@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>GEMEL INVEST — CRM</title>
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- SIDEBAR -->
+    <aside class="sidebar" aria-label="תפריט צד">
+      <div class="brand">
+        <div class="brand__logo">GI</div>
+        <div class="brand__text">
+          <div class="brand__title">GEMEL INVEST</div>
+          <div class="brand__sub">סוכנות לביטוח</div>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <a class="nav__item is-active" href="#">
+          <span class="nav__icon">🏠</span>
+          <span class="nav__text">דשבורד</span>
+        </a>
+        <a class="nav__item" href="#">
+          <span class="nav__icon">👥</span>
+          <span class="nav__text">לקוחות</span>
+        </a>
+        <a class="nav__item" href="#">
+          <span class="nav__icon">📄</span>
+          <span class="nav__text">פוליסות</span>
+        </a>
+        <a class="nav__item" href="#">
+          <span class="nav__icon">🧾</span>
+          <span class="nav__text">הצעה חדשה</span>
+        </a>
+        <a class="nav__item" href="#">
+          <span class="nav__icon">🪞</span>
+          <span class="nav__text">שיקוף שיחה</span>
+        </a>
+        <a class="nav__item" href="#">
+          <span class="nav__icon">✉️</span>
+          <span class="nav__text">מייל פנימי</span>
+          <span class="nav__badge" id="mailBadge">3</span>
+        </a>
+
+        <div class="nav__section">מערכת</div>
+
+        <a class="nav__item" href="#">
+          <span class="nav__icon">⚙️</span>
+          <span class="nav__text">הגדרות</span>
+        </a>
+        <a class="nav__item" href="#">
+          <span class="nav__icon">🛡️</span>
+          <span class="nav__text">אבטחה</span>
+        </a>
+      </nav>
+
+      <div class="sidebar__footer">
+        <button class="btn btn--ghost" id="collapseBtn" type="button">צמצום תפריט</button>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+      <!-- TOPBAR -->
+      <header class="topbar">
+        <div class="topbar__left">
+          <button class="iconbtn" id="menuBtn" type="button" aria-label="תפריט">≡</button>
+          <div class="breadcrumb">My Dashboard</div>
+        </div>
+
+        <div class="topbar__center">
+          <div class="search">
+            <span class="search__icon">🔎</span>
+            <input class="search__input" type="search" placeholder="חיפוש לקוח / ת״ז / טלפון..." />
+          </div>
+        </div>
+
+        <div class="topbar__right">
+          <button class="iconbtn" type="button" aria-label="התראות">🔔</button>
+          <button class="iconbtn" type="button" aria-label="דואר">✉️</button>
+          <div class="userchip">
+            <div class="userchip__avatar">א</div>
+            <div class="userchip__meta">
+              <div class="userchip__name">אוריה</div>
+              <div class="userchip__role">מנהל</div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- CONTENT -->
+      <section class="content">
+        <!-- KPI CARDS -->
+        <div class="kpi">
+          <article class="card kpi__card">
+            <div class="kpi__row">
+              <div class="kpi__icon">👤</div>
+              <div class="kpi__meta">
+                <div class="kpi__value">3500</div>
+                <div class="kpi__label">לקוחות</div>
+              </div>
+            </div>
+            <div class="kpi__bar"><span style="width: 62%"></span></div>
+            <div class="kpi__hint">62% יעד חודשי</div>
+          </article>
+
+          <article class="card kpi__card">
+            <div class="kpi__row">
+              <div class="kpi__icon">📄</div>
+              <div class="kpi__meta">
+                <div class="kpi__value">3500</div>
+                <div class="kpi__label">פוליסות פעילות</div>
+              </div>
+            </div>
+            <div class="kpi__bar"><span style="width: 48%"></span></div>
+            <div class="kpi__hint">48% יעד חודשי</div>
+          </article>
+
+          <article class="card kpi__card">
+            <div class="kpi__row">
+              <div class="kpi__icon">🧾</div>
+              <div class="kpi__meta">
+                <div class="kpi__value">3500</div>
+                <div class="kpi__label">הצעות</div>
+              </div>
+            </div>
+            <div class="kpi__bar"><span style="width: 71%"></span></div>
+            <div class="kpi__hint">71% יעד חודשי</div>
+          </article>
+        </div>
+
+        <!-- GRID like the screenshot -->
+        <div class="grid">
+          <!-- Chart card -->
+          <section class="card grid__chart">
+            <div class="card__head">
+              <div>
+                <div class="card__title">Visits & Conversions</div>
+                <div class="card__sub">Activity Stream</div>
+              </div>
+              <button class="btn btn--primary" type="button">דוח</button>
+            </div>
+
+            <!-- Faux chart (placeholder) -->
+            <div class="chart">
+              <div class="bar" style="height:42%"></div>
+              <div class="bar" style="height:58%"></div>
+              <div class="bar" style="height:31%"></div>
+              <div class="bar" style="height:64%"></div>
+              <div class="bar" style="height:77%"></div>
+              <div class="bar" style="height:49%"></div>
+              <div class="bar is-muted" style="height:28%"></div>
+              <div class="bar" style="height:62%"></div>
+            </div>
+          </section>
+
+          <!-- Sales card -->
+          <section class="card grid__sales">
+            <div class="card__head">
+              <div>
+                <div class="card__title">Sales</div>
+                <div class="card__sub">Pipeline Summary</div>
+              </div>
+              <button class="btn" type="button">פרטים</button>
+            </div>
+
+            <div class="pyramid">
+              <div class="pyr lvl1">Meet</div>
+              <div class="pyr lvl2">Policy</div>
+              <div class="pyr lvl3">KYC</div>
+              <div class="pyr lvl4">Issuing</div>
+              <div class="pyr lvl5">Closing</div>
+            </div>
+          </section>
+
+          <!-- Table card -->
+          <section class="card grid__table">
+            <div class="card__head">
+              <div>
+                <div class="card__title">לקוחות אחרונים</div>
+                <div class="card__sub">עדכון בזמן אמת (בהמשך נחבר לגוגל שיטס)</div>
+              </div>
+              <button class="btn btn--ghost" type="button">ייצוא</button>
+            </div>
+
+            <div class="tablewrap">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>שם</th>
+                    <th>טלפון</th>
+                    <th>סטטוס</th>
+                    <th>פעולה</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>נועה לוי</td>
+                    <td>050-1234567</td>
+                    <td><span class="pill pill--ok">פעיל</span></td>
+                    <td><button class="btn btn--small">פתח</button></td>
+                  </tr>
+                  <tr>
+                    <td>דניאל כהן</td>
+                    <td>052-9876543</td>
+                    <td><span class="pill pill--warn">בטיפול</span></td>
+                    <td><button class="btn btn--small">פתח</button></td>
+                  </tr>
+                  <tr>
+                    <td>איילת מזרחי</td>
+                    <td>054-2223344</td>
+                    <td><span class="pill">ממתין</span></td>
+                    <td><button class="btn btn--small">פתח</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
