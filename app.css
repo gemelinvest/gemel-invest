@@ -1941,3 +1941,18 @@ body.compact-ui, #appRoot{
 
 /* Row highlight (after save / focus) */
 .rowHighlight{ outline:2px solid rgba(37,99,235,.55); outline-offset:-2px; box-shadow:0 0 0 4px rgba(37,99,235,.12); }
+/* FIX: מחזיר כחול לתפריט צד (מעל כל הזהב) */
+.sidebar .navItem.active{
+  background: rgba(30, 84, 214, .10) !important;
+  border-color: rgba(30, 84, 214, .26) !important;
+  box-shadow: 0 8px 22px rgba(30, 84, 214, .14) !important;
+}
+.sidebar .navItem.active::before{
+  background: linear-gradient(180deg, rgba(30,84,214,.10), rgba(30,84,214,.95), rgba(30,84,214,.18)) !important;
+  opacity: 1 !important;
+}
+.sidebar .navItem.active .ico{
+  background: rgba(30,84,214,.12) !important;
+  border-color: rgba(30,84,214,.26) !important;
+  color: rgba(30,84,214,.95) !important;
+}
