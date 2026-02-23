@@ -1,6 +1,6 @@
 // ======== CONFIG ========
 // Paste your Web App /exec URL here (from Deploy -> Web app)
-const API_URL = 'PASTE_YOUR_WEB_APP_URL_HERE';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxx9RNjATezpym7GpDPc0mRLhEnZGZY9O6CR-XzzMRCwpPTAYixibdCyR4v0SMCbid_/exec';
 
 // ======== STATE (NO localStorage) ========
 const state = {
