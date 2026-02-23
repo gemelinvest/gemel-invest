@@ -51,7 +51,7 @@
   // 1) Publish your Apps Script as Web App (Anyone with the link).
   // 2) Paste the /exec URL here. Example:
   // const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/XXXX/exec';
-  const GOOGLE_SCRIPT_URL = ''; // <-- חובה להדביק כאן את כתובת ה‑Web App (/exec) של Google Apps Script
+  const GOOGLE_SCRIPT_URL = ''; /https://script.google.com/macros/s/AKfycbzC8KP13XkDuAFqyRwtTIMMIm1m5euWYEis-oIqITg0S2ojlN6iR8PcDys_JaoYQ13sPQ/exec/ <-- חובה להדביק כאן את כתובת ה‑Web App (/exec) של Google Apps Script
 
   // If true, the app will try to auto-connect on load (ping).
   const AUTO_CONNECT = true;
