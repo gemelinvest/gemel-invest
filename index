@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CRM — Google Sheets</title>
+  <link rel="stylesheet" href="./app.css" />
+</head>
+<body>
+
+  <!-- LOGIN -->
+  <div class="authWrap" id="authWrap">
+    <div class="authCard">
+      <div class="authTitle">התחברות למערכת</div>
+      <div class="authSub">CRM על תשתית Google Sheets</div>
+
+      <label class="field">
+        <span>שם משתמש</span>
+        <input id="loginUser" autocomplete="username" />
+      </label>
+
+      <label class="field">
+        <span>סיסמה</span>
+        <input id="loginPass" type="password" autocomplete="current-password" />
+      </label>
+
+      <button class="btnPrimary" id="btnLogin">כניסה</button>
+      <div class="authErr" id="authErr"></div>
+    </div>
+  </div>
+
+  <!-- APP -->
+  <div class="app hidden" id="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brandTitle">לקוחות</div>
+        <div class="brandUser" id="brandUser">מחובר</div>
+      </div>
+
+      <nav class="nav">
+        <button class="navItem active" data-view="customers">
+          <span class="navIcon">👥</span>
+          <span>לקוחות</span>
+        </button>
+
+        <button class="navItem" data-view="proposals">
+          <span class="navIcon">📝</span>
+          <span>הצעות</span>
+        </button>
+
+        <button class="navItem" data-view="settings">
+          <span class="navIcon">⚙️</span>
+          <span>הגדרות</span>
+        </button>
+      </nav>
+
+      <div class="sidebarBottom">
+        <button class="btnGhost" id="btnLogout">התנתקות</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="pageTitle" id="pageTitle">לקוחות</div>
+
+        <div class="topActions">
+          <div class="searchWrap">
+            <input id="searchInput" placeholder="חיפוש לקוח / טלפון / סטטוס..." />
+          </div>
+
+          <button class="btnPrimary" id="btnNewCustomer">לקוח חדש +</button>
+          <button class="btnPrimary" id="btnNewProposal">יצירת הצעה +</button>
+        </div>
+      </header>
+
+      <section class="content">
+        <div class="list" id="customersList"></div>
+        <div class="emptyState hidden" id="emptyState">אין לקוחות להצגה</div>
+      </section>
+    </main>
+
+    <!-- Drawer: Customer file (opens on click) -->
+    <div class="drawerOverlay hidden" id="drawerOverlay"></div>
+
+    <section class="drawer hidden" id="drawer">
+      <div class="drawerTop">
+        <div class="drawerTitle" id="drawerTitle">תיק לקוח</div>
+        <button class="iconBtn" id="drawerClose" aria-label="סגור">✕</button>
+      </div>
+
+      <div class="drawerBody">
+        <div class="grid2">
+          <label class="field">
+            <span>שם מלא</span>
+            <input id="cFullName" />
+          </label>
+          <label class="field">
+            <span>טלפון</span>
+            <input id="cPhone" />
+          </label>
+
+          <label class="field">
+            <span>סטטוס</span>
+            <select id="cStatus">
+              <option>חדש</option>
+              <option>בטיפול</option>
+              <option>פעיל</option>
+              <option>לא רלוונטי</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>סוכן מטפל</span>
+            <input id="cAgent" />
+          </label>
+        </div>
+
+        <label class="field">
+          <span>הערות</span>
+          <textarea id="cNotes" rows="4"></textarea>
+        </label>
+
+        <div class="drawerActions">
+          <button class="btnGhost" id="btnCancelEdit">ביטול</button>
+          <button class="btnPrimary" id="btnSaveCustomer">שמירה</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Mini modal: Create proposal -->
+    <div class="modalOverlay hidden" id="proposalOverlay">
+      <div class="modalCard">
+        <div class="modalTop">
+          <div class="modalTitle">יצירת הצעה</div>
+          <button class="iconBtn" id="proposalClose" aria-label="סגור">✕</button>
+        </div>
+
+        <label class="field">
+          <span>בחר לקוח</span>
+          <select id="proposalCustomer"></select>
+        </label>
+
+        <label class="field">
+          <span>תיאור קצר</span>
+          <input id="proposalDesc" placeholder="למשל: ביטוח חיים + בריאות" />
+        </label>
+
+        <div class="drawerActions">
+          <button class="btnGhost" id="proposalCancel">ביטול</button>
+          <button class="btnPrimary" id="proposalCreate">צור הצעה</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
