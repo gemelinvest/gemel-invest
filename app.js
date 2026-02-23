@@ -1,5 +1,5 @@
 // ======== CONFIG ========
-const API_URL = 'PASTE_YOUR_WEB_APP_URL_HERE'; // אחרי פריסה נדביק כאן
+const API_URL = 'https://script.google.com/macros/s/AKfycbxx9RNjATezpym7GpDPc0mRLhEnZGZY9O6CR-XzzMRCwpPTAYixibdCyR4v0SMCbid_/exec'; // אחרי פריסה נדביק כאן
 
 // ======== STATE (NO localStorage) ========
 const state = {
