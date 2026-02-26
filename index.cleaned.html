@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>GEMEL INVEST • מערכת CRM</title>
+  <meta name="theme-color" content="#eef4ff" />
+
+  <link rel="stylesheet" href="./app.css?v=20260226-131200" />
+
+  <style>
+    /* Hotfix: move "new customer" button to the left side of the top bar (RTL-friendly) */
+    .topbar{ position: relative; }
+    .topbar__right{
+      position: absolute;
+      left: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+/* Hide the new-customer button outside dashboard once views are active */
+    body.view-users-active
+body.view-dashboard-active
+@media (max-width: 900px){
+      .topbar__right{
+        left: 10px;
+        top: auto;
+        bottom: 10px;
+        transform: none;
+      }
+    }
+
+
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+      position: sticky; /* keep header visible while scrolling inside modal */
+      top: 0;
+    }
+      position: absolute;
+      inset-inline-end: 16px; /* LEFT side in RTL */
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      pointer-events: none;
+    }
+      width: 160px;           /* קומפקטי (לא קטן מדי) */
+      max-width: 180px;
+      height: auto;
+      max-height: 40px;
+      object-fit: contain;
+      filter: drop-shadow(0 8px 12px rgba(11,31,74,.18));
+      opacity: .98;
+    }
+    /* keep titles from overlapping the logo on the left */
+      padding-inline-end: 200px;
+    }
+    @media (max-width: 720px){
+    }
+
+</style>
+</head>
+
+<body class="lcAuthLock">
+  <!-- Login Overlay (Premium) -->
+  <div class="lcLogin" id="lcLogin" aria-hidden="true">
+    <div class="lcLogin__card" role="dialog" aria-modal="true" aria-label="כניסה למערכת">
+      <div class="lcLogin__brand">
+        <div class="lcLogin__logo lcLogin__logo--img" aria-hidden="true">
+          <img src="./logo-login-clean.png" alt="GEMEL INVEST" class="lcLogin__logoImg" />
+        </div>
+        <div class="lcLogin__brandText">
+          <div class="lcLogin__brandName">GEMEL INVEST</div>
+          <div class="lcLogin__brandSub">סוכנות לביטוח</div>
+        </div>
+      </div>
+
+      <div class="lcLogin__title">כניסה למערכת</div>
+      <div class="lcLogin__hint">הזן שם משתמש וקוד כניסה</div>
+
+      <form id="lcLoginForm" class="lcLogin__form" autocomplete="off">
+        <label class="lcLogin__label">שם משתמש</label>
+        <input id="lcLoginUser" name="username" class="lcLogin__input" placeholder="לדוגמה: מנהל מערכת / סתיו" />
+
+        <label class="lcLogin__label">קוד כניסה (PIN)</label>
+        <input id="lcLoginPin" name="pin" class="lcLogin__input" inputmode="numeric" placeholder="••••" />
+
+        <label class="lcLogin__remember">
+          <input id="lcLoginRemember" type="checkbox" />
+          <span>זכור אותי במחשב הזה</span>
+        </label>
+
+        <button class="lcLogin__btn" type="submit">התחבר</button>
+        <div id="lcLoginError" class="lcLogin__error" aria-live="polite"></div>
+      </form>
+
+      <div class="lcLogin__foot">שכחת קוד? פנה למנהל המערכת</div>
+    </div>
+  </div>
+
+  <div class="app" id="app">
+    <!-- Sidebar (left) -->
+    <aside class="sidebar" aria-label="תפריט ראשי">
+      <div class="brand brand--logoOnly">
+        <div class="brand__logo brand__logo--img" aria-hidden="true">
+          <img src="./logo-login-clean.png" alt="GEMEL INVEST" class="brand__logoImg" />
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav__item is-active" data-view="dashboard">
+          <span class="nav__icon">📊</span>
+          <span class="nav__label">דשבורד</span>
+        </button>
+<button class="nav__item" data-view="settings">
+          <span class="nav__icon">⚙️</span>
+          <span class="nav__label">הגדרות מערכת</span>
+        </button>
+
+        <button class="nav__item" data-view="users" id="navUsers" style="display:none">
+          <span class="nav__icon">👥</span>
+          <span class="nav__label">ניהול משתמשים</span>
+        </button>
+      </nav>
+
+      <div class="sidebar__foot">
+        <div class="pill">
+          <span class="dot" id="syncDot" aria-hidden="true"></span>
+          <span id="syncText">מצב: Google Sheets</span>
+        </div>
+        <div class="muted small" id="lastSyncText" aria-live="polite">לא סונכרן עדיין</div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <!-- Topbar -->
+      <header class="topbar">
+        <div class="topbar__left">
+          <div class="pageTitle">
+            <div class="pageTitle__kicker">GEMEL INVEST</div>
+            <h1 class="pageTitle__title" id="pageTitle">דשבורד</h1>
+          </div>
+        </div>
+</div>
+
+        <div class="topbar__right">
+<div class="lcUserPill" id="lcUserPill" style="display:none;">
+            <span class="lcUserPill__dot" aria-hidden="true"></span>
+            <span class="lcUserPill__text" id="lcUserPillText">מחובר</span>
+            <button class="lcUserPill__btn" id="btnLogout" type="button">התנתק</button>
+          </div>
+
+        </div>
+      </header>
+
+      <!-- Content -->
+      <section class="content">
+
+        <!-- DASHBOARD -->
+        <section class="view is-visible" id="view-dashboard"></section>
+<!-- MY FLOW --><!-- ESIGN --><!-- SETTINGS -->
+        <section class="view" id="view-settings">
+          <div class="card">
+            <div class="card__head">
+              <div class="card__title">הגדרות מערכת</div>
+              <div class="card__hint">חיבור ל-Google Sheets + מצב עבודה</div>
+            </div>
+
+            <div class="formGrid">
+              <div class="field">
+                <label class="label">מצב נתונים</label>
+                <div class="pill" style="display:inline-flex; margin-top:6px">
+                  <span class="dot ok" aria-hidden="true"></span>
+                  <span>Google Sheets בלבד</span>
+                </div>
+                <div class="help">המערכת עובדת רק מול Google Sheets (Apps Script Web App). אין מצב Local בגירסה הזו.</div>
+              </div>
+
+              <div class="field">
+                <label class="label">כתובת Web App (Apps Script)</label>
+                <input class="input" id="gsUrl" type="url" placeholder="הדבק כאן את ה-URL של ה-Web App" />
+                <div class="help">לדוגמא: https://script.google.com/macros/s/XXXX/exec</div>
+              </div>
+
+              <div class="field">
+                <label class="label">פעולות</label>
+                <div class="row">
+                  <button class="btn" id="btnTestConn" type="button">בדיקת חיבור</button>
+                  <button class="btn" id="btnSyncNow" type="button">סנכרון עכשיו</button>
+                                  </div>
+                <div class="help">שמירה/טעינה מתבצעת מול ה-Web App. אם יש בעיה, בדוק Deploy והרשאות.</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- USERS (Admin only) -->
+        <section class="view" id="view-users">
+          <div class="card">
+            <div class="card__head">
+              <div class="card__title">ניהול משתמשים</div>
+              <div class="card__hint">הוספה/עריכה/השבתה של נציגים וסוכנים</div>
+            </div>
+
+            <div class="lcUsers__actions">
+              <button class="btn" id="btnAddUser" type="button">➕ הוסף נציג/סוכן</button>
+              <input class="input lcUsers__search" id="usersSearch" type="text" placeholder="חיפוש לפי שם…" />
+              <select class="input lcUsers__filter" id="usersFilter">
+                <option value="all">הכל</option>
+                <option value="active">פעילים</option>
+                <option value="disabled">מושבתים</option>
+              </select>
+            </div>
+
+            <div class="tableWrap">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>שם</th>
+                    <th>תפקיד</th>
+                    <th>סטטוס</th>
+                    <th style="width:220px">פעולות</th>
+                  </tr>
+                </thead>
+                <tbody id="usersTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+      </section>
+    </main>
+</div>
+
+
+<script src="./app.js?v=20260226-131200"></script>
