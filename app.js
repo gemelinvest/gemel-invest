@@ -1,12 +1,12 @@
 /* GEMEL INVEST CRM — CLEAN CORE (Sheets + Admin Settings/Users)
-   BUILD 20260226-132800
+   BUILD 20260226-134900
    - Keeps: Login, user pill, Google Sheets connection, Admin: System Settings + Users
    - Removes: Customers / New Customer flow / Policies UI
 */
 (() => {
   "use strict";
 
-  const BUILD = "20260226-132800";
+  const BUILD = "20260226-134900";
 
   // ---------- Helpers ----------
   const $ = (sel, root=document) => root.querySelector(sel);
@@ -78,10 +78,12 @@
       const name = safeTrim(a?.name) || "נציג";
       const username = safeTrim(a?.username) || safeTrim(a?.user) || name;
       const pin = safeTrim(a?.pin) || safeTrim(a?.pass) || "0000";
+      const roleRaw = safeTrim(a?.role) || safeTrim(a?.type) || "";
       const active = (a?.active === false) ? false : true;
+      const role = (roleRaw === "manager" || roleRaw === "adminLite" || roleRaw === "admin") ? "manager" : "agent";
       return {
         id: safeTrim(a?.id) || ("a_" + idx),
-        name, username, pin, active
+        name, username, pin, role, active
       };
     }).filter(a => a.name);
 
@@ -219,6 +221,14 @@
       return !!(this.current && this.current.role === "admin");
     },
 
+    isManager(){
+      return !!(this.current && this.current.role === "manager");
+    },
+
+    canManageUsers(){
+      return this.isAdmin() || this.isManager();
+    },
+
     logout(){
       this.current = null;
       try { localStorage.removeItem(LS_SESSION_KEY); } catch(_) {}
@@ -282,7 +292,7 @@
       const expected = safeTrim(matched.pin) || "0000";
       if(pin !== expected) return this._setError("קוד כניסה שגוי");
 
-      this.current = { name: matched.name, role:"agent" };
+      this.current = { name: matched.name, role: (matched.role === "manager" ? "manager" : "agent") };
       if(remember) this._saveSession(this.current); else localStorage.removeItem(LS_SESSION_KEY);
       this.unlock();
       UI.applyRoleUI();
@@ -322,7 +332,8 @@
         on(btn, "click", () => {
           const v = btn.getAttribute("data-view");
           if(!v) return;
-          if((v === "settings" || v === "users") && !Auth.isAdmin()) return;
+          if(v === "settings" && !Auth.isAdmin()) return;
+          if(v === "users" && !Auth.canManageUsers()) return;
           this.goView(v);
         });
       });
@@ -347,7 +358,7 @@
 
       // users
       on(this.els.btnAddUser, "click", async () => {
-        if(!Auth.isAdmin()) return;
+        if(!Auth.canManageUsers()) return;
         await UsersUI.addUser();
       });
       on(this.els.usersSearch, "input", () => UsersUI.render());
@@ -358,11 +369,11 @@
     },
 
     applyRoleUI(){
-      // Show admin-only nav items
       const isAdmin = Auth.isAdmin();
+      const canUsers = Auth.canManageUsers();
       const settingsBtn = document.querySelector('.nav__item[data-view="settings"]');
       if (settingsBtn) settingsBtn.style.display = isAdmin ? "" : "none";
-      if (this.els.navUsers) this.els.navUsers.style.display = isAdmin ? "" : "none";
+      if (this.els.navUsers) this.els.navUsers.style.display = canUsers ? "" : "none";
     },
 
     setActiveNav(view){
@@ -370,7 +381,9 @@
     },
 
     goView(view){
-      const safe = String(view || "dashboard");
+      let safe = String(view || "dashboard");
+      if(safe === "settings" && !Auth.isAdmin()) safe = "dashboard";
+      if(safe === "users" && !Auth.canManageUsers()) safe = "dashboard";
       // hide all views
       $$(".view").forEach(v => v.classList.remove("is-visible"));
       const el = $("#view-" + safe);
@@ -401,7 +414,7 @@
 
       if(Auth.current) {
         pill.style.display = "";
-        txt.textContent = Auth.current.name + (Auth.isAdmin() ? " (מנהל)" : "");
+        txt.textContent = Auth.current.name + (Auth.isAdmin() ? " (מנהל מערכת)" : Auth.isManager() ? " (מנהל)" : "");
       } else {
         pill.style.display = "none";
         txt.textContent = "";
@@ -447,7 +460,7 @@
       const rows = this._filtered();
       UI.els.usersTbody.innerHTML = rows.map(a => {
         const status = (a.active === false) ? "מושבת" : "פעיל";
-        const role = "נציג";
+        const role = (a.role === "manager") ? "מנהל" : "נציג";
         return `
           <tr>
             <td>${escapeHtml(a.name)}</td>
@@ -472,14 +485,16 @@
     },
 
     async addUser(){
-      const name = safeTrim(prompt("שם נציג/סוכן:") || "");
+      const rolePick = safeTrim(prompt("סוג משתמש: 1=נציג, 2=מנהל (ללא הגדרות מערכת)", "1") || "1");
+      const role = (rolePick === "2" ? "manager" : "agent");
+      const name = safeTrim(prompt(role === "manager" ? "שם מנהל:" : "שם נציג/סוכן:") || "");
       if(!name) return;
       const username = safeTrim(prompt("שם משתמש (ברירת מחדל = שם):", name) || name);
       const pin = safeTrim(prompt("קוד כניסה (PIN):", "0000") || "0000");
 
       const id = "a_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16);
       State.data.agents = Array.isArray(State.data.agents) ? State.data.agents : [];
-      State.data.agents.push({ id, name, username, pin, active:true });
+      State.data.agents.push({ id, name, username, pin, role, active:true });
       State.data.meta.updatedAt = nowISO();
 
       await App.persist("נשמר משתמש חדש");
@@ -493,10 +508,13 @@
       const name = safeTrim(prompt("שם:", a.name) || a.name);
       const username = safeTrim(prompt("שם משתמש:", a.username) || a.username);
       const pin = safeTrim(prompt("PIN:", a.pin) || a.pin);
+      const rolePick = safeTrim(prompt("תפקיד: 1=נציג, 2=מנהל (ללא הגדרות מערכת)", (a.role === "manager" ? "2" : "1")) || (a.role === "manager" ? "2" : "1"));
+      const role = (rolePick === "2" ? "manager" : "agent");
       const active = confirm("האם המשתמש פעיל? (אישור=פעיל, ביטול=מושבת)");
       a.name = name;
       a.username = username;
       a.pin = pin;
+      a.role = role;
       a.active = active;
       State.data.meta.updatedAt = nowISO();
 
