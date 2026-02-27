@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>GEMEL INVEST • מערכת CRM</title>
+  <meta name="theme-color" content="#eef4ff" />
+
+  <link rel="stylesheet" href="./app.css?v=20260227-0308" />
+
+  </head>
+
+<body class="lcAuthLock">
+  <!-- Login Overlay (Premium) -->
+  <div class="lcLogin" id="lcLogin" aria-hidden="true">
+    <div class="lcLogin__card" role="dialog" aria-modal="true" aria-label="כניסה למערכת">
+      <div class="lcLogin__brand">
+        <div class="lcLogin__logo lcLogin__logo--img" aria-hidden="true">
+          <img src="./logo-login-clean.png" alt="GEMEL INVEST" class="lcLogin__logoImg" />
+        </div>
+        <div class="lcLogin__brandText">
+          <div class="lcLogin__brandName">GEMEL INVEST</div>
+          <div class="lcLogin__brandSub">סוכנות לביטוח</div>
+        </div>
+      </div>
+
+      <div class="lcLogin__title">כניסה למערכת</div>
+      <div class="lcLogin__hint">הזן שם משתמש וקוד כניסה</div>
+
+      <form id="lcLoginForm" class="lcLogin__form" autocomplete="off">
+        <label class="lcLogin__label">שם משתמש</label>
+        <input id="lcLoginUser" name="username" class="lcLogin__input" placeholder="לדוגמה: מנהל מערכת / סתיו" />
+
+        <label class="lcLogin__label">קוד כניסה (PIN)</label>
+        <input id="lcLoginPin" name="pin" class="lcLogin__input" inputmode="numeric" placeholder="••••" />
+
+        <label class="lcLogin__remember">
+          <input id="lcLoginRemember" type="checkbox" />
+          <span>זכור אותי במחשב הזה</span>
+        </label>
+
+        <button class="lcLogin__btn" type="submit">התחבר</button>
+        <div id="lcLoginError" class="lcLogin__error" aria-live="polite"></div>
+      </form>
+
+      <div class="lcLogin__foot">שכחת קוד? פנה למנהל המערכת</div>
+    </div>
+  </div>
+
+  <div class="app" id="app">
+    <!-- Sidebar (left) -->
+    <aside class="sidebar" aria-label="תפריט ראשי">
+      <div class="brand brand--logoOnly">
+        <div class="brand__logo brand__logo--img" aria-hidden="true">
+          <img src="./logo-login-clean.png" alt="GEMEL INVEST" class="brand__logoImg" />
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav__item is-active" data-view="dashboard">
+          <span class="nav__icon">📊</span>
+          <span class="nav__label">דשבורד</span>
+        </button>
+<button class="nav__item" data-view="settings">
+          <span class="nav__icon">⚙️</span>
+          <span class="nav__label">הגדרות מערכת</span>
+        </button>
+
+        <button class="nav__item" data-view="users" id="navUsers" style="display:none">
+          <span class="nav__icon">👥</span>
+          <span class="nav__label">ניהול משתמשים</span>
+        </button>
+      </nav>
+
+      <div class="sidebar__foot">
+        <div class="pill">
+          <span class="dot" id="syncDot" aria-hidden="true"></span>
+          <span id="syncText">מצב: Google Sheets</span>
+        </div>
+        <div class="muted small" id="lastSyncText" aria-live="polite">לא סונכרן עדיין</div>
+      </div>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <!-- Topbar -->
+      <header class="topbar">
+        <div class="topbar__left">
+          <div class="pageTitle">
+            <div class="pageTitle__kicker">GEMEL INVEST</div>
+            <h1 class="pageTitle__title" id="pageTitle">דשבורד</h1>
+          </div>
+        </div>
+
+        <div class="topbar__right">
+<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <button class="btn lcTopBtn" id="btnNewCustomer" type="button" title="הקמת לקוח חדש" style="display:none;">
+            <span class="lcTopBtn__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" class="lcTopBtn__svg" focusable="false" aria-hidden="true">
+                <path d="M12 12a4.2 4.2 0 1 0-4.2-4.2A4.2 4.2 0 0 0 12 12Zm0 2c-4.15 0-7.5 2.06-7.5 4.6V20h12.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M19 13v6M16 16h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </span>
+            <span class="lcTopBtn__label">הקמת לקוח חדש</span>
+          </button>
+
+<div class="lcUserPill" id="lcUserPill" style="display:none;">
+            <span class="lcUserPill__dot" aria-hidden="true"></span>
+            <span class="lcUserPill__text" id="lcUserPillText">מחובר</span>
+            <button class="lcUserPill__btn" id="btnLogout" type="button">התנתק</button>
+          </div>
+
+</div>
+</div>
+      </header>
+
+      <!-- Content -->
+      <section class="content">
+
+        <!-- DASHBOARD -->
+        <section class="view is-visible" id="view-dashboard"></section>
+<!-- MY FLOW --><!-- ESIGN --><!-- SETTINGS -->
+        <section class="view" id="view-settings">
+          <div class="card">
+            <div class="card__head">
+              <div class="card__title">הגדרות מערכת</div>
+              <div class="card__hint">חיבור ל-Google Sheets + מצב עבודה</div>
+            </div>
+
+            <div class="formGrid">
+              <div class="field">
+                <label class="label">מצב נתונים</label>
+                <div class="pill" style="display:inline-flex; margin-top:6px">
+                  <span class="dot ok" aria-hidden="true"></span>
+                  <span>Google Sheets בלבד</span>
+                </div>
+                <div class="help">המערכת עובדת רק מול Google Sheets (Apps Script Web App). אין מצב Local בגירסה הזו.</div>
+              </div>
+
+              <div class="field">
+                <label class="label">כתובת Web App (Apps Script)</label>
+                <input class="input" id="gsUrl" type="url" placeholder="הדבק כאן את ה-URL של ה-Web App" />
+                <div class="help">לדוגמא: https://script.google.com/macros/s/XXXX/exec</div>
+              </div>
+
+              <div class="field">
+                <label class="label">פעולות</label>
+                <div class="row">
+                  <button class="btn" id="btnTestConn" type="button">בדיקת חיבור</button>
+                  <button class="btn" id="btnSyncNow" type="button">סנכרון עכשיו</button>
+                                  </div>
+                <div class="help">שמירה/טעינה מתבצעת מול ה-Web App. אם יש בעיה, בדוק Deploy והרשאות.</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- USERS (Admin only) -->
+        <section class="view" id="view-users">
+          <div class="card">
+            <div class="card__head">
+              <div class="card__title">ניהול משתמשים</div>
+              <div class="card__hint">הוספה/עריכה/השבתה של נציגים וסוכנים</div>
+            </div>
+
+            <div class="lcUsers__actions">
+              <button class="btn" id="btnAddUser" type="button">➕ הוסף נציג/סוכן</button>
+              <input class="input lcUsers__search" id="usersSearch" type="text" placeholder="חיפוש לפי שם…" />
+              <select class="input lcUsers__filter" id="usersFilter">
+                <option value="all">הכל</option>
+                <option value="active">פעילים</option>
+                <option value="disabled">מושבתים</option>
+              </select>
+            </div>
+
+            <div class="tableWrap">
+              <table class="table">
+                <thead>
+                  <tr>
+                    <th>שם</th>
+                    <th>תפקיד</th>
+                    <th>סטטוס</th>
+                    <th style="width:220px">פעולות</th>
+                  </tr>
+                </thead>
+                <tbody id="usersTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+      </section>
+    </main>
+</div>
+
+
+<div class="lcWizard" id="lcWizard" aria-hidden="true">
+    <div class="lcWizard__backdrop" id="lcWizardBackdrop" aria-hidden="true"></div>
+
+    <div class="lcWizard__panel" role="dialog" aria-modal="true" aria-label="הקמת לקוח חדש">
+      <div class="lcWizard__head">
+        <div class="lcWizard__titleWrap">
+          <div class="lcWizard__kicker">GEMEL INVEST</div>
+          <div class="lcWizard__title" id="lcWizardTitle">הקמת לקוח חדש · שלב 1</div>
+          <div class="lcWizard__sub" id="lcWizardSub">פרטי לקוח</div>
+        </div>
+
+        <div class="lcWizard__actions">
+          <button class="btn" id="btnAddInsured" type="button">➕ הוסף מבוטח</button>
+          <button class="btn btn--danger" id="btnCloseWizard" type="button">סגור</button>
+        </div>
+      </div>
+
+      <div class="lcWizard__progress">
+        <div class="lcProgress">
+          <div class="lcProgress__bar" aria-hidden="true"><span id="lcProgressFill" style="width:0%"></span></div>
+          <div class="lcProgress__meta">
+            <span class="lcProgress__pct" id="lcProgressText">0%</span>
+            <span class="muted small" id="lcProgressHint">השלמת שלב פרטי לקוח</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="lcWizard__body">
+        <section class="lcWizardStep is-active" id="lcStep1" aria-label="שלב 1 - פרטי לקוח">
+          <div class="lcStepCard glassCard">
+            <div class="lcStepCard__head">
+              <div class="lcStepCard__title">פרטי לקוח (חובה)</div>
+              <div class="lcStepCard__hint">מלא את כל השדות המסומנים *</div>
+            </div>
+
+            <div class="lcFormGrid lcFormGrid--2">
+              <div class="field">
+                <label class="label">שם פרטי *</label>
+                <input class="input" id="c_firstName" autocomplete="off" />
+              </div>
+
+              <div class="field">
+                <label class="label">שם משפחה *</label>
+                <input class="input" id="c_lastName" autocomplete="off" />
+              </div>
+
+              <div class="field">
+                <label class="label">תעודת זהות *</label>
+                <input class="input" id="c_id" inputmode="numeric" autocomplete="off" placeholder="לדוגמה: 123456789" />
+              </div>
+
+              <div class="field">
+                <label class="label">תאריך לידה מלא *</label>
+                <div class="lcInline">
+                  <input class="input" id="c_dob" type="date" />
+                  <div class="lcAge" id="c_agePill" title="גיל המבוטח">
+                    <span class="lcAge__k">גיל</span>
+                    <span class="lcAge__v" id="c_age">—</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="field">
+                <label class="label">מין *</label>
+                <select class="input" id="c_gender">
+                  <option value="">בחר…</option>
+                  <option value="זכר">זכר</option>
+                  <option value="נקבה">נקבה</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label class="label">מצב משפחתי *</label>
+                <select class="input" id="c_marital">
+                  <option value="">בחר…</option>
+                  <option value="רווק/ה">רווק/ה</option>
+                  <option value="נשוי/ה">נשוי/ה</option>
+                  <option value="גרוש/ה">גרוש/ה</option>
+                  <option value="ידוע/ה בציבור">ידוע/ה בציבור</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label class="label">טלפון *</label>
+                <input class="input" id="c_phone" inputmode="tel" autocomplete="off" placeholder="05x-xxxxxxx" />
+              </div>
+
+              <div class="field">
+                <label class="label">עיסוק *</label>
+                <input class="input" id="c_job" autocomplete="off" placeholder="לדוגמה: מהנדס/ת" />
+              </div>
+            </div>
+
+            <div class="lcFormGrid lcFormGrid--4">
+              <div class="field">
+                <label class="label">עיר *</label>
+                <input class="input" id="c_city" autocomplete="off" />
+              </div>
+
+              <div class="field">
+                <label class="label">רחוב *</label>
+                <input class="input" id="c_street" autocomplete="off" />
+              </div>
+
+              <div class="field">
+                <label class="label">מס׳ בית *</label>
+                <input class="input" id="c_house" inputmode="numeric" autocomplete="off" />
+              </div>
+
+              <div class="field">
+                <label class="label">מס׳ דירה</label>
+                <input class="input" id="c_apt" inputmode="numeric" autocomplete="off" />
+              </div>
+
+              <div class="field lcZipField">
+                <label class="label">מיקוד (נשלף אוטומטית)</label>
+                <div class="lcInline">
+                  <input class="input" id="c_zip" inputmode="numeric" autocomplete="off" placeholder="—" />
+                  <button class="btn lcZipBtn" id="btnZipLookup" type="button">מצא מיקוד</button>
+                </div>
+                <div class="help" id="c_zipHint">המיקוד יישלף לפי עיר/רחוב/בית. אם לא נמצא—ניתן להקליד ידנית.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="lcInsuredWrap">
+            <div class="lcInsuredHead">
+              <div class="lcInsuredTitle">מבוטחים נוספים</div>
+              <div class="lcInsuredHint muted small">כתובת המבוטח הראשי תשוכפל אוטומטית למבוטחים נוספים</div>
+            </div>
+            <div id="lcInsuredList" class="lcInsuredList"></div>
+          </div>
+        </section>
+
+        <section class="lcWizardStep" id="lcStep2" aria-label="שלב 2 - נתוני גוף (BMI)">
+          <div class="lcStepCard glassCard">
+            <div class="lcStepCard__head">
+              <div class="lcStepCard__title">נתוני גוף (BMI)</div>
+              <div class="lcStepCard__hint">מלא גובה ומשקל לכל מבוטח כדי לחשב BMI</div>
+            </div>
+
+            <div class="lcBmiList" id="lcBmiList" aria-label="רשימת BMI למבוטחים"></div>
+          </div>
+        </section>
+
+      </div>
+
+      <div class="lcWizard__foot">
+        <div class="lcWizard__footHint muted small" id="lcWizardFootHint">כפתור “המשך” יופעל לאחר מילוי כל שדות החובה.</div>
+        <div class="lcWizard__footBtns">
+          <button class="btn" id="btnWizardPrev" type="button" style="display:none;">חזרה</button>
+          <button class="btn btn--primary" id="btnWizardNext" type="button" disabled>המשך</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="lcMiniModal" id="lcInsuredPicker" aria-hidden="true">
+    <div class="lcMiniModal__backdrop" data-close="1" aria-hidden="true"></div>
+    <div class="lcMiniModal__panel" role="dialog" aria-modal="true" aria-label="בחירת מבוטח">
+      <div class="lcMiniModal__head">
+        <div class="lcMiniModal__title">הוסף מבוטח</div>
+        <button class="iconBtn" id="btnCloseInsuredPicker" type="button" aria-label="סגור">✕</button>
+      </div>
+      <div class="lcMiniModal__body">
+        <button class="lcPick" type="button" data-type="spouse">בן/בת זוג</button>
+        <button class="lcPick" type="button" data-type="adult">בגיר</button>
+        <button class="lcPick" type="button" data-type="minor">קטין</button>
+      </div>
+      <div class="lcMiniModal__foot muted small">בקטין לא ממלאים טלפון/כתובת — נלקח מהמבוטח הראשי.</div>
+    </div>
+  </div>
+
+<script src="./app.js?v=20260227-0308"></script>
