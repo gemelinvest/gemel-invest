@@ -1,0 +1,21 @@
+{
+  "name": "GEMEL INVEST",
+  "short_name": "GEMEL INVEST",
+  "start_url": "./?v=v2-blue-right-20260227041622",
+  "display": "standalone",
+  "background_color": "#F3F7FF",
+  "theme_color": "#1E5AA8",
+  "icons": [
+    {
+      "src": "icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512x512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

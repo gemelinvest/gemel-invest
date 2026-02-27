@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#1E5AA8" />
+  <title>GEMEL INVEST</title>
+  <link rel="manifest" href="manifest.webmanifest?v=v2-blue-right-20260227041622">
+  <link rel="icon" href="icon-192x192.png">
+  <link rel="stylesheet" href="app.css?v=v2-blue-right-20260227041622">
+</head>
+<body>
+  <div id="loginScreen" class="loginScreen">
+    <div class="loginCard">
+      <img class="loginLogo" src="logo-login-clean.png" alt="GEMEL INVEST" />
+      <div class="loginTitle">כניסה למערכת</div>
+
+      <form id="loginForm" class="loginForm" autocomplete="on">
+        <label class="fieldLabel">שם משתמש</label>
+        <input id="loginUser" class="input" autocomplete="username" />
+
+        <label class="fieldLabel">סיסמה</label>
+        <input id="loginPass" class="input" type="password" autocomplete="current-password" />
+
+        <button class="btn btnPrimary" type="submit">התחבר</button>
+        <div id="loginError" class="loginError" style="display:none"></div>
+      </form>
+
+      <div class="loginFoot">
+        <button type="button" class="btn btnSoft" onclick="(function(){var m=document.getElementById('forgotModal'); if(m) m.style.display='flex';})()">שכחתי סיסמה</button>
+        <div id="installHint" class="muted"></div>
+        <button id="installBtn" type="button" class="btn btnTiny" style="display:none">התקן אפליקציה</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="appRoot" class="app" style="display:none">
+    <main class="main">
+      <div class="topbar">
+        <div class="topbarLeft">
+          <div id="pageTitle" class="pageTitle">מערכת</div>
+          <div id="crumb" class="crumb"></div>
+        </div>
+
+        <div class="topbarCenter">
+          <input id="globalSearch" class="input searchInput" placeholder="חיפוש לקוח / טלפון / ת״ז" />
+          <button id="searchBtn" class="btn btnSoft">חפש</button>
+          <button id="newProposalBtn" class="btn btnPrimary">לקוח חדש</button>
+          <button id="gofiBtn" class="btn btnSoft">מחירונים</button>
+          <button id="discountSpecBtn" class="btn btnSoft">הנחות</button>
+        </div>
+
+        <div class="topbarRight">
+          <span id="agentName" class="agentBadge">נציג: אורח</span>
+          <button id="logoutBtn" class="btn btnSoft">התנתק</button>
+        </div>
+      </div>
+
+      <div class="connStrip" style="display:none">
+        <input id="serverUrlInput" class="input" placeholder="כתובת שרת (Google Apps Script Web App)" />
+        <button id="connectBtn" class="btn btnPrimary">בדוק חיבור</button>
+        <button id="pullBtn" class="btn btnSoft">משוך נתונים</button>
+        <span id="connHint" class="muted"></span>
+        <button id="logoutBtn2" class="btn btnSoft" style="display:none">התנתק</button>
+      </div>
+
+      <div id="kpis" class="kpis"></div>
+      <div id="tabs" class="tabs"></div>
+      <div id="view" class="view"></div>
+    </main>
+
+    <aside class="sidebar">
+      <div class="brand">
+        <img class="brandLogo" src="logo-login-clean.png" alt="GEMEL INVEST" />
+      </div>
+
+      <nav class="nav">
+        <button class="navItem" data-route="customers"><span>לקוחות</span></button>
+        <button class="navItem" data-route="my"><span>התהליכים שלי</span></button>
+        <button class="navItem" data-route="talkMirror"><span>שיקוף שיחה</span></button>
+        <button class="navItem" data-route="settings"><span>הגדרות</span></button>
+      </nav>
+
+      <div class="sidebarFoot">
+        <div class="muted">גרסה: v2-blue-right-20260227041622</div>
+      </div>
+    </aside>
+  </div>
+
+  <div id="toastHost" class="toastHost"></div>
+
+  <div id="forgotModal" class="overlay" style="display:none">
+    <div class="modal">
+      <div class="modalHead">
+        <div class="modalTitle">איפוס סיסמה</div>
+        <button class="btn btnTiny" onclick="(function(){var m=document.getElementById('forgotModal'); if(m) m.style.display='none';})()">סגור</button>
+      </div>
+      <div class="modalBody">
+        <div class="muted">פנה למנהל המערכת לאיפוס סיסמה.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="gofiOverlay" class="overlay" style="display:none">
+    <div class="modal modalWide">
+      <div class="modalHead">
+        <div class="modalTitle">מחירונים</div>
+        <button id="gofiCloseBtn" class="btn btnTiny">סגור</button>
+      </div>
+      <div class="modalBody">
+        <iframe id="gofiFrame" class="frame"></iframe>
+        <div id="gofiFallback" class="muted" style="display:none"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="discountSpecOverlay" class="overlay" style="display:none">
+    <div class="modal modalWide">
+      <div class="modalHead">
+        <div class="modalTitle">מסמך הנחות</div>
+        <button id="discountSpecCloseBtn" class="btn btnTiny">סגור</button>
+      </div>
+      <div class="modalBody">
+        <iframe id="discountSpecFrame" class="frame"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <div id="wizardOverlay" class="overlay" style="display:none">
+    <div class="modal modalWizard">
+      <div class="modalHead">
+        <div>
+          <div id="wizardTitle" class="modalTitle">הצעה חדשה</div>
+          <div id="wizardSub" class="muted"></div>
+        </div>
+        <div class="headActions">
+          <span id="savePill" class="badge">טיוטה</span>
+          <button id="pdfBtn" class="btn btnTiny">PDF</button>
+          <button id="wizardCloseBtn" class="btn btnTiny">סגור</button>
+        </div>
+      </div>
+
+      <div id="insuredIndicator" class="insuredIndicator"></div>
+      <div id="insuredTabs" class="insuredTabs"></div>
+
+      <div id="stepper" class="stepper"></div>
+
+      <div id="wizardMain" class="wizardMain">
+        <div class="muted">טוען…</div>
+      </div>
+
+      <div style="display:none">
+        <button id="addSpouseBtn"></button>
+        <button id="addChildBtn"></button>
+        <button id="retryStepBtn"></button>
+
+        <div id="oldPartialWrap"></div>
+        <button id="oldPartialEditBtn"></button>
+        <div id="oldPartialHint"></div>
+
+        <form id="medicalForm"></form>
+
+        <div id="smokeRow"></div>
+
+        <input id="customer_heightCm">
+        <input id="customer_weightKg">
+        <div id="bmiValue"></div>
+        <div id="bmiLabel"></div>
+
+        <input id="customer_gender">
+        <input id="customer_maritalStatus">
+        <input id="customer_hmo">
+        <input id="customer_shaban">
+        <input id="customer_zip">
+        <input id="customer_email">
+
+        <select id="old_company"></select>
+        <select id="old_product"></select>
+        <input id="old_policyNo">
+        <input id="old_sumInsured">
+        <input id="old_compensation">
+        <input id="old_premium">
+        <select id="old_decision"></select>
+        <div id="oldSumWrap"></div>
+        <div id="oldCompWrap"></div>
+
+        <select id="new_company"></select>
+        <select id="new_product"></select>
+        <input id="new_sumInsured">
+        <input id="new_compensation">
+        <input id="new_premium">
+        <input id="new_lien">
+        <div id="newSumWrap"></div>
+        <div id="newCompWrap"></div>
+        <div id="newLienWrap"></div>
+
+        <div id="sumOld"></div>
+        <div id="sumNew"></div>
+        <div id="sumTotal"></div>
+
+        <button id="addOldBtn"></button>
+        <button id="addNewBtn"></button>
+
+        <button id="prevStepBtn"></button>
+        <button id="nextStepBtn"></button>
+        <button id="prevMedicalBtn"></button>
+        <button id="nextMedicalBtn"></button>
+
+        <button id="markDoneBtn"></button>
+        <select id="statusSelect"></select>
+        <button id="toggleCard"></button>
+
+        <button id="payerRelBtn"></button>
+        <button id="copyPayment"></button>
+        <input id="payer_hok_bank">
+        <input id="payer_hok_branch">
+        <input id="payer_hok_account">
+        <input id="payer_card_name">
+        <input id="payer_card_tz">
+        <input id="payer_card_number">
+        <input id="payer_card_exp">
+
+        <input id="cancelOpp_client">
+        <input id="cancelOpp_new_company">
+        <input id="cancelOpp_agency">
+
+        <div id="compHost"></div>
+
+        <input id="usersSearch">
+        <select id="usersRole"></select>
+        <select id="usersStatus"></select>
+        <button id="usersAddBtn"></button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=v2-blue-right-20260227041622"></script>
+  <script>
+    if('serviceWorker' in navigator){
+      navigator.serviceWorker.register('service-worker.js?v=v2-blue-right-20260227041622').catch(() => {});
+    }
+  </script>
+</body>
+</html>
