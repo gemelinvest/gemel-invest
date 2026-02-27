@@ -6,7 +6,7 @@
   <title>GEMEL INVEST • מערכת CRM</title>
   <meta name="theme-color" content="#eef4ff" />
 
-  <link rel="stylesheet" href="./app.css?v=20260227-023000" />
+  <link rel="stylesheet" href="./app.css?v=20260226-142152" />
 
   </head>
 
@@ -280,6 +280,10 @@
                 <label class="label">טלפון *</label>
                 <input class="input" id="c_phone" inputmode="tel" autocomplete="off" placeholder="05x-xxxxxxx" />
               </div>
+              <div class="field">
+                <label class="label">מייל *</label>
+                <input class="input lcEmailInput" id="c_email" type="email" autocomplete="off" placeholder="name@example.com" />
+              </div>
 
               <div class="field">
                 <label class="label">עיסוק *</label>
@@ -327,33 +331,11 @@
             <div id="lcInsuredList" class="lcInsuredList"></div>
           </div>
         </section>
-
-        <section class="lcWizardStep" id="lcStep2" aria-label="שלב 2 - BMI">
-          <div class="lcStepCard glassCard">
-            <div class="lcStepCard__head">
-              <div>
-                <div class="lcStepCard__title">BMI (גובה + משקל)</div>
-                <div class="lcStepCard__hint">מלא גובה (ס״מ) ומשקל (ק״ג) לכל מבוטח — המערכת מחשבת BMI ומציגה נורה</div>
-              </div>
-              <div class="muted small">שלב 2 מתוך 2</div>
-            </div>
-
-            <div class="lcBmiList" id="lcBmiList"></div>
-
-            <div class="help" style="padding:0 14px 14px">
-              ירוק = תקין · צהוב = עודף משקל · אדום = תת/עודף קיצוני
-            </div>
-          </div>
-        </section>
-
       </div>
 
       <div class="lcWizard__foot">
         <div class="lcWizard__footHint muted small" id="lcWizardFootHint">כפתור “המשך” יופעל לאחר מילוי כל שדות החובה.</div>
-        <div class="lcWizard__footBtns">
-          <button class="btn" id="btnWizardPrev" type="button" style="display:none">חזור</button>
-          <button class="btn btn--primary" id="btnWizardNext" type="button" disabled>המשך</button>
-        </div>
+        <button class="btn btn--primary" id="btnWizardNext" type="button" disabled>המשך</button>
       </div>
     </div>
   </div>
@@ -374,4 +356,4 @@
     </div>
   </div>
 
-<script src="./app.js?v=20260227-023000"></script>
+<script src="./app.js?v=20260226-142152"></script>

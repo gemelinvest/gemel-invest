@@ -6,7 +6,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260227-023000";
+  const BUILD = "20260226-142152";
 
   // ---------- Helpers ----------
   const $ = (sel, root=document) => root.querySelector(sel);
@@ -625,11 +625,9 @@
   };
 
   // ---------- New Customer Wizard (Step 1 only) ----------
-  
-  // ---------- New Customer Wizard (Steps 1-2: Details + BMI) ----------
   const Wizard = {
     els: {},
-    state: { step: 1, insured: [], bmi: {} },
+    state: { insured: [] },
 
     init(){
       this.els.wrap = $("#lcWizard");
@@ -637,18 +635,10 @@
       this.els.btnClose = $("#btnCloseWizard");
       this.els.btnAddInsured = $("#btnAddInsured");
       this.els.btnNext = $("#btnWizardNext");
-      this.els.btnPrev = $("#btnWizardPrev");
       this.els.progressFill = $("#lcProgressFill");
       this.els.progressText = $("#lcProgressText");
-      this.els.title = $("#lcWizardTitle");
-      this.els.sub = $("#lcWizardSub");
-      this.els.footHint = $("#lcWizardFootHint");
 
-      this.els.step1 = $("#lcStep1");
-      this.els.step2 = $("#lcStep2");
-      this.els.bmiList = $("#lcBmiList");
-
-      const ids = ["c_firstName","c_lastName","c_id","c_dob","c_gender","c_marital","c_phone",
+      const ids = ["c_firstName","c_lastName","c_id","c_dob","c_gender","c_marital","c_phone","c_email",
                    "c_city","c_street","c_house","c_apt","c_zip","c_job"];
       this.els.fields = Object.fromEntries(ids.map(id => [id, $("#"+id)]));
       this.els.age = $("#c_age");
@@ -682,10 +672,11 @@
 
       on(this.els.btnZipLookup, "click", async () => { await this.lookupZip(); });
 
-      on(this.els.btnNext, "click", () => this.goNext());
-      on(this.els.btnPrev, "click", () => this.goPrev());
+      on(this.els.btnNext, "click", () => {
+        if(!this.isStepValid()) return;
+        alert("שלב 1 הושלם ✅\nבשלב הבא נבנה את המשך התהליך.");
+      });
 
-      this.showStep(1);
       this.updateProgress();
     },
 
@@ -708,56 +699,8 @@
       Object.values(this.els.fields || {}).forEach(el => { if(el) el.value = ""; });
       if(this.els.age) this.els.age.textContent = "—";
       this.state.insured = [];
-      this.state.bmi = {};
       this.renderInsured();
-      this.showStep(1);
       this.updateProgress();
-    },
-
-    showStep(n){
-      this.state.step = n;
-
-      if(this.els.step1) this.els.step1.classList.toggle("is-active", n === 1);
-      if(this.els.step2) this.els.step2.classList.toggle("is-active", n === 2);
-
-      if(this.els.btnPrev) this.els.btnPrev.style.display = (n === 2) ? "" : "none";
-      if(this.els.btnNext) this.els.btnNext.textContent = (n === 2) ? "סיום" : "המשך";
-      if(this.els.footHint){
-        this.els.footHint.textContent = (n === 2)
-          ? "מלא גובה ומשקל לכל מבוטח — ואז אפשר לסיים."
-          : "כפתור “המשך” יופעל לאחר מילוי כל שדות החובה.";
-      }
-
-      if(this.els.title) this.els.title.textContent = `הקמת לקוח חדש · שלב ${n}`;
-      if(this.els.sub) this.els.sub.textContent = (n === 2) ? "BMI" : "פרטי לקוח";
-
-      if(n === 2){
-        this.renderBMI();
-        setTimeout(() => {
-          const first = this.els.bmiList?.querySelector?.('input[data-bmi="h"]');
-          first?.focus?.();
-        }, 50);
-      }
-
-      this.updateProgress();
-    },
-
-    goNext(){
-      if(this.state.step === 1){
-        if(!this.isStepValid()) return;
-        this.showStep(2);
-        return;
-      }
-      if(this.state.step === 2){
-        if(!this.isStep2Valid()) return;
-        alert("שלב BMI הושלם ✅\nבשלב הבא נחבר את זה להמשך התהליכים במערכת.");
-        this.close();
-        return;
-      }
-    },
-
-    goPrev(){
-      if(this.state.step === 2) this.showStep(1);
     },
 
     openPicker(){
@@ -784,7 +727,7 @@
     },
 
     requiredMain(){
-      return ["c_firstName","c_lastName","c_id","c_dob","c_gender","c_marital","c_phone","c_city","c_street","c_house","c_job"];
+      return ["c_firstName","c_lastName","c_id","c_dob","c_gender","c_marital","c_phone","c_email","c_city","c_street","c_house","c_job"];
     },
 
     isStepValid(){
@@ -793,6 +736,8 @@
       if(idv && !/^\d{5,10}$/.test(idv)) missing.push("c_id");
       const ph = safeTrim(this.els.fields.c_phone?.value);
       if(ph && !/^[0-9+\-\s]{7,15}$/.test(ph)) missing.push("c_phone");
+      const em = safeTrim(this.els.fields.c_email?.value);
+      if(em && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em)) missing.push("c_email");
       return missing.length === 0 && this.areInsuredValid();
     },
 
@@ -804,7 +749,9 @@
 
     insuredRequired(item){
       if(item.type === "minor") return ["firstName","lastName","id","dob","gender"];
-      return ["firstName","lastName","id","dob","gender","phone","job"];
+      const base = ["firstName","lastName","id","dob","gender","phone","job"];
+      if(item.type === "spouse") base.push("email");
+      return base;
     },
 
     areInsuredValid(){
@@ -813,6 +760,10 @@
         const data = it.data || {};
         for(const k of req){
           if(!safeTrim(data[k])) return false;
+        }
+        if(it.type === "spouse"){
+          const em = safeTrim(data.email);
+          if(em && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(em)) return false;
         }
       }
       return true;
@@ -837,167 +788,12 @@
       return Math.max(0, Math.min(100, Math.round((done / total) * 100)));
     },
 
-    // ---------- BMI ----------
-    allPersons(){
-      const mainFn = safeTrim(this.els.fields.c_firstName?.value);
-      const mainLn = safeTrim(this.els.fields.c_lastName?.value);
-      const mainName = [mainFn, mainLn].filter(Boolean).join(" ").trim();
-      const mainLabel = mainName ? `מבוטח ראשי · ${mainName}` : "מבוטח ראשי";
-
-      const list = [{ key:"main", label: mainLabel }].concat(
-        this.state.insured.map(it => {
-          const fn = safeTrim(it.data?.firstName);
-          const ln = safeTrim(it.data?.lastName);
-          const nm = [fn, ln].filter(Boolean).join(" ").trim();
-          const lbl = nm ? `${it.label} · ${nm}` : it.label;
-          return { key: it.id, label: lbl };
-        })
-      );
-      return list;
-    },
-
-    bmiLevel(bmi){
-      if(!(bmi > 0)) return { cls:"", text:"—" };
-      if(bmi >= 18.5 && bmi < 25) return { cls:"is-green", text:"תקין" };
-      if(bmi >= 25 && bmi < 30) return { cls:"is-amber", text:"עודף" };
-      return { cls:"is-red", text:"סיכון" };
-    },
-
-    computeBMI(hCm, wKg){
-      const h = Number(hCm);
-      const w = Number(wKg);
-      if(!(h > 0) || !(w > 0)) return null;
-      const hm = h / 100;
-      const bmi = w / (hm * hm);
-      if(!Number.isFinite(bmi)) return null;
-      return bmi;
-    },
-
-    bmiCompletionPct(){
-      const persons = this.allPersons();
-      if(!persons.length) return 0;
-      let need = 0, done = 0;
-      for(const p of persons){
-        need += 2;
-        const row = this.state.bmi[p.key] || {};
-        if(Number(row.h) > 0) done++;
-        if(Number(row.w) > 0) done++;
-      }
-      return Math.max(0, Math.min(100, Math.round((done / need) * 100)));
-    },
-
-    isStep2Valid(){
-      const persons = this.allPersons();
-      if(!persons.length) return false;
-      for(const p of persons){
-        const row = this.state.bmi[p.key] || {};
-        const h = Number(row.h), w = Number(row.w);
-        if(!(h >= 80 && h <= 250)) return false;
-        if(!(w >= 20 && w <= 350)) return false;
-      }
-      return true;
-    },
-
-    renderBMI(){
-      const host = this.els.bmiList;
-      if(!host) return;
-      const persons = this.allPersons();
-
-      if(!persons.length){
-        host.innerHTML = '<div class="emptyState" style="padding:18px 12px"><div class="emptyState__title">אין מבוטחים</div></div>';
-        return;
-      }
-
-      host.innerHTML = persons.map(p => {
-        const row = this.state.bmi[p.key] || {};
-        const bmi = this.computeBMI(row.h, row.w);
-        const bmiTxt = bmi ? bmi.toFixed(1) : "—";
-        const lvl = this.bmiLevel(bmi);
-
-        return `
-          <div class="lcBmiCard" data-bmicard="${p.key}">
-            <div class="lcBmiCard__head">
-              <div class="lcBmiCard__title">${escapeHtml(p.label)}</div>
-              <div class="lcBmiBadge">
-                <span class="lcBmiLight ${lvl.cls}" data-bmilight="${p.key}" aria-hidden="true"></span>
-                <span data-bmistatus="${p.key}">${lvl.text}</span>
-              </div>
-            </div>
-
-            <div class="lcBmiGrid">
-              <div class="field">
-                <label class="label">גובה (ס״מ) *</label>
-                <input class="input" inputmode="decimal" data-bmi="h" data-id="${p.key}" value="${escapeAttr(row.h)}" placeholder="לדוגמה: 175" />
-              </div>
-
-              <div class="field">
-                <label class="label">משקל (ק״ג) *</label>
-                <input class="input" inputmode="decimal" data-bmi="w" data-id="${p.key}" value="${escapeAttr(row.w)}" placeholder="לדוגמה: 78" />
-              </div>
-
-              <div class="field">
-                <label class="label">BMI</label>
-                <input class="input lcBmiAuto" readonly value="${escapeAttr(bmiTxt)}" data-bmiout="${p.key}" />
-              </div>
-
-              <div class="field">
-                <label class="label">סטטוס</label>
-                <input class="input lcBmiAuto" readonly value="${escapeAttr(lvl.text)}" data-bmioutstatus="${p.key}" />
-              </div>
-            </div>
-          </div>
-        `;
-      }).join("");
-
-      $$('input[data-bmi]', host).forEach(inp => {
-        const id = inp.getAttribute("data-id");
-        const k = inp.getAttribute("data-bmi"); // h/w
-        const handler = () => {
-          this.state.bmi[id] = this.state.bmi[id] || {};
-          this.state.bmi[id][k] = inp.value;
-          this.refreshBMI(id);
-          this.updateProgress();
-        };
-        on(inp, "input", handler);
-        on(inp, "change", handler);
-      });
-    },
-
-    refreshBMI(id){
-      const row = this.state.bmi[id] || {};
-      const bmi = this.computeBMI(row.h, row.w);
-      const bmiTxt = bmi ? bmi.toFixed(1) : "—";
-      const lvl = this.bmiLevel(bmi);
-
-      const out = this.els.bmiList?.querySelector?.(`[data-bmiout="${CSS.escape(id)}"]`);
-      const outS = this.els.bmiList?.querySelector?.(`[data-bmioutstatus="${CSS.escape(id)}"]`);
-      const light = this.els.bmiList?.querySelector?.(`[data-bmilight="${CSS.escape(id)}"]`);
-      const stat = this.els.bmiList?.querySelector?.(`[data-bmistatus="${CSS.escape(id)}"]`);
-
-      if(out) out.value = bmiTxt;
-      if(outS) outS.value = lvl.text;
-
-      if(light){
-        light.classList.remove("is-green","is-amber","is-red");
-        if(lvl.cls) light.classList.add(lvl.cls);
-      }
-      if(stat) stat.textContent = lvl.text;
-    },
-
     updateProgress(){
       this.updateAge();
-
-      const p1 = this.completionPct();
-      const p2 = this.bmiCompletionPct();
-      const overall = Math.max(0, Math.min(100, Math.round((p1 + p2) / 2)));
-
-      if(this.els.progressFill) this.els.progressFill.style.width = overall + "%";
-      if(this.els.progressText) this.els.progressText.textContent = overall + "%";
-
-      if(this.els.btnNext){
-        if(this.state.step === 1) this.els.btnNext.disabled = !this.isStepValid();
-        else this.els.btnNext.disabled = !this.isStep2Valid();
-      }
+      const pct = this.completionPct();
+      if(this.els.progressFill) this.els.progressFill.style.width = pct + "%";
+      if(this.els.progressText) this.els.progressText.textContent = pct + "%";
+      if(this.els.btnNext) this.els.btnNext.disabled = !this.isStepValid();
     },
 
     addInsured(type){
@@ -1009,7 +805,6 @@
 
     removeInsured(id){
       this.state.insured = this.state.insured.filter(x => x.id !== id);
-      delete this.state.bmi[id];
       this.renderInsured();
       this.updateProgress();
     },
@@ -1049,7 +844,13 @@
             <input class="input" data-k="phone" data-id="${it.id}" inputmode="tel" placeholder="05x-xxxxxxx" value="${escapeAttr(it.data?.phone)}" />
           </div>
         `;
-        const jobBlock = isMinor ? "" : `
+                const emailBlock = (it.type === "spouse") ? `
+          <div class="field">
+            <label class="label">מייל *</label>
+            <input class="input lcEmailInput" data-k="email" data-id="${it.id}" type="email" placeholder="name@example.com" value="${escapeAttr(it.data?.email)}" />
+          </div>
+        ` : "";
+const jobBlock = isMinor ? "" : `
           <div class="field">
             <label class="label">עיסוק *</label>
             <input class="input" data-k="job" data-id="${it.id}" value="${escapeAttr(it.data?.job)}" />
@@ -1076,12 +877,18 @@
 
               <div class="field">
                 <label class="label">תעודת זהות *</label>
-                <input class="input" data-k="id" data-id="${it.id}" inputmode="numeric" placeholder="123456789" value="${escapeAttr(it.data?.id)}" />
+                <input class="input" data-k="id" data-id="${it.id}" inputmode="numeric" value="${escapeAttr(it.data?.id)}" />
               </div>
 
               <div class="field">
                 <label class="label">תאריך לידה מלא *</label>
-                <input class="input" data-k="dob" data-id="${it.id}" type="date" value="${escapeAttr(it.data?.dob)}" />
+                <div class="lcInline">
+                  <input class="input" data-k="dob" data-id="${it.id}" type="date" value="${escapeAttr(it.data?.dob)}" />
+                  <div class="lcAge" id="agePill_${it.id}" title="גיל המבוטח">
+                    <span class="lcAge__k">גיל</span>
+                    <span class="lcAge__v" id="age_${it.id}">—</span>
+                  </div>
+                </div>
               </div>
 
               <div class="field">
@@ -1094,6 +901,7 @@
               </div>
 
               ${phoneBlock}
+              ${emailBlock}
               ${jobBlock}
             </div>
 
@@ -1112,11 +920,15 @@
           if(!it) return;
           it.data = it.data || {};
           it.data[k] = inp.value;
+          if(k === "dob") this.updateInsuredAge(id);
           this.updateProgress();
         };
         on(inp, "input", handler);
         on(inp, "change", handler);
       });
+
+      // init ages for insured cards
+      (this.state.insured || []).forEach(it => this.updateInsuredAge(it.id));
     },
 
     async lookupZip(){
@@ -1137,7 +949,7 @@
     }
   };
 
-function escapeAttr(v){
+  function escapeAttr(v){
     return escapeHtml(safeTrim(v)).replace(/"/g, "&quot;");
   }
 
