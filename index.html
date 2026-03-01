@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+ <meta charset="utf-8" />
+ <meta name="viewport" content="width=device-width,initial-scale=1" />
+ <title>GEMEL INVEST • מערכת CRM</title>
+ <meta name="theme-color" content="#eef4ff" />
+
+ <link rel="stylesheet" href="./app.css?v=20260301-1805" />
+
+ </head>
+
+<body class="lcAuthLock">
+ <!-- Login Overlay (Premium) -->
+ <div class="lcLogin" id="lcLogin" aria-hidden="true">
+ <div class="lcLogin__card" role="dialog" aria-modal="true" aria-label="כניסה למערכת">
+  <div class="lcLogin__brand">
+  <div class="lcLogin__logo lcLogin__logo--img" aria-hidden="true">
+   <img src="./logo-login-clean.png" alt="GEMEL INVEST" class="lcLogin__logoImg" />
+  </div>
+  <div class="lcLogin__brandText">
+   <div class="lcLogin__brandName">GEMEL INVEST</div>
+   <div class="lcLogin__brandSub">סוכנות לביטוח</div>
+  </div>
+  </div>
+
+  <div class="lcLogin__title">כניסה למערכת</div>
+  <div class="lcLogin__hint">הזן שם משתמש וקוד כניסה</div>
+
+  <form id="lcLoginForm" class="lcLogin__form" autocomplete="off">
+  <label class="lcLogin__label">שם משתמש</label>
+  <input id="lcLoginUser" name="username" class="lcLogin__input" />
+
+  <label class="lcLogin__label">קוד כניסה (PIN)</label>
+  <input id="lcLoginPin" name="pin" class="lcLogin__input" inputmode="numeric" />
+
+  <label class="lcLogin__remember">
+   <input id="lcLoginRemember" type="checkbox" />
+   <span>זכור אותי במחשב הזה</span>
+  </label>
+
+  <button class="lcLogin__btn" type="submit">התחבר</button>
+  <div id="lcLoginError" class="lcLogin__error" aria-live="polite"></div>
+  </form>
+
+  <div class="lcLogin__foot">שכחת קוד? פנה למנהל המערכת</div>
+ </div>
+ </div>
+
+ <div class="app" id="app">
+ <!-- Sidebar (left) -->
+ <aside class="sidebar" aria-label="תפריט ראשי">
+  <div class="brand brand--logoOnly">
+  <div class="brand__logo brand__logo--img" aria-hidden="true">
+   <img src="./logo-login-clean.png" alt="GEMEL INVEST" class="brand__logoImg" />
+  </div>
+  </div>
+
+  <nav class="nav">
+  <button class="nav__item is-active" data-view="dashboard">
+   <span class="nav__icon">📊</span>
+   <span class="nav__label">דשבורד</span>
+  </button>
+<button class="nav__item" data-view="settings">
+   <span class="nav__icon">⚙️</span>
+   <span class="nav__label">הגדרות מערכת</span>
+  </button>
+
+  <button class="nav__item" data-view="users" id="navUsers" style="display:none">
+   <span class="nav__icon">👥</span>
+   <span class="nav__label">ניהול משתמשים</span>
+  </button>
+  </nav>
+ </aside>
+
+ <!-- Main -->
+ <main class="main">
+  <!-- Topbar -->
+  <header class="topbar">
+  <div class="topbar__left">
+   <div class="pageTitle">
+   <div class="pageTitle__kicker">GEMEL INVEST</div>
+   <h1 class="pageTitle__title" id="pageTitle">דשבורד</h1>
+   </div>
+  </div>
+
+  <div class="topbar__right">
+<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+ <button class="btn btn--glassCta lcTopBtn" id="btnNewCustomerWizard" type="button"><span class="glassCta__icon" aria-hidden="true">＋</span><span class="glassCta__text">הקמת לקוח חדש</span></button>
+
+<div class="lcUserPill" id="lcUserPill" style="display:none;">
+   <span class="lcUserPill__dot" aria-hidden="true"></span>
+   <span class="lcUserPill__text" id="lcUserPillText">מחובר</span>
+   <button class="lcUserPill__btn" id="btnLogout" type="button">התנתק</button>
+   </div>
+
+</div>
+</div>
+  </header>
+
+  <!-- Content -->
+  <section class="content">
+
+  <!-- DASHBOARD -->
+  <section class="view is-visible" id="view-dashboard"></section>
+<!-- MY FLOW --><!-- ESIGN --><!-- SETTINGS -->
+  <section class="view" id="view-settings">
+   <div class="card">
+   <div class="card__head">
+    <div class="card__title">הגדרות מערכת</div>
+    <div class="card__hint">חיבור ל-Google Sheets + מצב עבודה</div>
+   </div>
+
+   <div class="formGrid">
+    <div class="field">
+    <label class="label">מצב נתונים</label>
+    <div class="pill" style="display:inline-flex; margin-top:6px">
+     <span class="dot ok" aria-hidden="true"></span>
+     <span>Google Sheets בלבד</span>
+    </div>
+    <div class="help">המערכת עובדת רק מול Google Sheets (Apps Script Web App). אין מצב Local בגירסה הזו.</div>
+    </div>
+
+    <div class="field">
+    <label class="label">כתובת Web App (Apps Script)</label>
+    <input class="input" id="gsUrl" type="url" placeholder="הדבק כאן את ה-URL של ה-Web App" />
+    <div class="help">לדוגמא: https://script.google.com/macros/s/XXXX/exec</div>
+    </div>
+
+    <div class="field">
+    <label class="label">פעולות</label>
+    <div class="row">
+     <button class="btn" id="btnTestConn" type="button">בדיקת חיבור</button>
+     <button class="btn" id="btnSyncNow" type="button">סנכרון עכשיו</button>
+         </div>
+    <div class="help">שמירה/טעינה מתבצעת מול ה-Web App. אם יש בעיה, בדוק Deploy והרשאות.</div>
+    </div>
+   </div>
+   </div>
+  </section>
+
+  <!-- USERS (Admin only) -->
+  <section class="view" id="view-users">
+   <div class="card">
+   <div class="card__head">
+    <div class="card__title">ניהול משתמשים</div>
+    <div class="card__hint">הוספה/עריכה/השבתה של נציגים וסוכנים</div>
+   </div>
+
+   <div class="lcUsers__actions">
+    <button class="btn" id="btnAddUser" type="button">➕ הוסף נציג/סוכן</button>
+    <input class="input lcUsers__search" id="usersSearch" type="text" placeholder="חיפוש לפי שם…" />
+    <select class="input lcUsers__filter" id="usersFilter">
+    <option value="all">הכל</option>
+    <option value="active">פעילים</option>
+    <option value="disabled">מושבתים</option>
+    </select>
+   </div>
+
+   <div class="tableWrap">
+    <table class="table">
+    <thead>
+     <tr>
+     <th>שם</th>
+     <th>תפקיד</th>
+     <th>סטטוס</th>
+     <th style="width:220px">פעולות</th>
+     </tr>
+    </thead>
+    <tbody id="usersTbody"></tbody>
+    </table>
+   </div>
+   </div>
+  </section>
+
+  </section>
+ </main>
+</div>
+
+
+
+
+
+ 
+ <!-- Users Add/Edit Modal -->
+ <div class="modal lcUserModal" id="lcUserModal" aria-hidden="true">
+  <div class="modal__backdrop" data-close="1"></div>
+  <div class="modal__panel lcUserModal__panel" role="dialog" aria-modal="true" aria-label="ניהול משתמש">
+   <div class="modal__head">
+    <div>
+     <div class="modal__kicker">GEMEL INVEST</div>
+     <div class="modal__title" id="lcUserModalTitle">הוסף נציג/סוכן</div>
+    </div>
+    <button class="iconBtn" id="lcUserModalClose" type="button" aria-label="סגור">✕</button>
+   </div>
+
+   <div class="modal__body">
+    <input type="hidden" id="lcUserId" />
+
+    <div class="formGrid lcUserModal__grid">
+     <div class="field">
+      <label class="label">שם</label>
+      <input class="input" id="lcUserName" type="text" placeholder="לדוגמה: סתיו כהן" />
+      <div class="lcLogin__error" id="lcUserNameErr" style="display:none"></div>
+     </div>
+
+     <div class="field">
+      <label class="label">שם משתמש</label>
+      <input class="input" id="lcUserUsername" type="text" placeholder="לדוגמה: סתיו" />
+      <div class="lcLogin__error" id="lcUserUsernameErr" style="display:none"></div>
+     </div>
+
+     <div class="field">
+      <label class="label">קוד כניסה (PIN)</label>
+      <input class="input" id="lcUserPin" type="text" inputmode="numeric" placeholder="0000" />
+      <div class="lcLogin__error" id="lcUserPinErr" style="display:none"></div>
+     </div>
+
+     <div class="field">
+      <label class="label">תפקיד</label>
+      <select class="input" id="lcUserRole">
+       <option value="agent">נציג</option>
+       <option value="manager">מנהל (ללא הגדרות מערכת)</option>
+       <option value="ops">תפעול (צפייה בכל הלקוחות)</option>
+      </select>
+      <div class="help">תפעול: צופה בכל הלקוחות (בחיפוש), בלי ניהול משתמשים והגדרות מערכת.</div>
+     </div>
+
+     <div class="field">
+      <label class="label">סטטוס</label>
+      <label class="lcLogin__remember" style="margin-top:2px">
+       <input id="lcUserActive" type="checkbox" checked />
+       <span>משתמש פעיל</span>
+      </label>
+     </div>
+
+     <div class="field" style="grid-column: 1 / -1;">
+      <div class="lcLogin__error" id="lcUserModalErr" style="display:none"></div>
+     </div>
+    </div>
+   </div>
+
+   <div class="modal__foot">
+    <button class="btn" id="lcUserModalCancel" type="button">ביטול</button>
+    <button class="btn btn--primary" id="lcUserModalSave" type="button">שמור</button>
+   </div>
+  </div>
+ </div>
+
+
+
+<!-- New Customer Wizard (Fullscreen Overlay) -->
+ <div class="lcWizard" id="lcWizard" aria-hidden="true">
+ <div class="lcWizard__backdrop" data-close="1"></div>
+ <div class="lcWizard__panel" role="dialog" aria-modal="true" aria-label="הקמת לקוח">
+  <div class="lcWizard__head">
+  <div class="lcWizard__titleWrap">
+   <div class="lcWizard__kicker">GEMEL INVEST</div>
+   <div class="lcWizard__title">הקמת לקוח</div>
+  </div>
+  <button class="iconBtn lcWizard__close" id="lcWizardClose" type="button" aria-label="סגור">✕</button>
+  </div>
+
+  <div class="lcWizard__progress">
+  <div class="lcSteps" id="lcSteps"></div>
+  <div class="lcProgressBar"><span id="lcProgressFill"></span></div>
+  </div>
+
+  <div class="lcWizard__tabs">
+  <div class="lcTabs" id="lcInsTabs"></div>
+  <button class="btn lcWizard__addIns" id="lcAddInsuredBtn" type="button">➕ הוסף מבוטח</button>
+  </div>
+
+  <div class="lcWizard__body" id="lcWizardBody"></div>
+
+  <div class="lcWizard__foot">
+  <div class="lcWizard__footLeft">
+   <button class="btn" id="lcPrevStep" type="button"> הקודם</button>
+   <button class="btn btn--primary" id="lcNextStep" type="button">הבא </button>
+  </div>
+  <div class="lcWizard__footRight muted small" id="lcWizardHint" aria-live="polite"></div>
+  </div>
+ </div>
+
+ <!-- Add insured picker -->
+ <div class="lcMiniModal" id="lcInsPicker" aria-hidden="true">
+  <div class="lcMiniModal__backdrop" data-close="1"></div>
+  <div class="lcMiniModal__panel" role="dialog" aria-modal="true" aria-label="הוסף מבוטח">
+  <div class="lcMiniModal__head">
+   <div class="lcMiniModal__title">הוסף מבוטח</div>
+   <button class="iconBtn" id="lcInsPickerClose" type="button" aria-label="סגור">✕</button>
+  </div>
+  <div class="lcMiniModal__body">
+   <button class="btn lcPickBtn" data-ins-type="spouse" type="button">בן/בת זוג</button>
+   <button class="btn lcPickBtn" data-ins-type="adult" type="button">בגיר</button>
+   <button class="btn lcPickBtn" data-ins-type="child" type="button">קטין</button>
+  </div>
+  <div class="lcMiniModal__foot muted small">ניתן להסיר מבוטח בכל שלב.</div>
+  </div>
+ </div>
+  <!-- Health Covers Drawer (Step 3: Existing Policies - Health only) -->
+    <div class="drawer lcCoversDrawer" id="lcCoversDrawer" aria-hidden="true">
+      <div class="drawer__backdrop" id="lcCoversDrawerBackdrop"></div>
+      <div class="drawer__panel" role="dialog" aria-modal="true" aria-label="כיסויי בריאות">
+        <div class="drawer__head">
+          <div>
+            <div class="drawer__kicker">GEMEL INVEST</div>
+            <div class="drawer__title" id="lcCoversDrawerTitle">בחירת כיסויי בריאות</div>
+          </div>
+          <button class="iconBtn" id="lcCoversDrawerClose" type="button" aria-label="סגור">✕</button>
+        </div>
+        <div class="drawer__body">
+          <div class="lcCoversHint muted small">סמן את הכיסויים הרלוונטיים לפוליסה.</div>
+          <div class="lcCoversList" id="lcCoversList"></div>
+        </div>
+        <div class="lcCoversFoot">
+          <button class="btn" id="lcCoversCancel" type="button">ביטול</button>
+          <button class="btn btn--primary" id="lcCoversSave" type="button">שמירה</button>
+        </div>
+      </div>
+    </div>
+
+ </div>
+
+  
+<script src="./app.js?v=20260301-1805"></script>
