@@ -6,7 +6,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260317-1535";
+  const BUILD = "20260317-2035";
   const ADMIN_CONTACT_EMAIL = "oriasomech@gmail.com";
   const ARCHIVE_CUSTOMER_PIN = "1990";
 
@@ -102,6 +102,16 @@
 
   function normalizeCustomerRecord(c, idx=0){
     const payload = c?.payload && typeof c.payload === "object" ? c.payload : {};
+    if(!payload.opsMirror || typeof payload.opsMirror !== "object") payload.opsMirror = {};
+    if(!safeTrim(payload.opsMirror.queueStatus) && safeTrim(c?.reflectStatus)) payload.opsMirror.queueStatus = safeTrim(c.reflectStatus);
+    if(!safeTrim(payload.opsMirror.submittedAt) && safeTrim(c?.reflectSubmittedAt)) payload.opsMirror.submittedAt = safeTrim(c.reflectSubmittedAt);
+    if(!safeTrim(payload.opsMirror.submittedBy) && safeTrim(c?.reflectSubmittedBy)) payload.opsMirror.submittedBy = safeTrim(c.reflectSubmittedBy);
+    if(!safeTrim(payload.opsMirror.startedAt) && safeTrim(c?.reflectStartedAt)) payload.opsMirror.startedAt = safeTrim(c.reflectStartedAt);
+    if(!safeTrim(payload.opsMirror.startedBy) && safeTrim(c?.reflectStartedBy)) payload.opsMirror.startedBy = safeTrim(c.reflectStartedBy);
+    if(!safeTrim(payload.opsMirror.finishedAt) && safeTrim(c?.reflectFinishedAt)) payload.opsMirror.finishedAt = safeTrim(c.reflectFinishedAt);
+    if(!safeTrim(payload.opsMirror.finishedBy) && safeTrim(c?.reflectFinishedBy)) payload.opsMirror.finishedBy = safeTrim(c.reflectFinishedBy);
+    if(!safeTrim(payload.opsMirror.savedAt) && safeTrim(c?.reflectSavedAt)) payload.opsMirror.savedAt = safeTrim(c.reflectSavedAt);
+    if(!safeTrim(payload.opsMirror.savedBy) && safeTrim(c?.reflectSavedBy)) payload.opsMirror.savedBy = safeTrim(c.reflectSavedBy);
     if((!Array.isArray(payload.insureds) || !payload.insureds.length) && Array.isArray(payload?.operational?.insureds)){
       payload.insureds = JSON.parse(JSON.stringify(payload.operational.insureds));
     }
@@ -120,9 +130,11 @@
     const insuredCount = Number(c?.insuredCount || payload?.insureds?.length || 0) || 0;
     const existingPoliciesCount = Number(c?.existingPoliciesCount || ((payload?.insureds || []).reduce((acc, ins) => acc + ((ins?.data?.existingPolicies || []).length), 0))) || 0;
     const newPoliciesCount = Number(c?.newPoliciesCount || (payload?.newPolicies || []).length) || 0;
+    const queueStatus = safeTrim(payload?.opsMirror?.queueStatus || c?.reflectStatus);
+    const statusLabel = queueStatus ? getMirrorQueueLabel(queueStatus) : (safeTrim(c?.status) || "חדש");
     return {
       id: safeTrim(c?.id) || ("cust_" + idx + "_" + Math.random().toString(16).slice(2)),
-      status: safeTrim(c?.status) || "חדש",
+      status: statusLabel,
       fullName,
       idNumber,
       phone,
@@ -137,6 +149,206 @@
       newPoliciesCount,
       payload
     };
+  }
+
+  function getMirrorQueueStore(rec){
+    if(!rec || typeof rec !== "object") return null;
+    if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+    if(!rec.payload.opsMirror || typeof rec.payload.opsMirror !== "object") rec.payload.opsMirror = {};
+    const store = rec.payload.opsMirror;
+    store.queueStatus = safeTrim(store.queueStatus || rec.reflectStatus) || "";
+    store.submittedAt = safeTrim(store.submittedAt || rec.reflectSubmittedAt) || "";
+    store.submittedBy = safeTrim(store.submittedBy || rec.reflectSubmittedBy) || "";
+    store.finishedAt = safeTrim(store.finishedAt || rec.reflectFinishedAt) || "";
+    store.finishedBy = safeTrim(store.finishedBy || rec.reflectFinishedBy) || "";
+    store.startedAt = safeTrim(store.startedAt || rec.reflectStartedAt) || "";
+    store.startedBy = safeTrim(store.startedBy || rec.reflectStartedBy) || "";
+    store.savedAt = safeTrim(store.savedAt || rec.reflectSavedAt) || "";
+    store.savedBy = safeTrim(store.savedBy || rec.reflectSavedBy) || "";
+    rec.reflectStatus = store.queueStatus;
+    rec.reflectSubmittedAt = store.submittedAt;
+    rec.reflectSubmittedBy = store.submittedBy;
+    rec.reflectFinishedAt = store.finishedAt;
+    rec.reflectFinishedBy = store.finishedBy;
+    rec.reflectStartedAt = store.startedAt;
+    rec.reflectStartedBy = store.startedBy;
+    rec.reflectSavedAt = store.savedAt;
+    rec.reflectSavedBy = store.savedBy;
+    return store;
+  }
+
+  function getMirrorQueueStatus(rec){
+    const store = getMirrorQueueStore(rec);
+    return safeTrim(store?.queueStatus);
+  }
+
+  function getMirrorQueueLabel(status){
+    const key = safeTrim(status);
+    if(key === 'waiting') return 'ממתין לשיקוף';
+    if(key === 'in_progress') return 'בטיפול שיקוף';
+    if(key === 'done') return 'בוצע שיקוף';
+    if(key === 'saved_for_later') return 'נשמר להגשה במועד אחר';
+    return 'חדש';
+  }
+
+  function getMirrorQueueMetaText(rec){
+    const store = getMirrorQueueStore(rec) || {};
+    const status = getMirrorQueueStatus(rec);
+    const parts = [];
+    if(status === 'waiting'){
+      if(safeTrim(store.submittedBy)) parts.push(`הוגש ע"י ${safeTrim(store.submittedBy)}`);
+      if(safeTrim(store.submittedAt)) parts.push(`בתאריך ${CustomersUI?.formatDate ? CustomersUI.formatDate(store.submittedAt) : safeTrim(store.submittedAt)}`);
+    }else if(status === 'in_progress'){
+      if(safeTrim(store.startedBy)) parts.push(`בטיפול ${safeTrim(store.startedBy)}`);
+      if(safeTrim(store.startedAt)) parts.push(`התחיל ${CustomersUI?.formatDate ? CustomersUI.formatDate(store.startedAt) : safeTrim(store.startedAt)}`);
+    }else if(status === 'done'){
+      if(safeTrim(store.finishedBy)) parts.push(`בוצע ע"י ${safeTrim(store.finishedBy)}`);
+      if(safeTrim(store.finishedAt)) parts.push(`הסתיים ${CustomersUI?.formatDate ? CustomersUI.formatDate(store.finishedAt) : safeTrim(store.finishedAt)}`);
+    }else if(status === 'saved_for_later'){
+      if(safeTrim(store.savedBy)) parts.push(`נשמר ע"י ${safeTrim(store.savedBy)}`);
+      if(safeTrim(store.savedAt)) parts.push(`בתאריך ${CustomersUI?.formatDate ? CustomersUI.formatDate(store.savedAt) : safeTrim(store.savedAt)}`);
+    }
+    return parts.join(' · ');
+  }
+
+  function getMirrorQueueBadgeClass(status){
+    const key = safeTrim(status);
+    if(key === 'done') return 'badge--success';
+    if(key === 'waiting' || key === 'saved_for_later') return 'badge--warning';
+    if(key === 'in_progress') return 'badge--info';
+    return '';
+  }
+
+  function mergeCustomerRecords(baseRec, incomingRec){
+    const base = normalizeCustomerRecord(baseRec || {});
+    const incoming = normalizeCustomerRecord(incomingRec || {});
+    const baseStore = getMirrorQueueStore(base) || {};
+    const incomingStore = getMirrorQueueStore(incoming) || {};
+    const merged = Object.assign({}, base, incoming, {
+      payload: Object.assign({}, base.payload || {}, incoming.payload || {})
+    });
+    if(base.payload?.opsMirror || incoming.payload?.opsMirror){
+      merged.payload.opsMirror = Object.assign({}, base.payload?.opsMirror || {}, incoming.payload?.opsMirror || {});
+    }
+    const baseStatus = safeTrim(baseStore.queueStatus);
+    const incomingStatus = safeTrim(incomingStore.queueStatus);
+    const rank = (status) => {
+      if(status === 'done') return 4;
+      if(status === 'in_progress') return 3;
+      if(status === 'waiting') return 2;
+      if(status === 'saved_for_later') return 1;
+      return 0;
+    };
+    const baseUpdated = new Date(base?.updatedAt || base?.createdAt || 0).getTime() || 0;
+    const incomingUpdated = new Date(incoming?.updatedAt || incoming?.createdAt || 0).getTime() || 0;
+    const preferredStore = (rank(incomingStatus) > rank(baseStatus) || (!baseStatus && incomingStatus) || (incomingStatus === baseStatus && incomingUpdated >= baseUpdated))
+      ? incomingStore
+      : baseStore;
+    merged.payload.opsMirror = Object.assign({}, merged.payload.opsMirror || {}, preferredStore || {});
+    getMirrorQueueStore(merged);
+    if(!safeTrim(merged.status) || merged.status === 'חדש'){
+      const queueStatus = getMirrorQueueStatus(merged);
+      if(queueStatus) merged.status = getMirrorQueueLabel(queueStatus);
+    }
+    return merged;
+  }
+
+  function mergeCustomersWithBackup(liveCustomers, backupCustomers){
+    const byId = new Map();
+    const apply = (rec) => {
+      if(!rec || typeof rec !== 'object') return;
+      const normalized = normalizeCustomerRecord(rec);
+      const id = safeTrim(normalized?.id);
+      if(!id) return;
+      if(!byId.has(id)){
+        byId.set(id, normalized);
+        return;
+      }
+      byId.set(id, mergeCustomerRecords(byId.get(id), normalized));
+    };
+    (Array.isArray(liveCustomers) ? liveCustomers : []).forEach(apply);
+    (Array.isArray(backupCustomers) ? backupCustomers : []).forEach(apply);
+    return Array.from(byId.values());
+  }
+
+  function getMergedMirrorQueueCustomers(){
+    const backupState = Storage.loadBackup?.() || {};
+    const live = Array.isArray(State.data?.customers) ? State.data.customers.slice() : [];
+    const backup = Array.isArray(backupState?.customers) ? backupState.customers.slice() : [];
+    return mergeCustomersWithBackup(live, backup);
+  }
+
+  function syncMirrorQueueRecordEverywhere(rec){
+    const id = safeTrim(rec?.id);
+    if(!id) return rec;
+    const syncList = (list) => {
+      if(!Array.isArray(list)) return list;
+      return list.map(item => safeTrim(item?.id) === id ? mergeCustomerRecords(item, rec) : item);
+    };
+    if(Array.isArray(State.data?.customers)) State.data.customers = syncList(State.data.customers);
+    if(Array.isArray(State.data?.proposals)){
+      State.data.proposals = State.data.proposals.map(item => {
+        if(safeTrim(item?.customerId) === id || safeTrim(item?.id) === id){
+          const nextPayload = Object.assign({}, item?.payload || {});
+          nextPayload.opsMirror = Object.assign({}, nextPayload.opsMirror || {}, rec?.payload?.opsMirror || {});
+          return Object.assign({}, item, {
+            status: getMirrorQueueLabel(getMirrorQueueStatus(rec)) || item.status,
+            updatedAt: rec.updatedAt || item.updatedAt,
+            payload: nextPayload
+          });
+        }
+        return item;
+      });
+    }
+    return rec;
+  }
+
+  function markCustomerMirrorQueue(rec, status, extra={}){
+    if(!rec || typeof rec !== 'object') return rec;
+    const store = getMirrorQueueStore(rec);
+    const stamp = safeTrim(extra.at) || nowISO();
+    const by = safeTrim(extra.by) || safeTrim(Auth?.current?.name);
+    store.queueStatus = safeTrim(status);
+    rec.reflectStatus = store.queueStatus;
+    if(status === 'waiting'){
+      store.submittedAt = stamp;
+      store.submittedBy = by;
+      store.startedAt = '';
+      store.startedBy = '';
+      store.finishedAt = '';
+      store.finishedBy = '';
+      rec.status = 'ממתין לשיקוף';
+    }else if(status === 'saved_for_later'){
+      store.savedAt = stamp;
+      store.savedBy = by;
+      store.startedAt = '';
+      store.startedBy = '';
+      store.finishedAt = '';
+      store.finishedBy = '';
+      rec.status = 'הצעה נשמרה להגשה';
+    }else if(status === 'in_progress'){
+      store.startedAt = stamp;
+      store.startedBy = by;
+      rec.status = 'בטיפול שיקוף';
+    }else if(status === 'done'){
+      store.finishedAt = stamp;
+      store.finishedBy = by;
+      rec.status = 'בוצע שיקוף';
+    }
+    rec.reflectSubmittedAt = store.submittedAt || '';
+    rec.reflectSubmittedBy = store.submittedBy || '';
+    rec.reflectStartedAt = store.startedAt || '';
+    rec.reflectStartedBy = store.startedBy || '';
+    rec.reflectFinishedAt = store.finishedAt || '';
+    rec.reflectFinishedBy = store.finishedBy || '';
+    rec.reflectSavedAt = store.savedAt || '';
+    rec.reflectSavedBy = store.savedBy || '';
+    rec.updatedAt = stamp;
+    State.data.meta = State.data.meta || {};
+    State.data.meta.updatedAt = stamp;
+    syncMirrorQueueRecordEverywhere(rec);
+    try { Storage.saveBackup(normalizeState(State.data)); } catch(_e) {}
+    return rec;
   }
 
   function normalizeProposalRecord(p, idx=0){
@@ -169,28 +381,6 @@
       insuredCount,
       payload
     };
-  }
-
-  function mergeProposalLists(primaryList, fallbackList){
-    const map = new Map();
-    const pushAll = (items) => {
-      (Array.isArray(items) ? items : []).forEach((item, idx) => {
-        const rec = normalizeProposalRecord(item, idx);
-        const key = String(rec.id || "");
-        if(!key) return;
-        const prev = map.get(key);
-        if(!prev){
-          map.set(key, rec);
-          return;
-        }
-        const prevAt = new Date(prev.updatedAt || prev.createdAt || 0).getTime();
-        const nextAt = new Date(rec.updatedAt || rec.createdAt || 0).getTime();
-        if(nextAt >= prevAt) map.set(key, rec);
-      });
-    };
-    pushAll(primaryList);
-    pushAll(fallbackList);
-    return Array.from(map.values()).sort((a,b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
   }
 
   // ---------- Storage (Sheets) ----------
@@ -503,42 +693,6 @@
     }
   };
 
-  const Toast = {
-    el: null,
-    timer: null,
-
-    ensure(){
-      if(this.el) return this.el;
-      const root = document.createElement("div");
-      root.id = "lcToast";
-      root.className = "lcToast";
-      root.setAttribute("aria-live", "polite");
-      root.setAttribute("aria-atomic", "true");
-      root.innerHTML = `<div class="lcToast__icon" aria-hidden="true">✓</div><div class="lcToast__text">בוצע</div>`;
-      document.body.appendChild(root);
-      this.el = root;
-      return root;
-    },
-
-    show(message, type="success", ms=2600){
-      const root = this.ensure();
-      const textEl = root.querySelector('.lcToast__text');
-      const iconEl = root.querySelector('.lcToast__icon');
-      root.classList.remove('is-success','is-error','is-open');
-      root.classList.add(type === 'error' ? 'is-error' : 'is-success');
-      if(textEl) textEl.textContent = safeTrim(message) || 'בוצע';
-      if(iconEl) iconEl.textContent = type === 'error' ? '!' : '✓';
-      clearTimeout(this.timer);
-      requestAnimationFrame(() => root.classList.add('is-open'));
-      this.timer = setTimeout(() => {
-        root.classList.remove('is-open');
-      }, Math.max(1200, Number(ms) || 2600));
-    },
-
-    success(message, ms){ this.show(message, 'success', ms); },
-    error(message, ms){ this.show(message, 'error', ms); }
-  };
-
   // ---------- Forgot Password / Contact Admin ----------
   const ForgotPasswordUI = {
     els: null,
@@ -686,6 +840,7 @@ this.els.syncDot = $("#syncDot");
       this.els.navCustomers = $("#navCustomers");
       this.els.navProposals = $("#navProposals");
       this.els.navMirrors = $("#navMirrors");
+      this.els.btnOpenMirrorQueue = $("#btnOpenMirrorQueue");
       this.els.customersTbody = $("#customersTbody");
       this.els.customersSearch = $("#customersSearch");
       this.els.customersCountBadge = $("#customersCountBadge");
@@ -698,7 +853,13 @@ this.els.syncDot = $("#syncDot");
       on(this.els.btnLogout, "click", () => Auth.logout());
 // nav
       $$(".nav__item").forEach(btn => {
-        on(btn, "click", () => {
+        on(btn, "click", async (ev) => {
+          if(btn === this.els.btnOpenMirrorQueue || btn.id === 'btnOpenMirrorQueue'){
+            ev?.preventDefault?.();
+            ev?.stopPropagation?.();
+            await MirrorQueueUI.open();
+            return;
+          }
           const v = btn.getAttribute("data-view");
           if(!v) return;
           if(v === "settings" && !Auth.isAdmin()) return;
@@ -737,6 +898,15 @@ this.els.syncDot = $("#syncDot");
       on(this.els.btnCustomersRefresh, "click", () => CustomersUI.render());
       on(this.els.proposalsSearch, "input", () => ProposalsUI.render());
       on(this.els.btnProposalsRefresh, "click", () => ProposalsUI.render());
+      on(this.els.btnOpenMirrorQueue, "click", async (ev) => { ev?.preventDefault?.(); ev?.stopPropagation?.(); await MirrorQueueUI.open(); });
+      if(this.els.btnOpenMirrorQueue) this.els.btnOpenMirrorQueue.onclick = async (ev) => { ev?.preventDefault?.(); ev?.stopPropagation?.(); await MirrorQueueUI.open(); };
+      on(document, "click", async (ev) => {
+        const trigger = ev.target?.closest?.('#btnOpenMirrorQueue');
+        if(!trigger) return;
+        ev?.preventDefault?.();
+        ev?.stopPropagation?.();
+        await MirrorQueueUI.open();
+      }, true);
 this.applyRoleUI();
       this.renderAuthPill();
     },
@@ -752,6 +922,7 @@ this.applyRoleUI();
       if (this.els.navCustomers) this.els.navCustomers.style.display = Auth.current ? "" : "none";
       if (this.els.navProposals) this.els.navProposals.style.display = (Auth.current && !isOps) ? "" : "none";
       if (this.els.navMirrors) this.els.navMirrors.style.display = isOps ? "" : "none";
+      if (this.els.btnOpenMirrorQueue) this.els.btnOpenMirrorQueue.style.display = isOps ? "" : "none";
       if (newCustomerBtn) newCustomerBtn.style.display = isOps ? "none" : "";
     },
 
@@ -1096,12 +1267,17 @@ txt.textContent = "";
           Wizard.getOperationalPayload = prevPayload;
         }
       });
-      on(this.els.proposalBtn, "click", () => {
+      on(this.els.proposalBtn, "click", async () => {
         const rec = this.current();
         if(!rec) return;
+        const currentStatus = getMirrorQueueStatus(rec);
+        if(currentStatus === 'waiting' || currentStatus === 'in_progress' || currentStatus === 'done') return;
+        markCustomerMirrorQueue(rec, 'waiting');
+        await App.persist('הצעה הוגשה מתיק הלקוח למחלקת תפעול');
         this.currentSection = "wallet";
         this.renderCurrentSection(rec);
-        alert(`הצעה עבור ${rec.fullName || "הלקוח"} תהיה זמינה בשלב הבא.`);
+        CustomersUI.render();
+        alert(`ההצעה של ${rec.fullName || "הלקוח"} הועברה למחלקת התפעול וממתינה לשיקוף.`);
       });
       on(this.els.medicalBtn, "click", () => {
         const rec = this.current();
@@ -1148,7 +1324,7 @@ txt.textContent = "";
       const q = safeTrim(UI.els.customersSearch?.value).toLowerCase();
       let rows = this.list();
       if(!q) return rows;
-      return rows.filter(rec => [rec.fullName, rec.idNumber, rec.phone, rec.agentName, rec.email, rec.city].some(v => safeTrim(v).toLowerCase().includes(q)));
+      return rows.filter(rec => [rec.fullName, rec.idNumber, rec.phone, rec.agentName, rec.email, rec.city, getMirrorQueueLabel(getMirrorQueueStatus(rec)), getMirrorQueueMetaText(rec)].some(v => safeTrim(v).toLowerCase().includes(q)));
     },
 
     handleOpenCustomerClick(ev, customerId){
@@ -1197,7 +1373,7 @@ txt.textContent = "";
           <td>${escapeHtml(rec.idNumber || "—")}</td>
           <td dir="ltr">${escapeHtml(rec.phone || "—")}</td>
           <td>${escapeHtml(rec.agentName || "—")}</td>
-          <td><span class="badge">${escapeHtml(rec.status || "חדש")}</span></td>
+          <td><div class="lcCustomers__statusCol"><span class="badge ${getMirrorQueueBadgeClass(getMirrorQueueStatus(rec))}">${escapeHtml(getMirrorQueueLabel(getMirrorQueueStatus(rec)) || rec.status || "חדש")}</span>${getMirrorQueueMetaText(rec) ? `<span class="muted small">${escapeHtml(getMirrorQueueMetaText(rec))}</span>` : ''}</div></td>
           <td>${escapeHtml(updated)}</td>
           <td><div class="lcCustomers__rowActions">
             <button class="btn btn--primary" data-open-customer="${escapeHtml(rec.id)}" type="button">פתח תיק</button>
@@ -1206,6 +1382,13 @@ txt.textContent = "";
       }).join("") : `<tr><td colspan="7"><div class="emptyState"><div class="emptyState__icon">🗂️</div><div class="emptyState__title">עדיין אין לקוחות</div><div class="emptyState__text">ברגע שמסיימים הקמת לקוח, הלקוח יישמר כאן אוטומטית ויהיה אפשר לפתוח את תיק הלקוח המלא.</div></div></td></tr>`;
 
       this.bindRowActionButtons();
+    },
+
+    refreshVisibleState(){
+      this.render();
+      if(this.currentId && this.els.wrap?.classList?.contains('is-open')){
+        try{ this.openById(this.currentId, { refreshOnly:true }); }catch(_e){}
+      }
     },
 
     showLoader(){
@@ -1603,12 +1786,28 @@ txt.textContent = "";
     },
 
     updateHeroButtons(){
-      if(this.els.proposalBtn) this.els.proposalBtn.classList.remove('is-section-active');
+      const rec = this.current();
+      const queueStatus = getMirrorQueueStatus(rec);
+      if(this.els.proposalBtn){
+        this.els.proposalBtn.classList.remove('is-section-active');
+        this.els.proposalBtn.disabled = false;
+        this.els.proposalBtn.textContent = 'הגש לתפעול';
+        if(queueStatus === 'waiting'){
+          this.els.proposalBtn.disabled = true;
+          this.els.proposalBtn.textContent = 'ממתין לשיקוף';
+        }else if(queueStatus === 'in_progress'){
+          this.els.proposalBtn.disabled = true;
+          this.els.proposalBtn.textContent = 'בטיפול תפעול';
+        }else if(queueStatus === 'done'){
+          this.els.proposalBtn.disabled = true;
+          this.els.proposalBtn.textContent = 'בוצע שיקוף';
+        }else if(queueStatus === 'saved_for_later'){
+          this.els.proposalBtn.textContent = 'הגש כעת לתפעול';
+        }
+      }
       if(this.els.medicalBtn) this.els.medicalBtn.classList.remove('is-section-active');
       if(this.currentSection === 'medical'){
         if(this.els.medicalBtn) this.els.medicalBtn.classList.add('is-section-active');
-      } else {
-        if(this.els.proposalBtn) this.els.proposalBtn.classList.add('is-section-active');
       }
     },
 
@@ -1663,10 +1862,15 @@ txt.textContent = "";
         if(this.els.name) this.els.name.textContent = rec.fullName || "תיק לקוח";
         if(this.els.avatar) this.els.avatar.textContent = this.getAvatarText(rec);
         if(this.els.meta){
+          const queueStatus = getMirrorQueueStatus(rec);
+          const queueLabel = getMirrorQueueLabel(queueStatus);
+          const queueMeta = getMirrorQueueMetaText(rec);
           const metaParts = [
             rec.idNumber ? `<span class="customerHero__metaItem">ת.ז ${escapeHtml(rec.idNumber)}</span>` : "",
             rec.agentName ? `<span class="customerHero__metaSep">|</span><span class="customerHero__metaItem">נציג: ${escapeHtml(rec.agentName)}</span>` : "",
-            rec.phone ? `<span class="customerHero__metaSep">|</span><span class="customerHero__metaItem" dir="ltr">${escapeHtml(rec.phone)}</span>` : ""
+            rec.phone ? `<span class="customerHero__metaSep">|</span><span class="customerHero__metaItem" dir="ltr">${escapeHtml(rec.phone)}</span>` : "",
+            queueStatus ? `<span class="customerHero__metaSep">|</span><span class="customerHero__metaItem customerHero__metaItem--status"><span class="badge ${getMirrorQueueBadgeClass(queueStatus)}">${escapeHtml(queueLabel)}</span></span>` : "",
+            queueMeta ? `<span class="customerHero__metaSep">|</span><span class="customerHero__metaItem">${escapeHtml(queueMeta)}</span>` : ""
           ].filter(Boolean).join("");
           this.els.meta.innerHTML = metaParts;
         }
@@ -1879,6 +2083,107 @@ txt.textContent = "";
     }
   };
 
+  const MirrorQueueUI = {
+    els: {},
+
+    init(){
+      this.els.wrap = $("#mirrorQueueModal");
+      this.els.backdrop = $("#mirrorQueueBackdrop");
+      this.els.close = $("#mirrorQueueClose");
+      this.els.search = $("#mirrorQueueSearch");
+      this.els.tbody = $("#mirrorQueueTbody");
+      this.els.count = $("#mirrorQueueCountBadge");
+      on(this.els.backdrop, 'click', () => this.close());
+      on(this.els.close, 'click', () => this.close());
+      on(this.els.search, 'input', () => this.render());
+      on(this.els.tbody, 'click', (ev) => {
+        const btn = ev.target?.closest?.('[data-open-mirror-queue-customer]');
+        if(!btn) return;
+        const id = safeTrim(btn.getAttribute('data-open-mirror-queue-customer'));
+        if(!id) return;
+        const merged = getMergedMirrorQueueCustomers().find(rec => safeTrim(rec?.id) === id);
+        if(merged && !(Array.isArray(State.data?.customers) && State.data.customers.some(rec => safeTrim(rec?.id) === id))){
+          State.data.customers = (Array.isArray(State.data?.customers) ? State.data.customers.slice() : []).concat([merged]);
+        }
+        this.close();
+        UI.goView('mirrors');
+        setTimeout(() => MirrorsUI.selectCustomer(id), 40);
+      });
+    },
+
+    list(){
+      const rows = getMergedMirrorQueueCustomers().filter(rec => {
+        const status = getMirrorQueueStatus(rec);
+        return status === 'waiting' || status === 'in_progress' || status === 'done';
+      });
+      rows.sort((a,b) => {
+        const weight = (rec) => {
+          const s = getMirrorQueueStatus(rec);
+          if(s === 'in_progress') return 0;
+          if(s === 'waiting') return 1;
+          if(s === 'done') return 2;
+          return 3;
+        };
+        return weight(a) - weight(b) || new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0);
+      });
+      return rows;
+    },
+
+    filtered(){
+      const q = safeTrim(this.els.search?.value).toLowerCase();
+      const rows = this.list();
+      if(!q) return rows;
+      return rows.filter(rec => [rec.fullName, rec.idNumber, rec.phone, rec.agentName, rec.email, rec.city, getMirrorQueueLabel(getMirrorQueueStatus(rec))]
+        .some(v => safeTrim(v).toLowerCase().includes(q)));
+    },
+
+    async open(){
+      if(!Auth.isOps()) return;
+      this.init();
+      if(!this.els.wrap){
+        try{ UI.goView('mirrors'); }catch(_e){}
+        alert('דוח שיקופים לא נטען. בדוק שהמודאל קיים ב-index.html');
+        return;
+      }
+      this.els.wrap.style.display = 'block';
+      this.render();
+      this.els.wrap.classList.add('is-open');
+      this.els.wrap.setAttribute('aria-hidden', 'false');
+      document.body.classList.add('mirrorQueueModal-open');
+      setTimeout(() => { try{ this.els.search?.focus?.(); }catch(_e){} }, 30);
+      Promise.resolve().then(async () => {
+        try{
+          await App.reloadSessionState({ silent:true, preserveView:true });
+          this.render();
+        }catch(_e){}
+      });
+    },
+
+    close(){
+      if(!this.els.wrap) return;
+      this.els.wrap.classList.remove('is-open');
+      this.els.wrap.setAttribute('aria-hidden', 'true');
+      this.els.wrap.style.display = '';
+      document.body.classList.remove('mirrorQueueModal-open');
+    },
+
+    render(){
+      if(!this.els.tbody) return;
+      const rows = this.filtered();
+      if(this.els.count) this.els.count.textContent = `${rows.length} לקוחות`;
+      this.els.tbody.innerHTML = rows.length ? rows.map(rec => {
+        const status = getMirrorQueueStatus(rec);
+        return `<tr>
+          <td><div class="lcCustomers__nameCell"><strong>${escapeHtml(rec.fullName || '—')}</strong><span class="muted small">ת״ז ${escapeHtml(rec.idNumber || '—')} · טלפון ${escapeHtml(rec.phone || '—')}</span></div></td>
+          <td><div class="lcCustomers__statusCol"><strong>${escapeHtml(rec.agentName || '—')}</strong><span class="muted small">${escapeHtml(getMirrorQueueMetaText(rec) || '—')}</span></div></td>
+          <td><span class="badge ${getMirrorQueueBadgeClass(status)}">${escapeHtml(getMirrorQueueLabel(status))}</span></td>
+          <td>${escapeHtml(CustomersUI.formatDate(rec.updatedAt || rec.createdAt))}</td>
+          <td><button class="btn btn--primary" data-open-mirror-queue-customer="${escapeHtml(rec.id)}" type="button">פתח שיקוף</button></td>
+        </tr>`;
+      }).join('') : `<tr><td colspan="5"><div class="emptyState"><div class="emptyState__icon">📋</div><div class="emptyState__title">אין כרגע לקוחות בדוח השיקופים</div><div class="emptyState__text">ברגע שנציג יגיש הצעה למחלקת תפעול, הלקוח יופיע כאן אוטומטית.</div></div></td></tr>`;
+    }
+  };
+
   // ---------- Proposals UI ----------
   const ProposalsUI = {
     list(){
@@ -1892,7 +2197,7 @@ txt.textContent = "";
       const q = safeTrim(UI.els.proposalsSearch?.value).toLowerCase();
       let rows = this.list();
       if(!q) return rows;
-      return rows.filter(rec => [rec.fullName, rec.idNumber, rec.phone, rec.agentName, rec.email, rec.city].some(v => safeTrim(v).toLowerCase().includes(q)));
+      return rows.filter(rec => [rec.fullName, rec.idNumber, rec.phone, rec.agentName, rec.email, rec.city, getMirrorQueueLabel(getMirrorQueueStatus(rec)), getMirrorQueueMetaText(rec)].some(v => safeTrim(v).toLowerCase().includes(q)));
     },
 
     render(){
@@ -2053,10 +2358,8 @@ init(){
       this.els.flowLoading = $("#lcFlowLoading");
       this.els.flowSuccess = $("#lcFlowSuccess");
       this.els.flowProgress = $("#lcFlowProgress");
-      this.els.btnOpenCustomerFile = $("#lcOpenCustomerFile");
       this.els.btnSendToOps = $("#lcSendToOps");
-      this.els.btnDownloadOpsFile = $("#lcDownloadOpsFile");
-      this.els.btnBackToDashboard = $("#lcBackToDashboard");
+      this.els.btnSaveForLater = $("#lcSaveForLater");
 
       on(this.els.reportClose, "click", () => this.closeOperationalReport());
       on(this.els.reportPrint, "click", () => this.exportOperationalPdf());
@@ -2064,22 +2367,27 @@ init(){
         const t = e.target;
         if(t && t.getAttribute && t.getAttribute("data-close") === "1") this.closeOperationalReport();
       });
-      on(this.els.btnOpenCustomerFile, "click", () => {
-        const customerId = this.lastSavedCustomerId;
+      on(this.els.btnSendToOps, "click", async () => {
+        const rec = this.lastSavedCustomerId ? CustomersUI.byId(this.lastSavedCustomerId) : null;
+        if(!rec) return;
+        markCustomerMirrorQueue(rec, 'waiting');
+        await App.persist('הצעה הוגשה למחלקת תפעול');
+        CustomersUI.render();
         this.hideFinishFlow();
         this.close();
-        UI.goView("customers");
-        if(customerId) setTimeout(() => CustomersUI.openByIdWithLoader(customerId, 1080), 80);
+        UI.goView('customers');
+        alert(`ההצעה של ${rec.fullName || 'הלקוח'} הועברה למחלקת התפעול וממתינה לשיקוף.`);
       });
-      on(this.els.btnSendToOps, "click", () => {
-        this.hideFinishFlow();
-        this.openOperationalReport();
-      });
-      on(this.els.btnDownloadOpsFile, "click", () => this.exportOperationalPdf());
-      on(this.els.btnBackToDashboard, "click", () => {
+      on(this.els.btnSaveForLater, "click", async () => {
+        const rec = this.lastSavedCustomerId ? CustomersUI.byId(this.lastSavedCustomerId) : null;
+        if(!rec) return;
+        markCustomerMirrorQueue(rec, 'saved_for_later');
+        await App.persist('הצעה נשמרה להגשה במועד אחר');
+        CustomersUI.render();
         this.hideFinishFlow();
         this.close();
-        UI.goView("dashboard");
+        UI.goView('customers');
+        alert(`ההצעה של ${rec.fullName || 'הלקוח'} נשמרה להגשה במועד אחר.`);
       });
 
       // covers drawer (Step 3 - Health only)
@@ -2194,6 +2502,7 @@ init(){
       store.active = true;
       store.startedAt = startedAt;
       store.startedBy = safeTrim(Auth?.current?.name);
+      markCustomerMirrorQueue(rec, 'in_progress', { at: startedAt, by: safeTrim(Auth?.current?.name) });
       store.runtimeSessionId = this.runtimeSessionId;
       store.finishedAt = '';
       store.durationSec = 0;
@@ -2224,6 +2533,7 @@ init(){
       store.startTime = this.formatClock(store.startedAt);
       store.endTime = this.formatClock(finishedAt);
       store.finishedBy = safeTrim(Auth?.current?.name);
+      markCustomerMirrorQueue(rec, 'done', { at: finishedAt, by: safeTrim(Auth?.current?.name) });
       State.data.meta.updatedAt = finishedAt;
       rec.updatedAt = finishedAt;
       this.stopTimerLoop();
@@ -2327,7 +2637,6 @@ init(){
       this.lastSavedCustomerId = null;
       this.editingDraftId = null;
       this._finishing = false;
-      this._savingDraft = false;
       this.render();
     },
 
@@ -5871,73 +6180,43 @@ if(path === "birthDate"){
 
     async saveDraft(){
       if(!Auth.current) return;
-      if(this._savingDraft) return;
-      this._savingDraft = true;
+      const payload = this.getDraftPayload();
+      const primary = payload?.operational?.primary || {};
+      const record = normalizeProposalRecord({
+        id: this.editingDraftId || ("prop_" + Date.now().toString(16) + "_" + Math.random().toString(16).slice(2,8)),
+        status: "פתוחה",
+        fullName: safeTrim(((primary.firstName || "") + " " + (primary.lastName || "")).trim()) || "הצעה ללא שם",
+        idNumber: safeTrim(primary.idNumber),
+        phone: safeTrim(primary.phone),
+        email: safeTrim(primary.email),
+        city: safeTrim(primary.city),
+        agentName: safeTrim(Auth?.current?.name),
+        agentRole: safeTrim(Auth?.current?.role),
+        createdAt: (() => {
+          if(this.editingDraftId){
+            const existing = (State.data?.proposals || []).find(x => String(x.id) === String(this.editingDraftId));
+            if(existing?.createdAt) return existing.createdAt;
+          }
+          return nowISO();
+        })(),
+        updatedAt: nowISO(),
+        currentStep: this.step || 1,
+        insuredCount: (payload.insureds || []).length,
+        payload
+      });
 
-      const btn = this.els?.btnSaveDraft;
-      const prevBtnText = btn?.textContent || "שמור הצעה";
-      if(btn){
-        btn.disabled = true;
-        btn.textContent = "שומר הצעה...";
-      }
-
-      try {
-        const payload = this.getDraftPayload();
-        const primary = payload?.operational?.primary || {};
-        const record = normalizeProposalRecord({
-          id: this.editingDraftId || ("prop_" + Date.now().toString(16) + "_" + Math.random().toString(16).slice(2,8)),
-          status: "פתוחה",
-          fullName: safeTrim(((primary.firstName || "") + " " + (primary.lastName || "")).trim()) || "הצעה ללא שם",
-          idNumber: safeTrim(primary.idNumber),
-          phone: safeTrim(primary.phone),
-          email: safeTrim(primary.email),
-          city: safeTrim(primary.city),
-          agentName: safeTrim(Auth?.current?.name),
-          agentRole: safeTrim(Auth?.current?.role),
-          createdAt: (() => {
-            if(this.editingDraftId){
-              const existing = (State.data?.proposals || []).find(x => String(x.id) === String(this.editingDraftId));
-              if(existing?.createdAt) return existing.createdAt;
-            }
-            return nowISO();
-          })(),
-          updatedAt: nowISO(),
-          currentStep: this.step || 1,
-          insuredCount: (payload.insureds || []).length,
-          payload
-        });
-
-        State.data.proposals = Array.isArray(State.data.proposals) ? State.data.proposals : [];
-        const idx = State.data.proposals.findIndex(x => String(x.id) === String(record.id));
-        if(idx >= 0) State.data.proposals[idx] = record;
-        else State.data.proposals.unshift(record);
-
-        this.editingDraftId = record.id;
-        State.data.meta.updatedAt = nowISO();
-        try { Storage.saveBackup(State.data); } catch(_) {}
-
-        const persistRes = await App.persist("ההצעה נשמרה");
-        ProposalsUI.render();
-
-        if(persistRes?.ok){
-          this.setHint("הצעה נשמרה בהצלחה ותופיע במסך הצעות להמשך עריכה");
-          ProposalsUI.render();
-          Toast.success("הצעה נשמרה בהצלחה", 3200);
-        }else{
-          this.setHint("ההצעה נשמרה מקומית בלבד. בדוק חיבור ל-Google Sheets כדי שתופיע גם ממחשב אחר.");
-          ProposalsUI.render();
-          Toast.error("ההצעה נשמרה מקומית בלבד", 3600);
-        }
-      } catch(err) {
-        console.error("SAVE_DRAFT_FAILED:", err);
-        this.setHint("שמירת ההצעה נכשלה. נסה שוב.");
-        Toast.error("שמירת ההצעה נכשלה", 3600);
-      } finally {
-        this._savingDraft = false;
-        if(btn){
-          btn.disabled = false;
-          btn.textContent = prevBtnText;
-        }
+      State.data.proposals = Array.isArray(State.data.proposals) ? State.data.proposals : [];
+      const idx = State.data.proposals.findIndex(x => String(x.id) === String(record.id));
+      if(idx >= 0) State.data.proposals[idx] = record;
+      else State.data.proposals.unshift(record);
+      this.editingDraftId = record.id;
+      State.data.meta.updatedAt = nowISO();
+      const persistRes = await App.persist("ההצעה נשמרה");
+      ProposalsUI.render();
+      if(persistRes?.ok){
+        this.setHint("ההצעה נשמרה ותופיע במסך הצעות להמשך עריכה");
+      }else{
+        this.setHint("ההצעה נשמרה מקומית בלבד. בדוק חיבור ל-Google Sheets כדי שתופיע גם ממחשב אחר.");
       }
     },
 
@@ -6158,11 +6437,12 @@ if(path === "birthDate"){
         Math.abs(new Date(x.createdAt).getTime() - new Date(record.createdAt).getTime()) < 5 * 60 * 1000
       );
       if(sameIndex >= 0){
-        State.data.customers[sameIndex] = {
-          ...State.data.customers[sameIndex],
+        const prevRecord = State.data.customers[sameIndex];
+        const mergedRecord = mergeCustomerRecords(prevRecord, {
           ...record,
-          createdAt: State.data.customers[sameIndex].createdAt || record.createdAt
-        };
+          createdAt: prevRecord.createdAt || record.createdAt
+        });
+        State.data.customers[sameIndex] = mergedRecord;
       }else{
         State.data.customers.unshift(record);
       }
@@ -7200,6 +7480,7 @@ const MIRROR_DISCLOSURE_LIBRARY = {
       store.active = true;
       store.startedAt = startedAt;
       store.startedBy = safeTrim(Auth?.current?.name);
+      markCustomerMirrorQueue(rec, 'in_progress', { at: startedAt, by: safeTrim(Auth?.current?.name) });
       store.runtimeSessionId = this.runtimeSessionId;
       store.finishedAt = '';
       store.durationSec = 0;
@@ -7230,6 +7511,7 @@ const MIRROR_DISCLOSURE_LIBRARY = {
       store.startTime = this.formatClock(store.startedAt);
       store.endTime = this.formatClock(finishedAt);
       store.finishedBy = safeTrim(Auth?.current?.name);
+      markCustomerMirrorQueue(rec, 'done', { at: finishedAt, by: safeTrim(Auth?.current?.name) });
       State.data.meta.updatedAt = finishedAt;
       rec.updatedAt = finishedAt;
       this.stopTimerLoop();
@@ -9153,10 +9435,8 @@ const SystemRepairUI = {
       const r = await Storage.loadSheets();
       if (r.ok) {
         State.data = r.payload;
-        const backup = Storage.loadBackup();
-        if (backup?.proposals?.length) {
-          State.data.proposals = mergeProposalLists(State.data.proposals, backup.proposals);
-        }
+        const backupState = Storage.loadBackup();
+        State.data.customers = mergeCustomersWithBackup(State.data?.customers, backupState?.customers);
         Storage.saveBackup(State.data);
         UI.renderSyncStatus("מחובר", "ok", r.at);
       } else {
@@ -9198,25 +9478,28 @@ const SystemRepairUI = {
       return r;
     },
 
-    async reloadSessionState(){
+    async reloadSessionState(opts={}){
       if(!Auth.current) return { ok:false, error:"NO_SESSION" };
-      UI.renderSyncStatus("טוען נתוני משתמש…", "warn");
+      const silent = !!opts?.silent;
+      const preserveView = !!opts?.preserveView;
+      const currentVisibleView = preserveView ? ($$('.view').find(v => v.classList.contains('is-visible'))?.id || '').replace('view-','') : '';
+      if(!silent) UI.renderSyncStatus("טוען נתוני משתמש…", "warn");
       const r = await Storage.loadSheets();
       if (r.ok) {
-        const backup = Storage.loadBackup();
         State.data = r.payload;
-        if (backup?.proposals?.length) {
-          State.data.proposals = mergeProposalLists(State.data.proposals, backup.proposals);
-        }
+        const backupState = Storage.loadBackup();
+        State.data.customers = mergeCustomersWithBackup(State.data?.customers, backupState?.customers);
         Storage.saveBackup(State.data);
-        UI.renderSyncStatus("נתוני משתמש נטענו", "ok", r.at);
+        if(!silent) UI.renderSyncStatus("נתוני משתמש נטענו", "ok", r.at);
         if (Auth.isAdmin()) UsersUI.render();
         if (Auth.current) {
-          CustomersUI.render();
+          CustomersUI.refreshVisibleState ? CustomersUI.refreshVisibleState() : CustomersUI.render();
           ProposalsUI.render();
+          MirrorQueueUI.render?.();
+          if(currentVisibleView === 'mirrors') MirrorsUI.render?.();
         }
       } else {
-        UI.renderSyncStatus("שגיאה בטעינת נתוני משתמש", "err", null, r.error);
+        if(!silent) UI.renderSyncStatus("שגיאה בטעינת נתוני משתמש", "err", null, r.error);
         console.error("LOAD_SESSION_STATE_FAILED:", r?.error || r);
       }
       return r;
@@ -9226,20 +9509,55 @@ const SystemRepairUI = {
       UI.renderSyncStatus("מסנכרן…", "warn");
       const r = await Storage.loadSheets();
       if (r.ok) {
-        const backup = Storage.loadBackup();
         State.data = r.payload;
-        if (backup?.proposals?.length) {
-          State.data.proposals = mergeProposalLists(State.data.proposals, backup.proposals);
-        }
+        const backupState = Storage.loadBackup();
+        State.data.customers = mergeCustomersWithBackup(State.data?.customers, backupState?.customers);
         Storage.saveBackup(State.data);
         UI.renderSyncStatus("סונכרן", "ok", r.at);
         if (Auth.isAdmin()) UsersUI.render();
-        if (Auth.current) { CustomersUI.render(); ProposalsUI.render(); }
+        if (Auth.current) { CustomersUI.refreshVisibleState ? CustomersUI.refreshVisibleState() : CustomersUI.render(); ProposalsUI.render(); MirrorQueueUI.render?.(); if(($$('.view').find(v => v.classList.contains('is-visible'))?.id || '').replace('view-','') === 'mirrors') MirrorsUI.render?.(); }
       } else {
         UI.renderSyncStatus("שגיאה בסנכרון", "err", null, r.error);
       }
+    },
+
+    _liveSyncHandle: null,
+
+    startLiveSync(){
+      try{ if(this._liveSyncHandle) window.clearInterval(this._liveSyncHandle); }catch(_e){}
+      this._liveSyncHandle = window.setInterval(async () => {
+        if(!Auth.current || document.hidden) return;
+        try{
+          if(Wizard?.isOpen) return;
+          const currentVisibleView = ($$('.view').find(v => v.classList.contains('is-visible'))?.id || '').replace('view-','');
+          const currentUpdatedAt = safeTrim(State.data?.meta?.updatedAt);
+          const r = await Storage.loadSheets();
+          if(!r?.ok || !r?.payload) return;
+          const nextUpdatedAt = safeTrim(r.payload?.meta?.updatedAt);
+          if(nextUpdatedAt && currentUpdatedAt && nextUpdatedAt === currentUpdatedAt) return;
+          State.data = r.payload;
+          if(Auth.isOps()){
+            State.data.customers = getMergedMirrorQueueCustomers();
+          }
+          Storage.saveBackup(State.data);
+          CustomersUI.refreshVisibleState ? CustomersUI.refreshVisibleState() : CustomersUI.render();
+          ProposalsUI.render();
+          MirrorQueueUI.render?.();
+          if(currentVisibleView === 'mirrors') MirrorsUI.render?.();
+          UI.renderSyncStatus('עודכן אוטומטית', 'ok', r.at);
+        }catch(_e){}
+      }, 12000);
     }
   };
+
+  document.addEventListener('click', async (ev) => {
+    const trigger = ev.target?.closest?.('#btnOpenMirrorQueue');
+    if(!trigger) return;
+    ev.preventDefault?.();
+    ev.stopPropagation?.();
+    ev.stopImmediatePropagation?.();
+    await MirrorQueueUI.open();
+  }, true);
 
   // ---------- Start ----------
   UI.init();
@@ -9248,8 +9566,46 @@ const SystemRepairUI = {
   CustomersUI.init();
   ArchiveCustomerUI.init();
   MirrorsUI.init();
+  MirrorQueueUI.init();
   Wizard.init();
   SystemRepairUI.init();
   App._bootPromise = App.boot();
+  App.startLiveSync();
 
 })();
+// ===== AUTO SYNC REFLECT STATUS =====
+
+let lastSyncHash = "";
+
+async function autoSyncReflect(){
+  try{
+    const res = await fetch(API_URL + "?action=get");
+    const data = await res.json();
+
+    if(!data?.payload) return;
+
+    const newHash = JSON.stringify(data.payload.customers);
+
+    // רק אם יש שינוי אמיתי
+    if(newHash !== lastSyncHash){
+      lastSyncHash = newHash;
+
+      state.customers = data.payload.customers;
+
+      // רענון UI
+      if(typeof renderCustomers === "function") renderCustomers();
+      if(typeof renderCustomerDetails === "function") renderCustomerDetails();
+
+      // אם דוח שיקופים פתוח → לרענן אותו
+      if(document.getElementById("reflectModal")){
+        openReflectReport();
+      }
+    }
+
+  }catch(err){
+    console.log("sync error", err);
+  }
+}
+
+// כל 5 שניות
+setInterval(autoSyncReflect, 5000);

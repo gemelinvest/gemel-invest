@@ -6,7 +6,7 @@
 <meta content="width=device-width,initial-scale=1" name="viewport"/>
 <title>GEMEL INVEST • מערכת CRM</title>
 <meta content="#eef4ff" name="theme-color"/>
-<link href="./app.css?v=20260317-1535" rel="stylesheet"/>
+<link href="./app.css?v=20260317-2048" rel="stylesheet"/>
 </head>
 <body class="lcAuthLock">
 <!-- Login Overlay (Premium) -->
@@ -54,6 +54,10 @@
 <button class="nav__item" data-view="mirrors" id="navMirrors" style="display:none">
 <span class="nav__icon">📞</span>
 <span class="nav__label">שיקופים</span>
+</button>
+<button class="nav__item" id="btnOpenMirrorQueue" style="display:none" type="button">
+<span class="nav__icon">📋</span>
+<span class="nav__label">דוח שיקופים</span>
 </button>
 <button class="nav__item" data-view="discountSpec" id="navDiscountSpec">
 <span class="nav__icon">
@@ -519,7 +523,7 @@
           </div>
         </div>
         <div class="customerHero__actions">
-          <button class="btn btn--primary customerHero__btn" id="customerFullProposalBtn" type="button">שלח הצעה</button>
+          <button class="btn btn--primary customerHero__btn" id="customerFullProposalBtn" type="button">הגש לתפעול</button>
           <button class="btn customerHero__btn customerHero__btn--medical" id="customerFullMedicalBtn" type="button">מידע רפואי</button>
           <button class="btn customerHero__btn" id="customerFullOpsBtn" type="button">דו״ח תפעול</button>
           <button class="btn customerHero__btn customerHero__btn--green" id="customerFullAddPolicyBtn" type="button">הוספת פוליסה</button>
@@ -750,16 +754,56 @@
         </svg>
       </div>
       <div class="lcFlow__title lcFlow__title--success">הלקוח הוקם בהצלחה במערכת</div>
-      <div class="lcFlow__actions">
-        <button class="btn btn--primary" id="lcOpenCustomerFile" type="button">פתח תיק לקוח</button>
-        <button class="btn" id="lcSendToOps" type="button">הגש הצעה למחלקת תפעול</button>
-        <button class="btn" id="lcDownloadOpsFile" type="button">הורד קובץ תפעולי</button>
-        <button class="btn" id="lcBackToDashboard" type="button">חזרה לדשבורד</button>
+      <div class="lcFlow__text lcFlow__text--success">בחר מה ברצונך לעשות עם ההצעה שהוקמה עכשיו.</div>
+      <div class="lcFlow__actions lcFlow__actions--priority">
+        <button class="btn btn--primary" id="lcSendToOps" type="button">הגש הצעה למחלקת תפעול</button>
+        <button class="btn" id="lcSaveForLater" type="button">שמור הצעה להגשה במועד אחר</button>
       </div>
+      <div class="lcFlow__helper">לאחר הבחירה, ההצעה תסונכרן אוטומטית למערכת והלקוח יישאר משויך לנציג שהקים אותו.</div>
     </div>
   </div>
 </div>
 
+
+
+<!-- Mirror Queue Report Modal -->
+<div aria-hidden="true" class="modal mirrorQueueModal" id="mirrorQueueModal">
+  <div class="modal__backdrop" id="mirrorQueueBackdrop"></div>
+  <div aria-label="דוח שיקופים" aria-modal="true" class="modal__panel mirrorQueueModal__panel" role="dialog">
+    <div class="modal__head mirrorQueueModal__head">
+      <div>
+        <div class="modal__kicker">GEMEL INVEST • תפעול</div>
+        <div class="modal__title">דוח שיקופים</div>
+        <div class="mirrorQueueModal__sub">כל הלקוחות שממתינים לשיקוף, נמצאים כרגע בטיפול, או סיימו שיקוף.</div>
+      </div>
+      <button aria-label="סגור" class="iconBtn" id="mirrorQueueClose" type="button">✕</button>
+    </div>
+    <div class="modal__body mirrorQueueModal__body">
+      <div class="mirrorQueueModal__toolbar">
+        <div class="search mirrorQueueModal__search">
+          <input class="search__input" id="mirrorQueueSearch" placeholder="חיפוש לפי לקוח, ת״ז, טלפון או נציג" type="text"/>
+        </div>
+        <div class="row">
+          <span class="badge" id="mirrorQueueCountBadge">0 לקוחות</span>
+        </div>
+      </div>
+      <div class="tableWrap mirrorQueueModal__tableWrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>לקוח</th>
+              <th>נציג</th>
+              <th>סטטוס שיקוף</th>
+              <th>עודכן</th>
+              <th style="width:180px">פעולה</th>
+            </tr>
+          </thead>
+          <tbody id="mirrorQueueTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Archive Customer Modal -->
 <div aria-hidden="true" class="modal lcArchiveCustomerModal" id="lcArchiveCustomerModal">
@@ -792,5 +836,5 @@
 </div>
 
 </div>
-<script src="./app.js?v=20260317-1535"></script>
+<script src="./app.js?v=20260317-2048"></script>
 </body></html>
