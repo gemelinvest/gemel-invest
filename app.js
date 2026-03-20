@@ -1525,13 +1525,8 @@ txt.textContent = "";
       on(this.els.opsBtn, "click", () => {
         const rec = this.current();
         if(!rec) return;
-        const prevPayload = Wizard.getOperationalPayload;
-        try{
-          Wizard.getOperationalPayload = () => JSON.parse(JSON.stringify(rec.payload || {}));
-          Wizard.openOperationalReport();
-        } finally {
-          Wizard.getOperationalPayload = prevPayload;
-        }
+        const payload = JSON.parse(JSON.stringify(rec.payload || {}));
+        Wizard.openOperationalReport(payload);
       });
       on(this.els.proposalBtn, "click", () => {
         const rec = this.current();
@@ -6772,40 +6767,61 @@ if(path === "birthDate"){
       return `<div class="lcReportTableWrap"><table class="lcReportTable"><thead><tr>${headers.map(h => `<th>${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
     },
 
-    getOperationalPayloadSnapshot(){
-      const raw = (typeof this.getOperationalPayload === 'function') ? this.getOperationalPayload() : {};
-      const payload = raw && typeof raw === 'object' ? JSON.parse(JSON.stringify(raw)) : {};
-      const insureds = Array.isArray(payload.insureds) ? payload.insureds : (Array.isArray(payload?.operational?.insureds) ? JSON.parse(JSON.stringify(payload.operational.insureds)) : []);
-      const newPolicies = Array.isArray(payload.newPolicies) ? payload.newPolicies : (Array.isArray(payload?.operational?.newPolicies) ? JSON.parse(JSON.stringify(payload.operational.newPolicies)) : []);
-      const primary = payload.primary || payload?.operational?.primary || insureds?.[0]?.data || {};
-      const companyAgentNumbers = payload.companyAgentNumbers || payload?.operational?.companyAgentNumbers || {};
-      return {
-        ...payload,
-        insureds,
-        newPolicies,
-        primary,
-        companyAgentNumbers,
-        createdAt: payload.createdAt || payload?.operational?.createdAt || nowISO()
-      };
+    normalizeOperationalReportPayload(rawPayload){
+      const payload = rawPayload && typeof rawPayload === 'object' ? JSON.parse(JSON.stringify(rawPayload)) : {};
+      if((!Array.isArray(payload.insureds) || !payload.insureds.length) && Array.isArray(payload?.operational?.insureds)){
+        payload.insureds = JSON.parse(JSON.stringify(payload.operational.insureds));
+      }
+      if((!Array.isArray(payload.newPolicies) || !payload.newPolicies.length) && Array.isArray(payload?.operational?.newPolicies)){
+        payload.newPolicies = JSON.parse(JSON.stringify(payload.operational.newPolicies));
+      }
+      payload.insureds = Array.isArray(payload.insureds) ? payload.insureds : [];
+      payload.newPolicies = Array.isArray(payload.newPolicies) ? payload.newPolicies : [];
+      payload.primary = (payload.primary && typeof payload.primary === 'object')
+        ? payload.primary
+        : (payload.insureds[0]?.data && typeof payload.insureds[0].data === 'object' ? payload.insureds[0].data : {});
+      payload.companyAgentNumbers = (payload.companyAgentNumbers && typeof payload.companyAgentNumbers === 'object')
+        ? payload.companyAgentNumbers
+        : (payload.operational?.companyAgentNumbers && typeof payload.operational.companyAgentNumbers === 'object'
+            ? payload.operational.companyAgentNumbers
+            : (payload.primary?.operationalAgentNumbers && typeof payload.primary.operationalAgentNumbers === 'object'
+                ? payload.primary.operationalAgentNumbers
+                : {}));
+      payload.createdAt = safeTrim(payload.createdAt) || safeTrim(payload.updatedAt) || nowISO();
+      return payload;
     },
 
-    getPayloadHealthResponse(payload, insuredLabel, questionKey){
-      const insureds = Array.isArray(payload?.insureds) ? payload.insureds : [];
-      const insured = insureds.find(x => safeTrim(x?.label) === safeTrim(insuredLabel));
-      const data = insured?.data && typeof insured.data === 'object' ? insured.data : {};
-      const health = data.health && typeof data.health === 'object' ? data.health : {};
-      const direct = health?.[questionKey] && typeof health[questionKey] === 'object' ? health[questionKey] : null;
-      if(direct) return direct;
-      const alt = data.healthAnswers && typeof data.healthAnswers === 'object' ? data.healthAnswers[questionKey] : null;
-      return (alt && typeof alt === 'object') ? alt : { answer:'', fields:{} };
+    buildHealthItemsFromPayload(payload){
+      const healthItems = [];
+      const primary = payload?.primary && typeof payload.primary === 'object' ? payload.primary : {};
+      const healthDeclaration = primary?.healthDeclaration && typeof primary.healthDeclaration === 'object'
+        ? primary.healthDeclaration
+        : {};
+      const responses = healthDeclaration?.responses && typeof healthDeclaration.responses === 'object'
+        ? healthDeclaration.responses
+        : {};
+      const questionMap = new Map();
+      this.getHealthQuestionList().forEach(item => questionMap.set(item.question.key, item.question));
+      (payload.insureds || []).forEach((ins, index) => {
+        const insData = ins?.data && typeof ins.data === 'object' ? ins.data : {};
+        const insId = safeTrim(ins?.id) || safeTrim(insData?.id) || `payload_ins_${index}`;
+        Object.entries(responses).forEach(([qKey, byIns]) => {
+          const block = byIns && typeof byIns === 'object' ? byIns : {};
+          const answer = block[insId];
+          if(!answer || answer.answer !== 'yes') return;
+          const question = questionMap.get(qKey);
+          const questionText = question?.text || qKey;
+          healthItems.push(`<div class="lcReportListItem"><strong>${escapeHtml(ins?.label || ('מבוטח ' + (index + 1)))} · ${escapeHtml(questionText)}</strong><span>${escapeHtml(this.summarizeHealthFields(answer.fields || {}))}</span></div>`);
+        });
+      });
+      return healthItems;
     },
 
-    renderOperationalReport(){
-      const payload = this.getOperationalPayloadSnapshot();
-      const insureds = Array.isArray(payload.insureds) ? payload.insureds : [];
-      const primary = payload.primary || insureds?.[0]?.data || {};
-      const insuredRows = insureds.map(ins => {
-        const d = ins?.data || {};
+    renderOperationalReport(payloadOverride){
+      const payload = this.normalizeOperationalReportPayload(payloadOverride || this.getOperationalPayload());
+      const primary = payload.primary || {};
+      const insuredRows = payload.insureds.map(ins => {
+        const d = ins?.data && typeof ins.data === 'object' ? ins.data : {};
         return [
           escapeHtml(ins?.label || ''),
           this.renderReportValue((d.firstName || '') + ' ' + (d.lastName || '')),
@@ -6815,37 +6831,35 @@ if(path === "birthDate"){
         ];
       });
       const existingRows = [];
-      insureds.forEach(ins => {
-        ((ins?.data?.existingPolicies) || []).forEach(p => existingRows.push([
+      payload.insureds.forEach(ins => {
+        const insData = ins?.data && typeof ins.data === 'object' ? ins.data : {};
+        const existingPolicies = Array.isArray(insData.existingPolicies) ? insData.existingPolicies : [];
+        existingPolicies.forEach(p => existingRows.push([
           escapeHtml(ins?.label || ''), this.renderReportValue(p?.company), this.renderReportValue(p?.type), this.renderReportValue(p?.policyNumber), this.renderReportValue(p?.monthlyPremium)
         ]));
       });
       const cancelRows = [];
-      insureds.forEach(ins => {
-        const canc = ins?.data?.cancellations || {};
-        ((ins?.data?.existingPolicies) || []).forEach(p => {
-          const c = canc?.[p?.id] || {};
-          if(safeTrim(c?.status) || safeTrim(c?.reason)) cancelRows.push([
+      payload.insureds.forEach(ins => {
+        const insData = ins?.data && typeof ins.data === 'object' ? ins.data : {};
+        const canc = insData?.cancellations && typeof insData.cancellations === 'object' ? insData.cancellations : {};
+        const existingPolicies = Array.isArray(insData.existingPolicies) ? insData.existingPolicies : [];
+        existingPolicies.forEach(p => {
+          const c = canc[p?.id] || {};
+          if(safeTrim(c.status) || safeTrim(c.reason)) cancelRows.push([
             escapeHtml(ins?.label || ''), this.renderReportValue(p?.company), this.renderReportValue(p?.type), this.renderReportValue(c?.status), this.renderReportValue(c?.reason)
           ]);
         });
       });
-      const newRows = (Array.isArray(payload.newPolicies) ? payload.newPolicies : []).map(p => [this.renderReportValue(p?.company), this.renderReportValue(p?.type), this.renderReportValue(p?.premiumMonthly), this.renderReportValue(`${safeTrim(p?.discountPct || '0')}%`), this.renderReportValue(this.formatMoneyValue(this.getPolicyPremiumAfterDiscount(p || {}))), this.renderReportValue(p?.startDate)]);
+      const newRows = (payload.newPolicies || []).map(p => [this.renderReportValue(p?.company), this.renderReportValue(p?.type), this.renderReportValue(p?.premiumMonthly), this.renderReportValue(`${safeTrim(p?.discountPct || "0")}%`), this.renderReportValue(this.formatMoneyValue(this.getPolicyPremiumAfterDiscount(p || {}))), this.renderReportValue(p?.startDate)]);
       const agentNumberRows = Object.entries(payload.companyAgentNumbers || {}).map(([company, agentNo]) => [
         this.renderReportValue(company),
         this.renderReportValue(agentNo)
       ]);
-      const healthItems = [];
-      this.getHealthQuestionList().forEach(item => {
-        insureds.forEach(ins => {
-          const r = this.getPayloadHealthResponse(payload, ins?.label || '', item?.question?.key || '');
-          if(r?.answer === 'yes') healthItems.push(`<div class="lcReportListItem"><strong>${escapeHtml(ins?.label || '')} · ${escapeHtml(item?.question?.text || '')}</strong><span>${escapeHtml(this.summarizeHealthFields(r?.fields || {}))}</span></div>`);
-        });
-      });
+      const healthItems = this.buildHealthItemsFromPayload(payload);
       const payerFields = [];
       if(primary.payerChoice === 'external'){
         const ex = primary.externalPayer || {};
-        const anyEx = ['relation','firstName','lastName','idNumber','birthDate','phone'].some(k => safeTrim(ex?.[k]));
+        const anyEx = ['relation','firstName','lastName','idNumber','birthDate','phone'].some(k => safeTrim(ex[k]));
         if(anyEx){
           payerFields.push(`<div class="lcReportGrid">${this.compactReportFields(ex, [['relation','קרבה'],['firstName','שם פרטי'],['lastName','שם משפחה'],['idNumber','תעודת זהות'],['birthDate','תאריך לידה'],['phone','טלפון']])}</div>`);
         }
@@ -6853,19 +6867,19 @@ if(path === "birthDate"){
       const payMethod = safeTrim(primary.paymentMethod);
       if(payMethod === 'cc'){
         const cc = primary.cc || {};
-        if(['holderName','holderId','cardNumber','exp'].some(k => safeTrim(cc?.[k]))){
+        if(['holderName','holderId','cardNumber','exp'].some(k => safeTrim(cc[k]))){
           payerFields.push(`<div class="lcReportGrid">${this.compactReportFields(cc, [['holderName','שם מחזיק'],['holderId','תז מחזיק'],['cardNumber','מספר כרטיס'],['exp','תוקף']])}</div>`);
         }
       } else if(payMethod === 'ho'){
         const ho = primary.ho || {};
-        if(['bankName','bankNo','branch','account'].some(k => safeTrim(ho?.[k]))){
+        if(['bankName','bankNo','branch','account'].some(k => safeTrim(ho[k]))){
           payerFields.push(`<div class="lcReportGrid">${this.compactReportFields(ho, [['bankName','שם בנק'],['bankNo','מספר בנק'],['branch','סניף'],['account','מספר חשבון']])}</div>`);
         }
       }
-      const ts = new Date(payload.createdAt || nowISO()).toLocaleString('he-IL');
+      const ts = new Date(payload.createdAt).toLocaleString('he-IL');
       return `<div class="lcReportDoc">
         <div class="lcReportHero">
-          <div class="lcReportCard"><div class="lcReportSection__title">דוח תפעולי מלא</div><div class="lcReportSection__sub">הדוח מציג את כל הנתונים שהוזנו בהקמת הלקוח, בצורה מרוכזת ומוכנה למחלקת תפעול.</div><div class="lcReportMeta"><div class="lcReportMetaItem"><b>מבוטח ראשי</b><span>${this.renderReportValue((primary.firstName||'') + ' ' + (primary.lastName||''))}</span></div><div class="lcReportMetaItem"><b>תעודת זהות</b><span>${this.renderReportValue(primary.idNumber)}</span></div><div class="lcReportMetaItem"><b>מספר מבוטחים</b><span>${insureds.length}</span></div><div class="lcReportMetaItem"><b>הופק בתאריך</b><span>${escapeHtml(ts)}</span></div></div></div>
+          <div class="lcReportCard"><div class="lcReportSection__title">דוח תפעולי מלא</div><div class="lcReportSection__sub">הדוח מציג את כל הנתונים שהוזנו בהקמת הלקוח, בצורה מרוכזת ומוכנה למחלקת תפעול.</div><div class="lcReportMeta"><div class="lcReportMetaItem"><b>מבוטח ראשי</b><span>${this.renderReportValue((primary.firstName||'') + ' ' + (primary.lastName||''))}</span></div><div class="lcReportMetaItem"><b>תעודת זהות</b><span>${this.renderReportValue(primary.idNumber)}</span></div><div class="lcReportMetaItem"><b>מספר מבוטחים</b><span>${payload.insureds.length}</span></div><div class="lcReportMetaItem"><b>הופק בתאריך</b><span>${escapeHtml(ts)}</span></div></div></div>
           <div class="lcReportCard"><div class="lcReportMeta"><div class="lcReportMetaItem"><b>פוליסות קיימות</b><span>${existingRows.length}</span></div><div class="lcReportMetaItem"><b>פוליסות חדשות</b><span>${newRows.length}</span></div><div class="lcReportMetaItem"><b>סוג משלם</b><span>${this.renderReportValue(primary.payerChoice === 'external' ? 'משלם חריג' : primary.payerChoice === 'insured' ? 'מבוטח קיים' : '')}</span></div><div class="lcReportMetaItem"><b>אמצעי תשלום</b><span>${this.renderReportValue(payMethod === 'cc' ? 'כרטיס אשראי' : payMethod === 'ho' ? 'הוראת קבע' : '')}</span></div></div></div>
         </div>
         <section class="lcReportSection"><div class="lcReportSection__title">פרטי לקוח</div><div class="lcReportGrid">${this.compactReportFields(primary, [['firstName','שם פרטי'],['lastName','שם משפחה'],['idNumber','תעודת זהות'],['birthDate','תאריך לידה'],['gender','מגדר'],['maritalStatus','מצב משפחתי'],['phone','טלפון'],['email','אימייל'],['city','עיר'],['street','רחוב'],['houseNumber','מספר בית'],['zip','מיקוד'],['clinic','קופת חולים'],['shaban','שב״ן'],['occupation','עיסוק'],['heightCm','גובה'],['weightKg','משקל'],['bmi','BMI']])}</div></section>
@@ -6879,18 +6893,16 @@ if(path === "birthDate"){
       </div>`;
     },
 
-    openOperationalReport(){
+    openOperationalReport(payloadOverride){
       if(!this.els.report || !this.els.reportBody) return;
       try{
-        this.els.reportBody.innerHTML = this.renderOperationalReport();
-        this.els.report.classList.add('is-open');
-        this.els.report.setAttribute('aria-hidden','false');
+        this.els.reportBody.innerHTML = this.renderOperationalReport(payloadOverride);
       }catch(err){
-        console.error('OPS_REPORT_OPEN_FAILED', err);
-        this.els.reportBody.innerHTML = `<div class="emptyState"><div class="emptyState__icon">📄</div><div class="emptyState__title">לא ניתן לפתוח את הדוח כרגע</div><div class="emptyState__text">חסרים נתונים לדוח התפעולי או שיש שדה שלא נטען עדיין. נסה לשמור/לרענן את הלקוח ולפתוח שוב.</div></div>`;
-        this.els.report.classList.add('is-open');
-        this.els.report.setAttribute('aria-hidden','false');
+        console.error('openOperationalReport failed', err);
+        this.els.reportBody.innerHTML = `<div class="lcReportDoc"><section class="lcReportSection"><div class="lcReportSection__title">לא ניתן לפתוח את הדוח כרגע</div><div class="lcReportSection__sub">אירעה שגיאה בעת בניית הדוח התפעולי. בדוק שהלקוח נשמר עם כל הנתונים ונסה שוב.</div><div class="lcReportList"><div class="lcReportListItem"><strong>פירוט</strong><span>${escapeHtml(err?.message || 'שגיאה לא ידועה')}</span></div></div></section></div>`;
       }
+      this.els.report.classList.add('is-open');
+      this.els.report.setAttribute('aria-hidden','false');
     },
 
     closeOperationalReport(){
