@@ -1492,7 +1492,11 @@ txt.textContent = "";
       this.els.wrap = $("#customerFull");
       this.els.backdrop = $("#customerFullBackdrop");
       this.els.close = $("#customerFullClose");
+      this.els.opsBtn = $("#customerFullOpsBtn");
+      this.els.proposalBtn = $("#customerFullProposalBtn");
+      this.els.medicalBtn = $("#customerFullMedicalBtn");
       this.els.archiveBtn = $("#customerFullArchiveBtn");
+      this.els.addPolicyBtn = $("#customerFullAddPolicyBtn");
       this.els.name = $("#customerFullName");
       this.els.meta = $("#customerFullMeta");
       this.els.avatar = $("#customerFullAvatar");
@@ -1518,16 +1522,50 @@ txt.textContent = "";
 
       on(this.els.close, "click", () => this.close());
       on(this.els.backdrop, "click", () => this.close());
-
-
-
+      on(this.els.opsBtn, "click", () => {
+        const rec = this.current();
+        if(!rec) return;
+        const prevPayload = Wizard.getOperationalPayload;
+        try{
+          Wizard.getOperationalPayload = () => JSON.parse(JSON.stringify(rec.payload || {}));
+          Wizard.openOperationalReport();
+        } finally {
+          Wizard.getOperationalPayload = prevPayload;
+        }
+      });
+      on(this.els.proposalBtn, "click", () => {
+        const rec = this.current();
+        if(!rec) return;
+        this.currentSection = "wallet";
+        this.renderCurrentSection(rec);
+        alert(`הצעה עבור ${rec.fullName || "הלקוח"} תהיה זמינה בשלב הבא.`);
+      });
+      on(this.els.medicalBtn, "click", () => {
+        const rec = this.current();
+        if(!rec) return;
+        this.currentSection = "medical";
+        this.renderCurrentSection(rec);
+      });
       on(this.els.archiveBtn, "click", (ev) => {
         const rec = this.current();
         if(!rec) return;
         this.handleArchiveCustomerClick(ev, rec.id);
       });
-
-
+      on(this.els.addPolicyBtn, "click", () => {
+        const rec = this.current();
+        if(!rec) return;
+        this.currentSection = "wallet";
+        this.renderCurrentSection(rec);
+        alert("שלב הבא: חיבור הוספת פוליסה מתוך תיק הלקוח.");
+      });
+      on(this.els.body, "click", (ev) => {
+        const backBtn = ev.target?.closest?.("#customerMedicalBackBtn");
+        if(!backBtn) return;
+        const rec = this.current();
+        if(!rec) return;
+        this.currentSection = "wallet";
+        this.renderCurrentSection(rec);
+      });
 
       on(this.els.dash, "click", async (ev) => {
         const btn = ev.target?.closest?.('[data-ops-result]');
@@ -1979,12 +2017,123 @@ txt.textContent = "";
       </article>`;
     },
 
+    getMedicalGroups(rec){
+      try{
+        if(typeof MirrorsUI !== "undefined" && MirrorsUI && typeof MirrorsUI.getMirrorHealthEntries === "function"){
+          return MirrorsUI.getMirrorHealthEntries(rec) || [];
+        }
+      }catch(_e){}
+      return [];
+    },
+
+    getMedicalSummary(rec, groups){
+      const stepState = rec?.payload?.mirrorFlow?.healthStep || {};
+      let total = 0, positive = 0, negative = 0, detailed = 0;
+      (groups || []).forEach(group => {
+        (group.items || []).forEach(item => {
+          total += 1;
+          const answer = safeTrim(item?.response?.answer);
+          if(answer === 'yes') positive += 1;
+          if(answer === 'no') negative += 1;
+          if(item?.response?.fields && Object.values(item.response.fields).some(v => safeTrim(v))) detailed += 1;
+        });
+      });
+      return {
+        total, positive, negative, detailed,
+        corrected: !!safeTrim(stepState.savedAt),
+        updatedAt: safeTrim(stepState.savedAt) || safeTrim(rec?.updatedAt) || safeTrim(rec?.createdAt),
+        updatedBy: safeTrim(stepState.savedBy),
+        itemsCount: Number(stepState.itemsCount || total) || total
+      };
+    },
+
+    renderMedicalInfo(rec){
+      const groups = this.getMedicalGroups(rec);
+      const summary = this.getMedicalSummary(rec, groups);
+      const summaryCards = [
+        { icon:'🩺', label:'סעיפים רפואיים', value:String(summary.total || 0), sub:'כל ממצאי ההצהרה שנשמרו בתיק' },
+        { icon:'⚠️', label:'סומנו כן', value:String(summary.positive || 0), sub:'סעיפים שדורשים תשומת לב רפואית' },
+        { icon:'📄', label:'שאלוני המשך', value:String(summary.detailed || 0), sub:'שדות פירוט שנשמרו בפועל' },
+        { icon:'🔄', label:'עודכן בשיקוף', value: summary.corrected ? 'כן' : 'לא', sub: summary.corrected ? (summary.updatedBy ? `עודכן ע"י ${summary.updatedBy}` : 'נשמרה גרסה מתוקנת') : 'כרגע מוצגת הגרסה המקורית' }
+      ];
+      const chips = `
+        <div class="customerMedical__metaRow">
+          <span class="customerMedical__metaPill">תאריך עדכון: ${escapeHtml(this.formatDate(summary.updatedAt || rec?.updatedAt || rec?.createdAt))}</span>
+          <span class="customerMedical__metaPill ${summary.corrected ? 'is-corrected' : ''}">${summary.corrected ? 'סונכרן עם שיקוף' : 'מקור: הצהרת הבריאות'}</span>
+          <span class="customerMedical__metaPill">מבוטחים עם מידע: ${escapeHtml(String((groups || []).length || 0))}</span>
+        </div>`;
+      const groupsHtml = groups.length ? groups.map((group, gIdx) => {
+        const items = (group.items || []).map((item, idx) => {
+          const answer = safeTrim(item?.response?.answer);
+          const fields = item?.response?.fields && typeof item.response.fields === 'object' ? Object.entries(item.response.fields).filter(([k,v]) => safeTrim(v)) : [];
+          const badge = answer === 'yes' ? 'כן' : answer === 'no' ? 'לא' : 'טרם סומן';
+          const badgeClass = answer === 'yes' ? 'is-yes' : answer === 'no' ? 'is-no' : 'is-empty';
+          return `
+            <article class="customerMedicalItem">
+              <div class="customerMedicalItem__glow" aria-hidden="true"></div>
+              <div class="customerMedicalItem__head">
+                <div>
+                  <div class="customerMedicalItem__title">${escapeHtml(item?.meta?.text || item?.qKey || `שאלה ${idx+1}`)}</div>
+                  <div class="customerMedicalItem__sub">${escapeHtml(item?.meta?.title || 'הצהרת בריאות')}</div>
+                </div>
+                <span class="customerMedicalItem__badge ${badgeClass}">${escapeHtml(badge)}</span>
+              </div>
+              ${fields.length ? `<div class="customerMedicalItem__fields">${fields.map(([key,val]) => `<div class="customerMedicalField"><span class="customerMedicalField__k">${escapeHtml(key)}</span><span class="customerMedicalField__v">${escapeHtml(String(val))}</span></div>`).join('')}</div>` : `<div class="customerMedicalItem__empty">${answer === 'yes' ? 'סומן כן ללא פירוט נוסף בשדה המשך.' : answer === 'no' ? 'לא דווח ממצא רפואי בשאלה זו.' : 'הסעיף טרם סומן.'}</div>`}
+              <div class="customerMedicalItem__footer">
+                <span class="customerMedicalItem__footPill">${summary.corrected ? 'מוצג לפי גרסת השיקוף המעודכנת' : 'מוצג לפי הטופס המקורי'}</span>
+              </div>
+            </article>`;
+        }).join('');
+        return `
+          <section class="customerMedicalGroup">
+            <div class="customerMedicalGroup__head">
+              <div>
+                <div class="customerMedicalGroup__title">${escapeHtml(group?.insured?.label || `מבוטח ${gIdx+1}`)}</div>
+                <div class="customerMedicalGroup__sub">${escapeHtml(String((group.items || []).length || 0))} סעיפים רפואיים שמורים בתיק</div>
+              </div>
+              <div class="customerMedicalGroup__pulse" aria-hidden="true"></div>
+            </div>
+            <div class="customerMedicalGroup__grid">${items}</div>
+          </section>`;
+      }).join('') : `<div class="emptyState customerMedical__empty"><div class="emptyState__icon">🩺</div><div class="emptyState__title">עדיין אין מידע רפואי להצגה</div><div class="emptyState__text">ברגע שתישמר הצהרת בריאות ללקוח, הממצאים יוצגו כאן אוטומטית. אם יתבצע תיקון בשיקוף, המסך הזה יתעדכן בהתאם.</div></div>`;
+      return `<section class="customerMedicalView">
+        <div class="customerMedicalHero">
+          <div class="customerMedicalHero__scan" aria-hidden="true"></div>
+          <div class="customerWalletSection__head customerMedicalHero__head">
+            <div class="customerWalletSection__titleWrap">
+              <div class="customerWalletSection__icon">🩺</div>
+              <div>
+                <div class="customerWalletSection__title">מידע רפואי</div>
+                <div class="customerWalletSection__sub">סיכום פרימיום של הצהרת הבריאות — כולל סנכרון אוטומטי מול תיקוני שיקוף</div>
+              </div>
+            </div>
+            <div class="customerMedicalHero__tools">
+              <button class="customerMedicalHero__backBtn" id="customerMedicalBackBtn" type="button">חזרה לתיק הביטוח</button>
+            </div>
+          </div>
+          ${chips}
+          <div class="customerMedicalSummary">${summaryCards.map(card => `<div class="customerMedicalSummaryCard"><div class="customerMedicalSummaryCard__icon">${card.icon}</div><div class="customerMedicalSummaryCard__value">${escapeHtml(card.value)}</div><div class="customerMedicalSummaryCard__label">${escapeHtml(card.label)}</div><div class="customerMedicalSummaryCard__sub">${escapeHtml(card.sub)}</div></div>`).join('')}</div>
+        </div>
+        <div class="customerMedicalGroups">${groupsHtml}</div>
+      </section>`;
+    },
+
+    updateHeroButtons(){
+      if(this.els.proposalBtn) this.els.proposalBtn.classList.remove('is-section-active');
+      if(this.els.medicalBtn) this.els.medicalBtn.classList.remove('is-section-active');
+      if(this.currentSection === 'medical'){
+        if(this.els.medicalBtn) this.els.medicalBtn.classList.add('is-section-active');
+      } else {
+        if(this.els.proposalBtn) this.els.proposalBtn.classList.add('is-section-active');
+      }
+    },
+
     renderCurrentSection(rec){
       if(!rec || !this.els.body) return;
       const policies = this.collectPolicies(rec);
-      this.currentSection = "wallet";
-      this.els.body.innerHTML = this.renderPolicyWallet(rec, policies);
-      this.bindPolicyCardActions(rec, policies);
+      this.updateHeroButtons();
+      this.els.body.innerHTML = this.currentSection === 'medical' ? this.renderMedicalInfo(rec) : this.renderPolicyWallet(rec, policies);
+      if(this.currentSection !== 'medical') this.bindPolicyCardActions(rec, policies);
     },
 
     renderPolicyWallet(rec, policies){
@@ -2078,7 +2227,7 @@ txt.textContent = "";
     openById(id, opts={}){
       const rec = this.byId(id);
       if(!rec || !this.els.wrap) return;
-      const safeSection = "wallet";
+      const safeSection = String(opts?.section || this.currentSection || "wallet") === "medical" ? "medical" : "wallet";
       const reopenPolicyId = safeTrim(opts?.policyId || "");
       const bodyScrollTop = Math.max(0, Number(opts?.bodyScrollTop || 0) || 0);
       try {
