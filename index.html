@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1" name="viewport"/>
+<title>GEMEL INVEST • מערכת CRM</title>
+<meta content="#eef4ff" name="theme-color"/>
+<link href="./app.css?v=20260322-welcome-loader-card-glass-luxe-1" rel="stylesheet"/>
+</head>
+<body class="lcAuthLock">
+<!-- Login Overlay (Premium) -->
+<div aria-hidden="true" class="lcLogin" id="lcLogin">
+<div aria-label="כניסה למערכת" aria-modal="true" class="lcLogin__card" role="dialog">
+<div class="lcLogin__brand">
+<div aria-hidden="true" class="lcLogin__logo lcLogin__logo--img">
+<img alt="GEMEL INVEST" class="lcLogin__logoImg" src="./logo-login-clean.png"/>
+</div>
+</div>
+<div class="lcLogin__title">כניסה למערכת</div>
+<div class="lcLogin__hint">הזן שם משתמש וקוד כניסה</div>
+<form autocomplete="off" class="lcLogin__form" id="lcLoginForm">
+<label class="lcLogin__label">שם משתמש</label>
+<input class="lcLogin__input" id="lcLoginUser" name="username"/>
+<label class="lcLogin__label">קוד כניסה (PIN)</label>
+<input class="lcLogin__input" id="lcLoginPin" type="password" inputmode="numeric" name="pin" placeholder=""/>
+<button class="lcLogin__btn" type="submit">התחבר</button>
+<div aria-live="polite" class="lcLogin__error" id="lcLoginError"></div>
+</form>
+<button class="lcLogin__footBtn" id="lcForgotPasswordBtn" type="button">שכחת סיסמה? פנה למנהל מערכת</button>
+</div>
+</div>
+<div class="app" id="app">
+<!-- Sidebar (left) -->
+<aside aria-label="תפריט ראשי" class="sidebar">
+<div class="brand brand--logoOnly">
+<div aria-hidden="true" class="brand__logo brand__logo--img">
+<img alt="GEMEL INVEST" class="brand__logoImg" src="./logo-login-clean.png"/>
+</div>
+</div>
+<nav class="nav">
+<button class="nav__item is-active" data-view="dashboard">
+<span class="nav__icon" aria-hidden="true">
+<svg class="nav__iconSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+<path d="M4.5 12.75 12 6l7.5 6.75"></path>
+<path d="M6.75 10.75V18a1.5 1.5 0 0 0 1.5 1.5h7.5a1.5 1.5 0 0 0 1.5-1.5v-7.25"></path>
+<path d="M9.25 19.5v-5.25h5.5v5.25"></path>
+</svg>
+</span>
+<span class="nav__label">דשבורד</span>
+</button>
+<button class="nav__item" data-view="customers" id="navCustomers">
+<span class="nav__icon" aria-hidden="true">
+<svg class="nav__iconSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+<path d="M3.75 8.75a2 2 0 0 1 2-2h4.15l1.5 1.7h6.85a2 2 0 0 1 2 2v6.8a2 2 0 0 1-2 2H5.75a2 2 0 0 1-2-2v-8.5Z"></path>
+<path d="M3.75 10.25h16.5"></path>
+</svg>
+</span>
+<span class="nav__label">לקוחות</span>
+</button>
+<button class="nav__item" data-view="proposals" id="navProposals">
+<span class="nav__icon" aria-hidden="true">
+<svg class="nav__iconSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+<path d="M8 4.75h6.5l4 4V18a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V6.75a2 2 0 0 1 2-2Z"></path>
+<path d="M14.5 4.75v4h4"></path>
+<path d="M9 12h6"></path>
+<path d="M9 15.5h6"></path>
+</svg>
+</span>
+<span class="nav__label">הצעות</span>
+</button>
+<button class="nav__item" data-view="mirrors" id="navMirrors" style="display:none">
+<span class="nav__icon" aria-hidden="true">
+<svg class="nav__iconSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+<path d="M8.75 6.75h6.5a2 2 0 0 1 2 2v6.5a2 2 0 0 1-2 2h-1.25l-3 2.25v-2.25h-2.25a2 2 0 0 1-2-2v-6.5a2 2 0 0 1 2-2Z"></path>
+<path d="M9.75 10.25h4.5"></path>
+<path d="M9.75 13.25h3"></path>
+</svg>
+</span>
+<span class="nav__label">שיקופים</span>
+</button>
+<button class="nav__item" data-view="myProcesses" id="navMyProcesses" style="display:none">
+<span class="nav__icon" aria-hidden="true">
+<svg class="nav__iconSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+<path d="M6.5 6.5h4v4h-4z"></path>
+<path d="M13.5 13.5h4v4h-4z"></path>
+<path d="M13.5 6.5h4v4h-4z"></path>
+<path d="M10.5 8.5h3"></path>
+<path d="M8.5 10.5v3h5"></path>
+</svg>
+</span>
+<span class="nav__label">התהליכים שלי</span>
+</button>
+<button class="nav__item" data-view="discountSpec" id="navDiscountSpec">
+<span class="nav__icon" aria-hidden="true">
+<svg class="nav__iconSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-3 3-3-3 3-3z"></path>
+</svg>
+</span>
+<span class="nav__label">כלים</span>
+</button>
+
+<button class="nav__item" data-view="settings">
+<span class="nav__icon" aria-hidden="true">
+<svg class="nav__iconSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+<circle cx="12" cy="12" r="3"></circle>
+<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82L4.21 7.2a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+</svg>
+</span>
+<span class="nav__label">הגדרות מערכת</span>
+</button>
+<button class="nav__item" data-view="users" id="navUsers" style="display:none">
+<span class="nav__icon" aria-hidden="true">
+<svg class="nav__iconSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+<path d="M16.25 19.25v-1a3.25 3.25 0 0 0-3.25-3.25h-2a3.25 3.25 0 0 0-3.25 3.25v1"></path>
+<circle cx="12" cy="9.25" r="3"></circle>
+<path d="M18 8.5h2.5"></path>
+<path d="M19.25 7.25v2.5"></path>
+</svg>
+</span>
+<span class="nav__label">ניהול משתמשים</span>
+</button>
+</nav>
+<div class="sidebar__bottomTools">
+<button class="sidebarRepairBtn" id="btnSystemRepair" type="button" aria-label="טיפול בתקלות מערכת" title="טיפול בתקלות מערכת">
+<span class="sidebarRepairBtn__icon" aria-hidden="true">
+<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+<circle cx="12" cy="12" r="3"></circle>
+<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82L4.21 7.2a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+</svg>
+</span>
+<span class="sidebarRepairBtn__label">טיפול בתקלות מערכת</span>
+</button>
+</div>
+</aside>
+<!-- Main -->
+<main class="main">
+<!-- Topbar -->
+<header class="topbar">
+<div class="topbar__left">
+<div class="pageTitle">
+<div class="pageTitle__kicker">GEMEL INVEST</div>
+<h1 class="pageTitle__title" id="pageTitle">דשבורד</h1>
+</div>
+</div>
+<div class="topbar__right">
+<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+<button class="btn btn--glassCta lcTopBtn" id="btnNewCustomerWizard" type="button"><span aria-hidden="true" class="glassCta__icon">＋</span><span class="glassCta__text">הקמת לקוח חדש</span></button>
+<button class="btn btn--glassCta lcTopBtn lcTopBtn--lead" id="btnOpenLeadShell" type="button"><span aria-hidden="true" class="glassCta__icon">✦</span><span class="glassCta__text">צור ליד</span></button>
+<div class="lcUserPill" id="lcUserPill" style="display:none;">
+<span aria-hidden="true" class="lcUserPill__dot"></span>
+<span class="lcUserPill__text" id="lcUserPillText">מחובר</span>
+<button class="lcUserPill__btn" id="btnLogout" type="button">התנתק</button>
+</div>
+</div>
+</div>
+</header>
+<!-- Content -->
+<section class="content">
+<!-- DASHBOARD -->
+<section class="view is-visible" id="view-dashboard"></section>
+<section class="view" id="view-customers">
+<div class="card lcCustomersCard">
+<div class="card__head">
+<div>
+<div class="card__title">לקוחות</div>
+<div class="card__hint">רשימת הלקוחות שנשמרו מהקמת לקוח</div>
+</div>
+<div class="lcCustomers__headMeta">
+<span class="badge" id="customersCountBadge">0 לקוחות</span>
+</div>
+</div>
+<div class="lcCustomers__toolbar">
+<div class="search lcCustomers__searchWrap">
+<input class="search__input" id="customersSearch" placeholder="חיפוש לפי שם, ת״ז, טלפון או נציג" type="text"/>
+<button class="search__btn" id="customersSearchBtn" type="button">חפש</button>
+</div>
+<div class="row">
+<button class="btn" id="btnCustomersRefresh" type="button">רענון רשימה</button>
+</div>
+</div>
+<div class="tableWrap">
+<table class="table">
+<thead>
+<tr>
+<th>לקוח</th>
+<th>תעודת זהות</th>
+<th>טלפון</th>
+<th>נציג</th>
+<th>סטטוס</th>
+<th>עודכן</th>
+<th style="width:200px"></th>
+</tr>
+</thead>
+<tbody id="customersTbody"></tbody>
+</table>
+</div>
+</div>
+</section>
+
+<section class="view" id="view-proposals">
+<div class="card lcCustomersCard">
+<div class="card__head">
+<div>
+<div class="card__title">הצעות פתוחות</div>
+<div class="card__hint">טיוטות שנשמרו באמצע הקמת לקוח ומחכות להמשך עריכה</div>
+</div>
+<div class="lcCustomers__headMeta">
+<span class="badge" id="proposalsCountBadge">0 הצעות</span>
+</div>
+</div>
+<div class="lcCustomers__toolbar">
+<div class="search lcCustomers__searchWrap">
+<input class="search__input" id="proposalsSearch" placeholder="חיפוש לפי שם, ת״ז, טלפון או נציג" type="text"/>
+<button class="search__btn" id="proposalsSearchBtn" type="button">חפש</button>
+</div>
+<div class="row">
+<button class="btn" id="btnProposalsRefresh" type="button">רענון רשימה</button>
+</div>
+</div>
+<div class="tableWrap">
+<table class="table">
+<thead>
+<tr>
+<th>הצעה</th>
+<th>תעודת זהות</th>
+<th>טלפון</th>
+<th>נציג</th>
+<th>סטטוס</th>
+<th>עודכן</th>
+<th style="width:220px">פעולות</th>
+</tr>
+</thead>
+<tbody id="proposalsTbody"></tbody>
+</table>
+</div>
+</div>
+</section>
+
+<section class="view" id="view-myProcesses">
+<div class="card lcMyProcessesCard">
+<div class="card__head lcMyProcessesCard__head">
+<div>
+<div class="card__title">התהליכים שלי</div>
+<div class="card__hint">מרוכז עבור משתמש תפעול בלבד, עם חיבור ישיר לנתוני הלקוחות והתהליכים הפעילים במערכת</div>
+</div>
+<div class="lcMyProcesses__headMeta">
+<span class="badge" id="myProcessesCountBadge">0 תהליכים</span>
+</div>
+</div>
+
+<div class="lcMyProcesses__toolbar">
+<div class="search lcMyProcesses__searchWrap">
+<input class="search__input" id="myProcessesSearch" placeholder="חיפוש לפי שם לקוח, ת״ז, טלפון, נציג או סטטוס" type="text"/>
+<button class="search__btn" id="myProcessesSearchBtn" type="button">חיפוש</button>
+</div>
+
+<div class="lcMyProcesses__toolbarRight">
+<button class="btn btn--primary lcMyProcessesToolbarBtn" id="btnOpsCreateEvent" type="button">צור אירוע</button>
+<button class="btn lcMyProcessesToolbarBtn" id="btnOpsOpenEvents" type="button">פתח אירועים</button>
+<div class="segmented lcMyProcesses__segmented" id="myProcessesScope">
+<button class="segmented__btn is-active" data-process-scope="all" type="button">הכל</button>
+<button class="segmented__btn" data-process-scope="active" type="button">פעילים</button>
+<button class="segmented__btn" data-process-scope="urgent" type="button">דחופים</button>
+</div>
+<button class="btn" id="btnMyProcessesRefresh" type="button">רענון רשימה</button>
+</div>
+</div>
+
+<div class="lcMyProcesses__summary" id="myProcessesSummary"></div>
+
+<div class="tableWrap lcMyProcesses__tableWrap">
+<table class="table lcMyProcessesTable">
+<thead>
+<tr>
+<th>#</th>
+<th>שם לקוח</th>
+<th>סוג תהליך</th>
+<th>סטטוס</th>
+<th>שלב נוכחי</th>
+<th>נציג מטפל</th>
+<th>עודכן</th>
+<th style="width:260px">פעולות</th>
+</tr>
+</thead>
+<tbody id="myProcessesTbody"></tbody>
+</table>
+</div>
+</div>
+</section>
+
+<section class="view" id="view-mirrors">
+<div class="mirrorsView">
+  <div class="mirrorsHero">
+    <div>
+      <div class="mirrorsHero__kicker">GEMEL INVEST • תפעול</div>
+      <h2 class="mirrorsHero__title">שיקופים</h2>
+      <div class="mirrorsHero__sub">אימות לקוח והקראת נוסח פתיחה בצורה מסודרת, מלאה ופרימיום.</div>
+    </div>
+    <div class="mirrorsHero__side">
+      <div class="mirrorsHero__meta" id="mirrorsHeroMeta">מחפש לקוח לשיקוף</div>
+      <div class="mirrorsHero__actions">
+        <button class="btn btn--primary mirrorsHero__searchBtn" id="btnOpenMirrorsSearch" type="button">🔍 איתור לקוח לשיקוף</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="mirrorsSteps" id="mirrorsSteps">
+    <div class="mirrorsStep is-active" data-step="1"><span>1</span><strong>חיפוש לקוח</strong></div>
+    <div class="mirrorsStep" data-step="2"><span>2</span><strong>פתיח שיחה</strong></div>
+    <div class="mirrorsStep" data-step="3"><span>3</span><strong>אימות נתונים</strong></div>
+    <div class="mirrorsStep" data-step="4"><span>4</span><strong>שיקוף הר הביטוח</strong></div>
+    <div class="mirrorsStep" data-step="5"><span>5</span><strong>ביטול בחברה נגדית</strong></div>
+    <div class="mirrorsStep" data-step="6"><span>6</span><strong>גילוי נאות</strong></div>
+    <div class="mirrorsStep" data-step="7"><span>7</span><strong>הצהרת בריאות</strong></div>
+    <div class="mirrorsStep" data-step="8"><span>8</span><strong>אמצעי תשלום</strong></div>
+    <div class="mirrorsStep" data-step="9"><span>9</span><strong>כניסה לתוקף</strong></div>
+  </div>
+
+
+  <div class="mirrorsCallBar" id="mirrorsCallBar" style="display:none;">
+    <div class="mirrorsCallBar__main">
+      <div class="mirrorsCallBar__kicker">שיחת שיקוף פעילה</div>
+      <div class="mirrorsCallBar__timer" id="mirrorsCallTimer">00:00</div>
+    </div>
+    <div class="mirrorsCallBar__meta" id="mirrorsCallMeta">טרם התחילה שיחה</div>
+    <button class="btn mirrorsCallBar__endBtn" id="btnFinishMirrorCall" type="button">סיים שיחת שיקוף</button>
+  </div>
+
+  <div class="mirrorsShell">
+    <section class="mirrorsPanel mirrorsPanel--flow mirrorsPanel--full">
+      <div class="mirrorsEmpty" id="mirrorsEmptyState">
+        <div class="mirrorsEmpty__icon">📋</div>
+        <div class="mirrorsEmpty__title">מוכן להתחיל שיקוף</div>
+        <div class="mirrorsEmpty__text">לחץ על כפתור איתור לקוח, בחר לקוח רלוונטי, והמערכת תציג לך את נוסח השיחה המחייב והמשך אימות הנתונים.</div>
+      </div>
+
+      <div class="mirrorsFlow" id="mirrorsFlow" style="display:none;">
+        <div class="mirrorsCustomerHero" id="mirrorsCustomerHero"></div>
+        <div class="mirrorsWizardNav" id="mirrorsWizardNav" style="display:none;"></div>
+        <div class="mirrorsScriptCard" id="mirrorsScriptCard"></div>
+        <div class="mirrorsVerifyCard" id="mirrorsVerifyCard" style="display:none;"></div>
+        <div class="mirrorsReflectCard" id="mirrorsReflectCard" style="display:none;"></div>
+        <div class="mirrorsCancelCard" id="mirrorsCancelCard" style="display:none;"></div>
+        <div class="mirrorsDisclosureCard" id="mirrorsDisclosureCard" style="display:none;"></div>
+        <div class="mirrorsHealthCard" id="mirrorsHealthCard" style="display:none;"></div>
+        <div class="mirrorsPaymentCard" id="mirrorsPaymentCard" style="display:none;"></div>
+        <div class="mirrorsIssuanceCard" id="mirrorsIssuanceCard" style="display:none;"></div>
+      </div>
+    </section>
+  </div>
+
+
+  <div class="mirrorsStartModal" id="mirrorsStartModal" hidden>
+    <div class="mirrorsStartModal__backdrop" data-close-mirrors-start></div>
+    <div class="mirrorsStartModal__dialog" role="dialog" aria-modal="true" aria-labelledby="mirrorsStartModalTitle">
+      <div class="mirrorsStartModal__kicker">GEMEL INVEST • שיקופים</div>
+      <div class="mirrorsStartModal__title" id="mirrorsStartModalTitle">התחל שיחת שיקוף ללקוח</div>
+      <div class="mirrorsStartModal__text" id="mirrorsStartModalText">המערכת תתחיל למדוד זמן שיחה מהרגע שתלחץ על התחלה.</div>
+      <div class="mirrorsStartModal__actions">
+        <button class="btn" id="btnCancelMirrorsStart" type="button">ביטול</button>
+        <button class="btn btn--primary" id="btnConfirmMirrorsStart" type="button">התחל שיחה</button>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="mirrorsSearchModal" id="mirrorsSearchModal" hidden>
+    <div class="mirrorsSearchModal__backdrop" data-close-mirrors-search></div>
+    <div class="mirrorsSearchModal__dialog" role="dialog" aria-modal="true" aria-labelledby="mirrorsSearchModalTitle">
+      <div class="mirrorsPanel__head mirrorsPanel__head--modal">
+        <div>
+          <div class="mirrorsPanel__title" id="mirrorsSearchModalTitle">איתור לקוח לשיקוף</div>
+          <div class="mirrorsPanel__hint">חפש לפי תעודת זהות, שם לקוח או מספר טלפון.</div>
+        </div>
+        <div class="mirrorsSearchModal__headSide">
+          <span class="mirrorsBadge" id="mirrorsResultsBadge">0 תוצאות</span>
+          <button class="mirrorsSearchModal__close" id="btnCloseMirrorsSearch" type="button" aria-label="סגור חלון חיפוש">✕</button>
+        </div>
+      </div>
+      <div class="mirrorsSearchRow mirrorsSearchRow--modal">
+        <input class="input mirrorsSearchInput" id="mirrorsSearchInput" placeholder="חיפוש לפי ת״ז / שם לקוח / טלפון" type="text" />
+        <button class="btn btn--primary mirrorsSearchBtn" id="mirrorsSearchBtn" type="button">אישור</button>
+      </div>
+      <div class="mirrorsSearchNote" id="mirrorsSearchNote">המערכת תחפש בתוך הלקוחות השמורים במערכת.</div>
+      <div class="mirrorsResults" id="mirrorsResults"></div>
+    </div>
+  </div>
+</div>
+</section>
+<!-- MY FLOW --><!-- ESIGN --><!-- SETTINGS -->
+<section class="view view--toolsWorkspace" id="view-discountSpec"><div class="card discountSpec__card"><div class="card__head discountSpec__head"><div class="card__title">מפרט הנחות ביטוח</div></div><div class="discountSpec__frameWrap discountSpec__frameWrap--full"><iframe class="discountSpec__frame" id="discountSpecFrame" loading="lazy" src="https://leadupleadup.github.io/LeadUp/" title="מפרט הנחות ביטוח"></iframe></div></div></section><section class="view" id="view-settings">
+<div class="card">
+<div class="card__head">
+<div class="card__title">הגדרות מערכת</div>
+<div class="card__hint">חיבור ל-Supabase + מצב עבודה</div>
+</div>
+<div class="formGrid">
+<div class="field">
+<label class="label">מצב נתונים</label>
+<div class="pill" style="display:inline-flex; margin-top:6px">
+<span aria-hidden="true" class="dot ok"></span>
+<span>Supabase בלבד</span>
+</div>
+<div class="help">המערכת עובדת מול Supabase. אין תלות ב-Google Sheets בגירסה הזו.</div>
+</div>
+<div class="field">
+<label class="label">כתובת Project URL (Supabase)</label>
+<input class="input" id="gsUrl" placeholder="כתובת ה-Project URL של Supabase" readonly="readonly" type="url"/>
+<div class="help">לדוגמא: https://your-project.supabase.co</div>
+</div>
+<div class="field">
+<label class="label">פעולות</label>
+<div class="row">
+<button class="btn" id="btnTestConn" type="button">בדיקת חיבור</button>
+<button class="btn" id="btnSyncNow" type="button">סנכרון עכשיו</button>
+</div>
+<div class="help">שמירה/טעינה מתבצעת מול Supabase. אם יש בעיה, בדוק שהטבלאות נוצרו ושהמפתח תקין.</div>
+</div>
+</div>
+</div>
+</section>
+<!-- USERS (Admin only) -->
+<section class="view" id="view-users">
+<div class="card">
+<div class="card__head">
+<div class="card__title">ניהול משתמשים</div>
+<div class="card__hint">הוספה/עריכה/השבתה של נציגים וסוכנים</div>
+</div>
+<div class="lcUsers__actions">
+<button class="btn" id="btnAddUser" type="button">➕ הוסף נציג/סוכן</button>
+<input class="input lcUsers__search" id="usersSearch" placeholder="חיפוש לפי שם…" type="text"/>
+<select class="input lcUsers__filter" id="usersFilter">
+<option value="all">הכל</option>
+<option value="active">פעילים</option>
+<option value="disabled">מושבתים</option>
+</select>
+</div>
+<div class="tableWrap">
+<table class="table">
+<thead>
+<tr>
+<th>שם</th>
+<th>תפקיד</th>
+<th>סטטוס</th>
+<th style="width:220px">פעולות</th>
+</tr>
+</thead>
+<tbody id="usersTbody"></tbody>
+</table>
+</div>
+</div>
+</section>
+</section>
+</main>
+</div>
+
+<!-- Forgot Password / Contact Admin Modal -->
+
+<div aria-hidden="true" class="modal lcLeadShell" id="lcLeadShell">
+  <div class="modal__backdrop lcLeadShell__backdrop" data-close="1"></div>
+  <div aria-label="צור ליד" aria-modal="true" class="modal__panel lcLeadShell__panel" role="dialog">
+    <button aria-label="סגור מסך יצירת ליד" class="lcLeadShell__close" id="btnCloseLeadShell" type="button">✕</button>
+    <iframe class="lcLeadShell__frame" id="lcLeadShellFrame" loading="lazy" src="about:blank" title="מערכת לידים"></iframe>
+    <div class="lcLeadShell__loading" id="lcLeadShellPlaceholder">
+      <div class="lcLeadShell__loadingSpinner" aria-hidden="true"></div>
+      <div class="lcLeadShell__loadingText">טוען את מנוע יצירת הליד...</div>
+    </div>
+  </div>
+</div>
+
+<div aria-hidden="true" class="modal lcForgotModal" id="lcForgotModal">
+  <div class="modal__backdrop" data-close="1" id="lcForgotModalBackdrop"></div>
+  <div aria-label="פנייה למנהל מערכת" aria-modal="true" class="modal__panel lcForgotModal__panel" role="dialog">
+    <div class="modal__head lcForgotModal__head">
+      <div class="lcForgotModal__titleWrap">
+        <div class="lcForgotModal__icon" aria-hidden="true">✉</div>
+        <div>
+          <div class="modal__kicker">GEMEL INVEST</div>
+          <div class="modal__title">פנייה למנהל מערכת</div>
+          <div class="lcForgotModal__sub">כתוב פנייה קצרה ונעביר אותה למנהל המערכת</div>
+        </div>
+      </div>
+      <button aria-label="סגור" class="iconBtn" id="lcForgotModalClose" type="button">✕</button>
+    </div>
+    <div class="modal__body">
+      <div class="formGrid lcForgotModal__grid">
+        <div class="field">
+          <label class="label" for="lcForgotUsername">שם משתמש</label>
+          <input class="input lcForgotModal__input" id="lcForgotUsername" type="text" placeholder="הכנס שם משתמש"/>
+        </div>
+        <div class="field">
+          <label class="label" for="lcForgotMessage">תוכן הפנייה</label>
+          <textarea class="input lcForgotModal__textarea" id="lcForgotMessage" placeholder="כתוב כאן את הפנייה למנהל המערכת"></textarea>
+        </div>
+        <div aria-live="polite" class="lcLogin__error lcForgotModal__error" id="lcForgotModalError"></div>
+        <div aria-live="polite" class="lcForgotModal__success" id="lcForgotModalSuccess">
+          <span class="lcForgotModal__successIcon" aria-hidden="true">✓</span>
+          <span class="lcForgotModal__successText">הפנייה נשלחה בהצלחה</span>
+        </div>
+      </div>
+    </div>
+    <div class="modal__foot">
+      <button class="btn" id="lcForgotModalCancel" type="button">ביטול</button>
+      <button class="btn btn--primary" id="lcForgotModalSend" type="button">שלח פנייה</button>
+    </div>
+  </div>
+</div>
+
+<!-- Users Add/Edit Modal -->
+<div aria-hidden="true" class="modal lcUserModal" id="lcUserModal">
+<div class="modal__backdrop" data-close="1"></div>
+<div aria-label="ניהול משתמש" aria-modal="true" class="modal__panel lcUserModal__panel" role="dialog">
+<div class="modal__head">
+<div>
+<div class="modal__kicker">GEMEL INVEST</div>
+<div class="modal__title" id="lcUserModalTitle">הוסף נציג/סוכן</div>
+</div>
+<button aria-label="סגור" class="iconBtn" id="lcUserModalClose" type="button">✕</button>
+</div>
+<div class="modal__body">
+<input id="lcUserId" type="hidden"/>
+<div class="formGrid lcUserModal__grid">
+<div class="field">
+<label class="label">שם</label>
+<input class="input" id="lcUserName" placeholder="לדוגמה: סתיו כהן" type="text"/>
+<div class="lcLogin__error" id="lcUserNameErr" style="display:none"></div>
+</div>
+<div class="field">
+<label class="label">שם משתמש</label>
+<input class="input" id="lcUserUsername" placeholder="לדוגמה: סתיו" type="text"/>
+<div class="lcLogin__error" id="lcUserUsernameErr" style="display:none"></div>
+</div>
+<div class="field">
+<label class="label">קוד כניסה (PIN)</label>
+<input class="input" id="lcUserPin" inputmode="numeric" placeholder="0000" type="text"/>
+<div class="lcLogin__error" id="lcUserPinErr" style="display:none"></div>
+</div>
+<div class="field">
+<label class="label">תפקיד</label>
+<select class="input" id="lcUserRole">
+<option value="agent">נציג</option>
+<option value="manager">מנהל (ללא הגדרות מערכת)</option>
+<option value="ops">תפעול (צפייה בכל הלקוחות)</option>
+</select>
+<div class="help">תפעול: צופה בכל הלקוחות (בחיפוש), בלי ניהול משתמשים והגדרות מערכת.</div>
+</div>
+<div class="field">
+<label class="label">סטטוס</label>
+<label class="lcLogin__remember" style="margin-top:2px">
+<input checked="" id="lcUserActive" type="checkbox"/>
+<span>משתמש פעיל</span>
+</label>
+</div>
+<div class="field" style="grid-column: 1 / -1;">
+<div class="lcLogin__error" id="lcUserModalErr" style="display:none"></div>
+</div>
+</div>
+</div>
+<div class="modal__foot">
+<button class="btn" id="lcUserModalCancel" type="button">ביטול</button>
+<button class="btn btn--primary" id="lcUserModalSave" type="button">שמור</button>
+</div>
+</div>
+</div>
+
+<!-- System Repair Modal -->
+<div aria-hidden="true" class="modal systemRepairModal" id="systemRepairModal">
+  <div class="modal__backdrop" data-close="1" id="systemRepairBackdrop"></div>
+  <div aria-label="טיפול בתקלת מערכת" aria-modal="true" class="modal__panel systemRepairModal__panel" role="dialog">
+    <div class="modal__head systemRepairModal__head">
+      <div class="systemRepairModal__titleWrap">
+        <div class="systemRepairModal__icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3l8 14H4L12 3z"></path>
+            <path d="M12 9v4"></path>
+            <path d="M12 16h.01"></path>
+          </svg>
+        </div>
+        <div>
+          <div class="modal__kicker">GEMEL INVEST • טיפול בתקלות</div>
+          <div class="modal__title">טיפול בתקלת מערכת</div>
+          <div class="systemRepairModal__sub">פעולה קשיחה לשחרור מערכת תקועה בלי למחוק נתוני לקוחות והצעות.</div>
+        </div>
+      </div>
+      <button aria-label="סגור" class="iconBtn" id="systemRepairClose" type="button">✕</button>
+    </div>
+    <div class="modal__body systemRepairModal__body">
+      <div class="systemRepairModal__warning">
+        <strong>שים לב:</strong>
+        פעולה זו היא פעולה קשיחה למערכת. לחץ על אישור רק במקרה של תקלה, קיפאון, מסך שלא מגיב או פעולה שלא הושלמה כראוי.
+      </div>
+      <div class="systemRepairModal__list">
+        <div class="systemRepairModal__item">שחרור חלונות, שכבות חסימה ומסכי טעינה תקועים</div>
+        <div class="systemRepairModal__item">איפוס מצב מסך פעיל ורענון נתונים מקומיים</div>
+        <div class="systemRepairModal__item">ניסיון סנכרון מחדש של נתוני המשתמש ללא מחיקת מידע</div>
+      </div>
+      <div class="systemRepairProgress" id="systemRepairProgress" aria-hidden="true">
+        <div class="systemRepairProgress__head">
+          <div class="systemRepairProgress__spinner" aria-hidden="true"></div>
+          <div>
+            <div class="systemRepairProgress__title">המערכת עוברת בדיקה ותיקון</div>
+            <div class="systemRepairProgress__sub">נא להמתין בזמן שהמערכת משחררת עומסים, מאפסת מצבים תקועים ומרעננת נתונים.</div>
+          </div>
+        </div>
+        <div class="systemRepairProgress__bar"><span id="systemRepairProgressBar"></span></div>
+        <div class="systemRepairProgress__steps" id="systemRepairProgressSteps">
+          <div class="systemRepairProgress__step" data-step="1"><span class="systemRepairProgress__dot"></span><span>שחרור חלונות ושכבות חסימה</span></div>
+          <div class="systemRepairProgress__step" data-step="2"><span class="systemRepairProgress__dot"></span><span>איפוס טיימרים ומצבי ממשק תקועים</span></div>
+          <div class="systemRepairProgress__step" data-step="3"><span class="systemRepairProgress__dot"></span><span>רענון מסך פעיל וסנכרון נתונים</span></div>
+        </div>
+      </div>
+      <div aria-live="polite" class="systemRepairModal__status" id="systemRepairStatus">המערכת מוכנה לבצע טיפול.</div>
+    </div>
+    <div class="modal__foot systemRepairModal__foot">
+      <button class="btn" id="systemRepairCancel" type="button">ביטול</button>
+      <button class="btn btn--primary systemRepairModal__confirm" id="systemRepairConfirm" type="button">אישור והפעל טיפול</button>
+    </div>
+  </div>
+</div>
+
+<!-- Customer File Fullscreen -->
+<div aria-hidden="true" class="customerFull" id="customerFull">
+  <div class="customerFull__backdrop" id="customerFullBackdrop"></div>
+  <div class="customerFull__panel">
+    <div class="customerFull__top">
+      <div class="customerHero" id="customerHero">
+        <div class="customerHero__left">
+          <button class="customerHero__back" id="customerFullClose" type="button" aria-label="חזור">❮</button>
+          <div class="customerHero__avatar customerHero__avatar--folder" id="customerFullAvatar" aria-hidden="true"><img class="customerHero__avatarImg" src="./folder-customer.png" alt=""/></div>
+          <div class="customerHero__identity">
+            <div class="customerHero__name" id="customerFullName">תיק לקוח</div>
+            <div class="customerHero__meta" id="customerFullMeta"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="customerFull__dash" id="customerFullDash"></div>
+    <div class="customerFull__body" id="customerFullBody"></div>
+  </div>
+</div>
+
+
+
+<!-- Customer File Loader -->
+<div aria-hidden="true" class="customerLoader" id="customerLoader">
+  <div class="customerLoader__backdrop"></div>
+  <div class="customerLoader__panel" role="status" aria-live="polite">
+    <div class="customerLoader__orb customerLoader__orb--a" aria-hidden="true"></div>
+    <div class="customerLoader__orb customerLoader__orb--b" aria-hidden="true"></div>
+    <div class="customerLoader__brandRow">
+      <span class="customerLoader__brandLine" aria-hidden="true"></span>
+      <div class="customerLoader__brand">GEMEL INVEST</div>
+      <span class="customerLoader__brandLine" aria-hidden="true"></span>
+    </div>
+    <div class="customerLoader__iconWrap">
+      <img class="customerLoader__iconImg" src="./folder-customer.png" alt="" />
+      <span class="customerLoader__iconGloss" aria-hidden="true"></span>
+    </div>
+    <div class="customerLoader__titleRow">
+      <span class="customerLoader__titleLine" aria-hidden="true"></span>
+      <div class="customerLoader__title">טוען תיק לקוח</div>
+      <span class="customerLoader__titleLine" aria-hidden="true"></span>
+    </div>
+    <div class="customerLoader__sub">אנו מכינים עבורך את נתוני הלקוח</div>
+    <div class="customerLoader__dots" aria-hidden="true">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+    <div class="customerLoader__reflection" aria-hidden="true"></div>
+  </div>
+</div>
+
+<!-- Customer Policy Details -->
+<div aria-hidden="true" class="modal customerPolicyModal" id="customerPolicyModal">
+  <div class="modal__backdrop" data-close="1" id="customerPolicyModalBackdrop"></div>
+  <div aria-label="פרטי פוליסה" aria-modal="true" class="modal__panel customerPolicyModal__panel" role="dialog">
+    <div class="modal__head customerPolicyModal__head">
+      <div>
+        <div class="modal__kicker">GEMEL INVEST</div>
+        <div class="modal__title" id="customerPolicyModalTitle">פרטי פוליסה</div>
+      </div>
+      <button aria-label="סגור" class="iconBtn" id="customerPolicyModalClose" type="button">✕</button>
+    </div>
+    <div class="modal__body customerPolicyModal__body" id="customerPolicyModalBody"></div>
+  </div>
+</div>
+
+<!-- New Customer Wizard (Fullscreen Overlay) -->
+<div aria-hidden="true" class="lcWizard" id="lcWizard">
+<div class="lcWizard__backdrop" data-close="1"></div>
+<div aria-label="הקמת לקוח" aria-modal="true" class="lcWizard__panel" role="dialog">
+<div class="lcWizard__head">
+<div class="lcWizard__titleWrap">
+<div class="lcWizard__kicker">GEMEL INVEST</div>
+<div class="lcWizard__title">הקמת לקוח</div>
+</div>
+<button aria-label="סגור" class="iconBtn lcWizard__close" id="lcWizardClose" type="button">✕</button>
+</div>
+<div class="lcWizard__tabs">
+<div class="lcTabs" id="lcInsTabs"></div>
+<button class="btn lcWizard__addIns" id="lcAddInsuredBtn" type="button">➕ הוסף מבוטח</button>
+</div>
+<div class="lcWizard__body" id="lcWizardBody"></div>
+<div class="lcWizard__foot">
+<div class="lcWizard__footActions">
+<button class="btn" id="lcPrevStep" type="button"> הקודם</button>
+<button class="btn btn--primary" id="lcNextStep" type="button">הבא </button>
+</div>
+<div class="lcWizard__footAside">
+<button class="btn" id="lcSaveDraft" type="button">שמור הצעה</button>
+</div>
+</div>
+</div>
+<!-- Add insured picker -->
+<div aria-hidden="true" class="lcMiniModal" id="lcInsPicker">
+<div class="lcMiniModal__backdrop" data-close="1"></div>
+<div aria-label="הוסף מבוטח" aria-modal="true" class="lcMiniModal__panel" role="dialog">
+<div class="lcMiniModal__head">
+<div class="lcMiniModal__title">הוסף מבוטח</div>
+<button aria-label="סגור" class="iconBtn" id="lcInsPickerClose" type="button">✕</button>
+</div>
+<div class="lcMiniModal__body">
+<button class="btn lcPickBtn" data-ins-type="spouse" type="button">בן/בת זוג</button>
+<button class="btn lcPickBtn" data-ins-type="adult" type="button">בגיר</button>
+<button class="btn lcPickBtn" data-ins-type="child" type="button">קטין</button>
+</div>
+<div class="lcMiniModal__foot muted small">ניתן להסיר מבוטח בכל שלב.</div>
+</div>
+</div>
+<!-- Health Covers Drawer (Step 3: Existing Policies - Health only) -->
+<div aria-hidden="true" class="drawer lcCoversDrawer" id="lcCoversDrawer">
+<div class="drawer__backdrop" id="lcCoversDrawerBackdrop"></div>
+<div aria-label="כיסויי בריאות" aria-modal="true" class="drawer__panel" role="dialog">
+<div class="drawer__head">
+<div>
+<div class="drawer__kicker">GEMEL INVEST</div>
+<div class="drawer__title" id="lcCoversDrawerTitle">בחירת כיסויי בריאות</div>
+</div>
+<button aria-label="סגור" class="iconBtn" id="lcCoversDrawerClose" type="button">✕</button>
+</div>
+<div class="drawer__body">
+<div class="lcCoversHint muted small">סמן את הכיסויים הרלוונטיים לפוליסה.</div>
+<div class="lcCoversList" id="lcCoversList"></div>
+</div>
+<div class="lcCoversFoot">
+<button class="btn" id="lcCoversCancel" type="button">ביטול</button>
+<button class="btn btn--primary" id="lcCoversSave" type="button">שמירה</button>
+</div>
+</div>
+</div>
+
+
+
+
+<!-- New Policy Success Modal -->
+<div aria-hidden="true" class="modal lcPolicyAddedModal" id="lcPolicyAddedModal">
+<div class="modal__backdrop lcPolicyAddedModal__backdrop" id="lcPolicyAddedBackdrop"></div>
+<div aria-label="פוליסה נוספה בהצלחה" aria-modal="true" class="modal__panel lcPolicyAddedModal__panel" role="dialog">
+<div class="lcPolicyAddedModal__glow" aria-hidden="true"></div>
+<div class="lcPolicyAddedModal__body">
+<div class="lcPolicyAddedModal__iconWrap" aria-hidden="true">
+<div class="lcPolicyAddedModal__icon">
+<svg viewBox="0 0 72 72" class="lcPolicyAddedModal__svg">
+<circle class="lcPolicyAddedModal__circle" cx="36" cy="36" r="30"></circle>
+<path class="lcPolicyAddedModal__check" d="M22 37.5l9 9L50 28"></path>
+</svg>
+</div>
+</div>
+<div class="lcPolicyAddedModal__kicker">GEMEL INVEST</div>
+<div class="lcPolicyAddedModal__title">פוליסה נוספה בהצלחה</div>
+<div class="lcPolicyAddedModal__text">יש לעדכן הנחות לפוליסה בשורת הפוליסה</div>
+<div class="lcPolicyAddedModal__actions">
+<button class="btn" id="lcPolicyAddedApprove" type="button">אישור</button>
+<button class="btn btn--primary" id="lcPolicyAddedGoDiscount" type="button">עבור לעדכון הנחה</button>
+</div>
+</div>
+</div>
+</div>
+
+<!-- New Policy Discount Modal -->
+<div aria-hidden="true" class="modal lcPolicyDiscountModal" id="lcPolicyDiscountModal">
+<div class="modal__backdrop" id="lcPolicyDiscountBackdrop"></div>
+<div aria-label="הנחת פוליסה" aria-modal="true" class="modal__panel lcPolicyDiscountModal__panel" role="dialog">
+<div class="modal__head lcPolicyDiscountModal__head">
+<div>
+<div class="modal__kicker">GEMEL INVEST</div>
+<div class="modal__title">הנחת פוליסה</div>
+</div>
+<button aria-label="סגור" class="iconBtn" id="lcPolicyDiscountClose" type="button">✕</button>
+</div>
+<div class="modal__body">
+<div class="lcPolicyDiscountModal__body">
+<div class="lcPolicyDiscountModal__hero">
+<div class="lcPolicyDiscountModal__name" id="lcPolicyDiscountName">פוליסה</div>
+<div class="lcPolicyDiscountModal__meta" id="lcPolicyDiscountMeta">פרמיה נוכחית: —</div>
+</div>
+<div class="lcPolicyDiscountModal__grid">
+<div class="field">
+<label class="label" for="lcPolicyDiscountPct">בחירת הנחה</label>
+<select class="input" id="lcPolicyDiscountPct">
+<option value="0">0%</option>
+<option value="2">2%</option>
+<option value="10">10%</option>
+<option value="15">15%</option>
+<option value="20">20%</option>
+<option value="25">25%</option>
+<option value="30">30%</option>
+<option value="35">35%</option>
+<option value="40">40%</option>
+<option value="45">45%</option>
+<option value="50">50%</option>
+<option value="55">55%</option>
+<option value="60">60%</option>
+<option value="65">65%</option>
+</select>
+</div>
+<div class="field">
+<label class="label" for="lcPolicyDiscountYearsBtn">דירוג הנחה בשנים</label>
+<button class="btn lcPolicyDiscountYearsBtn" id="lcPolicyDiscountYearsBtn" type="button">עדכן דירוג הנחה בשנים</button>
+<div class="help">פתח מסך מסודר להזנת דירוג הנחה לכל שנה עד שנה 10.</div>
+</div>
+</div>
+<div class="lcPolicyDiscountModal__scheduleSummary" id="lcPolicyDiscountScheduleSummary">
+<div class="lcPolicyDiscountModal__scheduleSummaryHead">
+<div>
+<div class="lcPolicyDiscountModal__scheduleSummaryTitle">דירוג ההנחה בשנים</div>
+<div class="lcPolicyDiscountModal__scheduleSummarySub">טרם הוגדר דירוג הנחה לפי שנים</div>
+</div>
+<span class="lcPolicyDiscountModal__scheduleBadge">0/10</span>
+</div>
+<div class="lcPolicyDiscountModal__scheduleList" id="lcPolicyDiscountScheduleList"></div>
+</div>
+<div aria-hidden="true" class="lcPolicyDiscountScheduleEditor" id="lcPolicyDiscountScheduleEditor">
+<div class="lcPolicyDiscountScheduleEditor__backdrop" id="lcPolicyDiscountScheduleBackdrop"></div>
+<div class="lcPolicyDiscountScheduleEditor__panel">
+<div class="lcPolicyDiscountScheduleEditor__head">
+<div>
+<div class="lcPolicyDiscountScheduleEditor__kicker">GEMEL INVEST</div>
+<div class="lcPolicyDiscountScheduleEditor__title">עדכון דירוג הנחה בשנים</div>
+</div>
+<button aria-label="סגור" class="iconBtn" id="lcPolicyDiscountScheduleClose" type="button">✕</button>
+</div>
+<div class="lcPolicyDiscountScheduleEditor__body">
+<div class="lcPolicyDiscountScheduleEditor__hero">
+<div class="lcPolicyDiscountScheduleEditor__heroTitle">בחר הנחה לכל שנה רלוונטית</div>
+<div class="lcPolicyDiscountScheduleEditor__heroSub">אפשר לעדכן שנה 1 עד שנה 10, ולשמור רק את השנים הרלוונטיות לפוליסה.</div>
+</div>
+<div class="lcPolicyDiscountScheduleEditor__grid" id="lcPolicyDiscountScheduleGrid"></div>
+</div>
+<div class="lcPolicyDiscountScheduleEditor__foot">
+<button class="btn" id="lcPolicyDiscountScheduleCancel" type="button">ביטול</button>
+<button class="btn btn--primary" id="lcPolicyDiscountScheduleSave" type="button">שמור דירוג הנחה</button>
+</div>
+</div>
+</div>
+<div aria-live="polite" class="lcPolicyDiscountModal__preview" id="lcPolicyDiscountPreview">פרמיה אחרי הנחה: —</div>
+<div aria-live="polite" class="lcPolicyDiscountModal__error" id="lcPolicyDiscountError"></div>
+</div>
+</div>
+<div class="modal__foot lcPolicyDiscountModal__foot">
+<button class="btn" id="lcPolicyDiscountCancel" type="button">ביטול</button>
+<button class="btn btn--primary" id="lcPolicyDiscountSave" type="button">שמור</button>
+</div>
+</div>
+</div>
+
+<!-- Operational Report Modal -->
+<div aria-hidden="true" class="modal lcReport" id="lcReport">
+  <div class="modal__backdrop" data-close="1"></div>
+  <div aria-label="דוח תפעולי" aria-modal="true" class="modal__panel lcReport__panel" role="dialog">
+    <div class="modal__head">
+      <div>
+        <div class="modal__kicker">GEMEL INVEST</div>
+        <div class="modal__title">דוח תפעולי</div>
+      </div>
+      <div class="row">
+        <button class="btn" id="lcReportPrint" type="button">הורד קובץ תפעולי</button>
+        <button aria-label="סגור" class="iconBtn" id="lcReportClose" type="button">✕</button>
+      </div>
+    </div>
+    <div class="modal__body">
+      <div class="lcReportBody" id="lcReportBody"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Create Customer Flow Overlay -->
+<div aria-hidden="true" class="modal lcFlow" id="lcFlow">
+  <div class="modal__backdrop"></div>
+  <div aria-label="הקמת לקוח" aria-modal="true" class="modal__panel lcFlow__panel" role="dialog">
+    <div class="lcFlow__loading" id="lcFlowLoading">
+      <div class="lcFlow__spinner"></div>
+      <div class="lcFlow__title">אנא המתן</div>
+      <div class="lcFlow__text">המערכת מבצעת הקמת לקוח...</div>
+      <div class="lcFlow__progress"><span id="lcFlowProgress"></span></div>
+    </div>
+    <div class="lcFlow__success" id="lcFlowSuccess" style="display:none">
+      <div class="lcSuccessCheck" aria-hidden="true">
+        <svg viewBox="0 0 72 72" class="lcSuccessCheck__svg">
+          <circle class="lcSuccessCheck__circle" cx="36" cy="36" r="30"></circle>
+          <path class="lcSuccessCheck__path" d="M22 37.5l9 9L50 28"></path>
+        </svg>
+      </div>
+      <div class="lcFlow__title lcFlow__title--success">הלקוח הוקם בהצלחה במערכת</div>
+      <div class="lcFlow__actions">
+        <button class="btn btn--primary" id="lcOpenCustomerFile" type="button">פתח תיק לקוח</button>
+        <button class="btn" id="lcSendToOps" type="button">הגש הצעה למחלקת תפעול</button>
+        <button class="btn" id="lcDownloadOpsFile" type="button">הורד קובץ תפעולי</button>
+        <button class="btn" id="lcBackToDashboard" type="button">חזרה לדשבורד</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- Archive Customer Modal -->
+<div aria-hidden="true" class="modal lcArchiveCustomerModal" id="lcArchiveCustomerModal">
+  <div class="modal__backdrop" id="lcArchiveCustomerBackdrop"></div>
+  <div aria-label="גניזת לקוח" aria-modal="true" class="modal__panel lcArchiveCustomerModal__panel" role="dialog">
+    <div class="modal__head">
+      <div>
+        <div class="modal__kicker">GEMEL INVEST</div>
+        <div class="modal__title">גניזת לקוח</div>
+      </div>
+      <button aria-label="סגור" class="iconBtn" id="lcArchiveCustomerClose" type="button">✕</button>
+    </div>
+    <div class="modal__body">
+      <div class="lcArchiveCustomerModal__body">
+        <div class="lcArchiveCustomerModal__warn">פעולה זו מוחקת את הלקוח מהמערכת ומהשמירה ב־Supabase.</div>
+        <div class="lcArchiveCustomerModal__name" id="lcArchiveCustomerName">לקוח</div>
+        <div class="lcArchiveCustomerModal__meta" id="lcArchiveCustomerMeta"></div>
+        <div class="field">
+          <label class="label" for="lcArchiveCustomerPin">קוד מנהל למחיקה</label>
+          <input autocomplete="off" class="input" id="lcArchiveCustomerPin" inputmode="numeric" placeholder="הזן קוד מנהל" type="password" />
+        </div>
+        <div aria-live="polite" class="lcArchiveCustomerModal__error" id="lcArchiveCustomerError"></div>
+      </div>
+    </div>
+    <div class="modal__foot">
+      <button class="btn" id="lcArchiveCustomerCancel" type="button">ביטול</button>
+      <button class="btn btn--danger" id="lcArchiveCustomerConfirm" type="button">מחק לקוח</button>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<!-- Invest Chat (Global after login) -->
+<div class="giChatFab is-hidden" id="giChatFab" aria-label="צ׳אט אינווסט" title="צ׳אט אינווסט" role="button" tabindex="0">
+  <span class="giChatFab__icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M7 10h10"></path>
+      <path d="M7 14h6"></path>
+      <path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5A8.46 8.46 0 0 1 8.7 19L3 20.5 4.5 15a8.46 8.46 0 0 1-1-4A8.5 8.5 0 0 1 12 2.5 8.5 8.5 0 0 1 21 11.5Z"></path>
+    </svg>
+  </span>
+  <span class="giChatFab__badge is-hidden" id="giChatFabBadge">0</span>
+</div>
+
+<section class="giChatWindow is-hidden" id="giChatWindow" aria-hidden="true">
+  <header class="giChatWindow__header" id="giChatDragHandle">
+    <div class="giChatWindow__brand">
+      <div class="giChatWindow__orb" aria-hidden="true"></div>
+      <div>
+        <div class="giChatWindow__kicker">GEMEL INVEST</div>
+        <div class="giChatWindow__title">צ׳אט אינווסט</div>
+      </div>
+    </div>
+    <div class="giChatWindow__actions">
+      <button class="giChatWindow__miniBtn" id="giChatMinimize" type="button" aria-label="מזער">—</button>
+      <button class="giChatWindow__miniBtn" id="giChatClose" type="button" aria-label="סגור">✕</button>
+    </div>
+  </header>
+
+  <div class="giChatWindow__body">
+    <aside class="giChatSidebar">
+      <div class="giChatSidebar__me">
+        <div class="giChatSidebar__meAvatar" id="giChatMeAvatar">--</div>
+        <div class="giChatSidebar__meMeta">
+          <div class="giChatSidebar__meLabel">מחובר כעת</div>
+          <div class="giChatSidebar__meName" id="giChatMeName">--</div>
+          <div class="giChatSidebar__meRole" id="giChatMeRole">--</div>
+        </div>
+      </div>
+
+      <div class="giChatSidebar__top">
+        <div class="giChatSidebar__sectionTitle">נציגים זמינים</div>
+        <div class="giChatSidebar__status" id="giChatConnectionStatus">מאתחל צ׳אט…</div>
+      </div>
+
+      <div class="giChatSidebar__search">
+        <input type="text" id="giChatUserSearch" placeholder="חיפוש נציג..." autocomplete="off">
+      </div>
+
+      <div class="giChatUsers" id="giChatUsersList"></div>
+
+      <div class="giChatSidebar__setupHint is-hidden" id="giChatSetupHint">
+        יש להריץ את קובץ ה-SQL של צ׳אט Supabase כדי להפעיל צ׳אט לייב זמני בין נציגים.
+      </div>
+    </aside>
+
+    <section class="giChatPanel">
+      <div class="giChatPanel__empty" id="giChatEmptyState">
+        <div class="giChatPanel__emptyIcon">💬</div>
+        <div class="giChatPanel__emptyTitle">בחר נציג כדי להתחיל שיחה</div>
+        <div class="giChatPanel__emptyText">הצ׳אט נשאר צף, מציג הקלדה בלייב, ונשמר זמנית למספר דקות בלבד.</div>
+      </div>
+
+      <div class="giChatConversation is-hidden" id="giChatConversation">
+        <div class="giChatConversation__head">
+          <div class="giChatConversation__contact">
+            <div class="giChatConversation__avatar" id="giChatPeerAvatar">--</div>
+            <div>
+              <div class="giChatConversation__name" id="giChatPeerName">--</div>
+              <div class="giChatConversation__presence" id="giChatPeerStatus">--</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="giChatMessages" id="giChatMessages"></div>
+
+        <div class="giChatTyping is-hidden" id="giChatTypingIndicator">
+          <span></span><span></span><span></span>
+          <strong id="giChatTypingText">מקליד…</strong>
+        </div>
+
+        <div class="giChatComposer">
+          <div class="giChatComposer__inputWrap" id="giChatComposerWrap">
+            <button class="giChatComposer__emojiBtn" id="giChatEmojiToggle" type="button" aria-label="פתח אימוג׳ים" title="אימוג׳ים" aria-expanded="false" aria-controls="giChatEmojiPanel">
+              <span aria-hidden="true">😊</span>
+            </button>
+            <textarea id="giChatInput" rows="1" placeholder="הקלד הודעה"></textarea>
+            <div class="giChatEmojiPanel is-hidden" id="giChatEmojiPanel" aria-hidden="true">
+              <button type="button" class="giChatEmojiPanel__item" data-chat-emoji="😀">😀</button>
+              <button type="button" class="giChatEmojiPanel__item" data-chat-emoji="😁">😁</button>
+              <button type="button" class="giChatEmojiPanel__item" data-chat-emoji="😂">😂</button>
+              <button type="button" class="giChatEmojiPanel__item" data-chat-emoji="😊">😊</button>
+              <button type="button" class="giChatEmojiPanel__item" data-chat-emoji="😍">😍</button>
+              <button type="button" class="giChatEmojiPanel__item" data-chat-emoji="😘">😘</button>
+              <button type="button" class="giChatEmojiPanel__item" data-chat-emoji="😉">😉</button>
+              <button type="button" class="giChatEmojiPanel__item" data-chat-emoji="😎">😎</button>
+              <button type="button" class="giChatEmojiPanel__item" data-chat-emoji="🤝">🤝</button>
+              <button type="button" class="giChatEmojiPanel__item" data-chat-emoji="🙏">🙏</button>
+              <button type="button" class="giChatEmojiPanel__item" data-chat-emoji="👍">👍</button>
+              <button type="button" class="giChatEmojiPanel__item" data-chat-emoji="👏">👏</button>
+              <button type="button" class="giChatEmojiPanel__item" data-chat-emoji="🔥">🔥</button>
+              <button type="button" class="giChatEmojiPanel__item" data-chat-emoji="💙">💙</button>
+              <button type="button" class="giChatEmojiPanel__item" data-chat-emoji="💬">💬</button>
+              <button type="button" class="giChatEmojiPanel__item" data-chat-emoji="🎉">🎉</button>
+            </div>
+          </div>
+          <button class="giChatComposer__send" id="giChatSend" type="button" aria-label="שלח הודעה" title="שלח הודעה">
+            <span class="giChatComposer__sendIcon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                <path d="M4.2 11.2 18.8 5.1c.9-.37 1.78.51 1.41 1.41l-6.11 14.6c-.39.92-1.72.88-2.05-.06l-1.82-5.24-5.25-1.82c-.93-.33-.97-1.66-.05-2.05Z"></path>
+                <path d="M10.6 15.1 20 5.7"></path>
+              </svg>
+            </span>
+            <span class="giChatComposer__sendLabel">שלח</span>
+          </button>
+        </div>
+      </div>
+    </section>
+  </div>
+</section>
+
+<div class="giChatToasts" id="giChatToasts" aria-live="polite" aria-atomic="false"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./app.js?v=20260322-welcome-loader-card-glass-luxe-1"></script>
+</body></html>
