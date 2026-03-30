@@ -839,6 +839,7 @@
 <div class="lcWizard__foot">
 <div class="lcWizard__footActions">
 <button class="btn" id="lcPrevStep" type="button"> הקודם</button>
+<button class="btn lcWizard__previewBtn" id="lcPreviewOpsReport" type="button" style="display:none" disabled>צפייה בדוח התפעולי</button>
 <button class="btn btn--primary" id="lcNextStep" type="button">הבא </button>
 </div>
 <div class="lcWizard__footAside">
@@ -1010,7 +1011,6 @@
         <div class="modal__title">דוח תפעולי</div>
       </div>
       <div class="row">
-        <button class="btn" id="lcReportPrint" type="button">הורד PDF דוח תפעולי</button>
         <button aria-label="סגור" class="iconBtn" id="lcReportClose" type="button">✕</button>
       </div>
     </div>
@@ -1041,7 +1041,7 @@
       <div class="lcFlow__actions">
         <button class="btn btn--primary" id="lcOpenCustomerFile" type="button">פתח תיק לקוח</button>
         <button class="btn" id="lcSendToOps" type="button">הגש לתפעול – בפיתוח</button>
-        <button class="btn" id="lcDownloadOpsFile" type="button">הורד PDF דוח תפעולי</button>
+        <button class="btn" id="lcDownloadOpsFile" type="button">הורד דוח תפעולי</button>
         <button class="btn" id="lcBackToDashboard" type="button">חזרה לדשבורד</button>
       </div>
     </div>
@@ -1068,7 +1068,7 @@
       </div>
       <div class="lcOpGuideModal__kicker">GEMEL INVEST</div>
       <div class="lcOpGuideModal__title">לפני סיום הקמת הלקוח</div>
-      <div class="lcOpGuideModal__text">יש להוריד דוח תפעולי ולשלוח למחלקת תפעול, ולאחר מכן למלא מספר סוכן וללחוץ סיום הקמת לקוח לצורך הקמת תיק הלקוח במערכת.</div>
+      <div class="lcOpGuideModal__text">יש למלא מספרי סוכן עבור החברות שנמכרו. לאחר מכן ניתן לצפות בדוח התפעולי בתוך המערכת, ורק אחרי לחיצה על סיום הקמת לקוח תופיע אפשרות להוריד את הדוח.</div>
       <label class="lcOpGuideModal__check">
         <input id="lcOpGuideConfirm" type="checkbox" />
         <span>קראתי והבנתי</span>
