@@ -1,4 +1,4 @@
-/* BUILD: 20260401-summary-logo-clean-v22 */
+/* BUILD: 20260401-summary-logo-fix-v23 */
 /* LEAD CORE • Premium CRM (RTL) */
 
 :root{
@@ -3733,7 +3733,7 @@ body:not(.lcAuthLock) #lcLogin{ display:none !important; }
   .lcReportHero__title{font-size:28px}
   .lcReport__panel{width:min(100vw - 14px,980px)}
   .lcSummaryHero__top{align-items:flex-start; flex-direction:column-reverse}
-  .lcSummaryHero__brand{align-self:flex-start; padding:8px 10px}
+  .lcSummaryHero__brand{align-self:flex-start; padding:0}
   .lcSummaryHero__brandImg{width:112px}
 }
 
@@ -3822,11 +3822,11 @@ body:not(.lcAuthLock) #lcLogin{ display:none !important; }
   display:flex;
   align-items:center;
   justify-content:center;
-  padding:10px 12px;
-  border-radius:20px;
-  background:linear-gradient(180deg, rgba(255,255,255,.78), rgba(229,239,255,.94));
-  border:1px solid rgba(43,75,138,.12);
-  box-shadow:0 14px 30px rgba(15,23,42,.08), inset 0 1px 0 rgba(255,255,255,.78);
+  padding:0;
+  border-radius:0;
+  background:transparent;
+  border:0;
+  box-shadow:none;
 }
 .lcSummaryHero__brandImg{
   display:block;
