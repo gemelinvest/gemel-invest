@@ -6,7 +6,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260413-vUpdateNotify3";
+  const BUILD = "20260413-test1";
   const ADMIN_CONTACT_EMAIL = "oriasomech@gmail.com";
   const AUTO_LOGOUT_IDLE_MS = 40 * 60 * 1000;
   const ARCHIVE_CUSTOMER_PIN = "1990";
