@@ -6232,14 +6232,17 @@ init(){
       const usePartialQuestionRefresh = !!options.partialQuestion;
       if(usePartialQuestionRefresh){
         const updated = this.updateHealthStepQuestionCard();
-        if(!updated) this.renderBody();
+        if(!updated){
+          this.renderBody();
+          this.renderFooter();
+        }
       }else{
         this.renderBody();
+        this.renderFooter();
       }
-      this.renderFooter();
       requestAnimationFrame(() => {
         try{
-          this.hardenHealthStepInteractivity();
+          if(!usePartialQuestionRefresh) this.hardenHealthStepInteractivity();
           if(options.focusDetail && options.qKey && options.insId){
             this.focusHealthDetailCard(options.qKey, options.insId, { restoreValues: !!options.restoreValues });
           }
@@ -7033,7 +7036,7 @@ init(){
       else if(this.step === 6) this.bindInputs(this.insureds[0]);
       else if(this.step === 8){
         requestAnimationFrame(() => {
-          try{ prepareInteractiveWizardOpen(); this.hardenHealthStepInteractivity(); }catch(_e){}
+          try{ this.hardenHealthStepInteractivity(); }catch(_e){}
         });
       }
       else if(this.step === 9) this.bindOperationalSummaryInputs();
