@@ -7,7 +7,7 @@
   "use strict";
 
   const BUILD = "20260419-vUpdatePromptPremium-v1";
-  const BUILD_NAME = "עדכון חוויית מערכת";
+  const BUILD_NAME = "עדכון חוויית פוליסות חדשות";
   const ADMIN_CONTACT_EMAIL = "oriasomech@gmail.com";
   const AUTO_LOGOUT_IDLE_MS = 40 * 60 * 1000;
   const ARCHIVE_CUSTOMER_PIN = "1990";
