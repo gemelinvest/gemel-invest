@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>התאמת צרכים — גמל אינווסט</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #ffffff;
+    --bg-secondary: #f7f7f5;
+    --bg-tertiary: #f0efe9;
+    --text-primary: #1a1a18;
+    --text-secondary: #5f5e5a;
+    --text-tertiary: #888780;
+    --border: rgba(0,0,0,0.12);
+    --border-md: rgba(0,0,0,0.22);
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --teal-50: #E1F5EE;
+    --teal-200: #5DCAA5;
+    --teal-600: #0F6E56;
+    --teal-800: #085041;
+    --blue-50: #E6F1FB;
+    --blue-200: #85B7EB;
+    --blue-600: #185FA5;
+    --blue-800: #0C447C;
+    --amber-50: #FAEEDA;
+    --amber-200: #EF9F27;
+    --amber-600: #854F0B;
+    --amber-800: #633806;
+    --red-50: #FCEBEB;
+    --red-600: #A32D2D;
+    --font: -apple-system, 'Segoe UI', Arial, sans-serif;
+  }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    min-height: 100vh;
+    direction: rtl;
+  }
+
+  /* ── Top Nav ── */
+  .topnav {
+    background: var(--bg);
+    border-bottom: 0.5px solid var(--border);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+  }
+  .brand {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    letter-spacing: 0.05em;
+  }
+  .brand span { color: var(--blue-600); }
+  .nav-steps {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .step-dot {
+    width: 28px; height: 4px;
+    border-radius: 999px;
+    background: var(--border);
+  }
+  .step-dot.done { background: var(--teal-200); }
+  .step-dot.active { background: var(--blue-600); }
+  .step-label { font-size: 12px; color: var(--text-tertiary); margin-right: 10px; }
+
+  /* ── Layout ── */
+  .page { max-width: 760px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+  /* ── Header ── */
+  .header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 2rem; }
+  .page-tag { font-size: 11px; font-weight: 500; color: var(--text-tertiary); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 5px; }
+  .page-title { font-size: 24px; font-weight: 500; color: var(--text-primary); margin-bottom: 6px; }
+  .page-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.65; max-width: 440px; }
+
+  .client-chip {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 14px 6px 10px;
+    background: var(--bg);
+    border: 0.5px solid var(--border);
+    border-radius: 999px;
+    flex-shrink: 0;
+    margin-top: 4px;
+  }
+  .client-dot { width: 7px; height: 7px; border-radius: 50%; background: #E9A800; flex-shrink: 0; }
+  .client-avatar {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--teal-50); color: var(--teal-800);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 500; flex-shrink: 0;
+  }
+  .client-name { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+
+  /* ── Progress ── */
+  .progress-wrap { margin-bottom: 1.75rem; }
+  .progress-meta { display: flex; justify-content: space-between; margin-bottom: 7px; }
+  .progress-meta span { font-size: 12px; color: var(--text-secondary); }
+  .progress-track { height: 3px; background: var(--border); border-radius: 999px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--teal-200); border-radius: 999px; transition: width 0.5s cubic-bezier(.4,0,.2,1); }
+
+  /* ── Policy Card ── */
+  .pcard {
+    background: var(--bg);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-lg);
+    margin-bottom: 0.75rem;
+    overflow: hidden;
+    transition: border-color 0.25s;
+  }
+  .pcard.active { border-color: var(--border-md); }
+  .pcard.done { border-color: var(--teal-200); }
+
+  .pcard-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s;
+  }
+  .pcard-head:hover { background: var(--bg-secondary); }
+
+  .head-r { display: flex; align-items: center; gap: 10px; }
+  .logo-circle {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: var(--bg-secondary); border: 0.5px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 500; color: var(--text-secondary); flex-shrink: 0;
+  }
+  .pname { font-size: 14px; font-weight: 500; color: var(--text-primary); }
+  .psub { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+
+  .head-l { display: flex; align-items: center; gap: 8px; }
+  .sbadge { font-size: 11px; font-weight: 500; padding: 3px 10px; border-radius: 999px; }
+  .s-cancel { background: var(--red-50); color: var(--red-600); }
+  .s-partial { background: var(--amber-50); color: var(--amber-600); }
+  .s-appoint { background: var(--blue-50); color: var(--blue-600); }
+
+  .status-ring {
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 0.5px solid var(--border);
+    background: var(--bg-secondary);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: all 0.25s;
+  }
+  .status-ring svg { display: none; }
+  .status-ring.done { background: var(--teal-200); border-color: var(--teal-200); }
+  .status-ring.done svg { display: block; }
+
+  /* ── Card Body ── */
+  .pcard-body { display: none; padding: 0 1.25rem 1.25rem; border-top: 0.5px solid var(--border); }
+  .pcard-body.open { display: block; }
+
+  /* ── Alert ── */
+  .alert {
+    margin: 1rem 0 0.5rem;
+    padding: 0.85rem 1rem;
+    border-radius: var(--radius-md);
+    border: 0.5px solid;
+  }
+  .alert-head {
+    display: flex; align-items: flex-start; gap: 8px;
+    font-size: 13px; font-weight: 500; line-height: 1.4;
+  }
+  .alert-icon { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
+  .alert-text { font-size: 12px; line-height: 1.6; margin-top: 5px; margin-right: 24px; }
+  .alert.warn { background: var(--amber-50); border-color: #FAC775; color: var(--amber-800); }
+  .alert.info { background: var(--blue-50); border-color: #B5D4F4; color: var(--blue-800); }
+
+  .ack-row { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .ack-row input { width: 14px; height: 14px; flex-shrink: 0; accent-color: var(--teal-600); }
+  .ack-row label { font-size: 12px; color: var(--text-secondary); cursor: pointer; }
+
+  /* ── Fields ── */
+  .field-label {
+    font-size: 11px; font-weight: 500; color: var(--text-tertiary);
+    letter-spacing: 0.04em; margin: 1rem 0 0.5rem;
+  }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 0.5rem; }
+  .chip {
+    font-size: 12px; padding: 5px 13px; border-radius: 999px;
+    border: 0.5px solid var(--border);
+    background: var(--bg); color: var(--text-secondary);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .chip:hover { border-color: var(--border-md); color: var(--text-primary); }
+  .chip.on { background: var(--teal-50); border-color: var(--teal-200); color: var(--teal-800); }
+
+  .radios { display: flex; gap: 6px; margin-bottom: 0.5rem; }
+  .ropt {
+    flex: 1; padding: 8px 6px;
+    border-radius: var(--radius-md);
+    border: 0.5px solid var(--border);
+    background: var(--bg);
+    cursor: pointer; text-align: center;
+    font-size: 12px; color: var(--text-secondary);
+    transition: all 0.15s; line-height: 1.4;
+  }
+  .ropt:hover { border-color: var(--border-md); color: var(--text-primary); }
+  .ropt.on-green { background: var(--teal-50); border-color: var(--teal-200); color: var(--teal-800); }
+  .ropt.on-amber { background: var(--amber-50); border-color: var(--amber-200); color: var(--amber-800); }
+  .ropt.on-blue { background: var(--blue-50); border-color: var(--blue-200); color: var(--blue-800); }
+
+  textarea {
+    width: 100%; min-height: 80px;
+    padding: 0.7rem 0.9rem;
+    font-size: 13px; font-family: var(--font);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    resize: none; line-height: 1.6; direction: rtl;
+    transition: border-color 0.15s;
+  }
+  textarea:focus { outline: none; border-color: var(--border-md); }
+  textarea::placeholder { color: var(--text-tertiary); }
+
+  .char-hint { font-size: 11px; color: var(--text-tertiary); text-align: left; margin-top: 4px; }
+  .char-hint.met { color: var(--teal-600); }
+
+  /* ── Buttons ── */
+  .card-footer { margin-top: 1rem; }
+  .btn-save {
+    padding: 8px 22px;
+    font-size: 13px; font-family: var(--font);
+    border-radius: var(--radius-md); border: none;
+    background: var(--blue-600); color: #fff;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .btn-save:hover { background: var(--blue-800); }
+
+  /* ── Page Footer ── */
+  .page-footer {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 2rem; padding-top: 1.25rem;
+    border-top: 0.5px solid var(--border);
+  }
+  .btn-sec {
+    padding: 9px 22px;
+    font-size: 13px; font-family: var(--font);
+    border-radius: var(--radius-md);
+    border: 0.5px solid var(--border-md);
+    background: var(--bg); color: var(--text-primary);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .btn-sec:hover { background: var(--bg-secondary); }
+  .btn-pri {
+    padding: 9px 28px;
+    font-size: 13px; font-family: var(--font);
+    border-radius: var(--radius-md); border: none;
+    background: var(--blue-600); color: #fff;
+    cursor: pointer; transition: background 0.15s;
+  }
+  .btn-pri:hover { background: var(--blue-800); }
+  .btn-pri:disabled {
+    background: var(--bg-secondary);
+    color: var(--text-tertiary); cursor: not-allowed;
+  }
+</style>
+</head>
+<body>
+
+<!-- Top Nav -->
+<nav class="topnav">
+  <div class="brand">גמל <span>INVEST</span></div>
+  <div style="display:flex;align-items:center;gap:6px">
+    <span class="step-label">שלב 4 מתוך 5</span>
+    <div class="nav-steps">
+      <div class="step-dot done"></div>
+      <div class="step-dot done"></div>
+      <div class="step-dot done"></div>
+      <div class="step-dot active"></div>
+      <div class="step-dot"></div>
+    </div>
+  </div>
+</nav>
+
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <div class="page-tag">התאמת צרכים</div>
+      <div class="page-title">שיקולי ההמלצה</div>
+      <div class="page-desc">פרט את שיקולי ההמלצה לכל פוליסה שעברה שינוי. הנימוקים יישמרו לצורכי ציות ופיקוח פנימי.</div>
+    </div>
+    <div class="client-chip">
+      <div class="client-dot"></div>
+      <div class="client-avatar">חב</div>
+      <div class="client-name">חגית בראלי פישמן</div>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div class="progress-wrap">
+    <div class="progress-meta">
+      <span>התקדמות תיעוד</span>
+      <span id="pcount">0 מתוך 3 פוליסות</span>
+    </div>
+    <div class="progress-track">
+      <div class="progress-fill" id="pfill" style="width:0%"></div>
+    </div>
+  </div>
+
+  <!-- Cards -->
+
+  <!-- Card 0: הפניקס בריאות ביטול מלא -->
+  <div class="pcard active" id="pc0">
+    <div class="pcard-head" onclick="toggle(0)">
+      <div class="head-r">
+        <div class="logo-circle">פנ</div>
+        <div>
+          <div class="pname">הפניקס</div>
+          <div class="psub">בריאות · ביטוח עיקרי</div>
+        </div>
+      </div>
+      <div class="head-l">
+        <span class="sbadge s-cancel">ביטול מלא</span>
+        <div class="status-ring" id="sr0">
+          <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+            <path d="M1 4l2.5 2.5L9 1" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+    <div class="pcard-body open" id="pb0">
+
+      <div class="alert warn">
+        <div class="alert-head">
+          <svg class="alert-icon" viewBox="0 0 16 16" fill="none">
+            <path d="M8 2L14.5 13H1.5L8 2Z" stroke="#854F0B" stroke-width="1.2" stroke-linejoin="round"/>
+            <path d="M8 6v3M8 11v.5" stroke="#854F0B" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          שים לב — תקופת אכשרה
+        </div>
+        <div class="alert-text">הלקוח עלול לאבד תקופת אכשרה אם אינו רוכש פוליסת בריאות חלופית בחברה אחרת.</div>
+        <div class="ack-row">
+          <input type="checkbox" id="ack0">
+          <label for="ack0">הובן ואושר — שוחח עם הלקוח על ההשלכות</label>
+        </div>
+      </div>
+
+      <div class="field-label">סיבת ההמלצה</div>
+      <div class="chips" id="r0">
+        <div class="chip" onclick="pick('r0',this)">כיסוי כפול / חפיפה</div>
+        <div class="chip" onclick="pick('r0',this)">פרמיה גבוהה ביחס לכיסוי</div>
+        <div class="chip" onclick="pick('r0',this)">לא מתאים לצרכי הלקוח</div>
+        <div class="chip" onclick="pick('r0',this)">בקשת הלקוח</div>
+        <div class="chip" onclick="pick('r0',this)">שינוי מצב אישי</div>
+        <div class="chip" onclick="pick('r0',this)">אחר</div>
+      </div>
+
+      <div class="field-label">כיסוי חלופי</div>
+      <div class="radios" id="c0">
+        <div class="ropt" onclick="rad('c0',this,'on-green')">כן — כיסוי זהה</div>
+        <div class="ropt" onclick="rad('c0',this,'on-amber')">חלקי</div>
+        <div class="ropt" onclick="rad('c0',this,'on-blue')">לא — מוותר במודע</div>
+      </div>
+
+      <div class="field-label">נימוק הנציג</div>
+      <textarea id="t0" placeholder="תאר את השיקולים שהובילו להמלצה ואת שיחת ההסבר עם הלקוח..." oninput="onType(0)"></textarea>
+      <div class="char-hint" id="ch0">0 / מינימום 30 תווים</div>
+
+      <div class="card-footer">
+        <button class="btn-save" onclick="save(0)">אישור ושמירה</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Card 1: מגדל ריסק ביטול מלא -->
+  <div class="pcard" id="pc1">
+    <div class="pcard-head" onclick="toggle(1)">
+      <div class="head-r">
+        <div class="logo-circle">מג</div>
+        <div>
+          <div class="pname">מגדל</div>
+          <div class="psub">ריסק · ביטוח עיקרי</div>
+        </div>
+      </div>
+      <div class="head-l">
+        <span class="sbadge s-cancel">ביטול מלא</span>
+        <div class="status-ring" id="sr1">
+          <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+            <path d="M1 4l2.5 2.5L9 1" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+    <div class="pcard-body" id="pb1">
+
+      <div class="alert info">
+        <div class="alert-head">
+          <svg class="alert-icon" viewBox="0 0 16 16" fill="none">
+            <circle cx="8" cy="8" r="6" stroke="#185FA5" stroke-width="1.2"/>
+            <path d="M8 7v4M8 5.5v.5" stroke="#185FA5" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          האם הפוליסה נרכשה דרך סוכנות הבנק?
+        </div>
+        <div class="radios" id="bank1" style="margin-top:10px">
+          <div class="ropt" onclick="rad('bank1',this,'on-blue')">כן — דרך הבנק</div>
+          <div class="ropt" onclick="rad('bank1',this,'on-green')">לא — ישירות</div>
+        </div>
+      </div>
+
+      <div class="field-label">סיבת ההמלצה</div>
+      <div class="chips" id="r1">
+        <div class="chip" onclick="pick('r1',this)">כיסוי כפול / חפיפה</div>
+        <div class="chip" onclick="pick('r1',this)">פרמיה גבוהה ביחס לכיסוי</div>
+        <div class="chip" onclick="pick('r1',this)">לא מתאים לצרכי הלקוח</div>
+        <div class="chip" onclick="pick('r1',this)">בקשת הלקוח</div>
+        <div class="chip" onclick="pick('r1',this)">שינוי מצב אישי</div>
+        <div class="chip" onclick="pick('r1',this)">אחר</div>
+      </div>
+
+      <div class="field-label">כיסוי חלופי</div>
+      <div class="radios" id="c1">
+        <div class="ropt" onclick="rad('c1',this,'on-green')">כן — כיסוי זהה</div>
+        <div class="ropt" onclick="rad('c1',this,'on-amber')">חלקי</div>
+        <div class="ropt" onclick="rad('c1',this,'on-blue')">לא — מוותר במודע</div>
+      </div>
+
+      <div class="field-label">נימוק הנציג</div>
+      <textarea id="t1" placeholder="תאר את השיקולים שהובילו להמלצה ואת שיחת ההסבר עם הלקוח..." oninput="onType(1)"></textarea>
+      <div class="char-hint" id="ch1">0 / מינימום 30 תווים</div>
+
+      <div class="card-footer">
+        <button class="btn-save" onclick="save(1)">אישור ושמירה</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Card 2: הפניקס בריאות ביטול חלקי -->
+  <div class="pcard" id="pc2">
+    <div class="pcard-head" onclick="toggle(2)">
+      <div class="head-r">
+        <div class="logo-circle">פנ</div>
+        <div>
+          <div class="pname">הפניקס</div>
+          <div class="psub">בריאות · ביטוח משלים</div>
+        </div>
+      </div>
+      <div class="head-l">
+        <span class="sbadge s-partial">ביטול חלקי</span>
+        <div class="status-ring" id="sr2">
+          <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+            <path d="M1 4l2.5 2.5L9 1" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+    <div class="pcard-body" id="pb2">
+
+      <div class="alert warn">
+        <div class="alert-head">
+          <svg class="alert-icon" viewBox="0 0 16 16" fill="none">
+            <path d="M8 2L14.5 13H1.5L8 2Z" stroke="#854F0B" stroke-width="1.2" stroke-linejoin="round"/>
+            <path d="M8 6v3M8 11v.5" stroke="#854F0B" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          שים לב — תקופת אכשרה
+        </div>
+        <div class="alert-text">הלקוח עלול לאבד תקופת אכשרה אם אינו רוכש פוליסת בריאות חלופית בחברה אחרת.</div>
+        <div class="ack-row">
+          <input type="checkbox" id="ack2">
+          <label for="ack2">הובן ואושר — שוחח עם הלקוח על ההשלכות</label>
+        </div>
+      </div>
+
+      <div class="field-label">סיבת ההמלצה</div>
+      <div class="chips" id="r2">
+        <div class="chip" onclick="pick('r2',this)">כיסוי כפול / חפיפה</div>
+        <div class="chip" onclick="pick('r2',this)">פרמיה גבוהה ביחס לכיסוי</div>
+        <div class="chip" onclick="pick('r2',this)">לא מתאים לצרכי הלקוח</div>
+        <div class="chip" onclick="pick('r2',this)">בקשת הלקוח</div>
+        <div class="chip" onclick="pick('r2',this)">שינוי מצב אישי</div>
+        <div class="chip" onclick="pick('r2',this)">אחר</div>
+      </div>
+
+      <div class="field-label">כיסוי חלופי</div>
+      <div class="radios" id="c2">
+        <div class="ropt" onclick="rad('c2',this,'on-green')">כן — כיסוי זהה</div>
+        <div class="ropt" onclick="rad('c2',this,'on-amber')">חלקי</div>
+        <div class="ropt" onclick="rad('c2',this,'on-blue')">לא — מוותר במודע</div>
+      </div>
+
+      <div class="field-label">תזמון הביטול</div>
+      <div class="radios" id="tim2">
+        <div class="ropt" onclick="rad('tim2',this,'on-blue')">ביטול מיידי</div>
+        <div class="ropt" onclick="rad('tim2',this,'on-green')">בתום תקופה</div>
+        <div class="ropt" onclick="rad('tim2',this,'on-amber')">ממתין לאישור</div>
+      </div>
+
+      <div class="field-label">נימוק הנציג</div>
+      <textarea id="t2" placeholder="תאר את השיקולים שהובילו להמלצה ואת שיחת ההסבר עם הלקוח..." oninput="onType(2)"></textarea>
+      <div class="char-hint" id="ch2">0 / מינימום 30 תווים</div>
+
+      <div class="card-footer">
+        <button class="btn-save" onclick="save(2)">אישור ושמירה</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Page Footer -->
+  <div class="page-footer">
+    <button class="btn-sec">קודם</button>
+    <button class="btn-pri" id="nxtBtn" disabled>הבא</button>
+  </div>
+
+</div>
+
+<script>
+const done = [false, false, false];
+const open = [true, false, false];
+const ackCards = [0, 2];
+
+function toggle(i) {
+  open[i] = !open[i];
+  document.getElementById('pb' + i).className = 'pcard-body' + (open[i] ? ' open' : '');
+  const pc = document.getElementById('pc' + i);
+  pc.className = 'pcard' + (done[i] ? ' done' : open[i] ? ' active' : '');
+}
+
+function pick(gid, el) {
+  document.querySelectorAll('#' + gid + ' .chip').forEach(c => c.classList.remove('on'));
+  el.classList.add('on');
+}
+
+function rad(gid, el, cls) {
+  document.querySelectorAll('#' + gid + ' .ropt').forEach(r => r.className = 'ropt');
+  el.classList.add(cls);
+}
+
+function onType(i) {
+  const v = document.getElementById('t' + i).value;
+  const el = document.getElementById('ch' + i);
+  if (v.length >= 30) {
+    el.textContent = v.length + ' תווים ✓';
+    el.className = 'char-hint met';
+  } else {
+    el.textContent = v.length + ' / מינימום 30 תווים';
+    el.className = 'char-hint';
+  }
+}
+
+function save(i) {
+  const reason = document.querySelector('#r' + i + ' .chip.on');
+  const cover = document.querySelector('#c' + i + ' .ropt.on-green, #c' + i + ' .ropt.on-amber, #c' + i + ' .ropt.on-blue');
+  const txt = document.getElementById('t' + i).value;
+
+  if (!reason) { alert('נא לבחור סיבת המלצה'); return; }
+  if (!cover) { alert('נא לציין כיסוי חלופי'); return; }
+  if (txt.length < 30) { alert('נא להרחיב את הנימוק (לפחות 30 תווים)'); return; }
+
+  if (ackCards.includes(i)) {
+    const ack = document.getElementById('ack' + i);
+    if (ack && !ack.checked) { alert('נא לאשר שהסברת ללקוח על תקופת האכשרה'); return; }
+  }
+
+  done[i] = true;
+  open[i] = false;
+  document.getElementById('pb' + i).className = 'pcard-body';
+  const sr = document.getElementById('sr' + i);
+  sr.className = 'status-ring done';
+  document.getElementById('pc' + i).className = 'pcard done';
+
+  updateProgress();
+
+  const nxt = done.indexOf(false);
+  if (nxt !== -1) {
+    open[nxt] = true;
+    document.getElementById('pb' + nxt).className = 'pcard-body open';
+    document.getElementById('pc' + nxt).className = 'pcard active';
+  }
+}
+
+function updateProgress() {
+  const n = done.filter(Boolean).length;
+  document.getElementById('pfill').style.width = (n / 3 * 100) + '%';
+  document.getElementById('pcount').textContent = n + ' מתוך 3 פוליסות';
+  if (n === 3) document.getElementById('nxtBtn').disabled = false;
+}
+</script>
+</body>
+</html>
