@@ -21629,7 +21629,7 @@ const MIRROR_DISCLOSURE_LIBRARY = {
       if(matched.active === false) return this._setError('המשתמש מושבת');
       const expected = safeTrim(matched.pin) || '0000';
       const sec = getAgentSecurity(matched.id);
-      const requiresAuthMfa = !!safeTrim(sec.authEmail) || sec.mfaRequired === true;
+      const requiresAuthMfa = !!safeTrim(sec.authEmail) || sec.mfaRequired === true || !!safeTrim(sec.factorId);
       let authSigned = false;
       if(requiresAuthMfa){
         this._setPrimaryLoginLoading(true, 'מחבר אימות מאובטח...');
@@ -21814,9 +21814,6 @@ const MIRROR_DISCLOSURE_LIBRARY = {
   App._bootPromise = App.boot();
 
   try { window.__GI_BUILD = BUILD; } catch(_e) {}
-  try { window.__GI_SKEY = SUPABASE_PUBLISHABLE_KEY; } catch(_e) {}
-  try { window.__GI_SURL = SUPABASE_URL; } catch(_e) {}
-  try { window.__GI_SMETA = SUPABASE_TABLES.meta; } catch(_e) {}
 
 })();
 
@@ -21838,13 +21835,24 @@ const MIRROR_DISCLOSURE_LIBRARY = {
 })();
 
 
-// ===== System version + update notify =====
+// ===== System version + update notify (Supabase Realtime — מיידי) =====
 (function(){
   const GI_VC_META_KEY = 'app_version';
-  const GI_VC_INTERVAL_MS = 60 * 1000;
+  const GI_VC_ACKNOWLEDGED_KEY = 'GI_VERSION_ACKNOWLEDGED_V1';
 
   let updatePopupShown = false;
   let updateDismissed  = false;
+
+  // שמירת הגרסה שהיוזר כבר עדכן אליה — כדי שאחרי reload לא יקפוץ שוב
+  function getAcknowledgedVersion(){
+    try { return localStorage.getItem(GI_VC_ACKNOWLEDGED_KEY) || ''; } catch(_e){ return ''; }
+  }
+  function setAcknowledgedVersion(ver){
+    try { localStorage.setItem(GI_VC_ACKNOWLEDGED_KEY, ver); } catch(_e){}
+  }
+  function clearAcknowledgedVersion(){
+    try { localStorage.removeItem(GI_VC_ACKNOWLEDGED_KEY); } catch(_e){}
+  }
 
   function setSystemVersionLabel(){
     const el = document.getElementById('appVersion');
@@ -21852,11 +21860,25 @@ const MIRROR_DISCLOSURE_LIBRARY = {
     if(el) el.textContent = 'גרסה: ' + buildLabel;
   }
 
-  function openUpdatePopup(){
+  function isSensitiveWorkflowOpen(){
+    const selectors = [
+      '#lcWizard.is-open',
+      '#customerFull.is-open',
+      '#lcLeadShell.is-open',
+      '#lcFlow[style*="display: block"]',
+      '#mirrorsStartModal.is-open',
+      '#mirrorsSearchModal.is-open',
+      '.modal.is-open[data-busy="true"]'
+    ];
+    return selectors.some((selector) => document.querySelector(selector));
+  }
+
+  function openUpdatePopup(newVersion){
     const popup = document.getElementById('updatePopup');
     if(!popup || updatePopupShown || updateDismissed) return;
     popup.classList.add('is-open');
     popup.setAttribute('aria-hidden', 'false');
+    if(newVersion) popup.dataset.pendingVersion = newVersion;
     updatePopupShown = true;
   }
 
@@ -21868,91 +21890,89 @@ const MIRROR_DISCLOSURE_LIBRARY = {
   }
 
   function parsePayload(raw){
-    if(raw === null || raw === undefined) return '';
     if(typeof raw === 'string') return raw.replace(/^"|"$/g, '').trim();
-    return String(raw).trim();
+    return String(raw || '').trim();
   }
 
-  async function fetchRemoteVersion(){
-    const key = window.__GI_SKEY || '';
-    const baseUrl = window.__GI_SURL || '';
-    const tableMeta = window.__GI_SMETA || 'app_meta';
-    if(!key || !baseUrl) return '';
-    const headers = {
-      'apikey': key,
-      'Authorization': 'Bearer ' + key,
-      'Content-Type': 'application/json'
-    };
-    const url = baseUrl + '/rest/v1/' + tableMeta
-      + '?key=eq.' + encodeURIComponent(GI_VC_META_KEY)
-      + '&select=payload&limit=1';
-    const res = await fetch(url, { method:'GET', cache:'no-store', headers });
-    if(!res.ok) throw new Error('HTTP_' + res.status);
-    const json = await res.json();
-    if(!Array.isArray(json) || !json.length) return '';
-    return parsePayload(json[0].payload);
-  }
-
-  async function checkForUpdate(){
-    if(updatePopupShown || updateDismissed) return 'already shown';
-    try{
-      const remote = await fetchRemoteVersion();
-      const local = window.__GI_BUILD || '';
-      if(!remote) return 'no remote version';
-      if(!local) return 'no local build';
-      if(remote !== local){
-        openUpdatePopup();
-        return 'popup! remote=' + remote + ' local=' + local;
-      }
-      return 'up to date: ' + local;
-    }catch(e){
-      return 'error: ' + e.message;
+  function handleVersionChange(newVersion){
+    if(updatePopupShown || updateDismissed) return;
+    const local = window.__GI_BUILD || '';
+    if(!local || !newVersion) return;
+    // אם הגרסה החדשה זהה לגרסה הנוכחית — המשתמש כבר עדכן, לא צריך לקפוץ
+    if(newVersion === local) return;
+    // אם המשתמש כבר אישר/עדכן לגרסה הזו בעבר — לא קופצים שוב
+    if(getAcknowledgedVersion() === newVersion) return;
+    if(isSensitiveWorkflowOpen()){
+      setTimeout(() => handleVersionChange(newVersion), 15000);
+      return;
     }
+    openUpdatePopup(newVersion);
   }
 
-  window.__GI_checkForUpdate = checkForUpdate;
-
-  function addDebugBtn(){
-    const actionsRow = document.querySelector('#versionPublishCard .lcSettingsActions');
-    if(!actionsRow || document.getElementById('btnCheckVersion')) return;
-    const btn = document.createElement('button');
-    btn.className = 'btn';
-    btn.id = 'btnCheckVersion';
-    btn.type = 'button';
-    btn.textContent = 'בדוק עכשיו';
-    btn.addEventListener('click', async () => {
-      btn.textContent = 'בודק...';
-      const result = await checkForUpdate();
-      const statusEl = document.getElementById('versionPublishStatus');
-      if(statusEl){ statusEl.style.color = '#555'; statusEl.textContent = result; }
-      btn.textContent = 'בדוק עכשיו';
-    });
-    actionsRow.appendChild(btn);
+  function startRealtimeVersionWatch(){
+    try{
+      const client = (typeof Storage !== 'undefined' && typeof Storage.getClient === 'function') ? Storage.getClient() : null;
+      if(!client || typeof client.channel !== 'function') return false;
+      client
+        .channel('gi-version-watch')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'app_meta',
+          filter: 'key=eq.' + GI_VC_META_KEY
+        }, (payload) => {
+          const raw = payload && payload.new && payload.new.payload;
+          if(raw != null) handleVersionChange(parsePayload(raw));
+        })
+        .subscribe();
+      return true;
+    }catch(_e){ return false; }
   }
 
   document.addEventListener('DOMContentLoaded', () => {
     setSystemVersionLabel();
-    addDebugBtn();
+    // אם הגרסה הנוכחית זהה לגרסה ש-acknowledged — נקה כי כבר עדכנו בהצלחה
+    const local = window.__GI_BUILD || '';
+    if(local && getAcknowledgedVersion() === local) clearAcknowledgedVersion();
 
     const applyBtn = document.getElementById('btnApplyUpdate');
     if(applyBtn){
-      applyBtn.addEventListener('click', () => {
-        try { window.location.reload(); } catch(_e) {}
+      applyBtn.addEventListener('click', async () => {
+        try {
+          // שמור את הגרסה שאליה עוברים לפני הריענון
+          const popup = document.getElementById('updatePopup');
+          const pendingVersion = popup ? (popup.dataset.pendingVersion || '') : '';
+          if(pendingVersion) setAcknowledgedVersion(pendingVersion);
+          // נקה cache ואז רענן
+          if('caches' in window){
+            const keys = await caches.keys();
+            await Promise.all(keys.map(k => caches.delete(k)));
+          }
+          if('serviceWorker' in navigator){
+            const regs = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(regs.map(r => r.unregister()));
+          }
+          window.location.href = window.location.href.split('?')[0] + '?nocache=' + Date.now();
+        } catch(_e) {
+          window.location.reload(true);
+        }
       });
     }
 
     const dismissBtn = document.getElementById('btnDismissUpdate');
     if(dismissBtn){
       dismissBtn.addEventListener('click', () => {
+        // שמור גרסה ש-dismissed — כדי שלא יחזור גם אחרי רענון ידני
+        const popup = document.getElementById('updatePopup');
+        const pendingVersion = popup ? (popup.dataset.pendingVersion || '') : '';
+        if(pendingVersion) setAcknowledgedVersion(pendingVersion);
         updateDismissed = true;
         closeUpdatePopup();
       });
     }
 
-    setTimeout(() => {
-      checkForUpdate();
-      setInterval(checkForUpdate, GI_VC_INTERVAL_MS);
-    }, 10000);
+    // מחכה 3 שניות כדי ש-Supabase client יסיים לטעון
+    setTimeout(() => { startRealtimeVersionWatch(); }, 3000);
   });
 })();
 
