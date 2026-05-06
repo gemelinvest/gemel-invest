@@ -6474,12 +6474,19 @@ UsersGateUI.init();
       );
 
       const netBreakdownHtml = (() => {
-        const rows = recentByDate(metrics.customersMonth).slice(0, 3).map((rec) => {
-          const premium = CustomersUI.collectPolicies(rec)
-            .filter((p) => String(p?.origin||'') === 'new' && !p?.isHealthAddon)
-            .reduce((s, p) => s + (Number(p?.premiumAfterDiscountValue) || CustomersUI.asMoneyNumber(p?.premiumValue) || 0), 0);
-          return `<div class="bankKpiTodayRow"><span class="bankKpiTodayRow__label">${escapeHtml(rec.fullName||'—')} <span class="bankKpiTodayRow__id">${escapeHtml(rec.idNumber||'')}</span></span><span class="bankKpiTodayRow__val">${escapeHtml(this.formatMoney(Math.round(premium*100)/100))}</span></div>`;
-        });
+        const netByProduct = {};
+        for (const rec of metrics.customersMonth) {
+          for (const p of CustomersUI.collectPolicies(rec)) {
+            if (String(p?.origin||'') !== 'new' || p?.isHealthAddon) continue;
+            const label = safeTrim(p?.type || p?.product || '—') || '—';
+            const premium = Number(p?.premiumAfterDiscountValue) || CustomersUI.asMoneyNumber(p?.premiumValue) || 0;
+            if (!netByProduct[label]) netByProduct[label] = 0;
+            netByProduct[label] += premium;
+          }
+        }
+        const rows = Object.entries(netByProduct)
+          .sort((a, b) => b[1] - a[1])
+          .map(([label, premium]) => `<div class="bankKpiTodayRow"><span class="bankKpiTodayRow__label">${escapeHtml(label)}</span><span class="bankKpiTodayRow__val">${escapeHtml(this.formatMoney(Math.round(premium*100)/100))}</span></div>`);
         return rows.length ? rows.join('') : `<div class="bankKpiTodayRow bankKpiTodayRow--empty">אין לקוחות החודש</div>`;
       })();
 
@@ -6670,18 +6677,26 @@ UsersGateUI.init();
         return tb - ta;
       });
 
-      // פרמיה חודשית נטו — 3 לקוחות אחרונים עם פרמיה
-      const recentNetRows = recentByDate(metrics.customersMonth).slice(0, 3).map((rec) => {
+      // פרמיה חודשית נטו — breakdown לפי מוצר
+      const netByProduct = {};
+      for (const rec of metrics.customersMonth) {
         const policies = CustomersUI.collectPolicies(rec);
-        const premium = policies.filter((p) => String(p?.origin||'') === 'new' && !p?.isHealthAddon)
-          .reduce((s, p) => s + (Number(p?.premiumAfterDiscountValue) || CustomersUI.asMoneyNumber(p?.premiumValue) || 0), 0);
-        return `<div class="bankKpiTodayRow">
-          <span class="bankKpiTodayRow__label">${escapeHtml(rec.fullName || '—')} <span class="bankKpiTodayRow__id">${escapeHtml(rec.idNumber || '')}</span></span>
+        for (const p of policies) {
+          if (String(p?.origin||'') !== 'new' || p?.isHealthAddon) continue;
+          const label = safeTrim(p?.type || p?.product || '—') || '—';
+          const premium = Number(p?.premiumAfterDiscountValue) || CustomersUI.asMoneyNumber(p?.premiumValue) || 0;
+          if (!netByProduct[label]) netByProduct[label] = 0;
+          netByProduct[label] += premium;
+        }
+      }
+      const netProductRows = Object.entries(netByProduct)
+        .sort((a, b) => b[1] - a[1])
+        .map(([label, premium]) => `<div class="bankKpiTodayRow">
+          <span class="bankKpiTodayRow__label">${escapeHtml(label)}</span>
           <span class="bankKpiTodayRow__val">${escapeHtml(this.formatMoney(Math.round(premium*100)/100))}</span>
-        </div>`;
-      });
-      const netBreakdownHtml = recentNetRows.length
-        ? recentNetRows.join('')
+        </div>`);
+      const netBreakdownHtml = netProductRows.length
+        ? netProductRows.join('')
         : `<div class="bankKpiTodayRow bankKpiTodayRow--empty">אין לקוחות החודש</div>`;
 
       // פרמיה ממינוי סוכן — 3 לקוחות אחרונים עם מינוי סוכן
