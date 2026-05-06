@@ -19689,12 +19689,32 @@ if(path === "birthDate"){
             });
           })(),
           ...getNewPolicyPerInsuredPremiumRowsSafe(policy).map((item) => [`פרמיה חודשית — ${item.label}`, item.totalLabel]),
-          ...getNewPolicyPerInsuredSumRowsSafe(policy).map((item) => [`${item.sumLabel} — ${item.label}`, item.valueDisplay]),
-          ['כיסוי / סכום', getPolicyCoverageDisplaySafe(policy)],
+          // כיסויים + סכומים — שורה אחת מאוחדת (ללא כפילות)
+          (() => {
+            const covers = getPolicyCoverItemsSafe(policy);
+            const amounts = policy?.healthCoversAmounts && typeof policy.healthCoversAmounts === 'object' ? policy.healthCoversAmounts : {};
+            const company = safeTrim(policy?.company || '');
+            const groups = (this.healthCoversByCompany && this.healthCoversByCompany[company]) || [];
+            const fieldToLabel = {};
+            groups.forEach(g => (g.items || []).forEach(item => { if(item.amountField) fieldToLabel[item.amountField] = item.k || item.amountField; }));
+            const labelToAmount = {};
+            Object.entries(amounts).forEach(([f,v]) => { if(safeTrim(v) && fieldToLabel[f]) labelToAmount[fieldToLabel[f]] = v; });
+            const type = safeTrim(policy?.type || policy?.product || '');
+            const isComp = (type === 'מחלות קשות' || type === 'סרטן');
+            const singleAmount = isComp ? safeTrim(policy?.compensation || policy?.sumInsured || '') : safeTrim(policy?.sumInsured || '');
+            if(!covers.length && !Object.keys(labelToAmount).length && !singleAmount) return null;
+            let val = '';
+            if(covers.length){
+              val = covers.map(c => labelToAmount[c] ? `${c} (${this.formatMoneyValue(labelToAmount[c])})` : c).join(' · ');
+            } else if(singleAmount){
+              val = this.formatMoneyValue(singleAmount);
+            }
+            return val ? ['כיסויים', val] : null;
+          })(),
           ['הנחה', discountDisplayFull || ''],
           ['הטבת הצטרפות', safeTrim(this.getPolicyIntroBenefitText(policy || {}))],
           ['אופן תשלום', safeTrim(policy?.paymentMethod)]
-        ].filter(([,value]) => safeTrim(value));
+        ].filter(row => row && safeTrim(row[1]));
         return { title: safeTrim(policy?.company) || `פוליסה ${index + 1}`, subtitle: (safeTrim(policy?.type || policy?.product) || 'פוליסה חדשה'), rows, covers: getPolicyCoverItemsSafe(policy), pledgeRows: getPolicyPledgeRowsSafe(policy), beneficiaryRows: [] };
       });
 
