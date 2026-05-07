@@ -6,7 +6,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260507-vVersionLiveNotifyFixV2";
+  const BUILD = "20260505-vDuplicateIdGuardAgentGlobalV1";
   const ADMIN_CONTACT_EMAIL = "oriasomech@gmail.com";
   const AUTO_LOGOUT_IDLE_MS = 40 * 60 * 1000;
   const ARCHIVE_CUSTOMER_PIN = "1990";
@@ -2973,7 +2973,7 @@ UsersGateUI.init();
           statusEl.style.color = 'var(--brandC)';
           statusEl.textContent = scheduledAt
             ? '✓ גרסה ' + newVersion + ' תוצג לנציגים במועד שנבחר'
-            : '✓ גרסה ' + newVersion + ' פורסמה — הנציגים המחוברים יקבלו הודעה בתוך כמה שניות';
+            : '✓ גרסה ' + newVersion + ' פורסמה — הנציגים יקבלו הודעה אחרי כניסה מלאה למערכת';
         }
       } catch(e){
         if(statusEl){ statusEl.style.color = 'var(--danger, #e53)'; statusEl.textContent = 'שגיאה בשמירה: ' + (e?.message || String(e)); }
@@ -29068,22 +29068,8 @@ const MIRROR_DISCLOSURE_LIBRARY = {
     watcherStarted = true;
     updatePopupShown = false;
     updateDismissed = false;
-
-    // בדיקה ראשונה כמעט מיידית אחרי כניסה מלאה, ולא רק אחרי רענון/כניסה מחדש.
-    setTimeout(() => pollVersionFromSupabase(), 800);
-
-    // פולינג חי וקצר: אם מנהל מפרסם גרסה בזמן שהנציג כבר מחובר,
-    // הפופאפ יקפוץ בתוך כמה שניות גם בלי יציאה/כניסה.
-    pollTimer = setInterval(() => pollVersionFromSupabase(), 7000);
-
-    // חיזוק נוסף כשחוזרים לחלון/לטאב.
-    if(!window.__GI_VERSION_WATCH_VIS_BOUND){
-      window.__GI_VERSION_WATCH_VIS_BOUND = true;
-      document.addEventListener('visibilitychange', () => {
-        if(document.visibilityState === 'visible') pollVersionFromSupabase();
-      });
-      window.addEventListener('focus', () => pollVersionFromSupabase());
-    }
+    setTimeout(() => pollVersionFromSupabase(), 2500);
+    pollTimer = setInterval(() => pollVersionFromSupabase(), 60000);
   }
 
   function stopVersionWatchOnLogout(){
@@ -29139,16 +29125,6 @@ const MIRROR_DISCLOSURE_LIBRARY = {
 
   window.addEventListener('gi:app-login-ready', () => startVersionWatchAfterLogin());
   window.addEventListener('gi:app-logout', () => stopVersionWatchOnLogout());
-
-  // Fallback קריטי: אם אירוע הכניסה כבר נשלח לפני שהבלוק הזה נטען,
-  // נזהה לבד שהמערכת פתוחה ונפעיל את מנגנון הגרסאות.
-  const liveBootTimer = setInterval(() => {
-    if(isLoggedInReady()) startVersionWatchAfterLogin();
-    if(watcherStarted) clearInterval(liveBootTimer);
-  }, 1500);
-  setTimeout(() => {
-    if(!watcherStarted && isLoggedInReady()) startVersionWatchAfterLogin();
-  }, 2500);
 })();
 
 /* ===== PWA install support ===== */
