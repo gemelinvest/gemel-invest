@@ -6,7 +6,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260508-vOpsHeaderBlueGlass";
+  const BUILD = "20260508-vOpsPremiumRowPolish";
   const ADMIN_CONTACT_EMAIL = "oriasomech@gmail.com";
   const AUTO_LOGOUT_IDLE_MS = 40 * 60 * 1000;
   const ARCHIVE_CUSTOMER_PIN = "1990";
@@ -20853,12 +20853,12 @@ if(path === "birthDate"){
         .lcPdfInfoTable tr{break-inside:avoid;page-break-inside:avoid}
         .lcPdfInfoTable th,.lcPdfInfoTable td{border:1px solid #dbe3ed;padding:5px 6px;vertical-align:top}
         .lcPdfInfoTable th{width:118px;background:#f7f9fc;color:#516882;font-weight:700}
-        .lcPdfInfoTable td{color:#1f334e;font-weight:600}
+        .lcPdfInfoTable td{color:#1f334e;font-weight:600;unicode-bidi:plaintext}
         .lcPdfTable{width:100%;border-collapse:collapse;font-size:11px}
         .lcPdfTable tr{break-inside:avoid;page-break-inside:avoid}
         .lcPdfTable th,.lcPdfTable td{border:1px solid #dbe3ed;padding:5px 6px;vertical-align:top;text-align:right}
         .lcPdfTable th{background:#f7f9fc;color:#516882;font-weight:800}
-        .lcPdfTable td{color:#1f334e;font-weight:600}
+        .lcPdfTable td{color:#1f334e;font-weight:600;unicode-bidi:plaintext}
         .lcPdfTable td:first-child{max-width:130px;word-break:break-word;white-space:normal}
         .lcPdfTable td:nth-child(2){vertical-align:middle}
         .lcPdfCompanyCell{display:flex;align-items:center;gap:7px;min-width:0}
@@ -20964,11 +20964,11 @@ if(path === "birthDate"){
         .lcPdfQTable th{width:160px;background:#f7f9fc;color:#516882;font-weight:700}
         .lcPdfQTable td{color:#1f334e;font-weight:600;line-height:1.6}
         .lcPdfSmallNote{font-size:12px;color:#73859c}
-        .lcPdfTotalRow{direction:rtl;display:flex;justify-content:space-between;align-items:center;gap:14px;width:100%;margin-top:8px;padding:10px 14px;background:linear-gradient(90deg,rgba(231,249,239,.82) 0%,rgba(242,253,247,.94) 46%,rgba(218,246,231,.86) 100%);border:1.4px solid rgba(111,197,154,.50);border-radius:12px;font-size:13px;font-weight:900;color:#174b35;box-shadow:inset 0 1px 0 rgba(255,255,255,.86),0 7px 18px rgba(18,123,73,.09);break-inside:avoid;page-break-inside:avoid;position:relative;overflow:hidden}
+        .lcPdfTotalRow{direction:rtl;display:flex;justify-content:space-between;align-items:center;gap:14px;width:100%;margin-top:8px;padding:10px 14px;background:linear-gradient(115deg,rgba(223,246,236,.56) 0%,rgba(239,252,246,.44) 52%,rgba(213,242,230,.38) 100%);border:1.2px solid rgba(102,182,143,.36);border-radius:13px;font-size:13px;font-weight:900;color:#174b35;box-shadow:inset 0 1px 0 rgba(255,255,255,.80),0 8px 18px rgba(34,120,85,.08);backdrop-filter:blur(3px);break-inside:avoid;page-break-inside:avoid;position:relative;overflow:hidden}
         .lcPdfTotalRow::before{content:"";position:absolute;inset:1px;border-radius:13px;background:linear-gradient(180deg,rgba(255,255,255,.50),rgba(255,255,255,0) 55%);pointer-events:none}
         .lcPdfTotalRow__label{position:relative;z-index:1;display:flex;align-items:center;justify-content:flex-start;color:#174b35;white-space:nowrap;font-size:14px;font-weight:950;letter-spacing:.01em}
         .lcPdfTotalRow__amount{position:relative;z-index:1;display:flex;align-items:center;gap:9px;direction:ltr;white-space:nowrap}
-        .lcPdfTotalRow__icon{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:12px;background:radial-gradient(circle at 30% 24%,rgba(255,255,255,.95),rgba(255,232,153,.72) 35%,rgba(209,151,38,.92) 100%);border:1px solid rgba(149,111,31,.28);box-shadow:inset 0 1px 0 rgba(255,255,255,.78),0 5px 13px rgba(154,111,25,.20);color:#7a5411;line-height:1;overflow:hidden}
+        .lcPdfTotalRow__icon{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:10px;background:linear-gradient(180deg,rgba(255,255,255,.82),rgba(250,237,197,.62));border:1px solid rgba(149,111,31,.22);box-shadow:inset 0 1px 0 rgba(255,255,255,.76),0 4px 10px rgba(120,90,28,.13);color:#7a5411;line-height:1;overflow:hidden}
         .lcPdfTotalRow__icon svg{width:22px;height:22px;display:block}
         .lcPdfTotalRow__value{font-size:21px;font-weight:950;color:#0f7a48;letter-spacing:0.01em;line-height:1}
         .lcPdfMirrorCard{border:1.5px solid #c8d8f0;border-radius:14px;background:#f5f8ff;padding:16px 18px;margin-top:8px}
@@ -21111,11 +21111,11 @@ if(path === "birthDate"){
 
       const totalPremiumAfterDiscount = newPolicies.reduce((sum, policy) => sum + this.getPolicyPremiumAfterDiscount(policy), 0);
       const totalPremiumAfterDiscountLabel = newPolicies.length
-        ? `${this.formatMoneyValue(totalPremiumAfterDiscount)} ₪`
+        ? `${this.formatMoneyValue(totalPremiumAfterDiscount)}`
         : '—';
       const renderNewPoliciesSummaryRow = () => {
         if(!newPolicies.length) return '';
-        const premiumCoinsIcon = `<span class="lcPdfTotalRow__icon" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="15.5" cy="22.8" rx="8.9" ry="3.2" fill="rgba(117,78,9,.20)"/><circle cx="13.2" cy="15.4" r="7.1" fill="rgba(255,221,112,.92)" stroke="rgba(126,84,11,.70)" stroke-width="1.2"/><circle cx="13.2" cy="15.4" r="4.6" fill="none" stroke="rgba(255,255,255,.76)" stroke-width="1"/><path d="M10.6 15.4h5.2M13.2 12.7v5.4" stroke="rgba(105,71,10,.80)" stroke-width="1.35" stroke-linecap="round"/><circle cx="18.9" cy="12.3" r="6.3" fill="rgba(255,199,73,.82)" stroke="rgba(126,84,11,.60)" stroke-width="1.1"/><path d="M16.6 12.3h4.6M18.9 10v4.6" stroke="rgba(105,71,10,.70)" stroke-width="1.15" stroke-linecap="round"/><path d="M8.7 9.8c2.8-2.2 7.2-2.4 10.2-.5" stroke="rgba(255,255,255,.70)" stroke-width="1.2" stroke-linecap="round"/></svg></span>`;
+        const premiumCoinsIcon = `<span class="lcPdfTotalRow__icon" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"><ellipse cx="16" cy="25.4" rx="9.4" ry="2.2" fill="rgba(102,72,18,.18)"/><ellipse cx="13.2" cy="18.3" rx="6.1" ry="6.1" fill="url(#coinA)" stroke="rgba(146,108,31,.78)" stroke-width="1.05"/><ellipse cx="13.2" cy="18.3" rx="4.15" ry="4.15" fill="none" stroke="rgba(255,255,255,.66)" stroke-width=".95"/><path d="M11.1 18.3h4.2M13.2 16.2v4.2" stroke="rgba(113,80,20,.74)" stroke-width="1.12" stroke-linecap="round"/><ellipse cx="19.5" cy="13.2" rx="6.8" ry="6.8" fill="url(#coinB)" stroke="rgba(146,108,31,.82)" stroke-width="1.1"/><ellipse cx="19.5" cy="13.2" rx="4.55" ry="4.55" fill="none" stroke="rgba(255,255,255,.70)" stroke-width=".96"/><path d="M17.1 13.2h4.8M19.5 10.8v4.8" stroke="rgba(106,74,18,.76)" stroke-width="1.18" stroke-linecap="round"/><defs><linearGradient id="coinA" x1="7.1" y1="12.2" x2="19.3" y2="24.4" gradientUnits="userSpaceOnUse"><stop stop-color="#FFF6D9"/><stop offset=".45" stop-color="#F4CF6A"/><stop offset="1" stop-color="#C9962F"/></linearGradient><linearGradient id="coinB" x1="12.7" y1="6.4" x2="26.4" y2="20.1" gradientUnits="userSpaceOnUse"><stop stop-color="#FFF8E4"/><stop offset=".42" stop-color="#F2CF72"/><stop offset="1" stop-color="#C68F2A"/></linearGradient></defs></svg></span>`;
         return `<div class="lcPdfTotalRow"><span class="lcPdfTotalRow__label">סה״כ פרמייה לאחר הנחות</span><span class="lcPdfTotalRow__amount"><span class="lcPdfTotalRow__value">${escapeHtml(totalPremiumAfterDiscountLabel)}</span>${premiumCoinsIcon}</span></div>`;
       };
 
