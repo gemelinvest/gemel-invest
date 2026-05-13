@@ -30965,6 +30965,9 @@ const MIRROR_DISCLOSURE_LIBRARY = {
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
           try{
+            if(this.els.flowDock && this.els.flowDock.hidden === false){
+              this.els.flowDock.scrollIntoView({ block: "nearest", behavior: "auto" });
+            }
             if(this.els.scriptWrap && this.els.scriptWrap.hidden === false) this.els.scriptWrap.focus();
             else if(this.els.consentYes) this.els.consentYes.focus();
           }catch(_e){}
@@ -31046,12 +31049,19 @@ const MIRROR_DISCLOSURE_LIBRARY = {
     },
 
     _setOpeningScriptVisible(on){
-      if(this.els.scriptWrap) this.els.scriptWrap.hidden = !on;
+      if(this.els.scriptWrap){
+        if(on){
+          this.els.scriptWrap.removeAttribute("hidden");
+          this.els.scriptWrap.hidden = false;
+        } else {
+          this.els.scriptWrap.hidden = true;
+        }
+      }
       this._syncFlowChrome();
     },
 
     _isFlowDockContentVisible(){
-      const vis = (el) => el && el.hidden === false;
+      const vis = (el) => !!(el && !el.hidden);
       return vis(this.els.scriptWrap) || vis(this.els.consentWrap) || vis(this.els.step2Wrap) || vis(this.els.declineWrap);
     },
 
@@ -31086,11 +31096,18 @@ const MIRROR_DISCLOSURE_LIBRARY = {
         return;
       }
       if(this.els.flowBar){
+        this.els.flowBar.removeAttribute("hidden");
         this.els.flowBar.hidden = false;
         this._updateFlowBarSteps();
       }
       const dockOpen = this._isFlowDockContentVisible();
-      if(this.els.flowDock) this.els.flowDock.hidden = !dockOpen;
+      if(this.els.flowDock){
+        if(!dockOpen) this.els.flowDock.hidden = true;
+        else {
+          this.els.flowDock.removeAttribute("hidden");
+          this.els.flowDock.hidden = false;
+        }
+      }
       if(this.els.workstation) this.els.workstation.classList.toggle("mcWorkstation--dockOpen", dockOpen);
     },
 
@@ -31117,7 +31134,15 @@ const MIRROR_DISCLOSURE_LIBRARY = {
     },
 
     _showConsentRow(on){
-      if(this.els.consentWrap) this.els.consentWrap.hidden = !on;
+      if(this.els.consentWrap){
+        if(on){
+          this.els.consentWrap.removeAttribute("hidden");
+          this.els.consentWrap.hidden = false;
+        } else {
+          this.els.consentWrap.hidden = true;
+        }
+      }
+      if(on) this._syncFlowChrome();
     },
 
     _hideMirrorFlowPanels(){
@@ -31149,11 +31174,17 @@ const MIRROR_DISCLOSURE_LIBRARY = {
       this._setOpeningScriptVisible(false);
       this._showConsentRow(false);
       this._renderStep2Body(rec, v.existing, v.newOnes);
-      if(this.els.step2Wrap) this.els.step2Wrap.hidden = false;
+      if(this.els.step2Wrap){
+        this.els.step2Wrap.removeAttribute("hidden");
+        this.els.step2Wrap.hidden = false;
+      }
       this._syncFlowChrome();
       window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => {
-          try{ if(this.els.step2Wrap) this.els.step2Wrap.focus(); }catch(_e){}
+          try{
+            if(this.els.step2Wrap) this.els.step2Wrap.scrollIntoView({ block: "nearest", behavior: "auto" });
+            if(this.els.step2Wrap) this.els.step2Wrap.focus();
+          }catch(_e){}
         });
       });
     },
@@ -31174,6 +31205,7 @@ const MIRROR_DISCLOSURE_LIBRARY = {
       this._showConsentRow(false);
       this._mirrorUiPhase = "declinePending";
       if(this.els.declineWrap){
+        this.els.declineWrap.removeAttribute("hidden");
         this.els.declineWrap.hidden = false;
         if(this.els.declineNotes) this.els.declineNotes.value = "";
       }
