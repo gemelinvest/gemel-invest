@@ -6,7 +6,7 @@
 (() => {
   "use strict";
 
-  const BUILD = "20260514-vMirrorScriptNewPolicyCompanies";
+  const BUILD = "20260519-elementaryLiveDashboard";
   const ADMIN_CONTACT_EMAIL = "oriasomech@gmail.com";
   const AUTO_LOGOUT_IDLE_MS = 40 * 60 * 1000;
   const ARCHIVE_CUSTOMER_PIN = "1990";
@@ -2138,6 +2138,7 @@
     try { ElementaryPendingUI.removeReferralRow(id); } catch(_e){}
     try { ProposalsUI.removeReferralRow(id); } catch(_e){}
     try { AgentElementaryTrackingUI.removeReferralRow(id); } catch(_e){}
+    try { ElementaryDashboardUI.removeReferralCard(id); } catch(_e){}
   }
 
   /** מתקן הפניות רכב-בקליק שנשמרו בטעות כ-proposal_submitting אחרי סיום הקמת הצעה */
@@ -2451,6 +2452,87 @@
     return { ...hit, key, requestedCoverageLabel: requested };
   }
 
+  /** סיווג הפניה לדשבורד אלמנטרי חי */
+  function getElementaryDashBucket(rec){
+    if(!rec) return "handled";
+    if(safeTrim(rec.issuedAt) || safeTrim(rec.agentTrackStatus) === "issued") return "issued";
+    const statusRaw = safeTrim(rec.status).toLowerCase();
+    if(statusRaw === "done" || statusRaw === "handled" || statusRaw === "טופל") return "handled";
+    const track = safeTrim(rec.agentTrackStatus);
+    if(track === "elementary_handling" || safeTrim(rec.elementaryHandlerAt)) return "in_treatment";
+    if(["with_insurer", "quote_ready", "agent_setup_complete", "proposal_submitting"].includes(track)) return "in_treatment";
+    if(referralAwaitingElementaryIssue(rec)) return "in_treatment";
+    if(elementaryReferralShowsInPendingQueue(rec)) return "pending";
+    if(rec.status === "pending") return "in_treatment";
+    return "handled";
+  }
+
+  function elementaryDashBucketMeta(bucket){
+    const map = {
+      pending: { label: "ממתין לטיפול", tone: "pending", tabLabel: "ממתינים" },
+      in_treatment: { label: "בטיפול", tone: "active", tabLabel: "בטיפול" },
+      issued: { label: "הופק", tone: "issued", tabLabel: "הופקו" },
+      handled: { label: "טופל", tone: "handled", tabLabel: "טופלו" }
+    };
+    return map[bucket] || map.handled;
+  }
+
+  function isIsoToday(iso){
+    const d = new Date(safeTrim(iso));
+    if(Number.isNaN(d.getTime())) return false;
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear()
+      && d.getMonth() === now.getMonth()
+      && d.getDate() === now.getDate();
+  }
+
+  function formatRelativeTimeHe(iso){
+    const d = new Date(safeTrim(iso));
+    if(Number.isNaN(d.getTime())) return "";
+    const sec = Math.floor((Date.now() - d.getTime()) / 1000);
+    if(sec < 45) return "עכשיו";
+    const min = Math.floor(sec / 60);
+    if(min < 60) return `לפני ${min} דק׳`;
+    const hr = Math.floor(min / 60);
+    if(hr < 24) return `לפני ${hr} שע׳`;
+    const day = Math.floor(hr / 24);
+    if(day < 7) return `לפני ${day} ימים`;
+    return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  }
+
+  function elementaryDashReferralsSorted(){
+    const cutoff = Date.now() - (60 * 24 * 60 * 60 * 1000);
+    return getElementaryReferrals()
+      .filter((rec) => {
+        if(!elementaryReferralIsTerminal(rec)) return true;
+        const t = new Date(safeTrim(rec.updatedAt) || safeTrim(rec.handledAt) || safeTrim(rec.issuedAt) || safeTrim(rec.submittedAt)).getTime();
+        return Number.isFinite(t) && t >= cutoff;
+      })
+      .sort((a, b) => {
+        const cmp = compareIsoStamps(safeTrim(b.updatedAt) || safeTrim(b.submittedAt), safeTrim(a.updatedAt) || safeTrim(a.submittedAt));
+        if(cmp !== 0) return cmp;
+        return new Date(b.submittedAt || 0) - new Date(a.submittedAt || 0);
+      });
+  }
+
+  function buildElementaryDashCardQuietSig(rec){
+    const bucket = getElementaryDashBucket(rec);
+    return [
+      bucket,
+      safeTrim(rec.status),
+      safeTrim(rec.agentTrackStatus),
+      safeTrim(rec.fullName),
+      safeTrim(rec.idNumber),
+      safeTrim(rec.phone),
+      safeTrim(rec.agentName),
+      safeTrim(rec.elementaryHandlerName),
+      safeTrim(rec.updatedAt),
+      safeTrim(rec.handledAt),
+      safeTrim(rec.issuedAt),
+      referralAwaitingElementaryIssue(rec) ? "1" : "0"
+    ].join("\x1e");
+  }
+
   function buildReferralTrackQuietSig(rec){
     const row = rec && typeof rec === "object" ? rec : {};
     const pres = getAgentElementaryTrackPresentation(row);
@@ -2670,6 +2752,7 @@
     void persistElementaryReferralsQuiet("אלמנטרי התחיל טיפול");
     try { ProposalsUI.render(); } catch(_e){}
     try { ElementaryPendingUI.render(); } catch(_e){}
+    try { ElementaryDashboardUI.render(); } catch(_e){}
     return updated;
   }
 
@@ -9338,6 +9421,7 @@ UsersGateUI.init();
       await persistElementaryReferralsQuiet("עודכן סטטוס הפניה אלמנטרי");
       this.closeDetail();
       this.render();
+      try { ElementaryDashboardUI.render(); } catch(_e){}
       try {
         window.showToast?.({ title:"עודכן", text:"ההפניה סומנה כטופלה.", variant:"success", durationMs:4200 });
       } catch(_e) {}
@@ -9753,6 +9837,7 @@ UsersGateUI.init();
       if(view === "proposals" && !Auth.isElementary()) return true;
       if(view === "elementaryPending" && ElementaryPendingUI.canAccessView()) return true;
       if(view === "agentElementaryTracking" && AgentElementaryTrackingUI.canAccessView()) return true;
+      if(view === "dashboard" && Auth.isElementary()) return true;
       return false;
     },
 
@@ -9775,11 +9860,13 @@ UsersGateUI.init();
         if(view === "proposals") ProposalsUI.render();
         else if(view === "elementaryPending") ElementaryPendingUI.render();
         else if(view === "agentElementaryTracking") AgentElementaryTrackingUI.render();
+        else if(view === "dashboard" && Auth.isElementary()) ElementaryDashboardUI.render();
       };
       const tryQuiet = () => {
         if(view === "proposals") return ProposalsUI.quietRefresh();
         if(view === "elementaryPending") return ElementaryPendingUI.quietRefresh();
         if(view === "agentElementaryTracking") return AgentElementaryTrackingUI.quietRefresh();
+        if(view === "dashboard" && Auth.isElementary()) return ElementaryDashboardUI.quietRefresh();
         return true;
       };
       if(!tbody){
@@ -9836,6 +9923,395 @@ UsersGateUI.init();
     }
   };
 
+  const ElementaryDashboardUI = {
+    _tab: "all",
+    _inited: false,
+    _seenIds: null,
+    _seenReady: false,
+    _lastRefreshLabel: "",
+
+    init(){
+      if(this._inited) return;
+      this._inited = true;
+      this._seenIds = new Set();
+    },
+
+    canAccess(){
+      return !!Auth.isElementary();
+    },
+
+    formatDate(value){
+      const raw = safeTrim(value);
+      if(!raw) return "—";
+      const d = new Date(raw);
+      if(Number.isNaN(d.getTime())) return raw.split(/\s+/)[0] || raw;
+      return d.toLocaleDateString("he-IL", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+    },
+
+    allRows(){
+      return elementaryDashReferralsSorted();
+    },
+
+    buildMetrics(rows){
+      const list = Array.isArray(rows) ? rows : this.allRows();
+      const metrics = { pending: 0, newToday: 0, in_treatment: 0, issued: 0, handled: 0, all: list.length };
+      list.forEach((rec) => {
+        const bucket = getElementaryDashBucket(rec);
+        if(bucket === "pending") metrics.pending += 1;
+        if(bucket === "in_treatment") metrics.in_treatment += 1;
+        if(bucket === "issued") metrics.issued += 1;
+        if(bucket === "handled") metrics.handled += 1;
+        if(isIsoToday(rec.submittedAt) && (bucket === "pending" || bucket === "in_treatment")) metrics.newToday += 1;
+      });
+      return metrics;
+    },
+
+    filteredRows(){
+      const q = safeTrim(this._search).toLowerCase();
+      let rows = this.allRows();
+      if(this._tab && this._tab !== "all"){
+        rows = rows.filter((rec) => getElementaryDashBucket(rec) === this._tab);
+      }
+      if(!q) return rows;
+      return rows.filter((rec) => [
+        rec.fullName, rec.idNumber, rec.phone, rec.agentName, rec.city,
+        elementaryCoverageTypeLabelHe(rec.requestedCoverageType || getRequestedCoverageFromPayload(rec.payload))
+      ].some((v) => safeTrim(v).toLowerCase().includes(q)));
+    },
+
+    cardTimeLabel(rec, bucket){
+      if(bucket === "issued") return `הופק: ${this.formatDate(rec.issuedAt || rec.updatedAt)}`;
+      if(bucket === "handled") return `טופל: ${this.formatDate(rec.handledAt || rec.updatedAt)}`;
+      if(bucket === "in_treatment" && safeTrim(rec.elementaryHandlerAt)){
+        return `התחלת טיפול: ${this.formatDate(rec.elementaryHandlerAt)} · ${formatRelativeTimeHe(rec.elementaryHandlerAt)}`;
+      }
+      return `הוגש: ${this.formatDate(rec.submittedAt)} · ${formatRelativeTimeHe(rec.submittedAt)}`;
+    },
+
+    cardActionsHtml(rec, bucket){
+      const canQuote = rec.status === "pending" && (Auth.isElementary() || Auth.isAdmin() || Auth.isManager());
+      const canCont = ElementaryPendingUI.canContinueReferralInWizard()
+        && rec.status === "pending"
+        && safeTrim(rec.agentTrackStatus) !== "proposal_submitting";
+      const setupComplete = referralAwaitingElementaryIssue(rec);
+      const canIssue = setupComplete && safeTrim(rec.customerId) && (Auth.isElementary() || Auth.isAdmin() || Auth.isManager());
+      if(bucket === "pending"){
+        return `<button class="btn btn--primary" type="button" data-elem-dash-treat="${escapeHtml(rec.id)}">פתח טיפול</button>
+          <button class="btn" type="button" data-elem-dash-open="${escapeHtml(rec.id)}">צפה בהצעה</button>
+          ${canQuote ? `<button class="btn" type="button" data-elem-dash-quote="${escapeHtml(rec.id)}">הצעת מחיר</button>` : ""}`;
+      }
+      if(bucket === "in_treatment"){
+        return `<button class="btn btn--primary" type="button" data-elem-dash-open="${escapeHtml(rec.id)}">${setupComplete ? "המשך להפקה" : "המשך טיפול"}</button>
+          ${canIssue ? `<button class="btn btn--success" type="button" data-elem-dash-issue="${escapeHtml(rec.id)}">הפק פוליסה</button>` : ""}
+          ${canCont ? `<button class="btn" type="button" data-elem-dash-continue="${escapeHtml(rec.id)}">המשך באשף</button>` : ""}
+          <button class="btn" type="button" data-elem-dash-done="${escapeHtml(rec.id)}">סמן כטופל</button>`;
+      }
+      if(bucket === "issued" || bucket === "handled"){
+        const cid = safeTrim(rec.customerId);
+        return cid
+          ? `<button class="btn btn--primary" type="button" data-elem-dash-customer="${escapeHtml(cid)}">פתח לקוח</button>`
+          : `<button class="btn" type="button" data-elem-dash-open="${escapeHtml(rec.id)}">צפה בהצעה</button>`;
+      }
+      return `<button class="btn" type="button" data-elem-dash-open="${escapeHtml(rec.id)}">צפה בהצעה</button>`;
+    },
+
+    /*
+      const bucket_DUP = getElementaryDashBucket(rec);
+      const meta_DUP = elementaryDashBucketMeta(bucket);
+      const cov = elementaryCoverageTypeLabelHe(rec.requestedCoverageType || getRequestedCoverageFromPayload(rec.payload));
+      const isNew = !!opts.isNew;
+      const setupNote_REMOVED = referralAwaitingElementaryIssue(rec)
+        ? `<motion class="lcElemDashCard__note">לקוח מאשר הצעת מחיר — ממתין להפקה</motion>`.replace(/^<motion/, "<motion").replace(/<\/motion>/, "</motion>").replace("<motion class", "<motion class".replace("motion", "motion"))
+        : "";
+      const noteHtml = referralAwaitingElementaryIssue(rec)
+        ? `<div class="lcElemDashCard__note">לקוח מאשר הצעת מחיר — ממתין להפקה</motion>`.replace("</motion>", "</motion>")
+        : "";
+      const noteBlock = referralAwaitingElementaryIssue(rec)
+        ? `<motion class="lcElemDashCard__note">לקוח מאשר הצעת מחיר — ממתין להפקה</div>`.replace("<motion", "<div").replace("</motion>", "")
+        : "";
+      const noteFinal = referralAwaitingElementaryIssue(rec)
+        ? `<div class="lcElemDashCard__note">לקוח מאשר הצעת מחיר — ממתין להפקה</motion>`.replace("</motion>", "</div>")
+        : "";
+      void setupNote; void noteHtml; void noteBlock;
+      const note = referralAwaitingElementaryIssue(rec)
+        ? `<motion class="lcElemDashCard__note">`.replace("<motion", "<div class=\"lcElemDashCard__note\">") 
+        : "";
+      const noteLine = referralAwaitingElementaryIssue(rec)
+        ? `<div class="lcElemDashCard__note">לקוח מאשר הצעת מחיר — ממתין להפקה</div>`
+        : "";
+      const handler = safeTrim(rec.elementaryHandlerName);
+      const subBits = [
+        cov ? `ביטוח: ${cov}` : "",
+        rec.agentName ? `נציג: ${rec.agentName}` : "",
+        handler && bucket === "in_treatment" ? `מטפל: ${handler}` : ""
+      ].filter(Boolean).join(" · ");
+      return `
+        <article class="lcElemDashCard lcElemDashCard--${escapeHtml(meta.tone)}${isNew ? " lcElemDashCard--new" : ""}" data-referral-id="${escapeHtml(rec.id)}" data-quiet-sig="${escapeHtml(buildElementaryDashCardQuietSig(rec))}">
+          <div class="lcElemDashCard__head">
+            <span class="lcElemDashCard__badge lcElemDashCard__badge--${escapeHtml(meta.tone)}">${isNew ? "חדש · " : ""}${escapeHtml(meta.label)}</span>
+            <span class="lcElemDashCard__time muted small">${escapeHtml(this.cardTimeLabel(rec, bucket))}</span>
+          </div>
+          <motion class="lcElemDashCard__body">`.replace("<motion", "<div").replace("</motion>", "</motion>")
+        + `<div class="lcElemDashCard__body">
+            <div class="lcElemDashCard__name"><strong>${escapeHtml(rec.fullName || "—")}</strong>${rec.city ? `<span class="muted small"> · ${escapeHtml(rec.city)}</span>` : ""}</motion>`.replace("</motion>", "</div>").replace("<motion class=\"lcElemDashCard__name\">", "<div class=\"lcElemDashCard__name\">")
+        ;
+    },
+
+    buildCardInner(rec, opts = {}){
+      const bucket = getElementaryDashBucket(rec);
+      const meta = elementaryDashBucketMeta(bucket);
+      const cov = elementaryCoverageTypeLabelHe(rec.requestedCoverageType || getRequestedCoverageFromPayload(rec.payload));
+      const isNew = !!opts.isNew;
+      const handler = safeTrim(rec.elementaryHandlerName);
+      const subBits = [
+        cov ? `ביטוח: ${cov}` : "",
+        rec.agentName ? `נציג: ${rec.agentName}` : "",
+        handler && bucket === "in_treatment" ? `מטפל: ${handler}` : ""
+      ].filter(Boolean).join(" · ");
+      const noteLine = referralAwaitingElementaryIssue(rec)
+        ? `<motion class="lcElemDashCard__note">לקוח מאשר הצעת מחיר — ממתין להפקה</div>`.replace("<motion", "<div").replace("</motion>", "")
+        : "";
+      return `
+        <article class="lcElemDashCard lcElemDashCard--${escapeHtml(meta.tone)}${isNew ? " lcElemDashCard--new" : ""}" data-referral-id="${escapeHtml(rec.id)}" data-quiet-sig="${escapeHtml(buildElementaryDashCardQuietSig(rec))}">
+          <div class="lcElemDashCard__head">
+            <span class="lcElemDashCard__badge lcElemDashCard__badge--${escapeHtml(meta.tone)}">${isNew ? "חדש · " : ""}${escapeHtml(meta.label)}</span>
+            <span class="lcElemDashCard__time muted small">${escapeHtml(this.cardTimeLabel(rec, bucket))}</span>
+          </motion>`.replace("</motion>", "</div>").replace("<motion", "<div")
+        ;
+    },
+    */
+
+    cardTemplate(rec, opts = {}){
+      const bucket = getElementaryDashBucket(rec);
+      const meta = elementaryDashBucketMeta(bucket);
+      const cov = elementaryCoverageTypeLabelHe(rec.requestedCoverageType || getRequestedCoverageFromPayload(rec.payload));
+      const isNew = !!opts.isNew;
+      const handler = safeTrim(rec.elementaryHandlerName);
+      const subBits = [
+        cov ? `ביטוח: ${cov}` : "",
+        rec.agentName ? `נציג: ${rec.agentName}` : "",
+        handler && bucket === "in_treatment" ? `מטפל: ${handler}` : ""
+      ].filter(Boolean).join(" · ");
+      const noteFixed = referralAwaitingElementaryIssue(rec)
+        ? `<div class="lcElemDashCard__note">לקוח מאשר הצעת מחיר — ממתין להפקה</div>`
+        : "";
+      return `
+        <article class="lcElemDashCard lcElemDashCard--${escapeHtml(meta.tone)}${isNew ? " lcElemDashCard--new" : ""}" data-referral-id="${escapeHtml(rec.id)}" data-quiet-sig="${escapeHtml(buildElementaryDashCardQuietSig(rec))}">
+          <div class="lcElemDashCard__head">
+            <span class="lcElemDashCard__badge lcElemDashCard__badge--${escapeHtml(meta.tone)}">${isNew ? "חדש · " : ""}${escapeHtml(meta.label)}</span>
+            <span class="lcElemDashCard__time muted small">${escapeHtml(this.cardTimeLabel(rec, bucket))}</span>
+          </div>
+          <div class="lcElemDashCard__body">
+            <div class="lcElemDashCard__name"><strong>${escapeHtml(rec.fullName || "—")}</strong></div>
+            <div class="lcElemDashCard__ids muted small">ת״ז ${escapeHtml(rec.idNumber || "—")}</div>
+            ${noteFixed}
+            ${subBits ? `<div class="lcElemDashCard__sub muted small">${escapeHtml(subBits)}</div>` : ""}
+            <div class="lcElemDashCard__actions">${this.cardActionsHtml(rec, bucket)}</div>
+          </div>
+        </article>`;
+    },
+
+    patchCardQuiet(cardEl, rec){
+      if(!cardEl || !rec) return false;
+      const sig = buildElementaryDashCardQuietSig(rec);
+      if(cardEl.getAttribute("data-quiet-sig") === sig) return false;
+      const scrollParent = cardEl.closest(".lcElemDash__feed");
+      const scrollTop = scrollParent?.scrollTop ?? 0;
+      const isNew = cardEl.classList.contains("lcElemDashCard--new");
+      cardEl.outerHTML = this.cardTemplate(rec, { isNew });
+      if(scrollParent) scrollParent.scrollTop = scrollTop;
+      return true;
+    },
+
+    removeReferralCard(referralId){
+      const root = DashboardUI.els?.root;
+      if(!root) return;
+      const id = safeTrim(referralId);
+      if(!id) return;
+      root.querySelectorAll(`[data-referral-id="${id}"]`).forEach((el) => el.remove());
+      this.updateMetricsDom();
+    },
+
+    updateMetricsDom(){
+      const root = DashboardUI.els?.root;
+      if(!root) return;
+      const m = this.buildMetrics();
+      const set = (key, val) => {
+        const el = root.querySelector(`[data-elem-dash-kpi="${key}"]`);
+        if(el) el.textContent = String(val);
+      };
+      set("pending", m.pending);
+      set("newToday", m.newToday);
+      set("in_treatment", m.in_treatment);
+      set("issued", m.issued);
+      root.querySelectorAll("[data-elem-dash-tab]").forEach((btn) => {
+        const tab = safeTrim(btn.getAttribute("data-elem-dash-tab"));
+        const map = { all: m.all, pending: m.pending, in_treatment: m.in_treatment, issued: m.issued, handled: m.handled };
+        const n = map[tab];
+        const base = safeTrim(btn.getAttribute("data-elem-dash-tab-label")) || safeTrim(btn.textContent).split("(")[0].trim();
+        if(n != null) btn.textContent = `${base} (${n})`;
+      });
+    },
+
+    notifyNewPending(rows){
+      if(!this.canAccess() || !document.body.classList.contains("view-dashboard-active")) return;
+      const pending = rows.filter((rec) => getElementaryDashBucket(rec) === "pending");
+      const fresh = [];
+      pending.forEach((rec) => {
+        const id = String(rec.id);
+        if(this._seenReady && !this._seenIds.has(id)) fresh.push(rec);
+        this._seenIds.add(id);
+      });
+      if(!this._seenReady){ this._seenReady = true; return; }
+      fresh.slice(0, 3).forEach((rec) => {
+        const cov = elementaryCoverageTypeLabelHe(rec.requestedCoverageType || getRequestedCoverageFromPayload(rec.payload));
+        try {
+          window.showToast?.({ title: "הפניה חדשה לחיתום", text: `${rec.fullName || "לקוח"}${cov ? ` · ${cov}` : ""}`, variant: "info", durationMs: 7200 });
+        } catch(_e){}
+      });
+    },
+
+    bindFeedActions(root){
+      if(!root || root.getAttribute("data-elem-dash-bound") === "1") return;
+      root.setAttribute("data-elem-dash-bound", "1");
+      on(root, "click", (ev) => {
+        const treat = ev.target.closest("[data-elem-dash-treat]");
+        if(treat){
+          touchElementaryReferralElementary(treat.getAttribute("data-elem-dash-treat"));
+          try { ElementaryPendingUI.openDetail(treat.getAttribute("data-elem-dash-treat")); } catch(_e){}
+          this.render();
+          return;
+        }
+        const openBtn = ev.target.closest("[data-elem-dash-open]");
+        if(openBtn){ try { ElementaryPendingUI.openDetail(openBtn.getAttribute("data-elem-dash-open")); } catch(_e){} return; }
+        const quoteBtn = ev.target.closest("[data-elem-dash-quote]");
+        if(quoteBtn){
+          const rec = findElementaryReferralById(quoteBtn.getAttribute("data-elem-dash-quote"));
+          if(rec) ElementaryQuoteUI.openForReferral(rec);
+          return;
+        }
+        const contBtn = ev.target.closest("[data-elem-dash-continue]");
+        if(contBtn){
+          const rec = findElementaryReferralById(contBtn.getAttribute("data-elem-dash-continue"));
+          if(rec) try { Wizard.openElementaryReferralContinue(rec); } catch(err) { console.error(err); }
+          return;
+        }
+        const issueBtn = ev.target.closest("[data-elem-dash-issue]");
+        if(issueBtn){
+          const rec = findElementaryReferralById(issueBtn.getAttribute("data-elem-dash-issue"));
+          if(rec) void ElementaryIssuePolicyUI.openForReferral(rec, { triggerBtn: issueBtn });
+          return;
+        }
+        const doneBtn = ev.target.closest("[data-elem-dash-done]");
+        if(doneBtn){ void ElementaryPendingUI.markHandled(doneBtn.getAttribute("data-elem-dash-done")); return; }
+        const custBtn = ev.target.closest("[data-elem-dash-customer]");
+        if(custBtn){
+          const customerId = safeTrim(custBtn.getAttribute("data-elem-dash-customer"));
+          if(!customerId) return;
+          UI.goView("customers");
+          window.setTimeout(() => CustomersUI.openByIdWithLoader(customerId, 900), 80);
+        }
+      });
+    },
+
+    bindShellActions(root){
+      if(!root || root.getAttribute("data-elem-dash-shell-bound") === "1") return;
+      root.setAttribute("data-elem-dash-shell-bound", "1");
+      on(root.querySelector("#lcElemDashRefresh"), "click", () => this.render());
+      on(root.querySelector("#lcElemDashSearch"), "input", (e) => { this._search = safeTrim(e.target?.value); this.renderFeedOnly(); });
+      root.querySelectorAll("[data-elem-dash-tab]").forEach((btn) => {
+        on(btn, "click", () => {
+          this._tab = safeTrim(btn.getAttribute("data-elem-dash-tab")) || "all";
+          root.querySelectorAll("[data-elem-dash-tab]").forEach((b) => b.classList.toggle("is-active", b === btn));
+          this.renderFeedOnly();
+        });
+      });
+      this.bindFeedActions(root);
+    },
+
+    renderFeedOnly(){
+      const root = DashboardUI.els?.root;
+      const feed = root?.querySelector("#lcElemDashFeed");
+      if(!feed) return this.render();
+      const rows = this.filteredRows();
+      feed.innerHTML = rows.length ? rows.map((rec) => this.cardTemplate(rec, { isNew: getElementaryDashBucket(rec) === "pending" && formatRelativeTimeHe(rec.submittedAt) === "עכשיו" })).join("")
+        : `<div class="emptyState lcElemDash__empty"><div class="emptyState__icon">📋</div><div class="emptyState__title">אין פריטים בסינון הנוכחי</div><div class="emptyState__text">כשנכנסת הפניה חדשה — זה יופיע כאן אוטומטית.</div></div>`;
+      this.bindFeedActions(root);
+    },
+
+    buildShellHtml(metrics, agentName){
+      const greeting = `${getTimeGreeting()}${agentName ? `, ${agentName}` : ""}`;
+      const tabs = [
+        { id: "all", label: "הכל" },
+        { id: "pending", label: "ממתינים" },
+        { id: "in_treatment", label: "בטיפול" },
+        { id: "issued", label: "הופקו" },
+        { id: "handled", label: "טופלו" }
+      ];
+      const tabHtml = tabs.map((t) => {
+        const n = t.id === "all" ? metrics.all : (metrics[t.id] ?? 0);
+        const active = this._tab === t.id ? " is-active" : "";
+        return `<button type="button" class="lcElemDash__tab${active}" data-elem-dash-tab="${escapeHtml(t.id)}" data-elem-dash-tab-label="${escapeHtml(t.label)}">${escapeHtml(t.label)} (${n})</button>`;
+      }).join("");
+      return `<section class="bankDash bankDash--elementaryLive" aria-label="דשבורד אלמנטרי חי">
+          <div class="lcElemDash__liveBar card"><span class="lcElemDash__liveDot" aria-hidden="true"></span><span>מחובר · מתעדכן אוטומטית</span><span class="lcElemDash__liveSep">·</span><span class="muted small" id="lcElemDashLiveAt">${escapeHtml(this._lastRefreshLabel || "עכשיו")}</span><button class="btn btn--ghost lcElemDash__refreshBtn" type="button" id="lcElemDashRefresh">רענון</button></div>
+          <div class="lcElemDash__hero"><h1 class="lcElemDash__title">${escapeHtml(greeting)}</h1><p class="lcElemDash__subtitle muted">מרכז פעילות אלמנטרי — הפניות והצעות בזמן אמת</p></div>
+          <div class="lcElemDash__kpis">
+            <article class="lcElemDashKpi lcElemDashKpi--pending card"><div class="lcElemDashKpi__label">ממתינים לטיפול</div><div class="lcElemDashKpi__val" data-elem-dash-kpi="pending">${metrics.pending}</div></article>
+            <article class="lcElemDashKpi lcElemDashKpi--new card"><div class="lcElemDashKpi__label">חדש היום</div><div class="lcElemDashKpi__val" data-elem-dash-kpi="newToday">${metrics.newToday}</div></article>
+            <article class="lcElemDashKpi lcElemDashKpi--active card"><div class="lcElemDashKpi__label">בטיפול</div><div class="lcElemDashKpi__val" data-elem-dash-kpi="in_treatment">${metrics.in_treatment}</div></article>
+            <article class="lcElemDashKpi lcElemDashKpi--issued card"><div class="lcElemDashKpi__label">הופקו (60 יום)</div><div class="lcElemDashKpi__val" data-elem-dash-kpi="issued">${metrics.issued}</div></article>
+          </div>
+          <div class="lcElemDash__tabs" role="tablist">${tabHtml}</div>
+          <div class="lcElemDash__toolbar card"><input class="search__input" id="lcElemDashSearch" type="search" placeholder="חיפוש לפי שם, ת״ז, טלפון או נציג מגיש" value="${escapeHtml(this._search)}"/></div>
+          <div class="lcElemDash__feed" id="lcElemDashFeed"></div>
+        </section>`.replace(/<\/?motion\b/g, (m) => m.replace("motion", "div"));
+    },
+
+    quietRefresh(){
+      const root = DashboardUI.els?.root;
+      const feed = root?.querySelector("#lcElemDashFeed");
+      if(!feed || !this.canAccess()) return true;
+      const rows = this.filteredRows();
+      const domCards = Array.from(feed.querySelectorAll("[data-referral-id]"));
+      const nextIds = rows.map((rec) => String(rec.id));
+      const domIds = domCards.map((el) => el.getAttribute("data-referral-id"));
+      const sameStructure = domIds.length === nextIds.length && domIds.every((id, i) => String(id) === String(nextIds[i]));
+      this.updateMetricsDom();
+      if(!sameStructure) return false;
+      let changed = false;
+      domCards.forEach((el, idx) => { if(this.patchCardQuiet(el, rows[idx])) changed = true; });
+      if(changed) this.bindFeedActions(root);
+      this._lastRefreshLabel = "עודכן לפני רגע";
+      const liveAt = root.querySelector("#lcElemDashLiveAt");
+      if(liveAt) liveAt.textContent = this._lastRefreshLabel;
+      return true;
+    },
+
+    render(){
+      this.init();
+      if(!this.canAccess()) return;
+      if(!DashboardUI.els?.root) DashboardUI.init();
+      const mount = DashboardUI.els?.root;
+      if(!mount) return;
+      const allRows = this.allRows();
+      this.notifyNewPending(allRows);
+      const metrics = this.buildMetrics(allRows);
+      const agentName = safeTrim(Auth?.current?.name) || "";
+      const needsShell = !mount.querySelector(".bankDash--elementaryLive");
+      if(needsShell){ mount.innerHTML = this.buildShellHtml(metrics, agentName); this.bindShellActions(mount); }
+      else { this.updateMetricsDom(); }
+      const feed = mount.querySelector("#lcElemDashFeed");
+      if(!feed) return;
+      const rows = this.filteredRows();
+      feed.innerHTML = rows.length ? rows.map((rec) => this.cardTemplate(rec, { isNew: getElementaryDashBucket(rec) === "pending" && formatRelativeTimeHe(rec.submittedAt) === "עכשיו" })).join("")
+        : `<div class="emptyState lcElemDash__empty"><div class="emptyState__icon">📋</div><motion class="emptyState__title">אין פריטים בסינון הנוכחי</div><div class="emptyState__text">כשנכנסת הפניה חדשה — זה יופיע כאן אוטומטית.</div></div>`.replace(/<\/?motion\b/g, (m) => m.replace("motion", "div"));
+      this._lastRefreshLabel = "עודכן עכשיו";
+      const liveAt = mount.querySelector("#lcElemDashLiveAt");
+      if(liveAt) liveAt.textContent = this._lastRefreshLabel;
+      if(!needsShell) this.bindFeedActions(mount);
+    }
+  };
 
   const DashboardUI = {
     els: {},
@@ -10560,7 +11036,7 @@ UsersGateUI.init();
       if(!this.els.root) this.init();
       if(!this.els.root) return;
       if(Auth.isElementary()){
-        this.renderElementaryPlaceholder();
+        ElementaryDashboardUI.render();
         return;
       }
       if(!this.shouldShowPerformanceBoard()){
