@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 48" role="img" aria-label="лмм бйиез">
+  <rect width="120" height="48" rx="8" fill="#fff"/>
+  <g transform="translate(8,8)">
+    <path fill="#00AEEF" d="M18 0 28 16H8L18 32 8 16h20L18 0Z"/>
+    <path fill="#003DA5" d="M18 4 24 14H12l6 10-6-10h12L18 4Z"/>
+    <text x="34" y="18" font-family="Arial, sans-serif" font-size="14" font-weight="700" fill="#003DA5">лмм</text>
+    <text x="34" y="30" font-family="Arial, sans-serif" font-size="7" fill="#003DA5">бйиез ефйррсйн</text>
+  </g>
+</svg>

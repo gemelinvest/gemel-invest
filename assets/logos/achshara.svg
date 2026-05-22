@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 48" role="img" aria-label="ΤΫιθΤ">
+  <rect width="120" height="48" rx="8" fill="#fff"/>
+  <path fill="#00A3E0" d="M10 32V16h6l8 10V16h6v16h-6l-8-10v10z"/>
+  <text x="38" y="28" font-family="Arial, sans-serif" font-size="12" font-weight="700" fill="#003DA5">ΤΫιθΤ</text>
+</svg>
