@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <meta name="theme-color" content="#002147"/>
+  <meta name="color-scheme" content="light"/>
+  <meta name="description" content="INVESTO — ניהול מכירות, לקוחות ודוחות לסוכני ביטוח"/>
+  <title>INVESTO</title>
+
+  <link rel="manifest" href="./manifest.webmanifest"/>
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png"/>
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="INVESTO"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <link href="./app.css?v=2" rel="stylesheet"/>
+</head>
+<body class="ivBody ivBody--auth">
+
+  <!-- iOS install guide -->
+  <div id="ivIosInstall" class="ivIosInstall" hidden>
+    <div class="ivIosInstall__card">
+      <div class="ivIosInstall__title">התקן INVESTO על האייפון</div>
+      <ol class="ivIosInstall__steps">
+        <li>לחץ על <strong>שיתוף</strong> <span class="ivIosInstall__share" aria-hidden="true">⎙</span> בתחתית Safari</li>
+        <li>גלול ובחר <strong>«הוסף למסך הבית»</strong></li>
+        <li>לחץ <strong>«הוסף»</strong> — האפליקציה תיפתח במסך מלא</li>
+      </ol>
+      <div class="ivIosInstall__actions">
+        <button type="button" id="ivIosInstallDismiss" class="ivBtn ivBtn--ghost">המשך בדפדפן</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Splash -->
+  <div id="ivSplash" class="ivSplash" aria-hidden="true">
+    <div class="ivSplash__logo">INVESTO</div>
+    <div class="ivSplash__tagline">לאן שלא תלך אינווסטו איתך</div>
+  </div>
+
+  <!-- Login -->
+  <section id="viewLogin" class="ivView ivView--login">
+    <div class="ivLogin">
+      <div class="ivLogin__brand">
+        <div class="ivWordmark" aria-label="INVESTO">INVESTO</div>
+        <p class="ivLogin__subtitle">התחברו כדי להמשיך</p>
+      </div>
+      <form id="ivLoginForm" class="ivLogin__form" autocomplete="on">
+        <label class="ivField">
+          <span class="ivField__label">שם משתמש</span>
+          <input class="ivField__input" id="ivLoginUser" name="username" type="text" autocomplete="username" placeholder="שם משתמש"/>
+        </label>
+        <label class="ivField">
+          <span class="ivField__label">קוד כניסה (PIN)</span>
+          <input class="ivField__input" id="ivLoginPin" name="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="קוד כניסה"/>
+        </label>
+        <p id="ivLoginError" class="ivLogin__error" hidden></p>
+        <button type="submit" id="ivLoginBtn" class="ivBtn ivBtn--primary ivBtn--block">התחבר</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- App shell -->
+  <div id="ivApp" class="ivApp" hidden>
+    <header class="ivHeader">
+      <div class="ivHeader__top">
+        <button type="button" id="ivMenuBtn" class="ivHeader__iconBtn" aria-label="תפריט">☰</button>
+        <div class="ivHeader__brand">INVESTO</div>
+        <button type="button" id="ivNotifBtn" class="ivHeader__iconBtn ivHeader__iconBtn--badge" aria-label="התראות">
+          🔔
+          <span id="ivNotifBadge" class="ivBadge" hidden>0</span>
+        </button>
+      </div>
+      <div class="ivHeader__greet">
+        <span id="ivGreeting">בוקר טוב,</span>
+        <strong id="ivUserName">סוכן</strong>
+      </div>
+    </header>
+
+    <main class="ivMain">
+      <!-- Dashboard -->
+      <section id="viewDashboard" class="ivView ivView--page">
+        <div class="ivAccountCard">
+          <div class="ivAccountCard__label">מצב חשבונך</div>
+          <div class="ivAccountCard__status">פעיל</div>
+          <div class="ivAccountCard__premium">
+            <span class="ivAccountCard__premiumLabel">פרמיה חודשית נטו</span>
+            <span id="ivMetricNet" class="ivAccountCard__premiumValue">—</span>
+          </div>
+        </div>
+
+        <div class="ivMetricGrid">
+          <article class="ivMetricCard ivMetricCard--green">
+            <div class="ivMetricCard__label">מכירות היום</div>
+            <div id="ivMetricSalesToday" class="ivMetricCard__value">0</div>
+          </article>
+          <article class="ivMetricCard ivMetricCard--blue">
+            <div class="ivMetricCard__label">פרמיה ממינוי סוכן</div>
+            <div id="ivMetricAppoint" class="ivMetricCard__value">—</div>
+          </article>
+          <article class="ivMetricCard ivMetricCard--amber">
+            <div class="ivMetricCard__label">פרמיית הפקה חודשית</div>
+            <div id="ivMetricIssued" class="ivMetricCard__value">—</div>
+          </article>
+          <article class="ivMetricCard ivMetricCard--navy">
+            <div class="ivMetricCard__label">לקוחות</div>
+            <div id="ivMetricCustomers" class="ivMetricCard__value">0</div>
+          </article>
+        </div>
+
+        <section class="ivSection">
+          <div class="ivSection__head">
+            <h2 class="ivSection__title">מכירות אחרונות</h2>
+            <span class="ivSection__pill">בזמן אמת</span>
+          </div>
+          <div id="ivRecentSales" class="ivList"></div>
+        </section>
+
+        <div class="ivQuickActions">
+          <button type="button" class="ivQuickBtn" data-action="wizard">הצעה חדשה</button>
+          <button type="button" class="ivQuickBtn" data-nav="customers">לקוחות</button>
+          <button type="button" class="ivQuickBtn" data-nav="leads">לידים סגורים</button>
+          <button type="button" class="ivQuickBtn" data-nav="crm">CRM מלא</button>
+          <button type="button" class="ivQuickBtn" data-nav="daily">דוח יומי</button>
+        </div>
+      </section>
+
+      <!-- Notifications -->
+      <section id="viewNotifications" class="ivView ivView--page" hidden>
+        <div class="ivSection__head">
+          <h2 class="ivSection__title">התראות</h2>
+        </div>
+        <p id="ivPushHint" class="ivPushHint">להתראות Push באייפון: התקן למסך הבית, ואז אשר התראות.</p>
+        <button type="button" id="ivEnablePushBtn" class="ivBtn ivBtn--primary ivBtn--block ivPushBtn">הפעל התראות Push</button>
+        <div id="ivNotifList" class="ivList ivList--spaced"></div>
+      </section>
+
+      <!-- Closed leads -->
+      <section id="viewLeads" class="ivView ivView--page" hidden>
+        <div class="ivSection__head">
+          <h2 class="ivSection__title">לידים שנסגרו</h2>
+          <span id="ivLeadsCount" class="ivSection__pill">0 לידים</span>
+        </div>
+        <div id="ivLeadsList" class="ivList"></div>
+      </section>
+
+      <!-- Health wizard -->
+      <section id="viewWizard" class="ivView ivView--page ivView--wizard" hidden>
+        <div class="ivWizardHead">
+          <button type="button" id="wizCloseBtn" class="ivBtn ivBtn--ghost ivBtn--sm">סגור</button>
+          <div id="wizStepLabel" class="ivWizardHead__label">שלב 1 מתוך 3</div>
+        </div>
+
+        <div class="ivWizardStep" data-step="1">
+          <h2 class="ivWizardTitle">פרטי מבוטח</h2>
+          <div class="ivFormGrid">
+            <label class="ivFieldLite"><span>שם פרטי</span><input id="wizFirstName" type="text"/></label>
+            <label class="ivFieldLite"><span>שם משפחה</span><input id="wizLastName" type="text"/></label>
+            <label class="ivFieldLite"><span>ת.ז.</span><input id="wizIdNumber" type="text" inputmode="numeric"/></label>
+            <label class="ivFieldLite"><span>טלפון</span><input id="wizPhone" type="tel"/></label>
+            <label class="ivFieldLite"><span>אימייל</span><input id="wizEmail" type="email"/></label>
+            <label class="ivFieldLite"><span>עיר</span><input id="wizCity" type="text"/></label>
+            <label class="ivFieldLite"><span>מין</span>
+              <select id="wizGender"><option value="">—</option><option>זכר</option><option>נקבה</option></select>
+            </label>
+            <label class="ivFieldLite"><span>תאריך לידה</span><input id="wizBirthDate" type="text" placeholder="DD/MM/YYYY"/></label>
+          </div>
+        </div>
+
+        <div class="ivWizardStep" data-step="2" hidden>
+          <h2 class="ivWizardTitle">פוליסות חדשות</h2>
+          <div class="ivFormGrid ivFormGrid--add">
+            <label class="ivFieldLite"><span>סוג ביטוח</span><input id="wizProductLabel" type="text" placeholder="בריאות, חיים…"/></label>
+            <label class="ivFieldLite"><span>פרמיה חודשית ₪</span><input id="wizPremium" type="number" min="1" step="1"/></label>
+            <button type="button" id="wizAddPolicyBtn" class="ivBtn ivBtn--primary">הוסף פוליסה</button>
+          </div>
+          <div id="wizPolicyList" class="ivList ivList--spaced"></div>
+        </div>
+
+        <div class="ivWizardStep" data-step="3" hidden>
+          <h2 class="ivWizardTitle">סיכום ושמירה</h2>
+          <div id="wizReview" class="ivList"></div>
+        </div>
+
+        <div class="ivWizardActions">
+          <button type="button" id="wizBackBtn" class="ivBtn ivBtn--ghost" hidden>חזור</button>
+          <button type="button" id="wizDraftBtn" class="ivBtn ivBtn--ghost" hidden>שמור טיוטה</button>
+          <button type="button" id="wizNextBtn" class="ivBtn ivBtn--primary">המשך</button>
+        </div>
+      </section>
+
+      <!-- Customers -->
+      <section id="viewCustomers" class="ivView ivView--page" hidden>
+        <div class="ivSearchBar">
+          <input id="ivCustomerSearch" class="ivSearchBar__input" type="search" placeholder="חיפוש לקוח…" autocomplete="off"/>
+        </div>
+        <div id="ivCustomerList" class="ivList"></div>
+      </section>
+
+      <!-- Daily report -->
+      <section id="viewDaily" class="ivView ivView--page" hidden>
+        <div class="ivDailyMeta">
+          <div id="ivDailyTitle" class="ivDailyMeta__title">דוח יומי</div>
+          <div id="ivDailyMeta" class="ivDailyMeta__sub">—</div>
+        </div>
+        <div id="ivDailyList" class="ivList"></div>
+      </section>
+
+      <!-- Full CRM iframe -->
+      <section id="viewCrm" class="ivView ivView--crm" hidden>
+        <iframe id="ivCrmFrame" class="ivCrmFrame" title="GEMEL INVEST CRM" loading="lazy"></iframe>
+      </section>
+    </main>
+
+    <nav class="ivBottomNav" aria-label="ניווט ראשי">
+      <button type="button" class="ivBottomNav__item ivBottomNav__item--active" data-nav="dashboard">
+        <span class="ivBottomNav__icon">🏠</span>
+        <span class="ivBottomNav__label">בית</span>
+      </button>
+      <button type="button" class="ivBottomNav__item" data-nav="daily">
+        <span class="ivBottomNav__icon">📊</span>
+        <span class="ivBottomNav__label">דוחות</span>
+      </button>
+      <button type="button" class="ivBottomNav__item" data-nav="customers">
+        <span class="ivBottomNav__icon">👥</span>
+        <span class="ivBottomNav__label">לקוחות</span>
+      </button>
+      <button type="button" class="ivBottomNav__item" data-nav="crm">
+        <span class="ivBottomNav__icon">💬</span>
+        <span class="ivBottomNav__label">CRM</span>
+      </button>
+    </nav>
+
+    <div id="ivMenu" class="ivMenu" hidden>
+      <div class="ivMenu__backdrop" data-close-menu></div>
+      <div class="ivMenu__sheet">
+        <button type="button" class="ivMenu__item" data-nav="dashboard">דשבורד</button>
+        <button type="button" class="ivMenu__item" data-nav="customers">לקוחות</button>
+        <button type="button" class="ivMenu__item" data-nav="daily">דוח יומי</button>
+        <button type="button" class="ivMenu__item" data-action="wizard">הצעת בריאות חדשה</button>
+        <button type="button" id="ivMenuLeads" class="ivMenu__item" data-nav="leads">לידים שנסגרו</button>
+        <button type="button" class="ivMenu__item" data-nav="notifications">התראות</button>
+        <button type="button" class="ivMenu__item" data-nav="crm">CRM מלא + צ׳אט</button>
+        <button type="button" id="ivLogoutBtn" class="ivMenu__item ivMenu__item--danger">התנתקות</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./app.js?v=2" defer></script>
+  <script src="./wizard.js?v=2" defer></script>
+  <script src="./notify.js?v=2" defer></script>
+</body>
+</html>
