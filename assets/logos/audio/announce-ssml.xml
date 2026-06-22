@@ -1,0 +1,7 @@
+﻿<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="he-IL">
+  <voice name="he-IL-HilaNeural">
+    <prosody rate="-18%" pitch="-2st" volume="+5%">
+      <break time="120ms"/>התקבל<break time="180ms"/> ליד חדש
+    </prosody>
+  </voice>
+</speak>
