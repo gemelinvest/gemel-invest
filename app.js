@@ -3570,6 +3570,10 @@
       agentApptOps: "operational_report_agent_appointment",
       agentApptForm: "agent_appointment_form"
     },
+    REPORT_SCOPES: {
+      proposal: "health_proposal",
+      purchase: "health_purchase"
+    },
     listFromPayload(payload){
       return Array.isArray(payload?.customerDocuments) ? payload.customerDocuments.filter((doc) => doc && typeof doc === "object") : [];
     },
@@ -3582,6 +3586,104 @@
     },
     newDocId(prefix){
       return prefix + Date.now().toString(16) + "_" + Math.random().toString(16).slice(2, 7);
+    },
+    formatDocDateLabel(value){
+      if(!value) return "—";
+      const d = new Date(value);
+      if(Number.isNaN(d.getTime())) return String(value);
+      return d.toLocaleString("he-IL");
+    },
+    getPrimaryInsuredLabel(payload){
+      const data = (payload?.primary && typeof payload.primary === "object")
+        ? payload.primary
+        : (payload?.insureds?.[0]?.data && typeof payload.insureds[0].data === "object" ? payload.insureds[0].data : {});
+      const fullName = safeTrim(((data.firstName || "") + " " + (data.lastName || "")).trim());
+      if(fullName) return fullName;
+      return safeTrim(payload?.insureds?.[0]?.label) || "מבוטח";
+    },
+    formatHealthReportDocName(scope, payload, uploadedAt){
+      const insured = this.getPrimaryInsuredLabel(payload);
+      const dateLabel = this.formatDocDateLabel(uploadedAt);
+      if(safeTrim(scope) === this.REPORT_SCOPES.purchase){
+        return `דוח תפעולי · רכישה חדשה · ${insured} · ${dateLabel}`;
+      }
+      return `דוח תפעולי · בריאות וסיכונים · הצעה לביטוח · ${insured} · ${dateLabel}`;
+    },
+    getDocumentDisplay(doc){
+      const uploadedAt = safeTrim(doc?.uploadedAt) || safeTrim(doc?.createdAt) || "";
+      const snapshot = doc?.payloadSnapshot && typeof doc.payloadSnapshot === "object" ? doc.payloadSnapshot : {};
+      const scope = safeTrim(doc?.reportScope);
+      const insured = safeTrim(doc?.insuredLabel) || this.getPrimaryInsuredLabel(snapshot);
+      let title = safeTrim(doc?.name);
+      if(safeTrim(doc?.type) === this.TYPES.healthOps){
+        if(scope === this.REPORT_SCOPES.purchase || scope === this.REPORT_SCOPES.proposal){
+          title = this.formatHealthReportDocName(scope, snapshot, uploadedAt);
+        }else if(doc?.isLegacy || doc?.isMaterializedLegacy){
+          title = this.formatHealthReportDocName(this.REPORT_SCOPES.proposal, snapshot, uploadedAt);
+        }
+      }
+      if(!title) title = `מסמך · ${insured}`;
+      return {
+        title,
+        dateLabel: this.formatDocDateLabel(uploadedAt),
+        agentLabel: safeTrim(doc?.uploadedBy) || safeTrim(doc?.source) || ""
+      };
+    },
+    relabelProposalHealthDocs(list, snapshotPayload){
+      (Array.isArray(list) ? list : []).forEach((doc) => {
+        if(safeTrim(doc?.type) !== this.TYPES.healthOps) return;
+        if(safeTrim(doc?.reportScope) === this.REPORT_SCOPES.purchase) return;
+        const snap = doc?.payloadSnapshot && typeof doc.payloadSnapshot === "object" ? doc.payloadSnapshot : snapshotPayload;
+        doc.reportScope = this.REPORT_SCOPES.proposal;
+        doc.insuredLabel = this.getPrimaryInsuredLabel(snap);
+        doc.name = this.formatHealthReportDocName(this.REPORT_SCOPES.proposal, snap, doc.uploadedAt);
+      });
+    },
+    hasProposalHealthDoc(list){
+      return (Array.isArray(list) ? list : []).some((doc) => {
+        if(safeTrim(doc?.type) !== this.TYPES.healthOps) return false;
+        if(safeTrim(doc?.reportScope) === this.REPORT_SCOPES.purchase) return false;
+        return true;
+      });
+    },
+    preparePurchaseHealthDocuments(payload, existingPayload, options = {}){
+      if(!payload || typeof payload !== "object" || !existingPayload || typeof existingPayload !== "object") return payload;
+      const list = this.listFromPayload(payload);
+      this.relabelProposalHealthDocs(list, existingPayload);
+      if(this.hasProposalHealthDoc(list)){
+        payload.customerDocuments = list;
+        return payload;
+      }
+      const existingList = this.listFromPayload(existingPayload);
+      const existingHealth = existingList.filter((doc) => safeTrim(doc?.type) === this.TYPES.healthOps);
+      if(existingHealth.length){
+        const seen = new Set(list.map((doc) => safeTrim(doc?.id)).filter(Boolean));
+        existingHealth.forEach((doc) => {
+          const id = safeTrim(doc?.id);
+          if(id && seen.has(id)) return;
+          const frozen = JSON.parse(JSON.stringify(doc));
+          const snap = frozen.payloadSnapshot && typeof frozen.payloadSnapshot === "object" ? frozen.payloadSnapshot : existingPayload;
+          frozen.reportScope = this.REPORT_SCOPES.proposal;
+          frozen.insuredLabel = this.getPrimaryInsuredLabel(snap);
+          frozen.name = this.formatHealthReportDocName(this.REPORT_SCOPES.proposal, snap, frozen.uploadedAt);
+          list.unshift(frozen);
+          if(id) seen.add(id);
+        });
+      }else if(this.qualifiesForHealthReport(existingPayload)){
+        const uploadedAt = safeTrim(existingPayload?.operational?.createdAt)
+          || safeTrim(existingPayload?.createdAt)
+          || safeTrim(options.uploadedAt)
+          || nowISO();
+        const frozen = this.createHealthReportDoc(existingPayload, {
+          uploadedAt,
+          uploadedBy: safeTrim(options.uploadedBy),
+          reportScope: this.REPORT_SCOPES.proposal
+        });
+        frozen.isMaterializedLegacy = true;
+        list.unshift(frozen);
+      }
+      payload.customerDocuments = list;
+      return payload;
     },
     qualifiesForHealthReport(payload){
       if(!payload || typeof payload !== "object") return false;
@@ -3602,12 +3704,19 @@
     },
     createHealthReportDoc(payload, options = {}){
       const uploadedAt = safeTrim(options.uploadedAt) || nowISO();
+      const reportScope = safeTrim(options.reportScope);
       let snapshot;
       try{ snapshot = JSON.parse(JSON.stringify(payload && typeof payload === "object" ? payload : {})); }catch(_e){ snapshot = {}; }
+      const insuredLabel = this.getPrimaryInsuredLabel(snapshot);
+      const name = reportScope
+        ? this.formatHealthReportDocName(reportScope, snapshot, uploadedAt)
+        : "דוח תפעולי — בריאות וסיכונים";
       return {
         id: this.newDocId("doc_ops_health_"),
         type: this.TYPES.healthOps,
-        name: "דוח תפעולי — בריאות וסיכונים",
+        name,
+        reportScope: reportScope || undefined,
+        insuredLabel,
         source: "מערכת",
         uploadedAt,
         uploadedBy: safeTrim(options.uploadedBy) || safeTrim(Auth?.current?.name),
@@ -3661,11 +3770,20 @@
         return payload;
       }
       if((kind === "health_wizard" || kind === "health_edit")){
+        if(context.isPurchaseFlow && context.existingPayload && typeof context.existingPayload === "object"){
+          this.preparePurchaseHealthDocuments(payload, context.existingPayload, options);
+        }
         const reportPayload = context.reportPayloadOverride && typeof context.reportPayloadOverride === "object"
           ? context.reportPayloadOverride
           : payload;
         if(this.qualifiesForHealthReport(reportPayload)){
-          this.append(payload, this.createHealthReportDoc(reportPayload, options));
+          const reportScope = context.isPurchaseFlow
+            ? this.REPORT_SCOPES.purchase
+            : (kind === "health_wizard" ? this.REPORT_SCOPES.proposal : "");
+          this.append(payload, this.createHealthReportDoc(reportPayload, {
+            ...options,
+            reportScope
+          }));
         }
         return payload;
       }
@@ -3676,7 +3794,19 @@
       const list = this.listFromPayload(payload);
       const hasHealthOps = list.some((d) => safeTrim(d?.type) === this.TYPES.healthOps);
       if(!hasHealthOps && this.qualifiesForHealthReport(payload)){
-        list.unshift({ id: "doc_legacy_health_ops", type: this.TYPES.healthOps, isLegacy: true, name: "דוח תפעולי — בריאות וסיכונים", source: "מערכת", uploadedAt: safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || safeTrim(rec?.created_at) || nowISO(), uploadedBy: safeTrim(rec?.agentName) });
+        const legacyUploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || safeTrim(rec?.created_at) || nowISO();
+        list.unshift({
+          id: "doc_legacy_health_ops",
+          type: this.TYPES.healthOps,
+          isLegacy: true,
+          reportScope: this.REPORT_SCOPES.proposal,
+          payloadSnapshot: JSON.parse(JSON.stringify(payload)),
+          name: this.formatHealthReportDocName(this.REPORT_SCOPES.proposal, payload, legacyUploadedAt),
+          insuredLabel: this.getPrimaryInsuredLabel(payload),
+          source: "מערכת",
+          uploadedAt: legacyUploadedAt,
+          uploadedBy: safeTrim(rec?.agentName)
+        });
       }
       const hasApptForm = list.some((d) => safeTrim(d?.type) === this.TYPES.agentApptForm);
       if(!hasApptForm && payload.agentAppointmentMeta){
@@ -10714,6 +10844,7 @@ UsersGateUI.init();
           ? this.getHealthPolicyBasePremium(p)
           : this.getPolicyPremiumAfterDiscount(p);
         const premiumAfterDiscount = this.formatMoneyValue(premiumAfterDiscountValue);
+        const policyAddedAt = safeTrim(p?._addedAt) || "";
         policies.push({
           id: safeTrim(p?.id) || `new_${idx}`,
           origin: "new",
@@ -10726,6 +10857,7 @@ UsersGateUI.init();
           discountYears,
           premiumAfterDiscount,
           premiumAfterDiscountValue,
+          ...(policyAddedAt ? { _addedAt: policyAddedAt } : {}),
           startDate: safeTrim(p?.startDate),
           policyNumber: safeTrim(p?.policyNumber),
           coverageLabel: (type === "מחלות קשות" || type === "סרטן") ? "סכום פיצוי" : (coverageValue && String(coverageValue).includes(",") ? "כיסויים" : "סכום ביטוח"),
@@ -10771,6 +10903,7 @@ UsersGateUI.init();
               discountYears: "",
               premiumAfterDiscount: this.formatMoneyValue(addonPremiumValue),
               premiumAfterDiscountValue: addonPremiumValue,
+              ...(policyAddedAt ? { _addedAt: policyAddedAt } : {}),
               startDate: safeTrim(p?.startDate),
               policyNumber: safeTrim(p?.policyNumber),
               coverageLabel: "סכום פיצוי",
@@ -11231,10 +11364,7 @@ UsersGateUI.init();
         </div>`;
       }
       const rows = docs.map((doc, idx) => {
-        const name = safeTrim(doc.name) || safeTrim(doc.fileName) || `מסמך ${idx + 1}`;
-        const uploadedAt = safeTrim(doc.uploadedAt) || safeTrim(doc.createdAt) || "";
-        const dateLabel = uploadedAt ? this.formatDate(uploadedAt) : "—";
-        const by = safeTrim(doc.uploadedBy) || safeTrim(doc.source) || "";
+        const display = CustomerDocuments.getDocumentDisplay(doc);
         const docType = safeTrim(doc.type);
         const docId = safeTrim(doc.id) || String(idx);
         let downloadBtn = "";
@@ -11249,16 +11379,22 @@ UsersGateUI.init();
           <div class="cfFile__documentRowMain">
             <div class="cfFile__documentRowIcon" aria-hidden="true">${premiumCustomerIcon("document")}</div>
             <div>
-              <div class="cfFile__documentRowName">${escapeHtml(name)}</div>
-              <div class="cfFile__documentRowMeta">${escapeHtml("תאריך: " + dateLabel + (by ? " · " + by : ""))}</div>
+              <div class="cfFile__documentRowName">${escapeHtml(display.title)}</div>
+              <div class="cfFile__documentRowMeta">${escapeHtml("תאריך: " + display.dateLabel)}</div>
             </div>
           </div>
           ${downloadBtn}
         </article>`;
       }).join("");
+      const footerAgent = safeTrim(rec?.agentName) || safeTrim(docs[0]?.uploadedBy) || "";
+      const footerUpdated = this.formatDate(rec?.updatedAt || rec?.updated_at || rec?.createdAt || rec?.created_at);
+      const footerHtml = (footerAgent || footerUpdated !== "—")
+        ? `<div class="cfFile__documentsFooter muted small">${footerAgent ? `נציג מטפל: ${escapeHtml(footerAgent)}` : ""}${footerAgent && footerUpdated !== "—" ? " · " : ""}${footerUpdated !== "—" ? `עודכן: ${escapeHtml(footerUpdated)}` : ""}</div>`
+        : "";
       return `<div class="cfFile__documentsPanel">
         <div class="cfFile__groupLabel">מסמכי לקוח · ${docs.length} ${docs.length === 1 ? 'מסמך' : 'מסמכים'}</div>
         <div class="cfFile__documentsList">${rows}</div>
+        ${footerHtml}
       </div>`;
     },
 
@@ -18327,6 +18463,86 @@ init(){
       return this.getOperationalPayload();
     },
 
+    /** מזהי מבוטחים שיופיעו בדוח רכישה — רק מי שמקושר לפוליסות שנוספו בסשן */
+    getCustomerPurchaseReportInsuredIds(sessionPolicies){
+      const policies = Array.isArray(sessionPolicies) ? sessionPolicies : [];
+      const idSet = new Set();
+      const wizardInsureds = this.insureds || [];
+      const primaryId = safeTrim(wizardInsureds[0]?.id);
+      const spouseId = safeTrim(wizardInsureds.find((x) => x?.type === "spouse")?.id);
+      policies.forEach((policy) => {
+        if(policy?.insuredMode === "couple"){
+          if(primaryId) idSet.add(String(primaryId));
+          if(spouseId) idSet.add(String(spouseId));
+          return;
+        }
+        this.getPolicyInsuredIds(policy).forEach((id) => {
+          const sid = safeTrim(id);
+          if(sid) idSet.add(String(sid));
+        });
+      });
+      return idSet;
+    },
+
+    _filterHealthResponsesForReportInsuredIds(responses, insuredIdSet){
+      if(!responses || typeof responses !== "object") return responses;
+      const out = {};
+      Object.keys(responses).forEach((qKey) => {
+        const block = responses[qKey];
+        if(!block || typeof block !== "object") return;
+        const nextBlock = {};
+        Object.keys(block).forEach((insId) => {
+          if(insuredIdSet.has(String(insId))) nextBlock[insId] = block[insId];
+        });
+        if(Object.keys(nextBlock).length) out[qKey] = nextBlock;
+      });
+      return out;
+    },
+
+    _applyCustomerPurchaseReportInsuredFilter(payload, sessionPolicies){
+      const insuredIdSet = this.getCustomerPurchaseReportInsuredIds(sessionPolicies);
+      const keepInsured = (ins, index) => {
+        const id = safeTrim(ins?.id) || safeTrim(ins?.data?.id) || `payload_ins_${index}`;
+        return insuredIdSet.has(String(id));
+      };
+      payload.insureds = (Array.isArray(payload.insureds) ? payload.insureds : []).filter(keepInsured);
+
+      const applyHealthFilter = (host) => {
+        if(!host?.healthDeclaration || typeof host.healthDeclaration !== "object") return;
+        if(host.healthDeclaration.responses){
+          host.healthDeclaration.responses = this._filterHealthResponsesForReportInsuredIds(
+            host.healthDeclaration.responses,
+            insuredIdSet
+          );
+        }
+      };
+      applyHealthFilter(payload.primary);
+      (payload.insureds || []).forEach((ins) => applyHealthFilter(ins.data));
+      if(payload.operational && typeof payload.operational === "object"){
+        payload.operational.insureds = (Array.isArray(payload.operational.insureds) ? payload.operational.insureds : [])
+          .filter(keepInsured);
+        applyHealthFilter(payload.operational.primary);
+        (payload.operational.insureds || []).forEach((ins) => applyHealthFilter(ins.data));
+      }
+
+      const sessionCompanies = new Set(
+        (Array.isArray(sessionPolicies) ? sessionPolicies : []).map((p) => safeTrim(p?.company)).filter(Boolean)
+      );
+      if(sessionCompanies.size){
+        const filterAgentNums = (obj) => {
+          if(!obj || typeof obj !== "object") return obj;
+          const out = {};
+          Object.entries(obj).forEach(([company, agentNo]) => {
+            if(sessionCompanies.has(safeTrim(company))) out[company] = agentNo;
+          });
+          return out;
+        };
+        payload.companyAgentNumbers = filterAgentNums(payload.companyAgentNumbers);
+        if(payload.operational) payload.operational.companyAgentNumbers = filterAgentNums(payload.operational.companyAgentNumbers);
+      }
+      return payload;
+    },
+
     getOperationalPayloadForReport(){
       const payload = this.getOperationalPayload();
       if(!this.isCustomerPurchaseMode()) return payload;
@@ -18337,6 +18553,7 @@ init(){
       if(next.operational && typeof next.operational === "object"){
         next.operational.newPolicies = JSON.parse(JSON.stringify(normalizedSession));
       }
+      this._applyCustomerPurchaseReportInsuredFilter(next, normalizedSession);
       next._purchaseReportScope = "session_only";
       return next;
     },
@@ -32496,6 +32713,17 @@ if(path === "birthDate"){
       const purchaseHeroSub = this.isCustomerPurchaseMode()
         ? "קבע מועד לשיחת השיקוף. הדוח התפעולי יכלול רק את המוצר החדש שנוסף בסשן זה."
         : "קבע מועד לשיחת השיקוף עם הלקוח והוסף הערות לנציג לפני שמירת ההקמה.";
+      const purchasePremiumStatsHtml = this.isCustomerPurchaseMode() && normalizedNewPolicies.length ? `
+            <div class="lcOpHero__stats">
+              <div class="lcOpStat">
+                <span>פרמייה חודשית · מוצרים חדשים בסשן</span>
+                <strong>${escapeHtml(this.formatMoneyValue(totalPremium))}</strong>
+              </div>
+              <div class="lcOpStat">
+                <span>פוליסות שנוספו בסשן</span>
+                <strong>${normalizedNewPolicies.length}</strong>
+              </div>
+            </div>` : "";
 
       return `
         <section class="lcOpSummary">
@@ -32503,6 +32731,7 @@ if(path === "birthDate"){
             <div class="lcOpHero__eyebrow">100% הושלם</div>
             <div class="lcOpHero__title">${this.isCustomerPurchaseMode() ? "סיום רכישת ביטוח חדש" : "תיאום שיחה וסיום הקמה"}</div>
             <div class="lcOpHero__sub">${purchaseHeroSub}</div>
+            ${purchasePremiumStatsHtml}
           </div>
 
           <section class="lcOpSection lcOpSection--mirrorSchedule">
@@ -40232,8 +40461,16 @@ if(path === "birthDate"){
         ? safeTrim(this.customerPurchaseMode?.customerId)
         : safeTrim(this.lastSavedCustomerId);
       const existingCustomer = targetCustomerId ? (State.data?.customers || []).find((x) => String(x?.id) === String(targetCustomerId)) : null;
+      const existingPayloadSnapshot = existingCustomer?.payload && typeof existingCustomer.payload === "object"
+        ? JSON.parse(JSON.stringify(existingCustomer.payload))
+        : null;
       if(existingCustomer?.payload && (this.isElementaryFlow() || safeTrim(targetCustomerId))){
         payload = mergeElementarySaveWithExistingCustomerPayload(existingCustomer.payload, payload);
+      }
+      if(isPurchaseFlow && Array.isArray(payload?.newPolicies) && payload.newPolicies.length){
+        if(payload.operational && typeof payload.operational === "object"){
+          payload.operational.newPolicies = JSON.parse(JSON.stringify(payload.newPolicies));
+        }
       }
       if(!this.isElementaryFlow()){
         const docContext = {
@@ -40241,6 +40478,8 @@ if(path === "birthDate"){
           uploadedBy: safeTrim(Auth?.current?.name) || safeTrim(existingCustomer?.agentName)
         };
         if(isPurchaseFlow){
+          docContext.isPurchaseFlow = true;
+          docContext.existingPayload = existingPayloadSnapshot;
           docContext.reportPayloadOverride = this.enrichWizardPayloadForCustomerSave(this.getOperationalPayloadForReport());
         }
         CustomerDocuments.enrichPayloadWithSaveDocuments(payload, docContext);
