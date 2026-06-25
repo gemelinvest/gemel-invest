@@ -27304,6 +27304,13 @@ input[inputmode="tel"] {
   }
 }
 
+/* Topbar visibility fix — scoped to car-insurance CTA only */
+.topbar__actions > #btnCarInsuranceClick.lcCarInsuranceClickBtn{
+  flex:0 0 auto !important;
+  flex-shrink:0 !important;
+  align-self:center;
+}
+
 .lcCarInsuranceClickModal{ z-index: 4100; }
 .lcCarInsuranceClickModal__backdrop{
   z-index:0;
