@@ -3349,7 +3349,7 @@
 .lcStatCell{
   flex:1 1 150px;
   min-width:0;
-  padding:16px 18px;
+  padding:20px 22px;
   border-inline-end:1px solid var(--gi-border-soft,#F1F5F9);
 }
 .lcStatCell:last-child{ border-inline-end:0; }
@@ -3357,14 +3357,14 @@
 .lcStatCell__label{
   display:flex;
   align-items:center;
-  gap:6px;
-  font-size:13px;
-  font-weight:600;
-  color:var(--gi-text-2,#475569);
+  gap:7px;
+  font-size:15px;
+  font-weight:700;
+  color:#334155;
   white-space:nowrap;
 }
 .lcStatCell__dot{
-  width:7px; height:7px;
+  width:9px; height:9px;
   border-radius:50%;
   background:var(--gi-text-muted,#94A3B8);
   flex:0 0 auto;
@@ -3377,11 +3377,11 @@
 
 .lcStatCell__value{
   display:block;
-  font-size:26px;
-  font-weight:700;
+  font-size:32px;
+  font-weight:800;
   letter-spacing:-.01em;
-  line-height:1.25;
-  margin-top:2px;
+  line-height:1.2;
+  margin-top:4px;
   color:var(--gi-text,#0F172A);
   font-variant-numeric:tabular-nums;
   direction:ltr;
@@ -3390,51 +3390,52 @@
 }
 .lcStatCell__sub{
   display:block;
-  font-size:12px;
-  font-weight:500;
+  font-size:13.5px;
+  font-weight:600;
   color:var(--gi-text-3,#64748B);
+  margin-top:2px;
 }
 
 .lcStatCell--totalDanger{ background:var(--gi-danger-soft,#FEF2F2); }
 .lcStatCell--totalDanger .lcStatCell__label{ color:#991B1B; font-weight:700; }
 .lcStatCell--totalDanger .lcStatCell__value{ color:#B91C1C; font-weight:800; }
-.lcStatCell--totalDanger .lcStatCell__sub{ color:#A85F5F; }
+.lcStatCell--totalDanger .lcStatCell__sub{ color:#96504F; }
 
 .lcStatCell--totalSuccess{ background:#F6FDF9; }
 .lcStatCell--totalSuccess .lcStatCell__label{ color:#166534; font-weight:700; }
 .lcStatCell--totalSuccess .lcStatCell__value{ color:#15803D; font-weight:800; }
-.lcStatCell--totalSuccess .lcStatCell__sub{ color:#5E8E70; }
+.lcStatCell--totalSuccess .lcStatCell__sub{ color:#4A7A5C; }
 
 .lcStatCell--totalInfo{ background:var(--gi-primary-soft,#EFF6FF); }
 .lcStatCell--totalInfo .lcStatCell__label{ color:#1E40AF; font-weight:700; }
 .lcStatCell--totalInfo .lcStatCell__value{ color:#1D4ED8; font-weight:800; }
-.lcStatCell--totalInfo .lcStatCell__sub{ color:#5F7CAF; }
+.lcStatCell--totalInfo .lcStatCell__sub{ color:#4C6A9E; }
 
 /* פילוח שנת ביטול */
-.lcStatCell--years{ flex:2 1 300px; padding:14px 18px; }
+.lcStatCell--years{ flex:2 1 340px; padding:18px 22px; }
 .lcStatYears__title{
   display:block;
-  font-size:12px;
-  font-weight:600;
-  color:var(--gi-text-3,#64748B);
-  margin-bottom:8px;
+  font-size:13.5px;
+  font-weight:700;
+  color:#475569;
+  margin-bottom:10px;
 }
-.lcStatYears__chips{ display:flex; flex-wrap:wrap; gap:7px; }
+.lcStatYears__chips{ display:flex; flex-wrap:wrap; gap:8px; }
 .lcStatYears__chip{
   display:inline-flex;
   align-items:baseline;
-  gap:6px;
-  padding:5px 12px;
+  gap:7px;
+  padding:7px 14px;
   border-radius:var(--gi-r-pill,999px);
   background:var(--gi-surface-2,#F8FAFC);
   border:1px solid #EDF1F5;
 }
-.lcStatYears__chipLabel{ font-size:12.5px; font-weight:800; color:#166534; }
+.lcStatYears__chipLabel{ font-size:14.5px; font-weight:800; color:#15803D; }
 .lcStatYears__chipValue{
-  font-size:13.5px; font-weight:700; color:#1E293B;
+  font-size:15.5px; font-weight:800; color:#0F172A;
   font-variant-numeric:tabular-nums; direction:ltr; unicode-bidi:plaintext;
 }
-.lcStatYears__chipCount{ font-size:11px; font-weight:600; color:#94A3B8; }
+.lcStatYears__chipCount{ font-size:12.5px; font-weight:700; color:#64748B; }
 .lcStatYears__chip--empty{ background:#FBFCFD; border-style:dashed; border-color:#E5E9EF; }
 .lcStatYears__chip--empty .lcStatYears__chipLabel,
 .lcStatYears__chip--empty .lcStatYears__chipValue{ color:var(--gi-text-muted,#94A3B8); }
@@ -3448,9 +3449,9 @@
 
 /* שורת "נכון לתאריך" מתחת לכותרת */
 .lcDailyReport__asOf--sub{
-  font-size:13px;
-  font-weight:600;
-  color:var(--gi-text-3,#64748B);
+  font-size:14.5px;
+  font-weight:700;
+  color:#475569;
   margin-top:3px;
 }
 .lcDailyReport__asOf--sub[hidden]{ display:none !important; }
@@ -3458,7 +3459,7 @@
 @media (max-width:760px){
   .lcStatCell{ flex:1 1 45%; border-bottom:1px solid var(--gi-border-soft,#F1F5F9); }
   .lcStatCell--years{ flex:1 1 100%; }
-  .lcStatCell__value{ font-size:22px; }
+  .lcStatCell__value{ font-size:26px; }
 }
 
 /* ===== GI-STAT-STRIP — הרצועה בשורה העליונה של הכרטיס (במקום הכותרת) ===== */
@@ -3478,9 +3479,9 @@
   background:#FCFDFE;
   overflow:hidden;
 }
-.lcStatStrip--inHead .lcStatCell{ padding:14px 16px; }
-.lcStatStrip--inHead .lcStatCell__value{ font-size:25px; }
-.lcStatStrip--inHead .lcStatCell--years{ padding:12px 16px; }
+.lcStatStrip--inHead .lcStatCell{ padding:18px 20px; }
+.lcStatStrip--inHead .lcStatCell__value{ font-size:30px; }
+.lcStatStrip--inHead .lcStatCell--years{ padding:16px 20px; }
 
 .lcReportHead__main .lcDailyReport__asOf--sub{ margin-top:0; }
 
