@@ -7,7 +7,7 @@
   "use strict";
 
   const GI_MAX_DISCOUNT_YEARS = 50;   // GI-FIX-DISCOUNT-YEARS
-  const BUILD = "20260802-balanced-v1";
+  const BUILD = "20260802-elderly-v2";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -4471,6 +4471,9 @@
       goldLead: base.goldLead === true || meta.goldLead === true,
       goldSourceAgentId: safeTrim(base.goldSourceAgentId) || safeTrim(meta.goldSourceAgentId),
       goldSourceAgentName: safeTrim(base.goldSourceAgentName) || safeTrim(meta.goldSourceAgentName),
+      // GI-ELDERLY-LEAD
+      elderlyOwnerId: safeTrim(base.elderlyOwnerId) || safeTrim(meta.elderlyOwnerId),
+      elderlyOwnerName: safeTrim(base.elderlyOwnerName) || safeTrim(meta.elderlyOwnerName),
       goldProducts: (Array.isArray(base.goldProducts) && base.goldProducts.length)
         ? base.goldProducts
         : (Array.isArray(meta.goldProducts) ? meta.goldProducts : []),
@@ -4803,6 +4806,44 @@
     return name || "—";
   }
 
+  // GI-ELDERLY-LEAD: ליד שאינו פוטנציאלי משויך ל"נציג" וירטואלי שמור.
+  // לא נשמר עליו מזהה של אדם אמיתי, ולכן אף נציג לא רואה אותו;
+  // הוא מופיע רק בדוח מעקב הסגירות של הסוקרת שיצרה אותו (ולמנהל/אדמין).
+  const ELDERLY_LEAD_AGENT_ID = "__ELDERLY__";
+  const ELDERLY_LEAD_AGENT_NAME = "לקוחות מבוגרים";
+
+  function isElderlyCampaignLead(lead){
+    return safeTrim(lead?.assignedAgentId) === ELDERLY_LEAD_AGENT_ID;
+  }
+
+  function canUseElderlyLeadBucket(){
+    try {
+      return !!(Auth.isReferent() || Auth.isAdmin() || Auth.isManager());
+    } catch(_e) { return false; }
+  }
+
+  // מנהל/אדמין רואים את כל המבוגרים; סוקרת רואה אך ורק את מה שהיא שייכה.
+  function elderlyLeadVisibleToSession(lead){
+    if(!isElderlyCampaignLead(lead)) return false;
+    try {
+      if(Auth.isAdmin() || Auth.isManager()) return true;
+      if(!Auth.isReferent()) return false;
+    } catch(_e) { return false; }
+    const owner = safeTrim(lead?.elderlyOwnerId);
+    const meId = safeTrim(Auth?.current?.id);
+    if(owner && meId && String(owner) === String(meId)) return true;
+    // גיבוי לרשומות ישנות שנשמרו לפני שדה הבעלות — התאמה לפי שם.
+    const ownerName = safeTrim(lead?.elderlyOwnerName) || safeTrim(lead?.createdByName);
+    const meName = safeTrim(Auth?.current?.name);
+    return !!(ownerName && meName && ownerName === meName);
+  }
+
+  // מסיר מרשימה לידי-מבוגרים שאינם של המשתמש הנוכחי, ומשאיר כל השאר כמות שהוא.
+  function scopeElderlyCampaignLeads(list){
+    return (Array.isArray(list) ? list : [])
+      .filter((l) => !isElderlyCampaignLead(l) || elderlyLeadVisibleToSession(l));
+  }
+
   function campaignLeadAllAgentNames(lead, agents){
     const list = Array.isArray(agents) ? agents : [];
     const names = [];
@@ -4821,6 +4862,8 @@
 
   function campaignLeadAgentAccess(lead, agentRec){
     if(!lead || !agentRec) return false;
+    // GI-ELDERLY-LEAD: דלי המבוגרים אינו שייך לאף נציג אמיתי.
+    if(isElderlyCampaignLead(lead)) return false;
     const meId = safeTrim(agentRec.id);
     const meName = safeTrim(agentRec.name);
     const meUser = safeTrim(agentRec.username);
@@ -4910,6 +4953,9 @@
       goldLead: input.goldLead === true || input.goldLead === "true",
       goldSourceAgentId: safeTrim(input.goldSourceAgentId),
       goldSourceAgentName: safeTrim(input.goldSourceAgentName),
+      // GI-ELDERLY-LEAD
+      elderlyOwnerId: safeTrim(input.elderlyOwnerId),
+      elderlyOwnerName: safeTrim(input.elderlyOwnerName),
       goldProducts: Array.isArray(input.goldProducts) ? input.goldProducts.map((x) => safeTrim(x)).filter(Boolean) : [],
       goldPolicyCount: Number.isFinite(Number(input.goldPolicyCount)) ? Number(input.goldPolicyCount) : 0,
       goldCustomerId: safeTrim(input.goldCustomerId),
@@ -4991,6 +5037,9 @@
     if(extraAgents.length) meta.additionalAgents = extraAgents;
     // GI-GOLD-LEAD
     if(l.goldLead === true) meta.goldLead = true;
+    // GI-ELDERLY-LEAD
+    if(safeTrim(l.elderlyOwnerId)) meta.elderlyOwnerId = safeTrim(l.elderlyOwnerId);
+    if(safeTrim(l.elderlyOwnerName)) meta.elderlyOwnerName = safeTrim(l.elderlyOwnerName);
     if(safeTrim(l.goldSourceAgentId)) meta.goldSourceAgentId = safeTrim(l.goldSourceAgentId);
     if(safeTrim(l.goldSourceAgentName)) meta.goldSourceAgentName = safeTrim(l.goldSourceAgentName);
     if(Array.isArray(l.goldProducts) && l.goldProducts.length) meta.goldProducts = l.goldProducts;
@@ -67785,7 +67834,8 @@ const CampaignLeadsStore = {
       const summaryTitle = document.getElementById("clAgentSummaryTitle");
       if(!summaryTbody) return;
       const dayStr = this._activeDayIL();
-      const allLeads = this._leadsForDay(CampaignLeadsStore.leads, dayStr);
+      // GI-ELDERLY-LEAD: אותו סקופ כמו הטבלה, אחרת המונים לא יתאימו למוצג.
+      const allLeads = scopeElderlyCampaignLeads(this._leadsForDay(CampaignLeadsStore.leads, dayStr));
       const displayDay = formatCampaignLeadDayLabel(dayStr);
       if(summaryTitle) summaryTitle.textContent = "סיכום נציגים — " + displayDay;
       const emptyLabel = dayStr === this._currentDayIL()
@@ -67853,7 +67903,8 @@ const CampaignLeadsStore = {
       if(!agentChipsEl) return;
       const agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
       const namesSet = new Set();
-      monthScopedLeads.forEach((l) => {
+      // GI-ELDERLY-LEAD
+      scopeElderlyCampaignLeads(monthScopedLeads).forEach((l) => {
         campaignLeadAllAgentNames(l, agents).forEach((n) => {
           if(n && n !== "—") namesSet.add(n);
         });
@@ -68102,7 +68153,11 @@ const CampaignLeadsStore = {
     fillAgentSelect(selectedId){
       if(!this.els.agent) return;
       const agents = getAssignableSalesAgents();
-      this.els.agent.innerHTML = '<option value="">— בחר נציג —</option>' + agents.map((a) =>
+      // GI-ELDERLY-LEAD: אפשרות "לקוחות מבוגרים" מוצגת רק לסוקרת/מנהל/אדמין.
+      const elderlyOpt = canUseElderlyLeadBucket()
+        ? `<option value="${escapeHtml(ELDERLY_LEAD_AGENT_ID)}">${escapeHtml(ELDERLY_LEAD_AGENT_NAME)}</option>`
+        : "";
+      this.els.agent.innerHTML = '<option value="">— בחר נציג —</option>' + elderlyOpt + agents.map((a) =>
         `<option value="${escapeHtml(a.id)}">${escapeHtml(a.name)}</option>`
       ).join("");
       if(selectedId) this.els.agent.value = selectedId;
@@ -68159,7 +68214,8 @@ const CampaignLeadsStore = {
     },
 
     filteredLeads(){
-      let list = goldLeadFilterForViewer(this._leadsForDay(CampaignLeadsStore.leads, this._activeDayIL()));
+      // GI-ELDERLY-LEAD: כל סוקרת רואה רק את המבוגרים שהיא שייכה.
+      let list = scopeElderlyCampaignLeads(goldLeadFilterForViewer(this._leadsForDay(CampaignLeadsStore.leads, this._activeDayIL())));
       const agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
       if(this.agentFilter){
         list = list.filter((l) => campaignLeadMatchesAgentFilter(l, this.agentFilter, agents));
@@ -68171,7 +68227,8 @@ const CampaignLeadsStore = {
     },
 
     splitFilteredLeads(){
-      let list = goldLeadFilterForViewer(this._leadsForToday(CampaignLeadsStore.leads));
+      // GI-ELDERLY-LEAD
+      let list = scopeElderlyCampaignLeads(goldLeadFilterForViewer(this._leadsForToday(CampaignLeadsStore.leads)));
       if(this.splitFilter !== "all") list = list.filter((l) => campaignLeadIsOpenInInbox(l.status));
       const q = (this.splitSearch || "").toLowerCase();
       if(q){
@@ -68407,9 +68464,16 @@ const CampaignLeadsStore = {
       const phone = normalizePhoneValue(this.els.phone?.value || existing?.phone);
       if(!isValidIsraeliPhone(phone)){ this.setFormErr("יש להזין מספר טלפון תקין"); return; }
       const agentId = safeTrim(this.els.agent?.value);
-      const agent = getAssignableSalesAgents().find((a) => String(a.id) === agentId);
-      if(!agent){ this.setFormErr("יש לבחור נציג לשיוך"); return; }
-      const targetAgent = resolveCampaignLeadTargetAgent(agent);
+      // GI-ELDERLY-LEAD: הדלי אינו נציג אמיתי, ולכן עוקף את חיפוש הנציג.
+      const isElderlyPick = agentId === ELDERLY_LEAD_AGENT_ID && canUseElderlyLeadBucket();
+      let targetAgent;
+      if(isElderlyPick){
+        targetAgent = { id: ELDERLY_LEAD_AGENT_ID, name: ELDERLY_LEAD_AGENT_NAME };
+      } else {
+        const agent = getAssignableSalesAgents().find((a) => String(a.id) === agentId);
+        if(!agent){ this.setFormErr("יש לבחור נציג לשיוך"); return; }
+        targetAgent = resolveCampaignLeadTargetAgent(agent);
+      }
       const campaignId = safeTrim(this.els.campaign?.value);
       const line = getCampaignLines().find((c) => String(c.id) === campaignId) || getDefaultCampaignLine();
       const stamp = nowISO();
@@ -68437,6 +68501,13 @@ const CampaignLeadsStore = {
         campaignLabel: line.label,
         assignedAgentId: targetAgent.id,
         assignedAgentName: targetAgent.name,
+        // GI-ELDERLY-LEAD: חותמים את הסוקרת הבעלים כדי שרק היא תראה את הרשומה.
+        elderlyOwnerId: isElderlyPick
+          ? (safeTrim(existing?.elderlyOwnerId) || safeTrim(Auth?.current?.id))
+          : "",
+        elderlyOwnerName: isElderlyPick
+          ? (safeTrim(existing?.elderlyOwnerName) || safeTrim(Auth?.current?.name))
+          : "",
         status: leadStatus,
         irrelevantNote: resetIrrelevantForNewAgent ? "" : (existing?.irrelevantNote || ""),
         source: existing?.source || "manual",
@@ -68779,8 +68850,14 @@ const CampaignLeadsStore = {
       const agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
       // רק נציגים שמופיעים בפועל על לידים בתקופה — לא כל משתמשי המערכת
       const namesSet = new Set();
+      // GI-ELDERLY-LEAD: המבוגרים אינם נציג — נספרים בנפרד ולא נכנסים לרשימת השמות.
+      let elderlyCount = 0;
       (monthScopedLeads || []).forEach((l) => {
         if(isGoldMirrorCampaignLead(l)) return;
+        if(isElderlyCampaignLead(l)){
+          if(elderlyLeadVisibleToSession(l)) elderlyCount += 1;
+          return;
+        }
         campaignLeadAllAgentNames(l, agents).forEach((n) => {
           if(n && n !== "—") namesSet.add(n);
         });
@@ -68789,13 +68866,18 @@ const CampaignLeadsStore = {
       if(agentFilterEl) agentFilterEl.style.display = "";
 
       const prev = safeTrim(this.agentFilter);
-      // מאפסים רק נציג ספציפי שנעלם מהתקופה — לא את בחירת "הכל"
-      if(prev && prev !== "__ALL__" && !names.includes(prev)) this.agentFilter = "";
+      // מאפסים רק נציג ספציפי שנעלם מהתקופה — לא את בחירת "הכל" ולא את דלי המבוגרים
+      if(prev && prev !== "__ALL__" && prev !== ELDERLY_LEAD_AGENT_ID && !names.includes(prev)) this.agentFilter = "";
+      if(prev === ELDERLY_LEAD_AGENT_ID && !elderlyCount) this.agentFilter = "";
 
       const cur = safeTrim(this.agentFilter);
+      const elderlyOpt = elderlyCount
+        ? `<option value="${escapeHtml(ELDERLY_LEAD_AGENT_ID)}"${cur === ELDERLY_LEAD_AGENT_ID ? " selected" : ""}>${escapeHtml(ELDERLY_LEAD_AGENT_NAME)} (${elderlyCount})</option>`
+        : "";
       agentSelectEl.innerHTML =
         `<option value="">— בחר נציג —</option>` +
         `<option value="__ALL__"${cur === "__ALL__" ? " selected" : ""}>הכל</option>` +
+        elderlyOpt +
         names.map((n) =>
           `<option value="${escapeHtml(n)}"${n === cur ? " selected" : ""}>${escapeHtml(n)}</option>`
         ).join("");
@@ -68813,8 +68895,13 @@ const CampaignLeadsStore = {
 
     _selectedAgentName(){
       const v = safeTrim(this.agentFilter);
-      if(!v || v === "__ALL__") return "";
+      if(!v || v === "__ALL__" || v === ELDERLY_LEAD_AGENT_ID) return "";
       return v;
+    },
+
+    // GI-ELDERLY-LEAD
+    _wantsElderly(){
+      return safeTrim(this.agentFilter) === ELDERLY_LEAD_AGENT_ID;
     },
 
     _renderAgentCard(agentLeads){
@@ -68922,6 +69009,13 @@ const CampaignLeadsStore = {
       // בלי בחירת נציג — לא מציגים את כל רשומות המערכת
       if(!this._isAgentFilterActive()) return [];
       const agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
+      // GI-ELDERLY-LEAD: הדלי הוא בחירה נפרדת. בכל בחירה אחרת (כולל "הכל")
+      // המבוגרים מוסתרים, כדי שלא יזלגו לרשימות של נציגים אמיתיים.
+      if(this._wantsElderly()){
+        list = list.filter((l) => elderlyLeadVisibleToSession(l));
+      } else {
+        list = list.filter((l) => !isElderlyCampaignLead(l));
+      }
       const agentName = this._selectedAgentName();
       if(agentName){
         list = list.filter((l) => campaignLeadMatchesAgentFilter(l, agentName, agents));
