@@ -7,7 +7,7 @@
   "use strict";
 
   const GI_MAX_DISCOUNT_YEARS = 50;   // GI-FIX-DISCOUNT-YEARS
-  const BUILD = "20260802-stat-strip-v1";
+  const BUILD = "20260802-stat-strip-v2";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
