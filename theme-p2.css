@@ -3265,3 +3265,70 @@
   color: var(--gi-success) !important;
   font-weight: 700 !important;
 }
+
+/* =====================================================================
+   GI-FIX: גלילה בדשבורד אלמנטרי
+   theme.css (~2190) מחיל `#view-dashboard .bankDash{display:grid !important}`
+   על כל מי שנושא את הקלאס bankDash — כולל סקשן דשבורד אלמנטרי, שהתכנון
+   שלו הוא עמודת flex עם טבלה גוללת פנימית. התוצאה: פריסת 2×2 שבורה,
+   ה-flex:1/min-height:0 על ה-tableWrap מאבד משמעות, והטבלה נחתכת ע"י
+   ה-overflow:hidden של .content בלי אפשרות גלילה.
+   כאן מחזירים לו את פריסת ה-flex ואת אזור הגלילה. theme-p2.css נטען
+   אחרון, וה-hack של :not(#\9) שומר על ספציפיות שווה לכלל שדורסים.
+   ===================================================================== */
+
+#view-dashboard .bankDash--elementaryLive:not(#\9):not(#\9){
+  display: flex !important;
+  flex-direction: column !important;
+  grid-template-columns: none !important;
+  grid-template-rows: none !important;
+  align-items: stretch !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+/* אזור הגלילה עצמו: לוקח את כל הגובה שנשאר וגולל פנימית.
+   min-height:0 חובה — בלעדיו flex item לא מתכווץ מתחת לגובה התוכן. */
+#view-dashboard .bankDash--elementaryLive .lcElemDash__tableWrap:not(#\9):not(#\9){
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* שאר האזורים קבועים ולא מתכווצים, אחרת הם "גונבים" גובה מהטבלה. */
+#view-dashboard .bankDash--elementaryLive .lcElemDash__topBar:not(#\9):not(#\9),
+#view-dashboard .bankDash--elementaryLive .lcElemDash__tabsBar:not(#\9):not(#\9),
+#view-dashboard .bankDash--elementaryLive .lcElemDash__kpiStrip:not(#\9):not(#\9),
+#view-dashboard .bankDash--elementaryLive .lcElemDash__toolbar:not(#\9):not(#\9){
+  flex: 0 0 auto !important;
+}
+
+/* כותרות הטבלה נשארות דבוקות למעלה בזמן גלילה. */
+#view-dashboard .bankDash--elementaryLive .lcElemDashTable thead th:not(#\9):not(#\9){
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 3 !important;
+  background: #f3f6fb !important;
+}
+
+/* רשת ביטחון: אם :has() לא נתמך בדפדפן, .content לא מקבל flex/overflow:hidden
+   והטבלה לא תיחתך — אבל אז צריך שהאזור עצמו יקבל גובה מפורש כדי לגלול. */
+@supports not selector(:has(*)){
+  #view-dashboard .bankDash--elementaryLive .lcElemDash__tableWrap:not(#\9):not(#\9){
+    max-height: calc(100vh - 260px) !important;
+  }
+}
+
+/* מסכים צרים: הפריסה עוברת לגלילת עמוד רגילה, בלי כליאת גובה. */
+@media (max-width: 980px){
+  #view-dashboard .bankDash--elementaryLive:not(#\9):not(#\9){
+    overflow: visible !important;
+  }
+  #view-dashboard .bankDash--elementaryLive .lcElemDash__tableWrap:not(#\9):not(#\9){
+    overflow-y: visible !important;
+    max-height: none !important;
+  }
+}
