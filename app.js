@@ -7,7 +7,7 @@
   "use strict";
 
   const GI_MAX_DISCOUNT_YEARS = 50;   // GI-FIX-DISCOUNT-YEARS
-  const BUILD = "20260801-daily-sales-page-v2";
+  const BUILD = "20260802-stat-strip-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -66929,38 +66929,52 @@ const CampaignLeadsStore = {
       }
       wrap.hidden = false;
       const policyWord = (n) => (Number(n) === 1 ? "פוליסה" : "פוליסות");
-      const tile = (label, data, tone, extraCls) => `
-        <div class="lcCancelStat lcCancelStat--${tone}${extraCls ? " " + extraCls : ""}">
-          <span class="lcCancelStat__label">${escapeHtml(label)}</span>
-          <span class="lcCancelStat__value">${escapeHtml(this.formatCancelMoney(data.premium))}</span>
-          <span class="lcCancelStat__sub">${escapeHtml(String(data.count) + " " + policyWord(data.count))}</span>
+      const cell = (label, data, dotCls, cellCls) => `
+        <div class="lcStatCell${cellCls ? " " + cellCls : ""}">
+          <span class="lcStatCell__label">${dotCls ? `<span class="lcStatCell__dot lcStatCell__dot--${dotCls}"></span>` : ""}${escapeHtml(label)}</span>
+          <span class="lcStatCell__value">${escapeHtml(this.formatCancelMoney(data.premium))}</span>
+          <span class="lcStatCell__sub">${escapeHtml(String(data.count) + " " + policyWord(data.count))}</span>
         </div>`;
       const S = stats.byStatus;
-      const parts = [
-        tile(CANCEL_STATUS_KEYS.cancelled.label, S.cancelled, "danger"),
-        tile(CANCEL_STATUS_KEYS.cancelledPartial.label, S.cancelledPartial, "danger"),
-        tile(CANCEL_STATUS_KEYS.partial.label, S.partial, "warn"),
-        tile("סה״כ פרמיית ביטול", { premium: stats.totalCancelPremium, count: stats.totalCancelCount }, "danger", "lcCancelStat--total"),
-        tile(CANCEL_STATUS_KEYS.awaitingRetain.label, S.awaitingRetain, "info"),
-        tile("סה״כ פרמיה ששומרה", S.retained, "success")
+      const rowTop = [
+        cell(CANCEL_STATUS_KEYS.cancelled.label, S.cancelled, "danger"),
+        cell(CANCEL_STATUS_KEYS.cancelledPartial.label, S.cancelledPartial, "dangerDim"),
+        cell(CANCEL_STATUS_KEYS.partial.label, S.partial, "warn"),
+        cell("סה״כ פרמיית ביטול", { premium: stats.totalCancelPremium, count: stats.totalCancelCount }, "", "lcStatCell--totalDanger")
+      ].join("");
+      const rowBottom = [
+        cell(CANCEL_STATUS_KEYS.awaitingRetain.label, S.awaitingRetain, "info"),
+        cell("סה״כ פרמיה ששומרה", S.retained, "success", "lcStatCell--totalSuccess")
       ];
       if(stats.hasYearCol){
-        const chips = stats.retainedByYear.length
-          ? stats.retainedByYear.map((it) => `
-              <span class="lcCancelYear__chip">
-                <span class="lcCancelYear__chipLabel">${escapeHtml(it.label)}</span>
-                <span class="lcCancelYear__chipValue">${escapeHtml(this.formatCancelMoney(it.premium))}</span>
-                <span class="lcCancelYear__chipCount">${escapeHtml(String(it.count))}</span>
-              </span>`).join("")
-          : `<span class="lcCancelYear__empty">אין שורות ששומרו</span>`;
-        parts.push(`
-          <div class="lcCancelStat lcCancelStat--years">
-            <span class="lcCancelStat__label">ששומרה — לפי שנת ביטול</span>
-            <div class="lcCancelYear__chips">${chips}</div>
-            <span class="lcCancelStat__sub">״כללי״ = שנה שישית ומעלה</span>
+        const chips = CANCEL_YEAR_ORDER.map((label) => {
+          const found = stats.retainedByYear.find((it) => it.label === label);
+          const isEmpty = !found;
+          const val = found ? found.premium : 0;
+          return `<span class="lcStatYears__chip${isEmpty ? " lcStatYears__chip--empty" : ""}">`
+            + `<span class="lcStatYears__chipLabel">${escapeHtml(label)}</span>`
+            + `<span class="lcStatYears__chipValue">${escapeHtml(this.formatCancelMoney(val))}</span>`
+            + (found ? `<span class="lcStatYears__chipCount">${escapeHtml(String(found.count))}</span>` : "")
+            + `</span>`;
+        });
+        // שנים שאינן ברשימה הסטנדרטית (למשל תא ריק) מוצגות בסוף כדי שלא ייעלמו.
+        stats.retainedByYear
+          .filter((it) => !CANCEL_YEAR_ORDER.includes(it.label))
+          .forEach((it) => {
+            chips.push(`<span class="lcStatYears__chip">`
+              + `<span class="lcStatYears__chipLabel">${escapeHtml(it.label)}</span>`
+              + `<span class="lcStatYears__chipValue">${escapeHtml(this.formatCancelMoney(it.premium))}</span>`
+              + `<span class="lcStatYears__chipCount">${escapeHtml(String(it.count))}</span>`
+              + `</span>`);
+          });
+        rowBottom.push(`
+          <div class="lcStatCell lcStatCell--years">
+            <span class="lcStatYears__title">ששומרה לפי שנת ביטול · ״כללי״ = שנה 6 ומעלה</span>
+            <div class="lcStatYears__chips">${chips.join("")}</div>
           </div>`);
       }
-      wrap.innerHTML = parts.join("");
+      wrap.innerHTML = `<div class="lcStatStrip__row">${rowTop}</div>`
+        + `<div class="lcStatStrip__row">${rowBottom.join("")}</div>`;
       wrap.classList.toggle("is-filtered", this.hasActiveFilters());
     },
 

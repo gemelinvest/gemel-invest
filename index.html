@@ -8,9 +8,9 @@
 <meta content="#f8fafc" name="theme-color"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20260801-settings-console-v1" rel="stylesheet"/>
-<link href="./theme.css?v=20260801-p1-crosscut-fix4" rel="stylesheet"/>
-<link href="./theme-p2.css?v=20260802-elem-dash-scroll-v1" rel="stylesheet"/>
+<link href="./app.css?v=20260802-stat-strip-v1" rel="stylesheet"/>
+<link href="./theme.css?v=20260802-stat-strip-v1" rel="stylesheet"/>
+<link href="./theme-p2.css?v=20260802-stat-strip-v1" rel="stylesheet"/>
 
 <link rel="manifest" href="./manifest.webmanifest"/>
 <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png"/>
@@ -517,19 +517,7 @@
 <div class="card__head lcDailyReportCard__head">
 <div>
 <div class="card__title" id="dailyReportTitle">דוח מכירות</div>
-<div class="lcDailyReport__asOf" hidden id="dailyReportAsOfLine"></div>
-<div class="lcDailyReport__premStats" hidden id="dailyReportPremStats">
-<div class="lcDailyReport__premStat lcDailyReport__premStat--issued">
-<span class="lcDailyReport__premStatLabel">סה״כ פרמיה הפקה</span>
-<span class="lcDailyReport__premStatValue" id="dailyReportPremIssued">₪0</span>
-<span class="lcDailyReport__premStatSub" id="dailyReportPremIssuedSub">0 פוליסות</span>
-</div>
-<div class="lcDailyReport__premStat lcDailyReport__premStat--pending">
-<span class="lcDailyReport__premStatLabel">פרמיה ממתינה להפקה</span>
-<span class="lcDailyReport__premStatValue" id="dailyReportPremPending">₪0</span>
-<span class="lcDailyReport__premStatSub" id="dailyReportPremPendingSub">0 פוליסות</span>
-</div>
-</div>
+<div class="lcDailyReport__asOf lcDailyReport__asOf--sub" hidden id="dailyReportAsOfLine"></div>
 </div>
 <div class="lcDailyReportCard__actions">
 <label class="lcDailyReport__asOfPick" hidden id="dailyReportAsOfPickWrap">
@@ -540,6 +528,20 @@
 <button class="btn btn--primary" id="btnDailyReportExport" type="button">הפק דוח יומי</button>
 <button class="btn btn--primary" id="btnDailyReportUpload" type="button" hidden>העלה דוח מאקסל</button>
 <button class="btn" id="btnDailyReportRefresh" type="button">רענון</button>
+</div>
+</div>
+<div class="lcStatStrip" hidden id="dailyReportPremStats">
+<div class="lcStatStrip__row">
+<div class="lcStatCell">
+<span class="lcStatCell__label"><span class="lcStatCell__dot lcStatCell__dot--warn"></span>פרמיה ממתינה להפקה</span>
+<span class="lcStatCell__value" id="dailyReportPremPending">₪0</span>
+<span class="lcStatCell__sub" id="dailyReportPremPendingSub">0 פוליסות</span>
+</div>
+<div class="lcStatCell lcStatCell--totalSuccess">
+<span class="lcStatCell__label">סה״כ פרמיה הפקה</span>
+<span class="lcStatCell__value" id="dailyReportPremIssued">₪0</span>
+<span class="lcStatCell__sub" id="dailyReportPremIssuedSub">0 פוליסות</span>
+</div>
 </div>
 </div>
 <div aria-live="polite" class="lcDailyReport__alert" hidden id="dailyReportAlert"></div>
@@ -565,10 +567,8 @@
 <div class="card__head lcDailyReportCard__head">
 <div>
 <div class="card__title" id="cancellationsTitle">דוח ביטולים</div>
-<div class="lcCancelStats" hidden id="cancellationsStats"></div>
+<div class="lcDailyReport__asOf lcDailyReport__asOf--sub" hidden id="cancellationsAsOfLine"></div>
 </div>
-<div class="lcDailyReportCard__actionsCol">
-<div class="lcDailyReport__asOf lcDailyReport__asOf--left" hidden id="cancellationsAsOfLine"></div>
 <div class="lcDailyReportCard__actions">
 <label class="lcDailyReport__asOfPick" hidden id="cancellationsAsOfPickWrap">
 <span class="lcDailyReport__asOfPickLabel">תאריך עדכון הדוח</span>
@@ -580,7 +580,7 @@
 <button class="btn" id="btnCancellationsRefresh" type="button">רענון</button>
 </div>
 </div>
-</div>
+<div class="lcStatStrip" hidden id="cancellationsStats"></div>
 <div aria-live="polite" class="lcDailyReport__alert" hidden id="cancellationsAlert"></div>
 <div class="lcCancellations__sheetTabs" id="cancellationsSheetTabs" role="tablist" aria-label="גיליונות דוח הביטולים" hidden></div>
 <div class="lcDailyReport__filters" hidden id="cancellationsFilters">

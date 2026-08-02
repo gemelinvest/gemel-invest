@@ -3333,207 +3333,130 @@
   }
 }
 
-/* ===== GI-PREMIUM-STATS — מוני פרמיה בכותרת הדוח היומי ===== */
-.lcDailyReport__premStats{
-  display:flex;
-  flex-wrap:wrap;
-  align-items:stretch;
-  gap:10px;
-  margin-top:10px;
-}
-.lcDailyReport__premStats[hidden]{ display:none !important; }
-
-.lcDailyReport__premStat{
-  display:flex;
-  flex-direction:column;
-  gap:2px;
-  min-width:170px;
-  padding:10px 14px;
-  border:1px solid rgba(148,163,184,.28);
-  border-radius:14px;
-  background:linear-gradient(180deg,rgba(255,255,255,.92),rgba(248,250,252,.86));
-  box-shadow:0 1px 2px rgba(15,23,42,.05);
-  position:relative;
+/* ===== GI-STAT-STRIP — רצועת מדדים משותפת (דוח מכירות + דוח ביטולים) ===== */
+.lcStatStrip{
+  border-top:1px solid var(--gi-border-soft,#F1F5F9);
+  background:#FCFDFE;
+  margin:14px -1px -1px;
+  border-radius:0 0 var(--gi-r-card,16px) var(--gi-r-card,16px);
   overflow:hidden;
 }
-.lcDailyReport__premStat::before{
-  content:"";
-  position:absolute;
-  inset-inline-start:0;
-  top:0;
-  bottom:0;
-  width:3px;
-  border-radius:3px;
-}
-.lcDailyReport__premStat--issued::before{ background:#16a34a; }
-.lcDailyReport__premStat--pending::before{ background:#f59e0b; }
+.lcStatStrip[hidden]{ display:none !important; }
 
-.lcDailyReport__premStatLabel{
-  font-size:11.5px;
-  font-weight:700;
-  letter-spacing:.01em;
-  color:#64748b;
-  white-space:nowrap;
-}
-.lcDailyReport__premStatValue{
-  font-size:21px;
-  font-weight:900;
-  line-height:1.15;
-  color:#0f172a;
-  font-variant-numeric:tabular-nums;
-  direction:ltr;
-  text-align:start;
-  unicode-bidi:plaintext;
-}
-.lcDailyReport__premStat--issued .lcDailyReport__premStatValue{ color:#15803d; }
-.lcDailyReport__premStat--pending .lcDailyReport__premStatValue{ color:#b45309; }
-.lcDailyReport__premStatSub{
-  font-size:11px;
-  font-weight:600;
-  color:#94a3b8;
-}
+.lcStatStrip__row{ display:flex; flex-wrap:wrap; align-items:stretch; }
+.lcStatStrip__row + .lcStatStrip__row{ border-top:1px solid var(--gi-border-soft,#F1F5F9); }
 
-.lcDailyReport__premStats.is-filtered .lcDailyReport__premStat{
-  border-style:dashed;
-  border-color:rgba(59,130,246,.45);
+.lcStatCell{
+  flex:1 1 130px;
+  min-width:0;
+  padding:12px 16px;
+  border-inline-end:1px solid var(--gi-border-soft,#F1F5F9);
 }
+.lcStatCell:last-child{ border-inline-end:0; }
 
-@media (max-width:640px){
-  .lcDailyReport__premStats{ gap:8px; }
-  .lcDailyReport__premStat{ flex:1 1 46%; min-width:0; padding:9px 11px; }
-  .lcDailyReport__premStatValue{ font-size:18px; }
-}
-
-/* ===== GI-CANCEL-STATS — מוני פרמיה בכרטיס דוח הביטולים ===== */
-.lcDailyReportCard__actionsCol{
+.lcStatCell__label{
   display:flex;
-  flex-direction:column;
-  align-items:flex-start;
-  gap:6px;
-}
-.lcDailyReport__asOf--left{
-  font-size:12px;
-  font-weight:700;
-  color:#475569;
-  white-space:nowrap;
-}
-.lcDailyReport__asOf--left[hidden]{ display:none !important; }
-
-.lcCancelStats{
-  display:flex;
-  flex-wrap:wrap;
-  align-items:stretch;
-  gap:8px;
-  margin-top:10px;
-}
-.lcCancelStats[hidden]{ display:none !important; }
-
-.lcCancelStat{
-  display:flex;
-  flex-direction:column;
-  gap:2px;
-  min-width:132px;
-  padding:9px 12px;
-  border:1px solid rgba(148,163,184,.28);
-  border-radius:13px;
-  background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(248,250,252,.86));
-  box-shadow:0 1px 2px rgba(15,23,42,.05);
-  position:relative;
-  overflow:hidden;
-}
-.lcCancelStat::before{
-  content:"";
-  position:absolute;
-  inset-inline-start:0;
-  top:0; bottom:0;
-  width:3px;
-}
-.lcCancelStat--danger::before{ background:#dc2626; }
-.lcCancelStat--warn::before{ background:#f59e0b; }
-.lcCancelStat--info::before{ background:#3b82f6; }
-.lcCancelStat--success::before{ background:#16a34a; }
-
-.lcCancelStat--total{
-  border-color:rgba(220,38,38,.4);
-  background:linear-gradient(180deg,rgba(254,242,242,.95),rgba(254,226,226,.6));
-}
-.lcCancelStat--total .lcCancelStat__label{ color:#991b1b; }
-
-.lcCancelStat__label{
-  font-size:11px;
-  font-weight:700;
-  color:#64748b;
-  white-space:nowrap;
-}
-.lcCancelStat__value{
-  font-size:18px;
-  font-weight:900;
-  line-height:1.15;
-  color:#0f172a;
-  font-variant-numeric:tabular-nums;
-  direction:ltr;
-  text-align:start;
-  unicode-bidi:plaintext;
-}
-.lcCancelStat--danger .lcCancelStat__value{ color:#b91c1c; }
-.lcCancelStat--warn .lcCancelStat__value{ color:#b45309; }
-.lcCancelStat--info .lcCancelStat__value{ color:#1d4ed8; }
-.lcCancelStat--success .lcCancelStat__value{ color:#15803d; }
-.lcCancelStat__sub{
+  align-items:center;
+  gap:5px;
   font-size:10.5px;
   font-weight:600;
-  color:#94a3b8;
+  color:var(--gi-text-3,#64748B);
+  white-space:nowrap;
+}
+.lcStatCell__dot{
+  width:5px; height:5px;
+  border-radius:50%;
+  background:var(--gi-text-muted,#94A3B8);
+  flex:0 0 auto;
+}
+.lcStatCell__dot--danger{ background:var(--gi-danger,#DC2626); }
+.lcStatCell__dot--dangerDim{ background:var(--gi-danger,#DC2626); opacity:.45; }
+.lcStatCell__dot--warn{ background:var(--gi-warn,#D97706); }
+.lcStatCell__dot--info{ background:var(--gi-info,#2563EB); }
+.lcStatCell__dot--success{ background:var(--gi-success,#16A34A); }
+
+.lcStatCell__value{
+  display:block;
+  font-size:19px;
+  font-weight:700;
+  letter-spacing:-.01em;
+  line-height:1.25;
+  margin-top:2px;
+  color:var(--gi-text,#0F172A);
+  font-variant-numeric:tabular-nums;
+  direction:ltr;
+  unicode-bidi:plaintext;
+  text-align:start;
+}
+.lcStatCell__sub{
+  display:block;
+  font-size:10px;
+  font-weight:500;
+  color:var(--gi-text-muted,#94A3B8);
 }
 
-/* פילוח השנה — צמוד ל"סה״כ פרמיה ששומרה" */
-.lcCancelStat--years{
-  min-width:220px;
-  border-color:rgba(22,163,74,.35);
-  background:linear-gradient(180deg,rgba(240,253,244,.95),rgba(220,252,231,.55));
+.lcStatCell--totalDanger{ background:var(--gi-danger-soft,#FEF2F2); }
+.lcStatCell--totalDanger .lcStatCell__label{ color:#991B1B; font-weight:700; }
+.lcStatCell--totalDanger .lcStatCell__value{ color:#B91C1C; font-weight:800; }
+.lcStatCell--totalDanger .lcStatCell__sub{ color:#C08585; }
+
+.lcStatCell--totalSuccess{ background:#F6FDF9; }
+.lcStatCell--totalSuccess .lcStatCell__label{ color:#166534; font-weight:700; }
+.lcStatCell--totalSuccess .lcStatCell__value{ color:#15803D; font-weight:800; }
+.lcStatCell--totalSuccess .lcStatCell__sub{ color:#8FB79F; }
+
+.lcStatCell--totalInfo{ background:var(--gi-primary-soft,#EFF6FF); }
+.lcStatCell--totalInfo .lcStatCell__label{ color:#1E40AF; font-weight:700; }
+.lcStatCell--totalInfo .lcStatCell__value{ color:#1D4ED8; font-weight:800; }
+.lcStatCell--totalInfo .lcStatCell__sub{ color:#8FA6CC; }
+
+/* פילוח שנת ביטול */
+.lcStatCell--years{ flex:2 1 260px; padding:11px 16px; }
+.lcStatYears__title{
+  display:block;
+  font-size:10px;
+  font-weight:600;
+  color:var(--gi-text-muted,#94A3B8);
+  margin-bottom:6px;
 }
-.lcCancelStat--years::before{ background:#16a34a; }
-.lcCancelYear__chips{
-  display:flex;
-  flex-wrap:wrap;
-  gap:5px;
-  margin:3px 0 1px;
-}
-.lcCancelYear__chip{
+.lcStatYears__chips{ display:flex; flex-wrap:wrap; gap:6px; }
+.lcStatYears__chip{
   display:inline-flex;
   align-items:baseline;
   gap:5px;
-  padding:2px 8px;
-  border-radius:999px;
-  background:rgba(255,255,255,.9);
-  border:1px solid rgba(22,163,74,.25);
-  font-size:11px;
-  line-height:1.5;
+  padding:3px 9px;
+  border-radius:var(--gi-r-pill,999px);
+  background:var(--gi-surface-2,#F8FAFC);
+  border:1px solid #EDF1F5;
 }
-.lcCancelYear__chipLabel{ font-weight:900; color:#166534; }
-.lcCancelYear__chipValue{
-  font-weight:800;
-  color:#0f172a;
-  font-variant-numeric:tabular-nums;
-  direction:ltr;
-  unicode-bidi:plaintext;
+.lcStatYears__chipLabel{ font-size:10px; font-weight:800; color:#166534; }
+.lcStatYears__chipValue{
+  font-size:11px; font-weight:700; color:#334155;
+  font-variant-numeric:tabular-nums; direction:ltr; unicode-bidi:plaintext;
 }
-.lcCancelYear__chipCount{
-  font-weight:700;
-  color:#94a3b8;
-  font-size:10px;
-}
-.lcCancelYear__chipCount::before{ content:"· "; }
-.lcCancelYear__empty{ font-size:11px; color:#94a3b8; }
+.lcStatYears__chipCount{ font-size:9.5px; font-weight:600; color:#B6C0CC; }
+.lcStatYears__chip--empty{ background:#FBFCFD; border-style:dashed; border-color:#E5E9EF; }
+.lcStatYears__chip--empty .lcStatYears__chipLabel,
+.lcStatYears__chip--empty .lcStatYears__chipValue{ color:var(--gi-text-muted,#94A3B8); }
 
-.lcCancelStats.is-filtered .lcCancelStat{
-  border-style:dashed;
-  border-color:rgba(59,130,246,.45);
+.lcStatStrip.is-filtered{ background:#FBFCFE; }
+.lcStatStrip.is-filtered .lcStatCell__label::after{
+  content:"·";
+  color:var(--gi-primary,#2563EB);
+  font-weight:900;
 }
 
-@media (max-width:640px){
-  .lcDailyReportCard__actionsCol{ align-items:stretch; }
-  .lcCancelStats{ gap:6px; }
-  .lcCancelStat{ flex:1 1 46%; min-width:0; padding:8px 10px; }
-  .lcCancelStat--years{ flex:1 1 100%; }
-  .lcCancelStat__value{ font-size:16px; }
+/* שורת "נכון לתאריך" מתחת לכותרת */
+.lcDailyReport__asOf--sub{
+  font-size:11.5px;
+  font-weight:500;
+  color:var(--gi-text-muted,#94A3B8);
+  margin-top:3px;
+}
+.lcDailyReport__asOf--sub[hidden]{ display:none !important; }
+
+@media (max-width:760px){
+  .lcStatCell{ flex:1 1 45%; border-bottom:1px solid var(--gi-border-soft,#F1F5F9); }
+  .lcStatCell--years{ flex:1 1 100%; }
+  .lcStatCell__value{ font-size:17px; }
 }
