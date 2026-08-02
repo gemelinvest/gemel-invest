@@ -3348,8 +3348,9 @@
 
 .lcStatCell{
   flex:1 1 150px;
+  position:relative;
   min-width:0;
-  padding:20px 22px;
+  padding:13px 18px;
   border-inline-end:1px solid var(--gi-border-soft,#F1F5F9);
 }
 .lcStatCell:last-child{ border-inline-end:0; }
@@ -3357,14 +3358,14 @@
 .lcStatCell__label{
   display:flex;
   align-items:center;
-  gap:7px;
-  font-size:15px;
-  font-weight:700;
+  gap:6px;
+  font-size:12.5px;
+  font-weight:600;
   color:#334155;
   white-space:nowrap;
 }
 .lcStatCell__dot{
-  width:9px; height:9px;
+  width:6px; height:6px;
   border-radius:50%;
   background:var(--gi-text-muted,#94A3B8);
   flex:0 0 auto;
@@ -3377,11 +3378,12 @@
 
 .lcStatCell__value{
   display:block;
-  font-size:32px;
-  font-weight:800;
+  font-size:22px;
+  font-weight:700;
   letter-spacing:-.01em;
-  line-height:1.2;
-  margin-top:4px;
+  line-height:1.25;
+  margin-top:3px;
+  letter-spacing:-.015em;
   color:var(--gi-text,#0F172A);
   font-variant-numeric:tabular-nums;
   direction:ltr;
@@ -3390,13 +3392,13 @@
 }
 .lcStatCell__sub{
   display:block;
-  font-size:13.5px;
-  font-weight:600;
+  font-size:11.5px;
+  font-weight:500;
   color:var(--gi-text-3,#64748B);
-  margin-top:2px;
+  margin-top:1px;
 }
 
-.lcStatCell--totalDanger{ background:var(--gi-danger-soft,#FEF2F2); }
+.lcStatCell--totalDanger{ background:#FEF4F4; }
 .lcStatCell--totalDanger .lcStatCell__label{ color:#991B1B; font-weight:700; }
 .lcStatCell--totalDanger .lcStatCell__value{ color:#B91C1C; font-weight:800; }
 .lcStatCell--totalDanger .lcStatCell__sub{ color:#96504F; }
@@ -3412,30 +3414,30 @@
 .lcStatCell--totalInfo .lcStatCell__sub{ color:#4C6A9E; }
 
 /* פילוח שנת ביטול */
-.lcStatCell--years{ flex:2 1 340px; padding:18px 22px; }
+.lcStatCell--years{ flex:2 1 300px; padding:12px 18px; }
 .lcStatYears__title{
   display:block;
-  font-size:13.5px;
-  font-weight:700;
-  color:#475569;
-  margin-bottom:10px;
+  font-size:12px;
+  font-weight:600;
+  color:var(--gi-text-3,#64748B);
+  margin-bottom:7px;
 }
-.lcStatYears__chips{ display:flex; flex-wrap:wrap; gap:8px; }
+.lcStatYears__chips{ display:flex; flex-wrap:wrap; gap:7px; }
 .lcStatYears__chip{
   display:inline-flex;
   align-items:baseline;
-  gap:7px;
-  padding:7px 14px;
+  gap:6px;
+  padding:4px 11px;
   border-radius:var(--gi-r-pill,999px);
   background:var(--gi-surface-2,#F8FAFC);
   border:1px solid #EDF1F5;
 }
-.lcStatYears__chipLabel{ font-size:14.5px; font-weight:800; color:#15803D; }
+.lcStatYears__chipLabel{ font-size:12px; font-weight:800; color:#15803D; }
 .lcStatYears__chipValue{
-  font-size:15.5px; font-weight:800; color:#0F172A;
+  font-size:12.5px; font-weight:700; color:#0F172A;
   font-variant-numeric:tabular-nums; direction:ltr; unicode-bidi:plaintext;
 }
-.lcStatYears__chipCount{ font-size:12.5px; font-weight:700; color:#64748B; }
+.lcStatYears__chipCount{ font-size:11px; font-weight:600; color:#94A3B8; }
 .lcStatYears__chip--empty{ background:#FBFCFD; border-style:dashed; border-color:#E5E9EF; }
 .lcStatYears__chip--empty .lcStatYears__chipLabel,
 .lcStatYears__chip--empty .lcStatYears__chipValue{ color:var(--gi-text-muted,#94A3B8); }
@@ -3449,7 +3451,7 @@
 
 /* שורת "נכון לתאריך" מתחת לכותרת */
 .lcDailyReport__asOf--sub{
-  font-size:14.5px;
+  font-size:12.5px;
   font-weight:700;
   color:#475569;
   margin-top:3px;
@@ -3459,7 +3461,7 @@
 @media (max-width:760px){
   .lcStatCell{ flex:1 1 45%; border-bottom:1px solid var(--gi-border-soft,#F1F5F9); }
   .lcStatCell--years{ flex:1 1 100%; }
-  .lcStatCell__value{ font-size:26px; }
+  .lcStatCell__value{ font-size:20px; }
 }
 
 /* ===== GI-STAT-STRIP — הרצועה בשורה העליונה של הכרטיס (במקום הכותרת) ===== */
@@ -3479,9 +3481,9 @@
   background:#FCFDFE;
   overflow:hidden;
 }
-.lcStatStrip--inHead .lcStatCell{ padding:18px 20px; }
-.lcStatStrip--inHead .lcStatCell__value{ font-size:30px; }
-.lcStatStrip--inHead .lcStatCell--years{ padding:16px 20px; }
+.lcStatStrip--inHead .lcStatCell{ padding:13px 18px; }
+.lcStatStrip--inHead .lcStatCell__value{ font-size:22px; }
+.lcStatStrip--inHead .lcStatCell--years{ padding:12px 18px; }
 
 .lcReportHead__main .lcDailyReport__asOf--sub{ margin-top:0; }
 
@@ -3513,4 +3515,12 @@
   .lcReportNav{ flex-wrap:wrap; }
   .lcReportNav__actions{ flex:1 1 100%; margin-inline-start:0; margin-top:8px; }
   .lcReportNav__actionsInner{ justify-content:flex-start; }
+}
+
+/* ===== GI-NAV-ACTIONS — שני סלוטי הכפתורים חולקים את אותו מיקום ===== */
+.lcReportNav__actions + .lcReportNav__actions{ margin-inline-start:0; }
+.lcReportNav__actionsInner .lcDailyReport__asOfPickLabel{
+  font-size:11px;
+  font-weight:600;
+  color:var(--gi-text-muted,#94A3B8);
 }

@@ -8,9 +8,9 @@
 <meta content="#f8fafc" name="theme-color"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20260802-stat-type-v2" rel="stylesheet"/>
-<link href="./theme.css?v=20260802-stat-type-v2" rel="stylesheet"/>
-<link href="./theme-p2.css?v=20260802-stat-type-v2" rel="stylesheet"/>
+<link href="./app.css?v=20260802-balanced-v1" rel="stylesheet"/>
+<link href="./theme.css?v=20260802-balanced-v1" rel="stylesheet"/>
+<link href="./theme-p2.css?v=20260802-balanced-v1" rel="stylesheet"/>
 
 <link rel="manifest" href="./manifest.webmanifest"/>
 <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png"/>
@@ -511,6 +511,18 @@
 <button class="lcReportRubrics__tab is-active" id="rubricTabDaily" type="button" role="tab" aria-selected="true" data-rubric="daily">דוח מכירות</button>
 <button class="lcReportRubrics__tab" id="rubricTabCancellations" type="button" role="tab" aria-selected="false" data-rubric="cancellations">דוח ביטולים</button>
 </div>
+<div class="lcReportNav__actions" id="reportNavActionsDaily">
+<div class="lcDailyReportCard__actions lcReportNav__actionsInner">
+<label class="lcDailyReport__asOfPick" hidden id="dailyReportAsOfPickWrap">
+<span class="lcDailyReport__asOfPickLabel">תאריך עדכון הדוח</span>
+<input class="input lcDailyReport__asOfInput" id="dailyReportAsOfDate" type="date"/>
+</label>
+<input accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" class="lcDailyReport__fileInput" id="dailyReportFileInput" type="file"/>
+<button class="btn btn--primary" id="btnDailyReportExport" type="button">הפק דוח יומי</button>
+<button class="btn btn--primary" id="btnDailyReportUpload" type="button" hidden>העלה דוח מאקסל</button>
+<button class="btn" id="btnDailyReportRefresh" type="button">רענון</button>
+</div>
+</div>
 <div class="lcReportNav__actions" hidden id="reportNavActionsCancellations">
 <div class="lcDailyReportCard__actions lcReportNav__actionsInner">
 <label class="lcDailyReport__asOfPick" hidden id="cancellationsAsOfPickWrap">
@@ -543,16 +555,6 @@
 </div>
 </div>
 </div>
-</div>
-<div class="lcDailyReportCard__actions">
-<label class="lcDailyReport__asOfPick" hidden id="dailyReportAsOfPickWrap">
-<span class="lcDailyReport__asOfPickLabel">תאריך עדכון הדוח</span>
-<input class="input lcDailyReport__asOfInput" id="dailyReportAsOfDate" type="date"/>
-</label>
-<input accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" class="lcDailyReport__fileInput" id="dailyReportFileInput" type="file"/>
-<button class="btn btn--primary" id="btnDailyReportExport" type="button">הפק דוח יומי</button>
-<button class="btn btn--primary" id="btnDailyReportUpload" type="button" hidden>העלה דוח מאקסל</button>
-<button class="btn" id="btnDailyReportRefresh" type="button">רענון</button>
 </div>
 </div>
 <div aria-live="polite" class="lcDailyReport__alert" hidden id="dailyReportAlert"></div>

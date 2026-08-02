@@ -7,7 +7,7 @@
   "use strict";
 
   const GI_MAX_DISCOUNT_YEARS = 50;   // GI-FIX-DISCOUNT-YEARS
-  const BUILD = "20260802-stat-type-v2";
+  const BUILD = "20260802-balanced-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -65833,6 +65833,7 @@ const CampaignLeadsStore = {
       this._rubricEls.panelDaily = document.getElementById("dailyReportPanelDaily");
       this._rubricEls.panelCancellations = document.getElementById("dailyReportPanelCancellations");
       this._rubricEls.btnBack = document.getElementById("btnReportsHubBack");
+      this._rubricEls.navActionsDaily = document.getElementById("reportNavActionsDaily");
       this._rubricEls.navActionsCancellations = document.getElementById("reportNavActionsCancellations");
       if(this._rubricEls.tabDaily) on(this._rubricEls.tabDaily, "click", () => this.switchRubric("daily"));
       if(this._rubricEls.tabCancellations) on(this._rubricEls.tabCancellations, "click", () => this.switchRubric("cancellations"));
@@ -65890,8 +65891,11 @@ const CampaignLeadsStore = {
         panelCancellations.hidden = !isCancellations;
         panelCancellations.classList.toggle("is-active", isCancellations);
       }
-      // GI-NAV-ACTIONS: כפתורי הביטולים יושבים בשורת הניווט המשותפת,
-      // ולכן חייבים להיות מוסתרים כשהרובריקה הפעילה היא "דוח מכירות".
+      // GI-NAV-ACTIONS: כפתורי שני הדוחות יושבים בשורת הניווט המשותפת,
+      // ולכן כל סלוט מוצג רק כשהרובריקה שלו פעילה.
+      if(this._rubricEls.navActionsDaily){
+        this._rubricEls.navActionsDaily.hidden = isCancellations;
+      }
       if(this._rubricEls.navActionsCancellations){
         this._rubricEls.navActionsCancellations.hidden = !isCancellations;
       }
