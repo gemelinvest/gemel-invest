@@ -3403,3 +3403,137 @@
   .lcDailyReport__premStat{ flex:1 1 46%; min-width:0; padding:9px 11px; }
   .lcDailyReport__premStatValue{ font-size:18px; }
 }
+
+/* ===== GI-CANCEL-STATS — מוני פרמיה בכרטיס דוח הביטולים ===== */
+.lcDailyReportCard__actionsCol{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:6px;
+}
+.lcDailyReport__asOf--left{
+  font-size:12px;
+  font-weight:700;
+  color:#475569;
+  white-space:nowrap;
+}
+.lcDailyReport__asOf--left[hidden]{ display:none !important; }
+
+.lcCancelStats{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:stretch;
+  gap:8px;
+  margin-top:10px;
+}
+.lcCancelStats[hidden]{ display:none !important; }
+
+.lcCancelStat{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:132px;
+  padding:9px 12px;
+  border:1px solid rgba(148,163,184,.28);
+  border-radius:13px;
+  background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(248,250,252,.86));
+  box-shadow:0 1px 2px rgba(15,23,42,.05);
+  position:relative;
+  overflow:hidden;
+}
+.lcCancelStat::before{
+  content:"";
+  position:absolute;
+  inset-inline-start:0;
+  top:0; bottom:0;
+  width:3px;
+}
+.lcCancelStat--danger::before{ background:#dc2626; }
+.lcCancelStat--warn::before{ background:#f59e0b; }
+.lcCancelStat--info::before{ background:#3b82f6; }
+.lcCancelStat--success::before{ background:#16a34a; }
+
+.lcCancelStat--total{
+  border-color:rgba(220,38,38,.4);
+  background:linear-gradient(180deg,rgba(254,242,242,.95),rgba(254,226,226,.6));
+}
+.lcCancelStat--total .lcCancelStat__label{ color:#991b1b; }
+
+.lcCancelStat__label{
+  font-size:11px;
+  font-weight:700;
+  color:#64748b;
+  white-space:nowrap;
+}
+.lcCancelStat__value{
+  font-size:18px;
+  font-weight:900;
+  line-height:1.15;
+  color:#0f172a;
+  font-variant-numeric:tabular-nums;
+  direction:ltr;
+  text-align:start;
+  unicode-bidi:plaintext;
+}
+.lcCancelStat--danger .lcCancelStat__value{ color:#b91c1c; }
+.lcCancelStat--warn .lcCancelStat__value{ color:#b45309; }
+.lcCancelStat--info .lcCancelStat__value{ color:#1d4ed8; }
+.lcCancelStat--success .lcCancelStat__value{ color:#15803d; }
+.lcCancelStat__sub{
+  font-size:10.5px;
+  font-weight:600;
+  color:#94a3b8;
+}
+
+/* פילוח השנה — צמוד ל"סה״כ פרמיה ששומרה" */
+.lcCancelStat--years{
+  min-width:220px;
+  border-color:rgba(22,163,74,.35);
+  background:linear-gradient(180deg,rgba(240,253,244,.95),rgba(220,252,231,.55));
+}
+.lcCancelStat--years::before{ background:#16a34a; }
+.lcCancelYear__chips{
+  display:flex;
+  flex-wrap:wrap;
+  gap:5px;
+  margin:3px 0 1px;
+}
+.lcCancelYear__chip{
+  display:inline-flex;
+  align-items:baseline;
+  gap:5px;
+  padding:2px 8px;
+  border-radius:999px;
+  background:rgba(255,255,255,.9);
+  border:1px solid rgba(22,163,74,.25);
+  font-size:11px;
+  line-height:1.5;
+}
+.lcCancelYear__chipLabel{ font-weight:900; color:#166534; }
+.lcCancelYear__chipValue{
+  font-weight:800;
+  color:#0f172a;
+  font-variant-numeric:tabular-nums;
+  direction:ltr;
+  unicode-bidi:plaintext;
+}
+.lcCancelYear__chipCount{
+  font-weight:700;
+  color:#94a3b8;
+  font-size:10px;
+}
+.lcCancelYear__chipCount::before{ content:"· "; }
+.lcCancelYear__empty{ font-size:11px; color:#94a3b8; }
+
+.lcCancelStats.is-filtered .lcCancelStat{
+  border-style:dashed;
+  border-color:rgba(59,130,246,.45);
+}
+
+@media (max-width:640px){
+  .lcDailyReportCard__actionsCol{ align-items:stretch; }
+  .lcCancelStats{ gap:6px; }
+  .lcCancelStat{ flex:1 1 46%; min-width:0; padding:8px 10px; }
+  .lcCancelStat--years{ flex:1 1 100%; }
+  .lcCancelStat__value{ font-size:16px; }
+}

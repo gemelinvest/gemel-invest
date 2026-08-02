@@ -565,9 +565,10 @@
 <div class="card__head lcDailyReportCard__head">
 <div>
 <div class="card__title" id="cancellationsTitle">דוח ביטולים</div>
-<div class="lcDailyReport__asOf" hidden id="cancellationsAsOfLine"></div>
-<div class="card__hint" id="cancellationsHint">דוח ביטולים שנקלט מתוך Excel — הנציגים רואים רק את השורות עם שמם בעמודת "נציג"</div>
+<div class="lcCancelStats" hidden id="cancellationsStats"></div>
 </div>
+<div class="lcDailyReportCard__actionsCol">
+<div class="lcDailyReport__asOf lcDailyReport__asOf--left" hidden id="cancellationsAsOfLine"></div>
 <div class="lcDailyReportCard__actions">
 <label class="lcDailyReport__asOfPick" hidden id="cancellationsAsOfPickWrap">
 <span class="lcDailyReport__asOfPickLabel">תאריך עדכון הדוח</span>
@@ -577,6 +578,7 @@
 <button class="btn btn--primary" id="btnCancellationsExport" type="button">הפק דוח ביטולים</button>
 <button class="btn btn--primary" id="btnCancellationsUpload" type="button" hidden>העלה דוח מאקסל</button>
 <button class="btn" id="btnCancellationsRefresh" type="button">רענון</button>
+</div>
 </div>
 </div>
 <div aria-live="polite" class="lcDailyReport__alert" hidden id="cancellationsAlert"></div>

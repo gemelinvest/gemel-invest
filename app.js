@@ -64389,6 +64389,63 @@ const CampaignLeadsStore = {
     return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : 0;
   }
 
+  // GI-CANCEL-STATS: זיהוי עמודת שנת הביטול.
+  // זהירות: המחרוזת "שנה" מוכלת גם ב-"פרמיה שנתית", ולכן חיפוש לפי הכלה יתפוס
+  // את עמודת הכסף במקום את השנה. לכן כאן עובדים בהתאמה מדויקת בלבד,
+  // ובגיליון "מדיקר" הכותרת היא "שנה" ולא "ביטול שנה".
+  function findCancellationYearCol(headers){
+    const list = Array.isArray(headers) ? headers : [];
+    const exact = ["ביטול שנה", "שנת ביטול", "שנה"];
+    for(const needle of exact){
+      const idx = list.findIndex((h) => safeTrim(h).toLowerCase() === needle);
+      if(idx >= 0) return idx;
+    }
+    return -1;
+  }
+
+  // "-" בעמודת השנה = שנה שישית ומעלה = כללי.
+  const CANCEL_YEAR_GENERAL_KEY = "כללי";
+  const CANCEL_YEAR_ORDER = Object.freeze(["א", "ב", "ג", "ד", "ה", CANCEL_YEAR_GENERAL_KEY]);
+
+  function normalizeCancellationYear(value){
+    const raw = safeTrim(value);
+    if(!raw) return "";
+    if(/^[-–—]+$/.test(raw)) return CANCEL_YEAR_GENERAL_KEY;
+    const letter = raw.replace(/['"׳״\s]/g, "");
+    if(CANCEL_YEAR_ORDER.includes(letter)) return letter;
+    const asNum = Number(letter);
+    if(Number.isFinite(asNum) && asNum >= 1){
+      if(asNum >= 6) return CANCEL_YEAR_GENERAL_KEY;
+      return ["א", "ב", "ג", "ד", "ה"][asNum - 1] || "";
+    }
+    return letter || "";
+  }
+
+  // GI-CANCEL-STATS: סיווג סטטוסי דוח הביטולים.
+  // "ביטול חלקי" ו-"בוטל חלקי" נשמרים בנפרד לפי החלטה פתוחה.
+  // כדי לאחד אותם בעתיד — להעביר את שניהם לאותו key כאן, וזה מספיק.
+  const CANCEL_STATUS_KEYS = Object.freeze({
+    cancelled:       { key: "cancelled",       label: "בוטל",              tone: "danger"  },
+    cancelledPartial:{ key: "cancelledPartial", label: "בוטל חלקי",         tone: "danger"  },
+    partial:         { key: "partial",          label: "ביטול חלקי",        tone: "warn"    },
+    awaitingRetain:  { key: "awaitingRetain",   label: "ממתין לשימור",      tone: "info"    },
+    retained:        { key: "retained",         label: "שומר",              tone: "success" }
+  });
+
+  function classifyCancellationStatus(value){
+    const n = normalizeDailyReportAgentToken(value);
+    if(!n) return "";
+    if(n === "בוטל") return "cancelled";
+    if(n === "בוטל חלקי") return "cancelledPartial";
+    if(n === "ביטול חלקי") return "partial";
+    if(n === "שומר" || n === "שומרה" || n === "נשמר") return "retained";
+    if(n.includes("ממתין") && n.includes("שימור")) return "awaitingRetain";
+    return "";
+  }
+
+  // הסטטוסים שנכנסים לשורת "סה״כ ביטולים".
+  const CANCEL_TOTAL_KEYS = Object.freeze(["cancelled", "cancelledPartial", "partial"]);
+
   function isDailyReportIssuedStatus(value){
     const norm = normalizeDailyReportAgentToken(safeTrim(value));
     if(!norm) return false;
@@ -66389,7 +66446,8 @@ const CampaignLeadsStore = {
     init(){
       this.els.title = document.getElementById("cancellationsTitle");
       this.els.asOfLine = document.getElementById("cancellationsAsOfLine");
-      this.els.hint = document.getElementById("cancellationsHint");
+      // GI-CANCEL-STATS: מוני פרמיה במקום שורת ההסבר הישנה (#cancellationsHint)
+      this.els.stats = document.getElementById("cancellationsStats");
       this.els.meta = document.getElementById("cancellationsMeta");
       this.els.alert = document.getElementById("cancellationsAlert");
       this.els.sheetTabs = document.getElementById("cancellationsSheetTabs");
@@ -66791,26 +66849,119 @@ const CampaignLeadsStore = {
           this.els.asOfLine.textContent = "";
         }
       }
-      if(this.els.hint){
-        if(Auth.canUploadDailyReport()){
-          this.els.hint.textContent = report
-            ? "דוח פעיל — העלאת קובץ חדש מחליפה לחלוטין את הקודם (ללא שמירת היסטוריה)"
-            : 'בחר תאריך עדכון, העלה Excel (.xlsx) עם גיליונות הביטולים — העמודה "נציג" קובעת אילו שורות יראה כל נציג';
-        } else if(Auth.isTeamManager()){
-          this.els.hint.textContent = report
-            ? "מוצגות שורות הביטולים של הנציגים המשויכים אליך — ניתן לסנן לפי נציג וגיליון"
-            : "טרם הועלה דוח ביטולים למערכת";
-        } else {
-          this.els.hint.textContent = report
-            ? "מוצגות כל העמודות מהדוח — רק השורות שלך, בכל אחד מהגיליונות"
-            : "טרם הועלה דוח ביטולים למערכת";
-        }
-      }
+      // GI-CANCEL-STATS: המלל ההסברי הוסר; במקומו מוני פרמיה (paintCancelStats).
       const canUpload = Auth.canUploadDailyReport();
       if(this.els.asOfPickWrap) this.els.asOfPickWrap.hidden = !canUpload;
       if(this.els.asOfDate && canUpload && report?.reportAsOfDate){
         this.els.asOfDate.value = normalizeDailyReportAsOfInput(report.reportAsOfDate);
       }
+    },
+
+    // GI-CANCEL-STATS
+    computeCancelStats(sheet, rows){
+      const out = {
+        hasStatusCol: false,
+        hasYearCol: false,
+        byStatus: {},
+        totalCancelPremium: 0,
+        totalCancelCount: 0,
+        retainedByYear: []
+      };
+      Object.keys(CANCEL_STATUS_KEYS).forEach((k) => { out.byStatus[k] = { premium: 0, count: 0 }; });
+      if(!sheet) return out;
+      const cols = getDailyReportColumnIndexes(sheet);
+      if(cols.status < 0 || cols.premium < 0) return out;
+      out.hasStatusCol = true;
+      const yearCol = findCancellationYearCol(Array.isArray(sheet.headerRow) ? sheet.headerRow : []);
+      out.hasYearCol = yearCol >= 0;
+      const yearMap = new Map();
+      (rows || []).forEach((row) => {
+        const key = classifyCancellationStatus(getDailyReportCell(row, cols.status));
+        if(!key || !out.byStatus[key]) return;
+        const premium = parseDailyReportMoney(getDailyReportCell(row, cols.premium));
+        out.byStatus[key].premium += premium;
+        out.byStatus[key].count += 1;
+        if(CANCEL_TOTAL_KEYS.includes(key)){
+          out.totalCancelPremium += premium;
+          out.totalCancelCount += 1;
+        }
+        if(key === "retained" && yearCol >= 0){
+          const yr = normalizeCancellationYear(getDailyReportCell(row, yearCol)) || "ללא שנה";
+          const prev = yearMap.get(yr) || { label: yr, premium: 0, count: 0 };
+          prev.premium += premium;
+          prev.count += 1;
+          yearMap.set(yr, prev);
+        }
+      });
+      Object.keys(out.byStatus).forEach((k) => {
+        out.byStatus[k].premium = Math.round(out.byStatus[k].premium * 100) / 100;
+      });
+      out.totalCancelPremium = Math.round(out.totalCancelPremium * 100) / 100;
+      out.retainedByYear = Array.from(yearMap.values())
+        .map((it) => ({ ...it, premium: Math.round(it.premium * 100) / 100 }))
+        .sort((a, b) => {
+          const ia = CANCEL_YEAR_ORDER.indexOf(a.label);
+          const ib = CANCEL_YEAR_ORDER.indexOf(b.label);
+          return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+        });
+      return out;
+    },
+
+    formatCancelMoney(v){
+      const n = Number(v);
+      if(!Number.isFinite(n) || n <= 0) return "₪0";
+      const rounded = Math.round(n * 100) / 100;
+      try {
+        return "₪" + rounded.toLocaleString("he-IL", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+      } catch(_e) {
+        return "₪" + rounded;
+      }
+    },
+
+    paintCancelStats(sheet, rows){
+      const wrap = this.els.stats;
+      if(!wrap) return;
+      const stats = this.computeCancelStats(sheet, rows);
+      if(!stats.hasStatusCol){
+        wrap.hidden = true;
+        wrap.innerHTML = "";
+        return;
+      }
+      wrap.hidden = false;
+      const policyWord = (n) => (Number(n) === 1 ? "פוליסה" : "פוליסות");
+      const tile = (label, data, tone, extraCls) => `
+        <div class="lcCancelStat lcCancelStat--${tone}${extraCls ? " " + extraCls : ""}">
+          <span class="lcCancelStat__label">${escapeHtml(label)}</span>
+          <span class="lcCancelStat__value">${escapeHtml(this.formatCancelMoney(data.premium))}</span>
+          <span class="lcCancelStat__sub">${escapeHtml(String(data.count) + " " + policyWord(data.count))}</span>
+        </div>`;
+      const S = stats.byStatus;
+      const parts = [
+        tile(CANCEL_STATUS_KEYS.cancelled.label, S.cancelled, "danger"),
+        tile(CANCEL_STATUS_KEYS.cancelledPartial.label, S.cancelledPartial, "danger"),
+        tile(CANCEL_STATUS_KEYS.partial.label, S.partial, "warn"),
+        tile("סה״כ פרמיית ביטול", { premium: stats.totalCancelPremium, count: stats.totalCancelCount }, "danger", "lcCancelStat--total"),
+        tile(CANCEL_STATUS_KEYS.awaitingRetain.label, S.awaitingRetain, "info"),
+        tile("סה״כ פרמיה ששומרה", S.retained, "success")
+      ];
+      if(stats.hasYearCol){
+        const chips = stats.retainedByYear.length
+          ? stats.retainedByYear.map((it) => `
+              <span class="lcCancelYear__chip">
+                <span class="lcCancelYear__chipLabel">${escapeHtml(it.label)}</span>
+                <span class="lcCancelYear__chipValue">${escapeHtml(this.formatCancelMoney(it.premium))}</span>
+                <span class="lcCancelYear__chipCount">${escapeHtml(String(it.count))}</span>
+              </span>`).join("")
+          : `<span class="lcCancelYear__empty">אין שורות ששומרו</span>`;
+        parts.push(`
+          <div class="lcCancelStat lcCancelStat--years">
+            <span class="lcCancelStat__label">ששומרה — לפי שנת ביטול</span>
+            <div class="lcCancelYear__chips">${chips}</div>
+            <span class="lcCancelStat__sub">״כללי״ = שנה שישית ומעלה</span>
+          </div>`);
+      }
+      wrap.innerHTML = parts.join("");
+      wrap.classList.toggle("is-filtered", this.hasActiveFilters());
     },
 
     paint(){
@@ -66837,6 +66988,7 @@ const CampaignLeadsStore = {
       if(sheet) this.paintFilterOptions(sheet);
       const totalVisible = sheet ? CancellationsStore.getVisibleRowsForSheet(sheet).length : 0;
       const rows = sheet ? this.getFilteredRows(sheet) : [];
+      this.paintCancelStats(sheet, rows);
       this.paintMeta(sheet, rows.length, totalVisible);
       this.paintHeader(sheet);
       this.paintBody(sheet, rows);
