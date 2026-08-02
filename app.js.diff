@@ -1,0 +1,65 @@
+12625a12626,12627
+>       // GI-FIX: כנ"ל עבור לקוחות גנוזים.
+>       on($("#archivedCustomersSearchBtn"), "click", () => ArchivedCustomersUI.render());
+12628a12631,12632
+>       // GI-FIX: הכפתור "חפש" לא היה מחובר לכלום. אותה פעולה בדיוק כמו מאזין ה-input.
+>       on($("#proposalsSearchBtn"), "click", () => ProposalsUI.render());
+12630a12635,12636
+>       // GI-FIX: כנ"ל עבור הצעות אלמנטרי.
+>       on($("#elementaryProposalsSearchBtn"), "click", () => ElementaryProposalsUI.render());
+12632a12639,12640
+>       // GI-FIX: כנ"ל עבור "התהליכים שלי".
+>       on($("#myProcessesSearchBtn"), "click", () => ProcessesUI.render());
+12633a12642,12646
+>       // GI-FIX: שני הכפתורים בסרגל לא היו מחוברים. OpsEventsUI.openCreate כבר
+>       // מכיל בעצמו את בדיקת ההרשאה (Auth.isOps) ואת ensureShell, אז אין צורך
+>       // בשום עטיפה נוספת כאן.
+>       on($("#btnOpsCreateEvent"), "click", () => { try { OpsEventsUI.openCreate(""); } catch(_e) {} });
+>       on($("#btnOpsOpenEvents"), "click", () => { try { void OpsEventsUI.openList(); } catch(_e) {} });
+29564a29578,29592
+>         // GI-FIX: מסך בחירת המוצר (step<=0) הציג כרטיסי "רכב"/"דירה" עם
+>         // data-elementary-product שאיש לא קרא — לחיצה לא עשתה כלום והמשתמש
+>         // נתקע. מחברים אותם: בחירה קובעת את המוצר ומעבירה לשלב 1.
+>         if(this.step <= 0){
+>           $$("[data-elementary-product]", this.els.body).forEach((btn) => {
+>             on(btn, "click", () => {
+>               if(btn.disabled) return;
+>               const key = safeTrim(btn.getAttribute("data-elementary-product"));
+>               if(!key) return;
+>               this.elementaryProduct = key;
+>               this.step = 1;
+>               this.render();
+>             });
+>           });
+>         }
+41137a41166,41179
+>         // GI-FIX 41194: כל render של שלב 5 רשם מאזין click חדש על document
+>         // ולא הסיר את הקודם, כך שהם נערמו לאורך הסשן. מסירים תמיד את הקודם
+>         // לפני רישום חדש — בדיוק כמו התבנית של dropdown קופת חולים (שורה 500).
+>         if(this._lcNpCoDdOutsideHandler){
+>           document.removeEventListener("click", this._lcNpCoDdOutsideHandler);
+>           this._lcNpCoDdOutsideHandler = null;
+>         }
+>         // ניקוי הגנתי: תפריט שנשאר תלוי ישירות תחת body מ-render קודם.
+>         // בשלב הזה התפריט ה"חי" עדיין נמצא בתוך els.body, ולכן כל מה
+>         // שיושב ישירות ב-body הוא בהכרח יתום.
+>         document.querySelectorAll("body > #lcNpCoDdMenu").forEach((stale) => {
+>           if(!this.els.body || !this.els.body.contains(stale)) stale.remove();
+>         });
+> 
+41167a41210,41215
+>             // GI-FIX 41194: openDd מעביר את התפריט ל-body כדי לחמוק מ-overflow.
+>             // בלי ההחזרה הזו הוא נשאר שם גם אחרי ש-els.body נדרס, ונוצרים
+>             // כמה אלמנטים עם אותו id="lcNpCoDdMenu". מחזירים אותו לקן.
+>             if(coDdWrap && coDdMenu.parentElement === document.body){
+>               coDdWrap.appendChild(coDdMenu);
+>             }
+41194c41242
+<           document.addEventListener('click', function closeDdOutside(ev){
+---
+>           this._lcNpCoDdOutsideHandler = function closeDdOutside(ev){
+41198c41246,41247
+<           }, { once: false, capture: false });
+---
+>           };
+>           document.addEventListener('click', this._lcNpCoDdOutsideHandler, { once: false, capture: false });

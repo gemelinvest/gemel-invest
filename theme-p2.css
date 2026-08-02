@@ -1,0 +1,3267 @@
+/* =====================================================================
+   GEMEL INVEST - Enterprise Theme Layer
+   PRIORITY 2 ADDENDUM  |  BUILD: 20260801-p2-wizard-shell
+
+   מעבר האשפים (בריאות וסיכונים + אלמנטרי) לשפת העיצוב החדשה.
+
+   שני האשפים חולקים את אותו מעטפת DOM אחת (#lcWizard). סעיף 33 כבר
+   החיל את שפת ה-panel על ‎.lcWizard__panel‎; הסעיפים כאן סוגרים את
+   הכרום ואת תוכן השלבים העיקריים.
+
+   כיסוי נוכחי:
+     37–39  מעטפת, גבהי פקדים, דפוס מקטע
+     40–42  בריאות: פוליסות חדשות / הצהרת בריאות / סיום
+     43     אלמנטרי: כל השלבים
+     44–47  בריאות: פרטי לקוח / התאמת צרכים / פוליסות קיימות / פרטי משלם
+
+   שים לב: ‎#lcWizard‎ נמצא מחוץ לרשימת ה-view ids של סעיף 34
+   (FLAT PASS II), ולכן שום דבר בתוך האשף לא עבר השטחה עד שכבה זו.
+
+   מוסכמת ה-specificity לא משתנה: ‎:not(#\9):not(#\9)‎ שווה שני יחידות
+   ID ולכן גובר על כללי ה-#id של app.css. ‎!important‎ נשמר רק היכן
+   ש-app.css הצהיר ‎!important‎ על אותו property.
+   ===================================================================== */
+
+
+/* =====================================================================
+   37. WIZARD SHELL - המעטפת המשותפת לשני האשפים
+   ===================================================================== */
+
+/* --- 37.1 מסך מלא --------------------------------------------------
+   ה-backdrop כבר מנורמל בסעיף 33 דרך [class*="__backdrop"].
+   כאן רק ה-panel: מסגרת שקטה במקום צל של 90px.                       */
+
+.lcWizard__panel:not(#\9):not(#\9){
+  inset: var(--gi-s3) !important;
+  height: calc(100vh - (var(--gi-s3) * 2)) !important;
+  max-height: calc(100vh - (var(--gi-s3) * 2)) !important;
+  border-radius: var(--gi-r-card) !important;
+  background: var(--gi-surface) !important;
+  border: 1px solid var(--gi-border) !important;
+  box-shadow: var(--gi-sh-lg) !important;
+  overflow: hidden !important;
+}
+
+
+/* --- 37.2 כותרת ----------------------------------------------------
+   היה: gradient תכלת→לבן. עכשיו: שורה לבנה עם קו שיער, כמו ה-topbar. */
+
+.lcWizard__head:not(#\9):not(#\9){
+  min-height: 56px;
+  padding: var(--gi-s2) var(--gi-s5) !important;
+  gap: var(--gi-s3);
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border-bottom: 1px solid var(--gi-border) !important;
+}
+
+.lcWizard.is-elementaryFlow:not(#\9):not(#\9) .lcWizard__head{
+  min-height: 64px !important;
+  padding-block: var(--gi-s2) !important;
+}
+
+.lcWizard__kicker:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-3) !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.lcWizard__title:not(#\9):not(#\9){
+  margin-top: 2px !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  line-height: 1.35 !important;
+  color: var(--gi-text) !important;
+  text-shadow: none !important;
+}
+
+.lcWizard__close:not(#\9):not(#\9){
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  color: var(--gi-text-3) !important;
+  box-shadow: none !important;
+}
+
+.lcWizard__close:hover:not(#\9):not(#\9){
+  background: var(--gi-surface-2) !important;
+  border-color: var(--gi-border-strong) !important;
+  color: var(--gi-text) !important;
+}
+
+/* מחוון שמירה אוטומטית - צבעי הטוקנים במקום ה-rgba הידניים */
+.lcAutoSaveIndicator:not(#\9):not(#\9){
+  padding: 3px var(--gi-s2) !important;
+  border-radius: var(--gi-r-pill) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+
+.lcAutoSaveIndicator--saving:not(#\9):not(#\9){
+  background: var(--gi-warn-soft) !important;
+  color: var(--gi-warn) !important;
+}
+
+.lcAutoSaveIndicator--saved:not(#\9):not(#\9){
+  background: var(--gi-success-soft) !important;
+  color: var(--gi-success) !important;
+}
+
+
+/* --- 37.3 פס שלבים -------------------------------------------------
+   גלולות ה-.lcStep עצמן כבר מטופלות בסעיף 15. כאן המכל ופס ההתקדמות. */
+
+.lcWizard__stepper:not(#\9):not(#\9){
+  padding: var(--gi-s3) var(--gi-s5) var(--gi-s2) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border-bottom: 1px solid var(--gi-border) !important;
+}
+
+.lcWizard__stepper:not(#\9):not(#\9) .lcSteps{
+  gap: var(--gi-s2) !important;
+  padding-bottom: var(--gi-s2) !important;
+}
+
+.lcWizard__progressBar:not(#\9):not(#\9){
+  height: 3px !important;
+  border-radius: var(--gi-r-pill) !important;
+  background: var(--gi-surface-3) !important;
+  background-image: none !important;
+}
+
+.lcWizard__progressFill:not(#\9):not(#\9){
+  background: var(--gi-primary) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  transition: width .25s ease !important;
+}
+
+.lcStep.is-jumpable:hover:not(#\9):not(#\9){
+  border-color: var(--gi-primary) !important;
+  background: var(--gi-primary-soft) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+
+/* --- 37.4 טאבי מבוטחים ---------------------------------------------
+   app.css הגדיל אותם ל-15px/900 ב-"Wizard Typography Boost" והוסיף צל
+   כחול ל-active. מיושרים כאן לגלולות ה-.lcStep.                        */
+
+.lcWizard__tabs:not(#\9):not(#\9){
+  padding: var(--gi-s3) var(--gi-s5) !important;
+  gap: var(--gi-s3) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  border-bottom: 1px solid var(--gi-border) !important;
+}
+
+.lcTabs:not(#\9):not(#\9){ gap: var(--gi-s2) !important; }
+
+.lcTabs:not(#\9):not(#\9) .lcTab,
+.lcTab:not(#\9):not(#\9){
+  padding: 6px var(--gi-s3) !important;
+  gap: var(--gi-s2) !important;
+  border-radius: var(--gi-r-pill) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  color: var(--gi-text-3) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+  transition: background .15s ease, border-color .15s ease, color .15s ease !important;
+}
+
+.lcTabs:not(#\9):not(#\9) .lcTab:hover{
+  background: var(--gi-surface-2) !important;
+  border-color: var(--gi-border-strong) !important;
+  color: var(--gi-text) !important;
+}
+
+.lcTabs:not(#\9):not(#\9) .lcTab.is-active,
+.lcTab.is-active:not(#\9):not(#\9){
+  background: var(--gi-primary-soft) !important;
+  border-color: var(--gi-primary) !important;
+  color: var(--gi-primary) !important;
+  box-shadow: none !important;
+}
+
+.lcTab__badge:not(#\9):not(#\9){
+  width: 6px !important;
+  height: 6px !important;
+  background: var(--gi-border-strong) !important;
+}
+
+.lcTab__badge.ok:not(#\9):not(#\9){   background: var(--gi-success) !important; }
+.lcTab__badge.warn:not(#\9):not(#\9){ background: var(--gi-warn) !important; }
+.lcTab__badge.err:not(#\9):not(#\9){  background: var(--gi-danger) !important; }
+
+.lcWizard__addIns:not(#\9):not(#\9){
+  flex: 0 0 auto !important;
+  white-space: nowrap !important;
+}
+
+.lcDangerLink:not(#\9):not(#\9){
+  color: var(--gi-text-muted) !important;
+  font-weight: 500 !important;
+}
+
+.lcDangerLink:hover:not(#\9):not(#\9){ color: var(--gi-danger) !important; }
+
+
+/* --- 37.5 גוף האשף -------------------------------------------------
+   שינוי מהותי: הגוף מקבל את רקע הקנבס. עד עכשיו כרטיסים לבנים ישבו על
+   panel לבן ונעלמו. אפור בהיר מאחוריהם מחזיר את ההיררכיה שיש במסכים
+   הראשיים.                                                            */
+
+.lcWizard__body:not(#\9):not(#\9){
+  padding: var(--gi-s5) !important;
+  background: var(--gi-bg) !important;
+  background-image: none !important;
+}
+
+@media (max-width: 720px){
+  .lcWizard__panel:not(#\9):not(#\9){
+    inset: 0 !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+  }
+  .lcWizard__head:not(#\9):not(#\9),
+  .lcWizard__stepper:not(#\9):not(#\9),
+  .lcWizard__tabs:not(#\9):not(#\9),
+  .lcWizard__body:not(#\9):not(#\9),
+  .lcWizard__foot:not(#\9):not(#\9){
+    padding-inline: var(--gi-s4) !important;
+  }
+}
+
+/* מקטע פנימי בתוך הגוף - שפת הכרטיס */
+.lcWSection:not(#\9):not(#\9){
+  padding: var(--gi-s5) !important;
+  border-radius: var(--gi-r-card) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: var(--gi-sh-xs) !important;
+}
+
+.lcWSection + .lcWSection:not(#\9):not(#\9){ margin-top: var(--gi-s4) !important; }
+
+.lcWTitle:not(#\9):not(#\9){
+  margin-bottom: var(--gi-s2) !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  line-height: 1.35 !important;
+  color: var(--gi-text) !important;
+  text-shadow: none !important;
+}
+
+
+/* --- 37.6 פוטר -----------------------------------------------------  */
+
+.lcWizard__foot:not(#\9):not(#\9){
+  padding: var(--gi-s3) var(--gi-s5) !important;
+  gap: var(--gi-s2) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border-top: 1px solid var(--gi-border) !important;
+  box-shadow: none !important;
+}
+
+.lcWizard__footActions:not(#\9):not(#\9),
+.lcWizard__footAside:not(#\9):not(#\9){ gap: var(--gi-s2) !important; }
+
+/* כפתור "צפייה בדוח התפעולי": היה gradient + הבזק + pulse בעת שחרור
+   הנעילה. נשאר סימון ברור של מצב, בלי התנועה.                          */
+.lcWizard__previewBtn:not(#\9):not(#\9){
+  min-width: 0 !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  color: var(--gi-text-2) !important;
+  box-shadow: none !important;
+  transform: none !important;
+  animation: none !important;
+  transition: background .15s ease, border-color .15s ease, color .15s ease !important;
+}
+
+.lcWizard__previewBtn.is-ready:not(#\9):not(#\9){
+  background: var(--gi-primary-soft) !important;
+  border-color: var(--gi-primary) !important;
+  color: var(--gi-primary) !important;
+  box-shadow: none !important;
+}
+
+.lcWizard__previewBtn.is-ready:hover:not(#\9):not(#\9){
+  background: var(--gi-primary) !important;
+  border-color: var(--gi-primary) !important;
+  color: #FFFFFF !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.lcWizard__previewBtn:not(#\9):not(#\9)::after{
+  content: none !important;
+  display: none !important;
+  animation: none !important;
+}
+
+
+/* --- 37.7 מגירת חוסרים (אלמנטרי) ------------------------------------ */
+
+.lcElemValDrawer__backdrop:not(#\9):not(#\9){
+  background: rgba(15,23,42,.45) !important;
+  backdrop-filter: blur(2px) !important;
+  -webkit-backdrop-filter: blur(2px) !important;
+}
+
+.lcElemValDrawer__panel:not(#\9):not(#\9){
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border-inline-start: 1px solid var(--gi-border) !important;
+  box-shadow: var(--gi-sh-lg) !important;
+}
+
+.lcElemValDrawer__head:not(#\9):not(#\9){
+  padding: var(--gi-s4) var(--gi-s5) !important;
+  border-bottom: 1px solid var(--gi-border) !important;
+}
+
+.lcElemValDrawer__kicker:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcElemValDrawer__title:not(#\9):not(#\9){
+  margin-top: var(--gi-s1) !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcElemValDrawer__body:not(#\9):not(#\9){ padding: var(--gi-s4) var(--gi-s5) !important; }
+
+.lcElemValDrawer__item:not(#\9):not(#\9){
+  margin: var(--gi-s2) 0 !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-2) !important;
+}
+
+.lcElemValDrawer__foot:not(#\9):not(#\9){
+  padding: var(--gi-s3) var(--gi-s5) !important;
+  border-top: 1px solid var(--gi-border) !important;
+}
+
+
+/* =====================================================================
+   38. WIZARD CONTROL HEIGHTS
+
+   שדות הקלט בתוך שני האשפים נוחתים כרגע על תשעה גבהים שונים
+   (32 / 36 / 38 / 40 / 44 / 46 / 48 / 50 / 56 / 58 / 64px). הסיבה:
+   סעיף 13 מגדיר padding ו-radius אבל לא height, ולכן ה-height
+   הישן ב-app.css שורד גם אחרי שכל שאר המאפיינים הוחלפו. התוצאה היא
+   שדה בגובה 48px עם טקסט 13px - ריווח פנימי שנראה שבור.
+
+   כאן נסגר הפער. textarea לא נכלל: הוא זקוק לגובה משלו.
+   ===================================================================== */
+
+.lcWizard:not(#\9):not(#\9) .input:not(textarea),
+.lcWizard:not(#\9):not(#\9) input[type="text"],
+.lcWizard:not(#\9):not(#\9) input[type="number"],
+.lcWizard:not(#\9):not(#\9) input[type="tel"],
+.lcWizard:not(#\9):not(#\9) input[type="email"],
+.lcWizard:not(#\9):not(#\9) input[type="date"],
+.lcWizard:not(#\9):not(#\9) input[type="search"],
+.lcWizard:not(#\9):not(#\9) select{
+  height: auto !important;
+  min-height: 38px !important;
+  padding: 9px var(--gi-s3) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+}
+
+/* וריאנט קומפקטי (טבלאות אלמנטרי) - נשאר קומפקטי, אבל בשפה אחת */
+.lcWizard:not(#\9):not(#\9) .input--compact{
+  min-height: 32px !important;
+  padding: 5px var(--gi-s2) !important;
+  font-size: 12px !important;
+}
+
+.lcWizard:not(#\9):not(#\9) textarea,
+.lcWizard:not(#\9):not(#\9) textarea.input{
+  height: auto !important;
+  padding: var(--gi-s2) var(--gi-s3) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  line-height: 1.5 !important;
+  box-shadow: none !important;
+}
+
+/* התוויות באשף הועלו ל-900 ב-app.css. מיושרות ל-.label של סעיף 13. */
+.lcWizard:not(#\9):not(#\9) .label,
+.lcWizard:not(#\9):not(#\9) .lcLabel{
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  color: var(--gi-text-2) !important;
+}
+
+.lcWizard:not(#\9):not(#\9) .help{
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcWizard:not(#\9):not(#\9) .formGrid{
+  padding: 0 !important;
+  gap: var(--gi-s4) !important;
+}
+
+
+/* =====================================================================
+   39. WIZARD SECTION PATTERN
+
+   בתוך שני האשפים קיימים ארבעה דפוסים שונים ל"כרטיס מקטע":
+     .lcNpSection        - הבלוק החדש ביותר ב-app.css. לבן, גבול 1.5px,
+                           radius 14px, כותרת אפורה בהירה. כמעט זהה
+                           לשפה החדשה - אבל עם צבעי hex קשיחים.
+     .lcOpSection        - radius 22px + צל 28px + כותרת 20px/950
+     .lcWSection         - radius 18px + rgba(255,255,255,.82)
+     .lcElementarySection- כותרות בלבד, ללא מכל
+
+   ההחלטה: ‎.lcNpSection‎ הוא הדפוס הקנוני. הוא מקבל טוקנים במקום ה-hex
+   הקשיח, וכל השאר מיושר אליו. כך שלב 5 באשף הבריאות ושלב 6 באלמנטרי
+   נראים כמו אותו מוצר.
+   ===================================================================== */
+
+.lcNpSection:not(#\9):not(#\9){
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  border-radius: var(--gi-r-card) !important;
+  box-shadow: var(--gi-sh-xs) !important;
+}
+
+.lcNpSection__head:not(#\9):not(#\9){
+  padding: var(--gi-s3) var(--gi-s5) !important;
+  gap: var(--gi-s3) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  border-bottom: 1px solid var(--gi-border) !important;
+}
+
+.lcNpSection__num:not(#\9):not(#\9){
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: var(--gi-r-ctl) !important;
+  background: var(--gi-primary) !important;
+  color: #FFFFFF !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+.lcNpSection__num--done:not(#\9):not(#\9){ background: var(--gi-success) !important; }
+
+.lcNpSection__icon:not(#\9):not(#\9){  color: var(--gi-primary) !important; }
+
+.lcNpSection__title:not(#\9):not(#\9){
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcNpSection__sub:not(#\9):not(#\9),
+.lcNpSection__summary:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcNpSection__body:not(#\9):not(#\9){ padding: var(--gi-s5) !important; }
+
+.lcNpSection--done:not(#\9):not(#\9) .lcNpSection__head{
+  background: var(--gi-success-soft) !important;
+  border-bottom-color: rgba(22,163,74,.20) !important;
+}
+
+.lcNpSection--locked:not(#\9):not(#\9) .lcNpSection__head{
+  background: var(--gi-surface-3) !important;
+}
+
+.lcNpSection--validationMiss:not(#\9):not(#\9){
+  border-color: var(--gi-danger) !important;
+  box-shadow: none !important;
+}
+
+.lcNpSection--validationMiss:not(#\9):not(#\9) > .lcNpSection__head{
+  background: var(--gi-danger-soft) !important;
+  border-bottom-color: rgba(220,38,38,.20) !important;
+}
+
+.lcNpSection--validationMiss:not(#\9):not(#\9) .lcNpSection__title{
+  color: var(--gi-danger) !important;
+}
+
+.lcNpSections:not(#\9):not(#\9){ gap: var(--gi-s4) !important; }
+
+
+/* =====================================================================
+   40. STEP 5 - פוליסות חדשות
+
+   557 כללים, 152 מהם בשפה הישנה - השלב הכי כבד באשף. שתי שכבות שונות
+   חיות בו זו לצד זו: רכיבי ה-lcNp* (חדשים, כמעט תקינים - צריכים רק
+   טוקנים) ורכיבי ה-lcPol* (glass card מקורי עם backdrop-filter,
+   gradients וזהב). שתיהן מיושרות כאן לאותה שפה.
+   ===================================================================== */
+
+/* --- 40.1 בחירת מוצר --- */
+.lcNpProductCard:not(#\9):not(#\9){
+  padding: var(--gi-s4) var(--gi-s3) var(--gi-s3) !important;
+  border: 1px solid var(--gi-border) !important;
+  border-radius: var(--gi-r-md) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  transition: border-color .15s ease, background-color .15s ease !important;
+}
+
+.lcNpProductCard:hover:not(:disabled):not(#\9):not(#\9){
+  border-color: var(--gi-primary) !important;
+  background: var(--gi-primary-soft) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.lcNpProductCard--selected:not(#\9):not(#\9){
+  border-color: var(--gi-primary) !important;
+  background: var(--gi-primary-soft) !important;
+  box-shadow: none !important;
+}
+
+.lcNpProductCard__icon:not(#\9):not(#\9){ color: var(--gi-primary) !important; }
+
+.lcNpProductCard__name:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcNpProductCard__sub:not(#\9):not(#\9){
+  font-size: 11px !important;
+  font-weight: 400 !important;
+  color: var(--gi-text-3) !important;
+}
+
+
+/* --- 40.2 כיסויים --- */
+.lcNpCoverItem:not(#\9):not(#\9){
+  padding: var(--gi-s2) var(--gi-s3) !important;
+  border: 1px solid var(--gi-border) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.lcNpCoverItem:hover:not(#\9):not(#\9){
+  border-color: var(--gi-primary) !important;
+  background: var(--gi-primary-soft) !important;
+}
+
+.lcNpCoverItem--checked:not(#\9):not(#\9){
+  border-color: var(--gi-primary) !important;
+  background: var(--gi-primary-soft) !important;
+}
+
+.lcNpCoverItem__check:not(#\9):not(#\9){ accent-color: var(--gi-primary) !important; }
+
+.lcNpCoverItem__label:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcNpCoverItem__age:not(#\9):not(#\9){
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcNpCoverGroup:not(#\9):not(#\9),
+.lcCoverGroup:not(#\9):not(#\9){
+  padding: var(--gi-s3) !important;
+  border-radius: var(--gi-r-md) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.lcNpCoverGroup__label:not(#\9):not(#\9),
+.lcCoverGroup__label:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  color: var(--gi-text-2) !important;
+  border-bottom: 1px solid var(--gi-border) !important;
+}
+
+
+/* --- 40.3 בורר חברה עם לוגו --- */
+.lcNpCoDd__trigger:not(#\9):not(#\9){
+  height: 44px !important;
+  padding: 0 var(--gi-s3) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+
+.lcNpCoDd__trigger:hover:not(#\9):not(#\9),
+.lcNpCoDd__trigger[aria-expanded="true"]:not(#\9):not(#\9){
+  border-color: var(--gi-primary) !important;
+  box-shadow: none !important;
+}
+
+.lcNpCoDd__trigger:focus-visible:not(#\9):not(#\9){
+  border-color: var(--gi-primary) !important;
+  box-shadow: var(--focus) !important;
+}
+
+.lcNpCoDd__menu:not(#\9):not(#\9){
+  border: 1px solid var(--gi-border) !important;
+  border-radius: var(--gi-r-md) !important;
+  background: var(--gi-surface) !important;
+  box-shadow: var(--gi-sh-lg) !important;
+}
+
+.lcNpCoDd__item:not(#\9):not(#\9){
+  border-radius: var(--gi-r-ctl) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcNpCoDd__item:hover:not(#\9):not(#\9){ background: var(--gi-surface-2) !important; }
+
+.lcNpCoDd__item.is-selected:not(#\9):not(#\9){
+  background: var(--gi-primary-soft) !important;
+  color: var(--gi-primary) !important;
+}
+
+.lcNpAddBtn:not(#\9):not(#\9){
+  padding: var(--gi-s2) var(--gi-s5) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  border-radius: var(--gi-r-ctl) !important;
+  background: var(--gi-primary) !important;
+  background-image: none !important;
+  color: #FFFFFF !important;
+  box-shadow: none !important;
+}
+
+.lcNpAddBtn:hover:not(#\9):not(#\9){
+  background: var(--gi-primary-hover) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+
+/* --- 40.4 כרטיס פוליסה שנוספה --------------------------------------
+   ה-glass המקורי: rgba(255,255,255,.06) + backdrop blur. הוא נראה שקוף
+   רק כי הרקע מאחוריו היה כהה פעם. על רקע בהיר זה כרטיס בלי גוף.       */
+
+.lcPolCard:not(#\9):not(#\9){
+  padding: var(--gi-s4) !important;
+  border: 1px solid var(--gi-border) !important;
+  border-radius: var(--gi-r-md) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: var(--gi-sh-xs) !important;
+}
+
+.lcPolCard--premium:not(#\9):not(#\9),
+.lcPolCard.lcPolCard--premium:not(#\9):not(#\9),
+.lcPolCard--premium.lcPolCard--square:not(#\9):not(#\9){
+  border-radius: var(--gi-r-md) !important;
+  border: 1px solid var(--gi-border) !important;
+  background-color: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: var(--gi-sh-xs) !important;
+}
+
+/* פס הזהב נשאר כסימון "פרימיום" - שטוח, 3px, בלי זוהר. */
+.lcPolCard--premium:not(#\9):not(#\9) .lcPolCard__goldAccent{
+  width: 3px !important;
+  background: var(--gi-warn) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.lcPolTitle:not(#\9):not(#\9),
+.lcPolCard--premium:not(#\9):not(#\9) .lcPolTitle,
+.lcPolCard--premium.lcPolCard--square:not(#\9):not(#\9) .lcPolTitle{
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcPolLogo:not(#\9):not(#\9),
+.lcPolCard--premium:not(#\9):not(#\9) .lcPolLogoWrap{
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+}
+
+.lcChip:not(#\9):not(#\9),
+.lcPolCard--premium:not(#\9):not(#\9) .lcChip{
+  padding: 2px var(--gi-s2) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface-3) !important;
+  background-image: none !important;
+  color: var(--gi-text-2) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+
+.lcPolStat__value:not(#\9):not(#\9),
+.lcPolCard__premiumAmount:not(#\9):not(#\9),
+.lcPolCard__sumLabel:not(#\9):not(#\9),
+.lcPolCard__sumSym:not(#\9):not(#\9),
+.lcPolCard__breakdownItem__value:not(#\9):not(#\9){
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcPolStaticValue:not(#\9):not(#\9),
+.lcPolCard__breakdownItem:not(#\9):not(#\9){
+  border-radius: var(--gi-r-ctl) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border-soft) !important;
+  font-weight: 600 !important;
+}
+
+.lcPolCard__warn:not(#\9):not(#\9){
+  border-radius: var(--gi-r-ctl) !important;
+  background: var(--gi-warn-soft) !important;
+  background-image: none !important;
+  border: 1px solid rgba(217,119,6,.20) !important;
+  color: var(--gi-warn) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+.lcPolInfoChip:not(#\9):not(#\9){
+  border-radius: var(--gi-r-pill) !important;
+  background: var(--gi-surface-3) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  color: var(--gi-text-2) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+.lcPolInfoChip--discount:not(#\9):not(#\9),
+.lcPolInfoChip--addon:not(#\9):not(#\9){
+  background: var(--gi-warn-soft) !important;
+  background-image: none !important;
+  border-color: rgba(217,119,6,.20) !important;
+  color: var(--gi-warn) !important;
+}
+
+.lcPolInfoChip--success:not(#\9):not(#\9),
+.lcPolInfoChip--total:not(#\9):not(#\9){
+  background: var(--gi-success-soft) !important;
+  background-image: none !important;
+  border-color: rgba(22,163,74,.20) !important;
+  color: var(--gi-success) !important;
+}
+
+.lcPolInfoChip--umbrella:not(#\9):not(#\9){
+  background: var(--gi-primary-soft) !important;
+  background-image: none !important;
+  border-color: rgba(37,99,235,.18) !important;
+  color: var(--gi-primary) !important;
+}
+
+/* כפתור ההנחה: היה זהב עם gradient. עכשיו כפתור משני רגיל. */
+.lcPolActionBtn--discount:not(#\9):not(#\9),
+.lcPolCard--premium.lcPolCard--square:not(#\9):not(#\9) .lcPolActionBtn--discount{
+  background: var(--gi-warn-soft) !important;
+  background-image: none !important;
+  border: 1px solid rgba(217,119,6,.24) !important;
+  color: var(--gi-warn) !important;
+  box-shadow: none !important;
+}
+
+.lcPolActionBtn--discount:hover:not(#\9):not(#\9),
+.lcPolCard--premium.lcPolCard--square:not(#\9):not(#\9) .lcPolActionBtn--discount:hover{
+  background: var(--gi-warn) !important;
+  background-image: none !important;
+  border-color: var(--gi-warn) !important;
+  color: #FFFFFF !important;
+}
+
+
+/* --- 40.5 פקדים ייעודיים של הפוליסה --- */
+.lcPolControlShell:not(#\9):not(#\9),
+.lcPolReferenceBlock:not(#\9):not(#\9) .lcPolControlShell{
+  min-height: 38px !important;
+  border-radius: var(--gi-r-ctl) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  box-shadow: none !important;
+}
+
+.lcPolSelect:not(#\9):not(#\9),
+.lcPolDateInput:not(#\9):not(#\9),
+.lcPolMoneyWrap__input:not(#\9):not(#\9){
+  min-height: 38px !important;
+  border-radius: var(--gi-r-ctl) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.lcPolMoneyWrap__sym:not(#\9):not(#\9),
+.lcPolReferenceBlock:not(#\9):not(#\9) .lcPolMoneyWrap__sym{
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcPolField--premiumReference:not(#\9):not(#\9) .lcPolMoneyWrap__input{
+  font-size: 15px !important;
+  font-weight: 600 !important;
+}
+
+.lcPolCoverCompact:not(#\9):not(#\9),
+.lcPolCoverCompact--reference:not(#\9):not(#\9),
+.lcPolCard--premium:not(#\9):not(#\9) .lcPolCoverCompact{
+  border-radius: var(--gi-r-ctl) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border-soft) !important;
+  box-shadow: none !important;
+}
+
+.lcPolCoverCompact__text:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-2) !important;
+}
+
+.lcPolCoverCompact__count:not(#\9):not(#\9),
+.lcPolCard--premium.lcPolCard--square:not(#\9):not(#\9) .lcPolCoverCompact__count{
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: var(--gi-primary) !important;
+}
+
+.lcPolCoverCompact__btn:not(#\9):not(#\9),
+.lcPolCard--premium:not(#\9):not(#\9) .lcPolCoverCompact__btn{
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  color: var(--gi-text-2) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+
+/* --- 40.6 תיבת פעולות על פוליסה קיימת --- */
+.lcPolicyActionBox:not(#\9):not(#\9),
+.lcPolicyActionBox--compact:not(#\9):not(#\9){
+  border-radius: var(--gi-r-md) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  box-shadow: none !important;
+}
+
+.lcPolicyActionBox--readonly:not(#\9):not(#\9){
+  background: var(--gi-warn-soft) !important;
+  background-image: none !important;
+  border-color: rgba(217,119,6,.20) !important;
+}
+
+.lcPolicyActionBox__title:not(#\9):not(#\9),
+.lcPolicyActionBox__annexTitle:not(#\9):not(#\9),
+.lcPolicyActionBox__execTitle:not(#\9):not(#\9){
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcPolicyActionBox__execOption:not(#\9):not(#\9){
+  border-radius: var(--gi-r-ctl) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+}
+
+.lcPolicyActionBox__execOption:hover:not(#\9):not(#\9){
+  border-color: var(--gi-border-strong) !important;
+  background: var(--gi-surface-2) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.lcPolicyActionBox__execOption.is-active:not(#\9):not(#\9){
+  background: var(--gi-primary-soft) !important;
+  background-image: none !important;
+  border-color: var(--gi-primary) !important;
+  color: var(--gi-primary) !important;
+}
+
+.lcPolicyActionBox__execMark:not(#\9):not(#\9){
+  font-weight: 600 !important;
+  color: var(--gi-primary) !important;
+}
+
+
+/* --- 40.7 ביטוח מטרייה (ריסק) --------------------------------------
+   היה radius 24px, gradient כפול, toggle כחול־כהה עם צל 30px וכותרת
+   22px/950. עכשיו: אותו מבנה, בשפה של כרטיס מקטע.                     */
+
+.lcRiskUmbrellaBox:not(#\9):not(#\9){
+  border-radius: var(--gi-r-card) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  box-shadow: var(--gi-sh-xs) !important;
+}
+
+.lcRiskUmbrellaBox__eyebrow:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcRiskUmbrellaBox__title:not(#\9):not(#\9){
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcRiskUmbrellaBox__intro:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcRiskUmbrellaBox__toggle:not(#\9):not(#\9){
+  border-radius: var(--gi-r-ctl) !important;
+  background: var(--gi-primary) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-primary) !important;
+  box-shadow: none !important;
+}
+
+.lcRiskUmbrellaBox__toggle:hover:not(#\9):not(#\9){
+  background: var(--gi-primary-hover) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.lcRiskUmbrellaBox__toggleText:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+
+.lcRiskUmbrellaBox__panel:not(#\9):not(#\9){
+  border-radius: var(--gi-r-md) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+}
+
+.lcRiskUmbrellaBox__panelTitle:not(#\9):not(#\9){
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcRiskUmbrellaField:not(#\9):not(#\9){
+  padding: var(--gi-s3) !important;
+  border-radius: var(--gi-r-md) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  box-shadow: none !important;
+}
+
+.lcRiskUmbrellaField:not(#\9):not(#\9) .lcLabel{
+  margin-bottom: var(--gi-s2) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-2) !important;
+}
+
+.lcRiskUmbrellaField__input:not(#\9):not(#\9){
+  min-height: 38px !important;
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border) !important;
+  box-shadow: none !important;
+}
+
+
+/* --- 40.8 פיצול מבוטחים / בורר חברת ייחוס --- */
+.lcSplitCard:not(#\9):not(#\9){
+  border-radius: var(--gi-r-md) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  box-shadow: none !important;
+}
+
+.lcSplitCard:hover:not(#\9):not(#\9){
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  border-color: var(--gi-border-strong) !important;
+}
+
+.lcSplitCard.is-active:not(#\9):not(#\9){
+  background: var(--gi-primary-soft) !important;
+  background-image: none !important;
+  border-color: var(--gi-primary) !important;
+}
+
+.lcSplitCard.is-active:not(#\9):not(#\9)::before{
+  background: var(--gi-primary) !important;
+  background-image: none !important;
+}
+
+.lcCoCard:not(#\9):not(#\9),
+.lcCoGrid--reference:not(#\9):not(#\9) .lcCoCard{
+  border-radius: var(--gi-r-md) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 1px solid var(--gi-border) !important;
+  box-shadow: none !important;
+}
+
+.lcCoCard:hover:not(#\9):not(#\9),
+.lcCoGrid--reference:not(#\9):not(#\9) .lcCoCard:hover{
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  border-color: var(--gi-border-strong) !important;
+}
+
+.lcCoGrid--reference:not(#\9):not(#\9) .lcCoCard.is-selected{
+  border-color: var(--gi-primary) !important;
+  background: var(--gi-primary-soft) !important;
+}
+
+.lcCoGrid--reference:not(#\9):not(#\9) .lcCoCard.is-selected::after{
+  background: var(--gi-primary) !important;
+  background-image: none !important;
+  font-weight: 600 !important;
+}
+
+.lcCoGrid--reference:not(#\9):not(#\9) .lcCoLogo{
+  background: var(--gi-surface) !important;
+  border: 1px solid var(--gi-border) !important;
+}
+
+.lcCoGrid--reference:not(#\9):not(#\9) .lcCoName{
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text) !important;
+}
+
+
+/* =====================================================================
+   41. STEP 7 - הצהרת בריאות
+
+   השלב שהנציג מבלה בו הכי הרבה זמן, ולכן גם זה שהכי סובל מהעומס
+   הוויזואלי: כל שורת שאלה היא כרטיס radius 22px עם צל 28px, וכפתורי
+   כן/לא הם gradient כחול. עשרות שורות כאלה בעמוד אחד.
+
+   כאן השורות הופכות לשורות טבלה שקטות עם קו מפריד, וכן/לא הופכים
+   לגלולת בחירה. הצבע נשמר רק לתשובה שנבחרה.
+   ===================================================================== */
+
+.lcPhxHealth__hero:not(#\9):not(#\9){
+  padding: var(--gi-s5) !important;
+  border-radius: var(--gi-r-card) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  box-shadow: var(--gi-sh-xs) !important;
+}
+
+.lcPhxHealth__kicker:not(#\9):not(#\9),
+.lcPhxHealth__searchLabel:not(#\9):not(#\9),
+.lcPhxHealth__detailLabel:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcPhxHealth__title:not(#\9):not(#\9){
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcPhxHealth__summary:not(#\9):not(#\9),
+.lcPhxHealth__bulkHint:not(#\9):not(#\9),
+.lcPhxHealth__searchMeta:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcPhxHealth__markAllNoBtn:not(#\9):not(#\9){
+  padding: var(--gi-s2) var(--gi-s4) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  color: var(--gi-text-2) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+.lcPhxHealth__markAllNoBtn:hover:not(#\9):not(#\9){
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  border-color: var(--gi-border-strong) !important;
+  color: var(--gi-text) !important;
+}
+
+.lcPhxHealth__search:not(#\9):not(#\9){
+  min-height: 38px !important;
+  padding: 9px var(--gi-s3) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+
+.lcPhxHealth__searchEmpty:not(#\9):not(#\9){
+  border-radius: var(--gi-r-ctl) !important;
+  background: var(--gi-warn-soft) !important;
+  border: 1px solid rgba(217,119,6,.20) !important;
+  color: var(--gi-warn) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+
+/* --- שורות השאלון: כרטיסים -> שורות טבלה --- */
+.lcPhxHealth__table:not(#\9):not(#\9){
+  gap: 0 !important;
+  background: var(--gi-surface) !important;
+  border: 1px solid var(--gi-border) !important;
+  border-radius: var(--gi-r-card) !important;
+  overflow: hidden !important;
+}
+
+.lcPhxHealth__row:not(#\9):not(#\9){
+  padding: var(--gi-s4) var(--gi-s5) !important;
+  gap: var(--gi-s5) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--gi-border-soft) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  transition: background-color .15s ease !important;
+}
+
+.lcPhxHealth__row:last-child:not(#\9):not(#\9){ border-bottom: 0 !important; }
+
+.lcPhxHealth__row:hover:not(#\9):not(#\9){ background: var(--gi-surface-2) !important; }
+
+.lcPhxHealth__row.is-searchHit:not(#\9):not(#\9){
+  background: var(--gi-primary-soft) !important;
+  background-image: none !important;
+  border-color: var(--gi-border-soft) !important;
+  box-shadow: inset 3px 0 0 var(--gi-primary) !important;
+}
+
+.lcPhxHealth__question:not(#\9):not(#\9){
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  line-height: 1.6 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcPhxHealth__insuredCol:not(#\9):not(#\9){
+  padding: var(--gi-s3) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border-soft) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+}
+
+.lcPhxHealth__insuredName:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text-2) !important;
+}
+
+.lcPhxHealth__answerBtn:not(#\9):not(#\9){
+  min-width: 56px !important;
+  padding: 6px var(--gi-s3) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  color: var(--gi-text-2) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease !important;
+}
+
+.lcPhxHealth__answerBtn:hover:not(#\9):not(#\9){
+  border-color: var(--gi-border-strong) !important;
+  background: var(--gi-surface-2) !important;
+  color: var(--gi-text) !important;
+}
+
+.lcPhxHealth__answerBtn.is-active:not(#\9):not(#\9){
+  background: var(--gi-primary) !important;
+  background-image: none !important;
+  border-color: var(--gi-primary) !important;
+  color: #FFFFFF !important;
+}
+
+.lcPhxHealth__detailInput:not(#\9):not(#\9){
+  min-height: 80px !important;
+  border-radius: var(--gi-r-ctl) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+
+.lcPhxHealth__saved:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--gi-success) !important;
+}
+
+/* --- בורר חברה/מוצר מהיר --- */
+.lcHealthQuickPick:not(#\9):not(#\9){
+  padding: var(--gi-s6) var(--gi-s5) !important;
+  border-radius: var(--gi-r-card) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  box-shadow: var(--gi-sh-xs) !important;
+}
+
+.lcHealthQuickPick__icon:not(#\9):not(#\9){ font-size: 24px !important; }
+
+.lcHealthQuickPick__title:not(#\9):not(#\9){
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcHealthQuickPick__text:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  line-height: 1.55 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcHealthQuickPick__label:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-2) !important;
+}
+
+
+/* =====================================================================
+   42. STEP 8 - סיום הקמה והדוח התפעולי
+
+   המסך האחרון לפני שמירת הלקוח, ולכן זה שהסוכן מצלם ושולח. היה בנוי
+   כ-hero עם radial-gradient, כרטיסי סטטיסטיקה radius 18px, באנרים
+   בגרדיאנט כחול־כהה, ואנימציית reveal של 0.55s על כל שורה.
+   ===================================================================== */
+
+.lcOpHero:not(#\9):not(#\9){
+  padding: var(--gi-s5) !important;
+  border-radius: var(--gi-r-card) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: var(--gi-sh-xs) !important;
+}
+
+.lcOpHero__eyebrow:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcOpHero__title:not(#\9):not(#\9){
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcOpHero__sub:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcOpStat:not(#\9):not(#\9){
+  padding: var(--gi-s4) !important;
+  border-radius: var(--gi-r-md) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  box-shadow: none !important;
+}
+
+.lcOpStat:not(#\9):not(#\9) span{
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcOpStat:not(#\9):not(#\9) strong{
+  margin-top: var(--gi-s2) !important;
+  font-size: 22px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+  letter-spacing: -.02em !important;
+}
+
+.lcOpSection:not(#\9):not(#\9){
+  border-radius: var(--gi-r-card) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  box-shadow: var(--gi-sh-xs) !important;
+}
+
+.lcOpSection__title:not(#\9):not(#\9){
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcOpSection__sub:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  color: var(--gi-text-3) !important;
+}
+
+/* הבאנר הכחול-כהה -> כותרת מקטע, זהה ל-.lcNpSection__head */
+.lcOpSectionBanner:not(#\9):not(#\9){
+  padding: var(--gi-s3) var(--gi-s5) !important;
+  gap: var(--gi-s3) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  border-bottom: 1px solid var(--gi-border) !important;
+  color: var(--gi-text) !important;
+}
+
+.lcOpSectionBanner__icon:not(#\9):not(#\9){
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: var(--gi-r-ctl) !important;
+  background: var(--gi-primary-soft) !important;
+  background-image: none !important;
+  border: 1px solid rgba(37,99,235,.14) !important;
+  color: var(--gi-primary) !important;
+}
+
+.lcOpSectionBanner__title:not(#\9):not(#\9){
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+  letter-spacing: 0 !important;
+}
+
+.lcOpSectionBanner__sub:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcOpSection--mirrorSchedule:not(#\9):not(#\9){
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+}
+
+/* --- כרטיסי ושורות הפוליסות בדוח --- */
+.lcOpPolicyCard:not(#\9):not(#\9),
+.lcOpPolicyCard--new:not(#\9):not(#\9),
+.lcOpPolicyRow:not(#\9):not(#\9),
+.lcOpPolicyRow--new:not(#\9):not(#\9),
+.lcOpAgentRow:not(#\9):not(#\9){
+  border-radius: var(--gi-r-md) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  box-shadow: none !important;
+}
+
+.lcOpPolicyCard--new:not(#\9):not(#\9),
+.lcOpPolicyRow--new:not(#\9):not(#\9){
+  border-color: var(--gi-primary) !important;
+  background: var(--gi-primary-soft) !important;
+}
+
+/* אנימציית ה-reveal: השורות נשארות במקום. */
+.lcOpPolicyCard:not(#\9):not(#\9),
+.lcOpPolicyRow:not(#\9):not(#\9),
+.lcOpAgentRow:not(#\9):not(#\9){
+  opacity: 1 !important;
+  transform: none !important;
+  animation: none !important;
+}
+
+.lcOpPolicyCard__logoWrap:not(#\9):not(#\9),
+.lcOpPolicyRow__logoWrap:not(#\9):not(#\9),
+.lcOpAgentRow__logo:not(#\9):not(#\9){
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+}
+
+.lcOpPolicyCard__company:not(#\9):not(#\9),
+.lcOpPolicyRow__company:not(#\9):not(#\9),
+.lcOpAgentRow__name:not(#\9):not(#\9){
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcOpPolicyCard__logoFallback:not(#\9):not(#\9),
+.lcOpPolicyRow__logoFallback:not(#\9):not(#\9),
+.lcOpAgentRow__logoFallback:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcOpPolicyCard__meta:not(#\9):not(#\9),
+.lcOpPolicyRow__meta:not(#\9):not(#\9),
+.lcOpAgentRow__sub:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcOpPolicyCard__grid:not(#\9):not(#\9) > div,
+.lcOpPolicyRow__metric:not(#\9):not(#\9){
+  padding: var(--gi-s2) var(--gi-s3) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border-soft) !important;
+}
+
+.lcOpPolicyCard__grid:not(#\9):not(#\9) span,
+.lcOpPolicyRow__metric:not(#\9):not(#\9) span,
+.lcOpPolicyRow__detailLabel:not(#\9):not(#\9){
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcOpPolicyCard__grid:not(#\9):not(#\9) strong,
+.lcOpPolicyRow__metric:not(#\9):not(#\9) strong{
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcOpPolicyRow__detailValue:not(#\9):not(#\9){
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcOpPolicyCard__note:not(#\9):not(#\9),
+.lcOpPolicyRow__note:not(#\9):not(#\9){
+  border-radius: var(--gi-r-ctl) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  border: 1px dashed var(--gi-border-strong) !important;
+  font-size: 12px !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcOpStatus:not(#\9):not(#\9){
+  padding: 4px var(--gi-s3) !important;
+  border: 1px solid rgba(37,99,235,.18) !important;
+  background: var(--gi-primary-soft) !important;
+  background-image: none !important;
+  color: var(--gi-primary) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+}
+
+.lcOpStatus--full:not(#\9):not(#\9),
+.lcOpStatus--cancel:not(#\9):not(#\9){
+  background: var(--gi-danger-soft) !important;
+  border-color: rgba(220,38,38,.20) !important;
+  color: var(--gi-danger) !important;
+}
+
+.lcOpStatus--partial_health:not(#\9):not(#\9){
+  background: var(--gi-warn-soft) !important;
+  border-color: rgba(217,119,6,.20) !important;
+  color: var(--gi-warn) !important;
+}
+
+.lcOpStatus--replace:not(#\9):not(#\9),
+.lcOpStatus--sold:not(#\9):not(#\9){
+  background: var(--gi-success-soft) !important;
+  border-color: rgba(22,163,74,.20) !important;
+  color: var(--gi-success) !important;
+}
+
+/* --- מודאל ההנחיה התפעולית ------------------------------------------
+   ההנפשה (מסמך + חץ נופל + מגש) נשמרת - היא מסבירה פעולה, לא מקשטת.
+   מה שיורד: ה-radial-gradient, ה-glow, radius 30px וכותרת 30px/950.  */
+
+.lcOpGuideModal__backdrop:not(#\9):not(#\9){
+  background: rgba(15,23,42,.45) !important;
+  backdrop-filter: blur(2px) !important;
+  -webkit-backdrop-filter: blur(2px) !important;
+}
+
+.lcOpGuideModal__panel:not(#\9):not(#\9){
+  border-radius: var(--gi-r-card) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: var(--gi-sh-lg) !important;
+}
+
+.lcOpGuideModal__glow:not(#\9):not(#\9){
+  display: none !important;
+  background-image: none !important;
+}
+
+.lcOpGuideModal__doc:not(#\9):not(#\9){
+  border-radius: var(--gi-r-md) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+}
+
+.lcOpGuideModal__docLine:not(#\9):not(#\9){ background: var(--gi-border-strong) !important; }
+
+.lcOpGuideModal__arrow:not(#\9):not(#\9){
+  background: var(--gi-primary) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.lcOpGuideModal__arrow:not(#\9):not(#\9)::after{ border-top-color: var(--gi-primary) !important; }
+
+.lcOpGuideModal__tray:not(#\9):not(#\9){
+  background: var(--gi-primary-soft) !important;
+  background-image: none !important;
+  border: 1px solid rgba(37,99,235,.16) !important;
+}
+
+.lcOpGuideModal__kicker:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcOpGuideModal__title:not(#\9):not(#\9){
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  line-height: 1.3 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcOpGuideModal__text:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  line-height: 1.6 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcOpGuideModal__check:not(#\9):not(#\9){
+  padding: var(--gi-s3) var(--gi-s4) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcOpGuideModal__check:not(#\9):not(#\9) input{ accent-color: var(--gi-primary) !important; }
+
+.lcOpGuideModal__actions:not(#\9):not(#\9) .btn{
+  min-width: 160px !important;
+  font-weight: 600 !important;
+}
+
+
+/* =====================================================================
+   43. אשף אלמנטרי - כל השלבים
+
+   שלושה החלטות עיצוב שנלקחו כאן, וכולן הפיכות בשורה אחת:
+
+   א. פס ההתקדמות עם המכונית (‎.lcElementaryRoad‎) נשאר. המכונית היא
+      זהות של "גמלנטרי" ולא קישוט אקראי. מה שיורד: הכביש בגרדיאנט
+      והפסים המקווקווים, צל ה-drop-shadow מתחת למכונית, ואנימציית
+      ה-cruise האינסופית שרצה כל הזמן ברקע. נשאר: המכונית זזה לאורך
+      הפס לפי השלב. למחיקה מלאה - להוסיף display:none ל-‎__car‎.
+
+   ב. כרטיס האשראי (‎.lcElemPaymentCard‎) נשאר כרטיס. הצורה עוזרת
+      לנציג להבין איזה שדה הוא מקליד. מה שיורד: הברק האלכסוני,
+      גרדיאנטי המותג לפי סוג הכרטיס והשבב המתכתי - השבב הופך לצורה
+      שטוחה.
+
+   ג. אייקוני הזכוכית הצבעוניים (‎.lcElemGlassIcon‎) שומרים על הצבע
+      הסמנטי שלהם (ירוק/אדום/סגול) ומאבדים את הזכוכית.
+   ===================================================================== */
+
+/* --- 43.1 פס ההתקדמות --- */
+.lcElementaryProgress:not(#\9):not(#\9),
+.lcWizard.is-elementaryFlow:not(#\9):not(#\9) .lcWizard__body .lcElementaryProgress{
+  border-radius: var(--gi-r-card) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.lcElementaryRoad__track:not(#\9):not(#\9){
+  height: 6px !important;
+  background: var(--gi-surface-3) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+/* הפסים הלבנים המקווקווים על הכביש */
+.lcElementaryRoad__track:not(#\9):not(#\9)::before{
+  content: none !important;
+  display: none !important;
+}
+
+.lcElementaryRoad__fill:not(#\9):not(#\9){
+  height: 6px !important;
+  background: var(--gi-primary) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.lcElementaryRoad__car:not(#\9):not(#\9){
+  filter: none !important;
+  transition: left .3s ease !important;
+}
+
+.lcElementaryRoad__carMotion:not(#\9):not(#\9){ animation: none !important; }
+
+.lcElementaryRoad__carShadow:not(#\9):not(#\9){
+  display: none !important;
+  animation: none !important;
+}
+
+.lcElementaryRoad__dot:not(#\9):not(#\9){
+  width: 28px !important;
+  height: 28px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text-3) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  box-shadow: none !important;
+}
+
+.lcElementaryRoad__label:not(#\9):not(#\9){
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcElementaryRoad__stop.is-active:not(#\9):not(#\9) .lcElementaryRoad__dot{
+  background: var(--gi-primary) !important;
+  background-image: none !important;
+  border-color: var(--gi-primary) !important;
+  color: #FFFFFF !important;
+  box-shadow: none !important;
+}
+
+.lcElementaryRoad__stop.is-active:not(#\9):not(#\9) .lcElementaryRoad__dot::after{
+  content: none !important;
+  display: none !important;
+}
+
+.lcElementaryRoad__stop.is-done:not(#\9):not(#\9) .lcElementaryRoad__dot{
+  background: var(--gi-success-soft) !important;
+  background-image: none !important;
+  border-color: rgba(22,163,74,.25) !important;
+  color: var(--gi-success) !important;
+}
+
+.lcElementaryRoad__stop.is-active:not(#\9):not(#\9) .lcElementaryRoad__label,
+.lcElementaryRoad__stop.is-done:not(#\9):not(#\9) .lcElementaryRoad__label{
+  color: var(--gi-text) !important;
+  font-weight: 600 !important;
+}
+
+
+/* --- 43.2 כותרות מקטע -----------------------------------------------
+   היו uppercase + letter-spacing + קו תחתון כחול 2px. ב-RTL ה-uppercase
+   לא עושה כלום ממילא, והקו הכחול קורא כמו כפתור פעיל.                */
+
+.lcElementarySection__title:not(#\9):not(#\9){
+  margin-bottom: var(--gi-s3) !important;
+  padding-bottom: var(--gi-s2) !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: var(--gi-text) !important;
+  border-bottom: 1px solid var(--gi-border) !important;
+}
+
+.lcElementarySection__subtitle:not(#\9):not(#\9),
+.lcElementaryWrap--step4:not(#\9):not(#\9) .lcElementarySection__subtitle{
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  color: var(--gi-text-3) !important;
+}
+
+
+/* --- 43.3 שלב 1 · פרטי לקוח ורכב --- */
+.lcStep1InfoCard:not(#\9):not(#\9),
+.lcStep1InfoCard--soft:not(#\9):not(#\9){
+  padding: var(--gi-s4) !important;
+  border-radius: var(--gi-r-md) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.lcStep1InfoCard__label:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcStep1InfoCard__value:not(#\9):not(#\9){
+  margin-top: var(--gi-s1) !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  line-height: 1.3 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcStep1InfoCard__sub:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcElementaryVehicleFetched__card:not(#\9):not(#\9){
+  border: 1px solid var(--gi-border) !important;
+  border-radius: var(--gi-r-md) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.lcElementaryVehicleFetched__brand:not(#\9):not(#\9){
+  border-radius: var(--gi-r-ctl) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+}
+
+.lcElementaryVehicleFetched__logoFallback:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcElementaryVehicleFetched__title:not(#\9):not(#\9){
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcElementaryVehicleFetched__sub:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcElementaryVehicleFetched__tile:not(#\9):not(#\9){
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+}
+
+.lcElementaryVehicleFetched__tileK:not(#\9):not(#\9){
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcElementaryVehicleFetched__tileV:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcElementaryVehicleFetched__tileV--pill:not(#\9):not(#\9){
+  background: var(--gi-surface-3) !important;
+  border: 1px solid var(--gi-border) !important;
+}
+
+.lcElementaryVehicleFetched__tileV--box:not(#\9):not(#\9){
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+}
+
+.lcElementaryDateField__hint:not(#\9):not(#\9),
+.lcElementaryDateField__hint--compact:not(#\9):not(#\9){
+  font-size: 12px !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcElemLeviLookup__k:not(#\9):not(#\9),
+.lcElementaryWrap:not(#\9):not(#\9) .lcElemLeviLookup__k{
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcElementaryWrap:not(#\9):not(#\9) .lcElemLeviLookup__badge{
+  background: var(--gi-primary-soft) !important;
+  border: 1px solid rgba(37,99,235,.16) !important;
+  color: var(--gi-primary) !important;
+  font-weight: 600 !important;
+}
+
+.lcElementaryWrap:not(#\9):not(#\9) .lcElemLeviLookup__manualBtn{
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  color: var(--gi-text-2) !important;
+  font-weight: 600 !important;
+}
+
+
+/* --- 43.4 בורר המוצר ושוברי מצב --- */
+.lcElementaryChooser__hero:not(#\9):not(#\9),
+.lcElementaryIntro:not(#\9):not(#\9),
+.lcElementaryImportHero:not(#\9):not(#\9){
+  padding: var(--gi-s5) !important;
+  border-radius: var(--gi-r-card) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: var(--gi-sh-xs) !important;
+}
+
+.lcElementaryCard:not(#\9):not(#\9),
+.lcElementaryCard--vehicle:not(#\9):not(#\9){
+  min-height: 0 !important;
+  padding: var(--gi-s5) !important;
+  border-radius: var(--gi-r-md) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+  transition: border-color .15s ease, background-color .15s ease !important;
+}
+
+.lcElementaryCard:not(#\9):not(#\9)::before,
+.lcElementaryCard__vehicleMedia:not(#\9):not(#\9)::after{
+  content: none !important;
+  display: none !important;
+}
+
+.lcElementaryCard:hover:not(#\9):not(#\9){
+  transform: none !important;
+  background: var(--gi-primary-soft) !important;
+  border-color: var(--gi-primary) !important;
+  box-shadow: none !important;
+}
+
+.lcElementaryCard.is-active:not(#\9):not(#\9){
+  background: var(--gi-primary-soft) !important;
+  background-image: none !important;
+  border-color: var(--gi-primary) !important;
+  box-shadow: none !important;
+}
+
+.lcElementaryCard__title:not(#\9):not(#\9){
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcElementaryFieldLegend:not(#\9):not(#\9),
+.lcElementaryStatus:not(#\9):not(#\9){
+  padding: var(--gi-s3) var(--gi-s4) !important;
+  border-radius: var(--gi-r-md) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-2) !important;
+}
+
+.lcElementaryEmpty:not(#\9):not(#\9){
+  padding: var(--gi-s7) var(--gi-s4) !important;
+  border-radius: var(--gi-r-card) !important;
+  border: 1px dashed var(--gi-border-strong) !important;
+  background: var(--gi-surface) !important;
+  color: var(--gi-text-3) !important;
+}
+
+
+/* --- 43.5 שלב 3 · כיסויים ואייקונים --- */
+.lcElementaryCoverageCard:not(#\9):not(#\9){
+  padding: var(--gi-s3) var(--gi-s2) !important;
+  border: 1px solid var(--gi-border) !important;
+  border-radius: var(--gi-r-md) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+  transition: border-color .15s ease, background-color .15s ease !important;
+}
+
+.lcElementaryCoverageCard:hover:not(.is-active):not(#\9):not(#\9){
+  border-color: var(--gi-primary) !important;
+  background: var(--gi-primary-soft) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.lcElementaryCoverageCard.is-active:not(#\9):not(#\9){
+  border-color: var(--gi-primary) !important;
+  background: var(--gi-primary-soft) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.lcElementaryCoverageCard__label:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcElemGlassIcon:not(#\9):not(#\9){
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: var(--gi-r-ctl) !important;
+  background: var(--gi-surface-3) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  color: var(--gi-text-3) !important;
+  box-shadow: none !important;
+}
+
+.lcElemGlassIcon--car-green:not(#\9):not(#\9){
+  background: var(--gi-success-soft) !important;
+  background-image: none !important;
+  border-color: rgba(22,163,74,.20) !important;
+  color: var(--gi-success) !important;
+  box-shadow: none !important;
+}
+
+.lcElemGlassIcon--doc-red:not(#\9):not(#\9){
+  background: var(--gi-danger-soft) !important;
+  background-image: none !important;
+  border-color: rgba(220,38,38,.18) !important;
+  color: var(--gi-danger) !important;
+  box-shadow: none !important;
+}
+
+.lcElemGlassIcon--person-violet:not(#\9):not(#\9){
+  background: var(--gi-primary-soft) !important;
+  background-image: none !important;
+  border-color: rgba(37,99,235,.16) !important;
+  color: var(--gi-primary) !important;
+  box-shadow: none !important;
+}
+
+
+/* --- 43.6 שלב 4 · נהגים ושירותים --- */
+.lcElementaryDriverRule:not(#\9):not(#\9),
+.lcElementaryServiceItem:not(#\9):not(#\9){
+  border: 1px solid var(--gi-border) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+}
+
+.lcElementaryDriverRule--open:not(#\9):not(#\9){
+  border-color: var(--gi-primary) !important;
+  background: var(--gi-primary-soft) !important;
+}
+
+.lcElementaryDriverRule__check:not(#\9):not(#\9),
+.lcElementaryDriverRule__row:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcElementaryDriverRule__check:not(#\9):not(#\9) input[type="checkbox"],
+.lcElementaryServiceItem:not(#\9):not(#\9) input[type="checkbox"]{
+  accent-color: var(--gi-primary) !important;
+}
+
+.lcElementaryLienAnswerBtn:not(#\9):not(#\9){
+  padding: var(--gi-s2) var(--gi-s4) !important;
+  border: 1px solid var(--gi-border) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  background: var(--gi-surface) !important;
+  color: var(--gi-text-2) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+}
+
+.lcElementaryLienAnswerBtn.is-active:not(#\9):not(#\9){
+  border-color: var(--gi-primary) !important;
+  background: var(--gi-primary-soft) !important;
+  color: var(--gi-primary) !important;
+}
+
+.lcElementaryLienBadge:not(#\9):not(#\9){
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+
+.lcElementaryLienBadge--none:not(#\9):not(#\9){
+  background: var(--gi-success-soft) !important;
+  color: var(--gi-success) !important;
+}
+
+.lcElementaryLienBadge--yes:not(#\9):not(#\9){
+  background: var(--gi-warn-soft) !important;
+  color: var(--gi-warn) !important;
+}
+
+.lcElementaryLienSection--formMode:not(#\9):not(#\9){
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  border-radius: var(--gi-r-md) !important;
+  box-shadow: none !important;
+  animation: none !important;
+}
+
+
+/* --- 43.7 שלב 5 · הצעות ותשלום --- */
+.lcElementaryPolicyRow:not(#\9):not(#\9){
+  padding: var(--gi-s4) var(--gi-s5) !important;
+  border-radius: var(--gi-r-md) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.lcElementaryPolicyRow__mid:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcElementaryPolicyRow__price:not(#\9):not(#\9){
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+  letter-spacing: -.02em !important;
+}
+
+.lcElementaryPolicyRow__priceSub:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcElementaryPolicyRow__lockTag:not(#\9):not(#\9){
+  padding: 4px var(--gi-s3) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface-3) !important;
+  background-image: none !important;
+  color: var(--gi-text-3) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+
+/* כרטיס האשראי - נשארת הצורה, יורדים הברק והמותג בגרדיאנט */
+.lcElemPaymentCard:not(#\9):not(#\9){
+  padding: var(--gi-s5) !important;
+  border-radius: var(--gi-r-card) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: var(--gi-sh-sm) !important;
+}
+
+.lcElemPaymentCard:not(#\9):not(#\9)::before,
+.lcElemPaymentCard:not(#\9):not(#\9)::after,
+.lcElemPaymentCard--unknown:not(#\9):not(#\9)::before,
+.lcElemPaymentCard--visa:not(#\9):not(#\9)::before,
+.lcElemPaymentCard--mastercard:not(#\9):not(#\9)::before,
+.lcElemPaymentCard--amex:not(#\9):not(#\9)::before,
+.lcElemPaymentCard--diners:not(#\9):not(#\9)::before,
+.lcElemPaymentCard--discover:not(#\9):not(#\9)::before{
+  content: none !important;
+  display: none !important;
+  background-image: none !important;
+}
+
+.lcElemPaymentCard__chip:not(#\9):not(#\9){
+  border-radius: var(--gi-r-ctl) !important;
+  background: var(--gi-surface-3) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  box-shadow: none !important;
+}
+
+.lcElemPaymentCard__chip:not(#\9):not(#\9)::after{
+  content: none !important;
+  display: none !important;
+}
+
+.lcElemPaymentCard__brandBadge:not(#\9):not(#\9){
+  padding: 3px var(--gi-s2) !important;
+  background: var(--gi-surface-3) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  color: var(--gi-text-2) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+}
+
+.lcElemPaymentCard__label:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcElemPaymentCard__input:not(#\9):not(#\9),
+.lcElemPaymentCard__readonlyVal:not(#\9):not(#\9){
+  min-height: 38px !important;
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+}
+
+.lcElemPaymentCard__field--readonly:not(#\9):not(#\9) .lcElemPaymentCard__readonlyVal{
+  background: var(--gi-surface-3) !important;
+  color: var(--gi-text-3) !important;
+}
+
+
+/* --- 43.8 שלב 6 · סיכום ההצעה --- */
+.lcElemSummaryCard:not(#\9):not(#\9){
+  padding: var(--gi-s4) !important;
+  border-radius: var(--gi-r-md) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.lcElemSummaryCard__title:not(#\9):not(#\9){
+  margin-bottom: var(--gi-s3) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcElemSummarySubTitle:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcElemSummaryRow:not(#\9):not(#\9),
+.lcElemSummaryBlock:not(#\9):not(#\9) .lcElemSummaryRow{
+  padding: var(--gi-s2) 0 !important;
+  font-size: 13px !important;
+  color: var(--gi-text-2) !important;
+  border-bottom: 1px solid var(--gi-border-soft) !important;
+}
+
+.lcElemSummaryRow--emph:not(#\9):not(#\9){
+  padding-top: var(--gi-s3) !important;
+  border-top: 1px solid var(--gi-border) !important;
+  border-bottom: 0 !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcElemHistHarGen:not(#\9):not(#\9){
+  border-radius: var(--gi-r-md) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.lcElemHistHarGen__head:not(#\9):not(#\9){
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  border-bottom: 1px solid var(--gi-border) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcHarSummaryBlock__label:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcHarSummaryBlock__value:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text) !important;
+}
+
+
+/* =====================================================================
+   44. HEALTH STEP 1 - פרטי לקוח
+
+   app.css מפעיל כאן שכבת glass כבדה על ‎.lcStep1UnifiedSection‎
+   (gradient תכלת, blur, רדיוס 22px, פס צד זוהר) + כרטיסי שאלה עם
+   כותרות 32px/950 וכפתורי עישון בגובה 56px. סעיף 38 כבר מאחד גבהי
+   input — כאן משטחים את המעטפת ומביאים את כפתורי הבחירה לשפת
+   ‎.lcPhxHealth__answerBtn‎ מסעיף 41.
+   ===================================================================== */
+
+.lcWizard .lcStep1UnifiedSection:not(#\9):not(#\9),
+.lcStep1UnifiedSection:not(#\9):not(#\9){
+  padding: var(--gi-s5) !important;
+  margin-bottom: var(--gi-s4) !important;
+  border-radius: var(--gi-r-card) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: var(--gi-sh-xs) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  overflow: hidden !important;
+}
+
+.lcWizard .lcStep1UnifiedSection:not(#\9):not(#\9)::before,
+.lcWizard .lcStep1UnifiedSection:not(#\9):not(#\9)::after,
+.lcStep1UnifiedSection:not(#\9):not(#\9)::before,
+.lcStep1UnifiedSection:not(#\9):not(#\9)::after{
+  content: none !important;
+  display: none !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+
+.lcWizard .lcStep1UnifiedSection__title:not(#\9):not(#\9),
+.lcStep1UnifiedSection__title:not(#\9):not(#\9){
+  margin-bottom: var(--gi-s4) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: var(--gi-text) !important;
+  text-shadow: none !important;
+}
+
+.lcStep1Hero:not(#\9):not(#\9),
+.lcStep1QuestionCard:not(#\9):not(#\9),
+.lcStep1Premium:not(#\9):not(#\9){
+  padding: var(--gi-s5) !important;
+  border-radius: var(--gi-r-card) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: var(--gi-sh-xs) !important;
+}
+
+.lcStep1Hero__eyebrow:not(#\9):not(#\9),
+.lcStep1QuestionCard__tag:not(#\9):not(#\9),
+.lcStep1QuestionCard__mini:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcStep1Hero__title:not(#\9):not(#\9),
+.lcStep1QuestionCard__title:not(#\9):not(#\9){
+  margin-top: var(--gi-s2) !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  line-height: 1.35 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcStep1Hero__sub:not(#\9):not(#\9),
+.lcStep1QuestionCard__sub:not(#\9):not(#\9){
+  margin-top: var(--gi-s2) !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  line-height: 1.55 !important;
+  color: var(--gi-text-2) !important;
+}
+
+.lcStep1FlowBar:not(#\9):not(#\9){
+  height: 6px !important;
+  border-radius: var(--gi-r-pill) !important;
+  background: var(--gi-surface-3) !important;
+  background-image: none !important;
+  overflow: hidden !important;
+}
+
+.lcStep1FlowBar > span:not(#\9):not(#\9){
+  background: var(--gi-primary) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.lcStep1FlowMeta:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcStep1QuestionCard__body:not(#\9):not(#\9) .input,
+.lcStep1QuestionCard__body:not(#\9):not(#\9) input,
+.lcStep1QuestionCard__body:not(#\9):not(#\9) select{
+  min-height: 38px !important;
+  padding: 9px var(--gi-s3) !important;
+  font-size: 13px !important;
+  border-radius: var(--gi-r-ctl) !important;
+  box-shadow: none !important;
+}
+
+.lcStep1Summary:not(#\9):not(#\9){
+  border-radius: var(--gi-r-card) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.lcStep1Summary__title:not(#\9):not(#\9){
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcStep1Summary__sub:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcStep1SummaryItem:not(#\9):not(#\9){
+  padding: var(--gi-s3) !important;
+  border-radius: var(--gi-r-md) !important;
+  border: 1px solid var(--gi-border-soft) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.lcStep1SummaryItem.is-active:not(#\9):not(#\9){
+  border-color: var(--gi-primary) !important;
+  background: var(--gi-primary-soft) !important;
+  box-shadow: none !important;
+}
+
+.lcStep1SummaryItem__k:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcStep1SummaryItem__v:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcStep1AgeInline:not(#\9):not(#\9){
+  padding: 4px var(--gi-s3) !important;
+  border-radius: var(--gi-r-pill) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+}
+
+.lcStep1AgeInline__label:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcStep1AgeInline__value:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcStep1DateInput:not(#\9):not(#\9),
+.lcStep1SmokingAmountInput:not(#\9):not(#\9){
+  min-height: 38px !important;
+}
+
+.lcStep1SmokingQ:not(#\9):not(#\9){ min-height: 0 !important; }
+
+.lcStep1SmokingBtn:not(#\9):not(#\9),
+.lcStep1SmokingTypeBtn:not(#\9):not(#\9){
+  min-height: 38px !important;
+  padding: 6px var(--gi-s4) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  color: var(--gi-text-2) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease !important;
+}
+
+.lcStep1SmokingBtn:hover:not(#\9):not(#\9),
+.lcStep1SmokingTypeBtn:hover:not(#\9):not(#\9){
+  border-color: var(--gi-border-strong) !important;
+  background: var(--gi-surface-2) !important;
+  color: var(--gi-text) !important;
+}
+
+.lcStep1SmokingBtn.is-active:not(#\9):not(#\9){
+  background: var(--gi-primary) !important;
+  background-image: none !important;
+  border-color: var(--gi-primary) !important;
+  color: #FFFFFF !important;
+  box-shadow: none !important;
+}
+
+.lcStep1SmokingTypeBtn.is-active:not(#\9):not(#\9){
+  background: var(--gi-primary-soft) !important;
+  background-image: none !important;
+  border-color: var(--gi-primary) !important;
+  color: var(--gi-primary) !important;
+}
+
+.lcStep1SmokingDetails__label:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcStep1InlineNav__btn:not(#\9):not(#\9){
+  min-height: 38px !important;
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  color: var(--gi-text-2) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+.lcStep1InlineNav__btn--next:not(#\9):not(#\9){
+  background: var(--gi-primary) !important;
+  background-image: none !important;
+  border-color: var(--gi-primary) !important;
+  color: #FFFFFF !important;
+}
+
+
+/* =====================================================================
+   45. HEALTH STEP 4 - התאמת צרכים (‎.lcNaV2‎)
+
+   רשימת פוליסות לביטול/התאמה: כרטיסים עם צל 16px, כותרת 22px/950
+   וסטטוס בגלולה עבה. מיושר לדפוס השורה השקטה של סעיף 41.
+   ===================================================================== */
+
+.lcNaV2__header:not(#\9):not(#\9){
+  margin: 0 0 var(--gi-s5) !important;
+  text-align: start !important;
+}
+
+.lcNaV2__title:not(#\9):not(#\9){
+  margin: 0 !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcNaV2__list:not(#\9):not(#\9){ gap: var(--gi-s3) !important; }
+
+.lcNaV2__row:not(#\9):not(#\9){
+  border-radius: var(--gi-r-card) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: var(--gi-sh-xs) !important;
+  animation: none !important;
+}
+
+.lcNaV2__rowPolNum:not(#\9):not(#\9){
+  padding: var(--gi-s2) var(--gi-s4) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  border-bottom: 1px solid var(--gi-border) !important;
+  font-size: 12px !important;
+}
+
+.lcNaV2__rowPolNumLabel:not(#\9):not(#\9){
+  font-weight: 500 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcNaV2__rowPolNumVal:not(#\9):not(#\9){
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+  letter-spacing: 0 !important;
+}
+
+.lcNaV2__rowPolNum--missing .lcNaV2__rowPolNumVal:not(#\9):not(#\9){
+  font-weight: 500 !important;
+  color: var(--gi-text-muted) !important;
+}
+
+.lcNaV2__rowBody:not(#\9):not(#\9){
+  gap: var(--gi-s3) var(--gi-s4) !important;
+  padding: var(--gi-s4) !important;
+}
+
+.lcNaV2__logo:not(#\9):not(#\9){
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+}
+
+.lcNaV2__company:not(#\9):not(#\9){
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcNaV2__meta:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcNaV2__rowInsured:not(#\9):not(#\9){
+  font-size: 13px !important;
+  color: var(--gi-text-2) !important;
+}
+
+.lcNaV2__rowInsuredLabel:not(#\9):not(#\9){
+  font-weight: 500 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcNaV2__rowInsured strong:not(#\9):not(#\9){
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcNaV2__markBtn:not(#\9):not(#\9){
+  padding: 5px var(--gi-s3) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  color: var(--gi-text-2) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+.lcNaV2__markBtn:hover:not(#\9):not(#\9){
+  border-color: var(--gi-primary) !important;
+  background: var(--gi-primary-soft) !important;
+  color: var(--gi-primary) !important;
+}
+
+.lcNaV2__label:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcNaV2__req:not(#\9):not(#\9){
+  color: var(--gi-danger) !important;
+  font-weight: 700 !important;
+}
+
+.lcNaV2__textarea:not(#\9):not(#\9){
+  min-height: 72px !important;
+  padding: var(--gi-s2) var(--gi-s3) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text) !important;
+  box-shadow: none !important;
+}
+
+.lcNaV2__textarea:focus:not(#\9):not(#\9){
+  border-color: var(--gi-primary) !important;
+  box-shadow: 0 0 0 3px var(--gi-primary-soft) !important;
+  outline: none !important;
+}
+
+.lcNaV2__status:not(#\9):not(#\9){
+  padding: 4px var(--gi-s3) !important;
+  border-radius: var(--gi-r-pill) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+
+.lcNaV2__status.is-full:not(#\9):not(#\9){
+  color: var(--gi-danger) !important;
+  background: var(--gi-danger-soft) !important;
+  border: 1px solid rgba(220,38,38,.20) !important;
+}
+
+.lcNaV2__status.is-partial:not(#\9):not(#\9){
+  color: var(--gi-warn) !important;
+  background: var(--gi-warn-soft) !important;
+  border: 1px solid rgba(217,119,6,.22) !important;
+}
+
+.lcNaV2__empty:not(#\9):not(#\9){
+  padding: var(--gi-s8) var(--gi-s5) !important;
+  border-radius: var(--gi-r-card) !important;
+  border: 1px dashed var(--gi-border-strong) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+}
+
+.lcNaV2__emptyTitle:not(#\9):not(#\9){
+  margin-top: var(--gi-s3) !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcNaV2__emptyText:not(#\9):not(#\9){
+  margin-top: var(--gi-s2) !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  color: var(--gi-text-3) !important;
+}
+
+
+/* =====================================================================
+   46. HEALTH STEP 3 - פוליסות קיימות
+
+   סעיף 40 כבר יישר כרטיס פוליסה ותיבת פעולות. כאן נסגרים שאר חלקי
+   השלב שעדיין בשפה הישנה: פס הייבוא, טבלת העריכה הידנית, כרטיס ייבוא
+   מהר הביטוח, צ'יפים וכיסויים חלקיים. מבנה ה-DOM וה-data-bind נשארים.
+   ===================================================================== */
+
+.lcStep3CompactTitle:not(#\9):not(#\9),
+.lcWizard__body--step3 .lcStep3CompactTitle:not(#\9):not(#\9){
+  margin: 0 0 var(--gi-s3) !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  line-height: 1.35 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcPolImportBar:not(#\9):not(#\9),
+.lcWizard__body--step3 .lcPolImportBar:not(#\9):not(#\9){
+  margin-bottom: var(--gi-s4) !important;
+  padding: var(--gi-s4) !important;
+  gap: var(--gi-s3) !important;
+  border-radius: var(--gi-r-card) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: var(--gi-sh-xs) !important;
+}
+
+.lcPolImportBar__title:not(#\9):not(#\9),
+.lcWizard__body--step3 .lcPolImportBar__title:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcPolImportBar__sub:not(#\9):not(#\9),
+.lcPolImportBar .lcFileDropZone__sub:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcPolImportBar__actions:not(#\9):not(#\9) .btn,
+.lcWizard__body--step3 .lcPolImportBar__actions .btn:not(#\9):not(#\9){
+  min-height: 38px !important;
+  border-radius: var(--gi-r-ctl) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+.lcHarSiteBtn:not(#\9):not(#\9){
+  min-height: 38px !important;
+  padding: 6px var(--gi-s3) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  color: var(--gi-text-2) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+.lcHarSiteBtn:hover:not(#\9):not(#\9),
+.lcHarSiteBtn:focus-visible:not(#\9):not(#\9){
+  border-color: var(--gi-primary) !important;
+  background: var(--gi-primary-soft) !important;
+  color: var(--gi-primary) !important;
+  box-shadow: none !important;
+}
+
+.lcFileDropZone:not(#\9):not(#\9),
+.lcFileDropZone--harExcel:not(#\9):not(#\9){
+  margin-top: 0 !important;
+  padding: var(--gi-s3) var(--gi-s4) !important;
+  border: 1px dashed var(--gi-border-strong) !important;
+  border-radius: var(--gi-r-md) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.lcFileDropZone:hover:not(#\9):not(#\9),
+.lcFileDropZone.is-dragover:not(#\9):not(#\9){
+  border-color: var(--gi-primary) !important;
+  background: var(--gi-primary-soft) !important;
+  box-shadow: none !important;
+}
+
+.lcFileDropZone--excel:not(#\9):not(#\9),
+.lcFileDropZone--excel:hover:not(#\9):not(#\9),
+.lcFileDropZone--excel.is-dragover:not(#\9):not(#\9){
+  border-color: var(--gi-border-strong) !important;
+  background: var(--gi-surface-2) !important;
+  box-shadow: none !important;
+}
+
+.lcFileDropZone__label:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text-2) !important;
+}
+
+.lcPolImportStatus:not(#\9):not(#\9),
+.lcWizard__body--step3 .lcPolImportStatus:not(#\9):not(#\9){
+  margin-bottom: var(--gi-s3) !important;
+  padding: var(--gi-s3) var(--gi-s4) !important;
+  border-radius: var(--gi-r-md) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-info-soft) !important;
+  background-image: none !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--gi-info) !important;
+}
+
+.lcPolImportStatus--loading:not(#\9):not(#\9){
+  background: var(--gi-info-soft) !important;
+  border-color: rgba(37,99,235,.18) !important;
+  color: var(--gi-info) !important;
+}
+
+.lcPolImportStatus--done:not(#\9):not(#\9){
+  background: var(--gi-success-soft) !important;
+  border-color: rgba(22,163,74,.20) !important;
+  color: var(--gi-success) !important;
+}
+
+.lcPolImportStatus--error:not(#\9):not(#\9){
+  background: var(--gi-danger-soft) !important;
+  border-color: rgba(220,38,38,.20) !important;
+  color: var(--gi-danger) !important;
+}
+
+.lcPolImportStatus--cancelled:not(#\9):not(#\9){
+  background: var(--gi-warn-soft) !important;
+  border-color: rgba(217,119,6,.22) !important;
+  color: var(--gi-warn) !important;
+}
+
+.lcPolImportStatus--empty:not(#\9):not(#\9){
+  background: var(--gi-surface-2) !important;
+  border-color: var(--gi-border) !important;
+  color: var(--gi-text-2) !important;
+}
+
+.lcPolTableWrap:not(#\9):not(#\9){
+  padding: 0 !important;
+  border-radius: var(--gi-r-card) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: var(--gi-sh-xs) !important;
+  overflow: auto !important;
+}
+
+.lcPolTable:not(#\9):not(#\9) th,
+.lcPolTable:not(#\9):not(#\9) td,
+.lcWizard__body--step3 .lcPolTable th:not(#\9):not(#\9),
+.lcWizard__body--step3 .lcPolTable td:not(#\9):not(#\9){
+  padding: var(--gi-s3) !important;
+  border-bottom: 1px solid var(--gi-border-soft) !important;
+  font-size: 13px !important;
+  color: var(--gi-text-2) !important;
+  background: transparent !important;
+}
+
+.lcPolTable:not(#\9):not(#\9) th,
+.lcWizard__body--step3 .lcPolTable th:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text-3) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+}
+
+.lcPolTable tbody tr:hover td:not(#\9):not(#\9){
+  background: var(--gi-surface-2) !important;
+}
+
+.lcPolTable tbody tr.lcPolImportedWrapRow:hover td:not(#\9):not(#\9),
+.lcPolTable tbody tr.lcPolActionRow:hover td:not(#\9):not(#\9){
+  background: transparent !important;
+}
+
+.lcPolCompanyCell:not(#\9):not(#\9){
+  gap: var(--gi-s2) !important;
+}
+
+.lcPolIncludedBox:not(#\9):not(#\9){
+  min-height: 38px !important;
+  padding: var(--gi-s2) var(--gi-s3) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-2) !important;
+  box-shadow: none !important;
+}
+
+.lcSmallBtn:not(#\9):not(#\9),
+.lcCoversBtn:not(#\9):not(#\9){
+  min-height: 38px !important;
+  padding: 6px var(--gi-s3) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+.lcDangerLink:not(#\9):not(#\9){
+  color: var(--gi-danger) !important;
+  font-weight: 600 !important;
+}
+
+.moneyField:not(#\9):not(#\9){ gap: var(--gi-s2) !important; }
+
+.moneyField__sym:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text-3) !important;
+  padding-inline: var(--gi-s1) !important;
+}
+
+.lcPolMetaBadge:not(#\9):not(#\9){
+  padding: 3px var(--gi-s2) !important;
+  border-radius: var(--gi-r-pill) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface-3) !important;
+  background-image: none !important;
+  color: var(--gi-text-2) !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+}
+
+.lcPolMetaBadge--imported:not(#\9):not(#\9){
+  background: var(--gi-info-soft) !important;
+  border-color: rgba(37,99,235,.18) !important;
+  color: var(--gi-info) !important;
+}
+
+.lcPolMetaBadge--warn:not(#\9):not(#\9){
+  background: var(--gi-warn-soft) !important;
+  border-color: rgba(217,119,6,.22) !important;
+  color: var(--gi-warn) !important;
+}
+
+/* כרטיס ייבוא מהר הביטוח - פרטי מבנה פנימיים שלא כוסו ב-40.4 */
+.lcPolCard__top:not(#\9):not(#\9){
+  border-bottom: 1px solid var(--gi-border) !important;
+  background: transparent !important;
+}
+
+.lcPolCard__company:not(#\9):not(#\9),
+.lcPolCard__meta:not(#\9):not(#\9),
+.lcPolCard__premium:not(#\9):not(#\9){
+  border-color: var(--gi-border) !important;
+  background: transparent !important;
+}
+
+.lcPolCardLogo:not(#\9):not(#\9){
+  width: 56px !important;
+  height: 56px !important;
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+}
+
+.lcPolCard__companyName:not(#\9):not(#\9),
+.lcPolCard__type:not(#\9):not(#\9),
+.lcPolCard__insuredName:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcPolCard__sourceBadge:not(#\9):not(#\9),
+.lcPolCard__num:not(#\9):not(#\9),
+.lcPolCard__insured:not(#\9):not(#\9),
+.lcPolCard__premiumLabel:not(#\9):not(#\9){
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcPolCard__badge:not(#\9):not(#\9),
+.lcPolCard__badge--muted:not(#\9):not(#\9){
+  padding: 2px var(--gi-s2) !important;
+  border-radius: var(--gi-r-pill) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface-3) !important;
+  background-image: none !important;
+  color: var(--gi-text-2) !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+}
+
+.lcPolCard__premiumAmount:not(#\9):not(#\9){
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcPolCard__breakdownShell:not(#\9):not(#\9){
+  padding: var(--gi-s3) var(--gi-s4) !important;
+  border-top: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+}
+
+.lcPolCard__breakdownTitle:not(#\9):not(#\9){
+  margin-bottom: var(--gi-s2) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcPolCard__breakdownItem:not(#\9):not(#\9){
+  padding: 6px var(--gi-s3) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border-soft) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+}
+
+.lcPolCard__breakdownItem__label:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-2) !important;
+}
+
+.lcPolCard__breakdownItem__value:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcPolCard__actionShell:not(#\9):not(#\9){
+  padding: var(--gi-s3) var(--gi-s4) !important;
+  background: transparent !important;
+}
+
+.lcPolCard__sumRow:not(#\9):not(#\9){
+  margin: var(--gi-s2) 0 !important;
+  padding: var(--gi-s3) var(--gi-s4) !important;
+  border-radius: var(--gi-r-md) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+}
+
+.lcPolCard__sumRow--warn:not(#\9):not(#\9){
+  background: var(--gi-warn-soft) !important;
+  border-color: rgba(217,119,6,.28) !important;
+}
+
+.lcPolCard__sumLabel:not(#\9):not(#\9),
+.lcPolCard__sumSym:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text-2) !important;
+}
+
+.lcPolCard__sumInput:not(#\9):not(#\9){
+  min-height: 38px !important;
+  border-radius: var(--gi-r-ctl) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+}
+
+.lcPolCard__sumInput--warn:not(#\9):not(#\9){
+  border-color: rgba(217,119,6,.45) !important;
+  background: var(--gi-warn-soft) !important;
+}
+
+.lcPolCard__sumWarnMsg:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--gi-warn) !important;
+}
+
+.lcPolChip:not(#\9):not(#\9){
+  padding: 4px var(--gi-s3) !important;
+  border-radius: var(--gi-r-pill) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  color: var(--gi-text-3) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+.lcPolChip:hover:not(.is-active):not(#\9):not(#\9){
+  background: var(--gi-surface-2) !important;
+  border-color: var(--gi-border-strong) !important;
+  color: var(--gi-text) !important;
+}
+
+.lcPolChip.is-active:not(#\9):not(#\9){
+  background: var(--gi-primary) !important;
+  background-image: none !important;
+  border-color: var(--gi-primary) !important;
+  color: #FFFFFF !important;
+}
+
+.lcPolicyActionBox__chipLabel:not(#\9):not(#\9),
+.lcPolicyActionBox__sub:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcPolicyActionBox__expandedSection:not(#\9):not(#\9),
+.lcPolicyActionBox__annex:not(#\9):not(#\9){
+  margin-top: var(--gi-s3) !important;
+  padding-top: var(--gi-s3) !important;
+  border-top: 1px solid var(--gi-border) !important;
+}
+
+.lcPolicyActionBox .input:not(#\9):not(#\9),
+.lcPolicyActionBox select.input:not(#\9):not(#\9){
+  min-height: 38px !important;
+  padding: 9px var(--gi-s3) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+}
+
+.lcPartialCovers__hint:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcPartialCovers__item:not(#\9):not(#\9){
+  padding: 8px var(--gi-s3) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+.lcPartialCovers__item:hover:not(#\9):not(#\9){
+  background: var(--gi-surface-2) !important;
+  border-color: var(--gi-border-strong) !important;
+}
+
+.lcPartialCovers__item.is-checked:not(#\9):not(#\9){
+  background: var(--gi-primary-soft) !important;
+  border-color: var(--gi-primary) !important;
+}
+
+.lcPartialCovers__label:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcPartialCovers__value:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text-2) !important;
+}
+
+.lcPartialCovers__cb:not(#\9):not(#\9){
+  accent-color: var(--gi-primary) !important;
+}
+
+
+/* =====================================================================
+   47. HEALTH STEP 6 - פרטי משלם
+
+   השלב בנוי מ-‎.lcWSection‎ + ‎.lcWGrid‎ + שדות רגילים. המעטפת כבר
+   מטופלת בסעיף 37; כאן מיושרים הרשת, המפרידים והשדות כך שייראו כמו
+   שאר האשף — בלי שינוי מבנה או data-payer / data-bind.
+   ===================================================================== */
+
+.lcWizard .lcWGrid:not(#\9):not(#\9),
+.lcWGrid:not(#\9):not(#\9){
+  gap: var(--gi-s4) !important;
+}
+
+.lcWizard .lcWSection > .divider:not(#\9):not(#\9),
+.lcWSection .divider:not(#\9):not(#\9){
+  margin: var(--gi-s5) 0 !important;
+  border: 0 !important;
+  border-top: 1px solid var(--gi-border) !important;
+  background: none !important;
+  height: 0 !important;
+  opacity: 1 !important;
+}
+
+.lcWizard .lcWSection > .muted.small:not(#\9):not(#\9),
+.lcWSection > .muted.small:not(#\9):not(#\9){
+  margin: 0 0 var(--gi-s4) !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcWizard .lcWSection .field:not(#\9):not(#\9),
+.lcWSection .field:not(#\9):not(#\9){
+  gap: var(--gi-s2) !important;
+}
+
+.lcWizard .lcWSection .help:not(#\9):not(#\9),
+.lcWSection .help:not(#\9):not(#\9){
+  margin-top: var(--gi-s1) !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcWizard .lcWSection .input:not(textarea):not(#\9):not(#\9),
+.lcWizard .lcWSection select.input:not(#\9):not(#\9),
+.lcWSection .input:not(textarea):not(#\9):not(#\9),
+.lcWSection select.input:not(#\9):not(#\9){
+  min-height: 38px !important;
+  border-radius: var(--gi-r-ctl) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  box-shadow: none !important;
+}
+
+.lcWizard .lcWSection .field[data-required] > .label:not(#\9):not(#\9)::after,
+.lcWSection .field[data-required] > .label:not(#\9):not(#\9)::after{
+  color: var(--gi-danger) !important;
+  font-weight: 700 !important;
+}
+
+.lcWizard .lcWSection .field.is-valid > .label:not(#\9):not(#\9)::after,
+.lcWSection .field.is-valid > .label:not(#\9):not(#\9)::after{
+  color: var(--gi-success) !important;
+  font-weight: 700 !important;
+}

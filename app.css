@@ -8037,100 +8037,10 @@ body.view-mirrors-active .mirrorsScriptBody{letter-spacing:.1px;}
   display:flex;
   align-items:center;
   justify-content:flex-start;
-  min-height:58px;
+  min-height:40px;
   overflow: visible;
 }
 
-#view-customers .lcCustomerFolderBtn{
-  position:relative;
-  width:132px;
-  height:64px;
-  padding:0;
-  border:0;
-  background:transparent;
-  cursor:pointer;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  overflow:visible;
-  isolation:isolate;
-}
-
-#view-customers .lcCustomerFolderBtn__glow{
-  position:absolute;
-  inset:auto 18px 7px 18px;
-  height:14px;
-  border-radius:999px;
-  background: radial-gradient(circle, rgba(17,53,107,.26) 0%, rgba(17,53,107,.11) 46%, transparent 76%);
-  filter: blur(9px);
-  opacity:.32;
-  transform: scale(.9);
-  transition: opacity .26s ease, transform .26s ease, filter .26s ease;
-  z-index:0;
-  pointer-events:none;
-}
-
-#view-customers .lcCustomerFolderBtn__img{
-  position:relative;
-  z-index:1;
-  display:block;
-  width:112px;
-  max-width:100%;
-  height:auto;
-  object-fit:contain;
-  transform-origin: 50% 50%;
-  filter: drop-shadow(0 10px 18px rgba(10,31,74,.18));
-  transition: transform .28s ease, filter .28s ease;
-  user-select:none;
-  -webkit-user-drag:none;
-  pointer-events:none;
-}
-
-#view-customers .lcCustomerRow:hover .lcCustomerFolderBtn__img,
-#view-customers .lcCustomerFolderBtn:hover .lcCustomerFolderBtn__img,
-#view-customers .lcCustomerFolderBtn:focus-visible .lcCustomerFolderBtn__img{
-  animation: lcFolderOpenClose .85s ease-in-out 1;
-  transform: translateY(-2px) scale(1.035);
-  filter: drop-shadow(0 14px 26px rgba(10,31,74,.24));
-}
-
-#view-customers .lcCustomerRow:hover .lcCustomerFolderBtn__glow,
-#view-customers .lcCustomerFolderBtn:hover .lcCustomerFolderBtn__glow,
-#view-customers .lcCustomerFolderBtn:focus-visible .lcCustomerFolderBtn__glow{
-  opacity:.62;
-  transform: scale(1.04);
-  filter: blur(11px);
-}
-
-#view-customers .lcCustomerFolderBtn:focus-visible{
-  outline:none;
-}
-
-#view-customers .lcCustomerFolderBtn:focus-visible::after{
-  content:"";
-  position:absolute;
-  inset:6px 10px;
-  border-radius:18px;
-  box-shadow: 0 0 0 3px rgba(58,108,255,.18);
-}
-
-@keyframes lcFolderOpenClose{
-  0%   { transform: translateY(0) scale(1); }
-  24%  { transform: translateY(-1px) scale(1.015); }
-  48%  { transform: translateY(-3px) scale(1.035); }
-  72%  { transform: translateY(-2px) scale(1.026); }
-  100% { transform: translateY(-2px) scale(1.035); }
-}
-
-@media (max-width: 980px){
-  #view-customers .lcCustomerFolderBtn{
-    width:108px;
-    height:56px;
-  }
-  #view-customers .lcCustomerFolderBtn__img{
-    width:92px;
-  }
-}
 
 /* BUILD: 20260318-2009 • login background - reka.png with milky frosted overlay */
 body.lcAuthLock .lcLogin{
@@ -9719,7 +9629,7 @@ body.lcLeadShellOpen .lcLeadShell__panel{
     0 0 26px rgba(188,220,255,.28);
   backdrop-filter: blur(24px) saturate(132%);
   -webkit-backdrop-filter: blur(24px) saturate(132%);
-  animation: customerHeroFloatIn .62s cubic-bezier(.2,.8,.2,1);
+  animation: none;
 }
 #customerFull .customerHero::before{
   content:"";
@@ -14574,99 +14484,69 @@ body.view-mirrors-active .mirrorsScriptBody{letter-spacing:.1px;}
   display:flex;
   align-items:center;
   justify-content:flex-start;
-  min-height:58px;
+  min-height:40px;
   overflow: visible;
 }
 
+/* ===============================
+   Customers: "פתח תיק" row button
+   GI-DESIGN 2026-07-31 — PNG + glow replaced by a token-driven SVG control.
+   Single source of truth: the duplicate copy of this block was removed.
+=============================== */
 #view-customers .lcCustomerFolderBtn{
   position:relative;
-  width:132px;
-  height:64px;
+  width:32px;
+  height:32px;
   padding:0;
   border:0;
-  background:transparent;
+  border-radius: var(--gi-r-ctl, 8px);
+  background: var(--gi-primary-soft, #EFF6FF);
+  color: var(--gi-primary, #2563EB);
   cursor:pointer;
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  overflow:visible;
-  isolation:isolate;
+  transition: background-color .18s ease, color .18s ease, box-shadow .18s ease;
 }
 
-#view-customers .lcCustomerFolderBtn__glow{
-  position:absolute;
-  inset:auto 18px 7px 18px;
-  height:14px;
-  border-radius:999px;
-  background: radial-gradient(circle, rgba(17,53,107,.26) 0%, rgba(17,53,107,.11) 46%, transparent 76%);
-  filter: blur(9px);
-  opacity:.32;
-  transform: scale(.9);
-  transition: opacity .26s ease, transform .26s ease, filter .26s ease;
-  z-index:0;
-  pointer-events:none;
-}
-
-#view-customers .lcCustomerFolderBtn__img{
-  position:relative;
-  z-index:1;
+#view-customers .lcCustomerFolderBtn__icon{
   display:block;
-  width:112px;
-  max-width:100%;
-  height:auto;
-  object-fit:contain;
-  transform-origin: 50% 50%;
-  filter: drop-shadow(0 10px 18px rgba(10,31,74,.18));
-  transition: transform .28s ease, filter .28s ease;
-  user-select:none;
-  -webkit-user-drag:none;
+  width:17px;
+  height:17px;
   pointer-events:none;
 }
 
-#view-customers .lcCustomerRow:hover .lcCustomerFolderBtn__img,
-#view-customers .lcCustomerFolderBtn:hover .lcCustomerFolderBtn__img,
-#view-customers .lcCustomerFolderBtn:focus-visible .lcCustomerFolderBtn__img{
-  animation: lcFolderOpenClose .85s ease-in-out 1;
-  transform: translateY(-2px) scale(1.035);
-  filter: drop-shadow(0 14px 26px rgba(10,31,74,.24));
+#view-customers .lcCustomerRow:hover .lcCustomerFolderBtn,
+#view-customers .lcCustomerFolderBtn:hover{
+  background: var(--gi-primary, #2563EB);
+  color:#FFFFFF;
 }
 
-#view-customers .lcCustomerRow:hover .lcCustomerFolderBtn__glow,
-#view-customers .lcCustomerFolderBtn:hover .lcCustomerFolderBtn__glow,
-#view-customers .lcCustomerFolderBtn:focus-visible .lcCustomerFolderBtn__glow{
-  opacity:.62;
-  transform: scale(1.04);
-  filter: blur(11px);
+#view-customers .lcCustomerFolderBtn:active{
+  background: var(--gi-primary-hover, #1D4ED8);
+  color:#FFFFFF;
 }
 
 #view-customers .lcCustomerFolderBtn:focus-visible{
   outline:none;
-}
-
-#view-customers .lcCustomerFolderBtn:focus-visible::after{
-  content:"";
-  position:absolute;
-  inset:6px 10px;
-  border-radius:18px;
-  box-shadow: 0 0 0 3px rgba(58,108,255,.18);
-}
-
-@keyframes lcFolderOpenClose{
-  0%   { transform: translateY(0) scale(1); }
-  24%  { transform: translateY(-1px) scale(1.015); }
-  48%  { transform: translateY(-3px) scale(1.035); }
-  72%  { transform: translateY(-2px) scale(1.026); }
-  100% { transform: translateY(-2px) scale(1.035); }
+  background: var(--gi-primary, #2563EB);
+  color:#FFFFFF;
+  box-shadow: 0 0 0 3px var(--gi-primary-ring, rgba(37,99,235,.18));
 }
 
 @media (max-width: 980px){
   #view-customers .lcCustomerFolderBtn{
-    width:108px;
-    height:56px;
+    width:30px;
+    height:30px;
   }
-  #view-customers .lcCustomerFolderBtn__img{
-    width:92px;
+  #view-customers .lcCustomerFolderBtn__icon{
+    width:16px;
+    height:16px;
   }
+}
+
+@media (prefers-reduced-motion: reduce){
+  #view-customers .lcCustomerFolderBtn{ transition:none; }
 }
 
 /* BUILD: 20260318-2009 • login background - reka.png with milky frosted overlay */
@@ -16151,7 +16031,7 @@ body.lcLeadShellOpen .lcLeadShell__panel{
     0 0 26px rgba(188,220,255,.28);
   backdrop-filter: blur(24px) saturate(132%);
   -webkit-backdrop-filter: blur(24px) saturate(132%);
-  animation: customerHeroFloatIn .62s cubic-bezier(.2,.8,.2,1);
+  animation: none;
 }
 #customerFull .customerHero::before{
   content:"";
@@ -20427,11 +20307,11 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
    =============================== */
 #view-dashboard .bankDash{
   display:grid;
-  gap:18px;
+  gap:10px;
 }
 
 
-#view-dashboard .bankDash--cleanTop{ display:grid; gap:12px; }
+#view-dashboard .bankDash--cleanTop{ display:grid; gap:8px; }
 #view-dashboard .bankDash__topStats{
   display:flex;
   justify-content:space-between;
@@ -20502,7 +20382,7 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
   margin-top:12px; display:flex; gap:12px; flex-wrap:wrap; color:rgba(33,57,101,.74); font-size:13px; font-weight:700;
 }
 #view-dashboard .bankDash__heroMeta span:not(:last-child)::after{ content:"|"; margin-inline-start:12px; opacity:.35; }
-#view-dashboard .bankDash__kpis{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px; }
+#view-dashboard .bankDash__kpis{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
 #view-dashboard .bankKpi{
   position:relative;
   min-height:0;
@@ -20622,14 +20502,9 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
   text-shadow:0 8px 18px rgba(74,116,192,.10);
 }
 #view-dashboard .bankKpi__delta{
-  margin-top:4px;
-  padding-bottom:2px;
-  font-size:10px;
-  font-weight:800;
-  line-height:1.35;
-  transition:transform .24s ease, opacity .24s ease;
+  display:none !important;
 }
-#view-dashboard .bankKpi:hover .bankKpi__delta{ transform:translateY(-1px); }
+#view-dashboard .bankKpi:hover .bankKpi__delta{ transform:none; }
 #view-dashboard .bankKpi__delta.is-up{ color:#2f8c57; }
 #view-dashboard .bankKpi__delta.is-down{ color:#b43a4d; }
 #view-dashboard .bankKpi__bar{
@@ -20882,12 +20757,7 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
 }
 /* הכותרת + המספר הגדול + sub נשארים בזרימה רגילה */
 #view-dashboard .bankKpiToday__sub{
-  position: relative; z-index: 2;
-  font-size: 11px;
-  color: var(--muted);
-  margin-top: 4px;
-  margin-bottom: 0;
-  letter-spacing: .01em;
+  display:none !important;
 }
 /* ה-breakdown דוחף את עצמו לתחתית הכרטיס — grid 0fr/1fr לפתיחה חלקה */
 #view-dashboard .bankKpiToday__breakdown{
@@ -21238,7 +21108,7 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
 /* שורות דשבורד: משמאל–מימין (פיזית) עם direction:ltr כדי ש‑RTL בשאר המסך לא יהפוך סדר מול המבוקש */
 #view-dashboard .bankDash__row{
   display:grid;
-  gap:16px;
+  gap:10px;
   align-items:stretch;
 }
 #view-dashboard .bankDash__row--goalLeader{
@@ -21283,8 +21153,7 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
   direction:ltr;
   align-items:start;
   gap:12px;
-  /* גרף ~58% · חדשות INVEST ~42% */
-  grid-template-columns:minmax(240px,1.15fr) minmax(200px,.85fr);
+  grid-template-columns:1fr;
 }
 #view-dashboard .bankDash__row--goalLeader > *{
   direction:rtl;
@@ -21814,9 +21683,8 @@ body.giDailySalesOverlay-open{ overflow:hidden; }
   #view-dashboard .giDailySales__footTotalVal{ font-size:17px; }
 }
 
-/* ===== שורת גרף + חדשות — compact ===== */
-#view-dashboard .bankDash__row--activityChart .bankChart.bankChart--dailyHud,
-#view-dashboard .bankDash__row--activityChart .bankSide.bankInvestNews{
+/* ===== שורת גרף — compact ===== */
+#view-dashboard .bankDash__row--activityChart .bankChart.bankChart--dailyHud{
   border-radius:20px;
 }
 #view-dashboard .bankDash__row--activityChart .bankChart.bankChart--dailyHud{
@@ -21856,75 +21724,6 @@ body.giDailySalesOverlay-open{ overflow:hidden; }
 }
 #view-dashboard .bankDash__row--activityChart .bankChart__barWrap span{
   font-size:9.5px;
-}
-#view-dashboard .bankDash__row--activityChart .bankSide.bankInvestNews{
-  display:flex;
-  flex-direction:column;
-  min-height:0;
-  padding:10px 12px 8px;
-  background:linear-gradient(180deg, #faf7f0 0%, #f3ede3 100%);
-}
-#view-dashboard .bankDash__row--activityChart .bankInvestNews__head{
-  text-align:center;
-  flex-shrink:0;
-}
-#view-dashboard .bankDash__row--activityChart .bankInvestNews__title{
-  margin:0;
-  font-size:15px;
-  font-weight:950;
-  color:#142e5c;
-}
-#view-dashboard .bankDash__row--activityChart .bankInvestNews__headLine{
-  display:block;
-  width:56px;
-  height:2px;
-  margin:5px auto 0;
-  border-radius:999px;
-  background:linear-gradient(90deg, #c9a24a, #e8cc7a);
-}
-#view-dashboard .bankDash__row--activityChart .bankInvestNews__list{
-  flex:0 1 auto;
-  min-height:0;
-  overflow-y:auto;
-  margin-top:4px;
-  padding-top:0;
-  max-height:min(248px, 42vh);
-}
-#view-dashboard .bankDash__row--activityChart .bankInvestNewsCard{
-  grid-template-columns:56px minmax(0, 1fr);
-  gap:8px;
-  padding:8px 0;
-}
-#view-dashboard .bankDash__row--activityChart .bankInvestNewsCard__thumbWrap{
-  border-radius:10px;
-  box-shadow:0 2px 8px rgba(28, 54, 102, .07);
-}
-#view-dashboard .bankDash__row--activityChart .bankInvestNewsCard__tag{
-  padding:2px 8px;
-  font-size:9px;
-}
-#view-dashboard .bankDash__row--activityChart .bankInvestNewsCard__date{
-  font-size:10px;
-  gap:3px;
-}
-#view-dashboard .bankDash__row--activityChart .bankInvestNewsCard__calIcon{
-  width:11px;
-  height:11px;
-}
-#view-dashboard .bankDash__row--activityChart .bankInvestNewsCard__title{
-  margin:5px 0 0;
-  font-size:11.5px;
-  line-height:1.3;
-}
-#view-dashboard .bankDash__row--activityChart .bankInvestNewsCard__summary{
-  margin:4px 0 0;
-  font-size:10px;
-  line-height:1.35;
-  -webkit-line-clamp:2;
-}
-#view-dashboard .bankDash__row--activityChart .bankInvestNewsCard__more{
-  margin-top:5px;
-  font-size:10.5px;
 }
 
 #view-dashboard .bankChart{ padding:18px 18px 12px; }
@@ -21995,101 +21794,6 @@ body.giDailySalesOverlay-open{ overflow:hidden; }
 #view-dashboard .bankSide__itemMeta{ text-align:left; }
 #view-dashboard .bankSide__itemMeta strong{ display:block; font-size:14px; color:#1c4a96; }
 #view-dashboard .bankSide__itemMeta span{ display:block; margin-top:4px; font-size:11px; color:#7a8dad; }
-
-/* חדשות INVEST — כרטיסי חדשות (במקום טיקר) */
-#view-dashboard .bankInvestNews{
-  display:flex;
-  flex-direction:column;
-  min-height:0;
-}
-#view-dashboard .bankInvestNews__title{
-  flex-shrink:0;
-  letter-spacing:.02em;
-}
-#view-dashboard .bankInvestNewsCard{
-  display:grid;
-  grid-template-columns:72px minmax(0, 1fr);
-  gap:12px;
-  padding:12px 2px;
-  align-items:start;
-  direction:ltr;
-}
-#view-dashboard .bankInvestNewsCard--sep{
-  border-top:1px solid rgba(176, 193, 226, .38);
-}
-#view-dashboard .bankInvestNewsCard__thumbWrap{
-  border-radius:14px;
-  overflow:hidden;
-  aspect-ratio:1;
-  background:#e8eef8;
-  box-shadow:0 4px 12px rgba(28, 54, 102, .08);
-}
-#view-dashboard .bankInvestNewsCard__thumb{
-  display:block;
-  width:100%;
-  height:100%;
-  object-fit:cover;
-}
-#view-dashboard .bankInvestNewsCard__body{
-  direction:rtl;
-  min-width:0;
-}
-#view-dashboard .bankInvestNewsCard__meta{
-  display:flex;
-  flex-wrap:wrap;
-  align-items:center;
-  justify-content:flex-end;
-  gap:8px;
-}
-#view-dashboard .bankInvestNewsCard__tag{
-  padding:3px 10px;
-  border-radius:999px;
-  background:linear-gradient(180deg, #c9a24a, #b8954a);
-  color:#fff;
-  font-size:10px;
-  font-weight:800;
-  line-height:1.2;
-}
-#view-dashboard .bankInvestNewsCard__date{
-  display:inline-flex;
-  align-items:center;
-  gap:4px;
-  font-size:11px;
-  color:#7a8aa8;
-  font-weight:700;
-}
-#view-dashboard .bankInvestNewsCard__calIcon{
-  width:13px;
-  height:13px;
-  flex-shrink:0;
-}
-#view-dashboard .bankInvestNewsCard__title{
-  margin:8px 0 0;
-  font-size:13px;
-  font-weight:950;
-  line-height:1.35;
-  color:#142e5c;
-}
-#view-dashboard .bankInvestNewsCard__summary{
-  margin:6px 0 0;
-  font-size:11px;
-  line-height:1.45;
-  color:rgba(34, 58, 102, .72);
-  font-weight:600;
-  display:-webkit-box;
-  -webkit-line-clamp:3;
-  -webkit-box-orient:vertical;
-  overflow:hidden;
-}
-#view-dashboard .bankInvestNewsCard__more{
-  display:inline-block;
-  margin-top:8px;
-  font-size:11.5px;
-  font-weight:800;
-  color:#2a5cf5;
-  pointer-events:none;
-  user-select:none;
-}
 
 #view-dashboard .bankTable{ padding:18px; }
 #view-dashboard .bankDash__emptyCard{ padding:34px 20px; text-align:center; }
@@ -23213,7 +22917,7 @@ body.sidebar-collapsed .sidebar .nav__icon{
 #view-dashboard > *{ position:relative; z-index:1; }
 #view-dashboard .bankDash{
   position:relative;
-  gap:20px;
+  gap:10px;
 }
 #view-dashboard .bankDash::before{
   content:"";
@@ -23225,7 +22929,7 @@ body.sidebar-collapsed .sidebar .nav__icon{
   opacity:.75;
 }
 #view-dashboard .bankDash--cleanTop{
-  gap:14px;
+  gap:8px;
 }
 #view-dashboard .bankDash__topStats{
   position:relative;
@@ -39161,29 +38865,26 @@ body.view-settings-active.lcSettingsRubric-systemUpdates .main{ overflow-y: auto
 }
 #campaignLeadsTrackingPanel{
   flex:1 1 0;
+  min-height:0;
   display:flex;
   flex-direction:column;
   overflow:hidden;
   position:relative;
-}
-#campaignLeadsTrackingPanel::before{
-  content:"";
-  position:absolute;
-  inset:-20px;
-  background:url('./tracking-bg.png') center/cover no-repeat;
-  opacity:.10;
-  pointer-events:none;
-  z-index:0;
+  background:transparent;
 }
 #campaignLeadsTrackingPanel > *{
   position:relative;
   z-index:1;
+  flex-shrink:0;
 }
-#campaignLeadsTrackingPanel .lcCampaign__tableWrap{
-  flex:1 1 0;
-  max-height:none;
+#campaignLeadsTrackingPanel .lcCampaign__tableWrap,
+#campaignLeadsTrackingPanel .lcTrackScreen__table{
+  flex:1 1 auto;
+  min-height:0;
+  max-height:none !important;
+  height:auto;
   overflow-y:auto;
-  overflow-x:hidden;
+  overflow-x:auto;
 }
 .lcCampaignTable{ width:100%; border-collapse:separate; border-spacing:0 5px; table-layout:fixed; }
 .lcCampaignTable th{
@@ -39786,10 +39487,12 @@ body.view-settings-active.lcSettingsRubric-systemUpdates .main{ overflow-y: auto
   display:flex;
   flex-direction:column;
   height:100%;
+  min-height:0;
   overflow:hidden;
 }
 #view-campaignLeads > .lcCampaignCard{
   flex:1 1 0;
+  min-height:0;
   display:flex;
   flex-direction:column;
   overflow:hidden;
@@ -40022,14 +39725,104 @@ body.view-dailyReport-active .content{
 }
 
 /* ===== Report rubrics (Daily / Cancellations) ===== */
+.lcReportNav{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:10px 14px;
+  margin:0;
+}
+.lcReportNav__back{
+  appearance:none;
+  border:1px solid var(--line);
+  background:rgba(255,255,255,.72);
+  color:var(--muted);
+  font-family:inherit;
+  font-size:13px;
+  font-weight:700;
+  padding:9px 14px;
+  border-radius:var(--radius2);
+  cursor:pointer;
+  transition:background .15s ease, color .15s ease, border-color .15s ease;
+}
+.lcReportNav__back:hover{
+  color:var(--brandB);
+  border-color:rgba(37,99,235,.35);
+  background:rgba(59,130,246,.08);
+}
 .lcReportRubrics{
   display:flex;
   gap:8px;
-  margin:0 0 16px;
+  margin:0;
   padding:6px;
   border-radius:var(--radius2);
   border:1px solid var(--line);
   background:rgba(255,255,255,.72);
+  flex:1 1 auto;
+}
+
+/* ===== Reports hub (lightweight picker) ===== */
+.giReportsHub{
+  max-width:720px;
+  margin:0 auto;
+  padding:12px 4px 24px;
+}
+.giReportsHub__intro{
+  margin:0 0 18px;
+}
+.giReportsHub__title{
+  font-size:22px;
+  font-weight:800;
+  color:var(--text, #0f172a);
+  line-height:1.25;
+}
+.giReportsHub__sub{
+  margin-top:4px;
+  font-size:14px;
+  color:var(--muted);
+}
+.giReportsHub__grid{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:12px;
+}
+.giReportsHub__opt{
+  appearance:none;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:6px;
+  width:100%;
+  text-align:right;
+  padding:18px 18px 16px;
+  border-radius:var(--radius2);
+  border:1px solid var(--line);
+  background:rgba(255,255,255,.88);
+  cursor:pointer;
+  transition:border-color .15s ease, background .15s ease, box-shadow .15s ease, transform .12s ease;
+}
+.giReportsHub__opt:hover{
+  border-color:rgba(37,99,235,.38);
+  background:#fff;
+  box-shadow:0 6px 18px rgba(15,23,42,.06);
+  transform:translateY(-1px);
+}
+.giReportsHub__opt:active{
+  transform:translateY(0);
+}
+.giReportsHub__optTitle{
+  font-size:16px;
+  font-weight:800;
+  color:var(--text, #0f172a);
+}
+.giReportsHub__optHint{
+  font-size:13px;
+  color:var(--muted);
+  line-height:1.35;
+}
+@media (max-width:640px){
+  .giReportsHub__grid{ grid-template-columns:1fr; }
+  .lcReportNav{ flex-direction:column; align-items:stretch; }
 }
 .lcReportRubrics__tab{
   appearance:none;
@@ -41228,18 +41021,10 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   color: var(--blueDeep);
   flex-shrink: 0;
 }
-.cfFile__avatar{
-  width: 48px;
-  height: 48px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, var(--sideA), #fff);
-  border: 1px solid var(--sideLine);
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  flex-shrink: 0;
+.cfFile__avatar,
+.cfFile__avatarImg{
+  display: none !important;
 }
-.cfFile__avatarImg{ width: 70%; height: 70%; object-fit: contain; }
 .cfFile__identity{ min-width: 0; }
 .cfFile__name{
   font-size: 22px;
@@ -42110,10 +41895,11 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   align-items:center;
   gap:8px;
   flex-wrap:wrap;
-  margin-top:6px;
-  padding-top:8px;
-  border-top:1px dashed var(--line);
-  width:100%;
+  margin-top:0;
+  padding-top:0;
+  border-top:none;
+  width:auto;
+  flex:0 0 auto;
 }
 .lcTracking__agentFilterLabel{
   font-size:.78rem;
@@ -42125,6 +41911,14 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   display:flex;
   gap:6px;
   flex-wrap:wrap;
+}
+.lcTracking__agentSelect{
+  min-width: 200px;
+  max-width: 280px;
+  height: 36px;
+  padding: 0 10px;
+  font-size: 13px;
+  border-radius: 10px;
 }
 /* Agent summary card */
 .lcTrackAgentCard{
@@ -43569,36 +43363,65 @@ body.view-elementaryMirror-active .pageTitle{ /* keep default */ }
 .goldLead__label .input{ width:100%; margin-top:4px; }
 
 .lcGoldBadge{
-  display:inline-block; font-size:11px; font-weight:700; padding:2px 9px;
+  display:inline-block; font-size:10px; font-weight:700; padding:1px 7px;
   border-radius:999px; background:#fdefcd; border:1px solid rgba(191,138,20,.5);
-  color:#7a5305; margin-inline-start:6px; vertical-align:middle;
+  color:#7a5305; margin-inline-start:4px; vertical-align:middle;
 }
 
 
 /* ===== GI-GOLD-LEAD board ===== */
-.goldBoard__stats{ display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:10px; margin:12px 0 14px; }
-.goldBoard__stat{ background:var(--bg); border:1px solid var(--line); border-radius:var(--radius2); padding:10px 12px; }
+#campaignLeadsGoldPanel{
+  flex:1 1 0;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+#campaignLeadsGoldPanel > .card__head{
+  flex-shrink:0;
+  padding:8px 12px !important;
+}
+#campaignLeadsGoldPanel .card__title{ font-size:15px !important; }
+#campaignLeadsGoldPanel .card__hint{ font-size:12px !important; margin-top:2px; }
+
+.goldBoard__stats{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(90px,1fr));
+  gap:6px;
+  margin:6px 0 8px;
+  flex-shrink:0;
+}
+.goldBoard__stat{ background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:6px 10px; }
 .goldBoard__stat--danger{ background:#fdecec; border-color:rgba(180,40,40,.4); }
-.goldBoard__statLabel{ font-size:12px; color:var(--muted); }
+.goldBoard__statLabel{ font-size:11px; color:var(--muted); }
 .goldBoard__stat--danger .goldBoard__statLabel{ color:#a32d2d; }
-.goldBoard__statVal{ font-size:22px; font-weight:700; color:var(--text); margin-top:2px; }
+.goldBoard__statVal{ font-size:16px; font-weight:700; color:var(--text); margin-top:1px; line-height:1.15; }
 .goldBoard__stat--danger .goldBoard__statVal{ color:#7a1f1f; }
 
-.goldBoard__body{ display:flex; flex-direction:column; gap:12px; }
-.goldBoard__empty{ padding:34px 12px; text-align:center; color:var(--muted); font-size:14px; }
-.goldBoard__card{ background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; }
+.goldBoard__body{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  flex:1 1 0;
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  padding-bottom:8px;
+}
+.goldBoard__empty{ padding:20px 12px; text-align:center; color:var(--muted); font-size:13px; }
+.goldBoard__card{ background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:8px 12px; }
 .goldBoard__card.is-stuck{ border-inline-start:3px solid #e24b4a; }
 
-.goldBoard__top{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
-.goldBoard__nameRow{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-.goldBoard__name{ font-size:16px; font-weight:700; color:var(--text); }
-.goldBoard__facts{ font-size:12.5px; color:var(--muted); margin-top:4px; }
-.goldBoard__assign{ text-align:start; min-width:120px; }
-.goldBoard__assignLabel{ font-size:11.5px; color:var(--muted); }
-.goldBoard__assignName{ font-size:13.5px; font-weight:600; color:var(--text); }
-.goldBoard__assignSrc{ font-size:11.5px; color:var(--muted); margin-top:2px; }
+.goldBoard__top{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+.goldBoard__nameRow{ display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+.goldBoard__name{ font-size:13.5px; font-weight:700; color:var(--text); }
+.goldBoard__facts{ font-size:11.5px; color:var(--muted); margin-top:2px; }
+.goldBoard__assign{ text-align:start; min-width:100px; }
+.goldBoard__assignLabel{ font-size:10.5px; color:var(--muted); }
+.goldBoard__assignName{ font-size:12.5px; font-weight:600; color:var(--text); }
+.goldBoard__assignSrc{ font-size:10.5px; color:var(--muted); margin-top:1px; }
 
-.goldBoard__pill{ font-size:11px; font-weight:600; padding:2px 9px; border-radius:999px; background:rgba(15,25,45,.07); color:var(--text); }
+.goldBoard__pill{ font-size:10px; font-weight:600; padding:1px 7px; border-radius:999px; background:rgba(15,25,45,.07); color:var(--text); }
 .goldBoard__pill--new{ background:#e6f1fb; color:#0c447c; }
 .goldBoard__pill--in_progress{ background:#fdf3d6; color:#7a5305; }
 .goldBoard__pill--no_answer{ background:#fdeede; color:#854f0b; }
@@ -43608,22 +43431,22 @@ body.view-elementaryMirror-active .pageTitle{ /* keep default */ }
 .goldBoard__pill--stuck{ background:#fceaea; color:#a32d2d; }
 .goldBoard__pill--carried{ background:rgba(15,25,45,.08); color:var(--muted); }
 
-.goldBoard__chips{ display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
-.goldBoard__chip{ font-size:11px; padding:3px 9px; border-radius:999px; background:var(--bg); border:1px solid var(--line); color:var(--muted); }
+.goldBoard__chips{ display:flex; flex-wrap:wrap; gap:4px; margin:4px 0; }
+.goldBoard__chip{ font-size:10px; padding:1px 7px; border-radius:999px; background:var(--bg); border:1px solid var(--line); color:var(--muted); }
 
-.goldBoard__timeline{ display:flex; align-items:center; gap:0; margin:12px 0 10px; }
+.goldBoard__timeline{ display:flex; align-items:center; gap:0; margin:4px 0 2px; }
 .goldBoard__tlStep{ flex:1; text-align:center; min-width:0; }
-.goldBoard__tlDot{ width:9px; height:9px; border-radius:50%; margin:0 auto 4px; background:var(--panel); border:1.6px solid rgba(15,25,45,.3); }
-.goldBoard__tlDot.is-done{ background:#1d9e75; border-color:#1d9e75; width:11px; height:11px; margin-bottom:3px; }
-.goldBoard__tlLabel{ font-size:11px; color:var(--muted); }
+.goldBoard__tlDot{ width:7px; height:7px; border-radius:50%; margin:0 auto 2px; background:var(--panel); border:1.4px solid rgba(15,25,45,.3); }
+.goldBoard__tlDot.is-done{ background:#1d9e75; border-color:#1d9e75; width:8px; height:8px; margin-bottom:2px; }
+.goldBoard__tlLabel{ font-size:10px; color:var(--muted); line-height:1.2; }
 .goldBoard__tlLabel.is-done{ color:var(--text); font-weight:600; }
-.goldBoard__tlTime{ font-size:11px; color:var(--muted); }
-.goldBoard__tlBar{ flex:1; height:1px; background:rgba(15,25,45,.25); margin-bottom:22px; }
+.goldBoard__tlTime{ font-size:10px; color:var(--muted); line-height:1.2; }
+.goldBoard__tlBar{ flex:1; height:1px; background:rgba(15,25,45,.25); margin-bottom:16px; }
 .goldBoard__tlBar.is-done{ background:#1d9e75; }
 
-.goldBoard__note{ background:var(--bg); border:1px solid var(--line); border-radius:var(--radius2); padding:10px 12px; }
-.goldBoard__noteHead{ font-size:11.5px; color:var(--muted); }
-.goldBoard__noteBody{ font-size:13px; color:var(--text); line-height:1.6; margin-top:4px; }
+.goldBoard__note{ background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:6px 9px; }
+.goldBoard__noteHead{ font-size:10.5px; color:var(--muted); }
+.goldBoard__noteBody{ font-size:12px; color:var(--text); line-height:1.4; margin-top:2px; }
 
 
 /* ===== GI-GOLD-LEAD routing ===== */
@@ -43644,7 +43467,7 @@ body.view-elementaryMirror-active .pageTitle{ /* keep default */ }
 .goldLead__availRow .input{ flex:1; }
 .goldBoard__pill--pension{ background:#efedfd; color:#3c3489; }
 .goldBoard__pill--elementary{ background:#e1f5ee; color:#0f6e56; }
-.goldBoard__track{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+.goldBoard__track{ display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px; }
 
 
 /* ===== GI-GOLD-LEAD full-screen (v7) ===== */
@@ -44335,3 +44158,15 @@ body.view-elementaryMirror-active .pageTitle{ /* keep default */ }
   .mcSumChoice .mcPayConfirm{ justify-content: center; }
 }
 /* ===== /GI-SUMMARY-UI ====================================================== */
+
+
+/* ===============================
+   Customer loader icon — SVG (GI-DESIGN 2026-07-31)
+   Was ./folder-customer.png. Sizing and float animation are inherited from
+   .customerLoader__iconImg above; only paint is restated here.
+=============================== */
+.customerLoader__iconImg{
+  color: var(--gi-primary, #2563EB);
+  object-fit: initial;
+  filter: none;
+}

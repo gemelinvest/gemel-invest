@@ -1,0 +1,814 @@
+/* =====================================================================
+   GEMEL INVEST - Enterprise Theme Layer
+   PRIORITY 1 ADDENDUM  |  BUILD: 20260801-p1-crosscut
+
+   Cross-cutting pass. These four sections were written to move many
+   screens at once rather than one screen at a time:
+
+     32. LEGACY FORM ATOMS   - .lcField / .lcLabel / .lcInput (~70 uses)
+     33. UNIFIED MODAL LAYER - four competing modal systems, one look
+     34. FLAT PASS II        - gradients + halos in the untouched views
+     35. UTILITY ATOMS       - .muted / .small / .row
+
+   Specificity convention is unchanged: :not(#\9):not(#\9) contributes
+   two ID-level units, which outranks app.css's #id rules. !important is
+   kept only where app.css also declared !important on the same property.
+   ===================================================================== */
+
+
+/* =====================================================================
+   32. LEGACY FORM ATOMS
+
+   app.css never defined a base rule for .lcField / .lcLabel / .lcInput -
+   only ~20 contextual overrides. So every wizard and modal field looked
+   slightly different. This is the missing base layer, matched to the
+   .field / .label / .input rules in section 13.
+   ===================================================================== */
+
+.lcField:not(#\9):not(#\9){
+  display: grid !important;
+  gap: var(--gi-s2) !important;
+  align-content: start !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.lcLabel:not(#\9):not(#\9){
+  margin: 0 !important;
+  font-family: var(--gi-font) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  line-height: 1.4 !important;
+  color: var(--gi-text-2) !important;
+  letter-spacing: 0 !important;
+  text-shadow: none !important;
+  text-transform: none !important;
+}
+
+.lcInput:not(#\9):not(#\9),
+.lcSelect:not(#\9):not(#\9),
+.lcTextarea:not(#\9):not(#\9){
+  width: 100% !important;
+  min-height: 38px !important;
+  padding: 9px var(--gi-s3) !important;
+  font-family: var(--gi-font) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.lcInput:not(#\9):not(#\9)::placeholder,
+.lcTextarea:not(#\9):not(#\9)::placeholder{
+  color: var(--gi-text-muted) !important;
+  font-weight: 400 !important;
+  font-size: 13px !important;
+}
+
+.lcInput:focus:not(#\9):not(#\9),
+.lcSelect:focus:not(#\9):not(#\9),
+.lcTextarea:focus:not(#\9):not(#\9){
+  border-color: var(--gi-primary) !important;
+  box-shadow: var(--focus) !important;
+  outline: none !important;
+}
+
+.lcInput:disabled:not(#\9):not(#\9),
+.lcSelect:disabled:not(#\9):not(#\9),
+.lcInput[readonly]:not(#\9):not(#\9){
+  background: var(--gi-surface-3) !important;
+  color: var(--gi-text-3) !important;
+  border-color: var(--gi-border-soft) !important;
+  cursor: not-allowed !important;
+}
+
+
+/* --- Validation states -----------------------------------------------
+   The base rules above are !important, so they would have swallowed
+   app.css's error colouring. Re-declared here at higher specificity so
+   invalid fields still read as invalid.                                */
+
+.lcNpField--invalid:not(#\9):not(#\9) .lcLabel,
+.lcField--invalid:not(#\9):not(#\9) .lcLabel{
+  color: var(--gi-danger) !important;
+  font-weight: 600 !important;
+}
+
+.lcInput.lcNpValidationMiss:not(#\9):not(#\9),
+.lcNpField--invalid:not(#\9):not(#\9) .lcInput,
+.lcField--invalid:not(#\9):not(#\9) .lcInput{
+  border-color: var(--gi-danger) !important;
+  background: var(--gi-danger-soft) !important;
+}
+
+.lcInput.lcNpValidationMiss:focus:not(#\9):not(#\9){
+  box-shadow: 0 0 0 3px rgba(220,38,38,.14) !important;
+}
+
+
+/* --- Shell wrapper pattern -------------------------------------------
+   .lcNpDetailField__shell is the visible control; the .lcInput inside it
+   is intentionally borderless. Without this the base rule above would
+   paint a second border inside the first. The shell itself is brought
+   down from radius 18px + inset highlight to the flat control language. */
+
+.lcNpDetailField__shell:not(#\9):not(#\9){
+  min-height: 44px !important;
+  padding: 6px var(--gi-s3) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.lcNpDetailField:focus-within:not(#\9):not(#\9) .lcNpDetailField__shell{
+  border-color: var(--gi-primary) !important;
+  box-shadow: var(--focus) !important;
+  transform: none !important;
+}
+
+.lcNpDetailField__shell:not(#\9):not(#\9) .lcInput{
+  min-height: 32px !important;
+  padding: 4px 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text) !important;
+}
+
+.lcNpDetailField__shell:not(#\9):not(#\9) .lcInput::placeholder{
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  color: var(--gi-text-muted) !important;
+}
+
+.lcNpDetailField__shell:not(#\9):not(#\9) .lcInput:focus{
+  box-shadow: none !important;
+}
+
+/* The leading icon chip lost its gradient and inner highlight. */
+.lcNpDetailField__icon:not(#\9):not(#\9){
+  width: 32px !important;
+  min-width: 32px !important;
+  height: 32px !important;
+  border-radius: var(--gi-r-ctl) !important;
+  background: var(--gi-primary-soft) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border-soft) !important;
+  color: var(--gi-primary) !important;
+  font-size: 14px !important;
+  box-shadow: none !important;
+}
+
+.lcNpDetailField__shell:not(#\9):not(#\9) .lcPolMoneyWrap__sym,
+.lcNpDetailField__currency:not(#\9):not(#\9){
+  min-width: 26px !important;
+  height: 26px !important;
+  padding: 0 var(--gi-s2) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  background: var(--gi-surface-3) !important;
+  background-image: none !important;
+  border: 0 !important;
+  color: var(--gi-text-3) !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+
+/* =====================================================================
+   33. UNIFIED MODAL LAYER
+
+   The app grew four modal systems side by side:
+     .modal__*      - 191 uses, the closest thing to a standard
+     .gi-modal      - 50 uses, its own overlay + panel naming
+     .lcMiniModal   - one-off
+     .drawer        - one-off, side panel
+
+   plus ~25 feature modals (giValModal, lcHarOwnerModal, mcAssignModal,
+   customerEditModal ...) that each redeclare panel chrome. Their internal
+   naming is consistent - __backdrop / __panel / __card / __head / __body
+   / __foot - so substring selectors normalise all of them at once and
+   keep working for modals added later.
+   ===================================================================== */
+
+/* --- Backdrop. Only overlays use __backdrop, so the match is safe. --- */
+[class*="__backdrop"]:not(#\9):not(#\9),
+.gi-modal-overlay:not(#\9):not(#\9),
+.lcTransferOverlay:not(#\9):not(#\9){
+  background: rgba(15,23,42,.45) !important;
+  background-image: none !important;
+  backdrop-filter: blur(2px) !important;
+  -webkit-backdrop-filter: blur(2px) !important;
+}
+
+/* --- Panel / card ---------------------------------------------------- */
+[class*="Modal__panel"]:not(#\9):not(#\9),
+[class*="Modal__card"]:not(#\9):not(#\9),
+[class*="Popup__panel"]:not(#\9):not(#\9),
+[class*="Overlay__panel"]:not(#\9):not(#\9),
+[class*="Drawer__panel"]:not(#\9):not(#\9),
+.modal__panel:not(#\9):not(#\9),
+.drawer__panel:not(#\9):not(#\9),
+.lcMiniModal__panel:not(#\9):not(#\9),
+.lcWizard__panel:not(#\9):not(#\9),
+.lcLeadShell__panel:not(#\9):not(#\9),
+.gi-modal:not(#\9):not(#\9){
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  border-radius: var(--gi-r-card) !important;
+  box-shadow: var(--gi-sh-lg) !important;
+  filter: none !important;
+}
+
+/* Decorative glow layers behind panels - a glass-era leftover. */
+[class*="Modal__glow"]:not(#\9):not(#\9),
+[class*="Modal__panel"]:not(#\9):not(#\9)::before,
+[class*="Modal__card"]:not(#\9):not(#\9)::before,
+.modal__panel:not(#\9):not(#\9)::before,
+.gi-modal:not(#\9):not(#\9)::before{
+  content: none !important;
+  display: none !important;
+  background: none !important;
+}
+
+/* --- Head ------------------------------------------------------------ */
+[class*="Modal__head"]:not(#\9):not(#\9),
+.modal__head:not(#\9):not(#\9),
+.drawer__head:not(#\9):not(#\9),
+.lcMiniModal__head:not(#\9):not(#\9),
+.gi-modal__header:not(#\9):not(#\9){
+  padding: var(--gi-s5) var(--gi-s5) var(--gi-s4) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border-bottom: 1px solid var(--gi-border-soft) !important;
+  box-shadow: none !important;
+}
+
+[class*="Modal__title"]:not(#\9):not(#\9),
+.modal__title:not(#\9):not(#\9),
+.drawer__title:not(#\9):not(#\9),
+.lcMiniModal__title:not(#\9):not(#\9),
+.gi-modal__title:not(#\9):not(#\9){
+  margin: 0 !important;
+  font-family: var(--gi-font) !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+  text-shadow: none !important;
+}
+
+[class*="Modal__kicker"]:not(#\9):not(#\9),
+[class*="Modal__sub"]:not(#\9):not(#\9),
+.modal__kicker:not(#\9):not(#\9),
+.drawer__kicker:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--gi-text-3) !important;
+  text-shadow: none !important;
+}
+
+/* --- Body ------------------------------------------------------------ */
+[class*="Modal__body"]:not(#\9):not(#\9),
+.modal__body:not(#\9):not(#\9),
+.drawer__body:not(#\9):not(#\9),
+.lcMiniModal__body:not(#\9):not(#\9),
+.gi-modal__body:not(#\9):not(#\9){
+  padding: var(--gi-s5) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+}
+
+[class*="Modal__hint"]:not(#\9):not(#\9),
+.gi-modal__hint:not(#\9):not(#\9){
+  margin: 0 0 var(--gi-s3) !important;
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+  color: var(--gi-text-3) !important;
+}
+
+[class*="Modal__error"]:not(#\9):not(#\9),
+.gi-modal__error:not(#\9):not(#\9){
+  color: var(--gi-danger) !important;
+  background: var(--gi-danger-soft) !important;
+  border: 1px solid rgba(220,38,38,.18) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  padding: var(--gi-s2) var(--gi-s3) !important;
+  font-size: 12px !important;
+}
+
+/* --- Foot ------------------------------------------------------------ */
+[class*="Modal__foot"]:not(#\9):not(#\9),
+.modal__foot:not(#\9):not(#\9),
+.lcMiniModal__foot:not(#\9):not(#\9),
+.gi-modal__footer:not(#\9):not(#\9){
+  padding: var(--gi-s4) var(--gi-s5) !important;
+  background: var(--gi-surface-2) !important;
+  background-image: none !important;
+  border-top: 1px solid var(--gi-border-soft) !important;
+  box-shadow: none !important;
+}
+
+/* --- Choice tiles (lcHarOwnerModal, emMirrorInterestModal, mcHealthQ) -
+   Only the tile itself. The siblings __choices (container), __choiceRow,
+   __choiceLabel and __choiceMark must keep their own layout.          */
+[class*="__choice"]:not([class*="__choices"]):not([class*="__choiceRow"]):not([class*="__choiceLabel"]):not([class*="__choiceMark"]):not(#\9):not(#\9){
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  border-radius: var(--gi-r-md) !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  transition: border-color .15s ease, background-color .15s ease;
+}
+
+[class*="__choice"].is-selected:not([class*="__choices"]):not([class*="__choiceRow"]):not(#\9):not(#\9),
+[class*="__choice"].is-active:not([class*="__choices"]):not([class*="__choiceRow"]):not(#\9):not(#\9){
+  border-color: var(--gi-primary) !important;
+  background: var(--gi-primary-soft) !important;
+}
+
+/* --- Entry animation: calm, no scale bounce -------------------------- */
+.gi-modal:not(#\9):not(#\9){
+  animation-duration: .16s !important;
+  animation-timing-function: ease-out !important;
+}
+
+@keyframes giModalIn{
+  from{ opacity: 0; transform: translateY(6px); }
+  to{   opacity: 1; transform: none; }
+}
+
+
+/* =====================================================================
+   34. FLAT PASS II - the views section 19 never reached
+
+   app.css still carries 944 linear-gradients. Section 19 neutralised the
+   dashboard, KPI cards and login. This pass covers the deep flows, which
+   were still painting gradient fills, photo ::before layers and white
+   text halos left over from the glass design.
+
+   Scoped by view id on purpose: the dashboard, login screen, sidebar and
+   logo animation own legitimate gradients (chart bars, goal progress,
+   brand) and must not be caught here.
+   ===================================================================== */
+
+#view-mirrorCall:not(#\9):not(#\9) *,
+#view-elementaryMirror:not(#\9):not(#\9) *,
+#view-myTools:not(#\9):not(#\9) *,
+#view-myProcesses:not(#\9):not(#\9) *,
+#view-myTeam:not(#\9):not(#\9) *,
+#view-users:not(#\9):not(#\9) *,
+#view-customers:not(#\9):not(#\9) *,
+#view-proposals:not(#\9):not(#\9) *,
+#view-elementaryProposals:not(#\9):not(#\9) *,
+#view-elementaryPending:not(#\9):not(#\9) *,
+#view-agentElementaryTracking:not(#\9):not(#\9) *,
+#view-mirrorAssignments:not(#\9):not(#\9) *,
+#view-campaignLeads:not(#\9):not(#\9) *,
+#view-campaignMyLeads:not(#\9):not(#\9) *,
+#customerFull:not(#\9):not(#\9) *,
+[class*="Modal__panel"]:not(#\9):not(#\9) *,
+[class*="Modal__card"]:not(#\9):not(#\9) *,
+.modal__panel:not(#\9):not(#\9) *,
+.gi-modal:not(#\9):not(#\9) *{
+  background-image: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+}
+
+/* Photo and gradient ::before / ::after decoration in the same scope. */
+#view-mirrorCall:not(#\9):not(#\9) *::before,
+#view-mirrorCall:not(#\9):not(#\9) *::after,
+#view-elementaryMirror:not(#\9):not(#\9) *::before,
+#view-elementaryMirror:not(#\9):not(#\9) *::after,
+#view-users:not(#\9):not(#\9) *::before,
+#view-users:not(#\9):not(#\9) *::after,
+#view-campaignLeads:not(#\9):not(#\9) *::before,
+#view-campaignLeads:not(#\9):not(#\9) *::after,
+#customerFull:not(#\9):not(#\9) *::before,
+#customerFull:not(#\9):not(#\9) *::after,
+.lcNewCustomerTypeCard:not(#\9):not(#\9)::before,
+.lcNewCustomerTypeCard:not(#\9):not(#\9)::after,
+.lcPolCard--premium:not(#\9):not(#\9)::before,
+.lcElemPaymentCard__noise:not(#\9):not(#\9){
+  background-image: none !important;
+  content: none !important;
+  display: none !important;
+}
+
+/* The welcome loader keeps its scrim - only the photo behind it goes. */
+.lcWelcomeLoader__backdrop:not(#\9):not(#\9){
+  background: rgba(15,23,42,.45) !important;
+  background-image: none !important;
+}
+
+
+/* =====================================================================
+   35. UTILITY ATOMS
+
+   .muted (134 uses) and .small (90 uses) were single-line rules in
+   app.css. They read as body text everywhere, which is what makes
+   unthemed screens look flat-but-wrong. Bound to the token scale.
+   ===================================================================== */
+
+.muted:not(#\9):not(#\9){
+  color: var(--gi-text-3) !important;
+  font-weight: 400 !important;
+}
+
+.small:not(#\9):not(#\9){
+  font-size: 12px !important;
+  line-height: 1.5 !important;
+}
+
+.muted.small:not(#\9):not(#\9){
+  color: var(--gi-text-muted) !important;
+}
+
+
+/* =====================================================================
+   36. NEW PROPOSAL - "type of proposal" chooser
+
+   This modal had been restyled five times in app.css, each layer stacked
+   on the last: dark glass -> photo cards -> light glass -> partial flat.
+   The result was a full-screen frosted overlay with 300px cards that
+   lifted 8px and scaled on hover, plus a staggered bounce entrance.
+
+   Rewritten here as one deterministic layer: a contained dialog, flat
+   cards, hover that changes colour instead of moving the card.
+
+   REGRESSION FIX: the card icons were painted with a linear-gradient and
+   drew a white SVG on top. Section 34 strips background-image inside
+   modal panels, which left a white icon on a white chip - the blank
+   squares. Icons are now a flat tinted chip with a coloured glyph, so
+   they no longer depend on a gradient at all.
+   ===================================================================== */
+
+/* --- Backdrop: plain scrim, no 10px blur + saturate --- */
+.lcNewCustomerTypeModal__backdrop:not(#\9):not(#\9){
+  background: rgba(15,23,42,.45) !important;
+  background-image: none !important;
+  backdrop-filter: blur(2px) !important;
+  -webkit-backdrop-filter: blur(2px) !important;
+}
+
+/* --- Panel: a real dialog again, not a full-viewport overlay --- */
+.lcNewCustomerTypeModal__panel:not(#\9):not(#\9){
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  width: min(880px, calc(100vw - 32px)) !important;
+  max-width: none !important;
+  height: auto !important;
+  max-height: calc(100vh - 48px) !important;
+  overflow-y: auto !important;
+  padding: 0 !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  border-radius: var(--gi-r-card) !important;
+  box-shadow: var(--gi-sh-lg) !important;
+  isolation: auto !important;
+}
+
+.lcNewCustomerTypeModal__panel:not(#\9):not(#\9)::before,
+.lcNewCustomerTypeModal__glow:not(#\9):not(#\9){
+  content: none !important;
+  display: none !important;
+}
+
+/* --- Header: app.css hid it outright, which is why the dialog opened
+       with a large blank band and no question. Restored. --- */
+.lcNewCustomerTypeModal__head:not(#\9):not(#\9){
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  text-align: start !important;
+  gap: var(--gi-s1) !important;
+  padding: var(--gi-s5) var(--gi-s5) var(--gi-s4) !important;
+  border-bottom: 1px solid var(--gi-border-soft) !important;
+  animation: none !important;
+}
+
+.lcNewCustomerTypeModal__head:not(#\9):not(#\9) .modal__kicker{
+  margin: 0 !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 1.2px !important;
+  text-transform: uppercase !important;
+  color: var(--gi-text-muted) !important;
+}
+
+.lcNewCustomerTypeModal__head:not(#\9):not(#\9) .modal__title{
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  line-height: 1.3 !important;
+  letter-spacing: 0 !important;
+  color: var(--gi-text) !important;
+  text-shadow: none !important;
+}
+
+.lcNewCustomerTypeModal__sub:not(#\9):not(#\9){
+  margin: 0 !important;
+  max-width: 60ch !important;
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+  color: var(--gi-text-3) !important;
+}
+
+/* --- Close: inside the panel, top-left (RTL convention) --- */
+#lcNewCustomerTypeModalClose:not(#\9):not(#\9){
+  position: absolute !important;
+  top: var(--gi-s4) !important;
+  inset-inline-start: auto !important;
+  inset-inline-end: var(--gi-s4) !important;
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: var(--gi-r-ctl) !important;
+  background: var(--gi-surface) !important;
+  border: 1px solid var(--gi-border) !important;
+  color: var(--gi-text-3) !important;
+  font-size: 15px !important;
+  box-shadow: none !important;
+  transition: background-color .15s ease, color .15s ease;
+}
+
+#lcNewCustomerTypeModalClose:hover:not(#\9):not(#\9){
+  background: var(--gi-surface-3) !important;
+  color: var(--gi-text) !important;
+  transform: none !important;
+}
+
+/* --- Body + grid --- */
+.lcNewCustomerTypeModal__body:not(#\9):not(#\9){
+  padding: var(--gi-s5) !important;
+  background: var(--gi-surface) !important;
+  align-items: stretch !important;
+}
+
+.lcNewCustomerTypeModal__grid:not(#\9):not(#\9){
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: var(--gi-s3) !important;
+  width: 100% !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+}
+
+/* --- Card: flat, no lift, no glass --- */
+.lcNewCustomerTypeCard:not(#\9):not(#\9){
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  text-align: start !important;
+  gap: var(--gi-s3) !important;
+  width: 100% !important;
+  min-height: 0 !important;
+  padding: var(--gi-s4) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  border-radius: var(--gi-r-md) !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+  isolation: auto !important;
+  cursor: pointer !important;
+  animation: none !important;
+  transform: none !important;
+  transition: border-color .15s ease, background-color .15s ease !important;
+}
+
+/* Colour-only hover. The card does not move. */
+.lcNewCustomerTypeCard:hover:not(#\9):not(#\9),
+.lcNewCustomerTypeCard--health:hover:not(#\9):not(#\9),
+.lcNewCustomerTypeCard--elementary:hover:not(#\9):not(#\9),
+.lcNewCustomerTypeCard--primary:hover:not(#\9):not(#\9){
+  transform: none !important;
+  background: var(--gi-primary-soft) !important;
+  border-color: var(--gi-primary) !important;
+  box-shadow: none !important;
+}
+
+.lcNewCustomerTypeCard:focus-visible:not(#\9):not(#\9){
+  outline: none !important;
+  border-color: var(--gi-primary) !important;
+  box-shadow: var(--focus) !important;
+}
+
+.lcNewCustomerTypeCard:not(#\9):not(#\9)::before,
+.lcNewCustomerTypeCard:not(#\9):not(#\9)::after{
+  content: none !important;
+  display: none !important;
+}
+
+/* --- Icon chip: flat fill, coloured glyph (the blank-square fix) --- */
+.lcNewCustomerTypeCard__iconWrap:not(#\9):not(#\9){
+  background: none !important;
+  border: 0 !important;
+  padding: 0 !important;
+}
+
+.lcNewCustomerTypeCard__icon:not(#\9):not(#\9){
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: var(--gi-r-ctl) !important;
+  background-color: var(--gi-primary-soft) !important;
+  background-image: none !important;
+  border: 1px solid rgba(37,99,235,.14) !important;
+  color: var(--gi-primary) !important;
+  box-shadow: none !important;
+  transform: none !important;
+  filter: none !important;
+  transition: none !important;
+}
+
+.lcNewCustomerTypeCard__icon:not(#\9):not(#\9) svg{
+  width: 20px !important;
+  height: 20px !important;
+  stroke-width: 1.8 !important;
+}
+
+.lcNewCustomerTypeCard:hover:not(#\9):not(#\9) .lcNewCustomerTypeCard__icon{
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* --- Text --- */
+.lcNewCustomerTypeCard__content:not(#\9):not(#\9){
+  align-items: flex-start !important;
+  text-align: start !important;
+  gap: var(--gi-s1) !important;
+}
+
+.lcNewCustomerTypeCard__title:not(#\9):not(#\9){
+  font-size: 16px !important;
+  font-weight: 700 !important;
+  line-height: 1.35 !important;
+  letter-spacing: 0 !important;
+  color: var(--gi-text) !important;
+  text-shadow: none !important;
+}
+
+.lcNewCustomerTypeCard__text:not(#\9):not(#\9){
+  min-height: 0 !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  line-height: 1.55 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.lcNewCustomerTypeCard__meta:not(#\9):not(#\9){
+  margin-top: auto !important;
+  margin-inline-start: 0 !important;
+  align-self: flex-start !important;
+  padding-top: var(--gi-s1) !important;
+}
+
+/* --- Badges --- */
+.lcNewCustomerTypeCard__badge:not(#\9):not(#\9){
+  min-height: 22px !important;
+  padding: 3px var(--gi-s2) !important;
+  border-radius: var(--gi-r-pill) !important;
+  background: var(--gi-success-soft) !important;
+  border: 1px solid rgba(22,163,74,.20) !important;
+  color: var(--gi-success) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.lcNewCustomerTypeCard__badge--dev:not(#\9):not(#\9),
+.lcNewCustomerTypeCard--pension:not(#\9):not(#\9) .lcNewCustomerTypeCard__badge{
+  background: var(--gi-warn-soft) !important;
+  border-color: rgba(217,119,6,.20) !important;
+  color: var(--gi-warn) !important;
+}
+
+.lcNewCustomerTypeCard__badge--agentAppt:not(#\9):not(#\9){
+  background: var(--gi-primary-soft) !important;
+  border-color: rgba(37,99,235,.18) !important;
+  color: var(--gi-primary) !important;
+}
+
+/* --- Disabled (pension, in development) --- */
+.lcNewCustomerTypeCard.is-disabled:not(#\9):not(#\9){
+  opacity: 1 !important;
+  cursor: default !important;
+  background: var(--gi-surface-2) !important;
+  border-color: var(--gi-border-soft) !important;
+}
+
+.lcNewCustomerTypeCard.is-disabled:hover:not(#\9):not(#\9){
+  transform: none !important;
+  background: var(--gi-surface-2) !important;
+  border-color: var(--gi-border-soft) !important;
+  box-shadow: none !important;
+}
+
+.lcNewCustomerTypeCard.is-disabled:not(#\9):not(#\9) .lcNewCustomerTypeCard__icon{
+  background-color: var(--gi-surface-3) !important;
+  border-color: var(--gi-border) !important;
+  color: var(--gi-text-muted) !important;
+  filter: none !important;
+}
+
+.lcNewCustomerTypeCard.is-disabled:not(#\9):not(#\9) .lcNewCustomerTypeCard__title{
+  color: var(--gi-text-2) !important;
+}
+
+/* --- Status line --- */
+.lcNewCustomerTypeModal__status:not(#\9):not(#\9){
+  position: static !important;
+  transform: none !important;
+  width: 100% !important;
+  min-height: 0 !important;
+  margin-top: var(--gi-s4) !important;
+  padding: 0 !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  text-align: start !important;
+}
+
+.lcNewCustomerTypeModal__status.is-visible:not(#\9):not(#\9){
+  transform: none !important;
+  padding: var(--gi-s3) var(--gi-s4) !important;
+  border-radius: var(--gi-r-ctl) !important;
+}
+
+.lcNewCustomerTypeModal__status.is-dev:not(#\9):not(#\9){
+  background: var(--gi-warn-soft) !important;
+  border: 1px solid rgba(217,119,6,.18) !important;
+  color: var(--gi-warn) !important;
+  box-shadow: none !important;
+}
+
+.lcNewCustomerTypeModal__status.is-ready:not(#\9):not(#\9){
+  background: var(--gi-primary-soft) !important;
+  border: 1px solid rgba(37,99,235,.16) !important;
+  color: var(--gi-primary) !important;
+  box-shadow: none !important;
+}
+
+/* --- Kill the staggered bounce entrance --- */
+.lcNewCustomerTypeModal.is-open:not(#\9):not(#\9) .lcNewCustomerTypeCard,
+.lcNewCustomerTypeModal.is-open:not(#\9):not(#\9) .lcNewCustomerTypeModal__head{
+  animation: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+/* --- Responsive --- */
+@media (max-width: 900px){
+  .lcNewCustomerTypeModal__grid:not(#\9):not(#\9){
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 640px){
+  .lcNewCustomerTypeModal__panel:not(#\9):not(#\9){
+    width: calc(100vw - 20px) !important;
+  }
+  .lcNewCustomerTypeModal__grid:not(#\9):not(#\9){
+    grid-template-columns: 1fr !important;
+  }
+  /* Row layout on phones - scans faster than three stacked tiles. */
+  .lcNewCustomerTypeCard:not(#\9):not(#\9){
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: var(--gi-s3) !important;
+    padding: var(--gi-s3) !important;
+  }
+  .lcNewCustomerTypeCard__icon:not(#\9):not(#\9){
+    flex-shrink: 0 !important;
+  }
+  .lcNewCustomerTypeCard__meta:not(#\9):not(#\9){
+    margin-top: 0 !important;
+    margin-inline-start: auto !important;
+    padding-top: 0 !important;
+  }
+  .lcNewCustomerTypeCard__text:not(#\9):not(#\9){
+    display: none !important;
+  }
+}
