@@ -7918,13 +7918,30 @@
     const idx = State.data.customers.findIndex((row) => String(row?.id) === String(cid));
     if(idx < 0) return false;
     const prev = State.data.customers[idx];
-    const nextPayload = JSON.parse(JSON.stringify(payload));
+    let nextPayload = JSON.parse(JSON.stringify(payload));
+    // GI-FIX 2026-08-02b: לא לדרוס תיק מלא ב-payload רדוד (primary/ops בלי מוצרים).
+    // אם הנכנס חסר תוכן מוצרים והקיים מלא — ממזגים לשימור הפוליסות.
+    try {
+      const prevFull = !Storage.payloadIsEmpty(prev) && Storage.payloadHasPolicyOrInsuredContent(prev?.payload);
+      const nextProbe = {
+        payload: nextPayload,
+        insuredCount: Array.isArray(nextPayload.insureds) ? nextPayload.insureds.length : Number(prev?.insuredCount || 0) || 0,
+        newPoliciesCount: Array.isArray(nextPayload.newPolicies) ? nextPayload.newPolicies.length : Number(prev?.newPoliciesCount || 0) || 0,
+        existingPoliciesCount: Number(prev?.existingPoliciesCount || 0) || 0
+      };
+      if(prevFull && Storage.payloadIsEmpty(nextProbe)){
+        nextPayload = mergeElementarySaveWithExistingCustomerPayload(prev.payload, nextPayload);
+        try { console.warn("PERSIST_CUSTOMER_PAYLOAD_MERGED_TO_AVOID_WIPE", cid, label || ""); } catch(_e) {}
+      }
+    } catch(_e) {}
+    const nextInsuredCount = Array.isArray(nextPayload.insureds) ? nextPayload.insureds.length : (Number(prev.insuredCount || 0) || 0);
+    const nextNewCount = Array.isArray(nextPayload.newPolicies) ? nextPayload.newPolicies.length : (Number(prev.newPoliciesCount || 0) || 0);
     State.data.customers[idx] = {
       ...prev,
       payload: nextPayload,
       updatedAt: nowISO(),
-      insuredCount: Array.isArray(nextPayload.insureds) ? nextPayload.insureds.length : prev.insuredCount,
-      newPoliciesCount: Array.isArray(nextPayload.newPolicies) ? nextPayload.newPolicies.length : prev.newPoliciesCount
+      insuredCount: nextInsuredCount,
+      newPoliciesCount: nextNewCount
     };
     refreshStateShadows();
     try {
@@ -10363,33 +10380,57 @@
        לכן נוספה בדיקת סתירה: אם עמודות המונים אומרות שיש תוכן, אבל ב-payload
        אין מבוטחים ואין פוליסות — הרשומה חסרה, ויש למשוך אותה מהשרת.
        GI-FIX 2026-08-02: stub בעלות בלבד נחשב גם הוא ריק — בלי לפסול טיוטות
-       קטנות לגיטימיות שיש בהן שדות תוכן. */
+       קטנות לגיטימיות שיש בהן שדות תוכן.
+       GI-FIX 2026-08-02b: primary בלבד (פרטי קשר) עם מונים > 0 נחשב ריק.
+       קודם hasPrimary קיצר את הבדיקה מוקדם מדי, _omitEmptyPayloadForWrite
+       שלח stub לשרת ודרס פוליסות בריאות/סיכונים. טיוטה לגיטימית עם
+       primary ומונים 0 נשארת "לא ריקה" וניתנת לשמירה כרגיל. */
+    payloadHasPolicyOrInsuredContent(payload){
+      const p = payload && typeof payload === "object" ? payload : null;
+      if(!p) return false;
+      const insureds = Array.isArray(p.insureds) ? p.insureds : [];
+      if(insureds.length) return true;
+      if(Array.isArray(p.newPolicies) && p.newPolicies.length) return true;
+      if(Array.isArray(p.existingPolicies) && p.existingPolicies.length) return true;
+      if(Array.isArray(p?.operational?.newPolicies) && p.operational.newPolicies.length) return true;
+      if(Array.isArray(p?.operational?.insureds) && p.operational.insureds.length) return true;
+      if(Array.isArray(p.elementaryPolicies) && p.elementaryPolicies.length) return true;
+      for(const ins of insureds){
+        if(Array.isArray(ins?.data?.existingPolicies) && ins.data.existingPolicies.length) return true;
+      }
+      return false;
+    },
+
     payloadIsEmpty(rec){
       const p = rec?.payload;
       if(!p || typeof p !== "object") return true;
       const keys = Object.keys(p);
       if(!keys.length) return true;
 
-      const insureds = Array.isArray(p.insureds) ? p.insureds.length : 0;
-      const newPolicies = Array.isArray(p.newPolicies) ? p.newPolicies.length : 0;
-      const existingPolicies = Array.isArray(p.existingPolicies) ? p.existingPolicies.length : 0;
-      const hasPrimary = !!(p.primary && typeof p.primary === "object" && Object.keys(p.primary).length);
-      if(insureds || newPolicies || existingPolicies || hasPrimary) return false;
+      const expectedInsureds = Number(rec?.insuredCount || rec?.insured_count || 0) || 0;
+      const expectedNew = Number(rec?.newPoliciesCount || rec?.new_policies_count || 0) || 0;
+      const expectedExisting = Number(rec?.existingPoliciesCount || rec?.existing_policies_count || 0) || 0;
+      const expectedTotal = expectedInsureds + expectedNew + expectedExisting;
+      const hasContent = this.payloadHasPolicyOrInsuredContent(p);
 
-      const expectedInsureds = Number(rec?.insuredCount || 0) || 0;
-      const expectedNew = Number(rec?.newPoliciesCount || 0) || 0;
-      const expectedExisting = Number(rec?.existingPoliciesCount || 0) || 0;
-      if((expectedInsureds + expectedNew + expectedExisting) > 0) return true;
+      // מונים אומרים שיש תיק, אבל אין מבנה מוצרים/מבוטחים — stub מסוכן לדריסה.
+      if(expectedTotal > 0 && !hasContent) return true;
+      if(hasContent) return false;
+
+      const hasPrimary = !!(p.primary && typeof p.primary === "object" && Object.keys(p.primary).length);
+      // טיוטה/לקוח חדש עם פרטי קשר בלבד ומונים 0 — לגיטימי לשמירה ולפתיחה.
+      if(hasPrimary && expectedTotal === 0) return false;
 
       const ownershipOnly = new Set([
-        "agentId", "createdBy", "createdByKey", "flowType",
-        "_lightCache", "updatedAt", "createdAt"
+        "agentId", "agentName", "createdBy", "createdByKey", "flowType",
+        "opsProcess", "_lightCache", "updatedAt", "createdAt", "primary"
       ]);
       return keys.every((k) => ownershipOnly.has(k));
     },
 
     /* GI-FIX 2026-08-02: לא לשלוח payload ריק/stub ב-upsert — PostgREST מעדכן
-       רק עמודות שנשלחו, כך שה-payload המלא בשרת נשמר. */
+       רק עמודות שנשלחו, כך שה-payload המלא בשרת נשמר.
+       GI-FIX 2026-08-02b: גם stub עם primary+מונים נחסם (ראה payloadIsEmpty). */
     _omitEmptyPayloadForWrite(row){
       if(!row || typeof row !== "object") return row;
       const probe = {
@@ -19359,7 +19400,14 @@ UsersGateUI.init();
 
       try {
         this.flushEditDraftFromDom();
-        const payload = this.normalizeDraftForSave(rec);
+        let payload = this.normalizeDraftForSave(rec);
+        // GI-FIX 2026-08-02b: אם הטיוטה יצאה בלי מוצרים והתיק המקורי היה מלא —
+        // ממזגים כדי לא לדרוס פוליסות בריאות/סיכונים בשמירת עריכה.
+        if(Storage.payloadHasPolicyOrInsuredContent(prevSnapshot?.payload)
+          && !Storage.payloadHasPolicyOrInsuredContent(payload)){
+          payload = mergeElementarySaveWithExistingCustomerPayload(prevSnapshot.payload, payload);
+          try { console.warn("CUSTOMER_EDIT_SAVE_MERGED_TO_AVOID_WIPE", safeTrim(rec?.id)); } catch(_e) {}
+        }
         CustomerDocuments.enrichPayloadWithSaveDocuments(payload, {
           kind: "health_edit",
           uploadedBy: safeTrim(Auth?.current?.name) || safeTrim(rec?.agentName)
@@ -51145,7 +51193,13 @@ if(path === "birthDate"){
       const existingPayloadSnapshot = existingCustomer?.payload && typeof existingCustomer.payload === "object"
         ? JSON.parse(JSON.stringify(existingCustomer.payload))
         : null;
-      if(existingCustomer?.payload && (this.isElementaryFlow() || safeTrim(targetCustomerId))){
+      // GI-FIX 2026-08-02b: תמיד למזג כשלתיק הקיים יש מוצרים — גם מחוץ לאלמנטרי /
+      // customerPurchase — כדי שלא יידרס תיק בריאות ב-payload חלקי מהאשף.
+      if(existingCustomer?.payload && (
+        this.isElementaryFlow()
+        || safeTrim(targetCustomerId)
+        || Storage.payloadHasPolicyOrInsuredContent(existingCustomer.payload)
+      )){
         payload = mergeElementarySaveWithExistingCustomerPayload(existingCustomer.payload, payload);
       }
       if(isPurchaseFlow && Array.isArray(payload?.newPolicies) && payload.newPolicies.length){
