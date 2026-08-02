@@ -8235,17 +8235,17 @@
       if(!payload || typeof payload !== "object") return true;
       if(payload._lightCache === true) return true;
       const customers = Array.isArray(payload.customers) ? payload.customers : [];
-      const proposals = Array.isArray(payload.proposals) ? payload.proposals : [];
       // מטמון בלי לקוחות = לא שמיש לצביעת סשן מלא (מונע תקיעה על 0 לקוחות + דלתא)
       if(!customers.length) return true;
       let sampled = 0, empty = 0;
       for(const c of customers){
         if(sampled >= 8) break;
         sampled += 1;
-        const body = c?.payload;
-        if(!body || (typeof body === "object" && !Object.keys(body).length)) empty += 1;
+        // GI-FIX 2026-08-02: גם מצב מעורב (חלק מלא / חלק ריק) הוא מטמון לא-בטוח.
+        // הדגימה הישנה דרשה שכל הדגימה תהיה ריקה — ופספסה תערובת.
+        if(this.payloadIsEmpty(c)) empty += 1;
       }
-      return sampled > 0 && empty === sampled;
+      return sampled > 0 && empty > 0;
     },
 
     _openFullIdb(){
@@ -8393,6 +8393,21 @@
 
     buildLightCachePayload(st){
       const src = st && typeof st === "object" ? st : defaultState();
+      /* GI-FIX 2026-08-02: שומר stub בעלות בלבד במטמון הקל — בלי מבוטחים/פוליסות.
+         אם מטמון קל בכל זאת נטען, סינון הצעות לפי agentId/createdByKey לא ייעלם. */
+      const ownershipStub = (rec) => {
+        const p = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+        const stub = {};
+        const agentId = safeTrim(rec?.agentId) || safeTrim(p.agentId);
+        const createdByKey = safeTrim(rec?.createdByKey) || safeTrim(p.createdByKey);
+        const createdBy = safeTrim(rec?.createdBy) || safeTrim(p.createdBy);
+        const flowType = safeTrim(p.flowType);
+        if(agentId) stub.agentId = agentId;
+        if(createdByKey) stub.createdByKey = createdByKey;
+        if(createdBy) stub.createdBy = createdBy;
+        if(flowType) stub.flowType = flowType;
+        return stub;
+      };
       const stripCustomer = (c) => ({
         id: c?.id,
         status: c?.status,
@@ -8405,12 +8420,13 @@
         agentId: c?.agentId,
         agentRole: c?.agentRole,
         createdBy: c?.createdBy,
+        createdByKey: safeTrim(c?.createdByKey) || safeTrim(c?.payload?.createdByKey) || "",
         createdAt: c?.createdAt,
         updatedAt: c?.updatedAt,
         insuredCount: c?.insuredCount,
         existingPoliciesCount: c?.existingPoliciesCount,
         newPoliciesCount: c?.newPoliciesCount,
-        payload: {}
+        payload: ownershipStub(c)
       });
       const stripProposal = (p) => ({
         id: p?.id,
@@ -8421,11 +8437,13 @@
         agentName: p?.agentName,
         agentId: p?.agentId,
         agentRole: p?.agentRole,
+        createdBy: p?.createdBy,
+        createdByKey: safeTrim(p?.createdByKey) || safeTrim(p?.payload?.createdByKey) || "",
         currentStep: p?.currentStep,
         createdAt: p?.createdAt,
         updatedAt: p?.updatedAt,
         insuredCount: p?.insuredCount,
-        payload: {}
+        payload: ownershipStub(p)
       });
       return {
         meta: src.meta && typeof src.meta === "object" ? src.meta : {},
@@ -8898,7 +8916,7 @@
     },
 
     async upsertSingleRow(tableName, row, options = {}){
-      const payload = row && typeof row === 'object' ? row : {};
+      const payload = row && typeof row === 'object' ? this._omitEmptyPayloadForWrite(row) : {};
       const retryOptions = {
         retries: options.retries,
         timeoutMs: options.timeoutMs,
@@ -9161,7 +9179,7 @@
     },
 
     async syncTable(tableName, rows, options = {}){
-      const safeRows = Array.isArray(rows) ? rows.filter(Boolean) : [];
+      const safeRows = (Array.isArray(rows) ? rows.filter(Boolean) : []).map((row) => this._omitEmptyPayloadForWrite(row));
       const allowDelete = options?.allowDelete === true;
 
       if(allowDelete && safeRows.length){
@@ -10343,21 +10361,47 @@
        ממקור מקוצץ יכולה לשאת payload רדוד ("‎{createdBy:...}‎") ולעבור אותה —
        ואז ההגנות שנשענות עליה לא נכנסות לפעולה והתיק נפתח בלי מוצרים.
        לכן נוספה בדיקת סתירה: אם עמודות המונים אומרות שיש תוכן, אבל ב-payload
-       אין מבוטחים ואין פוליסות — הרשומה חסרה, ויש למשוך אותה מהשרת. */
+       אין מבוטחים ואין פוליסות — הרשומה חסרה, ויש למשוך אותה מהשרת.
+       GI-FIX 2026-08-02: stub בעלות בלבד נחשב גם הוא ריק — בלי לפסול טיוטות
+       קטנות לגיטימיות שיש בהן שדות תוכן. */
     payloadIsEmpty(rec){
       const p = rec?.payload;
       if(!p || typeof p !== "object") return true;
-      if(!Object.keys(p).length) return true;
+      const keys = Object.keys(p);
+      if(!keys.length) return true;
 
       const insureds = Array.isArray(p.insureds) ? p.insureds.length : 0;
       const newPolicies = Array.isArray(p.newPolicies) ? p.newPolicies.length : 0;
+      const existingPolicies = Array.isArray(p.existingPolicies) ? p.existingPolicies.length : 0;
       const hasPrimary = !!(p.primary && typeof p.primary === "object" && Object.keys(p.primary).length);
-      if(insureds || newPolicies || hasPrimary) return false;
+      if(insureds || newPolicies || existingPolicies || hasPrimary) return false;
 
       const expectedInsureds = Number(rec?.insuredCount || 0) || 0;
       const expectedNew = Number(rec?.newPoliciesCount || 0) || 0;
       const expectedExisting = Number(rec?.existingPoliciesCount || 0) || 0;
-      return (expectedInsureds + expectedNew + expectedExisting) > 0;
+      if((expectedInsureds + expectedNew + expectedExisting) > 0) return true;
+
+      const ownershipOnly = new Set([
+        "agentId", "createdBy", "createdByKey", "flowType",
+        "_lightCache", "updatedAt", "createdAt"
+      ]);
+      return keys.every((k) => ownershipOnly.has(k));
+    },
+
+    /* GI-FIX 2026-08-02: לא לשלוח payload ריק/stub ב-upsert — PostgREST מעדכן
+       רק עמודות שנשלחו, כך שה-payload המלא בשרת נשמר. */
+    _omitEmptyPayloadForWrite(row){
+      if(!row || typeof row !== "object") return row;
+      const probe = {
+        payload: row.payload,
+        insuredCount: row.insured_count ?? row.insuredCount,
+        newPoliciesCount: row.new_policies_count ?? row.newPoliciesCount,
+        existingPoliciesCount: row.existing_policies_count ?? row.existingPoliciesCount
+      };
+      if(!this.payloadIsEmpty(probe)) return row;
+      const copy = Object.assign({}, row);
+      delete copy.payload;
+      return copy;
     },
 
     // GI-FIX 2026-07-31: מנה שנכשלת מתפצלת לשתיים ומנוסה שוב, עד רמת מזהה בודד.
@@ -14694,8 +14738,8 @@ UsersGateUI.init();
           const idx = State.data.customers.findIndex((row) => String(row?.id) === String(rec.id));
           if(idx >= 0){
             const existing = State.data.customers[idx];
-            const incomingEmpty = Storage.payloadIsEmpty(rec);
-            const keepPayload = incomingEmpty && !Storage.payloadIsEmpty(existing);
+            // GI-FIX 2026-08-02: לא לדרוס payload מלא מקומי בשורת רשימה רזה/רדודה.
+            const keepPayload = !Storage.payloadIsEmpty(existing) && Storage.payloadIsEmpty(rec);
             const merged = normalizeCustomerRecord({
               ...existing,
               ...rec,
