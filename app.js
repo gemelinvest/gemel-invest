@@ -25009,13 +25009,18 @@ UsersGateUI.init();
     },
 
     /* ===== לקוחות אחרונים — חמש הרשומות האחרונות שהנציג רשאי לראות =====
-       ההרשאות נשענות על CustomersUI.visibleCustomers(), שכבר מיישמת את
-       הכלל הקיים: מנהל רואה הכל, נציג רק את הלקוחות שלו. אין כאן לוגיקת
-       הרשאות חדשה. אין סינון ענף — כל לקוח נכנס לחמישייה. */
+       ההרשאות נשענות על CustomersUI.list(), שכבר מיישמת את הכלל הקיים:
+       מנהל רואה הכל, נציג רק את הלקוחות שלו (ואלמנטרי — רק תיקים אלמנטריים).
+       אין כאן לוגיקת הרשאות חדשה. אין סינון ענף — כל לקוח נכנס לחמישייה.
+
+       GI-FIX 2026-08-02: קודם נקרא כאן CustomersUI.visibleCustomers() — מתודה
+       שקיימת על MirrorsUI בלבד ומעולם לא הוגדרה על CustomersUI. בדיקת
+       ה-typeof נכשלה בשקט, הפונקציה החזירה [] תמיד, והכרטיס הציג
+       "אין עדיין לקוחות להצגה" גם כשהיו לקוחות. */
     recentCustomersRows(limit = 5){
       try {
-        const rows = (CustomersUI && typeof CustomersUI.visibleCustomers === "function")
-          ? CustomersUI.visibleCustomers()
+        const rows = (CustomersUI && typeof CustomersUI.list === "function")
+          ? CustomersUI.list()
           : [];
         const stamp = (rec) => {
           const raw = rec?.createdAt || rec?.created_at || rec?.updatedAt || rec?.updated_at;
@@ -25127,8 +25132,10 @@ UsersGateUI.init();
        להוגש לחיתום / ממתין להקלדה / נסגר וכו'. */
     latestUntouchedProposal(){
       try {
-        const rows = (CustomersUI && typeof CustomersUI.visibleCustomers === "function")
-          ? CustomersUI.visibleCustomers()
+        // GI-FIX 2026-08-02: אותו באג כמו ב-recentCustomersRows —
+        // CustomersUI.visibleCustomers אינה קיימת, ולכן הכרטיס הזה היה ריק תמיד.
+        const rows = (CustomersUI && typeof CustomersUI.list === "function")
+          ? CustomersUI.list()
           : [];
         const t = (rec) => {
           const raw = rec?.createdAt || rec?.created_at;
