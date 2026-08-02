@@ -47,9 +47,9 @@
 
   /* Text */
   --gi-text:          #0F172A;
-  --gi-text-2:        #475569;
-  --gi-text-3:        #64748B;
-  --gi-text-muted:    #94A3B8;
+  --gi-text-2:        #3D4A5C;
+  --gi-text-3:        #4B5A6E;
+  --gi-text-muted:    #647287;
   --gi-on-navy:       rgba(255,255,255,.92);
   --gi-on-navy-dim:   rgba(255,255,255,.68);
 
@@ -88,7 +88,7 @@
   --panel:     #FFFFFF;
   --line:      #E5E7EB;
   --text:      #0F172A;
-  --muted:     #64748B;
+  --muted:     #4B5A6E;
 
   --blue:      #EFF6FF;
   --blue2:     #BFDBFE;

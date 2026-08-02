@@ -3367,7 +3367,7 @@
 .lcStatCell__dot{
   width:6px; height:6px;
   border-radius:50%;
-  background:var(--gi-text-muted,#94A3B8);
+  background:var(--gi-text-muted,#647287);
   flex:0 0 auto;
 }
 .lcStatCell__dot--danger{ background:var(--gi-danger,#DC2626); }
@@ -3394,7 +3394,7 @@
   display:block;
   font-size:11.5px;
   font-weight:500;
-  color:var(--gi-text-3,#64748B);
+  color:var(--gi-text-3,#4B5A6E);
   margin-top:1px;
 }
 
@@ -3419,7 +3419,7 @@
   display:block;
   font-size:12px;
   font-weight:600;
-  color:var(--gi-text-3,#64748B);
+  color:var(--gi-text-3,#4B5A6E);
   margin-bottom:7px;
 }
 .lcStatYears__chips{ display:flex; flex-wrap:wrap; gap:7px; }
@@ -3437,10 +3437,10 @@
   font-size:12.5px; font-weight:700; color:#0F172A;
   font-variant-numeric:tabular-nums; direction:ltr; unicode-bidi:plaintext;
 }
-.lcStatYears__chipCount{ font-size:11px; font-weight:600; color:#94A3B8; }
+.lcStatYears__chipCount{ font-size:11px; font-weight:600; color:var(--gi-text-muted,#647287); }
 .lcStatYears__chip--empty{ background:#FBFCFD; border-style:dashed; border-color:#E5E9EF; }
 .lcStatYears__chip--empty .lcStatYears__chipLabel,
-.lcStatYears__chip--empty .lcStatYears__chipValue{ color:var(--gi-text-muted,#94A3B8); }
+.lcStatYears__chip--empty .lcStatYears__chipValue{ color:var(--gi-text-muted,#647287); }
 
 .lcStatStrip.is-filtered{ background:#FBFCFE; }
 .lcStatStrip.is-filtered .lcStatCell__label::after{
@@ -3522,5 +3522,5 @@
 .lcReportNav__actionsInner .lcDailyReport__asOfPickLabel{
   font-size:11px;
   font-weight:600;
-  color:var(--gi-text-muted,#94A3B8);
+  color:var(--gi-text-muted,#647287);
 }
