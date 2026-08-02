@@ -229,11 +229,70 @@
   };
   const safeTrim = (v) => String(v ?? "").trim();
 
+  /* GI-PERF 2026-08-02 (שלב ט'): הערכת גודל בלי סריאליזציה.
+     קודם: JSON.stringify(payload).length — כלומר סריאליזציה מלאה של ~29kB לכל
+     לקוח, רק כדי לקרוא את האורך, ואז זריקת התוצאה. isCustomerPayloadTooHeavy...
+     נקרא מארבע לולאות שעוברות על כל 1,035 הלקוחות; נמדד ~100ms חסימה בכל מעבר.
+     עכשיו: הערכה מבנית (מספר מבוטחים/פוליסות/כיסויים) שהיא O(מבנה) ולא
+     O(תוכן), עם memoization על הרשומה עצמה לפי חותמת העדכון.
+     המספר משמש אך ורק כדי להשוות מול סף של 2MB ולהחליט אם לדלג על חישוב
+     סינכרוני — הוא לא מוצג ולא נשמר בשום מקום, ולכן קירוב מספיק. */
+  /* הקבועים נמדדו, לא נוחשו: העלות השולית ב-JSON.stringify של יחידה אחת היא
+     65B לכיסוי, 398B לפוליסה (ללא כיסויים) ו-879B למבוטח.
+     כיוון ההטיה הוא הדבר החשוב כאן, ולכן אין מרווח כלפי מעלה: הערכת-יתר
+     מסמנת רשומה תקינה כ"כבדה מדי", וזו *נגרעת* מחישוב המטריקות — כלומר סכומי
+     כסף שגויים בדשבורד, בשקט. הערכת-חסר, לעומת זאת, רק מחזירה רשומה נדירה
+     למסלול החישוב המלא. לכן משתמשים בערכים המדודים כמות שהם.
+     הרשומות שבאמת חוצות 2MB חוצות אותו בגלל מסמכים מוטבעים (base64), ואת
+     אלה מודדים כאן במדויק לפי אורך המחרוזת — בלי הערכה בכלל. */
+  const GI_PAYLOAD_BYTES_PER_COVERAGE = 65;
+  const GI_PAYLOAD_BYTES_PER_POLICY = 398;
+  const GI_PAYLOAD_BYTES_PER_INSURED = 879;
+
+  function _estimatePayloadBytesStructural(p){
+    let bytes = 512;
+    const policies = (list) => {
+      if(!Array.isArray(list)) return;
+      bytes += list.length * GI_PAYLOAD_BYTES_PER_POLICY;
+      for(let i = 0; i < list.length; i += 1){
+        const cov = list[i] && list[i].coverages;
+        if(Array.isArray(cov)) bytes += cov.length * GI_PAYLOAD_BYTES_PER_COVERAGE;
+      }
+    };
+    const insureds = Array.isArray(p.insureds) ? p.insureds
+      : (Array.isArray(p?.operational?.insureds) ? p.operational.insureds : []);
+    bytes += insureds.length * GI_PAYLOAD_BYTES_PER_INSURED;
+    for(let i = 0; i < insureds.length; i += 1){
+      policies(insureds[i]?.data?.existingPolicies);
+    }
+    policies(p.newPolicies);
+    policies(p?.operational?.newPolicies);
+    // מסמכים מוטבעים (base64) הם הדבר היחיד שבאמת מנפח רשומה לסדר גודל של MB,
+    // ואת הגודל שלהם אפשר לקרוא ישירות בלי לסרוק את התוכן.
+    const docs = Array.isArray(p.customerDocuments) ? p.customerDocuments : [];
+    for(let i = 0; i < docs.length; i += 1){
+      const d = docs[i];
+      const raw = d && (d.dataUrl || d.data || d.base64);
+      bytes += typeof raw === "string" ? raw.length : (Number(d && d.size) || 4096);
+    }
+    return bytes;
+  }
+
   function estimateRecordPayloadBytes(rec){
     const p = rec?.payload;
     if(!p) return 0;
     if(typeof p === "string") return p.length;
-    try { return JSON.stringify(p).length; } catch(_e) { return 0; }
+    if(typeof p !== "object") return 0;
+    // memoization: החישוב תקף כל עוד הרשומה לא עודכנה.
+    const stamp = String(rec?.updatedAt || rec?.updated_at || "");
+    if(rec._giBytesStamp === stamp && typeof rec._giBytesEst === "number") return rec._giBytesEst;
+    let est = 0;
+    try { est = _estimatePayloadBytesStructural(p); } catch(_e) { est = 0; }
+    try {
+      Object.defineProperty(rec, "_giBytesEst", { value: est, writable: true, enumerable: false, configurable: true });
+      Object.defineProperty(rec, "_giBytesStamp", { value: stamp, writable: true, enumerable: false, configurable: true });
+    } catch(_e) {}
+    return est;
   }
 
   function isCustomerPayloadTooHeavyForSyncMetrics(rec){
@@ -1611,6 +1670,17 @@
   // קריאה + deserialize של payload בגודל עשרות MB מ-IndexedDB בנייד חורגת בקלות
   // מ-700ms, ואז ה-race החזיר null והצביעה לא קרתה כלל.
   const GI_FULL_IDB_READ_BUDGET_MS = 4000;
+  /* GI-PERF 2026-08-02 (שלב ט'): כתיבת מטמון מפוצלת ומצטברת.
+     הרקע — IDBObjectStore.put מבצע structured clone *סינכרוני על החוט הראשי*
+     לפני שהטרנזקציה בכלל יוצאת לדרך. הכתיבה הקודמת העבירה את כל State.data
+     בקריאה אחת: נמדד 1,000–1,900ms של חוט ראשי מת, בכל אחת מ-23 נקודות
+     הקריאה ל-saveBackup. requestIdleCallback לא עזר — הוא רץ על אותו חוט.
+     עכשיו: הרשומה מפוצלת ל-skeleton + מנות לקוחות, כל מנה נכתבת בפרוסת idle
+     נפרדת, ורק מנות שהשתנו נכתבות בפועל (טביעת אצבע לפי id+updatedAt).
+     גודל המנה נקבע במדידה: 25 לקוחות נתנו 25–35ms עם חריגים עד 61ms — מעל סף
+     ה-long task של 50ms. 15 לקוחות ≈ 0.45MB ≈ 15–20ms, ומשאיר מרווח לחריגים. */
+  const GI_FULL_IDB_SHARD_SIZE = 15;
+  const GI_FULL_IDB_SKELETON_FLAG = "_giShardedV2";
   const GI_NETWORK_TIMEOUT_MS = 12000;
   const GI_NETWORK_RETRY_COUNT = 2;
   const GI_NETWORK_RETRY_DELAY_MS = 900;
@@ -8292,30 +8362,130 @@
       return this._idbOpenPromise;
     },
 
+    /** מפתח מנת לקוחות מספר i עבור משתמש נתון. */
+    _idbShardKey(userKey, i){ return userKey + "::c::" + i; },
+
+    /** האם מפתח שייך למשתמש הזה (הרשומה הראשית או אחת המנות שלו). */
+    _idbKeyBelongsToUser(key, userKey){
+      const k = safeTrim(key);
+      return k === userKey || k.indexOf(userKey + "::") === 0;
+    },
+
+    /* טביעת אצבע זולה למנה: id + חותמת עדכון בלבד. אין כאן JSON.stringify של
+       ה-payload — זו בדיוק ההוצאה שאנחנו מנסים להימנע ממנה. */
+    _idbShardFingerprint(rows){
+      let fp = rows.length + "|";
+      for(let i = 0; i < rows.length; i += 1){
+        const r = rows[i];
+        fp += (r && r.id ? r.id : "?") + "~" + (r && r.updatedAt ? r.updatedAt : "") + ";";
+      }
+      return fp;
+    },
+
+    /* skeleton = כל ה-state למעט מערכי הלקוחות הכבדים.
+       meta.customersShadow חולק את אותם אובייקטי payload כמו customers (ראה
+       normalizeCustomerRecord — הוא מעביר payload בהפניה). לכן שומרים את שורות
+       הצל בלי payload ומחברים אותן מחדש בקריאה. שורה יתומה — כזו שכבר לא קיימת
+       ב-customers — כן שומרת את ה-payload שלה, כדי לא לאבד מידע. */
+    _buildIdbSkeleton(payload){
+      const customers = Array.isArray(payload.customers) ? payload.customers : [];
+      const ids = new Set(customers.map((c) => String(c && c.id)));
+      const meta = payload.meta && typeof payload.meta === "object" ? payload.meta : {};
+      const shadowSrc = Array.isArray(meta.customersShadow) ? meta.customersShadow : [];
+      const shadow = shadowSrc.map((row) => {
+        if(!row || typeof row !== "object") return row;
+        if(!ids.has(String(row.id))) return row;           // יתום — משאירים כמו שהוא
+        const { payload: _drop, ...light } = row;          // משותף — נחבר בקריאה
+        return light;
+      });
+      return {
+        ...payload,
+        customers: [],
+        meta: { ...meta, customersShadow: shadow },
+        [GI_FULL_IDB_SKELETON_FLAG]: true,
+        _giShardCount: Math.ceil(customers.length / GI_FULL_IDB_SHARD_SIZE)
+      };
+    },
+
+    /* כתיבה מצטברת. כל פרוסת idle כותבת מנה אחת (25 לקוחות ≈ 25–30ms) ומשחררת
+       את החוט. מנה שטביעת האצבע שלה לא השתנתה מדולגת לגמרי — בשמירה טיפוסית
+       שבה לקוח אחד השתנה, נכתבת מנה אחת בלבד. */
     async saveFullIdbCache(st){
       const userKey = this.fullCacheUserKey();
       if(!userKey) return false;
       const payload = st && typeof st === "object" ? st : null;
       if(!payload) return false;
       if(this.sessionPayloadLooksLight(payload)) return false;
+
+      if(this._idbWriteInFlight) { this._idbWriteQueued = true; return false; }
+      this._idbWriteInFlight = true;
       try {
         const db = await this._openFullIdb();
         if(!db) return false;
-        await new Promise((resolve) => {
+
+        const customers = Array.isArray(payload.customers) ? payload.customers : [];
+        const shardCount = Math.ceil(customers.length / GI_FULL_IDB_SHARD_SIZE);
+        const at = Date.now();
+
+        if(this._idbShardFpUserKey !== userKey){
+          this._idbShardFpUserKey = userKey;
+          this._idbShardFps = [];
+        }
+        const fps = Array.isArray(this._idbShardFps) ? this._idbShardFps : (this._idbShardFps = []);
+
+        const putOne = (value, key) => new Promise((resolve) => {
           try {
             const tx = db.transaction(GI_FULL_IDB_STORE, "readwrite");
-            const store = tx.objectStore(GI_FULL_IDB_STORE);
-            store.put({ at: Date.now(), userKey, payload }, userKey);
+            tx.objectStore(GI_FULL_IDB_STORE).put(value, key);
             tx.oncomplete = () => resolve(true);
             tx.onerror = () => resolve(false);
             tx.onabort = () => resolve(false);
-          } catch(_e) {
-            resolve(false);
-          }
+          } catch(_e) { resolve(false); }
         });
+        const deleteOne = (key) => new Promise((resolve) => {
+          try {
+            const tx = db.transaction(GI_FULL_IDB_STORE, "readwrite");
+            tx.objectStore(GI_FULL_IDB_STORE).delete(key);
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => resolve(false);
+            tx.onabort = () => resolve(false);
+          } catch(_e) { resolve(false); }
+        });
+        // מוותר על השאר ומחזיר את החוט לדפדפן עד הפרוסה הבאה.
+        const yieldToIdle = () => new Promise((resolve) => {
+          if(typeof requestIdleCallback === "function") requestIdleCallback(() => resolve(), { timeout: 300 });
+          else window.setTimeout(resolve, 0);
+        });
+
+        GiPerf.mark("idbShardWrite");
+        for(let i = 0; i < shardCount; i += 1){
+          const rows = customers.slice(i * GI_FULL_IDB_SHARD_SIZE, (i + 1) * GI_FULL_IDB_SHARD_SIZE);
+          const fp = this._idbShardFingerprint(rows);
+          if(fps[i] === fp) continue;                       // לא השתנה — לא נוגעים
+          const ok = await putOne({ at, userKey, rows }, this._idbShardKey(userKey, i));
+          if(ok) fps[i] = fp;
+          await yieldToIdle();
+        }
+        // מנות עודפות מריצה קודמת שבה היו יותר לקוחות.
+        for(let i = shardCount; i < fps.length; i += 1){
+          await deleteOne(this._idbShardKey(userKey, i));
+        }
+        fps.length = shardCount;
+
+        // ה-skeleton נכתב אחרון: כל עוד הוא לא שם, קריאה תיפול חזרה למסלול הישן
+        // ולא תיטען חצי-רשומה.
+        await putOne({ at, userKey, payload: this._buildIdbSkeleton(payload) }, userKey);
+        GiPerf.mark("idbShardWrite:end");
+        GiPerf.measure("idbShardWrite", "idbShardWrite");
         return true;
       } catch(_e) {
         return false;
+      } finally {
+        this._idbWriteInFlight = false;
+        if(this._idbWriteQueued){
+          this._idbWriteQueued = false;
+          this.scheduleFullIdbCacheSave(State.data);
+        }
       }
     },
 
@@ -8365,8 +8535,41 @@
         if(!entry?.payload || safeTrim(entry.userKey) !== userKey) return null;
         const ageOk = !maxAgeMs || (Date.now() - Number(entry.at || 0)) <= maxAgeMs;
         if(!ageOk) return null;
-        if(this.sessionPayloadLooksLight(entry.payload)) return null;
-        return { at: Number(entry.at || Date.now()), payload: entry.payload };
+
+        let payload = entry.payload;
+
+        // רשומה מפוצלת (GI-PERF שלב ט'): מחברים בחזרה את מנות הלקוחות.
+        if(payload && payload[GI_FULL_IDB_SKELETON_FLAG] === true){
+          const shardCount = Math.max(0, Number(payload._giShardCount) || 0);
+          const customers = [];
+          for(let i = 0; i < shardCount; i += 1){
+            const shard = await new Promise((resolve) => {
+              try {
+                const tx = db.transaction(GI_FULL_IDB_STORE, "readonly");
+                const req = tx.objectStore(GI_FULL_IDB_STORE).get(this._idbShardKey(userKey, i));
+                req.onsuccess = () => resolve(req.result || null);
+                req.onerror = () => resolve(null);
+              } catch(_e) { resolve(null); }
+            });
+            // מנה חסרה = רשומה לא שלמה. עדיף לא לצבוע כלום מאשר לצבוע חלקית.
+            if(!shard || !Array.isArray(shard.rows)) return null;
+            for(let k = 0; k < shard.rows.length; k += 1) customers.push(shard.rows[k]);
+          }
+          const meta = payload.meta && typeof payload.meta === "object" ? payload.meta : {};
+          // מחזירים ל-customersShadow את ה-payload המשותף שהוסר בכתיבה.
+          const byId = new Map(customers.map((c) => [String(c && c.id), c]));
+          const shadow = (Array.isArray(meta.customersShadow) ? meta.customersShadow : []).map((row) => {
+            if(!row || typeof row !== "object" || row.payload) return row;
+            const src = byId.get(String(row.id));
+            return src ? { ...row, payload: src.payload } : row;
+          });
+          payload = { ...payload, customers, meta: { ...meta, customersShadow: shadow } };
+          delete payload[GI_FULL_IDB_SKELETON_FLAG];
+          delete payload._giShardCount;
+        }
+
+        if(this.sessionPayloadLooksLight(payload)) return null;
+        return { at: Number(entry.at || Date.now()), payload };
       } catch(_e) {
         return null;
       }
@@ -8390,7 +8593,10 @@
             req.onsuccess = () => {
               try {
                 (req.result || []).forEach((k) => {
-                  if(safeTrim(k) !== keepKey) store.delete(k);
+                  // GI-PERF 2026-08-02: מאז הפיצול, למשתמש יש גם מפתחות
+                  // "<userKey>::c::<n>". השוואה מדויקת ל-keepKey הייתה מוחקת את
+                  // כל המנות שלו בכל כניסה ומאפסת את המטמון.
+                  if(!Storage._idbKeyBelongsToUser(k, keepKey)) store.delete(k);
                 });
               } catch(_e) {}
             };
@@ -15498,7 +15704,28 @@ UsersGateUI.init();
       const empty = () => ({ totalPremium: 0, policyCount: 0, customerItems: [] });
       const current = empty();
       const previous = empty();
-      const pushPack = (pack, rec, rows) => {
+      (Array.isArray(customers) ? customers : []).forEach((rec) => {
+        this.accumulateAgentAppointmentDual(rec, current, previous, currentRange, previousRange, isWithinRangeFn);
+      });
+      this.finalizeAgentAppointmentPacks(current, previous);
+      return { current, previous };
+    },
+
+    /* GI-PERF 2026-08-02 (שלב ט'): גוף הלולאה חולץ לפונקציה נפרדת כדי שאפשר
+       יהיה להריץ אותו במנות. אין כאן שינוי חישובי — אותה מתמטיקה בדיוק. */
+    accumulateAgentAppointmentDual(rec, current, previous, currentRange, previousRange, isWithinRangeFn){
+      if(isCustomerPayloadTooHeavyForSyncMetrics(rec)) return;
+      const allRows = this.collectAgentAppointmentPolicies(rec);
+      if(!allRows.length) return;
+      const curRows = [];
+      const prevRows = [];
+      allRows.forEach((row) => {
+        const stamp = safeTrim(row.appointmentDate);
+        if(!stamp || typeof isWithinRangeFn !== "function") return;
+        if(isWithinRangeFn(stamp, currentRange)) curRows.push(row);
+        else if(isWithinRangeFn(stamp, previousRange)) prevRows.push(row);
+      });
+      const push = (pack, rows) => {
         if(!rows.length) return;
         const premium = this.sumAgentAppointmentPremium(rows);
         pack.policyCount += rows.length;
@@ -15509,26 +15736,21 @@ UsersGateUI.init();
         }, 0);
         pack.customerItems.push({ rec, premium, policies: rows, latestStamp });
       };
-      (Array.isArray(customers) ? customers : []).forEach((rec) => {
-        if(isCustomerPayloadTooHeavyForSyncMetrics(rec)) return;
-        const allRows = this.collectAgentAppointmentPolicies(rec);
-        if(!allRows.length) return;
-        const curRows = [];
-        const prevRows = [];
-        allRows.forEach((row) => {
-          const stamp = safeTrim(row.appointmentDate);
-          if(!stamp || typeof isWithinRangeFn !== "function") return;
-          if(isWithinRangeFn(stamp, currentRange)) curRows.push(row);
-          else if(isWithinRangeFn(stamp, previousRange)) prevRows.push(row);
-        });
-        pushPack(current, rec, curRows);
-        pushPack(previous, rec, prevRows);
-      });
+      push(current, curRows);
+      push(previous, prevRows);
+    },
+
+    /** עיגול ומיון סופיים — מופעל פעם אחת בסוף, אחרי כל המנות. */
+    finalizeAgentAppointmentPacks(current, previous){
       current.totalPremium = Math.round(current.totalPremium * 100) / 100;
       previous.totalPremium = Math.round(previous.totalPremium * 100) / 100;
       current.customerItems.sort((a, b) => b.latestStamp - a.latestStamp);
       previous.customerItems.sort((a, b) => b.latestStamp - a.latestStamp);
-      return { current, previous };
+    },
+
+    /** מעטפת ריקה לצבירת מינויי סוכן, לשימוש הבנייה במנות. */
+    newEmptyAgentAppointmentPack(){
+      return { totalPremium: 0, policyCount: 0, customerItems: [] };
     },
 
     buildAgentAppointmentBreakdownHtml(customerItems, limit, formatMoneyFn){
@@ -24033,7 +24255,45 @@ UsersGateUI.init();
           }
           return;
         }
-        this.finalizeBothAggs(currentAgg, prevAgg, customersAll, currentRange, previousRange);
+        // GI-PERF 2026-08-02 (שלב ט'): שלב ב' — צבירת מינויי סוכן.
+        // קודם: finalizeBothAggs רץ כאן בקריאה אחת על כל 1,035 הלקוחות, וביטל
+        // בפועל את כל החלוקה למנות שקדמה לו. עכשיו גם הוא רץ במנות של
+        // METRICS_CHUNK_SIZE, על אותו מנוע idle.
+        apptIdx = 0;
+        apptStep();
+      };
+
+      const apptCurrent = CustomersUI.newEmptyAgentAppointmentPack();
+      const apptPrev = CustomersUI.newEmptyAgentAppointmentPack();
+      const isWithinRangeFn = (stamp, monthRange) => this.isWithinRange(stamp, monthRange);
+      let apptIdx = 0;
+
+      const apptStep = () => {
+        const end = Math.min(customersAll.length, apptIdx + METRICS_CHUNK_SIZE);
+        for(; apptIdx < end; apptIdx += 1){
+          CustomersUI.accumulateAgentAppointmentDual(
+            customersAll[apptIdx], apptCurrent, apptPrev, currentRange, previousRange, isWithinRangeFn
+          );
+        }
+        if(apptIdx < customersAll.length){
+          if(typeof requestIdleCallback === "function"){
+            requestIdleCallback(apptStep, { timeout: 120 });
+          } else {
+            window.setTimeout(apptStep, 0);
+          }
+          return;
+        }
+        CustomersUI.finalizeAgentAppointmentPacks(apptCurrent, apptPrev);
+        const applyPack = (agg, pack) => {
+          agg.agentAppointmentPremium = Math.round(pack.totalPremium * 100) / 100;
+          agg.agentAppointments = pack.policyCount;
+          agg.agentApptItems = Array.isArray(pack.customerItems) ? pack.customerItems : [];
+          agg.grossPremium = Math.round(agg.grossPremium * 100) / 100;
+          agg.netPremium = Math.round(agg.netPremium * 100) / 100;
+        };
+        applyPack(currentAgg, apptCurrent);
+        applyPack(prevAgg, apptPrev);
+
         this._assembleMetricsResult(
           cacheKey, customersAll, proposalsAll, currentRange, previousRange,
           customersMonth, customersPrev, proposalsMonth, proposalsPrev, currentAgg, prevAgg, dailySeries
