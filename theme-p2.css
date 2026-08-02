@@ -3332,3 +3332,74 @@
     max-height: none !important;
   }
 }
+
+/* ===== GI-PREMIUM-STATS — מוני פרמיה בכותרת הדוח היומי ===== */
+.lcDailyReport__premStats{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:stretch;
+  gap:10px;
+  margin-top:10px;
+}
+.lcDailyReport__premStats[hidden]{ display:none !important; }
+
+.lcDailyReport__premStat{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:170px;
+  padding:10px 14px;
+  border:1px solid rgba(148,163,184,.28);
+  border-radius:14px;
+  background:linear-gradient(180deg,rgba(255,255,255,.92),rgba(248,250,252,.86));
+  box-shadow:0 1px 2px rgba(15,23,42,.05);
+  position:relative;
+  overflow:hidden;
+}
+.lcDailyReport__premStat::before{
+  content:"";
+  position:absolute;
+  inset-inline-start:0;
+  top:0;
+  bottom:0;
+  width:3px;
+  border-radius:3px;
+}
+.lcDailyReport__premStat--issued::before{ background:#16a34a; }
+.lcDailyReport__premStat--pending::before{ background:#f59e0b; }
+
+.lcDailyReport__premStatLabel{
+  font-size:11.5px;
+  font-weight:700;
+  letter-spacing:.01em;
+  color:#64748b;
+  white-space:nowrap;
+}
+.lcDailyReport__premStatValue{
+  font-size:21px;
+  font-weight:900;
+  line-height:1.15;
+  color:#0f172a;
+  font-variant-numeric:tabular-nums;
+  direction:ltr;
+  text-align:start;
+  unicode-bidi:plaintext;
+}
+.lcDailyReport__premStat--issued .lcDailyReport__premStatValue{ color:#15803d; }
+.lcDailyReport__premStat--pending .lcDailyReport__premStatValue{ color:#b45309; }
+.lcDailyReport__premStatSub{
+  font-size:11px;
+  font-weight:600;
+  color:#94a3b8;
+}
+
+.lcDailyReport__premStats.is-filtered .lcDailyReport__premStat{
+  border-style:dashed;
+  border-color:rgba(59,130,246,.45);
+}
+
+@media (max-width:640px){
+  .lcDailyReport__premStats{ gap:8px; }
+  .lcDailyReport__premStat{ flex:1 1 46%; min-width:0; padding:9px 11px; }
+  .lcDailyReport__premStatValue{ font-size:18px; }
+}

@@ -518,7 +518,18 @@
 <div>
 <div class="card__title" id="dailyReportTitle">דוח מכירות</div>
 <div class="lcDailyReport__asOf" hidden id="dailyReportAsOfLine"></div>
-<div class="card__hint" id="dailyReportHint">דוח שנקלט מתוך Excel — הנציגים רואים רק את השורות עם שמם בעמודת "נציג"</div>
+<div class="lcDailyReport__premStats" hidden id="dailyReportPremStats">
+<div class="lcDailyReport__premStat lcDailyReport__premStat--issued">
+<span class="lcDailyReport__premStatLabel">סה״כ פרמיה הפקה</span>
+<span class="lcDailyReport__premStatValue" id="dailyReportPremIssued">₪0</span>
+<span class="lcDailyReport__premStatSub" id="dailyReportPremIssuedSub">0 פוליסות</span>
+</div>
+<div class="lcDailyReport__premStat lcDailyReport__premStat--pending">
+<span class="lcDailyReport__premStatLabel">פרמיה ממתינה להפקה</span>
+<span class="lcDailyReport__premStatValue" id="dailyReportPremPending">₪0</span>
+<span class="lcDailyReport__premStatSub" id="dailyReportPremPendingSub">0 פוליסות</span>
+</div>
+</div>
 </div>
 <div class="lcDailyReportCard__actions">
 <label class="lcDailyReport__asOfPick" hidden id="dailyReportAsOfPickWrap">

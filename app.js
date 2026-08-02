@@ -64396,6 +64396,28 @@ const CampaignLeadsStore = {
     return norm === "הופק" || norm === "הופקה";
   }
 
+  // GI-PREMIUM-STATS: "ממתין להפקה" בהתאמה מדויקת בלבד (אחרי נרמול רווחים/פיסוק).
+  // סטטוסים אחרים שמכילים "ממתין" (למשל "ממתין לחתימות") לא נספרים כאן.
+  const DAILY_REPORT_PENDING_ISSUE_STATUSES = Object.freeze([
+    "ממתין להפקה",
+    "ממתינה להפקה"
+  ].map((s) => normalizeDailyReportAgentToken(s)));
+
+  function isDailyReportPendingIssueStatus(value){
+    const norm = normalizeDailyReportAgentToken(safeTrim(value));
+    if(!norm) return false;
+    return DAILY_REPORT_PENDING_ISSUE_STATUSES.includes(norm);
+  }
+
+  // בשורות שממתינות להפקה עמודת "פרמיה הפקה" ריקה (עוד לא הופק),
+  // ולכן הסכום נלקח מעמודת "פרמיה". נפילה חזרה ל"פרמיה הפקה" רק אם "פרמיה" ריקה.
+  function getDailyReportPendingPremiumValue(row, cols){
+    if(!row || !cols) return 0;
+    const base = (cols.premium >= 0) ? parseDailyReportMoney(getDailyReportCell(row, cols.premium)) : 0;
+    if(base > 0) return base;
+    return getDailyReportIssuedPremiumValue(row, cols);
+  }
+
   function getDailyReportCell(row, colIdx){
     if(!row || colIdx < 0) return "";
     return safeTrim(row.cells?.[colIdx]);
@@ -65828,7 +65850,12 @@ const CampaignLeadsStore = {
       this.initRubrics();
       this.els.title = document.getElementById("dailyReportTitle");
       this.els.asOfLine = document.getElementById("dailyReportAsOfLine");
-      this.els.hint = document.getElementById("dailyReportHint");
+      // GI-PREMIUM-STATS: מוני פרמיה במקום שורת ההסבר הישנה (#dailyReportHint)
+      this.els.premStats = document.getElementById("dailyReportPremStats");
+      this.els.premIssuedValue = document.getElementById("dailyReportPremIssued");
+      this.els.premIssuedSub = document.getElementById("dailyReportPremIssuedSub");
+      this.els.premPendingValue = document.getElementById("dailyReportPremPending");
+      this.els.premPendingSub = document.getElementById("dailyReportPremPendingSub");
       this.els.meta = document.getElementById("dailyReportMeta");
       this.els.alert = document.getElementById("dailyReportAlert");
       this.els.filters = document.getElementById("dailyReportFilters");
@@ -66167,26 +66194,66 @@ const CampaignLeadsStore = {
           this.els.asOfLine.textContent = "";
         }
       }
-      if(this.els.hint){
-        if(Auth.canUploadDailyReport()){
-          this.els.hint.textContent = report
-            ? "דוח פעיל — העלאת קובץ חדש מחליפה לחלוטין את הקודם (ללא שמירת היסטוריה)"
-            : 'בחר תאריך עדכון, העלה Excel (.xlsx) — העמודה "נציג" קובעת אילו שורות יראה כל נציג';
-        } else if(Auth.isTeamManager()){
-          this.els.hint.textContent = report
-            ? "מוצגות שורות הדוח של הנציגים המשויכים אליך — ניתן לסנן לפי נציג"
-            : "טרם הועלה דוח יומי למערכת";
-        } else {
-          this.els.hint.textContent = report
-            ? "מוצגות כל העמודות מהדוח — רק השורות שלך"
-            : "טרם הועלה דוח יומי למערכת";
-        }
-      }
+      // GI-PREMIUM-STATS: המלל ההסברי הוסר מהכותרת והוחלף במוני פרמיה (paintPremiumStats).
       const canUpload = Auth.canUploadDailyReport();
       if(this.els.asOfPickWrap) this.els.asOfPickWrap.hidden = !canUpload;
       if(this.els.asOfDate && canUpload && report?.reportAsOfDate){
         this.els.asOfDate.value = normalizeDailyReportAsOfInput(report.reportAsOfDate);
       }
+    },
+
+    // GI-PREMIUM-STATS
+    formatPremiumStatMoney(v){
+      const n = Number(v);
+      if(!Number.isFinite(n) || n <= 0) return "₪0";
+      const rounded = Math.round(n * 100) / 100;
+      try {
+        return "₪" + rounded.toLocaleString("he-IL", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+      } catch(_e) {
+        return "₪" + rounded;
+      }
+    },
+
+    computePremiumStats(report, rows){
+      const out = { issuedPremium: 0, issuedCount: 0, pendingPremium: 0, pendingCount: 0, hasStatusCol: false };
+      if(!report) return out;
+      const cols = this.getColumnIndexes(report);
+      if(cols.status < 0) return out;
+      out.hasStatusCol = true;
+      (rows || []).forEach((row) => {
+        const status = getDailyReportCell(row, cols.status);
+        if(isDailyReportIssuedStatus(status)){
+          out.issuedCount += 1;
+          out.issuedPremium += getDailyReportIssuedPremiumValue(row, cols);
+        } else if(isDailyReportPendingIssueStatus(status)){
+          out.pendingCount += 1;
+          out.pendingPremium += getDailyReportPendingPremiumValue(row, cols);
+        }
+      });
+      out.issuedPremium = Math.round(out.issuedPremium * 100) / 100;
+      out.pendingPremium = Math.round(out.pendingPremium * 100) / 100;
+      return out;
+    },
+
+    paintPremiumStats(report, rows){
+      const wrap = this.els.premStats;
+      if(!wrap) return;
+      if(!report){
+        wrap.hidden = true;
+        return;
+      }
+      const stats = this.computePremiumStats(report, rows);
+      if(!stats.hasStatusCol){
+        wrap.hidden = true;
+        return;
+      }
+      wrap.hidden = false;
+      const policyWord = (n) => (Number(n) === 1 ? "פוליסה" : "פוליסות");
+      if(this.els.premIssuedValue) this.els.premIssuedValue.textContent = this.formatPremiumStatMoney(stats.issuedPremium);
+      if(this.els.premIssuedSub) this.els.premIssuedSub.textContent = `${stats.issuedCount} ${policyWord(stats.issuedCount)}`;
+      if(this.els.premPendingValue) this.els.premPendingValue.textContent = this.formatPremiumStatMoney(stats.pendingPremium);
+      if(this.els.premPendingSub) this.els.premPendingSub.textContent = `${stats.pendingCount} ${policyWord(stats.pendingCount)}`;
+      wrap.classList.toggle("is-filtered", this.hasActiveFilters());
     },
 
     getFilteredRows(){
@@ -66239,6 +66306,7 @@ const CampaignLeadsStore = {
         this.showAlert("");
       }
       this.paintTitle(report);
+      this.paintPremiumStats(report, rows);
       this.paintMeta(report, rows.length, totalVisible);
       this.paintHeader(report);
       this.paintBody(report, rows);
