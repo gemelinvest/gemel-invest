@@ -62122,6 +62122,9 @@ const ClalRiskLifePdf = {
     Object.entries(input).forEach(([key, value]) => { if(key) out[String(key)] = normalizeAgentSecurityEntry(value); });
     return out;
   };
+  /* GI-FIX 2026-08-03d — תמונת המצב האחרונה של agentSecurity שנקראה מהשרת.
+     נכתבת ב-Storage.mapMeta ומשמשת כרשת ביטחון ב-Storage.upsertMeta. */
+  let GI_LAST_SERVER_AGENT_SECURITY = null;
   /* GI-FIX 2026-08-03 — מיזוג agentSecurity עם הגנת pinOnlyLogin.
      שמירת meta (כולל metaOnly אחרי MFA) כותבת את כל המפה. בלי הכלל הזה,
      רשומה מקומית ישנה בלי pinOnlyLogin אבל עם updatedAt חדש יותר דרסה את
@@ -62877,7 +62880,47 @@ const ClalRiskLifePdf = {
       || safeTrim(out.teamManagerAssignmentsUpdatedAt)
       || null;
     Object.assign(out, normalizeMetaSyncClocks(metaRow?.payload || out, out.updatedAt));
+    /* GI-FIX 2026-08-03d — שומרים תמונת מצב אחרונה של agentSecurity מהשרת.
+       משמשת כרשת ביטחון ב-upsertMeta כשקריאת השרת לפני הכתיבה נכשלת. */
+    try { GI_LAST_SERVER_AGENT_SECURITY = normalizeAgentSecurityMap(out.agentSecurity); } catch(_e) {}
     return out;
+  };
+
+  /* GI-FIX 2026-08-03d — "כניסה עם PIN בלבד" נמחקה מהשרת אחרי זמן מה.
+     שורש: buildMetaRow דורס את כל payload.agentSecurity במפה המקומית, והמיזוג
+     המגן (mergeAgentSecurityMapsByRecency) הורץ רק אצל הקוראים — בתוך
+     if(serverState?.meta) ב-saveSheets ובתוך if(latestMeta?.ok) במסלול metaOnly.
+     כששני התנאים לא מתקיימים — skipServerMerge:true (מחיקת הצעה, שורה ~20304)
+     או loadMetaRow שנכשל — upsertMeta כתב מפה מקומית ישנה והחזיר נציגים ל-2FA.
+     כאן מגנים בנקודת הכתיבה היחידה לשרת, כמו ב-setAgentSecurity. */
+  const _origUpsertMetaPinOnlyGuard = Storage.upsertMeta.bind(Storage);
+  Storage.upsertMeta = async function(state){
+    try {
+      const target = state && typeof state === "object" ? state : null;
+      if(target){
+        target.meta = target.meta && typeof target.meta === "object" ? target.meta : {};
+        let serverSecurity = null;
+        try {
+          const res = await this.loadMetaRow();   // מטמון 2 שניות — בלי סיבוב רשת נוסף בפועל
+          if(res?.ok && res.data){
+            serverSecurity = this.mapMeta(res.data || {}).agentSecurity;
+          }
+        } catch(_readErr) {}
+        /* אם הקריאה נכשלה — לא מוותרים על ההגנה ולא מכשילים את השמירה:
+           ממזגים מול התמונה האחרונה שנקראה מהשרת בסשן הזה. */
+        if(!serverSecurity && GI_LAST_SERVER_AGENT_SECURITY) serverSecurity = GI_LAST_SERVER_AGENT_SECURITY;
+        if(serverSecurity){
+          const mergedSecurity = mergeAgentSecurityMapsByRecency(serverSecurity, target.meta.agentSecurity);
+          target.meta.agentSecurity = mergedSecurity;
+          if(State.data?.meta && State.data.meta !== target.meta){
+            State.data.meta.agentSecurity = normalizeAgentSecurityMap(mergedSecurity);
+          }
+        }
+      }
+    } catch(_guardErr) {
+      console.warn("META_PIN_ONLY_GUARD_WARN", _guardErr);
+    }
+    return _origUpsertMetaPinOnlyGuard(state);
   };
 
   const getCurrentAgentRecord = () => findAgentRecordForSession();
