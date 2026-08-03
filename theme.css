@@ -5856,6 +5856,77 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
   }
 }
 
+
+/* ---------- פיצול סה״כ הפרמיה לפי ענף (בתוך כרטיס הסה״כ) ---------- */
+#view-dailySales .giDailySalesPage__stat--prem:not(#\9):not(#\9){
+  grid-column: span 1;
+}
+
+#view-dailySales .giDailySalesPage__split:not(#\9):not(#\9){
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px dashed rgba(22,163,74,.28);
+}
+
+#view-dailySales .giDailySalesPage__splitItem:not(#\9):not(#\9){
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+}
+
+#view-dailySales .giDailySalesPage__splitItem:not(:last-child):not(#\9):not(#\9){
+  padding-inline-end: 10px;
+  border-inline-end: 1px solid var(--gi-border);
+}
+
+#view-dailySales .giDailySalesPage__splitLbl:not(#\9):not(#\9){
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  color: var(--gi-text-muted);
+  white-space: nowrap;
+}
+
+#view-dailySales .giDailySalesPage__splitVal:not(#\9):not(#\9){
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--gi-text);
+  white-space: nowrap;
+}
+
+#view-dailySales .giDailySalesPage__splitItem--briut .giDailySalesPage__splitVal:not(#\9):not(#\9){ color: #1a7a4a; }
+#view-dailySales .giDailySalesPage__splitItem--almanteri .giDailySalesPage__splitVal:not(#\9):not(#\9){ color: #2b5cb8; }
+#view-dailySales .giDailySalesPage__splitItem--pensia .giDailySalesPage__splitVal:not(#\9):not(#\9){ color: #6b46c1; }
+#view-dailySales .giDailySalesPage__splitItem--other .giDailySalesPage__splitVal:not(#\9):not(#\9){ color: var(--gi-text-3); }
+
+/* ענף בלי מכירות — מוחלש כדי שהעין תנחת על מה שכן נמכר */
+#view-dailySales .giDailySalesPage__splitItem.is-zero .giDailySalesPage__splitVal:not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__splitItem.is-zero .giDailySalesPage__splitLbl:not(#\9):not(#\9){
+  color: var(--gi-text-muted);
+  opacity: .55;
+}
+
+/* כרטיס הסה״כ מתרחב לרוחב מלא כדי שהפיצול יישב בשורה אחת */
+@media (min-width: 901px){
+  #view-dailySales .giDailySalesPage__summary:not(#\9):not(#\9){
+    grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.35fr);
+  }
+}
+
+@media (max-width: 900px){
+  #view-dailySales .giDailySalesPage__split:not(#\9):not(#\9){
+    gap: 4px 8px;
+  }
+  #view-dailySales .giDailySalesPage__splitItem:not(:last-child):not(#\9):not(#\9){
+    padding-inline-end: 8px;
+  }
+}
+
 /* =====================================================================
    SETTINGS CONSOLE ? GI stretch (Settings Hub)
    Visual layer only; DOM/logic unchanged.

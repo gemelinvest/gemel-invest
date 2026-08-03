@@ -25203,16 +25203,52 @@ UsersGateUI.init();
       }).join("");
     },
 
+    /* GI-FIX 2026-08-03: פיצול סה״כ הפרמיה לפי ענף. «בריאות» ו«סיכונים»
+       מאוחדים לדלי אחד כי הם מגיעים מאותו אשף («בריאות וסיכונים»).
+       נגזר מ-groups שכבר חושבו — בלי מעבר נוסף על הלקוחות. */
+    dailySalesBranchTotals(report){
+      const groups = Array.isArray(report?.groups) ? report.groups : [];
+      const buckets = { health: 0, elementary: 0, pension: 0, other: 0 };
+      groups.forEach((g) => {
+        const prem = Number(g?.premium) || 0;
+        const sector = safeTrim(g?.sector);
+        if(sector === "בריאות" || sector === "סיכונים") buckets.health += prem;
+        else if(sector === "אלמנטרי") buckets.elementary += prem;
+        else if(sector === "פנסיה") buckets.pension += prem;
+        else buckets.other += prem;
+      });
+      const round = (n) => Math.round(n * 100) / 100;
+      return {
+        health: round(buckets.health),
+        elementary: round(buckets.elementary),
+        pension: round(buckets.pension),
+        other: round(buckets.other)
+      };
+    },
+
     renderDailySalesGroupSummaryHtml(report){
       const agents = Number(report?.groupAgentCount) || 0;
       const deals = Number(report?.groupDealCount) || 0;
       const total = Number(report?.groupTotalPremium) || 0;
       const avg = agents > 0 ? Math.round((total / agents) * 100) / 100 : 0;
+      const b = this.dailySalesBranchTotals(report);
+      const splitItems = [
+        { label: "בריאות וסיכונים", value: b.health, slug: "briut" },
+        { label: "אלמנטרי", value: b.elementary, slug: "almanteri" },
+        { label: "פנסיה", value: b.pension, slug: "pensia" }
+      ];
+      // 'אחר' נכנס רק אם באמת נצבר בו סכום, כדי לא להוסיף רעש לסרגל
+      if(b.other > 0) splitItems.push({ label: "אחר", value: b.other, slug: "other" });
+      const split = `<div class="giDailySalesPage__split">` + splitItems.map((item) => `
+          <div class="giDailySalesPage__splitItem giDailySalesPage__splitItem--${escapeHtml(item.slug)}${item.value > 0 ? "" : " is-zero"}">
+            <span class="giDailySalesPage__splitLbl">${escapeHtml(item.label)}</span>
+            <span class="giDailySalesPage__splitVal">${escapeHtml(this.formatMoney(item.value))}</span>
+          </div>`).join("") + `</div>`;
       return `
         <div class="giDailySalesPage__stat"><span>נציגים</span><strong>${escapeHtml(this.dailySalesAgentsWord(agents))}</strong></div>
         <div class="giDailySalesPage__stat"><span>עסקאות</span><strong>${escapeHtml(this.dailySalesDealsWord(deals))}</strong></div>
         <div class="giDailySalesPage__stat"><span>ממוצע לנציג</span><strong>${escapeHtml(this.formatMoney(avg))}</strong></div>
-        <div class="giDailySalesPage__stat giDailySalesPage__stat--prem"><span>סה״כ פרמיה</span><strong>${escapeHtml(this.formatMoney(total))}</strong></div>`;
+        <div class="giDailySalesPage__stat giDailySalesPage__stat--prem"><span>סה״כ פרמיה</span><strong>${escapeHtml(this.formatMoney(total))}</strong>${split}</div>`;
     },
 
     renderDailySalesSummaryHtml(report){
@@ -25688,6 +25724,9 @@ UsersGateUI.init();
   .prem{color:#0f9f6e;font-weight:800;white-space:nowrap}
   .foot{margin-top:16px;padding-top:14px;border-top:1px solid #e8eef7;display:flex;justify-content:space-between;gap:12px;font-weight:800}
   .foot .prem{font-size:18px}
+  .split{margin-top:10px;display:flex;gap:10px;flex-wrap:wrap}
+  .split span{flex:1;min-width:130px;padding:8px 10px;border:1px solid #e8eef7;border-radius:8px;font-size:13px;font-weight:800;color:#1f2a44}
+  .split i{display:block;font-style:normal;font-size:10px;font-weight:700;color:#8a99b2;margin-bottom:2px}
   @page{margin:14mm}
 </style></head><body><div class="wrap">
   <h1>דוח מעקב מכירות יומי</h1>
@@ -25700,6 +25739,12 @@ UsersGateUI.init();
     <span>${escapeHtml(this.dailySalesAgentsWord(report.groupAgentCount))} · ${escapeHtml(this.dailySalesDealsWord(report.groupDealCount))}</span>
     <span class="prem">${escapeHtml(this.formatMoney(report.groupTotalPremium))}</span>
   </div>
+  <div class="split">${(() => {
+    const b = this.dailySalesBranchTotals(report);
+    const items = [["בריאות וסיכונים", b.health], ["אלמנטרי", b.elementary], ["פנסיה", b.pension]];
+    if(b.other > 0) items.push(["אחר", b.other]);
+    return items.map(([lbl, val]) => `<span><i>${escapeHtml(lbl)}</i>${escapeHtml(this.formatMoney(val))}</span>`).join("");
+  })()}</div>
 </div></body></html>`);
       win.document.close();
       try { win.focus(); win.print(); } catch(_e) {}
