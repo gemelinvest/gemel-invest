@@ -7170,3 +7170,169 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   gap: 10px !important;
   margin-top: 14px !important;
 }
+
+/* ==========================================================================
+   GI-GLOBALSEARCH 2026-08-03 — פאנל תוצאות החיפוש הגלובלי
+   --------------------------------------------------------------------------
+   מרחב שמות ייעודי (giGS) — אין חפיפה עם מחלקות קיימות.
+   משתמש בטריק ה-:not(#\9) של הקובץ כדי לגבור על כללי !important גלובליים.
+   ========================================================================== */
+
+/* העוגן לפאנל. .giTopSearch לא היה position:relative ואין בו כרגע שום
+   אלמנט ממוקם אבסולוטית, ולכן ההוספה אינה משנה שום פריסה קיימת. */
+.giTopSearch:not(#\9):not(#\9){
+  position: relative;
+}
+
+.giGSPanel:not(#\9):not(#\9){
+  position: absolute;
+  inset-inline-start: 0;
+  inset-inline-end: 0;
+  top: calc(100% + 8px);
+  z-index: 4000;
+  max-height: min(460px, calc(100vh - 140px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--gi-s2);
+  background: var(--gi-surface);
+  border: 1px solid var(--gi-border);
+  border-radius: var(--gi-r-card, 14px);
+  box-shadow: var(--gi-sh-lg);
+  text-align: start;
+  animation: giGSPanelIn .13s ease-out;
+}
+
+.giGSPanel[hidden]:not(#\9):not(#\9){
+  display: none !important;
+}
+
+@keyframes giGSPanelIn{
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.giGSPanel__group:not(#\9):not(#\9){
+  padding: var(--gi-s2) var(--gi-s3) 6px;
+  font-family: var(--gi-font);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: var(--gi-text-muted);
+}
+
+.giGSRow:not(#\9):not(#\9):not(#\9){
+  display: flex;
+  align-items: center;
+  gap: var(--gi-s3);
+  width: 100%;
+  margin: 0;
+  padding: 9px var(--gi-s3);
+  border: 0;
+  border-radius: var(--gi-r-ctl, 10px);
+  background: transparent;
+  box-shadow: none;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color .12s ease;
+}
+
+.giGSRow:hover:not(#\9):not(#\9),
+.giGSRow.is-active:not(#\9):not(#\9){
+  background: var(--gi-surface-2);
+}
+
+.giGSRow__icon:not(#\9):not(#\9){
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--gi-surface-3);
+  color: var(--gi-text-2);
+}
+
+.giGSRow__icon:not(#\9):not(#\9) svg{
+  width: 16px;
+  height: 16px;
+}
+
+.giGSRow__icon--customer:not(#\9):not(#\9){ background: var(--gi-primary-soft); color: var(--gi-primary); }
+.giGSRow__icon--proposal:not(#\9):not(#\9){ background: var(--gi-info-soft); color: var(--gi-info); }
+.giGSRow__icon--policy:not(#\9):not(#\9){ background: var(--gi-success-soft); color: var(--gi-success); }
+.giGSRow__icon--elementary:not(#\9):not(#\9){ background: var(--gi-warn-soft); color: var(--gi-warn); }
+.giGSRow__icon--lead:not(#\9):not(#\9){ background: var(--gi-danger-soft); color: var(--gi-danger); }
+
+.giGSRow__body:not(#\9):not(#\9){
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.giGSRow__title:not(#\9):not(#\9){
+  font-family: var(--gi-font);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--gi-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.giGSRow__sub:not(#\9):not(#\9){
+  font-family: var(--gi-font);
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--gi-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.giGSRow__meta:not(#\9):not(#\9){
+  flex: 0 0 auto;
+  max-width: 108px;
+  font-family: var(--gi-font);
+  font-size: 11px;
+  color: var(--gi-text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.giGSPanel__empty:not(#\9):not(#\9){
+  padding: var(--gi-s5) var(--gi-s3);
+  text-align: center;
+}
+
+.giGSPanel__emptyTitle:not(#\9):not(#\9){
+  font-family: var(--gi-font);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gi-text-2);
+}
+
+.giGSPanel__emptyHint:not(#\9):not(#\9){
+  margin-top: 4px;
+  font-family: var(--gi-font);
+  font-size: 11.5px;
+  color: var(--gi-text-muted);
+}
+
+.giGSPanel__foot:not(#\9):not(#\9){
+  margin-top: var(--gi-s2);
+  padding: 7px var(--gi-s3) 3px;
+  border-top: 1px solid var(--gi-border-soft);
+  font-family: var(--gi-font);
+  font-size: 10.5px;
+  color: var(--gi-text-muted);
+}
+
+@media (max-width: 1200px){
+  .giGSPanel:not(#\9):not(#\9){ max-height: min(400px, calc(100vh - 140px)); }
+}

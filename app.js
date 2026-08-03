@@ -78558,10 +78558,829 @@ const CampaignLeadsStore = {
     }
   };
 
+  /* ==========================================================================
+     GI-GLOBALSEARCH 2026-08-03 — מנוע חיפוש גלובלי (טופבר)
+     --------------------------------------------------------------------------
+     מודול עצמאי. אינו משנה שום פונקציה קיימת ואינו כותב ל-State.data.
+     קורא בלבד, ומנתב לפונקציות הפתיחה הקיימות של המערכת.
+
+     ארכיטקטורה:
+       שכבה 1 (מיידית)  — אינדקס שדות רזים (שם/ת״ז/טלפון/עיר/נציג). ללא payload.
+       שכבה 2 (רקע)     — אינדקס מתוך payload (פוליסות, רישוי, מסמכים, תפעול).
+                          נבנה רק כשהמשתמש נוגע בשדה החיפוש, במנות idle.
+       שכבה 3 (שרת)     — Storage.searchCustomers הקיים, debounce, מיזוג לפי id.
+
+     הרשאות: כל תוצאה עוברת דרך customerVisibleToCurrentUser / campaignLeadAgentAccess
+     הקיימים. אין מסלול עוקף.
+     ========================================================================== */
+  const GlobalSearch = {
+    /* ---------- תצורה ---------- */
+    MIN_CHARS: 2,
+    // 3 ספרות התאימו לכל ת״ז/טלפון שמכיל את הרצף (למשל "123" מול 301234567)
+    // וייצרו רעש. 4 שומר על חיפוש "4 ספרות אחרונות" ומוריד את הרעש משמעותית.
+    MIN_DIGITS: 4,
+    SERVER_DEBOUNCE_MS: 350,
+    MAX_PER_GROUP: 6,
+    MAX_TOTAL: 28,
+    // נמדד: מנה של 25 הגיעה ל-53.8ms — מעל תקציב ה-50ms של פריים.
+    // 12 מוריד את המנה הגרועה ביותר לכ-26ms.
+    TIER2_CHUNK: 12,
+    TIER2_MAX_ITEMS_PER_REC: 40,
+    SERVER_CACHE_MAX: 24,
+
+    els: {},
+    _bound: false,
+    _isOpen: false,
+    _q: "",
+    _rows: [],
+    _activeIdx: -1,
+    _tier1: null,
+    _tier1Sig: "",
+    _tier2: null,          // Map: recId -> { sig, entries:[] }
+    _tier2Started: false,
+    _tier2Done: false,
+    _tier2Scanned: 0,
+    _tier2Total: 0,
+    _serverCache: null,
+    _serverSeq: 0,
+    _serverRows: [],
+    _serverQ: "",
+    _serverBusy: false,
+
+    GROUPS: [
+      { key: "customer",  label: "תיקי לקוח" },
+      { key: "proposal",  label: "הצעות" },
+      { key: "policy",    label: "פוליסות" },
+      { key: "elementary",label: "אלמנטרי · רכב" },
+      { key: "document",  label: "מסמכים" },
+      { key: "ops",       label: "תהליכים תפעוליים" },
+      { key: "lead",      label: "לידים" },
+      { key: "report",    label: "דוח יומי" }
+    ],
+
+    ICONS: {
+      customer:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4l2 2.5h7A1.5 1.5 0 0 1 19 10v7.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 3 17.5Z"/></svg>',
+      proposal:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h8l4 4v13H6z"/><path d="M14 3.5v4h4"/><path d="M9 12.5h6M9 16h4"/></svg>',
+      policy:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.2 19 6v5.6c0 4-2.9 7.4-7 8.6-4.1-1.2-7-4.6-7-8.6V6Z"/><path d="m9.2 12 2 2 3.6-3.8"/></svg>',
+      elementary: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15.5h16v3H4z"/><path d="M5.6 15.5 7.2 9.4A2 2 0 0 1 9.1 8h5.8a2 2 0 0 1 1.9 1.4l1.6 6.1"/><circle cx="7.5" cy="18.5" r="1.3"/><circle cx="16.5" cy="18.5" r="1.3"/></svg>',
+      document:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-10A.5.5 0 0 1 7 20Z"/><path d="M14 3.5v4h4"/></svg>',
+      ops:        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 3.5v2.2M12 18.3v2.2M20.5 12h-2.2M5.7 12H3.5M18 6l-1.6 1.6M7.6 16.4 6 18M18 18l-1.6-1.6M7.6 7.6 6 6"/></svg>',
+      lead:       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 4.5h3l1.6 3.8-2 1.2a10.5 10.5 0 0 0 4.4 4.4l1.2-2 3.8 1.6v3a1.5 1.5 0 0 1-1.6 1.5C10.9 17.5 6.5 13.1 5 6.1A1.5 1.5 0 0 1 6.5 4.5Z"/></svg>',
+      report:     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5h15"/><path d="M7.5 19.5v-6M12 19.5V6M16.5 19.5v-9"/></svg>'
+    },
+
+    /* ---------- נרמול טקסט ---------- */
+    normText(v){
+      return String(v ?? "")
+        .toLowerCase()
+        .replace(/[\u05F3\u05F4'"`’״׳]/g, "")
+        .replace(/[\u0591-\u05C7]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    },
+
+    /* ---------- אתחול ---------- */
+    init(){
+      if(this._bound) return;
+      const input = document.getElementById("giTopSearchInput");
+      if(!input) return;
+      const wrap = input.closest(".giTopSearch");
+      if(!wrap) return;
+
+      this._bound = true;
+      this._tier2 = new Map();
+      this._serverCache = new Map();
+      this.els.input = input;
+      this.els.wrap = wrap;
+
+      const panel = document.createElement("div");
+      panel.className = "giGSPanel";
+      panel.id = "giGSPanel";
+      panel.setAttribute("role", "listbox");
+      panel.setAttribute("aria-label", "תוצאות חיפוש");
+      panel.hidden = true;
+      wrap.appendChild(panel);
+      this.els.panel = panel;
+
+      input.setAttribute("role", "combobox");
+      input.setAttribute("aria-expanded", "false");
+      input.setAttribute("aria-controls", "giGSPanel");
+      input.setAttribute("aria-autocomplete", "list");
+
+      const runServer = perfDebounce(() => { void this.fetchServer(); }, this.SERVER_DEBOUNCE_MS);
+
+      on(input, "focus", () => {
+        this.startBackgroundIndex();
+        if(safeTrim(input.value)) this.runLocal();
+      });
+      on(input, "input", () => {
+        this.startBackgroundIndex();
+        this.runLocal();
+        runServer();
+      });
+      on(input, "keydown", (ev) => this.onKeyDown(ev));
+      on(panel, "mousedown", (ev) => {
+        const row = ev.target?.closest?.("[data-gs-idx]");
+        if(!row) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        this.activate(Number(row.getAttribute("data-gs-idx")));
+      });
+      on(document, "mousedown", (ev) => {
+        if(!this._isOpen) return;
+        if(wrap.contains(ev.target)) return;
+        this.close();
+      });
+      on(window, "resize", () => { if(this._isOpen) this.close(); });
+    },
+
+    /* ---------- מקלדת ---------- */
+    onKeyDown(ev){
+      const key = ev.key;
+      if(key === "Escape"){
+        if(this._isOpen){ ev.preventDefault(); this.close(); }
+        else if(safeTrim(this.els.input?.value)){ this.els.input.value = ""; }
+        return;
+      }
+      if(!this._isOpen) return;
+      const pick = this._rows.filter((r) => r.type === "item");
+      if(!pick.length) return;
+      if(key === "ArrowDown" || key === "ArrowUp"){
+        ev.preventDefault();
+        const cur = pick.findIndex((r) => r.idx === this._activeIdx);
+        let next = key === "ArrowDown" ? cur + 1 : cur - 1;
+        if(next < 0) next = pick.length - 1;
+        if(next >= pick.length) next = 0;
+        this._activeIdx = pick[next].idx;
+        this.paintActive();
+        return;
+      }
+      if(key === "Enter"){
+        if(this._activeIdx >= 0){
+          ev.preventDefault();
+          this.activate(this._activeIdx);
+        }
+        return;
+      }
+    },
+
+    /* ---------- אינדקס שכבה 1 ---------- */
+    tier1Signature(){
+      const d = State.data || {};
+      const leads = (typeof CampaignLeadsStore !== "undefined" && Array.isArray(CampaignLeadsStore.leads)) ? CampaignLeadsStore.leads.length : 0;
+      const refs = Array.isArray(d?.meta?.elementaryReferrals) ? d.meta.elementaryReferrals.length : 0;
+      return [
+        (d.customers || []).length,
+        (d.proposals || []).length,
+        leads,
+        refs,
+        safeTrim(d?.meta?.updatedAt),
+        safeTrim(d?.meta?.dataUpdatedAt),
+        safeTrim(Auth?.current?.id)
+      ].join("|");
+    },
+
+    buildTier1(){
+      const sig = this.tier1Signature();
+      if(this._tier1 && this._tier1Sig === sig) return this._tier1;
+      return GiPerf.run("globalSearch:index1", () => {
+        const out = [];
+        const d = State.data || {};
+
+        const pushPerson = (rec, kind) => {
+          if(!rec) return;
+          const name = safeTrim(rec.fullName);
+          const idn = safeTrim(rec.idNumber);
+          const phone = safeTrim(rec.phone);
+          if(!name && !idn && !phone) return;
+          out.push({
+            kind,
+            id: safeTrim(rec.id),
+            custId: kind === "customer" ? safeTrim(rec.id) : "",
+            title: name || "ללא שם",
+            sub: [idn ? "ת״ז " + idn : "", phone].filter(Boolean).join(" · "),
+            meta: safeTrim(rec.agentName),
+            hay: this.normText([name, safeTrim(rec.city), safeTrim(rec.agentName), safeTrim(rec.email)].join(" ")),
+            dig: [digitsOnly(idn), digitsOnly(phone)].filter(Boolean).join("|"),
+            ref: rec
+          });
+        };
+
+        (Array.isArray(d.customers) ? d.customers : []).forEach((rec) => {
+          if(!this.canSeeRecord(rec)) return;
+          pushPerson(rec, "customer");
+        });
+
+        (Array.isArray(d.proposals) ? d.proposals : []).forEach((rec) => {
+          if(!this.canSeeRecord(rec)) return;
+          pushPerson(rec, "proposal");
+        });
+
+        (Array.isArray(d?.meta?.elementaryReferrals) ? d.meta.elementaryReferrals : []).forEach((rec) => {
+          if(!this.canSeeRecord(rec)) return;
+          const name = safeTrim(rec.fullName);
+          const idn = safeTrim(rec.idNumber);
+          const phone = safeTrim(rec.phone);
+          if(!name && !idn && !phone) return;
+          out.push({
+            kind: "elementary",
+            id: safeTrim(rec.id),
+            custId: safeTrim(rec.customerId),
+            title: name || "ללא שם",
+            sub: [safeTrim(rec.elementaryProduct) || "אלמנטרי", idn ? "ת״ז " + idn : ""].filter(Boolean).join(" · "),
+            meta: safeTrim(rec.agentName),
+            hay: this.normText([name, safeTrim(rec.elementaryProduct), safeTrim(rec.agentName), safeTrim(rec.city)].join(" ")),
+            dig: [digitsOnly(idn), digitsOnly(phone)].filter(Boolean).join("|"),
+            ref: rec,
+            isReferral: true
+          });
+        });
+
+        if(typeof CampaignLeadsStore !== "undefined" && Array.isArray(CampaignLeadsStore.leads)){
+          CampaignLeadsStore.leads.forEach((lead) => {
+            if(!this.canSeeLead(lead)) return;
+            const name = safeTrim(lead.customerName);
+            const phone = safeTrim(lead.phone);
+            const idn = safeTrim(lead.idNumber);
+            if(!name && !phone && !idn) return;
+            out.push({
+              kind: "lead",
+              id: safeTrim(lead.id),
+              custId: "",
+              title: name || phone || "ליד",
+              sub: [phone, safeTrim(lead.campaignLabel)].filter(Boolean).join(" · "),
+              meta: safeTrim(lead.assignedAgentName),
+              hay: this.normText([name, safeTrim(lead.campaignLabel), safeTrim(lead.assignedAgentName), safeTrim(lead.descriptionDisplay || lead.description)].join(" ")),
+              dig: [digitsOnly(phone), digitsOnly(idn)].filter(Boolean).join("|"),
+              ref: lead
+            });
+          });
+        }
+
+        this._tier1 = out;
+        this._tier1Sig = sig;
+        return out;
+      });
+    },
+
+    /* ---------- אינדקס שכבה 2 (payload, ברקע) ---------- */
+    startBackgroundIndex(){
+      if(this._tier2Started) return;
+      this._tier2Started = true;
+      // אינדקס שכבה 1 נבנה כאן ולא בהקלתה הראשונה: הבנייה הראשונה עולה
+      // ~155ms בגלל חימום JIT (הבנייה החוזרת היא ~9ms). בניית מראש ברגע
+      // המיקוד מוציאה את העלות הזו מהמסלול שהמשתמש מרגיש.
+      perfIdle(() => { try { this.buildTier1(); } catch(_e) {} }, 500);
+      const list = this.tier2Sources();
+      this._tier2Total = list.length;
+      this._tier2Scanned = 0;
+      const step = () => {
+        const end = Math.min(this._tier2Scanned + this.TIER2_CHUNK, list.length);
+        GiPerf.run("globalSearch:index2", () => {
+          for(let i = this._tier2Scanned; i < end; i += 1){
+            try { this.indexRecordPayload(list[i]); } catch(_e) {}
+          }
+        });
+        this._tier2Scanned = end;
+        if(end < list.length){
+          perfIdle(step, 900);
+        } else {
+          this._tier2Done = true;
+          if(this._isOpen && safeTrim(this.els.input?.value)) this.runLocal();
+        }
+      };
+      perfIdle(step, 900);
+    },
+
+    tier2Sources(){
+      const d = State.data || {};
+      const out = [];
+      (Array.isArray(d.customers) ? d.customers : []).forEach((rec) => {
+        if(this.canSeeRecord(rec)) out.push({ rec, kind: "customer" });
+      });
+      (Array.isArray(d.proposals) ? d.proposals : []).forEach((rec) => {
+        if(this.canSeeRecord(rec)) out.push({ rec, kind: "proposal" });
+      });
+      return out;
+    },
+
+    indexRecordPayload(src){
+      const rec = src?.rec;
+      if(!rec) return;
+      const id = safeTrim(rec.id);
+      if(!id) return;
+      const sig = id + "|" + safeTrim(rec.updatedAt);
+      const cached = this._tier2.get(id);
+      if(cached && cached.sig === sig) return;
+
+      const p = (rec.payload && typeof rec.payload === "object") ? rec.payload : null;
+      const entries = [];
+      if(!p){
+        this._tier2.set(id, { sig, entries });
+        return;
+      }
+
+      const custId = src.kind === "customer" ? id : "";
+      const owner = safeTrim(rec.fullName) || "לקוח";
+      const cap = this.TIER2_MAX_ITEMS_PER_REC;
+
+      const addPolicy = (pol) => {
+        if(entries.length >= cap) return;
+        if(!pol || typeof pol !== "object") return;
+        const num = safeTrim(pol.policyNumber);
+        const comp = safeTrim(pol.company);
+        const type = safeTrim(pol.type || pol.product);
+        if(!num && !comp && !type) return;
+        entries.push({
+          kind: "policy",
+          id: id + "::pol::" + (safeTrim(pol.id) || num || entries.length),
+          custId, srcKind: src.kind, srcId: id,
+          policyId: safeTrim(pol.id),
+          title: num ? "פוליסה " + num : (type || "פוליסה"),
+          sub: [comp, type].filter(Boolean).join(" · "),
+          meta: owner,
+          hay: this.normText([num, comp, type, owner].join(" ")),
+          dig: digitsOnly(num)
+        });
+      };
+
+      const addElementary = (row, plateFallback) => {
+        if(entries.length >= cap) return;
+        if(!row || typeof row !== "object") return;
+        const plate = safeTrim(row.licensePlate) || safeTrim(plateFallback);
+        const comp = safeTrim(row.company);
+        const type = safeTrim(row.type || row.label || row.coverageTypeHe);
+        const veh = safeTrim(row.vehicleDesc);
+        const num = safeTrim(row.policyNumber);
+        if(!plate && !comp && !type && !veh && !num) return;
+        entries.push({
+          kind: "elementary",
+          id: id + "::elem::" + (safeTrim(row.id) || plate || entries.length),
+          custId, srcKind: src.kind, srcId: id,
+          title: plate ? "רישוי " + plate : (type || "מוצר אלמנטרי"),
+          sub: [comp, veh || type, num ? "פוליסה " + num : ""].filter(Boolean).join(" · "),
+          meta: owner,
+          hay: this.normText([plate, comp, type, veh, num, owner].join(" ")),
+          dig: [digitsOnly(plate), digitsOnly(num)].filter(Boolean).join("|")
+        });
+      };
+
+      const insureds = Array.isArray(p.insureds) && p.insureds.length
+        ? p.insureds
+        : (Array.isArray(p?.operational?.insureds) ? p.operational.insureds : []);
+      for(let i = 0; i < insureds.length; i += 1){
+        const data = insureds[i]?.data;
+        if(!data || typeof data !== "object") continue;
+        const ex = data.existingPolicies;
+        if(Array.isArray(ex)) for(let j = 0; j < ex.length; j += 1) addPolicy(ex[j]);
+        const plate = safeTrim(data.licensePlate);
+        const vps = data.elementaryVehiclePolicies;
+        if(Array.isArray(vps) && vps.length){
+          for(let j = 0; j < vps.length; j += 1) addElementary(vps[j], plate);
+        } else if(plate){
+          addElementary({ licensePlate: plate, type: safeTrim(data.vehicleModel) || safeTrim(data.vehicleType) }, plate);
+        }
+      }
+
+      const np = Array.isArray(p.newPolicies) && p.newPolicies.length ? p.newPolicies : p?.operational?.newPolicies;
+      if(Array.isArray(np)) for(let i = 0; i < np.length; i += 1) addPolicy(np[i]);
+
+      if(Array.isArray(p.elementaryPolicies)){
+        for(let i = 0; i < p.elementaryPolicies.length; i += 1) addElementary(p.elementaryPolicies[i], "");
+      }
+
+      if(Array.isArray(p.customerDocuments)){
+        const docs = p.customerDocuments;
+        for(let i = 0; i < docs.length && entries.length < cap; i += 1){
+          const doc = docs[i];
+          if(!doc || typeof doc !== "object") continue;
+          const dn = safeTrim(doc.name) || safeTrim(doc.fileName) || safeTrim(doc.title);
+          if(!dn) continue;
+          entries.push({
+            kind: "document",
+            id: id + "::doc::" + (safeTrim(doc.id) || i),
+            custId, srcKind: src.kind, srcId: id,
+            title: dn,
+            sub: [safeTrim(doc.type), safeTrim(doc.insuredLabel)].filter(Boolean).join(" · "),
+            meta: owner,
+            hay: this.normText([dn, safeTrim(doc.type), safeTrim(doc.source), owner].join(" ")),
+            dig: ""
+          });
+        }
+      }
+
+      const mf = p.mirrorFlow;
+      const hasOps = !!(p.opsProcess || (mf && typeof mf === "object" && (
+        safeTrim(mf?.verify?.savedAt) || safeTrim(mf?.disclosure?.savedAt) ||
+        safeTrim(mf?.payment?.savedAt) || safeTrim(mf?.issuance?.savedAt)
+      )));
+      if(hasOps && custId){
+        entries.push({
+          kind: "ops",
+          id: id + "::ops",
+          custId, srcKind: src.kind, srcId: id,
+          title: "תהליך תפעולי — " + owner,
+          sub: safeTrim(rec.status) || "בטיפול תפעול",
+          meta: safeTrim(rec.agentName),
+          hay: this.normText([owner, "תהליך תפעולי תפעול", safeTrim(rec.status), safeTrim(rec.agentName)].join(" ")),
+          dig: digitsOnly(safeTrim(rec.idNumber))
+        });
+      }
+
+      this._tier2.set(id, { sig, entries });
+    },
+
+    /* ---------- דוח יומי ---------- */
+    searchDailyReport(qText, qDig){
+      const out = [];
+      try {
+        if(typeof DailyReportStore === "undefined" || !DailyReportStore.report) return out;
+        const report = DailyReportStore.report;
+        const rows = DailyReportStore.getVisibleRows();
+        if(!Array.isArray(rows) || !rows.length) return out;
+        const cols = getDailyReportColumnIndexes(report);
+        const headers = Array.isArray(report.headerRow) ? report.headerRow : [];
+        const nameIdx = cols.name;
+        for(let i = 0; i < rows.length && out.length < this.MAX_PER_GROUP; i += 1){
+          const row = rows[i];
+          const cells = Array.isArray(row) ? row : (Array.isArray(row?.cells) ? row.cells : null);
+          if(!cells) continue;
+          let hit = false;
+          for(let c = 0; c < cells.length; c += 1){
+            const raw = safeTrim(cells[c]);
+            if(!raw) continue;
+            if(qText && this.normText(raw).includes(qText)){ hit = true; break; }
+            if(qDig && qDig.length >= this.MIN_DIGITS && digitsOnly(raw).includes(qDig)){ hit = true; break; }
+          }
+          if(!hit) continue;
+          const name = nameIdx >= 0 ? safeTrim(cells[nameIdx]) : "";
+          const parts = [];
+          if(cols.company >= 0 && safeTrim(cells[cols.company])) parts.push(safeTrim(cells[cols.company]));
+          if(cols.plan >= 0 && safeTrim(cells[cols.plan])) parts.push(safeTrim(cells[cols.plan]));
+          if(cols.status >= 0 && safeTrim(cells[cols.status])) parts.push(safeTrim(cells[cols.status]));
+          out.push({
+            kind: "report",
+            id: "rep::" + i,
+            title: name || "שורה בדוח",
+            sub: parts.join(" · ") || safeTrim(headers[0]),
+            meta: "דוח מכירות",
+            reportQuery: name || safeTrim(cells[0])
+          });
+        }
+      } catch(_e) {}
+      return out;
+    },
+
+    /* ---------- הרשאות ---------- */
+    canSeeRecord(rec){
+      try { return !!customerVisibleToCurrentUser(rec); } catch(_e) { return false; }
+    },
+
+    canSeeLead(lead){
+      try {
+        if(!lead) return false;
+        if(Auth.isAdmin() || Auth.isManager()) return true;
+        const me = findAgentRecordForSession();
+        if(me && campaignLeadAgentAccess(lead, me)) return true;
+        if(Auth.isTeamManager()){
+          const mgrId = safeTrim(Auth.current?.id) || safeTrim(me?.id);
+          return getManagedAgentRecordsForTeamManager(mgrId).some((a) => campaignLeadAgentAccess(lead, a));
+        }
+        return false;
+      } catch(_e) { return false; }
+    },
+
+    /* ---------- חיפוש מקומי ---------- */
+    runLocal(){
+      const raw = safeTrim(this.els.input?.value);
+      this._q = raw;
+      if(raw.length < this.MIN_CHARS){
+        this._serverRows = [];
+        this._serverQ = "";
+        this.close();
+        return;
+      }
+      const qText = this.normText(raw);
+      const qDig = digitsOnly(raw);
+      const useDig = qDig.length >= this.MIN_DIGITS;
+
+      const matched = GiPerf.run("globalSearch:query", () => {
+        const buckets = {};
+        this.GROUPS.forEach((g) => { buckets[g.key] = []; });
+
+        const consider = (entry) => {
+          const b = buckets[entry.kind];
+          if(!b || b.length >= this.MAX_PER_GROUP) return;
+          let ok = false;
+          if(qText && entry.hay && entry.hay.includes(qText)) ok = true;
+          if(!ok && useDig && entry.dig && entry.dig.includes(qDig)) ok = true;
+          if(ok) b.push(entry);
+        };
+
+        this.buildTier1().forEach(consider);
+        if(this._tier2 && this._tier2.size){
+          this._tier2.forEach((v) => {
+            const list = v && Array.isArray(v.entries) ? v.entries : null;
+            if(!list) return;
+            for(let i = 0; i < list.length; i += 1) consider(list[i]);
+          });
+        }
+
+        this.searchDailyReport(qText, useDig ? qDig : "").forEach((r) => {
+          if(buckets.report.length < this.MAX_PER_GROUP) buckets.report.push(r);
+        });
+
+        return buckets;
+      });
+
+      this.mergeServerInto(matched, qText, useDig ? qDig : "");
+      this.paint(matched);
+    },
+
+    /* ---------- שרת ---------- */
+    async fetchServer(){
+      const raw = safeTrim(this.els.input?.value);
+      if(raw.length < this.MIN_CHARS) return;
+      if(typeof Storage === "undefined" || typeof Storage.searchCustomers !== "function") return;
+
+      const cached = this._serverCache.get(raw);
+      if(cached){
+        this._serverRows = cached;
+        this._serverQ = raw;
+        if(this._isOpen) this.runLocal();
+        return;
+      }
+
+      const seq = ++this._serverSeq;
+      this._serverBusy = true;
+      this.paintFooter();
+      let res = null;
+      try {
+        res = await Storage.searchCustomers(raw, 20);
+      } catch(_e) {
+        res = null;
+      }
+      if(seq !== this._serverSeq) return;   // בקשה ישנה — מבוטלת
+      this._serverBusy = false;
+
+      const rows = (res && res.ok && Array.isArray(res.data)) ? res.data : [];
+      const kept = rows.filter((rec) => this.canSeeRecord(rec));
+      this._serverCache.set(raw, kept);
+      if(this._serverCache.size > this.SERVER_CACHE_MAX){
+        const firstKey = this._serverCache.keys().next().value;
+        this._serverCache.delete(firstKey);
+      }
+      this._serverRows = kept;
+      this._serverQ = raw;
+      if(safeTrim(this.els.input?.value) === raw) this.runLocal();
+    },
+
+    mergeServerInto(buckets, qText, qDig){
+      if(!this._serverRows.length) return;
+      if(this._serverQ !== this._q) return;
+      const seen = new Set(buckets.customer.map((e) => String(e.id)));
+      this._serverRows.forEach((rec) => {
+        if(buckets.customer.length >= this.MAX_PER_GROUP) return;
+        const id = safeTrim(rec.id);
+        if(!id || seen.has(id)) return;
+        seen.add(id);
+        const name = safeTrim(rec.fullName);
+        const idn = safeTrim(rec.idNumber);
+        const phone = safeTrim(rec.phone);
+        buckets.customer.push({
+          kind: "customer",
+          id,
+          custId: id,
+          title: name || "ללא שם",
+          sub: [idn ? "ת״ז " + idn : "", phone].filter(Boolean).join(" · "),
+          meta: safeTrim(rec.agentName),
+          hay: this.normText([name, safeTrim(rec.city), safeTrim(rec.agentName)].join(" ")),
+          dig: [digitsOnly(idn), digitsOnly(phone)].filter(Boolean).join("|"),
+          fromServer: true
+        });
+      });
+    },
+
+    /* ---------- רינדור ---------- */
+    paint(buckets){
+      const panel = this.els.panel;
+      if(!panel) return;
+      const rows = [];
+      let idx = 0;
+      let total = 0;
+
+      this.GROUPS.forEach((g) => {
+        const list = buckets[g.key] || [];
+        if(!list.length) return;
+        if(total >= this.MAX_TOTAL) return;
+        rows.push({ type: "head", label: g.label, kind: g.key });
+        list.forEach((entry) => {
+          if(total >= this.MAX_TOTAL) return;
+          rows.push({ type: "item", idx: idx++, entry });
+          total += 1;
+        });
+      });
+
+      this._rows = rows;
+      if(!rows.length){
+        panel.innerHTML =
+          '<div class="giGSPanel__empty">' +
+            '<div class="giGSPanel__emptyTitle">לא נמצאו תוצאות</div>' +
+            '<div class="giGSPanel__emptyHint">נסה שם, ת״ז, טלפון או מספר פוליסה</div>' +
+          '</div>' + this.footerHtml();
+        this._activeIdx = -1;
+        this.open();
+        return;
+      }
+
+      const html = rows.map((r) => {
+        if(r.type === "head"){
+          return '<div class="giGSPanel__group">' + escapeHtml(r.label) + '</div>';
+        }
+        const e = r.entry;
+        const icon = this.ICONS[e.kind] || this.ICONS.customer;
+        const sub = safeTrim(e.sub);
+        const meta = safeTrim(e.meta);
+        return (
+          '<button class="giGSRow" type="button" role="option" data-gs-idx="' + r.idx + '">' +
+            '<span class="giGSRow__icon giGSRow__icon--' + escapeHtml(e.kind) + '">' + icon + '</span>' +
+            '<span class="giGSRow__body">' +
+              '<span class="giGSRow__title">' + escapeHtml(e.title) + '</span>' +
+              (sub ? '<span class="giGSRow__sub">' + escapeHtml(sub) + '</span>' : '') +
+            '</span>' +
+            (meta ? '<span class="giGSRow__meta">' + escapeHtml(meta) + '</span>' : '') +
+          '</button>'
+        );
+      }).join("");
+
+      panel.innerHTML = html + this.footerHtml();
+      this._activeIdx = rows.find((r) => r.type === "item")?.idx ?? -1;
+      this.paintActive();
+      this.open();
+    },
+
+    footerHtml(){
+      const bits = [];
+      if(this._serverBusy) bits.push("מסנכרן מהשרת…");
+      else if(!this._tier2Done && this._tier2Total) {
+        const pct = Math.min(99, Math.round((this._tier2Scanned / Math.max(1, this._tier2Total)) * 100));
+        bits.push("מרחיב חיפוש לפוליסות ומסמכים… " + pct + "%");
+      }
+      if(!bits.length) return "";
+      return '<div class="giGSPanel__foot">' + escapeHtml(bits.join(" · ")) + '</div>';
+    },
+
+    paintFooter(){
+      const panel = this.els.panel;
+      if(!panel || !this._isOpen) return;
+      const foot = panel.querySelector(".giGSPanel__foot");
+      const html = this.footerHtml();
+      if(foot){
+        if(!html) foot.remove();
+        else foot.outerHTML = html;
+      } else if(html){
+        panel.insertAdjacentHTML("beforeend", html);
+      }
+    },
+
+    paintActive(){
+      const panel = this.els.panel;
+      if(!panel) return;
+      panel.querySelectorAll(".giGSRow").forEach((el) => {
+        const on_ = Number(el.getAttribute("data-gs-idx")) === this._activeIdx;
+        el.classList.toggle("is-active", on_);
+        el.setAttribute("aria-selected", on_ ? "true" : "false");
+        if(on_ && typeof el.scrollIntoView === "function"){
+          try { el.scrollIntoView({ block: "nearest" }); } catch(_e) {}
+        }
+      });
+    },
+
+    open(){
+      if(!this.els.panel) return;
+      this.els.panel.hidden = false;
+      this.els.wrap?.classList.add("is-gsOpen");
+      this.els.input?.setAttribute("aria-expanded", "true");
+      this._isOpen = true;
+    },
+
+    close(){
+      if(!this.els.panel) return;
+      this.els.panel.hidden = true;
+      this.els.wrap?.classList.remove("is-gsOpen");
+      this.els.input?.setAttribute("aria-expanded", "false");
+      this._isOpen = false;
+      this._activeIdx = -1;
+    },
+
+    /* ---------- ניתוב פתיחה ---------- */
+    activate(idx){
+      const row = this._rows.find((r) => r.type === "item" && r.idx === idx);
+      if(!row) return;
+      const e = row.entry;
+      this.close();
+      try { this.els.input?.blur(); } catch(_e) {}
+      try { this.route(e); } catch(err) {
+        try { console.error("GLOBAL_SEARCH_OPEN_FAILED", err, e?.kind, e?.id); } catch(_e) {}
+        try { window.showToast?.({ title: "לא ניתן לפתוח", text: "הפריט לא נפתח. נסה שוב מהמסך הרלוונטי.", variant: "warn", durationMs: 4200 }); } catch(_e) {}
+      }
+    },
+
+    route(e){
+      if(!e) return;
+      switch(e.kind){
+        case "customer":
+          CustomersUI.openByIdWithLoader(e.custId || e.id);
+          return;
+
+        case "proposal":
+          void ProposalsUI.openById(e.id);
+          return;
+
+        case "policy":
+          if(e.srcKind === "proposal"){ void ProposalsUI.openById(e.srcId); return; }
+          this.openCustomerAt(e.custId || e.srcId, "policies", e.policyId);
+          return;
+
+        case "document":
+          if(e.srcKind === "proposal"){ void ProposalsUI.openById(e.srcId); return; }
+          this.openCustomerAt(e.custId || e.srcId, "documents");
+          return;
+
+        case "ops":
+          this.openCustomerAt(e.custId || e.srcId, "ops");
+          return;
+
+        case "elementary":
+          if(e.isReferral){
+            if(e.custId){ this.openCustomerAt(e.custId, "policies"); return; }
+            try { UI.goView("agentElementaryTracking"); } catch(_e) {}
+            try { window.showToast?.({ title: e.title || "אלמנטרי", text: "ההפניה טרם קושרה לתיק לקוח — פתוחה במעקב האלמנטרי.", variant: "info", durationMs: 5000 }); } catch(_e) {}
+            return;
+          }
+          if(e.srcKind === "proposal"){ void ProposalsUI.openById(e.srcId); return; }
+          this.openCustomerAt(e.custId || e.srcId, "policies");
+          return;
+
+        case "lead": {
+          const lead = (typeof CampaignLeadsStore !== "undefined" && Array.isArray(CampaignLeadsStore.leads))
+            ? CampaignLeadsStore.leads.find((l) => String(l.id) === String(e.id))
+            : null;
+          if(lead && typeof LeadDetailsModal !== "undefined" && LeadDetailsModal?.open){
+            LeadDetailsModal.open(lead);
+            return;
+          }
+          try { UI.goView("campaignMyLeads"); } catch(_e) {}
+          return;
+        }
+
+        case "report":
+          this.openDailyReportAt(e.reportQuery);
+          return;
+
+        default:
+          return;
+      }
+    },
+
+    openCustomerAt(customerId, section, policyId){
+      const id = safeTrim(customerId);
+      if(!id) return;
+      try {
+        CustomersUI.currentSection = CustomersUI.normalizeSection(section);
+      } catch(_e) {}
+      const rec = (typeof CustomersUI.byId === "function" ? CustomersUI.byId(id) : null) || findCustomerRecordById(id);
+      if(rec && typeof CustomersUI.openById === "function"){
+        const opts = { section };
+        if(safeTrim(policyId)) opts.policyId = safeTrim(policyId);
+        void CustomersUI.openById(id, opts);
+        return;
+      }
+      CustomersUI.openByIdWithLoader(id);
+    },
+
+    openDailyReportAt(query){
+      try {
+        DailyReportUI.openFromHub("daily");
+        const q = safeTrim(query);
+        if(!q) return;
+        window.setTimeout(() => {
+          try {
+            const el = document.getElementById("dailyReportSearch");
+            if(el) el.value = q;
+            DailyReportUI.searchQuery = q;
+            DailyReportUI.paint();
+          } catch(_e) {}
+        }, 120);
+      } catch(_e) {}
+    }
+  };
+
   ElementaryMirrorUI.init();
   MirrorCallUI.init();
   MirrorAssignmentsUI.init();
   OpsDashboardUI.init();
+  GlobalSearch.init();
 
 })();
 
