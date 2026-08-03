@@ -7336,3 +7336,41 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 @media (max-width: 1200px){
   .giGSPanel:not(#\9):not(#\9){ max-height: min(400px, calc(100vh - 140px)); }
 }
+
+
+/* =====================================================================
+   Customers list (#view-customers): readable black row text
+   CSS only — scoped to this view. Does not touch sector tags / premium
+   badges (they keep their intentional colors).
+   ===================================================================== */
+
+#view-customers .tableWrap .table th:not(#\9):not(#\9){
+  font-size: 13px !important;
+  color: #0F172A !important;
+  font-weight: 800 !important;
+}
+
+#view-customers .tableWrap .table td:not(#\9):not(#\9){
+  font-size: 15px !important;
+  color: #0F172A !important;
+  font-weight: 600 !important;
+}
+
+#view-customers .lcCustomers__nameMeta strong:not(#\9):not(#\9){
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  color: #0F172A !important;
+}
+
+#view-customers .lcCustomers__nameMeta .muted.small:not(#\9):not(#\9),
+#view-customers .tableWrap .table td .muted.small:not(#\9):not(#\9){
+  font-size: 13px !important;
+  color: #1e293b !important;
+  font-weight: 600 !important;
+}
+
+#view-customers .lcCustomers__agentName:not(#\9):not(#\9){
+  font-size: 15px !important;
+  color: #0F172A !important;
+  font-weight: 600 !important;
+}
