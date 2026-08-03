@@ -2131,8 +2131,12 @@
     const local = localMeta && typeof localMeta === "object" ? localMeta : {};
     const server = serverMeta && typeof serverMeta === "object" ? serverMeta : {};
     const preferredUpdatedAt = compareIsoStamps(local.updatedAt, server.updatedAt) >= 0 ? safeTrim(local.updatedAt) : safeTrim(server.updatedAt);
-    // Merge agentSecurity: combine server + local, prefer entry with newer updatedAt per agent
+    // Merge agentSecurity: combine server + local, prefer entry with newer updatedAt per agent.
+    // Prefer shared pinOnly-aware merger when available (defined with agentSecurity helpers).
     const mergeAgentSecurityMaps = (srv, loc) => {
+      if(typeof mergeAgentSecurityMapsByRecency === "function"){
+        return mergeAgentSecurityMapsByRecency(srv, loc);
+      }
       const s = normalizeAgentSecurityMap(srv);
       const l = normalizeAgentSecurityMap(loc);
       const out = { ...s };
@@ -10957,6 +10961,14 @@
                 }
                 return localAt || remoteAt || safeTrim(mergedState.meta.updatedAt) || nowISO();
               })();
+              // GI-FIX 2026-08-03: metaOnly כותב את כל agentSecurity — בלי מיזוג,
+              // לקוח עם מטמון ישן (או שמירת MFA אחרי כניסה) דרס pinOnlyLogin בשרת.
+              if(typeof mergeAgentSecurityMapsByRecency === "function"){
+                mergedState.meta.agentSecurity = mergeAgentSecurityMapsByRecency(
+                  remoteMeta.agentSecurity,
+                  mergedState.meta.agentSecurity
+                );
+              }
             }
           } catch(_mergeErr){
             console.warn("META_ONLY_REFERRALS_MERGE_WARN", _mergeErr);
@@ -11064,6 +11076,13 @@
             }
             return localAt || serverAt || safeTrim(localState.meta?.agentReportAliasesUpdatedAt) || null;
           })();
+          // GI-FIX 2026-08-03: אותו סיכון כמו metaOnly — לא לדרוס pinOnlyLogin מהשרת.
+          if(typeof mergeAgentSecurityMapsByRecency === "function"){
+            localState.meta.agentSecurity = mergeAgentSecurityMapsByRecency(
+              serverState.meta.agentSecurity,
+              localState.meta.agentSecurity
+            );
+          }
         }
 
         let conflictMergeWarning = "";
@@ -62066,6 +62085,9 @@ const ClalRiskLifePdf = {
       factorId: safeTrim(input.factorId || input.factor_id),
       lastVerifiedAt: safeTrim(input.lastVerifiedAt || input.last_verified_at),
       pinOnlyLogin: input.pinOnlyLogin === true || input.pin_only_login === true,
+      /* סימון ביטול מכוון של PIN-בלבד (רק כשנשלח pinOnlyLogin:false ב-patch).
+         מונע מלקוח עם מטמון ישן לדרוס pinOnlyLogin בשרת במיזוג/שמירה. */
+      pinOnlyLiftedAt: safeTrim(input.pinOnlyLiftedAt || input.pin_only_lifted_at),
       updatedAt: safeTrim(input.updatedAt || input.updated_at) || nowISO()
     };
   };
@@ -62073,6 +62095,34 @@ const ClalRiskLifePdf = {
     const input = raw && typeof raw === 'object' ? raw : {};
     const out = {};
     Object.entries(input).forEach(([key, value]) => { if(key) out[String(key)] = normalizeAgentSecurityEntry(value); });
+    return out;
+  };
+  /* GI-FIX 2026-08-03 — מיזוג agentSecurity עם הגנת pinOnlyLogin.
+     שמירת meta (כולל metaOnly אחרי MFA) כותבת את כל המפה. בלי הכלל הזה,
+     רשומה מקומית ישנה בלי pinOnlyLogin אבל עם updatedAt חדש יותר דרסה את
+     הגדרת "PIN בלבד" בשרת. ביטול מכוון מותר רק עם pinOnlyLiftedAt. */
+  const mergeAgentSecurityMapsByRecency = (serverMap, localMap) => {
+    const s = normalizeAgentSecurityMap(serverMap);
+    const l = normalizeAgentSecurityMap(localMap);
+    const out = { ...s };
+    Object.entries(l).forEach(([key, lEntry]) => {
+      const sEntry = s[key];
+      if(!sEntry){
+        out[key] = lEntry;
+        return;
+      }
+      if(sEntry.pinOnlyLogin === true && lEntry.pinOnlyLogin !== true){
+        const liftedAt = safeTrim(lEntry.pinOnlyLiftedAt);
+        const intentionalLift = !!liftedAt && compareIsoStamps(liftedAt, sEntry.updatedAt) >= 0;
+        if(!intentionalLift){
+          out[key] = sEntry;
+          return;
+        }
+      }
+      if(compareIsoStamps(lEntry.updatedAt, sEntry.updatedAt) >= 0){
+        out[key] = lEntry;
+      }
+    });
     return out;
   };
   const getAgentSecurityStore = () => {
@@ -62111,16 +62161,42 @@ const ClalRiskLifePdf = {
         factorId: "",
         mfaEnrolledAt: "",
         lastVerifiedAt: "",
-        pinOnlyLogin: true
+        pinOnlyLogin: true,
+        pinOnlyLiftedAt: ""
       };
+    }
+    if(explicitlyLifted){
+      nextPatch.pinOnlyLiftedAt = safeTrim(nextPatch.pinOnlyLiftedAt) || nowISO();
+    }
+    if(nextPatch.pinOnlyLogin === true){
+      nextPatch.pinOnlyLiftedAt = "";
     }
     const merged = normalizeAgentSecurityEntry({ ...prev, ...nextPatch, updatedAt: nowISO() });
     store[key] = merged;
     State.data.meta.updatedAt = nowISO();
     return merged;
   };
+  /* רענון agentSecurity מהשרת לפני החלטת MFA בכניסה — מונע שימוש במטמון
+     ישן (עד 5 דק') שמתעלם מ-pinOnlyLogin שנשמר ע"י מנהל. */
+  const refreshAgentSecurityMapFromServer = async () => {
+    try {
+      try { Storage.invalidateMetaRowCache(); } catch(_e) {}
+      const res = await Storage.loadMetaRow();
+      if(!res?.ok) return { ok:false, error: safeTrim(res?.error) || "META_READ_FAILED" };
+      const mapped = Storage.mapMeta(res.data || {});
+      State.data.meta = State.data.meta && typeof State.data.meta === "object" ? State.data.meta : {};
+      State.data.meta.agentSecurity = mergeAgentSecurityMapsByRecency(
+        mapped.agentSecurity,
+        State.data.meta.agentSecurity
+      );
+      return { ok:true };
+    } catch(e) {
+      return { ok:false, error: String(e?.message || e) };
+    }
+  };
   const resolveAgentAuthEmail = (agent, security = null) => {
     const sec = security || (agent?.id ? getAgentSecurity(agent.id) : normalizeAgentSecurityEntry({}));
+    if(sec.pinOnlyLogin === true) return "";
     return safeTrim(sec.authEmail) || safeTrim(agent?.email) || safeTrim(agent?.auth_email);
   };
   const agentRequiresMfa = (agent, security = null) => {
@@ -62819,15 +62895,22 @@ const ClalRiskLifePdf = {
       const E = this._ensureModal();
       if(E.authEmail){
         const sec = user ? getAgentSecurity(user.id) : normalizeAgentSecurityEntry({});
-        E.authEmail.value = safeTrim(sec.authEmail || user?.email || '');
+        const pinOnly = sec.pinOnlyLogin === true;
+        /* GI-FIX 2026-08-03: במצב PIN בלבד לא למלא מייל ישן מ-agent.email —
+           אחרת "שמור" מתייחס אליו כהקלדה ומבטל pinOnlyLogin. */
+        E.authEmail.value = pinOnly ? '' : safeTrim(sec.authEmail || user?.email || '');
         const help = E.authEmail.closest('.field')?.querySelector('.help');
         if(help && user){
-          const summary = getAgentMfaSummary(user);
-          help.textContent = summary.enrolled
-            ? '2FA פעיל. המייל משמש לכניסה עם Google Authenticator (אותו PIN כמו קוד הכניסה).'
-            : (summary.ready
-              ? 'הגדר מייל, שמור, ואז לחץ 2FA בטבלה להפעלת Google Authenticator.'
-              : 'מייל חובה לצורך אימות דו־שלבי. אחרי שמירה — לחץ 2FA בטבלה.');
+          if(pinOnly){
+            help.textContent = 'כניסה עם PIN בלבד פעילה. השאר ריק כדי לשמור כך. הזנת מייל תפעיל מחדש Auth/2FA.';
+          } else {
+            const summary = getAgentMfaSummary(user);
+            help.textContent = summary.enrolled
+              ? '2FA פעיל. המייל משמש לכניסה עם Google Authenticator (אותו PIN כמו קוד הכניסה).'
+              : (summary.ready
+                ? 'הגדר מייל, שמור, ואז לחץ 2FA בטבלה להפעלת Google Authenticator.'
+                : 'מייל חובה לצורך אימות דו־שלבי. אחרי שמירה — לחץ 2FA בטבלה.');
+          }
         } else if(help) {
           help.textContent = 'מייל Supabase Auth לכניסה עם Google Authenticator. אחרי שמירה — לחץ 2FA בטבלה.';
         }
@@ -63322,6 +63405,9 @@ const ClalRiskLifePdf = {
       if(!matched) return this._setError(loginMatch.error || 'שם משתמש לא נמצא');
       if(matched.active === false) return this._setError('המשתמש מושבת');
       const expected = safeTrim(matched.pin) || '0000';
+      // GI-FIX 2026-08-03: מטמון כניסה (עד 5 דק') עלול להתעלם מ-pinOnlyLogin
+      // שנשמר בשרת. מרעננים agentSecurity לפני החלטת MFA.
+      try { await refreshAgentSecurityMapFromServer(); } catch(_e) {}
       const sec = getAgentSecurity(matched.id);
       const authEmail = resolveAgentAuthEmail(matched, sec);
       const requiresAuthMfa = agentRequiresMfa(matched, sec);
@@ -63481,7 +63567,7 @@ const ClalRiskLifePdf = {
       const factorStatus = safeTrim(factor?.factor?.status).toLowerCase();
       const active = !!factor.factor && (factorStatus === 'verified' || factorStatus === 'enabled');
       const pending = !!factor.factor && !active;
-      if(active) setAgentSecurity(agent.id, { authEmail, mfaRequired:true, mfaEnabled:true, factorId:safeTrim(factor.factor?.id), mfaEnrolledAt:getAgentSecurity(agent.id).mfaEnrolledAt || nowISO() });
+      if(active && !pinOnly) setAgentSecurity(agent.id, { authEmail, mfaRequired:true, mfaEnabled:true, factorId:safeTrim(factor.factor?.id), mfaEnrolledAt:getAgentSecurity(agent.id).mfaEnrolledAt || nowISO() });
       this.currentFactorId = active ? safeTrim(factor.factor?.id) : (factor.factor ? safeTrim(factor.factor?.id) : safeTrim(synced.security.factorId));
       if(this.els.status) this.els.status.textContent = pinOnly
         ? 'כניסה עם PIN בלבד — ללא Auth וללא 2FA.'
