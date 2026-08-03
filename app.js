@@ -70607,19 +70607,26 @@ const CampaignLeadsStore = {
       if(this._overlay) this._overlay.remove();
       const lead = this._lead;
       const name = safeTrim(lead?.customerName) || "ליד";
+      const phone = safeTrim(lead?.phone);
       const overlay = document.createElement("div");
       overlay.className = "gi-modal-overlay gi-modal-overlay--active";
       overlay.innerHTML = `
-        <div class="gi-modal gi-modal--callNote">
-          <div class="gi-modal__header">
-            <h3 class="gi-modal__title">תיעוד שיחה — ${escapeHtml(name)}</h3>
+        <div class="gi-modal gi-modal--callNote lcLeadCardModal">
+          <div class="gi-modal__header lcLeadCardModal__header">
+            <div class="lcLeadCardModal__headerMain">
+              <div class="lcLeadCardModal__kicker">תיעוד שיחה</div>
+              <h3 class="gi-modal__title lcLeadCardModal__title">${escapeHtml(name)}</h3>
+              ${phone ? `<div class="lcLeadCardModal__meta" dir="ltr">${escapeHtml(phone)}</div>` : ""}
+            </div>
+            <button class="iconBtn lcLeadCardModal__close" type="button" id="btnCallNoteCancelX" aria-label="סגור">✕</button>
           </div>
-          <div class="gi-modal__body">
-            <p class="gi-modal__hint">רשום מה סיכמת עם הלקוח או מה דיברת — לשימוש בשיחה הבאה:</p>
-            <textarea class="input gi-modal__textarea" id="clCallNoteText" rows="6" placeholder="תיעוד שיחה (אופציונלי)..." dir="rtl"></textarea>
+          <div class="gi-modal__body lcLeadCardModal__body">
+            <p class="lcLeadCardModal__hint">רשום מה סיכמת עם הלקוח או מה דיברת — לשימוש בשיחה הבאה.</p>
+            <label class="lcLeadCardModal__fieldLabel" for="clCallNoteText">תיעוד</label>
+            <textarea class="input gi-modal__textarea lcLeadCardModal__textarea" id="clCallNoteText" rows="7" placeholder="תיעוד שיחה (אופציונלי)..." dir="rtl"></textarea>
             <div class="gi-modal__error" id="clCallNoteError" style="display:none"></div>
           </div>
-          <div class="gi-modal__footer">
+          <div class="gi-modal__footer lcLeadCardModal__footer">
             <button class="btn" type="button" id="btnCallNoteCancel">ביטול</button>
             <button class="btn btn--primary" type="button" id="btnCallNoteSave">שמירה</button>
           </div>
@@ -70632,9 +70639,12 @@ const CampaignLeadsStore = {
       if(textarea) textarea.value = safeTrim(lead?.callNote);
       const btnSave = overlay.querySelector("#btnCallNoteSave");
       const btnCancel = overlay.querySelector("#btnCallNoteCancel");
+      const btnCancelX = overlay.querySelector("#btnCallNoteCancelX");
       const errEl = overlay.querySelector("#clCallNoteError");
 
       on(btnCancel, "click", () => this.close());
+      on(btnCancelX, "click", () => this.close());
+      on(overlay, "click", (ev) => { if(ev.target === overlay) this.close(); });
       on(btnSave, "click", async () => {
         btnSave.disabled = true;
         btnSave.textContent = "שומר...";
@@ -70835,58 +70845,57 @@ const CampaignLeadsStore = {
 
   const LeadDetailsModal = {
     _overlay: null,
+    _windows: Object.create(null),
 
-    open(lead){
-      this.close();
-      try { void AgentActivityLog.logLead("lead_open", lead); } catch(_e) {}
+    _formatDate(raw){
+      const s = safeTrim(raw);
+      if(!s) return "—";
+      try {
+        const d = new Date(s);
+        if(!isNaN(d.getTime())) return d.toLocaleDateString("he-IL", { day:"2-digit", month:"2-digit", year:"numeric" });
+      } catch(_e){}
+      return s;
+    },
 
-      const formatDate = (raw) => {
-        const s = safeTrim(raw);
-        if(!s) return "—";
-        try {
-          const d = new Date(s);
-          if(!isNaN(d.getTime())) return d.toLocaleDateString("he-IL", { day:"2-digit", month:"2-digit", year:"numeric" });
-        } catch(_e){}
-        return s;
-      };
+    _fieldHtml(label, value, copyRaw){
+      const display = value || "—";
+      const copyVal = safeTrim(copyRaw !== undefined ? copyRaw : value);
+      return `<div class="lcLeadDetails__row lcMyLeadCopy" data-copy-text="${escapeHtml(copyVal)}" data-copy-label="${escapeHtml(label)}" title="דאבל-קליק להעתקה"><span class="lcLeadDetails__label">${escapeHtml(label)}</span><span class="lcLeadDetails__value">${escapeHtml(display)}</span></div>`;
+    },
 
+    _buildCardInnerHtml(lead){
       const sourceLabels = { manual:"ידני", landing:"לנדינג", campaign:"קמפיין" };
       const sourceLabel = sourceLabels[safeTrim(lead.source)] || safeTrim(lead.source) || "—";
       const desc = safeTrim(lead.descriptionDisplay || stripCampaignLeadPayloadMarker(lead.description)) || "—";
       const statusLabel = campaignLeadStatusLabel(lead.status);
       const statusTone = campaignLeadStatusTone(lead.status);
+      const phone = safeTrim(lead.phone);
+      const phoneDigits = phone.replace(/[^\d+]/g, "");
+      const row = (label, value, copyRaw) => this._fieldHtml(label, value, copyRaw);
 
-      const row = (label, value, copyRaw) => {
-        const display = value || "—";
-        const copyVal = safeTrim(copyRaw !== undefined ? copyRaw : value);
-        return `<div class="lcLeadDetails__row lcMyLeadCopy" data-copy-text="${escapeHtml(copyVal)}" data-copy-label="${escapeHtml(label)}" title="דאבל-קליק להעתקה"><span class="lcLeadDetails__label">${escapeHtml(label)}</span><span class="lcLeadDetails__value">${escapeHtml(display)}</span></div>`;
-      };
-
-      const overlay = document.createElement("div");
-      overlay.className = "gi-modal-overlay gi-modal-overlay--active";
-      overlay.innerHTML = `
-        <div class="gi-modal gi-modal--leadDetails">
-          <div class="gi-modal__header lcLeadDetails__header">
-            <div class="lcLeadDetails__headerMain">
-              <div class="lcLeadDetails__kicker">תיעוד ליד</div>
-              <h3 class="gi-modal__title">${escapeHtml(lead.customerName || "ליד")}</h3>
-              <span class="lcTrackBadge lcTrackBadge--${statusTone}" style="margin-top:4px;display:inline-block">${escapeHtml(statusLabel)}</span>
+      return `
+        <div class="lcLeadFloatCard" data-lead-id="${escapeHtml(String(lead.id || ""))}">
+          <div class="lcLeadFloatCard__header">
+            <div class="lcLeadFloatCard__headerMain">
+              <div class="lcLeadFloatCard__kicker">תיעוד ליד</div>
+              <h3 class="lcLeadFloatCard__title">${escapeHtml(lead.customerName || "ליד")}</h3>
+              <span class="lcTrackBadge lcTrackBadge--${statusTone} lcLeadFloatCard__badge">${escapeHtml(statusLabel)}</span>
             </div>
-            <button class="iconBtn" type="button" id="btnLeadDetailsClose" aria-label="סגור">✕</button>
+            <button class="lcLeadFloatCard__close" type="button" data-lead-float-close="1" aria-label="סגור">✕</button>
           </div>
-          <div class="gi-modal__body lcLeadDetails__body">
+          <div class="lcLeadFloatCard__body">
             <div class="lcLeadDetails__grid">
               ${row("שם לקוח", lead.customerName)}
               ${row("טלפון", lead.phone)}
               ${row("תעודת זהות", lead.idNumber)}
-              ${row("תאריך לידה", formatDate(lead.birthDate), lead.birthDate)}
-              ${row("תאריך הנפקת ת״ז", formatDate(lead.idIssueDate), lead.idIssueDate)}
+              ${row("תאריך לידה", this._formatDate(lead.birthDate), lead.birthDate)}
+              ${row("תאריך הנפקת ת״ז", this._formatDate(lead.idIssueDate), lead.idIssueDate)}
               ${row("שם קמפיין", lead.campaignLabel)}
               ${row("חברת ביטוח", lead.insuranceCompany)}
               ${row("מקור הליד", sourceLabel)}
               ${row("נציג משויך", lead.assignedAgentName)}
-              ${row("תאריך יצירה", formatDate(lead.createdAt), lead.createdAt)}
-              ${row("עדכון אחרון", formatDate(lead.lastModifiedAt || lead.updatedAt), lead.lastModifiedAt || lead.updatedAt)}
+              ${row("תאריך יצירה", this._formatDate(lead.createdAt), lead.createdAt)}
+              ${row("עדכון אחרון", this._formatDate(lead.lastModifiedAt || lead.updatedAt), lead.lastModifiedAt || lead.updatedAt)}
             </div>
             <div class="lcLeadDetails__descSection">
               <div class="lcLeadDetails__descLabel">תיאור מלא</div>
@@ -70908,35 +70917,179 @@ const CampaignLeadsStore = {
               <div class="lcLeadDetails__descBox lcMyLeadCopy" data-copy-text="${escapeHtml(safeTrim(lead.callNote))}" data-copy-label="תיעוד שיחה" title="דאבל-קליק להעתקה">${escapeHtml(safeTrim(lead.callNote)).replace(/\n/g, "<br/>")}</div>
             </div>` : ""}
           </div>
-          <div class="gi-modal__footer">
-            <button class="btn btn--primary" type="button" id="btnLeadDetailsClose2">סגור</button>
+          <div class="lcLeadFloatCard__footer">
+            ${phoneDigits ? `<a class="lcLeadFloatCard__btn lcLeadFloatCard__btn--primary" href="tel:${escapeHtml(phoneDigits)}">התקשר</a>` : ""}
+            <button class="lcLeadFloatCard__btn" type="button" data-lead-float-close="1">סגור</button>
           </div>
         </div>`;
-
-      document.body.appendChild(overlay);
-      this._overlay = overlay;
-
-      on(overlay.querySelector("#btnLeadDetailsClose"), "click", () => this.close());
-      on(overlay.querySelector("#btnLeadDetailsClose2"), "click", () => this.close());
-      on(overlay, "click", (ev) => { if(ev.target === overlay) this.close(); });
-      const modal = overlay.querySelector(".gi-modal--leadDetails");
-      if(modal){
-        on(modal, "dblclick", (ev) => {
-          if(ev.target.closest("button")) return;
-          const block = ev.target.closest(".lcMyLeadCopy");
-          if(!block) return;
-          ev.preventDefault();
-          ev.stopPropagation();
-          giCopyToClipboard(giResolveCopyText(block), block.getAttribute("data-copy-label") || "");
-        });
-      }
     },
 
-    close(){
+    _floatCardCss(){
+      return `
+        :root{ --gi-text:#0F172A; --gi-muted:#647287; --gi-border:#E5E7EB; --gi-bg:#F8FAFC; --gi-primary:#2563EB; --gi-primary-soft:#EFF6FF; }
+        *{box-sizing:border-box}
+        html,body{margin:0;padding:0;background:#EEF2F6;color:var(--gi-text);font-family:Heebo,Arial,Helvetica,sans-serif}
+        body{padding:14px;min-height:100vh}
+        .lcLeadFloatCard{background:#fff;border:1px solid var(--gi-border);border-radius:16px;box-shadow:0 8px 28px rgba(15,23,42,.08);overflow:hidden;max-width:520px;margin:0 auto;display:flex;flex-direction:column;min-height:calc(100vh - 28px)}
+        .lcLeadFloatCard__header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 18px;border-bottom:1px solid var(--gi-border);background:#fff}
+        .lcLeadFloatCard__headerMain{display:flex;flex-direction:column;gap:4px;min-width:0}
+        .lcLeadFloatCard__kicker{font-size:11px;font-weight:700;color:var(--gi-muted);letter-spacing:.04em}
+        .lcLeadFloatCard__title{margin:0;font-size:20px;font-weight:800;line-height:1.25;color:var(--gi-text)}
+        .lcLeadFloatCard__badge{margin-top:4px;display:inline-block;align-self:flex-start}
+        .lcLeadFloatCard__close{width:32px;height:32px;border-radius:8px;border:1px solid var(--gi-border);background:#fff;color:var(--gi-muted);cursor:pointer;font-size:14px;line-height:1;flex-shrink:0}
+        .lcLeadFloatCard__close:hover{background:var(--gi-bg);color:var(--gi-text)}
+        .lcLeadFloatCard__body{padding:16px 18px 8px;flex:1;overflow:auto}
+        .lcLeadDetails__grid{display:grid;grid-template-columns:1fr 1fr;gap:0;margin-bottom:16px;border:1px solid var(--gi-border);border-radius:12px;overflow:hidden;background:#fff}
+        .lcLeadDetails__row{display:flex;flex-direction:column;gap:3px;padding:10px 12px;border-bottom:1px solid var(--gi-border);border-inline-end:1px solid var(--gi-border);background:#fff}
+        .lcLeadDetails__row:nth-child(2n){border-inline-end:none}
+        .lcLeadDetails__label{font-size:11px;font-weight:700;color:var(--gi-muted)}
+        .lcLeadDetails__value{font-size:14px;font-weight:600;color:var(--gi-text);word-break:break-word}
+        .lcMyLeadCopy{cursor:copy}
+        .lcMyLeadCopy:hover{background:rgba(37,99,235,.04)}
+        .lcLeadDetails__descSection{margin-bottom:14px}
+        .lcLeadDetails__descLabel{font-size:12px;font-weight:700;color:var(--gi-text);margin-bottom:6px}
+        .lcLeadDetails__descLabel--warn{color:#B91C1C}
+        .lcLeadDetails__descLabel--success{color:#166534}
+        .lcLeadDetails__descBox{padding:12px 14px;border-radius:10px;background:var(--gi-bg);border:1px solid var(--gi-border);font-size:14px;line-height:1.7;white-space:pre-wrap;word-break:break-word;min-height:48px;max-height:220px;overflow:auto}
+        .lcLeadDetails__descBox--warn{background:#FEF2F2;border-color:#FECACA}
+        .lcLeadDetails__descBox--success{background:#ECFDF5;border-color:#A7F3D0}
+        .lcLeadFloatCard__footer{display:flex;justify-content:flex-start;gap:8px;padding:14px 18px;border-top:1px solid var(--gi-border);background:#fff}
+        .lcLeadFloatCard__btn{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:0 14px;border-radius:8px;border:1px solid var(--gi-border);background:#fff;color:var(--gi-text);font:inherit;font-size:13px;font-weight:700;text-decoration:none;cursor:pointer}
+        .lcLeadFloatCard__btn:hover{background:var(--gi-bg)}
+        .lcLeadFloatCard__btn--primary{background:var(--gi-primary);border-color:var(--gi-primary);color:#fff}
+        .lcLeadFloatCard__btn--primary:hover{background:#1D4ED8;border-color:#1D4ED8;color:#fff}
+        .lcTrackBadge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700}
+        .lcTrackBadge--blue{background:rgba(59,130,246,.15);color:#1d4ed8;border:1px solid rgba(59,130,246,.28)}
+        .lcTrackBadge--green{background:rgba(22,163,74,.14);color:#15803d;border:1px solid rgba(22,163,74,.25)}
+        .lcTrackBadge--yellow{background:rgba(234,179,8,.14);color:#92400e;border:1px solid rgba(234,179,8,.30)}
+        .lcTrackBadge--red{background:rgba(239,68,68,.12);color:#991b1b;border:1px solid rgba(239,68,68,.22)}
+        .lcTrackBadge--orange{background:rgba(249,115,22,.14);color:#9a3412;border:1px solid rgba(249,115,22,.28)}
+        .lcTrackBadge--purple{background:rgba(147,51,234,.14);color:#6b21a8;border:1px solid rgba(147,51,234,.26)}
+        .lcTrackBadge--neutral{background:rgba(15,25,45,.06);color:#647287;border:1px solid rgba(15,25,45,.10)}
+        .gi-toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#0F172A;color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;z-index:9;opacity:0;transition:opacity .15s}
+        .gi-toast.is-on{opacity:1}
+        @media (max-width:420px){ .lcLeadDetails__grid{grid-template-columns:1fr} .lcLeadDetails__row{border-inline-end:none} }
+      `;
+    },
+
+    _buildPopupDocument(lead){
+      const title = safeTrim(lead.customerName) || "פרטי ליד";
+      const inner = this._buildCardInnerHtml(lead);
+      return `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><title>${escapeHtml(title)} · פרטי ליד</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>${this._floatCardCss()}</style></head><body>
+${inner}
+<script>
+(function(){
+  function toast(msg){
+    var el = document.querySelector(".gi-toast");
+    if(!el){ el = document.createElement("div"); el.className = "gi-toast"; document.body.appendChild(el); }
+    el.textContent = msg || "הועתק";
+    el.classList.add("is-on");
+    clearTimeout(el._t);
+    el._t = setTimeout(function(){ el.classList.remove("is-on"); }, 1800);
+  }
+  function copyText(text, label){
+    var val = String(text || "").trim();
+    if(!val || val === "—"){ toast("אין ערך להעתקה"); return; }
+    try{
+      var ta = document.createElement("textarea");
+      ta.value = val; ta.setAttribute("readonly",""); ta.style.cssText="position:fixed;left:-9999px;top:0;opacity:0";
+      document.body.appendChild(ta); ta.select();
+      var ok = document.execCommand("copy");
+      ta.remove();
+      if(ok) toast((label ? label + " הועתק" : "הועתק"));
+      else toast("ההעתקה נכשלה");
+    }catch(e){ toast("ההעתקה נכשלה"); }
+  }
+  document.addEventListener("click", function(ev){
+    if(ev.target && ev.target.closest && ev.target.closest("[data-lead-float-close]")){
+      window.close();
+    }
+  });
+  document.addEventListener("dblclick", function(ev){
+    var block = ev.target && ev.target.closest && ev.target.closest(".lcMyLeadCopy");
+    if(!block) return;
+    ev.preventDefault();
+    var raw = block.getAttribute("data-copy-text");
+    var text = (raw != null && String(raw).trim() !== "") ? String(raw).trim() : String(block.textContent || "").trim();
+    copyText(text, block.getAttribute("data-copy-label") || "");
+  });
+})();
+<\/script>
+</body></html>`;
+    },
+
+    _bindInAppCard(root, lead){
+      if(!root) return;
+      const close = () => this.close();
+      root.querySelectorAll("[data-lead-float-close]").forEach((btn) => on(btn, "click", close));
+      on(root, "dblclick", (ev) => {
+        if(ev.target.closest("button,a")) return;
+        const block = ev.target.closest(".lcMyLeadCopy");
+        if(!block) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        giCopyToClipboard(giResolveCopyText(block), block.getAttribute("data-copy-label") || "");
+      });
+    },
+
+    _openInAppFallback(lead){
+      this._closeOverlayOnly();
+      const overlay = document.createElement("div");
+      overlay.className = "gi-modal-overlay gi-modal-overlay--active lcLeadFloatOverlay";
+      overlay.innerHTML = `<div class="gi-modal gi-modal--leadDetails lcLeadCardModal">${this._buildCardInnerHtml(lead)}</div>`;
+      document.body.appendChild(overlay);
+      this._overlay = overlay;
+      const modal = overlay.querySelector(".gi-modal--leadDetails");
+      this._bindInAppCard(modal, lead);
+      on(overlay, "click", (ev) => { if(ev.target === overlay) this.close(); });
+    },
+
+    _closeOverlayOnly(){
       if(this._overlay){
         this._overlay.remove();
         this._overlay = null;
       }
+    },
+
+    _windowNameFor(lead){
+      return "giLeadCard_" + String(lead?.id || "tmp").replace(/[^\w\-]/g, "_");
+    },
+
+    open(lead){
+      if(!lead) return;
+      try { void AgentActivityLog.logLead("lead_open", lead); } catch(_e) {}
+
+      const winName = this._windowNameFor(lead);
+      let win = null;
+      try {
+        win = window.open("", winName, "popup=yes,width=500,height=760,resizable=yes,scrollbars=yes");
+      } catch(_e) { win = null; }
+
+      if(win){
+        this._closeOverlayOnly();
+        try {
+          win.document.open();
+          win.document.write(this._buildPopupDocument(lead));
+          win.document.close();
+          try { win.focus(); } catch(_e2) {}
+          this._windows[String(lead.id)] = win;
+          return;
+        } catch(_e) {
+          try { win.close(); } catch(_e2) {}
+        }
+      }
+
+      this._openInAppFallback(lead);
+      try {
+        if(typeof toast === "function") toast("נפתח במסך המערכת", "אם נחסמו חלונות קופצים — אפשר אותם כדי לפתוח כרטיסייה צפה מחוץ למערכת");
+      } catch(_e) {}
+    },
+
+    close(){
+      this._closeOverlayOnly();
     }
   };
 

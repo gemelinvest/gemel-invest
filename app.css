@@ -39314,14 +39314,10 @@ body.view-settings-active.lcSettingsRubric-systemUpdates .main{ overflow-y: auto
   align-items:center;
   gap:3px;
   padding:3px;
-  border-radius:12px;
-  background:
-    linear-gradient(180deg,
-      rgba(255,255,255,.92),
-      rgba(232,240,255,.55)
-    );
-  border:1px solid rgba(15,25,45,.12);
-  box-shadow:0 1px 2px rgba(15,23,42,.04);
+  border-radius:10px;
+  background:var(--gi-surface, #fff);
+  border:1px solid var(--gi-border, rgba(15,25,45,.12));
+  box-shadow:var(--gi-sh-xs, 0 1px 2px rgba(15,23,42,.04));
   flex-shrink:0;
 }
 .lcMyLeadIconBtn{
@@ -39333,22 +39329,23 @@ body.view-settings-active.lcSettingsRubric-systemUpdates .main{ overflow-y: auto
   padding:0;
   margin:0;
   border:1px solid transparent;
-  border-radius:9px;
+  border-radius:8px;
   background:transparent;
-  color:var(--blueDeep, #1e3d7a);
+  color:var(--gi-text-2, #3D4A5C);
   cursor:pointer;
-  transition:background .15s ease, border-color .15s ease, color .15s ease, box-shadow .15s ease, transform .12s ease;
+  transition:background .15s ease, border-color .15s ease, color .15s ease;
   flex-shrink:0;
 }
 .lcMyLeadIconBtn:hover{
-  background:rgba(42,92,245,.10);
-  border-color:rgba(42,92,245,.22);
-  color:var(--brandC, #2a5cf5);
-  box-shadow:0 2px 8px rgba(42,92,245,.12);
-  transform:translateY(-1px);
+  background:var(--gi-primary-soft, rgba(37,99,235,.08));
+  border-color:rgba(37,99,235,.18);
+  color:var(--gi-primary, #2563EB);
+  box-shadow:none;
+  transform:none;
 }
 .lcMyLeadIconBtn:active{
-  transform:translateY(0);
+  transform:none;
+  background:rgba(37,99,235,.12);
 }
 .lcMyLeadIconBtn__icon{
   width:16px;
@@ -41684,6 +41681,105 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 .gi-modal--leadDetails{
   max-width:560px;
   width:95%;
+  padding:0 !important;
+  overflow:hidden;
+}
+.gi-modal--leadDetails .lcLeadFloatCard{
+  border:none;
+  border-radius:inherit;
+  box-shadow:none;
+  min-height:0;
+  max-width:none;
+  margin:0;
+}
+.lcLeadFloatCard__header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  padding:16px 18px;
+  border-bottom:1px solid var(--gi-border, #E5E7EB);
+  background:#fff;
+}
+.lcLeadFloatCard__headerMain{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-width:0;
+}
+.lcLeadFloatCard__kicker{
+  font-size:11px;
+  font-weight:700;
+  color:var(--gi-text-muted, #647287);
+  letter-spacing:.04em;
+}
+.lcLeadFloatCard__title{
+  margin:0;
+  font-size:20px;
+  font-weight:800;
+  line-height:1.25;
+  color:var(--gi-text, #0F172A);
+}
+.lcLeadFloatCard__badge{
+  margin-top:4px;
+  display:inline-block;
+  align-self:flex-start;
+}
+.lcLeadFloatCard__close{
+  width:32px;
+  height:32px;
+  border-radius:8px;
+  border:1px solid var(--gi-border, #E5E7EB);
+  background:#fff;
+  color:var(--gi-text-muted, #647287);
+  cursor:pointer;
+  font-size:14px;
+  line-height:1;
+  flex-shrink:0;
+}
+.lcLeadFloatCard__close:hover{
+  background:var(--gi-bg, #F8FAFC);
+  color:var(--gi-text, #0F172A);
+}
+.lcLeadFloatCard__body{
+  padding:16px 18px 8px;
+}
+.lcLeadFloatCard__footer{
+  display:flex;
+  justify-content:flex-start;
+  gap:8px;
+  padding:14px 18px;
+  border-top:1px solid var(--gi-border, #E5E7EB);
+  background:#fff;
+}
+.lcLeadFloatCard__btn{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:36px;
+  padding:0 14px;
+  border-radius:8px;
+  border:1px solid var(--gi-border, #E5E7EB);
+  background:#fff;
+  color:var(--gi-text, #0F172A);
+  font:inherit;
+  font-size:13px;
+  font-weight:700;
+  text-decoration:none;
+  cursor:pointer;
+}
+.lcLeadFloatCard__btn:hover{
+  background:var(--gi-bg, #F8FAFC);
+}
+.lcLeadFloatCard__btn--primary{
+  background:var(--gi-primary, #2563EB);
+  border-color:var(--gi-primary, #2563EB);
+  color:#fff;
+}
+.lcLeadFloatCard__btn--primary:hover{
+  background:var(--gi-primary-hover, #1D4ED8);
+  border-color:var(--gi-primary-hover, #1D4ED8);
+  color:#fff;
 }
 .lcLeadDetails__header{
   display:flex;
@@ -41699,10 +41795,8 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 .lcLeadDetails__kicker{
   font-size:11px;
   font-weight:700;
-  color:var(--blueDeep, #2563eb);
+  color:var(--gi-text-muted, #647287);
   letter-spacing:.04em;
-  text-transform:uppercase;
-  opacity:.7;
 }
 .lcLeadDetails__body{
   padding-top:4px;
@@ -41710,22 +41804,31 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 .lcLeadDetails__grid{
   display:grid;
   grid-template-columns:1fr 1fr;
-  gap:10px 16px;
-  margin-bottom:18px;
+  gap:0;
+  margin-bottom:16px;
+  border:1px solid var(--gi-border, #E5E7EB);
+  border-radius:12px;
+  overflow:hidden;
+  background:#fff;
 }
 .lcLeadDetails__row{
   display:flex;
   flex-direction:column;
   gap:3px;
-  background:rgba(241,245,255,.55);
-  border:1px solid rgba(200,218,255,.35);
-  border-radius:10px;
-  padding:9px 12px;
+  background:#fff;
+  border:none;
+  border-radius:0;
+  border-bottom:1px solid var(--gi-border, #E5E7EB);
+  border-inline-end:1px solid var(--gi-border, #E5E7EB);
+  padding:10px 12px;
+}
+.lcLeadDetails__row:nth-child(2n){
+  border-inline-end:none;
 }
 .lcLeadDetails__label{
   font-size:11px;
   font-weight:700;
-  color:var(--muted, #64748b);
+  color:var(--gi-text-muted, #647287);
   letter-spacing:.02em;
 }
 .lcMyLeadCopy{
@@ -41736,10 +41839,10 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   user-select:text;
 }
 .lcMyLeadCopy:hover{
-  background:rgba(42,92,245,.04);
+  background:rgba(37,99,235,.04);
 }
 .lcLeadDetails__row.lcMyLeadCopy:hover{
-  border-color:rgba(42,92,245,.28);
+  border-color:var(--gi-border, #E5E7EB);
 }
 #view-campaignMyLeads .lcMyLeadCopy:hover{
   border-radius:6px;
@@ -41747,7 +41850,7 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 .lcLeadDetails__value{
   font-size:14px;
   font-weight:600;
-  color:var(--text, #1e293b);
+  color:var(--gi-text, #0F172A);
   word-break:break-word;
 }
 .lcLeadDetails__descSection{
@@ -41756,30 +41859,104 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 .lcLeadDetails__descLabel{
   font-size:12px;
   font-weight:700;
-  color:var(--blueDeep, #2563eb);
-  margin-bottom:7px;
-  padding-right:4px;
+  color:var(--gi-text, #0F172A);
+  margin-bottom:6px;
+  padding-right:2px;
 }
 .lcLeadDetails__descLabel--warn{
-  color:#c0392b;
+  color:#b91c1c;
 }
 .lcLeadDetails__descBox{
-  padding:14px 16px;
-  border-radius:12px;
-  background:linear-gradient(135deg, rgba(200,222,255,.18), rgba(255,255,255,.60));
-  border:1px solid rgba(200,222,255,.35);
+  padding:12px 14px;
+  border-radius:10px;
+  background:var(--gi-bg, #F8FAFC);
+  border:1px solid var(--gi-border, #E5E7EB);
   font-size:14px;
-  line-height:1.75;
-  color:var(--text, #1e293b);
+  line-height:1.7;
+  color:var(--gi-text, #0F172A);
   white-space:pre-wrap;
   word-break:break-word;
-  min-height:50px;
+  min-height:48px;
   max-height:260px;
   overflow-y:auto;
 }
 .lcLeadDetails__descBox--warn{
-  background:linear-gradient(135deg, rgba(255,220,220,.22), rgba(255,255,255,.60));
-  border-color:rgba(255,180,180,.4);
+  background:#FEF2F2;
+  border-color:#FECACA;
+}
+
+/* ===== Call note + shared mature lead card modal ===== */
+.gi-modal--callNote.lcLeadCardModal{
+  max-width:520px;
+  width:95%;
+}
+.lcLeadCardModal__header{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  padding-bottom:12px;
+  border-bottom:1px solid var(--gi-border, #E5E7EB);
+  margin-bottom:4px;
+}
+.lcLeadCardModal__headerMain{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-width:0;
+}
+.lcLeadCardModal__kicker{
+  font-size:11px;
+  font-weight:700;
+  color:var(--gi-text-muted, #647287);
+  letter-spacing:.04em;
+}
+.lcLeadCardModal__title{
+  margin:0;
+  font-size:18px;
+  font-weight:800;
+  color:var(--gi-text, #0F172A);
+}
+.lcLeadCardModal__meta{
+  font-size:13px;
+  font-weight:600;
+  color:var(--gi-primary, #2563EB);
+}
+.lcLeadCardModal__close{
+  width:32px;
+  height:32px;
+  border-radius:8px;
+  border:1px solid var(--gi-border, #E5E7EB);
+  background:#fff;
+  flex-shrink:0;
+}
+.lcLeadCardModal__body{
+  padding-top:10px;
+}
+.lcLeadCardModal__hint{
+  margin:0 0 12px;
+  font-size:13px;
+  line-height:1.55;
+  color:var(--gi-text-muted, #647287);
+}
+.lcLeadCardModal__fieldLabel{
+  display:block;
+  font-size:11px;
+  font-weight:700;
+  color:var(--gi-text-muted, #647287);
+  margin-bottom:6px;
+}
+.lcLeadCardModal__textarea{
+  border-radius:10px !important;
+  border:1px solid var(--gi-border, #E5E7EB) !important;
+  background:var(--gi-bg, #F8FAFC) !important;
+  min-height:140px;
+  line-height:1.65;
+}
+.lcLeadCardModal__footer{
+  border-top:1px solid var(--gi-border, #E5E7EB);
+  margin-top:8px;
+  padding-top:12px;
 }
 
 /* ===== Sale Note Modal (CampaignClosedLeadFlow) ===== */
@@ -41790,8 +41967,8 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   color:#166534;
 }
 .lcLeadDetails__descBox--success{
-  background:linear-gradient(135deg, rgba(220,252,231,.35), rgba(255,255,255,.60));
-  border-color:rgba(134,239,172,.5);
+  background:#ECFDF5;
+  border-color:#A7F3D0;
 }
 
 /* ===== Date Filter & Agent Summary (Campaign Leads Daily View) ===== */
