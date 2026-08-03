@@ -7374,3 +7374,35 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   color: #0F172A !important;
   font-weight: 600 !important;
 }
+
+
+/* =====================================================================
+   Proposals list (#view-proposals): readable black row text
+   Same treatment as customers. CSS only — scoped to this view.
+   Leaves .lcProposalBadge / action buttons with their own colors.
+   ===================================================================== */
+
+#view-proposals .tableWrap .table th:not(#\9):not(#\9){
+  font-size: 13px !important;
+  color: #0F172A !important;
+  font-weight: 800 !important;
+}
+
+#view-proposals .tableWrap .table td:not(#\9):not(#\9){
+  font-size: 15px !important;
+  color: #0F172A !important;
+  font-weight: 600 !important;
+}
+
+#view-proposals .lcProposalsName strong:not(#\9):not(#\9){
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  color: #0F172A !important;
+}
+
+#view-proposals .lcProposalsStatusSub.muted.small:not(#\9):not(#\9),
+#view-proposals .tableWrap .table td .muted.small:not(#\9):not(#\9){
+  font-size: 13px !important;
+  color: #1e293b !important;
+  font-weight: 600 !important;
+}
