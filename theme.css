@@ -5535,6 +5535,327 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
   }
 }
 
+
+/* =====================================================================
+   GI-FIX 2026-08-03 · מעקב מכירות יומי — שכבת עיצוב מחודשת
+   נטען אחרי הבלוק המקורי ולכן גובר עליו בסדר המקור, באותה ספציפיות.
+   כל הכללים תחומים ל-#view-dailySales בלבד — האוברליי
+   (.giDailySalesOverlay) לא מושפע ולא נגענו בכללים המשותפים איתו.
+   ===================================================================== */
+
+#view-dailySales .giDailySalesPage:not(#\9):not(#\9){
+  gap: var(--gi-s4);
+  padding: var(--gi-s4) var(--gi-s5) var(--gi-s5);
+}
+
+#view-dailySales .giDailySalesPage__head:not(#\9):not(#\9){
+  align-items: center;
+  padding-bottom: var(--gi-s4);
+}
+
+#view-dailySales .giDailySalesPage .card__title:not(#\9):not(#\9){
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  color: var(--gi-text);
+}
+
+#view-dailySales .giDailySalesPage .card__hint:not(#\9):not(#\9){
+  display: flex;
+  align-items: center;
+  gap: var(--gi-s2);
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gi-text-muted);
+}
+
+#view-dailySales .giDailySalesPage__syncStamp:not(#\9):not(#\9){
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gi-text-muted);
+}
+#view-dailySales .giDailySalesPage__syncStamp:not(:empty):not(#\9):not(#\9){
+  padding: 2px 8px;
+  border-radius: var(--gi-r-pill);
+  background: var(--gi-surface-3);
+}
+
+/* ---------- בורר תאריך ---------- */
+#view-dailySales .giDailySalesPage__dateWrap:not(#\9):not(#\9){
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--gi-r-ctl);
+  border: 1px solid var(--gi-border);
+  background: var(--gi-surface);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+#view-dailySales .giDailySalesPage__dateWrap:hover:not(#\9):not(#\9){
+  border-color: var(--gi-border-strong);
+}
+#view-dailySales .giDailySalesPage__dateWrap:focus-visible:not(#\9):not(#\9){
+  outline: none;
+  border-color: var(--gi-primary);
+  box-shadow: 0 0 0 3px var(--gi-primary-ring);
+}
+#view-dailySales .giDailySalesPage__dateIcon:not(#\9):not(#\9){
+  width: 15px;
+  height: 15px;
+  flex: none;
+  color: var(--gi-text-muted);
+}
+#view-dailySales .giDailySalesPage__dateText:not(#\9):not(#\9){
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gi-text);
+  white-space: nowrap;
+}
+
+/* ---------- סרגל סיכום ---------- */
+#view-dailySales .giDailySalesPage__stat:not(#\9):not(#\9){
+  gap: 3px;
+  padding: 10px 14px;
+  border-radius: var(--gi-r-md);
+  background: var(--gi-surface-2);
+  border: 1px solid var(--gi-border-soft);
+}
+#view-dailySales .giDailySalesPage__stat > span:not(#\9):not(#\9){
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  color: var(--gi-text-muted);
+}
+#view-dailySales .giDailySalesPage__stat > strong:not(#\9):not(#\9){
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--gi-text);
+}
+#view-dailySales .giDailySalesPage__stat--prem:not(#\9):not(#\9){
+  background: var(--gi-success-soft);
+  border-color: rgba(22,163,74,.20);
+}
+
+/* ---------- טבלה ---------- */
+#view-dailySales .giDailySalesPage__tableWrap:not(#\9):not(#\9){
+  border: 1px solid var(--gi-border-soft);
+  border-radius: var(--gi-r-md);
+  background: var(--gi-surface);
+}
+
+#view-dailySales .giDailySalesPage__table:not(#\9):not(#\9){
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+#view-dailySales .giDailySalesPage__table th:not(#\9):not(#\9){
+  padding: 9px 14px;
+  background: var(--gi-surface-2);
+  border-bottom: 1px solid var(--gi-border);
+  color: var(--gi-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  text-align: right;
+  white-space: nowrap;
+}
+
+#view-dailySales .giDailySalesPage__table td:not(#\9):not(#\9){
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--gi-border-soft);
+  vertical-align: middle;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gi-text);
+}
+
+#view-dailySales .giDailySalesPage__table tbody tr:last-child td:not(#\9):not(#\9){
+  border-bottom: 0;
+}
+
+#view-dailySales .giDailySalesPage__row:hover td:not(#\9):not(#\9){
+  background: var(--gi-surface-2);
+}
+
+/* ענף חדש של אותו נציג — קו הפרדה מוחלש, כדי שקבוצת הנציג תיקרא כגוש אחד */
+#view-dailySales .giDailySalesPage__row.is-sameAgent td:not(#\9):not(#\9){
+  border-top: 0;
+}
+#view-dailySales .giDailySalesPage__row:not(.is-sameAgent) td:not(#\9):not(#\9){
+  border-top: 1px solid var(--gi-border-soft);
+}
+#view-dailySales .giDailySalesPage__table tbody tr:first-child td:not(#\9):not(#\9){
+  border-top: 0;
+}
+
+/* ---------- תא נציג ---------- */
+#view-dailySales .giDailySalesPage__agentCell:not(#\9):not(#\9){
+  display: flex;
+  align-items: center;
+  gap: var(--gi-s2);
+  min-width: 150px;
+}
+#view-dailySales .giDailySalesPage__agentName:not(#\9):not(#\9){
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gi-text);
+  white-space: nowrap;
+}
+#view-dailySales .giDailySalesPage__agentCell.is-repeat .giDailySalesPage__agentName:not(#\9):not(#\9){
+  font-weight: 600;
+  color: var(--gi-text-muted);
+}
+#view-dailySales .giDailySalesPage__av:not(#\9):not(#\9){
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--gi-r-pill);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+}
+#view-dailySales .giDailySalesPage__tie:not(#\9):not(#\9){
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--gi-r-pill);
+  background: repeating-linear-gradient(to bottom, var(--gi-border-strong) 0 2px, transparent 2px 6px);
+  background-size: 2px 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: .7;
+}
+#view-dailySales .giDailySalesPage__av--blue:not(#\9):not(#\9){   background: rgba(37,99,235,.12);  color: #1D4ED8; }
+#view-dailySales .giDailySalesPage__av--teal:not(#\9):not(#\9){   background: rgba(13,148,136,.12); color: #0F766E; }
+#view-dailySales .giDailySalesPage__av--amber:not(#\9):not(#\9){  background: rgba(217,119,6,.14);  color: #B45309; }
+#view-dailySales .giDailySalesPage__av--violet:not(#\9):not(#\9){ background: rgba(124,58,237,.12); color: #6D28D9; }
+#view-dailySales .giDailySalesPage__av--rose:not(#\9):not(#\9){   background: rgba(225,29,72,.11);  color: #BE123C; }
+#view-dailySales .giDailySalesPage__av--cyan:not(#\9):not(#\9){   background: rgba(8,145,178,.12);  color: #0E7490; }
+
+/* ---------- תג ענף — אותה שפת צבע כמו תגי הענף במסך הלקוחות ---------- */
+#view-dailySales .giDailySalesPage__sector:not(#\9):not(#\9){
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 10px;
+  border-radius: var(--gi-r-pill);
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+#view-dailySales .giDailySalesPage__sector--sikunim:not(#\9):not(#\9){
+  background: rgba(255,120,120,.14); color: #b42318; border-color: rgba(255,120,120,.28);
+}
+#view-dailySales .giDailySalesPage__sector--briut:not(#\9):not(#\9){
+  background: rgba(34,170,105,.12); color: #1a7a4a; border-color: rgba(34,170,105,.28);
+}
+#view-dailySales .giDailySalesPage__sector--almanteri:not(#\9):not(#\9){
+  background: rgba(79,140,255,.10); color: #2b5cb8; border-color: rgba(79,140,255,.22);
+}
+#view-dailySales .giDailySalesPage__sector--pensia:not(#\9):not(#\9){
+  background: rgba(147,112,219,.14); color: #6b46c1; border-color: rgba(147,112,219,.28);
+}
+#view-dailySales .giDailySalesPage__sector--other:not(#\9):not(#\9){
+  background: var(--gi-surface-3); color: var(--gi-text-muted); border-color: var(--gi-border);
+}
+
+/* ---------- צ'יפים של מוצרים וחברות ---------- */
+#view-dailySales .giDailySalesPage__chips:not(#\9):not(#\9){
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  max-width: 340px;
+}
+#view-dailySales .giDailySalesPage__chip:not(#\9):not(#\9){
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: var(--gi-r-ctl);
+  border: 1px solid var(--gi-border);
+  background: var(--gi-surface-2);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--gi-text-2);
+  white-space: nowrap;
+}
+#view-dailySales .giDailySalesPage__chip--co:not(#\9):not(#\9){
+  background: var(--gi-surface);
+  border-style: dashed;
+  color: var(--gi-text-3);
+}
+#view-dailySales .giDailySalesPage__chipQty:not(#\9):not(#\9){
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: var(--gi-r-pill);
+  background: var(--gi-primary-soft);
+  color: var(--gi-primary);
+  font-size: 10px;
+  font-weight: 800;
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}
+#view-dailySales .giDailySalesPage__dash:not(#\9):not(#\9){
+  color: var(--gi-text-muted);
+  font-weight: 600;
+}
+
+/* ---------- פרמיה ---------- */
+#view-dailySales .giDailySalesPage__premCell:not(#\9):not(#\9){
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  white-space: nowrap;
+}
+#view-dailySales .giDailySalesPage__premCell > strong:not(#\9):not(#\9){
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--gi-success);
+}
+#view-dailySales .giDailySalesPage__dealsHint:not(#\9):not(#\9){
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--gi-text-muted);
+}
+
+#view-dailySales .giDailySalesPage__emptyCell:not(#\9):not(#\9){
+  padding: 40px 16px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gi-text-muted);
+}
+
+/* ---------- מצב טעינה של כפתור הרענון ---------- */
+#view-dailySales #btnDailySalesRefresh.is-loading:not(#\9):not(#\9){
+  opacity: .7;
+  cursor: progress;
+}
+
+@media (max-width: 900px){
+  #view-dailySales .giDailySalesPage__chips:not(#\9):not(#\9){
+    max-width: 220px;
+  }
+  #view-dailySales .giDailySalesPage:not(#\9):not(#\9){
+    padding: var(--gi-s3) var(--gi-s3) var(--gi-s4);
+  }
+}
+
 /* =====================================================================
    SETTINGS CONSOLE ? GI stretch (Settings Hub)
    Visual layer only; DOM/logic unchanged.

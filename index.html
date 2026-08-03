@@ -455,14 +455,15 @@
 <div class="card__head giDailySalesPage__head">
 <div>
 <div class="card__title">מעקב מכירות יומי</div>
-<div class="card__hint">פירוט לפי נציג · מחלקה · מוצר · חברה · פרמיה</div>
+<div class="card__hint">שורה לכל נציג בכל ענף · סה״כ פרמיה יומית <span class="giDailySalesPage__syncStamp" id="dailySalesSyncStamp"></span></div>
 </div>
 <div class="giDailySalesPage__nav" role="group" aria-label="בחירת תאריך">
 <button class="btn giDailySalesPage__todayBtn" id="btnDailySalesToday" type="button">היום</button>
-<label class="giDailySalesPage__dateWrap">
+<div class="giDailySalesPage__dateWrap" role="button" tabindex="0" aria-label="בחר תאריך">
+<svg class="giDailySalesPage__dateIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 11h18"/></svg>
 <span class="giDailySalesPage__dateText" id="dailySalesDateText">—</span>
 <input class="input giDailySalesPage__dateInput" id="dailySalesDateInput" type="date" aria-label="בחר תאריך"/>
-</label>
+</div>
 <button class="btn" id="btnDailySalesRefresh" type="button">רענון</button>
 <button class="btn btn--primary" id="btnDailySalesPrint" type="button">הדפסה</button>
 </div>
@@ -473,14 +474,14 @@
 <thead>
 <tr>
 <th>נציג</th>
-<th>מחלקה</th>
-<th>מוצר</th>
-<th>חברה</th>
-<th>פרמיה</th>
+<th>ענף</th>
+<th>מוצרים</th>
+<th>חברות</th>
+<th>סה״כ פרמיה</th>
 </tr>
 </thead>
 <tbody id="dailySalesTbody">
-<tr><td colspan="5" class="muted">טוען…</td></tr>
+<tr><td colspan="5" class="giDailySalesPage__emptyCell">טוען…</td></tr>
 </tbody>
 </table>
 </div>

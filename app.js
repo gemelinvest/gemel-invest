@@ -24910,6 +24910,93 @@ UsersGateUI.init();
       return "נציג";
     },
 
+    /* ===== GI-FIX 2026-08-03 · מעקב מכירות יומי — קיבוץ לפי נציג × ענף =====
+       הדוח הציג שורה נפרדת לכל פוליסה, כך שנציג שמכר ארבע פוליסות הופיע
+       ארבע פעמים. בנוסף עמודת «מחלקה» הציגה את *התפקיד* של הנציג
+       (resolveSalesDepartmentLabel מחזירה נציג/מנהל/רפרנטית) ולא את הענף.
+       העזרים כאן בונים תצוגה מקובצת. אין כאן שינוי בשום פונקציה משותפת:
+       lines/map/agents נשארים בדיוק כשהיו כדי לא לשבור את האוברליי ואת
+       היישור מול כרטיס «נמכר היום» בדשבורד. */
+
+    /** מוצר → ענף. נשען על הטקסונומיה הקיימת במערכת
+        (CustomersUI.resolveCustomerSectorFromType → סיכונים/בריאות/אלמנטרי/פנסיה)
+        ומרחיב אותה רק כנפילה אחורה, בלי לגעת בפונקציה המשותפת. */
+    resolveDailySalesSector(rawType, fallback = ""){
+      const type = safeTrim(rawType);
+      let sector = "";
+      try {
+        if(typeof CustomersUI !== "undefined" && CustomersUI && typeof CustomersUI.resolveCustomerSectorFromType === "function"){
+          sector = safeTrim(CustomersUI.resolveCustomerSectorFromType(type));
+        }
+      } catch(_e) { sector = ""; }
+      if(sector) return sector;
+      if(/גמל|השתלמות|קרן|פיצוי|תגמול/i.test(type)) return "פנסיה";
+      if(/מקיף|חובה|צד\s*ג|רכוש|עסק|נסיע|תכולה|מבנה/i.test(type)) return "אלמנטרי";
+      return safeTrim(fallback) || "אחר";
+    },
+
+    dailySalesSectorSlug(sector){
+      const map = {
+        "סיכונים": "sikunim",
+        "בריאות": "briut",
+        "אלמנטרי": "almanteri",
+        "פנסיה": "pensia"
+      };
+      return map[safeTrim(sector)] || "other";
+    },
+
+    /** מכירות אלמנטרי של אותו יום. מוצרי אלמנטרי יושבים ב-payload.elementaryPolicies
+        ולא ב-newPolicies, ולכן collectNewPoliciesForMetrics לא מחזירה אותם כלל —
+        לכן הם פשוט לא הופיעו בדוח. אין כאן סיכון לספירה כפולה: שני המקורות
+        נפרדים לחלוטין (normalizeElementaryProductRow מסמנת origin:'elementary',
+        והמסנן בצד הבריאות מקבל רק origin==='new').
+        בדיקת התאריך הזולה רצה ראשונה כדי לא לקרוא ל-collectElementaryProducts
+        (שחוצה גם הפניות) עבור כל לקוח בכל render. */
+    _collectDailyElementarySales(rec, dayRange){
+      try {
+        const stamp = this.resolveCustomerMonthStamp(rec);
+        if(!stamp || !this.isWithinRange(stamp, dayRange)) return [];
+        const products = (typeof CustomersUI !== "undefined" && CustomersUI && typeof CustomersUI.collectElementaryProducts === "function")
+          ? (CustomersUI.collectElementaryProducts(rec) || [])
+          : [];
+        if(!products.length) return [];
+        return products.map((p) => {
+          const raw = Number(p?.premiumAfterDiscountValue);
+          const premium = Number.isFinite(raw) && raw > 0 ? Math.round(raw * 100) / 100 : 0;
+          const company = safeTrim(p?.company);
+          return {
+            product: safeTrim(p?.type) || "מוצר אלמנטרי",
+            // 'רכב · אלמנטרי' הוא ברירת מחדל של הנרמול, לא שם חברה אמיתי
+            company: (company && company !== "רכב · אלמנטרי") ? company : "",
+            premium
+          };
+        });
+      } catch(_e) { return []; }
+    },
+
+    _bumpDailySalesGroup(map, agentName, sector, product, company, premium){
+      const agent = safeTrim(agentName) || "נציג";
+      const sec = safeTrim(sector) || "אחר";
+      const key = agent + "\u0000" + sec;
+      if(!map[key]){
+        map[key] = {
+          agentName: agent,
+          sector: sec,
+          products: new Map(),
+          companies: new Map(),
+          premium: 0,
+          deals: 0
+        };
+      }
+      const g = map[key];
+      g.premium += Number(premium) || 0;
+      g.deals += 1;
+      const prodName = safeTrim(product) || "—";
+      g.products.set(prodName, (g.products.get(prodName) || 0) + 1);
+      const compName = safeTrim(company);
+      if(compName && compName !== "—") g.companies.set(compName, (g.companies.get(compName) || 0) + 1);
+    },
+
     buildDailyAgentSalesReport(forDate){
       const ref = forDate instanceof Date ? forDate : this.parseLocalDateKey(this.getDailySalesReportDateKey());
       const dateKey = this.toLocalDateKey(ref);
@@ -24919,7 +25006,7 @@ UsersGateUI.init();
         this.getMetricsCacheKey(),
         "dailyAgents",
         "alignTodayKpi",
-        "detailLinesV1",
+        "groupedSectorsV2",
         dateKey,
         String(customers.length),
         App?._fullDataReady ? "1" : "0"
@@ -24931,29 +25018,61 @@ UsersGateUI.init();
       // אותה לוגיקה כמו כרטיס «נמכר היום» — רק פוליסות חדשות בטווח היום, מחולק לנציג
       const map = Object.create(null);
       const lines = [];
+      const groupMap = Object.create(null);
       customers.forEach((rec) => {
         const newPolicies = CustomersUI.collectNewPoliciesForMetrics(rec, {
           range: dayRange,
           resolveCustomerMonthStamp: (row) => this.resolveCustomerMonthStamp(row),
           isWithinRange: (stamp, monthRange) => this.isWithinRange(stamp, monthRange)
         });
-        if(!newPolicies.length) return;
+        const elementarySales = this._collectDailyElementarySales(rec, dayRange);
+        // היציאה המוקדמת נשמרת כדי לא לשלם על resolveSalesDepartmentLabel
+        // (שסורקת את מערך הסוכנים) עבור לקוחות בלי מכירה באותו יום
+        if(!newPolicies.length && !elementarySales.length) return;
         const agentName = safeTrim(rec?.agentName) || safeTrim(rec?.createdBy) || "נציג";
         const department = this.resolveSalesDepartmentLabel(rec);
         const customerName = safeTrim(rec?.fullName) || "—";
         newPolicies.forEach((p) => {
           const premium = Math.round((this.policyNetPremium(p) || 0) * 100) / 100;
+          const product = safeTrim(p?.type) || "פוליסה";
+          const company = safeTrim(p?.company) || "—";
           this._bumpDailySalesAgent(map, agentName, premium, 1);
           lines.push({
             agentName,
             department,
-            product: safeTrim(p?.type) || "פוליסה",
-            company: safeTrim(p?.company) || "—",
+            product,
+            company,
             premium,
             customerName
           });
+          this._bumpDailySalesGroup(groupMap, agentName, this.resolveDailySalesSector(product), product, company, premium);
+        });
+        elementarySales.forEach((row) => {
+          this._bumpDailySalesGroup(groupMap, agentName, "אלמנטרי", row.product, row.company, row.premium);
         });
       });
+
+      const groups = Object.values(groupMap)
+        .map((g) => ({
+          agentName: g.agentName,
+          sector: g.sector,
+          sectorSlug: this.dailySalesSectorSlug(g.sector),
+          products: Array.from(g.products.entries())
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count || safeTrim(a.name).localeCompare(safeTrim(b.name), "he")),
+          companies: Array.from(g.companies.keys())
+            .sort((a, b) => safeTrim(a).localeCompare(safeTrim(b), "he")),
+          premium: Math.round(g.premium * 100) / 100,
+          deals: Number(g.deals) || 0
+        }))
+        .sort((a, b) =>
+          safeTrim(a.agentName).localeCompare(safeTrim(b.agentName), "he")
+          || (Number(b.premium) - Number(a.premium))
+          || safeTrim(a.sector).localeCompare(safeTrim(b.sector), "he")
+        );
+      const groupTotalPremium = Math.round(groups.reduce((sum, g) => sum + g.premium, 0) * 100) / 100;
+      const groupDealCount = groups.reduce((sum, g) => sum + g.deals, 0);
+      const groupAgentCount = new Set(groups.map((g) => g.agentName)).size;
 
       const agents = Object.values(map)
         .map((row) => ({
@@ -24976,12 +25095,18 @@ UsersGateUI.init();
         totalPremium,
         agentCount: agents.length,
         dealCount: agents.reduce((sum, row) => sum + row.deals, 0),
+        // שדות חדשים — תוספת בלבד. כל צרכן קיים ממשיך לקרוא את השדות שלמעלה.
+        groups,
+        groupTotalPremium,
+        groupDealCount,
+        groupAgentCount,
+        groupSectorCount: new Set(groups.map((g) => g.sector)).size,
         dateKey,
         dateLabel: this.formatDailySalesReportDateLabel(dateKey),
         isToday: dateKey === todayKey
       };
       // לא לקבע מטמון ריק לפני שנטענו נתונים מלאים
-      if(App?._fullDataReady || agents.length || customers.length){
+      if(App?._fullDataReady || agents.length || groups.length || customers.length){
         this._dailyAgentsCacheKey = cacheKey;
         this._dailyAgentsCache = result;
       }
@@ -25028,6 +25153,68 @@ UsersGateUI.init();
       </tr>`).join("");
     },
 
+    /* GI-FIX 2026-08-03: רנדרים ייעודיים למסך «מעקב מכירות יומי».
+       נפרדים מ-renderDailySalesDetailRowsHtml / renderDailySalesSummaryHtml
+       כדי שהאוברליי הישן ימשיך לעבוד בדיוק כמו קודם. */
+    renderDailySalesChipsHtml(items, modifier = ""){
+      const list = Array.isArray(items) ? items.filter(Boolean) : [];
+      if(!list.length) return `<span class="giDailySalesPage__dash">—</span>`;
+      const mod = modifier ? ` giDailySalesPage__chip--${modifier}` : "";
+      return `<div class="giDailySalesPage__chips">` + list.map((item) => {
+        const name = typeof item === "string" ? item : safeTrim(item?.name);
+        const count = typeof item === "string" ? 0 : (Number(item?.count) || 0);
+        const badge = count > 1 ? `<i class="giDailySalesPage__chipQty">${escapeHtml(String(count))}</i>` : "";
+        return `<span class="giDailySalesPage__chip${mod}">${escapeHtml(name || "—")}${badge}</span>`;
+      }).join("") + `</div>`;
+    },
+
+    renderDailySalesGroupRowsHtml(report){
+      const groups = Array.isArray(report?.groups) ? report.groups : [];
+      if(!groups.length){
+        return `<tr><td colspan="5" class="giDailySalesPage__emptyCell">אין מכירות ביום זה</td></tr>`;
+      }
+      let prevAgent = null;
+      return groups.map((g) => {
+        const isSameAgent = prevAgent === g.agentName;
+        prevAgent = g.agentName;
+        const tone = this.agentSalesAvatarTone(g.agentName);
+        const initials = this.agentSalesInitials(g.agentName);
+        // ענף שני ואילך של אותו נציג — האווטאר מוחלש כדי שהעין תזהה מיד
+        // שמדובר באותו אדם, בלי לחזור על השם בהבלטה מלאה
+        const agentCell = isSameAgent
+          ? `<td class="giDailySalesPage__agentCell is-repeat">
+              <span class="giDailySalesPage__tie" aria-hidden="true"></span>
+              <span class="giDailySalesPage__agentName">${escapeHtml(g.agentName)}</span>
+            </td>`
+          : `<td class="giDailySalesPage__agentCell">
+              <span class="giDailySalesPage__av giDailySalesPage__av--${escapeHtml(tone)}" aria-hidden="true">${escapeHtml(initials)}</span>
+              <span class="giDailySalesPage__agentName">${escapeHtml(g.agentName)}</span>
+            </td>`;
+        return `<tr class="giDailySalesPage__row${isSameAgent ? " is-sameAgent" : ""}">
+          ${agentCell}
+          <td><span class="giDailySalesPage__sector giDailySalesPage__sector--${escapeHtml(g.sectorSlug)}">${escapeHtml(g.sector)}</span></td>
+          <td>${this.renderDailySalesChipsHtml(g.products)}</td>
+          <td>${this.renderDailySalesChipsHtml(g.companies, "co")}</td>
+          <td class="giDailySalesPage__premCell">
+            <strong>${escapeHtml(this.formatMoney(g.premium))}</strong>
+            <span class="giDailySalesPage__dealsHint">${escapeHtml(this.dailySalesDealsWord(g.deals))}</span>
+          </td>
+        </tr>`;
+      }).join("");
+    },
+
+    renderDailySalesGroupSummaryHtml(report){
+      const agents = Number(report?.groupAgentCount) || 0;
+      const deals = Number(report?.groupDealCount) || 0;
+      const total = Number(report?.groupTotalPremium) || 0;
+      const avg = agents > 0 ? Math.round((total / agents) * 100) / 100 : 0;
+      return `
+        <div class="giDailySalesPage__stat"><span>נציגים</span><strong>${escapeHtml(this.dailySalesAgentsWord(agents))}</strong></div>
+        <div class="giDailySalesPage__stat"><span>עסקאות</span><strong>${escapeHtml(this.dailySalesDealsWord(deals))}</strong></div>
+        <div class="giDailySalesPage__stat"><span>ממוצע לנציג</span><strong>${escapeHtml(this.formatMoney(avg))}</strong></div>
+        <div class="giDailySalesPage__stat giDailySalesPage__stat--prem"><span>סה״כ פרמיה</span><strong>${escapeHtml(this.formatMoney(total))}</strong></div>`;
+    },
+
     renderDailySalesSummaryHtml(report){
       return `
         <div class="giDailySalesPage__stat"><span>נציגים</span><strong>${escapeHtml(this.dailySalesAgentsWord(report.agentCount))}</strong></div>
@@ -25036,13 +25223,23 @@ UsersGateUI.init();
         <div class="giDailySalesPage__stat"><span>תאריך</span><strong>${escapeHtml(report.dateLabel || "—")}</strong></div>`;
     },
 
+    /* GI-FIX 2026-08-03: הדגל _dailySalesPageBound נדלק כאן בשורה הראשונה,
+       *לפני* בדיקת קיום האלמנטים. אם המסך עוד לא היה ב-DOM בקריאה הראשונה,
+       כל ה-getElementById החזירו null, אף מאזין לא נרשם — והדגל כבר היה true,
+       כך שהפונקציה מעולם לא ניסתה שוב. התוצאה: «היום», «רענון», «הדפסה»
+       ובורר התאריך נשארו מתים לכל אורך הסשן. כעת הדגל נדלק רק אחרי
+       שהאלמנטים אותרו בפועל. */
     _ensureDailySalesPageBound(){
       if(this._dailySalesPageBound) return;
-      this._dailySalesPageBound = true;
       const todayBtn = document.getElementById("btnDailySalesToday");
       const refreshBtn = document.getElementById("btnDailySalesRefresh");
       const printBtn = document.getElementById("btnDailySalesPrint");
       const dateInput = document.getElementById("dailySalesDateInput");
+      const dateWrap = document.querySelector("#view-dailySales .giDailySalesPage__dateWrap");
+      // המסך עוד לא הוזרק — יוצאים בלי להדליק את הדגל, וננסה שוב בכניסה הבאה
+      if(!todayBtn && !refreshBtn && !printBtn && !dateInput) return;
+      this._dailySalesPageBound = true;
+
       if(todayBtn){
         on(todayBtn, "click", () => {
           this.setDailySalesReportDateKey(this.toLocalDateKey(new Date()));
@@ -25051,11 +25248,7 @@ UsersGateUI.init();
         });
       }
       if(refreshBtn){
-        on(refreshBtn, "click", () => {
-          this._dailyAgentsCacheKey = "";
-          this._dailyAgentsCache = null;
-          this.renderDailySalesPage();
-        });
+        on(refreshBtn, "click", () => { void this.reloadDailySalesFromServer(); });
       }
       if(printBtn){
         on(printBtn, "click", () => this.printDailySalesReportScreen());
@@ -25066,6 +25259,74 @@ UsersGateUI.init();
           this.renderDailySalesPage();
           try { this.refreshDailySalesReportPanel?.(); } catch(_e) {}
         });
+        /* GI-FIX: הקלט עצמו מוסתר (opacity:0, פרוס על ה-label). בדפדפנים
+           מבוססי Chromium לוח השנה הילידי נפתח רק מלחיצה על אייקון היומן —
+           שכאן שקוף ולא ממוקם — ולכן לחיצה על השדה לא עשתה כלום.
+           showPicker() פותח אותו במפורש. עטוף ב-try כי הוא זורק אם הדפדפן
+           לא תומך או אם הקריאה לא נובעת מאינטראקציית משתמש. */
+        const openPicker = (ev) => {
+          if(ev?.target === dateInput && ev?.type === "click") return;
+          try {
+            if(typeof dateInput.showPicker === "function"){ dateInput.showPicker(); return; }
+          } catch(_e) {}
+          try { dateInput.focus(); } catch(_e) {}
+        };
+        on(dateInput, "click", () => {
+          try { if(typeof dateInput.showPicker === "function") dateInput.showPicker(); } catch(_e) {}
+        });
+        if(dateWrap){
+          on(dateWrap, "click", openPicker);
+          on(dateWrap, "keydown", (ev) => {
+            if(ev.key !== "Enter" && ev.key !== " ") return;
+            ev.preventDefault();
+            openPicker(ev);
+          });
+        }
+      }
+    },
+
+    /** GI-FIX 2026-08-03: «רענון» רק ניקה מטמון מקומי ובנה מחדש מ-State.data,
+        כך שמכירה שנרשמה על ידי נציג אחר לא הופיעה — ובלי שום משוב ויזואלי
+        הכפתור נראה מת. כעת הוא מושך טרי מהשרת דרך אותו מסלול שהמערכת כבר
+        משתמשת בו (Storage.loadSheets + App.applyLoadResult), עם נעילה נגד
+        לחיצות כפולות ועם סטטוס. בכשל — הנתונים הקיימים נשארים על המסך. */
+    async reloadDailySalesFromServer(){
+      if(!this.canSeeDailySalesReport()) return;
+      if(this._dailySalesReloadBusy) return;
+      this._dailySalesReloadBusy = true;
+      const btn = document.getElementById("btnDailySalesRefresh");
+      const prevLabel = btn ? btn.textContent : "";
+      if(btn){
+        btn.disabled = true;
+        btn.classList.add("is-loading");
+        btn.textContent = "מרענן…";
+      }
+      try {
+        try { UI.renderSyncStatus?.("מרענן נתוני מכירות…", "warn"); } catch(_e) {}
+        const r = await Storage.loadSheets({ useCachedFallback: false });
+        if(r?.ok){
+          App.applyLoadResult(r, "נתוני מכירות עודכנו", { skipNavigation: true, skipLoginSideEffects: true });
+          try { Storage.scheduleFullIdbCacheSave(State.data); } catch(_e) {}
+          try { UI.renderSyncStatus?.("נתוני מכירות עודכנו", "ok", r.at); } catch(_e) {}
+        } else {
+          try { UI.renderSyncStatus?.("רענון נכשל · מוצגים הנתונים האחרונים", "err"); } catch(_e) {}
+        }
+      } catch(err) {
+        try { console.warn("DAILY_SALES_REFRESH_FAILED:", err); } catch(_e) {}
+        try { UI.renderSyncStatus?.("רענון נכשל · מוצגים הנתונים האחרונים", "err"); } catch(_e) {}
+      } finally {
+        // תמיד לבנות מחדש: גם בכשל, כדי שהמסך לא יישאר תקוע במצב ביניים
+        this._dailyAgentsCacheKey = "";
+        this._dailyAgentsCache = null;
+        this._dailySalesLastSyncAt = new Date();
+        try { this.renderDailySalesPage(); } catch(_e) {}
+        try { this.refreshDailySalesReportPanel?.(); } catch(_e) {}
+        if(btn){
+          btn.disabled = false;
+          btn.classList.remove("is-loading");
+          btn.textContent = prevLabel || "רענון";
+        }
+        this._dailySalesReloadBusy = false;
       }
     },
 
@@ -25078,8 +25339,8 @@ UsersGateUI.init();
       const dateInput = document.getElementById("dailySalesDateInput");
       const dateText = document.getElementById("dailySalesDateText");
       const todayBtn = document.getElementById("btnDailySalesToday");
-      if(summary) summary.innerHTML = this.renderDailySalesSummaryHtml(report);
-      if(tbody) tbody.innerHTML = this.renderDailySalesDetailRowsHtml(report);
+      if(summary) summary.innerHTML = this.renderDailySalesGroupSummaryHtml(report);
+      if(tbody) tbody.innerHTML = this.renderDailySalesGroupRowsHtml(report);
       if(dateInput){
         dateInput.value = report.dateKey;
         dateInput.max = this.toLocalDateKey(new Date());
@@ -25088,6 +25349,13 @@ UsersGateUI.init();
       if(todayBtn){
         todayBtn.disabled = !!report.isToday;
         todayBtn.classList.toggle("is-active", !!report.isToday);
+      }
+      const syncEl = document.getElementById("dailySalesSyncStamp");
+      if(syncEl){
+        const at = this._dailySalesLastSyncAt;
+        syncEl.textContent = at instanceof Date
+          ? `עודכן ${at.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`
+          : "";
       }
     },
 
@@ -25394,14 +25662,15 @@ UsersGateUI.init();
     printDailySalesReportScreen(){
       if(!this.canSeeDailySalesReport()) return;
       const report = this.buildDailyAgentSalesReport();
-      const lines = Array.isArray(report.lines) ? report.lines : [];
-      const rows = lines.length
-        ? lines.map((row) => `<tr>
-            <td>${escapeHtml(row.agentName || "—")}</td>
-            <td>${escapeHtml(row.department || "—")}</td>
-            <td>${escapeHtml(row.product || "—")}</td>
-            <td>${escapeHtml(row.company || "—")}</td>
-            <td class="prem">${escapeHtml(this.formatMoney(row.premium))}</td>
+      // GI-FIX 2026-08-03: ההדפסה נבנית מ-groups כדי שתהיה זהה למסך
+      const groups = Array.isArray(report.groups) ? report.groups : [];
+      const rows = groups.length
+        ? groups.map((g) => `<tr>
+            <td>${escapeHtml(g.agentName || "—")}</td>
+            <td>${escapeHtml(g.sector || "—")}</td>
+            <td>${escapeHtml((g.products || []).map((p) => p.count > 1 ? `${p.name} ×${p.count}` : p.name).join(" · ") || "—")}</td>
+            <td>${escapeHtml((g.companies || []).join(" · ") || "—")}</td>
+            <td class="prem">${escapeHtml(this.formatMoney(g.premium))}</td>
           </tr>`).join("")
         : `<tr><td colspan="5" style="text-align:center;padding:28px;color:#6b7c99">אין מכירות ביום זה</td></tr>`;
       const win = window.open("", "_blank", "width=1080,height=820");
@@ -25422,14 +25691,14 @@ UsersGateUI.init();
   @page{margin:14mm}
 </style></head><body><div class="wrap">
   <h1>דוח מעקב מכירות יומי</h1>
-  <p class="sub">נציג · מחלקה · מוצר · חברה · פרמיה · ${escapeHtml(report.dateLabel)}</p>
+  <p class="sub">נציג · ענף · מוצרים · חברות · סה״כ פרמיה · ${escapeHtml(report.dateLabel)}</p>
   <table>
     <thead><tr><th>נציג</th><th>מחלקה</th><th>מוצר</th><th>חברה</th><th>פרמיה</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
   <div class="foot">
-    <span>${escapeHtml(this.dailySalesAgentsWord(report.agentCount))} · ${escapeHtml(this.dailySalesDealsWord(report.dealCount))}</span>
-    <span class="prem">${escapeHtml(this.formatMoney(report.totalPremium))}</span>
+    <span>${escapeHtml(this.dailySalesAgentsWord(report.groupAgentCount))} · ${escapeHtml(this.dailySalesDealsWord(report.groupDealCount))}</span>
+    <span class="prem">${escapeHtml(this.formatMoney(report.groupTotalPremium))}</span>
   </div>
 </div></body></html>`);
       win.document.close();
