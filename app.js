@@ -1841,6 +1841,8 @@
       teamManagerAssignmentsUpdatedAt: null,
       agentReportAliases: {},
       agentReportAliasesUpdatedAt: null,
+      agentSecurity: {},
+      agentTargets: {},
       dataUpdatedAt: null,
       referralsUpdatedAt: null,
       campaignInboxUpdatedAt: null,
@@ -9121,6 +9123,14 @@
           teamManagerAssignmentsUpdatedAt: safeTrim(state?.meta?.teamManagerAssignmentsUpdatedAt) || null,
           agentReportAliases: normalizeAgentReportAliasesMap(state?.meta?.agentReportAliases),
           agentReportAliasesUpdatedAt: safeTrim(state?.meta?.agentReportAliasesUpdatedAt) || null,
+          // GI-FIX 2026-08-03c: agentSecurity/agentTargets חייבים ב-buildMetaRow עצמו,
+          // לא רק ב-wrapper מאוחר — אחרת שמירה לפני העטיפה מאבדת pinOnlyLogin.
+          agentSecurity: (typeof normalizeAgentSecurityMap === "function")
+            ? normalizeAgentSecurityMap(state?.meta?.agentSecurity)
+            : (state?.meta?.agentSecurity && typeof state.meta.agentSecurity === "object" ? state.meta.agentSecurity : {}),
+          agentTargets: (typeof normalizeAgentTargetMap === "function")
+            ? normalizeAgentTargetMap(state?.meta?.agentTargets)
+            : (state?.meta?.agentTargets && typeof state.meta.agentTargets === "object" ? state.meta.agentTargets : {}),
           ...clocks,
           updatedAt
         },
@@ -9673,7 +9683,14 @@
         teamManagerAssignments: normalizeTeamManagerAssignmentsMap(payload?.teamManagerAssignments),
         teamManagerAssignmentsUpdatedAt: safeTrim(payload?.teamManagerAssignmentsUpdatedAt) || null,
         agentReportAliases: normalizeAgentReportAliasesMap(payload?.agentReportAliases),
-        agentReportAliasesUpdatedAt: safeTrim(payload?.agentReportAliasesUpdatedAt) || null
+        agentReportAliasesUpdatedAt: safeTrim(payload?.agentReportAliasesUpdatedAt) || null,
+        // GI-FIX 2026-08-03c: קריאת agentSecurity מ-payload ב-mapMeta עצמו (לא רק ב-wrapper).
+        agentSecurity: (typeof normalizeAgentSecurityMap === "function")
+          ? normalizeAgentSecurityMap(payload?.agentSecurity)
+          : (payload?.agentSecurity && typeof payload.agentSecurity === "object" ? payload.agentSecurity : {}),
+        agentTargets: (typeof normalizeAgentTargetMap === "function")
+          ? normalizeAgentTargetMap(payload?.agentTargets)
+          : (payload?.agentTargets && typeof payload.agentTargets === "object" ? payload.agentTargets : {})
       };
     },
 
@@ -61900,26 +61917,6 @@ const ClalRiskLifePdf = {
         }
       }
 
-      if(
-        r?.ok
-        && Auth.current
-        && !Auth.canViewAllCustomers()
-        && agentSessionDataLooksEmpty()
-        && agentSessionDataLooksSuspiciouslyEmpty()
-      ){
-        // GI-FIX 2026-07-28: an agent with no customers is a legitimate state.
-        // The old code answered it by pulling the ENTIRE organisation (~62MB)
-        // into that agent's browser, which is what killed the server.
-        try { console.warn("AGENT_SCOPE_EMPTY:", safeTrim(Auth.current?.name), "— no org-wide escalation"); } catch(_e) {}
-        try {
-          window.showToast?.({
-            title: "לא נמצאו לקוחות",
-            text: "אם זו טעות, פנה למנהל המערכת.",
-            variant: "warn",
-            durationMs: 6000
-          });
-        } catch(_e) {}
-      }
       if (r.ok) {
         // חוסם צביעה מאוחרת מהמטמון אחרי שהשרת כבר החזיר נתונים טריים.
         serverSyncApplied = true;
@@ -61932,6 +61929,25 @@ const ClalRiskLifePdf = {
           try { console.warn("ADMIN_CUSTOMERS_STILL_EMPTY_AFTER_FULL_LOAD"); } catch(_e) {}
           this._fullDataReady = false;
           this.schedulePostLoginDataRecovery("admin_customers_empty");
+        }
+        /* GI-FIX 2026-08-03: הטוסט "לא נמצאו לקוחות" רץ לפני applyLoadResult,
+           כש-State עדיין ריק אחרי bootstrap — גם כש-r.payload כבר מכיל את לקוחות הנציג.
+           אז הופיעה אזעקת שווא בכל כניסה, ואז המסך התמלא כרגיל. בודקים רק אחרי הצביעה. */
+        if(
+          Auth.current
+          && !Auth.canViewAllCustomers()
+          && agentSessionDataLooksEmpty()
+          && agentSessionDataLooksSuspiciouslyEmpty()
+        ){
+          try { console.warn("AGENT_SCOPE_EMPTY:", safeTrim(Auth.current?.name), "— no org-wide escalation"); } catch(_e) {}
+          try {
+            window.showToast?.({
+              title: "לא נמצאו לקוחות",
+              text: "אם זו טעות, פנה למנהל המערכת.",
+              variant: "warn",
+              durationMs: 6000
+            });
+          } catch(_e) {}
         }
         if(paintedFromFullCache){
           try { this.refreshViewsAfterDeferredSessionLoad(); } catch(_e) {}
@@ -62370,11 +62386,16 @@ const ClalRiskLifePdf = {
       const sec = getAgentSecurity(id);
       if(sec.pinOnlyLogin === true) return;
       const authEmail = resolveAgentAuthEmail(agent, sec);
-      const hasMfaSignals = sec.mfaEnabled === true || sec.mfaRequired === true || !!safeTrim(sec.factorId);
-      if(!authEmail && !hasMfaSignals) return;
+      /* GI-FIX 2026-08-03c — שורש באג "PIN בלבד לא נשמר":
+         הקוד הישן הדליק mfaRequired=true על עצם קיום מייל בטבלת agents.
+         אחרי ניקוי pinOnly (או אם הדגל לא נטען מהמטמון), hydrate החזיר
+         את הנציג ל-2FA בכל כניסה/טעינה. מעכשיו: רק אותות MFA אמיתיים
+         (factor / mfaEnabled / mfaRequired שכבר דלוק) — לא מייל לבדו. */
+      const hasEnrolledOrRequired = sec.mfaEnabled === true || sec.mfaRequired === true || !!safeTrim(sec.factorId);
+      if(!hasEnrolledOrRequired) return;
       const patch = {};
       if(authEmail && authEmail !== safeTrim(sec.authEmail)) patch.authEmail = authEmail;
-      if((authEmail || hasMfaSignals) && sec.mfaRequired !== true) patch.mfaRequired = true;
+      if(sec.mfaRequired !== true) patch.mfaRequired = true;
       if(Object.keys(patch).length){
         setAgentSecurity(id, patch);
         changed = true;
@@ -62404,9 +62425,14 @@ const ClalRiskLifePdf = {
       const emailOnAgent = normalizeEmailValue(agent?.email);
       const emailOnSecurity = normalizeEmailValue(sec.authEmail);
       const authEmail = emailOnSecurity || emailOnAgent;
-      const hasMfaSignals = sec.mfaEnabled === true || !!safeTrim(sec.factorId);
+      /* GI-FIX 2026-08-03c — לא להדליק mfaRequired ממייל בלבד (אותו שורש כמו hydrate). */
+      const hasMfaSignals = sec.mfaEnabled === true || sec.mfaRequired === true || !!safeTrim(sec.factorId);
       if(!authEmail && !hasMfaSignals){
         stats.noEmail += 1;
+        return;
+      }
+      if(!hasMfaSignals){
+        stats.unchanged += 1;
         return;
       }
       const patch = {};
@@ -62422,10 +62448,10 @@ const ClalRiskLifePdf = {
         agentTouched = true;
         stats.agentEmailFilled += 1;
       }
-      if((authEmail || hasMfaSignals) && sec.mfaRequired !== true){
+      if(sec.mfaRequired !== true){
         patch.mfaRequired = true;
       }
-      if(hasMfaSignals && sec.mfaEnabled !== true){
+      if(!!safeTrim(sec.factorId) && sec.mfaEnabled !== true){
         patch.mfaEnabled = true;
         patch.factorId = safeTrim(sec.factorId);
       }
@@ -63480,20 +63506,22 @@ const ClalRiskLifePdf = {
       if(!matched) return this._setError(loginMatch.error || 'שם משתמש לא נמצא');
       if(matched.active === false) return this._setError('המשתמש מושבת');
       const expected = safeTrim(matched.pin) || '0000';
-      // GI-FIX 2026-08-03: מטמון כניסה (עד 5 דק') עלול להתעלם מ-pinOnlyLogin
-      // שנשמר בשרת. מרעננים agentSecurity לפני החלטת MFA.
+      /* GI-FIX 2026-08-03c — מקור האמת ל-PIN בלבד הוא השרת, לא מטמון מקומי.
+         בודקים קודם מול meta; אם הדגל דלוק — כניסת PIN בלבד בלי MFA. */
+      let serverPinOnly = false;
+      try {
+        const pinOnlyCheck = await readAgentPinOnlyFromServer(matched.id);
+        serverPinOnly = !!(pinOnlyCheck?.ok && pinOnlyCheck.pinOnly === true);
+      } catch(_e) {
+        serverPinOnly = false;
+      }
+      if(serverPinOnly){
+        if(pin !== expected) return this._setError('קוד כניסה שגוי');
+        await completeAgentLogin(matched);
+        return;
+      }
       try { await refreshAgentSecurityMapFromServer(); } catch(_e) {}
       let sec = getAgentSecurity(matched.id);
-      /* GI-FIX 2026-08-03b — אם המטמון המקומי עדיין דורש 2FA, בודקים ישירות
-         מול השרת לפני ששולחים את הנציג למסך Authenticator. */
-      if(agentRequiresMfa(matched, sec)){
-        try {
-          const pinOnlyCheck = await readAgentPinOnlyFromServer(matched.id);
-          if(pinOnlyCheck?.ok && pinOnlyCheck.pinOnly === true){
-            sec = getAgentSecurity(matched.id);
-          }
-        } catch(_e) {}
-      }
       const authEmail = resolveAgentAuthEmail(matched, sec);
       const requiresAuthMfa = agentRequiresMfa(matched, sec);
       let authSigned = false;
@@ -63787,10 +63815,18 @@ const ClalRiskLifePdf = {
           this.setError('השינוי לא אומת בשרת (' + (safeTrim(verify.error) || 'לא ידוע') + '). המשתמש עדיין יידרש ל-2FA — נסה שוב או בדוק חיבור.');
         } else if(result.warning){
           try {
+            Storage._memoryCache = null;
+            sessionStorage.removeItem(GI_SERVER_CACHE_KEY);
+          } catch(_e){}
+          try {
             window.showToast?.({ title: 'Auth בוטל', text: `${agentLabel} יכול להיכנס עם שם משתמש + PIN בלבד.`, variant: 'ok', durationMs: 5200 });
           } catch(_e){}
           this.setError(result.warning);
         } else {
+          try {
+            Storage._memoryCache = null;
+            sessionStorage.removeItem(GI_SERVER_CACHE_KEY);
+          } catch(_e){}
           try {
             window.showToast?.({ title: 'Auth בוטל ואומת בשרת', text: `${agentLabel} יכול להיכנס עם שם משתמש + PIN בלבד.`, variant: 'ok', durationMs: 5200 });
           } catch(_e){}
