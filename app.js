@@ -7403,6 +7403,13 @@
               State.data.meta.campaignLeadAssignInbox,
               remoteMeta.campaignLeadAssignInbox
             );
+            // GI-FIX 2026-08-03b: upsertMeta ישיר דרס agentSecurity / pinOnlyLogin מהשרת.
+            if(typeof mergeAgentSecurityMapsByRecency === "function"){
+              State.data.meta.agentSecurity = mergeAgentSecurityMapsByRecency(
+                remoteMeta.agentSecurity,
+                State.data.meta.agentSecurity
+              );
+            }
           }
           bumpMetaSyncClock(State.data.meta, "campaignInbox");
           await Storage.upsertMeta(State.data);
@@ -62084,7 +62091,9 @@ const ClalRiskLifePdf = {
       mfaEnrolledAt: safeTrim(input.mfaEnrolledAt || input.mfa_enrolled_at),
       factorId: safeTrim(input.factorId || input.factor_id),
       lastVerifiedAt: safeTrim(input.lastVerifiedAt || input.last_verified_at),
-      pinOnlyLogin: input.pinOnlyLogin === true || input.pin_only_login === true,
+      pinOnlyLogin: input.pinOnlyLogin === true || input.pin_only_login === true
+        || input.pinOnlyLogin === "true" || input.pin_only_login === "true"
+        || input.pinOnlyLogin === 1 || input.pin_only_login === 1,
       /* סימון ביטול מכוון של PIN-בלבד (רק כשנשלח pinOnlyLogin:false ב-patch).
          מונע מלקוח עם מטמון ישן לדרוס pinOnlyLogin בשרת במיזוג/שמירה. */
       pinOnlyLiftedAt: safeTrim(input.pinOnlyLiftedAt || input.pin_only_lifted_at),
@@ -62100,7 +62109,10 @@ const ClalRiskLifePdf = {
   /* GI-FIX 2026-08-03 — מיזוג agentSecurity עם הגנת pinOnlyLogin.
      שמירת meta (כולל metaOnly אחרי MFA) כותבת את כל המפה. בלי הכלל הזה,
      רשומה מקומית ישנה בלי pinOnlyLogin אבל עם updatedAt חדש יותר דרסה את
-     הגדרת "PIN בלבד" בשרת. ביטול מכוון מותר רק עם pinOnlyLiftedAt. */
+     הגדרת "PIN בלבד" בשרת. ביטול מכוון מותר רק עם pinOnlyLiftedAt.
+     GI-FIX 2026-08-03b — גם ההפך: כשמנהל מגדיר PIN בלבד מקומית, רשומת
+     MFA ישנה בשרת עם updatedAt חדש יותר (סשן אחר / MFA login) לא תבלע
+     את השינוי לפני ה-upsert. */
   const mergeAgentSecurityMapsByRecency = (serverMap, localMap) => {
     const s = normalizeAgentSecurityMap(serverMap);
     const l = normalizeAgentSecurityMap(localMap);
@@ -62108,6 +62120,10 @@ const ClalRiskLifePdf = {
     Object.entries(l).forEach(([key, lEntry]) => {
       const sEntry = s[key];
       if(!sEntry){
+        out[key] = lEntry;
+        return;
+      }
+      if(lEntry.pinOnlyLogin === true && sEntry.pinOnlyLogin !== true){
         out[key] = lEntry;
         return;
       }
@@ -62169,7 +62185,16 @@ const ClalRiskLifePdf = {
       nextPatch.pinOnlyLiftedAt = safeTrim(nextPatch.pinOnlyLiftedAt) || nowISO();
     }
     if(nextPatch.pinOnlyLogin === true){
+      /* GI-FIX 2026-08-03b — כל מעבר ל-PIN בלבד מנקה Auth/2FA בשער הכתיבה,
+         גם אם הקורא שלח רק pinOnlyLogin:true בלי לרוקן factorId/mfaEnabled. */
       nextPatch.pinOnlyLiftedAt = "";
+      nextPatch.authEmail = "";
+      nextPatch.authUserId = "";
+      nextPatch.mfaRequired = false;
+      nextPatch.mfaEnabled = false;
+      nextPatch.factorId = "";
+      nextPatch.mfaEnrolledAt = "";
+      nextPatch.lastVerifiedAt = "";
     }
     const merged = normalizeAgentSecurityEntry({ ...prev, ...nextPatch, updatedAt: nowISO() });
     store[key] = merged;
@@ -62189,9 +62214,59 @@ const ClalRiskLifePdf = {
         mapped.agentSecurity,
         State.data.meta.agentSecurity
       );
-      return { ok:true };
+      /* GI-FIX 2026-08-03b — אחרי המיזוג, כל רשומת pinOnlyLogin מהשרת
+         נכפית כפי שהיא (מנקה MFA מקומי ישן שלא הורם במכוון). */
+      const serverMap = normalizeAgentSecurityMap(mapped.agentSecurity);
+      const localMap = getAgentSecurityStore();
+      Object.entries(serverMap).forEach(([id, sEntry]) => {
+        if(sEntry.pinOnlyLogin !== true) return;
+        const lEntry = localMap[id];
+        const liftedAt = safeTrim(lEntry?.pinOnlyLiftedAt);
+        const intentionalLift = !!liftedAt && compareIsoStamps(liftedAt, sEntry.updatedAt) >= 0;
+        if(intentionalLift) return;
+        localMap[id] = normalizeAgentSecurityEntry({
+          ...sEntry,
+          authEmail: "",
+          authUserId: "",
+          mfaRequired: false,
+          mfaEnabled: false,
+          factorId: "",
+          mfaEnrolledAt: "",
+          lastVerifiedAt: "",
+          pinOnlyLogin: true,
+          pinOnlyLiftedAt: ""
+        });
+      });
+      return { ok:true, serverMap };
     } catch(e) {
       return { ok:false, error: String(e?.message || e) };
+    }
+  };
+  /* קריאה ישירה לדגל PIN-בלבד מהשרת עבור נציג בודד — בלי הסתמכות על מטמון מקומי. */
+  const readAgentPinOnlyFromServer = async (agentId) => {
+    const key = safeTrim(agentId);
+    if(!key) return { ok:false, pinOnly:false, error:"MISSING_AGENT_ID" };
+    try {
+      try { Storage.invalidateMetaRowCache(); } catch(_e) {}
+      const res = await Storage.loadMetaRow();
+      if(!res?.ok) return { ok:false, pinOnly:false, error: safeTrim(res?.error) || "META_READ_FAILED" };
+      const mapped = Storage.mapMeta(res.data || {});
+      const entry = normalizeAgentSecurityEntry((mapped?.agentSecurity || {})[key] || {});
+      if(entry.pinOnlyLogin === true){
+        setAgentSecurity(key, {
+          authEmail: "",
+          authUserId: "",
+          mfaRequired: false,
+          mfaEnabled: false,
+          factorId: "",
+          mfaEnrolledAt: "",
+          lastVerifiedAt: "",
+          pinOnlyLogin: true
+        });
+      }
+      return { ok:true, pinOnly: entry.pinOnlyLogin === true, entry };
+    } catch(e) {
+      return { ok:false, pinOnly:false, error: String(e?.message || e) };
     }
   };
   const resolveAgentAuthEmail = (agent, security = null) => {
@@ -63408,7 +63483,17 @@ const ClalRiskLifePdf = {
       // GI-FIX 2026-08-03: מטמון כניסה (עד 5 דק') עלול להתעלם מ-pinOnlyLogin
       // שנשמר בשרת. מרעננים agentSecurity לפני החלטת MFA.
       try { await refreshAgentSecurityMapFromServer(); } catch(_e) {}
-      const sec = getAgentSecurity(matched.id);
+      let sec = getAgentSecurity(matched.id);
+      /* GI-FIX 2026-08-03b — אם המטמון המקומי עדיין דורש 2FA, בודקים ישירות
+         מול השרת לפני ששולחים את הנציג למסך Authenticator. */
+      if(agentRequiresMfa(matched, sec)){
+        try {
+          const pinOnlyCheck = await readAgentPinOnlyFromServer(matched.id);
+          if(pinOnlyCheck?.ok && pinOnlyCheck.pinOnly === true){
+            sec = getAgentSecurity(matched.id);
+          }
+        } catch(_e) {}
+      }
       const authEmail = resolveAgentAuthEmail(matched, sec);
       const requiresAuthMfa = agentRequiresMfa(matched, sec);
       let authSigned = false;
@@ -63664,10 +63749,38 @@ const ClalRiskLifePdf = {
         const pin = safeTrim(this.els.password?.value) || safeTrim(agent.pin);
         const result = await clearAgentAuthForPinOnlyLogin(agent, { pin });
         if(!result.ok) return this.setError(result.error || 'לא הצלחתי לבטל Auth');
-        const persist = await App.persist('הוגדרה כניסה עם PIN בלבד');
-        /* GI-FIX 2026-08-03 — persist מחזיר ok:true גם כשסנכרון agents נכשל,
-           ולכן הוצג טוסט ירוק על שינוי שלא בהכרח הגיע לשרת. מאמתים בפועל. */
-        const verify = persist?.ok ? await verifyAgentPinOnlyOnServer(agent.id) : { ok:false, error:'PERSIST_FAILED' };
+        /* GI-FIX 2026-08-03b — שמירת meta ייעודית ל-agentSecurity (בלי לחכות
+           לסנכרון customers/proposals), ואז סנכרון שורת הנציג לניקוי המייל.
+           אם האימות נכשל — ניסיון חוזר אחד לפני שנכשלים למשתמש. */
+        const persistPinOnly = async () => {
+          const metaPersist = await App.persist('הוגדרה כניסה עם PIN בלבד', {
+            metaOnly: true,
+            metaSyncScopes: ['settings']
+          });
+          if(!metaPersist?.ok) return { persist: metaPersist, verify: { ok:false, error:'PERSIST_FAILED' } };
+          try {
+            const agentId = safeTrim(agent.id);
+            if(agentId){
+              await Storage.syncAgentsFromState(State.data, { onlyAgentIds: [agentId] });
+            }
+          } catch(_agentSyncErr) {}
+          const verify = await verifyAgentPinOnlyOnServer(agent.id);
+          return { persist: metaPersist, verify };
+        };
+        let { persist, verify } = await persistPinOnly();
+        if(persist?.ok && !verify.ok){
+          setAgentSecurity(agent.id, {
+            authEmail: "",
+            authUserId: "",
+            mfaRequired: false,
+            mfaEnabled: false,
+            factorId: "",
+            mfaEnrolledAt: "",
+            lastVerifiedAt: "",
+            pinOnlyLogin: true
+          });
+          ({ persist, verify } = await persistPinOnly());
+        }
         if(!persist?.ok){
           this.setError(safeTrim(persist?.error) || 'השמירה לשרת נכשלה — המשתמש עדיין יידרש ל-2FA. נסה שוב.');
         } else if(!verify.ok){
