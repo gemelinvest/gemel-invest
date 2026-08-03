@@ -14275,6 +14275,9 @@ UsersGateUI.init();
         E.wrap.setAttribute("aria-hidden","true");
         try { document.body.classList.remove("lcUserModalOpen"); } catch(_e) {}
       }
+      // GI-FIX 2026-08-03: _currentEditUser נשאר תקוע אחרי סגירה ושימש
+      // כמקור גיבוי למייל ב-_saveFromModal — כולל מייל של משתמש קודם.
+      this._currentEditUser = null;
       // GI-FIX 2026-07-31: hand focus back to the row button that opened this,
       // instead of dropping the caret on <body>.
       try {
@@ -62086,7 +62089,32 @@ const ClalRiskLifePdf = {
     const key = safeTrim(agentId);
     if(!key) return normalizeAgentSecurityEntry({});
     const store = getAgentSecurityStore();
-    const merged = normalizeAgentSecurityEntry({ ...(store[key] || {}), ...(patch || {}), updatedAt: nowISO() });
+    const prev = store[key] || {};
+    let nextPatch = patch && typeof patch === "object" ? { ...patch } : {};
+    /* GI-FIX 2026-08-03 — "כניסה עם PIN בלבד" לא החזיקה מעמד.
+       מסלולים רבים כותבים כאן mfaRequired/mfaEnabled/authEmail בלי לבדוק את
+       הדגל pinOnlyLogin: SecurityUI.render (factor פעיל), syncAgentAuthEmail,
+       hydrateAgentSecurityFromAgents, _prepareEnrollmentForLogin ו-
+       UsersUI._saveFromModal. כל אחד מהם החזיר את המשתמש ל-2FA בלי שאיש ביקש.
+       במקום לתקן כל קורא בנפרד — חוסמים בנקודת הכתיבה היחידה. ביטול הדגל
+       אפשרי רק בכוונה מפורשת: patch.pinOnlyLogin === false. */
+    const prevPinOnly = prev.pinOnlyLogin === true || prev.pin_only_login === true;
+    const explicitlyLifted = Object.prototype.hasOwnProperty.call(nextPatch, "pinOnlyLogin")
+      && nextPatch.pinOnlyLogin === false;
+    if(prevPinOnly && !explicitlyLifted){
+      nextPatch = {
+        ...nextPatch,
+        authEmail: "",
+        authUserId: "",
+        mfaRequired: false,
+        mfaEnabled: false,
+        factorId: "",
+        mfaEnrolledAt: "",
+        lastVerifiedAt: "",
+        pinOnlyLogin: true
+      };
+    }
+    const merged = normalizeAgentSecurityEntry({ ...prev, ...nextPatch, updatedAt: nowISO() });
     store[key] = merged;
     State.data.meta.updatedAt = nowISO();
     return merged;
@@ -62098,9 +62126,14 @@ const ClalRiskLifePdf = {
   const agentRequiresMfa = (agent, security = null) => {
     const sec = security || (agent?.id ? getAgentSecurity(agent.id) : normalizeAgentSecurityEntry({}));
     if(sec.pinOnlyLogin === true) return false;
-    const authEmail = resolveAgentAuthEmail(agent, sec);
-    if(!authEmail) return sec.mfaRequired === true || sec.mfaEnabled === true || !!safeTrim(sec.factorId);
-    return true;
+    /* GI-FIX 2026-08-03 — הגרסה הקודמת החזירה true על עצם קיום מייל:
+         if(!authEmail) return <דגלים>; return true;
+       המשמעות: "בטל 2FA" לא ביטל כלום (הוא משאיר את המייל), ומשתמש שקיבל
+       מייל אך מעולם לא נרשם (למשל אביב עמאש — email בטבלת agents בלי רשומת
+       agentSecurity) נחסם בכניסה ונשלח להרשמה כפויה מול Supabase.
+       הדרישה נקבעת עכשיו לפי הדגלים בלבד. משתמש שנרשם באמת מסומן
+       mfaRequired=true ולכן התנהגותו לא משתנה. */
+    return sec.mfaRequired === true || sec.mfaEnabled === true || !!safeTrim(sec.factorId);
   };
   const clearAgentAuthForPinOnlyLogin = async (agent, options = {}) => {
     const agentId = safeTrim(agent?.id);
@@ -62118,7 +62151,13 @@ const ClalRiskLifePdf = {
             const factorId = safeTrim(factor?.id);
             if(!factorId) continue;
             const removed = await SupabaseMFA.unenroll(factorId);
-            if(!removed.ok) unenrollWarning = safeTrim(removed.error) || "UNENROLL_FAILED";
+            /* GI-FIX 2026-08-03 — הסרת factor מאומת דורשת AAL2, ו-
+               signInWithPassword מייצר AAL1 בלבד. הכישלון צפוי ואינו חוסם:
+               הכניסה למערכת כבר לא עוברת דרך Supabase Auth. מנסחים את
+               האזהרה כך שתגיד למנהל בדיוק מה נשאר לעשות (אם בכלל). */
+            if(!removed.ok){
+              unenrollWarning = "הכניסה הועברה ל-PIN בלבד ואומתה. שים לב: רישום Google Authenticator עדיין קיים ב-Supabase Auth (הסרתו דורשת אימות דו־שלבי מלא) — הוא אינו משפיע על הכניסה למערכת. למחיקה מלאה: Authentication ← Users ← המשתמש ← MFA.";
+            }
           }
         }
         await SupabaseMFA.signOutSilently();
@@ -62148,6 +62187,28 @@ const ClalRiskLifePdf = {
     }
     State.data.meta.updatedAt = nowISO();
     return { ok:true, warning: unenrollWarning };
+  };
+  /* GI-FIX 2026-08-03 — אימות מול השרת אחרי הגדרת "PIN בלבד".
+     saveSheets מחזיר ok:true גם כשסנכרון ה-agents נכשל, ולכן ההודעה הירוקה
+     הופיעה גם כשהשינוי לא באמת נחת ב-app_meta. כאן קוראים את השורה בחזרה
+     ובודקים את הדגל בפועל במקום להסתמך על ערך ההחזרה של השמירה. */
+  const verifyAgentPinOnlyOnServer = async (agentId) => {
+    const key = safeTrim(agentId);
+    if(!key) return { ok:false, error:"MISSING_AGENT_ID" };
+    try {
+      try { Storage.invalidateMetaRowCache(); } catch(_e) {}
+      const res = await Storage.loadMetaRow();
+      if(!res?.ok) return { ok:false, error: safeTrim(res?.error) || "META_READ_FAILED" };
+      const mapped = Storage.mapMeta(res.data || {});
+      const entry = normalizeAgentSecurityEntry((mapped?.agentSecurity || {})[key] || {});
+      return {
+        ok: entry.pinOnlyLogin === true,
+        entry,
+        error: entry.pinOnlyLogin === true ? "" : "PIN_ONLY_NOT_PERSISTED"
+      };
+    } catch(e) {
+      return { ok:false, error: String(e?.message || e) };
+    }
   };
   const hydrateAgentSecurityFromAgents = () => {
     const agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
@@ -62834,8 +62895,17 @@ const ClalRiskLifePdf = {
       const agentRow = (State.data.agents || []).find(x => String(x.id) === String(agentId));
       // Preserve existing authEmail if the field is missing/empty, even if agentSecurity wasn't hydrated yet.
       const existingSec = getAgentSecurity(agentId);
-      const existingAuthEmail = safeTrim(existingSec.authEmail || agentRow?.email || this._currentEditUser?.email);
-      const authEmailToSave = normalizeEmailValue(authEmailRaw || '') || existingAuthEmail || '';
+      /* GI-FIX 2026-08-03 — שרשרת הגיבוי הזו החייתה מייל שנמחק בכוונה.
+         אחרי "כניסה עם PIN בלבד" השדה ריק, הקוד שלף מייל ישן מ-agentRow.email
+         או מ-_currentEditUser (snapshot שלא נוקה ב-closeModal), ואז שורת
+         patch.pinOnlyLogin=false החזירה את המשתמש ל-2FA בכל שמירה סתמית.
+         כשהמשתמש מסומן PIN בלבד — שדה ריק פירושו "להשאיר ריק". */
+      const isPinOnlyUser = existingSec.pinOnlyLogin === true;
+      const typedAuthEmail = normalizeEmailValue(authEmailRaw || '');
+      const existingAuthEmail = isPinOnlyUser
+        ? ''
+        : safeTrim(existingSec.authEmail || agentRow?.email || this._currentEditUser?.email);
+      const authEmailToSave = typedAuthEmail || existingAuthEmail || '';
       const hasEnrolledMfa = existingSec.mfaEnabled === true || !!safeTrim(existingSec.factorId);
       if(hasEnrolledMfa && !authEmailToSave){
         this._showErr(E.err, 'למשתמש עם אימות דו־שלבי (Google Authenticator) פעיל חובה להשאיר Auth email — הוא נדרש לכניסה.');
@@ -62845,7 +62915,10 @@ const ClalRiskLifePdf = {
         authEmail: authEmailToSave,
         mfaRequired: !!authEmailToSave || hasEnrolledMfa
       };
-      if(authEmailToSave) patch.pinOnlyLogin = false;
+      /* GI-FIX 2026-08-03 — ביטול מצב PIN בלבד רק בכוונה מפורשת:
+         מנהל שהקליד מייל חדש בשדה. מייל שנשלף משרשרת גיבוי לא סופר. */
+      if(typedAuthEmail) patch.pinOnlyLogin = false;
+      else if(isPinOnlyUser) patch.pinOnlyLogin = true;
       // Preserve MFA enrollment even when auth email field was not touched in the modal.
       if(hasEnrolledMfa){
         patch.mfaEnabled = existingSec.mfaEnabled;
@@ -63481,7 +63554,9 @@ const ClalRiskLifePdf = {
       if(!factorId) return this.setError('לא נמצא פקטור פעיל להסרה');
       const rr = await SupabaseMFA.unenroll(factorId); if(!rr.ok) return this.setError(rr.error || 'לא הצלחתי להסיר 2FA');
       const authEmail = resolveAgentAuthEmail(agent, security);
-      setAgentSecurity(agent.id,{ authEmail, mfaRequired:!!authEmail, mfaEnabled:false, factorId:'', mfaEnrolledAt:'', lastVerifiedAt:'' }); await App.persist('MFA removed');
+      /* GI-FIX 2026-08-03 — היה mfaRequired:!!authEmail, כלומר הביטול לא ביטל:
+         הדגל נשאר דלוק כל עוד יש מייל, ובכניסה הבאה נוצרה הרשמה חדשה עם QR. */
+      setAgentSecurity(agent.id,{ authEmail, mfaRequired:false, mfaEnabled:false, factorId:'', mfaEnrolledAt:'', lastVerifiedAt:'' }); await App.persist('MFA removed');
       this.currentFactorId=''; if(this.els.code) this.els.code.value=''; await this.render();
     },
     async disableAuthCompletely(){
@@ -63504,13 +63579,21 @@ const ClalRiskLifePdf = {
         const result = await clearAgentAuthForPinOnlyLogin(agent, { pin });
         if(!result.ok) return this.setError(result.error || 'לא הצלחתי לבטל Auth');
         const persist = await App.persist('הוגדרה כניסה עם PIN בלבד');
+        /* GI-FIX 2026-08-03 — persist מחזיר ok:true גם כשסנכרון agents נכשל,
+           ולכן הוצג טוסט ירוק על שינוי שלא בהכרח הגיע לשרת. מאמתים בפועל. */
+        const verify = persist?.ok ? await verifyAgentPinOnlyOnServer(agent.id) : { ok:false, error:'PERSIST_FAILED' };
         if(!persist?.ok){
-          this.setError(safeTrim(persist?.error) || 'השינוי נשמר מקומית; ייתכן שסנכרון לשרת נכשל.');
+          this.setError(safeTrim(persist?.error) || 'השמירה לשרת נכשלה — המשתמש עדיין יידרש ל-2FA. נסה שוב.');
+        } else if(!verify.ok){
+          this.setError('השינוי לא אומת בשרת (' + (safeTrim(verify.error) || 'לא ידוע') + '). המשתמש עדיין יידרש ל-2FA — נסה שוב או בדוק חיבור.');
         } else if(result.warning){
+          try {
+            window.showToast?.({ title: 'Auth בוטל', text: `${agentLabel} יכול להיכנס עם שם משתמש + PIN בלבד.`, variant: 'ok', durationMs: 5200 });
+          } catch(_e){}
           this.setError(result.warning);
         } else {
           try {
-            window.showToast?.({ title: 'Auth בוטל', text: `${agentLabel} יכול להיכנס עם שם משתמש + PIN בלבד.`, variant: 'ok', durationMs: 5200 });
+            window.showToast?.({ title: 'Auth בוטל ואומת בשרת', text: `${agentLabel} יכול להיכנס עם שם משתמש + PIN בלבד.`, variant: 'ok', durationMs: 5200 });
           } catch(_e){}
         }
         this.currentFactorId = '';
