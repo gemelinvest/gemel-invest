@@ -7,7 +7,7 @@
   "use strict";
 
   const GI_MAX_DISCOUNT_YEARS = 50;   // GI-FIX-DISCOUNT-YEARS
-  const BUILD = "20260802-contrast-v1";
+  const BUILD = "20260803-month-archive-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -85,6 +85,8 @@
   const TABLE_MAX_ROWS = 200000;
 
   const DAILY_REPORT_ACTIVE_ID = "active";
+  // ארכיון חודשי באותה טבלה: id = "m-YYYY-MM" (לא דורס את "active").
+  const DAILY_REPORT_MONTH_ID_PREFIX = "m-";
   const CANCELLATIONS_REPORT_ACTIVE_ID = "active";
 
   const SUPABASE_CHAT = {
@@ -65316,6 +65318,48 @@ const CampaignLeadsStore = {
     return `${y}-${mo}-${da}`;
   }
 
+  function getLocalYmdToday(){
+    const d = new Date();
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, "0");
+    const da = String(d.getDate()).padStart(2, "0");
+    return `${y}-${mo}-${da}`;
+  }
+
+  function dailyReportMonthKeyFromAsOf(asOf){
+    const n = normalizeDailyReportAsOfInput(asOf);
+    return n ? n.slice(0, 7) : "";
+  }
+
+  function dailyReportMonthArchiveId(monthKey){
+    const key = safeTrim(monthKey);
+    if(!/^\d{4}-\d{2}$/.test(key)) return "";
+    return DAILY_REPORT_MONTH_ID_PREFIX + key;
+  }
+
+  function parseDailyReportMonthArchiveId(id){
+    const m = new RegExp("^" + DAILY_REPORT_MONTH_ID_PREFIX + "(\\d{4}-\\d{2})$").exec(safeTrim(id));
+    return m ? m[1] : "";
+  }
+
+  function formatDailyReportMonthLabel(monthKey){
+    const m = /^(\d{4})-(\d{2})$/.exec(safeTrim(monthKey));
+    if(!m) return safeTrim(monthKey);
+    const months = [
+      "ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני",
+      "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר"
+    ];
+    const idx = Number(m[2]) - 1;
+    const name = (idx >= 0 && idx < months.length) ? months[idx] : m[2];
+    return name + " " + m[1];
+  }
+
+  function isDailyReportAsOfInCurrentMonth(asOf){
+    const key = dailyReportMonthKeyFromAsOf(asOf);
+    const todayKey = dailyReportMonthKeyFromAsOf(getLocalYmdToday());
+    return !!key && key === todayKey;
+  }
+
   function normalizeDailyReportAgentToken(value){
     // Normalize punctuation/quotes and collapse whitespace so export formatting
     // differences won't block matching rows to the correct agent.
@@ -65821,10 +65865,11 @@ const CampaignLeadsStore = {
     };
   }
 
-  function mapDailyReportToDb(report){
+  function mapDailyReportToDb(report, options = {}){
     const r = report && typeof report === "object" ? report : {};
+    const id = safeTrim(options?.id) || DAILY_REPORT_ACTIVE_ID;
     return {
-      id: DAILY_REPORT_ACTIVE_ID,
+      id,
       uploaded_at: safeTrim(r.uploadedAt) || nowISO(),
       uploaded_by_name: safeTrim(r.uploadedByName),
       report_as_of_date: normalizeDailyReportAsOfInput(r.reportAsOfDate),
@@ -65895,8 +65940,36 @@ const CampaignLeadsStore = {
 
   const DailyReportStore = {
     report: null,
+    // צפייה בארכיון חודשי — לא מחליף את report (active) שמשמש דשבורד/KPI.
+    viewMonthKey: "",
+    archiveReport: null,
+    monthIndex: [],
     tableReady: true,
     lastError: "",
+    archiveLastError: "",
+
+    getViewReport(){
+      if(safeTrim(this.viewMonthKey)) return this.archiveReport;
+      return this.report;
+    },
+
+    getVisibleRowsFor(report){
+      if(!report) return [];
+      return (report.dataRows || []).filter((row) => dailyReportRowVisibleToSession(row));
+    },
+
+    getVisibleRows(){
+      return this.getVisibleRowsFor(this.report);
+    },
+
+    getAgentSummaryFor(report){
+      const map = new Map();
+      (report?.dataRows || []).forEach((row) => {
+        const key = normalizeDailyReportAgentKey(row.agent) || "— ללא נציג";
+        map.set(key, (map.get(key) || 0) + 1);
+      });
+      return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], "he"));
+    },
 
     async fetchActive(){
       this.lastError = "";
@@ -65944,19 +66017,110 @@ const CampaignLeadsStore = {
       return { ok: true, report: this.report };
     },
 
-    getVisibleRows(){
-      const report = this.report;
-      if(!report) return [];
-      return (report.dataRows || []).filter((row) => dailyReportRowVisibleToSession(row));
+    async saveMonthArchive(report){
+      this.archiveLastError = "";
+      const monthKey = dailyReportMonthKeyFromAsOf(report?.reportAsOfDate);
+      const id = dailyReportMonthArchiveId(monthKey);
+      if(!id){
+        this.archiveLastError = "חסר תאריך דוח לקביעת חודש ארכיון";
+        return { ok: false, error: this.archiveLastError };
+      }
+      const row = mapDailyReportToDb(report, { id });
+      let save = await Storage.upsertSingleRow(SUPABASE_TABLES.dailyReport, row);
+      if(!save.ok){
+        const errMsg = safeTrim(save.error);
+        if(errMsg && /report_as_of_date|column|schema.cache/i.test(errMsg) && Object.prototype.hasOwnProperty.call(row, "report_as_of_date")){
+          const slim = { ...row };
+          delete slim.report_as_of_date;
+          save = await Storage.upsertSingleRow(SUPABASE_TABLES.dailyReport, slim);
+        }
+        if(!save.ok){
+          this.archiveLastError = save.error || "שמירת ארכיון חודשי נכשלה";
+          return save;
+        }
+      }
+      const entry = {
+        monthKey,
+        reportAsOfDate: normalizeDailyReportAsOfInput(report?.reportAsOfDate),
+        uploadedAt: safeTrim(row.uploaded_at),
+        uploadedByName: safeTrim(row.uploaded_by_name)
+      };
+      const without = (this.monthIndex || []).filter((m) => m.monthKey !== monthKey);
+      without.push(entry);
+      without.sort((a, b) => safeTrim(b.monthKey).localeCompare(safeTrim(a.monthKey)));
+      this.monthIndex = without;
+      return { ok: true, monthKey, report: mapDailyReportFromDb(row) };
+    },
+
+    async listMonthArchives(){
+      this.archiveLastError = "";
+      const lightSelect = "id,report_as_of_date,uploaded_at,uploaded_by_name";
+      let res = await Storage.loadTableRows(SUPABASE_TABLES.dailyReport, lightSelect);
+      if(!res.ok){
+        const errMsg = safeTrim(res.error);
+        if(errMsg && /report_as_of_date|column|schema.cache/i.test(errMsg)){
+          res = await Storage.loadTableRows(SUPABASE_TABLES.dailyReport, "id,uploaded_at,uploaded_by_name");
+        }
+      }
+      if(!res.ok){
+        this.archiveLastError = res.error || "טעינת ארכיון חודשים נכשלה";
+        return { ok: false, error: this.archiveLastError, months: this.monthIndex };
+      }
+      const rows = Array.isArray(res.data) ? res.data : [];
+      const months = [];
+      rows.forEach((row) => {
+        const monthKey = parseDailyReportMonthArchiveId(row?.id);
+        if(!monthKey) return;
+        months.push({
+          monthKey,
+          reportAsOfDate: normalizeDailyReportAsOfInput(row.report_as_of_date || row.reportAsOfDate),
+          uploadedAt: safeTrim(row.uploaded_at || row.uploadedAt),
+          uploadedByName: safeTrim(row.uploaded_by_name || row.uploadedByName)
+        });
+      });
+      months.sort((a, b) => safeTrim(b.monthKey).localeCompare(safeTrim(a.monthKey)));
+      this.monthIndex = months;
+      return { ok: true, months };
+    },
+
+    async fetchMonthArchive(monthKey){
+      this.archiveLastError = "";
+      const key = safeTrim(monthKey);
+      const id = dailyReportMonthArchiveId(key);
+      if(!id){
+        this.archiveLastError = "חודש לא תקין";
+        return { ok: false, error: this.archiveLastError };
+      }
+      const res = await Storage.loadSingleRow(SUPABASE_TABLES.dailyReport, id, "*");
+      if(!res.ok){
+        this.archiveLastError = res.error || "טעינת ארכיון חודשי נכשלה";
+        return { ok: false, error: this.archiveLastError };
+      }
+      if(!res.data){
+        this.archiveLastError = "לא נמצא דוח לחודש שנבחר";
+        this.viewMonthKey = "";
+        this.archiveReport = null;
+        return { ok: false, error: this.archiveLastError };
+      }
+      this.viewMonthKey = key;
+      this.archiveReport = mapDailyReportFromDb(res.data);
+      invalidateDailyReportOwnershipCache();
+      return { ok: true, report: this.archiveReport, monthKey: key };
+    },
+
+    async selectViewMonth(monthKey){
+      const key = safeTrim(monthKey);
+      if(!key){
+        this.viewMonthKey = "";
+        this.archiveReport = null;
+        invalidateDailyReportOwnershipCache();
+        return { ok: true, report: this.report };
+      }
+      return this.fetchMonthArchive(key);
     },
 
     getAgentSummary(){
-      const map = new Map();
-      (this.report?.dataRows || []).forEach((row) => {
-        const key = normalizeDailyReportAgentKey(row.agent) || "— ללא נציג";
-        map.set(key, (map.get(key) || 0) + 1);
-      });
-      return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], "he"));
+      return this.getAgentSummaryFor(this.report);
     },
 
     getIssuedRows(){
@@ -66634,6 +66798,7 @@ const CampaignLeadsStore = {
     filterTeam: "",
     filterPlan: "",
     _navFetchInFlight: false,
+    _monthSelectBusy: false,
     _rubricEls: {},
 
     initRubrics(){
@@ -66743,6 +66908,8 @@ const CampaignLeadsStore = {
       this.els.btnClearFilters = document.getElementById("btnDailyReportClearFilters");
       this.els.asOfPickWrap = document.getElementById("dailyReportAsOfPickWrap");
       this.els.asOfDate = document.getElementById("dailyReportAsOfDate");
+      this.els.monthPickWrap = document.getElementById("dailyReportMonthPickWrap");
+      this.els.monthSelect = document.getElementById("dailyReportMonthSelect");
       this.els.thead = document.getElementById("dailyReportThead");
       this.els.tbody = document.getElementById("dailyReportTbody");
       this.els.btnUpload = document.getElementById("btnDailyReportUpload");
@@ -66753,6 +66920,7 @@ const CampaignLeadsStore = {
       if(this.els.btnUpload) on(this.els.btnUpload, "click", () => this.onUploadClick());
       if(this.els.fileInput) on(this.els.fileInput, "change", (ev) => void this.onFileSelected(ev));
       if(this.els.btnRefresh) on(this.els.btnRefresh, "click", () => void this.refresh(true));
+      if(this.els.monthSelect) on(this.els.monthSelect, "change", () => void this.onMonthSelectChange());
       if(this.els.search) on(this.els.search, "input", perfDebounce(() => {
         this.searchQuery = safeTrim(this.els.search?.value);
         this.paint();
@@ -66771,6 +66939,49 @@ const CampaignLeadsStore = {
       if(this.els.btnClearFilters) on(this.els.btnClearFilters, "click", () => this.clearFilters());
     },
 
+    paintMonthSelect(){
+      const el = this.els.monthSelect;
+      const wrap = this.els.monthPickWrap;
+      if(!el || !wrap) return;
+      const months = Array.isArray(DailyReportStore.monthIndex) ? DailyReportStore.monthIndex : [];
+      const selected = safeTrim(DailyReportStore.viewMonthKey);
+      const opts = [`<option value="">דוח נוכחי</option>`]
+        .concat(months.map((m) => {
+          const key = safeTrim(m?.monthKey);
+          if(!key) return "";
+          return `<option value="${escapeHtml(key)}">${escapeHtml(formatDailyReportMonthLabel(key))}</option>`;
+        }).filter(Boolean));
+      this._monthSelectBusy = true;
+      try {
+        el.innerHTML = opts.join("");
+        el.value = months.some((m) => safeTrim(m?.monthKey) === selected) ? selected : "";
+        if(el.value !== selected && selected){
+          // חודש נבחר שלא ברשימה — מציגים בכל זאת
+          el.insertAdjacentHTML("beforeend", `<option value="${escapeHtml(selected)}">${escapeHtml(formatDailyReportMonthLabel(selected))}</option>`);
+          el.value = selected;
+        }
+      } finally {
+        this._monthSelectBusy = false;
+      }
+      wrap.hidden = false;
+    },
+
+    async onMonthSelectChange(){
+      if(this._monthSelectBusy) return;
+      const monthKey = safeTrim(this.els.monthSelect?.value);
+      this.clearFilters();
+      this.showAlert(monthKey ? "טוען דוח חודשי…" : "טוען דוח נוכחי…", "warn");
+      const r = await DailyReportStore.selectViewMonth(monthKey);
+      if(!r.ok){
+        this.showAlert(r.error || DailyReportStore.archiveLastError || "טעינת חודש נכשלה", "err");
+        this.paintMonthSelect();
+        this.paint();
+        return;
+      }
+      this.showAlert("");
+      this.paint();
+    },
+
     async exportToExcel(){
       try {
         if(window.GI_LOAD_LIBS?.xlsx) await window.GI_LOAD_LIBS.xlsx();
@@ -66778,7 +66989,7 @@ const CampaignLeadsStore = {
           this.showAlert("ספריית Excel לא נטענה — רענן את הדף ונסה שוב", "err");
           return;
         }
-        const report = DailyReportStore.report;
+        const report = DailyReportStore.getViewReport();
         if(!report || !Array.isArray(report.headerRow) || !report.headerRow.length){
           this.showAlert("טרם הועלה דוח יומי", "warn");
           return;
@@ -66787,7 +66998,7 @@ const CampaignLeadsStore = {
         const colCount = headers.length;
         const rows = (Auth.isAdmin() || Auth.isManager())
           ? (Array.isArray(report.dataRows) ? report.dataRows : [])
-          : DailyReportStore.getVisibleRows();
+          : DailyReportStore.getVisibleRowsFor(report);
         if(!rows.length){
           this.showAlert("אין שורות לייצוא", "warn");
           return;
@@ -66810,9 +67021,11 @@ const CampaignLeadsStore = {
         window.XLSX.utils.book_append_sheet(wb, ws, sheetLabel.slice(0, 31));
         const now = new Date();
         const ds = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0")].join("-");
+        const viewMonth = safeTrim(DailyReportStore.viewMonthKey);
         const asOf = normalizeDailyReportAsOfInput(report.reportAsOfDate);
-        let fileName = "דוח_יומי_GEMEL_INVEST";
-        if(asOf) fileName += "_" + asOf;
+        let fileName = viewMonth ? "דוח_מכירות_חודשי_GEMEL_INVEST" : "דוח_יומי_GEMEL_INVEST";
+        if(viewMonth) fileName += "_" + viewMonth;
+        else if(asOf) fileName += "_" + asOf;
         else fileName += "_" + ds;
         if(!Auth.isAdmin() && !Auth.isManager()){
           const agentName = safeTrim(Auth?.current?.name) || safeTrim(Auth?.current?.username) || "נציג";
@@ -66820,7 +67033,7 @@ const CampaignLeadsStore = {
         }
         fileName += ".xlsx";
         window.XLSX.writeFile(wb, fileName);
-        if(typeof toast === "function") toast("דוח יומי הופק", fileName);
+        if(typeof toast === "function") toast(viewMonth ? "דוח חודשי הופק" : "דוח יומי הופק", fileName);
       } catch(err) {
         console.error("dailyReport exportToExcel error:", err);
         this.showAlert("שגיאה בייצוא: " + (err?.message || err), "err");
@@ -66875,8 +67088,8 @@ const CampaignLeadsStore = {
 
     paintFilterOptions(report){
       const stamp = report
-        ? safeTrim(report.uploadedAt) + "|" + (report.dataRows?.length || 0) + "|" + (report.headerRow?.length || 0)
-        : "";
+        ? safeTrim(report.uploadedAt) + "|" + (report.dataRows?.length || 0) + "|" + (report.headerRow?.length || 0) + "|" + safeTrim(DailyReportStore.viewMonthKey)
+        : "|" + safeTrim(DailyReportStore.viewMonthKey);
       const syncValues = () => {
         if(this.els.filterAgent && !this.els.filterAgent.hidden) this.els.filterAgent.value = this.filterAgent;
         if(this.els.filterStatus) this.els.filterStatus.value = this.filterStatus;
@@ -66888,7 +67101,8 @@ const CampaignLeadsStore = {
         return;
       }
       this._filterOptionsStamp = stamp;
-      const baseRows = DailyReportStore.getVisibleRows();
+      const viewReport = DailyReportStore.getViewReport();
+      const baseRows = DailyReportStore.getVisibleRowsFor(viewReport);
       const cols = this.getColumnIndexes(report);
       const fillSelect = (el, placeholder, values, current) => {
         if(!el) return;
@@ -66901,7 +67115,7 @@ const CampaignLeadsStore = {
       if(this.els.filterAgent){
         this.els.filterAgent.hidden = !canPickAgent;
         if(canPickAgent){
-          let agents = DailyReportStore.getAgentSummary().map(([name]) => name).filter((n) => n && n !== "— ללא נציג");
+          let agents = DailyReportStore.getAgentSummaryFor(viewReport).map(([name]) => name).filter((n) => n && n !== "— ללא נציג");
           if(Auth.isTeamManager()){
             const allowed = new Set(
               getManagedAgentRecordsForTeamManager(safeTrim(Auth?.current?.id))
@@ -66970,27 +67184,56 @@ const CampaignLeadsStore = {
       }
       const stamp = nowISO();
       this.clearFilters();
-      const save = await DailyReportStore.saveActive({
+      const payload = {
         uploadedAt: stamp,
         uploadedByName: safeTrim(Auth?.current?.name) || "מנהל",
         reportAsOfDate,
         sheetName: parsed.sheetName,
         headerRow: parsed.headerRow,
         dataRows: parsed.dataRows
-      });
-      if(this.els.btnUpload) this.els.btnUpload.disabled = false;
-      if(!save.ok){
-        this.showAlert("שמירה נכשלה: " + (save.error || ""), "err");
-        return;
+      };
+      const monthKey = dailyReportMonthKeyFromAsOf(reportAsOfDate);
+      const updateActive = isDailyReportAsOfInCurrentMonth(reportAsOfDate);
+
+      if(updateActive){
+        const save = await DailyReportStore.saveActive(payload);
+        if(this.els.btnUpload) this.els.btnUpload.disabled = false;
+        if(!save.ok){
+          this.showAlert("שמירה נכשלה: " + (save.error || ""), "err");
+          return;
+        }
+        const arch = await DailyReportStore.saveMonthArchive(payload);
+        await DailyReportStore.selectViewMonth("");
+        await DailyReportStore.listMonthArchives();
+        this.paint();
+        if(typeof toast === "function") toast("דוח יומי הועלה", formatDailyReportUploadDate(stamp));
+        if(arch.ok){
+          this.showAlert("הדוח נשמר בהצלחה — " + parsed.dataRows.length + " שורות · עודכן גם ארכיון " + formatDailyReportMonthLabel(monthKey), "ok");
+        } else {
+          this.showAlert("הדוח היומי נשמר (" + parsed.dataRows.length + " שורות), אך ארכיון חודשי נכשל: " + (arch.error || DailyReportStore.archiveLastError || ""), "warn");
+        }
+      } else {
+        const arch = await DailyReportStore.saveMonthArchive(payload);
+        if(this.els.btnUpload) this.els.btnUpload.disabled = false;
+        if(!arch.ok){
+          this.showAlert("שמירת ארכיון חודשי נכשלה: " + (arch.error || ""), "err");
+          return;
+        }
+        await DailyReportStore.listMonthArchives();
+        await DailyReportStore.selectViewMonth(monthKey);
+        this.paint();
+        if(typeof toast === "function") toast("ארכיון חודשי עודכן", formatDailyReportMonthLabel(monthKey));
+        this.showAlert(
+          "הדוח נשמר לארכיון " + formatDailyReportMonthLabel(monthKey)
+            + " — " + parsed.dataRows.length + " שורות (הדוח היומי הנוכחי לא שונה)",
+          "ok"
+        );
       }
-      if(typeof toast === "function") toast("דוח יומי הועלה", formatDailyReportUploadDate(stamp));
-      this.showAlert("הדוח נשמר בהצלחה — " + parsed.dataRows.length + " שורות", "ok");
-      this.paint();
       try {
-        if(LiveRefresh.getCurrentView() === "dashboard" && DashboardUI.els?.root?.querySelector(".bankDash__kpis")) {
+        if(updateActive && LiveRefresh.getCurrentView() === "dashboard" && DashboardUI.els?.root?.querySelector(".bankDash__kpis")) {
           DashboardUI.refreshKpis();
         }
-        if(LiveRefresh.getCurrentView() === "myTeam") void MyTeamUI.render();
+        if(updateActive && LiveRefresh.getCurrentView() === "myTeam") void MyTeamUI.render();
       } catch(_e){}
     },
 
@@ -67044,13 +67287,15 @@ const CampaignLeadsStore = {
       }
       const uploadLabel = formatDailyReportUploadDate(report.uploadedAt);
       const parts = [`תאריך העלאה: ${uploadLabel}`];
+      const viewMonth = safeTrim(DailyReportStore.viewMonthKey);
+      if(viewMonth) parts.unshift("ארכיון: " + formatDailyReportMonthLabel(viewMonth));
       if(safeTrim(report.uploadedByName)) parts.push("הועלה על ידי: " + report.uploadedByName);
       if(safeTrim(report.sheetName)) parts.push("גיליון: " + report.sheetName);
       const total = Number(totalVisible) || 0;
       const shown = Number(filteredCount) || 0;
       parts.push(this.hasActiveFilters() ? `מוצגות ${shown} מתוך ${total} שורות` : `מוצגות ${shown} שורות`);
       if(Auth.isAdmin() || Auth.isManager()){
-        const summary = DailyReportStore.getAgentSummary();
+        const summary = DailyReportStore.getAgentSummaryFor(report);
         if(summary.length){
           parts.push("פילוח: " + summary.map(([name, cnt]) => `${name} (${cnt})`).join(" · "));
         }
@@ -67060,11 +67305,18 @@ const CampaignLeadsStore = {
 
     paintTitle(report){
       if(this.els.title) this.els.title.textContent = "דוח יומי";
+      const viewMonth = safeTrim(DailyReportStore.viewMonthKey);
       const asOfLabel = report ? formatDailyReportAsOfDate(report.reportAsOfDate) : "";
       if(this.els.asOfLine){
-        if(asOfLabel){
+        if(viewMonth && asOfLabel){
+          this.els.asOfLine.hidden = false;
+          this.els.asOfLine.textContent = formatDailyReportMonthLabel(viewMonth) + " · נכון לתאריך " + asOfLabel;
+        } else if(asOfLabel){
           this.els.asOfLine.hidden = false;
           this.els.asOfLine.textContent = "נכון לתאריך " + asOfLabel;
+        } else if(viewMonth){
+          this.els.asOfLine.hidden = false;
+          this.els.asOfLine.textContent = "ארכיון " + formatDailyReportMonthLabel(viewMonth);
         } else {
           this.els.asOfLine.hidden = true;
           this.els.asOfLine.textContent = "";
@@ -67073,7 +67325,8 @@ const CampaignLeadsStore = {
       // GI-PREMIUM-STATS: המלל ההסברי הוסר מהכותרת והוחלף במוני פרמיה (paintPremiumStats).
       const canUpload = Auth.canUploadDailyReport();
       if(this.els.asOfPickWrap) this.els.asOfPickWrap.hidden = !canUpload;
-      if(this.els.asOfDate && canUpload && report?.reportAsOfDate){
+      // לא לדרוס את תאריך ההעלאה כשצופים בארכיון חודשי.
+      if(this.els.asOfDate && canUpload && report?.reportAsOfDate && !viewMonth){
         this.els.asOfDate.value = normalizeDailyReportAsOfInput(report.reportAsOfDate);
       }
     },
@@ -67133,14 +67386,14 @@ const CampaignLeadsStore = {
     },
 
     getFilteredRows(){
-      const report = DailyReportStore.report;
+      const report = DailyReportStore.getViewReport();
       const cols = this.getColumnIndexes(report);
       const q = safeTrim(this.searchQuery).toLowerCase();
       const fAgent = safeTrim(this.filterAgent);
       const fStatus = safeTrim(this.filterStatus);
       const fTeam = safeTrim(this.filterTeam);
       const fPlan = safeTrim(this.filterPlan);
-      let rows = DailyReportStore.getVisibleRows();
+      let rows = DailyReportStore.getVisibleRowsFor(report);
       if(fAgent){
         rows = rows.filter((row) => normalizeDailyReportAgentKey(row.agent) === fAgent);
       }
@@ -67161,8 +67414,8 @@ const CampaignLeadsStore = {
     },
 
     paint(){
-      const report = DailyReportStore.report;
-      const totalVisible = DailyReportStore.getVisibleRows().length;
+      const report = DailyReportStore.getViewReport();
+      const totalVisible = DailyReportStore.getVisibleRowsFor(report).length;
       const rows = this.getFilteredRows();
       const canUpload = Auth.canUploadDailyReport();
       if(this.els.btnUpload){
@@ -67173,11 +67426,14 @@ const CampaignLeadsStore = {
       if(this.els.btnRefresh) this.els.btnRefresh.hidden = !canUpload;
       if(this.els.fileInput) this.els.fileInput.hidden = !canUpload;
       if(this.els.filters) this.els.filters.hidden = !report;
+      this.paintMonthSelect();
       if(report) this.paintFilterOptions(report);
       if(!DailyReportStore.tableReady){
         this.showAlert("יש להריץ את supabase/gi-daily-report-schema.sql ב-Supabase (טבלה gi_daily_report)", "warn");
-      } else if(!report && canUpload) {
+      } else if(!report && canUpload && !safeTrim(DailyReportStore.viewMonthKey)) {
         this.showAlert("", "ok");
+      } else if(!report && safeTrim(DailyReportStore.viewMonthKey)) {
+        this.showAlert("לא נמצא דוח לחודש שנבחר", "warn");
       } else {
         this.showAlert("");
       }
@@ -67211,7 +67467,7 @@ const CampaignLeadsStore = {
         return;
       }
       if(!this.els.thead) this.init();
-      const hadCache = !!DailyReportStore.report;
+      const hadCache = !!DailyReportStore.getViewReport();
       if(hadCache){
         try { this.paint(); } catch(_e) {}
       } else {
@@ -67234,6 +67490,15 @@ const CampaignLeadsStore = {
       const r = await DailyReportStore.fetchActive();
       if(!r.ok && DailyReportStore.lastError){
         this.showAlert("לא נטען דוח: " + DailyReportStore.lastError, "err");
+      }
+      await DailyReportStore.listMonthArchives();
+      const viewMonth = safeTrim(DailyReportStore.viewMonthKey);
+      if(viewMonth){
+        const arch = await DailyReportStore.fetchMonthArchive(viewMonth);
+        if(!arch.ok){
+          DailyReportStore.viewMonthKey = "";
+          DailyReportStore.archiveReport = null;
+        }
       }
       if(options.onlyIfVisible && LiveRefresh.getCurrentView() !== "dailyReport") return;
       this.paint();

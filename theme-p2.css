@@ -3510,6 +3510,7 @@
 }
 .lcReportNav__actionsInner .btn{ white-space:nowrap; }
 .lcReportNav__actionsInner .lcDailyReport__asOfPick{ margin:0; }
+.lcReportNav__actionsInner .lcDailyReport__monthPick{ margin:0; }
 
 @media (max-width:900px){
   .lcReportNav{ flex-wrap:wrap; }
