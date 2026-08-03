@@ -29499,8 +29499,11 @@ init(){
       ins.data.birthDate = "";
       ins.data.gender = "";
       ins.data.maritalStatus = "";
-      ins.data.clinic = "";
-      ins.data.shaban = "";
+      /* GI-FIX 2026-08-03: קודם אופסה כאן הקופה (clinic="" / shaban="") וכל
+         מבוטח נוסף נפתח ריק. כעת הוא יורש את הקופה של הראשי — data כבר הועתק
+         ממנו למעלה, ולכן די בכך שלא נאפס. הדגל מאופס במפורש כדי שהירושה לא
+         תיחשב בטעות כדריסה ידנית, ושינוי עתידי אצל הראשי עדיין יגיע לכאן. */
+      ins.data.clinicManualOverride = false;
       ins.data.occupation = "";
       ins.data.heightCm = "";
       ins.data.weightKg = "";
@@ -29509,7 +29512,9 @@ init(){
       ins.data.cancellations = {};
       ins.data.newPolicies = [];
       // child inherits contact/address from primary later in render/validate
+      this.syncInsuredShabanForClinic(ins);
       this.insureds.push(ins);
+      this.propagateClinicFromPrimary();
       this.activeInsId = ins.id;
       this.render();
       this.setHint("נוסף: " + label);
@@ -30475,9 +30480,9 @@ init(){
           if(path === "firstName" || path === "lastName"){
             this.updateInsuredLiveUi(ins);
           }
-          // special: step1 clinic -> shaban options reset
+          // special: step1 clinic -> shaban options reset + גרירה לשאר המבוטחים
           if(path === "clinic"){
-            this.syncInsuredShabanForClinic(ins);
+            this.applyClinicChangeForInsured(ins);
             this.render(); // rerender to refresh selects
             return;
           }
@@ -37333,8 +37338,27 @@ if(path === "birthDate"){
     },
 
 
+    /** GI-FIX 2026-08-03: רשת ביטחון עבור טיוטות שנשמרו לפני השינוי — שם
+        קיימות פוליסות עם סטטוס ביטול אך ללא אופן ביצוע, והן לא עוברות שוב
+        דרך מטפל השינוי. מיישם את ברירת המחדל פעם אחת, בלי לגעת בערך שנבחר. */
+    ensureDefaultCancellationExecutionMethods(ins){
+      const rows = ins?.data?.cancellations;
+      if(!rows || typeof rows !== "object") return 0;
+      let n = 0;
+      Object.keys(rows).forEach((pid) => {
+        const row = rows[pid];
+        if(!row || typeof row !== "object") return;
+        if(!this.isCancellationExecutionMethodRequired(safeTrim(row.status))) return;
+        if(safeTrim(row.executionMethod || row.cancellationExecutionMethod)) return;
+        row.executionMethod = this.DEFAULT_CANCELLATION_EXECUTION_METHOD;
+        n++;
+      });
+      return n;
+    },
+
     renderStep3(ins){
       const d = ins.data;
+      try { this.ensureDefaultCancellationExecutionMethods(ins); } catch(_e) {}
       const importState = this.getHarImportState(ins);
       const anyHealth = (d.existingPolicies || []).some(x => x && x.type === "בריאות");
       const anyIncluded = (d.existingPolicies || []).some(x => Array.isArray(x?.includedProducts) && x.includedProducts.length);
@@ -37623,7 +37647,7 @@ if(path === "birthDate"){
           this.setPath(ins.data, path, v);
 
           if(path === "clinic"){
-            this.syncInsuredShabanForClinic(ins);
+            this.applyClinicChangeForInsured(ins);
             this.render();
             return;
           }
@@ -38167,11 +38191,63 @@ if(path === "birthDate"){
       return this.fieldSelect("שב״ן", bind, shaban, options);
     },
 
+    /* ===== GI-FIX 2026-08-03 · גרירת קופת חולים מהמבוטח הראשי =====
+       כל מבוטח החזיק clinic משלו, וכל מבוטח נוסף (בן/בת זוג, קטין) נפתח ריק
+       והצריך מילוי חוזר. כעת הקופה של הראשי נגררת לשאר המבוטחים, אך נשארת
+       ניתנת לדריסה: ברגע שהמשתמש בחר ידנית קופה למבוטח שאינו הראשי, נדלק
+       הדגל clinicManualOverride והגרירה מפסיקה לגעת בו — כך ששינוי עתידי
+       אצל הראשי לא ידרוס בחזרה תיקון שנעשה במכוון. */
+
+    getPrimaryInsured(){
+      const list = Array.isArray(this.insureds) ? this.insureds : [];
+      return list.find((x) => x && x.type === "primary") || list[0] || null;
+    },
+
+    isPrimaryInsured(ins){
+      const primary = this.getPrimaryInsured();
+      return !!(ins && primary && ins === primary);
+    },
+
+    markInsuredClinicManual(ins){
+      if(!ins || !ins.data) return;
+      ins.data.clinicManualOverride = true;
+    },
+
+    /** גורר את הקופה (והשב״ן, שתלוי בה) מהראשי לכל מי שלא נדרס ידנית.
+        מחזיר את מספר המבוטחים שעודכנו בפועל. */
+    propagateClinicFromPrimary(){
+      const primary = this.getPrimaryInsured();
+      if(!primary || !primary.data) return 0;
+      const clinic = safeTrim(primary.data.clinic);
+      const shaban = safeTrim(primary.data.shaban);
+      const list = Array.isArray(this.insureds) ? this.insureds : [];
+      let changed = 0;
+      list.forEach((ins) => {
+        if(!ins || !ins.data || ins === primary) return;
+        if(ins.data.clinicManualOverride) return;
+        if(safeTrim(ins.data.clinic) === clinic && safeTrim(ins.data.shaban) === shaban) return;
+        ins.data.clinic = clinic;
+        ins.data.shaban = shaban;
+        // מנקה/מתקן את השב״ן אם אינו חוקי לקופה הזו (וכולל את המקרה הצה״לי)
+        this.syncInsuredShabanForClinic(ins);
+        changed++;
+      });
+      return changed;
+    },
+
+    /** נקודת כניסה אחידה לכל שינוי קופה, מכל אחד מהבינדים. */
+    applyClinicChangeForInsured(ins){
+      if(!ins) return;
+      this.syncInsuredShabanForClinic(ins);
+      if(this.isPrimaryInsured(ins)) this.propagateClinicFromPrimary();
+      else this.markInsuredClinicManual(ins);
+    },
+
     bindHmoClinicDropdownForInsured(ins){
       if(!this.els.body || !ins) return;
       bindHmoClinicDropdown(this.els.body, (val) => {
         ins.data.clinic = val;
-        this.syncInsuredShabanForClinic(ins);
+        this.applyClinicChangeForInsured(ins);
         const hidden = this.els.body.querySelector('[data-bind="clinic"]');
         if(hidden) hidden.value = val;
         this.render();
@@ -42773,6 +42849,12 @@ if(path === "birthDate"){
       return clean;
     },
 
+    /* GI-FIX 2026-08-03: אופן ביצוע הביטול נפתח ריק, ולכן בכל פוליסה שסומנה
+       «ביטול מלא»/«ביטול חלקי» היה צריך לבחור ידנית — אחרת הולידציה חוסמת.
+       כעת «באמצעות הנציג המטפל» נבחר כברירת מחדל ברגע שנדרש, וניתן לשנות.
+       הערך נכתב בפועל ל-data (ולא רק מוצג), כדי שהולידציה תראה אותו. */
+    DEFAULT_CANCELLATION_EXECUTION_METHOD: 'agent',
+
     syncCancellationExecutionMethodState(insured = null, policyId = ''){
       const ins = insured || this.getActive();
       const pid = safeTrim(policyId);
@@ -42782,7 +42864,10 @@ if(path === "birthDate"){
         this.setCancellationExecutionMethodValue('', ins, pid);
         return '';
       }
-      return this.getCancellationExecutionMethodValue(ins, pid);
+      // בחירה ידנית קיימת גוברת תמיד — כולל במעבר בין ביטול מלא לחלקי
+      const current = this.getCancellationExecutionMethodValue(ins, pid);
+      if(current) return current;
+      return this.setCancellationExecutionMethodValue(this.DEFAULT_CANCELLATION_EXECUTION_METHOD, ins, pid);
     },
 
     ensureCancellationExecutionMethodBeforeStep3Exit(){
