@@ -8,7 +8,7 @@
 
   const GI_MAX_DISCOUNT_YEARS = 50;   // GI-FIX-DISCOUNT-YEARS
   const GI_MAX_PLEDGE_BANKS = 2;      // GI-PLEDGE-MULTI 2026-08-04 — עד שני בנקים משעבדים בפוליסה
-  const BUILD = "20260804-pledge-multi-bank-v2";
+  const BUILD = "20260804-benef-dup-fix-v3";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -41626,6 +41626,16 @@ if(path === "birthDate"){
     },
 
     renderStep5(){
+      /* GI-FIX 2026-08-04 · כפילות מאזינים בשלב 5 =========================
+         קשירת המאזינים למטה יושבת ב-setTimeout, כלומר רצה בסוף ה-tick.
+         handler שקורא ל-this.render() באופן סינכרוני גרם למספר רנדרים
+         באותו tick, וכל אחד מהם תזמן קשירה נוספת — שכולן רצו אחרי
+         ה-innerHTML האחרון ונקשרו לאותם אלמנטים. מספר המאזינים הכפיל
+         את עצמו בכל לחיצה (1 → 3 → 7 → 15 מוטבים).
+         הפתרון: כל render מקבל אסימון. רק הקשירה של הרנדר האחרון רצה;
+         קשירות של רנדרים מיושנים מבטלות את עצמן.
+      ==================================================================== */
+      const step5RenderToken = (this._step5RenderToken = (this._step5RenderToken || 0) + 1);
       this.ensurePolicyDraft();
       const d = this.policyDraft;
       const spouse = this.insureds.find(x => x.type === "spouse");
@@ -42283,6 +42293,9 @@ if(path === "birthDate"){
 
       // ── Bind handlers ──
       setTimeout(() => {
+        // GI-FIX 2026-08-04: רנדר מיושן — הקשירה שלו כבר לא רלוונטית.
+        // בלי השורה הזו כל רנדר נוסף באותו tick מוסיף מאזין כפול.
+        if(step5RenderToken !== this._step5RenderToken) return;
         // GI-FIX 41194: כל render של שלב 5 רשם מאזין click חדש על document
         // ולא הסיר את הקודם, כך שהם נערמו לאורך הסשן. מסירים תמיד את הקודם
         // לפני רישום חדש — בדיוק כמו התבנית של dropdown קופת חולים (שורה 500).
@@ -42358,6 +42371,9 @@ if(path === "birthDate"){
             this.policyDraft.pledge = false;
             this.policyDraft.pledgeBanks = [this.emptyPledgeBank()];
             this.normalizePledgeBanks(this.policyDraft);
+            // GI-FIX 2026-08-04: החלפת חברה איפסה שיעבוד אך לא מוטבים,
+            // כך שמוטבים נגררו מפוליסה קודמת לפוליסה החדשה.
+            this.policyDraft.beneficiaries = [];
             this.render();
           });
           this._lcNpCoDdOutsideHandler = function closeDdOutside(ev){
