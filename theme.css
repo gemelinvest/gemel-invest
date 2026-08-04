@@ -635,8 +635,9 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
 .bankKpi:not(#\9):not(#\9){
   position: relative;
   padding: var(--gi-s5) !important;
-  /* gutter on the visual left (inline-end under RTL) reserved for the icon badge */
-  padding-inline-end: 84px !important;
+  /* gutter on the visual right (inline-start under RTL) reserved for the icon badge */
+  padding-inline-start: 84px !important;
+  padding-inline-end: var(--gi-s5) !important;
   background: var(--gi-surface) !important;
   border: 1px solid var(--gi-border) !important;
   border-radius: var(--gi-r-card) !important;
@@ -679,13 +680,15 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
 .bankKpi__delta.is-up:not(#\9):not(#\9){   color: var(--gi-success) !important; }
 .bankKpi__delta.is-down:not(#\9):not(#\9){ color: var(--gi-danger) !important; }
 
-/* Icon badge: circular, opposite the title+value stack (name top, number below) */
+/* Icon badge: circular, on the RIGHT (inline-start in RTL), next to title+value */
 .bankKpi__watermark:not(#\9):not(#\9){
   position: absolute !important;
-  top: 50% !important;
-  inset-inline-start: auto !important;
-  inset-inline-end: var(--gi-s5) !important;
+  top: var(--gi-s5) !important;
+  inset-inline-end: auto !important;
+  inset-inline-start: var(--gi-s5) !important;
   bottom: auto !important;
+  left: auto !important;
+  right: auto !important;
   width: 48px !important;
   height: 48px !important;
   display: grid !important;
@@ -695,7 +698,7 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
   color: var(--gi-primary) !important;
   opacity: 1 !important;
   filter: none !important;
-  transform: translateY(-50%) !important;
+  transform: none !important;
   pointer-events: none;
   z-index: 2 !important;
 }
@@ -715,10 +718,11 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
 
 .bankKpi__caret:not(#\9):not(#\9){ color: var(--gi-text-muted) !important; opacity: .7; }
 
-/* Below the icon badge ? reclaim the reserved gutter */
+/* Detail button stays full-width under the metrics — no overlap with icon gutter */
 .bankKpi__detailBtn:not(#\9):not(#\9),
 .bankKpiToday__breakdown:not(#\9):not(#\9){
-  margin-inline-end: -60px !important;
+  margin-inline-end: 0 !important;
+  margin-inline-start: 0 !important;
 }
 
 .bankKpi__detailBtn:not(#\9):not(#\9){
@@ -1710,8 +1714,10 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 .bankKpi__watermark:not(#\9):not(#\9){
   display: grid !important;
   border-radius: 50% !important;
-  top: 50% !important;
-  transform: translateY(-50%) !important;
+  top: var(--gi-s5) !important;
+  inset-inline-start: var(--gi-s5) !important;
+  inset-inline-end: auto !important;
+  transform: none !important;
 }
 
 .bankKpi__he:not(#\9):not(#\9){
