@@ -25138,6 +25138,58 @@ UsersGateUI.init();
       return map[safeTrim(sector)] || "other";
     },
 
+    /* GI-FIX 2026-08-04 · מסך מעקב מכירות יומי — סינון לפי 4 ענפים.
+       «פרט» הוא תווית תצוגה בלבד; המקור בנתונים נשאר «סיכונים».
+       באלמנטרי הפרמיה המוצגת היא שנתית. */
+    dailySalesSectorTabs(){
+      return [
+        { key: "briut",  source: "בריאות",  label: "בריאות" },
+        { key: "prat",   source: "סיכונים", label: "פרט" },
+        { key: "elem",   source: "אלמנטרי", label: "אלמנטרי", annual: true },
+        { key: "pensia", source: "פנסיה",   label: "פנסיה" }
+      ];
+    },
+
+    dailySalesDisplaySectorLabel(sector){
+      const s = safeTrim(sector);
+      if(s === "סיכונים") return "פרט";
+      return s || "—";
+    },
+
+    getDailySalesSelectedSectorKey(){
+      const tabs = this.dailySalesSectorTabs();
+      const key = safeTrim(this._dailySalesSelectedSectorKey);
+      if(tabs.some((t) => t.key === key)) return key;
+      this._dailySalesSelectedSectorKey = "briut";
+      return "briut";
+    },
+
+    setDailySalesSelectedSectorKey(key){
+      const tabs = this.dailySalesSectorTabs();
+      const next = tabs.some((t) => t.key === key) ? key : "briut";
+      this._dailySalesSelectedSectorKey = next;
+      return next;
+    },
+
+    getDailySalesSelectedSectorTab(){
+      const key = this.getDailySalesSelectedSectorKey();
+      return this.dailySalesSectorTabs().find((t) => t.key === key) || this.dailySalesSectorTabs()[0];
+    },
+
+    filterDailySalesGroupsBySource(report, sourceSector){
+      const source = safeTrim(sourceSector);
+      const groups = Array.isArray(report?.groups) ? report.groups : [];
+      return groups.filter((g) => safeTrim(g?.sector) === source);
+    },
+
+    dailySalesFilteredSlice(report, sourceSector){
+      const groups = this.filterDailySalesGroupsBySource(report, sourceSector);
+      const premium = Math.round(groups.reduce((sum, g) => sum + (Number(g.premium) || 0), 0) * 100) / 100;
+      const deals = groups.reduce((sum, g) => sum + (Number(g.deals) || 0), 0);
+      const agents = new Set(groups.map((g) => g.agentName)).size;
+      return { groups, premium, deals, agents };
+    },
+
     /** מכירות אלמנטרי של אותו יום. מוצרי אלמנטרי יושבים ב-payload.elementaryPolicies
         ולא ב-newPolicies, ולכן collectNewPoliciesForMetrics לא מחזירה אותם כלל —
         לכן הם פשוט לא הופיעו בדוח. אין כאן סיכון לספירה כפולה: שני המקורות
@@ -25361,10 +25413,13 @@ UsersGateUI.init();
       }).join("") + `</div>`;
     },
 
-    renderDailySalesGroupRowsHtml(report){
-      const groups = Array.isArray(report?.groups) ? report.groups : [];
+    renderDailySalesGroupRowsHtml(report, options = {}){
+      const groups = Array.isArray(options.groups)
+        ? options.groups
+        : (Array.isArray(report?.groups) ? report.groups : []);
+      const emptyMsg = safeTrim(options.emptyMessage) || "אין מכירות ביום זה";
       if(!groups.length){
-        return `<tr><td colspan="5" class="giDailySalesPage__emptyCell">אין מכירות ביום זה</td></tr>`;
+        return `<tr><td colspan="5" class="giDailySalesPage__emptyCell">${escapeHtml(emptyMsg)}</td></tr>`;
       }
       let prevAgent = null;
       return groups.map((g) => {
@@ -25372,8 +25427,8 @@ UsersGateUI.init();
         prevAgent = g.agentName;
         const tone = this.agentSalesAvatarTone(g.agentName);
         const initials = this.agentSalesInitials(g.agentName);
-        // ענף שני ואילך של אותו נציג — האווטאר מוחלש כדי שהעין תזהה מיד
-        // שמדובר באותו אדם, בלי לחזור על השם בהבלטה מלאה
+        const displaySector = this.dailySalesDisplaySectorLabel(g.sector);
+        const sectorSlug = this.dailySalesSectorSlug(g.sector);
         const agentCell = isSameAgent
           ? `<td class="giDailySalesPage__agentCell is-repeat">
               <span class="giDailySalesPage__tie" aria-hidden="true"></span>
@@ -25385,7 +25440,7 @@ UsersGateUI.init();
             </td>`;
         return `<tr class="giDailySalesPage__row${isSameAgent ? " is-sameAgent" : ""}">
           ${agentCell}
-          <td><span class="giDailySalesPage__sector giDailySalesPage__sector--${escapeHtml(g.sectorSlug)}">${escapeHtml(g.sector)}</span></td>
+          <td><span class="giDailySalesPage__sector giDailySalesPage__sector--${escapeHtml(sectorSlug)}">${escapeHtml(displaySector)}</span></td>
           <td>${this.renderDailySalesChipsHtml(g.products)}</td>
           <td>${this.renderDailySalesChipsHtml(g.companies, "co")}</td>
           <td class="giDailySalesPage__premCell">
@@ -25393,6 +25448,19 @@ UsersGateUI.init();
             <span class="giDailySalesPage__dealsHint">${escapeHtml(this.dailySalesDealsWord(g.deals))}</span>
           </td>
         </tr>`;
+      }).join("");
+    },
+
+    renderDailySalesSectorTabsHtml(report){
+      const selected = this.getDailySalesSelectedSectorKey();
+      return this.dailySalesSectorTabs().map((tab) => {
+        const slice = this.dailySalesFilteredSlice(report, tab.source);
+        const on = tab.key === selected;
+        return `<button class="giDailySalesPage__sectorTab${on ? " is-active" : ""}" type="button" role="tab" aria-selected="${on ? "true" : "false"}" data-daily-sales-sector="${escapeHtml(tab.key)}">
+          <span class="giDailySalesPage__sectorTabLabel">${escapeHtml(tab.label)}</span>
+          <span class="giDailySalesPage__sectorTabValue">${escapeHtml(this.formatMoney(slice.premium))}</span>
+          <span class="giDailySalesPage__sectorTabMeta">${escapeHtml(String(slice.agents))} נציגים · ${escapeHtml(String(slice.deals))} עסקאות</span>
+        </button>`;
       }).join("");
     },
 
@@ -25421,31 +25489,15 @@ UsersGateUI.init();
       };
     },
 
-    renderDailySalesGroupSummaryHtml(report){
-      const agents = Number(report?.groupAgentCount) || 0;
-      const deals = Number(report?.groupDealCount) || 0;
-      const total = Number(report?.groupTotalPremium) || 0;
-      const avg = agents > 0 ? Math.round((total / agents) * 100) / 100 : 0;
-      const b = this.dailySalesBranchTotals(report);
-      const splitItems = [
-        { label: "סיכונים", value: b.risks, slug: "sikunim" },
-        { label: "בריאות", value: b.health, slug: "briut" },
-        { label: "סה״כ בריאות+סיכונים", value: b.risks + b.health, slug: "briut" },
-        { label: "אלמנטרי", value: b.elementary, slug: "almanteri" },
-        { label: "פנסיה", value: b.pension, slug: "pensia" }
-      ];
-      // 'אחר' נכנס רק אם באמת נצבר בו סכום, כדי לא להוסיף רעש לסרגל
-      if(b.other > 0) splitItems.push({ label: "אחר", value: b.other, slug: "other" });
-      const split = `<div class="giDailySalesPage__split">` + splitItems.map((item) => `
-          <div class="giDailySalesPage__splitItem giDailySalesPage__splitItem--${escapeHtml(item.slug)}${item.value > 0 ? "" : " is-zero"}">
-            <span class="giDailySalesPage__splitLbl">${escapeHtml(item.label)}</span>
-            <span class="giDailySalesPage__splitVal">${escapeHtml(this.formatMoney(item.value))}</span>
-          </div>`).join("") + `</div>`;
+    renderDailySalesGroupSummaryHtml(report, options = {}){
+      const tab = options.tab || this.getDailySalesSelectedSectorTab();
+      const slice = options.slice || this.dailySalesFilteredSlice(report, tab.source);
+      const premLabel = tab.annual ? "סה״כ פרמיה שנתית" : "סה״כ פרמיה";
       return `
-        <div class="giDailySalesPage__stat"><span>נציגים</span><strong>${escapeHtml(this.dailySalesAgentsWord(agents))}</strong></div>
-        <div class="giDailySalesPage__stat"><span>עסקאות</span><strong>${escapeHtml(this.dailySalesDealsWord(deals))}</strong></div>
-        <div class="giDailySalesPage__stat"><span>ממוצע לנציג</span><strong>${escapeHtml(this.formatMoney(avg))}</strong></div>
-        <div class="giDailySalesPage__stat giDailySalesPage__stat--prem"><span>סה״כ פרמיה</span><strong>${escapeHtml(this.formatMoney(total))}</strong>${split}</div>`;
+        <div class="giDailySalesPage__stat"><span>ענף נבחר</span><strong>${escapeHtml(tab.label)}</strong></div>
+        <div class="giDailySalesPage__stat"><span>נציגים</span><strong>${escapeHtml(this.dailySalesAgentsWord(slice.agents))}</strong></div>
+        <div class="giDailySalesPage__stat"><span>עסקאות</span><strong>${escapeHtml(this.dailySalesDealsWord(slice.deals))}</strong></div>
+        <div class="giDailySalesPage__stat giDailySalesPage__stat--prem"><span>${escapeHtml(premLabel)}</span><strong>${escapeHtml(this.formatMoney(slice.premium))}</strong></div>`;
     },
 
     renderDailySalesSummaryHtml(report){
@@ -25469,8 +25521,9 @@ UsersGateUI.init();
       const printBtn = document.getElementById("btnDailySalesPrint");
       const dateInput = document.getElementById("dailySalesDateInput");
       const dateWrap = document.querySelector("#view-dailySales .giDailySalesPage__dateWrap");
+      const sectorsEl = document.getElementById("dailySalesSectors");
       // המסך עוד לא הוזרק — יוצאים בלי להדליק את הדגל, וננסה שוב בכניסה הבאה
-      if(!todayBtn && !refreshBtn && !printBtn && !dateInput) return;
+      if(!todayBtn && !refreshBtn && !printBtn && !dateInput && !sectorsEl) return;
       this._dailySalesPageBound = true;
 
       if(todayBtn){
@@ -25485,6 +25538,16 @@ UsersGateUI.init();
       }
       if(printBtn){
         on(printBtn, "click", () => this.printDailySalesReportScreen());
+      }
+      if(sectorsEl){
+        on(sectorsEl, "click", (ev) => {
+          const btn = ev.target?.closest?.("[data-daily-sales-sector]");
+          if(!btn || !sectorsEl.contains(btn)) return;
+          const key = safeTrim(btn.getAttribute("data-daily-sales-sector"));
+          if(!key || key === this.getDailySalesSelectedSectorKey()) return;
+          this.setDailySalesSelectedSectorKey(key);
+          this.renderDailySalesPage();
+        });
       }
       if(dateInput){
         on(dateInput, "change", () => {
@@ -25567,13 +25630,26 @@ UsersGateUI.init();
       if(!this.canSeeDailySalesReport()) return;
       this._ensureDailySalesPageBound();
       const report = this.buildDailyAgentSalesReport();
+      const tab = this.getDailySalesSelectedSectorTab();
+      const slice = this.dailySalesFilteredSlice(report, tab.source);
+      const sectorsEl = document.getElementById("dailySalesSectors");
       const summary = document.getElementById("dailySalesSummary");
       const tbody = document.getElementById("dailySalesTbody");
+      const noteEl = document.getElementById("dailySalesSectorNote");
       const dateInput = document.getElementById("dailySalesDateInput");
       const dateText = document.getElementById("dailySalesDateText");
       const todayBtn = document.getElementById("btnDailySalesToday");
-      if(summary) summary.innerHTML = this.renderDailySalesGroupSummaryHtml(report);
-      if(tbody) tbody.innerHTML = this.renderDailySalesGroupRowsHtml(report);
+      if(sectorsEl) sectorsEl.innerHTML = this.renderDailySalesSectorTabsHtml(report);
+      if(summary) summary.innerHTML = this.renderDailySalesGroupSummaryHtml(report, { tab, slice });
+      if(tbody){
+        tbody.innerHTML = this.renderDailySalesGroupRowsHtml(report, {
+          groups: slice.groups,
+          emptyMessage: `אין מכירות בענף ${tab.label} ביום זה`
+        });
+      }
+      if(noteEl){
+        noteEl.hidden = !tab.annual;
+      }
       if(dateInput){
         dateInput.value = report.dateKey;
         dateInput.max = this.toLocalDateKey(new Date());
@@ -25895,59 +25971,48 @@ UsersGateUI.init();
     printDailySalesReportScreen(){
       if(!this.canSeeDailySalesReport()) return;
       const report = this.buildDailyAgentSalesReport();
-      // GI-FIX 2026-08-03: ההדפסה נבנית מ-groups כדי שתהיה זהה למסך
-      const groups = Array.isArray(report.groups) ? report.groups : [];
+      const tab = this.getDailySalesSelectedSectorTab();
+      const slice = this.dailySalesFilteredSlice(report, tab.source);
+      const groups = slice.groups;
+      const premLabel = tab.annual ? "סה״כ פרמיה שנתית" : "סה״כ פרמיה";
       const rows = groups.length
         ? groups.map((g) => `<tr>
             <td>${escapeHtml(g.agentName || "—")}</td>
-            <td>${escapeHtml(g.sector || "—")}</td>
+            <td>${escapeHtml(this.dailySalesDisplaySectorLabel(g.sector))}</td>
             <td>${escapeHtml((g.products || []).map((p) => p.count > 1 ? `${p.name} ×${p.count}` : p.name).join(" · ") || "—")}</td>
             <td>${escapeHtml((g.companies || []).join(" · ") || "—")}</td>
             <td class="prem">${escapeHtml(this.formatMoney(g.premium))}</td>
           </tr>`).join("")
-        : `<tr><td colspan="5" style="text-align:center;padding:28px;color:#6b7c99">אין מכירות ביום זה</td></tr>`;
+        : `<tr><td colspan="5" style="text-align:center;padding:28px;color:#6b7c99">אין מכירות בענף ${escapeHtml(tab.label)} ביום זה</td></tr>`;
       const win = window.open("", "_blank", "width=1080,height=820");
       if(!win) return;
-      win.document.write(`<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><title>דוח מעקב מכירות יומי</title>
+      win.document.write(`<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><title>דוח מעקב מכירות יומי · ${escapeHtml(tab.label)}</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-  body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#fff;color:#1f2a44}
+  body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#fff;color:#1a2332}
   .wrap{padding:28px 32px}
-  h1{margin:0 0 6px;font-size:22px;color:#153c81}
-  .sub{margin:0 0 18px;color:#6b7c99;font-size:13px;font-weight:700}
+  h1{margin:0 0 6px;font-size:20px;color:#1e3a5f}
+  .sub{margin:0 0 18px;color:#718096;font-size:13px;font-weight:600}
   table{width:100%;border-collapse:collapse}
-  th,td{padding:10px 8px;border-bottom:1px solid #e8eef7;text-align:right;font-size:13px}
-  th{color:#8a99b2;font-size:11px;font-weight:800}
-  .prem{color:#0f9f6e;font-weight:800;white-space:nowrap}
-  .foot{margin-top:16px;padding-top:14px;border-top:1px solid #e8eef7;display:flex;justify-content:space-between;gap:12px;font-weight:800}
-  .foot .prem{font-size:18px}
-  .split{margin-top:10px;display:flex;gap:10px;flex-wrap:wrap}
-  .split span{flex:1;min-width:130px;padding:8px 10px;border:1px solid #e8eef7;border-radius:8px;font-size:13px;font-weight:800;color:#1f2a44}
-  .split i{display:block;font-style:normal;font-size:10px;font-weight:700;color:#8a99b2;margin-bottom:2px}
+  th,td{padding:10px 8px;border-bottom:1px solid #e8edf3;text-align:right;font-size:13px}
+  th{color:#718096;font-size:11px;font-weight:700}
+  .prem{color:#1e3a5f;font-weight:700;white-space:nowrap}
+  .foot{margin-top:16px;padding-top:14px;border-top:1px solid #d8dee8;display:flex;justify-content:space-between;gap:12px;font-weight:700}
+  .foot .prem{font-size:16px}
+  .note{margin:0 0 14px;padding:8px 10px;border:1px solid #d8dee8;background:#f7f8fb;color:#4a5568;font-size:12px}
   @page{margin:14mm}
 </style></head><body><div class="wrap">
-  <h1>דוח מעקב מכירות יומי</h1>
-  <p class="sub">נציג · ענף · מוצרים · חברות · סה״כ פרמיה · ${escapeHtml(report.dateLabel)}</p>
+  <h1>דוח מעקב מכירות יומי · ${escapeHtml(tab.label)}</h1>
+  <p class="sub">נציג · ענף · מוצרים · חברות · ${escapeHtml(premLabel)} · ${escapeHtml(report.dateLabel)}</p>
+  ${tab.annual ? `<p class="note">אלמנטרי: הפרמיה המוצגת היא פרמיה שנתית.</p>` : ""}
   <table>
-    <thead><tr><th>נציג</th><th>מחלקה</th><th>מוצר</th><th>חברה</th><th>פרמיה</th></tr></thead>
+    <thead><tr><th>נציג</th><th>ענף</th><th>מוצרים</th><th>חברות</th><th>${escapeHtml(premLabel)}</th></tr></thead>
     <tbody>${rows}</tbody>
   </table>
   <div class="foot">
-    <span>${escapeHtml(this.dailySalesAgentsWord(report.groupAgentCount))} · ${escapeHtml(this.dailySalesDealsWord(report.groupDealCount))}</span>
-    <span class="prem">${escapeHtml(this.formatMoney(report.groupTotalPremium))}</span>
+    <span>${escapeHtml(this.dailySalesAgentsWord(slice.agents))} · ${escapeHtml(this.dailySalesDealsWord(slice.deals))}</span>
+    <span class="prem">${escapeHtml(this.formatMoney(slice.premium))}</span>
   </div>
-  <div class="split">${(() => {
-    const b = this.dailySalesBranchTotals(report);
-    const items = [
-      ["סיכונים", b.risks],
-      ["בריאות", b.health],
-      ["סה״כ בריאות+סיכונים", b.risks + b.health],
-      ["אלמנטרי", b.elementary],
-      ["פנסיה", b.pension]
-    ];
-    if(b.other > 0) items.push(["אחר", b.other]);
-    return items.map(([lbl, val]) => `<span><i>${escapeHtml(lbl)}</i>${escapeHtml(this.formatMoney(val))}</span>`).join("");
-  })()}</div>
 </div></body></html>`);
       win.document.close();
       try { win.focus(); win.print(); } catch(_e) {}

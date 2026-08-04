@@ -5948,6 +5948,296 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
 }
 
 /* =====================================================================
+   GI-FIX 2026-08-04 · מעקב מכירות יומי — סרגל ענפים + עיצוב בוגר
+   נייבי/אפור שקט בסגנון מערכות סוכנות ביטוח. תחום ל-#view-dailySales בלבד.
+   ===================================================================== */
+
+#view-dailySales .giDailySalesPage:not(#\9):not(#\9){
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 4px;
+  box-shadow: none;
+  background: #fff;
+  border-color: #d8dee8;
+}
+
+#view-dailySales .giDailySalesPage__head:not(#\9):not(#\9){
+  padding: 18px 22px 16px;
+  border-bottom: 1px solid #d8dee8;
+  margin: 0;
+}
+
+#view-dailySales .giDailySalesPage .card__title:not(#\9):not(#\9){
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -.01em;
+  color: #1e3a5f;
+}
+
+#view-dailySales .giDailySalesPage .card__hint:not(#\9):not(#\9){
+  color: #718096;
+  font-weight: 500;
+}
+
+#view-dailySales .giDailySalesPage__syncStamp:not(:empty):not(#\9):not(#\9){
+  border-radius: 3px;
+  background: #eef2f7;
+  color: #718096;
+}
+
+#view-dailySales .giDailySalesPage__todayBtn:not(#\9):not(#\9){
+  background: #eef2f7;
+  color: #1e3a5f;
+  border-color: #c5d0e0;
+}
+#view-dailySales .giDailySalesPage__todayBtn.is-active:not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__todayBtn:disabled:not(#\9):not(#\9){
+  opacity: 1;
+  background: #eef2f7;
+  color: #1e3a5f;
+}
+
+#view-dailySales .giDailySalesPage__dateWrap:not(#\9):not(#\9){
+  border-radius: 3px;
+  background: #fff;
+  border-color: #d8dee8;
+}
+#view-dailySales .giDailySalesPage__dateWrap:hover:not(#\9):not(#\9){
+  border-color: #c5cedb;
+  box-shadow: none;
+}
+#view-dailySales .giDailySalesPage__dateWrap:focus-visible:not(#\9):not(#\9){
+  border-color: #2c5282;
+  box-shadow: 0 0 0 2px rgba(30,58,95,.15);
+}
+
+#view-dailySales .giDailySalesPage__sectors:not(#\9):not(#\9){
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  border-bottom: 1px solid #d8dee8;
+  background: #f7f8fb;
+}
+
+#view-dailySales .giDailySalesPage__sectorTab:not(#\9):not(#\9){
+  appearance: none;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin: 0;
+  padding: 16px 14px 14px;
+  border: 0;
+  border-inline-start: 1px solid #d8dee8;
+  background: transparent;
+  color: #4a5568;
+  font: inherit;
+  text-align: right;
+  cursor: pointer;
+  transition: background .12s ease, color .12s ease;
+}
+#view-dailySales .giDailySalesPage__sectorTab:first-child:not(#\9):not(#\9){
+  border-inline-start: 0;
+}
+#view-dailySales .giDailySalesPage__sectorTab:hover:not(#\9):not(#\9){
+  background: #eef1f6;
+}
+#view-dailySales .giDailySalesPage__sectorTab.is-active:not(#\9):not(#\9){
+  background: #fff;
+  color: #1a2332;
+}
+#view-dailySales .giDailySalesPage__sectorTab.is-active:not(#\9):not(#\9)::after{
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: -1px;
+  height: 2px;
+  background: #1e3a5f;
+}
+
+#view-dailySales .giDailySalesPage__sectorTabLabel:not(#\9):not(#\9){
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: .04em;
+  color: #718096;
+}
+#view-dailySales .giDailySalesPage__sectorTab.is-active .giDailySalesPage__sectorTabLabel:not(#\9):not(#\9){
+  color: #1e3a5f;
+}
+#view-dailySales .giDailySalesPage__sectorTabValue:not(#\9):not(#\9){
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+  color: #1a2332;
+}
+#view-dailySales .giDailySalesPage__sectorTabMeta:not(#\9):not(#\9){
+  font-size: 12px;
+  font-weight: 500;
+  color: #718096;
+}
+
+#view-dailySales .giDailySalesPage__summary:not(#\9):not(#\9){
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  border-bottom: 1px solid #d8dee8;
+}
+
+#view-dailySales .giDailySalesPage__stat:not(#\9):not(#\9){
+  gap: 4px;
+  padding: 14px 22px;
+  border-radius: 0;
+  border: 0;
+  border-inline-start: 1px solid #e8edf3;
+  background: #fff;
+}
+#view-dailySales .giDailySalesPage__stat:first-child:not(#\9):not(#\9){
+  border-inline-start: 0;
+}
+#view-dailySales .giDailySalesPage__stat > span:not(#\9):not(#\9){
+  font-size: 11px;
+  font-weight: 600;
+  color: #718096;
+}
+#view-dailySales .giDailySalesPage__stat > strong:not(#\9):not(#\9){
+  font-size: 15px;
+  font-weight: 650;
+  color: #1a2332;
+}
+#view-dailySales .giDailySalesPage__stat--prem:not(#\9):not(#\9){
+  background: #fff;
+  border-color: #e8edf3;
+}
+#view-dailySales .giDailySalesPage__stat--prem > strong:not(#\9):not(#\9){
+  color: #1e3a5f;
+}
+#view-dailySales .giDailySalesPage__split:not(#\9):not(#\9){
+  display: none;
+}
+
+#view-dailySales .giDailySalesPage__note:not(#\9):not(#\9){
+  margin: 0;
+  padding: 10px 22px;
+  border-bottom: 1px solid #d8dee8;
+  background: #fafbfc;
+  color: #718096;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+#view-dailySales .giDailySalesPage__note b:not(#\9):not(#\9){
+  color: #4a5568;
+  font-weight: 650;
+}
+#view-dailySales .giDailySalesPage__note[hidden]:not(#\9):not(#\9){
+  display: none !important;
+}
+
+#view-dailySales .giDailySalesPage__tableWrap:not(#\9):not(#\9){
+  border: 0;
+  border-radius: 0;
+  background: #fff;
+}
+#view-dailySales .giDailySalesPage__table th:not(#\9):not(#\9){
+  padding: 11px 16px;
+  background: #fff;
+  border-bottom: 1px solid #d8dee8;
+  color: #718096;
+  font-size: 11.5px;
+  font-weight: 650;
+}
+#view-dailySales .giDailySalesPage__table td:not(#\9):not(#\9){
+  padding: 13px 16px;
+  border-bottom: 1px solid #e8edf3;
+  font-weight: 500;
+  color: #1a2332;
+}
+#view-dailySales .giDailySalesPage__row:hover td:not(#\9):not(#\9){
+  background: #fafbfd;
+}
+
+#view-dailySales .giDailySalesPage__av:not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__av--blue:not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__av--teal:not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__av--amber:not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__av--violet:not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__av--rose:not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__av--cyan:not(#\9):not(#\9){
+  background: #e8eef5;
+  color: #1e3a5f;
+}
+
+#view-dailySales .giDailySalesPage__sector:not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__sector--sikunim:not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__sector--briut:not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__sector--almanteri:not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__sector--pensia:not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__sector--other:not(#\9):not(#\9){
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #4a5568;
+  font-weight: 600;
+}
+
+#view-dailySales .giDailySalesPage__chip:not(#\9):not(#\9){
+  border-radius: 2px;
+  border-color: #d8dee8;
+  background: #fff;
+  color: #4a5568;
+  font-weight: 500;
+}
+#view-dailySales .giDailySalesPage__chip--co:not(#\9):not(#\9){
+  border-style: solid;
+  color: #718096;
+}
+#view-dailySales .giDailySalesPage__chipQty:not(#\9):not(#\9){
+  border-radius: 2px;
+  background: #eef2f7;
+  color: #4a5568;
+}
+
+#view-dailySales .giDailySalesPage__premCell:not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__premCell > strong:not(#\9):not(#\9){
+  color: #1e3a5f;
+}
+#view-dailySales .giDailySalesPage__premCell > strong:not(#\9):not(#\9){
+  font-size: 14px;
+  font-weight: 650;
+}
+
+@media (max-width: 860px){
+  #view-dailySales .giDailySalesPage__sectors:not(#\9):not(#\9){
+    grid-template-columns: 1fr 1fr;
+  }
+  #view-dailySales .giDailySalesPage__sectorTab:nth-child(2):not(#\9):not(#\9){
+    border-inline-start: 0;
+  }
+  #view-dailySales .giDailySalesPage__sectorTab:nth-child(n+3):not(#\9):not(#\9){
+    border-top: 1px solid #d8dee8;
+  }
+  #view-dailySales .giDailySalesPage__summary:not(#\9):not(#\9){
+    grid-template-columns: 1fr 1fr;
+  }
+  #view-dailySales .giDailySalesPage__stat:nth-child(2):not(#\9):not(#\9){
+    border-inline-start: 0;
+  }
+  #view-dailySales .giDailySalesPage__stat:nth-child(n+3):not(#\9):not(#\9){
+    border-top: 1px solid #e8edf3;
+  }
+}
+
+@media (min-width: 901px){
+  #view-dailySales .giDailySalesPage__summary:not(#\9):not(#\9){
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* =====================================================================
    SETTINGS CONSOLE ? GI stretch (Settings Hub)
    Visual layer only; DOM/logic unchanged.
    ===================================================================== */

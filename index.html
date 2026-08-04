@@ -455,7 +455,7 @@
 <div class="card__head giDailySalesPage__head">
 <div>
 <div class="card__title">מעקב מכירות יומי</div>
-<div class="card__hint">שורה לכל נציג בכל ענף · סה״כ פרמיה יומית <span class="giDailySalesPage__syncStamp" id="dailySalesSyncStamp"></span></div>
+<div class="card__hint">בחירת ענף · מכירות ונציגים לפי יום עבודה <span class="giDailySalesPage__syncStamp" id="dailySalesSyncStamp"></span></div>
 </div>
 <div class="giDailySalesPage__nav" role="group" aria-label="בחירת תאריך">
 <button class="btn giDailySalesPage__todayBtn" id="btnDailySalesToday" type="button">היום</button>
@@ -468,7 +468,9 @@
 <button class="btn btn--primary" id="btnDailySalesPrint" type="button">הדפסה</button>
 </div>
 </div>
+<div class="giDailySalesPage__sectors" id="dailySalesSectors" role="tablist" aria-label="בחירת ענף"></div>
 <div class="giDailySalesPage__summary" id="dailySalesSummary" aria-live="polite"></div>
+<p class="giDailySalesPage__note" id="dailySalesSectorNote" hidden>אלמנטרי: הפרמיה המוצגת היא <b>פרמיה שנתית</b>.</p>
 <div class="tableWrap giDailySalesPage__tableWrap">
 <table class="table giDailySalesPage__table">
 <thead>
