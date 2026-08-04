@@ -2,68 +2,70 @@
    GEMEL INVEST · שכבת עיצוב לאשף בריאות וסיכונים
    GI-WIZARD-REDESIGN 2026-08-04 · שלב 1 — CSS בלבד
 
-   תיחום:  #lcWizard בלבד, ובתוכו רק גוף שאינו במצב אלמנטרי.
-   לא מושפעים: אשף מינוי סוכן (#lcAgentApptWizard), מסכי אלמנטרי,
-                מסך לקוחות, דשבורד, דוחות, וכל שאר המערכת.
+   הטוקנים כאן הועתקו אחד לאחד מ-_preview-customers-layout.html
+   כדי שהאשף ידבר בדיוק באותה שפה כמו מסך הלקוחות החדש.
 
-   הקובץ לא נוגע ב-app.js. גלגול אחורה = מחיקת שורת ה-<link> מ-index.html.
-   נטען אחרון, ולכן גובר על app.css / theme.css ללא שימוש ב-!important.
+   תיחום:  #lcWizard בלבד, ובתוכו רק גוף שאינו במצב אלמנטרי.
+   לא מושפעים: אשף מינוי סוכן, מסכי אלמנטרי, לקוחות, דשבורד, דוחות.
+
+   הקובץ לא נוגע ב-app.js — אף שדה, כותרת, סעיף או סדר לא משתנים.
+   גלגול אחורה = מחיקת שורת ה-<link> מ-index.html.
    ========================================================================== */
 
 #lcWizard{
-  --gw-ink:#16263c;
-  --gw-ink-2:#3d5875;
-  --gw-soft:#6b8296;
-  --gw-line:#dde5ef;
-  --gw-line-2:#eaf0f7;
-  --gw-card:#ffffff;
-  --gw-field:#f7f9fc;
-  --gw-brand:#1e5fa8;
-  --gw-brand-2:#0f8a86;
-  --gw-ok:#0f7a56;
-  --gw-bad:#c0392f;
-  --gw-warn:#a86a12;
-  --gw-r-lg:18px;
-  --gw-r-md:13px;
-  --gw-r-sm:9px;
+  --ink:#1a2332;
+  --ink-soft:#4a5568;
+  --ink-mute:#718096;
+  --line:#e2e8f0;
+  --line-soft:#edf2f7;
+  --surface:#ffffff;
+  --canvas:#f0f3f7;
+  --accent:#1e4d6b;
+  --accent-soft:#e8f0f5;
+  --ok:#1a6b4a;
+  --ok-bg:#e8f5ef;
+  --warn:#9a3412;
+  --warn-bg:#fff1e8;
+  --info:#1d4ed8;
+  --info-bg:#eef2ff;
+  --risk:#b42318;
+  --risk-bg:#fef2f2;
+  --health:#1a7a4a;
+  --health-bg:#ecfdf5;
+  --elem:#1e40af;
+  --elem-bg:#eff6ff;
+  --appt:#5b21b6;
+  --appt-bg:#f3e8ff;
+  --pens:#6b46c1;
+  --pens-bg:#f5f3ff;
 }
 
-/* ========================= רקע גוף האשף ========================= */
+/* ===== קיצור התיחום: W = גוף האשף כשאינו אלמנטרי ===== */
+
+/* ========================= גוף האשף ========================= */
 #lcWizard .lcWizard__body:not([class*="--elemStep"]){
-  background:#eef2f7;
-  color:var(--gw-ink);
+  background:var(--canvas);
+  color:var(--ink);
 }
 
-/* ========================= כרטיס ========================= */
+/* ========================= כרטיס — שטוח, בלי צל ========================= */
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcWSection{
-  padding:20px;
-  border-radius:var(--gw-r-lg);
-  border:1px solid var(--gw-line);
-  background:var(--gw-card);
-  box-shadow:0 1px 2px rgba(22,38,60,.04),0 10px 28px -20px rgba(22,38,60,.3);
+  padding:22px 24px;
+  border-radius:14px;
+  border:1px solid var(--line);
+  background:var(--surface);
+  box-shadow:none;
 }
 
 /* ========================= כותרת כרטיס ========================= */
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcWTitle{
-  font-size:16.5px;
-  font-weight:900;
-  letter-spacing:-.3px;
-  color:var(--gw-ink);
-  margin:0 0 16px;
-  padding-bottom:11px;
-  border-bottom:1px solid var(--gw-line-2);
-  position:relative;
-}
-/* קו מבטא קצר מתחת לכותרת — חתימת השפה החוזרת */
-#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcWTitle::after{
-  content:"";
-  position:absolute;
-  inset-inline-start:0;
-  bottom:-1px;
-  width:34px;
-  height:2px;
-  border-radius:2px;
-  background:var(--gw-brand);
+  font-size:16px;
+  font-weight:800;
+  letter-spacing:-.02em;
+  color:var(--ink);
+  margin:0 0 18px;
+  padding-bottom:14px;
+  border-bottom:1px solid var(--line-soft);
 }
 
 /* ========================= פריסה ========================= */
@@ -80,288 +82,409 @@
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcNpDetailField{
   display:flex;
   flex-direction:column;
-  gap:5px;
+  gap:6px;
   min-width:0;
 }
 
+/* תווית — micro-header באותה שפה של כותרות העמודות */
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcLabel{
-  font-size:11.5px;
-  font-weight:800;
-  color:var(--gw-soft);
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  color:var(--ink-mute);
   line-height:1.4;
 }
 
-#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcInput,
-#lcWizard .lcWizard__body:not([class*="--elemStep"]) textarea.lcInput{
+/* שדה קלט — נגזר מתיבת החיפוש: גובה 40, פינה 8, מסגרת line, רקע לבן */
+#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcInput{
   font-family:inherit;
   font-size:14px;
-  font-weight:700;
-  color:var(--gw-ink);
-  border:1px solid var(--gw-line);
-  border-radius:var(--gw-r-sm);
-  padding:10px 12px;
-  background:var(--gw-field);
+  font-weight:600;
+  color:var(--ink);
+  border:1px solid var(--line);
+  border-radius:8px;
+  height:40px;
+  padding:0 14px;
+  background:var(--surface);
   width:100%;
-  transition:border-color .16s ease,box-shadow .16s ease,background .16s ease;
+  transition:border-color .15s ease,box-shadow .15s ease;
 }
-
+#lcWizard .lcWizard__body:not([class*="--elemStep"]) textarea.lcInput{
+  height:auto;
+  min-height:80px;
+  padding:11px 14px;
+  line-height:1.55;
+}
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcInput:hover{
-  border-color:#c6d4e4;
+  border-color:#cbd5e0;
 }
-
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcInput:focus{
   outline:none;
-  background:#fff;
-  border-color:var(--gw-brand);
-  box-shadow:0 0 0 3px rgba(30,95,168,.12);
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(30,77,107,.12);
 }
-
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) select.lcInput{
   cursor:pointer;
 }
+/* מספרים — ספרות בעלות רוחב אחיד, בדיוק כמו .mono במסך הלקוחות */
+#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcInput[inputmode="numeric"],
+#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcInput[type="date"],
+#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcInput[type="tel"]{
+  font-variant-numeric:tabular-nums;
+  font-feature-settings:"tnum";
+  letter-spacing:.01em;
+}
 
-/* שדה שסומן חסר בוולידציה — נשאר בולט, בטון החדש */
+/* שדה חסר בוולידציה */
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcInput.lcNpValidationMiss{
-  border-color:var(--gw-bad);
-  background:rgba(192,57,47,.05);
-  box-shadow:0 0 0 3px rgba(192,57,47,.1);
+  border-color:var(--risk);
+  background:var(--risk-bg);
+  box-shadow:0 0 0 3px rgba(180,35,24,.1);
 }
 
 /* ========================= כפתורים ========================= */
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .btn{
   font-family:inherit;
   font-size:13px;
-  font-weight:800;
-  padding:9px 16px;
-  border-radius:var(--gw-r-sm);
-  border:1px solid var(--gw-line);
-  background:var(--gw-card);
-  color:var(--gw-ink-2);
+  font-weight:700;
+  height:40px;
+  padding:0 16px;
+  border-radius:8px;
+  border:1px solid var(--line);
+  background:var(--surface);
+  color:var(--ink-soft);
   cursor:pointer;
-  transition:background .16s ease,color .16s ease,border-color .16s ease;
+  transition:background .15s ease,border-color .15s ease,color .15s ease;
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .btn:hover{
-  background:var(--gw-field);
-  border-color:#c6d4e4;
-  color:var(--gw-ink);
+  background:#f8fafc;
+  border-color:#cbd5e0;
+  color:var(--ink);
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .btn:focus-visible,
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcInput:focus-visible{
-  outline:2px solid var(--gw-brand);
+  outline:2px solid var(--accent);
   outline-offset:2px;
 }
 
 /* ========================= טקסט משני ========================= */
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .muted{
-  color:var(--gw-soft);
+  color:var(--ink-mute);
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .small{
   font-size:12.5px;
-  font-weight:600;
+  font-weight:500;
+  line-height:1.5;
 }
 
-/* ========================= פריטי כיסוי (צ׳קבוקסים) ========================= */
+/* ========================= פריטי כיסוי ========================= */
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcNpCoverItem{
-  border:1px solid var(--gw-line);
-  border-radius:var(--gw-r-sm);
-  background:var(--gw-field);
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--surface);
   padding:10px 13px;
-  transition:border-color .16s ease,background .16s ease;
+  transition:background .15s ease,border-color .15s ease;
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcNpCoverItem:hover{
-  border-color:#c6d4e4;
-  background:#fff;
+  background:#f8fafc;
+  border-color:#cbd5e0;
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcNpCoverItem--checked{
-  border-color:var(--gw-brand);
-  background:rgba(30,95,168,.06);
+  border-color:var(--accent);
+  background:var(--accent-soft);
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcNpCoverItem__label{
   font-size:13.5px;
-  font-weight:700;
-  color:var(--gw-ink);
+  font-weight:600;
+  color:var(--ink);
 }
 
-/* ========================= טבלאות ========================= */
+/* ========================= טבלאות — זהות למסך הלקוחות ========================= */
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPolTable{
   width:100%;
-  border-collapse:separate;
-  border-spacing:0;
-  font-size:13px;
+  border-collapse:collapse;
+  font-size:13.5px;
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPolTable th{
-  font-size:11.5px;
-  font-weight:800;
-  color:var(--gw-soft);
-  text-align:start;
-  padding:9px 11px;
-  background:var(--gw-field);
-  border-bottom:1px solid var(--gw-line);
+  padding:12px 14px;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  color:var(--ink-mute);
+  background:#f7fafc;
+  border-bottom:1px solid var(--line);
+  text-align:right;
+  white-space:nowrap;
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPolTable td{
-  padding:11px;
-  border-bottom:1px solid var(--gw-line-2);
-  font-weight:700;
+  padding:14px;
+  border-bottom:1px solid var(--line-soft);
   vertical-align:middle;
+  text-align:right;
+  color:var(--ink);
 }
-#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPolTable tr:last-child td{
-  border-bottom:none;
+#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPolTable tbody tr:hover td{
+  background:#f8fafc;
+}
+#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPolTable tbody tr:last-child td{
+  border-bottom:0;
 }
 
 /* ========================= הרחבות ומוטבים ========================= */
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcRiskUmbrellaBox,
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcRiskBeneficiariesBox{
-  border:1px solid var(--gw-line);
-  border-radius:var(--gw-r-md);
+  border:1px solid var(--line);
+  border-radius:10px;
   padding:16px;
-  background:var(--gw-field);
+  background:#fafbfc;
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcRiskUmbrellaBox__title{
-  font-size:15px;
-  font-weight:900;
-  letter-spacing:-.2px;
-  color:var(--gw-ink);
+  font-size:13px;
+  font-weight:800;
+  color:var(--accent);
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcRiskUmbrellaBox__sub{
   font-size:12.5px;
-  font-weight:700;
-  color:var(--gw-soft);
-  margin-top:2px;
+  font-weight:500;
+  color:var(--ink-soft);
+  line-height:1.5;
+  margin-top:4px;
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcRiskUmbrellaBox__toggle{
-  border:1px solid var(--gw-brand);
-  background:transparent;
-  color:var(--gw-brand);
   font-family:inherit;
+  height:40px;
+  padding:0 16px;
+  border-radius:8px;
+  border:1px solid var(--accent);
+  background:var(--accent);
+  color:#fff;
   font-size:13px;
-  font-weight:800;
-  padding:9px 16px;
-  border-radius:var(--gw-r-sm);
+  font-weight:700;
   cursor:pointer;
   white-space:nowrap;
-  transition:background .16s ease,color .16s ease;
+  transition:background .15s ease;
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcRiskUmbrellaBox__toggle:hover{
-  background:var(--gw-brand);
-  color:#fff;
+  background:#173d55;
 }
 
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcBeneficiaryRow{
-  border:1px solid var(--gw-line);
-  border-radius:var(--gw-r-md);
-  padding:14px 15px;
-  background:var(--gw-card);
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:16px;
+  background:var(--surface);
 }
+/* תגית מספר — בשפת ה-.tag של מסך הלקוחות */
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcBeneficiaryRow__num{
-  font-size:12.5px;
-  font-weight:900;
-  color:var(--gw-brand);
-  background:rgba(30,95,168,.09);
-  padding:4px 11px;
-  border-radius:30px;
+  display:inline-flex;
+  align-items:center;
+  height:24px;
+  padding:0 9px;
+  border-radius:5px;
+  font-size:11.5px;
+  font-weight:700;
+  background:var(--accent-soft);
+  color:var(--accent);
+  border:1px solid #cfe0e9;
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcBeneficiaryRow__grid{
   display:grid;
   grid-template-columns:repeat(3,minmax(0,1fr));
-  gap:13px;
+  gap:14px;
+}
+#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcBeneficiaryRow__amount{
+  font-variant-numeric:tabular-nums;
+  font-feature-settings:"tnum";
+  font-size:12px;
+  font-weight:700;
+  color:var(--ink-mute);
+  direction:ltr;
+  unicode-bidi:plaintext;
+  text-align:right;
 }
 
 /* ========================= שיעבוד ========================= */
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeBox{
-  border:1px solid var(--gw-line);
-  border-radius:var(--gw-r-lg);
-  background:var(--gw-card);
-  padding:20px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  background:var(--surface);
+  padding:22px 24px;
+  box-shadow:none;
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeBankCard{
-  border:1px solid var(--gw-line);
-  border-radius:var(--gw-r-md);
-  background:var(--gw-field);
-  padding:15px 16px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:#fafbfc;
+  padding:16px;
   position:relative;
   overflow:hidden;
 }
-/* פס צבע בצד — קושר כל בנק לחלק שלו במאזן */
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeBankCard::before{
   content:"";
   position:absolute;
   inset-inline-start:0;
-  top:15px;
-  bottom:15px;
+  top:16px;
+  bottom:16px;
   width:3px;
   border-radius:0 3px 3px 0;
-  background:var(--gw-brand);
+  background:var(--accent);
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeBankCard + .lcPledgeBankCard::before{
-  background:var(--gw-brand-2);
+  background:var(--info);
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeBankCard__num{
-  font-size:13px;
-  font-weight:900;
-  color:var(--gw-ink);
-  background:transparent;
-  padding:0;
+  display:inline-flex;
+  align-items:center;
+  height:24px;
+  padding:0 9px;
+  border-radius:5px;
+  font-size:11.5px;
+  font-weight:700;
+  background:var(--accent-soft);
+  color:var(--accent);
+  border:1px solid #cfe0e9;
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeBankCard__share{
-  font-size:11px;
-  font-weight:800;
-  color:var(--gw-soft);
-  background:var(--gw-line-2);
-  padding:3px 9px;
-  border-radius:30px;
+  display:inline-flex;
+  align-items:center;
+  height:24px;
+  padding:0 9px;
+  border-radius:5px;
+  font-size:11.5px;
+  font-weight:700;
+  background:#f8fafc;
+  color:#475569;
+  border:1px solid var(--line);
+}
+#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeBankCard__remove,
+#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcBeneficiaryRow__remove{
+  width:36px;
+  height:36px;
+  border-radius:8px;
+  border:1px solid var(--line);
+  background:var(--surface);
+  color:var(--ink-mute);
+  cursor:pointer;
+  transition:background .15s ease,color .15s ease,border-color .15s ease;
+}
+#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeBankCard__remove:hover,
+#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcBeneficiaryRow__remove:hover{
+  background:var(--risk-bg);
+  color:var(--risk);
+  border-color:#fecaca;
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeAddBtn{
-  border:1px solid var(--gw-brand);
-  background:transparent;
-  color:var(--gw-brand);
-  border-radius:var(--gw-r-sm);
+  font-family:inherit;
+  height:40px;
+  padding:0 16px;
+  border-radius:8px;
+  border:1px solid var(--accent);
+  background:var(--accent);
+  color:#fff;
   font-size:13px;
-  font-weight:800;
-  padding:9px 16px;
+  font-weight:700;
+  cursor:pointer;
+  transition:background .15s ease;
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeAddBtn:hover{
-  background:var(--gw-brand);
-  color:#fff;
+  background:#173d55;
+}
+#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeMaxNote{
+  font-size:12px;
+  font-weight:600;
+  color:var(--ink-mute);
 }
 
+/* פס המאזן */
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeBalance{
-  border-radius:var(--gw-r-md);
-  padding:13px 14px;
+  border-radius:10px;
+  padding:14px 16px;
+  border:1px solid var(--line);
+  background:#fafbfc;
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeBalance__cell{
-  background:var(--gw-card);
-  border:1px solid var(--gw-line);
-  border-radius:var(--gw-r-sm);
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:8px;
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeBalance__k{
-  font-size:11px;
-  font-weight:800;
-  color:var(--gw-soft);
+  font-size:10px;
+  font-weight:600;
+  letter-spacing:.03em;
+  text-transform:uppercase;
+  color:var(--ink-mute);
   opacity:1;
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeBalance__v{
-  font-size:15px;
-  font-weight:900;
-  letter-spacing:-.2px;
+  font-size:14px;
+  font-weight:800;
+  font-variant-numeric:tabular-nums;
+  font-feature-settings:"tnum";
+  direction:ltr;
+  unicode-bidi:plaintext;
+  text-align:right;
+  letter-spacing:0;
+}
+#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeBalance__msg{
+  font-size:12.5px;
+  font-weight:700;
+  line-height:1.5;
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeBalance--ok{
-  border-color:rgba(15,122,86,.3);
-  background:rgba(15,122,86,.06);
+  border-color:#a7f3d0;
+  background:var(--ok-bg);
+}
+#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeBalance--ok .lcPledgeBalance__msg{
+  color:var(--ok);
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeBalance--warn{
-  border-color:rgba(168,106,18,.32);
-  background:rgba(168,106,18,.07);
+  border-color:#fed7aa;
+  background:var(--warn-bg);
+}
+#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeBalance--warn .lcPledgeBalance__msg{
+  color:var(--warn);
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeBalance--bad{
-  border-color:rgba(192,57,47,.32);
-  background:rgba(192,57,47,.06);
+  border-color:#fecaca;
+  background:var(--risk-bg);
+}
+#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeBalance--bad .lcPledgeBalance__msg{
+  color:var(--risk);
 }
 
+/* רמז סכום מפורמט */
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcMoneyHint{
   font-size:12px;
-  font-weight:900;
-  color:var(--gw-brand);
+  font-weight:800;
+  color:var(--accent);
+  font-variant-numeric:tabular-nums;
+  font-feature-settings:"tnum";
+  direction:ltr;
+  unicode-bidi:plaintext;
+  text-align:right;
   opacity:1;
+}
+#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeAutoTag{
+  display:inline-flex;
+  align-items:center;
+  height:20px;
+  padding:0 8px;
+  border-radius:5px;
+  font-size:10px;
+  font-weight:700;
+  background:var(--health-bg);
+  color:var(--health);
+  border:1px solid #a7f3d0;
+}
+#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcBenBaseNote{
+  font-size:12.5px;
+  font-weight:600;
+  color:var(--ok);
+}
+#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcBenBaseNote--empty{
+  color:var(--warn);
 }
 
 /* ========================= רספונסיביות ========================= */
@@ -375,9 +498,10 @@
 }
 
 @media (max-width:600px){
-  #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcWSection{
+  #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcWSection,
+  #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcPledgeBox{
     padding:16px;
-    border-radius:15px;
+    border-radius:12px;
   }
   #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcWGrid,
   #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcGrid2,
@@ -386,11 +510,12 @@
     grid-template-columns:1fr;
   }
   #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcWTitle{
-    font-size:15.5px;
+    font-size:15px;
   }
   /* 16px מונע זום אוטומטי של iOS בכניסה לשדה */
   #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcInput{
     font-size:16px;
+    height:44px;
   }
 }
 
