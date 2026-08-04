@@ -13548,14 +13548,24 @@ UsersGateUI.init();
         const _pillRole = Auth.current?.role === "owner" ? "מפתח המערכת" : Auth.isAdmin() ? "מנהל מערכת" : Auth.isManager() ? "מנהל" : Auth.isTeamManager() ? "מנהל צוות" : Auth.isOps() ? "מנהל תפעול" : Auth.isOpsAgent() ? "נציג תפעול" : Auth.isElementary() ? "אלמנטרי" : Auth.isReferent() ? "סוקרת" : "נציג";
         const _pillInitials = _pillName.split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase() || '??';
         txt.innerHTML = `<span class="lcUserPill__nameWrap"><span class="lcUserPill__name">${escapeHtml(_pillName)}</span><span class="lcUserPill__role">${escapeHtml(_pillRole)}</span></span>`;
-        // GI-DESIGN 2026-07-31: the avatar shows the user's photo when one exists,
-        // and falls back to the initials computed just above. `avatarUrl` is not
-        // written by anything yet — the branch is here so adding the field later
-        // needs no change on this side.
+        // GI-DESIGN 2026-07-31: avatar shows photo when available, else initials.
+        // GI-FIX 2026-08-04: also resolve from chat profile photo (meta.chatAvatars)
+        // via the same ChatUI key path — do not invent a second identity mapping.
         try {
           const _av = document.getElementById("lcUserAvatar");
           const _avInitials = document.getElementById("lcUserAvatarInitials");
-          const _avUrl = safeTrim(Auth.current.avatarUrl || Auth.current.photoUrl || "");
+          let _avUrl = safeTrim(Auth.current.avatarUrl || Auth.current.photoUrl || "");
+          if(!_avUrl){
+            try {
+              if(typeof ChatUI !== "undefined" && ChatUI){
+                if(!safeTrim(ChatUI.userKey) || !ChatUI.currentUser) ChatUI.refreshCurrentUser();
+                // Prefer live map lookup (avatarUrlForUser → getChatAvatarEntry)
+                // so a freshly synced/saved chat photo appears even if currentUser.avatar is stale.
+                _avUrl = safeTrim(ChatUI.avatarUrlForUser?.(ChatUI.currentUser || { id: ChatUI.userKey }) || "")
+                  || safeTrim(ChatUI.currentUser?.avatar || "");
+              }
+            } catch(_chatAvErr) {}
+          }
           if(_avInitials) _avInitials.textContent = _pillInitials;
           if(_av){
             _av.classList.toggle("has-photo", !!_avUrl);
@@ -61672,6 +61682,7 @@ const ClalRiskLifePdf = {
         this.renderUsers();
         this.renderPeerMeta();
         this.renderMessages();
+        try { UI.renderAuthPill(); } catch(_pillErr) {}
         this.setSettingsHint('תמונת הפרופיל נשמרה בהצלחה.', 'success');
         setTimeout(() => this.closeSettingsModal(), 520);
       } catch(err){
@@ -61696,6 +61707,7 @@ const ClalRiskLifePdf = {
         this.renderPeerMeta();
         this.renderMessages();
         this.renderSettingsPreview();
+        try { UI.renderAuthPill(); } catch(_pillErr) {}
         this.setSettingsHint('תמונת הפרופיל הוסרה.', 'success');
       } catch(err){
         console.error('CHAT_AVATAR_REMOVE_FAILED', err);
