@@ -5551,8 +5551,35 @@
       if(kind === "agent_appointment"){
         const meta = payload.agentAppointmentMeta;
         if(meta && typeof meta === "object"){
-          this.append(payload, this.createAgentApptFormDoc(meta, options));
-          this.append(payload, this.createAgentApptReportDoc(meta, options));
+          const companySlices = Array.isArray(meta.companies) && meta.companies.length
+            ? meta.companies
+            : [{
+                companyId: safeTrim(meta.companyId),
+                companyLabel: safeTrim(meta.companyLabel),
+                agentNumber: safeTrim(meta.agent?.agentNumber),
+                scope: safeTrim(meta.scope),
+                policies: Array.isArray(meta.policies) ? meta.policies : []
+              }];
+          companySlices.forEach((slice) => {
+            const coId = safeTrim(slice?.companyId) || safeTrim(meta.companyId);
+            const coLabel = safeTrim(slice?.companyLabel)
+              || safeTrim(getAgentApptCompany(coId)?.label)
+              || safeTrim(meta.companyLabel)
+              || "חברה";
+            const perMeta = {
+              ...meta,
+              companyId: coId,
+              companyLabel: coLabel,
+              scope: safeTrim(slice?.scope) || safeTrim(meta.scope) || "specific",
+              policies: Array.isArray(slice?.policies) ? slice.policies : (Array.isArray(meta.policies) ? meta.policies : []),
+              agent: {
+                ...(meta.agent && typeof meta.agent === "object" ? meta.agent : {}),
+                agentNumber: safeTrim(slice?.agentNumber) || safeTrim(meta.agent?.agentNumber)
+              }
+            };
+            this.append(payload, this.createAgentApptFormDoc(perMeta, options));
+            this.append(payload, this.createAgentApptReportDoc(perMeta, options));
+          });
         }
         return payload;
       }
@@ -57881,6 +57908,8 @@ const MIRROR_DISCLOSURE_LIBRARY = {
     const today = new Date().toISOString().slice(0, 10);
     const agentRec = typeof findAgentRecordForSession === "function" ? findAgentRecordForSession() : null;
     return {
+      companyIds: [],
+      activeCompanyId: "",
       companyId: "",
       scope: "specific",
       requestDate: today,
@@ -57895,8 +57924,112 @@ const MIRROR_DISCLOSURE_LIBRARY = {
         phone: safeTrim(agentRec?.phone) || "",
         address: ""
       },
+      companyAgents: {},
+      companyPolicies: {},
       policies: [newAgentApptPolicyRow()]
     };
+  }
+
+  function ensureAgentApptCompanyBuckets(state, companyIds){
+    if(!state || typeof state !== "object") return;
+    const ids = Array.isArray(companyIds) ? companyIds.map((x) => safeTrim(x)).filter(Boolean) : [];
+    if(!state.companyAgents || typeof state.companyAgents !== "object") state.companyAgents = {};
+    if(!state.companyPolicies || typeof state.companyPolicies !== "object") state.companyPolicies = {};
+    ids.forEach((id) => {
+      if(!state.companyAgents[id] || typeof state.companyAgents[id] !== "object"){
+        state.companyAgents[id] = { agentNumber: safeTrim(state.agent?.agentNumber) || "" };
+      }else if(state.companyAgents[id].agentNumber == null){
+        state.companyAgents[id].agentNumber = "";
+      }
+      if(!Array.isArray(state.companyPolicies[id]) || !state.companyPolicies[id].length){
+        state.companyPolicies[id] = [newAgentApptPolicyRow()];
+      }else{
+        state.companyPolicies[id] = state.companyPolicies[id].map((p) => normalizeAgentApptPolicyRow(p));
+      }
+    });
+    state.companyIds = ids.slice();
+    state.companyId = ids[0] || "";
+    if(ids.length && !ids.includes(safeTrim(state.activeCompanyId))){
+      state.activeCompanyId = ids[0];
+    }
+    if(!ids.length) state.activeCompanyId = "";
+    state.policies = ids.length
+      ? ids.flatMap((id) => (state.companyPolicies[id] || []).map((p) => normalizeAgentApptPolicyRow(p)))
+      : [newAgentApptPolicyRow()];
+  }
+
+  function migrateAgentApptStateFromMeta(meta){
+    const fresh = newAgentApptState();
+    const src = meta && typeof meta === "object" ? meta : {};
+    let companyIds = Array.isArray(src.companyIds)
+      ? src.companyIds.map((x) => safeTrim(x)).filter(Boolean)
+      : [];
+    if(!companyIds.length && Array.isArray(src.companies)){
+      companyIds = src.companies.map((c) => safeTrim(c?.companyId)).filter(Boolean);
+    }
+    if(!companyIds.length && safeTrim(src.companyId)) companyIds = [safeTrim(src.companyId)];
+    if(!companyIds.length && safeTrim(src.companyLabel)){
+      const byLabel = AGENT_APPT_COMPANIES.find((c) => c.label === safeTrim(src.companyLabel));
+      if(byLabel) companyIds = [byLabel.id];
+    }
+
+    const companyAgents = (src.companyAgents && typeof src.companyAgents === "object")
+      ? JSON.parse(JSON.stringify(src.companyAgents))
+      : {};
+    const companyPolicies = {};
+    if(src.companyPolicies && typeof src.companyPolicies === "object"){
+      Object.keys(src.companyPolicies).forEach((id) => {
+        const list = Array.isArray(src.companyPolicies[id]) ? src.companyPolicies[id] : [];
+        companyPolicies[id] = list.map((p) => normalizeAgentApptPolicyRow(p));
+      });
+    }else if(Array.isArray(src.companies)){
+      src.companies.forEach((co) => {
+        const id = safeTrim(co?.companyId);
+        if(!id) return;
+        companyPolicies[id] = (Array.isArray(co.policies) ? co.policies : []).map((p) => normalizeAgentApptPolicyRow(p));
+        if(!companyAgents[id]){
+          companyAgents[id] = { agentNumber: safeTrim(co?.agentNumber) || safeTrim(src.agent?.agentNumber) || "" };
+        }
+      });
+    }else if(Array.isArray(src.policies) && companyIds[0]){
+      companyPolicies[companyIds[0]] = src.policies.map((p) => normalizeAgentApptPolicyRow(p));
+    }
+
+    if(companyIds[0] && !companyAgents[companyIds[0]] && safeTrim(src.agent?.agentNumber)){
+      companyAgents[companyIds[0]] = { agentNumber: safeTrim(src.agent.agentNumber) };
+    }
+
+    const state = {
+      ...fresh,
+      companyIds,
+      activeCompanyId: safeTrim(src.activeCompanyId) || companyIds[0] || "",
+      companyId: companyIds[0] || "",
+      scope: safeTrim(src.scope) || "specific",
+      requestDate: safeTrim(src.requestDate) || fresh.requestDate,
+      customer: { ...fresh.customer, ...(src.customer && typeof src.customer === "object" ? src.customer : {}) },
+      agent: { ...fresh.agent, ...(src.agent && typeof src.agent === "object" ? src.agent : {}) },
+      companyAgents,
+      companyPolicies
+    };
+    if(state.customer.apartment == null) state.customer.apartment = "";
+    ensureAgentApptCompanyBuckets(state, companyIds);
+    return state;
+  }
+
+  function agentApptCompanyNeedsEmail(companyId){
+    return ["phoenix", "ayalon", "shlomo"].includes(safeTrim(companyId));
+  }
+  function agentApptCompanyNeedsPhoneHome(companyId){
+    return ["menora", "hachshara", "phoenix", "ayalon"].includes(safeTrim(companyId));
+  }
+  function agentApptCompanyNeedsAgentId(companyId){
+    return ["menora", "hachshara", "phoenix"].includes(safeTrim(companyId));
+  }
+  function agentApptCompanyNeedsAddress(companyId){
+    return ["menora", "hachshara", "phoenix", "ayalon", "migdal"].includes(safeTrim(companyId));
+  }
+  function agentApptCompanyNeedsAgentContact(companyId){
+    return ["phoenix", "ayalon", "hachshara"].includes(safeTrim(companyId));
   }
 
   const HealthRiskChoiceUI = {
@@ -59224,7 +59357,7 @@ const ClalRiskLifePdf = {
     _localDraftTimer: null,
     _LOCAL_DRAFT_KEY: "GI_AGENT_APPT_LOCAL_DRAFT_V1",
     STEPS: [
-      { id: 1, label: "חברת ביטוח" },
+      { id: 1, label: "חברות" },
       { id: 2, label: "פרטי לקוח" },
       { id: 3, label: "פוליסות" },
       { id: 4, label: "סיכום" }
@@ -59259,9 +59392,33 @@ const ClalRiskLifePdf = {
     _hasAnyData(){
       const s = this.state || {};
       const c = s.customer || {};
+      if((Array.isArray(s.companyIds) ? s.companyIds : []).length) return true;
       if(safeTrim(s.companyId)) return true;
       if(safeTrim(c.firstName) || safeTrim(c.lastName) || safeTrim(c.idNumber) || safeTrim(c.phone)) return true;
-      return (Array.isArray(s.policies) ? s.policies : []).some((p) => safeTrim(p?.policyNumber) || safeTrim(p?.totalPremium));
+      const allPolicies = this.getAllPolicies();
+      return allPolicies.some((p) => safeTrim(p?.policyNumber) || safeTrim(p?.totalPremium));
+    },
+    getSelectedCompanyIds(){
+      const ids = Array.isArray(this.state?.companyIds) ? this.state.companyIds.map((x) => safeTrim(x)).filter(Boolean) : [];
+      if(ids.length) return ids;
+      return safeTrim(this.state?.companyId) ? [safeTrim(this.state.companyId)] : [];
+    },
+    getAllPolicies(){
+      const ids = this.getSelectedCompanyIds();
+      if(ids.length && this.state?.companyPolicies){
+        return ids.flatMap((id) => Array.isArray(this.state.companyPolicies[id]) ? this.state.companyPolicies[id] : []);
+      }
+      return Array.isArray(this.state?.policies) ? this.state.policies : [];
+    },
+    getActiveCompanyPolicies(){
+      const id = safeTrim(this.state?.activeCompanyId) || this.getSelectedCompanyIds()[0] || "";
+      if(!id) return [];
+      if(!this.state.companyPolicies || typeof this.state.companyPolicies !== "object") this.state.companyPolicies = {};
+      if(!Array.isArray(this.state.companyPolicies[id])) this.state.companyPolicies[id] = [newAgentApptPolicyRow()];
+      return this.state.companyPolicies[id];
+    },
+    syncBuckets(){
+      ensureAgentApptCompanyBuckets(this.state, this.getSelectedCompanyIds());
     },
     _saveLocalDraft(){
       try{
@@ -59307,7 +59464,7 @@ const ClalRiskLifePdf = {
       if(existing) existing.remove();
       const savedAt = snap.savedAt ? new Date(snap.savedAt) : null;
       const timeStr = savedAt ? savedAt.toLocaleString("he-IL", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
-      const stepNames = { 1: "חברת ביטוח", 2: "פרטי לקוח", 3: "פוליסות", 4: "סיכום" };
+      const stepNames = { 1: "חברות", 2: "פרטי לקוח", 3: "פוליסות", 4: "סיכום" };
       const stepLabel = stepNames[snap.step] || `שלב ${snap.step}`;
       const c = snap.state?.customer || {};
       const name = [c.firstName, c.lastName].filter(Boolean).join(" ") || "";
@@ -59324,7 +59481,7 @@ const ClalRiskLifePdf = {
           <div style="font-size:14px;color:#64748b;margin-bottom:4px;">עצרת ב: <strong>${escapeHtml(stepLabel)}</strong></div>
           ${timeStr ? `<div style="font-size:13px;color:#94a3b8;margin-bottom:20px;">נשמר ב‑${escapeHtml(timeStr)}</div>` : `<div style="margin-bottom:20px;"></div>`}
           <div style="display:flex;gap:10px;flex-direction:column;">
-            <button id="lcAgentApptDraftRestoreYes" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);color:#fff;border:none;border-radius:12px;padding:13px 20px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;">המשך מאיפה שעצרתי</button>
+            <button id="lcAgentApptDraftRestoreYes" style="background:linear-gradient(135deg,#1e4fd6,#2a5cf5);color:#fff;border:none;border-radius:12px;padding:13px 20px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;">המשך מאיפה שעצרתי</button>
             <button id="lcAgentApptDraftRestoreNo" style="background:#f1f5f9;color:#475569;border:none;border-radius:12px;padding:11px 20px;font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;">התחל מחדש (מחק טיוטה)</button>
           </div>
         </div>`;
@@ -59341,12 +59498,22 @@ const ClalRiskLifePdf = {
     },
     _restoreFromLocalSnapshot(snap){
       try{ Wizard?.close?.(); }catch(_e){}
-      this.state = snap?.state ? JSON.parse(JSON.stringify(snap.state)) : newAgentApptState();
-      this.state.policies = Array.isArray(this.state.policies) && this.state.policies.length
-        ? this.state.policies.map((p) => normalizeAgentApptPolicyRow(p))
-        : [newAgentApptPolicyRow()];
-      if(this.state.customer && typeof this.state.customer === "object" && this.state.customer.apartment == null){
-        this.state.customer.apartment = "";
+      this.state = migrateAgentApptStateFromMeta(snap?.state || {});
+      if(snap?.state && typeof snap.state === "object"){
+        // Prefer full local snapshot shape when present
+        this.state = migrateAgentApptStateFromMeta({
+          ...snap.state,
+          companyIds: snap.state.companyIds,
+          companyPolicies: snap.state.companyPolicies,
+          companyAgents: snap.state.companyAgents,
+          customer: snap.state.customer,
+          agent: snap.state.agent,
+          policies: snap.state.policies,
+          companyId: snap.state.companyId,
+          activeCompanyId: snap.state.activeCompanyId,
+          scope: snap.state.scope,
+          requestDate: snap.state.requestDate
+        });
       }
       this.editingDraftId = safeTrim(snap?.editingDraftId) || null;
       this.step = Math.max(1, Math.min(this.STEPS.length, Number(snap?.step) || 1));
@@ -59381,25 +59548,16 @@ const ClalRiskLifePdf = {
       const meta = payload.agentAppointmentMeta && typeof payload.agentAppointmentMeta === "object"
         ? payload.agentAppointmentMeta
         : {};
-      const fresh = newAgentApptState();
       this.editingDraftId = rec?.id || null;
       this.step = Math.max(1, Math.min(this.STEPS.length, Number(rec?.currentStep || meta?.wizardStep || 1) || 1));
-      this.state = {
-        companyId: safeTrim(meta.companyId) || "",
-        scope: safeTrim(meta.scope) || "specific",
-        requestDate: safeTrim(meta.requestDate) || fresh.requestDate,
-        customer: { ...fresh.customer, ...(meta.customer && typeof meta.customer === "object" ? meta.customer : {}) },
-        agent: { ...fresh.agent, ...(meta.agent && typeof meta.agent === "object" ? meta.agent : {}) },
-        policies: Array.isArray(meta.policies) && meta.policies.length
-          ? meta.policies.map((p) => normalizeAgentApptPolicyRow(p))
-          : [newAgentApptPolicyRow()]
-      };
-      if(!this.state.companyId && safeTrim(meta.companyLabel)){
-        const byLabel = AGENT_APPT_COMPANIES.find((c) => c.label === safeTrim(meta.companyLabel));
-        if(byLabel) this.state.companyId = byLabel.id;
-      }
-      if((!Array.isArray(this.state.policies) || !this.state.policies.length) && payload?.insureds?.[0]?.data?.existingPolicies?.length){
-        this.state.policies = payload.insureds[0].data.existingPolicies.map((p) => normalizeAgentApptPolicyRow({
+      this.state = migrateAgentApptStateFromMeta(meta);
+
+      // Legacy fallback: policies only on insured existingPolicies
+      const ids = this.getSelectedCompanyIds();
+      if(ids.length === 1 && (!this.state.companyPolicies[ids[0]] || !this.state.companyPolicies[ids[0]].length
+          || (this.state.companyPolicies[ids[0]].length === 1 && !safeTrim(this.state.companyPolicies[ids[0]][0]?.policyNumber)))
+        && payload?.insureds?.[0]?.data?.existingPolicies?.length){
+        this.state.companyPolicies[ids[0]] = payload.insureds[0].data.existingPolicies.map((p) => normalizeAgentApptPolicyRow({
           id: safeTrim(p.id) || ("aap_" + Math.random().toString(16).slice(2)),
           policyNumber: safeTrim(p.policyNumber),
           productType: safeTrim(p.type || p.product) || getAgentApptProductTypes()[0] || "בריאות",
@@ -59408,11 +59566,7 @@ const ClalRiskLifePdf = {
           policyInsureds: p.policyInsureds,
           insuredCount: p.insuredCount
         }));
-      }
-      this.state.policies = (this.state.policies || []).map((p) => normalizeAgentApptPolicyRow(p));
-      if(!this.state.policies.length) this.state.policies = [newAgentApptPolicyRow()];
-      if(this.state.customer && typeof this.state.customer === "object" && this.state.customer.apartment == null){
-        this.state.customer.apartment = "";
+        this.syncBuckets();
       }
     },
     openDraft(rec){
@@ -59446,11 +59600,28 @@ const ClalRiskLifePdf = {
       const hasOther = !!document.querySelector(".modal.is-open, .drawer.is-open, .lcWizard.is-open");
       if(!hasOther) document.body.classList.remove("modal-open");
     },
-    getCompany(){ return getAgentApptCompany(this.state.companyId); },
-    totalPremium(){
-      return (this.state.policies || []).reduce((s, p) => s + (CustomersUI?.asMoneyNumber?.(p.totalPremium) || 0), 0);
+    getCompany(){
+      const id = safeTrim(this.state.activeCompanyId) || this.getSelectedCompanyIds()[0] || safeTrim(this.state.companyId);
+      return getAgentApptCompany(id);
     },
+    getSelectedCompanies(){
+      return this.getSelectedCompanyIds().map((id) => getAgentApptCompany(id)).filter(Boolean);
+    },
+    totalPremium(){
+      return this.getAllPolicies().reduce((s, p) => s + (CustomersUI?.asMoneyNumber?.(p.totalPremium) || 0), 0);
+    },
+    selectedNeedsEmail(){ return this.getSelectedCompanyIds().some(agentApptCompanyNeedsEmail); },
+    selectedNeedsPhoneHome(){ return this.getSelectedCompanyIds().some(agentApptCompanyNeedsPhoneHome); },
+    selectedNeedsAgentId(){ return this.getSelectedCompanyIds().some(agentApptCompanyNeedsAgentId); },
+    selectedNeedsAddress(){ return this.getSelectedCompanyIds().some(agentApptCompanyNeedsAddress); },
+    selectedNeedsAgentContact(){ return this.getSelectedCompanyIds().some(agentApptCompanyNeedsAgentContact); },
+    activeNeedsEmail(){ return agentApptCompanyNeedsEmail(this.state.activeCompanyId || this.getSelectedCompanyIds()[0]); },
+    activeNeedsPhoneHome(){ return agentApptCompanyNeedsPhoneHome(this.state.activeCompanyId || this.getSelectedCompanyIds()[0]); },
+    companyNeedsEmail(){ return this.activeNeedsEmail(); },
+    companyNeedsPhoneHome(){ return this.activeNeedsPhoneHome(); },
+    companyNeedsAgentId(){ return agentApptCompanyNeedsAgentId(this.state.activeCompanyId || this.getSelectedCompanyIds()[0]); },
     renderStepper(){
+      this.syncBuckets();
       const max = this.STEPS.length;
       const pct = Math.round((this.step / max) * 100);
       if(this.els.progress) this.els.progress.style.width = pct + "%";
@@ -59460,10 +59631,14 @@ const ClalRiskLifePdf = {
         const num = s.id < this.step ? "✓" : String(s.id);
         return `<span class="lcStep ${cls}"><span class="lcStep__num">${num}</span> ${escapeHtml(s.label)}</span>`;
       }).join("");
-      const co = this.getCompany();
-      if(this.els.kicker) this.els.kicker.textContent = co ? ("GEMEL INVEST · " + co.label) : "GEMEL INVEST";
+      const cos = this.getSelectedCompanies();
+      if(this.els.kicker){
+        this.els.kicker.textContent = cos.length
+          ? ("GEMEL INVEST · בריאות וסיכונים")
+          : "GEMEL INVEST · בריאות וסיכונים";
+      }
       if(this.els.title){
-        const titles = { 1: "מינוי סוכן · בחירת חברה", 2: "מינוי סוכן · פרטי לקוח", 3: "מינוי סוכן · פוליסות", 4: "מינוי סוכן · סיכום" };
+        const titles = { 1: "מינוי סוכן · בחירת חברות", 2: "מינוי סוכן · פרטי לקוח", 3: "מינוי סוכן · פוליסות", 4: "מינוי סוכן · סיכום" };
         this.els.title.textContent = titles[this.step] || "מינוי סוכן";
       }
       if(this.els.btnPrev) this.els.btnPrev.style.visibility = this.step <= 1 ? "hidden" : "visible";
@@ -59484,27 +59659,28 @@ const ClalRiskLifePdf = {
       </div>`;
     },
     renderStep1(){
+      const selected = new Set(this.getSelectedCompanyIds());
+      const count = selected.size;
       const cards = AGENT_APPT_COMPANIES.map((c) => {
-        const sel = this.state.companyId === c.id ? " is-selected" : "";
+        const sel = selected.has(c.id);
         const logoHtml = renderCompanyLogoHtmlForCompany(c.logoKey || c.label, "card");
-        return `<button type="button" class="giApptCompanyCard${sel}" data-agent-appt-company="${escapeHtml(c.id)}">
+        return `<button type="button" class="giApptCompanyCard${sel ? " is-selected" : ""}" data-agent-appt-company="${escapeHtml(c.id)}" aria-pressed="${sel ? "true" : "false"}">
+          <span class="giApptCompanyCard__check" aria-hidden="true">${sel ? "✓" : ""}</span>
           <span class="giApptCompanyCard__logo">${logoHtml}</span>
           <span class="giApptCompanyCard__name">${escapeHtml(c.label)}</span>
         </button>`;
       }).join("");
-      return `<div class="lcWSection">
-        <div class="lcWTitle">בחר חברת ביטוח</div>
-        <div class="muted small" style="margin-bottom:14px">השדות בשלבים הבאים יותאמו לטופס מינוי הסוכן של החברה</div>
+      return `<div class="lcWSection giApptStepCompanies">
+        <div class="lcWTitle">בחר חברות למינוי</div>
+        <div class="giApptStepCompanies__sub">ניתן לבחור כמה חברות · פרטי הלקוח ימולאו פעם אחת לכל החברות</div>
+        ${count ? `<div class="giApptSelectedChip">${count} חברות נבחרו</div>` : `<div class="giApptSelectedChip giApptSelectedChip--empty">לא נבחרו חברות עדיין</div>`}
         <div class="giApptCompanyGrid">${cards}</div>
       </div>`;
     },
-    companyNeedsEmail(){ return ["phoenix", "ayalon", "shlomo"].includes(this.state.companyId); },
-    companyNeedsPhoneHome(){ return ["menora", "hachshara", "phoenix", "ayalon"].includes(this.state.companyId); },
-    companyNeedsAgentId(){ return ["menora", "hachshara", "phoenix"].includes(this.state.companyId); },
     renderStep2(){
       const c = this.state.customer;
       const a = this.state.agent;
-      const addrFields = ["menora", "hachshara", "phoenix", "ayalon", "migdal"].includes(this.state.companyId);
+      const cos = this.getSelectedCompanies();
       let customerGrid = [
         this.fieldHtml("שם פרטי", "customer.firstName", c.firstName, { required: true }),
         this.fieldHtml("שם משפחה", "customer.lastName", c.lastName, { required: true }),
@@ -59512,9 +59688,9 @@ const ClalRiskLifePdf = {
         this.fieldHtml("תאריך הבקשה", "customer.requestDate", this.state.requestDate, { type: "date", required: true }),
         this.fieldHtml("טלפון נייד", "customer.phone", c.phone, { type: "tel", inputMode: "tel" })
       ];
-      if(this.companyNeedsPhoneHome()) customerGrid.push(this.fieldHtml("טלפון נייח", "customer.phoneHome", c.phoneHome, { type: "tel", inputMode: "tel" }));
-      if(this.companyNeedsEmail()) customerGrid.push(this.fieldHtml("דוא״ל", "customer.email", c.email, { type: "email" }));
-      if(addrFields){
+      if(this.selectedNeedsPhoneHome()) customerGrid.push(this.fieldHtml("טלפון נייח", "customer.phoneHome", c.phoneHome, { type: "tel", inputMode: "tel" }));
+      if(this.selectedNeedsEmail()) customerGrid.push(this.fieldHtml("דוא״ל", "customer.email", c.email, { type: "email" }));
+      if(this.selectedNeedsAddress()){
         customerGrid.push(
           this.fieldHtml("רחוב", "customer.street", c.street),
           this.fieldHtml("מספר בית", "customer.houseNumber", c.houseNumber),
@@ -59524,22 +59700,33 @@ const ClalRiskLifePdf = {
         );
       }
       const agentGrid = [
-        this.fieldHtml("שם הסוכן", "agent.name", a.name, { required: true }),
-        this.fieldHtml("מספר סוכן בחברה", "agent.agentNumber", a.agentNumber, { required: true, inputMode: "numeric" })
+        this.fieldHtml("שם הסוכן", "agent.name", a.name, { required: true })
       ];
-      if(this.companyNeedsAgentId()) agentGrid.push(this.fieldHtml("ת.ז. הסוכן", "agent.idNumber", a.idNumber, { inputMode: "numeric" }));
-      if(["phoenix", "ayalon", "hachshara"].includes(this.state.companyId)){
+      if(this.selectedNeedsAgentId()) agentGrid.push(this.fieldHtml("ת.ז. הסוכן", "agent.idNumber", a.idNumber, { inputMode: "numeric" }));
+      if(this.selectedNeedsAgentContact()){
         agentGrid.push(this.fieldHtml("טלפון הסוכן", "agent.phone", a.phone, { type: "tel", inputMode: "tel" }));
         agentGrid.push(this.fieldHtml("כתובת הסוכן", "agent.address", a.address));
       }
-      return `<div class="lcWSection">
+      const agentNumFields = cos.map((co) => {
+        const num = safeTrim(this.state.companyAgents?.[co.id]?.agentNumber);
+        return `<div class="field" data-required data-agent-appt-field="companyAgent.${escapeHtml(co.id)}">
+          <label class="label">מספר סוכן · ${escapeHtml(co.label)}</label>
+          <input class="input" type="text" inputmode="numeric" data-agent-appt-company-agent="${escapeHtml(co.id)}" value="${escapeHtml(num)}"/>
+        </div>`;
+      }).join("");
+      const syncNames = cos.map((co) => escapeHtml(co.label)).join(" · ") || "—";
+      return `<div class="giApptSyncBanner">
+        <div class="giApptSyncBanner__title">פרטי הלקוח יסונכרנו ל־${cos.length} חברות</div>
+        <div class="giApptSyncBanner__sub">${syncNames}</div>
+      </div>
+      <div class="lcWSection">
         <div class="lcWTitle">פרטי המבוטח / בעל הפוליסה</div>
         <div class="lcWGrid">${customerGrid.join("")}</div>
       </div>
       <div class="lcWSection">
         <div class="lcWTitle">פרטי הסוכן הממונה</div>
-        <div class="lcWGrid">${agentGrid.join("")}</div>
-        <div class="help muted small" style="margin-top:10px">פרטי הנציג נטענים מהמערכת · ניתן לערוך לפי דרישות החברה</div>
+        <div class="lcWGrid">${agentGrid.join("")}${agentNumFields}</div>
+        <div class="help muted small" style="margin-top:10px">פרטי הלקוח משותפים לכל החברות · מספר סוכן נפרד לכל חברה</div>
       </div>`;
     },
     renderPolicyInsuredCard(policyId, ins, index){
@@ -59566,11 +59753,11 @@ const ClalRiskLifePdf = {
             <label class="label">טלפון נייד</label>
             <input class="input" type="tel" inputmode="tel" data-agent-appt-insured-field="phone" data-agent-appt-insured-id="${escapeHtml(ins.id)}" data-agent-appt-policy-id="${escapeHtml(policyId)}" value="${escapeHtml(safeTrim(ins.phone))}"/>
           </div>
-          ${this.companyNeedsPhoneHome() ? `<div class="field">
+          ${this.activeNeedsPhoneHome() ? `<div class="field">
             <label class="label">טלפון נייח</label>
             <input class="input" type="tel" inputmode="tel" data-agent-appt-insured-field="phoneHome" data-agent-appt-insured-id="${escapeHtml(ins.id)}" data-agent-appt-policy-id="${escapeHtml(policyId)}" value="${escapeHtml(safeTrim(ins.phoneHome))}"/>
           </div>` : ""}
-          ${this.companyNeedsEmail() ? `<div class="field">
+          ${this.activeNeedsEmail() ? `<div class="field">
             <label class="label">דוא״ל</label>
             <input class="input" type="email" data-agent-appt-insured-field="email" data-agent-appt-insured-id="${escapeHtml(ins.id)}" data-agent-appt-policy-id="${escapeHtml(policyId)}" value="${escapeHtml(safeTrim(ins.email))}"/>
           </div>` : ""}
@@ -59578,18 +59765,20 @@ const ClalRiskLifePdf = {
         <div class="giApptPolicyInsured__addrNote">כתובת (רחוב, מספר בית, דירה, יישוב, מיקוד) נשאבת אוטומטית מפרטי הלקוח שמילאת בשלב הקודם</div>
       </div>`;
     },
-    renderPolicyCard(p, index){
+    renderPolicyCard(p, index, companyId){
       const productTypes = getAgentApptProductTypes();
       const opts = productTypes.map((t) => `<option value="${escapeHtml(t)}"${p.productType === t ? " selected" : ""}>${escapeHtml(t)}</option>`).join("");
       const c = this.state.customer || {};
       const primaryName = safeTrim(((c.firstName || "") + " " + (c.lastName || "")).trim()) || "מבוטח ראשי";
       const extras = Array.isArray(p.additionalInsureds) ? p.additionalInsureds : [];
       const insuredCount = getAgentApptPolicyInsuredCount(p);
+      const policies = this.getActiveCompanyPolicies();
       const extrasHtml = extras.map((ins, i) => this.renderPolicyInsuredCard(p.id, ins, i)).join("");
-      return `<div class="giApptPolicyCard" data-agent-appt-policy="${escapeHtml(p.id)}">
+      const co = getAgentApptCompany(companyId);
+      return `<div class="giApptPolicyCard" data-agent-appt-policy="${escapeHtml(p.id)}" data-agent-appt-policy-company="${escapeHtml(companyId)}">
         <div class="giApptPolicyCard__head">
           <span class="giApptPolicyCard__title">פוליסה ${index + 1} · ${insuredCount} ${insuredCount === 1 ? "מבוטח" : "מבוטחים"}</span>
-          ${this.state.policies.length > 1 ? `<button type="button" class="btn btn--small" data-agent-appt-remove-policy="${escapeHtml(p.id)}">הסר</button>` : ""}
+          ${policies.length > 1 ? `<button type="button" class="btn btn--small" data-agent-appt-remove-policy="${escapeHtml(p.id)}">הסר</button>` : ""}
         </div>
         <div class="giApptPolicyCard__body">
           <div class="lcWGrid">
@@ -59602,7 +59791,7 @@ const ClalRiskLifePdf = {
               <select class="input" data-agent-appt-policy-field="productType" data-agent-appt-policy-id="${escapeHtml(p.id)}">${opts}</select>
             </div>
             <div class="field" data-required>
-              <label class="label">סה״כ פרמיה (חודשי) ₪</label>
+              <label class="label">פרמיה חודשית ₪</label>
               <input class="input" type="text" inputmode="decimal" data-agent-appt-policy-field="totalPremium" data-agent-appt-policy-id="${escapeHtml(p.id)}" value="${escapeHtml(safeTrim(p.totalPremium))}" placeholder="0"/>
             </div>
           </div>
@@ -59614,7 +59803,7 @@ const ClalRiskLifePdf = {
             <div class="giApptPolicyInsured giApptPolicyInsured--primary">
               <div class="giApptPolicyInsured__head">
                 <span class="giApptPolicyInsured__title">מבוטח ראשי</span>
-                <span class="giApptPolicyInsured__badge">מהלקוח</span>
+                <span class="giApptPolicyInsured__badge">מסונכרן</span>
               </div>
               <div class="giApptPolicyInsured__primaryMeta">
                 <strong>${escapeHtml(primaryName)}</strong>
@@ -59622,48 +59811,83 @@ const ClalRiskLifePdf = {
               </div>
             </div>
             ${extrasHtml}
-            <button type="button" class="btn giApptPolicyInsureds__add" data-agent-appt-add-insured data-agent-appt-policy-id="${escapeHtml(p.id)}">➕ הוסף מבוטח לפוליסה</button>
+            <button type="button" class="btn giApptPolicyInsureds__add" data-agent-appt-add-insured data-agent-appt-policy-id="${escapeHtml(p.id)}">+ הוסף מבוטח לפוליסה</button>
           </div>
         </div>
       </div>`;
     },
     renderStep3(){
+      this.syncBuckets();
+      const ids = this.getSelectedCompanyIds();
+      if(!ids.length){
+        return `<div class="lcWSection"><div class="lcWTitle">אין חברות נבחרות</div><div class="muted">חזור לשלב בחירת החברות.</div></div>`;
+      }
+      let activeId = safeTrim(this.state.activeCompanyId);
+      if(!ids.includes(activeId)) activeId = ids[0];
+      this.state.activeCompanyId = activeId;
+      const c = this.state.customer || {};
+      const fullName = safeTrim(((c.firstName || "") + " " + (c.lastName || "")).trim()) || "—";
+      const cos = this.getSelectedCompanies();
+      const tabs = cos.map((co) => {
+        const on = co.id === activeId ? " is-active" : "";
+        return `<button type="button" class="giApptCompanyTab${on}" data-agent-appt-tab="${escapeHtml(co.id)}">${escapeHtml(co.label)}</button>`;
+      }).join("");
+      const activeCo = getAgentApptCompany(activeId);
+      const policies = this.getActiveCompanyPolicies();
+      const cards = policies.map((p, i) => this.renderPolicyCard(p, i, activeId)).join("");
       const scopeAll = this.state.scope === "all";
-      const cards = (this.state.policies || []).map((p, i) => this.renderPolicyCard(p, i)).join("");
-      return `<div class="lcWSection">
-        <div class="lcWTitle">היקף המינוי</div>
+      return `<div class="giApptSyncBanner">
+        <div class="giApptSyncBanner__title">פרטי הלקוח סונכרנו ל־${ids.length} חברות</div>
+        <div class="giApptSyncBanner__sub">${escapeHtml(fullName)} · ת.ז. ${escapeHtml(safeTrim(c.idNumber) || "—")}${safeTrim(c.phone) ? " · " + escapeHtml(safeTrim(c.phone)) : ""}</div>
+      </div>
+      <div class="giApptCompanyTabs" role="tablist">${tabs}</div>
+      <div class="lcWSection" style="margin-top:14px">
+        <div class="lcWTitle">היקף המינוי · ${escapeHtml(activeCo?.label || "")}</div>
         <div class="giApptScopeChips">
           <button type="button" class="giApptScopeChip${scopeAll ? " is-active" : ""}" data-agent-appt-scope="all">כל הפוליסות על שמי</button>
           <button type="button" class="giApptScopeChip${!scopeAll ? " is-active" : ""}" data-agent-appt-scope="specific">פוליסות ספציפיות</button>
         </div>
       </div>
       ${cards}
-      <button type="button" class="btn" data-agent-appt-add-policy style="margin-top:12px;width:100%">➕ הוסף פוליסה נוספת</button>`;
+      <button type="button" class="btn giApptAddPolicyBtn" data-agent-appt-add-policy>+ הוסף פוליסה ל${escapeHtml(activeCo?.label || "חברה")}</button>`;
     },
     renderStep4(){
-      const co = this.getCompany();
+      const cos = this.getSelectedCompanies();
       const c = this.state.customer;
       const a = this.state.agent;
       const fullName = safeTrim(((c.firstName || "") + " " + (c.lastName || "")).trim());
       const total = this.totalPremium();
       const fmt = typeof formatMoney === "function" ? formatMoney(total) : ("₪ " + total);
       const scopeLabel = this.state.scope === "all" ? "כל הפוליסות על שמי" : "פוליסות ספציפיות";
-      const policyRows = (this.state.policies || []).map((p, i) => {
+      const allPolicies = [];
+      this.getSelectedCompanyIds().forEach((id) => {
+        const co = getAgentApptCompany(id);
+        (this.state.companyPolicies?.[id] || []).forEach((p) => {
+          allPolicies.push({ ...p, _companyLabel: co?.label || id });
+        });
+      });
+      const policyRows = allPolicies.map((p, i) => {
         const prem = CustomersUI?.asMoneyNumber?.(p.totalPremium);
         const premLabel = prem ? (typeof formatMoney === "function" ? formatMoney(prem) : ("₪ " + prem)) : (safeTrim(p.totalPremium) || "—");
         const insuredCount = getAgentApptPolicyInsuredCount(p);
         return `<tr>
           <td>${i + 1}</td>
+          <td>${escapeHtml(p._companyLabel || "—")}</td>
           <td>${escapeHtml(safeTrim(p.policyNumber) || "—")}</td>
           <td>${escapeHtml(safeTrim(p.productType) || "—")}</td>
           <td>${insuredCount}</td>
           <td>${escapeHtml(premLabel)}</td>
         </tr>`;
       }).join("");
+      const companyLines = cos.map((co) => {
+        const num = safeTrim(this.state.companyAgents?.[co.id]?.agentNumber) || "—";
+        const count = (this.state.companyPolicies?.[co.id] || []).length;
+        return `<div class="giApptSummaryList__row"><span>${escapeHtml(co.label)}</span><strong>${count} פוליסות · סוכן ${escapeHtml(num)}</strong></div>`;
+      }).join("");
       return `<div class="giApptSummaryLayout">
         <div class="giApptSummaryLayout__hero">
           <div class="giApptSummaryLayout__title">סיכום מינוי סוכן</div>
-          <div class="giApptSummaryLayout__sub">${escapeHtml(co?.label || "—")} · ${this.state.policies.length} ${this.state.policies.length === 1 ? "פוליסה" : "פוליסות"} · ${escapeHtml(scopeLabel)}</div>
+          <div class="giApptSummaryLayout__sub">${cos.length} חברות · ${allPolicies.length} ${allPolicies.length === 1 ? "פוליסה" : "פוליסות"} · ${escapeHtml(scopeLabel)}</div>
         </div>
         <div class="giApptSummaryLayout__grid">
           <section class="giApptSummaryPanel">
@@ -59672,17 +59896,17 @@ const ClalRiskLifePdf = {
               <div class="giApptSummaryList__row"><span>לקוח</span><strong>${escapeHtml(fullName || "—")}</strong></div>
               <div class="giApptSummaryList__row"><span>ת.ז.</span><strong>${escapeHtml(safeTrim(c.idNumber) || "—")}</strong></div>
               <div class="giApptSummaryList__row giApptSummaryList__row--premium"><span>פרמיה חודשית</span><strong>${escapeHtml(fmt)}</strong></div>
-              <div class="giApptSummaryList__row"><span>חברה</span><strong>${escapeHtml(co?.label || "—")}</strong></div>
-              <div class="giApptSummaryList__row"><span>סוכן</span><strong>${escapeHtml(safeTrim(a.name) || "—")} · ${escapeHtml(safeTrim(a.agentNumber) || "—")}</strong></div>
+              <div class="giApptSummaryList__row"><span>סוכן</span><strong>${escapeHtml(safeTrim(a.name) || "—")}</strong></div>
               <div class="giApptSummaryList__row"><span>היקף</span><strong>${escapeHtml(scopeLabel)}</strong></div>
+              ${companyLines}
             </div>
           </section>
           <section class="giApptSummaryPanel giApptSummaryPanel--wide">
             <div class="giApptSummaryPanel__head">פירוט פוליסות</div>
             <div class="giApptSummaryTableWrap">
               <table class="giApptSummaryTable">
-                <thead><tr><th>#</th><th>מספר פוליסה</th><th>מוצר</th><th>מבוטחים</th><th>פרמיה</th></tr></thead>
-                <tbody>${policyRows || `<tr><td colspan="5" class="muted small">אין פוליסות</td></tr>`}</tbody>
+                <thead><tr><th>#</th><th>חברה</th><th>מספר פוליסה</th><th>מוצר</th><th>מבוטחים</th><th>פרמיה</th></tr></thead>
+                <tbody>${policyRows || `<tr><td colspan="6" class="muted small">אין פוליסות</td></tr>`}</tbody>
               </table>
             </div>
           </section>
@@ -59704,15 +59928,33 @@ const ClalRiskLifePdf = {
       }
       cur[parts[parts.length - 1]] = value;
     },
+    findPolicyRow(polId){
+      const id = safeTrim(polId);
+      for(const companyId of this.getSelectedCompanyIds()){
+        const list = this.state.companyPolicies?.[companyId];
+        if(!Array.isArray(list)) continue;
+        const row = list.find((p) => p.id === id);
+        if(row) return { row, companyId, list };
+      }
+      return null;
+    },
     handleBodyInput(ev){
       const t = ev.target;
+      const companyAgentId = t?.getAttribute?.("data-agent-appt-company-agent");
+      if(companyAgentId){
+        if(!this.state.companyAgents || typeof this.state.companyAgents !== "object") this.state.companyAgents = {};
+        if(!this.state.companyAgents[companyAgentId]) this.state.companyAgents[companyAgentId] = { agentNumber: "" };
+        this.state.companyAgents[companyAgentId].agentNumber = t.value;
+        this._persistLocalDraftDebounced();
+        return;
+      }
       const polId = t?.getAttribute?.("data-agent-appt-policy-id");
       const insuredId = t?.getAttribute?.("data-agent-appt-insured-id");
       const insuredField = t?.getAttribute?.("data-agent-appt-insured-field");
       if(polId && insuredId && insuredField){
-        const row = this.state.policies.find((p) => p.id === polId);
-        const ins = Array.isArray(row?.additionalInsureds)
-          ? row.additionalInsureds.find((x) => x.id === insuredId)
+        const found = this.findPolicyRow(polId);
+        const ins = Array.isArray(found?.row?.additionalInsureds)
+          ? found.row.additionalInsureds.find((x) => x.id === insuredId)
           : null;
         if(ins) ins[insuredField] = t.value;
         this._persistLocalDraftDebounced();
@@ -59720,8 +59962,8 @@ const ClalRiskLifePdf = {
       }
       const polField = t?.getAttribute?.("data-agent-appt-policy-field");
       if(polId && polField){
-        const row = this.state.policies.find((p) => p.id === polId);
-        if(row) row[polField] = t.value;
+        const found = this.findPolicyRow(polId);
+        if(found?.row) found.row[polField] = t.value;
         this._persistLocalDraftDebounced();
         return;
       }
@@ -59735,7 +59977,20 @@ const ClalRiskLifePdf = {
       const t = ev.target;
       const coBtn = t?.closest?.("[data-agent-appt-company]");
       if(coBtn){
-        this.state.companyId = safeTrim(coBtn.getAttribute("data-agent-appt-company"));
+        const id = safeTrim(coBtn.getAttribute("data-agent-appt-company"));
+        if(!id) return;
+        const set = new Set(this.getSelectedCompanyIds());
+        if(set.has(id)) set.delete(id);
+        else set.add(id);
+        const nextIds = AGENT_APPT_COMPANIES.map((c) => c.id).filter((x) => set.has(x));
+        ensureAgentApptCompanyBuckets(this.state, nextIds);
+        this.render();
+        this._saveLocalDraft();
+        return;
+      }
+      const tabBtn = t?.closest?.("[data-agent-appt-tab]");
+      if(tabBtn){
+        this.state.activeCompanyId = safeTrim(tabBtn.getAttribute("data-agent-appt-tab"));
         this.render();
         this._saveLocalDraft();
         return;
@@ -59748,18 +60003,23 @@ const ClalRiskLifePdf = {
         return;
       }
       if(t?.closest?.("[data-agent-appt-add-policy]")){
-        this.state.policies.push(newAgentApptPolicyRow());
-        this.render();
-        this._saveLocalDraft();
+        const activeId = safeTrim(this.state.activeCompanyId) || this.getSelectedCompanyIds()[0];
+        if(activeId){
+          if(!this.state.companyPolicies[activeId]) this.state.companyPolicies[activeId] = [];
+          this.state.companyPolicies[activeId].push(newAgentApptPolicyRow());
+          this.syncBuckets();
+          this.render();
+          this._saveLocalDraft();
+        }
         return;
       }
       const addInsuredBtn = t?.closest?.("[data-agent-appt-add-insured]");
       if(addInsuredBtn){
         const pid = safeTrim(addInsuredBtn.getAttribute("data-agent-appt-policy-id"));
-        const row = this.state.policies.find((p) => p.id === pid);
-        if(row){
-          if(!Array.isArray(row.additionalInsureds)) row.additionalInsureds = [];
-          row.additionalInsureds.push(newAgentApptPolicyInsuredRow());
+        const found = this.findPolicyRow(pid);
+        if(found?.row){
+          if(!Array.isArray(found.row.additionalInsureds)) found.row.additionalInsureds = [];
+          found.row.additionalInsureds.push(newAgentApptPolicyInsuredRow());
           this.render();
           this._saveLocalDraft();
         }
@@ -59769,9 +60029,9 @@ const ClalRiskLifePdf = {
       if(remInsuredBtn){
         const iid = safeTrim(remInsuredBtn.getAttribute("data-agent-appt-remove-insured"));
         const pid = safeTrim(remInsuredBtn.getAttribute("data-agent-appt-policy-id"));
-        const row = this.state.policies.find((p) => p.id === pid);
-        if(row && Array.isArray(row.additionalInsureds)){
-          row.additionalInsureds = row.additionalInsureds.filter((x) => x.id !== iid);
+        const found = this.findPolicyRow(pid);
+        if(found?.row && Array.isArray(found.row.additionalInsureds)){
+          found.row.additionalInsureds = found.row.additionalInsureds.filter((x) => x.id !== iid);
           this.render();
           this._saveLocalDraft();
         }
@@ -59779,37 +60039,50 @@ const ClalRiskLifePdf = {
       }
       const remId = t?.closest?.("[data-agent-appt-remove-policy]")?.getAttribute("data-agent-appt-remove-policy");
       if(remId){
-        this.state.policies = this.state.policies.filter((p) => p.id !== remId);
-        if(!this.state.policies.length) this.state.policies.push(newAgentApptPolicyRow());
-        this.render();
-        this._saveLocalDraft();
+        const found = this.findPolicyRow(remId);
+        if(found){
+          found.list.splice(found.list.indexOf(found.row), 1);
+          if(!found.list.length) found.list.push(newAgentApptPolicyRow());
+          this.state.companyPolicies[found.companyId] = found.list;
+          this.syncBuckets();
+          this.render();
+          this._saveLocalDraft();
+        }
       }
     },
     validateStep(step){
       if(step === 1){
-        if(!this.state.companyId) return { ok: false, msg: "יש לבחור חברת ביטוח" };
+        if(!this.getSelectedCompanyIds().length) return { ok: false, msg: "יש לבחור לפחות חברת ביטוח אחת" };
         return { ok: true };
       }
       if(step === 2){
         const c = this.state.customer;
         if(!safeTrim(c.firstName) || !safeTrim(c.lastName)) return { ok: false, msg: "יש למלא שם פרטי ושם משפחה" };
         if(!normalizeIdValue(c.idNumber)) return { ok: false, msg: "יש למלא מספר ת.ז. תקין" };
-        if(!safeTrim(this.state.agent.name) || !safeTrim(this.state.agent.agentNumber)) return { ok: false, msg: "יש למלא שם סוכן ומספר סוכן" };
+        if(!safeTrim(this.state.agent.name)) return { ok: false, msg: "יש למלא שם סוכן" };
+        for(const co of this.getSelectedCompanies()){
+          const num = safeTrim(this.state.companyAgents?.[co.id]?.agentNumber);
+          if(!num) return { ok: false, msg: `יש למלא מספר סוכן עבור ${co.label}` };
+        }
         return { ok: true };
       }
       if(step === 3){
-        for(const p of this.state.policies){
-          if(!safeTrim(p.policyNumber)) return { ok: false, msg: "יש למלא מספר פוליסה בכל השורות" };
-          const prem = CustomersUI?.asMoneyNumber?.(p.totalPremium);
-          if(!prem || prem <= 0) return { ok: false, msg: "יש למלא סה״כ פרמיה גדול מאפס בכל פוליסה" };
-          const extras = Array.isArray(p.additionalInsureds) ? p.additionalInsureds : [];
-          for(let i = 0; i < extras.length; i++){
-            const ins = extras[i];
-            if(!safeTrim(ins.firstName) || !safeTrim(ins.lastName)){
-              return { ok: false, msg: `בפוליסה ${safeTrim(p.policyNumber) || ""} יש למלא שם למבוטח נוסף ${i + 1}` };
-            }
-            if(!normalizeIdValue(ins.idNumber)){
-              return { ok: false, msg: `בפוליסה ${safeTrim(p.policyNumber) || ""} יש למלא ת.ז. תקינה למבוטח נוסף ${i + 1}` };
+        for(const co of this.getSelectedCompanies()){
+          const policies = this.state.companyPolicies?.[co.id] || [];
+          if(!policies.length) return { ok: false, msg: `יש להוסיף לפחות פוליסה אחת ל${co.label}` };
+          for(const p of policies){
+            if(!safeTrim(p.policyNumber)) return { ok: false, msg: `יש למלא מספר פוליסה בכל השורות (${co.label})` };
+            const prem = CustomersUI?.asMoneyNumber?.(p.totalPremium);
+            if(!prem || prem <= 0) return { ok: false, msg: `יש למלא סה״כ פרמיה גדול מאפס בכל פוליסה (${co.label})` };
+            const extras = Array.isArray(p.additionalInsureds) ? p.additionalInsureds : [];
+            for(let i = 0; i < extras.length; i++){
+              const ins = extras[i];
+              if(!safeTrim(ins.firstName) || !safeTrim(ins.lastName)){
+                return { ok: false, msg: `ב${co.label} · פוליסה ${safeTrim(p.policyNumber) || ""} יש למלא שם למבוטח נוסף ${i + 1}` };
+              }
+              if(!normalizeIdValue(ins.idNumber)){
+                return { ok: false, msg: `ב${co.label} · פוליסה ${safeTrim(p.policyNumber) || ""} יש למלא ת.ז. תקינה למבוטח נוסף ${i + 1}` };
+              }
             }
           }
         }
@@ -59836,7 +60109,7 @@ const ClalRiskLifePdf = {
       this._saveLocalDraft();
     },
     buildCustomerPayload(){
-      const co = this.getCompany();
+      this.syncBuckets();
       const c = this.state.customer;
       const addr = {
         street: safeTrim(c.street),
@@ -59848,75 +60121,100 @@ const ClalRiskLifePdf = {
       const existingPolicies = [];
       const cancellations = {};
       const additionalById = new Map();
-      (this.state.policies || []).forEach((p) => {
-        const prem = String(CustomersUI?.asMoneyNumber?.(p.totalPremium) || safeTrim(p.totalPremium));
-        const appointedAt = nowISO();
-        const extras = Array.isArray(p.additionalInsureds) ? p.additionalInsureds : [];
-        const policyInsureds = [
-          {
-            id: "ins_primary",
-            role: "primary",
-            firstName: safeTrim(c.firstName),
-            lastName: safeTrim(c.lastName),
-            idNumber: normalizeIdValue(c.idNumber),
-            phone: normalizePhoneValue(c.phone),
-            phoneHome: safeTrim(c.phoneHome),
-            email: normalizeEmailValue(c.email),
-            ...addr
-          },
-          ...extras.map((ins) => {
-            const row = {
-              id: safeTrim(ins.id) || ("aai_" + Math.random().toString(16).slice(2)),
-              role: "additional",
+      const companiesMeta = [];
+      const flatPolicies = [];
+
+      this.getSelectedCompanyIds().forEach((companyId) => {
+        const co = getAgentApptCompany(companyId);
+        const agentNumber = safeTrim(this.state.companyAgents?.[companyId]?.agentNumber);
+        const policies = (this.state.companyPolicies?.[companyId] || []).map((p) => normalizeAgentApptPolicyRow(p));
+        companiesMeta.push({
+          companyId,
+          companyLabel: co?.label || companyId,
+          agentNumber,
+          scope: this.state.scope,
+          policies: JSON.parse(JSON.stringify(policies))
+        });
+        policies.forEach((p) => {
+          flatPolicies.push(normalizeAgentApptPolicyRow(p));
+          const prem = String(CustomersUI?.asMoneyNumber?.(p.totalPremium) || safeTrim(p.totalPremium));
+          const appointedAt = nowISO();
+          const extras = Array.isArray(p.additionalInsureds) ? p.additionalInsureds : [];
+          const policyInsureds = [
+            {
+              id: "ins_primary",
+              role: "primary",
+              firstName: safeTrim(c.firstName),
+              lastName: safeTrim(c.lastName),
+              idNumber: normalizeIdValue(c.idNumber),
+              phone: normalizePhoneValue(c.phone),
+              phoneHome: safeTrim(c.phoneHome),
+              email: normalizeEmailValue(c.email),
+              ...addr
+            },
+            ...extras.map((ins) => {
+              const row = {
+                id: safeTrim(ins.id) || ("aai_" + Math.random().toString(16).slice(2)),
+                role: "additional",
+                firstName: safeTrim(ins.firstName),
+                lastName: safeTrim(ins.lastName),
+                idNumber: normalizeIdValue(ins.idNumber),
+                phone: normalizePhoneValue(ins.phone),
+                phoneHome: safeTrim(ins.phoneHome),
+                email: normalizeEmailValue(ins.email),
+                ...addr
+              };
+              const key = row.idNumber || row.id;
+              if(key && !additionalById.has(key)) additionalById.set(key, row);
+              return row;
+            })
+          ];
+          existingPolicies.push({
+            id: p.id,
+            company: co?.label || "",
+            type: safeTrim(p.productType) || "פוליסה",
+            product: safeTrim(p.productType) || "פוליסה",
+            policyNumber: safeTrim(p.policyNumber),
+            monthlyPremium: prem,
+            premiumMonthly: prem,
+            premium: prem,
+            premiumValue: prem,
+            existingStatus: "agent_appoint",
+            origin: "existing",
+            _appointedAt: appointedAt,
+            insuredCount: policyInsureds.length,
+            policyInsureds,
+            additionalInsureds: extras.map((ins) => ({
+              id: safeTrim(ins.id),
               firstName: safeTrim(ins.firstName),
               lastName: safeTrim(ins.lastName),
               idNumber: normalizeIdValue(ins.idNumber),
               phone: normalizePhoneValue(ins.phone),
               phoneHome: safeTrim(ins.phoneHome),
-              email: normalizeEmailValue(ins.email),
-              ...addr
-            };
-            const key = row.idNumber || row.id;
-            if(key && !additionalById.has(key)) additionalById.set(key, row);
-            return row;
-          })
-        ];
-        existingPolicies.push({
-          id: p.id,
-          company: co?.label || "",
-          type: safeTrim(p.productType) || "פוליסה",
-          product: safeTrim(p.productType) || "פוליסה",
-          policyNumber: safeTrim(p.policyNumber),
-          monthlyPremium: prem,
-          premiumMonthly: prem,
-          premium: prem,
-          premiumValue: prem,
-          existingStatus: "agent_appoint",
-          origin: "existing",
-          _appointedAt: appointedAt,
-          insuredCount: policyInsureds.length,
-          policyInsureds,
-          additionalInsureds: extras.map((ins) => ({
-            id: safeTrim(ins.id),
-            firstName: safeTrim(ins.firstName),
-            lastName: safeTrim(ins.lastName),
-            idNumber: normalizeIdValue(ins.idNumber),
-            phone: normalizePhoneValue(ins.phone),
-            phoneHome: safeTrim(ins.phoneHome),
-            email: normalizeEmailValue(ins.email)
-          }))
+              email: normalizeEmailValue(ins.email)
+            }))
+          });
+          cancellations[p.id] = { status: "agent_appoint", appointedAt };
         });
-        cancellations[p.id] = { status: "agent_appoint", appointedAt };
       });
-      const metaPolicies = (this.state.policies || []).map((p) => normalizeAgentApptPolicyRow(p));
+
+      const firstCo = companiesMeta[0] || null;
+      const agentShared = JSON.parse(JSON.stringify(this.state.agent || {}));
+      agentShared.agentNumber = safeTrim(firstCo?.agentNumber) || safeTrim(agentShared.agentNumber);
+
       const meta = {
-        companyId: this.state.companyId,
-        companyLabel: co?.label || "",
+        companyIds: this.getSelectedCompanyIds().slice(),
+        companyId: safeTrim(firstCo?.companyId) || "",
+        companyLabel: companiesMeta.map((x) => x.companyLabel).filter(Boolean).join(" · "),
+        companies: companiesMeta,
+        companyAgents: JSON.parse(JSON.stringify(this.state.companyAgents || {})),
+        companyPolicies: JSON.parse(JSON.stringify(this.state.companyPolicies || {})),
+        activeCompanyId: safeTrim(this.state.activeCompanyId) || safeTrim(firstCo?.companyId) || "",
         scope: this.state.scope,
         requestDate: this.state.requestDate,
         customer: JSON.parse(JSON.stringify(this.state.customer)),
-        agent: JSON.parse(JSON.stringify(this.state.agent)),
-        policies: JSON.parse(JSON.stringify(metaPolicies)),
+        agent: agentShared,
+        policies: JSON.parse(JSON.stringify(flatPolicies)),
         wizardStep: this.step,
         savedAt: nowISO()
       };
