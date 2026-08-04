@@ -5919,6 +5919,7 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
 }
 
 #view-dailySales .giDailySalesPage__splitItem--briut .giDailySalesPage__splitVal:not(#\9):not(#\9){ color: #1a7a4a; }
+#view-dailySales .giDailySalesPage__splitItem--sikunim .giDailySalesPage__splitVal:not(#\9):not(#\9){ color: #b45309; }
 #view-dailySales .giDailySalesPage__splitItem--almanteri .giDailySalesPage__splitVal:not(#\9):not(#\9){ color: #2b5cb8; }
 #view-dailySales .giDailySalesPage__splitItem--pensia .giDailySalesPage__splitVal:not(#\9):not(#\9){ color: #6b46c1; }
 #view-dailySales .giDailySalesPage__splitItem--other .giDailySalesPage__splitVal:not(#\9):not(#\9){ color: var(--gi-text-3); }

@@ -25252,16 +25252,17 @@ UsersGateUI.init();
       }).join("");
     },
 
-    /* GI-FIX 2026-08-03: פיצול סה״כ הפרמיה לפי ענף. «בריאות» ו«סיכונים»
-       מאוחדים לדלי אחד כי הם מגיעים מאותו אשף («בריאות וסיכונים»).
+    /* GI-FIX 2026-08-04: פיצול סה״כ הפרמיה לפי ענף.
+       עכשיו מציגים בנפרד: «סיכונים» ו־«בריאות», וגם «סה״כ בריאות+סיכונים».
        נגזר מ-groups שכבר חושבו — בלי מעבר נוסף על הלקוחות. */
     dailySalesBranchTotals(report){
       const groups = Array.isArray(report?.groups) ? report.groups : [];
-      const buckets = { health: 0, elementary: 0, pension: 0, other: 0 };
+      const buckets = { health: 0, risks: 0, elementary: 0, pension: 0, other: 0 };
       groups.forEach((g) => {
         const prem = Number(g?.premium) || 0;
         const sector = safeTrim(g?.sector);
-        if(sector === "בריאות" || sector === "סיכונים") buckets.health += prem;
+        if(sector === "בריאות") buckets.health += prem;
+        else if(sector === "סיכונים") buckets.risks += prem;
         else if(sector === "אלמנטרי") buckets.elementary += prem;
         else if(sector === "פנסיה") buckets.pension += prem;
         else buckets.other += prem;
@@ -25269,6 +25270,7 @@ UsersGateUI.init();
       const round = (n) => Math.round(n * 100) / 100;
       return {
         health: round(buckets.health),
+        risks: round(buckets.risks),
         elementary: round(buckets.elementary),
         pension: round(buckets.pension),
         other: round(buckets.other)
@@ -25282,7 +25284,9 @@ UsersGateUI.init();
       const avg = agents > 0 ? Math.round((total / agents) * 100) / 100 : 0;
       const b = this.dailySalesBranchTotals(report);
       const splitItems = [
-        { label: "בריאות וסיכונים", value: b.health, slug: "briut" },
+        { label: "סיכונים", value: b.risks, slug: "sikunim" },
+        { label: "בריאות", value: b.health, slug: "briut" },
+        { label: "סה״כ בריאות+סיכונים", value: b.risks + b.health, slug: "briut" },
         { label: "אלמנטרי", value: b.elementary, slug: "almanteri" },
         { label: "פנסיה", value: b.pension, slug: "pensia" }
       ];
@@ -25790,7 +25794,13 @@ UsersGateUI.init();
   </div>
   <div class="split">${(() => {
     const b = this.dailySalesBranchTotals(report);
-    const items = [["בריאות וסיכונים", b.health], ["אלמנטרי", b.elementary], ["פנסיה", b.pension]];
+    const items = [
+      ["סיכונים", b.risks],
+      ["בריאות", b.health],
+      ["סה״כ בריאות+סיכונים", b.risks + b.health],
+      ["אלמנטרי", b.elementary],
+      ["פנסיה", b.pension]
+    ];
     if(b.other > 0) items.push(["אחר", b.other]);
     return items.map(([lbl, val]) => `<span><i>${escapeHtml(lbl)}</i>${escapeHtml(this.formatMoney(val))}</span>`).join("");
   })()}</div>
