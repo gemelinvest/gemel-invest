@@ -3525,3 +3525,170 @@
   font-weight:600;
   color:var(--gi-text-muted,#647287);
 }
+
+/* ==========================================================================
+   GI-PLEDGE-MULTI 2026-08-04 · שיעבוד לשני בנקים
+   ========================================================================== */
+
+.lcPledgeBox__head{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:12px; flex-wrap:wrap; margin-bottom:10px;
+}
+.lcPledgeAddBtn{
+  border:1px solid var(--brandA, #2563eb);
+  background:color-mix(in srgb, var(--brandA, #2563eb) 8%, transparent);
+  color:var(--brandA, #2563eb);
+  font-family:inherit; font-weight:800; font-size:13px;
+  padding:8px 14px; border-radius:999px; cursor:pointer;
+  transition:background .18s ease, transform .12s ease;
+}
+.lcPledgeAddBtn:hover{ background:color-mix(in srgb, var(--brandA, #2563eb) 16%, transparent); }
+.lcPledgeAddBtn:active{ transform:scale(.97); }
+.lcPledgeMaxNote{ font-size:12px; font-weight:700; opacity:.65; }
+
+/* ── פס המאזן ── */
+.lcPledgeBalance{
+  border-radius:14px; padding:12px 14px; margin-bottom:14px;
+  border:1px solid rgba(0,0,0,.08);
+  background:rgba(0,0,0,.02);
+}
+.lcPledgeBalance__cells{
+  display:flex; gap:10px; flex-wrap:wrap; margin-bottom:8px;
+}
+.lcPledgeBalance__cell{
+  flex:1 1 130px; min-width:120px;
+  display:flex; flex-direction:column; gap:2px;
+  padding:8px 10px; border-radius:10px;
+  background:rgba(255,255,255,.75);
+  border:1px solid rgba(0,0,0,.05);
+}
+.lcPledgeBalance__k{ font-size:11px; font-weight:700; opacity:.6; }
+.lcPledgeBalance__v{ font-size:15px; font-weight:900; letter-spacing:-.2px; }
+.lcPledgeBalance__msg{ font-size:12.5px; font-weight:800; line-height:1.45; }
+
+.lcPledgeBalance--ok{   border-color:rgba(16,185,129,.35); background:rgba(16,185,129,.07); }
+.lcPledgeBalance--ok   .lcPledgeBalance__msg{ color:#047857; }
+.lcPledgeBalance--warn{ border-color:rgba(245,158,11,.38); background:rgba(245,158,11,.08); }
+.lcPledgeBalance--warn .lcPledgeBalance__msg{ color:#b45309; }
+.lcPledgeBalance--bad{  border-color:rgba(239,68,68,.4);  background:rgba(239,68,68,.07); }
+.lcPledgeBalance--bad  .lcPledgeBalance__msg{ color:#b91c1c; }
+
+/* ── כרטיס בנק ── */
+.lcPledgeBankList{ display:flex; flex-direction:column; gap:12px; }
+.lcPledgeBankCard{
+  border:1px solid rgba(0,0,0,.09); border-radius:14px;
+  padding:12px 14px; background:rgba(255,255,255,.6);
+}
+.lcPledgeBankCard + .lcPledgeBankCard{
+  border-color:color-mix(in srgb, var(--brandA, #2563eb) 30%, rgba(0,0,0,.09));
+}
+.lcPledgeBankCard__head{
+  display:flex; align-items:center; gap:10px; margin-bottom:10px;
+}
+.lcPledgeBankCard__num{
+  font-size:12.5px; font-weight:900;
+  color:var(--brandA, #2563eb);
+  background:color-mix(in srgb, var(--brandA, #2563eb) 10%, transparent);
+  padding:4px 10px; border-radius:999px;
+}
+.lcPledgeBankCard__share{ font-size:11.5px; font-weight:800; opacity:.6; }
+.lcPledgeBankCard__remove{
+  margin-inline-start:auto;
+  border:none; background:rgba(239,68,68,.1); color:#dc2626;
+  width:26px; height:26px; border-radius:50%;
+  font-size:13px; font-weight:900; cursor:pointer; line-height:1;
+  transition:background .16s ease;
+}
+.lcPledgeBankCard__remove:hover{ background:rgba(239,68,68,.2); }
+
+.lcPledgeAutoTag{
+  font-size:10px; font-weight:800; margin-inline-start:6px;
+  padding:2px 7px; border-radius:999px;
+  background:rgba(16,185,129,.14); color:#047857;
+}
+
+/* ── מוטבים: בסיס חלוקה + סכום בשקלים ── */
+.lcBenBaseNote{
+  font-size:12.5px; font-weight:700; margin-top:4px;
+  color:#047857;
+}
+.lcBenBaseNote--empty{ color:#b45309; }
+.lcBeneficiaryRow__amount{
+  font-size:11.5px; font-weight:800; opacity:.7; margin-top:4px; min-height:14px;
+}
+
+/* ── שיחת שיקוף ── */
+.mcPledgeBox__balance{
+  display:flex; flex-wrap:wrap; gap:10px 16px;
+  padding:10px 12px; border-radius:12px; margin-bottom:10px;
+  font-size:12.5px; font-weight:700;
+  border:1px solid rgba(0,0,0,.08); background:rgba(0,0,0,.02);
+}
+.mcPledgeBox__balanceMsg{ flex-basis:100%; font-weight:800; }
+.mcPledgeBox__balance--ok{   border-color:rgba(16,185,129,.35); background:rgba(16,185,129,.07); }
+.mcPledgeBox__balance--ok   .mcPledgeBox__balanceMsg{ color:#047857; }
+.mcPledgeBox__balance--warn{ border-color:rgba(245,158,11,.38); background:rgba(245,158,11,.08); }
+.mcPledgeBox__balance--warn .mcPledgeBox__balanceMsg{ color:#b45309; }
+.mcPledgeBox__balance--bad{  border-color:rgba(239,68,68,.4);  background:rgba(239,68,68,.07); }
+.mcPledgeBox__balance--bad  .mcPledgeBox__balanceMsg{ color:#b91c1c; }
+
+.mcPledgeBank + .mcPledgeBank{
+  margin-top:12px; padding-top:12px;
+  border-top:1px dashed rgba(0,0,0,.14);
+}
+.mcPledgeBank__num{
+  font-size:12px; font-weight:900; margin-bottom:8px;
+  color:var(--brandA, #2563eb);
+}
+
+@media (max-width:640px){
+  .lcPledgeBalance__cell{ flex:1 1 100%; }
+  .lcPledgeBox__head{ align-items:flex-start; }
+}
+
+/* ── GI-PLEDGE-MULTI · שלב ב' · שיחת שיקוף + רמזי סכום (תצוגה בלבד) ── */
+
+/* רמז סכום מפורמט — מוצג מתחת לשדה, השדה עצמו נשאר מספר נקי */
+.lcMoneyHint,
+.mcMoneyHint{
+  display:block; margin-top:4px; min-height:15px;
+  font-size:12px; font-weight:900; letter-spacing:-.1px;
+  color:var(--brandA, #2563eb); opacity:.85;
+}
+.mcMoneyHint{ font-size:11.5px; }
+
+/* כותרת בוקס השיעבוד בשיחת שיקוף + כפתור הוספה */
+.mcPledgeBox__head{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:10px; flex-wrap:wrap; margin-bottom:8px;
+}
+.mcPledgeAddBtn{
+  font-size:12.5px; font-weight:800; padding:6px 12px;
+  border-radius:999px; white-space:nowrap;
+}
+.mcPledgeMaxNote{ font-size:11.5px; font-weight:700; opacity:.6; }
+
+.mcPledgeBank__num{
+  display:flex; align-items:center; gap:8px;
+}
+.mcPledgeBank__remove{
+  margin-inline-start:auto;
+  border:none; background:rgba(239,68,68,.1); color:#dc2626;
+  width:24px; height:24px; border-radius:50%;
+  font-size:12px; font-weight:900; cursor:pointer; line-height:1;
+  transition:background .16s ease;
+}
+.mcPledgeBank__remove:hover{ background:rgba(239,68,68,.2); }
+
+/* סכום בשקלים ליד אחוז המוטב */
+.mcBenefRow__money{
+  display:block; margin-top:4px; min-height:14px;
+  font-size:11.5px; font-weight:800; opacity:.72;
+}
+
+/* שורת בסיס החלוקה */
+.mcBenefCard__base{
+  display:block; margin-top:5px;
+  font-size:11.5px; font-weight:700; color:#047857;
+}
+.mcBenefCard__base--empty{ color:#b45309; }

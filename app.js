@@ -7,7 +7,8 @@
   "use strict";
 
   const GI_MAX_DISCOUNT_YEARS = 50;   // GI-FIX-DISCOUNT-YEARS
-  const BUILD = "20260803-month-archive-v1";
+  const GI_MAX_PLEDGE_BANKS = 2;      // GI-PLEDGE-MULTI 2026-08-04 — עד שני בנקים משעבדים בפוליסה
+  const BUILD = "20260804-pledge-multi-bank-v2";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -39165,12 +39166,20 @@ if(path === "birthDate"){
         if(!d.compensationPerInsured) d.compensationPerInsured = {};
         d.compensationPerInsured[iid] = el.value;
       });
-      this.els.body.querySelectorAll("[data-pdraft-bank]").forEach(el => {
-        const k = el.getAttribute("data-pdraft-bank");
-        if(!k) return;
-        if(!d.pledgeBank) d.pledgeBank = { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" };
-        d.pledgeBank[k] = el.value;
-      });
+      // GI-PLEDGE-MULTI — קריאה לפי אינדקס הבנק (אחרת בנק 2 היה דורס את בנק 1)
+      const domBanks = this.els.body.querySelectorAll("[data-pdraft-bank]");
+      if(domBanks.length){
+        const banks = this.normalizePledgeBanks(d);
+        domBanks.forEach(el => {
+          const k = el.getAttribute("data-pdraft-bank");
+          if(!k) return;
+          const idx = Number(el.getAttribute("data-pdraft-bank-idx") || 0) || 0;
+          while(banks.length <= idx && banks.length < GI_MAX_PLEDGE_BANKS) banks.push(this.emptyPledgeBank());
+          if(!banks[idx]) return;
+          banks[idx][k] = el.value;
+        });
+        this.normalizePledgeBanks(d);
+      }
       this.syncPolicyDraftPremiumFields(d);
     },
 
@@ -39549,6 +39558,7 @@ if(path === "birthDate"){
       }
 
       if(!isMedicare && (d.type === "ריסק" || d.type === "ריסק משכנתא") && d.pledge){
+        /* GI-PLEDGE-MULTI 2026-08-04 — ולידציה לכל בנק + מאזן מול סכום הביטוח */
         const pledgeLabels = {
           bankName: "שם הבנק (שיעבוד)",
           bankNo: "מספר בנק (שיעבוד)",
@@ -39557,11 +39567,31 @@ if(path === "birthDate"){
           years: "משך השיעבוד בשנים",
           address: "כתובת הבנק (שיעבוד)"
         };
-        const b = d.pledgeBank || {};
-        for(const k of ["bankName","bankNo","branch","amount","years","address"]){
-          if(!safeTrim(b[k])){
-            miss(pledgeLabels[k] || k, { section: 4, selector: `[data-pdraft-bank="${k}"]` });
-            break;
+        const banks = this.normalizePledgeBanks(d);
+        banks.forEach((b, i) => {
+          const suffix = banks.length > 1 ? ` — בנק ${i + 1}` : "";
+          for(const k of ["bankName","bankNo","branch","amount","years","address"]){
+            if(!safeTrim(b[k])){
+              miss(`${pledgeLabels[k] || k}${suffix}`, {
+                section: 4,
+                selector: `[data-pdraft-bank="${k}"][data-pdraft-bank-idx="${i}"]`
+              });
+              break;
+            }
+          }
+        });
+
+        const pt = this.getPledgeTotals(d);
+        if(pt.hasSum){
+          const firstAmountSel = `[data-pdraft-bank="amount"][data-pdraft-bank-idx="0"]`;
+          if(pt.over){
+            miss(`סך השיעבוד (${this.formatMoneyValue(pt.pledged)}) עולה על סכום הביטוח (${this.formatMoneyValue(pt.totalSum)})`, {
+              section: 4, selector: firstAmountSel
+            });
+          }else if(pt.isMortgage && !pt.exact){
+            miss(`בריסק משכנתא סך השיעבוד חייב להיות שווה לסכום הביטוח — חסרים ${this.formatMoneyValue(pt.remaining)}`, {
+              section: 4, selector: firstAmountSel
+            });
           }
         }
       }
@@ -40158,6 +40188,171 @@ if(path === "birthDate"){
       return safeTrim(company) === "מדיקר";
     },
 
+    /* ===== GI-PLEDGE-MULTI 2026-08-04 · שיעבוד לשני בנקים =====
+       מודל הדאטה עבר מ-pledgeBank (אובייקט יחיד) ל-pledgeBanks (מערך).
+       pledgeBank נשמר כ-alias חי ל-pledgeBanks[0] — כך שכל הצרכנים
+       הישנים (PDF, שיחת שיקוף, טבלאות סיכום, רשומות Supabase קיימות)
+       ממשיכים לעבוד ללא שבירה.
+    ================================================================ */
+    emptyPledgeBank(){
+      return { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" };
+    },
+
+    normalizePledgeBanks(target){
+      if(!target || typeof target !== "object") return [this.emptyPledgeBank()];
+      let list = Array.isArray(target.pledgeBanks) ? target.pledgeBanks.slice() : null;
+      if(!list){
+        // מיגרציה מהמבנה הישן
+        list = [];
+        if(target.pledgeBank && typeof target.pledgeBank === "object"){
+          list.push(Object.assign(this.emptyPledgeBank(), target.pledgeBank));
+        }else if(safeTrim(target.pledgeBankName)){
+          list.push(Object.assign(this.emptyPledgeBank(), { bankName: safeTrim(target.pledgeBankName) }));
+        }
+      }
+      list = list
+        .filter(b => b && typeof b === "object")
+        .map(b => Object.assign(this.emptyPledgeBank(), b));
+      if(!list.length) list = [this.emptyPledgeBank()];
+      if(list.length > GI_MAX_PLEDGE_BANKS) list = list.slice(0, GI_MAX_PLEDGE_BANKS);
+      target.pledgeBanks = list;
+      target.pledgeBank = list[0]; // alias חי — אותה הפניה בדיוק
+      return list;
+    },
+
+    isMortgageRiskPolicy(src){
+      if(!src) return false;
+      return !this.isMedicareCompany(src.company) && safeTrim(src.type) === "ריסק משכנתא";
+    },
+
+    getPolicyTotalSumInsured(src){
+      if(!src || typeof src !== "object") return 0;
+      const per = src.sumInsuredPerInsured && typeof src.sumInsuredPerInsured === "object"
+        ? src.sumInsuredPerInsured : {};
+      const ids = Array.isArray(src.insuredIds) && src.insuredIds.length
+        ? src.insuredIds
+        : (src.insuredId ? [src.insuredId] : []);
+      let total = 0;
+      if(ids.length){
+        ids.forEach(iid => { total += this.parseMoneyNumber(per[iid]) || 0; });
+      }else{
+        total = Object.values(per).reduce((acc, v) => acc + (this.parseMoneyNumber(v) || 0), 0);
+      }
+      if(total > 0) return total;
+      return this.parseMoneyNumber(src.sumInsured || "") || 0;
+    },
+
+    getPledgeTotals(src){
+      const target = src || this.policyDraft || {};
+      const banks = this.normalizePledgeBanks(target);
+      const totalSum = this.getPolicyTotalSumInsured(target);
+      const pledged = banks.reduce((acc, b) => acc + (this.parseMoneyNumber(b.amount) || 0), 0);
+      const remaining = totalSum - pledged;
+      const isMortgage = this.isMortgageRiskPolicy(target);
+      return {
+        banks,
+        count: banks.length,
+        totalSum,
+        pledged,
+        remaining,
+        isMortgage,
+        hasSum: totalSum > 0,
+        over: totalSum > 0 && pledged > totalSum,
+        exact: totalSum > 0 && pledged === totalSum,
+        // ריסק משכנתא — חייב להסתכם בדיוק. ריסק רגיל — אסור רק לעבור.
+        ok: totalSum <= 0 ? true : (isMortgage ? pledged === totalSum : pledged <= totalSum)
+      };
+    },
+
+    // בסיס החלוקה למוטבים: בריסק רגיל עם שיעבוד — היתרה שנשארה אחרי הבנקים.
+    getBeneficiaryBaseAmount(src){
+      const target = src || this.policyDraft || {};
+      const totalSum = this.getPolicyTotalSumInsured(target);
+      if(!target.pledge || this.isMortgageRiskPolicy(target)) return totalSum;
+      const pt = this.getPledgeTotals(target);
+      return Math.max(0, pt.remaining);
+    },
+
+    autofillPledgeAmounts(src, opts){
+      const target = src || this.policyDraft;
+      if(!target) return;
+      const force = !!(opts && opts.force);
+      const banks = this.normalizePledgeBanks(target);
+      const totalSum = this.getPolicyTotalSumInsured(target);
+      if(totalSum <= 0) return;
+      if(banks.length === 1){
+        if(force || !safeTrim(banks[0].amount)) banks[0].amount = String(totalSum);
+        return;
+      }
+      if(!safeTrim(banks[0].amount)) banks[0].amount = String(totalSum);
+      const firstAmt = this.parseMoneyNumber(banks[0].amount) || 0;
+      if(force || !safeTrim(banks[1].amount)){
+        banks[1].amount = String(Math.max(0, totalSum - firstAmt));
+      }
+    },
+
+    buildPledgeStatusText(src){
+      const pt = this.getPledgeTotals(src);
+      if(!pt.hasSum) return { tone: "warn", text: "יש להזין סכום ביטוח כדי לחשב את חלוקת השיעבוד" };
+      if(pt.over){
+        return { tone: "bad", text: `סך השיעבוד (${this.formatMoneyValue(pt.pledged)}) עולה על סכום הביטוח (${this.formatMoneyValue(pt.totalSum)})` };
+      }
+      if(pt.isMortgage){
+        return pt.exact
+          ? { tone: "ok", text: "סך השיעבוד תואם במדויק לסכום הביטוח ✓" }
+          : { tone: "bad", text: `בריסק משכנתא סך השיעבוד חייב להיות שווה לסכום הביטוח — חסרים ${this.formatMoneyValue(pt.remaining)}` };
+      }
+      if(pt.remaining > 0){
+        return { tone: "ok", text: `יתרה פנויה לחלוקה בין המוטבים: ${this.formatMoneyValue(pt.remaining)}` };
+      }
+      return { tone: "ok", text: "כל סכום הביטוח משועבד — לא נותרה יתרה למוטבים" };
+    },
+
+    // עדכון חי של פס המאזן + סכומי המוטבים, בלי re-render (שומר על הפוקוס בשדה).
+    refreshPledgeSummaryUi(){
+      const root = this.els?.body;
+      const d = this.policyDraft;
+      if(!root || !d) return;
+      const strip = root.querySelector('#lcPledgeBalanceStrip');
+      if(strip){
+        const pt = this.getPledgeTotals(d);
+        const status = this.buildPledgeStatusText(d);
+        const set = (key, val) => {
+          const node = strip.querySelector(`[data-pledge-stat="${key}"]`);
+          if(node) node.textContent = val;
+        };
+        set("total", pt.hasSum ? this.formatMoneyValue(pt.totalSum) : "—");
+        set("pledged", this.formatMoneyValue(pt.pledged));
+        set("remaining", this.formatMoneyValue(Math.abs(pt.remaining)));
+        set("msg", status.text);
+        const remCell = strip.querySelector('[data-pledge-stat="remaining"]')?.previousElementSibling;
+        if(remCell) remCell.textContent = pt.remaining < 0 ? "חריגה" : "יתרה";
+        strip.classList.remove("lcPledgeBalance--ok", "lcPledgeBalance--warn", "lcPledgeBalance--bad");
+        strip.classList.add(`lcPledgeBalance--${status.tone}`);
+      }
+      // סכומי המוטבים מתעדכנים מול היתרה החדשה
+      const benBase = this.getBeneficiaryBaseAmount(d);
+      const bens = Array.isArray(d.beneficiaries) ? d.beneficiaries : [];
+      root.querySelectorAll("[data-ben-amount]").forEach(node => {
+        const bi = Number(node.getAttribute("data-ben-amount"));
+        const ben = bens[bi];
+        node.textContent = (benBase > 0 && ben)
+          ? `≈ ${this.formatMoneyValue(Math.round(benBase * (Number(ben.sharePct) || 0) / 100))}`
+          : "";
+      });
+      const baseNote = root.querySelector('[data-ben-base-note]');
+      if(baseNote){
+        const isRemainder = !!d.pledge && !this.isMortgageRiskPolicy(d);
+        if(benBase > 0){
+          baseNote.classList.remove("lcBenBaseNote--empty");
+          baseNote.innerHTML = `${isRemainder ? 'יתרה לחלוקה בין המוטבים (אחרי השיעבוד)' : 'סכום לחלוקה בין המוטבים'}: <b>${escapeHtml(this.formatMoneyValue(benBase))}</b>`;
+        }else if(isRemainder){
+          baseNote.classList.add("lcBenBaseNote--empty");
+          baseNote.textContent = "כל סכום הביטוח משועבד — לא נותרה יתרה לחלוקה בין מוטבים";
+        }
+      }
+    },
+
     policyRequiresHealthDeclaration(policy){
       return !this.isMedicareCompany(policy?.company);
     },
@@ -40212,9 +40407,11 @@ if(path === "birthDate"){
         healthCovers: [],
         healthCoversAmounts: {},
         pledge: false,
+        pledgeBanks: [this.emptyPledgeBank()],
         pledgeBank: { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" },
         beneficiaries: []
       };
+      this.normalizePledgeBanks(this.policyDraft);
       if(!spouse){
         // if no spouse exists, couple option will be hidden anyway
       }
@@ -40253,9 +40450,10 @@ if(path === "birthDate"){
         healthCoversAmounts: JSON.parse(JSON.stringify(d.healthCoversAmounts || {})),
         healthCoversWithAmounts: this.buildHealthCoversWithAmounts(d),
         pledge: !!d.pledge,
-        pledgeBank: Object.assign({ bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" }, d.pledgeBank || {}),
+        pledgeBanks: this.normalizePledgeBanks(d).map(b => Object.assign(this.emptyPledgeBank(), b)),
         beneficiaries: Array.isArray(d.beneficiaries) ? JSON.parse(JSON.stringify(d.beneficiaries)) : []
       };
+      this.normalizePledgeBanks(p);
       if(this.isCustomerPurchaseMode()) p._purchaseSession = true;
       this.normalizeHealthPolicyPremiums(p);
       this.normalizeNewPolicyPremiums(p);
@@ -40296,7 +40494,8 @@ if(path === "birthDate"){
       this.policyDraft.healthCovers = [];
       this.policyDraft.healthCoversAmounts = {};
       this.policyDraft.pledge = false;
-      this.policyDraft.pledgeBank = { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" };
+      this.policyDraft.pledgeBanks = [this.emptyPledgeBank()];
+      this.normalizePledgeBanks(this.policyDraft);
       this.policyDraft.beneficiaries = [];
 
       this.resetPremiumSanityState();
@@ -40451,8 +40650,10 @@ if(path === "birthDate"){
         healthCovers: Array.isArray(p.healthCovers) ? p.healthCovers.slice() : [],
         healthCoversAmounts: JSON.parse(JSON.stringify(p.healthCoversAmounts || {})),
         pledge: !!p.pledge,
-        pledgeBank: Object.assign({ bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" }, p.pledgeBank || {})
+        pledgeBanks: this.normalizePledgeBanks(p).map(b => Object.assign(this.emptyPledgeBank(), b)),
+        beneficiaries: Array.isArray(p.beneficiaries) ? JSON.parse(JSON.stringify(p.beneficiaries)) : []
       };
+      this.normalizePledgeBanks(this.policyDraft);
       this.setHint("מצב עריכה הופעל עבור הפוליסה שנבחרה");
       this.render();
     },
@@ -41762,6 +41963,9 @@ if(path === "birthDate"){
         ${(isRisk || (canPledge && !isRegularRisk)) ? (() => {
           const bens = Array.isArray(d.beneficiaries) ? d.beneficiaries : [];
           const RELATIONSHIP_OPTIONS = ["בן","בת","אח","אחות","אב","אם","סבא","סבתא","בן זוג","בת זוג","קרוב משפחה","אחר"];
+          // GI-PLEDGE-MULTI — האחוזים מחושבים על היתרה שנשארה אחרי השיעבוד
+          const benBase = this.getBeneficiaryBaseAmount(d);
+          const benBaseIsRemainder = !!d.pledge && !this.isMortgageRiskPolicy(d);
           const bensHtml = bens.map((b, bi) => `
             <div class="lcBeneficiaryRow" data-ben-idx="${bi}">
               <div class="lcBeneficiaryRow__head">
@@ -41802,6 +42006,7 @@ if(path === "birthDate"){
                     <input class="lcInput lcRiskUmbrellaField__input" type="text" inputmode="numeric" data-ben="${bi}" data-ben-field="sharePct" value="${escapeHtml(String(b.sharePct||''))}" placeholder="לדוגמה: 50" maxlength="3" />
                     <span class="lcBeneficiaryRow__pctSign">%</span>
                   </div>
+                  <div class="lcBeneficiaryRow__amount" data-ben-amount="${bi}">${benBase > 0 ? escapeHtml("≈ " + this.formatMoneyValue(Math.round(benBase * (Number(b.sharePct)||0) / 100))) : ""}</div>
                 </div>
               </div>
             </div>`).join('');
@@ -41813,6 +42018,7 @@ if(path === "birthDate"){
                 <div class="lcRiskUmbrellaBox__eyebrow">GEMEL INVEST</div>
                 <div class="lcRiskUmbrellaBox__title">מוטבים</div>
                 ${bens.length ? `<div class="lcRiskUmbrellaBox__sub">${bens.length} מוטב${bens.length>1?'ים':''} · סה"כ ${totalPct}%${!pctOk ? ' ⚠️ לא מסתכמים ל-100%' : ' ✓'}</div>` : ''}
+                ${benBase > 0 ? `<div class="lcBenBaseNote" data-ben-base-note="1">${benBaseIsRemainder ? 'יתרה לחלוקה בין המוטבים (אחרי השיעבוד)' : 'סכום לחלוקה בין המוטבים'}: <b>${escapeHtml(this.formatMoneyValue(benBase))}</b></div>` : (benBaseIsRemainder ? `<div class="lcBenBaseNote lcBenBaseNote--empty" data-ben-base-note="1">כל סכום הביטוח משועבד — לא נותרה יתרה לחלוקה בין מוטבים</div>` : '')}
               </div>
               <button class="lcRiskUmbrellaBox__toggle" type="button" id="lcBenAddBtn" aria-label="הוסף מוטב">
                 <span class="lcRiskUmbrellaBox__toggleText">+ הוסף מוטב</span>
@@ -41821,23 +42027,57 @@ if(path === "birthDate"){
             ${bens.length ? `<div class="lcBeneficiariesList" style="margin-top:14px">${bensHtml}</div>` : ''}
           </div>`;
         })() : ''}
-        ${canPledge && d.pledge ? `<div class="lcWSection lcPledgeBox lcPledgeBox--reference" style="margin-top:12px">
-          <div class="lcWTitle">פרטי המוטב הבלתי חוזר</div>
-          <div class="lcGrid2 lcGrid2--pledgeReference">
-            <div class="lcField lcField--pledgeReference">
-              <label class="lcLabel">שם הבנק</label>
-              <select class="lcInput lcSelect lcPledgeBankSelect" data-pdraft-bank="bankName">
-                <option value="">בחר בנק…</option>
-                ${this.bankNames.map(b => `<option value="${escapeHtml(b)}"${safeTrim(d.pledgeBank.bankName)===b?" selected":""}>${escapeHtml(b)}</option>`).join("")}
-              </select>
+        ${canPledge && d.pledge ? (() => {
+          /* GI-PLEDGE-MULTI 2026-08-04 — עד שני בנקים משעבדים */
+          this.autofillPledgeAmounts(d);
+          const pt = this.getPledgeTotals(d);
+          const banks = pt.banks;
+          const status = this.buildPledgeStatusText(d);
+          const canAdd = banks.length < GI_MAX_PLEDGE_BANKS;
+
+          const bankCard = (b, i) => `
+            <div class="lcPledgeBankCard" data-pledge-bank-card="${i}">
+              <div class="lcPledgeBankCard__head">
+                <span class="lcPledgeBankCard__num">בנק משעבד ${i + 1}</span>
+                ${banks.length > 1 ? `<span class="lcPledgeBankCard__share">${pt.pledged > 0 ? Math.round(((this.parseMoneyNumber(b.amount) || 0) / pt.pledged) * 100) : 0}% מהשיעבוד</span>` : ''}
+                ${i > 0 ? `<button type="button" class="lcPledgeBankCard__remove" data-pledge-bank-remove="${i}" aria-label="הסר בנק">✕</button>` : ''}
+              </div>
+              <div class="lcGrid2 lcGrid2--pledgeReference">
+                <div class="lcField lcField--pledgeReference">
+                  <label class="lcLabel">שם הבנק</label>
+                  <select class="lcInput lcSelect lcPledgeBankSelect" data-pdraft-bank="bankName" data-pdraft-bank-idx="${i}">
+                    <option value="">בחר בנק…</option>
+                    ${this.bankNames.map(bn => `<option value="${escapeHtml(bn)}"${safeTrim(b.bankName)===bn?" selected":""}>${escapeHtml(bn)}</option>`).join("")}
+                  </select>
+                </div>
+                <div class="lcField lcField--pledgeReference"><label class="lcLabel">מספר בנק</label><input class="lcInput" data-pdraft-bank="bankNo" data-pdraft-bank-idx="${i}" value="${escapeHtml(b.bankNo||"")}" inputmode="numeric" /></div>
+                <div class="lcField lcField--pledgeReference"><label class="lcLabel">מספר סניף</label><input class="lcInput" data-pdraft-bank="branch" data-pdraft-bank-idx="${i}" value="${escapeHtml(b.branch||"")}" inputmode="numeric" /></div>
+                <div class="lcField lcField--pledgeReference">
+                  <label class="lcLabel">סכום לשיעבוד${banks.length === 1 ? ' <span class="lcPledgeAutoTag">מולא אוטומטית</span>' : ''}</label>
+                  <input class="lcInput lcPledgeAmountInput" data-pdraft-bank="amount" data-pdraft-bank-idx="${i}" value="${escapeHtml(b.amount||"")}" inputmode="numeric" />
+                  <div class="lcMoneyHint" data-money-hint="pledge-${i}">${(this.parseMoneyNumber(b.amount) || 0) > 0 ? escapeHtml(this.formatMoneyValue(this.parseMoneyNumber(b.amount))) : ""}</div>
+                </div>
+                <div class="lcField lcField--pledgeReference"><label class="lcLabel">לכמה שנים</label><input class="lcInput" data-pdraft-bank="years" data-pdraft-bank-idx="${i}" value="${escapeHtml(b.years||"")}" inputmode="numeric" /></div>
+                <div class="lcField lcField--pledgeReference lcField--pledgeReferenceFull"><label class="lcLabel">כתובת הבנק</label><input class="lcInput" data-pdraft-bank="address" data-pdraft-bank-idx="${i}" value="${escapeHtml(b.address||"")}" /></div>
+              </div>
+            </div>`;
+
+          return `<div class="lcWSection lcPledgeBox lcPledgeBox--reference" style="margin-top:12px">
+            <div class="lcPledgeBox__head">
+              <div class="lcWTitle">פרטי המוטב הבלתי חוזר</div>
+              ${canAdd ? `<button type="button" class="lcPledgeAddBtn" id="lcPledgeBankAddBtn">+ הוסף בנק שני</button>` : `<span class="lcPledgeMaxNote">הגעת למקסימום ${GI_MAX_PLEDGE_BANKS} בנקים</span>`}
             </div>
-            <div class="lcField lcField--pledgeReference"><label class="lcLabel">מספר בנק</label><input class="lcInput" data-pdraft-bank="bankNo" value="${escapeHtml(d.pledgeBank.bankNo||"")}" inputmode="numeric" /></div>
-            <div class="lcField lcField--pledgeReference"><label class="lcLabel">מספר סניף</label><input class="lcInput" data-pdraft-bank="branch" value="${escapeHtml(d.pledgeBank.branch||"")}" inputmode="numeric" /></div>
-            <div class="lcField lcField--pledgeReference"><label class="lcLabel">סכום לשיעבוד</label><input class="lcInput" data-pdraft-bank="amount" value="${escapeHtml(d.pledgeBank.amount||"")}" inputmode="numeric" /></div>
-            <div class="lcField lcField--pledgeReference"><label class="lcLabel">לכמה שנים</label><input class="lcInput" data-pdraft-bank="years" value="${escapeHtml(d.pledgeBank.years||"")}" inputmode="numeric" /></div>
-            <div class="lcField lcField--pledgeReference lcField--pledgeReferenceFull"><label class="lcLabel">כתובת הבנק</label><input class="lcInput" data-pdraft-bank="address" value="${escapeHtml(d.pledgeBank.address||"")}" /></div>
-          </div>
-        </div>` : ''}
+            <div class="lcPledgeBalance lcPledgeBalance--${status.tone}" id="lcPledgeBalanceStrip">
+              <div class="lcPledgeBalance__cells">
+                <div class="lcPledgeBalance__cell"><span class="lcPledgeBalance__k">סכום ביטוח כולל</span><b class="lcPledgeBalance__v" data-pledge-stat="total">${pt.hasSum ? escapeHtml(this.formatMoneyValue(pt.totalSum)) : "—"}</b></div>
+                <div class="lcPledgeBalance__cell"><span class="lcPledgeBalance__k">סה״כ משועבד</span><b class="lcPledgeBalance__v" data-pledge-stat="pledged">${escapeHtml(this.formatMoneyValue(pt.pledged))}</b></div>
+                <div class="lcPledgeBalance__cell"><span class="lcPledgeBalance__k">${pt.remaining < 0 ? "חריגה" : "יתרה"}</span><b class="lcPledgeBalance__v" data-pledge-stat="remaining">${escapeHtml(this.formatMoneyValue(Math.abs(pt.remaining)))}</b></div>
+              </div>
+              <div class="lcPledgeBalance__msg" data-pledge-stat="msg">${escapeHtml(status.text)}</div>
+            </div>
+            <div class="lcPledgeBankList">${banks.map(bankCard).join("")}</div>
+          </div>`;
+        })() : ''}
         ${!isMedicare && (d.type === "מחלות קשות" || d.type === "סרטן") && companyGroups && companyGroups.length ? (() => {
           const filteredGroups = companyGroups.filter(g => !g.items.some(i => i.amountField));
           if(!filteredGroups.length) return '';
@@ -42116,7 +42356,8 @@ if(path === "birthDate"){
             this.policyDraft.umbrellaDisabilityAmount = "";
             this.policyDraft.umbrellaDeathAmount = "";
             this.policyDraft.pledge = false;
-            this.policyDraft.pledgeBank = { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" };
+            this.policyDraft.pledgeBanks = [this.emptyPledgeBank()];
+            this.normalizePledgeBanks(this.policyDraft);
             this.render();
           });
           this._lcNpCoDdOutsideHandler = function closeDdOutside(ev){
@@ -42286,6 +42527,8 @@ if(path === "birthDate"){
             if(!iid) return;
             if(!this.policyDraft.sumInsuredPerInsured) this.policyDraft.sumInsuredPerInsured = {};
             this.policyDraft.sumInsuredPerInsured[iid] = el.value;
+            // GI-PLEDGE-MULTI — סכום הביטוח השתנה: מרעננים את המאזן (בלי לדרוס מה שהנציג הזין)
+            if(this.policyDraft.pledge) this.refreshPledgeSummaryUi();
           };
           on(el, "input", handler); on(el, "change", handler);
         });
@@ -42302,15 +42545,63 @@ if(path === "birthDate"){
           on(el, "input", handler); on(el, "change", handler);
         });
 
-        // pledge bank fields
+        // pledge bank fields — GI-PLEDGE-MULTI (indexed)
         $$("[data-pdraft-bank]", this.els.body).forEach(el => {
           const handler = () => {
             this.ensurePolicyDraft();
             const k = el.getAttribute("data-pdraft-bank");
-            if(k) this.policyDraft.pledgeBank[k] = el.value;
+            if(!k) return;
+            const idx = Number(el.getAttribute("data-pdraft-bank-idx") || 0) || 0;
+            const banks = this.normalizePledgeBanks(this.policyDraft);
+            if(!banks[idx]) return;
+            banks[idx][k] = el.value;
+            if(k === "amount"){
+              // תצוגה בלבד — הערך בשדה ובמודל נשאר נקי לחלוטין
+              const hint = this.els.body.querySelector(`[data-money-hint="pledge-${idx}"]`);
+              if(hint){
+                const n = this.parseMoneyNumber(el.value) || 0;
+                hint.textContent = n > 0 ? this.formatMoneyValue(n) : "";
+              }
+              this.refreshPledgeSummaryUi();
+            }
           };
           on(el, "input", handler);
           on(el, "change", handler);
+        });
+
+        // הוספת בנק שני
+        const pledgeAddBtn = this.els.body.querySelector('#lcPledgeBankAddBtn');
+        if(pledgeAddBtn){
+          on(pledgeAddBtn, 'click', () => {
+            this.ensurePolicyDraft();
+            this.syncPolicyDraftFieldsFromDom();
+            const banks = this.normalizePledgeBanks(this.policyDraft);
+            if(banks.length >= GI_MAX_PLEDGE_BANKS){
+              window.showToast?.({ title:"מקסימום בנקים", text:`ניתן לשעבד פוליסה לעד ${GI_MAX_PLEDGE_BANKS} בנקים.`, variant:"warn", durationMs: 4000 });
+              return;
+            }
+            banks.push(this.emptyPledgeBank());
+            this.normalizePledgeBanks(this.policyDraft);
+            // בנק 2 מקבל אוטומטית את היתרה — הנציג יכול לשנות
+            this.autofillPledgeAmounts(this.policyDraft);
+            this.render();
+          });
+        }
+
+        // הסרת בנק
+        $$('[data-pledge-bank-remove]', this.els.body).forEach(btn => {
+          on(btn, 'click', () => {
+            this.ensurePolicyDraft();
+            this.syncPolicyDraftFieldsFromDom();
+            const idx = Number(btn.getAttribute('data-pledge-bank-remove'));
+            const banks = this.normalizePledgeBanks(this.policyDraft);
+            if(!Number.isFinite(idx) || idx <= 0 || !banks[idx]) return;
+            banks.splice(idx, 1);
+            this.normalizePledgeBanks(this.policyDraft);
+            // חזרנו לבנק אחד — כל הסכום חוזר אליו
+            this.autofillPledgeAmounts(this.policyDraft, { force: true });
+            this.render();
+          });
         });
 
         // add / save
@@ -42384,6 +42675,7 @@ if(path === "birthDate"){
                 const ok = bens.length === 0 || total === 100;
                 box.textContent = `${bens.length} מוטב${bens.length>1?'ים':''} · סה"כ ${total}%${!ok ? ' ⚠️ לא מסתכמים ל-100%' : ' ✓'}`;
               }
+              this.refreshPledgeSummaryUi();
             }
           });
           on(el, 'change', () => {
@@ -42710,17 +43002,21 @@ if(path === "birthDate"){
                 : "—"));
           let pledgeTxt = "—";
           if(isRisk){
-            pledgeTxt = p.pledge ? "כן" : "לא";
-            const b = p.pledgeBank || {};
-            if(p.pledge && [b.bankName, b.bankNo, b.branch, b.amount, b.years, b.address].some(v => safeTrim(v))){
-              const parts = [];
-              if(safeTrim(b.bankName)) parts.push(`בנק: ${escapeHtml(b.bankName)}`);
-              if(safeTrim(b.bankNo)) parts.push(`מס' בנק: ${escapeHtml(b.bankNo)}`);
-              if(safeTrim(b.branch)) parts.push(`סניף: ${escapeHtml(b.branch)}`);
-              if(safeTrim(b.amount)) parts.push(`סכום: ${escapeHtml(b.amount)}`);
-              if(safeTrim(b.years)) parts.push(`שנים: ${escapeHtml(b.years)}`);
-              if(safeTrim(b.address)) parts.push(`כתובת: ${escapeHtml(b.address)}`);
-              pledgeTxt += `<div class="small muted">${parts.join(" · ")}</div>`;
+            const pBanks = this.normalizePledgeBanks(p);
+            pledgeTxt = p.pledge ? (pBanks.length > 1 ? `כן · ${pBanks.length} בנקים` : "כן") : "לא";
+            if(p.pledge){
+              pBanks.forEach((b, bi) => {
+                if(![b.bankName, b.bankNo, b.branch, b.amount, b.years, b.address].some(v => safeTrim(v))) return;
+                const parts = [];
+                if(safeTrim(b.bankName)) parts.push(`בנק: ${escapeHtml(b.bankName)}`);
+                if(safeTrim(b.bankNo)) parts.push(`מס' בנק: ${escapeHtml(b.bankNo)}`);
+                if(safeTrim(b.branch)) parts.push(`סניף: ${escapeHtml(b.branch)}`);
+                if(safeTrim(b.amount)) parts.push(`סכום: ${escapeHtml(b.amount)}`);
+                if(safeTrim(b.years)) parts.push(`שנים: ${escapeHtml(b.years)}`);
+                if(safeTrim(b.address)) parts.push(`כתובת: ${escapeHtml(b.address)}`);
+                const head = pBanks.length > 1 ? `<b>בנק ${bi + 1}</b> · ` : "";
+                pledgeTxt += `<div class="small muted">${head}${parts.join(" · ")}</div>`;
+              });
             }
           }
           return `<tr>
@@ -47380,6 +47676,7 @@ if(path === "birthDate"){
           umbrellaDisabilityAmount: "",
           umbrellaDeathAmount: "",
           pledge: false,
+          pledgeBanks: [{ bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" }],
           pledgeBank: { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" },
           healthCovers: [],
           sumInsuredPerInsured: {},
@@ -49271,16 +49568,30 @@ if(path === "birthDate"){
         const type = safeTrim(policy?.type || policy?.product || '');
         if(!(type === 'ריסק' || type === 'ריסק משכנתא')) return [];
         if(!policy?.pledge) return [];
-        const bank = policy?.pledgeBank && typeof policy.pledgeBank === 'object' ? policy.pledgeBank : {};
-        return [
-          ['שיעבוד', 'מוטב בלתי חוזר'],
-          ['שם בנק', safeTrim(bank.bankName)],
-          ['מספר בנק', safeTrim(bank.bankNo)],
-          ['סניף', safeTrim(bank.branch || bank.branchNo)],
-          ['סכום משכנתא', safeTrim(policy?.mortgageAmount || bank.amount)],
-          ['שנות משכנתא', safeTrim(policy?.mortgageYears || bank.years)],
-          ['כתובת נכס / בנק', safeTrim(policy?.mortgageAddress || bank.address)]
-        ].filter(([,value]) => safeTrim(value));
+        // GI-PLEDGE-MULTI — שורות לכל בנק משעבד
+        const banks = this.normalizePledgeBanks(policy);
+        const multi = banks.length > 1;
+        const rows = [['שיעבוד', multi ? `מוטב בלתי חוזר · ${banks.length} בנקים` : 'מוטב בלתי חוזר']];
+        banks.forEach((bank, bi) => {
+          const sfx = multi ? ` (בנק ${bi + 1})` : '';
+          rows.push(
+            [`שם בנק${sfx}`, safeTrim(bank.bankName)],
+            [`מספר בנק${sfx}`, safeTrim(bank.bankNo)],
+            [`סניף${sfx}`, safeTrim(bank.branch || bank.branchNo)],
+            [`סכום משועבד${sfx}`, (() => {
+              const rawAmt = safeTrim(bi === 0 ? (policy?.mortgageAmount || bank.amount) : bank.amount);
+              const n = this.parseMoneyNumber(rawAmt);
+              return n > 0 ? this.formatMoneyValue(n) : rawAmt;
+            })()],
+            [`שנות שיעבוד${sfx}`, safeTrim(bi === 0 ? (policy?.mortgageYears || bank.years) : bank.years)],
+            [`כתובת נכס / בנק${sfx}`, safeTrim(bi === 0 ? (policy?.mortgageAddress || bank.address) : bank.address)]
+          );
+        });
+        if(multi){
+          const totalPledged = banks.reduce((a, b) => a + (this.parseMoneyNumber(b.amount) || 0), 0);
+          rows.push(['סה״כ משועבד', totalPledged > 0 ? this.formatMoneyValue(totalPledged) : '']);
+        }
+        return rows.filter(([,value]) => safeTrim(value));
       };
 
       const getPolicyInsuranceAmountSafe = (policy) => {
@@ -49298,8 +49609,11 @@ if(path === "birthDate"){
       const getPolicyBeneficiaryRowsSafe = (policy) => {
         const bens = Array.isArray(policy?.beneficiaries) ? policy.beneficiaries : [];
         if(!bens.length) return [];
-        const totalSum = getPolicyInsuranceAmountSafe(policy);
-        return bens.map((b, i) => {
+        /* GI-PLEDGE-MULTI 2026-08-04 — האחוזים מחושבים על היתרה שנשארה
+           אחרי השיעבוד, בדיוק כמו באשף. בלי זה הדוח היה מציג למוטב
+           50% את מלוא סכום הביטוח במקום את חלקו ביתרה. */
+        const totalSum = this.getBeneficiaryBaseAmount(policy) || getPolicyInsuranceAmountSafe(policy);
+        const rows = bens.map((b, i) => {
           const fullName = `${safeTrim(b?.firstName)} ${safeTrim(b?.lastName)}`.trim();
           const pctNum = Number(b?.sharePct) || 0;
           const parts = [];
@@ -49312,6 +49626,11 @@ if(path === "birthDate"){
           }
           return [`מוטב ${i + 1}`, parts.join(' · ')];
         }).filter(([,value]) => safeTrim(value));
+        // כשיש שיעבוד — מבהירים בדוח מהו בסיס החלוקה
+        if(rows.length && policy?.pledge && !this.isMortgageRiskPolicy(policy) && totalSum > 0){
+          rows.push(['בסיס החלוקה', `יתרה אחרי שיעבוד · ${this.formatMoneyValue(totalSum)}`]);
+        }
+        return rows;
       };
 
       const cancellationExecutionSummary = (insureds || []).flatMap((ins, insuredIndex) => {
@@ -52442,8 +52761,12 @@ if(path === "birthDate"){
             if(!safeTrim(p.umbrellaDisabilityAmount) || !safeTrim(p.umbrellaDeathAmount)) return false;
           }
           if(isRisk && p.pledge){
-            const b = p.pledgeBank || {};
-            if(!safeTrim(b.bankName) || !safeTrim(b.bankNo) || !safeTrim(b.branch) || !safeTrim(b.amount) || !safeTrim(b.years) || !safeTrim(b.address)) return false;
+            // GI-PLEDGE-MULTI — כל בנק משעבד חייב להיות מלא
+            const banks = Wizard.normalizePledgeBanks(p);
+            for(const b of banks){
+              if(!safeTrim(b.bankName) || !safeTrim(b.bankNo) || !safeTrim(b.branch) || !safeTrim(b.amount) || !safeTrim(b.years) || !safeTrim(b.address)) return false;
+            }
+            if(!Wizard.getPledgeTotals(p).ok) return false;
           }
         }
         return true;
@@ -58120,17 +58443,35 @@ const ClalRiskLifePdf = {
 
     resolvePledge(riskPolicy){
       const pledge = !!(riskPolicy?.pledge || riskPolicy?.hasPledge);
-      const bank = riskPolicy?.pledgeBank && typeof riskPolicy.pledgeBank === "object"
-        ? riskPolicy.pledgeBank
-        : {};
-      return {
-        pledge,
+      // GI-PLEDGE-MULTI — תמיכה בעד שני בנקים משעבדים
+      const rawBanks = (typeof Wizard !== "undefined" && typeof Wizard.normalizePledgeBanks === "function")
+        ? Wizard.normalizePledgeBanks(riskPolicy || {})
+        : [(riskPolicy?.pledgeBank && typeof riskPolicy.pledgeBank === "object") ? riskPolicy.pledgeBank : {}];
+      const banks = rawBanks.map(bank => ({
         bankName: safeTrim(bank.bankName || riskPolicy?.pledgeBankName),
         bankNo: safeTrim(bank.bankNo),
         branch: safeTrim(bank.branch),
         amount: this.fmtMoneyPlain(bank.amount),
         years: safeTrim(bank.years),
         address: safeTrim(bank.address)
+      })).filter(b => b.bankName || b.bankNo || b.branch || b.amount || b.years || b.address);
+      const first = banks[0] || { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" };
+      const totalAmount = banks.reduce((acc, b) => {
+        const n = Number(String(b.amount || "").replace(/[^0-9.]/g, ""));
+        return acc + (Number.isFinite(n) ? n : 0);
+      }, 0);
+      return {
+        pledge,
+        banks,
+        bankCount: banks.length,
+        totalAmount: totalAmount > 0 ? String(totalAmount) : "",
+        // שדות שטוחים — תאימות לאחור לכל צרכן ישן
+        bankName: first.bankName,
+        bankNo: first.bankNo,
+        branch: first.branch,
+        amount: first.amount,
+        years: first.years,
+        address: first.address
       };
     },
 
@@ -58382,18 +58723,34 @@ const ClalRiskLifePdf = {
     applyPledge(form, meta, font){
       const pledge = meta?.pledge || {};
       if(!pledge.pledge) return;
-      this.setTextSafe(form, "BankPolicy", pledge.amount, font);
-      this.setTextSafe(form, "BankPolicyNumber1", pledge.years ? `${pledge.years} שנים` : "", font);
-      this.setTextSafe(form, "BankAddress", pledge.address, font);
-      this.setTextSafe(form, "BeneficiaryCompany", pledge.bankName, font);
-      const pledgeDetail = [
-        pledge.bankName ? `בנק: ${pledge.bankName}` : "",
-        pledge.bankNo ? `מס׳ בנק: ${pledge.bankNo}` : "",
-        pledge.branch ? `סניף: ${pledge.branch}` : "",
-        pledge.amount ? `סכום שיעבוד: ${this.fmtMoneyDisplay(pledge.amount)}` : "",
-        pledge.years ? `תקופה: ${pledge.years} שנים` : "",
-        pledge.address ? `כתובת בנק: ${pledge.address}` : ""
+      /* GI-PLEDGE-MULTI — לטופס יש סט שדות אחד בלבד, לכן:
+         · השדות הראשיים מקבלים את בנק 1 (או את הסכום המצטבר כשיש שניים)
+         · BeneficiaryDetail מרכז את פירוט כל הבנקים */
+      const banks = Array.isArray(pledge.banks) && pledge.banks.length
+        ? pledge.banks
+        : [{ bankName: pledge.bankName, bankNo: pledge.bankNo, branch: pledge.branch, amount: pledge.amount, years: pledge.years, address: pledge.address }];
+      const multi = banks.length > 1;
+      const first = banks[0] || {};
+
+      this.setTextSafe(form, "BankPolicy", multi ? (pledge.totalAmount || first.amount) : first.amount, font);
+      this.setTextSafe(form, "BankPolicyNumber1", first.years ? `${first.years} שנים` : "", font);
+      this.setTextSafe(form, "BankAddress", first.address, font);
+      this.setTextSafe(form, "BeneficiaryCompany", multi
+        ? banks.map(b => b.bankName).filter(Boolean).join(" + ")
+        : first.bankName, font);
+
+      const bankDetail = (b, i) => [
+        multi ? `בנק ${i + 1}` : "",
+        b.bankName ? `בנק: ${b.bankName}` : "",
+        b.bankNo ? `מס׳ בנק: ${b.bankNo}` : "",
+        b.branch ? `סניף: ${b.branch}` : "",
+        b.amount ? `סכום שיעבוד: ${this.fmtMoneyDisplay(b.amount)}` : "",
+        b.years ? `תקופה: ${b.years} שנים` : "",
+        b.address ? `כתובת בנק: ${b.address}` : ""
       ].filter(Boolean).join(" · ");
+
+      const pledgeDetail = banks.map(bankDetail).filter(Boolean).join("  |  ")
+        + (multi && pledge.totalAmount ? `  |  סה״כ משועבד: ${this.fmtMoneyDisplay(pledge.totalAmount)}` : "");
       this.setTextSafe(form, "BeneficiaryDetail", pledgeDetail, font);
     },
 
@@ -73507,6 +73864,16 @@ ${inner}
             this._onBenefAddClick(addBen);
             return;
           }
+          const addBank = ev.target.closest("[data-mc-pledge-add]");
+          if(addBank){
+            this._onPledgeBankAddClick(addBank);
+            return;
+          }
+          const remBank = ev.target.closest("[data-mc-pledge-remove]");
+          if(remBank){
+            this._onPledgeBankRemoveClick(remBank);
+            return;
+          }
           const remBen = ev.target.closest("[data-mc-benef-remove]");
           if(remBen){
             this._onBenefRemoveClick(remBen);
@@ -74683,19 +75050,23 @@ ${inner}
       return !!(policy?.pledge || policy?.hasPledge);
     },
 
-    _ensurePledgeBank(policy){
-      if(!policy || typeof policy !== "object") return { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" };
-      if(!policy.pledgeBank || typeof policy.pledgeBank !== "object"){
-        policy.pledgeBank = {
-          bankName: safeTrim(policy.pledgeBankName) || "",
-          bankNo: "",
-          branch: "",
-          amount: "",
-          years: "",
-          address: ""
-        };
+    // GI-PLEDGE-MULTI — מחזיר את מערך הבנקים המשעבדים (עם מיגרציה מהמבנה הישן)
+    _ensurePledgeBanks(policy){
+      if(!policy || typeof policy !== "object") return [{ bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" }];
+      if(typeof Wizard !== "undefined" && typeof Wizard.normalizePledgeBanks === "function"){
+        return Wizard.normalizePledgeBanks(policy);
       }
-      return policy.pledgeBank;
+      if(!Array.isArray(policy.pledgeBanks) || !policy.pledgeBanks.length){
+        policy.pledgeBanks = [policy.pledgeBank && typeof policy.pledgeBank === "object"
+          ? policy.pledgeBank
+          : { bankName: safeTrim(policy.pledgeBankName) || "", bankNo:"", branch:"", amount:"", years:"", address:"" }];
+      }
+      policy.pledgeBank = policy.pledgeBanks[0];
+      return policy.pledgeBanks;
+    },
+
+    _ensurePledgeBank(policy){
+      return this._ensurePledgeBanks(policy)[0];
     },
 
     /** mortgage_bank | risk_pledge_and_bens | risk_benef */
@@ -74832,7 +75203,109 @@ ${inner}
           totalEl.classList.toggle("is-bad", total !== 100 && (item.policy.beneficiaries || []).length > 0);
           totalEl.classList.toggle("is-ok", total === 100);
         }
+        this._mcRefreshBenefMoneyUi(card, item.policy);
       }
+    },
+
+    // GI-PLEDGE-MULTI — בסיס החלוקה למוטבים (היתרה אחרי השיעבוד), מאותו מקור אמת כמו האשף
+    _mcBenefBaseAmount(policy){
+      try{
+        if(typeof Wizard !== "undefined" && typeof Wizard.getBeneficiaryBaseAmount === "function"){
+          return Wizard.getBeneficiaryBaseAmount(policy) || 0;
+        }
+      }catch(_e){}
+      return 0;
+    },
+
+    // עדכון חי של סכומי המוטבים + פס המאזן בכרטיס אחד (בלי re-render — שומר פוקוס)
+    _mcRefreshBenefMoneyUi(card, policy){
+      if(!card || !policy) return;
+      const benBase = this._mcBenefBaseAmount(policy);
+      const bens = Array.isArray(policy.beneficiaries) ? policy.beneficiaries : [];
+      card.querySelectorAll("[data-mc-benef-money]").forEach((node) => {
+        const bi = Number(node.getAttribute("data-mc-benef-money"));
+        const b = bens[bi];
+        node.textContent = (benBase > 0 && b)
+          ? `≈ ${this._mcFmtMoney(Math.round(benBase * (Number(b.sharePct) || 0) / 100))}`
+          : "";
+      });
+      const baseEl = card.querySelector("[data-mc-benef-base]");
+      if(baseEl){
+        const isRemainder = !!policy.pledge && safeTrim(policy.type || policy.product) !== "ריסק משכנתא";
+        if(benBase > 0){
+          baseEl.classList.remove("mcBenefCard__base--empty");
+          baseEl.innerHTML = `${isRemainder ? "בסיס החלוקה (יתרה אחרי שיעבוד)" : "בסיס החלוקה"}: <b>${escapeHtml(this._mcFmtMoney(benBase))}</b>`;
+        }else if(isRemainder){
+          baseEl.classList.add("mcBenefCard__base--empty");
+          baseEl.textContent = "כל סכום הביטוח משועבד — לא נותרה יתרה לחלוקה";
+        }
+      }
+      // פס המאזן של השיעבוד
+      const strip = card.querySelector(".mcPledgeBox__balance");
+      if(strip && typeof Wizard !== "undefined" && typeof Wizard.getPledgeTotals === "function"){
+        const pt = Wizard.getPledgeTotals(policy);
+        if(pt.hasSum){
+          const status = Wizard.buildPledgeStatusText(policy);
+          strip.innerHTML =
+            `<span>סכום ביטוח: <b>${escapeHtml(this._mcFmtMoney(pt.totalSum))}</b></span>` +
+            `<span>סה״כ משועבד: <b>${escapeHtml(this._mcFmtMoney(pt.pledged))}</b></span>` +
+            `<span>${pt.remaining < 0 ? "חריגה" : "יתרה"}: <b>${escapeHtml(this._mcFmtMoney(Math.abs(pt.remaining)))}</b></span>` +
+            `<span class="mcPledgeBox__balanceMsg">${escapeHtml(status.text)}</span>`;
+          strip.classList.remove("mcPledgeBox__balance--ok","mcPledgeBox__balance--warn","mcPledgeBox__balance--bad");
+          strip.classList.add(`mcPledgeBox__balance--${status.tone}`);
+        }
+      }
+    },
+
+    _mcFmtMoney(n){
+      try{
+        if(typeof Wizard !== "undefined" && typeof Wizard.formatMoneyValue === "function") return Wizard.formatMoneyValue(n);
+      }catch(_e){}
+      const num = Number(n);
+      return Number.isFinite(num) ? `₪${num.toLocaleString("he-IL")}` : "—";
+    },
+
+    _onPledgeBankAddClick(btn){
+      const rec = this._getFreshCustomerRecord();
+      if(!rec || !btn) return;
+      const card = btn.closest("[data-mc-benef-policy]");
+      const pid = card && safeTrim(card.getAttribute("data-mc-benef-policy"));
+      const item = this._findRiskPolicyById(rec, pid);
+      if(!item) return;
+      const banks = this._ensurePledgeBanks(item.policy);
+      if(banks.length >= GI_MAX_PLEDGE_BANKS){
+        try{ window.showToast?.({ title:"מקסימום בנקים", text:`ניתן לשעבד עד ${GI_MAX_PLEDGE_BANKS} בנקים.`, variant:"warn", durationMs: 4000 }); }catch(_e){}
+        return;
+      }
+      banks.push({ bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" });
+      this._ensurePledgeBanks(item.policy);
+      // הבנק החדש מקבל את היתרה — בדיוק כמו באשף
+      try{ Wizard.autofillPledgeAmounts?.(item.policy); }catch(_e){}
+      item.policy.pledge = true;
+      const store = this._mirrorGetBenefStore(rec);
+      if(!store.policies[pid]) store.policies[pid] = {};
+      store.policies[pid].confirmed = false; // חייב אישור מחדש מול הלקוח
+      this._renderBeneficiariesBody(rec);
+    },
+
+    _onPledgeBankRemoveClick(btn){
+      const rec = this._getFreshCustomerRecord();
+      if(!rec || !btn) return;
+      const card = btn.closest("[data-mc-benef-policy]");
+      const pid = card && safeTrim(card.getAttribute("data-mc-benef-policy"));
+      const idx = Number(btn.getAttribute("data-mc-pledge-remove"));
+      const item = this._findRiskPolicyById(rec, pid);
+      if(!item || !Number.isFinite(idx) || idx <= 0) return;
+      const banks = this._ensurePledgeBanks(item.policy);
+      if(!banks[idx]) return;
+      banks.splice(idx, 1);
+      this._ensurePledgeBanks(item.policy);
+      // חזרה לבנק אחד — כל הסכום חוזר אליו
+      try{ Wizard.autofillPledgeAmounts?.(item.policy, { force: true }); }catch(_e){}
+      const store = this._mirrorGetBenefStore(rec);
+      if(!store.policies[pid]) store.policies[pid] = {};
+      store.policies[pid].confirmed = false;
+      this._renderBeneficiariesBody(rec);
     },
 
     _onPledgeFieldEdit(el){
@@ -74843,10 +75316,21 @@ ${inner}
       const field = safeTrim(el.getAttribute("data-mc-pledge-field"));
       const item = this._findRiskPolicyById(rec, pid);
       if(!item || !field) return;
-      const bank = this._ensurePledgeBank(item.policy);
+      const banks = this._ensurePledgeBanks(item.policy);
+      const bIdx = Number(el.getAttribute("data-mc-pledge-idx") || 0) || 0;
+      const bank = banks[bIdx] || banks[0];
+      if(!bank) return;
       bank[field] = el.value;
       if(item.mode === "mortgage_bank" || item.mode === "risk_pledge_and_bens"){
         item.policy.pledge = true;
+      }
+      if(field === "amount"){
+        const hint = card.querySelector(`[data-mc-money-hint="${bIdx}"]`);
+        if(hint){
+          const n = Number(String(el.value || "").replace(/[^0-9.]/g, "")) || 0;
+          hint.textContent = n > 0 ? this._mcFmtMoney(n) : "";
+        }
+        this._mcRefreshBenefMoneyUi(card, item.policy);
       }
       const store = this._mirrorGetBenefStore(rec);
       if(!store.policies[pid]) store.policies[pid] = {};
@@ -74886,7 +75370,7 @@ ${inner}
     },
 
     _validatePledgeBank(policy, productLabel){
-      const bank = this._ensurePledgeBank(policy);
+      const banks = this._ensurePledgeBanks(policy);
       const need = [
         ["bankName", "שם הבנק"],
         ["bankNo", "מספר בנק"],
@@ -74894,9 +75378,22 @@ ${inner}
         ["amount", "סכום לשיעבוד"],
         ["years", "לכמה שנים"]
       ];
-      for(const [k, label] of need){
-        if(!safeTrim(bank[k])){
-          return { ok: false, message: `יש למלא ${label} עבור ${productLabel}.` };
+      for(let i = 0; i < banks.length; i++){
+        const suffix = banks.length > 1 ? ` (בנק ${i + 1})` : "";
+        for(const [k, label] of need){
+          if(!safeTrim(banks[i][k])){
+            return { ok: false, message: `יש למלא ${label}${suffix} עבור ${productLabel}.` };
+          }
+        }
+      }
+      // GI-PLEDGE-MULTI — מאזן מול סכום הביטוח
+      if(typeof Wizard !== "undefined" && typeof Wizard.getPledgeTotals === "function"){
+        const pt = Wizard.getPledgeTotals(policy);
+        if(pt.hasSum && !pt.ok){
+          const msg = pt.over
+            ? `סך השיעבוד עולה על סכום הביטוח עבור ${productLabel}.`
+            : `בריסק משכנתא סך השיעבוד חייב להיות שווה לסכום הביטוח עבור ${productLabel}.`;
+          return { ok: false, message: msg };
         }
       }
       return { ok: true };
@@ -74982,20 +75479,56 @@ ${inner}
     },
 
     _renderPledgeBankBlock(policy){
-      const bank = this._ensurePledgeBank(policy);
-      const banks = this._mcBankNameOptions();
+      /* GI-PLEDGE-MULTI — כרטיס לכל בנק משעבד + שורת מאזן */
+      const pledgeBanks = this._ensurePledgeBanks(policy);
+      const bankOpts = this._mcBankNameOptions();
+      const multi = pledgeBanks.length > 1;
+
+      let balanceHtml = "";
+      if(typeof Wizard !== "undefined" && typeof Wizard.getPledgeTotals === "function"){
+        const pt = Wizard.getPledgeTotals(policy);
+        if(pt.hasSum){
+          const status = Wizard.buildPledgeStatusText(policy);
+          balanceHtml = `<div class="mcPledgeBox__balance mcPledgeBox__balance--${status.tone}">` +
+            `<span>סכום ביטוח: <b>${escapeHtml(Wizard.formatMoneyValue(pt.totalSum))}</b></span>` +
+            `<span>סה״כ משועבד: <b>${escapeHtml(Wizard.formatMoneyValue(pt.pledged))}</b></span>` +
+            `<span>${pt.remaining < 0 ? "חריגה" : "יתרה"}: <b>${escapeHtml(Wizard.formatMoneyValue(Math.abs(pt.remaining)))}</b></span>` +
+            `<span class="mcPledgeBox__balanceMsg">${escapeHtml(status.text)}</span>` +
+          `</div>`;
+        }
+      }
+
+      const cards = pledgeBanks.map((bank, i) =>
+        `<div class="mcPledgeBank" data-mc-pledge-bank="${i}">` +
+          (multi
+            ? `<div class="mcPledgeBank__num">בנק משעבד ${i + 1}` +
+                (i > 0 ? `<button type="button" class="mcPledgeBank__remove" data-mc-pledge-remove="${i}" aria-label="הסר בנק">✕</button>` : "") +
+              `</div>`
+            : "") +
+          `<div class="mcBenefRow__grid">` +
+            `<label class="mcStepVerify__field"><span class="mcStepVerify__label">שם הבנק</span>` +
+              `<select class="mcStepVerify__input" data-mc-pledge-field="bankName" data-mc-pledge-idx="${i}"><option value="">בחר בנק…</option>${bankOpts.map((b) => `<option value="${escapeHtml(b)}"${safeTrim(bank.bankName) === b ? " selected" : ""}>${escapeHtml(b)}</option>`).join("")}</select>` +
+            `</label>` +
+            `<label class="mcStepVerify__field"><span class="mcStepVerify__label">מספר בנק</span><input class="mcStepVerify__input" type="text" inputmode="numeric" data-mc-pledge-field="bankNo" data-mc-pledge-idx="${i}" value="${escapeHtml(bank.bankNo || "")}"/></label>` +
+            `<label class="mcStepVerify__field"><span class="mcStepVerify__label">מספר סניף</span><input class="mcStepVerify__input" type="text" inputmode="numeric" data-mc-pledge-field="branch" data-mc-pledge-idx="${i}" value="${escapeHtml(bank.branch || "")}"/></label>` +
+            `<label class="mcStepVerify__field"><span class="mcStepVerify__label">סכום לשיעבוד</span><input class="mcStepVerify__input" type="text" inputmode="numeric" data-mc-pledge-field="amount" data-mc-pledge-idx="${i}" value="${escapeHtml(bank.amount || "")}"/>` +
+              `<span class="mcMoneyHint" data-mc-money-hint="${i}">${(Number(String(bank.amount || "").replace(/[^0-9.]/g, "")) || 0) > 0 ? escapeHtml(this._mcFmtMoney(Number(String(bank.amount).replace(/[^0-9.]/g, "")))) : ""}</span>` +
+            `</label>` +
+            `<label class="mcStepVerify__field"><span class="mcStepVerify__label">לכמה שנים</span><input class="mcStepVerify__input" type="text" inputmode="numeric" data-mc-pledge-field="years" data-mc-pledge-idx="${i}" value="${escapeHtml(bank.years || "")}"/></label>` +
+            `<label class="mcStepVerify__field mcStepVerify__field--wide"><span class="mcStepVerify__label">כתובת הבנק</span><input class="mcStepVerify__input" type="text" data-mc-pledge-field="address" data-mc-pledge-idx="${i}" value="${escapeHtml(bank.address || "")}"/></label>` +
+          `</div>` +
+        `</div>`).join("");
+
+      const addBtnHtml = pledgeBanks.length < GI_MAX_PLEDGE_BANKS
+        ? `<button type="button" class="btn mcPledgeAddBtn" data-mc-pledge-add>+ הוסף בנק שני</button>`
+        : `<span class="mcPledgeMaxNote">מקסימום ${GI_MAX_PLEDGE_BANKS} בנקים</span>`;
       return `<div class="mcPledgeBox" aria-label="פרטי הבנק המשעבד">` +
-        `<div class="mcPledgeBox__title">פרטי הבנק המשעבד (מוטב בלתי חוזר)</div>` +
-        `<div class="mcBenefRow__grid">` +
-          `<label class="mcStepVerify__field"><span class="mcStepVerify__label">שם הבנק</span>` +
-            `<select class="mcStepVerify__input" data-mc-pledge-field="bankName"><option value="">בחר בנק…</option>${banks.map((b) => `<option value="${escapeHtml(b)}"${safeTrim(bank.bankName) === b ? " selected" : ""}>${escapeHtml(b)}</option>`).join("")}</select>` +
-          `</label>` +
-          `<label class="mcStepVerify__field"><span class="mcStepVerify__label">מספר בנק</span><input class="mcStepVerify__input" type="text" inputmode="numeric" data-mc-pledge-field="bankNo" value="${escapeHtml(bank.bankNo || "")}"/></label>` +
-          `<label class="mcStepVerify__field"><span class="mcStepVerify__label">מספר סניף</span><input class="mcStepVerify__input" type="text" inputmode="numeric" data-mc-pledge-field="branch" value="${escapeHtml(bank.branch || "")}"/></label>` +
-          `<label class="mcStepVerify__field"><span class="mcStepVerify__label">סכום לשיעבוד</span><input class="mcStepVerify__input" type="text" inputmode="numeric" data-mc-pledge-field="amount" value="${escapeHtml(bank.amount || "")}"/></label>` +
-          `<label class="mcStepVerify__field"><span class="mcStepVerify__label">לכמה שנים</span><input class="mcStepVerify__input" type="text" inputmode="numeric" data-mc-pledge-field="years" value="${escapeHtml(bank.years || "")}"/></label>` +
-          `<label class="mcStepVerify__field mcStepVerify__field--wide"><span class="mcStepVerify__label">כתובת הבנק</span><input class="mcStepVerify__input" type="text" data-mc-pledge-field="address" value="${escapeHtml(bank.address || "")}"/></label>` +
+        `<div class="mcPledgeBox__head">` +
+          `<div class="mcPledgeBox__title">פרטי הבנק${multi ? "ים" : ""} המשעבד${multi ? "ים" : ""} (מוטב בלתי חוזר)</div>` +
+          addBtnHtml +
         `</div>` +
+        balanceHtml +
+        cards +
       `</div>`;
     },
 
@@ -75030,6 +75563,9 @@ ${inner}
         const bens = Array.isArray(item.policy.beneficiaries) ? item.policy.beneficiaries : [];
         const hasBens = bens.some((b) => safeTrim(b?.firstName) || safeTrim(b?.lastName) || safeTrim(b?.idNumber));
         const total = bens.reduce((s, b) => s + (Number(b?.sharePct) || 0), 0);
+        // GI-PLEDGE-MULTI — בסיס החלוקה: יתרה אחרי שיעבוד (ריסק רגיל) או מלוא הסכום
+        const benBase = this._mcBenefBaseAmount(item.policy);
+        const benBaseIsRemainder = !!item.policy.pledge && safeTrim(item.policy.type || item.policy.product) !== "ריסק משכנתא";
 
         let askHtml = "";
         if(mode === "mortgage_bank"){
@@ -75061,7 +75597,9 @@ ${inner}
                 `<label class="mcStepVerify__field"><span class="mcStepVerify__label">תאריך לידה</span><input class="mcStepVerify__input" type="date" data-mc-benef-field="birthDate" data-mc-benef-idx="${bi}" value="${escapeHtml(b.birthDate || "")}"/></label>` +
                 `<label class="mcStepVerify__field"><span class="mcStepVerify__label">טלפון</span><input class="mcStepVerify__input" type="text" dir="ltr" data-mc-benef-field="phone" data-mc-benef-idx="${bi}" value="${escapeHtml(b.phone || "")}"/></label>` +
                 `<label class="mcStepVerify__field"><span class="mcStepVerify__label">קרבה למבוטח</span><select class="mcStepVerify__input" data-mc-benef-field="relationship" data-mc-benef-idx="${bi}"><option value="">בחר קרבה…</option>${relOpts.map((r) => `<option value="${escapeHtml(r)}"${safeTrim(b.relationship) === r ? " selected" : ""}>${escapeHtml(r)}</option>`).join("")}</select></label>` +
-                `<label class="mcStepVerify__field"><span class="mcStepVerify__label">אחוז חלוקה</span><input class="mcStepVerify__input" type="text" inputmode="numeric" data-mc-benef-field="sharePct" data-mc-benef-idx="${bi}" value="${escapeHtml(String(b.sharePct ?? ""))}" placeholder="%"/></label>` +
+                `<label class="mcStepVerify__field"><span class="mcStepVerify__label">אחוז חלוקה</span><input class="mcStepVerify__input" type="text" inputmode="numeric" data-mc-benef-field="sharePct" data-mc-benef-idx="${bi}" value="${escapeHtml(String(b.sharePct ?? ""))}" placeholder="%"/>` +
+                  `<span class="mcBenefRow__money" data-mc-benef-money="${bi}">${benBase > 0 ? escapeHtml("≈ " + this._mcFmtMoney(Math.round(benBase * (Number(b.sharePct) || 0) / 100))) : ""}</span>` +
+                `</label>` +
               `</div>` +
             `</div>`;
           }).join("");
@@ -75071,7 +75609,11 @@ ${inner}
               : `<div class="mcBenefCard__hint">לא הוזנו מוטבים באשף — יש למלא מול הלקוח.</div>`) +
             `<div class="mcBenefList">${rowsHtml}</div>` +
             `<div class="mcBenefCard__footer">` +
-              `<div class="mcBenefCard__total">סה״כ חלוקה: <strong data-mc-benef-total class="${total === 100 ? "is-ok" : (bens.length ? "is-bad" : "")}">${total}</strong>%</div>` +
+              `<div class="mcBenefCard__total">סה״כ חלוקה: <strong data-mc-benef-total class="${total === 100 ? "is-ok" : (bens.length ? "is-bad" : "")}">${total}</strong>%` +
+                (benBase > 0
+                  ? `<span class="mcBenefCard__base" data-mc-benef-base>${benBaseIsRemainder ? "בסיס החלוקה (יתרה אחרי שיעבוד)" : "בסיס החלוקה"}: <b>${escapeHtml(this._mcFmtMoney(benBase))}</b></span>`
+                  : (benBaseIsRemainder ? `<span class="mcBenefCard__base mcBenefCard__base--empty" data-mc-benef-base>כל סכום הביטוח משועבד — לא נותרה יתרה לחלוקה</span>` : "")) +
+              `</div>` +
               `<button type="button" class="btn" data-mc-benef-add>+ הוסף מוטב</button>` +
             `</div>`;
         } else if(legalHeirs){
