@@ -2908,6 +2908,8 @@
       folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.75 8.75a2 2 0 0 1 2-2h4.15l1.5 1.7h6.85a2 2 0 0 1 2 2v6.8a2 2 0 0 1-2 2H5.75a2 2 0 0 1-2-2v-8.5Z"></path><path d="M3.75 10.25h16.5"></path></svg>',
       activity: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.1-4.5L13 16l2.2-4H21"></path></svg>',
       document: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4.75h6.5l4 4V18a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V6.75a2 2 0 0 1 2-2Z"></path><path d="M14.5 4.75v4h4"></path><path d="M9 12h6"></path><path d="M9 15.5h6"></path></svg>',
+      /* פוליסה + כסף — לכרטיס פרמייה מהפקה */
+      policyMoney: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 4.75h6.2L17.5 8.5V18a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V6.75a2 2 0 0 1 2-2Z"></path><path d="M13.7 4.75v3.7h3.8"></path><circle cx="11.5" cy="13.4" r="3.05"></circle><path d="M11.5 11.55v.55"></path><path d="M11.5 14.7v.55"></path><path d="M10.35 12.55c.22-.4.7-.7 1.15-.7.7 0 1.15.32 1.15.82s-.4.78-1.15.95c-.78.18-1.2.48-1.2.98 0 .52.5.85 1.2.85.48 0 .95-.24 1.15-.65"></path></svg>',
       car: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14"></path><path d="M6.5 17l1.2-4.2A2 2 0 0 1 9.6 11h4.8a2 2 0 0 1 1.9 1.3L17.5 17"></path><circle cx="7.5" cy="17.5" r="1.5"></circle><circle cx="16.5" cy="17.5" r="1.5"></circle><path d="M8 11l1.2-3h5.6L16 11"></path></svg>'
     };
     return `<span class="premiumMonoIcon premiumMonoIcon--${String(name || 'folder')}" aria-hidden="true">${icons[name] || icons.folder}</span>`;
@@ -24831,11 +24833,11 @@ UsersGateUI.init();
         he: orgScope
           ? ("פרמייה מהפקה (" + (getDashboardScopeLabelHe("allAgents") || "סיכום") + ")")
           : "פרמייה מהפקה",
-        cardClass: "bankKpi--newClients",
+        cardClass: "bankKpi--newClients bankKpi--issuedPremium",
         value: this.formatMoney(issued.totalPremium),
         deltaText: `${issued.policyCount} ${policyWord} הופקו · דוח יומי`,
         deltaClass: "is-up",
-        icon: premiumCustomerIcon("medical"),
+        icon: premiumCustomerIcon("policyMoney"),
         breakdown: breakdownHtml
       };
     },
