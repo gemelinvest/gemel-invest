@@ -7573,3 +7573,316 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   color: #1e293b !important;
   font-weight: 600 !important;
 }
+
+/* ==========================================================================
+   GI-CF-HIER / GI-CF-STATUS — 2026-08-04
+   תיק לקוח: היררכיית נושאים, עמודת פרמיה אחת, כתב מודגש, סטטוס פוליסות ישנות.
+   ========================================================================== */
+
+:root:not(#\9):not(#\9){
+  --gi-health:#2563EB; --gi-health-soft:#EFF6FF;
+  --gi-appt:#7C3AED;   --gi-appt-soft:#F5F3FF;
+  --gi-elem:#EA580C;   --gi-elem-soft:#FFF7ED;
+  --gi-legacy:#64748B; --gi-legacy-soft:#F1F5F9;
+  --gi-num:'Rubik','Heebo',system-ui,-apple-system,"Segoe UI",Arial,sans-serif;
+}
+
+/* ---- Group section ---- */
+.cfGroup:not(#\9):not(#\9){
+  background: var(--gi-surface) !important;
+  border: 1px solid var(--gi-border) !important;
+  border-radius: var(--gi-r-card) !important;
+  box-shadow: var(--gi-sh-sm) !important;
+  overflow: hidden !important;
+  margin-bottom: 16px !important;
+}
+
+.cfGroup__head:not(#\9):not(#\9){
+  display: flex !important;
+  align-items: center !important;
+  gap: var(--gi-s3) !important;
+  padding: 14px 18px !important;
+  position: relative !important;
+  border-bottom: 1px solid var(--gi-border) !important;
+}
+
+.cfGroup__head:not(#\9):not(#\9)::before{
+  content: "" !important;
+  position: absolute !important;
+  inset-inline-start: 0 !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  width: 4px !important;
+  background: var(--gi-cf-acc, var(--gi-primary)) !important;
+}
+
+.cfGroup__icon:not(#\9):not(#\9){
+  width: 38px !important;
+  height: 38px !important;
+  flex: none !important;
+  display: grid !important;
+  place-items: center !important;
+  border-radius: var(--gi-r-md) !important;
+  background: var(--gi-cf-acc-soft, var(--gi-primary-soft)) !important;
+  color: var(--gi-cf-acc, var(--gi-primary)) !important;
+}
+
+.cfGroup__icon svg:not(#\9):not(#\9){
+  width: 19px !important;
+  height: 19px !important;
+  stroke-width: 2 !important;
+}
+
+.cfGroup__titleWrap:not(#\9):not(#\9){ min-width: 0 !important; flex: 1 !important; }
+
+.cfGroup__title:not(#\9):not(#\9){
+  margin: 0 !important;
+  font-family: var(--gi-num) !important;
+  font-size: 16.5px !important;
+  font-weight: 800 !important;
+  letter-spacing: -.01em !important;
+  color: var(--gi-text) !important;
+}
+
+.cfGroup__sub:not(#\9):not(#\9){
+  margin: 3px 0 0 !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text-muted) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  flex-wrap: wrap !important;
+}
+
+.cfGroup__kind:not(#\9):not(#\9){
+  display: inline-block !important;
+  padding: 2px 8px !important;
+  border-radius: var(--gi-r-pill) !important;
+  background: var(--gi-cf-acc-soft, var(--gi-primary-soft)) !important;
+  color: var(--gi-cf-acc, var(--gi-primary)) !important;
+  font-size: 10.5px !important;
+  font-weight: 800 !important;
+  letter-spacing: .02em !important;
+  border: 1px solid var(--gi-cf-acc-line, rgba(37,99,235,.22)) !important;
+}
+
+.cfGroup__sum:not(#\9):not(#\9){
+  text-align: left !important;
+  flex: none !important;
+  padding-inline-start: 14px !important;
+  border-inline-start: 1px solid var(--gi-border) !important;
+}
+
+.cfGroup__sumVal:not(#\9):not(#\9){
+  display: block !important;
+  font-family: var(--gi-num) !important;
+  font-size: 19px !important;
+  font-weight: 800 !important;
+  color: var(--gi-text) !important;
+  letter-spacing: -.02em !important;
+}
+
+.cfGroup__sumLbl:not(#\9):not(#\9){
+  display: block !important;
+  font-size: 10.5px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text-muted) !important;
+  margin-top: 2px !important;
+}
+
+.cfGroup--health:not(#\9):not(#\9){  --gi-cf-acc: var(--gi-health);  --gi-cf-acc-soft: var(--gi-health-soft);  --gi-cf-acc-line: rgba(37,99,235,.22); }
+.cfGroup--appt:not(#\9):not(#\9){    --gi-cf-acc: var(--gi-appt);    --gi-cf-acc-soft: var(--gi-appt-soft);    --gi-cf-acc-line: rgba(124,58,237,.22); }
+.cfGroup--elem:not(#\9):not(#\9){    --gi-cf-acc: var(--gi-elem);    --gi-cf-acc-soft: var(--gi-elem-soft);    --gi-cf-acc-line: rgba(234,88,12,.22); }
+.cfGroup--legacy:not(#\9):not(#\9){  --gi-cf-acc: var(--gi-legacy);  --gi-cf-acc-soft: var(--gi-legacy-soft);  --gi-cf-acc-line: rgba(100,116,139,.28); }
+
+/* ---- Table: bolder rows ---- */
+.cfGroup .cfFile__table:not(#\9):not(#\9){ font-size: 13.5px !important; }
+
+.cfGroup .cfFile__table thead th:not(#\9):not(#\9){
+  padding: 9px 14px !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  letter-spacing: .04em !important;
+  color: var(--gi-text-muted) !important;
+  background: var(--gi-surface-2) !important;
+  border-bottom: 1px solid var(--gi-border) !important;
+  text-align: start !important;
+  white-space: nowrap !important;
+}
+
+.cfGroup .cfFile__table td:not(#\9):not(#\9){ padding: 13px 14px !important; }
+.cfGroup .cfFile__table tbody tr:last-child:not(#\9):not(#\9){ border-bottom: none !important; }
+
+.cfFile__policyLogoMark:not(#\9):not(#\9){
+  width: 40px !important;
+  height: 40px !important;
+  flex: none !important;
+  display: grid !important;
+  place-items: center !important;
+  border-radius: var(--gi-r-md) !important;
+  background: var(--gi-surface-2) !important;
+  border: 1px solid var(--gi-border) !important;
+  overflow: hidden !important;
+}
+
+.cfFile__policyName:not(#\9):not(#\9){
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  color: var(--gi-text) !important;
+  letter-spacing: -.005em !important;
+  line-height: 1.3 !important;
+}
+
+.cfFile__policyType:not(#\9):not(#\9){
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text-muted) !important;
+  margin-top: 3px !important;
+}
+
+.cfFile__coverage:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text-2) !important;
+}
+
+.cfFile__policyNumber:not(#\9):not(#\9),
+.cfFile__apptDate:not(#\9):not(#\9){
+  font-family: var(--gi-num) !important;
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text-2) !important;
+}
+
+/* ---- Single premium column ---- */
+.cfGroup .cfFile__premium:not(#\9):not(#\9){
+  font-family: var(--gi-num) !important;
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  color: var(--gi-text) !important;
+  letter-spacing: -.01em !important;
+  white-space: nowrap !important;
+}
+
+.cfFile__cancelReason:not(#\9):not(#\9){
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text-2) !important;
+}
+
+.cfFile__cancelReason.is-empty:not(#\9):not(#\9){ color: var(--gi-text-muted) !important; font-weight: 500 !important; }
+
+/* ---- Status badges ---- */
+.cfGroup .cfFile__statusBadge:not(#\9):not(#\9){
+  padding: 4px 10px !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  white-space: nowrap !important;
+}
+
+.cfFile__statusBadge.is-appoint:not(#\9):not(#\9){
+  background: var(--gi-appt-soft) !important; color: #5B21B6 !important; border-color: rgba(124,58,237,.22) !important;
+}
+.cfFile__statusBadge.is-cancelFull:not(#\9):not(#\9){
+  background: var(--gi-danger-soft) !important; color: #991B1B !important; border-color: rgba(220,38,38,.22) !important;
+}
+.cfFile__statusBadge.is-cancelPartial:not(#\9):not(#\9){
+  background: var(--gi-warn-soft) !important; color: #92400E !important; border-color: rgba(217,119,6,.24) !important;
+}
+.cfFile__statusBadge.is-nochangeClient:not(#\9):not(#\9){
+  background: var(--gi-primary-soft) !important; color: #1E40AF !important; border-color: rgba(37,99,235,.22) !important;
+}
+.cfFile__statusBadge.is-nochangeCollective:not(#\9):not(#\9){
+  background: var(--gi-legacy-soft) !important; color: #475569 !important; border-color: var(--gi-border-strong) !important;
+}
+.cfFile__statusBadge.is-pending:not(#\9):not(#\9){
+  background: transparent !important; color: var(--gi-text-muted) !important; border: 1px dashed var(--gi-border-strong) !important;
+}
+
+/* ---- Sidebar ---- */
+.cfFile__side:not(#\9):not(#\9){ position: sticky !important; top: 16px !important; }
+
+.cfFile__sideTotalLbl:not(#\9):not(#\9){
+  font-size: 11.5px !important; font-weight: 600 !important; color: var(--gi-text-3) !important; margin-top: 4px !important;
+}
+
+.cfFile__sideGroup:not(#\9):not(#\9){
+  font-size: 10.5px !important;
+  font-weight: 800 !important;
+  letter-spacing: .05em !important;
+  color: var(--gi-text-muted) !important;
+  padding: 0 2px 6px !important;
+  margin-top: 4px !important;
+}
+
+.cfFile__sideRow span:not(#\9):not(#\9){
+  display: flex !important; align-items: center !important; gap: 7px !important;
+  color: var(--gi-text-3) !important; font-weight: 600 !important;
+}
+
+.cfFile__sideRow strong:not(#\9):not(#\9){
+  font-family: var(--gi-num) !important; font-weight: 800 !important; color: var(--gi-text) !important; white-space: nowrap !important;
+}
+
+.cfFile__sideDot:not(#\9):not(#\9){
+  width: 7px !important; height: 7px !important; border-radius: 50% !important; flex: none !important; display: block !important;
+}
+.cfFile__sideDot--health:not(#\9):not(#\9){ background: var(--gi-health) !important; }
+.cfFile__sideDot--appt:not(#\9):not(#\9){ background: var(--gi-appt) !important; }
+.cfFile__sideDot--elem:not(#\9):not(#\9){ background: var(--gi-elem) !important; }
+.cfFile__sideDot--legacy:not(#\9):not(#\9){ background: var(--gi-legacy) !important; }
+
+.cfFile__sideDivide:not(#\9):not(#\9){
+  height: 1px !important; background: var(--gi-border) !important; margin: 12px -4px !important;
+}
+
+/* ---- Tabs (pill) ---- */
+.cfFile__tabs:not(#\9):not(#\9){
+  gap: 4px !important; padding: 5px !important;
+  background: var(--gi-surface) !important;
+  border: 1px solid var(--gi-border) !important;
+  border-radius: var(--gi-r-card) !important;
+  box-shadow: var(--gi-sh-sm) !important;
+}
+
+.cfFile__tab:not(#\9):not(#\9){
+  padding: 9px 15px !important;
+  border: none !important;
+  border-radius: var(--gi-r-ctl) !important;
+  background: transparent !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text-3) !important;
+}
+
+.cfFile__tab:hover:not(#\9):not(#\9){ background: var(--gi-surface-2) !important; color: var(--gi-text) !important; }
+
+.cfFile__tab.is-active:not(#\9):not(#\9){
+  background: var(--gi-primary) !important; color: #fff !important;
+  box-shadow: 0 1px 2px rgba(37,99,235,.3) !important;
+}
+
+.cfFile__tabCount:not(#\9):not(#\9){
+  font-family: var(--gi-num) !important;
+  min-width: 20px !important;
+  padding: 1px 6px !important;
+  border-radius: var(--gi-r-pill) !important;
+  background: var(--gi-surface-3) !important;
+  color: var(--gi-text-3) !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+}
+
+.cfFile__tab.is-active .cfFile__tabCount:not(#\9):not(#\9){
+  background: rgba(255,255,255,.22) !important; color: #fff !important;
+}
+
+@media (max-width: 1080px){
+  .cfFile__side:not(#\9):not(#\9){ position: static !important; }
+}
+
+@media (max-width: 640px){
+  .cfGroup__head:not(#\9):not(#\9){ flex-wrap: wrap !important; }
+  .cfGroup__sum:not(#\9):not(#\9){ border: none !important; padding-inline-start: 0 !important; }
+}

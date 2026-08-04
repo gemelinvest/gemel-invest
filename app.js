@@ -8,7 +8,7 @@
 
   const GI_MAX_DISCOUNT_YEARS = 50;   // GI-FIX-DISCOUNT-YEARS
   const GI_MAX_PLEDGE_BANKS = 2;      // GI-PLEDGE-MULTI 2026-08-04 — עד שני בנקים משעבדים בפוליסה
-  const BUILD = "20260804-wizard-redesign-v1";
+  const BUILD = "20260804-cf-hierarchy-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -15737,6 +15737,20 @@ UsersGateUI.init();
       return map[raw] || raw;
     },
 
+    /* GI-CF-STATUS 2026-08-04 — מיפוי סטטוס הטיפול של פוליסה ישנה לתווית + מחלקת צבע. */
+    getExistingStatusPresentation(policy){
+      const raw = this.normalizeExistingPolicyStatus(policy?.existingStatus || policy?.status || "");
+      const map = {
+        full:                { label: "ביטול מלא",               cls: "is-cancelFull" },
+        partialhealth:       { label: "ביטול חלקי",              cls: "is-cancelPartial" },
+        partial:             { label: "ביטול חלקי",              cls: "is-cancelPartial" },
+        agentappoint:        { label: "מינוי סוכן",              cls: "is-appoint" },
+        nochangeclient:      { label: "ללא שינוי – לבקשת הלקוח", cls: "is-nochangeClient" },
+        nochangecollective:  { label: "ללא שינוי – קולקטיב",     cls: "is-nochangeCollective" }
+      };
+      return map[raw] || { label: safeTrim(policy?.existingStatus) || "טרם הוזן", cls: "is-pending" };
+    },
+
     resolveExistingPolicyStatus(ins, rawPolicy){
       const pid = safeTrim(rawPolicy?.id);
       const cancellations = ins?.data?.cancellations;
@@ -16416,7 +16430,12 @@ UsersGateUI.init();
             subtitle: safeTrim(p?.policyNumber) ? `פוליסה ${p.policyNumber}` : insuredLabel,
             badgeText: isAgentAppt ? "מינוי סוכן" : "הגיעה עם הלקוח",
             badgeClass: isAgentAppt ? "is-appoint" : "is-existing",
-            existingStatus: isAgentAppt ? "agent_appoint" : safeTrim(p?.existingStatus || p?.status || ""),
+            existingStatus: isAgentAppt ? "agent_appoint" : this.resolveExistingPolicyStatus(ins, p),
+            /* GI-CF-STATUS 2026-08-04 — סטטוס הטיפול וסיבת הביטול שהנציג בחר בשלב הפוליסות הקיימות,
+               כדי שיוצגו בתיק הלקוח בטבלת "פוליסות ישנות" במקום תגית גנרית. */
+            cancelReason: isAgentAppt ? "" : safeTrim(
+              ins?.data?.cancellations?.[safeTrim(p?.id)]?.reason || p?.statusReason || p?.cancelReason || ""
+            ),
             ctaText: "פרטי פוליסה",
             details: {
               "סטטוס": isAgentAppt ? "מינוי סוכן" : "פוליסה קיימת",
@@ -16953,15 +16972,23 @@ UsersGateUI.init();
           return d.toLocaleDateString('he-IL');
         } catch(_e){ return '—'; }
       };
+      /* GI-CF-HIER 2026-08-04 — נקודת צבע לכל נושא, זהה לצבע הסקשן בטבלה. */
+      const oldSum = this.sumPremiumAfterDiscount(this.getExistingOldPoliciesOnly(policies));
+      const dotRow = (dot, label, val) =>
+        `<div class="cfFile__sideRow"><span><i class="cfFile__sideDot cfFile__sideDot--${dot}"></i>${escapeHtml(label)}</span><strong>${escapeHtml(val ? this.formatMoneyValue(val) : '—')}</strong></div>`;
       return `<div class="cfFile__sideHead">סיכום תיק</div>
         <div class="cfFile__sideBody">
           <div class="cfFile__sideTotal">
             <div class="cfFile__sideTotalVal">${escapeHtml(total ? this.formatMoneyValue(total) : '—')}</div>
-            <div class="cfFile__sideTotalLbl">פרמיה חודשית לאחר הנחה</div>
+            <div class="cfFile__sideTotalLbl">פרמיה חודשית לתשלום</div>
           </div>
-          <div class="cfFile__sideRow"><span>בריאות וסיכונים · חדש</span><strong>${escapeHtml(healthSum ? this.formatMoneyValue(healthSum) : '—')}</strong></div>
-          <div class="cfFile__sideRow cfFile__sideRow--agentAppt"><span>מינוי סוכן</span><strong>${escapeHtml(agentApptSum ? this.formatMoneyValue(agentApptSum) : '—')}</strong></div>
-          <div class="cfFile__sideRow"><span>אלמנטרי</span><strong>${escapeHtml(elemSum ? this.formatMoneyValue(elemSum) : '—')}</strong></div>
+          <div class="cfFile__sideGroup">פילוח לפי נושא</div>
+          ${dotRow('health', 'בריאות וסיכונים', healthSum)}
+          ${dotRow('appt', 'מינוי סוכן', agentApptSum)}
+          ${dotRow('elem', 'אלמנטרי', elemSum)}
+          ${dotRow('legacy', 'פוליסות ישנות', oldSum)}
+          <div class="cfFile__sideDivide"></div>
+          <div class="cfFile__sideGroup">פרטי תיק</div>
           <div class="cfFile__sideRow"><span>מבוטחים</span><strong>${escapeHtml(String(insuredCount || '—'))}</strong></div>
           <div class="cfFile__sideRow"><span>תאריך הקמה</span><strong>${escapeHtml(fmtShort(rec.createdAt || rec.created_at))}</strong></div>
           <div class="cfFile__sideRow"><span>עדכון אחרון</span><strong>${escapeHtml(fmtShort(rec.updatedAt || rec.updated_at))}</strong></div>
@@ -17077,45 +17104,66 @@ UsersGateUI.init();
       const elementaryProducts = this.collectElementaryProducts(rec);
       const agentApptPolicies = this.collectAgentAppointmentPolicies(rec);
       const oldPolicies = this.getExistingOldPoliciesOnly(policies);
-      const renderTable = (title, rows) => {
-        if(!rows.length) return '';
-        return `<div class="cfFile__groupLabel">${escapeHtml(title)} · ${rows.length} ${rows.length === 1 ? 'פוליסה' : 'פוליסות'}</div>
+      /* GI-CF-HIER 2026-08-04 — כל נושא הוא סקשן עם כותרת, אייקון, פס צבע וסכום משלו,
+         במקום תווית אפורה קטנה. עמודת "אחרי הנחה" בוטלה — נשארה עמודת פרמיה אחת. */
+      const plural = (n) => `${n} ${n === 1 ? 'פוליסה' : 'פוליסות'}`;
+      const ICONS = {
+        health: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1L12 21l7.7-7.6 1.1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>`,
+        appt: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-6 0v4"/><rect x="2" y="9" width="20" height="12" rx="2"/><path d="M12 13v4"/></svg>`,
+        elem: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h14M6 17l1.6-5.2A2 2 0 0 1 9.5 10h5a2 2 0 0 1 1.9 1.4L18 17"/><circle cx="7.5" cy="17.5" r="1.6"/><circle cx="16.5" cy="17.5" r="1.6"/></svg>`,
+        legacy: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>`
+      };
+      const group = ({ modifier, icon, title, kind, meta, sum, head, body }) => {
+        if(!body) return '';
+        return `<section class="cfGroup cfGroup--${escapeHtml(modifier)}">
+          <header class="cfGroup__head">
+            <div class="cfGroup__icon" aria-hidden="true">${icon}</div>
+            <div class="cfGroup__titleWrap">
+              <h3 class="cfGroup__title">${escapeHtml(title)}</h3>
+              <p class="cfGroup__sub"><span class="cfGroup__kind">${escapeHtml(kind)}</span>${escapeHtml(meta)}</p>
+            </div>
+            <div class="cfGroup__sum">
+              <span class="cfGroup__sumVal">${escapeHtml(sum)}</span>
+              <span class="cfGroup__sumLbl">פרמיה חודשית</span>
+            </div>
+          </header>
           <div class="cfFile__tableWrap">
             <table class="cfFile__table">
-              <thead><tr>
-                <th>חברה / מוצר</th>
-                <th>כיסוי</th>
-                <th>פרמיה</th>
-                <th>אחרי הנחה</th>
-                <th>סטטוס</th>
-                <th></th>
-              </tr></thead>
-              <tbody>${rows.map(p => this.renderPolicyTableRow(p)).join('')}</tbody>
+              <thead><tr>${head}</tr></thead>
+              <tbody>${body}</tbody>
             </table>
-          </div>`;
+          </div>
+        </section>`;
       };
-      const renderAgentApptTable = (title, rows) => {
-        if(!rows.length) return '';
-        return `<div class="cfFile__groupLabel cfFile__groupLabel--agentAppt">${escapeHtml(title)} · ${rows.length} ${rows.length === 1 ? 'פוליסה' : 'פוליסות'} · סה״כ ${escapeHtml(this.formatMoneyValue(this.sumAgentAppointmentPremium(rows)))}</div>
-          <div class="cfFile__tableWrap cfFile__tableWrap--agentAppt">
-            <table class="cfFile__table cfFile__table--agentAppt">
-              <thead><tr>
-                <th>חברה / מוצר</th>
-                <th>מספר פוליסה</th>
-                <th>פרמיה</th>
-                <th>תאריך מינוי</th>
-                <th>סטטוס</th>
-                <th></th>
-              </tr></thead>
-              <tbody>${rows.map(p => this.renderAgentAppointmentTableRow(p)).join('')}</tbody>
-            </table>
-          </div>`;
-      };
+      const STD_HEAD = `<th>חברה / מוצר</th><th>כיסוי</th><th>פרמיה חודשית</th><th>סטטוס</th><th></th>`;
+      const APPT_HEAD = `<th>חברה / מוצר</th><th>מספר פוליסה</th><th>פרמיה חודשית</th><th>תאריך מינוי</th><th>סטטוס</th><th></th>`;
+      const OLD_HEAD = `<th>חברה / מוצר</th><th>כיסוי</th><th>פרמיה חודשית</th><th>סטטוס טיפול</th><th>סיבת ביטול</th><th></th>`;
+      const insuredsInHealth = new Set(healthPolicies.map(p => safeTrim(p.insuredLabel)).filter(Boolean)).size;
       const blocks = [
-        renderTable('בריאות וסיכונים · פוליסות חדשות', healthPolicies),
-        renderAgentApptTable('מינוי סוכן · פוליסות קיימות', agentApptPolicies),
-        renderTable('פוליסות ישנות', oldPolicies),
-        renderTable('אלמנטרי', elementaryProducts)
+        group({
+          modifier: 'health', icon: ICONS.health, title: 'בריאות וסיכונים', kind: 'פוליסות חדשות',
+          meta: `${plural(healthPolicies.length)}${insuredsInHealth ? ` · ${insuredsInHealth} ${insuredsInHealth === 1 ? 'מבוטח' : 'מבוטחים'}` : ''}`,
+          sum: this.formatMoneyValue(this.sumPremiumAfterDiscount(healthPolicies)),
+          head: STD_HEAD, body: healthPolicies.map(p => this.renderPolicyTableRow(p)).join('')
+        }),
+        group({
+          modifier: 'appt', icon: ICONS.appt, title: 'מינוי סוכן', kind: 'פוליסות קיימות',
+          meta: `${plural(agentApptPolicies.length)} · הועברו לניהולנו`,
+          sum: this.formatMoneyValue(this.sumAgentAppointmentPremium(agentApptPolicies)),
+          head: APPT_HEAD, body: agentApptPolicies.map(p => this.renderAgentAppointmentTableRow(p)).join('')
+        }),
+        group({
+          modifier: 'elem', icon: ICONS.elem, title: 'אלמנטרי', kind: 'רכב ורכוש',
+          meta: plural(elementaryProducts.length),
+          sum: this.formatMoneyValue(this.sumElementaryPremium(elementaryProducts)),
+          head: STD_HEAD, body: elementaryProducts.map(p => this.renderPolicyTableRow(p)).join('')
+        }),
+        group({
+          modifier: 'legacy', icon: ICONS.legacy, title: 'פוליסות ישנות', kind: 'היסטוריה',
+          meta: `${plural(oldPolicies.length)} · הגיעו עם הלקוח`,
+          sum: this.formatMoneyValue(this.sumPremiumAfterDiscount(oldPolicies)),
+          head: OLD_HEAD, body: oldPolicies.map(p => this.renderOldPolicyTableRow(p)).join('')
+        })
       ].filter(Boolean);
       if(!blocks.length){
         return `<div class="emptyState" style="padding:32px 16px"><div class="emptyState__icon">${premiumCustomerIcon("document")}</div><div class="emptyState__title">עדיין אין מוצרים בתיק</div><div class="emptyState__text">ברגע שתישמר הצעה, המוצרים יוצגו כאן אוטומטית.</div></div>`;
@@ -17157,12 +17205,44 @@ UsersGateUI.init();
           </div>
         </td>
         <td><div class="cfFile__coverage">${escapeHtml(coverageText)}</div></td>
-        <td><span class="cfFile__premium">${escapeHtml(policy.premiumText || '—')}</span></td>
-        <td><span class="cfFile__premiumAfter">${escapeHtml(afterPremium)}</span></td>
+        <td><span class="cfFile__premium">${escapeHtml(afterPremium)}</span></td>
         <td><span class="cfFile__statusBadge ${escapeHtml(policy.badgeClass || '')}">${escapeHtml(policy.badgeText || 'חדש')}</span></td>
         <td class="cfFile__menuCell">
           <button class="cfFile__menuBtn" type="button" aria-label="פעולות" data-policy-menu="${escapeHtml(policy.id)}">⋮</button>
           <div class="cfFile__menu" role="menu">${menuActions.join('')}</div>
+        </td>
+      </tr>`;
+    },
+
+    /* GI-CF-STATUS 2026-08-04 — שורת פוליסה ישנה: סטטוס הטיפול שהנציג בחר + סיבת הביטול. */
+    renderOldPolicyTableRow(policy){
+      const logoHtml = renderCompanyLogoHtmlForCompany(policy.company, "card");
+      const logoMark = logoHtml
+        ? `<div class="cfFile__policyLogoMark">${logoHtml}</div>`
+        : `<div class="cfFile__policyLogoMark"><span class="cfFile__policyLogoFallback">${escapeHtml((policy.company || '?').slice(0,2))}</span></div>`;
+      const companyCls = this.companyClass(policy.company);
+      const coverageText = safeTrim(policy.coverageValue) || safeTrim(policy.subtitle) || '—';
+      const premiumText = safeTrim(policy.premiumAfterDiscount || policy.premiumText || '—');
+      const startDate = safeTrim(policy.startDate);
+      const status = this.getExistingStatusPresentation(policy);
+      const reason = safeTrim(policy.cancelReason);
+      return `<tr class="cfFilePolicyTr cfFilePolicyTr--legacy ${companyCls}" data-policy-id="${escapeHtml(policy.id)}">
+        <td>
+          <div class="cfFile__policyBrand">
+            ${logoMark}
+            <div>
+              <div class="cfFile__policyName">${escapeHtml(policy.company || 'חברה')} · ${escapeHtml(policy.type || 'פוליסה')}</div>
+              <div class="cfFile__policyType">${startDate ? `תחילה: ${escapeHtml(startDate)}` : escapeHtml(safeTrim(policy.insuredLabel) || '')}</div>
+            </div>
+          </div>
+        </td>
+        <td><div class="cfFile__coverage">${escapeHtml(coverageText)}</div></td>
+        <td><span class="cfFile__premium">${escapeHtml(premiumText)}</span></td>
+        <td><span class="cfFile__statusBadge ${escapeHtml(status.cls)}">${escapeHtml(status.label)}</span></td>
+        <td><span class="cfFile__cancelReason${reason ? '' : ' is-empty'}">${escapeHtml(reason || '—')}</span></td>
+        <td class="cfFile__menuCell">
+          <button class="cfFile__menuBtn" type="button" aria-label="פעולות" data-policy-menu="${escapeHtml(policy.id)}">⋮</button>
+          <div class="cfFile__menu" role="menu"><button class="cfFile__menuItem" type="button" data-policy-open="${escapeHtml(policy.id)}">פרטי פוליסה</button></div>
         </td>
       </tr>`;
     },
