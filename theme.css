@@ -7334,40 +7334,212 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 
 
 /* =====================================================================
-   Customers list (#view-customers): readable black row text
-   CSS only — scoped to this view. Does not touch sector tags / premium
-   badges (they keep their intentional colors).
+   GI-DESIGN 2026-08-04 · Customers list (#view-customers)
+   One-to-one with _preview-customers-layout.html
+   theme.css loads after app.css — keep !important + :not(#\9) specificity.
    ===================================================================== */
 
+#view-customers .lcCustomersCard:not(#\9):not(#\9){
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 14px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+}
+#view-customers .lcCustomersCard > .card__head:not(#\9):not(#\9){
+  padding: 22px 24px 18px !important;
+  border-bottom: 1px solid #edf2f7 !important;
+  background: #fff !important;
+  align-items: flex-end !important;
+}
+#view-customers .lcCustomersCard > .card__head .card__title:not(#\9):not(#\9){
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em !important;
+  color: #1a2332 !important;
+}
+#view-customers .lcCustomersCard > .card__head .card__hint:not(#\9):not(#\9){
+  font-size: 13px !important;
+  color: #718096 !important;
+  font-weight: 400 !important;
+}
+#view-customers .lcCustomers__headMeta .badge:not(#\9):not(#\9){
+  height: 28px !important;
+  padding: 0 12px !important;
+  border-radius: 6px !important;
+  background: #e8f0f5 !important;
+  color: #1e4d6b !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  border: 0 !important;
+}
+#view-customers .lcCustomers__toolbar:not(#\9):not(#\9){
+  padding: 14px 24px !important;
+  background: #fafbfc !important;
+  border-bottom: 1px solid #edf2f7 !important;
+}
+#view-customers .lcCustomers__searchWrap:not(#\9):not(#\9){
+  max-width: 520px !important;
+  height: 40px !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  overflow: hidden !important;
+}
+#view-customers #btnCustomersExport:not(#\9):not(#\9),
+#view-customers .lcCustomers__toolbar .btn.btn--primary:not(#\9):not(#\9){
+  height: 40px !important;
+  padding: 0 16px !important;
+  border-radius: 8px !important;
+  border: 1px solid #1e4d6b !important;
+  background: #1e4d6b !important;
+  color: #fff !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+
+#view-customers .tableWrap .table:not(#\9):not(#\9){
+  width: 100% !important;
+  min-width: 1100px !important;
+  table-layout: fixed !important;
+}
 #view-customers .tableWrap .table th:not(#\9):not(#\9){
-  font-size: 13px !important;
-  color: #0F172A !important;
-  font-weight: 800 !important;
+  padding: 12px 14px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+  color: #718096 !important;
+  background: #f7fafc !important;
+  border-bottom: 1px solid #e2e8f0 !important;
 }
-
 #view-customers .tableWrap .table td:not(#\9):not(#\9){
-  font-size: 15px !important;
-  color: #0F172A !important;
-  font-weight: 600 !important;
+  padding: 14px 14px !important;
+  font-size: 13.5px !important;
+  color: #1a2332 !important;
+  font-weight: 500 !important;
+  border-bottom: 1px solid #edf2f7 !important;
+  background: #fff !important;
+}
+#view-customers .tableWrap .table tbody tr:hover td:not(#\9):not(#\9){
+  background: #f8fafc !important;
 }
 
-#view-customers .lcCustomers__nameMeta strong:not(#\9):not(#\9){
-  font-size: 15px !important;
+#view-customers .tableWrap .table th:nth-child(1):not(#\9):not(#\9),
+#view-customers .tableWrap .table td:nth-child(1):not(#\9):not(#\9){ width: 22% !important; }
+#view-customers .tableWrap .table th:nth-child(2):not(#\9):not(#\9),
+#view-customers .tableWrap .table td:nth-child(2):not(#\9):not(#\9){ width: 14% !important; }
+#view-customers .tableWrap .table th:nth-child(3):not(#\9):not(#\9),
+#view-customers .tableWrap .table td:nth-child(3):not(#\9):not(#\9){ width: 12% !important; }
+#view-customers .tableWrap .table th:nth-child(4):not(#\9):not(#\9),
+#view-customers .tableWrap .table td:nth-child(4):not(#\9):not(#\9){ width: 11% !important; }
+#view-customers .tableWrap .table th:nth-child(5):not(#\9):not(#\9),
+#view-customers .tableWrap .table td:nth-child(5):not(#\9):not(#\9){ width: 12% !important; }
+#view-customers .tableWrap .table th:nth-child(6):not(#\9):not(#\9),
+#view-customers .tableWrap .table td:nth-child(6):not(#\9):not(#\9){ width: 12% !important; }
+#view-customers .tableWrap .table th:nth-child(7):not(#\9):not(#\9),
+#view-customers .tableWrap .table td:nth-child(7):not(#\9):not(#\9){ width: 11% !important; }
+#view-customers .tableWrap .table th:nth-child(8):not(#\9):not(#\9),
+#view-customers .tableWrap .table td:nth-child(8):not(#\9):not(#\9){ width: 6% !important; text-align: left !important; }
+
+#view-customers .lcCustomers__avatar:not(#\9):not(#\9){
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 8px !important;
+  background: #e8f0f5 !important;
+  color: #1e4d6b !important;
+  border: 0 !important;
+  font-size: 12px !important;
   font-weight: 800 !important;
-  color: #0F172A !important;
 }
-
+#view-customers .lcCustomers__nameMeta strong:not(#\9):not(#\9){
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: #1a2332 !important;
+}
 #view-customers .lcCustomers__nameMeta .muted.small:not(#\9):not(#\9),
-#view-customers .tableWrap .table td .muted.small:not(#\9):not(#\9){
-  font-size: 13px !important;
-  color: #1e293b !important;
+#view-customers .lcCustomers__nameMeta span:not(#\9):not(#\9){
+  font-size: 12px !important;
+  color: #718096 !important;
+  font-weight: 400 !important;
+}
+#view-customers .lcCustomers__date:not(#\9):not(#\9),
+#view-customers .lcCustomers__mono:not(#\9):not(#\9){
+  color: #4a5568 !important;
+  font-weight: 500 !important;
+  font-size: 13.5px !important;
+}
+#view-customers .lcCustomers__agentLabel:not(#\9):not(#\9){
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.03em !important;
+  text-transform: uppercase !important;
+  color: #718096 !important;
+}
+#view-customers .lcCustomers__agentName:not(#\9):not(#\9){
+  font-size: 13.5px !important;
+  color: #1a2332 !important;
   font-weight: 600 !important;
 }
 
-#view-customers .lcCustomers__agentName:not(#\9):not(#\9){
-  font-size: 15px !important;
-  color: #0F172A !important;
-  font-weight: 600 !important;
+#view-customers .lcCustomers__sectorTag:not(#\9):not(#\9){
+  height: 24px !important;
+  padding: 0 9px !important;
+  border-radius: 5px !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+}
+#view-customers .lcCustomers__sectorTag--sikunim:not(#\9):not(#\9){
+  background: #fef2f2 !important; color: #b42318 !important; border-color: #fecaca !important;
+}
+#view-customers .lcCustomers__sectorTag--briut:not(#\9):not(#\9){
+  background: #ecfdf5 !important; color: #1a7a4a !important; border-color: #a7f3d0 !important;
+}
+#view-customers .lcCustomers__sectorTag--almanteri:not(#\9):not(#\9){
+  background: #eff6ff !important; color: #1e40af !important; border-color: #bfdbfe !important;
+}
+#view-customers .lcCustomers__sectorTag--pensia:not(#\9):not(#\9){
+  background: #f5f3ff !important; color: #6b46c1 !important; border-color: #ddd6fe !important;
+}
+#view-customers .lcCustomers__sectorTag--agentAppt:not(#\9):not(#\9){
+  background: #f3e8ff !important; color: #5b21b6 !important; border-color: #e9d5ff !important;
+}
+
+#view-customers .lcCustomers__premiumBadge:not(#\9):not(#\9){
+  height: 28px !important;
+  padding: 0 10px !important;
+  border-radius: 6px !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  margin-top: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+}
+#view-customers .lcCustomers__premiumBadge--is-premium-high:not(#\9):not(#\9){
+  background: #ecfdf5 !important; color: #065f46 !important; border-color: #a7f3d0 !important;
+}
+#view-customers .lcCustomers__premiumBadge--is-premium-mid:not(#\9):not(#\9){
+  background: #eff6ff !important; color: #1e40af !important; border-color: #bfdbfe !important;
+}
+#view-customers .lcCustomers__premiumBadge--is-premium-low:not(#\9):not(#\9){
+  background: #f8fafc !important; color: #475569 !important; border-color: #e2e8f0 !important;
+}
+
+#view-customers .lcCustomerFolderBtn:not(#\9):not(#\9){
+  width: 36px !important;
+  height: 36px !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+  color: #1e4d6b !important;
+  box-shadow: none !important;
+}
+#view-customers .lcCustomerRow:hover .lcCustomerFolderBtn:not(#\9):not(#\9),
+#view-customers .lcCustomerFolderBtn:hover:not(#\9):not(#\9){
+  background: #1e4d6b !important;
+  border-color: #1e4d6b !important;
+  color: #fff !important;
 }
 
 

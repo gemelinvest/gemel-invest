@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>אימות עיצוב — מסך לקוחות (מבנה אמיתי)</title>
+<link rel="stylesheet" href="./app.css"/>
+<link rel="stylesheet" href="./theme.css"/>
+<style>
+  /* Isolate verification: show only customers view chrome */
+  body{ margin:0; background:#f0f3f7; font-family: Heebo, Assistant, Arial, sans-serif; }
+  .verifyNote{
+    max-width:1400px; margin:16px auto 0; padding:12px 16px;
+    background:#fffbeb; border:1px solid #f6e05e; border-radius:10px;
+    font-size:13px; color:#744210;
+  }
+  #view-customers{ display:block !important; max-width:1400px; margin:16px auto 40px; padding:0 16px; }
+</style>
+</head>
+<body>
+<div class="verifyNote"><strong>אימות יישום:</strong> אותו מבנה DOM כמו במערכת + app.css האמיתי (לא קובץ התצוגה המקדימה).</div>
+<section class="view" id="view-customers" style="display:block">
+<div class="card lcCustomersCard">
+<div class="card__head">
+<div>
+<div class="card__title">לקוחות</div>
+<div class="card__hint">מוצגים 10 הלקוחות האחרונים שהצטרפו — חפש כדי למצוא לקוח אחר</div>
+</div>
+<div class="lcCustomers__headMeta">
+<span class="badge" id="customersCountBadge">6 לקוחות</span>
+</div>
+</div>
+<div class="lcCustomers__toolbar">
+<div class="search lcCustomers__searchWrap">
+<input class="search__input" placeholder="חיפוש לפי שם, ת״ז, טלפון או נציג" type="text" readonly/>
+<button class="search__btn" type="button">חפש</button>
+</div>
+<div class="row">
+<button class="btn btn--primary" id="btnCustomersExport" type="button">ייצא קובץ לקוחות</button>
+</div>
+</div>
+<div class="tableWrap">
+<table class="table">
+<thead>
+<tr>
+<th>לקוח</th>
+<th>ענף</th>
+<th>תאריך הקמה</th>
+<th>תעודת זהות</th>
+<th>טלפון</th>
+<th>נציג</th>
+<th>סה״כ פרמיה</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr class="lcCustomerRow">
+<td><div class="lcCustomers__nameCell"><div class="lcCustomers__avatar" aria-hidden="true">יכ</div><div class="lcCustomers__nameMeta"><strong>יוסי כהן</strong><span class="muted small">תל אביב</span></div></div></td>
+<td><div class="lcCustomers__sectorCellWrap"><div class="lcCustomers__sectorCell"><span class="lcCustomers__sectorTag lcCustomers__sectorTag--sikunim">סיכונים</span><span class="lcCustomers__sectorTag lcCustomers__sectorTag--briut">בריאות</span></div></div></td>
+<td><span class="lcCustomers__date">3 באוגוסט 2026</span></td>
+<td><span class="lcCustomers__mono">032456789</span></td>
+<td dir="ltr"><span class="lcCustomers__mono">050-1234567</span></td>
+<td><div class="lcCustomers__agentCell"><span class="lcCustomers__agentLabel">סוכן מטפל</span><span class="lcCustomers__agentName">נועה לוי</span></div></td>
+<td><div class="lcCustomers__premiumCell"><span class="lcCustomers__premiumBadge lcCustomers__premiumBadge--is-premium-high">₪1,240</span></div></td>
+<td><div class="lcCustomers__rowActions lcCustomers__rowActions--folder"><button class="lcCustomerFolderBtn" type="button" aria-label="פתח תיק" title="פתח תיק"><svg class="lcCustomerFolderBtn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path></svg></button></div></td>
+</tr>
+<tr class="lcCustomerRow">
+<td><div class="lcCustomers__nameCell"><div class="lcCustomers__avatar" aria-hidden="true">רמ</div><div class="lcCustomers__nameMeta"><strong>רחל מזרחי</strong><span class="muted small">חיפה</span></div></div></td>
+<td><div class="lcCustomers__sectorCellWrap"><div class="lcCustomers__sectorCell"><span class="lcCustomers__sectorTag lcCustomers__sectorTag--agentAppt">מינוי סוכן</span></div></div></td>
+<td><span class="lcCustomers__date">2 באוגוסט 2026</span></td>
+<td><span class="lcCustomers__mono">028765432</span></td>
+<td dir="ltr"><span class="lcCustomers__mono">052-9876543</span></td>
+<td><div class="lcCustomers__agentCell"><span class="lcCustomers__agentLabel">סוכן מטפל</span><span class="lcCustomers__agentName">דניאל אברהם</span></div></td>
+<td><div class="lcCustomers__premiumCell"><span class="lcCustomers__premiumBadge lcCustomers__premiumBadge--is-premium-mid">₪380</span></div></td>
+<td><div class="lcCustomers__rowActions lcCustomers__rowActions--folder"><button class="lcCustomerFolderBtn" type="button" aria-label="פתח תיק"><svg class="lcCustomerFolderBtn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path></svg></button></div></td>
+</tr>
+<tr class="lcCustomerRow">
+<td><div class="lcCustomers__nameCell"><div class="lcCustomers__avatar" aria-hidden="true">עש</div><div class="lcCustomers__nameMeta"><strong>עמית שפירא</strong><span class="muted small">ראשון לציון</span></div></div></td>
+<td><div class="lcCustomers__sectorCellWrap"><div class="lcCustomers__sectorCell"><span class="lcCustomers__sectorTag lcCustomers__sectorTag--almanteri">אלמנטרי</span></div></div></td>
+<td><span class="lcCustomers__date">1 באוגוסט 2026</span></td>
+<td><span class="lcCustomers__mono">041112223</span></td>
+<td dir="ltr"><span class="lcCustomers__mono">054-1122334</span></td>
+<td><div class="lcCustomers__agentCell"><span class="lcCustomers__agentLabel">סוכן מטפל</span><span class="lcCustomers__agentName">מיכל דהן</span></div></td>
+<td><div class="lcCustomers__premiumCell"><span class="lcCustomers__premiumBadge lcCustomers__premiumBadge--is-premium-mid">₪620</span></div></td>
+<td><div class="lcCustomers__rowActions lcCustomers__rowActions--folder"><button class="lcCustomerFolderBtn" type="button" aria-label="פתח תיק"><svg class="lcCustomerFolderBtn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path></svg></button></div></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</section>
+</body>
+</html>

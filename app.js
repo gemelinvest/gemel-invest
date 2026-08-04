@@ -14861,7 +14861,8 @@ UsersGateUI.init();
     "סיכונים": "sikunim",
     "בריאות": "briut",
     "אלמנטרי": "almanteri",
-    "פנסיה": "pensia"
+    "פנסיה": "pensia",
+    "מינוי סוכן": "agentAppt"
   };
 
   const CustomersUI = {
@@ -15258,7 +15259,8 @@ UsersGateUI.init();
         safeTrim(rec?.city),
         safeTrim(rec?.updatedAt || rec?.updated_at),
         safeTrim(rec?.createdAt || rec?.created_at),
-        this.collectCustomerSectors(rec).join(",")
+        this.collectCustomerSectors(rec).join(","),
+        String(this.sumCustomerListPremium(rec) || 0)
       ].join('|');
     },
 
@@ -15272,6 +15274,20 @@ UsersGateUI.init();
       if(/רכב|דירה|אלמנטר/i.test(type)) return "אלמנטרי";
       if(/פנס/i.test(type)) return "פנסיה";
       return "";
+    },
+
+    /* האם ללקוח יש מינוי סוכן (אשף / מטא / פוליסות מסומנות).
+       נקרא רק כשאין ענפי מוצר — לא משנה את סדר העדיפויות הקיים. */
+    customerHasAgentAppointment(rec){
+      if(!rec) return false;
+      const payload = rec.payload && typeof rec.payload === "object" ? rec.payload : {};
+      if(payload.agentAppointmentMeta && typeof payload.agentAppointmentMeta === "object") return true;
+      if(safeTrim(payload.flowType).toLowerCase() === "agent_appointment") return true;
+      try {
+        return this.collectAgentAppointmentPolicies(rec).length > 0;
+      } catch(_e) {
+        return false;
+      }
     },
 
     collectCustomerSectors(rec){
@@ -15297,7 +15313,11 @@ UsersGateUI.init();
           if(elementaryProducts.length) found.add("אלמנטרי");
         } catch(_e){}
       }
-      return CUSTOMER_SECTOR_ORDER.filter((sector) => found.has(sector));
+      const ordered = CUSTOMER_SECTOR_ORDER.filter((sector) => found.has(sector));
+      // GI-FIX 2026-08-04: רק מינוי סוכן (בלי מוצרים חדשים) — הצג «מינוי סוכן» בענף.
+      // לא מתווסף לצד ענפי מוצר כדי לא לשנות תצוגה קיימת.
+      if(!ordered.length && this.customerHasAgentAppointment(rec)) return ["מינוי סוכן"];
+      return ordered;
     },
 
     sectorCellHtml(rec){
@@ -15313,9 +15333,23 @@ UsersGateUI.init();
       }
     },
 
+    /* פרמיה לתצוגה בטבלת לקוחות: פוליסות חדשות + מינוי סוכן.
+       לא מחליף את sumNewPolicyPremiumsShallow (משמש מדדים/דשבורד). */
+    sumCustomerListPremium(rec){
+      if(!rec) return 0;
+      const newSum = this.sumNewPolicyPremiumsShallow(rec) || 0;
+      let apptSum = 0;
+      try {
+        apptSum = this.sumAgentAppointmentPremium(rec) || 0;
+      } catch(_e) {
+        apptSum = 0;
+      }
+      return Math.round((newSum + apptSum) * 100) / 100;
+    },
+
     premiumCellHtml(rec){
       try {
-        const sum = this.sumNewPolicyPremiumsShallow(rec);
+        const sum = this.sumCustomerListPremium(rec);
         if(!sum) return '<span class="muted small">—</span>';
         return '<span class="lcCustomers__premiumBadge lcCustomers__premiumBadge--' + this.getPremiumToneClass(sum) + '">' + this.formatMoneyValue(sum) + '</span>';
       } catch(_e) {
@@ -15444,15 +15478,15 @@ UsersGateUI.init();
         return `<tr class="lcCustomerRow" data-customer-id="${escapeHtml(String(rec.id || ""))}" data-quiet-sig="${quietSig}">
           <td><div class="lcCustomers__nameCell"><div class="lcCustomers__avatar" aria-hidden="true">${(rec.fullName||'').split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase()||'?'}</div><div class="lcCustomers__nameMeta"><strong>${escapeHtml(rec.fullName || "—")}</strong><span class="muted small">${escapeHtml(rec.city || "")}</span></div></div></td>
           <td><div class="lcCustomers__sectorCellWrap">${sectorCellHtml(rec)}</div></td>
-          <td><span class="muted small">${escapeHtml(formatCreatedAt(rec.createdAt || rec.created_at))}</span></td>
-          <td>${escapeHtml(rec.idNumber || "—")}</td>
-          <td dir="ltr">${escapeHtml(rec.phone || "—")}</td>
-          <td><div class="lcCustomers__agentCell"><span class="lcCustomers__agentName">${escapeHtml(rec.agentName || "—")}</span></div></td>
+          <td><span class="lcCustomers__date">${escapeHtml(formatCreatedAt(rec.createdAt || rec.created_at))}</span></td>
+          <td><span class="lcCustomers__mono">${escapeHtml(rec.idNumber || "—")}</span></td>
+          <td dir="ltr"><span class="lcCustomers__mono">${escapeHtml(rec.phone || "—")}</span></td>
+          <td><div class="lcCustomers__agentCell"><span class="lcCustomers__agentLabel">סוכן מטפל</span><span class="lcCustomers__agentName">${escapeHtml(rec.agentName || "—")}</span></div></td>
           <td><div class="lcCustomers__premiumCell">${premiumCellHtml(rec)}</div></td>
           <td>
             <div class="lcCustomers__rowActions lcCustomers__rowActions--folder">
               <button class="lcCustomerFolderBtn" data-open-customer="${escapeHtml(rec.id)}" type="button" aria-label="פתח תיק לקוח עבור ${escapeHtml(rec.fullName || "לקוח")}" title="פתח תיק">
-                <svg class="lcCustomerFolderBtn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
+                <svg class="lcCustomerFolderBtn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path></svg>
               </button>
             </div>
           </td>
