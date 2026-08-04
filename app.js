@@ -15360,18 +15360,21 @@ UsersGateUI.init();
       }
     },
 
-    /* פרמיה לתצוגה בטבלת לקוחות: פוליסות חדשות + מינוי סוכן.
+    /* פרמיה לתצוגה בטבלת לקוחות בלבד.
+       עדיפות לפוליסות חדשות (בריאות/סיכונים); פרמיית מינוי סוכן רק כשאין פוליסות חדשות.
        לא מחליף את sumNewPolicyPremiumsShallow (משמש מדדים/דשבורד). */
     sumCustomerListPremium(rec){
       if(!rec) return 0;
-      const newSum = this.sumNewPolicyPremiumsShallow(rec) || 0;
+      const rawNew = getCustomerRawNewPolicies(rec);
+      const hasNewPolicies = rawNew.some((raw) => String(raw?.origin || "") !== "existing");
+      if(hasNewPolicies) return this.sumNewPolicyPremiumsShallow(rec) || 0;
       let apptSum = 0;
       try {
         apptSum = this.sumAgentAppointmentPremium(rec) || 0;
       } catch(_e) {
         apptSum = 0;
       }
-      return Math.round((newSum + apptSum) * 100) / 100;
+      return Math.round(apptSum * 100) / 100;
     },
 
     premiumCellHtml(rec){
