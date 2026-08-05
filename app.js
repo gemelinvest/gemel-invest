@@ -8,7 +8,7 @@
 
   const GI_MAX_DISCOUNT_YEARS = 50;   // GI-FIX-DISCOUNT-YEARS
   const GI_MAX_PLEDGE_BANKS = 2;      // GI-PLEDGE-MULTI 2026-08-04 — עד שני בנקים משעבדים בפוליסה
-  const BUILD = "20260805-perf-assets-v1";
+  const BUILD = "20260805-perf-lightproposals-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -61,6 +61,19 @@
      הלקוחות (10 אחרונים / חיפוש) ממשיכות לעבוד — הן ממזגות לתוך רשומות קיימות
      ו-_ingestServerRows שומר על ה-payload הקיים. */
   const LIGHT_INITIAL_LOAD_ENABLED = false;
+  /* GI-PERF 2026-08-05: הצעות בנפרד מלקוחות.
+     הדגל שמעליי כבוי כי הדשבורד מחשב מטריקות מתוך payload של *לקוחות*
+     (getCustomerRawNewPolicies), וטעינה רזה הייתה מציגה אפסים עד סיום מילוי הרקע.
+     להצעות אין תלות כזו — נבדק שכל קריאות payload.proposals עוברות דרך
+     ProposalsUI.openById, שקורא ensureRecordPayload לפני הפתיחה.
+     ארבע ההגנות שנבדקו לפני ההדלקה:
+       1. קריאה   — openById → ensureRecordPayload (שורה ~20357)
+       2. כתיבה   — _omitEmptyPayloadForWrite מוחק את המפתח, upsert לא דורס
+       3. מילוי   — hydratePayloads מטפל ב-proposals (spec השני)
+       4. current_step — getMaxProposalWizardStepIdFromPayload({}) מחזיר 8,
+                        הערך הגבוה, כך ש-Math.min לא מקטין שלב קיים.
+     לכיבוי: להחזיר ל-false. רענון אחד מחזיר להתנהגות הקודמת. */
+  const LIGHT_INITIAL_LOAD_PROPOSALS_ENABLED = true;
   // מנה של 40 מזהים ≈ 2.5MB. השורה הכבדה ביותר במסד היא 1.8MB דחוסים, אז
   // מנה גדולה יותר עלולה להיתקל שוב באותו קיר.
   const PAYLOAD_HYDRATION_BATCH_SIZE = 40;
@@ -10884,7 +10897,8 @@
         // GI-PERF 2026-07-31 (שלב ג'): שלב 1 — הכל חוץ מ-payload.
         // GI-FIX 2026-08-01: מושבת זמנית — ראה LIGHT_INITIAL_LOAD_ENABLED.
         const initialCustomerColumns = LIGHT_INITIAL_LOAD_ENABLED ? CUSTOMER_LIGHT_COLUMNS : "*";
-        const initialProposalColumns = LIGHT_INITIAL_LOAD_ENABLED ? PROPOSAL_LIGHT_COLUMNS : "*";
+        const initialProposalColumns = (LIGHT_INITIAL_LOAD_ENABLED || LIGHT_INITIAL_LOAD_PROPOSALS_ENABLED)
+          ? PROPOSAL_LIGHT_COLUMNS : "*";
         const [metaRes, agentsRes, customersLightRes, proposalsLightRes] = await Promise.all([
           this.loadMetaRow(),
           this.loadTableRows(SUPABASE_TABLES.agents),
