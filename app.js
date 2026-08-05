@@ -8,7 +8,7 @@
 
   const GI_MAX_DISCOUNT_YEARS = 50;   // GI-FIX-DISCOUNT-YEARS
   const GI_MAX_PLEDGE_BANKS = 2;      // GI-PLEDGE-MULTI 2026-08-04 — עד שני בנקים משעבדים בפוליסה
-  const BUILD = "20260805-perf-lightproposals-v1";
+  const BUILD = "20260805-serverkpi-compare-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -24517,10 +24517,13 @@ UsersGateUI.init();
           this.accumulateCustomerIntoBothAggs(rec, currentAgg, prevAgg, currentRange, previousRange, dailySeries);
         });
         this.finalizeBothAggs(currentAgg, prevAgg, customersAll, currentRange, previousRange);
-        return this._assembleMetricsResult(
+        const _giMetrics = this._assembleMetricsResult(
           cacheKey, customersAll, proposalsAll, currentRange, previousRange,
           customersMonth, customersPrev, proposalsMonth, proposalsPrev, currentAgg, prevAgg, dailySeries
         );
+        /* GI-SERVER-KPI: השוואה ברקע. לא נוגעת בערך המוחזר ולא חוסמת. */
+        try { this.compareServerKpis?.(_giMetrics); } catch(_e) {}
+        return _giMetrics;
       });
     },
 
@@ -63564,6 +63567,91 @@ const ClalRiskLifePdf = {
     row.payload.teamManagerAssignmentsUpdatedAt = safeTrim(state?.meta?.teamManagerAssignmentsUpdatedAt) || null;
     return row;
   };
+
+  /* ===== GI-SERVER-KPI 2026-08-05 =========================================
+     מטרה: להוכיח שהאגרגציה בשרת מחזירה את אותם מספרים כמו החישוב בדפדפן,
+     בלי לשנות מה שמוצג למשתמש.
+
+     GI_SERVER_KPI_MODE:
+       "off"     — כבוי לגמרי. אפס קריאות רשת, אפס השפעה.
+       "compare" — הדשבורד מציג את החישוב הקיים כרגיל, ובמקביל קורא ל-RPC
+                   ומדפיס השוואה לקונסולה. אין שינוי במה שרואים.
+
+     הטווח נשלח מאותו אובייקט Range שהדשבורד חישב לעצמו, ולכן אזור הזמן
+     וגבול החודש זהים בהגדרה — אי אפשר להשוות טווחים שונים בטעות.
+
+     דורש שהפונקציות gi_* קיימות במסד. אם לא — נכשל בשקט ולא מפריע.
+  ========================================================================= */
+  const GI_SERVER_KPI_MODE = "compare";
+
+  Storage.loadServerKpis = async function(range){
+    if(!range?.start || !range?.end) return { ok:false, error:"BAD_RANGE" };
+    const scope = (typeof getServerListAgentScopeFilter === "function")
+      ? getServerListAgentScopeFilter() : null;
+    const args = {
+      p_start: new Date(range.start).toISOString(),
+      p_end:   new Date(range.end).toISOString(),
+      p_agent_ids:   scope?.ids?.length   ? scope.ids   : null,
+      p_agent_names: scope?.names?.length ? scope.names : null
+    };
+    try {
+      const client = this.getClient();
+      const [net, appt] = await Promise.all([
+        client.rpc("gi_dashboard_net_premium", args),
+        client.rpc("gi_dashboard_agent_appointment", args)
+      ]);
+      if(net.error) throw net.error;
+      if(appt.error) throw appt.error;
+      const n = Array.isArray(net.data) ? (net.data[0] || {}) : (net.data || {});
+      const a = Array.isArray(appt.data) ? (appt.data[0] || {}) : (appt.data || {});
+      return {
+        ok: true,
+        netPremium:    Number(n.net_premium)   || 0,
+        soldPolicies:  Number(n.sold_policies) || 0,
+        newClients:    Number(n.new_clients)   || 0,
+        apptPremium:   Number(a.appt_premium)  || 0,
+        apptPolicies:  Number(a.appt_policies) || 0
+      };
+    } catch(err) {
+      return { ok:false, error: String(err?.message || err) };
+    }
+  };
+
+  DashboardUI.compareServerKpis = function(metrics){
+    if(GI_SERVER_KPI_MODE === "off") return;
+    if(this._serverKpiCompareBusy) return;
+    this._serverKpiCompareBusy = true;
+    void (async () => {
+      try {
+        const range = this.getMonthToDateRange();
+        const res = await Storage.loadServerKpis(range);
+        if(!res?.ok){
+          console.warn("[GI-SERVER-KPI] לא זמין:", res?.error);
+          return;
+        }
+        const round2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
+        const pairs = [
+          ["פרמיה נטו",        round2(metrics?.netPremium),              round2(res.netPremium)],
+          ["פוליסות",          Number(metrics?.soldPolicies) || 0,       res.soldPolicies],
+          ["פרמיה מינוי סוכן", round2(metrics?.agentAppointmentPremium), round2(res.apptPremium)],
+          ["מינויים",          Number(metrics?.agentAppointments) || 0,  res.apptPolicies]
+        ];
+        const diffs = pairs.filter(([, c, s]) => c !== s);
+        console.groupCollapsed(
+          diffs.length
+            ? `[GI-SERVER-KPI] ${diffs.length} פערים — ${range.start.toISOString().slice(0,10)}`
+            : `[GI-SERVER-KPI] ✓ זהה — ${range.start.toISOString().slice(0,10)}`
+        );
+        console.table(pairs.map(([name, c, s]) => ({ מדד:name, דפדפן:c, שרת:s, פער:round2(s - c) })));
+        console.groupEnd();
+      } catch(err) {
+        console.warn("[GI-SERVER-KPI] שגיאה:", err);
+      } finally {
+        this._serverKpiCompareBusy = false;
+      }
+    })();
+  };
+  // ===== /GI-SERVER-KPI ====================================================
 
   // GI-MIRROR-COALESCE: לא לאבד שמירה ממתינה בסגירת טאב / מעבר לרקע.
   try {
