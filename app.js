@@ -8,7 +8,7 @@
 
   const GI_MAX_DISCOUNT_YEARS = 50;   // GI-FIX-DISCOUNT-YEARS
   const GI_MAX_PLEDGE_BANKS = 2;      // GI-PLEDGE-MULTI 2026-08-04 — עד שני בנקים משעבדים בפוליסה
-  const BUILD = "20260804-cf-hierarchy-v1";
+  const BUILD = "20260805-perf-assets-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -26494,7 +26494,10 @@ UsersGateUI.init();
       if(!root) return;
       const cards = root.querySelectorAll(".bankDash__row--leaderSolo .bankLeader--photoBg");
       if(!cards.length) return;
-      const stamp = Date.now();
+      /* GI-PERF 2026-08-05: היה Date.now() — כל רינדור ייצר URL ייחודי ולכן
+         הדפדפן הוריד מחדש 2.2MB בכל פעם. BUILD משתנה רק בגרסה חדשה, כך
+         שהמטמון עובד ורענון גרסה עדיין מביא תמונה מעודכנת. */
+      const stamp = BUILD;
       const probe = new Image();
       probe.onload = () => {
         cards.forEach((el) => {
@@ -37843,7 +37846,7 @@ if(path === "birthDate"){
               </button>
               <button class="btn btn--danger" id="lcClearHarBituachBtn" type="button">מחק נתוני הר הביטוח</button>
               <button class="btn lcHarSiteBtn" id="lcOpenHarSiteBtn" type="button" title="הר הביטוח — פתיחת האתר הרשמי">
-                <img class="lcHarSiteBtn__img" src="./arreka.png" alt="" style="height:22px;vertical-align:middle;margin-inline-end:6px;" decoding="async"/>
+                <img class="lcHarSiteBtn__img" src="./har-icon.png" alt="" style="height:22px;vertical-align:middle;margin-inline-end:6px;" decoding="async"/>
                 <span>אתר הר הביטוח</span>
               </button>
               <input id="lcHarBituachFile" type="file" accept=".xlsx,.xls" hidden />
