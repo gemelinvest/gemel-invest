@@ -11,6 +11,7 @@
 <link href="./app.css?v=20260805-serverkpi-compare-v1" rel="stylesheet"/>
 <link href="./theme.css?v=20260805-serverkpi-compare-v1" rel="stylesheet"/>
 <link href="./theme-p2.css?v=20260805-serverkpi-compare-v1" rel="stylesheet"/>
+<link href="./theme-mirror-typing.css?v=20260805-mirror-typing-v1" rel="stylesheet"/>
 
 <link rel="manifest" href="./manifest.webmanifest"/>
 <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png"/>
@@ -1245,6 +1246,11 @@
 </div>
 </section>
 
+<!-- ===== TYPING PACKET VIEW (תיק הקלדה — אחרי אישור סיכום השיקוף) ===== -->
+<section class="view" id="view-typingPacket">
+<div class="mtq" id="typingPacketRoot"></div>
+</section>
+
 <!-- ===== MIRROR CALL VIEW (תחנת תפעול: סרגל שלבים מלא + פאנלים) ===== -->
 <section class="view" id="view-mirrorCall">
 <div class="mcView mcWorkstation" id="mcWorkstation" dir="ltr">
@@ -1508,6 +1514,9 @@
       <div class="mcStepInsStart__ribbon" aria-hidden="true"></div>
       <div class="mcStepInsStart__kicker" id="mcStepInsStartKicker">שלב 10 · תחילת ביטוח</div>
       <div class="mcStepInsStart__body" id="mcStepInsStartBody"></div>
+    </section>
+    <section class="mcMirrorSummary mcFlowDock__panel" id="mcStepMirrorSummaryWrap" hidden tabindex="-1" aria-label="סיכום תיקוני שיחת השיקוף">
+      <div class="mtq" id="mcMirrorSummaryBody"></div>
     </section>
     <section class="mcStep5 mcFlowDock__panel" id="mcStep5Wrap" hidden tabindex="-1" aria-label="שלב 8 שיחת שיקוף — שינוי או ביטול בעתיד">
       <div class="mcStep5__ribbon" aria-hidden="true"></div>

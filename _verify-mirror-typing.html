@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1" name="viewport"/>
+<title>אימות — סיכום שיקוף · ממתין להקלדה · תיק הקלדה</title>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<!-- אותו סדר טעינה בדיוק כמו index.html — כדי לתפוס זליגת CSS מהמערכת -->
+<link href="./app.css?v=20260805-serverkpi-compare-v1" rel="stylesheet"/>
+<link href="./theme.css?v=20260805-serverkpi-compare-v1" rel="stylesheet"/>
+<link href="./theme-p2.css?v=20260805-serverkpi-compare-v1" rel="stylesheet"/>
+<link href="./theme-mirror-typing.css?v=20260805-mirror-typing-v1" rel="stylesheet"/>
+<style>
+  /* תפאורת הבדיקה בלבד — לא חלק מהמערכת */
+  html, body{ overflow:auto !important; height:auto !important; }
+  body{ background:#eef2f6 !important; margin:0; }
+  .vfNote{
+    background:#fffbeb; border-bottom:1px solid #f0d78c;
+    padding:10px 22px; font:13px/1.5 "Heebo",system-ui,sans-serif; color:#6b4e12;
+  }
+  .vfTabs{ display:flex; background:#fff; border-bottom:1px solid #d7dee8; padding:0 18px; }
+  .vfTab{
+    appearance:none; border:0; background:transparent; padding:14px 18px 12px;
+    font:600 13.5px "Heebo",system-ui,sans-serif; color:#6b7c8f; cursor:pointer;
+    border-bottom:2px solid transparent; margin-bottom:-1px;
+  }
+  .vfTab.is-on{ color:#0c2d4a; border-bottom-color:#0c2d4a; }
+  .vfScreen{ display:none; }
+  .vfScreen.is-on{ display:block; }
+  .vfStage{ padding:22px; max-width:1280px; margin:0 auto; }
+</style>
+</head>
+<body>
+<div class="vfNote"><strong>עמוד אימות</strong> — המבנה שהקוד מייצר בפועל, עם כל גיליונות הסגנון של המערכת טעונים. השוו מול <code>_preview-mirror-typing-flow.html</code>.</div>
+
+<nav class="vfTabs">
+  <button class="vfTab is-on" type="button" data-vf="v1">1 · סיכום תיקוני שיקוף</button>
+  <button class="vfTab" type="button" data-vf="v2">2 · תור ממתין להקלדה</button>
+  <button class="vfTab" type="button" data-vf="v3">3 · תיק הקלדה</button>
+</nav>
+
+<!-- ===== 1 ===== -->
+<section class="vfScreen is-on" id="v1">
+  <section class="mcMirrorSummary">
+    <div class="mtq">
+      <div class="mtqCrumb">שיחת שיקוף <span>›</span> שלב אחרון <span>›</span> <span>דוח שינויים לפני העברה להקלדה</span></div>
+      <div class="mtqPageHead">
+        <div>
+          <div class="mtqPageHead__title">סיכום תיקונים בשיחת השיקוף</div>
+          <p class="mtqPageHead__sub">סקירה לפני אישור העברת הלקוח לתור «ממתין להקלדה»</p>
+        </div>
+        <div class="mtqBtnRow">
+          <button class="mtqBtn mtqBtn--ghost" type="button">חזרה לשיחה</button>
+          <button class="mtqBtn mtqBtn--primary" type="button">אשר והעבר לממתין להקלדה</button>
+        </div>
+      </div>
+
+      <div class="mtqMetaGrid" style="margin-bottom:16px">
+        <div class="mtqMetaCell"><div class="mtqMetaCell__lbl">לקוח</div><div class="mtqMetaCell__val">ישראל ישראלי</div></div>
+        <div class="mtqMetaCell"><div class="mtqMetaCell__lbl">תעודת זהות</div><div class="mtqMetaCell__val mtqMono">012345678</div></div>
+        <div class="mtqMetaCell"><div class="mtqMetaCell__lbl">משך שיחה</div><div class="mtqMetaCell__val mtqMono">24:18</div></div>
+        <div class="mtqMetaCell"><div class="mtqMetaCell__lbl">נציג שיקוף</div><div class="mtqMetaCell__val">דנה כהן</div></div>
+      </div>
+
+      <div class="mtqSummaryLayout">
+        <div class="mtqPanel">
+          <div class="mtqPanel__head">
+            <h2 class="mtqPanel__title">פירוט שינויים לפי אזור</h2>
+            <span class="mtqBadge mtqBadge--chg">7 שדות עודכנו</span>
+          </div>
+          <div class="mtqPanel__body">
+            <div class="mtqChgSection">
+              <div class="mtqChgSection__head">
+                <div class="mtqChgSection__name">פרטים אישיים <span class="mtqBadge mtqBadge--chg">3</span></div>
+                <div class="mtqChgSection__count">לעומת נתוני האשף לפני השיקוף</div>
+              </div>
+              <table class="mtqChgTable">
+                <thead><tr><th style="width:22%">שדה</th><th style="width:39%">לפני</th><th style="width:39%">אחרי שיקוף</th></tr></thead>
+                <tbody>
+                  <tr class="is-changed"><td>כתובת</td><td class="mtqChgBefore">הרצל 12, תל אביב</td><td class="mtqChgAfter">ויצמן 45, רמת גן</td></tr>
+                  <tr class="is-changed"><td>טלפון נייד</td><td class="mtqChgBefore">050-1112233</td><td class="mtqChgAfter">052-9988776</td></tr>
+                  <tr class="is-changed"><td>דוא״ל</td><td class="mtqChgBefore">israel@oldmail.co.il</td><td class="mtqChgAfter">israel.israeli@gmail.com</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="mtqChgSection">
+              <div class="mtqChgSection__head">
+                <div class="mtqChgSection__name">אמצעי תשלום <span class="mtqBadge mtqBadge--chg">2</span></div>
+              </div>
+              <table class="mtqChgTable">
+                <thead><tr><th style="width:22%">שדה</th><th style="width:39%">לפני</th><th style="width:39%">אחרי שיקוף</th></tr></thead>
+                <tbody>
+                  <tr class="is-changed"><td>4 ספרות אחרונות</td><td class="mtqChgBefore">4412</td><td class="mtqChgAfter">8891</td></tr>
+                  <tr class="is-changed"><td>תוקף כרטיס</td><td class="mtqChgBefore">08/27</td><td class="mtqChgAfter">11/29</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="mtqChgSection">
+              <div class="mtqChgSection__head">
+                <div class="mtqChgSection__name">הצהרת בריאות <span class="mtqBadge mtqBadge--chg">2</span></div>
+              </div>
+              <table class="mtqChgTable">
+                <thead><tr><th style="width:22%">שאלה / שדה</th><th style="width:39%">לפני</th><th style="width:39%">אחרי שיקוף</th></tr></thead>
+                <tbody>
+                  <tr class="is-changed"><td>עישון</td><td class="mtqChgBefore">לא</td><td class="mtqChgAfter">כן · 5 סיגריות ביום</td></tr>
+                  <tr class="is-changed"><td>ניתוח / אשפוז ב־5 שנים</td><td class="mtqChgBefore">לא</td><td class="mtqChgAfter">כן · אשפוז 2023 · אורתופדיה</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="mtqChgSection">
+              <div class="mtqChgSection__head">
+                <div class="mtqChgSection__name">גילוי נאות · מוטבים · שאלון ביטול</div>
+              </div>
+              <div class="mtqUnchangedNote">לא בוצעו שינויים באזורים אלה בשיחה זו.</div>
+            </div>
+          </div>
+        </div>
+
+        <aside class="mtqPanel mtqSideCard">
+          <div class="mtqPanel__head"><h2 class="mtqPanel__title">אישור נציג</h2></div>
+          <div class="mtqPanel__body">
+            <div class="mtqSideStat"><span>סה״כ אזורים שעודכנו</span><strong>3</strong></div>
+            <div class="mtqSideStat"><span>סה״כ שדות שעודכנו</span><strong>7</strong></div>
+            <div class="mtqSideDivider"></div>
+            <ul class="mtqCheckList">
+              <li><input type="checkbox" id="k1"/><label for="k1">עברתי על כל התיקונים המוצגים בדוח</label></li>
+              <li><input type="checkbox" id="k2"/><label for="k2">וידאתי שהפרטים תואמים את מה שנאמר בשיחה</label></li>
+              <li><input type="checkbox" id="k3"/><label for="k3">התיק מוכן להעברה להקלדת הצעות</label></li>
+            </ul>
+            <div class="mtqSideDivider"></div>
+            <p class="mtqSideNote">לאחר האישור הלקוח יועבר לסטטוס <strong>ממתין להקלדה</strong> ויופיע בדשבורד התפעול.</p>
+            <button class="mtqBtn mtqBtn--primary mtqBtn--block" type="button">אשר והעבר להקלדה</button>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </section>
+</section>
+
+<!-- ===== 2 ===== -->
+<section class="vfScreen" id="v2">
+  <div class="vfStage">
+    <section class="mtq">
+      <div class="mtqPanel">
+        <div class="mtqPanel__head">
+          <h2 class="mtqPanel__title">לקוחות ממתינים להקלדה</h2>
+          <span class="mtqPanel__hint">3 לקוחות · ממוין לפי זמן המתנה</span>
+        </div>
+        <div class="mtqPanel__body" style="padding-top:12px">
+          <div class="mtqQueueToolbar">
+            <div class="mtqSearch">
+              <span>חיפוש</span>
+              <input type="search" placeholder="שם, ת״ז, טלפון או נציג שיקוף" aria-label="חיפוש לקוחות"/>
+            </div>
+            <div class="mtqBtnRow">
+              <button class="mtqBtn mtqBtn--sm mtqBtn--primary" type="button">הכל</button>
+              <button class="mtqBtn mtqBtn--sm" type="button">היום</button>
+              <button class="mtqBtn mtqBtn--sm" type="button">השבוע</button>
+              <button class="mtqBtn mtqBtn--sm" type="button">חזרה לדשבורד</button>
+            </div>
+          </div>
+          <table class="mtqQueueTable">
+            <thead>
+              <tr><th>לקוח</th><th>ת״ז</th><th>מוצר / חברה</th><th>נציג שיקוף</th><th>שינויים</th><th>זמן בתור</th><th></th></tr>
+            </thead>
+            <tbody>
+              <tr class="is-open">
+                <td><div class="mtqNameCell">ישראל ישראלי</div><div class="mtqSubCell">052-9988776</div></td>
+                <td class="mtqMono">012345678</td>
+                <td>מנורה מבטחים<br/><span class="mtqSubCell">בריאות</span></td>
+                <td>דנה כהן</td>
+                <td><span class="mtqBadge mtqBadge--chg">7 שדות</span></td>
+                <td class="mtqMono">לפני שעה</td>
+                <td><button class="mtqBtn mtqBtn--sm mtqBtn--primary" type="button">פתח תיק הקלדה</button></td>
+              </tr>
+              <tr>
+                <td><div class="mtqNameCell">מיכל אברהם</div><div class="mtqSubCell">054-1122334</div></td>
+                <td class="mtqMono">029876543</td>
+                <td>הראל<br/><span class="mtqSubCell">חיים</span></td>
+                <td>יוסי לוי</td>
+                <td><span class="mtqBadge mtqBadge--chg">2 שדות</span></td>
+                <td class="mtqMono">לפני 55 דקות</td>
+                <td><button class="mtqBtn mtqBtn--sm" type="button">פתח תיק הקלדה</button></td>
+              </tr>
+              <tr>
+                <td><div class="mtqNameCell">אבי כהן</div><div class="mtqSubCell">050-7778899</div></td>
+                <td class="mtqMono">031112223</td>
+                <td>כלל<br/><span class="mtqSubCell">בריאות +1</span></td>
+                <td>דנה כהן</td>
+                <td><span class="mtqBadge mtqBadge--muted">ללא שינוי</span></td>
+                <td class="mtqMono">לפני 18 דקות</td>
+                <td><button class="mtqBtn mtqBtn--sm" type="button">פתח תיק הקלדה</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+</section>
+
+<!-- ===== 3 ===== -->
+<section class="vfScreen" id="v3">
+  <div class="vfStage">
+    <div class="mtq">
+      <div class="mtqCrumb">ממתין להקלדה <span>›</span> <span>תיק הקלדה · ישראל ישראלי</span></div>
+      <div class="mtqPageHead">
+        <div>
+          <div class="mtqPageHead__title">תיק הקלדה · ישראל ישראלי</div>
+          <p class="mtqPageHead__sub">כל הפרטים והמשך השיקוף — מסודר להקלדה. דאבל־קליק על ערך מעתיק ללוח.</p>
+        </div>
+        <div class="mtqBtnRow">
+          <button class="mtqBtn" type="button">חזרה לרשימה</button>
+          <button class="mtqBtn mtqBtn--primary" type="button">סמן כהועבר להקלדה בחברה</button>
+        </div>
+      </div>
+
+      <div class="mtqHintBar">
+        <div><strong>העתקה מהירה:</strong> דאבל־קליק על כל שדה מעתיק את הערך הנוכחי. שדות ששונו בשיקוף מסומנים ברקע חם.</div>
+        <span class="mtqBadge mtqBadge--chg">7 שדות עודכנו בשיקוף</span>
+      </div>
+
+      <div class="mtqPacketLayout">
+        <aside class="mtqPanel mtqToc">
+          <div class="mtqPanel__head"><h2 class="mtqPanel__title">ניווט בתיק</h2></div>
+          <div class="mtqPanel__body" style="padding:8px">
+            <nav>
+              <a href="#a1" class="is-active">פרטי לקוח</a>
+              <a href="#a2">יצירת קשר וכתובת</a>
+              <a href="#a3">אמצעי תשלום</a>
+              <a href="#a4">הצהרת בריאות</a>
+              <a href="#a5">סיכום שינויי שיקוף</a>
+              <a href="#a6">פוליסות / מוצר</a>
+            </nav>
+          </div>
+        </aside>
+
+        <div>
+          <div class="mtqSectionBlock mtqPanel" id="a1">
+            <div class="mtqPanel__head"><h2 class="mtqPanel__title">פרטי לקוח</h2><span class="mtqPanel__hint">מזהים בסיסיים</span></div>
+            <div class="mtqFieldGrid">
+              <div class="mtqField" data-mtq-copy="ישראל ישראלי"><div class="mtqField__lbl">שם מלא</div><div class="mtqField__val">ישראל ישראלי</div></div>
+              <div class="mtqField" data-mtq-copy="012345678"><div class="mtqField__lbl">תעודת זהות</div><div class="mtqField__val">012345678</div></div>
+              <div class="mtqField" data-mtq-copy="15/03/1988"><div class="mtqField__lbl">תאריך לידה</div><div class="mtqField__val">15/03/1988</div></div>
+              <div class="mtqField" data-mtq-copy="נשוי"><div class="mtqField__lbl">מצב משפחתי</div><div class="mtqField__val">נשוי</div></div>
+            </div>
+          </div>
+
+          <div class="mtqSectionBlock mtqPanel" id="a2">
+            <div class="mtqPanel__head"><h2 class="mtqPanel__title">יצירת קשר וכתובת</h2><span class="mtqBadge mtqBadge--chg">עודכן בשיקוף</span></div>
+            <div class="mtqFieldGrid">
+              <div class="mtqField is-changed" data-mtq-copy="052-9988776">
+                <div class="mtqField__lbl">טלפון נייד <span class="mtqBadge mtqBadge--chg">שונה</span></div>
+                <div class="mtqField__val">052-9988776</div>
+                <div class="mtqField__was">לפני: <em>050-1112233</em></div>
+              </div>
+              <div class="mtqField is-changed" data-mtq-copy="israel.israeli@gmail.com">
+                <div class="mtqField__lbl">דוא״ל <span class="mtqBadge mtqBadge--chg">שונה</span></div>
+                <div class="mtqField__val">israel.israeli@gmail.com</div>
+                <div class="mtqField__was">לפני: <em>israel@oldmail.co.il</em></div>
+              </div>
+              <div class="mtqField is-changed" data-mtq-copy="ויצמן 45, רמת גן">
+                <div class="mtqField__lbl">כתובת <span class="mtqBadge mtqBadge--chg">שונה</span></div>
+                <div class="mtqField__val">ויצמן 45, רמת גן</div>
+                <div class="mtqField__was">לפני: <em>הרצל 12, תל אביב</em></div>
+              </div>
+              <div class="mtqField" data-mtq-copy="5251203"><div class="mtqField__lbl">מיקוד</div><div class="mtqField__val">5251203</div></div>
+            </div>
+          </div>
+
+          <div class="mtqSectionBlock mtqPanel" id="a3">
+            <div class="mtqPanel__head"><h2 class="mtqPanel__title">אמצעי תשלום</h2><span class="mtqBadge mtqBadge--chg">עודכן בשיקוף</span></div>
+            <div class="mtqFieldGrid">
+              <div class="mtqField" data-mtq-copy="ישראל ישראלי"><div class="mtqField__lbl">שם בעל הכרטיס</div><div class="mtqField__val">ישראל ישראלי</div></div>
+              <div class="mtqField" data-mtq-copy="012345678"><div class="mtqField__lbl">ת״ז בעל הכרטיס</div><div class="mtqField__val">012345678</div></div>
+              <div class="mtqField is-changed" data-mtq-copy="8891">
+                <div class="mtqField__lbl">4 ספרות אחרונות <span class="mtqBadge mtqBadge--chg">שונה</span></div>
+                <div class="mtqField__val">8891</div>
+                <div class="mtqField__was">לפני: <em>4412</em></div>
+              </div>
+              <div class="mtqField is-changed" data-mtq-copy="11/29">
+                <div class="mtqField__lbl">תוקף <span class="mtqBadge mtqBadge--chg">שונה</span></div>
+                <div class="mtqField__val">11/29</div>
+                <div class="mtqField__was">לפני: <em>08/27</em></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mtqSectionBlock mtqPanel" id="a4">
+            <div class="mtqPanel__head"><h2 class="mtqPanel__title">הצהרת בריאות — סיכום לשיקוף</h2><span class="mtqBadge mtqBadge--chg">עודכן בשיקוף</span></div>
+            <div class="mtqFieldGrid">
+              <div class="mtqField is-changed" data-mtq-copy="כן · 5 סיגריות ביום">
+                <div class="mtqField__lbl">עישון <span class="mtqBadge mtqBadge--chg">שונה</span></div>
+                <div class="mtqField__val">כן · 5 סיגריות ביום</div>
+                <div class="mtqField__was">לפני: <em>לא</em></div>
+              </div>
+              <div class="mtqField is-changed" data-mtq-copy="כן · אשפוז 2023 · אורתופדיה">
+                <div class="mtqField__lbl">ניתוח / אשפוז <span class="mtqBadge mtqBadge--chg">שונה</span></div>
+                <div class="mtqField__val">כן · אשפוז 2023 · אורתופדיה</div>
+                <div class="mtqField__was">לפני: <em>לא</em></div>
+              </div>
+              <div class="mtqField" data-mtq-copy="לא"><div class="mtqField__lbl">מחלות כרוניות</div><div class="mtqField__val">לא</div></div>
+              <div class="mtqField" data-mtq-copy="לא"><div class="mtqField__lbl">תרופות קבועות</div><div class="mtqField__val">לא</div></div>
+            </div>
+          </div>
+
+          <div class="mtqSectionBlock mtqPanel" id="a5">
+            <div class="mtqPanel__head"><h2 class="mtqPanel__title">סיכום שינויי שיקוף</h2><span class="mtqPanel__hint">למעקב מהיר של מקליד</span></div>
+            <div class="mtqPanel__body" style="padding-top:0;padding-bottom:12px">
+              <table class="mtqChgTable" style="margin-top:12px">
+                <thead><tr><th>אזור</th><th>שדה</th><th>לפני</th><th>אחרי</th></tr></thead>
+                <tbody>
+                  <tr class="is-changed"><td>פרטים אישיים</td><td>כתובת</td><td class="mtqChgBefore">הרצל 12, תל אביב</td><td class="mtqChgAfter">ויצמן 45, רמת גן</td></tr>
+                  <tr class="is-changed"><td>פרטים אישיים</td><td>טלפון נייד</td><td class="mtqChgBefore">050-1112233</td><td class="mtqChgAfter">052-9988776</td></tr>
+                  <tr class="is-changed"><td>פרטים אישיים</td><td>דוא״ל</td><td class="mtqChgBefore">israel@oldmail.co.il</td><td class="mtqChgAfter">israel.israeli@gmail.com</td></tr>
+                  <tr class="is-changed"><td>אמצעי תשלום</td><td>4 ספרות אחרונות</td><td class="mtqChgBefore">4412</td><td class="mtqChgAfter">8891</td></tr>
+                  <tr class="is-changed"><td>אמצעי תשלום</td><td>תוקף כרטיס</td><td class="mtqChgBefore">08/27</td><td class="mtqChgAfter">11/29</td></tr>
+                  <tr class="is-changed"><td>הצהרת בריאות</td><td>עישון</td><td class="mtqChgBefore">לא</td><td class="mtqChgAfter">כן · 5 סיגריות ביום</td></tr>
+                  <tr class="is-changed"><td>הצהרת בריאות</td><td>ניתוח / אשפוז</td><td class="mtqChgBefore">לא</td><td class="mtqChgAfter">כן · אשפוז 2023</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="mtqSectionBlock mtqPanel" id="a6">
+            <div class="mtqPanel__head"><h2 class="mtqPanel__title">מוצר להקלדה</h2><span class="mtqPanel__hint">1 פוליסות</span></div>
+            <div class="mtqFieldGrid">
+              <div class="mtqField" data-mtq-copy="מנורה מבטחים"><div class="mtqField__lbl">חברה</div><div class="mtqField__val">מנורה מבטחים</div></div>
+              <div class="mtqField" data-mtq-copy="בריאות"><div class="mtqField__lbl">מוצר</div><div class="mtqField__val">בריאות</div></div>
+              <div class="mtqField" data-mtq-copy="187"><div class="mtqField__lbl">פרמיה חודשית (₪)</div><div class="mtqField__val">187</div></div>
+              <div class="mtqField" data-mtq-copy="01/09/2026"><div class="mtqField__lbl">תחילת ביטוח מבוקשת</div><div class="mtqField__val">01/09/2026</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+(function(){
+  var tabs = document.querySelectorAll(".vfTab");
+  var screens = document.querySelectorAll(".vfScreen");
+  tabs.forEach(function(t){
+    t.addEventListener("click", function(){
+      var id = t.getAttribute("data-vf");
+      screens.forEach(function(s){ s.classList.toggle("is-on", s.id === id); });
+      tabs.forEach(function(x){ x.classList.toggle("is-on", x === t); });
+      window.scrollTo(0, 0);
+    });
+  });
+  var toast;
+  document.querySelectorAll(".mtqField[data-mtq-copy]").forEach(function(f){
+    f.addEventListener("dblclick", function(){
+      var v = f.getAttribute("data-mtq-copy") || "";
+      if(!toast){
+        toast = document.createElement("div");
+        toast.className = "mtqCopyToast";
+        document.body.appendChild(toast);
+      }
+      navigator.clipboard.writeText(v).catch(function(){});
+      toast.textContent = "הועתק: " + v;
+      toast.classList.add("is-on");
+      setTimeout(function(){ toast.classList.remove("is-on"); }, 1600);
+    });
+  });
+})();
+</script>
+</body>
+</html>

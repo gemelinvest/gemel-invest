@@ -1550,6 +1550,326 @@
   }
 
 
+  /* =====================================================================
+     GI-MIRROR-DIFF — דוח תיקוני שיחת שיקוף
+
+     תיקוני השיקוף נכתבים ישירות על רשומת הלקוח (ins.data, payload.primary,
+     responses של הצהרת הבריאות) ודורסים את מה שהוזן באשף. לכן אין בשום מקום
+     ערך "לפני" שאפשר להשוות אליו.
+
+     הפתרון: לוכדים תצלום־בסיס של כל השדות הרלוונטיים ברגע שנפתחת שיחת
+     השיקוף — פעם אחת בלבד לכל שיחה — ובסיום משווים מולו. התצלום נשמר בתיק
+     הלקוח (payload.mirrorFlow.baseline) ולכן שורד רענון דף והחלפת מכשיר.
+     ===================================================================== */
+  const MirrorChangeReport = {
+    _insureds(rec){
+      try{
+        if(typeof CustomersUI !== "undefined" && typeof CustomersUI.getInsureds === "function"){
+          return CustomersUI.getInsureds(rec) || [];
+        }
+      }catch(_e){}
+      const pl = rec?.payload || {};
+      if(Array.isArray(pl.insureds)) return pl.insureds;
+      if(Array.isArray(pl?.operational?.insureds)) return pl.operational.insureds;
+      return [];
+    },
+
+    _primary(rec){
+      const pl = rec?.payload || {};
+      if(pl.primary && typeof pl.primary === "object") return pl.primary;
+      const ins = this._insureds(rec);
+      return (ins[0]?.data && typeof ins[0].data === "object") ? ins[0].data : {};
+    },
+
+    _insuredKey(ins, idx){
+      return safeTrim(ins?.id) || `idx_${idx}`;
+    },
+
+    _insuredTitle(ins, idx){
+      const t = safeTrim(ins?.type);
+      if(t === "primary" || (!t && idx === 0)) return "מבוטח ראשי";
+      if(t === "spouse" || t === "secondary") return "בן/בת זוג";
+      if(t === "adult") return "מבוטח בגיר";
+      if(t === "child") return "ילד/ה";
+      return idx === 0 ? "מבוטח ראשי" : `מבוטח ${idx + 1}`;
+    },
+
+    _insuredFullName(ins){
+      const d = ins?.data || {};
+      const joined = `${safeTrim(d.firstName)} ${safeTrim(d.lastName)}`.trim();
+      return joined || safeTrim(ins?.label) || "";
+    },
+
+    _addressText(src){
+      const street = safeTrim(src?.street);
+      const house = safeTrim(src?.houseNumber);
+      const city = safeTrim(src?.city);
+      const line = [street, house].filter(Boolean).join(" ");
+      return [line, city].filter(Boolean).join(", ");
+    },
+
+    _smokingText(d){
+      const status = safeTrim(d?.smokingStatus);
+      if(status !== "yes") return status === "no" ? "לא" : "";
+      const type = safeTrim(d?.smokingType);
+      const amount = safeTrim(d?.smokingAmount);
+      return ["כן", type, amount].filter(Boolean).join(" · ");
+    },
+
+    _last4(value){
+      const digits = safeTrim(value).replace(/\D/g, "");
+      return digits ? digits.slice(-4) : "";
+    },
+
+    _healthSource(rec){
+      try{
+        if(typeof MirrorFlowReadModel !== "undefined" && typeof MirrorFlowReadModel.getMirrorHealthEntries === "function"){
+          return MirrorFlowReadModel.getMirrorHealthEntries(rec) || [];
+        }
+      }catch(_e){}
+      return [];
+    },
+
+    _healthDetail(response){
+      const fields = response?.fields && typeof response.fields === "object" ? response.fields : {};
+      return Object.entries(fields)
+        .filter(([, v]) => safeTrim(v))
+        .map(([k, v]) => `${k}: ${safeTrim(v)}`)
+        .join(" · ");
+    },
+
+    _healthAnswerText(response){
+      const answer = safeTrim(response?.answer);
+      if(!answer) return "";
+      const base = answer === "yes" ? "כן" : answer === "no" ? "לא" : answer;
+      const detail = this._healthDetail(response);
+      return detail ? `${base} · ${detail}` : base;
+    },
+
+    /** תצלום של כל השדות שהשיקוף עשוי לשנות, במבנה שטוח וניתן להשוואה. */
+    buildSnapshot(rec){
+      const snap = { personal: {}, contact: {}, payment: {}, health: {} };
+      if(!rec) return snap;
+
+      const insureds = this._insureds(rec);
+      insureds.forEach((ins, idx) => {
+        const d = ins?.data || {};
+        snap.personal[this._insuredKey(ins, idx)] = {
+          title: this._insuredTitle(ins, idx),
+          fullName: this._insuredFullName(ins),
+          idNumber: safeTrim(d.idNumber),
+          birthDate: safeTrim(d.birthDate),
+          maritalStatus: safeTrim(d.maritalStatus || d.familyStatus),
+          childrenText: safeTrim(d.childrenCount ?? d.children ?? d.hasChildren),
+          occupation: safeTrim(d.occupation),
+          clinic: safeTrim(d.clinic || d.hmo || d.kupatHolim),
+          shaban: safeTrim(d.shaban || d.shabanLevel),
+          address: this._addressText(d),
+          zip: safeTrim(d.zip),
+          smoking: this._smokingText(d)
+        };
+      });
+
+      const p = this._primary(rec);
+      snap.contact = {
+        phone: safeTrim(rec.phone) || safeTrim(p.phone),
+        email: safeTrim(rec.email) || safeTrim(p.email),
+        address: this._addressText(p) || safeTrim(rec.city),
+        zip: safeTrim(p.zip)
+      };
+
+      const cc = (p.cc && typeof p.cc === "object") ? p.cc : {};
+      const ho = (p.ho && typeof p.ho === "object") ? p.ho : {};
+      const payStep = rec?.payload?.mirrorFlow?.paymentStep || {};
+      snap.payment = {
+        method: safeTrim(payStep.method) || safeTrim(p.paymentMethod) || "",
+        payerChoice: safeTrim(p.payerChoice),
+        holderName: safeTrim(cc.holderName),
+        holderId: safeTrim(cc.holderId),
+        cardLast4: this._last4(cc.cardNumber),
+        exp: safeTrim(cc.exp),
+        bankName: safeTrim(ho.bankName),
+        bankNo: safeTrim(ho.bankNo),
+        branch: safeTrim(ho.branch),
+        account: safeTrim(ho.account)
+      };
+
+      this._healthSource(rec).forEach((group) => {
+        const insuredLabel = safeTrim(group?.insured?.label) || "מבוטח";
+        (group.items || []).forEach((item) => {
+          const key = `${safeTrim(item.qKey)}|${safeTrim(item.insId)}`;
+          snap.health[key] = {
+            label: safeTrim(item?.meta?.text) || safeTrim(item.qKey) || "שאלה רפואית",
+            insuredLabel,
+            value: this._healthAnswerText(item.response)
+          };
+        });
+      });
+
+      return snap;
+    },
+
+    _flowStore(rec){
+      if(!rec || typeof rec !== "object") return null;
+      if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+      if(!rec.payload.mirrorFlow || typeof rec.payload.mirrorFlow !== "object") rec.payload.mirrorFlow = {};
+      return rec.payload.mirrorFlow;
+    },
+
+    /** נלכד פעם אחת בפתיחת השיחה. קריאות חוזרות לא דורסות את הבסיס. */
+    captureBaseline(rec, options = {}){
+      const flow = this._flowStore(rec);
+      if(!flow) return null;
+      if(flow.baseline && typeof flow.baseline === "object" && !options.force) return flow.baseline;
+      flow.baseline = {
+        capturedAt: nowISO(),
+        capturedBy: safeTrim(Auth?.current?.name),
+        data: this.buildSnapshot(rec)
+      };
+      return flow.baseline;
+    },
+
+    getBaseline(rec){
+      const flow = rec?.payload?.mirrorFlow;
+      const baseline = flow?.baseline;
+      if(baseline && typeof baseline === "object" && baseline.data) return baseline;
+      return null;
+    },
+
+    _row(label, before, after){
+      const b = safeTrim(before);
+      const a = safeTrim(after);
+      return { label, before: b, after: a, changed: b !== a };
+    },
+
+    PERSONAL_FIELDS: Object.freeze([
+      ["fullName", "שם מלא"],
+      ["idNumber", "תעודת זהות"],
+      ["birthDate", "תאריך לידה"],
+      ["maritalStatus", "מצב משפחתי"],
+      ["childrenText", "ילדים"],
+      ["occupation", "עיסוק"],
+      ["clinic", "קופת חולים"],
+      ["shaban", "שב״ן"],
+      ["address", "כתובת"],
+      ["zip", "מיקוד"],
+      ["smoking", "עישון"]
+    ]),
+
+    PAYMENT_FIELDS: Object.freeze([
+      ["holderName", "שם בעל הכרטיס"],
+      ["holderId", "ת״ז בעל הכרטיס"],
+      ["cardLast4", "4 ספרות אחרונות"],
+      ["exp", "תוקף כרטיס"],
+      ["bankName", "שם הבנק"],
+      ["bankNo", "מספר בנק"],
+      ["branch", "סניף"],
+      ["account", "מספר חשבון"],
+      ["payerChoice", "זהות המשלם"]
+    ]),
+
+    CONTACT_FIELDS: Object.freeze([
+      ["phone", "טלפון נייד"],
+      ["email", "דוא״ל"],
+      ["address", "כתובת"],
+      ["zip", "מיקוד"]
+    ]),
+
+    /** משווה בסיס מול המצב הנוכחי ומחזיר את האזורים לפי סדר התצוגה בדוח. */
+    collect(rec){
+      const baseline = this.getBaseline(rec);
+      const before = baseline?.data || { personal: {}, contact: {}, payment: {}, health: {} };
+      const after = this.buildSnapshot(rec);
+      const areas = [];
+
+      const personalRows = [];
+      Object.keys(after.personal).forEach((key) => {
+        const now = after.personal[key] || {};
+        const was = before.personal?.[key] || {};
+        const multi = Object.keys(after.personal).length > 1;
+        this.PERSONAL_FIELDS.forEach(([field, label]) => {
+          const row = this._row(multi ? `${now.title || "מבוטח"} · ${label}` : label, was[field], now[field]);
+          if(row.changed) personalRows.push(row);
+        });
+      });
+      this.CONTACT_FIELDS.forEach(([field, label]) => {
+        const row = this._row(label, before.contact?.[field], after.contact?.[field]);
+        if(row.changed) personalRows.push(row);
+      });
+      areas.push({ key: "personal", label: "פרטים אישיים", rows: personalRows });
+
+      const paymentRows = [];
+      this.PAYMENT_FIELDS.forEach(([field, label]) => {
+        const row = this._row(label, before.payment?.[field], after.payment?.[field]);
+        if(row.changed) paymentRows.push(row);
+      });
+      areas.push({ key: "payment", label: "אמצעי תשלום", rows: paymentRows });
+
+      const healthRows = [];
+      const healthKeys = new Set([...Object.keys(before.health || {}), ...Object.keys(after.health || {})]);
+      healthKeys.forEach((key) => {
+        const now = after.health?.[key];
+        const was = before.health?.[key];
+        const label = safeTrim(now?.label) || safeTrim(was?.label) || "שאלה רפואית";
+        const insuredLabel = safeTrim(now?.insuredLabel) || safeTrim(was?.insuredLabel);
+        const multi = new Set(Object.values(after.health || {}).map((x) => safeTrim(x?.insuredLabel))).size > 1;
+        const row = this._row(multi && insuredLabel ? `${insuredLabel} · ${label}` : label, was?.value, now?.value);
+        if(row.changed) healthRows.push(row);
+      });
+      areas.push({ key: "health", label: "הצהרת בריאות", rows: healthRows });
+
+      return {
+        hasBaseline: !!baseline,
+        capturedAt: safeTrim(baseline?.capturedAt),
+        areas,
+        changedAreas: areas.filter((a) => a.rows.length).length,
+        changedFields: areas.reduce((sum, a) => sum + a.rows.length, 0)
+      };
+    },
+
+    /** משמר את הדוח כפי שאושר, כדי שתיק ההקלדה יציג בדיוק מה שהנציג אישר. */
+    saveApproved(rec, meta = {}){
+      const flow = this._flowStore(rec);
+      if(!flow) return null;
+      const report = this.collect(rec);
+      flow.changeReport = {
+        approvedAt: safeTrim(meta.approvedAt) || nowISO(),
+        approvedBy: safeTrim(meta.approvedBy) || safeTrim(Auth?.current?.name),
+        changedAreas: report.changedAreas,
+        changedFields: report.changedFields,
+        areas: report.areas
+      };
+      return flow.changeReport;
+    },
+
+    /** אחרי האישור הדוח קפוא — כך תיק ההקלדה מציג בדיוק את מה שהנציג אישר. */
+    getReport(rec){
+      const saved = rec?.payload?.mirrorFlow?.changeReport;
+      if(saved && Array.isArray(saved.areas)){
+        return {
+          hasBaseline: true,
+          approved: true,
+          approvedAt: safeTrim(saved.approvedAt),
+          approvedBy: safeTrim(saved.approvedBy),
+          areas: saved.areas,
+          changedAreas: Number(saved.changedAreas) || 0,
+          changedFields: Number(saved.changedFields) || 0
+        };
+      }
+      return this.collect(rec);
+    },
+
+    /** גרסה זולה לרשימות — מחזירה רק מונים. */
+    summarize(rec){
+      try{
+        const res = this.getReport(rec);
+        return { changedFields: res.changedFields, changedAreas: res.changedAreas, hasBaseline: res.hasBaseline };
+      }catch(_e){
+        return { changedFields: 0, changedAreas: 0, hasBaseline: false };
+      }
+    }
+  };
+
   function releaseGlobalUiLocks(){
     try { document.body.style.overflow = ""; } catch(_e) {}
     try { document.body.style.pointerEvents = ""; } catch(_e) {}
@@ -13198,6 +13518,7 @@ UsersGateUI.init();
       if(safe === "dailySales" && !DashboardUI.canSeeDailySalesReport?.()) safe = "dashboard";
       if(safe === "myProcesses" && !Auth.isOps()) safe = "dashboard";
       if(safe === "mirrorCall" && !Auth.canAccessMirrorCall()) safe = "dashboard";
+      if(safe === "typingPacket" && !TypingPacketUI.canAccess()) safe = "dashboard";
       if(safe === "elementaryMirror" && !Auth.isElementary()) safe = "dashboard";
       if(safe === "mirrorAssignments" && !Auth.canMirrorAssign()) safe = "dashboard";
       if(safe === "elementaryPending"){
@@ -13248,6 +13569,7 @@ UsersGateUI.init();
           mirrorCall: "שיחת שיקוף",
           elementaryMirror: "שיקוף שיחה אלמנטרי",
           mirrorAssignments: "שיוכי שיקוף",
+          typingPacket: "תיק הקלדה",
           settings: "הגדרות מערכת",
           users: "ניהול משתמשים",
           systemUpdates: "עדכוני מערכת",
@@ -13264,7 +13586,7 @@ UsersGateUI.init();
       }
 
       this.setActiveNav(safe);
-      document.body.classList.remove("view-users-active","view-dashboard-active","view-settings-active","view-myTools-active","view-customers-active","view-archivedCustomers-active","view-proposals-active","view-elementaryProposals-active","view-elementaryPending-active","view-agentElementaryTracking-active","view-myProcesses-active","view-mirrorCall-active","view-elementaryMirror-active","view-mirrorAssignments-active","view-systemUpdates-active","view-campaignLeads-active","view-campaignMyLeads-active","view-reportsHub-active","view-dailyReport-active","view-dailySales-active","view-myTeam-active","view-activityLog-active","view-attendanceReport-active");
+      document.body.classList.remove("view-users-active","view-dashboard-active","view-settings-active","view-myTools-active","view-customers-active","view-archivedCustomers-active","view-proposals-active","view-elementaryProposals-active","view-elementaryPending-active","view-agentElementaryTracking-active","view-myProcesses-active","view-mirrorCall-active","view-elementaryMirror-active","view-mirrorAssignments-active","view-typingPacket-active","view-systemUpdates-active","view-campaignLeads-active","view-campaignMyLeads-active","view-reportsHub-active","view-dailyReport-active","view-dailySales-active","view-myTeam-active","view-activityLog-active","view-attendanceReport-active");
       document.body.classList.add("view-" + safe + "-active");
       if(safe !== "settings"){
         ["connection","version","campaigns","landing","security","systemUpdates","activityLog","attendanceReport","archivedCustomers"].forEach((name) => {
@@ -13329,6 +13651,7 @@ UsersGateUI.init();
         if (safe === "elementaryMirror") ElementaryMirrorUI.render();
         else { try { ElementaryMirrorUI.onLeaveView?.(); } catch(_e) {} }
         if (safe === "mirrorAssignments") MirrorAssignmentsUI.render();
+        if (safe === "typingPacket") TypingPacketUI.render();
         if (safe === "campaignLeads") void CampaignLeadsUI.render();
         if (safe === "campaignMyLeads") void CampaignMyLeadsUI.render();
         if (safe === "dailyReport") void DailyReportUI.scheduleNavRender();
@@ -23645,8 +23968,10 @@ UsersGateUI.init();
     _activeBucket: "all",
     _listBucket: "",
     _timerHandle: null,
-    // Typing/signatures stay frozen until product owner defines their customer sources.
-    _frozenBuckets: Object.freeze(["waiting_typing", "pending_signatures"]),
+    _typingQuery: "",
+    _typingRange: "all",
+    // Signatures stay frozen until product owner defines their customer source.
+    _frozenBuckets: Object.freeze(["pending_signatures"]),
 
     FLOW_STEPS: Object.freeze([
       { n: 1, keys: ["idle"], label: "הצגה עצמית" },
@@ -23774,7 +24099,8 @@ UsersGateUI.init();
       if(safeTrim(ops.resultKey) === "pendingSignatures") return "pending_signatures";
       if(safeTrim(ops.resultKey) === "waitingAgentInfo") return "waiting_agent";
       if(safeTrim(issuance?.savedAt) || safeTrim(payment?.savedAt)) return "issuance";
-      if(safeTrim(ops.liveKey) === "call_finished" && !safeTrim(ops.resultKey)) return "waiting_typing";
+      // סיום שיחה לבדו אינו מכניס לתור ההקלדה — נדרש אישור סיכום השיקוף,
+      // שמסמן resultStatus=pendingTyping. אחרת גם שיחה שנקטעה הייתה נכנסת לתור.
       if(isWaitingMirrorQueueCustomer(rec)) return "waiting_mirror";
       return "other";
     },
@@ -23928,6 +24254,59 @@ UsersGateUI.init();
       return this.collectRows().filter((row) => row.bucket === "waiting_mirror");
     },
 
+    collectWaitingTypingRows(){
+      return this.collectRows().filter((row) => row.bucket === "waiting_typing");
+    },
+
+    /** חברה · מוצר לשורת תור ההקלדה — מהפוליסות החדשות בתיק. */
+    typingProductLabel(rec){
+      let policies = [];
+      try { policies = getCustomerRawNewPolicies(rec) || []; } catch(_e){ policies = []; }
+      const fresh = policies.filter((p) => String(p?.origin || "") !== "existing");
+      if(!fresh.length) return { company: "—", product: "" };
+      const companies = Array.from(new Set(fresh.map((p) => safeTrim(p.company)).filter(Boolean)));
+      const types = Array.from(new Set(fresh.map((p) => safeTrim(p.type)).filter(Boolean)));
+      const company = companies.length > 1 ? `${companies[0]} +${companies.length - 1}` : (companies[0] || "—");
+      const product = types.length > 1 ? `${types[0]} +${types.length - 1}` : (types[0] || "");
+      return { company, product };
+    },
+
+    typingRowMatchesRange(row){
+      const range = safeTrim(this._typingRange) || "all";
+      if(range === "all") return true;
+      const raw = safeTrim(row?.ops?.store?.waitingTypingAt) || safeTrim(row?.stamp);
+      if(!raw) return false;
+      const when = new Date(raw).getTime();
+      if(!Number.isFinite(when)) return false;
+      const now = Date.now();
+      if(range === "today"){
+        const start = new Date();
+        start.setHours(0, 0, 0, 0);
+        return when >= start.getTime();
+      }
+      if(range === "week") return (now - when) <= 7 * 24 * 60 * 60 * 1000;
+      return true;
+    },
+
+    typingRowMatchesQuery(row){
+      const q = safeTrim(this._typingQuery).toLowerCase();
+      if(!q) return true;
+      const hay = [
+        safeTrim(row?.rec?.fullName),
+        safeTrim(row?.rec?.idNumber),
+        safeTrim(row?.rec?.phone),
+        safeTrim(row?.agentName),
+        safeTrim(row?.salesAgentName)
+      ].join(" ").toLowerCase();
+      return hay.includes(q);
+    },
+
+    filterTypingRows(rows){
+      return (Array.isArray(rows) ? rows : [])
+        .filter((row) => this.typingRowMatchesRange(row))
+        .filter((row) => this.typingRowMatchesQuery(row));
+    },
+
     buildModel(rows){
       const list = Array.isArray(rows) ? rows : this.collectRows();
       const kpiKeys = ["waiting_mirror", "waiting_typing", "pending_signatures"];
@@ -24035,6 +24414,55 @@ UsersGateUI.init();
         </div>`;
     },
 
+    renderTypingQueuePanel(rows){
+      if(!rows.length){
+        const filtered = !!(safeTrim(this._typingQuery) || safeTrim(this._typingRange) !== "all");
+        return `<div class="mtqEmpty">${filtered
+          ? "לא נמצאו לקוחות התואמים לסינון הנוכחי"
+          : "אין כרגע לקוחות ממתינים להקלדה"}</div>`;
+      }
+      const body = rows.map((row, idx) => {
+        const product = this.typingProductLabel(row.rec);
+        const changes = MirrorChangeReport.summarize(row.rec);
+        const changeBadge = changes.changedFields > 0
+          ? `<span class="mtqBadge mtqBadge--chg">${changes.changedFields} שדות</span>`
+          : `<span class="mtqBadge mtqBadge--muted">ללא שינוי</span>`;
+        const mirrorAgent = safeTrim(row.ops?.store?.waitingTypingBy)
+          || safeTrim(row.agentName !== "לא משויך" ? row.agentName : "")
+          || safeTrim(row.ops?.ownerText)
+          || "—";
+        return `
+          <tr${idx === 0 ? ' class="is-open"' : ""} data-ops-typing-open="${escapeHtml(row.id)}">
+            <td>
+              <div class="mtqNameCell">${escapeHtml(safeTrim(row.rec.fullName) || "לקוח")}</div>
+              <div class="mtqSubCell">${escapeHtml(safeTrim(row.rec.phone) || "—")}</div>
+            </td>
+            <td class="mtqMono">${escapeHtml(safeTrim(row.rec.idNumber) || "—")}</td>
+            <td>${escapeHtml(product.company)}${product.product ? `<br/><span class="mtqSubCell">${escapeHtml(product.product)}</span>` : ""}</td>
+            <td>${escapeHtml(mirrorAgent)}</td>
+            <td>${changeBadge}</td>
+            <td class="mtqMono">${escapeHtml(row.waitLabel)}</td>
+            <td><button class="mtqBtn mtqBtn--sm${idx === 0 ? " mtqBtn--primary" : ""}" type="button" data-ops-typing-open="${escapeHtml(row.id)}">פתח תיק הקלדה</button></td>
+          </tr>`;
+      }).join("");
+
+      return `
+        <table class="mtqQueueTable">
+          <thead>
+            <tr>
+              <th>לקוח</th>
+              <th>ת״ז</th>
+              <th>מוצר / חברה</th>
+              <th>נציג שיקוף</th>
+              <th>שינויים</th>
+              <th>זמן בתור</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>${body}</tbody>
+        </table>`;
+    },
+
     openMirrorForCustomer(id){
       const cid = safeTrim(id);
       if(!cid) return;
@@ -24137,7 +24565,41 @@ UsersGateUI.init();
           </article>`
         : "";
 
-      const mainMidHtml = listBucket
+      let typingListHtml = "";
+      if(listBucket === "waiting_typing"){
+        const allTypingRows = this.collectWaitingTypingRows();
+        const typingRows = this.filterTypingRows(allTypingRows);
+        const range = safeTrim(this._typingRange) || "all";
+        const chip = (key, label) => `<button class="mtqBtn mtqBtn--sm${range === key ? " mtqBtn--primary" : ""}" type="button" data-ops-typing-range="${key}">${label}</button>`;
+        typingListHtml = `
+          <section class="mtq opsDashTypingWrap">
+            <div class="mtqPanel">
+              <div class="mtqPanel__head">
+                <h2 class="mtqPanel__title">לקוחות ממתינים להקלדה</h2>
+                <span class="mtqPanel__hint">${allTypingRows.length} לקוחות · ממוין לפי זמן המתנה</span>
+              </div>
+              <div class="mtqPanel__body" style="padding-top:12px">
+                <div class="mtqQueueToolbar">
+                  <div class="mtqSearch">
+                    <span>חיפוש</span>
+                    <input type="search" id="opsTypingSearch" value="${escapeHtml(safeTrim(this._typingQuery))}" placeholder="שם, ת״ז, טלפון או נציג שיקוף" aria-label="חיפוש לקוחות"/>
+                  </div>
+                  <div class="mtqBtnRow">
+                    ${chip("all", "הכל")}
+                    ${chip("today", "היום")}
+                    ${chip("week", "השבוע")}
+                    <button class="mtqBtn mtqBtn--sm" type="button" data-ops-dash-back>חזרה לדשבורד</button>
+                  </div>
+                </div>
+                ${this.renderTypingQueuePanel(typingRows)}
+              </div>
+            </div>
+          </section>`;
+      }
+
+      const mainMidHtml = listBucket === "waiting_typing"
+        ? typingListHtml
+        : listBucket
         ? waitingListHtml
         : `<div class="opsDash__mid opsDash__mid--agents">
             <article class="card opsDashPanel opsDashPanel--agents">
@@ -24216,6 +24678,11 @@ UsersGateUI.init();
             this.render();
             return;
           }
+          if(bucket === "waiting_typing"){
+            this._listBucket = "waiting_typing";
+            this.render();
+            return;
+          }
           if(this.isBucketFrozen(bucket)){
             try { window.showToast?.({ title: "בקרוב", text: "התור הזה יחובר בהמשך.", variant: "info", durationMs: 3200 }); } catch(_e){}
             return;
@@ -24228,6 +24695,40 @@ UsersGateUI.init();
           this.render();
         });
       });
+      mount.querySelectorAll("[data-ops-typing-range]").forEach((btn) => {
+        on(btn, "click", () => {
+          this._typingRange = safeTrim(btn.getAttribute("data-ops-typing-range")) || "all";
+          this.render();
+        });
+      });
+      mount.querySelectorAll("[data-ops-typing-open]").forEach((el) => {
+        on(el, "click", (ev) => {
+          ev.stopPropagation();
+          const id = safeTrim(el.getAttribute("data-ops-typing-open"));
+          if(id) TypingPacketUI.open(id);
+        });
+      });
+      const typingSearch = mount.querySelector("#opsTypingSearch");
+      if(typingSearch){
+        // רינדור מחדש מאבד פוקוס — לכן מסננים את השורות במקום, בלי render().
+        on(typingSearch, "input", () => {
+          this._typingQuery = safeTrim(typingSearch.value);
+          const rows = this.filterTypingRows(this.collectWaitingTypingRows());
+          const host = typingSearch.closest(".mtqPanel__body");
+          const table = host?.querySelector(".mtqQueueTable");
+          const empty = host?.querySelector(".mtqEmpty");
+          const fresh = this.renderTypingQueuePanel(rows);
+          if(table) table.outerHTML = fresh;
+          else if(empty) empty.outerHTML = fresh;
+          host?.querySelectorAll("[data-ops-typing-open]").forEach((el) => {
+            on(el, "click", (ev) => {
+              ev.stopPropagation();
+              const id = safeTrim(el.getAttribute("data-ops-typing-open"));
+              if(id) TypingPacketUI.open(id);
+            });
+          });
+        });
+      }
       mount.querySelectorAll("[data-ops-dash-assign]").forEach((btn) => {
         on(btn, "click", () => {
           this.openAssignForCustomer(btn.getAttribute("data-ops-dash-assign"));
@@ -24238,6 +24739,305 @@ UsersGateUI.init();
           this.openMirrorForCustomer(btn.getAttribute("data-ops-dash-mirror"));
         });
       });
+    }
+  };
+
+  /* =====================================================================
+     GI-TYPING-PACKET — תיק הקלדה
+
+     המסך שאליו נכנס המקליד אחרי שהשיקוף אושר: כל הפרטים שנדרשים להקלדת
+     ההצעה בחברה, מסודרים לפי אזור, כשכל שדה שתוקן בשיקוף מסומן ומציג את
+     הערך הקודם. דאבל־קליק על שדה מעתיק את הערך ללוח.
+     ===================================================================== */
+  const TypingPacketUI = {
+    _customerId: "",
+    _bound: false,
+
+    canAccess(){
+      return !!(Auth.isOps() || Auth.isOpsAgent());
+    },
+
+    root(){
+      return document.getElementById("typingPacketRoot");
+    },
+
+    current(){
+      const id = safeTrim(this._customerId);
+      if(!id) return null;
+      return (State.data?.customers || []).find((c) => safeTrim(c.id) === id) || null;
+    },
+
+    open(id){
+      const cid = safeTrim(id);
+      if(!cid || !this.canAccess()) return;
+      this._customerId = cid;
+      UI.goView("typingPacket");
+    },
+
+    toast(text){
+      let el = document.getElementById("mtqCopyToast");
+      if(!el){
+        el = document.createElement("div");
+        el.id = "mtqCopyToast";
+        el.className = "mtqCopyToast";
+        el.setAttribute("role", "status");
+        document.body.appendChild(el);
+      }
+      el.textContent = text;
+      el.classList.add("is-on");
+      if(this._toastTimer) window.clearTimeout(this._toastTimer);
+      this._toastTimer = window.setTimeout(() => el.classList.remove("is-on"), 1600);
+    },
+
+    async copyValue(value){
+      const text = String(value == null ? "" : value);
+      if(!text) return;
+      try{
+        await navigator.clipboard.writeText(text);
+        this.toast("הועתק: " + text);
+      }catch(_e){
+        // clipboard API חסום בהקשר לא מאובטח — נפילה חזרה ל-execCommand.
+        try{
+          const ta = document.createElement("textarea");
+          ta.value = text;
+          ta.setAttribute("readonly", "");
+          ta.style.position = "fixed";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand("copy");
+          document.body.removeChild(ta);
+          this.toast("הועתק: " + text);
+        }catch(_err){
+          this.toast("לא ניתן להעתיק בדפדפן זה");
+        }
+      }
+    },
+
+    /** שדה יחיד בתיק. changedRow — שורת שינוי מהדוח, אם השדה תוקן בשיקוף. */
+    field(label, value, changedRow){
+      const val = safeTrim(value);
+      const changed = !!changedRow;
+      return `
+              <div class="mtqField${changed ? " is-changed" : ""}" data-mtq-copy="${escapeHtml(val)}">
+                <div class="mtqField__lbl">${escapeHtml(label)}${changed ? ` <span class="mtqBadge mtqBadge--chg">שונה</span>` : ""}</div>
+                <div class="mtqField__val">${escapeHtml(val || "—")}</div>
+                ${changed ? `<div class="mtqField__was">לפני: <em>${escapeHtml(changedRow.before || "לא הוזן")}</em></div>` : ""}
+              </div>`;
+    },
+
+    section(id, title, headRight, fieldsHtml){
+      return `
+          <div class="mtqSectionBlock mtqPanel" id="${escapeHtml(id)}">
+            <div class="mtqPanel__head">
+              <h2 class="mtqPanel__title">${escapeHtml(title)}</h2>
+              ${headRight}
+            </div>
+            <div class="mtqFieldGrid">${fieldsHtml}</div>
+          </div>`;
+    },
+
+    render(){
+      const mount = this.root();
+      if(!mount) return;
+      const rec = this.current();
+      if(!rec){
+        mount.innerHTML = `<div class="mtqEmpty">לא נבחר לקוח להקלדה. חזור לדשבורד ובחר לקוח מתור «ממתין להקלדה».</div>`;
+        return;
+      }
+      if(UI.els.pageTitle) UI.els.pageTitle.textContent = "תיק הקלדה";
+
+      const report = MirrorChangeReport.getReport(rec);
+      const rowsByLabel = {};
+      report.areas.forEach((area) => {
+        area.rows.forEach((row) => { rowsByLabel[`${area.key}|${row.label}`] = row; });
+      });
+      const chg = (areaKey, label) => rowsByLabel[`${areaKey}|${label}`] || null;
+
+      const snap = MirrorChangeReport.buildSnapshot(rec);
+      const insuredKeys = Object.keys(snap.personal);
+      const primaryKey = insuredKeys[0];
+      const primary = snap.personal[primaryKey] || {};
+      const multi = insuredKeys.length > 1;
+      const pLabel = (label) => multi ? `${primary.title || "מבוטח ראשי"} · ${label}` : label;
+      const changedBadge = `<span class="mtqBadge mtqBadge--chg">עודכן בשיקוף</span>`;
+
+      const sectionHasChange = (labels, areaKey) => labels.some((l) => !!chg(areaKey, l));
+
+      const idFields =
+        this.field("שם מלא", primary.fullName, chg("personal", pLabel("שם מלא"))) +
+        this.field("תעודת זהות", primary.idNumber, chg("personal", pLabel("תעודת זהות"))) +
+        this.field("תאריך לידה", primary.birthDate, chg("personal", pLabel("תאריך לידה"))) +
+        this.field("מצב משפחתי", primary.maritalStatus, chg("personal", pLabel("מצב משפחתי"))) +
+        this.field("עיסוק", primary.occupation, chg("personal", pLabel("עיסוק"))) +
+        this.field("קופת חולים", primary.clinic, chg("personal", pLabel("קופת חולים"))) +
+        this.field("שב״ן", primary.shaban, chg("personal", pLabel("שב״ן"))) +
+        this.field("עישון", primary.smoking, chg("personal", pLabel("עישון")));
+
+      const contactFields =
+        this.field("טלפון נייד", snap.contact.phone, chg("personal", "טלפון נייד")) +
+        this.field("דוא״ל", snap.contact.email, chg("personal", "דוא״ל")) +
+        this.field("כתובת", snap.contact.address || primary.address, chg("personal", "כתובת") || chg("personal", pLabel("כתובת"))) +
+        this.field("מיקוד", snap.contact.zip || primary.zip, chg("personal", "מיקוד") || chg("personal", pLabel("מיקוד")));
+
+      const isBank = safeTrim(snap.payment.method) === "ho" || safeTrim(snap.payment.method) === "bank";
+      const payFields = isBank
+        ? this.field("שם הבנק", snap.payment.bankName, chg("payment", "שם הבנק")) +
+          this.field("מספר בנק", snap.payment.bankNo, chg("payment", "מספר בנק")) +
+          this.field("סניף", snap.payment.branch, chg("payment", "סניף")) +
+          this.field("מספר חשבון", snap.payment.account, chg("payment", "מספר חשבון"))
+        : this.field("שם בעל הכרטיס", snap.payment.holderName, chg("payment", "שם בעל הכרטיס")) +
+          this.field("ת״ז בעל הכרטיס", snap.payment.holderId, chg("payment", "ת״ז בעל הכרטיס")) +
+          this.field("4 ספרות אחרונות", snap.payment.cardLast4, chg("payment", "4 ספרות אחרונות")) +
+          this.field("תוקף", snap.payment.exp, chg("payment", "תוקף כרטיס"));
+
+      const healthEntries = Object.values(snap.health || {});
+      const multiIns = new Set(healthEntries.map((x) => safeTrim(x.insuredLabel))).size > 1;
+      const healthFields = healthEntries.length
+        ? healthEntries.map((item) => {
+            const label = multiIns && safeTrim(item.insuredLabel) ? `${item.insuredLabel} · ${item.label}` : item.label;
+            return this.field(label, item.value, chg("health", label));
+          }).join("")
+        : "";
+
+      let policies = [];
+      try{ policies = (getCustomerRawNewPolicies(rec) || []).filter((p) => String(p?.origin || "") !== "existing"); }catch(_e){ policies = []; }
+      const productFields = policies.length
+        ? policies.map((p) => {
+            const premium = safeTrim(p.premiumAfterDiscount || p.monthlyPremium || p.premiumValue || p.premiumText);
+            return this.field("חברה", p.company) +
+              this.field("מוצר", p.type) +
+              this.field("פרמיה חודשית (₪)", premium) +
+              this.field("תחילת ביטוח מבוקשת", p.startDate);
+          }).join("")
+        : "";
+
+      const changeRows = report.areas.flatMap((area) => area.rows.map((row) => ({ area: area.label, row })));
+      const changeTableHtml = changeRows.length ? `
+          <div class="mtqSectionBlock mtqPanel" id="mtqPktChanges">
+            <div class="mtqPanel__head">
+              <h2 class="mtqPanel__title">סיכום שינויי שיקוף</h2>
+              <span class="mtqPanel__hint">למעקב מהיר של מקליד</span>
+            </div>
+            <div class="mtqPanel__body" style="padding-top:0;padding-bottom:12px">
+              <table class="mtqChgTable" style="margin-top:12px">
+                <thead>
+                  <tr><th>אזור</th><th>שדה</th><th>לפני</th><th>אחרי</th></tr>
+                </thead>
+                <tbody>
+                  ${changeRows.map(({ area, row }) => `
+                  <tr class="is-changed">
+                    <td>${escapeHtml(area)}</td>
+                    <td>${escapeHtml(row.label)}</td>
+                    <td class="mtqChgBefore">${escapeHtml(row.before || "לא הוזן")}</td>
+                    <td class="mtqChgAfter">${escapeHtml(row.after || "רוקן")}</td>
+                  </tr>`).join("")}
+                </tbody>
+              </table>
+            </div>
+          </div>` : "";
+
+      const tocLinks = [
+        ["mtqPktId", "פרטי לקוח"],
+        ["mtqPktContact", "יצירת קשר וכתובת"],
+        ["mtqPktPay", "אמצעי תשלום"],
+        healthFields ? ["mtqPktHealth", "הצהרת בריאות"] : null,
+        changeTableHtml ? ["mtqPktChanges", "סיכום שינויי שיקוף"] : null,
+        productFields ? ["mtqPktProduct", "פוליסות / מוצר"] : null
+      ].filter(Boolean);
+
+      mount.innerHTML = `
+        <div class="mtqCrumb">ממתין להקלדה <span>›</span> <span>תיק הקלדה · ${escapeHtml(safeTrim(rec.fullName) || "לקוח")}</span></div>
+        <div class="mtqPageHead">
+          <div>
+            <div class="mtqPageHead__title">תיק הקלדה · ${escapeHtml(safeTrim(rec.fullName) || "לקוח")}</div>
+            <p class="mtqPageHead__sub">כל הפרטים והמשך השיקוף — מסודר להקלדה. דאבל־קליק על ערך מעתיק ללוח.</p>
+          </div>
+          <div class="mtqBtnRow">
+            <button class="mtqBtn" type="button" data-mtq-act="back">חזרה לרשימה</button>
+            <button class="mtqBtn mtqBtn--primary" type="button" data-mtq-act="mark-typed">סמן כהועבר להקלדה בחברה</button>
+          </div>
+        </div>
+
+        <div class="mtqHintBar">
+          <div><strong>העתקה מהירה:</strong> דאבל־קליק על כל שדה מעתיק את הערך הנוכחי. שדות ששונו בשיקוף מסומנים ברקע חם.</div>
+          <span class="mtqBadge ${report.changedFields ? "mtqBadge--chg" : "mtqBadge--muted"}">${report.changedFields ? `${report.changedFields} שדות עודכנו בשיקוף` : "לא עודכנו שדות בשיקוף"}</span>
+        </div>
+
+        <div class="mtqPacketLayout">
+          <aside class="mtqPanel mtqToc">
+            <div class="mtqPanel__head"><h2 class="mtqPanel__title">ניווט בתיק</h2></div>
+            <div class="mtqPanel__body" style="padding:8px">
+              <nav>
+                ${tocLinks.map(([id, label], idx) => `<a href="#${id}" data-mtq-toc="${id}"${idx === 0 ? ' class="is-active"' : ""}>${escapeHtml(label)}</a>`).join("")}
+              </nav>
+            </div>
+          </aside>
+
+          <div>
+            ${this.section("mtqPktId", "פרטי לקוח", `<span class="mtqPanel__hint">מזהים בסיסיים</span>`, idFields)}
+            ${this.section("mtqPktContact", "יצירת קשר וכתובת", sectionHasChange(["טלפון נייד", "דוא״ל", "כתובת", "מיקוד"], "personal") ? changedBadge : `<span class="mtqPanel__hint">פרטי התקשרות</span>`, contactFields)}
+            ${this.section("mtqPktPay", "אמצעי תשלום", report.areas.find((a) => a.key === "payment")?.rows.length ? changedBadge : `<span class="mtqPanel__hint">${isBank ? "הוראת קבע" : "כרטיס אשראי"}</span>`, payFields)}
+            ${healthFields ? this.section("mtqPktHealth", "הצהרת בריאות — סיכום לשיקוף", report.areas.find((a) => a.key === "health")?.rows.length ? changedBadge : `<span class="mtqPanel__hint">כפי שנשמר בתיק</span>`, healthFields) : ""}
+            ${changeTableHtml}
+            ${productFields ? this.section("mtqPktProduct", "מוצר להקלדה", `<span class="mtqPanel__hint">${policies.length} פוליסות</span>`, productFields) : ""}
+          </div>
+        </div>`;
+
+      this.bind(mount);
+    },
+
+    bind(mount){
+      mount.querySelectorAll(".mtqField[data-mtq-copy]").forEach((field) => {
+        on(field, "dblclick", () => {
+          void this.copyValue(field.getAttribute("data-mtq-copy") || "");
+        });
+      });
+      mount.querySelectorAll("[data-mtq-act]").forEach((btn) => {
+        on(btn, "click", () => {
+          const act = safeTrim(btn.getAttribute("data-mtq-act"));
+          if(act === "back"){
+            OpsDashboardUI._listBucket = "waiting_typing";
+            UI.goView("dashboard");
+            return;
+          }
+          if(act === "mark-typed") void this.markTyped();
+        });
+      });
+      const links = Array.from(mount.querySelectorAll("[data-mtq-toc]"));
+      links.forEach((link) => {
+        on(link, "click", (ev) => {
+          ev.preventDefault();
+          const id = safeTrim(link.getAttribute("data-mtq-toc"));
+          const target = id ? mount.querySelector("#" + id) : null;
+          if(!target) return;
+          links.forEach((l) => l.classList.toggle("is-active", l === link));
+          try{ target.scrollIntoView({ block: "start", behavior: "smooth" }); }catch(_e){}
+        });
+      });
+    },
+
+    async markTyped(){
+      const rec = this.current();
+      if(!rec) return;
+      const stamp = nowISO();
+      setOpsTouch(rec, {
+        resultStatus: "pendingSignatures",
+        typedAt: stamp,
+        typedBy: safeTrim(Auth?.current?.name),
+        updatedBy: safeTrim(Auth?.current?.name)
+      });
+      await App.persist("הלקוח הוקלד בחברה · ממתין לחתימות").catch(() => {});
+      try{
+        window.showToast?.({
+          title: "עודכן",
+          text: `${safeTrim(rec.fullName) || "הלקוח"} סומן כהועבר להקלדה בחברה.`,
+          variant: "success",
+          durationMs: 4600
+        });
+      }catch(_e){}
+      OpsDashboardUI._listBucket = "waiting_typing";
+      UI.goView("dashboard");
     }
   };
 
@@ -72647,6 +73447,8 @@ ${inner}
       this.els.stepPayBody = document.getElementById("mcStepPayBody");
       this.els.stepInsStartWrap = document.getElementById("mcStepInsStartWrap");
       this.els.stepInsStartBody = document.getElementById("mcStepInsStartBody");
+      this.els.mirrorSummaryWrap = document.getElementById("mcStepMirrorSummaryWrap");
+      this.els.mirrorSummaryBody = document.getElementById("mcMirrorSummaryBody");
       this.els.discoveryPanel = document.getElementById("mcDiscoveryPanel");
       this.els.sessionPanel   = document.getElementById("mcSessionPanel");
       this.els.scriptWrap     = document.getElementById("mcCallScriptWrap");
@@ -73450,6 +74252,8 @@ ${inner}
         store.startTime = new Date(startedAt).toLocaleTimeString("he-IL",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
         store.dateFull  = new Date(startedAt).toLocaleDateString("he-IL",{day:"2-digit",month:"2-digit",year:"numeric"});
         try{ setOpsTouch(rec,{liveState:"in_call",ownerName:safeTrim(Auth?.current?.name),updatedBy:safeTrim(Auth?.current?.name)}); }catch(_e){}
+        // תצלום "לפני" לדוח התיקונים — חייב להילכד לפני העריכה הראשונה בשיחה.
+        try{ MirrorChangeReport.captureBaseline(rec, { force: true }); }catch(_e){}
         State.data.meta.updatedAt = startedAt;
         rec.updatedAt = startedAt;
       }
@@ -73848,7 +74652,7 @@ ${inner}
 
     _isFlowDockContentVisible(){
       const vis = (el) => !!(el && !el.hidden);
-      return vis(this.els.scriptWrap) || vis(this.els.consentWrap) || vis(this.els.verifyWrap) || vis(this.els.step2Wrap) || vis(this.els.step4Wrap) || vis(this.els.stepCancelQWrap) || vis(this.els.stepBenefWrap) || vis(this.els.stepHealthDeclWrap) || vis(this.els.step5Wrap) || vis(this.els.step6Wrap) || vis(this.els.stepPayWrap) || vis(this.els.stepInsStartWrap) || vis(this.els.pauseWrap) || vis(this.els.declineWrap);
+      return vis(this.els.scriptWrap) || vis(this.els.consentWrap) || vis(this.els.verifyWrap) || vis(this.els.step2Wrap) || vis(this.els.step4Wrap) || vis(this.els.stepCancelQWrap) || vis(this.els.stepBenefWrap) || vis(this.els.stepHealthDeclWrap) || vis(this.els.step5Wrap) || vis(this.els.step6Wrap) || vis(this.els.stepPayWrap) || vis(this.els.stepInsStartWrap) || vis(this.els.mirrorSummaryWrap) || vis(this.els.pauseWrap) || vis(this.els.declineWrap);
     },
 
     // ===== GI-FLOW-SCRIPT =====================================================
@@ -77023,7 +77827,7 @@ ${inner}
     },
 
     _hideMcPanelsExcept(keep){
-      const panels = [this.els.stepPayWrap, this.els.stepInsStartWrap, this.els.step2Wrap, this.els.step4Wrap, this.els.stepCancelQWrap, this.els.stepBenefWrap, this.els.stepHealthDeclWrap, this.els.step5Wrap, this.els.step6Wrap, this.els.pauseWrap];
+      const panels = [this.els.stepPayWrap, this.els.stepInsStartWrap, this.els.mirrorSummaryWrap, this.els.step2Wrap, this.els.step4Wrap, this.els.stepCancelQWrap, this.els.stepBenefWrap, this.els.stepHealthDeclWrap, this.els.step5Wrap, this.els.step6Wrap, this.els.pauseWrap];
       panels.forEach((el) => {
         if(!el) return;
         if(keep && el === keep){
@@ -77716,7 +78520,7 @@ ${inner}
           this._renderInsStartBody(rec);
           return;
         }
-        this.onNewPoliciesMirrorDone();
+        this.openMirrorSummaryReport(rec);
         return;
       }
       if(action === "disclosure-back"){
@@ -77739,6 +78543,191 @@ ${inner}
 
     onHarPoliciesContinue(){
       this._handleNeedsAct("needs-to-offer");
+    },
+
+    /* ===== GI-MIRROR-DIFF · מסך סיכום תיקוני השיקוף =========================
+       נפתח בלחיצה על «סיים שיקוף» ולפני שהלקוח עובר להקלדה. הנציג רואה מה
+       תוקן בשיחה לפי אזור, מאשר שעבר על הכל, ורק אז הלקוח נכנס לתור ההקלדה. */
+
+    _mirrorSummaryCallMeta(rec){
+      const call = getMirrorCallStore(rec);
+      let duration = safeTrim(call?.durationText);
+      if(!duration && this._callRunning) duration = this._fmtTime(this._callSeconds);
+      return {
+        duration: duration || "—",
+        agent: safeTrim(call?.startedBy) || safeTrim(Auth?.current?.name) || "—"
+      };
+    },
+
+    _renderMirrorSummaryReport(rec){
+      if(!this.els.mirrorSummaryBody) return;
+      const report = MirrorChangeReport.collect(rec);
+      const meta = this._mirrorSummaryCallMeta(rec);
+      const changedAreas = report.areas.filter((area) => area.rows.length);
+      const untouched = report.areas.filter((area) => !area.rows.length).map((area) => area.label);
+
+      const areaHtml = changedAreas.map((area) => `
+              <div class="mtqChgSection">
+                <div class="mtqChgSection__head">
+                  <div class="mtqChgSection__name">${escapeHtml(area.label)} <span class="mtqBadge mtqBadge--chg">${area.rows.length}</span></div>
+                  ${area.key === "personal" ? `<div class="mtqChgSection__count">לעומת נתוני האשף לפני השיקוף</div>` : ""}
+                </div>
+                <table class="mtqChgTable">
+                  <thead>
+                    <tr><th style="width:22%">${area.key === "health" ? "שאלה / שדה" : "שדה"}</th><th style="width:39%">לפני</th><th style="width:39%">אחרי שיקוף</th></tr>
+                  </thead>
+                  <tbody>
+                    ${area.rows.map((row) => `
+                    <tr class="is-changed">
+                      <td>${escapeHtml(row.label)}</td>
+                      <td class="mtqChgBefore">${escapeHtml(row.before || "לא הוזן")}</td>
+                      <td class="mtqChgAfter">${escapeHtml(row.after || "רוקן")}</td>
+                    </tr>`).join("")}
+                  </tbody>
+                </table>
+              </div>`).join("");
+
+      const untouchedHtml = untouched.length ? `
+              <div class="mtqChgSection">
+                <div class="mtqChgSection__head">
+                  <div class="mtqChgSection__name">${escapeHtml(untouched.join(" · "))}</div>
+                </div>
+                <div class="mtqUnchangedNote">לא בוצעו שינויים באזורים אלה בשיחה זו.</div>
+              </div>` : "";
+
+      const noBaselineHtml = report.hasBaseline ? "" : `
+              <div class="mtqUnchangedNote" style="margin-bottom:18px">לא נלכד תצלום נתונים בתחילת השיחה, ולכן לא ניתן להציג השוואת «לפני / אחרי» עבור שיחה זו. ניתן להמשיך ולאשר את העברת הלקוח להקלדה.</div>`;
+
+      this.els.mirrorSummaryBody.innerHTML = `
+        <div class="mtqCrumb">שיחת שיקוף <span>›</span> שלב אחרון <span>›</span> <span>דוח שינויים לפני העברה להקלדה</span></div>
+        <div class="mtqPageHead">
+          <div>
+            <div class="mtqPageHead__title">סיכום תיקונים בשיחת השיקוף</div>
+            <p class="mtqPageHead__sub">סקירה לפני אישור העברת הלקוח לתור «ממתין להקלדה»</p>
+          </div>
+          <div class="mtqBtnRow">
+            <button class="mtqBtn mtqBtn--ghost" type="button" data-mc-summary-act="back">חזרה לשיחה</button>
+            <button class="mtqBtn mtqBtn--primary" type="button" data-mc-summary-act="approve">אשר והעבר לממתין להקלדה</button>
+          </div>
+        </div>
+
+        <div class="mtqMetaGrid" style="margin-bottom:16px">
+          <div class="mtqMetaCell">
+            <div class="mtqMetaCell__lbl">לקוח</div>
+            <div class="mtqMetaCell__val">${escapeHtml(safeTrim(rec?.fullName) || "לקוח")}</div>
+          </div>
+          <div class="mtqMetaCell">
+            <div class="mtqMetaCell__lbl">תעודת זהות</div>
+            <div class="mtqMetaCell__val mtqMono">${escapeHtml(safeTrim(rec?.idNumber) || "—")}</div>
+          </div>
+          <div class="mtqMetaCell">
+            <div class="mtqMetaCell__lbl">משך שיחה</div>
+            <div class="mtqMetaCell__val mtqMono">${escapeHtml(meta.duration)}</div>
+          </div>
+          <div class="mtqMetaCell">
+            <div class="mtqMetaCell__lbl">נציג שיקוף</div>
+            <div class="mtqMetaCell__val">${escapeHtml(meta.agent)}</div>
+          </div>
+        </div>
+
+        <div class="mtqSummaryLayout">
+          <div class="mtqPanel">
+            <div class="mtqPanel__head">
+              <h2 class="mtqPanel__title">פירוט שינויים לפי אזור</h2>
+              <span class="mtqBadge ${report.changedFields ? "mtqBadge--chg" : "mtqBadge--muted"}">${report.changedFields ? `${report.changedFields} שדות עודכנו` : "לא עודכנו שדות"}</span>
+            </div>
+            <div class="mtqPanel__body">
+              ${noBaselineHtml}${areaHtml}${untouchedHtml}
+            </div>
+          </div>
+
+          <aside class="mtqPanel mtqSideCard">
+            <div class="mtqPanel__head">
+              <h2 class="mtqPanel__title">אישור נציג</h2>
+            </div>
+            <div class="mtqPanel__body">
+              <div class="mtqSideStat"><span>סה״כ אזורים שעודכנו</span><strong>${report.changedAreas}</strong></div>
+              <div class="mtqSideStat"><span>סה״כ שדות שעודכנו</span><strong>${report.changedFields}</strong></div>
+              <div class="mtqSideDivider"></div>
+              <ul class="mtqCheckList">
+                <li><input type="checkbox" id="mcSumChk1" data-mc-summary-chk="1"/><label for="mcSumChk1">עברתי על כל התיקונים המוצגים בדוח</label></li>
+                <li><input type="checkbox" id="mcSumChk2" data-mc-summary-chk="2"/><label for="mcSumChk2">וידאתי שהפרטים תואמים את מה שנאמר בשיחה</label></li>
+                <li><input type="checkbox" id="mcSumChk3" data-mc-summary-chk="3"/><label for="mcSumChk3">התיק מוכן להעברה להקלדת הצעות</label></li>
+              </ul>
+              <div class="mtqSideDivider"></div>
+              <p class="mtqSideNote">לאחר האישור הלקוח יועבר לסטטוס <strong>ממתין להקלדה</strong> ויופיע בדשבורד התפעול.</p>
+              <button class="mtqBtn mtqBtn--primary mtqBtn--block" type="button" data-mc-summary-act="approve">אשר והעבר להקלדה</button>
+            </div>
+          </aside>
+        </div>`;
+
+      this.els.mirrorSummaryBody.querySelectorAll("[data-mc-summary-act]").forEach((btn) => {
+        on(btn, "click", () => {
+          const act = safeTrim(btn.getAttribute("data-mc-summary-act"));
+          if(act === "back") this.closeMirrorSummaryReport();
+          else if(act === "approve") void this.approveMirrorSummaryReport();
+        });
+      });
+    },
+
+    openMirrorSummaryReport(rec){
+      const target = rec || this._getFreshCustomerRecord();
+      if(!target) return;
+      this._mirrorUiPhase = "mirrorSummaryReport";
+      this._renderMirrorSummaryReport(target);
+      this._hideMcPanelsExcept(this.els.mirrorSummaryWrap);
+      this._syncFlowChrome();
+      window.requestAnimationFrame(() => {
+        try{ this.els.mirrorSummaryWrap?.focus?.(); }catch(_e){}
+      });
+    },
+
+    closeMirrorSummaryReport(){
+      const rec = this._getFreshCustomerRecord();
+      this._mirrorUiPhase = "insuranceStart";
+      if(rec) this._renderInsStartBody(rec);
+      this._hideMcPanelsExcept(this.els.stepInsStartWrap);
+      this._syncFlowChrome();
+    },
+
+    async approveMirrorSummaryReport(){
+      const rec = this._getFreshCustomerRecord();
+      if(!rec) return;
+      const body = this.els.mirrorSummaryBody;
+      const allChecked = ["1", "2", "3"].every((n) => !!body?.querySelector(`[data-mc-summary-chk="${n}"]`)?.checked);
+      if(!allChecked){
+        this._mcToast("חסר אישור", "יש לסמן את כל שלושת אישורי הנציג לפני העברת הלקוח להקלדה.", "warn");
+        return;
+      }
+
+      const approvedAt = nowISO();
+      const approvedBy = safeTrim(Auth?.current?.name);
+      MirrorChangeReport.saveApproved(rec, { approvedAt, approvedBy });
+
+      setOpsTouch(rec, {
+        liveState: "call_finished",
+        resultStatus: "pendingTyping",
+        waitingTypingAt: approvedAt,
+        waitingTypingBy: approvedBy,
+        ownerName: approvedBy,
+        updatedBy: approvedBy
+      });
+
+      // סוגר שיחה פעילה כדי שהלקוח לא יישאר תקוע בדלי "בשיחת שיקוף".
+      try{ if(this._callRunning) this.stopCall(); }catch(_e){}
+      this.onNewPoliciesMirrorDone();
+      try{ CustomersUI?.refreshOperationalReflectionCard?.(); }catch(_e){}
+      await App.persist("שיקוף אושר · הלקוח הועבר לממתין להקלדה").catch(() => {});
+      try{
+        window.showToast?.({
+          title: "הועבר להקלדה",
+          text: `${safeTrim(rec.fullName) || "הלקוח"} ממתין להקלדת הצעות.`,
+          variant: "success",
+          durationMs: 5200
+        });
+      }catch(_e){}
+      OpsDashboardUI._listBucket = "waiting_typing";
+      UI.goView("dashboard");
     },
 
     onNewPoliciesMirrorDone(){
@@ -77774,6 +78763,10 @@ ${inner}
       if(this.els.stepInsStartWrap){
         this.els.stepInsStartWrap.hidden = true;
         this.els.stepInsStartWrap.setAttribute("hidden", "");
+      }
+      if(this.els.mirrorSummaryWrap){
+        this.els.mirrorSummaryWrap.hidden = true;
+        this.els.mirrorSummaryWrap.setAttribute("hidden", "");
       }
       this._syncFlowChrome();
     },
