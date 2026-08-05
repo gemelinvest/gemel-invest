@@ -8,7 +8,60 @@
 
   const GI_MAX_DISCOUNT_YEARS = 50;   // GI-FIX-DISCOUNT-YEARS
   const GI_MAX_PLEDGE_BANKS = 2;      // GI-PLEDGE-MULTI 2026-08-04 — עד שני בנקים משעבדים בפוליסה
-  const BUILD = "20260805-serverkpi-compare-v1";
+
+  // ===== GI-WORKDAYS 2026-08-05 · יעד יומי לפי ימי עבודה ====================
+  // ימי העבודה בסוכנות: ראשון עד חמישי. (JS getDay: 0=ראשון ... 6=שבת)
+  const GI_WORKDAY_DOW = Object.freeze([0, 1, 2, 3, 4]);
+  // ימים שאינם ימי עבודה — חגים, ערבי חג, סגירת משרד. פורמט "YYYY-MM-DD".
+  // עד שתיבנה טבלת הגדרות ב-Supabase, מעדכנים את הרשימה כאן.
+  const GI_NON_WORKING_DATES = Object.freeze([
+    // "2026-09-11",  // ערב ראש השנה
+    // "2026-09-12",  // ראש השנה
+  ]);
+  const GI_NON_WORKING_SET = new Set(GI_NON_WORKING_DATES);
+
+  function giDateKey(d){
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  function giIsWorkday(d){
+    if(!(d instanceof Date) || Number.isNaN(d.getTime())) return false;
+    if(!GI_WORKDAY_DOW.includes(d.getDay())) return false;
+    return !GI_NON_WORKING_SET.has(giDateKey(d));
+  }
+  /** סופר ימי עבודה בחודש של ref. אם through שייך לאותו חודש — סופר עד אותו יום ועד בכלל. */
+  function giCountWorkdays(ref, through){
+    const base = (ref instanceof Date && !Number.isNaN(ref.getTime())) ? ref : new Date();
+    const year = base.getFullYear();
+    const month = base.getMonth();
+    const lastDay = new Date(year, month + 1, 0).getDate();
+    const sameMonth = (through instanceof Date)
+      && !Number.isNaN(through.getTime())
+      && through.getFullYear() === year
+      && through.getMonth() === month;
+    const limit = sameMonth ? Math.min(through.getDate(), lastDay) : lastDay;
+    let count = 0;
+    for(let day = 1; day <= limit; day++){
+      if(giIsWorkday(new Date(year, month, day))) count++;
+    }
+    return count;
+  }
+  /** סך ימי העבודה בחודש. לעולם לא 0 — כדי שלא ייווצר מחלק אפס. */
+  function giWorkdaysInMonth(ref){ return Math.max(1, giCountWorkdays(ref)); }
+  /** ימי עבודה שכבר חלפו בחודש, כולל היום (אם היום הוא יום עבודה). */
+  function giWorkdaysElapsed(ref = new Date()){
+    const now = new Date();
+    const base = (ref instanceof Date && !Number.isNaN(ref.getTime())) ? ref : now;
+    // אם ref הוא חודש שהסתיים — כל ימי העבודה שלו חלפו.
+    const isCurrentMonth = base.getFullYear() === now.getFullYear() && base.getMonth() === now.getMonth();
+    return isCurrentMonth ? giCountWorkdays(base, now) : giCountWorkdays(base);
+  }
+  /** ימי עבודה שנותרו בחודש, לא כולל היום. */
+  function giWorkdaysRemaining(ref = new Date()){
+    return Math.max(0, giWorkdaysInMonth(ref) - giWorkdaysElapsed(ref));
+  }
+  // ===== /GI-WORKDAYS =======================================================
+
+  const BUILD = "20260805-workdays-goal-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -25223,6 +25276,22 @@ UsersGateUI.init();
       const dailySeries = Array.isArray(prebuiltDailySeries)
         ? prebuiltDailySeries.map((item) => ({ ...item, premium: Math.round((item.premium || 0) * 100) / 100 }))
         : this.buildDailySeries(customersMonth);
+
+      // GI-WORKDAYS 2026-08-05 — יעד יומי ופריסה לפי ימי עבודה בפועל (א׳–ה׳), לא לפי 30.
+      const workdaysRef = (currentRange?.start instanceof Date) ? currentRange.start : new Date();
+      const workdaysTotal = giWorkdaysInMonth(workdaysRef);
+      const workdaysElapsed = giWorkdaysElapsed(workdaysRef);   // כולל היום, אם הוא יום עבודה
+      const _now = new Date();
+      const _isCurrentMonth = workdaysRef.getFullYear() === _now.getFullYear() && workdaysRef.getMonth() === _now.getMonth();
+      // לפריסת היתרה — היום עדיין פתוח למכירות, לכן הוא נספר בימים שנותרו.
+      const workdaysLeft = Math.max(0, workdaysTotal - workdaysElapsed + ((_isCurrentMonth && giIsWorkday(_now)) ? 1 : 0));
+      const dailyTargetValue = targetValue > 0 ? (targetValue / workdaysTotal) : 0;
+      const targetRemainingValue = Math.max(0, targetValue - currentAgg.netPremium);
+      // כמה צריך לייצר בכל יום עבודה שנותר כדי לסגור את החודש.
+      const requiredDailyRate = (targetValue > 0 && targetRemainingValue > 0)
+        ? (targetRemainingValue / Math.max(1, workdaysLeft))
+        : 0;
+
       const metricsResult = {
         monthLabel: this.formatMonthTitle(currentRange.start),
         updatedAt: State.data?.meta?.updatedAt || nowISO(),
@@ -25246,8 +25315,12 @@ UsersGateUI.init();
         targetPct,
         targetTone,
         targetRemaining: Math.max(0, targetValue - currentAgg.netPremium),
-        dailyTarget: targetValue > 0 ? (targetValue / 30) : 0,
-        targetSoFar: targetValue > 0 ? Math.round((targetValue / 30) * Math.max(1, new Date().getDate())) : 0,
+        dailyTarget: dailyTargetValue,
+        targetSoFar: targetValue > 0 ? Math.round(dailyTargetValue * Math.max(1, workdaysElapsed)) : 0,
+        workdaysTotal,
+        workdaysElapsed,
+        workdaysLeft,
+        requiredDailyRate,
         avgPremium: customersMonth.length ? (currentAgg.netPremium / customersMonth.length) : 0,
         topDayValue: Math.max(0, ...dailySeries.map((item) => item.premium || 0)),
         // PERF: reuse from metrics build — avoids re-scanning all customers in refreshKpis/render
@@ -25290,6 +25363,10 @@ UsersGateUI.init();
         targetRemaining: 0,
         dailyTarget: 0,
         targetSoFar: 0,
+        workdaysTotal: giWorkdaysInMonth(currentRange?.start),
+        workdaysElapsed: giWorkdaysElapsed(currentRange?.start),
+        workdaysLeft: giWorkdaysRemaining(currentRange?.start),
+        requiredDailyRate: 0,
         avgPremium: 0,
         topDayValue: 0,
         netProductTotals: Object.create(null),
@@ -25764,6 +25841,25 @@ UsersGateUI.init();
     formatPct(value){
       const n = Number(value) || 0;
       return `${n.toLocaleString('he-IL', { maximumFractionDigits: 1 })}%`;
+    },
+
+    /* GI-WORKDAYS 2026-08-05 — השורה מתחת ל"יעד יומי". מקור אחד לתבנית ולעדכון החי. */
+    goalPaceText(metrics){
+      const targetValue = Number(metrics?.targetValue) || 0;
+      if(targetValue <= 0) return 'לא הוגדר יעד חודשי';
+
+      const left = Math.max(0, Number(metrics?.workdaysLeft) || 0);
+      const remaining = Math.max(0, targetValue - (Number(metrics?.netPremium) || 0));
+
+      if(remaining <= 0){
+        const over = (Number(metrics?.netPremium) || 0) - targetValue;
+        return over > 0 ? `היעד הושג · ${this.formatMoney(over)} מעבר ליעד` : 'היעד הושג';
+      }
+      if(left <= 0) return `נותר ${this.formatMoney(remaining)} · אין ימי עבודה נוספים החודש`;
+
+      const rate = Number(metrics?.requiredDailyRate) || (remaining / left);
+      const daysLabel = left === 1 ? 'נותר יום עבודה אחד' : `נותרו ${left} ימי עבודה`;
+      return `${daysLabel} · ${this.formatMoney(Math.round(rate))} ליום`;
     },
 
     /** אדום מתחת ל־40% מהיעד, צהוב 40–99%, ירוק מ־100%+. ללא יעד — טון ניטרלי. */
@@ -27257,7 +27353,7 @@ UsersGateUI.init();
         const topStats = goalCard.querySelectorAll('.bankGoal__topStat');
         if(topStats[0]){
           const s = topStats[0].querySelector('strong'); if(s) s.textContent = this.formatMoney(metrics.dailyTarget || 0);
-          const sm = topStats[0].querySelector('small'); if(sm) sm.textContent = `₪ ${Math.round(Number(metrics.targetValue||0)/30).toLocaleString('he-IL')}`;
+          const sm = topStats[0].querySelector('small'); if(sm) sm.textContent = this.goalPaceText(metrics);
         }
         if(topStats[1]){
           const s = topStats[1].querySelector('strong'); if(s) s.textContent = metrics.targetValue > 0 ? this.formatMoney(metrics.targetValue) : '₪0';
@@ -27700,7 +27796,6 @@ UsersGateUI.init();
                 <div class="bankGoal__meterTop">
                   <div class="bankGoal__percent">${escapeHtml(this.formatPct(metrics.targetPct))}</div>
                   <div class="bankGoal__meterCopy">
-                    <div class="bankGoal__percentLabel">רבע מהיעד</div>
                     <div class="bankGoal__percentSub">${metrics.targetValue > 0 ? `התקדמות חודשית` : `ממתין להגדרת יעד`}</div>
                   </div>
                 </div>
@@ -27722,7 +27817,7 @@ UsersGateUI.init();
                   <div class="bankGoal__topStat">
                     <span>יעד יומי:</span>
                     <strong>${escapeHtml(this.formatMoney(metrics.dailyTarget || 0))}</strong>
-                    <small>₪ ${Math.round(Number(metrics.targetValue || 0) / 30).toLocaleString('he-IL')}</small>
+                    <small>${escapeHtml(this.goalPaceText(metrics))}</small>
                   </div>
                   <div class="bankGoal__topStat">
                     <span>יעד חודשי:</span>
