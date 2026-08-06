@@ -84567,7 +84567,12 @@ ${inner}
   /* ------------------------ חיבור לטבלת הלקוחות ------------------------ */
 
   function ciBootCustomersFeatures(){
-    try { CustomerImport.mountButton(); } catch(_e) {}
+    // הכפתור מותנה בהרשאה, ובזמן טעינת העמוד המשתמש עדיין לא מחובר.
+    // לכן בודקים שוב מדי כמה שניות — הבדיקה זולה ויוצאת מיד אם הכפתור כבר קיים.
+    const tryMount = () => { try { CustomerImport.mountButton(); } catch(_e) {} };
+    tryMount();
+    window.setInterval(tryMount, 1500);
+    on(document, "visibilitychange", tryMount);
 
     // לחיצה על שם הלקוח בטבלה → פאנל צדדי. עובד גם על שורות שנוצרו מחדש ברינדור.
     on(document, "click", (ev) => {
@@ -84584,14 +84589,16 @@ ${inner}
     // הכפתור נמחק/נבנה מחדש בעת החלפת מסכים — מוודאים שהוא קיים
     const view = document.getElementById("view-customers");
     if(view && window.MutationObserver){
-      const observer = new MutationObserver(() => { try { CustomerImport.mountButton(); } catch(_e) {} });
+      const observer = new MutationObserver(tryMount);
       observer.observe(view, { childList: true, subtree: true });
     }
   }
 
-  window.addEventListener("load", () => {
-    window.setTimeout(ciBootCustomersFeatures, 400);
-  });
+  if(document.readyState === "complete" || document.readyState === "interactive"){
+    window.setTimeout(ciBootCustomersFeatures, 300);
+  } else {
+    window.addEventListener("DOMContentLoaded", () => window.setTimeout(ciBootCustomersFeatures, 300));
+  }
 
   try {
     window.__GI_CustomerImport = CustomerImport;
