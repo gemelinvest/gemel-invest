@@ -189,3 +189,32 @@
 /* שם הלקוח בטבלה הופך לניתן ללחיצה */
 .lcCustomerRow .lcCustomers__nameMeta{ cursor:pointer; }
 .lcCustomerRow .lcCustomers__nameMeta:hover strong{ text-decoration:underline; text-underline-offset:3px; }
+
+/* ------------------------ מסך בחירת סוג הדוח ------------------------ */
+.ciHub{ display:grid; gap:12px; }
+.ciHubCard{
+  display:flex; align-items:center; gap:16px; text-align:start; width:100%;
+  border:1px solid var(--gi-border, #E5E7EB); border-radius:14px; padding:16px 18px;
+  background:var(--gi-surface, #fff); cursor:pointer; font-family:inherit; color:inherit;
+  transition:.15s ease;
+}
+.ciHubCard:hover:not(.is-disabled){
+  border-color:var(--gi-primary, #2563EB); background:var(--gi-primary-soft, #EFF6FF);
+  transform:translateY(-1px);
+}
+.ciHubCard.is-disabled{ opacity:.55; cursor:not-allowed; }
+.ciHubCard__icon{
+  flex:0 0 auto; width:46px; height:46px; border-radius:12px; display:grid; place-items:center;
+  background:var(--gi-surface-3, #F1F5F9); font-size:22px;
+}
+.ciHubCard__text{ flex:1 1 auto; }
+.ciHubCard__title{ font-weight:800; font-size:15px; }
+.ciHubCard__desc{ font-size:12.5px; color:var(--gi-text-muted, #647287); margin-top:4px; line-height:1.6; }
+.ciHubCard__state{
+  flex:0 0 auto; font-size:11.5px; font-weight:700; border-radius:999px; padding:4px 11px;
+  background:var(--gi-surface-3, #F1F5F9); color:var(--gi-text-muted, #647287);
+}
+.ciHubCard__state--ready{ background:#DCFCE7; color:#166534; }
+
+/* פריט התפריט החדש */
+.ciNavItem{ cursor:pointer; }

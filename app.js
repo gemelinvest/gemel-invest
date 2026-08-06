@@ -82600,35 +82600,85 @@ ${inner}
       try { return !!(Auth.isAdmin?.() || Auth.isManager?.()); } catch(_e) { return false; }
     },
 
-    /** מוסיף את כפתור הייבוא לסרגל מסך הלקוחות (פעם אחת).
-        הכפתור נוצר תמיד — בדיקת ההרשאה מתבצעת בלחיצה. אחרת, אם המשתמש עדיין
-        לא מחובר או שזיהוי התפקיד נכשל, הכפתור לא היה נוצר לעולם ובלי שום שגיאה. */
-    mountButton(){
-      if(document.getElementById("btnCustomersImport")) return true;
-
-      // סדר נפילה: ליד כפתור הייצוא → תיבת הכפתורים → הסרגל → כותרת הכרטיס
-      const exportBtn = document.getElementById("btnCustomersExport");
-      const host = exportBtn?.parentNode
-        || document.querySelector("#view-customers .lcCustomers__toolbar .row")
-        || document.querySelector("#view-customers .lcCustomers__toolbar")
-        || document.querySelector("#view-customers .card__head")
-        || document.querySelector("#view-customers .card");
-      if(!host) return false;
+    /** מוסיף פריט "טעינת קבצי מערכת" בתחתית תפריט הצד (פעם אחת).
+        הפריט נוצר תמיד — בדיקת ההרשאה מתבצעת בלחיצה, כדי שכשל בזיהוי תפקיד
+        לא יגרום להיעלמות שקטה של הפריט. */
+    mountNavItem(){
+      if(document.getElementById("navSystemFileUpload")) return true;
+      const nav = document.querySelector(".sidebar .nav")
+        || document.querySelector("nav.nav")
+        || document.querySelector(".nav__item")?.parentNode;
+      if(!nav) return false;
 
       const btn = document.createElement("button");
-      btn.className = "btn btn--primary ciImportBtn";
-      btn.id = "btnCustomersImport";
+      btn.className = "nav__item ciNavItem";
+      btn.id = "navSystemFileUpload";
       btn.type = "button";
-      btn.textContent = "ייבוא לקוחות מקובץ";
-      if(exportBtn && exportBtn.parentNode === host) host.insertBefore(btn, exportBtn);
-      else host.appendChild(btn);
-      on(btn, "click", () => this.open());
+      btn.innerHTML = `
+        <span class="nav__icon" aria-hidden="true">
+          <svg class="nav__iconSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 16.5v2.25A1.25 1.25 0 0 1 18.75 20H5.25A1.25 1.25 0 0 1 4 18.75V16.5"></path>
+            <path d="M12 15V4.5"></path>
+            <path d="m7.75 8.75 4.25-4.25 4.25 4.25"></path>
+          </svg>
+        </span>
+        <span class="nav__label">טעינת קבצי מערכת</span>`;
+      nav.appendChild(btn);
+      on(btn, "click", () => this.openHub());
 
       try {
         window.__GI_IMPORT_READY = true;
-        console.log("[GI] כפתור ייבוא לקוחות הותקן", CUSTOMER_IMPORT_VERSION);
+        console.log("[GI] פריט טעינת קבצי מערכת הותקן", CUSTOMER_IMPORT_VERSION);
       } catch(_e) {}
       return true;
+    },
+
+    /** מסך הבחירה: איזה דוח טוענים. */
+    openHub(){
+      if(!this.canUse()){
+        try { window.showToast?.({ title: "אין הרשאה", text: "טעינת קבצי מערכת זמינה למנהל מערכת או למנהל בלבד.", variant: "warn" }); } catch(_e) {}
+        return;
+      }
+      this.ensureModal();
+      this.state = null;
+      this.els.wrap.classList.add("is-open");
+      this.els.wrap.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+      this.renderHubStep();
+    },
+
+    renderHubStep(){
+      this.els.subtitle.textContent = "בחר את סוג הדוח שברצונך לטעון";
+      this.els.body.innerHTML = `
+        <div class="ciHub">
+          <button class="ciHubCard" type="button" data-ci-hub="customers">
+            <div class="ciHubCard__icon">👤</div>
+            <div class="ciHubCard__text">
+              <div class="ciHubCard__title">דוח לקוחות — פרטים אישיים</div>
+              <div class="ciHubCard__desc">שם, ת״ז, טלפון, כתובת, תאריך לידה ומת״ל. פותח תיק לקוח לכל שורה ומשייך אותו לנציג.</div>
+            </div>
+            <div class="ciHubCard__state ciHubCard__state--ready">פעיל</div>
+          </button>
+
+          <button class="ciHubCard is-disabled" type="button" data-ci-hub="production" disabled>
+            <div class="ciHubCard__icon">📊</div>
+            <div class="ciHubCard__text">
+              <div class="ciHubCard__title">דוח פרודוקציה — פוליסות ופרמיות</div>
+              <div class="ciHubCard__desc">צבירה, פרמיה חודשית ופירוט מוצרים. ייטען על תיקי לקוח קיימים לפי ת״ז.</div>
+            </div>
+            <div class="ciHubCard__state">בקרוב</div>
+          </button>
+        </div>
+        <ul class="ciNotes">
+          <li>מומלץ לטעון תחילה את דוח הלקוחות, ורק אחריו את דוח הפרודוקציה — כך לכל פוליסה יהיה תיק לקוח לשייך אליו.</li>
+        </ul>`;
+      this.els.foot.innerHTML = `<button class="btn" type="button" data-ci-close>סגור</button>`;
+
+      on(this.els.body, "click", (ev) => {
+        const card = ev.target?.closest?.("[data-ci-hub]");
+        if(!card || card.disabled) return;
+        if(card.getAttribute("data-ci-hub") === "customers") this.renderPickStep();
+      });
     },
 
     ensureModal(){
@@ -82670,7 +82720,7 @@ ${inner}
       this.els.wrap.classList.add("is-open");
       this.els.wrap.setAttribute("aria-hidden", "false");
       document.body.style.overflow = "hidden";
-      this.renderPickStep();
+      this.renderHubStep();
     },
 
     close(){
@@ -82695,7 +82745,8 @@ ${inner}
           <li>שיוך הנציג נעשה לפי עמודת <strong>מת״ל</strong>. שני שמות מופרדים בפסיק → התיק משויך לראשון והשני נרשם כשיתוף.</li>
           <li>לקוח שכבר קיים במערכת יוצג לאישור שלך — לא יעודכן אוטומטית.</li>
         </ul>`;
-      this.els.foot.innerHTML = `<button class="btn" type="button" data-ci-close>ביטול</button>`;
+      this.els.foot.innerHTML = `<button class="btn" type="button" id="ciBackToHub">חזור</button>`;
+      on(this.els.foot.querySelector("#ciBackToHub"), "click", () => this.renderHubStep());
 
       const drop = this.els.body.querySelector("#ciDrop");
       const input = this.els.body.querySelector("#ciFileInput");
@@ -83268,7 +83319,7 @@ ${inner}
     } catch(_e) {}
     // הכפתור מותנה בהרשאה, ובזמן טעינת העמוד המשתמש עדיין לא מחובר.
     // לכן בודקים שוב מדי כמה שניות — הבדיקה זולה ויוצאת מיד אם הכפתור כבר קיים.
-    const tryMount = () => { try { CustomerImport.mountButton(); } catch(_e) {} };
+    const tryMount = () => { try { CustomerImport.mountNavItem(); } catch(_e) {} };
     tryMount();
     window.setInterval(tryMount, 1500);
     on(document, "visibilitychange", tryMount);
@@ -83285,8 +83336,8 @@ ${inner}
       CustomerQuickPanel.open(customerId);
     });
 
-    // הכפתור נמחק/נבנה מחדש בעת החלפת מסכים — מוודאים שהוא קיים
-    const view = document.getElementById("view-customers");
+    // התפריט עשוי להיבנות מחדש — מוודאים שהפריט קיים
+    const view = document.querySelector(".sidebar") || document.getElementById("view-customers");
     if(view && window.MutationObserver){
       const observer = new MutationObserver(tryMount);
       observer.observe(view, { childList: true, subtree: true });
