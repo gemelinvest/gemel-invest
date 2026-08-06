@@ -1,0 +1,191 @@
+/* =========================================================================
+   ייבוא לקוחות מקובץ + פאנל פרטי לקוח
+   משתמש במשתני העיצוב הקיימים (--gi-*) עם נפילה לערכים קבועים.
+   ========================================================================= */
+
+/* ------------------------------ מודאל ייבוא ------------------------------ */
+.ciModal{ position:fixed; inset:0; z-index:12000; display:none; }
+.ciModal.is-open{ display:block; }
+.ciModal__backdrop{ position:absolute; inset:0; background:rgba(15,23,42,.55); backdrop-filter:blur(2px); }
+.ciModal__panel{
+  position:absolute; inset:3vh 50% auto auto; transform:translateX(50%);
+  width:min(1180px, 94vw); max-height:94vh; display:flex; flex-direction:column;
+  background:var(--gi-surface, #fff); color:var(--gi-text, #0F172A);
+  border:1px solid var(--gi-border, #E5E7EB); border-radius:18px;
+  box-shadow:0 24px 60px rgba(15,23,42,.28); overflow:hidden; direction:rtl;
+}
+.ciModal__head{
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+  padding:18px 22px; border-bottom:1px solid var(--gi-border, #E5E7EB);
+  background:var(--gi-surface-2, #F8FAFC);
+}
+.ciModal__title{ font-size:19px; font-weight:800; }
+.ciModal__sub{ font-size:13px; color:var(--gi-text-muted, #647287); margin-top:2px; }
+.ciModal__close{
+  border:1px solid var(--gi-border, #E5E7EB); background:var(--gi-surface, #fff);
+  width:34px; height:34px; border-radius:10px; cursor:pointer; font-size:15px; line-height:1;
+}
+.ciModal__close:hover{ background:var(--gi-surface-3, #F1F5F9); }
+.ciModal__body{ padding:20px 22px; overflow:auto; flex:1 1 auto; }
+.ciModal__foot{
+  display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+  padding:14px 22px; border-top:1px solid var(--gi-border, #E5E7EB);
+  background:var(--gi-surface-2, #F8FAFC);
+}
+.ciFoot__summary{ font-size:13.5px; color:var(--gi-text-2, #3D4A5C); }
+.ciFoot__actions{ display:flex; gap:10px; margin-inline-start:auto; }
+
+/* ------------------------------ אזור גרירה ------------------------------ */
+.ciDrop{
+  border:2px dashed var(--gi-border-strong, #CBD5E1); border-radius:16px;
+  padding:40px 20px; text-align:center; cursor:pointer; transition:.15s ease;
+  background:var(--gi-surface-2, #F8FAFC);
+}
+.ciDrop:hover, .ciDrop.is-over{
+  border-color:var(--gi-primary, #2563EB); background:var(--gi-primary-soft, #EFF6FF);
+}
+.ciDrop__icon{ font-size:38px; }
+.ciDrop__title{ font-weight:700; margin-top:8px; }
+.ciDrop__hint{ font-size:12.5px; color:var(--gi-text-muted, #647287); margin-top:4px; }
+.ciNotes{ margin:18px 0 0; padding-inline-start:20px; color:var(--gi-text-2, #3D4A5C); font-size:13px; line-height:1.9; }
+
+/* ------------------------------ טעינה/שגיאה ------------------------------ */
+.ciBusy{ display:flex; flex-direction:column; align-items:center; gap:14px; padding:56px 0; color:var(--gi-text-2, #3D4A5C); }
+.ciBusy__spin{
+  width:34px; height:34px; border-radius:50%;
+  border:3px solid var(--gi-border, #E5E7EB); border-top-color:var(--gi-primary, #2563EB);
+  animation:ciSpin .8s linear infinite;
+}
+@keyframes ciSpin{ to{ transform:rotate(360deg); } }
+.ciError{ display:flex; gap:12px; align-items:flex-start; padding:20px; border-radius:12px;
+  background:#FEF2F2; border:1px solid #FECACA; color:#991B1B; }
+.ciError__icon{ font-size:20px; }
+
+/* ------------------------------ צ'יפים וסינון ------------------------------ */
+.ciChips{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:14px; }
+.ciChip{
+  border:1px solid var(--gi-border, #E5E7EB); background:var(--gi-surface, #fff);
+  border-radius:999px; padding:7px 14px; font-size:13px; cursor:pointer; font-weight:600;
+  display:inline-flex; align-items:center; gap:7px;
+}
+.ciChip span{ background:var(--gi-surface-3, #F1F5F9); border-radius:999px; padding:1px 8px; font-size:12px; }
+.ciChip.is-active{ border-color:var(--gi-primary, #2563EB); background:var(--gi-primary-soft, #EFF6FF); color:var(--gi-primary, #2563EB); }
+.ciChip--ok span{ background:#DCFCE7; color:#166534; }
+.ciChip--warn span{ background:#FEF3C7; color:#92400E; }
+.ciChip--dup span{ background:#E0E7FF; color:#3730A3; }
+.ciChip--err span{ background:#FEE2E2; color:#991B1B; }
+
+.ciBanner{
+  background:#FFFBEB; border:1px solid #FDE68A; color:#92400E;
+  border-radius:12px; padding:12px 14px; font-size:13px; margin-bottom:14px; line-height:1.7;
+}
+.ciBulk{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:13px; margin-bottom:12px; }
+.ciBulk__hint{ color:var(--gi-text-muted, #647287); font-size:12.5px; }
+.btn--tiny{ padding:5px 12px !important; font-size:12.5px !important; }
+
+/* ------------------------------ טבלת תצוגה מקדימה ------------------------------ */
+.ciTableWrap{ border:1px solid var(--gi-border, #E5E7EB); border-radius:12px; overflow:auto; max-height:46vh; }
+.ciTableWrap--short{ max-height:26vh; margin-top:14px; }
+.ciTable{ width:100%; border-collapse:collapse; font-size:13px; }
+.ciTable thead th{
+  position:sticky; top:0; z-index:1; background:var(--gi-surface-3, #F1F5F9);
+  text-align:start; padding:10px 12px; font-weight:700; white-space:nowrap;
+  border-bottom:1px solid var(--gi-border, #E5E7EB);
+}
+.ciTable td{ padding:9px 12px; border-bottom:1px solid var(--gi-border-soft, #F1F5F9); vertical-align:top; }
+.ciRow--error{ background:#FEF2F2; }
+.ciRow--dupServer, .ciRow--dupFile{ background:#F8FAFF; }
+.ciRow--noAgent{ background:#FFFDF5; }
+.ciMono{ font-variant-numeric:tabular-nums; letter-spacing:.02em; }
+.ciIssues{ font-size:11.5px; color:var(--gi-text-muted, #647287); margin-top:3px; line-height:1.5; }
+.ciBadge{ display:inline-block; border-radius:999px; padding:2px 10px; font-size:11.5px; font-weight:700; white-space:nowrap; }
+.ciBadge--ok{ background:#DCFCE7; color:#166534; }
+.ciBadge--warn{ background:#FEF3C7; color:#92400E; }
+.ciBadge--dup{ background:#E0E7FF; color:#3730A3; }
+.ciBadge--err{ background:#FEE2E2; color:#991B1B; }
+.ciAgent{ font-weight:600; }
+.ciAgent--none{ color:#92400E; font-weight:500; }
+.ciAgent__shared{ display:block; font-size:11.5px; color:var(--gi-text-muted, #647287); }
+.ciSelect{
+  border:1px solid var(--gi-border, #E5E7EB); border-radius:8px; padding:5px 8px;
+  font-size:12.5px; background:var(--gi-surface, #fff); font-family:inherit;
+}
+
+/* ------------------------------ התקדמות וסיום ------------------------------ */
+.ciProgress{ padding:48px 0; text-align:center; }
+.ciProgress__bar{ height:10px; border-radius:999px; background:var(--gi-surface-3, #F1F5F9); overflow:hidden; }
+.ciProgress__fill{ height:100%; width:0%; background:var(--gi-primary, #2563EB); transition:width .2s ease; }
+.ciProgress__text{ margin-top:12px; font-size:13.5px; color:var(--gi-text-2, #3D4A5C); }
+.ciDone{ display:flex; align-items:center; gap:18px; padding:12px 0 4px; }
+.ciDone__icon{ font-size:40px; }
+.ciDone__stats{ display:grid; gap:5px; font-size:14.5px; }
+.ciDone__warn{ color:#92400E; }
+.ciDone__err{ color:#991B1B; }
+
+/* ------------------------------ פאנל צדדי ------------------------------ */
+.cqPanel{ position:fixed; inset:0; z-index:12500; display:none; }
+.cqPanel.is-open{ display:block; }
+.cqPanel__backdrop{ position:absolute; inset:0; background:rgba(15,23,42,.45); }
+.cqPanel__panel{
+  position:absolute; inset-block:0; inset-inline-start:0;
+  width:min(460px, 92vw); display:flex; flex-direction:column; direction:rtl;
+  background:var(--gi-surface, #fff); color:var(--gi-text, #0F172A);
+  border-inline-end:1px solid var(--gi-border, #E5E7EB);
+  box-shadow:12px 0 40px rgba(15,23,42,.18);
+  animation:cqSlide .22s ease;
+}
+@keyframes cqSlide{ from{ transform:translateX(-24px); opacity:.4; } to{ transform:none; opacity:1; } }
+.cqPanel__head{
+  display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
+  padding:18px; border-bottom:1px solid var(--gi-border, #E5E7EB); background:var(--gi-surface-2, #F8FAFC);
+}
+.cqPanel__ident{ display:flex; gap:12px; align-items:center; }
+.cqPanel__avatar{
+  width:44px; height:44px; border-radius:12px; display:grid; place-items:center;
+  background:var(--gi-primary-soft, #EFF6FF); color:var(--gi-primary, #2563EB); font-weight:800; font-size:15px;
+}
+.cqPanel__name{ font-size:17px; font-weight:800; }
+.cqPanel__meta{ display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+.cqChip{
+  font-size:11.5px; border-radius:999px; padding:2px 9px;
+  background:var(--gi-surface-3, #F1F5F9); color:var(--gi-text-2, #3D4A5C);
+}
+.cqChip--mono{ font-variant-numeric:tabular-nums; }
+.cqChip--warn{ background:#FEF3C7; color:#92400E; }
+.cqPanel__close{
+  border:1px solid var(--gi-border, #E5E7EB); background:var(--gi-surface, #fff);
+  width:32px; height:32px; border-radius:9px; cursor:pointer; line-height:1;
+}
+.cqPanel__body{ flex:1 1 auto; overflow:auto; padding:6px 18px 18px; }
+.cqPanel__foot{
+  display:flex; gap:10px; padding:14px 18px;
+  border-top:1px solid var(--gi-border, #E5E7EB); background:var(--gi-surface-2, #F8FAFC);
+}
+.cqLoading{ padding:32px 0; text-align:center; color:var(--gi-text-muted, #647287); font-size:13.5px; }
+.cqSection{ margin-top:20px; }
+.cqSection__title{
+  margin:0 0 8px; font-size:12px; font-weight:800; letter-spacing:.04em;
+  color:var(--gi-text-muted, #647287);
+}
+.cqRow{ display:flex; gap:12px; padding:7px 0; border-bottom:1px solid var(--gi-border-soft, #F1F5F9); font-size:13.5px; }
+.cqRow__label{ flex:0 0 40%; color:var(--gi-text-muted, #647287); }
+.cqRow__value{ flex:1 1 auto; font-weight:600; overflow-wrap:anywhere; }
+.cqRow__value--mono{ font-variant-numeric:tabular-nums; }
+.cqSection--fin .cqFin{ display:grid; gap:8px; }
+.cqFin__item{
+  display:flex; justify-content:space-between; gap:12px; align-items:baseline;
+  background:var(--gi-surface-2, #F8FAFC); border:1px solid var(--gi-border-soft, #F1F5F9);
+  border-radius:10px; padding:9px 12px;
+}
+.cqFin__label{ font-size:12.5px; color:var(--gi-text-2, #3D4A5C); }
+.cqFin__value{ font-weight:800; font-variant-numeric:tabular-nums; }
+.cqFin__note{ font-size:12px; color:var(--gi-text-muted, #647287); }
+.cqFin__disclaimer{
+  font-size:11.5px; color:var(--gi-text-muted, #647287);
+  background:#FFFBEB; border:1px solid #FDE68A; border-radius:9px; padding:8px 10px; line-height:1.6;
+}
+.cqSection--src .cqRow__value{ font-weight:500; }
+
+/* שם הלקוח בטבלה הופך לניתן ללחיצה */
+.lcCustomerRow .lcCustomers__nameMeta{ cursor:pointer; }
+.lcCustomerRow .lcCustomers__nameMeta:hover strong{ text-decoration:underline; text-underline-offset:3px; }
