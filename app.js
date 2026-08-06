@@ -82049,6 +82049,1236 @@ ${inner}
     }
   };
 
+
+  /* ==========================================================================
+     ייבוא לקוחות מקובץ (Excel/CSV) + פאנל פרטי לקוח
+     --------------------------------------------------------------------------
+     מה הפיצ'ר עושה:
+     1. מנהל טוען קובץ לקוחות (ייצוא ממערכת חיצונית).
+     2. המערכת שואבת את הפרטים האישיים ואת המת"ל (הנציג) מכל שורה.
+     3. מסך תצוגה מקדימה מסווג כל שורה: חדש / ת"ז קיימת / נציג לא זוהה / שגיאה.
+     4. באישור — נפתח תיק לקוח לכל שורה, משויך לנציג הנכון.
+     5. לחיצה על שם לקוח בטבלת הלקוחות פותחת פאנל צדדי עם כל מה שנשאב מהדוח.
+
+     הערה: פוליסות/פרמיות אינן נכנסות למנוע הפוליסות. נתוני הצבירה מהקובץ
+     נשמרים תחת payload.importedFinancials — לתצוגה בפאנל בלבד.
+     ========================================================================== */
+
+  const CUSTOMER_IMPORT_VERSION = "1.0";
+  const CI_BATCH_SIZE = 40;
+
+  /** כותרות אפשריות לכל שדה. ההשוואה מתבצעת אחרי ניקוי גרשיים/רווחים/פיסוק. */
+  const CI_FIELD_ALIASES = {
+    fullName:      ["שם לקוח", "שם הלקוח", "שם מלא", "שם"],
+    idNumber:      ["מזהה לקוח", "תעודת זהות", "תז", "ת.ז", "ת״ז", "מספר זהות", "ח.פ", "חפ"],
+    mobile:        ["סלולרי", "נייד", "טלפון נייד", "פלאפון", "מובייל"],
+    phone:         ["טלפון", "טלפון נוסף", "טלפון בית", "טלפון קווי"],
+    email:         ["מייל", "אימייל", "דואל", "דואר אלקטרוני", "email", "e-mail"],
+    street:        ["רחוב", "כתובת"],
+    houseNumber:   ["מספר בית", "מס בית", "בית"],
+    apartment:     ["מספר דירה", "מס דירה", "דירה"],
+    city:          ["יישוב", "ישוב", "עיר"],
+    status:        ["סטטוס", "מצב לקוח"],
+    agent:         ["מת\"ל", "מתל", "נציג", "סוכן", "סוכן מטפל", "מנהל תיק", "מנהל תיק לקוח"],
+    gender:        ["מגדר", "מין"],
+    birthDate:     ["תאריך לידה", "תאלידה"],
+    maritalStatus: ["מצב משפחתי"],
+    childrenCount: ["מספר ילדים", "ילדים"],
+    occupation:    ["מקצוע", "עיסוק"]
+  };
+
+  const CI_FIELD_LABELS = {
+    fullName: "שם לקוח", idNumber: "תעודת זהות", mobile: "סלולרי", phone: "טלפון",
+    email: "דוא\"ל", street: "רחוב", houseNumber: "מספר בית", apartment: "דירה",
+    city: "יישוב", status: "סטטוס", agent: "מת\"ל / נציג", gender: "מגדר",
+    birthDate: "תאריך לידה", maritalStatus: "מצב משפחתי", childrenCount: "מספר ילדים",
+    occupation: "מקצוע"
+  };
+
+  /** מיפוי סטטוס מהקובץ לסטטוס פנימי. הערך המקורי נשמר תמיד ב-payload. */
+  const CI_STATUS_MAP = {
+    "לקוחפעיל": "פעיל",
+    "פעיל": "פעיל",
+    "לקוחלאפעיל": "לא פעיל",
+    "לאפעיל": "לא פעיל",
+    "לקוחנגזר": "נגזר",
+    "נגזר": "נגזר"
+  };
+
+  const CI_UNASSIGNED_STATUS = "ממתין לשיוך";
+
+  /** מפתח השוואה לכותרות: מוריד גרשיים, רווחים ופיסוק. */
+  const ciKey = (value) => safeTrim(value)
+    .replace(/[\s"'״׳`.,\-_()\[\]\/\\]/g, "")
+    .toLowerCase();
+
+  const ciDigits = (value) => String(value == null ? "" : value).replace(/\D+/g, "");
+
+  /** ת"ז: שומר אפסים מובילים ומשלים ל-9 ספרות. */
+  function ciNormalizeId(value){
+    const raw = ciDigits(value);
+    if(!raw) return "";
+    if(raw.length > 9) return raw.slice(-9);
+    return raw.padStart(9, "0");
+  }
+
+  /** טלפון: +972546501485 -> 0546501485 */
+  function ciNormalizePhone(value){
+    let raw = safeTrim(value).replace(/[^\d+]/g, "");
+    if(!raw) return "";
+    if(raw.startsWith("+972")) raw = "0" + raw.slice(4);
+    else if(raw.startsWith("972") && raw.length >= 11) raw = "0" + raw.slice(3);
+    raw = raw.replace(/\D/g, "");
+    if(raw && !raw.startsWith("0")) raw = "0" + raw;
+    return raw;
+  }
+
+  /** תאריך: Date, מספר סידורי של אקסל, או מחרוזת. מחזיר ISO (yyyy-mm-dd) או "". */
+  function ciParseDate(value){
+    if(value == null || value === "") return "";
+    if(value instanceof Date && !isNaN(value.getTime())){
+      return ciDateToIso(value);
+    }
+    const num = Number(value);
+    if(Number.isFinite(num) && num > 1 && num < 80000){
+      const ms = Date.UTC(1899, 11, 30) + Math.round(num * 86400000);
+      const d = new Date(ms);
+      if(!isNaN(d.getTime())) return ciDateToIso(d);
+    }
+    const txt = safeTrim(value);
+    const m = txt.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/);
+    if(m){
+      let year = Number(m[3]);
+      if(year < 100) year += year > 30 ? 1900 : 2000;
+      const d = new Date(Date.UTC(year, Number(m[2]) - 1, Number(m[1])));
+      if(!isNaN(d.getTime())) return ciDateToIso(d);
+    }
+    const parsed = new Date(txt);
+    if(!isNaN(parsed.getTime())) return ciDateToIso(parsed);
+    return "";
+  }
+
+  function ciDateToIso(date){
+    const y = date.getUTCFullYear();
+    const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const d = String(date.getUTCDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  function ciFormatDate(iso){
+    const raw = safeTrim(iso);
+    if(!raw) return "";
+    const d = new Date(raw);
+    if(isNaN(d.getTime())) return raw;
+    return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
+  }
+
+  function ciAgeFromBirthDate(iso){
+    const raw = safeTrim(iso);
+    if(!raw) return null;
+    const d = new Date(raw);
+    if(isNaN(d.getTime())) return null;
+    const now = new Date();
+    let age = now.getFullYear() - d.getFullYear();
+    const beforeBirthday = now.getMonth() < d.getMonth()
+      || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate());
+    if(beforeBirthday) age -= 1;
+    return age >= 0 && age < 130 ? age : null;
+  }
+
+  function ciFormatMoney(value){
+    const num = Number(String(value ?? "").replace(/[^\d.\-]/g, ""));
+    if(!Number.isFinite(num)) return "";
+    return "₪" + num.toLocaleString("he-IL", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  }
+
+  function ciNum(value){
+    const num = Number(String(value ?? "").replace(/[^\d.\-]/g, ""));
+    return Number.isFinite(num) ? num : null;
+  }
+
+  /* ---------------------------- זיהוי נציגים ---------------------------- */
+
+  /** כל השמות שאפשר לזהות לפיהם נציג: שם, שם משתמש, היסטוריית שמות וכינויי דוח. */
+  function ciAgentLabels(agent){
+    const labels = [safeTrim(agent?.name), safeTrim(agent?.username)];
+    try { getAgentNameHistory(agent?.id).forEach((n) => labels.push(safeTrim(n))); } catch(_e) {}
+    try { getAgentReportAliases(agent?.id).forEach((n) => labels.push(safeTrim(n))); } catch(_e) {}
+    return labels.filter(Boolean);
+  }
+
+  /** משווה שם מהקובץ לנציג: התאמה מלאה, ואם לא — התאמת קבוצת מילים (סדר חופשי). */
+  function ciAgentNameMatches(fileLabel, agentLabel){
+    const a = ciKey(fileLabel);
+    const b = ciKey(agentLabel);
+    if(!a || !b) return false;
+    if(a === b) return true;
+    const tokensA = safeTrim(fileLabel).split(/\s+/).map(ciKey).filter(Boolean).sort().join("|");
+    const tokensB = safeTrim(agentLabel).split(/\s+/).map(ciKey).filter(Boolean).sort().join("|");
+    return !!tokensA && tokensA === tokensB;
+  }
+
+  function ciResolveAgent(fileLabel){
+    const label = safeTrim(fileLabel);
+    if(!label) return null;
+    const agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
+    // קודם המנגנון הקיים במערכת (זהה לזה של הדוח היומי)
+    try {
+      const byExisting = resolveAgentIdByLabel(label, agents);
+      if(byExisting){
+        const found = agents.find((a) => safeTrim(a?.id) === byExisting);
+        if(found) return found;
+      }
+    } catch(_e) {}
+    for(const agent of agents){
+      if(agent?.active === false) continue;
+      if(ciAgentLabels(agent).some((candidate) => ciAgentNameMatches(label, candidate))) return agent;
+    }
+    return null;
+  }
+
+  /** מפצל תא מת"ל לרשימת שמות ומזהה כל אחד. הראשון = בעל התיק, כולם = שיתוף. */
+  function ciResolveAgentCell(rawValue){
+    const names = safeTrim(rawValue)
+      .split(/[,;،|\/]+/)
+      .map(safeTrim)
+      .filter(Boolean);
+    const resolved = [];
+    const unresolved = [];
+    names.forEach((name) => {
+      const agent = ciResolveAgent(name);
+      if(agent){
+        if(!resolved.some((r) => safeTrim(r.agent?.id) === safeTrim(agent.id))){
+          resolved.push({ label: name, agent });
+        }
+      } else {
+        unresolved.push(name);
+      }
+    });
+    return { names, resolved, unresolved };
+  }
+
+  /* ---------------------------- קריאת הקובץ ---------------------------- */
+
+  function ciBuildHeaderMap(headerRow){
+    const map = {};       // field -> column index
+    const headers = [];   // index -> raw header text
+    const financial = []; // עמודות צבירה/פרמיה — לתצוגה בלבד
+    const extra = [];     // כל השאר
+
+    (headerRow || []).forEach((cell, idx) => {
+      const raw = safeTrim(cell);
+      headers[idx] = raw;
+      if(!raw) return;
+      const key = ciKey(raw);
+      let matchedField = "";
+      for(const [field, aliases] of Object.entries(CI_FIELD_ALIASES)){
+        if(map[field] != null) continue;
+        if(aliases.some((alias) => ciKey(alias) === key)){ matchedField = field; break; }
+      }
+      if(matchedField){ map[matchedField] = idx; return; }
+      if(/צבירה|פרמיה|פעילותאחרון/.test(key)) financial.push({ index: idx, label: raw });
+      else extra.push({ index: idx, label: raw });
+    });
+
+    return { map, headers, financial, extra };
+  }
+
+  /** מאתר את שורת הכותרות (לרוב הראשונה, אבל יש קבצים עם שורות כותרת מיותרות). */
+  function ciDetectHeaderRow(rows){
+    const limit = Math.min(rows.length, 10);
+    let best = { index: 0, score: -1 };
+    for(let i = 0; i < limit; i += 1){
+      const built = ciBuildHeaderMap(rows[i]);
+      const score = Object.keys(built.map).length;
+      if(score > best.score) best = { index: i, score };
+      if(score >= 4) break;
+    }
+    return best.index;
+  }
+
+  function ciCellText(row, index){
+    if(index == null || index < 0) return "";
+    const value = row?.[index];
+    if(value == null) return "";
+    if(value instanceof Date) return ciDateToIso(value);
+    return safeTrim(String(value));
+  }
+
+  /** מנתח שורת נתונים אחת לרשומת ייבוא מלאה. */
+  function ciParseRow(row, rowNumber, built){
+    const { map, headers, financial, extra } = built;
+    const get = (field) => ciCellText(row, map[field]);
+
+    const rawRecord = {};
+    headers.forEach((label, idx) => {
+      if(!label) return;
+      const raw = row?.[idx];
+      rawRecord[label] = raw instanceof Date ? ciDateToIso(raw) : (raw == null ? "" : String(raw).trim());
+    });
+
+    const fullNameRaw = get("fullName");
+    const idNumber = ciNormalizeId(get("idNumber"));
+    const mobile = ciNormalizePhone(get("mobile"));
+    const landline = ciNormalizePhone(get("phone"));
+    const phone = mobile || landline;
+    const email = normalizeEmailValue(get("email"));
+    const city = get("city");
+    const street = get("street");
+    const houseNumber = get("houseNumber");
+    const apartment = get("apartment");
+    const birthDate = ciParseDate(row?.[map.birthDate]);
+    const statusRaw = get("status");
+    const agentRaw = get("agent");
+
+    // שם שהוא בעצם מספר טלפון (שורות ללא ת"ז בייצוא) — מוצג כך שיהיה ברור
+    const nameIsPhone = !!fullNameRaw && /^[\d+\-\s]{9,}$/.test(fullNameRaw);
+    const fullName = fullNameRaw || (phone ? phone : "");
+
+    const financials = financial.map(({ index, label }) => ({
+      label,
+      value: ciNum(row?.[index]),
+      raw: ciCellText(row, index)
+    })).filter((f) => f.raw !== "");
+
+    const extras = extra.map(({ index, label }) => ({ label, value: ciCellText(row, index) }))
+      .filter((f) => f.value !== "");
+
+    const agentInfo = ciResolveAgentCell(agentRaw);
+
+    const entry = {
+      rowNumber,
+      fullName,
+      nameIsPhone,
+      idNumber,
+      idValid: idNumber ? isValidIsraeliId(idNumber) : false,
+      mobile,
+      landline,
+      phone,
+      email,
+      city,
+      street,
+      houseNumber,
+      apartment,
+      address: [street, houseNumber, apartment ? "דירה " + apartment : "", city].filter(Boolean).join(" "),
+      birthDate,
+      gender: get("gender"),
+      maritalStatus: get("maritalStatus"),
+      childrenCount: ciNum(get("childrenCount")),
+      occupation: get("occupation"),
+      statusRaw,
+      status: CI_STATUS_MAP[ciKey(statusRaw)] || (statusRaw ? statusRaw : "חדש"),
+      agentRaw,
+      agentNames: agentInfo.names,
+      agents: agentInfo.resolved,
+      unresolvedAgents: agentInfo.unresolved,
+      financials,
+      extras,
+      raw: rawRecord,
+      issues: [],
+      category: "new",
+      action: "import",
+      existing: null
+    };
+
+    if(!fullName && !phone && !idNumber) entry.issues.push("שורה ריקה — אין שם, טלפון או ת״ז");
+    else {
+      if(!fullName) entry.issues.push("חסר שם לקוח");
+      if(!idNumber && !phone) entry.issues.push("אין ת״ז ואין טלפון — לא ניתן לזהות את הלקוח");
+      if(idNumber && !entry.idValid) entry.issues.push("ת״ז לא עוברת ביקורת ספרת ביקורת");
+      if(birthDate){
+        const age = ciAgeFromBirthDate(birthDate);
+        if(age == null || age < 16 || age > 105){
+          entry.issues.push("תאריך לידה חריג (" + ciFormatDate(birthDate) + ") — כדאי לבדוק מול המקור");
+          entry.birthDateSuspect = true;
+        }
+      }
+      if(!agentInfo.resolved.length) entry.issues.push("הנציג לא זוהה במערכת");
+    }
+
+    const blocking = !fullName && !phone && !idNumber;
+    const noIdentifier = !idNumber && !phone;
+    if(blocking || noIdentifier) entry.category = "error";
+    else if(!agentInfo.resolved.length) entry.category = "noAgent";
+
+    if(entry.category === "error") entry.action = "skip";
+    return entry;
+  }
+
+  /* ------------------------- בדיקת כפילויות מול השרת ------------------------- */
+
+  async function ciFetchExistingByColumn(column, values){
+    const found = new Map();
+    const list = [...new Set(values.filter(Boolean))];
+    for(let i = 0; i < list.length; i += 80){
+      const chunk = list.slice(i, i + 80);
+      const inList = "(" + chunk.map((v) => '"' + String(v).replace(/"/g, "") + '"').join(",") + ")";
+      const select = "id,full_name,id_number,phone,city,status,agent_name,agent_id,updated_at";
+      let rows = null;
+      try {
+        const client = Storage.getClient();
+        if(client){
+          const res = await client.from(SUPABASE_TABLES.customers).select(select).in(column, chunk);
+          if(!res?.error) rows = res?.data || [];
+        }
+      } catch(_e) {}
+      if(!rows){
+        try {
+          rows = await Storage.restRequest(
+            SUPABASE_TABLES.customers + "?" + column + "=in." + encodeURIComponent(inList) + "&select=" + encodeURIComponent(select),
+            { method: "GET" }
+          ) || [];
+        } catch(_e) { rows = []; }
+      }
+      (rows || []).forEach((row) => {
+        const key = safeTrim(row?.[column]);
+        if(!key) return;
+        if(!found.has(key)) found.set(key, row);
+      });
+    }
+    return found;
+  }
+
+  async function ciMarkDuplicates(entries){
+    // כפילות בתוך הקובץ עצמו
+    const seen = new Map();
+    entries.forEach((entry) => {
+      if(entry.category === "error") return;
+      const key = entry.idNumber ? "id:" + entry.idNumber : (entry.phone ? "ph:" + entry.phone : "");
+      if(!key) return;
+      if(seen.has(key)){
+        entry.category = "dupFile";
+        entry.action = "skip";
+        entry.issues.push("שורה כפולה בתוך הקובץ (שורה " + seen.get(key) + ")");
+      } else {
+        seen.set(key, entry.rowNumber);
+      }
+    });
+
+    const byId = await ciFetchExistingByColumn(
+      "id_number",
+      entries.filter((e) => e.category === "new" || e.category === "noAgent").map((e) => e.idNumber)
+    );
+    const phoneCandidates = entries
+      .filter((e) => (e.category === "new" || e.category === "noAgent") && !e.idNumber)
+      .map((e) => e.phone);
+    const byPhone = phoneCandidates.length ? await ciFetchExistingByColumn("phone", phoneCandidates) : new Map();
+
+    entries.forEach((entry) => {
+      if(entry.category !== "new" && entry.category !== "noAgent") return;
+      const match = (entry.idNumber && byId.get(entry.idNumber)) || (!entry.idNumber && entry.phone && byPhone.get(entry.phone));
+      if(match){
+        entry.existing = match;
+        entry.category = "dupServer";
+        entry.action = "skip";
+        entry.issues.push("קיים כבר במערכת" + (safeTrim(match.agent_name) ? " אצל " + safeTrim(match.agent_name) : ""));
+      }
+    });
+
+    return entries;
+  }
+
+  /* ---------------------------- בניית רשומת לקוח ---------------------------- */
+
+  function ciSplitName(fullName){
+    const parts = safeTrim(fullName).split(/\s+/).filter(Boolean);
+    if(!parts.length) return { firstName: "", lastName: "" };
+    if(parts.length === 1) return { firstName: parts[0], lastName: "" };
+    // בייצוא הלקוחות השם מגיע בפורמט "משפחה פרטי"
+    return { lastName: parts[0], firstName: parts.slice(1).join(" ") };
+  }
+
+  function ciBuildCustomerRecord(entry, batch, existingRow){
+    const now = nowISO();
+    const nameParts = ciSplitName(entry.fullName);
+    const owner = entry.agents[0]?.agent || null;
+    const shared = entry.agents.slice(1).map((a) => ({ id: safeTrim(a.agent?.id), name: safeTrim(a.agent?.name) }));
+
+    let payload = {};
+    if(existingRow?.payload && typeof existingRow.payload === "object"){
+      try { payload = JSON.parse(JSON.stringify(existingRow.payload)); } catch(_e) { payload = {}; }
+    }
+
+    payload.primary = Object.assign({}, payload.primary, {
+      firstName: nameParts.firstName || safeTrim(payload?.primary?.firstName),
+      lastName: nameParts.lastName || safeTrim(payload?.primary?.lastName),
+      idNumber: entry.idNumber || safeTrim(payload?.primary?.idNumber),
+      phone: entry.phone || safeTrim(payload?.primary?.phone),
+      mobile: entry.mobile || safeTrim(payload?.primary?.mobile),
+      landline: entry.landline || safeTrim(payload?.primary?.landline),
+      email: entry.email || safeTrim(payload?.primary?.email),
+      city: entry.city || safeTrim(payload?.primary?.city),
+      street: entry.street || safeTrim(payload?.primary?.street),
+      houseNumber: entry.houseNumber || safeTrim(payload?.primary?.houseNumber),
+      apartment: entry.apartment || safeTrim(payload?.primary?.apartment),
+      birthDate: entry.birthDate || safeTrim(payload?.primary?.birthDate),
+      gender: entry.gender || safeTrim(payload?.primary?.gender),
+      maritalStatus: entry.maritalStatus || safeTrim(payload?.primary?.maritalStatus),
+      childrenCount: entry.childrenCount != null ? entry.childrenCount : payload?.primary?.childrenCount,
+      occupation: entry.occupation || safeTrim(payload?.primary?.occupation)
+    });
+
+    payload.importedProfile = {
+      fullName: entry.fullName,
+      nameIsPhone: entry.nameIsPhone,
+      idNumber: entry.idNumber,
+      mobile: entry.mobile,
+      landline: entry.landline,
+      email: entry.email,
+      street: entry.street,
+      houseNumber: entry.houseNumber,
+      apartment: entry.apartment,
+      city: entry.city,
+      address: entry.address,
+      birthDate: entry.birthDate,
+      gender: entry.gender,
+      maritalStatus: entry.maritalStatus,
+      childrenCount: entry.childrenCount,
+      occupation: entry.occupation,
+      statusRaw: entry.statusRaw,
+      agentRaw: entry.agentRaw
+    };
+
+    // נתוני צבירה/פרמיה מהדוח — לתצוגה בלבד, לא נכנסים למנוע הפוליסות
+    payload.importedFinancials = {
+      updatedAt: now,
+      source: batch.fileName,
+      items: entry.financials.map((f) => ({ label: f.label, value: f.value, raw: f.raw }))
+    };
+
+    payload.importedExtras = entry.extras;
+
+    payload.importSource = {
+      batchId: batch.id,
+      fileName: batch.fileName,
+      sheetName: batch.sheetName,
+      rowNumber: entry.rowNumber,
+      importedAt: now,
+      importedBy: safeTrim(Auth?.current?.name),
+      version: CUSTOMER_IMPORT_VERSION
+    };
+
+    if(shared.length) payload.sharedAgents = shared;
+    if(owner){
+      payload.agentId = safeTrim(owner.id);
+      payload.agentName = safeTrim(owner.name);
+      payload.createdBy = safeTrim(owner.name);
+    } else {
+      payload.pendingAgentAssign = true;
+      payload.pendingAgentLabel = entry.agentRaw;
+    }
+
+    const isUpdate = !!existingRow;
+    const record = normalizeCustomerRecord({
+      id: isUpdate ? safeTrim(existingRow.id) : ("cust_imp_" + batch.id + "_" + entry.rowNumber),
+      // בעדכון לא נוגעים בסטטוס ולא מחליפים את הנציג הקיים
+      status: isUpdate ? (safeTrim(existingRow.status) || entry.status) : (owner ? entry.status : CI_UNASSIGNED_STATUS),
+      fullName: entry.fullName || safeTrim(existingRow?.full_name),
+      idNumber: entry.idNumber || safeTrim(existingRow?.id_number),
+      phone: entry.phone || safeTrim(existingRow?.phone),
+      email: entry.email || safeTrim(existingRow?.email),
+      city: entry.city || safeTrim(existingRow?.city),
+      agentName: isUpdate ? (safeTrim(existingRow.agent_name) || safeTrim(owner?.name)) : safeTrim(owner?.name),
+      agentId: isUpdate ? (safeTrim(existingRow.agent_id) || safeTrim(owner?.id)) : safeTrim(owner?.id),
+      agentRole: safeTrim(owner?.role),
+      createdBy: safeTrim(owner?.name),
+      createdAt: isUpdate ? (safeTrim(existingRow.created_at) || now) : now,
+      updatedAt: now,
+      payload
+    }, entry.rowNumber);
+
+    return record;
+  }
+
+  /* ------------------------------- מודול ראשי ------------------------------- */
+
+  const CustomerImport = {
+    state: null,
+    els: {},
+
+    canUse(){
+      try { return !!(Auth.isAdmin?.() || Auth.isManager?.()); } catch(_e) { return false; }
+    },
+
+    /** מוסיף את כפתור הייבוא לסרגל מסך הלקוחות (פעם אחת). */
+    mountButton(){
+      if(!this.canUse()) return;
+      const exportBtn = document.getElementById("btnCustomersExport");
+      if(!exportBtn || document.getElementById("btnCustomersImport")) return;
+      const btn = document.createElement("button");
+      btn.className = "btn ciImportBtn";
+      btn.id = "btnCustomersImport";
+      btn.type = "button";
+      btn.textContent = "ייבוא לקוחות מקובץ";
+      exportBtn.parentNode.insertBefore(btn, exportBtn);
+      on(btn, "click", () => this.open());
+    },
+
+    ensureModal(){
+      if(this.els.wrap) return;
+      const wrap = document.createElement("div");
+      wrap.className = "ciModal";
+      wrap.id = "ciImportModal";
+      wrap.setAttribute("aria-hidden", "true");
+      wrap.innerHTML = `
+        <div class="ciModal__backdrop" data-ci-close></div>
+        <div class="ciModal__panel" role="dialog" aria-modal="true" aria-label="ייבוא לקוחות מקובץ">
+          <div class="ciModal__head">
+            <div>
+              <div class="ciModal__title">ייבוא לקוחות מקובץ</div>
+              <div class="ciModal__sub" id="ciSubtitle">בחר קובץ Excel או CSV של לקוחות</div>
+            </div>
+            <button class="ciModal__close" type="button" data-ci-close aria-label="סגור">✕</button>
+          </div>
+          <div class="ciModal__body" id="ciBody"></div>
+          <div class="ciModal__foot" id="ciFoot"></div>
+        </div>`;
+      document.body.appendChild(wrap);
+      this.els.wrap = wrap;
+      this.els.body = wrap.querySelector("#ciBody");
+      this.els.foot = wrap.querySelector("#ciFoot");
+      this.els.subtitle = wrap.querySelector("#ciSubtitle");
+      on(wrap, "click", (ev) => {
+        if(ev.target?.closest?.("[data-ci-close]")) this.close();
+      });
+    },
+
+    open(){
+      if(!this.canUse()){
+        try { window.showToast?.({ title: "אין הרשאה", text: "ייבוא לקוחות זמין למנהל מערכת או למנהל בלבד.", variant: "warn" }); } catch(_e) {}
+        return;
+      }
+      this.ensureModal();
+      this.state = null;
+      this.els.wrap.classList.add("is-open");
+      this.els.wrap.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+      this.renderPickStep();
+    },
+
+    close(){
+      if(!this.els.wrap) return;
+      this.els.wrap.classList.remove("is-open");
+      this.els.wrap.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+    },
+
+    /* --------------------------- שלב 1: בחירת קובץ --------------------------- */
+    renderPickStep(){
+      this.els.subtitle.textContent = "שלב 1 מתוך 3 — בחירת קובץ";
+      this.els.body.innerHTML = `
+        <div class="ciDrop" id="ciDrop">
+          <div class="ciDrop__icon">📄</div>
+          <div class="ciDrop__title">גרור לכאן קובץ לקוחות או לחץ לבחירה</div>
+          <div class="ciDrop__hint">נתמך: xlsx, xls, csv · הקובץ נקרא בדפדפן בלבד</div>
+          <input type="file" id="ciFileInput" accept=".xlsx,.xls,.csv" hidden />
+        </div>
+        <ul class="ciNotes">
+          <li>המערכת שואבת פרטים אישיים בלבד. פוליסות ופרמיות ייטענו בהמשך מדוח נפרד.</li>
+          <li>שיוך הנציג נעשה לפי עמודת <strong>מת״ל</strong>. שני שמות מופרדים בפסיק → התיק משויך לראשון והשני נרשם כשיתוף.</li>
+          <li>לקוח שכבר קיים במערכת יוצג לאישור שלך — לא יעודכן אוטומטית.</li>
+        </ul>`;
+      this.els.foot.innerHTML = `<button class="btn" type="button" data-ci-close>ביטול</button>`;
+
+      const drop = this.els.body.querySelector("#ciDrop");
+      const input = this.els.body.querySelector("#ciFileInput");
+      on(drop, "click", () => input.click());
+      on(input, "change", () => {
+        const file = input.files?.[0];
+        if(file) this.handleFile(file);
+        input.value = "";
+      });
+      ["dragenter", "dragover"].forEach((evt) => on(drop, evt, (ev) => {
+        ev.preventDefault(); drop.classList.add("is-over");
+      }));
+      ["dragleave", "drop"].forEach((evt) => on(drop, evt, (ev) => {
+        ev.preventDefault(); drop.classList.remove("is-over");
+      }));
+      on(drop, "drop", (ev) => {
+        const file = ev.dataTransfer?.files?.[0];
+        if(file) this.handleFile(file);
+      });
+    },
+
+    renderBusy(text){
+      this.els.body.innerHTML = `<div class="ciBusy"><div class="ciBusy__spin"></div><div>${escapeHtml(text)}</div></div>`;
+      this.els.foot.innerHTML = "";
+    },
+
+    async handleFile(file){
+      this.renderBusy("קורא את הקובץ…");
+      try {
+        if(window.GI_LOAD_LIBS?.xlsx) await window.GI_LOAD_LIBS.xlsx();
+        if(!window.XLSX) throw new Error("ספריית קריאת קובצי Excel לא נטענה. בדוק חיבור לאינטרנט ונסה שוב.");
+
+        const buffer = await file.arrayBuffer();
+        const wb = window.XLSX.read(buffer, { type: "array", cellDates: true });
+        const sheetName = wb.SheetNames[0];
+        const sheet = wb.Sheets[sheetName];
+        if(!sheet) throw new Error("לא נמצא גיליון בקובץ.");
+
+        const rows = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: true, blankrows: false });
+        if(rows.length < 2) throw new Error("הקובץ ריק או מכיל שורת כותרות בלבד.");
+
+        const headerIndex = ciDetectHeaderRow(rows);
+        const built = ciBuildHeaderMap(rows[headerIndex]);
+        if(built.map.fullName == null && built.map.idNumber == null){
+          throw new Error("לא זוהו עמודות של שם לקוח או תעודת זהות. ודא שהקובץ הוא ייצוא לקוחות.");
+        }
+
+        const batch = {
+          id: Date.now().toString(36),
+          fileName: file.name,
+          sheetName,
+          sheetsCount: wb.SheetNames.length
+        };
+
+        this.renderBusy("מנתח " + (rows.length - headerIndex - 1) + " שורות…");
+        const entries = rows.slice(headerIndex + 1)
+          .map((row, idx) => ciParseRow(row, headerIndex + idx + 2, built))
+          .filter((entry) => entry.fullName || entry.idNumber || entry.phone || entry.agentRaw);
+
+        this.renderBusy("בודק כפילויות מול המערכת…");
+        await ciMarkDuplicates(entries);
+
+        this.state = { batch, built, entries };
+        this.renderPreviewStep();
+      } catch(err){
+        this.renderError(safeTrim(err?.message) || "קריאת הקובץ נכשלה");
+      }
+    },
+
+    renderError(message){
+      this.els.body.innerHTML = `<div class="ciError"><div class="ciError__icon">⚠️</div><div>${escapeHtml(message)}</div></div>`;
+      this.els.foot.innerHTML = `<button class="btn" type="button" id="ciBack">חזור</button>`;
+      on(this.els.foot.querySelector("#ciBack"), "click", () => this.renderPickStep());
+    },
+
+    counts(){
+      const entries = this.state?.entries || [];
+      return {
+        total: entries.length,
+        new: entries.filter((e) => e.category === "new").length,
+        noAgent: entries.filter((e) => e.category === "noAgent").length,
+        dupServer: entries.filter((e) => e.category === "dupServer").length,
+        dupFile: entries.filter((e) => e.category === "dupFile").length,
+        error: entries.filter((e) => e.category === "error").length,
+        willImport: entries.filter((e) => e.action === "import").length,
+        willUpdate: entries.filter((e) => e.action === "update").length
+      };
+    },
+
+    /* -------------------------- שלב 2: תצוגה מקדימה -------------------------- */
+    renderPreviewStep(){
+      const { batch, entries } = this.state;
+      const c = this.counts();
+      this.els.subtitle.textContent = `שלב 2 מתוך 3 — ${escapeHtml(batch.fileName)} · ${c.total} שורות`;
+
+      const unresolvedAgents = [...new Set(entries.flatMap((e) => e.unresolvedAgents))];
+
+      this.els.body.innerHTML = `
+        <div class="ciChips">
+          <button class="ciChip is-active" data-ci-filter="all">הכל <span>${c.total}</span></button>
+          <button class="ciChip ciChip--ok" data-ci-filter="new">לקוחות חדשים <span>${c.new}</span></button>
+          <button class="ciChip ciChip--warn" data-ci-filter="noAgent">נציג לא זוהה <span>${c.noAgent}</span></button>
+          <button class="ciChip ciChip--dup" data-ci-filter="dupServer">קיימים במערכת <span>${c.dupServer}</span></button>
+          <button class="ciChip ciChip--dup" data-ci-filter="dupFile">כפולים בקובץ <span>${c.dupFile}</span></button>
+          <button class="ciChip ciChip--err" data-ci-filter="error">שגיאות <span>${c.error}</span></button>
+        </div>
+        ${unresolvedAgents.length ? `<div class="ciBanner">שמות מת״ל שלא זוהו כנציגים במערכת: <strong>${escapeHtml(unresolvedAgents.join(", "))}</strong>. הלקוחות שלהם ייווצרו בסטטוס "${CI_UNASSIGNED_STATUS}" וניתן יהיה לשייך אותם ידנית מתוך תיק הלקוח.</div>` : ""}
+        <div class="ciBulk">
+          <span>פעולה מהירה לכפילויות:</span>
+          <button class="btn btn--tiny" data-ci-bulk="skipDup">דלג על כולן</button>
+          <button class="btn btn--tiny" data-ci-bulk="updateDup">עדכן את כולן</button>
+          <span class="ciBulk__hint">עדכון משלים פרטי קשר בלבד ואינו מחליף את הנציג או הסטטוס הקיים.</span>
+        </div>
+        <div class="ciTableWrap">
+          <table class="ciTable">
+            <thead>
+              <tr>
+                <th>#</th><th>שם לקוח</th><th>ת״ז</th><th>טלפון</th><th>יישוב</th>
+                <th>נציג (מת״ל)</th><th>מצב</th><th>פעולה</th>
+              </tr>
+            </thead>
+            <tbody id="ciRows"></tbody>
+          </table>
+        </div>`;
+
+      this.els.foot.innerHTML = `
+        <div class="ciFoot__summary" id="ciSummary"></div>
+        <div class="ciFoot__actions">
+          <button class="btn" type="button" data-ci-close>ביטול</button>
+          <button class="btn btn--primary" type="button" id="ciCommit">אשר ופתח תיקי לקוח</button>
+        </div>`;
+
+      this._filter = "all";
+      this.paintRows();
+
+      on(this.els.body, "click", (ev) => {
+        const chip = ev.target?.closest?.("[data-ci-filter]");
+        if(chip){
+          this._filter = chip.getAttribute("data-ci-filter");
+          this.els.body.querySelectorAll("[data-ci-filter]").forEach((el) => el.classList.toggle("is-active", el === chip));
+          this.paintRows();
+          return;
+        }
+        const bulk = ev.target?.closest?.("[data-ci-bulk]");
+        if(bulk){
+          const mode = bulk.getAttribute("data-ci-bulk");
+          this.state.entries.forEach((entry) => {
+            if(entry.category === "dupServer") entry.action = mode === "updateDup" ? "update" : "skip";
+          });
+          this.paintRows();
+        }
+      });
+
+      on(this.els.body, "change", (ev) => {
+        const select = ev.target?.closest?.("[data-ci-action]");
+        if(!select) return;
+        const rowNumber = Number(select.getAttribute("data-ci-action"));
+        const entry = this.state.entries.find((e) => e.rowNumber === rowNumber);
+        if(entry){
+          entry.action = select.value;
+          this.paintSummary();
+        }
+      });
+
+      on(this.els.foot.querySelector("#ciCommit"), "click", () => this.commit());
+    },
+
+    paintRows(){
+      const tbody = this.els.body.querySelector("#ciRows");
+      if(!tbody) return;
+      const filter = this._filter || "all";
+      const rows = (this.state?.entries || []).filter((e) => filter === "all" || e.category === filter);
+
+      const badge = (entry) => {
+        const map = {
+          new: '<span class="ciBadge ciBadge--ok">חדש</span>',
+          noAgent: '<span class="ciBadge ciBadge--warn">נציג לא זוהה</span>',
+          dupServer: '<span class="ciBadge ciBadge--dup">קיים במערכת</span>',
+          dupFile: '<span class="ciBadge ciBadge--dup">כפול בקובץ</span>',
+          error: '<span class="ciBadge ciBadge--err">שגיאה</span>'
+        };
+        const issues = entry.issues.length
+          ? `<div class="ciIssues">${escapeHtml(entry.issues.join(" · "))}</div>` : "";
+        return (map[entry.category] || "") + issues;
+      };
+
+      const actionSelect = (entry) => {
+        if(entry.category === "error"){
+          return '<span class="muted small">לא ייובא</span>';
+        }
+        const options = entry.category === "dupServer"
+          ? [["skip", "דלג"], ["update", "עדכן קיים"]]
+          : entry.category === "dupFile"
+            ? [["skip", "דלג"], ["import", "ייבא בכל זאת"]]
+            : [["import", "ייבא"], ["skip", "דלג"]];
+        return `<select class="ciSelect" data-ci-action="${entry.rowNumber}">${
+          options.map(([value, label]) => `<option value="${value}"${entry.action === value ? " selected" : ""}>${label}</option>`).join("")
+        }</select>`;
+      };
+
+      const agentCell = (entry) => {
+        if(!entry.agents.length){
+          return `<span class="ciAgent ciAgent--none">${escapeHtml(entry.agentRaw || "—")}</span>`;
+        }
+        const owner = escapeHtml(entry.agents[0].agent.name);
+        const shared = entry.agents.slice(1).map((a) => escapeHtml(a.agent.name));
+        return `<span class="ciAgent">${owner}</span>${shared.length ? `<span class="ciAgent__shared">+ ${shared.join(", ")}</span>` : ""}`;
+      };
+
+      tbody.innerHTML = rows.length ? rows.map((entry) => `
+        <tr class="ciRow ciRow--${entry.category}">
+          <td class="muted small">${entry.rowNumber}</td>
+          <td>${escapeHtml(entry.fullName || "—")}${entry.nameIsPhone ? '<div class="ciIssues">השם בקובץ הוא מספר טלפון</div>' : ""}</td>
+          <td dir="ltr" class="ciMono">${escapeHtml(entry.idNumber || "—")}</td>
+          <td dir="ltr" class="ciMono">${escapeHtml(entry.phone || "—")}</td>
+          <td>${escapeHtml(entry.city || "—")}</td>
+          <td>${agentCell(entry)}</td>
+          <td>${badge(entry)}</td>
+          <td>${actionSelect(entry)}</td>
+        </tr>`).join("")
+        : `<tr><td colspan="8" class="muted" style="text-align:center;padding:24px">אין שורות בקטגוריה הזו</td></tr>`;
+
+      this.paintSummary();
+    },
+
+    paintSummary(){
+      const el = this.els.foot?.querySelector("#ciSummary");
+      if(!el) return;
+      const c = this.counts();
+      el.innerHTML = `ייווצרו <strong>${c.willImport}</strong> תיקי לקוח · יעודכנו <strong>${c.willUpdate}</strong> · ידולגו <strong>${c.total - c.willImport - c.willUpdate}</strong>`;
+    },
+
+    /* ----------------------------- שלב 3: ביצוע ----------------------------- */
+    async commit(){
+      const { batch, entries } = this.state;
+      const toImport = entries.filter((e) => e.action === "import");
+      const toUpdate = entries.filter((e) => e.action === "update");
+      const total = toImport.length + toUpdate.length;
+      if(!total){
+        try { window.showToast?.({ title: "אין מה לייבא", text: "כל השורות מסומנות לדילוג.", variant: "warn" }); } catch(_e) {}
+        return;
+      }
+
+      this.els.subtitle.textContent = "שלב 3 מתוך 3 — יוצר תיקי לקוח";
+      this.els.body.innerHTML = `
+        <div class="ciProgress">
+          <div class="ciProgress__bar"><div class="ciProgress__fill" id="ciFill"></div></div>
+          <div class="ciProgress__text" id="ciProgressText">מתחיל…</div>
+        </div>`;
+      this.els.foot.innerHTML = "";
+
+      const fill = this.els.body.querySelector("#ciFill");
+      const text = this.els.body.querySelector("#ciProgressText");
+      const setProgress = (done) => {
+        const pct = Math.round((done / total) * 100);
+        if(fill) fill.style.width = pct + "%";
+        if(text) text.textContent = `${done} מתוך ${total} (${pct}%)`;
+      };
+
+      const records = toImport.map((entry) => ({ entry, record: ciBuildCustomerRecord(entry, batch, null) }));
+
+      // עדכון: חובה לטעון את השורה המלאה (כולל payload) לפני הבנייה,
+      // אחרת ה-upsert היה דורס את תוכן התיק הקיים.
+      for(const entry of toUpdate){
+        let existingFull = entry.existing;
+        try {
+          const res = await Storage.loadSingleRow(SUPABASE_TABLES.customers, safeTrim(entry.existing?.id), "*");
+          if(res?.ok && res.data) existingFull = res.data;
+        } catch(_e) {}
+        records.push({ entry, record: ciBuildCustomerRecord(entry, batch, existingFull) });
+      }
+
+      const failures = [];
+      let done = 0;
+
+      for(let i = 0; i < records.length; i += CI_BATCH_SIZE){
+        const chunk = records.slice(i, i + CI_BATCH_SIZE);
+        const rows = Storage.buildCustomerRows({ customers: chunk.map((c) => c.record) });
+        let ok = false;
+        try {
+          const client = Storage.getClient();
+          if(client){
+            const res = await client.from(SUPABASE_TABLES.customers).upsert(rows, { onConflict: "id" });
+            ok = !res?.error;
+            if(res?.error) console.warn("CI_BULK_UPSERT_FAILED:", res.error?.message || res.error);
+          }
+        } catch(err){
+          console.warn("CI_BULK_UPSERT_THREW:", err?.message || err);
+        }
+        if(!ok){
+          // נפילה חזרה לשורה-שורה כדי לא לאבד את כל האצווה בגלל שורה אחת
+          for(const item of chunk){
+            const row = Storage.buildCustomerRows({ customers: [item.record] })[0];
+            const res = await Storage.upsertSingleRow(SUPABASE_TABLES.customers, row);
+            if(!res?.ok){
+              failures.push({ entry: item.entry, error: safeTrim(res?.error) || "שמירה נכשלה" });
+            }
+          }
+        }
+        done += chunk.length;
+        setProgress(Math.min(done, total));
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+      }
+
+      const created = toImport.length - failures.filter((f) => f.entry.action === "import").length;
+      const updated = toUpdate.length - failures.filter((f) => f.entry.action === "update").length;
+      const pendingAssign = toImport.filter((e) => !e.agents.length).length;
+
+      try {
+        appendAuditLog({
+          type: "customers_bulk_import",
+          entity: "customer",
+          entityId: batch.id,
+          label: `ייבוא לקוחות מקובץ ${batch.fileName}`,
+          actorName: safeTrim(Auth?.current?.name),
+          details: { fileName: batch.fileName, created, updated, failed: failures.length, pendingAssign, rows: entries.length }
+        });
+      } catch(_e) {}
+
+      try { await App.persist("ייבוא לקוחות מקובץ"); } catch(_e) {}
+      try { CustomersUI.render({ forceServer: true }); } catch(_e) {}
+
+      this.renderDoneStep({ created, updated, failures, pendingAssign, batch });
+    },
+
+    renderDoneStep({ created, updated, failures, pendingAssign, batch }){
+      this.els.subtitle.textContent = "הייבוא הסתיים";
+      this.els.body.innerHTML = `
+        <div class="ciDone">
+          <div class="ciDone__icon">${failures.length ? "⚠️" : "✅"}</div>
+          <div class="ciDone__stats">
+            <div><strong>${created}</strong> תיקי לקוח נפתחו</div>
+            <div><strong>${updated}</strong> לקוחות עודכנו</div>
+            ${pendingAssign ? `<div class="ciDone__warn"><strong>${pendingAssign}</strong> ממתינים לשיוך נציג (סטטוס "${CI_UNASSIGNED_STATUS}")</div>` : ""}
+            ${failures.length ? `<div class="ciDone__err"><strong>${failures.length}</strong> שורות נכשלו</div>` : ""}
+          </div>
+        </div>
+        ${failures.length ? `<div class="ciTableWrap ciTableWrap--short">
+          <table class="ciTable">
+            <thead><tr><th>#</th><th>שם</th><th>ת״ז</th><th>שגיאה</th></tr></thead>
+            <tbody>${failures.map((f) => `<tr>
+              <td class="muted small">${f.entry.rowNumber}</td>
+              <td>${escapeHtml(f.entry.fullName || "—")}</td>
+              <td dir="ltr" class="ciMono">${escapeHtml(f.entry.idNumber || "—")}</td>
+              <td>${escapeHtml(f.error)}</td>
+            </tr>`).join("")}</tbody>
+          </table>
+        </div>` : ""}
+        <div class="ciNotes"><li>לחיצה על שם לקוח בטבלה תפתח פאנל צדדי עם כל הפרטים שנשאבו מהקובץ.</li></div>`;
+
+      this.els.foot.innerHTML = `
+        ${failures.length ? '<button class="btn" type="button" id="ciExportErrors">ייצא שורות שנכשלו</button>' : ""}
+        <button class="btn btn--primary" type="button" data-ci-close>סיום</button>`;
+
+      const exportBtn = this.els.foot.querySelector("#ciExportErrors");
+      if(exportBtn) on(exportBtn, "click", () => this.exportFailures(failures, batch));
+    },
+
+    async exportFailures(failures, batch){
+      try {
+        if(window.GI_LOAD_LIBS?.xlsx) await window.GI_LOAD_LIBS.xlsx();
+        if(!window.XLSX) return;
+        const data = [["שורה בקובץ", "שם לקוח", "ת״ז", "טלפון", "מת״ל", "שגיאה"]];
+        failures.forEach((f) => data.push([
+          f.entry.rowNumber, f.entry.fullName, f.entry.idNumber, f.entry.phone, f.entry.agentRaw, f.error
+        ]));
+        const wb = window.XLSX.utils.book_new();
+        window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet(data), "שגיאות");
+        window.XLSX.writeFile(wb, "שגיאות_ייבוא_" + batch.fileName.replace(/\.[^.]+$/, "") + ".xlsx");
+      } catch(_e) {}
+    }
+  };
+
+  /* ======================= פאנל צדדי: פרטי לקוח מהדוח ======================= */
+
+  const CustomerQuickPanel = {
+    els: {},
+    currentId: "",
+
+    ensure(){
+      if(this.els.wrap) return;
+      const wrap = document.createElement("div");
+      wrap.className = "cqPanel";
+      wrap.id = "customerQuickPanel";
+      wrap.setAttribute("aria-hidden", "true");
+      wrap.innerHTML = `
+        <div class="cqPanel__backdrop" data-cq-close></div>
+        <aside class="cqPanel__panel" role="dialog" aria-modal="true" aria-label="פרטי לקוח">
+          <div class="cqPanel__head">
+            <div class="cqPanel__ident">
+              <div class="cqPanel__avatar" id="cqAvatar">?</div>
+              <div>
+                <div class="cqPanel__name" id="cqName">טוען…</div>
+                <div class="cqPanel__meta" id="cqMeta"></div>
+              </div>
+            </div>
+            <button class="cqPanel__close" type="button" data-cq-close aria-label="סגור">✕</button>
+          </div>
+          <div class="cqPanel__body" id="cqBody"></div>
+          <div class="cqPanel__foot">
+            <button class="btn btn--primary" type="button" id="cqOpenFull">פתח תיק לקוח מלא</button>
+            <button class="btn" type="button" data-cq-close>סגור</button>
+          </div>
+        </aside>`;
+      document.body.appendChild(wrap);
+      this.els.wrap = wrap;
+      this.els.body = wrap.querySelector("#cqBody");
+      this.els.name = wrap.querySelector("#cqName");
+      this.els.meta = wrap.querySelector("#cqMeta");
+      this.els.avatar = wrap.querySelector("#cqAvatar");
+
+      on(wrap, "click", (ev) => {
+        if(ev.target?.closest?.("[data-cq-close]")) this.close();
+      });
+      on(wrap.querySelector("#cqOpenFull"), "click", () => {
+        const id = this.currentId;
+        this.close();
+        if(id){
+          try { CustomersUI.openByIdWithLoader(id); } catch(_e) {}
+        }
+      });
+      on(document, "keydown", (ev) => {
+        if(ev.key === "Escape" && this.els.wrap?.classList.contains("is-open")) this.close();
+      });
+    },
+
+    close(){
+      if(!this.els.wrap) return;
+      this.els.wrap.classList.remove("is-open");
+      this.els.wrap.setAttribute("aria-hidden", "true");
+    },
+
+    async open(customerId){
+      const id = safeTrim(customerId);
+      if(!id) return;
+      this.ensure();
+      this.currentId = id;
+      this.els.wrap.classList.add("is-open");
+      this.els.wrap.setAttribute("aria-hidden", "false");
+
+      const light = (State.data?.customers || []).find((c) => String(c?.id) === String(id)) || null;
+      this.paintHeader(light);
+      this.els.body.innerHTML = `<div class="cqLoading">טוען את פרטי הלקוח…</div>`;
+
+      let full = null;
+      try {
+        const res = await Storage.loadSingleRow(SUPABASE_TABLES.customers, id, "*");
+        if(res?.ok && res.data) full = Storage.mapCustomerRow(res.data, 0);
+      } catch(_e) {}
+      const record = full || light;
+      if(!record){
+        this.els.body.innerHTML = `<div class="cqLoading">לא נמצאו פרטים עבור הלקוח הזה.</div>`;
+        return;
+      }
+      this.paintHeader(record);
+      this.paintBody(record);
+    },
+
+    paintHeader(record){
+      if(!record) return;
+      const name = safeTrim(record.fullName) || "לקוח";
+      this.els.name.textContent = name;
+      this.els.avatar.textContent = name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
+      const chips = [];
+      if(safeTrim(record.status)) chips.push(`<span class="cqChip">${escapeHtml(record.status)}</span>`);
+      if(safeTrim(record.idNumber)) chips.push(`<span class="cqChip cqChip--mono" dir="ltr">${escapeHtml(record.idNumber)}</span>`);
+      if(safeTrim(record.agentName)) chips.push(`<span class="cqChip">נציג: ${escapeHtml(record.agentName)}</span>`);
+      else chips.push(`<span class="cqChip cqChip--warn">ללא נציג</span>`);
+      this.els.meta.innerHTML = chips.join("");
+    },
+
+    paintBody(record){
+      const payload = record?.payload && typeof record.payload === "object" ? record.payload : {};
+      const prof = payload.importedProfile || {};
+      const primary = payload.primary || {};
+      const src = payload.importSource || {};
+      const fin = payload.importedFinancials || {};
+      const shared = Array.isArray(payload.sharedAgents) ? payload.sharedAgents : [];
+
+      const pick = (...values) => {
+        for(const v of values){ const t = safeTrim(v); if(t) return t; }
+        return "";
+      };
+
+      const birthDate = pick(prof.birthDate, primary.birthDate);
+      const age = ciAgeFromBirthDate(birthDate);
+      const children = prof.childrenCount != null ? prof.childrenCount : primary.childrenCount;
+
+      const rowsHtml = (rows) => rows
+        .filter(([, value]) => safeTrim(value) !== "")
+        .map(([label, value, opts]) => `
+          <div class="cqRow">
+            <div class="cqRow__label">${escapeHtml(label)}</div>
+            <div class="cqRow__value${opts?.mono ? " cqRow__value--mono" : ""}"${opts?.ltr ? ' dir="ltr"' : ""}>${opts?.html ? value : escapeHtml(String(value))}</div>
+          </div>`).join("");
+
+      const section = (title, inner, extraClass = "") => inner
+        ? `<section class="cqSection ${extraClass}"><h4 class="cqSection__title">${escapeHtml(title)}</h4>${inner}</section>`
+        : "";
+
+      const phoneValue = pick(prof.mobile, record.phone, primary.phone);
+      const contactRows = rowsHtml([
+        ["סלולרי", phoneValue, { mono: true, ltr: true }],
+        ["טלפון נוסף", pick(prof.landline, primary.landline), { mono: true, ltr: true }],
+        ["דוא\"ל", pick(prof.email, record.email, primary.email), { ltr: true }]
+      ]);
+
+      const personalRows = rowsHtml([
+        ["שם מלא", pick(record.fullName)],
+        ["תעודת זהות", pick(record.idNumber, prof.idNumber), { mono: true, ltr: true }],
+        ["מגדר", pick(prof.gender, primary.gender)],
+        ["תאריך לידה", birthDate ? ciFormatDate(birthDate) + (age != null ? ` (גיל ${age})` : "") : ""],
+        ["מצב משפחתי", pick(prof.maritalStatus, primary.maritalStatus)],
+        ["מספר ילדים", children == null || children === "" ? "" : String(children)],
+        ["מקצוע", pick(prof.occupation, primary.occupation)]
+      ]);
+
+      const addressRows = rowsHtml([
+        ["רחוב", pick(prof.street, primary.street)],
+        ["מספר בית", pick(prof.houseNumber, primary.houseNumber)],
+        ["דירה", pick(prof.apartment, primary.apartment)],
+        ["יישוב", pick(record.city, prof.city, primary.city)]
+      ]);
+
+      const finItems = Array.isArray(fin.items) ? fin.items.filter((i) => i.value != null && i.value !== 0) : [];
+      const finZero = Array.isArray(fin.items) ? fin.items.filter((i) => i.value === 0) : [];
+      const finRows = finItems.length
+        ? `<div class="cqFin">${finItems.map((item) => `
+            <div class="cqFin__item">
+              <div class="cqFin__label">${escapeHtml(item.label)}</div>
+              <div class="cqFin__value">${escapeHtml(/תאריך/.test(item.label) ? ciFormatDate(ciParseDate(item.value)) : ciFormatMoney(item.value))}</div>
+            </div>`).join("")}
+           ${finZero.length ? `<div class="cqFin__note">${finZero.length} שדות נוספים בערך 0 לא מוצגים</div>` : ""}
+           <div class="cqFin__disclaimer">נתונים אלה נשאבו מהדוח לצורכי תצוגה בלבד ואינם מהווים פוליסות במערכת.</div>
+          </div>`
+        : "";
+
+      const sourceRows = rowsHtml([
+        ["קובץ מקור", pick(src.fileName)],
+        ["מועד ייבוא", src.importedAt ? ciFormatDate(src.importedAt) : ""],
+        ["יובא על ידי", pick(src.importedBy)],
+        ["שורה בקובץ", src.rowNumber ? String(src.rowNumber) : ""],
+        ["מת״ל בקובץ", pick(prof.agentRaw)],
+        ["סטטוס בקובץ", pick(prof.statusRaw)],
+        ["נציגים משותפים", shared.map((a) => safeTrim(a?.name)).filter(Boolean).join(", ")]
+      ]);
+
+      const extras = Array.isArray(payload.importedExtras) ? payload.importedExtras : [];
+      const extraRows = extras.length ? rowsHtml(extras.map((e) => [e.label, e.value])) : "";
+
+      const body = [
+        section("פרטים אישיים", personalRows),
+        section("דרכי התקשרות", contactRows),
+        section("כתובת", addressRows),
+        section("נתוני צבירה ופרמיה מהדוח", finRows, "cqSection--fin"),
+        section("שדות נוספים מהקובץ", extraRows),
+        section("מקור הנתונים", sourceRows, "cqSection--src")
+      ].filter(Boolean).join("");
+
+      this.els.body.innerHTML = body || `<div class="cqLoading">אין פרטים מורחבים ללקוח הזה. הפרטים המלאים זמינים בתיק הלקוח.</div>`;
+    }
+  };
+
+  /* ------------------------ חיבור לטבלת הלקוחות ------------------------ */
+
+  function ciBootCustomersFeatures(){
+    // הכפתור מותנה בהרשאה, ובזמן טעינת העמוד המשתמש עדיין לא מחובר.
+    // לכן בודקים שוב מדי כמה שניות — הבדיקה זולה ויוצאת מיד אם הכפתור כבר קיים.
+    const tryMount = () => { try { CustomerImport.mountButton(); } catch(_e) {} };
+    tryMount();
+    window.setInterval(tryMount, 1500);
+    on(document, "visibilitychange", tryMount);
+
+    // לחיצה על שם הלקוח בטבלה → פאנל צדדי. עובד גם על שורות שנוצרו מחדש ברינדור.
+    on(document, "click", (ev) => {
+      const nameCell = ev.target?.closest?.(".lcCustomers__nameMeta");
+      if(!nameCell) return;
+      const row = nameCell.closest?.("tr.lcCustomerRow");
+      const customerId = row?.getAttribute?.("data-customer-id");
+      if(!customerId) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      CustomerQuickPanel.open(customerId);
+    });
+
+    // הכפתור נמחק/נבנה מחדש בעת החלפת מסכים — מוודאים שהוא קיים
+    const view = document.getElementById("view-customers");
+    if(view && window.MutationObserver){
+      const observer = new MutationObserver(tryMount);
+      observer.observe(view, { childList: true, subtree: true });
+    }
+  }
+
+  ciBootCustomersFeatures();
+
+  try {
+    window.__GI_CustomerImport = CustomerImport;
+    window.__GI_CustomerQuickPanel = CustomerQuickPanel;
+  } catch(_e) {}
+
   ElementaryMirrorUI.init();
   MirrorCallUI.init();
   MirrorAssignmentsUI.init();
@@ -83371,1240 +84601,6 @@ ${inner}
     bindInstallUi();
     try { VoiceNumberInput.boot(); } catch(_e) {}
   });
-
-  /* ==========================================================================
-     ייבוא לקוחות מקובץ (Excel/CSV) + פאנל פרטי לקוח
-     --------------------------------------------------------------------------
-     מה הפיצ'ר עושה:
-     1. מנהל טוען קובץ לקוחות (ייצוא ממערכת חיצונית).
-     2. המערכת שואבת את הפרטים האישיים ואת המת"ל (הנציג) מכל שורה.
-     3. מסך תצוגה מקדימה מסווג כל שורה: חדש / ת"ז קיימת / נציג לא זוהה / שגיאה.
-     4. באישור — נפתח תיק לקוח לכל שורה, משויך לנציג הנכון.
-     5. לחיצה על שם לקוח בטבלת הלקוחות פותחת פאנל צדדי עם כל מה שנשאב מהדוח.
-
-     הערה: פוליסות/פרמיות אינן נכנסות למנוע הפוליסות. נתוני הצבירה מהקובץ
-     נשמרים תחת payload.importedFinancials — לתצוגה בפאנל בלבד.
-     ========================================================================== */
-
-  const CUSTOMER_IMPORT_VERSION = "1.0";
-  const CI_BATCH_SIZE = 40;
-
-  /** כותרות אפשריות לכל שדה. ההשוואה מתבצעת אחרי ניקוי גרשיים/רווחים/פיסוק. */
-  const CI_FIELD_ALIASES = {
-    fullName:      ["שם לקוח", "שם הלקוח", "שם מלא", "שם"],
-    idNumber:      ["מזהה לקוח", "תעודת זהות", "תז", "ת.ז", "ת״ז", "מספר זהות", "ח.פ", "חפ"],
-    mobile:        ["סלולרי", "נייד", "טלפון נייד", "פלאפון", "מובייל"],
-    phone:         ["טלפון", "טלפון נוסף", "טלפון בית", "טלפון קווי"],
-    email:         ["מייל", "אימייל", "דואל", "דואר אלקטרוני", "email", "e-mail"],
-    street:        ["רחוב", "כתובת"],
-    houseNumber:   ["מספר בית", "מס בית", "בית"],
-    apartment:     ["מספר דירה", "מס דירה", "דירה"],
-    city:          ["יישוב", "ישוב", "עיר"],
-    status:        ["סטטוס", "מצב לקוח"],
-    agent:         ["מת\"ל", "מתל", "נציג", "סוכן", "סוכן מטפל", "מנהל תיק", "מנהל תיק לקוח"],
-    gender:        ["מגדר", "מין"],
-    birthDate:     ["תאריך לידה", "תאלידה"],
-    maritalStatus: ["מצב משפחתי"],
-    childrenCount: ["מספר ילדים", "ילדים"],
-    occupation:    ["מקצוע", "עיסוק"]
-  };
-
-  const CI_FIELD_LABELS = {
-    fullName: "שם לקוח", idNumber: "תעודת זהות", mobile: "סלולרי", phone: "טלפון",
-    email: "דוא\"ל", street: "רחוב", houseNumber: "מספר בית", apartment: "דירה",
-    city: "יישוב", status: "סטטוס", agent: "מת\"ל / נציג", gender: "מגדר",
-    birthDate: "תאריך לידה", maritalStatus: "מצב משפחתי", childrenCount: "מספר ילדים",
-    occupation: "מקצוע"
-  };
-
-  /** מיפוי סטטוס מהקובץ לסטטוס פנימי. הערך המקורי נשמר תמיד ב-payload. */
-  const CI_STATUS_MAP = {
-    "לקוחפעיל": "פעיל",
-    "פעיל": "פעיל",
-    "לקוחלאפעיל": "לא פעיל",
-    "לאפעיל": "לא פעיל",
-    "לקוחנגזר": "נגזר",
-    "נגזר": "נגזר"
-  };
-
-  const CI_UNASSIGNED_STATUS = "ממתין לשיוך";
-
-  /** מפתח השוואה לכותרות: מוריד גרשיים, רווחים ופיסוק. */
-  const ciKey = (value) => safeTrim(value)
-    .replace(/[\s"'״׳`.,\-_()\[\]\/\\]/g, "")
-    .toLowerCase();
-
-  const ciDigits = (value) => String(value == null ? "" : value).replace(/\D+/g, "");
-
-  /** ת"ז: שומר אפסים מובילים ומשלים ל-9 ספרות. */
-  function ciNormalizeId(value){
-    const raw = ciDigits(value);
-    if(!raw) return "";
-    if(raw.length > 9) return raw.slice(-9);
-    return raw.padStart(9, "0");
-  }
-
-  /** טלפון: +972546501485 -> 0546501485 */
-  function ciNormalizePhone(value){
-    let raw = safeTrim(value).replace(/[^\d+]/g, "");
-    if(!raw) return "";
-    if(raw.startsWith("+972")) raw = "0" + raw.slice(4);
-    else if(raw.startsWith("972") && raw.length >= 11) raw = "0" + raw.slice(3);
-    raw = raw.replace(/\D/g, "");
-    if(raw && !raw.startsWith("0")) raw = "0" + raw;
-    return raw;
-  }
-
-  /** תאריך: Date, מספר סידורי של אקסל, או מחרוזת. מחזיר ISO (yyyy-mm-dd) או "". */
-  function ciParseDate(value){
-    if(value == null || value === "") return "";
-    if(value instanceof Date && !isNaN(value.getTime())){
-      return ciDateToIso(value);
-    }
-    const num = Number(value);
-    if(Number.isFinite(num) && num > 1 && num < 80000){
-      const ms = Date.UTC(1899, 11, 30) + Math.round(num * 86400000);
-      const d = new Date(ms);
-      if(!isNaN(d.getTime())) return ciDateToIso(d);
-    }
-    const txt = safeTrim(value);
-    const m = txt.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/);
-    if(m){
-      let year = Number(m[3]);
-      if(year < 100) year += year > 30 ? 1900 : 2000;
-      const d = new Date(Date.UTC(year, Number(m[2]) - 1, Number(m[1])));
-      if(!isNaN(d.getTime())) return ciDateToIso(d);
-    }
-    const parsed = new Date(txt);
-    if(!isNaN(parsed.getTime())) return ciDateToIso(parsed);
-    return "";
-  }
-
-  function ciDateToIso(date){
-    const y = date.getUTCFullYear();
-    const m = String(date.getUTCMonth() + 1).padStart(2, "0");
-    const d = String(date.getUTCDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  }
-
-  function ciFormatDate(iso){
-    const raw = safeTrim(iso);
-    if(!raw) return "";
-    const d = new Date(raw);
-    if(isNaN(d.getTime())) return raw;
-    return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
-  }
-
-  function ciAgeFromBirthDate(iso){
-    const raw = safeTrim(iso);
-    if(!raw) return null;
-    const d = new Date(raw);
-    if(isNaN(d.getTime())) return null;
-    const now = new Date();
-    let age = now.getFullYear() - d.getFullYear();
-    const beforeBirthday = now.getMonth() < d.getMonth()
-      || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate());
-    if(beforeBirthday) age -= 1;
-    return age >= 0 && age < 130 ? age : null;
-  }
-
-  function ciFormatMoney(value){
-    const num = Number(String(value ?? "").replace(/[^\d.\-]/g, ""));
-    if(!Number.isFinite(num)) return "";
-    return "₪" + num.toLocaleString("he-IL", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-  }
-
-  function ciNum(value){
-    const num = Number(String(value ?? "").replace(/[^\d.\-]/g, ""));
-    return Number.isFinite(num) ? num : null;
-  }
-
-  /* ---------------------------- זיהוי נציגים ---------------------------- */
-
-  /** כל השמות שאפשר לזהות לפיהם נציג: שם, שם משתמש, היסטוריית שמות וכינויי דוח. */
-  function ciAgentLabels(agent){
-    const labels = [safeTrim(agent?.name), safeTrim(agent?.username)];
-    try { getAgentNameHistory(agent?.id).forEach((n) => labels.push(safeTrim(n))); } catch(_e) {}
-    try { getAgentReportAliases(agent?.id).forEach((n) => labels.push(safeTrim(n))); } catch(_e) {}
-    return labels.filter(Boolean);
-  }
-
-  /** משווה שם מהקובץ לנציג: התאמה מלאה, ואם לא — התאמת קבוצת מילים (סדר חופשי). */
-  function ciAgentNameMatches(fileLabel, agentLabel){
-    const a = ciKey(fileLabel);
-    const b = ciKey(agentLabel);
-    if(!a || !b) return false;
-    if(a === b) return true;
-    const tokensA = safeTrim(fileLabel).split(/\s+/).map(ciKey).filter(Boolean).sort().join("|");
-    const tokensB = safeTrim(agentLabel).split(/\s+/).map(ciKey).filter(Boolean).sort().join("|");
-    return !!tokensA && tokensA === tokensB;
-  }
-
-  function ciResolveAgent(fileLabel){
-    const label = safeTrim(fileLabel);
-    if(!label) return null;
-    const agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
-    // קודם המנגנון הקיים במערכת (זהה לזה של הדוח היומי)
-    try {
-      const byExisting = resolveAgentIdByLabel(label, agents);
-      if(byExisting){
-        const found = agents.find((a) => safeTrim(a?.id) === byExisting);
-        if(found) return found;
-      }
-    } catch(_e) {}
-    for(const agent of agents){
-      if(agent?.active === false) continue;
-      if(ciAgentLabels(agent).some((candidate) => ciAgentNameMatches(label, candidate))) return agent;
-    }
-    return null;
-  }
-
-  /** מפצל תא מת"ל לרשימת שמות ומזהה כל אחד. הראשון = בעל התיק, כולם = שיתוף. */
-  function ciResolveAgentCell(rawValue){
-    const names = safeTrim(rawValue)
-      .split(/[,;،|\/]+/)
-      .map(safeTrim)
-      .filter(Boolean);
-    const resolved = [];
-    const unresolved = [];
-    names.forEach((name) => {
-      const agent = ciResolveAgent(name);
-      if(agent){
-        if(!resolved.some((r) => safeTrim(r.agent?.id) === safeTrim(agent.id))){
-          resolved.push({ label: name, agent });
-        }
-      } else {
-        unresolved.push(name);
-      }
-    });
-    return { names, resolved, unresolved };
-  }
-
-  /* ---------------------------- קריאת הקובץ ---------------------------- */
-
-  function ciBuildHeaderMap(headerRow){
-    const map = {};       // field -> column index
-    const headers = [];   // index -> raw header text
-    const financial = []; // עמודות צבירה/פרמיה — לתצוגה בלבד
-    const extra = [];     // כל השאר
-
-    (headerRow || []).forEach((cell, idx) => {
-      const raw = safeTrim(cell);
-      headers[idx] = raw;
-      if(!raw) return;
-      const key = ciKey(raw);
-      let matchedField = "";
-      for(const [field, aliases] of Object.entries(CI_FIELD_ALIASES)){
-        if(map[field] != null) continue;
-        if(aliases.some((alias) => ciKey(alias) === key)){ matchedField = field; break; }
-      }
-      if(matchedField){ map[matchedField] = idx; return; }
-      if(/צבירה|פרמיה|פעילותאחרון/.test(key)) financial.push({ index: idx, label: raw });
-      else extra.push({ index: idx, label: raw });
-    });
-
-    return { map, headers, financial, extra };
-  }
-
-  /** מאתר את שורת הכותרות (לרוב הראשונה, אבל יש קבצים עם שורות כותרת מיותרות). */
-  function ciDetectHeaderRow(rows){
-    const limit = Math.min(rows.length, 10);
-    let best = { index: 0, score: -1 };
-    for(let i = 0; i < limit; i += 1){
-      const built = ciBuildHeaderMap(rows[i]);
-      const score = Object.keys(built.map).length;
-      if(score > best.score) best = { index: i, score };
-      if(score >= 4) break;
-    }
-    return best.index;
-  }
-
-  function ciCellText(row, index){
-    if(index == null || index < 0) return "";
-    const value = row?.[index];
-    if(value == null) return "";
-    if(value instanceof Date) return ciDateToIso(value);
-    return safeTrim(String(value));
-  }
-
-  /** מנתח שורת נתונים אחת לרשומת ייבוא מלאה. */
-  function ciParseRow(row, rowNumber, built){
-    const { map, headers, financial, extra } = built;
-    const get = (field) => ciCellText(row, map[field]);
-
-    const rawRecord = {};
-    headers.forEach((label, idx) => {
-      if(!label) return;
-      const raw = row?.[idx];
-      rawRecord[label] = raw instanceof Date ? ciDateToIso(raw) : (raw == null ? "" : String(raw).trim());
-    });
-
-    const fullNameRaw = get("fullName");
-    const idNumber = ciNormalizeId(get("idNumber"));
-    const mobile = ciNormalizePhone(get("mobile"));
-    const landline = ciNormalizePhone(get("phone"));
-    const phone = mobile || landline;
-    const email = normalizeEmailValue(get("email"));
-    const city = get("city");
-    const street = get("street");
-    const houseNumber = get("houseNumber");
-    const apartment = get("apartment");
-    const birthDate = ciParseDate(row?.[map.birthDate]);
-    const statusRaw = get("status");
-    const agentRaw = get("agent");
-
-    // שם שהוא בעצם מספר טלפון (שורות ללא ת"ז בייצוא) — מוצג כך שיהיה ברור
-    const nameIsPhone = !!fullNameRaw && /^[\d+\-\s]{9,}$/.test(fullNameRaw);
-    const fullName = fullNameRaw || (phone ? phone : "");
-
-    const financials = financial.map(({ index, label }) => ({
-      label,
-      value: ciNum(row?.[index]),
-      raw: ciCellText(row, index)
-    })).filter((f) => f.raw !== "");
-
-    const extras = extra.map(({ index, label }) => ({ label, value: ciCellText(row, index) }))
-      .filter((f) => f.value !== "");
-
-    const agentInfo = ciResolveAgentCell(agentRaw);
-
-    const entry = {
-      rowNumber,
-      fullName,
-      nameIsPhone,
-      idNumber,
-      idValid: idNumber ? isValidIsraeliId(idNumber) : false,
-      mobile,
-      landline,
-      phone,
-      email,
-      city,
-      street,
-      houseNumber,
-      apartment,
-      address: [street, houseNumber, apartment ? "דירה " + apartment : "", city].filter(Boolean).join(" "),
-      birthDate,
-      gender: get("gender"),
-      maritalStatus: get("maritalStatus"),
-      childrenCount: ciNum(get("childrenCount")),
-      occupation: get("occupation"),
-      statusRaw,
-      status: CI_STATUS_MAP[ciKey(statusRaw)] || (statusRaw ? statusRaw : "חדש"),
-      agentRaw,
-      agentNames: agentInfo.names,
-      agents: agentInfo.resolved,
-      unresolvedAgents: agentInfo.unresolved,
-      financials,
-      extras,
-      raw: rawRecord,
-      issues: [],
-      category: "new",
-      action: "import",
-      existing: null
-    };
-
-    if(!fullName && !phone && !idNumber) entry.issues.push("שורה ריקה — אין שם, טלפון או ת״ז");
-    else {
-      if(!fullName) entry.issues.push("חסר שם לקוח");
-      if(!idNumber && !phone) entry.issues.push("אין ת״ז ואין טלפון — לא ניתן לזהות את הלקוח");
-      if(idNumber && !entry.idValid) entry.issues.push("ת״ז לא עוברת ביקורת ספרת ביקורת");
-      if(birthDate){
-        const age = ciAgeFromBirthDate(birthDate);
-        if(age == null || age < 16 || age > 105){
-          entry.issues.push("תאריך לידה חריג (" + ciFormatDate(birthDate) + ") — כדאי לבדוק מול המקור");
-          entry.birthDateSuspect = true;
-        }
-      }
-      if(!agentInfo.resolved.length) entry.issues.push("הנציג לא זוהה במערכת");
-    }
-
-    const blocking = !fullName && !phone && !idNumber;
-    const noIdentifier = !idNumber && !phone;
-    if(blocking || noIdentifier) entry.category = "error";
-    else if(!agentInfo.resolved.length) entry.category = "noAgent";
-
-    if(entry.category === "error") entry.action = "skip";
-    return entry;
-  }
-
-  /* ------------------------- בדיקת כפילויות מול השרת ------------------------- */
-
-  async function ciFetchExistingByColumn(column, values){
-    const found = new Map();
-    const list = [...new Set(values.filter(Boolean))];
-    for(let i = 0; i < list.length; i += 80){
-      const chunk = list.slice(i, i + 80);
-      const inList = "(" + chunk.map((v) => '"' + String(v).replace(/"/g, "") + '"').join(",") + ")";
-      const select = "id,full_name,id_number,phone,city,status,agent_name,agent_id,updated_at";
-      let rows = null;
-      try {
-        const client = Storage.getClient();
-        if(client){
-          const res = await client.from(SUPABASE_TABLES.customers).select(select).in(column, chunk);
-          if(!res?.error) rows = res?.data || [];
-        }
-      } catch(_e) {}
-      if(!rows){
-        try {
-          rows = await Storage.restRequest(
-            SUPABASE_TABLES.customers + "?" + column + "=in." + encodeURIComponent(inList) + "&select=" + encodeURIComponent(select),
-            { method: "GET" }
-          ) || [];
-        } catch(_e) { rows = []; }
-      }
-      (rows || []).forEach((row) => {
-        const key = safeTrim(row?.[column]);
-        if(!key) return;
-        if(!found.has(key)) found.set(key, row);
-      });
-    }
-    return found;
-  }
-
-  async function ciMarkDuplicates(entries){
-    // כפילות בתוך הקובץ עצמו
-    const seen = new Map();
-    entries.forEach((entry) => {
-      if(entry.category === "error") return;
-      const key = entry.idNumber ? "id:" + entry.idNumber : (entry.phone ? "ph:" + entry.phone : "");
-      if(!key) return;
-      if(seen.has(key)){
-        entry.category = "dupFile";
-        entry.action = "skip";
-        entry.issues.push("שורה כפולה בתוך הקובץ (שורה " + seen.get(key) + ")");
-      } else {
-        seen.set(key, entry.rowNumber);
-      }
-    });
-
-    const byId = await ciFetchExistingByColumn(
-      "id_number",
-      entries.filter((e) => e.category === "new" || e.category === "noAgent").map((e) => e.idNumber)
-    );
-    const phoneCandidates = entries
-      .filter((e) => (e.category === "new" || e.category === "noAgent") && !e.idNumber)
-      .map((e) => e.phone);
-    const byPhone = phoneCandidates.length ? await ciFetchExistingByColumn("phone", phoneCandidates) : new Map();
-
-    entries.forEach((entry) => {
-      if(entry.category !== "new" && entry.category !== "noAgent") return;
-      const match = (entry.idNumber && byId.get(entry.idNumber)) || (!entry.idNumber && entry.phone && byPhone.get(entry.phone));
-      if(match){
-        entry.existing = match;
-        entry.category = "dupServer";
-        entry.action = "skip";
-        entry.issues.push("קיים כבר במערכת" + (safeTrim(match.agent_name) ? " אצל " + safeTrim(match.agent_name) : ""));
-      }
-    });
-
-    return entries;
-  }
-
-  /* ---------------------------- בניית רשומת לקוח ---------------------------- */
-
-  function ciSplitName(fullName){
-    const parts = safeTrim(fullName).split(/\s+/).filter(Boolean);
-    if(!parts.length) return { firstName: "", lastName: "" };
-    if(parts.length === 1) return { firstName: parts[0], lastName: "" };
-    // בייצוא הלקוחות השם מגיע בפורמט "משפחה פרטי"
-    return { lastName: parts[0], firstName: parts.slice(1).join(" ") };
-  }
-
-  function ciBuildCustomerRecord(entry, batch, existingRow){
-    const now = nowISO();
-    const nameParts = ciSplitName(entry.fullName);
-    const owner = entry.agents[0]?.agent || null;
-    const shared = entry.agents.slice(1).map((a) => ({ id: safeTrim(a.agent?.id), name: safeTrim(a.agent?.name) }));
-
-    let payload = {};
-    if(existingRow?.payload && typeof existingRow.payload === "object"){
-      try { payload = JSON.parse(JSON.stringify(existingRow.payload)); } catch(_e) { payload = {}; }
-    }
-
-    payload.primary = Object.assign({}, payload.primary, {
-      firstName: nameParts.firstName || safeTrim(payload?.primary?.firstName),
-      lastName: nameParts.lastName || safeTrim(payload?.primary?.lastName),
-      idNumber: entry.idNumber || safeTrim(payload?.primary?.idNumber),
-      phone: entry.phone || safeTrim(payload?.primary?.phone),
-      mobile: entry.mobile || safeTrim(payload?.primary?.mobile),
-      landline: entry.landline || safeTrim(payload?.primary?.landline),
-      email: entry.email || safeTrim(payload?.primary?.email),
-      city: entry.city || safeTrim(payload?.primary?.city),
-      street: entry.street || safeTrim(payload?.primary?.street),
-      houseNumber: entry.houseNumber || safeTrim(payload?.primary?.houseNumber),
-      apartment: entry.apartment || safeTrim(payload?.primary?.apartment),
-      birthDate: entry.birthDate || safeTrim(payload?.primary?.birthDate),
-      gender: entry.gender || safeTrim(payload?.primary?.gender),
-      maritalStatus: entry.maritalStatus || safeTrim(payload?.primary?.maritalStatus),
-      childrenCount: entry.childrenCount != null ? entry.childrenCount : payload?.primary?.childrenCount,
-      occupation: entry.occupation || safeTrim(payload?.primary?.occupation)
-    });
-
-    payload.importedProfile = {
-      fullName: entry.fullName,
-      nameIsPhone: entry.nameIsPhone,
-      idNumber: entry.idNumber,
-      mobile: entry.mobile,
-      landline: entry.landline,
-      email: entry.email,
-      street: entry.street,
-      houseNumber: entry.houseNumber,
-      apartment: entry.apartment,
-      city: entry.city,
-      address: entry.address,
-      birthDate: entry.birthDate,
-      gender: entry.gender,
-      maritalStatus: entry.maritalStatus,
-      childrenCount: entry.childrenCount,
-      occupation: entry.occupation,
-      statusRaw: entry.statusRaw,
-      agentRaw: entry.agentRaw
-    };
-
-    // נתוני צבירה/פרמיה מהדוח — לתצוגה בלבד, לא נכנסים למנוע הפוליסות
-    payload.importedFinancials = {
-      updatedAt: now,
-      source: batch.fileName,
-      items: entry.financials.map((f) => ({ label: f.label, value: f.value, raw: f.raw }))
-    };
-
-    payload.importedExtras = entry.extras;
-
-    payload.importSource = {
-      batchId: batch.id,
-      fileName: batch.fileName,
-      sheetName: batch.sheetName,
-      rowNumber: entry.rowNumber,
-      importedAt: now,
-      importedBy: safeTrim(Auth?.current?.name),
-      version: CUSTOMER_IMPORT_VERSION
-    };
-
-    if(shared.length) payload.sharedAgents = shared;
-    if(owner){
-      payload.agentId = safeTrim(owner.id);
-      payload.agentName = safeTrim(owner.name);
-      payload.createdBy = safeTrim(owner.name);
-    } else {
-      payload.pendingAgentAssign = true;
-      payload.pendingAgentLabel = entry.agentRaw;
-    }
-
-    const isUpdate = !!existingRow;
-    const record = normalizeCustomerRecord({
-      id: isUpdate ? safeTrim(existingRow.id) : ("cust_imp_" + batch.id + "_" + entry.rowNumber),
-      // בעדכון לא נוגעים בסטטוס ולא מחליפים את הנציג הקיים
-      status: isUpdate ? (safeTrim(existingRow.status) || entry.status) : (owner ? entry.status : CI_UNASSIGNED_STATUS),
-      fullName: entry.fullName || safeTrim(existingRow?.full_name),
-      idNumber: entry.idNumber || safeTrim(existingRow?.id_number),
-      phone: entry.phone || safeTrim(existingRow?.phone),
-      email: entry.email || safeTrim(existingRow?.email),
-      city: entry.city || safeTrim(existingRow?.city),
-      agentName: isUpdate ? (safeTrim(existingRow.agent_name) || safeTrim(owner?.name)) : safeTrim(owner?.name),
-      agentId: isUpdate ? (safeTrim(existingRow.agent_id) || safeTrim(owner?.id)) : safeTrim(owner?.id),
-      agentRole: safeTrim(owner?.role),
-      createdBy: safeTrim(owner?.name),
-      createdAt: isUpdate ? (safeTrim(existingRow.created_at) || now) : now,
-      updatedAt: now,
-      payload
-    }, entry.rowNumber);
-
-    return record;
-  }
-
-  /* ------------------------------- מודול ראשי ------------------------------- */
-
-  const CustomerImport = {
-    state: null,
-    els: {},
-
-    canUse(){
-      try { return !!(Auth.isAdmin?.() || Auth.isManager?.()); } catch(_e) { return false; }
-    },
-
-    /** מוסיף את כפתור הייבוא לסרגל מסך הלקוחות (פעם אחת). */
-    mountButton(){
-      if(!this.canUse()) return;
-      const exportBtn = document.getElementById("btnCustomersExport");
-      if(!exportBtn || document.getElementById("btnCustomersImport")) return;
-      const btn = document.createElement("button");
-      btn.className = "btn ciImportBtn";
-      btn.id = "btnCustomersImport";
-      btn.type = "button";
-      btn.textContent = "ייבוא לקוחות מקובץ";
-      exportBtn.parentNode.insertBefore(btn, exportBtn);
-      on(btn, "click", () => this.open());
-    },
-
-    ensureModal(){
-      if(this.els.wrap) return;
-      const wrap = document.createElement("div");
-      wrap.className = "ciModal";
-      wrap.id = "ciImportModal";
-      wrap.setAttribute("aria-hidden", "true");
-      wrap.innerHTML = `
-        <div class="ciModal__backdrop" data-ci-close></div>
-        <div class="ciModal__panel" role="dialog" aria-modal="true" aria-label="ייבוא לקוחות מקובץ">
-          <div class="ciModal__head">
-            <div>
-              <div class="ciModal__title">ייבוא לקוחות מקובץ</div>
-              <div class="ciModal__sub" id="ciSubtitle">בחר קובץ Excel או CSV של לקוחות</div>
-            </div>
-            <button class="ciModal__close" type="button" data-ci-close aria-label="סגור">✕</button>
-          </div>
-          <div class="ciModal__body" id="ciBody"></div>
-          <div class="ciModal__foot" id="ciFoot"></div>
-        </div>`;
-      document.body.appendChild(wrap);
-      this.els.wrap = wrap;
-      this.els.body = wrap.querySelector("#ciBody");
-      this.els.foot = wrap.querySelector("#ciFoot");
-      this.els.subtitle = wrap.querySelector("#ciSubtitle");
-      on(wrap, "click", (ev) => {
-        if(ev.target?.closest?.("[data-ci-close]")) this.close();
-      });
-    },
-
-    open(){
-      if(!this.canUse()){
-        try { window.showToast?.({ title: "אין הרשאה", text: "ייבוא לקוחות זמין למנהל מערכת או למנהל בלבד.", variant: "warn" }); } catch(_e) {}
-        return;
-      }
-      this.ensureModal();
-      this.state = null;
-      this.els.wrap.classList.add("is-open");
-      this.els.wrap.setAttribute("aria-hidden", "false");
-      document.body.style.overflow = "hidden";
-      this.renderPickStep();
-    },
-
-    close(){
-      if(!this.els.wrap) return;
-      this.els.wrap.classList.remove("is-open");
-      this.els.wrap.setAttribute("aria-hidden", "true");
-      document.body.style.overflow = "";
-    },
-
-    /* --------------------------- שלב 1: בחירת קובץ --------------------------- */
-    renderPickStep(){
-      this.els.subtitle.textContent = "שלב 1 מתוך 3 — בחירת קובץ";
-      this.els.body.innerHTML = `
-        <div class="ciDrop" id="ciDrop">
-          <div class="ciDrop__icon">📄</div>
-          <div class="ciDrop__title">גרור לכאן קובץ לקוחות או לחץ לבחירה</div>
-          <div class="ciDrop__hint">נתמך: xlsx, xls, csv · הקובץ נקרא בדפדפן בלבד</div>
-          <input type="file" id="ciFileInput" accept=".xlsx,.xls,.csv" hidden />
-        </div>
-        <ul class="ciNotes">
-          <li>המערכת שואבת פרטים אישיים בלבד. פוליסות ופרמיות ייטענו בהמשך מדוח נפרד.</li>
-          <li>שיוך הנציג נעשה לפי עמודת <strong>מת״ל</strong>. שני שמות מופרדים בפסיק → התיק משויך לראשון והשני נרשם כשיתוף.</li>
-          <li>לקוח שכבר קיים במערכת יוצג לאישור שלך — לא יעודכן אוטומטית.</li>
-        </ul>`;
-      this.els.foot.innerHTML = `<button class="btn" type="button" data-ci-close>ביטול</button>`;
-
-      const drop = this.els.body.querySelector("#ciDrop");
-      const input = this.els.body.querySelector("#ciFileInput");
-      on(drop, "click", () => input.click());
-      on(input, "change", () => {
-        const file = input.files?.[0];
-        if(file) this.handleFile(file);
-        input.value = "";
-      });
-      ["dragenter", "dragover"].forEach((evt) => on(drop, evt, (ev) => {
-        ev.preventDefault(); drop.classList.add("is-over");
-      }));
-      ["dragleave", "drop"].forEach((evt) => on(drop, evt, (ev) => {
-        ev.preventDefault(); drop.classList.remove("is-over");
-      }));
-      on(drop, "drop", (ev) => {
-        const file = ev.dataTransfer?.files?.[0];
-        if(file) this.handleFile(file);
-      });
-    },
-
-    renderBusy(text){
-      this.els.body.innerHTML = `<div class="ciBusy"><div class="ciBusy__spin"></div><div>${escapeHtml(text)}</div></div>`;
-      this.els.foot.innerHTML = "";
-    },
-
-    async handleFile(file){
-      this.renderBusy("קורא את הקובץ…");
-      try {
-        if(window.GI_LOAD_LIBS?.xlsx) await window.GI_LOAD_LIBS.xlsx();
-        if(!window.XLSX) throw new Error("ספריית קריאת קובצי Excel לא נטענה. בדוק חיבור לאינטרנט ונסה שוב.");
-
-        const buffer = await file.arrayBuffer();
-        const wb = window.XLSX.read(buffer, { type: "array", cellDates: true });
-        const sheetName = wb.SheetNames[0];
-        const sheet = wb.Sheets[sheetName];
-        if(!sheet) throw new Error("לא נמצא גיליון בקובץ.");
-
-        const rows = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: true, blankrows: false });
-        if(rows.length < 2) throw new Error("הקובץ ריק או מכיל שורת כותרות בלבד.");
-
-        const headerIndex = ciDetectHeaderRow(rows);
-        const built = ciBuildHeaderMap(rows[headerIndex]);
-        if(built.map.fullName == null && built.map.idNumber == null){
-          throw new Error("לא זוהו עמודות של שם לקוח או תעודת זהות. ודא שהקובץ הוא ייצוא לקוחות.");
-        }
-
-        const batch = {
-          id: Date.now().toString(36),
-          fileName: file.name,
-          sheetName,
-          sheetsCount: wb.SheetNames.length
-        };
-
-        this.renderBusy("מנתח " + (rows.length - headerIndex - 1) + " שורות…");
-        const entries = rows.slice(headerIndex + 1)
-          .map((row, idx) => ciParseRow(row, headerIndex + idx + 2, built))
-          .filter((entry) => entry.fullName || entry.idNumber || entry.phone || entry.agentRaw);
-
-        this.renderBusy("בודק כפילויות מול המערכת…");
-        await ciMarkDuplicates(entries);
-
-        this.state = { batch, built, entries };
-        this.renderPreviewStep();
-      } catch(err){
-        this.renderError(safeTrim(err?.message) || "קריאת הקובץ נכשלה");
-      }
-    },
-
-    renderError(message){
-      this.els.body.innerHTML = `<div class="ciError"><div class="ciError__icon">⚠️</div><div>${escapeHtml(message)}</div></div>`;
-      this.els.foot.innerHTML = `<button class="btn" type="button" id="ciBack">חזור</button>`;
-      on(this.els.foot.querySelector("#ciBack"), "click", () => this.renderPickStep());
-    },
-
-    counts(){
-      const entries = this.state?.entries || [];
-      return {
-        total: entries.length,
-        new: entries.filter((e) => e.category === "new").length,
-        noAgent: entries.filter((e) => e.category === "noAgent").length,
-        dupServer: entries.filter((e) => e.category === "dupServer").length,
-        dupFile: entries.filter((e) => e.category === "dupFile").length,
-        error: entries.filter((e) => e.category === "error").length,
-        willImport: entries.filter((e) => e.action === "import").length,
-        willUpdate: entries.filter((e) => e.action === "update").length
-      };
-    },
-
-    /* -------------------------- שלב 2: תצוגה מקדימה -------------------------- */
-    renderPreviewStep(){
-      const { batch, entries } = this.state;
-      const c = this.counts();
-      this.els.subtitle.textContent = `שלב 2 מתוך 3 — ${escapeHtml(batch.fileName)} · ${c.total} שורות`;
-
-      const unresolvedAgents = [...new Set(entries.flatMap((e) => e.unresolvedAgents))];
-
-      this.els.body.innerHTML = `
-        <div class="ciChips">
-          <button class="ciChip is-active" data-ci-filter="all">הכל <span>${c.total}</span></button>
-          <button class="ciChip ciChip--ok" data-ci-filter="new">לקוחות חדשים <span>${c.new}</span></button>
-          <button class="ciChip ciChip--warn" data-ci-filter="noAgent">נציג לא זוהה <span>${c.noAgent}</span></button>
-          <button class="ciChip ciChip--dup" data-ci-filter="dupServer">קיימים במערכת <span>${c.dupServer}</span></button>
-          <button class="ciChip ciChip--dup" data-ci-filter="dupFile">כפולים בקובץ <span>${c.dupFile}</span></button>
-          <button class="ciChip ciChip--err" data-ci-filter="error">שגיאות <span>${c.error}</span></button>
-        </div>
-        ${unresolvedAgents.length ? `<div class="ciBanner">שמות מת״ל שלא זוהו כנציגים במערכת: <strong>${escapeHtml(unresolvedAgents.join(", "))}</strong>. הלקוחות שלהם ייווצרו בסטטוס "${CI_UNASSIGNED_STATUS}" וניתן יהיה לשייך אותם ידנית מתוך תיק הלקוח.</div>` : ""}
-        <div class="ciBulk">
-          <span>פעולה מהירה לכפילויות:</span>
-          <button class="btn btn--tiny" data-ci-bulk="skipDup">דלג על כולן</button>
-          <button class="btn btn--tiny" data-ci-bulk="updateDup">עדכן את כולן</button>
-          <span class="ciBulk__hint">עדכון משלים פרטי קשר בלבד ואינו מחליף את הנציג או הסטטוס הקיים.</span>
-        </div>
-        <div class="ciTableWrap">
-          <table class="ciTable">
-            <thead>
-              <tr>
-                <th>#</th><th>שם לקוח</th><th>ת״ז</th><th>טלפון</th><th>יישוב</th>
-                <th>נציג (מת״ל)</th><th>מצב</th><th>פעולה</th>
-              </tr>
-            </thead>
-            <tbody id="ciRows"></tbody>
-          </table>
-        </div>`;
-
-      this.els.foot.innerHTML = `
-        <div class="ciFoot__summary" id="ciSummary"></div>
-        <div class="ciFoot__actions">
-          <button class="btn" type="button" data-ci-close>ביטול</button>
-          <button class="btn btn--primary" type="button" id="ciCommit">אשר ופתח תיקי לקוח</button>
-        </div>`;
-
-      this._filter = "all";
-      this.paintRows();
-
-      on(this.els.body, "click", (ev) => {
-        const chip = ev.target?.closest?.("[data-ci-filter]");
-        if(chip){
-          this._filter = chip.getAttribute("data-ci-filter");
-          this.els.body.querySelectorAll("[data-ci-filter]").forEach((el) => el.classList.toggle("is-active", el === chip));
-          this.paintRows();
-          return;
-        }
-        const bulk = ev.target?.closest?.("[data-ci-bulk]");
-        if(bulk){
-          const mode = bulk.getAttribute("data-ci-bulk");
-          this.state.entries.forEach((entry) => {
-            if(entry.category === "dupServer") entry.action = mode === "updateDup" ? "update" : "skip";
-          });
-          this.paintRows();
-        }
-      });
-
-      on(this.els.body, "change", (ev) => {
-        const select = ev.target?.closest?.("[data-ci-action]");
-        if(!select) return;
-        const rowNumber = Number(select.getAttribute("data-ci-action"));
-        const entry = this.state.entries.find((e) => e.rowNumber === rowNumber);
-        if(entry){
-          entry.action = select.value;
-          this.paintSummary();
-        }
-      });
-
-      on(this.els.foot.querySelector("#ciCommit"), "click", () => this.commit());
-    },
-
-    paintRows(){
-      const tbody = this.els.body.querySelector("#ciRows");
-      if(!tbody) return;
-      const filter = this._filter || "all";
-      const rows = (this.state?.entries || []).filter((e) => filter === "all" || e.category === filter);
-
-      const badge = (entry) => {
-        const map = {
-          new: '<span class="ciBadge ciBadge--ok">חדש</span>',
-          noAgent: '<span class="ciBadge ciBadge--warn">נציג לא זוהה</span>',
-          dupServer: '<span class="ciBadge ciBadge--dup">קיים במערכת</span>',
-          dupFile: '<span class="ciBadge ciBadge--dup">כפול בקובץ</span>',
-          error: '<span class="ciBadge ciBadge--err">שגיאה</span>'
-        };
-        const issues = entry.issues.length
-          ? `<div class="ciIssues">${escapeHtml(entry.issues.join(" · "))}</div>` : "";
-        return (map[entry.category] || "") + issues;
-      };
-
-      const actionSelect = (entry) => {
-        if(entry.category === "error"){
-          return '<span class="muted small">לא ייובא</span>';
-        }
-        const options = entry.category === "dupServer"
-          ? [["skip", "דלג"], ["update", "עדכן קיים"]]
-          : entry.category === "dupFile"
-            ? [["skip", "דלג"], ["import", "ייבא בכל זאת"]]
-            : [["import", "ייבא"], ["skip", "דלג"]];
-        return `<select class="ciSelect" data-ci-action="${entry.rowNumber}">${
-          options.map(([value, label]) => `<option value="${value}"${entry.action === value ? " selected" : ""}>${label}</option>`).join("")
-        }</select>`;
-      };
-
-      const agentCell = (entry) => {
-        if(!entry.agents.length){
-          return `<span class="ciAgent ciAgent--none">${escapeHtml(entry.agentRaw || "—")}</span>`;
-        }
-        const owner = escapeHtml(entry.agents[0].agent.name);
-        const shared = entry.agents.slice(1).map((a) => escapeHtml(a.agent.name));
-        return `<span class="ciAgent">${owner}</span>${shared.length ? `<span class="ciAgent__shared">+ ${shared.join(", ")}</span>` : ""}`;
-      };
-
-      tbody.innerHTML = rows.length ? rows.map((entry) => `
-        <tr class="ciRow ciRow--${entry.category}">
-          <td class="muted small">${entry.rowNumber}</td>
-          <td>${escapeHtml(entry.fullName || "—")}${entry.nameIsPhone ? '<div class="ciIssues">השם בקובץ הוא מספר טלפון</div>' : ""}</td>
-          <td dir="ltr" class="ciMono">${escapeHtml(entry.idNumber || "—")}</td>
-          <td dir="ltr" class="ciMono">${escapeHtml(entry.phone || "—")}</td>
-          <td>${escapeHtml(entry.city || "—")}</td>
-          <td>${agentCell(entry)}</td>
-          <td>${badge(entry)}</td>
-          <td>${actionSelect(entry)}</td>
-        </tr>`).join("")
-        : `<tr><td colspan="8" class="muted" style="text-align:center;padding:24px">אין שורות בקטגוריה הזו</td></tr>`;
-
-      this.paintSummary();
-    },
-
-    paintSummary(){
-      const el = this.els.foot?.querySelector("#ciSummary");
-      if(!el) return;
-      const c = this.counts();
-      el.innerHTML = `ייווצרו <strong>${c.willImport}</strong> תיקי לקוח · יעודכנו <strong>${c.willUpdate}</strong> · ידולגו <strong>${c.total - c.willImport - c.willUpdate}</strong>`;
-    },
-
-    /* ----------------------------- שלב 3: ביצוע ----------------------------- */
-    async commit(){
-      const { batch, entries } = this.state;
-      const toImport = entries.filter((e) => e.action === "import");
-      const toUpdate = entries.filter((e) => e.action === "update");
-      const total = toImport.length + toUpdate.length;
-      if(!total){
-        try { window.showToast?.({ title: "אין מה לייבא", text: "כל השורות מסומנות לדילוג.", variant: "warn" }); } catch(_e) {}
-        return;
-      }
-
-      this.els.subtitle.textContent = "שלב 3 מתוך 3 — יוצר תיקי לקוח";
-      this.els.body.innerHTML = `
-        <div class="ciProgress">
-          <div class="ciProgress__bar"><div class="ciProgress__fill" id="ciFill"></div></div>
-          <div class="ciProgress__text" id="ciProgressText">מתחיל…</div>
-        </div>`;
-      this.els.foot.innerHTML = "";
-
-      const fill = this.els.body.querySelector("#ciFill");
-      const text = this.els.body.querySelector("#ciProgressText");
-      const setProgress = (done) => {
-        const pct = Math.round((done / total) * 100);
-        if(fill) fill.style.width = pct + "%";
-        if(text) text.textContent = `${done} מתוך ${total} (${pct}%)`;
-      };
-
-      const records = toImport.map((entry) => ({ entry, record: ciBuildCustomerRecord(entry, batch, null) }));
-
-      // עדכון: חובה לטעון את השורה המלאה (כולל payload) לפני הבנייה,
-      // אחרת ה-upsert היה דורס את תוכן התיק הקיים.
-      for(const entry of toUpdate){
-        let existingFull = entry.existing;
-        try {
-          const res = await Storage.loadSingleRow(SUPABASE_TABLES.customers, safeTrim(entry.existing?.id), "*");
-          if(res?.ok && res.data) existingFull = res.data;
-        } catch(_e) {}
-        records.push({ entry, record: ciBuildCustomerRecord(entry, batch, existingFull) });
-      }
-
-      const failures = [];
-      let done = 0;
-
-      for(let i = 0; i < records.length; i += CI_BATCH_SIZE){
-        const chunk = records.slice(i, i + CI_BATCH_SIZE);
-        const rows = Storage.buildCustomerRows({ customers: chunk.map((c) => c.record) });
-        let ok = false;
-        try {
-          const client = Storage.getClient();
-          if(client){
-            const res = await client.from(SUPABASE_TABLES.customers).upsert(rows, { onConflict: "id" });
-            ok = !res?.error;
-            if(res?.error) console.warn("CI_BULK_UPSERT_FAILED:", res.error?.message || res.error);
-          }
-        } catch(err){
-          console.warn("CI_BULK_UPSERT_THREW:", err?.message || err);
-        }
-        if(!ok){
-          // נפילה חזרה לשורה-שורה כדי לא לאבד את כל האצווה בגלל שורה אחת
-          for(const item of chunk){
-            const row = Storage.buildCustomerRows({ customers: [item.record] })[0];
-            const res = await Storage.upsertSingleRow(SUPABASE_TABLES.customers, row);
-            if(!res?.ok){
-              failures.push({ entry: item.entry, error: safeTrim(res?.error) || "שמירה נכשלה" });
-            }
-          }
-        }
-        done += chunk.length;
-        setProgress(Math.min(done, total));
-        await new Promise((resolve) => window.setTimeout(resolve, 0));
-      }
-
-      const created = toImport.length - failures.filter((f) => f.entry.action === "import").length;
-      const updated = toUpdate.length - failures.filter((f) => f.entry.action === "update").length;
-      const pendingAssign = toImport.filter((e) => !e.agents.length).length;
-
-      try {
-        appendAuditLog({
-          type: "customers_bulk_import",
-          entity: "customer",
-          entityId: batch.id,
-          label: `ייבוא לקוחות מקובץ ${batch.fileName}`,
-          actorName: safeTrim(Auth?.current?.name),
-          details: { fileName: batch.fileName, created, updated, failed: failures.length, pendingAssign, rows: entries.length }
-        });
-      } catch(_e) {}
-
-      try { await App.persist("ייבוא לקוחות מקובץ"); } catch(_e) {}
-      try { CustomersUI.render({ forceServer: true }); } catch(_e) {}
-
-      this.renderDoneStep({ created, updated, failures, pendingAssign, batch });
-    },
-
-    renderDoneStep({ created, updated, failures, pendingAssign, batch }){
-      this.els.subtitle.textContent = "הייבוא הסתיים";
-      this.els.body.innerHTML = `
-        <div class="ciDone">
-          <div class="ciDone__icon">${failures.length ? "⚠️" : "✅"}</div>
-          <div class="ciDone__stats">
-            <div><strong>${created}</strong> תיקי לקוח נפתחו</div>
-            <div><strong>${updated}</strong> לקוחות עודכנו</div>
-            ${pendingAssign ? `<div class="ciDone__warn"><strong>${pendingAssign}</strong> ממתינים לשיוך נציג (סטטוס "${CI_UNASSIGNED_STATUS}")</div>` : ""}
-            ${failures.length ? `<div class="ciDone__err"><strong>${failures.length}</strong> שורות נכשלו</div>` : ""}
-          </div>
-        </div>
-        ${failures.length ? `<div class="ciTableWrap ciTableWrap--short">
-          <table class="ciTable">
-            <thead><tr><th>#</th><th>שם</th><th>ת״ז</th><th>שגיאה</th></tr></thead>
-            <tbody>${failures.map((f) => `<tr>
-              <td class="muted small">${f.entry.rowNumber}</td>
-              <td>${escapeHtml(f.entry.fullName || "—")}</td>
-              <td dir="ltr" class="ciMono">${escapeHtml(f.entry.idNumber || "—")}</td>
-              <td>${escapeHtml(f.error)}</td>
-            </tr>`).join("")}</tbody>
-          </table>
-        </div>` : ""}
-        <div class="ciNotes"><li>לחיצה על שם לקוח בטבלה תפתח פאנל צדדי עם כל הפרטים שנשאבו מהקובץ.</li></div>`;
-
-      this.els.foot.innerHTML = `
-        ${failures.length ? '<button class="btn" type="button" id="ciExportErrors">ייצא שורות שנכשלו</button>' : ""}
-        <button class="btn btn--primary" type="button" data-ci-close>סיום</button>`;
-
-      const exportBtn = this.els.foot.querySelector("#ciExportErrors");
-      if(exportBtn) on(exportBtn, "click", () => this.exportFailures(failures, batch));
-    },
-
-    async exportFailures(failures, batch){
-      try {
-        if(window.GI_LOAD_LIBS?.xlsx) await window.GI_LOAD_LIBS.xlsx();
-        if(!window.XLSX) return;
-        const data = [["שורה בקובץ", "שם לקוח", "ת״ז", "טלפון", "מת״ל", "שגיאה"]];
-        failures.forEach((f) => data.push([
-          f.entry.rowNumber, f.entry.fullName, f.entry.idNumber, f.entry.phone, f.entry.agentRaw, f.error
-        ]));
-        const wb = window.XLSX.utils.book_new();
-        window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet(data), "שגיאות");
-        window.XLSX.writeFile(wb, "שגיאות_ייבוא_" + batch.fileName.replace(/\.[^.]+$/, "") + ".xlsx");
-      } catch(_e) {}
-    }
-  };
-
-  /* ======================= פאנל צדדי: פרטי לקוח מהדוח ======================= */
-
-  const CustomerQuickPanel = {
-    els: {},
-    currentId: "",
-
-    ensure(){
-      if(this.els.wrap) return;
-      const wrap = document.createElement("div");
-      wrap.className = "cqPanel";
-      wrap.id = "customerQuickPanel";
-      wrap.setAttribute("aria-hidden", "true");
-      wrap.innerHTML = `
-        <div class="cqPanel__backdrop" data-cq-close></div>
-        <aside class="cqPanel__panel" role="dialog" aria-modal="true" aria-label="פרטי לקוח">
-          <div class="cqPanel__head">
-            <div class="cqPanel__ident">
-              <div class="cqPanel__avatar" id="cqAvatar">?</div>
-              <div>
-                <div class="cqPanel__name" id="cqName">טוען…</div>
-                <div class="cqPanel__meta" id="cqMeta"></div>
-              </div>
-            </div>
-            <button class="cqPanel__close" type="button" data-cq-close aria-label="סגור">✕</button>
-          </div>
-          <div class="cqPanel__body" id="cqBody"></div>
-          <div class="cqPanel__foot">
-            <button class="btn btn--primary" type="button" id="cqOpenFull">פתח תיק לקוח מלא</button>
-            <button class="btn" type="button" data-cq-close>סגור</button>
-          </div>
-        </aside>`;
-      document.body.appendChild(wrap);
-      this.els.wrap = wrap;
-      this.els.body = wrap.querySelector("#cqBody");
-      this.els.name = wrap.querySelector("#cqName");
-      this.els.meta = wrap.querySelector("#cqMeta");
-      this.els.avatar = wrap.querySelector("#cqAvatar");
-
-      on(wrap, "click", (ev) => {
-        if(ev.target?.closest?.("[data-cq-close]")) this.close();
-      });
-      on(wrap.querySelector("#cqOpenFull"), "click", () => {
-        const id = this.currentId;
-        this.close();
-        if(id){
-          try { CustomersUI.openByIdWithLoader(id); } catch(_e) {}
-        }
-      });
-      on(document, "keydown", (ev) => {
-        if(ev.key === "Escape" && this.els.wrap?.classList.contains("is-open")) this.close();
-      });
-    },
-
-    close(){
-      if(!this.els.wrap) return;
-      this.els.wrap.classList.remove("is-open");
-      this.els.wrap.setAttribute("aria-hidden", "true");
-    },
-
-    async open(customerId){
-      const id = safeTrim(customerId);
-      if(!id) return;
-      this.ensure();
-      this.currentId = id;
-      this.els.wrap.classList.add("is-open");
-      this.els.wrap.setAttribute("aria-hidden", "false");
-
-      const light = (State.data?.customers || []).find((c) => String(c?.id) === String(id)) || null;
-      this.paintHeader(light);
-      this.els.body.innerHTML = `<div class="cqLoading">טוען את פרטי הלקוח…</div>`;
-
-      let full = null;
-      try {
-        const res = await Storage.loadSingleRow(SUPABASE_TABLES.customers, id, "*");
-        if(res?.ok && res.data) full = Storage.mapCustomerRow(res.data, 0);
-      } catch(_e) {}
-      const record = full || light;
-      if(!record){
-        this.els.body.innerHTML = `<div class="cqLoading">לא נמצאו פרטים עבור הלקוח הזה.</div>`;
-        return;
-      }
-      this.paintHeader(record);
-      this.paintBody(record);
-    },
-
-    paintHeader(record){
-      if(!record) return;
-      const name = safeTrim(record.fullName) || "לקוח";
-      this.els.name.textContent = name;
-      this.els.avatar.textContent = name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
-      const chips = [];
-      if(safeTrim(record.status)) chips.push(`<span class="cqChip">${escapeHtml(record.status)}</span>`);
-      if(safeTrim(record.idNumber)) chips.push(`<span class="cqChip cqChip--mono" dir="ltr">${escapeHtml(record.idNumber)}</span>`);
-      if(safeTrim(record.agentName)) chips.push(`<span class="cqChip">נציג: ${escapeHtml(record.agentName)}</span>`);
-      else chips.push(`<span class="cqChip cqChip--warn">ללא נציג</span>`);
-      this.els.meta.innerHTML = chips.join("");
-    },
-
-    paintBody(record){
-      const payload = record?.payload && typeof record.payload === "object" ? record.payload : {};
-      const prof = payload.importedProfile || {};
-      const primary = payload.primary || {};
-      const src = payload.importSource || {};
-      const fin = payload.importedFinancials || {};
-      const shared = Array.isArray(payload.sharedAgents) ? payload.sharedAgents : [];
-
-      const pick = (...values) => {
-        for(const v of values){ const t = safeTrim(v); if(t) return t; }
-        return "";
-      };
-
-      const birthDate = pick(prof.birthDate, primary.birthDate);
-      const age = ciAgeFromBirthDate(birthDate);
-      const children = prof.childrenCount != null ? prof.childrenCount : primary.childrenCount;
-
-      const rowsHtml = (rows) => rows
-        .filter(([, value]) => safeTrim(value) !== "")
-        .map(([label, value, opts]) => `
-          <div class="cqRow">
-            <div class="cqRow__label">${escapeHtml(label)}</div>
-            <div class="cqRow__value${opts?.mono ? " cqRow__value--mono" : ""}"${opts?.ltr ? ' dir="ltr"' : ""}>${opts?.html ? value : escapeHtml(String(value))}</div>
-          </div>`).join("");
-
-      const section = (title, inner, extraClass = "") => inner
-        ? `<section class="cqSection ${extraClass}"><h4 class="cqSection__title">${escapeHtml(title)}</h4>${inner}</section>`
-        : "";
-
-      const phoneValue = pick(prof.mobile, record.phone, primary.phone);
-      const contactRows = rowsHtml([
-        ["סלולרי", phoneValue, { mono: true, ltr: true }],
-        ["טלפון נוסף", pick(prof.landline, primary.landline), { mono: true, ltr: true }],
-        ["דוא\"ל", pick(prof.email, record.email, primary.email), { ltr: true }]
-      ]);
-
-      const personalRows = rowsHtml([
-        ["שם מלא", pick(record.fullName)],
-        ["תעודת זהות", pick(record.idNumber, prof.idNumber), { mono: true, ltr: true }],
-        ["מגדר", pick(prof.gender, primary.gender)],
-        ["תאריך לידה", birthDate ? ciFormatDate(birthDate) + (age != null ? ` (גיל ${age})` : "") : ""],
-        ["מצב משפחתי", pick(prof.maritalStatus, primary.maritalStatus)],
-        ["מספר ילדים", children == null || children === "" ? "" : String(children)],
-        ["מקצוע", pick(prof.occupation, primary.occupation)]
-      ]);
-
-      const addressRows = rowsHtml([
-        ["רחוב", pick(prof.street, primary.street)],
-        ["מספר בית", pick(prof.houseNumber, primary.houseNumber)],
-        ["דירה", pick(prof.apartment, primary.apartment)],
-        ["יישוב", pick(record.city, prof.city, primary.city)]
-      ]);
-
-      const finItems = Array.isArray(fin.items) ? fin.items.filter((i) => i.value != null && i.value !== 0) : [];
-      const finZero = Array.isArray(fin.items) ? fin.items.filter((i) => i.value === 0) : [];
-      const finRows = finItems.length
-        ? `<div class="cqFin">${finItems.map((item) => `
-            <div class="cqFin__item">
-              <div class="cqFin__label">${escapeHtml(item.label)}</div>
-              <div class="cqFin__value">${escapeHtml(/תאריך/.test(item.label) ? ciFormatDate(ciParseDate(item.value)) : ciFormatMoney(item.value))}</div>
-            </div>`).join("")}
-           ${finZero.length ? `<div class="cqFin__note">${finZero.length} שדות נוספים בערך 0 לא מוצגים</div>` : ""}
-           <div class="cqFin__disclaimer">נתונים אלה נשאבו מהדוח לצורכי תצוגה בלבד ואינם מהווים פוליסות במערכת.</div>
-          </div>`
-        : "";
-
-      const sourceRows = rowsHtml([
-        ["קובץ מקור", pick(src.fileName)],
-        ["מועד ייבוא", src.importedAt ? ciFormatDate(src.importedAt) : ""],
-        ["יובא על ידי", pick(src.importedBy)],
-        ["שורה בקובץ", src.rowNumber ? String(src.rowNumber) : ""],
-        ["מת״ל בקובץ", pick(prof.agentRaw)],
-        ["סטטוס בקובץ", pick(prof.statusRaw)],
-        ["נציגים משותפים", shared.map((a) => safeTrim(a?.name)).filter(Boolean).join(", ")]
-      ]);
-
-      const extras = Array.isArray(payload.importedExtras) ? payload.importedExtras : [];
-      const extraRows = extras.length ? rowsHtml(extras.map((e) => [e.label, e.value])) : "";
-
-      const body = [
-        section("פרטים אישיים", personalRows),
-        section("דרכי התקשרות", contactRows),
-        section("כתובת", addressRows),
-        section("נתוני צבירה ופרמיה מהדוח", finRows, "cqSection--fin"),
-        section("שדות נוספים מהקובץ", extraRows),
-        section("מקור הנתונים", sourceRows, "cqSection--src")
-      ].filter(Boolean).join("");
-
-      this.els.body.innerHTML = body || `<div class="cqLoading">אין פרטים מורחבים ללקוח הזה. הפרטים המלאים זמינים בתיק הלקוח.</div>`;
-    }
-  };
-
-  /* ------------------------ חיבור לטבלת הלקוחות ------------------------ */
-
-  function ciBootCustomersFeatures(){
-    // הכפתור מותנה בהרשאה, ובזמן טעינת העמוד המשתמש עדיין לא מחובר.
-    // לכן בודקים שוב מדי כמה שניות — הבדיקה זולה ויוצאת מיד אם הכפתור כבר קיים.
-    const tryMount = () => { try { CustomerImport.mountButton(); } catch(_e) {} };
-    tryMount();
-    window.setInterval(tryMount, 1500);
-    on(document, "visibilitychange", tryMount);
-
-    // לחיצה על שם הלקוח בטבלה → פאנל צדדי. עובד גם על שורות שנוצרו מחדש ברינדור.
-    on(document, "click", (ev) => {
-      const nameCell = ev.target?.closest?.(".lcCustomers__nameMeta");
-      if(!nameCell) return;
-      const row = nameCell.closest?.("tr.lcCustomerRow");
-      const customerId = row?.getAttribute?.("data-customer-id");
-      if(!customerId) return;
-      ev.preventDefault();
-      ev.stopPropagation();
-      CustomerQuickPanel.open(customerId);
-    });
-
-    // הכפתור נמחק/נבנה מחדש בעת החלפת מסכים — מוודאים שהוא קיים
-    const view = document.getElementById("view-customers");
-    if(view && window.MutationObserver){
-      const observer = new MutationObserver(tryMount);
-      observer.observe(view, { childList: true, subtree: true });
-    }
-  }
-
-  if(document.readyState === "complete" || document.readyState === "interactive"){
-    window.setTimeout(ciBootCustomersFeatures, 300);
-  } else {
-    window.addEventListener("DOMContentLoaded", () => window.setTimeout(ciBootCustomersFeatures, 300));
-  }
-
-  try {
-    window.__GI_CustomerImport = CustomerImport;
-    window.__GI_CustomerQuickPanel = CustomerQuickPanel;
-  } catch(_e) {}
-
 
 
 
