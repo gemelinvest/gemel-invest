@@ -82600,18 +82600,35 @@ ${inner}
       try { return !!(Auth.isAdmin?.() || Auth.isManager?.()); } catch(_e) { return false; }
     },
 
-    /** מוסיף את כפתור הייבוא לסרגל מסך הלקוחות (פעם אחת). */
+    /** מוסיף את כפתור הייבוא לסרגל מסך הלקוחות (פעם אחת).
+        הכפתור נוצר תמיד — בדיקת ההרשאה מתבצעת בלחיצה. אחרת, אם המשתמש עדיין
+        לא מחובר או שזיהוי התפקיד נכשל, הכפתור לא היה נוצר לעולם ובלי שום שגיאה. */
     mountButton(){
-      if(!this.canUse()) return;
+      if(document.getElementById("btnCustomersImport")) return true;
+
+      // סדר נפילה: ליד כפתור הייצוא → תיבת הכפתורים → הסרגל → כותרת הכרטיס
       const exportBtn = document.getElementById("btnCustomersExport");
-      if(!exportBtn || document.getElementById("btnCustomersImport")) return;
+      const host = exportBtn?.parentNode
+        || document.querySelector("#view-customers .lcCustomers__toolbar .row")
+        || document.querySelector("#view-customers .lcCustomers__toolbar")
+        || document.querySelector("#view-customers .card__head")
+        || document.querySelector("#view-customers .card");
+      if(!host) return false;
+
       const btn = document.createElement("button");
-      btn.className = "btn ciImportBtn";
+      btn.className = "btn btn--primary ciImportBtn";
       btn.id = "btnCustomersImport";
       btn.type = "button";
       btn.textContent = "ייבוא לקוחות מקובץ";
-      exportBtn.parentNode.insertBefore(btn, exportBtn);
+      if(exportBtn && exportBtn.parentNode === host) host.insertBefore(btn, exportBtn);
+      else host.appendChild(btn);
       on(btn, "click", () => this.open());
+
+      try {
+        window.__GI_IMPORT_READY = true;
+        console.log("[GI] כפתור ייבוא לקוחות הותקן", CUSTOMER_IMPORT_VERSION);
+      } catch(_e) {}
+      return true;
     },
 
     ensureModal(){
@@ -83245,6 +83262,10 @@ ${inner}
   /* ------------------------ חיבור לטבלת הלקוחות ------------------------ */
 
   function ciBootCustomersFeatures(){
+    try {
+      window.__GI_IMPORT_BUILD = "customers-import-" + CUSTOMER_IMPORT_VERSION;
+      console.log("[GI] מודול ייבוא לקוחות נטען", window.__GI_IMPORT_BUILD);
+    } catch(_e) {}
     // הכפתור מותנה בהרשאה, ובזמן טעינת העמוד המשתמש עדיין לא מחובר.
     // לכן בודקים שוב מדי כמה שניות — הבדיקה זולה ויוצאת מיד אם הכפתור כבר קיים.
     const tryMount = () => { try { CustomerImport.mountButton(); } catch(_e) {} };
