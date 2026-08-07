@@ -82258,6 +82258,19 @@ ${inner}
     return { names, resolved, unresolved };
   }
 
+  /** שומר שם מהקובץ ככינוי דוח לנציג — כך גם הייבוא הבא יזהה אותו לבד. */
+  function ciSaveAgentAlias(agentId, label){
+    const id = safeTrim(agentId);
+    const name = safeTrim(label);
+    if(!id || !name) return false;
+    try {
+      const current = getAgentReportAliases(id) || [];
+      if(current.some((a) => ciKey(a) === ciKey(name))) return true;
+      setAgentReportAliases(id, current.concat([name]));
+      return true;
+    } catch(_e) { return false; }
+  }
+
   /* ---------------------------- קריאת הקובץ ---------------------------- */
 
   function ciBuildHeaderMap(headerRow){
@@ -82660,6 +82673,15 @@ ${inner}
             <div class="ciHubCard__state ciHubCard__state--ready">פעיל</div>
           </button>
 
+          <button class="ciHubCard" type="button" data-ci-hub="pending">
+            <div class="ciHubCard__icon">🔗</div>
+            <div class="ciHubCard__text">
+              <div class="ciHubCard__title">שיוך לקוחות שממתינים לשיוך</div>
+              <div class="ciHubCard__desc">לקוחות שיובאו עם שם מת״ל שלא זוהה. מפה כל שם לנציג — השיוך יוחל על כל הלקוחות שלו בבת אחת.</div>
+            </div>
+            <div class="ciHubCard__state ciHubCard__state--ready">פעיל</div>
+          </button>
+
           <button class="ciHubCard is-disabled" type="button" data-ci-hub="production" disabled>
             <div class="ciHubCard__icon">📊</div>
             <div class="ciHubCard__text">
@@ -82677,8 +82699,174 @@ ${inner}
       on(this.els.body, "click", (ev) => {
         const card = ev.target?.closest?.("[data-ci-hub]");
         if(!card || card.disabled) return;
-        if(card.getAttribute("data-ci-hub") === "customers") this.renderPickStep();
+        const which = card.getAttribute("data-ci-hub");
+        if(which === "customers") this.renderPickStep();
+        else if(which === "pending") this.renderPendingStep();
       });
+    },
+
+    /* ------------------ שיוך רטרואקטיבי ללקוחות ללא נציג ------------------ */
+
+    async renderPendingStep(){
+      this.els.subtitle.textContent = "שיוך לקוחות שממתינים לשיוך";
+      this.renderBusy("טוען לקוחות שממתינים לשיוך…");
+
+      let rows = [];
+      try {
+        const select = "id,full_name,id_number,phone,city,status,agent_id,agent_name,payload";
+        const client = Storage.getClient();
+        if(client){
+          const res = await client.from(SUPABASE_TABLES.customers)
+            .select(select).eq("status", CI_UNASSIGNED_STATUS).limit(2000);
+          if(!res?.error) rows = res?.data || [];
+        }
+        if(!rows.length){
+          rows = await Storage.restRequest(
+            SUPABASE_TABLES.customers + "?status=eq." + encodeURIComponent(CI_UNASSIGNED_STATUS) +
+            "&select=" + encodeURIComponent(select) + "&limit=2000",
+            { method: "GET" }
+          ) || [];
+        }
+      } catch(err){
+        this.renderError("טעינת הלקוחות נכשלה: " + (safeTrim(err?.message) || "שגיאה לא ידועה"));
+        return;
+      }
+
+      if(!rows.length){
+        this.els.body.innerHTML = `<div class="ciDone"><div class="ciDone__icon">✅</div><div class="ciDone__stats"><div>אין לקוחות שממתינים לשיוך.</div></div></div>`;
+        this.els.foot.innerHTML = `<button class="btn" type="button" id="ciBackToHub">חזור</button>`;
+        on(this.els.foot.querySelector("#ciBackToHub"), "click", () => this.renderHubStep());
+        return;
+      }
+
+      // קיבוץ לפי שם המת״ל שנשמר בעת הייבוא
+      const groups = new Map();
+      rows.forEach((row) => {
+        const label = safeTrim(row?.payload?.pendingAgentLabel)
+          || safeTrim(row?.payload?.importedProfile?.agentRaw)
+          || "(ללא שם מת״ל בקובץ)";
+        if(!groups.has(label)) groups.set(label, []);
+        groups.get(label).push(row);
+      });
+
+      this.pendingGroups = groups;
+      const agents = (Array.isArray(State.data?.agents) ? State.data.agents : [])
+        .filter((a) => a && a.active !== false && safeTrim(a.name))
+        .sort((a, b) => safeTrim(a.name).localeCompare(safeTrim(b.name), "he"));
+
+      this.els.body.innerHTML = `
+        <div class="ciMapper">
+          <div class="ciMapper__head">
+            <strong>${rows.length} לקוחות ממתינים לשיוך, ב-${groups.size} קבוצות</strong>
+            <span>בחר נציג לכל שם ולחץ "שייך". השם יישמר ככינוי, כך שייבוא עתידי יזהה אותו לבד.</span>
+          </div>
+          ${[...groups.entries()].map(([label, list]) => `
+            <div class="ciMapRow" data-ci-group="${escapeHtml(label)}">
+              <div class="ciMapRow__name">
+                <strong>${escapeHtml(label)}</strong>
+                <span class="ciMapRow__count">${list.length} לקוחות</span>
+              </div>
+              <select class="ciSelect ciMapRow__select" data-ci-pending="${escapeHtml(label)}">
+                <option value="">— בחר נציג —</option>
+                ${agents.map((a) => `<option value="${escapeHtml(safeTrim(a.id))}">${escapeHtml(safeTrim(a.name))}</option>`).join("")}
+              </select>
+              <button class="btn btn--tiny" type="button" data-ci-assign="${escapeHtml(label)}">שייך</button>
+            </div>`).join("")}
+        </div>
+        <div id="ciPendingLog" class="ciNotes"></div>`;
+
+      this.els.foot.innerHTML = `<button class="btn" type="button" id="ciBackToHub">חזור</button>`;
+      on(this.els.foot.querySelector("#ciBackToHub"), "click", () => this.renderHubStep());
+
+      on(this.els.body, "click", (ev) => {
+        const btn = ev.target?.closest?.("[data-ci-assign]");
+        if(!btn) return;
+        const label = btn.getAttribute("data-ci-assign");
+        const select = this.els.body.querySelector(`[data-ci-pending="${label}"]`);
+        this.assignPendingGroup(label, select?.value, btn);
+      });
+    },
+
+    async assignPendingGroup(label, agentId, btn){
+      const agent = (State.data?.agents || []).find((a) => safeTrim(a?.id) === safeTrim(agentId)) || null;
+      if(!agent){
+        try { window.showToast?.({ title: "בחר נציג", text: "יש לבחור נציג מהרשימה לפני השיוך.", variant: "warn" }); } catch(_e) {}
+        return;
+      }
+      const rows = this.pendingGroups?.get(label) || [];
+      if(!rows.length) return;
+
+      if(btn){ btn.disabled = true; btn.textContent = "משייך…"; }
+      const now = nowISO();
+      const records = rows.map((row) => {
+        const rec = Storage.mapCustomerRow(row, 0);
+        const payload = rec.payload && typeof rec.payload === "object" ? rec.payload : {};
+        delete payload.pendingAgentAssign;
+        delete payload.pendingAgentLabel;
+        payload.agentId = safeTrim(agent.id);
+        payload.agentName = safeTrim(agent.name);
+        payload.assignedFromImport = { label, at: now, by: safeTrim(Auth?.current?.name) };
+        const rawStatus = safeTrim(payload?.importedProfile?.statusRaw);
+        return normalizeCustomerRecord(Object.assign({}, rec, {
+          agentId: safeTrim(agent.id),
+          agentName: safeTrim(agent.name),
+          agentRole: safeTrim(agent.role),
+          status: CI_STATUS_MAP[ciKey(rawStatus)] || "חדש",
+          updatedAt: now,
+          payload
+        }), 0);
+      });
+
+      let failed = 0;
+      for(let i = 0; i < records.length; i += CI_BATCH_SIZE){
+        const chunk = records.slice(i, i + CI_BATCH_SIZE);
+        const built = Storage.buildCustomerRows({ customers: chunk });
+        let ok = false;
+        try {
+          const client = Storage.getClient();
+          if(client){
+            const res = await client.from(SUPABASE_TABLES.customers).upsert(built, { onConflict: "id" });
+            ok = !res?.error;
+          }
+        } catch(_e) {}
+        if(!ok){
+          for(const rec of chunk){
+            const row = Storage.buildCustomerRows({ customers: [rec] })[0];
+            const res = await Storage.upsertSingleRow(SUPABASE_TABLES.customers, row);
+            if(!res?.ok) failed += 1;
+          }
+        }
+      }
+
+      const saved = ciSaveAgentAlias(agent.id, label);
+      try {
+        appendAuditLog({
+          type: "customers_pending_assign",
+          entity: "customer",
+          label: `שיוך ${records.length - failed} לקוחות מ"${label}" ל${safeTrim(agent.name)}`,
+          actorName: safeTrim(Auth?.current?.name),
+          details: { label, agentId: safeTrim(agent.id), count: records.length - failed, failed }
+        });
+      } catch(_e) {}
+      try { await App.persist("שיוך לקוחות שממתינים לשיוך"); } catch(_e) {}
+      try { CustomersUI.render({ forceServer: true }); } catch(_e) {}
+
+      const log = this.els.body.querySelector("#ciPendingLog");
+      if(log){
+        log.insertAdjacentHTML("beforeend",
+          `<li>${escapeHtml(label)} → ${escapeHtml(safeTrim(agent.name))}: ${records.length - failed} שויכו${failed ? `, ${failed} נכשלו` : ""}${saved ? ", השם נשמר ככינוי" : ""}</li>`);
+      }
+      const row = this.els.body.querySelector(`[data-ci-group="${label}"]`);
+      if(row) row.remove();
+      this.pendingGroups.delete(label);
+
+      try {
+        window.showToast?.({
+          title: "השיוך הושלם",
+          text: `${records.length - failed} לקוחות שויכו ל${safeTrim(agent.name)}.`,
+          variant: failed ? "warn" : "success"
+        });
+      } catch(_e) {}
     },
 
     ensureModal(){
@@ -82853,7 +83041,7 @@ ${inner}
           <button class="ciChip ciChip--dup" data-ci-filter="dupFile">כפולים בקובץ <span>${c.dupFile}</span></button>
           <button class="ciChip ciChip--err" data-ci-filter="error">שגיאות <span>${c.error}</span></button>
         </div>
-        ${unresolvedAgents.length ? `<div class="ciBanner">שמות מת״ל שלא זוהו כנציגים במערכת: <strong>${escapeHtml(unresolvedAgents.join(", "))}</strong>. הלקוחות שלהם ייווצרו בסטטוס "${CI_UNASSIGNED_STATUS}" וניתן יהיה לשייך אותם ידנית מתוך תיק הלקוח.</div>` : ""}
+        ${unresolvedAgents.length ? this.mapperHtml(unresolvedAgents) : ""}
         <div class="ciBulk">
           <span>פעולה מהירה לכפילויות:</span>
           <button class="btn btn--tiny" data-ci-bulk="skipDup">דלג על כולן</button>
@@ -82901,6 +83089,23 @@ ${inner}
       });
 
       on(this.els.body, "change", (ev) => {
+        const mapSelect = ev.target?.closest?.("[data-ci-map]");
+        if(mapSelect){
+          const label = mapSelect.getAttribute("data-ci-map");
+          const changed = this.applyAgentMapping(label, mapSelect.value);
+          const agentName = safeTrim((State.data?.agents || []).find((a) => safeTrim(a?.id) === safeTrim(mapSelect.value))?.name);
+          try {
+            window.showToast?.({
+              title: agentName ? "השם מופה לנציג" : "השיוך בוטל",
+              text: agentName ? `${changed} שורות ישויכו ל${agentName}. השם "${label}" יזוהה אוטומטית בייבוא הבא.` : `${changed} שורות חזרו למצב ללא שיוך.`,
+              variant: agentName ? "success" : "warn"
+            });
+          } catch(_e) {}
+          this.renderPreviewStep();
+          const restored = this.els.body.querySelector(`[data-ci-map="${label}"]`);
+          if(restored) restored.value = mapSelect.value;
+          return;
+        }
         const select = ev.target?.closest?.("[data-ci-action]");
         if(!select) return;
         const rowNumber = Number(select.getAttribute("data-ci-action"));
@@ -82912,6 +83117,78 @@ ${inner}
       });
 
       on(this.els.foot.querySelector("#ciCommit"), "click", () => this.commit());
+    },
+
+    /** שמות מת״ל שלא זוהו — בחירת נציג לכל שם, כולל שמירה ככינוי קבוע. */
+    mapperHtml(names){
+      const agents = (Array.isArray(State.data?.agents) ? State.data.agents : [])
+        .filter((a) => a && a.active !== false && safeTrim(a.name))
+        .sort((a, b) => safeTrim(a.name).localeCompare(safeTrim(b.name), "he"));
+      const rows = names.map((name) => {
+        const count = this.state.entries.filter((e) => e.unresolvedAgents.includes(name)).length;
+        return `
+          <div class="ciMapRow">
+            <div class="ciMapRow__name">
+              <strong>${escapeHtml(name)}</strong>
+              <span class="ciMapRow__count">${count} שורות</span>
+            </div>
+            <select class="ciSelect ciMapRow__select" data-ci-map="${escapeHtml(name)}">
+              <option value="">— ללא שיוך —</option>
+              ${agents.map((a) => `<option value="${escapeHtml(safeTrim(a.id))}">${escapeHtml(safeTrim(a.name))}</option>`).join("")}
+            </select>
+          </div>`;
+      }).join("");
+
+      return `
+        <div class="ciMapper">
+          <div class="ciMapper__head">
+            <strong>שמות מת״ל שלא זוהו כנציגים</strong>
+            <span>בחר לכל שם את הנציג המתאים. הבחירה נשמרת, וכל ייבוא עתידי יזהה את השם אוטומטית.</span>
+          </div>
+          ${rows}
+        </div>`;
+    },
+
+    /** מחיל בחירת נציג על כל השורות שנשאו את השם הזה. */
+    applyAgentMapping(label, agentId){
+      const name = safeTrim(label);
+      const agent = (State.data?.agents || []).find((a) => safeTrim(a?.id) === safeTrim(agentId)) || null;
+      let changed = 0;
+
+      this.state.entries.forEach((entry) => {
+        const idx = entry.unresolvedAgents.indexOf(name);
+        if(idx < 0 && !entry.mappedLabels?.[name]) return;
+        entry.mappedLabels = entry.mappedLabels || {};
+
+        // מסירים שיוך קודם שנוצר מאותו שם
+        entry.agents = entry.agents.filter((a) => a.label !== name);
+        if(agent){
+          if(!entry.agents.some((a) => safeTrim(a.agent?.id) === safeTrim(agent.id))){
+            // סדר השמות בקובץ קובע מי בעל התיק
+            const position = entry.agentNames.indexOf(name);
+            entry.agents.splice(position < 0 ? entry.agents.length : position, 0, { label: name, agent });
+          }
+          entry.mappedLabels[name] = safeTrim(agent.id);
+        } else {
+          delete entry.mappedLabels[name];
+        }
+
+        // סיווג מחדש: שורה שקיבלה נציג כבר אינה "נציג לא זוהה"
+        if(entry.category === "noAgent" && entry.agents.length){
+          entry.category = "new";
+          entry.action = "import";
+          entry.issues = entry.issues.filter((i) => i !== "הנציג לא זוהה במערכת");
+        } else if(entry.category === "new" && !entry.agents.length){
+          entry.category = "noAgent";
+          entry.issues.push("הנציג לא זוהה במערכת");
+        }
+        changed += 1;
+      });
+
+      if(agent && ciSaveAgentAlias(agent.id, name)){
+        try { App.persist("שמירת כינוי נציג לייבוא"); } catch(_e) {}
+      }
+      return changed;
     },
 
     paintRows(){
