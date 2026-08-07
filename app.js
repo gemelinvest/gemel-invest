@@ -82491,6 +82491,40 @@ ${inner}
     return entries;
   }
 
+  /** בונה רשומת "מבוטח ראשי" מהפרטים האישיים, כדי שלשונית המבוטחים לא תהיה ריקה. */
+  function ciBuildPrimaryInsured(payload, recId){
+    const prof = payload?.importedProfile || {};
+    const primary = payload?.primary || {};
+    const pick = (...vals) => { for(const v of vals){ const t = safeTrim(v); if(t) return t; } return ""; };
+    const fullName = pick(prof.fullName, payload?.fullName, [primary.firstName, primary.lastName].filter(Boolean).join(" "));
+    const street = pick(prof.street, primary.street);
+    const house = pick(prof.houseNumber, primary.houseNumber);
+    const apt = pick(prof.apartment, primary.apartment);
+    const city = pick(prof.city, primary.city);
+    return {
+      id: "ins_primary_" + safeTrim(recId || Date.now().toString(36)),
+      type: "primary",
+      label: fullName || "מבוטח ראשי",
+      source: "customersImport",
+      data: {
+        firstName: pick(primary.firstName),
+        lastName: pick(primary.lastName),
+        fullName,
+        idNumber: pick(prof.idNumber, primary.idNumber),
+        birthDate: pick(prof.birthDate, primary.birthDate),
+        gender: pick(prof.gender, primary.gender),
+        maritalStatus: pick(prof.maritalStatus, primary.maritalStatus),
+        childrenCount: prof.childrenCount != null ? prof.childrenCount : primary.childrenCount,
+        occupation: pick(prof.occupation, primary.occupation),
+        phone: pick(prof.mobile, primary.phone, primary.mobile),
+        landline: pick(prof.landline, primary.landline),
+        email: pick(prof.email, primary.email),
+        street, houseNumber: house, apartment: apt, city,
+        address: [street, house, apt ? "דירה " + apt : "", city].filter(Boolean).join(" ")
+      }
+    };
+  }
+
   /* ---------------------------- בניית רשומת לקוח ---------------------------- */
 
   function ciSplitName(fullName){
@@ -82570,6 +82604,11 @@ ${inner}
       importedBy: safeTrim(Auth?.current?.name),
       version: CUSTOMER_IMPORT_VERSION
     };
+
+    // מבוטח ראשי — כדי שלשונית "מבוטחים בתיק" לא תישאר ריקה בתיק מיובא
+    if(!Array.isArray(payload.insureds) || !payload.insureds.length){
+      payload.insureds = [ciBuildPrimaryInsured(payload, existingRow?.id || entry.rowNumber)];
+    }
 
     if(shared.length) payload.sharedAgents = shared;
     if(owner){
@@ -82682,6 +82721,15 @@ ${inner}
             <div class="ciHubCard__state ciHubCard__state--ready">פעיל</div>
           </button>
 
+          <button class="ciHubCard" type="button" data-ci-hub="backfill">
+            <div class="ciHubCard__icon">🧩</div>
+            <div class="ciHubCard__text">
+              <div class="ciHubCard__title">השלמת מבוטח ראשי לתיקים מיובאים</div>
+              <div class="ciHubCard__desc">תיקים שיובאו לפני העדכון נפתחו בלי מבוטח. הכלי יוצר לכל אחד מבוטח ראשי מהפרטים האישיים.</div>
+            </div>
+            <div class="ciHubCard__state ciHubCard__state--ready">פעיל</div>
+          </button>
+
           <button class="ciHubCard is-disabled" type="button" data-ci-hub="production" disabled>
             <div class="ciHubCard__icon">📊</div>
             <div class="ciHubCard__text">
@@ -82702,6 +82750,7 @@ ${inner}
         const which = card.getAttribute("data-ci-hub");
         if(which === "customers") this.renderPickStep();
         else if(which === "pending") this.renderPendingStep();
+        else if(which === "backfill") this.renderBackfillStep();
       });
     },
 
@@ -82867,6 +82916,124 @@ ${inner}
           variant: failed ? "warn" : "success"
         });
       } catch(_e) {}
+    },
+
+    /* ---------------- השלמת מבוטח ראשי לתיקים שכבר יובאו ---------------- */
+
+    async renderBackfillStep(){
+      this.els.subtitle.textContent = "השלמת מבוטח ראשי לתיקים מיובאים";
+      this.renderBusy("מאתר תיקים ללא מבוטחים…");
+
+      let rows = [];
+      try {
+        const select = "id,full_name,insured_count,payload";
+        const client = Storage.getClient();
+        if(client){
+          const res = await client.from(SUPABASE_TABLES.customers)
+            .select(select).or("insured_count.is.null,insured_count.eq.0").limit(3000);
+          if(!res?.error) rows = res?.data || [];
+        }
+        if(!rows.length){
+          rows = await Storage.restRequest(
+            SUPABASE_TABLES.customers + "?or=(insured_count.is.null,insured_count.eq.0)&select=" +
+            encodeURIComponent(select) + "&limit=3000", { method: "GET" }) || [];
+        }
+      } catch(err){
+        this.renderError("טעינת התיקים נכשלה: " + (safeTrim(err?.message) || "שגיאה"));
+        return;
+      }
+
+      // רק תיקים שהגיעו מייבוא ובאמת אין בהם מבוטחים
+      const targets = rows.filter((row) => {
+        const pl = row?.payload || {};
+        const hasInsureds = Array.isArray(pl.insureds) && pl.insureds.length;
+        return !hasInsureds && (pl.importSource || pl.importedProfile);
+      });
+
+      if(!targets.length){
+        this.els.body.innerHTML = `<div class="ciDone"><div class="ciDone__icon">✅</div><div class="ciDone__stats"><div>כל התיקים המיובאים כבר כוללים מבוטח ראשי.</div></div></div>`;
+        this.els.foot.innerHTML = `<button class="btn" type="button" id="ciBackToHub">חזור</button>`;
+        on(this.els.foot.querySelector("#ciBackToHub"), "click", () => this.renderHubStep());
+        return;
+      }
+
+      this.backfillTargets = targets;
+      this.els.body.innerHTML = `
+        <div class="ciMapper">
+          <div class="ciMapper__head">
+            <strong>${targets.length} תיקים מיובאים ללא מבוטח</strong>
+            <span>לכל תיק ייווצר מבוטח ראשי מהשם, ת״ז, תאריך הלידה, הכתובת ופרטי הקשר ששמורים בתיק. פוליסות ופרמיות לא מושפעות.</span>
+          </div>
+        </div>
+        <div id="ciBackfillLog" class="ciNotes"></div>`;
+      this.els.foot.innerHTML = `
+        <button class="btn" type="button" id="ciBackToHub">חזור</button>
+        <button class="btn btn--primary" type="button" id="ciRunBackfill">צור מבוטח ראשי ל-${targets.length} תיקים</button>`;
+      on(this.els.foot.querySelector("#ciBackToHub"), "click", () => this.renderHubStep());
+      on(this.els.foot.querySelector("#ciRunBackfill"), "click", () => this.runBackfill());
+    },
+
+    async runBackfill(){
+      const targets = this.backfillTargets || [];
+      if(!targets.length) return;
+      const total = targets.length;
+
+      this.els.body.innerHTML = `
+        <div class="ciProgress">
+          <div class="ciProgress__bar"><div class="ciProgress__fill" id="ciFill"></div></div>
+          <div class="ciProgress__text" id="ciProgressText">מתחיל…</div>
+        </div>`;
+      this.els.foot.innerHTML = "";
+      const fill = this.els.body.querySelector("#ciFill");
+      const text = this.els.body.querySelector("#ciProgressText");
+
+      let done = 0, failed = 0;
+      for(let i = 0; i < targets.length; i += CI_BATCH_SIZE){
+        const chunk = targets.slice(i, i + CI_BATCH_SIZE);
+        const records = chunk.map((row) => {
+          const rec = Storage.mapCustomerRow(row, 0);
+          const payload = rec.payload && typeof rec.payload === "object" ? rec.payload : {};
+          payload.insureds = [ciBuildPrimaryInsured(payload, rec.id)];
+          return normalizeCustomerRecord(Object.assign({}, rec, {
+            insuredCount: 1, updatedAt: nowISO(), payload
+          }), 0);
+        });
+
+        let ok = false;
+        try {
+          const client = Storage.getClient();
+          if(client){
+            const res = await client.from(SUPABASE_TABLES.customers)
+              .upsert(Storage.buildCustomerRows({ customers: records }), { onConflict: "id" });
+            ok = !res?.error;
+          }
+        } catch(_e) {}
+        if(!ok){
+          for(const rec of records){
+            const row = Storage.buildCustomerRows({ customers: [rec] })[0];
+            const res = await Storage.upsertSingleRow(SUPABASE_TABLES.customers, row);
+            if(!res?.ok) failed += 1;
+          }
+        }
+        done += chunk.length;
+        const pct = Math.round((done / total) * 100);
+        if(fill) fill.style.width = pct + "%";
+        if(text) text.textContent = `${done} מתוך ${total} (${pct}%)`;
+        await new Promise((r) => window.setTimeout(r, 0));
+      }
+
+      try { await App.persist("השלמת מבוטח ראשי לתיקים מיובאים"); } catch(_e) {}
+      try { CustomersUI.render({ forceServer: true }); } catch(_e) {}
+
+      this.els.body.innerHTML = `
+        <div class="ciDone">
+          <div class="ciDone__icon">${failed ? "⚠️" : "✅"}</div>
+          <div class="ciDone__stats">
+            <div><strong>${total - failed}</strong> תיקים קיבלו מבוטח ראשי</div>
+            ${failed ? `<div class="ciDone__err"><strong>${failed}</strong> נכשלו</div>` : ""}
+          </div>
+        </div>`;
+      this.els.foot.innerHTML = `<button class="btn btn--primary" type="button" data-ci-close>סיום</button>`;
     },
 
     ensureModal(){
@@ -83423,8 +83590,9 @@ ${inner}
             <button class="cqPanel__close" type="button" data-cq-close aria-label="סגור">✕</button>
           </div>
           <div class="cqPanel__body" id="cqBody"></div>
-          <div class="cqPanel__foot">
-            <button class="btn btn--primary" type="button" id="cqOpenFull">פתח תיק לקוח מלא</button>
+          <div class="cqPanel__foot" id="cqFoot">
+            <button class="btn btn--primary" type="button" id="cqEdit">עריכה</button>
+            <button class="btn" type="button" id="cqOpenFull">פתח תיק מלא</button>
             <button class="btn" type="button" data-cq-close>סגור</button>
           </div>
         </aside>`;
@@ -83438,6 +83606,7 @@ ${inner}
       on(wrap, "click", (ev) => {
         if(ev.target?.closest?.("[data-cq-close]")) this.close();
       });
+      on(wrap.querySelector("#cqEdit"), "click", () => this.enterEditMode());
       on(wrap.querySelector("#cqOpenFull"), "click", () => {
         const id = this.currentId;
         this.close();
@@ -83478,8 +83647,151 @@ ${inner}
         this.els.body.innerHTML = `<div class="cqLoading">לא נמצאו פרטים עבור הלקוח הזה.</div>`;
         return;
       }
+      this.record = record;
       this.paintHeader(record);
       this.paintBody(record);
+      this.setFootMode("view");
+    },
+
+    setFootMode(mode){
+      const foot = this.els.wrap?.querySelector("#cqFoot");
+      if(!foot) return;
+      if(mode === "edit"){
+        foot.innerHTML = `
+          <button class="btn btn--primary" type="button" id="cqSave">שמור</button>
+          <button class="btn" type="button" id="cqCancel">ביטול</button>`;
+        on(foot.querySelector("#cqSave"), "click", () => this.saveEdits());
+        on(foot.querySelector("#cqCancel"), "click", () => {
+          this.paintBody(this.record);
+          this.setFootMode("view");
+        });
+      } else {
+        foot.innerHTML = `
+          <button class="btn btn--primary" type="button" id="cqEdit">עריכה</button>
+          <button class="btn" type="button" id="cqOpenFull">פתח תיק מלא</button>
+          <button class="btn" type="button" data-cq-close>סגור</button>`;
+        on(foot.querySelector("#cqEdit"), "click", () => this.enterEditMode());
+        on(foot.querySelector("#cqOpenFull"), "click", () => {
+          const id = this.currentId;
+          this.close();
+          if(id){ try { CustomersUI.openByIdWithLoader(id); } catch(_e) {} }
+        });
+      }
+    },
+
+    /** מצב עריכה: אותם שדות, כשדות קלט. */
+    enterEditMode(){
+      const rec = this.record;
+      if(!rec) return;
+      const payload = rec.payload && typeof rec.payload === "object" ? rec.payload : {};
+      const prof = payload.importedProfile || {};
+      const primary = payload.primary || {};
+      const pick = (...vals) => { for(const v of vals){ const t = safeTrim(v); if(t) return t; } return ""; };
+
+      const fields = [
+        ["fullName", "שם מלא", pick(rec.fullName, prof.fullName), "text"],
+        ["idNumber", "תעודת זהות", pick(rec.idNumber, prof.idNumber), "text"],
+        ["mobile", "סלולרי", pick(prof.mobile, rec.phone, primary.phone), "text"],
+        ["landline", "טלפון נוסף", pick(prof.landline, primary.landline), "text"],
+        ["email", "דוא\"ל", pick(prof.email, rec.email, primary.email), "email"],
+        ["gender", "מגדר", pick(prof.gender, primary.gender), "text"],
+        ["birthDate", "תאריך לידה", pick(prof.birthDate, primary.birthDate), "date"],
+        ["maritalStatus", "מצב משפחתי", pick(prof.maritalStatus, primary.maritalStatus), "text"],
+        ["childrenCount", "מספר ילדים", (prof.childrenCount ?? primary.childrenCount ?? ""), "number"],
+        ["occupation", "מקצוע", pick(prof.occupation, primary.occupation), "text"],
+        ["street", "רחוב", pick(prof.street, primary.street), "text"],
+        ["houseNumber", "מספר בית", pick(prof.houseNumber, primary.houseNumber), "text"],
+        ["apartment", "דירה", pick(prof.apartment, primary.apartment), "text"],
+        ["city", "יישוב", pick(rec.city, prof.city, primary.city), "text"]
+      ];
+
+      this.els.body.innerHTML = `
+        <section class="cqSection">
+          <h4 class="cqSection__title">עריכת פרטים אישיים</h4>
+          ${fields.map(([key, label, value, type]) => `
+            <div class="cqEditRow">
+              <label class="cqEditRow__label" for="cqf_${key}">${escapeHtml(label)}</label>
+              <input class="cqEditRow__input" id="cqf_${key}" data-cq-field="${key}"
+                     type="${type}" value="${escapeHtml(String(value ?? ""))}" />
+            </div>`).join("")}
+          <div class="cqEditNote">השינויים נשמרים על תיק הלקוח ומתעדכנים גם בטבלת הלקוחות.</div>
+        </section>`;
+      this.setFootMode("edit");
+    },
+
+    async saveEdits(){
+      const rec = this.record;
+      if(!rec) return;
+      const foot = this.els.wrap?.querySelector("#cqFoot");
+      const saveBtn = foot?.querySelector("#cqSave");
+      if(saveBtn){ saveBtn.disabled = true; saveBtn.textContent = "שומר…"; }
+
+      const val = (key) => safeTrim(this.els.body.querySelector(`[data-cq-field="${key}"]`)?.value);
+      const payload = rec.payload && typeof rec.payload === "object"
+        ? JSON.parse(JSON.stringify(rec.payload)) : {};
+
+      const childrenRaw = val("childrenCount");
+      const patch = {
+        fullName: val("fullName"), idNumber: val("idNumber"), mobile: val("mobile"),
+        landline: val("landline"), email: val("email"), gender: val("gender"),
+        birthDate: val("birthDate"), maritalStatus: val("maritalStatus"),
+        childrenCount: childrenRaw === "" ? null : Number(childrenRaw),
+        occupation: val("occupation"), street: val("street"),
+        houseNumber: val("houseNumber"), apartment: val("apartment"), city: val("city")
+      };
+
+      payload.importedProfile = Object.assign({}, payload.importedProfile, patch, {
+        address: [patch.street, patch.houseNumber, patch.apartment ? "דירה " + patch.apartment : "", patch.city].filter(Boolean).join(" ")
+      });
+      payload.primary = Object.assign({}, payload.primary, {
+        idNumber: patch.idNumber, phone: patch.mobile, mobile: patch.mobile,
+        landline: patch.landline, email: patch.email, city: patch.city,
+        street: patch.street, houseNumber: patch.houseNumber, apartment: patch.apartment,
+        birthDate: patch.birthDate, gender: patch.gender, maritalStatus: patch.maritalStatus,
+        childrenCount: patch.childrenCount, occupation: patch.occupation
+      });
+      const nameParts = ciSplitName(patch.fullName);
+      if(nameParts.lastName || nameParts.firstName){
+        payload.primary.firstName = nameParts.firstName;
+        payload.primary.lastName = nameParts.lastName;
+      }
+      // מסנכרנים גם את כרטיס המבוטח הראשי, אם הוא נוצר מהייבוא
+      if(Array.isArray(payload.insureds) && payload.insureds.length){
+        const idx = payload.insureds.findIndex((i) => safeTrim(i?.type) === "primary");
+        if(idx >= 0){
+          const rebuilt = ciBuildPrimaryInsured(payload, rec.id);
+          payload.insureds[idx] = Object.assign({}, payload.insureds[idx], {
+            label: rebuilt.label,
+            data: Object.assign({}, payload.insureds[idx].data, rebuilt.data)
+          });
+        }
+      }
+      payload.lastManualEdit = { at: nowISO(), by: safeTrim(Auth?.current?.name) };
+
+      const updated = normalizeCustomerRecord(Object.assign({}, rec, {
+        fullName: patch.fullName || rec.fullName,
+        idNumber: patch.idNumber, phone: patch.mobile, email: patch.email,
+        city: patch.city, updatedAt: nowISO(), payload
+      }), 0);
+
+      const row = Storage.buildCustomerRows({ customers: [updated] })[0];
+      const res = await Storage.upsertSingleRow(SUPABASE_TABLES.customers, row);
+
+      if(!res?.ok){
+        if(saveBtn){ saveBtn.disabled = false; saveBtn.textContent = "שמור"; }
+        try { window.showToast?.({ title: "השמירה נכשלה", text: safeTrim(res?.error) || "נסה שוב.", variant: "error" }); } catch(_e) {}
+        return;
+      }
+
+      this.record = updated;
+      this.paintHeader(updated);
+      this.paintBody(updated);
+      this.setFootMode("view");
+      try { CustomersUI.render({ forceServer: true }); } catch(_e) {}
+      try {
+        if(safeTrim(CustomersUI?.currentId) === safeTrim(updated.id)) CustomersUI.openByIdWithLoader(updated.id);
+      } catch(_e) {}
+      try { window.showToast?.({ title: "נשמר", text: "פרטי הלקוח עודכנו.", variant: "success" }); } catch(_e) {}
     },
 
     paintHeader(record){
@@ -83587,6 +83899,40 @@ ${inner}
     }
   };
 
+  /** מעתיק ללוח ומציג חיווי קצר על האלמנט עצמו. */
+  function ciCopyToClipboard(text, el){
+    const done = () => {
+      if(!el) return;
+      el.classList.add("is-copied");
+      const prev = el.getAttribute("data-copy-label");
+      if(!prev) el.setAttribute("data-copy-label", "1");
+      window.setTimeout(() => el.classList.remove("is-copied"), 1400);
+      try { window.showToast?.({ title: "הועתק", text: text, variant: "success" }); } catch(_e) {}
+    };
+    try {
+      if(navigator.clipboard?.writeText){
+        navigator.clipboard.writeText(text).then(done).catch(() => ciCopyFallback(text, done));
+        return;
+      }
+    } catch(_e) {}
+    ciCopyFallback(text, done);
+  }
+
+  function ciCopyFallback(text, done){
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      done();
+    } catch(_e) {}
+  }
+
   /* ------------------------ חיבור לטבלת הלקוחות ------------------------ */
 
   function ciBootCustomersFeatures(){
@@ -83601,8 +83947,32 @@ ${inner}
     window.setInterval(tryMount, 1500);
     on(document, "visibilitychange", tryMount);
 
-    // לחיצה על שם הלקוח בטבלה → פאנל צדדי. עובד גם על שורות שנוצרו מחדש ברינדור.
     on(document, "click", (ev) => {
+      // א. שם הלקוח בכותרת תיק הלקוח → פאנל הפרטים
+      const heroName = ev.target?.closest?.("#customerFullName");
+      if(heroName){
+        const openId = safeTrim(CustomersUI?.currentId);
+        if(openId){
+          ev.preventDefault();
+          ev.stopPropagation();
+          CustomerQuickPanel.open(openId);
+          return;
+        }
+      }
+
+      // ב. צ'יפ מספרי בכותרת (ת"ז / טלפון) → העתקה ללוח
+      const chip = ev.target?.closest?.(".cfFile__chip");
+      if(chip){
+        const text = safeTrim(chip.querySelector(".cfFile__chipText")?.textContent);
+        if(text && /^[\d\-+ ]{6,}$/.test(text)){
+          ev.preventDefault();
+          ev.stopPropagation();
+          ciCopyToClipboard(text.replace(/[^\d+]/g, ""), chip);
+          return;
+        }
+      }
+
+      // ג. שם הלקוח בטבלה → פאנל הפרטים
       const nameCell = ev.target?.closest?.(".lcCustomers__nameMeta");
       if(!nameCell) return;
       const row = nameCell.closest?.("tr.lcCustomerRow");
@@ -83612,6 +83982,27 @@ ${inner}
       ev.stopPropagation();
       CustomerQuickPanel.open(customerId);
     });
+
+    // מסמן צ'יפים מספריים בכותרת התיק כניתנים להעתקה (הכותרת נבנית מחדש בכל פתיחה)
+    const metaEl = document.getElementById("customerFullMeta");
+    if(metaEl && window.MutationObserver){
+      const markChips = () => {
+        metaEl.querySelectorAll(".cfFile__chip").forEach((chip) => {
+          const text = safeTrim(chip.querySelector(".cfFile__chipText")?.textContent);
+          if(text && /^[\d\-+ ]{6,}$/.test(text)){
+            chip.classList.add("cfChipCopy");
+            chip.setAttribute("title", "לחץ להעתקה");
+          }
+        });
+      };
+      new MutationObserver(markChips).observe(metaEl, { childList: true, subtree: true });
+      markChips();
+    }
+    const heroNameEl = document.getElementById("customerFullName");
+    if(heroNameEl){
+      heroNameEl.classList.add("cfNameClickable");
+      heroNameEl.setAttribute("title", "לחץ לצפייה בפרטים האישיים");
+    }
 
     // התפריט עשוי להיבנות מחדש — מוודאים שהפריט קיים
     const view = document.querySelector(".sidebar") || document.getElementById("view-customers");
