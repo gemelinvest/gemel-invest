@@ -8722,6 +8722,8 @@
     keepAliveTimer: null,
     _memoryCache: null,
     _rowHashes: { agents:{}, customers:{}, proposals:{} },
+    /* GI-FIX 2026-08-07 — האם _rowHashes נזרע מטעינה מוצלחת מהשרת. */
+    _rowHashBaseline: { agents:false, customers:false, proposals:false },
     _lastMetaUpdatedAt: "",
     _idbOpenPromise: null,
     _fullIdbWriteHandle: null,
@@ -9329,6 +9331,19 @@
       });
     },
 
+    /* GI-FIX 2026-08-07 — סימון שהבסיס להשוואה נזרע מטעינה מוצלחת מהשרת.
+       בלי זה אי אפשר להבחין בין "שום שורה לא השתנתה" לבין "אין לי מושג מה
+       יש בשרת", ושתי המשמעויות מובילות להתנהגות הפוכה לגמרי. */
+    markRowsBaseline(tableName){
+      const key = this.getHashBucketKey(tableName);
+      if(key) this._rowHashBaseline[key] = true;
+    },
+
+    hasRowsBaseline(tableName){
+      const key = this.getHashBucketKey(tableName);
+      return !!(key && this._rowHashBaseline[key]);
+    },
+
     getHashBucketKey(tableName){
       const t = safeTrim(tableName);
       if(t === SUPABASE_TABLES.agents) return 'agents';
@@ -9568,11 +9583,14 @@
         const storeTarget = storeEntry ? (Number(String(storeEntry.monthlySalesTarget ?? '').replace(/[^\d.-]/g, '')) || 0) : 0;
         const recordTarget = Number(String(a?.monthlySalesTarget ?? a?.monthly_sales_target ?? '').replace(/[^\d.-]/g, '')) || 0;
         const monthly_sales_target = storeTarget > 0 ? storeTarget : recordTarget;
-        return {
+        /* GI-FIX 2026-08-07 — בלי ברירת מחדל "0000".
+           רשומה שאיבדה את ה-PIN בזיכרון אִפסה אותו בשרת לקוד ברירת מחדל.
+           עכשיו במקרה כזה העמודה לא נשלחת כלל וערך השרת שורד. */
+        const pin = safeTrim(a?.pin);
+        const row = {
           id: agentId,
           name: safeTrim(a?.name) || "נציג",
           username: safeTrim(a?.username) || safeTrim(a?.name) || "נציג",
-          pin: safeTrim(a?.pin) || "0000",
           role: safeTrim(a?.role) || "agent",
           active: a?.active === false ? false : true,
           birth_date: safeTrim(a?.birthDate) || null,
@@ -9582,6 +9600,8 @@
           created_at: safeTrim(a?.created_at) || nowISO(),
           updated_at: safeTrim(a?.updatedAt || a?.updated_at) || nowISO()
         };
+        if(pin) row.pin = pin;
+        return row;
       });
     },
 
@@ -9817,12 +9837,41 @@
       const onlyAgentIds = Array.isArray(options.onlyAgentIds)
         ? [...new Set(options.onlyAgentIds.map((id) => safeTrim(id)).filter(Boolean))]
         : [];
-      const changedRows = onlyAgentIds.length
+      /* GI-FIX 2026-08-07 — "ממוקד" = הקורא נקב במפורש בנציגים שהוא משנה.
+         רק במסלול הזה מותר לכתוב את עמודת pin. */
+      const targeted = onlyAgentIds.length > 0;
+      const changedRows = targeted
         ? agentRows.filter((row) => onlyAgentIds.includes(safeTrim(row?.id)))
         : (options.forceAll === true
           ? agentRows
           : this.getChangedRows(SUPABASE_TABLES.agents, agentRows));
       if(!changedRows.length) return { ok:true, skipped:true, synced:0, at: nowISO() };
+
+      /* GI-FIX 2026-08-07 — בלימת בטיחות. בלי בסיס השוואה שנזרע מטעינה
+         מוצלחת, getChangedRows מחזיר את כל 51 השורות מהזיכרון של הלשונית
+         ודורס את הטבלה. עדיף לא לכתוב כלום — הנתונים כבר במטמון המקומי
+         והשמירה הבאה אחרי טעינה תקינה תעביר אותם. */
+      if(!targeted && options.forceAll !== true && !this.hasRowsBaseline(SUPABASE_TABLES.agents)){
+        console.warn("AGENTS_SYNC_SKIPPED_NO_BASELINE:", changedRows.length);
+        return { ok:true, skipped:true, synced:0, noBaseline:true, at: nowISO() };
+      }
+
+      /* GI-FIX 2026-08-07 — הגנת ה-PIN.
+         שורש: כל שמירה בנתה מחדש את שורות הנציגים מהזיכרון של הלשונית, כולל
+         עמודת pin. לשונית שנפתחה ב-09:00 החזירה ב-11:00 קודים ישנים לכל מי
+         שהשתנה בינתיים. ב-upsert של PostgREST עמודה שלא נשלחה פשוט לא
+         נכתבת, ולכן השמטת pin משמרת את ערך השרת.
+         שורה שהמזהה שלה מוכר מהבסיס — קיימת בשרת, בטוח לעדכן אותה בלי pin.
+         שורה שאינה מוכרת היא נציג חדש: שם חייבים pin ב-INSERT, ולכן היא
+         נכתבת בנפרד (גם כי PostgREST דורש מפתחות זהים בכל מערך ה-bulk). */
+      const knownIds = this._rowHashes?.agents || {};
+      const stripPin = (row) => {
+        const copy = { ...row };
+        delete copy.pin;
+        return copy;
+      };
+      const writeRows = targeted ? changedRows : changedRows.filter((row) => knownIds[safeTrim(row?.id)]).map(stripPin);
+      const newRows = targeted ? [] : changedRows.filter((row) => !knownIds[safeTrim(row?.id)]);
 
       const rememberOnSuccess = () => {
         try { this.rememberRows(SUPABASE_TABLES.agents, agentRows); } catch(_e) {}
@@ -9845,18 +9894,49 @@
         return res;
       };
 
-      try {
-        await this.syncTable(SUPABASE_TABLES.agents, changedRows, { allowDelete:false });
+      /* נציגים חדשים נכתבים אחד-אחד עם ה-PIN שלהם, לפני הבאלק. */
+      let newRowErrors = [];
+      for(const row of newRows){
+        try {
+          const res = await upsertAgentRow(row);
+          if(!res?.ok) newRowErrors.push(safeTrim(row?.id) + ": " + formatAgentServerPersistError(safeTrim(res?.error) || "UPSERT_FAILED"));
+        } catch(rowErr) {
+          newRowErrors.push(safeTrim(row?.id) + ": " + formatAgentServerPersistError(rowErr?.message || rowErr));
+        }
+      }
+      if(!writeRows.length){
+        if(newRowErrors.length) return { ok:false, synced: newRows.length - newRowErrors.length, error: newRowErrors.join(" | "), at: nowISO() };
         rememberOnSuccess();
-        return { ok:true, synced: changedRows.length, mode:"bulk", at: nowISO() };
+        return { ok:true, synced: newRows.length, mode:"new-only", at: nowISO() };
+      }
+
+      try {
+        /* PostgREST דוחה מערך bulk שהאובייקטים בו לא חולקים אותם מפתחות.
+           אחרי הגנת ה-PIN יש שורות עם pin ובלעדיו, ולכן כותבים בשתי מנות. */
+        const groups = [
+          writeRows.filter((row) => Object.prototype.hasOwnProperty.call(row, "pin")),
+          writeRows.filter((row) => !Object.prototype.hasOwnProperty.call(row, "pin"))
+        ].filter((group) => group.length);
+        for(const group of groups){
+          await this.syncTable(SUPABASE_TABLES.agents, group, { allowDelete:false });
+        }
+        rememberOnSuccess();
+        return {
+          ok: !newRowErrors.length,
+          synced: writeRows.length + newRows.length - newRowErrors.length,
+          mode:"bulk",
+          pinOmitted: !targeted,
+          error: newRowErrors.join(" | "),
+          at: nowISO()
+        };
       } catch(bulkErr) {
         console.warn("AGENTS_BULK_SYNC_FAILED:", bulkErr?.message || bulkErr);
       }
 
-      const rowErrors = [];
-      let synced = 0;
+      const rowErrors = [...newRowErrors];
+      let synced = newRows.length - newRowErrors.length;
       let teamManagerColumnSkipped = false;
-      for(const row of changedRows){
+      for(const row of writeRows){
         const id = safeTrim(row?.id);
         if(!id) continue;
         try {
@@ -11345,6 +11425,12 @@
           this.rememberRows(SUPABASE_TABLES.agents, this.buildAgentRows(payload));
           this.rememberRows(SUPABASE_TABLES.customers, this.buildCustomerRows(payload));
           this.rememberRows(SUPABASE_TABLES.proposals, this.buildProposalRows(payload));
+          /* GI-FIX 2026-08-07 — רק כאן, אחרי טעינה מוצלחת מהשרת, יש בסיס
+             אמיתי להשוואה. מסלול ה-backup-cache שלמטה מגיע ממטמון מקומי
+             ובמכוון לא מסמן בסיס. */
+          this.markRowsBaseline(SUPABASE_TABLES.agents);
+          this.markRowsBaseline(SUPABASE_TABLES.customers);
+          this.markRowsBaseline(SUPABASE_TABLES.proposals);
           this._lastMetaUpdatedAt = safeTrim(payload?.meta?.updatedAt) || safeTrim(mappedMeta?.updatedAt) || nowISO();
         } catch(_e) {}
         try { this.clearLegacyCaches({ keepBackup:true }); } catch(_e) {}
@@ -14775,10 +14861,17 @@ UsersGateUI.init();
       if(!id) return { ok:false, error:"חסר מזהה נציג" };
       refreshStateShadows();
       const persistOptions = {};
-      if(Array.isArray(options.syncAgentIds) && options.syncAgentIds.length){
-        persistOptions.syncAgentIds = options.syncAgentIds;
-      } else if(options.forceAgentsSync === true){
+      /* GI-FIX 2026-08-07 — הפונקציה תמיד ידעה איזה נציג נערך ולא השתמשה בזה.
+         בלי הצמצום, עריכת נציג נפלה למסלול הכללי שמסתמך על מאגר ה-hashים
+         בזיכרון; כשהוא לא נזרע, כל 51 השורות נכתבו מהזיכרון של הלשונית.
+         עכשיו הכתיבה ממוקדת בוודאות — וזה גם המסלול היחיד שכותב עמודת pin. */
+      if(options.forceAgentsSync === true){
         persistOptions.forceAgentsSync = true;
+      } else {
+        persistOptions.syncAgentIds = [...new Set([
+          id,
+          ...(Array.isArray(options.syncAgentIds) ? options.syncAgentIds.map((x) => safeTrim(x)) : [])
+        ].filter(Boolean))];
       }
       const r = await App.persist(label, persistOptions);
       const agentsFailed = r?.ok !== true || r?.agentsSyncOk === false;
