@@ -156,7 +156,7 @@
   border:1px solid var(--gi-border, #E5E7EB); background:var(--gi-surface, #fff);
   width:32px; height:32px; border-radius:9px; cursor:pointer; line-height:1;
 }
-.cqPanel__body{ flex:1 1 auto; overflow:auto; padding:6px 18px 18px; }
+.cqPanel__body{ flex:1 1 auto; overflow:auto; padding:6px 18px 24px; }
 .cqPanel__foot{
   display:flex; gap:10px; padding:14px 18px;
   border-top:1px solid var(--gi-border, #E5E7EB); background:var(--gi-surface-2, #F8FAFC);
@@ -167,9 +167,19 @@
   margin:0 0 8px; font-size:12px; font-weight:800; letter-spacing:.04em;
   color:var(--gi-text-muted, #647287);
 }
-.cqRow{ display:flex; gap:12px; padding:7px 0; border-bottom:1px solid var(--gi-border-soft, #F1F5F9); font-size:13.5px; }
-.cqRow__label{ flex:0 0 40%; color:var(--gi-text-muted, #647287); }
-.cqRow__value{ flex:1 1 auto; font-weight:600; overflow-wrap:anywhere; }
+.cqRow{
+  display:flex; align-items:baseline; justify-content:space-between; gap:16px;
+  padding:8px 0; border-bottom:1px solid var(--gi-border-soft, #F1F5F9); font-size:13.5px;
+}
+/* תווית נעולה לקצה הימני, ערך נעול לקצה השמאלי — בכל שורה, בלי תלות בשפת התוכן */
+.cqRow__label{
+  flex:0 0 auto; max-width:45%; text-align:right;
+  color:var(--gi-text-muted, #647287); white-space:nowrap;
+}
+.cqRow__value{
+  flex:1 1 auto; min-width:0; text-align:left;
+  font-weight:600; overflow-wrap:anywhere;
+}
 .cqRow__value--mono{ font-variant-numeric:tabular-nums; }
 .cqSection--fin .cqFin{ display:grid; gap:8px; }
 .cqFin__item{
@@ -184,7 +194,6 @@
   font-size:11.5px; color:var(--gi-text-muted, #647287);
   background:#FFFBEB; border:1px solid #FDE68A; border-radius:9px; padding:8px 10px; line-height:1.6;
 }
-.cqSection--src .cqRow__value{ font-weight:500; }
 
 /* שם הלקוח בטבלה הופך לניתן ללחיצה */
 .lcCustomerRow .lcCustomers__nameMeta{ cursor:pointer; }

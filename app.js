@@ -83811,9 +83811,7 @@ ${inner}
       const payload = record?.payload && typeof record.payload === "object" ? record.payload : {};
       const prof = payload.importedProfile || {};
       const primary = payload.primary || {};
-      const src = payload.importSource || {};
       const fin = payload.importedFinancials || {};
-      const shared = Array.isArray(payload.sharedAgents) ? payload.sharedAgents : [];
 
       const pick = (...values) => {
         for(const v of values){ const t = safeTrim(v); if(t) return t; }
@@ -83862,26 +83860,24 @@ ${inner}
 
       const finItems = Array.isArray(fin.items) ? fin.items.filter((i) => i.value != null && i.value !== 0) : [];
       const finZero = Array.isArray(fin.items) ? fin.items.filter((i) => i.value === 0) : [];
-      const finRows = finItems.length
-        ? `<div class="cqFin">${finItems.map((item) => `
+      const finDisplay = finItems.map((item) => {
+        const isDate = /תאריך/.test(item.label);
+        const shown = isDate
+          ? ciFormatDate(ciParseDate(item.value != null && item.value !== "" ? item.value : item.raw))
+          : ciFormatMoney(item.value);
+        return { label: item.label, shown: safeTrim(shown) };
+      }).filter((item) => item.shown !== "");
+
+      const finRows = finDisplay.length
+        ? `<div class="cqFin">${finDisplay.map((item) => `
             <div class="cqFin__item">
               <div class="cqFin__label">${escapeHtml(item.label)}</div>
-              <div class="cqFin__value">${escapeHtml(/תאריך/.test(item.label) ? ciFormatDate(ciParseDate(item.value)) : ciFormatMoney(item.value))}</div>
+              <div class="cqFin__value">${escapeHtml(item.shown)}</div>
             </div>`).join("")}
            ${finZero.length ? `<div class="cqFin__note">${finZero.length} שדות נוספים בערך 0 לא מוצגים</div>` : ""}
            <div class="cqFin__disclaimer">נתונים אלה נשאבו מהדוח לצורכי תצוגה בלבד ואינם מהווים פוליסות במערכת.</div>
           </div>`
         : "";
-
-      const sourceRows = rowsHtml([
-        ["קובץ מקור", pick(src.fileName)],
-        ["מועד ייבוא", src.importedAt ? ciFormatDate(src.importedAt) : ""],
-        ["יובא על ידי", pick(src.importedBy)],
-        ["שורה בקובץ", src.rowNumber ? String(src.rowNumber) : ""],
-        ["מת״ל בקובץ", pick(prof.agentRaw)],
-        ["סטטוס בקובץ", pick(prof.statusRaw)],
-        ["נציגים משותפים", shared.map((a) => safeTrim(a?.name)).filter(Boolean).join(", ")]
-      ]);
 
       const extras = Array.isArray(payload.importedExtras) ? payload.importedExtras : [];
       const extraRows = extras.length ? rowsHtml(extras.map((e) => [e.label, e.value])) : "";
@@ -83891,8 +83887,7 @@ ${inner}
         section("דרכי התקשרות", contactRows),
         section("כתובת", addressRows),
         section("נתוני צבירה ופרמיה מהדוח", finRows, "cqSection--fin"),
-        section("שדות נוספים מהקובץ", extraRows),
-        section("מקור הנתונים", sourceRows, "cqSection--src")
+        section("שדות נוספים מהקובץ", extraRows)
       ].filter(Boolean).join("");
 
       this.els.body.innerHTML = body || `<div class="cqLoading">אין פרטים מורחבים ללקוח הזה. הפרטים המלאים זמינים בתיק הלקוח.</div>`;
