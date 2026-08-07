@@ -16,7 +16,7 @@
    לאיפוס ידני: כפתור "החל עדכון" במערכת כבר מוחק את כל המטמונים ומבטל רישום SW.
 */
 
-const CACHE_VERSION = "gi-v1-20260803-leadfloat-v1";
+const CACHE_VERSION = "gi-v2-20260806-system-files-v1";
 const RUNTIME_CACHE = `gi-runtime-${CACHE_VERSION}`;
 
 // סיומות שמותר להגיש מהמטמון.
@@ -53,7 +53,17 @@ function isCacheableResponse(res) {
 async function handleNavigate(request) {
   const cache = await caches.open(RUNTIME_CACHE);
   try {
-    const fresh = await fetch(request);
+    let fresh;
+    try {
+      // cache:"reload" מכריח פנייה לשרת ומדלג על מטמון ה-HTTP של הדפדפן.
+      fresh = await fetch(new Request(request.url, {
+        cache: "reload",
+        credentials: "same-origin",
+        redirect: "follow"
+      }));
+    } catch (_reloadErr) {
+      fresh = await fetch(request);
+    }
     if (isCacheableResponse(fresh)) {
       cache.put(request, fresh.clone()).catch(() => {});
     }
