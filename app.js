@@ -63907,7 +63907,12 @@ const ClalRiskLifePdf = {
       /* סימון ביטול מכוון של PIN-בלבד (רק כשנשלח pinOnlyLogin:false ב-patch).
          מונע מלקוח עם מטמון ישן לדרוס pinOnlyLogin בשרת במיזוג/שמירה. */
       pinOnlyLiftedAt: safeTrim(input.pinOnlyLiftedAt || input.pin_only_lifted_at),
-      updatedAt: safeTrim(input.updatedAt || input.updated_at) || nowISO()
+      /* GI-FIX 2026-08-07 — היעדר חותמת זמן נשאר היעדר.
+         קודם: כל רשומה שהגיעה בלי updatedAt קיבלה כאן nowISO(), ולכן רשומה
+         ממטמון ישן בדפדפן "ניצחה" תמיד את השרת בהשוואת הרסניות ומחקה את
+         authEmail. כל כתיבה לגיטימית עוברת ב-setAgentSecurity שחותם nowISO()
+         במפורש, אז אין מסלול אמיתי שמאבד חותמת בגלל השינוי הזה. */
+      updatedAt: safeTrim(input.updatedAt || input.updated_at)
     };
   };
   const normalizeAgentSecurityMap = (raw) => {
@@ -63926,6 +63931,27 @@ const ClalRiskLifePdf = {
      GI-FIX 2026-08-03b — גם ההפך: כשמנהל מגדיר PIN בלבד מקומית, רשומת
      MFA ישנה בשרת עם updatedAt חדש יותר (סשן אחר / MFA login) לא תבלע
      את השינוי לפני ה-upsert. */
+  /* GI-FIX 2026-08-07 — שדות זהות שריק בהם אף פעם לא אומר "למחוק".
+     מחיקה מכוונת של השדות האלה קורית אך ורק במעבר ל-pinOnlyLogin, ושם
+     setAgentSecurity מנקה אותם — והענף של pinOnly מטופל לפני המיזוג הזה. */
+  const AGENT_SECURITY_IDENTITY_FIELDS = ["authEmail", "authUserId", "factorId", "mfaEnrolledAt", "lastVerifiedAt"];
+  /* base = הרשומה שניצחה בהשוואת הרסניות; filler = המפסידה.
+     המנצחת קובעת את כל הדגלים; המפסידה רק ממלאת שדות זהות שנשארו ריקים. */
+  const mergeAgentSecurityEntriesFieldwise = (base, filler) => {
+    const out = { ...(base || {}) };
+    let revivedFactor = false;
+    AGENT_SECURITY_IDENTITY_FIELDS.forEach((field) => {
+      if(safeTrim(out[field])) return;
+      const fallback = safeTrim(filler?.[field]);
+      if(!fallback) return;
+      out[field] = fallback;
+      if(field === "factorId") revivedFactor = true;
+    });
+    /* אם החזרנו factor אמיתי מהצד השני — אסור להשאיר את דגל ה-MFA כבוי,
+       אחרת נציג עם Google Authenticator פעיל היה נכנס עם PIN בלבד. */
+    if(revivedFactor && filler?.mfaEnabled === true) out.mfaEnabled = true;
+    return normalizeAgentSecurityEntry(out);
+  };
   const mergeAgentSecurityMapsByRecency = (serverMap, localMap) => {
     const s = normalizeAgentSecurityMap(serverMap);
     const l = normalizeAgentSecurityMap(localMap);
@@ -63937,20 +63963,32 @@ const ClalRiskLifePdf = {
         return;
       }
       if(lEntry.pinOnlyLogin === true && sEntry.pinOnlyLogin !== true){
+        /* מעבר מכוון ל-PIN בלבד: הריקון של authEmail/factorId הוא התוכן
+           של השינוי, ולכן כאן דווקא לוקחים את המקומי כמקשה אחת. */
         out[key] = lEntry;
         return;
       }
       if(sEntry.pinOnlyLogin === true && lEntry.pinOnlyLogin !== true){
         const liftedAt = safeTrim(lEntry.pinOnlyLiftedAt);
-        const intentionalLift = !!liftedAt && compareIsoStamps(liftedAt, sEntry.updatedAt) >= 0;
+        /* GI-FIX 2026-08-07 — דורשים חותמת בשני הצדדים. בלי הבדיקה הזו,
+           רשומת שרת ישנה בלי updatedAt נחשבת ל-0 וכל pinOnlyLiftedAt היה
+           מבטל את "PIN בלבד" — בדיוק הרגרסיה שנלחמנו בה ב-08-03. */
+        const intentionalLift = !!liftedAt
+          && !!safeTrim(sEntry.updatedAt)
+          && compareIsoStamps(liftedAt, sEntry.updatedAt) >= 0;
         if(!intentionalLift){
           out[key] = sEntry;
           return;
         }
       }
-      if(compareIsoStamps(lEntry.updatedAt, sEntry.updatedAt) >= 0){
-        out[key] = lEntry;
-      }
+      /* GI-FIX 2026-08-07 — מיזוג ברמת שדה במקום החלפת רשומה שלמה.
+         קודם: המנצחת בהשוואת הרסניות החליפה את המפסידה כמקשה אחת, ולכן
+         לשונית עם מטמון ישן שבה authEmail ריק מחקה את המייל מהשרת. זו
+         הייתה היעלמות המיילים. ההגנה סימטרית — גם רשומת שרת ישנה בלי
+         מייל לא תמחק מייל שנשמר מקומית זה עתה. */
+      out[key] = (compareIsoStamps(lEntry.updatedAt, sEntry.updatedAt) >= 0)
+        ? mergeAgentSecurityEntriesFieldwise(lEntry, sEntry)
+        : mergeAgentSecurityEntriesFieldwise(sEntry, lEntry);
     });
     return out;
   };
@@ -64035,7 +64073,11 @@ const ClalRiskLifePdf = {
         if(sEntry.pinOnlyLogin !== true) return;
         const lEntry = localMap[id];
         const liftedAt = safeTrim(lEntry?.pinOnlyLiftedAt);
-        const intentionalLift = !!liftedAt && compareIsoStamps(liftedAt, sEntry.updatedAt) >= 0;
+        /* GI-FIX 2026-08-07 — זהה לכלל שב-mergeAgentSecurityMapsByRecency:
+           בלי חותמת בשני הצדדים אין "ביטול מכוון". */
+        const intentionalLift = !!liftedAt
+          && !!safeTrim(sEntry.updatedAt)
+          && compareIsoStamps(liftedAt, sEntry.updatedAt) >= 0;
         if(intentionalLift) return;
         localMap[id] = normalizeAgentSecurityEntry({
           ...sEntry,
