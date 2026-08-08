@@ -1184,20 +1184,25 @@
    ===================================================================== */
 
 /* ---- כפתור פעמון בטופ-בר ---- */
+/* מיושר בדיוק (אותם טוקנים) לכפתורי הטופ-בר האחרים (lcTopBtn / giOfferFab / giChatFab)
+   כדי שמצב רגיל, hover ו-focus יהיו זהים פיקסל-לפיקסל — בלי צבע/טוקן ייחודי לפעמון. */
 #giReminderFab.giReminderFab--topbar:not(#\9):not(#\9){
-  border-radius: 0 !important;
+  border-radius: var(--gi-r-ctl) !important;
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
-  color: var(--uf-accent) !important;
+  color: var(--gi-text-3) !important;
 }
-#giReminderFab.giReminderFab--topbar:hover:not(#\9):not(#\9),
-#giReminderFab.giReminderFab--topbar:focus-visible:not(#\9):not(#\9){
-  background: var(--uf-accent-soft) !important;
+#giReminderFab.giReminderFab--topbar:hover:not(#\9):not(#\9){
+  background: var(--gi-surface-3) !important;
   border: none !important;
+  color: var(--gi-primary) !important;
   box-shadow: none !important;
   transform: none !important;
+}
+#giReminderFab.giReminderFab--topbar:focus-visible:not(#\9):not(#\9){
   outline: none !important;
+  box-shadow: 0 0 0 3px var(--gi-primary-ring) !important;
 }
 #giReminderFabBadge.giReminderFab__badge:not(#\9):not(#\9){
   border-radius: 0 !important;
