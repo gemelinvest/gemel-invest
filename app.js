@@ -25456,13 +25456,13 @@ UsersGateUI.init();
       );
     },
 
-    /** יעד חודשי לפי היקף הדשבורד: כל הנציגים / צוות / אישי. */
+    /** יעד חודשי לפי היקף הדשבורד.
+        - מנהל צוות: סכום יעדי הנציגים תחתיו.
+        - מנהל/מנהל מערכת (גם ב«כל הנציגים»): היעד האישי שלו מניהול משתמשים — לא סכום כל הנציגים.
+        - נציג: היעד האישי שלו. */
     resolveDashboardTargetValue(){
       const salesScope = Auth.getDashboardSalesScope();
       const currentAgent = this.getCurrentAgentRecord();
-      if(salesScope === "all"){
-        return this.getTeamMonthlyTargetSum();
-      }
       if(salesScope === "team"){
         const managerId = safeTrim(Auth?.current?.id) || safeTrim(currentAgent?.id);
         return this.getTeamMonthlyTargetSumForManager(managerId);
@@ -28214,7 +28214,7 @@ UsersGateUI.init();
                 </div>
                 <div class="bankGoal__progressTrack" style="--goal-progress:${Math.max(0, Math.min(metrics.targetPct, 100))}%"><span aria-hidden="true"></span></div>
                 <div class="bankGoal__metaRow">
-                  <span>"יעד חודשי" <b>${metrics.targetValue > 0 ? escapeHtml(this.formatMoney(metrics.targetValue)) : '₪0'}</b></span>
+                  <span>יעד חודשי <b>${metrics.targetValue > 0 ? escapeHtml(this.formatMoney(metrics.targetValue)) : '₪0'}</b></span>
                   <strong>${escapeHtml(this.formatPct(metrics.targetPct))}</strong>
                 </div>
               </div>
