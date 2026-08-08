@@ -28126,6 +28126,22 @@ UsersGateUI.init();
     return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   }
 
+  /** מחשב גיל נוכחי (שנים שלמות) מתאריך לידה, כדי לשאוב אוטומטית את גיל המבוטח
+      משלב 1 (פרטים אישיים) לתוך סימולטורי הריסק — בדיוק כמו ששואבים מין/עישון.
+      משתמש ב-parseBirthDateValue הגלובלי הקיים (אותו parser המשמש גם את
+      Wizard.calcAge בשאר האפליקציה, כדי לתמוך באותם פורמטי תאריך: dd/mm/yyyy
+      וכו'). מחזיר null אם התאריך חסר/לא תקין — לעולם לא מנחש/מקרב גיל. */
+  function riskSimAgeFromBirthDate(dateStr){
+    const parsed = (typeof parseBirthDateValue === "function") ? parseBirthDateValue(dateStr) : null;
+    if(!parsed || !parsed.date) return null;
+    const birth = parsed.date;
+    const now = new Date();
+    let age = now.getFullYear() - birth.getFullYear();
+    const mm = now.getMonth() - birth.getMonth();
+    if(mm < 0 || (mm === 0 && now.getDate() < birth.getDate())) age--;
+    return Number.isFinite(age) ? age : null;
+  }
+
   /** קומפוננטת סימולטור ריסק הפניקס — מודאל עצמאי, לא תלוי במבנה הפנימי של
       Wizard.renderStep5 מעבר לממשק open(ctx)/onApply. */
   const PhoenixRiskSimulator = {
@@ -28150,8 +28166,12 @@ UsersGateUI.init();
       const d = ins?.data || {};
       const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
       const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
+      const computedAge = riskSimAgeFromBirthDate(d.birthDate);
+      const ageInRange = Number.isInteger(computedAge) && computedAge >= PHOENIX_RISK_MIN_AGE && computedAge <= PHOENIX_RISK_MAX_AGE;
       return {
-        age: "",
+        age: ageInRange ? String(computedAge) : "",
+        ageSource: ageInRange ? "step1" : "",
+        ageRaw: computedAge,
         gender, genderSource: gender ? "step1" : "",
         smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "",
         sumInsured: "",
@@ -28205,6 +28225,12 @@ UsersGateUI.init();
         `<option value="${a}"${String(st.age) === String(a) ? " selected" : ""}>${a}</option>`
       ).join("");
 
+      const ageHintHtml = st.age
+        ? (st.ageSource === "step1" ? `<div class="lcPhxSim__hint">נשאב מתאריך הלידה בפרטים האישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
+        : (Number.isInteger(st.ageRaw)
+            ? `<div class="lcPhxSim__hint lcPhxSim__hint--warn">הגיל המחושב מתאריך הלידה (${st.ageRaw}) חורג מטווח התעריפון (${PHOENIX_RISK_MIN_AGE}–${PHOENIX_RISK_MAX_AGE}) — יש לבחור גיל ידנית</div>`
+            : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא תאריך לידה תקין בפרטים האישיים — יש לבחור גיל</div>`);
+
       const genderHintHtml = st.gender
         ? (st.genderSource === "step1" ? `<div class="lcPhxSim__hint">נשאב מפרטים אישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
         : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא מין בפרטים האישיים — יש לבחור</div>`;
@@ -28240,6 +28266,7 @@ UsersGateUI.init();
               <div class="lcPhxSim__field">
                 <label class="lcPhxSim__label">גיל (${PHOENIX_RISK_MIN_AGE}–${PHOENIX_RISK_MAX_AGE})</label>
                 <select class="lcPhxSim__input" data-phx-field="age">${ageOptionsHtml}</select>
+                ${ageHintHtml}
               </div>
               <div class="lcPhxSim__field">
                 <label class="lcPhxSim__label">מין</label>
@@ -28287,6 +28314,7 @@ UsersGateUI.init();
         const st = this._state[this._activeInsuredId];
         if(!st) return;
         st.age = ageSel.value;
+        st.ageSource = "manual";
         st.result = null; st.error = null;
         this._render();
       });
@@ -28347,7 +28375,7 @@ UsersGateUI.init();
             monthlyPremium: st.result.monthlyPremium,
             annualPremium: st.result.annualPremium,
             ratePerMille: st.result.ratePerMille,
-            age: st.age, gender: st.gender, smoker: st.smoker,
+            age: st.age, ageSource: st.ageSource, gender: st.gender, smoker: st.smoker,
             genderSource: st.genderSource, smokerSource: st.smokerSource
           };
         }
@@ -28517,8 +28545,12 @@ UsersGateUI.init();
       const d = ins?.data || {};
       const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
       const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
+      const computedAge = riskSimAgeFromBirthDate(d.birthDate);
+      const ageInRange = Number.isInteger(computedAge) && computedAge >= MENORA_RISK_MIN_AGE && computedAge <= MENORA_RISK_MAX_AGE;
       return {
-        age: "",
+        age: ageInRange ? String(computedAge) : "",
+        ageSource: ageInRange ? "step1" : "",
+        ageRaw: computedAge,
         gender, genderSource: gender ? "step1" : "",
         smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "",
         sumInsured: "",
@@ -28572,6 +28604,12 @@ UsersGateUI.init();
         `<option value="${a}"${String(st.age) === String(a) ? " selected" : ""}>${a}</option>`
       ).join("");
 
+      const ageHintHtml = st.age
+        ? (st.ageSource === "step1" ? `<div class="lcMnrSim__hint">נשאב מתאריך הלידה בפרטים האישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
+        : (Number.isInteger(st.ageRaw)
+            ? `<div class="lcMnrSim__hint lcMnrSim__hint--warn">הגיל המחושב מתאריך הלידה (${st.ageRaw}) חורג מטווח התעריפון (${MENORA_RISK_MIN_AGE}–${MENORA_RISK_MAX_AGE}) — יש לבחור גיל ידנית</div>`
+            : `<div class="lcMnrSim__hint lcMnrSim__hint--warn">לא נמצא תאריך לידה תקין בפרטים האישיים — יש לבחור גיל</div>`);
+
       const genderHintHtml = st.gender
         ? (st.genderSource === "step1" ? `<div class="lcMnrSim__hint">נשאב מפרטים אישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
         : `<div class="lcMnrSim__hint lcMnrSim__hint--warn">לא נמצא מין בפרטים האישיים — יש לבחור</div>`;
@@ -28608,6 +28646,7 @@ UsersGateUI.init();
               <div class="lcMnrSim__field">
                 <label class="lcMnrSim__label">גיל (${MENORA_RISK_MIN_AGE}–${MENORA_RISK_MAX_AGE})</label>
                 <select class="lcMnrSim__input" data-mnr-field="age">${ageOptionsHtml}</select>
+                ${ageHintHtml}
               </div>
               <div class="lcMnrSim__field">
                 <label class="lcMnrSim__label">מין</label>
@@ -28655,6 +28694,7 @@ UsersGateUI.init();
         const st = this._state[this._activeInsuredId];
         if(!st) return;
         st.age = ageSel.value;
+        st.ageSource = "manual";
         st.result = null; st.error = null;
         this._render();
       });
@@ -28716,7 +28756,7 @@ UsersGateUI.init();
             annualPremium: st.result.annualPremium,
             ratePerHundredThousand: st.result.ratePerHundredThousand,
             bracket: st.result.bracket,
-            age: st.age, gender: st.gender, smoker: st.smoker,
+            age: st.age, ageSource: st.ageSource, gender: st.gender, smoker: st.smoker,
             genderSource: st.genderSource, smokerSource: st.smokerSource
           };
         }
@@ -28842,8 +28882,12 @@ UsersGateUI.init();
       const d = ins?.data || {};
       const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
       const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
+      const computedAge = riskSimAgeFromBirthDate(d.birthDate);
+      const ageInRange = Number.isInteger(computedAge) && computedAge >= PHOENIX_MORTGAGE_RISK_MIN_AGE && computedAge <= PHOENIX_MORTGAGE_RISK_MAX_AGE;
       return {
-        age: "",
+        age: ageInRange ? String(computedAge) : "",
+        ageSource: ageInRange ? "step1" : "",
+        ageRaw: computedAge,
         gender, genderSource: gender ? "step1" : "",
         smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "",
         sumInsured: "",
@@ -28897,6 +28941,12 @@ UsersGateUI.init();
         `<option value="${a}"${String(st.age) === String(a) ? " selected" : ""}>${a}</option>`
       ).join("");
 
+      const ageHintHtml = st.age
+        ? (st.ageSource === "step1" ? `<div class="lcPhxSim__hint">נשאב מתאריך הלידה בפרטים האישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
+        : (Number.isInteger(st.ageRaw)
+            ? `<div class="lcPhxSim__hint lcPhxSim__hint--warn">הגיל המחושב מתאריך הלידה (${st.ageRaw}) חורג מטווח התעריפון (${PHOENIX_MORTGAGE_RISK_MIN_AGE}–${PHOENIX_MORTGAGE_RISK_MAX_AGE}) — יש לבחור גיל ידנית</div>`
+            : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא תאריך לידה תקין בפרטים האישיים — יש לבחור גיל</div>`);
+
       const genderHintHtml = st.gender
         ? (st.genderSource === "step1" ? `<div class="lcPhxSim__hint">נשאב מפרטים אישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
         : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא מין בפרטים האישיים — יש לבחור</div>`;
@@ -28932,6 +28982,7 @@ UsersGateUI.init();
               <div class="lcPhxSim__field">
                 <label class="lcPhxSim__label">גיל (${PHOENIX_MORTGAGE_RISK_MIN_AGE}–${PHOENIX_MORTGAGE_RISK_MAX_AGE})</label>
                 <select class="lcPhxSim__input" data-phxmort-field="age">${ageOptionsHtml}</select>
+                ${ageHintHtml}
               </div>
               <div class="lcPhxSim__field">
                 <label class="lcPhxSim__label">מין</label>
@@ -28979,6 +29030,7 @@ UsersGateUI.init();
         const st = this._state[this._activeInsuredId];
         if(!st) return;
         st.age = ageSel.value;
+        st.ageSource = "manual";
         st.result = null; st.error = null;
         this._render();
       });
@@ -29039,7 +29091,7 @@ UsersGateUI.init();
             monthlyPremium: st.result.monthlyPremium,
             annualPremium: st.result.annualPremium,
             ratePerMille: st.result.ratePerMille,
-            age: st.age, gender: st.gender, smoker: st.smoker,
+            age: st.age, ageSource: st.ageSource, gender: st.gender, smoker: st.smoker,
             genderSource: st.genderSource, smokerSource: st.smokerSource
           };
         }
