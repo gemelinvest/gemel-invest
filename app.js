@@ -28115,6 +28115,17 @@ UsersGateUI.init();
     getHandler(company, product){ return this.registry[this._key(company, product)] || null; }
   };
 
+  /** מפרמט קלט "סכום ביטוח" לתצוגה עם פסיקים בין שלשות ספרות בזמן ההקלדה
+      (למשל "50000" -> "50,000"), כדי שיהיה ברור מיידית כמה אפסים הוזנו בפועל
+      ותימנע טעות של אפס חסר/עודף. משמש בכל סימולטורי הריסק. לא משפיע על
+      החישוב עצמו — _calc בכל סימולטור ממשיך לנקות תווים שאינם ספרות לפני
+      ההמרה למספר. */
+  function formatRiskSimSumInsuredDigits(raw){
+    const digits = String(raw == null ? "" : raw).replace(/[^\d]/g, "").replace(/^0+(?=\d)/, "");
+    if(!digits) return "";
+    return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  }
+
   /** קומפוננטת סימולטור ריסק הפניקס — מודאל עצמאי, לא תלוי במבנה הפנימי של
       Wizard.renderStep5 מעבר לממשק open(ctx)/onApply. */
   const PhoenixRiskSimulator = {
@@ -28283,7 +28294,10 @@ UsersGateUI.init();
       if(sumInput) on(sumInput, "input", () => {
         const st = this._state[this._activeInsuredId];
         if(!st) return;
-        st.sumInsured = sumInput.value;
+        const formatted = formatRiskSimSumInsuredDigits(sumInput.value);
+        sumInput.value = formatted;
+        try { sumInput.setSelectionRange(formatted.length, formatted.length); } catch(_e){}
+        st.sumInsured = formatted;
         st.result = null; st.error = null;
       });
       $$('[data-phx-field="gender"]', modal).forEach((btn) => on(btn, "click", () => {
@@ -28648,7 +28662,10 @@ UsersGateUI.init();
       if(sumInput) on(sumInput, "input", () => {
         const st = this._state[this._activeInsuredId];
         if(!st) return;
-        st.sumInsured = sumInput.value;
+        const formatted = formatRiskSimSumInsuredDigits(sumInput.value);
+        sumInput.value = formatted;
+        try { sumInput.setSelectionRange(formatted.length, formatted.length); } catch(_e){}
+        st.sumInsured = formatted;
         st.result = null; st.error = null;
       });
       $$('[data-mnr-field="gender"]', modal).forEach((btn) => on(btn, "click", () => {
@@ -28969,7 +28986,10 @@ UsersGateUI.init();
       if(sumInput) on(sumInput, "input", () => {
         const st = this._state[this._activeInsuredId];
         if(!st) return;
-        st.sumInsured = sumInput.value;
+        const formatted = formatRiskSimSumInsuredDigits(sumInput.value);
+        sumInput.value = formatted;
+        try { sumInput.setSelectionRange(formatted.length, formatted.length); } catch(_e){}
+        st.sumInsured = formatted;
         st.result = null; st.error = null;
       });
       $$('[data-phxmort-field="gender"]', modal).forEach((btn) => on(btn, "click", () => {
