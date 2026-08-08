@@ -4166,6 +4166,48 @@
     };
   }
 
+  /* GI-FIX 2026-08-09 — בטעינה רזה (בלי payload) לא דורסים payload מלא שכבר היה בזיכרון.
+     בלי זה hydration/רשימות יכולים לראות «אין לקוחות» אחרי שהמטמון המלא כבר נצבע. */
+  function mergePreservedCustomerPayloads(nextState){
+    const next = nextState && typeof nextState === "object" ? nextState : defaultState();
+    const prevList = Array.isArray(State.data?.customers) ? State.data.customers : [];
+    const nextList = Array.isArray(next.customers) ? next.customers : [];
+    if(!prevList.length || !nextList.length) return next;
+    const prevById = new Map();
+    for(let i = 0; i < prevList.length; i += 1){
+      const id = String(prevList[i]?.id || "");
+      if(id) prevById.set(id, prevList[i]);
+    }
+    let changed = false;
+    const merged = nextList.map((rec) => {
+      if(!rec?.id) return rec;
+      const prev = prevById.get(String(rec.id));
+      if(!prev) return rec;
+      try {
+        if(!Storage.payloadIsEmpty(prev) && Storage.payloadIsEmpty(rec)){
+          changed = true;
+          return {
+            ...rec,
+            payload: prev.payload,
+            fullName: (safeTrim(rec.fullName) && safeTrim(rec.fullName) !== "לקוח ללא שם")
+              ? rec.fullName
+              : (prev.fullName || rec.fullName),
+            phone: safeTrim(rec.phone) || prev.phone || "",
+            idNumber: safeTrim(rec.idNumber) || prev.idNumber || "",
+            city: safeTrim(rec.city) || prev.city || "",
+            agentName: safeTrim(rec.agentName) || prev.agentName || "",
+            createdAt: safeTrim(rec.createdAt) || prev.createdAt || rec.createdAt,
+            insuredCount: Number(rec.insuredCount) || Number(prev.insuredCount) || 0,
+            existingPoliciesCount: Number(rec.existingPoliciesCount) || Number(prev.existingPoliciesCount) || 0,
+            newPoliciesCount: Number(rec.newPoliciesCount) || Number(prev.newPoliciesCount) || 0
+          };
+        }
+      } catch(_e) {}
+      return rec;
+    });
+    return changed ? { ...next, customers: merged } : next;
+  }
+
   function agentSessionDataLooksSuspiciouslyEmpty(){
     if(!agentSessionDataLooksEmpty()) return false;
     try {
@@ -10750,7 +10792,22 @@
             archivedBy: safeTrim(row?.updated_by) || "מערכת"
           }, idx));
         } else {
-          map.set(id, rec);
+          const prev = map.get(id);
+          // GI-FIX 2026-08-09 — דלתא/שורה רזה לא מוחקת payload מלא קיים.
+          if(prev && !this.payloadIsEmpty(prev) && this.payloadIsEmpty(rec)){
+            map.set(id, {
+              ...rec,
+              payload: prev.payload,
+              fullName: (safeTrim(rec.fullName) && safeTrim(rec.fullName) !== "לקוח ללא שם") ? rec.fullName : (prev.fullName || rec.fullName),
+              phone: safeTrim(rec.phone) || prev.phone || "",
+              idNumber: safeTrim(rec.idNumber) || prev.idNumber || "",
+              city: safeTrim(rec.city) || prev.city || "",
+              agentName: safeTrim(rec.agentName) || prev.agentName || "",
+              createdAt: safeTrim(rec.createdAt) || prev.createdAt || rec.createdAt
+            });
+          } else {
+            map.set(id, rec);
+          }
         }
         merged += 1;
       });
@@ -23168,6 +23225,7 @@ UsersGateUI.init();
         : "";
       let next = normalizeState(remotePayload || defaultState());
       next = guardAgainstEmptyCustomersWipe(next);
+      next = mergePreservedCustomerPayloads(next);
       if(Auth?.current && !Auth.canViewAllCustomers()){
         next = filterSessionStateForCurrentUserScope(next);
       }
@@ -26877,6 +26935,72 @@ UsersGateUI.init();
         </div>`;
     },
 
+    /* GI-PERF 2026-08-09 — רענון שקט לכרטיסי דשבורד שלא עוברים דרך refreshKpis.
+       מונע מצב שבו רינדור מלא עם רשימה ריקה זמנית מוחק «לקוחות אחרונים»
+       ואז רק KPI מתעדכנים והטבלה נשארת ריקה. */
+    refreshDashboardListPanels(){
+      const root = this.els.root;
+      if(!root || !root.querySelector(".bankDash__kpis")) return;
+      if(root.querySelector(".bankDash--bootLoading")) return;
+      const replacePanel = (selector, html) => {
+        const cur = root.querySelector(selector);
+        if(!cur || !html) return;
+        const tmp = document.createElement("div");
+        tmp.innerHTML = String(html).trim();
+        const next = tmp.firstElementChild;
+        if(next) cur.replaceWith(next);
+      };
+      try {
+        const rows = this.recentCustomersRows(5);
+        const existingRecent = root.querySelectorAll(".bankRecent__row").length;
+        if(rows.length || !existingRecent){
+          replacePanel(".bankDash__row--recentCustomers", this.renderRecentCustomersHtml());
+        }
+        // אם הטבלה ריקה אבל ה-KPI מהשרת חי — מושכים 5 אחרונים ישירות מהשרת.
+        if(!rows.length && !existingRecent){
+          try { this.ensureRecentCustomersFromServer(); } catch(_e2) {}
+        }
+      } catch(_e) {}
+      try {
+        const lead = this.latestLead();
+        const leadCard = root.querySelector(".bankSideCard--lead");
+        const hadLead = !!leadCard && !leadCard.querySelector(".bankSideCard__empty");
+        if(lead || !hadLead){
+          replacePanel(".bankSideCard--lead", this.renderLatestLeadHtml());
+        }
+      } catch(_e) {}
+      try {
+        const untouched = this.latestUntouchedProposal();
+        const untouchedCard = root.querySelector(".bankSideCard--untouched");
+        const hadUntouched = !!untouchedCard && !untouchedCard.querySelector(".bankSideCard__empty");
+        if(untouchedCard && (untouched || !hadUntouched)){
+          replacePanel(".bankSideCard--untouched", this.renderLatestUntouchedHtml());
+        }
+      } catch(_e) {}
+    },
+
+    ensureRecentCustomersFromServer(){
+      if(this._recentServerFetchBusy) return;
+      if(!Auth?.current) return;
+      if(this.recentCustomersRows(5).length) return;
+      const lastTry = Number(this._recentServerFetchAt) || 0;
+      if(lastTry && (Date.now() - lastTry) < 15000) return;
+      this._recentServerFetchBusy = true;
+      this._recentServerFetchAt = Date.now();
+      void (async () => {
+        try {
+          const res = await Storage.loadLatestCustomers(5);
+          if(!res?.ok || !Array.isArray(res.data) || !res.data.length) return;
+          try { CustomersUI._ingestServerRows(res.data); } catch(_e) {}
+          if(LiveRefresh.getCurrentView?.() !== "dashboard") return;
+          try { this.refreshDashboardListPanels(); } catch(_e) {}
+        } catch(_e) {
+        } finally {
+          this._recentServerFetchBusy = false;
+        }
+      })();
+    },
+
     /* ===== הליד האחרון שנכנס =====
        ההרשאות דרך campaignLeadAgentAccess, אותה פונקציה שמזינה את מסך
        הלידים. אין כאן כלל הרשאות חדש. */
@@ -27609,6 +27733,7 @@ UsersGateUI.init();
       }
       this.revealKpiMetricValues(root);
       try { this.refreshDailySalesReportPanel(); } catch(_e){}
+      try { this.refreshDashboardListPanels(); } catch(_e){}
     },
 
     leaderboardAgentSub(agent, isYesterday){
@@ -27989,6 +28114,24 @@ UsersGateUI.init();
       ];
       const maxBar = Math.max(1, ...metrics.dailySeries.map((item) => item.premium || 0), (metrics.dailyTarget || 0) * 1.15);
       await perfYield();
+      /* GI-FIX 2026-08-09 — רינדור מלא עם רשימה ריקה זמנית לא מוחק טבלה/ליד שכבר נצבעו. */
+      const existingRecentCount = this.els.root.querySelectorAll(".bankRecent__row").length;
+      const existingLeadCard = this.els.root.querySelector(".bankSideCard--lead");
+      const existingHadLead = !!existingLeadCard && !existingLeadCard.querySelector(".bankSideCard__empty");
+      const existingUntouchedCard = this.els.root.querySelector(".bankSideCard--untouched");
+      const existingHadUntouched = !!existingUntouchedCard && !existingUntouchedCard.querySelector(".bankSideCard__empty");
+      const preservedRecentHtml = (!this.recentCustomersRows(5).length && existingRecentCount > 0)
+        ? (this.els.root.querySelector(".bankDash__row--recentCustomers")?.outerHTML || "")
+        : "";
+      const preservedLeadHtml = (!this.latestLead() && existingHadLead)
+        ? (existingLeadCard?.outerHTML || "")
+        : "";
+      const preservedUntouchedHtml = (!this.latestUntouchedProposal() && existingHadUntouched)
+        ? (existingUntouchedCard?.outerHTML || "")
+        : "";
+      const recentCustomersPanelHtml = preservedRecentHtml || this.renderRecentCustomersHtml();
+      const latestLeadPanelHtml = preservedLeadHtml || this.renderLatestLeadHtml();
+      const latestUntouchedPanelHtml = preservedUntouchedHtml || this.renderLatestUntouchedHtml();
       this.els.root.innerHTML = `
         <section class="bankDash bankDash--cleanTop">
           <div class="bankDash__topStats">
@@ -28108,11 +28251,11 @@ UsersGateUI.init();
           </div>
 
           <div class="bankDash__row bankDash__row--sideStack">
-            ${this.renderLatestLeadHtml()}
-            ${this.renderLatestUntouchedHtml()}
+            ${latestLeadPanelHtml}
+            ${latestUntouchedPanelHtml}
           </div>
 
-          ${this.renderRecentCustomersHtml()}
+          ${recentCustomersPanelHtml}
 
         </section>`;
       this._renderedDomKey = (metrics && !metrics._loading) ? this.getMetricsCacheKey() : "";
@@ -28124,6 +28267,7 @@ UsersGateUI.init();
       try { this._ensureDailySalesReportBound(); } catch(_e){}
       try { this.refreshDailySalesOverlay(); } catch(_e){}
       try { this._scheduleMidnightReset(); } catch(_e){}
+      try { this.refreshDashboardListPanels(); } catch(_e){}
       } finally {
         this._renderInFlight = false;
         if(this._renderQueued){
@@ -65298,6 +65442,7 @@ const ClalRiskLifePdf = {
               if(DashboardUI.els?.root?.querySelector(".bankDash__kpis")
                 && !DashboardUI.els.root.querySelector(".bankDash--bootLoading")){
                 DashboardUI.scheduleRefreshKpis();
+                try { DashboardUI.refreshDashboardListPanels(); } catch(_e2) {}
               } else {
                 DashboardUI.schedulePostLoginRender({ skipDailyReportWait: true });
               }
@@ -65468,6 +65613,7 @@ const ClalRiskLifePdf = {
         ? (payload && typeof payload === "object" ? payload : defaultState())
         : normalizeState(payload || defaultState());
       state = guardAgainstEmptyCustomersWipe(state);
+      state = mergePreservedCustomerPayloads(state);
       if(Auth?.current && !Auth.canViewAllCustomers()){
         state = prepSessionStateBeforeUserScopeFilter(state);
         const rawCustomers = Array.isArray(state.customers) ? state.customers.length : 0;
