@@ -28351,6 +28351,7 @@ UsersGateUI.init();
 
       const activeId = this._activeInsuredId;
       const st = this._state[activeId] || this._prefillFromInsured(null);
+      const isStandalone = !!this._ctx?.standalone;
 
       const tabsHtml = isMulti ? `<div class="lcPhxSim__tabs">${insureds.map((ins) => {
         const s = this._state[ins.id];
@@ -28374,20 +28375,23 @@ UsersGateUI.init();
         `<option value="${a}"${String(st.age) === String(a) ? " selected" : ""}>${a}</option>`
       ).join("");
 
-      const ageHintHtml = st.age
+      /* במצב עצמאי אין פרטים אישיים — לא מציגים אזהרות "לא נמצא בפרטים". באשף נשאר כפי שהיה. */
+      const ageHintHtml = (isStandalone || st.age)
         ? ""
         : (Number.isInteger(st.ageRaw)
             ? `<div class="lcPhxSim__hint lcPhxSim__hint--warn">הגיל המחושב מתאריך הלידה (${st.ageRaw}) חורג מטווח התעריפון (${PHOENIX_RISK_MIN_AGE}–${PHOENIX_RISK_MAX_AGE}) — יש לבחור גיל ידנית</div>`
             : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא תאריך לידה תקין בפרטים האישיים — יש לבחור גיל</div>`);
 
-      const genderHintHtml = st.gender
+      const genderHintHtml = (isStandalone || st.gender)
         ? ""
         : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא מין בפרטים האישיים — יש לבחור</div>`;
-      const smokerHintHtml = (st.smoker === true || st.smoker === false)
+      const smokerHintHtml = (isStandalone || st.smoker === true || st.smoker === false)
         ? ""
         : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא סטטוס עישון בפרטים האישיים — יש לבחור</div>`;
 
-      const isStandalone = !!this._ctx?.standalone;
+      const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company)
+        ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini")
+        : "🛡️";
       const occAssessment = assessOccupationRisk((this._getActiveInsured()?.data || {}).occupation, this._ctx?.company, this._ctx?.product);
       const occBlockHtml = isStandalone ? "" : renderOccupationRiskBlockHtml(occAssessment, "lcPhxSim");
 
@@ -28432,7 +28436,7 @@ UsersGateUI.init();
         <div class="giValModal__backdrop" data-phx-close="1"></div>
         <div class="giValModal__card lcPhxSim__card">
           <div class="giValModal__head">
-            <span class="giValModal__headIcon" aria-hidden="true">🛡️</span>
+            <span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span>
             <div class="giValModal__headText">
               <div class="giValModal__title">סימולטור ריסק הפניקס</div>
               <div class="giValModal__sub">חישוב פרמיה מדויק לפי מפת התעריפים הרשמית של הפניקס (עדכון 05.2026)</div>
@@ -28896,6 +28900,7 @@ UsersGateUI.init();
 
       const activeId = this._activeInsuredId;
       const st = this._state[activeId] || this._prefillFromInsured(null);
+      const isStandalone = !!this._ctx?.standalone;
 
       const tabsHtml = isMulti ? `<div class="lcMnrSim__tabs">${insureds.map((ins) => {
         const s = this._state[ins.id];
@@ -28919,20 +28924,22 @@ UsersGateUI.init();
         `<option value="${a}"${String(st.age) === String(a) ? " selected" : ""}>${a}</option>`
       ).join("");
 
-      const ageHintHtml = st.age
+      const ageHintHtml = (isStandalone || st.age)
         ? ""
         : (Number.isInteger(st.ageRaw)
             ? `<div class="lcMnrSim__hint lcMnrSim__hint--warn">הגיל המחושב מתאריך הלידה (${st.ageRaw}) חורג מטווח התעריפון (${MENORA_RISK_MIN_AGE}–${MENORA_RISK_MAX_AGE}) — יש לבחור גיל ידנית</div>`
             : `<div class="lcMnrSim__hint lcMnrSim__hint--warn">לא נמצא תאריך לידה תקין בפרטים האישיים — יש לבחור גיל</div>`);
 
-      const genderHintHtml = st.gender
+      const genderHintHtml = (isStandalone || st.gender)
         ? ""
         : `<div class="lcMnrSim__hint lcMnrSim__hint--warn">לא נמצא מין בפרטים האישיים — יש לבחור</div>`;
-      const smokerHintHtml = (st.smoker === true || st.smoker === false)
+      const smokerHintHtml = (isStandalone || st.smoker === true || st.smoker === false)
         ? ""
         : `<div class="lcMnrSim__hint lcMnrSim__hint--warn">לא נמצא סטטוס עישון בפרטים האישיים — יש לבחור</div>`;
 
-      const isStandalone = !!this._ctx?.standalone;
+      const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company)
+        ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini")
+        : "🛡️";
       const occAssessment = assessOccupationRisk((this._getActiveInsured()?.data || {}).occupation, this._ctx?.company, this._ctx?.product);
       const occBlockHtml = isStandalone ? "" : renderOccupationRiskBlockHtml(occAssessment, "lcMnrSim");
 
@@ -28978,7 +28985,7 @@ UsersGateUI.init();
         <div class="giValModal__backdrop" data-mnr-close="1"></div>
         <div class="giValModal__card lcMnrSim__card">
           <div class="giValModal__head">
-            <span class="giValModal__headIcon" aria-hidden="true">🛡️</span>
+            <span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span>
             <div class="giValModal__headText">
               <div class="giValModal__title">סימולטור ריסק מנורה</div>
               <div class="giValModal__sub">חישוב פרמיה מדויק לפי מפת התעריפים הרשמית של מנורה מבטחים</div>
@@ -29399,6 +29406,7 @@ UsersGateUI.init();
 
       const activeId = this._activeInsuredId;
       const st = this._state[activeId] || this._prefillFromInsured(null);
+      const isStandalone = !!this._ctx?.standalone;
 
       const tabsHtml = isMulti ? `<div class="lcPhxSim__tabs">${insureds.map((ins) => {
         const s = this._state[ins.id];
@@ -29422,20 +29430,22 @@ UsersGateUI.init();
         `<option value="${a}"${String(st.age) === String(a) ? " selected" : ""}>${a}</option>`
       ).join("");
 
-      const ageHintHtml = st.age
+      const ageHintHtml = (isStandalone || st.age)
         ? ""
         : (Number.isInteger(st.ageRaw)
             ? `<div class="lcPhxSim__hint lcPhxSim__hint--warn">הגיל המחושב מתאריך הלידה (${st.ageRaw}) חורג מטווח התעריפון (${PHOENIX_MORTGAGE_RISK_MIN_AGE}–${PHOENIX_MORTGAGE_RISK_MAX_AGE}) — יש לבחור גיל ידנית</div>`
             : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא תאריך לידה תקין בפרטים האישיים — יש לבחור גיל</div>`);
 
-      const genderHintHtml = st.gender
+      const genderHintHtml = (isStandalone || st.gender)
         ? ""
         : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא מין בפרטים האישיים — יש לבחור</div>`;
-      const smokerHintHtml = (st.smoker === true || st.smoker === false)
+      const smokerHintHtml = (isStandalone || st.smoker === true || st.smoker === false)
         ? ""
         : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא סטטוס עישון בפרטים האישיים — יש לבחור</div>`;
 
-      const isStandalone = !!this._ctx?.standalone;
+      const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company)
+        ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini")
+        : "🏠";
       const occAssessment = assessOccupationRisk((this._getActiveInsured()?.data || {}).occupation, this._ctx?.company, this._ctx?.product);
       const occBlockHtml = isStandalone ? "" : renderOccupationRiskBlockHtml(occAssessment, "lcPhxSim");
 
@@ -29480,7 +29490,7 @@ UsersGateUI.init();
         <div class="giValModal__backdrop" data-phxmort-close="1"></div>
         <div class="giValModal__card lcPhxSim__card">
           <div class="giValModal__head">
-            <span class="giValModal__headIcon" aria-hidden="true">🏠</span>
+            <span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span>
             <div class="giValModal__headText">
               <div class="giValModal__title">סימולטור ריסק משכנתא הפניקס</div>
               <div class="giValModal__sub">חישוב פרמיה מדויק לפי מפת התעריפים הרשמית של הפניקס לריסק משכנתא (עדכון 05.2026)</div>
@@ -29762,17 +29772,37 @@ UsersGateUI.init();
       this._escHandler = (ev) => { if(ev.key === "Escape") this.close(); };
       document.addEventListener("keydown", this._escHandler);
 
-      const cardsHtml = items.length ? items.map((it, idx) => `
+      const cardsHtml = items.length ? items.map((it, idx) => {
+        const logoHtml = (typeof renderCompanyLogoHtmlForCompany === "function")
+          ? renderCompanyLogoHtmlForCompany(it.company, "mini")
+          : `<span aria-hidden="true">${escapeHtml(safeTrim(it.company).slice(0, 2) || "•")}</span>`;
+        return `
         <button type="button" class="lcSimCenterCard" data-simc-idx="${idx}">
-          <span class="lcSimCenterCard__icon" aria-hidden="true">${it.product.includes("משכנתא") ? "🏠" : "🛡️"}</span>
-          <span class="lcSimCenterCard__label">${escapeHtml(this._labelFor(it.company, it.product))}</span>
-        </button>`).join("") : `<div class="lcSimCenterEmpty">לא נמצאו סימולטורים רשומים במערכת.</div>`;
+          <span class="lcSimCenterCard__icon">${logoHtml}</span>
+          <span class="lcSimCenterCard__meta">
+            <span class="lcSimCenterCard__company">${escapeHtml(safeTrim(it.company))}</span>
+            <span class="lcSimCenterCard__product">${escapeHtml(safeTrim(it.product))}</span>
+          </span>
+        </button>`;
+      }).join("") : `<div class="lcSimCenterEmpty">לא נמצאו סימולטורים רשומים במערכת.</div>`;
 
       modal.innerHTML = `
         <div class="giValModal__backdrop" data-simc-close="1"></div>
         <div class="giValModal__card lcSimCenterModal__card">
           <div class="giValModal__head">
-            <span class="giValModal__headIcon" aria-hidden="true">🧮</span>
+            <span class="giValModal__headIcon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="5" y="3" width="14" height="18" rx="2"></rect>
+                <path d="M8 7h8"></path>
+                <path d="M8 11h1"></path>
+                <path d="M11.5 11h1"></path>
+                <path d="M15 11h1"></path>
+                <path d="M8 14.5h1"></path>
+                <path d="M11.5 14.5h1"></path>
+                <path d="M15 14.5h1"></path>
+                <path d="M8 18h8"></path>
+              </svg>
+            </span>
             <div class="giValModal__headText">
               <div class="giValModal__title">מרכז הסימולטורים</div>
               <div class="giValModal__sub">בחרו חברה ומוצר לחישוב פרמיה עצמאי — ללא תלות בלקוח או הצעה קיימת</div>

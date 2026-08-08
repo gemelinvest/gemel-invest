@@ -1,12 +1,9 @@
 /* ===== GI-SIM-CENTER 2026-08-08 · "מרכז הסימולטורים" ==========================
-   קובץ CSS מבודד ועצמאי לחלוטין. כל המחלקות כאן ממוסגרות בקידומת ייחודית
-   "lcSimCenter" שלא קיימת בשום מקום אחר באפליקציה, כדי שלא תהיה שום התנגשות
-   עם app.css / theme.css / theme-p2.css הקיימים. כל הצבעים/רדיוסים/צללים
-   מבוססים על משתני העיצוב הגלובליים (var(--gi-*)) כדי להישאר תואם-שפה
-   מלא לשאר האפליקציה (כמו בקבצי הסימולטורים הקיימים phoenix-risk-sim.css
-   ו-menora-risk-sim.css). אין בקובץ הזה שום שינוי לסלקטור גלובלי קיים. */
+   קובץ CSS מבודד. קידומת lcSimCenter. צבעים מ-var(--gi-*).
+   GI-SIM-CENTER-UI-BLUE: כותרת כחול-לבן תואם תפריט הצד, כרטיסים צפופים,
+   אייקוני חברות (lcCompanyLogo) במקום אימוג'י. */
 
-/* ---------- כפתור הטופ-בר (בהשראת .lcCarInsuranceClickBtn הקיים) ---------- */
+/* ---------- כפתור הטופ-בר ---------- */
 .lcSimCenterBtn{
   position:static !important;
   left:auto !important;
@@ -24,7 +21,7 @@
   margin:0 !important;
   background:
     radial-gradient(120% 120% at 24% 18%, rgba(255,255,255,.42), transparent 44%),
-    linear-gradient(180deg, var(--gi-primary-light, #4f7fee) 0%, var(--gi-primary, #2563EB) 100%);
+    linear-gradient(180deg, #4A7EEE 0%, var(--gi-navy, #3870ED) 100%);
   border:1px solid rgba(160,190,255,.72);
   box-shadow:
     0 4px 16px rgba(30,58,138,.34),
@@ -47,7 +44,7 @@
   transform:translateY(-1px) scale(1.06);
   background:
     radial-gradient(120% 120% at 24% 18%, rgba(255,255,255,.50), transparent 46%),
-    linear-gradient(180deg, #5c8bff 0%, #1d4ed8 100%);
+    linear-gradient(180deg, #5c8bff 0%, var(--gi-primary-hover, #1D4ED8) 100%);
   box-shadow:
     0 8px 24px rgba(30,58,138,.40),
     inset 0 1px 0 rgba(255,255,255,.52);
@@ -67,34 +64,60 @@
   display:inline-flex !important;
 }
 
-/* ---------- מודאל בורר חברה/מוצר (מבוסס על .giValModal הגלובלי הקיים) ---------- */
+/* ---------- מודאל בורר חברה/מוצר ---------- */
 .lcSimCenterModal .giValModal__card{
-  max-width:640px;
+  max-width:620px;
   width:100%;
+  overflow:hidden;
 }
-.lcSimCenterModal .giValModal__head{ padding:24px 30px 18px; position:relative; }
-.lcSimCenterModal .giValModal__body{ padding:22px 30px; }
-.lcSimCenterModal .giValModal__foot{ padding:16px 30px 22px; }
+.lcSimCenterModal .giValModal__head{
+  padding:16px 24px 14px;
+  position:relative;
+  background:linear-gradient(135deg, var(--gi-primary-soft, #EFF6FF) 0%, #e0ecff 55%, #d7e6ff 100%);
+  border-bottom:1px solid rgba(56,112,237,.16);
+}
+.lcSimCenterModal .giValModal__body{ padding:14px 24px; }
+.lcSimCenterModal .giValModal__foot{
+  padding:12px 24px 16px;
+  background:var(--gi-surface-2, #F8FAFC);
+  border-top:1px solid var(--gi-border-soft, #F1F5F9);
+}
+.lcSimCenterModal .giValModal__title{ color:var(--gi-text, #0F172A); font-size:17px; }
+.lcSimCenterModal .giValModal__sub{ color:var(--gi-text-muted, #647287); font-size:12.5px; }
+.lcSimCenterModal .giValModal__headIcon{
+  width:40px;
+  height:40px;
+  border-radius:var(--gi-r-md, 12px);
+  background:#fff;
+  border:1px solid rgba(56,112,237,.14);
+  box-shadow:var(--gi-sh-xs, 0 1px 2px rgba(15,23,42,.04));
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:var(--gi-navy, #3870ED);
+  font-size:18px;
+}
+
 .lcSimCenterModal__closeX{
   position:absolute;
-  top:16px;
-  left:16px;
+  top:12px;
+  left:12px;
   border:none;
-  background:transparent;
+  background:rgba(255,255,255,.72);
   color:var(--gi-text-muted, #647287);
-  font-size:17px;
+  font-size:15px;
   line-height:1;
   cursor:pointer;
-  padding:5px 9px;
+  padding:5px 8px;
   border-radius:var(--gi-r-ctl, 8px);
   transition:background .12s ease, color .12s ease;
 }
-.lcSimCenterModal__closeX:hover{ background:var(--gi-border-soft, #F1F5F9); color:var(--gi-text, #0F172A); }
+.lcSimCenterModal__closeX:hover{ background:#fff; color:var(--gi-text, #0F172A); }
 
 .lcSimCenterGrid{
   display:grid;
   grid-template-columns:repeat(2, 1fr);
-  gap:14px;
+  gap:10px;
 }
 .lcSimCenterCard{
   display:flex;
@@ -102,8 +125,8 @@
   gap:12px;
   border:1.5px solid var(--gi-border, #E5E7EB);
   background:#fff;
-  border-radius:var(--gi-r-card, 16px);
-  padding:16px 18px;
+  border-radius:var(--gi-r-md, 12px);
+  padding:12px 14px;
   cursor:pointer;
   text-align:right;
   transition:border-color .12s ease, background .12s ease, transform .1s ease, box-shadow .12s ease;
@@ -112,42 +135,66 @@
   border-color:var(--gi-primary, #2563EB);
   background:var(--gi-primary-soft, #EFF6FF);
   transform:translateY(-1px);
-  box-shadow:0 6px 18px rgba(37,99,235,.14);
+  box-shadow:0 4px 14px rgba(37,99,235,.12);
 }
 .lcSimCenterCard:active{ transform:translateY(0) scale(.99); }
 .lcSimCenterCard__icon{
   flex-shrink:0;
-  width:40px;
-  height:40px;
+  width:44px;
+  height:44px;
   border-radius:var(--gi-r-md, 12px);
-  background:var(--gi-primary-soft, #EFF6FF);
+  background:var(--gi-surface-2, #F8FAFC);
+  border:1px solid var(--gi-border, #E5E7EB);
   display:flex;
   align-items:center;
   justify-content:center;
-  font-size:19px;
+  overflow:hidden;
 }
-.lcSimCenterCard__label{ font-size:14.5px; font-weight:700; color:var(--gi-text, #0F172A); }
-.lcSimCenterEmpty{
-  padding:18px;
-  text-align:center;
+.lcSimCenterCard__icon .lcCompanyLogo,
+.lcSimCenterCard__icon .lcCompanyLogo--mini{
+  width:32px;
+  height:32px;
+}
+.lcSimCenterCard__icon .lcCompanyLogo__img{
+  width:100%;
+  height:100%;
+  object-fit:contain;
+}
+.lcSimCenterCard__meta{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:0;
+}
+.lcSimCenterCard__company{
   font-size:14px;
+  font-weight:800;
+  color:var(--gi-text, #0F172A);
+  line-height:1.25;
+}
+.lcSimCenterCard__product{
+  font-size:12.5px;
+  font-weight:600;
+  color:var(--gi-text-muted, #647287);
+}
+.lcSimCenterEmpty{
+  padding:16px;
+  text-align:center;
+  font-size:13.5px;
   color:var(--gi-text-muted, #647287);
 }
 
 @media (max-width: 560px){
   .lcSimCenterGrid{ grid-template-columns:1fr; }
-  .lcSimCenterModal .giValModal__head{ padding:20px 20px 14px; }
-  .lcSimCenterModal .giValModal__body{ padding:18px 20px; }
-  .lcSimCenterModal .giValModal__foot{ padding:14px 20px 18px; }
+  .lcSimCenterModal .giValModal__head{ padding:14px 16px 12px; }
+  .lcSimCenterModal .giValModal__body{ padding:12px 16px; }
+  .lcSimCenterModal .giValModal__foot{ padding:12px 16px 14px; }
 }
 
-/* ---------- הודעת "מצב חישוב עצמאי" בתוך הסימולטורים עצמם (ctx.standalone) ----------
-   מוגדר כאן (ולא בקבצי הסימולטורים) כדי לרכז את כל עיצוב "מרכז הסימולטורים"
-   במקום אחד. משתמש בקידומות lcPhxSim / lcMnrSim הקיימות של הסימולטורים
-   בלבד עבור הווריאנט הזה, כדי שיתאים בדיוק לעיצוב הקיים סביבו. */
+/* ---------- הודעת "מצב חישוב עצמאי" ---------- */
 .lcPhxSim__insuredLabel--standalone,
 .lcMnrSim__insuredLabel--standalone{
-  color:var(--gi-info, #2563EB);
-  background:var(--gi-info-soft, #EFF6FF);
-  border:1px solid rgba(37,99,235,.16);
+  color:var(--gi-primary, #2563EB);
+  background:linear-gradient(135deg, var(--gi-primary-soft, #EFF6FF) 0%, #e8f0fe 100%);
+  border:1px solid rgba(56,112,237,.16);
 }
