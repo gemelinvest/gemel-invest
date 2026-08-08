@@ -25218,7 +25218,28 @@ UsersGateUI.init();
       this.els.root = $("#view-dashboard");
     },
 
-    invalidateMetricsCache(){
+    /* GI-PERF 2026-08-09 — בזמן טעינה רזה ה-KPI מגיע מ-RPC (_serverKpiOverlay).
+       רענוני hydration לא צריכים למחוק אותו, אחרת המסך קופץ ל-₪0 עד סוף המילוי. */
+    hasStableServerKpiOverlay(){
+      try {
+        if(!this._metricsCache || this._metricsCache._serverKpiOverlay !== true) return false;
+        return (typeof Storage !== "undefined" && Storage.countMissingCustomerPayloads)
+          ? Storage.countMissingCustomerPayloads() > 0
+          : false;
+      } catch(_e) {
+        return false;
+      }
+    },
+
+    invalidateMetricsCache(options = {}){
+      const force = options.force === true;
+      if(!force && this.hasStableServerKpiOverlay()){
+        this._todaySalesCacheKey = "";
+        this._todaySalesCache = null;
+        this._dailyAgentsCacheKey = "";
+        this._dailyAgentsCache = null;
+        return;
+      }
       this._metricsCacheKey = "";
       this._metricsCache = null;
       this._renderedDomKey = "";
@@ -25488,6 +25509,21 @@ UsersGateUI.init();
     },
 
     computeAndCacheMetrics(cacheKey){
+      /* GI-PERF 2026-08-09 — לא לחשב אפסים מלקוחות רזים; RPC ממלא ויציב עד hydration. */
+      try {
+        if(typeof Storage !== "undefined" && Storage.countMissingCustomerPayloads
+          && Storage.countMissingCustomerPayloads() > 0){
+          if(this._metricsCache?._serverKpiOverlay){
+            this._metricsCacheKey = cacheKey;
+            return this._metricsCache;
+          }
+          const shell = this._metricsLoadingShell();
+          this._metricsCache = shell;
+          this._metricsCacheKey = cacheKey;
+          try { this.compareServerKpis?.(shell); } catch(_e) {}
+          return shell;
+        }
+      } catch(_e) {}
       return GiPerf.run("buildMetrics", () => {
         const customersAll = this.getVisibleCustomers();
         const proposalsAll = this.getVisibleProposals();
@@ -25518,6 +25554,23 @@ UsersGateUI.init();
 
     scheduleChunkedMetricsBuild(cacheKey){
       if(this._metricsBuildBusy && this._metricsBuildKey === cacheKey) return;
+      /* GI-PERF 2026-08-09 — דילוג על בנייה מנותית מאפסים בזמן payloads חסרים. */
+      try {
+        if(typeof Storage !== "undefined" && Storage.countMissingCustomerPayloads
+          && Storage.countMissingCustomerPayloads() > 0){
+          if(this._metricsCache?._serverKpiOverlay){
+            this._metricsCacheKey = cacheKey;
+            this._metricsBuildBusy = false;
+            return;
+          }
+          const shell = this._metricsLoadingShell();
+          this._metricsCache = shell;
+          this._metricsCacheKey = cacheKey;
+          this._metricsBuildBusy = false;
+          try { this.compareServerKpis?.(shell); } catch(_e) {}
+          return;
+        }
+      } catch(_e) {}
       this._metricsBuildKey = cacheKey;
       this._metricsBuildBusy = true;
       const customersAll = this.getVisibleCustomers();
@@ -25751,6 +25804,23 @@ UsersGateUI.init();
       if(this._todaySalesCacheKey === cacheKey && this._todaySalesCache){
         return this._todaySalesCache;
       }
+      /* GI-PERF 2026-08-09 — בלי payloads אין «נמכר היום» אמיתי; לא מציגים ₪0 מטעה. */
+      try {
+        if(typeof Storage !== "undefined" && Storage.countMissingCustomerPayloads
+          && Storage.countMissingCustomerPayloads() > 0){
+          const pending = {
+            totalPremium: 0,
+            totalPolicies: 0,
+            newClients: 0,
+            breakdown: [],
+            _pendingHydration: true,
+            _loading: true
+          };
+          this._todaySalesCacheKey = cacheKey;
+          this._todaySalesCache = pending;
+          return pending;
+        }
+      } catch(_e) {}
       const customersAll = this.getVisibleCustomers();
 
       // PRODUCT_LABELS: מפה מ-p.type לשם תצוגה נחמד
@@ -27227,6 +27297,15 @@ UsersGateUI.init();
       if(this._metricsCacheKey === cacheKey && this._metricsCache){
         return this._metricsCache;
       }
+      /* GI-PERF 2026-08-09 — שינוי cacheKey בזמן hydration לא ידרוס overlay שרת. */
+      if(this._metricsCache?._serverKpiOverlay){
+        try {
+          if(Storage.countMissingCustomerPayloads() > 0){
+            this._metricsCacheKey = cacheKey;
+            return this._metricsCache;
+          }
+        } catch(_e) {}
+      }
       const customersAll = this.getVisibleCustomers();
       const agentScoped = !!(Auth.current && !Auth.canViewAllCustomers?.());
       // PERF: admins hit sync path too often at 30–45 customers; chunk earlier
@@ -27478,16 +27557,21 @@ UsersGateUI.init();
       const todayCard = root.querySelector('#bankKpiTodayCard');
       if(todayCard){
         const valEl = todayCard.querySelector('.bankKpi__value');
-        const newVal = this.formatMoney(todaySales.totalPremium);
+        const pendingToday = !!(todaySales && todaySales._pendingHydration);
+        const newVal = pendingToday ? "טוען…" : this.formatMoney(todaySales.totalPremium);
         if(valEl && valEl.textContent !== newVal) valEl.textContent = newVal;
         const subEl = todayCard.querySelector('.bankKpiToday__sub');
-        const newSub = `${todaySales.totalPolicies} פוליסות · ${todaySales.newClients} לקוחות`;
+        const newSub = pendingToday
+          ? "ממתין לנתונים מלאים"
+          : `${todaySales.totalPolicies} פוליסות · ${todaySales.newClients} לקוחות`;
         if(subEl && subEl.textContent !== newSub) subEl.textContent = newSub;
         const bdEl = todayCard.querySelector('.bankKpiToday__breakdown');
         if(bdEl){
-          const breakdownHtml = todaySales.breakdown.length
-            ? todaySales.breakdown.map((row) => `<div class="bankKpiTodayRow"><span class="bankKpiTodayRow__label">${escapeHtml(row.label)}</span><span class="bankKpiTodayRow__val">${escapeHtml(this.formatMoney(row.premium))}</span></div>`).join('')
-            : `<div class="bankKpiTodayRow bankKpiTodayRow--empty">אין מכירות עדיין היום</div>`;
+          const breakdownHtml = pendingToday
+            ? `<div class="bankKpiTodayRow bankKpiTodayRow--empty">הפירוט ייטען ברקע</div>`
+            : (todaySales.breakdown.length
+              ? todaySales.breakdown.map((row) => `<div class="bankKpiTodayRow"><span class="bankKpiTodayRow__label">${escapeHtml(row.label)}</span><span class="bankKpiTodayRow__val">${escapeHtml(this.formatMoney(row.premium))}</span></div>`).join('')
+              : `<div class="bankKpiTodayRow bankKpiTodayRow--empty">אין מכירות עדיין היום</div>`);
           bdEl.dataset.breakdown = breakdownHtml;
           const inner = bdEl.querySelector('.bankKpiToday__breakdownInner');
           if(inner) inner.innerHTML = breakdownHtml;
@@ -27807,13 +27891,20 @@ UsersGateUI.init();
       // --- TODAY SALES ---
       const todaySales = this.buildTodaySalesMetrics();
       const todayCardHtml = (() => {
-        const breakdownHtml = todaySales.breakdown.length
-          ? todaySales.breakdown.map((row) => `
+        const pendingToday = !!(todaySales && todaySales._pendingHydration);
+        const breakdownHtml = pendingToday
+          ? `<div class="bankKpiTodayRow bankKpiTodayRow--empty">הפירוט ייטען ברקע</div>`
+          : (todaySales.breakdown.length
+            ? todaySales.breakdown.map((row) => `
               <div class="bankKpiTodayRow">
                 <span class="bankKpiTodayRow__label">${escapeHtml(row.label)}</span>
                 <span class="bankKpiTodayRow__val">${escapeHtml(this.formatMoney(row.premium))}</span>
               </div>`).join('')
-          : `<div class="bankKpiTodayRow bankKpiTodayRow--empty">אין מכירות עדיין היום</div>`;
+            : `<div class="bankKpiTodayRow bankKpiTodayRow--empty">אין מכירות עדיין היום</div>`);
+        const todayValue = pendingToday ? "טוען…" : this.formatMoney(todaySales.totalPremium);
+        const todaySub = pendingToday
+          ? "ממתין לנתונים מלאים"
+          : `${String(todaySales.totalPolicies)} פוליסות · ${String(todaySales.newClients)} לקוחות${orgScope ? (' · סה״כ ' + (getDashboardScopeLabelHe('office') || 'סיכום')) : ''}`;
         return `
           <article class="bankKpi card bankKpi--compact bankKpi--today bankKpi--todaySales" id="bankKpiTodayCard" style="display:flex;flex-direction:column;">
             <div class="bankKpi__top">
@@ -27821,8 +27912,8 @@ UsersGateUI.init();
               <div class="bankKpi__caret">⌃</div>
             </div>
             <div class="bankKpi__watermark" aria-hidden="true">${premiumCustomerIcon('building')}</div>
-            <div class="bankKpi__value">${escapeHtml(this.formatMoney(todaySales.totalPremium))}</div>
-            <div class="bankKpiToday__sub">${escapeHtml(String(todaySales.totalPolicies))} פוליסות · ${escapeHtml(String(todaySales.newClients))} לקוחות${orgScope ? (' · סה״כ ' + (getDashboardScopeLabelHe('office') || 'סיכום')) : ''}</div>
+            <div class="bankKpi__value">${escapeHtml(todayValue)}</div>
+            <div class="bankKpiToday__sub">${escapeHtml(todaySub)}</div>
             <button class="bankKpi__detailBtn" type="button" onclick="window.__giToggleKpiBreakdown(this)">הצג פירוט ▾</button>
             <div class="bankKpiToday__breakdown bankKpiToday__breakdown--collapsed" data-breakdown="${breakdownHtml.replace(/"/g,'&quot;')}"><div class="bankKpiToday__breakdownInner">${breakdownHtml}</div></div>
             <div class="bankKpi__bar"></div>
@@ -65680,7 +65771,15 @@ const ClalRiskLifePdf = {
         this._hydrationRefreshDeferrals = 0;
         this._hydrationRefreshLastAt = Date.now();
         GiPerf.run("hydration:viewRefresh", () => {
-          try { DashboardUI.invalidateMetricsCache?.(); } catch(_e) {}
+          /* GI-PERF 2026-08-09 — לא למחוק KPI מ-RPC באמצע hydration.
+             כשכל ה-payloads מלאים, invalidate רגיל מאפשר בנייה סופית אחת. */
+          try {
+            if(DashboardUI.hasStableServerKpiOverlay?.()){
+              DashboardUI.invalidateMetricsCache?.({ force: false });
+            } else {
+              DashboardUI.invalidateMetricsCache?.({ force: true });
+            }
+          } catch(_e) {}
           // המסלול השקט: מטליא תאים קיימים במקום לבנות את הטבלה מחדש.
           try { LiveRefresh.renderActiveView(); } catch(_e) {}
         });
@@ -66736,8 +66835,12 @@ const ClalRiskLifePdf = {
         })();
         /* GI-PERF 2026-08-08: בזמן טעינה רזה אין מאיפה לחשב פרמיה נטו בלקוח —
            ממלאים מ-RPC קיים בלי להוריד את כל ה-payloads שוב. */
-        if(missingCustomers > 0 && this._metricsCache && this._metricsCache === metrics){
-          const m = this._metricsCache;
+        if(missingCustomers > 0){
+          const m = (this._metricsCache && typeof this._metricsCache === "object")
+            ? this._metricsCache
+            : (metrics && typeof metrics === "object" ? metrics : this._metricsLoadingShell());
+          this._metricsCache = m;
+          try { this._metricsCacheKey = this.getMetricsCacheKey(); } catch(_e) {}
           const netPremium = Number(res.netPremium) || 0;
           const apptPremium = Number(res.apptPremium) || 0;
           const apptPolicies = Number(res.apptPolicies) || 0;
@@ -66752,14 +66855,11 @@ const ClalRiskLifePdf = {
           }
           /* אין RPC לפי לקוח למינוי סוכן — מציגים סיכום שרת עד שה-hydration ממלא פירוט מלא. */
           if(apptPolicies > 0 || apptPremium > 0){
-            const emptyClientItems = !Array.isArray(m.agentApptItems) || !m.agentApptItems.length;
-            if(emptyClientItems){
-              m.agentApptItems = [{
-                rec: { fullName: apptPolicies + " מינויי סוכן", idNumber: "" },
-                premium: apptPremium,
-                latestStamp: Date.now()
-              }];
-            }
+            m.agentApptItems = [{
+              rec: { fullName: apptPolicies + " מינויי סוכן", idNumber: "" },
+              premium: apptPremium,
+              latestStamp: Date.now()
+            }];
           }
           const targetValue = Number(m.targetValue) || 0;
           if(targetValue > 0){
