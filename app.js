@@ -105,15 +105,15 @@
   const CUSTOMER_LIGHT_COLUMNS = "id,status,full_name,id_number,phone,email,city,agent_name,agent_id,agent_role,insured_count,existing_policies_count,new_policies_count,created_at,updated_at";
   const PROPOSAL_LIGHT_COLUMNS = "id,status,full_name,id_number,phone,email,city,agent_name,agent_id,agent_role,current_step,insured_count,created_at,updated_at";
 
-  /* GI-FIX 2026-08-01 — טעינה ראשונית מלאה (כולל payload).
-     הרקע: כל תיק לקוח (CustomerEditUI.open) וכל טיוטת הצעה (Wizard.loadDraftData)
-     קוראים rec.payload מהזיכרון באופן סינכרוני. אין בקוד שליפת payload לפי דרישה.
-     כל עוד זה המצב, טעינה רזה אומרת שרשומה שטרם מולאה ברקע נפתחת ריקה —
-     ובאשף זה מסוכן במיוחד, כי _triggerAutoSave דורס את השורה בשרת עם payload ריק.
-     לכן המסלול הרזה מושבת עד שיוקשחו שני מסלולי הפתיחה. השליפות הרזות של מסך
-     הלקוחות (10 אחרונים / חיפוש) ממשיכות לעבוד — הן ממזגות לתוך רשומות קיימות
-     ו-_ingestServerRows שומר על ה-payload הקיים. */
-  const LIGHT_INITIAL_LOAD_ENABLED = false;
+  /* GI-PERF 2026-08-08 — טעינה ראשונית רזה ללקוחות (בלי payload).
+     הגנות שנבדקו לפני ההדלקה:
+       1. פתיחת תיק/עריכה — ensureRecordPayload לפני שימוש ב-payload
+       2. רכישה חדשה / שיקוף — ensure לפני קריאה/כתיבה
+       3. כתיבה — _omitEmptyPayloadForWrite חוסם stub ריק
+       4. KPI — RPC gi_dashboard_* כשחסרים payloads (בלי להוריד 1511 מלאים)
+       5. hydratePayloads ממלא ברקע אחרי שהמסך שמיש
+     לכיבוי חירום: false + רענון (או קובץ rollback). */
+  const LIGHT_INITIAL_LOAD_ENABLED = true;
   /* GI-PERF 2026-08-05: הצעות בנפרד מלקוחות.
      הדגל שמעליי כבוי כי הדשבורד מחשב מטריקות מתוך payload של *לקוחות*
      (getCustomerRawNewPolicies), וטעינה רזה הייתה מציגה אפסים עד סיום מילוי הרקע.
@@ -11263,6 +11263,15 @@
       return missing;
     },
 
+    countMissingCustomerPayloads(){
+      const list = Array.isArray(State.data?.customers) ? State.data.customers : [];
+      let missing = 0;
+      for(let i = 0; i < list.length; i += 1){
+        if(this.payloadIsEmpty(list[i])) missing += 1;
+      }
+      return missing;
+    },
+
     async hydratePayloads(options = {}){
       if(this._payloadHydrationRunning) return { ok:false, error:"ALREADY_RUNNING" };
       this._payloadHydrationRunning = true;
@@ -11322,6 +11331,16 @@
     },
 
     async loadSheets(options = {}){
+      /* GI-PERF 2026-08-08 — מניעת הורדה כפולה: timeout/recovery שמצטרפים
+         לטעינה שכבר רצה מקבלים את אותה Promise במקום select * נוסף. */
+      if(this._loadSheetsInFlight) return this._loadSheetsInFlight;
+      this._loadSheetsInFlight = this._loadSheetsUnlocked(options).finally(() => {
+        this._loadSheetsInFlight = null;
+      });
+      return this._loadSheetsInFlight;
+    },
+
+    async _loadSheetsUnlocked(options = {}){
       GiPerf.mark("loadSheets");
       const prevSkipScope = this._skipServerAgentScope;
       this._skipServerAgentScope = options.skipServerAgentScope === true;
@@ -15496,7 +15515,7 @@ UsersGateUI.init();
         ev?.preventDefault?.();
         const rec = this.current();
         if(!rec) return;
-        Wizard.openNewPurchaseForCustomer(rec.id);
+        void Wizard.openNewPurchaseForCustomer(rec.id);
       });
       on(this.els.body, "click", (ev) => {
         const tabBtn = ev.target?.closest?.("[data-cf-tab]");
@@ -25569,10 +25588,11 @@ UsersGateUI.init();
         applyPack(currentAgg, apptCurrent);
         applyPack(prevAgg, apptPrev);
 
-        this._assembleMetricsResult(
+        const _giChunkMetrics = this._assembleMetricsResult(
           cacheKey, customersAll, proposalsAll, currentRange, previousRange,
           customersMonth, customersPrev, proposalsMonth, proposalsPrev, currentAgg, prevAgg, dailySeries
         );
+        try { this.compareServerKpis?.(_giChunkMetrics); } catch(_e) {}
         this._metricsBuildBusy = false;
         GiPerf.mark("buildMetrics:end");
         GiPerf.measure("buildMetrics", "buildMetrics");
@@ -32251,15 +32271,16 @@ init(){
         const customer = findCustomerByIdNumber(idNum);
         if(customer && customerVisibleToCurrentUser(customer)){
           prepareInteractiveWizardOpen();
-          this.openNewPurchaseForCustomer(customer.id);
-          this.applyCampaignLeadPrefillToWizard({
-            ...payload,
-            idNumber: idNum,
-            customerName: payload.customerName || lead.customerName,
-            phone: payload.phone || lead.phone
-          }, { mergeOnly: true });
-          const labels = (payload.insuranceTypeLabels || []).join(" · ");
-          this.setHint(labels ? `פרטים מדף הנחיתה נטענו (${labels}). המשיכו באשף.` : (isGoldMirrorCampaignLead(lead) ? "ליד זהב · פרטי הלקוח נטענו — המשיכו באשף." : "פרטים מדף הנחיתה נטענו — המשיכו באשף."));
+          void this.openNewPurchaseForCustomer(customer.id).then(() => {
+            this.applyCampaignLeadPrefillToWizard({
+              ...payload,
+              idNumber: idNum,
+              customerName: payload.customerName || lead.customerName,
+              phone: payload.phone || lead.phone
+            }, { mergeOnly: true });
+            const labels = (payload.insuranceTypeLabels || []).join(" · ");
+            this.setHint(labels ? `פרטים מדף הנחיתה נטענו (${labels}). המשיכו באשף.` : (isGoldMirrorCampaignLead(lead) ? "ליד זהב · פרטי הלקוח נטענו — המשיכו באשף." : "פרטים מדף הנחיתה נטענו — המשיכו באשף."));
+          });
           return;
         }
       }
@@ -32279,15 +32300,37 @@ init(){
       this.setHint(labels ? `פרטים מדף הנחיתה: ${labels}. בדקו שלב 1 ו-4 והמשיכו.` : (isGoldMirrorCampaignLead(lead) ? "ליד זהב · המשיכו באשף בריאות וסיכונים." : "פרטים מדף הנחיתה נטענו — המשיכו באשף."));
     },
 
-    openNewPurchaseForCustomer(customerId){
+    async openNewPurchaseForCustomer(customerId){
       const id = safeTrim(customerId);
       if(!id) return;
       this._clearLocalDraft();
       this._harImportState = {};
-      const rec = (State.data?.customers || []).find((x) => String(x?.id) === String(id));
+      let rec = (State.data?.customers || []).find((x) => String(x?.id) === String(id));
       if(!rec){
         SaveStatusUI.error('לא נמצא תיק לקוח', 'לא הצלחנו לאתר את תיק הלקוח לצורך רכישת ביטוח חדש.');
         return;
+      }
+      /* GI-PERF 2026-08-08 — בטעינה רזה אין payload בזיכרון; חובה למשוך
+         לפני baseline לרכישה חדשה, אחרת שמירה עלולה לדרוס תיק מלא. */
+      if(Storage.payloadIsEmpty(rec)){
+        let ensured = null;
+        try {
+          ensured = await Storage.ensureRecordPayload("customers", id);
+        } catch(err) {
+          ensured = { ok:false, error: String(err?.message || err) };
+        }
+        if(!ensured?.ok){
+          try {
+            window.showToast?.({
+              title: "לא ניתן להתחיל רכישה",
+              text: "פרטי התיק לא הגיעו מהשרת. הנתונים לא נמחקו — נסה שוב בעוד רגע.",
+              variant: "warn",
+              durationMs: 7000
+            });
+          } catch(_e) {}
+          return;
+        }
+        rec = (State.data?.customers || []).find((x) => String(x?.id) === String(id)) || rec;
       }
       const payload = rec?.payload && typeof rec.payload === 'object' ? rec.payload : {};
       let sourceInsureds = Array.isArray(payload.insureds) ? payload.insureds : [];
@@ -65149,6 +65192,15 @@ const ClalRiskLifePdf = {
       if(this._fullDataReady && (!!Auth.canViewAllCustomers() || this._sessionDataScoped)) return;
       if(this._postLoginDataRecoveryBusy) return;
       if(this._postLoginDataRecoveryTimer) return;
+      /* GI-PERF 2026-08-08 — לא מפעילים recovery בזמן טעינה פעילה (מונע כפילות),
+         אבל דוחים ניסיון קצר אחרי הסיום למקרה שהטעינה נכשלה. */
+      if(this._reloadSessionInFlight || Storage._loadSheetsInFlight){
+        this._postLoginDataRecoveryTimer = window.setTimeout(() => {
+          this._postLoginDataRecoveryTimer = null;
+          this.schedulePostLoginDataRecovery(reason || "deferred_after_inflight");
+        }, 1500);
+        return;
+      }
       const attempt = Number(this._postLoginDataRecoveryAttempt) || 0;
       const delays = POST_LOGIN_DATA_RECOVERY_DELAYS_MS;
       if(attempt >= delays.length){
@@ -65659,6 +65711,14 @@ const ClalRiskLifePdf = {
             try { this.scheduleHydrationViewRefresh({ force: true }); } catch(_e) {}
             // רק עכשיו יש payload מלא — שווה לשמור למטמון לפתיחה הבאה.
             try { Storage.scheduleFullIdbCacheSave(State.data); } catch(_e) {}
+            /* GI-PERF 2026-08-08 — אחרי מילוי payload מעדכנים baseline כדי
+               ש-persist לא יראה את כל הלקוחות כ-"השתנו" וישלח upsert ענק. */
+            try {
+              Storage.rememberRows(SUPABASE_TABLES.customers, Storage.buildCustomerRows(State.data));
+              Storage.markRowsBaseline(SUPABASE_TABLES.customers);
+              Storage.rememberRows(SUPABASE_TABLES.proposals, Storage.buildProposalRows(State.data));
+              Storage.markRowsBaseline(SUPABASE_TABLES.proposals);
+            } catch(_e) {}
           }
           if(res?.failed){
             try { console.warn("PAYLOAD_HYDRATION_PARTIAL:", res.filled, "מולאו,", res.failed, "נכשלו"); } catch(_e) {}
@@ -65677,6 +65737,18 @@ const ClalRiskLifePdf = {
     },
 
     async reloadSessionState(options = {}){
+      if(!Auth.current) return { ok:false, error:"NO_SESSION" };
+      /* GI-PERF 2026-08-08 — recovery/timeout מצטרפים לריצה אחת במקום שני
+         reloadSessionState מקבילים (כל אחד עם loadSheets מלא). */
+      if(this._reloadSessionInFlight) return this._reloadSessionInFlight;
+      const run = this._reloadSessionStateUnlocked(options).finally(() => {
+        if(this._reloadSessionInFlight === run) this._reloadSessionInFlight = null;
+      });
+      this._reloadSessionInFlight = run;
+      return run;
+    },
+
+    async _reloadSessionStateUnlocked(options = {}){
       if(!Auth.current) return { ok:false, error:"NO_SESSION" };
       // מנקה מטמון של משתמשים אחרים על אותו מכשיר (לא חוסם — רץ ברקע).
       try { void Storage.purgeOtherUserIdbCaches(); } catch(_e) {}
@@ -66591,7 +66663,8 @@ const ClalRiskLifePdf = {
      GI_SERVER_KPI_MODE:
        "off"     — כבוי לגמרי. אפס קריאות רשת, אפס השפעה.
        "compare" — הדשבורד מציג את החישוב הקיים כרגיל, ובמקביל קורא ל-RPC
-                   ומדפיס השוואה לקונסולה. אין שינוי במה שרואים.
+                   ומדפיס השוואה לקונסולה. כשחסרים customer payloads (טעינה רזה)
+                   ה-RPC גם ממלא את המספרים על המסך עד סיום hydration.
 
      הטווח נשלח מאותו אובייקט Range שהדשבורד חישב לעצמו, ולכן אזור הזמן
      וגבול החודש זהים בהגדרה — אי אפשר להשוות טווחים שונים בטעות.
@@ -66643,6 +66716,36 @@ const ClalRiskLifePdf = {
         const res = await Storage.loadServerKpis(range);
         if(!res?.ok){
           console.warn("[GI-SERVER-KPI] לא זמין:", res?.error);
+          return;
+        }
+        const missingCustomers = (() => {
+          try { return Storage.countMissingCustomerPayloads(); } catch(_e) { return 0; }
+        })();
+        /* GI-PERF 2026-08-08: בזמן טעינה רזה אין מאיפה לחשב פרמיה נטו בלקוח —
+           ממלאים מ-RPC קיים בלי להוריד את כל ה-payloads שוב. */
+        if(missingCustomers > 0 && this._metricsCache && this._metricsCache === metrics){
+          const m = this._metricsCache;
+          const netPremium = Number(res.netPremium) || 0;
+          m.netPremium = netPremium;
+          m.soldPolicies = Number(res.soldPolicies) || 0;
+          m.newClients = Number(res.newClients) || 0;
+          m.agentAppointmentPremium = Number(res.apptPremium) || 0;
+          m.agentAppointments = Number(res.apptPolicies) || 0;
+          const targetValue = Number(m.targetValue) || 0;
+          if(targetValue > 0){
+            const targetPctRaw = (netPremium / targetValue) * 100;
+            m.targetPct = Math.max(0, Math.round(targetPctRaw * 10) / 10);
+            m.targetTone = m.targetPct >= 100 ? "success" : m.targetPct >= 80 ? "strong" : m.targetPct >= 40 ? "mid" : "low";
+            m.targetRemaining = Math.max(0, targetValue - netPremium);
+            m.avgPremium = m.customersMonth?.length ? (netPremium / m.customersMonth.length) : 0;
+            const workdaysLeft = Math.max(1, Number(m.workdaysLeft) || 1);
+            m.requiredDailyRate = m.targetRemaining > 0 ? (m.targetRemaining / workdaysLeft) : 0;
+          }
+          m._serverKpiOverlay = true;
+          m._loading = false;
+          if(LiveRefresh.getCurrentView() === "dashboard"){
+            try { this.scheduleRefreshKpis(); } catch(_e) {}
+          }
           return;
         }
         const round2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
@@ -76425,7 +76528,7 @@ ${inner}
       else this.stopCall();
     },
 
-    startCall(){
+    async startCall(){
       if(!this._allPreCheckComplete()){
         if(this.els.preFlightAlert) this.els.preFlightAlert.hidden = false;
         try{
@@ -76441,6 +76544,26 @@ ${inner}
         this._mcToast("חסרים קבצים", "יש להעלות את כל קבצי הפרמיות (לפני ואחרי הנחה) לפני התחלת השיחה.", "warn");
         this._syncMcCallStartButton();
         return;
+      }
+      /* GI-PERF 2026-08-08 — בטעינה רזה חובה payload מלא לפני mutate+persist. */
+      const ensureId = safeTrim(this.selectedCustomer?.id || recGate?.id);
+      if(ensureId){
+        const gateRec = (State.data?.customers || []).find((c) => safeTrim(c?.id) === ensureId);
+        if(!gateRec || Storage.payloadIsEmpty(gateRec)){
+          let ensured = null;
+          try {
+            ensured = await Storage.ensureRecordPayload("customers", ensureId);
+          } catch(err) {
+            ensured = { ok:false, error: String(err?.message || err) };
+          }
+          if(!ensured?.ok){
+            this._mcToast("לא ניתן להתחיל שיחה", "פרטי התיק לא הגיעו מהשרת. נסה שוב בעוד רגע.", "warn");
+            this._syncMcCallStartButton();
+            return;
+          }
+          const fresh = (State.data?.customers || []).find((c) => safeTrim(c?.id) === ensureId);
+          if(fresh) this.selectedCustomer = fresh;
+        }
       }
       if(this.els.preFlightAlert) this.els.preFlightAlert.hidden = true;
       if(this.els.readyPremiumAlert) this.els.readyPremiumAlert.hidden = true;
