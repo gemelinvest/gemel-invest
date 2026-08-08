@@ -28717,6 +28717,326 @@ UsersGateUI.init();
   RiskSimulators.register("מנורה", "ריסק", MenoraRiskSimulator);
   // ===== סוף GI-MNR-RISK-SIM =====================================================
 
+  // ===== GI-PHX-MORT-RISK-SIM: סימולטור ריסק משכנתא הפניקס ========================
+  // מפת התעריפים הרשמית של הפניקס לביטוח ריסק משכנתא (עדכון 05.2026). זהו מוצר
+  // נפרד מ"ריסק" הרגיל של הפניקס — עם טבלת תעריפים ייחודית וטווח גילאים שונה
+  // (18–80, לא 18–79). התעריף הוא פרמיה שנתית לכל 1,000 ₪ סכום ביטוח — זהה ביחידה
+  // ל"ריסק" הרגיל (שנתית/1000, חודשית=שנתית/12). זהו מקור האמת היחיד לתמחור ריסק
+  // משכנתא הפניקס בסימולטור הזה — אין להמציא, לקרב או להשלים ערך שאינו רשום כאן
+  // במפורש, כולל אי-המונוטוניות בגילאים 70→71 (התעריף יורד בפועל בדוח המקורי —
+  // מועתק כמו שהוא, ללא "תיקון"). כל עדכון תעריפים עתידי מהחברה חייב לעדכן רק
+  // את הטבלה הזו.
+  //
+  // [age, maleNonSmoker, maleSmoker, femaleNonSmoker, femaleSmoker] — פרמיה שנתית ל-1,000 ₪
+  const PHOENIX_MORTGAGE_RISK_RATE_TABLE = [
+    [18, 0.73, 1.05, 0.70, 1.00], [19, 0.73, 1.05, 0.70, 1.00], [20, 0.73, 1.05, 0.70, 1.00],
+    [21, 0.73, 1.05, 0.70, 1.00], [22, 0.73, 1.05, 0.70, 1.00], [23, 0.73, 1.05, 0.70, 1.00],
+    [24, 0.73, 1.05, 0.70, 1.00], [25, 0.73, 1.05, 0.70, 1.00], [26, 0.73, 1.05, 0.70, 1.00],
+    [27, 0.73, 1.05, 0.70, 1.00], [28, 0.73, 1.05, 0.70, 1.00], [29, 0.73, 1.05, 0.70, 1.00],
+    [30, 0.73, 1.05, 0.70, 1.00], [31, 0.73, 1.05, 0.70, 1.00], [32, 0.73, 1.09, 0.70, 1.00],
+    [33, 0.73, 1.12, 0.70, 1.00], [34, 0.73, 1.16, 0.70, 1.00], [35, 0.73, 1.20, 0.70, 1.00],
+    [36, 0.84, 1.33, 0.80, 1.09], [37, 0.87, 1.43, 0.80, 1.15], [38, 0.92, 1.53, 0.80, 1.15],
+    [39, 0.97, 1.65, 0.80, 1.15], [40, 1.03, 1.79, 0.80, 1.21], [41, 1.10, 1.97, 0.84, 1.34],
+    [42, 1.17, 2.12, 0.90, 1.48], [43, 1.25, 2.30, 0.96, 1.64], [44, 1.34, 2.50, 1.04, 1.82],
+    [45, 1.46, 2.76, 1.13, 2.05], [46, 1.59, 3.05, 1.23, 2.30], [47, 1.73, 3.38, 1.34, 2.58],
+    [48, 1.90, 3.77, 1.47, 2.91], [49, 2.09, 4.21, 1.61, 3.28], [50, 2.31, 4.71, 1.77, 3.70],
+    [51, 2.55, 5.28, 1.95, 4.17], [52, 2.83, 5.93, 2.15, 4.71], [53, 3.14, 6.67, 2.38, 5.31],
+    [54, 3.50, 7.51, 2.64, 5.99], [55, 3.90, 8.46, 2.92, 6.76], [56, 4.36, 9.54, 3.25, 7.62],
+    [57, 4.87, 10.75, 3.61, 8.59], [58, 5.46, 12.12, 4.02, 9.67], [59, 6.13, 13.66, 4.47, 10.23],
+    [60, 6.88, 15.38, 4.90, 11.50], [61, 7.74, 17.31, 5.26, 12.93], [62, 8.70, 19.46, 5.77, 14.45],
+    [63, 9.80, 21.32, 6.32, 15.96], [64, 11.04, 24.54, 6.94, 17.62], [65, 12.45, 27.51, 7.61, 19.47],
+    [66, 14.05, 30.80, 8.60, 21.76], [67, 15.85, 34.44, 9.67, 24.31], [68, 17.89, 38.46, 10.91, 27.17],
+    [69, 20.21, 42.89, 12.33, 30.48], [70, 22.82, 47.76, 14.26, 34.21], [71, 22.43, 46.20, 14.94, 36.38],
+    [72, 25.33, 51.28, 16.75, 40.41], [73, 28.62, 56.82, 18.77, 44.83], [74, 30.35, 58.99, 19.76, 46.60],
+    [75, 32.29, 61.36, 20.87, 48.55], [76, 36.47, 67.65, 23.40, 53.65], [77, 41.19, 74.45, 26.24, 59.20],
+    [78, 46.52, 81.80, 29.42, 65.23], [79, 52.51, 89.71, 32.99, 71.78], [80, 59.26, 98.18, 36.99, 78.87]
+  ];
+
+  const PHOENIX_MORTGAGE_RISK_RATE_MAP = new Map(
+    PHOENIX_MORTGAGE_RISK_RATE_TABLE.map((row) => [row[0], {
+      maleNonSmoker: row[1], maleSmoker: row[2], femaleNonSmoker: row[3], femaleSmoker: row[4]
+    }])
+  );
+
+  const PHOENIX_MORTGAGE_RISK_AGE_OPTIONS = PHOENIX_MORTGAGE_RISK_RATE_TABLE.map((row) => row[0]);
+  const PHOENIX_MORTGAGE_RISK_MIN_AGE = PHOENIX_MORTGAGE_RISK_AGE_OPTIONS[0];
+  const PHOENIX_MORTGAGE_RISK_MAX_AGE = PHOENIX_MORTGAGE_RISK_AGE_OPTIONS[PHOENIX_MORTGAGE_RISK_AGE_OPTIONS.length - 1];
+
+  /** התאמה מדויקת בלבד — ללא קירוב/השלמה. מחזיר {ok:false, reason} אם אין התאמה. */
+  function lookupPhoenixMortgageRiskRate({ age, gender, smoker }){
+    const ageNum = Number(age);
+    if(!Number.isInteger(ageNum)) return { ok:false, reason:"age_missing" };
+    const row = PHOENIX_MORTGAGE_RISK_RATE_MAP.get(ageNum);
+    if(!row) return { ok:false, reason:"age_out_of_range" };
+    const genderKey = gender === "זכר" ? "male" : (gender === "נקבה" ? "female" : "");
+    if(!genderKey) return { ok:false, reason:"gender_missing" };
+    if(smoker !== true && smoker !== false) return { ok:false, reason:"smoker_missing" };
+    const rate = row[genderKey + (smoker ? "Smoker" : "NonSmoker")];
+    if(typeof rate !== "number" || !Number.isFinite(rate)) return { ok:false, reason:"rate_missing" };
+    return { ok:true, ratePerMille: rate };
+  }
+
+  /** פרמיה שנתית = (סכום ביטוח / 1000) × תעריף; חודשית = שנתית / 12. חישוב
+      בעשרות-אגורות שלמות למניעת שגיאות float בינאריות — אין כאן שום עיגול עסקי. */
+  function computePhoenixMortgageRiskPremium({ age, gender, smoker, sumInsured }){
+    const lookup = lookupPhoenixMortgageRiskRate({ age, gender, smoker });
+    if(!lookup.ok) return lookup;
+    const sum = Number(sumInsured);
+    if(!Number.isFinite(sum) || sum <= 0) return { ok:false, reason:"sum_missing" };
+    const rateCenti = Math.round(lookup.ratePerMille * 100); // אגורות ל-1,000 ₪ (התעריף נתון ב-2 ספרות עשרוניות בדוח)
+    const annualPremium = (rateCenti * sum) / 100000; // (rateCenti/100) * sum / 1000
+    const monthlyPremium = annualPremium / 12;
+    return { ok:true, ratePerMille: lookup.ratePerMille, annualPremium, monthlyPremium };
+  }
+
+  const PHOENIX_MORTGAGE_RISK_SIM_MISSING_MESSAGES = {
+    age_missing: "יש לבחור גיל לפני חישוב הפרמיה.",
+    age_out_of_range: `לא נמצא תעריף מתאים לגיל שהוזן (התעריפון מכיל גילאים ${PHOENIX_MORTGAGE_RISK_MIN_AGE}–${PHOENIX_MORTGAGE_RISK_MAX_AGE} בלבד).`,
+    gender_missing: "יש להזין מין לפני חישוב הפרמיה.",
+    smoker_missing: "יש לציין האם המבוטח מעשן/ת לפני חישוב הפרמיה.",
+    sum_missing: "יש להזין סכום ביטוח תקין (גדול מאפס) לפני חישוב הפרמיה.",
+    rate_missing: "לא נמצא תעריף מתאים לנתונים שהוזנו."
+  };
+
+  /** קומפוננטת סימולטור ריסק משכנתא הפניקס — מודאל עצמאי, לא תלוי במבנה הפנימי
+      של Wizard.renderStep5 מעבר לממשק open(ctx)/onApply. עושה שימוש חוזר במחלקות
+      ה-CSS lcPhxSim__* הקיימות (אותה חברה, אותו מבנה מודאל בדיוק — אין צורך
+      בקובץ CSS נפרד), עם מזהה DOM ו-data-attributes נפרדים (data-phxmort-*)
+      כדי שלא יתערבבו עם הבינדינג של סימולטור "ריסק" הרגיל. */
+  const PhoenixMortgageRiskSimulator = {
+    _modal: null,
+    _ctx: null,
+    _state: {},
+    _activeInsuredId: null,
+    _escHandler: null,
+
+    open(ctx){
+      this.close();
+      this._ctx = ctx || {};
+      const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : [];
+      this._state = {};
+      insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); });
+      this._activeInsuredId = insureds[0]?.id || null;
+      this._mount();
+      this._render();
+    },
+
+    _prefillFromInsured(ins){
+      const d = ins?.data || {};
+      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
+      const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
+      return {
+        age: "",
+        gender, genderSource: gender ? "step1" : "",
+        smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "",
+        sumInsured: "",
+        result: null,
+        error: null
+      };
+    },
+
+    close(){
+      if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; }
+      if(this._modal){
+        const m = this._modal;
+        m.classList.add("giValModal--leaving");
+        window.setTimeout(() => m.remove(), 200);
+        this._modal = null;
+      }
+      this._ctx = null;
+    },
+
+    _mount(){
+      const modal = document.createElement("div");
+      modal.id = "lcPhxMortSimModal";
+      modal.className = "giValModal lcPhxSimModal";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-label", "סימולטור ריסק משכנתא הפניקס");
+      document.body.appendChild(modal);
+      this._modal = modal;
+      this._escHandler = (ev) => { if(ev.key === "Escape") this.close(); };
+      document.addEventListener("keydown", this._escHandler);
+      requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
+    },
+
+    _getInsuredLabel(insId){
+      const ins = (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === insId);
+      return ins ? safeTrim(ins.label) || "מבוטח" : "מבוטח";
+    },
+
+    _render(){
+      if(!this._modal) return;
+      const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+      const activeId = this._activeInsuredId;
+      const st = this._state[activeId] || this._prefillFromInsured(null);
+
+      const tabsHtml = insureds.length > 1 ? `<div class="lcPhxSim__tabs">${insureds.map((ins) => {
+        const hasResult = !!this._state[ins.id]?.result;
+        return `<button type="button" class="lcPhxSim__tab${ins.id === activeId ? ' is-active' : ''}${hasResult ? ' has-result' : ''}" data-phxmort-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${hasResult ? ' ✓' : ''}</button>`;
+      }).join("")}</div>` : "";
+
+      const ageOptionsHtml = `<option value="">בחר גיל…</option>` + PHOENIX_MORTGAGE_RISK_AGE_OPTIONS.map((a) =>
+        `<option value="${a}"${String(st.age) === String(a) ? " selected" : ""}>${a}</option>`
+      ).join("");
+
+      const genderHintHtml = st.gender
+        ? (st.genderSource === "step1" ? `<div class="lcPhxSim__hint">נשאב מפרטים אישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
+        : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא מין בפרטים האישיים — יש לבחור</div>`;
+      const smokerHintHtml = (st.smoker === true || st.smoker === false)
+        ? (st.smokerSource === "step1" ? `<div class="lcPhxSim__hint">נשאב מפרטים אישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
+        : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא סטטוס עישון בפרטים האישיים — יש לבחור</div>`;
+
+      const resultHtml = st.error
+        ? `<div class="lcPhxSim__result lcPhxSim__result--error">${escapeHtml(st.error)}</div>`
+        : (st.result ? `<div class="lcPhxSim__result lcPhxSim__result--ok">
+            <div class="lcPhxSim__resultRow"><span>תעריף שנתי ל-1,000 ₪</span><strong>${escapeHtml(String(st.result.ratePerMille))} ₪</strong></div>
+            <div class="lcPhxSim__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatPhoenixExactAmount(st.result.annualPremium))}</strong></div>
+            <div class="lcPhxSim__resultRow lcPhxSim__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatPhoenixExactAmount(st.result.monthlyPremium))}</strong></div>
+          </div>` : "");
+
+      const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
+
+      this._modal.innerHTML = `
+        <div class="giValModal__backdrop" data-phxmort-close="1"></div>
+        <div class="giValModal__card lcPhxSim__card">
+          <div class="giValModal__head">
+            <span class="giValModal__headIcon" aria-hidden="true">🏠</span>
+            <div class="giValModal__headText">
+              <div class="giValModal__title">סימולטור ריסק משכנתא הפניקס</div>
+              <div class="giValModal__sub">חישוב פרמיה מדויק לפי מפת התעריפים הרשמית של הפניקס לריסק משכנתא (עדכון 05.2026)</div>
+            </div>
+            <button type="button" class="lcPhxSim__closeX" data-phxmort-close="1" aria-label="סגירה">✕</button>
+          </div>
+          <div class="giValModal__body lcPhxSim__body">
+            ${tabsHtml}
+            <div class="lcPhxSim__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>
+            <div class="lcPhxSim__grid">
+              <div class="lcPhxSim__field">
+                <label class="lcPhxSim__label">גיל (${PHOENIX_MORTGAGE_RISK_MIN_AGE}–${PHOENIX_MORTGAGE_RISK_MAX_AGE})</label>
+                <select class="lcPhxSim__input" data-phxmort-field="age">${ageOptionsHtml}</select>
+              </div>
+              <div class="lcPhxSim__field">
+                <label class="lcPhxSim__label">מין</label>
+                <div class="lcPhxSim__segmented">
+                  <button type="button" class="lcPhxSim__segBtn${st.gender === 'זכר' ? ' is-active' : ''}" data-phxmort-field="gender" data-phxmort-value="זכר">זכר</button>
+                  <button type="button" class="lcPhxSim__segBtn${st.gender === 'נקבה' ? ' is-active' : ''}" data-phxmort-field="gender" data-phxmort-value="נקבה">נקבה</button>
+                </div>
+                ${genderHintHtml}
+              </div>
+              <div class="lcPhxSim__field">
+                <label class="lcPhxSim__label">עישון</label>
+                <div class="lcPhxSim__segmented">
+                  <button type="button" class="lcPhxSim__segBtn${st.smoker === false ? ' is-active' : ''}" data-phxmort-field="smoker" data-phxmort-value="0">לא מעשן/ת</button>
+                  <button type="button" class="lcPhxSim__segBtn${st.smoker === true ? ' is-active' : ''}" data-phxmort-field="smoker" data-phxmort-value="1">מעשן/ת</button>
+                </div>
+                ${smokerHintHtml}
+              </div>
+              <div class="lcPhxSim__field">
+                <label class="lcPhxSim__label">סכום ביטוח (₪)</label>
+                <input class="lcPhxSim__input" type="text" inputmode="numeric" data-phxmort-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="לדוגמה: 1,000,000" />
+              </div>
+            </div>
+            <button type="button" class="btn btn--secondary lcPhxSim__calcBtn" data-phxmort-calc="1">חשב פרמיה</button>
+            ${resultHtml}
+          </div>
+          <div class="giValModal__foot lcPhxSim__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-phxmort-close="1">ביטול</button>
+            <button type="button" class="btn btn--primary" data-phxmort-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button>
+          </div>
+        </div>`;
+
+      this._bind();
+    },
+
+    _bind(){
+      const modal = this._modal;
+      if(!modal) return;
+      $$("[data-phxmort-close]", modal).forEach((el) => on(el, "click", () => this.close()));
+      $$("[data-phxmort-tab]", modal).forEach((el) => on(el, "click", () => {
+        this._activeInsuredId = el.getAttribute("data-phxmort-tab");
+        this._render();
+      }));
+      const ageSel = modal.querySelector('[data-phxmort-field="age"]');
+      if(ageSel) on(ageSel, "change", () => {
+        const st = this._state[this._activeInsuredId];
+        if(!st) return;
+        st.age = ageSel.value;
+        st.result = null; st.error = null;
+        this._render();
+      });
+      const sumInput = modal.querySelector('[data-phxmort-field="sumInsured"]');
+      if(sumInput) on(sumInput, "input", () => {
+        const st = this._state[this._activeInsuredId];
+        if(!st) return;
+        st.sumInsured = sumInput.value;
+        st.result = null; st.error = null;
+      });
+      $$('[data-phxmort-field="gender"]', modal).forEach((btn) => on(btn, "click", () => {
+        const st = this._state[this._activeInsuredId];
+        if(!st) return;
+        st.gender = btn.getAttribute("data-phxmort-value") || "";
+        st.genderSource = "manual";
+        st.result = null; st.error = null;
+        this._render();
+      }));
+      $$('[data-phxmort-field="smoker"]', modal).forEach((btn) => on(btn, "click", () => {
+        const st = this._state[this._activeInsuredId];
+        if(!st) return;
+        st.smoker = btn.getAttribute("data-phxmort-value") === "1";
+        st.smokerSource = "manual";
+        st.result = null; st.error = null;
+        this._render();
+      }));
+      const calcBtn = modal.querySelector("[data-phxmort-calc]");
+      if(calcBtn) on(calcBtn, "click", () => this._calc(this._activeInsuredId));
+      const applyBtn = modal.querySelector("[data-phxmort-apply]");
+      if(applyBtn) on(applyBtn, "click", () => this._apply());
+    },
+
+    _calc(insuredId){
+      const st = this._state[insuredId];
+      if(!st) return;
+      const sumNum = Number(String(st.sumInsured || "").replace(/[^\d.]/g, ""));
+      const calc = computePhoenixMortgageRiskPremium({ age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: sumNum });
+      if(calc.ok){
+        st.result = calc;
+        st.error = null;
+      } else {
+        st.result = null;
+        st.error = PHOENIX_MORTGAGE_RISK_SIM_MISSING_MESSAGES[calc.reason] || "לא נמצא תעריף מתאים לנתונים שהוזנו.";
+      }
+      this._render();
+    },
+
+    _apply(){
+      const results = {};
+      Object.keys(this._state).forEach((insId) => {
+        const st = this._state[insId];
+        if(st?.result?.ok){
+          results[insId] = {
+            sumInsured: st.sumInsured,
+            monthlyPremium: st.result.monthlyPremium,
+            annualPremium: st.result.annualPremium,
+            ratePerMille: st.result.ratePerMille,
+            age: st.age, gender: st.gender, smoker: st.smoker,
+            genderSource: st.genderSource, smokerSource: st.smokerSource
+          };
+        }
+      });
+      if(!Object.keys(results).length){
+        window.showToast?.({ title: "אין תוצאה להחלה", text: "יש לחשב פרמיה לפחות למבוטח אחד לפני ההחלה על הפוליסה.", variant: "warn" });
+        return;
+      }
+      const onApply = this._ctx?.onApply;
+      this.close();
+      try { onApply?.(results); } catch(_e) {}
+    }
+  };
+
+  RiskSimulators.register("הפניקס", "ריסק משכנתא", PhoenixMortgageRiskSimulator);
+  // ===== סוף GI-PHX-MORT-RISK-SIM =================================================
+
   // ---------- New Customer Wizard (Steps 1–7) ----------
   const DISCOUNT_SELECT_PLACEHOLDER = 'בחר הנחה';
   const TZAHAL_CLINIC = "קופה צהלית";
