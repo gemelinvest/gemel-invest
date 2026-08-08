@@ -28196,7 +28196,7 @@ UsersGateUI.init();
   function assessOccupationRisk(occupation, company, product){
     const occ = safeTrim(occupation);
     if(!occ){
-      return { occupation: "", state: "unclear", level: null, loadingText: "", exclusionText: "", fallbackText: "לא נמצא מקצוע בפרטי המבוטח (שלב 1) — יש לבדוק ידנית." };
+      return { occupation: "", state: "unclear", level: null, loadingText: "", exclusionText: "", fallbackText: "יש להזין עיסוק כדי לבדוק סיכון מקצועי / תוספת חיתום." };
     }
     const classification = Object.prototype.hasOwnProperty.call(OCCUPATION_RISK_LEVELS, occ) ? OCCUPATION_RISK_LEVELS[occ] : null;
     if(!classification || classification.hasRisk === "unclear"){
@@ -28283,12 +28283,15 @@ UsersGateUI.init();
       const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
       const computedAge = riskSimAgeFromBirthDate(d.birthDate);
       const ageInRange = Number.isInteger(computedAge) && computedAge >= PHOENIX_RISK_MIN_AGE && computedAge <= PHOENIX_RISK_MAX_AGE;
+      const occupation = safeTrim(d.occupation || "");
       return {
         age: ageInRange ? String(computedAge) : "",
         ageSource: ageInRange ? "step1" : "",
         ageRaw: computedAge,
         gender, genderSource: gender ? "step1" : "",
         smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "",
+        occupation,
+        occupationSource: occupation ? "step1" : "",
         sumInsured: "",
         result: null,
         error: null,
@@ -28392,8 +28395,8 @@ UsersGateUI.init();
       const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company)
         ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini")
         : "🛡️";
-      const occAssessment = assessOccupationRisk((this._getActiveInsured()?.data || {}).occupation, this._ctx?.company, this._ctx?.product);
-      const occBlockHtml = isStandalone ? "" : renderOccupationRiskBlockHtml(occAssessment, "lcPhxSim");
+      const occAssessment = assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product);
+      const occBlockHtml = renderOccupationRiskBlockHtml(occAssessment, "lcPhxSim");
 
       const resultHtml = st.error
         ? `<div class="lcPhxSim__result lcPhxSim__result--error">${escapeHtml(st.error)}</div>`
@@ -28439,7 +28442,6 @@ UsersGateUI.init();
             <span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span>
             <div class="giValModal__headText">
               <div class="giValModal__title">סימולטור ריסק הפניקס</div>
-              <div class="giValModal__sub">חישוב פרמיה מדויק לפי מפת התעריפים הרשמית של הפניקס (עדכון 05.2026)</div>
             </div>
             <button type="button" class="lcPhxSim__closeX" data-phx-close="1" aria-label="סגירה">✕</button>
           </div>
@@ -28474,6 +28476,10 @@ UsersGateUI.init();
               <div class="lcPhxSim__field lcPhxSim__field--wide">
                 <label class="lcPhxSim__label">סכום ביטוח (₪)</label>
                 <input class="lcPhxSim__input" type="text" inputmode="numeric" data-phx-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="לדוגמה: 1,000,000" />
+              </div>
+              <div class="lcPhxSim__field lcPhxSim__field--wide">
+                <label class="lcPhxSim__label">עיסוק</label>
+                <input class="lcPhxSim__input" type="text" data-phx-field="occupation" value="${escapeHtml(st.occupation || "")}" placeholder="לדוגמה: מהנדס, נהג משאית" autocomplete="off" />
               </div>
             </div>
             ${occBlockHtml}
@@ -28557,6 +28563,18 @@ UsersGateUI.init();
         st.sumInsured = formatted;
         st.result = null; st.error = null; st.dirtySinceSave = true;
       });
+      const occInput = modal.querySelector('[data-phx-field="occupation"]');
+      if(occInput){
+        on(occInput, "input", () => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.occupation = safeTrim(occInput.value);
+          st.occupationSource = "manual";
+          st.dirtySinceSave = true;
+        });
+        on(occInput, "change", () => this._render());
+        on(occInput, "blur", () => this._render());
+      }
       $$('[data-phx-field="gender"]', modal).forEach((btn) => on(btn, "click", () => {
         const st = this._state[this._activeInsuredId];
         if(!st) return;
@@ -28637,7 +28655,8 @@ UsersGateUI.init();
         annualPremium: st.result.annualPremium,
         ratePerMille: st.result.ratePerMille,
         age: st.age, ageSource: st.ageSource, gender: st.gender, smoker: st.smoker,
-        genderSource: st.genderSource, smokerSource: st.smokerSource
+        genderSource: st.genderSource, smokerSource: st.smokerSource,
+        occupation: st.occupation || "", occupationSource: st.occupationSource || ""
       };
     },
 
@@ -28832,12 +28851,15 @@ UsersGateUI.init();
       const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
       const computedAge = riskSimAgeFromBirthDate(d.birthDate);
       const ageInRange = Number.isInteger(computedAge) && computedAge >= MENORA_RISK_MIN_AGE && computedAge <= MENORA_RISK_MAX_AGE;
+      const occupation = safeTrim(d.occupation || "");
       return {
         age: ageInRange ? String(computedAge) : "",
         ageSource: ageInRange ? "step1" : "",
         ageRaw: computedAge,
         gender, genderSource: gender ? "step1" : "",
         smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "",
+        occupation,
+        occupationSource: occupation ? "step1" : "",
         sumInsured: "",
         result: null,
         error: null,
@@ -28940,8 +28962,8 @@ UsersGateUI.init();
       const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company)
         ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini")
         : "🛡️";
-      const occAssessment = assessOccupationRisk((this._getActiveInsured()?.data || {}).occupation, this._ctx?.company, this._ctx?.product);
-      const occBlockHtml = isStandalone ? "" : renderOccupationRiskBlockHtml(occAssessment, "lcMnrSim");
+      const occAssessment = assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product);
+      const occBlockHtml = renderOccupationRiskBlockHtml(occAssessment, "lcMnrSim");
 
       const resultHtml = st.error
         ? `<div class="lcMnrSim__result lcMnrSim__result--error">${escapeHtml(st.error)}</div>`
@@ -28988,7 +29010,6 @@ UsersGateUI.init();
             <span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span>
             <div class="giValModal__headText">
               <div class="giValModal__title">סימולטור ריסק מנורה</div>
-              <div class="giValModal__sub">חישוב פרמיה מדויק לפי מפת התעריפים הרשמית של מנורה מבטחים</div>
             </div>
             <button type="button" class="lcMnrSim__closeX" data-mnr-close="1" aria-label="סגירה">✕</button>
           </div>
@@ -29023,6 +29044,10 @@ UsersGateUI.init();
               <div class="lcMnrSim__field lcMnrSim__field--wide">
                 <label class="lcMnrSim__label">סכום ביטוח (₪)</label>
                 <input class="lcMnrSim__input" type="text" inputmode="numeric" data-mnr-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="לדוגמה: 1,000,000" />
+              </div>
+              <div class="lcMnrSim__field lcMnrSim__field--wide">
+                <label class="lcMnrSim__label">עיסוק</label>
+                <input class="lcMnrSim__input" type="text" data-mnr-field="occupation" value="${escapeHtml(st.occupation || "")}" placeholder="לדוגמה: מהנדס, נהג משאית" autocomplete="off" />
               </div>
             </div>
             ${occBlockHtml}
@@ -29106,6 +29131,18 @@ UsersGateUI.init();
         st.sumInsured = formatted;
         st.result = null; st.error = null; st.dirtySinceSave = true;
       });
+      const occInput = modal.querySelector('[data-mnr-field="occupation"]');
+      if(occInput){
+        on(occInput, "input", () => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.occupation = safeTrim(occInput.value);
+          st.occupationSource = "manual";
+          st.dirtySinceSave = true;
+        });
+        on(occInput, "change", () => this._render());
+        on(occInput, "blur", () => this._render());
+      }
       $$('[data-mnr-field="gender"]', modal).forEach((btn) => on(btn, "click", () => {
         const st = this._state[this._activeInsuredId];
         if(!st) return;
@@ -29187,7 +29224,8 @@ UsersGateUI.init();
         ratePerHundredThousand: st.result.ratePerHundredThousand,
         bracket: st.result.bracket,
         age: st.age, ageSource: st.ageSource, gender: st.gender, smoker: st.smoker,
-        genderSource: st.genderSource, smokerSource: st.smokerSource
+        genderSource: st.genderSource, smokerSource: st.smokerSource,
+        occupation: st.occupation || "", occupationSource: st.occupationSource || ""
       };
     },
 
@@ -29338,12 +29376,15 @@ UsersGateUI.init();
       const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
       const computedAge = riskSimAgeFromBirthDate(d.birthDate);
       const ageInRange = Number.isInteger(computedAge) && computedAge >= PHOENIX_MORTGAGE_RISK_MIN_AGE && computedAge <= PHOENIX_MORTGAGE_RISK_MAX_AGE;
+      const occupation = safeTrim(d.occupation || "");
       return {
         age: ageInRange ? String(computedAge) : "",
         ageSource: ageInRange ? "step1" : "",
         ageRaw: computedAge,
         gender, genderSource: gender ? "step1" : "",
         smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "",
+        occupation,
+        occupationSource: occupation ? "step1" : "",
         sumInsured: "",
         result: null,
         error: null,
@@ -29446,8 +29487,8 @@ UsersGateUI.init();
       const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company)
         ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini")
         : "🏠";
-      const occAssessment = assessOccupationRisk((this._getActiveInsured()?.data || {}).occupation, this._ctx?.company, this._ctx?.product);
-      const occBlockHtml = isStandalone ? "" : renderOccupationRiskBlockHtml(occAssessment, "lcPhxSim");
+      const occAssessment = assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product);
+      const occBlockHtml = renderOccupationRiskBlockHtml(occAssessment, "lcPhxSim");
 
       const resultHtml = st.error
         ? `<div class="lcPhxSim__result lcPhxSim__result--error">${escapeHtml(st.error)}</div>`
@@ -29493,7 +29534,6 @@ UsersGateUI.init();
             <span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span>
             <div class="giValModal__headText">
               <div class="giValModal__title">סימולטור ריסק משכנתא הפניקס</div>
-              <div class="giValModal__sub">חישוב פרמיה מדויק לפי מפת התעריפים הרשמית של הפניקס לריסק משכנתא (עדכון 05.2026)</div>
             </div>
             <button type="button" class="lcPhxSim__closeX" data-phxmort-close="1" aria-label="סגירה">✕</button>
           </div>
@@ -29528,6 +29568,10 @@ UsersGateUI.init();
               <div class="lcPhxSim__field lcPhxSim__field--wide">
                 <label class="lcPhxSim__label">סכום ביטוח (₪)</label>
                 <input class="lcPhxSim__input" type="text" inputmode="numeric" data-phxmort-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="לדוגמה: 1,000,000" />
+              </div>
+              <div class="lcPhxSim__field lcPhxSim__field--wide">
+                <label class="lcPhxSim__label">עיסוק</label>
+                <input class="lcPhxSim__input" type="text" data-phxmort-field="occupation" value="${escapeHtml(st.occupation || "")}" placeholder="לדוגמה: מהנדס, נהג משאית" autocomplete="off" />
               </div>
             </div>
             ${occBlockHtml}
@@ -29611,6 +29655,18 @@ UsersGateUI.init();
         st.sumInsured = formatted;
         st.result = null; st.error = null; st.dirtySinceSave = true;
       });
+      const occInput = modal.querySelector('[data-phxmort-field="occupation"]');
+      if(occInput){
+        on(occInput, "input", () => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.occupation = safeTrim(occInput.value);
+          st.occupationSource = "manual";
+          st.dirtySinceSave = true;
+        });
+        on(occInput, "change", () => this._render());
+        on(occInput, "blur", () => this._render());
+      }
       $$('[data-phxmort-field="gender"]', modal).forEach((btn) => on(btn, "click", () => {
         const st = this._state[this._activeInsuredId];
         if(!st) return;
@@ -29691,7 +29747,8 @@ UsersGateUI.init();
         annualPremium: st.result.annualPremium,
         ratePerMille: st.result.ratePerMille,
         age: st.age, ageSource: st.ageSource, gender: st.gender, smoker: st.smoker,
-        genderSource: st.genderSource, smokerSource: st.smokerSource
+        genderSource: st.genderSource, smokerSource: st.smokerSource,
+        occupation: st.occupation || "", occupationSource: st.occupationSource || ""
       };
     },
 
