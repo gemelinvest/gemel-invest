@@ -28112,7 +28112,16 @@ UsersGateUI.init();
     registry: {},
     _key(company, product){ return safeTrim(company) + "::" + safeTrim(product); },
     register(company, product, handler){ this.registry[this._key(company, product)] = handler; },
-    getHandler(company, product){ return this.registry[this._key(company, product)] || null; }
+    getHandler(company, product){ return this.registry[this._key(company, product)] || null; },
+    /** GI-SIM-CENTER 2026-08-08: מחזיר רשימת {company, product} עבור כל הסימולטורים
+        הרשומים בפועל, כדי ש"מרכז הסימולטורים" יוכל להציג רשימה עדכנית אוטומטית
+        (כולל כל סימולטור עתידי) בלי לגעת בקוד הזה שוב. */
+    list(){
+      return Object.keys(this.registry).map((k) => {
+        const idx = k.indexOf("::");
+        return { company: k.slice(0, idx), product: k.slice(idx + 2) };
+      });
+    }
   };
 
   /** מפרמט קלט "סכום ביטוח" לתצוגה עם פסיקים בין שלשות ספרות בזמן ההקלדה
@@ -28378,8 +28387,9 @@ UsersGateUI.init();
         ? ""
         : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא סטטוס עישון בפרטים האישיים — יש לבחור</div>`;
 
+      const isStandalone = !!this._ctx?.standalone;
       const occAssessment = assessOccupationRisk((this._getActiveInsured()?.data || {}).occupation, this._ctx?.company, this._ctx?.product);
-      const occBlockHtml = renderOccupationRiskBlockHtml(occAssessment, "lcPhxSim");
+      const occBlockHtml = isStandalone ? "" : renderOccupationRiskBlockHtml(occAssessment, "lcPhxSim");
 
       const resultHtml = st.error
         ? `<div class="lcPhxSim__result lcPhxSim__result--error">${escapeHtml(st.error)}</div>`
@@ -28392,7 +28402,10 @@ UsersGateUI.init();
       const relevantInsureds = insureds.filter((ins) => this._isInsuredRelevant(ins));
       const allRelevantSaved = relevantInsureds.length > 0 && relevantInsureds.every((ins) => !!this._state[ins.id]?.savedAt);
 
-      const footHtml = !isMulti ? `
+      const footHtml = isStandalone ? `
+          <div class="giValModal__foot lcPhxSim__foot">
+            <button type="button" class="btn btn--primary" data-phx-close="1">סגור</button>
+          </div>` : (!isMulti ? `
           <div class="giValModal__foot lcPhxSim__foot">
             <button type="button" class="btn giValModal__closeBtn" data-phx-close="1">ביטול</button>
             <button type="button" class="btn btn--primary" data-phx-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button>
@@ -28401,7 +28414,7 @@ UsersGateUI.init();
             <button type="button" class="btn giValModal__closeBtn" data-phx-close="1">ביטול</button>
             <button type="button" class="btn btn--secondary" data-phx-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button>
             <button type="button" class="btn btn--primary" data-phx-finalconfirm="1"${allRelevantSaved ? "" : " disabled"}>אישור סופי</button>
-          </div>`;
+          </div>`);
 
       const confirmOverlayHtml = this._confirmSwitch ? `
         <div class="lcPhxSim__overlay">
@@ -28429,7 +28442,9 @@ UsersGateUI.init();
           <div class="giValModal__body lcPhxSim__body">
             ${statusListHtml}
             ${tabsHtml}
-            <div class="lcPhxSim__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>
+            ${isStandalone
+              ? `<div class="lcPhxSim__insuredLabel lcPhxSim__insuredLabel--standalone">מצב חישוב עצמאי — התוצאה לא נשמרת על אף פוליסה</div>`
+              : `<div class="lcPhxSim__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}
             <div class="lcPhxSim__grid">
               <div class="lcPhxSim__field">
                 <label class="lcPhxSim__label">גיל (${PHOENIX_RISK_MIN_AGE}–${PHOENIX_RISK_MAX_AGE})</label>
@@ -28917,8 +28932,9 @@ UsersGateUI.init();
         ? ""
         : `<div class="lcMnrSim__hint lcMnrSim__hint--warn">לא נמצא סטטוס עישון בפרטים האישיים — יש לבחור</div>`;
 
+      const isStandalone = !!this._ctx?.standalone;
       const occAssessment = assessOccupationRisk((this._getActiveInsured()?.data || {}).occupation, this._ctx?.company, this._ctx?.product);
-      const occBlockHtml = renderOccupationRiskBlockHtml(occAssessment, "lcMnrSim");
+      const occBlockHtml = isStandalone ? "" : renderOccupationRiskBlockHtml(occAssessment, "lcMnrSim");
 
       const resultHtml = st.error
         ? `<div class="lcMnrSim__result lcMnrSim__result--error">${escapeHtml(st.error)}</div>`
@@ -28932,7 +28948,10 @@ UsersGateUI.init();
       const relevantInsureds = insureds.filter((ins) => this._isInsuredRelevant(ins));
       const allRelevantSaved = relevantInsureds.length > 0 && relevantInsureds.every((ins) => !!this._state[ins.id]?.savedAt);
 
-      const footHtml = !isMulti ? `
+      const footHtml = isStandalone ? `
+          <div class="giValModal__foot lcMnrSim__foot">
+            <button type="button" class="btn btn--primary" data-mnr-close="1">סגור</button>
+          </div>` : (!isMulti ? `
           <div class="giValModal__foot lcMnrSim__foot">
             <button type="button" class="btn giValModal__closeBtn" data-mnr-close="1">ביטול</button>
             <button type="button" class="btn btn--primary" data-mnr-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button>
@@ -28941,7 +28960,7 @@ UsersGateUI.init();
             <button type="button" class="btn giValModal__closeBtn" data-mnr-close="1">ביטול</button>
             <button type="button" class="btn btn--secondary" data-mnr-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button>
             <button type="button" class="btn btn--primary" data-mnr-finalconfirm="1"${allRelevantSaved ? "" : " disabled"}>אישור סופי</button>
-          </div>`;
+          </div>`);
 
       const confirmOverlayHtml = this._confirmSwitch ? `
         <div class="lcMnrSim__overlay">
@@ -28969,7 +28988,9 @@ UsersGateUI.init();
           <div class="giValModal__body lcMnrSim__body">
             ${statusListHtml}
             ${tabsHtml}
-            <div class="lcMnrSim__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>
+            ${isStandalone
+              ? `<div class="lcMnrSim__insuredLabel lcMnrSim__insuredLabel--standalone">מצב חישוב עצמאי — התוצאה לא נשמרת על אף פוליסה</div>`
+              : `<div class="lcMnrSim__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}
             <div class="lcMnrSim__grid">
               <div class="lcMnrSim__field">
                 <label class="lcMnrSim__label">גיל (${MENORA_RISK_MIN_AGE}–${MENORA_RISK_MAX_AGE})</label>
@@ -29414,8 +29435,9 @@ UsersGateUI.init();
         ? ""
         : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא סטטוס עישון בפרטים האישיים — יש לבחור</div>`;
 
+      const isStandalone = !!this._ctx?.standalone;
       const occAssessment = assessOccupationRisk((this._getActiveInsured()?.data || {}).occupation, this._ctx?.company, this._ctx?.product);
-      const occBlockHtml = renderOccupationRiskBlockHtml(occAssessment, "lcPhxSim");
+      const occBlockHtml = isStandalone ? "" : renderOccupationRiskBlockHtml(occAssessment, "lcPhxSim");
 
       const resultHtml = st.error
         ? `<div class="lcPhxSim__result lcPhxSim__result--error">${escapeHtml(st.error)}</div>`
@@ -29428,7 +29450,10 @@ UsersGateUI.init();
       const relevantInsureds = insureds.filter((ins) => this._isInsuredRelevant(ins));
       const allRelevantSaved = relevantInsureds.length > 0 && relevantInsureds.every((ins) => !!this._state[ins.id]?.savedAt);
 
-      const footHtml = !isMulti ? `
+      const footHtml = isStandalone ? `
+          <div class="giValModal__foot lcPhxSim__foot">
+            <button type="button" class="btn btn--primary" data-phxmort-close="1">סגור</button>
+          </div>` : (!isMulti ? `
           <div class="giValModal__foot lcPhxSim__foot">
             <button type="button" class="btn giValModal__closeBtn" data-phxmort-close="1">ביטול</button>
             <button type="button" class="btn btn--primary" data-phxmort-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button>
@@ -29437,7 +29462,7 @@ UsersGateUI.init();
             <button type="button" class="btn giValModal__closeBtn" data-phxmort-close="1">ביטול</button>
             <button type="button" class="btn btn--secondary" data-phxmort-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button>
             <button type="button" class="btn btn--primary" data-phxmort-finalconfirm="1"${allRelevantSaved ? "" : " disabled"}>אישור סופי</button>
-          </div>`;
+          </div>`);
 
       const confirmOverlayHtml = this._confirmSwitch ? `
         <div class="lcPhxSim__overlay">
@@ -29465,7 +29490,9 @@ UsersGateUI.init();
           <div class="giValModal__body lcPhxSim__body">
             ${statusListHtml}
             ${tabsHtml}
-            <div class="lcPhxSim__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>
+            ${isStandalone
+              ? `<div class="lcPhxSim__insuredLabel lcPhxSim__insuredLabel--standalone">מצב חישוב עצמאי — התוצאה לא נשמרת על אף פוליסה</div>`
+              : `<div class="lcPhxSim__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}
             <div class="lcPhxSim__grid">
               <div class="lcPhxSim__field">
                 <label class="lcPhxSim__label">גיל (${PHOENIX_MORTGAGE_RISK_MIN_AGE}–${PHOENIX_MORTGAGE_RISK_MAX_AGE})</label>
@@ -29690,6 +29717,115 @@ UsersGateUI.init();
 
   RiskSimulators.register("הפניקס", "ריסק משכנתא", PhoenixMortgageRiskSimulator);
   // ===== סוף GI-PHX-MORT-RISK-SIM =================================================
+
+  // ===== GI-SIM-CENTER 2026-08-08 · "מרכז הסימולטורים" =============================
+  // כפתור עצמאי בטופ-בר (ללא תלות באשף/לקוח/הצעה קיימת) שפותח בורר חברה+מוצר,
+  // ולאחר בחירה פותח את אותו סימולטור בדיוק דרך RiskSimulators.getHandler(...)
+  // הקיים, במצב standalone:true — עם מבוטח סינתטי יחיד וללא שמירה בשום מקום.
+  // אינו נוגע ב-Wizard.openRiskSimulator ולא משנה שום התנהגות קיימת באשף.
+  const SimulatorsCenterUI = {
+    els: {},
+    _modal: null,
+    _escHandler: null,
+
+    init(){
+      this.els.btn = document.getElementById("btnSimulatorsCenter");
+      if(!this.els.btn) return;
+      on(this.els.btn, "click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if(!Auth.current){
+          try{
+            window.showToast?.({ title: "נדרשת התחברות", text: "יש להתחבר למערכת לפני פתיחת מרכז הסימולטורים.", variant: "warn", durationMs: 4200 });
+          }catch(_e){}
+          return;
+        }
+        this.open();
+      });
+    },
+
+    _labelFor(company, product){
+      return `${safeTrim(company)} – ${safeTrim(product)}`;
+    },
+
+    open(){
+      this.close();
+      const items = (typeof RiskSimulators.list === "function") ? RiskSimulators.list() : [];
+      const modal = document.createElement("div");
+      modal.id = "lcSimCenterModal";
+      modal.className = "giValModal lcSimCenterModal";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-label", "מרכז הסימולטורים");
+      document.body.appendChild(modal);
+      this._modal = modal;
+      this._escHandler = (ev) => { if(ev.key === "Escape") this.close(); };
+      document.addEventListener("keydown", this._escHandler);
+
+      const cardsHtml = items.length ? items.map((it, idx) => `
+        <button type="button" class="lcSimCenterCard" data-simc-idx="${idx}">
+          <span class="lcSimCenterCard__icon" aria-hidden="true">${it.product.includes("משכנתא") ? "🏠" : "🛡️"}</span>
+          <span class="lcSimCenterCard__label">${escapeHtml(this._labelFor(it.company, it.product))}</span>
+        </button>`).join("") : `<div class="lcSimCenterEmpty">לא נמצאו סימולטורים רשומים במערכת.</div>`;
+
+      modal.innerHTML = `
+        <div class="giValModal__backdrop" data-simc-close="1"></div>
+        <div class="giValModal__card lcSimCenterModal__card">
+          <div class="giValModal__head">
+            <span class="giValModal__headIcon" aria-hidden="true">🧮</span>
+            <div class="giValModal__headText">
+              <div class="giValModal__title">מרכז הסימולטורים</div>
+              <div class="giValModal__sub">בחרו חברה ומוצר לחישוב פרמיה עצמאי — ללא תלות בלקוח או הצעה קיימת</div>
+            </div>
+            <button type="button" class="lcSimCenterModal__closeX" data-simc-close="1" aria-label="סגירה">✕</button>
+          </div>
+          <div class="giValModal__body lcSimCenterModal__body">
+            <div class="lcSimCenterGrid">${cardsHtml}</div>
+          </div>
+          <div class="giValModal__foot lcSimCenterModal__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-simc-close="1">ביטול</button>
+          </div>
+        </div>`;
+
+      $$("[data-simc-close]", modal).forEach((el) => on(el, "click", () => this.close()));
+      $$("[data-simc-idx]", modal).forEach((el) => on(el, "click", () => {
+        const idx = Number(el.getAttribute("data-simc-idx"));
+        const item = items[idx];
+        if(!item) return;
+        this._launch(item.company, item.product);
+      }));
+
+      requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
+    },
+
+    close(){
+      if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; }
+      if(this._modal){
+        const m = this._modal;
+        m.classList.add("giValModal--leaving");
+        window.setTimeout(() => m.remove(), 200);
+        this._modal = null;
+      }
+    },
+
+    _launch(company, product){
+      const handler = RiskSimulators.getHandler(company, product);
+      this.close();
+      if(!handler){
+        window.showToast?.({ title: "שגיאה", text: "לא נמצא סימולטור מתאים.", variant: "warn" });
+        return;
+      }
+      const syntheticInsured = { id: "standalone", label: "חישוב עצמאי", data: {} };
+      handler.open({
+        standalone: true,
+        company, product,
+        insureds: [syntheticInsured],
+        onApply(){},
+        onFinalConfirm(){}
+      });
+    }
+  };
+  // ===== סוף GI-SIM-CENTER ==========================================================
 
   // ---------- New Customer Wizard (Steps 1–7) ----------
   const DISCOUNT_SELECT_PLACEHOLDER = 'בחר הנחה';
@@ -67708,6 +67844,7 @@ const ClalRiskLifePdf = {
   NewCustomerEntryUI.init();
   HarHabituachTopbarUI.init();
   CarInsuranceClickUI.init();
+  SimulatorsCenterUI.init();
   LeadShellUI.init();
   // ===== REMINDER UI =====
   const REMINDERS_TABLE = "reminders";

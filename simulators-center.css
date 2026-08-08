@@ -1,0 +1,153 @@
+/* ===== GI-SIM-CENTER 2026-08-08 · "מרכז הסימולטורים" ==========================
+   קובץ CSS מבודד ועצמאי לחלוטין. כל המחלקות כאן ממוסגרות בקידומת ייחודית
+   "lcSimCenter" שלא קיימת בשום מקום אחר באפליקציה, כדי שלא תהיה שום התנגשות
+   עם app.css / theme.css / theme-p2.css הקיימים. כל הצבעים/רדיוסים/צללים
+   מבוססים על משתני העיצוב הגלובליים (var(--gi-*)) כדי להישאר תואם-שפה
+   מלא לשאר האפליקציה (כמו בקבצי הסימולטורים הקיימים phoenix-risk-sim.css
+   ו-menora-risk-sim.css). אין בקובץ הזה שום שינוי לסלקטור גלובלי קיים. */
+
+/* ---------- כפתור הטופ-בר (בהשראת .lcCarInsuranceClickBtn הקיים) ---------- */
+.lcSimCenterBtn{
+  position:static !important;
+  left:auto !important;
+  bottom:auto !important;
+  width:40px;
+  height:40px;
+  border-radius:12px;
+  flex:0 0 auto;
+  flex-shrink:0;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:0;
+  margin:0 !important;
+  background:
+    radial-gradient(120% 120% at 24% 18%, rgba(255,255,255,.42), transparent 44%),
+    linear-gradient(180deg, var(--gi-primary-light, #4f7fee) 0%, var(--gi-primary, #2563EB) 100%);
+  border:1px solid rgba(160,190,255,.72);
+  box-shadow:
+    0 4px 16px rgba(30,58,138,.34),
+    inset 0 1px 0 rgba(255,255,255,.45);
+  color:#fff;
+  overflow:hidden;
+  vertical-align:middle;
+  transition:background .18s, box-shadow .18s, transform .15s, border-color .18s;
+  z-index:2;
+}
+.lcSimCenterBtn__icon{
+  position:relative;
+  z-index:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.lcSimCenterBtn:hover,
+.lcSimCenterBtn:focus-visible{
+  transform:translateY(-1px) scale(1.06);
+  background:
+    radial-gradient(120% 120% at 24% 18%, rgba(255,255,255,.50), transparent 46%),
+    linear-gradient(180deg, #5c8bff 0%, #1d4ed8 100%);
+  box-shadow:
+    0 8px 24px rgba(30,58,138,.40),
+    inset 0 1px 0 rgba(255,255,255,.52);
+  border-color: rgba(190,210,255,.85);
+  outline:none;
+}
+.lcSimCenterBtn:focus-visible{
+  outline:2px solid rgba(37,99,235,.45);
+  outline-offset:2px;
+}
+.topbar__actions > #btnSimulatorsCenter.lcSimCenterBtn{
+  flex:0 0 auto !important;
+  flex-shrink:0 !important;
+  align-self:center;
+  margin-left:0 !important;
+  margin-right:0 !important;
+  display:inline-flex !important;
+}
+
+/* ---------- מודאל בורר חברה/מוצר (מבוסס על .giValModal הגלובלי הקיים) ---------- */
+.lcSimCenterModal .giValModal__card{
+  max-width:640px;
+  width:100%;
+}
+.lcSimCenterModal .giValModal__head{ padding:24px 30px 18px; position:relative; }
+.lcSimCenterModal .giValModal__body{ padding:22px 30px; }
+.lcSimCenterModal .giValModal__foot{ padding:16px 30px 22px; }
+.lcSimCenterModal__closeX{
+  position:absolute;
+  top:16px;
+  left:16px;
+  border:none;
+  background:transparent;
+  color:var(--gi-text-muted, #647287);
+  font-size:17px;
+  line-height:1;
+  cursor:pointer;
+  padding:5px 9px;
+  border-radius:var(--gi-r-ctl, 8px);
+  transition:background .12s ease, color .12s ease;
+}
+.lcSimCenterModal__closeX:hover{ background:var(--gi-border-soft, #F1F5F9); color:var(--gi-text, #0F172A); }
+
+.lcSimCenterGrid{
+  display:grid;
+  grid-template-columns:repeat(2, 1fr);
+  gap:14px;
+}
+.lcSimCenterCard{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  border:1.5px solid var(--gi-border, #E5E7EB);
+  background:#fff;
+  border-radius:var(--gi-r-card, 16px);
+  padding:16px 18px;
+  cursor:pointer;
+  text-align:right;
+  transition:border-color .12s ease, background .12s ease, transform .1s ease, box-shadow .12s ease;
+}
+.lcSimCenterCard:hover{
+  border-color:var(--gi-primary, #2563EB);
+  background:var(--gi-primary-soft, #EFF6FF);
+  transform:translateY(-1px);
+  box-shadow:0 6px 18px rgba(37,99,235,.14);
+}
+.lcSimCenterCard:active{ transform:translateY(0) scale(.99); }
+.lcSimCenterCard__icon{
+  flex-shrink:0;
+  width:40px;
+  height:40px;
+  border-radius:var(--gi-r-md, 12px);
+  background:var(--gi-primary-soft, #EFF6FF);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:19px;
+}
+.lcSimCenterCard__label{ font-size:14.5px; font-weight:700; color:var(--gi-text, #0F172A); }
+.lcSimCenterEmpty{
+  padding:18px;
+  text-align:center;
+  font-size:14px;
+  color:var(--gi-text-muted, #647287);
+}
+
+@media (max-width: 560px){
+  .lcSimCenterGrid{ grid-template-columns:1fr; }
+  .lcSimCenterModal .giValModal__head{ padding:20px 20px 14px; }
+  .lcSimCenterModal .giValModal__body{ padding:18px 20px; }
+  .lcSimCenterModal .giValModal__foot{ padding:14px 20px 18px; }
+}
+
+/* ---------- הודעת "מצב חישוב עצמאי" בתוך הסימולטורים עצמם (ctx.standalone) ----------
+   מוגדר כאן (ולא בקבצי הסימולטורים) כדי לרכז את כל עיצוב "מרכז הסימולטורים"
+   במקום אחד. משתמש בקידומות lcPhxSim / lcMnrSim הקיימות של הסימולטורים
+   בלבד עבור הווריאנט הזה, כדי שיתאים בדיוק לעיצוב הקיים סביבו. */
+.lcPhxSim__insuredLabel--standalone,
+.lcMnrSim__insuredLabel--standalone{
+  color:var(--gi-info, #2563EB);
+  background:var(--gi-info-soft, #EFF6FF);
+  border:1px solid rgba(37,99,235,.16);
+}
