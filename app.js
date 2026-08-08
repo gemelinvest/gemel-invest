@@ -25456,16 +25456,49 @@ UsersGateUI.init();
       );
     },
 
+    /** יעד חודשי לפי היקף הדשבורד: כל הנציגים / צוות / אישי. */
+    resolveDashboardTargetValue(){
+      const salesScope = Auth.getDashboardSalesScope();
+      const currentAgent = this.getCurrentAgentRecord();
+      if(salesScope === "all"){
+        return this.getTeamMonthlyTargetSum();
+      }
+      if(salesScope === "team"){
+        const managerId = safeTrim(Auth?.current?.id) || safeTrim(currentAgent?.id);
+        return this.getTeamMonthlyTargetSumForManager(managerId);
+      }
+      return (typeof getAgentMonthlyTarget === "function")
+        ? getAgentMonthlyTarget(currentAgent?.id, currentAgent)
+        : normalizeAgentTargetValue(currentAgent?.monthlySalesTarget ?? currentAgent?.monthly_sales_target);
+    },
+
+    applyTargetFieldsToMetrics(metrics, netPremiumOverride){
+      const m = metrics && typeof metrics === "object" ? metrics : null;
+      if(!m) return m;
+      const targetValue = this.resolveDashboardTargetValue();
+      const netPremium = Number.isFinite(Number(netPremiumOverride))
+        ? Number(netPremiumOverride)
+        : (Number(m.netPremium) || 0);
+      m.targetValue = targetValue;
+      const targetPctRaw = targetValue > 0 ? (netPremium / targetValue) * 100 : 0;
+      m.targetPct = Math.max(0, Math.round(targetPctRaw * 10) / 10);
+      m.targetTone = m.targetPct >= 100 ? "success" : m.targetPct >= 80 ? "strong" : m.targetPct >= 40 ? "mid" : "low";
+      m.targetRemaining = Math.max(0, targetValue - netPremium);
+      const workdaysTotal = Math.max(1, Number(m.workdaysTotal) || giWorkdaysInMonth(new Date()) || 1);
+      const workdaysElapsed = Math.max(0, Number(m.workdaysElapsed) || giWorkdaysElapsed(new Date()));
+      const workdaysLeft = Math.max(1, Number(m.workdaysLeft) || 1);
+      m.dailyTarget = targetValue > 0 ? (targetValue / workdaysTotal) : 0;
+      m.targetSoFar = targetValue > 0 ? Math.round(m.dailyTarget * Math.max(1, workdaysElapsed)) : 0;
+      m.requiredDailyRate = (targetValue > 0 && m.targetRemaining > 0)
+        ? (m.targetRemaining / workdaysLeft)
+        : 0;
+      return m;
+    },
+
     _assembleMetricsResult(cacheKey, customersAll, proposalsAll, currentRange, previousRange, customersMonth, customersPrev, proposalsMonth, proposalsPrev, currentAgg, prevAgg, prebuiltDailySeries){
       const salesScope = Auth.getDashboardSalesScope();
       const orgScope = salesScope === "all" || salesScope === "team";
-      const currentAgent = this.getCurrentAgentRecord();
-      const managerId = safeTrim(Auth?.current?.id) || safeTrim(currentAgent?.id);
-      const targetValue = salesScope === "team"
-        ? this.getTeamMonthlyTargetSumForManager(managerId)
-        : (typeof getAgentMonthlyTarget === "function"
-          ? getAgentMonthlyTarget(currentAgent?.id, currentAgent)
-          : normalizeAgentTargetValue(currentAgent?.monthlySalesTarget ?? currentAgent?.monthly_sales_target));
+      const targetValue = this.resolveDashboardTargetValue();
       const targetPctRaw = targetValue > 0 ? (currentAgg.netPremium / targetValue) * 100 : 0;
       const targetPct = Math.max(0, Math.round(targetPctRaw * 10) / 10);
       const targetTone = targetPct >= 100 ? "success" : targetPct >= 80 ? "strong" : targetPct >= 40 ? "mid" : "low";
@@ -25539,7 +25572,7 @@ UsersGateUI.init();
       const proposalsAll = this.getVisibleProposals();
       const customersMonth = customersAll.filter((rec) => this.isWithinRange(this.resolveCustomerMonthStamp(rec), currentRange));
       const salesScope = Auth.getDashboardSalesScope();
-      return {
+      const shell = {
         monthLabel: this.formatMonthTitle(currentRange.start),
         updatedAt: State.data?.meta?.updatedAt || nowISO(),
         customersMonth,
@@ -25574,6 +25607,9 @@ UsersGateUI.init();
         agentApptItems: [],
         _loading: true
       };
+      /* GI-FIX 2026-08-09 — גם במסך טעינה מציגים יעד אמיתי (סכום נציגים / צוות / אישי). */
+      try { this.applyTargetFieldsToMetrics(shell, 0); } catch(_e) {}
+      return shell;
     },
 
     computeAndCacheMetrics(cacheKey){
@@ -25872,21 +25908,19 @@ UsersGateUI.init();
       if(this._todaySalesCacheKey === cacheKey && this._todaySalesCache){
         return this._todaySalesCache;
       }
-      /* GI-PERF 2026-08-09 — בלי payloads אין «נמכר היום» אמיתי; לא מציגים ₪0 מטעה. */
+      /* GI-FIX 2026-08-09 — בלי payloads מציגים ₪0 (לא «טוען…»), ולא שומרים במטמון
+         כדי שאחרי hydration החישוב ירוץ מחדש. */
       try {
         if(typeof Storage !== "undefined" && Storage.countMissingCustomerPayloads
           && Storage.countMissingCustomerPayloads() > 0){
-          const pending = {
+          return {
             totalPremium: 0,
             totalPolicies: 0,
             newClients: 0,
             breakdown: [],
-            _pendingHydration: true,
+            _pendingHydration: false,
             _loading: true
           };
-          this._todaySalesCacheKey = cacheKey;
-          this._todaySalesCache = pending;
-          return pending;
         }
       } catch(_e) {}
       const customersAll = this.getVisibleCustomers();
@@ -27714,25 +27748,20 @@ UsersGateUI.init();
         }
       }
 
-      // כרטיס today
+      // כרטיס today — תמיד מספר (₪0 עד שיש נתונים), בלי «טוען…»
       const todayCard = root.querySelector('#bankKpiTodayCard');
       if(todayCard){
         const valEl = todayCard.querySelector('.bankKpi__value');
-        const pendingToday = !!(todaySales && todaySales._pendingHydration);
-        const newVal = pendingToday ? "טוען…" : this.formatMoney(todaySales.totalPremium);
+        const newVal = this.formatMoney(todaySales.totalPremium || 0);
         if(valEl && valEl.textContent !== newVal) valEl.textContent = newVal;
         const subEl = todayCard.querySelector('.bankKpiToday__sub');
-        const newSub = pendingToday
-          ? "ממתין לנתונים מלאים"
-          : `${todaySales.totalPolicies} פוליסות · ${todaySales.newClients} לקוחות`;
+        const newSub = `${todaySales.totalPolicies || 0} פוליסות · ${todaySales.newClients || 0} לקוחות`;
         if(subEl && subEl.textContent !== newSub) subEl.textContent = newSub;
         const bdEl = todayCard.querySelector('.bankKpiToday__breakdown');
         if(bdEl){
-          const breakdownHtml = pendingToday
-            ? `<div class="bankKpiTodayRow bankKpiTodayRow--empty">הפירוט ייטען ברקע</div>`
-            : (todaySales.breakdown.length
-              ? todaySales.breakdown.map((row) => `<div class="bankKpiTodayRow"><span class="bankKpiTodayRow__label">${escapeHtml(row.label)}</span><span class="bankKpiTodayRow__val">${escapeHtml(this.formatMoney(row.premium))}</span></div>`).join('')
-              : `<div class="bankKpiTodayRow bankKpiTodayRow--empty">אין מכירות עדיין היום</div>`);
+          const breakdownHtml = (todaySales.breakdown && todaySales.breakdown.length)
+            ? todaySales.breakdown.map((row) => `<div class="bankKpiTodayRow"><span class="bankKpiTodayRow__label">${escapeHtml(row.label)}</span><span class="bankKpiTodayRow__val">${escapeHtml(this.formatMoney(row.premium))}</span></div>`).join('')
+            : `<div class="bankKpiTodayRow bankKpiTodayRow--empty">אין מכירות עדיין היום</div>`;
           bdEl.dataset.breakdown = breakdownHtml;
           const inner = bdEl.querySelector('.bankKpiToday__breakdownInner');
           if(inner) inner.innerHTML = breakdownHtml;
@@ -28055,23 +28084,18 @@ UsersGateUI.init();
         ? ('ממוצע פרמיה ללקוח (' + (getDashboardScopeLabelHe("office") || "סיכום") + ')')
         : 'ממוצע פרמיה ללקוח';
 
-      // --- TODAY SALES ---
+      // --- TODAY SALES --- תמיד מספר (₪0 עד שיש נתונים), בלי «טוען…»
       const todaySales = this.buildTodaySalesMetrics();
       const todayCardHtml = (() => {
-        const pendingToday = !!(todaySales && todaySales._pendingHydration);
-        const breakdownHtml = pendingToday
-          ? `<div class="bankKpiTodayRow bankKpiTodayRow--empty">הפירוט ייטען ברקע</div>`
-          : (todaySales.breakdown.length
-            ? todaySales.breakdown.map((row) => `
+        const breakdownHtml = (todaySales.breakdown && todaySales.breakdown.length)
+          ? todaySales.breakdown.map((row) => `
               <div class="bankKpiTodayRow">
                 <span class="bankKpiTodayRow__label">${escapeHtml(row.label)}</span>
                 <span class="bankKpiTodayRow__val">${escapeHtml(this.formatMoney(row.premium))}</span>
               </div>`).join('')
-            : `<div class="bankKpiTodayRow bankKpiTodayRow--empty">אין מכירות עדיין היום</div>`);
-        const todayValue = pendingToday ? "טוען…" : this.formatMoney(todaySales.totalPremium);
-        const todaySub = pendingToday
-          ? "ממתין לנתונים מלאים"
-          : `${String(todaySales.totalPolicies)} פוליסות · ${String(todaySales.newClients)} לקוחות${orgScope ? (' · סה״כ ' + (getDashboardScopeLabelHe('office') || 'סיכום')) : ''}`;
+          : `<div class="bankKpiTodayRow bankKpiTodayRow--empty">אין מכירות עדיין היום</div>`;
+        const todayValue = this.formatMoney(todaySales.totalPremium || 0);
+        const todaySub = `${String(todaySales.totalPolicies || 0)} פוליסות · ${String(todaySales.newClients || 0)} לקוחות${orgScope ? (' · סה״כ ' + (getDashboardScopeLabelHe('office') || 'סיכום')) : ''}`;
         return `
           <article class="bankKpi card bankKpi--compact bankKpi--today bankKpi--todaySales" id="bankKpiTodayCard" style="display:flex;flex-direction:column;">
             <div class="bankKpi__top">
@@ -67109,16 +67133,9 @@ const ClalRiskLifePdf = {
               latestStamp: Date.now()
             }];
           }
-          const targetValue = Number(m.targetValue) || 0;
-          if(targetValue > 0){
-            const targetPctRaw = (netPremium / targetValue) * 100;
-            m.targetPct = Math.max(0, Math.round(targetPctRaw * 10) / 10);
-            m.targetTone = m.targetPct >= 100 ? "success" : m.targetPct >= 80 ? "strong" : m.targetPct >= 40 ? "mid" : "low";
-            m.targetRemaining = Math.max(0, targetValue - netPremium);
-            m.avgPremium = m.customersMonth?.length ? (netPremium / m.customersMonth.length) : 0;
-            const workdaysLeft = Math.max(1, Number(m.workdaysLeft) || 1);
-            m.requiredDailyRate = m.targetRemaining > 0 ? (m.targetRemaining / workdaysLeft) : 0;
-          }
+          /* GI-FIX 2026-08-09 — יעד לפי היקף (כל הנציגים/צוות/אישי), לא רק יעד אישי של המנהל. */
+          try { this.applyTargetFieldsToMetrics(m, netPremium); } catch(_e) {}
+          m.avgPremium = m.customersMonth?.length ? (netPremium / m.customersMonth.length) : 0;
           m._serverKpiOverlay = true;
           m._loading = false;
           if(LiveRefresh.getCurrentView() === "dashboard"){
