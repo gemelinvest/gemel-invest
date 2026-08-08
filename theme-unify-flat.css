@@ -1,0 +1,1253 @@
+/* =====================================================================
+   GEMEL INVEST — Unify Flat Design (מקור: מסך "סיכום תיקונים בשיחת השיקוף")
+   BUILD: 20260808-unify-flat-v1
+
+   קובץ זה מעביר את שפת העיצוב של מסך סיכום השיקוף (mtq* /
+   theme-mirror-typing.css) למסכים הבאים בלבד:
+     · לקוחות              #view-customers (+ פאנל פרטי לקוח cqPanel + ייבוא ciModal)
+     · הצעות                #view-proposals , #view-elementaryProposals
+     · אשף הקמת לקוח        #lcWizard
+     · בריאות וסיכונים      #lcHealthRiskChoiceModal , #lcAgentApptWizard
+     · הגדרות מערכת         #view-settings
+     · ניהול משתמשים        #view-users (+ מודאל #lcUserModal)
+     · התהליכים שלי         #view-myProcesses
+     · מערכת לידים          #view-campaignLeads , #view-campaignMyLeads (+ #goldLeadModal)
+
+   עקרונות:
+   1. אין שינוי ל-DOM, ל-ID, למשתני JS, ל-data-attributes או ללוגיקה — קובץ
+      CSS בלבד, בתוספת <link> אחד ב-index.html.
+   2. כל כלל כאן ממוקד (scoped) לאחד המסכים הנ"ל דרך #id של המסך/המודאל —
+      כך שאין השפעה על מסכים אחרים במערכת.
+   3. theme.css מטביע ספציפיות מלאכותית בעזרת התחביר :not(#\9):not(#\9)
+      (כל :not(#\9) שווה ל-ID לצורכי ספציפיות) כדי לנצח את app.css.
+      קובץ זה משתמש באותה טכניקה, יחד עם #id של המסך, כדי לנצח את שתי
+      השכבות בלי לגעת בהן ובלי להזדקק לסדר טעינה.
+   4. הפלטה, הטיפוגרפיה (Heebo), המרווחים וההיררכיה הועתקו מ-
+      theme-mirror-typing.css (מחלקות מ-mtq*) ומיושמים כאן מחדש על
+      המחלקות הגנריות (.card/.btn/.badge/.input/.table/.modal וכו') וגם
+      על מחלקות ה-BEM הספציפיות של כל מסך יעד.
+   ===================================================================== */
+
+
+/* =====================================================================
+   0. TOKENS — פלטת "שיקוף" מועברת למסכי היעד
+   ===================================================================== */
+#view-customers, #view-proposals, #view-elementaryProposals, #view-settings,
+#view-users, #view-myProcesses, #view-campaignLeads, #view-campaignMyLeads,
+#lcUserModal, #lcHealthRiskChoiceModal, #lcWizard, #lcAgentApptWizard,
+#goldLeadModal, .cqPanel, .ciModal, .lcHealthDetailModal{
+  --uf-navy:        #0c2d4a;
+  --uf-ink:         #152033;
+  --uf-ink-2:       #3d4f63;
+  --uf-ink-3:       #6b7c8f;
+  --uf-line:        #d7dee8;
+  --uf-line-soft:   #e8eef5;
+  --uf-canvas:      #eef2f6;
+  --uf-surface:     #ffffff;
+  --uf-head-bg:     #f7f9fc;
+  --uf-accent:      #1a4f7a;
+  --uf-accent-hover:#143d5e;
+  --uf-accent-soft: #e8f1f8;
+  --uf-ok:          #0f6b45;
+  --uf-ok-bg:       #e6f5ee;
+  --uf-ok-line:     #b7e0c9;
+  --uf-warn:        #9a5b00;
+  --uf-warn-bg:     #fff6e8;
+  --uf-warn-line:   #f0d4a8;
+  --uf-info:        #1a4f7a;
+  --uf-info-bg:     #eaf2f8;
+  --uf-info-line:   #c5d8e8;
+  --uf-chg:         #7a3b12;
+  --uf-chg-bg:      #fff4ec;
+  --uf-chg-line:    #f0c9a8;
+  --uf-danger:      #9b1c1c;
+  --uf-danger-bg:   #fbeaea;
+  --uf-danger-line: #e3b6b6;
+  --uf-muted-bg:    #f1f4f8;
+}
+
+
+/* =====================================================================
+   1. יסודות גנריים משותפים — .card / .badge / .btn / .input / .table /
+      .modal / .field / .search / .dot — בתוך כל אחד ממסכי היעד והמודאלים
+   ===================================================================== */
+
+/* ---- כרטיסים ---- */
+#view-customers .card:not(#\9):not(#\9),
+#view-proposals .card:not(#\9):not(#\9),
+#view-elementaryProposals .card:not(#\9):not(#\9),
+#view-settings .card:not(#\9):not(#\9),
+#view-users .card:not(#\9):not(#\9),
+#view-myProcesses .card:not(#\9):not(#\9),
+#view-campaignLeads .card:not(#\9):not(#\9),
+#view-campaignMyLeads .card:not(#\9):not(#\9){
+  background: var(--uf-surface) !important;
+  border: 1px solid var(--uf-line) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+#view-customers .card:hover:not(#\9):not(#\9),
+#view-proposals .card:hover:not(#\9):not(#\9),
+#view-elementaryProposals .card:hover:not(#\9):not(#\9),
+#view-settings .card:hover:not(#\9):not(#\9),
+#view-users .card:hover:not(#\9):not(#\9),
+#view-myProcesses .card:hover:not(#\9):not(#\9),
+#view-campaignLeads .card:hover:not(#\9):not(#\9),
+#view-campaignMyLeads .card:hover:not(#\9):not(#\9){
+  box-shadow: none !important;
+  transform: none !important;
+}
+#view-customers .card__head:not(#\9):not(#\9),
+#view-proposals .card__head:not(#\9):not(#\9),
+#view-elementaryProposals .card__head:not(#\9):not(#\9),
+#view-settings .card__head:not(#\9):not(#\9),
+#view-users .card__head:not(#\9):not(#\9),
+#view-myProcesses .card__head:not(#\9):not(#\9),
+#view-campaignLeads .card__head:not(#\9):not(#\9),
+#view-campaignMyLeads .card__head:not(#\9):not(#\9){
+  background: var(--uf-head-bg) !important;
+  border-bottom: 1px solid var(--uf-line-soft) !important;
+  padding: 14px 18px !important;
+}
+#view-customers .card__title:not(#\9):not(#\9),
+#view-proposals .card__title:not(#\9):not(#\9),
+#view-elementaryProposals .card__title:not(#\9):not(#\9),
+#view-settings .card__title:not(#\9):not(#\9),
+#view-users .card__title:not(#\9):not(#\9),
+#view-myProcesses .card__title:not(#\9):not(#\9),
+#view-campaignLeads .card__title:not(#\9):not(#\9),
+#view-campaignMyLeads .card__title:not(#\9):not(#\9){
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  color: var(--uf-navy) !important;
+  letter-spacing: 0 !important;
+}
+#view-customers .card__hint:not(#\9):not(#\9),
+#view-proposals .card__hint:not(#\9):not(#\9),
+#view-elementaryProposals .card__hint:not(#\9):not(#\9),
+#view-settings .card__hint:not(#\9):not(#\9),
+#view-users .card__hint:not(#\9):not(#\9),
+#view-myProcesses .card__hint:not(#\9):not(#\9),
+#view-campaignLeads .card__hint:not(#\9):not(#\9),
+#view-campaignMyLeads .card__hint:not(#\9):not(#\9){
+  font-size: 13px !important;
+  color: var(--uf-ink-3) !important;
+}
+
+/* ---- תגיות / תוויות סטטוס (badge / pill) ---- */
+#view-customers .badge:not(#\9):not(#\9), #view-customers .pill:not(#\9):not(#\9),
+#view-proposals .badge:not(#\9):not(#\9), #view-proposals .pill:not(#\9):not(#\9),
+#view-elementaryProposals .badge:not(#\9):not(#\9), #view-elementaryProposals .pill:not(#\9):not(#\9),
+#view-settings .badge:not(#\9):not(#\9), #view-settings .pill:not(#\9):not(#\9),
+#view-users .badge:not(#\9):not(#\9), #view-users .pill:not(#\9):not(#\9),
+#view-myProcesses .badge:not(#\9):not(#\9), #view-myProcesses .pill:not(#\9):not(#\9),
+#view-campaignLeads .badge:not(#\9):not(#\9), #view-campaignLeads .pill:not(#\9):not(#\9),
+#view-campaignMyLeads .badge:not(#\9):not(#\9), #view-campaignMyLeads .pill:not(#\9):not(#\9){
+  padding: 3px 10px !important;
+  border-radius: 0 !important;
+  border: 1px solid var(--uf-line) !important;
+  background: var(--uf-muted-bg) !important;
+  color: var(--uf-ink-3) !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+#view-customers .badge.ok:not(#\9):not(#\9), #view-customers .badge--ok:not(#\9):not(#\9), #view-customers .badge.is-ok:not(#\9):not(#\9), #view-customers .badge--success:not(#\9):not(#\9),
+#view-proposals .badge.ok:not(#\9):not(#\9), #view-proposals .badge--ok:not(#\9):not(#\9), #view-proposals .badge.is-ok:not(#\9):not(#\9), #view-proposals .badge--success:not(#\9):not(#\9),
+#view-elementaryProposals .badge.ok:not(#\9):not(#\9), #view-elementaryProposals .badge--ok:not(#\9):not(#\9), #view-elementaryProposals .badge.is-ok:not(#\9):not(#\9), #view-elementaryProposals .badge--success:not(#\9):not(#\9),
+#view-settings .badge.ok:not(#\9):not(#\9), #view-settings .badge--ok:not(#\9):not(#\9), #view-settings .badge.is-ok:not(#\9):not(#\9), #view-settings .badge--success:not(#\9):not(#\9),
+#view-users .badge.ok:not(#\9):not(#\9), #view-users .badge--ok:not(#\9):not(#\9), #view-users .badge.is-ok:not(#\9):not(#\9), #view-users .badge--success:not(#\9):not(#\9),
+#view-myProcesses .badge.ok:not(#\9):not(#\9), #view-myProcesses .badge--ok:not(#\9):not(#\9), #view-myProcesses .badge.is-ok:not(#\9):not(#\9), #view-myProcesses .badge--success:not(#\9):not(#\9),
+#view-campaignLeads .badge.ok:not(#\9):not(#\9), #view-campaignLeads .badge--ok:not(#\9):not(#\9), #view-campaignLeads .badge.is-ok:not(#\9):not(#\9), #view-campaignLeads .badge--success:not(#\9):not(#\9),
+#view-campaignMyLeads .badge.ok:not(#\9):not(#\9), #view-campaignMyLeads .badge--ok:not(#\9):not(#\9), #view-campaignMyLeads .badge.is-ok:not(#\9):not(#\9), #view-campaignMyLeads .badge--success:not(#\9):not(#\9){
+  background: var(--uf-ok-bg) !important; color: var(--uf-ok) !important; border-color: var(--uf-ok-line) !important;
+}
+#view-customers .badge.warn:not(#\9):not(#\9), #view-customers .badge--warn:not(#\9):not(#\9), #view-customers .badge.is-warn:not(#\9):not(#\9), #view-customers .badge--warning:not(#\9):not(#\9),
+#view-proposals .badge.warn:not(#\9):not(#\9), #view-proposals .badge--warn:not(#\9):not(#\9), #view-proposals .badge.is-warn:not(#\9):not(#\9), #view-proposals .badge--warning:not(#\9):not(#\9),
+#view-elementaryProposals .badge.warn:not(#\9):not(#\9), #view-elementaryProposals .badge--warn:not(#\9):not(#\9), #view-elementaryProposals .badge.is-warn:not(#\9):not(#\9), #view-elementaryProposals .badge--warning:not(#\9):not(#\9),
+#view-settings .badge.warn:not(#\9):not(#\9), #view-settings .badge--warn:not(#\9):not(#\9), #view-settings .badge.is-warn:not(#\9):not(#\9), #view-settings .badge--warning:not(#\9):not(#\9),
+#view-users .badge.warn:not(#\9):not(#\9), #view-users .badge--warn:not(#\9):not(#\9), #view-users .badge.is-warn:not(#\9):not(#\9), #view-users .badge--warning:not(#\9):not(#\9),
+#view-myProcesses .badge.warn:not(#\9):not(#\9), #view-myProcesses .badge--warn:not(#\9):not(#\9), #view-myProcesses .badge.is-warn:not(#\9):not(#\9), #view-myProcesses .badge--warning:not(#\9):not(#\9),
+#view-campaignLeads .badge.warn:not(#\9):not(#\9), #view-campaignLeads .badge--warn:not(#\9):not(#\9), #view-campaignLeads .badge.is-warn:not(#\9):not(#\9), #view-campaignLeads .badge--warning:not(#\9):not(#\9),
+#view-campaignMyLeads .badge.warn:not(#\9):not(#\9), #view-campaignMyLeads .badge--warn:not(#\9):not(#\9), #view-campaignMyLeads .badge.is-warn:not(#\9):not(#\9), #view-campaignMyLeads .badge--warning:not(#\9):not(#\9){
+  background: var(--uf-warn-bg) !important; color: var(--uf-warn) !important; border-color: var(--uf-warn-line) !important;
+}
+#view-customers .badge.err:not(#\9):not(#\9), #view-customers .badge--danger:not(#\9):not(#\9), #view-customers .badge.is-err:not(#\9):not(#\9), #view-customers .badge--error:not(#\9):not(#\9),
+#view-proposals .badge.err:not(#\9):not(#\9), #view-proposals .badge--danger:not(#\9):not(#\9), #view-proposals .badge.is-err:not(#\9):not(#\9), #view-proposals .badge--error:not(#\9):not(#\9),
+#view-elementaryProposals .badge.err:not(#\9):not(#\9), #view-elementaryProposals .badge--danger:not(#\9):not(#\9), #view-elementaryProposals .badge.is-err:not(#\9):not(#\9), #view-elementaryProposals .badge--error:not(#\9):not(#\9),
+#view-settings .badge.err:not(#\9):not(#\9), #view-settings .badge--danger:not(#\9):not(#\9), #view-settings .badge.is-err:not(#\9):not(#\9), #view-settings .badge--error:not(#\9):not(#\9),
+#view-users .badge.err:not(#\9):not(#\9), #view-users .badge--danger:not(#\9):not(#\9), #view-users .badge.is-err:not(#\9):not(#\9), #view-users .badge--error:not(#\9):not(#\9),
+#view-myProcesses .badge.err:not(#\9):not(#\9), #view-myProcesses .badge--danger:not(#\9):not(#\9), #view-myProcesses .badge.is-err:not(#\9):not(#\9), #view-myProcesses .badge--error:not(#\9):not(#\9),
+#view-campaignLeads .badge.err:not(#\9):not(#\9), #view-campaignLeads .badge--danger:not(#\9):not(#\9), #view-campaignLeads .badge.is-err:not(#\9):not(#\9), #view-campaignLeads .badge--error:not(#\9):not(#\9),
+#view-campaignMyLeads .badge.err:not(#\9):not(#\9), #view-campaignMyLeads .badge--danger:not(#\9):not(#\9), #view-campaignMyLeads .badge.is-err:not(#\9):not(#\9), #view-campaignMyLeads .badge--error:not(#\9):not(#\9){
+  background: var(--uf-danger-bg) !important; color: var(--uf-danger) !important; border-color: var(--uf-danger-line) !important;
+}
+#view-customers .badge.info:not(#\9):not(#\9), #view-customers .badge--info:not(#\9):not(#\9), #view-customers .badge.is-info:not(#\9):not(#\9), #view-customers .badge--primary:not(#\9):not(#\9),
+#view-proposals .badge.info:not(#\9):not(#\9), #view-proposals .badge--info:not(#\9):not(#\9), #view-proposals .badge.is-info:not(#\9):not(#\9), #view-proposals .badge--primary:not(#\9):not(#\9),
+#view-elementaryProposals .badge.info:not(#\9):not(#\9), #view-elementaryProposals .badge--info:not(#\9):not(#\9), #view-elementaryProposals .badge.is-info:not(#\9):not(#\9), #view-elementaryProposals .badge--primary:not(#\9):not(#\9),
+#view-settings .badge.info:not(#\9):not(#\9), #view-settings .badge--info:not(#\9):not(#\9), #view-settings .badge.is-info:not(#\9):not(#\9), #view-settings .badge--primary:not(#\9):not(#\9),
+#view-users .badge.info:not(#\9):not(#\9), #view-users .badge--info:not(#\9):not(#\9), #view-users .badge.is-info:not(#\9):not(#\9), #view-users .badge--primary:not(#\9):not(#\9),
+#view-myProcesses .badge.info:not(#\9):not(#\9), #view-myProcesses .badge--info:not(#\9):not(#\9), #view-myProcesses .badge.is-info:not(#\9):not(#\9), #view-myProcesses .badge--primary:not(#\9):not(#\9),
+#view-campaignLeads .badge.info:not(#\9):not(#\9), #view-campaignLeads .badge--info:not(#\9):not(#\9), #view-campaignLeads .badge.is-info:not(#\9):not(#\9), #view-campaignLeads .badge--primary:not(#\9):not(#\9),
+#view-campaignMyLeads .badge.info:not(#\9):not(#\9), #view-campaignMyLeads .badge--info:not(#\9):not(#\9), #view-campaignMyLeads .badge.is-info:not(#\9):not(#\9), #view-campaignMyLeads .badge--primary:not(#\9):not(#\9){
+  background: var(--uf-info-bg) !important; color: var(--uf-info) !important; border-color: var(--uf-info-line) !important;
+}
+
+/* ---- נקודות סטטוס (dot) ---- */
+#view-settings .dot:not(#\9):not(#\9),
+#view-users .dot:not(#\9):not(#\9){ box-shadow: none !important; }
+#view-settings .dot.ok:not(#\9):not(#\9), #view-users .dot.ok:not(#\9):not(#\9){ background: var(--uf-ok) !important; }
+#view-settings .dot.warn:not(#\9):not(#\9), #view-users .dot.warn:not(#\9):not(#\9){ background: var(--uf-warn) !important; }
+#view-settings .dot.err:not(#\9):not(#\9), #view-users .dot.err:not(#\9):not(#\9){ background: var(--uf-danger) !important; }
+
+/* ---- כפתורים ---- */
+#view-customers .btn:not(#\9):not(#\9),
+#view-proposals .btn:not(#\9):not(#\9),
+#view-elementaryProposals .btn:not(#\9):not(#\9),
+#view-settings .btn:not(#\9):not(#\9),
+#view-users .btn:not(#\9):not(#\9),
+#view-myProcesses .btn:not(#\9):not(#\9),
+#view-campaignLeads .btn:not(#\9):not(#\9),
+#view-campaignMyLeads .btn:not(#\9):not(#\9),
+#lcUserModal .btn:not(#\9):not(#\9),
+#lcHealthRiskChoiceModal .btn:not(#\9):not(#\9),
+#lcWizard .btn:not(#\9):not(#\9),
+#lcAgentApptWizard .btn:not(#\9):not(#\9),
+#goldLeadModal .btn:not(#\9):not(#\9),
+.cqPanel .btn:not(#\9):not(#\9),
+.ciModal .btn:not(#\9):not(#\9){
+  padding: 9px 16px !important;
+  border-radius: 0 !important;
+  border: 1px solid var(--uf-line) !important;
+  background: var(--uf-surface) !important;
+  color: var(--uf-ink) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+  transition: background .15s ease, border-color .15s ease !important;
+}
+#view-customers .btn:hover:not(#\9):not(#\9),
+#view-proposals .btn:hover:not(#\9):not(#\9),
+#view-elementaryProposals .btn:hover:not(#\9):not(#\9),
+#view-settings .btn:hover:not(#\9):not(#\9),
+#view-users .btn:hover:not(#\9):not(#\9),
+#view-myProcesses .btn:hover:not(#\9):not(#\9),
+#view-campaignLeads .btn:hover:not(#\9):not(#\9),
+#view-campaignMyLeads .btn:hover:not(#\9):not(#\9),
+#lcUserModal .btn:hover:not(#\9):not(#\9),
+#lcHealthRiskChoiceModal .btn:hover:not(#\9):not(#\9),
+#lcWizard .btn:hover:not(#\9):not(#\9),
+#lcAgentApptWizard .btn:hover:not(#\9):not(#\9),
+#goldLeadModal .btn:hover:not(#\9):not(#\9),
+.cqPanel .btn:hover:not(#\9):not(#\9),
+.ciModal .btn:hover:not(#\9):not(#\9){
+  background: var(--uf-head-bg) !important;
+  border-color: var(--uf-line) !important;
+  color: var(--uf-navy) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+#view-customers .btn--primary:not(#\9):not(#\9),
+#view-proposals .btn--primary:not(#\9):not(#\9),
+#view-elementaryProposals .btn--primary:not(#\9):not(#\9),
+#view-settings .btn--primary:not(#\9):not(#\9),
+#view-users .btn--primary:not(#\9):not(#\9),
+#view-myProcesses .btn--primary:not(#\9):not(#\9),
+#view-campaignLeads .btn--primary:not(#\9):not(#\9),
+#view-campaignMyLeads .btn--primary:not(#\9):not(#\9),
+#lcUserModal .btn--primary:not(#\9):not(#\9),
+#lcHealthRiskChoiceModal .btn--primary:not(#\9):not(#\9),
+#lcWizard .btn--primary:not(#\9):not(#\9),
+#lcAgentApptWizard .btn--primary:not(#\9):not(#\9),
+#goldLeadModal .btn--primary:not(#\9):not(#\9),
+.cqPanel .btn--primary:not(#\9):not(#\9),
+.ciModal .btn--primary:not(#\9):not(#\9){
+  background: var(--uf-accent) !important;
+  border-color: var(--uf-accent) !important;
+  color: #fff !important;
+}
+#view-customers .btn--primary:hover:not(#\9):not(#\9),
+#view-proposals .btn--primary:hover:not(#\9):not(#\9),
+#view-elementaryProposals .btn--primary:hover:not(#\9):not(#\9),
+#view-settings .btn--primary:hover:not(#\9):not(#\9),
+#view-users .btn--primary:hover:not(#\9):not(#\9),
+#view-myProcesses .btn--primary:hover:not(#\9):not(#\9),
+#view-campaignLeads .btn--primary:hover:not(#\9):not(#\9),
+#view-campaignMyLeads .btn--primary:hover:not(#\9):not(#\9),
+#lcUserModal .btn--primary:hover:not(#\9):not(#\9),
+#lcHealthRiskChoiceModal .btn--primary:hover:not(#\9):not(#\9),
+#lcWizard .btn--primary:hover:not(#\9):not(#\9),
+#lcAgentApptWizard .btn--primary:hover:not(#\9):not(#\9),
+#goldLeadModal .btn--primary:hover:not(#\9):not(#\9),
+.cqPanel .btn--primary:hover:not(#\9):not(#\9),
+.ciModal .btn--primary:hover:not(#\9):not(#\9){
+  background: var(--uf-accent-hover) !important;
+  border-color: var(--uf-accent-hover) !important;
+  color: #fff !important;
+}
+#view-customers .btn--success:not(#\9):not(#\9), #view-myProcesses .btn--success:not(#\9):not(#\9), #view-campaignLeads .btn--success:not(#\9):not(#\9), #lcWizard .btn--success:not(#\9):not(#\9){
+  background: var(--uf-ok) !important; border-color: var(--uf-ok) !important; color: #fff !important;
+}
+#view-customers .btn--warning:not(#\9):not(#\9), #view-myProcesses .btn--warning:not(#\9):not(#\9), #view-campaignLeads .btn--warning:not(#\9):not(#\9), #lcWizard .btn--warning:not(#\9):not(#\9){
+  background: var(--uf-warn) !important; border-color: var(--uf-warn) !important; color: #fff !important;
+}
+#view-customers .btn--danger:not(#\9):not(#\9), #view-myProcesses .btn--danger:not(#\9):not(#\9), #view-campaignLeads .btn--danger:not(#\9):not(#\9), #lcWizard .btn--danger:not(#\9):not(#\9), #view-users .btn--danger:not(#\9):not(#\9){
+  background: var(--uf-danger) !important; border-color: var(--uf-danger) !important; color: #fff !important;
+}
+#view-customers .btn--small:not(#\9):not(#\9),
+#view-proposals .btn--small:not(#\9):not(#\9),
+#view-myProcesses .btn--small:not(#\9):not(#\9),
+#view-campaignLeads .btn--small:not(#\9):not(#\9),
+#lcUserModal .btn--small:not(#\9):not(#\9){
+  padding: 6px 11px !important; font-size: 12px !important;
+}
+
+/* ---- שדות טופס: input / select / textarea / label / help ---- */
+#view-customers .input:not(#\9):not(#\9), #view-customers input[type="text"]:not(#\9):not(#\9), #view-customers input[type="number"]:not(#\9):not(#\9), #view-customers input[type="tel"]:not(#\9):not(#\9), #view-customers input[type="email"]:not(#\9):not(#\9), #view-customers input[type="date"]:not(#\9):not(#\9), #view-customers input[type="password"]:not(#\9):not(#\9), #view-customers input[type="search"]:not(#\9):not(#\9), #view-customers select:not(#\9):not(#\9), #view-customers textarea:not(#\9):not(#\9),
+#view-proposals .input:not(#\9):not(#\9), #view-proposals input[type="text"]:not(#\9):not(#\9), #view-proposals select:not(#\9):not(#\9), #view-proposals textarea:not(#\9):not(#\9),
+#view-elementaryProposals .input:not(#\9):not(#\9), #view-elementaryProposals input[type="text"]:not(#\9):not(#\9), #view-elementaryProposals select:not(#\9):not(#\9), #view-elementaryProposals textarea:not(#\9):not(#\9),
+#view-settings .input:not(#\9):not(#\9), #view-settings input[type="text"]:not(#\9):not(#\9), #view-settings input[type="number"]:not(#\9):not(#\9), #view-settings input[type="tel"]:not(#\9):not(#\9), #view-settings input[type="email"]:not(#\9):not(#\9), #view-settings input[type="date"]:not(#\9):not(#\9), #view-settings input[type="password"]:not(#\9):not(#\9), #view-settings input[type="datetime-local"]:not(#\9):not(#\9), #view-settings select:not(#\9):not(#\9), #view-settings textarea:not(#\9):not(#\9),
+#view-users .input:not(#\9):not(#\9), #view-users input[type="text"]:not(#\9):not(#\9), #view-users input[type="date"]:not(#\9):not(#\9), #view-users input[type="email"]:not(#\9):not(#\9), #view-users select:not(#\9):not(#\9), #view-users textarea:not(#\9):not(#\9),
+#view-myProcesses .input:not(#\9):not(#\9), #view-myProcesses input[type="text"]:not(#\9):not(#\9), #view-myProcesses select:not(#\9):not(#\9),
+#view-campaignLeads .input:not(#\9):not(#\9), #view-campaignLeads input[type="text"]:not(#\9):not(#\9), #view-campaignLeads input[type="tel"]:not(#\9):not(#\9), #view-campaignLeads input[type="date"]:not(#\9):not(#\9), #view-campaignLeads input[type="month"]:not(#\9):not(#\9), #view-campaignLeads select:not(#\9):not(#\9), #view-campaignLeads textarea:not(#\9):not(#\9),
+#view-campaignMyLeads .input:not(#\9):not(#\9), #view-campaignMyLeads input[type="text"]:not(#\9):not(#\9), #view-campaignMyLeads input[type="date"]:not(#\9):not(#\9), #view-campaignMyLeads select:not(#\9):not(#\9),
+#lcUserModal .input:not(#\9):not(#\9), #lcUserModal input[type="text"]:not(#\9):not(#\9), #lcUserModal input[type="date"]:not(#\9):not(#\9), #lcUserModal input[type="email"]:not(#\9):not(#\9), #lcUserModal input[type="password"]:not(#\9):not(#\9), #lcUserModal select:not(#\9):not(#\9),
+#lcWizard .input:not(#\9):not(#\9), #lcWizard input[type="text"]:not(#\9):not(#\9), #lcWizard select:not(#\9):not(#\9), #lcWizard textarea:not(#\9):not(#\9),
+#lcAgentApptWizard .input:not(#\9):not(#\9), #lcAgentApptWizard input[type="text"]:not(#\9):not(#\9), #lcAgentApptWizard select:not(#\9):not(#\9),
+.cqPanel .input:not(#\9):not(#\9), .cqPanel input[type="text"]:not(#\9):not(#\9),
+.ciModal .input:not(#\9):not(#\9), .ciModal select:not(#\9):not(#\9){
+  padding: 9px 12px !important;
+  border-radius: 0 !important;
+  border: 1px solid var(--uf-line) !important;
+  background: var(--uf-surface) !important;
+  color: var(--uf-ink) !important;
+  font-size: 13.5px !important;
+  box-shadow: none !important;
+}
+#view-customers .input:focus:not(#\9):not(#\9), #view-settings .input:focus:not(#\9):not(#\9), #view-users .input:focus:not(#\9):not(#\9), #view-myProcesses .input:focus:not(#\9):not(#\9), #view-campaignLeads .input:focus:not(#\9):not(#\9), #view-campaignMyLeads .input:focus:not(#\9):not(#\9), #lcUserModal .input:focus:not(#\9):not(#\9), #lcWizard .input:focus:not(#\9):not(#\9){
+  border-color: var(--uf-accent) !important;
+  box-shadow: 0 0 0 2px var(--uf-accent-soft) !important;
+}
+#view-customers .label:not(#\9):not(#\9), #view-settings .label:not(#\9):not(#\9), #view-users .label:not(#\9):not(#\9), #view-myProcesses .label:not(#\9):not(#\9), #view-campaignLeads .label:not(#\9):not(#\9), #view-campaignMyLeads .label:not(#\9):not(#\9), #lcUserModal .label:not(#\9):not(#\9){
+  font-size: 12px !important; font-weight: 600 !important; color: var(--uf-ink-3) !important;
+}
+#view-customers .help:not(#\9):not(#\9), #view-settings .help:not(#\9):not(#\9), #view-users .help:not(#\9):not(#\9), #view-campaignLeads .help:not(#\9):not(#\9), #lcUserModal .help:not(#\9):not(#\9){
+  font-size: 12px !important; color: var(--uf-ink-3) !important;
+}
+
+/* ---- שדה חיפוש (.search) ---- */
+#view-customers .search:not(#\9):not(#\9),
+#view-proposals .search:not(#\9):not(#\9),
+#view-elementaryProposals .search:not(#\9):not(#\9),
+#view-myProcesses .search:not(#\9):not(#\9),
+#view-campaignMyLeads .search:not(#\9):not(#\9){
+  background: var(--uf-surface) !important;
+  border: 1px solid var(--uf-line) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+#view-customers .search:focus-within:not(#\9):not(#\9),
+#view-proposals .search:focus-within:not(#\9):not(#\9),
+#view-elementaryProposals .search:focus-within:not(#\9):not(#\9),
+#view-myProcesses .search:focus-within:not(#\9):not(#\9),
+#view-campaignMyLeads .search:focus-within:not(#\9):not(#\9){
+  border-color: var(--uf-accent) !important; box-shadow: 0 0 0 2px var(--uf-accent-soft) !important;
+}
+#view-customers .search__input:not(#\9):not(#\9),
+#view-proposals .search__input:not(#\9):not(#\9),
+#view-elementaryProposals .search__input:not(#\9):not(#\9),
+#view-myProcesses .search__input:not(#\9):not(#\9),
+#view-campaignMyLeads .search__input:not(#\9):not(#\9){
+  color: var(--uf-ink) !important; font-size: 13.5px !important;
+}
+
+/* ---- טבלאות ---- */
+#view-customers .tableWrap:not(#\9):not(#\9),
+#view-proposals .tableWrap:not(#\9):not(#\9),
+#view-elementaryProposals .tableWrap:not(#\9):not(#\9),
+#view-settings .tableWrap:not(#\9):not(#\9),
+#view-users .tableWrap:not(#\9):not(#\9),
+#view-myProcesses .tableWrap:not(#\9):not(#\9),
+#view-campaignLeads .tableWrap:not(#\9):not(#\9),
+#view-campaignMyLeads .tableWrap:not(#\9):not(#\9){
+  border: 1px solid var(--uf-line) !important;
+  border-radius: 0 !important;
+}
+#view-customers .table:not(#\9):not(#\9) th, #view-customers table.table th:not(#\9):not(#\9),
+#view-proposals table.table th:not(#\9):not(#\9),
+#view-elementaryProposals table.table th:not(#\9):not(#\9),
+#view-settings table.table th:not(#\9):not(#\9),
+#view-users table.table th:not(#\9):not(#\9),
+#view-myProcesses table.table th:not(#\9):not(#\9),
+#view-campaignLeads table.table th:not(#\9):not(#\9),
+#view-campaignMyLeads table.table th:not(#\9):not(#\9){
+  padding: 10px 14px !important;
+  background: var(--uf-head-bg) !important;
+  border-bottom: 1px solid var(--uf-line) !important;
+  border-radius: 0 !important;
+  color: var(--uf-ink-3) !important;
+  font-size: 11.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+}
+#view-customers table.table td:not(#\9):not(#\9),
+#view-proposals table.table td:not(#\9):not(#\9),
+#view-elementaryProposals table.table td:not(#\9):not(#\9),
+#view-settings table.table td:not(#\9):not(#\9),
+#view-users table.table td:not(#\9):not(#\9),
+#view-myProcesses table.table td:not(#\9):not(#\9),
+#view-campaignLeads table.table td:not(#\9):not(#\9),
+#view-campaignMyLeads table.table td:not(#\9):not(#\9){
+  padding: 12px 14px !important;
+  border-bottom: 1px solid var(--uf-line-soft) !important;
+  font-size: 13px !important;
+  color: var(--uf-ink) !important;
+}
+#view-customers table.table tr:hover td:not(#\9):not(#\9),
+#view-proposals table.table tr:hover td:not(#\9):not(#\9),
+#view-elementaryProposals table.table tr:hover td:not(#\9):not(#\9),
+#view-settings table.table tr:hover td:not(#\9):not(#\9),
+#view-users table.table tr:hover td:not(#\9):not(#\9),
+#view-myProcesses table.table tr:hover td:not(#\9):not(#\9),
+#view-campaignLeads table.table tr:hover td:not(#\9):not(#\9),
+#view-campaignMyLeads table.table tr:hover td:not(#\9):not(#\9){
+  background: var(--uf-canvas) !important;
+}
+#view-customers table.table td:first-child:not(#\9):not(#\9),
+#view-proposals table.table td:first-child:not(#\9):not(#\9),
+#view-elementaryProposals table.table td:first-child:not(#\9):not(#\9),
+#view-users table.table td:first-child:not(#\9):not(#\9),
+#view-myProcesses table.table td:first-child:not(#\9):not(#\9),
+#view-campaignLeads table.table td:first-child:not(#\9):not(#\9),
+#view-campaignMyLeads table.table td:first-child:not(#\9):not(#\9){
+  color: var(--uf-navy) !important; font-weight: 700 !important;
+}
+#view-customers .lcCustomers__avatar:not(#\9):not(#\9){
+  background: var(--uf-accent-soft) !important;
+  border: 1px solid var(--uf-line) !important;
+  border-radius: 0 !important;
+  color: var(--uf-accent) !important;
+}
+
+/* ---- מודאלים (מעטפת) ---- */
+#lcUserModal .modal__panel:not(#\9):not(#\9),
+.ciModal .ciModal__panel:not(#\9):not(#\9){
+  background: var(--uf-surface) !important;
+  border: 1px solid var(--uf-line) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+#lcUserModal .modal__head:not(#\9):not(#\9),
+.ciModal .ciModal__head:not(#\9):not(#\9){
+  background: var(--uf-head-bg) !important;
+  border-bottom: 1px solid var(--uf-line-soft) !important;
+}
+#lcUserModal .modal__title:not(#\9):not(#\9){ color: var(--uf-navy) !important; font-weight: 700 !important; }
+#lcUserModal .modal__kicker:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; font-weight: 600 !important; }
+#lcUserModal .modal__foot:not(#\9):not(#\9),
+.ciModal .ciModal__foot:not(#\9):not(#\9){
+  background: var(--uf-head-bg) !important;
+  border-top: 1px solid var(--uf-line-soft) !important;
+}
+
+/* ---- Segmented control (התהליכים שלי) ---- */
+#view-myProcesses .segmented:not(#\9):not(#\9){
+  background: var(--uf-surface) !important;
+  border: 1px solid var(--uf-line) !important;
+  border-radius: 0 !important;
+  padding: 3px !important;
+}
+#view-myProcesses .segmented__btn:not(#\9):not(#\9){
+  border-radius: 0 !important;
+  color: var(--uf-ink-3) !important;
+  font-weight: 600 !important;
+}
+#view-myProcesses .segmented__btn.is-active:not(#\9):not(#\9){
+  background: var(--uf-accent) !important;
+  color: #fff !important;
+}
+
+
+/* =====================================================================
+   2. לקוחות — #view-customers · פאנל פרטי לקוח (.cqPanel) · ייבוא (.ciModal)
+   ===================================================================== */
+#view-customers .lcCustomers__toolbar:not(#\9):not(#\9){ gap: 10px !important; }
+#view-customers .lcCustomers__headMeta:not(#\9):not(#\9){ gap: 8px !important; }
+
+/* פאנל פרטי לקוח — נגלל מהצד, "כרטיס תיק" בסגנון mtq */
+.cqPanel__panel:not(#\9):not(#\9){
+  background: var(--uf-canvas) !important;
+  border-inline-end: 1px solid var(--uf-line) !important;
+  box-shadow: none !important;
+}
+.cqPanel__head:not(#\9):not(#\9){
+  background: var(--uf-surface) !important;
+  border-bottom: 1px solid var(--uf-line) !important;
+}
+.cqPanel__avatar:not(#\9):not(#\9){
+  background: var(--uf-accent-soft) !important;
+  color: var(--uf-accent) !important;
+  border-radius: 0 !important;
+}
+.cqPanel__name:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
+.cqChip:not(#\9):not(#\9){
+  background: var(--uf-muted-bg) !important;
+  color: var(--uf-ink-2) !important;
+  border-radius: 0 !important;
+  border: 1px solid var(--uf-line) !important;
+}
+.cqChip--warn:not(#\9):not(#\9){ background: var(--uf-warn-bg) !important; color: var(--uf-warn) !important; border-color: var(--uf-warn-line) !important; }
+.cqPanel__close:not(#\9):not(#\9){
+  border-radius: 0 !important; border-color: var(--uf-line) !important; background: var(--uf-surface) !important;
+}
+.cqPanel__foot:not(#\9):not(#\9){
+  background: var(--uf-head-bg) !important; border-top: 1px solid var(--uf-line-soft) !important;
+}
+.cqSection__title:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+.cqRow:not(#\9):not(#\9){ border-bottom: 1px solid var(--uf-line-soft) !important; }
+.cqRow__label:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+.cqFin__item:not(#\9):not(#\9){
+  background: var(--uf-surface) !important; border: 1px solid var(--uf-line) !important; border-radius: 0 !important;
+}
+.cqFin__disclaimer:not(#\9):not(#\9){
+  background: var(--uf-warn-bg) !important; border: 1px solid var(--uf-warn-line) !important; border-radius: 0 !important; color: var(--uf-warn) !important;
+}
+.cqEditRow__input:not(#\9):not(#\9){
+  border: 1px solid var(--uf-line) !important; border-radius: 0 !important;
+}
+.cqEditRow__input:focus:not(#\9):not(#\9){ border-color: var(--uf-accent) !important; box-shadow: 0 0 0 2px var(--uf-accent-soft) !important; }
+.cqEditNote:not(#\9):not(#\9){ background: var(--uf-head-bg) !important; border-radius: 0 !important; }
+
+/* מודאל ייבוא לקוחות (.ciModal) */
+.ciDrop:not(#\9):not(#\9){
+  border: 2px dashed var(--uf-line) !important; border-radius: 0 !important; background: var(--uf-head-bg) !important;
+}
+.ciDrop:hover:not(#\9):not(#\9), .ciDrop.is-over:not(#\9):not(#\9){
+  border-color: var(--uf-accent) !important; background: var(--uf-accent-soft) !important;
+}
+.ciChip:not(#\9):not(#\9){ border: 1px solid var(--uf-line) !important; border-radius: 0 !important; background: var(--uf-surface) !important; }
+.ciChip.is-active:not(#\9):not(#\9){ border-color: var(--uf-accent) !important; background: var(--uf-accent-soft) !important; color: var(--uf-accent) !important; }
+.ciTableWrap:not(#\9):not(#\9){ border: 1px solid var(--uf-line) !important; border-radius: 0 !important; }
+.ciTable thead th:not(#\9):not(#\9){ background: var(--uf-head-bg) !important; border-bottom: 1px solid var(--uf-line) !important; }
+.ciTable td:not(#\9):not(#\9){ border-bottom: 1px solid var(--uf-line-soft) !important; }
+.ciBadge:not(#\9):not(#\9){ border-radius: 0 !important; }
+.ciHubCard:not(#\9):not(#\9){ border: 1px solid var(--uf-line) !important; border-radius: 0 !important; background: var(--uf-surface) !important; box-shadow: none !important; }
+.ciHubCard:hover:not(.is-disabled):not(#\9):not(#\9){ border-color: var(--uf-accent) !important; background: var(--uf-accent-soft) !important; transform: none !important; }
+.ciHubCard__icon:not(#\9):not(#\9){ border-radius: 0 !important; background: var(--uf-muted-bg) !important; }
+
+/* מחלקות בלעדיות ל-#view-customers שנוספו ב-GI-DESIGN 2026-08-04 (app.css)
+   ולא מתנגשות עם theme.css — נדרסות ישירות בלי צורך במלכודת הספציפיות,
+   אך מוסיפים אותה בכל זאת לשם עקביות ובטיחות. */
+#view-customers .lcCustomersCard:not(#\9):not(#\9){
+  border: 1px solid var(--uf-line) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+#view-customers .lcCustomersCard > .card__head:not(#\9):not(#\9){
+  background: var(--uf-head-bg) !important;
+  border-bottom: 1px solid var(--uf-line-soft) !important;
+}
+#view-customers .lcCustomersCard > .card__head .card__title:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
+#view-customers .lcCustomersCard > .card__head .card__hint:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#view-customers .lcCustomers__headMeta .badge:not(#\9):not(#\9){
+  border-radius: 0 !important; background: var(--uf-accent-soft) !important; color: var(--uf-accent) !important; border: 1px solid var(--uf-line) !important;
+}
+#view-customers .lcCustomers__toolbar:not(#\9):not(#\9){ background: var(--uf-head-bg) !important; border-bottom: 1px solid var(--uf-line-soft) !important; }
+#view-customers .lcCustomers__searchWrap:not(#\9):not(#\9){ border: 1px solid var(--uf-line) !important; border-radius: 0 !important; background: var(--uf-surface) !important; }
+#view-customers .lcCustomers__searchWrap .search__btn:not(#\9):not(#\9){ border-inline-start: 1px solid var(--uf-line) !important; background: var(--uf-head-bg) !important; border-radius: 0 !important; color: var(--uf-ink-2) !important; }
+#view-customers .lcCustomers__toolbar .btn.btn--primary:not(#\9):not(#\9), #view-customers #btnCustomersExport:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-accent) !important; background: var(--uf-accent) !important;
+}
+#view-customers .lcCustomers__avatar:not(#\9):not(#\9){ border-radius: 0 !important; background: var(--uf-accent-soft) !important; color: var(--uf-accent) !important; }
+#view-customers .lcCustomers__sectorTag:not(#\9):not(#\9){ border-radius: 0 !important; }
+#view-customers .lcCustomers__sectorTag--sikunim:not(#\9):not(#\9){ background: var(--uf-danger-bg) !important; color: var(--uf-danger) !important; border-color: var(--uf-danger-line) !important; }
+#view-customers .lcCustomers__sectorTag--briut:not(#\9):not(#\9){ background: var(--uf-ok-bg) !important; color: var(--uf-ok) !important; border-color: var(--uf-ok-line) !important; }
+#view-customers .lcCustomers__sectorTag--almanteri:not(#\9):not(#\9){ background: var(--uf-info-bg) !important; color: var(--uf-info) !important; border-color: var(--uf-info-line) !important; }
+#view-customers .lcCustomers__sectorTag--pensia:not(#\9):not(#\9){ background: var(--uf-accent-soft) !important; color: var(--uf-accent) !important; border-color: var(--uf-line) !important; }
+#view-customers .lcCustomers__sectorTag--agentAppt:not(#\9):not(#\9){ background: var(--uf-chg-bg) !important; color: var(--uf-chg) !important; border-color: var(--uf-chg-line) !important; }
+#view-customers .lcCustomers__premiumBadge:not(#\9):not(#\9){ border-radius: 0 !important; background: var(--uf-info-bg) !important; color: var(--uf-info) !important; border-color: var(--uf-info-line) !important; }
+#view-customers .lcCustomers__premiumBadge--is-premium-high:not(#\9):not(#\9){ background: var(--uf-ok-bg) !important; color: var(--uf-ok) !important; border-color: var(--uf-ok-line) !important; }
+#view-customers .lcCustomers__premiumBadge--is-premium-mid:not(#\9):not(#\9){ background: var(--uf-info-bg) !important; color: var(--uf-info) !important; border-color: var(--uf-info-line) !important; }
+#view-customers .lcCustomers__premiumBadge--is-premium-low:not(#\9):not(#\9){ background: var(--uf-muted-bg) !important; color: var(--uf-ink-3) !important; border-color: var(--uf-line) !important; }
+#view-customers .lcCustomerFolderBtn:not(#\9):not(#\9){
+  border: 1px solid var(--uf-line) !important; border-radius: 0 !important; background: var(--uf-surface) !important; color: var(--uf-accent) !important; box-shadow: none !important;
+}
+#view-customers .lcCustomerRow:hover .lcCustomerFolderBtn:not(#\9):not(#\9),
+#view-customers .lcCustomerFolderBtn:hover:not(#\9):not(#\9){ background: var(--uf-accent) !important; border-color: var(--uf-accent) !important; color: #fff !important; }
+#view-customers .lcCustomerFolderBtn:active:not(#\9):not(#\9){ background: var(--uf-accent-hover) !important; border-color: var(--uf-accent-hover) !important; }
+#view-customers .lcCustomerFolderBtn:focus-visible:not(#\9):not(#\9){ box-shadow: 0 0 0 2px var(--uf-accent-soft) !important; }
+#view-customers .emptyState:not(#\9):not(#\9),
+#view-proposals .emptyState:not(#\9):not(#\9),
+#view-elementaryProposals .emptyState:not(#\9):not(#\9){
+  background: transparent !important; border-radius: 0 !important;
+}
+#view-customers .emptyState__title:not(#\9):not(#\9),
+#view-proposals .emptyState__title:not(#\9):not(#\9),
+#view-elementaryProposals .emptyState__title:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
+#view-customers .emptyState__text:not(#\9):not(#\9),
+#view-proposals .emptyState__text:not(#\9):not(#\9),
+#view-elementaryProposals .emptyState__text:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+
+
+/* =====================================================================
+   3. הצעות — #view-proposals , #view-elementaryProposals
+   ===================================================================== */
+#view-proposals .lcCustomers__toolbar:not(#\9):not(#\9),
+#view-elementaryProposals .lcCustomers__toolbar:not(#\9):not(#\9){ gap: 10px !important; }
+
+/* תגיות סטטוס הצעה (lcProposalBadge) — ממופות לצבעי mtq */
+#view-proposals .lcProposalBadge:not(#\9):not(#\9),
+#view-elementaryProposals .lcProposalBadge:not(#\9):not(#\9){
+  border-radius: 0 !important;
+}
+#view-proposals .lcProposalBadge--open:not(#\9):not(#\9), #view-proposals .lcProposalBadge--step-open:not(#\9):not(#\9),
+#view-elementaryProposals .lcProposalBadge--open:not(#\9):not(#\9), #view-elementaryProposals .lcProposalBadge--step-open:not(#\9):not(#\9){
+  background: var(--uf-info-bg) !important; border-color: var(--uf-info-line) !important; color: var(--uf-info) !important;
+}
+#view-proposals .lcProposalBadge--mid:not(#\9):not(#\9), #view-proposals .lcProposalBadge--step-mid:not(#\9):not(#\9),
+#view-elementaryProposals .lcProposalBadge--mid:not(#\9):not(#\9), #view-elementaryProposals .lcProposalBadge--step-mid:not(#\9):not(#\9){
+  background: var(--uf-warn-bg) !important; border-color: var(--uf-warn-line) !important; color: var(--uf-warn) !important;
+}
+#view-proposals .lcProposalBadge--done:not(#\9):not(#\9), #view-proposals .lcProposalBadge--step-done:not(#\9):not(#\9),
+#view-elementaryProposals .lcProposalBadge--done:not(#\9):not(#\9), #view-elementaryProposals .lcProposalBadge--step-done:not(#\9):not(#\9){
+  background: var(--uf-ok-bg) !important; border-color: var(--uf-ok-line) !important; color: var(--uf-ok) !important;
+}
+#view-proposals .lcProposalBadge--waiting:not(#\9):not(#\9),
+#view-elementaryProposals .lcProposalBadge--waiting:not(#\9):not(#\9){
+  background: var(--uf-info-bg) !important; border-color: var(--uf-info-line) !important; color: var(--uf-info) !important;
+}
+#view-proposals .lcProposalBadge--handling:not(#\9):not(#\9),
+#view-elementaryProposals .lcProposalBadge--handling:not(#\9):not(#\9){
+  background: var(--uf-warn-bg) !important; border-color: var(--uf-warn-line) !important; color: var(--uf-warn) !important;
+}
+#view-proposals .lcProposalBadge--quoteReady:not(#\9):not(#\9),
+#view-elementaryProposals .lcProposalBadge--quoteReady:not(#\9):not(#\9){
+  background: var(--uf-ok-bg) !important; border-color: var(--uf-ok-line) !important; color: var(--uf-ok) !important; box-shadow: none !important;
+}
+
+
+/* =====================================================================
+   4. הגדרות מערכת — #view-settings
+   ===================================================================== */
+#view-settings .lcSettingsHub__rubrics:not(#\9):not(#\9){
+  background: var(--uf-surface) !important;
+  border: 1px solid var(--uf-line) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+#view-settings .lcSettingsHub__intro:not(#\9):not(#\9){ border-bottom: 1px solid var(--uf-line-soft) !important; }
+#view-settings .lcSettingsHub__title:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
+#view-settings .lcSettingsHub__sub:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#view-settings .lcSettingsHub__groupTitle:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#view-settings .lcSettingsRubric:not(#\9):not(#\9){
+  border-radius: 0 !important;
+  border: 1px solid transparent !important;
+  color: var(--uf-ink) !important;
+}
+#view-settings .lcSettingsRubric:hover:not(#\9):not(#\9){
+  background: var(--uf-head-bg) !important; border-color: var(--uf-line-soft) !important;
+}
+#view-settings .lcSettingsRubric.is-active:not(#\9):not(#\9){
+  background: var(--uf-accent-soft) !important; border-color: var(--uf-accent) !important;
+}
+#view-settings .lcSettingsRubric__icon:not(#\9):not(#\9){
+  border-radius: 0 !important; background: var(--uf-muted-bg) !important; color: var(--uf-ink-3) !important;
+}
+#view-settings .lcSettingsRubric.is-active .lcSettingsRubric__icon:not(#\9):not(#\9){
+  background: var(--uf-accent-soft) !important; color: var(--uf-accent) !important;
+}
+#view-settings .lcSettingsRubric__title:not(#\9):not(#\9){ color: var(--uf-ink) !important; }
+#view-settings .lcSettingsRubric.is-active .lcSettingsRubric__title:not(#\9):not(#\9){ color: var(--uf-accent) !important; }
+#view-settings .lcSettingsCard:not(#\9):not(#\9){
+  background: var(--uf-surface) !important;
+  border: 1px solid var(--uf-line) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+#view-settings .lcSettingsCard:hover:not(#\9):not(#\9){ box-shadow: none !important; transform: none !important; }
+#view-settings .lcSettingsCard > .card__head:not(#\9):not(#\9){ border-bottom: 1px solid var(--uf-line-soft) !important; background: var(--uf-head-bg) !important; }
+#view-settings .lcSettingsGridForm .input:not(#\9):not(#\9), #view-settings .lcSettingsGridForm textarea.input:not(#\9):not(#\9){
+  border-radius: 0 !important; border-color: var(--uf-line) !important; background: var(--uf-surface) !important;
+}
+#view-settings .lcSettingsGridForm .input[readonly]:not(#\9):not(#\9){ background: var(--uf-head-bg) !important; color: var(--uf-ink-2) !important; }
+#view-settings .lcSettingsStatusRow:not(#\9):not(#\9){
+  border-radius: 0 !important; background: var(--uf-head-bg) !important; border: 1px solid var(--uf-line) !important;
+}
+#view-settings .lcSettingsStatusText:not(#\9):not(#\9){ color: var(--uf-ink) !important; }
+#view-settings .lcSettingsSecurityState:not(#\9):not(#\9){
+  border-radius: 0 !important; background: var(--uf-accent-soft) !important; border: 1px solid var(--uf-info-line) !important; color: var(--uf-ink) !important;
+}
+#view-settings .lcSettingsActions:not(#\9):not(#\9){ border-top: 1px solid var(--uf-line-soft) !important; }
+#view-settings .lcCampaignLines__row:not(#\9):not(#\9){
+  border: 1px solid var(--uf-line) !important; border-radius: 0 !important;
+}
+
+/* לוג פעילות / דוח נוכחות — giActLog: הפיכה לעיצוב שטוח ומתועד */
+#view-settings .giActLog__hero:not(#\9):not(#\9){
+  border-radius: 0 !important;
+  border: 1px solid var(--uf-line) !important;
+  background: var(--uf-surface) !important;
+  box-shadow: none !important;
+}
+#view-settings .giActLog__title:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
+#view-settings .giActLog__subtitle:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#view-settings .giActLog__dateInput:not(#\9):not(#\9){ border-radius: 0 !important; border: 1px solid var(--uf-line) !important; }
+#view-settings .giActLog__navBtn:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important; color: var(--uf-accent) !important;
+}
+#view-settings .giActLog__navBtn:hover:not(:disabled):not(#\9):not(#\9){ background: var(--uf-head-bg) !important; border-color: var(--uf-line) !important; }
+#view-settings .giActLog__dateBanner:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-head-bg) !important;
+}
+#view-settings .giActLog__dateBannerLabel:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#view-settings .giActLog__dateBannerValue:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
+#view-settings .giActLog__dateBadge:not(#\9):not(#\9){
+  border-radius: 0 !important; background: var(--uf-ok-bg) !important; color: var(--uf-ok) !important; border: 1px solid var(--uf-ok-line) !important;
+}
+#view-settings .giActLog__quickDate:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important; color: var(--uf-ink-3) !important;
+}
+#view-settings .giActLog__quickDate.is-active:not(#\9):not(#\9), #view-settings .giActLog__quickDate:hover:not(#\9):not(#\9){
+  background: var(--uf-accent-soft) !important; color: var(--uf-accent) !important; border-color: var(--uf-accent) !important;
+}
+#view-settings .giActLog__kpi:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important; box-shadow: none !important;
+}
+#view-settings .giActLog__kpiValue:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
+#view-settings .giActLog__kpiLabel:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#view-settings .giActLog__tab:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important; color: var(--uf-ink-3) !important;
+}
+#view-settings .giActLog__tab:hover:not(#\9):not(#\9){ background: var(--uf-head-bg) !important; color: var(--uf-navy) !important; }
+#view-settings .giActLog__tab.is-active:not(#\9):not(#\9){
+  background: var(--uf-accent-soft) !important; border-color: var(--uf-accent) !important; color: var(--uf-accent) !important; box-shadow: none !important;
+}
+#view-settings .giActLog__panel:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important; box-shadow: none !important;
+}
+#view-settings .giActLogTable thead th:not(#\9):not(#\9){
+  background: var(--uf-head-bg) !important; border-bottom: 1px solid var(--uf-line) !important; color: var(--uf-ink-3) !important;
+}
+#view-settings .giActLogTable__agent:not(#\9):not(#\9), #view-settings .giActLogTable__agentName:not(#\9):not(#\9){ color: var(--uf-ink) !important; }
+#view-settings .giActLogTable__day:not(#\9):not(#\9), #view-settings .giActLogTable__time:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
+#view-settings .giActLogTable__row--in td:not(#\9):not(#\9){ background: var(--uf-ok-bg) !important; }
+#view-settings .giActLogTable__row--out td:not(#\9):not(#\9){ background: var(--uf-danger-bg) !important; }
+#view-settings .giActLogTable__row--idle td:not(#\9):not(#\9){ background: var(--uf-warn-bg) !important; }
+#view-settings .giActLogTable__row--browser td:not(#\9):not(#\9){ background: var(--uf-accent-soft) !important; }
+#view-settings .giActLogTable__row--lead td:not(#\9):not(#\9){ background: var(--uf-info-bg) !important; }
+#view-settings .giActLog__pill:not(#\9):not(#\9){ border-radius: 0 !important; }
+#view-settings .giActLog__pill--in:not(#\9):not(#\9){ color: var(--uf-ok) !important; background: var(--uf-ok-bg) !important; border-color: var(--uf-ok-line) !important; }
+#view-settings .giActLog__pill--out:not(#\9):not(#\9){ color: var(--uf-danger) !important; background: var(--uf-danger-bg) !important; border-color: var(--uf-danger-line) !important; }
+#view-settings .giActLog__pill--idle:not(#\9):not(#\9){ color: var(--uf-warn) !important; background: var(--uf-warn-bg) !important; border-color: var(--uf-warn-line) !important; }
+#view-settings .giActLog__pill--browser:not(#\9):not(#\9){ color: var(--uf-accent) !important; background: var(--uf-accent-soft) !important; border-color: var(--uf-line) !important; }
+#view-settings .giActLog__pill--neutral:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; background: var(--uf-muted-bg) !important; border-color: var(--uf-line) !important; }
+#view-settings .giActLog__pill--lead:not(#\9):not(#\9){ color: var(--uf-info) !important; background: var(--uf-info-bg) !important; border-color: var(--uf-info-line) !important; }
+
+/* דוח נוכחות (giAttendReport) — לוח נפרד תחת אותו רוביקה */
+#view-settings .giAttendReport__badge--ok:not(#\9):not(#\9){ background: var(--uf-ok-bg) !important; color: var(--uf-ok) !important; }
+#view-settings .giAttendReport__badge--open:not(#\9):not(#\9){ background: var(--uf-info-bg) !important; color: var(--uf-info) !important; }
+#view-settings .giAttendReport__badge--warn:not(#\9):not(#\9){ background: var(--uf-danger-bg) !important; color: var(--uf-danger) !important; }
+#view-settings .giAttendReport__table tr.giAttendReport__row--warn td:not(#\9):not(#\9){ background: var(--uf-danger-bg) !important; }
+#view-settings .giAttendReport__table tr.giAttendReport__row--warn td:last-child:not(#\9):not(#\9){ box-shadow: inset -3px 0 0 var(--uf-danger) !important; }
+
+/* עדכוני מערכת (SystemUpdatesUI) — כפתורי חברה/מוצר */
+#view-settings .lcSysUpCo:not(#\9):not(#\9), #view-settings .lcSysUpPr:not(#\9):not(#\9){ border-radius: 0 !important; }
+
+/* לקוחות שנגנזו — כפתור שחזור/מחיקה סופית */
+#view-settings .lcArchivedCustomerRow__purge:not(#\9):not(#\9){ border-radius: 0 !important; }
+#view-settings .lcIconActionBtn--danger:not(#\9):not(#\9){ color: var(--uf-danger) !important; }
+
+
+/* =====================================================================
+   5. ניהול משתמשים — #view-users + מודאל #lcUserModal
+   ===================================================================== */
+#view-users .lcUsers__mfaBadge:not(#\9):not(#\9){ border-radius: 0 !important; }
+#view-users .lcUsers__mfaBadge--is-ok:not(#\9):not(#\9){ background: var(--uf-ok-bg) !important; color: var(--uf-ok) !important; border-color: var(--uf-ok-line) !important; }
+#view-users .lcUsers__mfaBadge--is-pending:not(#\9):not(#\9){ background: var(--uf-warn-bg) !important; color: var(--uf-warn) !important; border-color: var(--uf-warn-line) !important; }
+#view-users .lcUsers__mfaBadge--is-warn:not(#\9):not(#\9){ background: var(--uf-danger-bg) !important; color: var(--uf-danger) !important; border-color: var(--uf-danger-line) !important; }
+#view-users .lcUsers__mfaBadge--is-neutral:not(#\9):not(#\9){ background: var(--uf-info-bg) !important; color: var(--uf-info) !important; border-color: var(--uf-info-line) !important; }
+#view-users .lcUsers__name:not(#\9):not(#\9){ color: var(--uf-ink) !important; }
+
+#lcUserModal .lcUserModal__panel:not(#\9):not(#\9){
+  border-radius: 0 !important; background: var(--uf-surface) !important; border: 1px solid var(--uf-line) !important; box-shadow: none !important;
+}
+#lcUserModal .lcUserModal__head:not(#\9):not(#\9){ border-bottom: 1px solid var(--uf-line-soft) !important; background: var(--uf-head-bg) !important; }
+#lcUserModal .lcUserModal__roleBadge:not(#\9):not(#\9){ border-radius: 0 !important; background: var(--uf-accent-soft) !important; color: var(--uf-accent) !important; }
+#lcUserModal .lcUserModal__statusDot:not(#\9):not(#\9){ background: var(--uf-ok) !important; }
+#lcUserModal .lcUserModal__sectionTitle:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
+#lcUserModal .lcUserModal__teamBadge:not(#\9):not(#\9){ border-radius: 0 !important; background: var(--uf-muted-bg) !important; color: var(--uf-ink-2) !important; }
+#lcUserModal .lcUserModal__foot:not(#\9):not(#\9){ border-top: 1px solid var(--uf-line-soft) !important; background: var(--uf-head-bg) !important; }
+#lcUserModal .lcUserModal__toggleTrack:not(#\9):not(#\9){ background: var(--uf-line) !important; }
+#lcUserModal .lcTeamAgentsPick:not(#\9):not(#\9){ border: 1px solid var(--uf-line) !important; border-radius: 0 !important; }
+#lcUserModal .moneyField__sym:not(#\9):not(#\9){ color: var(--uf-accent) !important; }
+
+
+/* =====================================================================
+   6. התהליכים שלי — #view-myProcesses
+   ===================================================================== */
+#view-myProcesses .lcMyProcessesCard:not(#\9):not(#\9){
+  border: 1px solid var(--uf-line) !important;
+  background: var(--uf-surface) !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+#view-myProcesses .lcMyProcessesCard .card__title:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
+#view-myProcesses .lcMyProcessesStat:not(#\9):not(#\9){
+  border: 1px solid var(--uf-line) !important;
+  background: var(--uf-surface) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+#view-myProcesses .lcMyProcessesStat__label:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#view-myProcesses .lcMyProcessesStat__value:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
+#view-myProcesses .lcMyProcessesTable thead th:not(#\9):not(#\9){
+  background: var(--uf-head-bg) !important; color: var(--uf-ink-3) !important;
+}
+#view-myProcesses .lcMyProcessesTable:not(#\9):not(#\9){ border-spacing: 0 !important; }
+#view-myProcesses .lcMyProcessesRow::before:not(#\9):not(#\9){ display: none !important; }
+#view-myProcesses .lcMyProcessesRow td:not(#\9):not(#\9){ border-bottom: 1px solid var(--uf-line-soft) !important; }
+#view-myProcesses .lcMyProcessesRow__num:not(#\9):not(#\9){
+  border-radius: 0 !important; background: var(--uf-muted-bg) !important; border: 1px solid var(--uf-line) !important; color: var(--uf-ink-2) !important;
+}
+#view-myProcesses .lcMyProcessesType:not(#\9):not(#\9){ color: var(--uf-accent) !important; }
+#view-myProcesses .lcMyProcessesStage:not(#\9):not(#\9){ color: var(--uf-ink) !important; }
+#view-myProcesses .lcMyProcessesOwner__name:not(#\9):not(#\9){ color: var(--uf-ink) !important; }
+#view-myProcesses .lcMyProcessesBadge:not(#\9):not(#\9){
+  border-radius: 0 !important;
+}
+#view-myProcesses .lcMyProcessesBadge--info:not(#\9):not(#\9){ background: var(--uf-info-bg) !important; color: var(--uf-info) !important; border-color: var(--uf-info-line) !important; }
+#view-myProcesses .lcMyProcessesBadge--warn:not(#\9):not(#\9){ background: var(--uf-warn-bg) !important; color: var(--uf-warn) !important; border-color: var(--uf-warn-line) !important; }
+#view-myProcesses .lcMyProcessesBadge--success:not(#\9):not(#\9){ background: var(--uf-ok-bg) !important; color: var(--uf-ok) !important; border-color: var(--uf-ok-line) !important; }
+#view-myProcesses .lcMyProcessesActions .btn:not(#\9):not(#\9){ border-radius: 0 !important; }
+#view-myProcesses .lcMyProcesses__segmented:not(#\9):not(#\9){
+  border: 1px solid var(--uf-line) !important;
+  background: var(--uf-surface) !important;
+  box-shadow: none !important;
+}
+#view-myProcesses .opsToolbarCount:not(#\9):not(#\9){
+  border-radius: 0 !important; background: var(--uf-muted-bg) !important; color: var(--uf-navy) !important; border: 1px solid var(--uf-line) !important;
+}
+
+
+/* =====================================================================
+   7. מערכת לידים — #view-campaignLeads , #view-campaignMyLeads , #goldLeadModal
+   ===================================================================== */
+#view-campaignLeads .lcCampaign__editor:not(#\9):not(#\9){
+  background: var(--uf-surface) !important;
+  border: 1px solid var(--uf-line) !important;
+  border-radius: 0 !important;
+}
+#view-campaignLeads .lcCampaign__splitForm .lcCampaign__editor:not(#\9):not(#\9){ background: transparent !important; border: none !important; }
+#view-campaignLeads .lcCampaign__fieldGroup:not(#\9):not(#\9){ color: var(--uf-navy) !important; border-bottom: 2px solid var(--uf-line) !important; }
+#view-campaignLeads .lcCampaign__splitLeads:not(#\9):not(#\9){
+  border-inline-start: 1px solid var(--uf-line) !important;
+  background: var(--uf-canvas) !important;
+}
+#view-campaignLeads .lcSplitLeads__head:not(#\9):not(#\9){ border-bottom: 1px solid var(--uf-line) !important; }
+#view-campaignLeads .lcSplitLeads__search:not(#\9):not(#\9){ border-bottom: 1px solid var(--uf-line-soft) !important; background: var(--uf-surface) !important; }
+#view-campaignLeads .lcSplitLeads__chip:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important; color: var(--uf-ink-3) !important;
+}
+#view-campaignLeads .lcSplitLeads__chip:hover:not(#\9):not(#\9){
+  background: var(--uf-accent-soft) !important; border-color: var(--uf-accent) !important; color: var(--uf-accent) !important;
+}
+#view-campaignLeads .lcSplitLeads__chip.is-active:not(#\9):not(#\9){
+  background: var(--uf-accent) !important; border-color: var(--uf-accent) !important; color: #fff !important; box-shadow: none !important;
+}
+#view-campaignLeads .lcCampaign__alert:not(#\9):not(#\9){ border-radius: 0 !important; }
+#view-campaignLeads .lcCampaign__alert--warn:not(#\9):not(#\9){ background: var(--uf-warn-bg) !important; border: 1px solid var(--uf-warn-line) !important; }
+#view-campaignLeads .lcCampaign__alert--err:not(#\9):not(#\9){ background: var(--uf-danger-bg) !important; border: 1px solid var(--uf-danger-line) !important; }
+#view-campaignLeads .lcCampaign__alert--ok:not(#\9):not(#\9){ background: var(--uf-ok-bg) !important; border: 1px solid var(--uf-ok-line) !important; }
+#view-campaignLeads .lcCampaign__srcBadge:not(#\9):not(#\9){ border-radius: 0 !important; }
+
+/* צ'יפי סינון סטטוס (משתפים מחלקה של תחנת השיקוף — mcSearch__chip) */
+#view-campaignLeads .mcSearch__chip:not(#\9):not(#\9),
+#view-campaignMyLeads .mcSearch__chip:not(#\9):not(#\9){
+  border-radius: 0 !important;
+  border: 1px solid var(--uf-line) !important;
+  background: var(--uf-surface) !important;
+  color: var(--uf-ink-3) !important;
+  box-shadow: none !important;
+}
+#view-campaignLeads .mcSearch__chip.is-active:not(#\9):not(#\9),
+#view-campaignMyLeads .mcSearch__chip.is-active:not(#\9):not(#\9){
+  background: var(--uf-accent) !important; border-color: var(--uf-accent) !important; color: #fff !important;
+}
+
+#view-campaignLeads .lcAgentSummary:not(#\9):not(#\9){ border: 1px solid var(--uf-line) !important; border-radius: 0 !important; }
+#view-campaignLeads .lcAgentSummary__title:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
+#view-campaignLeads .lcTrackAgentCard:not(#\9):not(#\9){ border: 1px solid var(--uf-line) !important; border-radius: 0 !important; background: var(--uf-surface) !important; }
+#view-campaignLeads .lcTrackScreen__btn:not(#\9):not(#\9){ border-radius: 0 !important; }
+#view-campaignLeads .lcTrackScreen__btn--primary:not(#\9):not(#\9){ background: var(--uf-accent) !important; border-color: var(--uf-accent) !important; color: #fff !important; }
+#view-campaignLeads .lcTrackScreen__btn--accent:not(#\9):not(#\9){ background: var(--uf-accent) !important; border-color: var(--uf-accent) !important; color: #fff !important; }
+#view-campaignLeads .lcTracking__agentChips .lcTracking__agentChip:not(#\9):not(#\9){ border-radius: 0 !important; }
+
+/* Dropdown מותאם לבחירת חברת ביטוח (lcNpCoDd) */
+#view-campaignLeads .lcNpCoDd__trigger:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important;
+}
+#view-campaignLeads .lcNpCoDd__trigger:hover:not(#\9):not(#\9), #view-campaignLeads .lcNpCoDd__trigger[aria-expanded="true"]:not(#\9):not(#\9){
+  border-color: var(--uf-accent) !important; box-shadow: 0 0 0 2px var(--uf-accent-soft) !important;
+}
+#view-campaignLeads .lcNpCoDd__menu:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; box-shadow: none !important;
+}
+
+/* ליד זהב — #goldLeadModal / .goldFs */
+#goldLeadModal .goldFs__bar:not(#\9):not(#\9), #goldLeadModal .goldFs__foot:not(#\9):not(#\9){ border-color: var(--uf-line) !important; }
+#goldLeadModal .goldFs__brandIcon:not(#\9):not(#\9){ border-radius: 0 !important; background: var(--uf-accent-soft) !important; color: var(--uf-accent) !important; border-color: var(--uf-line) !important; }
+#goldLeadModal .goldFs__x:not(#\9):not(#\9){ border-radius: 0 !important; border-color: var(--uf-line) !important; }
+#goldLeadModal .goldFs__stepNum:not(#\9):not(#\9){ border-radius: 0 !important; border: 1px solid var(--uf-line) !important; }
+#goldLeadModal .goldFs__step.is-active .goldFs__stepNum:not(#\9):not(#\9){ background: var(--uf-accent-soft) !important; border-color: var(--uf-accent) !important; color: var(--uf-accent) !important; }
+#goldLeadModal .goldFs__step.is-done .goldFs__stepNum:not(#\9):not(#\9){ background: var(--uf-ok-bg) !important; border-color: var(--uf-ok-line) !important; color: var(--uf-ok) !important; }
+#goldLeadModal .goldFs__stepBar:not(#\9):not(#\9){ background: var(--uf-line) !important; }
+#goldLeadModal .goldFs__side:not(#\9):not(#\9){ border-inline-end: 1px solid var(--uf-line) !important; }
+#goldLeadModal .goldFs__search:not(#\9):not(#\9){ border-radius: 0 !important; border: 1px solid var(--uf-line) !important; }
+#goldLeadModal .goldFs__result:not(#\9):not(#\9){ border-radius: 0 !important; }
+#goldLeadModal .goldFs__result.is-active:not(#\9):not(#\9){ background: var(--uf-accent-soft) !important; border-color: var(--uf-accent) !important; }
+#goldLeadModal .goldFs__avatar:not(#\9):not(#\9){ border-radius: 0 !important; background: var(--uf-accent-soft) !important; color: var(--uf-accent) !important; }
+#goldLeadModal .goldFs__result.is-active .goldFs__avatar:not(#\9):not(#\9){ background: var(--uf-accent) !important; color: #fff !important; }
+#goldLeadModal .goldFs__btn:not(#\9):not(#\9){ border-radius: 0 !important; border: 1px solid var(--uf-line) !important; }
+#goldLeadModal .goldFs__btn--go:not(#\9):not(#\9){ background: var(--uf-accent) !important; border-color: var(--uf-accent) !important; }
+#goldLeadModal .goldFs__btn--go:hover:not(#\9):not(#\9){ background: var(--uf-accent-hover) !important; }
+.goldBoard__stat:not(#\9):not(#\9){ border-radius: 0 !important; border: 1px solid var(--uf-line) !important; }
+.goldBoard__stat--danger:not(#\9):not(#\9){ background: var(--uf-danger-bg) !important; border-color: var(--uf-danger-line) !important; }
+
+/* תגיות סטטוס ליד בפאנל הצדי (lcSplitCard__statusPill) וצביעת שורות סטטוס בטבלה */
+#view-campaignLeads .lcSplitCard__statusPill:not(#\9):not(#\9){ border-radius: 0 !important; }
+#view-campaignLeads .lcSplitCard__statusPill--new:not(#\9):not(#\9){ background: var(--uf-info-bg) !important; color: var(--uf-info) !important; border-color: var(--uf-info-line) !important; }
+#view-campaignLeads .lcSplitCard__statusPill--in_progress:not(#\9):not(#\9){ background: var(--uf-warn-bg) !important; color: var(--uf-warn) !important; border-color: var(--uf-warn-line) !important; }
+#view-campaignLeads .lcSplitCard__statusPill--closed:not(#\9):not(#\9){ background: var(--uf-ok-bg) !important; color: var(--uf-ok) !important; border-color: var(--uf-ok-line) !important; }
+#view-campaignLeads .lcSplitCard__statusPill--irrelevant:not(#\9):not(#\9){ background: var(--uf-danger-bg) !important; color: var(--uf-danger) !important; border-color: var(--uf-danger-line) !important; }
+#view-campaignLeads .lcSplitCard__statusPill--no_answer:not(#\9):not(#\9){ background: var(--uf-chg-bg) !important; color: var(--uf-chg) !important; border-color: var(--uf-chg-line) !important; }
+#view-campaignLeads .lcSplitCard__statusPill--agent_appointment:not(#\9):not(#\9){ background: var(--uf-accent-soft) !important; color: var(--uf-accent) !important; border-color: var(--uf-line) !important; }
+
+#view-campaignLeads .lcCampaignTable tr.lcLeadRow--new td:not(#\9):not(#\9){ background: var(--uf-info-bg) !important; }
+#view-campaignLeads .lcCampaignTable tr.lcLeadRow--closed td:not(#\9):not(#\9){ background: var(--uf-ok-bg) !important; }
+#view-campaignLeads .lcCampaignTable tr.lcLeadRow--irrelevant td:not(#\9):not(#\9){ background: var(--uf-danger-bg) !important; }
+#view-campaignLeads .lcCampaignTable tr.lcLeadRow--no_answer td:not(#\9):not(#\9){ background: var(--uf-chg-bg) !important; }
+#view-campaignLeads .lcCampaignTable tr.lcLeadRow--agent_appointment td:not(#\9):not(#\9){ background: var(--uf-accent-soft) !important; }
+#view-campaignLeads .lcCampaignTable tr.lcLeadRow--in_progress td:not(#\9):not(#\9){ background: var(--uf-warn-bg) !important; }
+#view-campaignLeads .lcCampaignTable tr.lcLeadRow--new.is-highlight td:not(#\9):not(#\9),
+#view-campaignLeads .lcCampaignTable tr.lcLeadRow--closed.is-highlight td:not(#\9):not(#\9),
+#view-campaignLeads .lcCampaignTable tr.lcLeadRow--irrelevant.is-highlight td:not(#\9):not(#\9),
+#view-campaignLeads .lcCampaignTable tr.lcLeadRow--no_answer.is-highlight td:not(#\9):not(#\9),
+#view-campaignLeads .lcCampaignTable tr.lcLeadRow--agent_appointment.is-highlight td:not(#\9):not(#\9),
+#view-campaignLeads .lcCampaignTable tr.lcLeadRow--in_progress.is-highlight td:not(#\9):not(#\9){
+  box-shadow: inset 0 0 0 2px var(--uf-accent) !important;
+}
+#view-campaignLeads .lcLeadRow--gold td:first-child:not(#\9):not(#\9){ box-shadow: inset -3px 0 0 var(--uf-warn) !important; }
+
+/* מסך מעקב (Tracking) — שורות/תגים בתוך #campaignLeadsTrackingPanel */
+#view-campaignLeads .lcTrackRow td:not(#\9):not(#\9){
+  background: var(--uf-surface) !important;
+}
+#view-campaignLeads .lcTrackRow td:first-child:not(#\9):not(#\9){
+  border-radius: 0 !important; border-inline-end: 3px solid var(--uf-line) !important;
+}
+#view-campaignLeads .lcTrackRow td:last-child:not(#\9):not(#\9){ border-radius: 0 !important; }
+#view-campaignLeads .lcTrackRow:hover td:not(#\9):not(#\9){ background: var(--uf-canvas) !important; }
+#view-campaignLeads .lcTrackBadge:not(#\9):not(#\9){ border-radius: 0 !important; }
+#view-campaignLeads .lcTrackBadge--green:not(#\9):not(#\9){ background: var(--uf-ok-bg) !important; color: var(--uf-ok) !important; border-color: var(--uf-ok-line) !important; }
+#view-campaignLeads .lcTrackBadge--yellow:not(#\9):not(#\9){ background: var(--uf-warn-bg) !important; color: var(--uf-warn) !important; border-color: var(--uf-warn-line) !important; }
+#view-campaignLeads .lcTrackBadge--red:not(#\9):not(#\9){ background: var(--uf-danger-bg) !important; color: var(--uf-danger) !important; border-color: var(--uf-danger-line) !important; }
+#view-campaignLeads .lcTrackBadge--orange:not(#\9):not(#\9){ background: var(--uf-chg-bg) !important; color: var(--uf-chg) !important; border-color: var(--uf-chg-line) !important; }
+#view-campaignLeads .lcTrackBadge--purple:not(#\9):not(#\9){ background: var(--uf-accent-soft) !important; color: var(--uf-accent) !important; border-color: var(--uf-line) !important; }
+#view-campaignLeads .lcTrackBadge--blue:not(#\9):not(#\9){ background: var(--uf-info-bg) !important; color: var(--uf-info) !important; border-color: var(--uf-info-line) !important; }
+#view-campaignLeads .lcTrackBadge--neutral:not(#\9):not(#\9){ background: var(--uf-muted-bg) !important; color: var(--uf-ink-3) !important; border-color: var(--uf-line) !important; }
+#view-campaignLeads .lcSplitLeads__count:not(#\9):not(#\9){ border-radius: 0 !important; background: var(--uf-muted-bg) !important; color: var(--uf-ink-3) !important; }
+#view-campaignLeads .lcAgentSummary__total:not(#\9):not(#\9){ color: var(--uf-accent) !important; }
+#view-campaignLeads .lcAgentSummary__closed:not(#\9):not(#\9){ color: var(--uf-ok) !important; }
+#view-campaignLeads .lcAgentSummary__irr:not(#\9):not(#\9){ color: var(--uf-warn) !important; }
+
+/* הלידים שלי (#view-campaignMyLeads) — כפתורי אייקון, בחירת סטטוס, תג ליד זהב */
+#view-campaignMyLeads .lcMyLeadIconBtn:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important;
+}
+#view-campaignMyLeads .lcMyLeadIconBtn:hover:not(#\9):not(#\9){
+  background: var(--uf-accent-soft) !important; border-color: var(--uf-accent) !important; color: var(--uf-accent) !important; box-shadow: none !important;
+}
+#view-campaignMyLeads .lcMyLeadStatusSelect:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important;
+}
+#view-campaignMyLeads .lcMyLeadStatusSelect:focus:not(#\9):not(#\9){
+  box-shadow: 0 0 0 2px var(--uf-accent-soft) !important; border-color: var(--uf-accent) !important;
+}
+#view-campaignMyLeads .lcMyLeadCopy:hover:not(#\9):not(#\9){ background: var(--uf-accent-soft) !important; border-radius: 0 !important; }
+#view-campaignMyLeads .lcGoldLeadBadge:not(#\9):not(#\9){
+  border-radius: 0 !important; background: var(--uf-warn-bg) !important; color: var(--uf-chg) !important; box-shadow: none !important;
+}
+
+/* לוח "ליד זהב" (goldBoard) — כרטיסים ותגי סטטוס */
+#goldLeadModal .goldBoard__card:not(#\9):not(#\9), #view-campaignLeads .goldBoard__card:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important;
+}
+#goldLeadModal .goldBoard__card.is-stuck:not(#\9):not(#\9), #view-campaignLeads .goldBoard__card.is-stuck:not(#\9):not(#\9){ border-inline-start: 3px solid var(--uf-danger) !important; }
+#goldLeadModal .goldBoard__pill--new:not(#\9):not(#\9), #view-campaignLeads .goldBoard__pill--new:not(#\9):not(#\9){ background: var(--uf-info-bg) !important; color: var(--uf-info) !important; }
+#goldLeadModal .goldBoard__pill--in_progress:not(#\9):not(#\9), #view-campaignLeads .goldBoard__pill--in_progress:not(#\9):not(#\9){ background: var(--uf-warn-bg) !important; color: var(--uf-warn) !important; }
+#goldLeadModal .goldBoard__pill--no_answer:not(#\9):not(#\9), #view-campaignLeads .goldBoard__pill--no_answer:not(#\9):not(#\9){ background: var(--uf-chg-bg) !important; color: var(--uf-chg) !important; }
+#goldLeadModal .goldBoard__pill--agent_appointment:not(#\9):not(#\9), #view-campaignLeads .goldBoard__pill--agent_appointment:not(#\9):not(#\9){ background: var(--uf-accent-soft) !important; color: var(--uf-accent) !important; }
+#goldLeadModal .goldBoard__pill--closed:not(#\9):not(#\9), #view-campaignLeads .goldBoard__pill--closed:not(#\9):not(#\9){ background: var(--uf-ok-bg) !important; color: var(--uf-ok) !important; }
+#goldLeadModal .goldBoard__pill--irrelevant:not(#\9):not(#\9), #view-campaignLeads .goldBoard__pill--irrelevant:not(#\9):not(#\9),
+#goldLeadModal .goldBoard__pill--stuck:not(#\9):not(#\9), #view-campaignLeads .goldBoard__pill--stuck:not(#\9):not(#\9){ background: var(--uf-danger-bg) !important; color: var(--uf-danger) !important; }
+#goldLeadModal .goldBoard__pill--carried:not(#\9):not(#\9), #view-campaignLeads .goldBoard__pill--carried:not(#\9):not(#\9){ background: var(--uf-muted-bg) !important; color: var(--uf-ink-3) !important; }
+#goldLeadModal .goldBoard__pill--pension:not(#\9):not(#\9), #view-campaignLeads .goldBoard__pill--pension:not(#\9):not(#\9){ background: var(--uf-accent-soft) !important; color: var(--uf-accent) !important; }
+#goldLeadModal .goldBoard__pill--elementary:not(#\9):not(#\9), #view-campaignLeads .goldBoard__pill--elementary:not(#\9):not(#\9){ background: var(--uf-ok-bg) !important; color: var(--uf-ok) !important; }
+#goldLeadModal .goldBoard__chip:not(#\9):not(#\9), #view-campaignLeads .goldBoard__chip:not(#\9):not(#\9){ border-radius: 0 !important; background: var(--uf-surface) !important; border-color: var(--uf-line) !important; }
+
+
+/* =====================================================================
+   8. אשף הקמת לקוח (#lcWizard) ובריאות וסיכונים
+      (#lcHealthRiskChoiceModal , #lcAgentApptWizard)
+   ===================================================================== */
+
+/* ---- מודאל בחירת פעולה "בריאות וסיכונים" — מ-מסך פתיחה כהה ל-קנבס שטוח ---- */
+#lcHealthRiskChoiceModal.lcHealthRiskChoiceModal:not(#\9):not(#\9){
+  background: var(--uf-canvas) !important;
+}
+#lcHealthRiskChoiceModal .lcHealthRiskChoiceModal__backdrop:not(#\9):not(#\9){
+  background: rgba(12, 45, 74, .55) !important;
+  backdrop-filter: none !important;
+}
+#lcHealthRiskChoiceModal .lcHealthRiskChoiceModal__panel:not(#\9):not(#\9){
+  background: var(--uf-canvas) !important;
+}
+#lcHealthRiskChoiceModal .modal__kicker:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#lcHealthRiskChoiceModal .modal__title:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
+
+/* כרטיסי בחירת סוג לקוח (בריאות וסיכונים / אלמנטרי / פנסיה / הצעה חדשה / מינוי סוכן) */
+#lcHealthRiskChoiceModal .lcNewCustomerTypeCard:not(#\9):not(#\9),
+#lcWizard .lcNewCustomerTypeCard:not(#\9):not(#\9){
+  background: var(--uf-surface) !important;
+  border: 1px solid var(--uf-line) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+#lcHealthRiskChoiceModal .lcNewCustomerTypeCard:hover:not(#\9):not(#\9),
+#lcWizard .lcNewCustomerTypeCard:hover:not(#\9):not(#\9){
+  border-color: var(--uf-accent) !important;
+  background: var(--uf-accent-soft) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+#lcHealthRiskChoiceModal .lcNewCustomerTypeCard__iconWrap:not(#\9):not(#\9),
+#lcWizard .lcNewCustomerTypeCard__iconWrap:not(#\9):not(#\9){
+  border-radius: 0 !important;
+  background: var(--uf-accent-soft) !important;
+  border: 1px solid var(--uf-line) !important;
+}
+#lcHealthRiskChoiceModal .lcNewCustomerTypeCard__title:not(#\9):not(#\9),
+#lcWizard .lcNewCustomerTypeCard__title:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
+#lcHealthRiskChoiceModal .lcNewCustomerTypeCard__text:not(#\9):not(#\9),
+#lcWizard .lcNewCustomerTypeCard__text:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#lcHealthRiskChoiceModal .lcNewCustomerTypeCard__badge:not(#\9):not(#\9),
+#lcWizard .lcNewCustomerTypeCard__badge:not(#\9):not(#\9){
+  border-radius: 0 !important;
+  background: var(--uf-muted-bg) !important;
+  color: var(--uf-ink-3) !important;
+  border: 1px solid var(--uf-line) !important;
+}
+#lcHealthRiskChoiceModal .lcNewCustomerTypeCard__badge--agentAppt:not(#\9):not(#\9){ background: var(--uf-info-bg) !important; color: var(--uf-info) !important; }
+#lcHealthRiskChoiceModal .lcNewCustomerTypeCard__badge--dev:not(#\9):not(#\9){ background: var(--uf-warn-bg) !important; color: var(--uf-warn) !important; }
+
+/* ---- מעטפת האשף (backdrop / panel / head / stepper / footer) ---- */
+#lcWizard .lcWizard__backdrop:not(#\9):not(#\9),
+#lcAgentApptWizard .lcWizard__backdrop:not(#\9):not(#\9){
+  background: rgba(12, 45, 74, .45) !important;
+  backdrop-filter: none !important;
+}
+#lcWizard .lcWizard__panel:not(#\9):not(#\9),
+#lcAgentApptWizard .lcWizard__panel:not(#\9):not(#\9){
+  border-radius: 0 !important;
+  background: var(--uf-surface) !important;
+  border: 1px solid var(--uf-line) !important;
+  box-shadow: none !important;
+}
+#lcWizard .lcWizard__head:not(#\9):not(#\9),
+#lcAgentApptWizard .lcWizard__head:not(#\9):not(#\9){
+  background: var(--uf-head-bg) !important;
+  border-bottom: 1px solid var(--uf-line-soft) !important;
+}
+#lcWizard .lcWizard__kicker:not(#\9):not(#\9),
+#lcAgentApptWizard .lcWizard__kicker:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#lcWizard .lcWizard__title:not(#\9):not(#\9),
+#lcAgentApptWizard .lcWizard__title:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
+#lcWizard .lcWizard__progressBar:not(#\9):not(#\9),
+#lcAgentApptWizard .lcWizard__progressBar:not(#\9):not(#\9){
+  background: var(--uf-line-soft) !important; border-radius: 0 !important;
+}
+#lcWizard .lcWizard__progressFill:not(#\9):not(#\9),
+#lcAgentApptWizard .lcWizard__progressFill:not(#\9):not(#\9){
+  background: var(--uf-accent) !important;
+}
+#lcWizard .lcStep:not(#\9):not(#\9),
+#lcAgentApptWizard .lcStep:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important;
+}
+#lcWizard .lcStep.is-active:not(#\9):not(#\9),
+#lcAgentApptWizard .lcStep.is-active:not(#\9):not(#\9){
+  border-color: var(--uf-accent) !important; background: var(--uf-accent-soft) !important; color: var(--uf-navy) !important;
+}
+#lcWizard .lcStep.is-active .lcStep__num:not(#\9):not(#\9),
+#lcAgentApptWizard .lcStep.is-active .lcStep__num:not(#\9):not(#\9){
+  background: var(--uf-accent) !important; color: #fff !important; border-radius: 0 !important;
+}
+#lcWizard .lcStep.is-done:not(#\9):not(#\9),
+#lcAgentApptWizard .lcStep.is-done:not(#\9):not(#\9){
+  border-color: var(--uf-ok-line) !important; background: var(--uf-ok-bg) !important;
+}
+#lcWizard .lcWizard__foot:not(#\9):not(#\9),
+#lcAgentApptWizard .lcWizard__foot:not(#\9):not(#\9){
+  border-top: 1px solid var(--uf-line-soft) !important; background: var(--uf-head-bg) !important;
+}
+#lcWizard .lcWizard__close:not(#\9):not(#\9),
+#lcAgentApptWizard .lcWizard__close:not(#\9):not(#\9){ border-radius: 0 !important; }
+
+/* ---- מינוי סוכן — badge / chips / כרטיסי חברות / כרטיסי פוליסה / סיכום ---- */
+#lcAgentApptWizard .giAgentApptBadge:not(#\9):not(#\9){
+  border-radius: 0 !important; background: var(--uf-accent-soft) !important; border: 1px solid var(--uf-line) !important; color: var(--uf-accent) !important;
+}
+#lcAgentApptWizard .giApptSelectedChip:not(#\9):not(#\9){
+  border-radius: 0 !important; background: var(--uf-accent-soft) !important; border: 1px solid var(--uf-line) !important; color: var(--uf-accent) !important;
+}
+#lcAgentApptWizard .giApptSelectedChip--empty:not(#\9):not(#\9){
+  background: var(--uf-muted-bg) !important; border-color: var(--uf-line) !important; color: var(--uf-ink-3) !important;
+}
+#lcAgentApptWizard .giApptCompanyCard:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important; box-shadow: none !important;
+}
+#lcAgentApptWizard .giApptCompanyCard:hover:not(#\9):not(#\9){
+  border-color: var(--uf-accent) !important; box-shadow: none !important; transform: none !important;
+}
+#lcAgentApptWizard .giApptCompanyCard.is-selected:not(#\9):not(#\9){
+  border-color: var(--uf-accent) !important; background: var(--uf-accent-soft) !important; box-shadow: none !important;
+}
+#lcAgentApptWizard .giApptCompanyCard__check:not(#\9):not(#\9){ border-radius: 0 !important; border-color: var(--uf-line) !important; }
+#lcAgentApptWizard .giApptCompanyCard.is-selected .giApptCompanyCard__check:not(#\9):not(#\9){ border-color: var(--uf-accent) !important; background: var(--uf-accent) !important; }
+#lcAgentApptWizard .giApptCompanyCard__logo:not(#\9):not(#\9){ border-radius: 0 !important; border-color: var(--uf-line) !important; }
+#lcAgentApptWizard .giApptCompanyTab:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important; color: var(--uf-ink-2) !important;
+}
+#lcAgentApptWizard .giApptCompanyTab:hover:not(#\9):not(#\9){ border-color: var(--uf-accent) !important; }
+#lcAgentApptWizard .giApptCompanyTab.is-active:not(#\9):not(#\9){
+  border-color: var(--uf-accent) !important; background: var(--uf-accent) !important; color: #fff !important; box-shadow: none !important;
+}
+#lcAgentApptWizard .giApptAddPolicyBtn:not(#\9):not(#\9),
+#lcAgentApptWizard .giApptPolicyInsureds__add:not(#\9):not(#\9){
+  border: 1.5px dashed var(--uf-line) !important; background: var(--uf-head-bg) !important; color: var(--uf-accent) !important;
+}
+#lcAgentApptWizard .giApptSyncBanner:not(#\9):not(#\9){
+  border-radius: 0 !important; background: var(--uf-accent-soft) !important; border: 1px solid var(--uf-line) !important;
+}
+#lcAgentApptWizard .giApptSyncBanner__title:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
+#lcAgentApptWizard .giApptSyncBanner__sub:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#lcAgentApptWizard .giApptPolicyCard:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important; box-shadow: none !important;
+}
+#lcAgentApptWizard .giApptPolicyCard__head:not(#\9):not(#\9){
+  background: var(--uf-head-bg) !important; border-bottom: 1px solid var(--uf-line-soft) !important;
+}
+#lcAgentApptWizard .giApptPolicyCard__title:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
+#lcAgentApptWizard .giApptPolicyInsured:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-head-bg) !important;
+}
+#lcAgentApptWizard .giApptPolicyInsured--primary:not(#\9):not(#\9){ background: var(--uf-accent-soft) !important; border-color: var(--uf-line) !important; }
+#lcAgentApptWizard .giApptPolicyInsured__badge:not(#\9):not(#\9){ border-radius: 0 !important; background: var(--uf-accent-soft) !important; color: var(--uf-accent) !important; }
+#lcAgentApptWizard .giApptPolicyInsured__addrNote:not(#\9):not(#\9){
+  border-radius: 0 !important; background: var(--uf-accent-soft) !important; border: 1px solid var(--uf-line) !important;
+}
+#lcAgentApptWizard .giApptScopeChip:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important;
+}
+#lcAgentApptWizard .giApptScopeChip.is-active:not(#\9):not(#\9){
+  border-color: var(--uf-accent) !important; background: var(--uf-accent-soft) !important; color: var(--uf-accent) !important;
+}
+#lcAgentApptWizard .giApptSummaryLayout__hero:not(#\9):not(#\9){ border-bottom: 1px solid var(--uf-line-soft) !important; }
+#lcAgentApptWizard .giApptSummaryLayout__title:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
+#lcAgentApptWizard .giApptSummaryPanel:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important;
+}
+#lcAgentApptWizard .giApptSummaryPanel__head:not(#\9):not(#\9){
+  background: var(--uf-head-bg) !important; border-bottom: 1px solid var(--uf-line-soft) !important; color: var(--uf-accent) !important;
+}
+#lcAgentApptWizard .giApptSummaryList__row strong:not(#\9):not(#\9){ color: var(--uf-ink) !important; }
+#lcAgentApptWizard .giApptSummaryList__row--premium:not(#\9):not(#\9){ background: var(--uf-accent-soft) !important; border-radius: 0 !important; }
+#lcAgentApptWizard .giApptSummaryList__row--premium strong:not(#\9):not(#\9){ color: var(--uf-accent) !important; }
+#lcAgentApptWizard .giApptSummaryTable th:not(#\9):not(#\9){ background: var(--uf-head-bg) !important; color: var(--uf-ink-3) !important; }
+
+/* ---- כרטיסי מקטע בגוף האשף (lcWSection/lcWTitle) — כל השלבים, כולל בריאות ---- */
+#lcWizard .lcWSection:not(#\9):not(#\9),
+#lcAgentApptWizard .lcWSection:not(#\9):not(#\9){
+  border-radius: 0 !important;
+  border: 1px solid var(--uf-line) !important;
+  background: var(--uf-surface) !important;
+  box-shadow: none !important;
+}
+#lcWizard .lcWTitle:not(#\9):not(#\9),
+#lcAgentApptWizard .lcWTitle:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
+#lcWizard .lcStep1UnifiedSection:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important; box-shadow: none !important;
+}
+
+/* ---- טאבי מבוטחים (lcTabs/lcTab) ---- */
+#lcWizard .lcTab:not(#\9):not(#\9),
+#lcAgentApptWizard .lcTab:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important; color: var(--uf-ink-2) !important;
+}
+#lcWizard .lcTab:hover:not(#\9):not(#\9),
+#lcAgentApptWizard .lcTab:hover:not(#\9):not(#\9){ background: var(--uf-head-bg) !important; border-color: var(--uf-line) !important; color: var(--uf-ink) !important; }
+#lcWizard .lcTab.is-active:not(#\9):not(#\9),
+#lcAgentApptWizard .lcTab.is-active:not(#\9):not(#\9){
+  background: var(--uf-accent-soft) !important; border-color: var(--uf-accent) !important; color: var(--uf-accent) !important; box-shadow: none !important;
+}
+#lcWizard .lcTab__badge:not(#\9):not(#\9){ background: var(--uf-line) !important; border-radius: 0 !important; }
+#lcWizard .lcTab__badge.ok:not(#\9):not(#\9){ background: var(--uf-ok) !important; }
+#lcWizard .lcTab__badge.warn:not(#\9):not(#\9){ background: var(--uf-warn) !important; }
+#lcWizard .lcTab__badge.err:not(#\9):not(#\9){ background: var(--uf-danger) !important; }
+#lcWizard .lcDangerLink:not(#\9):not(#\9){ color: var(--uf-danger) !important; }
+
+/* ---- שאלון הצהרת בריאות (lcPhxHealth) — שלב "בריאות וסיכונים" באשף ---- */
+#lcWizard .lcPhxHealth__hero:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important; box-shadow: none !important;
+}
+#lcWizard .lcPhxHealth__title:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
+#lcWizard .lcPhxHealth__kicker:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#lcWizard .lcPhxHealth__summary:not(#\9):not(#\9){ color: var(--uf-ink-2) !important; }
+#lcWizard .lcPhxHealth__markAllNoBtn:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important; color: var(--uf-ink) !important; box-shadow: none !important;
+}
+#lcWizard .lcPhxHealth__searchWrap:not(#\9):not(#\9), #lcWizard .lcPhxHealth__search:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important;
+}
+#lcWizard .lcPhxHealth__table:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; box-shadow: none !important;
+}
+#lcWizard .lcPhxHealth__row:not(#\9):not(#\9){ border-radius: 0 !important; border-bottom: 1px solid var(--uf-line-soft) !important; box-shadow: none !important; }
+#lcWizard .lcPhxHealth__question:not(#\9):not(#\9){ color: var(--uf-ink) !important; }
+#lcWizard .lcPhxHealth__insuredCol:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line-soft) !important; background: var(--uf-head-bg) !important;
+}
+#lcWizard .lcPhxHealth__answerBtn:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important; color: var(--uf-ink-2) !important;
+}
+#lcWizard .lcPhxHealth__answerBtn:hover:not(#\9):not(#\9){ background: var(--uf-head-bg) !important; border-color: var(--uf-line) !important; color: var(--uf-ink) !important; }
+#lcWizard .lcPhxHealth__answerBtn.is-active:not(#\9):not(#\9){
+  background: var(--uf-accent) !important; border-color: var(--uf-accent) !important; color: #fff !important;
+}
+#lcWizard .lcPhxHealth__miniEdit:not(#\9):not(#\9){ color: var(--uf-accent) !important; }
+#lcWizard .lcPhxHealth__cardStatus:not(#\9):not(#\9){ border-radius: 0 !important; }
+#lcWizard .lcPhxHealth__cardStatus.is-saved:not(#\9):not(#\9){ background: var(--uf-ok-bg) !important; color: var(--uf-ok) !important; }
+#lcWizard .lcPhxHealth__cardStatus.is-open:not(#\9):not(#\9){ background: var(--uf-warn-bg) !important; color: var(--uf-warn) !important; }
+#lcWizard .lcHealthQuickPick:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important; box-shadow: none !important;
+}
+#lcWizard .lcHealthQuickPick__icon:not(#\9):not(#\9){ border-radius: 0 !important; background: var(--uf-accent-soft) !important; color: var(--uf-accent) !important; }
+#lcWizard .lcHealthQuickPick__title:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
+
+/* מודאל עריכת תשובת בריאות (נוצר ב-JS, לא בתוך #lcWizard) */
+.lcHealthDetailModal .lcHealthDetailModal__panel:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important; box-shadow: none !important;
+}
+.lcHealthDetailModal .lcHealthDetailModal__head:not(#\9):not(#\9){ background: var(--uf-head-bg) !important; border-bottom: 1px solid var(--uf-line-soft) !important; }
+.lcHealthDetailModal .lcHealthDetailModal__foot:not(#\9):not(#\9){ background: var(--uf-head-bg) !important; border-top: 1px solid var(--uf-line-soft) !important; }
+.lcHealthDetailModal .lcHealthDetailModal__saveBtn:not(#\9):not(#\9){ border-radius: 0 !important; background: var(--uf-accent) !important; border-color: var(--uf-accent) !important; }
