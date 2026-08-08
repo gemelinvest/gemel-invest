@@ -23196,8 +23196,11 @@ UsersGateUI.init();
         } else if(Auth.isOps() || Auth.isOpsAgent()){
           try { OpsDashboardUI.render(); } catch(_e) {}
         } else if(DashboardUI.els?.root?.querySelector(".bankDash__kpis")) {
+          /* GI-PERF 2026-08-09 — בזמן overlay לא מרעננים leaderboard בכל tick (קפיצות). */
           DashboardUI.scheduleRefreshKpis();
-          try { DashboardUI.scheduleRefreshLeaderboard(); } catch(_e){}
+          if(!DashboardUI.hasStableServerKpiOverlay?.()){
+            try { DashboardUI.scheduleRefreshLeaderboard(); } catch(_e){}
+          }
         } else {
           DashboardUI.render();
         }
@@ -27323,15 +27326,40 @@ UsersGateUI.init();
       if(!this.els.root) this.init();
       if(!this.els.root) return;
       const cacheKey = this.getMetricsCacheKey();
+      const hasKpiDom = !!this.els.root.querySelector(".bankDash__kpis")
+        && !this.els.root.querySelector(".bankDash--bootLoading");
+      const runQuietKpiUpdate = () => {
+        try {
+          if(LiveRefresh.getCurrentView() !== "dashboard" || Auth.isElementary()) return;
+          if(!this.shouldShowPerformanceBoard()) return;
+          if(hasKpiDom || this.els.root.querySelector(".bankDash__kpis")){
+            this.scheduleRefreshKpis();
+            return;
+          }
+          void this.render(options);
+        } catch(_e) {}
+      };
       const runFullRender = () => {
         try {
           if(LiveRefresh.getCurrentView() !== "dashboard" || Auth.isElementary()) return;
           if(!this.shouldShowPerformanceBoard()) return;
+          /* GI-PERF 2026-08-09 — אם ה-KPI כבר על המסך, לא לבנות DOM מחדש (קפיצות). */
+          if(this.els.root?.querySelector(".bankDash__kpis")
+            && !this.els.root.querySelector(".bankDash--bootLoading")
+            && !options.forceFullRender){
+            this.scheduleRefreshKpis();
+            return;
+          }
           void this.render(options);
         } catch(_e) {}
       };
+      if(this._metricsCache && this._metricsCache._serverKpiOverlay && !this._metricsCache._loading){
+        this._metricsCacheKey = cacheKey;
+        perfIdle(runQuietKpiUpdate, 80);
+        return;
+      }
       if(this._metricsCacheKey === cacheKey && this._metricsCache && !this._metricsCache._loading){
-        perfIdle(runFullRender, 80);
+        perfIdle(runQuietKpiUpdate, 80);
         return;
       }
 
@@ -27347,7 +27375,10 @@ UsersGateUI.init();
       // with loading metrics, then quietly replace numbers when chunked build finishes.
       if(hasSessionRows){
         try {
-          if(!this._metricsCache || this._metricsCacheKey !== cacheKey){
+          /* GI-PERF 2026-08-09 — שינוי cacheKey (fullDataReady/meta) לא ידרוס overlay ל-₪0. */
+          if(this._metricsCache?._serverKpiOverlay){
+            this._metricsCacheKey = cacheKey;
+          } else if(!this._metricsCache || this._metricsCacheKey !== cacheKey){
             this._metricsCache = this._metricsLoadingShell();
             this._metricsCacheKey = cacheKey;
           }
@@ -27373,7 +27404,6 @@ UsersGateUI.init();
             try {
               if(this._metricsCache && !this._metricsCache._loading && this.els.root?.querySelector(".bankDash__kpis") && !this.els.root.querySelector(".bankDash--bootLoading")){
                 this.scheduleRefreshKpis();
-                try { this.scheduleRefreshLeaderboard(); } catch(_e) {}
               } else {
                 runFullRender();
               }
@@ -27831,16 +27861,21 @@ UsersGateUI.init();
       try { App.ensureAdminCustomersLoaded("dashboard_view"); } catch(_e) {}
       // PERF: when the dashboard is already on screen with the same data, update
       // values in place (same as LiveRefresh) instead of rebuilding the whole DOM.
+      /* GI-PERF 2026-08-09 — גם כש-cacheKey משתנה (hydration/fullDataReady),
+         אם כרטיסי ה-KPI כבר קיימים מעדכנים במקום ולא בונים DOM מחדש. */
       if(!options.forceFullRender
         && this.els.root
         && !Auth.isElementary()
         && this.shouldShowPerformanceBoard()
-        && this._renderedDomKey
-        && this._renderedDomKey === this.getMetricsCacheKey()
         && this.els.root.querySelector(".bankDash__kpis")
-        && !this.els.root.querySelector(".bankDash--bootLoading")){
+        && !this.els.root.querySelector(".bankDash--bootLoading")
+        && (this._renderedDomKey === this.getMetricsCacheKey()
+          || this._metricsCache?._serverKpiOverlay
+          || !!this._renderedDomKey)){
         try { this.refreshKpis(); } catch(_e) {}
-        try { this.scheduleRefreshLeaderboard(); } catch(_e) {}
+        if(!this.hasStableServerKpiOverlay()){
+          try { this.scheduleRefreshLeaderboard(); } catch(_e) {}
+        }
         return;
       }
       if(this._renderInFlight){
@@ -65247,7 +65282,7 @@ const ClalRiskLifePdf = {
 
     refreshViewsAfterDeferredSessionLoad(){
       if(!Auth?.current) return;
-      try { DashboardUI.invalidateMetricsCache?.(); } catch(_e) {}
+      try { DashboardUI.invalidateMetricsCache?.({ force: false }); } catch(_e) {}
       try {
         const view = (typeof LiveRefresh !== "undefined" && LiveRefresh.getCurrentView)
           ? LiveRefresh.getCurrentView()
@@ -65258,7 +65293,15 @@ const ClalRiskLifePdf = {
           } else if(Auth.isOps() || Auth.isOpsAgent()){
             try { OpsDashboardUI.render(); } catch(_e) {}
           } else if(DashboardUI.shouldShowPerformanceBoard?.()){
-            try { DashboardUI.schedulePostLoginRender({ skipDailyReportWait: true }); } catch(_e) {}
+            /* GI-PERF 2026-08-09 — אחרי sync: עדכון שקט בלבד אם הדשבורד כבר בנוי. */
+            try {
+              if(DashboardUI.els?.root?.querySelector(".bankDash__kpis")
+                && !DashboardUI.els.root.querySelector(".bankDash--bootLoading")){
+                DashboardUI.scheduleRefreshKpis();
+              } else {
+                DashboardUI.schedulePostLoginRender({ skipDailyReportWait: true });
+              }
+            } catch(_e) {}
           } else {
             try { void DashboardUI.render(); } catch(_e) {}
           }
@@ -65771,17 +65814,36 @@ const ClalRiskLifePdf = {
         this._hydrationRefreshDeferrals = 0;
         this._hydrationRefreshLastAt = Date.now();
         GiPerf.run("hydration:viewRefresh", () => {
-          /* GI-PERF 2026-08-09 — לא למחוק KPI מ-RPC באמצע hydration.
-             כשכל ה-payloads מלאים, invalidate רגיל מאפשר בנייה סופית אחת. */
+          const overlayStable = !!DashboardUI.hasStableServerKpiOverlay?.();
+          const missingCustomers = (() => {
+            try { return Storage.countMissingCustomerPayloads(); } catch(_e) { return 0; }
+          })();
+          /* GI-PERF 2026-08-09 — באמצע hydration לא נוגעים בדשבורד בכלל (מונע קפיצות).
+             רק בסיום (force + אין חסרים) רענון אחד. ברשימת לקוחות — quiet patch בלבד. */
+          if(overlayStable && !force){
+            try {
+              const view = LiveRefresh.getCurrentView?.() || "";
+              if(view === "customers"){
+                if(!CustomersUI.quietRefresh?.()) CustomersUI.render?.({ skipServerFetch: true });
+              }
+            } catch(_e) {}
+            return;
+          }
           try {
-            if(DashboardUI.hasStableServerKpiOverlay?.()){
+            if(overlayStable || missingCustomers > 0){
               DashboardUI.invalidateMetricsCache?.({ force: false });
             } else {
               DashboardUI.invalidateMetricsCache?.({ force: true });
             }
           } catch(_e) {}
-          // המסלול השקט: מטליא תאים קיימים במקום לבנות את הטבלה מחדש.
-          try { LiveRefresh.renderActiveView(); } catch(_e) {}
+          try {
+            const view = LiveRefresh.getCurrentView?.() || "";
+            if(view === "dashboard" && (overlayStable || (missingCustomers > 0 && !force))){
+              DashboardUI.scheduleRefreshKpis?.();
+              return;
+            }
+            LiveRefresh.renderActiveView();
+          } catch(_e) {}
         });
       }, wait);
     },
