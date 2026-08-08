@@ -13,6 +13,7 @@
 .lcMnrSimModal .giValModal__card{
   max-width:520px;
   width:100%;
+  position:relative;
 }
 .lcMnrSim__closeX{
   position:absolute;
@@ -119,3 +120,89 @@
 @media (max-width: 560px){
   .lcMnrSim__grid{ grid-template-columns:1fr; }
 }
+
+/* ---------- GI-RISK-SIM-OCCUPATION · "פרטי מקצוע וחיתום" ---------- */
+.lcMnrSim__occBox{
+  border:1px solid #dbe4f3;
+  border-radius:12px;
+  padding:12px 14px;
+  margin-bottom:14px;
+  background:#f8faff;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.lcMnrSim__occHead{ font-size:12.5px; font-weight:700; color:#1e3a8a; }
+.lcMnrSim__occBadge{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  width:fit-content;
+  font-size:13px;
+  font-weight:700;
+  padding:5px 10px;
+  border-radius:999px;
+  border:1px solid #e2e8f0;
+  background:#fff;
+}
+.lcMnrSim__occBadge--none{ border-color:#bbf7d0; background:#f0fdf4; color:#166534; }
+.lcMnrSim__occBadge--risk{ border-color:#fed7aa; background:#fff7ed; color:#9a3412; }
+.lcMnrSim__occBadge--unclear{ border-color:#bfdbfe; background:#eff6ff; color:#1d4ed8; }
+.lcMnrSim__occBadge--needsUnderwriting{ border-color:#fecaca; background:#fef2f2; color:#b91c1c; }
+.lcMnrSim__occRow{ display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:13px; color:#334155; }
+.lcMnrSim__occRow strong{ color:#0f172a; }
+.lcMnrSim__occNote{ font-size:12px; color:#b91c1c; font-weight:600; }
+
+/* ---------- מבוטחים בהצעה (מצב שמירה) ---------- */
+.lcMnrSim__statusList{
+  border:1px solid #e2e8f0;
+  border-radius:12px;
+  padding:10px 12px;
+  margin-bottom:12px;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  background:#fafbff;
+}
+.lcMnrSim__statusListTitle{ font-size:12px; font-weight:700; color:#475569; margin-bottom:2px; }
+.lcMnrSim__statusRow{ display:flex; align-items:center; gap:8px; font-size:12.5px; color:#334155; }
+.lcMnrSim__tab.has-saved{ border-color:#22c55e; background:#f0fdf4; color:#166534; }
+
+/* ---------- דיאלוג אישור מעבר בין מבוטחים ---------- */
+.lcMnrSim__overlay{
+  position:absolute;
+  inset:0;
+  background:rgba(15,23,42,.45);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+  border-radius:inherit;
+  z-index:5;
+}
+.lcMnrSim__overlayCard{
+  background:#fff;
+  border-radius:14px;
+  padding:18px;
+  max-width:360px;
+  width:100%;
+  box-shadow:0 10px 30px rgba(15,23,42,.25);
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+}
+.lcMnrSim__overlayText{ font-size:13.5px; color:#1e293b; line-height:1.5; }
+.lcMnrSim__overlayBtns{ display:flex; flex-direction:column; gap:8px; }
+
+/* ---------- סיכום סימולטור להצעה ---------- */
+.lcMnrSim__summaryRow{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:8px 4px;
+  border-bottom:1px dashed #e2e8f0;
+  font-size:13.5px;
+  color:#334155;
+}
+.lcMnrSim__summaryRow:last-child{ border-bottom:none; }
+.lcMnrSim__summaryRow span:last-child{ margin-inline-start:auto; font-weight:700; color:#166534; }

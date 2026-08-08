@@ -28142,6 +28142,108 @@ UsersGateUI.init();
     return Number.isFinite(age) ? age : null;
   }
 
+  // ===== GI-RISK-SIM-OCCUPATION 2026-08-08 · "פרטי מקצוע וחיתום" ==================
+  // תשתית לזיהוי סיכון מקצועי + כללי חיתום, לשימוש בכל סימולטורי הריסק.
+  //
+  // ריק בכוונה — נכון לעכשיו אין במערכת (ולא בקבצי המקור/PDF/Supabase) שום
+  // טבלת חיתום/סיכון-מקצועי אמיתית. אסור להמציא נתונים, לכן שתי הטבלאות
+  // הבאות מתחילות ריקות. כאשר יתקבלו כללי חיתום אמיתיים מהחברות, יש להוסיף
+  // להן שורות בדיוק לפי המבנה המתועד — שום שינוי קוד נוסף לא יידרש.
+
+  /** סיווג סיכון מקצועי כללי (לא תלוי חברה/מוצר) — לפי מחרוזת המקצוע המדויקת
+      כפי שהיא מוזנת/נבחרת בשלב 1 (ins.data.occupation).
+      מבנה כל רשומה: { hasRisk: "yes" | "no" | "unclear", level: "רגיל" | "בינוני" | "גבוה" }
+      (level רלוונטי/נדרש רק כאשר hasRisk === "yes").
+      דוגמה (להמחשת המבנה בלבד — לא נתון אמיתי, לא להזין כך בפועל):
+      "טייס": { hasRisk: "yes", level: "גבוה" } */
+  const OCCUPATION_RISK_LEVELS = {
+    // ריק בכוונה — ממתין לנתוני חיתום אמיתיים.
+  };
+
+  /** כללי חיתום ספציפיים לפי (חברה + מוצר + מקצוע) — כי אותו מקצוע יכול לקבל
+      תוצאה שונה בין חברות/מוצרים שונים. מפתח: `${company}|${product}|${occupation}`.
+      מבנה כל רשומה: {
+        status: "auto" | "needsUnderwriting",
+        loadingText?: string,   // תוספת/השפעה על הפרמיה — רק אם קיים נתון מאומת
+        exclusionText?: string  // החרגה — רק אם קיימת
+      }
+      status "needsUnderwriting" — כלל קיים ומפורש שאומר שנדרשת בדיקת חיתום ידנית
+      (לא לבלבל עם "לא נמצא כלל" — זהו כלל שנמצא ומגדיר זאת באופן מפורש). */
+  const OCCUPATION_UNDERWRITING_RULES = {
+    // ריק בכוונה — ממתין לכללי חיתום אמיתיים מהחברות.
+  };
+
+  function occupationUnderwritingRuleKey(company, product, occupation){
+    return safeTrim(company) + "|" + safeTrim(product) + "|" + safeTrim(occupation);
+  }
+
+  /** מעריך את מצב הסיכון המקצועי/החיתום עבור מבוטח נתון, לפי:
+      מבוטח → מקצוע → חברה שנבחרה → מוצר שנבחר → כלל חיתום מתאים → תוצאה.
+      לעולם לא ממציא/מקרב פרומיל, תוספת, החרגה או כלל חיתום — כל שדה מוצג
+      רק אם יש לו נתון מאומת בטבלאות שלמעלה. מחזיר אובייקט תיאורי לרינדור:
+      { occupation, state, level, loadingText, exclusionText, fallbackText }
+      state ∈ "none" (אין סיכון) | "risk" (יש סיכון, יש כלל אוטומטי) |
+             "unclear" (אין מספיק מידע) | "needsUnderwriting" (נדרש חיתום). */
+  function assessOccupationRisk(occupation, company, product){
+    const occ = safeTrim(occupation);
+    if(!occ){
+      return { occupation: "", state: "unclear", level: null, loadingText: "", exclusionText: "", fallbackText: "לא נמצא מקצוע בפרטי המבוטח (שלב 1) — יש לבדוק ידנית." };
+    }
+    const classification = Object.prototype.hasOwnProperty.call(OCCUPATION_RISK_LEVELS, occ) ? OCCUPATION_RISK_LEVELS[occ] : null;
+    if(!classification || classification.hasRisk === "unclear"){
+      return { occupation: occ, state: "unclear", level: null, loadingText: "", exclusionText: "", fallbackText: "לא נמצא סיווג סיכון מקצועי עבור מקצוע זה — נדרש בירור." };
+    }
+    if(classification.hasRisk === "no"){
+      return { occupation: occ, state: "none", level: null, loadingText: "", exclusionText: "", fallbackText: "" };
+    }
+    // classification.hasRisk === "yes" מכאן ואילך
+    const level = classification.level || null;
+    const ruleKey = occupationUnderwritingRuleKey(company, product, occ);
+    const rule = Object.prototype.hasOwnProperty.call(OCCUPATION_UNDERWRITING_RULES, ruleKey) ? OCCUPATION_UNDERWRITING_RULES[ruleKey] : null;
+    if(!rule || rule.status === "needsUnderwriting"){
+      return {
+        occupation: occ, state: "needsUnderwriting", level,
+        loadingText: "", exclusionText: "",
+        fallbackText: "נדרש חיתום – לא נמצא כלל תמחור אוטומטי למקצוע זה."
+      };
+    }
+    return {
+      occupation: occ, state: "risk", level,
+      loadingText: safeTrim(rule.loadingText || ""),
+      exclusionText: safeTrim(rule.exclusionText || ""),
+      fallbackText: ""
+    };
+  }
+
+  /** מרנדר את בלוק "פרטי מקצוע וחיתום" בתוך סימולטור ריסק. prefix = קידומת ה-CSS
+      המסוגננת של הסימולטור הקורא ("lcPhxSim" או "lcMnrSim"), כדי שהעיצוב יישאר
+      מבודד לחלוטין לכל סימולטור ולא ישפיע על מסכים אחרים. */
+  function renderOccupationRiskBlockHtml(assessment, prefix){
+    const a = assessment || {};
+    const badge = a.state === "none" ? { emoji: "🟢", cls: "none", title: "סיכון מקצועי: לא" }
+      : a.state === "risk" ? { emoji: "🟠", cls: "risk", title: "סיכון מקצועי: כן" }
+      : a.state === "needsUnderwriting" ? { emoji: "🔴", cls: "needsUnderwriting", title: "נדרש חיתום" }
+      : { emoji: "🔵", cls: "unclear", title: "נדרש בירור" };
+
+    const rows = [];
+    if(a.occupation) rows.push(`<div class="${prefix}__occRow"><span>מקצוע המבוטח</span><strong>${escapeHtml(a.occupation)}</strong></div>`);
+    if(a.state === "risk" || a.state === "needsUnderwriting"){
+      if(a.level) rows.push(`<div class="${prefix}__occRow"><span>רמת סיכון</span><strong>${escapeHtml(a.level)}</strong></div>`);
+    }
+    if(a.state === "risk"){
+      if(a.loadingText) rows.push(`<div class="${prefix}__occRow"><span>השפעה על הפרמיה / תוספת מקצועית</span><strong>${escapeHtml(a.loadingText)}</strong></div>`);
+      if(a.exclusionText) rows.push(`<div class="${prefix}__occRow"><span>החרגה</span><strong>${escapeHtml(a.exclusionText)}</strong></div>`);
+    }
+    if(a.fallbackText) rows.push(`<div class="${prefix}__occNote">${escapeHtml(a.fallbackText)}</div>`);
+
+    return `
+      <div class="${prefix}__occBox">
+        <div class="${prefix}__occHead">פרטי מקצוע וחיתום</div>
+        <div class="${prefix}__occBadge ${prefix}__occBadge--${badge.cls}"><span>${badge.emoji}</span><span>${escapeHtml(badge.title)}</span></div>
+        ${rows.join("")}
+      </div>`;
+  }
+
   /** קומפוננטת סימולטור ריסק הפניקס — מודאל עצמאי, לא תלוי במבנה הפנימי של
       Wizard.renderStep5 מעבר לממשק open(ctx)/onApply. */
   const PhoenixRiskSimulator = {
@@ -28150,6 +28252,8 @@ UsersGateUI.init();
     _state: {},
     _activeInsuredId: null,
     _escHandler: null,
+    _confirmSwitch: null,
+    _showFinalSummary: false,
 
     open(ctx){
       this.close();
@@ -28158,6 +28262,8 @@ UsersGateUI.init();
       this._state = {};
       insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); });
       this._activeInsuredId = insureds[0]?.id || null;
+      this._confirmSwitch = null;
+      this._showFinalSummary = false;
       this._mount();
       this._render();
     },
@@ -28176,8 +28282,18 @@ UsersGateUI.init();
         smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "",
         sumInsured: "",
         result: null,
-        error: null
+        error: null,
+        savedAt: null,
+        dirtySinceSave: false
       };
+    },
+
+    /** נקודת הרחבה: קובע אם מבוטח נתון רלוונטי לסימולטור הזה. כברירת מחדל כולם
+        רלוונטיים — הנציג כבר בחר אותם בשלב 3 עבור המוצר הנוכחי, ואין כיום כלל
+        עסקי קיים במערכת שממעט מבוטחים מסוימים (למשל ילדים) מריסק, ולכן לא
+        מומצא כזה. אם בעתיד יתברר שיש כלל כזה, יש לממש אותו כאן בלבד. */
+    _isInsuredRelevant(_ins){
+      return true;
     },
 
     close(){
@@ -28210,16 +28326,40 @@ UsersGateUI.init();
       return ins ? safeTrim(ins.label) || "מבוטח" : "מבוטח";
     },
 
+    _getActiveInsured(){
+      return (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === this._activeInsuredId) || null;
+    },
+
     _render(){
       if(!this._modal) return;
       const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+      const isMulti = insureds.length > 1;
+
+      if(this._showFinalSummary){
+        this._renderFinalSummary(insureds);
+        return;
+      }
+
       const activeId = this._activeInsuredId;
       const st = this._state[activeId] || this._prefillFromInsured(null);
 
-      const tabsHtml = insureds.length > 1 ? `<div class="lcPhxSim__tabs">${insureds.map((ins) => {
-        const hasResult = !!this._state[ins.id]?.result;
-        return `<button type="button" class="lcPhxSim__tab${ins.id === activeId ? ' is-active' : ''}${hasResult ? ' has-result' : ''}" data-phx-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${hasResult ? ' ✓' : ''}</button>`;
+      const tabsHtml = isMulti ? `<div class="lcPhxSim__tabs">${insureds.map((ins) => {
+        const s = this._state[ins.id];
+        const statusCls = s?.savedAt ? ' has-saved' : (s?.result ? ' has-result' : '');
+        return `<button type="button" class="lcPhxSim__tab${ins.id === activeId ? ' is-active' : ''}${statusCls}" data-phx-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${s?.savedAt ? ' 🟢' : ''}</button>`;
       }).join("")}</div>` : "";
+
+      const statusListHtml = isMulti ? `
+        <div class="lcPhxSim__statusList">
+          <div class="lcPhxSim__statusListTitle">מבוטחים בהצעה</div>
+          ${insureds.map((ins) => {
+            const s = this._state[ins.id];
+            const label = escapeHtml(safeTrim(ins.label) || "מבוטח");
+            if(!this._isInsuredRelevant(ins)) return `<div class="lcPhxSim__statusRow"><span>⚪</span><span>${label} – לא נדרש סימולטור עבור מבוטח זה</span></div>`;
+            if(s?.savedAt) return `<div class="lcPhxSim__statusRow"><span>🟢</span><span>${label} – נשמר</span></div>`;
+            return `<div class="lcPhxSim__statusRow"><span>🟡</span><span>${label} – טרם חושב</span></div>`;
+          }).join("")}
+        </div>` : "";
 
       const ageOptionsHtml = `<option value="">בחר גיל…</option>` + PHOENIX_RISK_AGE_OPTIONS.map((a) =>
         `<option value="${a}"${String(st.age) === String(a) ? " selected" : ""}>${a}</option>`
@@ -28238,6 +28378,9 @@ UsersGateUI.init();
         ? (st.smokerSource === "step1" ? `<div class="lcPhxSim__hint">נשאב מפרטים אישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
         : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא סטטוס עישון בפרטים האישיים — יש לבחור</div>`;
 
+      const occAssessment = assessOccupationRisk((this._getActiveInsured()?.data || {}).occupation, this._ctx?.company, this._ctx?.product);
+      const occBlockHtml = renderOccupationRiskBlockHtml(occAssessment, "lcPhxSim");
+
       const resultHtml = st.error
         ? `<div class="lcPhxSim__result lcPhxSim__result--error">${escapeHtml(st.error)}</div>`
         : (st.result ? `<div class="lcPhxSim__result lcPhxSim__result--ok">
@@ -28247,6 +28390,31 @@ UsersGateUI.init();
           </div>` : "");
 
       const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
+      const relevantInsureds = insureds.filter((ins) => this._isInsuredRelevant(ins));
+      const allRelevantSaved = relevantInsureds.length > 0 && relevantInsureds.every((ins) => !!this._state[ins.id]?.savedAt);
+
+      const footHtml = !isMulti ? `
+          <div class="giValModal__foot lcPhxSim__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-phx-close="1">ביטול</button>
+            <button type="button" class="btn btn--primary" data-phx-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button>
+          </div>` : `
+          <div class="giValModal__foot lcPhxSim__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-phx-close="1">ביטול</button>
+            <button type="button" class="btn btn--secondary" data-phx-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button>
+            <button type="button" class="btn btn--primary" data-phx-finalconfirm="1"${allRelevantSaved ? "" : " disabled"}>אישור סופי</button>
+          </div>`;
+
+      const confirmOverlayHtml = this._confirmSwitch ? `
+        <div class="lcPhxSim__overlay">
+          <div class="lcPhxSim__overlayCard">
+            <div class="lcPhxSim__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}. האם לשמור לפני המעבר?</div>
+            <div class="lcPhxSim__overlayBtns">
+              <button type="button" class="btn btn--primary" data-phx-switch="save">שמור ועבור</button>
+              <button type="button" class="btn btn--secondary" data-phx-switch="discard">עבור ללא שמירה</button>
+              <button type="button" class="btn" data-phx-switch="cancel">ביטול</button>
+            </div>
+          </div>
+        </div>` : "";
 
       this._modal.innerHTML = `
         <div class="giValModal__backdrop" data-phx-close="1"></div>
@@ -28260,6 +28428,7 @@ UsersGateUI.init();
             <button type="button" class="lcPhxSim__closeX" data-phx-close="1" aria-label="סגירה">✕</button>
           </div>
           <div class="giValModal__body lcPhxSim__body">
+            ${statusListHtml}
             ${tabsHtml}
             <div class="lcPhxSim__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>
             <div class="lcPhxSim__grid">
@@ -28289,15 +28458,43 @@ UsersGateUI.init();
                 <input class="lcPhxSim__input" type="text" inputmode="numeric" data-phx-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="לדוגמה: 1,000,000" />
               </div>
             </div>
+            ${occBlockHtml}
             <button type="button" class="btn btn--secondary lcPhxSim__calcBtn" data-phx-calc="1">חשב פרמיה</button>
             ${resultHtml}
           </div>
-          <div class="giValModal__foot lcPhxSim__foot">
-            <button type="button" class="btn giValModal__closeBtn" data-phx-close="1">ביטול</button>
-            <button type="button" class="btn btn--primary" data-phx-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button>
-          </div>
+          ${footHtml}
+          ${confirmOverlayHtml}
         </div>`;
 
+      this._bind();
+    },
+
+    _renderFinalSummary(insureds){
+      const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+      const rows = relevant.map((ins) => {
+        const ok = !!this._state[ins.id]?.savedAt;
+        return `<div class="lcPhxSim__summaryRow"><span>${ok ? "✓" : "•"}</span><span>${escapeHtml(safeTrim(ins.label) || "מבוטח")}</span><span>${ok ? "הושלם" : "לא נשמר"}</span></div>`;
+      }).join("");
+      this._modal.innerHTML = `
+        <div class="giValModal__backdrop" data-phx-close="1"></div>
+        <div class="giValModal__card lcPhxSim__card">
+          <div class="giValModal__head">
+            <span class="giValModal__headIcon" aria-hidden="true">🛡️</span>
+            <div class="giValModal__headText">
+              <div class="giValModal__title">סיכום סימולטור להצעה</div>
+              <div class="giValModal__sub">בדקו את הנתונים לפני האישור הסופי</div>
+            </div>
+            <button type="button" class="lcPhxSim__closeX" data-phx-close="1" aria-label="סגירה">✕</button>
+          </div>
+          <div class="giValModal__body lcPhxSim__body">
+            <div class="lcPhxSim__statusListTitle">מבוטחים</div>
+            ${rows}
+          </div>
+          <div class="giValModal__foot lcPhxSim__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-phx-summary-back="1">חזרה</button>
+            <button type="button" class="btn btn--primary" data-phx-summary-confirm="1">אישור סופי</button>
+          </div>
+        </div>`;
       this._bind();
     },
 
@@ -28306,8 +28503,22 @@ UsersGateUI.init();
       if(!modal) return;
       $$("[data-phx-close]", modal).forEach((el) => on(el, "click", () => this.close()));
       $$("[data-phx-tab]", modal).forEach((el) => on(el, "click", () => {
-        this._activeInsuredId = el.getAttribute("data-phx-tab");
-        this._render();
+        this._switchInsured(el.getAttribute("data-phx-tab"));
+      }));
+      $$("[data-phx-switch]", modal).forEach((el) => on(el, "click", () => {
+        const action = el.getAttribute("data-phx-switch");
+        const target = this._confirmSwitch?.targetId;
+        this._confirmSwitch = null;
+        if(action === "save"){
+          this._saveActive();
+          if(target) this._activeInsuredId = target;
+          this._render();
+        } else if(action === "discard"){
+          if(target) this._activeInsuredId = target;
+          this._render();
+        } else {
+          this._render();
+        }
       }));
       const ageSel = modal.querySelector('[data-phx-field="age"]');
       if(ageSel) on(ageSel, "change", () => {
@@ -28315,7 +28526,7 @@ UsersGateUI.init();
         if(!st) return;
         st.age = ageSel.value;
         st.ageSource = "manual";
-        st.result = null; st.error = null;
+        st.result = null; st.error = null; st.dirtySinceSave = true;
         this._render();
       });
       const sumInput = modal.querySelector('[data-phx-field="sumInsured"]');
@@ -28326,14 +28537,14 @@ UsersGateUI.init();
         sumInput.value = formatted;
         try { sumInput.setSelectionRange(formatted.length, formatted.length); } catch(_e){}
         st.sumInsured = formatted;
-        st.result = null; st.error = null;
+        st.result = null; st.error = null; st.dirtySinceSave = true;
       });
       $$('[data-phx-field="gender"]', modal).forEach((btn) => on(btn, "click", () => {
         const st = this._state[this._activeInsuredId];
         if(!st) return;
         st.gender = btn.getAttribute("data-phx-value") || "";
         st.genderSource = "manual";
-        st.result = null; st.error = null;
+        st.result = null; st.error = null; st.dirtySinceSave = true;
         this._render();
       }));
       $$('[data-phx-field="smoker"]', modal).forEach((btn) => on(btn, "click", () => {
@@ -28341,13 +28552,46 @@ UsersGateUI.init();
         if(!st) return;
         st.smoker = btn.getAttribute("data-phx-value") === "1";
         st.smokerSource = "manual";
-        st.result = null; st.error = null;
+        st.result = null; st.error = null; st.dirtySinceSave = true;
         this._render();
       }));
       const calcBtn = modal.querySelector("[data-phx-calc]");
       if(calcBtn) on(calcBtn, "click", () => this._calc(this._activeInsuredId));
       const applyBtn = modal.querySelector("[data-phx-apply]");
       if(applyBtn) on(applyBtn, "click", () => this._apply());
+      const saveBtn = modal.querySelector("[data-phx-save]");
+      if(saveBtn) on(saveBtn, "click", () => this._saveActive());
+      const finalBtn = modal.querySelector("[data-phx-finalconfirm]");
+      if(finalBtn) on(finalBtn, "click", () => {
+        const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+        const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+        const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
+        if(!allSaved){
+          window.showToast?.({ title: "לא כל המבוטחים נשמרו", text: "יש לשמור את הסימולטור עבור כל המבוטחים הרלוונטיים לפני האישור הסופי.", variant: "warn" });
+          return;
+        }
+        this._showFinalSummary = true;
+        this._render();
+      });
+      const summaryBackBtn = modal.querySelector("[data-phx-summary-back]");
+      if(summaryBackBtn) on(summaryBackBtn, "click", () => { this._showFinalSummary = false; this._render(); });
+      const summaryConfirmBtn = modal.querySelector("[data-phx-summary-confirm]");
+      if(summaryConfirmBtn) on(summaryConfirmBtn, "click", () => {
+        try { this._ctx?.onFinalConfirm?.(); } catch(_e){}
+        this.close();
+      });
+    },
+
+    _switchInsured(targetId){
+      if(!targetId || targetId === this._activeInsuredId) return;
+      const st = this._state[this._activeInsuredId];
+      if(st?.dirtySinceSave){
+        this._confirmSwitch = { targetId };
+        this._render();
+        return;
+      }
+      this._activeInsuredId = targetId;
+      this._render();
     },
 
     _calc(insuredId){
@@ -28362,23 +28606,28 @@ UsersGateUI.init();
         st.result = null;
         st.error = PHOENIX_RISK_SIM_MISSING_MESSAGES[calc.reason] || "לא נמצא תעריף מתאים לנתונים שהוזנו.";
       }
+      st.dirtySinceSave = true;
       this._render();
+    },
+
+    _buildResultForInsured(insId){
+      const st = this._state[insId];
+      if(!st?.result?.ok) return null;
+      return {
+        sumInsured: st.sumInsured,
+        monthlyPremium: st.result.monthlyPremium,
+        annualPremium: st.result.annualPremium,
+        ratePerMille: st.result.ratePerMille,
+        age: st.age, ageSource: st.ageSource, gender: st.gender, smoker: st.smoker,
+        genderSource: st.genderSource, smokerSource: st.smokerSource
+      };
     },
 
     _apply(){
       const results = {};
       Object.keys(this._state).forEach((insId) => {
-        const st = this._state[insId];
-        if(st?.result?.ok){
-          results[insId] = {
-            sumInsured: st.sumInsured,
-            monthlyPremium: st.result.monthlyPremium,
-            annualPremium: st.result.annualPremium,
-            ratePerMille: st.result.ratePerMille,
-            age: st.age, ageSource: st.ageSource, gender: st.gender, smoker: st.smoker,
-            genderSource: st.genderSource, smokerSource: st.smokerSource
-          };
-        }
+        const r = this._buildResultForInsured(insId);
+        if(r) results[insId] = r;
       });
       if(!Object.keys(results).length){
         window.showToast?.({ title: "אין תוצאה להחלה", text: "יש לחשב פרמיה לפחות למבוטח אחד לפני ההחלה על הפוליסה.", variant: "warn" });
@@ -28387,6 +28636,20 @@ UsersGateUI.init();
       const onApply = this._ctx?.onApply;
       this.close();
       try { onApply?.(results); } catch(_e) {}
+    },
+
+    _saveActive(){
+      const insId = this._activeInsuredId;
+      const result = this._buildResultForInsured(insId);
+      if(!result){
+        window.showToast?.({ title: "אין תוצאה לשמירה", text: "יש לחשב פרמיה עבור מבוטח זה לפני השמירה.", variant: "warn" });
+        return;
+      }
+      try { this._ctx?.onApply?.({ [insId]: result }); } catch(_e) {}
+      const st = this._state[insId];
+      if(st){ st.savedAt = nowISO(); st.dirtySinceSave = false; }
+      window.showToast?.({ title: "נשמר", text: `הסימולטור עבור ${this._getInsuredLabel(insId)} נשמר על ההצעה.`, variant: "success" });
+      this._render();
     }
   };
 
@@ -28529,6 +28792,8 @@ UsersGateUI.init();
     _state: {},
     _activeInsuredId: null,
     _escHandler: null,
+    _confirmSwitch: null,
+    _showFinalSummary: false,
 
     open(ctx){
       this.close();
@@ -28537,6 +28802,8 @@ UsersGateUI.init();
       this._state = {};
       insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); });
       this._activeInsuredId = insureds[0]?.id || null;
+      this._confirmSwitch = null;
+      this._showFinalSummary = false;
       this._mount();
       this._render();
     },
@@ -28555,8 +28822,18 @@ UsersGateUI.init();
         smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "",
         sumInsured: "",
         result: null,
-        error: null
+        error: null,
+        savedAt: null,
+        dirtySinceSave: false
       };
+    },
+
+    /** נקודת הרחבה: קובע אם מבוטח נתון רלוונטי לסימולטור הזה. כברירת מחדל כולם
+        רלוונטיים — הנציג כבר בחר אותם בשלב 3 עבור המוצר הנוכחי, ואין כיום כלל
+        עסקי קיים במערכת שממעט מבוטחים מסוימים (למשל ילדים) מריסק, ולכן לא
+        מומצא כזה. אם בעתיד יתברר שיש כלל כזה, יש לממש אותו כאן בלבד. */
+    _isInsuredRelevant(_ins){
+      return true;
     },
 
     close(){
@@ -28589,16 +28866,40 @@ UsersGateUI.init();
       return ins ? safeTrim(ins.label) || "מבוטח" : "מבוטח";
     },
 
+    _getActiveInsured(){
+      return (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === this._activeInsuredId) || null;
+    },
+
     _render(){
       if(!this._modal) return;
       const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+      const isMulti = insureds.length > 1;
+
+      if(this._showFinalSummary){
+        this._renderFinalSummary(insureds);
+        return;
+      }
+
       const activeId = this._activeInsuredId;
       const st = this._state[activeId] || this._prefillFromInsured(null);
 
-      const tabsHtml = insureds.length > 1 ? `<div class="lcMnrSim__tabs">${insureds.map((ins) => {
-        const hasResult = !!this._state[ins.id]?.result;
-        return `<button type="button" class="lcMnrSim__tab${ins.id === activeId ? ' is-active' : ''}${hasResult ? ' has-result' : ''}" data-mnr-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${hasResult ? ' ✓' : ''}</button>`;
+      const tabsHtml = isMulti ? `<div class="lcMnrSim__tabs">${insureds.map((ins) => {
+        const s = this._state[ins.id];
+        const statusCls = s?.savedAt ? ' has-saved' : (s?.result ? ' has-result' : '');
+        return `<button type="button" class="lcMnrSim__tab${ins.id === activeId ? ' is-active' : ''}${statusCls}" data-mnr-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${s?.savedAt ? ' 🟢' : ''}</button>`;
       }).join("")}</div>` : "";
+
+      const statusListHtml = isMulti ? `
+        <div class="lcMnrSim__statusList">
+          <div class="lcMnrSim__statusListTitle">מבוטחים בהצעה</div>
+          ${insureds.map((ins) => {
+            const s = this._state[ins.id];
+            const label = escapeHtml(safeTrim(ins.label) || "מבוטח");
+            if(!this._isInsuredRelevant(ins)) return `<div class="lcMnrSim__statusRow"><span>⚪</span><span>${label} – לא נדרש סימולטור עבור מבוטח זה</span></div>`;
+            if(s?.savedAt) return `<div class="lcMnrSim__statusRow"><span>🟢</span><span>${label} – נשמר</span></div>`;
+            return `<div class="lcMnrSim__statusRow"><span>🟡</span><span>${label} – טרם חושב</span></div>`;
+          }).join("")}
+        </div>` : "";
 
       const ageOptionsHtml = `<option value="">בחר גיל…</option>` + MENORA_RISK_AGE_OPTIONS.map((a) =>
         `<option value="${a}"${String(st.age) === String(a) ? " selected" : ""}>${a}</option>`
@@ -28617,6 +28918,9 @@ UsersGateUI.init();
         ? (st.smokerSource === "step1" ? `<div class="lcMnrSim__hint">נשאב מפרטים אישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
         : `<div class="lcMnrSim__hint lcMnrSim__hint--warn">לא נמצא סטטוס עישון בפרטים האישיים — יש לבחור</div>`;
 
+      const occAssessment = assessOccupationRisk((this._getActiveInsured()?.data || {}).occupation, this._ctx?.company, this._ctx?.product);
+      const occBlockHtml = renderOccupationRiskBlockHtml(occAssessment, "lcMnrSim");
+
       const resultHtml = st.error
         ? `<div class="lcMnrSim__result lcMnrSim__result--error">${escapeHtml(st.error)}</div>`
         : (st.result ? `<div class="lcMnrSim__result lcMnrSim__result--ok">
@@ -28627,6 +28931,31 @@ UsersGateUI.init();
           </div>` : "");
 
       const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
+      const relevantInsureds = insureds.filter((ins) => this._isInsuredRelevant(ins));
+      const allRelevantSaved = relevantInsureds.length > 0 && relevantInsureds.every((ins) => !!this._state[ins.id]?.savedAt);
+
+      const footHtml = !isMulti ? `
+          <div class="giValModal__foot lcMnrSim__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-mnr-close="1">ביטול</button>
+            <button type="button" class="btn btn--primary" data-mnr-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button>
+          </div>` : `
+          <div class="giValModal__foot lcMnrSim__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-mnr-close="1">ביטול</button>
+            <button type="button" class="btn btn--secondary" data-mnr-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button>
+            <button type="button" class="btn btn--primary" data-mnr-finalconfirm="1"${allRelevantSaved ? "" : " disabled"}>אישור סופי</button>
+          </div>`;
+
+      const confirmOverlayHtml = this._confirmSwitch ? `
+        <div class="lcMnrSim__overlay">
+          <div class="lcMnrSim__overlayCard">
+            <div class="lcMnrSim__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}. האם לשמור לפני המעבר?</div>
+            <div class="lcMnrSim__overlayBtns">
+              <button type="button" class="btn btn--primary" data-mnr-switch="save">שמור ועבור</button>
+              <button type="button" class="btn btn--secondary" data-mnr-switch="discard">עבור ללא שמירה</button>
+              <button type="button" class="btn" data-mnr-switch="cancel">ביטול</button>
+            </div>
+          </div>
+        </div>` : "";
 
       this._modal.innerHTML = `
         <div class="giValModal__backdrop" data-mnr-close="1"></div>
@@ -28640,6 +28969,7 @@ UsersGateUI.init();
             <button type="button" class="lcMnrSim__closeX" data-mnr-close="1" aria-label="סגירה">✕</button>
           </div>
           <div class="giValModal__body lcMnrSim__body">
+            ${statusListHtml}
             ${tabsHtml}
             <div class="lcMnrSim__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>
             <div class="lcMnrSim__grid">
@@ -28669,15 +28999,43 @@ UsersGateUI.init();
                 <input class="lcMnrSim__input" type="text" inputmode="numeric" data-mnr-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="לדוגמה: 1,000,000" />
               </div>
             </div>
+            ${occBlockHtml}
             <button type="button" class="btn btn--secondary lcMnrSim__calcBtn" data-mnr-calc="1">חשב פרמיה</button>
             ${resultHtml}
           </div>
-          <div class="giValModal__foot lcMnrSim__foot">
-            <button type="button" class="btn giValModal__closeBtn" data-mnr-close="1">ביטול</button>
-            <button type="button" class="btn btn--primary" data-mnr-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button>
-          </div>
+          ${footHtml}
+          ${confirmOverlayHtml}
         </div>`;
 
+      this._bind();
+    },
+
+    _renderFinalSummary(insureds){
+      const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+      const rows = relevant.map((ins) => {
+        const ok = !!this._state[ins.id]?.savedAt;
+        return `<div class="lcMnrSim__summaryRow"><span>${ok ? "✓" : "•"}</span><span>${escapeHtml(safeTrim(ins.label) || "מבוטח")}</span><span>${ok ? "הושלם" : "לא נשמר"}</span></div>`;
+      }).join("");
+      this._modal.innerHTML = `
+        <div class="giValModal__backdrop" data-mnr-close="1"></div>
+        <div class="giValModal__card lcMnrSim__card">
+          <div class="giValModal__head">
+            <span class="giValModal__headIcon" aria-hidden="true">🛡️</span>
+            <div class="giValModal__headText">
+              <div class="giValModal__title">סיכום סימולטור להצעה</div>
+              <div class="giValModal__sub">בדקו את הנתונים לפני האישור הסופי</div>
+            </div>
+            <button type="button" class="lcMnrSim__closeX" data-mnr-close="1" aria-label="סגירה">✕</button>
+          </div>
+          <div class="giValModal__body lcMnrSim__body">
+            <div class="lcMnrSim__statusListTitle">מבוטחים</div>
+            ${rows}
+          </div>
+          <div class="giValModal__foot lcMnrSim__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-mnr-summary-back="1">חזרה</button>
+            <button type="button" class="btn btn--primary" data-mnr-summary-confirm="1">אישור סופי</button>
+          </div>
+        </div>`;
       this._bind();
     },
 
@@ -28686,8 +29044,22 @@ UsersGateUI.init();
       if(!modal) return;
       $$("[data-mnr-close]", modal).forEach((el) => on(el, "click", () => this.close()));
       $$("[data-mnr-tab]", modal).forEach((el) => on(el, "click", () => {
-        this._activeInsuredId = el.getAttribute("data-mnr-tab");
-        this._render();
+        this._switchInsured(el.getAttribute("data-mnr-tab"));
+      }));
+      $$("[data-mnr-switch]", modal).forEach((el) => on(el, "click", () => {
+        const action = el.getAttribute("data-mnr-switch");
+        const target = this._confirmSwitch?.targetId;
+        this._confirmSwitch = null;
+        if(action === "save"){
+          this._saveActive();
+          if(target) this._activeInsuredId = target;
+          this._render();
+        } else if(action === "discard"){
+          if(target) this._activeInsuredId = target;
+          this._render();
+        } else {
+          this._render();
+        }
       }));
       const ageSel = modal.querySelector('[data-mnr-field="age"]');
       if(ageSel) on(ageSel, "change", () => {
@@ -28695,7 +29067,7 @@ UsersGateUI.init();
         if(!st) return;
         st.age = ageSel.value;
         st.ageSource = "manual";
-        st.result = null; st.error = null;
+        st.result = null; st.error = null; st.dirtySinceSave = true;
         this._render();
       });
       const sumInput = modal.querySelector('[data-mnr-field="sumInsured"]');
@@ -28706,14 +29078,14 @@ UsersGateUI.init();
         sumInput.value = formatted;
         try { sumInput.setSelectionRange(formatted.length, formatted.length); } catch(_e){}
         st.sumInsured = formatted;
-        st.result = null; st.error = null;
+        st.result = null; st.error = null; st.dirtySinceSave = true;
       });
       $$('[data-mnr-field="gender"]', modal).forEach((btn) => on(btn, "click", () => {
         const st = this._state[this._activeInsuredId];
         if(!st) return;
         st.gender = btn.getAttribute("data-mnr-value") || "";
         st.genderSource = "manual";
-        st.result = null; st.error = null;
+        st.result = null; st.error = null; st.dirtySinceSave = true;
         this._render();
       }));
       $$('[data-mnr-field="smoker"]', modal).forEach((btn) => on(btn, "click", () => {
@@ -28721,13 +29093,46 @@ UsersGateUI.init();
         if(!st) return;
         st.smoker = btn.getAttribute("data-mnr-value") === "1";
         st.smokerSource = "manual";
-        st.result = null; st.error = null;
+        st.result = null; st.error = null; st.dirtySinceSave = true;
         this._render();
       }));
       const calcBtn = modal.querySelector("[data-mnr-calc]");
       if(calcBtn) on(calcBtn, "click", () => this._calc(this._activeInsuredId));
       const applyBtn = modal.querySelector("[data-mnr-apply]");
       if(applyBtn) on(applyBtn, "click", () => this._apply());
+      const saveBtn = modal.querySelector("[data-mnr-save]");
+      if(saveBtn) on(saveBtn, "click", () => this._saveActive());
+      const finalBtn = modal.querySelector("[data-mnr-finalconfirm]");
+      if(finalBtn) on(finalBtn, "click", () => {
+        const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+        const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+        const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
+        if(!allSaved){
+          window.showToast?.({ title: "לא כל המבוטחים נשמרו", text: "יש לשמור את הסימולטור עבור כל המבוטחים הרלוונטיים לפני האישור הסופי.", variant: "warn" });
+          return;
+        }
+        this._showFinalSummary = true;
+        this._render();
+      });
+      const summaryBackBtn = modal.querySelector("[data-mnr-summary-back]");
+      if(summaryBackBtn) on(summaryBackBtn, "click", () => { this._showFinalSummary = false; this._render(); });
+      const summaryConfirmBtn = modal.querySelector("[data-mnr-summary-confirm]");
+      if(summaryConfirmBtn) on(summaryConfirmBtn, "click", () => {
+        try { this._ctx?.onFinalConfirm?.(); } catch(_e){}
+        this.close();
+      });
+    },
+
+    _switchInsured(targetId){
+      if(!targetId || targetId === this._activeInsuredId) return;
+      const st = this._state[this._activeInsuredId];
+      if(st?.dirtySinceSave){
+        this._confirmSwitch = { targetId };
+        this._render();
+        return;
+      }
+      this._activeInsuredId = targetId;
+      this._render();
     },
 
     _calc(insuredId){
@@ -28742,24 +29147,29 @@ UsersGateUI.init();
         st.result = null;
         st.error = MENORA_RISK_SIM_MISSING_MESSAGES[calc.reason] || "לא נמצא תעריף מתאים לנתונים שהוזנו.";
       }
+      st.dirtySinceSave = true;
       this._render();
+    },
+
+    _buildResultForInsured(insId){
+      const st = this._state[insId];
+      if(!st?.result?.ok) return null;
+      return {
+        sumInsured: st.sumInsured,
+        monthlyPremium: st.result.monthlyPremium,
+        annualPremium: st.result.annualPremium,
+        ratePerHundredThousand: st.result.ratePerHundredThousand,
+        bracket: st.result.bracket,
+        age: st.age, ageSource: st.ageSource, gender: st.gender, smoker: st.smoker,
+        genderSource: st.genderSource, smokerSource: st.smokerSource
+      };
     },
 
     _apply(){
       const results = {};
       Object.keys(this._state).forEach((insId) => {
-        const st = this._state[insId];
-        if(st?.result?.ok){
-          results[insId] = {
-            sumInsured: st.sumInsured,
-            monthlyPremium: st.result.monthlyPremium,
-            annualPremium: st.result.annualPremium,
-            ratePerHundredThousand: st.result.ratePerHundredThousand,
-            bracket: st.result.bracket,
-            age: st.age, ageSource: st.ageSource, gender: st.gender, smoker: st.smoker,
-            genderSource: st.genderSource, smokerSource: st.smokerSource
-          };
-        }
+        const r = this._buildResultForInsured(insId);
+        if(r) results[insId] = r;
       });
       if(!Object.keys(results).length){
         window.showToast?.({ title: "אין תוצאה להחלה", text: "יש לחשב פרמיה לפחות למבוטח אחד לפני ההחלה על הפוליסה.", variant: "warn" });
@@ -28768,6 +29178,20 @@ UsersGateUI.init();
       const onApply = this._ctx?.onApply;
       this.close();
       try { onApply?.(results); } catch(_e) {}
+    },
+
+    _saveActive(){
+      const insId = this._activeInsuredId;
+      const result = this._buildResultForInsured(insId);
+      if(!result){
+        window.showToast?.({ title: "אין תוצאה לשמירה", text: "יש לחשב פרמיה עבור מבוטח זה לפני השמירה.", variant: "warn" });
+        return;
+      }
+      try { this._ctx?.onApply?.({ [insId]: result }); } catch(_e) {}
+      const st = this._state[insId];
+      if(st){ st.savedAt = nowISO(); st.dirtySinceSave = false; }
+      window.showToast?.({ title: "נשמר", text: `הסימולטור עבור ${this._getInsuredLabel(insId)} נשמר על ההצעה.`, variant: "success" });
+      this._render();
     }
   };
 
@@ -28866,6 +29290,8 @@ UsersGateUI.init();
     _state: {},
     _activeInsuredId: null,
     _escHandler: null,
+    _confirmSwitch: null,
+    _showFinalSummary: false,
 
     open(ctx){
       this.close();
@@ -28874,6 +29300,8 @@ UsersGateUI.init();
       this._state = {};
       insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); });
       this._activeInsuredId = insureds[0]?.id || null;
+      this._confirmSwitch = null;
+      this._showFinalSummary = false;
       this._mount();
       this._render();
     },
@@ -28892,8 +29320,18 @@ UsersGateUI.init();
         smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "",
         sumInsured: "",
         result: null,
-        error: null
+        error: null,
+        savedAt: null,
+        dirtySinceSave: false
       };
+    },
+
+    /** נקודת הרחבה: קובע אם מבוטח נתון רלוונטי לסימולטור הזה. כברירת מחדל כולם
+        רלוונטיים — הנציג כבר בחר אותם בשלב 3 עבור המוצר הנוכחי, ואין כיום כלל
+        עסקי קיים במערכת שממעט מבוטחים מסוימים (למשל ילדים) מריסק משכנתא, ולכן
+        לא מומצא כזה. אם בעתיד יתברר שיש כלל כזה, יש לממש אותו כאן בלבד. */
+    _isInsuredRelevant(_ins){
+      return true;
     },
 
     close(){
@@ -28926,16 +29364,40 @@ UsersGateUI.init();
       return ins ? safeTrim(ins.label) || "מבוטח" : "מבוטח";
     },
 
+    _getActiveInsured(){
+      return (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === this._activeInsuredId) || null;
+    },
+
     _render(){
       if(!this._modal) return;
       const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+      const isMulti = insureds.length > 1;
+
+      if(this._showFinalSummary){
+        this._renderFinalSummary(insureds);
+        return;
+      }
+
       const activeId = this._activeInsuredId;
       const st = this._state[activeId] || this._prefillFromInsured(null);
 
-      const tabsHtml = insureds.length > 1 ? `<div class="lcPhxSim__tabs">${insureds.map((ins) => {
-        const hasResult = !!this._state[ins.id]?.result;
-        return `<button type="button" class="lcPhxSim__tab${ins.id === activeId ? ' is-active' : ''}${hasResult ? ' has-result' : ''}" data-phxmort-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${hasResult ? ' ✓' : ''}</button>`;
+      const tabsHtml = isMulti ? `<div class="lcPhxSim__tabs">${insureds.map((ins) => {
+        const s = this._state[ins.id];
+        const statusCls = s?.savedAt ? ' has-saved' : (s?.result ? ' has-result' : '');
+        return `<button type="button" class="lcPhxSim__tab${ins.id === activeId ? ' is-active' : ''}${statusCls}" data-phxmort-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${s?.savedAt ? ' 🟢' : ''}</button>`;
       }).join("")}</div>` : "";
+
+      const statusListHtml = isMulti ? `
+        <div class="lcPhxSim__statusList">
+          <div class="lcPhxSim__statusListTitle">מבוטחים בהצעה</div>
+          ${insureds.map((ins) => {
+            const s = this._state[ins.id];
+            const label = escapeHtml(safeTrim(ins.label) || "מבוטח");
+            if(!this._isInsuredRelevant(ins)) return `<div class="lcPhxSim__statusRow"><span>⚪</span><span>${label} – לא נדרש סימולטור עבור מבוטח זה</span></div>`;
+            if(s?.savedAt) return `<div class="lcPhxSim__statusRow"><span>🟢</span><span>${label} – נשמר</span></div>`;
+            return `<div class="lcPhxSim__statusRow"><span>🟡</span><span>${label} – טרם חושב</span></div>`;
+          }).join("")}
+        </div>` : "";
 
       const ageOptionsHtml = `<option value="">בחר גיל…</option>` + PHOENIX_MORTGAGE_RISK_AGE_OPTIONS.map((a) =>
         `<option value="${a}"${String(st.age) === String(a) ? " selected" : ""}>${a}</option>`
@@ -28954,6 +29416,9 @@ UsersGateUI.init();
         ? (st.smokerSource === "step1" ? `<div class="lcPhxSim__hint">נשאב מפרטים אישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
         : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא סטטוס עישון בפרטים האישיים — יש לבחור</div>`;
 
+      const occAssessment = assessOccupationRisk((this._getActiveInsured()?.data || {}).occupation, this._ctx?.company, this._ctx?.product);
+      const occBlockHtml = renderOccupationRiskBlockHtml(occAssessment, "lcPhxSim");
+
       const resultHtml = st.error
         ? `<div class="lcPhxSim__result lcPhxSim__result--error">${escapeHtml(st.error)}</div>`
         : (st.result ? `<div class="lcPhxSim__result lcPhxSim__result--ok">
@@ -28963,6 +29428,31 @@ UsersGateUI.init();
           </div>` : "");
 
       const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
+      const relevantInsureds = insureds.filter((ins) => this._isInsuredRelevant(ins));
+      const allRelevantSaved = relevantInsureds.length > 0 && relevantInsureds.every((ins) => !!this._state[ins.id]?.savedAt);
+
+      const footHtml = !isMulti ? `
+          <div class="giValModal__foot lcPhxSim__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-phxmort-close="1">ביטול</button>
+            <button type="button" class="btn btn--primary" data-phxmort-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button>
+          </div>` : `
+          <div class="giValModal__foot lcPhxSim__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-phxmort-close="1">ביטול</button>
+            <button type="button" class="btn btn--secondary" data-phxmort-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button>
+            <button type="button" class="btn btn--primary" data-phxmort-finalconfirm="1"${allRelevantSaved ? "" : " disabled"}>אישור סופי</button>
+          </div>`;
+
+      const confirmOverlayHtml = this._confirmSwitch ? `
+        <div class="lcPhxSim__overlay">
+          <div class="lcPhxSim__overlayCard">
+            <div class="lcPhxSim__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}. האם לשמור לפני המעבר?</div>
+            <div class="lcPhxSim__overlayBtns">
+              <button type="button" class="btn btn--primary" data-phxmort-switch="save">שמור ועבור</button>
+              <button type="button" class="btn btn--secondary" data-phxmort-switch="discard">עבור ללא שמירה</button>
+              <button type="button" class="btn" data-phxmort-switch="cancel">ביטול</button>
+            </div>
+          </div>
+        </div>` : "";
 
       this._modal.innerHTML = `
         <div class="giValModal__backdrop" data-phxmort-close="1"></div>
@@ -28976,6 +29466,7 @@ UsersGateUI.init();
             <button type="button" class="lcPhxSim__closeX" data-phxmort-close="1" aria-label="סגירה">✕</button>
           </div>
           <div class="giValModal__body lcPhxSim__body">
+            ${statusListHtml}
             ${tabsHtml}
             <div class="lcPhxSim__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>
             <div class="lcPhxSim__grid">
@@ -29005,15 +29496,43 @@ UsersGateUI.init();
                 <input class="lcPhxSim__input" type="text" inputmode="numeric" data-phxmort-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="לדוגמה: 1,000,000" />
               </div>
             </div>
+            ${occBlockHtml}
             <button type="button" class="btn btn--secondary lcPhxSim__calcBtn" data-phxmort-calc="1">חשב פרמיה</button>
             ${resultHtml}
           </div>
-          <div class="giValModal__foot lcPhxSim__foot">
-            <button type="button" class="btn giValModal__closeBtn" data-phxmort-close="1">ביטול</button>
-            <button type="button" class="btn btn--primary" data-phxmort-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button>
-          </div>
+          ${footHtml}
+          ${confirmOverlayHtml}
         </div>`;
 
+      this._bind();
+    },
+
+    _renderFinalSummary(insureds){
+      const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+      const rows = relevant.map((ins) => {
+        const ok = !!this._state[ins.id]?.savedAt;
+        return `<div class="lcPhxSim__summaryRow"><span>${ok ? "✓" : "•"}</span><span>${escapeHtml(safeTrim(ins.label) || "מבוטח")}</span><span>${ok ? "הושלם" : "לא נשמר"}</span></div>`;
+      }).join("");
+      this._modal.innerHTML = `
+        <div class="giValModal__backdrop" data-phxmort-close="1"></div>
+        <div class="giValModal__card lcPhxSim__card">
+          <div class="giValModal__head">
+            <span class="giValModal__headIcon" aria-hidden="true">🏠</span>
+            <div class="giValModal__headText">
+              <div class="giValModal__title">סיכום סימולטור להצעה</div>
+              <div class="giValModal__sub">בדקו את הנתונים לפני האישור הסופי</div>
+            </div>
+            <button type="button" class="lcPhxSim__closeX" data-phxmort-close="1" aria-label="סגירה">✕</button>
+          </div>
+          <div class="giValModal__body lcPhxSim__body">
+            <div class="lcPhxSim__statusListTitle">מבוטחים</div>
+            ${rows}
+          </div>
+          <div class="giValModal__foot lcPhxSim__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-phxmort-summary-back="1">חזרה</button>
+            <button type="button" class="btn btn--primary" data-phxmort-summary-confirm="1">אישור סופי</button>
+          </div>
+        </div>`;
       this._bind();
     },
 
@@ -29022,8 +29541,22 @@ UsersGateUI.init();
       if(!modal) return;
       $$("[data-phxmort-close]", modal).forEach((el) => on(el, "click", () => this.close()));
       $$("[data-phxmort-tab]", modal).forEach((el) => on(el, "click", () => {
-        this._activeInsuredId = el.getAttribute("data-phxmort-tab");
-        this._render();
+        this._switchInsured(el.getAttribute("data-phxmort-tab"));
+      }));
+      $$("[data-phxmort-switch]", modal).forEach((el) => on(el, "click", () => {
+        const action = el.getAttribute("data-phxmort-switch");
+        const target = this._confirmSwitch?.targetId;
+        this._confirmSwitch = null;
+        if(action === "save"){
+          this._saveActive();
+          if(target) this._activeInsuredId = target;
+          this._render();
+        } else if(action === "discard"){
+          if(target) this._activeInsuredId = target;
+          this._render();
+        } else {
+          this._render();
+        }
       }));
       const ageSel = modal.querySelector('[data-phxmort-field="age"]');
       if(ageSel) on(ageSel, "change", () => {
@@ -29031,7 +29564,7 @@ UsersGateUI.init();
         if(!st) return;
         st.age = ageSel.value;
         st.ageSource = "manual";
-        st.result = null; st.error = null;
+        st.result = null; st.error = null; st.dirtySinceSave = true;
         this._render();
       });
       const sumInput = modal.querySelector('[data-phxmort-field="sumInsured"]');
@@ -29042,14 +29575,14 @@ UsersGateUI.init();
         sumInput.value = formatted;
         try { sumInput.setSelectionRange(formatted.length, formatted.length); } catch(_e){}
         st.sumInsured = formatted;
-        st.result = null; st.error = null;
+        st.result = null; st.error = null; st.dirtySinceSave = true;
       });
       $$('[data-phxmort-field="gender"]', modal).forEach((btn) => on(btn, "click", () => {
         const st = this._state[this._activeInsuredId];
         if(!st) return;
         st.gender = btn.getAttribute("data-phxmort-value") || "";
         st.genderSource = "manual";
-        st.result = null; st.error = null;
+        st.result = null; st.error = null; st.dirtySinceSave = true;
         this._render();
       }));
       $$('[data-phxmort-field="smoker"]', modal).forEach((btn) => on(btn, "click", () => {
@@ -29057,13 +29590,46 @@ UsersGateUI.init();
         if(!st) return;
         st.smoker = btn.getAttribute("data-phxmort-value") === "1";
         st.smokerSource = "manual";
-        st.result = null; st.error = null;
+        st.result = null; st.error = null; st.dirtySinceSave = true;
         this._render();
       }));
       const calcBtn = modal.querySelector("[data-phxmort-calc]");
       if(calcBtn) on(calcBtn, "click", () => this._calc(this._activeInsuredId));
       const applyBtn = modal.querySelector("[data-phxmort-apply]");
       if(applyBtn) on(applyBtn, "click", () => this._apply());
+      const saveBtn = modal.querySelector("[data-phxmort-save]");
+      if(saveBtn) on(saveBtn, "click", () => this._saveActive());
+      const finalBtn = modal.querySelector("[data-phxmort-finalconfirm]");
+      if(finalBtn) on(finalBtn, "click", () => {
+        const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+        const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+        const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
+        if(!allSaved){
+          window.showToast?.({ title: "לא כל המבוטחים נשמרו", text: "יש לשמור את הסימולטור עבור כל המבוטחים הרלוונטיים לפני האישור הסופי.", variant: "warn" });
+          return;
+        }
+        this._showFinalSummary = true;
+        this._render();
+      });
+      const summaryBackBtn = modal.querySelector("[data-phxmort-summary-back]");
+      if(summaryBackBtn) on(summaryBackBtn, "click", () => { this._showFinalSummary = false; this._render(); });
+      const summaryConfirmBtn = modal.querySelector("[data-phxmort-summary-confirm]");
+      if(summaryConfirmBtn) on(summaryConfirmBtn, "click", () => {
+        try { this._ctx?.onFinalConfirm?.(); } catch(_e){}
+        this.close();
+      });
+    },
+
+    _switchInsured(targetId){
+      if(!targetId || targetId === this._activeInsuredId) return;
+      const st = this._state[this._activeInsuredId];
+      if(st?.dirtySinceSave){
+        this._confirmSwitch = { targetId };
+        this._render();
+        return;
+      }
+      this._activeInsuredId = targetId;
+      this._render();
     },
 
     _calc(insuredId){
@@ -29078,23 +29644,28 @@ UsersGateUI.init();
         st.result = null;
         st.error = PHOENIX_MORTGAGE_RISK_SIM_MISSING_MESSAGES[calc.reason] || "לא נמצא תעריף מתאים לנתונים שהוזנו.";
       }
+      st.dirtySinceSave = true;
       this._render();
+    },
+
+    _buildResultForInsured(insId){
+      const st = this._state[insId];
+      if(!st?.result?.ok) return null;
+      return {
+        sumInsured: st.sumInsured,
+        monthlyPremium: st.result.monthlyPremium,
+        annualPremium: st.result.annualPremium,
+        ratePerMille: st.result.ratePerMille,
+        age: st.age, ageSource: st.ageSource, gender: st.gender, smoker: st.smoker,
+        genderSource: st.genderSource, smokerSource: st.smokerSource
+      };
     },
 
     _apply(){
       const results = {};
       Object.keys(this._state).forEach((insId) => {
-        const st = this._state[insId];
-        if(st?.result?.ok){
-          results[insId] = {
-            sumInsured: st.sumInsured,
-            monthlyPremium: st.result.monthlyPremium,
-            annualPremium: st.result.annualPremium,
-            ratePerMille: st.result.ratePerMille,
-            age: st.age, ageSource: st.ageSource, gender: st.gender, smoker: st.smoker,
-            genderSource: st.genderSource, smokerSource: st.smokerSource
-          };
-        }
+        const r = this._buildResultForInsured(insId);
+        if(r) results[insId] = r;
       });
       if(!Object.keys(results).length){
         window.showToast?.({ title: "אין תוצאה להחלה", text: "יש לחשב פרמיה לפחות למבוטח אחד לפני ההחלה על הפוליסה.", variant: "warn" });
@@ -29103,6 +29674,20 @@ UsersGateUI.init();
       const onApply = this._ctx?.onApply;
       this.close();
       try { onApply?.(results); } catch(_e) {}
+    },
+
+    _saveActive(){
+      const insId = this._activeInsuredId;
+      const result = this._buildResultForInsured(insId);
+      if(!result){
+        window.showToast?.({ title: "אין תוצאה לשמירה", text: "יש לחשב פרמיה עבור מבוטח זה לפני השמירה.", variant: "warn" });
+        return;
+      }
+      try { this._ctx?.onApply?.({ [insId]: result }); } catch(_e) {}
+      const st = this._state[insId];
+      if(st){ st.savedAt = nowISO(); st.dirtySinceSave = false; }
+      window.showToast?.({ title: "נשמר", text: `הסימולטור עבור ${this._getInsuredLabel(insId)} נשמר על ההצעה.`, variant: "success" });
+      this._render();
     }
   };
 
@@ -42767,6 +43352,8 @@ if(path === "birthDate"){
         return;
       }
       handler.open({
+        company: d.company,
+        product: d.type,
         insureds,
         onApply: (resultsByInsuredId) => {
           this.ensurePolicyDraft();
@@ -42786,9 +43373,20 @@ if(path === "birthDate"){
             });
             delete draft.riskSimQuotes[insId].sumInsured;
           });
+          // GI-RISK-SIM-OCCUPATION: כל שינוי בתוצאות הסימולטור (שמירה חדשה עבור
+          // מבוטח כלשהו) מבטל אישור סופי קודם — כדי שלא יישאר "מאושר" מול נתונים
+          // שכבר לא רלוונטיים. הנציג יצטרך לאשר מחדש דרך "אישור סופי" בסימולטור.
+          delete draft.riskSimApprovedAt;
           this.resetPremiumSanityState();
           this.render();
           window.showToast?.({ title: "הפרמיה עודכנה", text: "תוצאת הסימולטור הוחלה על הפוליסה — ניתן לבדוק ולהמשיך כרגיל.", variant: "success" });
+        },
+        onFinalConfirm: () => {
+          this.ensurePolicyDraft();
+          const draft = this.policyDraft;
+          draft.riskSimApprovedAt = nowISO();
+          this.render();
+          window.showToast?.({ title: "ההצעה אושרה", text: "הסימולטור אושר סופית לכל המבוטחים הרלוונטיים.", variant: "success" });
         }
       });
     },
@@ -42832,9 +43430,14 @@ if(path === "birthDate"){
         // פרמיה חושבה ע"י סימולטור ריסק כלשהו (הפניקס/מנורה/עתידי, לפי מבוטח).
         // לא נוגע, לא דורס ולא משנה שום שדה קיים בפוליסה.
         riskSimQuotes: (d.riskSimQuotes && typeof d.riskSimQuotes === "object")
-          ? JSON.parse(JSON.stringify(d.riskSimQuotes)) : undefined
+          ? JSON.parse(JSON.stringify(d.riskSimQuotes)) : undefined,
+        // GI-RISK-SIM-OCCUPATION: מתי הנציג לחץ "אישור סופי" בסימולטור עבור כל
+        // המבוטחים הרלוונטיים בהצעה זו. אופציונלי בלבד — פוליסות בלי סימולטור
+        // (או שנשמרו לפני הפיצ'ר הזה) פשוט לא יכללו שדה זה כלל.
+        riskSimApprovedAt: safeTrim(d.riskSimApprovedAt || "") || undefined
       };
       if(!p.riskSimQuotes) delete p.riskSimQuotes;
+      if(!p.riskSimApprovedAt) delete p.riskSimApprovedAt;
       this.normalizePledgeBanks(p);
       if(this.isCustomerPurchaseMode()) p._purchaseSession = true;
       this.normalizeHealthPolicyPremiums(p);
