@@ -43,200 +43,229 @@
   .lcPhxSimBanner__btn{ width:100%; }
 }
 
-/* ---------- מודאל הסימולטור (מבוסס על .giValModal הגלובלי הקיים, בלי לשנות אותו) ---------- */
+/* ---------- מודאל הסימולטור (מבוסס על .giValModal הגלובלי הקיים, בלי לשנות אותו) ----------
+   GI-RISK-SIM-REDESIGN 2026-08-08: עיצוב רחב ובוגר יותר, בנוי כולו על משתני
+   העיצוב הגלובליים של המערכת (var(--gi-*) המוגדרים ב-theme.css) — צבעים,
+   רדיוסים וצללים — כדי שהסימולטור יישאר תואם-שפה מלא לשאר האפליקציה גם אם
+   ה-theme יתעדכן בעתיד. אין כאן שום שינוי לסלקטור גלובלי עצמו. */
 .lcPhxSimModal .giValModal__card{
-  max-width:520px;
+  max-width:720px;
   width:100%;
   position:relative;
 }
+.lcPhxSimModal .giValModal__head{ padding:24px 30px 18px; }
+.lcPhxSimModal .giValModal__body{ padding:22px 30px; gap:18px; }
+.lcPhxSimModal .giValModal__foot{ padding:16px 30px 22px; gap:10px; }
 .lcPhxSim__closeX{
   position:absolute;
-  top:14px;
-  left:14px;
+  top:16px;
+  left:16px;
   border:none;
   background:transparent;
-  color:#94a3b8;
-  font-size:16px;
+  color:var(--gi-text-muted, #647287);
+  font-size:17px;
   line-height:1;
   cursor:pointer;
-  padding:4px 8px;
-  border-radius:8px;
+  padding:5px 9px;
+  border-radius:var(--gi-r-ctl, 8px);
+  transition:background .12s ease, color .12s ease;
 }
-.lcPhxSim__closeX:hover{ background:#f1f5f9; color:#334155; }
+.lcPhxSim__closeX:hover{ background:var(--gi-border-soft, #F1F5F9); color:var(--gi-text, #0F172A); }
 
 .lcPhxSim__tabs{
   display:flex;
   flex-wrap:wrap;
-  gap:6px;
-  margin-bottom:14px;
+  gap:8px;
+  margin-bottom:2px;
 }
 .lcPhxSim__tab{
-  border:1px solid #e2e8f0;
-  background:#f8fafc;
-  color:#334155;
-  font-size:12.5px;
-  font-weight:600;
-  padding:7px 12px;
-  border-radius:9px;
+  border:1.5px solid var(--gi-border, #E5E7EB);
+  background:#fff;
+  color:var(--gi-text-muted, #647287);
+  font-size:13px;
+  font-weight:700;
+  padding:8px 16px;
+  border-radius:var(--gi-r-pill, 999px);
   cursor:pointer;
+  transition:border-color .12s ease, background .12s ease, color .12s ease;
 }
-.lcPhxSim__tab.is-active{ border-color:#2563eb; background:#eaf1ff; color:#1d4ed8; }
-.lcPhxSim__tab.has-result{ border-color:#22c55e; }
+.lcPhxSim__tab:hover{ border-color:var(--gi-border-strong, #CBD5E1); }
+.lcPhxSim__tab.is-active{ border-color:var(--gi-primary, #2563EB); background:var(--gi-primary-soft, #EFF6FF); color:var(--gi-primary, #2563EB); }
+.lcPhxSim__tab.has-result{ border-color:var(--gi-success, #16A34A); }
+.lcPhxSim__tab.has-saved{ border-color:var(--gi-success, #16A34A); background:var(--gi-success-soft, #ECFDF5); color:var(--gi-success, #16A34A); }
 
 .lcPhxSim__insuredLabel{
-  font-size:13px;
-  color:#475569;
-  margin-bottom:12px;
+  font-size:14px;
+  font-weight:600;
+  color:var(--gi-primary, #2563EB);
+  background:var(--gi-primary-soft, #EFF6FF);
+  border:1px solid rgba(37,99,235,.16);
+  border-radius:var(--gi-r-md, 12px);
+  padding:11px 16px;
 }
+.lcPhxSim__insuredLabel strong{ color:inherit; }
 
 .lcPhxSim__grid{
   display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:14px;
-  margin-bottom:14px;
+  grid-template-columns:repeat(3, minmax(160px, 1fr));
+  gap:20px 24px;
 }
-.lcPhxSim__field{ display:flex; flex-direction:column; gap:6px; min-width:0; }
-.lcPhxSim__label{ font-size:12.5px; font-weight:600; color:#475569; }
+.lcPhxSim__field{ display:flex; flex-direction:column; gap:8px; min-width:0; }
+.lcPhxSim__field--wide{ grid-column:1 / -1; }
+.lcPhxSim__label{ font-size:13px; font-weight:700; color:var(--gi-text, #0F172A); }
 .lcPhxSim__input{
-  border:1px solid #e2e8f0;
-  border-radius:9px;
-  padding:9px 11px;
-  font-size:14px;
+  border:1.5px solid var(--gi-border, #E5E7EB);
+  border-radius:var(--gi-r-md, 12px);
+  padding:12px 14px;
+  font-size:15px;
   background:#fff;
-  color:#0f172a;
+  color:var(--gi-text, #0F172A);
   width:100%;
   box-sizing:border-box;
+  transition:border-color .12s ease, box-shadow .12s ease;
 }
-.lcPhxSim__input:focus{ outline:none; border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+.lcPhxSim__input:focus{ outline:none; border-color:var(--gi-primary, #2563EB); box-shadow:0 0 0 4px rgba(37,99,235,.12); }
 
-.lcPhxSim__segmented{ display:flex; gap:6px; }
+.lcPhxSim__segmented{ display:flex; gap:8px; }
 .lcPhxSim__segBtn{
   flex:1;
-  border:1px solid #e2e8f0;
-  background:#f8fafc;
-  color:#334155;
-  font-size:13px;
-  font-weight:600;
-  padding:8px 6px;
-  border-radius:9px;
+  border:1.5px solid var(--gi-border, #E5E7EB);
+  background:#fff;
+  color:var(--gi-text-muted, #647287);
+  font-size:14.5px;
+  font-weight:700;
+  padding:11px 8px;
+  border-radius:var(--gi-r-md, 12px);
   cursor:pointer;
   text-align:center;
+  transition:border-color .12s ease, background .12s ease, color .12s ease;
 }
-.lcPhxSim__segBtn.is-active{ border-color:#2563eb; background:#2563eb; color:#fff; }
+.lcPhxSim__segBtn:hover{ border-color:var(--gi-border-strong, #CBD5E1); }
+.lcPhxSim__segBtn.is-active{ border-color:var(--gi-primary, #2563EB); background:var(--gi-primary, #2563EB); color:#fff; }
 
-.lcPhxSim__hint{ font-size:11.5px; color:#94a3b8; }
-.lcPhxSim__hint--warn{ color:#b45309; }
-
-.lcPhxSim__calcBtn{ width:100%; margin-bottom:12px; }
-
-.lcPhxSim__result{
-  border-radius:12px;
-  padding:12px 14px;
-  font-size:13.5px;
-}
-.lcPhxSim__result--error{
-  background:#fef2f2;
-  border:1px solid #fecaca;
-  color:#b91c1c;
+.lcPhxSim__hint{
+  font-size:12.5px;
   font-weight:600;
 }
+.lcPhxSim__hint--warn{
+  color:var(--gi-warn, #D97706);
+  background:var(--gi-warn-soft, #FFFBEB);
+  border:1px solid rgba(217,119,6,.18);
+  border-radius:var(--gi-r-ctl, 8px);
+  padding:7px 10px;
+}
+
+.lcPhxSim__calcBtn{ width:100%; padding:13px 16px !important; font-size:15px !important; font-weight:700 !important; }
+
+.lcPhxSim__result{
+  border-radius:var(--gi-r-card, 16px);
+  padding:18px 22px;
+  font-size:14px;
+}
+.lcPhxSim__result--error{
+  background:var(--gi-danger-soft, #FEF2F2);
+  border:1.5px solid rgba(220,38,38,.22);
+  color:var(--gi-danger, #DC2626);
+  font-weight:700;
+}
 .lcPhxSim__result--ok{
-  background:#f0fdf4;
-  border:1px solid #bbf7d0;
-  color:#166534;
+  background:var(--gi-success-soft, #ECFDF5);
+  border:1.5px solid rgba(22,163,74,.22);
+  color:var(--gi-success, #16A34A);
   display:flex;
   flex-direction:column;
-  gap:6px;
+  gap:9px;
 }
-.lcPhxSim__resultRow{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
-.lcPhxSim__resultRow--main{ font-size:16px; font-weight:800; border-top:1px dashed #bbf7d0; padding-top:6px; margin-top:2px; }
+.lcPhxSim__resultRow{ display:flex; align-items:center; justify-content:space-between; gap:14px; }
+.lcPhxSim__resultRow--main{ font-size:23px; font-weight:800; border-top:1px dashed rgba(22,163,74,.3); padding-top:10px; margin-top:2px; color:var(--gi-success, #16A34A); }
 
-@media (max-width: 560px){
+@media (max-width: 640px){
   .lcPhxSim__grid{ grid-template-columns:1fr; }
+  .lcPhxSimModal .giValModal__head{ padding:20px 20px 14px; }
+  .lcPhxSimModal .giValModal__body{ padding:18px 20px; }
+  .lcPhxSimModal .giValModal__foot{ padding:14px 20px 18px; }
 }
 
 /* ---------- GI-RISK-SIM-OCCUPATION · "פרטי מקצוע וחיתום" ---------- */
 .lcPhxSim__occBox{
-  border:1px solid #dbe4f3;
-  border-radius:12px;
-  padding:12px 14px;
-  margin-bottom:14px;
-  background:#f8faff;
+  border:1.5px solid var(--gi-border, #E5E7EB);
+  border-radius:var(--gi-r-card, 16px);
+  padding:16px 20px;
+  background:var(--gi-bg, #F8FAFC);
   display:flex;
   flex-direction:column;
-  gap:8px;
+  gap:10px;
 }
-.lcPhxSim__occHead{ font-size:12.5px; font-weight:700; color:#1e3a8a; }
+.lcPhxSim__occHead{ font-size:13px; font-weight:700; color:var(--gi-text-muted, #647287); text-transform:uppercase; letter-spacing:.02em; }
 .lcPhxSim__occBadge{
   display:inline-flex;
   align-items:center;
-  gap:6px;
+  gap:7px;
   width:fit-content;
-  font-size:13px;
+  font-size:13.5px;
   font-weight:700;
-  padding:5px 10px;
-  border-radius:999px;
-  border:1px solid #e2e8f0;
+  padding:6px 14px;
+  border-radius:var(--gi-r-pill, 999px);
+  border:1.5px solid var(--gi-border, #E5E7EB);
   background:#fff;
 }
-.lcPhxSim__occBadge--none{ border-color:#bbf7d0; background:#f0fdf4; color:#166534; }
-.lcPhxSim__occBadge--risk{ border-color:#fed7aa; background:#fff7ed; color:#9a3412; }
-.lcPhxSim__occBadge--unclear{ border-color:#bfdbfe; background:#eff6ff; color:#1d4ed8; }
-.lcPhxSim__occBadge--needsUnderwriting{ border-color:#fecaca; background:#fef2f2; color:#b91c1c; }
-.lcPhxSim__occRow{ display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:13px; color:#334155; }
-.lcPhxSim__occRow strong{ color:#0f172a; }
-.lcPhxSim__occNote{ font-size:12px; color:#b91c1c; font-weight:600; }
+.lcPhxSim__occBadge--none{ border-color:rgba(22,163,74,.3); background:var(--gi-success-soft, #ECFDF5); color:var(--gi-success, #16A34A); }
+.lcPhxSim__occBadge--risk{ border-color:rgba(217,119,6,.3); background:var(--gi-warn-soft, #FFFBEB); color:var(--gi-warn, #D97706); }
+.lcPhxSim__occBadge--unclear{ border-color:rgba(37,99,235,.3); background:var(--gi-info-soft, #EFF6FF); color:var(--gi-info, #2563EB); }
+.lcPhxSim__occBadge--needsUnderwriting{ border-color:rgba(220,38,38,.3); background:var(--gi-danger-soft, #FEF2F2); color:var(--gi-danger, #DC2626); }
+.lcPhxSim__occRow{ display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:13.5px; color:var(--gi-text-muted, #647287); }
+.lcPhxSim__occRow strong{ color:var(--gi-text, #0F172A); font-weight:700; }
+.lcPhxSim__occNote{ font-size:12.5px; color:var(--gi-danger, #DC2626); font-weight:700; }
 
 /* ---------- מבוטחים בהצעה (מצב שמירה) ---------- */
 .lcPhxSim__statusList{
-  border:1px solid #e2e8f0;
-  border-radius:12px;
-  padding:10px 12px;
-  margin-bottom:12px;
+  border:1.5px solid var(--gi-border, #E5E7EB);
+  border-radius:var(--gi-r-card, 16px);
+  padding:14px 18px;
   display:flex;
   flex-direction:column;
-  gap:4px;
-  background:#fafbff;
+  gap:6px;
+  background:#fff;
 }
-.lcPhxSim__statusListTitle{ font-size:12px; font-weight:700; color:#475569; margin-bottom:2px; }
-.lcPhxSim__statusRow{ display:flex; align-items:center; gap:8px; font-size:12.5px; color:#334155; }
-.lcPhxSim__tab.has-saved{ border-color:#22c55e; background:#f0fdf4; color:#166534; }
+.lcPhxSim__statusListTitle{ font-size:12.5px; font-weight:700; color:var(--gi-text-muted, #647287); text-transform:uppercase; letter-spacing:.02em; margin-bottom:2px; }
+.lcPhxSim__statusRow{ display:flex; align-items:center; gap:9px; font-size:13.5px; color:var(--gi-text, #0F172A); }
 
 /* ---------- דיאלוג אישור מעבר בין מבוטחים ---------- */
 .lcPhxSim__overlay{
   position:absolute;
   inset:0;
-  background:rgba(15,23,42,.45);
+  background:rgba(15,23,42,.5);
+  backdrop-filter:blur(2px);
   display:flex;
   align-items:center;
   justify-content:center;
-  padding:20px;
+  padding:24px;
   border-radius:inherit;
   z-index:5;
 }
 .lcPhxSim__overlayCard{
   background:#fff;
-  border-radius:14px;
-  padding:18px;
-  max-width:360px;
+  border-radius:var(--gi-r-card, 16px);
+  padding:22px;
+  max-width:380px;
   width:100%;
-  box-shadow:0 10px 30px rgba(15,23,42,.25);
+  box-shadow:var(--gi-sh-lg, 0 12px 32px rgba(15,23,42,.10));
   display:flex;
   flex-direction:column;
-  gap:14px;
+  gap:16px;
 }
-.lcPhxSim__overlayText{ font-size:13.5px; color:#1e293b; line-height:1.5; }
-.lcPhxSim__overlayBtns{ display:flex; flex-direction:column; gap:8px; }
+.lcPhxSim__overlayText{ font-size:14.5px; color:var(--gi-text, #0F172A); line-height:1.6; }
+.lcPhxSim__overlayBtns{ display:flex; flex-direction:column; gap:9px; }
 
 /* ---------- סיכום סימולטור להצעה ---------- */
 .lcPhxSim__summaryRow{
   display:flex;
   align-items:center;
-  gap:10px;
-  padding:8px 4px;
-  border-bottom:1px dashed #e2e8f0;
-  font-size:13.5px;
-  color:#334155;
+  gap:12px;
+  padding:11px 4px;
+  border-bottom:1px solid var(--gi-border-soft, #F1F5F9);
+  font-size:14.5px;
+  color:var(--gi-text, #0F172A);
 }
 .lcPhxSim__summaryRow:last-child{ border-bottom:none; }
-.lcPhxSim__summaryRow span:last-child{ margin-inline-start:auto; font-weight:700; color:#166534; }
+.lcPhxSim__summaryRow span:last-child{ margin-inline-start:auto; font-weight:700; color:var(--gi-success, #16A34A); }

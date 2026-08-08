@@ -28366,16 +28366,16 @@ UsersGateUI.init();
       ).join("");
 
       const ageHintHtml = st.age
-        ? (st.ageSource === "step1" ? `<div class="lcPhxSim__hint">נשאב מתאריך הלידה בפרטים האישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
+        ? ""
         : (Number.isInteger(st.ageRaw)
             ? `<div class="lcPhxSim__hint lcPhxSim__hint--warn">הגיל המחושב מתאריך הלידה (${st.ageRaw}) חורג מטווח התעריפון (${PHOENIX_RISK_MIN_AGE}–${PHOENIX_RISK_MAX_AGE}) — יש לבחור גיל ידנית</div>`
             : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא תאריך לידה תקין בפרטים האישיים — יש לבחור גיל</div>`);
 
       const genderHintHtml = st.gender
-        ? (st.genderSource === "step1" ? `<div class="lcPhxSim__hint">נשאב מפרטים אישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
+        ? ""
         : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא מין בפרטים האישיים — יש לבחור</div>`;
       const smokerHintHtml = (st.smoker === true || st.smoker === false)
-        ? (st.smokerSource === "step1" ? `<div class="lcPhxSim__hint">נשאב מפרטים אישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
+        ? ""
         : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא סטטוס עישון בפרטים האישיים — יש לבחור</div>`;
 
       const occAssessment = assessOccupationRisk((this._getActiveInsured()?.data || {}).occupation, this._ctx?.company, this._ctx?.product);
@@ -28384,7 +28384,6 @@ UsersGateUI.init();
       const resultHtml = st.error
         ? `<div class="lcPhxSim__result lcPhxSim__result--error">${escapeHtml(st.error)}</div>`
         : (st.result ? `<div class="lcPhxSim__result lcPhxSim__result--ok">
-            <div class="lcPhxSim__resultRow"><span>תעריף שנתי ל-1,000 ₪</span><strong>${escapeHtml(String(st.result.ratePerMille))} ₪</strong></div>
             <div class="lcPhxSim__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatPhoenixExactAmount(st.result.annualPremium))}</strong></div>
             <div class="lcPhxSim__resultRow lcPhxSim__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatPhoenixExactAmount(st.result.monthlyPremium))}</strong></div>
           </div>` : "");
@@ -28453,7 +28452,7 @@ UsersGateUI.init();
                 </div>
                 ${smokerHintHtml}
               </div>
-              <div class="lcPhxSim__field">
+              <div class="lcPhxSim__field lcPhxSim__field--wide">
                 <label class="lcPhxSim__label">סכום ביטוח (₪)</label>
                 <input class="lcPhxSim__input" type="text" inputmode="numeric" data-phx-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="לדוגמה: 1,000,000" />
               </div>
@@ -28906,16 +28905,16 @@ UsersGateUI.init();
       ).join("");
 
       const ageHintHtml = st.age
-        ? (st.ageSource === "step1" ? `<div class="lcMnrSim__hint">נשאב מתאריך הלידה בפרטים האישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
+        ? ""
         : (Number.isInteger(st.ageRaw)
             ? `<div class="lcMnrSim__hint lcMnrSim__hint--warn">הגיל המחושב מתאריך הלידה (${st.ageRaw}) חורג מטווח התעריפון (${MENORA_RISK_MIN_AGE}–${MENORA_RISK_MAX_AGE}) — יש לבחור גיל ידנית</div>`
             : `<div class="lcMnrSim__hint lcMnrSim__hint--warn">לא נמצא תאריך לידה תקין בפרטים האישיים — יש לבחור גיל</div>`);
 
       const genderHintHtml = st.gender
-        ? (st.genderSource === "step1" ? `<div class="lcMnrSim__hint">נשאב מפרטים אישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
+        ? ""
         : `<div class="lcMnrSim__hint lcMnrSim__hint--warn">לא נמצא מין בפרטים האישיים — יש לבחור</div>`;
       const smokerHintHtml = (st.smoker === true || st.smoker === false)
-        ? (st.smokerSource === "step1" ? `<div class="lcMnrSim__hint">נשאב מפרטים אישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
+        ? ""
         : `<div class="lcMnrSim__hint lcMnrSim__hint--warn">לא נמצא סטטוס עישון בפרטים האישיים — יש לבחור</div>`;
 
       const occAssessment = assessOccupationRisk((this._getActiveInsured()?.data || {}).occupation, this._ctx?.company, this._ctx?.product);
@@ -28925,7 +28924,6 @@ UsersGateUI.init();
         ? `<div class="lcMnrSim__result lcMnrSim__result--error">${escapeHtml(st.error)}</div>`
         : (st.result ? `<div class="lcMnrSim__result lcMnrSim__result--ok">
             <div class="lcMnrSim__resultRow"><span>מדרגת סכום ביטוח</span><strong>${escapeHtml(MENORA_RISK_BRACKET_LABELS[st.result.bracket] || "")}</strong></div>
-            <div class="lcMnrSim__resultRow"><span>תעריף חודשי ל-100,000 ₪</span><strong>${escapeHtml(String(st.result.ratePerHundredThousand))} ₪</strong></div>
             <div class="lcMnrSim__resultRow lcMnrSim__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatMenoraExactAmount(st.result.monthlyPremium))}</strong></div>
             <div class="lcMnrSim__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatMenoraExactAmount(st.result.annualPremium))}</strong></div>
           </div>` : "");
@@ -28994,7 +28992,7 @@ UsersGateUI.init();
                 </div>
                 ${smokerHintHtml}
               </div>
-              <div class="lcMnrSim__field">
+              <div class="lcMnrSim__field lcMnrSim__field--wide">
                 <label class="lcMnrSim__label">סכום ביטוח (₪)</label>
                 <input class="lcMnrSim__input" type="text" inputmode="numeric" data-mnr-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="לדוגמה: 1,000,000" />
               </div>
@@ -29404,16 +29402,16 @@ UsersGateUI.init();
       ).join("");
 
       const ageHintHtml = st.age
-        ? (st.ageSource === "step1" ? `<div class="lcPhxSim__hint">נשאב מתאריך הלידה בפרטים האישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
+        ? ""
         : (Number.isInteger(st.ageRaw)
             ? `<div class="lcPhxSim__hint lcPhxSim__hint--warn">הגיל המחושב מתאריך הלידה (${st.ageRaw}) חורג מטווח התעריפון (${PHOENIX_MORTGAGE_RISK_MIN_AGE}–${PHOENIX_MORTGAGE_RISK_MAX_AGE}) — יש לבחור גיל ידנית</div>`
             : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא תאריך לידה תקין בפרטים האישיים — יש לבחור גיל</div>`);
 
       const genderHintHtml = st.gender
-        ? (st.genderSource === "step1" ? `<div class="lcPhxSim__hint">נשאב מפרטים אישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
+        ? ""
         : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא מין בפרטים האישיים — יש לבחור</div>`;
       const smokerHintHtml = (st.smoker === true || st.smoker === false)
-        ? (st.smokerSource === "step1" ? `<div class="lcPhxSim__hint">נשאב מפרטים אישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
+        ? ""
         : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא סטטוס עישון בפרטים האישיים — יש לבחור</div>`;
 
       const occAssessment = assessOccupationRisk((this._getActiveInsured()?.data || {}).occupation, this._ctx?.company, this._ctx?.product);
@@ -29422,7 +29420,6 @@ UsersGateUI.init();
       const resultHtml = st.error
         ? `<div class="lcPhxSim__result lcPhxSim__result--error">${escapeHtml(st.error)}</div>`
         : (st.result ? `<div class="lcPhxSim__result lcPhxSim__result--ok">
-            <div class="lcPhxSim__resultRow"><span>תעריף שנתי ל-1,000 ₪</span><strong>${escapeHtml(String(st.result.ratePerMille))} ₪</strong></div>
             <div class="lcPhxSim__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatPhoenixExactAmount(st.result.annualPremium))}</strong></div>
             <div class="lcPhxSim__resultRow lcPhxSim__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatPhoenixExactAmount(st.result.monthlyPremium))}</strong></div>
           </div>` : "");
@@ -29491,7 +29488,7 @@ UsersGateUI.init();
                 </div>
                 ${smokerHintHtml}
               </div>
-              <div class="lcPhxSim__field">
+              <div class="lcPhxSim__field lcPhxSim__field--wide">
                 <label class="lcPhxSim__label">סכום ביטוח (₪)</label>
                 <input class="lcPhxSim__input" type="text" inputmode="numeric" data-phxmort-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="לדוגמה: 1,000,000" />
               </div>
