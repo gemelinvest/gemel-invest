@@ -1186,17 +1186,18 @@
 /* ---- כפתור פעמון בטופ-בר ---- */
 #giReminderFab.giReminderFab--topbar:not(#\9):not(#\9){
   border-radius: 0 !important;
-  background: var(--uf-surface) !important;
-  border: 1px solid var(--uf-line) !important;
+  background: transparent !important;
+  border: none !important;
   box-shadow: none !important;
   color: var(--uf-accent) !important;
 }
 #giReminderFab.giReminderFab--topbar:hover:not(#\9):not(#\9),
 #giReminderFab.giReminderFab--topbar:focus-visible:not(#\9):not(#\9){
   background: var(--uf-accent-soft) !important;
-  border-color: var(--uf-accent) !important;
+  border: none !important;
   box-shadow: none !important;
   transform: none !important;
+  outline: none !important;
 }
 #giReminderFabBadge.giReminderFab__badge:not(#\9):not(#\9){
   border-radius: 0 !important;
