@@ -13101,6 +13101,11 @@
       return this.isAdmin() || this.isManager();
     },
 
+    /** מרכז סימולטורים + פתיחת סימולטור באשף — מנהל מערכת / מנהל בלבד. */
+    canAccessSimulators(){
+      return this.isAdmin() || this.isManager();
+    },
+
     logout(reason = "manual"){
       const cur = this.current ? { ...this.current } : null;
       if(cur){
@@ -13678,6 +13683,7 @@ UsersGateUI.init();
       }
       if (this.els.navMyTeam) this.els.navMyTeam.style.display = Auth.isTeamManager() ? "" : "none";
       if (this.els.navActivityLog) this.els.navActivityLog.style.display = "none";
+      try { SimulatorsCenterUI.syncVisibility?.(); } catch(_e) {}
       if (isReferent) {
         $$(".nav__item").forEach((btn) => {
           const v = btn.getAttribute("data-view");
@@ -13686,6 +13692,7 @@ UsersGateUI.init();
         if (newCustomerBtn) newCustomerBtn.style.display = "none";
         if (offerFab) offerFab.style.display = "none";
         if (carInsuranceBtn) carInsuranceBtn.style.display = "none";
+        try { SimulatorsCenterUI.syncVisibility?.(); } catch(_e) {}
         document.body.classList.add("is-referent-role");
         try { CustomersUI.refreshArchiveBtnVisibility?.(); } catch(_e){}
         try { CustomersUI.refreshAssignBtnVisibility?.(); } catch(_e){}
@@ -30085,15 +30092,34 @@ UsersGateUI.init();
     _modal: null,
     _escHandler: null,
 
+    syncVisibility(){
+      const btn = this.els.btn || document.getElementById("btnSimulatorsCenter");
+      this.els.btn = btn;
+      if(!btn) return;
+      const allowed = !!(Auth?.current && Auth.canAccessSimulators?.());
+      btn.style.display = allowed ? "" : "none";
+      btn.setAttribute("aria-hidden", allowed ? "false" : "true");
+      if(!allowed){
+        try { this.close(); } catch(_e) {}
+      }
+    },
+
     init(){
       this.els.btn = document.getElementById("btnSimulatorsCenter");
       if(!this.els.btn) return;
+      this.syncVisibility();
       on(this.els.btn, "click", (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
         if(!Auth.current){
           try{
             window.showToast?.({ title: "נדרשת התחברות", text: "יש להתחבר למערכת לפני פתיחת מרכז הסימולטורים.", variant: "warn", durationMs: 4200 });
+          }catch(_e){}
+          return;
+        }
+        if(!Auth.canAccessSimulators?.()){
+          try{
+            window.showToast?.({ title: "אין הרשאה", text: "מרכז הסימולטורים זמין למנהל מערכת ומנהל בלבד.", variant: "warn", durationMs: 4200 });
           }catch(_e){}
           return;
         }
@@ -30106,6 +30132,12 @@ UsersGateUI.init();
     },
 
     open(){
+      if(!Auth.canAccessSimulators?.()){
+        try{
+          window.showToast?.({ title: "אין הרשאה", text: "מרכז הסימולטורים זמין למנהל מערכת ומנהל בלבד.", variant: "warn", durationMs: 4200 });
+        }catch(_e){}
+        return;
+      }
       this.close();
       const items = (typeof RiskSimulators.list === "function") ? RiskSimulators.list() : [];
       const modal = document.createElement("div");
@@ -43874,6 +43906,12 @@ if(path === "birthDate"){
         לא קורה כלום. תוצאת הסימולטור ממלאת רק שדות קיימים בטיוטה, ולא נשמרת
         בשום מקום עד שהנציג לוחץ על כפתור השמירה הקיים של הפוליסה. */
     openRiskSimulator(){
+      if(!Auth.canAccessSimulators?.()){
+        try{
+          window.showToast?.({ title: "אין הרשאה", text: "פתיחת סימולטור זמינה למנהל מערכת ומנהל בלבד.", variant: "warn", durationMs: 4200 });
+        }catch(_e){}
+        return;
+      }
       this.ensurePolicyDraft();
       const d = this.policyDraft;
       const handler = RiskSimulators.getHandler(d.company, d.type);
@@ -45281,9 +45319,11 @@ if(path === "birthDate"){
           }).join("");
 
       // GI-PHX-RISK-SIM: כפתור אופציונלי — מופיע רק כשיש handler רשום ל-(חברה, מוצר)
-      // הנוכחיים (כרגע: הפניקס + ריסק בלבד). לא מחליף ולא משנה שום שדה קיים —
+      // וגם הרשאת מנהל/מנהל מערכת. לא מחליף ולא משנה שום שדה קיים —
       // רק מציע דרך נוספת ואופציונלית למלא את הפרמיה/הסכום הקיימים בשלב 4.
-      const riskSimHandler = !isMedicare ? RiskSimulators.getHandler(d.company, d.type) : null;
+      const riskSimHandler = (!isMedicare && Auth.canAccessSimulators?.())
+        ? RiskSimulators.getHandler(d.company, d.type)
+        : null;
       const riskSimBannerHtml = riskSimHandler ? `
         <div class="lcPhxSimBanner">
           <div class="lcPhxSimBanner__text">
