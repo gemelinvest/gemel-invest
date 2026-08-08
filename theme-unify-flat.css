@@ -12,6 +12,7 @@
      · ניהול משתמשים        #view-users (+ מודאל #lcUserModal)
      · התהליכים שלי         #view-myProcesses
      · מערכת לידים          #view-campaignLeads , #view-campaignMyLeads (+ #goldLeadModal)
+     · תזכורות               #giReminderModal , #giReminderAlert , #giReminderFab (טופ-בר)
 
    עקרונות:
    1. אין שינוי ל-DOM, ל-ID, למשתני JS, ל-data-attributes או ללוגיקה — קובץ
@@ -35,7 +36,8 @@
 #view-customers, #view-proposals, #view-elementaryProposals, #view-settings,
 #view-users, #view-myProcesses, #view-campaignLeads, #view-campaignMyLeads,
 #lcUserModal, #lcHealthRiskChoiceModal, #lcWizard, #lcAgentApptWizard,
-#goldLeadModal, .cqPanel, .ciModal, .lcHealthDetailModal{
+#goldLeadModal, .cqPanel, .ciModal, .lcHealthDetailModal,
+#giReminderModal, #giReminderAlert, #giReminderFab{
   --uf-navy:        #0c2d4a;
   --uf-ink:         #152033;
   --uf-ink-2:       #3d4f63;
@@ -1174,6 +1176,138 @@
 #lcAgentApptWizard .giApptSummaryList__row--premium:not(#\9):not(#\9){ background: var(--uf-accent-soft) !important; border-radius: 0 !important; }
 #lcAgentApptWizard .giApptSummaryList__row--premium strong:not(#\9):not(#\9){ color: var(--uf-accent) !important; }
 #lcAgentApptWizard .giApptSummaryTable th:not(#\9):not(#\9){ background: var(--uf-head-bg) !important; color: var(--uf-ink-3) !important; }
+
+
+/* =====================================================================
+   9. תזכורות — כפתור פעמון בטופ-בר (#giReminderFab), מודאל התזכורות
+      (#giReminderModal) והתראת תזכורת קופצת (#giReminderAlert)
+   ===================================================================== */
+
+/* ---- כפתור פעמון בטופ-בר ---- */
+#giReminderFab.giReminderFab--topbar:not(#\9):not(#\9){
+  border-radius: 0 !important;
+  background: var(--uf-surface) !important;
+  border: 1px solid var(--uf-line) !important;
+  box-shadow: none !important;
+  color: var(--uf-accent) !important;
+}
+#giReminderFab.giReminderFab--topbar:hover:not(#\9):not(#\9),
+#giReminderFab.giReminderFab--topbar:focus-visible:not(#\9):not(#\9){
+  background: var(--uf-accent-soft) !important;
+  border-color: var(--uf-accent) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+#giReminderFabBadge.giReminderFab__badge:not(#\9):not(#\9){
+  border-radius: 0 !important;
+  background: var(--uf-danger) !important;
+  box-shadow: none !important;
+}
+
+/* ---- מעטפת המודאל (ראש / גוף / רגל) ---- */
+#giReminderModal .modal__panel:not(#\9):not(#\9){
+  border-radius: 0 !important;
+  border: 1px solid var(--uf-line) !important;
+  background: var(--uf-surface) !important;
+  box-shadow: none !important;
+}
+#giReminderModal .modal__head:not(#\9):not(#\9){
+  background: var(--uf-head-bg) !important;
+  border-bottom: 1px solid var(--uf-line-soft) !important;
+}
+#giReminderModal .modal__kicker:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#giReminderModal .modal__title:not(#\9):not(#\9){ color: var(--uf-navy) !important; font-weight: 700 !important; }
+#giReminderModal .iconBtn:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important;
+}
+#giReminderModal .modal__foot:not(#\9):not(#\9){
+  background: var(--uf-head-bg) !important; border-top: 1px solid var(--uf-line-soft) !important;
+}
+
+/* ---- כפתורים / שדות בתוך המודאל ---- */
+#giReminderModal .btn:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important; color: var(--uf-ink) !important; box-shadow: none !important;
+}
+#giReminderModal .btn:hover:not(#\9):not(#\9){ background: var(--uf-head-bg) !important; color: var(--uf-navy) !important; box-shadow: none !important; }
+#giReminderModal .btn--primary:not(#\9):not(#\9){
+  background: var(--uf-accent) !important; border-color: var(--uf-accent) !important; color: #fff !important;
+}
+#giReminderModal .btn--primary:hover:not(#\9):not(#\9){ background: var(--uf-accent-hover) !important; border-color: var(--uf-accent-hover) !important; }
+#giReminderModal .input:not(#\9):not(#\9), #giReminderModal select.input:not(#\9):not(#\9), #giReminderModal textarea.input:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important; color: var(--uf-ink) !important; box-shadow: none !important;
+}
+#giReminderModal .input:focus:not(#\9):not(#\9){ border-color: var(--uf-accent) !important; box-shadow: 0 0 0 2px var(--uf-accent-soft) !important; }
+#giReminderModal .label:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+
+/* ---- שלב 1: כרטיסי בחירת סוג תזכורת ---- */
+#giReminderModal .giReminderModal__stepLabel:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#giReminderModal .giReminderModal__typeCard:not(#\9):not(#\9){
+  border-radius: 0 !important;
+  border: 1px solid var(--uf-line) !important;
+  background: var(--uf-surface) !important;
+  box-shadow: none !important;
+}
+#giReminderModal .giReminderModal__typeCard:hover:not(#\9):not(#\9){
+  border-color: var(--uf-accent) !important;
+  background: var(--uf-accent-soft) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+#giReminderModal .giReminderModal__typeCard.is-selected:not(#\9):not(#\9){
+  border-color: var(--uf-accent) !important;
+  background: var(--uf-accent-soft) !important;
+  box-shadow: 0 0 0 2px var(--uf-accent-soft) !important;
+}
+#giReminderModal .giReminderModal__typeTitle:not(#\9):not(#\9){ color: var(--uf-ink) !important; }
+#giReminderModal .giReminderModal__typeDesc:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#giReminderModal .giReminderModal__error:not(#\9):not(#\9){ color: var(--uf-danger) !important; }
+
+/* ---- רשימת תזכורות פתוחות ---- */
+#giReminderModal .giReminderModal__listEmpty:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#giReminderModal .giReminderRow:not(#\9):not(#\9){
+  border-radius: 0 !important;
+  border: 1px solid var(--uf-line) !important;
+  background: var(--uf-surface) !important;
+}
+#giReminderModal .giReminderRow__type:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#giReminderModal .giReminderRow__text:not(#\9):not(#\9){ color: var(--uf-ink) !important; }
+#giReminderModal .giReminderRow__time:not(#\9):not(#\9){ color: var(--uf-accent) !important; }
+#giReminderModal .giReminderRow__customer:not(#\9):not(#\9){
+  border-radius: 0 !important; background: var(--uf-accent-soft) !important; color: var(--uf-accent) !important;
+}
+#giReminderModal .giReminderRow__btn:not(#\9):not(#\9){
+  border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important;
+}
+#giReminderModal .giReminderRow__btn:hover:not(#\9):not(#\9){ background: var(--uf-accent-soft) !important; border-color: var(--uf-accent) !important; }
+#giReminderModal .giReminderRow__btn--done:hover:not(#\9):not(#\9){ background: var(--uf-ok-bg) !important; border-color: var(--uf-ok-line) !important; }
+#giReminderModal .giReminderRow__btn--delete:hover:not(#\9):not(#\9){ background: var(--uf-danger-bg) !important; border-color: var(--uf-danger-line) !important; }
+#giReminderModal .giReminderRow.is-overdue:not(#\9):not(#\9){
+  border-color: var(--uf-danger-line) !important;
+  background: var(--uf-danger-bg) !important;
+}
+#giReminderModal .giReminderRow.is-overdue .giReminderRow__time:not(#\9):not(#\9){ color: var(--uf-danger) !important; }
+
+/* ---- התראת תזכורת קופצת (פינה תחתונה) ---- */
+#giReminderAlert.giReminderAlert:not(#\9):not(#\9){
+  border-radius: 0 !important;
+  border: 1px solid var(--uf-line) !important;
+  background: var(--uf-surface) !important;
+  box-shadow: none !important;
+}
+#giReminderAlert .giReminderAlert__title:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
+#giReminderAlert .giReminderAlert__text:not(#\9):not(#\9){ color: var(--uf-ink) !important; }
+#giReminderAlert .giReminderAlert__customer:not(#\9):not(#\9){ color: var(--uf-accent) !important; }
+#giReminderAlert .giReminderAlert__time:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#giReminderAlert .giReminderAlert__btn:not(#\9):not(#\9){ border-radius: 0 !important; }
+#giReminderAlert .giReminderAlert__btn--done:not(#\9):not(#\9){
+  background: var(--uf-ok) !important; background-image: none !important; color: #fff !important; border: none !important;
+}
+#giReminderAlert .giReminderAlert__btn--snooze:not(#\9):not(#\9){
+  background: var(--uf-surface) !important; color: var(--uf-ink) !important; border: 1px solid var(--uf-line) !important;
+}
+#giReminderAlert .giReminderAlert__btn--open:not(#\9):not(#\9){
+  background: var(--uf-accent) !important; background-image: none !important; color: #fff !important; border: none !important;
+}
 
 /* ---- כרטיסי מקטע בגוף האשף (lcWSection/lcWTitle) — כל השלבים, כולל בריאות ---- */
 #lcWizard .lcWSection:not(#\9):not(#\9),
