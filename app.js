@@ -86434,7 +86434,6 @@ ${inner}
       const payload = record?.payload && typeof record.payload === "object" ? record.payload : {};
       const prof = payload.importedProfile || {};
       const primary = payload.primary || {};
-      const fin = payload.importedFinancials || {};
 
       const pick = (...values) => {
         for(const v of values){ const t = safeTrim(v); if(t) return t; }
@@ -86481,26 +86480,7 @@ ${inner}
         ["יישוב", pick(record.city, prof.city, primary.city)]
       ]);
 
-      const finItems = Array.isArray(fin.items) ? fin.items.filter((i) => i.value != null && i.value !== 0) : [];
-      const finZero = Array.isArray(fin.items) ? fin.items.filter((i) => i.value === 0) : [];
-      const finDisplay = finItems.map((item) => {
-        const isDate = /תאריך/.test(item.label);
-        const shown = isDate
-          ? ciFormatDate(ciParseDate(item.value != null && item.value !== "" ? item.value : item.raw))
-          : ciFormatMoney(item.value);
-        return { label: item.label, shown: safeTrim(shown) };
-      }).filter((item) => item.shown !== "");
-
-      const finRows = finDisplay.length
-        ? `<div class="cqFin">${finDisplay.map((item) => `
-            <div class="cqFin__item">
-              <div class="cqFin__label">${escapeHtml(item.label)}</div>
-              <div class="cqFin__value">${escapeHtml(item.shown)}</div>
-            </div>`).join("")}
-           ${finZero.length ? `<div class="cqFin__note">${finZero.length} שדות נוספים בערך 0 לא מוצגים</div>` : ""}
-           <div class="cqFin__disclaimer">נתונים אלה נשאבו מהדוח לצורכי תצוגה בלבד ואינם מהווים פוליסות במערכת.</div>
-          </div>`
-        : "";
+      /* GI-UI 2026-08-09: אזור «נתוני צבירה ופרמיה מהדוח» הוסר מתצוגת פרטים אישיים — לא רלוונטי. */
 
       const extras = Array.isArray(payload.importedExtras) ? payload.importedExtras : [];
       const extraRows = extras.length ? rowsHtml(extras.map((e) => [e.label, e.value])) : "";
@@ -86509,7 +86489,6 @@ ${inner}
         section("פרטים אישיים", personalRows),
         section("דרכי התקשרות", contactRows),
         section("כתובת", addressRows),
-        section("נתוני צבירה ופרמיה מהדוח", finRows, "cqSection--fin"),
         section("שדות נוספים מהקובץ", extraRows)
       ].filter(Boolean).join("");
 
