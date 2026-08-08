@@ -66685,21 +66685,34 @@ const ClalRiskLifePdf = {
     };
     try {
       const client = this.getClient();
-      const [net, appt] = await Promise.all([
+      const [net, appt, byProduct] = await Promise.all([
         client.rpc("gi_dashboard_net_premium", args),
-        client.rpc("gi_dashboard_agent_appointment", args)
+        client.rpc("gi_dashboard_agent_appointment", args),
+        client.rpc("gi_dashboard_sales_by_product", args)
       ]);
       if(net.error) throw net.error;
       if(appt.error) throw appt.error;
       const n = Array.isArray(net.data) ? (net.data[0] || {}) : (net.data || {});
       const a = Array.isArray(appt.data) ? (appt.data[0] || {}) : (appt.data || {});
+      const productTotals = Object.create(null);
+      if(!byProduct?.error && Array.isArray(byProduct.data)){
+        byProduct.data.forEach((row) => {
+          const product = safeTrim(row?.product) || "אחר";
+          const premium = Number(row?.premium) || 0;
+          if(!product) return;
+          productTotals[product] = (productTotals[product] || 0) + premium;
+        });
+      } else if(byProduct?.error){
+        try { console.warn("[GI-SERVER-KPI] sales_by_product:", byProduct.error); } catch(_e) {}
+      }
       return {
         ok: true,
         netPremium:    Number(n.net_premium)   || 0,
         soldPolicies:  Number(n.sold_policies) || 0,
         newClients:    Number(n.new_clients)   || 0,
         apptPremium:   Number(a.appt_premium)  || 0,
-        apptPolicies:  Number(a.appt_policies) || 0
+        apptPolicies:  Number(a.appt_policies) || 0,
+        productTotals
       };
     } catch(err) {
       return { ok:false, error: String(err?.message || err) };
@@ -66726,11 +66739,28 @@ const ClalRiskLifePdf = {
         if(missingCustomers > 0 && this._metricsCache && this._metricsCache === metrics){
           const m = this._metricsCache;
           const netPremium = Number(res.netPremium) || 0;
+          const apptPremium = Number(res.apptPremium) || 0;
+          const apptPolicies = Number(res.apptPolicies) || 0;
           m.netPremium = netPremium;
           m.soldPolicies = Number(res.soldPolicies) || 0;
           m.newClients = Number(res.newClients) || 0;
-          m.agentAppointmentPremium = Number(res.apptPremium) || 0;
-          m.agentAppointments = Number(res.apptPolicies) || 0;
+          m.agentAppointmentPremium = apptPremium;
+          m.agentAppointments = apptPolicies;
+          /* פירוט מוצרים מ-RPC — בלי payloads בזיכרון אין מאיפה לבנות «הצג פירוט». */
+          if(res.productTotals && typeof res.productTotals === "object"){
+            m.netProductTotals = res.productTotals;
+          }
+          /* אין RPC לפי לקוח למינוי סוכן — מציגים סיכום שרת עד שה-hydration ממלא פירוט מלא. */
+          if(apptPolicies > 0 || apptPremium > 0){
+            const emptyClientItems = !Array.isArray(m.agentApptItems) || !m.agentApptItems.length;
+            if(emptyClientItems){
+              m.agentApptItems = [{
+                rec: { fullName: apptPolicies + " מינויי סוכן", idNumber: "" },
+                premium: apptPremium,
+                latestStamp: Date.now()
+              }];
+            }
+          }
           const targetValue = Number(m.targetValue) || 0;
           if(targetValue > 0){
             const targetPctRaw = (netPremium / targetValue) * 100;
