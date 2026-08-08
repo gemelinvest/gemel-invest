@@ -1,0 +1,121 @@
+/* ===== GI-MNR-RISK-SIM 2026-08-08 · סימולטור ריסק מנורה מבטחים ===============
+   קובץ CSS מבודד ועצמאי לחלוטין. כל המחלקות כאן ממוסגרות בקידומת ייחודית
+   "lcMnrSim" שלא קיימת בשום מקום אחר באפליקציה, כדי שלא תהיה שום התנגשות עם
+   app.css / theme.css / theme-p2.css / phoenix-risk-sim.css הקיימים.
+   הבאנר "פתח סימולטור..." בשלב 5 משתמש במחלקה הגנרית lcPhxSimBanner (מוגדרת
+   ב-phoenix-risk-sim.css) עבור כל חברה — אין צורך בבאנר נפרד כאן.
+   אין בקובץ הזה שום שינוי לסלקטור גלובלי (body, .btn, .input וכו') — רק
+   מחלקות חדשות וממוקדות, פרט לכללי גודל/מיקום שממוענים במפורש דרך הקידומת
+   lcMnrSim (למשל ".lcMnrSimModal .giValModal__card"), שמשפיעים רק על המודאל
+   הזה בעצמו ולא על מודאלים אחרים במערכת שמשתמשים ב-giValModal. */
+
+/* ---------- מודאל הסימולטור (מבוסס על .giValModal הגלובלי הקיים, בלי לשנות אותו) ---------- */
+.lcMnrSimModal .giValModal__card{
+  max-width:520px;
+  width:100%;
+}
+.lcMnrSim__closeX{
+  position:absolute;
+  top:14px;
+  left:14px;
+  border:none;
+  background:transparent;
+  color:#94a3b8;
+  font-size:16px;
+  line-height:1;
+  cursor:pointer;
+  padding:4px 8px;
+  border-radius:8px;
+}
+.lcMnrSim__closeX:hover{ background:#f1f5f9; color:#334155; }
+
+.lcMnrSim__tabs{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-bottom:14px;
+}
+.lcMnrSim__tab{
+  border:1px solid #e2e8f0;
+  background:#f8fafc;
+  color:#334155;
+  font-size:12.5px;
+  font-weight:600;
+  padding:7px 12px;
+  border-radius:9px;
+  cursor:pointer;
+}
+.lcMnrSim__tab.is-active{ border-color:#2563eb; background:#eaf1ff; color:#1d4ed8; }
+.lcMnrSim__tab.has-result{ border-color:#22c55e; }
+
+.lcMnrSim__insuredLabel{
+  font-size:13px;
+  color:#475569;
+  margin-bottom:12px;
+}
+
+.lcMnrSim__grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:14px;
+  margin-bottom:14px;
+}
+.lcMnrSim__field{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+.lcMnrSim__label{ font-size:12.5px; font-weight:600; color:#475569; }
+.lcMnrSim__input{
+  border:1px solid #e2e8f0;
+  border-radius:9px;
+  padding:9px 11px;
+  font-size:14px;
+  background:#fff;
+  color:#0f172a;
+  width:100%;
+  box-sizing:border-box;
+}
+.lcMnrSim__input:focus{ outline:none; border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+
+.lcMnrSim__segmented{ display:flex; gap:6px; }
+.lcMnrSim__segBtn{
+  flex:1;
+  border:1px solid #e2e8f0;
+  background:#f8fafc;
+  color:#334155;
+  font-size:13px;
+  font-weight:600;
+  padding:8px 6px;
+  border-radius:9px;
+  cursor:pointer;
+  text-align:center;
+}
+.lcMnrSim__segBtn.is-active{ border-color:#2563eb; background:#2563eb; color:#fff; }
+
+.lcMnrSim__hint{ font-size:11.5px; color:#94a3b8; }
+.lcMnrSim__hint--warn{ color:#b45309; }
+
+.lcMnrSim__calcBtn{ width:100%; margin-bottom:12px; }
+
+.lcMnrSim__result{
+  border-radius:12px;
+  padding:12px 14px;
+  font-size:13.5px;
+}
+.lcMnrSim__result--error{
+  background:#fef2f2;
+  border:1px solid #fecaca;
+  color:#b91c1c;
+  font-weight:600;
+}
+.lcMnrSim__result--ok{
+  background:#f0fdf4;
+  border:1px solid #bbf7d0;
+  color:#166534;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.lcMnrSim__resultRow{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.lcMnrSim__resultRow--main{ font-size:16px; font-weight:800; border-top:1px dashed #bbf7d0; padding-top:6px; margin-top:2px; }
+
+@media (max-width: 560px){
+  .lcMnrSim__grid{ grid-template-columns:1fr; }
+}

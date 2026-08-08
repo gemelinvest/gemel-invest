@@ -28351,6 +28351,372 @@ UsersGateUI.init();
   RiskSimulators.register("הפניקס", "ריסק", PhoenixRiskSimulator);
   // ===== סוף GI-PHX-RISK-SIM =====================================================
 
+  // ===== GI-MNR-RISK-SIM: סימולטור ריסק מנורה מבטחים =============================
+  // מפת התעריפים הרשמית של מנורה מבטחים לביטוח ריסק. שתי מדרגות סכום ביטוח:
+  // "עד חצי מיליון ₪" (כולל 500,000 בדיוק) ו"מעל חצי מיליון ₪". התעריף בכל טבלה
+  // הוא פרמיה **חודשית** (לא שנתית — בשונה מהפניקס!) לכל 100,000 ₪ סכום ביטוח,
+  // לפי גיל כניסה בודד (18–79), מין ומעשן/לא מעשן. זהו מקור האמת היחיד לתמחור
+  // ריסק מנורה בסימולטור הזה — אין להמציא, לקרב או להשלים ערך שאינו רשום כאן
+  // במפורש. כל עדכון תעריפים עתידי מהחברה חייב לעדכן רק את הטבלאות האלה.
+  //
+  // [age, maleNonSmoker, maleSmoker, femaleNonSmoker, femaleSmoker] — פרמיה חודשית ל-100,000 ₪
+  const MENORA_RISK_RATE_TABLE_LE500K = [
+    [18, 7.40, 11.34, 4.62, 6.03], [19, 7.08, 10.90, 4.62, 5.85], [20, 6.86, 8.85, 4.62, 5.85],
+    [21, 6.58, 8.68, 4.62, 5.85], [22, 6.64, 8.69, 4.62, 5.85], [23, 6.47, 8.53, 4.62, 5.85],
+    [24, 6.31, 8.46, 4.62, 5.85], [25, 6.20, 8.42, 4.62, 5.85], [26, 5.97, 8.35, 4.67, 5.85],
+    [27, 5.92, 8.27, 4.67, 5.97], [28, 6.04, 8.24, 4.73, 5.97], [29, 6.17, 8.19, 4.83, 6.25],
+    [30, 6.26, 8.10, 5.04, 6.47], [31, 6.41, 8.30, 5.28, 6.69], [32, 6.47, 8.46, 5.50, 7.03],
+    [33, 6.71, 8.74, 5.76, 7.30], [34, 6.99, 9.18, 6.04, 7.69], [35, 7.23, 9.63, 6.27, 8.24],
+    [36, 7.77, 10.29, 6.55, 8.75], [37, 8.14, 11.06, 6.83, 9.26], [38, 8.49, 11.88, 7.34, 9.88],
+    [39, 8.74, 13.11, 7.62, 10.56], [40, 9.24, 14.38, 8.15, 11.29], [41, 9.89, 15.82, 8.80, 12.76],
+    [42, 10.62, 17.25, 9.39, 14.14], [43, 11.27, 19.25, 10.19, 15.62], [44, 12.36, 21.41, 10.86, 17.51],
+    [45, 13.44, 23.56, 11.63, 19.24], [46, 14.79, 26.14, 12.33, 21.58], [47, 16.20, 28.95, 13.20, 24.04],
+    [48, 17.83, 33.02, 14.26, 27.03], [49, 19.87, 36.54, 15.31, 30.04], [50, 22.41, 42.20, 16.87, 33.80],
+    [51, 24.73, 48.07, 18.18, 38.05], [52, 27.60, 53.52, 19.69, 42.32], [53, 30.57, 60.89, 21.34, 47.50],
+    [54, 33.82, 69.13, 23.20, 53.38], [55, 36.66, 76.44, 24.98, 59.89], [56, 40.57, 87.26, 27.61, 65.79],
+    [57, 44.93, 97.04, 30.20, 73.17], [58, 50.44, 109.21, 33.03, 80.55], [59, 55.82, 122.06, 36.55, 89.60],
+    [60, 61.78, 136.25, 39.63, 99.76], [61, 69.27, 147.66, 43.94, 109.97], [62, 76.58, 159.87, 48.49, 121.17],
+    [63, 84.70, 170.50, 53.30, 135.00], [64, 93.45, 205.21, 58.51, 148.97], [65, 106.28, 239.02, 64.42, 166.18],
+    [66, 121.02, 280.78, 72.19, 184.04], [67, 137.66, 318.64, 82.09, 206.01], [68, 156.44, 356.81, 92.30, 230.47],
+    [69, 168.41, 399.45, 104.08, 262.95], [70, 191.37, 445.22, 117.68, 290.06], [71, 217.38, 498.65, 133.02, 315.37],
+    [72, 244.30, 544.29, 153.59, 341.55], [73, 274.85, 590.83, 181.09, 368.08], [74, 309.54, 631.09, 211.43, 394.43],
+    [75, 349.19, 669.45, 247.13, 419.92], [76, 438.74, 704.53, 307.77, 443.85], [77, 534.39, 719.57, 338.70, 464.68],
+    [78, 598.74, 741.16, 381.29, 481.09], [79, 672.07, 752.09, 430.15, 491.03]
+  ];
+
+  const MENORA_RISK_RATE_TABLE_GT500K = [
+    [18, 7.03, 10.77, 4.39, 5.73], [19, 6.72, 10.35, 4.39, 5.56], [20, 6.52, 8.41, 4.39, 5.56],
+    [21, 6.25, 8.25, 4.39, 5.56], [22, 6.31, 8.26, 4.39, 5.56], [23, 6.15, 8.11, 4.39, 5.56],
+    [24, 5.99, 8.04, 4.39, 5.56], [25, 5.89, 8.00, 4.39, 5.56], [26, 5.68, 7.93, 4.44, 5.56],
+    [27, 5.62, 7.85, 4.44, 5.67], [28, 5.74, 7.83, 4.49, 5.67], [29, 5.86, 7.78, 4.59, 5.94],
+    [30, 5.94, 7.70, 4.79, 6.15], [31, 6.08, 7.88, 5.02, 6.36], [32, 6.14, 8.04, 5.23, 6.67],
+    [33, 6.37, 8.30, 5.47, 6.94], [34, 6.64, 8.72, 5.73, 7.30], [35, 6.87, 9.14, 5.95, 7.83],
+    [36, 7.38, 9.77, 6.22, 8.31], [37, 7.73, 10.51, 6.49, 8.79], [38, 8.07, 11.29, 6.97, 9.38],
+    [39, 8.30, 12.45, 7.24, 10.03], [40, 8.78, 13.66, 7.74, 10.73], [41, 9.39, 15.03, 8.36, 12.12],
+    [42, 10.09, 16.39, 8.92, 13.44], [43, 10.71, 18.29, 9.68, 14.84], [44, 11.75, 20.34, 10.31, 16.63],
+    [45, 12.77, 22.38, 11.04, 18.28], [46, 14.05, 24.84, 11.71, 20.50], [47, 15.39, 27.50, 12.54, 22.84],
+    [48, 16.94, 31.37, 13.54, 25.68], [49, 18.88, 34.71, 14.54, 28.54], [50, 21.29, 40.09, 16.03, 32.11],
+    [51, 23.49, 45.67, 17.27, 36.15], [52, 26.22, 50.84, 18.71, 40.20], [53, 29.04, 57.84, 20.27, 45.13],
+    [54, 32.13, 65.67, 22.04, 50.71], [55, 34.83, 72.62, 23.73, 56.90], [56, 38.54, 82.90, 26.23, 62.50],
+    [57, 42.69, 92.19, 28.69, 69.51], [58, 47.91, 103.75, 31.38, 76.52], [59, 53.03, 115.96, 34.73, 85.12],
+    [60, 58.69, 129.44, 37.65, 94.77], [61, 65.80, 140.27, 41.74, 104.47], [62, 72.75, 151.88, 46.06, 115.11],
+    [63, 80.46, 161.98, 50.63, 128.25], [64, 88.78, 194.95, 55.59, 141.52], [65, 100.96, 227.07, 61.20, 157.87],
+    [66, 114.97, 266.74, 68.58, 174.83], [67, 130.78, 302.71, 77.99, 195.71], [68, 148.62, 338.97, 87.69, 218.95],
+    [69, 159.99, 379.47, 98.87, 249.80], [70, 181.81, 422.96, 111.79, 275.55], [71, 206.51, 473.72, 126.37, 299.60],
+    [72, 232.09, 517.07, 145.91, 324.48], [73, 261.11, 561.29, 172.04, 349.68], [74, 294.07, 599.54, 200.85, 374.71],
+    [75, 331.73, 635.98, 234.77, 398.93], [76, 416.80, 669.31, 292.38, 421.66], [77, 507.67, 683.59, 321.77, 441.44],
+    [78, 568.80, 704.11, 362.23, 457.04], [79, 638.47, 714.48, 408.64, 466.48]
+  ];
+
+  function buildMenoraRiskRateMap(table){
+    return new Map(table.map((row) => [row[0], {
+      maleNonSmoker: row[1], maleSmoker: row[2], femaleNonSmoker: row[3], femaleSmoker: row[4]
+    }]));
+  }
+  const MENORA_RISK_RATE_MAP_LE500K = buildMenoraRiskRateMap(MENORA_RISK_RATE_TABLE_LE500K);
+  const MENORA_RISK_RATE_MAP_GT500K = buildMenoraRiskRateMap(MENORA_RISK_RATE_TABLE_GT500K);
+
+  const MENORA_RISK_AGE_OPTIONS = MENORA_RISK_RATE_TABLE_LE500K.map((row) => row[0]);
+  const MENORA_RISK_MIN_AGE = MENORA_RISK_AGE_OPTIONS[0];
+  const MENORA_RISK_MAX_AGE = MENORA_RISK_AGE_OPTIONS[MENORA_RISK_AGE_OPTIONS.length - 1];
+  const MENORA_RISK_BRACKET_THRESHOLD = 500000; // "עד חצי מיליון" — כולל 500,000 ₪ בדיוק במדרגה הראשונה
+
+  /** התאמה מדויקת בלבד — ללא קירוב/השלמה. בוחר מדרגה לפי סכום הביטוח (עד/כולל
+      500,000 ₪ → מדרגה 1; מעל 500,000 ₪ → מדרגה 2), ואז מחזיר את התעריף המדויק
+      מהמדרגה הנכונה. מחזיר {ok:false, reason} אם אין התאמה. */
+  function lookupMenoraRiskRate({ age, gender, smoker, sumInsured }){
+    const ageNum = Number(age);
+    if(!Number.isInteger(ageNum)) return { ok:false, reason:"age_missing" };
+    const sum = Number(sumInsured);
+    if(!Number.isFinite(sum) || sum <= 0) return { ok:false, reason:"sum_missing" };
+    const bracket = sum <= MENORA_RISK_BRACKET_THRESHOLD ? "le500k" : "gt500k";
+    const map = bracket === "le500k" ? MENORA_RISK_RATE_MAP_LE500K : MENORA_RISK_RATE_MAP_GT500K;
+    const row = map.get(ageNum);
+    if(!row) return { ok:false, reason:"age_out_of_range" };
+    const genderKey = gender === "זכר" ? "male" : (gender === "נקבה" ? "female" : "");
+    if(!genderKey) return { ok:false, reason:"gender_missing" };
+    if(smoker !== true && smoker !== false) return { ok:false, reason:"smoker_missing" };
+    const rate = row[genderKey + (smoker ? "Smoker" : "NonSmoker")];
+    if(typeof rate !== "number" || !Number.isFinite(rate)) return { ok:false, reason:"rate_missing" };
+    return { ok:true, ratePerHundredThousand: rate, bracket };
+  }
+
+  /** פרמיה חודשית = (סכום ביטוח / 100,000) × תעריף — זהו מקור האמת מהטבלה.
+      שנתית היא נגזרת תצוגה בלבד = חודשית × 12. חישוב באגורות שלמות של התעריף
+      למניעת שגיאות float בינאריות — אין כאן שום עיגול עסקי. */
+  function computeMenoraRiskPremium({ age, gender, smoker, sumInsured }){
+    const lookup = lookupMenoraRiskRate({ age, gender, smoker, sumInsured });
+    if(!lookup.ok) return lookup;
+    const sum = Number(sumInsured);
+    const rateCenti = Math.round(lookup.ratePerHundredThousand * 100); // אגורות ל-100,000 ₪ (תעריף ב-2 ספרות עשרוניות בדוח)
+    const monthlyPremium = (rateCenti * sum) / 10000000; // (rateCenti/100) * (sum/100000)
+    const annualPremium = monthlyPremium * 12;
+    return {
+      ok:true,
+      ratePerHundredThousand: lookup.ratePerHundredThousand,
+      bracket: lookup.bracket,
+      monthlyPremium,
+      annualPremium
+    };
+  }
+
+  // תצוגת סכום מדויקת — ללא כלל עיגול עסקי. משתמשת בפורמט הגנרי הקיים (זהה לזה
+  // שנבנה לסימולטור הפניקס, ואינו תלוי בנתוני הפניקס עצמם).
+  const formatMenoraExactAmount = formatPhoenixExactAmount;
+
+  const MENORA_RISK_BRACKET_LABELS = {
+    le500k: "עד חצי מיליון ₪ (כולל)",
+    gt500k: "מעל חצי מיליון ₪"
+  };
+
+  const MENORA_RISK_SIM_MISSING_MESSAGES = {
+    age_missing: "יש לבחור גיל לפני חישוב הפרמיה.",
+    age_out_of_range: `לא נמצא תעריף מתאים לגיל שהוזן (התעריפון מכיל גילאים ${MENORA_RISK_MIN_AGE}–${MENORA_RISK_MAX_AGE} בלבד).`,
+    gender_missing: "יש להזין מין לפני חישוב הפרמיה.",
+    smoker_missing: "יש לציין האם המבוטח מעשן/ת לפני חישוב הפרמיה.",
+    sum_missing: "יש להזין סכום ביטוח תקין (גדול מאפס) לפני חישוב הפרמיה.",
+    rate_missing: "לא נמצא תעריף מתאים לנתונים שהוזנו."
+  };
+
+  /** קומפוננטת סימולטור ריסק מנורה — מודאל עצמאי, לא תלוי במבנה הפנימי של
+      Wizard.renderStep5 מעבר לממשק open(ctx)/onApply. מבנה זהה לסימולטור
+      הפניקס אך עם קידומת lcMnrSim ייחודית ותמיכה במדרגות סכום ביטוח. */
+  const MenoraRiskSimulator = {
+    _modal: null,
+    _ctx: null,
+    _state: {},
+    _activeInsuredId: null,
+    _escHandler: null,
+
+    open(ctx){
+      this.close();
+      this._ctx = ctx || {};
+      const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : [];
+      this._state = {};
+      insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); });
+      this._activeInsuredId = insureds[0]?.id || null;
+      this._mount();
+      this._render();
+    },
+
+    _prefillFromInsured(ins){
+      const d = ins?.data || {};
+      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
+      const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
+      return {
+        age: "",
+        gender, genderSource: gender ? "step1" : "",
+        smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "",
+        sumInsured: "",
+        result: null,
+        error: null
+      };
+    },
+
+    close(){
+      if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; }
+      if(this._modal){
+        const m = this._modal;
+        m.classList.add("giValModal--leaving");
+        window.setTimeout(() => m.remove(), 200);
+        this._modal = null;
+      }
+      this._ctx = null;
+    },
+
+    _mount(){
+      const modal = document.createElement("div");
+      modal.id = "lcMnrSimModal";
+      modal.className = "giValModal lcMnrSimModal";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-label", "סימולטור ריסק מנורה");
+      document.body.appendChild(modal);
+      this._modal = modal;
+      this._escHandler = (ev) => { if(ev.key === "Escape") this.close(); };
+      document.addEventListener("keydown", this._escHandler);
+      requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
+    },
+
+    _getInsuredLabel(insId){
+      const ins = (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === insId);
+      return ins ? safeTrim(ins.label) || "מבוטח" : "מבוטח";
+    },
+
+    _render(){
+      if(!this._modal) return;
+      const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+      const activeId = this._activeInsuredId;
+      const st = this._state[activeId] || this._prefillFromInsured(null);
+
+      const tabsHtml = insureds.length > 1 ? `<div class="lcMnrSim__tabs">${insureds.map((ins) => {
+        const hasResult = !!this._state[ins.id]?.result;
+        return `<button type="button" class="lcMnrSim__tab${ins.id === activeId ? ' is-active' : ''}${hasResult ? ' has-result' : ''}" data-mnr-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${hasResult ? ' ✓' : ''}</button>`;
+      }).join("")}</div>` : "";
+
+      const ageOptionsHtml = `<option value="">בחר גיל…</option>` + MENORA_RISK_AGE_OPTIONS.map((a) =>
+        `<option value="${a}"${String(st.age) === String(a) ? " selected" : ""}>${a}</option>`
+      ).join("");
+
+      const genderHintHtml = st.gender
+        ? (st.genderSource === "step1" ? `<div class="lcMnrSim__hint">נשאב מפרטים אישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
+        : `<div class="lcMnrSim__hint lcMnrSim__hint--warn">לא נמצא מין בפרטים האישיים — יש לבחור</div>`;
+      const smokerHintHtml = (st.smoker === true || st.smoker === false)
+        ? (st.smokerSource === "step1" ? `<div class="lcMnrSim__hint">נשאב מפרטים אישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
+        : `<div class="lcMnrSim__hint lcMnrSim__hint--warn">לא נמצא סטטוס עישון בפרטים האישיים — יש לבחור</div>`;
+
+      const resultHtml = st.error
+        ? `<div class="lcMnrSim__result lcMnrSim__result--error">${escapeHtml(st.error)}</div>`
+        : (st.result ? `<div class="lcMnrSim__result lcMnrSim__result--ok">
+            <div class="lcMnrSim__resultRow"><span>מדרגת סכום ביטוח</span><strong>${escapeHtml(MENORA_RISK_BRACKET_LABELS[st.result.bracket] || "")}</strong></div>
+            <div class="lcMnrSim__resultRow"><span>תעריף חודשי ל-100,000 ₪</span><strong>${escapeHtml(String(st.result.ratePerHundredThousand))} ₪</strong></div>
+            <div class="lcMnrSim__resultRow lcMnrSim__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatMenoraExactAmount(st.result.monthlyPremium))}</strong></div>
+            <div class="lcMnrSim__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatMenoraExactAmount(st.result.annualPremium))}</strong></div>
+          </div>` : "");
+
+      const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
+
+      this._modal.innerHTML = `
+        <div class="giValModal__backdrop" data-mnr-close="1"></div>
+        <div class="giValModal__card lcMnrSim__card">
+          <div class="giValModal__head">
+            <span class="giValModal__headIcon" aria-hidden="true">🛡️</span>
+            <div class="giValModal__headText">
+              <div class="giValModal__title">סימולטור ריסק מנורה</div>
+              <div class="giValModal__sub">חישוב פרמיה מדויק לפי מפת התעריפים הרשמית של מנורה מבטחים</div>
+            </div>
+            <button type="button" class="lcMnrSim__closeX" data-mnr-close="1" aria-label="סגירה">✕</button>
+          </div>
+          <div class="giValModal__body lcMnrSim__body">
+            ${tabsHtml}
+            <div class="lcMnrSim__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>
+            <div class="lcMnrSim__grid">
+              <div class="lcMnrSim__field">
+                <label class="lcMnrSim__label">גיל (${MENORA_RISK_MIN_AGE}–${MENORA_RISK_MAX_AGE})</label>
+                <select class="lcMnrSim__input" data-mnr-field="age">${ageOptionsHtml}</select>
+              </div>
+              <div class="lcMnrSim__field">
+                <label class="lcMnrSim__label">מין</label>
+                <div class="lcMnrSim__segmented">
+                  <button type="button" class="lcMnrSim__segBtn${st.gender === 'זכר' ? ' is-active' : ''}" data-mnr-field="gender" data-mnr-value="זכר">זכר</button>
+                  <button type="button" class="lcMnrSim__segBtn${st.gender === 'נקבה' ? ' is-active' : ''}" data-mnr-field="gender" data-mnr-value="נקבה">נקבה</button>
+                </div>
+                ${genderHintHtml}
+              </div>
+              <div class="lcMnrSim__field">
+                <label class="lcMnrSim__label">עישון</label>
+                <div class="lcMnrSim__segmented">
+                  <button type="button" class="lcMnrSim__segBtn${st.smoker === false ? ' is-active' : ''}" data-mnr-field="smoker" data-mnr-value="0">לא מעשן/ת</button>
+                  <button type="button" class="lcMnrSim__segBtn${st.smoker === true ? ' is-active' : ''}" data-mnr-field="smoker" data-mnr-value="1">מעשן/ת</button>
+                </div>
+                ${smokerHintHtml}
+              </div>
+              <div class="lcMnrSim__field">
+                <label class="lcMnrSim__label">סכום ביטוח (₪)</label>
+                <input class="lcMnrSim__input" type="text" inputmode="numeric" data-mnr-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="לדוגמה: 1,000,000" />
+              </div>
+            </div>
+            <button type="button" class="btn btn--secondary lcMnrSim__calcBtn" data-mnr-calc="1">חשב פרמיה</button>
+            ${resultHtml}
+          </div>
+          <div class="giValModal__foot lcMnrSim__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-mnr-close="1">ביטול</button>
+            <button type="button" class="btn btn--primary" data-mnr-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button>
+          </div>
+        </div>`;
+
+      this._bind();
+    },
+
+    _bind(){
+      const modal = this._modal;
+      if(!modal) return;
+      $$("[data-mnr-close]", modal).forEach((el) => on(el, "click", () => this.close()));
+      $$("[data-mnr-tab]", modal).forEach((el) => on(el, "click", () => {
+        this._activeInsuredId = el.getAttribute("data-mnr-tab");
+        this._render();
+      }));
+      const ageSel = modal.querySelector('[data-mnr-field="age"]');
+      if(ageSel) on(ageSel, "change", () => {
+        const st = this._state[this._activeInsuredId];
+        if(!st) return;
+        st.age = ageSel.value;
+        st.result = null; st.error = null;
+        this._render();
+      });
+      const sumInput = modal.querySelector('[data-mnr-field="sumInsured"]');
+      if(sumInput) on(sumInput, "input", () => {
+        const st = this._state[this._activeInsuredId];
+        if(!st) return;
+        st.sumInsured = sumInput.value;
+        st.result = null; st.error = null;
+      });
+      $$('[data-mnr-field="gender"]', modal).forEach((btn) => on(btn, "click", () => {
+        const st = this._state[this._activeInsuredId];
+        if(!st) return;
+        st.gender = btn.getAttribute("data-mnr-value") || "";
+        st.genderSource = "manual";
+        st.result = null; st.error = null;
+        this._render();
+      }));
+      $$('[data-mnr-field="smoker"]', modal).forEach((btn) => on(btn, "click", () => {
+        const st = this._state[this._activeInsuredId];
+        if(!st) return;
+        st.smoker = btn.getAttribute("data-mnr-value") === "1";
+        st.smokerSource = "manual";
+        st.result = null; st.error = null;
+        this._render();
+      }));
+      const calcBtn = modal.querySelector("[data-mnr-calc]");
+      if(calcBtn) on(calcBtn, "click", () => this._calc(this._activeInsuredId));
+      const applyBtn = modal.querySelector("[data-mnr-apply]");
+      if(applyBtn) on(applyBtn, "click", () => this._apply());
+    },
+
+    _calc(insuredId){
+      const st = this._state[insuredId];
+      if(!st) return;
+      const sumNum = Number(String(st.sumInsured || "").replace(/[^\d.]/g, ""));
+      const calc = computeMenoraRiskPremium({ age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: sumNum });
+      if(calc.ok){
+        st.result = calc;
+        st.error = null;
+      } else {
+        st.result = null;
+        st.error = MENORA_RISK_SIM_MISSING_MESSAGES[calc.reason] || "לא נמצא תעריף מתאים לנתונים שהוזנו.";
+      }
+      this._render();
+    },
+
+    _apply(){
+      const results = {};
+      Object.keys(this._state).forEach((insId) => {
+        const st = this._state[insId];
+        if(st?.result?.ok){
+          results[insId] = {
+            sumInsured: st.sumInsured,
+            monthlyPremium: st.result.monthlyPremium,
+            annualPremium: st.result.annualPremium,
+            ratePerHundredThousand: st.result.ratePerHundredThousand,
+            bracket: st.result.bracket,
+            age: st.age, gender: st.gender, smoker: st.smoker,
+            genderSource: st.genderSource, smokerSource: st.smokerSource
+          };
+        }
+      });
+      if(!Object.keys(results).length){
+        window.showToast?.({ title: "אין תוצאה להחלה", text: "יש לחשב פרמיה לפחות למבוטח אחד לפני ההחלה על הפוליסה.", variant: "warn" });
+        return;
+      }
+      const onApply = this._ctx?.onApply;
+      this.close();
+      try { onApply?.(results); } catch(_e) {}
+    }
+  };
+
+  RiskSimulators.register("מנורה", "ריסק", MenoraRiskSimulator);
+  // ===== סוף GI-MNR-RISK-SIM =====================================================
+
   // ---------- New Customer Wizard (Steps 1–7) ----------
   const DISCOUNT_SELECT_PLACEHOLDER = 'בחר הנחה';
   const TZAHAL_CLINIC = "קופה צהלית";
@@ -41993,8 +42359,8 @@ if(path === "birthDate"){
       }
     },
 
-    /** GI-PHX-RISK-SIM: פותח את הסימולטור הרשום ל-(חברה, מוצר) הנוכחיים בטיוטה
-        (כרגע: הפניקס + ריסק בלבד). אופציונלי לחלוטין — אם אין handler רשום,
+    /** GI-RISK-SIM: פותח את הסימולטור הרשום ל-(חברה, מוצר) הנוכחיים בטיוטה
+        (כרגע: הפניקס+ריסק ומנורה+ריסק). אופציונלי לחלוטין — אם אין handler רשום,
         לא קורה כלום. תוצאת הסימולטור ממלאת רק שדות קיימים בטיוטה, ולא נשמרת
         בשום מקום עד שהנציג לוחץ על כפתור השמירה הקיים של הפוליסה. */
     openRiskSimulator(){
@@ -42015,19 +42381,18 @@ if(path === "birthDate"){
           const draft = this.policyDraft;
           draft.sumInsuredPerInsured = draft.sumInsuredPerInsured || {};
           draft.premiumPerInsured = draft.premiumPerInsured || {};
-          draft.phoenixRiskQuotes = draft.phoenixRiskQuotes || {};
+          draft.riskSimQuotes = draft.riskSimQuotes || {};
           Object.keys(resultsByInsuredId).forEach((insId) => {
             const r = resultsByInsuredId[insId];
             draft.sumInsuredPerInsured[insId] = safeTrim(r.sumInsured);
             draft.premiumPerInsured[insId] = r.monthlyPremium.toFixed(2);
-            draft.phoenixRiskQuotes[insId] = {
-              age: r.age, gender: r.gender, smoker: r.smoker,
-              genderSource: r.genderSource, smokerSource: r.smokerSource,
-              ratePerMille: r.ratePerMille,
-              annualPremium: r.annualPremium,
-              monthlyPremium: r.monthlyPremium,
-              computedAt: nowISO()
-            };
+            // שדה מטא-דאטה גנרי — שומר את כל פלט הסימולטור (כל שדות התעריף
+            // הייחודיים לחברה, כגון ratePerMille להפניקס או ratePerHundredThousand
+            // ו-bracket למנורה) בלי לקודד שם שדות ספציפיים לחברה מסוימת.
+            draft.riskSimQuotes[insId] = Object.assign({}, r, {
+              company: d.company, product: d.type, computedAt: nowISO()
+            });
+            delete draft.riskSimQuotes[insId].sumInsured;
           });
           this.resetPremiumSanityState();
           this.render();
@@ -42071,13 +42436,13 @@ if(path === "birthDate"){
         pledge: !!d.pledge,
         pledgeBanks: this.normalizePledgeBanks(d).map(b => Object.assign(this.emptyPledgeBank(), b)),
         beneficiaries: Array.isArray(d.beneficiaries) ? JSON.parse(JSON.stringify(d.beneficiaries)) : [],
-        // GI-PHX-RISK-SIM: שדה מטא-דאטה חדש ואופציונלי בלבד — לתיעוד שקיפות
-        // מתי/איך פרמיה חושבה ע"י סימולטור ריסק הפניקס (לפי מבוטח). לא נוגע,
-        // לא דורס ולא משנה שום שדה קיים בפוליסה.
-        phoenixRiskQuotes: (d.phoenixRiskQuotes && typeof d.phoenixRiskQuotes === "object")
-          ? JSON.parse(JSON.stringify(d.phoenixRiskQuotes)) : undefined
+        // GI-RISK-SIM: שדה מטא-דאטה חדש ואופציונלי בלבד — לתיעוד שקיפות מתי/איך
+        // פרמיה חושבה ע"י סימולטור ריסק כלשהו (הפניקס/מנורה/עתידי, לפי מבוטח).
+        // לא נוגע, לא דורס ולא משנה שום שדה קיים בפוליסה.
+        riskSimQuotes: (d.riskSimQuotes && typeof d.riskSimQuotes === "object")
+          ? JSON.parse(JSON.stringify(d.riskSimQuotes)) : undefined
       };
-      if(!p.phoenixRiskQuotes) delete p.phoenixRiskQuotes;
+      if(!p.riskSimQuotes) delete p.riskSimQuotes;
       this.normalizePledgeBanks(p);
       if(this.isCustomerPurchaseMode()) p._purchaseSession = true;
       this.normalizeHealthPolicyPremiums(p);
