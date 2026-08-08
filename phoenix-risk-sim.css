@@ -1,0 +1,155 @@
+/* ===== GI-PHX-RISK-SIM 2026-08-08 · סימולטור ריסק הפניקס =====================
+   קובץ CSS מבודד ועצמאי לחלוטין. כל המחלקות כאן ממוסגרות בקידומת ייחודית
+   "lcPhxSim" / "lcPhxSimBanner" שלא קיימת בשום מקום אחר באפליקציה, כדי שלא
+   תהיה שום התנגשות עם app.css / theme.css / theme-p2.css הקיימים.
+   אין בקובץ הזה שום שינוי לסלקטור גלובלי (body, .btn, .input וכו') — רק
+   מחלקות חדשות וממוקדות, פרט לכללי גודל/מיקום שממוענים במפורש דרך
+   הקידומת lcPhxSim (למשל ".lcPhxSimModal .giValModal__card"), שמשפיעים
+   רק על המודאל הזה בעצמו ולא על מודאלים אחרים במערכת שמשתמשים ב-giValModal. */
+
+/* ---------- באנר "פתח סימולטור הפניקס" בתוך שלב 5 ---------- */
+.lcPhxSimBanner{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  margin-top:14px;
+  padding:14px 16px;
+  border-radius:14px;
+  border:1px solid #dbe4f3;
+  background:linear-gradient(135deg,#f4f8ff 0%,#eef3ff 100%);
+}
+.lcPhxSimBanner__text{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+.lcPhxSimBanner__title{ font-weight:700; font-size:14.5px; color:#1e3a8a; }
+.lcPhxSimBanner__sub{ font-size:12.5px; color:#5b6b8c; }
+.lcPhxSimBanner__btn{
+  flex-shrink:0;
+  border:1px solid #2563eb;
+  background:#2563eb;
+  color:#fff;
+  font-weight:600;
+  font-size:13.5px;
+  padding:10px 16px;
+  border-radius:10px;
+  cursor:pointer;
+  white-space:nowrap;
+  transition:background .15s ease, transform .1s ease;
+}
+.lcPhxSimBanner__btn:hover{ background:#1d4ed8; }
+.lcPhxSimBanner__btn:active{ transform:scale(.97); }
+
+@media (max-width: 560px){
+  .lcPhxSimBanner{ flex-direction:column; align-items:stretch; }
+  .lcPhxSimBanner__btn{ width:100%; }
+}
+
+/* ---------- מודאל הסימולטור (מבוסס על .giValModal הגלובלי הקיים, בלי לשנות אותו) ---------- */
+.lcPhxSimModal .giValModal__card{
+  max-width:520px;
+  width:100%;
+}
+.lcPhxSim__closeX{
+  position:absolute;
+  top:14px;
+  left:14px;
+  border:none;
+  background:transparent;
+  color:#94a3b8;
+  font-size:16px;
+  line-height:1;
+  cursor:pointer;
+  padding:4px 8px;
+  border-radius:8px;
+}
+.lcPhxSim__closeX:hover{ background:#f1f5f9; color:#334155; }
+
+.lcPhxSim__tabs{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-bottom:14px;
+}
+.lcPhxSim__tab{
+  border:1px solid #e2e8f0;
+  background:#f8fafc;
+  color:#334155;
+  font-size:12.5px;
+  font-weight:600;
+  padding:7px 12px;
+  border-radius:9px;
+  cursor:pointer;
+}
+.lcPhxSim__tab.is-active{ border-color:#2563eb; background:#eaf1ff; color:#1d4ed8; }
+.lcPhxSim__tab.has-result{ border-color:#22c55e; }
+
+.lcPhxSim__insuredLabel{
+  font-size:13px;
+  color:#475569;
+  margin-bottom:12px;
+}
+
+.lcPhxSim__grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:14px;
+  margin-bottom:14px;
+}
+.lcPhxSim__field{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+.lcPhxSim__label{ font-size:12.5px; font-weight:600; color:#475569; }
+.lcPhxSim__input{
+  border:1px solid #e2e8f0;
+  border-radius:9px;
+  padding:9px 11px;
+  font-size:14px;
+  background:#fff;
+  color:#0f172a;
+  width:100%;
+  box-sizing:border-box;
+}
+.lcPhxSim__input:focus{ outline:none; border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+
+.lcPhxSim__segmented{ display:flex; gap:6px; }
+.lcPhxSim__segBtn{
+  flex:1;
+  border:1px solid #e2e8f0;
+  background:#f8fafc;
+  color:#334155;
+  font-size:13px;
+  font-weight:600;
+  padding:8px 6px;
+  border-radius:9px;
+  cursor:pointer;
+  text-align:center;
+}
+.lcPhxSim__segBtn.is-active{ border-color:#2563eb; background:#2563eb; color:#fff; }
+
+.lcPhxSim__hint{ font-size:11.5px; color:#94a3b8; }
+.lcPhxSim__hint--warn{ color:#b45309; }
+
+.lcPhxSim__calcBtn{ width:100%; margin-bottom:12px; }
+
+.lcPhxSim__result{
+  border-radius:12px;
+  padding:12px 14px;
+  font-size:13.5px;
+}
+.lcPhxSim__result--error{
+  background:#fef2f2;
+  border:1px solid #fecaca;
+  color:#b91c1c;
+  font-weight:600;
+}
+.lcPhxSim__result--ok{
+  background:#f0fdf4;
+  border:1px solid #bbf7d0;
+  color:#166534;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.lcPhxSim__resultRow{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.lcPhxSim__resultRow--main{ font-size:16px; font-weight:800; border-top:1px dashed #bbf7d0; padding-top:6px; margin-top:2px; }
+
+@media (max-width: 560px){
+  .lcPhxSim__grid{ grid-template-columns:1fr; }
+}

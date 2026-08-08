@@ -28014,6 +28014,343 @@ UsersGateUI.init();
     window.__giToggleKpiBreakdown = (btn) => DashboardUI.toggleKpiBreakdown(btn);
   } catch(_e) {}
 
+  // ===== GI-PHX-RISK-SIM 2026-08-08 · סימולטור ריסק הפניקס =====================
+  // תוסף עצמאי ומבודד לשלב 5 (פוליסות חדשות) — לא נוגע בשום קוד קיים של Wizard.
+  // מקור התעריפים: "תעריפי ריסק פניקס.pdf" (תעריף ריסק, גרסה 05.2026) — פרמיה
+  // שנתית לכל 1,000 ₪ סכום ביטוח, לפי גיל כניסה בודד (18–79), מין ומעשן/לא מעשן.
+  // זהו מקור האמת היחיד לתמחור ריסק הפניקס בסימולטור הזה — אין להמציא, לקרב
+  // או להשלים ערך שאינו רשום כאן במפורש. כל עדכון תעריפים עתידי מהחברה חייב
+  // לעדכן רק את הטבלה הזו, ולא שום היגיון אחר.
+  //
+  // [age, maleNonSmoker, maleSmoker, femaleNonSmoker, femaleSmoker] — פרמיה שנתית ל-1,000 ₪
+  const PHOENIX_RISK_RATE_TABLE = [
+    [18, 0.84, 1.21, 0.80, 1.15], [19, 0.84, 1.21, 0.80, 1.15], [20, 0.84, 1.21, 0.80, 1.15],
+    [21, 0.84, 1.21, 0.80, 1.15], [22, 0.84, 1.21, 0.80, 1.15], [23, 0.84, 1.21, 0.80, 1.15],
+    [24, 0.84, 1.21, 0.80, 1.15], [25, 0.84, 1.21, 0.80, 1.15], [26, 0.84, 1.21, 0.80, 1.15],
+    [27, 0.84, 1.21, 0.80, 1.15], [28, 0.84, 1.21, 0.80, 1.15], [29, 0.84, 1.21, 0.80, 1.15],
+    [30, 0.84, 1.21, 0.80, 1.15], [31, 0.84, 1.21, 0.80, 1.15], [32, 0.84, 1.25, 0.80, 1.15],
+    [33, 0.84, 1.29, 0.80, 1.15], [34, 0.84, 1.33, 0.80, 1.15], [35, 0.84, 1.38, 0.80, 1.15],
+    [36, 0.84, 1.43, 0.80, 1.15], [37, 0.87, 1.51, 0.80, 1.15], [38, 0.92, 1.60, 0.80, 1.15],
+    [39, 0.97, 1.71, 0.80, 1.15], [40, 1.03, 1.83, 0.80, 1.21], [41, 1.10, 1.97, 0.84, 1.34],
+    [42, 1.17, 2.12, 0.90, 1.48], [43, 1.25, 2.30, 0.96, 1.64], [44, 1.34, 2.50, 1.04, 1.82],
+    [45, 1.46, 2.76, 1.13, 2.05], [46, 1.59, 3.05, 1.23, 2.30], [47, 1.73, 3.38, 1.34, 2.58],
+    [48, 1.90, 3.77, 1.47, 2.91], [49, 2.09, 4.21, 1.61, 3.28], [50, 2.31, 4.71, 1.77, 3.70],
+    [51, 2.55, 5.28, 1.95, 4.17], [52, 2.83, 5.93, 2.15, 4.71], [53, 3.14, 6.67, 2.38, 5.31],
+    [54, 3.50, 7.51, 2.64, 5.99], [55, 3.90, 8.46, 2.92, 6.76], [56, 4.36, 9.54, 3.25, 7.62],
+    [57, 4.87, 10.75, 3.61, 8.59], [58, 5.46, 12.12, 4.02, 9.67], [59, 6.13, 13.66, 4.48, 10.89],
+    [60, 6.88, 15.38, 4.99, 12.24], [61, 7.74, 17.31, 5.57, 13.76], [62, 8.70, 19.46, 6.22, 15.45],
+    [63, 9.80, 21.86, 6.95, 17.33], [64, 11.04, 24.54, 7.77, 19.42], [65, 12.45, 27.51, 8.70, 21.74],
+    [66, 14.05, 30.80, 9.73, 24.31], [67, 15.85, 34.44, 10.90, 27.16], [68, 17.89, 38.46, 12.20, 30.31],
+    [69, 20.21, 42.89, 13.67, 33.78], [70, 22.82, 47.76, 15.32, 37.61], [71, 25.78, 53.10, 17.17, 41.82],
+    [72, 29.12, 58.94, 19.25, 46.45], [73, 32.90, 65.31, 21.58, 51.53], [74, 34.88, 67.80, 22.71, 53.56],
+    [75, 37.11, 70.53, 23.99, 55.81], [76, 41.92, 77.76, 26.90, 61.67], [77, 47.35, 85.58, 30.16, 68.05],
+    [78, 53.47, 94.02, 33.82, 74.98], [79, 60.36, 103.11, 37.92, 82.51]
+  ];
+
+  const PHOENIX_RISK_RATE_MAP = new Map(
+    PHOENIX_RISK_RATE_TABLE.map((row) => [row[0], {
+      maleNonSmoker: row[1], maleSmoker: row[2], femaleNonSmoker: row[3], femaleSmoker: row[4]
+    }])
+  );
+
+  const PHOENIX_RISK_AGE_OPTIONS = PHOENIX_RISK_RATE_TABLE.map((row) => row[0]);
+  const PHOENIX_RISK_MIN_AGE = PHOENIX_RISK_AGE_OPTIONS[0];
+  const PHOENIX_RISK_MAX_AGE = PHOENIX_RISK_AGE_OPTIONS[PHOENIX_RISK_AGE_OPTIONS.length - 1];
+
+  /** התאמה מדויקת בלבד — ללא קירוב/השלמה. מחזיר {ok:false, reason} אם אין התאמה. */
+  function lookupPhoenixRiskRate({ age, gender, smoker }){
+    const ageNum = Number(age);
+    if(!Number.isInteger(ageNum)) return { ok:false, reason:"age_missing" };
+    const row = PHOENIX_RISK_RATE_MAP.get(ageNum);
+    if(!row) return { ok:false, reason:"age_out_of_range" };
+    const genderKey = gender === "זכר" ? "male" : (gender === "נקבה" ? "female" : "");
+    if(!genderKey) return { ok:false, reason:"gender_missing" };
+    if(smoker !== true && smoker !== false) return { ok:false, reason:"smoker_missing" };
+    const rate = row[genderKey + (smoker ? "Smoker" : "NonSmoker")];
+    if(typeof rate !== "number" || !Number.isFinite(rate)) return { ok:false, reason:"rate_missing" };
+    return { ok:true, ratePerMille: rate };
+  }
+
+  /** פרמיה שנתית = (סכום ביטוח / 1000) × תעריף; חודשית = שנתית / 12. חישוב
+      בעשרות-אגורות שלמות למניעת שגיאות float בינאריות — אין כאן שום עיגול עסקי. */
+  function computePhoenixRiskPremium({ age, gender, smoker, sumInsured }){
+    const lookup = lookupPhoenixRiskRate({ age, gender, smoker });
+    if(!lookup.ok) return lookup;
+    const sum = Number(sumInsured);
+    if(!Number.isFinite(sum) || sum <= 0) return { ok:false, reason:"sum_missing" };
+    const rateCenti = Math.round(lookup.ratePerMille * 100); // אגורות ל-1,000 ₪ (התעריף נתון ב-2 ספרות עשרוניות בדוח)
+    const annualPremium = (rateCenti * sum) / 100000; // (rateCenti/100) * sum / 1000
+    const monthlyPremium = annualPremium / 12;
+    return { ok:true, ratePerMille: lookup.ratePerMille, annualPremium, monthlyPremium };
+  }
+
+  /** תצוגת סכום מדויקת — ללא כלל עיגול עסקי. מציגה עד 4 ספרות עשריות ומקצצת
+      אפסים מובילים, אך לא פחות מ-2 ספרות (סטנדרט תצוגת מטבע). */
+  function formatPhoenixExactAmount(n){
+    if(!Number.isFinite(n)) return "";
+    let s = n.toFixed(4);
+    if(s.indexOf(".") !== -1){
+      s = s.replace(/0+$/, "");
+      if(s.endsWith(".")) s += "00";
+      else if(s.split(".")[1].length === 1) s += "0";
+    }
+    return s;
+  }
+
+  const PHOENIX_RISK_SIM_MISSING_MESSAGES = {
+    age_missing: "יש לבחור גיל לפני חישוב הפרמיה.",
+    age_out_of_range: `לא נמצא תעריף מתאים לגיל שהוזן (התעריפון מכיל גילאים ${PHOENIX_RISK_MIN_AGE}–${PHOENIX_RISK_MAX_AGE} בלבד).`,
+    gender_missing: "יש להזין מין לפני חישוב הפרמיה.",
+    smoker_missing: "יש לציין האם המבוטח מעשן/ת לפני חישוב הפרמיה.",
+    sum_missing: "יש להזין סכום ביטוח תקין (גדול מאפס) לפני חישוב הפרמיה.",
+    rate_missing: "לא נמצא תעריף מתאים לנתונים שהוזנו."
+  };
+
+  /** מודול גנרי — רישום סימולטורים לפי (חברה, מוצר), כדי לאפשר הרחבה עתידית
+      (כלל / מגדל / מנורה / איילון וכו') בלי לשנות שוב את שלב 5 של האשף. */
+  const RiskSimulators = {
+    registry: {},
+    _key(company, product){ return safeTrim(company) + "::" + safeTrim(product); },
+    register(company, product, handler){ this.registry[this._key(company, product)] = handler; },
+    getHandler(company, product){ return this.registry[this._key(company, product)] || null; }
+  };
+
+  /** קומפוננטת סימולטור ריסק הפניקס — מודאל עצמאי, לא תלוי במבנה הפנימי של
+      Wizard.renderStep5 מעבר לממשק open(ctx)/onApply. */
+  const PhoenixRiskSimulator = {
+    _modal: null,
+    _ctx: null,
+    _state: {},
+    _activeInsuredId: null,
+    _escHandler: null,
+
+    open(ctx){
+      this.close();
+      this._ctx = ctx || {};
+      const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : [];
+      this._state = {};
+      insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); });
+      this._activeInsuredId = insureds[0]?.id || null;
+      this._mount();
+      this._render();
+    },
+
+    _prefillFromInsured(ins){
+      const d = ins?.data || {};
+      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
+      const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
+      return {
+        age: "",
+        gender, genderSource: gender ? "step1" : "",
+        smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "",
+        sumInsured: "",
+        result: null,
+        error: null
+      };
+    },
+
+    close(){
+      if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; }
+      if(this._modal){
+        const m = this._modal;
+        m.classList.add("giValModal--leaving");
+        window.setTimeout(() => m.remove(), 200);
+        this._modal = null;
+      }
+      this._ctx = null;
+    },
+
+    _mount(){
+      const modal = document.createElement("div");
+      modal.id = "lcPhxSimModal";
+      modal.className = "giValModal lcPhxSimModal";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-label", "סימולטור ריסק הפניקס");
+      document.body.appendChild(modal);
+      this._modal = modal;
+      this._escHandler = (ev) => { if(ev.key === "Escape") this.close(); };
+      document.addEventListener("keydown", this._escHandler);
+      requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
+    },
+
+    _getInsuredLabel(insId){
+      const ins = (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === insId);
+      return ins ? safeTrim(ins.label) || "מבוטח" : "מבוטח";
+    },
+
+    _render(){
+      if(!this._modal) return;
+      const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+      const activeId = this._activeInsuredId;
+      const st = this._state[activeId] || this._prefillFromInsured(null);
+
+      const tabsHtml = insureds.length > 1 ? `<div class="lcPhxSim__tabs">${insureds.map((ins) => {
+        const hasResult = !!this._state[ins.id]?.result;
+        return `<button type="button" class="lcPhxSim__tab${ins.id === activeId ? ' is-active' : ''}${hasResult ? ' has-result' : ''}" data-phx-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${hasResult ? ' ✓' : ''}</button>`;
+      }).join("")}</div>` : "";
+
+      const ageOptionsHtml = `<option value="">בחר גיל…</option>` + PHOENIX_RISK_AGE_OPTIONS.map((a) =>
+        `<option value="${a}"${String(st.age) === String(a) ? " selected" : ""}>${a}</option>`
+      ).join("");
+
+      const genderHintHtml = st.gender
+        ? (st.genderSource === "step1" ? `<div class="lcPhxSim__hint">נשאב מפרטים אישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
+        : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא מין בפרטים האישיים — יש לבחור</div>`;
+      const smokerHintHtml = (st.smoker === true || st.smoker === false)
+        ? (st.smokerSource === "step1" ? `<div class="lcPhxSim__hint">נשאב מפרטים אישיים (שלב 1) — ניתן לשינוי כאן בלבד</div>` : "")
+        : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא סטטוס עישון בפרטים האישיים — יש לבחור</div>`;
+
+      const resultHtml = st.error
+        ? `<div class="lcPhxSim__result lcPhxSim__result--error">${escapeHtml(st.error)}</div>`
+        : (st.result ? `<div class="lcPhxSim__result lcPhxSim__result--ok">
+            <div class="lcPhxSim__resultRow"><span>תעריף שנתי ל-1,000 ₪</span><strong>${escapeHtml(String(st.result.ratePerMille))} ₪</strong></div>
+            <div class="lcPhxSim__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatPhoenixExactAmount(st.result.annualPremium))}</strong></div>
+            <div class="lcPhxSim__resultRow lcPhxSim__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatPhoenixExactAmount(st.result.monthlyPremium))}</strong></div>
+          </div>` : "");
+
+      const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
+
+      this._modal.innerHTML = `
+        <div class="giValModal__backdrop" data-phx-close="1"></div>
+        <div class="giValModal__card lcPhxSim__card">
+          <div class="giValModal__head">
+            <span class="giValModal__headIcon" aria-hidden="true">🛡️</span>
+            <div class="giValModal__headText">
+              <div class="giValModal__title">סימולטור ריסק הפניקס</div>
+              <div class="giValModal__sub">חישוב פרמיה מדויק לפי מפת התעריפים הרשמית של הפניקס (עדכון 05.2026)</div>
+            </div>
+            <button type="button" class="lcPhxSim__closeX" data-phx-close="1" aria-label="סגירה">✕</button>
+          </div>
+          <div class="giValModal__body lcPhxSim__body">
+            ${tabsHtml}
+            <div class="lcPhxSim__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>
+            <div class="lcPhxSim__grid">
+              <div class="lcPhxSim__field">
+                <label class="lcPhxSim__label">גיל (${PHOENIX_RISK_MIN_AGE}–${PHOENIX_RISK_MAX_AGE})</label>
+                <select class="lcPhxSim__input" data-phx-field="age">${ageOptionsHtml}</select>
+              </div>
+              <div class="lcPhxSim__field">
+                <label class="lcPhxSim__label">מין</label>
+                <div class="lcPhxSim__segmented">
+                  <button type="button" class="lcPhxSim__segBtn${st.gender === 'זכר' ? ' is-active' : ''}" data-phx-field="gender" data-phx-value="זכר">זכר</button>
+                  <button type="button" class="lcPhxSim__segBtn${st.gender === 'נקבה' ? ' is-active' : ''}" data-phx-field="gender" data-phx-value="נקבה">נקבה</button>
+                </div>
+                ${genderHintHtml}
+              </div>
+              <div class="lcPhxSim__field">
+                <label class="lcPhxSim__label">עישון</label>
+                <div class="lcPhxSim__segmented">
+                  <button type="button" class="lcPhxSim__segBtn${st.smoker === false ? ' is-active' : ''}" data-phx-field="smoker" data-phx-value="0">לא מעשן/ת</button>
+                  <button type="button" class="lcPhxSim__segBtn${st.smoker === true ? ' is-active' : ''}" data-phx-field="smoker" data-phx-value="1">מעשן/ת</button>
+                </div>
+                ${smokerHintHtml}
+              </div>
+              <div class="lcPhxSim__field">
+                <label class="lcPhxSim__label">סכום ביטוח (₪)</label>
+                <input class="lcPhxSim__input" type="text" inputmode="numeric" data-phx-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="לדוגמה: 1,000,000" />
+              </div>
+            </div>
+            <button type="button" class="btn btn--secondary lcPhxSim__calcBtn" data-phx-calc="1">חשב פרמיה</button>
+            ${resultHtml}
+          </div>
+          <div class="giValModal__foot lcPhxSim__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-phx-close="1">ביטול</button>
+            <button type="button" class="btn btn--primary" data-phx-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button>
+          </div>
+        </div>`;
+
+      this._bind();
+    },
+
+    _bind(){
+      const modal = this._modal;
+      if(!modal) return;
+      $$("[data-phx-close]", modal).forEach((el) => on(el, "click", () => this.close()));
+      $$("[data-phx-tab]", modal).forEach((el) => on(el, "click", () => {
+        this._activeInsuredId = el.getAttribute("data-phx-tab");
+        this._render();
+      }));
+      const ageSel = modal.querySelector('[data-phx-field="age"]');
+      if(ageSel) on(ageSel, "change", () => {
+        const st = this._state[this._activeInsuredId];
+        if(!st) return;
+        st.age = ageSel.value;
+        st.result = null; st.error = null;
+        this._render();
+      });
+      const sumInput = modal.querySelector('[data-phx-field="sumInsured"]');
+      if(sumInput) on(sumInput, "input", () => {
+        const st = this._state[this._activeInsuredId];
+        if(!st) return;
+        st.sumInsured = sumInput.value;
+        st.result = null; st.error = null;
+      });
+      $$('[data-phx-field="gender"]', modal).forEach((btn) => on(btn, "click", () => {
+        const st = this._state[this._activeInsuredId];
+        if(!st) return;
+        st.gender = btn.getAttribute("data-phx-value") || "";
+        st.genderSource = "manual";
+        st.result = null; st.error = null;
+        this._render();
+      }));
+      $$('[data-phx-field="smoker"]', modal).forEach((btn) => on(btn, "click", () => {
+        const st = this._state[this._activeInsuredId];
+        if(!st) return;
+        st.smoker = btn.getAttribute("data-phx-value") === "1";
+        st.smokerSource = "manual";
+        st.result = null; st.error = null;
+        this._render();
+      }));
+      const calcBtn = modal.querySelector("[data-phx-calc]");
+      if(calcBtn) on(calcBtn, "click", () => this._calc(this._activeInsuredId));
+      const applyBtn = modal.querySelector("[data-phx-apply]");
+      if(applyBtn) on(applyBtn, "click", () => this._apply());
+    },
+
+    _calc(insuredId){
+      const st = this._state[insuredId];
+      if(!st) return;
+      const sumNum = Number(String(st.sumInsured || "").replace(/[^\d.]/g, ""));
+      const calc = computePhoenixRiskPremium({ age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: sumNum });
+      if(calc.ok){
+        st.result = calc;
+        st.error = null;
+      } else {
+        st.result = null;
+        st.error = PHOENIX_RISK_SIM_MISSING_MESSAGES[calc.reason] || "לא נמצא תעריף מתאים לנתונים שהוזנו.";
+      }
+      this._render();
+    },
+
+    _apply(){
+      const results = {};
+      Object.keys(this._state).forEach((insId) => {
+        const st = this._state[insId];
+        if(st?.result?.ok){
+          results[insId] = {
+            sumInsured: st.sumInsured,
+            monthlyPremium: st.result.monthlyPremium,
+            annualPremium: st.result.annualPremium,
+            ratePerMille: st.result.ratePerMille,
+            age: st.age, gender: st.gender, smoker: st.smoker,
+            genderSource: st.genderSource, smokerSource: st.smokerSource
+          };
+        }
+      });
+      if(!Object.keys(results).length){
+        window.showToast?.({ title: "אין תוצאה להחלה", text: "יש לחשב פרמיה לפחות למבוטח אחד לפני ההחלה על הפוליסה.", variant: "warn" });
+        return;
+      }
+      const onApply = this._ctx?.onApply;
+      this.close();
+      try { onApply?.(results); } catch(_e) {}
+    }
+  };
+
+  RiskSimulators.register("הפניקס", "ריסק", PhoenixRiskSimulator);
+  // ===== סוף GI-PHX-RISK-SIM =====================================================
+
   // ---------- New Customer Wizard (Steps 1–7) ----------
   const DISCOUNT_SELECT_PLACEHOLDER = 'בחר הנחה';
   const TZAHAL_CLINIC = "קופה צהלית";
@@ -41656,6 +41993,49 @@ if(path === "birthDate"){
       }
     },
 
+    /** GI-PHX-RISK-SIM: פותח את הסימולטור הרשום ל-(חברה, מוצר) הנוכחיים בטיוטה
+        (כרגע: הפניקס + ריסק בלבד). אופציונלי לחלוטין — אם אין handler רשום,
+        לא קורה כלום. תוצאת הסימולטור ממלאת רק שדות קיימים בטיוטה, ולא נשמרת
+        בשום מקום עד שהנציג לוחץ על כפתור השמירה הקיים של הפוליסה. */
+    openRiskSimulator(){
+      this.ensurePolicyDraft();
+      const d = this.policyDraft;
+      const handler = RiskSimulators.getHandler(d.company, d.type);
+      if(!handler) return;
+      const insuredIds = Array.isArray(d.insuredIds) && d.insuredIds.length ? d.insuredIds : (d.insuredId ? [d.insuredId] : []);
+      const insureds = insuredIds.map((id) => this.insureds.find((x) => x.id === id)).filter(Boolean);
+      if(!insureds.length){
+        window.showToast?.({ title: "יש לבחור מבוטח", text: "בחרו מבוטח/ים בשלב 3 לפני פתיחת הסימולטור.", variant: "warn" });
+        return;
+      }
+      handler.open({
+        insureds,
+        onApply: (resultsByInsuredId) => {
+          this.ensurePolicyDraft();
+          const draft = this.policyDraft;
+          draft.sumInsuredPerInsured = draft.sumInsuredPerInsured || {};
+          draft.premiumPerInsured = draft.premiumPerInsured || {};
+          draft.phoenixRiskQuotes = draft.phoenixRiskQuotes || {};
+          Object.keys(resultsByInsuredId).forEach((insId) => {
+            const r = resultsByInsuredId[insId];
+            draft.sumInsuredPerInsured[insId] = safeTrim(r.sumInsured);
+            draft.premiumPerInsured[insId] = r.monthlyPremium.toFixed(2);
+            draft.phoenixRiskQuotes[insId] = {
+              age: r.age, gender: r.gender, smoker: r.smoker,
+              genderSource: r.genderSource, smokerSource: r.smokerSource,
+              ratePerMille: r.ratePerMille,
+              annualPremium: r.annualPremium,
+              monthlyPremium: r.monthlyPremium,
+              computedAt: nowISO()
+            };
+          });
+          this.resetPremiumSanityState();
+          this.render();
+          window.showToast?.({ title: "הפרמיה עודכנה", text: "תוצאת הסימולטור הוחלה על הפוליסה — ניתן לבדוק ולהמשיך כרגיל.", variant: "success" });
+        }
+      });
+    },
+
     addDraftPolicy(){
       this.ensurePolicyDraft();
       const d = this.policyDraft;
@@ -41690,8 +42070,14 @@ if(path === "birthDate"){
         healthCoversWithAmounts: this.buildHealthCoversWithAmounts(d),
         pledge: !!d.pledge,
         pledgeBanks: this.normalizePledgeBanks(d).map(b => Object.assign(this.emptyPledgeBank(), b)),
-        beneficiaries: Array.isArray(d.beneficiaries) ? JSON.parse(JSON.stringify(d.beneficiaries)) : []
+        beneficiaries: Array.isArray(d.beneficiaries) ? JSON.parse(JSON.stringify(d.beneficiaries)) : [],
+        // GI-PHX-RISK-SIM: שדה מטא-דאטה חדש ואופציונלי בלבד — לתיעוד שקיפות
+        // מתי/איך פרמיה חושבה ע"י סימולטור ריסק הפניקס (לפי מבוטח). לא נוגע,
+        // לא דורס ולא משנה שום שדה קיים בפוליסה.
+        phoenixRiskQuotes: (d.phoenixRiskQuotes && typeof d.phoenixRiskQuotes === "object")
+          ? JSON.parse(JSON.stringify(d.phoenixRiskQuotes)) : undefined
       };
+      if(!p.phoenixRiskQuotes) delete p.phoenixRiskQuotes;
       this.normalizePledgeBanks(p);
       if(this.isCustomerPurchaseMode()) p._purchaseSession = true;
       this.normalizeHealthPolicyPremiums(p);
@@ -43001,7 +43387,20 @@ if(path === "birthDate"){
             </button>`;
           }).join("");
 
-      const body2 = `<div class="lcNpProductGrid">${productCards}</div>`;
+      // GI-PHX-RISK-SIM: כפתור אופציונלי — מופיע רק כשיש handler רשום ל-(חברה, מוצר)
+      // הנוכחיים (כרגע: הפניקס + ריסק בלבד). לא מחליף ולא משנה שום שדה קיים —
+      // רק מציע דרך נוספת ואופציונלית למלא את הפרמיה/הסכום הקיימים בשלב 4.
+      const riskSimHandler = !isMedicare ? RiskSimulators.getHandler(d.company, d.type) : null;
+      const riskSimBannerHtml = riskSimHandler ? `
+        <div class="lcPhxSimBanner">
+          <div class="lcPhxSimBanner__text">
+            <div class="lcPhxSimBanner__title">סימולטור ${escapeHtml(d.company)} — ${escapeHtml(d.type)}</div>
+            <div class="lcPhxSimBanner__sub">חישוב פרמיה מדויק לפי מפת התעריפים הרשמית (אופציונלי — לא מחליף את מילוי הפרמיה הרגיל)</div>
+          </div>
+          <button type="button" class="lcPhxSimBanner__btn" data-open-risk-sim="1">פתח סימולטור ${escapeHtml(d.company)}</button>
+        </div>` : "";
+
+      const body2 = `<div class="lcNpProductGrid">${productCards}</div>${riskSimBannerHtml}`;
 
       // ── Section 3: Insured (multi-select) ──
       const selectedInsuredIds = new Set(insuredIds);
@@ -43639,6 +44038,13 @@ if(path === "birthDate"){
             this.render();
           });
         });
+
+        // GI-PHX-RISK-SIM: כפתור "פתח סימולטור" — קיים רק כשיש handler רשום
+        // ל-(חברה, מוצר) הנוכחיים. אופציונלי בלבד, לא נוגע בשום מאזין קיים.
+        const riskSimBtn = this.els.body.querySelector('[data-open-risk-sim]');
+        if(riskSimBtn){
+          on(riskSimBtn, 'click', () => this.openRiskSimulator());
+        }
 
         // insured cards — multi-select toggle
         $$('[data-np-insured]', this.els.body).forEach(btn => {
