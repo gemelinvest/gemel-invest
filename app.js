@@ -16525,7 +16525,7 @@ UsersGateUI.init();
       let policyCount = 0;
       const customerItems = [];
       (Array.isArray(customers) ? customers : []).forEach((rec) => {
-        if(isCustomerPayloadTooHeavyForSyncMetrics(rec)) return;
+        // GI-FIX 2026-08-09c: לא מדלגים על תיקים כבדים — collectAgentAppointmentPolicies קל (existingPolicies בלבד)
         let rows = this.collectAgentAppointmentPolicies(rec);
         if(range && typeof isWithinRangeFn === "function"){
           rows = rows.filter((row) => {
@@ -16563,9 +16563,8 @@ UsersGateUI.init();
     },
 
     /* GI-PERF 2026-08-02 (שלב ט'): גוף הלולאה חולץ לפונקציה נפרדת כדי שאפשר
-       יהיה להריץ אותו במנות. אין כאן שינוי חישובי — אותה מתמטיקה בדיוק. */
+       יהיה להריץ אותו במנות. GI-FIX 2026-08-09c: בלי דילוג על תיקים כבדים. */
     accumulateAgentAppointmentDual(rec, current, previous, currentRange, previousRange, isWithinRangeFn){
-      if(isCustomerPayloadTooHeavyForSyncMetrics(rec)) return;
       const allRows = this.collectAgentAppointmentPolicies(rec);
       if(!allRows.length) return;
       const curRows = [];
@@ -16628,8 +16627,13 @@ UsersGateUI.init();
         (ins?.data?.existingPolicies || []).forEach((p, pIdx) => {
           if(!this.isAgentAppointmentExistingPolicy(ins, p)) return;
           const type = safeTrim(p?.type || p?.product || "פוליסה");
-          const monthlyPremium = safeTrim(p?.monthlyPremium || p?.premiumMonthly || p?.premium || p?.premiumValue || p?.premiumBefore || "");
-          const premiumNum = this.asMoneyNumber(monthlyPremium);
+          // GI-FIX 2026-08-09c: אותה עדיפות שדות כמו getPolicyPremiumAfterDiscount / gi_appt_premium
+          const premiumNum = this.getPolicyPremiumAfterDiscount(p)
+            || this.asMoneyNumber(p?.premiumAfterDiscountValue ?? p?.premiumAfterDiscount)
+            || this.asMoneyNumber(p?.monthlyPremium ?? p?.premiumMonthly ?? p?.premium ?? p?.premiumValue ?? p?.premiumBefore);
+          const monthlyPremium = premiumNum > 0
+            ? String(premiumNum)
+            : safeTrim(p?.monthlyPremium || p?.premiumMonthly || p?.premium || p?.premiumValue || p?.premiumBefore || "");
           const appointmentDate = this.getAgentAppointmentPolicyDate(rec, p, ins);
           const policyNumber = safeTrim(p?.policyNumber);
           const insuredCount = getAgentApptPolicyInsuredCount(p);
@@ -25516,6 +25520,8 @@ UsersGateUI.init();
     /** האם מותר לדרוס overlay שרת בתוצאת חישוב מקומי. */
     _canPromoteLocalMetrics(localMetrics){
       if(!localMetrics || typeof localMetrics !== "object") return false;
+      // GI-FIX 2026-08-09c: לא לקדם באמצע בנייה מנותית — מונע קפיצות ביניים.
+      if(this._metricsBuildBusy) return false;
       if(this._countMissingCustomerPayloadsSafe() > 0) return false;
       if(localMetrics._loading === true) return false;
       // אם יש overlay עם מספרים אמיתיים — אל תחליף באפסים מקומיים
@@ -25531,6 +25537,18 @@ UsersGateUI.init();
       return true;
     },
 
+    _kpiMetricsFingerprint(m){
+      if(!m || typeof m !== "object") return "";
+      return [
+        Math.round((Number(m.netPremium) || 0) * 100),
+        Number(m.soldPolicies) || 0,
+        Math.round((Number(m.agentAppointmentPremium) || 0) * 100),
+        Number(m.agentAppointments) || 0,
+        Number(m.newClients) || 0,
+        Math.round((Number(m.targetPct) || 0) * 10)
+      ].join("|");
+    },
+
     _commitLocalMetricsResult(cacheKey, metricsResult){
       const next = metricsResult && typeof metricsResult === "object" ? metricsResult : null;
       if(!next) return this._metricsCache;
@@ -25542,12 +25560,29 @@ UsersGateUI.init();
         }
         return this._metricsCache;
       }
+      const prev = this._metricsCache;
+      const wasOverlay = prev && prev._serverKpiOverlay === true && prev._localBuildReady !== true;
+      const prevFp = this._kpiMetricsFingerprint(prev);
       next._serverKpiOverlay = false;
       next._localBuildReady = true;
       next._loading = false;
       this._metricsCacheKey = cacheKey;
       this._metricsCache = next;
       this._localMetricsAttemptedKey = "";
+      const nextFp = this._kpiMetricsFingerprint(next);
+      // מעבר overlay→מקומי: רענון אחד בלבד, ורק אם המספרים באמת השתנו
+      if(wasOverlay){
+        this._kpiHandoffFromOverlayAt = Date.now();
+        if(prevFp && nextFp && prevFp !== nextFp){
+          try {
+            console.info("[GI-KPI-HANDOFF] overlay→local", {
+              net: { from: Number(prev.netPremium) || 0, to: Number(next.netPremium) || 0 },
+              appt: { from: Number(prev.agentAppointmentPremium) || 0, to: Number(next.agentAppointmentPremium) || 0 }
+            });
+          } catch(_e) {}
+        }
+      }
+      this._kpiPendingPaintFp = nextFp;
       return next;
     },
 
@@ -25603,8 +25638,7 @@ UsersGateUI.init();
     },
 
     // PERF: one collectPolicies per customer, then bucket into current + previous month.
-    // Optionally fills dailySeries for customers whose month-stamp falls in currentRange
-    // (same rules as buildDailySeries).
+    // GI-FIX 2026-08-09c: גרף יומי לפי _addedAt של כל פוליסה (לא לפי createdAt של הלקוח).
     accumulateCustomerIntoBothAggs(rec, currentAgg, prevAgg, currentRange, previousRange, dailySeries){
       const allNew = CustomersUI.collectNewPoliciesForMetrics(rec, {
         resolveCustomerMonthStamp: (row) => this.resolveCustomerMonthStamp(row)
@@ -25622,21 +25656,27 @@ UsersGateUI.init();
           agg.productTotals[pType] = (agg.productTotals[pType] || 0) + net;
         }
       };
+      const daysTouched = dailySeries && Array.isArray(dailySeries) ? new Set() : null;
       for(const p of allNew){
         const stamp = safeTrim(p?._addedAt) || custStamp;
         if(!stamp) continue;
         if(this.isWithinRange(stamp, currentRange)) addTo(currentAgg, p);
         else if(this.isWithinRange(stamp, previousRange)) addTo(prevAgg, p);
+        if(!daysTouched || !this.isWithinRange(stamp, currentRange)) continue;
+        const dayMs = Date.parse(stamp);
+        if(!Number.isFinite(dayMs)) continue;
+        const day = new Date(dayMs).getDate();
+        const entry = dailySeries[day - 1];
+        if(!entry) continue;
+        entry.premium += this.policyNetPremium(p);
+        daysTouched.add(day);
       }
-      if(!dailySeries || !Array.isArray(dailySeries)) return;
-      if(!custStamp || !this.isWithinRange(custStamp, currentRange)) return;
-      const dayMs = Date.parse(custStamp);
-      if(!Number.isFinite(dayMs)) return;
-      const day = new Date(dayMs).getDate();
-      const entry = dailySeries[day - 1];
-      if(!entry) return;
-      entry.premium += allNew.reduce((sum, p) => sum + this.policyNetPremium(p), 0);
-      entry.clients += 1;
+      if(daysTouched){
+        daysTouched.forEach((day) => {
+          const entry = dailySeries[day - 1];
+          if(entry) entry.clients += 1;
+        });
+      }
     },
 
     finalizeAgg(agg, allCustomers, range){
@@ -26156,7 +26196,7 @@ UsersGateUI.init();
       return { start, end };
     },
 
-    /** GI-FIX: מנהל/טעינה רזה — «נמכר היום» מ-RPC (אותן פונקציות של פרמיה נטו, בטווח היום). */
+    /** GI-FIX: מנהל/טעינה רזה — «נמכר היום» מ-RPC (gi_dashboard_net_premium בטווח היום = בריאות/סיכונים בלבד). */
     ensureTodaySalesServerOverlay(){
       if(this._todaySalesServerBusy) return;
       if(typeof Storage === "undefined" || typeof Storage.loadServerKpis !== "function") return;
@@ -26213,7 +26253,8 @@ UsersGateUI.init();
     buildTodaySalesMetrics(){
       const todayRange = this.getTodayRange();
       const dayKey = todayRange.start.toISOString().slice(0, 10);
-      const cacheKey = this.getMetricsCacheKey() + "|today|" + dayKey + "|elemV1|rpc1";
+      // GI-FIX 2026-08-09c: כרטיס היום = בריאות וסיכונים בלבד (ללא אלמנטרי)
+      const cacheKey = this.getMetricsCacheKey() + "|today|" + dayKey + "|healthRiskOnly|rpc1";
       if(this._todaySalesCacheKey === cacheKey && this._todaySalesCache){
         return this._todaySalesCache;
       }
@@ -26274,19 +26315,14 @@ UsersGateUI.init();
           resolveCustomerMonthStamp: (row) => this.resolveCustomerMonthStamp(row),
           isWithinRange: (stamp, monthRange) => this.isWithinRange(stamp, monthRange)
         });
-        // אותה לוגיקה כמו דוח המכירות היומי — אלמנטרי ב-elementaryPolicies, לא ב-newPolicies
-        const elementarySales = this._collectDailyElementarySales(rec, todayRange);
-        if(!newPolicies.length && !elementarySales.length) return;
+        // כלל עסקי: כרטיס «נמכר היום» / «כמה מכרתי היום» = בריאות וסיכונים בלבד.
+        // אלמנטרי נשאר בדוח מכירות יומי / דשבורד אלמנטרי — לא כאן.
+        if(!newPolicies.length) return;
         countedCustomers.add(rec.id);
         newPolicies.forEach((p) => {
           const premium = this.policyNetPremium(p);
           const rawType = safeTrim(p?.type || "");
           bump(PRODUCT_LABELS[rawType] || (rawType || "אחר"), premium);
-        });
-        elementarySales.forEach((row) => {
-          const premium = Number(row?.premium) || 0;
-          const rawType = safeTrim(row?.product || "");
-          bump(PRODUCT_LABELS[rawType] || (rawType || "אלמנטרי"), premium);
         });
       });
 
@@ -26304,10 +26340,11 @@ UsersGateUI.init();
         _fromServer: false
       };
 
-      // מנהל בטעינה רזה: עדיפות ל-RPC יומי (בשרת כבר יש את המכירות)
+      // מנהל בטעינה רזה: עדיפות ל-RPC יומי (בריאות/סיכונים — אותן פונקציות net_premium)
       const serverOverlay = this._todaySalesServerOverlay;
       if(serverOverlay?.ok && serverOverlay.dayKey === dayKey){
         const localEmpty = !(result.totalPremium > 0 || result.totalPolicies > 0);
+        // בזמן hydration — תמיד RPC (גם אם יש סכום מקומי חלקי) כדי למנוע קפיצות
         if(missingPayloads > 0 || localEmpty){
           result = {
             totalPremium: Number(serverOverlay.totalPremium) || 0,
@@ -26524,15 +26561,29 @@ UsersGateUI.init();
       const range = this.getMonthRange();
       const totalDays = new Date(range.start.getFullYear(), range.start.getMonth() + 1, 0).getDate();
       const daily = Array.from({ length: totalDays }, (_, idx) => ({ day: idx + 1, premium: 0, clients: 0 }));
-      customersMonth.forEach((rec) => {
-        const stamp = Date.parse(this.resolveCustomerMonthStamp(rec));
-        if(!Number.isFinite(stamp)) return;
-        const day = new Date(stamp).getDate();
-        const entry = daily[day - 1];
-        if(!entry) return;
-        const policies = CustomersUI.collectNewPoliciesForMetrics(rec);
-        entry.premium += policies.reduce((sum, p) => sum + this.policyNetPremium(p), 0);
-        entry.clients += 1;
+      // GI-FIX 2026-08-09c: ייחוס לפי _addedAt של פוליסה (כמו KPI), לא לפי createdAt של הלקוח בלבד
+      (Array.isArray(customersMonth) ? customersMonth : []).forEach((rec) => {
+        const custStamp = this.resolveCustomerMonthStamp(rec);
+        const policies = CustomersUI.collectNewPoliciesForMetrics(rec, {
+          resolveCustomerMonthStamp: (row) => this.resolveCustomerMonthStamp(row)
+        });
+        if(!policies.length) return;
+        const daysTouched = new Set();
+        policies.forEach((p) => {
+          const stamp = safeTrim(p?._addedAt) || custStamp;
+          if(!stamp || !this.isWithinRange(stamp, range)) return;
+          const dayMs = Date.parse(stamp);
+          if(!Number.isFinite(dayMs)) return;
+          const day = new Date(dayMs).getDate();
+          const entry = daily[day - 1];
+          if(!entry) return;
+          entry.premium += this.policyNetPremium(p);
+          daysTouched.add(day);
+        });
+        daysTouched.forEach((day) => {
+          const entry = daily[day - 1];
+          if(entry) entry.clients += 1;
+        });
       });
       return daily.map((item) => ({ ...item, premium: Math.round(item.premium * 100) / 100 }));
     },
@@ -26822,7 +26873,8 @@ UsersGateUI.init();
         return this._dailyAgentsCache;
       }
 
-      // אותה לוגיקה כמו כרטיס «נמכר היום» — רק פוליסות חדשות בטווח היום, מחולק לנציג
+      // פוליסות חדשות בטווח היום (בריאות/סיכונים) — כמו כרטיס «נמכר היום»;
+      // אלמנטרי מתווסף כאן לדוח המכירות היומי בלבד (לא לכרטיס הדשבורד).
       const map = Object.create(null);
       const lines = [];
       const groupMap = Object.create(null);
@@ -28057,6 +28109,19 @@ UsersGateUI.init();
       const root       = this.els.root;
       if(!root) return;
 
+      // GI-FIX 2026-08-09c: לא לצבוע שוב אם טביעת האצבע זהה (מונע ריצוד)
+      const monthFp = this._kpiMetricsFingerprint(metrics);
+      const todayFp = [
+        Math.round((Number(todaySales?.totalPremium) || 0) * 100),
+        Number(todaySales?.totalPolicies) || 0,
+        Number(todaySales?.newClients) || 0,
+        todaySales?._fromServer ? "s" : "l"
+      ].join("|");
+      const paintFp = monthFp + "#" + todayFp;
+      if(this._lastKpiPaintFp === paintFp && !this._kpiPendingPaintFp){
+        return;
+      }
+
       // GI-FIX: לא צובעים ₪0 מעל מספרים טובים בזמן shell/טעינה/רענון חלקי
       const paintedMoneyLooksReal = (txt) => {
         const s = safeTrim(txt);
@@ -28109,9 +28174,26 @@ UsersGateUI.init();
       const issuedPremiumKpi = this.buildDailyReportIssuedPremiumKpi(!!metrics.orgScope);
 
       const cardData = [
-        { value: this.formatMoney(metrics.netPremium),               delta: metrics.netDelta,                    breakdown: netBreakdownHtml },
-        { value: issuedPremiumKpi.value, he: issuedPremiumKpi.he, deltaText: issuedPremiumKpi.deltaText, deltaClass: issuedPremiumKpi.deltaClass, breakdown: issuedPremiumKpi.breakdown },
-        { value: this.formatMoney(metrics.agentAppointmentPremium),  delta: metrics.agentAppointmentPremiumDelta, breakdown: agentBreakdownHtml }
+        {
+          value: this.formatMoney(metrics.netPremium),
+          delta: metrics.netDelta,
+          breakdown: netBreakdownHtml,
+          hint: "פוליסות חדשות · בריאות וסיכונים · מתחילת החודש"
+        },
+        {
+          value: issuedPremiumKpi.value,
+          he: issuedPremiumKpi.he,
+          deltaText: issuedPremiumKpi.deltaText,
+          deltaClass: issuedPremiumKpi.deltaClass,
+          breakdown: issuedPremiumKpi.breakdown,
+          hint: "מדוח יומי · סטטוס הופק בלבד"
+        },
+        {
+          value: this.formatMoney(metrics.agentAppointmentPremium),
+          delta: metrics.agentAppointmentPremiumDelta,
+          breakdown: agentBreakdownHtml,
+          hint: "מינויי סוכן בלבד · לא נכלל ביעד"
+        }
       ];
 
       const applyKpiDatum = (card, datum) => {
@@ -28120,6 +28202,18 @@ UsersGateUI.init();
         if(datum.he){
           const heEl = card.querySelector('.bankKpi__he');
           if(heEl && heEl.textContent !== datum.he) heEl.textContent = datum.he;
+        }
+        if(datum.hint){
+          let hintEl = card.querySelector('.bankKpi__hint');
+          if(!hintEl){
+            const top = card.querySelector('.bankKpi__top');
+            hintEl = document.createElement('div');
+            hintEl.className = 'bankKpi__hint';
+            if(top && top.nextSibling) card.insertBefore(hintEl, top.nextSibling);
+            else if(top) top.insertAdjacentElement('afterend', hintEl);
+            else card.prepend(hintEl);
+          }
+          if(hintEl.textContent !== datum.hint) hintEl.textContent = datum.hint;
         }
         const valEl = card.querySelector('.bankKpi__value');
         if(valEl && valEl.textContent !== value) valEl.textContent = value;
@@ -28198,6 +28292,18 @@ UsersGateUI.init();
       // כרטיס today — תמיד מספר (₪0 עד שיש נתונים), בלי «טוען…»
       const todayCard = root.querySelector('#bankKpiTodayCard');
       if(todayCard && !skipTodayZeroPaint){
+        const todayHintEl = todayCard.querySelector('.bankKpi__hint');
+        const todayHintTxt = "בריאות וסיכונים בלבד · היום";
+        if(todayHintEl && todayHintEl.textContent !== todayHintTxt) todayHintEl.textContent = todayHintTxt;
+        else if(!todayHintEl){
+          const top = todayCard.querySelector('.bankKpi__top');
+          if(top){
+            const hintEl = document.createElement('div');
+            hintEl.className = 'bankKpi__hint';
+            hintEl.textContent = todayHintTxt;
+            top.insertAdjacentElement('afterend', hintEl);
+          }
+        }
         const valEl = todayCard.querySelector('.bankKpi__value');
         const newVal = this.formatMoney(todaySales.totalPremium || 0);
         if(valEl && valEl.textContent !== newVal) valEl.textContent = newVal;
@@ -28217,6 +28323,10 @@ UsersGateUI.init();
       this.revealKpiMetricValues(root);
       try { this.refreshDailySalesReportPanel(); } catch(_e){}
       try { this.refreshDashboardListPanels(); } catch(_e){}
+      if(!skipMonthZeroPaint || !skipTodayZeroPaint){
+        this._lastKpiPaintFp = paintFp;
+        this._kpiPendingPaintFp = "";
+      }
     },
 
     leaderboardAgentSub(agent, isYesterday){
@@ -28544,12 +28654,14 @@ UsersGateUI.init();
           : `<div class="bankKpiTodayRow bankKpiTodayRow--empty">אין מכירות עדיין היום</div>`;
         const todayValue = this.formatMoney(todaySales.totalPremium || 0);
         const todaySub = `${String(todaySales.totalPolicies || 0)} פוליסות · ${String(todaySales.newClients || 0)} לקוחות${orgScope ? (' · סה״כ ' + (getDashboardScopeLabelHe('office') || 'סיכום')) : ''}`;
+        const todayHint = "בריאות וסיכונים בלבד · היום";
         return `
           <article class="bankKpi card bankKpi--compact bankKpi--today bankKpi--todaySales" id="bankKpiTodayCard" style="display:flex;flex-direction:column;">
             <div class="bankKpi__top">
               <div class="bankKpi__he">${orgScope ? ('נמכר היום (' + (getDashboardScopeLabelHe('allAgents') || 'סיכום') + ')') : 'כמה מכרתי היום'}</div>
               <div class="bankKpi__caret">⌃</div>
             </div>
+            <div class="bankKpi__hint">${escapeHtml(todayHint)}</div>
             <div class="bankKpi__watermark" aria-hidden="true">${premiumCustomerIcon('building')}</div>
             <div class="bankKpi__value">${escapeHtml(todayValue)}</div>
             <div class="bankKpiToday__sub">${escapeHtml(todaySub)}</div>
@@ -28579,15 +28691,17 @@ UsersGateUI.init();
           value: this.formatMoney(metrics.netPremium),
           delta: metrics.netDelta,
           icon: premiumCustomerIcon('briefcase'),
+          hint: 'פוליסות חדשות · בריאות וסיכונים · מתחילת החודש',
           breakdown: netBreakdownHtml
         },
-        issuedPremiumKpi,
+        Object.assign({}, issuedPremiumKpi, { hint: 'מדוח יומי · סטטוס הופק בלבד' }),
         {
           he: 'פרמיה ממינוי סוכן',
           cardClass: 'bankKpi--agentAppoint',
           value: this.formatMoney(metrics.agentAppointmentPremium),
           delta: metrics.agentAppointmentPremiumDelta,
           icon: premiumCustomerIcon('document'),
+          hint: 'מינויי סוכן בלבד · לא נכלל ביעד',
           breakdown: agentBreakdownHtml
         }
       ];
@@ -28637,6 +28751,7 @@ UsersGateUI.init();
                     <div class="bankKpi__he">${escapeHtml(card.he)}</div>
                     <div class="bankKpi__caret">⌃</div>
                   </div>
+                  ${card.hint ? `<div class="bankKpi__hint">${escapeHtml(card.hint)}</div>` : ""}
                   <div class="bankKpi__watermark" aria-hidden="true">${card.icon}</div>
                   <div class="bankKpi__value">${escapeHtml(card.value)}</div>
                   <div class="bankKpi__delta ${card.deltaClass || deltaClass}">${deltaHtml}</div>

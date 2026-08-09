@@ -20456,6 +20456,16 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
 #view-dashboard .bankKpi__top{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; min-height:0; }
 #view-dashboard .bankKpi__caret{ color:#7a90b8; font-size:13px; font-weight:700; transition:transform .24s ease, color .24s ease; }
 #view-dashboard .bankKpi__he{ margin-top:0; font-size:13px; font-weight:700; color:#4a6490; line-height:1.2; transition:transform .24s ease, color .24s ease; }
+#view-dashboard .bankKpi__hint{
+  position:relative;
+  z-index:2;
+  margin:2px 0 0;
+  font-size:11px;
+  font-weight:500;
+  line-height:1.25;
+  color:#7a90b8;
+  max-width:92%;
+}
 #view-dashboard .bankKpi:hover{
   transform:translateY(-6px);
   border-color:rgba(117,154,228,.70);
@@ -20633,6 +20643,10 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
 #view-dashboard .bankKpi--agentAppoint .bankKpi__he,
 #view-dashboard .bankKpi--newClients .bankKpi__he,
 #view-dashboard .bankKpi--todaySales .bankKpi__he,
+#view-dashboard .bankKpi--netPremium .bankKpi__hint,
+#view-dashboard .bankKpi--agentAppoint .bankKpi__hint,
+#view-dashboard .bankKpi--newClients .bankKpi__hint,
+#view-dashboard .bankKpi--todaySales .bankKpi__hint,
 #view-dashboard .bankKpi--netPremium .bankKpi__caret,
 #view-dashboard .bankKpi--agentAppoint .bankKpi__caret,
 #view-dashboard .bankKpi--newClients .bankKpi__caret,
