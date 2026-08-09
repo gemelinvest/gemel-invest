@@ -30234,6 +30234,658 @@ UsersGateUI.init();
   RiskSimulators.register("הפניקס", "ריסק משכנתא", PhoenixMortgageRiskSimulator);
   // ===== סוף GI-PHX-MORT-RISK-SIM =================================================
 
+  // ===== GI-MNR-HEALTH-SIM 2026-08-09 · סימולטור בריאות מנורה ==================
+  // מקור אמת: תעריפי בריאות מנורה (תכניות בסיס/ניתוחים + אמבולטורי/כתבי שירות).
+  // מחלות קשות / סרטן — סימולטורים נפרדים (לא כאן).
+  // כל התעריפים באגורות (שלמים) כדי למנוע סטיית floating-point.
+
+  const MENORA_HEALTH_MIN_AGE = 0;
+  const MENORA_HEALTH_MAX_AGE = 70;
+  const MENORA_HEALTH_AGE_OPTIONS = Array.from({ length: MENORA_HEALTH_MAX_AGE - MENORA_HEALTH_MIN_AGE + 1 }, (_, i) => MENORA_HEALTH_MIN_AGE + i);
+
+  /** המרת שקלים → אגורות בשלמים (קלט מהתעריפון בלבד, עד ספרה אחת אחרי הנקודה). */
+  function menoraHealthShekelsToAgorot(shekels){
+    return Math.round(Number(shekels) * 100);
+  }
+  function menoraHealthAgorotToShekels(agorot){
+    return agorot / 100;
+  }
+  function formatMenoraHealthExactAmount(n){
+    if(!Number.isFinite(n)) return "";
+    const ag = Math.round(n * 100);
+    const whole = Math.trunc(ag / 100);
+    const frac = Math.abs(ag % 100);
+    return whole + "." + String(frac).padStart(2, "0");
+  }
+
+  /** מחפש תעריף בקבוצת גיל. bands: [{min,max,agorot}] או [{min,max,male,female}] */
+  function menoraHealthLookupBand(bands, age){
+    const a = Number(age);
+    if(!Number.isInteger(a)) return null;
+    for(let i = 0; i < bands.length; i++){
+      const b = bands[i];
+      if(a >= b.min && a <= b.max) return b;
+    }
+    return null;
+  }
+
+  /**
+   * קטלוג כיסויים — שמות זהים ל-Wizard.healthCoversByCompany["מנורה"]
+   * (למעט מחלות קשות/סרטן שנשארים סימולטורים נפרדים).
+   * תעריפים באגורות, מדויקים 1:1 מול ה-PDF.
+   */
+  const MENORA_HEALTH_COVERS = [
+    {
+      id: "transplant",
+      label: "השתלות וטיפולים מיוחדים מחוץ לישראל",
+      group: "פוליסת בריאות בסיסית",
+      needsGender: false,
+      bands: [
+        { min:0, max:20, agorot:1000 }, { min:21, max:30, agorot:1600 },
+        { min:31, max:40, agorot:1760 }, { min:41, max:50, agorot:2080 },
+        { min:51, max:55, agorot:2410 }, { min:56, max:60, agorot:2670 },
+        { min:61, max:65, agorot:3040 }, { min:66, max:120, agorot:3150 }
+      ]
+    },
+    {
+      id: "drugs",
+      label: "תרופות מחוץ לסל הבריאות",
+      group: "פוליסת בריאות בסיסית",
+      needsGender: false,
+      bands: [
+        { min:0, max:20, agorot:1260 }, { min:21, max:30, agorot:1840 },
+        { min:31, max:40, agorot:2540 }, { min:41, max:50, agorot:4090 },
+        { min:51, max:55, agorot:5930 }, { min:56, max:60, agorot:7810 },
+        { min:61, max:65, agorot:10650 }, { min:66, max:120, agorot:14210 }
+      ]
+    },
+    {
+      id: "abroad_surgery",
+      label: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל",
+      group: "פוליסת בריאות בסיסית",
+      needsGender: false,
+      bands: [
+        { min:0, max:20, agorot:650 }, { min:21, max:30, agorot:860 },
+        { min:31, max:40, agorot:1020 }, { min:41, max:50, agorot:1270 },
+        { min:51, max:55, agorot:2100 }, { min:56, max:60, agorot:2530 },
+        { min:61, max:65, agorot:2960 }, { min:66, max:120, agorot:3090 }
+      ]
+    },
+    {
+      id: "surgery_first_shekel",
+      label: "ניתוחים בישראל מהשקל הראשון",
+      group: "ניתוחים בישראל",
+      needsGender: false,
+      bands: [
+        { min:0, max:20, agorot:3910 }, { min:21, max:30, agorot:7360 },
+        { min:31, max:40, agorot:12890 }, { min:41, max:50, agorot:17860 },
+        { min:51, max:55, agorot:28400 }, { min:56, max:60, agorot:33670 },
+        { min:61, max:65, agorot:48710 }, { min:66, max:120, agorot:72810 }
+      ]
+    },
+    {
+      id: "surgery_shaban",
+      label: "משלים שב\"ן ללא השתתפות עצמית",
+      group: "ניתוחים בישראל",
+      needsGender: false,
+      bands: [
+        { min:0, max:20, agorot:1830 }, { min:21, max:30, agorot:3450 },
+        { min:31, max:40, agorot:6040 }, { min:41, max:50, agorot:8370 },
+        { min:51, max:55, agorot:13370 }, { min:56, max:60, agorot:16280 },
+        { min:61, max:65, agorot:23910 }, { min:66, max:120, agorot:37280 }
+      ]
+    },
+    {
+      id: "surgery_shaban_5000",
+      label: "משלים שב\"ן עם השתתפות עצמית",
+      group: "ניתוחים בישראל",
+      needsGender: false,
+      bands: [
+        { min:0, max:20, agorot:1420 }, { min:21, max:30, agorot:2670 },
+        { min:31, max:40, agorot:4680 }, { min:41, max:50, agorot:6490 },
+        { min:51, max:55, agorot:10360 }, { min:56, max:60, agorot:12620 },
+        { min:61, max:65, agorot:18530 }, { min:66, max:120, agorot:28900 }
+      ]
+    },
+    {
+      id: "ambulatory_consults",
+      label: "ייעוץ ובדיקות",
+      group: "שירותים אמבולטוריים",
+      needsGender: true,
+      bands: [
+        { min:0, max:20, male:2530, female:2320 },
+        { min:21, max:55, male:3230, female:7520 },
+        { min:56, max:65, male:5120, female:6200 },
+        { min:66, max:70, male:9500, female:11800 },
+        { min:71, max:120, male:16130, female:16700 }
+      ]
+    },
+    {
+      id: "fast_diagnosis",
+      label: "אבחון רפואי מהיר",
+      group: "שירותים אמבולטוריים",
+      needsGender: false,
+      bands: [
+        { min:0, max:14, agorot:730 },
+        { min:15, max:120, agorot:1930 }
+      ]
+    },
+    {
+      id: "tech_devices",
+      label: "טיפולים בטכנולוגיות מתקדמות",
+      group: "שירותים אמבולטוריים",
+      needsGender: false,
+      bands: [
+        { min:0, max:20, agorot:700 }, { min:21, max:30, agorot:1270 },
+        { min:31, max:35, agorot:1310 }, { min:36, max:40, agorot:1440 },
+        { min:41, max:45, agorot:1620 }, { min:46, max:50, agorot:1890 },
+        { min:51, max:55, agorot:2180 }, { min:56, max:60, agorot:2780 },
+        { min:61, max:65, agorot:3410 }, { min:66, max:120, agorot:4530 }
+      ]
+    },
+    {
+      id: "child_dev",
+      label: "טיפול ואבחון לילד",
+      group: "כתבי שירות",
+      needsGender: false,
+      maxAge: 21,
+      bands: [
+        { min:0, max:21, agorot:2880 }
+      ]
+    },
+    {
+      id: "top_complementary",
+      label: "TOP רפואה משלימה",
+      group: "כתבי שירות",
+      needsGender: false,
+      bands: [
+        { min:0, max:20, agorot:1250 },
+        { min:21, max:120, agorot:2720 }
+      ]
+    },
+    {
+      id: "top_preventive",
+      label: "TOP מניעתית — בריאות חיים ובדיקות מניעה",
+      group: "כתבי שירות",
+      needsGender: false,
+      bands: [
+        { min:0, max:20, agorot:870 },
+        { min:21, max:120, agorot:2240 }
+      ]
+    },
+    {
+      id: "smart_dr",
+      label: "Smart DR — ייעוץ רפואי וניווק עד הבית",
+      group: "כתבי שירות",
+      needsGender: false,
+      bands: [
+        { min:0, max:20, agorot:840 },
+        { min:21, max:120, agorot:1610 }
+      ]
+    }
+  ];
+
+  const MENORA_HEALTH_COVER_BY_ID = MENORA_HEALTH_COVERS.reduce((acc, c) => { acc[c.id] = c; return acc; }, {});
+
+  /** מחשב פרמיה חודשית לכיסוי בודד. מחזיר {ok, monthlyPremium, monthlyAgorot, reason?} */
+  function computeMenoraHealthCoverPremium(coverId, age, gender){
+    const cover = MENORA_HEALTH_COVER_BY_ID[coverId];
+    if(!cover) return { ok:false, reason:"cover_missing" };
+    const a = Number(age);
+    if(!Number.isInteger(a)) return { ok:false, reason:"age_missing" };
+    if(a < MENORA_HEALTH_MIN_AGE || a > MENORA_HEALTH_MAX_AGE) return { ok:false, reason:"age_out_of_range" };
+    if(cover.maxAge != null && a > cover.maxAge) return { ok:false, reason:"age_cover_limit", coverMaxAge: cover.maxAge };
+    const band = menoraHealthLookupBand(cover.bands, a);
+    if(!band) return { ok:false, reason:"rate_missing" };
+    let agorot = null;
+    if(cover.needsGender){
+      if(gender !== "זכר" && gender !== "נקבה") return { ok:false, reason:"gender_missing" };
+      agorot = gender === "זכר" ? band.male : band.female;
+    } else {
+      agorot = band.agorot;
+    }
+    if(!Number.isInteger(agorot)) return { ok:false, reason:"rate_missing" };
+    return { ok:true, monthlyAgorot: agorot, monthlyPremium: menoraHealthAgorotToShekels(agorot), coverId: cover.id, label: cover.label };
+  }
+
+  /** מחשב סל כיסויים נבחרים — סכום אגורות מדויק */
+  function computeMenoraHealthBundle(selectedIds, age, gender){
+    const ids = Array.isArray(selectedIds) ? selectedIds : [];
+    if(!ids.length) return { ok:false, reason:"covers_missing", covers:[], monthlyAgorot:0, monthlyPremium:0, annualPremium:0 };
+    const covers = [];
+    let totalAg = 0;
+    for(let i = 0; i < ids.length; i++){
+      const one = computeMenoraHealthCoverPremium(ids[i], age, gender);
+      if(!one.ok) return { ok:false, reason: one.reason, failCoverId: ids[i], coverMaxAge: one.coverMaxAge, covers:[], monthlyAgorot:0, monthlyPremium:0, annualPremium:0 };
+      covers.push({ id: one.coverId, label: one.label, monthlyPremium: one.monthlyPremium, monthlyAgorot: one.monthlyAgorot });
+      totalAg += one.monthlyAgorot;
+    }
+    const monthly = menoraHealthAgorotToShekels(totalAg);
+    return {
+      ok: true,
+      covers,
+      monthlyAgorot: totalAg,
+      monthlyPremium: monthly,
+      annualPremium: menoraHealthAgorotToShekels(totalAg * 12)
+    };
+  }
+
+  const MENORA_HEALTH_SIM_MESSAGES = {
+    age_missing: "יש לבחור גיל לפני חישוב הפרמיה.",
+    age_out_of_range: `לא נמצא תעריף מתאים לגיל שהוזן (טווח כניסה ${MENORA_HEALTH_MIN_AGE}–${MENORA_HEALTH_MAX_AGE}).`,
+    gender_missing: "יש לבחור מין — נדרש לכיסוי ייעוץ ובדיקות.",
+    covers_missing: "יש לסמן לפחות כיסוי אחד.",
+    age_cover_limit: "הגיל חורג מהמותר לכיסוי שנבחר.",
+    rate_missing: "לא נמצא תעריף מתאים לנתונים שהוזנו.",
+    cover_missing: "כיסוי לא מזוהה בתעריפון."
+  };
+
+  const MenoraHealthSimulator = {
+    _modal: null,
+    _ctx: null,
+    _state: {},
+    _activeInsuredId: null,
+    _escHandler: null,
+    _confirmSwitch: null,
+    _showFinalSummary: false,
+
+    open(ctx){
+      this.close();
+      this._ctx = ctx || {};
+      const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : [];
+      this._state = {};
+      insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); });
+      this._activeInsuredId = insureds[0]?.id || null;
+      this._confirmSwitch = null;
+      this._showFinalSummary = false;
+      this._mount();
+      this._render();
+    },
+
+    _prefillFromInsured(ins){
+      const d = ins?.data || {};
+      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
+      const computedAge = riskSimAgeFromBirthDate(d.birthDate);
+      const ageInRange = Number.isInteger(computedAge) && computedAge >= MENORA_HEALTH_MIN_AGE && computedAge <= MENORA_HEALTH_MAX_AGE;
+      const occupation = safeTrim(d.occupation || "");
+      return {
+        age: ageInRange ? String(computedAge) : "",
+        ageSource: ageInRange ? "step1" : "",
+        ageRaw: computedAge,
+        gender, genderSource: gender ? "step1" : "",
+        occupation,
+        occupationSource: occupation ? "step1" : "",
+        selected: {},
+        result: null,
+        error: null,
+        savedAt: null,
+        dirtySinceSave: false
+      };
+    },
+
+    _isInsuredRelevant(_ins){ return true; },
+
+    close(){
+      if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; }
+      if(this._modal){
+        const m = this._modal;
+        m.classList.add("giValModal--leaving");
+        window.setTimeout(() => m.remove(), 200);
+        this._modal = null;
+      }
+      this._ctx = null;
+    },
+
+    _mount(){
+      const modal = document.createElement("div");
+      modal.id = "lcMnrHealthModal";
+      modal.className = "giValModal lcMnrHealthModal";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-label", "סימולטור בריאות מנורה");
+      document.body.appendChild(modal);
+      this._modal = modal;
+      this._escHandler = (ev) => { if(ev.key === "Escape") this.close(); };
+      document.addEventListener("keydown", this._escHandler);
+      requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
+    },
+
+    _getInsuredLabel(insId){
+      const ins = (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === insId);
+      return ins ? safeTrim(ins.label) || "מבוטח" : "מבוטח";
+    },
+
+    _getActiveInsured(){
+      return (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === this._activeInsuredId) || null;
+    },
+
+    _selectedIds(st){
+      return MENORA_HEALTH_COVERS.map((c) => c.id).filter((id) => !!st?.selected?.[id]);
+    },
+
+    _recalcState(st){
+      if(!st) return;
+      const ids = this._selectedIds(st);
+      if(!ids.length){
+        st.result = null;
+        st.error = null;
+        return;
+      }
+      const calc = computeMenoraHealthBundle(ids, st.age, st.gender);
+      if(calc.ok){
+        st.result = calc;
+        st.error = null;
+      } else {
+        st.result = null;
+        let msg = MENORA_HEALTH_SIM_MESSAGES[calc.reason] || "לא ניתן לחשב את הפרמיה.";
+        if(calc.reason === "age_cover_limit" && calc.failCoverId){
+          const c = MENORA_HEALTH_COVER_BY_ID[calc.failCoverId];
+          msg = `הכיסוי "${c?.label || ""}" זמין עד גיל ${calc.coverMaxAge} בלבד.`;
+        } else if(calc.failCoverId){
+          const c = MENORA_HEALTH_COVER_BY_ID[calc.failCoverId];
+          if(c) msg = `${msg} (${c.label})`;
+        }
+        st.error = msg;
+      }
+    },
+
+    _render(){
+      if(!this._modal) return;
+      const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+      const isMulti = insureds.length > 1;
+      if(this._showFinalSummary){
+        this._renderFinalSummary(insureds);
+        return;
+      }
+      const activeId = this._activeInsuredId;
+      const st = this._state[activeId] || this._prefillFromInsured(null);
+      const isStandalone = !!this._ctx?.standalone;
+      this._recalcState(st);
+
+      const tabsHtml = isMulti ? `<div class="lcMnrHealth__tabs">${insureds.map((ins) => {
+        const s = this._state[ins.id];
+        const statusCls = s?.savedAt ? " has-saved" : (s?.result ? " has-result" : "");
+        return `<button type="button" class="lcMnrHealth__tab${ins.id === activeId ? " is-active" : ""}${statusCls}" data-mnrh-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${s?.savedAt ? " 🟢" : ""}</button>`;
+      }).join("")}</div>` : "";
+
+      const ageOptionsHtml = `<option value="">בחר גיל…</option>` + MENORA_HEALTH_AGE_OPTIONS.map((a) =>
+        `<option value="${a}"${String(st.age) === String(a) ? " selected" : ""}>${a}</option>`
+      ).join("");
+
+      const ageHintHtml = (isStandalone || st.age) ? "" : (
+        Number.isInteger(st.ageRaw)
+          ? `<div class="lcMnrHealth__hint lcMnrHealth__hint--warn">הגיל המחושב (${st.ageRaw}) חורג מטווח הכניסה — יש לבחור גיל ידנית</div>`
+          : `<div class="lcMnrHealth__hint lcMnrHealth__hint--warn">לא נמצא תאריך לידה תקין — יש לבחור גיל</div>`
+      );
+      const genderHintHtml = (isStandalone || st.gender) ? "" : `<div class="lcMnrHealth__hint lcMnrHealth__hint--warn">לא נמצא מין בפרטים האישיים — יש לבחור (נדרש לייעוץ ובדיקות)</div>`;
+
+      const groups = {};
+      MENORA_HEALTH_COVERS.forEach((c) => {
+        if(!groups[c.group]) groups[c.group] = [];
+        groups[c.group].push(c);
+      });
+      const coversHtml = Object.keys(groups).map((g) => `
+        <div class="lcMnrHealth__group">
+          <div class="lcMnrHealth__groupTitle">${escapeHtml(g)}</div>
+          <div class="lcMnrHealth__coverList">
+            ${groups[g].map((c) => {
+              const checked = !!st.selected[c.id];
+              const one = checked ? computeMenoraHealthCoverPremium(c.id, st.age, st.gender) : null;
+              const premTxt = one?.ok ? `₪${formatMenoraHealthExactAmount(one.monthlyPremium)}` : "";
+              return `<label class="lcMnrHealth__cover${checked ? " is-checked" : ""}">
+                <input type="checkbox" data-mnrh-cover="${escapeHtml(c.id)}"${checked ? " checked" : ""} />
+                <span class="lcMnrHealth__coverLabel">${escapeHtml(c.label)}${c.needsGender ? ' <em>(לפי מין)</em>' : ""}${c.maxAge != null ? ` <em>(עד גיל ${c.maxAge})</em>` : ""}</span>
+                <span class="lcMnrHealth__coverPrem">${premTxt}</span>
+              </label>`;
+            }).join("")}
+          </div>
+        </div>`).join("");
+
+      const selectedRows = (st.result?.covers || []).map((c) =>
+        `<div class="lcMnrHealth__selRow"><span>${escapeHtml(c.label)}</span><strong>₪${escapeHtml(formatMenoraHealthExactAmount(c.monthlyPremium))}</strong></div>`
+      ).join("");
+
+      const resultHtml = st.error
+        ? `<div class="lcMnrHealth__result lcMnrHealth__result--error">${escapeHtml(st.error)}</div>`
+        : (st.result ? `<div class="lcMnrHealth__result lcMnrHealth__result--ok">
+            <div class="lcMnrHealth__selTitle">כיסויים שנבחרו</div>
+            ${selectedRows}
+            <div class="lcMnrHealth__resultRow lcMnrHealth__resultRow--main"><span>סה״כ פרמיה חודשית</span><strong>₪${escapeHtml(formatMenoraHealthExactAmount(st.result.monthlyPremium))}</strong></div>
+            <div class="lcMnrHealth__resultRow"><span>סה״כ פרמיה שנתית</span><strong>₪${escapeHtml(formatMenoraHealthExactAmount(st.result.annualPremium))}</strong></div>
+          </div>` : `<div class="lcMnrHealth__result lcMnrHealth__result--empty">סמנו כיסויים כדי לראות פרמיה</div>`);
+
+      const occAssessment = assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product);
+      const occBlockHtml = renderOccupationRiskBlockHtml(occAssessment, "lcMnrHealth");
+      const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company)
+        ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini")
+        : "✚";
+
+      const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
+      const relevantInsureds = insureds.filter((ins) => this._isInsuredRelevant(ins));
+      const allRelevantSaved = relevantInsureds.length > 0 && relevantInsureds.every((ins) => !!this._state[ins.id]?.savedAt);
+
+      const footHtml = isStandalone ? `
+          <div class="giValModal__foot lcMnrHealth__foot">
+            <button type="button" class="btn btn--primary" data-mnrh-close="1">סגור</button>
+          </div>` : (!isMulti ? `
+          <div class="giValModal__foot lcMnrHealth__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-mnrh-close="1">ביטול</button>
+            <button type="button" class="btn btn--primary" data-mnrh-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button>
+          </div>` : `
+          <div class="giValModal__foot lcMnrHealth__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-mnrh-close="1">ביטול</button>
+            <button type="button" class="btn btn--secondary" data-mnrh-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button>
+            <button type="button" class="btn btn--primary" data-mnrh-finalconfirm="1"${allRelevantSaved ? "" : " disabled"}>אישור סופי</button>
+          </div>`);
+
+      const confirmOverlayHtml = this._confirmSwitch ? `
+        <div class="lcMnrHealth__overlay">
+          <div class="lcMnrHealth__overlayCard">
+            <div class="lcMnrHealth__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}. האם לשמור לפני המעבר?</div>
+            <div class="lcMnrHealth__overlayBtns">
+              <button type="button" class="btn btn--primary" data-mnrh-switch="save">שמור ועבור</button>
+              <button type="button" class="btn btn--secondary" data-mnrh-switch="discard">עבור ללא שמירה</button>
+              <button type="button" class="btn" data-mnrh-switch="cancel">ביטול</button>
+            </div>
+          </div>
+        </div>` : "";
+
+      this._modal.innerHTML = `
+        <div class="giValModal__backdrop" data-mnrh-close="1"></div>
+        <div class="giValModal__card lcMnrHealth__card">
+          <div class="giValModal__head">
+            <span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span>
+            <div class="giValModal__headText">
+              <div class="giValModal__title">סימולטור בריאות מנורה</div>
+            </div>
+            <button type="button" class="lcMnrHealth__closeX" data-mnrh-close="1" aria-label="סגירה">✕</button>
+          </div>
+          <div class="giValModal__body lcMnrHealth__body">
+            ${tabsHtml}
+            ${isStandalone
+              ? `<div class="lcMnrHealth__insuredLabel lcMnrHealth__insuredLabel--standalone">מצב חישוב עצמאי — התוצאה לא נשמרת על אף פוליסה</div>`
+              : `<div class="lcMnrHealth__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}
+            <div class="lcMnrHealth__grid">
+              <div class="lcMnrHealth__field">
+                <label class="lcMnrHealth__label">גיל (${MENORA_HEALTH_MIN_AGE}–${MENORA_HEALTH_MAX_AGE})</label>
+                <select class="lcMnrHealth__input" data-mnrh-field="age">${ageOptionsHtml}</select>
+                ${ageHintHtml}
+              </div>
+              <div class="lcMnrHealth__field">
+                <label class="lcMnrHealth__label">מין</label>
+                <div class="lcMnrHealth__segmented">
+                  <button type="button" class="lcMnrHealth__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-mnrh-field="gender" data-mnrh-value="זכר">זכר</button>
+                  <button type="button" class="lcMnrHealth__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-mnrh-field="gender" data-mnrh-value="נקבה">נקבה</button>
+                </div>
+                ${genderHintHtml}
+              </div>
+              <div class="lcMnrHealth__field lcMnrHealth__field--wide">
+                <label class="lcMnrHealth__label">עיסוק</label>
+                <input class="lcMnrHealth__input" type="text" data-mnrh-field="occupation" value="${escapeHtml(st.occupation || "")}" placeholder="לדוגמה: מהנדס, נהג משאית" autocomplete="off" />
+              </div>
+            </div>
+            <div class="lcMnrHealth__coversTitle">בחירת כיסויים</div>
+            ${coversHtml}
+            ${occBlockHtml}
+            ${resultHtml}
+          </div>
+          ${footHtml}
+          ${confirmOverlayHtml}
+        </div>`;
+      this._bind();
+    },
+
+    _renderFinalSummary(insureds){
+      const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+      const rows = relevant.map((ins) => {
+        const ok = !!this._state[ins.id]?.savedAt;
+        return `<div class="lcMnrHealth__summaryRow"><span>${ok ? "✓" : "•"}</span><span>${escapeHtml(safeTrim(ins.label) || "מבוטח")}</span><span>${ok ? "הושלם" : "לא נשמר"}</span></div>`;
+      }).join("");
+      this._modal.innerHTML = `
+        <div class="giValModal__backdrop" data-mnrh-close="1"></div>
+        <div class="giValModal__card lcMnrHealth__card">
+          <div class="giValModal__head">
+            <div class="giValModal__headText">
+              <div class="giValModal__title">סיכום סימולטור להצעה</div>
+            </div>
+            <button type="button" class="lcMnrHealth__closeX" data-mnrh-close="1" aria-label="סגירה">✕</button>
+          </div>
+          <div class="giValModal__body lcMnrHealth__body">${rows}</div>
+          <div class="giValModal__foot lcMnrHealth__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-mnrh-summary-back="1">חזרה</button>
+            <button type="button" class="btn btn--primary" data-mnrh-summary-confirm="1">אישור סופי</button>
+          </div>
+        </div>`;
+      this._bind();
+    },
+
+    _bind(){
+      const modal = this._modal;
+      if(!modal) return;
+      $$("[data-mnrh-close]", modal).forEach((el) => on(el, "click", () => this.close()));
+      $$("[data-mnrh-tab]", modal).forEach((el) => on(el, "click", () => this._switchInsured(el.getAttribute("data-mnrh-tab"))));
+      $$("[data-mnrh-switch]", modal).forEach((el) => on(el, "click", () => {
+        const action = el.getAttribute("data-mnrh-switch");
+        const target = this._confirmSwitch?.targetId;
+        this._confirmSwitch = null;
+        if(action === "save"){ this._saveActive(); if(target) this._activeInsuredId = target; this._render(); }
+        else if(action === "discard"){ if(target) this._activeInsuredId = target; this._render(); }
+        else this._render();
+      }));
+      const ageSel = modal.querySelector('[data-mnrh-field="age"]');
+      if(ageSel) on(ageSel, "change", () => {
+        const st = this._state[this._activeInsuredId];
+        if(!st) return;
+        st.age = ageSel.value; st.ageSource = "manual"; st.dirtySinceSave = true;
+        this._render();
+      });
+      $$('[data-mnrh-field="gender"]', modal).forEach((btn) => on(btn, "click", () => {
+        const st = this._state[this._activeInsuredId];
+        if(!st) return;
+        st.gender = btn.getAttribute("data-mnrh-value") || "";
+        st.genderSource = "manual"; st.dirtySinceSave = true;
+        this._render();
+      }));
+      const occInput = modal.querySelector('[data-mnrh-field="occupation"]');
+      if(occInput){
+        on(occInput, "input", () => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.occupation = safeTrim(occInput.value);
+          st.occupationSource = "manual"; st.dirtySinceSave = true;
+        });
+        on(occInput, "change", () => this._render());
+        on(occInput, "blur", () => this._render());
+      }
+      $$("[data-mnrh-cover]", modal).forEach((el) => on(el, "change", () => {
+        const st = this._state[this._activeInsuredId];
+        if(!st) return;
+        const id = el.getAttribute("data-mnrh-cover");
+        st.selected[id] = !!el.checked;
+        st.dirtySinceSave = true;
+        this._render();
+      }));
+      const applyBtn = modal.querySelector("[data-mnrh-apply]");
+      if(applyBtn) on(applyBtn, "click", () => this._apply());
+      const saveBtn = modal.querySelector("[data-mnrh-save]");
+      if(saveBtn) on(saveBtn, "click", () => this._saveActive());
+      const finalBtn = modal.querySelector("[data-mnrh-finalconfirm]");
+      if(finalBtn) on(finalBtn, "click", () => {
+        const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+        const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+        const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
+        if(!allSaved){
+          window.showToast?.({ title: "לא כל המבוטחים נשמרו", text: "יש לשמור את הסימולטור עבור כל המבוטחים הרלוונטיים לפני האישור הסופי.", variant: "warn" });
+          return;
+        }
+        this._showFinalSummary = true;
+        this._render();
+      });
+      const summaryBackBtn = modal.querySelector("[data-mnrh-summary-back]");
+      if(summaryBackBtn) on(summaryBackBtn, "click", () => { this._showFinalSummary = false; this._render(); });
+      const summaryConfirmBtn = modal.querySelector("[data-mnrh-summary-confirm]");
+      if(summaryConfirmBtn) on(summaryConfirmBtn, "click", () => {
+        try { this._ctx?.onFinalConfirm?.(); } catch(_e){}
+        this.close();
+      });
+    },
+
+    _switchInsured(targetId){
+      if(!targetId || targetId === this._activeInsuredId) return;
+      const st = this._state[this._activeInsuredId];
+      if(st?.dirtySinceSave){ this._confirmSwitch = { targetId }; this._render(); return; }
+      this._activeInsuredId = targetId;
+      this._render();
+    },
+
+    _buildResultForInsured(insId){
+      const st = this._state[insId];
+      this._recalcState(st);
+      if(!st?.result?.ok) return null;
+      return {
+        covers: st.result.covers.map((c) => ({ id: c.id, label: c.label, monthlyPremium: c.monthlyPremium })),
+        monthlyPremium: st.result.monthlyPremium,
+        annualPremium: st.result.annualPremium,
+        monthlyAgorot: st.result.monthlyAgorot,
+        age: st.age, ageSource: st.ageSource, gender: st.gender, genderSource: st.genderSource,
+        occupation: st.occupation || "", occupationSource: st.occupationSource || ""
+      };
+    },
+
+    _apply(){
+      const results = {};
+      Object.keys(this._state).forEach((insId) => {
+        const r = this._buildResultForInsured(insId);
+        if(r) results[insId] = r;
+      });
+      if(!Object.keys(results).length){
+        window.showToast?.({ title: "אין תוצאה להחלה", text: "יש לבחור כיסויים ולחשב פרמיה לפני ההחלה על הפוליסה.", variant: "warn" });
+        return;
+      }
+      const onApply = this._ctx?.onApply;
+      this.close();
+      try { onApply?.(results); } catch(_e) {}
+    },
+
+    _saveActive(){
+      const insId = this._activeInsuredId;
+      const result = this._buildResultForInsured(insId);
+      if(!result){
+        window.showToast?.({ title: "אין תוצאה לשמירה", text: "יש לבחור כיסויים תקינים לפני השמירה.", variant: "warn" });
+        return;
+      }
+      try { this._ctx?.onApply?.({ [insId]: result }); } catch(_e) {}
+      const st = this._state[insId];
+      if(st){ st.savedAt = nowISO(); st.dirtySinceSave = false; }
+      window.showToast?.({ title: "נשמר", text: `הסימולטור עבור ${this._getInsuredLabel(insId)} נשמר על ההצעה.`, variant: "success" });
+      this._render();
+    }
+  };
+
+  RiskSimulators.register("מנורה", "בריאות", MenoraHealthSimulator);
+  // ===== סוף GI-MNR-HEALTH-SIM ====================================================
+
+
   // ===== GI-SIM-CENTER 2026-08-08 · "מרכז הסימולטורים" =============================
   // כפתור עצמאי בטופ-בר (ללא תלות באשף/לקוח/הצעה קיימת) שפותח בורר חברה+מוצר,
   // ולאחר בחירה פותח את אותו סימולטור בדיוק דרך RiskSimulators.getHandler(...)
@@ -44320,11 +44972,19 @@ if(path === "birthDate"){
           draft.riskSimQuotes = draft.riskSimQuotes || {};
           Object.keys(resultsByInsuredId).forEach((insId) => {
             const r = resultsByInsuredId[insId];
-            draft.sumInsuredPerInsured[insId] = safeTrim(r.sumInsured);
-            draft.premiumPerInsured[insId] = r.monthlyPremium.toFixed(2);
+            if(r.sumInsured != null && safeTrim(r.sumInsured) !== ""){
+              draft.sumInsuredPerInsured[insId] = safeTrim(r.sumInsured);
+            }
+            const monthlyNum = Number(r.monthlyPremium);
+            draft.premiumPerInsured[insId] = Number.isFinite(monthlyNum) ? monthlyNum.toFixed(2) : String(r.monthlyPremium);
+            // GI-MNR-HEALTH-SIM: אם הסימולטור החזיר רשימת כיסויים — מעדכנים את
+            // healthCovers בטיוטה (שמות כיסוי זהים לרשימת מנורה במערכת).
+            if(Array.isArray(r.covers) && r.covers.length){
+              draft.healthCovers = r.covers.map((c) => safeTrim(c.label || c.id)).filter(Boolean);
+            }
             // שדה מטא-דאטה גנרי — שומר את כל פלט הסימולטור (כל שדות התעריף
             // הייחודיים לחברה, כגון ratePerMille להפניקס או ratePerHundredThousand
-            // ו-bracket למנורה) בלי לקודד שם שדות ספציפיים לחברה מסוימת.
+            // ו-bracket למנורה / covers לבריאות) בלי לקודד שם שדות ספציפיים לחברה.
             draft.riskSimQuotes[insId] = Object.assign({}, r, {
               company: d.company, product: d.type, computedAt: nowISO()
             });
