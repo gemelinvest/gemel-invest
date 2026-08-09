@@ -25477,6 +25477,7 @@ UsersGateUI.init();
       this._metricsBuildBusy = false;
       this._todaySalesCacheKey = "";
       this._todaySalesCache = null;
+      this._todaySalesServerOverlay = null;
       this._dailyAgentsCacheKey = "";
       this._dailyAgentsCache = null;
     },
@@ -26064,9 +26065,57 @@ UsersGateUI.init();
       return { start, end };
     },
 
+    /** GI-FIX: מנהל/טעינה רזה — «נמכר היום» מ-RPC (אותן פונקציות של פרמיה נטו, בטווח היום). */
+    ensureTodaySalesServerOverlay(){
+      if(this._todaySalesServerBusy) return;
+      if(typeof Storage === "undefined" || typeof Storage.loadServerKpis !== "function") return;
+      const todayRange = this.getTodayRange();
+      const dayKey = todayRange.start.toISOString().slice(0, 10);
+      const ageMs = Date.now() - (Number(this._todaySalesServerOverlay?.at) || 0);
+      if(this._todaySalesServerOverlay?.ok && this._todaySalesServerOverlay?.dayKey === dayKey && ageMs < 45000){
+        return;
+      }
+      this._todaySalesServerBusy = true;
+      void (async () => {
+        try {
+          const res = await Storage.loadServerKpis(todayRange);
+          if(!res?.ok){
+            try { console.warn("[GI-TODAY-KPI] לא זמין:", res?.error); } catch(_e) {}
+            return;
+          }
+          const breakdown = Array.isArray(res.productBreakdown) && res.productBreakdown.length
+            ? res.productBreakdown.slice()
+            : Object.entries(res.productTotals || {}).map(([label, premium]) => ({
+              label,
+              count: 0,
+              premium: Math.round((Number(premium) || 0) * 100) / 100
+            })).sort((a, b) => b.premium - a.premium);
+          this._todaySalesServerOverlay = {
+            ok: true,
+            dayKey,
+            at: Date.now(),
+            totalPremium: Math.round((Number(res.netPremium) || 0) * 100) / 100,
+            totalPolicies: Number(res.soldPolicies) || 0,
+            newClients: Number(res.newClients) || 0,
+            breakdown
+          };
+          this._todaySalesCacheKey = "";
+          this._todaySalesCache = null;
+          if(typeof LiveRefresh !== "undefined" && LiveRefresh.getCurrentView?.() === "dashboard"){
+            try { this.scheduleRefreshKpis(); } catch(_e) {}
+          }
+        } catch(err) {
+          try { console.warn("[GI-TODAY-KPI] failed", err); } catch(_e) {}
+        } finally {
+          this._todaySalesServerBusy = false;
+        }
+      })();
+    },
+
     buildTodaySalesMetrics(){
       const todayRange = this.getTodayRange();
-      const cacheKey = this.getMetricsCacheKey() + "|today|" + todayRange.start.toISOString().slice(0, 10) + "|elemV1";
+      const dayKey = todayRange.start.toISOString().slice(0, 10);
+      const cacheKey = this.getMetricsCacheKey() + "|today|" + dayKey + "|elemV1|rpc1";
       if(this._todaySalesCacheKey === cacheKey && this._todaySalesCache){
         return this._todaySalesCache;
       }
@@ -26076,6 +26125,12 @@ UsersGateUI.init();
           missingPayloads = Number(Storage.countMissingCustomerPayloads()) || 0;
         }
       } catch(_e) {}
+
+      // בזמן payloads חסרים (במיוחד מנהל עם כל הלקוחות) — מביאים מהשרת
+      if(missingPayloads > 0){
+        try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
+      }
+
       const customersAll = this.getVisibleCustomers();
 
       // PRODUCT_LABELS: מפה מ-p.type לשם תצוגה נחמד
@@ -26142,15 +26197,36 @@ UsersGateUI.init();
         .map(([label, data]) => ({ label, count: data.count, premium: Math.round(data.premium * 100) / 100 }))
         .sort((a, b) => b.premium - a.premium);
 
-      const result = {
+      let result = {
         totalPremium: Math.round(totalPremium * 100) / 100,
         totalPolicies,
         newClients: countedCustomers.size,
         breakdown,
-        _loading: missingPayloads > 0
+        _loading: missingPayloads > 0,
+        _fromServer: false
       };
-      // לא שומרים במטמון בזמן hydration — כדי שאחרי מילוי payload החישוב ירוץ מחדש
-      if(missingPayloads <= 0){
+
+      // מנהל בטעינה רזה: עדיפות ל-RPC יומי (בשרת כבר יש את המכירות)
+      const serverOverlay = this._todaySalesServerOverlay;
+      if(serverOverlay?.ok && serverOverlay.dayKey === dayKey){
+        const localEmpty = !(result.totalPremium > 0 || result.totalPolicies > 0);
+        if(missingPayloads > 0 || localEmpty){
+          result = {
+            totalPremium: Number(serverOverlay.totalPremium) || 0,
+            totalPolicies: Number(serverOverlay.totalPolicies) || 0,
+            newClients: Number(serverOverlay.newClients) || 0,
+            breakdown: Array.isArray(serverOverlay.breakdown) ? serverOverlay.breakdown.slice() : [],
+            _loading: false,
+            _fromServer: true
+          };
+        }
+      } else if(missingPayloads > 0 && !(result.totalPremium > 0)){
+        // עדיין מחכים ל-RPC — לא לנעול מטמון על אפס
+        try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
+      }
+
+      // לא שומרים במטמון בזמן hydration בלי overlay — כדי שאחרי מילוי/RPC החישוב ירוץ מחדש
+      if(missingPayloads <= 0 || result._fromServer){
         this._todaySalesCacheKey = cacheKey;
         this._todaySalesCache = result;
       } else {
@@ -27807,6 +27883,7 @@ UsersGateUI.init();
 
     // עדכון שקט — מחליף רק את הטקסט/HTML הפנימי בלי לבנות מחדש את ה-DOM
     refreshKpis(){
+      try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
       const metrics    = this.buildMetrics();
       const todaySales = this.buildTodaySalesMetrics();
       const root       = this.els.root;
@@ -28263,6 +28340,7 @@ UsersGateUI.init();
         : 'ממוצע פרמיה ללקוח';
 
       // --- TODAY SALES --- תמיד מספר (₪0 עד שיש נתונים), בלי «טוען…»
+      try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
       const todaySales = this.buildTodaySalesMetrics();
       const todayCardHtml = (() => {
         const breakdownHtml = (todaySales.breakdown && todaySales.breakdown.length)
@@ -68996,13 +69074,21 @@ const ClalRiskLifePdf = {
       const n = Array.isArray(net.data) ? (net.data[0] || {}) : (net.data || {});
       const a = Array.isArray(appt.data) ? (appt.data[0] || {}) : (appt.data || {});
       const productTotals = Object.create(null);
+      const productBreakdown = [];
       if(!byProduct?.error && Array.isArray(byProduct.data)){
         byProduct.data.forEach((row) => {
           const product = safeTrim(row?.product) || "אחר";
           const premium = Number(row?.premium) || 0;
+          const policies = Number(row?.policies) || 0;
           if(!product) return;
           productTotals[product] = (productTotals[product] || 0) + premium;
+          productBreakdown.push({
+            label: product,
+            count: policies,
+            premium: Math.round(premium * 100) / 100
+          });
         });
+        productBreakdown.sort((a, b) => b.premium - a.premium);
       } else if(byProduct?.error){
         try { console.warn("[GI-SERVER-KPI] sales_by_product:", byProduct.error); } catch(_e) {}
       }
@@ -69013,7 +69099,8 @@ const ClalRiskLifePdf = {
         newClients:    Number(n.new_clients)   || 0,
         apptPremium:   Number(a.appt_premium)  || 0,
         apptPolicies:  Number(a.appt_policies) || 0,
-        productTotals
+        productTotals,
+        productBreakdown
       };
     } catch(err) {
       return { ok:false, error: String(err?.message || err) };
@@ -69068,6 +69155,7 @@ const ClalRiskLifePdf = {
           m.avgPremium = m.customersMonth?.length ? (netPremium / m.customersMonth.length) : 0;
           m._serverKpiOverlay = true;
           m._loading = false;
+          try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
           if(LiveRefresh.getCurrentView() === "dashboard"){
             try { this.scheduleRefreshKpis(); } catch(_e) {}
           }
