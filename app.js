@@ -88278,8 +88278,43 @@ ${inner}
      נשמרים תחת payload.importedFinancials — לתצוגה בפאנל בלבד.
      ========================================================================== */
 
-  const CUSTOMER_IMPORT_VERSION = "1.0";
+  const CUSTOMER_IMPORT_VERSION = "1.1";
   const CI_BATCH_SIZE = 40;
+  /** גודל מנה לפרסינג שורות בקובץ — משחרר את ה־UI בין מנות */
+  const CI_PARSE_CHUNK = 400;
+  /** כמה שורות מציגים בתצוגה המקדימה (מניעת תקיעת DOM על עשרות אלפים) */
+  const CI_PREVIEW_PAGE_SIZE = 100;
+  /** מרווח עדכון מונה התקדמות בזמן בדיקת כפילויות מול השרת */
+  const CI_DUP_FETCH_CHUNK = 80;
+
+  function ciYieldToUi(){
+    return new Promise((resolve) => {
+      window.requestAnimationFrame(() => { window.setTimeout(resolve, 0); });
+    });
+  }
+
+  function ciFormatDuration(ms){
+    const sec = Math.max(0, Math.round(Number(ms) / 1000));
+    if(sec < 60) return sec + " שנ׳";
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    if(m < 60) return s ? (m + " דק׳ " + s + " שנ׳") : (m + " דק׳");
+    const h = Math.floor(m / 60);
+    const rm = m % 60;
+    return rm ? (h + " שע׳ " + rm + " דק׳") : (h + " שע׳");
+  }
+
+  /** אומדן זמן שנותר לפי קצב שנמדד עד כה */
+  function ciEtaMs(done, total, startedAt){
+    const d = Number(done) || 0;
+    const t = Number(total) || 0;
+    if(d <= 0 || t <= d || !startedAt) return null;
+    const elapsed = Date.now() - startedAt;
+    if(elapsed < 400) return null;
+    const rate = d / elapsed;
+    if(!(rate > 0)) return null;
+    return (t - d) / rate;
+  }
 
   /** כותרות אפשריות לכל שדה. ההשוואה מתבצעת אחרי ניקוי גרשיים/רווחים/פיסוק. */
   const CI_FIELD_ALIASES = {
@@ -88634,11 +88669,12 @@ ${inner}
 
   /* ------------------------- בדיקת כפילויות מול השרת ------------------------- */
 
-  async function ciFetchExistingByColumn(column, values){
+  async function ciFetchExistingByColumn(column, values, onProgress){
     const found = new Map();
     const list = [...new Set(values.filter(Boolean))];
-    for(let i = 0; i < list.length; i += 80){
-      const chunk = list.slice(i, i + 80);
+    const total = list.length;
+    for(let i = 0; i < list.length; i += CI_DUP_FETCH_CHUNK){
+      const chunk = list.slice(i, i + CI_DUP_FETCH_CHUNK);
       const inList = "(" + chunk.map((v) => '"' + String(v).replace(/"/g, "") + '"').join(",") + ")";
       const select = "id,full_name,id_number,phone,city,status,agent_name,agent_id,updated_at";
       let rows = null;
@@ -88662,17 +88698,22 @@ ${inner}
         if(!key) return;
         if(!found.has(key)) found.set(key, row);
       });
+      if(typeof onProgress === "function"){
+        try { onProgress({ done: Math.min(i + chunk.length, total), total, column }); } catch(_e) {}
+      }
+      if(list.length > CI_DUP_FETCH_CHUNK) await ciYieldToUi();
     }
     return found;
   }
 
-  async function ciMarkDuplicates(entries){
+  async function ciMarkDuplicates(entries, onProgress){
     // כפילות בתוך הקובץ עצמו
     const seen = new Map();
-    entries.forEach((entry) => {
-      if(entry.category === "error") return;
+    for(let i = 0; i < entries.length; i++){
+      const entry = entries[i];
+      if(entry.category === "error") continue;
       const key = entry.idNumber ? "id:" + entry.idNumber : (entry.phone ? "ph:" + entry.phone : "");
-      if(!key) return;
+      if(!key) continue;
       if(seen.has(key)){
         entry.category = "dupFile";
         entry.action = "skip";
@@ -88680,19 +88721,36 @@ ${inner}
       } else {
         seen.set(key, entry.rowNumber);
       }
-    });
+      if(i > 0 && i % 2000 === 0){
+        if(typeof onProgress === "function"){
+          try { onProgress({ phase: "file_dups", done: i, total: entries.length }); } catch(_e) {}
+        }
+        await ciYieldToUi();
+      }
+    }
 
-    const byId = await ciFetchExistingByColumn(
-      "id_number",
-      entries.filter((e) => e.category === "new" || e.category === "noAgent").map((e) => e.idNumber)
-    );
+    const idCandidates = entries
+      .filter((e) => e.category === "new" || e.category === "noAgent")
+      .map((e) => e.idNumber);
+    const byId = await ciFetchExistingByColumn("id_number", idCandidates, (p) => {
+      if(typeof onProgress === "function"){
+        try { onProgress({ phase: "server_id", done: p.done, total: p.total }); } catch(_e) {}
+      }
+    });
     const phoneCandidates = entries
       .filter((e) => (e.category === "new" || e.category === "noAgent") && !e.idNumber)
       .map((e) => e.phone);
-    const byPhone = phoneCandidates.length ? await ciFetchExistingByColumn("phone", phoneCandidates) : new Map();
+    const byPhone = phoneCandidates.length
+      ? await ciFetchExistingByColumn("phone", phoneCandidates, (p) => {
+          if(typeof onProgress === "function"){
+            try { onProgress({ phase: "server_phone", done: p.done, total: p.total }); } catch(_e) {}
+          }
+        })
+      : new Map();
 
-    entries.forEach((entry) => {
-      if(entry.category !== "new" && entry.category !== "noAgent") return;
+    for(let i = 0; i < entries.length; i++){
+      const entry = entries[i];
+      if(entry.category !== "new" && entry.category !== "noAgent") continue;
       const match = (entry.idNumber && byId.get(entry.idNumber)) || (!entry.idNumber && entry.phone && byPhone.get(entry.phone));
       if(match){
         entry.existing = match;
@@ -88700,7 +88758,8 @@ ${inner}
         entry.action = "skip";
         entry.issues.push("קיים כבר במערכת" + (safeTrim(match.agent_name) ? " אצל " + safeTrim(match.agent_name) : ""));
       }
-    });
+      if(i > 0 && i % 2000 === 0) await ciYieldToUi();
+    }
 
     return entries;
   }
@@ -89338,22 +89397,96 @@ ${inner}
     },
 
     renderBusy(text){
-      this.els.body.innerHTML = `<div class="ciBusy"><div class="ciBusy__spin"></div><div>${escapeHtml(text)}</div></div>`;
+      this.renderProgress({ title: text || "מעבד…", done: 0, total: 0, indeterminate: true });
+    },
+
+    /** מונה התקדמות עם אחוז וזמן משוער שנותר */
+    renderProgress({ title, detail, done, total, startedAt, indeterminate }){
+      if(!this.els.body) return;
+      const d = Math.max(0, Number(done) || 0);
+      const t = Math.max(0, Number(total) || 0);
+      const pct = (!indeterminate && t > 0) ? Math.min(100, Math.round((d / t) * 100)) : null;
+      const eta = (!indeterminate && t > 0) ? ciEtaMs(d, t, startedAt) : null;
+      const etaTxt = eta == null ? "" : (" · נותרו כ־" + ciFormatDuration(eta));
+      const countTxt = (!indeterminate && t > 0)
+        ? (`${d.toLocaleString("he-IL")} מתוך ${t.toLocaleString("he-IL")} (${pct}%)` + etaTxt)
+        : "";
+      const elapsedTxt = startedAt ? ("עבר: " + ciFormatDuration(Date.now() - startedAt)) : "";
+      this.els.body.innerHTML = `
+        <div class="ciProgress">
+          <div class="ciProgress__title">${escapeHtml(title || "מעבד…")}</div>
+          ${detail ? `<div class="ciProgress__detail">${escapeHtml(detail)}</div>` : ""}
+          <div class="ciProgress__bar${indeterminate || pct == null ? " is-indeterminate" : ""}">
+            <div class="ciProgress__fill" id="ciFill" style="width:${pct == null ? 35 : pct}%"></div>
+          </div>
+          <div class="ciProgress__text" id="ciProgressText">${escapeHtml(countTxt || (indeterminate ? "אנא המתן…" : ""))}</div>
+          ${elapsedTxt ? `<div class="ciProgress__eta">${escapeHtml(elapsedTxt)}</div>` : ""}
+        </div>`;
       this.els.foot.innerHTML = "";
+      this._progressEls = {
+        fill: this.els.body.querySelector("#ciFill"),
+        text: this.els.body.querySelector("#ciProgressText"),
+        title,
+        startedAt: startedAt || Date.now()
+      };
+    },
+
+    updateProgress({ title, detail, done, total }){
+      if(!this.els.body?.querySelector(".ciProgress")){
+        this.renderProgress({ title, detail, done, total, startedAt: Date.now() });
+        return;
+      }
+      const d = Math.max(0, Number(done) || 0);
+      const t = Math.max(0, Number(total) || 0);
+      const startedAt = this._progressEls?.startedAt || Date.now();
+      const pct = t > 0 ? Math.min(100, Math.round((d / t) * 100)) : 0;
+      const eta = ciEtaMs(d, t, startedAt);
+      const etaTxt = eta == null ? "" : (" · נותרו כ־" + ciFormatDuration(eta));
+      const fill = this.els.body.querySelector("#ciFill");
+      const text = this.els.body.querySelector("#ciProgressText");
+      const titleEl = this.els.body.querySelector(".ciProgress__title");
+      const detailEl = this.els.body.querySelector(".ciProgress__detail");
+      const etaEl = this.els.body.querySelector(".ciProgress__eta");
+      if(fill){
+        fill.style.width = pct + "%";
+        fill.parentElement?.classList.remove("is-indeterminate");
+      }
+      if(text) text.textContent = t > 0
+        ? (`${d.toLocaleString("he-IL")} מתוך ${t.toLocaleString("he-IL")} (${pct}%)` + etaTxt)
+        : "";
+      if(title && titleEl) titleEl.textContent = title;
+      if(detail != null && detailEl) detailEl.textContent = detail;
+      if(etaEl) etaEl.textContent = "עבר: " + ciFormatDuration(Date.now() - startedAt);
     },
 
     async handleFile(file){
-      this.renderBusy("קורא את הקובץ…");
+      const overallStart = Date.now();
+      this.renderProgress({
+        title: "קורא את הקובץ…",
+        detail: safeTrim(file?.name) + (file?.size ? (" · " + Math.round(file.size / 1024 / 1024 * 10) / 10 + " MB") : ""),
+        indeterminate: true,
+        startedAt: overallStart
+      });
       try {
         if(window.GI_LOAD_LIBS?.xlsx) await window.GI_LOAD_LIBS.xlsx();
         if(!window.XLSX) throw new Error("ספריית קריאת קובצי Excel לא נטענה. בדוק חיבור לאינטרנט ונסה שוב.");
 
+        await ciYieldToUi();
         const buffer = await file.arrayBuffer();
-        const wb = window.XLSX.read(buffer, { type: "array", cellDates: true });
+        this.renderProgress({
+          title: "מפענח את האקסל…",
+          detail: "קבצים גדולים עשויים לקחת דקה — המסך יישאר חי",
+          indeterminate: true,
+          startedAt: overallStart
+        });
+        await ciYieldToUi();
+
+        const wb = window.XLSX.read(buffer, { type: "array", cellDates: true, cellStyles: false, sheetStubs: false });
         const sheetName = wb.SheetNames[0];
         const sheet = wb.Sheets[sheetName];
         if(!sheet) throw new Error("לא נמצא גיליון בקובץ.");
 
+        await ciYieldToUi();
         const rows = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: true, blankrows: false });
         if(rows.length < 2) throw new Error("הקובץ ריק או מכיל שורת כותרות בלבד.");
 
@@ -89370,15 +89503,56 @@ ${inner}
           sheetsCount: wb.SheetNames.length
         };
 
-        this.renderBusy("מנתח " + (rows.length - headerIndex - 1) + " שורות…");
-        const entries = rows.slice(headerIndex + 1)
-          .map((row, idx) => ciParseRow(row, headerIndex + idx + 2, built))
-          .filter((entry) => entry.fullName || entry.idNumber || entry.phone || entry.agentRaw);
+        const dataRows = rows.slice(headerIndex + 1);
+        const parseTotal = dataRows.length;
+        const parseStart = Date.now();
+        this.renderProgress({
+          title: "מנתח שורות מהקובץ…",
+          detail: parseTotal.toLocaleString("he-IL") + " שורות",
+          done: 0,
+          total: parseTotal,
+          startedAt: parseStart
+        });
 
-        this.renderBusy("בודק כפילויות מול המערכת…");
-        await ciMarkDuplicates(entries);
+        const entries = [];
+        for(let i = 0; i < dataRows.length; i += CI_PARSE_CHUNK){
+          const chunk = dataRows.slice(i, i + CI_PARSE_CHUNK);
+          for(let j = 0; j < chunk.length; j++){
+            const entry = ciParseRow(chunk[j], headerIndex + i + j + 2, built);
+            if(entry.fullName || entry.idNumber || entry.phone || entry.agentRaw){
+              entries.push(entry);
+            }
+          }
+          this.updateProgress({
+            title: "מנתח שורות מהקובץ…",
+            done: Math.min(i + chunk.length, parseTotal),
+            total: parseTotal
+          });
+          await ciYieldToUi();
+        }
+
+        const dupStart = Date.now();
+        this.renderProgress({
+          title: "בודק כפילויות מול המערכת…",
+          detail: entries.length.toLocaleString("he-IL") + " לקוחות תקינים בקובץ",
+          done: 0,
+          total: Math.max(entries.length, 1),
+          startedAt: dupStart
+        });
+        await ciMarkDuplicates(entries, (p) => {
+          const phaseLabel = p.phase === "server_id" ? "משווה ת״ז מול השרת…"
+            : p.phase === "server_phone" ? "משווה טלפונים מול השרת…"
+            : p.phase === "file_dups" ? "מאתר כפילויות בתוך הקובץ…"
+            : "בודק כפילויות…";
+          this.updateProgress({
+            title: phaseLabel,
+            done: p.done,
+            total: Math.max(p.total || 1, 1)
+          });
+        });
 
         this.state = { batch, built, entries };
+        this._page = 0;
         this.renderPreviewStep();
       } catch(err){
         this.renderError(safeTrim(err?.message) || "קריאת הקובץ נכשלה");
@@ -89449,13 +89623,25 @@ ${inner}
         </div>`;
 
       this._filter = "all";
+      this._page = 0;
       this.paintRows();
 
       on(this.els.body, "click", (ev) => {
         const chip = ev.target?.closest?.("[data-ci-filter]");
         if(chip){
           this._filter = chip.getAttribute("data-ci-filter");
+          this._page = 0;
           this.els.body.querySelectorAll("[data-ci-filter]").forEach((el) => el.classList.toggle("is-active", el === chip));
+          this.paintRows();
+          return;
+        }
+        const pageBtn = ev.target?.closest?.("[data-ci-page]");
+        if(pageBtn){
+          const dir = pageBtn.getAttribute("data-ci-page");
+          if(dir === "prev") this._page = Math.max(0, (this._page || 0) - 1);
+          else if(dir === "next") this._page = (this._page || 0) + 1;
+          else if(dir === "first") this._page = 0;
+          else if(dir === "last") this._page = Number(pageBtn.getAttribute("data-ci-last") || 0);
           this.paintRows();
           return;
         }
@@ -89577,6 +89763,14 @@ ${inner}
       if(!tbody) return;
       const filter = this._filter || "all";
       const rows = (this.state?.entries || []).filter((e) => filter === "all" || e.category === filter);
+      const pageSize = CI_PREVIEW_PAGE_SIZE;
+      const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+      let page = Number(this._page) || 0;
+      if(page >= totalPages) page = totalPages - 1;
+      if(page < 0) page = 0;
+      this._page = page;
+      const from = page * pageSize;
+      const pageRows = rows.slice(from, from + pageSize);
 
       const badge = (entry) => {
         const map = {
@@ -89614,7 +89808,7 @@ ${inner}
         return `<span class="ciAgent">${owner}</span>${shared.length ? `<span class="ciAgent__shared">+ ${shared.join(", ")}</span>` : ""}`;
       };
 
-      tbody.innerHTML = rows.length ? rows.map((entry) => `
+      tbody.innerHTML = pageRows.length ? pageRows.map((entry) => `
         <tr class="ciRow ciRow--${entry.category}">
           <td class="muted small">${entry.rowNumber}</td>
           <td>${escapeHtml(entry.fullName || "—")}${entry.nameIsPhone ? '<div class="ciIssues">השם בקובץ הוא מספר טלפון</div>' : ""}</td>
@@ -89626,6 +89820,33 @@ ${inner}
           <td>${actionSelect(entry)}</td>
         </tr>`).join("")
         : `<tr><td colspan="8" class="muted" style="text-align:center;padding:24px">אין שורות בקטגוריה הזו</td></tr>`;
+
+      let pager = this.els.body.querySelector("#ciPager");
+      if(!pager){
+        const wrap = this.els.body.querySelector(".ciTableWrap");
+        if(wrap){
+          pager = document.createElement("div");
+          pager.id = "ciPager";
+          pager.className = "ciPager";
+          wrap.insertAdjacentElement("afterend", pager);
+        }
+      }
+      if(pager){
+        const showingFrom = rows.length ? (from + 1) : 0;
+        const showingTo = Math.min(from + pageSize, rows.length);
+        pager.innerHTML = `
+          <div class="ciPager__info">
+            מציג ${showingFrom.toLocaleString("he-IL")}–${showingTo.toLocaleString("he-IL")}
+            מתוך ${rows.length.toLocaleString("he-IL")} שורות
+            · עמוד ${page + 1}/${totalPages}
+          </div>
+          <div class="ciPager__actions">
+            <button type="button" class="btn btn--tiny" data-ci-page="first" ${page <= 0 ? "disabled" : ""}>ראשון</button>
+            <button type="button" class="btn btn--tiny" data-ci-page="prev" ${page <= 0 ? "disabled" : ""}>הקודם</button>
+            <button type="button" class="btn btn--tiny" data-ci-page="next" ${page >= totalPages - 1 ? "disabled" : ""}>הבא</button>
+            <button type="button" class="btn btn--tiny" data-ci-page="last" data-ci-last="${totalPages - 1}" ${page >= totalPages - 1 ? "disabled" : ""}>אחרון</button>
+          </div>`;
+      }
 
       this.paintSummary();
     },
@@ -89649,36 +89870,55 @@ ${inner}
       }
 
       this.els.subtitle.textContent = "שלב 3 מתוך 3 — יוצר תיקי לקוח";
-      this.els.body.innerHTML = `
-        <div class="ciProgress">
-          <div class="ciProgress__bar"><div class="ciProgress__fill" id="ciFill"></div></div>
-          <div class="ciProgress__text" id="ciProgressText">מתחיל…</div>
-        </div>`;
-      this.els.foot.innerHTML = "";
+      const commitStart = Date.now();
+      this.renderProgress({
+        title: "מכין רשומות לייבוא…",
+        detail: total.toLocaleString("he-IL") + " לקוחות לטיפול",
+        done: 0,
+        total,
+        startedAt: commitStart
+      });
 
-      const fill = this.els.body.querySelector("#ciFill");
-      const text = this.els.body.querySelector("#ciProgressText");
-      const setProgress = (done) => {
-        const pct = Math.round((done / total) * 100);
-        if(fill) fill.style.width = pct + "%";
-        if(text) text.textContent = `${done} מתוך ${total} (${pct}%)`;
-      };
-
-      const records = toImport.map((entry) => ({ entry, record: ciBuildCustomerRecord(entry, batch, null) }));
+      const records = [];
+      for(let i = 0; i < toImport.length; i++){
+        records.push({ entry: toImport[i], record: ciBuildCustomerRecord(toImport[i], batch, null) });
+        if(i > 0 && i % 200 === 0){
+          this.updateProgress({
+            title: "מכין רשומות לייבוא…",
+            done: i,
+            total
+          });
+          await ciYieldToUi();
+        }
+      }
 
       // עדכון: חובה לטעון את השורה המלאה (כולל payload) לפני הבנייה,
       // אחרת ה-upsert היה דורס את תוכן התיק הקיים.
-      for(const entry of toUpdate){
+      for(let i = 0; i < toUpdate.length; i++){
+        const entry = toUpdate[i];
         let existingFull = entry.existing;
         try {
           const res = await Storage.loadSingleRow(SUPABASE_TABLES.customers, safeTrim(entry.existing?.id), "*");
           if(res?.ok && res.data) existingFull = res.data;
         } catch(_e) {}
         records.push({ entry, record: ciBuildCustomerRecord(entry, batch, existingFull) });
+        this.updateProgress({
+          title: "טוען תיקים קיימים לעדכון…",
+          done: toImport.length + i + 1,
+          total
+        });
+        if(i % 10 === 0) await ciYieldToUi();
       }
 
       const failures = [];
       let done = 0;
+      this.renderProgress({
+        title: "מעלה לקוחות לשרת…",
+        detail: "שמירה במנות — אפשר להשאיר את החלון פתוח",
+        done: 0,
+        total: records.length,
+        startedAt: Date.now()
+      });
 
       for(let i = 0; i < records.length; i += CI_BATCH_SIZE){
         const chunk = records.slice(i, i + CI_BATCH_SIZE);
@@ -89705,8 +89945,12 @@ ${inner}
           }
         }
         done += chunk.length;
-        setProgress(Math.min(done, total));
-        await new Promise((resolve) => window.setTimeout(resolve, 0));
+        this.updateProgress({
+          title: "מעלה לקוחות לשרת…",
+          done: Math.min(done, records.length),
+          total: records.length
+        });
+        await ciYieldToUi();
       }
 
       const created = toImport.length - failures.filter((f) => f.entry.action === "import").length;
@@ -89724,7 +89968,17 @@ ${inner}
         });
       } catch(_e) {}
 
-      try { await App.persist("ייבוא לקוחות מקובץ"); } catch(_e) {}
+      // הנתונים כבר נשמרו ישירות ל-Supabase — לא מריצים persist מלא של State
+      // (עלול לתקוע את הדפדפן אחרי עשרות אלפי רשומות).
+      try {
+        await App.persist("ייבוא לקוחות מקובץ", {
+          silent: true,
+          metaOnly: true,
+          metaSyncScopes: ["data"],
+          skipNormalize: true,
+          yieldUi: true
+        });
+      } catch(_e) {}
       try { CustomersUI.render({ forceServer: true }); } catch(_e) {}
 
       this.renderDoneStep({ created, updated, failures, pendingAssign, batch });
