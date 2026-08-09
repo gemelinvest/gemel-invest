@@ -11539,14 +11539,17 @@
         for(const spec of specs){
           const list = Array.isArray(State.data?.[spec.key]) ? State.data[spec.key] : [];
           if(!list.length) continue;
-          /* GI-FIX 2026-08-09b — תקרה על היקף ההידרציה האוטומטית + עדיפות
-             לרשומות עדכניות. לפני התיקון: כל הרשומות החסרות (יכול להגיע
-             לעשרות אלפים) נמשכו בכל login, ~2.5MB למנה של 40 — עשרות אלפי
-             רשומות הפכו לג'יגהבייטים של רשת וזיכרון שנשארים ב-State לצמיתות.
-             עכשיו: ממיינים מהחדש לישן ולוקחים רק GI_HYDRATION_CAP הראשונים.
-             לקוח/הצעה שלא נכללו כאן עדיין נטענים כרגיל בפתיחה בודדת —
-             ensureRecordPayload / fetchCustomerRecordFromServer ממשיכים
-             לעבוד ללא תלות בהידרציה הגורפת. */
+          /* GI-FIX 2026-08-09e — התקרה חלה רק על customers, לא על proposals.
+             רקע: כל בעיית הביצועים המקורית (52,000+ רשומות, 3.2GB רשת)
+             הייתה על טבלת הלקוחות — טבלת ההצעות קטנה בסדרי גודל ומעולם לא
+             הייתה הגורם לעומס. הגבלת ה-hydration עבור proposals גם כן
+             (בטעות, בגרסה הקודמת) גרמה לכך שהצעות שלא נכללו בתקרה נשארו
+             עם payload ריק זמן רב יותר משהיו קודם — וחשפה תקלה בפתיחת/עריכת
+             הצעות (openDraft חוסם שמירה על payload ריק — הגנה קיימת ותקינה,
+             אך נחשפה בתדירות גבוהה בהרבה מבעבר). לכן: proposals תמיד
+             מקבלות hydration מלא כמו לפני כל שלושת התיקונים; רק customers
+             מוגבלות. */
+          const applyCap = spec.key === "customers";
           const pendingRecords = list.filter((rec) => this.payloadIsEmpty(rec));
           if(!pendingRecords.length) continue;
           pendingRecords.sort((a, b) => {
@@ -11554,8 +11557,8 @@
             const bt = Date.parse(b?.updatedAt || b?.updated_at || b?.createdAt || b?.created_at || 0) || 0;
             return bt - at;
           });
-          const cap = getPayloadHydrationCap();
-          const cappedRecords = (Number.isFinite(cap) && cap > 0) ? pendingRecords.slice(0, cap) : pendingRecords;
+          const cap = applyCap ? getPayloadHydrationCap() : 0;
+          const cappedRecords = (applyCap && Number.isFinite(cap) && cap > 0) ? pendingRecords.slice(0, cap) : pendingRecords;
           const skippedByCap = pendingRecords.length - cappedRecords.length;
           if(skippedByCap > 0){
             try { console.info("HYDRATION_CAP_APPLIED:", spec.key, "capped to", cappedRecords.length, "of", pendingRecords.length); } catch(_e) {}
