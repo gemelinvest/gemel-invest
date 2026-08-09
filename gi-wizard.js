@@ -167,6 +167,18 @@
   const getCurrentAgentRecord = host.getCurrentAgentRecord;
   const normalizeEmailValue = host.normalizeEmailValue;
   const nowISO = host.nowISO;
+  /* GI-FIX 2026-08-09h — סבב שלישי (ניתוח scope מלא). Wizard עצמו נקרא
+     בקוד (normalizePledgeBanks/getPledgeTotals) אך לא היה מקושר כאן. */
+  const Wizard = host.Wizard;
+  const CampaignLeadsStore = host.CampaignLeadsStore;
+  const ClalRiskLifePdf = host.ClalRiskLifePdf;
+  const ensureCustomerForElementaryReferral = host.ensureCustomerForElementaryReferral;
+  const isPdfUploadFileAsync = host.isPdfUploadFileAsync;
+  const markElementaryMirrorGoldSoldFromWizard = host.markElementaryMirrorGoldSoldFromWizard;
+  const persistCustomerPayloadRecord = host.persistCustomerPayloadRecord;
+  const touchElementaryReferralAgentSetupComplete = host.touchElementaryReferralAgentSetupComplete;
+  const touchElementaryReferralProposalReady = host.touchElementaryReferralProposalReady;
+  const verifyElementaryReferralPersisted = host.verifyElementaryReferralPersisted;
 
   // ---------- New Customer Wizard (Steps 1–7) ----------
   const DISCOUNT_SELECT_PLACEHOLDER = 'בחר הנחה';

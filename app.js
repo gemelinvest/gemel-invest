@@ -29251,6 +29251,9 @@ UsersGateUI.init();
           renderCompanyLogoHtmlForCompany,
           ensureGiSimulatorStylesLoaded,
           RiskSimulators,
+          /* GI-FIX 2026-08-09h — $$ ו-nowISO נקראים ב-gi-simulators.js ולא הוזרקו. */
+          $$,
+          nowISO,
           onSimulatorsInstalled: () => { RiskSimulators._chunkReady = true; }
         };
         const done = () => {
@@ -29626,6 +29629,17 @@ UsersGateUI.init();
           getCurrentAgentRecord,
           normalizeEmailValue,
           nowISO,
+          /* GI-FIX 2026-08-09h — סבב שלישי, נמצא ע"י ניתוח scope מלא (parser)
+             ולא regex: async function / const בעימוד שונה שלא נתפסו קודם. */
+          CampaignLeadsStore,
+          ClalRiskLifePdf,
+          ensureCustomerForElementaryReferral,
+          isPdfUploadFileAsync,
+          markElementaryMirrorGoldSoldFromWizard,
+          persistCustomerPayloadRecord,
+          touchElementaryReferralAgentSetupComplete,
+          touchElementaryReferralProposalReady,
+          verifyElementaryReferralPersisted,
         };
         try {
           Object.defineProperty(host, "ElementaryMirrorUI", {

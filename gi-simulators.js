@@ -15,6 +15,9 @@
   const renderCompanyLogoHtmlForCompany = host.renderCompanyLogoHtmlForCompany;
   const ensureGiSimulatorStylesLoaded = host.ensureGiSimulatorStylesLoaded;
   const RiskSimulators = host.RiskSimulators;
+  /* GI-FIX 2026-08-09h — חסרו וגרמו ל-ReferenceError בסימולטורים. */
+  const $$ = host.$$;
+  const nowISO = host.nowISO;
 
 // ===== GI-PHX-RISK-SIM 2026-08-08 · סימולטור ריסק הפניקס =====================
   // תוסף עצמאי ומבודד לשלב 5 (פוליסות חדשות) — לא נוגע בשום קוד קיים של Wizard.
