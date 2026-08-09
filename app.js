@@ -31329,6 +31329,741 @@ UsersGateUI.init();
   RiskSimulators.register("מנורה", "בריאות", MenoraHealthSimulator);
   // ===== סוף GI-MNR-HEALTH-SIM ====================================================
 
+  // ===== GI-AYL-HEALTH-SIM 2026-08-09 · סימולטור בריאות איילון ==================
+  // מקור אמת: תעריפי בריאות איילון.pdf (ינואר 2026) — תכניות בסיס/ניתוחים + אמבולטורי/כתבי שירות.
+  // מחלות קשות / סרטן (בשביל החוסן) — סימולטורים נפרדים (לא כאן).
+  // כל התעריפים באגורות (שלמים) כדי למנוע סטיית floating-point.
+
+  const AYALON_HEALTH_MIN_AGE = 0;
+  const AYALON_HEALTH_MAX_AGE = 75;
+  const AYALON_HEALTH_MIN_ENTRY_DAYS = 15;
+
+  /** המרת שקלים → אגורות בשלמים (קלט מהתעריפון בלבד). */
+  function ayalonHealthShekelsToAgorot(shekels){
+    return Math.round(Number(shekels) * 100);
+  }
+  function ayalonHealthAgorotToShekels(agorot){
+    return agorot / 100;
+  }
+  function formatAyalonHealthExactAmount(n){
+    if(!Number.isFinite(n)) return "";
+    const ag = Math.round(n * 100);
+    const whole = Math.trunc(ag / 100);
+    const frac = Math.abs(ag % 100);
+    return whole + "." + String(frac).padStart(2, "0");
+  }
+
+  /** מחפש תעריף בקבוצת גיל. bands: [{min,max,agorot}] */
+  function ayalonHealthLookupBand(bands, age){
+    const a = Number(age);
+    if(!Number.isInteger(a)) return null;
+    for(let i = 0; i < bands.length; i++){
+      const b = bands[i];
+      if(a >= b.min && a <= b.max) return b;
+    }
+    return null;
+  }
+
+  /**
+   * קטלוג כיסויים — שמות label מה-PDF; wizardKey = מפתח ב-Wizard.healthCoversByCompany["איילון"].
+   * מחלות קשות / סרטן — לא כאן. אין שדה עישון בבריאות. אין תעריף לפי מין בכיסויי הבריאות.
+   */
+  const AYALON_HEALTH_COVERS = [
+    {
+      id: "transplant",
+      label: "השתלות וטיפולים מיוחדים בחו״ל",
+      wizardKey: "השתלות וטיפולים מיוחדים בחו\"ל",
+      group: "דבר ראשון — בסיסי",
+      needsGender: false,
+      bands: [
+        { min:0, max:20, agorot:1038 }, { min:21, max:30, agorot:1654 }, { min:31, max:40, agorot:1821 }, { min:41, max:50, agorot:2252 },
+        { min:51, max:55, agorot:2459 }, { min:56, max:60, agorot:2732 }, { min:61, max:65, agorot:3098 }, { min:66, max:120, agorot:3162 }
+      ]
+    },
+    {
+      id: "drugs",
+      label: "תרופות שלא בסל הבריאות",
+      wizardKey: "תרופות מחוץ לסל הבריאות",
+      group: "דבר ראשון — בסיסי",
+      needsGender: false,
+      bands: [
+        { min:0, max:20, agorot:1323 }, { min:21, max:30, agorot:1833 }, { min:31, max:40, agorot:2580 }, { min:41, max:50, agorot:4194 },
+        { min:51, max:55, agorot:6073 }, { min:56, max:60, agorot:8050 }, { min:61, max:65, agorot:10841 }, { min:66, max:120, agorot:14398 }
+      ]
+    },
+    {
+      id: "abroad_surgery",
+      label: "ניתוחים ומחליפי ניתוח בחו״ל",
+      wizardKey: "ניתוחים וטיפולים מחליפי ניתוח בחו\"ל",
+      group: "דבר ראשון — בסיסי",
+      needsGender: false,
+      bands: [
+        { min:0, max:20, agorot:666 }, { min:21, max:30, agorot:925 }, { min:31, max:40, agorot:1072 }, { min:41, max:50, agorot:1320 },
+        { min:51, max:55, agorot:2183 }, { min:56, max:60, agorot:2676 }, { min:61, max:65, agorot:3050 }, { min:66, max:120, agorot:3135 }
+      ]
+    },
+    {
+      id: "surgery_first_shekel",
+      label: "ניתוחים ומחליפי ניתוח פרטיים בארץ — מהשקל הראשון",
+      wizardKey: "ניתוחים בישראל מהשקל הראשון",
+      group: "דבר שני — ניתוחים בישראל",
+      needsGender: false,
+      bands: [
+        { min:0, max:20, agorot:4554 }, { min:21, max:30, agorot:9865 }, { min:31, max:40, agorot:12759 }, { min:41, max:50, agorot:19961 },
+        { min:51, max:55, agorot:29929 }, { min:56, max:60, agorot:39114 }, { min:61, max:65, agorot:47187 }, { min:66, max:120, agorot:62491 }
+      ]
+    },
+    {
+      id: "surgery_shaban",
+      label: "ניתוחים ומחליפי ניתוח פרטיים בארץ — משלים שב״ן",
+      wizardKey: "משלים שב\"ן",
+      group: "דבר שני — ניתוחים בישראל",
+      needsGender: false,
+      bands: [
+        { min:0, max:20, agorot:1906 }, { min:21, max:30, agorot:3588 }, { min:31, max:40, agorot:6281 }, { min:41, max:50, agorot:8707 },
+        { min:51, max:55, agorot:13904 }, { min:56, max:60, agorot:16935 }, { min:61, max:65, agorot:22411 }, { min:66, max:120, agorot:28999 }
+      ]
+    },
+    {
+      id: "surgery_shaban_5000",
+      label: "משלים שב״ן עם השתתפות עצמית ₪5,000",
+      wizardKey: "משלים שב\"ן עם השתתפות עצמית 5,000 ₪",
+      group: "דבר שני — ניתוחים בישראל",
+      needsGender: false,
+      bands: [
+        { min:0, max:20, agorot:1486 }, { min:21, max:30, agorot:2799 }, { min:31, max:40, agorot:4900 }, { min:41, max:50, agorot:6792 },
+        { min:51, max:55, agorot:10845 }, { min:56, max:60, agorot:13209 }, { min:61, max:65, agorot:17481 }, { min:66, max:120, agorot:22620 }
+      ]
+    },
+    {
+      id: "ambulatory_extended",
+      label: "שירותים אמבולטוריים לייעוץ ובדיקות — מורחב",
+      wizardKey: "אמבולטורי מורחב",
+      group: "דבר רביעי — שירותים אמבולטוריים",
+      needsGender: false,
+      bands: [
+        { min:0, max:17, agorot:2880 }, { min:18, max:30, agorot:7300 }, { min:31, max:55, agorot:8030 }, { min:56, max:64, agorot:8210 },
+        { min:65, max:75, agorot:11800 }, { min:76, max:120, agorot:14410 }
+      ]
+    },
+    {
+      id: "ambulatory_consults",
+      label: "שירותים אמבולטוריים לייעוץ ובדיקות",
+      wizardKey: "ייעוץ ובדיקות",
+      group: "דבר רביעי — שירותים אמבולטוריים",
+      needsGender: false,
+      bands: [
+        { min:0, max:17, agorot:1699 }, { min:18, max:30, agorot:4652 }, { min:31, max:55, agorot:5756 }, { min:56, max:64, agorot:6219 },
+        { min:65, max:75, agorot:8359 }, { min:76, max:120, agorot:9723 }
+      ]
+    },
+    {
+      id: "ambulatory_treatments",
+      label: "נספח לטיפולים",
+      wizardKey: "טיפולים אמבולטוריים",
+      group: "דבר רביעי — שירותים אמבולטוריים",
+      needsGender: false,
+      bands: [
+        { min:0, max:17, agorot:186 }, { min:18, max:30, agorot:508 }, { min:31, max:55, agorot:630 }, { min:56, max:64, agorot:680 },
+        { min:65, max:75, agorot:914 }, { min:76, max:120, agorot:1063 }
+      ]
+    },
+    {
+      id: "fast_diagnosis",
+      label: "נספח לשירותי אבחון מהיר",
+      wizardKey: "אבחון רפואי מהיר",
+      group: "דבר רביעי — שירותים אמבולטוריים",
+      needsGender: false,
+      maxEntryAge: 69,
+      bands: [
+        { min:0, max:20, agorot:406 }, { min:21, max:120, agorot:1876 }
+      ]
+    },
+    {
+      id: "tech_devices",
+      label: "טיפולים בטכנולוגיות מתקדמות ואביזרים רפואיים",
+      wizardKey: "טכנולוגיות מתקדמות ואביזרים רפואיים",
+      group: "דבר רביעי — שירותים אמבולטוריים",
+      needsGender: false,
+      bands: [
+        { min:0, max:20, agorot:726 }, { min:21, max:30, agorot:1323 }, { min:31, max:35, agorot:1368 }, { min:36, max:40, agorot:1500 },
+        { min:41, max:45, agorot:1687 }, { min:46, max:50, agorot:1971 }, { min:51, max:55, agorot:2271 }, { min:56, max:60, agorot:2897 },
+        { min:61, max:65, agorot:3552 }, { min:66, max:120, agorot:4716 }
+      ]
+    },
+    {
+      id: "child_dev",
+      label: "אבחונים וטיפולי התפתחות הילד",
+      wizardKey: "טיפולים ואבחונים בהתפתחות הילד",
+      group: "דבר שלישי — כתבי שירות",
+      needsGender: false,
+      maxAge: 21,
+      bands: [
+        { min:0, max:21, agorot:2640 }
+      ]
+    },
+    {
+      id: "complementary",
+      label: "רפואה משלימה",
+      wizardKey: "רפואה משלימה",
+      group: "דבר שלישי — כתבי שירות",
+      needsGender: false,
+      bands: [
+        { min:0, max:25, agorot:977 }, { min:26, max:70, agorot:1725 }, { min:71, max:75, agorot:1832 }
+      ]
+    },
+    {
+      id: "online",
+      label: "רפואה אונליין — ייעוץ רופא מומחה בקליק",
+      wizardKey: "ייעוץ אונליין — רופא מומחה בקליק",
+      group: "דבר שלישי — כתבי שירות",
+      needsGender: false,
+      bands: [
+        { min:0, max:75, agorot:1945 }
+      ]
+    },
+    {
+      id: "home",
+      label: "איילון עד הבית",
+      wizardKey: "איילון עד הבית",
+      group: "דבר שלישי — כתבי שירות",
+      needsGender: false,
+      maxEntryAge: 69,
+      bands: [
+        { min:0, max:20, agorot:1739 }, { min:21, max:69, agorot:2826 }
+      ]
+    },
+    {
+      id: "sports",
+      label: "איילון ספורטיבי",
+      wizardKey: "איילון ספורטיבי",
+      group: "דבר שלישי — כתבי שירות",
+      needsGender: false,
+      maxEntryAge: 69,
+      bands: [
+        { min:0, max:20, agorot:1152 }, { min:21, max:69, agorot:1806 }
+      ]
+    },
+    {
+      id: "crisis_bar_gefen",
+      label: "ניהול משברים בר גפן",
+      wizardKey: "ניהול משברים בר גפן",
+      group: "דבר שלישי — כתבי שירות",
+      needsGender: false,
+      maxEntryAge: 65,
+      bands: [
+        { min:0, max:20, agorot:577 }, { min:21, max:55, agorot:1153 }, { min:56, max:65, agorot:2307 }, { min:66, max:120, agorot:2884 }
+      ]
+    }
+  ];
+
+  const AYALON_HEALTH_COVER_BY_ID = AYALON_HEALTH_COVERS.reduce((acc, c) => { acc[c.id] = c; return acc; }, {});
+
+  /** מחשב פרמיה חודשית לכיסוי בודד. מחזיר {ok, monthlyPremium, monthlyAgorot, reason?} */
+  function computeAyalonHealthCoverPremium(coverId, age, gender){
+    const cover = AYALON_HEALTH_COVER_BY_ID[coverId];
+    if(!cover) return { ok:false, reason:"cover_missing" };
+    const a = Number(age);
+    if(!Number.isInteger(a)) return { ok:false, reason:"age_missing" };
+    if(a < AYALON_HEALTH_MIN_AGE || a > AYALON_HEALTH_MAX_AGE) return { ok:false, reason:"age_out_of_range" };
+    if(cover.maxAge != null && a > cover.maxAge) return { ok:false, reason:"age_cover_limit", coverMaxAge: cover.maxAge };
+    if(cover.maxEntryAge != null && a > cover.maxEntryAge) return { ok:false, reason:"age_cover_limit", coverMaxAge: cover.maxEntryAge };
+    const band = ayalonHealthLookupBand(cover.bands, a);
+    if(!band) return { ok:false, reason:"rate_missing" };
+    let agorot = null;
+    if(cover.needsGender){
+      if(gender !== "זכר" && gender !== "נקבה") return { ok:false, reason:"gender_missing" };
+      agorot = gender === "זכר" ? band.male : band.female;
+    } else {
+      agorot = band.agorot;
+    }
+    if(!Number.isInteger(agorot)) return { ok:false, reason:"rate_missing" };
+    return { ok:true, monthlyAgorot: agorot, monthlyPremium: ayalonHealthAgorotToShekels(agorot), coverId: cover.id, label: cover.label };
+  }
+
+  /** מחשב סל כיסויים נבחרים — סכום אגורות מדויק */
+  function computeAyalonHealthBundle(selectedIds, age, gender){
+    const ids = Array.isArray(selectedIds) ? selectedIds : [];
+    if(!ids.length) return { ok:false, reason:"covers_missing", covers:[], monthlyAgorot:0, monthlyPremium:0, annualPremium:0 };
+    const covers = [];
+    let totalAg = 0;
+    for(let i = 0; i < ids.length; i++){
+      const one = computeAyalonHealthCoverPremium(ids[i], age, gender);
+      if(!one.ok) return { ok:false, reason: one.reason, failCoverId: ids[i], coverMaxAge: one.coverMaxAge, covers:[], monthlyAgorot:0, monthlyPremium:0, annualPremium:0 };
+      const meta = AYALON_HEALTH_COVER_BY_ID[one.coverId];
+      covers.push({
+        id: one.coverId,
+        label: one.label,
+        wizardKey: meta?.wizardKey || one.label,
+        monthlyPremium: one.monthlyPremium,
+        monthlyAgorot: one.monthlyAgorot
+      });
+      totalAg += one.monthlyAgorot;
+    }
+    const monthly = ayalonHealthAgorotToShekels(totalAg);
+    return {
+      ok: true,
+      covers,
+      monthlyAgorot: totalAg,
+      monthlyPremium: monthly,
+      annualPremium: ayalonHealthAgorotToShekels(totalAg * 12)
+    };
+  }
+
+  const AYALON_HEALTH_SIM_MESSAGES = {
+    birth_missing: "יש לבחור תאריך לידה לפני חישוב הפרמיה.",
+    entry_too_young: `גיל הכניסה המינימלי הוא ${AYALON_HEALTH_MIN_ENTRY_DAYS} ימים.`,
+    age_missing: "יש לבחור תאריך לידה לפני חישוב הפרמיה.",
+    age_out_of_range: `הגיל הביטוחי (שנים שלמות היום) חורג מטווח הכניסה ${AYALON_HEALTH_MIN_AGE}–${AYALON_HEALTH_MAX_AGE}.`,
+    gender_missing: "יש לבחור מין.",
+    covers_missing: "יש לסמן לפחות כיסוי אחד.",
+    age_cover_limit: "הגיל חורג מהמותר לכיסוי שנבחר.",
+    rate_missing: "לא נמצא תעריף מתאים לנתונים שהוזנו.",
+    cover_missing: "כיסוי לא מזוהה בתעריפון."
+  };
+
+  const AyalonHealthSimulator = {
+    _modal: null,
+    _ctx: null,
+    _state: {},
+    _activeInsuredId: null,
+    _escHandler: null,
+    _confirmSwitch: null,
+    _showFinalSummary: false,
+
+    open(ctx){
+      this.close();
+      this._ctx = ctx || {};
+      const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : [];
+      this._state = {};
+      insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); });
+      this._activeInsuredId = insureds[0]?.id || null;
+      this._confirmSwitch = null;
+      this._showFinalSummary = false;
+      this._mount();
+      this._render();
+    },
+
+    _prefillFromInsured(ins){
+      const d = ins?.data || {};
+      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
+      const birthDate = safeTrim(d.birthDate || "");
+      const occupation = safeTrim(d.occupation || "");
+      const st = {
+        birthDate,
+        birthDateSource: birthDate ? "step1" : "",
+        age: "",
+        ageSource: birthDate ? "step1" : "",
+        ageRaw: null,
+        entryDays: null,
+        gender, genderSource: gender ? "step1" : "",
+        occupation,
+        occupationSource: occupation ? "step1" : "",
+        selected: {},
+        result: null,
+        error: null,
+        savedAt: null,
+        dirtySinceSave: false
+      };
+      riskSimSyncAgeFromBirthDate(st, {
+        minAge: AYALON_HEALTH_MIN_AGE,
+        maxAge: AYALON_HEALTH_MAX_AGE,
+        minEntryDays: AYALON_HEALTH_MIN_ENTRY_DAYS
+      });
+      return st;
+    },
+
+    _isInsuredRelevant(_ins){ return true; },
+
+    close(){
+      if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; }
+      if(this._modal){
+        const m = this._modal;
+        m.classList.add("giValModal--leaving");
+        window.setTimeout(() => m.remove(), 200);
+        this._modal = null;
+      }
+      this._ctx = null;
+    },
+
+    _mount(){
+      const modal = document.createElement("div");
+      modal.id = "lcAylHealthModal";
+      modal.className = "giValModal lcAylHealthModal";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-label", "סימולטור בריאות איילון");
+      document.body.appendChild(modal);
+      this._modal = modal;
+      this._escHandler = (ev) => { if(ev.key === "Escape") this.close(); };
+      document.addEventListener("keydown", this._escHandler);
+      requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
+    },
+
+    _getInsuredLabel(insId){
+      const ins = (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === insId);
+      return ins ? safeTrim(ins.label) || "מבוטח" : "מבוטח";
+    },
+
+    _getActiveInsured(){
+      return (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === this._activeInsuredId) || null;
+    },
+
+    _selectedIds(st){
+      return AYALON_HEALTH_COVERS.map((c) => c.id).filter((id) => !!st?.selected?.[id]);
+    },
+
+    _syncAge(st){
+      return riskSimSyncAgeFromBirthDate(st, {
+        minAge: AYALON_HEALTH_MIN_AGE,
+        maxAge: AYALON_HEALTH_MAX_AGE,
+        minEntryDays: AYALON_HEALTH_MIN_ENTRY_DAYS
+      });
+    },
+
+    _recalcState(st){
+      if(!st) return;
+      if(!st.selected || typeof st.selected !== "object") st.selected = {};
+      const ageSync = this._syncAge(st);
+      const ids = this._selectedIds(st);
+      if(!ids.length){
+        st.result = null;
+        st.error = null;
+        return;
+      }
+      if(!ageSync.ok){
+        st.result = null;
+        st.error = AYALON_HEALTH_SIM_MESSAGES[ageSync.reason] || AYALON_HEALTH_SIM_MESSAGES.birth_missing;
+        return;
+      }
+      const calc = computeAyalonHealthBundle(ids, st.age, st.gender);
+      if(calc.ok){
+        st.result = calc;
+        st.error = null;
+      } else {
+        st.result = null;
+        let msg = AYALON_HEALTH_SIM_MESSAGES[calc.reason] || "לא ניתן לחשב את הפרמיה.";
+        if(calc.reason === "age_cover_limit" && calc.failCoverId){
+          const c = AYALON_HEALTH_COVER_BY_ID[calc.failCoverId];
+          msg = `הכיסוי "${c?.label || ""}" זמין עד גיל ${calc.coverMaxAge} בלבד.`;
+        } else if(calc.failCoverId){
+          const c = AYALON_HEALTH_COVER_BY_ID[calc.failCoverId];
+          if(c) msg = `${msg} (${c.label})`;
+        }
+        st.error = msg;
+      }
+    },
+
+    _render(){
+      if(!this._modal) return;
+      const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+      const isMulti = insureds.length > 1;
+      if(this._showFinalSummary){
+        this._renderFinalSummary(insureds);
+        return;
+      }
+      const activeId = this._activeInsuredId;
+      const st = this._state[activeId] || this._prefillFromInsured(null);
+      const isStandalone = !!this._ctx?.standalone;
+      this._recalcState(st);
+
+      const tabsHtml = isMulti ? `<div class="lcAylHealth__tabs">${insureds.map((ins) => {
+        const s = this._state[ins.id];
+        const statusCls = s?.savedAt ? " has-saved" : (s?.result ? " has-result" : "");
+        return `<button type="button" class="lcAylHealth__tab${ins.id === activeId ? " is-active" : ""}${statusCls}" data-aylh-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${s?.savedAt ? " 🟢" : ""}</button>`;
+      }).join("")}</div>` : "";
+
+      const birthIso = riskSimBirthDateToIsoInput(st.birthDate || "");
+      const birthMaxIso = riskSimIsoDateDaysAgo(AYALON_HEALTH_MIN_ENTRY_DAYS);
+      const ageSync = this._syncAge(st);
+      const ageDisplay = ageSync.ok ? String(ageSync.age) : "—";
+      const ageHintHtml = !st.birthDate
+        ? (isStandalone ? `<div class="lcAylHealth__hint lcAylHealth__hint--warn">יש לבחור תאריך לידה מלוח השנה</div>` : `<div class="lcAylHealth__hint lcAylHealth__hint--warn">לא נמצא תאריך לידה בפרטים האישיים — יש לבחור מלוח השנה</div>`)
+        : (!ageSync.ok
+          ? `<div class="lcAylHealth__hint lcAylHealth__hint--warn">${escapeHtml(AYALON_HEALTH_SIM_MESSAGES[ageSync.reason] || "תאריך לידה לא תקין לחישוב")}</div>`
+          : `<div class="lcAylHealth__hint">גיל ביטוחי (שנים שלמות היום): <strong>${escapeHtml(ageDisplay)}</strong></div>`);
+      const needsGenderSelected = this._selectedIds(st).some((id) => !!AYALON_HEALTH_COVER_BY_ID[id]?.needsGender);
+      const genderHintHtml = (!needsGenderSelected || isStandalone || st.gender) ? "" : `<div class="lcAylHealth__hint lcAylHealth__hint--warn">לא נמצא מין — נדרש לכיסוי לפי מין</div>`;
+
+      const groups = {};
+      AYALON_HEALTH_COVERS.forEach((c) => {
+        if(!groups[c.group]) groups[c.group] = [];
+        groups[c.group].push(c);
+      });
+      const coversHtml = Object.keys(groups).map((g) => `
+        <div class="lcAylHealth__group">
+          <div class="lcAylHealth__groupTitle">${escapeHtml(g)}</div>
+          <div class="lcAylHealth__coverList">
+            ${groups[g].map((c) => {
+              const checked = !!(st.selected && st.selected[c.id]);
+              const one = checked ? computeAyalonHealthCoverPremium(c.id, st.age, st.gender) : null;
+              const premTxt = one?.ok ? `₪${formatAyalonHealthExactAmount(one.monthlyPremium)}` : (checked && one && !one.ok ? "—" : "");
+              return `<label class="lcAylHealth__cover${checked ? " is-checked" : ""}">
+                <input type="checkbox" data-aylh-cover="${escapeHtml(c.id)}"${checked ? " checked" : ""} />
+                <span class="lcAylHealth__coverLabel">${escapeHtml(c.label)}${c.needsGender ? ' <em>(לפי מין)</em>' : ""}${c.maxAge != null ? ` <em>(עד גיל ${c.maxAge})</em>` : ""}</span>
+                <span class="lcAylHealth__coverPrem">${premTxt}</span>
+              </label>`;
+            }).join("")}
+          </div>
+        </div>`).join("");
+
+      const selectedRows = (st.result?.covers || []).map((c) =>
+        `<div class="lcAylHealth__selRow"><span>${escapeHtml(c.label)}</span><strong>₪${escapeHtml(formatAyalonHealthExactAmount(c.monthlyPremium))}</strong></div>`
+      ).join("");
+
+      const resultHtml = st.error
+        ? `<div class="lcAylHealth__result lcAylHealth__result--error">${escapeHtml(st.error)}</div>`
+        : (st.result ? `<div class="lcAylHealth__result lcAylHealth__result--ok">
+            <div class="lcAylHealth__selTitle">כיסויים שנבחרו</div>
+            ${selectedRows}
+            <div class="lcAylHealth__resultRow lcAylHealth__resultRow--main"><span>סה״כ פרמיה חודשית</span><strong>₪${escapeHtml(formatAyalonHealthExactAmount(st.result.monthlyPremium))}</strong></div>
+            <div class="lcAylHealth__resultRow"><span>סה״כ פרמיה שנתית</span><strong>₪${escapeHtml(formatAyalonHealthExactAmount(st.result.annualPremium))}</strong></div>
+          </div>` : `<div class="lcAylHealth__result lcAylHealth__result--empty">סמנו כיסויים כדי לראות פרמיה</div>`);
+
+      const occAssessment = assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product);
+      const occBlockHtml = renderOccupationRiskBlockHtml(occAssessment, "lcAylHealth");
+      const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company)
+        ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini")
+        : "✚";
+
+      const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
+      const relevantInsureds = insureds.filter((ins) => this._isInsuredRelevant(ins));
+      const allRelevantSaved = relevantInsureds.length > 0 && relevantInsureds.every((ins) => !!this._state[ins.id]?.savedAt);
+
+      const footHtml = isStandalone ? `
+          <div class="giValModal__foot lcAylHealth__foot">
+            <button type="button" class="btn btn--primary" data-aylh-close="1">סגור</button>
+          </div>` : (!isMulti ? `
+          <div class="giValModal__foot lcAylHealth__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-aylh-close="1">ביטול</button>
+            <button type="button" class="btn btn--primary" data-aylh-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button>
+          </div>` : `
+          <div class="giValModal__foot lcAylHealth__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-aylh-close="1">ביטול</button>
+            <button type="button" class="btn btn--secondary" data-aylh-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button>
+            <button type="button" class="btn btn--primary" data-aylh-finalconfirm="1"${allRelevantSaved ? "" : " disabled"}>אישור סופי</button>
+          </div>`);
+
+      const confirmOverlayHtml = this._confirmSwitch ? `
+        <div class="lcAylHealth__overlay">
+          <div class="lcAylHealth__overlayCard">
+            <div class="lcAylHealth__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}. האם לשמור לפני המעבר?</div>
+            <div class="lcAylHealth__overlayBtns">
+              <button type="button" class="btn btn--primary" data-aylh-switch="save">שמור ועבור</button>
+              <button type="button" class="btn btn--secondary" data-aylh-switch="discard">עבור ללא שמירה</button>
+              <button type="button" class="btn" data-aylh-switch="cancel">ביטול</button>
+            </div>
+          </div>
+        </div>` : "";
+
+      this._modal.innerHTML = `
+        <div class="giValModal__backdrop" data-aylh-close="1"></div>
+        <div class="giValModal__card lcAylHealth__card">
+          <div class="giValModal__head">
+            <span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span>
+            <div class="giValModal__headText">
+              <div class="giValModal__title">סימולטור בריאות איילון</div>
+            </div>
+            <button type="button" class="lcAylHealth__closeX" data-aylh-close="1" aria-label="סגירה">✕</button>
+          </div>
+          <div class="giValModal__body lcAylHealth__body">
+            ${tabsHtml}
+            ${isStandalone
+              ? `<div class="lcAylHealth__insuredLabel lcAylHealth__insuredLabel--standalone">מצב חישוב עצמאי — התוצאה לא נשמרת על אף פוליסה</div>`
+              : `<div class="lcAylHealth__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}
+            <div class="lcAylHealth__grid">
+              <div class="lcAylHealth__field">
+                <label class="lcAylHealth__label">תאריך לידה</label>
+                <input class="lcAylHealth__input" type="date" data-aylh-field="birthDate" value="${escapeHtml(birthIso)}" max="${escapeHtml(birthMaxIso)}" />
+                ${ageHintHtml}
+              </div>
+              <div class="lcAylHealth__field">
+                <label class="lcAylHealth__label">מין</label>
+                <div class="lcAylHealth__segmented">
+                  <button type="button" class="lcAylHealth__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-aylh-field="gender" data-aylh-value="זכר">זכר</button>
+                  <button type="button" class="lcAylHealth__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-aylh-field="gender" data-aylh-value="נקבה">נקבה</button>
+                </div>
+                ${genderHintHtml}
+              </div>
+              <div class="lcAylHealth__field lcAylHealth__field--wide">
+                <label class="lcAylHealth__label">עיסוק</label>
+                <input class="lcAylHealth__input" type="text" data-aylh-field="occupation" value="${escapeHtml(st.occupation || "")}" placeholder="לדוגמה: מהנדס, נהג משאית" autocomplete="off" />
+              </div>
+            </div>
+            <div class="lcAylHealth__coversTitle">בחירת כיסויים <span class="lcAylHealth__coversCount">(${AYALON_HEALTH_COVERS.length})</span></div>
+            <div class="lcAylHealth__coversWrap">${coversHtml}</div>
+            ${occBlockHtml}
+            ${resultHtml}
+          </div>
+          ${footHtml}
+          ${confirmOverlayHtml}
+        </div>`;
+      this._bind();
+    },
+
+    _renderFinalSummary(insureds){
+      const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+      const rows = relevant.map((ins) => {
+        const ok = !!this._state[ins.id]?.savedAt;
+        return `<div class="lcAylHealth__summaryRow"><span>${ok ? "✓" : "•"}</span><span>${escapeHtml(safeTrim(ins.label) || "מבוטח")}</span><span>${ok ? "הושלם" : "לא נשמר"}</span></div>`;
+      }).join("");
+      this._modal.innerHTML = `
+        <div class="giValModal__backdrop" data-aylh-close="1"></div>
+        <div class="giValModal__card lcAylHealth__card">
+          <div class="giValModal__head">
+            <div class="giValModal__headText">
+              <div class="giValModal__title">סיכום סימולטור להצעה</div>
+            </div>
+            <button type="button" class="lcAylHealth__closeX" data-aylh-close="1" aria-label="סגירה">✕</button>
+          </div>
+          <div class="giValModal__body lcAylHealth__body">${rows}</div>
+          <div class="giValModal__foot lcAylHealth__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-aylh-summary-back="1">חזרה</button>
+            <button type="button" class="btn btn--primary" data-aylh-summary-confirm="1">אישור סופי</button>
+          </div>
+        </div>`;
+      this._bind();
+    },
+
+    _bind(){
+      const modal = this._modal;
+      if(!modal) return;
+      $$("[data-aylh-close]", modal).forEach((el) => on(el, "click", () => this.close()));
+      $$("[data-aylh-tab]", modal).forEach((el) => on(el, "click", () => this._switchInsured(el.getAttribute("data-aylh-tab"))));
+      $$("[data-aylh-switch]", modal).forEach((el) => on(el, "click", () => {
+        const action = el.getAttribute("data-aylh-switch");
+        const target = this._confirmSwitch?.targetId;
+        this._confirmSwitch = null;
+        if(action === "save"){ this._saveActive(); if(target) this._activeInsuredId = target; this._render(); }
+        else if(action === "discard"){ if(target) this._activeInsuredId = target; this._render(); }
+        else this._render();
+      }));
+      const birthInput = modal.querySelector('[data-aylh-field="birthDate"]');
+      if(birthInput) on(birthInput, "change", () => {
+        const st = this._state[this._activeInsuredId];
+        if(!st) return;
+        st.birthDate = riskSimBirthDateFromIsoInput(birthInput.value);
+        st.birthDateSource = "manual";
+        st.ageSource = "manual";
+        st.dirtySinceSave = true;
+        this._syncAge(st);
+        this._render();
+      });
+      $$('[data-aylh-field="gender"]', modal).forEach((btn) => on(btn, "click", () => {
+        const st = this._state[this._activeInsuredId];
+        if(!st) return;
+        st.gender = btn.getAttribute("data-aylh-value") || "";
+        st.genderSource = "manual"; st.dirtySinceSave = true;
+        this._render();
+      }));
+      const occInput = modal.querySelector('[data-aylh-field="occupation"]');
+      if(occInput){
+        on(occInput, "input", () => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.occupation = safeTrim(occInput.value);
+          st.occupationSource = "manual"; st.dirtySinceSave = true;
+        });
+        on(occInput, "change", () => this._render());
+        on(occInput, "blur", () => this._render());
+      }
+      $$("[data-aylh-cover]", modal).forEach((el) => on(el, "change", () => {
+        const st = this._state[this._activeInsuredId];
+        if(!st) return;
+        if(!st.selected || typeof st.selected !== "object") st.selected = {};
+        const id = el.getAttribute("data-aylh-cover");
+        st.selected[id] = !!el.checked;
+        st.dirtySinceSave = true;
+        this._render();
+      }));
+      const applyBtn = modal.querySelector("[data-aylh-apply]");
+      if(applyBtn) on(applyBtn, "click", () => this._apply());
+      const saveBtn = modal.querySelector("[data-aylh-save]");
+      if(saveBtn) on(saveBtn, "click", () => this._saveActive());
+      const finalBtn = modal.querySelector("[data-aylh-finalconfirm]");
+      if(finalBtn) on(finalBtn, "click", () => {
+        const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+        const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+        const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
+        if(!allSaved){
+          window.showToast?.({ title: "לא כל המבוטחים נשמרו", text: "יש לשמור את הסימולטור עבור כל המבוטחים הרלוונטיים לפני האישור הסופי.", variant: "warn" });
+          return;
+        }
+        this._showFinalSummary = true;
+        this._render();
+      });
+      const summaryBackBtn = modal.querySelector("[data-aylh-summary-back]");
+      if(summaryBackBtn) on(summaryBackBtn, "click", () => { this._showFinalSummary = false; this._render(); });
+      const summaryConfirmBtn = modal.querySelector("[data-aylh-summary-confirm]");
+      if(summaryConfirmBtn) on(summaryConfirmBtn, "click", () => {
+        try { this._ctx?.onFinalConfirm?.(); } catch(_e){}
+        this.close();
+      });
+    },
+
+    _switchInsured(targetId){
+      if(!targetId || targetId === this._activeInsuredId) return;
+      const st = this._state[this._activeInsuredId];
+      if(st?.dirtySinceSave){ this._confirmSwitch = { targetId }; this._render(); return; }
+      this._activeInsuredId = targetId;
+      this._render();
+    },
+
+    _buildResultForInsured(insId){
+      const st = this._state[insId];
+      this._recalcState(st);
+      if(!st?.result?.ok) return null;
+      return {
+        covers: st.result.covers.map((c) => ({
+          id: c.id,
+          label: c.label,
+          wizardKey: c.wizardKey || c.label,
+          monthlyPremium: c.monthlyPremium
+        })),
+        monthlyPremium: st.result.monthlyPremium,
+        annualPremium: st.result.annualPremium,
+        monthlyAgorot: st.result.monthlyAgorot,
+        birthDate: st.birthDate || "",
+        birthDateSource: st.birthDateSource || "",
+        age: st.age, ageSource: st.ageSource, gender: st.gender, genderSource: st.genderSource,
+        occupation: st.occupation || "", occupationSource: st.occupationSource || ""
+      };
+    },
+
+    _apply(){
+      const results = {};
+      Object.keys(this._state).forEach((insId) => {
+        const r = this._buildResultForInsured(insId);
+        if(r) results[insId] = r;
+      });
+      if(!Object.keys(results).length){
+        window.showToast?.({ title: "אין תוצאה להחלה", text: "יש לבחור כיסויים ולחשב פרמיה לפני ההחלה על הפוליסה.", variant: "warn" });
+        return;
+      }
+      const onApply = this._ctx?.onApply;
+      this.close();
+      try { onApply?.(results); } catch(_e) {}
+    },
+
+    _saveActive(){
+      const insId = this._activeInsuredId;
+      const result = this._buildResultForInsured(insId);
+      if(!result){
+        window.showToast?.({ title: "אין תוצאה לשמירה", text: "יש לבחור כיסויים תקינים לפני השמירה.", variant: "warn" });
+        return;
+      }
+      try { this._ctx?.onApply?.({ [insId]: result }); } catch(_e) {}
+      const st = this._state[insId];
+      if(st){ st.savedAt = nowISO(); st.dirtySinceSave = false; }
+      window.showToast?.({ title: "נשמר", text: `הסימולטור עבור ${this._getInsuredLabel(insId)} נשמר על ההצעה.`, variant: "success" });
+      this._render();
+    }
+  };
+
+  RiskSimulators.register("איילון", "בריאות", AyalonHealthSimulator);
+  // ===== סוף GI-AYL-HEALTH-SIM ====================================================
+
+
   // ===== GI-MNR-CI-SIM 2026-08-09 · סימולטורי מחלות קשות מנורה ==================
   // מקור אמת: תעריפי בריאות מנורה.pdf עמוד 3 — "תעריפונים מחלות קשות".
   // שני מסלולים נפרדים (סימולטורים נפרדים):
