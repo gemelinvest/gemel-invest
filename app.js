@@ -6295,7 +6295,7 @@
     try {
       const p = payload && typeof payload === "object" ? payload : {};
       const flow = inferProposalFlowType(p);
-      if(flow === "elementary") return 6;
+      if(flow === "elementary") return 8;
       if(typeof Wizard !== "undefined" && Wizard && Array.isArray(Wizard.steps)){
         const ids = Wizard.steps
           .filter((s) => Number(s?.id) !== 41)
@@ -21327,6 +21327,10 @@ UsersGateUI.init();
     _referralId: null,
     _quotes: [],
     _viewOnly: false,
+    _hostMode: "modal",
+    _wizardHostEl: null,
+    _wizardRec: null,
+    _onQuotesChanged: null,
     init(){
       this.els = {
         modal: $("#lcElemQuoteModal"),
@@ -21341,14 +21345,78 @@ UsersGateUI.init();
       this._referralId = null;
       this._quotes = [];
       this._viewOnly = false;
+      this._hostMode = "modal";
+      this._wizardHostEl = null;
+      this._wizardRec = null;
+      this._onQuotesChanged = null;
       on(this.els.close, "click", () => this.close());
       on(this.els.backdrop, "click", () => this.close());
       on(this.els.btnCancel, "click", () => this.close());
       on(this.els.btnAdd, "click", () => this.addQuoteVariant());
       on(this.els.btnSend, "click", () => { void this.sendToAgent(); });
     },
+    getHostBody(){
+      if(this._hostMode === "wizard" && this._wizardHostEl) return this._wizardHostEl;
+      return this.els?.body || null;
+    },
     getRec(){
+      if(this._hostMode === "wizard" && this._wizardRec) return this._wizardRec;
       return findElementaryReferralById(this._referralId);
+    },
+    isWizardHost(){
+      return this._hostMode === "wizard";
+    },
+    getNormalizedQuotes(){
+      return normalizeElementaryPriceQuotes(this._quotes);
+    },
+    validateQuotesForWizard(){
+      const quotes = this.getNormalizedQuotes();
+      if(!quotes.length) return { ok: false, msg: "יש להוסיף לפחות הצעת מחיר אחת עם פרמיות" };
+      for(const q of quotes){
+        let hasPremium = false;
+        for(const line of q.products){
+          const prem = safeTrim(line.premium).replace(/[^\d.,]/g, "");
+          if(prem) hasPremium = true;
+          if(!safeTrim(line.company)) return { ok: false, msg: `יש לבחור חברה ל־${safeTrim(line.label) || "מוצר"} (${safeTrim(q.label)})` };
+          if(!prem) return { ok: false, msg: `חסרה פרמיה ל־${safeTrim(line.label) || "מוצר"} (${safeTrim(q.label)})` };
+        }
+        if(!hasPremium) return { ok: false, msg: `חסרה פרמיה (${safeTrim(q.label) || "הצעה"})` };
+      }
+      return { ok: true, quotes };
+    },
+    notifyQuotesChanged(){
+      if(typeof this._onQuotesChanged === "function"){
+        try { this._onQuotesChanged(this.getNormalizedQuotes()); } catch(_e){}
+      }
+    },
+    mountWizardHost(hostEl, recLike, options = {}){
+      if(!hostEl) return;
+      this._hostMode = "wizard";
+      this._wizardHostEl = hostEl;
+      this._wizardRec = recLike || null;
+      this._referralId = safeTrim(recLike?.id) && String(recLike.id) !== "__wizard_quote__"
+        ? safeTrim(recLike.id)
+        : null;
+      this._viewOnly = !!options.viewOnly;
+      this._onQuotesChanged = typeof options.onQuotesChanged === "function" ? options.onQuotesChanged : null;
+      const seed = Array.isArray(options.quotes)
+        ? options.quotes
+        : (recLike ? getReferralElementaryPriceQuotes(recLike) : []);
+      this._quotes = normalizeElementaryPriceQuotes(JSON.parse(JSON.stringify(seed || [])));
+      if(!this._quotes.length && recLike){
+        this._quotes = normalizeElementaryPriceQuotes(buildDefaultElementaryPriceQuotesFromReferral(recLike));
+      }
+      try { this.render(); } catch(_e){}
+    },
+    unmountWizardHost(){
+      if(this._hostMode !== "wizard") return;
+      this._hostMode = "modal";
+      this._wizardHostEl = null;
+      this._wizardRec = null;
+      this._onQuotesChanged = null;
+      this._referralId = null;
+      this._quotes = [];
+      this._viewOnly = false;
     },
     parseQuoteMoney(val){
       const n = parseFloat(String(val ?? "").replace(/[^\d.,]/g, "").replace(/,/g, "."));
@@ -21393,9 +21461,10 @@ UsersGateUI.init();
       return sum;
     },
     refreshQuoteCalcs(quoteId){
-      if(!this.els.body) return;
+      const host = this.getHostBody();
+      if(!host) return;
       const wantId = safeTrim(quoteId);
-      this.els.body.querySelectorAll(".lcElemQuoteVariant[data-quote-id]").forEach((section) => {
+      host.querySelectorAll(".lcElemQuoteVariant[data-quote-id]").forEach((section) => {
         if(wantId && String(section.getAttribute("data-quote-id")) !== String(wantId)) return;
         const qid = section.getAttribute("data-quote-id");
         const quote = this._quotes.find((row) => String(row.id) === String(qid));
@@ -21425,6 +21494,7 @@ UsersGateUI.init();
       this.els.modal.setAttribute("aria-hidden", "false");
     },
     close(){
+      if(this.isWizardHost()) return;
       if(this.els.modal){
         this.els.modal.classList.remove("is-open");
         this.els.modal.setAttribute("aria-hidden", "true");
@@ -21435,6 +21505,8 @@ UsersGateUI.init();
     },
     openForReferral(rec){
       if(!rec) return;
+      this.unmountWizardHost();
+      this._hostMode = "modal";
       this._viewOnly = false;
       this._referralId = rec.id;
       this._quotes = normalizeElementaryPriceQuotes(JSON.parse(JSON.stringify(getReferralElementaryPriceQuotes(rec))));
@@ -21445,6 +21517,8 @@ UsersGateUI.init();
     },
     openViewOnly(rec){
       if(!rec) return;
+      this.unmountWizardHost();
+      this._hostMode = "modal";
       this._viewOnly = true;
       this._referralId = rec.id;
       this._quotes = normalizeElementaryPriceQuotes(JSON.parse(JSON.stringify(rec.elementaryPriceQuotes || [])));
@@ -21464,11 +21538,13 @@ UsersGateUI.init();
       const normalized = normalizeElementaryPriceQuoteVariant(clone, idx);
       this._quotes.push(normalized);
       this.render();
+      this.notifyQuotesChanged();
     },
     removeQuoteVariant(quoteId){
       if(this._viewOnly || this._quotes.length <= 1) return;
       this._quotes = this._quotes.filter((q) => String(q.id) !== String(quoteId));
       this.render();
+      this.notifyQuotesChanged();
     },
     ensureQuoteAdditionalServices(quote){
       if(!quote) return { premium: "", installments: "", details: "" };
@@ -21483,12 +21559,14 @@ UsersGateUI.init();
       const line = (q.products || []).find((p) => String(p.productKey) === String(productKey));
       if(!line) return;
       line[field] = value;
+      this.notifyQuotesChanged();
     },
     updateAdditionalField(quoteId, field, value){
       const q = this._quotes.find((row) => String(row.id) === String(quoteId));
       if(!q) return;
       const svc = this.ensureQuoteAdditionalServices(q);
       svc[field] = value;
+      this.notifyQuotesChanged();
     },
     renderQuoteVariantSections(quote, companyOpts, covLabel){
       const products = Array.isArray(quote.products) ? quote.products : [];
@@ -21549,12 +21627,15 @@ UsersGateUI.init();
     },
     render(){
       const rec = this.getRec();
-      if(!this.els.body || !rec) return;
+      const host = this.getHostBody();
+      if(!host || !rec) return;
       const companies = getVehicleInsuranceCompanies();
       const covLabel = elementaryCoverageTypeLabelHe(rec.requestedCoverageType || getRequestedCoverageFromPayload(rec.payload));
-      if(this.els.title) this.els.title.textContent = this._viewOnly
-        ? `הצעת מחיר · ${rec.fullName || "לקוח"}`
-        : `הצעת מחיר · ${rec.fullName || "לקוח"} · נציג: ${rec.agentName || "—"}`;
+      if(!this.isWizardHost() && this.els.title){
+        this.els.title.textContent = this._viewOnly
+          ? `הצעת מחיר · ${rec.fullName || "לקוח"}`
+          : `הצעת מחיר · ${rec.fullName || "לקוח"} · נציג: ${rec.agentName || "—"}`;
+      }
       const companyOpts = companies.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
       const variantsHtml = this._quotes.map((quote, qIdx) => {
         const total = this.computeQuoteTotal(quote);
@@ -21577,8 +21658,14 @@ UsersGateUI.init();
           </div>
         </section>`;
       }).join("");
-      this.els.body.innerHTML = `<div class="lcElemQuoteLead muted small">מוצר מבוקש: <strong>${escapeHtml(covLabel)}</strong> · מגיש: ${escapeHtml(rec.agentName || "—")} · ${escapeHtml(ElementaryPendingUI.formatDate(rec.submittedAt))}</div>${variantsHtml}`;
-      this.els.body.querySelectorAll("select[data-eq-field]").forEach((sel) => {
+      const leadDate = this.isWizardHost()
+        ? (safeTrim(rec.submittedAt) ? ElementaryPendingUI.formatDate(rec.submittedAt) : "טיוטת אשף")
+        : ElementaryPendingUI.formatDate(rec.submittedAt);
+      const addBtnHtml = this.isWizardHost() && !this._viewOnly
+        ? `<div class="lcWizardElemQuoteActions"><button class="btn" type="button" data-eq-wizard-add="1">הוסף הצעה נוספת</button></div>`
+        : "";
+      host.innerHTML = `<div class="lcElemQuoteLead muted small">מוצר מבוקש: <strong>${escapeHtml(covLabel)}</strong> · מגיש: ${escapeHtml(rec.agentName || "—")} · ${escapeHtml(leadDate)}</div>${variantsHtml}${addBtnHtml}`;
+      host.querySelectorAll("select[data-eq-field]").forEach((sel) => {
         const wrap = sel.closest("[data-quote-line]");
         const parts = safeTrim(wrap?.getAttribute("data-quote-line")).split(":");
         const quoteId = parts[0];
@@ -21593,7 +21680,7 @@ UsersGateUI.init();
           });
         }
       });
-      this.els.body.querySelectorAll("input[data-eq-field]").forEach((inp) => {
+      host.querySelectorAll("input[data-eq-field]").forEach((inp) => {
         const wrap = inp.closest("[data-quote-line]");
         const parts = safeTrim(wrap?.getAttribute("data-quote-line")).split(":");
         const quoteId = parts[0];
@@ -21609,7 +21696,7 @@ UsersGateUI.init();
           });
         }
       });
-      this.els.body.querySelectorAll("[data-quote-additional] [data-eq-add-field]").forEach((inp) => {
+      host.querySelectorAll("[data-quote-additional] [data-eq-add-field]").forEach((inp) => {
         const wrap = inp.closest("[data-quote-additional]");
         const quoteId = safeTrim(wrap?.getAttribute("data-quote-additional"));
         const field = inp.getAttribute("data-eq-add-field");
@@ -21617,14 +21704,19 @@ UsersGateUI.init();
           on(inp, "input", () => this.updateAdditionalField(quoteId, field, inp.value));
         }
       });
-      this.els.body.querySelectorAll("[data-eq-remove]").forEach((btn) => {
+      host.querySelectorAll("[data-eq-remove]").forEach((btn) => {
         on(btn, "click", () => this.removeQuoteVariant(btn.getAttribute("data-eq-remove")));
       });
-      if(this.els.btnAdd) this.els.btnAdd.style.display = this._viewOnly ? "none" : "";
-      if(this.els.btnSend){
-        const agentName = safeTrim(rec.agentName) || "הנציג";
-        this.els.btnSend.style.display = this._viewOnly ? "none" : "";
-        this.els.btnSend.textContent = `סיום ושליחת הצעה ל־${agentName}`;
+      host.querySelectorAll("[data-eq-wizard-add]").forEach((btn) => {
+        on(btn, "click", () => this.addQuoteVariant());
+      });
+      if(!this.isWizardHost()){
+        if(this.els.btnAdd) this.els.btnAdd.style.display = this._viewOnly ? "none" : "";
+        if(this.els.btnSend){
+          const agentName = safeTrim(rec.agentName) || "הנציג";
+          this.els.btnSend.style.display = this._viewOnly ? "none" : "";
+          this.els.btnSend.textContent = `סיום ושליחת הצעה ל־${agentName}`;
+        }
       }
     },
     async sendToAgent(){
@@ -31040,30 +31132,74 @@ init(){
     },
 
     getCurrentSteps(){
+      if(Array.isArray(this._wizardMirrorKeepSteps) && this._wizardMirrorKeepSteps.length){
+        return this._wizardMirrorKeepSteps;
+      }
       if(this.isElementaryReferralAgentSetupFlow()){
         return [
-          { id:5, title:"אמצעי תשלום והצעת מחיר", progressTitle:"תשלום והצעה" },
-          { id:6, title:"סיכום והקמת הצעה ללקוח", progressTitle:"סיכום והקמה" }
+          { id:5, title:"אמצעי תשלום והצעת מחיר", progressTitle:"תשלום והצעה", kind:"payment" },
+          { id:6, title:"סיכום והקמת הצעה ללקוח", progressTitle:"סיכום והקמה", kind:"summary" },
+          { id:7, title:"שיקוף", progressTitle:"שיקוף", kind:"mirror" }
         ];
       }
       if(this.isCarInsuranceClickFlow()){
         return [
-          { id:1, title:"פרטים אישיים", progressTitle:"פרטים" },
-          { id:2, title:"פרטי רכב", progressTitle:"רכב" },
-          { id:3, title:"עבר ביטוחי", progressTitle:"עבר" },
-          { id:4, title:"בחירת כיסוי", progressTitle:"כיסוי" }
+          { id:1, title:"פרטים אישיים", progressTitle:"פרטים", kind:"personal" },
+          { id:2, title:"פרטי רכב", progressTitle:"רכב", kind:"vehicle" },
+          { id:3, title:"עבר ביטוחי", progressTitle:"עבר", kind:"history" },
+          { id:4, title:"בחירת כיסוי", progressTitle:"כיסוי", kind:"coverage" }
         ];
       }
       return this.isElementaryFlow()
         ? [
-            { id:1, title:"פרטים אישיים" },
-            { id:2, title:"פרטי רכב" },
-            { id:3, title:"עבר ביטוחי" },
-            { id:4, title:"בחירת כיסוי" },
-            { id:5, title:"אמצעי תשלום" },
-            { id:6, title:"סיכום פרטי הצעה והקמת לקוח", progressTitle:"סיכום והקמת לקוח" }
+            { id:1, title:"פרטים אישיים", kind:"personal" },
+            { id:2, title:"פרטי רכב", kind:"vehicle" },
+            { id:3, title:"עבר ביטוחי", kind:"history" },
+            { id:4, title:"בחירת כיסוי", kind:"coverage" },
+            { id:5, title:"פרמיות", progressTitle:"פרמיות", kind:"premiums" },
+            { id:6, title:"אמצעי תשלום", progressTitle:"תשלום", kind:"payment" },
+            { id:7, title:"סיכום פרטי הצעה והקמת לקוח", progressTitle:"סיכום והקמת לקוח", kind:"summary" },
+            { id:8, title:"שיקוף", progressTitle:"שיקוף", kind:"mirror" }
           ]
         : this.steps.filter((step) => Number(step.id) !== 41);
+    },
+
+    getElementaryStepKind(stepId = this.step){
+      const def = this.getCurrentSteps().find((step) => Number(step.id) === Number(stepId));
+      if(def?.kind) return safeTrim(def.kind);
+      const sid = Number(stepId);
+      if(this.isElementaryReferralAgentSetupFlow()){
+        if(sid === 5) return "payment";
+        if(sid === 6) return "summary";
+        if(sid === 7) return "mirror";
+      }
+      if(sid === 5) return "premiums";
+      if(sid === 6) return "payment";
+      if(sid === 7) return "summary";
+      if(sid === 8) return "mirror";
+      return "";
+    },
+
+    getElementaryStepIndex(stepId = this.step){
+      const steps = this.getCurrentSteps();
+      return steps.findIndex((step) => Number(step.id) === Number(stepId));
+    },
+
+    migrateElementaryDraftStep(rawStep){
+      let step = Number(rawStep) || 1;
+      if(!this.isElementaryFlow() || this.isCarInsuranceClickFlow() || this.isElementaryReferralAgentSetupFlow()){
+        return step;
+      }
+      // טיוטות ישנות: 5=תשלום(+פרמיות), 6=סיכום → מיפוי לזרימה החדשה
+      if(step === 5){
+        const d = this.insureds[0]?.data || {};
+        const phase = safeTrim(d._elemStep5Phase);
+        const hasQuotes = Array.isArray(d.elementaryPriceQuotes) && d.elementaryPriceQuotes.length;
+        if(phase === "pricing" || hasQuotes) return 5;
+        return 6;
+      }
+      if(step === 6) return 7;
+      return step;
     },
 
     getWizardLastStepId(){
@@ -31335,6 +31471,8 @@ init(){
     },
 
     resetElementary(){
+      try { ElementaryQuoteUI.unmountWizardHost(); } catch(_e){}
+      try { ElementaryMirrorUI.unmountWizardEmbed(); } catch(_e){}
       this.flowType = "elementary";
       this.elementaryProduct = "vehicle";
       this.customerPurchaseMode = null;
@@ -31351,6 +31489,8 @@ init(){
       this.step1FlowMap = {};
       this._operationalGuideAccepted = false;
       this.lastSavedCustomerId = null;
+      this._wizardMirrorCustomerId = null;
+      this._wizardMirrorKeepSteps = null;
       this.editingDraftId = null;
       this._draftPayloadMissing = false;
       this._finishing = false;
@@ -31687,6 +31827,7 @@ init(){
           elementaryPayment:{ cardNumber:"", expiry:"", holderName:"", holderId:"" },
           _elemStep5Phase:"payment",
           elementaryProductPricing:[],
+          elementaryPriceQuotes:[],
           requestedCoverageType:"",
           elementaryVehiclePolicies: [],
           elementaryHarImport: { status:"idle", fileName:"", count:0, importedAt:"", message:"" }
@@ -31874,7 +32015,7 @@ init(){
       }
       this.step = 5;
       this.open();
-      this.setHint(`המשך הקמת הצעה עבור ${safeTrim(rec.fullName) || "הלקוח"} — אמצעי תשלום, בחירת הצעת מחיר וסיכום.`);
+      this.setHint(`המשך הקמת הצעה עבור ${safeTrim(rec.fullName) || "הלקוח"} — אמצעי תשלום, בחירת הצעת מחיר, סיכום ושיקוף.`);
     },
 
     isCarInsuranceClickFlow(){
@@ -31897,11 +32038,80 @@ init(){
     getElementaryStep5Phase(d){
       const data = d && typeof d === "object" ? d : {};
       const raw = safeTrim(data._elemStep5Phase) || "payment";
+      // פאזות פנימיות של תשלום/בחירת הצעה רק בזרימת הקמת נציג
       if(this.isElementaryReferralAgentSetupFlow()){
         if(raw === "quotePick" || raw === "pricing") return raw;
         return "payment";
       }
-      return raw === "pricing" ? "pricing" : "payment";
+      return "payment";
+    },
+
+    buildWizardElementaryQuoteRec(){
+      const ins = this.insureds[0];
+      const d = ins?.data || {};
+      const referralId = safeTrim(this._elementaryReferralContinue?.referralId)
+        || safeTrim(this._elementaryReferralAgentSetup?.referralId);
+      if(referralId){
+        const live = findElementaryReferralById(referralId);
+        if(live){
+          const clone = { ...live };
+          if(Array.isArray(d.elementaryPriceQuotes) && d.elementaryPriceQuotes.length){
+            clone.elementaryPriceQuotes = JSON.parse(JSON.stringify(d.elementaryPriceQuotes));
+          }
+          return clone;
+        }
+      }
+      const fullName = [safeTrim(d.firstName), safeTrim(d.lastName)].filter(Boolean).join(" ")
+        || safeTrim(Auth?.current?.name)
+        || "לקוח";
+      return {
+        id: "__wizard_quote__",
+        fullName,
+        agentName: safeTrim(Auth?.current?.name) || "",
+        submittedAt: nowISO(),
+        requestedCoverageType: safeTrim(d.coverageType) || safeTrim(d.requestedCoverageType),
+        elementaryPriceQuotes: Array.isArray(d.elementaryPriceQuotes) ? JSON.parse(JSON.stringify(d.elementaryPriceQuotes)) : [],
+        payload: {
+          insureds: this.insureds,
+          primary: d,
+          flowType: "elementary",
+          elementaryProduct: safeTrim(this.elementaryProduct) || "vehicle"
+        }
+      };
+    },
+
+    syncWizardElementaryQuotesFromUi(quotesRaw){
+      const ins = this.insureds[0];
+      if(!ins?.data) return [];
+      const quotes = normalizeElementaryPriceQuotes(quotesRaw);
+      ins.data.elementaryPriceQuotes = quotes;
+      const referralId = safeTrim(this._elementaryReferralContinue?.referralId)
+        || safeTrim(this._elementaryReferralAgentSetup?.referralId);
+      if(referralId && String(referralId) !== "__wizard_quote__"){
+        try { patchElementaryReferral(referralId, { elementaryPriceQuotes: quotes }); } catch(_e){}
+      }
+      if(quotes[0]){
+        applyElementaryQuoteVariantToInsuredData(ins.data, quotes[0]);
+        ins.data._agentSelectedQuoteId = safeTrim(quotes[0].id);
+        ins.data._agentSelectedQuoteLabel = safeTrim(quotes[0].label);
+      }
+      this.ensureElementaryProductPricing(ins);
+      this.syncElementaryPremiumAggregate(ins);
+      return quotes;
+    },
+
+    mountWizardElementaryQuoteUi(){
+      try { ElementaryQuoteUI.unmountWizardHost(); } catch(_e){}
+      const host = this.els.body?.querySelector?.("#lcWizardElemQuoteHost");
+      if(!host) return;
+      const rec = this.buildWizardElementaryQuoteRec();
+      ElementaryQuoteUI.mountWizardHost(host, rec, {
+        quotes: this.insureds[0]?.data?.elementaryPriceQuotes,
+        onQuotesChanged: (quotes) => {
+          try { this.syncWizardElementaryQuotesFromUi(quotes); } catch(_e){}
+          try { this._persistWizardMemoryLocalOnly?.(); } catch(_e2){}
+        }
+      });
     },
 
     applyAgentSelectedElementaryQuote(ins, quoteId){
@@ -32742,6 +32952,8 @@ init(){
     close(){
       // שמירת טיוטה מקומית לפני סגירה (לשחזור אם נסגר בטעות)
       if(!this._finishing){ this._saveLocalDraft(); }
+      try { ElementaryQuoteUI.unmountWizardHost(); } catch(_e){}
+      try { ElementaryMirrorUI.unmountWizardEmbed(); } catch(_e){}
       this.isOpen = false;
       this.els.wrap.classList.remove("is-open");
       this.els.wrap.setAttribute("aria-hidden","true");
@@ -33097,36 +33309,37 @@ init(){
     prevStep(){
       if(this.isElementaryFlow()){
         if(this.step <= 0) return;
-        if(Number(this.step) === 6){
-          this.step = 5;
+        const kind = this.getElementaryStepKind(this.step);
+        if(kind === "payment" && this.isElementaryReferralAgentSetupFlow()){
           const d = this.insureds[0]?.data;
-          if(d) d._elemStep5Phase = this.isElementaryReferralAgentSetupFlow() ? 'pricing' : 'pricing';
-          this.setHint('');
-          this.render();
-          return;
-        }
-        if(Number(this.step) === 5){
-          const d = this.insureds[0]?.data;
-          const phase = d ? this.getElementaryStep5Phase(d) : 'payment';
-          if(d && phase === 'pricing'){
-            d._elemStep5Phase = this.isElementaryReferralAgentSetupFlow() ? 'quotePick' : 'payment';
-            this.setHint('');
+          const phase = d ? this.getElementaryStep5Phase(d) : "payment";
+          if(d && phase === "pricing"){
+            d._elemStep5Phase = "quotePick";
+            this.setHint("");
             this.render();
             return;
           }
-          if(d && phase === 'quotePick'){
-            d._elemStep5Phase = 'payment';
-            this.setHint('');
+          if(d && phase === "quotePick"){
+            d._elemStep5Phase = "payment";
+            this.setHint("");
             this.render();
             return;
           }
         }
-        this.step -= 1;
-        if(Number(this.step) <= 4){
+        const steps = this.getCurrentSteps();
+        const idx = this.getElementaryStepIndex(this.step);
+        if(idx <= 0) return;
+        this.step = Number(steps[idx - 1].id);
+        if(this.getElementaryStepKind(this.step) === "payment"){
           const d = this.insureds[0]?.data;
-          if(d) d._elemStep5Phase = 'payment';
+          if(d && this.isElementaryReferralAgentSetupFlow()){
+            // שמירה על פאזת pricing כשחוזרים מסיכום להקמת נציג
+            if(kind === "summary") d._elemStep5Phase = "pricing";
+          } else if(d){
+            d._elemStep5Phase = "payment";
+          }
         }
-        this.setHint('');
+        this.setHint("");
         this.render();
         return;
       }
@@ -33194,49 +33407,72 @@ init(){
           this.setHint("להגשה לחיתום השתמשו בלחצן «הגש הצעה לחיתום».");
           return;
         }
-        if(Number(this.step) === 5){
+        const kind = this.getElementaryStepKind(this.step);
+        if(kind === "premiums"){
+          const check = ElementaryQuoteUI.validateQuotesForWizard();
+          if(!check.ok){
+            this.setHint(check.msg || "יש להשלים פרמיות וחברות");
+            try { window.showToast?.({ title: "חסרים בפרמיות", text: check.msg || "יש להשלים פרמיות וחברות", variant: "warn", durationMs: 5600 }); } catch(_e){}
+            return;
+          }
+          this.syncWizardElementaryQuotesFromUi(check.quotes || ElementaryQuoteUI.getNormalizedQuotes());
+        }
+        if(kind === "payment" && this.isElementaryReferralAgentSetupFlow()){
           const d = this.insureds[0]?.data || {};
           const phase = this.getElementaryStep5Phase(d);
-          if(phase === 'payment'){
-            d._elemStep5Phase = this.isElementaryReferralAgentSetupFlow() ? 'quotePick' : 'pricing';
-            if(!this.isElementaryReferralAgentSetupFlow()) this.ensureElementaryProductPricing(this.insureds[0]);
+          if(phase === "payment"){
+            d._elemStep5Phase = "quotePick";
             this.closeElementaryValidationDrawer();
-            this.setHint('');
+            this.setHint("");
             this.render();
             try { ElementaryDatePicker.attachToContainer(this.els.body); } catch(_e){}
             return;
           }
-          if(phase === 'quotePick'){
+          if(phase === "quotePick"){
             const qid = safeTrim(d._agentSelectedQuoteId);
             if(!qid){
-              this.setHint('יש לבחור הצעת מחיר לפני המשך');
-              try { window.showToast?.({ title: 'חסרה בחירה', text: 'סמנו ✓ את הצעת המחיר שאושרה.', variant: 'warn', durationMs: 5200 }); } catch(_e){}
+              this.setHint("יש לבחור הצעת מחיר לפני המשך");
+              try { window.showToast?.({ title: "חסרה בחירה", text: "סמנו ✓ את הצעת המחיר שאושרה.", variant: "warn", durationMs: 5200 }); } catch(_e){}
               return;
             }
             if(!this.applyAgentSelectedElementaryQuote(this.insureds[0], qid)){
-              this.setHint('לא ניתן ליישם את ההצעה שנבחרה');
+              this.setHint("לא ניתן ליישם את ההצעה שנבחרה");
               return;
             }
-            d._elemStep5Phase = 'pricing';
+            d._elemStep5Phase = "pricing";
             this.ensureElementaryProductPricing(this.insureds[0]);
             this.closeElementaryValidationDrawer();
-            this.setHint('');
+            this.setHint("");
             this.render();
             try { ElementaryDatePicker.attachToContainer(this.els.body); } catch(_e){}
             return;
           }
           this.syncElementaryPremiumAggregate(this.insureds[0]);
         }
-        if(this.step >= this.getCurrentSteps().length){
+        if(kind === "summary"){
+          void this.completeElementaryProposalAndContinueToMirror();
+          return;
+        }
+        if(kind === "mirror"){
+          void this.finishElementaryWizardFromMirror();
+          return;
+        }
+        const steps = this.getCurrentSteps();
+        const idx = this.getElementaryStepIndex(this.step);
+        if(idx < 0 || idx >= steps.length - 1){
           void this.finishWizard();
           return;
         }
-        const wasStep4 = Number(this.step) === 4;
-        this.step += 1;
-        if(wasStep4 && Number(this.step) === 5){
+        const nextId = Number(steps[idx + 1].id);
+        if(this.getElementaryStepKind(this.step) === "coverage" && this.getElementaryStepKind(nextId) === "payment"){
           const d = this.insureds[0]?.data;
-          if(d) d._elemStep5Phase = 'payment';
+          if(d) d._elemStep5Phase = "payment";
         }
+        if(this.getElementaryStepKind(nextId) === "payment"){
+          const d = this.insureds[0]?.data;
+          if(d && !this.isElementaryReferralAgentSetupFlow()) d._elemStep5Phase = "payment";
+        }
+        this.step = nextId;
         this.closeElementaryValidationDrawer();
         this.setHint("");
         this.render();
@@ -33692,7 +33928,10 @@ init(){
       if(!this.els.wrap) return;
       if(this.isCustomerPurchaseMode()) this.sanitizeCustomerPurchaseWizardPolicies();
       if(!this.isElementaryFlow() && Number(this.step) === 41) this.step = 3;
-      if(this.isElementaryFlow() && Number(this.step) > 6) this.step = 6;
+      if(this.isElementaryFlow()){
+        const lastId = this.getWizardLastStepId();
+        if(Number(this.step) > lastId) this.step = lastId;
+      }
       this.syncElementaryWizardChrome();
       this.renderSteps();
       this.renderTabs();
@@ -33799,13 +34038,19 @@ init(){
         this.els.btnElemProposalPdf.style.display = 'none';
       }
       if(this.isElementaryFlow()){
-        const totalSteps = this.getCurrentSteps().length;
+        const steps = this.getCurrentSteps();
+        const lastStepId = this.getWizardLastStepId();
+        const kind = this.getElementaryStepKind(this.step);
         const carClick = this.isCarInsuranceClickFlow();
         const canSubmitUnderwriting = this.canSubmitCarInsuranceClickToUnderwriting();
-        if(this.els.btnPrev){ this.els.btnPrev.style.display = ""; this.els.btnPrev.disabled = (this.step <= 1); }
+        const stepIdx = this.getElementaryStepIndex(this.step);
+        if(this.els.btnPrev){
+          this.els.btnPrev.style.display = "";
+          this.els.btnPrev.disabled = stepIdx <= 0 || Number(this.step) <= 1;
+        }
         if(this.els.btnSaveDraft){
           // always visible on every elementary wizard step (including car-click/referral flows)
-          this.els.btnSaveDraft.style.display = "";
+          this.els.btnSaveDraft.style.display = kind === "mirror" ? "none" : "";
           this.els.btnSaveDraft.textContent = "שמירת הצעה";
         }
         if(this.els.btnWizardSubmitUnderwriting){
@@ -33818,12 +34063,20 @@ init(){
           this.els.btnNext.style.display = hideNextForCarSubmit ? "none" : "";
           this.els.btnNext.disabled = false;
           const agentSetup = this.isElementaryReferralAgentSetupFlow();
-          this.els.btnNext.textContent = this.step >= totalSteps
-            ? (agentSetup ? "סיום הקמת הצעה ללקוח" : "סיום הקמת הצעה ללקוח")
-            : (agentSetup && Number(this.step) === 5 && safeTrim(this.insureds[0]?.data?._elemStep5Phase) === "quotePick" ? "המשך לפרמיות" : "לשלב הבא");
+          if(kind === "mirror"){
+            this.els.btnNext.textContent = "סיום ושמירת שיקוף";
+          } else if(kind === "summary"){
+            this.els.btnNext.textContent = "סיום הקמת הצעה והמשך לשיקוף";
+          } else if(agentSetup && kind === "payment" && safeTrim(this.insureds[0]?.data?._elemStep5Phase) === "quotePick"){
+            this.els.btnNext.textContent = "המשך לפרמיות";
+          } else if(Number(this.step) >= lastStepId){
+            this.els.btnNext.textContent = "סיום הקמת הצעה ללקוח";
+          } else {
+            this.els.btnNext.textContent = "לשלב הבא";
+          }
         }
         if(this.els.btnElemProposalPdf){
-          this.els.btnElemProposalPdf.style.display = (Number(this.step) === 6 && !carClick && !this.isElementaryReferralAgentSetupFlow()) ? "" : "none";
+          this.els.btnElemProposalPdf.style.display = (kind === "summary" && !carClick && !this.isElementaryReferralAgentSetupFlow()) ? "" : "none";
         }
         if(this.els.btnMarkElementaryIssued){
           const ref = findElementaryReferralById(this._elementaryReferralContinue?.referralId);
@@ -33872,6 +34125,10 @@ init(){
       this.els.body.classList.remove("lcWizard__body--elemStep4");
       this.els.body.classList.remove("lcWizard__body--elemStep5");
       this.els.body.classList.remove("lcWizard__body--elemStep6");
+      this.els.body.classList.remove("lcWizard__body--elemStep7");
+      this.els.body.classList.remove("lcWizard__body--elemStep8");
+      this.els.body.classList.remove("lcWizard__body--elemPremiums");
+      this.els.body.classList.remove("lcWizard__body--elemMirror");
       this.els.body.classList.remove("lcWizard__body--step3");
       this.els.body.classList.remove("lcWizard__body--step4Needs");
       this.els.body.classList.toggle("lcWizard__body--carClickFlow", this.isCarInsuranceClickFlow());
@@ -33881,17 +34138,24 @@ init(){
       if(this.els.wrap) this.els.wrap.classList.toggle("lcWizard--healthStep3", isHealthStep3);
       const ins = this.getActive();
       if(this.isElementaryFlow()){
+        try { ElementaryQuoteUI.unmountWizardHost(); } catch(_e){}
+        try { ElementaryMirrorUI.unmountWizardEmbed(); } catch(_e){}
+        const elemKind = this.getElementaryStepKind(this.step);
         let body = "";
         if(this.step <= 0) body = this.renderElementaryCategory();
-        else if(this.step === 1) body = this.renderElementaryStep1(ins);
-        else if(this.step === 2) body = this.renderElementaryStep2(ins);
-        else if(this.step === 3) body = this.renderElementaryStep3(ins);
-        else if(this.step === 4){
+        else if(elemKind === "personal" || this.step === 1) body = this.renderElementaryStep1(ins);
+        else if(elemKind === "vehicle" || this.step === 2) body = this.renderElementaryStep2(ins);
+        else if(elemKind === "history" || this.step === 3) body = this.renderElementaryStep3(ins);
+        else if(elemKind === "coverage" || this.step === 4){
           body = this.renderElementaryStep4(ins);
           if(this.isCarInsuranceClickFlow()) body += this.renderCarInsuranceClickSubmitPanel(ins);
         }
+        else if(elemKind === "premiums") body = this.renderElementaryStepPremiums(ins);
+        else if(elemKind === "payment") body = this.renderElementaryStep5(ins);
+        else if(elemKind === "summary") body = this.renderElementaryStep6ProposalSummary(ins);
+        else if(elemKind === "mirror") body = this.renderElementaryStepMirror(ins);
         else if(this.step === 5) body = this.renderElementaryStep5(ins);
-        else if(this.step >= 6) body = this.renderElementaryStep6ProposalSummary(ins);
+        else body = this.renderElementaryStep6ProposalSummary(ins);
         this.els.body.innerHTML = body;
         // GI-FIX: מסך בחירת המוצר (step<=0) הציג כרטיסי "רכב"/"דירה" עם
         // data-elementary-product שאיש לא קרא — לחיצה לא עשתה כלום והמשתמש
@@ -33908,18 +34172,33 @@ init(){
             });
           });
         }
-        if(Number(this.step) === 1) this.els.body.classList.add("lcWizard__body--elemStep1");
-        if(Number(this.step) === 2) this.els.body.classList.add("lcWizard__body--elemStep2");
-        if(Number(this.step) === 3) this.els.body.classList.add("lcWizard__body--elemStep3");
-        if(Number(this.step) === 4) this.els.body.classList.add("lcWizard__body--elemStep4");
-        if(Number(this.step) === 5) this.els.body.classList.add("lcWizard__body--elemStep5");
-        if(Number(this.step) === 6) this.els.body.classList.add("lcWizard__body--elemStep6");
+        if(elemKind === "personal" || Number(this.step) === 1) this.els.body.classList.add("lcWizard__body--elemStep1");
+        if(elemKind === "vehicle" || Number(this.step) === 2) this.els.body.classList.add("lcWizard__body--elemStep2");
+        if(elemKind === "history" || Number(this.step) === 3) this.els.body.classList.add("lcWizard__body--elemStep3");
+        if(elemKind === "coverage" || Number(this.step) === 4) this.els.body.classList.add("lcWizard__body--elemStep4");
+        if(elemKind === "premiums") this.els.body.classList.add("lcWizard__body--elemPremiums");
+        if(elemKind === "payment") this.els.body.classList.add("lcWizard__body--elemStep5");
+        if(elemKind === "summary") this.els.body.classList.add("lcWizard__body--elemStep6");
+        if(elemKind === "mirror"){
+          this.els.body.classList.add("lcWizard__body--elemMirror");
+          this.els.body.classList.add("lcWizard__body--elemStep8");
+        }
         this.bindElementaryInputs(ins);
-        if(Number(this.step) === 1){
+        if(elemKind === "personal" || Number(this.step) === 1){
           this.updateZipUI(ins);
           this.scheduleZipLookup(ins);
         }
-        if(Number(this.step) === 2) this.syncElementaryStep2AfterRender(ins);
+        if(elemKind === "vehicle" || Number(this.step) === 2) this.syncElementaryStep2AfterRender(ins);
+        if(elemKind === "premiums"){
+          requestAnimationFrame(() => {
+            try { this.mountWizardElementaryQuoteUi(); } catch(_e){}
+          });
+        }
+        if(elemKind === "mirror"){
+          requestAnimationFrame(() => {
+            try { this.mountWizardElementaryMirrorUi(); } catch(_e){}
+          });
+        }
         // חיבור date picker לכל שדות התאריך
         try { ElementaryDatePicker.attachToContainer(this.els.body); } catch(_e){}
         return;
@@ -34291,9 +34570,8 @@ if(path === "birthDate"){
 
     renderElementaryProgress(){
       const steps = this.getCurrentSteps();
-      const maxStepId = steps.reduce((m, s) => Math.max(m, Number(s.id) || 0), 0) || 1;
-      const currentStep = Math.max(1, Math.min(maxStepId, Number(this.step) || 1));
-      const progressPct = steps.length <= 1 ? 100 : ((currentStep - 1) / (steps.length - 1)) * 100;
+      const currentIndex = Math.max(0, this.getElementaryStepIndex(this.step));
+      const progressPct = steps.length <= 1 ? 100 : (currentIndex / (steps.length - 1)) * 100;
       return `<div class="lcElementaryProgress" style="--elementary-progress:${progressPct}%;--elementary-car-progress:${progressPct};">
         <div class="lcElementaryRoad">
           <div class="lcElementaryRoad__track"></div>
@@ -34305,10 +34583,11 @@ if(path === "birthDate"){
             </div>
           </div>
           <div class="lcElementaryRoad__stops" style="grid-template-columns:repeat(${steps.length}, minmax(0, 1fr))">
-            ${steps.map((step) => {
-              const cls = ['lcElementaryRoad__stop', step.id === currentStep ? 'is-active' : '', step.id < currentStep ? 'is-done' : ''].join(' ').trim();
+            ${steps.map((step, idx) => {
+              const cls = ['lcElementaryRoad__stop', idx === currentIndex ? 'is-active' : '', idx < currentIndex ? 'is-done' : ''].join(' ').trim();
               const stepLabel = escapeHtml(step.progressTitle || step.title);
-              return `<div class="${cls}"><span class="lcElementaryRoad__dot">${step.id < currentStep ? '✓' : step.id}</span><span class="lcElementaryRoad__label">${stepLabel}</span></div>`;
+              const dotLabel = idx < currentIndex ? '✓' : String(idx + 1);
+              return `<div class="${cls}"><span class="lcElementaryRoad__dot">${dotLabel}</span><span class="lcElementaryRoad__label">${stepLabel}</span></div>`;
             }).join('')}
           </div>
         </div>
@@ -38276,13 +38555,52 @@ if(path === "birthDate"){
       </div>`;
     },
 
+    renderElementaryStepPremiums(ins){
+      const d = ins?.data || {};
+      const covLabel = elementaryCoverageTypeLabelHe(d.coverageType || d.requestedCoverageType);
+      return `<div class="lcElementaryWrap lcElementaryWrap--stepPremiums lcElemPremiumsRoot">
+        ${this.renderElementaryProgress()}
+        <div class="lcElementarySection__title lcElementarySection__title--compact">פרמיות</div>
+        <p class="lcElemQuotePickLead muted small">מוצר מבוקש: <strong>${escapeHtml(covLabel || "—")}</strong> · מלאו חברה, פרמיה ותשלומים לכל מוצר שנבחר בכיסוי.</p>
+        <div id="lcWizardElemQuoteHost" class="lcWizardElemQuoteHost lcElemQuoteModal__body"></div>
+      </div>`;
+    },
+
+    renderElementaryStepMirror(_ins){
+      return `<div class="lcElementaryWrap lcElementaryWrap--stepMirror lcElemMirrorRoot">
+        ${this.renderElementaryProgress()}
+        <div class="lcElementarySection__title lcElementarySection__title--compact">שיקוף</div>
+        <p class="lcElemQuotePickLead muted small">מלאו את נתוני השיקוף. הם יישמרו בתיק הלקוח ויופיעו גם במסך שיקוף השיחה.</p>
+        <div id="lcWizardElemMirrorHost" class="lcWizardElemMirrorHost emMirror__report"></div>
+      </div>`;
+    },
+
+    mountWizardElementaryMirrorUi(){
+      const host = this.els.body?.querySelector?.("#lcWizardElemMirrorHost");
+      if(!host) return;
+      const customerId = safeTrim(this._wizardMirrorCustomerId)
+        || safeTrim(this.lastSavedCustomerId)
+        || safeTrim(this._elementaryReferralAgentSetup?.customerId)
+        || safeTrim(this._elementaryReferralContinue?.customerId);
+      if(!customerId){
+        host.innerHTML = `<div class="lcElemPricingEmpty muted small">לא נמצא לקוח לשמירת שיקוף — יש לסיים קודם את הקמת ההצעה.</div>`;
+        return;
+      }
+      try {
+        ElementaryMirrorUI.mountWizardEmbed(host, customerId);
+      } catch(err){
+        try { console.error("WIZARD_MIRROR_MOUNT_FAILED", err); } catch(_e){}
+        host.innerHTML = `<div class="lcElemPricingEmpty muted small">טעינת מסך השיקוף נכשלה.</div>`;
+      }
+    },
+
     renderElementaryStep5(ins){
       const d = ins?.data || {};
       if(!safeTrim(d._elemStep5Phase)) d._elemStep5Phase = 'payment';
       const phase = this.getElementaryStep5Phase(d);
       this.ensureElementaryPaymentDefaults(ins);
       if(phase === 'quotePick') return this.renderElementaryStep5QuotePick(ins);
-      if(phase === 'pricing'){
+      if(phase === 'pricing' && this.isElementaryReferralAgentSetupFlow()){
         this.ensureElementaryProductPricing(ins);
         return this.renderElementaryStep5Pricing(ins);
       }
@@ -51865,11 +52183,16 @@ if(path === "birthDate"){
       this.activeInsId = payload.activeInsId && this.insureds.some(x => String(x.id) === String(payload.activeInsId)) ? payload.activeInsId : (this.insureds[0]?.id || null);
       const currentSteps = Array.isArray(this.getCurrentSteps?.()) ? this.getCurrentSteps() : this.steps;
       const minStep = this.isElementaryFlow() ? (this.elementaryProduct ? 1 : 0) : 1;
-      const maxStep = Math.max(minStep, Number(currentSteps?.length || this.steps.length || 1));
-      this.step = Math.max(minStep, Math.min(maxStep, Number(rec?.currentStep || payload.currentStep || minStep) || minStep));
+      const maxStepId = this.isElementaryFlow()
+        ? (Number(this.getWizardLastStepId?.()) || 8)
+        : Math.max(minStep, Number(currentSteps?.[currentSteps.length - 1]?.id || this.steps.length || 1));
+      let nextStep = Number(rec?.currentStep || payload.currentStep || minStep) || minStep;
+      if(this.isElementaryFlow()) nextStep = this.migrateElementaryDraftStep(nextStep);
+      this.step = Math.max(minStep, Math.min(maxStepId, nextStep));
       this.policyDraft = null;
       this.editingPolicyId = null;
       this.lastSavedCustomerId = null;
+      this._wizardMirrorCustomerId = null;
       this.customerPurchaseMode = null;
       this.editingDraftId = rec?.id || null;
       this._finishing = false;
@@ -55347,33 +55670,37 @@ if(path === "birthDate"){
         }
         return null;
       }
-      if(sid === 5){
+      const kind = this.getElementaryStepKind(sid);
+      if(kind === "premiums"){
+        return "elementaryPriceQuotes";
+      }
+      if(kind === "payment" || (sid === 5 && this.isElementaryReferralAgentSetupFlow())){
         const ins0 = this.insureds[0];
         const phase = this.getElementaryStep5Phase(d);
         if(phase === 'quotePick'){
           if(!safeTrim(d._agentSelectedQuoteId)) return "_agentSelectedQuoteId";
           return null;
         }
-        if(phase === 'payment'){
-          if(ins0) this.ensureElementaryPaymentDefaults(ins0);
-          const pay = d.elementaryPayment && typeof d.elementaryPayment === 'object' ? d.elementaryPayment : {};
-          const pan = digitsOnly(pay.cardNumber || '');
-          if(!this.elementaryPanSixteenDigitsOk(pan)) return "elementaryPayment.cardNumber";
-          if(!this.elementaryExpiryOk(pay.expiry)) return "elementaryPayment.expiry";
-          if(!safeTrim(pay.holderName)) return "elementaryPayment.holderName";
-          if(normalizeIdValue(pay.holderId || '').length !== 9) return "elementaryPayment.holderId";
+        if(phase === 'pricing' && this.isElementaryReferralAgentSetupFlow()){
+          if(ins0) this.ensureElementaryProductPricing(ins0);
+          const rows = Array.isArray(d.elementaryProductPricing) ? d.elementaryProductPricing : [];
+          for(const row of rows){
+            const pk = safeTrim(row?.productKey);
+            const p = this.parseElementaryMoney(row?.premium);
+            if(!Number.isFinite(p) || p <= 0) return `elemPricing.premium.${pk}`;
+            const instStr = this.normalizeElementaryInstallmentsInput(row?.installments || '');
+            const inst = instStr ? parseInt(instStr, 10) : NaN;
+            if(!Number.isFinite(inst) || inst < 1) return `elemPricing.installments.${pk}`;
+          }
           return null;
         }
-        if(ins0) this.ensureElementaryProductPricing(ins0);
-        const rows = Array.isArray(d.elementaryProductPricing) ? d.elementaryProductPricing : [];
-        for(const row of rows){
-          const pk = safeTrim(row?.productKey);
-          const p = this.parseElementaryMoney(row?.premium);
-          if(!Number.isFinite(p) || p <= 0) return `elemPricing.premium.${pk}`;
-          const instStr = this.normalizeElementaryInstallmentsInput(row?.installments || '');
-          const inst = instStr ? parseInt(instStr, 10) : NaN;
-          if(!Number.isFinite(inst) || inst < 1) return `elemPricing.installments.${pk}`;
-        }
+        if(ins0) this.ensureElementaryPaymentDefaults(ins0);
+        const pay = d.elementaryPayment && typeof d.elementaryPayment === 'object' ? d.elementaryPayment : {};
+        const pan = digitsOnly(pay.cardNumber || '');
+        if(!this.elementaryPanSixteenDigitsOk(pan)) return "elementaryPayment.cardNumber";
+        if(!this.elementaryExpiryOk(pay.expiry)) return "elementaryPayment.expiry";
+        if(!safeTrim(pay.holderName)) return "elementaryPayment.holderName";
+        if(normalizeIdValue(pay.holderId || '').length !== 9) return "elementaryPayment.holderId";
         return null;
       }
       return null;
@@ -55429,39 +55756,56 @@ if(path === "birthDate"){
         this.getElementaryDriverPolicyValidationIssues(d).forEach((msg) => out.push(`${primaryLabel}: ${msg}`));
         return out;
       }
-      if(sid === 5){
+      const kind = this.getElementaryStepKind(sid);
+      if(kind === "premiums"){
+        const check = ElementaryQuoteUI.isWizardHost()
+          ? ElementaryQuoteUI.validateQuotesForWizard()
+          : (() => {
+              const quotes = normalizeElementaryPriceQuotes(d.elementaryPriceQuotes);
+              if(!quotes.length) return { ok:false, msg:"יש להוסיף לפחות הצעת מחיר אחת עם פרמיות" };
+              for(const q of quotes){
+                for(const line of q.products){
+                  if(!safeTrim(line.company)) return { ok:false, msg:`יש לבחור חברה ל־${safeTrim(line.label) || "מוצר"}` };
+                  if(!safeTrim(line.premium).replace(/[^\d.,]/g, "")) return { ok:false, msg:`חסרה פרמיה ל־${safeTrim(line.label) || "מוצר"}` };
+                }
+              }
+              return { ok:true };
+            })();
+        return check.ok ? [] : [`${primaryLabel}: ${check.msg || "יש להשלים פרמיות"}`];
+      }
+      if(kind === "payment" || (sid === 5 && this.isElementaryReferralAgentSetupFlow())){
         const phase = this.getElementaryStep5Phase(d);
         if(phase === 'quotePick'){
           if(!safeTrim(d._agentSelectedQuoteId)) return [`${primaryLabel}: יש לבחור הצעת מחיר מאלמנטרי`];
           return [];
         }
-        if(phase === 'payment'){
+        if(phase === 'pricing' && this.isElementaryReferralAgentSetupFlow()){
           const ins0 = this.insureds[0];
-          if(ins0) this.ensureElementaryPaymentDefaults(ins0);
-          const pay = d.elementaryPayment && typeof d.elementaryPayment === 'object' ? d.elementaryPayment : {};
-          const pan = digitsOnly(pay.cardNumber || '');
+          if(ins0) this.ensureElementaryProductPricing(ins0);
+          const rows = Array.isArray(d.elementaryProductPricing) ? d.elementaryProductPricing : [];
           const out = [];
-          if(!this.elementaryPanSixteenDigitsOk(pan)){
-            out.push(`${primaryLabel}: יש להזין מספר כרטיס בן 16 ספרות (ארבע קבוצות של ארבע ספרות)`);
+          if(!rows.length) out.push(`${primaryLabel}: אין מוצרים לתמחור לפי סוג הכיסוי`);
+          for(const row of rows){
+            const lbl = safeTrim(row?.label) || 'מוצר';
+            const p = this.parseElementaryMoney(row?.premium);
+            if(!Number.isFinite(p) || p <= 0) out.push(`${primaryLabel}: חסרה פרמיה תקפה עבור ${lbl}`);
+            const instStr = this.normalizeElementaryInstallmentsInput(row?.installments || '');
+            const inst = instStr ? parseInt(instStr, 10) : NaN;
+            if(!Number.isFinite(inst) || inst < 1) out.push(`${primaryLabel}: חסר מספר תשלומים תקף עבור ${lbl}`);
           }
-          if(!this.elementaryExpiryOk(pay.expiry)) out.push(`${primaryLabel}: חסר או לא תקף ${fieldLabel.elemPayExp}`);
-          if(!safeTrim(pay.holderName)) out.push(`${primaryLabel}: חסר ${fieldLabel.elemPayHolder}`);
-          if(normalizeIdValue(pay.holderId || '').length !== 9) out.push(`${primaryLabel}: חסר או לא תקף ${fieldLabel.elemPayHolderId}`);
           return out;
         }
         const ins0 = this.insureds[0];
-        if(ins0) this.ensureElementaryProductPricing(ins0);
-        const rows = Array.isArray(d.elementaryProductPricing) ? d.elementaryProductPricing : [];
+        if(ins0) this.ensureElementaryPaymentDefaults(ins0);
+        const pay = d.elementaryPayment && typeof d.elementaryPayment === 'object' ? d.elementaryPayment : {};
+        const pan = digitsOnly(pay.cardNumber || '');
         const out = [];
-        if(!rows.length) out.push(`${primaryLabel}: אין מוצרים לתמחור לפי סוג הכיסוי`);
-        for(const row of rows){
-          const lbl = safeTrim(row?.label) || 'מוצר';
-          const p = this.parseElementaryMoney(row?.premium);
-          if(!Number.isFinite(p) || p <= 0) out.push(`${primaryLabel}: חסרה פרמיה תקפה עבור ${lbl}`);
-          const instStr = this.normalizeElementaryInstallmentsInput(row?.installments || '');
-          const inst = instStr ? parseInt(instStr, 10) : NaN;
-          if(!Number.isFinite(inst) || inst < 1) out.push(`${primaryLabel}: חסר מספר תשלומים תקף עבור ${lbl}`);
+        if(!this.elementaryPanSixteenDigitsOk(pan)){
+          out.push(`${primaryLabel}: יש להזין מספר כרטיס בן 16 ספרות (ארבע קבוצות של ארבע ספרות)`);
         }
+        if(!this.elementaryExpiryOk(pay.expiry)) out.push(`${primaryLabel}: חסר או לא תקף ${fieldLabel.elemPayExp}`);
+        if(!safeTrim(pay.holderName)) out.push(`${primaryLabel}: חסר ${fieldLabel.elemPayHolder}`);
+        if(normalizeIdValue(pay.holderId || '').length !== 9) out.push(`${primaryLabel}: חסר או לא תקף ${fieldLabel.elemPayHolderId}`);
         return out;
       }
       return [];
@@ -55663,8 +56007,41 @@ if(path === "birthDate"){
       requestAnimationFrame(() => modal.classList.add('giValModal--visible'));
     },
 
-    async finishWizard(){
+    async completeElementaryProposalAndContinueToMirror(){
+      return this.finishWizard({ continueToMirror: true });
+    },
+
+    async finishElementaryWizardFromMirror(){
       if(this._finishing) return;
+      this._finishing = true;
+      try{
+        const ok = await ElementaryMirrorUI.commitWizardEmbed();
+        if(!ok){
+          this.setHint("לא ניתן לשמור את נתוני השיקוף — נסו שוב");
+          try { window.showToast?.({ title: "שיקוף", text: "שמירת נתוני השיקוף נכשלה", variant: "warn", durationMs: 5200 }); } catch(_e){}
+          return;
+        }
+        this._wizardMirrorKeepSteps = null;
+        this._elementaryReferralAgentSetup = null;
+        this._elementaryReferralContinue = null;
+        this.showFinishFlow();
+        SaveStatusUI.success("נתוני השיקוף נשמרו", "הנתונים זמינים כעת בשיקוף השיחה של הלקוח.");
+        const minLoaderMs = 900;
+        await new Promise((resolve) => window.setTimeout(resolve, minLoaderMs));
+        this.showFinishFlowSuccess();
+        this.syncElementaryFinishFlowActions();
+      }catch(err){
+        try { console.error("FINISH_ELEM_MIRROR_WIZARD", err); } catch(_e){}
+        this.hideFinishFlow();
+        this.setHint(safeTrim(err?.message) || "שמירת השיקוף נכשלה");
+      }finally{
+        this._finishing = false;
+      }
+    },
+
+    async finishWizard(options = {}){
+      if(this._finishing) return;
+      const continueToMirror = !!(options && options.continueToMirror);
       const duplicateGuardOpts = this.getWizardDuplicateIdGuardOptions();
       if(this.isElementaryReferralAgentSetupFlow()){
         const ref = this.getElementaryReferralAgentSetupRec();
@@ -55686,10 +56063,12 @@ if(path === "birthDate"){
       if(this.isElementaryFlow()){
         const steps = this.getCurrentSteps();
         const lastStepId = Number(steps[steps.length - 1]?.id) || 5;
-        gateValidation = this.validateStep(lastStepId);
+        const summaryStepId = Number(steps.find((s) => s.kind === "summary")?.id) || lastStepId;
+        const gateStepId = continueToMirror ? summaryStepId : lastStepId;
+        gateValidation = this.validateStep(gateStepId);
         if(!gateValidation.ok){
           this.setHint(gateValidation.msg || 'לא ניתן לסיים לפני השלמת פרטי התשלום');
-          const details = this.getElementaryStepMissingDetails(lastStepId);
+          const details = this.getElementaryStepMissingDetails(gateStepId);
           const subText = safeTrim(gateValidation.msg) || '';
           if(details.length){
             this.showValidationToast(details, {
@@ -55707,7 +56086,7 @@ if(path === "birthDate"){
               durationMs: 7600
             });
           }
-          this.step = lastStepId;
+          this.step = gateStepId;
           this.render();
           return;
         }
@@ -55842,7 +56221,7 @@ if(path === "birthDate"){
               customerId: saved.id,
               payload: finalPayload
             });
-            this._elementaryReferralAgentSetup = null;
+            if(!continueToMirror) this._elementaryReferralAgentSetup = null;
             if(CustomersUI?.currentId && String(CustomersUI.currentId) === String(saved.id)){
               try { CustomersUI.refreshOpenCustomerPreservingState(); } catch(_e){}
             }
@@ -55884,7 +56263,7 @@ if(path === "birthDate"){
               });
             }
           }
-          if(referralContinue){
+          if(referralContinue && !continueToMirror){
             this._elementaryReferralContinue = null;
           }
           this._lastElementaryHandoff = {
@@ -55898,6 +56277,23 @@ if(path === "birthDate"){
             agentId: safeTrim(Auth?.current?.id) || safeTrim(getCurrentAgentRecord()?.id),
             alreadySubmitted: referralContinue || !!findPendingElementaryReferralByCustomerId(saved.id) || !!findPendingElementaryReferralByIdNumber(saved.idNumber)
           };
+          if(continueToMirror){
+            this._wizardMirrorCustomerId = safeTrim(saved.id);
+            this._wizardMirrorKeepSteps = this.getCurrentSteps().map((s) => ({ ...s }));
+            const mirrorStep = this._wizardMirrorKeepSteps.find((s) => s.kind === "mirror");
+            this.step = Number(mirrorStep?.id) || this.getWizardLastStepId();
+            this._elementaryReferralAgentSetup = null;
+            this._elementaryReferralContinue = null;
+            this.hideFinishFlow();
+            if(saveWarning){
+              SaveStatusUI.success("ההצעה נשמרה · ממשיכים לשיקוף", saveWarning);
+            } else {
+              SaveStatusUI.success("ההצעה נשמרה", "מלאו את נתוני השיקוף — הם יישמרו בתיק הלקוח.");
+            }
+            this.setHint("מלאו את נתוני השיקוף. הם יופיעו גם בשיקוף השיחה של הלקוח.");
+            this.render();
+            return;
+          }
           this.showFinishFlowSuccess();
           this.syncElementaryFinishFlowActions();
         } else {
@@ -56108,7 +56504,22 @@ if(path === "birthDate"){
           if(drvIssues.length) return { ok:false, msg: drvIssues[0] };
           return { ok:true };
         }
-        if(Number(stepId) === 5){
+        const kind = this.getElementaryStepKind(stepId);
+        if(kind === "premiums"){
+          if(ElementaryQuoteUI.isWizardHost()){
+            return ElementaryQuoteUI.validateQuotesForWizard();
+          }
+          const quotes = normalizeElementaryPriceQuotes(d.elementaryPriceQuotes);
+          if(!quotes.length) return { ok:false, msg:"יש להוסיף לפחות הצעת מחיר אחת עם פרמיות" };
+          for(const q of quotes){
+            for(const line of q.products){
+              if(!safeTrim(line.company)) return { ok:false, msg:`יש לבחור חברה ל־${safeTrim(line.label) || "מוצר"}` };
+              if(!safeTrim(line.premium).replace(/[^\d.,]/g, "")) return { ok:false, msg:`חסרה פרמיה ל־${safeTrim(line.label) || "מוצר"}` };
+            }
+          }
+          return { ok:true };
+        }
+        if(kind === "payment" || (Number(stepId) === 5 && this.isElementaryReferralAgentSetupFlow())){
           const phase = this.getElementaryStep5Phase(d);
           if(phase === 'quotePick'){
             if(!safeTrim(d._agentSelectedQuoteId)){
@@ -56116,44 +56527,47 @@ if(path === "birthDate"){
             }
             return { ok:true };
           }
-          if(phase === 'payment'){
-            this.ensureElementaryPaymentDefaults(primary);
-            const pay = d.elementaryPayment && typeof d.elementaryPayment === 'object' ? d.elementaryPayment : {};
-            const pan = digitsOnly(pay.cardNumber || '');
-            if(!this.elementaryPanSixteenDigitsOk(pan)){
-              return { ok:false, msg:'יש להזין מספר כרטיס בן 16 ספרות (ארבע קבוצות של ארבע ספרות)' };
+          if(phase === 'pricing' && this.isElementaryReferralAgentSetupFlow()){
+            this.ensureElementaryProductPricing(primary);
+            const rows = Array.isArray(d.elementaryProductPricing) ? d.elementaryProductPricing : [];
+            if(!rows.length){
+              return { ok:false, msg:'אין מוצרים לתמחור — חזרו ובחרו סוג כיסוי' };
             }
-            if(!this.elementaryExpiryOk(pay.expiry)){
-              return { ok:false, msg:'יש להזין תוקף תקף בפורמט חודש/שנה (MM/YY)' };
-            }
-            if(!safeTrim(pay.holderName)){
-              return { ok:false, msg:'יש למלא את שם בעל הכרטיס' };
-            }
-            const hid = normalizeIdValue(pay.holderId || '');
-            if(hid.length !== 9){
-              return { ok:false, msg:'יש למלא ת״ז בעל כרטיס בת 9 ספרות' };
+            for(const row of rows){
+              const p = this.parseElementaryMoney(row?.premium);
+              if(!Number.isFinite(p) || p <= 0){
+                return { ok:false, msg:`יש להזין פרמיה תקפה עבור ${safeTrim(row?.label) || 'מוצר'}` };
+              }
+              const instStr = this.normalizeElementaryInstallmentsInput(row?.installments || '');
+              const inst = instStr ? parseInt(instStr, 10) : NaN;
+              if(!Number.isFinite(inst) || inst < 1){
+                return { ok:false, msg:`יש להזין מספר תשלומים (לפחות 1) עבור ${safeTrim(row?.label) || 'מוצר'}` };
+              }
             }
             return { ok:true };
           }
-          this.ensureElementaryProductPricing(primary);
-          const rows = Array.isArray(d.elementaryProductPricing) ? d.elementaryProductPricing : [];
-          if(!rows.length){
-            return { ok:false, msg:'אין מוצרים לתמחור — חזרו ובחרו סוג כיסוי' };
+          this.ensureElementaryPaymentDefaults(primary);
+          const pay = d.elementaryPayment && typeof d.elementaryPayment === 'object' ? d.elementaryPayment : {};
+          const pan = digitsOnly(pay.cardNumber || '');
+          if(!this.elementaryPanSixteenDigitsOk(pan)){
+            return { ok:false, msg:'יש להזין מספר כרטיס בן 16 ספרות (ארבע קבוצות של ארבע ספרות)' };
           }
-          for(const row of rows){
-            const p = this.parseElementaryMoney(row?.premium);
-            if(!Number.isFinite(p) || p <= 0){
-              return { ok:false, msg:`יש להזין פרמיה תקפה עבור ${safeTrim(row?.label) || 'מוצר'}` };
-            }
-            const instStr = this.normalizeElementaryInstallmentsInput(row?.installments || '');
-            const inst = instStr ? parseInt(instStr, 10) : NaN;
-            if(!Number.isFinite(inst) || inst < 1){
-              return { ok:false, msg:`יש להזין מספר תשלומים (לפחות 1) עבור ${safeTrim(row?.label) || 'מוצר'}` };
-            }
+          if(!this.elementaryExpiryOk(pay.expiry)){
+            return { ok:false, msg:'יש להזין תוקף תקף בפורמט חודש/שנה (MM/YY)' };
+          }
+          if(!safeTrim(pay.holderName)){
+            return { ok:false, msg:'יש למלא את שם בעל הכרטיס' };
+          }
+          const hid = normalizeIdValue(pay.holderId || '');
+          if(hid.length !== 9){
+            return { ok:false, msg:'יש למלא ת״ז בעל כרטיס בת 9 ספרות' };
           }
           return { ok:true };
         }
-        if(Number(stepId) === 6){
+        if(kind === "summary" || kind === "mirror"){
+          return { ok:true };
+        }
+        if(Number(stepId) === 6 || Number(stepId) === 7 || Number(stepId) === 8){
           return { ok:true };
         }
         return { ok:true };
@@ -81686,7 +82100,128 @@ ${inner}
     _persistTimer: null,
     _persistGen: 0,
     _persistChain: Promise.resolve(),
+    _wizardEmbed: false,
+    _wizardHostEl: null,
+    _savedReportEl: null,
     els: {},
+
+    isWizardEmbed(){
+      return !!this._wizardEmbed;
+    },
+
+    mountWizardEmbed(hostEl, customerId){
+      if(!hostEl || !safeTrim(customerId)) return false;
+      this.init();
+      this._wizardEmbed = true;
+      this._wizardHostEl = hostEl;
+      if(!this._savedReportEl) this._savedReportEl = this.els.report || null;
+      this.els.report = hostEl;
+      this.selectedCustomerId = safeTrim(customerId);
+      const rec = this._getCustomer(this.selectedCustomerId);
+      if(!rec){
+        hostEl.innerHTML = `<div class="emMirror__emptySoft">לא נמצא תיק לקוח לשמירת שיקוף.</div>`;
+        return false;
+      }
+      this.reportDraft = this.buildReportDraft(rec);
+      if(!safeTrim(this.reportDraft.recordingConsent)) this.reportDraft.recordingConsent = "yes";
+      this._bindWizardEmbedEvents(hostEl);
+      this._renderReport();
+      this._polishWizardEmbedDom();
+      return true;
+    },
+
+    unmountWizardEmbed(){
+      if(!this._wizardEmbed) return;
+      try { this._captureReportFromDom(); } catch(_e){}
+      try { void this.saveReport({ silent: true }); } catch(_e){}
+      this._wizardEmbed = false;
+      this._wizardHostEl = null;
+      if(this._savedReportEl){
+        this.els.report = this._savedReportEl;
+      }
+      this._savedReportEl = null;
+    },
+
+    async commitWizardEmbed(){
+      if(!this._wizardEmbed) return false;
+      this._captureReportFromDom();
+      if(this.reportDraft && !safeTrim(this.reportDraft.recordingConsent)){
+        this.reportDraft.recordingConsent = "yes";
+      }
+      const ok = await this.saveReport({
+        silent: false,
+        toast: false,
+        pdf: false,
+        stopTimer: false,
+        forcePersist: true
+      });
+      return !!ok;
+    },
+
+    _polishWizardEmbedDom(){
+      if(!this.isWizardEmbed() || !this.els.report) return;
+      this.els.report.querySelectorAll("#emMirrorSaveReportBtn, #emMirrorDeclineSaveBtn").forEach((btn) => {
+        try { btn.remove(); } catch(_e){ btn.style.display = "none"; }
+      });
+      this.els.report.querySelectorAll(".emMirror__consentGate").forEach((el) => {
+        // בתוך האשף מאפשרים עריכה מלאה; שערי ההסכמה נשארים לקריאה בשיחת השיקוף
+      });
+    },
+
+    _bindWizardEmbedEvents(host){
+      if(!host || host.getAttribute("data-em-wizard-bound") === "1") return;
+      host.setAttribute("data-em-wizard-bound", "1");
+      const ui = this;
+      on(host, "input", () => {
+        if(!ui.isWizardEmbed()) return;
+        ui._captureReportFromDom();
+        void ui.saveReport({ silent: true });
+      });
+      on(host, "change", (ev) => {
+        if(!ui.isWizardEmbed()) return;
+        ui._captureReportFromDom();
+        const t = ev.target;
+        if(t && t.matches && t.matches("[data-em-check=\"exceptionalPayer\"]")){
+          void ui.saveReport({ silent: true });
+          ui._renderReport();
+          ui._polishWizardEmbedDom();
+          return;
+        }
+        void ui.saveReport({ silent: true });
+      });
+      on(host, "click", (ev) => {
+        if(!ui.isWizardEmbed()) return;
+        const recBtn = ev.target.closest("[data-em-rec-consent]");
+        if(recBtn){
+          ui._setRecordingConsent(recBtn.getAttribute("data-em-rec-consent"));
+          ui._polishWizardEmbedDom();
+          return;
+        }
+        const ynBtn = ev.target.closest("[data-em-yn]");
+        if(ynBtn){
+          const key = ynBtn.getAttribute("data-em-yn");
+          const val = ynBtn.getAttribute("data-em-yn-val");
+          if(key && ui.reportDraft){
+            ui._captureReportFromDom();
+            ui.reportDraft[key] = val;
+            void ui.saveReport({ silent: true });
+            ui._renderReport();
+            ui._polishWizardEmbedDom();
+          }
+          return;
+        }
+        const payBtn = ev.target.closest("[data-em-pay]");
+        if(payBtn){
+          if(ui.reportDraft){
+            ui._captureReportFromDom();
+            ui.reportDraft.paymentMethod = payBtn.getAttribute("data-em-pay") || "";
+            void ui.saveReport({ silent: true });
+            ui._renderReport();
+            ui._polishWizardEmbedDom();
+          }
+        }
+      });
+    },
 
     init(){
       if(this._bound) return;
@@ -83260,6 +83795,7 @@ ${inner}
       this.reportDraft.recordingConsent = val === "yes" ? "yes" : "no";
       this.saveReport({ silent: true });
       this._renderReport();
+      if(this.isWizardEmbed()) this._polishWizardEmbedDom();
     },
 
     async _saveDeclineAndClose(){
