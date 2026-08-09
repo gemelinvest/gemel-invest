@@ -4114,11 +4114,40 @@
     return customerOwnedByCurrentAgent(rec) || customerOwnedByManagedTeam(rec);
   }
 
+  function isElementaryPoolCustomerRecord(rec){
+    if(!rec) return false;
+    const role = safeTrim(rec.agentRole || rec.agent_role).toLowerCase();
+    if(role === "elementary" || role === "אלמנטרי") return true;
+    try {
+      if(typeof CustomersUI !== "undefined" && CustomersUI?.customerHasElementaryProducts?.(rec)) return true;
+    } catch(_e){}
+    try {
+      if(rec?.payload?.mirrorFlow?.elementaryReport && typeof rec.payload.mirrorFlow.elementaryReport === "object") return true;
+    } catch(_e){}
+    try {
+      const cid = safeTrim(rec.id);
+      const idNum = normalizeIdValue(rec.idNumber);
+      if(cid && typeof findElementaryReferralByCustomerId === "function" && findElementaryReferralByCustomerId(cid)) return true;
+      if(idNum && typeof findElementaryReferralsForCustomerOrIdNumber === "function"){
+        const rows = findElementaryReferralsForCustomerOrIdNumber(cid, idNum) || [];
+        if(rows.length) return true;
+      } else if(idNum && typeof findPendingElementaryReferralByIdNumber === "function" && findPendingElementaryReferralByIdNumber(idNum)){
+        return true;
+      }
+    } catch(_e){}
+    return false;
+  }
+
   function customerVisibleToCurrentUser(rec){
     if(!rec || !Auth?.current) return false;
     if(Auth.canViewAllCustomers()) return true;
     if(Auth.isOpsAgent()){
       try { return currentUserMatchesMirrorAssign(getMirrorAssign(rec)); } catch(_e){ return false; }
+    }
+    // מאגר אלמנטרי משותף: כל נציגי האלמנטרי רואים לקוחות אלמנטרי (לא רק את של עצמם)
+    if(Auth.isElementary()){
+      if(isElementaryPoolCustomerRecord(rec)) return true;
+      return customerOwnedByCurrentAgent(rec);
     }
     if(Auth.isTeamManager()) return customerVisibleToTeamManager(rec);
     return customerOwnedByCurrentAgent(rec);
@@ -10667,8 +10696,9 @@
       }
     },
 
-    /** חיפוש לקוחות בשרת (רק כשהמשתמש מחפש). */
-    async searchCustomers(query, limit = 40){
+    /** חיפוש לקוחות בשרת (רק כשהמשתמש מחפש).
+     *  options.skipAgentScope — מאגר משותף (למשל שיקוף אלמנטרי לכל נציגי האלמנטרי). */
+    async searchCustomers(query, limit = 40, options = {}){
       const raw = safeTrim(query);
       if(!raw) return this.loadLatestCustomers(10);
       const take = Math.max(1, Math.min(60, Number(limit) || 40));
@@ -10684,6 +10714,8 @@
         "email.ilike." + pattern,
         "city.ilike." + pattern
       ].join(",");
+      const prevSkipScope = this._skipServerAgentScope;
+      if(options && options.skipAgentScope === true) this._skipServerAgentScope = true;
       try {
         const connection = await this.waitForConnection({ retries: 2, delayMs: 600 });
         if(!connection?.ok) return { ok:false, error: connection?.error || "NO_CONNECTION", data: [] };
@@ -10726,6 +10758,8 @@
         return { ok:true, data: mapped };
       } catch(err) {
         return { ok:false, error: String(err?.message || err), data: [] };
+      } finally {
+        this._skipServerAgentScope = prevSkipScope;
       }
     },
 
@@ -83710,15 +83744,18 @@ ${inner}
       this.els.report = document.getElementById("emMirrorReport");
       if(!this.els.root) return;
 
-      if(this.els.searchBtn) on(this.els.searchBtn, "click", () => this.search());
+      if(this.els.searchBtn) on(this.els.searchBtn, "click", () => { void this.search({ immediate: true }); });
       if(this.els.searchInput){
         on(this.els.searchInput, "keydown", (ev) => {
-          if(ev.key === "Enter"){ ev.preventDefault(); this.search(); }
+          if(ev.key === "Enter"){ ev.preventDefault(); void this.search({ immediate: true }); }
         });
         on(this.els.searchInput, "input", () => {
           const q = safeTrim(this.els.searchInput.value);
-          if(q.length >= 2) this.search();
-          else if(!q) this._renderIdleResults();
+          if(q.length >= 2) void this.search();
+          else if(!q){
+            this._searchSeq = (Number(this._searchSeq) || 0) + 1;
+            this._renderIdleResults();
+          }
         });
       }
       if(this.els.results) on(this.els.results, "click", (ev) => {
@@ -84335,13 +84372,36 @@ ${inner}
       if(this.els.results) this.els.results.innerHTML = `<div class="emMirror__empty">הקלד ת״ז, שם מלא או טלפון לחיפוש</div>`;
     },
 
-    search(){
-      const q = safeTrim(this.els.searchInput?.value || "");
-      if(!q){
-        this._renderIdleResults();
+    _isElementaryMirrorSearchCandidate(rec){
+      if(!rec) return false;
+      try {
+        if(typeof customerOwnedByCurrentAgent === "function" && customerOwnedByCurrentAgent(rec)) return true;
+      } catch(_e){}
+      try {
+        if(typeof isElementaryPoolCustomerRecord === "function" && isElementaryPoolCustomerRecord(rec)) return true;
+      } catch(_e){}
+      if(safeTrim(rec._emMirrorFromReferralId)) return true;
+      return false;
+    },
+
+    _paintSearchResults(list, q){
+      const rows = Array.isArray(list) ? list.slice(0, 20) : [];
+      this._lastSearchHits = rows;
+      if(this.els.searchHint){
+        this.els.searchHint.textContent = rows.length
+          ? (rows.length === 1 ? "נמצאה התאמה אחת · ניתן להתחיל שיחת שיקוף" : `${rows.length} לקוחות נמצאו`)
+          : (safeTrim(q) ? "לא נמצאו לקוחות תואמים" : "הקלד לחיפוש לקוח");
+      }
+      if(!this.els.results) return;
+      if(!rows.length){
+        this.els.results.innerHTML = `<div class="emMirror__empty">${safeTrim(q) ? "לא נמצאו לקוחות תואמים" : "הקלד ת״ז, שם מלא או טלפון לחיפוש"}</div>`;
         return;
       }
-      const qLow = q.toLowerCase();
+      this.els.results.innerHTML = rows.map((c) => this._resultCardHtml(c)).join("");
+    },
+
+    _collectLocalMirrorSearchHits(q){
+      const qLow = String(q || "").toLowerCase();
       const qDigits = digitsOnly(q);
       const qId = normalizeIdValue(q);
       const seen = new Set();
@@ -84349,6 +84409,7 @@ ${inner}
 
       const pushRec = (rec) => {
         if(!rec || !safeTrim(rec.id)) return;
+        if(!this._isElementaryMirrorSearchCandidate(rec)) return;
         const id = safeTrim(rec.id);
         if(seen.has(id)) return;
         seen.add(id);
@@ -84389,25 +84450,75 @@ ${inner}
             fullName: safeTrim(ref.fullName),
             idNumber: safeTrim(ref.idNumber),
             phone: safeTrim(ref.phone),
+            agentRole: "elementary",
             payload: ref.payload && typeof ref.payload === "object" ? ref.payload : {},
             _emMirrorFromReferralId: safeTrim(ref.id)
           });
         });
       }catch(_e){}
 
-      const list = results.slice(0, 20);
-      this._lastSearchHits = list;
-      if(this.els.searchHint){
-        this.els.searchHint.textContent = list.length
-          ? (list.length === 1 ? "נמצאה התאמה אחת · ניתן להתחיל שיחת שיקוף" : `${list.length} לקוחות נמצאו`)
-          : "לא נמצאו לקוחות תואמים";
-      }
-      if(!this.els.results) return;
-      if(!list.length){
-        this.els.results.innerHTML = `<div class="emMirror__empty">לא נמצאו לקוחות תואמים</div>`;
+      return { results, seen };
+    },
+
+    async search(options = {}){
+      const q = safeTrim(this.els.searchInput?.value || "");
+      if(!q){
+        this._searchSeq = (Number(this._searchSeq) || 0) + 1;
+        window.clearTimeout(this._searchServerTimer);
+        this._searchServerTimer = null;
+        this._renderIdleResults();
         return;
       }
-      this.els.results.innerHTML = list.map((c) => this._resultCardHtml(c)).join("");
+      const seq = (Number(this._searchSeq) || 0) + 1;
+      this._searchSeq = seq;
+
+      const local = this._collectLocalMirrorSearchHits(q);
+      this._paintSearchResults(local.results, q);
+
+      // מאגר משותף לכל נציגי האלמנטרי — חיפוש שרת בלי סינון agent_id של הנציג המחובר
+      if(typeof Storage === "undefined" || typeof Storage.searchCustomers !== "function") return;
+
+      const runServer = async () => {
+        if(seq !== this._searchSeq) return;
+        if(this.els.searchHint && !local.results.length){
+          this.els.searchHint.textContent = "מחפש בשרת…";
+        }
+        let res = null;
+        try{
+          res = await Storage.searchCustomers(q, 40, { skipAgentScope: true });
+        }catch(err){
+          try{ console.warn("[ElementaryMirrorUI] server search failed", err); }catch(_e){}
+          return;
+        }
+        if(seq !== this._searchSeq) return;
+        if(safeTrim(this.els.searchInput?.value || "") !== q) return;
+        if(!res?.ok || !Array.isArray(res.data)) return;
+
+        const seen = local.seen instanceof Set ? local.seen : new Set(local.results.map((r) => safeTrim(r.id)));
+        const merged = local.results.slice();
+        res.data.forEach((rec) => {
+          if(!rec || !safeTrim(rec.id)) return;
+          if(!this._isElementaryMirrorSearchCandidate(rec)) return;
+          const id = safeTrim(rec.id);
+          if(seen.has(id)) return;
+          seen.add(id);
+          let live = rec;
+          try { live = ensureCustomerInActiveList(rec) || rec; } catch(_e){ live = rec; }
+          merged.push(live);
+        });
+        this._paintSearchResults(merged, q);
+      };
+
+      window.clearTimeout(this._searchServerTimer);
+      this._searchServerTimer = null;
+      if(options.immediate === true){
+        await runServer();
+        return;
+      }
+      this._searchServerTimer = window.setTimeout(() => {
+        this._searchServerTimer = null;
+        void runServer();
+      }, 320);
     },
 
     _resultCardHtml(rec){
@@ -84744,7 +84855,7 @@ ${inner}
       }
       this._resetLocalCallState();
       this._showPhase("search");
-      this.search();
+      void this.search({ immediate: true });
     },
 
     _addOneYearDmy(dateStr){
@@ -85288,7 +85399,7 @@ ${inner}
       this.saveReport({ silent: true });
       this.endCall({ goSearch: false });
       this._showPhase("search");
-      this.search();
+      void this.search({ immediate: true });
       try{ window.showToast?.({ title: "שיקוף אלמנטרי", text: "השיחה נסגרה · הסירוב תועד", variant: "success" }); }catch(_e){}
     },
 
