@@ -25448,14 +25448,14 @@ UsersGateUI.init();
       this.els.root = $("#view-dashboard");
     },
 
-    /* GI-PERF 2026-08-09 — בזמן טעינה רזה ה-KPI מגיע מ-RPC (_serverKpiOverlay).
-       רענוני hydration לא צריכים למחוק אותו, אחרת המסך קופץ ל-₪0 עד סוף המילוי. */
+    /* GI-PERF 2026-08-09 / GI-FIX 2026-08-09b —
+       ה-RPC (_serverKpiOverlay) נשאר יציב עד שיש חישוב מקומי מלא (_localBuildReady).
+       קודם: overlay התבטל ברגע ש־missingPayloads=0 → מסך קפץ ל־₪0 בזמן בנייה מנותית. */
     hasStableServerKpiOverlay(){
       try {
         if(!this._metricsCache || this._metricsCache._serverKpiOverlay !== true) return false;
-        return (typeof Storage !== "undefined" && Storage.countMissingCustomerPayloads)
-          ? Storage.countMissingCustomerPayloads() > 0
-          : false;
+        if(this._metricsCache._localBuildReady === true) return false;
+        return true;
       } catch(_e) {
         return false;
       }
@@ -25463,11 +25463,31 @@ UsersGateUI.init();
 
     invalidateMetricsCache(options = {}){
       const force = options.force === true;
-      if(!force && this.hasStableServerKpiOverlay()){
+      const keepUsableCache = () => {
         this._todaySalesCacheKey = "";
         this._todaySalesCache = null;
         this._dailyAgentsCacheKey = "";
         this._dailyAgentsCache = null;
+        // מאפשרים rebuild ברקע, בלי למחוק מספרים שכבר על המסך
+        this._metricsCacheKey = "";
+        this._renderedDomKey = "";
+        this._localMetricsAttemptedKey = "";
+      };
+      // בזמן overlay יציב — לא מוחקים את מספרי השרת (גם ב־force).
+      if(this.hasStableServerKpiOverlay()){
+        keepUsableCache();
+        return;
+      }
+      // גם אחרי חישוב מקומי מוכן: force/hydration לא יאפסו את המסך ל־₪0
+      // בזמן בנייה מנותית — משאירים cache ישן עד ש־commit חדש מוכן.
+      const usable = this._metricsCache
+        && this._metricsCache._loading !== true
+        && (
+          (Number(this._metricsCache.netPremium) || 0) > 0
+          || (Number(this._metricsCache.agentAppointmentPremium) || 0) > 0
+        );
+      if(usable){
+        keepUsableCache();
         return;
       }
       this._metricsCacheKey = "";
@@ -25475,11 +25495,60 @@ UsersGateUI.init();
       this._renderedDomKey = "";
       this._metricsBuildKey = "";
       this._metricsBuildBusy = false;
+      this._metricsBuildQueuedKey = "";
+      this._localMetricsAttemptedKey = "";
       this._todaySalesCacheKey = "";
       this._todaySalesCache = null;
       this._todaySalesServerOverlay = null;
       this._dailyAgentsCacheKey = "";
       this._dailyAgentsCache = null;
+    },
+
+    _countMissingCustomerPayloadsSafe(){
+      try {
+        if(typeof Storage !== "undefined" && Storage.countMissingCustomerPayloads){
+          return Number(Storage.countMissingCustomerPayloads()) || 0;
+        }
+      } catch(_e) {}
+      return 0;
+    },
+
+    /** האם מותר לדרוס overlay שרת בתוצאת חישוב מקומי. */
+    _canPromoteLocalMetrics(localMetrics){
+      if(!localMetrics || typeof localMetrics !== "object") return false;
+      if(this._countMissingCustomerPayloadsSafe() > 0) return false;
+      if(localMetrics._loading === true) return false;
+      // אם יש overlay עם מספרים אמיתיים — אל תחליף באפסים מקומיים
+      const overlay = this._metricsCache;
+      if(overlay && overlay._serverKpiOverlay === true && overlay._localBuildReady !== true){
+        const serverNet = Number(overlay.netPremium) || 0;
+        const localNet = Number(localMetrics.netPremium) || 0;
+        const serverAppt = Number(overlay.agentAppointmentPremium) || 0;
+        const localAppt = Number(localMetrics.agentAppointmentPremium) || 0;
+        if(serverNet > 0 && localNet <= 0) return false;
+        if(serverAppt > 0 && localAppt <= 0 && serverNet > 0) return false;
+      }
+      return true;
+    },
+
+    _commitLocalMetricsResult(cacheKey, metricsResult){
+      const next = metricsResult && typeof metricsResult === "object" ? metricsResult : null;
+      if(!next) return this._metricsCache;
+      if(!this._canPromoteLocalMetrics(next)){
+        // שומרים overlay; מסמנים שניסינו — בלי לולאת rebuild
+        if(this._metricsCache?._serverKpiOverlay){
+          try { this._metricsCacheKey = cacheKey || this.getMetricsCacheKey(); } catch(_e) {}
+          this._localMetricsAttemptedKey = cacheKey || this._metricsCacheKey;
+        }
+        return this._metricsCache;
+      }
+      next._serverKpiOverlay = false;
+      next._localBuildReady = true;
+      next._loading = false;
+      this._metricsCacheKey = cacheKey;
+      this._metricsCache = next;
+      this._localMetricsAttemptedKey = "";
+      return next;
     },
 
     getMetricsCacheKey(){
@@ -25724,9 +25793,7 @@ UsersGateUI.init();
         netProductTotals: currentAgg.productTotals || Object.create(null),
         agentApptItems: Array.isArray(currentAgg.agentApptItems) ? currentAgg.agentApptItems : []
       };
-      this._metricsCacheKey = cacheKey;
-      this._metricsCache = metricsResult;
-      return metricsResult;
+      return this._commitLocalMetricsResult(cacheKey, metricsResult);
     },
 
     _metricsLoadingShell(){
@@ -25820,11 +25887,14 @@ UsersGateUI.init();
     },
 
     scheduleChunkedMetricsBuild(cacheKey){
-      if(this._metricsBuildBusy && this._metricsBuildKey === cacheKey) return;
+      // GI-FIX: בנייה אחת בלבד; אם ה-key השתנה באמצע — תור לריצה הבאה (לא מקביליות)
+      if(this._metricsBuildBusy){
+        this._metricsBuildQueuedKey = cacheKey;
+        return;
+      }
       /* GI-PERF 2026-08-09 — דילוג על בנייה מנותית מאפסים בזמן payloads חסרים. */
       try {
-        if(typeof Storage !== "undefined" && Storage.countMissingCustomerPayloads
-          && Storage.countMissingCustomerPayloads() > 0){
+        if(this._countMissingCustomerPayloadsSafe() > 0){
           if(this._metricsCache?._serverKpiOverlay){
             this._metricsCacheKey = cacheKey;
             this._metricsBuildBusy = false;
@@ -25840,6 +25910,7 @@ UsersGateUI.init();
       } catch(_e) {}
       this._metricsBuildKey = cacheKey;
       this._metricsBuildBusy = true;
+      this._metricsBuildQueuedKey = "";
       const customersAll = this.getVisibleCustomers();
       const proposalsAll = this.getVisibleProposals();
       const currentRange = this.getMonthToDateRange();
@@ -25855,7 +25926,27 @@ UsersGateUI.init();
       const dailySeries = Array.from({ length: totalDays }, (_, idx) => ({ day: idx + 1, premium: 0, clients: 0 }));
       let idx = 0;
       GiPerf.mark("buildMetrics");
+      const finishBuild = (_giChunkMetrics) => {
+        this._metricsBuildBusy = false;
+        GiPerf.mark("buildMetrics:end");
+        GiPerf.measure("buildMetrics", "buildMetrics");
+        const queued = safeTrim(this._metricsBuildQueuedKey);
+        this._metricsBuildQueuedKey = "";
+        if(queued && queued !== cacheKey){
+          this.scheduleChunkedMetricsBuild(queued);
+          return;
+        }
+        if(LiveRefresh.getCurrentView() === "dashboard") this.scheduleRefreshKpis();
+      };
       const step = () => {
+        // אם ביקשו invalidate/queue — לא ממשיכים לכתוב תוצאה חלקית
+        if(this._metricsBuildKey !== cacheKey){
+          this._metricsBuildBusy = false;
+          const queued = safeTrim(this._metricsBuildQueuedKey) || this._metricsBuildKey;
+          this._metricsBuildQueuedKey = "";
+          if(queued) this.scheduleChunkedMetricsBuild(queued);
+          return;
+        }
         const end = Math.min(customersAll.length, idx + METRICS_CHUNK_SIZE);
         for(; idx < end; idx += 1){
           const rec = customersAll[idx];
@@ -25869,10 +25960,6 @@ UsersGateUI.init();
           }
           return;
         }
-        // GI-PERF 2026-08-02 (שלב ט'): שלב ב' — צבירת מינויי סוכן.
-        // קודם: finalizeBothAggs רץ כאן בקריאה אחת על כל 1,035 הלקוחות, וביטל
-        // בפועל את כל החלוקה למנות שקדמה לו. עכשיו גם הוא רץ במנות של
-        // METRICS_CHUNK_SIZE, על אותו מנוע idle.
         apptIdx = 0;
         apptStep();
       };
@@ -25883,6 +25970,13 @@ UsersGateUI.init();
       let apptIdx = 0;
 
       const apptStep = () => {
+        if(this._metricsBuildKey !== cacheKey){
+          this._metricsBuildBusy = false;
+          const queued = safeTrim(this._metricsBuildQueuedKey) || this._metricsBuildKey;
+          this._metricsBuildQueuedKey = "";
+          if(queued) this.scheduleChunkedMetricsBuild(queued);
+          return;
+        }
         const end = Math.min(customersAll.length, apptIdx + METRICS_CHUNK_SIZE);
         for(; apptIdx < end; apptIdx += 1){
           CustomersUI.accumulateAgentAppointmentDual(
@@ -25913,10 +26007,7 @@ UsersGateUI.init();
           customersMonth, customersPrev, proposalsMonth, proposalsPrev, currentAgg, prevAgg, dailySeries
         );
         try { this.compareServerKpis?.(_giChunkMetrics); } catch(_e) {}
-        this._metricsBuildBusy = false;
-        GiPerf.mark("buildMetrics:end");
-        GiPerf.measure("buildMetrics", "buildMetrics");
-        if(LiveRefresh.getCurrentView() === "dashboard") this.scheduleRefreshKpis();
+        finishBuild(_giChunkMetrics);
       };
       if(typeof requestIdleCallback === "function"){
         requestIdleCallback(step, { timeout: 120 });
@@ -26090,7 +26181,7 @@ UsersGateUI.init();
               count: 0,
               premium: Math.round((Number(premium) || 0) * 100) / 100
             })).sort((a, b) => b.premium - a.premium);
-          this._todaySalesServerOverlay = {
+          const next = {
             ok: true,
             dayKey,
             at: Date.now(),
@@ -26099,6 +26190,13 @@ UsersGateUI.init();
             newClients: Number(res.newClients) || 0,
             breakdown
           };
+          const prev = this._todaySalesServerOverlay;
+          const changed = !prev || prev.dayKey !== next.dayKey
+            || Number(prev.totalPremium) !== Number(next.totalPremium)
+            || Number(prev.totalPolicies) !== Number(next.totalPolicies)
+            || Number(prev.newClients) !== Number(next.newClients);
+          this._todaySalesServerOverlay = next;
+          if(!changed) return;
           this._todaySalesCacheKey = "";
           this._todaySalesCache = null;
           if(typeof LiveRefresh !== "undefined" && LiveRefresh.getCurrentView?.() === "dashboard"){
@@ -27103,6 +27201,26 @@ UsersGateUI.init();
       const dateInput = document.getElementById("dailySalesDateInput");
       const dateText = document.getElementById("dailySalesDateText");
       const todayBtn = document.getElementById("btnDailySalesToday");
+      // GI-FIX: בזמן hydration לא מוחקים טבלה מלאה ברינדור ריק זמני
+      try {
+        const missing = (typeof Storage !== "undefined" && Storage.countMissingCustomerPayloads)
+          ? (Number(Storage.countMissingCustomerPayloads()) || 0)
+          : 0;
+        const prevRows = tbody ? tbody.querySelectorAll("tr").length : 0;
+        const nextEmpty = !(slice?.groups?.length) && !(Number(report?.totalPremium) > 0);
+        if(missing > 0 && prevRows > 0 && nextEmpty){
+          if(dateInput){
+            dateInput.value = report.dateKey;
+            dateInput.max = this.toLocalDateKey(new Date());
+          }
+          if(dateText) dateText.textContent = report.dateLabel || "—";
+          if(todayBtn){
+            todayBtn.disabled = !!report.isToday;
+            todayBtn.classList.toggle("is-active", !!report.isToday);
+          }
+          return;
+        }
+      } catch(_e) {}
       if(sectorsEl) sectorsEl.innerHTML = this.renderDailySalesSectorTabsHtml(report);
       if(summary) summary.innerHTML = this.renderDailySalesGroupSummaryHtml(report, { tab, slice });
       if(tbody){
@@ -27495,7 +27613,25 @@ UsersGateUI.init();
       if(!this._dailySalesOverlayOpen) return;
       const overlay = document.getElementById("giDailySalesOverlay");
       if(!overlay || overlay.hidden) return;
-      overlay.innerHTML = this.renderDailySalesOverlayInnerHtml();
+      // GI-FIX: לא מחליפים דוח מלא בריק זמני בזמן hydration
+      const prevHadRows = !!overlay.querySelector("tbody tr, .giDailySales__row, .giDailySalesOverlay__table tbody tr");
+      const prevTotal = safeTrim(overlay.querySelector(".giDailySales__footTotalVal")?.textContent);
+      const nextHtml = this.renderDailySalesOverlayInnerHtml();
+      const wrap = document.createElement("div");
+      wrap.innerHTML = nextHtml;
+      const nextHadRows = !!wrap.querySelector("tbody tr td:not([colspan]), .giDailySales__row");
+      const nextTotal = safeTrim(wrap.querySelector(".giDailySales__footTotalVal")?.textContent);
+      const nextLooksEmpty = !nextHadRows || nextTotal === "₪0" || nextTotal === "0";
+      const prevLooksFilled = prevHadRows && prevTotal && prevTotal !== "₪0" && prevTotal !== "0";
+      if(prevLooksFilled && nextLooksEmpty){
+        try {
+          if(typeof Storage !== "undefined" && Storage.countMissingCustomerPayloads
+            && Storage.countMissingCustomerPayloads() > 0){
+            return;
+          }
+        } catch(_e) {}
+      }
+      overlay.innerHTML = nextHtml;
     },
 
     printDailySalesReportScreen(){
@@ -27552,10 +27688,20 @@ UsersGateUI.init();
       if(!this.canSeeDailySalesReport() || !this.els.root) return;
       const mount = this.els.root.querySelector("#giDailySalesReport");
       if(mount){
+        // GI-FIX: לא מחליפים פאנל עם תוכן ברינדור ריק זמני (בזמן hydration/רענון)
+        const prevHadRows = !!mount.querySelector(".giDailySalesReport__row, .giDailySalesReport__group, [data-daily-sales-row]");
         const wrap = document.createElement("div");
         wrap.innerHTML = this.renderDailySalesReportHtml();
         const next = wrap.querySelector("#giDailySalesReport");
-        if(next) mount.replaceWith(next);
+        if(next){
+          const nextHasRows = !!next.querySelector(".giDailySalesReport__row, .giDailySalesReport__group, [data-daily-sales-row]");
+          const nextIsEmptyMsg = !!next.querySelector(".giDailySalesReport__empty, .bankKpiTodayRow--empty");
+          if(prevHadRows && !nextHasRows && nextIsEmptyMsg){
+            // שומרים את מה שכבר מוצג
+          } else {
+            mount.replaceWith(next);
+          }
+        }
       }
       try { this.refreshDailySalesOverlay(); } catch(_e){}
     },
@@ -27714,19 +27860,41 @@ UsersGateUI.init();
         .finally(() => { this._orgLeaderFetchBusy = false; });
     },
 
+    _ensureBackgroundLocalMetricsBuild(cacheKey){
+      if(this._metricsBuildBusy) return;
+      if(this._countMissingCustomerPayloadsSafe() > 0) return;
+      if(!this._metricsCache?._serverKpiOverlay || this._metricsCache._localBuildReady === true) return;
+      // ניסיון אחד לכל cacheKey — מונע לולאת rebuild כשהמקומי עדיין 0 והשרת מלא
+      if(this._localMetricsAttemptedKey === cacheKey) return;
+      this._localMetricsAttemptedKey = cacheKey;
+      const customersAll = this.getVisibleCustomers();
+      const agentScoped = !!(Auth.current && !Auth.canViewAllCustomers?.());
+      const syncLimit = agentScoped ? 24 : 45;
+      if(customersAll.length <= syncLimit){
+        try { this.computeAndCacheMetrics(cacheKey); } catch(_e) {}
+        return;
+      }
+      this.scheduleChunkedMetricsBuild(cacheKey);
+    },
+
     buildMetrics(){
       const cacheKey = this.getMetricsCacheKey();
       if(this._metricsCacheKey === cacheKey && this._metricsCache){
+        try { this._ensureBackgroundLocalMetricsBuild(cacheKey); } catch(_e) {}
         return this._metricsCache;
       }
-      /* GI-PERF 2026-08-09 — שינוי cacheKey בזמן hydration לא ידרוס overlay שרת. */
-      if(this._metricsCache?._serverKpiOverlay){
+      /* GI-FIX 2026-08-09b — overlay שרת נשאר עד _localBuildReady, גם אחרי missing=0.
+         במקביל מריצים בנייה מקומית ברקע (בלי לצבוע ₪0 באמצע). */
+      if(this._metricsCache?._serverKpiOverlay && this._metricsCache._localBuildReady !== true){
+        this._metricsCacheKey = cacheKey;
         try {
-          if(Storage.countMissingCustomerPayloads() > 0){
-            this._metricsCacheKey = cacheKey;
-            return this._metricsCache;
+          if(this._countMissingCustomerPayloadsSafe() === 0){
+            this._ensureBackgroundLocalMetricsBuild(cacheKey);
+          } else {
+            try { this.compareServerKpis?.(this._metricsCache); } catch(_e2) {}
           }
         } catch(_e) {}
+        return this._metricsCache;
       }
       const customersAll = this.getVisibleCustomers();
       const agentScoped = !!(Auth.current && !Auth.canViewAllCustomers?.());
@@ -27889,6 +28057,26 @@ UsersGateUI.init();
       const root       = this.els.root;
       if(!root) return;
 
+      // GI-FIX: לא צובעים ₪0 מעל מספרים טובים בזמן shell/טעינה/רענון חלקי
+      const paintedMoneyLooksReal = (txt) => {
+        const s = safeTrim(txt);
+        if(!s) return false;
+        if(s === "₪0" || s === "0" || s === "₪0.00") return false;
+        return /[1-9]/.test(s);
+      };
+      const firstKpiVal = root.querySelector(".bankDash__kpis .bankKpi:not(.bankKpi--today) .bankKpi__value");
+      const skipMonthZeroPaint = (
+        (metrics?._loading === true || this.hasStableServerKpiOverlay())
+        && !(Number(metrics?.netPremium) > 0 || Number(metrics?.agentAppointmentPremium) > 0)
+        && paintedMoneyLooksReal(firstKpiVal?.textContent)
+      );
+      const todayValEl = root.querySelector("#bankKpiTodayCard .bankKpi__value");
+      const skipTodayZeroPaint = (
+        !(Number(todaySales?.totalPremium) > 0 || Number(todaySales?.totalPolicies) > 0)
+        && paintedMoneyLooksReal(todayValEl?.textContent)
+        && (todaySales?._loading === true || !!this._todaySalesServerBusy)
+      );
+
       const setText = (sel, val) => { const el = root.querySelector(sel); if(el && el.textContent !== val) el.textContent = val; };
       const setHTML = (sel, val) => { const el = root.querySelector(sel); if(el) el.innerHTML = val; };
 
@@ -27909,8 +28097,10 @@ UsersGateUI.init();
           valEl.className = 'bankDash__topStats__value bankDash__topStats__value--' + topBarTone;
         }
       };
-      applyTopMetric(topTargetEl, targetNumStr);
-      applyTopMetric(topAvgEl, avgNumStr);
+      if(!skipMonthZeroPaint){
+        applyTopMetric(topTargetEl, targetNumStr);
+        applyTopMetric(topAvgEl, avgNumStr);
+      }
 
       // PERF: reuse totals from metrics build — no second full-customer policy scan
       const netBreakdownHtml = this.formatNetProductBreakdownHtml(metrics.netProductTotals);
@@ -27954,13 +28144,15 @@ UsersGateUI.init();
         }
       };
 
-      root.querySelectorAll('.bankDash__kpis .bankKpi:not(.bankKpi--today)').forEach((card, i) => {
-        applyKpiDatum(card, cardData[i]);
-      });
+      if(!skipMonthZeroPaint){
+        root.querySelectorAll('.bankDash__kpis .bankKpi:not(.bankKpi--today)').forEach((card, i) => {
+          applyKpiDatum(card, cardData[i]);
+        });
+      }
 
       // ביצועים מול יעד
       const goalCard = root.querySelector('.bankGoal');
-      if(goalCard){
+      if(goalCard && !skipMonthZeroPaint){
         // טון (צבע) הכרטיס
         goalCard.className = `bankGoal card bankGoal--${metrics.targetTone}`;
 
@@ -28005,7 +28197,7 @@ UsersGateUI.init();
 
       // כרטיס today — תמיד מספר (₪0 עד שיש נתונים), בלי «טוען…»
       const todayCard = root.querySelector('#bankKpiTodayCard');
-      if(todayCard){
+      if(todayCard && !skipTodayZeroPaint){
         const valEl = todayCard.querySelector('.bankKpi__value');
         const newVal = this.formatMoney(todaySales.totalPremium || 0);
         if(valEl && valEl.textContent !== newVal) valEl.textContent = newVal;
@@ -69122,28 +69314,41 @@ const ClalRiskLifePdf = {
         const missingCustomers = (() => {
           try { return Storage.countMissingCustomerPayloads(); } catch(_e) { return 0; }
         })();
-        /* GI-PERF 2026-08-08: בזמן טעינה רזה אין מאיפה לחשב פרמיה נטו בלקוח —
-           ממלאים מ-RPC קיים בלי להוריד את כל ה-payloads שוב. */
-        if(missingCustomers > 0){
+        const localReady = !!(this._metricsCache && this._metricsCache._localBuildReady === true);
+        /* GI-FIX 2026-08-09b: ממלאים מ-RPC כל עוד אין חישוב מקומי מוכן —
+           לא רק בזמן missing payloads (אחרת אחרי hydration המסך קופץ ל־0). */
+        if(missingCustomers > 0 || !localReady){
           const m = (this._metricsCache && typeof this._metricsCache === "object")
             ? this._metricsCache
             : (metrics && typeof metrics === "object" ? metrics : this._metricsLoadingShell());
           this._metricsCache = m;
           try { this._metricsCacheKey = this.getMetricsCacheKey(); } catch(_e) {}
+          const prevFp = [
+            Number(m.netPremium) || 0,
+            Number(m.soldPolicies) || 0,
+            Number(m.agentAppointmentPremium) || 0,
+            Number(m.agentAppointments) || 0,
+            Number(m.newClients) || 0
+          ].join("|");
           const netPremium = Number(res.netPremium) || 0;
           const apptPremium = Number(res.apptPremium) || 0;
           const apptPolicies = Number(res.apptPolicies) || 0;
-          m.netPremium = netPremium;
-          m.soldPolicies = Number(res.soldPolicies) || 0;
-          m.newClients = Number(res.newClients) || 0;
-          m.agentAppointmentPremium = apptPremium;
-          m.agentAppointments = apptPolicies;
+          // אל תדרוס מספרים טובים באפסים אם ה-RPC החזיר ריק זמנית
+          if(netPremium > 0 || !(Number(m.netPremium) > 0)){
+            m.netPremium = netPremium;
+            m.soldPolicies = Number(res.soldPolicies) || 0;
+            m.newClients = Number(res.newClients) || 0;
+          }
+          if(apptPremium > 0 || !(Number(m.agentAppointmentPremium) > 0)){
+            m.agentAppointmentPremium = apptPremium;
+            m.agentAppointments = apptPolicies;
+          }
           /* פירוט מוצרים מ-RPC — בלי payloads בזיכרון אין מאיפה לבנות «הצג פירוט». */
           if(res.productTotals && typeof res.productTotals === "object"){
             m.netProductTotals = res.productTotals;
           }
           /* אין RPC לפי לקוח למינוי סוכן — מציגים סיכום שרת עד שה-hydration ממלא פירוט מלא. */
-          if(apptPolicies > 0 || apptPremium > 0){
+          if((apptPolicies > 0 || apptPremium > 0) && !Array.isArray(m.agentApptItems)){
             m.agentApptItems = [{
               rec: { fullName: apptPolicies + " מינויי סוכן", idNumber: "" },
               premium: apptPremium,
@@ -69151,12 +69356,20 @@ const ClalRiskLifePdf = {
             }];
           }
           /* GI-FIX 2026-08-09 — יעד לפי היקף (כל הנציגים/צוות/אישי), לא רק יעד אישי של המנהל. */
-          try { this.applyTargetFieldsToMetrics(m, netPremium); } catch(_e) {}
-          m.avgPremium = m.customersMonth?.length ? (netPremium / m.customersMonth.length) : 0;
+          try { this.applyTargetFieldsToMetrics(m, Number(m.netPremium) || 0); } catch(_e) {}
+          m.avgPremium = m.customersMonth?.length ? ((Number(m.netPremium) || 0) / m.customersMonth.length) : 0;
           m._serverKpiOverlay = true;
+          m._localBuildReady = false;
           m._loading = false;
+          const nextFp = [
+            Number(m.netPremium) || 0,
+            Number(m.soldPolicies) || 0,
+            Number(m.agentAppointmentPremium) || 0,
+            Number(m.agentAppointments) || 0,
+            Number(m.newClients) || 0
+          ].join("|");
           try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
-          if(LiveRefresh.getCurrentView() === "dashboard"){
+          if(nextFp !== prevFp && LiveRefresh.getCurrentView() === "dashboard"){
             try { this.scheduleRefreshKpis(); } catch(_e) {}
           }
           return;
