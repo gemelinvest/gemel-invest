@@ -2168,6 +2168,35 @@
     } catch(_e) { return true; }
   }
 
+  /* GI-FIX 2026-08-09b — Payload hydration guardrails.
+     רקע: hydratePayloads (ראה למטה) מילאה payload מלא לכל לקוח חסר בבת אחת,
+     בלי תקרה. זה תוכנן ונבדק מול ~1,035 לקוחות. טעינת קובץ של 52,000 לקוחות
+     חדשים הפכה את אותו תהליך לכ-1,300 קריאות רשת רצופות (~3.2GB) בכל login,
+     עם כל הלקוחות נשארים בזיכרון לצמיתות — זו הסיבה הישירה ל"הדף אינו מגיב".
+     שני מפתחות חדשים, באותו דפוס כמו GI_WAVE3_INCR:
+       GI_HYDRATION_ENABLED — "0"/"false" מכבה את ההידרציה הגורפת לגמרי.
+       GI_HYDRATION_CAP — מספר לקוחות מקסימלי למילוי אוטומטי בכל login
+                          (ברירת מחדל תואמת לגודל שנבדק בפועל).
+     לקוח שלא נכלל בתקרה עדיין נטען כרגיל בפתיחה בודדת (fetchCustomerRecordFromServer/
+     ensureRecordPayload) — רק לא מראש עבור כל 52,000 הרשומות. */
+  function isPayloadHydrationEnabled(){
+    try {
+      const v = localStorage.getItem("GI_HYDRATION_ENABLED");
+      return v !== "0" && v !== "false";
+    } catch(_e) { return true; }
+  }
+
+  const PAYLOAD_HYDRATION_DEFAULT_CAP = 1500;
+
+  function getPayloadHydrationCap(){
+    try {
+      const raw = localStorage.getItem("GI_HYDRATION_CAP");
+      const n = Number(raw);
+      if(raw != null && Number.isFinite(n) && n >= 0) return n;
+    } catch(_e) {}
+    return PAYLOAD_HYDRATION_DEFAULT_CAP;
+  }
+
   // ---------- State ----------
 
   function normalizeUsersManagementAccess(raw){
@@ -11431,6 +11460,10 @@
     },
 
     async hydratePayloads(options = {}){
+      // GI-FIX 2026-08-09b — מפסק חירום: ראה isPayloadHydrationEnabled למעלה.
+      // כשכבוי, לא נוגעים ב-_payloadHydrationRunning כלל כדי לא לחסום קריאות
+      // עתידיות אם הדגל יופעל מחדש תוך כדי session.
+      if(!isPayloadHydrationEnabled()) return { ok:true, filled:0, failed:0, skipped:true, reason:"DISABLED" };
       if(this._payloadHydrationRunning) return { ok:false, error:"ALREADY_RUNNING" };
       this._payloadHydrationRunning = true;
       const onBatch = typeof options.onBatch === "function" ? options.onBatch : null;
@@ -11444,9 +11477,28 @@
         for(const spec of specs){
           const list = Array.isArray(State.data?.[spec.key]) ? State.data[spec.key] : [];
           if(!list.length) continue;
-          const pending = list.filter((rec) => this.payloadIsEmpty(rec))
-                              .map((rec) => safeTrim(rec?.id))
-                              .filter(Boolean);
+          /* GI-FIX 2026-08-09b — תקרה על היקף ההידרציה האוטומטית + עדיפות
+             לרשומות עדכניות. לפני התיקון: כל הרשומות החסרות (יכול להגיע
+             לעשרות אלפים) נמשכו בכל login, ~2.5MB למנה של 40 — עשרות אלפי
+             רשומות הפכו לג'יגהבייטים של רשת וזיכרון שנשארים ב-State לצמיתות.
+             עכשיו: ממיינים מהחדש לישן ולוקחים רק GI_HYDRATION_CAP הראשונים.
+             לקוח/הצעה שלא נכללו כאן עדיין נטענים כרגיל בפתיחה בודדת —
+             ensureRecordPayload / fetchCustomerRecordFromServer ממשיכים
+             לעבוד ללא תלות בהידרציה הגורפת. */
+          const pendingRecords = list.filter((rec) => this.payloadIsEmpty(rec));
+          if(!pendingRecords.length) continue;
+          pendingRecords.sort((a, b) => {
+            const at = Date.parse(a?.updatedAt || a?.updated_at || a?.createdAt || a?.created_at || 0) || 0;
+            const bt = Date.parse(b?.updatedAt || b?.updated_at || b?.createdAt || b?.created_at || 0) || 0;
+            return bt - at;
+          });
+          const cap = getPayloadHydrationCap();
+          const cappedRecords = (Number.isFinite(cap) && cap > 0) ? pendingRecords.slice(0, cap) : pendingRecords;
+          const skippedByCap = pendingRecords.length - cappedRecords.length;
+          if(skippedByCap > 0){
+            try { console.info("HYDRATION_CAP_APPLIED:", spec.key, "capped to", cappedRecords.length, "of", pendingRecords.length); } catch(_e) {}
+          }
+          const pending = cappedRecords.map((rec) => safeTrim(rec?.id)).filter(Boolean);
           if(!pending.length) continue;
 
           for(let i = 0; i < pending.length; i += PAYLOAD_HYDRATION_BATCH_SIZE){
@@ -39094,6 +39146,9 @@ const ClalRiskLifePdf = {
       // ישירה — יש רשומות עם payload ריק? למלא. מאיפה שלא הגענו.
       const missing = Storage.countMissingPayloads();
       if(!missing) return;
+      // GI-FIX 2026-08-09b: מפסק חירום כבוי — לא מציגים "טוען ברקע" למשתמש
+      // כשההידרציה הגורפת בכלל לא תרוץ (Storage.hydratePayloads יחזיר skipped).
+      if(!isPayloadHydrationEnabled()) return;
       this._payloadHydrationStarted = true;
       void (async () => {
         try {
