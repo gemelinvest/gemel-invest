@@ -4,6 +4,7 @@
 .lcMnrHealthModal .giValModal__card{
   max-width:760px;
   width:100%;
+  max-height:min(92vh, 920px);
   position:relative;
   overflow:hidden;
 }
@@ -12,8 +13,17 @@
   background:linear-gradient(135deg, var(--gi-primary-soft, #EFF6FF) 0%, #e0ecff 55%, #d7e6ff 100%);
   border-bottom:1px solid rgba(56,112,237,.16);
   position:relative;
+  flex-shrink:0;
 }
-.lcMnrHealthModal .giValModal__body{ padding:14px 24px; gap:12px; }
+.lcMnrHealthModal .giValModal__body{
+  padding:14px 24px;
+  gap:12px;
+  min-height:0;
+  overflow-x:hidden;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
+.lcMnrHealthModal .giValModal__foot{ flex-shrink:0; }
 .lcMnrHealthModal .giValModal__foot{
   padding:12px 24px 16px;
   gap:8px;

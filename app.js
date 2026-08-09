@@ -30270,15 +30270,17 @@ UsersGateUI.init();
   }
 
   /**
-   * קטלוג כיסויים — שמות זהים ל-Wizard.healthCoversByCompany["מנורה"]
-   * (למעט מחלות קשות/סרטן שנשארים סימולטורים נפרדים).
+   * קטלוג כיסויים — שמות label מדויקים מה-PDF (עמודים 1–2).
+   * wizardKey = המפתח ב-Wizard.healthCoversByCompany["מנורה"] להחלה על הפוליסה.
+   * מחלות קשות / סרטן — סימולטורים נפרדים (לא כאן). אין שדה עישון בבריאות.
    * תעריפים באגורות, מדויקים 1:1 מול ה-PDF.
    */
   const MENORA_HEALTH_COVERS = [
     {
       id: "transplant",
       label: "השתלות וטיפולים מיוחדים מחוץ לישראל",
-      group: "פוליסת בריאות בסיסית",
+      wizardKey: "השתלות וטיפולים מיוחדים מחוץ לישראל",
+      group: "תכניות בסיס וניתוחים",
       needsGender: false,
       bands: [
         { min:0, max:20, agorot:1000 }, { min:21, max:30, agorot:1600 },
@@ -30288,21 +30290,10 @@ UsersGateUI.init();
       ]
     },
     {
-      id: "drugs",
-      label: "תרופות מחוץ לסל הבריאות",
-      group: "פוליסת בריאות בסיסית",
-      needsGender: false,
-      bands: [
-        { min:0, max:20, agorot:1260 }, { min:21, max:30, agorot:1840 },
-        { min:31, max:40, agorot:2540 }, { min:41, max:50, agorot:4090 },
-        { min:51, max:55, agorot:5930 }, { min:56, max:60, agorot:7810 },
-        { min:61, max:65, agorot:10650 }, { min:66, max:120, agorot:14210 }
-      ]
-    },
-    {
       id: "abroad_surgery",
       label: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל",
-      group: "פוליסת בריאות בסיסית",
+      wizardKey: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל",
+      group: "תכניות בסיס וניתוחים",
       needsGender: false,
       bands: [
         { min:0, max:20, agorot:650 }, { min:21, max:30, agorot:860 },
@@ -30312,9 +30303,23 @@ UsersGateUI.init();
       ]
     },
     {
+      id: "drugs",
+      label: "תרופות מחוץ לסל שירותי הבריאות",
+      wizardKey: "תרופות מחוץ לסל הבריאות",
+      group: "תכניות בסיס וניתוחים",
+      needsGender: false,
+      bands: [
+        { min:0, max:20, agorot:1260 }, { min:21, max:30, agorot:1840 },
+        { min:31, max:40, agorot:2540 }, { min:41, max:50, agorot:4090 },
+        { min:51, max:55, agorot:5930 }, { min:56, max:60, agorot:7810 },
+        { min:61, max:65, agorot:10650 }, { min:66, max:120, agorot:14210 }
+      ]
+    },
+    {
       id: "surgery_first_shekel",
-      label: "ניתוחים בישראל מהשקל הראשון",
-      group: "ניתוחים בישראל",
+      label: "ניתוחים שקל ראשון",
+      wizardKey: "ניתוחים בישראל מהשקל הראשון",
+      group: "תכניות בסיס וניתוחים",
       needsGender: false,
       bands: [
         { min:0, max:20, agorot:3910 }, { min:21, max:30, agorot:7360 },
@@ -30325,8 +30330,9 @@ UsersGateUI.init();
     },
     {
       id: "surgery_shaban",
-      label: "משלים שב\"ן ללא השתתפות עצמית",
-      group: "ניתוחים בישראל",
+      label: "ניתוחים שב״ן משלים",
+      wizardKey: "משלים שב\"ן ללא השתתפות עצמית",
+      group: "תכניות בסיס וניתוחים",
       needsGender: false,
       bands: [
         { min:0, max:20, agorot:1830 }, { min:21, max:30, agorot:3450 },
@@ -30337,8 +30343,9 @@ UsersGateUI.init();
     },
     {
       id: "surgery_shaban_5000",
-      label: "משלים שב\"ן עם השתתפות עצמית",
-      group: "ניתוחים בישראל",
+      label: "ניתוחים שב״ן משלים ₪5000 ה.ע",
+      wizardKey: "משלים שב\"ן עם השתתפות עצמית",
+      group: "תכניות בסיס וניתוחים",
       needsGender: false,
       bands: [
         { min:0, max:20, agorot:1420 }, { min:21, max:30, agorot:2670 },
@@ -30349,8 +30356,9 @@ UsersGateUI.init();
     },
     {
       id: "ambulatory_consults",
-      label: "ייעוץ ובדיקות",
-      group: "שירותים אמבולטוריים",
+      label: "ייעוצים ובדיקות",
+      wizardKey: "ייעוץ ובדיקות",
+      group: "אמבולטורי וכתבי שירות",
       needsGender: true,
       bands: [
         { min:0, max:20, male:2530, female:2320 },
@@ -30363,7 +30371,8 @@ UsersGateUI.init();
     {
       id: "fast_diagnosis",
       label: "אבחון רפואי מהיר",
-      group: "שירותים אמבולטוריים",
+      wizardKey: "אבחון רפואי מהיר",
+      group: "אמבולטורי וכתבי שירות",
       needsGender: false,
       bands: [
         { min:0, max:14, agorot:730 },
@@ -30372,8 +30381,9 @@ UsersGateUI.init();
     },
     {
       id: "tech_devices",
-      label: "טיפולים בטכנולוגיות מתקדמות",
-      group: "שירותים אמבולטוריים",
+      label: "טיפולים בטכנולוגיות מתקדמות ואביזרים רפואיים",
+      wizardKey: "טיפולים בטכנולוגיות מתקדמות",
+      group: "אמבולטורי וכתבי שירות",
       needsGender: false,
       bands: [
         { min:0, max:20, agorot:700 }, { min:21, max:30, agorot:1270 },
@@ -30384,19 +30394,21 @@ UsersGateUI.init();
       ]
     },
     {
-      id: "child_dev",
-      label: "טיפול ואבחון לילד",
-      group: "כתבי שירות",
+      id: "smart_dr",
+      label: "סמארט דוקטור — ייעוץ רפואי מקוון",
+      wizardKey: "Smart DR — ייעוץ רפואי וניווק עד הבית",
+      group: "אמבולטורי וכתבי שירות",
       needsGender: false,
-      maxAge: 21,
       bands: [
-        { min:0, max:21, agorot:2880 }
+        { min:0, max:20, agorot:840 },
+        { min:21, max:120, agorot:1610 }
       ]
     },
     {
       id: "top_complementary",
-      label: "TOP רפואה משלימה",
-      group: "כתבי שירות",
+      label: "טיפולים טופ — רפואה משלימה",
+      wizardKey: "TOP רפואה משלימה",
+      group: "אמבולטורי וכתבי שירות",
       needsGender: false,
       bands: [
         { min:0, max:20, agorot:1250 },
@@ -30404,23 +30416,25 @@ UsersGateUI.init();
       ]
     },
     {
+      id: "child_dev",
+      label: "טופ לילד — אבחונים וטיפולי התפתחות",
+      wizardKey: "טיפול ואבחון לילד",
+      group: "אמבולטורי וכתבי שירות",
+      needsGender: false,
+      maxAge: 21,
+      bands: [
+        { min:0, max:21, agorot:2880 }
+      ]
+    },
+    {
       id: "top_preventive",
-      label: "TOP מניעתית — בריאות חיים ובדיקות מניעה",
-      group: "כתבי שירות",
+      label: "מניעתית טופ — רפואה מונעת",
+      wizardKey: "TOP מניעתית — בריאות חיים ובדיקות מניעה",
+      group: "אמבולטורי וכתבי שירות",
       needsGender: false,
       bands: [
         { min:0, max:20, agorot:870 },
         { min:21, max:120, agorot:2240 }
-      ]
-    },
-    {
-      id: "smart_dr",
-      label: "Smart DR — ייעוץ רפואי וניווק עד הבית",
-      group: "כתבי שירות",
-      needsGender: false,
-      bands: [
-        { min:0, max:20, agorot:840 },
-        { min:21, max:120, agorot:1610 }
       ]
     }
   ];
@@ -30457,7 +30471,14 @@ UsersGateUI.init();
     for(let i = 0; i < ids.length; i++){
       const one = computeMenoraHealthCoverPremium(ids[i], age, gender);
       if(!one.ok) return { ok:false, reason: one.reason, failCoverId: ids[i], coverMaxAge: one.coverMaxAge, covers:[], monthlyAgorot:0, monthlyPremium:0, annualPremium:0 };
-      covers.push({ id: one.coverId, label: one.label, monthlyPremium: one.monthlyPremium, monthlyAgorot: one.monthlyAgorot });
+      const meta = MENORA_HEALTH_COVER_BY_ID[one.coverId];
+      covers.push({
+        id: one.coverId,
+        label: one.label,
+        wizardKey: meta?.wizardKey || one.label,
+        monthlyPremium: one.monthlyPremium,
+        monthlyAgorot: one.monthlyAgorot
+      });
       totalAg += one.monthlyAgorot;
     }
     const monthly = menoraHealthAgorotToShekels(totalAg);
@@ -30617,7 +30638,8 @@ UsersGateUI.init();
           ? `<div class="lcMnrHealth__hint lcMnrHealth__hint--warn">הגיל המחושב (${st.ageRaw}) חורג מטווח הכניסה — יש לבחור גיל ידנית</div>`
           : `<div class="lcMnrHealth__hint lcMnrHealth__hint--warn">לא נמצא תאריך לידה תקין — יש לבחור גיל</div>`
       );
-      const genderHintHtml = (isStandalone || st.gender) ? "" : `<div class="lcMnrHealth__hint lcMnrHealth__hint--warn">לא נמצא מין בפרטים האישיים — יש לבחור (נדרש לייעוץ ובדיקות)</div>`;
+      const needsGenderSelected = this._selectedIds(st).some((id) => !!MENORA_HEALTH_COVER_BY_ID[id]?.needsGender);
+      const genderHintHtml = (!needsGenderSelected || isStandalone || st.gender) ? "" : `<div class="lcMnrHealth__hint lcMnrHealth__hint--warn">לא נמצא מין — נדרש לכיסוי ייעוצים ובדיקות</div>`;
 
       const groups = {};
       MENORA_HEALTH_COVERS.forEach((c) => {
@@ -30631,7 +30653,7 @@ UsersGateUI.init();
             ${groups[g].map((c) => {
               const checked = !!st.selected[c.id];
               const one = checked ? computeMenoraHealthCoverPremium(c.id, st.age, st.gender) : null;
-              const premTxt = one?.ok ? `₪${formatMenoraHealthExactAmount(one.monthlyPremium)}` : "";
+              const premTxt = one?.ok ? `₪${formatMenoraHealthExactAmount(one.monthlyPremium)}` : (checked && one && !one.ok ? "—" : "");
               return `<label class="lcMnrHealth__cover${checked ? " is-checked" : ""}">
                 <input type="checkbox" data-mnrh-cover="${escapeHtml(c.id)}"${checked ? " checked" : ""} />
                 <span class="lcMnrHealth__coverLabel">${escapeHtml(c.label)}${c.needsGender ? ' <em>(לפי מין)</em>' : ""}${c.maxAge != null ? ` <em>(עד גיל ${c.maxAge})</em>` : ""}</span>
@@ -30843,7 +30865,12 @@ UsersGateUI.init();
       this._recalcState(st);
       if(!st?.result?.ok) return null;
       return {
-        covers: st.result.covers.map((c) => ({ id: c.id, label: c.label, monthlyPremium: c.monthlyPremium })),
+        covers: st.result.covers.map((c) => ({
+          id: c.id,
+          label: c.label,
+          wizardKey: c.wizardKey || c.label,
+          monthlyPremium: c.monthlyPremium
+        })),
         monthlyPremium: st.result.monthlyPremium,
         annualPremium: st.result.annualPremium,
         monthlyAgorot: st.result.monthlyAgorot,
@@ -30884,6 +30911,539 @@ UsersGateUI.init();
 
   RiskSimulators.register("מנורה", "בריאות", MenoraHealthSimulator);
   // ===== סוף GI-MNR-HEALTH-SIM ====================================================
+
+  // ===== GI-MNR-CI-SIM 2026-08-09 · סימולטורי מחלות קשות מנורה ==================
+  // מקור אמת: תעריפי בריאות מנורה.pdf עמוד 3 — "תעריפונים מחלות קשות".
+  // שני מסלולים נפרדים (סימולטורים נפרדים):
+  //   1) קרן אור TOP  → מוצר מערכת: מחלות קשות
+  //   2) קרן לחיים    → מוצר מערכת: סרטן
+  //      הערה: ב-PDF אין טבלת "סרטן" נפרדת — זה המסלול השני בעמוד 3.
+  //      שם התצוגה במודאל: "קרן לחיים". תעריפים מדויקים 1:1 מהטבלה בלבד.
+  // תעריף = פרמיה חודשית בש״ח לכל ₪100,000 פיצוי. חישוב באגורות שלמות.
+
+  const MENORA_CI_RATE_UNIT = 100000;
+  const MENORA_CI_RATE_MAPS = {"orTop":{"1":{"mNS":1050,"mS":null,"fNS":1050,"fS":null},"2":{"mNS":1050,"mS":null,"fNS":1050,"fS":null},"3":{"mNS":1050,"mS":null,"fNS":1050,"fS":null},"4":{"mNS":1050,"mS":null,"fNS":1050,"fS":null},"5":{"mNS":1050,"mS":null,"fNS":1050,"fS":null},"6":{"mNS":1050,"mS":null,"fNS":1050,"fS":null},"7":{"mNS":1050,"mS":null,"fNS":1050,"fS":null},"8":{"mNS":1050,"mS":null,"fNS":1050,"fS":null},"9":{"mNS":1050,"mS":null,"fNS":1050,"fS":null},"10":{"mNS":1050,"mS":null,"fNS":1050,"fS":null},"11":{"mNS":1050,"mS":null,"fNS":1050,"fS":null},"12":{"mNS":1050,"mS":null,"fNS":1050,"fS":null},"13":{"mNS":1050,"mS":null,"fNS":1050,"fS":null},"14":{"mNS":1050,"mS":null,"fNS":1050,"fS":null},"15":{"mNS":1050,"mS":null,"fNS":1050,"fS":null},"16":{"mNS":1050,"mS":null,"fNS":1050,"fS":null},"17":{"mNS":1050,"mS":null,"fNS":1050,"fS":null},"18":{"mNS":1050,"mS":null,"fNS":1050,"fS":null},"19":{"mNS":1050,"mS":null,"fNS":1050,"fS":null},"20":{"mNS":1230,"mS":1410,"fNS":1340,"fS":1530},"21":{"mNS":1270,"mS":1480,"fNS":1390,"fS":1620},"22":{"mNS":1300,"mS":1560,"fNS":1450,"fS":1730},"23":{"mNS":1340,"mS":1630,"fNS":1520,"fS":1850},"24":{"mNS":1370,"mS":1710,"fNS":1590,"fS":1980},"25":{"mNS":1400,"mS":1780,"fNS":1660,"fS":2110},"26":{"mNS":1440,"mS":1860,"fNS":1760,"fS":2270},"27":{"mNS":1500,"mS":1950,"fNS":1880,"fS":2450},"28":{"mNS":1560,"mS":2080,"fNS":2020,"fS":2690},"29":{"mNS":1650,"mS":2230,"fNS":2180,"fS":2950},"30":{"mNS":1750,"mS":2400,"fNS":2360,"fS":3240},"31":{"mNS":1830,"mS":2580,"fNS":2520,"fS":3540},"32":{"mNS":1970,"mS":2840,"fNS":2730,"fS":3930},"33":{"mNS":2150,"mS":3180,"fNS":2990,"fS":4420},"34":{"mNS":2380,"mS":3610,"fNS":3300,"fS":5000},"35":{"mNS":2660,"mS":4140,"fNS":3660,"fS":5680},"36":{"mNS":2960,"mS":4770,"fNS":3990,"fS":6390},"37":{"mNS":3250,"mS":5530,"fNS":4240,"fS":6980},"38":{"mNS":4020,"mS":7010,"fNS":4370,"fS":7300},"39":{"mNS":4800,"mS":8510,"fNS":4890,"fS":8370},"40":{"mNS":5600,"mS":10030,"fNS":5440,"fS":9470},"41":{"mNS":6420,"mS":11590,"fNS":6010,"fS":10590},"42":{"mNS":7280,"mS":13200,"fNS":6610,"fS":11750},"43":{"mNS":8170,"mS":14850,"fNS":7240,"fS":12940},"44":{"mNS":9100,"mS":16570,"fNS":7910,"fS":14170},"45":{"mNS":10120,"mS":18400,"fNS":8610,"fS":15430},"46":{"mNS":11200,"mS":20290,"fNS":9350,"fS":16730},"47":{"mNS":12360,"mS":22320,"fNS":10110,"fS":18060},"48":{"mNS":13650,"mS":24510,"fNS":10910,"fS":19430},"49":{"mNS":15080,"mS":26900,"fNS":11740,"fS":20830},"50":{"mNS":16690,"mS":29550,"fNS":12610,"fS":22300},"51":{"mNS":18520,"mS":32490,"fNS":13530,"fS":23790},"52":{"mNS":20570,"mS":35740,"fNS":14490,"fS":25340},"53":{"mNS":22860,"mS":39340,"fNS":15520,"fS":26940},"54":{"mNS":25400,"mS":43270,"fNS":16610,"fS":28610},"55":{"mNS":28280,"mS":47660,"fNS":17780,"fS":30340},"56":{"mNS":31310,"mS":52230,"fNS":19010,"fS":32150},"57":{"mNS":34540,"mS":57060,"fNS":20320,"fS":34030},"58":{"mNS":37940,"mS":62090,"fNS":21710,"fS":35990},"59":{"mNS":41480,"mS":67270,"fNS":23190,"fS":38040},"60":{"mNS":45120,"mS":72530,"fNS":24740,"fS":40160},"61":{"mNS":48780,"mS":77770,"fNS":26370,"fS":42350},"62":{"mNS":52460,"mS":82990,"fNS":28060,"fS":44610},"63":{"mNS":56130,"mS":88160,"fNS":29790,"fS":46930},"64":{"mNS":59760,"mS":93250,"fNS":31580,"fS":49300},"65":{"mNS":63480,"mS":98440,"fNS":33410,"fS":51710},"66":{"mNS":67100,"mS":103490,"fNS":35270,"fS":54170},"67":{"mNS":70720,"mS":108520,"fNS":37160,"fS":56660},"68":{"mNS":74330,"mS":113550,"fNS":39080,"fS":59170},"69":{"mNS":77950,"mS":118570,"fNS":41010,"fS":61700},"70":{"mNS":81530,"mS":123550,"fNS":42950,"fS":64240},"71":{"mNS":87780,"mS":131810,"fNS":49710,"fS":74580},"72":{"mNS":95410,"mS":142080,"fNS":55510,"fS":82610},"73":{"mNS":103670,"mS":153080,"fNS":61570,"fS":90850},"74":{"mNS":111690,"mS":163410,"fNS":68160,"fS":99660}},"kerenChaim":{"1":{"mNS":450,"mS":null,"fNS":450,"fS":null},"2":{"mNS":450,"mS":null,"fNS":450,"fS":null},"3":{"mNS":450,"mS":null,"fNS":450,"fS":null},"4":{"mNS":450,"mS":null,"fNS":450,"fS":null},"5":{"mNS":450,"mS":null,"fNS":450,"fS":null},"6":{"mNS":450,"mS":null,"fNS":450,"fS":null},"7":{"mNS":450,"mS":null,"fNS":450,"fS":null},"8":{"mNS":450,"mS":null,"fNS":450,"fS":null},"9":{"mNS":450,"mS":null,"fNS":450,"fS":null},"10":{"mNS":450,"mS":null,"fNS":450,"fS":null},"11":{"mNS":450,"mS":null,"fNS":450,"fS":null},"12":{"mNS":450,"mS":null,"fNS":450,"fS":null},"13":{"mNS":450,"mS":null,"fNS":450,"fS":null},"14":{"mNS":450,"mS":null,"fNS":450,"fS":null},"15":{"mNS":450,"mS":null,"fNS":450,"fS":null},"16":{"mNS":450,"mS":null,"fNS":450,"fS":null},"17":{"mNS":450,"mS":null,"fNS":450,"fS":null},"18":{"mNS":450,"mS":null,"fNS":450,"fS":null},"19":{"mNS":450,"mS":null,"fNS":450,"fS":null},"20":{"mNS":520,"mS":520,"fNS":460,"fS":460},"21":{"mNS":520,"mS":520,"fNS":470,"fS":470},"22":{"mNS":520,"mS":520,"fNS":460,"fS":460},"23":{"mNS":560,"mS":560,"fNS":550,"fS":550},"24":{"mNS":570,"mS":570,"fNS":610,"fS":610},"25":{"mNS":600,"mS":600,"fNS":680,"fS":680},"26":{"mNS":630,"mS":630,"fNS":770,"fS":770},"27":{"mNS":670,"mS":670,"fNS":920,"fS":920},"28":{"mNS":720,"mS":720,"fNS":1130,"fS":1130},"29":{"mNS":800,"mS":800,"fNS":1370,"fS":1370},"30":{"mNS":860,"mS":860,"fNS":1630,"fS":1630},"31":{"mNS":890,"mS":890,"fNS":1890,"fS":1890},"32":{"mNS":960,"mS":960,"fNS":2200,"fS":2200},"33":{"mNS":1040,"mS":1040,"fNS":2600,"fS":2600},"34":{"mNS":1130,"mS":1130,"fNS":3010,"fS":3010},"35":{"mNS":1250,"mS":1250,"fNS":3470,"fS":3470},"36":{"mNS":1380,"mS":1380,"fNS":3840,"fS":3840},"37":{"mNS":1550,"mS":1550,"fNS":4010,"fS":4010},"38":{"mNS":1750,"mS":1750,"fNS":4050,"fS":4050},"39":{"mNS":1910,"mS":1910,"fNS":4060,"fS":4060},"40":{"mNS":2060,"mS":2060,"fNS":4120,"fS":4120},"41":{"mNS":2480,"mS":2480,"fNS":4360,"fS":4360},"42":{"mNS":2900,"mS":2900,"fNS":4770,"fS":4770},"43":{"mNS":3420,"mS":3420,"fNS":5410,"fS":5410},"44":{"mNS":3980,"mS":3980,"fNS":6050,"fS":6050},"45":{"mNS":4490,"mS":4490,"fNS":6680,"fS":6680},"46":{"mNS":4820,"mS":4820,"fNS":7250,"fS":7250},"47":{"mNS":5000,"mS":5000,"fNS":7690,"fS":7690},"48":{"mNS":5230,"mS":5230,"fNS":7930,"fS":7930},"49":{"mNS":5450,"mS":5450,"fNS":8150,"fS":8150},"50":{"mNS":5150,"mS":7560,"fNS":7710,"fS":9770},"51":{"mNS":5590,"mS":8220,"fNS":8290,"fS":10510},"52":{"mNS":6300,"mS":9260,"fNS":8860,"fS":11240},"53":{"mNS":7430,"mS":10910,"fNS":9690,"fS":12290},"54":{"mNS":8950,"mS":13150,"fNS":10630,"fS":13480},"55":{"mNS":10840,"mS":15930,"fNS":11570,"fS":14670},"56":{"mNS":12860,"mS":18890,"fNS":12410,"fS":15740},"57":{"mNS":15340,"mS":22540,"fNS":13300,"fS":16870},"58":{"mNS":18450,"mS":27110,"fNS":14460,"fS":18340},"59":{"mNS":22010,"mS":32340,"fNS":15700,"fS":19910},"60":{"mNS":25920,"mS":38080,"fNS":17050,"fS":21630},"61":{"mNS":28320,"mS":41600,"fNS":17840,"fS":22630},"62":{"mNS":30570,"mS":44920,"fNS":18640,"fS":23650},"63":{"mNS":32680,"mS":48010,"fNS":18890,"fS":23950},"64":{"mNS":33560,"mS":49300,"fNS":19130,"fS":24260},"65":{"mNS":36200,"mS":53180,"fNS":19370,"fS":24560},"66":{"mNS":38070,"mS":55930,"fNS":19500,"fS":24730},"67":{"mNS":39790,"mS":58460,"fNS":19640,"fS":24910},"68":{"mNS":41390,"mS":60810,"fNS":19770,"fS":25080},"69":{"mNS":42750,"mS":62810,"fNS":20120,"fS":25510},"70":{"mNS":43850,"mS":64420,"fNS":20470,"fS":25960},"71":{"mNS":45410,"mS":66710,"fNS":21140,"fS":26810},"72":{"mNS":46900,"mS":68910,"fNS":21830,"fS":27690},"73":{"mNS":48390,"mS":71090,"fNS":22500,"fS":28530},"74":{"mNS":49970,"mS":73410,"fNS":23100,"fS":29300}}};
+
+  const MENORA_CI_PLANS = {
+    orTop: {
+      id: "orTop",
+      pdfName: "קרן אור TOP",
+      wizardCoverKey: "TOP קרן מחלות קשות",
+      productKey: "מחלות קשות",
+      title: "סימולטור מחלות קשות מנורה",
+      subtitle: "קרן אור TOP — פרמיה חודשית לכל ₪100,000 פיצוי",
+      minAge: 1,
+      maxEntryAge: 66,
+      minSum: 50000,
+      maxSum: 600000,
+      cssPrefix: "lcMnrCi",
+      modalClass: "lcMnrCiModal"
+    },
+    kerenChaim: {
+      id: "kerenChaim",
+      pdfName: "קרן לחיים",
+      wizardCoverKey: "קרן פיצוי לגילוי מחלת הסרטן",
+      productKey: "סרטן",
+      title: "סימולטור סרטן מנורה",
+      subtitle: "תעריפון קרן לחיים (עמוד מחלות קשות) — פרמיה חודשית לכל ₪100,000 פיצוי",
+      minAge: 1,
+      maxEntryAge: 69,
+      minSum: 100000,
+      maxSum: 400000,
+      cssPrefix: "lcMnrCi",
+      modalClass: "lcMnrCiModal"
+    }
+  };
+
+  function menoraCiAgorotToShekels(agorot){
+    return agorot / 100;
+  }
+  function formatMenoraCiExactAmount(n){
+    if(!Number.isFinite(n)) return "";
+    const ag = Math.round(n * 100);
+    const whole = Math.trunc(ag / 100);
+    const frac = Math.abs(ag % 100);
+    return whole + "." + String(frac).padStart(2, "0");
+  }
+
+  function lookupMenoraCiRate(planId, { age, gender, smoker }){
+    const plan = MENORA_CI_PLANS[planId];
+    if(!plan) return { ok:false, reason:"plan_missing" };
+    const ageNum = Number(age);
+    if(!Number.isInteger(ageNum)) return { ok:false, reason:"age_missing" };
+    if(ageNum < plan.minAge || ageNum > plan.maxEntryAge) return { ok:false, reason:"age_out_of_range" };
+    const map = MENORA_CI_RATE_MAPS[planId];
+    const row = map ? map[String(ageNum)] : null;
+    if(!row) return { ok:false, reason:"age_out_of_range" };
+    if(gender !== "זכר" && gender !== "נקבה") return { ok:false, reason:"gender_missing" };
+    if(smoker !== true && smoker !== false) return { ok:false, reason:"smoker_missing" };
+    const key = gender === "זכר"
+      ? (smoker ? "mS" : "mNS")
+      : (smoker ? "fS" : "fNS");
+    const rateAgorot = row[key];
+    if(rateAgorot == null || !Number.isInteger(rateAgorot)) return { ok:false, reason:"rate_missing" };
+    return {
+      ok: true,
+      rateAgorot,
+      ratePerHundredThousand: menoraCiAgorotToShekels(rateAgorot),
+      planId,
+      pdfName: plan.pdfName
+    };
+  }
+
+  function computeMenoraCiPremium(planId, { age, gender, smoker, compensation }){
+    const plan = MENORA_CI_PLANS[planId];
+    if(!plan) return { ok:false, reason:"plan_missing" };
+    const sum = Number(String(compensation == null ? "" : compensation).replace(/[^\d.-]/g, ""));
+    if(!Number.isFinite(sum) || sum <= 0) return { ok:false, reason:"sum_missing" };
+    if(sum < plan.minSum || sum > plan.maxSum) return { ok:false, reason:"sum_out_of_range", minSum: plan.minSum, maxSum: plan.maxSum };
+    const looked = lookupMenoraCiRate(planId, { age, gender, smoker });
+    if(!looked.ok) return looked;
+    const monthlyAgorotExact = (looked.rateAgorot * sum) / MENORA_CI_RATE_UNIT;
+    if(!Number.isFinite(monthlyAgorotExact)) return { ok:false, reason:"rate_missing" };
+    const monthlyPremium = monthlyAgorotExact / 100;
+    const annualPremium = monthlyPremium * 12;
+    return {
+      ok: true,
+      monthlyPremium,
+      annualPremium,
+      ratePerHundredThousand: looked.ratePerHundredThousand,
+      compensation: sum,
+      planId,
+      pdfName: looked.pdfName,
+      wizardCoverKey: plan.wizardCoverKey
+    };
+  }
+
+  const MENORA_CI_MESSAGES = {
+    age_missing: "יש לבחור גיל לפני חישוב הפרמיה.",
+    age_out_of_range: "הגיל חורג מטווח הכניסה המותר למסלול זה.",
+    gender_missing: "יש לבחור מין לפני חישוב הפרמיה.",
+    smoker_missing: "יש לציין האם המבוטח מעשן/ת לפני חישוב הפרמיה.",
+    sum_missing: "יש להזין סכום פיצוי תקין (גדול מאפס) לפני חישוב הפרמיה.",
+    sum_out_of_range: "סכום הפיצוי חורג מהמינימום/מקסימום המותר למסלול זה.",
+    rate_missing: "לא נמצא תעריף מתאים לנתונים שהוזנו (למשל מעשן בגיל 1–19).",
+    plan_missing: "מסלול לא מזוהה בתעריפון."
+  };
+
+  function createMenoraCiSimulator(planId){
+    const plan = MENORA_CI_PLANS[planId];
+    const P = plan.cssPrefix;
+    const ageOptions = [];
+    for(let a = plan.minAge; a <= plan.maxEntryAge; a++) ageOptions.push(a);
+
+    return {
+      _planId: planId,
+      _modal: null,
+      _ctx: null,
+      _state: {},
+      _activeInsuredId: null,
+      _escHandler: null,
+      _confirmSwitch: null,
+      _showFinalSummary: false,
+
+      open(ctx){
+        this.close();
+        this._ctx = ctx || {};
+        const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : [];
+        this._state = {};
+        insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); });
+        this._activeInsuredId = insureds[0]?.id || null;
+        this._confirmSwitch = null;
+        this._showFinalSummary = false;
+        this._mount();
+        this._render();
+      },
+
+      _prefillFromInsured(ins){
+        const d = ins?.data || {};
+        const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
+        const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
+        const computedAge = riskSimAgeFromBirthDate(d.birthDate);
+        const ageInRange = Number.isInteger(computedAge) && computedAge >= plan.minAge && computedAge <= plan.maxEntryAge;
+        const occupation = safeTrim(d.occupation || "");
+        return {
+          age: ageInRange ? String(computedAge) : "",
+          ageSource: ageInRange ? "step1" : "",
+          ageRaw: computedAge,
+          gender, genderSource: gender ? "step1" : "",
+          smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "",
+          occupation,
+          occupationSource: occupation ? "step1" : "",
+          compensation: "",
+          result: null,
+          error: null,
+          savedAt: null,
+          dirtySinceSave: false
+        };
+      },
+
+      _isInsuredRelevant(_ins){ return true; },
+
+      close(){
+        if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; }
+        if(this._modal){
+          const m = this._modal;
+          m.classList.add("giValModal--leaving");
+          window.setTimeout(() => m.remove(), 200);
+          this._modal = null;
+        }
+        this._ctx = null;
+      },
+
+      _mount(){
+        const modal = document.createElement("div");
+        modal.id = "lcMnrCiModal_" + planId;
+        modal.className = "giValModal " + plan.modalClass;
+        modal.setAttribute("role", "dialog");
+        modal.setAttribute("aria-modal", "true");
+        modal.setAttribute("aria-label", plan.title);
+        document.body.appendChild(modal);
+        this._modal = modal;
+        this._escHandler = (ev) => { if(ev.key === "Escape") this.close(); };
+        document.addEventListener("keydown", this._escHandler);
+        requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
+      },
+
+      _getInsuredLabel(insId){
+        const ins = (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === insId);
+        return ins ? safeTrim(ins.label) || "מבוטח" : "מבוטח";
+      },
+
+      _calc(insId){
+        const st = this._state[insId];
+        if(!st) return;
+        const calc = computeMenoraCiPremium(planId, {
+          age: st.age, gender: st.gender, smoker: st.smoker, compensation: st.compensation
+        });
+        if(calc.ok){
+          st.result = calc;
+          st.error = null;
+        } else {
+          st.result = null;
+          let msg = MENORA_CI_MESSAGES[calc.reason] || "לא ניתן לחשב את הפרמיה.";
+          if(calc.reason === "age_out_of_range"){
+            msg = `לא נמצא תעריף לכניסה בגיל זה (טווח כניסה ${plan.minAge}–${plan.maxEntryAge}).`;
+          } else if(calc.reason === "sum_out_of_range"){
+            msg = `סכום הפיצוי חייב להיות בין ₪${formatRiskSimSumInsuredDigits(plan.minSum)} ל-₪${formatRiskSimSumInsuredDigits(plan.maxSum)}.`;
+          }
+          st.error = msg;
+        }
+        this._render();
+      },
+
+      _render(){
+        if(!this._modal) return;
+        const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+        const isMulti = insureds.length > 1;
+        if(this._showFinalSummary){
+          this._renderFinalSummary(insureds);
+          return;
+        }
+        const activeId = this._activeInsuredId;
+        const st = this._state[activeId] || this._prefillFromInsured(null);
+        const isStandalone = !!this._ctx?.standalone;
+
+        const tabsHtml = isMulti ? `<div class="${P}__tabs">${insureds.map((ins) => {
+          const s = this._state[ins.id];
+          const statusCls = s?.savedAt ? " has-saved" : (s?.result ? " has-result" : "");
+          return `<button type="button" class="${P}__tab${ins.id === activeId ? " is-active" : ""}${statusCls}" data-mnrci-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${s?.savedAt ? " 🟢" : ""}</button>`;
+        }).join("")}</div>` : "";
+
+        const ageOptionsHtml = `<option value="">בחר גיל…</option>` + ageOptions.map((a) =>
+          `<option value="${a}"${String(st.age) === String(a) ? " selected" : ""}>${a}</option>`
+        ).join("");
+
+        const ageHintHtml = (isStandalone || st.age) ? "" : (
+          Number.isInteger(st.ageRaw)
+            ? `<div class="${P}__hint ${P}__hint--warn">הגיל המחושב (${st.ageRaw}) חורג מטווח הכניסה — יש לבחור גיל ידנית</div>`
+            : `<div class="${P}__hint ${P}__hint--warn">לא נמצא תאריך לידה תקין — יש לבחור גיל</div>`
+        );
+        const genderHintHtml = (isStandalone || st.gender) ? "" : `<div class="${P}__hint ${P}__hint--warn">לא נמצא מין בפרטים האישיים — יש לבחור</div>`;
+        const smokerHintHtml = (isStandalone || st.smoker === true || st.smoker === false) ? "" : `<div class="${P}__hint ${P}__hint--warn">לא נמצא סטטוס עישון בפרטים האישיים — יש לבחור</div>`;
+
+        const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company)
+          ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini")
+          : "✚";
+        const occAssessment = assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product);
+        const occBlockHtml = renderOccupationRiskBlockHtml(occAssessment, P);
+
+        const resultHtml = st.error
+          ? `<div class="${P}__result ${P}__result--error">${escapeHtml(st.error)}</div>`
+          : (st.result ? `<div class="${P}__result ${P}__result--ok">
+              <div class="${P}__resultRow"><span>מסלול</span><strong>${escapeHtml(st.result.pdfName)}</strong></div>
+              <div class="${P}__resultRow"><span>תעריף ל-₪100,000</span><strong>₪${escapeHtml(formatMenoraCiExactAmount(st.result.ratePerHundredThousand))}</strong></div>
+              <div class="${P}__resultRow"><span>סכום פיצוי</span><strong>₪${escapeHtml(formatRiskSimSumInsuredDigits(st.result.compensation))}</strong></div>
+              <div class="${P}__resultRow ${P}__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatMenoraCiExactAmount(st.result.monthlyPremium))}</strong></div>
+              <div class="${P}__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatMenoraCiExactAmount(st.result.annualPremium))}</strong></div>
+            </div>` : `<div class="${P}__result ${P}__result--empty">מלאו את השדות ולחצו "חשב פרמיה"</div>`);
+
+        const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
+        const relevantInsureds = insureds.filter((ins) => this._isInsuredRelevant(ins));
+        const allRelevantSaved = relevantInsureds.length > 0 && relevantInsureds.every((ins) => !!this._state[ins.id]?.savedAt);
+
+        const footHtml = isStandalone ? `
+            <div class="giValModal__foot ${P}__foot">
+              <button type="button" class="btn btn--primary" data-mnrci-close="1">סגור</button>
+            </div>` : (!isMulti ? `
+            <div class="giValModal__foot ${P}__foot">
+              <button type="button" class="btn giValModal__closeBtn" data-mnrci-close="1">ביטול</button>
+              <button type="button" class="btn btn--primary" data-mnrci-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button>
+            </div>` : `
+            <div class="giValModal__foot ${P}__foot">
+              <button type="button" class="btn giValModal__closeBtn" data-mnrci-close="1">ביטול</button>
+              <button type="button" class="btn btn--secondary" data-mnrci-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button>
+              <button type="button" class="btn btn--primary" data-mnrci-finalconfirm="1"${allRelevantSaved ? "" : " disabled"}>אישור סופי</button>
+            </div>`);
+
+        const confirmOverlayHtml = this._confirmSwitch ? `
+          <div class="${P}__overlay">
+            <div class="${P}__overlayCard">
+              <div class="${P}__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}. האם לשמור לפני המעבר?</div>
+              <div class="${P}__overlayBtns">
+                <button type="button" class="btn btn--primary" data-mnrci-switch="save">שמור ועבור</button>
+                <button type="button" class="btn btn--secondary" data-mnrci-switch="discard">עבור ללא שמירה</button>
+                <button type="button" class="btn" data-mnrci-switch="cancel">ביטול</button>
+              </div>
+            </div>
+          </div>` : "";
+
+        this._modal.innerHTML = `
+          <div class="giValModal__backdrop" data-mnrci-close="1"></div>
+          <div class="giValModal__card ${P}__card">
+            <div class="giValModal__head">
+              <span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span>
+              <div class="giValModal__headText">
+                <div class="giValModal__title">${escapeHtml(plan.title)}</div>
+                <div class="giValModal__sub">${escapeHtml(plan.subtitle)}</div>
+              </div>
+              <button type="button" class="${P}__closeX" data-mnrci-close="1" aria-label="סגירה">✕</button>
+            </div>
+            <div class="giValModal__body ${P}__body">
+              ${tabsHtml}
+              ${isStandalone
+                ? `<div class="${P}__insuredLabel ${P}__insuredLabel--standalone">מצב חישוב עצמאי — התוצאה לא נשמרת על אף פוליסה</div>`
+                : `<div class="${P}__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}
+              <div class="${P}__grid">
+                <div class="${P}__field">
+                  <label class="${P}__label">גיל כניסה (${plan.minAge}–${plan.maxEntryAge})</label>
+                  <select class="${P}__input" data-mnrci-field="age">${ageOptionsHtml}</select>
+                  ${ageHintHtml}
+                </div>
+                <div class="${P}__field">
+                  <label class="${P}__label">מין</label>
+                  <div class="${P}__segmented">
+                    <button type="button" class="${P}__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-mnrci-field="gender" data-mnrci-value="זכר">זכר</button>
+                    <button type="button" class="${P}__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-mnrci-field="gender" data-mnrci-value="נקבה">נקבה</button>
+                  </div>
+                  ${genderHintHtml}
+                </div>
+                <div class="${P}__field">
+                  <label class="${P}__label">עישון</label>
+                  <div class="${P}__segmented">
+                    <button type="button" class="${P}__segBtn${st.smoker === false ? " is-active" : ""}" data-mnrci-field="smoker" data-mnrci-value="0">לא מעשן/ת</button>
+                    <button type="button" class="${P}__segBtn${st.smoker === true ? " is-active" : ""}" data-mnrci-field="smoker" data-mnrci-value="1">מעשן/ת</button>
+                  </div>
+                  ${smokerHintHtml}
+                </div>
+                <div class="${P}__field">
+                  <label class="${P}__label">סכום פיצוי (₪${formatRiskSimSumInsuredDigits(plan.minSum)}–₪${formatRiskSimSumInsuredDigits(plan.maxSum)})</label>
+                  <input class="${P}__input" type="text" inputmode="numeric" data-mnrci-field="compensation" value="${escapeHtml(st.compensation || "")}" placeholder="לדוגמה: 100,000" />
+                </div>
+                <div class="${P}__field ${P}__field--wide">
+                  <label class="${P}__label">עיסוק</label>
+                  <input class="${P}__input" type="text" data-mnrci-field="occupation" value="${escapeHtml(st.occupation || "")}" placeholder="לדוגמה: מהנדס, נהג משאית" autocomplete="off" />
+                </div>
+              </div>
+              <div class="${P}__actions">
+                <button type="button" class="btn btn--primary" data-mnrci-calc="1">חשב פרמיה</button>
+              </div>
+              ${occBlockHtml}
+              ${resultHtml}
+            </div>
+            ${footHtml}
+            ${confirmOverlayHtml}
+          </div>`;
+        this._bind();
+      },
+
+      _renderFinalSummary(insureds){
+        const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+        const rows = relevant.map((ins) => {
+          const ok = !!this._state[ins.id]?.savedAt;
+          return `<div class="${P}__summaryRow"><span>${ok ? "✓" : "•"}</span><span>${escapeHtml(safeTrim(ins.label) || "מבוטח")}</span><span>${ok ? "הושלם" : "לא נשמר"}</span></div>`;
+        }).join("");
+        this._modal.innerHTML = `
+          <div class="giValModal__backdrop" data-mnrci-close="1"></div>
+          <div class="giValModal__card ${P}__card">
+            <div class="giValModal__head">
+              <div class="giValModal__headText">
+                <div class="giValModal__title">סיכום סימולטור להצעה</div>
+              </div>
+              <button type="button" class="${P}__closeX" data-mnrci-close="1" aria-label="סגירה">✕</button>
+            </div>
+            <div class="giValModal__body ${P}__body">${rows}</div>
+            <div class="giValModal__foot ${P}__foot">
+              <button type="button" class="btn giValModal__closeBtn" data-mnrci-summary-back="1">חזרה</button>
+              <button type="button" class="btn btn--primary" data-mnrci-summary-confirm="1">אישור סופי</button>
+            </div>
+          </div>`;
+        this._bind();
+      },
+
+      _bind(){
+        const modal = this._modal;
+        if(!modal) return;
+        $$("[data-mnrci-close]", modal).forEach((el) => on(el, "click", () => this.close()));
+        $$("[data-mnrci-tab]", modal).forEach((el) => on(el, "click", () => this._switchInsured(el.getAttribute("data-mnrci-tab"))));
+        $$("[data-mnrci-switch]", modal).forEach((el) => on(el, "click", () => {
+          const action = el.getAttribute("data-mnrci-switch");
+          const target = this._confirmSwitch?.targetId;
+          this._confirmSwitch = null;
+          if(action === "save"){ this._saveActive(); if(target) this._activeInsuredId = target; this._render(); }
+          else if(action === "discard"){ if(target) this._activeInsuredId = target; this._render(); }
+          else this._render();
+        }));
+        const ageSel = modal.querySelector('[data-mnrci-field="age"]');
+        if(ageSel) on(ageSel, "change", () => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.age = ageSel.value; st.ageSource = "manual";
+          st.result = null; st.error = null; st.dirtySinceSave = true;
+          this._render();
+        });
+        const sumInput = modal.querySelector('[data-mnrci-field="compensation"]');
+        if(sumInput) on(sumInput, "input", () => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          const formatted = formatRiskSimSumInsuredDigits(sumInput.value);
+          sumInput.value = formatted;
+          try { sumInput.setSelectionRange(formatted.length, formatted.length); } catch(_e){}
+          st.compensation = formatted;
+          st.result = null; st.error = null; st.dirtySinceSave = true;
+        });
+        const occInput = modal.querySelector('[data-mnrci-field="occupation"]');
+        if(occInput){
+          on(occInput, "input", () => {
+            const st = this._state[this._activeInsuredId];
+            if(!st) return;
+            st.occupation = safeTrim(occInput.value);
+            st.occupationSource = "manual"; st.dirtySinceSave = true;
+          });
+          on(occInput, "change", () => this._render());
+          on(occInput, "blur", () => this._render());
+        }
+        $$('[data-mnrci-field="gender"]', modal).forEach((btn) => on(btn, "click", () => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.gender = btn.getAttribute("data-mnrci-value") || "";
+          st.genderSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true;
+          this._render();
+        }));
+        $$('[data-mnrci-field="smoker"]', modal).forEach((btn) => on(btn, "click", () => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.smoker = btn.getAttribute("data-mnrci-value") === "1";
+          st.smokerSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true;
+          this._render();
+        }));
+        const calcBtn = modal.querySelector("[data-mnrci-calc]");
+        if(calcBtn) on(calcBtn, "click", () => this._calc(this._activeInsuredId));
+        const applyBtn = modal.querySelector("[data-mnrci-apply]");
+        if(applyBtn) on(applyBtn, "click", () => this._apply());
+        const saveBtn = modal.querySelector("[data-mnrci-save]");
+        if(saveBtn) on(saveBtn, "click", () => this._saveActive());
+        const finalBtn = modal.querySelector("[data-mnrci-finalconfirm]");
+        if(finalBtn) on(finalBtn, "click", () => {
+          const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+          const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+          const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
+          if(!allSaved){
+            window.showToast?.({ title: "לא כל המבוטחים נשמרו", text: "יש לשמור את הסימולטור עבור כל המבוטחים הרלוונטיים לפני האישור הסופי.", variant: "warn" });
+            return;
+          }
+          this._showFinalSummary = true;
+          this._render();
+        });
+        const summaryBackBtn = modal.querySelector("[data-mnrci-summary-back]");
+        if(summaryBackBtn) on(summaryBackBtn, "click", () => { this._showFinalSummary = false; this._render(); });
+        const summaryConfirmBtn = modal.querySelector("[data-mnrci-summary-confirm]");
+        if(summaryConfirmBtn) on(summaryConfirmBtn, "click", () => {
+          try { this._ctx?.onFinalConfirm?.(); } catch(_e){}
+          this.close();
+        });
+      },
+
+      _switchInsured(targetId){
+        if(!targetId || targetId === this._activeInsuredId) return;
+        const st = this._state[this._activeInsuredId];
+        if(st?.dirtySinceSave){ this._confirmSwitch = { targetId }; this._render(); return; }
+        this._activeInsuredId = targetId;
+        this._render();
+      },
+
+      _buildResultForInsured(insId){
+        const st = this._state[insId];
+        if(!st) return null;
+        if(!st.result?.ok){
+          const calc = computeMenoraCiPremium(planId, {
+            age: st.age, gender: st.gender, smoker: st.smoker, compensation: st.compensation
+          });
+          if(!calc.ok) return null;
+          st.result = calc; st.error = null;
+        }
+        const r = st.result;
+        return {
+          compensation: formatRiskSimSumInsuredDigits(r.compensation),
+          monthlyPremium: r.monthlyPremium,
+          annualPremium: r.annualPremium,
+          ratePerHundredThousand: r.ratePerHundredThousand,
+          pdfName: r.pdfName,
+          planId: r.planId,
+          wizardCoverKey: r.wizardCoverKey,
+          age: st.age, ageSource: st.ageSource, gender: st.gender, genderSource: st.genderSource,
+          smoker: st.smoker, smokerSource: st.smokerSource,
+          occupation: st.occupation || "", occupationSource: st.occupationSource || ""
+        };
+      },
+
+      _apply(){
+        const results = {};
+        Object.keys(this._state).forEach((insId) => {
+          const r = this._buildResultForInsured(insId);
+          if(r) results[insId] = r;
+        });
+        if(!Object.keys(results).length){
+          window.showToast?.({ title: "אין תוצאה להחלה", text: "יש לחשב פרמיה תקינה לפני ההחלה על הפוליסה.", variant: "warn" });
+          return;
+        }
+        const onApply = this._ctx?.onApply;
+        this.close();
+        try { onApply?.(results); } catch(_e) {}
+      },
+
+      _saveActive(){
+        const insId = this._activeInsuredId;
+        const result = this._buildResultForInsured(insId);
+        if(!result){
+          window.showToast?.({ title: "אין תוצאה לשמירה", text: "יש לחשב פרמיה תקינה לפני השמירה.", variant: "warn" });
+          return;
+        }
+        try { this._ctx?.onApply?.({ [insId]: result }); } catch(_e) {}
+        const st = this._state[insId];
+        if(st){ st.savedAt = nowISO(); st.dirtySinceSave = false; }
+        window.showToast?.({ title: "נשמר", text: `הסימולטור עבור ${this._getInsuredLabel(insId)} נשמר על ההצעה.`, variant: "success" });
+        this._render();
+      }
+    };
+  }
+
+  const MenoraCriticalIllnessSimulator = createMenoraCiSimulator("orTop");
+  const MenoraCancerSimulator = createMenoraCiSimulator("kerenChaim");
+  RiskSimulators.register("מנורה", "מחלות קשות", MenoraCriticalIllnessSimulator);
+  RiskSimulators.register("מנורה", "סרטן", MenoraCancerSimulator);
+  // ===== סוף GI-MNR-CI-SIM ========================================================
+
 
 
   // ===== GI-SIM-CENTER 2026-08-08 · "מרכז הסימולטורים" =============================
@@ -44978,9 +45538,15 @@ if(path === "birthDate"){
             const monthlyNum = Number(r.monthlyPremium);
             draft.premiumPerInsured[insId] = Number.isFinite(monthlyNum) ? monthlyNum.toFixed(2) : String(r.monthlyPremium);
             // GI-MNR-HEALTH-SIM: אם הסימולטור החזיר רשימת כיסויים — מעדכנים את
-            // healthCovers בטיוטה (שמות כיסוי זהים לרשימת מנורה במערכת).
+            // healthCovers בטיוטה לפי wizardKey (מפתחות האשף), לא לפי שם ה-PDF.
             if(Array.isArray(r.covers) && r.covers.length){
-              draft.healthCovers = r.covers.map((c) => safeTrim(c.label || c.id)).filter(Boolean);
+              draft.healthCovers = r.covers.map((c) => safeTrim(c.wizardKey || c.label || c.id)).filter(Boolean);
+            }
+            // מחלות קשות / סרטן — סכום פיצוי (לא סכום ביטוח ריסק).
+            if(r.compensation != null && safeTrim(r.compensation) !== ""){
+              draft.compensationPerInsured = draft.compensationPerInsured || {};
+              draft.compensationPerInsured[insId] = safeTrim(r.compensation);
+              draft.compensation = draft.compensationPerInsured[insId];
             }
             // שדה מטא-דאטה גנרי — שומר את כל פלט הסימולטור (כל שדות התעריף
             // הייחודיים לחברה, כגון ratePerMille להפניקס או ratePerHundredThousand
