@@ -294,8 +294,39 @@
     },
     reset(){
       try { performance.clearMeasures(); performance.clearMarks(); } catch(_e) {}
+    },
+    /* GI-PERF 2026-08-09: Long Task observer — מדידה בלבד, בלי שינוי לוגיקה. */
+    startLongTaskObserver(){
+      if(this._longTaskObs) return;
+      try {
+        if(typeof PerformanceObserver !== "function") return;
+        const po = new PerformanceObserver((list) => {
+          try {
+            list.getEntries().forEach((e) => {
+              if(e && e.duration >= GI_PERF_LOG_MS){
+                console.info("[GiPerf] longtask", Math.round(e.duration) + "ms");
+              }
+            });
+          } catch(_e) {}
+        });
+        po.observe({ type: "longtask", buffered: true });
+        this._longTaskObs = po;
+      } catch(_e) {
+        try {
+          const po = new PerformanceObserver((list) => {
+            list.getEntries().forEach((e) => {
+              if(e && e.duration >= GI_PERF_LOG_MS){
+                console.info("[GiPerf] longtask", Math.round(e.duration) + "ms");
+              }
+            });
+          });
+          po.observe({ entryTypes: ["longtask"] });
+          this._longTaskObs = po;
+        } catch(_e2) {}
+      }
     }
   };
+  try { GiPerf.startLongTaskObserver(); } catch(_e) {}
   const safeTrim = (v) => String(v ?? "").trim();
 
   /* GI-PERF 2026-08-02 (שלב ט'): הערכת גודל בלי סריאליזציה.
@@ -13918,7 +13949,14 @@ UsersGateUI.init();
             } else if(DashboardUI.shouldShowPerformanceBoard?.()){
               try { DashboardUI.schedulePostLoginRender({ skipDailyReportWait: true }); } catch(_e) {}
             } else {
-              try { void DashboardUI.render(); } catch(_e) {}
+              /* GI-PERF: גם במסלול לא-performance — yield לפני render מלא */
+              try {
+                if(typeof requestAnimationFrame === "function"){
+                  requestAnimationFrame(() => { try { void DashboardUI.render(); } catch(_e2) {} });
+                } else {
+                  void DashboardUI.render();
+                }
+              } catch(_e) {}
             }
           }
         }
@@ -13929,7 +13967,14 @@ UsersGateUI.init();
             CustomersUI._viewMode = "latest";
             CustomersUI._viewQuery = "";
           } catch(_e) {}
-          CustomersUI.render({ forceServer: true });
+          /* GI-PERF 2026-08-09: אם יש 10 אחרונים טריים — paint מקומי בלי force לשרת.
+             אחרת forceServer ברקע אחרי paint (ראה CustomersUI.render). */
+          let freshLocal = false;
+          try {
+            freshLocal = Array.isArray(CustomersUI._viewRows) && CustomersUI._viewRows.length > 0
+              && (Date.now() - (Number(CustomersUI._lastLatestFetchAt) || 0)) < 20000;
+          } catch(_e) {}
+          CustomersUI.render({ forceServer: !freshLocal });
         }
         if (safe === "proposals") ProposalsUI.render();
         if (safe === "elementaryProposals") ElementaryProposalsUI.render();
@@ -16027,6 +16072,10 @@ UsersGateUI.init();
 
     premiumCellHtml(rec){
       try {
+        /* GI-PERF: ברשימה רזה אין payload — לא לסרוק מבנה ריק בכל שורה. */
+        if(typeof Storage !== "undefined" && Storage.payloadIsEmpty?.(rec)){
+          return '<span class="muted small">—</span>';
+        }
         const sum = this.sumCustomerListPremium(rec);
         if(!sum) return '<span class="muted small">—</span>';
         return '<span class="lcCustomers__premiumBadge lcCustomers__premiumBadge--' + this.getPremiumToneClass(sum) + '">' + this.formatMoneyValue(sum) + '</span>';
@@ -16134,6 +16183,29 @@ UsersGateUI.init();
       if(!UI.els.customersTbody) return;
       const q = safeTrim(UI.els.customersSearch?.value);
       const rows = this.filtered();
+      /* GI-PERF 2026-08-09 (שלב 2): עדכון דיפרנציאלי כשאותן שורות כבר ב-DOM. */
+      if(!this._listBusy && !(q && this._viewMode !== "search")){
+        try {
+          const domRows = Array.from(UI.els.customersTbody.querySelectorAll("tr.lcCustomerRow"));
+          if(domRows.length && domRows.length === rows.length){
+            const domIds = domRows.map((tr) => safeTrim(tr.querySelector("[data-open-customer]")?.getAttribute("data-open-customer")));
+            const nextIds = rows.map((rec) => String(rec.id));
+            if(domIds.every((id, idx) => String(id) === String(nextIds[idx]))){
+              let changed = false;
+              domRows.forEach((tr, idx) => {
+                if(this.patchCustomerRowQuiet(tr, rows[idx])) changed = true;
+              });
+              if(UI.els.customersCountBadge){
+                UI.els.customersCountBadge.textContent = (this._viewMode === "search" || q)
+                  ? rows.length + " תוצאות"
+                  : rows.length + " לקוחות";
+              }
+              if(changed) this.bindRowActionButtons();
+              return;
+            }
+          }
+        } catch(_e) {}
+      }
       if(UI.els.customersCountBadge){
         if(this._viewMode === "search" || q){
           UI.els.customersCountBadge.textContent = rows.length + " תוצאות";
@@ -16182,8 +16254,18 @@ UsersGateUI.init();
       // צביעה מיידית ממה שיש (מטמון תצוגה / 10 מקומיים) — בלי לחכות לשרת
       this.paintTable();
       if(options.skipServerFetch === true) return;
-      // forceServer: ניווט/חיפוש. אחרת (שמירה/שינוי מקומי) — גם מרעננים מהשרת את ה-10.
-      void this.syncListFromServer({ force: true });
+      /* GI-PERF 2026-08-09: סנכרון שרת אחרי paint (rAF+idle) כדי שלחיצת תפריט
+         לא תתחרה עם fetch/merge באותו task. forceServer:false משתמש במטמון 20ש׳. */
+      const force = options.forceServer !== false;
+      const kick = () => { void this.syncListFromServer({ force }); };
+      if(typeof requestAnimationFrame === "function"){
+        requestAnimationFrame(() => {
+          if(typeof requestIdleCallback === "function") requestIdleCallback(kick, { timeout: 280 });
+          else window.setTimeout(kick, 0);
+        });
+      } else {
+        window.setTimeout(kick, 0);
+      }
     },
 
     showLoader(){
@@ -18403,7 +18485,7 @@ UsersGateUI.init();
 
     _openByIdResolved(rec, opts={}){
       if(!rec || !this.els.wrap) return;
-      return GiPerf.run("openCustomer", () => {
+      const paintHeavy = () => GiPerf.run("openCustomer", () => {
       try {
         if(typeof MirrorCallUI !== "undefined" && MirrorCallUI?._mirrorCoerceCustomerPayloadInPlace){
           MirrorCallUI._mirrorCoerceCustomerPayloadInPlace(rec);
@@ -18463,6 +18545,33 @@ UsersGateUI.init();
       this.refreshArchiveBtnVisibility();
       this.refreshAssignBtnVisibility();
       });
+
+      /* GI-PERF 2026-08-09: פתיחת מעטפת מיידית + רינדור כבד אחרי paint.
+         skipSig / syncOpen — רענון תיק פתוח בלי הבהוב "טוען". */
+      if(opts.skipSig || opts.syncOpen === true || typeof requestAnimationFrame !== "function"){
+        return paintHeavy();
+      }
+      try {
+        this.currentId = rec.id;
+        if(this.els.name) this.els.name.textContent = safeTrim(rec.fullName) || "תיק לקוח";
+        if(this.els.avatar) this.els.avatar.setAttribute("data-customer-name", safeTrim(rec.fullName || "תיק לקוח"));
+        if(this.els.main){
+          this.els.main.innerHTML = `<div class="muted" style="padding:32px;text-align:center;">טוען פרטי תיק…</div>`;
+        }
+        this.els.wrap.classList.add("is-open");
+        this.els.wrap.setAttribute("aria-hidden", "false");
+        document.body.style.overflow = "hidden";
+        this.refreshArchiveBtnVisibility();
+        this.refreshAssignBtnVisibility();
+      } catch(_e) {}
+      const token = (Number(this._openPaintToken) || 0) + 1;
+      this._openPaintToken = token;
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if(this._openPaintToken !== token) return;
+        if(!this.els.wrap?.classList.contains("is-open")) return;
+        if(safeTrim(this.currentId) !== safeTrim(rec.id)) return;
+        paintHeavy();
+      }));
     },
 
     refreshArchiveBtnVisibility(){
@@ -23433,7 +23542,9 @@ UsersGateUI.init();
             try { DashboardUI.scheduleRefreshLeaderboard(); } catch(_e){}
           }
         } else {
-          DashboardUI.render();
+          try { DashboardUI.schedulePostLoginRender({ skipDailyReportWait: true }); } catch(_e) {
+            try { void DashboardUI.render(); } catch(_e2) {}
+          }
         }
         return;
       }
@@ -27921,7 +28032,8 @@ UsersGateUI.init();
       this._localMetricsAttemptedKey = cacheKey;
       const customersAll = this.getVisibleCustomers();
       const agentScoped = !!(Auth.current && !Auth.canViewAllCustomers?.());
-      const syncLimit = agentScoped ? 24 : 45;
+      /* GI-PERF 2026-08-09: סף נמוך יותר — מעדיפים מסלול מנותי גם לנציג/מנהל. */
+      const syncLimit = agentScoped ? 12 : 18;
       if(customersAll.length <= syncLimit){
         try { this.computeAndCacheMetrics(cacheKey); } catch(_e) {}
         return;
@@ -27950,9 +28062,8 @@ UsersGateUI.init();
       }
       const customersAll = this.getVisibleCustomers();
       const agentScoped = !!(Auth.current && !Auth.canViewAllCustomers?.());
-      // PERF: admins hit sync path too often at 30–45 customers; chunk earlier
-      // After single-pass + empty-new early-exit, sync is cheap enough for larger sets.
-      const syncLimit = agentScoped ? 24 : 45;
+      /* GI-PERF 2026-08-09: סף סינכרוני נמוך — מעל זה תמיד chunked + shell. */
+      const syncLimit = agentScoped ? 12 : 18;
       if(customersAll.length <= syncLimit){
         return this.computeAndCacheMetrics(cacheKey);
       }
@@ -28992,10 +29103,45 @@ UsersGateUI.init();
 
   /** מודול גנרי — רישום סימולטורים לפי (חברה, מוצר), כדי לאפשר הרחבה עתידית
       (כלל / מגדל / מנורה / איילון וכו') בלי לשנות שוב את שלב 5 של האשף. */
+  /* GI-PERF 2026-08-09: CSS סימולטורים נטען רק בפתיחה — חוסך ~58KB + CSSOM בטעינה ראשונית. */
+  const GI_SIMULATOR_STYLE_HREFS = Object.freeze([
+    "./phoenix-risk-sim.css?v=20260808-sim-ui-blue-v1",
+    "./menora-risk-sim.css?v=20260808-sim-ui-blue-v1",
+    "./menora-health-sim.css?v=20260809-health-cpi-v2",
+    "./ayalon-health-sim.css?v=20260809-health-cpi-v2",
+    "./menora-ci-sim.css?v=20260809-menora-age-v2",
+    "./simulators-center.css?v=20260808-sim-ui-blue-v1"
+  ]);
+  function ensureGiSimulatorStylesLoaded(){
+    if(document.documentElement.dataset.giSimCss === "1") return;
+    document.documentElement.dataset.giSimCss = "1";
+    GI_SIMULATOR_STYLE_HREFS.forEach((href) => {
+      try {
+        const id = "gi-sim-css-" + href.replace(/[^\w]+/g, "_");
+        if(document.getElementById(id)) return;
+        const link = document.createElement("link");
+        link.id = id;
+        link.rel = "stylesheet";
+        link.href = href;
+        document.head.appendChild(link);
+      } catch(_e) {}
+    });
+  }
+
   const RiskSimulators = {
     registry: {},
     _key(company, product){ return safeTrim(company) + "::" + safeTrim(product); },
-    register(company, product, handler){ this.registry[this._key(company, product)] = handler; },
+    register(company, product, handler){
+      if(handler && typeof handler.open === "function" && !handler._giStylesWrapped){
+        const origOpen = handler.open.bind(handler);
+        handler.open = function(ctx){
+          try { ensureGiSimulatorStylesLoaded(); } catch(_e) {}
+          return origOpen(ctx);
+        };
+        handler._giStylesWrapped = true;
+      }
+      this.registry[this._key(company, product)] = handler;
+    },
     getHandler(company, product){ return this.registry[this._key(company, product)] || null; },
     /** GI-SIM-CENTER 2026-08-08: מחזיר רשימת {company, product} עבור כל הסימולטורים
         הרשומים בפועל, כדי ש"מרכז הסימולטורים" יוכל להציג רשימה עדכנית אוטומטית
@@ -33242,6 +33388,7 @@ UsersGateUI.init();
         }catch(_e){}
         return;
       }
+      try { ensureGiSimulatorStylesLoaded(); } catch(_e) {}
       this.close();
       const items = (typeof RiskSimulators.list === "function") ? RiskSimulators.list() : [];
       const modal = document.createElement("div");
