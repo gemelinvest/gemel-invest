@@ -197,3 +197,66 @@
   .lcAylHealthModal .giValModal__body{ padding:12px 16px; }
   .lcAylHealthModal .giValModal__foot{ padding:12px 16px 14px; }
 }
+
+
+/* GI-AYL-HEALTH-SIM · תיאור «מה כולל הכיסוי» */
+.lcAylHealth__cover{
+  display:grid;
+  grid-template-columns:1fr auto auto;
+  align-items:center;
+  gap:8px 10px;
+  padding:9px 12px;
+  border-bottom:1px solid var(--gi-border-soft, #F1F5F9);
+  font-size:13.5px;
+  color:var(--gi-text, #0F172A);
+}
+.lcAylHealth__cover:last-child{ border-bottom:none; }
+.lcAylHealth__cover.is-checked{ background:var(--gi-primary-soft, #EFF6FF); }
+.lcAylHealth__coverMain{
+  display:grid; grid-template-columns:auto 1fr; align-items:center; gap:10px;
+  cursor:pointer; min-width:0;
+}
+.lcAylHealth__coverMain input{ width:16px; height:16px; accent-color:var(--gi-primary, #2563EB); }
+.lcAylHealth__infoBtn{
+  border:1px solid rgba(37,99,235,.28);
+  background:#fff;
+  color:var(--gi-primary, #2563EB);
+  font-size:11.5px; font-weight:800;
+  padding:4px 8px; border-radius:var(--gi-r-pill, 999px);
+  cursor:pointer; white-space:nowrap;
+}
+.lcAylHealth__infoBtn:hover{ background:var(--gi-primary-soft, #EFF6FF); }
+.lcAylHealth__overlay--info{ z-index:6; }
+.lcAylHealth__infoCard{
+  max-width:520px; max-height:min(80vh, 640px);
+  overflow:hidden; display:flex; flex-direction:column; gap:10px;
+}
+.lcAylHealth__infoHead{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+}
+.lcAylHealth__infoTitle{
+  font-size:12px; font-weight:800; color:var(--gi-text-muted, #647287);
+  text-transform:uppercase; letter-spacing:.02em;
+}
+.lcAylHealth__infoClose{
+  border:none; background:var(--gi-surface-3, #F1F5F9);
+  color:var(--gi-text-muted, #647287); border-radius:var(--gi-r-ctl, 8px);
+  padding:4px 8px; cursor:pointer; font-size:14px; line-height:1;
+}
+.lcAylHealth__infoCoverName{
+  font-size:15px; font-weight:800; color:var(--gi-text, #0F172A); line-height:1.35;
+}
+.lcAylHealth__infoBody{
+  overflow:auto; max-height:min(52vh, 420px);
+  border:1px solid var(--gi-border, #E5E7EB);
+  border-radius:var(--gi-r-ctl, 8px);
+  background:var(--gi-surface-2, #F8FAFC);
+  padding:10px 12px;
+  display:flex; flex-direction:column; gap:6px;
+}
+.lcAylHealth__infoLine{
+  font-size:13px; line-height:1.5; color:var(--gi-text, #0F172A); font-weight:600;
+  white-space:pre-wrap;
+}
+.lcAylHealth__infoLine--text{ font-weight:600; color:var(--gi-text-2, #3D4A5C); }
+.lcAylHealth__infoFoot{ display:flex; justify-content:flex-end; }

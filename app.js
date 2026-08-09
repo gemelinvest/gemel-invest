@@ -31375,6 +31375,7 @@ UsersGateUI.init();
       wizardKey: "השתלות וטיפולים מיוחדים בחו\"ל",
       group: "דבר ראשון — בסיסי",
       needsGender: false,
+      includes: "• שיפוי מלא להשתלה / טיפול מיוחד בחו״ל בעת פניה לספק בהסכם\n• שיפוי להשתלת איבר שנלקח מאדם אחר עד ₪5,000,000 (כבד, כליה, לב, ריאה, לבלב, מעי, שחלה וכל שילוב ביניהם)\n• שיפוי להשתלת איבר שנלקח מבעל חיים — עד ₪3,000,000\n• שיפוי בעת השתלת מח עצם / תאי גזע, שמקורם במבוטח עצמו — עד ₪150,000\n• שיפוי לטיפול מיוחד בחו״ל — עד ₪1,000,000\n• כיסוי להוצאות נלוות להשתלה ו/או טיפול מיוחד בחו״ל\n• גמלה חודשית לפני ואחרי השתלה בחו״ל\n• פיצוי במקרה של ביצוע השתלה בחו״ל ללא מעורבות המבטח",
       bands: [
         { min:0, max:20, agorot:1038 }, { min:21, max:30, agorot:1654 }, { min:31, max:40, agorot:1821 }, { min:41, max:50, agorot:2252 },
         { min:51, max:55, agorot:2459 }, { min:56, max:60, agorot:2732 }, { min:61, max:65, agorot:3098 }, { min:66, max:120, agorot:3162 }
@@ -31386,6 +31387,7 @@ UsersGateUI.init();
       wizardKey: "תרופות מחוץ לסל הבריאות",
       group: "דבר ראשון — בסיסי",
       needsGender: false,
+      includes: "• כיסוי לתרופות שאינן בסל הבריאות, לרבות:\n  ° תרופות המאושרות בסל אך להתוויה שונה (OFF LABEL)\n  ° תרופות יתום\n  ° תרופות מיוחדות (ג׳29)\n  ° כיסוי לבדיקה גנטית לצורך התאמת טיפול תרופתי למחלת הסרטן\n  ° בכפוף להשתתפות עצמית עד ₪40,000 במבוטח, 20%\n• סכום השיפוי המרבי: ₪3,000,000 מתמלא כל 24 חודשים\n• טיפול רפואי הכרוך במתן התרופה עד 60 ימים ועד ₪250 ליום\n• השתתפות עצמית של ₪300 למרשם\n• לתרופות מיוחדות ג׳29 — תקרה של ₪1,000,000, מתמלא כל 24 חודשים (תקרת שיפוי לחודש עד ₪200,000), בכפוף להשתתפות עצמית ₪500\n• פטור מהשתתפות עצמית לתרופה שעלותה החודשית גבוהה מ־₪5,000",
       bands: [
         { min:0, max:20, agorot:1323 }, { min:21, max:30, agorot:1833 }, { min:31, max:40, agorot:2580 }, { min:41, max:50, agorot:4194 },
         { min:51, max:55, agorot:6073 }, { min:56, max:60, agorot:8050 }, { min:61, max:65, agorot:10841 }, { min:66, max:120, agorot:14398 }
@@ -31397,6 +31399,7 @@ UsersGateUI.init();
       wizardKey: "ניתוחים וטיפולים מחליפי ניתוח בחו\"ל",
       group: "דבר ראשון — בסיסי",
       needsGender: false,
+      includes: "• שיפוי לביצוע ניתוח פרטי ו/או מחליף ניתוח בחו״ל, עפ״י בחירת המבוטח\n• לניתוח ומחליף ניתוח באמצעות איילון עם ספקי הסדר — שיפוי מלא\n• לניתוח או מחליף ניתוח שבוצע שלא באמצעות איילון — עד 250% מהעלויות הנקובות אצל ספק השירות לביצוע אותו ניתוח / מחליף ניתוח\n• התייעצויות עם רופא מומחה בישראל — 2\n• התייעצות אחת עם רופא מומחה מחוץ לישראל\n• הוצאות הטסה רפואית\n• הוצאות הבאת מומחה רפואי לישראל\n• הוצאות עלות שתל\n• הוצאות נוספות בגין ניתוח מורכב\n• עלות שכירות אחות פרטית\n• שהייה מחוץ לישראל לצורך ניתוח מורכב\n• טיפול פיזיותרפיה / ריפוי בעיסוק / התעמלות שיקומית\n• הוצאות למוסד החלמה מוכר\n• פיצוי בגין פטירת המבוטח",
       bands: [
         { min:0, max:20, agorot:666 }, { min:21, max:30, agorot:925 }, { min:31, max:40, agorot:1072 }, { min:41, max:50, agorot:1320 },
         { min:51, max:55, agorot:2183 }, { min:56, max:60, agorot:2676 }, { min:61, max:65, agorot:3050 }, { min:66, max:120, agorot:3135 }
@@ -31408,6 +31411,7 @@ UsersGateUI.init();
       wizardKey: "ניתוחים בישראל מהשקל הראשון",
       group: "דבר שני — ניתוחים בישראל",
       needsGender: false,
+      includes: "• התייעצויות עם רופא מומחה, אגב ניתוח בארץ או מחליף ניתוח בארץ — 3\n• כיסוי להוצאות שכר מנתח\n• כיסוי להוצאות שכר מרדים\n• הוצאות אשפוז עד לתקרה של 30 ימי אשפוז, כולל אשפוז טרום ניתוח\n• הוצאת חדר ניתוח / מחליף ניתוח\n• הוצאות בגין בדיקות במהלך אשפוז\n• שתלים במהלך הניתוח — כיסוי מלא עד תקרת ספק שבהסכם\n• תרופות במהלך אשפוז",
       bands: [
         { min:0, max:20, agorot:4554 }, { min:21, max:30, agorot:9865 }, { min:31, max:40, agorot:12759 }, { min:41, max:50, agorot:19961 },
         { min:51, max:55, agorot:29929 }, { min:56, max:60, agorot:39114 }, { min:61, max:65, agorot:47187 }, { min:66, max:120, agorot:62491 }
@@ -31419,6 +31423,7 @@ UsersGateUI.init();
       wizardKey: "משלים שב\"ן",
       group: "דבר שני — ניתוחים בישראל",
       needsGender: false,
+      includes: "• התייעצויות עם רופא מומחה, אגב ניתוח בארץ או מחליף ניתוח בארץ — 3\n• בחירת הרופא המנתח, בית החולים, מועד הניתוח ושיפוי לשכר מנתח מעבר לזכאות בשב״ן\n• הוצאות חדר ניתוח\n• הוצאת אשפוז עד לתקרה של 30 ימי אשפוז, כולל אשפוז טרום ניתוח\n• שתלים במהלך הניתוח — כיסוי מלא\n• תרופות במהלך אשפוז\n• הכיסוי יינתן לאחר מיצוי הזכויות עם השב״ן",
       bands: [
         { min:0, max:20, agorot:1906 }, { min:21, max:30, agorot:3588 }, { min:31, max:40, agorot:6281 }, { min:41, max:50, agorot:8707 },
         { min:51, max:55, agorot:13904 }, { min:56, max:60, agorot:16935 }, { min:61, max:65, agorot:22411 }, { min:66, max:120, agorot:28999 }
@@ -31430,6 +31435,7 @@ UsersGateUI.init();
       wizardKey: "משלים שב\"ן עם השתתפות עצמית 5,000 ₪",
       group: "דבר שני — ניתוחים בישראל",
       needsGender: false,
+      includes: "• התייעצויות עם רופא מומחה, אגב ניתוח בארץ או מחליף ניתוח בארץ — 3\n• בחירת הרופא המנתח, בית החולים, מועד הניתוח ושיפוי לשכר מנתח מעבר לזכאות בשב״ן ובכפוף להשתתפות עצמית\n• הוצאות חדר ניתוח\n• הוצאת אשפוז עד לתקרה של 30 ימי אשפוז, כולל אשפוז טרום ניתוח\n• שתלים במהלך הניתוח — כיסוי מלא\n• תרופות במהלך אשפוז\n• הכיסוי יינתן לאחר מיצוי הזכויות עם השב״ן ובכפוף להשתתפות עצמית",
       bands: [
         { min:0, max:20, agorot:1486 }, { min:21, max:30, agorot:2799 }, { min:31, max:40, agorot:4900 }, { min:41, max:50, agorot:6792 },
         { min:51, max:55, agorot:10845 }, { min:56, max:60, agorot:13209 }, { min:61, max:65, agorot:17481 }, { min:66, max:120, agorot:22620 }
@@ -31441,6 +31447,7 @@ UsersGateUI.init();
       wizardKey: "אמבולטורי מורחב",
       group: "דבר רביעי — שירותים אמבולטוריים",
       needsGender: false,
+      includes: "• התייעצויות עם רופאים מומחים — תקרת החזר מוגדלת וקבועה לכל ייעוץ, ללא מכסה שנתית\n• התייעצות בנוגע לבעיות גיל המעבר ואנטי אייג׳ינג\n• בדיקות אבחנתיות ובדיקות הדמיה\n• אבחון וייעוץ גנטי למחלות תורשתיות\n• הראיית איברים פנימיים במערכת העיכול באמצעות קפסולה\n• כיסויים להריון ולידה — שיפוי, רשימה פתוחה של בדיקות הריון; עד 3 התייעצויות עם רופא מומחה בנושא הריון ולידה, איסוף ושימור דם טבורי\n• פריון ושירותי פונדקאות בישראל:\n  ° טיפולי פריון בישראל עקב ליקוי פריון של המבוטח/ת\n  ° שירותי פונדקאות בישראל – זכאות לשני בני זוג המבוטחים בפוליסה לרבות בני זוג מאותו המין\n  ° תקרת החזר עד לסכום של ₪32,974 לכל תקופת הביטוח\n• כיסויים למחלת הסרטן — רפואה מונעת:\n  ° בדיקת סקר לגילוי סרטן\n  ° בדיקת קולונוסקופיה מניעתית\n  ° חוות דעת שניה בחו״ל\n  ° בדיקת סקר תקופתית\n  ° בדיקת COLONFLAG — שירות מחקר אישי ממוקד",
       bands: [
         { min:0, max:17, agorot:2880 }, { min:18, max:30, agorot:7300 }, { min:31, max:55, agorot:8030 }, { min:56, max:64, agorot:8210 },
         { min:65, max:75, agorot:11800 }, { min:76, max:120, agorot:14410 }
@@ -31452,6 +31459,7 @@ UsersGateUI.init();
       wizardKey: "ייעוץ ובדיקות",
       group: "דבר רביעי — שירותים אמבולטוריים",
       needsGender: false,
+      includes: "• התייעצויות עם רופאים מומחים\n• התייעצות בנוגע לבעיות גיל המעבר ואנטי אייג׳ינג\n• בדיקות אבחנתיות ובדיקות הדמיה\n• אבחון וייעוץ גנטי למחלות תורשתיות\n• הראיית איברים פנימיים במערכת העיכול באמצעות קפסולה\n• כיסויים להריון ולידה — סקירה על־קולית לבדיקת מערכות עובר מוקדמת או מאוחרת, בדיקת שקיפות עורפית, בדיקת סקר ביוכימי משולש (חלבון עוברי), בדיקת מי שפיר, בדיקת NIPT, סיסי שילייה, ביצוע בדיקה לאבחון גנטי טרום הריון לתכנון המשפחה, בדיקת CMA (“צ׳יפ גנטי”), שיפוי ל־3 התייעצויות עם רופא מומחה בנושא הריון ולידה, איסוף ושימור דם טבורי\n• כיסויים למחלת הסרטן — רפואה מונעת:\n  ° בדיקת סקר לגילוי סרטן\n  ° בדיקת קולונוסקופיה מניעתית\n  ° חוות דעת שניה בחו״ל\n  ° בדיקת סקר תקופתית\n  ° בדיקת COLONFLAG — שירות מחקר אישי ממוקד",
       bands: [
         { min:0, max:17, agorot:1699 }, { min:18, max:30, agorot:4652 }, { min:31, max:55, agorot:5756 }, { min:56, max:64, agorot:6219 },
         { min:65, max:75, agorot:8359 }, { min:76, max:120, agorot:9723 }
@@ -31463,6 +31471,7 @@ UsersGateUI.init();
       wizardKey: "טיפולים אמבולטוריים",
       group: "דבר רביעי — שירותים אמבולטוריים",
       needsGender: false,
+      includes: "• טיפולים פרא רפואיים\n• מלונית לאחר לידה\n• הפריית מבחנה\n• טיפול מיוחד במחלת הסרטן\n• טיפולים פיזיותרפיים / הידרותרפיים\n• מרפאות כאב בבית חולים פרטי",
       bands: [
         { min:0, max:17, agorot:186 }, { min:18, max:30, agorot:508 }, { min:31, max:55, agorot:630 }, { min:56, max:64, agorot:680 },
         { min:65, max:75, agorot:914 }, { min:76, max:120, agorot:1063 }
@@ -31475,6 +31484,7 @@ UsersGateUI.init();
       group: "דבר רביעי — שירותים אמבולטוריים",
       needsGender: false,
       maxEntryAge: 69,
+      includes: "השירותים כוללים:\n• אבחון ראשוני ע״י רופא ממיון\n• בדיקה פיזיקאלית\n• בדיקות אבחנתיות ראשוניות\n• דוח אבחון ראשוני והמלצות להמשך טיפול\n• אבחון מורחב\n• פגישת סיכום\nבכפוף להשתתפויות עצמיות בהתאם למפורט בתנאי הנספח.\nלקבלת השירות, ניתן לפנות למוקד אבחון מהיר בבית חולים רפאל: טלפון 03-7752026.\nהשירותים יינתנו בבית החולים רפאל — פארק עתידים, תל אביב.",
       bands: [
         { min:0, max:20, agorot:406 }, { min:21, max:120, agorot:1876 }
       ]
@@ -31485,6 +31495,7 @@ UsersGateUI.init();
       wizardKey: "טכנולוגיות מתקדמות ואביזרים רפואיים",
       group: "דבר רביעי — שירותים אמבולטוריים",
       needsGender: false,
+      includes: "• טיפולים בתא לחץ\n• הזרקות לטיפולים רפואיים לרבות הזרקות של חומרי שגשוג למפרקים\n• טכנולוגיות לטיפול בכאב — החזר עד גובה של 80%\n• טכנולוגיות לטיפול עקב מחלה אונקולוגית — החזר עד גובה של 80%\n• החזר בגין אביזרים רפואיים שעלותם מעל ₪500\n• תקרת הכיסוי ₪80,000 לתקופת הביטוח אשר מתחדש כל שנתיים, בכפוף להשתתפות עצמית של 20%",
       bands: [
         { min:0, max:20, agorot:726 }, { min:21, max:30, agorot:1323 }, { min:31, max:35, agorot:1368 }, { min:36, max:40, agorot:1500 },
         { min:41, max:45, agorot:1687 }, { min:46, max:50, agorot:1971 }, { min:51, max:55, agorot:2271 }, { min:56, max:60, agorot:2897 },
@@ -31498,6 +31509,7 @@ UsersGateUI.init();
       group: "דבר שלישי — כתבי שירות",
       needsGender: false,
       maxAge: 21,
+      includes: "• שירותי אבחון וייעוץ דידקטי ופסיכו־דידקטי\n• שירותי אבחון וייעוץ בהפרעות קשב וריכוז, בדיקה ממוחשבת מסוג TOVA, BRC, MOXO\n• טיפולים בהתפתחות הילד באמצעות מרפא בעיסוק או פיזיותרפיסט\n• טיפולים התפתחותיים — שחייה טיפולית, רכיבה טיפולית, טיפול באומנות, טיפול בתנועה, טיפול במוסיקה\n• טיפול באמצעות קלינאי תקשורת ו/או הוראה מתקנת\n• טיפול באמצעות פסיכולוג חינוכי / קליני / עובד סוציאלי / פסיכותרפיסט\n• ייעוץ דיאטטי – תזונאי / הפרעות אכילה\n• מאמן ספורט אישי\nהשירותים יינתנו באמצעות חברת פמי פרמיום בכפוף להשתתפות עצמית או בפנייה לספק, על פי בחירת המבוטח/ת, עד התקרות הנקובות בתנאי הנספח ובכפוף להשתתפות עצמית המפורטת.",
       bands: [
         { min:0, max:21, agorot:2640 }
       ]
@@ -31508,6 +31520,7 @@ UsersGateUI.init();
       wizardKey: "רפואה משלימה",
       group: "דבר שלישי — כתבי שירות",
       needsGender: false,
+      includes: "• השירותים יסופקו על ידי ספק השירותים Targetcare\n• רשימת השירותים: אקופונקטורה, סוג׳וק, עיסוי רפואי עקב אשפוז כתוצאה מתאונה, רפלקסולוגיה, שיאצו, פלדנקרייז, אוסטיאופתיה, שיטת אלכסנדר, ביו פידבק, הומיאופתיה, כירופרקטיקה, נטורופתיה, פרחי באך, חדרי מלח\n• עד 20 טיפולים בשנת הביטוח ובכפוף להשתתפות עצמית\n• מוקד ״טרגט־קייר״, טל׳ 072-2756606, ימים א׳–ה׳, 08:00–16:00",
       bands: [
         { min:0, max:25, agorot:977 }, { min:26, max:70, agorot:1725 }, { min:71, max:75, agorot:1832 }
       ]
@@ -31518,6 +31531,7 @@ UsersGateUI.init();
       wizardKey: "ייעוץ אונליין — רופא מומחה בקליק",
       group: "דבר שלישי — כתבי שירות",
       needsGender: false,
+      includes: "קבלת ייעוץ רפואי אונליין מקוונת, מבלי לצאת מהבית, באמצעות שיחת וידאו / שיחה טלפונית עם רופאים מומחים, לרבות רפואת משפחה וילדים.\n• עלות כתב השירות למנוי (בגילאי 0–75): ₪19.45 לחודש\n• השתתפות עצמית: התייעצות עם רופאים מומחים / משפחה / ילדים — ₪120; איסוף מידע / תיקים רפואיים לצורך הייעוץ — ₪90\n• דמי הביטוח נקובים ב־₪ וצמודים למדד\n• פרמיה קבועה\n• השירות ניתן על ידי ספק השירותים \"פמי פרימיום\", טל׳ 03-6388448",
       bands: [
         { min:0, max:75, agorot:1945 }
       ]
@@ -31529,6 +31543,7 @@ UsersGateUI.init();
       group: "דבר שלישי — כתבי שירות",
       needsGender: false,
       maxEntryAge: 69,
+      includes: "השירותים כוללים:\n• ביקור רופא עד הבית\n  ° שירות רפואי בבית המבוטח או במקום הימצאו\n  ° קבלת שירות עד הבית תוך 3 שעות ממועד הפנייה\n  ° השירות כולל, בין היתר, בדיקה רפואית ומתן מרשם לתרופות על פי החלטת הרופא\n  ° השתתפות עצמית בסך ₪25\n• שירותי מעבדה עד הבית\n  ° קבלת שירות מעבדה בבית המבוטח, כגון: בדיקות דם ושתן\n  ° השירות יינתן כנגד הצגת טופס הפנייה לבדיקות מעבדה (ההפנייה תינתן גם על ידי רופא עד הבית או רופא אונליין)\n  ° השתתפות עצמית בסך ₪40\n• רופא ילדים / משפחה אונליין\n  ° רופא אונליין, בין השעות 7:00 עד 19:00\n  ° ללא השתתפות עצמית",
       bands: [
         { min:0, max:20, agorot:1739 }, { min:21, max:69, agorot:2826 }
       ]
@@ -31540,6 +31555,7 @@ UsersGateUI.init();
       group: "דבר שלישי — כתבי שירות",
       needsGender: false,
       maxEntryAge: 69,
+      includes: "• הוצאות בגין פינוי אמבולנס\n• ייעוץ עם רופא מומחה באורתופדיה / קרדיולוגיה\n• ייעוץ עם רופא מומחה בפיזיותרפיה / הידרותרפיה\n• מפגשי טיפול עם רופא מומחה ברפואת כאב\n• החזר בגין הקפאת מנוי בחדר כושר",
       bands: [
         { min:0, max:20, agorot:1152 }, { min:21, max:69, agorot:1806 }
       ]
@@ -31551,6 +31567,7 @@ UsersGateUI.init();
       group: "דבר שלישי — כתבי שירות",
       needsGender: false,
       maxEntryAge: 65,
+      includes: "• סיוע והכוונה מול הביטוח הלאומי ורשויות המס\n• עזרה וסיוע מול רשויות המס\n• איתור מומחים רפואיים ופרא רפואיים\n• עזרה וסיוע באיתור מטפל זר וסיוע בהוצאת היתר\n• סיוע בהוצאת תו נכה\n• סיוע והכוונה במיצוי זכויות מול משרדי ממשלה וגופים ציבוריים\n• הפניה ליועצים חיצוניים (עורכי דין, רואי חשבון, מטפלים)\n• תקופת אכשרה של 90 ימים\n• ללא השתתפות עצמית",
       bands: [
         { min:0, max:20, agorot:577 }, { min:21, max:55, agorot:1153 }, { min:56, max:65, agorot:2307 }, { min:66, max:120, agorot:2884 }
       ]
@@ -31640,6 +31657,7 @@ UsersGateUI.init();
       this._activeInsuredId = insureds[0]?.id || null;
       this._confirmSwitch = null;
       this._showFinalSummary = false;
+      this._infoCoverId = null;
       this._mount();
       this._render();
     },
@@ -31798,11 +31816,15 @@ UsersGateUI.init();
               const checked = !!(st.selected && st.selected[c.id]);
               const one = checked ? computeAyalonHealthCoverPremium(c.id, st.age, st.gender) : null;
               const premTxt = one?.ok ? `₪${formatAyalonHealthExactAmount(one.monthlyPremium)}` : (checked && one && !one.ok ? "—" : "");
-              return `<label class="lcAylHealth__cover${checked ? " is-checked" : ""}">
-                <input type="checkbox" data-aylh-cover="${escapeHtml(c.id)}"${checked ? " checked" : ""} />
-                <span class="lcAylHealth__coverLabel">${escapeHtml(c.label)}${c.needsGender ? ' <em>(לפי מין)</em>' : ""}${c.maxAge != null ? ` <em>(עד גיל ${c.maxAge})</em>` : ""}</span>
+              const hasInfo = !!(c.includes && String(c.includes).trim());
+              return `<div class="lcAylHealth__cover${checked ? " is-checked" : ""}">
+                <label class="lcAylHealth__coverMain">
+                  <input type="checkbox" data-aylh-cover="${escapeHtml(c.id)}"${checked ? " checked" : ""} />
+                  <span class="lcAylHealth__coverLabel">${escapeHtml(c.label)}${c.needsGender ? ' <em>(לפי מין)</em>' : ""}${c.maxAge != null ? ` <em>(עד גיל ${c.maxAge})</em>` : ""}</span>
+                </label>
+                ${hasInfo ? `<button type="button" class="lcAylHealth__infoBtn" data-aylh-info="${escapeHtml(c.id)}" aria-label="מה כולל הכיסוי" title="מה כולל הכיסוי">מה כולל?</button>` : ""}
                 <span class="lcAylHealth__coverPrem">${premTxt}</span>
-              </label>`;
+              </div>`;
             }).join("")}
           </div>
         </div>`).join("");
@@ -31844,6 +31866,29 @@ UsersGateUI.init();
             <button type="button" class="btn btn--primary" data-aylh-finalconfirm="1"${allRelevantSaved ? "" : " disabled"}>אישור סופי</button>
           </div>`);
 
+      const infoCover = this._infoCoverId ? AYALON_HEALTH_COVER_BY_ID[this._infoCoverId] : null;
+      const infoBody = infoCover?.includes
+        ? String(infoCover.includes).split("\n").map((ln) => {
+            const t = safeTrim(ln);
+            if(!t) return "";
+            if(t.startsWith("•") || t.startsWith("°")) return `<div class="lcAylHealth__infoLine">${escapeHtml(t)}</div>`;
+            return `<div class="lcAylHealth__infoLine lcAylHealth__infoLine--text">${escapeHtml(t)}</div>`;
+          }).join("")
+        : "";
+      const infoOverlayHtml = infoCover ? `
+        <div class="lcAylHealth__overlay lcAylHealth__overlay--info" data-aylh-info-close="1">
+          <div class="lcAylHealth__overlayCard lcAylHealth__infoCard" role="dialog" aria-modal="true" aria-label="מה כולל הכיסוי">
+            <div class="lcAylHealth__infoHead">
+              <div class="lcAylHealth__infoTitle">מה כולל הכיסוי</div>
+              <button type="button" class="lcAylHealth__infoClose" data-aylh-info-close="1" aria-label="סגור">✕</button>
+            </div>
+            <div class="lcAylHealth__infoCoverName">${escapeHtml(infoCover.label || "")}</div>
+            <div class="lcAylHealth__infoBody">${infoBody || `<div class="lcAylHealth__infoLine lcAylHealth__infoLine--text">אין תיאור זמין לכיסוי זה.</div>`}</div>
+            <div class="lcAylHealth__infoFoot">
+              <button type="button" class="btn btn--primary" data-aylh-info-close="1">סגור</button>
+            </div>
+          </div>
+        </div>` : "";
       const confirmOverlayHtml = this._confirmSwitch ? `
         <div class="lcAylHealth__overlay">
           <div class="lcAylHealth__overlayCard">
@@ -31896,6 +31941,7 @@ UsersGateUI.init();
             ${resultHtml}
           </div>
           ${footHtml}
+          ${infoOverlayHtml}
           ${confirmOverlayHtml}
         </div>`;
       this._bind();
@@ -31976,6 +32022,20 @@ UsersGateUI.init();
         st.dirtySinceSave = true;
         this._render();
       }));
+      $$("[data-aylh-info]", modal).forEach((el) => on(el, "click", (ev) => {
+        try { ev.preventDefault(); ev.stopPropagation(); } catch(_e) {}
+        this._infoCoverId = el.getAttribute("data-aylh-info") || null;
+        this._render();
+      }));
+      $$("[data-aylh-info-close]", modal).forEach((el) => on(el, "click", (ev) => {
+        try { ev.preventDefault(); ev.stopPropagation(); } catch(_e) {}
+        // לחיצה על הרקע סוגרת; לחיצה בתוך הכרטיס לא (למעט כפתורי סגור)
+        if(el.classList.contains("lcAylHealth__overlay--info") && ev.target !== el) return;
+        this._infoCoverId = null;
+        this._render();
+      }));
+      const infoCard = modal.querySelector(".lcAylHealth__infoCard");
+      if(infoCard) on(infoCard, "click", (ev) => { try { ev.stopPropagation(); } catch(_e) {} });
       const applyBtn = modal.querySelector("[data-aylh-apply]");
       if(applyBtn) on(applyBtn, "click", () => this._apply());
       const saveBtn = modal.querySelector("[data-aylh-save]");
