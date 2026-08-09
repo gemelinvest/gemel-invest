@@ -1384,25 +1384,6 @@
 #lcWizard .lcHealthQuickPick__icon:not(#\9):not(#\9){ border-radius: 0 !important; background: var(--uf-accent-soft) !important; color: var(--uf-accent) !important; }
 #lcWizard .lcHealthQuickPick__title:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
 
-/* GI-PERF 2026-08-09: פחות blur בשכבות שנפתחות/נסגרות הרבה — פחות עלות paint במעברי תפריט/מודל */
-.nav__item,
-.sidebar,
-.lcLogin__card,
-.giValModal__backdrop,
-.lcWizard__backdrop{
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-}
-@media (prefers-reduced-motion: reduce){
-  .nav__item,
-  .sidebar .nav__item,
-  .view,
-  .giValModal__card{
-    transition: none !important;
-    animation: none !important;
-  }
-}
-
 /* מודאל עריכת תשובת בריאות (נוצר ב-JS, לא בתוך #lcWizard) */
 .lcHealthDetailModal .lcHealthDetailModal__panel:not(#\9):not(#\9){
   border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important; box-shadow: none !important;
