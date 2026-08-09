@@ -26066,23 +26066,14 @@ UsersGateUI.init();
 
     buildTodaySalesMetrics(){
       const todayRange = this.getTodayRange();
-      const cacheKey = this.getMetricsCacheKey() + "|today|" + todayRange.start.toISOString().slice(0, 10);
+      const cacheKey = this.getMetricsCacheKey() + "|today|" + todayRange.start.toISOString().slice(0, 10) + "|elemV1";
       if(this._todaySalesCacheKey === cacheKey && this._todaySalesCache){
         return this._todaySalesCache;
       }
-      /* GI-FIX 2026-08-09 — בלי payloads מציגים ₪0 (לא «טוען…»), ולא שומרים במטמון
-         כדי שאחרי hydration החישוב ירוץ מחדש. */
+      let missingPayloads = 0;
       try {
-        if(typeof Storage !== "undefined" && Storage.countMissingCustomerPayloads
-          && Storage.countMissingCustomerPayloads() > 0){
-          return {
-            totalPremium: 0,
-            totalPolicies: 0,
-            newClients: 0,
-            breakdown: [],
-            _pendingHydration: false,
-            _loading: true
-          };
+        if(typeof Storage !== "undefined" && Storage.countMissingCustomerPayloads){
+          missingPayloads = Number(Storage.countMissingCustomerPayloads()) || 0;
         }
       } catch(_e) {}
       const customersAll = this.getVisibleCustomers();
@@ -26101,6 +26092,7 @@ UsersGateUI.init();
         'סרטן':            'סרטן',
         'רכב':             'רכב',
         'דירה':            'דירה',
+        'מוצר אלמנטרי':    'אלמנטרי',
       };
 
       const byProduct = {};  // { label: { count, premium } }
@@ -26108,23 +26100,40 @@ UsersGateUI.init();
       let totalPolicies = 0;
       const countedCustomers = new Set();
 
+      const bump = (label, premium) => {
+        const key = safeTrim(label) || "אחר";
+        if(!byProduct[key]) byProduct[key] = { count: 0, premium: 0 };
+        byProduct[key].count += 1;
+        byProduct[key].premium += premium;
+        totalPremium += premium;
+        totalPolicies += 1;
+      };
+
       customersAll.forEach((rec) => {
+        // GI-FIX: לא נועלים את כל הכרטיס על ₪0 בגלל לקוח אחד בלי payload —
+        // מחשבים ממה שכבר מלא, ומסמנים _loading אם עדיין יש חסרים.
+        try {
+          if(typeof Storage !== "undefined" && Storage.payloadIsEmpty?.(rec)) return;
+        } catch(_e) {}
+
         const newPolicies = CustomersUI.collectNewPoliciesForMetrics(rec, {
           range: todayRange,
           resolveCustomerMonthStamp: (row) => this.resolveCustomerMonthStamp(row),
           isWithinRange: (stamp, monthRange) => this.isWithinRange(stamp, monthRange)
         });
-        if(!newPolicies.length) return;
+        // אותה לוגיקה כמו דוח המכירות היומי — אלמנטרי ב-elementaryPolicies, לא ב-newPolicies
+        const elementarySales = this._collectDailyElementarySales(rec, todayRange);
+        if(!newPolicies.length && !elementarySales.length) return;
         countedCustomers.add(rec.id);
         newPolicies.forEach((p) => {
           const premium = this.policyNetPremium(p);
-          const rawType = safeTrim(p?.type || '');
-          const label = PRODUCT_LABELS[rawType] || (rawType || 'אחר');
-          if(!byProduct[label]) byProduct[label] = { count: 0, premium: 0 };
-          byProduct[label].count += 1;
-          byProduct[label].premium += premium;
-          totalPremium += premium;
-          totalPolicies += 1;
+          const rawType = safeTrim(p?.type || "");
+          bump(PRODUCT_LABELS[rawType] || (rawType || "אחר"), premium);
+        });
+        elementarySales.forEach((row) => {
+          const premium = Number(row?.premium) || 0;
+          const rawType = safeTrim(row?.product || "");
+          bump(PRODUCT_LABELS[rawType] || (rawType || "אלמנטרי"), premium);
         });
       });
 
@@ -26138,9 +26147,16 @@ UsersGateUI.init();
         totalPolicies,
         newClients: countedCustomers.size,
         breakdown,
+        _loading: missingPayloads > 0
       };
-      this._todaySalesCacheKey = cacheKey;
-      this._todaySalesCache = result;
+      // לא שומרים במטמון בזמן hydration — כדי שאחרי מילוי payload החישוב ירוץ מחדש
+      if(missingPayloads <= 0){
+        this._todaySalesCacheKey = cacheKey;
+        this._todaySalesCache = result;
+      } else {
+        this._todaySalesCacheKey = "";
+        this._todaySalesCache = null;
+      }
       return result;
     },
 
