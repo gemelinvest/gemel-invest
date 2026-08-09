@@ -30619,6 +30619,188 @@ UsersGateUI.init();
   RiskSimulators.register("הפניקס", "ריסק משכנתא", PhoenixMortgageRiskSimulator);
   // ===== סוף GI-PHX-MORT-RISK-SIM =================================================
 
+  // ===== GI-HEALTH-CPI 2026-08-09 · הצמדת פרמיות בריאות למדד המחירים לצרכן =====
+  // מקור מדד: API למ״ס (סדרה 120010 — מדד המחירים לצרכן כללי).
+  // נוסחה: פרמיה_צמודה = פרמיית_תעריפון × (מדד_נוכחי ÷ מדד_בסיס_CBS_לחודש_התעריפון)
+  // מדד הבסיס בנקודות מה-PDF מוצג למשתמש; החישוב בפועל נשען על יחס CBS
+  // בין חודש בסיס התעריפון לחודש המדד האחרון שפורסם (אותה סדרה מקושרת).
+  const HealthCpi = {
+    CBS_SERIES_ID: 120010,
+    CACHE_KEY: "gi_health_cpi_v1",
+    LINK_BASE_DESC: "2022 ממוצע",
+    TARIFFS: {
+      menora_health: {
+        company: "מנורה",
+        product: "בריאות",
+        // PDF מנורה: "הסכומים נכונים למדד הידוע ביום 01.09.2023 שערכו 136.84 נקודות"
+        baseIndexPoints: 136.84,
+        baseKnownDate: "2023-09-01",
+        // ב-1.9 המדד הידוע הוא בדרך-כלל של יולי (אוגוסט עוד לא פורסם)
+        cbsBasePeriod: "07-2023"
+      },
+      ayalon_health: {
+        company: "איילון",
+        product: "בריאות",
+        // PDF איילון מהדורת יוני 2026 — "הפרמיה צמודה למדד 142.34"
+        baseIndexPoints: 142.34,
+        baseKnownDate: "2026-06-01",
+        cbsBasePeriod: "06-2026"
+      }
+    },
+    _mem: null,
+    _loading: null,
+    _listeners: [],
+
+    _readLocal(){
+      try {
+        const raw = localStorage.getItem(this.CACHE_KEY);
+        if(!raw) return null;
+        const parsed = JSON.parse(raw);
+        if(!parsed || typeof parsed !== "object") return null;
+        return parsed;
+      } catch(_e){ return null; }
+    },
+    _writeLocal(payload){
+      try { localStorage.setItem(this.CACHE_KEY, JSON.stringify(payload)); } catch(_e){}
+    },
+    _linkedValue(entry){
+      if(!entry || !entry.currBase) return null;
+      if(entry.currBase.baseDesc === this.LINK_BASE_DESC){
+        const v = Number(entry.currBase.value);
+        return Number.isFinite(v) ? v : null;
+      }
+      const prev = Array.isArray(entry.prevBase) ? entry.prevBase : [];
+      for(let i = 0; i < prev.length; i++){
+        if(prev[i]?.baseDesc === this.LINK_BASE_DESC){
+          const v = Number(prev[i].value);
+          return Number.isFinite(v) ? v : null;
+        }
+      }
+      const v = Number(entry.currBase.value);
+      return Number.isFinite(v) ? v : null;
+    },
+    async _fetchCbs(params){
+      const url = "https://api.cbs.gov.il/index/data/price?id=" + this.CBS_SERIES_ID +
+        "&format=json&download=false&lang=he&coef=true&" + params;
+      const res = await fetch(url, { headers: { "Accept": "application/json" } });
+      if(!res.ok) throw new Error("cbs_http_" + res.status);
+      const data = await res.json();
+      const entry = data?.month?.[0]?.date?.[0];
+      if(!entry) throw new Error("cbs_empty");
+      const linked = this._linkedValue(entry);
+      if(linked == null) throw new Error("cbs_link_missing");
+      return {
+        year: entry.year,
+        month: entry.month,
+        monthDesc: entry.monthDesc || "",
+        linked,
+        currBaseDesc: entry.currBase?.baseDesc || "",
+        currBaseValue: Number(entry.currBase?.value) || null
+      };
+    },
+    async refresh(){
+      const current = await this._fetchCbs("last=1");
+      const bases = {};
+      const keys = Object.keys(this.TARIFFS);
+      for(let i = 0; i < keys.length; i++){
+        const key = keys[i];
+        const t = this.TARIFFS[key];
+        const base = await this._fetchCbs("startPeriod=" + encodeURIComponent(t.cbsBasePeriod) +
+          "&endPeriod=" + encodeURIComponent(t.cbsBasePeriod));
+        bases[key] = base;
+      }
+      const payload = {
+        fetchedAt: new Date().toISOString(),
+        current,
+        bases,
+        source: "cbs"
+      };
+      this._mem = payload;
+      this._writeLocal(payload);
+      this._listeners.slice().forEach((fn) => { try { fn(payload); } catch(_e){} });
+      return payload;
+    },
+    ensure(){
+      if(this._mem) return Promise.resolve(this._mem);
+      const local = this._readLocal();
+      if(local?.current?.linked != null){
+        this._mem = local;
+        // רענון ברקע אם המטמון ישן מ-12 שעות
+        const ageMs = Date.now() - Date.parse(local.fetchedAt || 0);
+        if(!(Number.isFinite(ageMs) && ageMs < 12 * 3600 * 1000)){
+          if(!this._loading){
+            this._loading = this.refresh().catch(() => local).finally(() => { this._loading = null; });
+          }
+        }
+        return Promise.resolve(this._mem);
+      }
+      if(this._loading) return this._loading;
+      this._loading = this.refresh()
+        .catch((err) => {
+          const fallback = this._readLocal();
+          if(fallback?.current?.linked != null){
+            this._mem = fallback;
+            return fallback;
+          }
+          throw err;
+        })
+        .finally(() => { this._loading = null; });
+      return this._loading;
+    },
+    onChange(fn){
+      if(typeof fn === "function") this._listeners.push(fn);
+      return () => { this._listeners = this._listeners.filter((x) => x !== fn); };
+    },
+    /** מחזיר מידע הצמדה סינכרוני מהמטמון. factor=1 אם אין מדד עדיין. */
+    getIndexInfo(tariffKey){
+      const tariff = this.TARIFFS[tariffKey];
+      if(!tariff){
+        return { ok:false, factor:1, reason:"tariff_missing", tariffKey };
+      }
+      const mem = this._mem || this._readLocal();
+      const current = mem?.current;
+      const base = mem?.bases?.[tariffKey];
+      if(!current?.linked || !base?.linked){
+        return {
+          ok: false,
+          factor: 1,
+          reason: "cpi_pending",
+          tariffKey,
+          baseIndexPoints: tariff.baseIndexPoints,
+          baseKnownDate: tariff.baseKnownDate,
+          company: tariff.company
+        };
+      }
+      const factor = current.linked / base.linked;
+      if(!(Number.isFinite(factor) && factor > 0)){
+        return { ok:false, factor:1, reason:"cpi_bad_factor", tariffKey };
+      }
+      // מדד נוכחי בנקודות תעריפון ≈ בסיס_PDF × יחס CBS
+      const currentIndexPoints = Math.round(tariff.baseIndexPoints * factor * 100) / 100;
+      return {
+        ok: true,
+        factor,
+        tariffKey,
+        company: tariff.company,
+        baseIndexPoints: tariff.baseIndexPoints,
+        baseKnownDate: tariff.baseKnownDate,
+        currentIndexPoints,
+        currentMonthLabel: (current.monthDesc || "") + " " + (current.year || ""),
+        baseMonthLabel: (base.monthDesc || "") + " " + (base.year || ""),
+        fetchedAt: mem.fetchedAt || "",
+        source: mem.source || "cbs"
+      };
+    },
+    /** עיגול לאגורה אחרי הצמדה */
+    indexAgorot(baseAgorot, tariffKey){
+      const info = this.getIndexInfo(tariffKey);
+      const factor = info.factor || 1;
+      const indexedAgorot = Math.round(Number(baseAgorot) * factor);
+      return { baseAgorot: Number(baseAgorot) || 0, indexedAgorot, factor, indexInfo: info };
+    }
+  };
+  try { window.HealthCpi = HealthCpi; } catch(_e){}
+
   // ===== GI-MNR-HEALTH-SIM 2026-08-09 · סימולטור בריאות מנורה ==================
   // מקור אמת: תעריפי בריאות מנורה (תכניות בסיס/ניתוחים + אמבולטורי/כתבי שירות).
   // מחלות קשות / סרטן — סימולטורים נפרדים (לא כאן).
@@ -30826,7 +31008,10 @@ UsersGateUI.init();
 
   const MENORA_HEALTH_COVER_BY_ID = MENORA_HEALTH_COVERS.reduce((acc, c) => { acc[c.id] = c; return acc; }, {});
 
-  /** מחשב פרמיה חודשית לכיסוי בודד. מחזיר {ok, monthlyPremium, monthlyAgorot, reason?} */
+  const MENORA_HEALTH_CPI_KEY = "menora_health";
+
+  /** מחשב פרמיה חודשית לכיסוי בודד. מחזיר {ok, monthlyPremium, monthlyAgorot, reason?}
+      monthlyPremium/monthlyAgorot = אחרי הצמדה למדד; base* = תעריפון PDF לפני הצמדה. */
   function computeMenoraHealthCoverPremium(coverId, age, gender){
     const cover = MENORA_HEALTH_COVER_BY_ID[coverId];
     if(!cover) return { ok:false, reason:"cover_missing" };
@@ -30844,36 +31029,71 @@ UsersGateUI.init();
       agorot = band.agorot;
     }
     if(!Number.isInteger(agorot)) return { ok:false, reason:"rate_missing" };
-    return { ok:true, monthlyAgorot: agorot, monthlyPremium: menoraHealthAgorotToShekels(agorot), coverId: cover.id, label: cover.label };
+    const indexed = HealthCpi.indexAgorot(agorot, MENORA_HEALTH_CPI_KEY);
+    return {
+      ok: true,
+      coverId: cover.id,
+      label: cover.label,
+      baseMonthlyAgorot: indexed.baseAgorot,
+      baseMonthlyPremium: menoraHealthAgorotToShekels(indexed.baseAgorot),
+      monthlyAgorot: indexed.indexedAgorot,
+      monthlyPremium: menoraHealthAgorotToShekels(indexed.indexedAgorot),
+      indexFactor: indexed.factor,
+      indexInfo: indexed.indexInfo
+    };
   }
 
-  /** מחשב סל כיסויים נבחרים — סכום אגורות מדויק */
+  /** מחשב סל כיסויים נבחרים — סכום אגורות מדויק (אחרי הצמדה) */
   function computeMenoraHealthBundle(selectedIds, age, gender){
     const ids = Array.isArray(selectedIds) ? selectedIds : [];
     if(!ids.length) return { ok:false, reason:"covers_missing", covers:[], monthlyAgorot:0, monthlyPremium:0, annualPremium:0 };
     const covers = [];
     let totalAg = 0;
+    let totalBaseAg = 0;
+    let indexInfo = null;
     for(let i = 0; i < ids.length; i++){
       const one = computeMenoraHealthCoverPremium(ids[i], age, gender);
       if(!one.ok) return { ok:false, reason: one.reason, failCoverId: ids[i], coverMaxAge: one.coverMaxAge, covers:[], monthlyAgorot:0, monthlyPremium:0, annualPremium:0 };
       const meta = MENORA_HEALTH_COVER_BY_ID[one.coverId];
+      if(!indexInfo) indexInfo = one.indexInfo || null;
       covers.push({
         id: one.coverId,
         label: one.label,
         wizardKey: meta?.wizardKey || one.label,
         monthlyPremium: one.monthlyPremium,
-        monthlyAgorot: one.monthlyAgorot
+        monthlyAgorot: one.monthlyAgorot,
+        baseMonthlyPremium: one.baseMonthlyPremium,
+        baseMonthlyAgorot: one.baseMonthlyAgorot
       });
       totalAg += one.monthlyAgorot;
+      totalBaseAg += one.baseMonthlyAgorot;
     }
-    const monthly = menoraHealthAgorotToShekels(totalAg);
     return {
       ok: true,
       covers,
       monthlyAgorot: totalAg,
-      monthlyPremium: monthly,
-      annualPremium: menoraHealthAgorotToShekels(totalAg * 12)
+      monthlyPremium: menoraHealthAgorotToShekels(totalAg),
+      annualPremium: menoraHealthAgorotToShekels(totalAg * 12),
+      baseMonthlyAgorot: totalBaseAg,
+      baseMonthlyPremium: menoraHealthAgorotToShekels(totalBaseAg),
+      indexFactor: indexInfo?.factor || 1,
+      indexInfo
     };
+  }
+
+  function formatMenoraHealthIndexMetaHtml(indexInfo){
+    if(!indexInfo) return "";
+    if(!indexInfo.ok){
+      return `<div class="lcMnrHealth__indexMeta lcMnrHealth__indexMeta--pending">ממתין למדד למ״ס — מוצגת כרגע פרמיית בסיס מהתעריפון</div>`;
+    }
+    const factorTxt = (Math.round(indexInfo.factor * 10000) / 10000).toFixed(4);
+    return `<div class="lcMnrHealth__indexMeta">
+      הצמדה למדד: בסיס ${escapeHtml(String(indexInfo.baseIndexPoints))}
+      (${escapeHtml(indexInfo.baseKnownDate || "")})
+      → נוכחי ≈ ${escapeHtml(String(indexInfo.currentIndexPoints))}
+      (${escapeHtml(safeTrim(indexInfo.currentMonthLabel))})
+      · מקדם ×${escapeHtml(factorTxt)}
+    </div>`;
   }
 
   const MENORA_HEALTH_SIM_MESSAGES = {
@@ -30896,6 +31116,7 @@ UsersGateUI.init();
     _escHandler: null,
     _confirmSwitch: null,
     _showFinalSummary: false,
+    _cpiUnsub: null,
 
     open(ctx){
       this.close();
@@ -30908,6 +31129,8 @@ UsersGateUI.init();
       this._showFinalSummary = false;
       this._mount();
       this._render();
+      this._cpiUnsub = HealthCpi.onChange(() => { if(this._modal) this._render(); });
+      HealthCpi.ensure().then(() => { if(this._modal) this._render(); }).catch(() => {});
     },
 
     _prefillFromInsured(ins){
@@ -30942,6 +31165,7 @@ UsersGateUI.init();
     _isInsuredRelevant(_ins){ return true; },
 
     close(){
+      if(this._cpiUnsub){ try { this._cpiUnsub(); } catch(_e){} this._cpiUnsub = null; }
       if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; }
       if(this._modal){
         const m = this._modal;
@@ -31077,13 +31301,19 @@ UsersGateUI.init();
         `<div class="lcMnrHealth__selRow"><span>${escapeHtml(c.label)}</span><strong>₪${escapeHtml(formatMenoraHealthExactAmount(c.monthlyPremium))}</strong></div>`
       ).join("");
 
+      const indexMetaHtml = formatMenoraHealthIndexMetaHtml(st.result?.indexInfo || HealthCpi.getIndexInfo(MENORA_HEALTH_CPI_KEY));
+      const baseTotalHtml = (st.result?.ok && st.result.baseMonthlyPremium != null && Math.abs(st.result.baseMonthlyPremium - st.result.monthlyPremium) > 0.0001)
+        ? `<div class="lcMnrHealth__resultRow"><span>פרמיית בסיס (לפני מדד)</span><strong>₪${escapeHtml(formatMenoraHealthExactAmount(st.result.baseMonthlyPremium))}</strong></div>`
+        : "";
       const resultHtml = st.error
         ? `<div class="lcMnrHealth__result lcMnrHealth__result--error">${escapeHtml(st.error)}</div>`
         : (st.result ? `<div class="lcMnrHealth__result lcMnrHealth__result--ok">
             <div class="lcMnrHealth__selTitle">כיסויים שנבחרו</div>
             ${selectedRows}
-            <div class="lcMnrHealth__resultRow lcMnrHealth__resultRow--main"><span>סה״כ פרמיה חודשית</span><strong>₪${escapeHtml(formatMenoraHealthExactAmount(st.result.monthlyPremium))}</strong></div>
+            ${baseTotalHtml}
+            <div class="lcMnrHealth__resultRow lcMnrHealth__resultRow--main"><span>סה״כ פרמיה חודשית (צמודה למדד)</span><strong>₪${escapeHtml(formatMenoraHealthExactAmount(st.result.monthlyPremium))}</strong></div>
             <div class="lcMnrHealth__resultRow"><span>סה״כ פרמיה שנתית</span><strong>₪${escapeHtml(formatMenoraHealthExactAmount(st.result.annualPremium))}</strong></div>
+            ${indexMetaHtml}
           </div>` : `<div class="lcMnrHealth__result lcMnrHealth__result--empty">סמנו כיסויים כדי לראות פרמיה</div>`);
 
       const occAssessment = assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product);
@@ -31330,9 +31560,10 @@ UsersGateUI.init();
   // ===== סוף GI-MNR-HEALTH-SIM ====================================================
 
   // ===== GI-AYL-HEALTH-SIM 2026-08-09 · סימולטור בריאות איילון ==================
-  // מקור אמת: תעריפי בריאות איילון.pdf (ינואר 2026) — תכניות בסיס/ניתוחים + אמבולטורי/כתבי שירות.
+  // מקור אמת: תעריפי בריאות איילון.pdf (מהדורת יוני 2026) — תכניות בסיס/ניתוחים + אמבולטורי/כתבי שירות.
   // מחלות קשות / סרטן (בשביל החוסן) — סימולטורים נפרדים (לא כאן).
   // כל התעריפים באגורות (שלמים) כדי למנוע סטיית floating-point.
+  // פרמיות מוצגות צמודות למדד (HealthCpi · ayalon_health).
 
   const AYALON_HEALTH_MIN_AGE = 0;
   const AYALON_HEALTH_MAX_AGE = 75;
@@ -31576,7 +31807,9 @@ UsersGateUI.init();
 
   const AYALON_HEALTH_COVER_BY_ID = AYALON_HEALTH_COVERS.reduce((acc, c) => { acc[c.id] = c; return acc; }, {});
 
-  /** מחשב פרמיה חודשית לכיסוי בודד. מחזיר {ok, monthlyPremium, monthlyAgorot, reason?} */
+  const AYALON_HEALTH_CPI_KEY = "ayalon_health";
+
+  /** מחשב פרמיה חודשית לכיסוי בודד — אחרי הצמדה למדד (base* = תעריפון PDF). */
   function computeAyalonHealthCoverPremium(coverId, age, gender){
     const cover = AYALON_HEALTH_COVER_BY_ID[coverId];
     if(!cover) return { ok:false, reason:"cover_missing" };
@@ -31595,36 +31828,71 @@ UsersGateUI.init();
       agorot = band.agorot;
     }
     if(!Number.isInteger(agorot)) return { ok:false, reason:"rate_missing" };
-    return { ok:true, monthlyAgorot: agorot, monthlyPremium: ayalonHealthAgorotToShekels(agorot), coverId: cover.id, label: cover.label };
+    const indexed = HealthCpi.indexAgorot(agorot, AYALON_HEALTH_CPI_KEY);
+    return {
+      ok: true,
+      coverId: cover.id,
+      label: cover.label,
+      baseMonthlyAgorot: indexed.baseAgorot,
+      baseMonthlyPremium: ayalonHealthAgorotToShekels(indexed.baseAgorot),
+      monthlyAgorot: indexed.indexedAgorot,
+      monthlyPremium: ayalonHealthAgorotToShekels(indexed.indexedAgorot),
+      indexFactor: indexed.factor,
+      indexInfo: indexed.indexInfo
+    };
   }
 
-  /** מחשב סל כיסויים נבחרים — סכום אגורות מדויק */
+  /** מחשב סל כיסויים נבחרים — סכום אגורות מדויק (אחרי הצמדה) */
   function computeAyalonHealthBundle(selectedIds, age, gender){
     const ids = Array.isArray(selectedIds) ? selectedIds : [];
     if(!ids.length) return { ok:false, reason:"covers_missing", covers:[], monthlyAgorot:0, monthlyPremium:0, annualPremium:0 };
     const covers = [];
     let totalAg = 0;
+    let totalBaseAg = 0;
+    let indexInfo = null;
     for(let i = 0; i < ids.length; i++){
       const one = computeAyalonHealthCoverPremium(ids[i], age, gender);
       if(!one.ok) return { ok:false, reason: one.reason, failCoverId: ids[i], coverMaxAge: one.coverMaxAge, covers:[], monthlyAgorot:0, monthlyPremium:0, annualPremium:0 };
       const meta = AYALON_HEALTH_COVER_BY_ID[one.coverId];
+      if(!indexInfo) indexInfo = one.indexInfo || null;
       covers.push({
         id: one.coverId,
         label: one.label,
         wizardKey: meta?.wizardKey || one.label,
         monthlyPremium: one.monthlyPremium,
-        monthlyAgorot: one.monthlyAgorot
+        monthlyAgorot: one.monthlyAgorot,
+        baseMonthlyPremium: one.baseMonthlyPremium,
+        baseMonthlyAgorot: one.baseMonthlyAgorot
       });
       totalAg += one.monthlyAgorot;
+      totalBaseAg += one.baseMonthlyAgorot;
     }
-    const monthly = ayalonHealthAgorotToShekels(totalAg);
     return {
       ok: true,
       covers,
       monthlyAgorot: totalAg,
-      monthlyPremium: monthly,
-      annualPremium: ayalonHealthAgorotToShekels(totalAg * 12)
+      monthlyPremium: ayalonHealthAgorotToShekels(totalAg),
+      annualPremium: ayalonHealthAgorotToShekels(totalAg * 12),
+      baseMonthlyAgorot: totalBaseAg,
+      baseMonthlyPremium: ayalonHealthAgorotToShekels(totalBaseAg),
+      indexFactor: indexInfo?.factor || 1,
+      indexInfo
     };
+  }
+
+  function formatAyalonHealthIndexMetaHtml(indexInfo){
+    if(!indexInfo) return "";
+    if(!indexInfo.ok){
+      return `<div class="lcAylHealth__indexMeta lcAylHealth__indexMeta--pending">ממתין למדד למ״ס — מוצגת כרגע פרמיית בסיס מהתעריפון</div>`;
+    }
+    const factorTxt = (Math.round(indexInfo.factor * 10000) / 10000).toFixed(4);
+    return `<div class="lcAylHealth__indexMeta">
+      הצמדה למדד: בסיס ${escapeHtml(String(indexInfo.baseIndexPoints))}
+      (${escapeHtml(indexInfo.baseKnownDate || "")})
+      → נוכחי ≈ ${escapeHtml(String(indexInfo.currentIndexPoints))}
+      (${escapeHtml(safeTrim(indexInfo.currentMonthLabel))})
+      · מקדם ×${escapeHtml(factorTxt)}
+    </div>`;
   }
 
   const AYALON_HEALTH_SIM_MESSAGES = {
@@ -31647,6 +31915,7 @@ UsersGateUI.init();
     _escHandler: null,
     _confirmSwitch: null,
     _showFinalSummary: false,
+    _cpiUnsub: null,
 
     open(ctx){
       this.close();
@@ -31660,6 +31929,8 @@ UsersGateUI.init();
       this._infoCoverId = null;
       this._mount();
       this._render();
+      this._cpiUnsub = HealthCpi.onChange(() => { if(this._modal) this._render(); });
+      HealthCpi.ensure().then(() => { if(this._modal) this._render(); }).catch(() => {});
     },
 
     _prefillFromInsured(ins){
@@ -31694,6 +31965,7 @@ UsersGateUI.init();
     _isInsuredRelevant(_ins){ return true; },
 
     close(){
+      if(this._cpiUnsub){ try { this._cpiUnsub(); } catch(_e){} this._cpiUnsub = null; }
       if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; }
       if(this._modal){
         const m = this._modal;
@@ -31833,13 +32105,19 @@ UsersGateUI.init();
         `<div class="lcAylHealth__selRow"><span>${escapeHtml(c.label)}</span><strong>₪${escapeHtml(formatAyalonHealthExactAmount(c.monthlyPremium))}</strong></div>`
       ).join("");
 
+      const indexMetaHtml = formatAyalonHealthIndexMetaHtml(st.result?.indexInfo || HealthCpi.getIndexInfo(AYALON_HEALTH_CPI_KEY));
+      const baseTotalHtml = (st.result?.ok && st.result.baseMonthlyPremium != null && Math.abs(st.result.baseMonthlyPremium - st.result.monthlyPremium) > 0.0001)
+        ? `<div class="lcAylHealth__resultRow"><span>פרמיית בסיס (לפני מדד)</span><strong>₪${escapeHtml(formatAyalonHealthExactAmount(st.result.baseMonthlyPremium))}</strong></div>`
+        : "";
       const resultHtml = st.error
         ? `<div class="lcAylHealth__result lcAylHealth__result--error">${escapeHtml(st.error)}</div>`
         : (st.result ? `<div class="lcAylHealth__result lcAylHealth__result--ok">
             <div class="lcAylHealth__selTitle">כיסויים שנבחרו</div>
             ${selectedRows}
-            <div class="lcAylHealth__resultRow lcAylHealth__resultRow--main"><span>סה״כ פרמיה חודשית</span><strong>₪${escapeHtml(formatAyalonHealthExactAmount(st.result.monthlyPremium))}</strong></div>
+            ${baseTotalHtml}
+            <div class="lcAylHealth__resultRow lcAylHealth__resultRow--main"><span>סה״כ פרמיה חודשית (צמודה למדד)</span><strong>₪${escapeHtml(formatAyalonHealthExactAmount(st.result.monthlyPremium))}</strong></div>
             <div class="lcAylHealth__resultRow"><span>סה״כ פרמיה שנתית</span><strong>₪${escapeHtml(formatAyalonHealthExactAmount(st.result.annualPremium))}</strong></div>
+            ${indexMetaHtml}
           </div>` : `<div class="lcAylHealth__result lcAylHealth__result--empty">סמנו כיסויים כדי לראות פרמיה</div>`);
 
       const occAssessment = assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product);
