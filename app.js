@@ -2197,6 +2197,24 @@
     return PAYLOAD_HYDRATION_DEFAULT_CAP;
   }
 
+  /* GI-FIX 2026-08-09c — Resident payload LRU cap.
+     רקע: GI_HYDRATION_CAP (למעלה) מגביל כמה לקוחות חדשים מקבלים payload
+     בכל login בודד — אבל payloads שכבר נטענו (session קודם, מטמון IDB)
+     נשארים "לא ריקים" ולא נספרים כ"חסרים", כך שלאורך זמן/logins רבים כמות
+     התיקים המלאים בזיכרון עדיין יכולה לטפס בהדרגה לכל 52,000+ הבסיס.
+     GI_HYDRATION_RESIDENT_CAP קובע תקרה עליונה כמה תיקים מלאים שוכנים
+     בזיכרון בו-זמנית — ראו Storage.enforceResidentPayloadCap. */
+  const PAYLOAD_RESIDENT_CAP_DEFAULT = 3000;
+
+  function getPayloadResidentCap(){
+    try {
+      const raw = localStorage.getItem("GI_HYDRATION_RESIDENT_CAP");
+      const n = Number(raw);
+      if(raw != null && Number.isFinite(n) && n >= 0) return n;
+    } catch(_e) {}
+    return PAYLOAD_RESIDENT_CAP_DEFAULT;
+  }
+
   // ---------- State ----------
 
   function normalizeUsersManagementAccess(raw){
@@ -11396,6 +11414,50 @@
       return keys.every((k) => ownershipOnly.has(k));
     },
 
+    /* GI-FIX 2026-08-09c — סימון "נגיש עכשיו" לצורך LRU. במתכוון לא נשמר על
+       הרשומה עצמה (normalizeCustomerRecord מחזירה אובייקט עם שדות קבועים
+       בלבד — שדה זר היה נמחק בכל נורמליזציה חוזרת, ועלול אף להישלח בטעות
+       לשרת). Map בזיכרון, per-session, מספיק לצורך הפינוי. */
+    touchCustomerAccess(id){
+      const key = safeTrim(id);
+      if(!key) return;
+      if(!this._customerAccessLru) this._customerAccessLru = new Map();
+      this._customerAccessLru.set(key, Date.now());
+    },
+
+    /* GI-FIX 2026-08-09c — Resident payload LRU eviction.
+       שומרת תקרה עליונה (GI_HYDRATION_RESIDENT_CAP) על כמות תיקי הלקוחות
+       עם payload מלא שמחזיקים בזיכרון בו-זמנית. מעל התקרה, התיקים
+       הכי-פחות-נגישים לאחרונה מפונים בחזרה למצב "רזה" (payload={}).
+       בטיחות: _omitEmptyPayloadForWrite כבר מוודא ש-payload ריק לעולם לא
+       נשלח כעדכון לשרת (המפתח פשוט נמחק מה-upsert) — כך שפינוי לא יכול
+       לדרוס נתונים אמיתיים בשרת. תיק שמפונה ונפתח שוב פשוט נטען מחדש
+       מהשרת דרך fetchCustomerRecordFromServer/ensureRecordPayload,
+       בדיוק כמו תיק שמעולם לא נטען. */
+    enforceResidentPayloadCap(){
+      try {
+        const list = Array.isArray(State.data?.customers) ? State.data.customers : [];
+        const resident = list.filter((rec) => !this.payloadIsEmpty(rec));
+        const cap = getPayloadResidentCap();
+        if(!Number.isFinite(cap) || cap <= 0 || resident.length <= cap) return { evicted: 0 };
+        const lru = this._customerAccessLru || (this._customerAccessLru = new Map());
+        resident.sort((a, b) => {
+          const at = lru.get(safeTrim(a?.id)) || 0;
+          const bt = lru.get(safeTrim(b?.id)) || 0;
+          return at - bt; // 0 (לא נגיש מעולם) נחשב הכי ישן — מפונה ראשון
+        });
+        const toEvict = resident.slice(0, resident.length - cap);
+        toEvict.forEach((rec) => {
+          rec.payload = {};
+          try { this._customerAccessLru.delete(safeTrim(rec?.id)); } catch(_e2) {}
+        });
+        try { console.info("HYDRATION_RESIDENT_EVICTED:", toEvict.length, "of", resident.length, "cap", cap); } catch(_e3) {}
+        return { evicted: toEvict.length };
+      } catch(err) {
+        return { evicted: 0, error: String(err?.message || err) };
+      }
+    },
+
     /* GI-FIX 2026-08-02: לא לשלוח payload ריק/stub ב-upsert — PostgREST מעדכן
        רק עמודות שנשלחו, כך שה-payload המלא בשרת נשמר.
        GI-FIX 2026-08-02b: גם stub עם primary+מונים נחסם (ראה payloadIsEmpty). */
@@ -11526,12 +11588,18 @@
               } catch(_e) {
                 rec.payload = payload;
               }
+              // GI-FIX 2026-08-09c: מסמן "נגיש עכשיו" כדי שרשומה שזה עתה
+              // מולאה לא תפונה מיידית ע"י enforceResidentPayloadCap למטה.
+              try { this.touchCustomerAccess(id); } catch(_e) {}
               filled += 1;
             });
             if(onBatch){ try { onBatch(filled, failed); } catch(_e) {} }
             await this.sleep(0);
           }
         }
+        // GI-FIX 2026-08-09c: אחרי מילוי — שומרים על תקרת תיקים מלאים
+        // בזיכרון (ראה enforceResidentPayloadCap למעלה).
+        try { this.enforceResidentPayloadCap(); } catch(_e) {}
         return { ok: failed === 0, filled, failed };
       } catch(err) {
         return { ok:false, error:String(err?.message || err), filled, failed };
@@ -11588,20 +11656,34 @@
           this.loadTableRows(SUPABASE_TABLES.proposals, initialProposalColumns)
         ]);
 
-        // רשת ביטחון: אם רשימת העמודות הרזה נדחתה (למשל עמודה שלא קיימת בסכימה),
-        // חוזרים להתנהגות הישנה של select * במקום להיכשל.
+        // רשת ביטחון: אם רשימת העמודות הרזה נדחתה בגלל בעיית סכימה (למשל עמודה
+        // שלא קיימת), חוזרים להתנהגות הישנה של select * במקום להיכשל — זה
+        // המקרה המקורי שלמענו נכתבה רשת הביטחון (ראה _isMissingColumnError).
+        // GI-FIX 2026-08-09d: לפני התיקון, ANY כשל בשאילתה הרזה (גם timeout/
+        // כשל רשת רגיל) הסלים ל-select * *מלא כולל payload* על כל טבלת
+        // הלקוחות. בהיקף של 52,000+ לקוחות זה בדיוק התרחיש שהערת GI-FIX
+        // 2026-07-28 הזהירה ממנו ("select(*) over customers (~62MB)... the
+        // DB ran out of memory") — רק שעכשיו ה-62MB ההיא היא כמה מאות MB עד
+        // כמה GB. כשל רגיל (רשת/timeout) צריך לחזור ככשל רגיל ולתת למסלולי
+        // ה-retry/cached-fallback הקיימים למטה לטפל בו — לא להסלים לעומס
+        // גדול יותר בדיוק כשהשרת כבר תחת עומס.
         let customersRes = customersLightRes;
         let proposalsRes = proposalsLightRes;
         let lightSelectUsed = LIGHT_INITIAL_LOAD_ENABLED;
         if(!customersRes.ok || !proposalsRes.ok){
-          try { console.warn("LIGHT_SELECT_FAILED_FALLBACK_TO_FULL:", safeTrim(customersRes.error) || safeTrim(proposalsRes.error)); } catch(_e) {}
-          lightSelectUsed = false;
-          const [cFull, pFull] = await Promise.all([
-            this.loadTableRows(SUPABASE_TABLES.customers),
-            this.loadTableRows(SUPABASE_TABLES.proposals)
-          ]);
-          customersRes = cFull;
-          proposalsRes = pFull;
+          const isSchemaIssue = this._isMissingColumnError(customersRes.error) || this._isMissingColumnError(proposalsRes.error);
+          if(isSchemaIssue){
+            try { console.warn("LIGHT_SELECT_SCHEMA_ERROR_FALLBACK_TO_FULL:", safeTrim(customersRes.error) || safeTrim(proposalsRes.error)); } catch(_e) {}
+            lightSelectUsed = false;
+            const [cFull, pFull] = await Promise.all([
+              this.loadTableRows(SUPABASE_TABLES.customers),
+              this.loadTableRows(SUPABASE_TABLES.proposals)
+            ]);
+            customersRes = cFull;
+            proposalsRes = pFull;
+          } else {
+            try { console.warn("LIGHT_SELECT_FAILED_NON_SCHEMA_NO_FULL_ESCALATION:", safeTrim(customersRes.error) || safeTrim(proposalsRes.error)); } catch(_e) {}
+          }
         }
         this._lastLoadWasLight = lightSelectUsed;
 
@@ -18482,6 +18564,10 @@ UsersGateUI.init();
     openById(id, opts={}){
       const rec = this.byId(id);
       if(!rec || !this.els.wrap) return;
+      // GI-FIX 2026-08-09c: כל פתיחת תיק מסמנת "נגיש עכשיו" לצורך
+      // Storage.enforceResidentPayloadCap (LRU) — תיק שנפתח בפועל הוא
+      // האחרון שצריך להתפנות מהזיכרון.
+      try { Storage.touchCustomerAccess(id); } catch(_e) {}
       // הקורא (openWithLoader) עוטף ב-try/catch סינכרוני, שלא תופס דחיית Promise —
       // לכן בולעים כאן ומדווחים ללוג, במקום unhandled rejection.
       if(Storage.payloadIsEmpty(rec)){
