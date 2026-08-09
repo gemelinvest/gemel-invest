@@ -30621,30 +30621,37 @@ UsersGateUI.init();
 
   // ===== GI-HEALTH-CPI 2026-08-09 · הצמדת פרמיות בריאות למדד המחירים לצרכן =====
   // מקור מדד: API למ״ס (סדרה 120010 — מדד המחירים לצרכן כללי).
-  // נוסחה: פרמיה_צמודה = פרמיית_תעריפון × (מדד_נוכחי ÷ מדד_בסיס_CBS_לחודש_התעריפון)
-  // מדד הבסיס בנקודות מה-PDF מוצג למשתמש; החישוב בפועל נשען על יחס CBS
-  // בין חודש בסיס התעריפון לחודש המדד האחרון שפורסם (אותה סדרה מקושרת).
+  //
+  // עוגן נקודות (כמו מנורה שעובד בפועל): מדד ידוע 136.84 ב־01.09.2023 (= CBS יולי 2023).
+  // מדד_נוכחי_בנקודות = 136.84 × (CBS_היום ÷ CBS_יולי_2023)
+  // פרמיה_צמודה = פרמיית_תעריפון × (מדד_נוכחי_בנקודות ÷ מדד_בסיס_של_הכיסוי_מה_PDF)
+  //
+  // איילון: בסיס 142.34 לרוב הכיסויים; 145.56 לאמבולטורי מורחב / ייעוץ ובדיקות.
   const HealthCpi = {
     CBS_SERIES_ID: 120010,
-    CACHE_KEY: "gi_health_cpi_v1",
+    CACHE_KEY: "gi_health_cpi_v2",
     LINK_BASE_DESC: "2022 ממוצע",
+    // עוגן משותף להמרת CBS → נקודות תעריפון (מאומת מול מנורה)
+    ANCHOR: {
+      points: 136.84,
+      knownDate: "2023-09-01",
+      cbsBasePeriod: "07-2023"
+    },
     TARIFFS: {
       menora_health: {
         company: "מנורה",
         product: "בריאות",
         // PDF מנורה: "הסכומים נכונים למדד הידוע ביום 01.09.2023 שערכו 136.84 נקודות"
         baseIndexPoints: 136.84,
-        baseKnownDate: "2023-09-01",
-        // ב-1.9 המדד הידוע הוא בדרך-כלל של יולי (אוגוסט עוד לא פורסם)
-        cbsBasePeriod: "07-2023"
+        baseKnownDate: "2023-09-01"
       },
       ayalon_health: {
         company: "איילון",
         product: "בריאות",
-        // PDF איילון מהדורת יוני 2026 — "הפרמיה צמודה למדד 142.34"
+        // PDF איילון מהדורת יוני 2026 — "הפרמיה צמודה למדד 142.34" (ברירת מחדל)
+        // כיסויי אמבולטורי מסוימים: 145.56 — מוגדר על הכיסוי עצמו
         baseIndexPoints: 142.34,
-        baseKnownDate: "2026-06-01",
-        cbsBasePeriod: "06-2026"
+        baseKnownDate: "מהדורת יוני 2026"
       }
     },
     _mem: null,
@@ -30657,6 +30664,8 @@ UsersGateUI.init();
         if(!raw) return null;
         const parsed = JSON.parse(raw);
         if(!parsed || typeof parsed !== "object") return null;
+        // דורש מבנה v2 (עם anchor)
+        if(!parsed.anchor?.linked || !parsed.current?.linked) return null;
         return parsed;
       } catch(_e){ return null; }
     },
@@ -30700,19 +30709,13 @@ UsersGateUI.init();
     },
     async refresh(){
       const current = await this._fetchCbs("last=1");
-      const bases = {};
-      const keys = Object.keys(this.TARIFFS);
-      for(let i = 0; i < keys.length; i++){
-        const key = keys[i];
-        const t = this.TARIFFS[key];
-        const base = await this._fetchCbs("startPeriod=" + encodeURIComponent(t.cbsBasePeriod) +
-          "&endPeriod=" + encodeURIComponent(t.cbsBasePeriod));
-        bases[key] = base;
-      }
+      const anchorPeriod = this.ANCHOR.cbsBasePeriod;
+      const anchor = await this._fetchCbs("startPeriod=" + encodeURIComponent(anchorPeriod) +
+        "&endPeriod=" + encodeURIComponent(anchorPeriod));
       const payload = {
         fetchedAt: new Date().toISOString(),
         current,
-        bases,
+        anchor,
         source: "cbs"
       };
       this._mem = payload;
@@ -30721,11 +30724,12 @@ UsersGateUI.init();
       return payload;
     },
     ensure(){
-      if(this._mem) return Promise.resolve(this._mem);
+      if(this._mem?.anchor?.linked != null && this._mem?.current?.linked != null){
+        return Promise.resolve(this._mem);
+      }
       const local = this._readLocal();
-      if(local?.current?.linked != null){
+      if(local?.current?.linked != null && local?.anchor?.linked != null){
         this._mem = local;
-        // רענון ברקע אם המטמון ישן מ-12 שעות
         const ageMs = Date.now() - Date.parse(local.fetchedAt || 0);
         if(!(Number.isFinite(ageMs) && ageMs < 12 * 3600 * 1000)){
           if(!this._loading){
@@ -30738,7 +30742,7 @@ UsersGateUI.init();
       this._loading = this.refresh()
         .catch((err) => {
           const fallback = this._readLocal();
-          if(fallback?.current?.linked != null){
+          if(fallback?.current?.linked != null && fallback?.anchor?.linked != null){
             this._mem = fallback;
             return fallback;
           }
@@ -30751,49 +30755,65 @@ UsersGateUI.init();
       if(typeof fn === "function") this._listeners.push(fn);
       return () => { this._listeners = this._listeners.filter((x) => x !== fn); };
     },
-    /** מחזיר מידע הצמדה סינכרוני מהמטמון. factor=1 אם אין מדד עדיין. */
-    getIndexInfo(tariffKey){
+    /** מדד נוכחי בנקודות תעריפון (סולם מנורה/איילון) — null אם אין מטמון */
+    getCurrentIndexPoints(){
+      const mem = this._mem || this._readLocal();
+      const current = mem?.current;
+      const anchor = mem?.anchor;
+      if(!current?.linked || !anchor?.linked) return null;
+      const ratio = current.linked / anchor.linked;
+      if(!(Number.isFinite(ratio) && ratio > 0)) return null;
+      return Math.round(this.ANCHOR.points * ratio * 100) / 100;
+    },
+    /**
+     * מידע הצמדה. אפשר לעקוף baseIndexPoints לכיסוי ספציפי (איילון 145.56).
+     * factor = מדד_נוכחי_בנקודות ÷ מדד_בסיס_PDF
+     */
+    getIndexInfo(tariffKey, opts){
+      const options = opts && typeof opts === "object" ? opts : {};
       const tariff = this.TARIFFS[tariffKey];
       if(!tariff){
         return { ok:false, factor:1, reason:"tariff_missing", tariffKey };
       }
+      const baseIndexPoints = Number.isFinite(Number(options.baseIndexPoints))
+        ? Number(options.baseIndexPoints)
+        : tariff.baseIndexPoints;
       const mem = this._mem || this._readLocal();
       const current = mem?.current;
-      const base = mem?.bases?.[tariffKey];
-      if(!current?.linked || !base?.linked){
+      const currentIndexPoints = this.getCurrentIndexPoints();
+      if(currentIndexPoints == null || !current?.linked){
         return {
           ok: false,
           factor: 1,
           reason: "cpi_pending",
           tariffKey,
-          baseIndexPoints: tariff.baseIndexPoints,
+          baseIndexPoints,
           baseKnownDate: tariff.baseKnownDate,
           company: tariff.company
         };
       }
-      const factor = current.linked / base.linked;
+      const factor = currentIndexPoints / baseIndexPoints;
       if(!(Number.isFinite(factor) && factor > 0)){
-        return { ok:false, factor:1, reason:"cpi_bad_factor", tariffKey };
+        return { ok:false, factor:1, reason:"cpi_bad_factor", tariffKey, baseIndexPoints };
       }
-      // מדד נוכחי בנקודות תעריפון ≈ בסיס_PDF × יחס CBS
-      const currentIndexPoints = Math.round(tariff.baseIndexPoints * factor * 100) / 100;
       return {
         ok: true,
         factor,
         tariffKey,
         company: tariff.company,
-        baseIndexPoints: tariff.baseIndexPoints,
+        baseIndexPoints,
         baseKnownDate: tariff.baseKnownDate,
         currentIndexPoints,
         currentMonthLabel: (current.monthDesc || "") + " " + (current.year || ""),
-        baseMonthLabel: (base.monthDesc || "") + " " + (base.year || ""),
+        anchorPoints: this.ANCHOR.points,
+        anchorKnownDate: this.ANCHOR.knownDate,
         fetchedAt: mem.fetchedAt || "",
         source: mem.source || "cbs"
       };
     },
-    /** עיגול לאגורה אחרי הצמדה */
-    indexAgorot(baseAgorot, tariffKey){
-      const info = this.getIndexInfo(tariffKey);
+    /** עיגול לאגורה אחרי הצמדה; opts.baseIndexPoints לעקיפת בסיס הכיסוי */
+    indexAgorot(baseAgorot, tariffKey, opts){
+      const info = this.getIndexInfo(tariffKey, opts);
       const factor = info.factor || 1;
       const indexedAgorot = Math.round(Number(baseAgorot) * factor);
       return { baseAgorot: Number(baseAgorot) || 0, indexedAgorot, factor, indexInfo: info };
@@ -31678,6 +31698,8 @@ UsersGateUI.init();
       wizardKey: "אמבולטורי מורחב",
       group: "דבר רביעי — שירותים אמבולטוריים",
       needsGender: false,
+      // PDF עמ׳ 10: הפרמיה צמודה למדד 145.56 (בסיס שונה מרוב הכיסויים)
+      baseIndexPoints: 145.56,
       includes: "• התייעצויות עם רופאים מומחים — תקרת החזר מוגדלת וקבועה לכל ייעוץ, ללא מכסה שנתית\n• התייעצות בנוגע לבעיות גיל המעבר ואנטי אייג׳ינג\n• בדיקות אבחנתיות ובדיקות הדמיה\n• אבחון וייעוץ גנטי למחלות תורשתיות\n• הראיית איברים פנימיים במערכת העיכול באמצעות קפסולה\n• כיסויים להריון ולידה — שיפוי, רשימה פתוחה של בדיקות הריון; עד 3 התייעצויות עם רופא מומחה בנושא הריון ולידה, איסוף ושימור דם טבורי\n• פריון ושירותי פונדקאות בישראל:\n  ° טיפולי פריון בישראל עקב ליקוי פריון של המבוטח/ת\n  ° שירותי פונדקאות בישראל – זכאות לשני בני זוג המבוטחים בפוליסה לרבות בני זוג מאותו המין\n  ° תקרת החזר עד לסכום של ₪32,974 לכל תקופת הביטוח\n• כיסויים למחלת הסרטן — רפואה מונעת:\n  ° בדיקת סקר לגילוי סרטן\n  ° בדיקת קולונוסקופיה מניעתית\n  ° חוות דעת שניה בחו״ל\n  ° בדיקת סקר תקופתית\n  ° בדיקת COLONFLAG — שירות מחקר אישי ממוקד",
       bands: [
         { min:0, max:17, agorot:2880 }, { min:18, max:30, agorot:7300 }, { min:31, max:55, agorot:8030 }, { min:56, max:64, agorot:8210 },
@@ -31690,6 +31712,8 @@ UsersGateUI.init();
       wizardKey: "ייעוץ ובדיקות",
       group: "דבר רביעי — שירותים אמבולטוריים",
       needsGender: false,
+      // PDF עמ׳ 11: הפרמיה צמודה למדד 145.56
+      baseIndexPoints: 145.56,
       includes: "• התייעצויות עם רופאים מומחים\n• התייעצות בנוגע לבעיות גיל המעבר ואנטי אייג׳ינג\n• בדיקות אבחנתיות ובדיקות הדמיה\n• אבחון וייעוץ גנטי למחלות תורשתיות\n• הראיית איברים פנימיים במערכת העיכול באמצעות קפסולה\n• כיסויים להריון ולידה — סקירה על־קולית לבדיקת מערכות עובר מוקדמת או מאוחרת, בדיקת שקיפות עורפית, בדיקת סקר ביוכימי משולש (חלבון עוברי), בדיקת מי שפיר, בדיקת NIPT, סיסי שילייה, ביצוע בדיקה לאבחון גנטי טרום הריון לתכנון המשפחה, בדיקת CMA (“צ׳יפ גנטי”), שיפוי ל־3 התייעצויות עם רופא מומחה בנושא הריון ולידה, איסוף ושימור דם טבורי\n• כיסויים למחלת הסרטן — רפואה מונעת:\n  ° בדיקת סקר לגילוי סרטן\n  ° בדיקת קולונוסקופיה מניעתית\n  ° חוות דעת שניה בחו״ל\n  ° בדיקת סקר תקופתית\n  ° בדיקת COLONFLAG — שירות מחקר אישי ממוקד",
       bands: [
         { min:0, max:17, agorot:1699 }, { min:18, max:30, agorot:4652 }, { min:31, max:55, agorot:5756 }, { min:56, max:64, agorot:6219 },
@@ -31808,6 +31832,13 @@ UsersGateUI.init();
   const AYALON_HEALTH_COVER_BY_ID = AYALON_HEALTH_COVERS.reduce((acc, c) => { acc[c.id] = c; return acc; }, {});
 
   const AYALON_HEALTH_CPI_KEY = "ayalon_health";
+  const AYALON_HEALTH_DEFAULT_BASE_INDEX = HealthCpi.TARIFFS.ayalon_health.baseIndexPoints; // 142.34
+
+  function ayalonHealthCoverBaseIndexPoints(cover){
+    const v = Number(cover?.baseIndexPoints);
+    if(Number.isFinite(v) && v > 0) return v;
+    return AYALON_HEALTH_DEFAULT_BASE_INDEX;
+  }
 
   /** מחשב פרמיה חודשית לכיסוי בודד — אחרי הצמדה למדד (base* = תעריפון PDF). */
   function computeAyalonHealthCoverPremium(coverId, age, gender){
@@ -31828,7 +31859,8 @@ UsersGateUI.init();
       agorot = band.agorot;
     }
     if(!Number.isInteger(agorot)) return { ok:false, reason:"rate_missing" };
-    const indexed = HealthCpi.indexAgorot(agorot, AYALON_HEALTH_CPI_KEY);
+    const basePts = ayalonHealthCoverBaseIndexPoints(cover);
+    const indexed = HealthCpi.indexAgorot(agorot, AYALON_HEALTH_CPI_KEY, { baseIndexPoints: basePts });
     return {
       ok: true,
       coverId: cover.id,
@@ -31838,6 +31870,7 @@ UsersGateUI.init();
       monthlyAgorot: indexed.indexedAgorot,
       monthlyPremium: ayalonHealthAgorotToShekels(indexed.indexedAgorot),
       indexFactor: indexed.factor,
+      baseIndexPoints: basePts,
       indexInfo: indexed.indexInfo
     };
   }
@@ -31850,11 +31883,13 @@ UsersGateUI.init();
     let totalAg = 0;
     let totalBaseAg = 0;
     let indexInfo = null;
+    const basesUsed = {};
     for(let i = 0; i < ids.length; i++){
       const one = computeAyalonHealthCoverPremium(ids[i], age, gender);
       if(!one.ok) return { ok:false, reason: one.reason, failCoverId: ids[i], coverMaxAge: one.coverMaxAge, covers:[], monthlyAgorot:0, monthlyPremium:0, annualPremium:0 };
       const meta = AYALON_HEALTH_COVER_BY_ID[one.coverId];
       if(!indexInfo) indexInfo = one.indexInfo || null;
+      basesUsed[String(one.baseIndexPoints)] = one.indexInfo || null;
       covers.push({
         id: one.coverId,
         label: one.label,
@@ -31862,7 +31897,9 @@ UsersGateUI.init();
         monthlyPremium: one.monthlyPremium,
         monthlyAgorot: one.monthlyAgorot,
         baseMonthlyPremium: one.baseMonthlyPremium,
-        baseMonthlyAgorot: one.baseMonthlyAgorot
+        baseMonthlyAgorot: one.baseMonthlyAgorot,
+        baseIndexPoints: one.baseIndexPoints,
+        indexFactor: one.indexFactor
       });
       totalAg += one.monthlyAgorot;
       totalBaseAg += one.baseMonthlyAgorot;
@@ -31876,22 +31913,27 @@ UsersGateUI.init();
       baseMonthlyAgorot: totalBaseAg,
       baseMonthlyPremium: ayalonHealthAgorotToShekels(totalBaseAg),
       indexFactor: indexInfo?.factor || 1,
-      indexInfo
+      indexInfo,
+      indexBases: basesUsed
     };
   }
 
-  function formatAyalonHealthIndexMetaHtml(indexInfo){
+  function formatAyalonHealthIndexMetaHtml(indexInfo, indexBases){
     if(!indexInfo) return "";
     if(!indexInfo.ok){
       return `<div class="lcAylHealth__indexMeta lcAylHealth__indexMeta--pending">ממתין למדד למ״ס — מוצגת כרגע פרמיית בסיס מהתעריפון</div>`;
     }
-    const factorTxt = (Math.round(indexInfo.factor * 10000) / 10000).toFixed(4);
+    const baseKeys = indexBases && typeof indexBases === "object" ? Object.keys(indexBases) : [];
+    const uniqueBases = baseKeys.length ? baseKeys : [String(indexInfo.baseIndexPoints)];
+    const factorsTxt = uniqueBases.map((b) => {
+      const info = (indexBases && indexBases[b]) || indexInfo;
+      const f = (Math.round((info?.factor || indexInfo.factor) * 10000) / 10000).toFixed(4);
+      return `בסיס ${b} ×${f}`;
+    }).join(" · ");
     return `<div class="lcAylHealth__indexMeta">
-      הצמדה למדד: בסיס ${escapeHtml(String(indexInfo.baseIndexPoints))}
-      (${escapeHtml(indexInfo.baseKnownDate || "")})
-      → נוכחי ≈ ${escapeHtml(String(indexInfo.currentIndexPoints))}
+      הצמדה למדד: נוכחי ≈ ${escapeHtml(String(indexInfo.currentIndexPoints))}
       (${escapeHtml(safeTrim(indexInfo.currentMonthLabel))})
-      · מקדם ×${escapeHtml(factorTxt)}
+      · ${escapeHtml(factorsTxt)}
     </div>`;
   }
 
@@ -32105,7 +32147,10 @@ UsersGateUI.init();
         `<div class="lcAylHealth__selRow"><span>${escapeHtml(c.label)}</span><strong>₪${escapeHtml(formatAyalonHealthExactAmount(c.monthlyPremium))}</strong></div>`
       ).join("");
 
-      const indexMetaHtml = formatAyalonHealthIndexMetaHtml(st.result?.indexInfo || HealthCpi.getIndexInfo(AYALON_HEALTH_CPI_KEY));
+      const indexMetaHtml = formatAyalonHealthIndexMetaHtml(
+        st.result?.indexInfo || HealthCpi.getIndexInfo(AYALON_HEALTH_CPI_KEY),
+        st.result?.indexBases || null
+      );
       const baseTotalHtml = (st.result?.ok && st.result.baseMonthlyPremium != null && Math.abs(st.result.baseMonthlyPremium - st.result.monthlyPremium) > 0.0001)
         ? `<div class="lcAylHealth__resultRow"><span>פרמיית בסיס (לפני מדד)</span><strong>₪${escapeHtml(formatAyalonHealthExactAmount(st.result.baseMonthlyPremium))}</strong></div>`
         : "";
