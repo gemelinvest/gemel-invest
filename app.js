@@ -21267,6 +21267,20 @@ UsersGateUI.init();
         rec = findRec();
         if(!rec) return;
       }
+      // GI-FIX 2026-08-09f — אותו מרוץ טעינה כמו openHealthProposalWizard:
+      // Wizard.openDraft/AgentAppointmentWizard.openDraft מותקנות רק אחרי
+      // שה-chunk העצל נטען. בלי השורה הזו, לחיצה על "המשך עריכה" לפני
+      // שה-chunk נטען זרקה שגיאה סינכרונית בתוך async function בלי טיפול —
+      // דחיית Promise שקטה שאף אחד לא תפס, ומבחינת המשתמש הכפתור "לא מגיב".
+      try {
+        await ensureGiWizardJsLoaded();
+      } catch(err) {
+        console.error("WIZARD_CHUNK_LOAD_FAILED:", err);
+        try {
+          window.showToast?.({ title: "שגיאה", text: "טעינת מסך העריכה נכשלה. בדוק חיבור לאינטרנט ונסה שוב.", variant: "warn", durationMs: 5200 });
+        } catch(_e) {}
+        return;
+      }
       const flow = safeTrim(rec?.payload?.flowType).toLowerCase();
       if(flow === "agent_appointment" || rec?.payload?.agentAppointmentMeta){
         AgentAppointmentWizard.openDraft(rec);
@@ -29526,7 +29540,76 @@ UsersGateUI.init();
           focusElementaryDashboardPendingTab,
           BUILD,
           premiumCustomerIcon,
-          digitsOnly,
+          /* GI-FIX 2026-08-09f — פונקציות שנחסרו מ-host כשגי-wizard.js פוצל
+             לקובץ נפרד היום (GI-PERF 2026-08-09). gi-wizard.js קורא להן
+             כשמות חשופים (למשל inferProposalFlowType, prepareInteractiveWizardOpen)
+             בלי host. — בלעדיהן זו הייתה ReferenceError בכל פתיחת הצעה/וויזארד.
+             תוספת בלבד: לא משנה שום פונקציה קיימת, רק חושפת אותן ל-host. */
+          activateElementaryPoliciesInPayload,
+          agentCanOpenCampaignLead,
+          appendAuditLog,
+          applyDmyAutoFormat,
+          applyElementaryQuoteVariantToInsuredData,
+          bindFileDropZone,
+          bindHmoClinicDropdown,
+          canElementaryMarkIssuedForReferral,
+          currentAgentIdentity,
+          customerHasAgentHealthRiskCoverage,
+          elementaryCoverageTypeLabelHe,
+          elementaryLicenseIssueYearFromStored,
+          elementaryReferralShouldCompleteAgentSetupOnFinish,
+          extractIsraelPostNameList,
+          findAgentRecordForSession,
+          findElementaryReferralById,
+          findElementaryReferralIssuableByCustomerId,
+          findHarWorkbookHeaderRow,
+          findPendingElementaryReferralByCustomerId,
+          findPendingElementaryReferralByIdNumber,
+          getCompanyLogoSrcForCompany,
+          getElementaryPolicyLifecyclePresentation,
+          getElementaryReferralSourceFlow,
+          getNewPoliciesFromCustomerPayload,
+          getReferralElementaryPriceQuotes,
+          getRequestedCoverageFromPayload,
+          getValidationConfigForBind,
+          inferProposalElementaryProduct,
+          inferProposalFlowType,
+          isElementaryLicenseIssueYearValid,
+          isExcelUploadFile,
+          isGoldMirrorCampaignLead,
+          isPdfUploadFile,
+          israelPostZipDataJsonp,
+          mapLandingInsuranceToWizardTypes,
+          mergeElementarySaveWithExistingCustomerPayload,
+          mergeInsuredDataPreferNonEmpty,
+          normalizeCompanyDiscountOverrides,
+          normalizeDiscountOptionRow,
+          normalizeElementaryLicenseIssueYearInput,
+          normalizeElementaryPriceQuotes,
+          normalizeElementaryReferral,
+          normalizeHarWorkbookCell,
+          notifyElementaryReferralsChannel,
+          parseAnyDmyDate,
+          parseCampaignLeadLandingPayload,
+          patchElementaryReferral,
+          pinElementaryReferralLocally,
+          prepareInteractiveWizardOpen,
+          referralAwaitingElementaryIssue,
+          removeElementaryReferralFromActiveViews,
+          renderCompactShabanFieldHtml,
+          renderHmoClinicDropdownHtml,
+          renderHmoLogoHtmlForClinic,
+          resolveCompanyLogoKey,
+          scheduleBackgroundElementaryReferralVerify,
+          setElementaryReferrals,
+          setOpsTouch,
+          showHarBituachImportModal,
+          showHarBituachProcessingModal,
+          showWizardHarAlertModal,
+          stampHealthRisksWaitingMirror,
+          stampRecordAgentOwnership,
+          touchElementaryReferralElementary,
+          validateValueByKind,
         };
         try {
           Object.defineProperty(host, "ElementaryMirrorUI", {
@@ -37153,7 +37236,22 @@ const ClalRiskLifePdf = {
         this.statusTimer = window.setTimeout(() => this.clearStatus(), 2400);
       }
     },
-    openHealthProposalWizard(){
+    async openHealthProposalWizard(){
+      /* GI-FIX 2026-08-09f — מרוץ טעינה: Wizard.reset/open/וכו' מותקנות רק
+         אחרי ש-gi-wizard.js (chunk עצל) נטען — וזה מתוזמן ל-6.5 שניות אחרי
+         Wizard.init() + idle. לפני שלושת תיקוני הביצועים, ה-login האיטי חיפה
+         על זה בפועל (עד שהמשתמש הספיק ללחוץ, ה-chunk כבר היה טעון). אחרי
+         התיקונים ה-login מהיר משמעותית — ולחיצה מוקדמת על "הצעת בריאות
+         חדשה" קוראת ל-Wizard.reset()/open() לפני שהן קיימות בכלל, וזורקת
+         TypeError גנרי שנתפס ומוצג כ"אירעה תקלה בפתיחת וויזארד". התיקון:
+         לוודא במפורש שה-chunk טעון לפני שנוגעים ב-Wizard בכלל. */
+      try {
+        await ensureGiWizardJsLoaded();
+      } catch(err) {
+        console.error("WIZARD_CHUNK_LOAD_FAILED:", err);
+        window.showToast?.({ title: "שגיאה", text: "טעינת וויזארד בריאות וסיכונים נכשלה. בדוק חיבור לאינטרנט ונסה שוב.", variant: "warn", durationMs: 5200 });
+        return;
+      }
       const localDraft = Wizard._loadLocalDraft?.();
       const isDraftHealth = localDraft && (localDraft.flowType === "health" || !localDraft.flowType);
       if(isDraftHealth){
@@ -37191,7 +37289,7 @@ const ClalRiskLifePdf = {
         window.showToast?.({ title: "שגיאה", text: "אירעה תקלה בפתיחת וויזארד בריאות וסיכונים", variant: "warn", durationMs: 5200 });
       }
     },
-    handleType(type){
+    async handleType(type){
       if(type === "health"){
         this.close();
         HealthRiskChoiceUI.open();
@@ -37202,6 +37300,15 @@ const ClalRiskLifePdf = {
         return;
       }
       if(type === "elementary"){
+        // GI-FIX 2026-08-09f — אותו מרוץ טעינה כמו openHealthProposalWizard
+        // (ראה שם), עבור נתיב הוויזארד האלמנטרי.
+        try {
+          await ensureGiWizardJsLoaded();
+        } catch(err) {
+          console.error("WIZARD_CHUNK_LOAD_FAILED:", err);
+          this.showStatus("טעינת וויזארד אלמנטרי נכשלה. בדוק חיבור לאינטרנט ונסה שוב.", "dev");
+          return;
+        }
         // בדוק טיוטה מקומית לאלמנטרי
         const localDraftElem = Wizard._loadLocalDraft?.();
         const isDraftElementary = localDraftElem && localDraftElem.flowType === "elementary";
