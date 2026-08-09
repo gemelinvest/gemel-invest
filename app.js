@@ -8463,11 +8463,12 @@
       ? options.policyFilesByPolicyId
       : {};
     const globalFiles = Array.isArray(options.policyFiles) ? options.policyFiles : [];
+    const lifecycleStatus = safeTrim(options.lifecycleStatus) || "issued";
     const markInsured = (data, active) => {
       if(!data || typeof data !== "object") return;
-      data._elemPoliciesLifecycle = active ? "issued" : (safeTrim(data._elemPoliciesLifecycle) || "pending_underwriting");
+      data._elemPoliciesLifecycle = active ? lifecycleStatus : (safeTrim(data._elemPoliciesLifecycle) || "pending_underwriting");
     };
-    const activePres = getElementaryPolicyLifecyclePresentation("issued");
+    const activePres = getElementaryPolicyLifecyclePresentation(lifecycleStatus);
     const pendingPres = getElementaryPolicyLifecyclePresentation("pending_underwriting");
     let anyActive = false;
     if(Array.isArray(p.elementaryPolicies)){
@@ -8489,7 +8490,7 @@
           : globalFiles;
         return {
           ...base,
-          lifecycleStatus: "issued",
+          lifecycleStatus,
           badgeText: activePres.badgeText,
           badgeClass: activePres.badgeClass,
           policyFiles: rowFiles.length ? rowFiles : (Array.isArray(base.policyFiles) ? base.policyFiles : [])
@@ -8501,6 +8502,41 @@
       (Array.isArray(p.insureds) ? p.insureds : []).forEach((ins) => markInsured(ins?.data, true));
     }
     return p;
+  }
+
+  /** אחרי «שמור דוח והפק PDF» בשיקוף אלמנטרי — ממתינות לאישור → פעילות */
+  async function activateElementaryPoliciesAfterMirrorSave(customerId){
+    const cid = safeTrim(customerId);
+    if(!cid) return { ok: false, msg: "חסר מזהה לקוח" };
+    const list = Array.isArray(State.data?.customers) ? State.data.customers : [];
+    const idx = list.findIndex((row) => String(row?.id) === String(cid));
+    if(idx < 0) return { ok: false, msg: "לקוח לא נמצא" };
+    const rec = list[idx];
+    let payload = JSON.parse(JSON.stringify(rec.payload && typeof rec.payload === "object" ? rec.payload : {}));
+    if(!Array.isArray(payload.elementaryPolicies) || !payload.elementaryPolicies.length){
+      try {
+        const ins0 = Array.isArray(payload.insureds) ? payload.insureds[0] : null;
+        const data = (ins0?.data && typeof ins0.data === "object")
+          ? { ...ins0.data }
+          : (payload.primary && typeof payload.primary === "object" ? { ...payload.primary } : {});
+        data._elemPoliciesLifecycle = "active";
+        if(typeof Wizard !== "undefined" && Wizard?.buildElementaryPoliciesForCustomerPayload){
+          payload.elementaryPolicies = Wizard.buildElementaryPoliciesForCustomerPayload({ data });
+        }
+      } catch(_e){}
+    }
+    if(!Array.isArray(payload.elementaryPolicies) || !payload.elementaryPolicies.length){
+      return { ok: false, msg: "לא נמצאו פוליסות אלמנטרי להפעלה" };
+    }
+    payload = activateElementaryPoliciesInPayload(payload, { lifecycleStatus: "active" });
+    const ok = await persistCustomerPayloadRecord(cid, payload, "פוליסות אלמנטרי הופעלו לאחר אישור בשיקוף");
+    try { CustomersUI.render(); } catch(_e){}
+    try {
+      if(CustomersUI?.currentId && String(CustomersUI.currentId) === String(cid)){
+        CustomersUI.refreshOpenCustomerPreservingState?.();
+      }
+    } catch(_e){}
+    return { ok: !!ok };
   }
 
   async function persistCustomerPayloadRecord(customerId, payload, label){
@@ -31138,8 +31174,8 @@ init(){
       if(this.isElementaryReferralAgentSetupFlow()){
         return [
           { id:5, title:"אמצעי תשלום והצעת מחיר", progressTitle:"תשלום והצעה", kind:"payment" },
-          { id:6, title:"סיכום והקמת הצעה ללקוח", progressTitle:"סיכום והקמה", kind:"summary" },
-          { id:7, title:"שיקוף", progressTitle:"שיקוף", kind:"mirror" }
+          { id:6, title:"שיקוף", progressTitle:"שיקוף", kind:"mirror" },
+          { id:7, title:"סיכום והקמת הצעה ללקוח", progressTitle:"סיכום והקמה", kind:"summary" }
         ];
       }
       if(this.isCarInsuranceClickFlow()){
@@ -31158,8 +31194,8 @@ init(){
             { id:4, title:"בחירת כיסוי", kind:"coverage" },
             { id:5, title:"פרמיות", progressTitle:"פרמיות", kind:"premiums" },
             { id:6, title:"אמצעי תשלום", progressTitle:"תשלום", kind:"payment" },
-            { id:7, title:"סיכום פרטי הצעה והקמת לקוח", progressTitle:"סיכום והקמת לקוח", kind:"summary" },
-            { id:8, title:"שיקוף", progressTitle:"שיקוף", kind:"mirror" }
+            { id:7, title:"שיקוף", progressTitle:"שיקוף", kind:"mirror" },
+            { id:8, title:"סיכום פרטי הצעה והקמת לקוח", progressTitle:"סיכום והקמת לקוח", kind:"summary" }
           ]
         : this.steps.filter((step) => Number(step.id) !== 41);
     },
@@ -31170,13 +31206,13 @@ init(){
       const sid = Number(stepId);
       if(this.isElementaryReferralAgentSetupFlow()){
         if(sid === 5) return "payment";
-        if(sid === 6) return "summary";
-        if(sid === 7) return "mirror";
+        if(sid === 6) return "mirror";
+        if(sid === 7) return "summary";
       }
       if(sid === 5) return "premiums";
       if(sid === 6) return "payment";
-      if(sid === 7) return "summary";
-      if(sid === 8) return "mirror";
+      if(sid === 7) return "mirror";
+      if(sid === 8) return "summary";
       return "";
     },
 
@@ -31190,15 +31226,16 @@ init(){
       if(!this.isElementaryFlow() || this.isCarInsuranceClickFlow() || this.isElementaryReferralAgentSetupFlow()){
         return step;
       }
-      // טיוטות ישנות: 5=תשלום(+פרמיות), 6=סיכום → מיפוי לזרימה החדשה
+      // טיוטות ישנות: 5=תשלום(+פרמיות), 6=סיכום
+      // נוכחי: 5=פרמיות, 6=תשלום, 7=שיקוף, 8=סיכום
       if(step === 5){
         const d = this.insureds[0]?.data || {};
         const phase = safeTrim(d._elemStep5Phase);
         const hasQuotes = Array.isArray(d.elementaryPriceQuotes) && d.elementaryPriceQuotes.length;
         if(phase === "pricing" || hasQuotes) return 5;
-        return 6;
+        if(safeTrim(d.elementaryPayment?.cardNumber)) return 6;
+        return 5;
       }
-      if(step === 6) return 7;
       return step;
     },
 
@@ -32015,7 +32052,7 @@ init(){
       }
       this.step = 5;
       this.open();
-      this.setHint(`המשך הקמת הצעה עבור ${safeTrim(rec.fullName) || "הלקוח"} — אמצעי תשלום, בחירת הצעת מחיר, סיכום ושיקוף.`);
+      this.setHint(`המשך הקמת הצעה עבור ${safeTrim(rec.fullName) || "הלקוח"} — אמצעי תשלום, בחירת הצעת מחיר, שיקוף וסיכום.`);
     },
 
     isCarInsuranceClickFlow(){
@@ -33450,11 +33487,11 @@ init(){
           this.syncElementaryPremiumAggregate(this.insureds[0]);
         }
         if(kind === "summary"){
-          void this.completeElementaryProposalAndContinueToMirror();
+          void this.finishWizard();
           return;
         }
         if(kind === "mirror"){
-          void this.finishElementaryWizardFromMirror();
+          void this.advanceElementaryFromMirrorToSummary();
           return;
         }
         const steps = this.getCurrentSteps();
@@ -33464,6 +33501,11 @@ init(){
           return;
         }
         const nextId = Number(steps[idx + 1].id);
+        if(this.getElementaryStepKind(nextId) === "mirror"){
+          // לפני שיקוף — שומרים את הלקוח כדי שנתוני השיקוף ייכתבו לתיק
+          void this.completeElementaryProposalAndContinueToMirror();
+          return;
+        }
         if(this.getElementaryStepKind(this.step) === "coverage" && this.getElementaryStepKind(nextId) === "payment"){
           const d = this.insureds[0]?.data;
           if(d) d._elemStep5Phase = "payment";
@@ -34064,13 +34106,15 @@ init(){
           this.els.btnNext.disabled = false;
           const agentSetup = this.isElementaryReferralAgentSetupFlow();
           if(kind === "mirror"){
-            this.els.btnNext.textContent = "סיום ושמירת שיקוף";
-          } else if(kind === "summary"){
-            this.els.btnNext.textContent = "סיום הקמת הצעה והמשך לשיקוף";
+            this.els.btnNext.textContent = "המשך לסיכום והקמת לקוח";
+          } else if(kind === "summary" || Number(this.step) >= lastStepId){
+            this.els.btnNext.textContent = "סיום הקמת הצעה ללקוח";
           } else if(agentSetup && kind === "payment" && safeTrim(this.insureds[0]?.data?._elemStep5Phase) === "quotePick"){
             this.els.btnNext.textContent = "המשך לפרמיות";
-          } else if(Number(this.step) >= lastStepId){
-            this.els.btnNext.textContent = "סיום הקמת הצעה ללקוח";
+          } else if(this.getElementaryStepKind(
+            Number(this.getCurrentSteps()[this.getElementaryStepIndex(this.step) + 1]?.id)
+          ) === "mirror"){
+            this.els.btnNext.textContent = "המשך לשיקוף";
           } else {
             this.els.btnNext.textContent = "לשלב הבא";
           }
@@ -56011,7 +56055,7 @@ if(path === "birthDate"){
       return this.finishWizard({ continueToMirror: true });
     },
 
-    async finishElementaryWizardFromMirror(){
+    async advanceElementaryFromMirrorToSummary(){
       if(this._finishing) return;
       this._finishing = true;
       try{
@@ -56021,18 +56065,26 @@ if(path === "birthDate"){
           try { window.showToast?.({ title: "שיקוף", text: "שמירת נתוני השיקוף נכשלה", variant: "warn", durationMs: 5200 }); } catch(_e){}
           return;
         }
-        this._wizardMirrorKeepSteps = null;
-        this._elementaryReferralAgentSetup = null;
-        this._elementaryReferralContinue = null;
-        this.showFinishFlow();
-        SaveStatusUI.success("נתוני השיקוף נשמרו", "הנתונים זמינים כעת בשיקוף השיחה של הלקוח.");
-        const minLoaderMs = 900;
-        await new Promise((resolve) => window.setTimeout(resolve, minLoaderMs));
-        this.showFinishFlowSuccess();
-        this.syncElementaryFinishFlowActions();
+        const steps = this.getCurrentSteps();
+        const summaryStep = steps.find((s) => s.kind === "summary");
+        const summaryId = Number(summaryStep?.id);
+        if(!summaryId){
+          this.setHint("לא נמצא שלב סיכום");
+          return;
+        }
+        try {
+          window.showToast?.({
+            title: "שיקוף נשמר",
+            text: "הנתונים נשמרו בתיק · ממשיכים לסיכום והקמת לקוח",
+            variant: "success",
+            durationMs: 4200
+          });
+        } catch(_e){}
+        this.step = summaryId;
+        this.setHint("בדקו את הסיכום וסיימו את הקמת ההצעה ללקוח.");
+        this.render();
       }catch(err){
-        try { console.error("FINISH_ELEM_MIRROR_WIZARD", err); } catch(_e){}
-        this.hideFinishFlow();
+        try { console.error("ADVANCE_ELEM_MIRROR_TO_SUMMARY", err); } catch(_e){}
         this.setHint(safeTrim(err?.message) || "שמירת השיקוף נכשלה");
       }finally{
         this._finishing = false;
@@ -56063,8 +56115,8 @@ if(path === "birthDate"){
       if(this.isElementaryFlow()){
         const steps = this.getCurrentSteps();
         const lastStepId = Number(steps[steps.length - 1]?.id) || 5;
-        const summaryStepId = Number(steps.find((s) => s.kind === "summary")?.id) || lastStepId;
-        const gateStepId = continueToMirror ? summaryStepId : lastStepId;
+        // לפני מעבר לשיקוף מאמתים את השלב הנוכחי (תשלום); בסיום רגיל — את הסיכום
+        const gateStepId = continueToMirror ? Number(this.step) : lastStepId;
         gateValidation = this.validateStep(gateStepId);
         if(!gateValidation.ok){
           this.setHint(gateValidation.msg || 'לא ניתן לסיים לפני השלמת פרטי התשלום');
@@ -56294,6 +56346,7 @@ if(path === "birthDate"){
             this.render();
             return;
           }
+          this._wizardMirrorKeepSteps = null;
           this.showFinishFlowSuccess();
           this.syncElementaryFinishFlowActions();
         } else {
@@ -83918,7 +83971,8 @@ ${inner}
           pdf: true,
           stopTimer: true,
           sourceBtn: sourceBtn || null,
-          forcePersist: true
+          forcePersist: true,
+          activatePolicies: true
         });
       }
       this._interestSaveOpts = {
@@ -83927,7 +83981,8 @@ ${inner}
         stopTimer: true,
         sourceBtn: sourceBtn || null,
         customerId: safeTrim(this.selectedCustomerId),
-        draftSnap: this._cloneReport(this.reportDraft)
+        draftSnap: this._cloneReport(this.reportDraft),
+        activatePolicies: true
       };
       const host = this._ensureInterestModal();
       host.querySelector('[data-em-interest-step="choice"]').hidden = false;
@@ -83956,7 +84011,8 @@ ${inner}
           pdf: false,
           stopTimer: !!opts.stopTimer,
           sourceBtn: opts.sourceBtn || null,
-          forcePersist: true
+          forcePersist: true,
+          activatePolicies: opts.activatePolicies === true
         }));
       }catch(err){
         try{ console.error("[ElementaryMirrorUI] saveReport after interest failed", err); }catch(_e){}
@@ -84383,6 +84439,18 @@ ${inner}
       if(options.pdf){
         pdfOk = await this._exportReportPdf(options.sourceBtn || null);
       }
+      let policiesActivated = false;
+      if(persistOk && options.activatePolicies){
+        try{
+          const act = await activateElementaryPoliciesAfterMirrorSave(this.selectedCustomerId);
+          policiesActivated = !!act?.ok;
+          if(!policiesActivated){
+            try{ console.warn("[ElementaryMirrorUI] activate policies after mirror failed", act); }catch(_e){}
+          }
+        }catch(err){
+          try{ console.error("[ElementaryMirrorUI] activate policies after mirror error", err); }catch(_e){}
+        }
+      }
       if(options.toast){
         try{
           let text;
@@ -84392,14 +84460,25 @@ ${inner}
             variant = "danger";
           } else if(pdfOk){
             text = `הדוח נשמר בתיק הלקוח · PDF הופק · משך ${meta.durationText}`;
+            if(policiesActivated) text += " · הפוליסות פעילות";
           } else {
             text = "הדוח נשמר בתיק הלקוח · הפקת PDF נכשלה";
             variant = "warn";
+            if(policiesActivated) text += " · הפוליסות פעילות";
           }
           window.showToast?.({
             title: "שיקוף אלמנטרי",
             text,
             variant
+          });
+        }catch(_e){}
+      } else if(persistOk && policiesActivated){
+        try{
+          window.showToast?.({
+            title: "שיקוף אלמנטרי",
+            text: "הפוליסות בתיק הלקוח הועברו לפעילות",
+            variant: "success",
+            durationMs: 5200
           });
         }catch(_e){}
       }

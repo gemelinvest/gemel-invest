@@ -29152,16 +29152,23 @@ input[inputmode="tel"] {
   overflow: hidden;
   padding-inline: 2px;
 }
-.lcElementaryPlateInput{
+.lcElementaryPlateInput,
+.lcElementaryPlateShell .lcElementaryPlateInput.lcElementaryLicenseInput{
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  border: 0;
-  outline: none;
-  background: transparent;
-  box-shadow: none;
+  height: auto !important;
+  min-height: 0 !important;
+  border: 0 !important;
+  outline: none !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  -webkit-appearance: none;
+  appearance: none;
   margin: 0 auto;
-  padding: 0;
+  padding: 0 !important;
+  border-radius: 0 !important;
   font-weight: 900;
   text-align: center;
   color: #0a0a0a;
@@ -29170,6 +29177,15 @@ input[inputmode="tel"] {
   line-height: 1;
   box-sizing: border-box;
   display: block;
+  caret-color: #0a0a0a;
+}
+.lcElementaryPlateInput:focus,
+.lcElementaryPlateShell .lcElementaryPlateInput.lcElementaryLicenseInput:focus{
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  background-color: transparent !important;
 }
 .lcElementaryPlateInput::placeholder{
   color: rgba(10,10,10,.22);

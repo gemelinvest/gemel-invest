@@ -374,13 +374,13 @@
    כאן נסגר הפער. textarea לא נכלל: הוא זקוק לגובה משלו.
    ===================================================================== */
 
-.lcWizard:not(#\9):not(#\9) .input:not(textarea),
-.lcWizard:not(#\9):not(#\9) input[type="text"],
-.lcWizard:not(#\9):not(#\9) input[type="number"],
-.lcWizard:not(#\9):not(#\9) input[type="tel"],
-.lcWizard:not(#\9):not(#\9) input[type="email"],
-.lcWizard:not(#\9):not(#\9) input[type="date"],
-.lcWizard:not(#\9):not(#\9) input[type="search"],
+.lcWizard:not(#\9):not(#\9) .input:not(textarea):not(.lcElementaryPlateInput),
+.lcWizard:not(#\9):not(#\9) input[type="text"]:not(.lcElementaryPlateInput),
+.lcWizard:not(#\9):not(#\9) input[type="number"]:not(.lcElementaryPlateInput),
+.lcWizard:not(#\9):not(#\9) input[type="tel"]:not(.lcElementaryPlateInput),
+.lcWizard:not(#\9):not(#\9) input[type="email"]:not(.lcElementaryPlateInput),
+.lcWizard:not(#\9):not(#\9) input[type="date"]:not(.lcElementaryPlateInput),
+.lcWizard:not(#\9):not(#\9) input[type="search"]:not(.lcElementaryPlateInput),
 .lcWizard:not(#\9):not(#\9) select{
   height: auto !important;
   min-height: 38px !important;
@@ -389,6 +389,21 @@
   font-size: 13px !important;
   font-weight: 500 !important;
   box-shadow: none !important;
+}
+
+/* לוחית רישוי — הטקסט על הצהוב, בלי רקע/מסגרת של שדה אשף */
+.lcWizard:not(#\9):not(#\9) .lcElementaryPlateInput,
+.lcWizard:not(#\9):not(#\9) input.lcElementaryPlateInput[type="text"]{
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  font-size: inherit !important;
+  font-weight: 900 !important;
 }
 
 /* וריאנט קומפקטי (טבלאות אלמנטרי) - נשאר קומפקטי, אבל בשפה אחת */
