@@ -4,7 +4,10 @@
 .lcMnrCiModal .giValModal__card{
   max-width:700px;
   width:100%;
+  height:min(92vh, 920px);
   max-height:min(92vh, 920px);
+  display:flex;
+  flex-direction:column;
   position:relative;
   overflow:hidden;
 }
@@ -13,11 +16,12 @@
   background:linear-gradient(135deg, var(--gi-primary-soft, #EFF6FF) 0%, #e0ecff 55%, #d7e6ff 100%);
   border-bottom:1px solid rgba(56,112,237,.16);
   position:relative;
-  flex-shrink:0;
+  flex:0 0 auto;
 }
 .lcMnrCiModal .giValModal__body{
   padding:14px 24px;
   gap:12px;
+  flex:1 1 auto;
   min-height:0;
   overflow-x:hidden;
   overflow-y:auto;
@@ -28,7 +32,7 @@
   gap:8px;
   background:var(--gi-surface-2, #F8FAFC);
   border-top:1px solid var(--gi-border-soft, #F1F5F9);
-  flex-shrink:0;
+  flex:0 0 auto;
 }
 .lcMnrCiModal .giValModal__title{ color:var(--gi-text, #0F172A); font-size:17px; }
 .lcMnrCiModal .giValModal__sub{ color:var(--gi-text-muted, #647287); font-size:12.5px; }

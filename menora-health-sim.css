@@ -4,7 +4,10 @@
 .lcMnrHealthModal .giValModal__card{
   max-width:760px;
   width:100%;
+  height:min(92vh, 920px);
   max-height:min(92vh, 920px);
+  display:flex;
+  flex-direction:column;
   position:relative;
   overflow:hidden;
 }
@@ -13,17 +16,29 @@
   background:linear-gradient(135deg, var(--gi-primary-soft, #EFF6FF) 0%, #e0ecff 55%, #d7e6ff 100%);
   border-bottom:1px solid rgba(56,112,237,.16);
   position:relative;
-  flex-shrink:0;
+  flex:0 0 auto;
 }
 .lcMnrHealthModal .giValModal__body{
   padding:14px 24px;
   gap:12px;
+  flex:1 1 auto;
   min-height:0;
   overflow-x:hidden;
   overflow-y:auto;
   -webkit-overflow-scrolling:touch;
 }
-.lcMnrHealthModal .giValModal__foot{ flex-shrink:0; }
+.lcMnrHealthModal .giValModal__foot{ flex:0 0 auto; }
+.lcMnrHealth__coversWrap{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  flex:0 0 auto;
+}
+.lcMnrHealth__coversCount{
+  font-weight:600;
+  color:var(--gi-text-muted, #647287);
+  font-size:12px;
+}
 .lcMnrHealthModal .giValModal__foot{
   padding:12px 24px 16px;
   gap:8px;

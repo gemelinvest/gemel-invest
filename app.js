@@ -28600,6 +28600,71 @@ UsersGateUI.init();
     return Number.isFinite(age) ? age : null;
   }
 
+  /** המרה לתצוגת <input type="date"> (yyyy-mm-dd) מתאריך האפליקציה (dd/mm/yyyy וכו'). */
+  function riskSimBirthDateToIsoInput(dateStr){
+    const parsed = (typeof parseBirthDateValue === "function") ? parseBirthDateValue(dateStr) : null;
+    if(!parsed) return "";
+    return `${parsed.year}-${String(parsed.month).padStart(2, "0")}-${String(parsed.day).padStart(2, "0")}`;
+  }
+
+  /** המרה מ-yyyy-mm-dd (לוח שנה) ל-dd/mm/yyyy לשימוש ב-parseBirthDateValue / שמירה מקומית. */
+  function riskSimBirthDateFromIsoInput(iso){
+    const s = safeTrim(iso);
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+    if(!m) return "";
+    return formatDmyFromParts(Number(m[1]), Number(m[2]), Number(m[3]));
+  }
+
+  /** מספר ימים שלמים מאז תאריך הלידה עד היום (לחישוב מינ׳ כניסה של 15 ימים). */
+  function riskSimDaysSinceBirth(dateStr){
+    const parsed = (typeof parseBirthDateValue === "function") ? parseBirthDateValue(dateStr) : null;
+    if(!parsed || !parsed.date) return null;
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const birth = new Date(parsed.date.getFullYear(), parsed.date.getMonth(), parsed.date.getDate());
+    const days = Math.floor((today - birth) / 86400000);
+    return Number.isFinite(days) ? days : null;
+  }
+
+  function riskSimIsoDateToday(){
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+  }
+
+  function riskSimIsoDateDaysAgo(daysAgo){
+    const n = new Date();
+    n.setHours(0, 0, 0, 0);
+    n.setDate(n.getDate() - Number(daysAgo || 0));
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+  }
+
+  /**
+   * מסנכרן st.birthDate → st.age (שנים שלמות היום) + בדיקת מינ׳ ימי כניסה.
+   * לא מנחש גיל: בלי תאריך לידה תקין — age ריק.
+   */
+  function riskSimSyncAgeFromBirthDate(st, { minAge, maxAge, minEntryDays }){
+    if(!st) return { ok:false, reason:"birth_missing" };
+    const bd = safeTrim(st.birthDate || "");
+    const days = bd ? riskSimDaysSinceBirth(bd) : null;
+    const age = bd ? riskSimAgeFromBirthDate(bd) : null;
+    st.ageRaw = age;
+    st.entryDays = days;
+    if(!bd || days == null || !Number.isInteger(age)){
+      st.age = "";
+      return { ok:false, reason:"birth_missing" };
+    }
+    if(Number.isInteger(minEntryDays) && days < minEntryDays){
+      st.age = "";
+      return { ok:false, reason:"entry_too_young", entryDays: days, minEntryDays };
+    }
+    if(age < minAge || age > maxAge){
+      st.age = "";
+      return { ok:false, reason:"age_out_of_range", age };
+    }
+    st.age = String(age);
+    return { ok:true, age, days };
+  }
+
   // ===== GI-RISK-SIM-OCCUPATION 2026-08-08 · "פרטי מקצוע וחיתום" ==================
   // תשתית לזיהוי סיכון מקצועי + כללי חיתום, לשימוש בכל סימולטורי הריסק.
   //
@@ -30241,7 +30306,7 @@ UsersGateUI.init();
 
   const MENORA_HEALTH_MIN_AGE = 0;
   const MENORA_HEALTH_MAX_AGE = 70;
-  const MENORA_HEALTH_AGE_OPTIONS = Array.from({ length: MENORA_HEALTH_MAX_AGE - MENORA_HEALTH_MIN_AGE + 1 }, (_, i) => MENORA_HEALTH_MIN_AGE + i);
+  const MENORA_HEALTH_MIN_ENTRY_DAYS = 15; // לפי הערת גיל כניסה מינימלי ב-PDF
 
   /** המרת שקלים → אגורות בשלמים (קלט מהתעריפון בלבד, עד ספרה אחת אחרי הנקודה). */
   function menoraHealthShekelsToAgorot(shekels){
@@ -30492,9 +30557,11 @@ UsersGateUI.init();
   }
 
   const MENORA_HEALTH_SIM_MESSAGES = {
-    age_missing: "יש לבחור גיל לפני חישוב הפרמיה.",
-    age_out_of_range: `לא נמצא תעריף מתאים לגיל שהוזן (טווח כניסה ${MENORA_HEALTH_MIN_AGE}–${MENORA_HEALTH_MAX_AGE}).`,
-    gender_missing: "יש לבחור מין — נדרש לכיסוי ייעוץ ובדיקות.",
+    birth_missing: "יש לבחור תאריך לידה לפני חישוב הפרמיה.",
+    entry_too_young: `גיל הכניסה המינימלי הוא ${MENORA_HEALTH_MIN_ENTRY_DAYS} ימים.`,
+    age_missing: "יש לבחור תאריך לידה לפני חישוב הפרמיה.",
+    age_out_of_range: `הגיל הביטוחי (שנים שלמות היום) חורג מטווח הכניסה ${MENORA_HEALTH_MIN_AGE}–${MENORA_HEALTH_MAX_AGE}.`,
+    gender_missing: "יש לבחור מין — נדרש לכיסוי ייעוצים ובדיקות.",
     covers_missing: "יש לסמן לפחות כיסוי אחד.",
     age_cover_limit: "הגיל חורג מהמותר לכיסוי שנבחר.",
     rate_missing: "לא נמצא תעריף מתאים לנתונים שהוזנו.",
@@ -30526,13 +30593,15 @@ UsersGateUI.init();
     _prefillFromInsured(ins){
       const d = ins?.data || {};
       const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
-      const computedAge = riskSimAgeFromBirthDate(d.birthDate);
-      const ageInRange = Number.isInteger(computedAge) && computedAge >= MENORA_HEALTH_MIN_AGE && computedAge <= MENORA_HEALTH_MAX_AGE;
+      const birthDate = safeTrim(d.birthDate || "");
       const occupation = safeTrim(d.occupation || "");
-      return {
-        age: ageInRange ? String(computedAge) : "",
-        ageSource: ageInRange ? "step1" : "",
-        ageRaw: computedAge,
+      const st = {
+        birthDate,
+        birthDateSource: birthDate ? "step1" : "",
+        age: "",
+        ageSource: birthDate ? "step1" : "",
+        ageRaw: null,
+        entryDays: null,
         gender, genderSource: gender ? "step1" : "",
         occupation,
         occupationSource: occupation ? "step1" : "",
@@ -30542,6 +30611,12 @@ UsersGateUI.init();
         savedAt: null,
         dirtySinceSave: false
       };
+      riskSimSyncAgeFromBirthDate(st, {
+        minAge: MENORA_HEALTH_MIN_AGE,
+        maxAge: MENORA_HEALTH_MAX_AGE,
+        minEntryDays: MENORA_HEALTH_MIN_ENTRY_DAYS
+      });
+      return st;
     },
 
     _isInsuredRelevant(_ins){ return true; },
@@ -30584,12 +30659,27 @@ UsersGateUI.init();
       return MENORA_HEALTH_COVERS.map((c) => c.id).filter((id) => !!st?.selected?.[id]);
     },
 
+    _syncAge(st){
+      return riskSimSyncAgeFromBirthDate(st, {
+        minAge: MENORA_HEALTH_MIN_AGE,
+        maxAge: MENORA_HEALTH_MAX_AGE,
+        minEntryDays: MENORA_HEALTH_MIN_ENTRY_DAYS
+      });
+    },
+
     _recalcState(st){
       if(!st) return;
+      if(!st.selected || typeof st.selected !== "object") st.selected = {};
+      const ageSync = this._syncAge(st);
       const ids = this._selectedIds(st);
       if(!ids.length){
         st.result = null;
         st.error = null;
+        return;
+      }
+      if(!ageSync.ok){
+        st.result = null;
+        st.error = MENORA_HEALTH_SIM_MESSAGES[ageSync.reason] || MENORA_HEALTH_SIM_MESSAGES.birth_missing;
         return;
       }
       const calc = computeMenoraHealthBundle(ids, st.age, st.gender);
@@ -30629,15 +30719,15 @@ UsersGateUI.init();
         return `<button type="button" class="lcMnrHealth__tab${ins.id === activeId ? " is-active" : ""}${statusCls}" data-mnrh-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${s?.savedAt ? " 🟢" : ""}</button>`;
       }).join("")}</div>` : "";
 
-      const ageOptionsHtml = `<option value="">בחר גיל…</option>` + MENORA_HEALTH_AGE_OPTIONS.map((a) =>
-        `<option value="${a}"${String(st.age) === String(a) ? " selected" : ""}>${a}</option>`
-      ).join("");
-
-      const ageHintHtml = (isStandalone || st.age) ? "" : (
-        Number.isInteger(st.ageRaw)
-          ? `<div class="lcMnrHealth__hint lcMnrHealth__hint--warn">הגיל המחושב (${st.ageRaw}) חורג מטווח הכניסה — יש לבחור גיל ידנית</div>`
-          : `<div class="lcMnrHealth__hint lcMnrHealth__hint--warn">לא נמצא תאריך לידה תקין — יש לבחור גיל</div>`
-      );
+      const birthIso = riskSimBirthDateToIsoInput(st.birthDate || "");
+      const birthMaxIso = riskSimIsoDateDaysAgo(MENORA_HEALTH_MIN_ENTRY_DAYS);
+      const ageSync = this._syncAge(st);
+      const ageDisplay = ageSync.ok ? String(ageSync.age) : "—";
+      const ageHintHtml = !st.birthDate
+        ? (isStandalone ? `<div class="lcMnrHealth__hint lcMnrHealth__hint--warn">יש לבחור תאריך לידה מלוח השנה</div>` : `<div class="lcMnrHealth__hint lcMnrHealth__hint--warn">לא נמצא תאריך לידה בפרטים האישיים — יש לבחור מלוח השנה</div>`)
+        : (!ageSync.ok
+          ? `<div class="lcMnrHealth__hint lcMnrHealth__hint--warn">${escapeHtml(MENORA_HEALTH_SIM_MESSAGES[ageSync.reason] || "תאריך לידה לא תקין לחישוב")}</div>`
+          : `<div class="lcMnrHealth__hint">גיל ביטוחי (שנים שלמות היום): <strong>${escapeHtml(ageDisplay)}</strong></div>`);
       const needsGenderSelected = this._selectedIds(st).some((id) => !!MENORA_HEALTH_COVER_BY_ID[id]?.needsGender);
       const genderHintHtml = (!needsGenderSelected || isStandalone || st.gender) ? "" : `<div class="lcMnrHealth__hint lcMnrHealth__hint--warn">לא נמצא מין — נדרש לכיסוי ייעוצים ובדיקות</div>`;
 
@@ -30651,7 +30741,7 @@ UsersGateUI.init();
           <div class="lcMnrHealth__groupTitle">${escapeHtml(g)}</div>
           <div class="lcMnrHealth__coverList">
             ${groups[g].map((c) => {
-              const checked = !!st.selected[c.id];
+              const checked = !!(st.selected && st.selected[c.id]);
               const one = checked ? computeMenoraHealthCoverPremium(c.id, st.age, st.gender) : null;
               const premTxt = one?.ok ? `₪${formatMenoraHealthExactAmount(one.monthlyPremium)}` : (checked && one && !one.ok ? "—" : "");
               return `<label class="lcMnrHealth__cover${checked ? " is-checked" : ""}">
@@ -30729,8 +30819,8 @@ UsersGateUI.init();
               : `<div class="lcMnrHealth__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}
             <div class="lcMnrHealth__grid">
               <div class="lcMnrHealth__field">
-                <label class="lcMnrHealth__label">גיל (${MENORA_HEALTH_MIN_AGE}–${MENORA_HEALTH_MAX_AGE})</label>
-                <select class="lcMnrHealth__input" data-mnrh-field="age">${ageOptionsHtml}</select>
+                <label class="lcMnrHealth__label">תאריך לידה</label>
+                <input class="lcMnrHealth__input" type="date" data-mnrh-field="birthDate" value="${escapeHtml(birthIso)}" max="${escapeHtml(birthMaxIso)}" />
                 ${ageHintHtml}
               </div>
               <div class="lcMnrHealth__field">
@@ -30746,8 +30836,8 @@ UsersGateUI.init();
                 <input class="lcMnrHealth__input" type="text" data-mnrh-field="occupation" value="${escapeHtml(st.occupation || "")}" placeholder="לדוגמה: מהנדס, נהג משאית" autocomplete="off" />
               </div>
             </div>
-            <div class="lcMnrHealth__coversTitle">בחירת כיסויים</div>
-            ${coversHtml}
+            <div class="lcMnrHealth__coversTitle">בחירת כיסויים <span class="lcMnrHealth__coversCount">(${MENORA_HEALTH_COVERS.length})</span></div>
+            <div class="lcMnrHealth__coversWrap">${coversHtml}</div>
             ${occBlockHtml}
             ${resultHtml}
           </div>
@@ -30794,11 +30884,15 @@ UsersGateUI.init();
         else if(action === "discard"){ if(target) this._activeInsuredId = target; this._render(); }
         else this._render();
       }));
-      const ageSel = modal.querySelector('[data-mnrh-field="age"]');
-      if(ageSel) on(ageSel, "change", () => {
+      const birthInput = modal.querySelector('[data-mnrh-field="birthDate"]');
+      if(birthInput) on(birthInput, "change", () => {
         const st = this._state[this._activeInsuredId];
         if(!st) return;
-        st.age = ageSel.value; st.ageSource = "manual"; st.dirtySinceSave = true;
+        st.birthDate = riskSimBirthDateFromIsoInput(birthInput.value);
+        st.birthDateSource = "manual";
+        st.ageSource = "manual";
+        st.dirtySinceSave = true;
+        this._syncAge(st);
         this._render();
       });
       $$('[data-mnrh-field="gender"]', modal).forEach((btn) => on(btn, "click", () => {
@@ -30822,6 +30916,7 @@ UsersGateUI.init();
       $$("[data-mnrh-cover]", modal).forEach((el) => on(el, "change", () => {
         const st = this._state[this._activeInsuredId];
         if(!st) return;
+        if(!st.selected || typeof st.selected !== "object") st.selected = {};
         const id = el.getAttribute("data-mnrh-cover");
         st.selected[id] = !!el.checked;
         st.dirtySinceSave = true;
@@ -30874,6 +30969,8 @@ UsersGateUI.init();
         monthlyPremium: st.result.monthlyPremium,
         annualPremium: st.result.annualPremium,
         monthlyAgorot: st.result.monthlyAgorot,
+        birthDate: st.birthDate || "",
+        birthDateSource: st.birthDateSource || "",
         age: st.age, ageSource: st.ageSource, gender: st.gender, genderSource: st.genderSource,
         occupation: st.occupation || "", occupationSource: st.occupationSource || ""
       };
@@ -30932,10 +31029,14 @@ UsersGateUI.init();
       productKey: "מחלות קשות",
       title: "סימולטור מחלות קשות מנורה",
       subtitle: "קרן אור TOP — פרמיה חודשית לכל ₪100,000 פיצוי",
-      minAge: 1,
-      maxEntryAge: 66,
-      minSum: 50000,
+      minAge: 1,           // טבלת התעריף מתחילה ב-1–19
+      maxEntryAge: 66,     // גיל כניסה מקסימלי
+      minEntryDays: 15,
+      minSumAdult: 50000,  // מינימום למבוגר
+      minSumChild: 100000, // מינימום לילד עד גיל 20
+      childMaxAge: 20,
       maxSum: 600000,
+      supportsProgramMode: false,
       cssPrefix: "lcMnrCi",
       modalClass: "lcMnrCiModal"
     },
@@ -30948,12 +31049,32 @@ UsersGateUI.init();
       subtitle: "תעריפון קרן לחיים (עמוד מחלות קשות) — פרמיה חודשית לכל ₪100,000 פיצוי",
       minAge: 1,
       maxEntryAge: 69,
-      minSum: 100000,
+      minEntryDays: 15,
+      minSumBase: 100000,   // מינימלי כבסיס
+      minSumAddon: 50000,   // מינימלי כתכנית נוספת
       maxSum: 400000,
+      supportsProgramMode: true,
       cssPrefix: "lcMnrCi",
       modalClass: "lcMnrCiModal"
     }
   };
+
+  /** גבולות סכום פיצוי לפי הערות התעריפון (עמוד 3) — תלוי גיל / סוג תכנית. */
+  function menoraCiResolveSumLimits(planId, age, programMode){
+    const plan = MENORA_CI_PLANS[planId];
+    if(!plan) return { minSum: null, maxSum: null };
+    if(planId === "orTop"){
+      const a = Number(age);
+      const hasAge = safeTrim(age) !== "" && Number.isInteger(a);
+      const isChild = hasAge && a <= plan.childMaxAge;
+      return { minSum: isChild ? plan.minSumChild : plan.minSumAdult, maxSum: plan.maxSum };
+    }
+    if(planId === "kerenChaim"){
+      const minSum = programMode === "addon" ? plan.minSumAddon : plan.minSumBase;
+      return { minSum, maxSum: plan.maxSum };
+    }
+    return { minSum: null, maxSum: null };
+  }
 
   function menoraCiAgorotToShekels(agorot){
     return agorot / 100;
@@ -30991,12 +31112,16 @@ UsersGateUI.init();
     };
   }
 
-  function computeMenoraCiPremium(planId, { age, gender, smoker, compensation }){
+  function computeMenoraCiPremium(planId, { age, gender, smoker, compensation, programMode }){
     const plan = MENORA_CI_PLANS[planId];
     if(!plan) return { ok:false, reason:"plan_missing" };
     const sum = Number(String(compensation == null ? "" : compensation).replace(/[^\d.-]/g, ""));
     if(!Number.isFinite(sum) || sum <= 0) return { ok:false, reason:"sum_missing" };
-    if(sum < plan.minSum || sum > plan.maxSum) return { ok:false, reason:"sum_out_of_range", minSum: plan.minSum, maxSum: plan.maxSum };
+    const limits = menoraCiResolveSumLimits(planId, age, programMode || "base");
+    if(limits.minSum == null || limits.maxSum == null) return { ok:false, reason:"plan_missing" };
+    if(sum < limits.minSum || sum > limits.maxSum){
+      return { ok:false, reason:"sum_out_of_range", minSum: limits.minSum, maxSum: limits.maxSum };
+    }
     const looked = lookupMenoraCiRate(planId, { age, gender, smoker });
     if(!looked.ok) return looked;
     const monthlyAgorotExact = (looked.rateAgorot * sum) / MENORA_CI_RATE_UNIT;
@@ -31010,14 +31135,19 @@ UsersGateUI.init();
       ratePerHundredThousand: looked.ratePerHundredThousand,
       compensation: sum,
       planId,
+      programMode: programMode || "base",
       pdfName: looked.pdfName,
-      wizardCoverKey: plan.wizardCoverKey
+      wizardCoverKey: plan.wizardCoverKey,
+      minSum: limits.minSum,
+      maxSum: limits.maxSum
     };
   }
 
   const MENORA_CI_MESSAGES = {
-    age_missing: "יש לבחור גיל לפני חישוב הפרמיה.",
-    age_out_of_range: "הגיל חורג מטווח הכניסה המותר למסלול זה.",
+    birth_missing: "יש לבחור תאריך לידה לפני חישוב הפרמיה.",
+    entry_too_young: "גיל הכניסה המינימלי הוא 15 ימים.",
+    age_missing: "יש לבחור תאריך לידה לפני חישוב הפרמיה.",
+    age_out_of_range: "הגיל הביטוחי (שנים שלמות היום) חורג מטווח הכניסה המותר למסלול זה.",
     gender_missing: "יש לבחור מין לפני חישוב הפרמיה.",
     smoker_missing: "יש לציין האם המבוטח מעשן/ת לפני חישוב הפרמיה.",
     sum_missing: "יש להזין סכום פיצוי תקין (גדול מאפס) לפני חישוב הפרמיה.",
@@ -31029,8 +31159,6 @@ UsersGateUI.init();
   function createMenoraCiSimulator(planId){
     const plan = MENORA_CI_PLANS[planId];
     const P = plan.cssPrefix;
-    const ageOptions = [];
-    for(let a = plan.minAge; a <= plan.maxEntryAge; a++) ageOptions.push(a);
 
     return {
       _planId: planId,
@@ -31059,23 +31187,40 @@ UsersGateUI.init();
         const d = ins?.data || {};
         const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
         const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
-        const computedAge = riskSimAgeFromBirthDate(d.birthDate);
-        const ageInRange = Number.isInteger(computedAge) && computedAge >= plan.minAge && computedAge <= plan.maxEntryAge;
+        const birthDate = safeTrim(d.birthDate || "");
         const occupation = safeTrim(d.occupation || "");
-        return {
-          age: ageInRange ? String(computedAge) : "",
-          ageSource: ageInRange ? "step1" : "",
-          ageRaw: computedAge,
+        const st = {
+          birthDate,
+          birthDateSource: birthDate ? "step1" : "",
+          age: "",
+          ageSource: birthDate ? "step1" : "",
+          ageRaw: null,
+          entryDays: null,
           gender, genderSource: gender ? "step1" : "",
           smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "",
           occupation,
           occupationSource: occupation ? "step1" : "",
+          programMode: "base",
           compensation: "",
           result: null,
           error: null,
           savedAt: null,
           dirtySinceSave: false
         };
+        riskSimSyncAgeFromBirthDate(st, {
+          minAge: plan.minAge,
+          maxAge: plan.maxEntryAge,
+          minEntryDays: plan.minEntryDays
+        });
+        return st;
+      },
+
+      _syncAge(st){
+        return riskSimSyncAgeFromBirthDate(st, {
+          minAge: plan.minAge,
+          maxAge: plan.maxEntryAge,
+          minEntryDays: plan.minEntryDays
+        });
       },
 
       _isInsuredRelevant(_ins){ return true; },
@@ -31113,8 +31258,19 @@ UsersGateUI.init();
       _calc(insId){
         const st = this._state[insId];
         if(!st) return;
+        const ageSync = this._syncAge(st);
+        if(!ageSync.ok){
+          st.result = null;
+          st.error = MENORA_CI_MESSAGES[ageSync.reason] || MENORA_CI_MESSAGES.birth_missing;
+          if(ageSync.reason === "age_out_of_range"){
+            st.error = `הגיל הביטוחי חורג מטווח הכניסה ${plan.minAge}–${plan.maxEntryAge} (שנים שלמות היום).`;
+          }
+          this._render();
+          return;
+        }
         const calc = computeMenoraCiPremium(planId, {
-          age: st.age, gender: st.gender, smoker: st.smoker, compensation: st.compensation
+          age: st.age, gender: st.gender, smoker: st.smoker,
+          compensation: st.compensation, programMode: st.programMode || "base"
         });
         if(calc.ok){
           st.result = calc;
@@ -31125,7 +31281,7 @@ UsersGateUI.init();
           if(calc.reason === "age_out_of_range"){
             msg = `לא נמצא תעריף לכניסה בגיל זה (טווח כניסה ${plan.minAge}–${plan.maxEntryAge}).`;
           } else if(calc.reason === "sum_out_of_range"){
-            msg = `סכום הפיצוי חייב להיות בין ₪${formatRiskSimSumInsuredDigits(plan.minSum)} ל-₪${formatRiskSimSumInsuredDigits(plan.maxSum)}.`;
+            msg = `סכום הפיצוי חייב להיות בין ₪${formatRiskSimSumInsuredDigits(calc.minSum)} ל-₪${formatRiskSimSumInsuredDigits(calc.maxSum)}.`;
           }
           st.error = msg;
         }
@@ -31150,17 +31306,31 @@ UsersGateUI.init();
           return `<button type="button" class="${P}__tab${ins.id === activeId ? " is-active" : ""}${statusCls}" data-mnrci-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${s?.savedAt ? " 🟢" : ""}</button>`;
         }).join("")}</div>` : "";
 
-        const ageOptionsHtml = `<option value="">בחר גיל…</option>` + ageOptions.map((a) =>
-          `<option value="${a}"${String(st.age) === String(a) ? " selected" : ""}>${a}</option>`
-        ).join("");
-
-        const ageHintHtml = (isStandalone || st.age) ? "" : (
-          Number.isInteger(st.ageRaw)
-            ? `<div class="${P}__hint ${P}__hint--warn">הגיל המחושב (${st.ageRaw}) חורג מטווח הכניסה — יש לבחור גיל ידנית</div>`
-            : `<div class="${P}__hint ${P}__hint--warn">לא נמצא תאריך לידה תקין — יש לבחור גיל</div>`
-        );
+        const birthIso = riskSimBirthDateToIsoInput(st.birthDate || "");
+        const birthMaxIso = riskSimIsoDateDaysAgo(plan.minEntryDays);
+        const ageSync = this._syncAge(st);
+        const sumLimits = menoraCiResolveSumLimits(planId, st.age, st.programMode || "base");
+        const ageHintHtml = !st.birthDate
+          ? (isStandalone
+            ? `<div class="${P}__hint ${P}__hint--warn">יש לבחור תאריך לידה מלוח השנה</div>`
+            : `<div class="${P}__hint ${P}__hint--warn">לא נמצא תאריך לידה בפרטים האישיים — יש לבחור מלוח השנה</div>`)
+          : (!ageSync.ok
+            ? `<div class="${P}__hint ${P}__hint--warn">${escapeHtml(
+                ageSync.reason === "age_out_of_range"
+                  ? `הגיל הביטוחי חורג מטווח הכניסה ${plan.minAge}–${plan.maxEntryAge}`
+                  : (MENORA_CI_MESSAGES[ageSync.reason] || "תאריך לידה לא תקין לחישוב")
+              )}</div>`
+            : `<div class="${P}__hint">גיל ביטוחי (שנים שלמות היום): <strong>${escapeHtml(String(ageSync.age))}</strong></div>`);
         const genderHintHtml = (isStandalone || st.gender) ? "" : `<div class="${P}__hint ${P}__hint--warn">לא נמצא מין בפרטים האישיים — יש לבחור</div>`;
         const smokerHintHtml = (isStandalone || st.smoker === true || st.smoker === false) ? "" : `<div class="${P}__hint ${P}__hint--warn">לא נמצא סטטוס עישון בפרטים האישיים — יש לבחור</div>`;
+        const programModeHtml = plan.supportsProgramMode ? `
+                <div class="${P}__field ${P}__field--wide">
+                  <label class="${P}__label">סוג תכנית (לפי התעריפון)</label>
+                  <div class="${P}__segmented">
+                    <button type="button" class="${P}__segBtn${(st.programMode || "base") === "base" ? " is-active" : ""}" data-mnrci-field="programMode" data-mnrci-value="base">כבסיס (מינ׳ ₪${formatRiskSimSumInsuredDigits(plan.minSumBase)})</button>
+                    <button type="button" class="${P}__segBtn${st.programMode === "addon" ? " is-active" : ""}" data-mnrci-field="programMode" data-mnrci-value="addon">כתכנית נוספת (מינ׳ ₪${formatRiskSimSumInsuredDigits(plan.minSumAddon)})</button>
+                  </div>
+                </div>` : "";
 
         const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company)
           ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini")
@@ -31226,8 +31396,8 @@ UsersGateUI.init();
                 : `<div class="${P}__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}
               <div class="${P}__grid">
                 <div class="${P}__field">
-                  <label class="${P}__label">גיל כניסה (${plan.minAge}–${plan.maxEntryAge})</label>
-                  <select class="${P}__input" data-mnrci-field="age">${ageOptionsHtml}</select>
+                  <label class="${P}__label">תאריך לידה</label>
+                  <input class="${P}__input" type="date" data-mnrci-field="birthDate" value="${escapeHtml(birthIso)}" max="${escapeHtml(birthMaxIso)}" />
                   ${ageHintHtml}
                 </div>
                 <div class="${P}__field">
@@ -31247,9 +31417,10 @@ UsersGateUI.init();
                   ${smokerHintHtml}
                 </div>
                 <div class="${P}__field">
-                  <label class="${P}__label">סכום פיצוי (₪${formatRiskSimSumInsuredDigits(plan.minSum)}–₪${formatRiskSimSumInsuredDigits(plan.maxSum)})</label>
+                  <label class="${P}__label">סכום פיצוי (₪${formatRiskSimSumInsuredDigits(sumLimits.minSum)}–₪${formatRiskSimSumInsuredDigits(sumLimits.maxSum)})</label>
                   <input class="${P}__input" type="text" inputmode="numeric" data-mnrci-field="compensation" value="${escapeHtml(st.compensation || "")}" placeholder="לדוגמה: 100,000" />
                 </div>
+                ${programModeHtml}
                 <div class="${P}__field ${P}__field--wide">
                   <label class="${P}__label">עיסוק</label>
                   <input class="${P}__input" type="text" data-mnrci-field="occupation" value="${escapeHtml(st.occupation || "")}" placeholder="לדוגמה: מהנדס, נהג משאית" autocomplete="off" />
@@ -31304,12 +31475,15 @@ UsersGateUI.init();
           else if(action === "discard"){ if(target) this._activeInsuredId = target; this._render(); }
           else this._render();
         }));
-        const ageSel = modal.querySelector('[data-mnrci-field="age"]');
-        if(ageSel) on(ageSel, "change", () => {
+        const birthInput = modal.querySelector('[data-mnrci-field="birthDate"]');
+        if(birthInput) on(birthInput, "change", () => {
           const st = this._state[this._activeInsuredId];
           if(!st) return;
-          st.age = ageSel.value; st.ageSource = "manual";
+          st.birthDate = riskSimBirthDateFromIsoInput(birthInput.value);
+          st.birthDateSource = "manual";
+          st.ageSource = "manual";
           st.result = null; st.error = null; st.dirtySinceSave = true;
+          this._syncAge(st);
           this._render();
         });
         const sumInput = modal.querySelector('[data-mnrci-field="compensation"]');
@@ -31345,6 +31519,13 @@ UsersGateUI.init();
           if(!st) return;
           st.smoker = btn.getAttribute("data-mnrci-value") === "1";
           st.smokerSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true;
+          this._render();
+        }));
+        $$('[data-mnrci-field="programMode"]', modal).forEach((btn) => on(btn, "click", () => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.programMode = btn.getAttribute("data-mnrci-value") || "base";
+          st.result = null; st.error = null; st.dirtySinceSave = true;
           this._render();
         }));
         const calcBtn = modal.querySelector("[data-mnrci-calc]");
@@ -31385,9 +31566,12 @@ UsersGateUI.init();
       _buildResultForInsured(insId){
         const st = this._state[insId];
         if(!st) return null;
+        const ageSync = this._syncAge(st);
+        if(!ageSync.ok) return null;
         if(!st.result?.ok){
           const calc = computeMenoraCiPremium(planId, {
-            age: st.age, gender: st.gender, smoker: st.smoker, compensation: st.compensation
+            age: st.age, gender: st.gender, smoker: st.smoker,
+            compensation: st.compensation, programMode: st.programMode || "base"
           });
           if(!calc.ok) return null;
           st.result = calc; st.error = null;
@@ -31400,7 +31584,10 @@ UsersGateUI.init();
           ratePerHundredThousand: r.ratePerHundredThousand,
           pdfName: r.pdfName,
           planId: r.planId,
+          programMode: r.programMode || st.programMode || "base",
           wizardCoverKey: r.wizardCoverKey,
+          birthDate: st.birthDate || "",
+          birthDateSource: st.birthDateSource || "",
           age: st.age, ageSource: st.ageSource, gender: st.gender, genderSource: st.genderSource,
           smoker: st.smoker, smokerSource: st.smokerSource,
           occupation: st.occupation || "", occupationSource: st.occupationSource || ""
