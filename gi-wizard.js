@@ -153,6 +153,20 @@
   const stampRecordAgentOwnership = host.stampRecordAgentOwnership;
   const touchElementaryReferralElementary = host.touchElementaryReferralElementary;
   const validateValueByKind = host.validateValueByKind;
+  /* GI-FIX 2026-08-09g — נוספו ל-host; חסרו וגרמו למסך ריק בפתיחת האשף. */
+  const AgentActivityLog = host.AgentActivityLog;
+  const AgentElementaryTrackingUI = host.AgentElementaryTrackingUI;
+  const COMPANY_LOGO_FILES = host.COMPANY_LOGO_FILES;
+  const CustomerDocuments = host.CustomerDocuments;
+  const ELEMENTARY_LEVI_CODE_MAPPINGS = host.ELEMENTARY_LEVI_CODE_MAPPINGS;
+  const ElementaryDashboardUI = host.ElementaryDashboardUI;
+  const ElementaryIssuePolicyUI = host.ElementaryIssuePolicyUI;
+  const HAR_BITUACH_SITE_URL = host.HAR_BITUACH_SITE_URL;
+  const elementaryProgressCarUrl = host.elementaryProgressCarUrl;
+  const elementaryWizardLogoUrl = host.elementaryWizardLogoUrl;
+  const getCurrentAgentRecord = host.getCurrentAgentRecord;
+  const normalizeEmailValue = host.normalizeEmailValue;
+  const nowISO = host.nowISO;
 
   // ---------- New Customer Wizard (Steps 1–7) ----------
   const DISCOUNT_SELECT_PLACEHOLDER = 'בחר הנחה';

@@ -29610,6 +29610,22 @@ UsersGateUI.init();
           stampRecordAgentOwnership,
           touchElementaryReferralElementary,
           validateValueByKind,
+          /* GI-FIX 2026-08-09g — קבועים/פונקציות עזר נוספים שנעדרו מ-host,
+             נמצאו בסבב שני של אותה בדיקה אוטומטית (מסך ריק אחרי פתיחת האשף —
+             render נכשל על אחד מהם). תוספת בלבד. */
+          AgentActivityLog,
+          AgentElementaryTrackingUI,
+          COMPANY_LOGO_FILES,
+          CustomerDocuments,
+          ELEMENTARY_LEVI_CODE_MAPPINGS,
+          ElementaryDashboardUI,
+          ElementaryIssuePolicyUI,
+          HAR_BITUACH_SITE_URL,
+          elementaryProgressCarUrl,
+          elementaryWizardLogoUrl,
+          getCurrentAgentRecord,
+          normalizeEmailValue,
+          nowISO,
         };
         try {
           Object.defineProperty(host, "ElementaryMirrorUI", {
