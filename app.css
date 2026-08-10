@@ -20456,6 +20456,16 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
 #view-dashboard .bankKpi__top{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; min-height:0; }
 #view-dashboard .bankKpi__caret{ color:#7a90b8; font-size:13px; font-weight:700; transition:transform .24s ease, color .24s ease; }
 #view-dashboard .bankKpi__he{ margin-top:0; font-size:13px; font-weight:700; color:#4a6490; line-height:1.2; transition:transform .24s ease, color .24s ease; }
+#view-dashboard .bankKpi__hint{
+  position:relative;
+  z-index:2;
+  margin:2px 0 0;
+  font-size:11px;
+  font-weight:500;
+  line-height:1.25;
+  color:#7a90b8;
+  max-width:92%;
+}
 #view-dashboard .bankKpi:hover{
   transform:translateY(-6px);
   border-color:rgba(117,154,228,.70);
@@ -20633,6 +20643,10 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
 #view-dashboard .bankKpi--agentAppoint .bankKpi__he,
 #view-dashboard .bankKpi--newClients .bankKpi__he,
 #view-dashboard .bankKpi--todaySales .bankKpi__he,
+#view-dashboard .bankKpi--netPremium .bankKpi__hint,
+#view-dashboard .bankKpi--agentAppoint .bankKpi__hint,
+#view-dashboard .bankKpi--newClients .bankKpi__hint,
+#view-dashboard .bankKpi--todaySales .bankKpi__hint,
 #view-dashboard .bankKpi--netPremium .bankKpi__caret,
 #view-dashboard .bankKpi--agentAppoint .bankKpi__caret,
 #view-dashboard .bankKpi--newClients .bankKpi__caret,
@@ -44963,3 +44977,128 @@ body.view-elementaryMirror-active .pageTitle{ /* keep default */ }
   }
 }
 /* ===== /GI-DESIGN 2026-08-04 Customers list ===== */
+/* =========================================================
+   BUILD: 20260810-logo-fix-v1
+   Login + sidebar logo: no black/blue box, centered above form
+   ========================================================= */
+.lcLogin__logo,
+.lcLogin__logo--img,
+body.lcAuthLock .lcLogin__logo,
+body.lcAuthLock .lcLogin__logo--img{
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 auto !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+.lcLogin__logo::before,
+.lcLogin__logo::after,
+body.lcAuthLock .lcLogin__logo::before,
+body.lcAuthLock .lcLogin__logo::after{
+  content: none !important;
+  display: none !important;
+  animation: none !important;
+}
+
+body.lcAuthLock .lcLogin__card{
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+}
+
+body.lcAuthLock .lcLogin__brand,
+body.lcAuthLock .lcLogin__brand--mfa{
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 100% !important;
+  margin: 0 auto 10px !important;
+  text-align: center !important;
+  order: 0;
+}
+
+body.lcAuthLock .giLogoAnim--login{
+  width: min(280px, 78%) !important;
+  max-width: 100%;
+  margin: 0 auto !important;
+  aspect-ratio: 1808 / 373;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body.lcAuthLock .giLogoAnim__wrap{
+  filter: drop-shadow(0 10px 22px rgba(11, 31, 74, .14));
+}
+
+body.lcAuthLock .lcLogin__logoImg,
+body.lcAuthLock .giLogoAnim--login .lcLogin__logoImg,
+body.lcAuthLock .giLogoAnim--login .brand__logoImg{
+  width: 100% !important;
+  max-width: none !important;
+  height: auto !important;
+  object-fit: contain !important;
+  background: transparent !important;
+  mix-blend-mode: normal !important;
+}
+
+/* Title/hint sit under the centered logo, not behind it */
+body.lcAuthLock .lcLogin__title,
+body.lcAuthLock .lcLogin__hint,
+body.lcAuthLock .lcLogin__secureNote{
+  text-align: center !important;
+  width: 100%;
+}
+
+body.lcAuthLock .lcLogin__title{
+  margin-top: 6px !important;
+  order: 1;
+}
+body.lcAuthLock .lcLogin__hint{
+  order: 2;
+  margin-bottom: 4px;
+}
+body.lcAuthLock .lcLogin__secureNote{
+  order: 3;
+  justify-content: center !important;
+  margin: 8px auto 14px !important;
+}
+body.lcAuthLock .lcLogin__form{
+  order: 4;
+  width: 100%;
+  margin-top: 4px !important;
+}
+body.lcAuthLock .lcLogin__error{
+  order: 5;
+}
+body.lcAuthLock .lcLogin__footBtn{
+  order: 6;
+}
+
+/* Sidebar / topbar logo — no dark tile behind the PNG */
+.topbarBrand,
+.topbarBrand--sidebar,
+.sidebar__topBar .topbarBrand{
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.topbarBrand__img,
+.brand__logoImg{
+  background: transparent !important;
+  object-fit: contain;
+}
+
+@media (max-width: 640px){
+  body.lcAuthLock .giLogoAnim--login{
+    width: min(230px, 84%) !important;
+  }
+}
