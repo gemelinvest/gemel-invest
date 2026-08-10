@@ -379,6 +379,23 @@
   display:none !important;
 }
 
+/* הסתרת כפתור "חשב פרמיה" מקורי בגוף — נשאר רק ב-footer */
+.giSimShellModal .giSimShell__nativeCalcHidden,
+.giSimShellModal [class*="__calcBtn"]:not(.giSimShell__calcBtn),
+.giSimShellModal [class*="__actions"],
+.giSimShellModal .giValModal__body [data-phx-calc],
+.giSimShellModal .giValModal__body [data-mnr-calc],
+.giSimShellModal .giValModal__body [data-phxmort-calc],
+.giSimShellModal .giValModal__body [data-mnrci-calc],
+.giSimShellModal .giValModal__body [data-mgdci-calc],
+.giSimShellModal .giValModal__body [data-mgdca-calc],
+.giSimShellModal .giValModal__body [data-mgdr-calc],
+.giSimShellModal .giValModal__body [data-hachci-calc]{
+  display:none !important;
+  visibility:hidden !important;
+  pointer-events:none !important;
+}
+
 /* רוחב בסיסי */
 .lcPhxSimModal .giValModal__card,
 .lcMnrSimModal .giValModal__card,
