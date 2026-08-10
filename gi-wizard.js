@@ -365,13 +365,14 @@
         {
           groupLabel: "כיסוי נוסף",
           items: [
-            { k:"ראשון בסל" }
+            { k:"ראשון בסל" },
+            { k:"שירות פרימיום לילד" }
           ]
         },
         {
           groupLabel: "מחלות קשות",
           items: [
-            { k:"מחלות קשות", amountField: "hachsharaCriticalAmount", amountLabel: "סכום פיצוי", ageRange: "0-65" },
+            { k:"מחלות קשות", amountField: "hachsharaCriticalAmount", amountLabel: "סכום פיצוי", ageRange: "0-75" },
             { k:"מחלות קשות לילד", amountField: "hachsharaChildCriticalAmount", amountLabel: "סכום פיצוי" }
           ]
         }

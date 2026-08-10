@@ -68,17 +68,31 @@
 .lcSimCenterModal .giValModal__card{
   max-width:620px;
   width:100%;
+  max-height:min(92vh, 900px);
+  height:auto;
+  display:flex;
+  flex-direction:column;
   overflow:hidden;
 }
 .lcSimCenterModal .giValModal__head{
   padding:16px 24px 14px;
   position:relative;
+  flex:0 0 auto;
   background:linear-gradient(135deg, var(--gi-primary-soft, #EFF6FF) 0%, #e0ecff 55%, #d7e6ff 100%);
   border-bottom:1px solid rgba(56,112,237,.16);
 }
-.lcSimCenterModal .giValModal__body{ padding:14px 24px; }
+.lcSimCenterModal .giValModal__body,
+.lcSimCenterModal__body{
+  padding:14px 24px;
+  flex:1 1 auto;
+  min-height:0;
+  overflow-x:hidden;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
 .lcSimCenterModal .giValModal__foot{
   padding:12px 24px 16px;
+  flex:0 0 auto;
   background:var(--gi-surface-2, #F8FAFC);
   border-top:1px solid var(--gi-border-soft, #F1F5F9);
 }
