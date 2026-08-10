@@ -2209,19 +2209,18 @@ body.sidebar-collapsed .sidebar .nav__item.is-active .nav__label:not(#\9):not(#\
 
 /* =====================================================================
    25. DASHBOARD GRID — two columns
-   BUILD: 20260810-dash-ops-service
+   BUILD: 20260810-dash-ops-v2
 
    RTL: column 1 = right, column 2 = left.
    Right (wide): לקוחות אחרונים → ביצועים מול יעד מתחתיו
-   Left (narrow): תפעול → שירות מתחתיו → הצעה שלא התקדמה
-   Full width: לוח מובילים
+   Left (narrow stack): תפעול → שירות → מצטיין היום (צמודים)
 
    Rows still use display:contents so placement is via grid-column/row only.
    ===================================================================== */
 
 #view-dashboard .bankDash:not(#\9):not(#\9){
   display: grid !important;
-  /* col1 (right/RTL) wide for recent+goal; col2 (left/RTL) narrow for ops/service */
+  /* col1 (right/RTL) wide for recent+goal; col2 (left/RTL) narrow elevated stack */
   grid-template-columns: minmax(0, 3fr) minmax(0, 1.15fr) !important;
   align-items: start !important;
   gap: 10px !important;
@@ -2249,11 +2248,23 @@ body.sidebar-collapsed .sidebar .nav__item.is-active .nav__label:not(#\9):not(#\
   min-width: 0 !important;
 }
 
-/* Left elevated: תפעול */
-#view-dashboard .bankOpsCube:not(#\9):not(#\9){
+/* Left elevated stack: תפעול → שירות → מצטיין */
+#view-dashboard .bankDash__elevatedCol:not(#\9):not(#\9){
   grid-column: 2 !important;
-  grid-row: 3 !important;
+  grid-row: 3 / span 2 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
   min-width: 0 !important;
+  align-self: start !important;
+}
+
+#view-dashboard .bankDash__elevatedCol .bankOpsCube:not(#\9):not(#\9),
+#view-dashboard .bankDash__elevatedCol .bankServiceCube:not(#\9):not(#\9),
+#view-dashboard .bankDash__elevatedCol .bankLeader:not(#\9):not(#\9){
+  width: 100% !important;
+  min-width: 0 !important;
+  flex: 0 0 auto !important;
 }
 
 /* Right under recent: ביצועים מול יעד */
@@ -2263,33 +2274,15 @@ body.sidebar-collapsed .sidebar .nav__item.is-active .nav__label:not(#\9):not(#\
   min-width: 0 !important;
 }
 
-/* Left under ops: שירות */
-#view-dashboard .bankServiceCube:not(#\9):not(#\9){
-  grid-column: 2 !important;
-  grid-row: 4 !important;
-  min-width: 0 !important;
-}
-
-/* Lead card removed from dashboard — keep rule inert if markup returns */
-#view-dashboard .bankSideCard--lead:not(#\9):not(#\9){
-  display: none !important;
-}
-
+/* Lead / untouched cards removed from agent dashboard */
+#view-dashboard .bankSideCard--lead:not(#\9):not(#\9),
 #view-dashboard .bankSideCard--untouched:not(#\9):not(#\9){
-  grid-column: 2 !important;
-  grid-row: 5 !important;
-  min-width: 0 !important;
-}
-
-#view-dashboard .bankLeader:not(#\9):not(#\9){
-  grid-column: 1 / -1 !important;
-  grid-row: 6 !important;
-  min-width: 0 !important;
+  display: none !important;
 }
 
 #view-dashboard .giDailySales:not(#\9):not(#\9){
   grid-column: 1 / -1 !important;
-  grid-row: 7 !important;
+  grid-row: 5 !important;
   min-width: 0 !important;
 }
 
@@ -2300,11 +2293,9 @@ body.sidebar-collapsed .sidebar .nav__item.is-active .nav__label:not(#\9):not(#\
     grid-template-columns: 1fr !important;
   }
   #view-dashboard .bankRecent:not(#\9):not(#\9),
-  #view-dashboard .bankOpsCube:not(#\9):not(#\9),
-  #view-dashboard .bankServiceCube:not(#\9):not(#\9),
+  #view-dashboard .bankDash__elevatedCol:not(#\9):not(#\9),
   #view-dashboard .bankSideCard:not(#\9):not(#\9),
   #view-dashboard .bankGoal:not(#\9):not(#\9),
-  #view-dashboard .bankLeader:not(#\9):not(#\9),
   #view-dashboard .giDailySales:not(#\9):not(#\9){
     grid-column: 1 !important;
     grid-row: auto !important;
@@ -2464,6 +2455,72 @@ body.sidebar-collapsed .sidebar .nav__item.is-active .nav__label:not(#\9):not(#\
   gap: var(--gi-s4) !important;
   background: none !important;
   box-shadow: none !important;
+}
+
+/* GI-DASH 2026-08-10: ביצועים מול יעד — 3 בלוקים בשורה אחת רציפה (RTL מימין לשמאל) */
+#view-dashboard .bankGoal .bankGoal__shell:not(#\9):not(#\9),
+#view-dashboard .bankDash__row--goalOnly .bankGoal .bankGoal__shell:not(#\9):not(#\9),
+#view-dashboard .bankDash__row--goalUnderRecent .bankGoal .bankGoal__shell:not(#\9):not(#\9){
+  display: grid !important;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.95fr) minmax(0, 1.15fr) !important;
+  grid-template-rows: auto !important;
+  flex-direction: unset !important;
+  align-items: center !important;
+  gap: 10px 14px !important;
+  direction: rtl !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+
+#view-dashboard .bankGoal .bankGoal__meter:not(#\9):not(#\9),
+#view-dashboard .bankGoal .bankGoal__center:not(#\9):not(#\9),
+#view-dashboard .bankGoal .bankGoal__details:not(#\9):not(#\9){
+  width: auto !important;
+  min-width: 0 !important;
+  grid-column: auto !important;
+  grid-row: 1 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-top: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+}
+
+#view-dashboard .bankGoal .bankGoal__center:not(#\9):not(#\9){
+  padding-inline: 12px !important;
+  border-inline: 1px solid var(--gi-border-soft) !important;
+  align-self: stretch !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+#view-dashboard .bankGoal .bankGoal__details:not(#\9):not(#\9){
+  padding-inline-start: 4px !important;
+}
+
+#view-dashboard .bankGoal .bankGoal__topStats:not(#\9):not(#\9){
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 10px 14px !important;
+  padding-top: 0 !important;
+  border-top: 0 !important;
+}
+
+@media (max-width: 900px){
+  #view-dashboard .bankGoal .bankGoal__shell:not(#\9):not(#\9){
+    grid-template-columns: 1fr !important;
+  }
+  #view-dashboard .bankGoal .bankGoal__meter:not(#\9):not(#\9),
+  #view-dashboard .bankGoal .bankGoal__center:not(#\9):not(#\9),
+  #view-dashboard .bankGoal .bankGoal__details:not(#\9):not(#\9){
+    grid-row: auto !important;
+  }
+  #view-dashboard .bankGoal .bankGoal__center:not(#\9):not(#\9){
+    border-inline: 0 !important;
+    border-block: 1px solid var(--gi-border-soft) !important;
+    padding-block: 10px !important;
+    padding-inline: 0 !important;
+  }
 }
 
 .bankGoal__center:not(#\9):not(#\9),
@@ -3968,6 +4025,36 @@ body.sidebar-collapsed .sidebar .nav__item.is-active .nav__label:not(#\9):not(#\
   font-size: 16px !important;
   line-height: 1 !important;
 }
+
+/* מצטיין היום — קומפקטי בעמודת תפעול/שירות */
+#view-dashboard .bankDash__elevatedCol .bankLeader--elevated:not(#\9):not(#\9){
+  padding: 12px 12px 14px !important;
+  overflow: hidden !important;
+}
+#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__head--podium:not(#\9):not(#\9){
+  margin-bottom: 8px !important;
+}
+#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__podium:not(#\9):not(#\9){
+  gap: 8px !important;
+  align-items: stretch !important;
+}
+#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__podiumSlot--first:not(#\9):not(#\9),
+#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__podiumSlot--second:not(#\9):not(#\9),
+#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__podiumSlot--third:not(#\9):not(#\9){
+  min-width: 0 !important;
+  padding: 8px 6px !important;
+}
+#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__heroName:not(#\9):not(#\9),
+#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__sideName:not(#\9):not(#\9){
+  font-size: 12px !important;
+}
+#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__heroAmount:not(#\9):not(#\9),
+#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__sideAmount:not(#\9):not(#\9){
+  font-size: 13px !important;
+}
+#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__trophyImg--lg:not(#\9):not(#\9){ height: 42px !important; }
+#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__trophyImg--md:not(#\9):not(#\9){ height: 34px !important; }
+#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__trophyImg--sm:not(#\9):not(#\9){ height: 28px !important; }
 
 .giAgentOpsOverlay:not(#\9):not(#\9){
   position: fixed !important;

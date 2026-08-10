@@ -27963,14 +27963,6 @@ UsersGateUI.init();
         }
       } catch(_e) {}
       try {
-        const untouched = this.latestUntouchedProposal();
-        const untouchedCard = root.querySelector(".bankSideCard--untouched");
-        const hadUntouched = !!untouchedCard && !untouchedCard.querySelector(".bankSideCard__empty");
-        if(untouchedCard && (untouched || !hadUntouched)){
-          replacePanel(".bankSideCard--untouched", this.renderLatestUntouchedHtml());
-        }
-      } catch(_e) {}
-      try {
         replacePanel(".bankOpsCube", this.renderAgentOpsCubeHtml());
       } catch(_e) {}
       try {
@@ -28306,33 +28298,8 @@ UsersGateUI.init();
     },
 
     renderLatestUntouchedHtml(){
-      const rec = this.latestUntouchedProposal();
-      let sector = "";
-      if(rec){ try { sector = CustomersUI.sectorCellHtml(rec); } catch(_e) { sector = ""; } }
-      const body = rec
-        ? `
-          <div class="bankSideCard__lead">
-            <div class="bankSideCard__leadTop">
-              <span class="bankSideCard__leadName">${escapeHtml(rec.fullName || "—")}</span>
-              <span class="bankSideCard__pill bankSideCard__pill--warn">לא התקדם</span>
-            </div>
-            ${rec.phone ? `<a class="bankSideCard__link" dir="ltr" href="tel:${escapeHtml(rec.phone)}">${escapeHtml(rec.phone)}</a>` : ""}
-            <div class="bankSideCard__rows">
-              <div class="bankSideCard__row"><span>נשמר בתאריך</span><strong>${escapeHtml(this.dashSideDate(rec.createdAt || rec.created_at))}</strong></div>
-              <div class="bankSideCard__row"><span>סוכן מטפל</span><strong>${escapeHtml(rec.agentName || "—")}</strong></div>
-              ${sector ? `<div class="bankSideCard__row"><span>ענף</span><span class="bankSideCard__sector">${sector}</span></div>` : ""}
-            </div>
-            <button class="bankSideCard__cta" data-open-customer="${escapeHtml(String(rec.id || ""))}" type="button">המשך בהצעה</button>
-          </div>`
-        : `<div class="bankSideCard__empty">אין הצעות שנשמרו וממתינות</div>`;
-
-      return `
-        <article class="bankSideCard card bankSideCard--untouched" aria-label="הצעה אחרונה שנשמרה ולא התקדמה">
-          <header class="bankSideCard__head">
-            <span class="bankSideCard__title">הצעה שנשמרה ולא התקדמה</span>
-          </header>
-          <div class="bankSideCard__body">${body}</div>
-        </article>`;
+      // GI-DASH 2026-08-10: כרטיס «הצעה שנשמרה ולא התקדמה» הוסר מהדשבורד.
+      return "";
     },
 
     renderDailySalesReportHtml(){
@@ -29464,21 +29431,46 @@ UsersGateUI.init();
       ];
       const maxBar = Math.max(1, ...metrics.dailySeries.map((item) => item.premium || 0), (metrics.dailyTarget || 0) * 1.15);
       await perfYield();
-      /* GI-FIX 2026-08-09 — רינדור מלא עם רשימה ריקה זמנית לא מוחק טבלה/ליד שכבר נצבעו. */
+      /* GI-FIX 2026-08-09 — רינדור מלא עם רשימה ריקה זמנית לא מוחק טבלה שכבר נצבעה. */
       const existingRecentCount = this.els.root.querySelectorAll(".bankRecent__row").length;
-      const existingUntouchedCard = this.els.root.querySelector(".bankSideCard--untouched");
-      const existingHadUntouched = !!existingUntouchedCard && !existingUntouchedCard.querySelector(".bankSideCard__empty");
       const preservedRecentHtml = (!this.recentCustomersRows(5).length && existingRecentCount > 0)
         ? (this.els.root.querySelector(".bankDash__row--recentCustomers")?.outerHTML || "")
         : "";
-      const preservedUntouchedHtml = (!this.latestUntouchedProposal() && existingHadUntouched)
-        ? (existingUntouchedCard?.outerHTML || "")
-        : "";
       const recentCustomersPanelHtml = preservedRecentHtml || this.renderRecentCustomersHtml();
-      const latestUntouchedPanelHtml = preservedUntouchedHtml || this.renderLatestUntouchedHtml();
       const opsCubeHtml = this.renderAgentOpsCubeHtml();
       const serviceCubeHtml = this.renderAgentServiceCubeHtml();
       const goalPanelHtml = this.renderGoalCardHtml(metrics, orgScope);
+      const leaderboardPanelHtml = (() => {
+            const { board: leaderboard2, isYesterday: isYesterday2 } = this.buildLeaderboardWithFallback();
+            const todayStr2 = new Date().toLocaleDateString('he-IL', { day:'numeric', month:'long' });
+            const yesterday2 = new Date(); yesterday2.setDate(yesterday2.getDate() - 1);
+            const yestStr2 = yesterday2.toLocaleDateString('he-IL', { day:'numeric', month:'long' });
+            const displayDate2 = isYesterday2 ? yestStr2 : todayStr2;
+            if(!leaderboard2.length) return `
+              <article class="bankLeader card bankLeader--photoBg bankLeader--waiting bankLeader--solo bankLeader--elevated" id="bankLeaderWaiting">
+                <div class="bankLeader__head bankLeader__head--podium">
+                  ${this.leaderboardHeadHtml(false, todayStr2)}
+                </div>
+              </article>`;
+            const first = leaderboard2[0];
+            const second = leaderboard2[1] || null;
+            const third = leaderboard2[2] || null;
+            return `
+              <article class="bankLeader card bankLeader--photoBg bankLeader--podiumTop3 bankLeader--elevated${isYesterday2 ? ' bankLeader--yesterday' : ''}">
+                <div class="bankLeader__podiumShell" id="bankLeaderHero">
+                  <div class="bankLeader__head bankLeader__head--podium">
+                    ${this.leaderboardHeadHtml(isYesterday2, displayDate2)}
+                  </div>
+                  <div class="bankLeader__podium">
+                    ${this.leaderboardPodiumSlot(first, 1, isYesterday2)}
+                    ${second ? this.leaderboardPodiumSlot(second, 2, isYesterday2) : ''}
+                    ${third ? this.leaderboardPodiumSlot(third, 3, isYesterday2) : ''}
+                  </div>
+                </div>
+                <div class="bankLeader__list" hidden></div>
+                <div class="bankLeader__empty" hidden></div>
+              </article>`;
+          })();
       this.els.root.innerHTML = `
         <section class="bankDash bankDash--cleanTop">
           <div class="bankDash__topStats">
@@ -29517,54 +29509,17 @@ UsersGateUI.init();
             ${todayCardHtml}
           </div>
 
-          <div class="bankDash__row bankDash__row--opsService">
-            ${opsCubeHtml}
-            ${serviceCubeHtml}
+          <div class="bankDash__row bankDash__row--elevatedCol">
+            <div class="bankDash__elevatedCol">
+              ${opsCubeHtml}
+              ${serviceCubeHtml}
+              ${leaderboardPanelHtml}
+            </div>
           </div>
 
           ${recentCustomersPanelHtml}
 
           ${goalPanelHtml}
-
-          <div class="bankDash__row bankDash__row--sideStack">
-            ${latestUntouchedPanelHtml}
-          </div>
-
-          <div class="bankDash__row bankDash__row--leaderSolo">
-
-          ${(() => {
-            const { board: leaderboard2, isYesterday: isYesterday2 } = this.buildLeaderboardWithFallback();
-            const todayStr2 = new Date().toLocaleDateString('he-IL', { day:'numeric', month:'long' });
-            const yesterday2 = new Date(); yesterday2.setDate(yesterday2.getDate() - 1);
-            const yestStr2 = yesterday2.toLocaleDateString('he-IL', { day:'numeric', month:'long' });
-            const displayDate2 = isYesterday2 ? yestStr2 : todayStr2;
-            if(!leaderboard2.length) return `
-              <article class="bankLeader card bankLeader--photoBg bankLeader--waiting bankLeader--solo" id="bankLeaderWaiting">
-                <div class="bankLeader__head bankLeader__head--podium">
-                  ${this.leaderboardHeadHtml(false, todayStr2)}
-                </div>
-              </article>`;
-            const first = leaderboard2[0];
-            const second = leaderboard2[1] || null;
-            const third = leaderboard2[2] || null;
-            return `
-              <article class="bankLeader card bankLeader--photoBg bankLeader--podiumTop3${isYesterday2 ? ' bankLeader--yesterday' : ''}">
-                <div class="bankLeader__podiumShell" id="bankLeaderHero">
-                  <div class="bankLeader__head bankLeader__head--podium">
-                    ${this.leaderboardHeadHtml(isYesterday2, displayDate2)}
-                  </div>
-                  <div class="bankLeader__podium">
-                    ${this.leaderboardPodiumSlot(first, 1, isYesterday2)}
-                    ${second ? this.leaderboardPodiumSlot(second, 2, isYesterday2) : ''}
-                    ${third ? this.leaderboardPodiumSlot(third, 3, isYesterday2) : ''}
-                  </div>
-                </div>
-                <div class="bankLeader__list" hidden></div>
-                <div class="bankLeader__empty" hidden></div>
-              </article>`;
-          })()}
-
-          </div>
 
         </section>`;
       this._renderedDomKey = (metrics && !metrics._loading) ? this.getMetricsCacheKey() : "";

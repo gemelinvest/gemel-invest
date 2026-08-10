@@ -21824,8 +21824,11 @@ body.giDailySalesOverlay-open{ overflow:hidden; }
 #view-users .table td:nth-child(4){ font-weight:900; color:#1b4a97; }
 @media (max-width: 1280px){
   #view-dashboard .bankDash__kpis{ grid-template-columns:repeat(2,minmax(0,1fr)); }
-  #view-dashboard .bankGoal__shell{ grid-template-columns:minmax(0,1fr) minmax(0,.62fr); }
-  #view-dashboard .bankGoal__details{ grid-column:1 / -1; padding-top:16px; border-top:1px solid rgba(176,188,214,.50); }
+  /* GI-DASH 2026-08-10: שומרים 3 עמודות בשורה גם ברוחב בינוני — בלי להוריד details למטה */
+  #view-dashboard .bankGoal__shell{
+    grid-template-columns:minmax(0,1.1fr) minmax(0,.9fr) minmax(0,1.1fr);
+  }
+  #view-dashboard .bankGoal__details{ grid-column:auto; padding-top:0; border-top:0; }
   #view-dashboard .bankGoal__center::after{ display:none; }
 }
 @media (max-width: 980px){
@@ -21833,12 +21836,7 @@ body.giDailySalesOverlay-open{ overflow:hidden; }
   #view-dashboard .bankDash__row--activityChart,
   #view-dashboard .bankDash__row--goalOnly,
   #view-dashboard .bankDash__row--leaderWide{ grid-template-columns:1fr; }
-  #view-dashboard .bankGoal__shell{ grid-template-columns:minmax(0,1fr); }
-  #view-dashboard .bankGoal__center::before,
-  #view-dashboard .bankGoal__center::after{ display:none; }
-  #view-dashboard .bankGoal__center,
-  #view-dashboard .bankGoal__details{ border-top:1px solid rgba(176,188,214,.50); padding-top:14px; }
-  #view-dashboard .bankGoal__topStats{ grid-template-columns:1fr; gap:14px; }
+  /* מתחת ל־900px ה־theme כבר עובר לעמודה אחת; כאן לא שוברים את שורת ה־3 ב־desktop */
   #view-dashboard .bankGoal__topStat:first-child::after{ display:none; }
   #view-dashboard .bankDash__row--leaderWide .bankLeaderFlat__podium{ flex-direction:column; }
   #view-dashboard .bankDash__row--leaderWide .bankLeader__list{ flex-direction:column; }
