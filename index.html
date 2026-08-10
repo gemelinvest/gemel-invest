@@ -10,8 +10,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <link href="./app.css?v=20260810-dash-goldgrad-v1" rel="stylesheet"/>
 <link href="./theme.css?v=20260810-dash-goldgrad-v1" rel="stylesheet"/>
-<link href="./login-split.css?v=20260810-login-split-v1" rel="stylesheet"/>
 <link href="./theme-p2.css?v=20260805-workdays-goal-v1" rel="stylesheet"/>
+<link href="./login-split.css?v=20260810-login-split-v2" rel="stylesheet"/>
 <!-- GI-PERF 2026-08-10: CSS משני (mirror/import/unify) נטען אחרי כניסה מ-app.js —
      לא חוסם מסך login ולא מרעיש 404 לפני שהמשתמש התחבר. -->
 <!-- GI-PERF 2026-08-09: סימולטורים — CSS נטען לפי צורך מ-ensureGiSimulatorStylesLoaded ב-app.js -->
@@ -23,21 +23,70 @@
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
 <meta name="apple-mobile-web-app-title" content="GEMEL INVEST - CRM"/>
+<style id="giLoginSplitCritical">
+/* Critical login split — חייב לנצח theme/app גם אם קובץ חיצוני נכשל */
+body.lcAuthLock{background:#070d18!important}
+body.lcAuthLock #lcLogin.lcLogin{
+  position:fixed!important;inset:0!important;z-index:9999!important;
+  display:flex!important;padding:0!important;margin:0!important;overflow:hidden!important;
+  background:#0a1222!important;align-items:stretch!important;justify-content:stretch!important;
+}
+body.lcAuthLock #lcLogin .lcLogin__shell{
+  display:flex!important;flex-direction:row!important;direction:rtl!important;
+  width:100%!important;height:100%!important;min-height:100dvh!important;align-items:stretch!important;
+}
+body.lcAuthLock #lcLogin .lcLogin__visual{
+  position:relative!important;flex:1 1 auto!important;min-width:0!important;min-height:100dvh!important;
+  overflow:hidden!important;
+  background:radial-gradient(ellipse 70% 55% at 50% 40%,rgba(199,178,129,.16),transparent 60%),linear-gradient(145deg,#0b1730,#070d18 55%,#050910)!important;
+}
+body.lcAuthLock #lcLogin .lcLogin__visualBg{
+  position:absolute!important;inset:0!important;background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important;
+}
+body.lcAuthLock #lcLogin .lcLogin__visualShade{position:absolute!important;inset:0!important;z-index:1!important;pointer-events:none!important;
+  background:linear-gradient(115deg,rgba(7,13,24,.55),rgba(10,20,40,.35) 45%,rgba(7,13,24,.72))!important}
+body.lcAuthLock #lcLogin .lcLogin__visualBrand{
+  position:absolute!important;inset:0!important;z-index:2!important;display:flex!important;
+  align-items:center!important;justify-content:center!important;padding:5vw!important;pointer-events:none!important;box-sizing:border-box!important;
+}
+body.lcAuthLock #lcLogin .lcLogin__visualLogo{
+  display:block!important;width:min(480px,58%)!important;max-width:520px!important;max-height:42vh!important;
+  height:auto!important;object-fit:contain!important;
+}
+body.lcAuthLock #lcLogin .lcLogin__card{
+  flex:0 0 min(440px,42vw)!important;width:min(440px,42vw)!important;max-width:none!important;max-height:none!important;
+  height:100%!important;min-height:100dvh!important;margin:0!important;border-radius:0!important;border:0!important;
+  border-inline-start:1px solid #E5E7EB!important;background:#fff!important;box-shadow:-18px 0 48px rgba(0,0,0,.18)!important;
+  padding:0!important;display:flex!important;flex-direction:column!important;justify-content:center!important;
+  overflow:auto!important;transform:none!important;backdrop-filter:none!important;
+}
+body.lcAuthLock #lcLogin .lcLogin__card::before,
+body.lcAuthLock #lcLogin .lcLogin__card::after{content:none!important;display:none!important}
+body.lcAuthLock #lcLogin .lcLogin__panelInner{
+  width:100%!important;max-width:360px!important;margin:0 auto!important;padding:36px!important;box-sizing:border-box!important;
+}
+@media (max-width:900px){
+  body.lcAuthLock #lcLogin .lcLogin__shell{flex-direction:column-reverse!important}
+  body.lcAuthLock #lcLogin .lcLogin__visual{flex:0 0 34vh!important;min-height:200px!important;min-width:100%!important}
+  body.lcAuthLock #lcLogin .lcLogin__card{flex:1 1 auto!important;width:100%!important;min-height:0!important;height:auto!important;border-inline-start:0!important;border-top:1px solid #E5E7EB!important;box-shadow:none!important}
+  body.lcAuthLock #lcLogin .lcLogin__visualLogo{width:min(260px,55%)!important;max-height:22vh!important}
+}
+</style>
 
 </head>
 <body class="lcAuthLock">
 <!-- Login Overlay — split: visual left + form right (מוקאפ 2) -->
 <div aria-hidden="true" class="lcLogin" id="lcLogin">
-<div class="lcLogin__shell">
-<aside class="lcLogin__visual" aria-hidden="true">
-<div class="lcLogin__visualBg" style="background-image:url('./login-hero-visual.jpg')"></div>
-<div class="lcLogin__visualShade"></div>
-<div class="lcLogin__visualBrand">
-<img class="lcLogin__visualLogo" src="./logo-login-clean.png" alt="" width="1808" height="373" decoding="async"/>
+<div class="lcLogin__shell" style="display:flex;flex-direction:row;direction:rtl;width:100%;height:100%;min-height:100dvh;align-items:stretch;">
+<aside class="lcLogin__visual" aria-hidden="true" style="position:relative;flex:1 1 auto;min-width:0;min-height:100dvh;overflow:hidden;background:#070d18;">
+<div class="lcLogin__visualBg" style="position:absolute;inset:0;background-image:url('./login-hero-visual.jpg');background-size:cover;background-position:center;background-repeat:no-repeat;"></div>
+<div class="lcLogin__visualShade" style="position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(115deg,rgba(7,13,24,.55),rgba(10,20,40,.35) 45%,rgba(7,13,24,.72));"></div>
+<div class="lcLogin__visualBrand" style="position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;padding:5vw;pointer-events:none;box-sizing:border-box;">
+<img class="lcLogin__visualLogo" src="./logo-login-clean.png" alt="" width="480" height="99" decoding="async" style="display:block;width:min(480px,58%);max-width:520px;max-height:42vh;height:auto;object-fit:contain;"/>
 </div>
 </aside>
-<div aria-label="כניסה למערכת" aria-modal="true" class="lcLogin__card" role="dialog">
-<div class="lcLogin__panelInner">
+<div aria-label="כניסה למערכת" aria-modal="true" class="lcLogin__card" role="dialog" style="flex:0 0 min(440px,42vw);width:min(440px,42vw);height:100%;min-height:100dvh;margin:0;border-radius:0;border:0;border-inline-start:1px solid #E5E7EB;background:#fff;box-shadow:-18px 0 48px rgba(0,0,0,.18);padding:0;display:flex;flex-direction:column;justify-content:center;overflow:auto;">
+<div class="lcLogin__panelInner" style="width:100%;max-width:360px;margin:0 auto;padding:36px;box-sizing:border-box;">
 <div class="lcLogin__brand">
 <div aria-hidden="true" class="lcLogin__logo lcLogin__logo--img">
 <div class="giLogoAnim giLogoAnim--login">
@@ -3634,7 +3683,7 @@
   </div>
 </div>
 
-<script src="./app.js?v=20260810-login-split-v1"></script>
+<script src="./app.js?v=20260810-login-split-v2"></script>
 
 
 <div id="giPwaInstallBanner" class="giPwaInstallBanner" hidden>
