@@ -1,4 +1,4 @@
-/* ===== GI-LOGIN-SPLIT v6 — פאנל לבן + מיזוג + לוח לוגו בהיר ===== */
+/* ===== GI-LOGIN-SPLIT v7 — פאנל לבן + מיזוג + לוגו + שדות נקיים ===== */
 
 body.lcAuthLock:not(#\9):not(#\9){
   background:#070d18 !important;
@@ -127,22 +127,127 @@ body.lcAuthLock .lcLogin__hint:not(#\9):not(#\9){
 }
 
 body.lcAuthLock .lcLogin__secureNote:not(#\9):not(#\9){
-  margin:14px auto 0 !important;
+  margin:16px auto 0 !important;
+  width:fit-content !important;
+  max-width:100% !important;
+  padding:8px 14px !important;
+  border-radius:999px !important;
+  border:1px solid #DBEAFE !important;
+  background:#EFF6FF !important;
+  color:#1D4ED8 !important;
+  font-size:12px !important;
+  font-weight:700 !important;
+  box-shadow:none !important;
 }
 
 body.lcAuthLock .lcLogin__form:not(#\9):not(#\9){
-  margin-top:18px !important;
+  margin-top:20px !important;
   width:100% !important;
+}
+
+/* שדות נקיים — בלי פסים כחולים / גבול כפול */
+body.lcAuthLock .lcLogin__field:not(#\9):not(#\9){
+  position:relative !important;
+  display:block !important;
+  height:auto !important;
+  min-height:0 !important;
+  margin:0 !important;
+  padding:0 !important;
+  gap:0 !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
+}
+
+body.lcAuthLock .lcLogin__field:focus-within:not(#\9):not(#\9){
+  border:0 !important;
+  box-shadow:none !important;
+  background:transparent !important;
+}
+
+body.lcAuthLock .lcLogin__fieldIcon:not(#\9):not(#\9){
+  position:absolute !important;
+  inset-inline-start:14px !important;
+  inset-inline-end:auto !important;
+  top:50% !important;
+  transform:translateY(-50%) !important;
+  width:22px !important;
+  height:22px !important;
+  padding:0 !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:none !important;
+  box-shadow:none !important;
+  color:#94A3B8 !important;
+  display:grid !important;
+  place-items:center !important;
+  pointer-events:none !important;
+  z-index:2 !important;
+}
+
+body.lcAuthLock .lcLogin__field:focus-within .lcLogin__fieldIcon:not(#\9):not(#\9){
+  color:#2563EB !important;
+}
+
+body.lcAuthLock .lcLogin__fieldIconSvg:not(#\9):not(#\9){
+  width:20px !important;
+  height:20px !important;
+}
+
+body.lcAuthLock .lcLogin__field > .lcLogin__input:not(#\9):not(#\9),
+body.lcAuthLock .lcLogin__input:not(#\9):not(#\9){
+  display:block !important;
+  width:100% !important;
+  height:50px !important;
+  min-height:50px !important;
+  margin:0 !important;
+  padding-block:0 !important;
+  padding-inline-start:46px !important;
+  padding-inline-end:16px !important;
+  border:1px solid #E5E7EB !important;
+  border-radius:12px !important;
+  background:#FFFFFF !important;
+  box-shadow:none !important;
+  color:#0F172A !important;
+  font-size:15px !important;
+  font-weight:500 !important;
+  outline:none !important;
+  transform:none !important;
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+}
+
+body.lcAuthLock .lcLogin__field > .lcLogin__input:focus:not(#\9):not(#\9),
+body.lcAuthLock .lcLogin__input:focus:not(#\9):not(#\9){
+  border-color:#2563EB !important;
+  background:#FFFFFF !important;
+  box-shadow:0 0 0 3px rgba(37,99,235,.14) !important;
+  transform:none !important;
+}
+
+body.lcAuthLock .lcLogin__input::placeholder:not(#\9):not(#\9){
+  color:#94A3B8 !important;
+  font-weight:500 !important;
+}
+
+body.lcAuthLock #lcLoginCredentialsStep:not(#\9):not(#\9){
+  display:grid !important;
+  gap:12px !important;
 }
 
 body.lcAuthLock .lcLogin__btn:not(#\9):not(#\9){
   width:100% !important;
-  min-height:48px !important;
+  min-height:50px !important;
+  height:50px !important;
+  margin-top:4px !important;
   border-radius:12px !important;
+  border:0 !important;
   background:#2563EB !important;
   border-color:#2563EB !important;
   color:#fff !important;
   font-weight:800 !important;
+  box-shadow:0 10px 22px rgba(37,99,235,.22) !important;
 }
 
 body.lcAuthLock .lcLogin__footBtn:not(#\9):not(#\9){
