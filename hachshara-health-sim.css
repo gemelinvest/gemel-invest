@@ -1,0 +1,204 @@
+/* ===== GI-HACH-HEALTH-SIM 2026-08-09 · סימולטור בריאות הכשרה ==================
+   קידומת lcHachHealth. מבוסס var(--gi-*). אין שינוי לסלקטורים גלובליים. */
+
+.lcHachHealthModal .giValModal__card{
+  max-width:760px;
+  width:100%;
+  height:min(92vh, 920px);
+  max-height:min(92vh, 920px);
+  display:flex;
+  flex-direction:column;
+  position:relative;
+  overflow:hidden;
+}
+.lcHachHealthModal .giValModal__head{
+  padding:16px 24px 14px;
+  background:linear-gradient(135deg, var(--gi-primary-soft, #EFF6FF) 0%, #e0ecff 55%, #d7e6ff 100%);
+  border-bottom:1px solid rgba(56,112,237,.16);
+  position:relative;
+  flex:0 0 auto;
+}
+.lcHachHealthModal .giValModal__body{
+  padding:14px 24px;
+  gap:12px;
+  flex:1 1 auto;
+  min-height:0;
+  overflow-x:hidden;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+}
+.lcHachHealthModal .giValModal__foot{ flex:0 0 auto; }
+.lcHachHealth__coversWrap{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  flex:0 0 auto;
+}
+.lcHachHealth__coversCount{
+  font-weight:600;
+  color:var(--gi-text-muted, #647287);
+  font-size:12px;
+}
+.lcHachHealthModal .giValModal__foot{
+  padding:12px 24px 16px;
+  gap:8px;
+  background:var(--gi-surface-2, #F8FAFC);
+  border-top:1px solid var(--gi-border-soft, #F1F5F9);
+}
+.lcHachHealthModal .giValModal__title{ color:var(--gi-text, #0F172A); font-size:17px; }
+.lcHachHealthModal .giValModal__headIcon{
+  width:40px; height:40px; border-radius:var(--gi-r-md, 12px);
+  background:#fff; border:1px solid rgba(56,112,237,.14);
+  display:flex; align-items:center; justify-content:center; overflow:hidden; font-size:0;
+}
+.lcHachHealthModal .giValModal__headIcon .lcCompanyLogo,
+.lcHachHealthModal .giValModal__headIcon .lcCompanyLogo--mini{ width:28px; height:28px; }
+.lcHachHealthModal .giValModal__headIcon .lcCompanyLogo__img{ width:100%; height:100%; object-fit:contain; }
+
+.lcHachHealth__closeX{
+  position:absolute; top:12px; left:12px; border:none;
+  background:rgba(255,255,255,.72); color:var(--gi-text-muted, #647287);
+  font-size:15px; line-height:1; cursor:pointer; padding:5px 8px;
+  border-radius:var(--gi-r-ctl, 8px);
+}
+.lcHachHealth__closeX:hover{ background:#fff; color:var(--gi-text, #0F172A); }
+
+.lcHachHealth__tabs{ display:flex; flex-wrap:wrap; gap:6px; }
+.lcHachHealth__tab{
+  border:1.5px solid var(--gi-border, #E5E7EB); background:#fff;
+  color:var(--gi-text-muted, #647287); font-size:12.5px; font-weight:700;
+  padding:6px 12px; border-radius:var(--gi-r-pill, 999px); cursor:pointer;
+}
+.lcHachHealth__tab.is-active{ border-color:var(--gi-primary, #2563EB); background:var(--gi-primary-soft, #EFF6FF); color:var(--gi-primary, #2563EB); }
+.lcHachHealth__tab.has-saved{ border-color:var(--gi-success, #16A34A); background:var(--gi-success-soft, #ECFDF5); color:var(--gi-success, #16A34A); }
+
+.lcHachHealth__insuredLabel{
+  font-size:13px; font-weight:600; color:var(--gi-primary, #2563EB);
+  background:var(--gi-primary-soft, #EFF6FF); border:1px solid rgba(37,99,235,.14);
+  border-radius:var(--gi-r-ctl, 8px); padding:8px 12px;
+}
+.lcHachHealth__insuredLabel--standalone{
+  background:linear-gradient(135deg, var(--gi-primary-soft, #EFF6FF) 0%, #e8f0fe 100%);
+  border:1px solid rgba(56,112,237,.16);
+}
+
+.lcHachHealth__grid{
+  display:grid; grid-template-columns:repeat(2, minmax(140px, 1fr)); gap:12px 14px;
+}
+.lcHachHealth__field{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+.lcHachHealth__field--wide{ grid-column:1 / -1; }
+.lcHachHealth__label{ font-size:12.5px; font-weight:700; color:var(--gi-text-2, #3D4A5C); }
+.lcHachHealth__input{
+  border:1.5px solid var(--gi-border, #E5E7EB); border-radius:var(--gi-r-ctl, 8px);
+  padding:9px 12px; font-size:14px; background:#fff; color:var(--gi-text, #0F172A); width:100%; box-sizing:border-box;
+}
+.lcHachHealth__input:focus{ outline:none; border-color:var(--gi-primary, #2563EB); box-shadow:0 0 0 3px var(--gi-primary-ring, rgba(37,99,235,.18)); }
+
+.lcHachHealth__segmented{ display:flex; gap:6px; }
+.lcHachHealth__segBtn{
+  flex:1; border:1.5px solid var(--gi-border, #E5E7EB); background:#fff;
+  color:var(--gi-text-muted, #647287); font-size:13px; font-weight:700;
+  padding:9px 6px; border-radius:var(--gi-r-ctl, 8px); cursor:pointer; text-align:center;
+}
+.lcHachHealth__segBtn.is-active{ border-color:var(--gi-primary, #2563EB); background:var(--gi-primary, #2563EB); color:#fff; }
+
+.lcHachHealth__hint{ font-size:11.5px; font-weight:600; }
+.lcHachHealth__hint--warn{
+  color:var(--gi-text-muted, #647287); background:var(--gi-surface-3, #F1F5F9);
+  border:1px solid var(--gi-border, #E5E7EB); border-radius:var(--gi-r-ctl, 8px); padding:5px 8px;
+}
+
+.lcHachHealth__coversTitle{
+  font-size:13px; font-weight:800; color:var(--gi-text, #0F172A); margin-top:2px;
+}
+.lcHachHealth__group{
+  border:1px solid var(--gi-border, #E5E7EB); border-radius:var(--gi-r-md, 12px);
+  background:#fff; overflow:hidden;
+}
+.lcHachHealth__groupTitle{
+  font-size:12px; font-weight:800; color:var(--gi-primary, #2563EB);
+  background:var(--gi-primary-soft, #EFF6FF); padding:8px 12px;
+  border-bottom:1px solid rgba(37,99,235,.12);
+}
+.lcHachHealth__coverList{ display:flex; flex-direction:column; }
+.lcHachHealth__cover{
+  display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:10px;
+  padding:9px 12px; border-bottom:1px solid var(--gi-border-soft, #F1F5F9);
+  cursor:pointer; font-size:13.5px; color:var(--gi-text, #0F172A);
+}
+.lcHachHealth__cover:last-child{ border-bottom:none; }
+.lcHachHealth__cover.is-checked{ background:var(--gi-primary-soft, #EFF6FF); }
+.lcHachHealth__cover input{ width:16px; height:16px; accent-color:var(--gi-primary, #2563EB); }
+.lcHachHealth__coverLabel em{ font-style:normal; color:var(--gi-text-muted, #647287); font-size:11.5px; font-weight:600; }
+.lcHachHealth__coverPrem{ font-weight:800; color:var(--gi-primary, #2563EB); font-variant-numeric:tabular-nums; min-width:4.5rem; text-align:left; }
+
+.lcHachHealth__result{
+  border-radius:var(--gi-r-md, 12px); padding:12px 16px; font-size:13.5px;
+}
+.lcHachHealth__result--empty{
+  background:var(--gi-surface-3, #F1F5F9); border:1px dashed var(--gi-border, #E5E7EB);
+  color:var(--gi-text-muted, #647287); font-weight:600;
+}
+.lcHachHealth__result--error{
+  background:var(--gi-danger-soft, #FEF2F2); border:1.5px solid rgba(220,38,38,.18);
+  color:var(--gi-danger, #DC2626); font-weight:700;
+}
+.lcHachHealth__result--ok{
+  background:var(--gi-success-soft, #ECFDF5); border:1.5px solid rgba(22,163,74,.18);
+  color:var(--gi-success, #16A34A); display:flex; flex-direction:column; gap:6px;
+}
+.lcHachHealth__selTitle{ font-size:12px; font-weight:800; color:var(--gi-text-muted, #647287); text-transform:uppercase; letter-spacing:.02em; }
+.lcHachHealth__selRow,
+.lcHachHealth__resultRow{ display:flex; align-items:center; justify-content:space-between; gap:12px; color:var(--gi-text, #0F172A); }
+.lcHachHealth__selRow strong{ color:var(--gi-primary, #2563EB); }
+.lcHachHealth__resultRow--main{
+  font-size:20px; font-weight:800; border-top:1px dashed rgba(22,163,74,.28);
+  padding-top:8px; margin-top:2px; color:var(--gi-success, #16A34A);
+}
+.lcHachHealth__indexMeta{
+  font-size:11.5px; line-height:1.45; color:var(--gi-text-muted, #647287);
+  margin-top:4px; padding-top:6px; border-top:1px solid rgba(100,114,135,.12);
+}
+.lcHachHealth__indexMeta--pending{ color:var(--gi-warn, #D97706); }
+
+.lcHachHealth__occBox{
+  border:1px solid var(--gi-border, #E5E7EB); border-radius:var(--gi-r-md, 12px);
+  padding:12px 14px; background:var(--gi-bg, #F8FAFC); display:flex; flex-direction:column; gap:8px;
+}
+.lcHachHealth__occHead{ font-size:12px; font-weight:700; color:var(--gi-text-muted, #647287); text-transform:uppercase; letter-spacing:.02em; }
+.lcHachHealth__occBadge{
+  display:inline-flex; align-items:center; gap:6px; width:fit-content;
+  font-size:12.5px; font-weight:700; padding:5px 12px; border-radius:var(--gi-r-pill, 999px);
+  border:1.5px solid var(--gi-border, #E5E7EB); background:#fff;
+}
+.lcHachHealth__occBadge--none{ border-color:rgba(22,163,74,.3); background:var(--gi-success-soft, #ECFDF5); color:var(--gi-success, #16A34A); }
+.lcHachHealth__occBadge--risk{ border-color:rgba(217,119,6,.3); background:var(--gi-warn-soft, #FFFBEB); color:var(--gi-warn, #D97706); }
+.lcHachHealth__occBadge--unclear{ border-color:rgba(37,99,235,.3); background:var(--gi-info-soft, #EFF6FF); color:var(--gi-info, #2563EB); }
+.lcHachHealth__occBadge--needsUnderwriting{ border-color:rgba(220,38,38,.3); background:var(--gi-danger-soft, #FEF2F2); color:var(--gi-danger, #DC2626); }
+.lcHachHealth__occRow{ display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:13px; color:var(--gi-text-muted, #647287); }
+.lcHachHealth__occRow strong{ color:var(--gi-text, #0F172A); font-weight:700; }
+.lcHachHealth__occNote{ font-size:12px; color:var(--gi-danger, #DC2626); font-weight:700; }
+
+.lcHachHealth__overlay{
+  position:absolute; inset:0; background:rgba(15,23,42,.5); backdrop-filter:blur(2px);
+  display:flex; align-items:center; justify-content:center; padding:20px; z-index:5;
+}
+.lcHachHealth__overlayCard{
+  background:#fff; border-radius:var(--gi-r-md, 12px); padding:18px; max-width:360px; width:100%;
+  box-shadow:var(--gi-sh-lg, 0 12px 32px rgba(15,23,42,.10)); display:flex; flex-direction:column; gap:12px;
+}
+.lcHachHealth__overlayText{ font-size:14px; color:var(--gi-text, #0F172A); line-height:1.55; }
+.lcHachHealth__overlayBtns{ display:flex; flex-direction:column; gap:8px; }
+
+.lcHachHealth__summaryRow{
+  display:flex; align-items:center; gap:10px; padding:9px 4px;
+  border-bottom:1px solid var(--gi-border-soft, #F1F5F9); font-size:14px;
+}
+.lcHachHealth__summaryRow span:last-child{ margin-inline-start:auto; font-weight:700; color:var(--gi-success, #16A34A); }
+
+@media (max-width: 640px){
+  .lcHachHealth__grid{ grid-template-columns:1fr; }
+  .lcHachHealthModal .giValModal__head{ padding:14px 16px 12px; }
+  .lcHachHealthModal .giValModal__body{ padding:12px 16px; }
+  .lcHachHealthModal .giValModal__foot{ padding:12px 16px 14px; }
+}
