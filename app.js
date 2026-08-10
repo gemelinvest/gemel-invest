@@ -27963,20 +27963,18 @@ UsersGateUI.init();
         }
       } catch(_e) {}
       try {
-        const lead = this.latestLead();
-        const leadCard = root.querySelector(".bankSideCard--lead");
-        const hadLead = !!leadCard && !leadCard.querySelector(".bankSideCard__empty");
-        if(lead || !hadLead){
-          replacePanel(".bankSideCard--lead", this.renderLatestLeadHtml());
-        }
-      } catch(_e) {}
-      try {
         const untouched = this.latestUntouchedProposal();
         const untouchedCard = root.querySelector(".bankSideCard--untouched");
         const hadUntouched = !!untouchedCard && !untouchedCard.querySelector(".bankSideCard__empty");
         if(untouchedCard && (untouched || !hadUntouched)){
           replacePanel(".bankSideCard--untouched", this.renderLatestUntouchedHtml());
         }
+      } catch(_e) {}
+      try {
+        replacePanel(".bankOpsCube", this.renderAgentOpsCubeHtml());
+      } catch(_e) {}
+      try {
+        replacePanel(".bankServiceCube", this.renderAgentServiceCubeHtml());
       } catch(_e) {}
     },
 
@@ -28056,34 +28054,255 @@ UsersGateUI.init();
     },
 
     renderLatestLeadHtml(){
-      const lead = this.latestLead();
-      const statusLabel = lead
-        ? (CAMPAIGN_LEAD_STATUS_LABELS[lead.status] || CAMPAIGN_LEAD_STATUS_LABELS.new)
-        : "";
-      const body = lead
-        ? `
-          <div class="bankSideCard__lead">
-            <div class="bankSideCard__leadTop">
-              <span class="bankSideCard__leadName">${escapeHtml(lead.customerName || "ליד ללא שם")}</span>
-              <span class="bankSideCard__pill">${escapeHtml(statusLabel)}</span>
-            </div>
-            ${lead.phone ? `<a class="bankSideCard__link" dir="ltr" href="tel:${escapeHtml(lead.phone)}">${escapeHtml(lead.phone)}</a>` : ""}
-            <div class="bankSideCard__rows">
-              <div class="bankSideCard__row"><span>קמפיין</span><strong>${escapeHtml(lead.campaignLabel || "כללי")}</strong></div>
-              <div class="bankSideCard__row"><span>נכנס בתאריך</span><strong>${escapeHtml(this.dashSideDate(lead.createdAt))}</strong></div>
-              ${lead.assignedAgentName ? `<div class="bankSideCard__row"><span>משויך ל</span><strong>${escapeHtml(lead.assignedAgentName)}</strong></div>` : ""}
-            </div>
-          </div>`
-        : `<div class="bankSideCard__empty">אין לידים להצגה</div>`;
+      // GI-DASH 2026-08-10: כרטיס «הליד האחרון» הוסר — הוחלף בקוביית תפעול.
+      return "";
+    },
 
+    agentOpsVisibleCustomers(){
+      try {
+        return (CustomersUI && typeof CustomersUI.list === "function") ? (CustomersUI.list() || []) : [];
+      } catch(_e) {
+        return [];
+      }
+    },
+
+    agentOpsBucketRows(bucketKey){
+      const key = safeTrim(bucketKey);
+      const rows = [];
+      const list = this.agentOpsVisibleCustomers();
+      for(let i = 0; i < list.length; i++){
+        const rec = list[i];
+        if(!rec) continue;
+        let bucket = "other";
+        try { bucket = OpsDashboardUI.classifyBucket(rec); } catch(_e) {}
+        if(bucket !== key) continue;
+        let premium = 0;
+        try { premium = OpsDashboardUI.getPremium(rec) || 0; } catch(_e2) {}
+        rows.push({
+          id: rec.id,
+          fullName: safeTrim(rec.fullName) || "לקוח",
+          phone: safeTrim(rec.phone),
+          idNumber: safeTrim(rec.idNumber),
+          agentName: safeTrim(rec.agentName),
+          premium: Number(premium) || 0,
+          bucket
+        });
+      }
+      return rows;
+    },
+
+    buildAgentOpsCubeModel(){
+      const defs = [
+        { key: "waiting_mirror", label: "ממתין לשיקוף", lamp: "amber", metric: "premium" },
+        { key: "waiting_typing", label: "ממתין להקלדה", lamp: "blue", metric: "count" },
+        { key: "pending_signatures", label: "ממתין לחתימות", lamp: "purple", metric: "count" },
+        { key: "issuance", label: "עבר להפקה", lamp: "green", metric: "count" }
+      ];
+      return defs.map((d) => {
+        const items = this.agentOpsBucketRows(d.key);
+        const count = items.length;
+        const premium = items.reduce((s, r) => s + (Number(r.premium) || 0), 0);
+        return Object.assign({}, d, { count, premium, items });
+      });
+    },
+
+    renderAgentOpsCubeHtml(){
+      const rows = this.buildAgentOpsCubeModel();
+      const body = rows.map((r) => {
+        const valueHtml = r.metric === "premium"
+          ? `<strong class="bankOpsCube__metric">${escapeHtml(this.formatMoney(r.premium))}</strong><span class="bankOpsCube__metricSub">${r.count} לקוחות</span>`
+          : `<strong class="bankOpsCube__metric">${escapeHtml(String(r.count))}</strong><span class="bankOpsCube__metricSub">לקוחות</span>`;
+        return `
+          <button type="button" class="bankOpsCube__row" data-agent-ops-bucket="${escapeHtml(r.key)}" aria-label="${escapeHtml(r.label)}">
+            <span class="bankOpsCube__lamp bankOpsCube__lamp--${escapeHtml(r.lamp)}" aria-hidden="true"></span>
+            <span class="bankOpsCube__label">${escapeHtml(r.label)}</span>
+            <span class="bankOpsCube__values">${valueHtml}</span>
+            <span class="bankOpsCube__chev" aria-hidden="true">‹</span>
+          </button>`;
+      }).join("");
       return `
-        <article class="bankSideCard card bankSideCard--lead" aria-label="הליד האחרון שנכנס">
-          <header class="bankSideCard__head">
-            <span class="bankSideCard__title">הליד האחרון שנכנס</span>
-            ${lead ? `<button class="bankSideCard__all" data-view-jump="campaignLeads" type="button">לכל הלידים</button>` : ""}
+        <article class="bankOpsCube card" aria-label="תפעול">
+          <header class="bankOpsCube__head">
+            <span class="bankOpsCube__title">תפעול</span>
           </header>
-          <div class="bankSideCard__body">${body}</div>
+          <div class="bankOpsCube__body">${body}</div>
         </article>`;
+    },
+
+    renderAgentServiceCubeHtml(){
+      const topics = [
+        { key: "collection", label: "גבייה", lamp: "teal" },
+        { key: "claims", label: "תביעות", lamp: "orange" },
+        { key: "policy_changes", label: "שינויים בפוליסה", lamp: "indigo" },
+        { key: "service_requests", label: "פניות לשירות", lamp: "rose" }
+      ];
+      const body = topics.map((t) => `
+        <button type="button" class="bankServiceCube__row" data-agent-service-topic="${escapeHtml(t.key)}" aria-label="${escapeHtml(t.label)}">
+          <span class="bankServiceCube__lamp bankServiceCube__lamp--${escapeHtml(t.lamp)}" aria-hidden="true"></span>
+          <span class="bankServiceCube__label">${escapeHtml(t.label)}</span>
+          <span class="bankServiceCube__chev" aria-hidden="true">‹</span>
+        </button>`).join("");
+      return `
+        <article class="bankServiceCube card" aria-label="שירות">
+          <header class="bankServiceCube__head">
+            <span class="bankServiceCube__title">שירות</span>
+          </header>
+          <div class="bankServiceCube__body">${body}</div>
+        </article>`;
+    },
+
+    agentOpsBucketLabel(key){
+      return ({
+        waiting_mirror: "ממתין לשיקוף",
+        waiting_typing: "ממתין להקלדה",
+        pending_signatures: "ממתין לחתימות",
+        issuance: "עבר להפקה"
+      })[safeTrim(key)] || "תפעול";
+    },
+
+    openAgentOpsBucketList(bucketKey){
+      const key = safeTrim(bucketKey);
+      if(!key) return;
+      const rows = this.agentOpsBucketRows(key);
+      const title = this.agentOpsBucketLabel(key);
+      let overlay = document.getElementById("giAgentOpsOverlay");
+      if(!overlay){
+        overlay = document.createElement("div");
+        overlay.id = "giAgentOpsOverlay";
+        overlay.className = "giAgentOpsOverlay";
+        overlay.setAttribute("role", "dialog");
+        overlay.setAttribute("aria-modal", "true");
+        overlay.setAttribute("aria-labelledby", "giAgentOpsOverlayTitle");
+        document.body.appendChild(overlay);
+        on(overlay, "click", (ev) => {
+          if(ev.target === overlay){ this.closeAgentOpsBucketList(); return; }
+          const closeBtn = ev.target.closest?.("[data-agent-ops-close]");
+          if(closeBtn){ ev.preventDefault(); this.closeAgentOpsBucketList(); return; }
+          const openBtn = ev.target.closest?.("[data-open-customer]");
+          if(openBtn && overlay.contains(openBtn)){
+            ev.preventDefault();
+            const cid = openBtn.getAttribute("data-open-customer");
+            this.closeAgentOpsBucketList();
+            try { UI.goView("customers"); } catch(_e) {}
+            try { CustomersUI.handleOpenCustomerClick(ev, cid); } catch(_e2) {}
+          }
+        });
+      }
+      const listHtml = rows.length
+        ? `<table class="giAgentOpsOverlay__table">
+            <thead><tr><th>שם</th><th>טלפון</th><th>ת.ז.</th><th>סוכן</th><th>פרמיה</th><th></th></tr></thead>
+            <tbody>${rows.map((r) => `
+              <tr>
+                <td><strong>${escapeHtml(r.fullName)}</strong></td>
+                <td dir="ltr">${r.phone ? escapeHtml(r.phone) : "—"}</td>
+                <td>${escapeHtml(r.idNumber || "—")}</td>
+                <td>${escapeHtml(r.agentName || "—")}</td>
+                <td>${escapeHtml(this.formatMoney(r.premium))}</td>
+                <td><button type="button" class="btn btn--small" data-open-customer="${escapeHtml(String(r.id || ""))}">פתח</button></td>
+              </tr>`).join("")}</tbody>
+          </table>`
+        : `<div class="giAgentOpsOverlay__empty">אין לקוחות בסטטוס זה כרגע</div>`;
+      overlay.innerHTML = `
+        <div class="giAgentOpsOverlay__panel" role="document">
+          <header class="giAgentOpsOverlay__head">
+            <div>
+              <h2 class="giAgentOpsOverlay__title" id="giAgentOpsOverlayTitle">${escapeHtml(title)}</h2>
+              <div class="giAgentOpsOverlay__sub">${rows.length} רשומות</div>
+            </div>
+            <button type="button" class="btn" data-agent-ops-close>סגור</button>
+          </header>
+          <div class="giAgentOpsOverlay__body">${listHtml}</div>
+        </div>`;
+      overlay.hidden = false;
+      document.body.classList.add("giAgentOpsOverlay-open");
+    },
+
+    closeAgentOpsBucketList(){
+      const overlay = document.getElementById("giAgentOpsOverlay");
+      if(overlay){ overlay.hidden = true; overlay.innerHTML = ""; }
+      document.body.classList.remove("giAgentOpsOverlay-open");
+    },
+
+    openAgentServiceTopic(topicKey){
+      const labels = {
+        collection: "גבייה",
+        claims: "תביעות",
+        policy_changes: "שינויים בפוליסה",
+        service_requests: "פניות לשירות"
+      };
+      const label = labels[safeTrim(topicKey)] || "שירות";
+      try {
+        window.showToast?.({
+          title: label,
+          text: "מודול השירות יתמלא בהמשך — כרגע זו מסגרת בדשבורד בלבד.",
+          variant: "info",
+          durationMs: 4200
+        });
+      } catch(_e) {}
+    },
+
+    _ensureAgentOpsServiceBound(){
+      if(this._agentOpsServiceBound || !this.els.root) return;
+      this._agentOpsServiceBound = true;
+      on(this.els.root, "click", (ev) => {
+        const opsBtn = ev.target.closest?.("[data-agent-ops-bucket]");
+        if(opsBtn && this.els.root.contains(opsBtn)){
+          ev.preventDefault();
+          this.openAgentOpsBucketList(opsBtn.getAttribute("data-agent-ops-bucket"));
+          return;
+        }
+        const svcBtn = ev.target.closest?.("[data-agent-service-topic]");
+        if(svcBtn && this.els.root.contains(svcBtn)){
+          ev.preventDefault();
+          this.openAgentServiceTopic(svcBtn.getAttribute("data-agent-service-topic"));
+        }
+      });
+    },
+
+    renderGoalCardHtml(metrics, orgScope){
+      return `
+          <div class="bankDash__row bankDash__row--goalOnly bankDash__row--goalUnderRecent">
+          <article class="bankGoal card bankGoal--${metrics.targetTone}">
+            <div class="bankGoal__title">${orgScope ? ('ביצועים מול יעד (' + (getDashboardScopeLabelHe('goal') || 'סיכום') + ')') : 'ביצועים מול יעד'}</div>
+            <div class="bankGoal__shell">
+              <div class="bankGoal__meter">
+                <div class="bankGoal__meterTop">
+                  <div class="bankGoal__percent">${escapeHtml(this.formatPct(metrics.targetPct))}</div>
+                  <div class="bankGoal__meterCopy">
+                    <div class="bankGoal__percentSub">${metrics.targetValue > 0 ? `התקדמות חודשית` : `ממתין להגדרת יעד`}</div>
+                  </div>
+                </div>
+                <div class="bankGoal__progressTrack" style="--goal-progress:${Math.max(0, Math.min(metrics.targetPct, 100))}%"><span aria-hidden="true"></span></div>
+                <div class="bankGoal__metaRow">
+                  <span>יעד חודשי <b>${metrics.targetValue > 0 ? escapeHtml(this.formatMoney(metrics.targetValue)) : '₪0'}</b></span>
+                  <strong>${escapeHtml(this.formatPct(metrics.targetPct))}</strong>
+                </div>
+              </div>
+              <div class="bankGoal__center">
+                <div class="bankGoal__mainStat">
+                  <span>בוצע בפועל</span>
+                  <strong>${escapeHtml(this.formatMoney(metrics.netPremium))}</strong>
+                  <small>${Number(metrics.netDelta) >= 0 ? `↗ ${escapeHtml(this.formatPct(Math.abs(Number(metrics.netDelta) || 0)))} בכמות מול חודש קודם` : `↘ ${escapeHtml(this.formatPct(Math.abs(Number(metrics.netDelta) || 0)))} בכמות מול חודש קודם`}</small>
+                </div>
+              </div>
+              <div class="bankGoal__details">
+                <div class="bankGoal__topStats">
+                  <div class="bankGoal__topStat">
+                    <span>יעד יומי:</span>
+                    <strong>${escapeHtml(this.formatMoney(metrics.dailyTarget || 0))}</strong>
+                    <small>${escapeHtml(this.goalPaceText(metrics))}</small>
+                  </div>
+                  <div class="bankGoal__topStat">
+                    <span>יעד חודשי:</span>
+                    <strong>${metrics.targetValue > 0 ? escapeHtml(this.formatMoney(metrics.targetValue)) : '₪0'}</strong>
+                    <small>${escapeHtml(metrics.monthLabel)}</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="bankGoal__foot"></div>
+          </article>
+          </div>`;
     },
 
     renderLatestUntouchedHtml(){
@@ -29247,22 +29466,19 @@ UsersGateUI.init();
       await perfYield();
       /* GI-FIX 2026-08-09 — רינדור מלא עם רשימה ריקה זמנית לא מוחק טבלה/ליד שכבר נצבעו. */
       const existingRecentCount = this.els.root.querySelectorAll(".bankRecent__row").length;
-      const existingLeadCard = this.els.root.querySelector(".bankSideCard--lead");
-      const existingHadLead = !!existingLeadCard && !existingLeadCard.querySelector(".bankSideCard__empty");
       const existingUntouchedCard = this.els.root.querySelector(".bankSideCard--untouched");
       const existingHadUntouched = !!existingUntouchedCard && !existingUntouchedCard.querySelector(".bankSideCard__empty");
       const preservedRecentHtml = (!this.recentCustomersRows(5).length && existingRecentCount > 0)
         ? (this.els.root.querySelector(".bankDash__row--recentCustomers")?.outerHTML || "")
         : "";
-      const preservedLeadHtml = (!this.latestLead() && existingHadLead)
-        ? (existingLeadCard?.outerHTML || "")
-        : "";
       const preservedUntouchedHtml = (!this.latestUntouchedProposal() && existingHadUntouched)
         ? (existingUntouchedCard?.outerHTML || "")
         : "";
       const recentCustomersPanelHtml = preservedRecentHtml || this.renderRecentCustomersHtml();
-      const latestLeadPanelHtml = preservedLeadHtml || this.renderLatestLeadHtml();
       const latestUntouchedPanelHtml = preservedUntouchedHtml || this.renderLatestUntouchedHtml();
+      const opsCubeHtml = this.renderAgentOpsCubeHtml();
+      const serviceCubeHtml = this.renderAgentServiceCubeHtml();
+      const goalPanelHtml = this.renderGoalCardHtml(metrics, orgScope);
       this.els.root.innerHTML = `
         <section class="bankDash bankDash--cleanTop">
           <div class="bankDash__topStats">
@@ -29301,49 +29517,17 @@ UsersGateUI.init();
             ${todayCardHtml}
           </div>
 
-          <div class="bankDash__row bankDash__row--goalOnly">
+          <div class="bankDash__row bankDash__row--opsService">
+            ${opsCubeHtml}
+            ${serviceCubeHtml}
+          </div>
 
-          <article class="bankGoal card bankGoal--${metrics.targetTone}">
-            <div class="bankGoal__title">${orgScope ? ('ביצועים מול יעד (' + (getDashboardScopeLabelHe('goal') || 'סיכום') + ')') : 'ביצועים מול יעד'}</div>
-            <div class="bankGoal__shell">
-              <div class="bankGoal__meter">
-                <div class="bankGoal__meterTop">
-                  <div class="bankGoal__percent">${escapeHtml(this.formatPct(metrics.targetPct))}</div>
-                  <div class="bankGoal__meterCopy">
-                    <div class="bankGoal__percentSub">${metrics.targetValue > 0 ? `התקדמות חודשית` : `ממתין להגדרת יעד`}</div>
-                  </div>
-                </div>
-                <div class="bankGoal__progressTrack" style="--goal-progress:${Math.max(0, Math.min(metrics.targetPct, 100))}%"><span aria-hidden="true"></span></div>
-                <div class="bankGoal__metaRow">
-                  <span>יעד חודשי <b>${metrics.targetValue > 0 ? escapeHtml(this.formatMoney(metrics.targetValue)) : '₪0'}</b></span>
-                  <strong>${escapeHtml(this.formatPct(metrics.targetPct))}</strong>
-                </div>
-              </div>
-              <div class="bankGoal__center">
-                <div class="bankGoal__mainStat">
-                  <span>בוצע בפועל</span>
-                  <strong>${escapeHtml(this.formatMoney(metrics.netPremium))}</strong>
-                  <small>${Number(metrics.netDelta) >= 0 ? `↗ ${escapeHtml(this.formatPct(Math.abs(Number(metrics.netDelta) || 0)))} בכמות מול חודש קודם` : `↘ ${escapeHtml(this.formatPct(Math.abs(Number(metrics.netDelta) || 0)))} בכמות מול חודש קודם`}</small>
-                </div>
-              </div>
-              <div class="bankGoal__details">
-                <div class="bankGoal__topStats">
-                  <div class="bankGoal__topStat">
-                    <span>יעד יומי:</span>
-                    <strong>${escapeHtml(this.formatMoney(metrics.dailyTarget || 0))}</strong>
-                    <small>${escapeHtml(this.goalPaceText(metrics))}</small>
-                  </div>
-                  <div class="bankGoal__topStat">
-                    <span>יעד חודשי:</span>
-                    <strong>${metrics.targetValue > 0 ? escapeHtml(this.formatMoney(metrics.targetValue)) : '₪0'}</strong>
-                    <small>${escapeHtml(metrics.monthLabel)}</small>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div class="bankGoal__foot"></div>
-          </article>
+          ${recentCustomersPanelHtml}
 
+          ${goalPanelHtml}
+
+          <div class="bankDash__row bankDash__row--sideStack">
+            ${latestUntouchedPanelHtml}
           </div>
 
           <div class="bankDash__row bankDash__row--leaderSolo">
@@ -29382,13 +29566,6 @@ UsersGateUI.init();
 
           </div>
 
-          <div class="bankDash__row bankDash__row--sideStack">
-            ${latestLeadPanelHtml}
-            ${latestUntouchedPanelHtml}
-          </div>
-
-          ${recentCustomersPanelHtml}
-
         </section>`;
       this._renderedDomKey = (metrics && !metrics._loading) ? this.getMetricsCacheKey() : "";
       await perfYield();
@@ -29396,6 +29573,7 @@ UsersGateUI.init();
       try { this.applyLeaderPhotoBg(); } catch(_e){}
       try { this._stopWaitingAnimation(); } catch(_e){}
       try { this._ensureRecentCustomersBound(); } catch(_e){}
+      try { this._ensureAgentOpsServiceBound(); } catch(_e){}
       try { this._ensureDailySalesReportBound(); } catch(_e){}
       try { this.refreshDailySalesOverlay(); } catch(_e){}
       try { this._scheduleMidnightReset(); } catch(_e){}

@@ -2209,20 +2209,20 @@ body.sidebar-collapsed .sidebar .nav__item.is-active .nav__label:not(#\9):not(#\
 
 /* =====================================================================
    25. DASHBOARD GRID — two columns
-   BUILD: 20260803-dash-grid-swap
+   BUILD: 20260810-dash-ops-service
 
    RTL: column 1 = right, column 2 = left.
-   Right (wide): לקוחות אחרונים
-   Left (narrow): ביצועים מול יעד + ליד אחרון + הצעה שלא התקדמה (+ לוח מובילים)
+   Right (wide): לקוחות אחרונים → ביצועים מול יעד מתחתיו
+   Left (narrow): תפעול → שירות מתחתיו → הצעה שלא התקדמה
+   Full width: לוח מובילים
 
    Rows still use display:contents so placement is via grid-column/row only.
-   Do not reorder DOM in app.js for this layout.
    ===================================================================== */
 
 #view-dashboard .bankDash:not(#\9):not(#\9){
   display: grid !important;
-  /* col1 (right/RTL) wide for recent table; col2 (left/RTL) narrow for side cards */
-  grid-template-columns: minmax(0, 3fr) minmax(0, 1fr) !important;
+  /* col1 (right/RTL) wide for recent+goal; col2 (left/RTL) narrow for ops/service */
+  grid-template-columns: minmax(0, 3fr) minmax(0, 1.15fr) !important;
   align-items: start !important;
   gap: 10px !important;
 }
@@ -2249,17 +2249,30 @@ body.sidebar-collapsed .sidebar .nav__item.is-active .nav__label:not(#\9):not(#\
   min-width: 0 !important;
 }
 
-/* Left stack: goal + side cards + leader */
-#view-dashboard .bankGoal:not(#\9):not(#\9){
+/* Left elevated: תפעול */
+#view-dashboard .bankOpsCube:not(#\9):not(#\9){
   grid-column: 2 !important;
   grid-row: 3 !important;
   min-width: 0 !important;
 }
 
-#view-dashboard .bankSideCard--lead:not(#\9):not(#\9){
+/* Right under recent: ביצועים מול יעד */
+#view-dashboard .bankGoal:not(#\9):not(#\9){
+  grid-column: 1 !important;
+  grid-row: 4 !important;
+  min-width: 0 !important;
+}
+
+/* Left under ops: שירות */
+#view-dashboard .bankServiceCube:not(#\9):not(#\9){
   grid-column: 2 !important;
   grid-row: 4 !important;
   min-width: 0 !important;
+}
+
+/* Lead card removed from dashboard — keep rule inert if markup returns */
+#view-dashboard .bankSideCard--lead:not(#\9):not(#\9){
+  display: none !important;
 }
 
 #view-dashboard .bankSideCard--untouched:not(#\9):not(#\9){
@@ -2269,14 +2282,14 @@ body.sidebar-collapsed .sidebar .nav__item.is-active .nav__label:not(#\9):not(#\
 }
 
 #view-dashboard .bankLeader:not(#\9):not(#\9){
-  grid-column: 2 !important;
+  grid-column: 1 / -1 !important;
   grid-row: 6 !important;
   min-width: 0 !important;
 }
 
 #view-dashboard .giDailySales:not(#\9):not(#\9){
-  grid-column: 1 !important;
-  grid-row: 4 !important;
+  grid-column: 1 / -1 !important;
+  grid-row: 7 !important;
   min-width: 0 !important;
 }
 
@@ -2287,6 +2300,8 @@ body.sidebar-collapsed .sidebar .nav__item.is-active .nav__label:not(#\9):not(#\
     grid-template-columns: 1fr !important;
   }
   #view-dashboard .bankRecent:not(#\9):not(#\9),
+  #view-dashboard .bankOpsCube:not(#\9):not(#\9),
+  #view-dashboard .bankServiceCube:not(#\9):not(#\9),
   #view-dashboard .bankSideCard:not(#\9):not(#\9),
   #view-dashboard .bankGoal:not(#\9):not(#\9),
   #view-dashboard .bankLeader:not(#\9):not(#\9),
@@ -3823,6 +3838,222 @@ body.sidebar-collapsed .sidebar .nav__item.is-active .nav__label:not(#\9):not(#\
 
 .bankSideCard__body:not(#\9):not(#\9){
   padding: var(--gi-s4) !important;
+}
+
+/* =====================================================================
+   30b. AGENT OPS + SERVICE CUBES
+   BUILD: 20260810-dash-ops-service
+   ===================================================================== */
+
+.bankOpsCube:not(#\9):not(#\9),
+.bankServiceCube:not(#\9):not(#\9){
+  display: flex !important;
+  flex-direction: column !important;
+  padding: 0 !important;
+  background: var(--gi-surface) !important;
+  border: 1px solid var(--gi-border) !important;
+  border-radius: var(--gi-r-card) !important;
+  box-shadow: var(--gi-sh-sm) !important;
+  overflow: hidden !important;
+  min-height: 0 !important;
+}
+
+.bankOpsCube__head:not(#\9):not(#\9),
+.bankServiceCube__head:not(#\9):not(#\9){
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: var(--gi-s2) !important;
+  padding: var(--gi-s4) var(--gi-s4) var(--gi-s3) !important;
+  border-bottom: 1px solid var(--gi-border-soft) !important;
+}
+
+.bankOpsCube__title:not(#\9):not(#\9),
+.bankServiceCube__title:not(#\9):not(#\9){
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text) !important;
+}
+
+.bankOpsCube__body:not(#\9):not(#\9),
+.bankServiceCube__body:not(#\9):not(#\9){
+  display: flex !important;
+  flex-direction: column !important;
+  padding: 4px 0 !important;
+}
+
+.bankOpsCube__row:not(#\9):not(#\9),
+.bankServiceCube__row:not(#\9):not(#\9){
+  display: grid !important;
+  grid-template-columns: 12px minmax(0, 1fr) auto 14px !important;
+  align-items: center !important;
+  gap: 10px !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 11px 14px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--gi-border-soft) !important;
+  background: transparent !important;
+  color: inherit !important;
+  font: inherit !important;
+  text-align: right !important;
+  cursor: pointer !important;
+  transition: background .15s ease !important;
+}
+
+.bankServiceCube__row:not(#\9):not(#\9){
+  grid-template-columns: 12px minmax(0, 1fr) 14px !important;
+}
+
+.bankOpsCube__row:last-child:not(#\9):not(#\9),
+.bankServiceCube__row:last-child:not(#\9):not(#\9){
+  border-bottom: 0 !important;
+}
+
+.bankOpsCube__row:hover:not(#\9):not(#\9),
+.bankServiceCube__row:hover:not(#\9):not(#\9){
+  background: rgba(37, 99, 235, 0.05) !important;
+}
+
+.bankOpsCube__lamp:not(#\9):not(#\9),
+.bankServiceCube__lamp:not(#\9):not(#\9){
+  width: 10px !important;
+  height: 10px !important;
+  border-radius: 50% !important;
+  box-shadow: 0 0 0 3px rgba(255,255,255,.9), 0 0 8px currentColor !important;
+  justify-self: center !important;
+}
+
+.bankOpsCube__lamp--amber:not(#\9):not(#\9){ background: #f59e0b !important; color: rgba(245,158,11,.45) !important; }
+.bankOpsCube__lamp--blue:not(#\9):not(#\9){ background: #2563eb !important; color: rgba(37,99,235,.4) !important; }
+.bankOpsCube__lamp--purple:not(#\9):not(#\9){ background: #7c3aed !important; color: rgba(124,58,237,.4) !important; }
+.bankOpsCube__lamp--green:not(#\9):not(#\9){ background: #16a34a !important; color: rgba(22,163,74,.4) !important; }
+.bankServiceCube__lamp--teal:not(#\9):not(#\9){ background: #0d9488 !important; color: rgba(13,148,136,.4) !important; }
+.bankServiceCube__lamp--orange:not(#\9):not(#\9){ background: #ea580c !important; color: rgba(234,88,12,.4) !important; }
+.bankServiceCube__lamp--indigo:not(#\9):not(#\9){ background: #4f46e5 !important; color: rgba(79,70,229,.4) !important; }
+.bankServiceCube__lamp--rose:not(#\9):not(#\9){ background: #e11d48 !important; color: rgba(225,29,72,.4) !important; }
+
+.bankOpsCube__label:not(#\9):not(#\9),
+.bankServiceCube__label:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  color: var(--gi-text) !important;
+  min-width: 0 !important;
+}
+
+.bankOpsCube__values:not(#\9):not(#\9){
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+  gap: 1px !important;
+  min-width: 0 !important;
+}
+
+.bankOpsCube__metric:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  color: #1b4a97 !important;
+  line-height: 1.15 !important;
+}
+
+.bankOpsCube__metricSub:not(#\9):not(#\9){
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text-muted) !important;
+}
+
+.bankOpsCube__chev:not(#\9):not(#\9),
+.bankServiceCube__chev:not(#\9):not(#\9){
+  color: var(--gi-text-muted) !important;
+  font-size: 16px !important;
+  line-height: 1 !important;
+}
+
+.giAgentOpsOverlay:not(#\9):not(#\9){
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 12000 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 24px !important;
+  background: rgba(15, 23, 42, 0.48) !important;
+  backdrop-filter: blur(3px) !important;
+}
+
+.giAgentOpsOverlay[hidden]:not(#\9):not(#\9){
+  display: none !important;
+}
+
+.giAgentOpsOverlay__panel:not(#\9):not(#\9){
+  width: min(920px, 100%) !important;
+  max-height: min(82vh, 820px) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  background: #fff !important;
+  border-radius: 18px !important;
+  border: 1px solid #e5eaf3 !important;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22) !important;
+  overflow: hidden !important;
+}
+
+.giAgentOpsOverlay__head:not(#\9):not(#\9){
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  padding: 18px 20px !important;
+  border-bottom: 1px solid #e8eef8 !important;
+}
+
+.giAgentOpsOverlay__title:not(#\9):not(#\9){
+  margin: 0 !important;
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  color: #19396e !important;
+}
+
+.giAgentOpsOverlay__sub:not(#\9):not(#\9){
+  margin-top: 4px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: #6479a8 !important;
+}
+
+.giAgentOpsOverlay__body:not(#\9):not(#\9){
+  overflow: auto !important;
+  padding: 12px 16px 18px !important;
+}
+
+.giAgentOpsOverlay__empty:not(#\9):not(#\9){
+  padding: 28px 12px !important;
+  text-align: center !important;
+  color: #6479a8 !important;
+  font-weight: 650 !important;
+}
+
+.giAgentOpsOverlay__table:not(#\9):not(#\9){
+  width: 100% !important;
+  border-collapse: collapse !important;
+  font-size: 13px !important;
+}
+
+.giAgentOpsOverlay__table th:not(#\9):not(#\9),
+.giAgentOpsOverlay__table td:not(#\9):not(#\9){
+  padding: 10px 8px !important;
+  border-bottom: 1px solid #eef2f8 !important;
+  text-align: right !important;
+  vertical-align: middle !important;
+}
+
+.giAgentOpsOverlay__table th:not(#\9):not(#\9){
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  color: #6479a8 !important;
+}
+
+body.giAgentOpsOverlay-open:not(#\9):not(#\9){
+  overflow: hidden !important;
 }
 
 .bankSideCard__leadTop:not(#\9):not(#\9){
