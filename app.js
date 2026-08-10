@@ -29602,7 +29602,7 @@ UsersGateUI.init();
     "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
     "./menora-ci-sim.css?v=20260810-sim-mockup-v2",
-    "./simulators-center.css?v=20260810-sim-dd-v1",
+    "./simulators-center.css?v=20260810-sim-logo-v1",
     "./simulators-shell.css?v=20260810-sim-ui-v3"
   ]);
   function ensureGiSimulatorStylesLoaded(){
@@ -29866,6 +29866,7 @@ UsersGateUI.init();
         <div class="giValModal__card lcSimCenterModal__card">
           <div class="giValModal__head lcSimCenterModal__head">
             <button type="button" class="lcSimCenterModal__closeX" data-simc-close="1" aria-label="סגירה">✕</button>
+            <img class="lcSimCenterModal__brandLogo" src="./logo-login-clean.png" alt="GEMEL INVEST" width="1808" height="373" decoding="async" />
             <div class="giValModal__headText">
               <div class="giValModal__title lcSimCenterModal__title">מרכז הסימולטורים</div>
               <div class="giValModal__sub lcSimCenterModal__sub">בחרו חברה ומוצר לפתיחת הסימולטור</div>

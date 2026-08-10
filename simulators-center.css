@@ -185,6 +185,19 @@
 }
 .lcSimCenterModal__closeX:hover{ background:#F1F5F9; color:#0F172A; }
 
+.lcSimCenterModal__brandLogo{
+  position:absolute;
+  top:14px;
+  right:16px;
+  width:auto;
+  height:28px;
+  max-width:120px;
+  object-fit:contain;
+  object-position:right center;
+  pointer-events:none;
+  user-select:none;
+}
+
 /* שורת חזרה + chip — לא בשימוש בזרימת הדרופדאון */
 .lcSimCenterModal__navRow{ display:none; }
 
