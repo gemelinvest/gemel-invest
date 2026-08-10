@@ -1,0 +1,241 @@
+/* ===== GI-LOGIN-SPLIT v2 — מוקאפ 2 · specificity גבוהה נגד theme/app ===== */
+
+body.lcAuthLock:not(#\9):not(#\9){
+  background:#070d18 !important;
+}
+
+body.lcAuthLock #lcLogin.lcLogin:not(#\9):not(#\9),
+body.lcAuthLock .lcLogin:not(#\9):not(#\9){
+  position:fixed !important;
+  inset:0 !important;
+  z-index:9999 !important;
+  display:flex !important;
+  align-items:stretch !important;
+  justify-content:stretch !important;
+  padding:0 !important;
+  margin:0 !important;
+  overflow:hidden !important;
+  background:#0a1222 !important;
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+}
+
+body.lcAuthLock .lcLogin:not(#\9):not(#\9)::before,
+body.lcAuthLock .lcLogin:not(#\9):not(#\9)::after{
+  content:none !important;
+  display:none !important;
+}
+
+body.lcAuthLock .lcLogin__shell:not(#\9):not(#\9){
+  width:100% !important;
+  height:100% !important;
+  min-height:100dvh !important;
+  display:flex !important;
+  flex-direction:row !important;
+  direction:rtl !important;
+  align-items:stretch !important;
+  box-sizing:border-box !important;
+}
+
+/* ---------- פאנל התחברות (ימין) ---------- */
+body.lcAuthLock .lcLogin__card:not(#\9):not(#\9),
+body.lcAuthLock .lcLogin--mfa .lcLogin__card:not(#\9):not(#\9){
+  position:relative !important;
+  flex:0 0 min(440px, 42vw) !important;
+  width:min(440px, 42vw) !important;
+  max-width:none !important;
+  max-height:none !important;
+  height:100% !important;
+  min-height:100dvh !important;
+  margin:0 !important;
+  border-radius:0 !important;
+  border:0 !important;
+  border-inline-end:1px solid #E5E7EB !important;
+  background:#FFFFFF !important;
+  box-shadow:18px 0 48px rgba(0,0,0,.18) !important;
+  order:1 !important;
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
+  transform:none !important;
+  overflow-x:hidden !important;
+  overflow-y:auto !important;
+  display:flex !important;
+  flex-direction:column !important;
+  justify-content:center !important;
+  padding:0 !important;
+  isolation:auto !important;
+}
+
+body.lcAuthLock .lcLogin__card:not(#\9):not(#\9)::before,
+body.lcAuthLock .lcLogin__card:not(#\9):not(#\9)::after{
+  content:none !important;
+  display:none !important;
+}
+
+body.lcAuthLock .lcLogin__card:hover:not(#\9):not(#\9){
+  transform:none !important;
+  box-shadow:-18px 0 48px rgba(0,0,0,.18) !important;
+}
+
+body.lcAuthLock .lcLogin__panelInner:not(#\9):not(#\9){
+  width:100% !important;
+  max-width:360px !important;
+  margin:0 auto !important;
+  padding:36px 36px 28px !important;
+  box-sizing:border-box !important;
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:stretch !important;
+  position:relative !important;
+  z-index:2 !important;
+}
+
+body.lcAuthLock .lcLogin__brand:not(#\9):not(#\9){
+  display:flex !important;
+  justify-content:center !important;
+  margin:0 0 8px !important;
+  background:none !important;
+  border:none !important;
+  box-shadow:none !important;
+}
+
+body.lcAuthLock .lcLogin__logoImg:not(#\9):not(#\9),
+body.lcAuthLock .giLogoAnim--login .lcLogin__logoImg:not(#\9):not(#\9){
+  width:min(200px, 72%) !important;
+  max-width:220px !important;
+  height:auto !important;
+  filter:none !important;
+}
+
+body.lcAuthLock .lcLogin__title:not(#\9):not(#\9){
+  text-align:center !important;
+  font-size:22px !important;
+  font-weight:800 !important;
+  color:#0B1F4B !important;
+  margin-top:10px !important;
+}
+
+body.lcAuthLock .lcLogin__hint:not(#\9):not(#\9){
+  text-align:center !important;
+  font-size:13px !important;
+  color:#7B8BA5 !important;
+  margin-top:4px !important;
+}
+
+body.lcAuthLock .lcLogin__secureNote:not(#\9):not(#\9){
+  margin:14px auto 0 !important;
+}
+
+body.lcAuthLock .lcLogin__form:not(#\9):not(#\9){
+  margin-top:18px !important;
+  width:100% !important;
+}
+
+body.lcAuthLock .lcLogin__btn:not(#\9):not(#\9){
+  width:100% !important;
+  min-height:48px !important;
+  border-radius:12px !important;
+  background:#2563EB !important;
+  border-color:#2563EB !important;
+  color:#fff !important;
+  font-weight:800 !important;
+}
+
+body.lcAuthLock .lcLogin__footBtn:not(#\9):not(#\9){
+  margin-top:14px !important;
+  text-align:center !important;
+  width:100% !important;
+}
+
+/* ---------- ויזואל מותג (שמאל) ---------- */
+body.lcAuthLock .lcLogin__visual:not(#\9):not(#\9){
+  position:relative !important;
+  flex:1 1 auto !important;
+  min-width:0 !important;
+  min-height:100dvh !important;
+  overflow:hidden !important;
+  order:2 !important;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 40%, rgba(199,178,129,.16), transparent 60%),
+    linear-gradient(145deg, #0b1730 0%, #070d18 55%, #050910 100%) !important;
+}
+
+body.lcAuthLock .lcLogin__visualBg:not(#\9):not(#\9){
+  position:absolute !important;
+  inset:0 !important;
+  background-color:#070d18 !important;
+  background-position:center !important;
+  background-size:cover !important;
+  background-repeat:no-repeat !important;
+  transform:scale(1.02) !important;
+}
+
+body.lcAuthLock .lcLogin__visualShade:not(#\9):not(#\9){
+  position:absolute !important;
+  inset:0 !important;
+  background:
+    linear-gradient(115deg, rgba(7,13,24,.55) 0%, rgba(10,20,40,.35) 45%, rgba(7,13,24,.72) 100%),
+    radial-gradient(ellipse 70% 60% at 50% 45%, rgba(199,178,129,.14), transparent 62%) !important;
+  pointer-events:none !important;
+  z-index:1 !important;
+}
+
+body.lcAuthLock .lcLogin__visualBrand:not(#\9):not(#\9){
+  position:absolute !important;
+  inset:0 !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  padding:clamp(24px, 5vw, 72px) !important;
+  z-index:2 !important;
+  pointer-events:none !important;
+  box-sizing:border-box !important;
+}
+
+body.lcAuthLock .lcLogin__visualLogo:not(#\9):not(#\9){
+  display:block !important;
+  width:min(480px, 58%) !important;
+  max-width:520px !important;
+  height:auto !important;
+  max-height:42vh !important;
+  object-fit:contain !important;
+  filter:
+    drop-shadow(0 18px 40px rgba(0,0,0,.45))
+    drop-shadow(0 0 28px rgba(199,178,129,.18)) !important;
+  opacity:.96 !important;
+}
+
+body.lcAuthLock .lcLogin--mfa .lcLogin__card:not(#\9):not(#\9){
+  flex-basis:min(480px, 46vw) !important;
+  width:min(480px, 46vw) !important;
+}
+
+@media (max-width: 900px){
+  body.lcAuthLock .lcLogin__shell:not(#\9):not(#\9){
+    flex-direction:column-reverse !important;
+  }
+  body.lcAuthLock .lcLogin__visual:not(#\9):not(#\9){
+    flex:0 0 34vh !important;
+    min-height:200px !important;
+    min-width:100% !important;
+  }
+  body.lcAuthLock .lcLogin__card:not(#\9):not(#\9),
+  body.lcAuthLock .lcLogin--mfa .lcLogin__card:not(#\9):not(#\9){
+    flex:1 1 auto !important;
+    width:100% !important;
+    min-height:0 !important;
+    height:auto !important;
+    border-inline-end:0 !important;
+    border-top:1px solid #E5E7EB !important;
+    box-shadow:none !important;
+    justify-content:flex-start !important;
+  }
+  body.lcAuthLock .lcLogin__panelInner:not(#\9):not(#\9){
+    padding:28px 22px 24px !important;
+    max-width:420px !important;
+  }
+  body.lcAuthLock .lcLogin__visualLogo:not(#\9):not(#\9){
+    width:min(260px, 55%) !important;
+    max-height:22vh !important;
+  }
+}

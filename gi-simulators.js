@@ -566,6 +566,33 @@
       }
       // already moved nodes won't be in body
     });
+
+    // הסתרת כפתורי "חשב פרמיה" מקוריים בגוף — נשאר רק הכפתור ב-footer של ה-shell
+    try { riskSimHideNativeBodyCalc(body); } catch(_e) {}
+  }
+
+  function riskSimHideNativeBodyCalc(root){
+    if(!root) return;
+    const hide = (el) => {
+      if(!el || el.closest?.(".giSimShell__foot") || el.closest?.(".giValModal__foot")) return;
+      if(el.hasAttribute?.("data-gishell-calc")) return;
+      el.classList.add("giSimShell__nativeCalcHidden");
+      el.setAttribute("hidden", "");
+      el.setAttribute("aria-hidden", "true");
+      try { el.style.display = "none"; } catch(_e) {}
+    };
+    root.querySelectorAll(
+      "[class*='__calcBtn'], [class*='__actions'], " +
+      "[data-phx-calc], [data-mnr-calc], [data-phxmort-calc], [data-mnrci-calc], " +
+      "[data-mgdci-calc], [data-mgdca-calc], [data-mgdr-calc], [data-hachci-calc]"
+    ).forEach(hide);
+    // כפתורי btn עם הטקסט בגוף (גיבוי)
+    root.querySelectorAll("button.btn").forEach((btn) => {
+      if(btn.closest?.(".giSimShell__foot") || btn.closest?.(".giValModal__foot")) return;
+      if(btn.hasAttribute("data-gishell-calc")) return;
+      const t = safeTrim(btn.textContent);
+      if(t === "חשב פרמיה") hide(btn);
+    });
   }
 
   function riskSimAugmentStandaloneChrome(sim){
@@ -659,6 +686,7 @@
       bar.innerHTML = tabs + `<button type="button" class="giSimShell__addIns" data-gishell-add-ins="1">+ הוסף מבוטח</button>`;
       body.insertBefore(bar, body.firstChild);
       try { riskSimLayoutStandaloneBody(body, sim); } catch(_e) {}
+      try { riskSimHideNativeBodyCalc(card); } catch(_e2) {}
     }
 
     const foot = card.querySelector(".giValModal__foot");
