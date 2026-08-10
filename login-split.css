@@ -231,9 +231,31 @@ body.lcAuthLock .lcLogin__input::placeholder:not(#\9):not(#\9){
   font-weight:500 !important;
 }
 
-body.lcAuthLock #lcLoginCredentialsStep:not(#\9):not(#\9){
+body.lcAuthLock #lcLoginCredentialsStep:not([hidden]):not(#\9):not(#\9){
   display:grid !important;
   gap:12px !important;
+}
+
+/* אחרי סיסמה — רק שלב MFA, בלי שדות הכניסה הראשונים */
+body.lcAuthLock #lcLoginCredentialsStep[hidden]:not(#\9):not(#\9),
+body.lcAuthLock .lcLogin--mfa #lcLoginCredentialsStep:not(#\9):not(#\9){
+  display:none !important;
+  visibility:hidden !important;
+  height:0 !important;
+  max-height:0 !important;
+  overflow:hidden !important;
+  margin:0 !important;
+  padding:0 !important;
+  border:0 !important;
+  gap:0 !important;
+}
+
+body.lcAuthLock .lcLogin--mfa .lcLogin__panelInner > .lcLogin__brand:not(#\9):not(#\9),
+body.lcAuthLock .lcLogin--mfa .lcLogin__panelInner > .lcLogin__title:not(#\9):not(#\9),
+body.lcAuthLock .lcLogin--mfa .lcLogin__panelInner > .lcLogin__hint:not(#\9):not(#\9),
+body.lcAuthLock .lcLogin--mfa .lcLogin__panelInner > .lcLogin__secureNote:not(#\9):not(#\9),
+body.lcAuthLock .lcLogin--mfa #lcForgotPasswordBtn:not(#\9):not(#\9){
+  display:none !important;
 }
 
 body.lcAuthLock .lcLogin__btn:not(#\9):not(#\9){

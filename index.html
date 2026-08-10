@@ -11,7 +11,7 @@
 <link href="./app.css?v=20260810-dash-goldgrad-v1" rel="stylesheet"/>
 <link href="./theme.css?v=20260810-dash-goldgrad-v1" rel="stylesheet"/>
 <link href="./theme-p2.css?v=20260805-workdays-goal-v1" rel="stylesheet"/>
-<link href="./login-split.css?v=20260810-login-split-v10" rel="stylesheet"/>
+<link href="./login-split.css?v=20260810-login-split-v12" rel="stylesheet"/>
 <!-- GI-PERF 2026-08-10: CSS משני (mirror/import/unify) נטען אחרי כניסה מ-app.js —
      לא חוסם מסך login ולא מרעיש 404 לפני שהמשתמש התחבר. -->
 <!-- GI-PERF 2026-08-09: סימולטורים — CSS נטען לפי צורך מ-ensureGiSimulatorStylesLoaded ב-app.js -->
@@ -86,7 +86,16 @@ body.lcAuthLock #lcLogin .lcLogin__field > .lcLogin__input:focus:not(#\9):not(#\
 body.lcAuthLock #lcLogin .lcLogin__input:focus:not(#\9):not(#\9){
   border-color:#2563EB!important;background:#fff!important;box-shadow:0 0 0 3px rgba(37,99,235,.14)!important;
 }
-body.lcAuthLock #lcLogin #lcLoginCredentialsStep{display:grid!important;gap:12px!important}
+body.lcAuthLock #lcLogin #lcLoginCredentialsStep:not([hidden]){display:grid!important;gap:12px!important}
+body.lcAuthLock #lcLogin #lcLoginCredentialsStep[hidden],
+body.lcAuthLock #lcLogin.lcLogin--mfa #lcLoginCredentialsStep{
+  display:none!important;visibility:hidden!important;height:0!important;overflow:hidden!important;margin:0!important;padding:0!important;
+}
+body.lcAuthLock #lcLogin.lcLogin--mfa .lcLogin__title,
+body.lcAuthLock #lcLogin.lcLogin--mfa .lcLogin__hint,
+body.lcAuthLock #lcLogin.lcLogin--mfa .lcLogin__secureNote,
+body.lcAuthLock #lcLogin.lcLogin--mfa > .lcLogin__shell .lcLogin__panelInner > .lcLogin__brand,
+body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!important}
 @media (max-width:900px){
   body.lcAuthLock #lcLogin .lcLogin__shell:not(#\9):not(#\9){flex-direction:column-reverse!important}
   body.lcAuthLock #lcLogin .lcLogin__visual:not(#\9):not(#\9){flex:0 0 34vh!important;min-height:200px!important;min-width:100%!important}
@@ -3710,7 +3719,7 @@ body.lcAuthLock #lcLogin #lcLoginCredentialsStep{display:grid!important;gap:12px
   </div>
 </div>
 
-<script src="./app.js?v=20260810-login-split-v10"></script>
+<script src="./app.js?v=20260810-login-split-v12"></script>
 
 
 <div id="giPwaInstallBanner" class="giPwaInstallBanner" hidden>
