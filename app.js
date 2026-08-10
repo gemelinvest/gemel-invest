@@ -58796,12 +58796,25 @@ ${inner}
       this._activeIdx = -1;
     },
 
+    /** מנקה את שורת החיפוש אחרי בחירת תוצאה / חיפוש שהושלם */
+    clearQuery(){
+      try {
+        if(this.els.input) this.els.input.value = "";
+      } catch(_e) {}
+      this._q = "";
+      this._rows = [];
+      this._activeIdx = -1;
+      this._serverRows = [];
+      this._serverQ = "";
+    },
+
     /* ---------- ניתוב פתיחה ---------- */
     activate(idx){
       const row = this._rows.find((r) => r.type === "item" && r.idx === idx);
       if(!row) return;
       const e = row.entry;
       this.close();
+      this.clearQuery();
       try { this.els.input?.blur(); } catch(_e) {}
       try { this.route(e); } catch(err) {
         try { console.error("GLOBAL_SEARCH_OPEN_FAILED", err, e?.kind, e?.id); } catch(_e) {}
