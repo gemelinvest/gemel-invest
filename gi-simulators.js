@@ -460,6 +460,114 @@
     try { sim._render(); } catch(_e2) {}
   }
 
+  function riskSimExtractAgeFromHint(body){
+    if(!body) return "";
+    const hints = body.querySelectorAll("[class*='__hint']");
+    for(let i = 0; i < hints.length; i++){
+      const hint = hints[i];
+      if(hint.className && String(hint.className).indexOf("warn") >= 0) continue;
+      const strong = hint.querySelector("strong");
+      if(!strong) continue;
+      const age = safeTrim(strong.textContent);
+      if(/^\d{1,3}$/.test(age)) return age;
+    }
+    return "";
+  }
+
+  function riskSimBuildShellPanel(title, className){
+    const panel = document.createElement("section");
+    panel.className = "giSimShell__panel " + (className || "");
+    const h = document.createElement("div");
+    h.className = "giSimShell__panelTitle";
+    h.textContent = title;
+    panel.appendChild(h);
+    return panel;
+  }
+
+  function riskSimLayoutStandaloneBody(body, sim){
+    if(!body || body.querySelector(".giSimShell__layout")) return;
+    const bar = body.querySelector(".giSimShell__insuredBar");
+    const grid = body.querySelector("[class*='__grid']");
+    if(!grid) return;
+
+    const coversTitle = body.querySelector("[class*='__coversTitle']");
+    const coversWrap = body.querySelector("[class*='__coversWrap']");
+    const result = body.querySelector("[class*='__result']");
+    const occBox = body.querySelector("[class*='__occBox']");
+    const statusList = body.querySelector("[class*='__statusList']");
+
+    const age = riskSimExtractAgeFromHint(body);
+    const layout = document.createElement("div");
+    layout.className = "giSimShell__layout";
+
+    const details = riskSimBuildShellPanel("פרטי מבוטח", "giSimShell__panel--details");
+    details.appendChild(grid);
+
+    if(age){
+      const ageBox = document.createElement("div");
+      ageBox.className = "giSimShell__ageBadge";
+      ageBox.innerHTML = `<span class="giSimShell__ageBadgeLabel">גיל ביטוחי</span><strong class="giSimShell__ageBadgeValue">${escapeHtml(age)}</strong>`;
+      details.appendChild(ageBox);
+      body.querySelectorAll("[class*='__hint']").forEach((hint) => {
+        if(hint.className && String(hint.className).indexOf("warn") >= 0) return;
+        const strong = hint.querySelector("strong");
+        if(strong && safeTrim(strong.textContent) === age){
+          hint.classList.add("giSimShell__hintHidden");
+        }
+      });
+    }
+
+    const covers = riskSimBuildShellPanel(
+      coversWrap ? "כיסויים" : "פרמטרים לחישוב",
+      coversWrap ? "giSimShell__panel--covers" : "giSimShell__panel--params"
+    );
+
+    // Move wide calculation fields (sum insured etc.) into the second panel for risk sims
+    if(!coversWrap){
+      const wideFields = Array.from(grid.querySelectorAll("[class*='__field--wide']"));
+      wideFields.forEach((f) => covers.appendChild(f));
+      if(occBox) covers.appendChild(occBox);
+      if(result) covers.appendChild(result);
+      if(!wideFields.length && !occBox && !result){
+        // keep second panel useful: clone note
+        const note = document.createElement("div");
+        note.className = "giSimShell__emptyNote";
+        note.textContent = "מלאו את פרטי המבוטח ולחצו «חשב פרמיה»";
+        covers.appendChild(note);
+      }
+    } else {
+      if(coversTitle) covers.appendChild(coversTitle);
+      covers.appendChild(coversWrap);
+      if(occBox) covers.appendChild(occBox);
+      if(result) covers.appendChild(result);
+    }
+
+    layout.appendChild(details);
+    layout.appendChild(covers);
+
+    const insertAfter = bar || null;
+    if(insertAfter && insertAfter.nextSibling){
+      body.insertBefore(layout, insertAfter.nextSibling);
+    } else if(insertAfter){
+      body.appendChild(layout);
+    } else {
+      body.insertBefore(layout, body.firstChild);
+    }
+
+    // Move leftover nodes (except bar/layout/overlays) under a extras strip if any meaningful leftovers remain
+    Array.from(body.children).forEach((child) => {
+      if(child === bar || child === layout) return;
+      if(child.classList && (child.classList.contains("giSimShell__insuredBar") || child.classList.contains("giSimShell__layout"))) return;
+      if(statusList && child === statusList) return;
+      if(child.className && String(child.className).indexOf("overlay") >= 0) return;
+      if(child.className && String(child.className).indexOf("insuredLabel") >= 0){
+        child.classList.add("giSimShell__hintHidden");
+        return;
+      }
+      // already moved nodes won't be in body
+    });
+  }
+
   function riskSimAugmentStandaloneChrome(sim){
     const modal = sim && sim._modal;
     if(!modal || !sim._ctx?.standalone) return;
@@ -509,6 +617,7 @@
       }).join("");
       bar.innerHTML = tabs + `<button type="button" class="giSimShell__addIns" data-gishell-add-ins="1">+ הוסף מבוטח</button>`;
       body.insertBefore(bar, body.firstChild);
+      try { riskSimLayoutStandaloneBody(body, sim); } catch(_e) {}
     }
 
     const foot = card.querySelector(".giValModal__foot");
@@ -526,8 +635,10 @@
           <span class="giSimShell__premLabel">סה״כ לכל המבוטחים</span>
           <strong class="giSimShell__premValue giSimShell__premValue--total">₪${escapeHtml(riskSimFormatMoneyShekels(total))}</strong>
         </div>
-        <button type="button" class="btn btn--primary giSimShell__calcBtn" data-gishell-calc="1">חשב פרמיה</button>
-        <button type="button" class="btn giSimShell__closeBtn" data-${escapeHtml(prefix)}-close="1">סגור</button>`;
+        <div class="giSimShell__footActions">
+          <button type="button" class="btn giSimShell__closeBtn" data-${escapeHtml(prefix)}-close="1">סגור</button>
+          <button type="button" class="btn btn--primary giSimShell__calcBtn" data-gishell-calc="1">חשב פרמיה</button>
+        </div>`;
     }
   }
 

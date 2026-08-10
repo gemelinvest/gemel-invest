@@ -1,4 +1,4 @@
-/* ===== GI-SIM-SHELL 2026-08-10 · מוקאפ 3:1 סימולטור גדול כחול-לבן ========= */
+/* ===== GI-SIM-SHELL 2026-08-10 · מוקאפ 1: סימולטור גדול 2 טורים ========= */
 
 .giSimShellModal .giValModal__card,
 .giSimShellModal .giSimShell__card,
@@ -15,21 +15,22 @@
   background:#fff !important;
 }
 
+/* Header לבן נקי (בלי גרדיאנט) */
 .giSimShellModal .giValModal__head,
 .giSimShell__head{
   position:relative !important;
   flex:0 0 auto !important;
-  padding:18px 24px 14px !important;
+  padding:18px 28px 14px !important;
   background:#fff !important;
   border-bottom:1px solid #EEF2F8 !important;
   display:flex !important;
   align-items:flex-start !important;
-  gap:12px !important;
+  gap:14px !important;
 }
 .giSimShellModal .giValModal__headIcon{
-  width:44px !important;
-  height:44px !important;
-  border-radius:12px !important;
+  width:48px !important;
+  height:48px !important;
+  border-radius:14px !important;
   background:#EFF6FF !important;
   border:1px solid #DBEAFE !important;
   display:flex !important;
@@ -37,41 +38,58 @@
   justify-content:center !important;
   overflow:hidden !important;
   flex:0 0 auto !important;
+  box-shadow:none !important;
 }
 .giSimShellModal .giValModal__headIcon img,
-.giSimShellModal .giValModal__headIcon svg{
-  max-width:28px !important;
-  max-height:28px !important;
-  width:auto !important;
-  height:auto !important;
+.giSimShellModal .giValModal__headIcon svg,
+.giSimShellModal .giValModal__headIcon .lcCompanyLogo,
+.giSimShellModal .giValModal__headIcon .lcCompanyLogo--mini{
+  max-width:30px !important;
+  max-height:30px !important;
+  width:30px !important;
+  height:30px !important;
   object-fit:contain !important;
 }
 .giSimShellModal .giValModal__title{
-  font-size:20px !important;
+  font-size:22px !important;
   font-weight:800 !important;
   color:#0B1F4B !important;
   line-height:1.25 !important;
 }
+.giSimShellModal .giValModal__sub{ display:none !important; }
 .giSimShell__crumb{
   margin-top:4px;
   font-size:12.5px;
   font-weight:600;
   color:#7B8BA5;
 }
-.giSimShellModal [class*="__closeX"],
-.giSimShellModal .giValModal__head .lcSimCenterModal__closeX{
+.giSimShellModal [class*="__closeX"]{
   position:absolute !important;
-  top:14px !important;
-  left:14px !important;
+  top:16px !important;
+  left:16px !important;
   right:auto !important;
+  background:transparent !important;
+  border:none !important;
+  color:#647287 !important;
+  font-size:18px !important;
+  padding:6px 8px !important;
+  border-radius:10px !important;
+  cursor:pointer !important;
+}
+.giSimShellModal [class*="__closeX"]:hover{
+  background:#F1F5F9 !important;
+  color:#0F172A !important;
 }
 
 .giSimShellModal .giValModal__body{
   flex:1 1 auto !important;
   min-height:0 !important;
   overflow:auto !important;
-  padding:16px 22px 18px !important;
-  background:#FCFDFF !important;
+  padding:16px 24px 18px !important;
+  background:#F7F9FC !important;
+  display:flex !important;
+  flex-direction:column !important;
+  gap:14px !important;
 }
 
 /* שורת מבוטחים */
@@ -80,7 +98,8 @@
   flex-wrap:wrap;
   align-items:center;
   gap:8px;
-  margin:0 0 14px;
+  margin:0;
+  flex:0 0 auto;
 }
 .giSimShell__tab{
   display:inline-flex;
@@ -126,27 +145,131 @@
   border-color:#2563EB;
 }
 
-/* גיל ביטוחי בולט */
-.giSimShellModal [class*="__hint"] strong,
-.giSimShell__ageBadge{
-  color:#2563EB !important;
-  font-size:18px !important;
-  font-weight:800 !important;
+/* פריסת 2 טורים */
+.giSimShell__layout{
+  display:grid;
+  grid-template-columns:minmax(280px, 0.92fr) minmax(320px, 1.08fr);
+  gap:16px;
+  align-items:start;
+  flex:1 1 auto;
+  min-height:0;
+}
+.giSimShell__panel{
+  background:#fff;
+  border:1.5px solid #E5EAF3;
+  border-radius:16px;
+  padding:16px 16px 18px;
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  min-width:0;
+  box-shadow:0 1px 2px rgba(15,23,42,.03);
+}
+.giSimShell__panelTitle{
+  font-size:15px;
+  font-weight:850;
+  color:#0B1F4B;
+  letter-spacing:-0.01em;
+  padding-bottom:2px;
+}
+.giSimShell__panel--details [class*="__grid"]{
+  display:flex !important;
+  flex-direction:column !important;
+  gap:14px !important;
+}
+.giSimShell__panel--details [class*="__field"],
+.giSimShell__panel--details [class*="__field--wide"]{
+  grid-column:auto !important;
+  width:100%;
+}
+.giSimShell__panel--covers [class*="__coversTitle"]{
+  display:none !important; /* כותרת הפאנל מספיקה */
+}
+.giSimShell__panel--covers [class*="__coversWrap"],
+.giSimShell__panel--covers [class*="__group"]{
+  border-color:#E8EEF8 !important;
+}
+.giSimShell__panel--covers [class*="__groupTitle"]{
+  background:#F8FBFF !important;
+  color:#1D4ED8 !important;
+}
+.giSimShell__panel--covers [class*="__cover"]{
+  padding:11px 12px !important;
+  gap:12px !important;
+}
+.giSimShell__panel--covers [class*="__cover"].is-checked{
+  background:#F8FBFF !important;
+}
+.giSimShell__emptyNote{
+  font-size:13.5px;
+  font-weight:600;
+  color:#7B8BA5;
+  padding:18px 8px;
+  text-align:center;
 }
 
-/* שדות גדולים יותר */
+/* גיל ביטוחי — תיבה בולטת */
+.giSimShell__ageBadge{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-top:4px;
+  padding:14px 16px;
+  border-radius:14px;
+  background:#EFF6FF;
+  border:1.5px solid #BFDBFE;
+}
+.giSimShell__ageBadgeLabel{
+  font-size:13px;
+  font-weight:700;
+  color:#1D4ED8;
+}
+.giSimShell__ageBadgeValue{
+  font-size:28px !important;
+  font-weight:850 !important;
+  color:#2563EB !important;
+  line-height:1 !important;
+  letter-spacing:-0.02em;
+}
+.giSimShell__hintHidden{ display:none !important; }
+
+/* שדות גדולים */
+.giSimShellModal [class*="__label"]{
+  font-size:13px !important;
+  font-weight:750 !important;
+  color:#0B1F4B !important;
+}
 .giSimShellModal [class*="__input"],
 .giSimShellModal input[type="text"],
 .giSimShellModal input[type="number"],
 .giSimShellModal select{
-  min-height:44px !important;
+  min-height:46px !important;
   border-radius:12px !important;
-  font-size:14px !important;
+  border:1.5px solid #E5EAF3 !important;
+  font-size:14.5px !important;
+  background:#fff !important;
+}
+.giSimShellModal [class*="__input"]:focus,
+.giSimShellModal input:focus,
+.giSimShellModal select:focus{
+  border-color:#2563EB !important;
+  box-shadow:0 0 0 3px rgba(37,99,235,.14) !important;
+  outline:none !important;
+}
+.giSimShellModal [class*="__segmented"]{
+  display:flex !important;
+  gap:8px !important;
 }
 .giSimShellModal [class*="__segBtn"]{
-  min-height:40px !important;
-  border-radius:10px !important;
-  font-weight:700 !important;
+  flex:1 !important;
+  min-height:42px !important;
+  border-radius:11px !important;
+  border:1.5px solid #E5EAF3 !important;
+  background:#fff !important;
+  color:#647287 !important;
+  font-weight:750 !important;
+  font-size:13.5px !important;
 }
 .giSimShellModal [class*="__segBtn"].is-active{
   background:#2563EB !important;
@@ -154,7 +277,7 @@
   color:#fff !important;
 }
 
-/* Footer דביק — פרמיה | סה״כ | חשב */
+/* Footer דביק */
 .giSimShellModal .giValModal__foot,
 .giSimShell__foot{
   flex:0 0 auto !important;
@@ -162,8 +285,8 @@
   flex-wrap:wrap !important;
   align-items:center !important;
   justify-content:flex-start !important;
-  gap:16px 28px !important;
-  padding:14px 22px !important;
+  gap:16px 24px !important;
+  padding:14px 24px !important;
   background:#fff !important;
   border-top:1px solid #EEF2F8 !important;
   direction:rtl !important;
@@ -180,7 +303,7 @@
   color:#7B8BA5;
 }
 .giSimShell__premValue{
-  font-size:26px;
+  font-size:28px;
   font-weight:850;
   color:#2563EB;
   line-height:1.1;
@@ -190,32 +313,44 @@
   color:#0B1F4B;
   font-size:22px;
 }
-.giSimShell__calcBtn{
+.giSimShell__footActions{
   margin-inline-start:auto !important;
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.giSimShell__calcBtn{
   min-height:48px !important;
   min-width:150px !important;
   border-radius:12px !important;
   background:#2563EB !important;
   border-color:#2563EB !important;
+  color:#fff !important;
   font-size:15px !important;
   font-weight:800 !important;
   padding:0 20px !important;
 }
 .giSimShell__closeBtn{
-  min-height:44px !important;
+  min-height:46px !important;
+  min-width:96px !important;
   border-radius:12px !important;
+  border:1.5px solid #2563EB !important;
+  background:#fff !important;
+  color:#2563EB !important;
+  font-weight:750 !important;
 }
 
-/* הסתרת טאבים ישנים כשיש בר shell */
+/* הסתרת טאבים ישנים / לייבל standalone */
 .giSimShellModal .giSimShell__insuredBar ~ [class*="__tabs"],
 .giSimShellModal [class*="__tabs"]:not(.giSimShell__insuredBar){
   display:none !important;
 }
-.giSimShellModal [class*="__insuredLabel--standalone"]{
+.giSimShellModal [class*="__insuredLabel--standalone"],
+.giSimShellModal [class*="__insuredLabel"]{
   display:none !important;
 }
 
-/* רוחב בסיסי לכל מודאלי הסימולטורים גם לפני enhancement */
+/* רוחב בסיסי */
 .lcPhxSimModal .giValModal__card,
 .lcMnrSimModal .giValModal__card,
 .lcMnrHealthModal .giValModal__card,
@@ -229,9 +364,15 @@
   max-width:min(1180px, 96vw) !important;
 }
 
+@media (max-width: 900px){
+  .giSimShell__layout{
+    grid-template-columns:1fr;
+  }
+}
 @media (max-width: 760px){
   .giSimShellModal .giValModal__card{ max-width:96vw !important; }
   .giSimShell__premValue{ font-size:22px; }
-  .giSimShell__calcBtn{ width:100%; margin-inline-start:0 !important; }
+  .giSimShell__footActions{ width:100%; margin-inline-start:0 !important; }
+  .giSimShell__calcBtn{ flex:1; }
   .giSimShellModal .giValModal__foot{ gap:12px; }
 }
