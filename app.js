@@ -28901,22 +28901,19 @@ UsersGateUI.init();
         {
           value: this.formatMoney(metrics.netPremium),
           delta: metrics.netDelta,
-          breakdown: netBreakdownHtml,
-          hint: "פוליסות חדשות · בריאות וסיכונים · מתחילת החודש"
+          breakdown: netBreakdownHtml
         },
         {
           value: issuedPremiumKpi.value,
           he: issuedPremiumKpi.he,
           deltaText: issuedPremiumKpi.deltaText,
           deltaClass: issuedPremiumKpi.deltaClass,
-          breakdown: issuedPremiumKpi.breakdown,
-          hint: "מדוח יומי · סטטוס הופק בלבד"
+          breakdown: issuedPremiumKpi.breakdown
         },
         {
           value: this.formatMoney(metrics.agentAppointmentPremium),
           delta: metrics.agentAppointmentPremiumDelta,
-          breakdown: agentBreakdownHtml,
-          hint: "מינויי סוכן בלבד · לא נכלל ביעד"
+          breakdown: agentBreakdownHtml
         }
       ];
 
@@ -28927,18 +28924,7 @@ UsersGateUI.init();
           const heEl = card.querySelector('.bankKpi__he');
           if(heEl && heEl.textContent !== datum.he) heEl.textContent = datum.he;
         }
-        if(datum.hint){
-          let hintEl = card.querySelector('.bankKpi__hint');
-          if(!hintEl){
-            const top = card.querySelector('.bankKpi__top');
-            hintEl = document.createElement('div');
-            hintEl.className = 'bankKpi__hint';
-            if(top && top.nextSibling) card.insertBefore(hintEl, top.nextSibling);
-            else if(top) top.insertAdjacentElement('afterend', hintEl);
-            else card.prepend(hintEl);
-          }
-          if(hintEl.textContent !== datum.hint) hintEl.textContent = datum.hint;
-        }
+        card.querySelectorAll('.bankKpi__hint').forEach((el) => { try { el.remove(); } catch(_e) {} });
         const valEl = card.querySelector('.bankKpi__value');
         if(valEl && valEl.textContent !== value) valEl.textContent = value;
         const deltaEl = card.querySelector('.bankKpi__delta');
@@ -29016,18 +29002,7 @@ UsersGateUI.init();
       // כרטיס today — תמיד מספר (₪0 עד שיש נתונים), בלי «טוען…»
       const todayCard = root.querySelector('#bankKpiTodayCard');
       if(todayCard && !skipTodayZeroPaint){
-        const todayHintEl = todayCard.querySelector('.bankKpi__hint');
-        const todayHintTxt = "בריאות וסיכונים בלבד · היום";
-        if(todayHintEl && todayHintEl.textContent !== todayHintTxt) todayHintEl.textContent = todayHintTxt;
-        else if(!todayHintEl){
-          const top = todayCard.querySelector('.bankKpi__top');
-          if(top){
-            const hintEl = document.createElement('div');
-            hintEl.className = 'bankKpi__hint';
-            hintEl.textContent = todayHintTxt;
-            top.insertAdjacentElement('afterend', hintEl);
-          }
-        }
+        todayCard.querySelectorAll('.bankKpi__hint').forEach((el) => { try { el.remove(); } catch(_e) {} });
         const valEl = todayCard.querySelector('.bankKpi__value');
         const newVal = this.formatMoney(todaySales.totalPremium || 0);
         if(valEl && valEl.textContent !== newVal) valEl.textContent = newVal;
@@ -29378,14 +29353,12 @@ UsersGateUI.init();
           : `<div class="bankKpiTodayRow bankKpiTodayRow--empty">אין מכירות עדיין היום</div>`;
         const todayValue = this.formatMoney(todaySales.totalPremium || 0);
         const todaySub = `${String(todaySales.totalPolicies || 0)} פוליסות · ${String(todaySales.newClients || 0)} לקוחות${orgScope ? (' · סה״כ ' + (getDashboardScopeLabelHe('office') || 'סיכום')) : ''}`;
-        const todayHint = "בריאות וסיכונים בלבד · היום";
         return `
           <article class="bankKpi card bankKpi--compact bankKpi--today bankKpi--todaySales" id="bankKpiTodayCard" style="display:flex;flex-direction:column;">
             <div class="bankKpi__top">
               <div class="bankKpi__he">${orgScope ? ('נמכר היום (' + (getDashboardScopeLabelHe('allAgents') || 'סיכום') + ')') : 'כמה מכרתי היום'}</div>
               <div class="bankKpi__caret">⌃</div>
             </div>
-            <div class="bankKpi__hint">${escapeHtml(todayHint)}</div>
             <div class="bankKpi__watermark" aria-hidden="true">${premiumCustomerIcon('building')}</div>
             <div class="bankKpi__value">${escapeHtml(todayValue)}</div>
             <div class="bankKpiToday__sub">${escapeHtml(todaySub)}</div>
@@ -29415,17 +29388,15 @@ UsersGateUI.init();
           value: this.formatMoney(metrics.netPremium),
           delta: metrics.netDelta,
           icon: premiumCustomerIcon('briefcase'),
-          hint: 'פוליסות חדשות · בריאות וסיכונים · מתחילת החודש',
           breakdown: netBreakdownHtml
         },
-        Object.assign({}, issuedPremiumKpi, { hint: 'מדוח יומי · סטטוס הופק בלבד' }),
+        Object.assign({}, issuedPremiumKpi),
         {
           he: 'פרמיה ממינוי סוכן',
           cardClass: 'bankKpi--agentAppoint',
           value: this.formatMoney(metrics.agentAppointmentPremium),
           delta: metrics.agentAppointmentPremiumDelta,
           icon: premiumCustomerIcon('document'),
-          hint: 'מינויי סוכן בלבד · לא נכלל ביעד',
           breakdown: agentBreakdownHtml
         }
       ];
@@ -29497,7 +29468,6 @@ UsersGateUI.init();
                     <div class="bankKpi__he">${escapeHtml(card.he)}</div>
                     <div class="bankKpi__caret">⌃</div>
                   </div>
-                  ${card.hint ? `<div class="bankKpi__hint">${escapeHtml(card.hint)}</div>` : ""}
                   <div class="bankKpi__watermark" aria-hidden="true">${card.icon}</div>
                   <div class="bankKpi__value">${escapeHtml(card.value)}</div>
                   <div class="bankKpi__delta ${card.deltaClass || deltaClass}">${deltaHtml}</div>

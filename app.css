@@ -20456,16 +20456,7 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
 #view-dashboard .bankKpi__top{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; min-height:0; }
 #view-dashboard .bankKpi__caret{ color:#7a90b8; font-size:13px; font-weight:700; transition:transform .24s ease, color .24s ease; }
 #view-dashboard .bankKpi__he{ margin-top:0; font-size:13px; font-weight:700; color:#4a6490; line-height:1.2; transition:transform .24s ease, color .24s ease; }
-#view-dashboard .bankKpi__hint{
-  position:relative;
-  z-index:2;
-  margin:2px 0 0;
-  font-size:11px;
-  font-weight:500;
-  line-height:1.25;
-  color:#7a90b8;
-  max-width:92%;
-}
+#view-dashboard .bankKpi__hint{ display:none !important; }
 #view-dashboard .bankKpi:hover{
   transform:translateY(-6px);
   border-color:rgba(117,154,228,.70);
@@ -20504,17 +20495,24 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
   font-size:38px;
   line-height:.95;
   font-weight:700;
-  color:#3a6099;
+  /* זהב לוגו משמאל → שחור מימין (כמו המוקאפ) */
+  color:transparent !important;
+  background-image:linear-gradient(to right, #C7B281 0%, #9E8A58 42%, #3A3220 72%, #000000 100%) !important;
+  -webkit-background-clip:text !important;
+  background-clip:text !important;
+  -webkit-text-fill-color:transparent !important;
+  text-shadow:none !important;
   opacity:1;
   transform:translateY(0);
   animation:bankKpiValueIn .55s cubic-bezier(.22,.8,.22,1) .12s both;
-  transition:transform .24s ease, text-shadow .28s ease, color .24s ease;
+  transition:transform .24s ease;
   letter-spacing:-.5px;
 }
 #view-dashboard .bankKpi:hover .bankKpi__value{
   transform:translateY(-2px);
-  color:#2e5390;
-  text-shadow:0 8px 18px rgba(74,116,192,.10);
+  color:transparent !important;
+  -webkit-text-fill-color:transparent !important;
+  text-shadow:none !important;
 }
 #view-dashboard .bankKpi__delta{
   display:none !important;
@@ -20659,9 +20657,13 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
 #view-dashboard .bankKpi--agentAppoint .bankKpi__value,
 #view-dashboard .bankKpi--newClients .bankKpi__value,
 #view-dashboard .bankKpi--todaySales .bankKpi__value{
-  color:#061a38;
+  color:transparent !important;
   font-weight:800;
-  text-shadow:var(--kpiOnPhotoTextShadowStrong);
+  background-image:linear-gradient(to right, #C7B281 0%, #9E8A58 42%, #3A3220 72%, #000000 100%) !important;
+  -webkit-background-clip:text !important;
+  background-clip:text !important;
+  -webkit-text-fill-color:transparent !important;
+  text-shadow:none !important;
 }
 #view-dashboard .bankKpi--netPremium .bankKpi__delta,
 #view-dashboard .bankKpi--agentAppoint .bankKpi__delta,
@@ -20761,8 +20763,9 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
 #view-dashboard .bankKpi--agentAppoint:hover .bankKpi__value,
 #view-dashboard .bankKpi--newClients:hover .bankKpi__value,
 #view-dashboard .bankKpi--todaySales:hover .bankKpi__value{
-  color:#061a38;
-  text-shadow:var(--kpiOnPhotoTextShadowStrong);
+  color:transparent !important;
+  -webkit-text-fill-color:transparent !important;
+  text-shadow:none !important;
 }
 
 /* ===== TODAY SALES CARD ===== */
@@ -23135,8 +23138,12 @@ body.sidebar-collapsed .sidebar .nav__icon{
   filter:drop-shadow(0 10px 18px rgba(122,161,231,.08));
 }
 #view-dashboard .bankKpi__value{
-  color:#144291;
-  text-shadow:0 10px 24px rgba(100,138,210,.08);
+  color:transparent !important;
+  background-image:linear-gradient(to right, #C7B281 0%, #9E8A58 42%, #3A3220 72%, #000000 100%) !important;
+  -webkit-background-clip:text !important;
+  background-clip:text !important;
+  -webkit-text-fill-color:transparent !important;
+  text-shadow:none !important;
 }
 #view-dashboard .bankKpi__delta{
   font-size:12px;
