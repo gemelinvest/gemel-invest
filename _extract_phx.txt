@@ -1,0 +1,443 @@
+  const PhoenixRiskSimulator = {
+    _modal: null,
+    _ctx: null,
+    _state: {},
+    _activeInsuredId: null,
+    _escHandler: null,
+    _confirmSwitch: null,
+    _showFinalSummary: false,
+
+    open(ctx){
+      this.close();
+      this._ctx = ctx || {};
+      const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : [];
+      this._state = {};
+      insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); });
+      this._activeInsuredId = insureds[0]?.id || null;
+      this._confirmSwitch = null;
+      this._showFinalSummary = false;
+      this._mount();
+      this._render();
+    },
+
+    _prefillFromInsured(ins){
+      const d = ins?.data || {};
+      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
+      const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
+      const birthDate = safeTrim(d.birthDate || "");
+      const computedAge = birthDate ? riskSimAgeFromBirthDate(birthDate) : null;
+      const ageInRange = Number.isInteger(computedAge) && computedAge >= PHOENIX_RISK_MIN_AGE && computedAge <= PHOENIX_RISK_MAX_AGE;
+      const occupation = safeTrim(d.occupation || "");
+      return {
+        birthDate,
+        birthDateSource: birthDate ? "step1" : "",
+        age: ageInRange ? String(computedAge) : "",
+        ageSource: ageInRange ? "step1" : "",
+        ageRaw: computedAge,
+        gender, genderSource: gender ? "step1" : "",
+        smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "",
+        occupation,
+        occupationSource: occupation ? "step1" : "",
+        sumInsured: "",
+        result: null,
+        error: null,
+        savedAt: null,
+        dirtySinceSave: false
+      };
+    },
+
+    /** נקודת הרחבה: קובע אם מבוטח נתון רלוונטי לסימולטור הזה. כברירת מחדל כולם
+        רלוונטיים — הנציג כבר בחר אותם בשלב 3 עבור המוצר הנוכחי, ואין כיום כלל
+        עסקי קיים במערכת שממעט מבוטחים מסוימים (למשל ילדים) מריסק, ולכן לא
+        מומצא כזה. אם בעתיד יתברר שיש כלל כזה, יש לממש אותו כאן בלבד. */
+    _isInsuredRelevant(_ins){
+      return true;
+    },
+
+    close(){
+      if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; }
+      if(this._modal){
+        const m = this._modal;
+        m.classList.add("giValModal--leaving");
+        window.setTimeout(() => m.remove(), 200);
+        this._modal = null;
+      }
+      this._ctx = null;
+    },
+
+    _mount(){
+      const modal = document.createElement("div");
+      modal.id = "lcPhxSimModal";
+      modal.className = "giValModal lcPhxSimModal";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-label", "סימולטור ריסק הפניקס");
+      document.body.appendChild(modal);
+      this._modal = modal;
+      this._escHandler = (ev) => { if(ev.key === "Escape") this.close(); };
+      document.addEventListener("keydown", this._escHandler);
+      requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
+    },
+
+    _getInsuredLabel(insId){
+      const ins = (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === insId);
+      return ins ? safeTrim(ins.label) || "מבוטח" : "מבוטח";
+    },
+
+    _getActiveInsured(){
+      return (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === this._activeInsuredId) || null;
+    },
+
+    _render(){
+      if(!this._modal) return;
+      const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+      const isMulti = insureds.length > 1;
+
+      if(this._showFinalSummary){
+        this._renderFinalSummary(insureds);
+        return;
+      }
+
+      const activeId = this._activeInsuredId;
+      const st = this._state[activeId] || this._prefillFromInsured(null);
+      const isStandalone = !!this._ctx?.standalone;
+
+      const tabsHtml = isMulti ? `<div class="lcPhxSim__tabs">${insureds.map((ins) => {
+        const s = this._state[ins.id];
+        const statusCls = s?.savedAt ? ' has-saved' : (s?.result ? ' has-result' : '');
+        return `<button type="button" class="lcPhxSim__tab${ins.id === activeId ? ' is-active' : ''}${statusCls}" data-phx-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${s?.savedAt ? ' 🟢' : ''}</button>`;
+      }).join("")}</div>` : "";
+
+      const statusListHtml = isMulti ? `
+        <div class="lcPhxSim__statusList">
+          <div class="lcPhxSim__statusListTitle">מבוטחים בהצעה</div>
+          ${insureds.map((ins) => {
+            const s = this._state[ins.id];
+            const label = escapeHtml(safeTrim(ins.label) || "מבוטח");
+            if(!this._isInsuredRelevant(ins)) return `<div class="lcPhxSim__statusRow"><span>⚪</span><span>${label} – לא נדרש סימולטור עבור מבוטח זה</span></div>`;
+            if(s?.savedAt) return `<div class="lcPhxSim__statusRow"><span>🟢</span><span>${label} – נשמר</span></div>`;
+            return `<div class="lcPhxSim__statusRow"><span>🟡</span><span>${label} – טרם חושב</span></div>`;
+          }).join("")}
+        </div>` : "";
+
+      const ageOptionsHtml = ""; // legacy removed — birth date field
+      void ageOptionsHtml;
+
+      /* במצב עצמאי אין פרטים אישיים — לא מציגים אזהרות "לא נמצא בפרטים". באשף נשאר כפי שהיה. */
+      const ageHintHtml = st.birthDate && Number.isInteger(st.ageRaw)
+        ? (st.age
+            ? `<div class="lcPhxSim__hint">גיל ביטוחי: <strong>${escapeHtml(String(st.ageRaw))}</strong> (טווח תעריפון ${PHOENIX_RISK_MIN_AGE}–${PHOENIX_RISK_MAX_AGE})</div>`
+            : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">הגיל המחושב מתאריך הלידה (${st.ageRaw}) חורג מטווח התעריפון (${PHOENIX_RISK_MIN_AGE}–${PHOENIX_RISK_MAX_AGE})</div>`)
+        : ((isStandalone || st.birthDate)
+            ? (st.birthDate ? `<div class="lcPhxSim__hint lcPhxSim__hint--warn">תאריך לידה לא תקין — יש להזין DD/MM/YYYY</div>` : "")
+            : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא תאריך לידה תקין בפרטים האישיים — יש להזין</div>`);
+
+      const genderHintHtml = (isStandalone || st.gender)
+        ? ""
+        : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא מין בפרטים האישיים — יש לבחור</div>`;
+      const smokerHintHtml = (isStandalone || st.smoker === true || st.smoker === false)
+        ? ""
+        : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">לא נמצא סטטוס עישון בפרטים האישיים — יש לבחור</div>`;
+
+      const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company)
+        ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini")
+        : "🛡️";
+      const occAssessment = assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product);
+      const occBlockHtml = renderOccupationRiskBlockHtml(occAssessment, "lcPhxSim");
+
+      const resultHtml = st.error
+        ? `<div class="lcPhxSim__result lcPhxSim__result--error">${escapeHtml(st.error)}</div>`
+        : (st.result ? `<div class="lcPhxSim__result lcPhxSim__result--ok">
+            <div class="lcPhxSim__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatPhoenixExactAmount(st.result.annualPremium))}</strong></div>
+            <div class="lcPhxSim__resultRow lcPhxSim__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatPhoenixExactAmount(st.result.monthlyPremium))}</strong></div>
+          </div>` : "");
+
+      const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
+      const relevantInsureds = insureds.filter((ins) => this._isInsuredRelevant(ins));
+      const allRelevantSaved = relevantInsureds.length > 0 && relevantInsureds.every((ins) => !!this._state[ins.id]?.savedAt);
+
+      const footHtml = isStandalone ? `
+          <div class="giValModal__foot lcPhxSim__foot">
+            <button type="button" class="btn btn--primary" data-phx-close="1">סגור</button>
+          </div>` : (!isMulti ? `
+          <div class="giValModal__foot lcPhxSim__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-phx-close="1">ביטול</button>
+            <button type="button" class="btn btn--primary" data-phx-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button>
+          </div>` : `
+          <div class="giValModal__foot lcPhxSim__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-phx-close="1">ביטול</button>
+            <button type="button" class="btn btn--secondary" data-phx-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button>
+            <button type="button" class="btn btn--primary" data-phx-finalconfirm="1"${allRelevantSaved ? "" : " disabled"}>אישור סופי</button>
+          </div>`);
+
+      const confirmOverlayHtml = this._confirmSwitch ? `
+        <div class="lcPhxSim__overlay">
+          <div class="lcPhxSim__overlayCard">
+            <div class="lcPhxSim__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}. האם לשמור לפני המעבר?</div>
+            <div class="lcPhxSim__overlayBtns">
+              <button type="button" class="btn btn--primary" data-phx-switch="save">שמור ועבור</button>
+              <button type="button" class="btn btn--secondary" data-phx-switch="discard">עבור ללא שמירה</button>
+              <button type="button" class="btn" data-phx-switch="cancel">ביטול</button>
+            </div>
+          </div>
+        </div>` : "";
+
+      this._modal.innerHTML = `
+        <div class="giValModal__backdrop" data-phx-close="1"></div>
+        <div class="giValModal__card lcPhxSim__card">
+          <div class="giValModal__head">
+            <span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span>
+            <div class="giValModal__headText">
+              <div class="giValModal__title">סימולטור ריסק הפניקס</div>
+            </div>
+            <button type="button" class="lcPhxSim__closeX" data-phx-close="1" aria-label="סגירה">✕</button>
+          </div>
+          <div class="giValModal__body lcPhxSim__body">
+            ${statusListHtml}
+            ${tabsHtml}
+            ${isStandalone
+              ? `<div class="lcPhxSim__insuredLabel lcPhxSim__insuredLabel--standalone">מצב חישוב עצמאי — התוצאה לא נשמרת על אף פוליסה</div>`
+              : `<div class="lcPhxSim__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}
+            <div class="lcPhxSim__grid">
+              <div class="lcPhxSim__field">
+                <label class="lcPhxSim__label">תאריך לידה</label>
+                <input class="lcPhxSim__input lcPhxSim__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
+                  placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-phx-field="birthDate"
+                  value="${escapeHtml(st.birthDate || "")}" />
+                ${ageHintHtml}
+              </div>
+              <div class="lcPhxSim__field">
+                <label class="lcPhxSim__label">מין</label>
+                <div class="lcPhxSim__segmented">
+                  <button type="button" class="lcPhxSim__segBtn${st.gender === 'זכר' ? ' is-active' : ''}" data-phx-field="gender" data-phx-value="זכר">זכר</button>
+                  <button type="button" class="lcPhxSim__segBtn${st.gender === 'נקבה' ? ' is-active' : ''}" data-phx-field="gender" data-phx-value="נקבה">נקבה</button>
+                </div>
+                ${genderHintHtml}
+              </div>
+              <div class="lcPhxSim__field">
+                <label class="lcPhxSim__label">עישון</label>
+                <div class="lcPhxSim__segmented">
+                  <button type="button" class="lcPhxSim__segBtn${st.smoker === false ? ' is-active' : ''}" data-phx-field="smoker" data-phx-value="0">לא מעשן/ת</button>
+                  <button type="button" class="lcPhxSim__segBtn${st.smoker === true ? ' is-active' : ''}" data-phx-field="smoker" data-phx-value="1">מעשן/ת</button>
+                </div>
+                ${smokerHintHtml}
+              </div>
+              <div class="lcPhxSim__field lcPhxSim__field--wide">
+                <label class="lcPhxSim__label">סכום ביטוח (₪)</label>
+                <input class="lcPhxSim__input" type="text" inputmode="numeric" data-phx-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="לדוגמה: 1,000,000" />
+              </div>
+              <div class="lcPhxSim__field lcPhxSim__field--wide">
+                <label class="lcPhxSim__label">עיסוק</label>
+                <input class="lcPhxSim__input" type="text" data-phx-field="occupation" value="${escapeHtml(st.occupation || "")}" placeholder="לדוגמה: מהנדס, נהג משאית" autocomplete="off" />
+              </div>
+            </div>
+            ${occBlockHtml}
+            <button type="button" class="btn btn--secondary lcPhxSim__calcBtn" data-phx-calc="1">חשב פרמיה</button>
+            ${resultHtml}
+          </div>
+          ${footHtml}
+          ${confirmOverlayHtml}
+        </div>`;
+
+      this._bind();
+    },
+
+    _renderFinalSummary(insureds){
+      const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+      const rows = relevant.map((ins) => {
+        const ok = !!this._state[ins.id]?.savedAt;
+        return `<div class="lcPhxSim__summaryRow"><span>${ok ? "✓" : "•"}</span><span>${escapeHtml(safeTrim(ins.label) || "מבוטח")}</span><span>${ok ? "הושלם" : "לא נשמר"}</span></div>`;
+      }).join("");
+      this._modal.innerHTML = `
+        <div class="giValModal__backdrop" data-phx-close="1"></div>
+        <div class="giValModal__card lcPhxSim__card">
+          <div class="giValModal__head">
+            <span class="giValModal__headIcon" aria-hidden="true">🛡️</span>
+            <div class="giValModal__headText">
+              <div class="giValModal__title">סיכום סימולטור להצעה</div>
+              <div class="giValModal__sub">בדקו את הנתונים לפני האישור הסופי</div>
+            </div>
+            <button type="button" class="lcPhxSim__closeX" data-phx-close="1" aria-label="סגירה">✕</button>
+          </div>
+          <div class="giValModal__body lcPhxSim__body">
+            <div class="lcPhxSim__statusListTitle">מבוטחים</div>
+            ${rows}
+          </div>
+          <div class="giValModal__foot lcPhxSim__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-phx-summary-back="1">חזרה</button>
+            <button type="button" class="btn btn--primary" data-phx-summary-confirm="1">אישור סופי</button>
+          </div>
+        </div>`;
+      this._bind();
+    },
+
+    _bind(){
+      const modal = this._modal;
+      if(!modal) return;
+      ensureSegFieldDelegation(modal, this, "phx");
+      $$("[data-phx-close]", modal).forEach((el) => on(el, "click", () => this.close()));
+      $$("[data-phx-tab]", modal).forEach((el) => on(el, "click", () => {
+        this._switchInsured(el.getAttribute("data-phx-tab"));
+      }));
+      $$("[data-phx-switch]", modal).forEach((el) => on(el, "click", () => {
+        const action = el.getAttribute("data-phx-switch");
+        const target = this._confirmSwitch?.targetId;
+        this._confirmSwitch = null;
+        if(action === "save"){
+          this._saveActive();
+          if(target) this._activeInsuredId = target;
+          this._render();
+        } else if(action === "discard"){
+          if(target) this._activeInsuredId = target;
+          this._render();
+        } else {
+          this._render();
+        }
+      }));
+      const ageSel = null; void ageSel;
+      bindRiskSimDmyField(modal, '[data-phx-field="birthDate"]', {
+        onInput: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.birthDate = val;
+          st.birthDateSource = "manual";
+          st.dirtySinceSave = true;
+        },
+        onCommit: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.birthDate = val;
+          st.birthDateSource = "manual";
+          const sync = riskSimSyncAgeFromBirthDate(st, { minAge: PHOENIX_RISK_MIN_AGE, maxAge: PHOENIX_RISK_MAX_AGE });
+          st.ageSource = "manual";
+          if(!sync.ok){ st.age = ""; }
+          st.result = null; st.error = null; st.dirtySinceSave = true;
+          this._render();
+        }
+      });
+      const sumInput = modal.querySelector('[data-phx-field="sumInsured"]');
+      if(sumInput) on(sumInput, "input", () => {
+        const st = this._state[this._activeInsuredId];
+        if(!st) return;
+        const formatted = formatRiskSimSumInsuredDigits(sumInput.value);
+        sumInput.value = formatted;
+        try { sumInput.setSelectionRange(formatted.length, formatted.length); } catch(_e){}
+        st.sumInsured = formatted;
+        st.result = null; st.error = null; st.dirtySinceSave = true;
+      });
+      const occInput = modal.querySelector('[data-phx-field="occupation"]');
+      if(occInput){
+        on(occInput, "input", () => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.occupation = safeTrim(occInput.value);
+          st.occupationSource = "manual";
+          st.dirtySinceSave = true;
+        });
+        on(occInput, "change", () => this._render());
+        on(occInput, "blur", () => this._render());
+      }
+      const calcBtn = modal.querySelector("[data-phx-calc]");
+      if(calcBtn) on(calcBtn, "click", () => this._calc(this._activeInsuredId));
+      const applyBtn = modal.querySelector("[data-phx-apply]");
+      if(applyBtn) on(applyBtn, "click", () => this._apply());
+      const saveBtn = modal.querySelector("[data-phx-save]");
+      if(saveBtn) on(saveBtn, "click", () => this._saveActive());
+      const finalBtn = modal.querySelector("[data-phx-finalconfirm]");
+      if(finalBtn) on(finalBtn, "click", () => {
+        const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+        const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+        const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
+        if(!allSaved){
+          window.showToast?.({ title: "לא כל המבוטחים נשמרו", text: "יש לשמור את הסימולטור עבור כל המבוטחים הרלוונטיים לפני האישור הסופי.", variant: "warn" });
+          return;
+        }
+        this._showFinalSummary = true;
+        this._render();
+      });
+      const summaryBackBtn = modal.querySelector("[data-phx-summary-back]");
+      if(summaryBackBtn) on(summaryBackBtn, "click", () => { this._showFinalSummary = false; this._render(); });
+      const summaryConfirmBtn = modal.querySelector("[data-phx-summary-confirm]");
+      if(summaryConfirmBtn) on(summaryConfirmBtn, "click", () => {
+        try { this._ctx?.onFinalConfirm?.(); } catch(_e){}
+        this.close();
+      });
+    },
+
+    _switchInsured(targetId){
+      if(!targetId || targetId === this._activeInsuredId) return;
+      const st = this._state[this._activeInsuredId];
+      if(st?.dirtySinceSave){
+        this._confirmSwitch = { targetId };
+        this._render();
+        return;
+      }
+      this._activeInsuredId = targetId;
+      this._render();
+    },
+
+    _calc(insuredId){
+      const st = this._state[insuredId];
+      if(!st) return;
+      const sumNum = Number(String(st.sumInsured || "").replace(/[^\d.]/g, ""));
+      const calc = computePhoenixRiskPremium({ age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: sumNum });
+      if(calc.ok){
+        st.result = calc;
+        st.error = null;
+      } else {
+        st.result = null;
+        st.error = PHOENIX_RISK_SIM_MISSING_MESSAGES[calc.reason] || "לא נמצא תעריף מתאים לנתונים שהוזנו.";
+      }
+      st.dirtySinceSave = true;
+      this._render();
+    },
+
+    _buildResultForInsured(insId){
+      const st = this._state[insId];
+      if(!st?.result?.ok) return null;
+      return {
+        sumInsured: st.sumInsured,
+        monthlyPremium: st.result.monthlyPremium,
+        annualPremium: st.result.annualPremium,
+        ratePerMille: st.result.ratePerMille,
+        age: st.age, ageSource: st.ageSource, gender: st.gender, smoker: st.smoker,
+        genderSource: st.genderSource, smokerSource: st.smokerSource,
+        occupation: st.occupation || "", occupationSource: st.occupationSource || ""
+      };
+    },
+
+    _apply(){
+      const results = {};
+      Object.keys(this._state).forEach((insId) => {
+        const r = this._buildResultForInsured(insId);
+        if(r) results[insId] = r;
+      });
+      if(!Object.keys(results).length){
+        window.showToast?.({ title: "אין תוצאה להחלה", text: "יש לחשב פרמיה לפחות למבוטח אחד לפני ההחלה על הפוליסה.", variant: "warn" });
+        return;
+      }
+      const onApply = this._ctx?.onApply;
+      this.close();
+      try { onApply?.(results); } catch(_e) {}
+    },
+
+    _saveActive(){
+      const insId = this._activeInsuredId;
+      const result = this._buildResultForInsured(insId);
+      if(!result){
+        window.showToast?.({ title: "אין תוצאה לשמירה", text: "יש לחשב פרמיה עבור מבוטח זה לפני השמירה.", variant: "warn" });
+        return;
+      }
+      try { this._ctx?.onApply?.({ [insId]: result }); } catch(_e) {}
+      const st = this._state[insId];
+      if(st){ st.savedAt = nowISO(); st.dirtySinceSave = false; }
+      window.showToast?.({ title: "נשמר", text: `הסימולטור עבור ${this._getInsuredLabel(insId)} נשמר על ההצעה.`, variant: "success" });
+      this._render();
+    }
+  };
+
+  RiskSimulators.register("הפניקס", "ריסק", PhoenixRiskSimulator);
+  // ===== סוף GI-PHX-RISK-SIM =====================================================
+
+  // ===== GI-MNR-RISK-SIM: סימולטור ריסק מנורה מבטחים =============================
+  // מפת התעריפים הרשמית של מנורה מבטחים לביטוח ריסק. שתי מדרגות סכום ביטוח:

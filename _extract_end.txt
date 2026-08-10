@@ -1,0 +1,15 @@
+  };
+  RiskSimulators.register("הכשרה", "מחלות קשות", HachsharaCriticalIllnessSimulator);
+  // ===== סוף GI-HACH-CI-SIM ========================================================
+
+
+  // ===== GI-SIM-CENTER 2026-08-08 · "מרכז הסימולטורים" =============================
+  // כפתור עצמאי בטופ-בר (ללא תלות באשף/לקוח/הצעה קיימת) שפותח בורר חברה+מוצר,
+  // ולאחר בחירה פותח את אותו סימולטור בדיוק דרך RiskSimulators.getHandler(...)
+  // הקיים, במצב standalone:true — עם מבוטח סינתטי יחיד וללא שמירה בשום מקום.
+  // אינו נוגע ב-Wizard.openRiskSimulator ולא משנה שום התנהגות קיימת באשף.
+
+
+  try { host.onSimulatorsInstalled?.(RiskSimulators); } catch(_e) {}
+  try { global.__GI_SIMS_CHUNK_READY = true; } catch(_e) {}
+})(typeof globalThis !== "undefined" ? globalThis : window);

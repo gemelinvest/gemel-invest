@@ -14098,6 +14098,8 @@ if(path === "birthDate"){
       handler.open({
         company: d.company,
         product: d.type,
+        insuranceStartDate: safeTrim(d.insuranceStartDate || ""),
+        startDate: safeTrim(d.insuranceStartDate || ""),
         insureds,
         onApply: (resultsByInsuredId) => {
           this.ensurePolicyDraft();

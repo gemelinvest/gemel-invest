@@ -29438,13 +29438,17 @@ UsersGateUI.init();
 
     /* GI-PERF-LAZY-SIMS 2026-08-09 */
   // Lazy simulator registry — engines in gi-simulators.js (~220KB parse deferred).
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260810-simfix-v3";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260810-migdal-v1";
   const GI_SIMULATOR_CATALOG = Object.freeze([
     { company: "הפניקס", product: "ריסק" },
     { company: "מנורה", product: "ריסק" },
     { company: "הפניקס", product: "ריסק משכנתא" },
     { company: "הכשרה", product: "בריאות" },
     { company: "הכשרה", product: "מחלות קשות" },
+    { company: "מגדל", product: "בריאות" },
+    { company: "מגדל", product: "מחלות קשות" },
+    { company: "מגדל", product: "סרטן" },
+    { company: "מגדל", product: "ריסק" },
     { company: "מנורה", product: "בריאות" },
     { company: "איילון", product: "בריאות" },
     { company: "מנורה", product: "מחלות קשות" },
@@ -29461,8 +29465,11 @@ UsersGateUI.init();
     "./menora-health-sim.css?v=20260809-health-cpi-v2",
     "./ayalon-health-sim.css?v=20260809-health-cpi-v2",
     "./hachshara-health-sim.css?v=20260810-hachshara-cpi-v1",
+    "./migdal-health-sim.css?v=20260810-migdal-v1",
+    "./migdal-ci-sim.css?v=20260810-migdal-v1",
+    "./migdal-risk-sim.css?v=20260810-migdal-v1",
     "./menora-ci-sim.css?v=20260809-menora-age-v2",
-    "./simulators-center.css?v=20260810-simfix-v3"
+    "./simulators-center.css?v=20260810-migdal-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     if(document.documentElement.dataset.giSimCss === "1") return;
@@ -29551,12 +29558,21 @@ UsersGateUI.init();
           $$,
           nowISO,
           parseBirthDateValue,
+          parseAnyDmyDate,
           formatDmyFromParts,
+          applyDmyAutoFormat,
           renderCompanyLogoHtmlForCompany,
           ensureGiSimulatorStylesLoaded,
           RiskSimulators,
           onSimulatorsInstalled: () => { RiskSimulators._chunkReady = true; }
         };
+        try {
+          Object.defineProperty(globalThis.__GI_SIM_HOST, "ElementaryDatePicker", {
+            enumerable: true,
+            configurable: true,
+            get(){ try { return ElementaryDatePicker; } catch(_e) { return undefined; } }
+          });
+        } catch(_e) {}
         const done = () => {
           RiskSimulators._chunkReady = true;
           resolve(RiskSimulators);
