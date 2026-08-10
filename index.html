@@ -11,7 +11,7 @@
 <link href="./app.css?v=20260810-dash-goldgrad-v1" rel="stylesheet"/>
 <link href="./theme.css?v=20260810-dash-goldgrad-v1" rel="stylesheet"/>
 <link href="./theme-p2.css?v=20260805-workdays-goal-v1" rel="stylesheet"/>
-<link href="./login-split.css?v=20260810-login-split-v7" rel="stylesheet"/>
+<link href="./login-split.css?v=20260810-login-split-v10" rel="stylesheet"/>
 <!-- GI-PERF 2026-08-10: CSS משני (mirror/import/unify) נטען אחרי כניסה מ-app.js —
      לא חוסם מסך login ולא מרעיש 404 לפני שהמשתמש התחבר. -->
 <!-- GI-PERF 2026-08-09: סימולטורים — CSS נטען לפי צורך מ-ensureGiSimulatorStylesLoaded ב-app.js -->
@@ -25,11 +25,11 @@
 <meta name="apple-mobile-web-app-title" content="GEMEL INVEST - CRM"/>
 <style id="giLoginSplitCritical">
 /* Critical login split v5 — פאנל לבן + מיזוג מהתמונה (מנצח theme/app) */
-body.lcAuthLock{background:#070d18!important}
+body.lcAuthLock{background:#3870ED!important}
 body.lcAuthLock #lcLogin.lcLogin:not(#\9):not(#\9){
   position:fixed!important;inset:0!important;z-index:9999!important;
   display:flex!important;padding:0!important;margin:0!important;overflow:hidden!important;
-  background:#0a1222!important;align-items:stretch!important;justify-content:stretch!important;
+  background:#3870ED!important;align-items:stretch!important;justify-content:stretch!important;
   backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
 }
 body.lcAuthLock #lcLogin .lcLogin__shell:not(#\9):not(#\9){
@@ -39,29 +39,20 @@ body.lcAuthLock #lcLogin .lcLogin__shell:not(#\9):not(#\9){
 body.lcAuthLock #lcLogin .lcLogin__visual:not(#\9):not(#\9){
   position:relative!important;flex:1 1 auto!important;min-width:0!important;min-height:100dvh!important;
   overflow:hidden!important;order:2!important;
-  background:radial-gradient(ellipse 70% 55% at 50% 40%,rgba(199,178,129,.16),transparent 60%),linear-gradient(145deg,#0b1730,#070d18 55%,#050910)!important;
+  background:radial-gradient(ellipse 80% 70% at 35% 40%,rgba(255,255,255,.10),transparent 58%),linear-gradient(165deg,#4A7EEE 0%,#3870ED 42%,#2A66E9 100%)!important;
 }
 body.lcAuthLock #lcLogin .lcLogin__visual:not(#\9):not(#\9)::after{
   content:""!important;display:block!important;position:absolute!important;top:0!important;bottom:0!important;
-  right:0!important;left:auto!important;width:min(280px,32vw)!important;z-index:5!important;pointer-events:none!important;
-  background:linear-gradient(to right,rgba(255,255,255,0) 0%,rgba(255,255,255,.18) 28%,rgba(255,255,255,.55) 58%,rgba(255,255,255,.88) 82%,#fff 100%)!important;
+  right:0!important;left:auto!important;width:min(300px,34vw)!important;z-index:5!important;pointer-events:none!important;
+  background:linear-gradient(to right,rgba(255,255,255,0) 0%,rgba(255,255,255,.20) 30%,rgba(255,255,255,.58) 60%,rgba(255,255,255,.90) 84%,#fff 100%)!important;
 }
-body.lcAuthLock #lcLogin .lcLogin__visualBg{position:absolute!important;inset:0!important;background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important}
+body.lcAuthLock #lcLogin .lcLogin__visualBg{display:none!important;background-image:none!important;opacity:0!important}
 body.lcAuthLock #lcLogin .lcLogin__visualShade{position:absolute!important;inset:0!important;z-index:1!important;pointer-events:none!important;
-  background:linear-gradient(115deg,rgba(7,13,24,.55),rgba(10,20,40,.35) 45%,rgba(7,13,24,.72))!important}
+  background:radial-gradient(ellipse 65% 55% at 45% 45%,rgba(255,255,255,.08),transparent 62%),linear-gradient(115deg,rgba(42,102,233,.18),transparent 55%,rgba(26,74,200,.22))!important}
 body.lcAuthLock #lcLogin .lcLogin__visualBrand{position:absolute!important;inset:0!important;z-index:2!important;display:flex!important;
   align-items:center!important;justify-content:center!important;padding:5vw!important;pointer-events:none!important;box-sizing:border-box!important}
-body.lcAuthLock #lcLogin .lcLogin__logoPlate:not(#\9):not(#\9){
-  display:flex!important;align-items:center!important;justify-content:center!important;
-  padding:clamp(22px,3.2vw,42px) clamp(28px,4vw,56px)!important;
-  border-radius:28px!important;
-  background:linear-gradient(145deg,rgba(255,252,246,.92),rgba(248,244,236,.86) 55%,rgba(255,255,255,.90))!important;
-  border:1px solid rgba(255,255,255,.55)!important;
-  box-shadow:0 24px 60px rgba(0,0,0,.28),0 0 0 1px rgba(199,178,129,.18),inset 0 1px 0 rgba(255,255,255,.75)!important;
-  backdrop-filter:blur(10px) saturate(120%)!important;-webkit-backdrop-filter:blur(10px) saturate(120%)!important;
-  max-width:min(640px,86%)!important;box-sizing:border-box!important;
-}
-body.lcAuthLock #lcLogin .lcLogin__visualLogo{display:block!important;width:min(480px,58vw)!important;max-width:520px!important;max-height:36vh!important;height:auto!important;object-fit:contain!important;filter:none!important;opacity:1!important}
+body.lcAuthLock #lcLogin .lcLogin__logoPlate{display:contents!important;background:none!important;border:0!important;box-shadow:none!important;padding:0!important}
+body.lcAuthLock #lcLogin .lcLogin__visualLogo{display:block!important;width:min(560px,68%)!important;max-width:620px!important;max-height:38vh!important;height:auto!important;object-fit:contain!important;filter:drop-shadow(0 10px 28px rgba(0,0,0,.18))!important;opacity:1!important;background:transparent!important}
 body.lcAuthLock #lcLogin .lcLogin__card:not(#\9):not(#\9){
   position:relative!important;flex:0 0 min(440px,42vw)!important;width:min(440px,42vw)!important;
   max-width:none!important;max-height:none!important;height:100%!important;min-height:100dvh!important;
@@ -104,8 +95,7 @@ body.lcAuthLock #lcLogin #lcLoginCredentialsStep{display:grid!important;gap:12px
     background:linear-gradient(to bottom,rgba(255,255,255,0),rgba(255,255,255,.45) 45%,#fff)!important;
   }
   body.lcAuthLock #lcLogin .lcLogin__card:not(#\9):not(#\9){flex:1 1 auto!important;width:100%!important;min-height:0!important;height:auto!important;background:#fff!important;box-shadow:none!important}
-  body.lcAuthLock #lcLogin .lcLogin__logoPlate:not(#\9):not(#\9){padding:18px 22px!important;border-radius:20px!important;max-width:90%!important}
-  body.lcAuthLock #lcLogin .lcLogin__visualLogo{width:min(260px,55%)!important;max-height:18vh!important}
+  body.lcAuthLock #lcLogin .lcLogin__visualLogo{width:min(280px,60%)!important;max-height:22vh!important}
 }
 </style>
 
@@ -195,13 +185,11 @@ body.lcAuthLock #lcLogin #lcLoginCredentialsStep{display:grid!important;gap:12px
 <button class="lcLogin__footBtn" id="lcForgotPasswordBtn" type="button">שכחת סיסמה? פנה למנהל מערכת</button>
 </div>
 </div>
-<aside class="lcLogin__visual" aria-hidden="true" style="position:relative;flex:1 1 auto;min-width:0;min-height:100dvh;overflow:hidden;background:#070d18;order:2;">
-<div class="lcLogin__visualBg" style="position:absolute;inset:0;background-image:url('./login-hero-visual.jpg');background-size:cover;background-position:center;background-repeat:no-repeat;"></div>
-<div class="lcLogin__visualShade" style="position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(115deg,rgba(7,13,24,.55),rgba(10,20,40,.35) 45%,rgba(7,13,24,.72));"></div>
+<aside class="lcLogin__visual" aria-hidden="true" style="position:relative;flex:1 1 auto;min-width:0;min-height:100dvh;overflow:hidden;background:#3870ED;order:2;">
+<div class="lcLogin__visualBg" aria-hidden="true" style="display:none;"></div>
+<div class="lcLogin__visualShade" style="position:absolute;inset:0;z-index:1;pointer-events:none;"></div>
 <div class="lcLogin__visualBrand" style="position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;padding:5vw;pointer-events:none;box-sizing:border-box;">
-<div class="lcLogin__logoPlate">
-<img class="lcLogin__visualLogo" src="./logo-login-clean.png" alt="" width="480" height="99" decoding="async"/>
-</div>
+<img class="lcLogin__visualLogo" src="./logo-login-tagline.png" alt="גמל INVEST — ביטוח | פנסיה | פיננסים" width="952" height="247" decoding="async"/>
 </div>
 </aside>
 </div>
@@ -3722,7 +3710,7 @@ body.lcAuthLock #lcLogin #lcLoginCredentialsStep{display:grid!important;gap:12px
   </div>
 </div>
 
-<script src="./app.js?v=20260810-login-split-v7"></script>
+<script src="./app.js?v=20260810-login-split-v10"></script>
 
 
 <div id="giPwaInstallBanner" class="giPwaInstallBanner" hidden>
