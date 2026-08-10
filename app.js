@@ -29571,7 +29571,7 @@ UsersGateUI.init();
 
     /* GI-PERF-LAZY-SIMS 2026-08-09 */
   // Lazy simulator registry — engines in gi-simulators.js (~220KB parse deferred).
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260810-sim-ui-v3";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260810-sim-fix-v2";
   const GI_SIMULATOR_CATALOG = Object.freeze([
     { company: "הפניקס", product: "ריסק" },
     { company: "מנורה", product: "ריסק" },
@@ -29602,21 +29602,28 @@ UsersGateUI.init();
     "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
     "./menora-ci-sim.css?v=20260810-sim-mockup-v2",
-    "./simulators-center.css?v=20260810-sim-logo-v1",
-    "./simulators-shell.css?v=20260810-sim-ui-v3"
+    "./simulators-center.css?v=20260810-sim-fix-v2",
+    "./simulators-shell.css?v=20260810-sim-fix-v2"
   ]);
   function ensureGiSimulatorStylesLoaded(){
-    if(document.documentElement.dataset.giSimCss === "1") return;
+    const ver = "20260810-sim-fix-v2";
+    const prev = document.documentElement.dataset.giSimCssVer || "";
     document.documentElement.dataset.giSimCss = "1";
+    document.documentElement.dataset.giSimCssVer = ver;
     GI_SIMULATOR_STYLE_HREFS.forEach((href) => {
       try {
-        const id = "gi-sim-css-" + href.replace(/[^\w]+/g, "_");
-        if(document.getElementById(id)) return;
-        const link = document.createElement("link");
-        link.id = id;
-        link.rel = "stylesheet";
-        link.href = href;
-        document.head.appendChild(link);
+        const base = String(href).split("?")[0];
+        const id = "gi-sim-css-" + base.replace(/[^\w]+/g, "_");
+        let link = document.getElementById(id);
+        if(!link){
+          link = document.createElement("link");
+          link.id = id;
+          link.rel = "stylesheet";
+          document.head.appendChild(link);
+        }
+        if(link.getAttribute("href") !== href || prev !== ver){
+          link.href = href;
+        }
       } catch(_e) {}
     });
   }
@@ -29866,7 +29873,7 @@ UsersGateUI.init();
         <div class="giValModal__card lcSimCenterModal__card">
           <div class="giValModal__head lcSimCenterModal__head">
             <button type="button" class="lcSimCenterModal__closeX" data-simc-close="1" aria-label="סגירה">✕</button>
-            <img class="lcSimCenterModal__brandLogo" src="./logo-login-clean.png" alt="GEMEL INVEST" width="1808" height="373" decoding="async" />
+            <img class="lcSimCenterModal__brandLogo" src="./logo-login-clean.png?v=20260810-sim-fix-v2" alt="GEMEL INVEST" width="1808" height="373" decoding="async" />
             <div class="giValModal__headText">
               <div class="giValModal__title lcSimCenterModal__title">מרכז הסימולטורים</div>
               <div class="giValModal__sub lcSimCenterModal__sub">בחרו חברה ומוצר לפתיחת הסימולטור</div>
@@ -29874,15 +29881,15 @@ UsersGateUI.init();
           </div>
           <div class="giValModal__body lcSimCenterModal__body">
             ${companies.length ? `
-              <form class="lcSimCenterForm" data-simc-form="1" novalidate>
-                <div class="lcSimCenterField">
+              <form class="lcSimCenterForm" data-simc-form="1" novalidate style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 14px;direction:rtl;padding:4px 0 8px;width:100%;box-sizing:border-box;">
+                <div class="lcSimCenterField" style="display:flex;flex-direction:column;gap:6px;min-width:0;text-align:right;">
                   <label class="lcSimCenterField__label" for="lcSimCenterCompany">חברת ביטוח</label>
                   <select id="lcSimCenterCompany" class="lcSimCenterField__select" data-simc-company-select="1" required>
                     <option value="">בחרו חברה...</option>
                     ${companyOpts}
                   </select>
                 </div>
-                <div class="lcSimCenterField${company ? "" : " is-disabled"}">
+                <div class="lcSimCenterField${company ? "" : " is-disabled"}" style="display:flex;flex-direction:column;gap:6px;min-width:0;text-align:right;">
                   <label class="lcSimCenterField__label" for="lcSimCenterProduct">מוצר</label>
                   <select id="lcSimCenterProduct" class="lcSimCenterField__select" data-simc-product-select="1"${company ? "" : " disabled"} required>
                     <option value="">${company ? "בחרו מוצר..." : "בחרו קודם חברה"}</option>

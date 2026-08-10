@@ -598,6 +598,47 @@
         else head.appendChild(crumb);
       }
       crumb.textContent = "מרכז הסימולטורים › " + company + " › " + product;
+
+      // לוגו גמל — מוחלט למעלה מימין + מעל לוגו החברה
+      let brandLogo = head.querySelector(".giSimShell__brandLogo");
+      if(!brandLogo){
+        brandLogo = document.createElement("img");
+        brandLogo.className = "giSimShell__brandLogo";
+        brandLogo.src = "./logo-login-clean.png?v=20260810-sim-fix-v2";
+        brandLogo.alt = "GEMEL INVEST";
+        brandLogo.width = 1808;
+        brandLogo.height = 373;
+        brandLogo.decoding = "async";
+        brandLogo.setAttribute("aria-hidden", "true");
+        brandLogo.style.cssText = "position:absolute;top:10px;right:16px;left:auto;height:24px;width:auto;max-width:110px;object-fit:contain;z-index:3;pointer-events:none;display:block;";
+        head.appendChild(brandLogo);
+      } else {
+        brandLogo.style.cssText = "position:absolute;top:10px;right:16px;left:auto;height:24px;width:auto;max-width:110px;object-fit:contain;z-index:3;pointer-events:none;display:block;";
+        if(brandLogo.getAttribute("src") !== "./logo-login-clean.png?v=20260810-sim-fix-v2"){
+          brandLogo.src = "./logo-login-clean.png?v=20260810-sim-fix-v2";
+        }
+      }
+
+      let brandStack = head.querySelector(".giSimShell__brandStack");
+      const headIcon = head.querySelector(".giValModal__headIcon");
+      if(!brandStack){
+        brandStack = document.createElement("div");
+        brandStack.className = "giSimShell__brandStack";
+        brandStack.setAttribute("aria-hidden", "true");
+        brandStack.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:6px;flex:0 0 auto;margin-top:18px;";
+        if(headIcon){
+          headIcon.parentNode.insertBefore(brandStack, headIcon);
+          brandStack.appendChild(headIcon);
+        } else {
+          head.insertBefore(brandStack, head.firstChild);
+        }
+      } else if(headIcon && headIcon.parentNode !== brandStack){
+        brandStack.appendChild(headIcon);
+      }
+      // מרווח לכותרת כדי שלא תתנגש בלוגו
+      head.style.paddingTop = head.style.paddingTop || "28px";
+      const headText = head.querySelector(".giValModal__headText");
+      if(headText) headText.style.paddingInlineEnd = "120px";
     }
 
     const body = card.querySelector(".giValModal__body");

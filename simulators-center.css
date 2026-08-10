@@ -64,24 +64,24 @@
   display:inline-flex !important;
 }
 
-/* ---------- מודאל מרכז — גדול, לבן, צל רך ---------- */
+/* ---------- מודאל מרכז — קומפקטי, חברה | מוצר בשורה ---------- */
 .lcSimCenterModal .giValModal__card,
 .lcSimCenterModal__card{
-  max-width:min(480px, 94vw) !important;
+  max-width:min(560px, 94vw) !important;
   width:100%;
-  max-height:min(92vh, 640px);
+  max-height:none;
   height:auto;
   display:flex;
   flex-direction:column;
   overflow:hidden;
-  border-radius:22px !important;
+  border-radius:18px !important;
   border:1px solid #E8EEF8 !important;
-  box-shadow:0 28px 80px rgba(15, 23, 42, 0.22) !important;
+  box-shadow:0 22px 60px rgba(15, 23, 42, 0.18) !important;
   background:#fff !important;
 }
 .lcSimCenterModal .giValModal__head,
 .lcSimCenterModal__head{
-  padding:22px 28px 8px !important;
+  padding:16px 20px 6px !important;
   position:relative;
   flex:0 0 auto;
   background:#fff !important;
@@ -90,7 +90,7 @@
   flex-direction:column !important;
   align-items:center !important;
   text-align:center !important;
-  gap:6px;
+  gap:4px;
 }
 .lcSimCenterModal .giValModal__headIcon{ display:none !important; }
 .lcSimCenterModal .giValModal__headText{
@@ -98,12 +98,14 @@
   display:flex;
   flex-direction:column;
   align-items:center;
-  gap:6px;
+  gap:4px;
+  padding-inline:56px;
+  box-sizing:border-box;
 }
 .lcSimCenterModal .giValModal__title,
 .lcSimCenterModal__title{
   color:#0B1F4B !important;
-  font-size:26px !important;
+  font-size:20px !important;
   font-weight:800 !important;
   letter-spacing:-0.02em;
   line-height:1.2;
@@ -112,22 +114,20 @@
 .lcSimCenterModal .giValModal__sub,
 .lcSimCenterModal__sub{
   color:#7B8BA5 !important;
-  font-size:14px !important;
+  font-size:12.5px !important;
   font-weight:500 !important;
   text-align:center;
 }
 .lcSimCenterModal .giValModal__body,
 .lcSimCenterModal__body{
-  padding:18px 28px 8px !important;
-  flex:1 1 auto;
+  padding:10px 20px 4px !important;
+  flex:0 0 auto;
   min-height:0;
-  overflow-x:hidden;
-  overflow-y:auto;
-  -webkit-overflow-scrolling:touch;
+  overflow:visible;
 }
 .lcSimCenterModal .giValModal__foot,
 .lcSimCenterModal__foot{
-  padding:14px 28px 22px !important;
+  padding:12px 20px 16px !important;
   flex:0 0 auto;
   background:#fff !important;
   border-top:0 !important;
@@ -201,36 +201,40 @@
 /* שורת חזרה + chip — לא בשימוש בזרימת הדרופדאון */
 .lcSimCenterModal__navRow{ display:none; }
 
-/* ---------- טופס בחירה: חברה + מוצר ---------- */
+/* ---------- טופס בחירה: חברה (ימין) + מוצר (שמאל) ---------- */
 .lcSimCenterForm{
-  display:flex;
-  flex-direction:column;
-  gap:18px;
-  padding:8px 4px 12px;
+  display:grid !important;
+  grid-template-columns:minmax(0, 1fr) minmax(0, 1fr) !important;
+  gap:12px 14px !important;
+  padding:4px 0 8px !important;
+  direction:rtl !important;
+  width:100% !important;
+  box-sizing:border-box !important;
 }
 .lcSimCenterField{
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-  text-align:right;
+  display:flex !important;
+  flex-direction:column !important;
+  gap:6px !important;
+  text-align:right !important;
+  min-width:0 !important;
 }
 .lcSimCenterField.is-disabled{
   opacity:.72;
 }
 .lcSimCenterField__label{
-  font-size:13.5px;
+  font-size:12.5px;
   font-weight:750;
   color:#0B1F4B;
 }
 .lcSimCenterField__select{
   width:100%;
-  min-height:48px;
-  padding:10px 14px;
+  min-height:42px;
+  padding:8px 12px;
   border:1.5px solid #E5EAF3;
-  border-radius:12px;
+  border-radius:11px;
   background:#fff;
   color:#0F172A;
-  font-size:15px;
+  font-size:14px;
   font-weight:650;
   cursor:pointer;
   appearance:auto;
@@ -249,18 +253,20 @@
 }
 
 .lcSimCenterEmpty{
-  padding:28px 16px;
+  padding:16px 12px;
   text-align:center;
-  font-size:14px;
+  font-size:13.5px;
   color:#7B8BA5;
   font-weight:600;
 }
 
 @media (max-width: 560px){
-  .lcSimCenterModal .giValModal__head{ padding:18px 16px 6px !important; }
-  .lcSimCenterModal .giValModal__body{ padding:14px 16px 6px !important; }
-  .lcSimCenterModal .giValModal__foot{ padding:12px 16px 18px !important; }
-  .lcSimCenterModal .giValModal__title{ font-size:22px !important; }
+  .lcSimCenterForm{ grid-template-columns:1fr !important; }
+  .lcSimCenterModal .giValModal__head{ padding:14px 14px 4px !important; }
+  .lcSimCenterModal .giValModal__headText{ padding-inline:40px; }
+  .lcSimCenterModal .giValModal__body{ padding:8px 14px 2px !important; }
+  .lcSimCenterModal .giValModal__foot{ padding:10px 14px 14px !important; }
+  .lcSimCenterModal .giValModal__title{ font-size:18px !important; }
   .lcSimCenterModal__open{ width:100%; margin-inline-start:0; }
   .lcSimCenterModal__cancel{ width:100%; }
 }

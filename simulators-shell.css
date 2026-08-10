@@ -27,6 +27,35 @@
   align-items:flex-start !important;
   gap:14px !important;
 }
+/* לוגו גמל מעל לוגו החברה — צד ימין */
+.giSimShell__brandStack{
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:flex-start !important;
+  gap:6px !important;
+  flex:0 0 auto !important;
+  margin-inline-end:2px !important;
+  margin-top:18px !important;
+}
+.giSimShell__brandLogo,
+.giSimShellModal .giSimShell__brandLogo{
+  position:absolute !important;
+  top:10px !important;
+  right:16px !important;
+  left:auto !important;
+  height:24px !important;
+  width:auto !important;
+  max-width:110px !important;
+  object-fit:contain !important;
+  object-position:right center !important;
+  display:block !important;
+  pointer-events:none !important;
+  user-select:none !important;
+  z-index:5 !important;
+  opacity:1 !important;
+  visibility:visible !important;
+}
 .giSimShellModal .giValModal__headIcon{
   width:48px !important;
   height:48px !important;
