@@ -1,0 +1,6 @@
+﻿rollback_file=app.js.rollback-pre-light-load-20260808-235942
+sha256=3FE8A27492A8698C7B514CEA2F2EE1EB027FF11EA2D6C8B3183C4878AFB4E728
+bytes=4681401
+created=20260808-235942
+flag_before=LIGHT_INITIAL_LOAD_ENABLED=false
+note=Restore by copying this file over app.js
