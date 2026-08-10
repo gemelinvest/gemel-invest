@@ -11,7 +11,7 @@
 <link href="./app.css?v=20260810-dash-goldgrad-v1" rel="stylesheet"/>
 <link href="./theme.css?v=20260810-dash-goldgrad-v1" rel="stylesheet"/>
 <link href="./theme-p2.css?v=20260805-workdays-goal-v1" rel="stylesheet"/>
-<link href="./login-split.css?v=20260810-login-split-v2" rel="stylesheet"/>
+<link href="./login-split.css?v=20260810-login-split-v3" rel="stylesheet"/>
 <!-- GI-PERF 2026-08-10: CSS משני (mirror/import/unify) נטען אחרי כניסה מ-app.js —
      לא חוסם מסך login ולא מרעיש 404 לפני שהמשתמש התחבר. -->
 <!-- GI-PERF 2026-08-09: סימולטורים — CSS נטען לפי צורך מ-ensureGiSimulatorStylesLoaded ב-app.js -->
@@ -56,10 +56,11 @@ body.lcAuthLock #lcLogin .lcLogin__visualLogo{
 body.lcAuthLock #lcLogin .lcLogin__card{
   flex:0 0 min(440px,42vw)!important;width:min(440px,42vw)!important;max-width:none!important;max-height:none!important;
   height:100%!important;min-height:100dvh!important;margin:0!important;border-radius:0!important;border:0!important;
-  border-inline-start:1px solid #E5E7EB!important;background:#fff!important;box-shadow:-18px 0 48px rgba(0,0,0,.18)!important;
+  border-inline-end:1px solid #E5E7EB!important;background:#fff!important;box-shadow:18px 0 48px rgba(0,0,0,.18)!important;
   padding:0!important;display:flex!important;flex-direction:column!important;justify-content:center!important;
-  overflow:auto!important;transform:none!important;backdrop-filter:none!important;
+  overflow:auto!important;transform:none!important;backdrop-filter:none!important;order:1!important;
 }
+body.lcAuthLock #lcLogin .lcLogin__visual{order:2!important}
 body.lcAuthLock #lcLogin .lcLogin__card::before,
 body.lcAuthLock #lcLogin .lcLogin__card::after{content:none!important;display:none!important}
 body.lcAuthLock #lcLogin .lcLogin__panelInner{
@@ -68,7 +69,7 @@ body.lcAuthLock #lcLogin .lcLogin__panelInner{
 @media (max-width:900px){
   body.lcAuthLock #lcLogin .lcLogin__shell{flex-direction:column-reverse!important}
   body.lcAuthLock #lcLogin .lcLogin__visual{flex:0 0 34vh!important;min-height:200px!important;min-width:100%!important}
-  body.lcAuthLock #lcLogin .lcLogin__card{flex:1 1 auto!important;width:100%!important;min-height:0!important;height:auto!important;border-inline-start:0!important;border-top:1px solid #E5E7EB!important;box-shadow:none!important}
+  body.lcAuthLock #lcLogin .lcLogin__card{flex:1 1 auto!important;width:100%!important;min-height:0!important;height:auto!important;border-inline-end:0!important;border-top:1px solid #E5E7EB!important;box-shadow:none!important}
   body.lcAuthLock #lcLogin .lcLogin__visualLogo{width:min(260px,55%)!important;max-height:22vh!important}
 }
 </style>
@@ -77,15 +78,9 @@ body.lcAuthLock #lcLogin .lcLogin__panelInner{
 <body class="lcAuthLock">
 <!-- Login Overlay — split: visual left + form right (מוקאפ 2) -->
 <div aria-hidden="true" class="lcLogin" id="lcLogin">
+<!-- RTL flex: הילד הראשון בימין = טופס; השני בשמאל = ויזואל -->
 <div class="lcLogin__shell" style="display:flex;flex-direction:row;direction:rtl;width:100%;height:100%;min-height:100dvh;align-items:stretch;">
-<aside class="lcLogin__visual" aria-hidden="true" style="position:relative;flex:1 1 auto;min-width:0;min-height:100dvh;overflow:hidden;background:#070d18;">
-<div class="lcLogin__visualBg" style="position:absolute;inset:0;background-image:url('./login-hero-visual.jpg');background-size:cover;background-position:center;background-repeat:no-repeat;"></div>
-<div class="lcLogin__visualShade" style="position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(115deg,rgba(7,13,24,.55),rgba(10,20,40,.35) 45%,rgba(7,13,24,.72));"></div>
-<div class="lcLogin__visualBrand" style="position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;padding:5vw;pointer-events:none;box-sizing:border-box;">
-<img class="lcLogin__visualLogo" src="./logo-login-clean.png" alt="" width="480" height="99" decoding="async" style="display:block;width:min(480px,58%);max-width:520px;max-height:42vh;height:auto;object-fit:contain;"/>
-</div>
-</aside>
-<div aria-label="כניסה למערכת" aria-modal="true" class="lcLogin__card" role="dialog" style="flex:0 0 min(440px,42vw);width:min(440px,42vw);height:100%;min-height:100dvh;margin:0;border-radius:0;border:0;border-inline-start:1px solid #E5E7EB;background:#fff;box-shadow:-18px 0 48px rgba(0,0,0,.18);padding:0;display:flex;flex-direction:column;justify-content:center;overflow:auto;">
+<div aria-label="כניסה למערכת" aria-modal="true" class="lcLogin__card" role="dialog" style="flex:0 0 min(440px,42vw);width:min(440px,42vw);height:100%;min-height:100dvh;margin:0;border-radius:0;border:0;border-inline-end:1px solid #E5E7EB;background:#fff;box-shadow:18px 0 48px rgba(0,0,0,.18);padding:0;display:flex;flex-direction:column;justify-content:center;overflow:auto;order:1;">
 <div class="lcLogin__panelInner" style="width:100%;max-width:360px;margin:0 auto;padding:36px;box-sizing:border-box;">
 <div class="lcLogin__brand">
 <div aria-hidden="true" class="lcLogin__logo lcLogin__logo--img">
@@ -165,6 +160,13 @@ body.lcAuthLock #lcLogin .lcLogin__panelInner{
 <button class="lcLogin__footBtn" id="lcForgotPasswordBtn" type="button">שכחת סיסמה? פנה למנהל מערכת</button>
 </div>
 </div>
+<aside class="lcLogin__visual" aria-hidden="true" style="position:relative;flex:1 1 auto;min-width:0;min-height:100dvh;overflow:hidden;background:#070d18;order:2;">
+<div class="lcLogin__visualBg" style="position:absolute;inset:0;background-image:url('./login-hero-visual.jpg');background-size:cover;background-position:center;background-repeat:no-repeat;"></div>
+<div class="lcLogin__visualShade" style="position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(115deg,rgba(7,13,24,.55),rgba(10,20,40,.35) 45%,rgba(7,13,24,.72));"></div>
+<div class="lcLogin__visualBrand" style="position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;padding:5vw;pointer-events:none;box-sizing:border-box;">
+<img class="lcLogin__visualLogo" src="./logo-login-clean.png" alt="" width="480" height="99" decoding="async" style="display:block;width:min(480px,58%);max-width:520px;max-height:42vh;height:auto;object-fit:contain;"/>
+</div>
+</aside>
 </div>
 </div>
 <div class="app" id="app">
@@ -3683,7 +3685,7 @@ body.lcAuthLock #lcLogin .lcLogin__panelInner{
   </div>
 </div>
 
-<script src="./app.js?v=20260810-login-split-v2"></script>
+<script src="./app.js?v=20260810-login-split-v3"></script>
 
 
 <div id="giPwaInstallBanner" class="giPwaInstallBanner" hidden>
