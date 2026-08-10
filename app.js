@@ -29571,7 +29571,7 @@ UsersGateUI.init();
 
     /* GI-PERF-LAZY-SIMS 2026-08-09 */
   // Lazy simulator registry — engines in gi-simulators.js (~220KB parse deferred).
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260810-migdal-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260810-sim-mockup-v2";
   const GI_SIMULATOR_CATALOG = Object.freeze([
     { company: "הפניקס", product: "ריסק" },
     { company: "מנורה", product: "ריסק" },
@@ -29593,16 +29593,17 @@ UsersGateUI.init();
     return GI_SIMULATOR_CATALOG.some((x) => x.company === c && x.product === p);
   }
   const GI_SIMULATOR_STYLE_HREFS = Object.freeze([
-    "./phoenix-risk-sim.css?v=20260808-sim-ui-blue-v1",
-    "./menora-risk-sim.css?v=20260808-sim-ui-blue-v1",
-    "./menora-health-sim.css?v=20260809-health-cpi-v2",
-    "./ayalon-health-sim.css?v=20260809-health-cpi-v2",
-    "./hachshara-health-sim.css?v=20260810-hachshara-cpi-v1",
-    "./migdal-health-sim.css?v=20260810-migdal-v1",
-    "./migdal-ci-sim.css?v=20260810-migdal-v1",
-    "./migdal-risk-sim.css?v=20260810-migdal-v1",
-    "./menora-ci-sim.css?v=20260809-menora-age-v2",
-    "./simulators-center.css?v=20260810-migdal-v1"
+    "./phoenix-risk-sim.css?v=20260810-sim-mockup-v2",
+    "./menora-risk-sim.css?v=20260810-sim-mockup-v2",
+    "./menora-health-sim.css?v=20260810-sim-mockup-v2",
+    "./ayalon-health-sim.css?v=20260810-sim-mockup-v2",
+    "./hachshara-health-sim.css?v=20260810-sim-mockup-v2",
+    "./migdal-health-sim.css?v=20260810-sim-mockup-v2",
+    "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
+    "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
+    "./menora-ci-sim.css?v=20260810-sim-mockup-v2",
+    "./simulators-center.css?v=20260810-sim-mockup-v2",
+    "./simulators-shell.css?v=20260810-sim-mockup-v2"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     if(document.documentElement.dataset.giSimCss === "1") return;
@@ -29748,6 +29749,8 @@ UsersGateUI.init();
     els: {},
     _modal: null,
     _escHandler: null,
+    _step: "companies",
+    _selectedCompany: "",
 
     syncVisibility(){
       const btn = this.els.btn || document.getElementById("btnSimulatorsCenter");
@@ -29788,6 +29791,55 @@ UsersGateUI.init();
       return `${safeTrim(company)} – ${safeTrim(product)}`;
     },
 
+    _catalogItems(){
+      return Array.isArray(GI_SIMULATOR_CATALOG) ? GI_SIMULATOR_CATALOG.slice() : [];
+    },
+
+    _uniqueCompanies(){
+      const seen = new Set();
+      const out = [];
+      this._catalogItems().forEach((it) => {
+        const c = safeTrim(it?.company);
+        if(!c || seen.has(c)) return;
+        seen.add(c);
+        out.push(c);
+      });
+      return out;
+    },
+
+    _productsForCompany(company){
+      const c = safeTrim(company);
+      return this._catalogItems().filter((it) => safeTrim(it?.company) === c);
+    },
+
+    _productDesc(product){
+      const p = safeTrim(product);
+      return ({
+        "בריאות": "סימולציה לכיסוי ביטוחי בריאות פרטי ומשלים",
+        "מחלות קשות": "סימולציה לכיסוי ביטוחי מחלות קשות",
+        "סרטן": "סימולציה לכיסוי ביטוחי סרטן",
+        "ריסק": "סימולציה לכיסוי ביטוח חיים / ריסק",
+        "ריסק משכנתא": "סימולציה לכיסוי ריסק משכנתא"
+      })[p] || "סימולציית פרמיה עצמאית";
+    },
+
+    _productIconSvg(product){
+      const p = safeTrim(product);
+      if(p === "בריאות"){
+        return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19.5 12.5c0 4.2-3.3 7.2-7.5 9.5-4.2-2.3-7.5-5.3-7.5-9.5V7.2L12 4l7.5 3.2v5.3z"/><path d="M12 9v4"/><path d="M9.8 12.2h4.4"/></svg>`;
+      }
+      if(p === "מחלות קשות"){
+        return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 3.5v5.2c0 5-3.4 8.5-8 10.3C7.4 20.2 4 16.7 4 11.7V6.5L12 3z"/><path d="M12 11v4"/><path d="M10 13h4"/></svg>`;
+      }
+      if(p === "סרטן"){
+        return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 11c0 5.6-7 10-7 10z"/></svg>`;
+      }
+      if(p.indexOf("משכנתא") >= 0){
+        return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5L12 4l9 7.5"/><path d="M6 10.5V20h12v-9.5"/><path d="M10 20v-5h4v5"/></svg>`;
+      }
+      return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3c-3.2 2.4-5.5 4.2-5.5 7.4A5.5 5.5 0 0 0 12 16a5.5 5.5 0 0 0 5.5-5.6C17.5 7.2 15.2 5.4 12 3z"/><path d="M8 19h8"/><path d="M9.5 16.5h5"/></svg>`;
+    },
+
     async open(){
       if(!Auth.canAccessSimulators?.()){
         try{
@@ -29805,8 +29857,8 @@ UsersGateUI.init();
         return;
       }
       this.close();
-      // מקור האמת לרשימת הכרטיסים: הקטלוג ב-app.js (לא רק מה שכבר נרשם ב-registry).
-      const items = Array.isArray(GI_SIMULATOR_CATALOG) ? GI_SIMULATOR_CATALOG.slice() : [];
+      this._step = "companies";
+      this._selectedCompany = "";
       const modal = document.createElement("div");
       modal.id = "lcSimCenterModal";
       modal.className = "giValModal lcSimCenterModal";
@@ -29815,63 +29867,102 @@ UsersGateUI.init();
       modal.setAttribute("aria-label", "מרכז הסימולטורים");
       document.body.appendChild(modal);
       this._modal = modal;
-      this._escHandler = (ev) => { if(ev.key === "Escape") this.close(); };
+      this._escHandler = (ev) => {
+        if(ev.key !== "Escape") return;
+        if(this._step === "products"){
+          this._step = "companies";
+          this._selectedCompany = "";
+          this._paint();
+          return;
+        }
+        this.close();
+      };
       document.addEventListener("keydown", this._escHandler);
+      this._paint();
+      requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
+    },
 
-      const cardsHtml = items.length ? items.map((it, idx) => {
-        const logoHtml = (typeof renderCompanyLogoHtmlForCompany === "function")
-          ? renderCompanyLogoHtmlForCompany(it.company, "mini")
-          : `<span aria-hidden="true">${escapeHtml(safeTrim(it.company).slice(0, 2) || "•")}</span>`;
-        return `
-        <button type="button" class="lcSimCenterCard" data-simc-idx="${idx}">
-          <span class="lcSimCenterCard__icon">${logoHtml}</span>
-          <span class="lcSimCenterCard__meta">
-            <span class="lcSimCenterCard__company">${escapeHtml(safeTrim(it.company))}</span>
-            <span class="lcSimCenterCard__product">${escapeHtml(safeTrim(it.product))}</span>
-          </span>
-        </button>`;
-      }).join("") : `<div class="lcSimCenterEmpty">לא נמצאו סימולטורים רשומים במערכת.</div>`;
+    _paint(){
+      const modal = this._modal;
+      if(!modal) return;
+      const step = this._step === "products" ? "products" : "companies";
+      const company = safeTrim(this._selectedCompany);
+      const companies = this._uniqueCompanies();
+      const products = company ? this._productsForCompany(company) : [];
+
+      const companiesHtml = companies.length
+        ? `<div class="lcSimCenterGrid lcSimCenterGrid--companies">${companies.map((c) => {
+            const logoHtml = (typeof renderCompanyLogoHtmlForCompany === "function")
+              ? renderCompanyLogoHtmlForCompany(c, "mini")
+              : `<span aria-hidden="true">${escapeHtml(c.slice(0, 2) || "•")}</span>`;
+            return `
+              <button type="button" class="lcSimCenterCompanyCard" data-simc-company="${escapeHtml(c)}">
+                <span class="lcSimCenterCompanyCard__icon">${logoHtml}</span>
+                <span class="lcSimCenterCompanyCard__name">${escapeHtml(c)}</span>
+              </button>`;
+          }).join("")}</div>`
+        : `<div class="lcSimCenterEmpty">לא נמצאו חברות עם סימולטורים רשומים.</div>`;
+
+      const productsHtml = products.length
+        ? `<div class="lcSimCenterGrid lcSimCenterGrid--products">${products.map((it) => `
+              <button type="button" class="lcSimCenterProductCard" data-simc-product="${escapeHtml(safeTrim(it.product))}">
+                <span class="lcSimCenterProductCard__icon">${this._productIconSvg(it.product)}</span>
+                <span class="lcSimCenterProductCard__meta">
+                  <span class="lcSimCenterProductCard__title">${escapeHtml(safeTrim(it.product))}</span>
+                  <span class="lcSimCenterProductCard__desc">${escapeHtml(this._productDesc(it.product))}</span>
+                </span>
+              </button>`).join("")}</div>`
+        : `<div class="lcSimCenterEmpty">לא נמצאו מוצרים לחברה זו.</div>`;
+
+      const headNav = step === "products"
+        ? `<div class="lcSimCenterModal__navRow">
+            <button type="button" class="lcSimCenterModal__back" data-simc-back="1">‹ חזרה לחברות</button>
+            <span class="lcSimCenterModal__chip">${escapeHtml(company)}</span>
+          </div>`
+        : "";
+
+      const title = step === "products" ? "בחרו מוצר" : "מרכז הסימולטורים";
+      const sub = step === "products"
+        ? `${company} · סימולטורים זמינים`
+        : "בחרו חברת ביטוח";
 
       modal.innerHTML = `
         <div class="giValModal__backdrop" data-simc-close="1"></div>
         <div class="giValModal__card lcSimCenterModal__card">
-          <div class="giValModal__head">
-            <span class="giValModal__headIcon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="5" y="3" width="14" height="18" rx="2"></rect>
-                <path d="M8 7h8"></path>
-                <path d="M8 11h1"></path>
-                <path d="M11.5 11h1"></path>
-                <path d="M15 11h1"></path>
-                <path d="M8 14.5h1"></path>
-                <path d="M11.5 14.5h1"></path>
-                <path d="M15 14.5h1"></path>
-                <path d="M8 18h8"></path>
-              </svg>
-            </span>
-            <div class="giValModal__headText">
-              <div class="giValModal__title">מרכז הסימולטורים</div>
-              <div class="giValModal__sub">בחרו חברה ומוצר לחישוב פרמיה עצמאי — ${items.length} סימולטורים זמינים</div>
-            </div>
+          <div class="giValModal__head lcSimCenterModal__head">
             <button type="button" class="lcSimCenterModal__closeX" data-simc-close="1" aria-label="סגירה">✕</button>
+            ${headNav}
+            <div class="giValModal__headText">
+              <div class="giValModal__title lcSimCenterModal__title">${escapeHtml(title)}</div>
+              <div class="giValModal__sub lcSimCenterModal__sub">${escapeHtml(sub)}</div>
+            </div>
           </div>
           <div class="giValModal__body lcSimCenterModal__body">
-            <div class="lcSimCenterGrid">${cardsHtml}</div>
+            ${step === "products" ? productsHtml : companiesHtml}
           </div>
           <div class="giValModal__foot lcSimCenterModal__foot">
-            <button type="button" class="btn giValModal__closeBtn" data-simc-close="1">ביטול</button>
+            <button type="button" class="btn giValModal__closeBtn lcSimCenterModal__cancel" data-simc-close="1">ביטול</button>
           </div>
         </div>`;
 
       $$("[data-simc-close]", modal).forEach((el) => on(el, "click", () => this.close()));
-      $$("[data-simc-idx]", modal).forEach((el) => on(el, "click", () => {
-        const idx = Number(el.getAttribute("data-simc-idx"));
-        const item = items[idx];
-        if(!item) return;
-        this._launch(item.company, item.product);
+      $$("[data-simc-back]", modal).forEach((el) => on(el, "click", () => {
+        this._step = "companies";
+        this._selectedCompany = "";
+        this._paint();
       }));
-
-      requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
+      $$("[data-simc-company]", modal).forEach((el) => on(el, "click", () => {
+        const c = el.getAttribute("data-simc-company") || "";
+        if(!c) return;
+        this._selectedCompany = c;
+        this._step = "products";
+        this._paint();
+      }));
+      $$("[data-simc-product]", modal).forEach((el) => on(el, "click", () => {
+        const p = el.getAttribute("data-simc-product") || "";
+        if(!company || !p) return;
+        this._launch(company, p);
+      }));
     },
 
     close(){
@@ -29883,6 +29974,8 @@ UsersGateUI.init();
         window.setTimeout(() => { try { m.remove(); } catch(_e) {} }, 200);
         this._modal = null;
       }
+      this._step = "companies";
+      this._selectedCompany = "";
     },
 
     _launch(company, product){
@@ -29892,14 +29985,14 @@ UsersGateUI.init();
         window.showToast?.({ title: "שגיאה", text: "לא נמצא סימולטור מתאים.", variant: "warn" });
         return;
       }
-      const syntheticInsured = { id: "standalone", label: "חישוב עצמאי", data: {} };
-      // אחרי סגירת המרכז — פתיחה בטיק הבא כדי לא להתחרות עם אנימציית היציאה.
+      const primaryInsured = { id: "standalone-1", label: "מבוטח 1 — ראשי", data: {} };
       window.setTimeout(() => {
         try {
           handler.open({
             standalone: true,
+            allowAddInsured: true,
             company, product,
-            insureds: [syntheticInsured],
+            insureds: [primaryInsured],
             onApply(){},
             onFinalConfirm(){}
           });

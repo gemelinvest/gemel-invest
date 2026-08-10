@@ -1,0 +1,237 @@
+/* ===== GI-SIM-SHELL 2026-08-10 · מוקאפ 3:1 סימולטור גדול כחול-לבן ========= */
+
+.giSimShellModal .giValModal__card,
+.giSimShellModal .giSimShell__card,
+.giValModal.giSimShellModal .giValModal__card{
+  max-width:min(1180px, 96vw) !important;
+  width:100% !important;
+  max-height:min(94vh, 980px) !important;
+  border-radius:20px !important;
+  border:1px solid #E5EAF3 !important;
+  box-shadow:0 28px 70px rgba(15,23,42,.18) !important;
+  overflow:hidden !important;
+  display:flex !important;
+  flex-direction:column !important;
+  background:#fff !important;
+}
+
+.giSimShellModal .giValModal__head,
+.giSimShell__head{
+  position:relative !important;
+  flex:0 0 auto !important;
+  padding:18px 24px 14px !important;
+  background:#fff !important;
+  border-bottom:1px solid #EEF2F8 !important;
+  display:flex !important;
+  align-items:flex-start !important;
+  gap:12px !important;
+}
+.giSimShellModal .giValModal__headIcon{
+  width:44px !important;
+  height:44px !important;
+  border-radius:12px !important;
+  background:#EFF6FF !important;
+  border:1px solid #DBEAFE !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  overflow:hidden !important;
+  flex:0 0 auto !important;
+}
+.giSimShellModal .giValModal__headIcon img,
+.giSimShellModal .giValModal__headIcon svg{
+  max-width:28px !important;
+  max-height:28px !important;
+  width:auto !important;
+  height:auto !important;
+  object-fit:contain !important;
+}
+.giSimShellModal .giValModal__title{
+  font-size:20px !important;
+  font-weight:800 !important;
+  color:#0B1F4B !important;
+  line-height:1.25 !important;
+}
+.giSimShell__crumb{
+  margin-top:4px;
+  font-size:12.5px;
+  font-weight:600;
+  color:#7B8BA5;
+}
+.giSimShellModal [class*="__closeX"],
+.giSimShellModal .giValModal__head .lcSimCenterModal__closeX{
+  position:absolute !important;
+  top:14px !important;
+  left:14px !important;
+  right:auto !important;
+}
+
+.giSimShellModal .giValModal__body{
+  flex:1 1 auto !important;
+  min-height:0 !important;
+  overflow:auto !important;
+  padding:16px 22px 18px !important;
+  background:#FCFDFF !important;
+}
+
+/* שורת מבוטחים */
+.giSimShell__insuredBar{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:8px;
+  margin:0 0 14px;
+}
+.giSimShell__tab{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  min-height:40px;
+  padding:8px 14px;
+  border-radius:12px;
+  border:1.5px solid #E5EAF3;
+  background:#fff;
+  color:#0F172A;
+  font-size:13px;
+  font-weight:700;
+  cursor:pointer;
+  transition:border-color .12s, background .12s, color .12s;
+}
+.giSimShell__tab.is-active{
+  background:#2563EB;
+  border-color:#2563EB;
+  color:#fff;
+}
+.giSimShell__tab.has-result:not(.is-active){
+  border-color:#93C5FD;
+  background:#EFF6FF;
+  color:#1D4ED8;
+}
+.giSimShell__addIns{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  min-height:40px;
+  padding:8px 14px;
+  border-radius:12px;
+  border:1.5px dashed #93C5FD;
+  background:#fff;
+  color:#2563EB;
+  font-size:13px;
+  font-weight:700;
+  cursor:pointer;
+}
+.giSimShell__addIns:hover{
+  background:#EFF6FF;
+  border-color:#2563EB;
+}
+
+/* גיל ביטוחי בולט */
+.giSimShellModal [class*="__hint"] strong,
+.giSimShell__ageBadge{
+  color:#2563EB !important;
+  font-size:18px !important;
+  font-weight:800 !important;
+}
+
+/* שדות גדולים יותר */
+.giSimShellModal [class*="__input"],
+.giSimShellModal input[type="text"],
+.giSimShellModal input[type="number"],
+.giSimShellModal select{
+  min-height:44px !important;
+  border-radius:12px !important;
+  font-size:14px !important;
+}
+.giSimShellModal [class*="__segBtn"]{
+  min-height:40px !important;
+  border-radius:10px !important;
+  font-weight:700 !important;
+}
+.giSimShellModal [class*="__segBtn"].is-active{
+  background:#2563EB !important;
+  border-color:#2563EB !important;
+  color:#fff !important;
+}
+
+/* Footer דביק — פרמיה | סה״כ | חשב */
+.giSimShellModal .giValModal__foot,
+.giSimShell__foot{
+  flex:0 0 auto !important;
+  display:flex !important;
+  flex-wrap:wrap !important;
+  align-items:center !important;
+  justify-content:flex-start !important;
+  gap:16px 28px !important;
+  padding:14px 22px !important;
+  background:#fff !important;
+  border-top:1px solid #EEF2F8 !important;
+  direction:rtl !important;
+}
+.giSimShell__premBlock{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:120px;
+}
+.giSimShell__premLabel{
+  font-size:12px;
+  font-weight:650;
+  color:#7B8BA5;
+}
+.giSimShell__premValue{
+  font-size:26px;
+  font-weight:850;
+  color:#2563EB;
+  line-height:1.1;
+  letter-spacing:-0.02em;
+}
+.giSimShell__premValue--total{
+  color:#0B1F4B;
+  font-size:22px;
+}
+.giSimShell__calcBtn{
+  margin-inline-start:auto !important;
+  min-height:48px !important;
+  min-width:150px !important;
+  border-radius:12px !important;
+  background:#2563EB !important;
+  border-color:#2563EB !important;
+  font-size:15px !important;
+  font-weight:800 !important;
+  padding:0 20px !important;
+}
+.giSimShell__closeBtn{
+  min-height:44px !important;
+  border-radius:12px !important;
+}
+
+/* הסתרת טאבים ישנים כשיש בר shell */
+.giSimShellModal .giSimShell__insuredBar ~ [class*="__tabs"],
+.giSimShellModal [class*="__tabs"]:not(.giSimShell__insuredBar){
+  display:none !important;
+}
+.giSimShellModal [class*="__insuredLabel--standalone"]{
+  display:none !important;
+}
+
+/* רוחב בסיסי לכל מודאלי הסימולטורים גם לפני enhancement */
+.lcPhxSimModal .giValModal__card,
+.lcMnrSimModal .giValModal__card,
+.lcMnrHealthModal .giValModal__card,
+.lcAylHealthModal .giValModal__card,
+.lcHachHealthModal .giValModal__card,
+.lcMgdHealthModal .giValModal__card,
+.lcMgdCiModal .giValModal__card,
+.lcMgdRiskModal .giValModal__card,
+.lcMnrCiModal .giValModal__card,
+[class*="Modal"].giValModal .giValModal__card{
+  max-width:min(1180px, 96vw) !important;
+}
+
+@media (max-width: 760px){
+  .giSimShellModal .giValModal__card{ max-width:96vw !important; }
+  .giSimShell__premValue{ font-size:22px; }
+  .giSimShell__calcBtn{ width:100%; margin-inline-start:0 !important; }
+  .giSimShellModal .giValModal__foot{ gap:12px; }
+}

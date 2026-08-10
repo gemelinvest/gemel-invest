@@ -42,7 +42,7 @@
 
 /* ---------- מודאל הסימולטור ---------- */
 .lcMgdRiskModal .giValModal__card{
-  max-width:700px;
+  max-width:min(1180px, 96vw);
   width:100%;
   position:relative;
   overflow:hidden;

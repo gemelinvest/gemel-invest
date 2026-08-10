@@ -183,7 +183,27 @@
     return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   }
 
-  /** מחשב גיל (שנים שלמות) מתאריך לידה עד asOfDate (ברירת מחדל: היום). */
+  /**
+   * מוסיף מספר חודשים לתאריך (שומר על יום בחודש; אם אין יום כזה — היום האחרון בחודש היעד).
+   * לשימוש בחישוב גיל ביטוחי (עיגול מחצי שנה).
+   */
+  function riskSimAddMonths(date, months){
+    const src = date instanceof Date ? date : null;
+    if(!src || Number.isNaN(src.getTime())) return null;
+    const y = src.getFullYear();
+    const m = src.getMonth();
+    const d = src.getDate();
+    const base = new Date(y, m + Number(months || 0), 1);
+    const lastDay = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
+    base.setDate(Math.min(d, lastDay));
+    return base;
+  }
+
+  /**
+   * גיל ביטוחי לתמחור סימולטורים: שנים שלמות + עיגול כלפי מעלה מחצי שנה ומעלה.
+   * דוגמה: בן 40 ו־6 חודשים → גיל ביטוחי 41; בן 40 ו־5 חודשים → 40.
+   * asOfDate: תאריך ייחוס (תחילת ביטוח), ברירת מחדל היום.
+   */
   function riskSimAgeAtDate(birthDateStr, asOfDateStr){
     const birthParsed = (typeof parseBirthDateValue === "function") ? parseBirthDateValue(birthDateStr) : null;
     if(!birthParsed || !birthParsed.date) return null;
@@ -197,14 +217,30 @@
         ? asParsed.date
         : new Date(asParsed.year, (asParsed.month || 1) - 1, asParsed.day || 1);
     }
-    const birth = birthParsed.date;
-    let age = asOf.getFullYear() - birth.getFullYear();
-    const mm = asOf.getMonth() - birth.getMonth();
-    if(mm < 0 || (mm === 0 && asOf.getDate() < birth.getDate())) age--;
-    return Number.isFinite(age) ? age : null;
+    const birth = new Date(birthParsed.date.getFullYear(), birthParsed.date.getMonth(), birthParsed.date.getDate());
+    const end = new Date(asOf.getFullYear(), asOf.getMonth(), asOf.getDate());
+    if(Number.isNaN(birth.getTime()) || Number.isNaN(end.getTime()) || end < birth) return null;
+
+    const bMonth = birth.getMonth();
+    const bDay = birth.getDate();
+    const birthdayInYear = (year) => {
+      const dim = new Date(year, bMonth + 1, 0).getDate();
+      return new Date(year, bMonth, Math.min(bDay, dim));
+    };
+
+    let completed = end.getFullYear() - birth.getFullYear();
+    if(end < birthdayInYear(end.getFullYear())) completed--;
+    if(!Number.isFinite(completed) || completed < 0) return null;
+
+    let lastBdayYear = end.getFullYear();
+    if(end < birthdayInYear(end.getFullYear())) lastBdayYear -= 1;
+    const lastBirthday = birthdayInYear(lastBdayYear);
+    const halfYearMark = riskSimAddMonths(lastBirthday, 6);
+    if(halfYearMark && end >= halfYearMark) return completed + 1;
+    return completed;
   }
 
-  /** גיל נוכחי (שנים שלמות היום) מתאריך לידה — תאימות לאחור. */
+  /** גיל ביטוחי להיום (עם עיגול חצי־שנה) — תאימות לאחור. */
   function riskSimAgeFromBirthDate(dateStr){
     return riskSimAgeAtDate(dateStr, null);
   }
@@ -323,7 +359,7 @@
   }
 
   /**
-   * מסנכרן st.birthDate → st.age (שנים שלמות) + בדיקת מינ׳ ימי כניסה.
+   * מסנכרן st.birthDate → st.age (גיל ביטוחי עם עיגול חצי־שנה) + בדיקת מינ׳ ימי כניסה.
    * asOfDate: תאריך תחילת ביטוח (dd/mm/yyyy) — אם חסר, מול היום.
    * לא מנחש גיל: בלי תאריך לידה תקין — age ריק.
    */
@@ -349,6 +385,243 @@
     }
     st.age = String(age);
     return { ok:true, age, days };
+  }
+
+  /* ===== GI-SIM-SHELL 2026-08-10 — מעטפת standalone + הוספת מבוטחים ========= */
+  function riskSimEnsureStandaloneInsureds(ctx){
+    const next = ctx && typeof ctx === "object" ? ctx : {};
+    if(!next.standalone) return next;
+    if(!Array.isArray(next.insureds) || !next.insureds.length){
+      next.insureds = [{ id: "standalone-1", label: "מבוטח 1 — ראשי", data: {} }];
+    } else {
+      next.insureds = next.insureds.map((ins, idx) => {
+        if(!ins || typeof ins !== "object") return { id: "standalone-" + (idx + 1), label: idx === 0 ? "מבוטח 1 — ראשי" : ("מבוטח " + (idx + 1)), data: {} };
+        const label = safeTrim(ins.label);
+        if(!label || label === "חישוב עצמאי"){
+          return Object.assign({}, ins, { label: idx === 0 ? "מבוטח 1 — ראשי" : ("מבוטח " + (idx + 1)) });
+        }
+        return ins;
+      });
+    }
+    next.allowAddInsured = true;
+    return next;
+  }
+
+  function riskSimDetectClosePrefix(modal){
+    if(!modal) return null;
+    const hit = modal.querySelector(
+      "[data-phx-close],[data-mnr-close],[data-phxmort-close],[data-mnrh-close],[data-aylh-close],[data-mnrci-close],[data-hach-close],[data-hachci-close],[data-mgdh-close],[data-mgdci-close],[data-mgdca-close],[data-mgdr-close]"
+    );
+    if(!hit || !hit.attributes) return null;
+    for(let i = 0; i < hit.attributes.length; i++){
+      const name = hit.attributes[i].name || "";
+      if(name.indexOf("data-") === 0 && name.slice(-6) === "-close"){
+        return name.slice(5, -6);
+      }
+    }
+    return null;
+  }
+
+  function riskSimFormatMoneyShekels(n){
+    const num = Number(n);
+    if(!Number.isFinite(num)) return "0.00";
+    try {
+      return num.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    } catch(_e) {
+      return (Math.round(num * 100) / 100).toFixed(2);
+    }
+  }
+
+  function riskSimTotalMonthlyPremiums(stateMap){
+    let sum = 0;
+    const map = stateMap && typeof stateMap === "object" ? stateMap : {};
+    Object.keys(map).forEach((k) => {
+      const m = Number(map[k]?.result?.monthlyPremium);
+      if(Number.isFinite(m)) sum += m;
+    });
+    return Math.round(sum * 100) / 100;
+  }
+
+  function riskSimAddStandaloneInsured(sim){
+    if(!sim || !sim._ctx) return;
+    if(!Array.isArray(sim._ctx.insureds)) sim._ctx.insureds = [];
+    if(!sim._state || typeof sim._state !== "object") sim._state = {};
+    const n = sim._ctx.insureds.length + 1;
+    const id = "standalone-" + Date.now() + "-" + n;
+    const label = n === 1 ? "מבוטח 1 — ראשי" : ("מבוטח " + n);
+    const ins = { id, label, data: {} };
+    sim._ctx.insureds.push(ins);
+    try {
+      sim._state[id] = typeof sim._prefillFromInsured === "function" ? sim._prefillFromInsured(ins) : {};
+    } catch(_e) {
+      sim._state[id] = {};
+    }
+    sim._activeInsuredId = id;
+    try { sim._render(); } catch(_e2) {}
+  }
+
+  function riskSimAugmentStandaloneChrome(sim){
+    const modal = sim && sim._modal;
+    if(!modal || !sim._ctx?.standalone) return;
+    if(sim._showFinalSummary) return;
+    modal.classList.add("giSimShellModal");
+    const card = modal.querySelector(".giValModal__card");
+    if(!card) return;
+    card.classList.add("giSimShell__card");
+
+    const company = safeTrim(sim._ctx.company);
+    const product = safeTrim(sim._ctx.product);
+    const prefix = riskSimDetectClosePrefix(modal) || "sim";
+    const insureds = Array.isArray(sim._ctx.insureds) ? sim._ctx.insureds : [];
+    const activeId = sim._activeInsuredId;
+
+    const head = card.querySelector(".giValModal__head");
+    if(head){
+      head.classList.add("giSimShell__head");
+      const title = head.querySelector(".giValModal__title");
+      if(title && company && product){
+        title.textContent = company + " · " + product;
+      }
+      let crumb = head.querySelector(".giSimShell__crumb");
+      if(!crumb){
+        crumb = document.createElement("div");
+        crumb.className = "giSimShell__crumb";
+        if(title && title.parentNode) title.parentNode.insertBefore(crumb, title.nextSibling);
+        else head.appendChild(crumb);
+      }
+      crumb.textContent = "מרכז הסימולטורים › " + company + " › " + product;
+    }
+
+    const body = card.querySelector(".giValModal__body");
+    if(body){
+      let bar = body.querySelector(".giSimShell__insuredBar");
+      if(bar) bar.remove();
+      bar = document.createElement("div");
+      bar.className = "giSimShell__insuredBar";
+      const tabs = insureds.map((ins) => {
+        const s = sim._state?.[ins.id];
+        const cls = [
+          "giSimShell__tab",
+          ins.id === activeId ? "is-active" : "",
+          s?.result?.ok ? "has-result" : ""
+        ].filter(Boolean).join(" ");
+        return `<button type="button" class="${cls}" data-gishell-tab="${escapeHtml(String(ins.id || ""))}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}</button>`;
+      }).join("");
+      bar.innerHTML = tabs + `<button type="button" class="giSimShell__addIns" data-gishell-add-ins="1">+ הוסף מבוטח</button>`;
+      body.insertBefore(bar, body.firstChild);
+    }
+
+    const foot = card.querySelector(".giValModal__foot");
+    if(foot){
+      foot.classList.add("giSimShell__foot");
+      const active = sim._state?.[activeId];
+      const monthly = Number(active?.result?.monthlyPremium) || 0;
+      const total = riskSimTotalMonthlyPremiums(sim._state);
+      foot.innerHTML = `
+        <div class="giSimShell__premBlock">
+          <span class="giSimShell__premLabel">פרמיה חודשית</span>
+          <strong class="giSimShell__premValue">₪${escapeHtml(riskSimFormatMoneyShekels(monthly))}</strong>
+        </div>
+        <div class="giSimShell__premBlock">
+          <span class="giSimShell__premLabel">סה״כ לכל המבוטחים</span>
+          <strong class="giSimShell__premValue giSimShell__premValue--total">₪${escapeHtml(riskSimFormatMoneyShekels(total))}</strong>
+        </div>
+        <button type="button" class="btn btn--primary giSimShell__calcBtn" data-gishell-calc="1">חשב פרמיה</button>
+        <button type="button" class="btn giSimShell__closeBtn" data-${escapeHtml(prefix)}-close="1">סגור</button>`;
+    }
+  }
+
+  function riskSimBindStandaloneChrome(sim){
+    const modal = sim && sim._modal;
+    if(!modal || !sim._ctx?.standalone) return;
+    if(sim._showFinalSummary) return;
+    const prefix = riskSimDetectClosePrefix(modal) || "sim";
+
+    $$("[data-gishell-tab]", modal).forEach((btn) => {
+      if(btn._giShellBound) return;
+      btn._giShellBound = true;
+      on(btn, "click", (ev) => {
+        ev.preventDefault();
+        const id = btn.getAttribute("data-gishell-tab");
+        if(!id) return;
+        if(typeof sim._switchInsured === "function") sim._switchInsured(id);
+        else { sim._activeInsuredId = id; try { sim._render(); } catch(_e) {} }
+      });
+    });
+
+    const addBtn = modal.querySelector("[data-gishell-add-ins]");
+    if(addBtn && !addBtn._giShellBound){
+      addBtn._giShellBound = true;
+      on(addBtn, "click", (ev) => {
+        ev.preventDefault();
+        riskSimAddStandaloneInsured(sim);
+      });
+    }
+
+    const calcBtn = modal.querySelector("[data-gishell-calc]");
+    if(calcBtn && !calcBtn._giShellBound){
+      calcBtn._giShellBound = true;
+      on(calcBtn, "click", (ev) => {
+        ev.preventDefault();
+        const id = sim._activeInsuredId;
+        try {
+          if(typeof sim._calc === "function"){
+            sim._calc(id);
+          } else if(typeof sim._recalcState === "function"){
+            sim._recalcState(sim._state?.[id]);
+            if(typeof sim._render === "function") sim._render();
+          } else {
+            const native = modal.querySelector(`[data-${prefix}-calc]`);
+            if(native) native.click();
+            else if(typeof sim._render === "function") sim._render();
+          }
+        } catch(_e) {
+          try { if(typeof sim._render === "function") sim._render(); } catch(_e2) {}
+        }
+      });
+    }
+
+    $$(`[data-${prefix}-close]`, modal).forEach((el) => {
+      if(el._giShellCloseBound) return;
+      el._giShellCloseBound = true;
+      on(el, "click", (ev) => {
+        ev.preventDefault();
+        try { sim.close(); } catch(_e) {}
+      });
+    });
+  }
+
+  function riskSimInstallShellEnhancer(handler){
+    if(!handler || handler._giShellEnhanced) return handler;
+    if(typeof handler.open === "function"){
+      const origOpen = handler.open.bind(handler);
+      handler.open = function(ctx){
+        return origOpen(riskSimEnsureStandaloneInsureds(Object.assign({}, ctx || {})));
+      };
+    }
+    if(typeof handler._bind === "function"){
+      const origBind = handler._bind.bind(handler);
+      handler._bind = function(){
+        try { riskSimAugmentStandaloneChrome(handler); } catch(_e) {}
+        origBind();
+        try { riskSimBindStandaloneChrome(handler); } catch(_e2) {}
+      };
+    }
+    handler._giShellEnhanced = true;
+    return handler;
+  }
+
+  if(RiskSimulators && typeof RiskSimulators.register === "function" && !RiskSimulators._giShellRegisterWrapped){
+    const origRegister = RiskSimulators.register.bind(RiskSimulators);
+    RiskSimulators.register = function(company, product, handler){
+      return origRegister(company, product, riskSimInstallShellEnhancer(handler));
+    };
+    RiskSimulators._giShellRegisterWrapped = true;
+    try {
+      Object.keys(RiskSimulators.registry || {}).forEach((k) => {
+        riskSimInstallShellEnhancer(RiskSimulators.registry[k]);
+      });
+    } catch(_e) {}
   }
 
   // ===== GI-RISK-SIM-OCCUPATION 2026-08-08 · "פרטי מקצוע וחיתום" ==================
@@ -2576,7 +2849,7 @@
     birth_missing: "יש לבחור תאריך לידה לפני חישוב הפרמיה.",
     entry_too_young: `גיל הכניסה המינימלי הוא ${MENORA_HEALTH_MIN_ENTRY_DAYS} ימים.`,
     age_missing: "יש לבחור תאריך לידה לפני חישוב הפרמיה.",
-    age_out_of_range: `הגיל הביטוחי (שנים שלמות היום) חורג מטווח הכניסה ${MENORA_HEALTH_MIN_AGE}–${MENORA_HEALTH_MAX_AGE}.`,
+    age_out_of_range: `הגיל הביטוחי (חצי שנה ומעלה מעוגל למעלה) חורג מטווח הכניסה ${MENORA_HEALTH_MIN_AGE}–${MENORA_HEALTH_MAX_AGE}.`,
     gender_missing: "יש לבחור מין — נדרש לכיסוי ייעוצים ובדיקות.",
     covers_missing: "יש לסמן לפחות כיסוי אחד.",
     age_cover_limit: "הגיל חורג מהמותר לכיסוי שנבחר.",
@@ -2747,7 +3020,7 @@
         ? (isStandalone ? `<div class="lcMnrHealth__hint lcMnrHealth__hint--warn">יש לבחור תאריך לידה מלוח השנה</div>` : `<div class="lcMnrHealth__hint lcMnrHealth__hint--warn">לא נמצא תאריך לידה בפרטים האישיים — יש לבחור מלוח השנה</div>`)
         : (!ageSync.ok
           ? `<div class="lcMnrHealth__hint lcMnrHealth__hint--warn">${escapeHtml(MENORA_HEALTH_SIM_MESSAGES[ageSync.reason] || "תאריך לידה לא תקין לחישוב")}</div>`
-          : `<div class="lcMnrHealth__hint">גיל ביטוחי (שנים שלמות היום): <strong>${escapeHtml(ageDisplay)}</strong></div>`);
+          : `<div class="lcMnrHealth__hint">גיל ביטוחי (חצי שנה ומעלה מעוגל למעלה): <strong>${escapeHtml(ageDisplay)}</strong></div>`);
       const needsGenderSelected = this._selectedIds(st).some((id) => !!MENORA_HEALTH_COVER_BY_ID[id]?.needsGender);
       const genderHintHtml = (!needsGenderSelected || isStandalone || st.gender) ? "" : `<div class="lcMnrHealth__hint lcMnrHealth__hint--warn">לא נמצא מין — נדרש לכיסוי ייעוצים ובדיקות</div>`;
 
@@ -3399,7 +3672,7 @@
     birth_missing: "יש לבחור תאריך לידה לפני חישוב הפרמיה.",
     entry_too_young: `גיל הכניסה המינימלי הוא ${AYALON_HEALTH_MIN_ENTRY_DAYS} ימים.`,
     age_missing: "יש לבחור תאריך לידה לפני חישוב הפרמיה.",
-    age_out_of_range: `הגיל הביטוחי (שנים שלמות היום) חורג מטווח הכניסה ${AYALON_HEALTH_MIN_AGE}–${AYALON_HEALTH_MAX_AGE}.`,
+    age_out_of_range: `הגיל הביטוחי (חצי שנה ומעלה מעוגל למעלה) חורג מטווח הכניסה ${AYALON_HEALTH_MIN_AGE}–${AYALON_HEALTH_MAX_AGE}.`,
     gender_missing: "יש לבחור מין.",
     covers_missing: "יש לסמן לפחות כיסוי אחד.",
     age_cover_limit: "הגיל חורג מהמותר לכיסוי שנבחר.",
@@ -3571,7 +3844,7 @@
         ? (isStandalone ? `<div class="lcAylHealth__hint lcAylHealth__hint--warn">יש לבחור תאריך לידה מלוח השנה</div>` : `<div class="lcAylHealth__hint lcAylHealth__hint--warn">לא נמצא תאריך לידה בפרטים האישיים — יש לבחור מלוח השנה</div>`)
         : (!ageSync.ok
           ? `<div class="lcAylHealth__hint lcAylHealth__hint--warn">${escapeHtml(AYALON_HEALTH_SIM_MESSAGES[ageSync.reason] || "תאריך לידה לא תקין לחישוב")}</div>`
-          : `<div class="lcAylHealth__hint">גיל ביטוחי (שנים שלמות היום): <strong>${escapeHtml(ageDisplay)}</strong></div>`);
+          : `<div class="lcAylHealth__hint">גיל ביטוחי (חצי שנה ומעלה מעוגל למעלה): <strong>${escapeHtml(ageDisplay)}</strong></div>`);
       const needsGenderSelected = this._selectedIds(st).some((id) => !!AYALON_HEALTH_COVER_BY_ID[id]?.needsGender);
       const genderHintHtml = (!needsGenderSelected || isStandalone || st.gender) ? "" : `<div class="lcAylHealth__hint lcAylHealth__hint--warn">לא נמצא מין — נדרש לכיסוי לפי מין</div>`;
 
@@ -4045,7 +4318,7 @@
     birth_missing: "יש לבחור תאריך לידה לפני חישוב הפרמיה.",
     entry_too_young: "גיל הכניסה המינימלי הוא 15 ימים.",
     age_missing: "יש לבחור תאריך לידה לפני חישוב הפרמיה.",
-    age_out_of_range: "הגיל הביטוחי (שנים שלמות היום) חורג מטווח הכניסה המותר למסלול זה.",
+    age_out_of_range: "הגיל הביטוחי (חצי שנה ומעלה מעוגל למעלה) חורג מטווח הכניסה המותר למסלול זה.",
     gender_missing: "יש לבחור מין לפני חישוב הפרמיה.",
     smoker_missing: "יש לציין האם המבוטח מעשן/ת לפני חישוב הפרמיה.",
     sum_missing: "יש להזין סכום פיצוי תקין (גדול מאפס) לפני חישוב הפרמיה.",
@@ -4161,7 +4434,7 @@
           st.result = null;
           st.error = MENORA_CI_MESSAGES[ageSync.reason] || MENORA_CI_MESSAGES.birth_missing;
           if(ageSync.reason === "age_out_of_range"){
-            st.error = `הגיל הביטוחי חורג מטווח הכניסה ${plan.minAge}–${plan.maxEntryAge} (שנים שלמות היום).`;
+            st.error = `הגיל הביטוחי חורג מטווח הכניסה ${plan.minAge}–${plan.maxEntryAge} (חצי שנה ומעלה מעוגל למעלה).`;
           }
           this._render();
           return;
@@ -4218,7 +4491,7 @@
                   ? `הגיל הביטוחי חורג מטווח הכניסה ${plan.minAge}–${plan.maxEntryAge}`
                   : (MENORA_CI_MESSAGES[ageSync.reason] || "תאריך לידה לא תקין לחישוב")
               )}</div>`
-            : `<div class="${P}__hint">גיל ביטוחי (שנים שלמות היום): <strong>${escapeHtml(String(ageSync.age))}</strong></div>`);
+            : `<div class="${P}__hint">גיל ביטוחי (חצי שנה ומעלה מעוגל למעלה): <strong>${escapeHtml(String(ageSync.age))}</strong></div>`);
         const genderHintHtml = (isStandalone || st.gender) ? "" : `<div class="${P}__hint ${P}__hint--warn">לא נמצא מין בפרטים האישיים — יש לבחור</div>`;
         const smokerHintHtml = (isStandalone || st.smoker === true || st.smoker === false) ? "" : `<div class="${P}__hint ${P}__hint--warn">לא נמצא סטטוס עישון בפרטים האישיים — יש לבחור</div>`;
         const programModeHtml = plan.supportsProgramMode ? `
@@ -4664,7 +4937,7 @@
     birth_missing: "יש לבחור תאריך לידה לפני חישוב הפרמיה.",
     entry_too_young: `גיל הכניסה המינימלי הוא ${HACHSHARA_HEALTH_MIN_ENTRY_DAYS} ימים.`,
     age_missing: "יש לבחור תאריך לידה לפני חישוב הפרמיה.",
-    age_out_of_range: `הגיל הביטוחי (שנים שלמות היום) חורג מטווח הכניסה ${HACHSHARA_HEALTH_MIN_AGE}–${HACHSHARA_HEALTH_MAX_AGE}.`,
+    age_out_of_range: `הגיל הביטוחי (חצי שנה ומעלה מעוגל למעלה) חורג מטווח הכניסה ${HACHSHARA_HEALTH_MIN_AGE}–${HACHSHARA_HEALTH_MAX_AGE}.`,
     gender_missing: "יש לבחור מין — נדרש לכיסוי ייעוצים ובדיקות.",
     covers_missing: "יש לסמן לפחות כיסוי אחד.",
     age_cover_limit: "הגיל חורג מהמותר לכיסוי שנבחר.",
@@ -4835,7 +5108,7 @@
         ? (isStandalone ? `<div class="lcHachHealth__hint lcHachHealth__hint--warn">יש לבחור תאריך לידה מלוח השנה</div>` : `<div class="lcHachHealth__hint lcHachHealth__hint--warn">לא נמצא תאריך לידה בפרטים האישיים — יש לבחור מלוח השנה</div>`)
         : (!ageSync.ok
           ? `<div class="lcHachHealth__hint lcHachHealth__hint--warn">${escapeHtml(HACHSHARA_HEALTH_SIM_MESSAGES[ageSync.reason] || "תאריך לידה לא תקין לחישוב")}</div>`
-          : `<div class="lcHachHealth__hint">גיל ביטוחי (שנים שלמות היום): <strong>${escapeHtml(ageDisplay)}</strong></div>`);
+          : `<div class="lcHachHealth__hint">גיל ביטוחי (חצי שנה ומעלה מעוגל למעלה): <strong>${escapeHtml(ageDisplay)}</strong></div>`);
       const needsGenderSelected = this._selectedIds(st).some((id) => !!HACHSHARA_HEALTH_COVER_BY_ID[id]?.needsGender);
       const genderHintHtml = (!needsGenderSelected || isStandalone || st.gender) ? "" : `<div class="lcHachHealth__hint lcHachHealth__hint--warn">לא נמצא מין — נדרש לכיסוי ייעוצים ובדיקות</div>`;
 

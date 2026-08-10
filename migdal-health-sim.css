@@ -2,7 +2,9 @@
    קידומת lcMgdHealth. מבוסס var(--gi-*). אין שינוי לסלקטורים גלובליים. */
 
 .lcMgdHealthModal .giValModal__card{
-  max-width:760px;
+  max-width:min(1180px, 96vw);
+  width:100%;
+  max-height:min(94vh, 980px);
   width:100%;
   height:min(92vh, 920px);
   max-height:min(92vh, 920px);

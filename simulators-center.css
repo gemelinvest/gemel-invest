@@ -1,7 +1,7 @@
-/* ===== GI-SIM-CENTER 2026-08-08 · "מרכז הסימולטורים" ==========================
-   קובץ CSS מבודד. קידומת lcSimCenter. צבעים מ-var(--gi-*).
-   GI-SIM-CENTER-UI-BLUE: כותרת כחול-לבן תואם תפריט הצד, כרטיסים צפופים,
-   אייקוני חברות (lcCompanyLogo) במקום אימוג'י. */
+/* ===== GI-SIM-CENTER 2026-08-10 · מוקאפ 1:1 (חברה → מוצר) ==================
+   מקור אמת: sim-center-step1-company / step2-product
+   צבעים: כחול #2563EB / לבן / נייבי טקסט
+*/
 
 /* ---------- כפתור הטופ-בר ---------- */
 .lcSimCenterBtn{
@@ -64,151 +64,275 @@
   display:inline-flex !important;
 }
 
-/* ---------- מודאל בורר חברה/מוצר ---------- */
-.lcSimCenterModal .giValModal__card{
-  max-width:620px;
+/* ---------- מודאל מרכז — גדול, לבן, צל רך ---------- */
+.lcSimCenterModal .giValModal__card,
+.lcSimCenterModal__card{
+  max-width:min(720px, 94vw) !important;
   width:100%;
-  max-height:min(92vh, 900px);
+  max-height:min(92vh, 860px);
   height:auto;
   display:flex;
   flex-direction:column;
   overflow:hidden;
+  border-radius:22px !important;
+  border:1px solid #E8EEF8 !important;
+  box-shadow:0 28px 80px rgba(15, 23, 42, 0.22) !important;
+  background:#fff !important;
 }
-.lcSimCenterModal .giValModal__head{
-  padding:16px 24px 14px;
+.lcSimCenterModal .giValModal__head,
+.lcSimCenterModal__head{
+  padding:22px 28px 8px !important;
   position:relative;
   flex:0 0 auto;
-  background:linear-gradient(135deg, var(--gi-primary-soft, #EFF6FF) 0%, #e0ecff 55%, #d7e6ff 100%);
-  border-bottom:1px solid rgba(56,112,237,.16);
+  background:#fff !important;
+  border-bottom:0 !important;
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:center !important;
+  text-align:center !important;
+  gap:6px;
+}
+.lcSimCenterModal .giValModal__headIcon{ display:none !important; }
+.lcSimCenterModal .giValModal__headText{
+  width:100%;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:6px;
+}
+.lcSimCenterModal .giValModal__title,
+.lcSimCenterModal__title{
+  color:#0B1F4B !important;
+  font-size:26px !important;
+  font-weight:800 !important;
+  letter-spacing:-0.02em;
+  line-height:1.2;
+  text-align:center;
+}
+.lcSimCenterModal .giValModal__sub,
+.lcSimCenterModal__sub{
+  color:#7B8BA5 !important;
+  font-size:14px !important;
+  font-weight:500 !important;
+  text-align:center;
 }
 .lcSimCenterModal .giValModal__body,
 .lcSimCenterModal__body{
-  padding:14px 24px;
+  padding:18px 28px 8px !important;
   flex:1 1 auto;
   min-height:0;
   overflow-x:hidden;
   overflow-y:auto;
   -webkit-overflow-scrolling:touch;
 }
-.lcSimCenterModal .giValModal__foot{
-  padding:12px 24px 16px;
+.lcSimCenterModal .giValModal__foot,
+.lcSimCenterModal__foot{
+  padding:14px 28px 22px !important;
   flex:0 0 auto;
-  background:var(--gi-surface-2, #F8FAFC);
-  border-top:1px solid var(--gi-border-soft, #F1F5F9);
-}
-.lcSimCenterModal .giValModal__title{ color:var(--gi-text, #0F172A); font-size:17px; }
-.lcSimCenterModal .giValModal__sub{ color:var(--gi-text-muted, #647287); font-size:12.5px; }
-.lcSimCenterModal .giValModal__headIcon{
-  width:40px;
-  height:40px;
-  border-radius:var(--gi-r-md, 12px);
-  background:#fff;
-  border:1px solid rgba(56,112,237,.14);
-  box-shadow:var(--gi-sh-xs, 0 1px 2px rgba(15,23,42,.04));
+  background:#fff !important;
+  border-top:0 !important;
   display:flex;
-  align-items:center;
-  justify-content:center;
-  color:var(--gi-navy, #3870ED);
-  font-size:18px;
+  justify-content:flex-start;
+}
+.lcSimCenterModal .giValModal__closeBtn,
+.lcSimCenterModal__cancel{
+  min-width:108px;
+  height:42px;
+  border-radius:12px !important;
+  border:1.5px solid #2563EB !important;
+  background:#fff !important;
+  color:#2563EB !important;
+  font-weight:700 !important;
+  font-size:14px !important;
+  box-shadow:none !important;
+}
+.lcSimCenterModal .giValModal__closeBtn:hover,
+.lcSimCenterModal__cancel:hover{
+  background:#EFF6FF !important;
 }
 
 .lcSimCenterModal__closeX{
   position:absolute;
-  top:12px;
-  left:12px;
+  top:16px;
+  left:16px;
   border:none;
-  background:rgba(255,255,255,.72);
-  color:var(--gi-text-muted, #647287);
-  font-size:15px;
+  background:transparent;
+  color:#647287;
+  font-size:18px;
   line-height:1;
   cursor:pointer;
-  padding:5px 8px;
-  border-radius:var(--gi-r-ctl, 8px);
+  padding:6px 8px;
+  border-radius:10px;
   transition:background .12s ease, color .12s ease;
 }
-.lcSimCenterModal__closeX:hover{ background:#fff; color:var(--gi-text, #0F172A); }
+.lcSimCenterModal__closeX:hover{ background:#F1F5F9; color:#0F172A; }
 
-.lcSimCenterGrid{
-  display:grid;
-  grid-template-columns:repeat(2, 1fr);
-  gap:10px;
-}
-.lcSimCenterCard{
+/* שורת חזרה + chip בשלב מוצרים */
+.lcSimCenterModal__navRow{
+  width:100%;
   display:flex;
   align-items:center;
-  gap:12px;
-  border:1.5px solid var(--gi-border, #E5E7EB);
+  justify-content:flex-start;
+  gap:10px;
+  margin-bottom:10px;
+  flex-wrap:wrap;
+}
+.lcSimCenterModal__back{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  border:0;
+  background:transparent;
+  color:#2563EB;
+  font-size:13.5px;
+  font-weight:700;
+  cursor:pointer;
+  padding:4px 2px;
+}
+.lcSimCenterModal__back:hover{ text-decoration:underline; }
+.lcSimCenterModal__chip{
+  display:inline-flex;
+  align-items:center;
+  padding:5px 12px;
+  border-radius:999px;
+  background:#EFF6FF;
+  border:1px solid #BFDBFE;
+  color:#1D4ED8;
+  font-size:12.5px;
+  font-weight:700;
+}
+
+/* ---------- כרטיסי חברות (מוקאפ 1) ---------- */
+.lcSimCenterGrid--companies{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0, 1fr));
+  gap:14px;
+}
+.lcSimCenterCompanyCard{
+  display:flex;
+  align-items:center;
+  gap:16px;
+  min-height:92px;
+  border:1.5px solid #E5EAF3;
   background:#fff;
-  border-radius:var(--gi-r-md, 12px);
-  padding:12px 14px;
+  border-radius:16px;
+  padding:18px 18px;
   cursor:pointer;
   text-align:right;
-  transition:border-color .12s ease, background .12s ease, transform .1s ease, box-shadow .12s ease;
+  transition:border-color .14s ease, background .14s ease, transform .12s ease, box-shadow .14s ease;
 }
-.lcSimCenterCard:hover{
-  border-color:var(--gi-primary, #2563EB);
-  background:var(--gi-primary-soft, #EFF6FF);
+.lcSimCenterCompanyCard:hover,
+.lcSimCenterCompanyCard:focus-visible{
+  border-color:#2563EB;
+  background:#F8FBFF;
   transform:translateY(-1px);
-  box-shadow:0 4px 14px rgba(37,99,235,.12);
+  box-shadow:0 10px 28px rgba(37,99,235,.12);
+  outline:none;
 }
-.lcSimCenterCard:active{ transform:translateY(0) scale(.99); }
-.lcSimCenterCard__icon{
+.lcSimCenterCompanyCard__icon{
   flex-shrink:0;
-  width:44px;
-  height:44px;
-  border-radius:var(--gi-r-md, 12px);
-  background:var(--gi-surface-2, #F8FAFC);
-  border:1px solid var(--gi-border, #E5E7EB);
+  width:56px;
+  height:56px;
+  border-radius:14px;
+  background:#EFF6FF;
+  border:1px solid #DBEAFE;
   display:flex;
   align-items:center;
   justify-content:center;
   overflow:hidden;
 }
-.lcSimCenterCard__icon .lcCompanyLogo,
-.lcSimCenterCard__icon .lcCompanyLogo--mini{
-  width:32px;
-  height:32px;
+.lcSimCenterCompanyCard__icon .lcCompanyLogo,
+.lcSimCenterCompanyCard__icon .lcCompanyLogo--mini{
+  width:40px;
+  height:40px;
 }
-.lcSimCenterCard__icon .lcCompanyLogo__img{
+.lcSimCenterCompanyCard__icon .lcCompanyLogo__img{
   width:100%;
   height:100%;
   object-fit:contain;
 }
-.lcSimCenterCard__meta{
-  display:flex;
-  flex-direction:column;
-  gap:2px;
-  min-width:0;
-}
-.lcSimCenterCard__company{
-  font-size:14px;
+.lcSimCenterCompanyCard__name{
+  font-size:17px;
   font-weight:800;
-  color:var(--gi-text, #0F172A);
+  color:#0B1F4B;
   line-height:1.25;
 }
-.lcSimCenterCard__product{
-  font-size:12.5px;
-  font-weight:600;
-  color:var(--gi-text-muted, #647287);
+
+/* ---------- כרטיסי מוצרים (מוקאפ 2) ---------- */
+.lcSimCenterGrid--products{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
 }
+.lcSimCenterProductCard{
+  display:grid;
+  grid-template-columns:auto minmax(0, 1fr);
+  align-items:center;
+  gap:16px;
+  width:100%;
+  min-height:84px;
+  border:1.5px solid #E5EAF3;
+  background:#fff;
+  border-radius:16px;
+  padding:16px 18px;
+  cursor:pointer;
+  text-align:right;
+  transition:border-color .14s ease, background .14s ease, box-shadow .14s ease, transform .12s ease;
+}
+.lcSimCenterProductCard:hover,
+.lcSimCenterProductCard:focus-visible,
+.lcSimCenterProductCard.is-active{
+  border-color:#2563EB;
+  background:#F8FBFF;
+  box-shadow:0 8px 24px rgba(37,99,235,.10);
+  outline:none;
+  transform:translateY(-1px);
+}
+.lcSimCenterProductCard__icon{
+  width:48px;
+  height:48px;
+  border-radius:999px;
+  background:#EFF6FF;
+  border:1px solid #DBEAFE;
+  color:#2563EB;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex-shrink:0;
+}
+.lcSimCenterProductCard__icon svg{ width:22px; height:22px; }
+.lcSimCenterProductCard__meta{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  min-width:0;
+}
+.lcSimCenterProductCard__title{
+  font-size:16px;
+  font-weight:800;
+  color:#0B1F4B;
+  line-height:1.25;
+}
+.lcSimCenterProductCard__desc{
+  font-size:13px;
+  font-weight:500;
+  color:#7B8BA5;
+  line-height:1.35;
+}
+
 .lcSimCenterEmpty{
-  padding:16px;
+  padding:28px 16px;
   text-align:center;
-  font-size:13.5px;
-  color:var(--gi-text-muted, #647287);
+  font-size:14px;
+  color:#7B8BA5;
+  font-weight:600;
 }
 
 @media (max-width: 560px){
-  .lcSimCenterGrid{ grid-template-columns:1fr; }
-  .lcSimCenterModal .giValModal__head{ padding:14px 16px 12px; }
-  .lcSimCenterModal .giValModal__body{ padding:12px 16px; }
-  .lcSimCenterModal .giValModal__foot{ padding:12px 16px 14px; }
-}
-
-/* ---------- הודעת "מצב חישוב עצמאי" ---------- */
-.lcPhxSim__insuredLabel--standalone,
-.lcMnrSim__insuredLabel--standalone{
-  color:var(--gi-primary, #2563EB);
-  background:linear-gradient(135deg, var(--gi-primary-soft, #EFF6FF) 0%, #e8f0fe 100%);
-  border:1px solid rgba(56,112,237,.16);
+  .lcSimCenterGrid--companies{ grid-template-columns:1fr; }
+  .lcSimCenterModal .giValModal__head{ padding:18px 16px 6px !important; }
+  .lcSimCenterModal .giValModal__body{ padding:14px 16px 6px !important; }
+  .lcSimCenterModal .giValModal__foot{ padding:12px 16px 18px !important; }
+  .lcSimCenterModal .giValModal__title{ font-size:22px !important; }
+  .lcSimCenterCompanyCard{ min-height:80px; padding:14px; }
 }
