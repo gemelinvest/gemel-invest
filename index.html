@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <link href="./app.css?v=20260810-dash-goldgrad-v1" rel="stylesheet"/>
 <link href="./theme.css?v=20260810-dash-goldgrad-v1" rel="stylesheet"/>
+<link href="./login-split.css?v=20260810-login-split-v1" rel="stylesheet"/>
 <link href="./theme-p2.css?v=20260805-workdays-goal-v1" rel="stylesheet"/>
 <!-- GI-PERF 2026-08-10: CSS משני (mirror/import/unify) נטען אחרי כניסה מ-app.js —
      לא חוסם מסך login ולא מרעיש 404 לפני שהמשתמש התחבר. -->
@@ -25,9 +26,18 @@
 
 </head>
 <body class="lcAuthLock">
-<!-- Login Overlay (Premium) -->
+<!-- Login Overlay — split: visual left + form right (מוקאפ 2) -->
 <div aria-hidden="true" class="lcLogin" id="lcLogin">
+<div class="lcLogin__shell">
+<aside class="lcLogin__visual" aria-hidden="true">
+<div class="lcLogin__visualBg" style="background-image:url('./login-hero-visual.jpg')"></div>
+<div class="lcLogin__visualShade"></div>
+<div class="lcLogin__visualBrand">
+<img class="lcLogin__visualLogo" src="./logo-login-clean.png" alt="" width="1808" height="373" decoding="async"/>
+</div>
+</aside>
 <div aria-label="כניסה למערכת" aria-modal="true" class="lcLogin__card" role="dialog">
+<div class="lcLogin__panelInner">
 <div class="lcLogin__brand">
 <div aria-hidden="true" class="lcLogin__logo lcLogin__logo--img">
 <div class="giLogoAnim giLogoAnim--login">
@@ -104,6 +114,8 @@
 <div aria-live="polite" class="lcLogin__error" id="lcLoginError"></div>
 </form>
 <button class="lcLogin__footBtn" id="lcForgotPasswordBtn" type="button">שכחת סיסמה? פנה למנהל מערכת</button>
+</div>
+</div>
 </div>
 </div>
 <div class="app" id="app">
@@ -3622,7 +3634,7 @@
   </div>
 </div>
 
-<script src="./app.js?v=20260810-search-clear-v1"></script>
+<script src="./app.js?v=20260810-login-split-v1"></script>
 
 
 <div id="giPwaInstallBanner" class="giPwaInstallBanner" hidden>
