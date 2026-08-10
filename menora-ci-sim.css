@@ -2,7 +2,7 @@
    קידומת lcMnrCi. מבוסס var(--gi-*). אין שינוי לסלקטורים גלובליים. */
 
 .lcMnrCiModal .giValModal__card{
-  max-width:700px;
+  max-width:min(1180px, 96vw);
   width:100%;
   height:min(92vh, 920px);
   max-height:min(92vh, 920px);
