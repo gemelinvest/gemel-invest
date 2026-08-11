@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <link href="./app.css?v=20260811-contacts-v1" rel="stylesheet"/>
-<link href="./theme.css?v=20260811-contacts-v1" rel="stylesheet"/>
+<link href="./theme.css?v=20260811-dailysales-v1" rel="stylesheet"/>
 <link href="./theme-p2.css?v=20260805-workdays-goal-v1" rel="stylesheet"/>
 <link href="./login-split.css?v=20260810-login-split-v12" rel="stylesheet"/>
 <!-- GI-PERF 2026-08-10: CSS משני (mirror/import/unify) נטען אחרי כניסה מ-app.js —
@@ -582,7 +582,8 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <div class="card__head giDailySalesPage__head">
 <div>
 <div class="card__title">מעקב מכירות יומי</div>
-<div class="card__hint">בחירת ענף · מכירות ונציגים לפי יום עבודה <span class="giDailySalesPage__syncStamp" id="dailySalesSyncStamp"></span></div>
+<div class="card__hint">יום עבודה אחד · הנתונים מתאפסים בחצות ומתחילים מחדש <span class="giDailySalesPage__syncStamp" id="dailySalesSyncStamp"></span></div>
+<span class="giDailySalesPage__resetPill"><i class="giDailySalesPage__resetDot" aria-hidden="true"></i> איפוס אוטומטי בחצות · מציג רק את היום הנבחר</span>
 </div>
 <div class="giDailySalesPage__nav" role="group" aria-label="בחירת תאריך">
 <button class="btn giDailySalesPage__todayBtn" id="btnDailySalesToday" type="button">היום</button>
@@ -595,10 +596,15 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <button class="btn btn--primary" id="btnDailySalesPrint" type="button">הדפסה</button>
 </div>
 </div>
+<div class="giDailySalesPage__kpis" id="dailySalesKpis" aria-label="סיכום יומי"></div>
 <div class="giDailySalesPage__sectors" id="dailySalesSectors" role="tablist" aria-label="בחירת ענף"></div>
-<div class="giDailySalesPage__summary" id="dailySalesSummary" aria-live="polite"></div>
+<div class="giDailySalesPage__summary" id="dailySalesSummary" hidden aria-hidden="true"></div>
 <p class="giDailySalesPage__note" id="dailySalesSectorNote" hidden>אלמנטרי: הפרמיה המוצגת היא <b>פרמיה שנתית</b>.</p>
 <div class="tableWrap giDailySalesPage__tableWrap">
+<div class="giDailySalesPage__tableBar">
+<h2 class="giDailySalesPage__tableTitle" id="dailySalesTableTitle">פירוט לפי נציג</h2>
+<span class="giDailySalesPage__tableHint" id="dailySalesTableHint"></span>
+</div>
 <table class="table giDailySalesPage__table">
 <thead>
 <tr>
@@ -3794,7 +3800,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 </div>
 
 <script src="./contacts-directory-seed.js?v=20260811-contacts-v1"></script>
-<script src="./app.js?v=20260811-ayl-ci-v1"></script>
+<script src="./app.js?v=20260811-dailysales-v1"></script>
 
 
 <div id="giPwaInstallBanner" class="giPwaInstallBanner" hidden>
