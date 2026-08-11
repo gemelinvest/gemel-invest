@@ -427,7 +427,7 @@
   function riskSimDetectClosePrefix(modal){
     if(!modal) return null;
     const hit = modal.querySelector(
-      "[data-phx-close],[data-mnr-close],[data-phxmort-close],[data-mnrh-close],[data-aylh-close],[data-mnrci-close],[data-hach-close],[data-hachci-close],[data-mgdh-close],[data-mgdci-close],[data-mgdca-close],[data-mgdr-close]"
+      "[data-phx-close],[data-phxh-close],[data-mnr-close],[data-phxmort-close],[data-mnrh-close],[data-aylh-close],[data-mnrci-close],[data-hach-close],[data-hachr-close],[data-hachci-close],[data-mgdh-close],[data-mgdci-close],[data-mgdca-close],[data-mgdr-close]"
     );
     if(!hit || !hit.attributes) return null;
     for(let i = 0; i < hit.attributes.length; i++){
@@ -3194,6 +3194,13 @@
         product: "בריאות",
         baseIndexPoints: 145.28,
         baseKnownDate: "2026-02-15"
+      },
+      phoenix_health: {
+        company: "הפניקס",
+        product: "בריאות",
+        // PDF 01/2024 — OCR רמז למדד 133.96; הפרמיה צמודה למדד המחירים לצרכן
+        baseIndexPoints: 133.96,
+        baseKnownDate: "2024-01-01"
       }
     },
     _mem: null,
@@ -4214,6 +4221,741 @@
   };
 
   RiskSimulators.register("מנורה", "בריאות", MenoraHealthSimulator);
+
+  // ===== GI-PHX-HEALTH-SIM 2026-08-11 · סימולטור בריאות הפניקס ==================
+  // מקור אמת: תעריפי בריאות פניקס.pdf · עמוד 1 (תכניות בריאות 01/2024).
+  // מחלות קשות (מרפא) / סרטן (מרפא סרטן) — סימולטורים נפרדים (לא כאן).
+  // תעריפים באגורות (שלמים) 1:1 מה-PDF בשקלים×100. הפרמיה צמודה למדד.
+
+  const PHOENIX_HEALTH_MIN_AGE = 0;
+  const PHOENIX_HEALTH_MAX_AGE = 70;
+  const PHOENIX_HEALTH_MIN_ENTRY_DAYS = 0;
+
+  function phoenixHealthShekelsToAgorot(shekels){
+    return Math.round(Number(shekels) * 100);
+  }
+  function phoenixHealthAgorotToShekels(agorot){
+    return agorot / 100;
+  }
+  function formatPhoenixHealthExactAmount(n){
+    if(!Number.isFinite(n)) return "";
+    const ag = Math.round(n * 100);
+    const whole = Math.trunc(ag / 100);
+    const frac = Math.abs(ag % 100);
+    return whole + "." + String(frac).padStart(2, "0");
+  }
+
+  function phoenixHealthLookupBand(bands, age){
+    const a = Number(age);
+    if(!Number.isInteger(a)) return null;
+    for(let i = 0; i < bands.length; i++){
+      const b = bands[i];
+      if(a >= b.min && a <= b.max) return b;
+    }
+    return null;
+  }
+
+  /**
+   * קטלוג כיסויים — wizardKey תואם Wizard.healthCoversByCompany["הפניקס"].
+   * ניתוחים בישראל: needsGender (גבר/אישה מה-PDF).
+   * רפואה משלימה: ילד 0–20 לפי תעריף ילד; בוגר לפי תעריף מבוטח ראשי
+   *   (תעריף מבוטח משני 8.45 ₪ לא ממודל בלי שדה תפקיד — לא מומצא).
+   */
+  const PHOENIX_HEALTH_COVERS = [
+    {
+      id: "transplant",
+      label: "השתלות וטיפולים מיוחדים מחוץ לישראל",
+      wizardKey: "השתלות וטיפולים מיוחדים מחוץ לישראל",
+      group: "פוליסת בריאות בסיסית",
+      needsGender: false,
+      bands: [{ min:0, max:20, agorot:1067 }, { min:21, max:30, agorot:1752 }, { min:31, max:40, agorot:1752 }, { min:41, max:50, agorot:2013 }, { min:51, max:55, agorot:2492 }, { min:56, max:60, agorot:2596 }, { min:61, max:65, agorot:3008 }, { min:66, max:120, agorot:3084 }]
+    },
+    {
+      id: "abroad_surgery",
+      label: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל",
+      wizardKey: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל",
+      group: "פוליסת בריאות בסיסית",
+      needsGender: false,
+      bands: [{ min:0, max:20, agorot:518 }, { min:21, max:30, agorot:708 }, { min:31, max:40, agorot:999 }, { min:41, max:50, agorot:1459 }, { min:51, max:55, agorot:2183 }, { min:56, max:60, agorot:3015 }, { min:61, max:65, agorot:3710 }, { min:66, max:120, agorot:3818 }]
+    },
+    {
+      id: "drugs",
+      label: "תרופות מחוץ לסל שירותי הבריאות",
+      wizardKey: "תרופות מחוץ לסל שירותי הבריאות",
+      group: "פוליסת בריאות בסיסית",
+      needsGender: false,
+      bands: [{ min:0, max:20, agorot:1290 }, { min:21, max:30, agorot:1980 }, { min:31, max:40, agorot:2780 }, { min:41, max:50, agorot:4300 }, { min:51, max:55, agorot:6025 }, { min:56, max:60, agorot:7722 }, { min:61, max:65, agorot:10401 }, { min:66, max:120, agorot:13915 }]
+    },
+    {
+      id: "surgery_first_shekel",
+      label: "ניתוחים בישראל מהשקל הראשון",
+      wizardKey: "ניתוחים בישראל מהשקל הראשון",
+      group: "ניתוחים בישראל",
+      needsGender: true,
+      bands: [{ min:0, max:20, male:3994, female:3837 }, { min:21, max:30, male:6983, female:8680 }, { min:31, max:40, male:11068, female:14385 }, { min:41, max:50, male:16024, female:19218 }, { min:51, max:55, male:28836, female:26163 }, { min:56, max:60, male:36226, female:31194 }, { min:61, max:65, male:52263, female:43144 }, { min:66, max:120, male:76472, female:62858 }]
+    },
+    {
+      id: "surgery_shaban",
+      label: "משלים שב\"ן ללא השתתפות עצמית",
+      wizardKey: "משלים שב\"ן ללא השתתפות עצמית",
+      group: "ניתוחים בישראל",
+      needsGender: true,
+      bands: [{ min:0, max:20, male:1928, female:1852 }, { min:21, max:30, male:3749, female:4660 }, { min:31, max:40, male:5571, female:7241 }, { min:41, max:50, male:8759, female:10505 }, { min:51, max:55, male:13921, female:12630 }, { min:56, max:60, male:17489, female:15060 }, { min:61, max:65, male:25230, female:20828 }, { min:66, max:120, male:39652, female:32593 }]
+    },
+    {
+      id: "surgery_shaban_5000",
+      label: "משלים שב\"ן עם השתתפות עצמית 5,000 ₪",
+      wizardKey: "משלים שב\"ן עם השתתפות עצמית 5,000 ₪",
+      group: "ניתוחים בישראל",
+      needsGender: true,
+      bands: [{ min:0, max:20, male:1504, female:1445 }, { min:21, max:30, male:2924, female:3635 }, { min:31, max:40, male:4346, female:5648 }, { min:41, max:50, male:6832, female:8194 }, { min:51, max:55, male:10858, female:9852 }, { min:56, max:60, male:13641, female:11747 }, { min:61, max:65, male:19679, female:16246 }, { min:66, max:120, male:30928, female:25422 }]
+    },
+    {
+      id: "ambulatory_consults",
+      label: "ייעוץ ובדיקות",
+      wizardKey: "ייעוץ ובדיקות",
+      group: "שירותים אמבולטוריים",
+      needsGender: false,
+      bands: [{ min:0, max:20, agorot:2114 }, { min:21, max:30, agorot:4915 }, { min:31, max:40, agorot:7247 }, { min:41, max:50, agorot:5853 }, { min:51, max:55, agorot:7142 }, { min:56, max:60, agorot:7885 }, { min:61, max:65, agorot:7885 }, { min:66, max:120, agorot:12284 }]
+    },
+    {
+      id: "fast_diagnosis",
+      label: "אבחון רפואי מהיר",
+      wizardKey: "אבחון רפואי מהיר",
+      group: "שירותים אמבולטוריים",
+      needsGender: false,
+      bands: [{ min:0, max:20, agorot:350 }, { min:21, max:30, agorot:1655 }, { min:31, max:40, agorot:1655 }, { min:41, max:50, agorot:1655 }, { min:51, max:55, agorot:1655 }, { min:56, max:60, agorot:1655 }, { min:61, max:65, agorot:1655 }, { min:66, max:120, agorot:2054 }]
+    },
+    {
+      id: "ambulatory_package",
+      label: "ייעוץ ובדיקות ואבחון רפואי מהיר",
+      wizardKey: "ייעוץ ובדיקות ואבחון רפואי מהיר",
+      group: "שירותים אמבולטוריים",
+      needsGender: false,
+      bands: [{ min:0, max:20, agorot:2295 }, { min:21, max:30, agorot:6157 }, { min:31, max:40, agorot:8293 }, { min:41, max:50, agorot:7016 }, { min:51, max:55, agorot:8196 }, { min:56, max:60, agorot:8877 }, { min:61, max:65, agorot:8877 }, { min:66, max:120, agorot:13306 }]
+    },
+    {
+      id: "ambulatory_accompany",
+      label: "ליווי רפואי וטיפולים אגב אירוע רפואי",
+      wizardKey: "ליווי רפואי וטיפולים אגב אירוע רפואי",
+      group: "שירותים אמבולטוריים",
+      needsGender: false,
+      bands: [{ min:0, max:20, agorot:711 }, { min:21, max:30, agorot:1515 }, { min:31, max:40, agorot:1731 }, { min:41, max:50, agorot:1911 }, { min:51, max:55, agorot:1942 }, { min:56, max:60, agorot:2870 }, { min:61, max:65, agorot:2870 }, { min:66, max:120, agorot:3850 }]
+    },
+    {
+      id: "complementary",
+      label: "רפואה משלימה",
+      wizardKey: "רפואה משלימה",
+      group: "כתבי שירות ותכניות נוספות",
+      needsGender: false,
+      bands: [
+        { min:0, max:20, agorot:704 },
+        { min:21, max:120, agorot:1126 }
+      ]
+    },
+    {
+      id: "child_dev",
+      label: "כתב שירות התפתחות הילד",
+      wizardKey: "כתב שירות התפתחות הילד",
+      group: "כתבי שירות ותכניות נוספות",
+      needsGender: false,
+      maxAge: 21,
+      bands: [
+        { min:0, max:21, agorot:2970 }
+      ]
+    },
+    {
+      id: "expert_click",
+      label: "רופא מומחה בקליק",
+      wizardKey: "רופא מומחה בקליק",
+      group: "כתבי שירות ותכניות נוספות",
+      needsGender: false,
+      bands: [
+        { min:0, max:21, agorot:867 },
+        { min:22, max:120, agorot:1794 }
+      ]
+    }
+  ];
+
+  const PHOENIX_HEALTH_COVER_BY_ID = PHOENIX_HEALTH_COVERS.reduce((acc, c) => { acc[c.id] = c; return acc; }, {});
+  const PHOENIX_HEALTH_CPI_KEY = "phoenix_health";
+
+  function computePhoenixHealthCoverPremium(coverId, age, gender){
+    const cover = PHOENIX_HEALTH_COVER_BY_ID[coverId];
+    if(!cover) return { ok:false, reason:"cover_missing" };
+    const a = Number(age);
+    if(!Number.isInteger(a)) return { ok:false, reason:"age_missing" };
+    if(a < PHOENIX_HEALTH_MIN_AGE || a > PHOENIX_HEALTH_MAX_AGE) return { ok:false, reason:"age_out_of_range" };
+    if(cover.maxAge != null && a > cover.maxAge) return { ok:false, reason:"age_cover_limit", coverMaxAge: cover.maxAge };
+    const band = phoenixHealthLookupBand(cover.bands, a);
+    if(!band) return { ok:false, reason:"rate_missing" };
+    let agorot = null;
+    if(cover.needsGender){
+      if(gender !== "זכר" && gender !== "נקבה") return { ok:false, reason:"gender_missing" };
+      agorot = gender === "זכר" ? band.male : band.female;
+    } else {
+      agorot = band.agorot;
+    }
+    if(!Number.isInteger(agorot)) return { ok:false, reason:"rate_missing" };
+    const indexed = HealthCpi.indexAgorot(agorot, PHOENIX_HEALTH_CPI_KEY);
+    return {
+      ok: true,
+      coverId: cover.id,
+      label: cover.label,
+      baseMonthlyAgorot: indexed.baseAgorot,
+      baseMonthlyPremium: phoenixHealthAgorotToShekels(indexed.baseAgorot),
+      monthlyAgorot: indexed.indexedAgorot,
+      monthlyPremium: phoenixHealthAgorotToShekels(indexed.indexedAgorot),
+      indexFactor: indexed.factor,
+      indexInfo: indexed.indexInfo
+    };
+  }
+
+  function computePhoenixHealthBundle(selectedIds, age, gender){
+    const ids = Array.isArray(selectedIds) ? selectedIds : [];
+    if(!ids.length) return { ok:false, reason:"covers_missing", covers:[], monthlyAgorot:0, monthlyPremium:0, annualPremium:0 };
+    const covers = [];
+    let totalAg = 0;
+    let totalBaseAg = 0;
+    let indexInfo = null;
+    for(let i = 0; i < ids.length; i++){
+      const one = computePhoenixHealthCoverPremium(ids[i], age, gender);
+      if(!one.ok) return { ok:false, reason: one.reason, failCoverId: ids[i], coverMaxAge: one.coverMaxAge, covers:[], monthlyAgorot:0, monthlyPremium:0, annualPremium:0 };
+      const meta = PHOENIX_HEALTH_COVER_BY_ID[one.coverId];
+      if(!indexInfo) indexInfo = one.indexInfo || null;
+      covers.push({
+        id: one.coverId,
+        label: one.label,
+        wizardKey: meta?.wizardKey || one.label,
+        monthlyPremium: one.monthlyPremium,
+        monthlyAgorot: one.monthlyAgorot,
+        baseMonthlyPremium: one.baseMonthlyPremium,
+        baseMonthlyAgorot: one.baseMonthlyAgorot
+      });
+      totalAg += one.monthlyAgorot;
+      totalBaseAg += one.baseMonthlyAgorot;
+    }
+    return {
+      ok: true,
+      covers,
+      monthlyAgorot: totalAg,
+      monthlyPremium: phoenixHealthAgorotToShekels(totalAg),
+      annualPremium: phoenixHealthAgorotToShekels(totalAg * 12),
+      baseMonthlyAgorot: totalBaseAg,
+      baseMonthlyPremium: phoenixHealthAgorotToShekels(totalBaseAg),
+      indexFactor: indexInfo?.factor || 1,
+      indexInfo
+    };
+  }
+
+  function formatPhoenixHealthIndexMetaHtml(indexInfo){
+    if(!indexInfo) return "";
+    if(!indexInfo.ok){
+      return `<div class="lcPhxHSim__indexMeta lcPhxHSim__indexMeta--pending">ממתין למדד למ״ס — מוצגת כרגע פרמיית בסיס מהתעריפון</div>`;
+    }
+    const factorTxt = (Math.round(indexInfo.factor * 10000) / 10000).toFixed(4);
+    return `<div class="lcPhxHSim__indexMeta">
+      הצמדה למדד: בסיס ${escapeHtml(String(indexInfo.baseIndexPoints))}
+      (${escapeHtml(indexInfo.baseKnownDate || "")})
+      → נוכחי ≈ ${escapeHtml(String(indexInfo.currentIndexPoints))}
+      (${escapeHtml(safeTrim(indexInfo.currentMonthLabel))})
+      · מקדם ×${escapeHtml(factorTxt)}
+    </div>`;
+  }
+
+  const PHOENIX_HEALTH_SIM_MESSAGES = {
+    birth_missing: "יש לבחור תאריך לידה לפני חישוב הפרמיה.",
+    entry_too_young: `גיל הכניסה המינימלי הוא ${PHOENIX_HEALTH_MIN_ENTRY_DAYS} ימים.`,
+    age_missing: "יש לבחור תאריך לידה לפני חישוב הפרמיה.",
+    age_out_of_range: `הגיל הביטוחי (חצי שנה ומעלה מעוגל למעלה) חורג מטווח הכניסה ${PHOENIX_HEALTH_MIN_AGE}–${PHOENIX_HEALTH_MAX_AGE}.`,
+    gender_missing: "יש לבחור מין — נדרש לכיסויי ניתוחים בישראל.",
+    covers_missing: "יש לסמן לפחות כיסוי אחד.",
+    age_cover_limit: "הגיל חורג מהמותר לכיסוי שנבחר.",
+    rate_missing: "לא נמצא תעריף מתאים לנתונים שהוזנו.",
+    cover_missing: "כיסוי לא מוכר."
+  };
+
+  const PhoenixHealthSimulator = {
+    _modal: null,
+    _ctx: null,
+    _state: {},
+    _activeInsuredId: null,
+    _escHandler: null,
+    _confirmSwitch: null,
+    _showFinalSummary: false,
+    _cpiUnsub: null,
+
+    open(ctx){
+      this.close();
+      this._ctx = ctx || {};
+      const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : [];
+      this._state = {};
+      insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); });
+      this._activeInsuredId = insureds[0]?.id || null;
+      this._confirmSwitch = null;
+      this._showFinalSummary = false;
+      this._mount();
+      this._render();
+      this._cpiUnsub = HealthCpi.onChange(() => { if(this._modal) this._render(); });
+      HealthCpi.ensure().then(() => { if(this._modal) this._render(); }).catch(() => {});
+    },
+
+    _prefillFromInsured(ins){
+      const d = ins?.data || {};
+      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
+      const birthDate = safeTrim(d.birthDate || "");
+      const occupation = safeTrim(d.occupation || "");
+      const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
+      const st = {
+        birthDate,
+        birthDateSource: birthDate ? "step1" : "",
+        insuranceStartDate,
+        insuranceStartDateSource: insuranceStartDate ? "ctx" : "",
+        age: "",
+        ageSource: birthDate ? "step1" : "",
+        ageRaw: null,
+        entryDays: null,
+        gender, genderSource: gender ? "step1" : "",
+        occupation,
+        occupationSource: occupation ? "step1" : "",
+        selected: {},
+        result: null,
+        error: null,
+        savedAt: null,
+        dirtySinceSave: false
+      };
+      riskSimSyncAgeFromBirthDate(st, {
+        minAge: PHOENIX_HEALTH_MIN_AGE,
+        maxAge: PHOENIX_HEALTH_MAX_AGE,
+        minEntryDays: PHOENIX_HEALTH_MIN_ENTRY_DAYS,
+        asOfDate: st.insuranceStartDate || ""
+      });
+      return st;
+    },
+
+    _isInsuredRelevant(_ins){ return true; },
+
+    close(){
+      if(this._cpiUnsub){ try { this._cpiUnsub(); } catch(_e){} this._cpiUnsub = null; }
+      if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; }
+      if(this._modal){
+        const m = this._modal;
+        m.classList.add("giValModal--leaving");
+        window.setTimeout(() => m.remove(), 200);
+        this._modal = null;
+      }
+      this._ctx = null;
+    },
+
+    _mount(){
+      const modal = document.createElement("div");
+      modal.id = "lcPhxHSimModal";
+      modal.className = "giValModal lcPhxHSimModal";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-label", "סימולטור בריאות הפניקס");
+      document.body.appendChild(modal);
+      this._modal = modal;
+      this._escHandler = (ev) => { if(ev.key === "Escape") this.close(); };
+      document.addEventListener("keydown", this._escHandler);
+      requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
+    },
+
+    _getInsuredLabel(insId){
+      const ins = (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === insId);
+      return ins ? safeTrim(ins.label) || "מבוטח" : "מבוטח";
+    },
+
+    _getActiveInsured(){
+      return (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === this._activeInsuredId) || null;
+    },
+
+    _selectedIds(st){
+      return PHOENIX_HEALTH_COVERS.map((c) => c.id).filter((id) => !!st?.selected?.[id]);
+    },
+
+    _syncAge(st){
+      return riskSimSyncAgeFromBirthDate(st, {
+        minAge: PHOENIX_HEALTH_MIN_AGE,
+        maxAge: PHOENIX_HEALTH_MAX_AGE,
+        minEntryDays: PHOENIX_HEALTH_MIN_ENTRY_DAYS,
+        asOfDate: st?.insuranceStartDate || ""
+      });
+    },
+
+    _recalcState(st){
+      if(!st) return;
+      if(!st.selected || typeof st.selected !== "object") st.selected = {};
+      const ageSync = this._syncAge(st);
+      const ids = this._selectedIds(st);
+      if(!ids.length){
+        st.result = null;
+        st.error = null;
+        return;
+      }
+      if(!ageSync.ok){
+        st.result = null;
+        st.error = PHOENIX_HEALTH_SIM_MESSAGES[ageSync.reason] || PHOENIX_HEALTH_SIM_MESSAGES.birth_missing;
+        return;
+      }
+      const calc = computePhoenixHealthBundle(ids, st.age, st.gender);
+      if(calc.ok){
+        st.result = calc;
+        st.error = null;
+      } else {
+        st.result = null;
+        let msg = PHOENIX_HEALTH_SIM_MESSAGES[calc.reason] || "לא ניתן לחשב את הפרמיה.";
+        if(calc.reason === "age_cover_limit" && calc.failCoverId){
+          const c = PHOENIX_HEALTH_COVER_BY_ID[calc.failCoverId];
+          msg = `הכיסוי "${c?.label || ""}" זמין עד גיל ${calc.coverMaxAge} בלבד.`;
+        } else if(calc.failCoverId){
+          const c = PHOENIX_HEALTH_COVER_BY_ID[calc.failCoverId];
+          if(c) msg = `${msg} (${c.label})`;
+        }
+        st.error = msg;
+      }
+    },
+
+    _render(){
+      if(!this._modal) return;
+      const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+      const isMulti = insureds.length > 1;
+      if(this._showFinalSummary){
+        this._renderFinalSummary(insureds);
+        return;
+      }
+      const activeId = this._activeInsuredId;
+      const st = this._state[activeId] || this._prefillFromInsured(null);
+      const isStandalone = !!this._ctx?.standalone;
+      this._recalcState(st);
+
+      const tabsHtml = isMulti ? `<div class="lcPhxHSim__tabs">${insureds.map((ins) => {
+        const s = this._state[ins.id];
+        const statusCls = s?.savedAt ? " has-saved" : (s?.result ? " has-result" : "");
+        return `<button type="button" class="lcPhxHSim__tab${ins.id === activeId ? " is-active" : ""}${statusCls}" data-phxh-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${s?.savedAt ? " 🟢" : ""}</button>`;
+      }).join("")}</div>` : "";
+
+      const birthIso = riskSimBirthDateToIsoInput(st.birthDate || "");
+      const birthMaxIso = riskSimIsoDateDaysAgo(PHOENIX_HEALTH_MIN_ENTRY_DAYS);
+      const ageSync = this._syncAge(st);
+      const ageDisplay = ageSync.ok ? String(ageSync.age) : "—";
+      const ageHintHtml = !st.birthDate
+        ? (isStandalone ? `<div class="lcPhxHSim__hint lcPhxHSim__hint--warn">יש לבחור תאריך לידה מלוח השנה</div>` : `<div class="lcPhxHSim__hint lcPhxHSim__hint--warn">לא נמצא תאריך לידה בפרטים האישיים — יש לבחור מלוח השנה</div>`)
+        : (!ageSync.ok
+          ? `<div class="lcPhxHSim__hint lcPhxHSim__hint--warn">${escapeHtml(PHOENIX_HEALTH_SIM_MESSAGES[ageSync.reason] || "תאריך לידה לא תקין לחישוב")}</div>`
+          : `<div class="lcPhxHSim__hint">גיל ביטוחי בתחילת הביטוח: <strong>${escapeHtml(ageDisplay)}</strong></div>`);
+      const needsGenderSelected = this._selectedIds(st).some((id) => !!PHOENIX_HEALTH_COVER_BY_ID[id]?.needsGender);
+      const genderHintHtml = (!needsGenderSelected || isStandalone || st.gender) ? "" : `<div class="lcPhxHSim__hint lcPhxHSim__hint--warn">לא נמצא מין — נדרש לכיסויי ניתוחים בישראל</div>`;
+
+      const groups = {};
+      PHOENIX_HEALTH_COVERS.forEach((c) => {
+        if(!groups[c.group]) groups[c.group] = [];
+        groups[c.group].push(c);
+      });
+      const coversHtml = Object.keys(groups).map((g) => `
+        <div class="lcPhxHSim__group">
+          <div class="lcPhxHSim__groupTitle">${escapeHtml(g)}</div>
+          <div class="lcPhxHSim__coverList">
+            ${groups[g].map((c) => {
+              const checked = !!(st.selected && st.selected[c.id]);
+              const one = checked ? computePhoenixHealthCoverPremium(c.id, st.age, st.gender) : null;
+              const premTxt = one?.ok ? `₪${formatPhoenixHealthExactAmount(one.monthlyPremium)}` : (checked && one && !one.ok ? "—" : "");
+              return `<label class="lcPhxHSim__cover${checked ? " is-checked" : ""}">
+                <input type="checkbox" data-phxh-cover="${escapeHtml(c.id)}"${checked ? " checked" : ""} />
+                <span class="lcPhxHSim__coverLabel">${escapeHtml(c.label)}${c.needsGender ? ' <em>(לפי מין)</em>' : ""}${c.maxAge != null ? ` <em>(עד גיל ${c.maxAge})</em>` : ""}</span>
+                <span class="lcPhxHSim__coverPrem">${premTxt}</span>
+              </label>`;
+            }).join("")}
+          </div>
+        </div>`).join("");
+
+      const selectedRows = (st.result?.covers || []).map((c) =>
+        `<div class="lcPhxHSim__selRow"><span>${escapeHtml(c.label)}</span><strong>₪${escapeHtml(formatPhoenixHealthExactAmount(c.monthlyPremium))}</strong></div>`
+      ).join("");
+
+      const indexMetaHtml = formatPhoenixHealthIndexMetaHtml(st.result?.indexInfo || HealthCpi.getIndexInfo(PHOENIX_HEALTH_CPI_KEY));
+      const baseTotalHtml = (st.result?.ok && st.result.baseMonthlyPremium != null && Math.abs(st.result.baseMonthlyPremium - st.result.monthlyPremium) > 0.0001)
+        ? `<div class="lcPhxHSim__resultRow"><span>פרמיית בסיס (לפני מדד)</span><strong>₪${escapeHtml(formatPhoenixHealthExactAmount(st.result.baseMonthlyPremium))}</strong></div>`
+        : "";
+      const resultHtml = st.error
+        ? `<div class="lcPhxHSim__result lcPhxHSim__result--error">${escapeHtml(st.error)}</div>`
+        : (st.result ? `<div class="lcPhxHSim__result lcPhxHSim__result--ok">
+            <div class="lcPhxHSim__selTitle">כיסויים שנבחרו</div>
+            ${selectedRows}
+            ${baseTotalHtml}
+            <div class="lcPhxHSim__resultRow lcPhxHSim__resultRow--main"><span>סה״כ פרמיה חודשית (צמודה למדד)</span><strong>₪${escapeHtml(formatPhoenixHealthExactAmount(st.result.monthlyPremium))}</strong></div>
+            <div class="lcPhxHSim__resultRow"><span>סה״כ פרמיה שנתית</span><strong>₪${escapeHtml(formatPhoenixHealthExactAmount(st.result.annualPremium))}</strong></div>
+            ${indexMetaHtml}
+          </div>` : `<div class="lcPhxHSim__result lcPhxHSim__result--empty">סמנו כיסויים כדי לראות פרמיה</div>`);
+
+      const occAssessment = assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product);
+      const occBlockHtml = renderOccupationRiskBlockHtml(occAssessment, "lcPhxHSim");
+      const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company)
+        ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini")
+        : "✚";
+
+      const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
+      const relevantInsureds = insureds.filter((ins) => this._isInsuredRelevant(ins));
+      const allRelevantSaved = relevantInsureds.length > 0 && relevantInsureds.every((ins) => !!this._state[ins.id]?.savedAt);
+
+      const footHtml = isStandalone ? `
+          <div class="giValModal__foot lcPhxHSim__foot">
+            <button type="button" class="btn btn--primary" data-phxh-close="1">סגור</button>
+          </div>` : (!isMulti ? `
+          <div class="giValModal__foot lcPhxHSim__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-phxh-close="1">ביטול</button>
+            <button type="button" class="btn btn--primary" data-phxh-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button>
+          </div>` : `
+          <div class="giValModal__foot lcPhxHSim__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-phxh-close="1">ביטול</button>
+            <button type="button" class="btn btn--secondary" data-phxh-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button>
+            <button type="button" class="btn btn--primary" data-phxh-finalconfirm="1"${allRelevantSaved ? "" : " disabled"}>אישור סופי</button>
+          </div>`);
+
+      const confirmOverlayHtml = this._confirmSwitch ? `
+        <div class="lcPhxHSim__overlay">
+          <div class="lcPhxHSim__overlayCard">
+            <div class="lcPhxHSim__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}. האם לשמור לפני המעבר?</div>
+            <div class="lcPhxHSim__overlayBtns">
+              <button type="button" class="btn btn--primary" data-phxh-switch="save">שמור ועבור</button>
+              <button type="button" class="btn btn--secondary" data-phxh-switch="discard">עבור ללא שמירה</button>
+              <button type="button" class="btn" data-phxh-switch="cancel">ביטול</button>
+            </div>
+          </div>
+        </div>` : "";
+
+      this._modal.innerHTML = `
+        <div class="giValModal__backdrop" data-phxh-close="1"></div>
+        <div class="giValModal__card lcPhxHSim__card">
+          <div class="giValModal__head">
+            <span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span>
+            <div class="giValModal__headText">
+              <div class="giValModal__title">סימולטור בריאות הפניקס</div>
+            </div>
+            <button type="button" class="lcPhxHSim__closeX" data-phxh-close="1" aria-label="סגירה">✕</button>
+          </div>
+          <div class="giValModal__body lcPhxHSim__body">
+            ${tabsHtml}
+            ${isStandalone
+              ? `<div class="lcPhxHSim__insuredLabel lcPhxHSim__insuredLabel--standalone">מצב חישוב עצמאי — התוצאה לא נשמרת על אף פוליסה</div>`
+              : `<div class="lcPhxHSim__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}
+            <div class="lcPhxHSim__grid">
+              <div class="lcPhxHSim__field">
+                <label class="lcPhxHSim__label">תאריך לידה</label>
+                <input class="lcPhxHSim__input lcPhxHSim__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-phxh-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />
+                ${ageHintHtml}
+              </div>
+              <div class="lcPhxHSim__field">
+                <label class="lcPhxHSim__label">תחילת ביטוח</label>
+                <input class="lcPhxHSim__input lcPhxHSim__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-phxh-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" />
+              </div>
+              <div class="lcPhxHSim__field">
+                <label class="lcPhxHSim__label">מין</label>
+                <div class="lcPhxHSim__segmented">
+                  <button type="button" class="lcPhxHSim__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-phxh-field="gender" data-phxh-value="זכר">זכר</button>
+                  <button type="button" class="lcPhxHSim__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-phxh-field="gender" data-phxh-value="נקבה">נקבה</button>
+                </div>
+                ${genderHintHtml}
+              </div>
+              <div class="lcPhxHSim__field lcPhxHSim__field--wide">
+                <label class="lcPhxHSim__label">עיסוק</label>
+                <input class="lcPhxHSim__input" type="text" data-phxh-field="occupation" value="${escapeHtml(st.occupation || "")}" placeholder="לדוגמה: מהנדס, נהג משאית" autocomplete="off" />
+              </div>
+            </div>
+            <div class="lcPhxHSim__coversTitle">בחירת כיסויים <span class="lcPhxHSim__coversCount">(${PHOENIX_HEALTH_COVERS.length})</span></div>
+            <div class="lcPhxHSim__coversWrap">${coversHtml}</div>
+            ${occBlockHtml}
+            ${resultHtml}
+          </div>
+          ${footHtml}
+          ${confirmOverlayHtml}
+        </div>`;
+      this._bind();
+    },
+
+    _renderFinalSummary(insureds){
+      const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+      const rows = relevant.map((ins) => {
+        const ok = !!this._state[ins.id]?.savedAt;
+        return `<div class="lcPhxHSim__summaryRow"><span>${ok ? "✓" : "•"}</span><span>${escapeHtml(safeTrim(ins.label) || "מבוטח")}</span><span>${ok ? "הושלם" : "לא נשמר"}</span></div>`;
+      }).join("");
+      this._modal.innerHTML = `
+        <div class="giValModal__backdrop" data-phxh-close="1"></div>
+        <div class="giValModal__card lcPhxHSim__card">
+          <div class="giValModal__head">
+            <div class="giValModal__headText">
+              <div class="giValModal__title">סיכום סימולטור להצעה</div>
+            </div>
+            <button type="button" class="lcPhxHSim__closeX" data-phxh-close="1" aria-label="סגירה">✕</button>
+          </div>
+          <div class="giValModal__body lcPhxHSim__body">${rows}</div>
+          <div class="giValModal__foot lcPhxHSim__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-phxh-summary-back="1">חזרה</button>
+            <button type="button" class="btn btn--primary" data-phxh-summary-confirm="1">אישור סופי</button>
+          </div>
+        </div>`;
+      this._bind();
+    },
+
+    _bind(){
+      const modal = this._modal;
+      if(!modal) return;
+      ensureSegFieldDelegation(modal, this, "phxh");
+      $$("[data-phxh-close]", modal).forEach((el) => on(el, "click", () => this.close()));
+      $$("[data-phxh-tab]", modal).forEach((el) => on(el, "click", () => this._switchInsured(el.getAttribute("data-phxh-tab"))));
+      $$("[data-phxh-switch]", modal).forEach((el) => on(el, "click", () => {
+        const action = el.getAttribute("data-phxh-switch");
+        const target = this._confirmSwitch?.targetId;
+        this._confirmSwitch = null;
+        if(action === "save"){ this._saveActive(); if(target) this._activeInsuredId = target; this._render(); }
+        else if(action === "discard"){ if(target) this._activeInsuredId = target; this._render(); }
+        else this._render();
+      }));
+      bindRiskSimDmyField(modal, '[data-phxh-field="birthDate"]', {
+        onInput: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.birthDate = val;
+          st.birthDateSource = "manual";
+          st.dirtySinceSave = true;
+        },
+        onCommit: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.birthDate = val;
+          st.birthDateSource = "manual";
+          st.ageSource = "manual";
+          st.dirtySinceSave = true;
+          this._syncAge(st);
+          this._render();
+        }
+      });
+      bindRiskSimDmyField(modal, '[data-phxh-field="insuranceStartDate"]', {
+        onInput: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.insuranceStartDate = val;
+          st.insuranceStartDateSource = "manual";
+          st.dirtySinceSave = true;
+        },
+        onCommit: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.insuranceStartDate = val || riskSimTodayDmy();
+          st.insuranceStartDateSource = "manual";
+          st.dirtySinceSave = true;
+          this._syncAge(st);
+          this._render();
+        }
+      });
+      const occInput = modal.querySelector('[data-phxh-field="occupation"]');
+      if(occInput){
+        on(occInput, "input", () => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.occupation = safeTrim(occInput.value);
+          st.occupationSource = "manual"; st.dirtySinceSave = true;
+        });
+        on(occInput, "change", () => this._render());
+        on(occInput, "blur", () => this._render());
+      }
+      $$("[data-phxh-cover]", modal).forEach((el) => on(el, "change", () => {
+        const st = this._state[this._activeInsuredId];
+        if(!st) return;
+        if(!st.selected || typeof st.selected !== "object") st.selected = {};
+        const id = el.getAttribute("data-phxh-cover");
+        st.selected[id] = !!el.checked;
+        st.dirtySinceSave = true;
+        this._render();
+      }));
+      const applyBtn = modal.querySelector("[data-phxh-apply]");
+      if(applyBtn) on(applyBtn, "click", () => this._apply());
+      const saveBtn = modal.querySelector("[data-phxh-save]");
+      if(saveBtn) on(saveBtn, "click", () => this._saveActive());
+      const finalBtn = modal.querySelector("[data-phxh-finalconfirm]");
+      if(finalBtn) on(finalBtn, "click", () => {
+        const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+        const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+        const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
+        if(!allSaved){
+          window.showToast?.({ title: "לא כל המבוטחים נשמרו", text: "יש לשמור את הסימולטור עבור כל המבוטחים הרלוונטיים לפני האישור הסופי.", variant: "warn" });
+          return;
+        }
+        this._showFinalSummary = true;
+        this._render();
+      });
+      const summaryBackBtn = modal.querySelector("[data-phxh-summary-back]");
+      if(summaryBackBtn) on(summaryBackBtn, "click", () => { this._showFinalSummary = false; this._render(); });
+      const summaryConfirmBtn = modal.querySelector("[data-phxh-summary-confirm]");
+      if(summaryConfirmBtn) on(summaryConfirmBtn, "click", () => {
+        try { this._ctx?.onFinalConfirm?.(); } catch(_e){}
+        this.close();
+      });
+    },
+
+    _switchInsured(targetId){
+      if(!targetId || targetId === this._activeInsuredId) return;
+      const st = this._state[this._activeInsuredId];
+      if(st?.dirtySinceSave){ this._confirmSwitch = { targetId }; this._render(); return; }
+      this._activeInsuredId = targetId;
+      this._render();
+    },
+
+    _buildResultForInsured(insId){
+      const st = this._state[insId];
+      this._recalcState(st);
+      if(!st?.result?.ok) return null;
+      return {
+        covers: st.result.covers.map((c) => ({
+          id: c.id,
+          label: c.label,
+          wizardKey: c.wizardKey || c.label,
+          monthlyPremium: c.monthlyPremium
+        })),
+        monthlyPremium: st.result.monthlyPremium,
+        annualPremium: st.result.annualPremium,
+        monthlyAgorot: st.result.monthlyAgorot,
+        birthDate: st.birthDate || "",
+        insuranceStartDate: st.insuranceStartDate || "",
+        birthDateSource: st.birthDateSource || "",
+        age: st.age, ageSource: st.ageSource, gender: st.gender, genderSource: st.genderSource,
+        occupation: st.occupation || "", occupationSource: st.occupationSource || ""
+      };
+    },
+
+    _apply(){
+      const results = {};
+      Object.keys(this._state).forEach((insId) => {
+        const r = this._buildResultForInsured(insId);
+        if(r) results[insId] = r;
+      });
+      if(!Object.keys(results).length){
+        window.showToast?.({ title: "אין תוצאה להחלה", text: "יש לבחור כיסויים ולחשב פרמיה לפני ההחלה על הפוליסה.", variant: "warn" });
+        return;
+      }
+      const onApply = this._ctx?.onApply;
+      this.close();
+      try { onApply?.(results); } catch(_e) {}
+    },
+
+    _saveActive(){
+      const insId = this._activeInsuredId;
+      const result = this._buildResultForInsured(insId);
+      if(!result){
+        window.showToast?.({ title: "אין תוצאה לשמירה", text: "יש לבחור כיסויים תקינים לפני השמירה.", variant: "warn" });
+        return;
+      }
+      try { this._ctx?.onApply?.({ [insId]: result }); } catch(_e) {}
+      const st = this._state[insId];
+      if(st){ st.savedAt = nowISO(); st.dirtySinceSave = false; }
+      window.showToast?.({ title: "נשמר", text: `הסימולטור עבור ${this._getInsuredLabel(insId)} נשמר על ההצעה.`, variant: "success" });
+      this._render();
+    }
+  };
+
+  RiskSimulators.register("הפניקס", "בריאות", PhoenixHealthSimulator);
+  // ===== סוף GI-PHX-HEALTH-SIM ====================================================
+
   // ===== סוף GI-MNR-HEALTH-SIM ====================================================
 
   // ===== GI-AYL-HEALTH-SIM 2026-08-09 · סימולטור בריאות איילון ==================
