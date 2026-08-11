@@ -138,6 +138,7 @@
   const stampRecordAgentOwnership = host.stampRecordAgentOwnership;
   const CustomerDocuments = host.CustomerDocuments;
   const CampaignLeadsStore = host.CampaignLeadsStore;
+  const ClalRiskLifePdf = host.ClalRiskLifePdf;
   const parseCampaignLeadLandingPayload = host.parseCampaignLeadLandingPayload;
   const mapLandingInsuranceToWizardTypes = host.mapLandingInsuranceToWizardTypes;
   const agentCanOpenCampaignLead = host.agentCanOpenCampaignLead;
@@ -634,7 +635,9 @@ init(){
       on(this.els.btnDownloadOpsFile, "click", () => this.exportOperationalPdf(null, this.els.btnDownloadOpsFile));
       on(this.els.btnDownloadClalRiskForm, "click", () => {
         const payload = this._lastFinishPayload || this.getOperationalPayload();
-        void ClalRiskLifePdf.downloadForPayload(payload, this.els.btnDownloadClalRiskForm, { preview: true, download: true });
+        if(typeof ClalRiskLifePdf?.downloadForPayload === "function"){
+          void ClalRiskLifePdf.downloadForPayload(payload, this.els.btnDownloadClalRiskForm, { preview: true, download: true });
+        }
       });
       on(this.els.btnBackToDashboard, "click", () => {
         this.hideFinishFlow();
@@ -25199,7 +25202,7 @@ if(path === "birthDate"){
       const btn = this.els.btnDownloadClalRiskForm;
       if(!btn) return;
       const payload = this._lastFinishPayload || this.getOperationalPayload?.() || null;
-      const show = !!(payload && ClalRiskLifePdf.isEligible(payload) && !this.isElementaryFlow());
+      const show = !!(payload && typeof ClalRiskLifePdf?.isEligible === "function" && ClalRiskLifePdf.isEligible(payload) && !this.isElementaryFlow());
       btn.style.display = show ? "" : "none";
     },
 
@@ -26010,6 +26013,7 @@ if(path === "birthDate"){
       const finishStartedAt = Date.now();
       this.showFinishFlow();
       SaveStatusUI.show('loading', 'שומר לקוח לשרת…', 'המערכת מאמתת את הנתונים ושומרת אותם כעת ב-Supabase.');
+      let saved = null;
       try{
         if(this.isElementaryReferralAgentSetupFlow()){
           const ins0 = this.insureds?.[0];
@@ -26018,17 +26022,33 @@ if(path === "birthDate"){
             this.syncElementaryPremiumAggregate(ins0);
           }
         }
-        const saved = await this.saveCompletedCustomer();
+        saved = await this.saveCompletedCustomer();
+      }catch(err){
+        console.error('FINISH_WIZARD_SAVE_ERROR', err);
+        this.hideFinishFlow();
+        const msg = safeTrim(err?.message) || 'שמירת הלקוח נכשלה. בדוק חיבור ל-Supabase ונסה שוב.';
+        this.setHint(msg);
+        SaveStatusUI.error('שמירת הלקוח נכשלה', msg);
+        this._finishing = false;
+        return;
+      }
+
+      // אחרי שמירה מאומתת — כשל UI לא יוצג ככשל שמירת לקוח
+      try{
         this._clearLocalDraft(); // רק אחרי שמירה מאומתת בשרת
         this.lastSavedCustomerId = saved?.id || null;
-        this._lastFinishPayload = JSON.parse(JSON.stringify(saved?.payload || this.getOperationalPayload() || {}));
-        CustomersUI.render();
-        ProposalsUI.render();
+        try {
+          this._lastFinishPayload = JSON.parse(JSON.stringify(saved?.payload || this.getOperationalPayload() || {}));
+        } catch(_payloadCloneErr) {
+          this._lastFinishPayload = saved?.payload || this.getOperationalPayload() || {};
+        }
+        try { CustomersUI.render(); } catch(_e) {}
+        try { ProposalsUI.render(); } catch(_e) {}
         try { DashboardUI.render(); } catch(_e) {}
         if(saved?.id && CustomersUI?.currentId && String(CustomersUI.currentId) === String(saved.id)){
           try { CustomersUI.refreshOpenCustomerPreservingState(); } catch(_e) {}
         }
-        const minLoaderMs = 1300;
+        const minLoaderMs = 600;
         const remaining = Math.max(0, minLoaderMs - (Date.now() - finishStartedAt));
         if(remaining) await new Promise((resolve) => window.setTimeout(resolve, remaining));
         const saveWarning = safeTrim(saved?._saveMeta?.warning);
@@ -26150,7 +26170,7 @@ if(path === "birthDate"){
             phone: safeTrim(saved.phone),
             city: safeTrim(saved.city),
             agentName: safeTrim(saved.agentName) || safeTrim(Auth?.current?.name),
-            agentId: safeTrim(Auth?.current?.id) || safeTrim(getCurrentAgentRecord()?.id),
+            agentId: safeTrim(Auth?.current?.id) || safeTrim(findAgentRecordForSession()?.id),
             alreadySubmitted: referralContinue || !!findPendingElementaryReferralByCustomerId(saved.id) || !!findPendingElementaryReferralByIdNumber(saved.idNumber)
           };
           if(continueToMirror){
@@ -26177,13 +26197,13 @@ if(path === "birthDate"){
           this.showFinishFlowSuccess();
           this.syncElementaryFinishFlowActions();
         }
-      }catch(err){
-        console.error('FINISH_WIZARD_SAVE_ERROR', err);
-        this.hideFinishFlow();
-        const msg = safeTrim(err?.message) || 'שמירת הלקוח נכשלה. בדוק חיבור ל-Supabase ונסה שוב.';
-        this.setHint(msg);
-        SaveStatusUI.error('שמירת הלקוח נכשלה', msg);
-        return;
+      }catch(uiErr){
+        console.error('FINISH_WIZARD_POST_SAVE_UI_ERROR', uiErr);
+        try {
+          SaveStatusUI.success('הלקוח נשמר בהצלחה בשרת', 'התיק הוקם. רענון המסך החלקי נכשל — רענן את הדף במידת הצורך.');
+        } catch(_e) {}
+        try { this.showFinishFlowSuccess(); } catch(_e2) {}
+        try { this.syncElementaryFinishFlowActions(); } catch(_e3) {}
       }finally{
         this._finishing = false;
       }
@@ -26273,9 +26293,9 @@ if(path === "birthDate"){
         }
       };
       const upsertCustomerRow = (row) => Storage.upsertSingleRow(SUPABASE_TABLES.customers, row, {
-        timeoutMs: 45000,
-        retries: 2,
-        delayMs: 500
+        timeoutMs: 25000,
+        retries: 1,
+        delayMs: 400
       });
       const verifyCustomerExists = async (customerId) => {
         const reload = await Storage.loadSingleRow(SUPABASE_TABLES.customers, customerId, 'id,updated_at,full_name');
@@ -26325,8 +26345,8 @@ if(path === "birthDate"){
           id: record.id
         }, {
           selectExpr: 'id,updated_at',
-          retries: 4,
-          delayMs: 400
+          retries: 2,
+          delayMs: 200
         });
         verifiedOnServer = !!(verify?.ok && verify?.data);
         if(!verifiedOnServer){
@@ -26422,27 +26442,44 @@ if(path === "birthDate"){
       refreshStateShadows();
       try { Storage.saveBackup(State.data); } catch(_e) {}
 
-      // הלקוח כבר אומת בשרת — כשל ב-App.persist לא יציג "שגיאה בשמירה" קשיחה
-      // (זה מה שגרם לתחושת כשל בסיום האשף גם כשהלקוח נשמר).
-      const persistRes = await App.persist('הלקוח נשמר', { silent: true });
-      const customerSyncWarning = [
-        safeTrim(customerSaveWarning),
-        persistRes?.ok
-          ? safeTrim(persistRes?.customersSyncWarning)
-          : (safeTrim(persistRes?.error) || 'הלקוח אומת בשרת, אך סנכרון מלא נוסף לא הושלם.')
-      ].filter(Boolean).join(' · ');
-      if(persistRes?.ok && !customerSyncWarning){
-        UI.renderSyncStatus('הלקוח נשמר', 'ok', persistRes.at);
-      } else {
-        console.warn('CUSTOMER_GLOBAL_PERSIST_WARNING:', persistRes?.error || customerSyncWarning || persistRes);
-        UI.renderSyncStatus('הלקוח נשמר', 'warn', persistRes?.at || nowISO(), customerSyncWarning || 'סנכרון מערכת חלקי');
+      // GI-FIX 2026-08-11c: הלקוח כבר אומת בשרת — לא מחכים לסנכרון מערכת כבד ב-UI.
+      // מטא/גיבוי + מחיקת טיוטה רצים ברקע (בלי העלאה כפולה של customers).
+      const persistOpts = {
+        silent: true,
+        skipCustomersSync: true,
+        skipProposalsSync: true,
+        skipServerMerge: true,
+        skipNormalize: true,
+        lightShadows: true,
+        yieldUi: true
+      };
+      void App.persist('הלקוח נשמר', persistOpts).then((persistRes) => {
+        const warn = [
+          safeTrim(customerSaveWarning),
+          persistRes?.ok ? safeTrim(persistRes?.customersSyncWarning) : safeTrim(persistRes?.error)
+        ].filter(Boolean).join(' · ');
+        if(persistRes?.ok && !warn){
+          UI.renderSyncStatus('הלקוח נשמר', 'ok', persistRes.at);
+        } else {
+          console.warn('CUSTOMER_GLOBAL_PERSIST_WARNING:', persistRes?.error || warn || persistRes);
+          UI.renderSyncStatus('הלקוח נשמר', 'warn', persistRes?.at || nowISO(), warn || 'סנכרון מערכת חלקי');
+        }
+      }).catch((persistErr) => {
+        try { console.warn('CUSTOMER_FINISH_BG_PERSIST_WARN', persistErr); } catch(_e) {}
+        UI.renderSyncStatus('הלקוח נשמר', 'warn', nowISO(), safeTrim(persistErr?.message) || 'סנכרון מערכת חלקי');
+      });
+      if(draftProposalId && draftProposalSnapshot && typeof ProposalsUI?._purgeProposalFromServer === "function"){
+        void ProposalsUI._purgeProposalFromServer(draftProposalId, draftProposalSnapshot).catch((purgeErr) => {
+          try { console.warn('CUSTOMER_FINISH_DRAFT_PURGE_WARN', draftProposalId, purgeErr); } catch(_e) {}
+        });
       }
+      UI.renderSyncStatus('הלקוח נשמר', 'ok', nowISO());
 
       record._saveMeta = {
         verifiedOnServer: true,
-        globalSyncOk: !!persistRes?.ok,
-        skippedFullSync: false,
-        warning: customerSyncWarning
+        globalSyncOk: true,
+        skippedFullSync: true,
+        warning: safeTrim(customerSaveWarning)
       };
       if(isPurchaseFlow){
         this.customerPurchaseMode = null;

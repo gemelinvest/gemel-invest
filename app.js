@@ -12147,6 +12147,10 @@
           })),
           (async () => {
             try {
+              if(options.skipCustomersSync === true){
+                this.rememberRows(SUPABASE_TABLES.customers, customerRows);
+                return { ok: true, skipped: true };
+              }
               await this.syncTable(SUPABASE_TABLES.customers, this.getChangedRows(SUPABASE_TABLES.customers, customerRows), { allowDelete:false });
               this.rememberRows(SUPABASE_TABLES.customers, customerRows);
               return { ok: true };
@@ -29976,7 +29980,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260811-wizard-customerdocs-v3";
+  const GI_WIZARD_JS_VERSION = "20260811-wizard-finish-speed-v4";
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
   const TZAHAL_CLINIC = "קופה צהלית";
   const TZAHAL_CLINIC_SHABAN = "אין שב״ן";
@@ -30406,6 +30410,13 @@ UsersGateUI.init();
             enumerable: true,
             configurable: true,
             get(){ try { return CampaignLeadsStore; } catch(_e) { return undefined; } }
+          });
+        } catch(_e) {}
+        try {
+          Object.defineProperty(host, "ClalRiskLifePdf", {
+            enumerable: true,
+            configurable: true,
+            get(){ try { return ClalRiskLifePdf; } catch(_e) { return undefined; } }
           });
         } catch(_e) {}
         globalThis.__GI_WIZARD_HOST = host;
