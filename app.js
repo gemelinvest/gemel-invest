@@ -16584,6 +16584,21 @@ UsersGateUI.init();
       return Math.round(apptSum * 100) / 100;
     },
 
+    /* חודשית = בריאות/סיכונים/מינוי סוכן. שנתית = אלמנטרי. */
+    customerListPremiumParts(rec){
+      const monthly = this.sumCustomerListPremium(rec) || 0;
+      let annual = 0;
+      try {
+        annual = this.sumElementaryPremium(this.collectElementaryProducts(rec)) || 0;
+      } catch(_e) {
+        annual = 0;
+      }
+      return {
+        monthly: Math.round(Number(monthly) * 100) / 100,
+        annual: Math.round(Number(annual) * 100) / 100
+      };
+    },
+
     premiumCellHtml(rec){
       try {
         /* GI-PERF: ברשימה רזה אין payload — לא לסרוק מבנה ריק בכל שורה. */
@@ -28038,6 +28053,31 @@ UsersGateUI.init();
         .map((w) => w[0]).join("").toUpperCase() || "?";
     },
 
+    recentPremiumCellHtml(rec){
+      try {
+        if(typeof Storage !== "undefined" && Storage.payloadIsEmpty?.(rec)){
+          return '<span class="muted small">—</span>';
+        }
+        const parts = (CustomersUI && typeof CustomersUI.customerListPremiumParts === "function")
+          ? CustomersUI.customerListPremiumParts(rec)
+          : { monthly: 0, annual: 0 };
+        const fmt = (n) => {
+          try { return CustomersUI.formatMoneyValue(n); } catch(_e) { return "₪" + n; }
+        };
+        const lines = [];
+        if(Number(parts.monthly) > 0){
+          lines.push(`<span class="bankRecent__premLine"><strong>${escapeHtml(fmt(parts.monthly))}</strong><small>חודשית</small></span>`);
+        }
+        if(Number(parts.annual) > 0){
+          lines.push(`<span class="bankRecent__premLine"><strong>${escapeHtml(fmt(parts.annual))}</strong><small>שנתית</small></span>`);
+        }
+        if(!lines.length) return '<span class="muted small">—</span>';
+        return `<div class="bankRecent__prem">${lines.join("")}</div>`;
+      } catch(_e) {
+        return '<span class="muted small">—</span>';
+      }
+    },
+
     renderRecentCustomersHtml(){
       const rows = this.recentCustomersRows(5);
       const body = rows.length
@@ -28046,7 +28086,7 @@ UsersGateUI.init();
             const phone = safeTrim(rec.phone);
             let premium = '<span class="muted small">—</span>';
             let sector  = '<span class="muted small">—</span>';
-            try { premium = CustomersUI.premiumCellHtml(rec); } catch(_e) {}
+            try { premium = this.recentPremiumCellHtml(rec); } catch(_e) {}
             try { sector  = CustomersUI.sectorCellHtml(rec); } catch(_e) {}
             return `
               <tr class="bankRecent__row" data-customer-id="${id}">
@@ -28091,7 +28131,7 @@ UsersGateUI.init();
                     <th>טלפון</th>
                     <th>ת.ז.</th>
                     <th>סוכן מטפל</th>
-                    <th>פרמיה חודשית</th>
+                    <th>פרמיה חודשית / שנתית</th>
                     <th>ענף</th>
                     <th>פעולות</th>
                   </tr>
@@ -28128,6 +28168,7 @@ UsersGateUI.init();
         if(!rows.length && !existingRecent){
           try { this.ensureRecentCustomersFromServer(); } catch(_e2) {}
         }
+        try { this.ensureRecentCustomersPayloads(); } catch(_e3) {}
       } catch(_e) {}
       try {
         replacePanel(".bankOpsCube", this.renderAgentOpsCubeHtml());
@@ -28135,6 +28176,40 @@ UsersGateUI.init();
       try {
         replacePanel(".bankServiceCube", this.renderAgentServiceCubeHtml());
       } catch(_e) {}
+    },
+
+    /* GI-FIX 2026-08-11: רשימת 5 האחרונים מגיעה רזה (בלי payload),
+       ולכן ענף + פרמיה נשארו ריקים. מושכים payload רק לחמישייה הזו. */
+    ensureRecentCustomersPayloads(){
+      if(this._recentPayloadBusy) return;
+      if(!Auth?.current) return;
+      const rows = this.recentCustomersRows(5);
+      if(!rows.length) return;
+      const missing = rows.filter((rec) => {
+        try { return typeof Storage !== "undefined" && Storage.payloadIsEmpty?.(rec); }
+        catch(_e) { return false; }
+      });
+      if(!missing.length) return;
+      const missingKey = missing.map((rec) => String(rec?.id || "")).filter(Boolean).sort().join(",");
+      const lastAt = Number(this._recentPayloadTriedAt) || 0;
+      if(missingKey && this._recentPayloadTriedKey === missingKey && lastAt && (Date.now() - lastAt) < 20000) return;
+      this._recentPayloadTriedKey = missingKey;
+      this._recentPayloadTriedAt = Date.now();
+      this._recentPayloadBusy = true;
+      void (async () => {
+        try {
+          for(const rec of missing){
+            if(!Auth?.current) return;
+            const id = safeTrim(rec?.id);
+            if(!id) continue;
+            try { await Storage.ensureRecordPayload("customers", id); } catch(_e) {}
+          }
+          if(LiveRefresh.getCurrentView?.() !== "dashboard") return;
+          try { this.refreshDashboardListPanels(); } catch(_e) {}
+        } finally {
+          this._recentPayloadBusy = false;
+        }
+      })();
     },
 
     ensureRecentCustomersFromServer(){
@@ -28152,6 +28227,7 @@ UsersGateUI.init();
           try { CustomersUI._ingestServerRows(res.data); } catch(_e) {}
           if(LiveRefresh.getCurrentView?.() !== "dashboard") return;
           try { this.refreshDashboardListPanels(); } catch(_e) {}
+          try { this.ensureRecentCustomersPayloads(); } catch(_e) {}
         } catch(_e) {
         } finally {
           this._recentServerFetchBusy = false;

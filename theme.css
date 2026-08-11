@@ -3850,6 +3850,69 @@ body.sidebar-collapsed .sidebar .nav__item.is-active .nav__label:not(#\9):not(#\
   color: var(--gi-primary) !important;
 }
 
+.bankRecent__prem:not(#\9):not(#\9){
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 2px !important;
+}
+
+.bankRecent__premLine:not(#\9):not(#\9){
+  display: inline-flex !important;
+  align-items: baseline !important;
+  gap: 6px !important;
+  line-height: 1.25 !important;
+}
+
+.bankRecent__premLine strong:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  color: var(--gi-text) !important;
+}
+
+.bankRecent__premLine small:not(#\9):not(#\9){
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text-muted) !important;
+}
+
+#view-dashboard .bankRecent .lcCustomers__sectorCell:not(#\9):not(#\9){
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+#view-dashboard .bankRecent .lcCustomers__sectorTag:not(#\9):not(#\9){
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 24px !important;
+  padding: 0 9px !important;
+  border-radius: 5px !important;
+  border: 1px solid transparent !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  line-height: 1.35 !important;
+  white-space: nowrap !important;
+}
+
+#view-dashboard .bankRecent .lcCustomers__sectorTag--sikunim:not(#\9):not(#\9){
+  background: #fef2f2 !important; color: #b42318 !important; border-color: #fecaca !important;
+}
+#view-dashboard .bankRecent .lcCustomers__sectorTag--briut:not(#\9):not(#\9){
+  background: #ecfdf5 !important; color: #1a7a4a !important; border-color: #a7f3d0 !important;
+}
+#view-dashboard .bankRecent .lcCustomers__sectorTag--almanteri:not(#\9):not(#\9){
+  background: #eff6ff !important; color: #1e40af !important; border-color: #bfdbfe !important;
+}
+#view-dashboard .bankRecent .lcCustomers__sectorTag--pensia:not(#\9):not(#\9){
+  background: #f5f3ff !important; color: #6b46c1 !important; border-color: #ddd6fe !important;
+}
+#view-dashboard .bankRecent .lcCustomers__sectorTag--agentAppt:not(#\9):not(#\9){
+  background: #f3e8ff !important; color: #5b21b6 !important; border-color: #e9d5ff !important;
+}
+
 
 /* =====================================================================
    30. SIDE CARDS ? latest lead / saved-but-untouched proposal
