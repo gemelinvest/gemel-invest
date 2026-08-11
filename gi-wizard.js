@@ -26253,7 +26253,35 @@ if(path === "birthDate"){
         ? (State.data?.proposals || []).find((x) => String(x?.id) === String(draftProposalId))
         : null;
 
-      const directRow = Storage.buildCustomerRows({ customers:[record] })[0];
+      const buildRowForRecord = (rec) => Storage.buildCustomerRows({ customers:[rec] })[0];
+      const stripHeavyDocsFromPayload = (payloadObj) => {
+        try {
+          const copy = JSON.parse(JSON.stringify(payloadObj && typeof payloadObj === "object" ? payloadObj : {}));
+          delete copy.customerDocuments;
+          delete copy.elementaryPolicyFiles;
+          if(copy.operational && typeof copy.operational === "object"){
+            delete copy.operational.customerDocuments;
+            delete copy.operational.elementaryPolicyFiles;
+          }
+          return copy;
+        } catch(_e) {
+          return payloadObj && typeof payloadObj === "object" ? payloadObj : {};
+        }
+      };
+      const upsertCustomerRow = (row) => Storage.upsertSingleRow(SUPABASE_TABLES.customers, row, {
+        timeoutMs: 45000,
+        retries: 2,
+        delayMs: 500
+      });
+      const verifyCustomerExists = async (customerId) => {
+        const reload = await Storage.loadSingleRow(SUPABASE_TABLES.customers, customerId, 'id,updated_at,full_name');
+        if(reload?.ok && reload?.data && safeTrim(reload.data.id) === safeTrim(customerId)){
+          return { ok:true, data: reload.data };
+        }
+        return { ok:false, error: safeTrim(reload?.error) || 'VERIFY_EMPTY_RESULT', data: reload?.data || null };
+      };
+
+      let directRow = buildRowForRecord(record);
       try { JSON.stringify(directRow?.payload ?? {}); } catch(serialErr) {
         throw new Error('נתוני התיק גדולים מדי או לא תקינים לשמירה. נסה לשמור שוב אחרי רענון הדף.');
       }
@@ -26263,36 +26291,93 @@ if(path === "birthDate"){
         delete Storage._rowHashes.customers[String(record.id)];
       } catch(_e) {}
 
-      const directSave = await Storage.upsertSingleRow(SUPABASE_TABLES.customers, directRow);
+      // GI-FIX 2026-08-11b: שמירת סיום לקוח — 3 שכבות:
+      // 1) upsert ישיר  2) upsert בלי מסמכים כבדים  3) sync מלא דרך App.persist
+      let directSave = await upsertCustomerRow(directRow);
       let customerSaveWarning = '';
       if(!directSave?.ok){
-        customerSaveWarning = 'שמירה ישירה של הלקוח לטבלת customers נכשלה: ' + safeTrim(directSave?.error || 'SAVE_FAILED');
-        try { console.error('CUSTOMER_DIRECT_UPSERT_FAILED', customerSaveWarning, record.id); } catch(_e) {}
-      }
-
-      // GI-FIX 2026-08-11: אימות רך — id + updated_at (חלון 5שנ׳). אם השורה קיימת בשרת
-      // אחרי upsert מוצלח, לא נכשיל את כל הסיום בגלל אי־התאמת טלפון/שם נציג.
-      const verify = directSave?.ok ? await Storage.verifySavedRow(SUPABASE_TABLES.customers, record.id, {
-        id: record.id,
-        updated_at: (value) => !!safeTrim(value) && new Date(value).getTime() >= (new Date(directRow.updated_at).getTime() - 5000)
-      }, {
-        selectExpr: 'id,status,full_name,id_number,phone,agent_name,agent_id,updated_at',
-        retries: 3,
-        delayMs: 350
-      }) : { ok:false, error:'DIRECT_SAVE_FAILED', data:null };
-      let verifiedOnServer = !!(verify?.ok && verify?.data);
-      if(!verifiedOnServer && directSave?.ok){
-        const reload = await Storage.loadSingleRow(SUPABASE_TABLES.customers, record.id, 'id,updated_at');
-        if(reload?.ok && reload?.data && safeTrim(reload.data.id) === safeTrim(record.id)){
-          verifiedOnServer = true;
-          customerSaveWarning = (customerSaveWarning ? customerSaveWarning + ' ' : '')
-            + 'הלקוח נשמר בשרת; אימות שדות מפורט לא הושלם במלואו.';
-          try { console.warn('CUSTOMER_SAVE_VERIFY_SOFT_OK', record.id, verify?.error || verify); } catch(_e) {}
+        const rawErr = safeTrim(directSave?.error || 'SAVE_FAILED');
+        try { console.error('CUSTOMER_DIRECT_UPSERT_FAILED', rawErr, record.id); } catch(_e) {}
+        // ניסיון שני: בלי מסמכים מוטמעים כבדים (סיבה נפוצה לכשל timeout/גודל)
+        const slimPayload = stripHeavyDocsFromPayload(record.payload);
+        const slimRecord = { ...record, payload: slimPayload };
+        const slimRow = buildRowForRecord(slimRecord);
+        const slimSave = await upsertCustomerRow(slimRow);
+        if(slimSave?.ok){
+          directSave = slimSave;
+          record.payload = slimPayload;
+          directRow = slimRow;
+          customerSaveWarning = 'הלקוח נשמר בשרת ללא מסמכים מוטמעים כבדים (כדי למנוע כשל שמירה).';
+          try { console.warn('CUSTOMER_SAVE_SLIM_PAYLOAD_OK', record.id, rawErr); } catch(_e) {}
+        } else {
+          customerSaveWarning = 'שמירה ישירה של הלקוח לטבלת customers נכשלה: ' + rawErr
+            + (safeTrim(slimSave?.error) ? (' | ניסיון דק: ' + safeTrim(slimSave.error)) : '');
         }
       }
+
+      let verifiedOnServer = false;
+      if(directSave?.ok){
+        const verify = await Storage.verifySavedRow(SUPABASE_TABLES.customers, record.id, {
+          id: record.id
+        }, {
+          selectExpr: 'id,updated_at',
+          retries: 4,
+          delayMs: 400
+        });
+        verifiedOnServer = !!(verify?.ok && verify?.data);
+        if(!verifiedOnServer){
+          const soft = await verifyCustomerExists(record.id);
+          if(soft.ok){
+            verifiedOnServer = true;
+            customerSaveWarning = (customerSaveWarning ? customerSaveWarning + ' ' : '')
+              + 'הלקוח נשמר בשרת; אימות שדות מפורט לא הושלם במלואו.';
+            try { console.warn('CUSTOMER_SAVE_VERIFY_SOFT_OK', record.id, verify?.error || verify); } catch(_e) {}
+          }
+        }
+      }
+
+      // שכבה 3: אם upsert ישיר נכשל — שומרים מקומית + syncTable דרך App.persist
       if(!verifiedOnServer){
-        console.error('CUSTOMER_SAVE_VERIFY_FAILED', verify?.error || 'VERIFY_EMPTY_RESULT', record.id, verify?.data || null);
-        // קריטי: לא מסירים את ההצעה ולא מציגים הצלחה — מונע אובדן הצעה כשהלקוח לא אומת בשרת
+        try {
+          State.data.customers = Array.isArray(State.data.customers) ? State.data.customers : [];
+          const existingIdx = State.data.customers.findIndex((x) => String(x?.id) === String(record.id));
+          if(existingIdx >= 0) State.data.customers[existingIdx] = { ...State.data.customers[existingIdx], ...record };
+          else State.data.customers.unshift(record);
+          State.data.meta.updatedAt = nowISO();
+          refreshStateShadows();
+          try { Storage.saveBackup(State.data); } catch(_e) {}
+          try {
+            Storage._rowHashes = Storage._rowHashes || {};
+            Storage._rowHashes.customers = Storage._rowHashes.customers || {};
+            delete Storage._rowHashes.customers[String(record.id)];
+          } catch(_e) {}
+          const persistRescue = await App.persist('הלקוח נשמר', { silent: true });
+          const soft = await verifyCustomerExists(record.id);
+          if(soft.ok){
+            verifiedOnServer = true;
+            customerSaveWarning = [
+              safeTrim(customerSaveWarning),
+              'נשמר דרך סנכרון מערכת לאחר כשל בשמירה ישירה.',
+              persistRescue?.ok ? '' : safeTrim(persistRescue?.error)
+            ].filter(Boolean).join(' ');
+            try { console.warn('CUSTOMER_SAVE_PERSIST_RESCUE_OK', record.id, customerSaveWarning); } catch(_e) {}
+          } else if(!persistRescue?.ok || safeTrim(persistRescue?.customersSyncWarning)){
+            customerSaveWarning = [
+              safeTrim(customerSaveWarning),
+              safeTrim(persistRescue?.customersSyncWarning),
+              safeTrim(persistRescue?.error),
+              safeTrim(soft?.error)
+            ].filter(Boolean).join(' | ');
+          }
+        } catch(rescueErr) {
+          customerSaveWarning = (customerSaveWarning ? customerSaveWarning + ' | ' : '')
+            + (safeTrim(rescueErr?.message) || 'RESCUE_PERSIST_FAILED');
+          try { console.error('CUSTOMER_SAVE_PERSIST_RESCUE_FAILED', rescueErr); } catch(_e) {}
+        }
+      }
+
+      if(!verifiedOnServer){
+        console.error('CUSTOMER_SAVE_VERIFY_FAILED', customerSaveWarning || 'VERIFY_EMPTY_RESULT', record.id);
         State.data.proposals = Array.isArray(State.data.proposals) ? State.data.proposals : [];
         if(draftProposalId && draftProposalSnapshot){
           const keepIdx = State.data.proposals.findIndex((x) => String(x?.id) === String(draftProposalId));
@@ -26301,8 +26386,7 @@ if(path === "birthDate"){
         }
         try { Storage.saveBackup(State.data); } catch(_e) {}
         try { ProposalsUI.render?.(); } catch(_e) {}
-        const baseErr = safeTrim(customerSaveWarning)
-          || ('אימות שמירת הלקוח בשרת נכשל' + (safeTrim(verify?.error) ? (': ' + safeTrim(verify.error)) : ''));
+        const baseErr = safeTrim(customerSaveWarning) || 'אימות שמירת הלקוח בשרת נכשל';
         throw new Error(baseErr + '. ההצעה נשארה ברשימת ההצעות — נסה לשמור שוב.');
       }
       try { Storage.rememberRows(SUPABASE_TABLES.customers, [directRow]); } catch(_e) {}
