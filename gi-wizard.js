@@ -54,6 +54,7 @@
   const normalizeProposalRecord = host.normalizeProposalRecord;
   const isServerArchivedCustomerRecord = host.isServerArchivedCustomerRecord;
   const fetchCustomerRecordFromServer = host.fetchCustomerRecordFromServer;
+  const fetchCustomerRecordFromServerByIdNumber = host.fetchCustomerRecordFromServerByIdNumber;
   const persistElementaryReferralsQuiet = host.persistElementaryReferralsQuiet;
   const getElementaryReferrals = host.getElementaryReferrals;
   const focusElementaryDashboardPendingTab = host.focusElementaryDashboardPendingTab;
@@ -1374,14 +1375,64 @@ init(){
     findVisibleExistingCustomerByIdNumber(idNumber){
       const id = normalizeIdValue(idNumber);
       if(!id || id.length < 9) return null;
-      const matches = this.collectExistingIdMatches(id);
-      for(const match of matches){
-        const rec = findCustomerRecordById(match?.id) || (State.data?.customers || []).find((x) => String(x?.id) === String(match?.id));
-        if(!rec) continue;
+      const candidates = [id];
+      const padded = id.length < 9 ? id.padStart(9, "0") : id;
+      if(padded !== id) candidates.push(padded);
+
+      const tryRec = (rec) => {
+        if(!rec) return null;
         try {
-          if(typeof customerVisibleToCurrentUser === "function" && !customerVisibleToCurrentUser(rec)) continue;
+          if(typeof isServerArchivedCustomerRecord === "function" && isServerArchivedCustomerRecord(rec)) return null;
+        } catch(_e) {}
+        try {
+          if(typeof customerVisibleToCurrentUser === "function" && !customerVisibleToCurrentUser(rec)) return null;
         } catch(_e) {}
         return rec;
+      };
+
+      for(const candidate of candidates){
+        const matches = this.collectExistingIdMatches(candidate);
+        for(const match of matches){
+          const rec = tryRec(
+            findCustomerRecordById(match?.id)
+            || (State.data?.customers || []).find((x) => String(x?.id) === String(match?.id))
+          );
+          if(rec) return rec;
+        }
+        const local = tryRec(
+          (typeof findCustomerByIdNumber === "function" ? findCustomerByIdNumber(candidate) : null)
+        );
+        if(local) return local;
+      }
+      return null;
+    },
+
+    /** מקומי + שרת — כדי שהדיאלוג יופיע גם כשהלקוח לא בזיכרון המקומי */
+    async resolveVisibleExistingCustomerByIdNumber(idNumber){
+      const id = normalizeIdValue(idNumber);
+      if(!id || id.length < 9) return null;
+      const local = this.findVisibleExistingCustomerByIdNumber(id);
+      if(local) return local;
+
+      const padded = id.padStart(9, "0");
+      const idsToTry = padded !== id ? [id, padded] : [id];
+      if(typeof fetchCustomerRecordFromServerByIdNumber !== "function") return null;
+
+      for(const candidate of idsToTry){
+        let serverRec = null;
+        try {
+          serverRec = await fetchCustomerRecordFromServerByIdNumber(candidate);
+        } catch(_e) {
+          serverRec = null;
+        }
+        if(!serverRec) continue;
+        try {
+          if(typeof isServerArchivedCustomerRecord === "function" && isServerArchivedCustomerRecord(serverRec)) continue;
+        } catch(_e) {}
+        try {
+          if(typeof customerVisibleToCurrentUser === "function" && !customerVisibleToCurrentUser(serverRec)) continue;
+        } catch(_e) {}
+        return serverRec;
       }
       return null;
     },
@@ -2742,7 +2793,14 @@ init(){
       if(this._existingCustomerOfferInFlight) return { handled:true, blocked:false };
 
       const primary = this.insureds?.[0];
-      const idNumber = normalizeIdValue(primary?.data?.idNumber);
+      // קוראים גם מה־DOM אם המודל עוד לא סונכרן (blur לפני setVal)
+      let idNumber = normalizeIdValue(primary?.data?.idNumber);
+      if(!idNumber || idNumber.length < 9){
+        try {
+          const field = this.els?.body?.querySelector?.('[data-bind="idNumber"]');
+          idNumber = normalizeIdValue(field?.value);
+        } catch(_e) {}
+      }
       if(!idNumber || idNumber.length < 9) return { handled:false };
 
       // כבר מקושרים לאותו לקוח אחרי אישור קודם
@@ -2757,8 +2815,22 @@ init(){
         }
       }
 
-      const rec = this.findVisibleExistingCustomerByIdNumber(idNumber);
-      if(!rec) return { handled:false };
+      this._existingCustomerOfferInFlight = true;
+      let rec = null;
+      try {
+        // סנכרון ת.ז. למודל לפני חיפוש
+        if(primary?.data && normalizeIdValue(primary.data.idNumber) !== idNumber){
+          primary.data.idNumber = idNumber;
+        }
+        rec = await this.resolveVisibleExistingCustomerByIdNumber(idNumber);
+      } catch(_e) {
+        rec = null;
+      }
+
+      if(!rec){
+        this._existingCustomerOfferInFlight = false;
+        return { handled:false };
+      }
 
       const isSwitch = this.customerRecordHasSystemNewPolicies(rec);
       const name = safeTrim(rec.fullName) || "לקוח";
@@ -2767,18 +2839,21 @@ init(){
         ? `שים לב: ללקוח ${name} יש פוליסות שנרכשו דרך המערכת. המשך הוא תהליך שיחלוף — הסרת פוליסות קיימות מהמערכת והזנת חדשות במקומן. האם ברצונך להמשיך?`
         : `שים לב: לקוח זה קיים במערכת (${name}). האם ברצונך להמשיך? הפרטים ייטענו מהתיק הקיים ותוכלו להמשיך באשף בריאות וסיכונים.`;
 
-      this._existingCustomerOfferInFlight = true;
       let confirmed = false;
       try {
-        confirmed = !!(await showWizardHarAlertModal({
-          title,
-          text,
-          confirmText: "כן, המשך",
-          cancelText: "לא",
-          showCancel: true
-        }));
+        if(typeof showWizardHarAlertModal !== "function"){
+          confirmed = !!(window.confirm?.(text));
+        } else {
+          confirmed = !!(await showWizardHarAlertModal({
+            title,
+            text,
+            confirmText: "כן, המשך",
+            cancelText: "לא",
+            showCancel: true
+          }));
+        }
       } catch(_e) {
-        confirmed = false;
+        try { confirmed = !!(window.confirm?.(text)); } catch(_e2) { confirmed = false; }
       } finally {
         this._existingCustomerOfferInFlight = false;
       }
@@ -4471,7 +4546,12 @@ if(path === "birthDate"){
         on(el, "change", () => setVal(true));
         on(el, "blur", () => {
           if(path === "idNumber"){
-            runDuplicateGuardNow(true);
+            // סנכרון ערך אחרון ואז דיאלוג המשך/שיחלוף
+            setVal(false);
+            window.clearTimeout(this._duplicateIdGuardTimer);
+            this._duplicateIdGuardTimer = window.setTimeout(() => {
+              void this.maybeOfferExistingCustomerOnId({ source: "blur" });
+            }, 40);
           }
           const validationCfg = getValidationConfigForBind(path);
           if(!validationCfg) return;
