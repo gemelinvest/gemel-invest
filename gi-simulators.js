@@ -6495,6 +6495,626 @@
   // ===== סוף GI-MNR-CI-SIM ========================================================
 
 
+  // ===== GI-PHX-CI-SIM 2026-08-11 · מחלות קשות / סרטן הפניקס ==================
+  // מקור: תעריפי בריאות פניקס.pdf · מרפא (01.01.2024) + מרפא סרטן.
+  // פרמיה חודשית לכל ₪100,000 פיצוי. תעריפים באגורות 1:1 מה-PDF.
+  // גיל כניסה מקסימלי 64; טבלת תעריף ממשיכה מעבר לכך (חישוב כניסה נחסם ב-64).
+
+  const PHOENIX_CI_RATE_UNIT = 100000;
+  const PHOENIX_CI_RATE_MAPS = {"marpe":{"0":{"mNS":1076,"mS":1076,"fNS":1076,"fS":1076},"1":{"mNS":1076,"mS":1076,"fNS":1076,"fS":1076},"2":{"mNS":1076,"mS":1076,"fNS":1076,"fS":1076},"3":{"mNS":1076,"mS":1076,"fNS":1076,"fS":1076},"4":{"mNS":1076,"mS":1076,"fNS":1076,"fS":1076},"5":{"mNS":1076,"mS":1076,"fNS":1076,"fS":1076},"6":{"mNS":1076,"mS":1076,"fNS":1076,"fS":1076},"7":{"mNS":1076,"mS":1076,"fNS":1076,"fS":1076},"8":{"mNS":1076,"mS":1076,"fNS":1076,"fS":1076},"9":{"mNS":1076,"mS":1076,"fNS":1076,"fS":1076},"10":{"mNS":1076,"mS":1076,"fNS":1076,"fS":1076},"11":{"mNS":1076,"mS":1076,"fNS":1076,"fS":1076},"12":{"mNS":1076,"mS":1076,"fNS":1076,"fS":1076},"13":{"mNS":1076,"mS":1076,"fNS":1076,"fS":1076},"14":{"mNS":1076,"mS":1076,"fNS":1076,"fS":1076},"15":{"mNS":1076,"mS":1076,"fNS":1076,"fS":1076},"16":{"mNS":1076,"mS":1076,"fNS":1076,"fS":1076},"17":{"mNS":1076,"mS":1076,"fNS":1076,"fS":1076},"18":{"mNS":1076,"mS":1076,"fNS":1076,"fS":1076},"19":{"mNS":1076,"mS":1076,"fNS":1076,"fS":1076},"20":{"mNS":1076,"mS":1076,"fNS":1076,"fS":1076},"21":{"mNS":1129,"mS":1297,"fNS":1113,"fS":1220},"22":{"mNS":1182,"mS":1413,"fNS":1158,"fS":1304},"23":{"mNS":1254,"mS":1533,"fNS":1226,"fS":1401},"24":{"mNS":1344,"mS":1662,"fNS":1325,"fS":1520},"25":{"mNS":1439,"mS":1802,"fNS":1449,"fS":1668},"26":{"mNS":1541,"mS":1959,"fNS":1605,"fS":1854},"27":{"mNS":1654,"mS":2139,"fNS":1795,"fS":2080},"28":{"mNS":1780,"mS":2349,"fNS":2017,"fS":2346},"29":{"mNS":1924,"mS":2603,"fNS":2272,"fS":2653},"30":{"mNS":2095,"mS":2913,"fNS":2557,"fS":2999},"31":{"mNS":2296,"mS":3294,"fNS":2700,"fS":3382},"32":{"mNS":2529,"mS":3743,"fNS":2856,"fS":3700},"33":{"mNS":2808,"mS":4200,"fNS":3100,"fS":4200},"34":{"mNS":3141,"mS":4600,"fNS":3700,"fS":4500},"35":{"mNS":3538,"mS":5200,"fNS":3900,"fS":4800},"36":{"mNS":3833,"mS":5700,"fNS":4100,"fS":5500},"37":{"mNS":4219,"mS":6500,"fNS":4319,"fS":6200},"38":{"mNS":4669,"mS":7400,"fNS":4769,"fS":6900},"39":{"mNS":5300,"mS":8427,"fNS":5150,"fS":7500},"40":{"mNS":5900,"mS":9713,"fNS":5567,"fS":8600},"41":{"mNS":6600,"mS":11400,"fNS":6456,"fS":9300},"42":{"mNS":7400,"mS":12900,"fNS":7124,"fS":10400},"43":{"mNS":8100,"mS":14700,"fNS":7763,"fS":11400},"44":{"mNS":9400,"mS":16200,"fNS":8771,"fS":12400},"45":{"mNS":10500,"mS":17800,"fNS":9562,"fS":12700},"46":{"mNS":11600,"mS":19800,"fNS":10304,"fS":14100},"47":{"mNS":13400,"mS":22200,"fNS":10978,"fS":15200},"48":{"mNS":15000,"mS":24100,"fNS":11550,"fS":17000},"49":{"mNS":16700,"mS":27134,"fNS":12633,"fS":19000},"50":{"mNS":18700,"mS":30300,"fNS":13700,"fS":21000},"51":{"mNS":20500,"mS":33787,"fNS":14700,"fS":23500},"52":{"mNS":22374,"mS":37144,"fNS":14900,"fS":25250},"53":{"mNS":24315,"mS":40963,"fNS":16000,"fS":28056},"54":{"mNS":26535,"mS":43593,"fNS":17651,"fS":30561},"55":{"mNS":28745,"mS":47909,"fNS":19567,"fS":32063},"56":{"mNS":32465,"mS":51340,"fNS":22896,"fS":34067},"57":{"mNS":35428,"mS":56362,"fNS":24913,"fS":37069},"58":{"mNS":38457,"mS":62929,"fNS":26819,"fS":39904},"59":{"mNS":42682,"mS":70809,"fNS":29417,"fS":44035},"60":{"mNS":46481,"mS":79279,"fNS":31159,"fS":47655},"61":{"mNS":49720,"mS":88787,"fNS":32966,"fS":50183},"62":{"mNS":52812,"mS":97896,"fNS":34840,"fS":54386},"63":{"mNS":56761,"mS":105731,"fNS":36782,"fS":57323},"64":{"mNS":60013,"mS":115525,"fNS":38795,"fS":61091},"65":{"mNS":65486,"mS":126515,"fNS":40881,"fS":67864},"66":{"mNS":69108,"mS":137492,"fNS":43044,"fS":71289},"67":{"mNS":73380,"mS":145992,"fNS":45676,"fS":75994},"68":{"mNS":78163,"mS":155507,"fNS":48880,"fS":80946},"69":{"mNS":83695,"mS":165646,"fNS":52777,"fS":86675},"70":{"mNS":90100,"mS":176484,"fNS":57508,"fS":92416},"71":{"mNS":96264,"mS":191039,"fNS":63238,"fS":99482},"72":{"mNS":104763,"mS":206840,"fNS":66556,"fS":108266},"73":{"mNS":109164,"mS":221200,"fNS":69999,"fS":117277},"74":{"mNS":121874,"mS":246183,"fNS":73567,"fS":128218}},"marpeCancer":{"0":{"mNS":683,"mS":683,"fNS":1358,"fS":1358},"1":{"mNS":683,"mS":683,"fNS":1358,"fS":1358},"2":{"mNS":683,"mS":683,"fNS":1358,"fS":1358},"3":{"mNS":683,"mS":683,"fNS":1358,"fS":1358},"4":{"mNS":683,"mS":683,"fNS":1358,"fS":1358},"5":{"mNS":683,"mS":683,"fNS":1358,"fS":1358},"6":{"mNS":683,"mS":683,"fNS":1358,"fS":1358},"7":{"mNS":683,"mS":683,"fNS":1358,"fS":1358},"8":{"mNS":683,"mS":683,"fNS":1358,"fS":1358},"9":{"mNS":683,"mS":683,"fNS":1358,"fS":1358},"10":{"mNS":683,"mS":683,"fNS":1358,"fS":1358},"11":{"mNS":683,"mS":683,"fNS":1358,"fS":1358},"12":{"mNS":683,"mS":683,"fNS":1358,"fS":1358},"13":{"mNS":683,"mS":683,"fNS":1358,"fS":1358},"14":{"mNS":683,"mS":683,"fNS":1358,"fS":1358},"15":{"mNS":683,"mS":683,"fNS":1358,"fS":1358},"16":{"mNS":683,"mS":683,"fNS":1358,"fS":1358},"17":{"mNS":683,"mS":683,"fNS":1358,"fS":1358},"18":{"mNS":683,"mS":683,"fNS":1358,"fS":1358},"19":{"mNS":683,"mS":683,"fNS":1358,"fS":1358},"20":{"mNS":683,"mS":683,"fNS":1358,"fS":1358},"21":{"mNS":683,"mS":683,"fNS":1358,"fS":1358},"22":{"mNS":683,"mS":767,"fNS":1358,"fS":1442},"23":{"mNS":692,"mS":825,"fNS":1358,"fS":1533},"24":{"mNS":742,"mS":900,"fNS":1433,"fS":1633},"25":{"mNS":800,"mS":975,"fNS":1525,"fS":1742},"26":{"mNS":858,"mS":1058,"fNS":1642,"fS":1883},"27":{"mNS":917,"mS":1150,"fNS":1792,"fS":2058},"28":{"mNS":983,"mS":1242,"fNS":1983,"fS":2292},"29":{"mNS":1050,"mS":1350,"fNS":2217,"fS":2575},"30":{"mNS":1133,"mS":1483,"fNS":2517,"fS":2925},"31":{"mNS":1225,"mS":1633,"fNS":2850,"fS":3317},"32":{"mNS":1325,"mS":1825,"fNS":3200,"fS":3750},"33":{"mNS":1442,"mS":2058,"fNS":3592,"fS":4225},"34":{"mNS":1592,"mS":2342,"fNS":4025,"fS":4758},"35":{"mNS":1775,"mS":2700,"fNS":4492,"fS":5350},"36":{"mNS":2000,"mS":3133,"fNS":5008,"fS":5983},"37":{"mNS":2267,"mS":3658,"fNS":5583,"fS":6700},"38":{"mNS":2583,"mS":4275,"fNS":6200,"fS":7467},"39":{"mNS":2933,"mS":4975,"fNS":6833,"fS":8267},"40":{"mNS":3333,"mS":5783,"fNS":7517,"fS":9125},"41":{"mNS":3783,"mS":6683,"fNS":8242,"fS":10050},"42":{"mNS":4283,"mS":7700,"fNS":9008,"fS":11042},"43":{"mNS":4842,"mS":8825,"fNS":9833,"fS":12117},"44":{"mNS":5467,"mS":10083,"fNS":10725,"fS":13292},"45":{"mNS":6150,"mS":11475,"fNS":11683,"fS":14583},"46":{"mNS":6908,"mS":13017,"fNS":12708,"fS":16000},"47":{"mNS":7733,"mS":14708,"fNS":13800,"fS":17550},"48":{"mNS":8633,"mS":16567,"fNS":14958,"fS":19242},"49":{"mNS":9617,"mS":18600,"fNS":16200,"fS":21100},"50":{"mNS":10675,"mS":20817,"fNS":17517,"fS":23133},"51":{"mNS":11825,"mS":23208,"fNS":18917,"fS":25350},"52":{"mNS":13050,"mS":25792,"fNS":20400,"fS":27758},"53":{"mNS":14367,"mS":28567,"fNS":21975,"fS":30383},"54":{"mNS":15783,"mS":31550,"fNS":23667,"fS":33250},"55":{"mNS":17308,"mS":34733,"fNS":25475,"fS":36358},"56":{"mNS":18908,"mS":38117,"fNS":27358,"fS":39658},"57":{"mNS":20592,"mS":41683,"fNS":29283,"fS":43142},"58":{"mNS":22333,"mS":45417,"fNS":31242,"fS":46775},"59":{"mNS":24150,"mS":49342,"fNS":33225,"fS":50567},"60":{"mNS":26058,"mS":53467,"fNS":35275,"fS":54558},"61":{"mNS":28067,"mS":57792,"fNS":37408,"fS":58767},"62":{"mNS":30167,"mS":62325,"fNS":39617,"fS":63175},"63":{"mNS":32367,"mS":67067,"fNS":41908,"fS":67800},"64":{"mNS":34675,"mS":72017,"fNS":44283,"fS":72625},"65":{"mNS":37083,"mS":77175,"fNS":46750,"fS":77658},"66":{"mNS":39600,"mS":82533,"fNS":49308,"fS":82875},"67":{"mNS":42233,"mS":88092,"fNS":51950,"fS":88267},"68":{"mNS":44975,"mS":93842,"fNS":54692,"fS":93825},"69":{"mNS":47825,"mS":99775,"fNS":57542,"fS":99558},"70":{"mNS":50792,"mS":105883,"fNS":60500,"fS":105483},"71":{"mNS":55867,"mS":116467,"fNS":66550,"fS":116025},"72":{"mNS":61450,"mS":128117,"fNS":73200,"fS":127633},"73":{"mNS":67600,"mS":140925,"fNS":80517,"fS":140392},"74":{"mNS":74358,"mS":155017,"fNS":88575,"fS":154433},"75":{"mNS":81792,"mS":170517,"fNS":97433,"fS":169875}}};
+
+  const PHOENIX_CI_PLANS = {
+    marpe: {
+      id: "marpe",
+      pdfName: "מרפא",
+      wizardCoverKey: "מרפא",
+      productKey: "מחלות קשות",
+      title: "סימולטור מחלות קשות הפניקס",
+      subtitle: "מרפא — פרמיה חודשית לכל ₪100,000 פיצוי",
+      minAge: 0,
+      maxEntryAge: 64,
+      minEntryDays: 0,
+      minSum: 50000,
+      maxSum: 600000,
+      supportsProgramMode: false,
+      cssPrefix: "lcPhxCi",
+      modalClass: "lcPhxCiModal"
+    },
+    marpeCancer: {
+      id: "marpeCancer",
+      pdfName: "מרפא סרטן",
+      wizardCoverKey: "מרפא סרטן",
+      productKey: "סרטן",
+      title: "סימולטור סרטן הפניקס",
+      subtitle: "מרפא סרטן — פרמיה חודשית לכל ₪100,000 פיצוי",
+      minAge: 0,
+      maxEntryAge: 64,
+      minEntryDays: 0,
+      minSum: 50000,
+      maxSum: 600000,
+      supportsProgramMode: false,
+      cssPrefix: "lcPhxCi",
+      modalClass: "lcPhxCiModal"
+    }
+  };
+
+  function phoenixCiResolveSumLimits(planId, _age, _programMode){
+    const plan = PHOENIX_CI_PLANS[planId];
+    if(!plan) return { minSum: null, maxSum: null };
+    return { minSum: plan.minSum, maxSum: plan.maxSum };
+  }
+
+  function phoenixCiAgorotToShekels(agorot){
+    return agorot / 100;
+  }
+  function formatPhoenixCiExactAmount(n){
+    if(!Number.isFinite(n)) return "";
+    const ag = Math.round(n * 100);
+    const whole = Math.trunc(ag / 100);
+    const frac = Math.abs(ag % 100);
+    return whole + "." + String(frac).padStart(2, "0");
+  }
+
+  function lookupPhoenixCiRate(planId, { age, gender, smoker }){
+    const plan = PHOENIX_CI_PLANS[planId];
+    if(!plan) return { ok:false, reason:"plan_missing" };
+    const ageNum = Number(age);
+    if(!Number.isInteger(ageNum)) return { ok:false, reason:"age_missing" };
+    if(ageNum < plan.minAge || ageNum > plan.maxEntryAge) return { ok:false, reason:"age_out_of_range" };
+    const map = PHOENIX_CI_RATE_MAPS[planId];
+    const row = map ? map[String(ageNum)] : null;
+    if(!row) return { ok:false, reason:"age_out_of_range" };
+    if(gender !== "זכר" && gender !== "נקבה") return { ok:false, reason:"gender_missing" };
+    if(smoker !== true && smoker !== false) return { ok:false, reason:"smoker_missing" };
+    const key = gender === "זכר" ? (smoker ? "mS" : "mNS") : (smoker ? "fS" : "fNS");
+    const rateAgorot = row[key];
+    if(rateAgorot == null || !Number.isInteger(rateAgorot)) return { ok:false, reason:"rate_missing" };
+    return {
+      ok: true,
+      rateAgorot,
+      ratePerHundredThousand: phoenixCiAgorotToShekels(rateAgorot),
+      planId,
+      pdfName: plan.pdfName
+    };
+  }
+
+  function computePhoenixCiPremium(planId, { age, gender, smoker, compensation, programMode }){
+    const plan = PHOENIX_CI_PLANS[planId];
+    if(!plan) return { ok:false, reason:"plan_missing" };
+    const sum = Number(String(compensation == null ? "" : compensation).replace(/[^\d.-]/g, ""));
+    if(!Number.isFinite(sum) || sum <= 0) return { ok:false, reason:"sum_missing" };
+    const limits = phoenixCiResolveSumLimits(planId, age, programMode || "base");
+    if(limits.minSum == null || limits.maxSum == null) return { ok:false, reason:"plan_missing" };
+    if(sum < limits.minSum || sum > limits.maxSum){
+      return { ok:false, reason:"sum_out_of_range", minSum: limits.minSum, maxSum: limits.maxSum };
+    }
+    const looked = lookupPhoenixCiRate(planId, { age, gender, smoker });
+    if(!looked.ok) return looked;
+    const monthlyAgorotExact = (looked.rateAgorot * sum) / PHOENIX_CI_RATE_UNIT;
+    if(!Number.isFinite(monthlyAgorotExact)) return { ok:false, reason:"rate_missing" };
+    const monthlyPremium = monthlyAgorotExact / 100;
+    const annualPremium = monthlyPremium * 12;
+    return {
+      ok: true,
+      monthlyPremium,
+      annualPremium,
+      ratePerHundredThousand: looked.ratePerHundredThousand,
+      compensation: sum,
+      planId,
+      programMode: programMode || "base",
+      pdfName: looked.pdfName,
+      wizardCoverKey: plan.wizardCoverKey,
+      minSum: limits.minSum,
+      maxSum: limits.maxSum
+    };
+  }
+
+  const PHOENIX_CI_MESSAGES = {
+    birth_missing: "יש לבחור תאריך לידה לפני חישוב הפרמיה.",
+    entry_too_young: "גיל הכניסה המינימלי הוא 0 ימים.",
+    age_missing: "יש לבחור תאריך לידה לפני חישוב הפרמיה.",
+    age_out_of_range: "הגיל הביטוחי (חצי שנה ומעלה מעוגל למעלה) חורג מטווח הכניסה המותר למסלול זה.",
+    gender_missing: "יש לבחור מין לפני חישוב הפרמיה.",
+    smoker_missing: "יש לציין האם המבוטח מעשן/ת לפני חישוב הפרמיה.",
+    sum_missing: "יש להזין סכום פיצוי תקין (גדול מאפס) לפני חישוב הפרמיה.",
+    sum_out_of_range: "סכום הפיצוי חורג מהמינימום/מקסימום המותר למסלול זה.",
+    rate_missing: "לא נמצא תעריף מתאים לנתונים שהוזנו.",
+    plan_missing: "מסלול לא מזוהה בתעריפון."
+  };
+
+  function createPhoenixCiSimulator(planId){
+    const plan = PHOENIX_CI_PLANS[planId];
+    const P = plan.cssPrefix;
+
+    return {
+      _planId: planId,
+      _modal: null,
+      _ctx: null,
+      _state: {},
+      _activeInsuredId: null,
+      _escHandler: null,
+      _confirmSwitch: null,
+      _showFinalSummary: false,
+
+      open(ctx){
+        this.close();
+        this._ctx = ctx || {};
+        const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : [];
+        this._state = {};
+        insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); });
+        this._activeInsuredId = insureds[0]?.id || null;
+        this._confirmSwitch = null;
+        this._showFinalSummary = false;
+        this._mount();
+        this._render();
+      },
+
+      _prefillFromInsured(ins){
+        const d = ins?.data || {};
+        const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
+        const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
+        const birthDate = safeTrim(d.birthDate || "");
+        const occupation = safeTrim(d.occupation || "");
+        const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
+        const st = {
+          birthDate,
+          birthDateSource: birthDate ? "step1" : "",
+          insuranceStartDate,
+          insuranceStartDateSource: insuranceStartDate ? "ctx" : "",
+          age: "",
+          ageSource: birthDate ? "step1" : "",
+          ageRaw: null,
+          entryDays: null,
+          gender, genderSource: gender ? "step1" : "",
+          smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "",
+          occupation,
+          occupationSource: occupation ? "step1" : "",
+          programMode: "base",
+          compensation: "",
+          result: null,
+          error: null,
+          savedAt: null,
+          dirtySinceSave: false
+        };
+        riskSimSyncAgeFromBirthDate(st, {
+          minAge: plan.minAge,
+          maxAge: plan.maxEntryAge,
+          minEntryDays: plan.minEntryDays,
+          asOfDate: st.insuranceStartDate || ""
+        });
+        return st;
+      },
+
+      _syncAge(st){
+        return riskSimSyncAgeFromBirthDate(st, {
+          minAge: plan.minAge,
+          maxAge: plan.maxEntryAge,
+          minEntryDays: plan.minEntryDays,
+          asOfDate: st?.insuranceStartDate || ""
+        });
+      },
+
+      _isInsuredRelevant(_ins){ return true; },
+
+      close(){
+        if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; }
+        if(this._modal){
+          const m = this._modal;
+          m.classList.add("giValModal--leaving");
+          window.setTimeout(() => m.remove(), 200);
+          this._modal = null;
+        }
+        this._ctx = null;
+      },
+
+      _mount(){
+        const modal = document.createElement("div");
+        modal.id = "lcMnrCiModal_" + planId;
+        modal.className = "giValModal " + plan.modalClass;
+        modal.setAttribute("role", "dialog");
+        modal.setAttribute("aria-modal", "true");
+        modal.setAttribute("aria-label", plan.title);
+        document.body.appendChild(modal);
+        this._modal = modal;
+        this._escHandler = (ev) => { if(ev.key === "Escape") this.close(); };
+        document.addEventListener("keydown", this._escHandler);
+        requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
+      },
+
+      _getInsuredLabel(insId){
+        const ins = (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === insId);
+        return ins ? safeTrim(ins.label) || "מבוטח" : "מבוטח";
+      },
+
+      _calc(insId){
+        const st = this._state[insId];
+        if(!st) return;
+        const ageSync = this._syncAge(st);
+        if(!ageSync.ok){
+          st.result = null;
+          st.error = PHOENIX_CI_MESSAGES[ageSync.reason] || PHOENIX_CI_MESSAGES.birth_missing;
+          if(ageSync.reason === "age_out_of_range"){
+            st.error = `הגיל הביטוחי חורג מטווח הכניסה ${plan.minAge}–${plan.maxEntryAge} (חצי שנה ומעלה מעוגל למעלה).`;
+          }
+          this._render();
+          return;
+        }
+        const calc = computePhoenixCiPremium(planId, {
+          age: st.age, gender: st.gender, smoker: st.smoker,
+          compensation: st.compensation, programMode: st.programMode || "base"
+        });
+        if(calc.ok){
+          st.result = calc;
+          st.error = null;
+        } else {
+          st.result = null;
+          let msg = PHOENIX_CI_MESSAGES[calc.reason] || "לא ניתן לחשב את הפרמיה.";
+          if(calc.reason === "age_out_of_range"){
+            msg = `לא נמצא תעריף לכניסה בגיל זה (טווח כניסה ${plan.minAge}–${plan.maxEntryAge}).`;
+          } else if(calc.reason === "sum_out_of_range"){
+            msg = `סכום הפיצוי חייב להיות בין ₪${formatRiskSimSumInsuredDigits(calc.minSum)} ל-₪${formatRiskSimSumInsuredDigits(calc.maxSum)}.`;
+          }
+          st.error = msg;
+        }
+        this._render();
+      },
+
+      _render(){
+        if(!this._modal) return;
+        const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+        const isMulti = insureds.length > 1;
+        if(this._showFinalSummary){
+          this._renderFinalSummary(insureds);
+          return;
+        }
+        const activeId = this._activeInsuredId;
+        const st = this._state[activeId] || this._prefillFromInsured(null);
+        const isStandalone = !!this._ctx?.standalone;
+
+        const tabsHtml = isMulti ? `<div class="${P}__tabs">${insureds.map((ins) => {
+          const s = this._state[ins.id];
+          const statusCls = s?.savedAt ? " has-saved" : (s?.result ? " has-result" : "");
+          return `<button type="button" class="${P}__tab${ins.id === activeId ? " is-active" : ""}${statusCls}" data-phxci-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${s?.savedAt ? " 🟢" : ""}</button>`;
+        }).join("")}</div>` : "";
+
+        const birthIso = riskSimBirthDateToIsoInput(st.birthDate || "");
+        const birthMaxIso = riskSimIsoDateDaysAgo(plan.minEntryDays);
+        const ageSync = this._syncAge(st);
+        const sumLimits = phoenixCiResolveSumLimits(planId, st.age, st.programMode || "base");
+        const ageHintHtml = !st.birthDate
+          ? (isStandalone
+            ? `<div class="${P}__hint ${P}__hint--warn">יש לבחור תאריך לידה מלוח השנה</div>`
+            : `<div class="${P}__hint ${P}__hint--warn">לא נמצא תאריך לידה בפרטים האישיים — יש לבחור מלוח השנה</div>`)
+          : (!ageSync.ok
+            ? `<div class="${P}__hint ${P}__hint--warn">${escapeHtml(
+                ageSync.reason === "age_out_of_range"
+                  ? `הגיל הביטוחי חורג מטווח הכניסה ${plan.minAge}–${plan.maxEntryAge}`
+                  : (PHOENIX_CI_MESSAGES[ageSync.reason] || "תאריך לידה לא תקין לחישוב")
+              )}</div>`
+            : `<div class="${P}__hint">גיל ביטוחי (חצי שנה ומעלה מעוגל למעלה): <strong>${escapeHtml(String(ageSync.age))}</strong></div>`);
+        const genderHintHtml = (isStandalone || st.gender) ? "" : `<div class="${P}__hint ${P}__hint--warn">לא נמצא מין בפרטים האישיים — יש לבחור</div>`;
+        const smokerHintHtml = (isStandalone || st.smoker === true || st.smoker === false) ? "" : `<div class="${P}__hint ${P}__hint--warn">לא נמצא סטטוס עישון בפרטים האישיים — יש לבחור</div>`;
+        const programModeHtml = plan.supportsProgramMode ? `
+                <div class="${P}__field ${P}__field--wide">
+                  <label class="${P}__label">סוג תכנית (לפי התעריפון)</label>
+                  <div class="${P}__segmented">
+                    <button type="button" class="${P}__segBtn${(st.programMode || "base") === "base" ? " is-active" : ""}" data-phxci-field="programMode" data-phxci-value="base">כבסיס (מינ׳ ₪${formatRiskSimSumInsuredDigits(plan.minSumBase)})</button>
+                    <button type="button" class="${P}__segBtn${st.programMode === "addon" ? " is-active" : ""}" data-phxci-field="programMode" data-phxci-value="addon">כתכנית נוספת (מינ׳ ₪${formatRiskSimSumInsuredDigits(plan.minSumAddon)})</button>
+                  </div>
+                </div>` : "";
+
+        const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company)
+          ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini")
+          : "✚";
+        const occAssessment = assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product);
+        const occBlockHtml = renderOccupationRiskBlockHtml(occAssessment, P);
+
+        const resultHtml = st.error
+          ? `<div class="${P}__result ${P}__result--error">${escapeHtml(st.error)}</div>`
+          : (st.result ? `<div class="${P}__result ${P}__result--ok">
+              <div class="${P}__resultRow"><span>מסלול</span><strong>${escapeHtml(st.result.pdfName)}</strong></div>
+              <div class="${P}__resultRow"><span>תעריף ל-₪100,000</span><strong>₪${escapeHtml(formatPhoenixCiExactAmount(st.result.ratePerHundredThousand))}</strong></div>
+              <div class="${P}__resultRow"><span>סכום פיצוי</span><strong>₪${escapeHtml(formatRiskSimSumInsuredDigits(st.result.compensation))}</strong></div>
+              <div class="${P}__resultRow ${P}__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatPhoenixCiExactAmount(st.result.monthlyPremium))}</strong></div>
+              <div class="${P}__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatPhoenixCiExactAmount(st.result.annualPremium))}</strong></div>
+            </div>` : `<div class="${P}__result ${P}__result--empty">מלאו את השדות ולחצו "חשב פרמיה"</div>`);
+
+        const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
+        const relevantInsureds = insureds.filter((ins) => this._isInsuredRelevant(ins));
+        const allRelevantSaved = relevantInsureds.length > 0 && relevantInsureds.every((ins) => !!this._state[ins.id]?.savedAt);
+
+        const footHtml = isStandalone ? `
+            <div class="giValModal__foot ${P}__foot">
+              <button type="button" class="btn btn--primary" data-phxci-close="1">סגור</button>
+            </div>` : (!isMulti ? `
+            <div class="giValModal__foot ${P}__foot">
+              <button type="button" class="btn giValModal__closeBtn" data-phxci-close="1">ביטול</button>
+              <button type="button" class="btn btn--primary" data-phxci-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button>
+            </div>` : `
+            <div class="giValModal__foot ${P}__foot">
+              <button type="button" class="btn giValModal__closeBtn" data-phxci-close="1">ביטול</button>
+              <button type="button" class="btn btn--secondary" data-phxci-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button>
+              <button type="button" class="btn btn--primary" data-phxci-finalconfirm="1"${allRelevantSaved ? "" : " disabled"}>אישור סופי</button>
+            </div>`);
+
+        const confirmOverlayHtml = this._confirmSwitch ? `
+          <div class="${P}__overlay">
+            <div class="${P}__overlayCard">
+              <div class="${P}__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}. האם לשמור לפני המעבר?</div>
+              <div class="${P}__overlayBtns">
+                <button type="button" class="btn btn--primary" data-phxci-switch="save">שמור ועבור</button>
+                <button type="button" class="btn btn--secondary" data-phxci-switch="discard">עבור ללא שמירה</button>
+                <button type="button" class="btn" data-phxci-switch="cancel">ביטול</button>
+              </div>
+            </div>
+          </div>` : "";
+
+        this._modal.innerHTML = `
+          <div class="giValModal__backdrop" data-phxci-close="1"></div>
+          <div class="giValModal__card ${P}__card">
+            <div class="giValModal__head">
+              <span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span>
+              <div class="giValModal__headText">
+                <div class="giValModal__title">${escapeHtml(plan.title)}</div>
+                <div class="giValModal__sub">${escapeHtml(plan.subtitle)}</div>
+              </div>
+              <button type="button" class="${P}__closeX" data-phxci-close="1" aria-label="סגירה">✕</button>
+            </div>
+            <div class="giValModal__body ${P}__body">
+              ${tabsHtml}
+              ${isStandalone
+                ? `<div class="${P}__insuredLabel ${P}__insuredLabel--standalone">מצב חישוב עצמאי — התוצאה לא נשמרת על אף פוליסה</div>`
+                : `<div class="${P}__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}
+              <div class="${P}__grid">
+                <div class="${P}__field">
+                  <label class="${P}__label">תאריך לידה</label>
+                  <input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-phxci-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />
+                  ${ageHintHtml}
+                </div>
+                <div class="${P}__field">
+                  <label class="${P}__label">תחילת ביטוח</label>
+                  <input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-phxci-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" />
+                </div>
+                <div class="${P}__field">
+                  <label class="${P}__label">מין</label>
+                  <div class="${P}__segmented">
+                    <button type="button" class="${P}__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-phxci-field="gender" data-phxci-value="זכר">זכר</button>
+                    <button type="button" class="${P}__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-phxci-field="gender" data-phxci-value="נקבה">נקבה</button>
+                  </div>
+                  ${genderHintHtml}
+                </div>
+                <div class="${P}__field">
+                  <label class="${P}__label">עישון</label>
+                  <div class="${P}__segmented">
+                    <button type="button" class="${P}__segBtn${st.smoker === false ? " is-active" : ""}" data-phxci-field="smoker" data-phxci-value="0">לא מעשן/ת</button>
+                    <button type="button" class="${P}__segBtn${st.smoker === true ? " is-active" : ""}" data-phxci-field="smoker" data-phxci-value="1">מעשן/ת</button>
+                  </div>
+                  ${smokerHintHtml}
+                </div>
+                <div class="${P}__field">
+                  <label class="${P}__label">סכום פיצוי (₪${formatRiskSimSumInsuredDigits(sumLimits.minSum)}–₪${formatRiskSimSumInsuredDigits(sumLimits.maxSum)})</label>
+                  <input class="${P}__input" type="text" inputmode="numeric" data-phxci-field="compensation" value="${escapeHtml(st.compensation || "")}" placeholder="לדוגמה: 100,000" />
+                </div>
+                ${programModeHtml}
+                <div class="${P}__field ${P}__field--wide">
+                  <label class="${P}__label">עיסוק</label>
+                  <input class="${P}__input" type="text" data-phxci-field="occupation" value="${escapeHtml(st.occupation || "")}" placeholder="לדוגמה: מהנדס, נהג משאית" autocomplete="off" />
+                </div>
+              </div>
+              <div class="${P}__actions">
+                <button type="button" class="btn btn--primary" data-phxci-calc="1">חשב פרמיה</button>
+              </div>
+              ${occBlockHtml}
+              ${resultHtml}
+            </div>
+            ${footHtml}
+            ${confirmOverlayHtml}
+          </div>`;
+        this._bind();
+      },
+
+      _renderFinalSummary(insureds){
+        const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+        const rows = relevant.map((ins) => {
+          const ok = !!this._state[ins.id]?.savedAt;
+          return `<div class="${P}__summaryRow"><span>${ok ? "✓" : "•"}</span><span>${escapeHtml(safeTrim(ins.label) || "מבוטח")}</span><span>${ok ? "הושלם" : "לא נשמר"}</span></div>`;
+        }).join("");
+        this._modal.innerHTML = `
+          <div class="giValModal__backdrop" data-phxci-close="1"></div>
+          <div class="giValModal__card ${P}__card">
+            <div class="giValModal__head">
+              <div class="giValModal__headText">
+                <div class="giValModal__title">סיכום סימולטור להצעה</div>
+              </div>
+              <button type="button" class="${P}__closeX" data-phxci-close="1" aria-label="סגירה">✕</button>
+            </div>
+            <div class="giValModal__body ${P}__body">${rows}</div>
+            <div class="giValModal__foot ${P}__foot">
+              <button type="button" class="btn giValModal__closeBtn" data-phxci-summary-back="1">חזרה</button>
+              <button type="button" class="btn btn--primary" data-phxci-summary-confirm="1">אישור סופי</button>
+            </div>
+          </div>`;
+        this._bind();
+      },
+
+      _bind(){
+        const modal = this._modal;
+        if(!modal) return;
+        ensureSegFieldDelegation(modal, this, "phxci");
+        $$("[data-phxci-close]", modal).forEach((el) => on(el, "click", () => this.close()));
+        $$("[data-phxci-tab]", modal).forEach((el) => on(el, "click", () => this._switchInsured(el.getAttribute("data-phxci-tab"))));
+        $$("[data-phxci-switch]", modal).forEach((el) => on(el, "click", () => {
+          const action = el.getAttribute("data-phxci-switch");
+          const target = this._confirmSwitch?.targetId;
+          this._confirmSwitch = null;
+          if(action === "save"){ this._saveActive(); if(target) this._activeInsuredId = target; this._render(); }
+          else if(action === "discard"){ if(target) this._activeInsuredId = target; this._render(); }
+          else this._render();
+        }));
+        bindRiskSimDmyField(modal, '[data-phxci-field="birthDate"]', {
+          onInput: (val) => {
+            const st = this._state[this._activeInsuredId];
+            if(!st) return;
+            st.birthDate = val;
+            st.birthDateSource = "manual";
+            st.dirtySinceSave = true;
+          },
+          onCommit: (val) => {
+            const st = this._state[this._activeInsuredId];
+            if(!st) return;
+            st.birthDate = val;
+            st.birthDateSource = "manual";
+            st.ageSource = "manual";
+            st.result = null; st.error = null; st.dirtySinceSave = true;
+            this._syncAge(st);
+            this._render();
+          }
+        });
+        bindRiskSimDmyField(modal, '[data-phxci-field="insuranceStartDate"]', {
+          onInput: (val) => {
+            const st = this._state[this._activeInsuredId];
+            if(!st) return;
+            st.insuranceStartDate = val;
+            st.insuranceStartDateSource = "manual";
+            st.dirtySinceSave = true;
+          },
+          onCommit: (val) => {
+            const st = this._state[this._activeInsuredId];
+            if(!st) return;
+            st.insuranceStartDate = val || riskSimTodayDmy();
+            st.insuranceStartDateSource = "manual";
+            st.result = null; st.error = null; st.dirtySinceSave = true;
+            this._syncAge(st);
+            this._render();
+          }
+        });
+        const sumInput = modal.querySelector('[data-phxci-field="compensation"]');
+        if(sumInput) on(sumInput, "input", () => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          const formatted = formatRiskSimSumInsuredDigits(sumInput.value);
+          sumInput.value = formatted;
+          try { sumInput.setSelectionRange(formatted.length, formatted.length); } catch(_e){}
+          st.compensation = formatted;
+          st.result = null; st.error = null; st.dirtySinceSave = true;
+        });
+        const occInput = modal.querySelector('[data-phxci-field="occupation"]');
+        if(occInput){
+          on(occInput, "input", () => {
+            const st = this._state[this._activeInsuredId];
+            if(!st) return;
+            st.occupation = safeTrim(occInput.value);
+            st.occupationSource = "manual"; st.dirtySinceSave = true;
+          });
+          on(occInput, "change", () => this._render());
+          on(occInput, "blur", () => this._render());
+        }
+        const calcBtn = modal.querySelector("[data-phxci-calc]");
+        if(calcBtn) on(calcBtn, "click", () => this._calc(this._activeInsuredId));
+        const applyBtn = modal.querySelector("[data-phxci-apply]");
+        if(applyBtn) on(applyBtn, "click", () => this._apply());
+        const saveBtn = modal.querySelector("[data-phxci-save]");
+        if(saveBtn) on(saveBtn, "click", () => this._saveActive());
+        const finalBtn = modal.querySelector("[data-phxci-finalconfirm]");
+        if(finalBtn) on(finalBtn, "click", () => {
+          const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+          const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+          const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
+          if(!allSaved){
+            window.showToast?.({ title: "לא כל המבוטחים נשמרו", text: "יש לשמור את הסימולטור עבור כל המבוטחים הרלוונטיים לפני האישור הסופי.", variant: "warn" });
+            return;
+          }
+          this._showFinalSummary = true;
+          this._render();
+        });
+        const summaryBackBtn = modal.querySelector("[data-phxci-summary-back]");
+        if(summaryBackBtn) on(summaryBackBtn, "click", () => { this._showFinalSummary = false; this._render(); });
+        const summaryConfirmBtn = modal.querySelector("[data-phxci-summary-confirm]");
+        if(summaryConfirmBtn) on(summaryConfirmBtn, "click", () => {
+          try { this._ctx?.onFinalConfirm?.(); } catch(_e){}
+          this.close();
+        });
+      },
+
+      _switchInsured(targetId){
+        if(!targetId || targetId === this._activeInsuredId) return;
+        const st = this._state[this._activeInsuredId];
+        if(st?.dirtySinceSave){ this._confirmSwitch = { targetId }; this._render(); return; }
+        this._activeInsuredId = targetId;
+        this._render();
+      },
+
+      _buildResultForInsured(insId){
+        const st = this._state[insId];
+        if(!st) return null;
+        const ageSync = this._syncAge(st);
+        if(!ageSync.ok) return null;
+        if(!st.result?.ok){
+          const calc = computePhoenixCiPremium(planId, {
+            age: st.age, gender: st.gender, smoker: st.smoker,
+            compensation: st.compensation, programMode: st.programMode || "base"
+          });
+          if(!calc.ok) return null;
+          st.result = calc; st.error = null;
+        }
+        const r = st.result;
+        return {
+          compensation: formatRiskSimSumInsuredDigits(r.compensation),
+          monthlyPremium: r.monthlyPremium,
+          annualPremium: r.annualPremium,
+          ratePerHundredThousand: r.ratePerHundredThousand,
+          pdfName: r.pdfName,
+          planId: r.planId,
+          programMode: r.programMode || st.programMode || "base",
+          wizardCoverKey: r.wizardCoverKey,
+          birthDate: st.birthDate || "",
+          insuranceStartDate: st.insuranceStartDate || "",
+          birthDateSource: st.birthDateSource || "",
+          age: st.age, ageSource: st.ageSource, gender: st.gender, genderSource: st.genderSource,
+          smoker: st.smoker, smokerSource: st.smokerSource,
+          occupation: st.occupation || "", occupationSource: st.occupationSource || ""
+        };
+      },
+
+      _apply(){
+        const results = {};
+        Object.keys(this._state).forEach((insId) => {
+          const r = this._buildResultForInsured(insId);
+          if(r) results[insId] = r;
+        });
+        if(!Object.keys(results).length){
+          window.showToast?.({ title: "אין תוצאה להחלה", text: "יש לחשב פרמיה תקינה לפני ההחלה על הפוליסה.", variant: "warn" });
+          return;
+        }
+        const onApply = this._ctx?.onApply;
+        this.close();
+        try { onApply?.(results); } catch(_e) {}
+      },
+
+      _saveActive(){
+        const insId = this._activeInsuredId;
+        const result = this._buildResultForInsured(insId);
+        if(!result){
+          window.showToast?.({ title: "אין תוצאה לשמירה", text: "יש לחשב פרמיה תקינה לפני השמירה.", variant: "warn" });
+          return;
+        }
+        try { this._ctx?.onApply?.({ [insId]: result }); } catch(_e) {}
+        const st = this._state[insId];
+        if(st){ st.savedAt = nowISO(); st.dirtySinceSave = false; }
+        window.showToast?.({ title: "נשמר", text: `הסימולטור עבור ${this._getInsuredLabel(insId)} נשמר על ההצעה.`, variant: "success" });
+        this._render();
+      }
+    };
+  }
+
+  const PhoenixCriticalIllnessSimulator = createPhoenixCiSimulator("marpe");
+  const PhoenixCancerSimulator = createPhoenixCiSimulator("marpeCancer");
+  RiskSimulators.register("הפניקס", "מחלות קשות", PhoenixCriticalIllnessSimulator);
+  RiskSimulators.register("הפניקס", "סרטן", PhoenixCancerSimulator);
+  // ===== סוף GI-PHX-CI-SIM ========================================================
+
+
+
 
   // ===== GI-HACH-HEALTH-SIM 2026-08-10 · סימולטור בריאות הכשרה ==================
   // מקור אמת: תעריפי בריאות הכשרה.pdf — בסיס מדד 133.17 (13,317 נק׳) מ־15/12/2022.
