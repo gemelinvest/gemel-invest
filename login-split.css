@@ -41,8 +41,8 @@ body.lcAuthLock .lcLogin__shell:not(#\9):not(#\9){
 body.lcAuthLock .lcLogin__card:not(#\9):not(#\9),
 body.lcAuthLock .lcLogin--mfa .lcLogin__card:not(#\9):not(#\9){
   position:relative !important;
-  flex:0 0 min(440px, 42vw) !important;
-  width:min(440px, 42vw) !important;
+  flex:0 0 min(720px, 48vw) !important;
+  width:min(720px, 48vw) !important;
   max-width:none !important;
   max-height:none !important;
   height:100% !important;
@@ -83,7 +83,7 @@ body.lcAuthLock .lcLogin__card:hover:not(#\9):not(#\9){
 
 body.lcAuthLock .lcLogin__panelInner:not(#\9):not(#\9){
   width:100% !important;
-  max-width:360px !important;
+  max-width:400px !important;
   margin:0 auto !important;
   padding:36px 36px 28px !important;
   box-sizing:border-box !important;
@@ -361,14 +361,14 @@ body.lcAuthLock .lcLogin__visualLogo:not(#\9):not(#\9){
   height:auto !important;
   max-height:38vh !important;
   object-fit:contain !important;
-  filter:drop-shadow(0 10px 28px rgba(0,0,0,.18)) !important;
+  filter:drop-shadow(0 8px 22px rgba(0,0,0,.22)) !important;
   opacity:1 !important;
   background:transparent !important;
 }
 
 body.lcAuthLock .lcLogin--mfa .lcLogin__card:not(#\9):not(#\9){
-  flex-basis:min(480px, 46vw) !important;
-  width:min(480px, 46vw) !important;
+  flex-basis:min(760px, 50vw) !important;
+  width:min(760px, 50vw) !important;
 }
 
 @media (max-width: 900px){
