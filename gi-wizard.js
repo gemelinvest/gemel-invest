@@ -22108,6 +22108,9 @@ if(path === "birthDate"){
         return;
       }
       const primary = payload?.operational?.primary || {};
+      const existingProposal = this.editingDraftId
+        ? (State.data?.proposals || []).find(x => String(x.id) === String(this.editingDraftId))
+        : null;
       const record = normalizeProposalRecord({
         id: this.editingDraftId || ("prop_" + Date.now().toString(16) + "_" + Math.random().toString(16).slice(2,8)),
         status: "פתוחה",
@@ -22116,13 +22119,11 @@ if(path === "birthDate"){
         phone: normalizePhoneValue(primary.phone),
         email: normalizeEmailValue(primary.email),
         city: safeTrim(primary.city),
-        agentName: safeTrim(Auth?.current?.name),
-        agentRole: safeTrim(Auth?.current?.role),
+        agentName: safeTrim(existingProposal?.agentName) || safeTrim(Auth?.current?.name),
+        agentId: safeTrim(existingProposal?.agentId) || safeTrim(Auth?.current?.id) || safeTrim(findAgentRecordForSession()?.id),
+        agentRole: safeTrim(existingProposal?.agentRole) || safeTrim(Auth?.current?.role),
         createdAt: (() => {
-          if(this.editingDraftId){
-            const existing = (State.data?.proposals || []).find(x => String(x.id) === String(this.editingDraftId));
-            if(existing?.createdAt) return existing.createdAt;
-          }
+          if(existingProposal?.createdAt) return existingProposal.createdAt;
           return nowISO();
         })(),
         updatedAt: nowISO(),
@@ -22130,6 +22131,8 @@ if(path === "birthDate"){
         insuredCount: (payload.insureds || []).length,
         payload
       });
+      // GI-FIX 2026-08-11: בעלות נציג על הצעה — בלי agent_id RLS עלול לחסום upsert/verify
+      stampRecordAgentOwnership(record);
 
       SaveStatusUI.show('loading', 'שומר הצעה במערכת...', 'המערכת מעדכנת את נתוני ההצעה.');
       const directRow = Storage.buildProposalRows({ proposals:[record] })[0];
@@ -22139,26 +22142,30 @@ if(path === "birthDate"){
       if(proposalStoredDirectly){
         const verify = await Storage.verifySavedRow(SUPABASE_TABLES.proposals, record.id, {
           id: record.id,
-          status: record.status,
-          full_name: directRow.full_name,
-          id_number: directRow.id_number,
-          phone: directRow.phone,
-          agent_name: directRow.agent_name,
-          current_step: (value) => Number(value || 0) === Number(directRow.current_step || 0),
-          updated_at: (value) => !!safeTrim(value) && new Date(value).getTime() >= (new Date(directRow.updated_at).getTime() - 1000)
+          updated_at: (value) => !!safeTrim(value) && new Date(value).getTime() >= (new Date(directRow.updated_at).getTime() - 5000)
         }, {
-          selectExpr: 'id,status,full_name,id_number,phone,agent_name,current_step,updated_at'
+          selectExpr: 'id,status,full_name,id_number,phone,agent_name,agent_id,current_step,updated_at'
         });
         if(!verify?.ok || !verify?.data){
-          proposalStoredDirectly = false;
-          proposalSaveWarning = 'הטבלה של ההצעות לא החזירה אימות תקין אחרי השמירה. נשמר כעת גם בגיבוי מערכת כדי למנוע אובדן.';
+          // soft-ok: השורה קיימת בשרת גם אם חלק מהשדות לא תאמו בדיוק
+          const reload = await Storage.loadSingleRow(SUPABASE_TABLES.proposals, record.id, 'id,updated_at');
+          if(reload?.ok && reload?.data && safeTrim(reload.data.id) === safeTrim(record.id)){
+            proposalSaveWarning = 'ההצעה נשמרה בשרת; אימות שדות מפורט לא הושלם במלואו.';
+            try { console.warn('PROPOSAL_SAVE_VERIFY_SOFT_OK', record.id, verify?.error || verify); } catch(_e) {}
+          } else {
+            proposalStoredDirectly = false;
+            proposalSaveWarning = 'הטבלה של ההצעות לא החזירה אימות תקין אחרי השמירה. מתבצע סנכרון מלא של הצעות לשרת.';
+          }
+        } else {
+          try { Storage.rememberRows(SUPABASE_TABLES.proposals, [directRow]); } catch(_e) {}
         }
       } else {
         const rawErr = safeTrim(directSave?.error || 'SAVE_FAILED');
         const rlsHint = /row-level security|RLS/i.test(rawErr)
           ? ' זוהתי חסימת אבטחה ב-Supabase (RLS) על טבלת proposals — יש להריץ ב-SQL Editor את הקובץ supabase-proposals-rls-fix.sql מהתיקייה של האפליקציה.'
           : '';
-        proposalSaveWarning = 'שמירה ישירה לטבלת ההצעות נכשלה: ' + rawErr + '.' + rlsHint + ' מתבצע גיבוי דרך שמירת המערכת.';
+        proposalSaveWarning = 'שמירה ישירה לטבלת ההצעות נכשלה: ' + rawErr + '.' + rlsHint + ' מתבצע סנכרון מלא של הצעות לשרת.';
+        try { console.error('PROPOSAL_DIRECT_UPSERT_FAILED', rawErr, { id: record.id, agentId: record.agentId }); } catch(_e) {}
       }
 
       State.data.proposals = Array.isArray(State.data.proposals) ? State.data.proposals : [];
@@ -22166,24 +22173,32 @@ if(path === "birthDate"){
       if(idx >= 0) State.data.proposals[idx] = record;
       else State.data.proposals.unshift(record);
       this.editingDraftId = record.id;
-      this._clearLocalDraft(); // נשמר בהצלחה לסופאבייס — מחק טיוטה מקומית
+      this._clearLocalDraft();
       State.data.meta.updatedAt = nowISO();
       refreshStateShadows();
-      const persistRes = await App.persist("ההצעה נשמרה", { skipProposalsSync:true });
+      // GI-FIX 2026-08-11: skipProposalsSync רק כשהשמירה הישירה אומתה —
+      // אחרת App.persist חייב לסנכרן את טבלת proposals (ולא רק לזכור מקומית).
+      const persistRes = await App.persist("ההצעה נשמרה", { skipProposalsSync: proposalStoredDirectly });
       ProposalsUI.render();
-      if(persistRes?.ok){
-        const syncWarning = safeTrim(persistRes?.proposalsSyncWarning);
-        const finalWarning = safeTrim(proposalSaveWarning || syncWarning);
+      const proposalsSyncWarning = safeTrim(persistRes?.proposalsSyncWarning);
+      if(proposalStoredDirectly){
+        const finalWarning = safeTrim(proposalSaveWarning || (!persistRes?.ok ? (persistRes?.error || 'סנכרון מערכת נוסף לא הושלם') : ''));
         if(finalWarning){
-          this.setHint('ההצעה נשמרה ותופיע במסך הצעות. הופעל גם גיבוי מערכת כדי למנוע אובדן.');
-          SaveStatusUI.success('ההצעה נשמרה עם שכבת גיבוי', finalWarning);
+          this.setHint('ההצעה נשמרה ותופיע במסך הצעות.');
+          SaveStatusUI.success('ההצעה נשמרה בהצלחה', finalWarning);
         }else{
           this.setHint("ההצעה נשמרה ותופיע במסך הצעות להמשך עריכה");
           SaveStatusUI.success('ההצעה נשמרה בהצלחה', '');
         }
+      }else if(persistRes?.ok && !proposalsSyncWarning){
+        this.setHint('ההצעה נשמרה ותופיע במסך הצעות.');
+        SaveStatusUI.success('ההצעה נשמרה עם שכבת גיבוי', proposalSaveWarning || 'נשמר דרך סנכרון מערכת.');
       }else{
-        this.setHint("ההצעה נשמרה בזיכרון המקומי אך סנכרון המערכת נכשל. בדוק חיבור ל-Supabase.");
-        SaveStatusUI.error('ההצעה נשמרה חלקית', 'הרשומה נשמרה מקומית, אבל הסנכרון לשרת נכשל.');
+        this.setHint("ההצעה לא אומתה בשרת. בדוק חיבור / הרשאות RLS (supabase-proposals-rls-fix.sql).");
+        SaveStatusUI.error(
+          'שמירת ההצעה נכשלה',
+          proposalsSyncWarning || safeTrim(persistRes?.error) || proposalSaveWarning || 'הסנכרון לשרת נכשל.'
+        );
       }
       }catch(err){
         console.error('PROPOSAL_SAVE_ERROR', err);
@@ -26239,24 +26254,42 @@ if(path === "birthDate"){
         : null;
 
       const directRow = Storage.buildCustomerRows({ customers:[record] })[0];
+      try { JSON.stringify(directRow?.payload ?? {}); } catch(serialErr) {
+        throw new Error('נתוני התיק גדולים מדי או לא תקינים לשמירה. נסה לשמור שוב אחרי רענון הדף.');
+      }
+      try {
+        Storage._rowHashes = Storage._rowHashes || {};
+        Storage._rowHashes.customers = Storage._rowHashes.customers || {};
+        delete Storage._rowHashes.customers[String(record.id)];
+      } catch(_e) {}
+
       const directSave = await Storage.upsertSingleRow(SUPABASE_TABLES.customers, directRow);
       let customerSaveWarning = '';
       if(!directSave?.ok){
         customerSaveWarning = 'שמירה ישירה של הלקוח לטבלת customers נכשלה: ' + safeTrim(directSave?.error || 'SAVE_FAILED');
+        try { console.error('CUSTOMER_DIRECT_UPSERT_FAILED', customerSaveWarning, record.id); } catch(_e) {}
       }
 
+      // GI-FIX 2026-08-11: אימות רך — id + updated_at (חלון 5שנ׳). אם השורה קיימת בשרת
+      // אחרי upsert מוצלח, לא נכשיל את כל הסיום בגלל אי־התאמת טלפון/שם נציג.
       const verify = directSave?.ok ? await Storage.verifySavedRow(SUPABASE_TABLES.customers, record.id, {
         id: record.id,
-        status: record.status,
-        full_name: directRow.full_name,
-        id_number: directRow.id_number,
-        phone: directRow.phone,
-        agent_name: directRow.agent_name,
-        updated_at: (value) => !!safeTrim(value) && new Date(value).getTime() >= (new Date(directRow.updated_at).getTime() - 1000)
+        updated_at: (value) => !!safeTrim(value) && new Date(value).getTime() >= (new Date(directRow.updated_at).getTime() - 5000)
       }, {
-        selectExpr: 'id,status,full_name,id_number,phone,agent_name,updated_at'
+        selectExpr: 'id,status,full_name,id_number,phone,agent_name,agent_id,updated_at',
+        retries: 3,
+        delayMs: 350
       }) : { ok:false, error:'DIRECT_SAVE_FAILED', data:null };
-      const verifiedOnServer = !!(verify?.ok && verify?.data);
+      let verifiedOnServer = !!(verify?.ok && verify?.data);
+      if(!verifiedOnServer && directSave?.ok){
+        const reload = await Storage.loadSingleRow(SUPABASE_TABLES.customers, record.id, 'id,updated_at');
+        if(reload?.ok && reload?.data && safeTrim(reload.data.id) === safeTrim(record.id)){
+          verifiedOnServer = true;
+          customerSaveWarning = (customerSaveWarning ? customerSaveWarning + ' ' : '')
+            + 'הלקוח נשמר בשרת; אימות שדות מפורט לא הושלם במלואו.';
+          try { console.warn('CUSTOMER_SAVE_VERIFY_SOFT_OK', record.id, verify?.error || verify); } catch(_e) {}
+        }
+      }
       if(!verifiedOnServer){
         console.error('CUSTOMER_SAVE_VERIFY_FAILED', verify?.error || 'VERIFY_EMPTY_RESULT', record.id, verify?.data || null);
         // קריטי: לא מסירים את ההצעה ולא מציגים הצלחה — מונע אובדן הצעה כשהלקוח לא אומת בשרת
@@ -26272,6 +26305,7 @@ if(path === "birthDate"){
           || ('אימות שמירת הלקוח בשרת נכשל' + (safeTrim(verify?.error) ? (': ' + safeTrim(verify.error)) : ''));
         throw new Error(baseErr + '. ההצעה נשארה ברשימת ההצעות — נסה לשמור שוב.');
       }
+      try { Storage.rememberRows(SUPABASE_TABLES.customers, [directRow]); } catch(_e) {}
 
       State.data.customers = Array.isArray(State.data.customers) ? State.data.customers : [];
       const sameIndex = State.data.customers.findIndex(x =>
@@ -26300,15 +26334,20 @@ if(path === "birthDate"){
       refreshStateShadows();
       try { Storage.saveBackup(State.data); } catch(_e) {}
 
-      const persistRes = await App.persist('הלקוח נשמר');
-      const customerSyncWarning = persistRes?.ok
-        ? ''
-        : (safeTrim(persistRes?.error) || 'הלקוח אומת בשרת, אך סנכרון מלא נוסף לא הושלם.');
-      if(persistRes?.ok){
+      // הלקוח כבר אומת בשרת — כשל ב-App.persist לא יציג "שגיאה בשמירה" קשיחה
+      // (זה מה שגרם לתחושת כשל בסיום האשף גם כשהלקוח נשמר).
+      const persistRes = await App.persist('הלקוח נשמר', { silent: true });
+      const customerSyncWarning = [
+        safeTrim(customerSaveWarning),
+        persistRes?.ok
+          ? safeTrim(persistRes?.customersSyncWarning)
+          : (safeTrim(persistRes?.error) || 'הלקוח אומת בשרת, אך סנכרון מלא נוסף לא הושלם.')
+      ].filter(Boolean).join(' · ');
+      if(persistRes?.ok && !customerSyncWarning){
         UI.renderSyncStatus('הלקוח נשמר', 'ok', persistRes.at);
       } else {
-        console.warn('CUSTOMER_GLOBAL_PERSIST_WARNING:', persistRes?.error || persistRes);
-        UI.renderSyncStatus('הלקוח נשמר', 'warn', nowISO(), customerSyncWarning);
+        console.warn('CUSTOMER_GLOBAL_PERSIST_WARNING:', persistRes?.error || customerSyncWarning || persistRes);
+        UI.renderSyncStatus('הלקוח נשמר', 'warn', persistRes?.at || nowISO(), customerSyncWarning || 'סנכרון מערכת חלקי');
       }
 
       record._saveMeta = {

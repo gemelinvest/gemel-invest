@@ -29976,7 +29976,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260810-hachshara-cpi-v1";
+  const GI_WIZARD_JS_VERSION = "20260811-wizard-save-fix-v1";
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
   const TZAHAL_CLINIC = "קופה צהלית";
   const TZAHAL_CLINIC_SHABAN = "אין שב״ן";
@@ -37655,6 +37655,9 @@ const ClalRiskLifePdf = {
       try{
         const payload = this.buildCustomerPayload();
         const c = this.state.customer;
+        const existingApptProposal = this.editingDraftId
+          ? (State.data?.proposals || []).find((x) => String(x.id) === String(this.editingDraftId))
+          : null;
         const record = normalizeProposalRecord({
           id: this.editingDraftId || ("prop_" + Date.now().toString(16) + "_" + Math.random().toString(16).slice(2, 8)),
           status: "פתוחה",
@@ -37663,13 +37666,11 @@ const ClalRiskLifePdf = {
           phone: normalizePhoneValue(c.phone),
           email: normalizeEmailValue(c.email),
           city: safeTrim(c.city),
-          agentName: safeTrim(Auth?.current?.name),
-          agentRole: safeTrim(Auth?.current?.role),
+          agentName: safeTrim(existingApptProposal?.agentName) || safeTrim(Auth?.current?.name),
+          agentId: safeTrim(existingApptProposal?.agentId) || safeTrim(Auth?.current?.id) || safeTrim(findAgentRecordForSession()?.id),
+          agentRole: safeTrim(existingApptProposal?.agentRole) || safeTrim(Auth?.current?.role),
           createdAt: (() => {
-            if(this.editingDraftId){
-              const existing = (State.data?.proposals || []).find((x) => String(x.id) === String(this.editingDraftId));
-              if(existing?.createdAt) return existing.createdAt;
-            }
+            if(existingApptProposal?.createdAt) return existingApptProposal.createdAt;
             return nowISO();
           })(),
           updatedAt: nowISO(),
@@ -37677,13 +37678,16 @@ const ClalRiskLifePdf = {
           insuredCount: Array.isArray(payload.insureds) ? payload.insureds.length : 1,
           payload
         });
+        stampRecordAgentOwnership(record);
         SaveStatusUI.show("loading", "שומר הצעה במערכת...", "המערכת מעדכנת את נתוני מינוי הסוכן.");
         const directRow = Storage.buildProposalRows({ proposals: [record] })[0];
         const directSave = await Storage.upsertSingleRow(SUPABASE_TABLES.proposals, directRow);
         let proposalStoredDirectly = !!directSave?.ok;
         let proposalSaveWarning = "";
-        if(!proposalStoredDirectly){
-          proposalSaveWarning = "שמירה ישירה לטבלת ההצעות נכשלה: " + safeTrim(directSave?.error || "SAVE_FAILED") + ". מתבצע גיבוי דרך שמירת המערכת.";
+        if(proposalStoredDirectly){
+          try { Storage.rememberRows(SUPABASE_TABLES.proposals, [directRow]); } catch(_e) {}
+        } else {
+          proposalSaveWarning = "שמירה ישירה לטבלת ההצעות נכשלה: " + safeTrim(directSave?.error || "SAVE_FAILED") + ". מתבצע סנכרון מלא של הצעות לשרת.";
         }
         State.data.proposals = Array.isArray(State.data.proposals) ? State.data.proposals : [];
         const idx = State.data.proposals.findIndex((x) => String(x.id) === String(record.id));
@@ -37693,9 +37697,9 @@ const ClalRiskLifePdf = {
         this._clearLocalDraft();
         State.data.meta.updatedAt = nowISO();
         refreshStateShadows();
-        const persistRes = await App.persist("ההצעה נשמרה", { skipProposalsSync: true });
+        const persistRes = await App.persist("ההצעה נשמרה", { skipProposalsSync: proposalStoredDirectly });
         ProposalsUI.render();
-        if(persistRes?.ok){
+        if(persistRes?.ok && (proposalStoredDirectly || !safeTrim(persistRes?.proposalsSyncWarning))){
           const finalWarning = safeTrim(proposalSaveWarning || persistRes?.proposalsSyncWarning);
           if(finalWarning){
             SaveStatusUI.success("ההצעה נשמרה עם שכבת גיבוי", finalWarning);
@@ -37704,7 +37708,7 @@ const ClalRiskLifePdf = {
           }
           window.showToast?.({ title: "ההצעה נשמרה", text: "מינוי סוכן נשמר במסך הצעות", variant: "success", durationMs: 4200 });
         }else{
-          SaveStatusUI.error("ההצעה נשמרה חלקית", "הרשומה נשמרה מקומית, אבל הסנכרון לשרת נכשל.");
+          SaveStatusUI.error("שמירת ההצעה נכשלה", safeTrim(persistRes?.error || persistRes?.proposalsSyncWarning) || proposalSaveWarning || "הסנכרון לשרת נכשל.");
         }
       }catch(err){
         console.error("AGENT_APPT_DRAFT_SAVE_FAILED", err);
