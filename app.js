@@ -29708,7 +29708,7 @@ UsersGateUI.init();
 
     /* GI-PERF-LAZY-SIMS 2026-08-09 */
   // Lazy simulator registry — engines in gi-simulators.js (~220KB parse deferred).
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260811-phx-ci-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260811-ayl-ci-v1";
   const GI_SIMULATOR_CATALOG = Object.freeze([
     { company: "הפניקס", product: "ריסק" },
     { company: "הפניקס", product: "בריאות" },
@@ -29725,6 +29725,8 @@ UsersGateUI.init();
     { company: "מגדל", product: "ריסק" },
     { company: "מנורה", product: "בריאות" },
     { company: "איילון", product: "בריאות" },
+    { company: "איילון", product: "מחלות קשות" },
+    { company: "איילון", product: "סרטן" },
     { company: "מנורה", product: "מחלות קשות" },
     { company: "מנורה", product: "סרטן" }
   ]);
@@ -29740,6 +29742,7 @@ UsersGateUI.init();
     "./menora-risk-sim.css?v=20260810-sim-mockup-v2",
     "./menora-health-sim.css?v=20260810-sim-mockup-v2",
     "./ayalon-health-sim.css?v=20260810-sim-mockup-v2",
+    "./ayalon-ci-sim.css?v=20260811-ayl-ci-v1",
     "./hachshara-health-sim.css?v=20260810-sim-mockup-v2",
     "./hachshara-risk-sim.css?v=20260811-hach-risk-v1",
     "./migdal-health-sim.css?v=20260810-sim-mockup-v2",
@@ -29750,7 +29753,7 @@ UsersGateUI.init();
     "./simulators-shell.css?v=20260810-sim-calc-hide-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
-    const ver = "20260811-phx-ci-v1";
+    const ver = "20260811-ayl-ci-v1";
     const prev = document.documentElement.dataset.giSimCssVer || "";
     document.documentElement.dataset.giSimCss = "1";
     document.documentElement.dataset.giSimCssVer = ver;

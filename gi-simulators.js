@@ -7114,6 +7114,634 @@
   // ===== סוף GI-PHX-CI-SIM ========================================================
 
 
+  // ===== GI-AYL-CI-SIM 2026-08-11 · מחלות קשות / סרטן איילון ==================
+  // מקור: תעריפי בריאות איילון.pdf (יוני 2026) · בשביל החוסן + בשביל החוסן סרטן.
+  // מחלות קשות: פרמיה חודשית לכל ₪1,000. סרטן: לכל ₪10,000. תעריפים באגורות 1:1.
+  // גיל כניסה מקסימלי 65; טבלת תעריף ממשיכה עד 75 (חישוב כניסה נחסם ב-65).
+  // סכום פיצוי: מינימום ₪50,000, ללא תקרה קשיחה (סף הצהרה מקוצרת 350K/300K — באשף).
+
+  const AYALON_CI_RATE_MAPS = {"hoshen":{"0":{"mNS":10,"mS":10,"fNS":10,"fS":10},"1":{"mNS":10,"mS":10,"fNS":10,"fS":10},"2":{"mNS":10,"mS":10,"fNS":10,"fS":10},"3":{"mNS":10,"mS":10,"fNS":10,"fS":10},"4":{"mNS":10,"mS":10,"fNS":10,"fS":10},"5":{"mNS":10,"mS":10,"fNS":10,"fS":10},"6":{"mNS":10,"mS":10,"fNS":10,"fS":10},"7":{"mNS":10,"mS":10,"fNS":10,"fS":10},"8":{"mNS":10,"mS":10,"fNS":10,"fS":10},"9":{"mNS":10,"mS":10,"fNS":10,"fS":10},"10":{"mNS":10,"mS":10,"fNS":10,"fS":10},"11":{"mNS":10,"mS":10,"fNS":10,"fS":10},"12":{"mNS":10,"mS":10,"fNS":10,"fS":10},"13":{"mNS":10,"mS":10,"fNS":10,"fS":10},"14":{"mNS":10,"mS":10,"fNS":10,"fS":10},"15":{"mNS":10,"mS":10,"fNS":10,"fS":10},"16":{"mNS":10,"mS":10,"fNS":10,"fS":10},"17":{"mNS":10,"mS":10,"fNS":10,"fS":10},"18":{"mNS":10,"mS":10,"fNS":10,"fS":10},"19":{"mNS":10,"mS":10,"fNS":10,"fS":10},"20":{"mNS":13,"mS":20,"fNS":14,"fS":19},"21":{"mNS":13,"mS":20,"fNS":14,"fS":19},"22":{"mNS":13,"mS":20,"fNS":14,"fS":19},"23":{"mNS":14,"mS":21,"fNS":15,"fS":20},"24":{"mNS":14,"mS":21,"fNS":16,"fS":22},"25":{"mNS":15,"mS":22,"fNS":18,"fS":23},"26":{"mNS":15,"mS":23,"fNS":19,"fS":25},"27":{"mNS":16,"mS":23,"fNS":22,"fS":27},"28":{"mNS":17,"mS":24,"fNS":25,"fS":31},"29":{"mNS":18,"mS":26,"fNS":29,"fS":35},"30":{"mNS":19,"mS":28,"fNS":33,"fS":39},"31":{"mNS":20,"mS":30,"fNS":37,"fS":44},"32":{"mNS":21,"mS":32,"fNS":42,"fS":49},"33":{"mNS":23,"mS":36,"fNS":48,"fS":56},"34":{"mNS":26,"mS":40,"fNS":55,"fS":63},"35":{"mNS":29,"mS":46,"fNS":62,"fS":71},"36":{"mNS":32,"mS":52,"fNS":68,"fS":78},"37":{"mNS":37,"mS":62,"fNS":71,"fS":82},"38":{"mNS":43,"mS":73,"fNS":72,"fS":84},"39":{"mNS":49,"mS":86,"fNS":73,"fS":86},"40":{"mNS":55,"mS":100,"fNS":75,"fS":89},"41":{"mNS":66,"mS":119,"fNS":79,"fS":96},"42":{"mNS":77,"mS":140,"fNS":87,"fS":105},"43":{"mNS":89,"mS":163,"fNS":97,"fS":117},"44":{"mNS":103,"mS":189,"fNS":108,"fS":130},"45":{"mNS":117,"mS":216,"fNS":119,"fS":143},"46":{"mNS":128,"mS":238,"fNS":129,"fS":155},"47":{"mNS":136,"mS":255,"fNS":137,"fS":165},"48":{"mNS":268,"mS":143,"fNS":172,"fS":143},"49":{"mNS":150,"mS":281,"fNS":148,"fS":180},"50":{"mNS":151,"mS":317,"fNS":143,"fS":207},"51":{"mNS":162,"mS":338,"fNS":153,"fS":222},"52":{"mNS":178,"mS":370,"fNS":164,"fS":238},"53":{"mNS":204,"mS":422,"fNS":179,"fS":259},"54":{"mNS":237,"mS":487,"fNS":195,"fS":281},"55":{"mNS":274,"mS":559,"fNS":212,"fS":305},"56":{"mNS":316,"mS":642,"fNS":227,"fS":327},"57":{"mNS":366,"mS":738,"fNS":243,"fS":350},"58":{"mNS":424,"mS":848,"fNS":263,"fS":379},"59":{"mNS":489,"mS":969,"fNS":286,"fS":410},"60":{"mNS":557,"mS":1093,"fNS":310,"fS":444},"61":{"mNS":607,"mS":1188,"fNS":327,"fS":469},"62":{"mNS":653,"mS":1275,"fNS":344,"fS":496},"63":{"mNS":683,"mS":1321,"fNS":355,"fS":515},"64":{"mNS":699,"mS":1346,"fNS":365,"fS":532},"65":{"mNS":734,"mS":1401,"fNS":375,"fS":549},"66":{"mNS":760,"mS":1442,"fNS":384,"fS":564},"67":{"mNS":786,"mS":1482,"fNS":394,"fS":582},"68":{"mNS":812,"mS":1524,"fNS":405,"fS":602},"69":{"mNS":838,"mS":1566,"fNS":420,"fS":628},"70":{"mNS":866,"mS":1616,"fNS":437,"fS":656},"71":{"mNS":903,"mS":1675,"fNS":465,"fS":699},"72":{"mNS":951,"mS":1762,"fNS":497,"fS":748},"73":{"mNS":1002,"mS":1852,"fNS":529,"fS":796},"74":{"mNS":1045,"mS":1919,"fNS":562,"fS":845},"75":{"mNS":1045,"mS":1919,"fNS":562,"fS":845}},"hoshenCancer":{"0":{"mNS":50,"mS":50,"fNS":50,"fS":50},"1":{"mNS":50,"mS":50,"fNS":50,"fS":50},"2":{"mNS":50,"mS":50,"fNS":50,"fS":50},"3":{"mNS":50,"mS":50,"fNS":50,"fS":50},"4":{"mNS":50,"mS":50,"fNS":50,"fS":50},"5":{"mNS":50,"mS":50,"fNS":50,"fS":50},"6":{"mNS":50,"mS":50,"fNS":50,"fS":50},"7":{"mNS":50,"mS":50,"fNS":50,"fS":50},"8":{"mNS":50,"mS":50,"fNS":50,"fS":50},"9":{"mNS":50,"mS":50,"fNS":50,"fS":50},"10":{"mNS":50,"mS":50,"fNS":50,"fS":50},"11":{"mNS":50,"mS":50,"fNS":50,"fS":50},"12":{"mNS":50,"mS":50,"fNS":50,"fS":50},"13":{"mNS":50,"mS":50,"fNS":50,"fS":50},"14":{"mNS":50,"mS":50,"fNS":50,"fS":50},"15":{"mNS":50,"mS":50,"fNS":50,"fS":50},"16":{"mNS":50,"mS":50,"fNS":50,"fS":50},"17":{"mNS":50,"mS":50,"fNS":50,"fS":50},"18":{"mNS":50,"mS":50,"fNS":50,"fS":50},"19":{"mNS":50,"mS":50,"fNS":50,"fS":50},"20":{"mNS":67,"mS":99,"fNS":83,"fS":100},"21":{"mNS":70,"mS":103,"fNS":91,"fS":111},"22":{"mNS":72,"mS":105,"fNS":100,"fS":122},"23":{"mNS":73,"mS":107,"fNS":110,"fS":135},"24":{"mNS":75,"mS":110,"fNS":122,"fS":150},"25":{"mNS":77,"mS":114,"fNS":136,"fS":167},"26":{"mNS":81,"mS":119,"fNS":152,"fS":189},"27":{"mNS":87,"mS":127,"fNS":173,"fS":214},"28":{"mNS":94,"mS":138,"fNS":196,"fS":244},"29":{"mNS":103,"mS":151,"fNS":223,"fS":278},"30":{"mNS":112,"mS":165,"fNS":253,"fS":316},"31":{"mNS":124,"mS":182,"fNS":286,"fS":358},"32":{"mNS":136,"mS":200,"fNS":322,"fS":404},"33":{"mNS":150,"mS":220,"fNS":360,"fS":452},"34":{"mNS":164,"mS":241,"fNS":399,"fS":501},"35":{"mNS":178,"mS":262,"fNS":436,"fS":548},"36":{"mNS":191,"mS":281,"fNS":468,"fS":589},"37":{"mNS":204,"mS":300,"fNS":494,"fS":621},"38":{"mNS":218,"mS":320,"fNS":515,"fS":647},"39":{"mNS":233,"mS":342,"fNS":537,"fS":675},"40":{"mNS":251,"mS":369,"fNS":569,"fS":715},"41":{"mNS":274,"mS":402,"fNS":616,"fS":776},"42":{"mNS":300,"mS":441,"fNS":684,"fS":861},"43":{"mNS":329,"mS":483,"fNS":767,"fS":967},"44":{"mNS":357,"mS":525,"fNS":857,"fS":1081},"45":{"mNS":389,"mS":570,"fNS":944,"fS":1191},"46":{"mNS":416,"mS":609,"fNS":1018,"fS":1284},"47":{"mNS":443,"mS":649,"fNS":1075,"fS":1356},"48":{"mNS":472,"mS":692,"fNS":1117,"fS":1409},"49":{"mNS":510,"mS":747,"fNS":1154,"fS":1456},"50":{"mNS":562,"mS":826,"fNS":1196,"fS":1512},"51":{"mNS":640,"mS":940,"fNS":1253,"fS":1586},"52":{"mNS":750,"mS":1102,"fNS":1331,"fS":1685},"53":{"mNS":898,"mS":1320,"fNS":1429,"fS":1810},"54":{"mNS":1085,"mS":1595,"fNS":1542,"fS":1953},"55":{"mNS":1320,"mS":1940,"fNS":1664,"fS":2108},"56":{"mNS":1573,"mS":2313,"fNS":1789,"fS":2267},"57":{"mNS":1847,"mS":2715,"fNS":1915,"fS":2427},"58":{"mNS":2128,"mS":3129,"fNS":2037,"fS":2582},"59":{"mNS":2401,"mS":3530,"fNS":2150,"fS":2725},"60":{"mNS":2651,"mS":3897,"fNS":2248,"fS":2850},"61":{"mNS":2861,"mS":4206,"fNS":2327,"fS":2950},"62":{"mNS":3032,"mS":4457,"fNS":2387,"fS":3026},"63":{"mNS":3166,"mS":4655,"fNS":2433,"fS":3085},"64":{"mNS":3270,"mS":4806,"fNS":2475,"fS":3138},"65":{"mNS":3368,"mS":4951,"fNS":2521,"fS":3197},"66":{"mNS":3442,"mS":5060,"fNS":2579,"fS":3271},"67":{"mNS":3509,"mS":5159,"fNS":2655,"fS":3368},"68":{"mNS":3574,"mS":5253,"fNS":2753,"fS":3491},"69":{"mNS":3637,"mS":5347,"fNS":2874,"fS":3645},"70":{"mNS":3698,"mS":5436,"fNS":3018,"fS":3828},"71":{"mNS":3761,"mS":5529,"fNS":3186,"fS":4042},"72":{"mNS":3826,"mS":5624,"fNS":3378,"fS":4286},"73":{"mNS":3894,"mS":5724,"fNS":3593,"fS":4559},"74":{"mNS":3964,"mS":5827,"fNS":3831,"fS":4860}}};
+
+  const AYALON_CI_PLANS = {
+    hoshen: {
+      id: "hoshen",
+      pdfName: "בשביל החוסן",
+      wizardCoverKey: "בשביל החוסן — מחלות קשות",
+      productKey: "מחלות קשות",
+      title: "סימולטור מחלות קשות איילון",
+      subtitle: "בשביל החוסן — פרמיה חודשית לכל ₪1,000 פיצוי",
+      rateUnit: 1000,
+      rateUnitLabel: "₪1,000",
+      minAge: 0,
+      maxEntryAge: 65,
+      minEntryDays: 0,
+      minSum: 50000,
+      maxSum: null,
+      declareHintSum: 350000,
+      supportsProgramMode: false,
+      cssPrefix: "lcAylCi",
+      modalClass: "lcAylCiModal"
+    },
+    hoshenCancer: {
+      id: "hoshenCancer",
+      pdfName: "בשביל החוסן סרטן",
+      wizardCoverKey: "בשביל החוסן — סרטן",
+      productKey: "סרטן",
+      title: "סימולטור סרטן איילון",
+      subtitle: "בשביל החוסן סרטן — פרמיה חודשית לכל ₪10,000 פיצוי",
+      rateUnit: 10000,
+      rateUnitLabel: "₪10,000",
+      minAge: 0,
+      maxEntryAge: 65,
+      minEntryDays: 0,
+      minSum: 50000,
+      maxSum: null,
+      declareHintSum: 300000,
+      supportsProgramMode: false,
+      cssPrefix: "lcAylCi",
+      modalClass: "lcAylCiModal"
+    }
+  };
+
+  function ayalonCiResolveSumLimits(planId){
+    const plan = AYALON_CI_PLANS[planId];
+    if(!plan) return { minSum: null, maxSum: null };
+    return { minSum: plan.minSum, maxSum: plan.maxSum };
+  }
+
+  function ayalonCiAgorotToShekels(agorot){
+    return agorot / 100;
+  }
+  function formatAyalonCiExactAmount(n){
+    if(!Number.isFinite(n)) return "";
+    const ag = Math.round(n * 100);
+    const whole = Math.trunc(ag / 100);
+    const frac = Math.abs(ag % 100);
+    return whole + "." + String(frac).padStart(2, "0");
+  }
+
+  function lookupAyalonCiRate(planId, { age, gender, smoker }){
+    const plan = AYALON_CI_PLANS[planId];
+    if(!plan) return { ok:false, reason:"plan_missing" };
+    const ageNum = Number(age);
+    if(!Number.isInteger(ageNum)) return { ok:false, reason:"age_missing" };
+    if(ageNum < plan.minAge || ageNum > plan.maxEntryAge) return { ok:false, reason:"age_out_of_range" };
+    const map = AYALON_CI_RATE_MAPS[planId];
+    const row = map ? map[String(ageNum)] : null;
+    if(!row) return { ok:false, reason:"age_out_of_range" };
+    if(gender !== "זכר" && gender !== "נקבה") return { ok:false, reason:"gender_missing" };
+    if(smoker !== true && smoker !== false) return { ok:false, reason:"smoker_missing" };
+    const key = gender === "זכר" ? (smoker ? "mS" : "mNS") : (smoker ? "fS" : "fNS");
+    const rateAgorot = row[key];
+    if(rateAgorot == null || !Number.isInteger(rateAgorot)) return { ok:false, reason:"rate_missing" };
+    return {
+      ok: true,
+      rateAgorot,
+      ratePerUnit: ayalonCiAgorotToShekels(rateAgorot),
+      rateUnit: plan.rateUnit,
+      rateUnitLabel: plan.rateUnitLabel,
+      planId,
+      pdfName: plan.pdfName
+    };
+  }
+
+  function computeAyalonCiPremium(planId, { age, gender, smoker, compensation }){
+    const plan = AYALON_CI_PLANS[planId];
+    if(!plan) return { ok:false, reason:"plan_missing" };
+    const sum = Number(String(compensation == null ? "" : compensation).replace(/[^\d.-]/g, ""));
+    if(!Number.isFinite(sum) || sum <= 0) return { ok:false, reason:"sum_missing" };
+    const limits = ayalonCiResolveSumLimits(planId);
+    if(limits.minSum == null) return { ok:false, reason:"plan_missing" };
+    if(sum < limits.minSum){
+      return { ok:false, reason:"sum_out_of_range", minSum: limits.minSum, maxSum: limits.maxSum };
+    }
+    const looked = lookupAyalonCiRate(planId, { age, gender, smoker });
+    if(!looked.ok) return looked;
+    const monthlyAgorotExact = (looked.rateAgorot * sum) / plan.rateUnit;
+    if(!Number.isFinite(monthlyAgorotExact)) return { ok:false, reason:"rate_missing" };
+    const monthlyPremium = monthlyAgorotExact / 100;
+    const annualPremium = monthlyPremium * 12;
+    return {
+      ok: true,
+      monthlyPremium,
+      annualPremium,
+      ratePerUnit: looked.ratePerUnit,
+      rateUnit: plan.rateUnit,
+      rateUnitLabel: plan.rateUnitLabel,
+      compensation: sum,
+      planId,
+      programMode: "base",
+      pdfName: looked.pdfName,
+      wizardCoverKey: plan.wizardCoverKey,
+      minSum: limits.minSum,
+      maxSum: limits.maxSum,
+      declareHintSum: plan.declareHintSum
+    };
+  }
+
+  const AYALON_CI_MESSAGES = {
+    birth_missing: "יש לבחור תאריך לידה לפני חישוב הפרמיה.",
+    entry_too_young: "גיל הכניסה המינימלי הוא 0 ימים.",
+    age_missing: "יש לבחור תאריך לידה לפני חישוב הפרמיה.",
+    age_out_of_range: "הגיל הביטוחי (חצי שנה ומעלה מעוגל למעלה) חורג מטווח הכניסה המותר למסלול זה.",
+    gender_missing: "יש לבחור מין לפני חישוב הפרמיה.",
+    smoker_missing: "יש לציין האם המבוטח מעשן/ת לפני חישוב הפרמיה.",
+    sum_missing: "יש להזין סכום פיצוי תקין (גדול מאפס) לפני חישוב הפרמיה.",
+    sum_out_of_range: "סכום הפיצוי נמוך מהמינימום המותר למסלול זה.",
+    rate_missing: "לא נמצא תעריף מתאים לנתונים שהוזנו.",
+    plan_missing: "מסלול לא מזוהה בתעריפון."
+  };
+
+  function createAyalonCiSimulator(planId){
+    const plan = AYALON_CI_PLANS[planId];
+    const P = plan.cssPrefix;
+
+    return {
+      _planId: planId,
+      _modal: null,
+      _ctx: null,
+      _state: {},
+      _activeInsuredId: null,
+      _escHandler: null,
+      _confirmSwitch: null,
+      _showFinalSummary: false,
+
+      open(ctx){
+        this.close();
+        this._ctx = ctx || {};
+        const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : [];
+        this._state = {};
+        insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); });
+        this._activeInsuredId = insureds[0]?.id || null;
+        this._confirmSwitch = null;
+        this._showFinalSummary = false;
+        this._mount();
+        this._render();
+      },
+
+      _prefillFromInsured(ins){
+        const d = ins?.data || {};
+        const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
+        const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
+        const birthDate = safeTrim(d.birthDate || "");
+        const occupation = safeTrim(d.occupation || "");
+        const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
+        const st = {
+          birthDate,
+          birthDateSource: birthDate ? "step1" : "",
+          insuranceStartDate,
+          insuranceStartDateSource: insuranceStartDate ? "ctx" : "",
+          age: "",
+          ageSource: birthDate ? "step1" : "",
+          ageRaw: null,
+          entryDays: null,
+          gender, genderSource: gender ? "step1" : "",
+          smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "",
+          occupation,
+          occupationSource: occupation ? "step1" : "",
+          programMode: "base",
+          compensation: "",
+          result: null,
+          error: null,
+          savedAt: null,
+          dirtySinceSave: false
+        };
+        riskSimSyncAgeFromBirthDate(st, {
+          minAge: plan.minAge,
+          maxAge: plan.maxEntryAge,
+          minEntryDays: plan.minEntryDays,
+          asOfDate: st.insuranceStartDate || ""
+        });
+        return st;
+      },
+
+      _syncAge(st){
+        return riskSimSyncAgeFromBirthDate(st, {
+          minAge: plan.minAge,
+          maxAge: plan.maxEntryAge,
+          minEntryDays: plan.minEntryDays,
+          asOfDate: st?.insuranceStartDate || ""
+        });
+      },
+
+      _isInsuredRelevant(_ins){ return true; },
+
+      close(){
+        if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; }
+        if(this._modal){
+          const m = this._modal;
+          m.classList.add("giValModal--leaving");
+          window.setTimeout(() => m.remove(), 200);
+          this._modal = null;
+        }
+        this._ctx = null;
+      },
+
+      _mount(){
+        const modal = document.createElement("div");
+        modal.id = "lcAylCiModal_" + planId;
+        modal.className = "giValModal " + plan.modalClass;
+        modal.setAttribute("role", "dialog");
+        modal.setAttribute("aria-modal", "true");
+        modal.setAttribute("aria-label", plan.title);
+        document.body.appendChild(modal);
+        this._modal = modal;
+        this._escHandler = (ev) => { if(ev.key === "Escape") this.close(); };
+        document.addEventListener("keydown", this._escHandler);
+        requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
+      },
+
+      _getInsuredLabel(insId){
+        const ins = (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === insId);
+        return ins ? safeTrim(ins.label) || "מבוטח" : "מבוטח";
+      },
+
+      _calc(insId){
+        const st = this._state[insId];
+        if(!st) return;
+        const ageSync = this._syncAge(st);
+        if(!ageSync.ok){
+          st.result = null;
+          st.error = AYALON_CI_MESSAGES[ageSync.reason] || AYALON_CI_MESSAGES.birth_missing;
+          if(ageSync.reason === "age_out_of_range"){
+            st.error = `הגיל הביטוחי חורג מטווח הכניסה ${plan.minAge}–${plan.maxEntryAge} (חצי שנה ומעלה מעוגל למעלה).`;
+          }
+          this._render();
+          return;
+        }
+        const calc = computeAyalonCiPremium(planId, {
+          age: st.age, gender: st.gender, smoker: st.smoker,
+          compensation: st.compensation
+        });
+        if(calc.ok){
+          st.result = calc;
+          st.error = null;
+        } else {
+          st.result = null;
+          let msg = AYALON_CI_MESSAGES[calc.reason] || "לא ניתן לחשב את הפרמיה.";
+          if(calc.reason === "age_out_of_range"){
+            msg = `לא נמצא תעריף לכניסה בגיל זה (טווח כניסה ${plan.minAge}–${plan.maxEntryAge}).`;
+          } else if(calc.reason === "sum_out_of_range"){
+            msg = `סכום הפיצוי חייב להיות לפחות ₪${formatRiskSimSumInsuredDigits(calc.minSum)}.`;
+          }
+          st.error = msg;
+        }
+        this._render();
+      },
+
+      _render(){
+        if(!this._modal) return;
+        const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+        const isMulti = insureds.length > 1;
+        if(this._showFinalSummary){
+          this._renderFinalSummary(insureds);
+          return;
+        }
+        const activeId = this._activeInsuredId;
+        const st = this._state[activeId] || this._prefillFromInsured(null);
+        const isStandalone = !!this._ctx?.standalone;
+
+        const tabsHtml = isMulti ? `<div class="${P}__tabs">${insureds.map((ins) => {
+          const s = this._state[ins.id];
+          const statusCls = s?.savedAt ? " has-saved" : (s?.result ? " has-result" : "");
+          return `<button type="button" class="${P}__tab${ins.id === activeId ? " is-active" : ""}${statusCls}" data-aylci-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${s?.savedAt ? " 🟢" : ""}</button>`;
+        }).join("")}</div>` : "";
+
+        const ageSync = this._syncAge(st);
+        const sumLimits = ayalonCiResolveSumLimits(planId);
+        const sumNum = Number(String(st.compensation || "").replace(/[^\d.-]/g, ""));
+        const ageHintHtml = !st.birthDate
+          ? (isStandalone
+            ? `<div class="${P}__hint ${P}__hint--warn">יש לבחור תאריך לידה מלוח השנה</div>`
+            : `<div class="${P}__hint ${P}__hint--warn">לא נמצא תאריך לידה בפרטים האישיים — יש לבחור מלוח השנה</div>`)
+          : (!ageSync.ok
+            ? `<div class="${P}__hint ${P}__hint--warn">${escapeHtml(
+                ageSync.reason === "age_out_of_range"
+                  ? `הגיל הביטוחי חורג מטווח הכניסה ${plan.minAge}–${plan.maxEntryAge}`
+                  : (AYALON_CI_MESSAGES[ageSync.reason] || "תאריך לידה לא תקין לחישוב")
+              )}</div>`
+            : `<div class="${P}__hint">גיל ביטוחי (חצי שנה ומעלה מעוגל למעלה): <strong>${escapeHtml(String(ageSync.age))}</strong></div>`);
+        const genderHintHtml = (isStandalone || st.gender) ? "" : `<div class="${P}__hint ${P}__hint--warn">לא נמצא מין בפרטים האישיים — יש לבחור</div>`;
+        const smokerHintHtml = (isStandalone || st.smoker === true || st.smoker === false) ? "" : `<div class="${P}__hint ${P}__hint--warn">לא נמצא סטטוס עישון בפרטים האישיים — יש לבחור</div>`;
+        const declareHintHtml = (Number.isFinite(sumNum) && plan.declareHintSum && sumNum > plan.declareHintSum)
+          ? `<div class="${P}__hint ${P}__hint--warn">מעל ₪${formatRiskSimSumInsuredDigits(plan.declareHintSum)} תיפתח באשף הצהרת בריאות מלאה (לא חוסם חישוב).</div>`
+          : "";
+
+        const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company)
+          ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini")
+          : "✚";
+        const occAssessment = assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product);
+        const occBlockHtml = renderOccupationRiskBlockHtml(occAssessment, P);
+
+        const resultHtml = st.error
+          ? `<div class="${P}__result ${P}__result--error">${escapeHtml(st.error)}</div>`
+          : (st.result ? `<div class="${P}__result ${P}__result--ok">
+              <div class="${P}__resultRow"><span>מסלול</span><strong>${escapeHtml(st.result.pdfName)}</strong></div>
+              <div class="${P}__resultRow"><span>תעריף ל-${escapeHtml(st.result.rateUnitLabel)}</span><strong>₪${escapeHtml(formatAyalonCiExactAmount(st.result.ratePerUnit))}</strong></div>
+              <div class="${P}__resultRow"><span>סכום פיצוי</span><strong>₪${escapeHtml(formatRiskSimSumInsuredDigits(st.result.compensation))}</strong></div>
+              <div class="${P}__resultRow ${P}__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatAyalonCiExactAmount(st.result.monthlyPremium))}</strong></div>
+              <div class="${P}__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatAyalonCiExactAmount(st.result.annualPremium))}</strong></div>
+            </div>` : `<div class="${P}__result ${P}__result--empty">מלאו את השדות ולחצו "חשב פרמיה"</div>`);
+
+        const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
+        const relevantInsureds = insureds.filter((ins) => this._isInsuredRelevant(ins));
+        const allRelevantSaved = relevantInsureds.length > 0 && relevantInsureds.every((ins) => !!this._state[ins.id]?.savedAt);
+
+        const footHtml = isStandalone ? `
+            <div class="giValModal__foot ${P}__foot">
+              <button type="button" class="btn btn--primary" data-aylci-close="1">סגור</button>
+            </div>` : (!isMulti ? `
+            <div class="giValModal__foot ${P}__foot">
+              <button type="button" class="btn giValModal__closeBtn" data-aylci-close="1">ביטול</button>
+              <button type="button" class="btn btn--primary" data-aylci-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button>
+            </div>` : `
+            <div class="giValModal__foot ${P}__foot">
+              <button type="button" class="btn giValModal__closeBtn" data-aylci-close="1">ביטול</button>
+              <button type="button" class="btn btn--secondary" data-aylci-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button>
+              <button type="button" class="btn btn--primary" data-aylci-finalconfirm="1"${allRelevantSaved ? "" : " disabled"}>אישור סופי</button>
+            </div>`);
+
+        const confirmOverlayHtml = this._confirmSwitch ? `
+          <div class="${P}__overlay">
+            <div class="${P}__overlayCard">
+              <div class="${P}__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}. האם לשמור לפני המעבר?</div>
+              <div class="${P}__overlayBtns">
+                <button type="button" class="btn btn--primary" data-aylci-switch="save">שמור ועבור</button>
+                <button type="button" class="btn btn--secondary" data-aylci-switch="discard">עבור ללא שמירה</button>
+                <button type="button" class="btn" data-aylci-switch="cancel">ביטול</button>
+              </div>
+            </div>
+          </div>` : "";
+
+        this._modal.innerHTML = `
+          <div class="giValModal__backdrop" data-aylci-close="1"></div>
+          <div class="giValModal__card ${P}__card">
+            <div class="giValModal__head">
+              <span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span>
+              <div class="giValModal__headText">
+                <div class="giValModal__title">${escapeHtml(plan.title)}</div>
+                <div class="giValModal__sub">${escapeHtml(plan.subtitle)}</div>
+              </div>
+              <button type="button" class="${P}__closeX" data-aylci-close="1" aria-label="סגירה">✕</button>
+            </div>
+            <div class="giValModal__body ${P}__body">
+              ${tabsHtml}
+              ${isStandalone
+                ? `<div class="${P}__insuredLabel ${P}__insuredLabel--standalone">מצב חישוב עצמאי — התוצאה לא נשמרת על אף פוליסה</div>`
+                : `<div class="${P}__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}
+              <div class="${P}__grid">
+                <div class="${P}__field">
+                  <label class="${P}__label">תאריך לידה</label>
+                  <input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-aylci-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />
+                  ${ageHintHtml}
+                </div>
+                <div class="${P}__field">
+                  <label class="${P}__label">תחילת ביטוח</label>
+                  <input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-aylci-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" />
+                </div>
+                <div class="${P}__field">
+                  <label class="${P}__label">מין</label>
+                  <div class="${P}__segmented">
+                    <button type="button" class="${P}__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-aylci-field="gender" data-aylci-value="זכר">זכר</button>
+                    <button type="button" class="${P}__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-aylci-field="gender" data-aylci-value="נקבה">נקבה</button>
+                  </div>
+                  ${genderHintHtml}
+                </div>
+                <div class="${P}__field">
+                  <label class="${P}__label">עישון</label>
+                  <div class="${P}__segmented">
+                    <button type="button" class="${P}__segBtn${st.smoker === false ? " is-active" : ""}" data-aylci-field="smoker" data-aylci-value="0">לא מעשן/ת</button>
+                    <button type="button" class="${P}__segBtn${st.smoker === true ? " is-active" : ""}" data-aylci-field="smoker" data-aylci-value="1">מעשן/ת</button>
+                  </div>
+                  ${smokerHintHtml}
+                </div>
+                <div class="${P}__field">
+                  <label class="${P}__label">סכום פיצוי (מ-₪${formatRiskSimSumInsuredDigits(sumLimits.minSum)}, ללא תקרה)</label>
+                  <input class="${P}__input" type="text" inputmode="numeric" data-aylci-field="compensation" value="${escapeHtml(st.compensation || "")}" placeholder="לדוגמה: 100,000" />
+                  ${declareHintHtml}
+                </div>
+                <div class="${P}__field ${P}__field--wide">
+                  <label class="${P}__label">עיסוק</label>
+                  <input class="${P}__input" type="text" data-aylci-field="occupation" value="${escapeHtml(st.occupation || "")}" placeholder="לדוגמה: מהנדס, נהג משאית" autocomplete="off" />
+                </div>
+              </div>
+              <div class="${P}__actions">
+                <button type="button" class="btn btn--primary" data-aylci-calc="1">חשב פרמיה</button>
+              </div>
+              ${occBlockHtml}
+              ${resultHtml}
+            </div>
+            ${footHtml}
+            ${confirmOverlayHtml}
+          </div>`;
+        this._bind();
+      },
+
+      _renderFinalSummary(insureds){
+        const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+        const rows = relevant.map((ins) => {
+          const ok = !!this._state[ins.id]?.savedAt;
+          return `<div class="${P}__summaryRow"><span>${ok ? "✓" : "•"}</span><span>${escapeHtml(safeTrim(ins.label) || "מבוטח")}</span><span>${ok ? "הושלם" : "לא נשמר"}</span></div>`;
+        }).join("");
+        this._modal.innerHTML = `
+          <div class="giValModal__backdrop" data-aylci-close="1"></div>
+          <div class="giValModal__card ${P}__card">
+            <div class="giValModal__head">
+              <div class="giValModal__headText">
+                <div class="giValModal__title">סיכום סימולטור להצעה</div>
+              </div>
+              <button type="button" class="${P}__closeX" data-aylci-close="1" aria-label="סגירה">✕</button>
+            </div>
+            <div class="giValModal__body ${P}__body">${rows}</div>
+            <div class="giValModal__foot ${P}__foot">
+              <button type="button" class="btn giValModal__closeBtn" data-aylci-summary-back="1">חזרה</button>
+              <button type="button" class="btn btn--primary" data-aylci-summary-confirm="1">אישור סופי</button>
+            </div>
+          </div>`;
+        this._bind();
+      },
+
+      _bind(){
+        const modal = this._modal;
+        if(!modal) return;
+        ensureSegFieldDelegation(modal, this, "aylci");
+        $$("[data-aylci-close]", modal).forEach((el) => on(el, "click", () => this.close()));
+        $$("[data-aylci-tab]", modal).forEach((el) => on(el, "click", () => this._switchInsured(el.getAttribute("data-aylci-tab"))));
+        $$("[data-aylci-switch]", modal).forEach((el) => on(el, "click", () => {
+          const action = el.getAttribute("data-aylci-switch");
+          const target = this._confirmSwitch?.targetId;
+          this._confirmSwitch = null;
+          if(action === "save"){ this._saveActive(); if(target) this._activeInsuredId = target; this._render(); }
+          else if(action === "discard"){ if(target) this._activeInsuredId = target; this._render(); }
+          else this._render();
+        }));
+        bindRiskSimDmyField(modal, '[data-aylci-field="birthDate"]', {
+          onInput: (val) => {
+            const st = this._state[this._activeInsuredId];
+            if(!st) return;
+            st.birthDate = val;
+            st.birthDateSource = "manual";
+            st.dirtySinceSave = true;
+          },
+          onCommit: (val) => {
+            const st = this._state[this._activeInsuredId];
+            if(!st) return;
+            st.birthDate = val;
+            st.birthDateSource = "manual";
+            st.ageSource = "manual";
+            st.result = null; st.error = null; st.dirtySinceSave = true;
+            this._syncAge(st);
+            this._render();
+          }
+        });
+        bindRiskSimDmyField(modal, '[data-aylci-field="insuranceStartDate"]', {
+          onInput: (val) => {
+            const st = this._state[this._activeInsuredId];
+            if(!st) return;
+            st.insuranceStartDate = val;
+            st.insuranceStartDateSource = "manual";
+            st.dirtySinceSave = true;
+          },
+          onCommit: (val) => {
+            const st = this._state[this._activeInsuredId];
+            if(!st) return;
+            st.insuranceStartDate = val || riskSimTodayDmy();
+            st.insuranceStartDateSource = "manual";
+            st.result = null; st.error = null; st.dirtySinceSave = true;
+            this._syncAge(st);
+            this._render();
+          }
+        });
+        const sumInput = modal.querySelector('[data-aylci-field="compensation"]');
+        if(sumInput) on(sumInput, "input", () => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          const formatted = formatRiskSimSumInsuredDigits(sumInput.value);
+          sumInput.value = formatted;
+          try { sumInput.setSelectionRange(formatted.length, formatted.length); } catch(_e){}
+          st.compensation = formatted;
+          st.result = null; st.error = null; st.dirtySinceSave = true;
+        });
+        const occInput = modal.querySelector('[data-aylci-field="occupation"]');
+        if(occInput){
+          on(occInput, "input", () => {
+            const st = this._state[this._activeInsuredId];
+            if(!st) return;
+            st.occupation = safeTrim(occInput.value);
+            st.occupationSource = "manual"; st.dirtySinceSave = true;
+          });
+          on(occInput, "change", () => this._render());
+          on(occInput, "blur", () => this._render());
+        }
+        const calcBtn = modal.querySelector("[data-aylci-calc]");
+        if(calcBtn) on(calcBtn, "click", () => this._calc(this._activeInsuredId));
+        const applyBtn = modal.querySelector("[data-aylci-apply]");
+        if(applyBtn) on(applyBtn, "click", () => this._apply());
+        const saveBtn = modal.querySelector("[data-aylci-save]");
+        if(saveBtn) on(saveBtn, "click", () => this._saveActive());
+        const finalBtn = modal.querySelector("[data-aylci-finalconfirm]");
+        if(finalBtn) on(finalBtn, "click", () => {
+          const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+          const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+          const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
+          if(!allSaved){
+            window.showToast?.({ title: "לא כל המבוטחים נשמרו", text: "יש לשמור את הסימולטור עבור כל המבוטחים הרלוונטיים לפני האישור הסופי.", variant: "warn" });
+            return;
+          }
+          this._showFinalSummary = true;
+          this._render();
+        });
+        const summaryBackBtn = modal.querySelector("[data-aylci-summary-back]");
+        if(summaryBackBtn) on(summaryBackBtn, "click", () => { this._showFinalSummary = false; this._render(); });
+        const summaryConfirmBtn = modal.querySelector("[data-aylci-summary-confirm]");
+        if(summaryConfirmBtn) on(summaryConfirmBtn, "click", () => {
+          try { this._ctx?.onFinalConfirm?.(); } catch(_e){}
+          this.close();
+        });
+      },
+
+      _switchInsured(targetId){
+        if(!targetId || targetId === this._activeInsuredId) return;
+        const st = this._state[this._activeInsuredId];
+        if(st?.dirtySinceSave){ this._confirmSwitch = { targetId }; this._render(); return; }
+        this._activeInsuredId = targetId;
+        this._render();
+      },
+
+      _buildResultForInsured(insId){
+        const st = this._state[insId];
+        if(!st) return null;
+        const ageSync = this._syncAge(st);
+        if(!ageSync.ok) return null;
+        if(!st.result?.ok){
+          const calc = computeAyalonCiPremium(planId, {
+            age: st.age, gender: st.gender, smoker: st.smoker,
+            compensation: st.compensation
+          });
+          if(!calc.ok) return null;
+          st.result = calc; st.error = null;
+        }
+        const r = st.result;
+        return {
+          compensation: formatRiskSimSumInsuredDigits(r.compensation),
+          monthlyPremium: r.monthlyPremium,
+          annualPremium: r.annualPremium,
+          ratePerUnit: r.ratePerUnit,
+          rateUnit: r.rateUnit,
+          rateUnitLabel: r.rateUnitLabel,
+          pdfName: r.pdfName,
+          planId: r.planId,
+          programMode: r.programMode || st.programMode || "base",
+          wizardCoverKey: r.wizardCoverKey,
+          birthDate: st.birthDate || "",
+          insuranceStartDate: st.insuranceStartDate || "",
+          birthDateSource: st.birthDateSource || "",
+          age: st.age, ageSource: st.ageSource, gender: st.gender, genderSource: st.genderSource,
+          smoker: st.smoker, smokerSource: st.smokerSource,
+          occupation: st.occupation || "", occupationSource: st.occupationSource || ""
+        };
+      },
+
+      _apply(){
+        const results = {};
+        Object.keys(this._state).forEach((insId) => {
+          const r = this._buildResultForInsured(insId);
+          if(r) results[insId] = r;
+        });
+        if(!Object.keys(results).length){
+          window.showToast?.({ title: "אין תוצאה להחלה", text: "יש לחשב פרמיה תקינה לפני ההחלה על הפוליסה.", variant: "warn" });
+          return;
+        }
+        const onApply = this._ctx?.onApply;
+        this.close();
+        try { onApply?.(results); } catch(_e) {}
+      },
+
+      _saveActive(){
+        const insId = this._activeInsuredId;
+        const result = this._buildResultForInsured(insId);
+        if(!result){
+          window.showToast?.({ title: "אין תוצאה לשמירה", text: "יש לחשב פרמיה תקינה לפני השמירה.", variant: "warn" });
+          return;
+        }
+        try { this._ctx?.onApply?.({ [insId]: result }); } catch(_e) {}
+        const st = this._state[insId];
+        if(st){ st.savedAt = nowISO(); st.dirtySinceSave = false; }
+        window.showToast?.({ title: "נשמר", text: `הסימולטור עבור ${this._getInsuredLabel(insId)} נשמר על ההצעה.`, variant: "success" });
+        this._render();
+      }
+    };
+  }
+
+  const AyalonCriticalIllnessSimulator = createAyalonCiSimulator("hoshen");
+  const AyalonCancerSimulator = createAyalonCiSimulator("hoshenCancer");
+  RiskSimulators.register("איילון", "מחלות קשות", AyalonCriticalIllnessSimulator);
+  RiskSimulators.register("איילון", "סרטן", AyalonCancerSimulator);
+  // ===== סוף GI-AYL-CI-SIM ========================================================
+
+
+
+
 
 
   // ===== GI-HACH-HEALTH-SIM 2026-08-10 · סימולטור בריאות הכשרה ==================
