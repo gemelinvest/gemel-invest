@@ -351,6 +351,23 @@
     return formatDmyFromParts(n.getFullYear(), n.getMonth() + 1, n.getDate());
   }
 
+
+  /** תאריך תחילת ביטוח מהקשר/מבוטח, אחרת היום (dd/mm/yyyy). */
+  function resolveInsuranceStartDate(ctx, ins){
+    const fromCtx = safeTrim(ctx?.insuranceStartDate || ctx?.startDate || ctx?.policyStartDate || "");
+    if(fromCtx) return fromCtx;
+    const d = ins?.data || {};
+    const fromIns = safeTrim(d.insuranceStartDate || d.startDate || d.policyStartDate || "");
+    if(fromIns) return fromIns;
+    const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : [];
+    for(let i = 0; i < insureds.length; i++){
+      const meta = insureds[i]?.data || {};
+      const v = safeTrim(meta.insuranceStartDate || meta.startDate || meta.policyStartDate || "");
+      if(v) return v;
+    }
+    return riskSimTodayDmy();
+  }
+
   function riskSimIsoDateDaysAgo(daysAgo){
     const n = new Date();
     n.setHours(0, 0, 0, 0);
@@ -935,15 +952,17 @@
       const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
       const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
       const birthDate = safeTrim(d.birthDate || "");
-      const computedAge = birthDate ? riskSimAgeFromBirthDate(birthDate) : null;
-      const ageInRange = Number.isInteger(computedAge) && computedAge >= PHOENIX_RISK_MIN_AGE && computedAge <= PHOENIX_RISK_MAX_AGE;
       const occupation = safeTrim(d.occupation || "");
-      return {
+      const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
+      const st = {
         birthDate,
         birthDateSource: birthDate ? "step1" : "",
-        age: ageInRange ? String(computedAge) : "",
-        ageSource: ageInRange ? "step1" : "",
-        ageRaw: computedAge,
+        insuranceStartDate,
+        insuranceStartDateSource: insuranceStartDate ? "ctx" : "",
+        age: "",
+        ageSource: birthDate ? "step1" : "",
+        ageRaw: null,
+        entryDays: null,
         gender, genderSource: gender ? "step1" : "",
         smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "",
         occupation,
@@ -954,6 +973,8 @@
         savedAt: null,
         dirtySinceSave: false
       };
+      riskSimSyncAgeFromBirthDate(st, { minAge: PHOENIX_RISK_MIN_AGE, maxAge: PHOENIX_RISK_MAX_AGE, asOfDate: st.insuranceStartDate || "" });
+      return st;
     },
 
     /** נקודת הרחבה: קובע אם מבוטח נתון רלוונטי לסימולטור הזה. כברירת מחדל כולם
@@ -1036,7 +1057,7 @@
       /* במצב עצמאי אין פרטים אישיים — לא מציגים אזהרות "לא נמצא בפרטים". באשף נשאר כפי שהיה. */
       const ageHintHtml = st.birthDate && Number.isInteger(st.ageRaw)
         ? (st.age
-            ? `<div class="lcPhxSim__hint">גיל ביטוחי: <strong>${escapeHtml(String(st.ageRaw))}</strong> (טווח תעריפון ${PHOENIX_RISK_MIN_AGE}–${PHOENIX_RISK_MAX_AGE})</div>`
+            ? `<div class="lcPhxSim__hint">גיל ביטוחי בתחילת הביטוח: <strong>${escapeHtml(String(st.ageRaw))}</strong> (טווח תעריפון ${PHOENIX_RISK_MIN_AGE}–${PHOENIX_RISK_MAX_AGE})</div>`
             : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">הגיל המחושב מתאריך הלידה (${st.ageRaw}) חורג מטווח התעריפון (${PHOENIX_RISK_MIN_AGE}–${PHOENIX_RISK_MAX_AGE})</div>`)
         : ((isStandalone || st.birthDate)
             ? (st.birthDate ? `<div class="lcPhxSim__hint lcPhxSim__hint--warn">תאריך לידה לא תקין — יש להזין DD/MM/YYYY</div>` : "")
@@ -1115,6 +1136,12 @@
                   placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-phx-field="birthDate"
                   value="${escapeHtml(st.birthDate || "")}" />
                 ${ageHintHtml}
+              </div>
+              <div class="lcPhxSim__field">
+                <label class="lcPhxSim__label">תחילת ביטוח</label>
+                <input class="lcPhxSim__input lcPhxSim__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
+                  placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-phx-field="insuranceStartDate"
+                  value="${escapeHtml(st.insuranceStartDate || "")}" />
               </div>
               <div class="lcPhxSim__field">
                 <label class="lcPhxSim__label">מין</label>
@@ -1218,8 +1245,27 @@
           if(!st) return;
           st.birthDate = val;
           st.birthDateSource = "manual";
-          const sync = riskSimSyncAgeFromBirthDate(st, { minAge: PHOENIX_RISK_MIN_AGE, maxAge: PHOENIX_RISK_MAX_AGE });
+          const sync = riskSimSyncAgeFromBirthDate(st, { minAge: PHOENIX_RISK_MIN_AGE, maxAge: PHOENIX_RISK_MAX_AGE, asOfDate: st.insuranceStartDate || "" });
           st.ageSource = "manual";
+          if(!sync.ok){ st.age = ""; }
+          st.result = null; st.error = null; st.dirtySinceSave = true;
+          this._render();
+        }
+      });
+      bindRiskSimDmyField(modal, '[data-phx-field="insuranceStartDate"]', {
+        onInput: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.insuranceStartDate = val;
+          st.insuranceStartDateSource = "manual";
+          st.dirtySinceSave = true;
+        },
+        onCommit: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.insuranceStartDate = val || riskSimTodayDmy();
+          st.insuranceStartDateSource = "manual";
+          const sync = riskSimSyncAgeFromBirthDate(st, { minAge: PHOENIX_RISK_MIN_AGE, maxAge: PHOENIX_RISK_MAX_AGE, asOfDate: st.insuranceStartDate || "" });
           if(!sync.ok){ st.age = ""; }
           st.result = null; st.error = null; st.dirtySinceSave = true;
           this._render();
@@ -1310,6 +1356,8 @@
         monthlyPremium: st.result.monthlyPremium,
         annualPremium: st.result.annualPremium,
         ratePerMille: st.result.ratePerMille,
+        birthDate: st.birthDate || "",
+        insuranceStartDate: st.insuranceStartDate || "",
         age: st.age, ageSource: st.ageSource, gender: st.gender, smoker: st.smoker,
         genderSource: st.genderSource, smokerSource: st.smokerSource,
         occupation: st.occupation || "", occupationSource: st.occupationSource || ""
@@ -1506,15 +1554,17 @@
       const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
       const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
       const birthDate = safeTrim(d.birthDate || "");
-      const computedAge = birthDate ? riskSimAgeFromBirthDate(birthDate) : null;
-      const ageInRange = Number.isInteger(computedAge) && computedAge >= MENORA_RISK_MIN_AGE && computedAge <= MENORA_RISK_MAX_AGE;
       const occupation = safeTrim(d.occupation || "");
-      return {
+      const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
+      const st = {
         birthDate,
         birthDateSource: birthDate ? "step1" : "",
-        age: ageInRange ? String(computedAge) : "",
-        ageSource: ageInRange ? "step1" : "",
-        ageRaw: computedAge,
+        insuranceStartDate,
+        insuranceStartDateSource: insuranceStartDate ? "ctx" : "",
+        age: "",
+        ageSource: birthDate ? "step1" : "",
+        ageRaw: null,
+        entryDays: null,
         gender, genderSource: gender ? "step1" : "",
         smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "",
         occupation,
@@ -1525,6 +1575,8 @@
         savedAt: null,
         dirtySinceSave: false
       };
+      riskSimSyncAgeFromBirthDate(st, { minAge: MENORA_RISK_MIN_AGE, maxAge: MENORA_RISK_MAX_AGE, asOfDate: st.insuranceStartDate || "" });
+      return st;
     },
 
     /** נקודת הרחבה: קובע אם מבוטח נתון רלוונטי לסימולטור הזה. כברירת מחדל כולם
@@ -1605,7 +1657,7 @@
 
       const ageHintHtml = st.birthDate && Number.isInteger(st.ageRaw)
         ? (st.age
-            ? `<div class="lcMnrSim__hint">גיל ביטוחי: <strong>${escapeHtml(String(st.ageRaw))}</strong> (טווח תעריפון ${MENORA_RISK_MIN_AGE}–${MENORA_RISK_MAX_AGE})</div>`
+            ? `<div class="lcMnrSim__hint">גיל ביטוחי בתחילת הביטוח: <strong>${escapeHtml(String(st.ageRaw))}</strong> (טווח תעריפון ${MENORA_RISK_MIN_AGE}–${MENORA_RISK_MAX_AGE})</div>`
             : `<div class="lcMnrSim__hint lcMnrSim__hint--warn">הגיל המחושב מתאריך הלידה (${st.ageRaw}) חורג מטווח התעריפון (${MENORA_RISK_MIN_AGE}–${MENORA_RISK_MAX_AGE})</div>`)
         : ((isStandalone || st.birthDate)
             ? (st.birthDate ? `<div class="lcMnrSim__hint lcMnrSim__hint--warn">תאריך לידה לא תקין — יש להזין DD/MM/YYYY</div>` : "")
@@ -1685,6 +1737,12 @@
                   placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-mnr-field="birthDate"
                   value="${escapeHtml(st.birthDate || "")}" />
                 ${ageHintHtml}
+              </div>
+              <div class="lcMnrSim__field">
+                <label class="lcMnrSim__label">תחילת ביטוח</label>
+                <input class="lcMnrSim__input lcMnrSim__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
+                  placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-mnr-field="insuranceStartDate"
+                  value="${escapeHtml(st.insuranceStartDate || "")}" />
               </div>
               <div class="lcMnrSim__field">
                 <label class="lcMnrSim__label">מין</label>
@@ -1787,8 +1845,27 @@
           if(!st) return;
           st.birthDate = val;
           st.birthDateSource = "manual";
-          const sync = riskSimSyncAgeFromBirthDate(st, { minAge: MENORA_RISK_MIN_AGE, maxAge: MENORA_RISK_MAX_AGE });
+          const sync = riskSimSyncAgeFromBirthDate(st, { minAge: MENORA_RISK_MIN_AGE, maxAge: MENORA_RISK_MAX_AGE, asOfDate: st.insuranceStartDate || "" });
           st.ageSource = "manual";
+          if(!sync.ok){ st.age = ""; }
+          st.result = null; st.error = null; st.dirtySinceSave = true;
+          this._render();
+        }
+      });
+      bindRiskSimDmyField(modal, '[data-mnr-field="insuranceStartDate"]', {
+        onInput: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.insuranceStartDate = val;
+          st.insuranceStartDateSource = "manual";
+          st.dirtySinceSave = true;
+        },
+        onCommit: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.insuranceStartDate = val || riskSimTodayDmy();
+          st.insuranceStartDateSource = "manual";
+          const sync = riskSimSyncAgeFromBirthDate(st, { minAge: MENORA_RISK_MIN_AGE, maxAge: MENORA_RISK_MAX_AGE, asOfDate: st.insuranceStartDate || "" });
           if(!sync.ok){ st.age = ""; }
           st.result = null; st.error = null; st.dirtySinceSave = true;
           this._render();
@@ -1880,6 +1957,8 @@
         annualPremium: st.result.annualPremium,
         ratePerHundredThousand: st.result.ratePerHundredThousand,
         bracket: st.result.bracket,
+        birthDate: st.birthDate || "",
+        insuranceStartDate: st.insuranceStartDate || "",
         age: st.age, ageSource: st.ageSource, gender: st.gender, smoker: st.smoker,
         genderSource: st.genderSource, smokerSource: st.smokerSource,
         occupation: st.occupation || "", occupationSource: st.occupationSource || ""
@@ -2068,15 +2147,17 @@
       const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
       const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
       const birthDate = safeTrim(d.birthDate || "");
-      const computedAge = birthDate ? riskSimAgeFromBirthDate(birthDate) : null;
-      const ageInRange = Number.isInteger(computedAge) && computedAge >= HACHSHARA_RISK_MIN_AGE && computedAge <= HACHSHARA_RISK_MAX_AGE;
       const occupation = safeTrim(d.occupation || "");
-      return {
+      const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
+      const st = {
         birthDate,
         birthDateSource: birthDate ? "step1" : "",
-        age: ageInRange ? String(computedAge) : "",
-        ageSource: ageInRange ? "step1" : "",
-        ageRaw: computedAge,
+        insuranceStartDate,
+        insuranceStartDateSource: insuranceStartDate ? "ctx" : "",
+        age: "",
+        ageSource: birthDate ? "step1" : "",
+        ageRaw: null,
+        entryDays: null,
         gender, genderSource: gender ? "step1" : "",
         smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "",
         occupation,
@@ -2087,6 +2168,8 @@
         savedAt: null,
         dirtySinceSave: false
       };
+      riskSimSyncAgeFromBirthDate(st, { minAge: HACHSHARA_RISK_MIN_AGE, maxAge: HACHSHARA_RISK_MAX_AGE, asOfDate: st.insuranceStartDate || "" });
+      return st;
     },
 
     _isInsuredRelevant(_ins){
@@ -2161,7 +2244,7 @@
 
       const ageHintHtml = st.birthDate && Number.isInteger(st.ageRaw)
         ? (st.age
-            ? `<div class="lcHachRisk__hint">גיל ביטוחי: <strong>${escapeHtml(String(st.ageRaw))}</strong> (טווח תעריפון ${HACHSHARA_RISK_MIN_AGE}–${HACHSHARA_RISK_MAX_AGE})</div>`
+            ? `<div class="lcHachRisk__hint">גיל ביטוחי בתחילת הביטוח: <strong>${escapeHtml(String(st.ageRaw))}</strong> (טווח תעריפון ${HACHSHARA_RISK_MIN_AGE}–${HACHSHARA_RISK_MAX_AGE})</div>`
             : `<div class="lcHachRisk__hint lcHachRisk__hint--warn">הגיל המחושב מתאריך הלידה (${st.ageRaw}) חורג מטווח התעריפון (${HACHSHARA_RISK_MIN_AGE}–${HACHSHARA_RISK_MAX_AGE})</div>`)
         : ((isStandalone || st.birthDate)
             ? (st.birthDate ? `<div class="lcHachRisk__hint lcHachRisk__hint--warn">תאריך לידה לא תקין — יש להזין DD/MM/YYYY</div>` : "")
@@ -2241,6 +2324,12 @@
                   placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-hachr-field="birthDate"
                   value="${escapeHtml(st.birthDate || "")}" />
                 ${ageHintHtml}
+              </div>
+              <div class="lcHachRisk__field">
+                <label class="lcHachRisk__label">תחילת ביטוח</label>
+                <input class="lcHachRisk__input lcHachRisk__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
+                  placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-hachr-field="insuranceStartDate"
+                  value="${escapeHtml(st.insuranceStartDate || "")}" />
               </div>
               <div class="lcHachRisk__field">
                 <label class="lcHachRisk__label">מין</label>
@@ -2343,8 +2432,27 @@
           if(!st) return;
           st.birthDate = val;
           st.birthDateSource = "manual";
-          const sync = riskSimSyncAgeFromBirthDate(st, { minAge: HACHSHARA_RISK_MIN_AGE, maxAge: HACHSHARA_RISK_MAX_AGE });
+          const sync = riskSimSyncAgeFromBirthDate(st, { minAge: HACHSHARA_RISK_MIN_AGE, maxAge: HACHSHARA_RISK_MAX_AGE, asOfDate: st.insuranceStartDate || "" });
           st.ageSource = "manual";
+          if(!sync.ok){ st.age = ""; }
+          st.result = null; st.error = null; st.dirtySinceSave = true;
+          this._render();
+        }
+      });
+      bindRiskSimDmyField(modal, '[data-hachr-field="insuranceStartDate"]', {
+        onInput: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.insuranceStartDate = val;
+          st.insuranceStartDateSource = "manual";
+          st.dirtySinceSave = true;
+        },
+        onCommit: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.insuranceStartDate = val || riskSimTodayDmy();
+          st.insuranceStartDateSource = "manual";
+          const sync = riskSimSyncAgeFromBirthDate(st, { minAge: HACHSHARA_RISK_MIN_AGE, maxAge: HACHSHARA_RISK_MAX_AGE, asOfDate: st.insuranceStartDate || "" });
           if(!sync.ok){ st.age = ""; }
           st.result = null; st.error = null; st.dirtySinceSave = true;
           this._render();
@@ -2436,6 +2544,8 @@
         annualPremium: st.result.annualPremium,
         ratePerMille: st.result.ratePerMille,
         bracket: st.result.bracket,
+        birthDate: st.birthDate || "",
+        insuranceStartDate: st.insuranceStartDate || "",
         age: st.age, ageSource: st.ageSource, gender: st.gender, smoker: st.smoker,
         genderSource: st.genderSource, smokerSource: st.smokerSource,
         occupation: st.occupation || "", occupationSource: st.occupationSource || ""
@@ -2589,15 +2699,17 @@
       const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
       const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
       const birthDate = safeTrim(d.birthDate || "");
-      const computedAge = birthDate ? riskSimAgeFromBirthDate(birthDate) : null;
-      const ageInRange = Number.isInteger(computedAge) && computedAge >= PHOENIX_MORTGAGE_RISK_MIN_AGE && computedAge <= PHOENIX_MORTGAGE_RISK_MAX_AGE;
       const occupation = safeTrim(d.occupation || "");
-      return {
+      const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
+      const st = {
         birthDate,
         birthDateSource: birthDate ? "step1" : "",
-        age: ageInRange ? String(computedAge) : "",
-        ageSource: ageInRange ? "step1" : "",
-        ageRaw: computedAge,
+        insuranceStartDate,
+        insuranceStartDateSource: insuranceStartDate ? "ctx" : "",
+        age: "",
+        ageSource: birthDate ? "step1" : "",
+        ageRaw: null,
+        entryDays: null,
         gender, genderSource: gender ? "step1" : "",
         smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "",
         occupation,
@@ -2608,6 +2720,8 @@
         savedAt: null,
         dirtySinceSave: false
       };
+      riskSimSyncAgeFromBirthDate(st, { minAge: PHOENIX_MORTGAGE_RISK_MIN_AGE, maxAge: PHOENIX_MORTGAGE_RISK_MAX_AGE, asOfDate: st.insuranceStartDate || "" });
+      return st;
     },
 
     /** נקודת הרחבה: קובע אם מבוטח נתון רלוונטי לסימולטור הזה. כברירת מחדל כולם
@@ -2688,7 +2802,7 @@
 
       const ageHintHtml = st.birthDate && Number.isInteger(st.ageRaw)
         ? (st.age
-            ? `<div class="lcPhxSim__hint">גיל ביטוחי: <strong>${escapeHtml(String(st.ageRaw))}</strong> (טווח תעריפון ${PHOENIX_MORTGAGE_RISK_MIN_AGE}–${PHOENIX_MORTGAGE_RISK_MAX_AGE})</div>`
+            ? `<div class="lcPhxSim__hint">גיל ביטוחי בתחילת הביטוח: <strong>${escapeHtml(String(st.ageRaw))}</strong> (טווח תעריפון ${PHOENIX_MORTGAGE_RISK_MIN_AGE}–${PHOENIX_MORTGAGE_RISK_MAX_AGE})</div>`
             : `<div class="lcPhxSim__hint lcPhxSim__hint--warn">הגיל המחושב מתאריך הלידה (${st.ageRaw}) חורג מטווח התעריפון (${PHOENIX_MORTGAGE_RISK_MIN_AGE}–${PHOENIX_MORTGAGE_RISK_MAX_AGE})</div>`)
         : ((isStandalone || st.birthDate)
             ? (st.birthDate ? `<div class="lcPhxSim__hint lcPhxSim__hint--warn">תאריך לידה לא תקין — יש להזין DD/MM/YYYY</div>` : "")
@@ -2767,6 +2881,12 @@
                   placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-phxmort-field="birthDate"
                   value="${escapeHtml(st.birthDate || "")}" />
                 ${ageHintHtml}
+              </div>
+              <div class="lcPhxSim__field">
+                <label class="lcPhxSim__label">תחילת ביטוח</label>
+                <input class="lcPhxSim__input lcPhxSim__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
+                  placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-phxmort-field="insuranceStartDate"
+                  value="${escapeHtml(st.insuranceStartDate || "")}" />
               </div>
               <div class="lcPhxSim__field">
                 <label class="lcPhxSim__label">מין</label>
@@ -2869,8 +2989,27 @@
           if(!st) return;
           st.birthDate = val;
           st.birthDateSource = "manual";
-          const sync = riskSimSyncAgeFromBirthDate(st, { minAge: PHOENIX_MORTGAGE_RISK_MIN_AGE, maxAge: PHOENIX_MORTGAGE_RISK_MAX_AGE });
+          const sync = riskSimSyncAgeFromBirthDate(st, { minAge: PHOENIX_MORTGAGE_RISK_MIN_AGE, maxAge: PHOENIX_MORTGAGE_RISK_MAX_AGE, asOfDate: st.insuranceStartDate || "" });
           st.ageSource = "manual";
+          if(!sync.ok){ st.age = ""; }
+          st.result = null; st.error = null; st.dirtySinceSave = true;
+          this._render();
+        }
+      });
+      bindRiskSimDmyField(modal, '[data-phxmort-field="insuranceStartDate"]', {
+        onInput: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.insuranceStartDate = val;
+          st.insuranceStartDateSource = "manual";
+          st.dirtySinceSave = true;
+        },
+        onCommit: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.insuranceStartDate = val || riskSimTodayDmy();
+          st.insuranceStartDateSource = "manual";
+          const sync = riskSimSyncAgeFromBirthDate(st, { minAge: PHOENIX_MORTGAGE_RISK_MIN_AGE, maxAge: PHOENIX_MORTGAGE_RISK_MAX_AGE, asOfDate: st.insuranceStartDate || "" });
           if(!sync.ok){ st.age = ""; }
           st.result = null; st.error = null; st.dirtySinceSave = true;
           this._render();
@@ -2961,6 +3100,8 @@
         monthlyPremium: st.result.monthlyPremium,
         annualPremium: st.result.annualPremium,
         ratePerMille: st.result.ratePerMille,
+        birthDate: st.birthDate || "",
+        insuranceStartDate: st.insuranceStartDate || "",
         age: st.age, ageSource: st.ageSource, gender: st.gender, smoker: st.smoker,
         genderSource: st.genderSource, smokerSource: st.smokerSource,
         occupation: st.occupation || "", occupationSource: st.occupationSource || ""
@@ -3624,9 +3765,12 @@
       const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
       const birthDate = safeTrim(d.birthDate || "");
       const occupation = safeTrim(d.occupation || "");
+      const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
       const st = {
         birthDate,
         birthDateSource: birthDate ? "step1" : "",
+        insuranceStartDate,
+        insuranceStartDateSource: insuranceStartDate ? "ctx" : "",
         age: "",
         ageSource: birthDate ? "step1" : "",
         ageRaw: null,
@@ -3643,7 +3787,8 @@
       riskSimSyncAgeFromBirthDate(st, {
         minAge: MENORA_HEALTH_MIN_AGE,
         maxAge: MENORA_HEALTH_MAX_AGE,
-        minEntryDays: MENORA_HEALTH_MIN_ENTRY_DAYS
+        minEntryDays: MENORA_HEALTH_MIN_ENTRY_DAYS,
+        asOfDate: st.insuranceStartDate || ""
       });
       return st;
     },
@@ -3693,7 +3838,8 @@
       return riskSimSyncAgeFromBirthDate(st, {
         minAge: MENORA_HEALTH_MIN_AGE,
         maxAge: MENORA_HEALTH_MAX_AGE,
-        minEntryDays: MENORA_HEALTH_MIN_ENTRY_DAYS
+        minEntryDays: MENORA_HEALTH_MIN_ENTRY_DAYS,
+        asOfDate: st?.insuranceStartDate || ""
       });
     },
 
@@ -3860,6 +4006,10 @@
                 ${ageHintHtml}
               </div>
               <div class="lcMnrHealth__field">
+                <label class="lcMnrHealth__label">תחילת ביטוח</label>
+                <input class="lcMnrHealth__input lcMnrHealth__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-mnrh-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" />
+              </div>
+              <div class="lcMnrHealth__field">
                 <label class="lcMnrHealth__label">מין</label>
                 <div class="lcMnrHealth__segmented">
                   <button type="button" class="lcMnrHealth__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-mnrh-field="gender" data-mnrh-value="זכר">זכר</button>
@@ -3940,6 +4090,24 @@
           this._render();
         }
       });
+      bindRiskSimDmyField(modal, '[data-mnrh-field="insuranceStartDate"]', {
+        onInput: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.insuranceStartDate = val;
+          st.insuranceStartDateSource = "manual";
+          st.dirtySinceSave = true;
+        },
+        onCommit: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.insuranceStartDate = val || riskSimTodayDmy();
+          st.insuranceStartDateSource = "manual";
+          st.dirtySinceSave = true;
+          this._syncAge(st);
+          this._render();
+        }
+      });
       const occInput = modal.querySelector('[data-mnrh-field="occupation"]');
       if(occInput){
         on(occInput, "input", () => {
@@ -4008,6 +4176,7 @@
         annualPremium: st.result.annualPremium,
         monthlyAgorot: st.result.monthlyAgorot,
         birthDate: st.birthDate || "",
+        insuranceStartDate: st.insuranceStartDate || "",
         birthDateSource: st.birthDateSource || "",
         age: st.age, ageSource: st.ageSource, gender: st.gender, genderSource: st.genderSource,
         occupation: st.occupation || "", occupationSource: st.occupationSource || ""
@@ -4448,9 +4617,12 @@
       const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
       const birthDate = safeTrim(d.birthDate || "");
       const occupation = safeTrim(d.occupation || "");
+      const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
       const st = {
         birthDate,
         birthDateSource: birthDate ? "step1" : "",
+        insuranceStartDate,
+        insuranceStartDateSource: insuranceStartDate ? "ctx" : "",
         age: "",
         ageSource: birthDate ? "step1" : "",
         ageRaw: null,
@@ -4467,7 +4639,8 @@
       riskSimSyncAgeFromBirthDate(st, {
         minAge: AYALON_HEALTH_MIN_AGE,
         maxAge: AYALON_HEALTH_MAX_AGE,
-        minEntryDays: AYALON_HEALTH_MIN_ENTRY_DAYS
+        minEntryDays: AYALON_HEALTH_MIN_ENTRY_DAYS,
+        asOfDate: st.insuranceStartDate || ""
       });
       return st;
     },
@@ -4517,7 +4690,8 @@
       return riskSimSyncAgeFromBirthDate(st, {
         minAge: AYALON_HEALTH_MIN_AGE,
         maxAge: AYALON_HEALTH_MAX_AGE,
-        minEntryDays: AYALON_HEALTH_MIN_ENTRY_DAYS
+        minEntryDays: AYALON_HEALTH_MIN_ENTRY_DAYS,
+        asOfDate: st?.insuranceStartDate || ""
       });
     },
 
@@ -4714,6 +4888,10 @@
                 ${ageHintHtml}
               </div>
               <div class="lcAylHealth__field">
+                <label class="lcAylHealth__label">תחילת ביטוח</label>
+                <input class="lcAylHealth__input lcAylHealth__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-aylh-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" />
+              </div>
+              <div class="lcAylHealth__field">
                 <label class="lcAylHealth__label">מין</label>
                 <div class="lcAylHealth__segmented">
                   <button type="button" class="lcAylHealth__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-aylh-field="gender" data-aylh-value="זכר">זכר</button>
@@ -4790,6 +4968,24 @@
           st.birthDate = val;
           st.birthDateSource = "manual";
           st.ageSource = "manual";
+          st.dirtySinceSave = true;
+          this._syncAge(st);
+          this._render();
+        }
+      });
+      bindRiskSimDmyField(modal, '[data-aylh-field="insuranceStartDate"]', {
+        onInput: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.insuranceStartDate = val;
+          st.insuranceStartDateSource = "manual";
+          st.dirtySinceSave = true;
+        },
+        onCommit: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.insuranceStartDate = val || riskSimTodayDmy();
+          st.insuranceStartDateSource = "manual";
           st.dirtySinceSave = true;
           this._syncAge(st);
           this._render();
@@ -4877,6 +5073,7 @@
         annualPremium: st.result.annualPremium,
         monthlyAgorot: st.result.monthlyAgorot,
         birthDate: st.birthDate || "",
+        insuranceStartDate: st.insuranceStartDate || "",
         birthDateSource: st.birthDateSource || "",
         age: st.age, ageSource: st.ageSource, gender: st.gender, genderSource: st.genderSource,
         occupation: st.occupation || "", occupationSource: st.occupationSource || ""
@@ -5097,9 +5294,12 @@
         const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
         const birthDate = safeTrim(d.birthDate || "");
         const occupation = safeTrim(d.occupation || "");
+        const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
         const st = {
           birthDate,
           birthDateSource: birthDate ? "step1" : "",
+          insuranceStartDate,
+          insuranceStartDateSource: insuranceStartDate ? "ctx" : "",
           age: "",
           ageSource: birthDate ? "step1" : "",
           ageRaw: null,
@@ -5118,7 +5318,8 @@
         riskSimSyncAgeFromBirthDate(st, {
           minAge: plan.minAge,
           maxAge: plan.maxEntryAge,
-          minEntryDays: plan.minEntryDays
+          minEntryDays: plan.minEntryDays,
+          asOfDate: st.insuranceStartDate || ""
         });
         return st;
       },
@@ -5127,7 +5328,8 @@
         return riskSimSyncAgeFromBirthDate(st, {
           minAge: plan.minAge,
           maxAge: plan.maxEntryAge,
-          minEntryDays: plan.minEntryDays
+          minEntryDays: plan.minEntryDays,
+          asOfDate: st?.insuranceStartDate || ""
         });
       },
 
@@ -5309,6 +5511,10 @@
                   ${ageHintHtml}
                 </div>
                 <div class="${P}__field">
+                  <label class="${P}__label">תחילת ביטוח</label>
+                  <input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-mnrci-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" />
+                </div>
+                <div class="${P}__field">
                   <label class="${P}__label">מין</label>
                   <div class="${P}__segmented">
                     <button type="button" class="${P}__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-mnrci-field="gender" data-mnrci-value="זכר">זכר</button>
@@ -5403,6 +5609,24 @@
             this._render();
           }
         });
+        bindRiskSimDmyField(modal, '[data-mnrci-field="insuranceStartDate"]', {
+          onInput: (val) => {
+            const st = this._state[this._activeInsuredId];
+            if(!st) return;
+            st.insuranceStartDate = val;
+            st.insuranceStartDateSource = "manual";
+            st.dirtySinceSave = true;
+          },
+          onCommit: (val) => {
+            const st = this._state[this._activeInsuredId];
+            if(!st) return;
+            st.insuranceStartDate = val || riskSimTodayDmy();
+            st.insuranceStartDateSource = "manual";
+            st.result = null; st.error = null; st.dirtySinceSave = true;
+            this._syncAge(st);
+            this._render();
+          }
+        });
         const sumInput = modal.querySelector('[data-mnrci-field="compensation"]');
         if(sumInput) on(sumInput, "input", () => {
           const st = this._state[this._activeInsuredId];
@@ -5483,6 +5707,7 @@
           programMode: r.programMode || st.programMode || "base",
           wizardCoverKey: r.wizardCoverKey,
           birthDate: st.birthDate || "",
+          insuranceStartDate: st.insuranceStartDate || "",
           birthDateSource: st.birthDateSource || "",
           age: st.age, ageSource: st.ageSource, gender: st.gender, genderSource: st.genderSource,
           smoker: st.smoker, smokerSource: st.smokerSource,
@@ -5712,9 +5937,12 @@
       const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
       const birthDate = safeTrim(d.birthDate || "");
       const occupation = safeTrim(d.occupation || "");
+      const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
       const st = {
         birthDate,
         birthDateSource: birthDate ? "step1" : "",
+        insuranceStartDate,
+        insuranceStartDateSource: insuranceStartDate ? "ctx" : "",
         age: "",
         ageSource: birthDate ? "step1" : "",
         ageRaw: null,
@@ -5731,7 +5959,8 @@
       riskSimSyncAgeFromBirthDate(st, {
         minAge: HACHSHARA_HEALTH_MIN_AGE,
         maxAge: HACHSHARA_HEALTH_MAX_AGE,
-        minEntryDays: HACHSHARA_HEALTH_MIN_ENTRY_DAYS
+        minEntryDays: HACHSHARA_HEALTH_MIN_ENTRY_DAYS,
+        asOfDate: st.insuranceStartDate || ""
       });
       return st;
     },
@@ -5781,7 +6010,8 @@
       return riskSimSyncAgeFromBirthDate(st, {
         minAge: HACHSHARA_HEALTH_MIN_AGE,
         maxAge: HACHSHARA_HEALTH_MAX_AGE,
-        minEntryDays: HACHSHARA_HEALTH_MIN_ENTRY_DAYS
+        minEntryDays: HACHSHARA_HEALTH_MIN_ENTRY_DAYS,
+        asOfDate: st?.insuranceStartDate || ""
       });
     },
 
@@ -5948,6 +6178,10 @@
                 ${ageHintHtml}
               </div>
               <div class="lcHachHealth__field">
+                <label class="lcHachHealth__label">תחילת ביטוח</label>
+                <input class="lcHachHealth__input lcHachHealth__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-hachh-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" />
+              </div>
+              <div class="lcHachHealth__field">
                 <label class="lcHachHealth__label">מין</label>
                 <div class="lcHachHealth__segmented">
                   <button type="button" class="lcHachHealth__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-hachh-field="gender" data-hachh-value="זכר">זכר</button>
@@ -6028,6 +6262,24 @@
           this._render();
         }
       });
+      bindRiskSimDmyField(modal, '[data-hachh-field="insuranceStartDate"]', {
+        onInput: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.insuranceStartDate = val;
+          st.insuranceStartDateSource = "manual";
+          st.dirtySinceSave = true;
+        },
+        onCommit: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.insuranceStartDate = val || riskSimTodayDmy();
+          st.insuranceStartDateSource = "manual";
+          st.dirtySinceSave = true;
+          this._syncAge(st);
+          this._render();
+        }
+      });
       const occInput = modal.querySelector('[data-hachh-field="occupation"]');
       if(occInput){
         on(occInput, "input", () => {
@@ -6096,6 +6348,7 @@
         annualPremium: st.result.annualPremium,
         monthlyAgorot: st.result.monthlyAgorot,
         birthDate: st.birthDate || "",
+        insuranceStartDate: st.insuranceStartDate || "",
         birthDateSource: st.birthDateSource || "",
         age: st.age, ageSource: st.ageSource, gender: st.gender, genderSource: st.genderSource,
         occupation: st.occupation || "", occupationSource: st.occupationSource || ""
@@ -6227,8 +6480,10 @@
       const birthDate = safeTrim(d.birthDate || "");
       const smoker = (d.smoker === true || d.smoker === false) ? d.smoker : null;
       const compensation = safeTrim(d.hachsharaCriticalAmount || d.compensation || "") || "100000";
+      const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
       const st = {
         birthDate, birthDateSource: birthDate ? "step1" : "",
+        insuranceStartDate, insuranceStartDateSource: insuranceStartDate ? "ctx" : "",
         age: "", ageSource: birthDate ? "step1" : "", ageRaw: null, entryDays: null,
         gender, genderSource: gender ? "step1" : "",
         smoker, smokerSource: smoker != null ? "step1" : "",
@@ -6238,7 +6493,8 @@
       riskSimSyncAgeFromBirthDate(st, {
         minAge: HACHSHARA_CI_MIN_AGE,
         maxAge: HACHSHARA_CI_MAX_ENTRY_AGE,
-        minEntryDays: HACHSHARA_CI_MIN_ENTRY_DAYS
+        minEntryDays: HACHSHARA_CI_MIN_ENTRY_DAYS,
+        asOfDate: st.insuranceStartDate || ""
       });
       return st;
     },
@@ -6264,7 +6520,8 @@
       return riskSimSyncAgeFromBirthDate(st, {
         minAge: HACHSHARA_CI_MIN_AGE,
         maxAge: HACHSHARA_CI_MAX_ENTRY_AGE,
-        minEntryDays: HACHSHARA_CI_MIN_ENTRY_DAYS
+        minEntryDays: HACHSHARA_CI_MIN_ENTRY_DAYS,
+        asOfDate: st?.insuranceStartDate || ""
       });
     },
     _recalcState(st){
@@ -6296,7 +6553,8 @@
         ratePerHundredThousand: st.result.ratePerHundredThousand,
         wizardCoverKey: HACHSHARA_CI_WIZARD_KEY,
         inputs: {
-          birthDate: st.birthDate, age: st.age, gender: st.gender,
+          birthDate: st.birthDate, insuranceStartDate: st.insuranceStartDate || "",
+          age: st.age, gender: st.gender,
           smoker: st.smoker, compensation: st.compensation
         }
       };
@@ -6356,7 +6614,11 @@
               <div class="lcMnrCi__field">
                 <label class="lcMnrCi__label">תאריך לידה</label>
                 <input class="lcMnrCi__input lcMnrCi__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-hachci-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />
-                <div class="lcMnrCi__hint">גיל ביטוחי: <strong>${escapeHtml(ageDisplay)}</strong></div>
+                <div class="lcMnrCi__hint">גיל ביטוחי בתחילת הביטוח: <strong>${escapeHtml(ageDisplay)}</strong></div>
+              </div>
+              <div class="lcMnrCi__field">
+                <label class="lcMnrCi__label">תחילת ביטוח</label>
+                <input class="lcMnrCi__input lcMnrCi__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-hachci-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" />
               </div>
               <div class="lcMnrCi__field">
                 <label class="lcMnrCi__label">מין</label>
@@ -6429,6 +6691,24 @@
           this._render();
         }
       });
+      bindRiskSimDmyField(modal, '[data-hachci-field="insuranceStartDate"]', {
+        onInput: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.insuranceStartDate = val;
+          st.insuranceStartDateSource = "manual";
+          st.dirtySinceSave = true;
+        },
+        onCommit: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.insuranceStartDate = val || riskSimTodayDmy();
+          st.insuranceStartDateSource = "manual";
+          this._syncAge(st);
+          st.dirtySinceSave = true;
+          this._render();
+        }
+      });
       const compInput = modal.querySelector('[data-hachci-field="compensation"]');
       if(compInput){
         compInput.addEventListener("input", () => {
@@ -6494,18 +6774,7 @@
 
   // ===== GI-MGD-SIM 2026-08-10 · סימולטורי מגדל ==================================
   function resolveMigdalInsuranceStartDate(ctx, ins){
-    const fromCtx = safeTrim(ctx?.insuranceStartDate || ctx?.startDate || ctx?.policyStartDate || "");
-    if(fromCtx) return fromCtx;
-    const d = ins?.data || {};
-    const fromIns = safeTrim(d.insuranceStartDate || d.startDate || d.policyStartDate || "");
-    if(fromIns) return fromIns;
-    const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : [];
-    for(let i = 0; i < insureds.length; i++){
-      const meta = insureds[i]?.data || {};
-      const v = safeTrim(meta.insuranceStartDate || meta.startDate || meta.policyStartDate || "");
-      if(v) return v;
-    }
-    return riskSimTodayDmy();
+    return resolveInsuranceStartDate(ctx, ins);
   }
   function migdalAgorotToShekels(agorot){ return agorot / 100; }
   function formatMigdalExactAmount(n){
