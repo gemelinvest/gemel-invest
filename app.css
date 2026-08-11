@@ -45107,3 +45107,81 @@ body.lcAuthLock .lcLogin__footBtn{
     width: min(230px, 84%) !important;
   }
 }
+
+/* ===== Contacts directory ===== */
+#view-contacts .lcContacts__headMeta{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+#view-contacts .lcContacts__toolbar{
+  align-items:center;
+  gap:12px;
+}
+#view-contacts .lcContacts__chips{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+#view-contacts .lcContacts__chip{
+  border:0;
+  cursor:pointer;
+  padding:8px 12px;
+  border-radius:999px;
+  background:#f1f5f9;
+  color:#64748b;
+  font:inherit;
+  font-weight:600;
+  font-size:13px;
+}
+#view-contacts .lcContacts__chip.is-on{
+  background:rgba(37,99,235,.10);
+  color:#2563EB;
+}
+#view-contacts .lcContacts__rowName{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+#view-contacts .lcContacts__avatar{
+  width:32px;
+  height:32px;
+  border-radius:10px;
+  background:#dbeafe;
+  color:#1E3A8A;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:800;
+  font-size:12px;
+  flex:0 0 auto;
+}
+#view-contacts .lcContacts__name{font-weight:700;color:#0F2748}
+#view-contacts .lcContacts__agency{
+  display:inline-flex;
+  padding:4px 8px;
+  border-radius:8px;
+  background:#f1f5f9;
+  font-weight:600;
+  font-size:12.5px;
+}
+#view-contacts .lcContacts__agency.is-haifa{background:#ecfeff;color:#0e7490}
+#view-contacts .lcContacts__agency.is-modiin{background:#f5f3ff;color:#6d28d9}
+#view-contacts .lcContacts__ext{font-weight:700;color:#1E3A8A}
+#view-contacts .lcContacts__mail a,
+#view-contacts .lcContacts__tel a{
+  color:#2563EB;
+  text-decoration:none;
+  font-weight:500;
+}
+.lcContactsModal .lcContactsModal__fields{
+  display:grid;
+  gap:4px;
+  margin-bottom:12px;
+}
+.lcContactsModal .gi-modal__error{
+  color:#b91c1c;
+  font-size:13px;
+  margin:0 0 10px;
+}

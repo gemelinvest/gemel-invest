@@ -2271,6 +2271,8 @@
       teamManagerAssignmentsUpdatedAt: null,
       agentReportAliases: {},
       agentReportAliasesUpdatedAt: null,
+      directoryContactExtras: [],
+      directoryContactsUpdatedAt: null,
       agentSecurity: {},
       agentTargets: {},
       dataUpdatedAt: null,
@@ -2361,6 +2363,10 @@
     out.meta.agentReportAliases = normalizeAgentReportAliasesMap(out.meta.agentReportAliases);
     if(!safeTrim(out.meta.agentReportAliasesUpdatedAt) && Object.keys(out.meta.agentReportAliases || {}).length){
       out.meta.agentReportAliasesUpdatedAt = safeTrim(out.meta.updatedAt) || nowISO();
+    }
+    out.meta.directoryContactExtras = normalizeDirectoryContactsList(out.meta.directoryContactExtras);
+    if(!safeTrim(out.meta.directoryContactsUpdatedAt) && out.meta.directoryContactExtras.length){
+      out.meta.directoryContactsUpdatedAt = safeTrim(out.meta.updatedAt) || nowISO();
     }
     out.meta.teamManagerAssignments = normalizeTeamManagerAssignmentsMap(out.meta.teamManagerAssignments);
     if(!safeTrim(out.meta.teamManagerAssignmentsUpdatedAt) && Object.keys(out.meta.teamManagerAssignments || {}).length){
@@ -2612,11 +2618,27 @@
           remoteAt: safeTrim(server.agentReportAliasesUpdatedAt)
         }
       ),
+      directoryContactExtras: mergeDirectoryContactsListsByRecency(
+        local.directoryContactExtras,
+        server.directoryContactExtras,
+        {
+          localAt: safeTrim(local.directoryContactsUpdatedAt),
+          remoteAt: safeTrim(server.directoryContactsUpdatedAt)
+        }
+      ),
       updatedAt: preferredUpdatedAt || nowISO()
     };
     merged.agentReportAliasesUpdatedAt = (() => {
       const localAt = safeTrim(local.agentReportAliasesUpdatedAt);
       const serverAt = safeTrim(server.agentReportAliasesUpdatedAt);
+      if(localAt && serverAt){
+        return compareIsoStamps(localAt, serverAt) >= 0 ? localAt : serverAt;
+      }
+      return localAt || serverAt || preferredUpdatedAt || nowISO();
+    })();
+    merged.directoryContactsUpdatedAt = (() => {
+      const localAt = safeTrim(local.directoryContactsUpdatedAt);
+      const serverAt = safeTrim(server.directoryContactsUpdatedAt);
       if(localAt && serverAt){
         return compareIsoStamps(localAt, serverAt) >= 0 ? localAt : serverAt;
       }
@@ -3626,6 +3648,98 @@
       .split(/[\n,;]+/)
       .map(safeTrim)
       .filter(Boolean);
+  }
+
+  function normalizeDirectoryContact(row, idx){
+    if(!row || typeof row !== "object") return null;
+    const fullName = safeTrim(row.fullName || row.full_name || row.name);
+    if(!fullName) return null;
+    const email = safeTrim(row.email);
+    const agency = safeTrim(row.agency);
+    const mobile = safeTrim(row.mobile || row.phone || row.cellphone);
+    const extRaw = row.ext ?? row.extension ?? row.officeExt;
+    const ext = safeTrim(extRaw == null ? "" : String(extRaw));
+    const id = safeTrim(row.id) || ("dc_" + String(idx || 0));
+    return {
+      id,
+      fullName,
+      email,
+      agency,
+      mobile,
+      ext: ext || "ללא",
+      source: safeTrim(row.source) || "manual",
+      createdAt: safeTrim(row.createdAt || row.created_at) || nowISO(),
+      updatedAt: safeTrim(row.updatedAt || row.updated_at) || nowISO()
+    };
+  }
+
+  function normalizeDirectoryContactsList(list){
+    const seen = new Set();
+    const out = [];
+    (Array.isArray(list) ? list : []).forEach((row, idx) => {
+      const normalized = normalizeDirectoryContact(row, idx);
+      if(!normalized) return;
+      const key = safeTrim(normalized.id).toLowerCase() || ("row_" + idx);
+      if(seen.has(key)) return;
+      seen.add(key);
+      out.push(normalized);
+    });
+    return out;
+  }
+
+  function mergeDirectoryContactsListsByRecency(localList, remoteList, options = {}){
+    const local = normalizeDirectoryContactsList(localList);
+    const remote = normalizeDirectoryContactsList(remoteList);
+    const localAt = safeTrim(options.localAt);
+    const remoteAt = safeTrim(options.remoteAt);
+    if(localAt && remoteAt){
+      const localNewer = compareIsoStamps(localAt, remoteAt) >= 0;
+      const winner = localNewer ? local : remote;
+      const loser = localNewer ? remote : local;
+      const map = new Map();
+      loser.forEach((c) => map.set(String(c.id).toLowerCase(), c));
+      winner.forEach((c) => map.set(String(c.id).toLowerCase(), c));
+      return normalizeDirectoryContactsList([...map.values()]);
+    }
+    if(localAt && local.length) return local;
+    if(remoteAt && remote.length) return remote;
+    const map = new Map();
+    remote.forEach((c) => map.set(String(c.id).toLowerCase(), c));
+    local.forEach((c) => {
+      const key = String(c.id).toLowerCase();
+      const prev = map.get(key);
+      if(!prev || compareIsoStamps(c.updatedAt, prev.updatedAt) >= 0) map.set(key, c);
+    });
+    return normalizeDirectoryContactsList([...map.values()]);
+  }
+
+  function getDirectoryContactsSeedList(){
+    const raw = (typeof window !== "undefined" && Array.isArray(window.__GI_DIRECTORY_CONTACTS_SEED))
+      ? window.__GI_DIRECTORY_CONTACTS_SEED
+      : [];
+    return raw.map((row, idx) => normalizeDirectoryContact({
+      ...row,
+      id: "seed_" + idx,
+      source: "seed",
+      ext: row?.ext == null ? "ללא" : row.ext
+    }, idx)).filter(Boolean);
+  }
+
+  function listDirectoryContacts(){
+    const map = new Map();
+    getDirectoryContactsSeedList().forEach((c) => {
+      const key = (safeTrim(c.email).toLowerCase() || safeTrim(c.fullName).toLowerCase() || c.id);
+      map.set(key, c);
+    });
+    normalizeDirectoryContactsList(State.data?.meta?.directoryContactExtras).forEach((c) => {
+      const key = (safeTrim(c.email).toLowerCase() || safeTrim(c.id).toLowerCase() || safeTrim(c.fullName).toLowerCase());
+      map.set(key, c);
+    });
+    return [...map.values()].sort((a, b) => safeTrim(a.fullName).localeCompare(safeTrim(b.fullName), "he"));
+  }
+
+  function canManageDirectoryContacts(){
+    try { return !!(Auth.isAdmin() || Auth.isManager()); } catch(_e){ return false; }
   }
 
   function bootstrapAgentNameHistoryFromLinkedRecords(stateRef){
@@ -9770,6 +9884,8 @@
           teamManagerAssignmentsUpdatedAt: safeTrim(state?.meta?.teamManagerAssignmentsUpdatedAt) || null,
           agentReportAliases: normalizeAgentReportAliasesMap(state?.meta?.agentReportAliases),
           agentReportAliasesUpdatedAt: safeTrim(state?.meta?.agentReportAliasesUpdatedAt) || null,
+          directoryContactExtras: normalizeDirectoryContactsList(state?.meta?.directoryContactExtras),
+          directoryContactsUpdatedAt: safeTrim(state?.meta?.directoryContactsUpdatedAt) || null,
           // GI-FIX 2026-08-03c: agentSecurity/agentTargets חייבים ב-buildMetaRow עצמו,
           // לא רק ב-wrapper מאוחר — אחרת שמירה לפני העטיפה מאבדת pinOnlyLogin.
           agentSecurity: (typeof normalizeAgentSecurityMap === "function")
@@ -10396,6 +10512,8 @@
         teamManagerAssignmentsUpdatedAt: safeTrim(payload?.teamManagerAssignmentsUpdatedAt) || null,
         agentReportAliases: normalizeAgentReportAliasesMap(payload?.agentReportAliases),
         agentReportAliasesUpdatedAt: safeTrim(payload?.agentReportAliasesUpdatedAt) || null,
+        directoryContactExtras: normalizeDirectoryContactsList(payload?.directoryContactExtras),
+        directoryContactsUpdatedAt: safeTrim(payload?.directoryContactsUpdatedAt) || null,
         // GI-FIX 2026-08-03c: קריאת agentSecurity מ-payload ב-mapMeta עצמו (לא רק ב-wrapper).
         agentSecurity: (typeof normalizeAgentSecurityMap === "function")
           ? normalizeAgentSecurityMap(payload?.agentSecurity)
@@ -11274,6 +11392,22 @@
           }
           return localAt || remoteAt || safeTrim(mappedMeta.updatedAt) || nowISO();
         })();
+        mappedMeta.directoryContactExtras = mergeDirectoryContactsListsByRecency(
+          prevMeta.directoryContactExtras,
+          mappedMeta.directoryContactExtras,
+          {
+            localAt: safeTrim(prevMeta.directoryContactsUpdatedAt),
+            remoteAt: safeTrim(mappedMeta.directoryContactsUpdatedAt)
+          }
+        );
+        mappedMeta.directoryContactsUpdatedAt = (() => {
+          const localAt = safeTrim(prevMeta.directoryContactsUpdatedAt);
+          const remoteAt = safeTrim(mappedMeta.directoryContactsUpdatedAt);
+          if(localAt && remoteAt){
+            return compareIsoStamps(localAt, remoteAt) >= 0 ? localAt : remoteAt;
+          }
+          return localAt || remoteAt || safeTrim(mappedMeta.updatedAt) || nowISO();
+        })();
         State.data.meta = { ...(prevMeta || defaultState().meta), ...mappedMeta };
         try { invalidateDailyReportMatchCaches(); } catch(_e) {}
 
@@ -11965,6 +12099,22 @@
                 }
                 return localAt || remoteAt || safeTrim(mergedState.meta.updatedAt) || nowISO();
               })();
+              mergedState.meta.directoryContactExtras = mergeDirectoryContactsListsByRecency(
+                mergedState.meta.directoryContactExtras,
+                remoteMeta.directoryContactExtras,
+                {
+                  localAt: safeTrim(mergedState.meta.directoryContactsUpdatedAt),
+                  remoteAt: safeTrim(remoteMeta.directoryContactsUpdatedAt)
+                }
+              );
+              mergedState.meta.directoryContactsUpdatedAt = (() => {
+                const localAt = safeTrim(mergedState.meta.directoryContactsUpdatedAt);
+                const remoteAt = safeTrim(remoteMeta.directoryContactsUpdatedAt);
+                if(localAt && remoteAt){
+                  return compareIsoStamps(localAt, remoteAt) >= 0 ? localAt : remoteAt;
+                }
+                return localAt || remoteAt || safeTrim(mergedState.meta.updatedAt) || nowISO();
+              })();
               // GI-FIX 2026-08-03: metaOnly כותב את כל agentSecurity — בלי מיזוג,
               // לקוח עם מטמון ישן (או שמירת MFA אחרי כניסה) דרס pinOnlyLogin בשרת.
               if(typeof mergeAgentSecurityMapsByRecency === "function"){
@@ -12079,6 +12229,22 @@
               return compareIsoStamps(localAt, serverAt) >= 0 ? localAt : serverAt;
             }
             return localAt || serverAt || safeTrim(localState.meta?.agentReportAliasesUpdatedAt) || null;
+          })();
+          localState.meta.directoryContactExtras = mergeDirectoryContactsListsByRecency(
+            localState.meta?.directoryContactExtras,
+            serverState.meta.directoryContactExtras,
+            {
+              localAt: safeTrim(localState.meta?.directoryContactsUpdatedAt),
+              remoteAt: safeTrim(serverState.meta.directoryContactsUpdatedAt)
+            }
+          );
+          localState.meta.directoryContactsUpdatedAt = (() => {
+            const localAt = safeTrim(localState.meta?.directoryContactsUpdatedAt);
+            const serverAt = safeTrim(serverState.meta.directoryContactsUpdatedAt);
+            if(localAt && serverAt){
+              return compareIsoStamps(localAt, serverAt) >= 0 ? localAt : serverAt;
+            }
+            return localAt || serverAt || safeTrim(localState.meta?.directoryContactsUpdatedAt) || null;
           })();
           // GI-FIX 2026-08-03: אותו סיכון כמו metaOnly — לא לדרוס pinOnlyLogin מהשרת.
           if(typeof mergeAgentSecurityMapsByRecency === "function"){
@@ -14091,7 +14257,7 @@ UsersGateUI.init();
       if (isReferent) {
         $$(".nav__item").forEach((btn) => {
           const v = btn.getAttribute("data-view");
-          btn.style.display = (v === "campaignLeads" || v === "dashboard") ? "" : "none";
+          btn.style.display = (v === "campaignLeads" || v === "dashboard" || v === "contacts") ? "" : "none";
         });
         if (newCustomerBtn) newCustomerBtn.style.display = "none";
         if (offerFab) offerFab.style.display = "none";
@@ -14118,6 +14284,9 @@ UsersGateUI.init();
       if (this.els.navMirrorAssignments) this.els.navMirrorAssignments.style.display = (Auth.canMirrorAssign() && Auth.current) ? "" : "none";
       if (this.els.navMyProcesses) this.els.navMyProcesses.style.display = isOps ? "" : "none";
       if (myToolsNav) myToolsNav.style.display = isElementary ? "none" : "";
+      const contactsNav = document.getElementById("navContacts");
+      if (contactsNav) contactsNav.style.display = Auth.current ? "" : "none";
+      try { ContactsUI.syncAddButton?.(); } catch(_e) {}
       // הקמת הצעה חדשה: זמין גם לאלמנטרי (כמו נציג רגיל); מוסתר לתפעול / נציג תפעול / סוקרת
       if (newCustomerBtn) newCustomerBtn.style.display = isOpsFamily ? "none" : "";
       if (offerFab) offerFab.style.display = isElementary ? "none" : "";
@@ -14161,6 +14330,7 @@ UsersGateUI.init();
       }
       if(safe === "agentElementaryTracking") safe = "proposals";
       if(safe === "customers" && !Auth.current) safe = "dashboard";
+      if(safe === "contacts" && !Auth.current) safe = "dashboard";
       if(safe === "proposals" && (!Auth.current || Auth.isElementary())) safe = "dashboard";
       if(safe === "elementaryProposals" && (!Auth.current || !Auth.isElementary())) safe = "dashboard";
       if(safe === "archivedCustomers" && !Auth.isAdmin() && !Auth.isManager()) safe = "dashboard";
@@ -14176,7 +14346,7 @@ UsersGateUI.init();
         this._settingsRubric = safe;
         safe = "settings";
       }
-      if(Auth.isReferent() && safe !== "campaignLeads") safe = "campaignLeads";
+      if(Auth.isReferent() && safe !== "campaignLeads" && safe !== "contacts") safe = "campaignLeads";
       try { CampaignLeadsUI.stopPoll?.(); } catch(_e) {}
       try { CustomersUI.stopOpsCardLoop?.(); } catch(_e) {}
       // hide all views
@@ -14195,6 +14365,7 @@ UsersGateUI.init();
           elementaryPending: "ממתינים לטיפול",
           agentElementaryTracking: "לקוחות בטיפול תפעול וחיתום",
           myTools: "כלים",
+          contacts: "אנשי קשר",
           myProcesses: "התהליכים שלי",
           mirrorCall: "שיחת שיקוף",
           elementaryMirror: "שיקוף שיחה אלמנטרי",
@@ -14216,7 +14387,7 @@ UsersGateUI.init();
       }
 
       this.setActiveNav(safe);
-      document.body.classList.remove("view-users-active","view-dashboard-active","view-settings-active","view-myTools-active","view-customers-active","view-archivedCustomers-active","view-proposals-active","view-elementaryProposals-active","view-elementaryPending-active","view-agentElementaryTracking-active","view-myProcesses-active","view-mirrorCall-active","view-elementaryMirror-active","view-mirrorAssignments-active","view-typingPacket-active","view-systemUpdates-active","view-campaignLeads-active","view-campaignMyLeads-active","view-reportsHub-active","view-dailyReport-active","view-dailySales-active","view-myTeam-active","view-activityLog-active","view-attendanceReport-active");
+      document.body.classList.remove("view-users-active","view-dashboard-active","view-settings-active","view-myTools-active","view-contacts-active","view-customers-active","view-archivedCustomers-active","view-proposals-active","view-elementaryProposals-active","view-elementaryPending-active","view-agentElementaryTracking-active","view-myProcesses-active","view-mirrorCall-active","view-elementaryMirror-active","view-mirrorAssignments-active","view-typingPacket-active","view-systemUpdates-active","view-campaignLeads-active","view-campaignMyLeads-active","view-reportsHub-active","view-dailyReport-active","view-dailySales-active","view-myTeam-active","view-activityLog-active","view-attendanceReport-active");
       document.body.classList.add("view-" + safe + "-active");
       if(safe !== "settings"){
         ["connection","version","campaigns","landing","security","systemUpdates","activityLog","attendanceReport","archivedCustomers"].forEach((name) => {
@@ -14303,6 +14474,9 @@ UsersGateUI.init();
           try { DashboardUI.renderDailySalesPage?.(); } catch(_e) {}
         }
         if (safe === "myTeam") void MyTeamUI.render();
+        if (safe === "contacts") {
+          try { ContactsUI.render(); } catch(_e) {}
+        }
         if (safe !== "settings" || this._settingsRubric !== "activityLog") AgentActivityLogUI.stopRealtime();
         try { ProcessesUI.syncRealtimeForView?.(); } catch(_e) {}
         try { ListRecordRealtime.syncForView?.(); } catch(_e) {}
@@ -40990,6 +41164,8 @@ const ClalRiskLifePdf = {
     row.payload.agentTargets = normalizeAgentTargetMap(state?.meta?.agentTargets);
     row.payload.agentReportAliases = normalizeAgentReportAliasesMap(state?.meta?.agentReportAliases);
     row.payload.agentReportAliasesUpdatedAt = safeTrim(state?.meta?.agentReportAliasesUpdatedAt) || null;
+    row.payload.directoryContactExtras = normalizeDirectoryContactsList(state?.meta?.directoryContactExtras);
+    row.payload.directoryContactsUpdatedAt = safeTrim(state?.meta?.directoryContactsUpdatedAt) || null;
     row.payload.usersManagementAccess = normalizeUsersManagementAccess(state?.meta?.usersManagementAccess);
     row.payload.archivedCustomers = normalizeArchivedCustomersList(state?.meta?.archivedCustomers || []);
     row.payload.elementaryReferrals = getElementaryReferrals();
@@ -41334,6 +41510,12 @@ const ClalRiskLifePdf = {
     out.agentReportAliases = normalizeAgentReportAliasesMap(metaRow?.payload?.agentReportAliases || out.agentReportAliases);
     out.agentReportAliasesUpdatedAt = safeTrim(metaRow?.payload?.agentReportAliasesUpdatedAt)
       || safeTrim(out.agentReportAliasesUpdatedAt)
+      || null;
+    out.directoryContactExtras = normalizeDirectoryContactsList(
+      Array.isArray(metaRow?.payload?.directoryContactExtras) ? metaRow.payload.directoryContactExtras : (out.directoryContactExtras || [])
+    );
+    out.directoryContactsUpdatedAt = safeTrim(metaRow?.payload?.directoryContactsUpdatedAt)
+      || safeTrim(out.directoryContactsUpdatedAt)
       || null;
     out.usersManagementAccess = normalizeUsersManagementAccess(metaRow?.payload?.usersManagementAccess || out.usersManagementAccess);
     out.agentsShadow = Array.isArray(metaRow?.payload?.agentsShadow) ? metaRow.payload.agentsShadow.map((row, idx) => ({
@@ -45291,6 +45473,204 @@ const CampaignLeadsStore = {
         </tr>`).join("");
       if(showToast){
         try { window.showToast?.({ title: "הצוות שלי", text: "הנתונים עודכנו", variant: "ok", durationMs: 3200 }); } catch(_e) {}
+      }
+    }
+  };
+
+  const ContactsUI = {
+    els: {},
+    query: "",
+    agency: "הכל",
+    _bound: false,
+    _saving: false,
+
+    init(){
+      if(this._bound) return;
+      this.els.tbody = document.getElementById("contactsTbody");
+      this.els.badge = document.getElementById("contactsCountBadge");
+      this.els.search = document.getElementById("contactsSearch");
+      this.els.chips = document.getElementById("contactsAgencyChips");
+      this.els.btnAdd = document.getElementById("btnAddContact");
+      this.els.modal = document.getElementById("contactsAddModal");
+      this.els.backdrop = document.getElementById("contactsAddModalBackdrop");
+      this.els.btnSave = document.getElementById("contactsAddSaveBtn");
+      this.els.btnCancel = document.getElementById("contactsAddCancelBtn");
+      this.els.error = document.getElementById("contactsAddError");
+      this.els.fieldName = document.getElementById("contactFieldFullName");
+      this.els.fieldEmail = document.getElementById("contactFieldEmail");
+      this.els.fieldAgency = document.getElementById("contactFieldAgency");
+      this.els.fieldMobile = document.getElementById("contactFieldMobile");
+      this.els.fieldExt = document.getElementById("contactFieldExt");
+      if(this.els.search){
+        on(this.els.search, "input", perfDebounce(() => {
+          this.query = safeTrim(this.els.search.value);
+          this.render();
+        }, 180));
+      }
+      if(this.els.chips){
+        on(this.els.chips, "click", (ev) => {
+          const btn = ev.target?.closest?.("[data-agency]");
+          if(!btn) return;
+          this.agency = safeTrim(btn.getAttribute("data-agency")) || "הכל";
+          this.render();
+        });
+      }
+      if(this.els.btnAdd) on(this.els.btnAdd, "click", () => this.openAddModal());
+      if(this.els.btnCancel) on(this.els.btnCancel, "click", () => this.closeAddModal());
+      if(this.els.backdrop) on(this.els.backdrop, "click", () => this.closeAddModal());
+      if(this.els.btnSave) on(this.els.btnSave, "click", () => void this.saveNewContact());
+      this._bound = true;
+    },
+
+    initials(name){
+      const parts = safeTrim(name).split(/\s+/).filter(Boolean);
+      const a = (parts[0] || "?")[0] || "?";
+      const b = (parts[1] || "")[0] || "";
+      return (a + b).toUpperCase();
+    },
+
+    agencyClass(agency){
+      if(agency === "חיפה") return "is-haifa";
+      if(agency === "מודיעין") return "is-modiin";
+      return "";
+    },
+
+    filteredRows(){
+      const qq = safeTrim(this.query).toLowerCase();
+      return listDirectoryContacts().filter((c) => {
+        if(this.agency !== "הכל" && safeTrim(c.agency) !== this.agency) return false;
+        if(!qq) return true;
+        return [c.fullName, c.email, c.agency, c.mobile, c.ext].join(" ").toLowerCase().includes(qq);
+      });
+    },
+
+    syncAddButton(){
+      if(!this.els.btnAdd) return;
+      this.els.btnAdd.style.display = canManageDirectoryContacts() ? "" : "none";
+    },
+
+    renderChips(allRows){
+      if(!this.els.chips) return;
+      const agencies = ["הכל", ...[...new Set(allRows.map((c) => safeTrim(c.agency)).filter(Boolean))].sort((a, b) => a.localeCompare(b, "he"))];
+      if(!agencies.includes(this.agency)) this.agency = "הכל";
+      this.els.chips.innerHTML = agencies.map((a) => (
+        `<button class="lcContacts__chip${a === this.agency ? " is-on" : ""}" data-agency="${escapeHtml(a)}" type="button">${escapeHtml(a)}</button>`
+      )).join("");
+    },
+
+    render(){
+      this.init();
+      this.syncAddButton();
+      const allRows = listDirectoryContacts();
+      this.renderChips(allRows);
+      const rows = this.filteredRows();
+      if(this.els.badge) this.els.badge.textContent = rows.length + " אנשי קשר";
+      if(!this.els.tbody) return;
+      if(!rows.length){
+        this.els.tbody.innerHTML = `<tr><td class="muted" colspan="5">לא נמצאו אנשי קשר</td></tr>`;
+        return;
+      }
+      this.els.tbody.innerHTML = rows.map((c) => {
+        const email = safeTrim(c.email);
+        const mobile = safeTrim(c.mobile);
+        const telHref = mobile.replace(/[^\d+]/g, "");
+        const agency = safeTrim(c.agency);
+        return `<tr>
+          <td><div class="lcContacts__rowName"><span class="lcContacts__avatar" aria-hidden="true">${escapeHtml(this.initials(c.fullName))}</span><span class="lcContacts__name">${escapeHtml(c.fullName)}</span></div></td>
+          <td class="lcContacts__mail">${email ? `<a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>` : "—"}</td>
+          <td><span class="lcContacts__agency ${this.agencyClass(agency)}">${escapeHtml(agency || "—")}</span></td>
+          <td class="lcContacts__tel">${mobile ? `<a href="tel:${escapeHtml(telHref)}">${escapeHtml(mobile)}</a>` : "—"}</td>
+          <td class="lcContacts__ext">${escapeHtml(safeTrim(c.ext) || "ללא")}</td>
+        </tr>`;
+      }).join("");
+    },
+
+    openAddModal(){
+      if(!canManageDirectoryContacts()) return;
+      this.init();
+      if(this.els.error){
+        this.els.error.style.display = "none";
+        this.els.error.textContent = "";
+      }
+      if(this.els.fieldName) this.els.fieldName.value = "";
+      if(this.els.fieldEmail) this.els.fieldEmail.value = "";
+      if(this.els.fieldAgency) this.els.fieldAgency.value = "";
+      if(this.els.fieldMobile) this.els.fieldMobile.value = "";
+      if(this.els.fieldExt) this.els.fieldExt.value = "";
+      if(this.els.modal) this.els.modal.hidden = false;
+      try { this.els.fieldName?.focus?.(); } catch(_e) {}
+    },
+
+    closeAddModal(){
+      if(this.els.modal) this.els.modal.hidden = true;
+    },
+
+    showError(text){
+      if(!this.els.error) return;
+      this.els.error.textContent = text;
+      this.els.error.style.display = text ? "" : "none";
+    },
+
+    async saveNewContact(){
+      if(!canManageDirectoryContacts()) return;
+      if(this._saving) return;
+      const fullName = safeTrim(this.els.fieldName?.value);
+      const email = safeTrim(this.els.fieldEmail?.value);
+      const agency = safeTrim(this.els.fieldAgency?.value);
+      const mobile = safeTrim(this.els.fieldMobile?.value);
+      const ext = safeTrim(this.els.fieldExt?.value);
+      if(!fullName || !email || !agency || !mobile || !ext){
+        this.showError("יש למלא את כל השדות");
+        return;
+      }
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+        this.showError("כתובת המייל אינה תקינה");
+        return;
+      }
+      const stamp = nowISO();
+      const contact = normalizeDirectoryContact({
+        id: "dc_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7),
+        fullName,
+        email,
+        agency,
+        mobile,
+        ext,
+        source: "manual",
+        createdAt: stamp,
+        updatedAt: stamp
+      }, 0);
+      if(!contact){
+        this.showError("לא ניתן לשמור את איש הקשר");
+        return;
+      }
+      this._saving = true;
+      if(this.els.btnSave) this.els.btnSave.disabled = true;
+      try {
+        State.data.meta = State.data.meta && typeof State.data.meta === "object" ? State.data.meta : {};
+        const extras = normalizeDirectoryContactsList(State.data.meta.directoryContactExtras);
+        extras.push(contact);
+        State.data.meta.directoryContactExtras = extras;
+        State.data.meta.directoryContactsUpdatedAt = stamp;
+        State.data.meta.updatedAt = stamp;
+        const res = await Storage.upsertMeta(State.data);
+        if(!res?.ok){
+          throw new Error(safeTrim(res?.error) || "שמירה לשרת נכשלה");
+        }
+        this.closeAddModal();
+        this.render();
+        try {
+          window.showToast?.({
+            title: "אנשי קשר",
+            text: "איש הקשר נוסף בהצלחה",
+            variant: "ok",
+            durationMs: 3600
+          });
+        } catch(_e) {}
+      } catch(err){
+        this.showError(safeTrim(err?.message) || "שמירה נכשלה");
+      } finally {
+        this._saving = false;
+        if(this.els.btnSave) this.els.btnSave.disabled = false;
       }
     }
   };
@@ -50017,6 +50397,7 @@ ${inner}
   };
 
   MyTeamUI.init();
+  ContactsUI.init();
   AgentActivityLog.init();
   AgentActivityLogUI.init();
   AttendanceClock.init();

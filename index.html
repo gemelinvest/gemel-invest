@@ -8,8 +8,8 @@
 <meta content="#f8fafc" name="theme-color"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20260810-dash-goldgrad-v1" rel="stylesheet"/>
-<link href="./theme.css?v=20260810-dash-goldgrad-v1" rel="stylesheet"/>
+<link href="./app.css?v=20260811-contacts-v1" rel="stylesheet"/>
+<link href="./theme.css?v=20260811-contacts-v1" rel="stylesheet"/>
 <link href="./theme-p2.css?v=20260805-workdays-goal-v1" rel="stylesheet"/>
 <link href="./login-split.css?v=20260810-login-split-v12" rel="stylesheet"/>
 <!-- GI-PERF 2026-08-10: CSS משני (mirror/import/unify) נטען אחרי כניסה מ-app.js —
@@ -261,6 +261,17 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 </svg>
 </span>
 <span class="nav__label">כלים</span>
+</button>
+<button class="nav__item" data-view="contacts" id="navContacts" type="button">
+<span class="nav__icon" aria-hidden="true">
+<svg class="nav__iconSvg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+<circle cx="9" cy="7" r="4"></circle>
+<path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+</svg>
+</span>
+<span class="nav__label">אנשי קשר</span>
 </button>
 <button class="nav__item" data-view="dailySales" id="navDailySales" style="display:none" type="button">
 <span class="nav__icon" aria-hidden="true">
@@ -1270,6 +1281,41 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
       <iframe class="myTools__frame" id="myToolsFrame" src="https://oriasomech-jpg.github.io/TalkMe/" title="כלים" allowfullscreen></iframe>
     </div>
   </div>
+</section>
+
+<section class="view" id="view-contacts">
+<div class="card lcCustomersCard lcContactsCard">
+<div class="card__head">
+<div>
+<div class="card__title">אנשי קשר</div>
+<div class="card__hint">ספר טלפונים פנימי — חיפוש לפי שם, מייל, סוכנות, נייד או שלוחה</div>
+</div>
+<div class="lcCustomers__headMeta lcContacts__headMeta">
+<span class="badge" id="contactsCountBadge">0 אנשי קשר</span>
+<button class="btn btn--primary" id="btnAddContact" type="button" style="display:none">+ הוסף איש קשר</button>
+</div>
+</div>
+<div class="lcCustomers__toolbar lcContacts__toolbar">
+<div class="search lcCustomers__searchWrap">
+<input class="search__input" id="contactsSearch" placeholder="חיפוש שם / מייל / נייד / שלוחה" type="search"/>
+</div>
+<div class="lcContacts__chips" id="contactsAgencyChips" role="group" aria-label="סינון לפי סוכנות"></div>
+</div>
+<div class="tableWrap">
+<table class="table">
+<thead>
+<tr>
+<th>שם מלא</th>
+<th>מייל</th>
+<th>סוכנות</th>
+<th>סלולרי</th>
+<th>שלוחה משרדית</th>
+</tr>
+</thead>
+<tbody id="contactsTbody"></tbody>
+</table>
+</div>
+</div>
 </section>
 
 <section class="view" id="view-myProcesses">
@@ -3719,7 +3765,36 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
   </div>
 </div>
 
-<script src="./app.js?v=20260810-login-split-v12"></script>
+<div class="mcAssignModal lcContactsModal" id="contactsAddModal" hidden dir="rtl" role="dialog" aria-modal="true" aria-labelledby="contactsAddModalTitle">
+  <button type="button" class="mcAssignModal__backdrop" id="contactsAddModalBackdrop" aria-label="סגור"></button>
+  <div class="mcAssignModal__panel">
+    <div class="mcAssignModal__title" id="contactsAddModalTitle">הוסף איש קשר</div>
+    <div class="lcContactsModal__fields">
+      <label class="mcAssignModal__label" for="contactFieldFullName">שם מלא</label>
+      <input class="input mcAssignModal__select" id="contactFieldFullName" type="text" autocomplete="name"/>
+      <label class="mcAssignModal__label" for="contactFieldEmail">מייל</label>
+      <input class="input mcAssignModal__select" id="contactFieldEmail" type="email" autocomplete="email" dir="ltr"/>
+      <label class="mcAssignModal__label" for="contactFieldAgency">סוכנות</label>
+      <input class="input mcAssignModal__select" id="contactFieldAgency" type="text" placeholder="חיפה / מודיעין" list="contactsAgencySuggestions"/>
+      <datalist id="contactsAgencySuggestions">
+        <option value="חיפה"></option>
+        <option value="מודיעין"></option>
+      </datalist>
+      <label class="mcAssignModal__label" for="contactFieldMobile">סלולרי</label>
+      <input class="input mcAssignModal__select" id="contactFieldMobile" type="tel" autocomplete="tel" dir="ltr"/>
+      <label class="mcAssignModal__label" for="contactFieldExt">שלוחה משרדית</label>
+      <input class="input mcAssignModal__select" id="contactFieldExt" type="text" dir="ltr"/>
+    </div>
+    <div class="gi-modal__error" id="contactsAddError" style="display:none"></div>
+    <div class="mcAssignModal__actions">
+      <button class="btn btn--primary" type="button" id="contactsAddSaveBtn">שמירה</button>
+      <button class="btn" type="button" id="contactsAddCancelBtn">ביטול</button>
+    </div>
+  </div>
+</div>
+
+<script src="./contacts-directory-seed.js?v=20260811-contacts-v1"></script>
+<script src="./app.js?v=20260811-contacts-v1"></script>
 
 
 <div id="giPwaInstallBanner" class="giPwaInstallBanner" hidden>
