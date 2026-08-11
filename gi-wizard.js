@@ -2877,17 +2877,62 @@ init(){
       }
 
       this._existingCustomerOfferAcceptedFor = idNumber;
+      // GI-FIX: אל תדרסו פרטי שלב 1 שהנציג כבר מילא באשף הנוכחי.
+      // טוענים תיק/פוליסות מהלקוח הקיים, אבל ערכים לא־ריקים מהסשן גוברים.
+      const preservePrimarySessionData = this._capturePrimarySessionDataForExistingOffer();
       if(isSwitch){
-        await this.openNewPurchaseForCustomer(rec.id, { mode: "switch" });
+        await this.openNewPurchaseForCustomer(rec.id, { mode: "switch", preservePrimarySessionData });
       } else {
-        await this.openContinueExistingCustomer(rec.id);
+        await this.openContinueExistingCustomer(rec.id, { preservePrimarySessionData });
       }
       return { handled:true, blocked:false, loaded:true };
     },
 
-    async openContinueExistingCustomer(customerId){
+    /** סנכרון שדות שלב 1 מה־DOM למודל (לפני טעינת תיק קיים) */
+    _syncPrimaryStep1FromDom(){
+      const primary = this.insureds?.[0];
+      if(!primary?.data || typeof primary.data !== "object") return;
+      try {
+        $$("[data-bind]", this.els?.body).forEach((el) => {
+          const path = safeTrim(el.getAttribute("data-bind"));
+          if(!path) return;
+          if(el.type === "checkbox"){
+            this.setPath(primary.data, path, !!el.checked);
+            return;
+          }
+          let v = safeTrim(el.value);
+          if(el.getAttribute && el.getAttribute("data-money") === "ils"){
+            v = String(v || "").replace(/[₪,\s]/g, "").replace(/[^0-9.]/g, "");
+          }
+          if(el.getAttribute && el.getAttribute("data-datefmt") === "dmy"){
+            try { v = applyDmyAutoFormat(el) || v; } catch(_e) {}
+          }
+          this.setPath(primary.data, path, v);
+        });
+      } catch(_e) {}
+    },
+
+    _capturePrimarySessionDataForExistingOffer(){
+      this._syncPrimaryStep1FromDom();
+      const data = this.insureds?.[0]?.data;
+      if(!data || typeof data !== "object") return null;
+      try { return JSON.parse(JSON.stringify(data)); } catch(_e) { return null; }
+    },
+
+    _restorePrimarySessionDataOverLoaded(sessionData){
+      if(!sessionData || typeof sessionData !== "object") return false;
+      if(!this.insureds?.[0]) return false;
+      const before = this.insureds[0].data && typeof this.insureds[0].data === "object" ? this.insureds[0].data : {};
+      this.insureds[0].data = mergeInsuredDataPreferNonEmpty(before, sessionData);
+      return true;
+    },
+
+    async openContinueExistingCustomer(customerId, options = {}){
       const id = safeTrim(customerId);
       if(!id) return;
+      const preservePrimarySessionData = options?.preservePrimarySessionData && typeof options.preservePrimarySessionData === "object"
+        ? options.preservePrimarySessionData
+        : null;
       this._clearLocalDraft();
       this._harImportState = {};
       const loaded = await this.ensureCustomerRecordPayloadLoaded(id);
@@ -2960,6 +3005,7 @@ init(){
         this.insureds[0].data.mirrorSchedule = JSON.parse(JSON.stringify(mirrorSchedule));
         if(healthDeclaration) this.insureds[0].data.healthDeclaration = JSON.parse(JSON.stringify(healthDeclaration));
       }
+      this._restorePrimarySessionDataOverLoaded(preservePrimarySessionData);
       this._existingCustomerOfferAcceptedFor = normalizeIdValue(this.insureds[0]?.data?.idNumber || rec.idNumber);
       this.step = 1;
       this.open();
@@ -2967,7 +3013,9 @@ init(){
       try {
         window.showToast?.({
           title: "לקוח קיים נטען",
-          text: "הפרטים מולאו מהתיק. המשיכו באשף בריאות וסיכונים.",
+          text: preservePrimarySessionData
+            ? "הפרטים שהזנתם בשלב 1 נשמרו; חסרים הושלמו מהתיק הקיים."
+            : "הפרטים מולאו מהתיק. המשיכו באשף בריאות וסיכונים.",
           variant: "success",
           durationMs: 4800
         });
@@ -2978,6 +3026,9 @@ init(){
       const id = safeTrim(customerId);
       if(!id) return;
       const purchaseMode = safeTrim(options?.mode) === "switch" ? "switch" : "purchase";
+      const preservePrimarySessionData = options?.preservePrimarySessionData && typeof options.preservePrimarySessionData === "object"
+        ? options.preservePrimarySessionData
+        : null;
       this._clearLocalDraft();
       this._harImportState = {};
       this._existingCustomerContinue = false;
@@ -3085,6 +3136,7 @@ init(){
         this.insureds[0].data.mirrorSchedule = JSON.parse(JSON.stringify(mirrorSchedule));
         if(healthDeclaration) this.insureds[0].data.healthDeclaration = JSON.parse(JSON.stringify(healthDeclaration));
       }
+      this._restorePrimarySessionDataOverLoaded(preservePrimarySessionData);
       this._existingCustomerOfferAcceptedFor = normalizeIdValue(this.insureds[0]?.data?.idNumber || rec.idNumber);
       this.step = 5;
       this.open();
@@ -3093,7 +3145,9 @@ init(){
         try {
           window.showToast?.({
             title: "מצב שיחלוף",
-            text: "נטענו פוליסות קיימות מהמערכת. הסירו מה להחליף והוסיפו חדשות.",
+            text: preservePrimarySessionData
+              ? "פרטי שלב 1 שנרשמו באשף נשמרו. נטענו פוליסות מהמערכת לשיחלוף."
+              : "נטענו פוליסות קיימות מהמערכת. הסירו מה להחליף והוסיפו חדשות.",
             variant: "success",
             durationMs: 5200
           });
