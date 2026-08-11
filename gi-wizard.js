@@ -136,6 +136,8 @@
   const currentAgentIdentity = host.currentAgentIdentity;
   const findAgentRecordForSession = host.findAgentRecordForSession;
   const stampRecordAgentOwnership = host.stampRecordAgentOwnership;
+  const CustomerDocuments = host.CustomerDocuments;
+  const CampaignLeadsStore = host.CampaignLeadsStore;
   const parseCampaignLeadLandingPayload = host.parseCampaignLeadLandingPayload;
   const mapLandingInsuranceToWizardTypes = host.mapLandingInsuranceToWizardTypes;
   const agentCanOpenCampaignLead = host.agentCanOpenCampaignLead;
@@ -26039,7 +26041,7 @@ if(path === "birthDate"){
         try {
           const goldLeadId = safeTrim(this._campaignLeadId);
           if(goldLeadId && saved?.id && !this.isElementaryFlow()){
-            const lead = (CampaignLeadsStore.leads || []).find((l) => String(l.id) === String(goldLeadId));
+            const lead = (CampaignLeadsStore?.leads || []).find((l) => String(l.id) === String(goldLeadId));
             if(lead && isGoldMirrorCampaignLead(lead)){
               let premium = 0;
               try {
@@ -26222,7 +26224,9 @@ if(path === "birthDate"){
           docContext.existingPayload = existingPayloadSnapshot;
           docContext.reportPayloadOverride = this.enrichWizardPayloadForCustomerSave(this.getOperationalPayloadForReport());
         }
-        CustomerDocuments.enrichPayloadWithSaveDocuments(payload, docContext);
+        if(typeof CustomerDocuments?.enrichPayloadWithSaveDocuments === "function"){
+          CustomerDocuments.enrichPayloadWithSaveDocuments(payload, docContext);
+        }
       }
       const createdAtBase = existingCustomer?.createdAt || existingCustomer?.created_at || nowISO();
       const record = normalizeCustomerRecord({

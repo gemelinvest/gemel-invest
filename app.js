@@ -29976,7 +29976,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260811-wizard-customer-save-v2";
+  const GI_WIZARD_JS_VERSION = "20260811-wizard-customerdocs-v3";
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
   const TZAHAL_CLINIC = "קופה צהלית";
   const TZAHAL_CLINIC_SHABAN = "אין שב״ן";
@@ -30187,6 +30187,7 @@ UsersGateUI.init();
           currentAgentIdentity,
           findAgentRecordForSession,
           stampRecordAgentOwnership,
+          CustomerDocuments,
           parseCampaignLeadLandingPayload,
           mapLandingInsuranceToWizardTypes,
           agentCanOpenCampaignLead,
@@ -30398,6 +30399,13 @@ UsersGateUI.init();
             enumerable: true,
             configurable: true,
             get(){ try { return ElementaryPendingUI; } catch(_e) { return undefined; } }
+          });
+        } catch(_e) {}
+        try {
+          Object.defineProperty(host, "CampaignLeadsStore", {
+            enumerable: true,
+            configurable: true,
+            get(){ try { return CampaignLeadsStore; } catch(_e) { return undefined; } }
           });
         } catch(_e) {}
         globalThis.__GI_WIZARD_HOST = host;
