@@ -26928,13 +26928,6 @@ UsersGateUI.init();
             try { console.warn("[GI-TODAY-KPI] לא זמין:", res?.error); } catch(_e) {}
             return;
           }
-          const breakdown = Array.isArray(res.productBreakdown) && res.productBreakdown.length
-            ? res.productBreakdown.slice()
-            : Object.entries(res.productTotals || {}).map(([label, premium]) => ({
-              label,
-              count: 0,
-              premium: Math.round((Number(premium) || 0) * 100) / 100
-            })).sort((a, b) => b.premium - a.premium);
           const next = {
             ok: true,
             dayKey,
@@ -26942,7 +26935,8 @@ UsersGateUI.init();
             totalPremium: Math.round((Number(res.netPremium) || 0) * 100) / 100,
             totalPolicies: Number(res.soldPolicies) || 0,
             newClients: Number(res.newClients) || 0,
-            breakdown
+            // פירוט לפי-מוצר מה-RPC לא מוצג יותר בכרטיס היום (הפירוט המקומי לפי חברה).
+            breakdown: []
           };
           const prev = this._todaySalesServerOverlay;
           const changed = !prev || prev.dayKey !== next.dayKey
@@ -26968,7 +26962,7 @@ UsersGateUI.init();
       const todayRange = this.getTodayRange();
       const dayKey = todayRange.start.toISOString().slice(0, 10);
       // GI-FIX 2026-08-09c: כרטיס היום = בריאות וסיכונים בלבד (ללא אלמנטרי)
-      const cacheKey = this.getMetricsCacheKey() + "|today|" + dayKey + "|healthRiskOnly|rpc1";
+      const cacheKey = this.getMetricsCacheKey() + "|today|" + dayKey + "|healthRiskOnly|rpc1|byCompany1";
       if(this._todaySalesCacheKey === cacheKey && this._todaySalesCache){
         return this._todaySalesCache;
       }
@@ -26986,33 +26980,18 @@ UsersGateUI.init();
 
       const customersAll = this.getVisibleCustomers();
 
-      // PRODUCT_LABELS: מפה מ-p.type לשם תצוגה נחמד
-      const PRODUCT_LABELS = {
-        'פנסיה':           'פנסיה',
-        'גמל':             'גמל',
-        'השתלמות':         'השתלמות',
-        'ביטוח חיים':      'ביטוח חיים',
-        'ריסק':            'ריסק',
-        'ריסק משכנתא':     'ריסק משכנתא',
-        'אובדן כושר עבודה':'אובדן כושר עבודה',
-        'בריאות':          'בריאות',
-        'מחלות קשות':      'מחלות קשות',
-        'סרטן':            'סרטן',
-        'רכב':             'רכב',
-        'דירה':            'דירה',
-        'מוצר אלמנטרי':    'אלמנטרי',
-      };
-
-      const byProduct = {};  // { label: { count, premium } }
+      // פירוט כרטיס «נמכר היום»: קיבוץ לפי חברה (לא לפי סוג מוצר).
+      // סכום כולל / פוליסות / לקוחות נשארים זהים — רק תווית הפירוט משתנה.
+      const byCompany = {};  // { label: { count, premium } }
       let totalPremium = 0;
       let totalPolicies = 0;
       const countedCustomers = new Set();
 
       const bump = (label, premium) => {
-        const key = safeTrim(label) || "אחר";
-        if(!byProduct[key]) byProduct[key] = { count: 0, premium: 0 };
-        byProduct[key].count += 1;
-        byProduct[key].premium += premium;
+        const key = safeTrim(label) || "ללא חברה";
+        if(!byCompany[key]) byCompany[key] = { count: 0, premium: 0 };
+        byCompany[key].count += 1;
+        byCompany[key].premium += premium;
         totalPremium += premium;
         totalPolicies += 1;
       };
@@ -27035,13 +27014,12 @@ UsersGateUI.init();
         countedCustomers.add(rec.id);
         newPolicies.forEach((p) => {
           const premium = this.policyNetPremium(p);
-          const rawType = safeTrim(p?.type || "");
-          bump(PRODUCT_LABELS[rawType] || (rawType || "אחר"), premium);
+          bump(safeTrim(p?.company) || "ללא חברה", premium);
         });
       });
 
       // מיין לפי פרמיה יורדת
-      const breakdown = Object.entries(byProduct)
+      const breakdown = Object.entries(byCompany)
         .map(([label, data]) => ({ label, count: data.count, premium: Math.round(data.premium * 100) / 100 }))
         .sort((a, b) => b.premium - a.premium);
 
@@ -27054,17 +27032,18 @@ UsersGateUI.init();
         _fromServer: false
       };
 
-      // מנהל בטעינה רזה: עדיפות ל-RPC יומי (בריאות/סיכונים — אותן פונקציות net_premium)
+      // מנהל בטעינה רזה: עדיפות ל-RPC יומי לסכומים; הפירוט נשאר לפי חברה מהחישוב המקומי
+      // (לא מחליפים בפירוט-לפי-מוצר שמגיע מ-gi_dashboard_sales_by_product).
       const serverOverlay = this._todaySalesServerOverlay;
       if(serverOverlay?.ok && serverOverlay.dayKey === dayKey){
         const localEmpty = !(result.totalPremium > 0 || result.totalPolicies > 0);
-        // בזמן hydration — תמיד RPC (גם אם יש סכום מקומי חלקי) כדי למנוע קפיצות
+        // בזמן hydration — תמיד RPC לסכומים (גם אם יש סכום מקומי חלקי) כדי למנוע קפיצות
         if(missingPayloads > 0 || localEmpty){
           result = {
             totalPremium: Number(serverOverlay.totalPremium) || 0,
             totalPolicies: Number(serverOverlay.totalPolicies) || 0,
             newClients: Number(serverOverlay.newClients) || 0,
-            breakdown: Array.isArray(serverOverlay.breakdown) ? serverOverlay.breakdown.slice() : [],
+            breakdown,
             _loading: false,
             _fromServer: true
           };
