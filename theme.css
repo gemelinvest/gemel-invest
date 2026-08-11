@@ -8406,6 +8406,12 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   background: #f3e8ff !important; color: #5b21b6 !important; border-color: #e9d5ff !important;
 }
 
+#view-customers .lcCustomers__premiumStack:not(#\9):not(#\9){
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 4px !important;
+}
 #view-customers .lcCustomers__premiumBadge:not(#\9):not(#\9){
   height: 28px !important;
   padding: 0 10px !important;
@@ -8414,7 +8420,13 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   font-weight: 800 !important;
   margin-top: 0 !important;
   display: inline-flex !important;
-  align-items: center !important;
+  align-items: baseline !important;
+  gap: 6px !important;
+}
+#view-customers .lcCustomers__premiumBadge small:not(#\9):not(#\9){
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  opacity: 0.78 !important;
 }
 #view-customers .lcCustomers__premiumBadge--is-premium-high:not(#\9):not(#\9){
   background: #ecfdf5 !important; color: #065f46 !important; border-color: #a7f3d0 !important;

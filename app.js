@@ -16495,7 +16495,14 @@ UsersGateUI.init();
         safeTrim(rec?.updatedAt || rec?.updated_at),
         safeTrim(rec?.createdAt || rec?.created_at),
         this.collectCustomerSectors(rec).join(","),
-        String(this.sumCustomerListPremium(rec) || 0)
+        (() => {
+          try {
+            const parts = this.customerListPremiumParts(rec);
+            return String(parts.monthly || 0) + "/" + String(parts.annual || 0);
+          } catch(_e) {
+            return String(this.sumCustomerListPremium(rec) || 0);
+          }
+        })()
       ].join('|');
     },
 
@@ -16606,9 +16613,24 @@ UsersGateUI.init();
         if(typeof Storage !== "undefined" && Storage.payloadIsEmpty?.(rec)){
           return '<span class="muted small">—</span>';
         }
-        const sum = this.sumCustomerListPremium(rec);
-        if(!sum) return '<span class="muted small">—</span>';
-        return '<span class="lcCustomers__premiumBadge lcCustomers__premiumBadge--' + this.getPremiumToneClass(sum) + '">' + this.formatMoneyValue(sum) + '</span>';
+        const parts = this.customerListPremiumParts(rec);
+        const lines = [];
+        if(Number(parts.monthly) > 0){
+          lines.push(
+            '<span class="lcCustomers__premiumBadge lcCustomers__premiumBadge--' + this.getPremiumToneClass(parts.monthly) + '">'
+            + this.formatMoneyValue(parts.monthly)
+            + '<small>חודשית</small></span>'
+          );
+        }
+        if(Number(parts.annual) > 0){
+          lines.push(
+            '<span class="lcCustomers__premiumBadge lcCustomers__premiumBadge--' + this.getPremiumToneClass(parts.annual) + '">'
+            + this.formatMoneyValue(parts.annual)
+            + '<small>שנתית</small></span>'
+          );
+        }
+        if(!lines.length) return '<span class="muted small">—</span>';
+        return '<div class="lcCustomers__premiumStack">' + lines.join("") + '</div>';
       } catch(_e) {
         return '<span class="muted small">—</span>';
       }
@@ -16731,6 +16753,7 @@ UsersGateUI.init();
                   : rows.length + " לקוחות";
               }
               if(changed) this.bindRowActionButtons();
+              try { this.ensureVisibleListPayloads(); } catch(_e2) {}
               return;
             }
           }
@@ -16776,6 +16799,61 @@ UsersGateUI.init();
         : `<tr><td colspan="8"><div class="emptyState"><div class="emptyState__icon">🗂️</div><div class="emptyState__title">עדיין אין לקוחות</div><div class="emptyState__text">ברגע שמסיימים הקמת לקוח, הלקוח יישמר כאן אוטומטית ויהיה אפשר לפתוח את תיק הלקוח המלא.</div></div></td></tr>`);
 
       this.bindRowActionButtons();
+      try { this.ensureVisibleListPayloads(); } catch(_e) {}
+    },
+
+    /* תצוגה בלבד: מושכים payload רק לשורות שמוצגות עכשיו (10 אחרונים / חיפוש). */
+    ensureVisibleListPayloads(){
+      if(this._visiblePayloadBusy) return;
+      if(!Auth?.current) return;
+      const rows = this.filtered();
+      if(!rows.length) return;
+      const missing = rows.filter((rec) => {
+        try { return typeof Storage !== "undefined" && Storage.payloadIsEmpty?.(rec); }
+        catch(_e) { return false; }
+      });
+      if(!missing.length) return;
+      const missingKey = missing.map((rec) => String(rec?.id || "")).filter(Boolean).sort().join(",");
+      const lastFailAt = Number(this._visiblePayloadFailedAt) || 0;
+      if(missingKey && this._visiblePayloadFailedKey === missingKey && lastFailAt && (Date.now() - lastFailAt) < 20000) return;
+      this._visiblePayloadBusy = true;
+      void (async () => {
+        let filled = 0;
+        try {
+          for(const rec of missing){
+            if(!Auth?.current) return;
+            const id = safeTrim(rec?.id);
+            if(!id) continue;
+            try {
+              const res = await Storage.ensureRecordPayload("customers", id);
+              if(res?.ok && !Storage.payloadIsEmpty?.(res.record || rec)){
+                filled += 1;
+                if(res.record && Array.isArray(this._viewRows)){
+                  const vIdx = this._viewRows.findIndex((row) => String(row?.id) === String(id));
+                  if(vIdx >= 0) this._viewRows[vIdx] = res.record;
+                }
+              }
+            } catch(_e) {}
+          }
+          if(filled > 0){
+            this._visiblePayloadFailedKey = "";
+            this._visiblePayloadFailedAt = 0;
+          } else {
+            this._visiblePayloadFailedKey = missingKey;
+            this._visiblePayloadFailedAt = Date.now();
+          }
+          if(LiveRefresh.getCurrentView?.() !== "customers") return;
+          if(filled > 0){
+            try {
+              if(!this.quietRefresh()) this.paintTable();
+            } catch(_e) {
+              try { this.paintTable(); } catch(_e2) {}
+            }
+          }
+        } finally {
+          this._visiblePayloadBusy = false;
+        }
+      })();
     },
 
     render(options = {}){
@@ -26971,6 +27049,8 @@ UsersGateUI.init();
           this._todaySalesCache = null;
           if(typeof LiveRefresh !== "undefined" && LiveRefresh.getCurrentView?.() === "dashboard"){
             try { this.scheduleRefreshKpis(); } catch(_e) {}
+          } else if(typeof LiveRefresh !== "undefined" && LiveRefresh.getCurrentView?.() === "dailySales"){
+            try { this.renderDailySalesPage(); } catch(_e) {}
           }
         } catch(err) {
           try { console.warn("[GI-TODAY-KPI] failed", err); } catch(_e) {}
@@ -27488,7 +27568,7 @@ UsersGateUI.init();
        באלמנטרי הפרמיה המוצגת היא שנתית. */
     dailySalesSectorTabs(){
       return [
-        { key: "healthPrat", source: "בריאות", sources: ["בריאות", "סיכונים"], label: "בריאות + פרט", combined: true },
+        { key: "healthPrat", source: "בריאות", sources: ["בריאות", "סיכונים", "אחר"], label: "בריאות + פרט", combined: true },
         { key: "elem", source: "אלמנטרי", sources: ["אלמנטרי"], label: "אלמנטרי", annual: true },
         { key: "pensia", source: "פנסיה", sources: ["פנסיה"], label: "פנסיה" }
       ];
@@ -27497,6 +27577,7 @@ UsersGateUI.init();
     dailySalesDisplaySectorLabel(sector){
       const s = safeTrim(sector);
       if(s === "סיכונים") return "פרט";
+      if(s === "אחר") return "בריאות / פרט";
       return s || "—";
     },
 
@@ -27895,13 +27976,18 @@ UsersGateUI.init();
 
     renderDailySalesSectorTabsHtml(report){
       const selected = this.getDailySalesSelectedSectorKey();
+      let todayPrem = 0;
+      if(report?.isToday){
+        try { todayPrem = Math.round((Number(this.buildTodaySalesMetrics()?.totalPremium) || 0) * 100) / 100; } catch(_e) { todayPrem = 0; }
+      }
       return this.dailySalesSectorTabs().map((tab) => {
         const slice = this.dailySalesTabSlice(report, tab);
         const on = tab.key === selected;
         const unit = tab.annual ? "שנתית" : "חודשית";
+        const prem = (tab.combined && todayPrem > slice.premium) ? todayPrem : slice.premium;
         return `<button class="giDailySalesPage__sectorTab${on ? " is-active" : ""}" type="button" role="tab" aria-selected="${on ? "true" : "false"}" data-daily-sales-sector="${escapeHtml(tab.key)}">
           <span class="giDailySalesPage__sectorTabLabel">${escapeHtml(tab.label)}</span>
-          <span class="giDailySalesPage__sectorTabValue">${escapeHtml(this.formatMoney(slice.premium))}</span>
+          <span class="giDailySalesPage__sectorTabValue">${escapeHtml(this.formatMoney(prem))}</span>
           <span class="giDailySalesPage__sectorTabMeta">${escapeHtml(unit)} · ${escapeHtml(String(slice.agents))} נציגים · ${escapeHtml(String(slice.deals))} עסקאות</span>
         </button>`;
       }).join("");
@@ -27909,17 +27995,32 @@ UsersGateUI.init();
 
     renderDailySalesKpisHtml(report){
       const totals = this.dailySalesBranchTotals(report);
-      const healthPrat = Math.round(((Number(totals.health) || 0) + (Number(totals.risks) || 0)) * 100) / 100;
       const healthSlice = this.dailySalesTabSlice(report, this.dailySalesSectorTabs().find((t) => t.key === "healthPrat"));
       const elemSlice = this.dailySalesTabSlice(report, this.dailySalesSectorTabs().find((t) => t.key === "elem"));
       const pensiaSlice = this.dailySalesTabSlice(report, this.dailySalesSectorTabs().find((t) => t.key === "pensia"));
+      // בריאות+פרט = כל מכירות היום שאינן אלמנטרי/פנסיה (כולל מוצרים שלא סווגו).
+      let healthPrat = Math.round(((Number(totals.health) || 0) + (Number(totals.risks) || 0) + (Number(totals.other) || 0)) * 100) / 100;
+      let healthDeals = healthSlice.deals;
+      let healthAgents = healthSlice.agents;
+      if(report?.isToday){
+        try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
+        try {
+          const today = this.buildTodaySalesMetrics();
+          const todayPrem = Math.round((Number(today?.totalPremium) || 0) * 100) / 100;
+          if(todayPrem > healthPrat){
+            healthPrat = todayPrem;
+            if(Number(today?.totalPolicies) > healthDeals) healthDeals = Number(today.totalPolicies) || healthDeals;
+            if(Number(today?.newClients) > healthAgents) healthAgents = Number(today.newClients) || healthAgents;
+          }
+        } catch(_e) {}
+      }
       const allAgents = new Set((Array.isArray(report?.groups) ? report.groups : []).map((g) => g.agentName)).size;
       const allDeals = (Array.isArray(report?.groups) ? report.groups : []).reduce((sum, g) => sum + (Number(g.deals) || 0), 0);
       return `
         <article class="giDailySalesPage__kpi giDailySalesPage__kpi--hero">
           <div class="giDailySalesPage__kpiLabel">פרמיה כוללת · בריאות + פרט</div>
           <div class="giDailySalesPage__kpiValue">${escapeHtml(this.formatMoney(healthPrat))}</div>
-          <div class="giDailySalesPage__kpiMeta">חודשית · ${escapeHtml(this.dailySalesDealsWord(healthSlice.deals))} · ${escapeHtml(this.dailySalesAgentsWord(healthSlice.agents))}</div>
+          <div class="giDailySalesPage__kpiMeta">חודשית · ${escapeHtml(this.dailySalesDealsWord(healthDeals))} · ${escapeHtml(this.dailySalesAgentsWord(healthAgents))}</div>
         </article>
         <article class="giDailySalesPage__kpi giDailySalesPage__kpi--elem">
           <div class="giDailySalesPage__kpiLabel">אלמנטרי</div>
