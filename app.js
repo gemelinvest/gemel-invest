@@ -4403,7 +4403,7 @@
       const prev = prevById.get(String(rec.id));
       if(!prev) return rec;
       try {
-        if(!Storage.payloadIsEmpty(prev) && Storage.payloadIsEmpty(rec)){
+        if(Storage.payloadHasPolicyOrInsuredContent(prev?.payload) && !Storage.payloadHasPolicyOrInsuredContent(rec?.payload)){
           changed = true;
           return {
             ...rec,
@@ -11180,7 +11180,7 @@
         } else {
           const prev = map.get(id);
           // GI-FIX 2026-08-09 — דלתא/שורה רזה לא מוחקת payload מלא קיים.
-          if(prev && !this.payloadIsEmpty(prev) && this.payloadIsEmpty(rec)){
+          if(prev && this.payloadHasPolicyOrInsuredContent(prev?.payload) && !this.payloadHasPolicyOrInsuredContent(rec?.payload)){
             map.set(id, {
               ...rec,
               payload: prev.payload,
@@ -16338,7 +16338,8 @@ UsersGateUI.init();
           if(idx >= 0){
             const existing = State.data.customers[idx];
             // GI-FIX 2026-08-02: לא לדרוס payload מלא מקומי בשורת רשימה רזה/רדודה.
-            const keepPayload = !Storage.payloadIsEmpty(existing) && Storage.payloadIsEmpty(rec);
+            const keepPayload = Storage.payloadHasPolicyOrInsuredContent(existing?.payload)
+              && !Storage.payloadHasPolicyOrInsuredContent(rec?.payload);
             const merged = normalizeCustomerRecord({
               ...existing,
               ...rec,
@@ -28078,16 +28079,59 @@ UsersGateUI.init();
       }
     },
 
+    _recentCustomerFacts: Object.create(null),
+
+    _isRecentDashEmptyCell(html){
+      const s = String(html || "");
+      if(!s) return true;
+      return /muted small/.test(s) && !/bankRecent__premLine/.test(s) && !/lcCustomers__sectorTag/.test(s);
+    },
+
+    _rememberRecentCustomerFacts(id, premiumHtml, sectorHtml){
+      const key = String(id || "");
+      if(!key) return;
+      const prev = this._recentCustomerFacts[key] || {};
+      const nextPrem = this._isRecentDashEmptyCell(premiumHtml) ? (prev.premiumHtml || premiumHtml) : premiumHtml;
+      const nextSect = this._isRecentDashEmptyCell(sectorHtml) ? (prev.sectorHtml || sectorHtml) : sectorHtml;
+      this._recentCustomerFacts[key] = { premiumHtml: nextPrem, sectorHtml: nextSect, at: Date.now() };
+    },
+
+    _applyRecentCustomerFacts(id, premiumHtml, sectorHtml){
+      const key = String(id || "");
+      const facts = key ? this._recentCustomerFacts[key] : null;
+      let premium = premiumHtml;
+      let sector = sectorHtml;
+      if(this._isRecentDashEmptyCell(premium) && facts?.premiumHtml && !this._isRecentDashEmptyCell(facts.premiumHtml)){
+        premium = facts.premiumHtml;
+      }
+      if(this._isRecentDashEmptyCell(sector) && facts?.sectorHtml && !this._isRecentDashEmptyCell(facts.sectorHtml)){
+        sector = facts.sectorHtml;
+      }
+      this._rememberRecentCustomerFacts(key, premium, sector);
+      return { premium, sector };
+    },
+
+    _recentPanelFilledCount(root){
+      if(!root) return 0;
+      const prem = root.querySelectorAll(".bankRecent__premLine").length;
+      const sect = root.querySelectorAll(".lcCustomers__sectorTag").length;
+      return prem + sect;
+    },
+
     renderRecentCustomersHtml(){
       const rows = this.recentCustomersRows(5);
       const body = rows.length
         ? rows.map((rec) => {
-            const id = escapeHtml(String(rec.id || ""));
+            const rawId = String(rec.id || "");
+            const id = escapeHtml(rawId);
             const phone = safeTrim(rec.phone);
             let premium = '<span class="muted small">—</span>';
             let sector  = '<span class="muted small">—</span>';
             try { premium = this.recentPremiumCellHtml(rec); } catch(_e) {}
             try { sector  = CustomersUI.sectorCellHtml(rec); } catch(_e) {}
+            const kept = this._applyRecentCustomerFacts(rawId, premium, sector);
+            premium = kept.premium;
+            sector = kept.sector;
             return `
               <tr class="bankRecent__row" data-customer-id="${id}">
                 <td>
@@ -28162,7 +28206,19 @@ UsersGateUI.init();
         const rows = this.recentCustomersRows(5);
         const existingRecent = root.querySelectorAll(".bankRecent__row").length;
         if(rows.length || !existingRecent){
-          replacePanel(".bankDash__row--recentCustomers", this.renderRecentCustomersHtml());
+          const nextHtml = this.renderRecentCustomersHtml();
+          const cur = root.querySelector(".bankDash__row--recentCustomers");
+          const tmp = document.createElement("div");
+          tmp.innerHTML = String(nextHtml || "").trim();
+          const next = tmp.firstElementChild;
+          const curFilled = this._recentPanelFilledCount(cur);
+          const nextFilled = this._recentPanelFilledCount(next);
+          // GI-FIX 2026-08-11: רענון KPI/דלתא לא מוחק ענף+פרמיה שכבר נצבעו.
+          if(cur && next && curFilled > 0 && nextFilled < curFilled){
+            // משאירים את הטבלה הקיימת
+          } else if(next){
+            if(cur) cur.replaceWith(next);
+          }
         }
         // אם הטבלה ריקה אבל ה-KPI מהשרת חי — מושכים 5 אחרונים ישירות מהשרת.
         if(!rows.length && !existingRecent){
@@ -28191,21 +28247,32 @@ UsersGateUI.init();
       });
       if(!missing.length) return;
       const missingKey = missing.map((rec) => String(rec?.id || "")).filter(Boolean).sort().join(",");
-      const lastAt = Number(this._recentPayloadTriedAt) || 0;
-      if(missingKey && this._recentPayloadTriedKey === missingKey && lastAt && (Date.now() - lastAt) < 20000) return;
-      this._recentPayloadTriedKey = missingKey;
-      this._recentPayloadTriedAt = Date.now();
+      const lastFailAt = Number(this._recentPayloadFailedAt) || 0;
+      if(missingKey && this._recentPayloadFailedKey === missingKey && lastFailAt && (Date.now() - lastFailAt) < 20000) return;
       this._recentPayloadBusy = true;
       void (async () => {
+        let filled = 0;
         try {
           for(const rec of missing){
             if(!Auth?.current) return;
             const id = safeTrim(rec?.id);
             if(!id) continue;
-            try { await Storage.ensureRecordPayload("customers", id); } catch(_e) {}
+            try {
+              const res = await Storage.ensureRecordPayload("customers", id);
+              if(res?.ok && !Storage.payloadIsEmpty?.(res.record || rec)) filled += 1;
+            } catch(_e) {}
+          }
+          if(filled > 0){
+            this._recentPayloadFailedKey = "";
+            this._recentPayloadFailedAt = 0;
+          } else {
+            this._recentPayloadFailedKey = missingKey;
+            this._recentPayloadFailedAt = Date.now();
           }
           if(LiveRefresh.getCurrentView?.() !== "dashboard") return;
-          try { this.refreshDashboardListPanels(); } catch(_e) {}
+          if(filled > 0){
+            try { this.refreshDashboardListPanels(); } catch(_e) {}
+          }
         } finally {
           this._recentPayloadBusy = false;
         }
@@ -29645,12 +29712,20 @@ UsersGateUI.init();
       ];
       const maxBar = Math.max(1, ...metrics.dailySeries.map((item) => item.premium || 0), (metrics.dailyTarget || 0) * 1.15);
       await perfYield();
-      /* GI-FIX 2026-08-09 — רינדור מלא עם רשימה ריקה זמנית לא מוחק טבלה שכבר נצבעה. */
+      /* GI-FIX 2026-08-09 — רינדור מלא עם רשימה ריקה זמנית לא מוחק טבלה שכבר נצבעה.
+         GI-FIX 2026-08-11 — גם לא מחליפים טבלה מלאה (ענף/פרמיה) בגרסה ריקה. */
+      const existingRecentEl = this.els.root.querySelector(".bankDash__row--recentCustomers");
       const existingRecentCount = this.els.root.querySelectorAll(".bankRecent__row").length;
-      const preservedRecentHtml = (!this.recentCustomersRows(5).length && existingRecentCount > 0)
-        ? (this.els.root.querySelector(".bankDash__row--recentCustomers")?.outerHTML || "")
-        : "";
-      const recentCustomersPanelHtml = preservedRecentHtml || this.renderRecentCustomersHtml();
+      const renderedRecentHtml = this.renderRecentCustomersHtml();
+      const renderedRecentTmp = document.createElement("div");
+      renderedRecentTmp.innerHTML = String(renderedRecentHtml || "").trim();
+      const keepExistingRecent = !!(existingRecentEl && (
+        (!this.recentCustomersRows(5).length && existingRecentCount > 0)
+        || (this._recentPanelFilledCount(existingRecentEl) > this._recentPanelFilledCount(renderedRecentTmp.firstElementChild))
+      ));
+      const recentCustomersPanelHtml = keepExistingRecent
+        ? existingRecentEl.outerHTML
+        : renderedRecentHtml;
       const opsCubeHtml = this.renderAgentOpsCubeHtml();
       const serviceCubeHtml = this.renderAgentServiceCubeHtml();
       const goalPanelHtml = this.renderGoalCardHtml(metrics, orgScope);
