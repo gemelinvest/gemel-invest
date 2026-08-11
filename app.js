@@ -26928,6 +26928,9 @@ UsersGateUI.init();
             try { console.warn("[GI-TODAY-KPI] לא זמין:", res?.error); } catch(_e) {}
             return;
           }
+          const companyBreakdown = Array.isArray(res.companyBreakdown) && res.companyBreakdown.length
+            ? res.companyBreakdown.slice()
+            : [];
           const next = {
             ok: true,
             dayKey,
@@ -26935,14 +26938,17 @@ UsersGateUI.init();
             totalPremium: Math.round((Number(res.netPremium) || 0) * 100) / 100,
             totalPolicies: Number(res.soldPolicies) || 0,
             newClients: Number(res.newClients) || 0,
-            // פירוט לפי-מוצר מה-RPC לא מוצג יותר בכרטיס היום (הפירוט המקומי לפי חברה).
-            breakdown: []
+            // פירוט כרטיס היום לפי חברה (RPC) — משמש כשאין payloads מקומיים מלאים.
+            breakdown: companyBreakdown
           };
           const prev = this._todaySalesServerOverlay;
+          const prevBd = Array.isArray(prev?.breakdown) ? prev.breakdown.length : 0;
+          const nextBd = Array.isArray(next.breakdown) ? next.breakdown.length : 0;
           const changed = !prev || prev.dayKey !== next.dayKey
             || Number(prev.totalPremium) !== Number(next.totalPremium)
             || Number(prev.totalPolicies) !== Number(next.totalPolicies)
-            || Number(prev.newClients) !== Number(next.newClients);
+            || Number(prev.newClients) !== Number(next.newClients)
+            || prevBd !== nextBd;
           this._todaySalesServerOverlay = next;
           if(!changed) return;
           this._todaySalesCacheKey = "";
@@ -26962,7 +26968,7 @@ UsersGateUI.init();
       const todayRange = this.getTodayRange();
       const dayKey = todayRange.start.toISOString().slice(0, 10);
       // GI-FIX 2026-08-09c: כרטיס היום = בריאות וסיכונים בלבד (ללא אלמנטרי)
-      const cacheKey = this.getMetricsCacheKey() + "|today|" + dayKey + "|healthRiskOnly|rpc1|byCompany1";
+      const cacheKey = this.getMetricsCacheKey() + "|today|" + dayKey + "|healthRiskOnly|rpc1|byCompany2";
       if(this._todaySalesCacheKey === cacheKey && this._todaySalesCache){
         return this._todaySalesCache;
       }
@@ -27032,21 +27038,25 @@ UsersGateUI.init();
         _fromServer: false
       };
 
-      // מנהל בטעינה רזה: עדיפות ל-RPC יומי לסכומים; הפירוט נשאר לפי חברה מהחישוב המקומי
-      // (לא מחליפים בפירוט-לפי-מוצר שמגיע מ-gi_dashboard_sales_by_product).
+      // מנהל בטעינה רזה: עדיפות ל-RPC יומי לסכומים;
+      // פירוט לפי חברה — מקומי אם יש, אחרת מה-RPC (gi_dashboard_sales_by_company).
       const serverOverlay = this._todaySalesServerOverlay;
       if(serverOverlay?.ok && serverOverlay.dayKey === dayKey){
         const localEmpty = !(result.totalPremium > 0 || result.totalPolicies > 0);
+        const serverBreakdown = Array.isArray(serverOverlay.breakdown) ? serverOverlay.breakdown : [];
+        const resolvedBreakdown = breakdown.length ? breakdown : serverBreakdown;
         // בזמן hydration — תמיד RPC לסכומים (גם אם יש סכום מקומי חלקי) כדי למנוע קפיצות
         if(missingPayloads > 0 || localEmpty){
           result = {
             totalPremium: Number(serverOverlay.totalPremium) || 0,
             totalPolicies: Number(serverOverlay.totalPolicies) || 0,
             newClients: Number(serverOverlay.newClients) || 0,
-            breakdown,
+            breakdown: resolvedBreakdown,
             _loading: false,
             _fromServer: true
           };
+        } else if(!breakdown.length && serverBreakdown.length){
+          result = { ...result, breakdown: serverBreakdown };
         }
       } else if(missingPayloads > 0 && !(result.totalPremium > 0)){
         // עדיין מחכים ל-RPC — לא לנעול מטמון על אפס
@@ -41191,10 +41201,11 @@ const ClalRiskLifePdf = {
     };
     try {
       const client = this.getClient();
-      const [net, appt, byProduct] = await Promise.all([
+      const [net, appt, byProduct, byCompany] = await Promise.all([
         client.rpc("gi_dashboard_net_premium", args),
         client.rpc("gi_dashboard_agent_appointment", args),
-        client.rpc("gi_dashboard_sales_by_product", args)
+        client.rpc("gi_dashboard_sales_by_product", args),
+        client.rpc("gi_dashboard_sales_by_company", args)
       ]);
       if(net.error) throw net.error;
       if(appt.error) throw appt.error;
@@ -41219,6 +41230,23 @@ const ClalRiskLifePdf = {
       } else if(byProduct?.error){
         try { console.warn("[GI-SERVER-KPI] sales_by_product:", byProduct.error); } catch(_e) {}
       }
+      const companyBreakdown = [];
+      if(!byCompany?.error && Array.isArray(byCompany.data)){
+        byCompany.data.forEach((row) => {
+          const company = safeTrim(row?.company) || "ללא חברה";
+          const premium = Number(row?.premium) || 0;
+          const policies = Number(row?.policies) || 0;
+          if(!company) return;
+          companyBreakdown.push({
+            label: company,
+            count: policies,
+            premium: Math.round(premium * 100) / 100
+          });
+        });
+        companyBreakdown.sort((a, b) => b.premium - a.premium);
+      } else if(byCompany?.error){
+        try { console.warn("[GI-SERVER-KPI] sales_by_company:", byCompany.error); } catch(_e) {}
+      }
       return {
         ok: true,
         netPremium:    Number(n.net_premium)   || 0,
@@ -41227,7 +41255,8 @@ const ClalRiskLifePdf = {
         apptPremium:   Number(a.appt_premium)  || 0,
         apptPolicies:  Number(a.appt_policies) || 0,
         productTotals,
-        productBreakdown
+        productBreakdown,
+        companyBreakdown
       };
     } catch(err) {
       return { ok:false, error: String(err?.message || err) };
