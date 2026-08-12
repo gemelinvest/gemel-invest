@@ -427,7 +427,7 @@
   function riskSimDetectClosePrefix(modal){
     if(!modal) return null;
     const hit = modal.querySelector(
-      "[data-phx-close],[data-phxh-close],[data-mnr-close],[data-phxmort-close],[data-mnrh-close],[data-aylh-close],[data-mnrci-close],[data-hach-close],[data-hachr-close],[data-hachci-close],[data-mgdh-close],[data-mgdci-close],[data-mgdca-close],[data-mgdr-close]"
+      "[data-phx-close],[data-phxh-close],[data-mnr-close],[data-phxmort-close],[data-mnrh-close],[data-aylh-close],[data-mnrci-close],[data-hach-close],[data-hachr-close],[data-hachci-close],[data-mgdh-close],[data-mgdci-close],[data-mgdca-close],[data-mgdr-close],[data-clalh-close],[data-clalci-close],[data-clalca-close],[data-clalmort-close],[data-clalrisk-close]"
     );
     if(!hit || !hit.attributes) return null;
     for(let i = 0; i < hit.attributes.length; i++){
@@ -3201,6 +3201,14 @@
         // PDF 01/2024 — OCR רמז למדד 133.96; הפרמיה צמודה למדד המחירים לצרכן
         baseIndexPoints: 133.96,
         baseKnownDate: "2024-01-01"
+      },
+      clal_health: {
+        company: "כלל",
+        product: "בריאות",
+        // תעריפון כלל: מדד בסיס 13,684 נק׳ (08/2023) → 136.84 — זהה לעוגן המשותף
+        // חריגים ברמת הכיסוי: אביזרים רפואיים 126.49, חמ״ל בר גפן 123.40
+        baseIndexPoints: 136.84,
+        baseKnownDate: "2023-09-01"
       }
     },
     _mem: null,
@@ -9253,6 +9261,960 @@
   };
   RiskSimulators.register("מגדל", "ריסק", MigdalRiskSimulator);
   // ===== סוף GI-MGD-SIM ============================================================
+
+  // ===== GI-CLL-HEALTH-SIM 2026-08-12 · סימולטור בריאות כלל ======================
+  // מקור אמת: תעריפי בריאות כלל (גיליון "מרוכז" + גיליון פר־כיסוי).
+  // בכל כיסויי הבריאות של כלל התעריף זהה לגברים ולנשים — אין פילוח מגדרי.
+  // מדיכלל (מחלות קשות / סרטן) — פרומיל על סכום פיצוי, ראו GI-CLL-CI-SIM להלן.
+  // כל התעריפים באגורות שלמות כדי למנוע סטיית floating-point.
+  function clalHealthAgorotToShekels(agorot){ return agorot / 100; }
+  function formatClalHealthExactAmount(n){
+    if(!Number.isFinite(n)) return "";
+    const ag = Math.round(n * 100);
+    return Math.trunc(ag / 100) + "." + String(Math.abs(ag % 100)).padStart(2, "0");
+  }
+  function clalHealthLookupBand(bands, age){
+    const a = Number(age);
+    if(!Number.isInteger(a)) return null;
+    for(let i = 0; i < bands.length; i++){
+      if(a >= bands[i].min && a <= bands[i].max) return bands[i];
+    }
+    return null;
+  }
+
+  const CLAL_HEALTH_MIN_AGE = 0, CLAL_HEALTH_MAX_AGE = 65, CLAL_HEALTH_MIN_ENTRY_DAYS = 0;
+  const CLAL_HEALTH_CPI_KEY = "clal_health";
+  const CLAL_HEALTH_DEFAULT_BASE_INDEX = HealthCpi.TARIFFS.clal_health.baseIndexPoints; // 136.84
+  const CLAL_HEALTH_COVERS = [
+    {"id": "surgeries_abroad", "label": "ניתוחים ומחליפי ניתוח בחו\"ל", "wizardKey": "ניתוחים ומחליפי ניתוח בחו\"ל", "group": "פוליסת בריאות בסיסית", "needsGender": false, "bands": [{"min": 0, "max": 20, "agorot": 640}, {"min": 21, "max": 30, "agorot": 890}, {"min": 31, "max": 40, "agorot": 1000}, {"min": 41, "max": 50, "agorot": 1190}, {"min": 51, "max": 55, "agorot": 2017}, {"min": 56, "max": 60, "agorot": 2470}, {"min": 61, "max": 65, "agorot": 2820}, {"min": 66, "max": 120, "agorot": 2900}]},
+    {"id": "transplants_abroad", "label": "השתלות וטיפולים מיוחדים בחו\"ל", "wizardKey": "השתלות וטיפולים מיוחדים בחו\"ל", "group": "פוליסת בריאות בסיסית", "needsGender": false, "bands": [{"min": 0, "max": 20, "agorot": 960}, {"min": 21, "max": 30, "agorot": 1520}, {"min": 31, "max": 40, "agorot": 1660}, {"min": 41, "max": 50, "agorot": 2100}, {"min": 51, "max": 55, "agorot": 2260}, {"min": 56, "max": 60, "agorot": 2520}, {"min": 61, "max": 65, "agorot": 2850}, {"min": 66, "max": 120, "agorot": 3000}]},
+    {"id": "drugs", "label": "תרופות", "wizardKey": "תרופות", "group": "פוליסת בריאות בסיסית", "needsGender": false, "bands": [{"min": 0, "max": 20, "agorot": 1140}, {"min": 21, "max": 30, "agorot": 1780}, {"min": 31, "max": 40, "agorot": 2380}, {"min": 41, "max": 50, "agorot": 3900}, {"min": 51, "max": 55, "agorot": 5600}, {"min": 56, "max": 60, "agorot": 7400}, {"min": 61, "max": 65, "agorot": 10080}, {"min": 66, "max": 120, "agorot": 13470}]},
+    {"id": "shaban_deduct", "label": "משלים שב\"ן עם השתתפות עצמית 5,000 ₪", "wizardKey": "משלים שב\"ן עם השתתפות עצמית 5,000 ₪", "group": "פוליסת בריאות בסיסית", "needsGender": false, "bands": [{"min": 0, "max": 20, "agorot": 1360}, {"min": 21, "max": 30, "agorot": 2750}, {"min": 31, "max": 40, "agorot": 4495}, {"min": 41, "max": 50, "agorot": 6650}, {"min": 51, "max": 55, "agorot": 9450}, {"min": 56, "max": 60, "agorot": 11850}, {"min": 61, "max": 65, "agorot": 16950}, {"min": 66, "max": 120, "agorot": 25850}]},
+    {"id": "shaban", "label": "משלים שב\"ן לניתוחים ומחליפי ניתוח בישראל", "wizardKey": "משלים שב\"ן לניתוחים ומחליפי ניתוח בישראל", "group": "פוליסת בריאות בסיסית", "needsGender": false, "bands": [{"min": 0, "max": 20, "agorot": 1918}, {"min": 21, "max": 30, "agorot": 3450}, {"min": 31, "max": 40, "agorot": 6000}, {"min": 41, "max": 50, "agorot": 8350}, {"min": 51, "max": 55, "agorot": 13350}, {"min": 56, "max": 60, "agorot": 16250}, {"min": 61, "max": 65, "agorot": 23910}, {"min": 66, "max": 120, "agorot": 37280}]},
+    {"id": "surgeries_israel", "label": "ניתוחים ומחליפי ניתוח בישראל", "wizardKey": "ניתוחים ומחליפי ניתוח בישראל", "group": "פוליסת בריאות בסיסית", "needsGender": false, "bands": [{"min": 0, "max": 20, "agorot": 3625}, {"min": 21, "max": 30, "agorot": 7600}, {"min": 31, "max": 40, "agorot": 13200}, {"min": 41, "max": 50, "agorot": 18302}, {"min": 51, "max": 55, "agorot": 27850}, {"min": 56, "max": 60, "agorot": 31400}, {"min": 61, "max": 65, "agorot": 39869}, {"min": 66, "max": 120, "agorot": 56798}]},
+    {"id": "bar_gefen", "label": "חמ\"ל בר גפן", "wizardKey": "חמ\"ל בר גפן", "group": "פוליסת הרחבה", "needsGender": false, "baseIndexPoints": 123.4, "bands": [{"min": 0, "max": 20, "agorot": 500}, {"min": 21, "max": 55, "agorot": 1000}, {"min": 56, "max": 65, "agorot": 2000}, {"min": 66, "max": 120, "agorot": 2500}]},
+    {"id": "consult_tests", "label": "ייעוצים ובדיקות", "wizardKey": "ייעוצים ובדיקות", "group": "ייעוץ ובדיקות", "needsGender": false, "bands": [{"min": 0, "max": 20, "agorot": 1745}, {"min": 21, "max": 30, "agorot": 4160}, {"min": 31, "max": 60, "agorot": 5675}, {"min": 61, "max": 65, "agorot": 6240}, {"min": 66, "max": 66, "agorot": 7370}, {"min": 67, "max": 120, "agorot": 7750}]},
+    {"id": "fast_diag", "label": "אבחון רפואי מהיר", "wizardKey": "אבחון רפואי מהיר", "group": "ייעוץ ובדיקות", "needsGender": false, "bands": [{"min": 0, "max": 20, "agorot": 792}, {"min": 21, "max": 120, "agorot": 1882}]},
+    {"id": "consult_diag", "label": "ייעוץ, בדיקות ואבחון רפואי מהיר", "wizardKey": "ייעוץ, בדיקות ואבחון רפואי מהיר", "group": "ייעוץ ובדיקות", "needsGender": false, "bands": [{"min": 0, "max": 20, "agorot": 2537}, {"min": 21, "max": 30, "agorot": 6042}, {"min": 31, "max": 60, "agorot": 7557}, {"min": 61, "max": 65, "agorot": 8122}, {"min": 66, "max": 66, "agorot": 9252}, {"min": 67, "max": 120, "agorot": 9632}]},
+    {"id": "advanced_tech", "label": "טיפולים בטכנולוגיות מתקדמות ואביזרים רפואיים", "wizardKey": "טיפולים בטכנולוגיות מתקדמות ואביזרים רפואיים", "group": "פוליסת בריאות נוספת", "needsGender": false, "baseIndexPoints": 126.49, "bands": [{"min": 0, "max": 20, "agorot": 642}, {"min": 21, "max": 30, "agorot": 1173}, {"min": 31, "max": 35, "agorot": 1207}, {"min": 36, "max": 40, "agorot": 1326}, {"min": 41, "max": 45, "agorot": 1489}, {"min": 46, "max": 50, "agorot": 1743}, {"min": 51, "max": 55, "agorot": 2008}, {"min": 56, "max": 60, "agorot": 2561}, {"min": 61, "max": 65, "agorot": 3143}, {"min": 66, "max": 120, "agorot": 4171}]},
+    {"id": "personal_plus", "label": "ליווי אישי פלוס", "wizardKey": "ליווי אישי פלוס", "group": "פוליסת בריאות נוספת", "needsGender": false, "bands": [{"min": 0, "max": 20, "agorot": 1096}, {"min": 21, "max": 120, "agorot": 1344}]},
+    {"id": "child_services", "label": "שירותים לילד", "wizardKey": "שירותים לילד", "group": "פוליסת בריאות נוספת", "needsGender": false, "maxAge": 20, "bands": [{"min": 0, "max": 20, "agorot": 1993}]},
+    {"id": "online_doctor", "label": "ביקור רופא און-ליין", "wizardKey": "ביקור רופא און-ליין", "group": "פוליסת בריאות נוספת", "needsGender": false, "bands": [{"min": 0, "max": 120, "agorot": 1987}]},
+    {"id": "online_doctor_extra", "label": "ביקור רופא און-ליין אקסטרה", "wizardKey": "ביקור רופא און-ליין אקסטרה", "group": "פוליסת בריאות נוספת", "needsGender": false, "bands": [{"min": 0, "max": 20, "agorot": 2000}, {"min": 21, "max": 120, "agorot": 2480}]},
+    {"id": "complementary", "label": "רפואה משלימה", "wizardKey": "רפואה משלימה", "group": "פוליסת בריאות נוספת", "needsGender": false, "bands": [{"min": 0, "max": 20, "agorot": 822}, {"min": 21, "max": 120, "agorot": 2186}]}
+  ];
+  const CLAL_HEALTH_COVER_BY_ID = CLAL_HEALTH_COVERS.reduce((acc, c) => { acc[c.id] = c; return acc; }, {});
+
+  function clalHealthCoverBaseIndexPoints(cover){
+    const v = Number(cover?.baseIndexPoints);
+    if(Number.isFinite(v) && v > 0) return v;
+    return CLAL_HEALTH_DEFAULT_BASE_INDEX;
+  }
+
+  function computeClalHealthCoverPremium(coverId, age, _gender){
+    const cover = CLAL_HEALTH_COVER_BY_ID[coverId];
+    if(!cover) return { ok:false, reason:"cover_missing" };
+    const a = Number(age);
+    if(!Number.isInteger(a)) return { ok:false, reason:"age_missing" };
+    if(a < CLAL_HEALTH_MIN_AGE || a > CLAL_HEALTH_MAX_AGE) return { ok:false, reason:"age_out_of_range" };
+    if(cover.maxAge != null && a > cover.maxAge) return { ok:false, reason:"age_cover_limit", coverMaxAge: cover.maxAge };
+    const band = clalHealthLookupBand(cover.bands, a);
+    if(!band || !Number.isInteger(band.agorot)) return { ok:false, reason:"rate_missing" };
+    const basePts = clalHealthCoverBaseIndexPoints(cover);
+    const indexed = HealthCpi.indexAgorot(band.agorot, CLAL_HEALTH_CPI_KEY, { baseIndexPoints: basePts });
+    return {
+      ok:true, coverId: cover.id, label: cover.label,
+      baseMonthlyAgorot: indexed.baseAgorot, baseMonthlyPremium: clalHealthAgorotToShekels(indexed.baseAgorot),
+      monthlyAgorot: indexed.indexedAgorot, monthlyPremium: clalHealthAgorotToShekels(indexed.indexedAgorot),
+      indexFactor: indexed.factor, baseIndexPoints: basePts, indexInfo: indexed.indexInfo
+    };
+  }
+  function computeClalHealthBundle(selectedIds, age, gender){
+    const ids = Array.isArray(selectedIds) ? selectedIds : [];
+    if(!ids.length) return { ok:false, reason:"covers_missing", covers:[], monthlyAgorot:0, monthlyPremium:0, annualPremium:0 };
+    const covers = []; let totalAg = 0, totalBaseAg = 0, indexInfo = null;
+    const basesUsed = {};
+    for(let i = 0; i < ids.length; i++){
+      const one = computeClalHealthCoverPremium(ids[i], age, gender);
+      if(!one.ok) return { ok:false, reason: one.reason, failCoverId: ids[i], coverMaxAge: one.coverMaxAge, covers:[], monthlyAgorot:0, monthlyPremium:0, annualPremium:0 };
+      const meta = CLAL_HEALTH_COVER_BY_ID[one.coverId];
+      if(!indexInfo) indexInfo = one.indexInfo || null;
+      basesUsed[String(one.baseIndexPoints)] = one.indexInfo || null;
+      covers.push({ id: one.coverId, label: one.label, wizardKey: meta?.wizardKey || one.label, monthlyPremium: one.monthlyPremium, monthlyAgorot: one.monthlyAgorot, baseMonthlyPremium: one.baseMonthlyPremium, baseMonthlyAgorot: one.baseMonthlyAgorot, baseIndexPoints: one.baseIndexPoints, indexFactor: one.indexFactor });
+      totalAg += one.monthlyAgorot; totalBaseAg += one.baseMonthlyAgorot;
+    }
+    return { ok:true, covers, monthlyAgorot: totalAg, monthlyPremium: clalHealthAgorotToShekels(totalAg), annualPremium: clalHealthAgorotToShekels(totalAg * 12), baseMonthlyAgorot: totalBaseAg, baseMonthlyPremium: clalHealthAgorotToShekels(totalBaseAg), indexFactor: indexInfo?.factor || 1, indexInfo, indexBases: basesUsed };
+  }
+  function formatClalHealthIndexMetaHtml(indexInfo, indexBases){
+    if(!indexInfo) return "";
+    if(!indexInfo.ok) return `<div class="lcClalHealth__indexMeta lcClalHealth__indexMeta--pending">ממתין למדד למ״ס — מוצגת כרגע פרמיית בסיס מהתעריפון</div>`;
+    const baseKeys = indexBases && typeof indexBases === "object" ? Object.keys(indexBases) : [];
+    const uniqueBases = baseKeys.length ? baseKeys : [String(indexInfo.baseIndexPoints)];
+    const factorsTxt = uniqueBases.map((b) => {
+      const info = (indexBases && indexBases[b]) || indexInfo;
+      const f = (Math.round((info?.factor || indexInfo.factor) * 10000) / 10000).toFixed(4);
+      return `בסיס ${b} ×${f}`;
+    }).join(" · ");
+    return `<div class="lcClalHealth__indexMeta">הצמדה למדד: נוכחי ≈ ${escapeHtml(String(indexInfo.currentIndexPoints))} (${escapeHtml(safeTrim(indexInfo.currentMonthLabel))}) · ${escapeHtml(factorsTxt)}</div>`;
+  }
+  const CLAL_HEALTH_MSG = {
+    birth_missing:"יש לבחור תאריך לידה לפני חישוב הפרמיה.",
+    entry_too_young:"גיל הכניסה המינימלי הוא 0 ימים.",
+    age_missing:"יש לבחור תאריך לידה לפני חישוב הפרמיה.",
+    age_out_of_range:`הגיל הביטוחי חורג מטווח הכניסה ${CLAL_HEALTH_MIN_AGE}–${CLAL_HEALTH_MAX_AGE}.`,
+    covers_missing:"יש לסמן לפחות כיסוי אחד.",
+    age_cover_limit:"הגיל חורג מהמותר לכיסוי שנבחר.",
+    rate_missing:"לא נמצא תעריף מתאים לנתונים שהוזנו.",
+    cover_missing:"כיסוי לא מזוהה בתעריפון."
+  };
+
+  const ClalHealthSimulator = {
+    _modal:null,_ctx:null,_state:{},_activeInsuredId:null,_escHandler:null,_confirmSwitch:null,_showFinalSummary:false,_cpiUnsub:null,
+    open(ctx){
+      this.close(); this._ctx = ctx || {};
+      const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : [];
+      this._state = {}; insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); });
+      this._activeInsuredId = insureds[0]?.id || null; this._confirmSwitch = null; this._showFinalSummary = false;
+      this._mount(); this._render();
+      this._cpiUnsub = HealthCpi.onChange(() => { if(this._modal) this._render(); });
+      HealthCpi.ensure().then(() => { if(this._modal) this._render(); }).catch(() => {});
+    },
+    _prefillFromInsured(ins){
+      const d = ins?.data || {};
+      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
+      const birthDate = safeTrim(d.birthDate || "");
+      const occupation = safeTrim(d.occupation || "");
+      const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
+      const st = { birthDate, birthDateSource: birthDate ? "step1" : "", insuranceStartDate, insuranceStartDateSource: insuranceStartDate ? "ctx" : "", age:"", ageSource: birthDate ? "step1" : "", ageRaw:null, entryDays:null, gender, genderSource: gender ? "step1" : "", occupation, occupationSource: occupation ? "step1" : "", selected:{}, result:null, error:null, savedAt:null, dirtySinceSave:false };
+      this._syncAge(st); return st;
+    },
+    _isInsuredRelevant(_ins){ return true; },
+    close(){
+      if(this._cpiUnsub){ try{ this._cpiUnsub(); }catch(_e){} this._cpiUnsub = null; }
+      if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; }
+      if(this._modal){ const m = this._modal; m.classList.add("giValModal--leaving"); window.setTimeout(() => m.remove(), 200); this._modal = null; }
+      this._ctx = null;
+    },
+    _mount(){
+      const modal = document.createElement("div");
+      modal.id = "lcClalHealthModal"; modal.className = "giValModal lcClalHealthModal";
+      modal.setAttribute("role","dialog"); modal.setAttribute("aria-modal","true"); modal.setAttribute("aria-label","סימולטור בריאות כלל");
+      document.body.appendChild(modal); this._modal = modal;
+      this._escHandler = (ev) => { if(ev.key === "Escape") this.close(); };
+      document.addEventListener("keydown", this._escHandler);
+      requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
+    },
+    _getInsuredLabel(insId){
+      const ins = (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === insId);
+      return ins ? safeTrim(ins.label) || "מבוטח" : "מבוטח";
+    },
+    _selectedIds(st){ return CLAL_HEALTH_COVERS.map((c) => c.id).filter((id) => !!st?.selected?.[id]); },
+    _syncAge(st){
+      return riskSimSyncAgeFromBirthDate(st, { minAge: CLAL_HEALTH_MIN_AGE, maxAge: CLAL_HEALTH_MAX_AGE, minEntryDays: CLAL_HEALTH_MIN_ENTRY_DAYS, asOfDate: st?.insuranceStartDate || "" });
+    },
+    _recalcState(st){
+      if(!st) return;
+      if(!st.selected || typeof st.selected !== "object") st.selected = {};
+      const ageSync = this._syncAge(st);
+      const ids = this._selectedIds(st);
+      if(!ids.length){ st.result = null; st.error = null; return; }
+      if(!ageSync.ok){ st.result = null; st.error = CLAL_HEALTH_MSG[ageSync.reason] || CLAL_HEALTH_MSG.birth_missing; return; }
+      const calc = computeClalHealthBundle(ids, st.age, st.gender);
+      if(calc.ok){ st.result = calc; st.error = null; }
+      else {
+        st.result = null;
+        let msg = CLAL_HEALTH_MSG[calc.reason] || "לא ניתן לחשב את הפרמיה.";
+        if(calc.reason === "age_cover_limit" && calc.failCoverId){
+          const c = CLAL_HEALTH_COVER_BY_ID[calc.failCoverId];
+          msg = `הכיסוי "${c?.label || ""}" זמין עד גיל ${calc.coverMaxAge} בלבד.`;
+        }
+        st.error = msg;
+      }
+    },
+    _render(){
+      if(!this._modal) return;
+      const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+      const isMulti = insureds.length > 1;
+      if(this._showFinalSummary){ this._renderFinalSummary(insureds); return; }
+      const activeId = this._activeInsuredId;
+      const st = this._state[activeId] || this._prefillFromInsured(null);
+      const isStandalone = !!this._ctx?.standalone;
+      this._recalcState(st);
+      const tabsHtml = isMulti ? `<div class="lcClalHealth__tabs">${insureds.map((ins) => {
+        const s = this._state[ins.id];
+        const statusCls = s?.savedAt ? " has-saved" : (s?.result ? " has-result" : "");
+        return `<button type="button" class="lcClalHealth__tab${ins.id === activeId ? " is-active" : ""}${statusCls}" data-clalh-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${s?.savedAt ? " 🟢" : ""}</button>`;
+      }).join("")}</div>` : "";
+      const ageSync = this._syncAge(st);
+      const ageHintHtml = !st.birthDate
+        ? `<div class="lcClalHealth__hint lcClalHealth__hint--warn">${isStandalone ? "יש להזין תאריך לידה" : "לא נמצא תאריך לידה — יש להזין"}</div>`
+        : (!ageSync.ok ? `<div class="lcClalHealth__hint lcClalHealth__hint--warn">${escapeHtml(CLAL_HEALTH_MSG[ageSync.reason] || "תאריך לא תקין")}</div>`
+          : `<div class="lcClalHealth__hint">גיל ביטוחי בתחילת הביטוח: <strong>${escapeHtml(String(ageSync.age))}</strong></div>`);
+      const groups = {};
+      CLAL_HEALTH_COVERS.forEach((c) => { (groups[c.group] ||= []).push(c); });
+      const coversHtml = Object.keys(groups).map((g) => `<div class="lcClalHealth__group"><div class="lcClalHealth__groupTitle">${escapeHtml(g)}</div><div class="lcClalHealth__coverList">${groups[g].map((c) => {
+        const checked = !!(st.selected && st.selected[c.id]);
+        const one = checked ? computeClalHealthCoverPremium(c.id, st.age, st.gender) : null;
+        const premTxt = one?.ok ? `₪${formatClalHealthExactAmount(one.monthlyPremium)}` : (checked && one && !one.ok ? "—" : "");
+        return `<label class="lcClalHealth__cover${checked ? " is-checked" : ""}"><input type="checkbox" data-clalh-cover="${escapeHtml(c.id)}"${checked ? " checked" : ""} /><span class="lcClalHealth__coverLabel">${escapeHtml(c.label)}${c.maxAge != null ? ` <em>(עד גיל ${c.maxAge})</em>` : ""}</span><span class="lcClalHealth__coverPrem">${premTxt}</span></label>`;
+      }).join("")}</div></div>`).join("");
+      const selectedRows = (st.result?.covers || []).map((c) => `<div class="lcClalHealth__selRow"><span>${escapeHtml(c.label)}</span><strong>₪${escapeHtml(formatClalHealthExactAmount(c.monthlyPremium))}</strong></div>`).join("");
+      const indexMetaHtml = formatClalHealthIndexMetaHtml(st.result?.indexInfo || HealthCpi.getIndexInfo(CLAL_HEALTH_CPI_KEY), st.result?.indexBases);
+      const baseTotalHtml = (st.result?.ok && st.result.baseMonthlyPremium != null && Math.abs(st.result.baseMonthlyPremium - st.result.monthlyPremium) > 0.0001)
+        ? `<div class="lcClalHealth__resultRow"><span>פרמיית בסיס (לפני מדד)</span><strong>₪${escapeHtml(formatClalHealthExactAmount(st.result.baseMonthlyPremium))}</strong></div>` : "";
+      const resultHtml = st.error
+        ? `<div class="lcClalHealth__result lcClalHealth__result--error">${escapeHtml(st.error)}</div>`
+        : (st.result ? `<div class="lcClalHealth__result lcClalHealth__result--ok"><div class="lcClalHealth__selTitle">כיסויים שנבחרו</div>${selectedRows}${baseTotalHtml}<div class="lcClalHealth__resultRow lcClalHealth__resultRow--main"><span>סה״כ פרמיה חודשית (צמודה למדד)</span><strong>₪${escapeHtml(formatClalHealthExactAmount(st.result.monthlyPremium))}</strong></div><div class="lcClalHealth__resultRow"><span>סה״כ פרמיה שנתית</span><strong>₪${escapeHtml(formatClalHealthExactAmount(st.result.annualPremium))}</strong></div>${indexMetaHtml}</div>`
+          : `<div class="lcClalHealth__result lcClalHealth__result--empty">סמנו כיסויים כדי לראות פרמיה</div>`);
+      const occBlockHtml = renderOccupationRiskBlockHtml(assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product), "lcClalHealth");
+      const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company) ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini") : "✚";
+      const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
+      const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+      const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
+      const footHtml = isStandalone
+        ? `<div class="giValModal__foot lcClalHealth__foot"><button type="button" class="btn btn--primary" data-clalh-close="1">סגור</button></div>`
+        : (!isMulti
+          ? `<div class="giValModal__foot lcClalHealth__foot"><button type="button" class="btn giValModal__closeBtn" data-clalh-close="1">ביטול</button><button type="button" class="btn btn--primary" data-clalh-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button></div>`
+          : `<div class="giValModal__foot lcClalHealth__foot"><button type="button" class="btn giValModal__closeBtn" data-clalh-close="1">ביטול</button><button type="button" class="btn btn--secondary" data-clalh-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button><button type="button" class="btn btn--primary" data-clalh-finalconfirm="1"${allSaved ? "" : " disabled"}>אישור סופי</button></div>`);
+      const confirmOverlayHtml = this._confirmSwitch ? `<div class="lcClalHealth__overlay"><div class="lcClalHealth__overlayCard"><div class="lcClalHealth__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}. האם לשמור לפני המעבר?</div><div class="lcClalHealth__overlayBtns"><button type="button" class="btn btn--primary" data-clalh-switch="save">שמור ועבור</button><button type="button" class="btn btn--secondary" data-clalh-switch="discard">עבור ללא שמירה</button><button type="button" class="btn" data-clalh-switch="cancel">ביטול</button></div></div></div>` : "";
+      this._modal.innerHTML = `<div class="giValModal__backdrop" data-clalh-close="1"></div><div class="giValModal__card lcClalHealth__card"><div class="giValModal__head"><span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span><div class="giValModal__headText"><div class="giValModal__title">סימולטור בריאות כלל</div></div><button type="button" class="lcClalHealth__closeX" data-clalh-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body lcClalHealth__body">${tabsHtml}${isStandalone ? `<div class="lcClalHealth__insuredLabel lcClalHealth__insuredLabel--standalone">מצב חישוב עצמאי — התוצאה לא נשמרת על אף פוליסה</div>` : `<div class="lcClalHealth__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}<div class="lcClalHealth__grid"><div class="lcClalHealth__field"><label class="lcClalHealth__label">תאריך לידה</label><input class="lcClalHealth__input lcClalHealth__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-clalh-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />${ageHintHtml}</div><div class="lcClalHealth__field"><label class="lcClalHealth__label">תחילת ביטוח</label><input class="lcClalHealth__input lcClalHealth__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-clalh-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" /></div><div class="lcClalHealth__field"><label class="lcClalHealth__label">מין</label><div class="lcClalHealth__segmented"><button type="button" class="lcClalHealth__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-clalh-field="gender" data-clalh-value="זכר">זכר</button><button type="button" class="lcClalHealth__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-clalh-field="gender" data-clalh-value="נקבה">נקבה</button></div><div class="lcClalHealth__hint">בתעריפון כלל הפרמיה זהה לגברים ולנשים</div></div><div class="lcClalHealth__field lcClalHealth__field--wide"><label class="lcClalHealth__label">עיסוק</label><input class="lcClalHealth__input" type="text" data-clalh-field="occupation" value="${escapeHtml(st.occupation || "")}" placeholder="לדוגמה: מהנדס" autocomplete="off" /></div></div><div class="lcClalHealth__coversTitle">בחירת כיסויים <span class="lcClalHealth__coversCount">(${CLAL_HEALTH_COVERS.length})</span></div><div class="lcClalHealth__coversWrap">${coversHtml}</div>${occBlockHtml}${resultHtml}</div>${footHtml}${confirmOverlayHtml}</div>`;
+      this._bind();
+    },
+    _renderFinalSummary(insureds){
+      const rows = insureds.filter((ins) => this._isInsuredRelevant(ins)).map((ins) => {
+        const ok = !!this._state[ins.id]?.savedAt;
+        return `<div class="lcClalHealth__summaryRow"><span>${ok ? "✓" : "•"}</span><span>${escapeHtml(safeTrim(ins.label) || "מבוטח")}</span><span>${ok ? "הושלם" : "לא נשמר"}</span></div>`;
+      }).join("");
+      this._modal.innerHTML = `<div class="giValModal__backdrop" data-clalh-close="1"></div><div class="giValModal__card lcClalHealth__card"><div class="giValModal__head"><div class="giValModal__headText"><div class="giValModal__title">סיכום סימולטור להצעה</div></div><button type="button" class="lcClalHealth__closeX" data-clalh-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body lcClalHealth__body">${rows}</div><div class="giValModal__foot lcClalHealth__foot"><button type="button" class="btn giValModal__closeBtn" data-clalh-summary-back="1">חזרה</button><button type="button" class="btn btn--primary" data-clalh-summary-confirm="1">אישור סופי</button></div></div>`;
+      this._bind();
+    },
+    _bind(){
+      const modal = this._modal; if(!modal) return;
+      ensureSegFieldDelegation(modal, this, "clalh");
+      $$("[data-clalh-close]", modal).forEach((el) => on(el, "click", () => this.close()));
+      $$("[data-clalh-tab]", modal).forEach((el) => on(el, "click", () => this._switchInsured(el.getAttribute("data-clalh-tab"))));
+      $$("[data-clalh-switch]", modal).forEach((el) => on(el, "click", () => {
+        const action = el.getAttribute("data-clalh-switch"); const target = this._confirmSwitch?.targetId; this._confirmSwitch = null;
+        if(action === "save"){ this._saveActive(); if(target) this._activeInsuredId = target; this._render(); }
+        else if(action === "discard"){ if(target) this._activeInsuredId = target; this._render(); }
+        else this._render();
+      }));
+      bindRiskSimDmyField(modal, '[data-clalh-field="birthDate"]', {
+        onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.dirtySinceSave = true; },
+        onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.ageSource = "manual"; st.dirtySinceSave = true; this._syncAge(st); this._render(); }
+      });
+      bindRiskSimDmyField(modal, '[data-clalh-field="insuranceStartDate"]', {
+        onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; },
+        onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val || riskSimTodayDmy(); st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; this._syncAge(st); this._render(); }
+      });
+      const occInput = modal.querySelector('[data-clalh-field="occupation"]');
+      if(occInput){
+        on(occInput, "input", () => { const st = this._state[this._activeInsuredId]; if(!st) return; st.occupation = safeTrim(occInput.value); st.occupationSource = "manual"; st.dirtySinceSave = true; });
+        on(occInput, "change", () => this._render()); on(occInput, "blur", () => this._render());
+      }
+      $$("[data-clalh-cover]", modal).forEach((el) => on(el, "change", () => {
+        const st = this._state[this._activeInsuredId]; if(!st) return;
+        if(!st.selected || typeof st.selected !== "object") st.selected = {};
+        st.selected[el.getAttribute("data-clalh-cover")] = !!el.checked; st.dirtySinceSave = true; this._render();
+      }));
+      const applyBtn = modal.querySelector("[data-clalh-apply]"); if(applyBtn) on(applyBtn, "click", () => this._apply());
+      const saveBtn = modal.querySelector("[data-clalh-save]"); if(saveBtn) on(saveBtn, "click", () => this._saveActive());
+      const finalBtn = modal.querySelector("[data-clalh-finalconfirm]");
+      if(finalBtn) on(finalBtn, "click", () => {
+        const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+        const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+        if(!(relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt))){
+          window.showToast?.({ title: "לא כל המבוטחים נשמרו", text: "יש לשמור את הסימולטור עבור כל המבוטחים הרלוונטיים לפני האישור הסופי.", variant: "warn" }); return;
+        }
+        this._showFinalSummary = true; this._render();
+      });
+      const summaryBackBtn = modal.querySelector("[data-clalh-summary-back]"); if(summaryBackBtn) on(summaryBackBtn, "click", () => { this._showFinalSummary = false; this._render(); });
+      const summaryConfirmBtn = modal.querySelector("[data-clalh-summary-confirm]"); if(summaryConfirmBtn) on(summaryConfirmBtn, "click", () => { try{ this._ctx?.onFinalConfirm?.(); }catch(_e){} this.close(); });
+    },
+    _switchInsured(targetId){
+      if(!targetId || targetId === this._activeInsuredId) return;
+      if(this._state[this._activeInsuredId]?.dirtySinceSave){ this._confirmSwitch = { targetId }; this._render(); return; }
+      this._activeInsuredId = targetId; this._render();
+    },
+    _buildResultForInsured(insId){
+      const st = this._state[insId]; this._recalcState(st); if(!st?.result?.ok) return null;
+      return { covers: st.result.covers.map((c) => ({ id:c.id, label:c.label, wizardKey:c.wizardKey || c.label, monthlyPremium:c.monthlyPremium })), monthlyPremium: st.result.monthlyPremium, annualPremium: st.result.annualPremium, monthlyAgorot: st.result.monthlyAgorot, birthDate: st.birthDate || "", birthDateSource: st.birthDateSource || "", insuranceStartDate: st.insuranceStartDate || "", age: st.age, ageSource: st.ageSource, gender: st.gender, genderSource: st.genderSource, occupation: st.occupation || "", occupationSource: st.occupationSource || "" };
+    },
+    _apply(){
+      const results = {}; Object.keys(this._state).forEach((insId) => { const r = this._buildResultForInsured(insId); if(r) results[insId] = r; });
+      if(!Object.keys(results).length){ window.showToast?.({ title: "אין תוצאה להחלה", text: "יש לבחור כיסויים ולחשב פרמיה לפני ההחלה על הפוליסה.", variant: "warn" }); return; }
+      const onApply = this._ctx?.onApply; this.close(); try{ onApply?.(results); }catch(_e){}
+    },
+    _saveActive(){
+      const insId = this._activeInsuredId; const result = this._buildResultForInsured(insId);
+      if(!result){ window.showToast?.({ title: "אין תוצאה לשמירה", text: "יש לבחור כיסויים תקינים לפני השמירה.", variant: "warn" }); return; }
+      try{ this._ctx?.onApply?.({ [insId]: result }); }catch(_e){}
+      const st = this._state[insId]; if(st){ st.savedAt = nowISO(); st.dirtySinceSave = false; }
+      window.showToast?.({ title: "נשמר", text: `הסימולטור עבור ${this._getInsuredLabel(insId)} נשמר על ההצעה.`, variant: "success" });
+      this._render();
+    }
+  };
+  RiskSimulators.register("כלל", "בריאות", ClalHealthSimulator);
+  // ===== סוף GI-CLL-HEALTH-SIM =====================================================
+
+  // ===== GI-CLL-CI-SIM 2026-08-12 · סימולטורי מדיכלל כלל (מחלות קשות / סרטן) =====
+  // מקור אמת: גיליונות "מ.קשות" ו-"סרטן" בתעריפון בריאות כלל.
+  // בשונה מכיסויי הבריאות — התעריף הוא פרומיל לשנה על סכום הפיצוי, מפולח
+  // לפי מין × עישון, ואינו צמוד למדד (אין שורת "מדד בסיס" בגיליונות האלה).
+  // אחסון: מאיות פרומיל כמספר שלם (6.55‰ → 655) כדי למנוע סטיית floating-point.
+  //   פרמיה שנתית = (מאיות × סכום) ÷ 100,000 ; חודשית = שנתית ÷ 12
+  // בהתאם לשאר סימולטורי הפרומיל במערכת — אין כאן עיגול עסקי.
+  const CLAL_CI_MIN_AGE = 0, CLAL_CI_MIN_ENTRY_DAYS = 0, CLAL_CI_MAX_TABLE_AGE = 74;
+  const CLAL_CI_MIN_SUM = 50000, CLAL_CI_MAX_SUM = 700000;
+  const CLAL_CI_RATE_BANDS = {
+    mediclal_critical: [
+      {"min": 0, "max": 20, "mS": 85, "mNS": 85, "fS": 85, "fNS": 85},
+      {"min": 21, "max": 25, "mS": 170, "mNS": 156, "fS": 156, "fNS": 151},
+      {"min": 26, "max": 30, "mS": 205, "mNS": 175, "fS": 220, "fNS": 200},
+      {"min": 31, "max": 35, "mS": 305, "mNS": 245, "fS": 330, "fNS": 310},
+      {"min": 36, "max": 40, "mS": 550, "mNS": 370, "fS": 515, "fNS": 465},
+      {"min": 41, "max": 45, "mS": 1030, "mNS": 655, "fS": 810, "fNS": 680},
+      {"min": 46, "max": 50, "mS": 1880, "mNS": 1310, "fS": 1530, "fNS": 1155},
+      {"min": 51, "max": 55, "mS": 3075, "mNS": 2095, "fS": 2360, "fNS": 1665},
+      {"min": 56, "max": 60, "mS": 5785, "mNS": 3355, "fS": 3455, "fNS": 2525},
+      {"min": 61, "max": 65, "mS": 9640, "mNS": 6115, "fS": 5900, "fNS": 4120},
+      {"min": 66, "max": 66, "mS": 13070, "mNS": 8365, "fS": 7865, "fNS": 5300},
+      {"min": 67, "max": 67, "mS": 14830, "mNS": 9310, "fS": 8585, "fNS": 5905},
+      {"min": 68, "max": 68, "mS": 17165, "mNS": 10620, "fS": 9770, "fNS": 6610},
+      {"min": 69, "max": 69, "mS": 18500, "mNS": 11630, "fS": 10705, "fNS": 7735},
+      {"min": 70, "max": 70, "mS": 21515, "mNS": 13705, "fS": 12645, "fNS": 9220},
+      {"min": 71, "max": 71, "mS": 25645, "mNS": 16510, "fS": 15295, "fNS": 11225},
+      {"min": 72, "max": 74, "mS": 34220, "mNS": 22085, "fS": 20540, "fNS": 15060}
+    ],
+    mediclal_cancer: [
+      {"min": 0, "max": 20, "mS": 62, "mNS": 62, "fS": 62, "fNS": 62},
+      {"min": 21, "max": 25, "mS": 113, "mNS": 113, "fS": 114, "fNS": 104},
+      {"min": 26, "max": 30, "mS": 133, "mNS": 133, "fS": 190, "fNS": 171},
+      {"min": 31, "max": 35, "mS": 160, "mNS": 160, "fS": 300, "fNS": 265},
+      {"min": 36, "max": 40, "mS": 190, "mNS": 190, "fS": 510, "fNS": 435},
+      {"min": 41, "max": 45, "mS": 220, "mNS": 220, "fS": 720, "fNS": 660},
+      {"min": 46, "max": 50, "mS": 440, "mNS": 400, "fS": 1185, "fNS": 990},
+      {"min": 51, "max": 55, "mS": 845, "mNS": 690, "fS": 1470, "fNS": 1180},
+      {"min": 56, "max": 60, "mS": 1875, "mNS": 1305, "fS": 2090, "fNS": 1605},
+      {"min": 61, "max": 65, "mS": 3960, "mNS": 2645, "fS": 3525, "fNS": 2600},
+      {"min": 66, "max": 66, "mS": 5210, "mNS": 3425, "fS": 4460, "fNS": 3225},
+      {"min": 67, "max": 67, "mS": 5795, "mNS": 3805, "fS": 4835, "fNS": 3460},
+      {"min": 68, "max": 68, "mS": 6455, "mNS": 4235, "fS": 5260, "fNS": 3715},
+      {"min": 69, "max": 69, "mS": 7230, "mNS": 4740, "fS": 5770, "fNS": 4020},
+      {"min": 70, "max": 70, "mS": 7725, "mNS": 5060, "fS": 6070, "fNS": 4155},
+      {"min": 71, "max": 71, "mS": 8960, "mNS": 5865, "fS": 6945, "fNS": 4665},
+      {"min": 72, "max": 72, "mS": 10960, "mNS": 7155, "fS": 8385, "fNS": 5525},
+      {"min": 73, "max": 74, "mS": 16060, "mNS": 10450, "fS": 12005, "fNS": 7665}
+    ]
+  };
+  const CLAL_CI_PLANS = {
+    mediclal_critical: { planId:"mediclal_critical", title:"סימולטור מחלות קשות כלל · מדיכלל 33", subtitle:"תעריף פרומיל לשנה על סכום הפיצוי", pdfName:"מדיכלל מחלות קשות 33", wizardCoverKey:"מדיכלל מחלות קשות 33", cssPrefix:"lcClalCi", modalClass:"lcClalCiModal", fieldPrefix:"clalci", rateMapKey:"mediclal_critical", amountField:"mediclalCriticalAmount", maxEntryAge:65 },
+    mediclal_cancer: { planId:"mediclal_cancer", title:"סימולטור סרטן כלל · מדיכלל פיצוי לסרטן", subtitle:"תעריף פרומיל לשנה על סכום הפיצוי", pdfName:"מדיכלל פיצוי לסרטן", wizardCoverKey:"מדיכלל פיצוי לסרטן", cssPrefix:"lcClalCi", modalClass:"lcClalCiModal", fieldPrefix:"clalca", rateMapKey:"mediclal_cancer", amountField:"mediclalCancerAmount", maxEntryAge:69 }
+  };
+  /** תצוגת סכום מדויקת — ללא עיגול עסקי, עד 4 ספרות עשרוניות ולא פחות מ-2. */
+  function formatClalCiExactAmount(n){
+    if(!Number.isFinite(n)) return "";
+    let s = n.toFixed(4);
+    if(s.indexOf(".") !== -1){
+      s = s.replace(/0+$/, "");
+      if(s.endsWith(".")) s += "00";
+      else if(s.split(".")[1].length === 1) s += "0";
+    }
+    return s;
+  }
+  /** פרומיל לתצוגה: 655 → "6.55" */
+  function formatClalCiPermille(hundredths){
+    if(!Number.isInteger(hundredths)) return "";
+    return Math.trunc(hundredths / 100) + "." + String(Math.abs(hundredths % 100)).padStart(2, "0");
+  }
+  function lookupClalCiRate(planId, { age, gender, smoker }){
+    const plan = CLAL_CI_PLANS[planId]; if(!plan) return { ok:false, reason:"rate_missing" };
+    // Number("") הוא 0 — בלי הבדיקה הזו גיל ריק היה מקבל את תעריף גיל 0
+    if(age === "" || age == null) return { ok:false, reason:"age_missing" };
+    const ageNum = Number(age); if(!Number.isInteger(ageNum)) return { ok:false, reason:"age_missing" };
+    if(ageNum < CLAL_CI_MIN_AGE || ageNum > plan.maxEntryAge) return { ok:false, reason:"age_out_of_range" };
+    if(gender !== "זכר" && gender !== "נקבה") return { ok:false, reason:"gender_missing" };
+    if(smoker !== true && smoker !== false) return { ok:false, reason:"smoker_missing" };
+    const bands = CLAL_CI_RATE_BANDS[plan.rateMapKey] || [];
+    let band = null;
+    for(let i = 0; i < bands.length; i++){
+      if(ageNum >= bands[i].min && ageNum <= bands[i].max){ band = bands[i]; break; }
+    }
+    if(!band) return { ok:false, reason:"age_out_of_range" };
+    const key = gender === "זכר" ? (smoker ? "mS" : "mNS") : (smoker ? "fS" : "fNS");
+    const permilleHundredths = band[key];
+    if(permilleHundredths == null || !Number.isInteger(permilleHundredths)) return { ok:false, reason:"rate_missing" };
+    return { ok:true, permilleHundredths, ratePerMille: permilleHundredths / 100 };
+  }
+  function computeClalCiPremium(planId, { age, gender, smoker, compensation }){
+    const plan = CLAL_CI_PLANS[planId]; if(!plan) return { ok:false, reason:"rate_missing" };
+    const sum = Number(String(compensation == null ? "" : compensation).replace(/[^\d.-]/g, ""));
+    if(!Number.isFinite(sum) || sum <= 0) return { ok:false, reason:"sum_missing" };
+    if(sum < CLAL_CI_MIN_SUM) return { ok:false, reason:"sum_too_low", minSum: CLAL_CI_MIN_SUM };
+    if(sum > CLAL_CI_MAX_SUM) return { ok:false, reason:"sum_too_high", maxSum: CLAL_CI_MAX_SUM };
+    const rate = lookupClalCiRate(planId, { age, gender, smoker }); if(!rate.ok) return rate;
+    const annualPremium = (rate.permilleHundredths * sum) / 100000;
+    const monthlyPremium = annualPremium / 12;
+    return {
+      ok:true, monthlyPremium, annualPremium,
+      permilleHundredths: rate.permilleHundredths, ratePerMille: rate.ratePerMille,
+      compensation: sum, pdfName: plan.pdfName, planId: plan.planId, wizardCoverKey: plan.wizardCoverKey
+    };
+  }
+  const CLAL_CI_MSG = {
+    birth_missing:"יש לבחור תאריך לידה לפני חישוב הפרמיה.", entry_too_young:"גיל הכניסה המינימלי הוא 0 ימים.",
+    age_missing:"יש לבחור תאריך לידה לפני חישוב הפרמיה.", age_out_of_range:"הגיל הביטוחי חורג מטווח הכניסה של המסלול.",
+    gender_missing:"יש לבחור מין.", smoker_missing:"יש לבחור סטטוס עישון.", sum_missing:"יש להזין סכום פיצוי.",
+    sum_too_low:"סכום הפיצוי המינימלי הוא ₪50,000.", sum_too_high:"סכום הפיצוי המקסימלי הוא ₪700,000.", rate_missing:"לא נמצא תעריף מתאים."
+  };
+  function createClalCiSimulator(planId){
+    const plan = CLAL_CI_PLANS[planId]; const P = plan.cssPrefix; const FP = plan.fieldPrefix;
+    const ageRangeMsg = `הגיל הביטוחי חורג מטווח הכניסה ${CLAL_CI_MIN_AGE}–${plan.maxEntryAge}.`;
+    const msgFor = (reason) => (reason === "age_out_of_range" ? ageRangeMsg : (CLAL_CI_MSG[reason] || ""));
+    return {
+      _planId:planId,_modal:null,_ctx:null,_state:{},_activeInsuredId:null,_escHandler:null,_confirmSwitch:null,_showFinalSummary:false,
+      open(ctx){ this.close(); this._ctx = ctx || {}; const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : []; this._state = {}; insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); }); this._activeInsuredId = insureds[0]?.id || null; this._confirmSwitch = null; this._showFinalSummary = false; this._mount(); this._render(); },
+      _prefillFromInsured(ins){
+        const d = ins?.data || {};
+        const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
+        const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : ((d.smoker === true || d.smoker === false) ? d.smoker : null));
+        const birthDate = safeTrim(d.birthDate || ""); const occupation = safeTrim(d.occupation || "");
+        const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
+        const compensation = safeTrim(d[plan.amountField] || d.compensation || "") || "100000";
+        const st = { birthDate, birthDateSource: birthDate ? "step1" : "", insuranceStartDate, insuranceStartDateSource: insuranceStartDate ? "ctx" : "", age:"", ageSource: birthDate ? "step1" : "", ageRaw:null, entryDays:null, gender, genderSource: gender ? "step1" : "", smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "", occupation, occupationSource: occupation ? "step1" : "", compensation, result:null, error:null, savedAt:null, dirtySinceSave:false };
+        this._syncAge(st); return st;
+      },
+      _syncAge(st){ return riskSimSyncAgeFromBirthDate(st, { minAge: CLAL_CI_MIN_AGE, maxAge: plan.maxEntryAge, minEntryDays: CLAL_CI_MIN_ENTRY_DAYS, asOfDate: st?.insuranceStartDate || "" }); },
+      _isInsuredRelevant(_ins){ return true; },
+      close(){ if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; } if(this._modal){ const m = this._modal; m.classList.add("giValModal--leaving"); window.setTimeout(() => m.remove(), 200); this._modal = null; } this._ctx = null; },
+      _mount(){ const modal = document.createElement("div"); modal.id = "lcClalCiModal_" + planId; modal.className = "giValModal " + plan.modalClass; modal.setAttribute("role","dialog"); modal.setAttribute("aria-modal","true"); modal.setAttribute("aria-label", plan.title); document.body.appendChild(modal); this._modal = modal; this._escHandler = (ev) => { if(ev.key === "Escape") this.close(); }; document.addEventListener("keydown", this._escHandler); requestAnimationFrame(() => modal.classList.add("giValModal--visible")); },
+      _getInsuredLabel(insId){ const ins = (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === insId); return ins ? safeTrim(ins.label) || "מבוטח" : "מבוטח"; },
+      _calc(insId){
+        const st = this._state[insId]; if(!st) return;
+        const ageSync = this._syncAge(st);
+        if(!ageSync.ok){ st.result = null; st.error = msgFor(ageSync.reason) || CLAL_CI_MSG.birth_missing; this._render(); return; }
+        const calc = computeClalCiPremium(planId, { age: st.age, gender: st.gender, smoker: st.smoker, compensation: st.compensation });
+        if(calc.ok){ st.result = calc; st.error = null; }
+        else { st.result = null; let msg = msgFor(calc.reason) || "לא ניתן לחשב את הפרמיה."; if(calc.reason === "sum_too_low") msg = `סכום הפיצוי המינימלי הוא ₪${formatRiskSimSumInsuredDigits(calc.minSum)}.`; if(calc.reason === "sum_too_high") msg = `סכום הפיצוי המקסימלי הוא ₪${formatRiskSimSumInsuredDigits(calc.maxSum)}.`; st.error = msg; }
+        this._render();
+      },
+      _render(){
+        if(!this._modal) return;
+        const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []; const isMulti = insureds.length > 1;
+        if(this._showFinalSummary){ this._renderFinalSummary(insureds); return; }
+        const activeId = this._activeInsuredId; const st = this._state[activeId] || this._prefillFromInsured(null); const isStandalone = !!this._ctx?.standalone;
+        const tabsHtml = isMulti ? `<div class="${P}__tabs">${insureds.map((ins) => { const s = this._state[ins.id]; const statusCls = s?.savedAt ? " has-saved" : (s?.result ? " has-result" : ""); return `<button type="button" class="${P}__tab${ins.id === activeId ? " is-active" : ""}${statusCls}" data-${FP}-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${s?.savedAt ? " 🟢" : ""}</button>`; }).join("")}</div>` : "";
+        const ageSync = this._syncAge(st);
+        const ageHintHtml = !st.birthDate ? `<div class="${P}__hint ${P}__hint--warn">${isStandalone ? "יש להזין תאריך לידה" : "לא נמצא תאריך לידה — יש להזין"}</div>` : (!ageSync.ok ? `<div class="${P}__hint ${P}__hint--warn">${escapeHtml(msgFor(ageSync.reason) || "תאריך לא תקין")}</div>` : `<div class="${P}__hint">גיל ביטוחי בתחילת הביטוח: <strong>${escapeHtml(String(ageSync.age))}</strong></div>`);
+        const genderHintHtml = (isStandalone || st.gender) ? "" : `<div class="${P}__hint ${P}__hint--warn">יש לבחור מין</div>`;
+        const smokerHintHtml = (isStandalone || st.smoker === true || st.smoker === false) ? "" : `<div class="${P}__hint ${P}__hint--warn">יש לבחור סטטוס עישון</div>`;
+        const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company) ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini") : "✚";
+        const occBlockHtml = renderOccupationRiskBlockHtml(assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product), P);
+        const resultHtml = st.error ? `<div class="${P}__result ${P}__result--error">${escapeHtml(st.error)}</div>` : (st.result ? `<div class="${P}__result ${P}__result--ok"><div class="${P}__resultRow"><span>מסלול</span><strong>${escapeHtml(st.result.pdfName)}</strong></div><div class="${P}__resultRow"><span>תעריף (פרומיל לשנה)</span><strong>${escapeHtml(formatClalCiPermille(st.result.permilleHundredths))}‰</strong></div><div class="${P}__resultRow"><span>סכום פיצוי</span><strong>₪${escapeHtml(formatRiskSimSumInsuredDigits(st.result.compensation))}</strong></div><div class="${P}__resultRow ${P}__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatClalCiExactAmount(st.result.monthlyPremium))}</strong></div><div class="${P}__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatClalCiExactAmount(st.result.annualPremium))}</strong></div><div class="${P}__rateNote">התעריף משתנה כל שנה לפי גיל המבוטח · הפרמיה אינה צמודה למדד</div></div>` : `<div class="${P}__result ${P}__result--empty">מלאו את השדות ולחצו "חשב פרמיה"</div>`);
+        const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
+        const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+        const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
+        const footHtml = isStandalone ? `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn btn--primary" data-${FP}-close="1">סגור</button></div>` : (!isMulti ? `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn giValModal__closeBtn" data-${FP}-close="1">ביטול</button><button type="button" class="btn btn--primary" data-${FP}-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button></div>` : `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn giValModal__closeBtn" data-${FP}-close="1">ביטול</button><button type="button" class="btn btn--secondary" data-${FP}-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button><button type="button" class="btn btn--primary" data-${FP}-finalconfirm="1"${allSaved ? "" : " disabled"}>אישור סופי</button></div>`);
+        const confirmOverlayHtml = this._confirmSwitch ? `<div class="${P}__overlay"><div class="${P}__overlayCard"><div class="${P}__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}.</div><div class="${P}__overlayBtns"><button type="button" class="btn btn--primary" data-${FP}-switch="save">שמור ועבור</button><button type="button" class="btn btn--secondary" data-${FP}-switch="discard">עבור ללא שמירה</button><button type="button" class="btn" data-${FP}-switch="cancel">ביטול</button></div></div></div>` : "";
+        this._modal.innerHTML = `<div class="giValModal__backdrop" data-${FP}-close="1"></div><div class="giValModal__card ${P}__card"><div class="giValModal__head"><span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span><div class="giValModal__headText"><div class="giValModal__title">${escapeHtml(plan.title)}</div><div class="giValModal__sub">${escapeHtml(plan.subtitle)}</div></div><button type="button" class="${P}__closeX" data-${FP}-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body ${P}__body">${tabsHtml}${isStandalone ? `<div class="${P}__insuredLabel ${P}__insuredLabel--standalone">מצב חישוב עצמאי</div>` : `<div class="${P}__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}<div class="${P}__grid"><div class="${P}__field"><label class="${P}__label">תאריך לידה</label><input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-${FP}-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />${ageHintHtml}</div><div class="${P}__field"><label class="${P}__label">תחילת ביטוח</label><input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-${FP}-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" /></div><div class="${P}__field"><label class="${P}__label">מין</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-${FP}-field="gender" data-${FP}-value="זכר">זכר</button><button type="button" class="${P}__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-${FP}-field="gender" data-${FP}-value="נקבה">נקבה</button></div>${genderHintHtml}</div><div class="${P}__field"><label class="${P}__label">עישון</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.smoker === false ? " is-active" : ""}" data-${FP}-field="smoker" data-${FP}-value="0">לא מעשן/ת</button><button type="button" class="${P}__segBtn${st.smoker === true ? " is-active" : ""}" data-${FP}-field="smoker" data-${FP}-value="1">מעשן/ת</button></div>${smokerHintHtml}</div><div class="${P}__field"><label class="${P}__label">סכום פיצוי (₪${formatRiskSimSumInsuredDigits(CLAL_CI_MIN_SUM)}–₪${formatRiskSimSumInsuredDigits(CLAL_CI_MAX_SUM)})</label><input class="${P}__input" type="text" inputmode="numeric" data-${FP}-field="compensation" value="${escapeHtml(st.compensation || "")}" placeholder="100,000" /></div><div class="${P}__field ${P}__field--wide"><label class="${P}__label">עיסוק</label><input class="${P}__input" type="text" data-${FP}-field="occupation" value="${escapeHtml(st.occupation || "")}" autocomplete="off" /></div></div><div class="${P}__actions"><button type="button" class="btn btn--primary" data-${FP}-calc="1">חשב פרמיה</button></div>${occBlockHtml}${resultHtml}</div>${footHtml}${confirmOverlayHtml}</div>`;
+        this._bind();
+      },
+      _renderFinalSummary(insureds){
+        const rows = insureds.filter((ins) => this._isInsuredRelevant(ins)).map((ins) => { const ok = !!this._state[ins.id]?.savedAt; return `<div class="${P}__summaryRow"><span>${ok ? "✓" : "•"}</span><span>${escapeHtml(safeTrim(ins.label) || "מבוטח")}</span><span>${ok ? "הושלם" : "לא נשמר"}</span></div>`; }).join("");
+        this._modal.innerHTML = `<div class="giValModal__backdrop" data-${FP}-close="1"></div><div class="giValModal__card ${P}__card"><div class="giValModal__head"><div class="giValModal__headText"><div class="giValModal__title">סיכום סימולטור להצעה</div></div><button type="button" class="${P}__closeX" data-${FP}-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body ${P}__body">${rows}</div><div class="giValModal__foot ${P}__foot"><button type="button" class="btn giValModal__closeBtn" data-${FP}-summary-back="1">חזרה</button><button type="button" class="btn btn--primary" data-${FP}-summary-confirm="1">אישור סופי</button></div></div>`;
+        this._bind();
+      },
+      _bind(){
+        const modal = this._modal; if(!modal) return;
+        ensureSegFieldDelegation(modal, this, FP);
+        $$(`[data-${FP}-close]`, modal).forEach((el) => on(el, "click", () => this.close()));
+        $$(`[data-${FP}-tab]`, modal).forEach((el) => on(el, "click", () => this._switchInsured(el.getAttribute(`data-${FP}-tab`))));
+        $$(`[data-${FP}-switch]`, modal).forEach((el) => on(el, "click", () => { const action = el.getAttribute(`data-${FP}-switch`); const target = this._confirmSwitch?.targetId; this._confirmSwitch = null; if(action === "save"){ this._saveActive(); if(target) this._activeInsuredId = target; this._render(); } else if(action === "discard"){ if(target) this._activeInsuredId = target; this._render(); } else this._render(); }));
+        bindRiskSimDmyField(modal, `[data-${FP}-field="birthDate"]`, { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.ageSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
+        bindRiskSimDmyField(modal, `[data-${FP}-field="insuranceStartDate"]`, { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val || riskSimTodayDmy(); st.insuranceStartDateSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
+        const sumInput = modal.querySelector(`[data-${FP}-field="compensation"]`);
+        if(sumInput) on(sumInput, "input", () => { const st = this._state[this._activeInsuredId]; if(!st) return; const formatted = formatRiskSimSumInsuredDigits(sumInput.value); sumInput.value = formatted; try{ sumInput.setSelectionRange(formatted.length, formatted.length); }catch(_e){} st.compensation = formatted; st.result = null; st.error = null; st.dirtySinceSave = true; });
+        const occInput = modal.querySelector(`[data-${FP}-field="occupation"]`);
+        if(occInput){ on(occInput, "input", () => { const st = this._state[this._activeInsuredId]; if(!st) return; st.occupation = safeTrim(occInput.value); st.occupationSource = "manual"; st.dirtySinceSave = true; }); on(occInput, "change", () => this._render()); on(occInput, "blur", () => this._render()); }
+        const calcBtn = modal.querySelector(`[data-${FP}-calc]`); if(calcBtn) on(calcBtn, "click", () => this._calc(this._activeInsuredId));
+        const applyBtn = modal.querySelector(`[data-${FP}-apply]`); if(applyBtn) on(applyBtn, "click", () => this._apply());
+        const saveBtn = modal.querySelector(`[data-${FP}-save]`); if(saveBtn) on(saveBtn, "click", () => this._saveActive());
+        const finalBtn = modal.querySelector(`[data-${FP}-finalconfirm]`);
+        if(finalBtn) on(finalBtn, "click", () => { const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []; const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins)); if(!(relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt))){ window.showToast?.({ title: "לא כל המבוטחים נשמרו", text: "יש לשמור לפני אישור סופי.", variant: "warn" }); return; } this._showFinalSummary = true; this._render(); });
+        const summaryBackBtn = modal.querySelector(`[data-${FP}-summary-back]`); if(summaryBackBtn) on(summaryBackBtn, "click", () => { this._showFinalSummary = false; this._render(); });
+        const summaryConfirmBtn = modal.querySelector(`[data-${FP}-summary-confirm]`); if(summaryConfirmBtn) on(summaryConfirmBtn, "click", () => { try{ this._ctx?.onFinalConfirm?.(); }catch(_e){} this.close(); });
+      },
+      _switchInsured(targetId){ if(!targetId || targetId === this._activeInsuredId) return; if(this._state[this._activeInsuredId]?.dirtySinceSave){ this._confirmSwitch = { targetId }; this._render(); return; } this._activeInsuredId = targetId; this._render(); },
+      _buildResultForInsured(insId){
+        const st = this._state[insId]; if(!st) return null; if(!this._syncAge(st).ok) return null;
+        if(!st.result?.ok){ const calc = computeClalCiPremium(planId, { age: st.age, gender: st.gender, smoker: st.smoker, compensation: st.compensation }); if(!calc.ok) return null; st.result = calc; st.error = null; }
+        const r = st.result;
+        return { compensation: formatRiskSimSumInsuredDigits(r.compensation), monthlyPremium: r.monthlyPremium, annualPremium: r.annualPremium, ratePerMille: r.ratePerMille, pdfName: r.pdfName, planId: r.planId, wizardCoverKey: r.wizardCoverKey, birthDate: st.birthDate || "", birthDateSource: st.birthDateSource || "", insuranceStartDate: st.insuranceStartDate || "", age: st.age, ageSource: st.ageSource, gender: st.gender, genderSource: st.genderSource, smoker: st.smoker, smokerSource: st.smokerSource, occupation: st.occupation || "", occupationSource: st.occupationSource || "" };
+      },
+      _apply(){ const results = {}; Object.keys(this._state).forEach((insId) => { const r = this._buildResultForInsured(insId); if(r) results[insId] = r; }); if(!Object.keys(results).length){ window.showToast?.({ title: "אין תוצאה להחלה", text: "יש לחשב פרמיה תקינה לפני ההחלה.", variant: "warn" }); return; } const onApply = this._ctx?.onApply; this.close(); try{ onApply?.(results); }catch(_e){} },
+      _saveActive(){ const insId = this._activeInsuredId; const result = this._buildResultForInsured(insId); if(!result){ window.showToast?.({ title: "אין תוצאה לשמירה", text: "יש לחשב פרמיה תקינה לפני השמירה.", variant: "warn" }); return; } try{ this._ctx?.onApply?.({ [insId]: result }); }catch(_e){} const st = this._state[insId]; if(st){ st.savedAt = nowISO(); st.dirtySinceSave = false; } window.showToast?.({ title: "נשמר", text: `הסימולטור עבור ${this._getInsuredLabel(insId)} נשמר.`, variant: "success" }); this._render(); }
+    };
+  }
+  const ClalCriticalIllnessSimulator = createClalCiSimulator("mediclal_critical");
+  const ClalCancerSimulator = createClalCiSimulator("mediclal_cancer");
+  RiskSimulators.register("כלל", "מחלות קשות", ClalCriticalIllnessSimulator);
+  RiskSimulators.register("כלל", "סרטן", ClalCancerSimulator);
+  // ===== סוף GI-CLL-CI-SIM =========================================================
+
+  // ===== GI-CLL-MORT-RISK-SIM 2026-08-12 · ריסק משכנתא כלל (שוהם) ================
+  // מקור אמת: גיליון "תעריף למבוטח שוהם" (עדכון גיל תום 85). התעריף הוא פרמיה
+  // שנתית לכל 1,000 ₪ סכום ביטוח — אותה יחידה כמו ריסק משכנתא הפניקס. גילי כניסה
+  // 18–84 והפוליסה בתוקף עד גיל 85. התעריף הוא "למבוטח" — בזוג מחשבים כל מבוטח
+  // בנפרד. אין להמציא, לקרב או להשלים ערך שאינו רשום כאן במפורש, כולל שני
+  // המקומות שבהם התעריף זהה בין גילים עוקבים (27→28, 52→53) — מועתקים כמו שהם.
+  //
+  // דיוק: התעריפון מגיע עד 9 ספרות עשרוניות (למשל 50.201145792). אין לעגל את
+  // התעריף לפני ההכפלה — עיגול לאגורות כמו בהפניקס היה מאבד מידע אמיתי כאן.
+  //
+  // [age, maleNonSmoker, maleSmoker, femaleNonSmoker, femaleSmoker] — שנתית ל-1,000 ₪
+  const CLAL_MORT_RISK_MIN_AGE = 18, CLAL_MORT_RISK_MAX_ENTRY_AGE = 84;
+  const CLAL_MORT_RISK_POLICY_END_AGE = 85, CLAL_MORT_RISK_MIN_ENTRY_DAYS = 0;
+  const CLAL_MORT_RISK_RATE_TABLE = [
+    [18, 0.7296, 1.0412, 0.6308, 0.8284], [19, 0.7296, 1.0412, 0.6308, 0.8284], [20, 0.7296, 1.0412, 0.6308, 0.8284],
+    [21, 0.7296, 1.0412, 0.6308, 0.8284], [22, 0.7296, 1.0412, 0.6308, 0.8284], [23, 0.7296, 1.0412, 0.6308, 0.8284],
+    [24, 0.7296, 1.0412, 0.6308, 0.836], [25, 0.7372, 1.0488, 0.6384, 0.836], [26, 0.7372, 1.0564, 0.6384, 0.836],
+    [27, 0.7372, 1.0564, 0.646, 0.8436], [28, 0.7372, 1.0564, 0.646, 0.8436], [29, 0.7372, 1.0564, 0.646, 0.8512],
+    [30, 0.7372, 1.0575, 0.646, 0.855], [31, 0.7372, 1.0575, 0.646, 0.87], [32, 0.75, 1.0875, 0.66, 0.8925],
+    [33, 0.7725, 1.125, 0.6675, 0.9225], [34, 0.795, 1.17, 0.6975, 0.96], [35, 0.825, 1.23, 0.72, 0.9975],
+    [36, 0.8658, 1.295, 0.7474, 1.0434], [37, 0.9102, 1.3986, 0.7844, 1.1322], [38, 0.9694, 1.5022, 0.8214, 1.2062],
+    [39, 1.0508, 1.6428, 0.8732, 1.3024], [40, 1.1248, 1.7982, 0.925, 1.4208], [41, 1.2284, 1.9684, 0.9916, 1.554],
+    [42, 1.3468, 2.1904, 1.0656, 1.7094], [43, 1.4652, 2.4198, 1.1618, 1.8648], [44, 1.6132, 2.701, 1.258, 2.0572],
+    [45, 1.7834, 3.0192, 1.3246, 2.2718], [46, 1.9224, 3.2688, 1.404, 2.412], [47, 2.1384, 3.6432, 1.5336, 2.664],
+    [48, 2.376, 4.0968, 1.6632, 2.952], [49, 2.6568, 4.572, 1.836, 3.312], [50, 2.9376, 5.1192, 2.0088, 3.6864],
+    [51, 3.2616, 5.7096, 2.2032, 4.0752], [52, 3.47813676, 6.15218814, 2.32499106, 4.38818688], [53, 3.47813676, 6.15218814, 2.32499106, 4.38818688],
+    [54, 3.84943104, 6.79202496, 2.54161152, 4.87964736], [55, 4.212243, 7.4843622, 2.7959526, 5.3599266], [56, 4.6700955, 8.3573343, 3.0950829, 5.921559],
+    [57, 5.1828903, 9.3585051, 3.4247367, 6.5686572], [58, 5.7567321, 10.4207229, 3.7788093, 7.3195353], [59, 6.4038303, 11.5561971, 4.1389866, 8.1070416],
+    [60, 7.0997661, 12.8076606, 4.578525, 9.0166419], [61, 7.50145536, 13.65499296, 4.881806496, 9.622960704], [62, 8.362950624, 15.155284032, 5.379950016, 10.625108256],
+    [63, 9.253748448, 16.796227392, 5.936698656, 11.77962912], [64, 10.232453952, 18.595404576, 6.516889344, 13.057220736], [65, 11.22288048, 20.634862752, 7.220150784, 14.452022592],
+    [66, 12.477030048, 22.785670656, 7.97029632, 15.9698952], [67, 13.842529344, 25.25880672, 8.837652096, 17.739769824], [68, 15.243191712, 28.01324736, 9.75775248, 19.54480752],
+    [69, 16.872414048, 30.902479776, 10.72473696, 21.660452352], [70, 18.759498912, 34.037853696, 11.844094752, 23.799539232], [71, 20.529373536, 37.841325984, 13.074802272, 26.307838368],
+    [72, 22.697762976, 41.69754288, 14.287928256, 29.21465232], [73, 25.08299136, 45.700272576, 15.770637792, 32.40863136], [74, 27.538545888, 50.558637024, 17.306091936, 35.901496512],
+    [75, 30.216799872, 55.217744064, 19.093548096, 39.722550336], [76, 33.322871232, 60.878998656, 20.945469888, 43.889374368], [77, 36.95052816, 66.75123168, 22.439900448, 48.431271168],
+    [78, 40.947397344, 73.057142592, 24.866152416, 53.365822272], [79, 45.354502368, 79.814312928, 27.386172576, 58.72233024], [80, 50.201145792, 86.700414528, 30.70908288, 64.52423712],
+    [81, 55.891702944, 92.906696736, 33.797572704, 70.800845472], [82, 63.023946048, 99.3356784, 37.41936912, 77.569736832], [83, 71.035265952, 108.108864864, 41.410377792, 84.866074272],
+    [84, 79.984267776, 115.094595168, 45.512736192, 92.701578816]
+  ];
+  const CLAL_MORT_RISK_RATE_MAP = new Map(
+    CLAL_MORT_RISK_RATE_TABLE.map((row) => [row[0], {
+      maleNonSmoker: row[1], maleSmoker: row[2], femaleNonSmoker: row[3], femaleSmoker: row[4]
+    }])
+  );
+  /** תצוגת סכום מדויקת — ללא עיגול עסקי, עד 4 ספרות עשרוניות ולא פחות מ-2. */
+  function formatClalMortExactAmount(n){
+    if(!Number.isFinite(n)) return "";
+    let s = n.toFixed(4);
+    if(s.indexOf(".") !== -1){
+      s = s.replace(/0+$/, "");
+      if(s.endsWith(".")) s += "00";
+      else if(s.split(".")[1].length === 1) s += "0";
+    }
+    return s;
+  }
+  /** התעריף מוצג בדיוק כפי שהוא בתעריפון, כדי שיהיה בר-השוואה מול הדוח של כלל. */
+  function formatClalMortRate(n){
+    return Number.isFinite(n) ? String(n) : "";
+  }
+  /** התאמה מדויקת בלבד — ללא קירוב/השלמה בין גילים. */
+  function lookupClalMortRiskRate({ age, gender, smoker }){
+    // Number("") הוא 0 — בלי הבדיקה הזו גיל ריק היה נחשב גיל תקין
+    if(age === "" || age == null) return { ok:false, reason:"age_missing" };
+    const ageNum = Number(age);
+    if(!Number.isInteger(ageNum)) return { ok:false, reason:"age_missing" };
+    const row = CLAL_MORT_RISK_RATE_MAP.get(ageNum);
+    if(!row) return { ok:false, reason:"age_out_of_range" };
+    const genderKey = gender === "זכר" ? "male" : (gender === "נקבה" ? "female" : "");
+    if(!genderKey) return { ok:false, reason:"gender_missing" };
+    if(smoker !== true && smoker !== false) return { ok:false, reason:"smoker_missing" };
+    const rate = row[genderKey + (smoker ? "Smoker" : "NonSmoker")];
+    if(typeof rate !== "number" || !Number.isFinite(rate)) return { ok:false, reason:"rate_missing" };
+    return { ok:true, ratePerMille: rate };
+  }
+  /** פרמיה שנתית = (סכום ביטוח / 1000) × תעריף; חודשית = שנתית / 12. */
+  function computeClalMortRiskPremium({ age, gender, smoker, sumInsured }){
+    const sum = Number(String(sumInsured == null ? "" : sumInsured).replace(/[^\d.-]/g, ""));
+    if(!Number.isFinite(sum) || sum <= 0) return { ok:false, reason:"sum_missing" };
+    const lookup = lookupClalMortRiskRate({ age, gender, smoker });
+    if(!lookup.ok) return lookup;
+    const annualPremium = (sum / 1000) * lookup.ratePerMille;
+    const monthlyPremium = annualPremium / 12;
+    return {
+      ok:true, ratePerMille: lookup.ratePerMille, annualPremium, monthlyPremium,
+      sumInsured: sum, pdfName: "שוהם משכנתא", policyEndAge: CLAL_MORT_RISK_POLICY_END_AGE
+    };
+  }
+  const CLAL_MORT_RISK_MSG = {
+    birth_missing:"יש להזין תאריך לידה תקין לפני חישוב הפרמיה.", entry_too_young:"גיל הכניסה המינימלי הוא 0 ימים.",
+    age_missing:"יש להזין תאריך לידה תקין לפני חישוב הפרמיה.",
+    age_out_of_range:`לא נמצא תעריף לכניסה בגיל זה (טווח כניסה ${CLAL_MORT_RISK_MIN_AGE}–${CLAL_MORT_RISK_MAX_ENTRY_AGE}).`,
+    gender_missing:"יש לבחור מין.", smoker_missing:"יש לבחור סטטוס עישון.",
+    sum_missing:"יש להזין סכום ביטוח.", rate_missing:"לא נמצא תעריף מתאים."
+  };
+  const ClalMortgageRiskSimulator = {
+    _modal:null,_ctx:null,_state:{},_activeInsuredId:null,_escHandler:null,_confirmSwitch:null,_showFinalSummary:false,
+    open(ctx){ this.close(); this._ctx = ctx || {}; const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : []; this._state = {}; insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); }); this._activeInsuredId = insureds[0]?.id || null; this._confirmSwitch = null; this._showFinalSummary = false; this._mount(); this._render(); },
+    _prefillFromInsured(ins){
+      const d = ins?.data || {};
+      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
+      const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : ((d.smoker === true || d.smoker === false) ? d.smoker : null));
+      const birthDate = safeTrim(d.birthDate || ""); const occupation = safeTrim(d.occupation || "");
+      const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
+      const sumInsured = formatRiskSimSumInsuredDigits(safeTrim(d.sumInsured || ""));
+      const st = { birthDate, birthDateSource: birthDate ? "step1" : "", insuranceStartDate, insuranceStartDateSource: insuranceStartDate ? "ctx" : "", age:"", ageSource: birthDate ? "step1" : "", ageRaw:null, entryDays:null, gender, genderSource: gender ? "step1" : "", smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "", occupation, occupationSource: occupation ? "step1" : "", sumInsured, result:null, error:null, savedAt:null, dirtySinceSave:false };
+      this._syncAge(st); return st;
+    },
+    _syncAge(st){ return riskSimSyncAgeFromBirthDate(st, { minAge: CLAL_MORT_RISK_MIN_AGE, maxAge: CLAL_MORT_RISK_MAX_ENTRY_AGE, minEntryDays: CLAL_MORT_RISK_MIN_ENTRY_DAYS, asOfDate: st?.insuranceStartDate || "" }); },
+    _isInsuredRelevant(_ins){ return true; },
+    close(){ if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; } if(this._modal){ const m = this._modal; m.classList.add("giValModal--leaving"); window.setTimeout(() => m.remove(), 200); this._modal = null; } this._ctx = null; },
+    _mount(){ const modal = document.createElement("div"); modal.id = "lcClalMortModal"; modal.className = "giValModal lcClalMortModal"; modal.setAttribute("role","dialog"); modal.setAttribute("aria-modal","true"); modal.setAttribute("aria-label","סימולטור ריסק משכנתא כלל · שוהם"); document.body.appendChild(modal); this._modal = modal; this._escHandler = (ev) => { if(ev.key === "Escape") this.close(); }; document.addEventListener("keydown", this._escHandler); requestAnimationFrame(() => modal.classList.add("giValModal--visible")); },
+    _getInsuredLabel(insId){ const ins = (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === insId); return ins ? safeTrim(ins.label) || "מבוטח" : "מבוטח"; },
+    _calc(insId){
+      const st = this._state[insId]; if(!st) return;
+      const ageSync = this._syncAge(st);
+      if(!ageSync.ok){ st.result = null; st.error = CLAL_MORT_RISK_MSG[ageSync.reason] || CLAL_MORT_RISK_MSG.birth_missing; this._render(); return; }
+      const calc = computeClalMortRiskPremium({ age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: st.sumInsured });
+      if(calc.ok){ st.result = calc; st.error = null; }
+      else { st.result = null; st.error = CLAL_MORT_RISK_MSG[calc.reason] || "לא ניתן לחשב את הפרמיה."; }
+      this._render();
+    },
+    _render(){
+      if(!this._modal) return;
+      const P = "lcClalMort";
+      const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []; const isMulti = insureds.length > 1;
+      if(this._showFinalSummary){ this._renderFinalSummary(insureds); return; }
+      const activeId = this._activeInsuredId; const st = this._state[activeId] || this._prefillFromInsured(null); const isStandalone = !!this._ctx?.standalone;
+      const tabsHtml = isMulti ? `<div class="${P}__tabs">${insureds.map((ins) => { const s = this._state[ins.id]; const statusCls = s?.savedAt ? " has-saved" : (s?.result ? " has-result" : ""); return `<button type="button" class="${P}__tab${ins.id === activeId ? " is-active" : ""}${statusCls}" data-clalmort-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${s?.savedAt ? " 🟢" : ""}</button>`; }).join("")}</div>` : "";
+      const ageSync = this._syncAge(st);
+      const ageHintHtml = !st.birthDate ? `<div class="${P}__hint ${P}__hint--warn">${isStandalone ? "יש להזין תאריך לידה" : "לא נמצא תאריך לידה — יש להזין"}</div>` : (!ageSync.ok ? `<div class="${P}__hint ${P}__hint--warn">${escapeHtml(CLAL_MORT_RISK_MSG[ageSync.reason] || "תאריך לא תקין")}</div>` : `<div class="${P}__hint">גיל ביטוחי בתחילת הביטוח: <strong>${escapeHtml(String(ageSync.age))}</strong> (כניסה ${CLAL_MORT_RISK_MIN_AGE}–${CLAL_MORT_RISK_MAX_ENTRY_AGE})</div>`);
+      const genderHintHtml = (isStandalone || st.gender) ? "" : `<div class="${P}__hint ${P}__hint--warn">יש לבחור מין</div>`;
+      const smokerHintHtml = (isStandalone || st.smoker === true || st.smoker === false) ? "" : `<div class="${P}__hint ${P}__hint--warn">יש לבחור סטטוס עישון</div>`;
+      const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company) ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini") : "🏠";
+      const occBlockHtml = renderOccupationRiskBlockHtml(assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product), P);
+      const resultHtml = st.error ? `<div class="${P}__result ${P}__result--error">${escapeHtml(st.error)}</div>` : (st.result ? `<div class="${P}__result ${P}__result--ok"><div class="${P}__resultRow"><span>מסלול</span><strong>${escapeHtml(st.result.pdfName)}</strong></div><div class="${P}__resultRow"><span>תעריף שנתי ל-₪1,000</span><strong>${escapeHtml(formatClalMortRate(st.result.ratePerMille))}</strong></div><div class="${P}__resultRow"><span>סכום ביטוח</span><strong>₪${escapeHtml(formatRiskSimSumInsuredDigits(st.result.sumInsured))}</strong></div><div class="${P}__resultRow ${P}__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatClalMortExactAmount(st.result.monthlyPremium))}</strong></div><div class="${P}__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatClalMortExactAmount(st.result.annualPremium))}</strong></div><div class="${P}__rateNote">תעריף למבוטח · משתנה כל שנה לפי הגיל · הפוליסה בתוקף עד גיל ${CLAL_MORT_RISK_POLICY_END_AGE} · הפרמיה לפני חבילות הנחה</div></div>` : `<div class="${P}__result ${P}__result--empty">מלאו את השדות ולחצו "חשב פרמיה"</div>`);
+      const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
+      const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+      const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
+      const footHtml = isStandalone ? `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn btn--primary" data-clalmort-close="1">סגור</button></div>` : (!isMulti ? `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn giValModal__closeBtn" data-clalmort-close="1">ביטול</button><button type="button" class="btn btn--primary" data-clalmort-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button></div>` : `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn giValModal__closeBtn" data-clalmort-close="1">ביטול</button><button type="button" class="btn btn--secondary" data-clalmort-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button><button type="button" class="btn btn--primary" data-clalmort-finalconfirm="1"${allSaved ? "" : " disabled"}>אישור סופי</button></div>`);
+      const confirmOverlayHtml = this._confirmSwitch ? `<div class="${P}__overlay"><div class="${P}__overlayCard"><div class="${P}__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}.</div><div class="${P}__overlayBtns"><button type="button" class="btn btn--primary" data-clalmort-switch="save">שמור ועבור</button><button type="button" class="btn btn--secondary" data-clalmort-switch="discard">עבור ללא שמירה</button><button type="button" class="btn" data-clalmort-switch="cancel">ביטול</button></div></div></div>` : "";
+      this._modal.innerHTML = `<div class="giValModal__backdrop" data-clalmort-close="1"></div><div class="giValModal__card ${P}__card"><div class="giValModal__head"><span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span><div class="giValModal__headText"><div class="giValModal__title">סימולטור ריסק משכנתא כלל · שוהם</div><div class="giValModal__sub">תעריף שנתי לכל ₪1,000 סכום ביטוח</div></div><button type="button" class="${P}__closeX" data-clalmort-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body ${P}__body">${tabsHtml}${isStandalone ? `<div class="${P}__insuredLabel ${P}__insuredLabel--standalone">מצב חישוב עצמאי</div>` : `<div class="${P}__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}<div class="${P}__grid"><div class="${P}__field"><label class="${P}__label">תאריך לידה</label><input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-clalmort-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />${ageHintHtml}</div><div class="${P}__field"><label class="${P}__label">תחילת ביטוח</label><input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-clalmort-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" /></div><div class="${P}__field"><label class="${P}__label">מין</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-clalmort-field="gender" data-clalmort-value="זכר">זכר</button><button type="button" class="${P}__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-clalmort-field="gender" data-clalmort-value="נקבה">נקבה</button></div>${genderHintHtml}</div><div class="${P}__field"><label class="${P}__label">עישון</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.smoker === false ? " is-active" : ""}" data-clalmort-field="smoker" data-clalmort-value="0">לא מעשן/ת</button><button type="button" class="${P}__segBtn${st.smoker === true ? " is-active" : ""}" data-clalmort-field="smoker" data-clalmort-value="1">מעשן/ת</button></div>${smokerHintHtml}</div><div class="${P}__field"><label class="${P}__label">סכום ביטוח</label><input class="${P}__input" type="text" inputmode="numeric" data-clalmort-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="1,000,000" /></div><div class="${P}__field ${P}__field--wide"><label class="${P}__label">עיסוק</label><input class="${P}__input" type="text" data-clalmort-field="occupation" value="${escapeHtml(st.occupation || "")}" autocomplete="off" /></div></div><div class="${P}__actions"><button type="button" class="btn btn--primary" data-clalmort-calc="1">חשב פרמיה</button></div>${occBlockHtml}${resultHtml}</div>${footHtml}${confirmOverlayHtml}</div>`;
+      this._bind();
+    },
+    _renderFinalSummary(insureds){
+      const P = "lcClalMort";
+      const rows = insureds.filter((ins) => this._isInsuredRelevant(ins)).map((ins) => { const ok = !!this._state[ins.id]?.savedAt; return `<div class="${P}__summaryRow"><span>${ok ? "✓" : "•"}</span><span>${escapeHtml(safeTrim(ins.label) || "מבוטח")}</span><span>${ok ? "הושלם" : "לא נשמר"}</span></div>`; }).join("");
+      this._modal.innerHTML = `<div class="giValModal__backdrop" data-clalmort-close="1"></div><div class="giValModal__card ${P}__card"><div class="giValModal__head"><div class="giValModal__headText"><div class="giValModal__title">סיכום סימולטור להצעה</div></div><button type="button" class="${P}__closeX" data-clalmort-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body ${P}__body">${rows}</div><div class="giValModal__foot ${P}__foot"><button type="button" class="btn giValModal__closeBtn" data-clalmort-summary-back="1">חזרה</button><button type="button" class="btn btn--primary" data-clalmort-summary-confirm="1">אישור סופי</button></div></div>`;
+      this._bind();
+    },
+    _bind(){
+      const modal = this._modal; if(!modal) return;
+      ensureSegFieldDelegation(modal, this, "clalmort");
+      $$("[data-clalmort-close]", modal).forEach((el) => on(el, "click", () => this.close()));
+      $$("[data-clalmort-tab]", modal).forEach((el) => on(el, "click", () => this._switchInsured(el.getAttribute("data-clalmort-tab"))));
+      $$("[data-clalmort-switch]", modal).forEach((el) => on(el, "click", () => { const action = el.getAttribute("data-clalmort-switch"); const target = this._confirmSwitch?.targetId; this._confirmSwitch = null; if(action === "save"){ this._saveActive(); if(target) this._activeInsuredId = target; this._render(); } else if(action === "discard"){ if(target) this._activeInsuredId = target; this._render(); } else this._render(); }));
+      bindRiskSimDmyField(modal, '[data-clalmort-field="birthDate"]', { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.ageSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
+      bindRiskSimDmyField(modal, '[data-clalmort-field="insuranceStartDate"]', { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val || riskSimTodayDmy(); st.insuranceStartDateSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
+      const sumInput = modal.querySelector('[data-clalmort-field="sumInsured"]');
+      if(sumInput) on(sumInput, "input", () => { const st = this._state[this._activeInsuredId]; if(!st) return; const formatted = formatRiskSimSumInsuredDigits(sumInput.value); sumInput.value = formatted; try{ sumInput.setSelectionRange(formatted.length, formatted.length); }catch(_e){} st.sumInsured = formatted; st.result = null; st.error = null; st.dirtySinceSave = true; });
+      const occInput = modal.querySelector('[data-clalmort-field="occupation"]');
+      if(occInput){ on(occInput, "input", () => { const st = this._state[this._activeInsuredId]; if(!st) return; st.occupation = safeTrim(occInput.value); st.occupationSource = "manual"; st.dirtySinceSave = true; }); on(occInput, "change", () => this._render()); on(occInput, "blur", () => this._render()); }
+      const calcBtn = modal.querySelector("[data-clalmort-calc]"); if(calcBtn) on(calcBtn, "click", () => this._calc(this._activeInsuredId));
+      const applyBtn = modal.querySelector("[data-clalmort-apply]"); if(applyBtn) on(applyBtn, "click", () => this._apply());
+      const saveBtn = modal.querySelector("[data-clalmort-save]"); if(saveBtn) on(saveBtn, "click", () => this._saveActive());
+      const finalBtn = modal.querySelector("[data-clalmort-finalconfirm]");
+      if(finalBtn) on(finalBtn, "click", () => { const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []; const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins)); if(!(relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt))){ window.showToast?.({ title: "לא כל המבוטחים נשמרו", text: "יש לשמור לפני אישור סופי.", variant: "warn" }); return; } this._showFinalSummary = true; this._render(); });
+      const summaryBackBtn = modal.querySelector("[data-clalmort-summary-back]"); if(summaryBackBtn) on(summaryBackBtn, "click", () => { this._showFinalSummary = false; this._render(); });
+      const summaryConfirmBtn = modal.querySelector("[data-clalmort-summary-confirm]"); if(summaryConfirmBtn) on(summaryConfirmBtn, "click", () => { try{ this._ctx?.onFinalConfirm?.(); }catch(_e){} this.close(); });
+    },
+    _switchInsured(targetId){ if(!targetId || targetId === this._activeInsuredId) return; if(this._state[this._activeInsuredId]?.dirtySinceSave){ this._confirmSwitch = { targetId }; this._render(); return; } this._activeInsuredId = targetId; this._render(); },
+    _buildResultForInsured(insId){
+      const st = this._state[insId]; if(!st) return null; if(!this._syncAge(st).ok) return null;
+      if(!st.result?.ok){ const calc = computeClalMortRiskPremium({ age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: st.sumInsured }); if(!calc.ok) return null; st.result = calc; st.error = null; }
+      const r = st.result;
+      return { sumInsured: formatRiskSimSumInsuredDigits(r.sumInsured), monthlyPremium: r.monthlyPremium, annualPremium: r.annualPremium, ratePerMille: r.ratePerMille, pdfName: r.pdfName, policyEndAge: r.policyEndAge, birthDate: st.birthDate || "", birthDateSource: st.birthDateSource || "", insuranceStartDate: st.insuranceStartDate || "", age: st.age, ageSource: st.ageSource, gender: st.gender, genderSource: st.genderSource, smoker: st.smoker, smokerSource: st.smokerSource, occupation: st.occupation || "", occupationSource: st.occupationSource || "" };
+    },
+    _apply(){ const results = {}; Object.keys(this._state).forEach((insId) => { const r = this._buildResultForInsured(insId); if(r) results[insId] = r; }); if(!Object.keys(results).length){ window.showToast?.({ title: "אין תוצאה להחלה", text: "יש לחשב פרמיה תקינה לפני ההחלה.", variant: "warn" }); return; } const onApply = this._ctx?.onApply; this.close(); try{ onApply?.(results); }catch(_e){} },
+    _saveActive(){ const insId = this._activeInsuredId; const result = this._buildResultForInsured(insId); if(!result){ window.showToast?.({ title: "אין תוצאה לשמירה", text: "יש לחשב פרמיה תקינה לפני השמירה.", variant: "warn" }); return; } try{ this._ctx?.onApply?.({ [insId]: result }); }catch(_e){} const st = this._state[insId]; if(st){ st.savedAt = nowISO(); st.dirtySinceSave = false; } window.showToast?.({ title: "נשמר", text: `הסימולטור עבור ${this._getInsuredLabel(insId)} נשמר.`, variant: "success" }); this._render(); }
+  };
+  RiskSimulators.register("כלל", "ריסק משכנתא", ClalMortgageRiskSimulator);
+  // ===== סוף GI-CLL-MORT-RISK-SIM ==================================================
+
+
+  // ===== GI-CLL-RISK-SIM 2026-08-12 · ריסק כלל (ספיר) ===========================
+  // מקור אמת: גיליון "05-2025" בקובץ תעריפי ספיר ("החל מ- 1.7.2025"). הגיליון
+  // "2021" שבאותו קובץ הוא היסטוריה ואינו בשימוש. התעריף הוא פרמיה שנתית לכל
+  // 1,000 ₪ סכום ביטוח — אותה יחידה כמו שוהם וריסק משכנתא הפניקס.
+  //
+  // חדש במערכת: לתעריפון יש מימד של להקת סכום ביטוח. בכל גיל יש שמונה תעריפים —
+  // שתי להקות ("עד 500 אש״ח" ו-"מ-500 אש״ח") × מין × עישון. אין אינטרפולציה בין
+  // הלהקות: 500,000 ₪ בדיוק שייך ללהקה הנמוכה, ומעליו הגבוהה.
+  //
+  // הפוליסה בתוקף עד גיל 80 (מאושר גם בתסריט המכירה של ספיר ב-app.js), הכניסה
+  // עד גיל 67, והטבלה נחתכת בגיל 80. בגיליון קיימים תעריפים עד גיל 99 אך הם
+  // מחוץ לתקופת הביטוח ולכן לא הועברו לכאן.
+  //
+  // דיוק: התעריפון מגיע עד 12 ספרות עשרוניות. אין לעגל את התעריף לפני ההכפלה.
+  // הערכים כאן עוגלו ל-9 ספרות כדי להסיר רעש בינארי של Excel בלבד — הסטייה
+  // המקסימלית היא 5·10⁻¹⁰, כלומר 2.5·10⁻⁶ ₪ בפרמיה שנתית על סכום ביטוח של 5M.
+  //
+  // חריגויות שקיימות בתעריפון עצמו ולא "תוקנו" כאן:
+  //   · בגילים 18–19 התעריף בלהקה הגבוהה יקר מהנמוכה אצל גברים לא-מעשנים.
+  //   · מגיל 70 התעריף בלהקה הגבוהה יקר מהנמוכה אצל מעשנים ומעשנות.
+  //   · עדכון 2025 נגע רק בעמודות הלא-מעשנים; עמודות המעשנים זהות ל-2021.
+  //
+  // [age, mNS_low, mS_low, fNS_low, fS_low, mNS_high, mS_high, fNS_high, fS_high]
+  const CLAL_RISK_MIN_AGE = 18, CLAL_RISK_MAX_ENTRY_AGE = 67;
+  const CLAL_RISK_MAX_TABLE_AGE = 80, CLAL_RISK_POLICY_END_AGE = 80;
+  const CLAL_RISK_MIN_ENTRY_DAYS = 0;
+  // גבול הלהקות: "עד 500 אש״ח" כולל את 500,000 עצמו.
+  const CLAL_RISK_BAND_THRESHOLD = 500000;
+  // מתחת לגבול ובטווח הזה מוצגת השוואה ללהקה הגבוהה — מפל התעריף אמיתי ומשמעותי.
+  const CLAL_RISK_BAND_HINT_FROM = 450000;
+  const CLAL_RISK_BAND_HINT_SUM = 501000;
+  const CLAL_RISK_RATE_TABLE = [
+    [18, 0.657, 1.2802, 0.60225, 1.2876, 0.6643, 0.9344, 0.5475, 0.7446],
+    [19, 0.6624, 1.2802, 0.60225, 1.2876, 0.6643, 0.9344, 0.5475, 0.7446],
+    [20, 0.6696, 1.2802, 0.60225, 1.2876, 0.6643, 0.9344, 0.5475, 0.7446],
+    [21, 0.675, 1.2802, 0.60225, 1.2876, 0.6643, 0.9344, 0.5475, 0.7446],
+    [22, 0.684, 1.2802, 0.60225, 1.2876, 0.6643, 0.9417, 0.5475, 0.7446],
+    [23, 0.6912, 1.2802, 0.60225, 1.2876, 0.6643, 0.9417, 0.5475, 0.7446],
+    [24, 0.702, 1.2802, 0.60225, 1.2876, 0.6643, 0.9417, 0.5475, 0.7446],
+    [25, 0.7128, 1.2876, 0.61028, 1.295, 0.6716, 0.949, 0.5548, 0.7519],
+    [26, 0.7254, 1.2876, 0.61028, 1.295, 0.6716, 0.9563, 0.5548, 0.7592],
+    [27, 0.7398, 1.2876, 0.61831, 1.295, 0.6716, 0.9636, 0.5621, 0.7592],
+    [28, 0.7578, 1.295, 0.61831, 1.3024, 0.6716, 0.9636, 0.5621, 0.7592],
+    [29, 0.7758, 1.295, 0.62634, 1.3024, 0.6789, 0.9709, 0.5694, 0.7665],
+    [30, 0.7974, 1.3024, 0.63437, 1.3098, 0.6789, 0.9709, 0.5767, 0.7738],
+    [31, 0.8208, 1.3024, 0.6424, 1.3172, 0.6862, 0.9782, 0.584, 0.7811],
+    [32, 0.8478, 1.3098, 0.65043, 1.3246, 0.7008, 1.0074, 0.5913, 0.803],
+    [33, 0.8802, 1.3468, 0.66, 1.3394, 0.72, 1.0439, 0.6, 0.8322],
+    [34, 0.9144, 1.3912, 0.682, 1.3542, 0.74, 1.0877, 0.62, 0.8687],
+    [35, 0.9558, 1.4578, 0.704, 1.369, 0.77, 1.1461, 0.64, 0.9052],
+    [36, 1.0008, 1.554, 0.748, 1.3912, 0.82, 1.2264, 0.68, 0.9563],
+    [37, 1.053, 1.6724, 0.792, 1.4948, 0.86, 1.3286, 0.72, 1.0439],
+    [38, 1.1106, 1.7834, 0.825, 1.5836, 0.92, 1.4235, 0.75, 1.1169],
+    [39, 1.1772, 1.9462, 0.88, 1.6872, 1, 1.5622, 0.8, 1.2045],
+    [40, 1.2528, 2.109, 0.935, 1.813, 1.06, 1.7082, 0.85, 1.3213],
+    [41, 1.3392, 2.3014, 1.001, 1.9684, 1.1718, 1.8761, 0.91, 1.4454],
+    [42, 1.4364, 2.553, 1.078, 2.146, 1.2569, 2.0878, 0.98, 1.5987],
+    [43, 1.548, 2.8046, 1.166, 2.3532, 1.3545, 2.3068, 1.06, 1.7739],
+    [44, 1.6722, 3.108, 1.265, 2.5604, 1.4632, 2.5769, 1.15, 1.9564],
+    [45, 1.8144, 3.4558, 1.364, 2.7898, 1.5876, 2.8835, 1.24, 2.1608],
+    [46, 1.9764, 3.8184, 1.518, 3.0858, 1.7294, 3.212, 1.38, 2.4163],
+    [47, 2.16, 4.2328, 1.65, 3.3818, 1.89, 3.5916, 1.5, 2.6791],
+    [48, 2.367, 4.7212, 1.815, 3.7074, 2.0711, 4.0369, 1.65, 2.9784],
+    [49, 2.6046, 5.2318, 2.013, 4.1218, 2.279, 4.5187, 1.83, 3.3434],
+    [50, 2.871, 5.8164, 2.2, 4.5214, 2.5121, 5.0662, 2, 3.723],
+    [51, 3.1752, 6.4306, 2.42, 4.9432, 2.7783, 5.6502, 2.2, 4.1172],
+    [52, 3.519, 7.1114, 2.673, 5.4908, 3.0791, 5.657367273, 2.43, 4.6282],
+    [53, 3.9096, 7.8884, 2.736081633, 5.994, 3.4209, 5.719416788, 2.48, 4.6282],
+    [54, 4.0786875, 8.732, 3.030073469, 6.6674, 3.598361111, 5.719416788, 2.7, 4.839443194],
+    [55, 4.247775, 9.6422, 3.358995918, 7.3186, 3.775822222, 6.036845825, 2.96, 5.2898832],
+    [56, 4.745475, 9.748743075, 3.731110204, 7.3186, 4.218222222, 6.620071336, 3.26, 5.846076634],
+    [57, 5.309325, 9.870006944, 4.06516, 7.595400595, 4.719377778, 7.368365422, 3.59, 6.318038954],
+    [58, 5.95035, 10.1726976, 4.435545098, 8.268747746, 5.289244444, 8.106210212, 3.97, 6.871928139],
+    [59, 6.67485, 11.19456, 4.941458824, 9.135287965, 5.933244444, 9.149715973, 4.38, 7.576181723],
+    [60, 7.497, 12.3082752, 5.511301961, 10.270320861, 6.664, 10.296415848, 4.86, 8.492754817],
+    [61, 8.427825, 13.786795791, 6.149733333, 11.749239142, 7.491377778, 11.782127695, 5.38, 9.711305576],
+    [62, 9.483075, 15.424403304, 6.867968627, 13.415673802, 8.429422222, 13.249356843, 5.96, 11.187807476],
+    [63, 10.680075, 17.29275981, 7.7846125, 15.258617039, 9.493422222, 14.860659097, 6.62, 12.83688819],
+    [64, 12.033, 19.214693743, 8.69325, 17.199709789, 10.696, 16.490681888, 7.7, 14.590605495],
+    [65, 13.56705, 21.577124464, 9.940834667, 18.892419152, 12.059644444, 18.51970937, 8.65, 16.189428226],
+    [66, 15.304275, 24.002258747, 11.125752, 20.617802999, 13.603822222, 20.588901883, 9.7, 17.725365667],
+    [67, 17.269875, 26.969147392, 12.457801333, 22.671577547, 15.351022222, 23.18208237, 10.3, 19.485434547],
+    [68, 19.49535, 30.163532404, 13.951812, 25.114947434, 17.329244444, 25.903671287, 11.71, 21.605402593],
+    [69, 22.013775, 32.818851327, 15.630921333, 28.147385394, 19.567822222, 28.194093549, 13.2, 24.209085104],
+    [70, 24.86295, 35.157101177, 17.516658667, 31.903943835, 22.100444444, 35.62378704, 16.1, 32.409345808],
+    [71, 28.0854, 40.121075928, 19.63368, 36.485538771, 24.9648, 40.661314675, 18.4, 37.035290833],
+    [72, 31.728375, 46.010383345, 22.010214667, 42.590299783, 28.203022222, 46.636706072, 21.12, 43.221860931],
+    [73, 35.845425, 52.440676953, 24.676010667, 48.2549225, 31.862577778, 53.128279667, 23.82, 48.992406497],
+    [74, 40.4964, 59.427884551, 27.668945333, 54.170296625, 35.9968, 60.182793183, 26.49, 54.984349834],
+    [75, 45.7506, 65.571943285, 31.027164, 60.351841666, 40.6672, 66.499371148, 29.41, 61.205965072],
+    [76, 51.680475, 68.613428234, 34.793636, 63.502198289, 45.938222222, 69.461424104, 34.06, 64.430640596],
+    [77, 58.3695, 75.278953138, 39.017852, 72.580752309, 51.884, 76.254290392, 37.2, 73.670987787],
+    [78, 65.912175, 82.541079725, 43.751089333, 80.104052712, 58.588622222, 83.595741175, 41.3, 81.335429319],
+    [79, 74.410875, 90.332455476, 49.057757333, 88.818088367, 66.143022222, 91.526676802, 46.7, 90.213818621],
+    [80, 83.977425, 98.447448824, 55.000746667, 96.629408565, 74.646577778, 99.705680322, 49.56, 98.132384288]
+  ];
+  const CLAL_RISK_RATE_MAP = new Map(
+    CLAL_RISK_RATE_TABLE.map((row) => [row[0], {
+      low:  { maleNonSmoker: row[1], maleSmoker: row[2], femaleNonSmoker: row[3], femaleSmoker: row[4] },
+      high: { maleNonSmoker: row[5], maleSmoker: row[6], femaleNonSmoker: row[7], femaleSmoker: row[8] }
+    }])
+  );
+  /** להקת התעריף נקבעת מסכום הביטוח; 500,000 בדיוק שייך ל"עד 500 אש״ח". */
+  function resolveClalRiskBand(sum){
+    return sum <= CLAL_RISK_BAND_THRESHOLD ? "low" : "high";
+  }
+  const CLAL_RISK_BAND_LABEL = { low: 'עד 500 אש״ח', high: 'מ-500 אש״ח' };
+  /** תצוגת סכום מדויקת — ללא עיגול עסקי, עד 4 ספרות עשרוניות ולא פחות מ-2. */
+  function formatClalRiskExactAmount(n){
+    if(!Number.isFinite(n)) return "";
+    let s = n.toFixed(4);
+    if(s.indexOf(".") !== -1){
+      s = s.replace(/0+$/, "");
+      if(s.endsWith(".")) s += "00";
+      else if(s.split(".")[1].length === 1) s += "0";
+    }
+    return s;
+  }
+  /** התעריף מוצג בדיוק כפי שהוא בתעריפון, כדי שיהיה בר-השוואה מול הדוח של כלל. */
+  function formatClalRiskRate(n){
+    return Number.isFinite(n) ? String(n) : "";
+  }
+  /** התאמה מדויקת בלבד — ללא קירוב/השלמה בין גילים או בין להקות. */
+  function lookupClalRiskRate({ age, gender, smoker, band }){
+    // Number("") הוא 0 — בלי הבדיקה הזו גיל ריק היה נחשב גיל תקין
+    if(age === "" || age == null) return { ok:false, reason:"age_missing" };
+    const ageNum = Number(age);
+    if(!Number.isInteger(ageNum)) return { ok:false, reason:"age_missing" };
+    const row = CLAL_RISK_RATE_MAP.get(ageNum);
+    if(!row) return { ok:false, reason:"age_out_of_range" };
+    const bandRow = row[band === "high" ? "high" : "low"];
+    if(!bandRow) return { ok:false, reason:"rate_missing" };
+    const genderKey = gender === "זכר" ? "male" : (gender === "נקבה" ? "female" : "");
+    if(!genderKey) return { ok:false, reason:"gender_missing" };
+    if(smoker !== true && smoker !== false) return { ok:false, reason:"smoker_missing" };
+    const rate = bandRow[genderKey + (smoker ? "Smoker" : "NonSmoker")];
+    if(typeof rate !== "number" || !Number.isFinite(rate)) return { ok:false, reason:"rate_missing" };
+    return { ok:true, ratePerMille: rate };
+  }
+  /** פרמיה שנתית = (סכום ביטוח / 1000) × תעריף; חודשית = שנתית / 12.
+      הטבלה מגיעה עד גיל 80 כי הפרמיה מחושבת מחדש כל שנה לפי הגיל, אבל *כניסה*
+      חדשה מותרת רק עד 67 — ולכן החסימה כאן ולא ב-lookup, שהוא תעריפון טהור. */
+  function computeClalRiskPremium({ age, gender, smoker, sumInsured }){
+    const sum = Number(String(sumInsured == null ? "" : sumInsured).replace(/[^\d.-]/g, ""));
+    if(!Number.isFinite(sum) || sum <= 0) return { ok:false, reason:"sum_missing" };
+    const entryAge = Number(age);
+    if(Number.isInteger(entryAge) && entryAge > CLAL_RISK_MAX_ENTRY_AGE) return { ok:false, reason:"age_out_of_range" };
+    const band = resolveClalRiskBand(sum);
+    const lookup = lookupClalRiskRate({ age, gender, smoker, band });
+    if(!lookup.ok) return lookup;
+    const annualPremium = (sum / 1000) * lookup.ratePerMille;
+    // מפל הלהקות: מתחת לגבול ובטווח הרמז, מחשבים גם את החלופה בלהקה הגבוהה.
+    let bandHint = null;
+    if(band === "low" && sum >= CLAL_RISK_BAND_HINT_FROM){
+      const alt = lookupClalRiskRate({ age, gender, smoker, band:"high" });
+      if(alt.ok){
+        const altAnnual = (CLAL_RISK_BAND_HINT_SUM / 1000) * alt.ratePerMille;
+        if(altAnnual < annualPremium){
+          bandHint = {
+            sumInsured: CLAL_RISK_BAND_HINT_SUM, ratePerMille: alt.ratePerMille,
+            annualPremium: altAnnual, monthlyPremium: altAnnual / 12,
+            savingPct: (1 - altAnnual / annualPremium) * 100
+          };
+        }
+      }
+    }
+    return {
+      ok:true, ratePerMille: lookup.ratePerMille, annualPremium, monthlyPremium: annualPremium / 12,
+      sumInsured: sum, band, bandLabel: CLAL_RISK_BAND_LABEL[band], bandHint,
+      pdfName: "ספיר", policyEndAge: CLAL_RISK_POLICY_END_AGE
+    };
+  }
+  const CLAL_RISK_MSG = {
+    birth_missing:"יש להזין תאריך לידה תקין לפני חישוב הפרמיה.", entry_too_young:"גיל הכניסה המינימלי הוא 0 ימים.",
+    age_missing:"יש להזין תאריך לידה תקין לפני חישוב הפרמיה.",
+    age_out_of_range:`לא נמצא תעריף לכניסה בגיל זה (טווח כניסה ${CLAL_RISK_MIN_AGE}–${CLAL_RISK_MAX_ENTRY_AGE}; טבלה עד ${CLAL_RISK_MAX_TABLE_AGE}).`,
+    gender_missing:"יש לבחור מין.", smoker_missing:"יש לבחור סטטוס עישון.",
+    sum_missing:"יש להזין סכום ביטוח.", rate_missing:"לא נמצא תעריף מתאים."
+  };
+  const ClalRiskSimulator = {
+    _modal:null,_ctx:null,_state:{},_activeInsuredId:null,_escHandler:null,_confirmSwitch:null,_showFinalSummary:false,
+    open(ctx){ this.close(); this._ctx = ctx || {}; const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : []; this._state = {}; insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); }); this._activeInsuredId = insureds[0]?.id || null; this._confirmSwitch = null; this._showFinalSummary = false; this._mount(); this._render(); },
+    _prefillFromInsured(ins){
+      const d = ins?.data || {};
+      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
+      const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : ((d.smoker === true || d.smoker === false) ? d.smoker : null));
+      const birthDate = safeTrim(d.birthDate || ""); const occupation = safeTrim(d.occupation || "");
+      const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
+      const sumInsured = formatRiskSimSumInsuredDigits(safeTrim(d.sumInsured || ""));
+      const st = { birthDate, birthDateSource: birthDate ? "step1" : "", insuranceStartDate, insuranceStartDateSource: insuranceStartDate ? "ctx" : "", age:"", ageSource: birthDate ? "step1" : "", ageRaw:null, entryDays:null, gender, genderSource: gender ? "step1" : "", smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "", occupation, occupationSource: occupation ? "step1" : "", sumInsured, result:null, error:null, savedAt:null, dirtySinceSave:false };
+      this._syncAge(st); return st;
+    },
+    _syncAge(st){ return riskSimSyncAgeFromBirthDate(st, { minAge: CLAL_RISK_MIN_AGE, maxAge: CLAL_RISK_MAX_ENTRY_AGE, minEntryDays: CLAL_RISK_MIN_ENTRY_DAYS, asOfDate: st?.insuranceStartDate || "" }); },
+    _isInsuredRelevant(_ins){ return true; },
+    close(){ if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; } if(this._modal){ const m = this._modal; m.classList.add("giValModal--leaving"); window.setTimeout(() => m.remove(), 200); this._modal = null; } this._ctx = null; },
+    _mount(){ const modal = document.createElement("div"); modal.id = "lcClalRiskModal"; modal.className = "giValModal lcClalRiskModal"; modal.setAttribute("role","dialog"); modal.setAttribute("aria-modal","true"); modal.setAttribute("aria-label","סימולטור ריסק כלל · ספיר"); document.body.appendChild(modal); this._modal = modal; this._escHandler = (ev) => { if(ev.key === "Escape") this.close(); }; document.addEventListener("keydown", this._escHandler); requestAnimationFrame(() => modal.classList.add("giValModal--visible")); },
+    _getInsuredLabel(insId){ const ins = (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === insId); return ins ? safeTrim(ins.label) || "מבוטח" : "מבוטח"; },
+    _calc(insId){
+      const st = this._state[insId]; if(!st) return;
+      const ageSync = this._syncAge(st);
+      if(!ageSync.ok){ st.result = null; st.error = CLAL_RISK_MSG[ageSync.reason] || CLAL_RISK_MSG.birth_missing; this._render(); return; }
+      const calc = computeClalRiskPremium({ age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: st.sumInsured });
+      if(calc.ok){ st.result = calc; st.error = null; }
+      else { st.result = null; st.error = CLAL_RISK_MSG[calc.reason] || "לא ניתן לחשב את הפרמיה."; }
+      this._render();
+    },
+    _render(){
+      if(!this._modal) return;
+      const P = "lcClalRisk";
+      const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []; const isMulti = insureds.length > 1;
+      if(this._showFinalSummary){ this._renderFinalSummary(insureds); return; }
+      const activeId = this._activeInsuredId; const st = this._state[activeId] || this._prefillFromInsured(null); const isStandalone = !!this._ctx?.standalone;
+      const tabsHtml = isMulti ? `<div class="${P}__tabs">${insureds.map((ins) => { const s = this._state[ins.id]; const statusCls = s?.savedAt ? " has-saved" : (s?.result ? " has-result" : ""); return `<button type="button" class="${P}__tab${ins.id === activeId ? " is-active" : ""}${statusCls}" data-clalrisk-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${s?.savedAt ? " 🟢" : ""}</button>`; }).join("")}</div>` : "";
+      const ageSync = this._syncAge(st);
+      const ageHintHtml = !st.birthDate ? `<div class="${P}__hint ${P}__hint--warn">${isStandalone ? "יש להזין תאריך לידה" : "לא נמצא תאריך לידה — יש להזין"}</div>` : (!ageSync.ok ? `<div class="${P}__hint ${P}__hint--warn">${escapeHtml(CLAL_RISK_MSG[ageSync.reason] || "תאריך לא תקין")}</div>` : `<div class="${P}__hint">גיל ביטוחי בתחילת הביטוח: <strong>${escapeHtml(String(ageSync.age))}</strong> (כניסה ${CLAL_RISK_MIN_AGE}–${CLAL_RISK_MAX_ENTRY_AGE})</div>`);
+      const genderHintHtml = (isStandalone || st.gender) ? "" : `<div class="${P}__hint ${P}__hint--warn">יש לבחור מין</div>`;
+      const smokerHintHtml = (isStandalone || st.smoker === true || st.smoker === false) ? "" : `<div class="${P}__hint ${P}__hint--warn">יש לבחור סטטוס עישון</div>`;
+      const sumDigits = Number(String(st.sumInsured || "").replace(/[^\d]/g, ""));
+      const sumBandHintHtml = sumDigits > 0 ? `<div class="${P}__hint">להקת תעריף: <strong>${escapeHtml(CLAL_RISK_BAND_LABEL[resolveClalRiskBand(sumDigits)])}</strong></div>` : "";
+      const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company) ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini") : "🛡️";
+      const occBlockHtml = renderOccupationRiskBlockHtml(assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product), P);
+      const bandHintRowHtml = st.result?.bandHint ? `<div class="${P}__bandHint"><span class="${P}__bandHintIcon" aria-hidden="true">↑</span><div class="${P}__bandHintText">בהעלאת סכום הביטוח ל-₪${escapeHtml(formatRiskSimSumInsuredDigits(st.result.bandHint.sumInsured))} התעריף עובר ללהקת "${escapeHtml(CLAL_RISK_BAND_LABEL.high)}" והפרמיה החודשית תהיה <strong>₪${escapeHtml(formatClalRiskExactAmount(st.result.bandHint.monthlyPremium))}</strong> — זול ב-${escapeHtml(st.result.bandHint.savingPct.toFixed(1))}% עבור סכום ביטוח גבוה יותר.</div></div>` : "";
+      const resultHtml = st.error ? `<div class="${P}__result ${P}__result--error">${escapeHtml(st.error)}</div>` : (st.result ? `<div class="${P}__result ${P}__result--ok"><div class="${P}__resultRow"><span>מסלול</span><strong>${escapeHtml(st.result.pdfName)}</strong></div><div class="${P}__resultRow"><span>להקת תעריף</span><strong>${escapeHtml(st.result.bandLabel)}</strong></div><div class="${P}__resultRow"><span>תעריף שנתי ל-₪1,000</span><strong>${escapeHtml(formatClalRiskRate(st.result.ratePerMille))}</strong></div><div class="${P}__resultRow"><span>סכום ביטוח</span><strong>₪${escapeHtml(formatRiskSimSumInsuredDigits(st.result.sumInsured))}</strong></div><div class="${P}__resultRow ${P}__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatClalRiskExactAmount(st.result.monthlyPremium))}</strong></div><div class="${P}__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatClalRiskExactAmount(st.result.annualPremium))}</strong></div>${bandHintRowHtml}<div class="${P}__rateNote">התעריף לפי גיל, מין, עישון ולהקת סכום הביטוח · משתנה כל שנה לפי הגיל · הפוליסה בתוקף עד גיל ${CLAL_RISK_POLICY_END_AGE} · הפרמיה לפני חבילות הנחה</div></div>` : `<div class="${P}__result ${P}__result--empty">מלאו את השדות ולחצו "חשב פרמיה"</div>`);
+      const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
+      const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+      const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
+      const footHtml = isStandalone ? `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn btn--primary" data-clalrisk-close="1">סגור</button></div>` : (!isMulti ? `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn giValModal__closeBtn" data-clalrisk-close="1">ביטול</button><button type="button" class="btn btn--primary" data-clalrisk-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button></div>` : `<div class="giValModal__foot ${P}__foot"><button type="button" class="btn giValModal__closeBtn" data-clalrisk-close="1">ביטול</button><button type="button" class="btn btn--secondary" data-clalrisk-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button><button type="button" class="btn btn--primary" data-clalrisk-finalconfirm="1"${allSaved ? "" : " disabled"}>אישור סופי</button></div>`);
+      const confirmOverlayHtml = this._confirmSwitch ? `<div class="${P}__overlay"><div class="${P}__overlayCard"><div class="${P}__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}.</div><div class="${P}__overlayBtns"><button type="button" class="btn btn--primary" data-clalrisk-switch="save">שמור ועבור</button><button type="button" class="btn btn--secondary" data-clalrisk-switch="discard">עבור ללא שמירה</button><button type="button" class="btn" data-clalrisk-switch="cancel">ביטול</button></div></div></div>` : "";
+      this._modal.innerHTML = `<div class="giValModal__backdrop" data-clalrisk-close="1"></div><div class="giValModal__card ${P}__card"><div class="giValModal__head"><span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span><div class="giValModal__headText"><div class="giValModal__title">סימולטור ריסק כלל · ספיר</div><div class="giValModal__sub">תעריף שנתי לכל ₪1,000 סכום ביטוח · שתי להקות סכום</div></div><button type="button" class="${P}__closeX" data-clalrisk-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body ${P}__body">${tabsHtml}${isStandalone ? `<div class="${P}__insuredLabel ${P}__insuredLabel--standalone">מצב חישוב עצמאי</div>` : `<div class="${P}__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}<div class="${P}__grid"><div class="${P}__field"><label class="${P}__label">תאריך לידה</label><input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-clalrisk-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />${ageHintHtml}</div><div class="${P}__field"><label class="${P}__label">תחילת ביטוח</label><input class="${P}__input ${P}__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-clalrisk-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" /></div><div class="${P}__field"><label class="${P}__label">מין</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-clalrisk-field="gender" data-clalrisk-value="זכר">זכר</button><button type="button" class="${P}__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-clalrisk-field="gender" data-clalrisk-value="נקבה">נקבה</button></div>${genderHintHtml}</div><div class="${P}__field"><label class="${P}__label">עישון</label><div class="${P}__segmented"><button type="button" class="${P}__segBtn${st.smoker === false ? " is-active" : ""}" data-clalrisk-field="smoker" data-clalrisk-value="0">לא מעשן/ת</button><button type="button" class="${P}__segBtn${st.smoker === true ? " is-active" : ""}" data-clalrisk-field="smoker" data-clalrisk-value="1">מעשן/ת</button></div>${smokerHintHtml}</div><div class="${P}__field"><label class="${P}__label">סכום ביטוח</label><input class="${P}__input" type="text" inputmode="numeric" data-clalrisk-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="1,000,000" />${sumBandHintHtml}</div><div class="${P}__field"><label class="${P}__label">עיסוק</label><input class="${P}__input" type="text" data-clalrisk-field="occupation" value="${escapeHtml(st.occupation || "")}" autocomplete="off" /></div></div><div class="${P}__actions"><button type="button" class="btn btn--primary" data-clalrisk-calc="1">חשב פרמיה</button></div>${occBlockHtml}${resultHtml}</div>${footHtml}${confirmOverlayHtml}</div>`;
+      this._bind();
+    },
+    _renderFinalSummary(insureds){
+      const P = "lcClalRisk";
+      const rows = insureds.filter((ins) => this._isInsuredRelevant(ins)).map((ins) => { const ok = !!this._state[ins.id]?.savedAt; return `<div class="${P}__summaryRow"><span>${ok ? "✓" : "•"}</span><span>${escapeHtml(safeTrim(ins.label) || "מבוטח")}</span><span>${ok ? "הושלם" : "לא נשמר"}</span></div>`; }).join("");
+      this._modal.innerHTML = `<div class="giValModal__backdrop" data-clalrisk-close="1"></div><div class="giValModal__card ${P}__card"><div class="giValModal__head"><div class="giValModal__headText"><div class="giValModal__title">סיכום סימולטור להצעה</div></div><button type="button" class="${P}__closeX" data-clalrisk-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body ${P}__body">${rows}</div><div class="giValModal__foot ${P}__foot"><button type="button" class="btn giValModal__closeBtn" data-clalrisk-summary-back="1">חזרה</button><button type="button" class="btn btn--primary" data-clalrisk-summary-confirm="1">אישור סופי</button></div></div>`;
+      this._bind();
+    },
+    _bind(){
+      const modal = this._modal; if(!modal) return;
+      ensureSegFieldDelegation(modal, this, "clalrisk");
+      $$("[data-clalrisk-close]", modal).forEach((el) => on(el, "click", () => this.close()));
+      $$("[data-clalrisk-tab]", modal).forEach((el) => on(el, "click", () => this._switchInsured(el.getAttribute("data-clalrisk-tab"))));
+      $$("[data-clalrisk-switch]", modal).forEach((el) => on(el, "click", () => { const action = el.getAttribute("data-clalrisk-switch"); const target = this._confirmSwitch?.targetId; this._confirmSwitch = null; if(action === "save"){ this._saveActive(); if(target) this._activeInsuredId = target; this._render(); } else if(action === "discard"){ if(target) this._activeInsuredId = target; this._render(); } else this._render(); }));
+      bindRiskSimDmyField(modal, '[data-clalrisk-field="birthDate"]', { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.ageSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
+      bindRiskSimDmyField(modal, '[data-clalrisk-field="insuranceStartDate"]', { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val || riskSimTodayDmy(); st.insuranceStartDateSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
+      const sumInput = modal.querySelector('[data-clalrisk-field="sumInsured"]');
+      if(sumInput) on(sumInput, "input", () => { const st = this._state[this._activeInsuredId]; if(!st) return; const formatted = formatRiskSimSumInsuredDigits(sumInput.value); sumInput.value = formatted; try{ sumInput.setSelectionRange(formatted.length, formatted.length); }catch(_e){} st.sumInsured = formatted; st.result = null; st.error = null; st.dirtySinceSave = true; });
+      // הלהקה נגזרת מהסכום, ולכן הרמז מתחת לשדה מתרענן רק כשעוזבים אותו.
+      if(sumInput) on(sumInput, "change", () => this._render());
+      if(sumInput) on(sumInput, "blur", () => this._render());
+      const occInput = modal.querySelector('[data-clalrisk-field="occupation"]');
+      if(occInput){ on(occInput, "input", () => { const st = this._state[this._activeInsuredId]; if(!st) return; st.occupation = safeTrim(occInput.value); st.occupationSource = "manual"; st.dirtySinceSave = true; }); on(occInput, "change", () => this._render()); on(occInput, "blur", () => this._render()); }
+      const calcBtn = modal.querySelector("[data-clalrisk-calc]"); if(calcBtn) on(calcBtn, "click", () => this._calc(this._activeInsuredId));
+      const applyBtn = modal.querySelector("[data-clalrisk-apply]"); if(applyBtn) on(applyBtn, "click", () => this._apply());
+      const saveBtn = modal.querySelector("[data-clalrisk-save]"); if(saveBtn) on(saveBtn, "click", () => this._saveActive());
+      const finalBtn = modal.querySelector("[data-clalrisk-finalconfirm]");
+      if(finalBtn) on(finalBtn, "click", () => { const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []; const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins)); if(!(relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt))){ window.showToast?.({ title: "לא כל המבוטחים נשמרו", text: "יש לשמור לפני אישור סופי.", variant: "warn" }); return; } this._showFinalSummary = true; this._render(); });
+      const summaryBackBtn = modal.querySelector("[data-clalrisk-summary-back]"); if(summaryBackBtn) on(summaryBackBtn, "click", () => { this._showFinalSummary = false; this._render(); });
+      const summaryConfirmBtn = modal.querySelector("[data-clalrisk-summary-confirm]"); if(summaryConfirmBtn) on(summaryConfirmBtn, "click", () => { try{ this._ctx?.onFinalConfirm?.(); }catch(_e){} this.close(); });
+    },
+    _switchInsured(targetId){ if(!targetId || targetId === this._activeInsuredId) return; if(this._state[this._activeInsuredId]?.dirtySinceSave){ this._confirmSwitch = { targetId }; this._render(); return; } this._activeInsuredId = targetId; this._render(); },
+    _buildResultForInsured(insId){
+      const st = this._state[insId]; if(!st) return null; if(!this._syncAge(st).ok) return null;
+      if(!st.result?.ok){ const calc = computeClalRiskPremium({ age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: st.sumInsured }); if(!calc.ok) return null; st.result = calc; st.error = null; }
+      const r = st.result;
+      return { sumInsured: formatRiskSimSumInsuredDigits(r.sumInsured), monthlyPremium: r.monthlyPremium, annualPremium: r.annualPremium, ratePerMille: r.ratePerMille, band: r.band, bandLabel: r.bandLabel, pdfName: r.pdfName, policyEndAge: r.policyEndAge, birthDate: st.birthDate || "", birthDateSource: st.birthDateSource || "", insuranceStartDate: st.insuranceStartDate || "", age: st.age, ageSource: st.ageSource, gender: st.gender, genderSource: st.genderSource, smoker: st.smoker, smokerSource: st.smokerSource, occupation: st.occupation || "", occupationSource: st.occupationSource || "" };
+    },
+    _apply(){ const results = {}; Object.keys(this._state).forEach((insId) => { const r = this._buildResultForInsured(insId); if(r) results[insId] = r; }); if(!Object.keys(results).length){ window.showToast?.({ title: "אין תוצאה להחלה", text: "יש לחשב פרמיה תקינה לפני ההחלה.", variant: "warn" }); return; } const onApply = this._ctx?.onApply; this.close(); try{ onApply?.(results); }catch(_e){} },
+    _saveActive(){ const insId = this._activeInsuredId; const result = this._buildResultForInsured(insId); if(!result){ window.showToast?.({ title: "אין תוצאה לשמירה", text: "יש לחשב פרמיה תקינה לפני השמירה.", variant: "warn" }); return; } try{ this._ctx?.onApply?.({ [insId]: result }); }catch(_e){} const st = this._state[insId]; if(st){ st.savedAt = nowISO(); st.dirtySinceSave = false; } window.showToast?.({ title: "נשמר", text: `הסימולטור עבור ${this._getInsuredLabel(insId)} נשמר.`, variant: "success" }); this._render(); }
+  };
+  RiskSimulators.register("כלל", "ריסק", ClalRiskSimulator);
+  // ===== סוף GI-CLL-RISK-SIM =======================================================
 
 
   try { host.onSimulatorsInstalled?.(RiskSimulators); } catch(_e) {}

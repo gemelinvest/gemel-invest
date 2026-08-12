@@ -30119,7 +30119,7 @@ UsersGateUI.init();
 
     /* GI-PERF-LAZY-SIMS 2026-08-09 */
   // Lazy simulator registry — engines in gi-simulators.js (~220KB parse deferred).
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260811-ayl-ci-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260812-cll-risk-v1";
   const GI_SIMULATOR_CATALOG = Object.freeze([
     { company: "הפניקס", product: "ריסק" },
     { company: "הפניקס", product: "בריאות" },
@@ -30139,7 +30139,12 @@ UsersGateUI.init();
     { company: "איילון", product: "מחלות קשות" },
     { company: "איילון", product: "סרטן" },
     { company: "מנורה", product: "מחלות קשות" },
-    { company: "מנורה", product: "סרטן" }
+    { company: "מנורה", product: "סרטן" },
+    { company: "כלל", product: "בריאות" },
+    { company: "כלל", product: "מחלות קשות" },
+    { company: "כלל", product: "סרטן" },
+    { company: "כלל", product: "ריסק משכנתא" },
+    { company: "כלל", product: "ריסק" }
   ]);
   function giSimulatorCatalogHas(company, product){
     const c = safeTrim(company);
@@ -30160,11 +30165,15 @@ UsersGateUI.init();
     "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
     "./menora-ci-sim.css?v=20260810-sim-mockup-v2",
+    "./clal-health-sim.css?v=20260812-cll-health-v1",
+    "./clal-ci-sim.css?v=20260812-cll-ci-v1",
+    "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
+    "./clal-risk-sim.css?v=20260812-cll-risk-v1",
     "./simulators-center.css?v=20260810-sim-fix-v2",
     "./simulators-shell.css?v=20260810-sim-calc-hide-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
-    const ver = "20260811-ayl-ci-v1";
+    const ver = "20260812-cll-risk-v1";
     const prev = document.documentElement.dataset.giSimCssVer || "";
     document.documentElement.dataset.giSimCss = "1";
     document.documentElement.dataset.giSimCssVer = ver;
@@ -30564,7 +30573,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260811-ins-start-v1";
+  const GI_WIZARD_JS_VERSION = "20260812-cll-health-v1";
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
   const TZAHAL_CLINIC = "קופה צהלית";
   const TZAHAL_CLINIC_SHABAN = "אין שב״ן";

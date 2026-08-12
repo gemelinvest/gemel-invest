@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>מוקאפ · מעקב מכירות יומי</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<style>
+  :root{
+    --gi-bg:#F8FAFC; --gi-surface:#FFF; --gi-surface-2:#F8FAFC; --gi-surface-3:#F1F5F9;
+    --gi-navy:#3870ED; --gi-primary:#2563EB; --gi-primary-soft:#EFF6FF;
+    --gi-border:#E5E7EB; --gi-border-soft:#F1F5F9;
+    --gi-text:#0F172A; --gi-text-2:#3D4A5C; --gi-text-3:#4B5A6E; --gi-text-muted:#647287;
+    --gi-success:#16A34A; --gi-success-soft:#ECFDF5;
+    --gi-warn:#D97706; --gi-warn-soft:#FFFBEB;
+    --gi-r-card:16px; --gi-r-md:12px; --gi-r-ctl:8px; --gi-r-pill:999px;
+    --gi-sh-sm:0 1px 3px rgba(15,23,42,.06), 0 1px 2px rgba(15,23,42,.04);
+    --gi-sh-md:0 4px 12px rgba(15,23,42,.06);
+    --sidebar:240px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--gi-bg);color:var(--gi-text);font-family:Heebo,Arial,sans-serif}
+  body{min-height:100vh;display:flex}
+
+  .sidebar{
+    width:var(--sidebar); flex:0 0 var(--sidebar);
+    background:var(--gi-navy); color:#fff; padding:20px 14px;
+  }
+  .sidebar__brand{font-weight:800;letter-spacing:.04em;font-size:13px;opacity:.9;margin:4px 8px 22px}
+  .nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;font-size:13.5px;font-weight:600;opacity:.78}
+  .nav-item.is-active{background:#fff;color:var(--gi-navy);opacity:1}
+
+  .main{flex:1;min-width:0;padding:22px 28px 40px}
+
+  .page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+  .page-head h1{margin:0;font-size:22px;font-weight:800}
+  .page-head p{margin:4px 0 0;color:var(--gi-text-muted);font-size:13px;font-weight:500}
+  .reset-pill{
+    display:inline-flex;align-items:center;gap:6px;margin-top:8px;
+    padding:4px 10px;border-radius:var(--gi-r-pill);
+    background:var(--gi-primary-soft);color:var(--gi-primary);
+    font-size:11.5px;font-weight:700;
+  }
+  .reset-dot{width:6px;height:6px;border-radius:50%;background:var(--gi-primary)}
+
+  .nav-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .btn{
+    height:38px;padding:0 14px;border-radius:var(--gi-r-ctl);
+    border:1px solid var(--gi-border);background:#fff;color:var(--gi-text);
+    font:inherit;font-size:13px;font-weight:700;cursor:default;
+  }
+  .btn--primary{background:var(--gi-primary);border-color:var(--gi-primary);color:#fff}
+  .btn--ghost{background:var(--gi-surface-2)}
+  .date-chip{
+    display:inline-flex;align-items:center;gap:8px;height:38px;padding:0 12px;
+    border:1px solid var(--gi-border);border-radius:var(--gi-r-ctl);background:#fff;
+    font-size:13px;font-weight:700;
+  }
+
+  .kpis{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:12px;margin-bottom:16px}
+  .kpi{
+    background:#fff;border:1px solid var(--gi-border);border-radius:var(--gi-r-card);
+    box-shadow:var(--gi-sh-sm);padding:16px 18px;min-height:108px;
+    display:flex;flex-direction:column;justify-content:space-between;
+  }
+  .kpi--hero{background:var(--gi-navy);border-color:transparent;color:#fff}
+  .kpi__label{font-size:12px;font-weight:700;color:var(--gi-text-muted)}
+  .kpi--hero .kpi__label{color:rgba(255,255,255,.78)}
+  .kpi__value{font-size:26px;font-weight:800;letter-spacing:-.02em;margin-top:6px}
+  .kpi--hero .kpi__value{font-size:30px}
+  .kpi__meta{font-size:12px;font-weight:600;color:var(--gi-text-3);margin-top:8px}
+  .kpi--hero .kpi__meta{color:rgba(255,255,255,.72)}
+  .kpi--elem .kpi__value{color:var(--gi-primary)}
+
+  .tabs{display:flex;gap:8px;margin-bottom:14px}
+  .tab{
+    flex:1;text-align:right;background:#fff;border:1px solid var(--gi-border);
+    border-radius:14px;padding:12px 14px;cursor:default;
+  }
+  .tab.is-active{border-color:var(--gi-primary);background:var(--gi-primary-soft);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+  .tab__name{display:block;font-size:13px;font-weight:800}
+  .tab__val{display:block;font-size:18px;font-weight:800;margin-top:4px;color:var(--gi-text)}
+  .tab.is-active .tab__val{color:var(--gi-primary)}
+  .tab__meta{display:block;font-size:11.5px;font-weight:600;color:var(--gi-text-muted);margin-top:2px}
+
+  .card{
+    background:#fff;border:1px solid var(--gi-border);border-radius:var(--gi-r-card);
+    box-shadow:var(--gi-sh-sm);overflow:hidden;
+  }
+  .card__bar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 18px;border-bottom:1px solid var(--gi-border-soft);
+  }
+  .card__bar h2{margin:0;font-size:15px;font-weight:800}
+  .card__bar span{font-size:12px;font-weight:600;color:var(--gi-text-muted)}
+
+  table{width:100%;border-collapse:collapse}
+  th{
+    text-align:right;padding:11px 16px;background:var(--gi-surface-2);
+    font-size:11.5px;font-weight:800;color:var(--gi-text-3);border-bottom:1px solid var(--gi-border);
+  }
+  td{padding:14px 16px;border-bottom:1px solid var(--gi-border-soft);font-size:13.5px;font-weight:600;vertical-align:middle}
+  tr:last-child td{border-bottom:0}
+  tr:hover td{background:#FCFDFF}
+
+  .agent{display:flex;align-items:center;gap:10px}
+  .av{
+    width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+    background:var(--gi-primary-soft);color:var(--gi-primary);font-size:12px;font-weight:800;
+  }
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{
+    display:inline-flex;align-items:center;height:24px;padding:0 9px;
+    border-radius:6px;border:1px solid #BFDBFE;background:#EFF6FF;
+    color:#1E40AF;font-size:11.5px;font-weight:700;
+  }
+  .chip--co{background:#F8FAFC;border-color:var(--gi-border);color:var(--gi-text-2)}
+  .sec{display:inline-flex;height:24px;align-items:center;padding:0 9px;border-radius:6px;font-size:11.5px;font-weight:700;border:1px solid transparent}
+  .sec--briut{background:#ECFDF5;color:#1A7A4A;border-color:#A7F3D0}
+  .sec--prat{background:#FEF2F2;color:#B42318;border-color:#FECACA}
+  .sec--elem{background:#EFF6FF;color:#1E40AF;border-color:#BFDBFE}
+  .prem{font-weight:800;color:var(--gi-success);white-space:nowrap}
+  .prem small{display:block;font-size:11px;font-weight:600;color:var(--gi-text-muted)}
+
+  .note{
+    margin-top:12px;padding:10px 14px;border-radius:10px;
+    background:var(--gi-warn-soft);color:#92400E;font-size:12.5px;font-weight:600;
+  }
+
+  .legend{margin-top:18px;font-size:12px;color:var(--gi-text-muted);line-height:1.55;max-width:820px}
+  .legend b{color:var(--gi-text-2)}
+
+  @media (max-width:1100px){
+    .sidebar{display:none}
+    .kpis{grid-template-columns:1fr 1fr}
+    .tabs{flex-direction:column}
+  }
+</style>
+</head>
+<body>
+  <aside class="sidebar" aria-hidden="true">
+    <div class="sidebar__brand">GEMEL INVEST</div>
+    <div class="nav-item">דשבורד</div>
+    <div class="nav-item">לקוחות</div>
+    <div class="nav-item is-active">מעקב מכירות יומי</div>
+    <div class="nav-item">הצוות שלי</div>
+    <div class="nav-item">דוחות</div>
+  </aside>
+
+  <main class="main">
+    <header class="page-head">
+      <div>
+        <h1>מעקב מכירות יומי</h1>
+        <p>יום עבודה אחד · הנתונים מתאפסים בחצות ומתחילים מחדש</p>
+        <span class="reset-pill"><i class="reset-dot"></i> איפוס אוטומטי בחצות · מציג רק את היום הנבחר</span>
+      </div>
+      <div class="nav-actions">
+        <button class="btn btn--primary" type="button">היום</button>
+        <div class="date-chip">11 באוגוסט 2026</div>
+        <button class="btn btn--ghost" type="button">רענון</button>
+        <button class="btn" type="button">הדפסה</button>
+      </div>
+    </header>
+
+    <section class="kpis" aria-label="סיכום יומי">
+      <article class="kpi kpi--hero">
+        <div class="kpi__label">פרמיה כוללת · בריאות + פרט</div>
+        <div class="kpi__value">₪18,640</div>
+        <div class="kpi__meta">חודשית · 9 עסקאות · 4 נציגים</div>
+      </article>
+      <article class="kpi kpi--elem">
+        <div class="kpi__label">אלמנטרי</div>
+        <div class="kpi__value">₪24,900</div>
+        <div class="kpi__meta">פרמיה שנתית · 3 עסקאות</div>
+      </article>
+      <article class="kpi">
+        <div class="kpi__label">פנסיה</div>
+        <div class="kpi__value">₪2,180</div>
+        <div class="kpi__meta">חודשית · 1 עסקה</div>
+      </article>
+      <article class="kpi">
+        <div class="kpi__label">סה״כ נציגים היום</div>
+        <div class="kpi__value">5</div>
+        <div class="kpi__meta">13 עסקאות בכל הענפים</div>
+      </article>
+    </section>
+
+    <div class="tabs" role="tablist">
+      <div class="tab is-active">
+        <span class="tab__name">בריאות + פרט</span>
+        <span class="tab__val">₪18,640</span>
+        <span class="tab__meta">פרמיה אחת כוללת · חודשית</span>
+      </div>
+      <div class="tab">
+        <span class="tab__name">אלמנטרי</span>
+        <span class="tab__val">₪24,900</span>
+        <span class="tab__meta">פרמיה שנתית · יוצג בטבלה</span>
+      </div>
+      <div class="tab">
+        <span class="tab__name">פנסיה</span>
+        <span class="tab__val">₪2,180</span>
+        <span class="tab__meta">חודשית</span>
+      </div>
+    </div>
+
+    <section class="card">
+      <div class="card__bar">
+        <h2>פירוט לפי נציג · בריאות + פרט</h2>
+        <span>שורה אחת לנציג · הפרמיה מסוכמת יחד</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>נציג</th>
+            <th>ענפים</th>
+            <th>מוצרים</th>
+            <th>חברות</th>
+            <th>סה״כ פרמיה</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><div class="agent"><span class="av">דכ</span> דני כהן</div></td>
+            <td>
+              <div class="chips">
+                <span class="sec sec--briut">בריאות</span>
+                <span class="sec sec--prat">פרט</span>
+              </div>
+            </td>
+            <td>
+              <div class="chips">
+                <span class="chip">בריאות פרט</span>
+                <span class="chip">ריסק</span>
+              </div>
+            </td>
+            <td>
+              <div class="chips">
+                <span class="chip chip--co">הפניקס</span>
+                <span class="chip chip--co">מנורה</span>
+              </div>
+            </td>
+            <td class="prem">₪7,420<small>חודשית · 4 עסקאות</small></td>
+          </tr>
+          <tr>
+            <td><div class="agent"><span class="av">מל</span> מיכל לוי</div></td>
+            <td><span class="sec sec--briut">בריאות</span></td>
+            <td><span class="chip">מחלות קשות</span></td>
+            <td><span class="chip chip--co">מגדל</span></td>
+            <td class="prem">₪5,110<small>חודשית · 2 עסקאות</small></td>
+          </tr>
+          <tr>
+            <td><div class="agent"><span class="av">יפ</span> יוסי פרץ</div></td>
+            <td><span class="sec sec--prat">פרט</span></td>
+            <td><span class="chip">ריסק משכנתא</span></td>
+            <td><span class="chip chip--co">הכשרה</span></td>
+            <td class="prem">₪3,890<small>חודשית · 2 עסקאות</small></td>
+          </tr>
+          <tr>
+            <td><div class="agent"><span class="av">עש</span> עדן שמש</div></td>
+            <td><span class="sec sec--briut">בריאות</span></td>
+            <td><span class="chip">בריאות</span></td>
+            <td><span class="chip chip--co">איילון</span></td>
+            <td class="prem">₪2,220<small>חודשית · 1 עסקה</small></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card" style="margin-top:14px">
+      <div class="card__bar">
+        <h2>אלמנטרי · כך זה יוצג בטאב השני</h2>
+        <span>פרמיה שנתית · לא נעלם מהמסך</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>נציג</th>
+            <th>ענף</th>
+            <th>מוצרים</th>
+            <th>חברות</th>
+            <th>סה״כ פרמיה</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><div class="agent"><span class="av">רב</span> רועי בן דוד</div></td>
+            <td><span class="sec sec--elem">אלמנטרי</span></td>
+            <td>
+              <div class="chips">
+                <span class="chip">מקיף</span>
+                <span class="chip">חובה</span>
+              </div>
+            </td>
+            <td><span class="chip chip--co">הפניקס</span></td>
+            <td class="prem">₪14,400<small>שנתית · 2 עסקאות</small></td>
+          </tr>
+          <tr>
+            <td><div class="agent"><span class="av">דכ</span> דני כהן</div></td>
+            <td><span class="sec sec--elem">אלמנטרי</span></td>
+            <td><span class="chip">צד ג׳</span></td>
+            <td><span class="chip chip--co">מנורה</span></td>
+            <td class="prem">₪10,500<small>שנתית · 1 עסקה</small></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <p class="note">אלמנטרי: הפרמיה בטבלה ובכרטיס היא שנתית. בריאות + פרט מסוכמים כפרמיה חודשית אחת.</p>
+    <p class="legend">
+      זה מוקאפ עיצובי בלבד — עדיין לא במערכת חיה.
+      <b>מה משתנה אחרי אישור:</b>
+      טאב אחד משותף לבריאות ופרט עם סכום כולל,
+      מכירות אלמנטרי יופיעו לפי יום המכירה,
+      ובחצות המסך יחזור אוטומטית להיום החדש.
+    </p>
+  </main>
+</body>
+</html>
