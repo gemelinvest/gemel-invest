@@ -788,12 +788,120 @@
     });
   }
 
+  /* ===== GI-SIM-SAVE 2026-08-12 — שמירת חישוב פרמיה ושחזורו =================
+     כל דרכי היציאה מסימולטור (X, "סגור", לחיצה על הרקע ו-Escape) מגיעות בסופו
+     של דבר ל-close() של אותו סימולטור. לכן די בעטיפה אחת כאן כדי לתפוס את
+     כולן בכל הסימולטורים, בלי לגעת באף אחד מהם בנפרד.
+     המודאל ששואל "לשמור?" ושכבת Supabase יושבים ב-app.js ומתחברים דרך
+     window.GI_SIM_SAVE_PROMPT — כך שקובץ הסימולטורים נשאר בלי תלות באפליקציה,
+     וכשההוק לא מותקן הסגירה מתנהגת בדיוק כפי שהתנהגה עד היום. */
+  function riskSimJsonClone(value){
+    try { return JSON.parse(JSON.stringify(value == null ? null : value)); }
+    catch(_e) { return null; }
+  }
+
+  function riskSimHasSavableResult(sim){
+    const map = sim && sim._state && typeof sim._state === "object" ? sim._state : null;
+    if(!map) return false;
+    return Object.keys(map).some((k) => !!map[k]?.result?.ok);
+  }
+
+  function riskSimBuildSaveSnapshot(sim){
+    const ctx = (sim && sim._ctx) || {};
+    const map = (sim && sim._state && typeof sim._state === "object") ? sim._state : {};
+    const insureds = (Array.isArray(ctx.insureds) ? ctx.insureds : []).map((ins, idx) => ({
+      id: safeTrim(ins?.id) || ("standalone-" + (idx + 1)),
+      label: safeTrim(ins?.label) || ("מבוטח " + (idx + 1)),
+      data: riskSimJsonClone(ins?.data) || {}
+    }));
+    const state = {};
+    Object.keys(map).forEach((k) => {
+      const clone = riskSimJsonClone(map[k]);
+      if(clone) state[k] = clone;
+    });
+    return {
+      company: safeTrim(ctx.company),
+      product: safeTrim(ctx.product),
+      details: riskSimJsonClone(ctx.simCenterDetails) || null,
+      insuranceStartDate: safeTrim(ctx.insuranceStartDate || ctx.startDate || ""),
+      insureds,
+      activeInsuredId: safeTrim(sim?._activeInsuredId),
+      state,
+      totalMonthly: riskSimTotalMonthlyPremiums(map),
+      savedRecordId: safeTrim(ctx.savedRecordId),
+      savedClientName: safeTrim(ctx.savedClientName)
+    };
+  }
+
+  function riskSimApplyRestoredState(sim, restore, activeId){
+    if(!sim || !restore || typeof restore !== "object") return;
+    if(!sim._state || typeof sim._state !== "object") sim._state = {};
+    Object.keys(restore).forEach((id) => {
+      const saved = riskSimJsonClone(restore[id]);
+      if(!saved) return;
+      /* מיזוג ולא החלפה: ברירות המחדל שהסימולטור בנה זה עתה נשארות עבור שדות
+         שנוספו אחרי השמירה, והערכים השמורים נכתבים מעליהן. */
+      sim._state[id] = Object.assign({}, sim._state[id] || {}, saved);
+    });
+    const wanted = safeTrim(activeId);
+    if(wanted && sim._state[wanted]) sim._activeInsuredId = wanted;
+    try { if(typeof sim._render === "function") sim._render(); } catch(_e) {}
+  }
+
+  function riskSimShouldPromptSave(sim){
+    if(!sim || !sim._modal) return false;
+    if(!sim._ctx || !sim._ctx.standalone) return false;
+    /* open() קורא ל-close() בתחילתו — אין לשאול על שמירה בזמן פתיחה. */
+    if(sim._giOpening) return false;
+    if(typeof window === "undefined" || typeof window.GI_SIM_SAVE_PROMPT !== "function") return false;
+    return riskSimHasSavableResult(sim);
+  }
+
   function riskSimInstallShellEnhancer(handler){
     if(!handler || handler._giShellEnhanced) return handler;
     if(typeof handler.open === "function"){
       const origOpen = handler.open.bind(handler);
       handler.open = function(ctx){
-        return origOpen(riskSimEnsureStandaloneInsureds(Object.assign({}, ctx || {})));
+        const next = riskSimEnsureStandaloneInsureds(Object.assign({}, ctx || {}));
+        const restore = next.restoreState;
+        const restoreActive = safeTrim(next.restoreActiveId);
+        delete next.restoreState;
+        delete next.restoreActiveId;
+        handler._giOpening = true;
+        let out;
+        try { out = origOpen(next); }
+        finally { handler._giOpening = false; }
+        if(restore){
+          try { riskSimApplyRestoredState(handler, restore, restoreActive); } catch(_e) {}
+        }
+        return out;
+      };
+    }
+    if(typeof handler.close === "function"){
+      const origClose = handler.close.bind(handler);
+      handler.close = function(){
+        /* כל עוד שאלת השמירה על המסך — מקש Escape ולחיצות רקע של הסימולטור
+           שמתחתיה לא רשאים לסגור אותו מאחורי גבה. */
+        if(handler._giSavePromptOpen) return undefined;
+        if(!riskSimShouldPromptSave(handler)) return origClose();
+        /* close() מאפס את _ctx ואת _state, ולכן הצילום נלקח לפניו. */
+        const snapshot = riskSimBuildSaveSnapshot(handler);
+        handler._giSavePromptOpen = true;
+        let settled = false;
+        const done = (shouldClose) => {
+          if(settled) return;
+          settled = true;
+          handler._giSavePromptOpen = false;
+          if(shouldClose) origClose();
+        };
+        try {
+          window.GI_SIM_SAVE_PROMPT(snapshot, done);
+        } catch(err) {
+          try { console.error("SIM_SAVE_PROMPT_FAILED", err); } catch(_e) {}
+          handler._giSavePromptOpen = false;
+          return origClose();
+        }
+        return undefined;
       };
     }
     if(typeof handler._bind === "function"){

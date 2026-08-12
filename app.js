@@ -88,7 +88,8 @@
     campaignLeads: "campaign_leads",
     dailyReport: "gi_daily_report",
     cancellationsReport: "gi_cancellations_report",
-    agentActivityLog: "gi_agent_activity_log"
+    agentActivityLog: "gi_agent_activity_log",
+    simulatorSaves: "gi_simulator_saves"
   };
 
   // GI-PERF 2026-07-31 (שלב ג'): טעינה דו-שלבית.
@@ -30358,6 +30359,411 @@ UsersGateUI.init();
   } catch(_e) {}
 
 
+  /* ===== GI-SIM-SAVE 2026-08-12 — לקוחות סימולטורים שנשמרו =================
+     חישוב שנעשה במרכז הסימולטורים נשמר ב-Supabase (gi_simulator_saves) ולא
+     בדפדפן, כדי שהרשימה תיסע עם הנציג בין מחשבים.
+     הפרדת הנראות נאכפת כאן בקוד — בדיוק כמו בשאר המערכת, שבה הכניסה אינה
+     עוברת דרך Supabase Auth ולכן ה-RLS פתוח: מנהל רואה את השמירות שלו בלבד,
+     ומנהל מערכת רואה את כולן. */
+  const SimulatorSavesStore = {
+    _rows: null,
+    _loadPromise: null,
+
+    _identity(){
+      const rec = findAgentRecordForSession();
+      const id = safeTrim(rec?.id) || safeTrim(Auth.current?.id) || safeTrim(Auth.current?.name);
+      const name = safeTrim(rec?.name) || safeTrim(Auth.current?.name) || "נציג";
+      return { id, name };
+    },
+
+    canSeeAll(){
+      try { return !!Auth.isAdmin?.(); } catch(_e) { return false; }
+    },
+
+    clientKey(name){
+      return safeTrim(name).toLowerCase().replace(/\s+/g, " ");
+    },
+
+    _visible(rows){
+      const list = Array.isArray(rows) ? rows : [];
+      if(this.canSeeAll()) return list.slice();
+      const me = this._identity();
+      const myId = me.id.toLowerCase();
+      const myName = me.name.toLowerCase();
+      return list.filter((r) => {
+        const rid = safeTrim(r?.agent_id).toLowerCase();
+        const rname = safeTrim(r?.agent_name).toLowerCase();
+        return (!!myId && rid === myId) || (!!myName && rname === myName);
+      });
+    },
+
+    invalidate(){
+      this._rows = null;
+      this._loadPromise = null;
+    },
+
+    async load({ force = false } = {}){
+      if(!force && Array.isArray(this._rows)) return this._visible(this._rows);
+      if(!this._loadPromise){
+        const cols = "id,agent_id,agent_name,client_name,client_key,company,product,total_monthly,insureds_count,payload,created_at,updated_at";
+        const path = SUPABASE_TABLES.simulatorSaves + "?select=" + cols + "&order=created_at.desc&limit=500";
+        this._loadPromise = Storage.restRequest(path, { method: "GET" })
+          .then((rows) => { this._rows = Array.isArray(rows) ? rows : []; })
+          .finally(() => { this._loadPromise = null; });
+      }
+      await this._loadPromise;
+      return this._visible(this._rows || []);
+    },
+
+    _rowFromSnapshot(snapshot){
+      const snap = (snapshot && typeof snapshot === "object") ? snapshot : {};
+      return {
+        company: safeTrim(snap.company),
+        product: safeTrim(snap.product),
+        total_monthly: Math.round((Number(snap.totalMonthly) || 0) * 100) / 100,
+        insureds_count: Array.isArray(snap.insureds) ? snap.insureds.length : 0,
+        payload: snap
+      };
+    },
+
+    async create(clientName, snapshot){
+      const name = safeTrim(clientName);
+      if(!name) return { ok: false, error: "נא להזין שם לקוח." };
+      const me = this._identity();
+      const now = nowISO();
+      const row = Object.assign({
+        id: "simsave_" + Date.now().toString(36) + "_" + Math.random().toString(16).slice(2, 8),
+        agent_id: me.id,
+        agent_name: me.name,
+        client_name: name,
+        client_key: this.clientKey(name),
+        created_at: now,
+        updated_at: now
+      }, this._rowFromSnapshot(snapshot));
+      try {
+        await Storage.restRequest(SUPABASE_TABLES.simulatorSaves, {
+          method: "POST",
+          body: row,
+          headers: { Prefer: "return=minimal" }
+        });
+        if(!Array.isArray(this._rows)) this._rows = [];
+        this._rows.unshift(row);
+        return { ok: true, row };
+      } catch(err) {
+        try { console.error("SIM_SAVE_CREATE_FAILED", err); } catch(_e) {}
+        return { ok: false, error: String(err?.message || err) };
+      }
+    },
+
+    async update(id, snapshot){
+      const key = safeTrim(id);
+      if(!key) return { ok: false, error: "missing_id" };
+      const patch = Object.assign({ updated_at: nowISO() }, this._rowFromSnapshot(snapshot));
+      try {
+        await Storage.restRequest(SUPABASE_TABLES.simulatorSaves + "?id=eq." + encodeURIComponent(key), {
+          method: "PATCH",
+          body: patch,
+          headers: { Prefer: "return=minimal" }
+        });
+        const row = (Array.isArray(this._rows) ? this._rows : []).find((r) => safeTrim(r?.id) === key);
+        if(row) Object.assign(row, patch);
+        return { ok: true, row: row || null };
+      } catch(err) {
+        try { console.error("SIM_SAVE_UPDATE_FAILED", err); } catch(_e) {}
+        return { ok: false, error: String(err?.message || err) };
+      }
+    },
+
+    async remove(id){
+      const key = safeTrim(id);
+      if(!key) return { ok: false };
+      try {
+        await Storage.restRequest(SUPABASE_TABLES.simulatorSaves + "?id=eq." + encodeURIComponent(key), {
+          method: "DELETE",
+          headers: { Prefer: "return=minimal" }
+        });
+        if(Array.isArray(this._rows)) this._rows = this._rows.filter((r) => safeTrim(r?.id) !== key);
+        return { ok: true };
+      } catch(err) {
+        try { console.error("SIM_SAVE_DELETE_FAILED", err); } catch(_e) {}
+        return { ok: false, error: String(err?.message || err) };
+      }
+    },
+
+    /* קיבוץ לפי שם לקוח — אותו לקוח יכול להיבדק במספר חברות ומוצרים. */
+    group(rows){
+      const map = new Map();
+      (Array.isArray(rows) ? rows : []).forEach((r) => {
+        const key = safeTrim(r?.client_key) || this.clientKey(r?.client_name);
+        if(!key) return;
+        if(!map.has(key)){
+          map.set(key, { key, name: safeTrim(r?.client_name) || "ללא שם", rows: [], total: 0, lastAt: "" });
+        }
+        const g = map.get(key);
+        g.rows.push(r);
+        g.total += Number(r?.total_monthly) || 0;
+        const at = safeTrim(r?.updated_at) || safeTrim(r?.created_at);
+        if(at > g.lastAt) g.lastAt = at;
+      });
+      const out = Array.from(map.values());
+      out.forEach((g) => {
+        g.total = Math.round(g.total * 100) / 100;
+        g.rows.sort((a, b) => String(b?.created_at || "").localeCompare(String(a?.created_at || "")));
+      });
+      out.sort((a, b) => String(b.lastAt).localeCompare(String(a.lastAt)));
+      return out;
+    }
+  };
+
+  function simSaveFormatMoney(n){
+    const num = Number(n);
+    if(!Number.isFinite(num)) return "0.00";
+    try { return num.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+    catch(_e) { return (Math.round(num * 100) / 100).toFixed(2); }
+  }
+
+  function simSaveFormatDate(iso){
+    const s = safeTrim(iso);
+    if(!s) return "";
+    const d = new Date(s);
+    if(Number.isNaN(d.getTime())) return "";
+    try { return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" }); }
+    catch(_e) { return d.toISOString().slice(0, 10); }
+  }
+
+  /* המודאל שנפתח ביציאה מסימולטור. gi-simulators.js קורא לו דרך
+     window.GI_SIM_SAVE_PROMPT ומעביר snapshot + callback: done(true) סוגר את
+     הסימולטור, done(false) משאיר אותו פתוח. */
+  const SimulatorSavePrompt = {
+    _modal: null,
+    _escHandler: null,
+    _snapshot: null,
+    _done: null,
+    _step: "ask",
+    _busy: false,
+    _error: "",
+    _nameDraft: "",
+    _mode: "create",
+
+    open(snapshot, done){
+      /* אם משום מה נותרה שאלה קודמת פתוחה — משחררים את הסימולטור שמאחוריה
+         לפני שמציגים חדשה, אחרת ה-close שלו יישאר חסום לתמיד. */
+      if(this._done) this._resolve(false);
+      this._forceClose();
+      this._snapshot = (snapshot && typeof snapshot === "object") ? snapshot : {};
+      this._done = typeof done === "function" ? done : null;
+      this._step = "ask";
+      this._busy = false;
+      this._error = "";
+      this._mode = safeTrim(this._snapshot.savedRecordId) ? "update" : "create";
+      this._nameDraft = safeTrim(this._snapshot.savedClientName);
+
+      const modal = document.createElement("div");
+      modal.id = "lcSimSaveModal";
+      modal.className = "giValModal lcSimSaveModal";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-label", "שמירת חישוב פרמיה");
+      document.body.appendChild(modal);
+      this._modal = modal;
+
+      /* בשלב capture, כדי שה-Escape לא יגיע גם למאזין של הסימולטור שמתחת. */
+      this._escHandler = (ev) => {
+        if(ev.key !== "Escape") return;
+        ev.stopPropagation();
+        ev.preventDefault();
+        if(this._busy) return;
+        if(this._step === "name"){ this._step = "ask"; this._error = ""; this._paint(); return; }
+        this._resolve(false);
+      };
+      document.addEventListener("keydown", this._escHandler, true);
+
+      this._paint();
+      requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
+    },
+
+    _summaryHtml(){
+      const snap = this._snapshot || {};
+      const chips = [];
+      const label = [safeTrim(snap.company), safeTrim(snap.product)].filter(Boolean).join(" · ");
+      if(label) chips.push(["מוצר", label]);
+      const count = Array.isArray(snap.insureds) ? snap.insureds.length : 0;
+      if(count) chips.push(["מבוטחים", String(count)]);
+      chips.push(["סה״כ פרמיה חודשית", "₪" + simSaveFormatMoney(snap.totalMonthly)]);
+      const items = chips.map(([k, v]) =>
+        `<span class="lcSimSaveChip"><span class="lcSimSaveChip__k">${escapeHtml(k)}</span><span class="lcSimSaveChip__v">${escapeHtml(v)}</span></span>`
+      ).join("");
+      return `<div class="lcSimSaveChips">${items}</div>`;
+    },
+
+    _paint(){
+      const modal = this._modal;
+      if(!modal) return;
+      const snap = this._snapshot || {};
+      const savedName = safeTrim(snap.savedClientName);
+      const errHtml = this._error
+        ? `<div class="lcSimSaveErr">${escapeHtml(this._error)}</div>`
+        : "";
+
+      const bodyHtml = this._step === "name"
+        ? `
+            <div class="lcSimSaveText">על שם איזה לקוח לשמור את החישוב?</div>
+            ${this._summaryHtml()}
+            <div class="lcSimSaveField">
+              <label class="lcSimSaveField__label" for="lcSimSaveClientName">שם הלקוח</label>
+              <input id="lcSimSaveClientName" class="lcSimSaveField__input" type="text" maxlength="80" autocomplete="off" placeholder="לדוגמה: ישראל ישראלי" value="${escapeHtml(this._nameDraft)}" />
+            </div>
+            ${errHtml}`
+        : `
+            <div class="lcSimSaveText">האם ברצונך לשמור את חישוב הפרמיות שביצעת?</div>
+            ${this._summaryHtml()}
+            ${savedName ? `<div class="lcSimSaveNote">החישוב נפתח מתוך הלקוח השמור <strong>${escapeHtml(savedName)}</strong>.</div>` : ""}
+            ${errHtml}`;
+
+      const footHtml = this._step === "name"
+        ? `
+            <button type="button" class="btn giValModal__closeBtn" data-simsave-back="1"${this._busy ? " disabled" : ""}>חזרה</button>
+            <button type="button" class="btn btn--primary" data-simsave-confirm="1"${this._busy ? " disabled" : ""}>${this._busy ? "שומר..." : "שמור"}</button>`
+        : (this._mode === "update"
+          ? `
+            <button type="button" class="btn giValModal__closeBtn" data-simsave-discard="1">לא, סגור בלי לשמור</button>
+            <button type="button" class="btn btn--secondary" data-simsave-newclient="1">שמור כלקוח חדש</button>
+            <button type="button" class="btn btn--primary" data-simsave-overwrite="1"${this._busy ? " disabled" : ""}>${this._busy ? "שומר..." : "עדכן את " + escapeHtml(savedName || "הלקוח")}</button>`
+          : `
+            <button type="button" class="btn giValModal__closeBtn" data-simsave-discard="1">לא, סגור בלי לשמור</button>
+            <button type="button" class="btn btn--primary" data-simsave-yes="1">כן, שמור</button>`);
+
+      modal.innerHTML = `
+        <div class="giValModal__backdrop" data-simsave-cancel="1"></div>
+        <div class="giValModal__card lcSimSaveModal__card">
+          <div class="giValModal__head lcSimSaveModal__head">
+            <button type="button" class="lcSimSaveModal__closeX" data-simsave-cancel="1" aria-label="חזרה לסימולטור">✕</button>
+            <div class="giValModal__headText">
+              <div class="giValModal__title">שמירת חישוב פרמיה</div>
+              <div class="giValModal__sub">${escapeHtml(this._step === "name" ? "החישוב יישמר תחת שם הלקוח וניתן יהיה לפתוח אותו מחדש" : "אפשר לשמור את החישוב ולחזור אליו בכניסה הבאה למרכז הסימולטורים")}</div>
+            </div>
+          </div>
+          <div class="giValModal__body lcSimSaveModal__body">${bodyHtml}</div>
+          <div class="giValModal__foot lcSimSaveModal__foot">${footHtml}</div>
+        </div>`;
+
+      $$("[data-simsave-cancel]", modal).forEach((el) => on(el, "click", () => {
+        if(this._busy) return;
+        this._resolve(false);
+      }));
+
+      const discard = modal.querySelector("[data-simsave-discard]");
+      if(discard) on(discard, "click", () => { if(!this._busy) this._resolve(true); });
+
+      const yes = modal.querySelector("[data-simsave-yes]");
+      if(yes) on(yes, "click", () => { this._step = "name"; this._error = ""; this._paint(); });
+
+      const newClient = modal.querySelector("[data-simsave-newclient]");
+      if(newClient) on(newClient, "click", () => {
+        this._mode = "create";
+        this._step = "name";
+        this._error = "";
+        this._paint();
+      });
+
+      const overwrite = modal.querySelector("[data-simsave-overwrite]");
+      if(overwrite) on(overwrite, "click", () => { void this._commit("update"); });
+
+      const back = modal.querySelector("[data-simsave-back]");
+      if(back) on(back, "click", () => {
+        if(this._busy) return;
+        this._mode = safeTrim(snap.savedRecordId) ? "update" : "create";
+        this._step = "ask";
+        this._error = "";
+        this._paint();
+      });
+
+      const confirm = modal.querySelector("[data-simsave-confirm]");
+      if(confirm) on(confirm, "click", () => { void this._commit("create"); });
+
+      const input = modal.querySelector("#lcSimSaveClientName");
+      if(input){
+        on(input, "input", () => { this._nameDraft = input.value; });
+        on(input, "keydown", (ev) => {
+          if(ev.key !== "Enter") return;
+          ev.preventDefault();
+          void this._commit("create");
+        });
+        requestAnimationFrame(() => { try { input.focus(); input.select(); } catch(_e) {} });
+      }
+    },
+
+    async _commit(mode){
+      if(this._busy) return;
+      const snap = this._snapshot || {};
+      this._busy = true;
+      this._error = "";
+      this._paint();
+
+      let res;
+      if(mode === "update"){
+        res = await SimulatorSavesStore.update(safeTrim(snap.savedRecordId), snap);
+      } else {
+        const name = safeTrim(this._nameDraft);
+        if(!name){
+          this._busy = false;
+          this._error = "נא להזין שם לקוח.";
+          this._paint();
+          return;
+        }
+        res = await SimulatorSavesStore.create(name, snap);
+      }
+
+      this._busy = false;
+      if(!res?.ok){
+        this._error = "השמירה נכשלה: " + (res?.error || "שגיאה לא ידועה") + ". אפשר לנסות שוב.";
+        this._paint();
+        return;
+      }
+      try {
+        window.showToast?.({
+          title: "החישוב נשמר",
+          text: mode === "update"
+            ? "החישוב עודכן ברשימת הלקוחות השמורים."
+            : "החישוב נשמר תחת " + (safeTrim(this._nameDraft) || "הלקוח") + ".",
+          variant: "ok",
+          durationMs: 3600
+        });
+      } catch(_e) {}
+      this._resolve(true);
+    },
+
+    _forceClose(){
+      if(this._escHandler){
+        document.removeEventListener("keydown", this._escHandler, true);
+        this._escHandler = null;
+      }
+      if(this._modal){
+        const m = this._modal;
+        try { m.style.pointerEvents = "none"; } catch(_e) {}
+        m.classList.add("giValModal--leaving");
+        window.setTimeout(() => { try { m.remove(); } catch(_e) {} }, 200);
+        this._modal = null;
+      }
+    },
+
+    _resolve(shouldCloseSimulator){
+      const done = this._done;
+      this._done = null;
+      this._snapshot = null;
+      this._forceClose();
+      if(done){
+        try { done(!!shouldCloseSimulator); } catch(err) {
+          try { console.error("SIM_SAVE_DONE_FAILED", err); } catch(_e) {}
+        }
+      }
+    }
+  };
+
+  try {
+    window.GI_SIM_SAVE_PROMPT = (snapshot, done) => SimulatorSavePrompt.open(snapshot, done);
+  } catch(_e) {}
+
   const SimulatorsCenterUI = {
     els: {},
     _modal: null,
@@ -30369,6 +30775,11 @@ UsersGateUI.init();
     _step: "details",
     _details: null,
     _touched: null,
+    /* GI-SIM-SAVE 2026-08-12 — שתי לשוניות במסך: "סימולטור חדש" ו"לקוחות שמורים". */
+    _view: "new",
+    _saves: [],
+    _savesLoading: false,
+    _savesError: "",
 
     syncVisibility(){
       const btn = this.els.btn || document.getElementById("btnSimulatorsCenter");
@@ -30474,6 +30885,8 @@ UsersGateUI.init();
       this._step = "details";
       this._details = this._blankDetails();
       this._touched = {};
+      this._view = "new";
+      this._savesError = "";
       const modal = document.createElement("div");
       modal.id = "lcSimCenterModal";
       modal.className = "giValModal lcSimCenterModal";
@@ -30493,6 +30906,52 @@ UsersGateUI.init();
       document.addEventListener("keydown", this._escHandler);
       this._paint();
       requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
+      void this._loadSaves();
+    },
+
+    /* טעינה ברקע — המסך נפתח מיד, ומונה הלשונית מתעדכן כשהנתונים מגיעים. */
+    async _loadSaves({ force = false } = {}){
+      if(this._savesLoading) return;
+      this._savesLoading = true;
+      this._savesError = "";
+      this._refreshSavesUi();
+      try {
+        this._saves = await SimulatorSavesStore.load({ force });
+      } catch(err) {
+        try { console.error("SIM_SAVES_LOAD_FAILED", err); } catch(_e) {}
+        this._saves = [];
+        this._savesError = "לא ניתן לטעון את הלקוחות השמורים כרגע.";
+      }
+      this._savesLoading = false;
+      this._refreshSavesUi();
+    },
+
+    /* בלשונית "לקוחות שמורים" מציירים מחדש; אחרת די בעדכון המונה, כדי לא
+       לאבד ערכים שהוקלדו זה עתה במסך הפרטים. */
+    _refreshSavesUi(){
+      if(!this._modal) return;
+      if(this._view === "saved"){ this._paint(); return; }
+      const badge = this._modal.querySelector("[data-simc-saved-count]");
+      if(badge) badge.textContent = this._savesLoading ? "…" : String(this._saves.length || 0);
+    },
+
+    _tabsHtml(){
+      const count = this._savesLoading ? "…" : String(this._saves.length || 0);
+      const isSaved = this._view === "saved";
+      return `
+            <div class="lcSimCenterTabs" role="tablist">
+              <button type="button" class="lcSimCenterTabs__btn${isSaved ? "" : " is-active"}" role="tab" aria-selected="${isSaved ? "false" : "true"}" data-simc-view="new">סימולטור חדש</button>
+              <button type="button" class="lcSimCenterTabs__btn${isSaved ? " is-active" : ""}" role="tab" aria-selected="${isSaved ? "true" : "false"}" data-simc-view="saved">לקוחות שמורים <span class="lcSimCenterTabs__count" data-simc-saved-count="1">${escapeHtml(count)}</span></button>
+            </div>`;
+    },
+
+    _bindTabs(modal){
+      $$("[data-simc-view]", modal).forEach((btn) => on(btn, "click", () => {
+        const view = btn.getAttribute("data-simc-view") === "saved" ? "saved" : "new";
+        if(this._view === view) return;
+        this._view = view;
+        this._paint();
+      }));
     },
 
     _headHtml(sub){
@@ -30510,6 +30969,10 @@ UsersGateUI.init();
     _paint(){
       const modal = this._modal;
       if(!modal) return;
+      if(this._view === "saved"){
+        this._paintSaved();
+        return;
+      }
       const companies = this._uniqueCompanies();
       if(!companies.length){
         modal.innerHTML = `
@@ -30517,6 +30980,7 @@ UsersGateUI.init();
         <div class="giValModal__card lcSimCenterModal__card">
           ${this._headHtml("לא נמצאו סימולטורים רשומים")}
           <div class="giValModal__body lcSimCenterModal__body">
+            ${this._tabsHtml()}
             <div class="lcSimCenterEmpty">לא נמצאו חברות עם סימולטורים רשומים.</div>
           </div>
           <div class="giValModal__foot lcSimCenterModal__foot">
@@ -30524,10 +30988,153 @@ UsersGateUI.init();
           </div>
         </div>`;
         $$("[data-simc-close]", modal).forEach((el) => on(el, "click", () => this.close()));
+        this._bindTabs(modal);
         return;
       }
       if(this._step === "picker") this._paintPicker(companies);
       else this._paintDetails();
+    },
+
+    /* לשונית "לקוחות שמורים" — מקובץ לפי שם לקוח, כי אותו לקוח נבדק לרוב
+       במספר חברות ומוצרים. */
+    _paintSaved(){
+      const modal = this._modal;
+      if(!modal) return;
+      const groups = SimulatorSavesStore.group(this._saves);
+      const seeAll = SimulatorSavesStore.canSeeAll();
+
+      let listHtml;
+      if(this._savesLoading){
+        listHtml = `<div class="lcSimCenterEmpty">טוען לקוחות שמורים...</div>`;
+      } else if(this._savesError){
+        listHtml = `<div class="lcSimCenterEmpty lcSimCenterEmpty--err">${escapeHtml(this._savesError)}</div>`;
+      } else if(!groups.length){
+        listHtml = `<div class="lcSimCenterEmpty">אין עדיין חישובים שמורים. בסיום עבודה בסימולטור תישאלו אם לשמור את החישוב.</div>`;
+      } else {
+        listHtml = `<div class="lcSimSavedList">` + groups.map((g) => {
+          const rows = g.rows.map((r) => {
+            const label = [safeTrim(r?.company), safeTrim(r?.product)].filter(Boolean).join(" · ") || "סימולטור";
+            const when = simSaveFormatDate(r?.updated_at || r?.created_at);
+            const owner = seeAll ? safeTrim(r?.agent_name) : "";
+            const meta = [when, owner].filter(Boolean).join(" · ");
+            return `
+              <div class="lcSimSavedRow">
+                <div class="lcSimSavedRow__main">
+                  <div class="lcSimSavedRow__title">${escapeHtml(label)}</div>
+                  <div class="lcSimSavedRow__meta">${escapeHtml(meta)}</div>
+                </div>
+                <div class="lcSimSavedRow__prem">₪${escapeHtml(simSaveFormatMoney(r?.total_monthly))}</div>
+                <div class="lcSimSavedRow__actions">
+                  <button type="button" class="btn btn--primary lcSimSavedRow__btn" data-simc-open-saved="${escapeHtml(safeTrim(r?.id))}">פתח</button>
+                  <button type="button" class="btn lcSimSavedRow__btn lcSimSavedRow__btn--del" data-simc-del-saved="${escapeHtml(safeTrim(r?.id))}" aria-label="מחיקה">מחק</button>
+                </div>
+              </div>`;
+          }).join("");
+          return `
+            <section class="lcSimSavedGroup">
+              <header class="lcSimSavedGroup__head">
+                <div class="lcSimSavedGroup__name">${escapeHtml(g.name)}</div>
+                <div class="lcSimSavedGroup__sum">${g.rows.length} חישובים · סה״כ ₪${escapeHtml(simSaveFormatMoney(g.total))} לחודש</div>
+              </header>
+              ${rows}
+            </section>`;
+        }).join("") + `</div>`;
+      }
+
+      modal.innerHTML = `
+        <div class="giValModal__backdrop" data-simc-close="1"></div>
+        <div class="giValModal__card lcSimCenterModal__card lcSimCenterModal__card--wide">
+          ${this._headHtml(seeAll ? "חישובים שנשמרו על ידי כל הנציגים" : "החישובים ששמרתם — לחצו על לקוח כדי להמשיך לעבוד עליו")}
+          <div class="giValModal__body lcSimCenterModal__body">
+            ${this._tabsHtml()}
+            ${listHtml}
+          </div>
+          <div class="giValModal__foot lcSimCenterModal__foot">
+            <button type="button" class="btn giValModal__closeBtn lcSimCenterModal__cancel" data-simc-close="1">סגירה</button>
+            <button type="button" class="btn btn--secondary" data-simc-refresh-saved="1"${this._savesLoading ? " disabled" : ""}>רענון</button>
+          </div>
+        </div>`;
+
+      $$("[data-simc-close]", modal).forEach((el) => on(el, "click", () => this.close()));
+      this._bindTabs(modal);
+
+      const refresh = modal.querySelector("[data-simc-refresh-saved]");
+      if(refresh) on(refresh, "click", () => { void this._loadSaves({ force: true }); });
+
+      $$("[data-simc-open-saved]", modal).forEach((btn) => on(btn, "click", () => {
+        this._openSavedRecord(btn.getAttribute("data-simc-open-saved"));
+      }));
+
+      $$("[data-simc-del-saved]", modal).forEach((btn) => on(btn, "click", () => {
+        void this._deleteSavedRecord(btn.getAttribute("data-simc-del-saved"));
+      }));
+    },
+
+    _findSave(id){
+      const key = safeTrim(id);
+      if(!key) return null;
+      return (Array.isArray(this._saves) ? this._saves : []).find((r) => safeTrim(r?.id) === key) || null;
+    },
+
+    async _deleteSavedRecord(id){
+      const row = this._findSave(id);
+      if(!row) return;
+      const label = safeTrim(row.client_name) || "הלקוח";
+      const ok = window.confirm("למחוק את החישוב השמור של " + label + "?");
+      if(!ok) return;
+      const res = await SimulatorSavesStore.remove(row.id);
+      if(!res?.ok){
+        try { window.showToast?.({ title: "המחיקה נכשלה", text: res?.error || "נסו שוב.", variant: "err", durationMs: 4200 }); } catch(_e) {}
+        return;
+      }
+      this._saves = (this._saves || []).filter((r) => safeTrim(r?.id) !== safeTrim(row.id));
+      this._paint();
+    },
+
+    /* פתיחה מחדש של חישוב שמור — הסימולטור נפתח עם אותם מבוטחים, אותם נתונים
+       ואותן תוצאות, וניתן להמשיך לעבוד ולעדכן את אותה רשומה. */
+    _openSavedRecord(id){
+      const row = this._findSave(id);
+      if(!row) return;
+      const payload = (row.payload && typeof row.payload === "object") ? row.payload : {};
+      const company = safeTrim(payload.company) || safeTrim(row.company);
+      const product = safeTrim(payload.product) || safeTrim(row.product);
+      const handler = RiskSimulators.getHandler(company, product);
+      if(!handler){
+        window.showToast?.({ title: "שגיאה", text: "הסימולטור של " + (company || "החברה") + " · " + (product || "המוצר") + " אינו זמין יותר.", variant: "warn", durationMs: 4600 });
+        return;
+      }
+      const insureds = (Array.isArray(payload.insureds) && payload.insureds.length)
+        ? payload.insureds.map((ins, idx) => ({
+            id: safeTrim(ins?.id) || ("standalone-" + (idx + 1)),
+            label: safeTrim(ins?.label) || (idx === 0 ? "מבוטח 1 — ראשי" : "מבוטח " + (idx + 1)),
+            data: (ins?.data && typeof ins.data === "object") ? ins.data : {}
+          }))
+        : [{ id: "standalone-1", label: "מבוטח 1 — ראשי", data: {} }];
+      const startDate = safeTrim(payload.insuranceStartDate);
+      this.close();
+      window.setTimeout(() => {
+        try {
+          handler.open({
+            standalone: true,
+            allowAddInsured: true,
+            company, product,
+            insuranceStartDate: startDate,
+            startDate,
+            insureds,
+            simCenterDetails: payload.details || null,
+            savedRecordId: safeTrim(row.id),
+            savedClientName: safeTrim(row.client_name),
+            restoreState: payload.state || null,
+            restoreActiveId: safeTrim(payload.activeInsuredId),
+            onApply(){},
+            onFinalConfirm(){}
+          });
+        } catch(err) {
+          try { console.error("SIM_CENTER_REOPEN_FAILED", err); } catch(_e) {}
+          try { window.showToast?.({ title: "שגיאה", text: "לא ניתן לפתוח את החישוב השמור.", variant: "err", durationMs: 4800 }); } catch(_e2) {}
+        }
+      }, 0);
     },
 
     /* שלב 1 — פרטי המבוטח. נאספים לפני בחירת חברה/מוצר כדי שכל סימולטור שייפתח
@@ -30549,6 +31156,7 @@ UsersGateUI.init();
         <div class="giValModal__card lcSimCenterModal__card">
           ${this._headHtml("הזינו את פרטי המבוטח — לאחר מכן תיפתח בחירת החברה והמוצר")}
           <div class="giValModal__body lcSimCenterModal__body">
+            ${this._tabsHtml()}
             <form class="lcSimCenterForm lcSimCenterForm--details" data-simc-details-form="1" novalidate>
               <div class="lcSimCenterField">
                 <label class="lcSimCenterField__label" for="lcSimCenterBirthDate">תאריך לידה</label>
@@ -30599,6 +31207,8 @@ UsersGateUI.init();
       if(!this._details) this._details = this._blankDetails();
       if(!this._touched) this._touched = {};
       const d = this._details;
+
+      this._bindTabs(modal);
 
       $$("[data-simc-field]", modal).forEach((el) => {
         const key = el.getAttribute("data-simc-field");
@@ -30725,6 +31335,7 @@ UsersGateUI.init();
         <div class="giValModal__card lcSimCenterModal__card">
           ${this._headHtml("בחרו חברה ומוצר לפתיחת הסימולטור")}
           <div class="giValModal__body lcSimCenterModal__body">
+            ${this._tabsHtml()}
             ${this._detailsSummaryHtml()}
             <form class="lcSimCenterForm" data-simc-form="1" novalidate>
               <div class="lcSimCenterField">
@@ -30750,6 +31361,7 @@ UsersGateUI.init();
         </div>`;
 
       $$("[data-simc-close]", modal).forEach((el) => on(el, "click", () => this.close()));
+      this._bindTabs(modal);
 
       const backBtn = modal.querySelector("[data-simc-back]");
       if(backBtn) on(backBtn, "click", () => this._goToDetails());
@@ -30827,6 +31439,7 @@ UsersGateUI.init();
       this._step = "details";
       this._details = null;
       this._touched = null;
+      this._view = "new";
     },
 
     _launch(company, product){
@@ -30862,6 +31475,9 @@ UsersGateUI.init();
             insuranceStartDate: startDate,
             startDate,
             insureds: [primaryInsured],
+            /* נשמר בתוך ההקשר כדי שצילום המצב ביציאה יכיל גם את הפרטים
+               שהוזנו במסך הראשון, ופתיחה חוזרת תשחזר אותם. */
+            simCenterDetails: details,
             onApply(){},
             onFinalConfirm(){}
           });
