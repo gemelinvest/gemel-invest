@@ -10115,6 +10115,47 @@
       pdfName: "ספיר", policyEndAge: CLAL_RISK_POLICY_END_AGE
     };
   }
+  /** התפתחות פרמיה — טבלת הגילוי המלאה מגיל הכניסה ועד תום הביטוח בגיל 80.
+      ספיר היא פוליסת פרמיה משתנה: הפרמיה מחושבת מחדש בכל שנת ביטוח לפי הגיל
+      שהמבוטח הגיע אליו, ולכן הפרמיה של השנה הראשונה אינה הפרמיה שתשולם בהמשך
+      (גבר לא-מעשן שנכנס בגיל 40 עם מיליון ₪ משלם 88 ₪ בשנה הראשונה ו-6,220 ₪
+      בגיל 80). כאן משתלמת ההפרדה בין lookupClalRiskRate, שהוא תעריפון טהור
+      לגילים 18–80, לבין computeClalRiskPremium שחוסם כניסה מעל 67.
+
+      הלהקה נקבעת פעם אחת מסכום הביטוח ואינה משתנה לאורך התחזית.
+
+      הסכומים במונחי המדד הידוע היום. סכום הביטוח בספיר צמוד למדד, אך הצמדה
+      עתידית אינה נתון אלא הנחה: 2% לשנה מול 3% לשנה משנים את סך הפרמיות
+      בתרחיש שלמעלה מ-1.26M ל-1.74M ₪, כלומר המספרים היו משקפים את ההנחה
+      שלנו ולא את התעריפון של כלל. בנוסף, בסכומים מתחת ל-500,000 ₪ הצמדה
+      הייתה חוצה את גבול הלהקות באמצע התחזית ומציגה *ירידת* פרמיה בגיל מתקדם
+      יותר — ארטיפקט של מפל הלהקות, לא של התעריף. */
+  function buildClalRiskProjection({ age, gender, smoker, sumInsured }){
+    const base = computeClalRiskPremium({ age, gender, smoker, sumInsured });
+    if(!base.ok) return base;
+    const entryAge = Number(age);
+    if(!Number.isInteger(entryAge)) return { ok:false, reason:"age_missing" };
+    const rows = [];
+    let cumulative = 0;
+    for(let a = entryAge; a <= CLAL_RISK_POLICY_END_AGE; a++){
+      const lookup = lookupClalRiskRate({ age:a, gender, smoker, band: base.band });
+      if(!lookup.ok) return { ok:false, reason: lookup.reason };
+      const annualPremium = (base.sumInsured / 1000) * lookup.ratePerMille;
+      cumulative += annualPremium;
+      rows.push({
+        policyYear: a - entryAge + 1, age:a, ratePerMille: lookup.ratePerMille,
+        annualPremium, monthlyPremium: annualPremium / 12, cumulative
+      });
+    }
+    const first = rows[0], last = rows[rows.length - 1];
+    return {
+      ok:true, rows, entryAge, endAge: CLAL_RISK_POLICY_END_AGE,
+      band: base.band, bandLabel: base.bandLabel, sumInsured: base.sumInsured,
+      totalPremiums: cumulative, lastMonthlyPremium: last.monthlyPremium,
+      growthFactor: first.monthlyPremium > 0 ? last.monthlyPremium / first.monthlyPremium : null,
+      exceedsSumInsured: cumulative > base.sumInsured
+    };
+  }
   const CLAL_RISK_MSG = {
     birth_missing:"יש להזין תאריך לידה תקין לפני חישוב הפרמיה.", entry_too_young:"גיל הכניסה המינימלי הוא 0 ימים.",
     age_missing:"יש להזין תאריך לידה תקין לפני חישוב הפרמיה.",
@@ -10132,7 +10173,7 @@
       const birthDate = safeTrim(d.birthDate || ""); const occupation = safeTrim(d.occupation || "");
       const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
       const sumInsured = formatRiskSimSumInsuredDigits(safeTrim(d.sumInsured || ""));
-      const st = { birthDate, birthDateSource: birthDate ? "step1" : "", insuranceStartDate, insuranceStartDateSource: insuranceStartDate ? "ctx" : "", age:"", ageSource: birthDate ? "step1" : "", ageRaw:null, entryDays:null, gender, genderSource: gender ? "step1" : "", smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "", occupation, occupationSource: occupation ? "step1" : "", sumInsured, result:null, error:null, savedAt:null, dirtySinceSave:false };
+      const st = { birthDate, birthDateSource: birthDate ? "step1" : "", insuranceStartDate, insuranceStartDateSource: insuranceStartDate ? "ctx" : "", age:"", ageSource: birthDate ? "step1" : "", ageRaw:null, entryDays:null, gender, genderSource: gender ? "step1" : "", smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "", occupation, occupationSource: occupation ? "step1" : "", sumInsured, result:null, error:null, savedAt:null, dirtySinceSave:false, showProjection:false };
       this._syncAge(st); return st;
     },
     _syncAge(st){ return riskSimSyncAgeFromBirthDate(st, { minAge: CLAL_RISK_MIN_AGE, maxAge: CLAL_RISK_MAX_ENTRY_AGE, minEntryDays: CLAL_RISK_MIN_ENTRY_DAYS, asOfDate: st?.insuranceStartDate || "" }); },
@@ -10164,8 +10205,11 @@
       const sumBandHintHtml = sumDigits > 0 ? `<div class="${P}__hint">להקת תעריף: <strong>${escapeHtml(CLAL_RISK_BAND_LABEL[resolveClalRiskBand(sumDigits)])}</strong></div>` : "";
       const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company) ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini") : "🛡️";
       const occBlockHtml = renderOccupationRiskBlockHtml(assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product), P);
+      const projection = (st.result?.ok && st.showProjection) ? buildClalRiskProjection({ age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: st.sumInsured }) : null;
+      const projToggleHtml = st.result?.ok ? `<button type="button" class="${P}__projToggle${st.showProjection ? " is-open" : ""}" data-clalrisk-proj="1" aria-expanded="${st.showProjection ? "true" : "false"}"><span class="${P}__projToggleIcon" aria-hidden="true">${st.showProjection ? "▲" : "▼"}</span><span>התפתחות פרמיה · גיל ${escapeHtml(String(st.age))}–${CLAL_RISK_POLICY_END_AGE}</span></button>` : "";
+      const projectionHtml = projection?.ok ? `<div class="${P}__proj"><div class="${P}__projHead">בספיר הפרמיה מחושבת מחדש בכל שנת ביטוח לפי הגיל שהמבוטח הגיע אליו. להלן כל שנות הביטוח מגיל ${projection.entryAge} עד תום הביטוח בגיל ${projection.endAge}, בלהקת "${escapeHtml(projection.bandLabel)}".</div><div class="${P}__projScroll"><table class="${P}__projTable"><thead><tr><th>שנה</th><th>גיל</th><th>תעריף ל-₪1,000</th><th>חודשי</th><th>שנתי</th><th>מצטבר</th></tr></thead><tbody>${projection.rows.map((r) => `<tr${r.policyYear === 1 ? ` class="${P}__projRow--first"` : ""}><td>${r.policyYear}</td><td>${r.age}</td><td class="${P}__projRate">${escapeHtml(formatClalRiskRate(r.ratePerMille))}</td><td class="${P}__projMonthly"><strong>₪${escapeHtml(riskSimFormatMoneyShekels(r.monthlyPremium))}</strong></td><td>₪${escapeHtml(riskSimFormatMoneyShekels(r.annualPremium))}</td><td>₪${escapeHtml(riskSimFormatMoneyShekels(r.cumulative))}</td></tr>`).join("")}</tbody></table></div><div class="${P}__projTotals"><div class="${P}__projTotalsRow"><span>סה״כ פרמיות עד גיל ${projection.endAge}</span><strong>₪${escapeHtml(riskSimFormatMoneyShekels(projection.totalPremiums))}</strong></div><div class="${P}__projTotalsRow"><span>פרמיה חודשית בגיל ${projection.endAge}</span><strong>₪${escapeHtml(riskSimFormatMoneyShekels(projection.lastMonthlyPremium))}${projection.growthFactor ? ` (פי ${escapeHtml(projection.growthFactor.toFixed(1))} מהשנה הראשונה)` : ""}</strong></div></div>${projection.exceedsSumInsured ? `<div class="${P}__projWarn">סך הפרמיות עד תום הביטוח גבוה מסכום הביטוח (₪${escapeHtml(formatRiskSimSumInsuredDigits(projection.sumInsured))}).</div>` : ""}<div class="${P}__projNote">הסכומים במונחי המדד הידוע היום ולפני חבילות הנחה. סכום הביטוח צמוד למדד, ולכן הסכומים שישולמו בפועל יעלו בהתאם למדד.</div></div>` : "";
       const bandHintRowHtml = st.result?.bandHint ? `<div class="${P}__bandHint"><span class="${P}__bandHintIcon" aria-hidden="true">↑</span><div class="${P}__bandHintText">בהעלאת סכום הביטוח ל-₪${escapeHtml(formatRiskSimSumInsuredDigits(st.result.bandHint.sumInsured))} התעריף עובר ללהקת "${escapeHtml(CLAL_RISK_BAND_LABEL.high)}" והפרמיה החודשית תהיה <strong>₪${escapeHtml(formatClalRiskExactAmount(st.result.bandHint.monthlyPremium))}</strong> — זול ב-${escapeHtml(st.result.bandHint.savingPct.toFixed(1))}% עבור סכום ביטוח גבוה יותר.</div></div>` : "";
-      const resultHtml = st.error ? `<div class="${P}__result ${P}__result--error">${escapeHtml(st.error)}</div>` : (st.result ? `<div class="${P}__result ${P}__result--ok"><div class="${P}__resultRow"><span>מסלול</span><strong>${escapeHtml(st.result.pdfName)}</strong></div><div class="${P}__resultRow"><span>להקת תעריף</span><strong>${escapeHtml(st.result.bandLabel)}</strong></div><div class="${P}__resultRow"><span>תעריף שנתי ל-₪1,000</span><strong>${escapeHtml(formatClalRiskRate(st.result.ratePerMille))}</strong></div><div class="${P}__resultRow"><span>סכום ביטוח</span><strong>₪${escapeHtml(formatRiskSimSumInsuredDigits(st.result.sumInsured))}</strong></div><div class="${P}__resultRow ${P}__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatClalRiskExactAmount(st.result.monthlyPremium))}</strong></div><div class="${P}__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatClalRiskExactAmount(st.result.annualPremium))}</strong></div>${bandHintRowHtml}<div class="${P}__rateNote">התעריף לפי גיל, מין, עישון ולהקת סכום הביטוח · משתנה כל שנה לפי הגיל · הפוליסה בתוקף עד גיל ${CLAL_RISK_POLICY_END_AGE} · הפרמיה לפני חבילות הנחה</div></div>` : `<div class="${P}__result ${P}__result--empty">מלאו את השדות ולחצו "חשב פרמיה"</div>`);
+      const resultHtml = st.error ? `<div class="${P}__result ${P}__result--error">${escapeHtml(st.error)}</div>` : (st.result ? `<div class="${P}__result ${P}__result--ok"><div class="${P}__resultRow"><span>מסלול</span><strong>${escapeHtml(st.result.pdfName)}</strong></div><div class="${P}__resultRow"><span>להקת תעריף</span><strong>${escapeHtml(st.result.bandLabel)}</strong></div><div class="${P}__resultRow"><span>תעריף שנתי ל-₪1,000</span><strong>${escapeHtml(formatClalRiskRate(st.result.ratePerMille))}</strong></div><div class="${P}__resultRow"><span>סכום ביטוח</span><strong>₪${escapeHtml(formatRiskSimSumInsuredDigits(st.result.sumInsured))}</strong></div><div class="${P}__resultRow ${P}__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatClalRiskExactAmount(st.result.monthlyPremium))}</strong></div><div class="${P}__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatClalRiskExactAmount(st.result.annualPremium))}</strong></div>${bandHintRowHtml}<div class="${P}__rateNote">התעריף לפי גיל, מין, עישון ולהקת סכום הביטוח · משתנה כל שנה לפי הגיל · הפוליסה בתוקף עד גיל ${CLAL_RISK_POLICY_END_AGE} · הפרמיה לפני חבילות הנחה</div>${projToggleHtml}${projectionHtml}</div>` : `<div class="${P}__result ${P}__result--empty">מלאו את השדות ולחצו "חשב פרמיה"</div>`);
       const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
       const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
       const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
@@ -10196,6 +10240,9 @@
       const occInput = modal.querySelector('[data-clalrisk-field="occupation"]');
       if(occInput){ on(occInput, "input", () => { const st = this._state[this._activeInsuredId]; if(!st) return; st.occupation = safeTrim(occInput.value); st.occupationSource = "manual"; st.dirtySinceSave = true; }); on(occInput, "change", () => this._render()); on(occInput, "blur", () => this._render()); }
       const calcBtn = modal.querySelector("[data-clalrisk-calc]"); if(calcBtn) on(calcBtn, "click", () => this._calc(this._activeInsuredId));
+      // הטבלה נשארת פתוחה בין חישובים כדי לאפשר השוואת תרחישים בלי לפתוח שוב.
+      const projBtn = modal.querySelector("[data-clalrisk-proj]");
+      if(projBtn) on(projBtn, "click", () => { const st = this._state[this._activeInsuredId]; if(!st) return; st.showProjection = !st.showProjection; this._render(); });
       const applyBtn = modal.querySelector("[data-clalrisk-apply]"); if(applyBtn) on(applyBtn, "click", () => this._apply());
       const saveBtn = modal.querySelector("[data-clalrisk-save]"); if(saveBtn) on(saveBtn, "click", () => this._saveActive());
       const finalBtn = modal.querySelector("[data-clalrisk-finalconfirm]");
