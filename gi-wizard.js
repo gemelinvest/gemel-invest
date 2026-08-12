@@ -49,6 +49,7 @@
   const isCustomerPayloadTooHeavyForSyncMetrics = host.isCustomerPayloadTooHeavyForSyncMetrics;
   const customerVisibleToCurrentUser = host.customerVisibleToCurrentUser;
   const customerOwnedByCurrentAgent = host.customerOwnedByCurrentAgent;
+  const classifyCustomerOwnershipForCurrentUser = host.classifyCustomerOwnershipForCurrentUser;
   const refreshStateShadows = host.refreshStateShadows;
   const normalizeCustomerRecord = host.normalizeCustomerRecord;
   const normalizeProposalRecord = host.normalizeProposalRecord;
@@ -1040,7 +1041,10 @@ init(){
       this.customerPurchaseMode = null;
       this._existingCustomerContinue = false;
       this._existingCustomerOfferAcceptedFor = "";
+      this._existingCustomerOfferDeclinedFor = "";
+      this._foreignCustomerAlertShownFor = "";
       this._existingCustomerOfferInFlight = false;
+      this._idOwnershipCache = {};
       this._carInsuranceClickFlow = false;
       this._elementaryReferralContinue = null;
       this._elementaryReferralAgentSetup = null;
@@ -1371,71 +1375,6 @@ init(){
       } catch(_e) {
         return false;
       }
-    },
-
-    findVisibleExistingCustomerByIdNumber(idNumber){
-      const id = normalizeIdValue(idNumber);
-      if(!id || id.length < 9) return null;
-      const candidates = [id];
-      const padded = id.length < 9 ? id.padStart(9, "0") : id;
-      if(padded !== id) candidates.push(padded);
-
-      const tryRec = (rec) => {
-        if(!rec) return null;
-        try {
-          if(typeof isServerArchivedCustomerRecord === "function" && isServerArchivedCustomerRecord(rec)) return null;
-        } catch(_e) {}
-        try {
-          if(typeof customerVisibleToCurrentUser === "function" && !customerVisibleToCurrentUser(rec)) return null;
-        } catch(_e) {}
-        return rec;
-      };
-
-      for(const candidate of candidates){
-        const matches = this.collectExistingIdMatches(candidate);
-        for(const match of matches){
-          const rec = tryRec(
-            findCustomerRecordById(match?.id)
-            || (State.data?.customers || []).find((x) => String(x?.id) === String(match?.id))
-          );
-          if(rec) return rec;
-        }
-        const local = tryRec(
-          (typeof findCustomerByIdNumber === "function" ? findCustomerByIdNumber(candidate) : null)
-        );
-        if(local) return local;
-      }
-      return null;
-    },
-
-    /** מקומי + שרת — כדי שהדיאלוג יופיע גם כשהלקוח לא בזיכרון המקומי */
-    async resolveVisibleExistingCustomerByIdNumber(idNumber){
-      const id = normalizeIdValue(idNumber);
-      if(!id || id.length < 9) return null;
-      const local = this.findVisibleExistingCustomerByIdNumber(id);
-      if(local) return local;
-
-      const padded = id.padStart(9, "0");
-      const idsToTry = padded !== id ? [id, padded] : [id];
-      if(typeof fetchCustomerRecordFromServerByIdNumber !== "function") return null;
-
-      for(const candidate of idsToTry){
-        let serverRec = null;
-        try {
-          serverRec = await fetchCustomerRecordFromServerByIdNumber(candidate);
-        } catch(_e) {
-          serverRec = null;
-        }
-        if(!serverRec) continue;
-        try {
-          if(typeof isServerArchivedCustomerRecord === "function" && isServerArchivedCustomerRecord(serverRec)) continue;
-        } catch(_e) {}
-        try {
-          if(typeof customerVisibleToCurrentUser === "function" && !customerVisibleToCurrentUser(serverRec)) continue;
-        } catch(_e) {}
-        return serverRec;
-      }
-      return null;
     },
 
     getCustomerPurchaseStepIds(){
@@ -2808,6 +2747,10 @@ init(){
       if(safeTrim(this._existingCustomerOfferAcceptedFor) === idNumber){
         return { handled:false };
       }
+      // הנציג כבר בחר לא לטעון את התיק הקיים — לא חוזרים עליו עם אותה שאלה
+      if(safeTrim(this._existingCustomerOfferDeclinedFor) === idNumber){
+        return { handled:false };
+      }
       if(safeTrim(this.lastSavedCustomerId)){
         const linked = findCustomerRecordById(this.lastSavedCustomerId);
         if(normalizeIdValue(linked?.idNumber) === idNumber){
@@ -2817,20 +2760,55 @@ init(){
       }
 
       this._existingCustomerOfferInFlight = true;
+      let owned = null;
       let rec = null;
       try {
         // סנכרון ת.ז. למודל לפני חיפוש
         if(primary?.data && normalizeIdValue(primary.data.idNumber) !== idNumber){
           primary.data.idNumber = idNumber;
         }
-        rec = await this.resolveVisibleExistingCustomerByIdNumber(idNumber);
+        owned = await this.classifyIdOwnership(idNumber);
+        const ownedCustomerId = safeTrim(owned?.customerId);
+        rec = ownedCustomerId
+          ? (findCustomerRecordById(ownedCustomerId)
+            || (State.data?.customers || []).find((x) => String(x?.id) === String(ownedCustomerId))
+            || null)
+          : null;
       } catch(_e) {
+        owned = null;
         rec = null;
       }
 
-      if(!rec){
+      if(!rec || !owned || owned.scope === "none"){
         this._existingCustomerOfferInFlight = false;
         return { handled:false };
+      }
+
+      // לקוח שמשויך לנציג אחר — חסימה מלאה, עם ציון הנציג שהלקוח שייך אליו
+      if(owned.scope === "other"){
+        this._existingCustomerOfferInFlight = false;
+        this._existingCustomerOfferAcceptedFor = "";
+        // בזמן הקלדה לא מרעננים את המסך ולא קוטעים את הפוקוס — החסימה תוצג ביציאה מהשדה
+        if(safeTrim(options?.source) === "input"){
+          try { this.markDuplicateIdFields([this.buildForeignAgentDuplicateIssue(owned, primary, 0)]); } catch(_e) {}
+          return { handled:true, blocked:true };
+        }
+        const issue = this.buildForeignAgentDuplicateIssue(owned, primary, 0);
+        this.showDuplicateIdGuard([issue]);
+        if(safeTrim(this._foreignCustomerAlertShownFor) !== idNumber && typeof showWizardHarAlertModal === "function"){
+          this._foreignCustomerAlertShownFor = idNumber;
+          const ownerName = safeTrim(owned.ownerAgentName);
+          const clientName = safeTrim(owned.fullName);
+          try {
+            await showWizardHarAlertModal({
+              title: "הלקוח משויך לנציג אחר",
+              text: `תעודת הזהות ${idNumber}${clientName ? ` (${clientName})` : ""} משויכת ל${ownerName ? `נציג ${ownerName}` : "נציג אחר במערכת"}. לא ניתן להקים עבורה הצעה. יש לפנות לנציג המשויך או למנהל.`,
+              confirmText: "הבנתי",
+              showCancel: false
+            });
+          } catch(_e) {}
+        }
+        return { handled:true, blocked:true };
       }
 
       const isSwitch = this.customerRecordHasSystemNewPolicies(rec);
@@ -2859,24 +2837,16 @@ init(){
         this._existingCustomerOfferInFlight = false;
       }
 
+      // בחר לא לטעון את התיק הקיים — לא חוסמים אותו; יוכל לתקן ת.ז. או להמשיך,
+      // ובשמירה נתחבר לתיק הקיים כדי שלא תיווצר כפילות.
       if(!confirmed){
         this._existingCustomerOfferAcceptedFor = "";
-        this.showDuplicateIdGuard([{
-          type: "duplicate-existing-record",
-          idNumber,
-          insuredId: safeTrim(primary?.id),
-          label: this.getInsuredValidationLabel?.(primary, 0) || "מבוטח ראשי",
-          match: {
-            id: rec.id,
-            fullName: name,
-            agentName: safeTrim(rec.agentName),
-            idNumber
-          },
-          message: `הלקוח כבר קיים במערכת`
-        }]);
-        return { handled:true, blocked:true };
+        this._existingCustomerOfferDeclinedFor = idNumber;
+        this.setHint("ניתן לתקן את תעודת הזהות, או להמשיך — הפרטים יעודכנו בתיק הקיים.");
+        return { handled:true, blocked:false };
       }
 
+      this._existingCustomerOfferDeclinedFor = "";
       this._existingCustomerOfferAcceptedFor = idNumber;
       // GI-FIX: אל תדרסו פרטי שלב 1 שהנציג כבר מילא באשף הנוכחי.
       // טוענים תיק/פוליסות מהלקוח הקיים, אבל ערכים לא־ריקים מהסשן גוברים.
@@ -3008,6 +2978,7 @@ init(){
       }
       this._restorePrimarySessionDataOverLoaded(preservePrimarySessionData);
       this._existingCustomerOfferAcceptedFor = normalizeIdValue(this.insureds[0]?.data?.idNumber || rec.idNumber);
+      this._existingCustomerOfferDeclinedFor = "";
       this.step = 1;
       this.open();
       this.setHint(`לקוח קיים נטען: ${safeTrim(rec.fullName) || "לקוח"} — ניתן להמשיך באשף, לעדכן הר־ביטוח ולהוסיף פוליסות חדשות.`);
@@ -3139,6 +3110,7 @@ init(){
       }
       this._restorePrimarySessionDataOverLoaded(preservePrimarySessionData);
       this._existingCustomerOfferAcceptedFor = normalizeIdValue(this.insureds[0]?.data?.idNumber || rec.idNumber);
+      this._existingCustomerOfferDeclinedFor = "";
       this.step = 5;
       this.open();
       if(purchaseMode === "switch"){
@@ -3725,7 +3697,7 @@ init(){
         const offer = await this.maybeOfferExistingCustomerOnId({ source: "next" });
         if(offer?.blocked || offer?.loaded) return;
       }
-      if(Number(this.step) === 1 && !this.isCustomerPurchaseMode() && this.blockIfAgentDuplicateId()) return;
+      if(Number(this.step) === 1 && !this.isCustomerPurchaseMode() && await this.blockIfAgentDuplicateIdAsync()) return;
       if(this.step === 3 && !this.isElementaryFlow()){
         const missingHarInsureds = this.getStep3HarUploadMissingInsureds();
         if(missingHarInsureds.length){
@@ -3997,10 +3969,139 @@ init(){
       return matches;
     },
 
+    /**
+     * מטמון סיווג בעלות לפי ת״ז לאורך סשן האשף.
+     * נדרש כי בדיקות החסימה עצמן סינכרוניות, בעוד שהסיווג דורש גם שליפה מהשרת.
+     */
+    getIdOwnershipCache(){
+      if(!this._idOwnershipCache || typeof this._idOwnershipCache !== "object") this._idOwnershipCache = {};
+      return this._idOwnershipCache;
+    },
+
+    getCachedIdOwnership(idNumber){
+      const id = normalizeIdValue(idNumber);
+      if(!id || id.length < 9) return null;
+      return this.getIdOwnershipCache()[id] || null;
+    },
+
+    /** איתור תיק לפי ת״ז בלי סינון הרשאות — נדרש כדי לזהות לקוח שמשויך לנציג אחר */
+    async resolveAnyExistingCustomerByIdNumber(idNumber){
+      const id = normalizeIdValue(idNumber);
+      if(!id || id.length < 9) return null;
+      const padded = id.padStart(9, "0");
+      const idsToTry = padded !== id ? [id, padded] : [id];
+      const usable = (rec) => {
+        if(!rec) return null;
+        try {
+          if(typeof isServerArchivedCustomerRecord === "function" && isServerArchivedCustomerRecord(rec)) return null;
+        } catch(_e) {}
+        return rec;
+      };
+      for(const candidate of idsToTry){
+        for(const match of this.collectExistingIdMatches(candidate)){
+          const rec = usable(
+            findCustomerRecordById(match?.id)
+            || (State.data?.customers || []).find((x) => String(x?.id) === String(match?.id))
+          );
+          if(rec) return rec;
+        }
+        const local = usable(typeof findCustomerByIdNumber === "function" ? findCustomerByIdNumber(candidate) : null);
+        if(local) return local;
+      }
+      if(typeof fetchCustomerRecordFromServerByIdNumber !== "function") return null;
+      for(const candidate of idsToTry){
+        let serverRec = null;
+        try {
+          serverRec = await fetchCustomerRecordFromServerByIdNumber(candidate);
+        } catch(_e) {
+          serverRec = null;
+        }
+        const rec = usable(serverRec);
+        if(rec) return rec;
+      }
+      return null;
+    },
+
+    /**
+     * סיווג ת״ז מול המערכת: none / mine / unassigned / other.
+     * רק "other" (לקוח של נציג אחר) חוסם הקמה באשף בריאות וסיכונים.
+     */
+    async classifyIdOwnership(idNumber, options = {}){
+      const id = normalizeIdValue(idNumber);
+      if(!id || id.length < 9) return null;
+      const cache = this.getIdOwnershipCache();
+      if(cache[id] && !options.force) return cache[id];
+      const rec = await this.resolveAnyExistingCustomerByIdNumber(id);
+      if(!rec){
+        cache[id] = { scope:"none", idNumber:id, customerId:"", fullName:"", ownerAgentId:"", ownerAgentName:"" };
+        return cache[id];
+      }
+      let info = null;
+      try {
+        info = typeof classifyCustomerOwnershipForCurrentUser === "function"
+          ? classifyCustomerOwnershipForCurrentUser(rec)
+          : null;
+      } catch(_e) {
+        info = null;
+      }
+      cache[id] = {
+        scope: safeTrim(info?.scope) || "unassigned",
+        idNumber: id,
+        customerId: safeTrim(rec.id),
+        fullName: safeTrim(rec.fullName),
+        ownerAgentId: safeTrim(info?.ownerAgentId),
+        ownerAgentName: safeTrim(info?.ownerAgentName)
+      };
+      return cache[id];
+    },
+
+    /** ממלא את מטמון הסיווג לכל המבוטחים בהצעה (נקודות שאפשר להמתין בהן) */
+    async ensureWizardIdOwnershipClassified(){
+      if(!this.isOwnershipBasedDuplicateGuardFlow()) return;
+      const ids = [...new Set((Array.isArray(this.insureds) ? this.insureds : [])
+        .map((ins) => normalizeIdValue(ins?.data?.idNumber))
+        .filter((id) => id && id.length >= 9))];
+      for(const id of ids){
+        if(!this.getCachedIdOwnership(id)) await this.classifyIdOwnership(id);
+      }
+    },
+
+    /**
+     * אשף בריאות וסיכונים עובד לפי בעלות (חסימה רק ללקוח של נציג אחר).
+     * זרימת אלמנטרי נשארת עם חסימת כפילות ת״ז מלאה כפי שהייתה.
+     */
+    isOwnershipBasedDuplicateGuardFlow(){
+      return !this.isElementaryFlow();
+    },
+
+    buildForeignAgentDuplicateIssue(owned, ins, idx = 0){
+      const label = this.getInsuredValidationLabel
+        ? this.getInsuredValidationLabel(ins, idx)
+        : (safeTrim(ins?.label) || `מבוטח ${idx + 1}`);
+      const ownerName = safeTrim(owned?.ownerAgentName);
+      return {
+        type: "foreign-agent-customer",
+        idNumber: normalizeIdValue(owned?.idNumber),
+        insuredId: safeTrim(ins?.id),
+        label,
+        match: {
+          id: safeTrim(owned?.customerId),
+          fullName: safeTrim(owned?.fullName),
+          agentName: ownerName,
+          idNumber: normalizeIdValue(owned?.idNumber)
+        },
+        message: ownerName
+          ? `${label}: הלקוח משויך לנציג ${ownerName}`
+          : `${label}: הלקוח משויך לנציג אחר במערכת`
+      };
+    },
+
     collectWizardDuplicateIdIssues(options = {}){
       if(!this.isAgentDuplicateIdGuardEnabled()) return [];
       if(this.isCustomerPurchaseMode()) return [];
       const guardOpts = this.getWizardDuplicateIdGuardOptions(options);
+      const ownershipBased = this.isOwnershipBasedDuplicateGuardFlow();
+      const excludeCustomerId = safeTrim(guardOpts.excludeCustomerId);
       const issues = [];
       const seenInDraft = new Map();
       const insureds = Array.isArray(this.insureds) ? this.insureds : [];
@@ -4019,6 +4120,14 @@ init(){
           return;
         }
         seenInDraft.set(id, label);
+        if(ownershipBased){
+          // לקוח קיים שהוא של הנציג / בלי שיוך — ממשיכים באשף ומעדכנים את התיק הקיים.
+          const owned = this.getCachedIdOwnership(id);
+          if(!owned || owned.scope !== "other") return;
+          if(excludeCustomerId && safeTrim(owned.customerId) === excludeCustomerId) return;
+          issues.push(this.buildForeignAgentDuplicateIssue(owned, ins, idx));
+          return;
+        }
         const matches = this.collectExistingIdMatches(id, guardOpts);
         if(matches.length){
           const first = matches[0];
@@ -4036,16 +4145,43 @@ init(){
       return issues;
     },
 
+    buildDuplicateIdGuardText(issues = []){
+      const cleanIssues = Array.isArray(issues) ? issues.filter(Boolean) : [];
+      const foreign = cleanIssues.find((x) => safeTrim(x?.type) === "foreign-agent-customer");
+      if(foreign){
+        const matchName = safeTrim(foreign?.match?.fullName);
+        const matchAgent = safeTrim(foreign?.match?.agentName);
+        const ownerHint = matchAgent
+          ? `הלקוח משויך לנציג: ${matchAgent}.`
+          : "הלקוח משויך לנציג אחר במערכת.";
+        const existingHint = matchName ? `לקוח קיים: ${matchName}.` : "";
+        return {
+          title: "הלקוח משויך לנציג אחר",
+          text: `לא ניתן להקים הצעה לתעודת זהות זו. ${existingHint} ${ownerHint} יש לפנות לנציג המשויך או למנהל.`.replace(/\s+/g, ' ').trim()
+        };
+      }
+      if(cleanIssues.some((x) => safeTrim(x?.type) === "duplicate-in-current-draft")){
+        return {
+          title: "תעודת זהות כפולה בהצעה",
+          text: "אותה תעודת זהות מופיעה יותר מפעם אחת בהצעה הנוכחית. יש לתקן לפני המשך."
+        };
+      }
+      const first = cleanIssues[0] || {};
+      const matchName = safeTrim(first?.match?.fullName);
+      const matchAgent = safeTrim(first?.match?.agentName);
+      const ownerHint = matchAgent ? `הלקוח קיים במערכת ושייך לנציג: ${matchAgent}.` : "הלקוח קיים במערכת.";
+      const existingHint = matchName ? `לקוח קיים: ${matchName}.` : "";
+      return {
+        title: "הלקוח כבר קיים במערכת",
+        text: `לא ניתן להקים לקוח כפול לפי אותה תעודת זהות. ${existingHint} ${ownerHint} יש לפתוח את התיק הקיים ולא ליצור רשומה חדשה.`.replace(/\s+/g, ' ').trim()
+      };
+    },
+
     showDuplicateIdGuard(issues = []){
       const cleanIssues = Array.isArray(issues) ? issues.filter(Boolean) : [];
       const first = cleanIssues[0] || {};
-      const title = "הלקוח כבר קיים במערכת";
-      const match = first?.match || {};
-      const matchName = safeTrim(match?.fullName);
-      const matchAgent = safeTrim(match?.agentName);
-      const ownerHint = matchAgent ? `הלקוח קיים במערכת ושייך לנציג: ${matchAgent}.` : "הלקוח קיים במערכת.";
-      const existingHint = matchName ? `לקוח קיים: ${matchName}.` : "";
-      const text = `לא ניתן להקים לקוח כפול לפי אותה תעודת זהות. ${existingHint} ${ownerHint} יש לפתוח את התיק הקיים ולא ליצור רשומה חדשה.`.replace(/\s+/g, ' ').trim();
+      const { title, text } = this.buildDuplicateIdGuardText(cleanIssues);
+      this._lastDuplicateGuardText = text;
       this.setHint(text);
       try {
         window.showToast?.({
@@ -4072,7 +4208,23 @@ init(){
 
     markDuplicateIdFields(issues = []){
       if(!this.els?.body) return;
-      const ids = new Set((Array.isArray(issues) ? issues : []).map((x) => normalizeIdValue(x?.idNumber)).filter(Boolean));
+      const messageById = new Map();
+      (Array.isArray(issues) ? issues : []).forEach((issue) => {
+        const id = normalizeIdValue(issue?.idNumber);
+        if(!id || messageById.has(id)) return;
+        if(safeTrim(issue?.type) === "duplicate-in-current-draft"){
+          messageById.set(id, 'תעודת הזהות כבר מופיעה בהצעה הנוכחית');
+          return;
+        }
+        if(safeTrim(issue?.type) === "foreign-agent-customer"){
+          const agentName = safeTrim(issue?.match?.agentName);
+          messageById.set(id, agentName
+            ? `הלקוח משויך לנציג ${agentName} — לא ניתן להקים עבורו הצעה`
+            : 'הלקוח משויך לנציג אחר — לא ניתן להקים עבורו הצעה');
+          return;
+        }
+        messageById.set(id, 'הלקוח כבר קיים במערכת — לא ניתן להקים כפילות');
+      });
       this.els.body.querySelectorAll('[data-bind="idNumber"]').forEach((el) => {
         const id = normalizeIdValue(el.value);
         const field = el.closest('.field');
@@ -4083,11 +4235,16 @@ init(){
           errorEl.className = 'fieldError';
           field.appendChild(errorEl);
         }
-        if(ids.has(id)){
+        if(messageById.has(id)){
           field.classList.add('is-invalid','lcDuplicateIdBlocked');
-          errorEl.textContent = 'הלקוח כבר קיים במערכת — לא ניתן להקים כפילות';
+          errorEl.textContent = messageById.get(id);
           errorEl.style.display = 'block';
           el.setAttribute('aria-invalid','true');
+        } else if(field.classList.contains('lcDuplicateIdBlocked')){
+          field.classList.remove('is-invalid','lcDuplicateIdBlocked');
+          errorEl.textContent = '';
+          errorEl.style.display = 'none';
+          el.removeAttribute('aria-invalid');
         }
       });
     },
@@ -4097,6 +4254,15 @@ init(){
       if(!issues.length) return false;
       this.showDuplicateIdGuard(issues);
       return true;
+    },
+
+    /** סיווג בעלות מלא (כולל שליפה מהשרת) ורק אז חסימה — לנקודות אסינכרוניות */
+    async blockIfAgentDuplicateIdAsync(options = {}){
+      if(this.isCustomerPurchaseMode()) return false;
+      if(this.isAgentDuplicateIdGuardEnabled()){
+        try { await this.ensureWizardIdOwnershipClassified(); } catch(_e) {}
+      }
+      return this.blockIfAgentDuplicateId(options);
     },
 
     syncOperationalGuideState(){
@@ -4493,7 +4659,11 @@ init(){
           if(this.isElementaryFlow()) return false;
           try{
             const idNumber = normalizeIdValue(ins?.data?.idNumber || el.value);
-            if(idNumber && idNumber.length >= 9 && safeTrim(this._existingCustomerOfferAcceptedFor) !== idNumber){
+            // סימון קודם נמחק ונקבע מחדש לפי המצב העדכני של הת״ז
+            this.markDuplicateIdFields([]);
+            if(idNumber && idNumber.length >= 9
+              && safeTrim(this._existingCustomerOfferAcceptedFor) !== idNumber
+              && safeTrim(this._existingCustomerOfferDeclinedFor) !== idNumber){
               // דיאלוג המשך/שיחלוף — async; לא חוסם את setVal
               void this.maybeOfferExistingCustomerOnId({ source: notify ? "blur" : "input" });
               return false;
@@ -4502,12 +4672,10 @@ init(){
             const issues = this.collectWizardDuplicateIdIssues();
             if(issues.length){
               this.markDuplicateIdFields(issues);
-              const firstIssue = issues[0] || {};
-              const owner = safeTrim(firstIssue?.match?.agentName);
-              const ownerHint = owner ? ` · הלקוח קיים במערכת ושייך לנציג: ${owner}` : '';
-              this.setHint(`הלקוח כבר קיים במערכת${ownerHint} — לא ניתן להקים כפילות לפי תעודת זהות`);
+              const { title, text } = this.buildDuplicateIdGuardText(issues);
+              this.setHint(text);
               if(notify){
-                try { window.showToast?.({ title:'הלקוח כבר קיים במערכת', text:`לא ניתן להמשיך בהקמה כפולה לפי תעודת זהות${ownerHint}. יש לפתוח את התיק הקיים.`, singletonKey:'agent-duplicate-id-live', variant:'warn', durationMs:5200 }); } catch(_e) {}
+                try { window.showToast?.({ title, text, singletonKey:'agent-duplicate-id-live', variant:'warn', durationMs:5200 }); } catch(_e) {}
               }
               return true;
             }
@@ -4542,6 +4710,12 @@ init(){
             const nextId = normalizeIdValue(v);
             if(nextId !== safeTrim(this._existingCustomerOfferAcceptedFor)){
               this._existingCustomerOfferAcceptedFor = "";
+            }
+            if(nextId !== safeTrim(this._existingCustomerOfferDeclinedFor)){
+              this._existingCustomerOfferDeclinedFor = "";
+            }
+            if(nextId !== safeTrim(this._foreignCustomerAlertShownFor)){
+              this._foreignCustomerAlertShownFor = "";
             }
           }
           if(path === "idNumber" && this.isAgentDuplicateIdGuardEnabled && this.isAgentDuplicateIdGuardEnabled()){
@@ -22526,8 +22700,8 @@ if(path === "birthDate"){
       }
       try{
       const payload = this.getDraftPayload();
-      if(!this.isCustomerPurchaseMode() && this.blockIfAgentDuplicateId()){
-        SaveStatusUI.error('לא ניתן לשמור את ההצעה', 'הלקוח כבר קיים במערכת. לא ניתן לנציג לשמור כפילות לפי תעודת זהות.');
+      if(!this.isCustomerPurchaseMode() && await this.blockIfAgentDuplicateIdAsync()){
+        SaveStatusUI.error('לא ניתן לשמור את ההצעה', this._lastDuplicateGuardText || 'הלקוח משויך לנציג אחר. לא ניתן לשמור עבורו הצעה.');
         return;
       }
       const proposalIssues = this.getPremiumValidationIssues(payload);
@@ -26370,10 +26544,12 @@ if(path === "birthDate"){
         if(offer?.blocked) return;
         if(offer?.loaded) return;
       }
-      if(!this.isCustomerPurchaseMode() && this.blockIfAgentDuplicateId(duplicateGuardOpts)){
-        SaveStatusUI.error('לא ניתן לשמור את הלקוח', 'הלקוח כבר קיים במערכת. לא ניתן לנציג להקים לקוח כפול לפי תעודת זהות.');
+      if(!this.isCustomerPurchaseMode() && await this.blockIfAgentDuplicateIdAsync(duplicateGuardOpts)){
+        SaveStatusUI.error('לא ניתן לשמור את הלקוח', this._lastDuplicateGuardText || 'הלקוח משויך לנציג אחר. לא ניתן להקים עבורו לקוח.');
         return;
       }
+      // מניעת כפילות בלי לחסום: אם הת״ז מזוהה לתיק קיים של הנציג — השמירה תעדכן אותו
+      try { await this.ensureExistingCustomerLinkBeforeSave(); } catch(_e) {}
       let gateValidation = null;
       if(this.isElementaryFlow()){
         const steps = this.getCurrentSteps();
@@ -26645,6 +26821,26 @@ if(path === "birthDate"){
       }
     },
 
+    /**
+     * מקשר את האשף לתיק לקוח קיים של הנציג לפי ת״ז לפני השמירה הסופית.
+     * כך גם נציג שדילג על דיאלוג ההמשך מעדכן את התיק הקיים במקום ליצור כפילות.
+     */
+    async ensureExistingCustomerLinkBeforeSave(){
+      if(this.isCustomerPurchaseMode()) return;
+      if(this.isElementaryFlow()) return;
+      if(safeTrim(this.lastSavedCustomerId)) return;
+      const idNumber = normalizeIdValue(this.insureds?.[0]?.data?.idNumber);
+      if(!idNumber || idNumber.length < 9) return;
+      const owned = await this.classifyIdOwnership(idNumber);
+      if(!owned || (owned.scope !== "mine" && owned.scope !== "unassigned")) return;
+      const customerId = safeTrim(owned.customerId);
+      if(!customerId) return;
+      const loaded = await this.ensureCustomerRecordPayloadLoaded(customerId);
+      if(!loaded?.ok || !loaded.rec) return;
+      this.lastSavedCustomerId = customerId;
+      this._existingCustomerContinue = true;
+    },
+
     async saveCompletedCustomer(){
       let payload = this.enrichWizardPayloadForCustomerSave(this.getOperationalPayload());
       const primary = payload?.primary || {};
@@ -26715,7 +26911,12 @@ if(path === "birthDate"){
         newPoliciesCount: (payload.newPolicies || []).length,
         payload
       });
-      stampRecordAgentOwnership(record);
+      // המשך תיק של נציג אחר (מנהל צוות על נציג בצוותו) — לא מעבירים בעלות בשמירה
+      const existingOwnerAgentId = safeTrim(existingCustomer?.agentId) || safeTrim(existingCustomer?.payload?.agentId);
+      const sessionAgentId = safeTrim(Auth?.current?.id) || safeTrim(findAgentRecordForSession()?.id);
+      const preserveExistingOwner = !!(existingOwnerAgentId && sessionAgentId
+        && String(existingOwnerAgentId) !== String(sessionAgentId));
+      stampRecordAgentOwnership(record, preserveExistingOwner ? { preserveExistingOwner: true } : {});
       if(!this.isElementaryFlow()){
         try { stampHealthRisksWaitingMirror(record); } catch(_e){}
       }
