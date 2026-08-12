@@ -3480,7 +3480,9 @@
       || safeTrim(record.createdBy) || safeTrim(record.payload.createdBy);
 
     // Admin/manager/ops editing an existing record — preserve the owning agent.
-    if(!options.force && Auth?.canViewAllCustomers?.() && (existingId || existingName)){
+    // preserveExistingOwner: also used when a team manager continues a record of an agent in his team.
+    const preserveOwner = !options.force && (options.preserveExistingOwner === true || Auth?.canViewAllCustomers?.());
+    if(preserveOwner && (existingId || existingName)){
       if(existingId){
         record.agentId = existingId;
         record.payload.agentId = existingId;
@@ -4306,6 +4308,25 @@
     }
     if(Auth.isTeamManager()) return customerVisibleToTeamManager(rec);
     return customerOwnedByCurrentAgent(rec);
+  }
+
+  /**
+   * סיווג בעלות על תיק לקוח מול המשתמש המחובר — הבסיס לחסימת הקמה כפולה באשף.
+   * "mine"       — התיק בהרשאת המשתמש (שלו, של נציג בצוות שהוא מנהל, או הרשאת צפייה מלאה)
+   * "unassigned" — לא נמצא על התיק שיוך נציג כלשהו
+   * "other"      — התיק שייך לנציג אחר; ownerAgentName הוא השם להצגה
+   */
+  function classifyCustomerOwnershipForCurrentUser(rec){
+    const unassigned = { scope:"unassigned", ownerAgentId:"", ownerAgentName:"" };
+    if(!rec || !Auth?.current) return unassigned;
+    const ownerAgentId = safeTrim(rec?.agentId) || safeTrim(rec?.payload?.agentId);
+    const nameCandidates = recordAgentNameCandidates(rec);
+    const agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
+    const agentById = ownerAgentId ? agents.find((a) => safeTrim(a?.id) === String(ownerAgentId)) : null;
+    const ownerAgentName = safeTrim(agentById?.name) || safeTrim(nameCandidates[0]);
+    if(customerVisibleToCurrentUser(rec)) return { scope:"mine", ownerAgentId, ownerAgentName };
+    if(!ownerAgentId && !ownerAgentName && !recordAgentKeyCandidates(rec).length) return unassigned;
+    return { scope:"other", ownerAgentId, ownerAgentName };
   }
 
   function filterSessionStateForCurrentUserScope(state){
@@ -11644,6 +11665,10 @@
       } catch(_e) {
         rec.payload = payload;
       }
+      // אותה סיבה כמו ב-hydratePayloads: השלמת payload בלי שינוי updatedAt.
+      if(key === "customers"){
+        try { CustomersUI.invalidatePolicyCollectCache?.(safeId); } catch(_e) {}
+      }
       return { ok:true, record: rec };
     },
 
@@ -11801,6 +11826,7 @@
               const id = safeTrim(current[i]?.id);
               if(id && !indexById.has(id)) indexById.set(id, i);
             }
+            const hydratedIds = [];
             byId.forEach((payload, id) => {
               if(!payload || typeof payload !== "object") return;
               const idx = indexById.get(id);
@@ -11812,8 +11838,14 @@
               } catch(_e) {
                 rec.payload = payload;
               }
+              hydratedIds.push(id);
               filled += 1;
             });
+            /* GI-FIX 2026-08-12 — מילוי payload לא משנה updatedAt, ולכן כל מטמון
+               שנבנה על השורה הרזה חייב להתבטל כאן, אחרת הדשבורד ממשיך לחשב עליה כריקה. */
+            if(spec.key === "customers" && hydratedIds.length){
+              try { CustomersUI.invalidatePolicyCollectCache?.(hydratedIds); } catch(_e) {}
+            }
             if(onBatch){ try { onBatch(filled, failed); } catch(_e) {} }
             await this.sleep(0);
           }
@@ -17755,7 +17787,12 @@ UsersGateUI.init();
     },
 
     collectPolicies(rec){
-      const cacheKey = `${safeTrim(rec?.id)}|${safeTrim(rec?.updatedAt)}`;
+      /* GI-FIX 2026-08-12 — מפתח המטמון היה id|updatedAt בלבד. בטעינה רזה הרשומה
+         מגיעה בלי payload, מילוי הרקע מוסיף אותו בלי לשנות את updatedAt, ולכן
+         תוצאה ריקה שנשמרה לפני המילוי המשיכה לחזור. פוליסות שנמכרו ללקוח קיים
+         נעלמו כך מהפרמיה נטו וממכירות היום. */
+      const hasPayloadContent = Storage.payloadHasPolicyOrInsuredContent(rec?.payload);
+      const cacheKey = `${safeTrim(rec?.id)}|${safeTrim(rec?.updatedAt)}|${hasPayloadContent ? "1" : "0"}`;
       if(!this._policyCollectCache) this._policyCollectCache = new Map();
       if(this._policyCollectCache.has(cacheKey)) return this._policyCollectCache.get(cacheKey);
       const payload = rec?.payload || {};
@@ -17945,10 +17982,12 @@ UsersGateUI.init();
           });
         }
       });
-      return this._rememberPolicyCollectCache(cacheKey, policies);
+      return this._rememberPolicyCollectCache(cacheKey, policies, hasPayloadContent);
     },
 
-    _rememberPolicyCollectCache(cacheKey, policies){
+    /** שורה רזה (בלי payload) לא נכנסת למטמון — התוצאה שלה זמנית ומטעה. */
+    _rememberPolicyCollectCache(cacheKey, policies, cacheable = true){
+      if(!cacheable) return policies;
       if(!this._policyCollectCache) this._policyCollectCache = new Map();
       if(this._policyCollectCache.size > 600) this._policyCollectCache.clear();
       this._policyCollectCache.set(cacheKey, policies);
@@ -30724,6 +30763,7 @@ UsersGateUI.init();
           isCustomerPayloadTooHeavyForSyncMetrics,
           customerVisibleToCurrentUser,
           customerOwnedByCurrentAgent,
+          classifyCustomerOwnershipForCurrentUser,
           refreshStateShadows,
           normalizeCustomerRecord,
           normalizeProposalRecord,
