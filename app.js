@@ -30364,6 +30364,11 @@ UsersGateUI.init();
     _escHandler: null,
     _selectedCompany: "",
     _selectedProduct: "",
+    /* GI-SIM-CENTER-DETAILS 2026-08-12 — הבורר עובד בשני שלבים: קודם פרטי מבוטח
+       ("details"), ורק אחריהם בחירת חברה ומוצר ("picker"). */
+    _step: "details",
+    _details: null,
+    _touched: null,
 
     syncVisibility(){
       const btn = this.els.btn || document.getElementById("btnSimulatorsCenter");
@@ -30421,6 +30426,32 @@ UsersGateUI.init();
       return this._catalogItems().filter((it) => safeTrim(it?.company) === c);
     },
 
+    /* GI-SIM-CENTER-DETAILS 2026-08-12 — הפרטים נאספים פעם אחת ומוזרמים לסימולטור
+       דרך insureds[0].data + ctx.insuranceStartDate. כל הסימולטורים כבר יודעים
+       למלא את עצמם מהמבנה הזה ב-_prefillFromInsured, ולכן אין צורך לגעת באף
+       סימולטור בנפרד. מקצוע הוא רשות — רק סימולטורי ריסק משתמשים בו. */
+    _blankDetails(){
+      return { birthDate: "", gender: "", smoker: "", insuranceStartDate: "", occupation: "" };
+    },
+
+    _detailsErrors(){
+      const d = this._details || this._blankDetails();
+      const errs = {};
+      const bd = safeTrim(d.birthDate);
+      if(!bd) errs.birthDate = "נא להזין תאריך לידה.";
+      else if(!parseBirthDateValue(bd)) errs.birthDate = "תאריך לידה לא תקין (dd/mm/yyyy).";
+      const sd = safeTrim(d.insuranceStartDate);
+      if(!sd) errs.insuranceStartDate = "נא להזין תאריך תחילת ביטוח.";
+      else if(!parseAnyDmyDate(sd)) errs.insuranceStartDate = "תאריך תחילת ביטוח לא תקין (dd/mm/yyyy).";
+      if(d.gender !== "זכר" && d.gender !== "נקבה") errs.gender = "נא לבחור מין.";
+      if(d.smoker !== "yes" && d.smoker !== "no") errs.smoker = "נא לבחור מעשן / לא מעשן.";
+      return errs;
+    },
+
+    _detailsReady(){
+      return Object.keys(this._detailsErrors()).length === 0;
+    },
+
     async open(){
       if(!Auth.canAccessSimulators?.()){
         try{
@@ -30440,6 +30471,9 @@ UsersGateUI.init();
       this.close();
       this._selectedCompany = "";
       this._selectedProduct = "";
+      this._step = "details";
+      this._details = this._blankDetails();
+      this._touched = {};
       const modal = document.createElement("div");
       modal.id = "lcSimCenterModal";
       modal.className = "giValModal lcSimCenterModal";
@@ -30449,19 +30483,231 @@ UsersGateUI.init();
       document.body.appendChild(modal);
       this._modal = modal;
       this._escHandler = (ev) => {
-        if(ev.key === "Escape") this.close();
+        if(ev.key !== "Escape") return;
+        /* כשבורר התאריכים פתוח — Escape סוגר רק אותו, כדי לא לאבד את הפרטים
+           שכבר הוקלדו במסך. */
+        const dp = document.getElementById("lcDatePickerPopup");
+        if(dp && dp.style.display && dp.style.display !== "none") return;
+        this.close();
       };
       document.addEventListener("keydown", this._escHandler);
       this._paint();
       requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
     },
 
+    _headHtml(sub){
+      return `
+          <div class="giValModal__head lcSimCenterModal__head">
+            <button type="button" class="lcSimCenterModal__closeX" data-simc-close="1" aria-label="סגירה">✕</button>
+            <img class="lcSimCenterModal__brandLogo" src="./logo-login-clean.png?v=20260810-sim-fix-v2" alt="GEMEL INVEST" width="1808" height="373" decoding="async" />
+            <div class="giValModal__headText">
+              <div class="giValModal__title lcSimCenterModal__title">מרכז הסימולטורים</div>
+              <div class="giValModal__sub lcSimCenterModal__sub">${escapeHtml(sub)}</div>
+            </div>
+          </div>`;
+    },
+
     _paint(){
+      const modal = this._modal;
+      if(!modal) return;
+      const companies = this._uniqueCompanies();
+      if(!companies.length){
+        modal.innerHTML = `
+        <div class="giValModal__backdrop" data-simc-close="1"></div>
+        <div class="giValModal__card lcSimCenterModal__card">
+          ${this._headHtml("לא נמצאו סימולטורים רשומים")}
+          <div class="giValModal__body lcSimCenterModal__body">
+            <div class="lcSimCenterEmpty">לא נמצאו חברות עם סימולטורים רשומים.</div>
+          </div>
+          <div class="giValModal__foot lcSimCenterModal__foot">
+            <button type="button" class="btn giValModal__closeBtn lcSimCenterModal__cancel" data-simc-close="1">סגירה</button>
+          </div>
+        </div>`;
+        $$("[data-simc-close]", modal).forEach((el) => on(el, "click", () => this.close()));
+        return;
+      }
+      if(this._step === "picker") this._paintPicker(companies);
+      else this._paintDetails();
+    },
+
+    /* שלב 1 — פרטי המבוטח. נאספים לפני בחירת חברה/מוצר כדי שכל סימולטור שייפתח
+       אחר כך יגיע מלא מראש. */
+    _paintDetails(){
+      const modal = this._modal;
+      if(!modal) return;
+      if(!this._details) this._details = this._blankDetails();
+      if(!this._touched) this._touched = {};
+      const d = this._details;
+
+      const seg = (key, val, label) => {
+        const active = d[key] === val;
+        return `<button type="button" class="lcSimCenterSeg__btn${active ? " is-active" : ""}" data-simc-seg="${escapeHtml(key)}" data-simc-val="${escapeHtml(val)}" aria-pressed="${active ? "true" : "false"}">${escapeHtml(label)}</button>`;
+      };
+
+      modal.innerHTML = `
+        <div class="giValModal__backdrop" data-simc-close="1"></div>
+        <div class="giValModal__card lcSimCenterModal__card">
+          ${this._headHtml("הזינו את פרטי המבוטח — לאחר מכן תיפתח בחירת החברה והמוצר")}
+          <div class="giValModal__body lcSimCenterModal__body">
+            <form class="lcSimCenterForm lcSimCenterForm--details" data-simc-details-form="1" novalidate>
+              <div class="lcSimCenterField">
+                <label class="lcSimCenterField__label" for="lcSimCenterBirthDate">תאריך לידה</label>
+                <input id="lcSimCenterBirthDate" class="lcSimCenterField__input" type="text" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" maxlength="10" data-simc-field="birthDate" data-datefmt="dmy" value="${escapeHtml(d.birthDate)}" />
+                <div class="lcSimCenterField__err" data-simc-err="birthDate" style="display:none"></div>
+              </div>
+              <div class="lcSimCenterField">
+                <label class="lcSimCenterField__label" for="lcSimCenterStartDate">תאריך תחילת ביטוח</label>
+                <input id="lcSimCenterStartDate" class="lcSimCenterField__input" type="text" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" maxlength="10" data-simc-field="insuranceStartDate" data-datefmt="dmy" value="${escapeHtml(d.insuranceStartDate)}" />
+                <div class="lcSimCenterField__err" data-simc-err="insuranceStartDate" style="display:none"></div>
+              </div>
+              <div class="lcSimCenterField">
+                <span class="lcSimCenterField__label">מין</span>
+                <div class="lcSimCenterSeg" role="group" aria-label="מין">
+                  ${seg("gender", "זכר", "זכר")}
+                  ${seg("gender", "נקבה", "נקבה")}
+                </div>
+                <div class="lcSimCenterField__err" data-simc-err="gender" style="display:none"></div>
+              </div>
+              <div class="lcSimCenterField">
+                <span class="lcSimCenterField__label">עישון</span>
+                <div class="lcSimCenterSeg" role="group" aria-label="עישון">
+                  ${seg("smoker", "no", "לא מעשן")}
+                  ${seg("smoker", "yes", "מעשן")}
+                </div>
+                <div class="lcSimCenterField__err" data-simc-err="smoker" style="display:none"></div>
+              </div>
+              <div class="lcSimCenterField lcSimCenterField--wide">
+                <label class="lcSimCenterField__label" for="lcSimCenterOccupation">מקצוע <span class="lcSimCenterField__opt">(רשות)</span></label>
+                <input id="lcSimCenterOccupation" class="lcSimCenterField__input" type="text" autocomplete="off" placeholder="לדוגמה: מהנדס תוכנה" maxlength="60" data-simc-field="occupation" value="${escapeHtml(d.occupation)}" />
+              </div>
+            </form>
+          </div>
+          <div class="giValModal__foot lcSimCenterModal__foot">
+            <button type="button" class="btn giValModal__closeBtn lcSimCenterModal__cancel" data-simc-close="1">ביטול</button>
+            <button type="button" class="btn btn--primary lcSimCenterModal__open" data-simc-next="1"${this._detailsReady() ? "" : " disabled"}>המשך לבחירת חברה ומוצר</button>
+          </div>
+        </div>`;
+
+      $$("[data-simc-close]", modal).forEach((el) => on(el, "click", () => this.close()));
+      this._bindDetails();
+      this._syncDetailsUi();
+    },
+
+    _bindDetails(){
+      const modal = this._modal;
+      if(!modal) return;
+      if(!this._details) this._details = this._blankDetails();
+      if(!this._touched) this._touched = {};
+      const d = this._details;
+
+      $$("[data-simc-field]", modal).forEach((el) => {
+        const key = el.getAttribute("data-simc-field");
+        if(!key) return;
+        const isDate = el.getAttribute("data-datefmt") === "dmy";
+        const read = () => {
+          if(isDate) applyDmyAutoFormat(el);
+          d[key] = el.value;
+        };
+        on(el, "input", () => { read(); this._syncDetailsUi(); });
+        on(el, "change", () => { read(); this._touched[key] = true; this._syncDetailsUi(); });
+        on(el, "blur", () => { this._touched[key] = true; this._syncDetailsUi(); });
+      });
+
+      $$("[data-simc-seg]", modal).forEach((btn) => {
+        on(btn, "click", () => {
+          const key = btn.getAttribute("data-simc-seg");
+          const val = btn.getAttribute("data-simc-val");
+          if(!key) return;
+          d[key] = val;
+          this._touched[key] = true;
+          $$(`[data-simc-seg="${key}"]`, modal).forEach((b) => {
+            const active = b === btn;
+            b.classList.toggle("is-active", active);
+            b.setAttribute("aria-pressed", active ? "true" : "false");
+          });
+          this._syncDetailsUi();
+        });
+      });
+
+      try { ElementaryDatePicker.attachToContainer(modal); } catch(_e) {}
+
+      const form = modal.querySelector("[data-simc-details-form]");
+      if(form){
+        on(form, "submit", (ev) => {
+          ev.preventDefault();
+          this._goToPicker();
+        });
+      }
+      const nextBtn = modal.querySelector("[data-simc-next]");
+      if(nextBtn) on(nextBtn, "click", () => this._goToPicker());
+    },
+
+    /** מעדכן שגיאות וכפתור המשך בלי לצייר מחדש — כדי לא לאבד פוקוס תוך כדי הקלדה. */
+    _syncDetailsUi(){
+      const modal = this._modal;
+      if(!modal) return;
+      const errs = this._detailsErrors();
+      const touched = this._touched || {};
+      $$("[data-simc-err]", modal).forEach((el) => {
+        const key = el.getAttribute("data-simc-err");
+        const msg = (key && touched[key]) ? (errs[key] || "") : "";
+        el.textContent = msg;
+        el.style.display = msg ? "" : "none";
+      });
+      $$("[data-simc-field]", modal).forEach((el) => {
+        const key = el.getAttribute("data-simc-field");
+        el.classList.toggle("is-invalid", !!(key && touched[key] && errs[key]));
+      });
+      const nextBtn = modal.querySelector("[data-simc-next]");
+      if(nextBtn) nextBtn.disabled = Object.keys(errs).length > 0;
+    },
+
+    _goToPicker(){
+      const errs = this._detailsErrors();
+      const keys = Object.keys(errs);
+      if(keys.length){
+        if(!this._touched) this._touched = {};
+        keys.forEach((k) => { this._touched[k] = true; });
+        this._syncDetailsUi();
+        try {
+          window.showToast?.({ title: "חסרים פרטים", text: errs[keys[0]], variant: "warn", durationMs: 3200 });
+        } catch(_e) {}
+        return;
+      }
+      this._step = "picker";
+      this._paint();
+    },
+
+    _goToDetails(){
+      this._step = "details";
+      this._paint();
+    },
+
+    _detailsSummaryHtml(){
+      const d = this._details || this._blankDetails();
+      const chips = [];
+      const bd = safeTrim(d.birthDate);
+      if(bd) chips.push(["תאריך לידה", bd]);
+      if(d.gender === "זכר" || d.gender === "נקבה") chips.push(["מין", d.gender]);
+      if(d.smoker === "yes" || d.smoker === "no") chips.push(["עישון", d.smoker === "yes" ? "מעשן" : "לא מעשן"]);
+      const sd = safeTrim(d.insuranceStartDate);
+      if(sd) chips.push(["תחילת ביטוח", sd]);
+      const occ = safeTrim(d.occupation);
+      if(occ) chips.push(["מקצוע", occ]);
+      if(!chips.length) return "";
+      const items = chips.map(([k, v]) =>
+        `<span class="lcSimCenterSummary__chip"><span class="lcSimCenterSummary__k">${escapeHtml(k)}</span><span class="lcSimCenterSummary__v">${escapeHtml(v)}</span></span>`
+      ).join("");
+      return `<div class="lcSimCenterSummary">${items}</div>`;
+    },
+
+    /* שלב 2 — בחירת חברה ומוצר (הזרימה שהייתה קיימת, בתוספת חזרה וסיכום פרטים). */
+    _paintPicker(companiesArg){
       const modal = this._modal;
       if(!modal) return;
       const company = safeTrim(this._selectedCompany);
       const product = safeTrim(this._selectedProduct);
-      const companies = this._uniqueCompanies();
+      const companies = Array.isArray(companiesArg) ? companiesArg : this._uniqueCompanies();
       const products = company ? this._productsForCompany(company) : [];
       const canOpen = !!(company && product && products.some((it) => safeTrim(it.product) === product));
 
@@ -30477,41 +30723,36 @@ UsersGateUI.init();
       modal.innerHTML = `
         <div class="giValModal__backdrop" data-simc-close="1"></div>
         <div class="giValModal__card lcSimCenterModal__card">
-          <div class="giValModal__head lcSimCenterModal__head">
-            <button type="button" class="lcSimCenterModal__closeX" data-simc-close="1" aria-label="סגירה">✕</button>
-            <img class="lcSimCenterModal__brandLogo" src="./logo-login-clean.png?v=20260810-sim-fix-v2" alt="GEMEL INVEST" width="1808" height="373" decoding="async" />
-            <div class="giValModal__headText">
-              <div class="giValModal__title lcSimCenterModal__title">מרכז הסימולטורים</div>
-              <div class="giValModal__sub lcSimCenterModal__sub">בחרו חברה ומוצר לפתיחת הסימולטור</div>
-            </div>
-          </div>
+          ${this._headHtml("בחרו חברה ומוצר לפתיחת הסימולטור")}
           <div class="giValModal__body lcSimCenterModal__body">
-            ${companies.length ? `
-              <form class="lcSimCenterForm" data-simc-form="1" novalidate style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px 14px;direction:rtl;padding:4px 0 8px;width:100%;box-sizing:border-box;">
-                <div class="lcSimCenterField" style="display:flex;flex-direction:column;gap:6px;min-width:0;text-align:right;">
-                  <label class="lcSimCenterField__label" for="lcSimCenterCompany">חברת ביטוח</label>
-                  <select id="lcSimCenterCompany" class="lcSimCenterField__select" data-simc-company-select="1" required>
-                    <option value="">בחרו חברה...</option>
-                    ${companyOpts}
-                  </select>
-                </div>
-                <div class="lcSimCenterField${company ? "" : " is-disabled"}" style="display:flex;flex-direction:column;gap:6px;min-width:0;text-align:right;">
-                  <label class="lcSimCenterField__label" for="lcSimCenterProduct">מוצר</label>
-                  <select id="lcSimCenterProduct" class="lcSimCenterField__select" data-simc-product-select="1"${company ? "" : " disabled"} required>
-                    <option value="">${company ? "בחרו מוצר..." : "בחרו קודם חברה"}</option>
-                    ${productOpts}
-                  </select>
-                </div>
-              </form>
-            ` : `<div class="lcSimCenterEmpty">לא נמצאו חברות עם סימולטורים רשומים.</div>`}
+            ${this._detailsSummaryHtml()}
+            <form class="lcSimCenterForm" data-simc-form="1" novalidate>
+              <div class="lcSimCenterField">
+                <label class="lcSimCenterField__label" for="lcSimCenterCompany">חברת ביטוח</label>
+                <select id="lcSimCenterCompany" class="lcSimCenterField__select" data-simc-company-select="1" required>
+                  <option value="">בחרו חברה...</option>
+                  ${companyOpts}
+                </select>
+              </div>
+              <div class="lcSimCenterField${company ? "" : " is-disabled"}">
+                <label class="lcSimCenterField__label" for="lcSimCenterProduct">מוצר</label>
+                <select id="lcSimCenterProduct" class="lcSimCenterField__select" data-simc-product-select="1"${company ? "" : " disabled"} required>
+                  <option value="">${company ? "בחרו מוצר..." : "בחרו קודם חברה"}</option>
+                  ${productOpts}
+                </select>
+              </div>
+            </form>
           </div>
           <div class="giValModal__foot lcSimCenterModal__foot">
-            <button type="button" class="btn giValModal__closeBtn lcSimCenterModal__cancel" data-simc-close="1">ביטול</button>
+            <button type="button" class="btn giValModal__closeBtn lcSimCenterModal__cancel" data-simc-back="1">חזרה לפרטים</button>
             <button type="button" class="btn btn--primary lcSimCenterModal__open" data-simc-open="1"${canOpen ? "" : " disabled"}>פתח סימולטור</button>
           </div>
         </div>`;
 
       $$("[data-simc-close]", modal).forEach((el) => on(el, "click", () => this.close()));
+
+      const backBtn = modal.querySelector("[data-simc-back]");
+      if(backBtn) on(backBtn, "click", () => this._goToDetails());
 
       const companySelect = modal.querySelector("[data-simc-company-select]");
       if(companySelect){
@@ -30557,6 +30798,10 @@ UsersGateUI.init();
     _tryOpen(){
       const company = safeTrim(this._selectedCompany);
       const product = safeTrim(this._selectedProduct);
+      if(!this._detailsReady()){
+        this._goToDetails();
+        return;
+      }
       if(!company){
         window.showToast?.({ title: "חסרה בחירה", text: "נא לבחור חברת ביטוח.", variant: "warn", durationMs: 3200 });
         return;
@@ -30579,22 +30824,43 @@ UsersGateUI.init();
       }
       this._selectedCompany = "";
       this._selectedProduct = "";
+      this._step = "details";
+      this._details = null;
+      this._touched = null;
     },
 
     _launch(company, product){
       const handler = RiskSimulators.getHandler(company, product);
+      /* נשמר לפני close() — הסגירה מאפסת את הפרטים. */
+      const details = Object.assign(this._blankDetails(), this._details || {});
       this.close();
       if(!handler){
         window.showToast?.({ title: "שגיאה", text: "לא נמצא סימולטור מתאים.", variant: "warn" });
         return;
       }
-      const primaryInsured = { id: "standalone-1", label: "מבוטח 1 — ראשי", data: {} };
+      /* שמות השדות כאן חייבים להישאר תואמים ל-_prefillFromInsured שבכל סימולטור:
+         birthDate / gender ("זכר"|"נקבה") / smokingStatus ("yes"|"no") / occupation,
+         ותאריך תחילת הביטוח גם על ההקשר עבור resolveInsuranceStartDate. */
+      const startDate = safeTrim(details.insuranceStartDate);
+      const primaryInsured = {
+        id: "standalone-1",
+        label: "מבוטח 1 — ראשי",
+        data: {
+          birthDate: safeTrim(details.birthDate),
+          gender: (details.gender === "זכר" || details.gender === "נקבה") ? details.gender : "",
+          smokingStatus: (details.smoker === "yes" || details.smoker === "no") ? details.smoker : "",
+          occupation: safeTrim(details.occupation),
+          insuranceStartDate: startDate
+        }
+      };
       window.setTimeout(() => {
         try {
           handler.open({
             standalone: true,
             allowAddInsured: true,
             company, product,
+            insuranceStartDate: startDate,
+            startDate,
             insureds: [primaryInsured],
             onApply(){},
             onFinalConfirm(){}

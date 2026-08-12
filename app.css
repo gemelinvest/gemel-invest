@@ -31194,9 +31194,12 @@ input[inputmode="tel"] {
 }
 
 /* ===== ELEMENTARY DATE PICKER POPUP ===== */
+/* GI-FIX 2026-08-12 — בורר התאריכים הוא סינגלטון גלובלי שנפתח גם מתוך מודאלים
+   (.giValModal יושב על z-index:99999). בלי ערך גבוה ממנו הלוח נפתח מאחורי
+   המודאל ולא ניתן לבחור בו תאריך. */
 .lcDatePickerPopup {
   position: fixed;
-  z-index: 9999;
+  z-index: 100001;
   background: var(--panel);
   border: 1.5px solid var(--line);
   border-radius: var(--radius2);

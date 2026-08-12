@@ -260,8 +260,117 @@
   font-weight:600;
 }
 
+/* ---------- GI-SIM-CENTER-DETAILS 2026-08-12 · שלב פרטי מבוטח ---------- */
+.lcSimCenterForm--details{
+  grid-template-columns:minmax(0, 1fr) minmax(0, 1fr) !important;
+  gap:14px !important;
+}
+.lcSimCenterField--wide{
+  grid-column:1 / -1 !important;
+}
+.lcSimCenterField__opt{
+  font-weight:600;
+  color:#94A3B8;
+  font-size:11.5px;
+}
+.lcSimCenterField__input{
+  width:100%;
+  min-height:42px;
+  padding:8px 12px;
+  border:1.5px solid #E5EAF3;
+  border-radius:11px;
+  background:#fff;
+  color:#0F172A;
+  font-size:14px;
+  font-weight:650;
+  box-sizing:border-box;
+  transition:border-color .12s ease, box-shadow .12s ease;
+}
+.lcSimCenterField__input::placeholder{
+  color:#B4C0D2;
+  font-weight:600;
+}
+.lcSimCenterField__input:hover,
+.lcSimCenterField__input:focus{
+  border-color:#2563EB;
+  outline:none;
+  box-shadow:0 0 0 3px rgba(37,99,235,.12);
+}
+.lcSimCenterField__input.is-invalid{
+  border-color:#E1495F;
+}
+.lcSimCenterField__input.is-invalid:focus{
+  box-shadow:0 0 0 3px rgba(225,73,95,.14);
+}
+.lcSimCenterField__err{
+  font-size:11.5px;
+  font-weight:650;
+  color:#D63B52;
+  line-height:1.35;
+}
+
+/* בורר דו-מצבי (מין / עישון) */
+.lcSimCenterSeg{
+  display:flex;
+  gap:8px;
+  width:100%;
+}
+.lcSimCenterSeg__btn{
+  flex:1 1 0;
+  min-width:0;
+  min-height:42px;
+  padding:8px 10px;
+  border:1.5px solid #E5EAF3;
+  border-radius:11px;
+  background:#fff;
+  color:#5B6B84;
+  font-size:13.5px;
+  font-weight:700;
+  cursor:pointer;
+  transition:border-color .12s ease, background .12s ease, color .12s ease, box-shadow .12s ease;
+}
+.lcSimCenterSeg__btn:hover{
+  border-color:#B9CEF7;
+  background:#F7FAFF;
+}
+.lcSimCenterSeg__btn.is-active{
+  border-color:#2563EB;
+  background:#EFF6FF;
+  color:#1D4ED8;
+  box-shadow:inset 0 0 0 1px rgba(37,99,235,.28);
+}
+.lcSimCenterSeg__btn:focus-visible{
+  outline:2px solid rgba(37,99,235,.45);
+  outline-offset:1px;
+}
+
+/* סיכום הפרטים במסך בחירת החברה */
+.lcSimCenterSummary{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  direction:rtl;
+  padding:0 0 10px;
+  margin-bottom:10px;
+  border-bottom:1px solid #EEF2F9;
+}
+.lcSimCenterSummary__chip{
+  display:inline-flex;
+  align-items:baseline;
+  gap:5px;
+  padding:4px 10px;
+  border-radius:999px;
+  background:#F4F7FD;
+  border:1px solid #E5EAF3;
+  font-size:11.5px;
+  line-height:1.5;
+}
+.lcSimCenterSummary__k{ color:#8496AF; font-weight:650; }
+.lcSimCenterSummary__v{ color:#0B1F4B; font-weight:750; }
+
 @media (max-width: 560px){
   .lcSimCenterForm{ grid-template-columns:1fr !important; }
+  .lcSimCenterForm--details{ grid-template-columns:1fr !important; }
   .lcSimCenterModal .giValModal__head{ padding:14px 14px 4px !important; }
   .lcSimCenterModal .giValModal__headText{ padding-inline:40px; }
   .lcSimCenterModal .giValModal__body{ padding:8px 14px 2px !important; }
