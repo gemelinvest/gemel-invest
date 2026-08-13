@@ -30241,7 +30241,7 @@ UsersGateUI.init();
   /* GI-PERF 2026-08-10 — CSS משני אחרי login בלבד (לא במסך הכניסה). */
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
-    "./gi-customers-import.css?v=20260809-import-progress-v1",
+    "./gi-customers-import.css?v=20260813-prod-v1",
     "./theme-unify-flat.css?v=20260809-perf-paint-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
@@ -60763,7 +60763,28 @@ ${inner}
      נשמרים תחת payload.importedFinancials — לתצוגה בפאנל בלבד.
      ========================================================================== */
 
-  const CUSTOMER_IMPORT_VERSION = "1.1";
+  const CUSTOMER_IMPORT_VERSION = "1.2";
+  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260813-prod-v1";
+  function ensureGiProductionJsLoaded(){
+    return new Promise((resolve, reject) => {
+      try {
+        if(window.GI_PRODUCTION){ resolve(window.GI_PRODUCTION); return; }
+        const existing = document.getElementById("gi-production-js");
+        if(existing){
+          existing.addEventListener("load", () => resolve(window.GI_PRODUCTION), { once: true });
+          existing.addEventListener("error", () => reject(new Error("gi-production-import.js failed")), { once: true });
+          return;
+        }
+        const s = document.createElement("script");
+        s.id = "gi-production-js";
+        s.src = GI_PRODUCTION_JS_HREF;
+        s.async = true;
+        s.onload = () => resolve(window.GI_PRODUCTION);
+        s.onerror = () => reject(new Error("gi-production-import.js failed to load"));
+        document.head.appendChild(s);
+      } catch(err) { reject(err); }
+    });
+  }
   const CI_BATCH_SIZE = 40;
   /** גודל מנה לפרסינג שורות בקובץ — משחרר את ה־UI בין מנות */
   const CI_PARSE_CHUNK = 400;
@@ -61488,13 +61509,13 @@ ${inner}
             <div class="ciHubCard__state ciHubCard__state--ready">פעיל</div>
           </button>
 
-          <button class="ciHubCard is-disabled" type="button" data-ci-hub="production" disabled>
+          <button class="ciHubCard" type="button" data-ci-hub="production">
             <div class="ciHubCard__icon">📊</div>
             <div class="ciHubCard__text">
               <div class="ciHubCard__title">דוח פרודוקציה — פוליסות ופרמיות</div>
-              <div class="ciHubCard__desc">צבירה, פרמיה חודשית ופירוט מוצרים. ייטען על תיקי לקוח קיימים לפי ת״ז.</div>
+              <div class="ciHubCard__desc">חברה אחת בכל טעינה. נצמד לפוליסה חדשה פעילה לפי ת״ז, או בונה שורת פוליסה אם אין מוצר בתיק.</div>
             </div>
-            <div class="ciHubCard__state">בקרוב</div>
+            <div class="ciHubCard__state ciHubCard__state--ready">פעיל</div>
           </button>
         </div>
         <ul class="ciNotes">
@@ -61509,6 +61530,7 @@ ${inner}
         if(which === "customers") this.renderPickStep();
         else if(which === "pending") this.renderPendingStep();
         else if(which === "backfill") this.renderBackfillStep();
+        else if(which === "production") void this.openProduction();
       });
     },
 
@@ -61841,6 +61863,364 @@ ${inner}
       this.els.wrap.classList.remove("is-open");
       this.els.wrap.setAttribute("aria-hidden", "true");
       document.body.style.overflow = "";
+    },
+
+    /* -------------------- דוח פרודוקציה — חברה / קבצים / שיוך -------------------- */
+
+    async openProduction(){
+      this.renderBusy("טוען מנוע פרודוקציה…");
+      try {
+        await ensureGiProductionJsLoaded();
+        if(!window.GI_PRODUCTION) throw new Error("missing GI_PRODUCTION");
+      } catch(err){
+        this.renderError("לא ניתן לטעון את מנוע דוח הפרודוקציה. בדקו שהקובץ gi-production-import.js עלה לשרת.");
+        return;
+      }
+      this._prod = { company: "", files: [], items: [] };
+      this.renderProductionCompanyStep();
+    },
+
+    renderProductionCompanyStep(){
+      const companies = window.GI_PRODUCTION?.COMPANIES || [];
+      this.els.subtitle.textContent = "דוח פרודוקציה — בחירת חברה";
+      const cards = companies.map((c) => `
+        <button class="ciHubCard${c.ready ? "" : " is-disabled"}" type="button" data-prod-company="${escapeHtml(c.id)}" ${c.ready ? "" : "disabled"}>
+          <div class="ciHubCard__text">
+            <div class="ciHubCard__title">${escapeHtml(c.label)}</div>
+            <div class="ciHubCard__desc">${escapeHtml(c.hint || "")}</div>
+          </div>
+          <div class="ciHubCard__state${c.ready ? " ciHubCard__state--ready" : ""}">${c.ready ? "פעיל" : "בקרוב"}</div>
+        </button>`).join("");
+      this.els.body.innerHTML = `
+        <div class="ciHub">${cards}</div>
+        <ul class="ciNotes">
+          <li>כל טעינה היא של <strong>חברה אחת</strong>. קבצי הכשרה ומגדל לא מעורבבים באותו סבב.</li>
+          <li>קודם תיק במערכת (דוח לקוחות), ואחר כך הפרודוקציה — השיוך לפי ת״ז.</li>
+        </ul>`;
+      this.els.foot.innerHTML = `<button class="btn" type="button" id="ciBackToHub">חזור</button>`;
+      on(this.els.foot.querySelector("#ciBackToHub"), "click", () => this.renderHubStep());
+      Array.from(this.els.body.querySelectorAll("[data-prod-company]")).forEach((btn) => {
+        on(btn, "click", () => {
+          if(btn.disabled) return;
+          this._prod.company = safeTrim(btn.getAttribute("data-prod-company"));
+          this.renderProductionPickStep();
+        });
+      });
+    },
+
+    renderProductionPickStep(){
+      const company = safeTrim(this._prod?.company);
+      this.els.subtitle.textContent = "דוח פרודוקציה · " + company + " — בחירת קבצים";
+      this.els.body.innerHTML = `
+        <div class="ciDrop" id="ciProdDrop">
+          <div class="ciDrop__icon">📊</div>
+          <div class="ciDrop__title">גררו לכאן את קבצי הפרודוקציה של ${escapeHtml(company)} או לחצו לבחירה</div>
+          <div class="ciDrop__hint">הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד.</div>
+          <input type="file" id="ciProdFileInput" multiple hidden />
+        </div>
+        <ul class="ciNotes">
+          <li>פוליסה שכבר קיימת בתיק כפוליסה חדשה פעילה — תתעדכן (מספר, פרמיה, כיסויים).</li>
+          <li>תיק בלי מוצר — תיווצר שורת פוליסה חדשה.</li>
+          <li>ת״ז בלי תיק תישאר ברשימת «לא נמצא תיק» ולא תיזרק על לקוח אחר.</li>
+        </ul>`;
+      this.els.foot.innerHTML = `<button class="btn" type="button" id="ciProdBackCo">חזרה לחברה</button>`;
+      on(this.els.foot.querySelector("#ciProdBackCo"), "click", () => this.renderProductionCompanyStep());
+
+      const drop = this.els.body.querySelector("#ciProdDrop");
+      const input = this.els.body.querySelector("#ciProdFileInput");
+      on(drop, "click", () => input.click());
+      on(input, "change", () => {
+        const list = input.files;
+        if(list && list.length) void this.handleProductionFiles(list);
+        input.value = "";
+      });
+      ["dragenter", "dragover"].forEach((evt) => on(drop, evt, (ev) => {
+        ev.preventDefault(); drop.classList.add("is-over");
+      }));
+      ["dragleave", "drop"].forEach((evt) => on(drop, evt, (ev) => {
+        ev.preventDefault(); drop.classList.remove("is-over");
+      }));
+      on(drop, "drop", (ev) => {
+        const list = ev.dataTransfer?.files;
+        if(list && list.length) void this.handleProductionFiles(list);
+      });
+    },
+
+    async handleProductionFiles(fileList){
+      const P = window.GI_PRODUCTION;
+      const files = Array.from(fileList || []);
+      if(!files.length || !P) return;
+      const overallStart = Date.now();
+      this.renderProgress({
+        title: "קורא קבצי פרודוקציה…",
+        detail: files.map((f) => f.name).join(" · "),
+        indeterminate: true,
+        startedAt: overallStart
+      });
+      const parsed = [];
+      try {
+        for(let i = 0; i < files.length; i++){
+          const file = files[i];
+          this.updateProgress({
+            title: "מפענח " + file.name,
+            detail: (i + 1) + " מתוך " + files.length,
+            done: i,
+            total: files.length
+          });
+          const buf = await file.arrayBuffer();
+          parsed.push(P.parseFileBuffer(file.name, buf));
+          await ciYieldToUi();
+        }
+      } catch(err){
+        this.renderError("פענוח הקבצים נכשל: " + (safeTrim(err?.message) || "שגיאה לא ידועה"));
+        return;
+      }
+
+      const usable = parsed.filter((f) => f.kind && f.kind !== "RM" && (f.rows || []).length);
+      if(!usable.length){
+        this.renderError("לא זוהו רשומות פרודוקציה בקבצים. להכשרה נדרשים RB / RP / SB / SP.");
+        return;
+      }
+
+      const policies = P.buildPolicies(usable);
+      const idSet = new Set();
+      policies.forEach((p) => (p.ids || []).forEach((id) => { if(id) idSet.add(id); }));
+      const ids = Array.from(idSet);
+
+      this.renderProgress({
+        title: "מאתר תיקי לקוח לפי ת״ז…",
+        done: 0,
+        total: Math.max(ids.length, 1),
+        startedAt: Date.now()
+      });
+
+      const customersById = await this.fetchProductionCustomers(ids, (prog) => {
+        this.updateProgress({
+          title: "מאתר תיקי לקוח לפי ת״ז…",
+          done: prog.done,
+          total: prog.total
+        });
+      });
+
+      const items = P.classifyPolicies(policies, customersById);
+      this._prod.files = usable.map((f) => ({ name: f.fileName, kind: f.kind, rows: (f.rows || []).length }));
+      this._prod.items = items;
+      this.renderProductionPreview();
+    },
+
+    async fetchProductionCustomers(ids, onProgress){
+      const P = window.GI_PRODUCTION;
+      const found = new Map();
+      const list = (ids || []).filter(Boolean);
+      const total = list.length;
+      const select = "id,full_name,id_number,phone,city,status,agent_id,agent_name,payload,new_policies_count";
+      for(let i = 0; i < list.length; i += CI_DUP_FETCH_CHUNK){
+        const chunk = list.slice(i, i + CI_DUP_FETCH_CHUNK);
+        const queryIds = [];
+        chunk.forEach((id) => {
+          queryIds.push(id);
+          const stripped = String(id).replace(/^0+/, "");
+          if(stripped && stripped !== id) queryIds.push(stripped);
+        });
+        let rows = null;
+        try {
+          const client = Storage.getClient();
+          if(client){
+            const res = await client.from(SUPABASE_TABLES.customers).select(select).in("id_number", queryIds);
+            if(!res?.error) rows = res?.data || [];
+          }
+        } catch(_e) {}
+        if(!rows){
+          try {
+            const inList = "(" + queryIds.map((v) => '"' + String(v).replace(/"/g, "") + '"').join(",") + ")";
+            rows = await Storage.restRequest(
+              SUPABASE_TABLES.customers + "?id_number=in." + encodeURIComponent(inList) + "&select=" + encodeURIComponent(select),
+              { method: "GET" }
+            ) || [];
+          } catch(_e) { rows = []; }
+        }
+        (rows || []).forEach((row) => {
+          const rec = normalizeCustomerRecord({
+            id: row.id,
+            status: row.status,
+            fullName: row.full_name,
+            idNumber: row.id_number,
+            phone: row.phone,
+            city: row.city,
+            agentId: row.agent_id,
+            agentName: row.agent_name,
+            newPoliciesCount: row.new_policies_count,
+            payload: row.payload
+          });
+          const key = P.normId(rec.idNumber);
+          if(key && !found.has(key)) found.set(key, rec);
+        });
+        if(typeof onProgress === "function"){
+          try { onProgress({ done: Math.min(i + chunk.length, total), total }); } catch(_e) {}
+        }
+        await ciYieldToUi();
+      }
+      return found;
+    },
+
+    renderProductionPreview(){
+      const items = this._prod?.items || [];
+      const files = this._prod?.files || [];
+      const company = safeTrim(this._prod?.company);
+      const counts = { update: 0, create: 0, review: 0, unmatched: 0, inactive: 0 };
+      items.forEach((it) => { if(counts[it.category] != null) counts[it.category]++; });
+      this.els.subtitle.textContent = "דוח פרודוקציה · " + company + " — תצוגה מקדימה";
+      const fileLine = files.map((f) => escapeHtml(f.kind) + " " + f.rows).join(" · ");
+      const rowsHtml = items.map((it, idx) => {
+        const custName = it.customer ? escapeHtml(it.customer.fullName) : "—";
+        const catLabel = ({
+          update: "עדכון פוליסה",
+          create: "יצירת שורה",
+          review: "לבדיקה",
+          unmatched: "אין תיק",
+          inactive: "לא פעיל"
+        })[it.category] || it.category;
+        const badge = ({
+          update: "ok",
+          create: "ok",
+          review: "warn",
+          unmatched: "err",
+          inactive: "dup"
+        })[it.category] || "dup";
+        const people = (it.people || []).map((p) => escapeHtml(p.fullName || p.idNumber)).filter(Boolean).slice(0, 3).join(" · ");
+        return `<tr class="ciRow--${escapeHtml(it.category)}">
+          <td class="ciMono">${idx + 1}</td>
+          <td class="ciMono">${escapeHtml(it.policyNumber || "")}</td>
+          <td>${escapeHtml(it.type || "")}</td>
+          <td>${custName}<div class="ciIssues">${people}</div></td>
+          <td class="ciMono">${escapeHtml(it.premiumMonthly || "—")}</td>
+          <td><span class="ciBadge ciBadge--${badge}">${catLabel}</span><div class="ciIssues">${escapeHtml(it.reason || "")}</div></td>
+        </tr>`;
+      }).join("");
+
+      this.els.body.innerHTML = `
+        <div class="ciChips">
+          <span class="ciChip ciChip--ok is-active">עדכון <span>${counts.update}</span></span>
+          <span class="ciChip ciChip--ok">יצירה <span>${counts.create}</span></span>
+          <span class="ciChip ciChip--warn">לבדיקה <span>${counts.review}</span></span>
+          <span class="ciChip ciChip--err">אין תיק <span>${counts.unmatched}</span></span>
+          <span class="ciChip ciChip--dup">לא פעיל <span>${counts.inactive}</span></span>
+        </div>
+        <div class="ciBanner">קבצים: ${fileLine || "—"} · פרמיה מחושבת מסכומי הכיסוי (2 ספרות אחרי הנקודה). פוליסות «לבדיקה» לא יישמרו עד שתבחרו ידנית בסבב הבא.</div>
+        <div class="ciTableWrap">
+          <table class="ciTable">
+            <thead><tr><th>#</th><th>פוליסה</th><th>מוצר</th><th>תיק / מבוטחים</th><th>פרמיה</th><th>פעולה</th></tr></thead>
+            <tbody>${rowsHtml || `<tr><td colspan="6">אין רשומות</td></tr>`}</tbody>
+          </table>
+        </div>`;
+      const canCommit = (counts.update + counts.create) > 0;
+      this.els.foot.innerHTML = `
+        <div class="ciFoot__summary">${counts.update} עדכונים · ${counts.create} יצירות · ${counts.unmatched + counts.review + counts.inactive} דלג</div>
+        <div class="ciFoot__actions">
+          <button class="btn" type="button" id="ciProdBackFiles">חזרה לקבצים</button>
+          <button class="btn btn--primary" type="button" id="ciProdCommit"${canCommit ? "" : " disabled"}>אשר ושייך לתיקים</button>
+        </div>`;
+      on(this.els.foot.querySelector("#ciProdBackFiles"), "click", () => this.renderProductionPickStep());
+      const commit = this.els.foot.querySelector("#ciProdCommit");
+      if(commit && canCommit) on(commit, "click", () => void this.commitProduction());
+    },
+
+    async commitProduction(){
+      const P = window.GI_PRODUCTION;
+      const items = (this._prod?.items || []).filter((it) => it.action === "update" || it.action === "create");
+      if(!items.length || !P) return;
+      const byCust = new Map();
+      items.forEach((it) => {
+        const id = safeTrim(it.customer?.id);
+        if(!id) return;
+        if(!byCust.has(id)) byCust.set(id, []);
+        byCust.get(id).push(it);
+      });
+      const custIds = Array.from(byCust.keys());
+      this.renderProgress({
+        title: "משייך פוליסות לתיקים…",
+        done: 0,
+        total: custIds.length,
+        startedAt: Date.now()
+      });
+      let okCount = 0;
+      let failCount = 0;
+      for(let i = 0; i < custIds.length; i++){
+        const custId = custIds[i];
+        try {
+          let existingFull = null;
+          const resLoad = await Storage.loadSingleRow(SUPABASE_TABLES.customers, custId, "*");
+          if(resLoad?.ok && resLoad.data) existingFull = resLoad.data;
+          const rec = normalizeCustomerRecord({
+            id: existingFull?.id || custId,
+            status: existingFull?.status,
+            fullName: existingFull?.full_name,
+            idNumber: existingFull?.id_number,
+            phone: existingFull?.phone,
+            email: existingFull?.email,
+            city: existingFull?.city,
+            agentId: existingFull?.agent_id,
+            agentName: existingFull?.agent_name,
+            agentRole: existingFull?.agent_role,
+            createdAt: existingFull?.created_at,
+            payload: existingFull?.payload
+          });
+          let payload = rec.payload && typeof rec.payload === "object" ? rec.payload : {};
+          byCust.get(custId).forEach((it) => {
+            it.insuredIds = P.insuredIdsForCustomer(rec, it.people || []);
+            payload = P.applyToPayload(payload, it);
+          });
+          rec.payload = payload;
+          rec.newPoliciesCount = Array.isArray(payload.newPolicies) ? payload.newPolicies.length : rec.newPoliciesCount;
+          rec.updatedAt = nowISO();
+          const row = Storage.buildCustomerRows({ customers: [rec] })[0];
+          const saved = await Storage.upsertSingleRow(SUPABASE_TABLES.customers, row);
+          if(saved?.ok) okCount++;
+          else failCount++;
+        } catch(_e) {
+          failCount++;
+        }
+        this.updateProgress({
+          title: "משייך פוליסות לתיקים…",
+          done: i + 1,
+          total: custIds.length
+        });
+        if(i % 5 === 0) await ciYieldToUi();
+      }
+
+      try {
+        appendAuditLog({
+          type: "production_import",
+          entity: "customer",
+          entityId: safeTrim(this._prod?.company),
+          label: "ייבוא פרודוקציה " + safeTrim(this._prod?.company),
+          actorName: safeTrim(Auth?.current?.name),
+          details: {
+            company: this._prod?.company,
+            files: this._prod?.files,
+            updatedCustomers: okCount,
+            failed: failCount,
+            policies: items.length
+          }
+        });
+      } catch(_e) {}
+
+      try { await App.persist("ייבוא פרודוקציה", { skipHeavy: true }); } catch(_e) {}
+
+      this.els.subtitle.textContent = "דוח פרודוקציה — סיום";
+      this.els.body.innerHTML = `
+        <div class="ciDone">
+          <div class="ciDone__icon">✅</div>
+          <div class="ciDone__stats">
+            <div><strong>${okCount}</strong> תיקים עודכנו</div>
+            <div>${items.length} פוליסות שויכו</div>
+            ${failCount ? `<div class="ciDone__err"><strong>${failCount}</strong> נכשלו</div>` : ""}
+          </div>
+        </div>`;
+      this.els.foot.innerHTML = `
+        <button class="btn" type="button" id="ciBackToHub">חזרה לתפריט</button>
+        <button class="btn btn--primary" type="button" data-ci-close>סיום</button>`;
+      on(this.els.foot.querySelector("#ciBackToHub"), "click", () => this.renderHubStep());
     },
 
     /* --------------------------- שלב 1: בחירת קובץ --------------------------- */
