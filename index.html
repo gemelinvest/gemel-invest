@@ -8,7 +8,7 @@
 <meta content="#f8fafc" name="theme-color"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20260814-face-login-v1" rel="stylesheet"/>
+<link href="./app.css?v=20260814-face-login-v2" rel="stylesheet"/>
 <link href="./theme.css?v=20260814-face-login-v1" rel="stylesheet"/>
 <link href="./theme-p2.css?v=20260805-workdays-goal-v1" rel="stylesheet"/>
 <link href="./login-split.css?v=20260814-face-login-v1" rel="stylesheet"/>
@@ -141,6 +141,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <div class="lcLogin__facePanel" id="lcFaceLoginPanel" hidden>
   <div class="lcLogin__faceQrWrap"><canvas id="lcFaceLoginQr" width="220" height="220"></canvas></div>
   <div class="lcLogin__faceHint" id="lcFaceLoginHint">סרקו את הקוד במצלמת הטלפון</div>
+  <a class="lcLogin__faceLink" id="lcFaceLoginLink" href="#" hidden target="_blank" rel="noopener">פתיחת דף הסריקה בטלפון</a>
   <button class="lcLogin__faceCancel" id="btnFaceLoginCancel" type="button">ביטול</button>
 </div>
 <div class="lcLogin__or" id="lcLoginOrFace">או</div>
@@ -2273,6 +2274,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
     <div class="modal__body giFaceModal__body">
       <div class="giFaceModal__qrWrap"><canvas id="giFaceEnrollQr" width="220" height="220"></canvas></div>
       <div class="giFaceModal__hint" id="giFaceEnrollHint">סרקו בטלפון, צלמו כמה זוויות ולחצו «אישור וסיום».</div>
+      <a class="giFaceModal__openLink" id="giFaceEnrollLink" href="#" hidden target="_blank" rel="noopener">פתיחת דף הסריקה בטלפון</a>
       <p class="giFaceModal__note">התמונות לא נשמרות. נשמרת רק חתימה מספרית לזיהוי.</p>
     </div>
     <div class="modal__foot">
@@ -3830,8 +3832,8 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 </div>
 
 <script src="./contacts-directory-seed.js?v=20260811-contacts-v1"></script>
-<script src="./app.js?v=20260814-face-login-v1"></script>
-<script src="./gi-face-auth.js?v=20260814-face-login-v1"></script>
+<script src="./app.js?v=20260814-face-login-v2"></script>
+<script src="./gi-face-auth.js?v=20260814-face-login-v2"></script>
 
 
 <div id="giPwaInstallBanner" class="giPwaInstallBanner" hidden>

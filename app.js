@@ -64712,7 +64712,27 @@ ${inner}
         if(!sid) return null;
         return list.find((a) => String(a?.id || "").trim() === sid) || null;
       },
-      getCurrentAgent(){ return Auth.current; },
+      getCurrentAgent(){
+        const rec = (typeof getCurrentAgentRecord === "function" ? getCurrentAgentRecord() : null)
+          || (typeof findAgentRecordForSession === "function" ? findAgentRecordForSession() : null);
+        const cur = Auth.current;
+        const list = Array.isArray(State.data?.agents) ? State.data.agents : [];
+        let id = safeTrim(rec?.id) || safeTrim(cur?.id);
+        let name = safeTrim(rec?.name) || safeTrim(cur?.name);
+        let role = safeTrim(rec?.role) || safeTrim(cur?.role) || "agent";
+        let username = safeTrim(rec?.username);
+        if(!id && (typeof isOwnerIdentity === "function") && (isOwnerIdentity(cur) || isOwnerIdentity(rec) || Auth.isAdmin?.())){
+          const owner = list.find((a) => a?.active !== false && typeof isOwnerIdentity === "function" && isOwnerIdentity(a));
+          if(owner){
+            id = safeTrim(owner.id);
+            name = safeTrim(owner.name) || name;
+            role = safeTrim(owner.role) || role;
+            username = safeTrim(owner.username) || username;
+          }
+        }
+        if(!id && !name) return null;
+        return { id, name, role, username };
+      },
       closeUserMenu(){ try { UI._closeUserMenu?.(); } catch(_e) {} },
       setLoginError(msg){ try { Auth._setError(msg); } catch(_e) {} }
     };

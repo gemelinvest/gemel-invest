@@ -73,39 +73,64 @@
     return data;
   }
 
-  let qrLibPromise = null;
-  function loadQrLib(){
-    if(window.QRCode && typeof window.QRCode.toCanvas === "function") return Promise.resolve(window.QRCode);
-    if(qrLibPromise) return qrLibPromise;
-    qrLibPromise = new Promise((resolve, reject) => {
+  function loadScript(src){
+    return new Promise((resolve, reject) => {
       const s = document.createElement("script");
-      s.src = "https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js";
+      s.src = src;
       s.async = true;
-      s.onload = () => resolve(window.QRCode);
-      s.onerror = () => reject(new Error("QR_LIB"));
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error("SCRIPT " + src));
       document.head.appendChild(s);
     });
+  }
+
+  let qrLibPromise = null;
+  function loadQrLib(){
+    if(window.QRCode && (typeof window.QRCode.toCanvas === "function" || typeof window.QRCode === "function")){
+      return Promise.resolve(window.QRCode);
+    }
+    if(qrLibPromise) return qrLibPromise;
+    qrLibPromise = loadScript("https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js")
+      .catch(() => loadScript("https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"))
+      .then(() => window.QRCode);
     return qrLibPromise;
+  }
+
+  function setQrLink(href){
+    ["lcFaceLoginLink", "giFaceEnrollLink"].forEach((id) => {
+      const el = document.getElementById(id);
+      if(!el) return;
+      el.href = href || "#";
+      el.hidden = !href;
+    });
   }
 
   async function drawQr(canvas, text){
     if(!canvas) return;
+    setQrLink(text);
     try {
       const QRCode = await loadQrLib();
-      await QRCode.toCanvas(canvas, text, {
-        width: 220,
-        margin: 1,
-        color: { dark: "#0f172a", light: "#ffffff" }
-      });
-    } catch(_e) {
-      const img = document.createElement("img");
-      img.alt = "QR";
-      img.width = 220;
-      img.height = 220;
-      img.src = "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" + encodeURIComponent(text);
-      canvas.replaceWith(img);
-      img.id = canvas.id;
-    }
+      if(QRCode && typeof QRCode.toCanvas === "function"){
+        const node = canvas.tagName === "CANVAS" ? canvas : document.createElement("canvas");
+        if(node !== canvas){
+          node.id = canvas.id || "giFaceQr";
+          canvas.replaceWith(node);
+        }
+        await QRCode.toCanvas(node, text, {
+          width: 220,
+          margin: 1,
+          color: { dark: "#0f172a", light: "#ffffff" }
+        });
+        return;
+      }
+    } catch(_e) {}
+    const img = document.createElement("img");
+    img.alt = "QR";
+    img.width = 220;
+    img.height = 220;
+    img.src = "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" + encodeURIComponent(text);
+    img.id = canvas.id || "giFaceQr";
+    canvas.replaceWith(img);
   }
 
   function FaceSessionController(opts){
@@ -318,15 +343,15 @@
 
     async startEnroll(){
       const b = bridge();
-      const agent = typeof b.getCurrentAgent === "function" ? b.getCurrentAgent() : null;
-      if(!agent || !trim(agent.id)){
-        this.setEnrollHint("זיהוי פנים זמין לנציגים רשומים במערכת.", "err");
-        this.openEnrollModal(true);
-        return;
-      }
       try { if(typeof b.closeUserMenu === "function") b.closeUserMenu(); } catch(_e) {}
       this.openEnrollModal(true);
-      this.setEnrollHint("סרקו בטלפון, צלמו כמה זוויות ולחצו «אישור וסיום».");
+      this.setEnrollHint("מכין קוד QR…");
+      try { if(typeof b.ensureLoginReady === "function") await b.ensureLoginReady(); } catch(_e) {}
+      const agent = typeof b.getCurrentAgent === "function" ? b.getCurrentAgent() : null;
+      if(!agent || !trim(agent.id)){
+        this.setEnrollHint("לא נמצא כרטיס נציג למשתמש המחובר. היכנסו עם שם המשתמש של הנציג.", "err");
+        return;
+      }
       if(this._enrollCtl) await this._enrollCtl.cancel();
       const self = this;
       this._enrollCtl = new FaceSessionController({
@@ -339,9 +364,10 @@
             next.id = "giFaceEnrollQr";
             canvas.replaceWith(next);
             void drawQr(next, href);
-            return;
+          } else {
+            void drawQr(canvas, href);
           }
-          void drawQr(canvas, href);
+          self.setEnrollHint("סרקו בטלפון, צלמו כמה זוויות ולחצו «אישור וסיום».");
         },
         onStatus: (status) => {
           if(status === "scanned") self.setEnrollHint("הטלפון סרק. ממתינים לאישור וסיום בטלפון…");
@@ -356,6 +382,9 @@
       });
       try {
         await this._enrollCtl.start();
+        if(!trim(this.els().enrollHint?.textContent) || this.els().enrollHint.textContent === "מכין קוד QR…"){
+          this.setEnrollHint("סרקו בטלפון, צלמו כמה זוויות ולחצו «אישור וסיום».");
+        }
       } catch(err) {
         const code = String(err?.code || err?.message || "");
         if(code === "AGENT_NOT_FOUND" || code === "MISSING_AGENT"){

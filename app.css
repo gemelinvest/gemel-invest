@@ -45330,6 +45330,12 @@ body.lcAuthLock .lcLogin__footBtn{
   font-size:12px;
   color:#64748b;
 }
+.giFaceModal__openLink,
+.lcLogin__faceLink{
+  font-size:12px;
+  font-weight:700;
+  color:#2563EB;
+}
 .giActLogTable__actionSub{
   margin-top:4px;
   font-size:11px;
