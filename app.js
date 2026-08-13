@@ -30159,13 +30159,14 @@ UsersGateUI.init();
 
     /* GI-PERF-LAZY-SIMS 2026-08-09 */
   // Lazy simulator registry — engines in gi-simulators.js (~220KB parse deferred).
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260812-cll-risk-v2";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260813-mgd-acc-v1";
   const GI_SIMULATOR_CATALOG = Object.freeze([
     { company: "הפניקס", product: "ריסק" },
     { company: "הפניקס", product: "בריאות" },
     { company: "הפניקס", product: "מחלות קשות" },
     { company: "הפניקס", product: "סרטן" },
     { company: "מנורה", product: "ריסק" },
+    { company: "מנורה", product: "ריסק משכנתא" },
     { company: "הכשרה", product: "ריסק" },
     { company: "הפניקס", product: "ריסק משכנתא" },
     { company: "הכשרה", product: "בריאות" },
@@ -30174,6 +30175,8 @@ UsersGateUI.init();
     { company: "מגדל", product: "מחלות קשות" },
     { company: "מגדל", product: "סרטן" },
     { company: "מגדל", product: "ריסק" },
+    { company: "מגדל", product: "מוות מתאונה" },
+    { company: "מגדל", product: "נכות מתאונה" },
     { company: "מנורה", product: "בריאות" },
     { company: "איילון", product: "בריאות" },
     { company: "איילון", product: "מחלות קשות" },
@@ -30210,7 +30213,7 @@ UsersGateUI.init();
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
     "./simulators-center.css?v=20260812-simc-redesign-v1",
-    "./simulators-shell.css?v=20260810-sim-calc-hide-v1"
+    "./simulators-shell.css?v=20260813-mgd-acc-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260812-cll-risk-v2";
@@ -31548,7 +31551,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260813-har-status-click-v1";
+  const GI_WIZARD_JS_VERSION = "20260813-save-draft-fast-v1";
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
   const TZAHAL_CLINIC = "קופה צהלית";
   const TZAHAL_CLINIC_SHABAN = "אין שב״ן";

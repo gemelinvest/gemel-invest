@@ -390,6 +390,8 @@
 .giSimShellModal .giValModal__body [data-mgdci-calc],
 .giSimShellModal .giValModal__body [data-mgdca-calc],
 .giSimShellModal .giValModal__body [data-mgdr-calc],
+.giSimShellModal .giValModal__body [data-mgdad-calc],
+.giSimShellModal .giValModal__body [data-mgdacd-calc],
 .giSimShellModal .giValModal__body [data-hachci-calc]{
   display:none !important;
   visibility:hidden !important;

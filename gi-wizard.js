@@ -22746,13 +22746,77 @@ if(path === "birthDate"){
       }catch(_){ return false; }
     },
 
+    async _yieldWizardUi(){
+      await new Promise((resolve) => {
+        try { window.requestAnimationFrame(() => { window.setTimeout(resolve, 0); }); }
+        catch(_e) { window.setTimeout(resolve, 0); }
+      });
+    },
+
+    _commitProposalRecordLocally(record){
+      State.data.proposals = Array.isArray(State.data.proposals) ? State.data.proposals : [];
+      const idx = State.data.proposals.findIndex(x => String(x.id) === String(record.id));
+      if(idx >= 0) State.data.proposals[idx] = record;
+      else State.data.proposals.unshift(record);
+      this.editingDraftId = record.id;
+      this._clearLocalDraft();
+      State.data.meta.updatedAt = nowISO();
+      try { refreshStateShadows({ skipNormalize: true, lightShadows: true }); } catch(_e) {}
+    },
+
+    _scheduleProposalsListRefresh(){
+      try {
+        const view = (typeof LiveRefresh !== "undefined" && LiveRefresh.getCurrentView)
+          ? LiveRefresh.getCurrentView()
+          : "";
+        if(view !== "proposals") return;
+        requestAnimationFrame(() => {
+          try { ProposalsUI.render(); } catch(_e) {}
+        });
+      } catch(_e) {}
+    },
+
+    _persistProposalSaveInBackground(proposalStoredDirectly){
+      const persistOpts = {
+        silent: true,
+        skipCustomersSync: true,
+        skipProposalsSync: proposalStoredDirectly,
+        skipServerMerge: true,
+        skipNormalize: true,
+        lightShadows: true,
+        yieldUi: true
+      };
+      void App.persist("ההצעה נשמרה", persistOpts).then((persistRes) => {
+        if(persistRes?.ok){
+          try { UI.renderSyncStatus("ההצעה נשמרה", "ok", persistRes.at); } catch(_e) {}
+          return;
+        }
+        try { console.warn("PROPOSAL_SAVE_BG_PERSIST_WARN", persistRes); } catch(_e) {}
+        try {
+          UI.renderSyncStatus(
+            "ההצעה נשמרה",
+            "warn",
+            persistRes?.at || nowISO(),
+            persistRes?.error || "סנכרון מערכת חלקי"
+          );
+        } catch(_e) {}
+      }).catch((persistErr) => {
+        try { console.warn("PROPOSAL_SAVE_BG_PERSIST_WARN", persistErr); } catch(_e) {}
+      });
+    },
+
     async saveDraft(){
       if(!Auth.current) return;
+      if(this._savingDraft) return this._saveDraftPromise || Promise.resolve();
       if(this._draftPayloadMissing){
         try { console.warn("SAVE_BLOCKED_DRAFT_PAYLOAD_MISSING:", this.editingDraftId); } catch(_e) {}
         SaveStatusUI.error('לא ניתן לשמור את ההצעה', 'תוכן ההצעה לא נטען מהשרת. רענן את הדף ופתח את ההצעה מחדש.');
         return;
       }
+      this._savingDraft = true;
+      const saveBtn = this.els?.btnSaveDraft;
+      if(saveBtn) saveBtn.disabled = true;
+      const run = async () => {
       try{
       const payload = this.getDraftPayload();
       if(!this.isCustomerPurchaseMode() && await this.blockIfAgentDuplicateIdAsync()){
@@ -22800,6 +22864,7 @@ if(path === "birthDate"){
       stampRecordAgentOwnership(record);
 
       SaveStatusUI.show('loading', 'שומר הצעה במערכת...', 'המערכת מעדכנת את נתוני ההצעה.');
+      await this._yieldWizardUi();
       const directRow = Storage.buildProposalRows({ proposals:[record] })[0];
       const directSave = await Storage.upsertSingleRow(SUPABASE_TABLES.proposals, directRow);
       let proposalStoredDirectly = !!directSave?.ok;
@@ -22809,7 +22874,9 @@ if(path === "birthDate"){
           id: record.id,
           updated_at: (value) => !!safeTrim(value) && new Date(value).getTime() >= (new Date(directRow.updated_at).getTime() - 5000)
         }, {
-          selectExpr: 'id,status,full_name,id_number,phone,agent_name,agent_id,current_step,updated_at'
+          selectExpr: 'id,status,full_name,id_number,phone,agent_name,agent_id,current_step,updated_at',
+          retries: 2,
+          delayMs: 250
         });
         if(!verify?.ok || !verify?.data){
           // soft-ok: השורה קיימת בשרת גם אם חלק מהשדות לא תאמו בדיוק
@@ -22833,29 +22900,31 @@ if(path === "birthDate"){
         try { console.error('PROPOSAL_DIRECT_UPSERT_FAILED', rawErr, { id: record.id, agentId: record.agentId }); } catch(_e) {}
       }
 
-      State.data.proposals = Array.isArray(State.data.proposals) ? State.data.proposals : [];
-      const idx = State.data.proposals.findIndex(x => String(x.id) === String(record.id));
-      if(idx >= 0) State.data.proposals[idx] = record;
-      else State.data.proposals.unshift(record);
-      this.editingDraftId = record.id;
-      this._clearLocalDraft();
-      State.data.meta.updatedAt = nowISO();
-      refreshStateShadows();
-      // GI-FIX 2026-08-11: skipProposalsSync רק כשהשמירה הישירה אומתה —
-      // אחרת App.persist חייב לסנכרן את טבלת proposals (ולא רק לזכור מקומית).
-      const persistRes = await App.persist("ההצעה נשמרה", { skipProposalsSync: proposalStoredDirectly });
-      ProposalsUI.render();
-      const proposalsSyncWarning = safeTrim(persistRes?.proposalsSyncWarning);
+      this._commitProposalRecordLocally(record);
+      // GI-FIX 2026-08-13: אחרי upsert ישיר מאומת — לא מחכים לסנכרון CRM מלא.
+      // אותו דפוס כמו סיום תיק לקוח (skipNormalize / skipServerMerge / רקע).
       if(proposalStoredDirectly){
-        const finalWarning = safeTrim(proposalSaveWarning || (!persistRes?.ok ? (persistRes?.error || 'סנכרון מערכת נוסף לא הושלם') : ''));
-        if(finalWarning){
-          this.setHint('ההצעה נשמרה ותופיע במסך הצעות.');
-          SaveStatusUI.success('ההצעה נשמרה בהצלחה', finalWarning);
-        }else{
-          this.setHint("ההצעה נשמרה ותופיע במסך הצעות להמשך עריכה");
-          SaveStatusUI.success('ההצעה נשמרה בהצלחה', '');
-        }
-      }else if(persistRes?.ok && !proposalsSyncWarning){
+        this.setHint(proposalSaveWarning
+          ? 'ההצעה נשמרה ותופיע במסך הצעות.'
+          : "ההצעה נשמרה ותופיע במסך הצעות להמשך עריכה");
+        SaveStatusUI.success('ההצעה נשמרה בהצלחה', proposalSaveWarning || '');
+        this._persistProposalSaveInBackground(true);
+        this._scheduleProposalsListRefresh();
+        return;
+      }
+
+      const persistRes = await App.persist("ההצעה נשמרה", {
+        silent: true,
+        skipCustomersSync: true,
+        skipProposalsSync: false,
+        skipServerMerge: true,
+        skipNormalize: true,
+        lightShadows: true,
+        yieldUi: true
+      });
+      this._scheduleProposalsListRefresh();
+      const proposalsSyncWarning = safeTrim(persistRes?.proposalsSyncWarning);
+      if(persistRes?.ok && !proposalsSyncWarning){
         this.setHint('ההצעה נשמרה ותופיע במסך הצעות.');
         SaveStatusUI.success('ההצעה נשמרה עם שכבת גיבוי', proposalSaveWarning || 'נשמר דרך סנכרון מערכת.');
       }else{
@@ -22871,6 +22940,13 @@ if(path === "birthDate"){
         this.setHint(msg);
         SaveStatusUI.error('שמירת ההצעה נכשלה', msg);
       }
+      };
+      this._saveDraftPromise = run().finally(() => {
+        this._savingDraft = false;
+        this._saveDraftPromise = null;
+        if(saveBtn) saveBtn.disabled = false;
+      });
+      return this._saveDraftPromise;
     },
 
     getOperationalAgentNumbers(){
