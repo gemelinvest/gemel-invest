@@ -11623,7 +11623,7 @@ body.view-myProcesses-active .lcMyProcessesTable thead th{
 .lcPolCard__premiumAmount{ font-size:20px;font-weight:800;color:var(--blueDeep,#1e3d7a);line-height:1;white-space:nowrap; }
 .lcPolCard__breakdown{ display:flex;flex-direction:column;gap:1px;margin-top:3px; }
 .lcPolCard__breakdownItem{ font-size:10px;color:var(--muted);white-space:nowrap; }
-.lcPolCard__actionShell{ padding:10px 14px; }
+.lcPolCard__actionShell{ padding:10px 14px; pointer-events:auto; position:relative; z-index:1; }
 .lcPolCard__breakdownShell{
   padding:10px 14px 4px;
   border-top:0.5px solid var(--line,rgba(15,25,45,.10));
@@ -11684,6 +11684,9 @@ body.view-myProcesses-active .lcMyProcessesTable thead th{
   background:transparent;
   color:var(--muted);
   cursor:pointer;
+  pointer-events:auto;
+  position:relative;
+  z-index:2;
   transition:background .12s,border-color .12s,color .12s;
   line-height:1.3;
 }
