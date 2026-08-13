@@ -722,6 +722,9 @@
           <strong class="giSimShell__premValue giSimShell__premValue--total">₪${escapeHtml(riskSimFormatMoneyShekels(total))}</strong>
         </div>
         <div class="giSimShell__footActions">
+          ${typeof window !== "undefined" && typeof window.GI_SIM_BACK_TO_PICKER === "function"
+            ? `<button type="button" class="btn giSimShell__backBtn" data-gishell-back-picker="1">חזרה לבחירה</button>`
+            : ""}
           <button type="button" class="btn giSimShell__closeBtn" data-${escapeHtml(prefix)}-close="1">סגור</button>
           <button type="button" class="btn btn--primary giSimShell__calcBtn" data-gishell-calc="1">חשב פרמיה</button>
         </div>`;
@@ -786,6 +789,49 @@
         try { sim.close(); } catch(_e) {}
       });
     });
+
+    const backBtn = modal.querySelector("[data-gishell-back-picker]");
+    if(backBtn && !backBtn._giShellBound){
+      backBtn._giShellBound = true;
+      on(backBtn, "click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        riskSimReturnToPicker(sim);
+      });
+    }
+  }
+
+  function riskSimCollectCenterDetails(sim){
+    const base = riskSimJsonClone(sim?._ctx?.simCenterDetails) || {};
+    const st = (sim && sim._state && (sim._state[sim._activeInsuredId] || sim._state["standalone-1"])) || {};
+    const smoker = st.smoker === true ? "yes" : (st.smoker === false ? "no" : safeTrim(base.smoker || ""));
+    const gender = (st.gender === "זכר" || st.gender === "נקבה") ? st.gender : safeTrim(base.gender || "");
+    return {
+      birthDate: safeTrim(st.birthDate || base.birthDate || ""),
+      gender,
+      smoker,
+      insuranceStartDate: safeTrim(st.insuranceStartDate || base.insuranceStartDate || ""),
+      occupation: safeTrim(st.occupation || base.occupation || "")
+    };
+  }
+
+  function riskSimReturnToPicker(sim){
+    if(!sim) return;
+    const payload = {
+      details: riskSimCollectCenterDetails(sim),
+      company: safeTrim(sim._ctx?.company),
+      product: safeTrim(sim._ctx?.product)
+    };
+    sim._giSkipSavePrompt = true;
+    try { sim.close(); } catch(_e) {}
+    try {
+      if(typeof window === "undefined" || typeof window.GI_SIM_BACK_TO_PICKER !== "function") return;
+      window.setTimeout(() => {
+        try { window.GI_SIM_BACK_TO_PICKER(payload); } catch(err) {
+          try { console.error("SIM_BACK_TO_PICKER_FAILED", err); } catch(_e2) {}
+        }
+      }, 220);
+    } catch(_e) {}
   }
 
   /* ===== GI-SIM-SAVE 2026-08-12 — שמירת חישוב פרמיה ושחזורו =================
@@ -883,6 +929,11 @@
         /* כל עוד שאלת השמירה על המסך — מקש Escape ולחיצות רקע של הסימולטור
            שמתחתיה לא רשאים לסגור אותו מאחורי גבה. */
         if(handler._giSavePromptOpen) return undefined;
+        /* חזרה לבחירת חברה/מוצר — ניווט בתוך המרכז, לא יציאה. בלי שאלת שמירה. */
+        if(handler._giSkipSavePrompt){
+          handler._giSkipSavePrompt = false;
+          return origClose();
+        }
         if(!riskSimShouldPromptSave(handler)) return origClose();
         /* close() מאפס את _ctx ואת _state, ולכן הצילום נלקח לפניו. */
         const snapshot = riskSimBuildSaveSnapshot(handler);

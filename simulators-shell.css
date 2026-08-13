@@ -368,6 +368,15 @@
   color:#2563EB !important;
   font-weight:750 !important;
 }
+.giSimShell__backBtn{
+  min-height:46px !important;
+  min-width:118px !important;
+  border-radius:12px !important;
+  border:1.5px solid #94A3B8 !important;
+  background:#fff !important;
+  color:#334155 !important;
+  font-weight:750 !important;
+}
 
 /* הסתרת טאבים ישנים / לייבל standalone */
 .giSimShellModal .giSimShell__insuredBar ~ [class*="__tabs"],
@@ -420,7 +429,8 @@
 @media (max-width: 760px){
   .giSimShellModal .giValModal__card{ max-width:96vw !important; }
   .giSimShell__premValue{ font-size:22px; }
-  .giSimShell__footActions{ width:100%; margin-inline-start:0 !important; }
-  .giSimShell__calcBtn{ flex:1; }
+  .giSimShell__footActions{ width:100%; margin-inline-start:0 !important; flex-wrap:wrap; }
+  .giSimShell__backBtn, .giSimShell__closeBtn{ flex:1; }
+  .giSimShell__calcBtn{ flex:1 1 100%; }
   .giSimShellModal .giValModal__foot{ gap:12px; }
 }

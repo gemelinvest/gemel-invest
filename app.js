@@ -30159,7 +30159,7 @@ UsersGateUI.init();
 
     /* GI-PERF-LAZY-SIMS 2026-08-09 */
   // Lazy simulator registry — engines in gi-simulators.js (~220KB parse deferred).
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260813-mgd-acc-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260813-simc-back-v2";
   const GI_SIMULATOR_CATALOG = Object.freeze([
     { company: "הפניקס", product: "ריסק" },
     { company: "הפניקס", product: "בריאות" },
@@ -30213,7 +30213,7 @@ UsersGateUI.init();
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
     "./simulators-center.css?v=20260812-simc-redesign-v1",
-    "./simulators-shell.css?v=20260813-mgd-acc-v1"
+    "./simulators-shell.css?v=20260813-simc-back-v2"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260812-cll-risk-v2";
@@ -30880,7 +30880,7 @@ UsersGateUI.init();
       return Object.keys(this._detailsErrors()).length === 0;
     },
 
-    async open(){
+    async open(opts){
       if(!Auth.canAccessSimulators?.()){
         try{
           window.showToast?.({ title: "אין הרשאה", text: "מרכז הסימולטורים זמין למנהל מערכת ומנהל בלבד.", variant: "warn", durationMs: 4200 });
@@ -30896,12 +30896,14 @@ UsersGateUI.init();
         } catch(_e2) {}
         return;
       }
+      const resume = (opts && typeof opts === "object" && !opts.target) ? opts : {};
+      const resumeDetails = (resume.details && typeof resume.details === "object") ? resume.details : null;
       this.close();
-      this._selectedCompany = "";
-      this._selectedProduct = "";
-      this._step = "details";
-      this._details = this._blankDetails();
-      this._touched = {};
+      this._selectedCompany = safeTrim(resume.company);
+      this._selectedProduct = safeTrim(resume.product);
+      this._step = (resume.step === "picker") ? "picker" : "details";
+      this._details = Object.assign(this._blankDetails(), resumeDetails || {});
+      this._touched = resumeDetails ? { birthDate: true, gender: true, smoker: true, insuranceStartDate: true, occupation: true } : {};
       this._view = "new";
       this._savesError = "";
       const modal = document.createElement("div");
@@ -31547,6 +31549,18 @@ UsersGateUI.init();
       }, 0);
     }
   };
+
+  try {
+    window.GI_SIM_BACK_TO_PICKER = (payload) => {
+      const src = payload && typeof payload === "object" ? payload : {};
+      void SimulatorsCenterUI.open({
+        step: "picker",
+        company: safeTrim(src.company),
+        product: safeTrim(src.product),
+        details: (src.details && typeof src.details === "object") ? src.details : {}
+      });
+    };
+  } catch(_e) {}
   // ===== סוף GI-SIM-CENTER ==========================================================
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
