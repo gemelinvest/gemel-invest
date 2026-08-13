@@ -216,7 +216,6 @@
 #lcWizard .btn:not(#\9):not(#\9),
 #lcAgentApptWizard .btn:not(#\9):not(#\9),
 #goldLeadModal .btn:not(#\9):not(#\9),
-.cqPanel .btn:not(#\9):not(#\9),
 .ciModal .btn:not(#\9):not(#\9){
   padding: 9px 16px !important;
   border-radius: 0 !important;
@@ -241,7 +240,6 @@
 #lcWizard .btn:hover:not(#\9):not(#\9),
 #lcAgentApptWizard .btn:hover:not(#\9):not(#\9),
 #goldLeadModal .btn:hover:not(#\9):not(#\9),
-.cqPanel .btn:hover:not(#\9):not(#\9),
 .ciModal .btn:hover:not(#\9):not(#\9){
   background: var(--uf-head-bg) !important;
   border-color: var(--uf-line) !important;
@@ -262,7 +260,6 @@
 #lcWizard .btn--primary:not(#\9):not(#\9),
 #lcAgentApptWizard .btn--primary:not(#\9):not(#\9),
 #goldLeadModal .btn--primary:not(#\9):not(#\9),
-.cqPanel .btn--primary:not(#\9):not(#\9),
 .ciModal .btn--primary:not(#\9):not(#\9){
   background: var(--uf-accent) !important;
   border-color: var(--uf-accent) !important;
@@ -281,7 +278,6 @@
 #lcWizard .btn--primary:hover:not(#\9):not(#\9),
 #lcAgentApptWizard .btn--primary:hover:not(#\9):not(#\9),
 #goldLeadModal .btn--primary:hover:not(#\9):not(#\9),
-.cqPanel .btn--primary:hover:not(#\9):not(#\9),
 .ciModal .btn--primary:hover:not(#\9):not(#\9){
   background: var(--uf-accent-hover) !important;
   border-color: var(--uf-accent-hover) !important;
@@ -476,49 +472,65 @@
 #view-customers .lcCustomers__toolbar:not(#\9):not(#\9){ gap: 10px !important; }
 #view-customers .lcCustomers__headMeta:not(#\9):not(#\9){ gap: 8px !important; }
 
-/* פאנל פרטי לקוח — נגלל מהצד, "כרטיס תיק" בסגנון mtq */
+/* פאנל פרטי לקוח — כותרת בכחול תפריט הצד, כרטיסי תוכן שטוחים */
 .cqPanel__panel:not(#\9):not(#\9){
-  background: var(--uf-canvas) !important;
+  background: #eef2f6 !important;
   border-inline-end: 1px solid var(--uf-line) !important;
   box-shadow: none !important;
 }
 .cqPanel__head:not(#\9):not(#\9){
-  background: var(--uf-surface) !important;
-  border-bottom: 1px solid var(--uf-line) !important;
+  background: #3870ED !important;
+  border-bottom: none !important;
 }
 .cqPanel__avatar:not(#\9):not(#\9){
-  background: var(--uf-accent-soft) !important;
-  color: var(--uf-accent) !important;
-  border-radius: 0 !important;
+  background: rgba(255,255,255,.18) !important;
+  color: #fff !important;
+  border-radius: 10px !important;
 }
-.cqPanel__name:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
+.cqPanel__name:not(#\9):not(#\9){ color: #fff !important; }
+.cqPanel__agent:not(#\9):not(#\9){ color: rgba(255,255,255,.82) !important; }
 .cqChip:not(#\9):not(#\9){
-  background: var(--uf-muted-bg) !important;
-  color: var(--uf-ink-2) !important;
-  border-radius: 0 !important;
-  border: 1px solid var(--uf-line) !important;
+  background: rgba(255,255,255,.14) !important;
+  color: #fff !important;
+  border-radius: 10px !important;
+  border: 1px solid rgba(255,255,255,.16) !important;
 }
 .cqChip--warn:not(#\9):not(#\9){ background: var(--uf-warn-bg) !important; color: var(--uf-warn) !important; border-color: var(--uf-warn-line) !important; }
 .cqPanel__close:not(#\9):not(#\9){
-  border-radius: 0 !important; border-color: var(--uf-line) !important; background: var(--uf-surface) !important;
+  border-radius: 10px !important; border-color: rgba(255,255,255,.16) !important;
+  background: rgba(255,255,255,.12) !important; color: #fff !important;
 }
 .cqPanel__foot:not(#\9):not(#\9){
   background: var(--uf-head-bg) !important; border-top: 1px solid var(--uf-line-soft) !important;
+}
+.cqPanel .btn:not(#\9):not(#\9){
+  height: 40px !important; padding: 0 14px !important; border-radius: 10px !important;
+  border: 1px solid var(--uf-line) !important; background: #fff !important; color: var(--uf-ink) !important;
+  font-size: 13px !important; font-weight: 700 !important; box-shadow: none !important;
+}
+.cqPanel .btn--primary:not(#\9):not(#\9){
+  background: #3870ED !important; border-color: #3870ED !important; color: #fff !important;
+}
+.cqPanel .btn--primary:hover:not(#\9):not(#\9){
+  background: #4A7EEE !important; border-color: #4A7EEE !important; color: #fff !important;
+}
+.cqSection:not(#\9):not(#\9){
+  background: #fff !important; border: 1px solid var(--uf-line) !important; border-radius: 10px !important;
 }
 .cqSection__title:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
 .cqRow:not(#\9):not(#\9){ border-bottom: 1px solid var(--uf-line-soft) !important; }
 .cqRow__label:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
 .cqFin__item:not(#\9):not(#\9){
-  background: var(--uf-surface) !important; border: 1px solid var(--uf-line) !important; border-radius: 0 !important;
+  background: var(--uf-surface) !important; border: 1px solid var(--uf-line) !important; border-radius: 10px !important;
 }
 .cqFin__disclaimer:not(#\9):not(#\9){
-  background: var(--uf-warn-bg) !important; border: 1px solid var(--uf-warn-line) !important; border-radius: 0 !important; color: var(--uf-warn) !important;
+  background: var(--uf-warn-bg) !important; border: 1px solid var(--uf-warn-line) !important; border-radius: 10px !important; color: var(--uf-warn) !important;
 }
-.cqEditRow__input:not(#\9):not(#\9){
-  border: 1px solid var(--uf-line) !important; border-radius: 0 !important;
+        .cqPanel .cqEditRow__input:not(#\9):not(#\9){
+  border: 1px solid var(--uf-line) !important; border-radius: 10px !important;
 }
-.cqEditRow__input:focus:not(#\9):not(#\9){ border-color: var(--uf-accent) !important; box-shadow: 0 0 0 2px var(--uf-accent-soft) !important; }
-.cqEditNote:not(#\9):not(#\9){ background: var(--uf-head-bg) !important; border-radius: 0 !important; }
+.cqPanel .cqEditRow__input:focus:not(#\9):not(#\9){ border-color: #3870ED !important; box-shadow: 0 0 0 3px rgba(56,112,237,.18) !important; }
+.cqEditNote:not(#\9):not(#\9){ background: var(--uf-head-bg) !important; border-radius: 10px !important; }
 
 /* מודאל ייבוא לקוחות (.ciModal) */
 .ciDrop:not(#\9):not(#\9){

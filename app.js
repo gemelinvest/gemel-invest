@@ -30241,8 +30241,8 @@ UsersGateUI.init();
   /* GI-PERF 2026-08-10 — CSS משני אחרי login בלבד (לא במסך הכניסה). */
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
-    "./gi-customers-import.css?v=20260813-prod-v1",
-    "./theme-unify-flat.css?v=20260809-perf-paint-v1"
+    "./gi-customers-import.css?v=20260813-cq-v1",
+    "./theme-unify-flat.css?v=20260813-cq-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
     if(document.documentElement.dataset.giSecondaryCss === "1") return;
@@ -62913,31 +62913,40 @@ ${inner}
         <div class="cqPanel__backdrop" data-cq-close></div>
         <aside class="cqPanel__panel" role="dialog" aria-modal="true" aria-label="פרטי לקוח">
           <div class="cqPanel__head">
-            <div class="cqPanel__ident">
-              <div class="cqPanel__avatar" id="cqAvatar">?</div>
-              <div>
-                <div class="cqPanel__name" id="cqName">טוען…</div>
-                <div class="cqPanel__meta" id="cqMeta"></div>
+            <div class="cqPanel__headTop">
+              <div class="cqPanel__ident">
+                <div class="cqPanel__avatar" id="cqAvatar">?</div>
+                <div>
+                  <div class="cqPanel__name" id="cqName">טוען…</div>
+                  <div class="cqPanel__agent" id="cqAgent"></div>
+                </div>
               </div>
+              <button class="cqPanel__close" type="button" data-cq-close aria-label="סגור">✕</button>
             </div>
-            <button class="cqPanel__close" type="button" data-cq-close aria-label="סגור">✕</button>
+            <div class="cqPanel__meta" id="cqMeta"></div>
           </div>
           <div class="cqPanel__body" id="cqBody"></div>
           <div class="cqPanel__foot" id="cqFoot">
             <button class="btn btn--primary" type="button" id="cqEdit">עריכה</button>
             <button class="btn" type="button" id="cqOpenFull">פתח תיק מלא</button>
-            <button class="btn" type="button" data-cq-close>סגור</button>
+            <button class="btn btn--ghost" type="button" data-cq-close>סגור</button>
           </div>
         </aside>`;
       document.body.appendChild(wrap);
       this.els.wrap = wrap;
       this.els.body = wrap.querySelector("#cqBody");
       this.els.name = wrap.querySelector("#cqName");
+      this.els.agent = wrap.querySelector("#cqAgent");
       this.els.meta = wrap.querySelector("#cqMeta");
       this.els.avatar = wrap.querySelector("#cqAvatar");
 
       on(wrap, "click", (ev) => {
         if(ev.target?.closest?.("[data-cq-close]")) this.close();
+        const copyEl = ev.target?.closest?.("[data-cq-copy]");
+        if(copyEl){
+          const text = safeTrim(copyEl.getAttribute("data-cq-copy"));
+          if(text) ciCopyToClipboard(text, copyEl);
+        }
       });
       on(wrap.querySelector("#cqEdit"), "click", () => this.enterEditMode());
       on(wrap.querySelector("#cqOpenFull"), "click", () => {
@@ -63002,7 +63011,7 @@ ${inner}
         foot.innerHTML = `
           <button class="btn btn--primary" type="button" id="cqEdit">עריכה</button>
           <button class="btn" type="button" id="cqOpenFull">פתח תיק מלא</button>
-          <button class="btn" type="button" data-cq-close>סגור</button>`;
+          <button class="btn btn--ghost" type="button" data-cq-close>סגור</button>`;
         on(foot.querySelector("#cqEdit"), "click", () => this.enterEditMode());
         on(foot.querySelector("#cqOpenFull"), "click", () => {
           const id = this.currentId;
@@ -63132,12 +63141,18 @@ ${inner}
       const name = safeTrim(record.fullName) || "לקוח";
       this.els.name.textContent = name;
       this.els.avatar.textContent = name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
-      const chips = [];
-      if(safeTrim(record.status)) chips.push(`<span class="cqChip">${escapeHtml(record.status)}</span>`);
-      if(safeTrim(record.idNumber)) chips.push(`<span class="cqChip cqChip--mono" dir="ltr">${escapeHtml(record.idNumber)}</span>`);
-      if(safeTrim(record.agentName)) chips.push(`<span class="cqChip">נציג: ${escapeHtml(record.agentName)}</span>`);
-      else chips.push(`<span class="cqChip cqChip--warn">ללא נציג</span>`);
-      this.els.meta.innerHTML = chips.join("");
+      const agentName = safeTrim(record.agentName);
+      if(this.els.agent){
+        this.els.agent.textContent = agentName ? ("נציג · " + agentName) : "ללא נציג";
+        this.els.agent.classList.toggle("is-warn", !agentName);
+      }
+      const idNumber = safeTrim(record.idNumber);
+      this.els.meta.innerHTML = idNumber
+        ? `<button type="button" class="cqChip cqChip--id" dir="ltr" data-cq-copy="${escapeHtml(idNumber)}" title="לחץ להעתקה">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="7" y="7" width="12" height="14" rx="1.5"/><path d="M5 17V5.5A1.5 1.5 0 0 1 6.5 4H16"/></svg>
+            ${escapeHtml(idNumber)}
+          </button>`
+        : "";
     },
 
     paintBody(record){
@@ -63162,20 +63177,47 @@ ${inner}
             <div class="cqRow__value${opts?.mono ? " cqRow__value--mono" : ""}"${opts?.ltr ? ' dir="ltr"' : ""}>${opts?.html ? value : escapeHtml(String(value))}</div>
           </div>`).join("");
 
+      const factsHtml = (rows) => {
+        const filled = rows.filter(([, value]) => safeTrim(value) !== "");
+        if(!filled.length) return "";
+        return `<div class="cqFacts">${filled.map(([label, value]) => `
+          <div class="cqFact">
+            <div class="cqFact__label">${escapeHtml(label)}</div>
+            <div class="cqFact__value">${escapeHtml(String(value))}</div>
+          </div>`).join("")}</div>`;
+      };
+
       const section = (title, inner, extraClass = "") => inner
         ? `<section class="cqSection ${extraClass}"><h4 class="cqSection__title">${escapeHtml(title)}</h4>${inner}</section>`
         : "";
 
-      const phoneValue = pick(prof.mobile, record.phone, primary.phone);
-      const contactRows = rowsHtml([
-        ["סלולרי", phoneValue, { mono: true, ltr: true }],
-        ["טלפון נוסף", pick(prof.landline, primary.landline), { mono: true, ltr: true }],
-        ["דוא\"ל", pick(prof.email, record.email, primary.email), { ltr: true }]
-      ]);
+      const iconPhone = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 4h4l2 5-3 2a12 12 0 0 0 6 6l2-3 5 2v4a2 2 0 0 1-2 2C9 22 2 15 2 6a2 2 0 0 1 2-2z"/></svg>`;
+      const iconMail = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 7 9-7"/></svg>`;
+      const iconPin = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s7-6.2 7-11a7 7 0 1 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.2"/></svg>`;
+      const iconCopy = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/></svg>`;
 
-      const personalRows = rowsHtml([
-        ["שם מלא", pick(record.fullName)],
-        ["תעודת זהות", pick(record.idNumber, prof.idNumber), { mono: true, ltr: true }],
+      const contactItem = (icon, label, value, ltr) => {
+        const t = safeTrim(value);
+        if(!t) return "";
+        return `<div class="cqContact__row">
+          <div class="cqContact__icon">${icon}</div>
+          <div class="cqContact__meta">
+            <div class="cqContact__label">${escapeHtml(label)}</div>
+            <div class="cqContact__value"${ltr ? ' dir="ltr"' : ""}>${escapeHtml(t)}</div>
+          </div>
+          <button type="button" class="cqCopy" data-cq-copy="${escapeHtml(t)}" title="לחץ להעתקה" aria-label="העתקה">${iconCopy}</button>
+        </div>`;
+      };
+
+      const phoneValue = pick(prof.mobile, record.phone, primary.phone);
+      const contactInner = [
+        contactItem(iconPhone, "סלולרי", phoneValue, true),
+        contactItem(iconPhone, "טלפון נוסף", pick(prof.landline, primary.landline), true),
+        contactItem(iconMail, "דוא\"ל", pick(prof.email, record.email, primary.email), true)
+      ].filter(Boolean).join("");
+      const contactRows = contactInner ? `<div class="cqContact">${contactInner}</div>` : "";
+
+      const personalRows = factsHtml([
         ["מגדר", pick(prof.gender, primary.gender)],
         ["תאריך לידה", birthDate ? ciFormatDate(birthDate) + (age != null ? ` (גיל ${age})` : "") : ""],
         ["מצב משפחתי", pick(prof.maritalStatus, primary.maritalStatus)],
@@ -63183,12 +63225,18 @@ ${inner}
         ["מקצוע", pick(prof.occupation, primary.occupation)]
       ]);
 
-      const addressRows = rowsHtml([
-        ["רחוב", pick(prof.street, primary.street)],
-        ["מספר בית", pick(prof.houseNumber, primary.houseNumber)],
-        ["דירה", pick(prof.apartment, primary.apartment)],
-        ["יישוב", pick(record.city, prof.city, primary.city)]
-      ]);
+      const street = pick(prof.street, primary.street);
+      const house = pick(prof.houseNumber, primary.houseNumber);
+      const apt = pick(prof.apartment, primary.apartment);
+      const city = pick(record.city, prof.city, primary.city);
+      const addrLine = [street, house, apt ? ("דירה " + apt) : ""].filter(Boolean).join(" ");
+      const addressRows = (addrLine || city) ? `<div class="cqAddr">
+        <div class="cqAddr__icon">${iconPin}</div>
+        <div>
+          ${addrLine ? `<div class="cqAddr__line">${escapeHtml(addrLine)}</div>` : ""}
+          ${city ? `<div class="cqAddr__city">${escapeHtml(city)}</div>` : ""}
+        </div>
+      </div>` : "";
 
       /* GI-UI 2026-08-09: אזור «נתוני צבירה ופרמיה מהדוח» הוסר מתצוגת פרטים אישיים — לא רלוונטי. */
 
