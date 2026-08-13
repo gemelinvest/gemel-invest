@@ -3835,6 +3835,23 @@ init(){
             return;
           }
         }
+        if(this.step === 6){
+          this.setHint(v.msg || "יש להזין מספר כרטיס תקין לפי סוג הכרטיס");
+          try { this.updateHealthPaymentCardUi(this.insureds[0], { revealShort: true }); } catch(_e){}
+          try {
+            window.showToast?.({
+              title: "לא ניתן להמשיך",
+              text: v.msg || "יש להזין מספר כרטיס תקין לפי סוג הכרטיס",
+              singletonKey: "wizard-step6-pan",
+              variant: "warn",
+              durationMs: 5600
+            });
+          } catch(_e){}
+          requestAnimationFrame(() => {
+            this.els?.body?.querySelector?.("#lcHealthPayPan")?.focus?.();
+          });
+          return;
+        }
         // שלב 5 — פוליסות חדשות: toast + סימון ויזואלי + פוקוס
         if(this.step === 5 && Array.isArray(v.items) && v.items.length){
           this.showNewPolicyStepValidationFailure(v, {
@@ -12039,6 +12056,24 @@ if(path === "birthDate"){
           // normal bind
           this.setPath(ins.data, path, v);
 
+          if(path === "cc.cardNumber"){
+            const dig = digitsOnly(v);
+            this.setPath(ins.data, path, dig);
+            const disp = this.formatHealthPanDisplay(dig);
+            if(el.value !== disp) el.value = disp;
+            this.updateHealthPaymentCardUi(ins);
+            this.setHint("");
+            return;
+          }
+          if(path === "cc.exp"){
+            const dig = digitsOnly(v).slice(0, 4);
+            let out = dig.slice(0, 2);
+            if(dig.length > 2) out += "/" + dig.slice(2, 4);
+            this.setPath(ins.data, path, out);
+            if(el.value !== out) el.value = out;
+            this.setHint("");
+            return;
+          }
           if(path === "ho.branch"){
             this.scheduleHoBranchLookup(ins);
             this.setHint("");
@@ -12079,6 +12114,9 @@ if(path === "birthDate"){
 
         on(el, "input", () => setVal(false));
         on(el, "change", () => setVal(true));
+        if(path === "cc.cardNumber"){
+          on(el, "blur", () => this.updateHealthPaymentCardUi(ins, { revealShort: true }));
+        }
       });
 
       const addExist = $("#lcAddExistingPolicy", this.els.body);
@@ -17336,6 +17374,120 @@ if(path === "birthDate"){
       el.innerHTML = "מספר הסניף לא נמצא בבנק שנבחר. בדקו שהמספר נכון.";
     },
 
+    detectHealthCardBrand(panDigitsRaw){
+      const d = digitsOnly(panDigitsRaw || "");
+      if(!d.length) return { key: "unknown", labelHe: "כרטיס אשראי", expected: 0 };
+      const c2 = d.slice(0, 2);
+      const c4 = d.slice(0, 4);
+      if(d[0] === "4") return { key: "visa", labelHe: "Visa · ויזה", expected: 16 };
+      if(c2 === "34" || c2 === "37") return { key: "amex", labelHe: "American Express", expected: 15 };
+      if(c2 === "36" || c2 === "38" || c4 === "3095" || d.slice(0, 3) === "305"){
+        return { key: "diners", labelHe: "Diners Club · דיינרס", expected: 14 };
+      }
+      if(/^5[1-5]/.test(d)) return { key: "mastercard", labelHe: "Mastercard · מאסטרקארד", expected: 16 };
+      if(d[0] === "2"){
+        const pref4 = parseInt(d.slice(0, 4), 10);
+        if(Number.isFinite(pref4) && pref4 >= 2221 && pref4 <= 2720){
+          return { key: "mastercard", labelHe: "Mastercard · מאסטרקארד", expected: 16 };
+        }
+      }
+      return { key: "isracard", labelHe: "ישראכרט", expected: 9, expectedMin: 8, expectedMax: 9 };
+    },
+
+    formatHealthPanDisplay(digitsRaw){
+      const d = digitsOnly(digitsRaw || "");
+      if(!d) return "";
+      return d.replace(/(\d{4})(?=\d)/g, "$1 ").trim();
+    },
+
+    evaluateHealthCardPan(panDigitsRaw){
+      const pan = digitsOnly(panDigitsRaw || "");
+      if(!pan) return { state: "idle", brand: this.detectHealthCardBrand(""), message: "" };
+      const brand = this.detectHealthCardBrand(pan);
+      const len = pan.length;
+      if(brand.key === "isracard"){
+        if(len < 8){
+          return { state: "short", brand, message: "חסרות ספרות. לכרטיס ישראכרט נדרשות 8 או 9 ספרות." };
+        }
+        if(len > 9){
+          return { state: "long", brand, message: "יש יותר מדי ספרות. לכרטיס ישראכרט נדרשות 8 או 9 ספרות." };
+        }
+        return { state: "ok", brand, message: len + " / " + len + " ספרות · המספר תואם לכרטיס ישראכרט" };
+      }
+      if(!brand.expected){
+        return { state: "unknown", brand, message: "לא מזוהה סוג כרטיס. בדקו את המספר." };
+      }
+      if(len < brand.expected){
+        return { state: "short", brand, message: "חסרות ספרות. לכרטיס " + brand.labelHe + " נדרשות " + brand.expected + " ספרות." };
+      }
+      if(len > brand.expected){
+        return { state: "long", brand, message: "יש יותר מדי ספרות. לכרטיס " + brand.labelHe + " נדרשות " + brand.expected + " ספרות." };
+      }
+      return { state: "ok", brand, message: len + " / " + brand.expected + " ספרות · המספר תואם לכרטיס " + brand.labelHe };
+    },
+
+    getHealthCardPanGate(ins){
+      if(this.resolveStep6PaymentMethod(ins) !== "cc") return { ok: true, msg: "", path: "" };
+      const pan = digitsOnly(ins?.data?.cc?.cardNumber || "");
+      const ev = this.evaluateHealthCardPan(pan);
+      if(ev.state === "ok") return { ok: true, msg: "", path: "" };
+      if(ev.state === "idle") return { ok: false, msg: "יש להזין מספר כרטיס תקין לפי סוג הכרטיס", path: "cc.cardNumber" };
+      return { ok: false, msg: ev.message, path: "cc.cardNumber" };
+    },
+
+    healthCardBrandColor(key){
+      const map = {
+        visa: "#1A1F71",
+        mastercard: "#EB001B",
+        amex: "#006FCF",
+        diners: "#0079BE",
+        isracard: "#1B365D",
+        unknown: "#3870ED"
+      };
+      return map[key] || map.unknown;
+    },
+
+    renderHealthCardBrandLogo(key){
+      const logos = {
+        visa: '<svg viewBox="0 0 132 42" fill="none" aria-hidden="true"><path fill="#1A1F71" d="M54.2 31.2 60.4 5.6h9.4L63.6 31.2H54.2Zm43.4-18.4c-1.9-.8-4.8-1.7-8.5-1.7-9.4 0-16 4.9-16.1 12 0 5.2 4.8 8.1 8.5 9.8 3.8 1.8 5.1 2.9 5.1 4.5 0 2.4-3 3.5-5.8 3.5-3.9 0-5.9-.5-9.1-1.8l-1.3-.6-1.3 8c2.3.9 6.4 1.8 10.7 1.8 10.1 0 16.6-4.8 16.7-12.3 0-4.1-2.5-7.2-8-9.7-3.3-1.6-5.4-2.7-5.4-4.3.1-1.5 1.7-3 5.4-3 3.1 0 5.3.6 7 .1.6.3 1.4.6 1.8.8l1.4-7.9Zm21.2 25.8h8.3l7.3-25.6h-8.3c-1.5 0-2.6.4-3.2 1.9l-13.1 23.7h9.2l1.8-5h11.3l1.1 5Zm-10.4-11.4 4.6-12.6.3-.1 2.7 12.7h-7.6ZM47.3 5.6l-8.6 25.6h-9.2L24.8 12c-.6-2.2-1.1-3-2.9-3.9-6-2.6-12.5-5-12.5-5l.2-.8h15.3c2 0 3.7 1.3 4.2 3.6l3.8 20.3 9.4-23.9h9.2Z"/><path fill="#F7B600" d="M9.4 5.6 0 31.2h8.8l9.4-25.6H9.4Z"/></svg>',
+        mastercard: '<svg viewBox="0 0 78 48" aria-hidden="true"><circle cx="30" cy="24" r="18" fill="#EB001B"/><circle cx="48" cy="24" r="18" fill="#F79E1B"/><path fill="#FF5F00" d="M39 9.6a18 18 0 0 0 0 28.8 18 18 0 0 0 0-28.8Z"/></svg>',
+        amex: '<svg viewBox="0 0 84 52" aria-hidden="true"><rect width="84" height="52" rx="4" fill="#006FCF"/><text x="42" y="24" text-anchor="middle" fill="#fff" font-size="9" font-weight="800" font-family="Arial Black,Arial">AMERICAN</text><text x="42" y="38" text-anchor="middle" fill="#fff" font-size="9" font-weight="800" font-family="Arial Black,Arial">EXPRESS</text></svg>',
+        diners: '<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="23" fill="#0079BE"/><circle cx="24" cy="24" r="16" fill="#fff"/><path fill="#0079BE" d="M16 24c0-6.1 3.2-11.4 8-14.4v28.8c-4.8-3-8-8.3-8-14.4Zm8-14.4c4.8 3 8 8.3 8 14.4s-3.2 11.4-8 14.4V9.6Z"/></svg>',
+        isracard: '<svg viewBox="0 0 160 36" aria-hidden="true"><rect x="0" y="8" width="20" height="20" rx="3" fill="#E30613"/><path fill="#fff" d="M6.2 23V13h3.1l3.4 7.4h.1L16.2 13h3.1v10h-2.4v-6.7h-.1l-3.2 6.7h-1.8l-3.2-6.7h-.1V23H6.2Z"/><text x="28" y="25" fill="#1B365D" font-size="16" font-weight="800" font-family="Heebo,Arial">isracard</text></svg>'
+      };
+      return logos[key] || "";
+    },
+
+    updateHealthPaymentCardUi(ins, opts){
+      const root = this.els?.body;
+      const card = root?.querySelector?.("#lcHealthPayCard");
+      if(!card) return;
+      const panEl = root.querySelector('[data-bind="cc.cardNumber"]');
+      const pan = digitsOnly(ins?.data?.cc?.cardNumber || panEl?.value || "");
+      const ev = this.evaluateHealthCardPan(pan);
+      const brand = ev.brand || this.detectHealthCardBrand(pan);
+      const keys = ["unknown", "visa", "mastercard", "amex", "diners", "isracard"];
+      keys.forEach((k) => card.classList.remove("lcElemPaymentCard--" + k, "lcHealthPayCard--" + k));
+      card.classList.add("lcElemPaymentCard--" + brand.key, "lcHealthPayCard--" + brand.key);
+      card.dataset.brand = brand.key;
+      card.style.setProperty("--brand", this.healthCardBrandColor(brand.key));
+      const logo = root.querySelector("#lcHealthPayLogo");
+      if(logo) logo.innerHTML = this.renderHealthCardBrandLogo(brand.key);
+      const status = root.querySelector("#lcHealthPayPanStatus");
+      if(status){
+        const liveShort = ev.state === "short" && !(opts && opts.revealShort);
+        if(ev.state === "idle" || liveShort){
+          status.hidden = true;
+          status.className = "lcHealthPayPanStatus";
+          status.textContent = "";
+        } else {
+          status.hidden = false;
+          status.className = "lcHealthPayPanStatus is-" + (ev.state === "ok" ? "ok" : "bad");
+          status.textContent = ev.message;
+        }
+      }
+    },
+
     /** קובע cc/ho לפי המסך והנתונים — לא נופל ל-CVV כשהנציג על הוראת קבע */
     resolveStep6PaymentMethod(ins){
       const d = ins?.data || {};
@@ -17385,6 +17537,7 @@ if(path === "birthDate"){
           const liveResult = validateValueByKind(validationCfg.kind, v, { allowBlank:true });
           v = liveResult.clean;
         }
+        if(path === "cc.cardNumber") v = digitsOnly(v);
         this.setPath(d, path, v);
       });
       d.paymentMethod = this.resolveStep6PaymentMethod(ins);
@@ -17421,6 +17574,85 @@ if(path === "birthDate"){
           <input class="input" data-bind="${escapeHtml(bind)}" value="${escapeHtml(value||"")}" ${modeAttr} autocomplete="off" />
         </div>`;
       };
+      let payHtml = "";
+      if(method === "cc"){
+        const pan = digitsOnly(d.cc?.cardNumber || "");
+        const ev = this.evaluateHealthCardPan(pan);
+        const brand = ev.brand || this.detectHealthCardBrand(pan);
+        const panShown = this.formatHealthPanDisplay(pan);
+        const showStatus = ev.state && ev.state !== "idle" && ev.state !== "short";
+        payHtml = `
+            <div id="lcHealthPayCard" class="lcElemPaymentCard lcHealthPayCard lcHealthPayCard--${escapeHtml(brand.key)} lcElemPaymentCard--${escapeHtml(brand.key)}" data-brand="${escapeHtml(brand.key)}" dir="ltr" style="--brand:${escapeHtml(this.healthCardBrandColor(brand.key))}">
+              <div class="lcElemPaymentCard__noise" aria-hidden="true"></div>
+              <div class="lcHealthPayCard__top">
+                <div class="lcHealthPayCard__chipRow">
+                  <div class="lcElemPaymentCard__chip" aria-hidden="true"></div>
+                  <svg class="lcHealthPayCard__contactless" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 8c2.5 2.2 2.5 5.8 0 8M12 5.5c3.8 3.2 3.8 9.8 0 13M16 3c5 4.4 5 13.6 0 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                </div>
+                <div class="lcHealthPayCard__logo" id="lcHealthPayLogo">${this.renderHealthCardBrandLogo(brand.key)}</div>
+              </div>
+              <div class="lcHealthPayCard__nums">
+                <div class="lcElemPaymentCard__field lcElemPaymentCard__field--pan">
+                  <label class="lcElemPaymentCard__label" for="lcHealthPayPan">מספר כרטיס</label>
+                  <input id="lcHealthPayPan" class="lcElemPaymentCard__input lcElemPaymentCard__input--pan" type="text" inputmode="numeric" autocomplete="off" placeholder="0000 0000 0000 0000" data-bind="cc.cardNumber" value="${escapeHtml(panShown)}" dir="ltr" />
+                </div>
+                <div class="lcElemPaymentCard__field lcElemPaymentCard__field--exp">
+                  <label class="lcElemPaymentCard__label">תוקף</label>
+                  <input class="lcElemPaymentCard__input lcElemPaymentCard__input--exp" type="text" inputmode="numeric" autocomplete="off" placeholder="MM/YY" maxlength="5" data-bind="cc.exp" value="${escapeHtml(d.cc?.exp || "")}" dir="ltr" />
+                </div>
+                <div class="lcElemPaymentCard__field lcElemPaymentCard__field--cvv">
+                  <label class="lcElemPaymentCard__label">CVV</label>
+                  <input class="lcElemPaymentCard__input" type="text" inputmode="numeric" autocomplete="off" maxlength="4" data-bind="cc.cvv" value="${escapeHtml(d.cc?.cvv || "")}" dir="ltr" />
+                </div>
+              </div>
+              <div class="lcHealthPayPanStatus${showStatus ? (ev.state === "ok" ? " is-ok" : " is-bad") : ""}" id="lcHealthPayPanStatus"${showStatus ? "" : " hidden"}>${showStatus ? escapeHtml(ev.message) : ""}</div>
+              <div class="lcElemPaymentCard__identityGrid">
+                <div class="lcElemPaymentCard__field">
+                  <label class="lcElemPaymentCard__label">שם בעל הכרטיס</label>
+                  <input class="lcElemPaymentCard__input lcHealthPayCard__name" type="text" autocomplete="name" data-bind="cc.holderName" value="${escapeHtml(d.cc?.holderName || "")}" dir="rtl" />
+                </div>
+                <div class="lcElemPaymentCard__field lcElemPaymentCard__field--holderId">
+                  <label class="lcElemPaymentCard__label">ת״ז בעל הכרטיס</label>
+                  <input class="lcElemPaymentCard__input" type="text" inputmode="numeric" maxlength="9" autocomplete="off" data-bind="cc.holderId" value="${escapeHtml(d.cc?.holderId || "")}" dir="ltr" />
+                </div>
+              </div>
+            </div>`;
+      } else {
+        payHtml = `
+            <div class="lcElemPaymentCard lcHealthPayCard lcHealthPayCard--ho" dir="ltr" style="--brand:#3870ED">
+              <div class="lcElemPaymentCard__noise" aria-hidden="true"></div>
+              <div class="lcHealthPayCard__top">
+                <div class="lcHealthPayCard__chipRow">
+                  <div class="lcElemPaymentCard__chip" aria-hidden="true"></div>
+                  <svg class="lcHealthPayCard__contactless" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 8c2.5 2.2 2.5 5.8 0 8M12 5.5c3.8 3.2 3.8 9.8 0 13M16 3c5 4.4 5 13.6 0 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                </div>
+                <span class="lcHealthPayCard__hoBadge">הוראת קבע</span>
+              </div>
+              <div class="lcElemPaymentCard__field" style="position:relative;z-index:1">
+                <label class="lcElemPaymentCard__label">שם הבנק</label>
+                <select class="lcElemPaymentCard__input lcHealthPayCard__name" data-payer="ho.bankName" dir="rtl">
+                  <option value="">בחר…</option>
+                  ${this.bankNames.map(b => `<option value="${escapeHtml(b)}"${d.ho?.bankName===b?" selected":""}>${escapeHtml(b)}</option>`).join("")}
+                </select>
+              </div>
+              <div class="lcHealthPayCard__hoNums">
+                <div class="lcElemPaymentCard__field">
+                  <label class="lcElemPaymentCard__label">מספר בנק</label>
+                  <input class="lcElemPaymentCard__input" data-bind="ho.bankNo" value="${escapeHtml(d.ho?.bankNo || "")}" dir="ltr" inputmode="numeric" autocomplete="off" readonly />
+                  <div class="help" dir="rtl">מתמלא אוטומטית לפי הבנק שנבחר</div>
+                </div>
+                <div class="lcElemPaymentCard__field">
+                  <label class="lcElemPaymentCard__label">מספר סניף</label>
+                  <input class="lcElemPaymentCard__input" data-bind="ho.branch" value="${escapeHtml(d.ho?.branch || "")}" dir="ltr" inputmode="numeric" autocomplete="off" />
+                </div>
+              </div>
+              <div class="lcHoBranchStatus" id="lcHoBranchStatus" hidden></div>
+              <div class="lcElemPaymentCard__field" style="position:relative;z-index:1;margin-bottom:2px">
+                <label class="lcElemPaymentCard__label">מספר חשבון</label>
+                <input class="lcElemPaymentCard__input" data-bind="ho.account" value="${escapeHtml(d.ho?.account || "")}" dir="ltr" inputmode="numeric" autocomplete="off" />
+              </div>
+            </div>`;
+      }
       return `
         <div class="lcWSection">
           <div class="lcWTitle">פרטי משלם</div>
@@ -17473,36 +17705,7 @@ if(path === "birthDate"){
 
           <div class="divider"></div>
 
-          ${method==="cc" ? `
-            <div class="lcWGrid">
-              ${reqField("שם מחזיק/ה","cc.holderName", d.cc?.holderName || "")}
-              ${reqField("ת״ז מחזיק/ה","cc.holderId", d.cc?.holderId || "", "numeric")}
-              ${reqField("מספר כרטיס","cc.cardNumber", d.cc?.cardNumber || "", "numeric")}
-              ${reqField("תוקף (MM/YY)","cc.exp", d.cc?.exp || "", "text")}
-              ${reqField("CVV","cc.cvv", d.cc?.cvv || "", "numeric")}
-            </div>
-          ` : `
-            <div class="lcWGrid">
-              <div class="field" data-required>
-                <label class="label">שם הבנק</label>
-                <select class="input" data-payer="ho.bankName">
-                  <option value="">בחר…</option>
-                  ${this.bankNames.map(b => `<option value="${escapeHtml(b)}"${d.ho?.bankName===b?" selected":""}>${escapeHtml(b)}</option>`).join("")}
-                </select>
-              </div>
-              <div class="field" data-required>
-                <label class="label">מספר בנק</label>
-                <input class="input" data-bind="ho.bankNo" value="${escapeHtml(d.ho?.bankNo || "")}" dir="ltr" inputmode="numeric" autocomplete="off" readonly />
-                <div class="help">מתמלא אוטומטית לפי הבנק שנבחר</div>
-              </div>
-              <div class="field" data-required>
-                <label class="label">מספר סניף</label>
-                <input class="input" data-bind="ho.branch" value="${escapeHtml(d.ho?.branch || "")}" dir="ltr" inputmode="numeric" autocomplete="off" />
-                <div class="lcHoBranchStatus" id="lcHoBranchStatus" hidden></div>
-              </div>
-              ${reqField("מספר חשבון","ho.account", d.ho?.account || "", "numeric")}
-            </div>
-          `}
+          ${payHtml}
         </div>
       `;
     },
@@ -27502,9 +27705,14 @@ if(path === "birthDate"){
         const res = this.validateStep5();
         return res;
       }
-      // Step 6: פרטי משלם — ללא חסימה: תמיד מאפשרים מעבר להצהרת בריאות
+      // Step 6: פרטי משלם — חסימת «הבא» רק באשראי כשאורך ה-PAN לא תואם למותג.
+      // שמירה, מנורות שלב, והוראת קבע נשארים בלי שער חדש.
       if(stepId === 6){
         try { this.syncStep6PaymentFieldsFromDom?.(this.insureds[0]); } catch(_e){}
+        const panGate = this.getHealthCardPanGate?.(this.insureds[0]);
+        if(panGate && panGate.ok === false){
+          return { ok:false, msg: panGate.msg || "יש להזין מספר כרטיס תקין לפי סוג הכרטיס", path: panGate.path || "cc.cardNumber" };
+        }
         return { ok:true };
       }
       if(stepId === 7){

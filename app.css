@@ -30767,6 +30767,98 @@ input[inputmode="tel"] {
   }
 }
 
+/* בריאות/סיכונים · שלב 6 — כרטיס אשראי / הוראת קבע */
+#lcWizard .lcHealthPayCard__top{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  position: relative;
+  z-index: 1;
+}
+#lcWizard .lcHealthPayCard__chipRow{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+#lcWizard .lcHealthPayCard__contactless{
+  width: 22px;
+  height: 22px;
+  opacity: .55;
+  color: inherit;
+}
+#lcWizard .lcHealthPayCard__logo{
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+#lcWizard .lcHealthPayCard__logo svg{
+  height: 32px;
+  width: auto;
+  max-width: 140px;
+  display: block;
+}
+#lcWizard .lcHealthPayCard__hoBadge{
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(43,75,138,.92);
+  background: rgba(255,255,255,.86);
+  border: 1px solid rgba(43,75,138,.14);
+}
+#lcWizard .lcHealthPayCard__nums{
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 108px 92px;
+  gap: 0 12px;
+  position: relative;
+  z-index: 1;
+}
+#lcWizard .lcHealthPayCard__hoNums{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 12px;
+  position: relative;
+  z-index: 1;
+}
+#lcWizard .lcHealthPayCard .lcElemPaymentCard__identityGrid{
+  position: relative;
+  z-index: 1;
+}
+#lcWizard .lcHealthPayCard__name{
+  font-family: inherit;
+  font-weight: 700;
+  letter-spacing: 0;
+  font-size: 14px;
+}
+#lcWizard .lcHealthPayPanStatus{
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  position: relative;
+  z-index: 1;
+  border-radius: 10px;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+#lcWizard .lcHealthPayCard .help{
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: #647287;
+  font-family: inherit;
+  letter-spacing: 0;
+}
+@media (max-width: 560px){
+  #lcWizard .lcHealthPayCard__nums,
+  #lcWizard .lcHealthPayCard__hoNums{
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
+
 .lcElemPaymentCard{
   position: relative;
   overflow: hidden;
