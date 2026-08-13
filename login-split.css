@@ -413,3 +413,36 @@ body.lcAuthLock .lcLogin--mfa .lcLogin__card:not(#\9):not(#\9){
     max-height:22vh !important;
   }
 }
+
+body.lcAuthLock .lcLogin__faceBtn:not(#\9):not(#\9){
+  width:100% !important;
+  min-height:48px !important;
+  margin:0 0 8px !important;
+  border-radius:12px !important;
+  border:1px solid #c7d2fe !important;
+  background:#eef2ff !important;
+  color:#1e3a8a !important;
+  font-weight:800 !important;
+  box-shadow:none !important;
+}
+body.lcAuthLock .lcLogin__or:not(#\9):not(#\9){
+  text-align:center !important;
+  color:#64748b !important;
+  font-size:12px !important;
+  font-weight:700 !important;
+  margin:2px 0 10px !important;
+}
+body.lcAuthLock .lcLogin__facePanel:not(#\9):not(#\9){
+  display:grid !important;
+  justify-items:center !important;
+  gap:10px !important;
+  margin:0 0 12px !important;
+  padding:12px !important;
+  border:1px solid #e2e8f0 !important;
+  border-radius:14px !important;
+  background:#f8fafc !important;
+}
+body.lcAuthLock .lcLogin__facePanel[hidden]:not(#\9):not(#\9){display:none !important}
+body.lcAuthLock .lcLogin--mfa .lcLogin__faceBtn,
+body.lcAuthLock .lcLogin--mfa .lcLogin__facePanel,
+body.lcAuthLock .lcLogin--mfa .lcLogin__or{display:none !important}

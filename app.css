@@ -30767,80 +30767,32 @@ input[inputmode="tel"] {
   }
 }
 
-/* בריאות/סיכונים · שלב 6 — כרטיס אשראי / הוראת קבע */
-#lcWizard .lcHealthPayCard__top{
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
-  position: relative;
-  z-index: 1;
+/* בריאות/סיכונים · שלב 6 — אותה מעטפת כמו כרטיס האשראי באלמנטרי */
+#lcWizard .lcHealthPayShell{
+  width: 100%;
+  max-width: min(100%, 580px);
+  margin-inline: auto;
+  box-sizing: border-box;
 }
-#lcWizard .lcHealthPayCard__chipRow{
-  display: flex;
-  align-items: center;
-  gap: 10px;
+#lcWizard .lcHealthPayCard.lcElemPaymentCard{
+  padding: 22px 20px 18px;
 }
-#lcWizard .lcHealthPayCard__contactless{
-  width: 22px;
-  height: 22px;
-  opacity: .55;
-  color: inherit;
+#lcWizard .lcHealthPayCard__nums.lcElemPaymentCard__numbersGrid{
+  grid-template-columns: minmax(0, 1fr) minmax(88px, 110px) minmax(72px, 92px);
 }
-#lcWizard .lcHealthPayCard__logo{
-  min-height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-}
-#lcWizard .lcHealthPayCard__logo svg{
-  height: 32px;
-  width: auto;
-  max-width: 140px;
-  display: block;
-}
-#lcWizard .lcHealthPayCard__hoBadge{
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 800;
-  color: rgba(43,75,138,.92);
-  background: rgba(255,255,255,.86);
-  border: 1px solid rgba(43,75,138,.14);
-}
-#lcWizard .lcHealthPayCard__nums{
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 108px 92px;
-  gap: 0 12px;
-  position: relative;
-  z-index: 1;
-}
-#lcWizard .lcHealthPayCard__hoNums{
-  display: grid;
+#lcWizard .lcHealthPayCard__hoNums.lcElemPaymentCard__numbersGrid{
   grid-template-columns: 1fr 1fr;
-  gap: 0 12px;
-  position: relative;
-  z-index: 1;
-}
-#lcWizard .lcHealthPayCard .lcElemPaymentCard__identityGrid{
-  position: relative;
-  z-index: 1;
+  align-items: start;
 }
 #lcWizard .lcHealthPayCard__name{
   font-family: inherit;
-  font-weight: 700;
   letter-spacing: 0;
-  font-size: 14px;
 }
 #lcWizard .lcHealthPayPanStatus{
   margin: 0 0 12px;
   padding: 8px 10px;
   position: relative;
   z-index: 1;
-  border-radius: 10px;
   font-size: 12.5px;
   line-height: 1.4;
 }
@@ -30852,8 +30804,8 @@ input[inputmode="tel"] {
   letter-spacing: 0;
 }
 @media (max-width: 560px){
-  #lcWizard .lcHealthPayCard__nums,
-  #lcWizard .lcHealthPayCard__hoNums{
+  #lcWizard .lcHealthPayCard__nums.lcElemPaymentCard__numbersGrid,
+  #lcWizard .lcHealthPayCard__hoNums.lcElemPaymentCard__numbersGrid{
     grid-template-columns: 1fr;
     gap: 0;
   }
@@ -45282,4 +45234,106 @@ body.lcAuthLock .lcLogin__footBtn{
   color:#b91c1c;
   font-size:13px;
   margin:0 0 10px;
+}
+
+/* GI-FACE 2026-08-14 — optional face login / enroll */
+.lcLogin__faceBtn{
+  width:100%;
+  min-height:48px;
+  margin:0 0 8px;
+  border:1px solid #c7d2fe;
+  border-radius:12px;
+  background:#eef2ff;
+  color:#1e3a8a;
+  font-weight:800;
+  font-size:15px;
+  cursor:pointer;
+}
+.lcLogin__or{
+  text-align:center;
+  color:#64748b;
+  font-size:12px;
+  font-weight:700;
+  margin:4px 0 10px;
+}
+.lcLogin__facePanel{
+  display:grid;
+  justify-items:center;
+  gap:10px;
+  margin:0 0 12px;
+  padding:12px;
+  border:1px solid #e2e8f0;
+  border-radius:14px;
+  background:#f8fafc;
+}
+.lcLogin__facePanel[hidden]{display:none}
+.lcLogin__faceQrWrap{
+  width:220px;
+  height:220px;
+  background:#fff;
+  border-radius:12px;
+  overflow:hidden;
+}
+.lcLogin__faceQrWrap canvas,
+.lcLogin__faceQrWrap img{
+  display:block;
+  width:220px;
+  height:220px;
+}
+.lcLogin__faceHint{
+  text-align:center;
+  font-size:13px;
+  line-height:1.4;
+  color:#475569;
+}
+.lcLogin__faceHint.is-ok{color:#15803d;font-weight:700}
+.lcLogin__faceHint.is-err{color:#b91c1c;font-weight:700}
+.lcLogin__faceCancel{
+  min-height:40px;
+  padding:0 14px;
+  border:0;
+  border-radius:10px;
+  background:#e2e8f0;
+  color:#0f172a;
+  font-weight:700;
+  cursor:pointer;
+}
+.giFaceModal__body{
+  display:grid;
+  justify-items:center;
+  gap:12px;
+  text-align:center;
+}
+.giFaceModal__qrWrap{
+  width:220px;
+  height:220px;
+  background:#fff;
+  border-radius:12px;
+  overflow:hidden;
+  box-shadow:0 8px 24px rgba(15,23,42,.08);
+}
+.giFaceModal__qrWrap canvas,
+.giFaceModal__qrWrap img{
+  display:block;
+  width:220px;
+  height:220px;
+}
+.giFaceModal__hint{
+  font-size:14px;
+  line-height:1.45;
+  color:#334155;
+}
+.giFaceModal__hint.is-ok{color:#15803d;font-weight:700}
+.giFaceModal__hint.is-err{color:#b91c1c;font-weight:700}
+.giFaceModal__note{
+  margin:0;
+  font-size:12px;
+  color:#64748b;
+}
+.giActLogTable__actionSub{
+  margin-top:4px;
+  font-size:11px;
+  line-height:1.35;
+  font-weight:500;
+  color:#64748b;
 }

@@ -12486,6 +12486,7 @@
     _realtimeChannel: null,
     EVENT_LABELS: {
       login: "התחבר",
+      login_face_fail: "ניסיון זיהוי פנים נכשל",
       logout_manual: "התנתק (לחיצה)",
       logout_idle: "התנתק (אי-פעילות 40 דק׳)",
       logout_browser: "יציאה / סגירת דפדפן",
@@ -12612,7 +12613,7 @@
       return { ok:false, error: "INSERT_FAILED" };
     },
 
-    async log(eventType, agentCtx){
+    async log(eventType, agentCtx, options){
       const type = safeTrim(eventType);
       const ctx = agentCtx && typeof agentCtx === "object" ? agentCtx : null;
       if(!type || !ctx || !safeTrim(ctx?.name)) return { ok:false, error:"MISSING_CTX" };
@@ -12622,7 +12623,8 @@
       } else if(type === "login") {
         this._logoutLogged = false;
       }
-      const row = this.buildRow(type, ctx, { category: "session" });
+      const meta = (options && typeof options === "object") ? options : {};
+      const row = this.buildRow(type, ctx, { category: "session", detailText: safeTrim(meta.detailText) });
       try {
         const res = await this.insertRow(row);
         return res;
@@ -30242,7 +30244,7 @@ UsersGateUI.init();
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
     "./gi-customers-import.css?v=20260813-cq-v1",
-    "./theme-unify-flat.css?v=20260813-pay-card-v1"
+    "./theme-unify-flat.css?v=20260814-pay-card-v2"
   ]);
   function ensureGiSecondaryStylesLoaded(){
     if(document.documentElement.dataset.giSecondaryCss === "1") return;
@@ -31565,7 +31567,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260813-pay-card-v1";
+  const GI_WIZARD_JS_VERSION = "20260814-pay-card-v2";
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
   const TZAHAL_CLINIC = "קופה צהלית";
   const TZAHAL_CLINIC_SHABAN = "אין שב״ן";
@@ -41916,7 +41918,7 @@ const ClalRiskLifePdf = {
                 name: safeTrim(Auth.current?.name) || safeTrim(ctx.matched?.name) || safeTrim(ctx.matched?.username),
                 role: safeTrim(Auth.current?.role) || safeTrim(ctx.resolvedRole),
                 id: safeTrim(Auth.current?.id) || safeTrim(ctx.matched?.id)
-              });
+              }, { detailText: safeTrim(ctx.loginDetailText) });
             } catch(_e) {}
           }, 1200);
 
@@ -43104,7 +43106,8 @@ const ClalRiskLifePdf = {
         matched,
         agentForRepair: freshAgent || matched,
         resolvedRole,
-        targetView
+        targetView,
+        loginDetailText: safeTrim(options.loginDetailText)
       });
     } catch(err) {
       console.error("COMPLETE_AGENT_LOGIN_FAILED:", err);
@@ -43122,7 +43125,8 @@ const ClalRiskLifePdf = {
           matched,
           agentForRepair: matched,
           resolvedRole: Auth.current?.role || 'agent',
-          targetView
+          targetView,
+          loginDetailText: safeTrim(options.loginDetailText)
         });
       } catch(_e2) {}
     }
@@ -46661,6 +46665,7 @@ const CampaignLeadsStore = {
       const t = safeTrim(type);
       if(category === "lead") return "lead";
       if(t === "login") return "in";
+      if(t === "login_face_fail") return "out";
       if(t === "logout_idle") return "idle";
       if(t === "logout_browser") return "browser";
       if(t.startsWith("logout_")) return "out";
@@ -46670,6 +46675,7 @@ const CampaignLeadsStore = {
     eventStatusText(type){
       const t = safeTrim(type);
       if(t === "login") return "מחובר";
+      if(t === "login_face_fail") return "נדחה";
       if(t === "logout_manual") return "יצא";
       if(t === "logout_idle") return "נותק אוטומטית";
       if(t === "logout_browser") return "יצא מהמערכת";
@@ -46733,6 +46739,11 @@ const CampaignLeadsStore = {
       return sorted.map((ev, idx) => {
         const tone = this.eventTone(ev?.event_type, "session");
         const fullWhen = formatActivityDateTimeFull(ev?.event_at);
+        const type = safeTrim(ev?.event_type);
+        const detail = (type === "login" || type === "login_face_fail") ? safeTrim(ev?.detail_text) : "";
+        const actionHtml = detail
+          ? `${escapeHtml(this.eventLabel(type))}<div class="giActLogTable__actionSub">${escapeHtml(detail)}</div>`
+          : escapeHtml(this.eventLabel(type));
         return `<tr class="giActLogTable__row giActLogTable__row--${tone}" title="${escapeHtml(fullWhen)}">
           <td class="giActLogTable__idx">${idx + 1}</td>
           <td class="giActLogTable__day">${escapeHtml(formatActivityWeekdayHe(ev?.event_at))}</td>
@@ -46740,7 +46751,7 @@ const CampaignLeadsStore = {
           <td class="giActLogTable__agent">${this.renderAgentCell(ev)}</td>
           <td class="giActLogTable__role">${escapeHtml(this.agentRoleLabel(ev?.agent_role))}</td>
           <td class="giActLogTable__time">${escapeHtml(formatActivityClock(ev?.event_at))}</td>
-          <td class="giActLogTable__action">${escapeHtml(this.eventLabel(ev?.event_type))}</td>
+          <td class="giActLogTable__action">${actionHtml}</td>
           <td class="giActLogTable__status"><span class="giActLog__pill giActLog__pill--${tone}">${escapeHtml(this.eventStatusText(ev?.event_type))}</span></td>
         </tr>`;
       }).join("");
@@ -64688,6 +64699,24 @@ ${inner}
   })();
 
   try { window.VoiceNumberInput = VoiceNumberInput; } catch(_e) {}
+
+  try {
+    window.__GI_FACE_BRIDGE__ = {
+      supabaseUrl: SUPABASE_URL,
+      publishableKey: SUPABASE_PUBLISHABLE_KEY,
+      completeAgentLogin,
+      ensureLoginReady: () => App.ensureLoginReady(),
+      findAgentById(id){
+        const list = Array.isArray(State.data?.agents) ? State.data.agents : [];
+        const sid = String(id || "").trim();
+        if(!sid) return null;
+        return list.find((a) => String(a?.id || "").trim() === sid) || null;
+      },
+      getCurrentAgent(){ return Auth.current; },
+      closeUserMenu(){ try { UI._closeUserMenu?.(); } catch(_e) {} },
+      setLoginError(msg){ try { Auth._setError(msg); } catch(_e) {} }
+    };
+  } catch(_e) {}
 
   protectUiFromInspect();
 

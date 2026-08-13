@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<meta name="theme-color" content="#2563EB"/>
+<title>זיהוי פנים — GEMEL INVEST</title>
+<style>
+  :root{
+    --brand:#2563EB;
+    --bg:#0f172a;
+    --card:#ffffff;
+    --text:#0f172a;
+    --muted:#64748b;
+    --ok:#15803d;
+    --err:#b91c1c;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;background:var(--bg);color:#fff;font-family:Heebo,Rubik,Arial,sans-serif}
+  body{padding:20px 16px 32px}
+  .wrap{max-width:420px;margin:0 auto}
+  .brand{font-size:12px;letter-spacing:.08em;opacity:.75;margin-bottom:8px}
+  h1{font-size:22px;margin:0 0 8px;font-weight:800}
+  .sub{color:#cbd5e1;font-size:14px;line-height:1.45;margin:0 0 16px}
+  .stage{
+    position:relative;border-radius:18px;overflow:hidden;background:#020617;
+    aspect-ratio:3/4;box-shadow:0 18px 40px rgba(0,0,0,.35)
+  }
+  video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);background:#020617}
+  .guide{
+    position:absolute;inset:12% 16%;border:3px solid rgba(255,255,255,.85);border-radius:50%;
+    pointer-events:none;box-shadow:0 0 0 999px rgba(2,6,23,.35)
+  }
+  .card{background:var(--card);color:var(--text);border-radius:16px;padding:16px;margin-top:16px}
+  .status{font-size:14px;color:var(--muted);min-height:1.4em}
+  .status.is-ok{color:var(--ok);font-weight:700}
+  .status.is-err{color:var(--err);font-weight:700}
+  .steps{display:flex;gap:6px;margin:12px 0}
+  .steps span{flex:1;height:6px;border-radius:99px;background:#e2e8f0}
+  .steps span.is-on{background:var(--brand)}
+  .steps span.is-done{background:#22c55e}
+  button{
+    width:100%;min-height:48px;border:0;border-radius:12px;background:var(--brand);color:#fff;
+    font-weight:800;font-size:16px;cursor:pointer;margin-top:10px
+  }
+  button:disabled{opacity:.55;cursor:default}
+  button.secondary{background:#e2e8f0;color:#0f172a}
+  .hint{font-size:13px;color:var(--muted);margin-top:8px;line-height:1.4}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">GEMEL INVEST</div>
+  <h1 id="title">זיהוי פנים</h1>
+  <p class="sub" id="subtitle">ממתינים לקוד…</p>
+  <div class="stage">
+    <video id="cam" playsinline autoplay muted></video>
+    <div class="guide" aria-hidden="true"></div>
+  </div>
+  <div class="card">
+    <div class="steps" id="steps" hidden>
+      <span></span><span></span><span></span><span></span>
+    </div>
+    <div class="status" id="status">טוען…</div>
+    <button type="button" id="btnCapture" hidden>צילום זווית</button>
+    <button type="button" id="btnConfirm" hidden>אישור וסיום</button>
+    <div class="hint" id="hint"></div>
+  </div>
+</div>
+<script type="module">
+const SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
+const SUPABASE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
+const FN = SUPABASE_URL + "/functions/v1/gi-face-auth";
+const MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/model/";
+const ENROLL_PROMPTS = [
+  "הסתכלו ישר למצלמה",
+  "פנו מעט שמאלה",
+  "פנו מעט ימינה",
+  "שוב ישר למצלמה"
+];
+
+const token = new URLSearchParams(location.search).get("t") || "";
+const els = {
+  title: document.getElementById("title"),
+  subtitle: document.getElementById("subtitle"),
+  status: document.getElementById("status"),
+  hint: document.getElementById("hint"),
+  steps: document.getElementById("steps"),
+  btnCapture: document.getElementById("btnCapture"),
+  btnConfirm: document.getElementById("btnConfirm"),
+  cam: document.getElementById("cam")
+};
+
+let kind = "login";
+let modelsReady = false;
+let stream = null;
+const descriptors = [];
+
+function setStatus(text, tone){
+  els.status.textContent = text || "";
+  els.status.className = "status" + (tone ? " is-" + tone : "");
+}
+function setHint(text){ els.hint.textContent = text || ""; }
+
+async function callFn(payload){
+  const res = await fetch(FN, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: "Bearer " + SUPABASE_KEY,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+  let data = null;
+  try { data = await res.json(); } catch(_e) { data = {}; }
+  if(!res.ok || data?.ok === false){
+    const err = new Error(data?.error || ("HTTP_" + res.status));
+    err.code = data?.error || "";
+    throw err;
+  }
+  return data;
+}
+
+function deviceLabelFromUa(ua){
+  const s = String(ua || "");
+  if(/iPhone|iPad|iPod/i.test(s)) return "iPhone";
+  if(/Android/i.test(s)) return "Android";
+  if(/Mobile/i.test(s)) return "טלפון";
+  return "טלפון";
+}
+
+function paintSteps(){
+  const dots = [...els.steps.querySelectorAll("span")];
+  dots.forEach((el, i) => {
+    el.classList.toggle("is-done", i < descriptors.length);
+    el.classList.toggle("is-on", i === descriptors.length);
+  });
+}
+
+async function loadModels(){
+  setStatus("טוען מודל זיהוי פנים…");
+  const faceapi = await import("https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/dist/face-api.esm.js");
+  window.__faceapi = faceapi;
+  await Promise.all([
+    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+    faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
+    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+  ]);
+  modelsReady = true;
+}
+
+async function startCamera(){
+  stream = await navigator.mediaDevices.getUserMedia({
+    video: { facingMode: "user", width: { ideal: 720 }, height: { ideal: 960 } },
+    audio: false
+  });
+  els.cam.srcObject = stream;
+  await els.cam.play().catch(() => {});
+}
+
+function waitFrame(){
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+async function captureDescriptor(){
+  const faceapi = window.__faceapi;
+  if(!faceapi || !modelsReady) throw new Error("MODEL");
+  await waitFrame();
+  const det = await faceapi
+    .detectSingleFace(els.cam, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
+    .withFaceLandmarks(true)
+    .withFaceDescriptor();
+  if(!det || !det.descriptor) throw new Error("NO_FACE");
+  return Array.from(det.descriptor);
+}
+
+async function optionalGeo(){
+  if(!navigator.geolocation) return "";
+  const pos = await new Promise((resolve) => {
+    const t = window.setTimeout(() => resolve(null), 2500);
+    navigator.geolocation.getCurrentPosition(
+      (p) => { window.clearTimeout(t); resolve(p); },
+      () => { window.clearTimeout(t); resolve(null); },
+      { enableHighAccuracy: false, timeout: 2200, maximumAge: 60000 }
+    );
+  });
+  if(!pos?.coords) return "";
+  const lat = Number(pos.coords.latitude);
+  const lng = Number(pos.coords.longitude);
+  if(!Number.isFinite(lat) || !Number.isFinite(lng)) return "";
+  try {
+    const url = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=" + encodeURIComponent(lat) + "&lon=" + encodeURIComponent(lng) + "&zoom=12&accept-language=he";
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    const data = await res.json();
+    const a = data?.address || {};
+    const city = a.city || a.town || a.village || a.municipality || a.state;
+    if(city) return String(city);
+  } catch(_e) {}
+  return lat.toFixed(3) + "," + lng.toFixed(3);
+}
+
+async function submitAll(){
+  els.btnCapture.disabled = true;
+  els.btnConfirm.disabled = true;
+  setStatus("שולח לאימות…");
+  const geoText = await optionalGeo();
+  await callFn({
+    action: "submit",
+    publicToken: token,
+    descriptors,
+    deviceLabel: deviceLabelFromUa(navigator.userAgent),
+    geoText
+  });
+}
+
+function showEnrollUi(){
+  els.steps.hidden = false;
+  els.btnCapture.hidden = false;
+  els.btnConfirm.hidden = false;
+  els.btnConfirm.disabled = true;
+  paintSteps();
+  setStatus(ENROLL_PROMPTS[0]);
+  setHint("צלמו 4 זוויות ואז לחצו «אישור וסיום». התמונות לא נשמרות — רק חתימה מספרית.");
+  els.btnCapture.onclick = async () => {
+    els.btnCapture.disabled = true;
+    try {
+      const desc = await captureDescriptor();
+      descriptors.push(desc);
+      paintSteps();
+      if(descriptors.length >= 4){
+        els.btnCapture.hidden = true;
+        els.btnConfirm.disabled = false;
+        setStatus("מוכן לאישור", "ok");
+      } else {
+        setStatus(ENROLL_PROMPTS[descriptors.length]);
+      }
+    } catch(_e) {
+      setStatus("לא זוהו פנים. נסו שוב בתאורה טובה.", "err");
+    } finally {
+      els.btnCapture.disabled = false;
+    }
+  };
+  els.btnConfirm.onclick = async () => {
+    try {
+      await submitAll();
+      setStatus("נרשם בהצלחה. אפשר לחזור למחשב.", "ok");
+      setHint("");
+      els.btnConfirm.hidden = true;
+    } catch(err) {
+      const code = String(err?.code || err?.message || "");
+      if(code === "LIVENESS") setStatus("הסריקות דומות מדי. הזיזו מעט את הראש בין הצילומים.", "err");
+      else if(code === "EXPIRED") setStatus("הקוד פג. סרקו שוב מהמחשב.", "err");
+      else setStatus("ההרשמה נכשלה. נסו שוב.", "err");
+      els.btnConfirm.disabled = false;
+    }
+  };
+}
+
+async function runLoginCapture(){
+  setHint("מסובבים מעט את הראש — בלי לשמור תמונה.");
+  for(let i = 0; i < 3; i++){
+    setStatus("סורק פנים (" + (i + 1) + "/3)…");
+    let ok = false;
+    for(let attempt = 0; attempt < 8 && !ok; attempt++){
+      try {
+        descriptors.push(await captureDescriptor());
+        ok = true;
+      } catch(_e) {
+        await new Promise((r) => setTimeout(r, 280));
+      }
+    }
+    if(!ok){
+      setStatus("לא זוהו פנים. אפשר להיכנס עם PIN במחשב.", "err");
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 420));
+  }
+  try {
+    await submitAll();
+    setStatus("אומת. המחשב ייכנס למערכת.", "ok");
+    setHint("אפשר לסגור את החלון בטלפון.");
+  } catch(err) {
+    const code = String(err?.code || err?.message || "");
+    if(code === "NO_MATCH") setStatus("הפנים לא זוהו. היכנסו עם שם משתמש ו-PIN במחשב.", "err");
+    else if(code === "EXPIRED") setStatus("הקוד פג. סרקו שוב מהמסך.", "err");
+    else if(code === "LIVENESS") setStatus("הסריקה נראתה סטטית. נסו שוב מול המצלמה.", "err");
+    else setStatus("האימות נכשל. PIN עדיין זמין במחשב.", "err");
+  }
+}
+
+async function boot(){
+  if(!token){
+    setStatus("חסר קוד סריקה.", "err");
+    els.subtitle.textContent = "סרקו את ה-QR ממסך הכניסה או מתפריט המשתמש.";
+    return;
+  }
+  try {
+    const peek = await callFn({ action: "peek", publicToken: token });
+    kind = peek.kind === "enroll" ? "enroll" : "login";
+    if(kind === "enroll"){
+      els.title.textContent = "הרשמת זיהוי פנים";
+      els.subtitle.textContent = peek.agentName ? ("נציג: " + peek.agentName) : "מצלמים כמה זוויות ואז מאשרים.";
+    } else {
+      els.title.textContent = "כניסה בזיהוי פנים";
+      els.subtitle.textContent = "המחשב ממתין לאימות. PIN נשאר זמין במסך הכניסה.";
+    }
+    await loadModels();
+    await startCamera();
+    if(kind === "enroll") showEnrollUi();
+    else await runLoginCapture();
+  } catch(err) {
+    const code = String(err?.code || err?.message || "");
+    if(code === "EXPIRED" || code === "UNKNOWN_TOKEN") setStatus("הקוד פג או לא תקף. סרקו שוב.", "err");
+    else if(String(err).includes("NotAllowedError") || String(err).includes("Permission")) setStatus("יש לאשר גישה למצלמה.", "err");
+    else setStatus("לא ניתן להתחיל. בדקו חיבור וסרקו שוב.", "err");
+  }
+}
+
+boot();
+</script>
+</body>
+</html>
