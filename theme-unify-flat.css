@@ -1447,101 +1447,7 @@
   background: var(--uf-info-bg); border-color: var(--uf-info-line); color: var(--uf-info);
 }
 
-/* בריאות/סיכונים · שלב 6 — כרטיס פלסטיק עם גוון מותג (מנצח את theme-p2) */
-#lcWizard .lcHealthPayCard:not(#\9):not(#\9){
-  --brand: #3870ED;
-  position: relative;
-  overflow: hidden;
-  isolation: isolate;
-  padding: 20px !important;
-  border-radius: 18px !important;
-  border: 1px solid color-mix(in srgb, var(--brand) 28%, #e5e7eb) !important;
-  background:
-    linear-gradient(
-      155deg,
-      #fff 0%,
-      color-mix(in srgb, var(--brand) 16%, #fff) 42%,
-      color-mix(in srgb, var(--brand) 10%, #f8fafc) 100%
-    ) !important;
-  background-image:
-    linear-gradient(
-      155deg,
-      #fff 0%,
-      color-mix(in srgb, var(--brand) 16%, #fff) 42%,
-      color-mix(in srgb, var(--brand) 10%, #f8fafc) 100%
-    ) !important;
-  box-shadow:
-    0 1px 0 #fff inset,
-    0 16px 36px color-mix(in srgb, var(--brand) 18%, transparent) !important;
-  transition: background .25s, border-color .25s, box-shadow .25s;
-}
-#lcWizard .lcHealthPayCard:not(#\9):not(#\9)::before{
-  content: "" !important;
-  display: block !important;
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  background: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--brand) 22%, transparent), transparent 58%) !important;
-  background-image: radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--brand) 22%, transparent), transparent 58%) !important;
-}
-#lcWizard .lcHealthPayCard:not(#\9):not(#\9)::after{
-  content: "" !important;
-  display: block !important;
-  position: absolute;
-  top: -62%;
-  left: -30%;
-  width: 90%;
-  height: 150%;
-  background: linear-gradient(118deg, rgba(255,255,255,.62), transparent 64%) !important;
-  background-image: linear-gradient(118deg, rgba(255,255,255,.62), transparent 64%) !important;
-  opacity: .5;
-  pointer-events: none;
-  z-index: 0;
-  transform: rotate(-12deg);
-}
-#lcWizard .lcHealthPayCard .lcElemPaymentCard__chip:not(#\9):not(#\9){
-  width: 50px;
-  height: 38px;
-  border-radius: 8px !important;
-  border: 0 !important;
-  background: linear-gradient(145deg, #f7f4ea, #e4d7a8 36%, #c4b070 70%, #eee6c8) !important;
-  background-image: linear-gradient(145deg, #f7f4ea, #e4d7a8 36%, #c4b070 70%, #eee6c8) !important;
-  box-shadow: inset 0 1px 1px #fff, 0 6px 14px rgba(15,23,42,.1) !important;
-  position: relative;
-}
-#lcWizard .lcHealthPayCard .lcElemPaymentCard__chip:not(#\9):not(#\9)::after{
-  content: "" !important;
-  display: block !important;
-  position: absolute;
-  inset: 8px 7px;
-  border-radius: 3px;
-  background:
-    linear-gradient(#0000 0 7px, rgba(90,70,20,.22) 7px 8px) 0 0 / 100% 8px,
-    linear-gradient(90deg, #0000 0 10px, rgba(90,70,20,.22) 10px 11px) 0 0 / 11px 100% !important;
-  background-image:
-    linear-gradient(#0000 0 7px, rgba(90,70,20,.22) 7px 8px),
-    linear-gradient(90deg, #0000 0 10px, rgba(90,70,20,.22) 10px 11px) !important;
-}
-#lcWizard .lcHealthPayCard .lcElemPaymentCard__label:not(#\9):not(#\9){
-  color: color-mix(in srgb, var(--brand) 55%, #334155) !important;
-}
-#lcWizard .lcHealthPayCard .lcElemPaymentCard__input:not(#\9):not(#\9){
-  border: 1px solid color-mix(in srgb, var(--brand) 18%, #e5e7eb) !important;
-  background: rgba(255,255,255,.92) !important;
-  border-radius: 10px !important;
-  font-size: 15px;
-  font-weight: 650;
-}
-#lcWizard .lcHealthPayCard .lcElemPaymentCard__input[readonly]:not(#\9):not(#\9){
-  background: color-mix(in srgb, var(--brand) 6%, #f8fafc) !important;
-  color: #475569 !important;
-}
-#lcWizard .lcHealthPayCard .lcElemPaymentCard__input--pan:not(#\9):not(#\9){
-  font-size: 17px;
-  letter-spacing: .06em;
-  font-weight: 700;
-}
+/* בריאות/סיכונים · שלב 6 — יישור לכרטיס האלמנטרי השטוח (בלי גרדיאנט מותג) */
 #lcWizard .lcHealthPayPanStatus.is-ok:not(#\9):not(#\9){
   border: 1px solid var(--uf-ok-line);
   background: var(--uf-ok-bg);
@@ -1554,7 +1460,6 @@
 }
 #lcWizard .lcHealthPayCard .lcHoBranchStatus:not(#\9):not(#\9){
   margin: 0 0 12px;
-  border-radius: 10px;
   position: relative;
   z-index: 1;
 }
