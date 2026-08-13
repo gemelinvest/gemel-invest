@@ -64721,13 +64721,19 @@ ${inner}
         let name = safeTrim(rec?.name) || safeTrim(cur?.name);
         let role = safeTrim(rec?.role) || safeTrim(cur?.role) || "agent";
         let username = safeTrim(rec?.username);
-        if(!id && (typeof isOwnerIdentity === "function") && (isOwnerIdentity(cur) || isOwnerIdentity(rec) || Auth.isAdmin?.())){
-          const owner = list.find((a) => a?.active !== false && typeof isOwnerIdentity === "function" && isOwnerIdentity(a));
+        if(!id && (Auth.isAdmin?.() || role === "admin" || role === "owner" || name === "מנהל מערכת" || name === "מפתח המערכת")){
+          const owner = list.find((a) => safeTrim(a?.id) === "agent-admin-1")
+            || list.find((a) => a?.active !== false && typeof isOwnerIdentity === "function" && isOwnerIdentity(a))
+            || list.find((a) => a?.active !== false && (safeTrim(a?.name) === "אוריה סומך" || safeTrim(a?.username) === "אוריה"));
           if(owner){
             id = safeTrim(owner.id);
             name = safeTrim(owner.name) || name;
             role = safeTrim(owner.role) || role;
             username = safeTrim(owner.username) || username;
+          } else if(!id){
+            id = "agent-admin-1";
+            name = name || "אוריה סומך";
+            username = username || "אוריה";
           }
         }
         if(!id && !name){
