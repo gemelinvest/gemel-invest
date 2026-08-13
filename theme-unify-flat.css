@@ -1422,3 +1422,27 @@
 .lcHealthDetailModal .lcHealthDetailModal__head:not(#\9):not(#\9){ background: var(--uf-head-bg) !important; border-bottom: 1px solid var(--uf-line-soft) !important; }
 .lcHealthDetailModal .lcHealthDetailModal__foot:not(#\9):not(#\9){ background: var(--uf-head-bg) !important; border-top: 1px solid var(--uf-line-soft) !important; }
 .lcHealthDetailModal .lcHealthDetailModal__saveBtn:not(#\9):not(#\9){ border-radius: 0 !important; background: var(--uf-accent) !important; border-color: var(--uf-accent) !important; }
+
+/* הוראת קבע — סטטוס אימות סניף */
+#lcWizard .lcHoBranchStatus:not(#\9):not(#\9){
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--uf-line);
+  background: var(--uf-head-bg);
+  color: var(--uf-ink-2);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+#lcWizard .lcHoBranchStatus strong:not(#\9):not(#\9){ display:block; color: var(--uf-navy); font-size: 13px; }
+#lcWizard .lcHoBranchStatus span:not(#\9):not(#\9){ display:block; margin-top: 2px; }
+#lcWizard .lcHoBranchStatus.is-ok:not(#\9):not(#\9){
+  background: var(--uf-ok-bg); border-color: var(--uf-ok-line); color: var(--uf-ok);
+}
+#lcWizard .lcHoBranchStatus.is-ok strong:not(#\9):not(#\9){ color: var(--uf-ok); }
+#lcWizard .lcHoBranchStatus.is-bad:not(#\9):not(#\9){
+  background: var(--uf-danger-bg); border-color: var(--uf-danger-line); color: var(--uf-danger);
+}
+#lcWizard .lcHoBranchStatus.is-need-bank:not(#\9):not(#\9),
+#lcWizard .lcHoBranchStatus.is-loading:not(#\9):not(#\9){
+  background: var(--uf-info-bg); border-color: var(--uf-info-line); color: var(--uf-info);
+}

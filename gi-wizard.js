@@ -12039,6 +12039,11 @@ if(path === "birthDate"){
           // normal bind
           this.setPath(ins.data, path, v);
 
+          if(path === "ho.branch"){
+            this.scheduleHoBranchLookup(ins);
+            this.setHint("");
+            return;
+          }
           if(path === "clinic"){
             this.applyClinicChangeForInsured(ins);
             this.render();
@@ -12233,9 +12238,20 @@ if(path === "birthDate"){
             v = cleaned;
           }
           this.setPath(ins.data, k, v);
+          if(k === "ho.bankName"){
+            if(!ins.data.ho || typeof ins.data.ho !== "object") ins.data.ho = { account:"", branch:"", bankName:"", bankNo:"" };
+            const code = this.getBankCodeForName(v);
+            if(code) ins.data.ho.bankNo = code;
+          }
+          if(k === "paymentMethod"){
+            ins.data.paymentMethod = (safeTrim(v) === "ho") ? "ho" : "cc";
+          }
           this.render();
         });
       });
+      if(this.step === 6){
+        void this.ensureBankBranchesLoaded().then(() => this.applyHoBranchLookup(ins));
+      }
     },
 
     // ---------- Step 4 — התאמת צרכים (UI: שלב 3 בסרגל) ----------
@@ -17223,6 +17239,103 @@ if(path === "birthDate"){
       return map[name] || "";
     },
 
+    normBankBranchCode(value){
+      const n = Number(String(value || "").replace(/\D/g, ""));
+      return Number.isFinite(n) && n > 0 ? String(n) : "";
+    },
+
+    ensureBankBranchesLoaded(){
+      if(this._bankBranchesIndex && typeof this._bankBranchesIndex === "object"){
+        return Promise.resolve(this._bankBranchesIndex);
+      }
+      if(this._bankBranchesPromise) return this._bankBranchesPromise;
+      this._bankBranchesPromise = fetch("./gi-bank-branches.json?v=20260813-ho-v1")
+        .then((res) => {
+          if(!res || !res.ok) throw new Error("bank-branches");
+          return res.json();
+        })
+        .then((data) => {
+          this._bankBranchesIndex = data && typeof data === "object" ? data : {};
+          return this._bankBranchesIndex;
+        })
+        .catch(() => {
+          this._bankBranchesIndex = {};
+          return this._bankBranchesIndex;
+        });
+      return this._bankBranchesPromise;
+    },
+
+    lookupHoBranch(bankNo, branch){
+      const bank = this.normBankBranchCode(bankNo);
+      const br = this.normBankBranchCode(branch);
+      if(!bank) return { state: "need-bank" };
+      if(!br) return { state: "idle" };
+      const index = this._bankBranchesIndex;
+      if(!index) return { state: "loading" };
+      const row = index[bank] && index[bank][br];
+      if(!row) return { state: "bad", bank, branch: br };
+      return {
+        state: "ok",
+        bank,
+        branch: br,
+        name: safeTrim(row.n),
+        address: safeTrim(row.a)
+      };
+    },
+
+    scheduleHoBranchLookup(ins){
+      window.clearTimeout(this._hoBranchTimer);
+      this._hoBranchTimer = window.setTimeout(() => {
+        void this.ensureBankBranchesLoaded().then(() => this.applyHoBranchLookup(ins));
+      }, 180);
+    },
+
+    applyHoBranchLookup(ins){
+      const d = ins?.data;
+      if(!d) return;
+      if(!d.ho || typeof d.ho !== "object") d.ho = { account:"", branch:"", bankName:"", bankNo:"" };
+      const bankNo = safeTrim(d.ho.bankNo) || this.getBankCodeForName(d.ho.bankName);
+      const found = this.lookupHoBranch(bankNo, d.ho.branch);
+      if(found.state === "ok"){
+        d.ho.branchName = found.name;
+        d.ho.branchAddress = found.address;
+        d.ho.branchValid = true;
+      } else {
+        d.ho.branchName = "";
+        d.ho.branchAddress = "";
+        d.ho.branchValid = found.state === "idle" ? "" : false;
+      }
+      this.updateHoBranchUI(found);
+    },
+
+    updateHoBranchUI(found){
+      const el = this.els?.body?.querySelector?.("#lcHoBranchStatus");
+      if(!el) return;
+      const state = found?.state || "idle";
+      if(state === "idle"){
+        el.hidden = true;
+        el.className = "lcHoBranchStatus";
+        el.innerHTML = "";
+        return;
+      }
+      el.hidden = false;
+      el.className = "lcHoBranchStatus is-" + state;
+      if(state === "loading"){
+        el.innerHTML = "בודק את מספר הסניף…";
+        return;
+      }
+      if(state === "need-bank"){
+        el.innerHTML = "יש לבחור בנק לפני אימות הסניף.";
+        return;
+      }
+      if(state === "ok"){
+        const title = [found.name ? ("סניף " + found.name) : "", found.branch ? ("מס׳ " + found.branch) : ""].filter(Boolean).join(" · ");
+        el.innerHTML = `<strong>${escapeHtml(title)}</strong>${found.address ? `<span>${escapeHtml(found.address)}</span>` : ""}`;
+        return;
+      }
+      el.innerHTML = "מספר הסניף לא נמצא בבנק שנבחר. בדקו שהמספר נכון.";
+    },
+
     /** קובע cc/ho לפי המסך והנתונים — לא נופל ל-CVV כשהנציג על הוראת קבע */
     resolveStep6PaymentMethod(ins){
       const d = ins?.data || {};
@@ -17277,7 +17390,7 @@ if(path === "birthDate"){
       d.paymentMethod = this.resolveStep6PaymentMethod(ins);
       if(d.paymentMethod === "ho"){
         const code = this.getBankCodeForName(d.ho?.bankName);
-        if(code && !safeTrim(d.ho.bankNo)) d.ho.bankNo = code;
+        if(code) d.ho.bankNo = code;
       }
       this.ensureDefaultInsuredPayer(ins);
     },
@@ -17295,7 +17408,7 @@ if(path === "birthDate"){
       d.paymentMethod = method;
       if(method === "ho"){
         const code = this.getBankCodeForName(d.ho?.bankName);
-        if(code && !safeTrim(d.ho?.bankNo)){
+        if(code){
           if(!d.ho || typeof d.ho !== "object") d.ho = { account:"", branch:"", bankName:"", bankNo:"" };
           d.ho.bankNo = code;
         }
@@ -17377,8 +17490,16 @@ if(path === "birthDate"){
                   ${this.bankNames.map(b => `<option value="${escapeHtml(b)}"${d.ho?.bankName===b?" selected":""}>${escapeHtml(b)}</option>`).join("")}
                 </select>
               </div>
-              ${reqField("מספר בנק","ho.bankNo", d.ho?.bankNo || "", "numeric")}
-              ${reqField("מספר סניף","ho.branch", d.ho?.branch || "", "numeric")}
+              <div class="field" data-required>
+                <label class="label">מספר בנק</label>
+                <input class="input" data-bind="ho.bankNo" value="${escapeHtml(d.ho?.bankNo || "")}" dir="ltr" inputmode="numeric" autocomplete="off" readonly />
+                <div class="help">מתמלא אוטומטית לפי הבנק שנבחר</div>
+              </div>
+              <div class="field" data-required>
+                <label class="label">מספר סניף</label>
+                <input class="input" data-bind="ho.branch" value="${escapeHtml(d.ho?.branch || "")}" dir="ltr" inputmode="numeric" autocomplete="off" />
+                <div class="lcHoBranchStatus" id="lcHoBranchStatus" hidden></div>
+              </div>
               ${reqField("מספר חשבון","ho.account", d.ho?.account || "", "numeric")}
             </div>
           `}
