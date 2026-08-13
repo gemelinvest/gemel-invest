@@ -4626,6 +4626,9 @@ init(){
       else body = this.renderStep8();
 
       this.els.body.innerHTML = head + body;
+      /* GI-FIX 2026-08-13: חיבור לחיצות סטטוס על גוף האשף (לא על הכפתורים).
+         innerHTML מתחלף אחרי ייבוא הר הביטוח, והמאזין על האב נשאר. */
+      try { this.ensureExistingPolicyActionDelegation(); } catch(_e) {}
 
       if(this.step === 4) this.bindStep4NeedsAnalysis();
       else if(this.step < 5) this.bindInputs(ins);
@@ -11460,6 +11463,7 @@ if(path === "birthDate"){
           message: `יובאו ${policies.length} פוליסות מתוך הקובץ והן מוכנות כעת לעדכון סטטוס טיפול וסיבת ביטול.`
         });
         this.render();
+        try { this.unlockExistingPolicyActionsAfterHarImport(); } catch(_e) {}
       } catch(err){
         this.setHarImportState(ins, {
           status: "error",
@@ -11893,6 +11897,97 @@ if(path === "birthDate"){
       `;
     },
 
+    /* GI-FIX 2026-08-13: אחרי ייבוא הר הביטוח מודאל העיבוד עלול להשאיר
+       שכבה/inert/pointer-events שחוסמים את כפתורי הסטטוס עד לייבוא חוזר. */
+    unlockExistingPolicyActionsAfterHarImport(){
+      try { prepareInteractiveWizardOpen(); } catch(_e) {}
+      try {
+        ["lcHarProcessingModal", "lcHarImportModal"].forEach((id) => {
+          const el = document.getElementById(id);
+          if(el) el.remove();
+        });
+      } catch(_e) {}
+      try {
+        const body = this.els?.body;
+        if(body){
+          body.style.pointerEvents = "auto";
+          body.removeAttribute("inert");
+        }
+      } catch(_e) {}
+      this.ensureExistingPolicyActionDelegation();
+    },
+
+    ensureExistingPolicyCancellationRow(ins, pid){
+      if(!ins || !ins.data || typeof ins.data !== "object") return null;
+      const id = safeTrim(pid);
+      if(!id) return null;
+      if(!ins.data.cancellations || typeof ins.data.cancellations !== "object") ins.data.cancellations = {};
+      const prev = ins.data.cancellations[id];
+      if(!prev || typeof prev !== "object") ins.data.cancellations[id] = { attachments: {} };
+      else if(!prev.attachments || typeof prev.attachments !== "object") prev.attachments = {};
+      return ins.data.cancellations[id];
+    },
+
+    ensureExistingPolicyActionDelegation(){
+      const root = this.els?.body;
+      if(!root || root._giExistingPolicyActionBound) return;
+      root._giExistingPolicyActionBound = true;
+      on(root, "click", (ev) => this.handleExistingPolicyActionClick(ev));
+    },
+
+    handleExistingPolicyActionClick(ev){
+      const t = ev && ev.target;
+      if(!t || typeof t.closest !== "function") return;
+      if(Number(this.step) !== 3 || this.isElementaryFlow()) return;
+      const ins = this.getActive();
+      if(!ins?.data) return;
+
+      const coverItem = t.closest(".lcPartialCovers__item");
+      if(coverItem && this.els.body.contains(coverItem)){
+        ev.preventDefault();
+        const cb = coverItem.querySelector(".lcPartialCovers__cb");
+        if(!cb) return;
+        const pid = cb.getAttribute("data-cancel-policy");
+        const lbl = cb.getAttribute("data-cover-label");
+        if(!pid || !lbl) return;
+        const row = this.ensureExistingPolicyCancellationRow(ins, pid);
+        if(!row) return;
+        let covers = Array.isArray(row.partialCovers) ? row.partialCovers.slice() : [];
+        const alreadyChecked = covers.includes(lbl);
+        row.partialCovers = alreadyChecked ? covers.filter((x) => x !== lbl) : covers.concat([lbl]);
+        this.render();
+        return;
+      }
+
+      const execBtn = t.closest("[data-cancel-exec-option]");
+      if(execBtn && this.els.body.contains(execBtn)){
+        const pid = execBtn.getAttribute("data-cancel-policy");
+        const value = execBtn.getAttribute("data-cancel-exec-option");
+        if(!pid) return;
+        const row = this.ensureExistingPolicyCancellationRow(ins, pid);
+        if(!row) return;
+        row.executionMethod = safeTrim(value);
+        this.render();
+        return;
+      }
+
+      const chip = t.closest("[data-cancel-chip-value]");
+      if(chip && this.els.body.contains(chip)){
+        const pid = chip.getAttribute("data-cancel-policy");
+        const key = chip.getAttribute("data-cancel-key");
+        const value = chip.getAttribute("data-cancel-chip-value");
+        if(!pid || !key) return;
+        const row = this.ensureExistingPolicyCancellationRow(ins, pid);
+        if(!row) return;
+        row[key] = safeTrim(value);
+        if(key === "status") this.syncCancellationExecutionMethodState(ins, pid);
+        if(key === "status" && typeof CustomersUI !== "undefined"){
+          CustomersUI.syncAgentAppointmentStampForInsured(ins, pid, nowISO());
+        }
+        this.render();
+      }
+    },
+
     // Step3/5 use virtual binding for policy rows by id
     resolvePolicyBind(ins, path, value, kind){
       // path example: existingPolicies.<id>.company
@@ -11909,6 +12004,7 @@ if(path === "birthDate"){
 
     // override bindInputs with policy binds
     bindInputs(ins){
+      try { this.ensureExistingPolicyActionDelegation(); } catch(_e) {}
       $$("[data-bind]", this.els.body).forEach(el => {
         const path = el.getAttribute("data-bind");
         if(!path) return;
@@ -12073,59 +12169,19 @@ if(path === "birthDate"){
       on(addNew, "click", () => { this.addNewPolicy(ins); });
       $$("[data-del-new]", this.els.body).forEach(btn => on(btn, "click", () => this.delNewPolicy(ins, btn.getAttribute("data-del-new"))));
 
-      // partial covers checkboxes (har bituach breakdown)
-      // We manage state ourselves — no reliance on native checkbox toggle timing
-      $$('.lcPartialCovers__item', this.els.body).forEach(labelEl => {
-        on(labelEl, 'click', (e) => {
-          e.preventDefault(); // prevent double-toggle from label+checkbox
-          const cb = labelEl.querySelector('.lcPartialCovers__cb');
-          if(!cb) return;
-          const pid = cb.getAttribute('data-cancel-policy');
-          const lbl = cb.getAttribute('data-cover-label');
-          if(!pid || !lbl) return;
-          if(!ins.data.cancellations[pid]) ins.data.cancellations[pid] = { attachments: {} };
-          let covers = Array.isArray(ins.data.cancellations[pid].partialCovers) ? [...ins.data.cancellations[pid].partialCovers] : [];
-          const alreadyChecked = covers.includes(lbl);
-          if(alreadyChecked){ covers = covers.filter(x => x !== lbl); }
-          else { covers.push(lbl); }
-          ins.data.cancellations[pid].partialCovers = covers;
-          this.render();
-        });
-      });
-
-      $$('[data-cancel-chip-value]', this.els.body).forEach(btn => {
-        on(btn, 'click', () => {
-          const pid = btn.getAttribute('data-cancel-policy');
-          const key = btn.getAttribute('data-cancel-key');
-          const value = btn.getAttribute('data-cancel-chip-value');
-          if(!pid || !key) return;
-          if(!ins.data.cancellations[pid]) ins.data.cancellations[pid] = { attachments: {} };
-          ins.data.cancellations[pid][key] = safeTrim(value);
-          if(key === 'status') this.syncCancellationExecutionMethodState(ins, pid);
-          if(key === 'status' && typeof CustomersUI !== 'undefined'){
-            CustomersUI.syncAgentAppointmentStampForInsured(ins, pid, nowISO());
-          }
-          this.render();
-        });
-      });
-
-      $$('[data-cancel-exec-option]', this.els.body).forEach(btn => {
-        on(btn, 'click', () => {
-          const pid = btn.getAttribute('data-cancel-policy');
-          const value = btn.getAttribute('data-cancel-exec-option');
-          if(!pid) return;
-          if(!ins.data.cancellations[pid]) ins.data.cancellations[pid] = { attachments: {} };
-          ins.data.cancellations[pid].executionMethod = safeTrim(value);
-          this.render();
-        });
-      });
+      /* GI-FIX 2026-08-13: לחיצות סטטוס / אופן ביטול / כיסויים חלקיים מחוברות
+         פעם אחת על גוף האשף (ensureExistingPolicyActionDelegation). לא מחברים
+         כאן לכל כפתור — אחרי ייבוא הר הביטוח innerHTML מתחלף והמאזינים הישנים
+         היו נעלמים. */
 
       $$("[data-cancel-policy]", this.els.body).forEach(el => {
+        if(el.matches && el.matches("button, .lcPartialCovers__cb")) return;
         const commitCancel = (doRender = true) => {
           const pid = el.getAttribute("data-cancel-policy");
           const key = el.getAttribute("data-cancel-key");
           if(!pid || !key) return;
-          if(!ins.data.cancellations[pid]) ins.data.cancellations[pid] = { attachments: {} };
+          const row = this.ensureExistingPolicyCancellationRow(ins, pid);
+          if(!row) return;
           let v = (el.type === "checkbox") ? !!el.checked : safeTrim(el.value);
           if(el.getAttribute && el.getAttribute("data-money")==="ils"){
             const raw = String(v||"").replace(/[₪,\s]/g,"");
@@ -12141,11 +12197,10 @@ if(path === "birthDate"){
           }
           if(key.startsWith("att:")){
             const attKey = key.slice(4);
-            if(!ins.data.cancellations[pid].attachments) ins.data.cancellations[pid] = ins.data.cancellations[pid] || { attachments: {} };
-            if(!ins.data.cancellations[pid].attachments) ins.data.cancellations[pid].attachments = {};
-            ins.data.cancellations[pid].attachments[attKey] = v;
+            if(!row.attachments || typeof row.attachments !== "object") row.attachments = {};
+            row.attachments[attKey] = v;
           }else{
-            ins.data.cancellations[pid][key] = v;
+            row[key] = v;
           }
           if(key === 'status') this.syncCancellationExecutionMethodState(ins, pid);
           if(key === 'status' && typeof CustomersUI !== 'undefined'){
