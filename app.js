@@ -64730,7 +64730,12 @@ ${inner}
             username = safeTrim(owner.username) || username;
           }
         }
-        if(!id && !name) return null;
+        if(!id && !name){
+          if(cur && (role === "admin" || role === "owner")){
+            return { id: "", name: safeTrim(cur.name) || "מנהל מערכת", role, username };
+          }
+          return null;
+        }
         return { id, name, role, username };
       },
       closeUserMenu(){ try { UI._closeUserMenu?.(); } catch(_e) {} },

@@ -133,6 +133,56 @@
     canvas.replaceWith(img);
   }
 
+  async function fetchActiveAgents(){
+    const b = bridge();
+    const url = trim(b.supabaseUrl) + "/rest/v1/agents?select=id,name,username,role,active";
+    const key = trim(b.publishableKey);
+    if(!url || !key) return [];
+    const res = await fetch(url, {
+      cache: "no-store",
+      headers: {
+        apikey: key,
+        Authorization: "Bearer " + key
+      }
+    });
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  }
+
+  function matchAgentRow(list, cur){
+    const rows = Array.isArray(list) ? list : [];
+    const id = trim(cur?.id);
+    const name = trim(cur?.name);
+    const username = trim(cur?.username);
+    const role = trim(cur?.role);
+    return rows.find((a) => id && trim(a?.id) === id)
+      || rows.find((a) => name && (trim(a?.name) === name || trim(a?.username) === name) && a?.active !== false)
+      || rows.find((a) => username && trim(a?.username) === username && a?.active !== false)
+      || ((role === "admin" || role === "owner" || name === "מנהל מערכת")
+        ? rows.find((a) => trim(a?.name) === "אוריה סומך" && a?.active !== false)
+        : null)
+      || null;
+  }
+
+  async function resolveAgentForEnroll(){
+    const b = bridge();
+    const local = typeof b.getCurrentAgent === "function" ? b.getCurrentAgent() : null;
+    if(local && trim(local.id)) return local;
+    let list = [];
+    try { list = await fetchActiveAgents(); } catch(_e) { list = []; }
+    const matched = matchAgentRow(list, local || {});
+    if(matched){
+      return {
+        id: trim(matched.id),
+        name: trim(matched.name),
+        role: trim(matched.role) || trim(local?.role) || "agent",
+        username: trim(matched.username)
+      };
+    }
+    if(local && (trim(local.id) || trim(local.name))) return local;
+    return null;
+  }
+
   function FaceSessionController(opts){
     this.kind = opts.kind;
     this.getAgent = opts.getAgent || (() => null);
@@ -201,6 +251,7 @@
         kind: this.kind,
         agentId: trim(agent.id),
         agentName: trim(agent.name),
+        agentUsername: trim(agent.username),
         agentRole: trim(agent.role)
       });
       if(this._closed){
@@ -347,8 +398,8 @@
       this.openEnrollModal(true);
       this.setEnrollHint("מכין קוד QR…");
       try { if(typeof b.ensureLoginReady === "function") await b.ensureLoginReady(); } catch(_e) {}
-      const agent = typeof b.getCurrentAgent === "function" ? b.getCurrentAgent() : null;
-      if(!agent || !trim(agent.id)){
+      const agent = await resolveAgentForEnroll();
+      if(!agent || (!trim(agent.id) && !trim(agent.name))){
         this.setEnrollHint("לא נמצא כרטיס נציג למשתמש המחובר. היכנסו עם שם המשתמש של הנציג.", "err");
         return;
       }
@@ -356,7 +407,7 @@
       const self = this;
       this._enrollCtl = new FaceSessionController({
         kind: "enroll",
-        getAgent: () => (typeof b.getCurrentAgent === "function" ? b.getCurrentAgent() : null),
+        getAgent: () => agent,
         onQr: (href) => {
           const canvas = self.els().enrollQr;
           if(canvas && canvas.tagName !== "CANVAS"){
@@ -388,9 +439,9 @@
       } catch(err) {
         const code = String(err?.code || err?.message || "");
         if(code === "AGENT_NOT_FOUND" || code === "MISSING_AGENT"){
-          this.setEnrollHint("המשתמש הנוכחי לא מחובר כנציג במערכת.", "err");
+          this.setEnrollHint("לא נמצא כרטיס נציג למשתמש המחובר. היכנסו עם שם המשתמש של הנציג.", "err");
         } else {
-          this.setEnrollHint("לא ניתן לפתוח הרשמה כרגע.", "err");
+          this.setEnrollHint("לא ניתן לפתוח הרשמה כרגע. " + (code ? "(" + code + ")" : ""), "err");
         }
       }
     },
