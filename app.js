@@ -30209,7 +30209,7 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260810-sim-fix-v2",
+    "./simulators-center.css?v=20260812-simc-redesign-v1",
     "./simulators-shell.css?v=20260810-sim-calc-hide-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
@@ -30522,6 +30522,13 @@ UsersGateUI.init();
     catch(_e) { return (Math.round(num * 100) / 100).toFixed(2); }
   }
 
+  /* ראשי תיבות לאווטאר של הלקוח ברשימת החישובים השמורים. */
+  function simSaveInitials(name){
+    const words = safeTrim(name).split(/\s+/).filter(Boolean);
+    if(!words.length) return "--";
+    return words.slice(0, 2).map((w) => w.charAt(0)).join("");
+  }
+
   function simSaveFormatDate(iso){
     const s = safeTrim(iso);
     if(!s) return "";
@@ -30620,18 +30627,20 @@ UsersGateUI.init();
             ${savedName ? `<div class="lcSimSaveNote">החישוב נפתח מתוך הלקוח השמור <strong>${escapeHtml(savedName)}</strong>.</div>` : ""}
             ${errHtml}`;
 
+      /* סדר ה-DOM קובע את סדר הכפתורים ב-RTL: הראשון יושב מימין. כפתור
+         השמירה תמיד ראשון — כלומר צמוד מימין לכפתור "לא, סגור בלי לשמור". */
       const footHtml = this._step === "name"
         ? `
-            <button type="button" class="btn giValModal__closeBtn" data-simsave-back="1"${this._busy ? " disabled" : ""}>חזרה</button>
-            <button type="button" class="btn btn--primary" data-simsave-confirm="1"${this._busy ? " disabled" : ""}>${this._busy ? "שומר..." : "שמור"}</button>`
+            <button type="button" class="btn btn--primary" data-simsave-confirm="1"${this._busy ? " disabled" : ""}>${this._busy ? "שומר..." : "שמור"}</button>
+            <button type="button" class="btn giValModal__closeBtn" data-simsave-back="1"${this._busy ? " disabled" : ""}>חזרה</button>`
         : (this._mode === "update"
           ? `
-            <button type="button" class="btn giValModal__closeBtn" data-simsave-discard="1">לא, סגור בלי לשמור</button>
+            <button type="button" class="btn btn--primary" data-simsave-overwrite="1"${this._busy ? " disabled" : ""}>${this._busy ? "שומר..." : "עדכן חישוב"}</button>
             <button type="button" class="btn btn--secondary" data-simsave-newclient="1">שמור כלקוח חדש</button>
-            <button type="button" class="btn btn--primary" data-simsave-overwrite="1"${this._busy ? " disabled" : ""}>${this._busy ? "שומר..." : "עדכן את " + escapeHtml(savedName || "הלקוח")}</button>`
+            <button type="button" class="btn giValModal__closeBtn" data-simsave-discard="1">לא, סגור בלי לשמור</button>`
           : `
-            <button type="button" class="btn giValModal__closeBtn" data-simsave-discard="1">לא, סגור בלי לשמור</button>
-            <button type="button" class="btn btn--primary" data-simsave-yes="1">כן, שמור</button>`);
+            <button type="button" class="btn btn--primary" data-simsave-yes="1">כן, שמור</button>
+            <button type="button" class="btn giValModal__closeBtn" data-simsave-discard="1">לא, סגור בלי לשמור</button>`);
 
       modal.innerHTML = `
         <div class="giValModal__backdrop" data-simsave-cancel="1"></div>
@@ -30640,7 +30649,6 @@ UsersGateUI.init();
             <button type="button" class="lcSimSaveModal__closeX" data-simsave-cancel="1" aria-label="חזרה לסימולטור">✕</button>
             <div class="giValModal__headText">
               <div class="giValModal__title">שמירת חישוב פרמיה</div>
-              <div class="giValModal__sub">${escapeHtml(this._step === "name" ? "החישוב יישמר תחת שם הלקוח וניתן יהיה לפתוח אותו מחדש" : "אפשר לשמור את החישוב ולחזור אליו בכניסה הבאה למרכז הסימולטורים")}</div>
             </div>
           </div>
           <div class="giValModal__body lcSimSaveModal__body">${bodyHtml}</div>
@@ -30763,6 +30771,12 @@ UsersGateUI.init();
   try {
     window.GI_SIM_SAVE_PROMPT = (snapshot, done) => SimulatorSavePrompt.open(snapshot, done);
   } catch(_e) {}
+
+  /* GI-SIM-CENTER-UI 2026-08-12 — אייקוני קו דקים לכותרות המקטעים במרכז. */
+  const SIMC_ICON_USER = `<svg class="lcSimCenterIco" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg>`;
+  const SIMC_ICON_CALENDAR = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>`;
+  const SIMC_ICON_COMPANY = `<svg class="lcSimCenterIco" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M3 21h18M5 21V8l7-5 7 5v13"/><path d="M10 21v-6h4v6"/></svg>`;
+  const SIMC_ICON_SHIELD = `<svg class="lcSimCenterIco" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.4 8.2-8 9.5C7.4 20.2 4 17 4 12V6l8-3z"/></svg>`;
 
   const SimulatorsCenterUI = {
     els: {},
@@ -30954,14 +30968,34 @@ UsersGateUI.init();
       }));
     },
 
-    _headHtml(sub){
+    /* מחוון שני השלבים — כדי שהנציג ידע שאחרי הפרטים מגיעה בחירת חברה ומוצר. */
+    _stepsHtml(active){
+      const onPicker = active === 2;
+      return `
+              <div class="lcSimCenterSteps">
+                <span class="lcSimCenterSteps__item${onPicker ? " is-done" : " is-active"}">
+                  <span class="lcSimCenterSteps__dot">${onPicker ? "✓" : "1"}</span>
+                  <span class="lcSimCenterSteps__txt">פרטי המבוטח</span>
+                </span>
+                <span class="lcSimCenterSteps__bar${onPicker ? " is-done" : ""}"></span>
+                <span class="lcSimCenterSteps__item${onPicker ? " is-active" : ""}">
+                  <span class="lcSimCenterSteps__dot">2</span>
+                  <span class="lcSimCenterSteps__txt">חברה ומוצר</span>
+                </span>
+              </div>`;
+    },
+
+    _headHtml(sub, step){
+      const below = (step === 1 || step === 2)
+        ? this._stepsHtml(step)
+        : `<div class="giValModal__sub lcSimCenterModal__sub">${escapeHtml(sub)}</div>`;
       return `
           <div class="giValModal__head lcSimCenterModal__head">
             <button type="button" class="lcSimCenterModal__closeX" data-simc-close="1" aria-label="סגירה">✕</button>
             <img class="lcSimCenterModal__brandLogo" src="./logo-login-clean.png?v=20260810-sim-fix-v2" alt="GEMEL INVEST" width="1808" height="373" decoding="async" />
             <div class="giValModal__headText">
               <div class="giValModal__title lcSimCenterModal__title">מרכז הסימולטורים</div>
-              <div class="giValModal__sub lcSimCenterModal__sub">${escapeHtml(sub)}</div>
+              ${below}
             </div>
           </div>`;
     },
@@ -31017,11 +31051,15 @@ UsersGateUI.init();
             const when = simSaveFormatDate(r?.updated_at || r?.created_at);
             const owner = seeAll ? safeTrim(r?.agent_name) : "";
             const meta = [when, owner].filter(Boolean).join(" · ");
+            const insureds = Number(r?.insureds_count) || 0;
+            const who = insureds > 1 ? (insureds + " מבוטחים") : "מבוטח אחד";
+            const rowMeta = [who, meta].filter(Boolean).join(" · ");
             return `
               <div class="lcSimSavedRow">
+                <span class="lcSimSavedRow__badge">${SIMC_ICON_SHIELD}</span>
                 <div class="lcSimSavedRow__main">
                   <div class="lcSimSavedRow__title">${escapeHtml(label)}</div>
-                  <div class="lcSimSavedRow__meta">${escapeHtml(meta)}</div>
+                  <div class="lcSimSavedRow__meta">${escapeHtml(rowMeta)}</div>
                 </div>
                 <div class="lcSimSavedRow__prem">₪${escapeHtml(simSaveFormatMoney(r?.total_monthly))}</div>
                 <div class="lcSimSavedRow__actions">
@@ -31030,11 +31068,21 @@ UsersGateUI.init();
                 </div>
               </div>`;
           }).join("");
+          const countTxt = g.rows.length === 1 ? "חישוב אחד" : (g.rows.length + " חישובים");
+          const lastTxt = simSaveFormatDate(g.lastAt);
+          const groupMeta = [countTxt, lastTxt ? ("עודכן ב-" + lastTxt) : ""].filter(Boolean).join(" · ");
           return `
             <section class="lcSimSavedGroup">
               <header class="lcSimSavedGroup__head">
-                <div class="lcSimSavedGroup__name">${escapeHtml(g.name)}</div>
-                <div class="lcSimSavedGroup__sum">${g.rows.length} חישובים · סה״כ ₪${escapeHtml(simSaveFormatMoney(g.total))} לחודש</div>
+                <span class="lcSimSavedGroup__avatar">${escapeHtml(simSaveInitials(g.name))}</span>
+                <span class="lcSimSavedGroup__id">
+                  <span class="lcSimSavedGroup__name">${escapeHtml(g.name)}</span>
+                  <span class="lcSimSavedGroup__sum">${escapeHtml(groupMeta)}</span>
+                </span>
+                <span class="lcSimSavedGroup__total">
+                  <span class="lcSimSavedGroup__totalV">₪${escapeHtml(simSaveFormatMoney(g.total))}</span>
+                  <span class="lcSimSavedGroup__totalK">סה״כ לחודש</span>
+                </span>
               </header>
               ${rows}
             </section>`;
@@ -31050,13 +31098,18 @@ UsersGateUI.init();
             ${listHtml}
           </div>
           <div class="giValModal__foot lcSimCenterModal__foot">
-            <button type="button" class="btn giValModal__closeBtn lcSimCenterModal__cancel" data-simc-close="1">סגירה</button>
-            <button type="button" class="btn btn--secondary" data-simc-refresh-saved="1"${this._savesLoading ? " disabled" : ""}>רענון</button>
+            <button type="button" class="btn lcSimCenterModal__cancel" data-simc-new-sim="1">+ סימולטור חדש</button>
+            <button type="button" class="btn lcSimCenterModal__ghost" data-simc-refresh-saved="1"${this._savesLoading ? " disabled" : ""}>רענון</button>
+            <span class="lcSimCenterModal__spacer"></span>
+            <button type="button" class="btn lcSimCenterModal__ghost" data-simc-close="1">סגירה</button>
           </div>
         </div>`;
 
       $$("[data-simc-close]", modal).forEach((el) => on(el, "click", () => this.close()));
       this._bindTabs(modal);
+
+      const newSim = modal.querySelector("[data-simc-new-sim]");
+      if(newSim) on(newSim, "click", () => { this._view = "new"; this._paint(); });
 
       const refresh = modal.querySelector("[data-simc-refresh-saved]");
       if(refresh) on(refresh, "click", () => { void this._loadSaves({ force: true }); });
@@ -31154,45 +31207,55 @@ UsersGateUI.init();
       modal.innerHTML = `
         <div class="giValModal__backdrop" data-simc-close="1"></div>
         <div class="giValModal__card lcSimCenterModal__card">
-          ${this._headHtml("הזינו את פרטי המבוטח — לאחר מכן תיפתח בחירת החברה והמוצר")}
+          ${this._headHtml("", 1)}
           <div class="giValModal__body lcSimCenterModal__body">
             ${this._tabsHtml()}
-            <form class="lcSimCenterForm lcSimCenterForm--details" data-simc-details-form="1" novalidate>
-              <div class="lcSimCenterField">
-                <label class="lcSimCenterField__label" for="lcSimCenterBirthDate">תאריך לידה</label>
-                <input id="lcSimCenterBirthDate" class="lcSimCenterField__input" type="text" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" maxlength="10" data-simc-field="birthDate" data-datefmt="dmy" value="${escapeHtml(d.birthDate)}" />
-                <div class="lcSimCenterField__err" data-simc-err="birthDate" style="display:none"></div>
-              </div>
-              <div class="lcSimCenterField">
-                <label class="lcSimCenterField__label" for="lcSimCenterStartDate">תאריך תחילת ביטוח</label>
-                <input id="lcSimCenterStartDate" class="lcSimCenterField__input" type="text" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" maxlength="10" data-simc-field="insuranceStartDate" data-datefmt="dmy" value="${escapeHtml(d.insuranceStartDate)}" />
-                <div class="lcSimCenterField__err" data-simc-err="insuranceStartDate" style="display:none"></div>
-              </div>
-              <div class="lcSimCenterField">
-                <span class="lcSimCenterField__label">מין</span>
-                <div class="lcSimCenterSeg" role="group" aria-label="מין">
-                  ${seg("gender", "זכר", "זכר")}
-                  ${seg("gender", "נקבה", "נקבה")}
+            <form class="lcSimCenterBlock" data-simc-details-form="1" novalidate>
+              <div class="lcSimCenterBlock__title">${SIMC_ICON_USER}פרטי המבוטח</div>
+              <div class="lcSimCenterForm lcSimCenterForm--details">
+                <div class="lcSimCenterField">
+                  <label class="lcSimCenterField__label" for="lcSimCenterBirthDate">תאריך לידה</label>
+                  <span class="lcSimCenterField__wrap">
+                    <input id="lcSimCenterBirthDate" class="lcSimCenterField__input lcSimCenterField__input--icon" type="text" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" maxlength="10" data-simc-field="birthDate" data-datefmt="dmy" value="${escapeHtml(d.birthDate)}" />
+                    <span class="lcSimCenterField__ico">${SIMC_ICON_CALENDAR}</span>
+                  </span>
+                  <div class="lcSimCenterField__err" data-simc-err="birthDate" style="display:none"></div>
                 </div>
-                <div class="lcSimCenterField__err" data-simc-err="gender" style="display:none"></div>
-              </div>
-              <div class="lcSimCenterField">
-                <span class="lcSimCenterField__label">עישון</span>
-                <div class="lcSimCenterSeg" role="group" aria-label="עישון">
-                  ${seg("smoker", "no", "לא מעשן")}
-                  ${seg("smoker", "yes", "מעשן")}
+                <div class="lcSimCenterField">
+                  <label class="lcSimCenterField__label" for="lcSimCenterStartDate">תאריך תחילת ביטוח</label>
+                  <span class="lcSimCenterField__wrap">
+                    <input id="lcSimCenterStartDate" class="lcSimCenterField__input lcSimCenterField__input--icon" type="text" inputmode="numeric" autocomplete="off" placeholder="dd/mm/yyyy" maxlength="10" data-simc-field="insuranceStartDate" data-datefmt="dmy" value="${escapeHtml(d.insuranceStartDate)}" />
+                    <span class="lcSimCenterField__ico">${SIMC_ICON_CALENDAR}</span>
+                  </span>
+                  <div class="lcSimCenterField__err" data-simc-err="insuranceStartDate" style="display:none"></div>
                 </div>
-                <div class="lcSimCenterField__err" data-simc-err="smoker" style="display:none"></div>
-              </div>
-              <div class="lcSimCenterField lcSimCenterField--wide">
-                <label class="lcSimCenterField__label" for="lcSimCenterOccupation">מקצוע <span class="lcSimCenterField__opt">(רשות)</span></label>
-                <input id="lcSimCenterOccupation" class="lcSimCenterField__input" type="text" autocomplete="off" placeholder="לדוגמה: מהנדס תוכנה" maxlength="60" data-simc-field="occupation" value="${escapeHtml(d.occupation)}" />
+                <div class="lcSimCenterField">
+                  <span class="lcSimCenterField__label">מין</span>
+                  <div class="lcSimCenterSeg" role="group" aria-label="מין">
+                    ${seg("gender", "זכר", "זכר")}
+                    ${seg("gender", "נקבה", "נקבה")}
+                  </div>
+                  <div class="lcSimCenterField__err" data-simc-err="gender" style="display:none"></div>
+                </div>
+                <div class="lcSimCenterField">
+                  <span class="lcSimCenterField__label">עישון</span>
+                  <div class="lcSimCenterSeg" role="group" aria-label="עישון">
+                    ${seg("smoker", "no", "לא מעשן")}
+                    ${seg("smoker", "yes", "מעשן")}
+                  </div>
+                  <div class="lcSimCenterField__err" data-simc-err="smoker" style="display:none"></div>
+                </div>
+                <div class="lcSimCenterField lcSimCenterField--wide">
+                  <label class="lcSimCenterField__label" for="lcSimCenterOccupation">מקצוע <span class="lcSimCenterField__opt">(רשות)</span></label>
+                  <input id="lcSimCenterOccupation" class="lcSimCenterField__input" type="text" autocomplete="off" placeholder="לדוגמה: מהנדס תוכנה" maxlength="60" data-simc-field="occupation" value="${escapeHtml(d.occupation)}" />
+                </div>
               </div>
             </form>
           </div>
           <div class="giValModal__foot lcSimCenterModal__foot">
-            <button type="button" class="btn giValModal__closeBtn lcSimCenterModal__cancel" data-simc-close="1">ביטול</button>
             <button type="button" class="btn btn--primary lcSimCenterModal__open" data-simc-next="1"${this._detailsReady() ? "" : " disabled"}>המשך לבחירת חברה ומוצר</button>
+            <button type="button" class="btn giValModal__closeBtn lcSimCenterModal__cancel" data-simc-close="1">ביטול</button>
+            <span class="lcSimCenterModal__hint">הפרטים ימולאו אוטומטית בכל סימולטור</span>
           </div>
         </div>`;
 
@@ -31297,18 +31360,22 @@ UsersGateUI.init();
       const d = this._details || this._blankDetails();
       const chips = [];
       const bd = safeTrim(d.birthDate);
-      if(bd) chips.push(["תאריך לידה", bd]);
+      if(bd) chips.push(["לידה", bd]);
       if(d.gender === "זכר" || d.gender === "נקבה") chips.push(["מין", d.gender]);
       if(d.smoker === "yes" || d.smoker === "no") chips.push(["עישון", d.smoker === "yes" ? "מעשן" : "לא מעשן"]);
       const sd = safeTrim(d.insuranceStartDate);
-      if(sd) chips.push(["תחילת ביטוח", sd]);
+      if(sd) chips.push(["תחילה", sd]);
       const occ = safeTrim(d.occupation);
       if(occ) chips.push(["מקצוע", occ]);
       if(!chips.length) return "";
       const items = chips.map(([k, v]) =>
         `<span class="lcSimCenterSummary__chip"><span class="lcSimCenterSummary__k">${escapeHtml(k)}</span><span class="lcSimCenterSummary__v">${escapeHtml(v)}</span></span>`
       ).join("");
-      return `<div class="lcSimCenterSummary">${items}</div>`;
+      return `
+            <div class="lcSimCenterSummary">
+              <div class="lcSimCenterSummary__chips">${items}</div>
+              <button type="button" class="lcSimCenterSummary__edit" data-simc-back="1">עריכה</button>
+            </div>`;
     },
 
     /* שלב 2 — בחירת חברה ומוצר (הזרימה שהייתה קיימת, בתוספת חזרה וסיכום פרטים). */
@@ -31321,90 +31388,77 @@ UsersGateUI.init();
       const products = company ? this._productsForCompany(company) : [];
       const canOpen = !!(company && product && products.some((it) => safeTrim(it.product) === product));
 
-      const companyOpts = companies.map((c) =>
-        `<option value="${escapeHtml(c)}"${c === company ? " selected" : ""}>${escapeHtml(c)}</option>`
-      ).join("");
-
-      const productOpts = products.map((it) => {
-        const p = safeTrim(it.product);
-        return `<option value="${escapeHtml(p)}"${p === product ? " selected" : ""}>${escapeHtml(p)}</option>`;
+      /* אריחי חברות במקום רשימה נפתחת — כל החברות גלויות במבט אחד, עם מספר
+         המוצרים הזמינים בכל אחת. */
+      const tiles = companies.map((c) => {
+        const count = this._productsForCompany(c).length;
+        const active = c === company;
+        return `
+                <button type="button" class="lcSimCenterTile${active ? " is-active" : ""}" data-simc-company="${escapeHtml(c)}" aria-pressed="${active ? "true" : "false"}">
+                  <span class="lcSimCenterTile__name">${escapeHtml(c)}</span>
+                  <span class="lcSimCenterTile__meta">${count} מוצרים</span>
+                </button>`;
       }).join("");
+
+      const productsHtml = company
+        ? products.map((it) => {
+            const p = safeTrim(it.product);
+            const active = p === product;
+            return `
+                <button type="button" class="lcSimCenterProd${active ? " is-active" : ""}" data-simc-product="${escapeHtml(p)}" aria-pressed="${active ? "true" : "false"}">
+                  <span class="lcSimCenterProd__dot"></span>${escapeHtml(p)}
+                </button>`;
+          }).join("")
+        : `<div class="lcSimCenterProds__hint">בחרו קודם חברת ביטוח</div>`;
+
+      const openLabel = canOpen
+        ? "פתח סימולטור · " + company + " " + product
+        : "פתח סימולטור";
 
       modal.innerHTML = `
         <div class="giValModal__backdrop" data-simc-close="1"></div>
         <div class="giValModal__card lcSimCenterModal__card">
-          ${this._headHtml("בחרו חברה ומוצר לפתיחת הסימולטור")}
+          ${this._headHtml("", 2)}
           <div class="giValModal__body lcSimCenterModal__body">
             ${this._tabsHtml()}
             ${this._detailsSummaryHtml()}
-            <form class="lcSimCenterForm" data-simc-form="1" novalidate>
-              <div class="lcSimCenterField">
-                <label class="lcSimCenterField__label" for="lcSimCenterCompany">חברת ביטוח</label>
-                <select id="lcSimCenterCompany" class="lcSimCenterField__select" data-simc-company-select="1" required>
-                  <option value="">בחרו חברה...</option>
-                  ${companyOpts}
-                </select>
-              </div>
-              <div class="lcSimCenterField${company ? "" : " is-disabled"}">
-                <label class="lcSimCenterField__label" for="lcSimCenterProduct">מוצר</label>
-                <select id="lcSimCenterProduct" class="lcSimCenterField__select" data-simc-product-select="1"${company ? "" : " disabled"} required>
-                  <option value="">${company ? "בחרו מוצר..." : "בחרו קודם חברה"}</option>
-                  ${productOpts}
-                </select>
-              </div>
-            </form>
+            <div class="lcSimCenterBlock">
+              <div class="lcSimCenterBlock__title">${SIMC_ICON_COMPANY}חברת ביטוח</div>
+              <div class="lcSimCenterTiles">${tiles}</div>
+            </div>
+            <div class="lcSimCenterBlock">
+              <div class="lcSimCenterBlock__title">${SIMC_ICON_SHIELD}מוצר</div>
+              <div class="lcSimCenterProds">${productsHtml}</div>
+            </div>
           </div>
           <div class="giValModal__foot lcSimCenterModal__foot">
+            <button type="button" class="btn btn--primary lcSimCenterModal__open" data-simc-open="1"${canOpen ? "" : " disabled"}>${escapeHtml(openLabel)}</button>
             <button type="button" class="btn giValModal__closeBtn lcSimCenterModal__cancel" data-simc-back="1">חזרה לפרטים</button>
-            <button type="button" class="btn btn--primary lcSimCenterModal__open" data-simc-open="1"${canOpen ? "" : " disabled"}>פתח סימולטור</button>
           </div>
         </div>`;
 
       $$("[data-simc-close]", modal).forEach((el) => on(el, "click", () => this.close()));
       this._bindTabs(modal);
 
-      const backBtn = modal.querySelector("[data-simc-back]");
-      if(backBtn) on(backBtn, "click", () => this._goToDetails());
+      $$("[data-simc-back]", modal).forEach((el) => on(el, "click", () => this._goToDetails()));
 
-      const companySelect = modal.querySelector("[data-simc-company-select]");
-      if(companySelect){
-        on(companySelect, "change", () => {
-          this._selectedCompany = safeTrim(companySelect.value);
-          this._selectedProduct = "";
-          this._paint();
-        });
-      }
+      $$("[data-simc-company]", modal).forEach((btn) => on(btn, "click", () => {
+        const next = safeTrim(btn.getAttribute("data-simc-company"));
+        if(next === safeTrim(this._selectedCompany)) return;
+        this._selectedCompany = next;
+        this._selectedProduct = "";
+        this._paint();
+      }));
 
-      const productSelect = modal.querySelector("[data-simc-product-select]");
-      if(productSelect){
-        on(productSelect, "change", () => {
-          this._selectedProduct = safeTrim(productSelect.value);
-          this._syncOpenBtn();
-        });
-      }
-
-      const form = modal.querySelector("[data-simc-form]");
-      if(form){
-        on(form, "submit", (ev) => {
-          ev.preventDefault();
-          this._tryOpen();
-        });
-      }
+      $$("[data-simc-product]", modal).forEach((btn) => on(btn, "click", () => {
+        this._selectedProduct = safeTrim(btn.getAttribute("data-simc-product"));
+        this._paint();
+      }));
 
       const openBtn = modal.querySelector("[data-simc-open]");
       if(openBtn){
         on(openBtn, "click", () => this._tryOpen());
       }
-    },
-
-    _syncOpenBtn(){
-      const modal = this._modal;
-      if(!modal) return;
-      const company = safeTrim(this._selectedCompany);
-      const product = safeTrim(this._selectedProduct);
-      const canOpen = !!(company && product);
-      const openBtn = modal.querySelector("[data-simc-open]");
-      if(openBtn) openBtn.disabled = !canOpen;
     },
 
     _tryOpen(){

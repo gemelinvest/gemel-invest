@@ -67,7 +67,7 @@
 /* ---------- מודאל מרכז — קומפקטי, חברה | מוצר בשורה ---------- */
 .lcSimCenterModal .giValModal__card,
 .lcSimCenterModal__card{
-  max-width:min(560px, 94vw) !important;
+  max-width:620px !important;
   width:100%;
   max-height:none;
   height:auto;
@@ -81,11 +81,11 @@
 }
 .lcSimCenterModal .giValModal__head,
 .lcSimCenterModal__head{
-  padding:16px 20px 6px !important;
+  padding:16px 22px 14px !important;
   position:relative;
   flex:0 0 auto;
-  background:#fff !important;
-  border-bottom:0 !important;
+  background:linear-gradient(180deg,#FBFCFF 0%,#FFFFFF 100%) !important;
+  border-bottom:1px solid #F1F5FC !important;
   display:flex !important;
   flex-direction:column !important;
   align-items:center !important;
@@ -105,12 +105,57 @@
 .lcSimCenterModal .giValModal__title,
 .lcSimCenterModal__title{
   color:#0B1F4B !important;
-  font-size:20px !important;
+  font-size:19px !important;
   font-weight:800 !important;
   letter-spacing:-0.02em;
   line-height:1.2;
   text-align:center;
 }
+
+/* מחוון השלבים מתחת לכותרת: פרטי המבוטח → חברה ומוצר */
+.lcSimCenterSteps{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  direction:rtl;
+  margin-top:7px;
+}
+.lcSimCenterSteps__item{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+}
+.lcSimCenterSteps__dot{
+  width:21px;
+  height:21px;
+  border-radius:50%;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  background:#E7EDF9;
+  color:#93A2B8;
+  font-size:11px;
+  font-weight:800;
+  line-height:1;
+}
+.lcSimCenterSteps__txt{
+  font-size:11.5px;
+  font-weight:700;
+  color:#93A2B8;
+  white-space:nowrap;
+}
+.lcSimCenterSteps__item.is-active .lcSimCenterSteps__dot{ background:#2563EB; color:#fff; }
+.lcSimCenterSteps__item.is-active .lcSimCenterSteps__txt{ color:#0B1F4B; }
+.lcSimCenterSteps__item.is-done .lcSimCenterSteps__dot{ background:#DBEAFE; color:#2563EB; }
+.lcSimCenterSteps__item.is-done .lcSimCenterSteps__txt{ color:#2563EB; }
+.lcSimCenterSteps__bar{
+  width:44px;
+  height:2px;
+  margin:0 10px;
+  border-radius:2px;
+  background:#E7EDF9;
+}
+.lcSimCenterSteps__bar.is-done{ background:#93BBF7; }
 .lcSimCenterModal .giValModal__sub,
 .lcSimCenterModal__sub{
   color:#7B8BA5 !important;
@@ -120,27 +165,37 @@
 }
 .lcSimCenterModal .giValModal__body,
 .lcSimCenterModal__body{
-  padding:10px 20px 4px !important;
+  padding:16px 22px 6px !important;
   flex:0 0 auto;
   min-height:0;
   overflow:visible;
 }
+/* הפעולה הראשית תמיד ראשונה מימין, וצמודה לשאר הכפתורים. */
 .lcSimCenterModal .giValModal__foot,
 .lcSimCenterModal__foot{
-  padding:12px 20px 16px !important;
+  padding:14px 22px 18px !important;
   flex:0 0 auto;
   background:#fff !important;
-  border-top:0 !important;
+  border-top:1px solid #F1F5FC !important;
   display:flex;
   justify-content:flex-start;
   align-items:center;
-  gap:10px;
+  gap:8px;
   flex-wrap:wrap;
+}
+.lcSimCenterModal .giValModal__foot .btn{ white-space:nowrap; }
+.lcSimCenterModal__spacer{ flex:1 1 auto; }
+.lcSimCenterModal__hint{
+  margin-inline-start:auto;
+  font-size:11.5px;
+  font-weight:650;
+  color:#A3B0C4;
 }
 .lcSimCenterModal .giValModal__closeBtn,
 .lcSimCenterModal__cancel{
-  min-width:108px;
-  height:42px;
+  min-width:auto;
+  height:44px;
+  padding:0 17px !important;
   border-radius:12px !important;
   border:1.5px solid #2563EB !important;
   background:#fff !important;
@@ -153,20 +208,37 @@
 .lcSimCenterModal__cancel:hover{
   background:#EFF6FF !important;
 }
+/* כפתור משני שקט — "רענון" / "סגירה" בלשונית הלקוחות השמורים. */
+.lcSimCenterModal__ghost{
+  min-width:auto;
+  height:44px;
+  padding:0 17px !important;
+  border-radius:12px !important;
+  border:1.5px solid #E3E9F4 !important;
+  background:#fff !important;
+  color:#66748C !important;
+  font-weight:700 !important;
+  font-size:14px !important;
+  box-shadow:none !important;
+}
+.lcSimCenterModal__ghost:hover{ background:#F8FAFC !important; }
 .lcSimCenterModal__open{
-  min-width:140px;
-  height:42px;
+  min-width:auto;
+  height:44px;
+  padding:0 17px !important;
   border-radius:12px !important;
   background:#2563EB !important;
   border-color:#2563EB !important;
   color:#fff !important;
   font-weight:800 !important;
   font-size:14px !important;
-  margin-inline-start:auto;
+  margin-inline-start:0;
+  box-shadow:0 6px 16px rgba(37,99,235,.28) !important;
 }
 .lcSimCenterModal__open:disabled{
   opacity:.45;
   cursor:not-allowed;
+  box-shadow:none !important;
 }
 
 .lcSimCenterModal__closeX{
@@ -198,15 +270,34 @@
   user-select:none;
 }
 
-/* שורת חזרה + chip — לא בשימוש בזרימת הדרופדאון */
-.lcSimCenterModal__navRow{ display:none; }
+/* ---------- מקטע ממוסגר: כותרת קטנה + תוכן ---------- */
+.lcSimCenterBlock{
+  border:1px solid #EDF1F9;
+  border-radius:15px;
+  background:#FCFDFF;
+  padding:14px 15px 15px;
+  direction:rtl;
+  box-sizing:border-box;
+}
+.lcSimCenterBlock + .lcSimCenterBlock{ margin-top:11px; }
+.lcSimCenterBlock__title{
+  display:flex;
+  align-items:center;
+  gap:7px;
+  margin:0 0 11px;
+  font-size:12px;
+  font-weight:800;
+  color:#5B76A6;
+  letter-spacing:.01em;
+}
+.lcSimCenterIco{ flex:0 0 auto; opacity:.85; }
 
-/* ---------- טופס בחירה: חברה (ימין) + מוצר (שמאל) ---------- */
+/* ---------- טופס בחירה: שתי עמודות ---------- */
 .lcSimCenterForm{
   display:grid !important;
   grid-template-columns:minmax(0, 1fr) minmax(0, 1fr) !important;
   gap:12px 14px !important;
-  padding:4px 0 8px !important;
+  padding:0 !important;
   direction:rtl !important;
   width:100% !important;
   box-sizing:border-box !important;
@@ -218,38 +309,10 @@
   text-align:right !important;
   min-width:0 !important;
 }
-.lcSimCenterField.is-disabled{
-  opacity:.72;
-}
 .lcSimCenterField__label{
   font-size:12.5px;
   font-weight:750;
   color:#0B1F4B;
-}
-.lcSimCenterField__select{
-  width:100%;
-  min-height:42px;
-  padding:8px 12px;
-  border:1.5px solid #E5EAF3;
-  border-radius:11px;
-  background:#fff;
-  color:#0F172A;
-  font-size:14px;
-  font-weight:650;
-  cursor:pointer;
-  appearance:auto;
-  transition:border-color .12s ease, box-shadow .12s ease;
-}
-.lcSimCenterField__select:hover:not(:disabled),
-.lcSimCenterField__select:focus{
-  border-color:#2563EB;
-  outline:none;
-  box-shadow:0 0 0 3px rgba(37,99,235,.12);
-}
-.lcSimCenterField__select:disabled{
-  cursor:not-allowed;
-  background:#F8FAFC;
-  color:#94A3B8;
 }
 
 .lcSimCenterEmpty{
@@ -273,19 +336,33 @@
   color:#94A3B8;
   font-size:11.5px;
 }
+.lcSimCenterField__wrap{
+  position:relative;
+  display:block;
+}
+.lcSimCenterField__ico{
+  position:absolute;
+  left:12px;
+  top:50%;
+  transform:translateY(-50%);
+  display:flex;
+  color:#93A6C4;
+  pointer-events:none;
+}
 .lcSimCenterField__input{
   width:100%;
-  min-height:42px;
-  padding:8px 12px;
-  border:1.5px solid #E5EAF3;
-  border-radius:11px;
+  min-height:44px;
+  padding:9px 13px;
+  border:1.5px solid #E3E9F4;
+  border-radius:12px;
   background:#fff;
   color:#0F172A;
-  font-size:14px;
+  font-size:14.5px;
   font-weight:650;
   box-sizing:border-box;
   transition:border-color .12s ease, box-shadow .12s ease;
 }
+.lcSimCenterField__input--icon{ padding-left:40px; }
 .lcSimCenterField__input::placeholder{
   color:#B4C0D2;
   font-weight:600;
@@ -309,35 +386,40 @@
   line-height:1.35;
 }
 
-/* בורר דו-מצבי (מין / עישון) */
+/* בורר דו-מצבי (מין / עישון) — כל זוג יושב במסלול משלו, כדי שלא ייראה
+   כשורה אחת של ארבעה כפתורים. */
 .lcSimCenterSeg{
   display:flex;
-  gap:8px;
+  gap:3px;
   width:100%;
+  padding:3px;
+  background:#F1F5FC;
+  border:1px solid #E5EBF7;
+  border-radius:12px;
+  box-sizing:border-box;
 }
 .lcSimCenterSeg__btn{
   flex:1 1 0;
   min-width:0;
-  min-height:42px;
+  min-height:38px;
   padding:8px 10px;
-  border:1.5px solid #E5EAF3;
-  border-radius:11px;
-  background:#fff;
-  color:#5B6B84;
+  border:1px solid transparent;
+  border-radius:9px;
+  background:transparent;
+  color:#66748C;
   font-size:13.5px;
   font-weight:700;
   cursor:pointer;
   transition:border-color .12s ease, background .12s ease, color .12s ease, box-shadow .12s ease;
 }
 .lcSimCenterSeg__btn:hover{
-  border-color:#B9CEF7;
-  background:#F7FAFF;
+  color:#1D4ED8;
 }
 .lcSimCenterSeg__btn.is-active{
-  border-color:#2563EB;
-  background:#EFF6FF;
+  border-color:#CBDCFA;
+  background:#fff;
   color:#1D4ED8;
-  box-shadow:inset 0 0 0 1px rgba(37,99,235,.28);
+  box-shadow:0 1px 4px rgba(37,99,235,.18);
 }
 .lcSimCenterSeg__btn:focus-visible{
   outline:2px solid rgba(37,99,235,.45);
@@ -347,12 +429,21 @@
 /* סיכום הפרטים במסך בחירת החברה */
 .lcSimCenterSummary{
   display:flex;
+  align-items:center;
+  gap:10px;
+  direction:rtl;
+  padding:10px 12px;
+  margin-bottom:13px;
+  border-radius:13px;
+  background:#F7FAFF;
+  border:1px solid #E7EEFB;
+}
+.lcSimCenterSummary__chips{
+  flex:1 1 auto;
+  min-width:0;
+  display:flex;
   flex-wrap:wrap;
   gap:6px;
-  direction:rtl;
-  padding:0 0 10px;
-  margin-bottom:10px;
-  border-bottom:1px solid #EEF2F9;
 }
 .lcSimCenterSummary__chip{
   display:inline-flex;
@@ -360,29 +451,133 @@
   gap:5px;
   padding:4px 10px;
   border-radius:999px;
-  background:#F4F7FD;
-  border:1px solid #E5EAF3;
-  font-size:11.5px;
+  background:#fff;
+  border:1px solid #E3EAF7;
+  font-size:12px;
   line-height:1.5;
 }
-.lcSimCenterSummary__k{ color:#8496AF; font-weight:650; }
-.lcSimCenterSummary__v{ color:#0B1F4B; font-weight:750; }
+.lcSimCenterSummary__k{ color:#8A9AB4; font-weight:650; }
+.lcSimCenterSummary__v{ color:#0B1F4B; font-weight:800; }
+.lcSimCenterSummary__edit{
+  flex:0 0 auto;
+  border:none;
+  background:transparent;
+  color:#2563EB;
+  font-family:inherit;
+  font-size:12px;
+  font-weight:800;
+  cursor:pointer;
+  padding:4px 2px;
+  border-radius:8px;
+}
+.lcSimCenterSummary__edit:hover{ text-decoration:underline; }
+
+/* ---------- אריחי חברות + צ'יפים של מוצרים ---------- */
+.lcSimCenterTiles{
+  display:grid;
+  grid-template-columns:repeat(3, minmax(0, 1fr));
+  gap:9px;
+  direction:rtl;
+}
+.lcSimCenterTile{
+  min-height:62px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:3px;
+  padding:8px 6px;
+  border:1.5px solid #E7EDF7;
+  border-radius:13px;
+  background:#fff;
+  font-family:inherit;
+  cursor:pointer;
+  transition:border-color .14s ease, background .14s ease, box-shadow .14s ease;
+}
+.lcSimCenterTile:hover{ border-color:#C3D7F8; background:#FAFCFF; }
+.lcSimCenterTile__name{
+  font-size:14px;
+  font-weight:800;
+  color:#16233D;
+}
+.lcSimCenterTile__meta{
+  font-size:10.5px;
+  font-weight:650;
+  color:#A3B0C4;
+}
+.lcSimCenterTile.is-active{
+  border-color:#2563EB;
+  background:#F5F9FF;
+  box-shadow:0 0 0 3px rgba(37,99,235,.10);
+}
+.lcSimCenterTile.is-active .lcSimCenterTile__name{ color:#1D4ED8; }
+.lcSimCenterTile.is-active .lcSimCenterTile__meta{ color:#6B93E0; }
+.lcSimCenterTile:focus-visible{
+  outline:2px solid rgba(37,99,235,.45);
+  outline-offset:1px;
+}
+
+.lcSimCenterProds{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  direction:rtl;
+}
+.lcSimCenterProds__hint{
+  font-size:12.5px;
+  font-weight:650;
+  color:#A3B0C4;
+  padding:6px 2px;
+}
+.lcSimCenterProd{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  padding:9px 14px;
+  border:1.5px solid #E7EDF7;
+  border-radius:11px;
+  background:#fff;
+  color:#4A5A75;
+  font-family:inherit;
+  font-size:13.5px;
+  font-weight:700;
+  cursor:pointer;
+  transition:border-color .14s ease, background .14s ease, color .14s ease, box-shadow .14s ease;
+}
+.lcSimCenterProd:hover{ border-color:#C3D7F8; color:#1D4ED8; }
+.lcSimCenterProd__dot{
+  width:7px;
+  height:7px;
+  border-radius:50%;
+  background:#CBD7EA;
+}
+.lcSimCenterProd.is-active{
+  border-color:#2563EB;
+  background:#2563EB;
+  color:#fff;
+  box-shadow:0 5px 14px rgba(37,99,235,.26);
+}
+.lcSimCenterProd.is-active .lcSimCenterProd__dot{ background:#fff; }
+.lcSimCenterProd:focus-visible{
+  outline:2px solid rgba(37,99,235,.45);
+  outline-offset:1px;
+}
 
 /* ---------- GI-SIM-SAVE 2026-08-12 · לשוניות + לקוחות שמורים ---------- */
 .lcSimCenterTabs{
   display:flex;
-  gap:6px;
+  gap:4px;
   direction:rtl;
-  padding:2px;
-  margin:0 0 12px;
-  background:#F4F7FD;
-  border:1px solid #E5EAF3;
-  border-radius:12px;
+  padding:4px;
+  margin:0 0 14px;
+  background:#F1F5FC;
+  border:1px solid #E5EBF7;
+  border-radius:13px;
 }
 .lcSimCenterTabs__btn{
   flex:1 1 0;
   min-width:0;
-  min-height:36px;
+  min-height:38px;
   display:inline-flex;
   align-items:center;
   justify-content:center;
@@ -421,8 +616,10 @@
   color:#fff;
 }
 
-.lcSimCenterModal__card--wide{
-  max-width:min(720px, 96vw) !important;
+/* חייב להיות ספציפי לפחות כמו כלל הבסיס של הכרטיס, אחרת הרוחב הרגיל גובר. */
+.lcSimCenterModal .giValModal__card.lcSimCenterModal__card--wide,
+.lcSimCenterModal__card.lcSimCenterModal__card--wide{
+  max-width:720px !important;
 }
 .lcSimCenterEmpty--err{ color:#D63B52; }
 
@@ -443,12 +640,30 @@
 }
 .lcSimSavedGroup__head{
   display:flex;
-  align-items:baseline;
-  justify-content:space-between;
+  align-items:center;
   gap:10px;
-  padding:9px 14px;
+  padding:10px 14px;
   background:#F7FAFF;
   border-bottom:1px solid #EEF2F9;
+}
+.lcSimSavedGroup__avatar{
+  flex:0 0 auto;
+  width:30px;
+  height:30px;
+  border-radius:9px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  background:#DBEAFE;
+  color:#1D4ED8;
+  font-size:12.5px;
+  font-weight:800;
+}
+.lcSimSavedGroup__id{
+  flex:1 1 auto;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
 }
 .lcSimSavedGroup__name{
   font-size:14px;
@@ -457,18 +672,47 @@
   letter-spacing:-0.01em;
 }
 .lcSimSavedGroup__sum{
-  font-size:11.5px;
+  font-size:11px;
   font-weight:650;
-  color:#7B8BA5;
+  color:#8A9AB4;
+  margin-top:1px;
+}
+.lcSimSavedGroup__total{
+  flex:0 0 auto;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  text-align:left;
+}
+.lcSimSavedGroup__totalV{
+  font-size:15px;
+  font-weight:800;
+  color:#1D4ED8;
+}
+.lcSimSavedGroup__totalK{
+  font-size:10px;
+  font-weight:650;
+  color:#A3B0C4;
 }
 .lcSimSavedRow{
   display:flex;
   align-items:center;
-  gap:12px;
+  gap:11px;
   padding:10px 14px;
-  border-top:1px solid #F3F6FC;
+  border-top:1px solid #F5F8FD;
 }
 .lcSimSavedRow:first-of-type{ border-top:0; }
+.lcSimSavedRow__badge{
+  flex:0 0 auto;
+  width:26px;
+  height:26px;
+  border-radius:8px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  background:#F1F5FC;
+  color:#7C90B0;
+}
 .lcSimSavedRow__main{ flex:1 1 auto; min-width:0; }
 .lcSimSavedRow__title{
   font-size:13px;
@@ -517,7 +761,7 @@
 .lcSimSaveModal{ z-index:100002; }
 .lcSimSaveModal .giValModal__card,
 .lcSimSaveModal__card{
-  max-width:min(470px, 94vw) !important;
+  max-width:min(440px, 94vw) !important;
   width:100%;
   height:auto;
   max-height:none;
@@ -531,14 +775,14 @@
 .lcSimSaveModal .giValModal__head,
 .lcSimSaveModal__head{
   position:relative;
-  padding:18px 20px 6px !important;
+  padding:14px 18px 2px !important;
   background:#fff !important;
   border-bottom:0 !important;
   display:flex !important;
   flex-direction:column !important;
   align-items:center !important;
   text-align:center !important;
-  gap:4px;
+  gap:0;
 }
 .lcSimSaveModal .giValModal__headIcon{ display:none !important; }
 .lcSimSaveModal .giValModal__headText{
@@ -546,55 +790,52 @@
   display:flex;
   flex-direction:column;
   align-items:center;
-  gap:4px;
-  padding-inline:44px;
+  padding-inline:40px;
   box-sizing:border-box;
 }
 .lcSimSaveModal .giValModal__title{
   color:#0B1F4B !important;
-  font-size:18px !important;
+  font-size:19px !important;
   font-weight:800 !important;
   letter-spacing:-0.02em;
 }
-.lcSimSaveModal .giValModal__sub{
-  color:#7B8BA5 !important;
-  font-size:12px !important;
-  font-weight:500 !important;
-  line-height:1.4;
-}
 .lcSimSaveModal .giValModal__body,
 .lcSimSaveModal__body{
-  padding:10px 22px 6px !important;
+  padding:8px 18px 4px !important;
   direction:rtl;
   text-align:right;
   overflow:visible;
 }
+/* הכפתורים כקבוצה אחת בצד ימין — בלי כפתור שנדחף לקצה השני. */
 .lcSimSaveModal .giValModal__foot,
 .lcSimSaveModal__foot{
-  padding:12px 22px 18px !important;
+  padding:10px 18px 16px !important;
   background:#fff !important;
   border-top:0 !important;
   display:flex;
   align-items:center;
-  gap:8px;
+  justify-content:flex-start;
+  gap:6px;
   flex-wrap:wrap;
 }
+.lcSimSaveModal .giValModal__foot .btn{ white-space:nowrap; }
 .lcSimSaveModal .giValModal__foot .btn--primary{
-  margin-inline-start:auto;
-  min-width:120px;
-  height:42px;
+  margin-inline-start:0;
+  min-width:auto;
+  height:44px;
+  padding:0 16px !important;
   border-radius:12px !important;
   background:#2563EB !important;
   border-color:#2563EB !important;
   color:#fff !important;
   font-weight:800 !important;
-  font-size:14px !important;
+  font-size:15px !important;
 }
 .lcSimSaveModal .giValModal__foot .btn--primary:disabled{ opacity:.55; cursor:progress; }
 .lcSimSaveModal .giValModal__closeBtn{
   min-width:auto;
-  height:42px;
-  padding:0 14px !important;
+  height:44px;
+  padding:0 12px !important;
   border-radius:12px !important;
   border:1.5px solid #E5EAF3 !important;
   background:#fff !important;
@@ -605,8 +846,9 @@
 }
 .lcSimSaveModal .giValModal__closeBtn:hover{ background:#F8FAFC !important; }
 .lcSimSaveModal .btn--secondary{
-  height:42px;
-  padding:0 14px !important;
+  min-width:auto;
+  height:44px;
+  padding:0 12px !important;
   border-radius:12px !important;
   border:1.5px solid #2563EB !important;
   background:#fff !important;
@@ -632,18 +874,19 @@
 .lcSimSaveModal__closeX:hover{ background:#F1F5F9; color:#0F172A; }
 
 .lcSimSaveText{
-  font-size:14.5px;
-  font-weight:700;
-  color:#16233D;
-  line-height:1.5;
+  font-size:16.5px;
+  font-weight:800;
+  color:#0B1F4B;
+  line-height:1.4;
   margin-bottom:10px;
+  letter-spacing:-0.01em;
 }
 .lcSimSaveNote{
-  margin-top:10px;
-  font-size:12px;
-  font-weight:600;
+  margin-top:8px;
+  font-size:12.5px;
+  font-weight:650;
   color:#7B8BA5;
-  line-height:1.45;
+  line-height:1.4;
 }
 .lcSimSaveNote strong{ color:#0B1F4B; font-weight:800; }
 .lcSimSaveChips{
@@ -655,12 +898,12 @@
   display:inline-flex;
   align-items:baseline;
   gap:5px;
-  padding:4px 10px;
+  padding:5px 11px;
   border-radius:999px;
   background:#F4F7FD;
   border:1px solid #E5EAF3;
-  font-size:11.5px;
-  line-height:1.5;
+  font-size:13px;
+  line-height:1.45;
 }
 .lcSimSaveChip__k{ color:#8496AF; font-weight:650; }
 .lcSimSaveChip__v{ color:#0B1F4B; font-weight:800; }
@@ -668,23 +911,23 @@
   display:flex;
   flex-direction:column;
   gap:6px;
-  margin-top:14px;
+  margin-top:12px;
 }
 .lcSimSaveField__label{
-  font-size:12.5px;
-  font-weight:750;
+  font-size:13.5px;
+  font-weight:800;
   color:#0B1F4B;
 }
 .lcSimSaveField__input{
   width:100%;
-  min-height:44px;
-  padding:8px 12px;
+  min-height:46px;
+  padding:8px 13px;
   border:1.5px solid #E5EAF3;
   border-radius:11px;
   background:#fff;
   color:#0F172A;
-  font-size:14.5px;
-  font-weight:650;
+  font-size:16px;
+  font-weight:700;
   box-sizing:border-box;
   transition:border-color .12s ease, box-shadow .12s ease;
 }
@@ -701,25 +944,40 @@
   background:#FDF2F4;
   border:1px solid #F3D6DC;
   color:#C22E46;
-  font-size:12px;
+  font-size:13px;
   font-weight:700;
-  line-height:1.45;
+  line-height:1.4;
+}
+
+@media (max-width: 680px){
+  .lcSimCenterModal .giValModal__card,
+  .lcSimCenterModal__card,
+  .lcSimCenterModal__card--wide{ max-width:94vw !important; }
 }
 
 @media (max-width: 560px){
   .lcSimCenterForm{ grid-template-columns:1fr !important; }
   .lcSimCenterForm--details{ grid-template-columns:1fr !important; }
-  .lcSimCenterModal .giValModal__head{ padding:14px 14px 4px !important; }
+  .lcSimCenterModal .giValModal__head{ padding:14px 14px 12px !important; }
   .lcSimCenterModal .giValModal__headText{ padding-inline:40px; }
-  .lcSimCenterModal .giValModal__body{ padding:8px 14px 2px !important; }
-  .lcSimCenterModal .giValModal__foot{ padding:10px 14px 14px !important; }
+  .lcSimCenterModal .giValModal__body{ padding:12px 14px 4px !important; }
+  .lcSimCenterModal .giValModal__foot{ padding:12px 14px 14px !important; }
   .lcSimCenterModal .giValModal__title{ font-size:18px !important; }
-  .lcSimCenterModal__open{ width:100%; margin-inline-start:0; }
-  .lcSimCenterModal__cancel{ width:100%; }
+  .lcSimCenterModal__open,
+  .lcSimCenterModal__cancel,
+  .lcSimCenterModal__ghost{ padding:0 13px !important; font-size:13.5px !important; }
+  .lcSimCenterModal__hint{ display:none; }
+  .lcSimCenterSteps__txt{ font-size:11px; }
+  .lcSimCenterSteps__bar{ width:26px; margin:0 7px; }
+  .lcSimCenterTiles{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
   .lcSimSavedRow{ flex-wrap:wrap; }
   .lcSimSavedRow__main{ flex:1 1 100%; }
   .lcSimSavedRow__actions{ margin-inline-start:auto; }
-  .lcSimSaveModal .giValModal__foot .btn--primary{ width:100%; margin-inline-start:0; }
+  /* גם בנייד הכפתורים נשארים צמודים זה לזה ולא נמתחים לרוחב המסך. */
+  .lcSimSaveModal .giValModal__head{ padding:12px 14px 2px !important; }
+  .lcSimSaveModal .giValModal__body{ padding:8px 14px 4px !important; }
+  .lcSimSaveModal .giValModal__foot{ padding:10px 14px 14px !important; }
+  .lcSimSaveModal .giValModal__foot .btn--primary{ padding:0 15px !important; }
   .lcSimSaveModal .giValModal__closeBtn,
-  .lcSimSaveModal .btn--secondary{ flex:1 1 auto; }
+  .lcSimSaveModal .btn--secondary{ padding:0 12px !important; }
 }
