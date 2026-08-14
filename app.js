@@ -27042,6 +27042,7 @@ UsersGateUI.init();
           if(!changed) return;
           this._todaySalesCacheKey = "";
           this._todaySalesCache = null;
+          try { this.paintServerKpiDom?.(); } catch(_e) {}
           if(typeof LiveRefresh !== "undefined" && LiveRefresh.getCurrentView?.() === "dashboard"){
             try { this.scheduleRefreshKpis(); } catch(_e) {}
           } else if(typeof LiveRefresh !== "undefined" && LiveRefresh.getCurrentView?.() === "dailySales"){
@@ -29397,6 +29398,7 @@ UsersGateUI.init();
         }
         this._todaySalesCache = null;
         this._todaySalesCacheKey = "";
+        this._lastKpiPaintFp = "";
         if(!(Number(this._todaySalesServerOverlay?.totalPremium) > 0)
           && !(Number(this._todaySalesServerOverlay?.totalPolicies) > 0)){
           this._todaySalesServerOverlay = null;
@@ -29405,6 +29407,23 @@ UsersGateUI.init();
       try { this.compareServerKpis?.(this._metricsCache || this._metricsLoadingShell()); } catch(_e) {}
       try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
       try { this.scheduleRefreshKpis(); } catch(_e) {}
+    },
+
+    paintServerKpiDom(){
+      const root = this.els?.root;
+      if(!root || root.querySelector(".bankDash--bootLoading")) return;
+      const m = this._metricsCache;
+      if(m){
+        const netEl = root.querySelector(".bankKpi--netPremium .bankKpi__value");
+        const apptEl = root.querySelector(".bankKpi--agentAppoint .bankKpi__value");
+        if(netEl && Number(m.netPremium) > 0) netEl.textContent = this.formatMoney(m.netPremium);
+        if(apptEl && Number(m.agentAppointmentPremium) > 0) apptEl.textContent = this.formatMoney(m.agentAppointmentPremium);
+      }
+      const today = this._todaySalesServerOverlay;
+      if(today?.ok && (Number(today.totalPremium) > 0 || Number(today.totalPolicies) > 0)){
+        const todayEl = root.querySelector("#bankKpiTodayCard .bankKpi__value");
+        if(todayEl) todayEl.textContent = this.formatMoney(Number(today.totalPremium) || 0);
+      }
     },
 
     paintDashboardAfterFaceLogin(){
@@ -42664,16 +42683,28 @@ const ClalRiskLifePdf = {
     };
     try {
       const client = this.getClient();
-      const [net, appt, byProduct, byCompany] = await Promise.all([
+      /* GI-FACE-KPI: קודם נטו + מינוי סוכן בלבד. פירוט מוצר/חברה כבד
+         ואם הוא נופל/נתקע — Promise.all הישן ביטל גם את המספרים לכרטיסים. */
+      const [net, appt] = await Promise.all([
         client.rpc("gi_dashboard_net_premium", args),
-        client.rpc("gi_dashboard_agent_appointment", args),
-        client.rpc("gi_dashboard_sales_by_product", args),
-        client.rpc("gi_dashboard_sales_by_company", args)
+        client.rpc("gi_dashboard_agent_appointment", args)
       ]);
       if(net.error) throw net.error;
       if(appt.error) throw appt.error;
       const n = Array.isArray(net.data) ? (net.data[0] || {}) : (net.data || {});
       const a = Array.isArray(appt.data) ? (appt.data[0] || {}) : (appt.data || {});
+      let byProduct = { data: null, error: null };
+      let byCompany = { data: null, error: null };
+      try {
+        const extra = await Promise.allSettled([
+          client.rpc("gi_dashboard_sales_by_product", args),
+          client.rpc("gi_dashboard_sales_by_company", args)
+        ]);
+        if(extra[0]?.status === "fulfilled") byProduct = extra[0].value || byProduct;
+        else if(extra[0]?.status === "rejected") byProduct = { data: null, error: extra[0].reason };
+        if(extra[1]?.status === "fulfilled") byCompany = extra[1].value || byCompany;
+        else if(extra[1]?.status === "rejected") byCompany = { data: null, error: extra[1].reason };
+      } catch(_e) {}
       const productTotals = Object.create(null);
       const productBreakdown = [];
       if(!byProduct?.error && Array.isArray(byProduct.data)){
@@ -42748,10 +42779,12 @@ const ClalRiskLifePdf = {
         const localReady = !!(this._metricsCache && this._metricsCache._localBuildReady === true);
         const localHasMoney = (Number(this._metricsCache?.netPremium) > 0)
           || (Number(this._metricsCache?.agentAppointmentPremium) > 0);
+        const serverHasMore = (Number(res.netPremium) || 0) > (Number(this._metricsCache?.netPremium) || 0)
+          || (Number(res.apptPremium) || 0) > (Number(this._metricsCache?.agentAppointmentPremium) || 0);
         /* GI-FIX 2026-08-09b: ממלאים מ-RPC כל עוד אין חישוב מקומי מוכן —
            לא רק בזמן missing payloads (אחרת אחרי hydration המסך קופץ ל־0).
            GI-FACE-KPI 2026-08-14: גם אם סומן localReady על ₪0 (כניסת פנים מוקדמת). */
-        if(missingCustomers > 0 || !localReady || !localHasMoney){
+        if(missingCustomers > 0 || !localReady || !localHasMoney || serverHasMore){
           const m = (this._metricsCache && typeof this._metricsCache === "object")
             ? this._metricsCache
             : (metrics && typeof metrics === "object" ? metrics : this._metricsLoadingShell());
@@ -42803,11 +42836,10 @@ const ClalRiskLifePdf = {
             Number(m.newClients) || 0
           ].join("|");
           try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
-          const kpiDomReady = !!this.els?.root?.querySelector(".bankDash__kpis");
-          if(nextFp !== prevFp && (LiveRefresh.getCurrentView() === "dashboard" || kpiDomReady)){
-            try { this.scheduleRefreshKpis(); } catch(_e) {}
-            try { if(kpiDomReady) this.refreshKpis(); } catch(_e) {}
-          }
+          this._lastKpiPaintFp = "";
+          try { this.paintServerKpiDom?.(); } catch(_e) {}
+          try { this.scheduleRefreshKpis(); } catch(_e) {}
+          try { this.refreshKpis(); } catch(_e) {}
           return;
         }
         const round2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
@@ -42836,6 +42868,18 @@ const ClalRiskLifePdf = {
       }
     })();
   };
+  try {
+    window.addEventListener("gi:app-login-ready", () => {
+      try {
+        if(window.__GI_FACE_LOGIN_DONE__ !== true) return;
+        if(Auth.isElementary?.() || Auth.isOps?.() || Auth.isOpsAgent?.()) return;
+        DashboardUI.refillServerDashboardKpis?.();
+        window.setTimeout(() => {
+          try { DashboardUI.refillServerDashboardKpis?.(); } catch(_e2) {}
+        }, 1500);
+      } catch(_e) {}
+    });
+  } catch(_e) {}
   // ===== /GI-SERVER-KPI ====================================================
 
   // GI-MIRROR-COALESCE: לא לאבד שמירה ממתינה בסגירת טאב / מעבר לרקע.
