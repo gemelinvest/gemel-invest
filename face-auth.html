@@ -265,19 +265,18 @@ async function captureWhenLocked(prompt, timeoutMs){
   throw new Error("NO_FACE");
 }
 
-async function requestGeo(){
-  if(!navigator.geolocation) return "";
-  const pos = await new Promise((resolve) => {
-    const t = window.setTimeout(() => resolve(null), 15000);
-    navigator.geolocation.getCurrentPosition(
-      (p) => { window.clearTimeout(t); resolve(p); },
-      () => { window.clearTimeout(t); resolve(null); },
-      { enableHighAccuracy: false, timeout: 14000, maximumAge: 60000 }
-    );
-  });
-  if(!pos?.coords) return "";
-  const lat = Number(pos.coords.latitude);
-  const lng = Number(pos.coords.longitude);
+function geoErrorMessage(code){
+  if(code === "INSECURE") return "הדף חייב להיפתח ב-https כדי לבקש מיקום. סרקו שוב את ה-QR מהמערכת.";
+  if(code === "UNSUPPORTED") return "הדפדפן לא תומך במיקום. פתחו את הקישור בספארי או בכרום.";
+  if(code === 1 || code === "1") return "המיקום נחסם בדפדפן. בהגדרות ספארי/כרום אשרו מיקום לאתר הזה, ואז לחצו שוב.";
+  if(code === 2 || code === "2") return "לא התקבל מיקום. הפעילו GPS ונסו שוב.";
+  if(code === 3 || code === "3") return "המיקום לקח יותר מדי זמן. נסו שוב במקום פתוח.";
+  return "המיקום לא אושר. יש לאשר כדי להמשיך.";
+}
+
+async function coordsToText(pos){
+  const lat = Number(pos?.coords?.latitude);
+  const lng = Number(pos?.coords?.longitude);
   if(!Number.isFinite(lat) || !Number.isFinite(lng)) return "";
   try {
     const url = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=" + encodeURIComponent(lat) + "&lon=" + encodeURIComponent(lng) + "&zoom=12&accept-language=he";
@@ -291,6 +290,37 @@ async function requestGeo(){
     if(city) return String(city);
   } catch(_e) {}
   return lat.toFixed(3) + "," + lng.toFixed(3);
+}
+
+function requestGeo(){
+  return new Promise((resolve) => {
+    if(!window.isSecureContext){
+      resolve({ text: "", code: "INSECURE" });
+      return;
+    }
+    if(!navigator.geolocation){
+      resolve({ text: "", code: "UNSUPPORTED" });
+      return;
+    }
+    let done = false;
+    const finish = (value) => {
+      if(done) return;
+      done = true;
+      resolve(value);
+    };
+    const t = window.setTimeout(() => finish({ text: "", code: 3 }), 18000);
+    navigator.geolocation.getCurrentPosition(
+      (p) => {
+        window.clearTimeout(t);
+        coordsToText(p).then((text) => finish({ text, code: text ? "" : 2 }));
+      },
+      (err) => {
+        window.clearTimeout(t);
+        finish({ text: "", code: err && err.code ? err.code : 1 });
+      },
+      { enableHighAccuracy: true, timeout: 17000, maximumAge: 0 }
+    );
+  });
 }
 
 function showGeoRetry(){
@@ -421,16 +451,8 @@ async function boot(){
     const peek = await callFn({ action: "peek", publicToken: token });
     kind = peek.kind === "enroll" ? "enroll" : "login";
     setStatus("יש לאשר מיקום כדי להמשיך");
-    setHint("בלי אישור מיקום לא ניתן לבצע זיהוי פנים. המיקום נשמר בלוג הפעילות.");
-    const geo = await requestGeo();
-    if(!geo){
-      setStatus("יש לאשר מיקום כדי להמשיך.", "err");
-      showGeoRetry();
-      return;
-    }
-    resolvedGeo = geo;
-    els.btnGeo.hidden = true;
-    await startFaceFlow();
+    setHint("לחצו על הכפתור כדי לאשר מיקום. בלי אישור לא ניתן לבצע זיהוי פנים.");
+    showGeoRetry();
   } catch(err) {
     const code = String(err?.code || err?.message || "");
     if(code === "EXPIRED" || code === "UNKNOWN_TOKEN") setStatus("הקוד פג או לא תקף. סרקו שוב.", "err");
@@ -439,25 +461,26 @@ async function boot(){
   }
 }
 
-els.btnGeo.onclick = async () => {
+els.btnGeo.onclick = () => {
   els.btnGeo.disabled = true;
   setStatus("מבקשים מיקום…");
-  const geo = await requestGeo();
-  if(!geo){
-    setStatus("המיקום לא אושר. יש לאשר כדי להמשיך.", "err");
-    els.btnGeo.disabled = false;
-    showGeoRetry();
-    return;
-  }
-  resolvedGeo = geo;
-  els.btnGeo.hidden = true;
-  try {
-    await startFaceFlow();
-  } catch(err) {
-    const code = String(err?.code || err?.message || "");
-    if(String(err).includes("NotAllowedError") || String(err).includes("Permission") || String(err?.name || "") === "NotAllowedError") setStatus("יש לאשר גישה למצלמה.", "err");
-    else setStatus("לא ניתן להתחיל. בדקו חיבור וסרקו שוב.", "err");
-  }
+  requestGeo().then(async (geo) => {
+    if(!geo?.text){
+      setStatus(geoErrorMessage(geo?.code), "err");
+      setHint("אם לא הופיע חלון אישור — אשרו מיקום לאתר בהגדרות הדפדפן, ואז לחצו שוב.");
+      els.btnGeo.disabled = false;
+      showGeoRetry();
+      return;
+    }
+    resolvedGeo = geo.text;
+    els.btnGeo.hidden = true;
+    try {
+      await startFaceFlow();
+    } catch(err) {
+      if(String(err).includes("NotAllowedError") || String(err).includes("Permission") || String(err?.name || "") === "NotAllowedError") setStatus("יש לאשר גישה למצלמה.", "err");
+      else setStatus("לא ניתן להתחיל. בדקו חיבור וסרקו שוב.", "err");
+    }
+  });
 };
 
 boot();
