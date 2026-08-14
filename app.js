@@ -42690,21 +42690,30 @@ const ClalRiskLifePdf = {
         client.rpc("gi_dashboard_agent_appointment", args)
       ]);
       if(net.error) throw net.error;
-      if(appt.error) throw appt.error;
+      /* GI-FACE-KPI: מינוי סוכן נופל ב-timeout (500) בזמן כניסת פנים.
+         קודם throw כאן ביטל גם את הנטו שכבר חזר 200 — שלושת הכרטיסים נשארו ₪0.
+         החישוב עצמו לא משתנה: אם שתי הקריאות מצליחות, התוצאה זהה. */
+      let apptRes = appt;
+      if(appt.error){
+        try { console.warn("[GI-SERVER-KPI] agent_appointment:", appt.error); } catch(_e) {}
+        apptRes = { data: [{ appt_premium: 0, appt_policies: 0 }], error: appt.error };
+      }
       const n = Array.isArray(net.data) ? (net.data[0] || {}) : (net.data || {});
-      const a = Array.isArray(appt.data) ? (appt.data[0] || {}) : (appt.data || {});
+      const a = Array.isArray(apptRes.data) ? (apptRes.data[0] || {}) : (apptRes.data || {});
       let byProduct = { data: null, error: null };
       let byCompany = { data: null, error: null };
-      try {
-        const extra = await Promise.allSettled([
-          client.rpc("gi_dashboard_sales_by_product", args),
-          client.rpc("gi_dashboard_sales_by_company", args)
-        ]);
-        if(extra[0]?.status === "fulfilled") byProduct = extra[0].value || byProduct;
-        else if(extra[0]?.status === "rejected") byProduct = { data: null, error: extra[0].reason };
-        if(extra[1]?.status === "fulfilled") byCompany = extra[1].value || byCompany;
-        else if(extra[1]?.status === "rejected") byCompany = { data: null, error: extra[1].reason };
-      } catch(_e) {}
+      if(!appt.error){
+        try {
+          const extra = await Promise.allSettled([
+            client.rpc("gi_dashboard_sales_by_product", args),
+            client.rpc("gi_dashboard_sales_by_company", args)
+          ]);
+          if(extra[0]?.status === "fulfilled") byProduct = extra[0].value || byProduct;
+          else if(extra[0]?.status === "rejected") byProduct = { data: null, error: extra[0].reason };
+          if(extra[1]?.status === "fulfilled") byCompany = extra[1].value || byCompany;
+          else if(extra[1]?.status === "rejected") byCompany = { data: null, error: extra[1].reason };
+        } catch(_e) {}
+      }
       const productTotals = Object.create(null);
       const productBreakdown = [];
       if(!byProduct?.error && Array.isArray(byProduct.data)){
