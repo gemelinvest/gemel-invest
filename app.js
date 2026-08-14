@@ -26309,11 +26309,13 @@ UsersGateUI.init();
       if(this._metricsBuildBusy) return false;
       if(this._countMissingCustomerPayloadsSafe() > 0) return false;
       if(localMetrics._loading === true) return false;
-      // GI-FACE-KPI: אל תסמן ₪0 כחישוב מוכן לפני שהסשן נטען.
-      if(!App?._fullDataReady
-        && !(Number(localMetrics.netPremium) > 0)
-        && !(Number(localMetrics.agentAppointmentPremium) > 0)){
-        return false;
+      const localHasMoney = (Number(localMetrics.netPremium) > 0)
+        || (Number(localMetrics.agentAppointmentPremium) > 0);
+      // GI-FACE-KPI: אל תסמן ₪0 כחישוב מוכן לפני שהסשן נטען / בזמן דיחוי לשרת.
+      if(!localHasMoney){
+        if(!App?._fullDataReady) return false;
+        try { if(this._shouldDeferLocalMetricsToServer()) return false; } catch(_e) {}
+        if(this._overlayHasMoney()) return false;
       }
       // אם יש overlay עם מספרים אמיתיים — אל תחליף באפסים מקומיים
       const overlay = this._metricsCache;
@@ -26323,7 +26325,7 @@ UsersGateUI.init();
         const serverAppt = Number(overlay.agentAppointmentPremium) || 0;
         const localAppt = Number(localMetrics.agentAppointmentPremium) || 0;
         if(serverNet > 0 && localNet <= 0) return false;
-        if(serverAppt > 0 && localAppt <= 0 && serverNet > 0) return false;
+        if(serverAppt > 0 && localAppt <= 0) return false;
       }
       return true;
     },
@@ -27000,7 +27002,11 @@ UsersGateUI.init();
       const todayRange = this.getTodayRange();
       const dayKey = todayRange.start.toISOString().slice(0, 10);
       const ageMs = Date.now() - (Number(this._todaySalesServerOverlay?.at) || 0);
-      if(this._todaySalesServerOverlay?.ok && this._todaySalesServerOverlay?.dayKey === dayKey && ageMs < 45000){
+      const cachedOk = this._todaySalesServerOverlay?.ok && this._todaySalesServerOverlay?.dayKey === dayKey && ageMs < 45000;
+      const cachedHasMoney = Number(this._todaySalesServerOverlay?.totalPremium) > 0
+        || Number(this._todaySalesServerOverlay?.totalPolicies) > 0;
+      // GI-FACE-KPI: ₪0 שנשמר לפני שהסשן היה מוכן אינו סופי — ממשיכים לשלוף, עם השהיה קצרה.
+      if(cachedOk && (cachedHasMoney || App?._fullDataReady || ageMs < 2500)){
         return;
       }
       this._todaySalesServerBusy = true;
@@ -27064,12 +27070,14 @@ UsersGateUI.init();
         }
       } catch(_e) {}
 
-      // בזמן payloads חסרים (במיוחד מנהל עם כל הלקוחות) — מביאים מהשרת
-      if(missingPayloads > 0){
+      const customersAll = this.getVisibleCustomers();
+      let deferToServer = missingPayloads > 0;
+      try { if(this._shouldDeferLocalMetricsToServer()) deferToServer = true; } catch(_e) {}
+      if(!customersAll.length || !App?._fullDataReady) deferToServer = true;
+      // GI-FACE-KPI: גם כשאין לקוחות עדיין (כניסת פנים) — שולפים «נמכר היום» מהשרת.
+      if(deferToServer){
         try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
       }
-
-      const customersAll = this.getVisibleCustomers();
 
       // פירוט כרטיס «נמכר היום»: קיבוץ לפי חברה (לא לפי סוג מוצר).
       // סכום כולל / פוליסות / לקוחות נשארים זהים — רק תווית הפירוט משתנה.
@@ -27119,7 +27127,7 @@ UsersGateUI.init();
         totalPolicies,
         newClients: countedCustomers.size,
         breakdown,
-        _loading: missingPayloads > 0,
+        _loading: deferToServer,
         _fromServer: false
       };
 
@@ -27143,13 +27151,14 @@ UsersGateUI.init();
         } else if(!breakdown.length && serverBreakdown.length){
           result = { ...result, breakdown: serverBreakdown };
         }
-      } else if(missingPayloads > 0 && !(result.totalPremium > 0)){
+      } else if(deferToServer && !(result.totalPremium > 0)){
         // עדיין מחכים ל-RPC — לא לנעול מטמון על אפס
         try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
       }
 
-      // לא שומרים במטמון בזמן hydration בלי overlay — כדי שאחרי מילוי/RPC החישוב ירוץ מחדש
-      if(missingPayloads <= 0 || result._fromServer){
+      // לא שומרים במטמון בזמן hydration/כניסת פנים בלי overlay — כדי שאחרי מילוי/RPC החישוב ירוץ מחדש
+      const waitingForServer = deferToServer && !result._fromServer && !(result.totalPremium > 0);
+      if(!waitingForServer){
         this._todaySalesCacheKey = cacheKey;
         this._todaySalesCache = result;
       } else {
@@ -29196,6 +29205,7 @@ UsersGateUI.init();
     _ensureBackgroundLocalMetricsBuild(cacheKey){
       if(this._metricsBuildBusy) return;
       if(this._countMissingCustomerPayloadsSafe() > 0) return;
+      try { if(this._shouldDeferLocalMetricsToServer()) return; } catch(_e) {}
       if(!this._metricsCache?._serverKpiOverlay || this._metricsCache._localBuildReady === true) return;
       // ניסיון אחד לכל cacheKey — מונע לולאת rebuild כשהמקומי עדיין 0 והשרת מלא
       if(this._localMetricsAttemptedKey === cacheKey) return;
@@ -29379,6 +29389,24 @@ UsersGateUI.init();
 
     /* GI-FACE-KPI: אחרי זיהוי פנים — דשבורד אמיתי מיד, בלי מעטפת «מכין את הדשבורד»
        ובלי לנעול ₪0. PIN נשאר עם renderLoadingShell. */
+    refillServerDashboardKpis(){
+      try {
+        if(this._metricsCache && !this._overlayHasMoney()){
+          this._metricsCache._localBuildReady = false;
+          this._metricsCache._loading = true;
+        }
+        this._todaySalesCache = null;
+        this._todaySalesCacheKey = "";
+        if(!(Number(this._todaySalesServerOverlay?.totalPremium) > 0)
+          && !(Number(this._todaySalesServerOverlay?.totalPolicies) > 0)){
+          this._todaySalesServerOverlay = null;
+        }
+      } catch(_e) {}
+      try { this.compareServerKpis?.(this._metricsCache || this._metricsLoadingShell()); } catch(_e) {}
+      try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
+      try { this.scheduleRefreshKpis(); } catch(_e) {}
+    },
+
     paintDashboardAfterFaceLogin(){
       try { WelcomeLoader.close(); } catch(_e) {}
       this._renderInFlight = false;
@@ -29391,16 +29419,29 @@ UsersGateUI.init();
           this._renderedDomKey = "";
           this._localMetricsAttemptedKey = "";
         }
+        this._todaySalesCache = null;
+        this._todaySalesCacheKey = "";
+        this._lastKpiPaintFp = "";
       } catch(_e) {}
       try {
         if(!this.els.root) this.init();
       } catch(_e) {}
-      try { this.compareServerKpis?.(this._metricsLoadingShell()); } catch(_e) {}
+      try { this.refillServerDashboardKpis(); } catch(_e) {}
       void this.render({ skipDailyReportWait: true, forceFullRender: true });
-      window.setTimeout(() => {
-        try { this.compareServerKpis?.(this._metricsCache || this._metricsLoadingShell()); } catch(_e) {}
-        try { this.scheduleRefreshKpis(); } catch(_e) {}
-      }, 700);
+      [700, 1800, 4000].forEach((ms) => {
+        window.setTimeout(() => {
+          try {
+            if(this._overlayHasMoney()
+              && (Number(this._todaySalesServerOverlay?.totalPremium) > 0
+                || Number(this._todaySalesCache?.totalPremium) > 0
+                || App?._fullDataReady)){
+              try { this.scheduleRefreshKpis(); } catch(_e2) {}
+              return;
+            }
+            this.refillServerDashboardKpis();
+          } catch(_e) {}
+        }, ms);
+      });
     },
 
     startLiveRefresh(){
@@ -41036,6 +41077,7 @@ const ClalRiskLifePdf = {
             try {
               if(DashboardUI.els?.root?.querySelector(".bankDash__kpis")
                 && !DashboardUI.els.root.querySelector(".bankDash--bootLoading")){
+                try { DashboardUI.refillServerDashboardKpis?.(); } catch(_e2) {}
                 DashboardUI.scheduleRefreshKpis();
                 try { DashboardUI.refreshDashboardListPanels(); } catch(_e2) {}
               } else {
@@ -41927,8 +41969,7 @@ const ClalRiskLifePdf = {
                 /* GI-FACE-KPI: אחרי כניסת פנים (בלי MFA) ממלאים נטו/מינוי סוכן מהשרת
                    גם אם הצביעה הראשונה כבר שמרה ₪0. PIN לא עובר כאן. */
                 if(ctx.loginAlreadyLogged === true){
-                  try { DashboardUI.compareServerKpis?.(DashboardUI._metricsCache || DashboardUI._metricsLoadingShell?.()); } catch(_e2) {}
-                  try { DashboardUI.scheduleRefreshKpis?.(); } catch(_e2) {}
+                  try { DashboardUI.refillServerDashboardKpis?.(); } catch(_e2) {}
                 }
               }, POST_LOGIN_DASHBOARD_DEFER_MS);
             }
@@ -42762,8 +42803,10 @@ const ClalRiskLifePdf = {
             Number(m.newClients) || 0
           ].join("|");
           try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
-          if(nextFp !== prevFp && LiveRefresh.getCurrentView() === "dashboard"){
+          const kpiDomReady = !!this.els?.root?.querySelector(".bankDash__kpis");
+          if(nextFp !== prevFp && (LiveRefresh.getCurrentView() === "dashboard" || kpiDomReady)){
             try { this.scheduleRefreshKpis(); } catch(_e) {}
+            try { if(kpiDomReady) this.refreshKpis(); } catch(_e) {}
           }
           return;
         }
@@ -43102,7 +43145,7 @@ const ClalRiskLifePdf = {
         try { WelcomeLoader.open(loaderName); } catch(_e) {}
       }
       targetView = Auth.isReferent() ? 'campaignLeads' : 'dashboard';
-      if(options.skipMfa !== true && !App._loginReady){
+      if(!App._loginReady){
         try {
           await Promise.race([
             App.ensureLoginReady(),
@@ -43129,6 +43172,10 @@ const ClalRiskLifePdf = {
       UI.renderAuthPill();
       try { void AttendanceClock.onAuthenticated(); } catch(_e) {}
 
+      if(targetView === 'dashboard' && (Auth.isOps() || Auth.isOpsAgent())){
+        try { OpsDashboardUI.render(); } catch(_e) {}
+      }
+      UI.goView(targetView, { skipDashboardRender: true });
       if(targetView === 'dashboard' && !Auth.isElementary() && !Auth.isOps() && !Auth.isOpsAgent()){
         if(options.skipMfa === true){
           try { DashboardUI.paintDashboardAfterFaceLogin?.(); } catch(_e) {}
@@ -43136,10 +43183,6 @@ const ClalRiskLifePdf = {
           try { DashboardUI.renderLoadingShell(); } catch(_e) {}
         }
       }
-      if(targetView === 'dashboard' && (Auth.isOps() || Auth.isOpsAgent())){
-        try { OpsDashboardUI.render(); } catch(_e) {}
-      }
-      UI.goView(targetView, { skipDashboardRender: true });
 
       WelcomeLoader.close();
 
@@ -43158,6 +43201,10 @@ const ClalRiskLifePdf = {
       try { WelcomeLoader.close(); } catch(_e) {}
       try {
         Auth.unlock();
+        if(targetView === 'dashboard' && (Auth.isOps() || Auth.isOpsAgent())){
+          try { OpsDashboardUI.render(); } catch(_e) {}
+        }
+        UI.goView(targetView, { skipDashboardRender: true });
         if(targetView === 'dashboard' && !Auth.isElementary() && !Auth.isOps() && !Auth.isOpsAgent()){
           if(options.skipMfa === true){
             try { DashboardUI.paintDashboardAfterFaceLogin?.(); } catch(_e) {}
@@ -43165,10 +43212,6 @@ const ClalRiskLifePdf = {
             try { DashboardUI.renderLoadingShell(); } catch(_e) {}
           }
         }
-        if(targetView === 'dashboard' && (Auth.isOps() || Auth.isOpsAgent())){
-          try { OpsDashboardUI.render(); } catch(_e) {}
-        }
-        UI.goView(targetView, { skipDashboardRender: true });
         void App.runPostLoginPipeline({
           matched,
           agentForRepair: matched,
