@@ -22,12 +22,17 @@
   html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:Heebo,Rubik,Arial,sans-serif}
   body{padding:calc(12px + var(--safe-top)) 16px calc(24px + var(--safe-bottom))}
   .wrap{max-width:420px;margin:0 auto;position:relative}
+  .top{
+    display:flex;
+    justify-content:flex-start;
+    align-items:center;
+    min-height:48px;
+    margin-bottom:12px;
+  }
   .logo{
-    position:absolute;top:0;right:0;width:132px;height:auto;display:block;
+    width:140px;height:auto;display:block;
     object-fit:contain;
   }
-  h1{font-size:22px;margin:8px 0 6px;font-weight:800;padding-left:140px;line-height:1.25}
-  .sub{color:var(--muted);font-size:14px;line-height:1.45;margin:0 0 14px;padding-left:140px}
   .stage{
     position:relative;border-radius:22px;overflow:hidden;background:#0b1220;
     aspect-ratio:3/4;
@@ -68,9 +73,9 @@
 </head>
 <body>
 <div class="wrap">
-  <img class="logo" src="./logo-login-clean.png" alt="גמל אינווסט" width="1808" height="373"/>
-  <h1 id="title">זיהוי פנים</h1>
-  <p class="sub" id="subtitle">ממתינים לקוד…</p>
+  <div class="top">
+    <img class="logo" src="./logo-login-clean.png" alt="גמל אינווסט" width="1808" height="373"/>
+  </div>
   <div class="stage">
     <video id="cam" playsinline autoplay muted></video>
     <div class="guide" id="guide" aria-hidden="true"></div>
@@ -80,7 +85,8 @@
     <div class="steps" id="steps" hidden>
       <span></span><span></span><span></span><span></span>
     </div>
-    <div class="status" id="status">מכין מצלמה…</div>
+    <div class="status" id="status">בודק הרשאות…</div>
+    <button type="button" id="btnGeo" hidden>אשר מיקום והמשך</button>
     <button type="button" id="btnCapture" hidden>צלמו עכשיו</button>
     <button type="button" id="btnConfirm" hidden>אישור וסיום</button>
     <div class="hint" id="hint"></div>
@@ -105,11 +111,10 @@ const LOGIN_PROMPTS = [
 
 const token = new URLSearchParams(location.search).get("t") || "";
 const els = {
-  title: document.getElementById("title"),
-  subtitle: document.getElementById("subtitle"),
   status: document.getElementById("status"),
   hint: document.getElementById("hint"),
   steps: document.getElementById("steps"),
+  btnGeo: document.getElementById("btnGeo"),
   btnCapture: document.getElementById("btnCapture"),
   btnConfirm: document.getElementById("btnConfirm"),
   cam: document.getElementById("cam"),
@@ -120,7 +125,7 @@ const els = {
 let kind = "login";
 let modelsReady = false;
 let stream = null;
-let geoPromise = Promise.resolve("");
+let resolvedGeo = "";
 const descriptors = [];
 
 function sleep(ms){
@@ -260,14 +265,14 @@ async function captureWhenLocked(prompt, timeoutMs){
   throw new Error("NO_FACE");
 }
 
-async function optionalGeo(){
+async function requestGeo(){
   if(!navigator.geolocation) return "";
   const pos = await new Promise((resolve) => {
-    const t = window.setTimeout(() => resolve(null), 2500);
+    const t = window.setTimeout(() => resolve(null), 15000);
     navigator.geolocation.getCurrentPosition(
       (p) => { window.clearTimeout(t); resolve(p); },
       () => { window.clearTimeout(t); resolve(null); },
-      { enableHighAccuracy: false, timeout: 2200, maximumAge: 60000 }
+      { enableHighAccuracy: false, timeout: 14000, maximumAge: 60000 }
     );
   });
   if(!pos?.coords) return "";
@@ -276,7 +281,10 @@ async function optionalGeo(){
   if(!Number.isFinite(lat) || !Number.isFinite(lng)) return "";
   try {
     const url = "https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=" + encodeURIComponent(lat) + "&lon=" + encodeURIComponent(lng) + "&zoom=12&accept-language=he";
-    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    const ac = new AbortController();
+    const t = window.setTimeout(() => ac.abort(), 4000);
+    const res = await fetch(url, { headers: { Accept: "application/json" }, signal: ac.signal });
+    window.clearTimeout(t);
     const data = await res.json();
     const a = data?.address || {};
     const city = a.city || a.town || a.village || a.municipality || a.state;
@@ -285,25 +293,28 @@ async function optionalGeo(){
   return lat.toFixed(3) + "," + lng.toFixed(3);
 }
 
+function showGeoRetry(){
+  els.btnGeo.hidden = false;
+  els.btnGeo.disabled = false;
+  els.btnGeo.textContent = "אשר מיקום והמשך";
+}
+
 async function submitAll(){
+  if(!resolvedGeo){
+    const err = new Error("GEO_REQUIRED");
+    err.code = "GEO_REQUIRED";
+    throw err;
+  }
   els.btnCapture.disabled = true;
   els.btnConfirm.disabled = true;
+  els.btnGeo.hidden = true;
   setStatus("שולח לאימות…");
-  let geoText = "";
-  try {
-    geoText = await Promise.race([
-      Promise.resolve(geoPromise).catch(() => ""),
-      sleep(350).then(() => "")
-    ]);
-  } catch(_e) {
-    geoText = "";
-  }
   await callFn({
     action: "submit",
     publicToken: token,
     descriptors,
     deviceLabel: deviceLabelFromUa(navigator.userAgent),
-    geoText
+    geoText: resolvedGeo
   });
 }
 
@@ -353,6 +364,7 @@ function showEnrollUi(){
       const code = String(err?.code || err?.message || "");
       if(code === "LIVENESS") setStatus("הסריקות דומות מדי או רחוקות מדי. הזיזו מעט את הראש בין הצילומים.", "err");
       else if(code === "EXPIRED" || code === "SESSION_CLOSED") setStatus("הקוד פג במחשב. סרקו שוב את ה-QR.", "err");
+      else if(code === "GEO_REQUIRED") setStatus("יש לאשר מיקום כדי להמשיך.", "err");
       else setStatus("ההרשמה נכשלה. נסו שוב" + (code ? " (" + code + ")" : "") + ".", "err");
       els.btnConfirm.disabled = false;
     }
@@ -384,36 +396,41 @@ async function runLoginCapture(){
     if(code === "NO_MATCH") setStatus("הפנים לא זוהו. היכנסו עם שם משתמש ו-PIN במחשב.", "err");
     else if(code === "EXPIRED" || code === "SESSION_CLOSED") setStatus("הקוד פג. סרקו שוב מהמסך.", "err");
     else if(code === "LIVENESS") setStatus("הסריקה נראתה סטטית. נסו שוב מול המצלמה.", "err");
+    else if(code === "GEO_REQUIRED") setStatus("יש לאשר מיקום כדי להמשיך.", "err");
     else setStatus("האימות נכשל. PIN עדיין זמין במחשב.", "err");
   }
+}
+
+async function startFaceFlow(){
+  setStatus("פותחים מצלמה…");
+  setHint(kind === "enroll"
+    ? "הזיזו מעט בין הזוויות. התמונות לא נשמרות."
+    : "ממקמים את הפנים במרכז. בלי לשמור תמונה.");
+  await Promise.all([startCamera(), loadModels()]);
+  if(kind === "enroll") showEnrollUi();
+  else await runLoginCapture();
 }
 
 async function boot(){
   if(!token){
     setStatus("חסר קוד סריקה.", "err");
-    els.subtitle.textContent = "סרקו את ה-QR ממסך הכניסה או מתפריט המשתמש.";
+    setHint("סרקו את ה-QR ממסך הכניסה או מתפריט המשתמש.");
     return;
   }
-  geoPromise = optionalGeo();
-  const peekP = callFn({ action: "peek", publicToken: token });
-  const modelsP = loadModels();
-  const camP = startCamera();
   try {
-    const peek = await peekP;
+    const peek = await callFn({ action: "peek", publicToken: token });
     kind = peek.kind === "enroll" ? "enroll" : "login";
-    if(kind === "enroll"){
-      els.title.textContent = "הרשמת זיהוי פנים";
-      els.subtitle.textContent = peek.agentName ? ("נציג: " + peek.agentName) : "מצלמים כמה זוויות ואז מאשרים.";
-    } else {
-      els.title.textContent = "כניסה בזיהוי פנים";
-      els.subtitle.textContent = "המחשב ממתין. PIN נשאר זמין במסך הכניסה.";
+    setStatus("יש לאשר מיקום כדי להמשיך");
+    setHint("בלי אישור מיקום לא ניתן לבצע זיהוי פנים. המיקום נשמר בלוג הפעילות.");
+    const geo = await requestGeo();
+    if(!geo){
+      setStatus("יש לאשר מיקום כדי להמשיך.", "err");
+      showGeoRetry();
+      return;
     }
-    setStatus("פותחים מצלמה…");
-    await camP;
-    setStatus("טוען זיהוי…");
-    await modelsP;
-    if(kind === "enroll") showEnrollUi();
-    else await runLoginCapture();
+    resolvedGeo = geo;
+    els.btnGeo.hidden = true;
+    await startFaceFlow();
   } catch(err) {
     const code = String(err?.code || err?.message || "");
     if(code === "EXPIRED" || code === "UNKNOWN_TOKEN") setStatus("הקוד פג או לא תקף. סרקו שוב.", "err");
@@ -421,6 +438,27 @@ async function boot(){
     else setStatus("לא ניתן להתחיל. בדקו חיבור וסרקו שוב.", "err");
   }
 }
+
+els.btnGeo.onclick = async () => {
+  els.btnGeo.disabled = true;
+  setStatus("מבקשים מיקום…");
+  const geo = await requestGeo();
+  if(!geo){
+    setStatus("המיקום לא אושר. יש לאשר כדי להמשיך.", "err");
+    els.btnGeo.disabled = false;
+    showGeoRetry();
+    return;
+  }
+  resolvedGeo = geo;
+  els.btnGeo.hidden = true;
+  try {
+    await startFaceFlow();
+  } catch(err) {
+    const code = String(err?.code || err?.message || "");
+    if(String(err).includes("NotAllowedError") || String(err).includes("Permission") || String(err?.name || "") === "NotAllowedError") setStatus("יש לאשר גישה למצלמה.", "err");
+    else setStatus("לא ניתן להתחיל. בדקו חיבור וסרקו שוב.", "err");
+  }
+};
 
 boot();
 </script>
