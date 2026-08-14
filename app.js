@@ -26365,6 +26365,18 @@ UsersGateUI.init();
       return 0;
     },
 
+    /* GI-FACE-KPI 2026-08-14 — כניסת פנים פותחת דשבורד לפני שהלקוחות נטענים.
+       בלי זה החישוב המקומי שומר ₪0 כ-_localBuildReady וה-RPC כבר לא ממלא. */
+    _shouldDeferLocalMetricsToServer(){
+      try {
+        if(typeof Storage !== "undefined" && Storage.isLargeCustomersSession?.()) return true;
+        if(this._countMissingCustomerPayloadsSafe() > 0) return true;
+        const n = Array.isArray(State.data?.customers) ? State.data.customers.length : 0;
+        if(n === 0 && !App?._fullDataReady) return true;
+      } catch(_e) {}
+      return false;
+    },
+
     /** האם מותר לדרוס overlay שרת בתוצאת חישוב מקומי. */
     _canPromoteLocalMetrics(localMetrics){
       if(!localMetrics || typeof localMetrics !== "object") return false;
@@ -26372,6 +26384,12 @@ UsersGateUI.init();
       if(this._metricsBuildBusy) return false;
       if(this._countMissingCustomerPayloadsSafe() > 0) return false;
       if(localMetrics._loading === true) return false;
+      // GI-FACE-KPI: אל תסמן ₪0 כחישוב מוכן לפני שהסשן נטען.
+      if(!App?._fullDataReady
+        && !(Number(localMetrics.netPremium) > 0)
+        && !(Number(localMetrics.agentAppointmentPremium) > 0)){
+        return false;
+      }
       // אם יש overlay עם מספרים אמיתיים — אל תחליף באפסים מקומיים
       const overlay = this._metricsCache;
       if(overlay && overlay._serverKpiOverlay === true && overlay._localBuildReady !== true){
@@ -26732,13 +26750,10 @@ UsersGateUI.init();
 
     computeAndCacheMetrics(cacheKey){
       /* GI-PERF 2026-08-09 — לא לחשב אפסים מלקוחות רזים; RPC ממלא ויציב עד hydration.
-         GI-PERF 2026-08-10 — Large Session: לעולם לא forEach על working-set חלקי כאילו כל הארגון. */
+         GI-PERF 2026-08-10 — Large Session: לעולם לא forEach על working-set חלקי כאילו כל הארגון.
+         GI-FACE-KPI 2026-08-14 — גם לפני _fullDataReady כשעדיין אין לקוחות. */
       try {
-        const largeSession = typeof Storage !== "undefined" && Storage.isLargeCustomersSession?.();
-        const missingPayloads = typeof Storage !== "undefined" && Storage.countMissingCustomerPayloads
-          ? Storage.countMissingCustomerPayloads() > 0
-          : false;
-        if(largeSession || missingPayloads){
+        if(this._shouldDeferLocalMetricsToServer()){
           if(this._metricsCache?._serverKpiOverlay){
             this._metricsCacheKey = cacheKey;
             return this._metricsCache;
@@ -26785,10 +26800,10 @@ UsersGateUI.init();
         return;
       }
       /* GI-PERF 2026-08-09 — דילוג על בנייה מנותית מאפסים בזמן payloads חסרים.
-         GI-PERF 2026-08-10 — גם ב-Large Session (מדדים משרת, לא מסריקת State חלקי). */
+         GI-PERF 2026-08-10 — גם ב-Large Session (מדדים משרת, לא מסריקת State חלקי).
+         GI-FACE-KPI 2026-08-14 — גם לפני שהסשן מלא. */
       try {
-        const largeSession = typeof Storage !== "undefined" && Storage.isLargeCustomersSession?.();
-        if(largeSession || this._countMissingCustomerPayloadsSafe() > 0){
+        if(this._shouldDeferLocalMetricsToServer()){
           if(this._metricsCache?._serverKpiOverlay){
             this._metricsCacheKey = cacheKey;
             this._metricsBuildBusy = false;
@@ -41937,6 +41952,12 @@ const ClalRiskLifePdf = {
             } else {
               perfIdle(() => {
                 try { DashboardUI.schedulePostLoginRender({ skipDailyReportWait: true }); } catch(_e) {}
+                /* GI-FACE-KPI: אחרי כניסת פנים (בלי MFA) ממלאים נטו/מינוי סוכן מהשרת
+                   גם אם הצביעה הראשונה כבר שמרה ₪0. PIN לא עובר כאן. */
+                if(ctx.loginAlreadyLogged === true){
+                  try { DashboardUI.compareServerKpis?.(DashboardUI._metricsCache || DashboardUI._metricsLoadingShell?.()); } catch(_e2) {}
+                  try { DashboardUI.scheduleRefreshKpis?.(); } catch(_e2) {}
+                }
               }, POST_LOGIN_DASHBOARD_DEFER_MS);
             }
           } else if(targetView === "campaignLeads"){
@@ -42694,8 +42715,12 @@ const ClalRiskLifePdf = {
 
   DashboardUI.compareServerKpis = function(metrics){
     if(GI_SERVER_KPI_MODE === "off") return;
-    if(this._serverKpiCompareBusy) return;
+    if(this._serverKpiCompareBusy){
+      this._serverKpiCompareQueued = true;
+      return;
+    }
     this._serverKpiCompareBusy = true;
+    this._serverKpiCompareQueued = false;
     void (async () => {
       try {
         const range = this.getMonthToDateRange();
@@ -42708,9 +42733,12 @@ const ClalRiskLifePdf = {
           try { return Storage.countMissingCustomerPayloads(); } catch(_e) { return 0; }
         })();
         const localReady = !!(this._metricsCache && this._metricsCache._localBuildReady === true);
+        const localHasMoney = (Number(this._metricsCache?.netPremium) > 0)
+          || (Number(this._metricsCache?.agentAppointmentPremium) > 0);
         /* GI-FIX 2026-08-09b: ממלאים מ-RPC כל עוד אין חישוב מקומי מוכן —
-           לא רק בזמן missing payloads (אחרת אחרי hydration המסך קופץ ל־0). */
-        if(missingCustomers > 0 || !localReady){
+           לא רק בזמן missing payloads (אחרת אחרי hydration המסך קופץ ל־0).
+           GI-FACE-KPI 2026-08-14: גם אם סומן localReady על ₪0 (כניסת פנים מוקדמת). */
+        if(missingCustomers > 0 || !localReady || !localHasMoney){
           const m = (this._metricsCache && typeof this._metricsCache === "object")
             ? this._metricsCache
             : (metrics && typeof metrics === "object" ? metrics : this._metricsLoadingShell());
@@ -42786,6 +42814,10 @@ const ClalRiskLifePdf = {
         console.warn("[GI-SERVER-KPI] שגיאה:", err);
       } finally {
         this._serverKpiCompareBusy = false;
+        if(this._serverKpiCompareQueued){
+          this._serverKpiCompareQueued = false;
+          try { this.compareServerKpis(this._metricsCache || metrics); } catch(_e) {}
+        }
       }
     })();
   };
