@@ -1037,21 +1037,6 @@
     }
   }
 
-  function playGiLeadAnnouncement(){
-    try {
-      if(!playGiLeadAnnouncement._audio){
-        playGiLeadAnnouncement._audio = new Audio("assets/audio/lead-new-announcement.mp3");
-        playGiLeadAnnouncement._audio.preload = "auto";
-      }
-      const audio = playGiLeadAnnouncement._audio;
-      audio.currentTime = 0;
-      const playPromise = audio.play();
-      if(playPromise && typeof playPromise.catch === "function"){
-        playPromise.catch(() => {});
-      }
-    } catch(_e) {}
-  }
-
   function playGiLeadChime(){
     try {
       if(!playGiLeadChime._audio){
@@ -1186,16 +1171,11 @@
   };
 
   /**
-   * רצף התראת ליד: צלצול → הודעה קולית.
+   * התראת ליד: צלצול בלבד, בלי הודעה קולית.
    *
-   * GI-LEADNOTIFY 2026-08-02 — שלושה שינויים מהותיים:
-   * 1. המרווח בין הצלצול להכרזה היה setTimeout של שנייה. בטאב מוסתר דפדפנים
-   *    מחניקים טיימרים (מינימום שנייה, לעיתים הרבה יותר) ולכן הדיבור הגיע
-   *    באיחור. עכשיו: כשהטאב מוסתר ההכרזה מופעלת מיד מתוך אירוע "ended",
-   *    שלא כפוף להחנקה.
-   * 2. כישלון השמעה כבר לא נבלע — הוא נכנס ל-GiLeadNotifyQueue.
-   * 3. onPlayed/onBlocked מדווחים למי שקרא, כדי שההתראה לא תסומן כ"נמסרה"
-   *    אם בפועל לא נשמעה.
+   * GI-LEADNOTIFY 2026-08-02 — כישלון השמעה כבר לא נבלע: הוא נכנס ל-
+   * GiLeadNotifyQueue. onPlayed/onBlocked מדווחים למי שקרא, כדי שההתראה
+   * לא תסומן כ"נמסרה" אם בפועל לא נשמעה.
    */
   function playGiLeadNotifySequence(options = {}){
     const allowQueue = options.allowQueue !== false;
@@ -1203,74 +1183,34 @@
       try { if(typeof options[name] === "function") options[name](); } catch(_e) {}
     };
 
-    let announced = false;
-    let fallbackTimer = null;
-    let chime = null;
-
-    const runAnnouncement = () => {
-      if(announced) return;
-      announced = true;
-      const fire = () => { try { playGiLeadAnnouncement(); } catch(_e) {} };
-      // טאב מוסתר → בלי טיימר בכלל, אחרת הדיבור נדחה על ידי הדפדפן
-      if(document.hidden) fire();
-      else setTimeout(fire, 550);
-    };
-
-    const onEnded = () => {
-      cleanup();
-      runAnnouncement();
-    };
-
-    const cleanup = () => {
-      if(fallbackTimer){ clearTimeout(fallbackTimer); fallbackTimer = null; }
-      if(chime){
-        try { chime.removeEventListener("ended", onEnded); } catch(_e) {}
-      }
-    };
-
     const synthPath = () => {
-      // אין קובץ צלצול / הקובץ נחסם — צלצול מסונתז ואז הכרזה
+      // אין קובץ צלצול / הקובץ נחסם — צלצול מסונתז בלבד
       if(!tryGiSynthChime()){
         if(allowQueue){ try { GiLeadNotifyQueue.push(); } catch(_e) {} }
         report("onBlocked");
         return;
       }
-      announced = true;
-      setTimeout(() => { try { playGiLeadAnnouncement(); } catch(_e) {} }, 2100);
       report("onPlayed");
     };
 
     try {
-      chime = playGiLeadChime();
+      const chime = playGiLeadChime();
       if(!chime){
         synthPath();
         return;
       }
 
-      chime.addEventListener("ended", onEnded);
       try { chime.currentTime = 0; } catch(_e) {}
-
-      const dur = chime.duration;
-      const waitMs = Number.isFinite(dur) && dur > 0 ? Math.ceil(dur * 1000) + 150 : 6200;
-      fallbackTimer = setTimeout(() => {
-        cleanup();
-        runAnnouncement();
-      }, waitMs);
 
       const playPromise = chime.play();
       if(playPromise && typeof playPromise.then === "function"){
         playPromise
           .then(() => { report("onPlayed"); })
-          .catch(() => {
-            cleanup();
-            if(announced) return;
-            synthPath();
-          });
+          .catch(() => { synthPath(); });
       } else {
         report("onPlayed");
       }
     } catch(_e) {
-      cleanup();
       if(allowQueue){ try { GiLeadNotifyQueue.push(); } catch(_e2) {} }
       report("onBlocked");
     }
@@ -1301,29 +1241,6 @@
         source.buffer = buffer;
         source.connect(ctx.destination);
         source.start(0);
-      }
-    } catch(_e) {}
-    try {
-      if(!playGiLeadAnnouncement._audio){
-        playGiLeadAnnouncement._audio = new Audio("assets/audio/lead-new-announcement.mp3");
-        playGiLeadAnnouncement._audio.preload = "auto";
-      }
-      const audio = playGiLeadAnnouncement._audio;
-      const wasMuted = audio.muted;
-      audio.muted = true;
-      audio.currentTime = 0;
-      const playPromise = audio.play();
-      const finishUnlock = () => {
-        try {
-          audio.pause();
-          audio.currentTime = 0;
-          audio.muted = wasMuted;
-        } catch(_e) {}
-      };
-      if(playPromise && typeof playPromise.then === "function"){
-        playPromise.then(finishUnlock).catch(() => { audio.muted = wasMuted; });
-      } else {
-        finishUnlock();
       }
     } catch(_e) {}
     try {
@@ -26307,10 +26224,18 @@ UsersGateUI.init();
       try {
         if(!this._metricsCache || this._metricsCache._serverKpiOverlay !== true) return false;
         if(this._metricsCache._localBuildReady === true) return false;
+        // GI-FACE-KPI: overlay של ₪0 אינו יציב — אחרת כניסת פנים נועלת נטו/מינוי סוכן על 0.
+        if(!(Number(this._metricsCache.netPremium) > 0)
+          && !(Number(this._metricsCache.agentAppointmentPremium) > 0)) return false;
         return true;
       } catch(_e) {
         return false;
       }
+    },
+
+    _overlayHasMoney(){
+      return (Number(this._metricsCache?.netPremium) > 0)
+        || (Number(this._metricsCache?.agentAppointmentPremium) > 0);
     },
 
     invalidateMetricsCache(options = {}){
@@ -26754,7 +26679,7 @@ UsersGateUI.init();
          GI-FACE-KPI 2026-08-14 — גם לפני _fullDataReady כשעדיין אין לקוחות. */
       try {
         if(this._shouldDeferLocalMetricsToServer()){
-          if(this._metricsCache?._serverKpiOverlay){
+          if(this._metricsCache?._serverKpiOverlay && this._overlayHasMoney()){
             this._metricsCacheKey = cacheKey;
             return this._metricsCache;
           }
@@ -26804,7 +26729,7 @@ UsersGateUI.init();
          GI-FACE-KPI 2026-08-14 — גם לפני שהסשן מלא. */
       try {
         if(this._shouldDeferLocalMetricsToServer()){
-          if(this._metricsCache?._serverKpiOverlay){
+          if(this._metricsCache?._serverKpiOverlay && this._overlayHasMoney()){
             this._metricsCacheKey = cacheKey;
             this._metricsBuildBusy = false;
             return;
@@ -26933,8 +26858,11 @@ UsersGateUI.init();
           if(typeof document !== "undefined" && document.visibilityState === "hidden") return;
           if(LiveRefresh.getCurrentView() !== "dashboard" || Auth.isElementary()) return;
           if(!this.shouldShowPerformanceBoard()) return;
-          if(!this.els.root || !this.els.root.querySelector(".bankDash__kpis")) {
-            this.render();
+          /* GI-FACE-KPI: מעטפת boot יש בה .bankDash__kpis — אסור לרענן במקום במקום לבנות דשבורד. */
+          if(!this.els.root
+            || !this.els.root.querySelector(".bankDash__kpis")
+            || this.els.root.querySelector(".bankDash--bootLoading")) {
+            void this.render({ skipDailyReportWait: true, forceFullRender: true });
           } else {
             this.refreshKpis();
           }
@@ -27235,7 +27163,10 @@ UsersGateUI.init();
       try {
         if(typeof DailyReportStore === "undefined") return;
         if(DailyReportStore.report) return;
-        await DailyReportStore.fetchActive();
+        await Promise.race([
+          DailyReportStore.fetchActive(),
+          new Promise((resolve) => window.setTimeout(resolve, 2200))
+        ]);
       } catch(_e){}
     },
 
@@ -29321,6 +29252,10 @@ UsersGateUI.init();
         try {
           if(LiveRefresh.getCurrentView() !== "dashboard" || Auth.isElementary()) return;
           if(!this.shouldShowPerformanceBoard()) return;
+          if(this.els.root?.querySelector(".bankDash--bootLoading")){
+            void this.render({ ...options, skipDailyReportWait: true, forceFullRender: true });
+            return;
+          }
           if(hasKpiDom || this.els.root.querySelector(".bankDash__kpis")){
             this.scheduleRefreshKpis();
             return;
@@ -29407,6 +29342,17 @@ UsersGateUI.init();
         return;
       }
 
+      if(!hasSessionRows){
+        const alreadyPainted = !!this.els.root.querySelector(".bankDash__kpis")
+          && !this.els.root.querySelector(".bankDash--bootLoading");
+        if(alreadyPainted){
+          this.scheduleChunkedMetricsBuild(cacheKey);
+          try { this.compareServerKpis?.(this._metricsCache || this._metricsLoadingShell()); } catch(_e) {}
+          try { this.scheduleRefreshKpis(); } catch(_e) {}
+          return;
+        }
+      }
+
       if(!this.els.root.querySelector(".bankDash--bootLoading")){
         try { this.renderLoadingShell(); } catch(_e) {}
       }
@@ -29429,6 +29375,32 @@ UsersGateUI.init();
       } else {
         window.setTimeout(waitReady, 32);
       }
+    },
+
+    /* GI-FACE-KPI: אחרי זיהוי פנים — דשבורד אמיתי מיד, בלי מעטפת «מכין את הדשבורד»
+       ובלי לנעול ₪0. PIN נשאר עם renderLoadingShell. */
+    paintDashboardAfterFaceLogin(){
+      try { WelcomeLoader.close(); } catch(_e) {}
+      this._renderInFlight = false;
+      this._renderQueued = false;
+      this._metricsBuildBusy = false;
+      try {
+        if(!this._overlayHasMoney()){
+          this._metricsCache = null;
+          this._metricsCacheKey = "";
+          this._renderedDomKey = "";
+          this._localMetricsAttemptedKey = "";
+        }
+      } catch(_e) {}
+      try {
+        if(!this.els.root) this.init();
+      } catch(_e) {}
+      try { this.compareServerKpis?.(this._metricsLoadingShell()); } catch(_e) {}
+      void this.render({ skipDailyReportWait: true, forceFullRender: true });
+      window.setTimeout(() => {
+        try { this.compareServerKpis?.(this._metricsCache || this._metricsLoadingShell()); } catch(_e) {}
+        try { this.scheduleRefreshKpis(); } catch(_e) {}
+      }, 700);
     },
 
     startLiveRefresh(){
@@ -30141,7 +30113,7 @@ UsersGateUI.init();
         this._renderInFlight = false;
         if(this._renderQueued){
           this._renderQueued = false;
-          void this.render();
+          void this.render({ skipDailyReportWait: true });
         }
       }
     },
@@ -43126,9 +43098,11 @@ const ClalRiskLifePdf = {
       }
       const loaderName = safeTrim(Auth.current?.name || matched?.name);
       try { localStorage.removeItem(LS_SESSION_KEY); } catch(_) {}
-      try { WelcomeLoader.open(loaderName); } catch(_e) {}
+      if(options.skipMfa !== true){
+        try { WelcomeLoader.open(loaderName); } catch(_e) {}
+      }
       targetView = Auth.isReferent() ? 'campaignLeads' : 'dashboard';
-      if(!App._loginReady){
+      if(options.skipMfa !== true && !App._loginReady){
         try {
           await Promise.race([
             App.ensureLoginReady(),
@@ -43156,7 +43130,11 @@ const ClalRiskLifePdf = {
       try { void AttendanceClock.onAuthenticated(); } catch(_e) {}
 
       if(targetView === 'dashboard' && !Auth.isElementary() && !Auth.isOps() && !Auth.isOpsAgent()){
-        try { DashboardUI.renderLoadingShell(); } catch(_e) {}
+        if(options.skipMfa === true){
+          try { DashboardUI.paintDashboardAfterFaceLogin?.(); } catch(_e) {}
+        } else {
+          try { DashboardUI.renderLoadingShell(); } catch(_e) {}
+        }
       }
       if(targetView === 'dashboard' && (Auth.isOps() || Auth.isOpsAgent())){
         try { OpsDashboardUI.render(); } catch(_e) {}
@@ -43165,7 +43143,7 @@ const ClalRiskLifePdf = {
 
       WelcomeLoader.close();
 
-      if(loaderMs > 0) await new Promise((resolve) => window.setTimeout(resolve, Math.min(loaderMs, 250)));
+      if(options.skipMfa !== true && loaderMs > 0) await new Promise((resolve) => window.setTimeout(resolve, Math.min(loaderMs, 250)));
 
       void App.runPostLoginPipeline({
         matched,
@@ -43181,7 +43159,11 @@ const ClalRiskLifePdf = {
       try {
         Auth.unlock();
         if(targetView === 'dashboard' && !Auth.isElementary() && !Auth.isOps() && !Auth.isOpsAgent()){
-          try { DashboardUI.renderLoadingShell(); } catch(_e) {}
+          if(options.skipMfa === true){
+            try { DashboardUI.paintDashboardAfterFaceLogin?.(); } catch(_e) {}
+          } else {
+            try { DashboardUI.renderLoadingShell(); } catch(_e) {}
+          }
         }
         if(targetView === 'dashboard' && (Auth.isOps() || Auth.isOpsAgent())){
           try { OpsDashboardUI.render(); } catch(_e) {}
