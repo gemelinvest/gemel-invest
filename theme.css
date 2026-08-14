@@ -5332,6 +5332,7 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
   animation: none !important;
   transition: none !important;
   transform: none !important;
+  grid-template-rows: auto minmax(0, 1fr) !important;
 }
 
 #customerFull.cfFile .customerFull__top:not(#\9):not(#\9),
@@ -5355,18 +5356,22 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
 }
 
 #customerFull.cfFile .customerFull__dash:not(#\9):not(#\9){
-  padding: var(--gi-s3) var(--gi-s5) 0 !important;
-  background: transparent !important;
+  display: none !important;
 }
 
 #customerFull.cfFile .customerFull__body:not(#\9):not(#\9){
   padding: var(--gi-s3) var(--gi-s5) var(--gi-s5) !important;
   gap: var(--gi-s4) !important;
   background: transparent !important;
+  display: grid !important;
   grid-template-columns: minmax(0, 1fr) 280px !important;
+  grid-template-rows: minmax(0, 1fr) !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  align-items: stretch !important;
 }
-.cfFile__side:not(#\9):not(#\9){ grid-column: 2 !important; }
-.cfFile__mainWrap:not(#\9):not(#\9){ grid-column: 1 !important; }
+.cfFile__side:not(#\9):not(#\9){ grid-column: 2 !important; grid-row: 1 !important; }
+.cfFile__mainWrap:not(#\9):not(#\9){ grid-column: 1 !important; grid-row: 1 !important; }
 
 .cfFile__avatar:not(#\9):not(#\9),
 .cfFile__avatarImg:not(#\9):not(#\9){
@@ -5609,6 +5614,13 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
   border-radius: var(--gi-r-card) !important;
   box-shadow: var(--gi-sh-sm) !important;
 }
+.cfFile__side:not(#\9):not(#\9){
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  overflow: hidden !important;
+  align-self: stretch !important;
+}
 
 .cfFile__sideHead:not(#\9):not(#\9){
   padding: var(--gi-s3) var(--gi-s4) !important;
@@ -5617,11 +5629,16 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
   font-weight: 700 !important;
   color: var(--gi-text) !important;
   background: transparent !important;
+  flex: none !important;
 }
 
 .cfFile__sideBody:not(#\9):not(#\9){
   padding: var(--gi-s3) var(--gi-s4) var(--gi-s4) !important;
   gap: var(--gi-s2) !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+  align-content: start !important;
 }
 
 .cfFile__sideTotal:not(#\9):not(#\9){
@@ -5658,6 +5675,27 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
 .cfFile__sideRow strong:not(#\9):not(#\9){
   color: var(--gi-text) !important;
   font-weight: 700 !important;
+}
+.cfFile__sideRow--wrap strong:not(#\9):not(#\9){
+  white-space: normal !important;
+  word-break: break-word !important;
+}
+.cfFile__sideStatus:not(#\9):not(#\9){
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 2px 10px !important;
+  border-radius: 999px !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  line-height: 1.4 !important;
+}
+.cfFile__sideStatus.is-active:not(#\9):not(#\9){
+  background: rgba(22,163,74,.12) !important;
+  color: #15803d !important;
+}
+.cfFile__sideStatus.is-archived:not(#\9):not(#\9){
+  background: rgba(100,116,139,.14) !important;
+  color: #475569 !important;
 }
 
 .cfFile__sideRow.cfFile__sideRow--agentAppt strong:not(#\9):not(#\9){
@@ -5772,7 +5810,7 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
     grid-template-columns: 1fr !important;
   }
   .cfFile__side:not(#\9):not(#\9),
-  .cfFile__mainWrap:not(#\9):not(#\9){ grid-column: auto !important; }
+  .cfFile__mainWrap:not(#\9):not(#\9){ grid-column: auto !important; grid-row: auto !important; }
 }
 /* ===== ???? ?????? ???? ? ??? ??? ===== */
 #view-dailySales .giDailySalesPage:not(#\9):not(#\9){
@@ -8578,15 +8616,18 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 }
 
 .cfGroup__kind:not(#\9):not(#\9){
-  display: inline-block !important;
-  padding: 2px 8px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  flex: none !important;
+  padding: 6px 12px !important;
   border-radius: var(--gi-r-pill) !important;
   background: var(--gi-cf-acc-soft, var(--gi-primary-soft)) !important;
   color: var(--gi-cf-acc, var(--gi-primary)) !important;
-  font-size: 10.5px !important;
+  font-size: 12px !important;
   font-weight: 800 !important;
   letter-spacing: .02em !important;
   border: 1px solid var(--gi-cf-acc-line, rgba(37,99,235,.22)) !important;
+  white-space: nowrap !important;
 }
 
 .cfGroup__sum:not(#\9):not(#\9){
@@ -8603,6 +8644,9 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   font-weight: 800 !important;
   color: var(--gi-text) !important;
   letter-spacing: -.02em !important;
+}
+.cfGroup--health .cfGroup__sumVal:not(#\9):not(#\9){
+  color: var(--gi-health) !important;
 }
 
 .cfGroup__sumLbl:not(#\9):not(#\9){
@@ -8723,7 +8767,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 }
 
 /* ---- Sidebar ---- */
-.cfFile__side:not(#\9):not(#\9){ position: sticky !important; top: 16px !important; }
+.cfFile__side:not(#\9):not(#\9){ position: relative !important; top: auto !important; }
 
 .cfFile__sideTotalLbl:not(#\9):not(#\9){
   font-size: 11.5px !important; font-weight: 600 !important; color: var(--gi-text-3) !important; margin-top: 4px !important;
@@ -8745,6 +8789,9 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 
 .cfFile__sideRow strong:not(#\9):not(#\9){
   font-family: var(--gi-num) !important; font-weight: 800 !important; color: var(--gi-text) !important; white-space: nowrap !important;
+}
+.cfFile__sideRow--wrap strong:not(#\9):not(#\9){
+  white-space: normal !important; word-break: break-word !important;
 }
 
 .cfFile__sideDot:not(#\9):not(#\9){
@@ -8831,7 +8878,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   display: inline-flex !important;
   align-items: center !important;
   gap: 6px !important;
-  margin-inline-start: auto !important;
+  margin-inline-start: 0 !important;
   padding: 7px 12px !important;
   border-radius: var(--gi-r-pill) !important;
   border: 1px solid var(--gi-border) !important;
@@ -8922,6 +8969,13 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   font-size: 13px !important;
   font-weight: 600 !important;
   color: var(--gi-text-muted) !important;
+}
+.cfNewPolicyCard__sep:not(#\9):not(#\9){
+  color: var(--gi-text-muted) !important;
+  font-weight: 700 !important;
+}
+.cfNewPolicyCard .cfFile__menuBtn:not(#\9):not(#\9){
+  margin-inline-start: auto !important;
 }
 
 @media (max-width: 720px){

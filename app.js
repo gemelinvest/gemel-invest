@@ -18272,10 +18272,7 @@ UsersGateUI.init();
       if(this.els.name) this.els.name.textContent = rec.fullName || "תיק לקוח";
       if(this.els.avatar) this.els.avatar.setAttribute("data-customer-name", safeTrim(rec.fullName || "תיק לקוח"));
       if(this.els.meta) this.els.meta.innerHTML = this.renderHeroMeta(rec);
-      if(this.els.dash){
-        this.els.dash.innerHTML = this.renderKpiBar(rec, policies);
-        this.animatePremiumStats(this.els.dash);
-      }
+      if(this.els.dash) this.els.dash.innerHTML = "";
       if(this.els.side) this.els.side.innerHTML = this.renderSidebar(rec, policies);
       if(this.els.tabs) this.els.tabs.innerHTML = this.renderTabBar(rec, policies);
       if(this.els.main){
@@ -18362,8 +18359,17 @@ UsersGateUI.init();
       };
       /* GI-CF-HIER 2026-08-04 — נקודת צבע לכל נושא, זהה לצבע הסקשן בטבלה. */
       const oldSum = this.sumPremiumAfterDiscount(this.getExistingOldPoliciesOnly(policies));
+      const idNumber = safeTrim(rec?.idNumber);
+      const phone = safeTrim(rec?.phone || rec?.payload?.primary?.phone);
+      const email = safeTrim(rec?.email || rec?.payload?.primary?.email);
+      const agentName = safeTrim(rec?.agentName || rec?.payload?.agentName);
+      const isArchived = rec?.isArchived === true || rec?.is_archived === true || safeTrim(rec?.status) === "גנוז";
+      const statusLabel = isArchived ? "גנוז" : "פעיל";
+      const statusCls = isArchived ? "is-archived" : "is-active";
       const dotRow = (dot, label, val) =>
         `<div class="cfFile__sideRow"><span><i class="cfFile__sideDot cfFile__sideDot--${dot}"></i>${escapeHtml(label)}</span><strong>${escapeHtml(val ? this.formatMoneyValue(val) : '—')}</strong></div>`;
+      const infoRow = (label, valHtml, extraCls="") =>
+        `<div class="cfFile__sideRow${extraCls ? ` ${extraCls}` : ""}"><span>${escapeHtml(label)}</span><strong>${valHtml}</strong></div>`;
       return `<div class="cfFile__sideHead">סיכום תיק</div>
         <div class="cfFile__sideBody">
           <div class="cfFile__sideTotal">
@@ -18377,9 +18383,13 @@ UsersGateUI.init();
           ${dotRow('legacy', 'פוליסות ישנות', oldSum)}
           <div class="cfFile__sideDivide"></div>
           <div class="cfFile__sideGroup">פרטי תיק</div>
-          <div class="cfFile__sideRow"><span>מבוטחים</span><strong>${escapeHtml(String(insuredCount || '—'))}</strong></div>
-          <div class="cfFile__sideRow"><span>תאריך הקמה</span><strong>${escapeHtml(fmtShort(rec.createdAt || rec.created_at))}</strong></div>
-          <div class="cfFile__sideRow"><span>עדכון אחרון</span><strong>${escapeHtml(fmtShort(rec.updatedAt || rec.updated_at))}</strong></div>
+          ${infoRow('מספר תיק', escapeHtml(idNumber || rec?.id || '—'))}
+          ${infoRow('תאריך פתיחה', escapeHtml(fmtShort(rec.createdAt || rec.created_at)))}
+          ${infoRow('סטטוס', `<span class="cfFile__sideStatus ${statusCls}">${escapeHtml(statusLabel)}</span>`)}
+          ${infoRow('נציג מטפל', escapeHtml(agentName || '—'))}
+          ${infoRow('מבוטחים', escapeHtml(String(insuredCount || '—')))}
+          ${infoRow('טלפון', escapeHtml(phone || '—'))}
+          ${infoRow('דוא״ל', escapeHtml(email || '—'), 'cfFile__sideRow--wrap')}
         </div>`;
     },
 
@@ -18505,8 +18515,9 @@ UsersGateUI.init();
             <div class="cfGroup__icon" aria-hidden="true">${icon}</div>
             <div class="cfGroup__titleWrap">
               <h3 class="cfGroup__title">${escapeHtml(title)}</h3>
-              <p class="cfGroup__sub"><span class="cfGroup__kind">${escapeHtml(kind)}</span>${escapeHtml(meta)}</p>
+              <p class="cfGroup__sub">${escapeHtml(meta)}</p>
             </div>
+            <span class="cfGroup__kind">${escapeHtml(kind)}</span>
             ${collapsible
               ? `<span class="cfGroup__openBtn"><span class="cfGroup__openBtnLabel">לחץ לפתיחה</span><span class="cfGroup__chev" aria-hidden="true">▾</span></span>`
               : `<div class="cfGroup__sum">
@@ -18549,7 +18560,7 @@ UsersGateUI.init();
         ? `<section class="cfGroup cfGroup--health cfGroup--cards">
           <header class="cfGroup__head">
             ${headInner({
-              icon: ICONS.health, title: 'בריאות וסיכונים', kind: 'פוליסות חדשות',
+              icon: ICONS.health, title: 'בריאות וסיכונים', kind: '+ פוליסות חדשות',
               meta: healthMeta, sum: this.formatMoneyValue(this.sumPremiumAfterDiscount(healthPolicies)), collapsible: false
             })}
           </header>
@@ -18594,8 +18605,9 @@ UsersGateUI.init();
       return `<article class="cfNewPolicyCard ${escapeHtml(this.companyClass(policy.company))}" data-policy-id="${escapeHtml(policy.id)}">
         ${logoMark}
         <div class="cfNewPolicyCard__main">
-          <div class="cfNewPolicyCard__product">${escapeHtml(policy.type || 'פוליסה')}</div>
-          <div class="cfNewPolicyCard__company">${escapeHtml(policy.company || 'חברה')}</div>
+          <span class="cfNewPolicyCard__product">${escapeHtml(policy.type || 'פוליסה')}</span>
+          <span class="cfNewPolicyCard__sep" aria-hidden="true">•</span>
+          <span class="cfNewPolicyCard__company">${escapeHtml(policy.company || 'חברה')}</span>
         </div>
         <button class="cfFile__menuBtn" type="button" aria-label="פרטי פוליסה" data-policy-open="${escapeHtml(policy.id)}">⋮</button>
       </article>`;

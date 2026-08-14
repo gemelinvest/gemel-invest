@@ -41098,7 +41098,7 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 /* ===== Customer File Redesign (cfFile) — BUILD 20260530 ===== */
 #customerFull.cfFile .customerFull__panel{
   background: var(--bg);
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
 }
 #customerFull.cfFile .customerFull__top{
   padding: 14px 20px;
@@ -41107,9 +41107,7 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   background-image: none;
 }
 #customerFull.cfFile .customerFull__dash{
-  padding: 12px 20px 0;
-  border-bottom: none;
-  display: block;
+  display: none;
 }
 #customerFull.cfFile .customerFull__body{
   padding: 12px 20px 20px;
@@ -41117,6 +41115,7 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   overflow: hidden;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-rows: minmax(0, 1fr);
   gap: 14px;
   align-items: stretch;
 }
@@ -41345,13 +41344,18 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 .cfFile__layout{ /* grid set on customerFull__body */ }
 .cfFile__side{
   grid-column: 2;
+  grid-row: 1;
   padding: 0;
   min-height: 0;
-  overflow: auto;
+  height: 100%;
+  overflow: hidden;
   align-self: stretch;
+  display: flex;
+  flex-direction: column;
 }
 .cfFile__mainWrap{
   grid-column: 1;
+  grid-row: 1;
   min-width: 0;
   min-height: 0;
   display: grid;
@@ -41409,8 +41413,9 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   font-size: 14px;
   font-weight: 900;
   color: var(--text);
+  flex: none;
 }
-.cfFile__sideBody{ padding: 12px 16px 16px; display: grid; gap: 10px; }
+.cfFile__sideBody{ padding: 12px 16px 16px; display: grid; gap: 10px; flex: 1 1 auto; min-height: 0; overflow: auto; align-content: start; }
 .cfFile__sideRow{
   display: flex;
   justify-content: space-between;
@@ -41423,6 +41428,24 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 .cfFile__sideRow:last-child{ border-bottom: none; }
 .cfFile__sideRow span{ color: var(--muted); font-weight: 700; }
 .cfFile__sideRow strong{ font-weight: 900; color: var(--text); white-space: nowrap; }
+.cfFile__sideRow--wrap strong{ white-space: normal; text-align: start; word-break: break-word; }
+.cfFile__sideStatus{
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+.cfFile__sideStatus.is-active{
+  background: rgba(22,163,74,.12);
+  color: #15803d;
+}
+.cfFile__sideStatus.is-archived{
+  background: rgba(100,116,139,.14);
+  color: #475569;
+}
 .cfFile__sideRow.cfFile__sideRow--agentAppt strong{ color: #6d28d9; }
 .cfFile__sideTotal{
   margin-top: 4px;
@@ -41804,7 +41827,7 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 
 @media (max-width: 1100px){
   #customerFull.cfFile .customerFull__body{ grid-template-columns: 1fr; }
-  .cfFile__side, .cfFile__mainWrap{ grid-column: auto; }
+  .cfFile__side, .cfFile__mainWrap{ grid-column: auto; grid-row: auto; }
   .cfFile__kpiBar{ grid-template-columns: 1fr 1fr; }
   .cfFile__kpi:nth-child(odd){ border-inline-start: none; }
   .cfFile__personalGrid{ grid-template-columns: 1fr; }
