@@ -41116,7 +41116,7 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   min-height: 0;
   overflow: hidden;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 280px;
   gap: 14px;
   align-items: stretch;
 }
@@ -41344,12 +41344,14 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 
 .cfFile__layout{ /* grid set on customerFull__body */ }
 .cfFile__side{
+  grid-column: 2;
   padding: 0;
   min-height: 0;
   overflow: auto;
   align-self: stretch;
 }
 .cfFile__mainWrap{
+  grid-column: 1;
   min-width: 0;
   min-height: 0;
   display: grid;
@@ -41802,6 +41804,7 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 
 @media (max-width: 1100px){
   #customerFull.cfFile .customerFull__body{ grid-template-columns: 1fr; }
+  .cfFile__side, .cfFile__mainWrap{ grid-column: auto; }
   .cfFile__kpiBar{ grid-template-columns: 1fr 1fr; }
   .cfFile__kpi:nth-child(odd){ border-inline-start: none; }
   .cfFile__personalGrid{ grid-template-columns: 1fr; }
