@@ -45248,6 +45248,15 @@ body.lcAuthLock .lcLogin__footBtn{
   font-weight:800;
   font-size:15px;
   cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+}
+.lcLogin__faceBtnIcon{
+  width:18px;
+  height:18px;
+  flex:0 0 auto;
 }
 .lcLogin__or{
   text-align:center;
@@ -45261,18 +45270,19 @@ body.lcAuthLock .lcLogin__footBtn{
   justify-items:center;
   gap:10px;
   margin:0 0 12px;
-  padding:12px;
-  border:1px solid #e2e8f0;
-  border-radius:14px;
-  background:#f8fafc;
+  padding:16px 12px 14px;
+  border:1px solid #dbe4f5;
+  border-radius:16px;
+  background:#fff;
 }
 .lcLogin__facePanel[hidden]{display:none}
 .lcLogin__faceQrWrap{
   width:220px;
   height:220px;
   background:#fff;
-  border-radius:12px;
+  border-radius:14px;
   overflow:hidden;
+  border:1px solid #e8eef8;
 }
 .lcLogin__faceQrWrap canvas,
 .lcLogin__faceQrWrap img{
@@ -45283,20 +45293,31 @@ body.lcAuthLock .lcLogin__footBtn{
 .lcLogin__faceHint{
   text-align:center;
   font-size:13px;
-  line-height:1.4;
-  color:#475569;
+  line-height:1.45;
+  color:#334155;
+  font-weight:700;
 }
-.lcLogin__faceHint.is-ok{color:#15803d;font-weight:700}
-.lcLogin__faceHint.is-err{color:#b91c1c;font-weight:700}
+.lcLogin__faceHint.is-ok{color:#15803d;font-weight:800}
+.lcLogin__faceHint.is-err{color:#b91c1c;font-weight:800}
 .lcLogin__faceCancel{
   min-height:40px;
   padding:0 14px;
   border:0;
   border-radius:10px;
-  background:#e2e8f0;
+  background:#e8eef8;
   color:#0f172a;
   font-weight:700;
   cursor:pointer;
+}
+.giFaceModal__head{
+  align-items:flex-start;
+}
+.giFaceModal__logo{
+  display:block;
+  width:148px;
+  height:auto;
+  margin:0 0 6px;
+  object-fit:contain;
 }
 .giFaceModal__body{
   display:grid;
@@ -45308,9 +45329,9 @@ body.lcAuthLock .lcLogin__footBtn{
   width:220px;
   height:220px;
   background:#fff;
-  border-radius:12px;
+  border-radius:14px;
   overflow:hidden;
-  box-shadow:0 8px 24px rgba(15,23,42,.08);
+  border:1px solid #e8eef8;
 }
 .giFaceModal__qrWrap canvas,
 .giFaceModal__qrWrap img{

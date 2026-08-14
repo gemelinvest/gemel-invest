@@ -4,6 +4,7 @@
 
   const ROTATE_MS = 30000;
   const POLL_MS = 1400;
+  const POLL_FAST_MS = 600;
   const FN_PATH = "/functions/v1/gi-face-auth";
   const FALLBACK_SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
   const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
@@ -294,6 +295,7 @@
     this._status = "";
     this._timerRotate = 0;
     this._timerPoll = 0;
+    this._pollMs = POLL_MS;
     this._busy = false;
     this._closed = false;
   }
@@ -327,6 +329,7 @@
           window.clearInterval(this._timerRotate);
           this._timerRotate = 0;
         }
+        this._armPoll(POLL_FAST_MS);
         return;
       }
       if(status === "approved"){
@@ -401,12 +404,20 @@
     }
   };
 
+  FaceSessionController.prototype._armPoll = function(ms){
+    const interval = Math.max(400, Number(ms) || POLL_MS);
+    if(this._timerPoll && this._pollMs === interval) return;
+    if(this._timerPoll) window.clearInterval(this._timerPoll);
+    this._pollMs = interval;
+    this._timerPoll = window.setInterval(() => { void this.pollOnce(); }, interval);
+  };
+
   FaceSessionController.prototype.start = async function(){
     this._closed = false;
     this.stopTimers();
     await this.rotate();
     this._timerRotate = window.setInterval(() => { void this.rotate(); }, ROTATE_MS);
-    this._timerPoll = window.setInterval(() => { void this.pollOnce(); }, POLL_MS);
+    this._armPoll(POLL_MS);
     void this.pollOnce();
   };
 
@@ -454,9 +465,9 @@
       window.__GI_FACE_LOGIN_DONE__ = false;
       try { if(typeof b.hideMfaStep === "function") b.hideMfaStep(); } catch(_e) {}
       try { if(typeof b.abortPinLogin === "function") b.abortPinLogin(); } catch(_e) {}
-      try { if(typeof b.ensureLoginReady === "function") await b.ensureLoginReady(); } catch(_e) {}
       this.showLoginPanel(true);
-      this.setLoginHint("סרקו את הקוד במצלמת הטלפון. הקוד מתחלף כל 30 שניות.");
+      this.setLoginHint("מכין קוד QR…");
+      try { if(typeof b.ensureLoginReady === "function") void b.ensureLoginReady(); } catch(_e) {}
       if(this._loginCtl) await this._loginCtl.cancel();
       const self = this;
       this._loginCtl = new FaceSessionController({
@@ -468,13 +479,14 @@
             next.id = "lcFaceLoginQr";
             canvas.replaceWith(next);
             void drawQr(next, href);
-            return;
+          } else {
+            void drawQr(canvas, href);
           }
-          void drawQr(canvas, href);
+          self.setLoginHint("סרקו את הקוד בטלפון");
         },
         onStatus: (status) => {
-          if(status === "scanned") self.setLoginHint("הטלפון סרק. ממתינים לזיהוי פנים…");
-          if(status === "pending") self.setLoginHint("סרקו את הקוד במצלמת הטלפון. הקוד מתחלף כל 30 שניות.");
+          if(status === "scanned") self.setLoginHint("הטלפון סרק · מזהים פנים…");
+          if(status === "pending") self.setLoginHint("סרקו את הקוד בטלפון");
         },
         onApproved: async (data) => {
           window.__GI_FACE_LOGIN_ACTIVE__ = true;
@@ -486,7 +498,7 @@
             self.setLoginHint("הזיהוי הצליח אך כרטיס הנציג לא נטען. סרקו שוב.", "err");
             return;
           }
-          self.setLoginHint("אומת. נכנסים…", "ok");
+          self.setLoginHint("אומת · נכנסים למערכת…", "ok");
           const detail = buildDetailText(data.deviceLabel, data.geoText);
           try {
             window.__GI_FACE_LOGIN_DONE__ = true;
@@ -565,7 +577,7 @@
       try { if(typeof b.closeUserMenu === "function") b.closeUserMenu(); } catch(_e) {}
       this.openEnrollModal(true);
       this.setEnrollHint("מכין קוד QR…");
-      try { if(typeof b.ensureLoginReady === "function") await b.ensureLoginReady(); } catch(_e) {}
+      try { if(typeof b.ensureLoginReady === "function") void b.ensureLoginReady(); } catch(_e) {}
       let agent = null;
       try { agent = await resolveAgentForEnroll(); } catch(_e) { agent = agentFromPill(); }
       if(!agent) agent = ownerFallbackAgent();
@@ -576,10 +588,10 @@
         getAgent: () => agent,
         onQr: (href) => {
           void drawQr(self.els().enrollQr, href);
-          self.setEnrollHint("סרקו בטלפון, צלמו כמה זוויות ולחצו «אישור וסיום».");
+          self.setEnrollHint("סרקו בטלפון. המצלמה תנעל על הפנים, ואז לחצו «אישור וסיום».");
         },
         onStatus: (status) => {
-          if(status === "scanned") self.setEnrollHint("הטלפון סרק. ממתינים לאישור וסיום בטלפון…");
+          if(status === "scanned") self.setEnrollHint("הטלפון סרק · מצלמים זוויות. ממתינים ל«אישור וסיום»…");
         },
         onApproved: async () => {},
         onEnrolled: async () => {
@@ -592,7 +604,7 @@
       try {
         await this._enrollCtl.start();
         if(!trim(this.els().enrollHint?.textContent) || this.els().enrollHint.textContent === "מכין קוד QR…"){
-          this.setEnrollHint("סרקו בטלפון, צלמו כמה זוויות ולחצו «אישור וסיום».");
+          this.setEnrollHint("סרקו בטלפון. המצלמה תנעל על הפנים, ואז לחצו «אישור וסיום».");
         }
       } catch(err) {
         const code = String(err?.code || err?.message || "");
@@ -651,6 +663,8 @@
 
   window.GiFaceAuth = {
     ROTATE_MS,
+    POLL_MS,
+    POLL_FAST_MS,
     MATCH_THRESHOLD: 0.5,
     euclidean,
     deviceLabelFromUa,

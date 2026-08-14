@@ -8,10 +8,10 @@
 <meta content="#f8fafc" name="theme-color"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20260814-face-login-v2" rel="stylesheet"/>
+<link href="./app.css?v=20260814-face-ui-v1" rel="stylesheet"/>
 <link href="./theme.css?v=20260814-face-login-v1" rel="stylesheet"/>
 <link href="./theme-p2.css?v=20260805-workdays-goal-v1" rel="stylesheet"/>
-<link href="./login-split.css?v=20260814-face-login-v1" rel="stylesheet"/>
+<link href="./login-split.css?v=20260814-face-ui-v1" rel="stylesheet"/>
 <!-- GI-PERF 2026-08-10: CSS משני (mirror/import/unify) נטען אחרי כניסה מ-app.js —
      לא חוסם מסך login ולא מרעיש 404 לפני שהמשתמש התחבר. -->
 <!-- GI-PERF 2026-08-09: סימולטורים — CSS נטען לפי צורך מ-ensureGiSimulatorStylesLoaded ב-app.js -->
@@ -137,10 +137,19 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <div class="lcLogin__secureNote"><span class="lcLogin__secureDot" aria-hidden="true"></span>כניסה מאובטחת</div>
 <form class="lcLogin__form" id="lcLoginForm" autocomplete="on">
 <div id="lcLoginCredentialsStep">
-<button class="lcLogin__faceBtn" id="btnFaceLogin" type="button">היכנס באמצעות זיהוי פנים</button>
+<button class="lcLogin__faceBtn" id="btnFaceLogin" type="button">
+  <svg class="lcLogin__faceBtnIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M4.8 8.2V6.4A1.6 1.6 0 0 1 6.4 4.8h1.8"></path>
+    <path d="M17.8 4.8h1.8A1.6 1.6 0 0 1 21.2 6.4v1.8"></path>
+    <path d="M21.2 15.8v1.8a1.6 1.6 0 0 1-1.6 1.6h-1.8"></path>
+    <path d="M6.4 19.2H4.8A1.6 1.6 0 0 1 3.2 17.6v-1.8"></path>
+    <circle cx="12" cy="12" r="3.2"></circle>
+  </svg>
+  <span>היכנס באמצעות זיהוי פנים</span>
+</button>
 <div class="lcLogin__facePanel" id="lcFaceLoginPanel" hidden>
   <div class="lcLogin__faceQrWrap"><canvas id="lcFaceLoginQr" width="220" height="220"></canvas></div>
-  <div class="lcLogin__faceHint" id="lcFaceLoginHint">סרקו את הקוד במצלמת הטלפון</div>
+  <div class="lcLogin__faceHint" id="lcFaceLoginHint">סרקו את הקוד בטלפון</div>
   <a class="lcLogin__faceLink" id="lcFaceLoginLink" href="#" hidden target="_blank" rel="noopener">פתיחת דף הסריקה בטלפון</a>
   <button class="lcLogin__faceCancel" id="btnFaceLoginCancel" type="button">ביטול</button>
 </div>
@@ -2264,16 +2273,16 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <div aria-hidden="true" class="modal giFaceModal" id="giFaceEnrollModal">
   <div class="modal__backdrop" data-close="1" id="giFaceEnrollBackdrop"></div>
   <div aria-label="הרשמת זיהוי פנים" aria-modal="true" class="modal__panel giFaceModal__panel" role="dialog">
-    <div class="modal__head">
+    <div class="modal__head giFaceModal__head">
       <div>
-        <div class="modal__kicker">GEMEL INVEST</div>
+        <img class="giFaceModal__logo" src="./logo-login-clean.png" alt="גמל אינווסט" width="1808" height="373"/>
         <div class="modal__title">זיהוי פנים</div>
       </div>
       <button aria-label="סגור" class="iconBtn" id="giFaceEnrollClose" type="button">✕</button>
     </div>
     <div class="modal__body giFaceModal__body">
       <div class="giFaceModal__qrWrap"><canvas id="giFaceEnrollQr" width="220" height="220"></canvas></div>
-      <div class="giFaceModal__hint" id="giFaceEnrollHint">סרקו בטלפון, צלמו כמה זוויות ולחצו «אישור וסיום».</div>
+      <div class="giFaceModal__hint" id="giFaceEnrollHint">סרקו בטלפון. המצלמה תנעל על הפנים, ואז לחצו «אישור וסיום».</div>
       <a class="giFaceModal__openLink" id="giFaceEnrollLink" href="#" hidden target="_blank" rel="noopener">פתיחת דף הסריקה בטלפון</a>
       <p class="giFaceModal__note">התמונות לא נשמרות. נשמרת רק חתימה מספרית לזיהוי.</p>
     </div>
@@ -3832,8 +3841,8 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 </div>
 
 <script src="./contacts-directory-seed.js?v=20260811-contacts-v1"></script>
-<script src="./app.js?v=20260814-face-login-v10"></script>
-<script src="./gi-face-auth.js?v=20260814-face-login-v9"></script>
+<script src="./app.js?v=20260814-face-login-v11"></script>
+<script src="./gi-face-auth.js?v=20260814-face-ui-v1"></script>
 
 
 <div id="giPwaInstallBanner" class="giPwaInstallBanner" hidden>
