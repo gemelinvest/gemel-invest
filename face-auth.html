@@ -249,9 +249,9 @@ function showEnrollUi(){
       els.btnConfirm.hidden = true;
     } catch(err) {
       const code = String(err?.code || err?.message || "");
-      if(code === "LIVENESS") setStatus("הסריקות דומות מדי. הזיזו מעט את הראש בין הצילומים.", "err");
-      else if(code === "EXPIRED") setStatus("הקוד פג. סרקו שוב מהמחשב.", "err");
-      else setStatus("ההרשמה נכשלה. נסו שוב.", "err");
+      if(code === "LIVENESS") setStatus("הסריקות דומות מדי או רחוקות מדי. הזיזו מעט את הראש בין הצילומים.", "err");
+      else if(code === "EXPIRED" || code === "SESSION_CLOSED") setStatus("הקוד פג במחשב. סרקו שוב את ה-QR.", "err");
+      else setStatus("ההרשמה נכשלה. נסו שוב" + (code ? " (" + code + ")" : "") + ".", "err");
       els.btnConfirm.disabled = false;
     }
   };
@@ -283,7 +283,7 @@ async function runLoginCapture(){
   } catch(err) {
     const code = String(err?.code || err?.message || "");
     if(code === "NO_MATCH") setStatus("הפנים לא זוהו. היכנסו עם שם משתמש ו-PIN במחשב.", "err");
-    else if(code === "EXPIRED") setStatus("הקוד פג. סרקו שוב מהמסך.", "err");
+    else if(code === "EXPIRED" || code === "SESSION_CLOSED") setStatus("הקוד פג. סרקו שוב מהמסך.", "err");
     else if(code === "LIVENESS") setStatus("הסריקה נראתה סטטית. נסו שוב מול המצלמה.", "err");
     else setStatus("האימות נכשל. PIN עדיין זמין במחשב.", "err");
   }

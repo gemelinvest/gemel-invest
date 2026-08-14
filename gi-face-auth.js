@@ -262,6 +262,7 @@
     this.onEnrolled = opts.onEnrolled || function(){};
     this.onDenied = opts.onDenied || function(){};
     this._secret = "";
+    this._status = "";
     this._timerRotate = 0;
     this._timerPoll = 0;
     this._busy = false;
@@ -288,7 +289,15 @@
     if(this._closed || !this._secret) return;
     const data = await callFn({ action: "poll", desktopSecret: this._secret });
     const status = trim(data?.status);
+    this._status = status;
     this.onStatus(status, data);
+    if(status === "scanned"){
+      if(this._timerRotate){
+        window.clearInterval(this._timerRotate);
+        this._timerRotate = 0;
+      }
+      return;
+    }
     if(status === "approved"){
       this._closed = true;
       this.stopTimers();
@@ -308,7 +317,7 @@
   };
 
   FaceSessionController.prototype.rotate = async function(){
-    if(this._closed || this._busy) return;
+    if(this._closed || this._busy || this._status === "scanned") return;
     this._busy = true;
     try {
       const prev = this._secret;
@@ -348,6 +357,7 @@
         return;
       }
       this._secret = created.desktopSecret;
+      this._status = "pending";
       const href = phonePageUrl(created.publicToken);
       this.onQr(href, created);
       this.onStatus("pending", created);
