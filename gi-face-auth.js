@@ -34,6 +34,22 @@
     return "מחשב";
   }
 
+  function isAuthLocked(){
+    return !!(document.body && document.body.classList.contains("lcAuthLock"));
+  }
+
+  function agentFromApprovedSession(data){
+    const id = trim(data?.agentId);
+    const name = trim(data?.agentName);
+    if(!id && !name) return null;
+    return {
+      id,
+      name,
+      role: trim(data?.agentRole) || "agent",
+      username: trim(data?.agentUsername)
+    };
+  }
+
   function buildDetailText(deviceLabel, geoText){
     const device = trim(deviceLabel) || "טלפון";
     const geo = trim(geoText) || "מיקום כבוי";
@@ -382,6 +398,7 @@
     await this.rotate();
     this._timerRotate = window.setInterval(() => { void this.rotate(); }, ROTATE_MS);
     this._timerPoll = window.setInterval(() => { void this.pollOnce(); }, POLL_MS);
+    void this.pollOnce();
   };
 
   const FaceLoginUI = {
@@ -454,27 +471,9 @@
           window.__GI_FACE_LOGIN_ACTIVE__ = true;
           try { if(typeof b.abortPinLogin === "function") b.abortPinLogin(); } catch(_e) {}
           try { if(typeof b.hideMfaStep === "function") b.hideMfaStep(); } catch(_e) {}
-          let agent = typeof b.findLoginAgent === "function"
-            ? b.findLoginAgent(data.agentId, data.agentName)
-            : (typeof b.findAgentById === "function" ? b.findAgentById(data.agentId) : null);
-          if(!agent){
-            try {
-              const list = await fetchActiveAgents();
-              agent = matchAgentRow(list, { id: data.agentId, name: data.agentName });
-            } catch(_e) { agent = null; }
-          }
-          if(!agent && (trim(data.agentId) || trim(data.agentName))){
-            agent = {
-              id: trim(data.agentId),
-              name: trim(data.agentName),
-              role: trim(data.agentRole) || "agent",
-              username: trim(data.agentUsername)
-            };
-          }
+          const agent = agentFromApprovedSession(data);
           if(!agent){
             self.setLoginHint("הזיהוי הצליח אך כרטיס הנציג לא נטען. סרקו שוב.", "err");
-            window.__GI_FACE_LOGIN_ACTIVE__ = false;
-            window.__GI_FACE_LOGIN_DONE__ = false;
             return;
           }
           self.setLoginHint("אומת. נכנסים…", "ok");
@@ -484,12 +483,23 @@
             if(typeof b.completeAgentLogin !== "function") throw new Error("NO_COMPLETE_LOGIN");
             await b.completeAgentLogin(agent, { loginDetailText: detail, skipMfa: true });
             try { if(typeof b.unlock === "function") b.unlock(); } catch(_e) {}
-            self.showLoginPanel(false);
-            self.setLoginHint("");
+            if(isAuthLocked()){
+              try { if(typeof b.unlock === "function") b.unlock(); } catch(_e2) {}
+            }
+            if(!isAuthLocked()){
+              self.showLoginPanel(false);
+              self.setLoginHint("");
+            } else {
+              self.setLoginHint("אומת. נכנסים…", "ok");
+            }
           } catch(_e) {
             window.__GI_FACE_LOGIN_DONE__ = false;
-            self.showLoginPanel(false);
-            self.setLoginHint("הזיהוי הצליח אך הכניסה לא הושלמה. נסו שוב את זיהוי הפנים.", "err");
+            try { if(typeof b.unlock === "function") b.unlock(); } catch(_e2) {}
+            if(!isAuthLocked()){
+              self.showLoginPanel(false);
+            } else {
+              self.setLoginHint("הזיהוי הצליח. ממתינים לפתיחת המערכת…", "err");
+            }
           } finally {
             window.__GI_FACE_LOGIN_ACTIVE__ = false;
           }
@@ -634,6 +644,8 @@
     euclidean,
     deviceLabelFromUa,
     buildDetailText,
+    agentFromApprovedSession,
+    isAuthLocked,
     phonePageUrl,
     FaceLoginUI
   };

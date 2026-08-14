@@ -41916,15 +41916,17 @@ const ClalRiskLifePdf = {
             } catch(_e) {}
           }, 600);
 
-          perfIdle(() => {
-            try {
-              void AgentActivityLog.log("login", {
-                name: safeTrim(Auth.current?.name) || safeTrim(ctx.matched?.name) || safeTrim(ctx.matched?.username),
-                role: safeTrim(Auth.current?.role) || safeTrim(ctx.resolvedRole),
-                id: safeTrim(Auth.current?.id) || safeTrim(ctx.matched?.id)
-              }, { detailText: safeTrim(ctx.loginDetailText) });
-            } catch(_e) {}
-          }, 1200);
+          if(ctx.loginAlreadyLogged !== true){
+            perfIdle(() => {
+              try {
+                void AgentActivityLog.log("login", {
+                  name: safeTrim(Auth.current?.name) || safeTrim(ctx.matched?.name) || safeTrim(ctx.matched?.username),
+                  role: safeTrim(Auth.current?.role) || safeTrim(ctx.resolvedRole),
+                  id: safeTrim(Auth.current?.id) || safeTrim(ctx.matched?.id)
+                }, { detailText: safeTrim(ctx.loginDetailText) });
+              } catch(_e) {}
+            }, 1200);
+          }
 
           const targetView = safeTrim(ctx.targetView) || (Auth.isReferent() ? "campaignLeads" : "dashboard");
           if(targetView === "dashboard"){
@@ -43075,6 +43077,16 @@ const ClalRiskLifePdf = {
         : matched?.role === 'teamManager' ? 'teamManager'
         : 'agent';
       Auth.current.role = resolvedRole;
+      if(options.skipMfa === true){
+        try { Auth.unlock(); } catch(_e) {}
+        try {
+          void AgentActivityLog.log("login", {
+            name: safeTrim(Auth.current?.name),
+            role: safeTrim(Auth.current?.role),
+            id: safeTrim(Auth.current?.id)
+          }, { detailText: safeTrim(options.loginDetailText) });
+        } catch(_e) {}
+      }
       const loaderName = safeTrim(Auth.current?.name || matched?.name);
       try { localStorage.removeItem(LS_SESSION_KEY); } catch(_) {}
       try { WelcomeLoader.open(loaderName); } catch(_e) {}
@@ -43123,7 +43135,8 @@ const ClalRiskLifePdf = {
         agentForRepair: freshAgent || matched,
         resolvedRole,
         targetView,
-        loginDetailText: safeTrim(options.loginDetailText)
+        loginDetailText: safeTrim(options.loginDetailText),
+        loginAlreadyLogged: options.skipMfa === true
       });
     } catch(err) {
       console.error("COMPLETE_AGENT_LOGIN_FAILED:", err);
@@ -43142,7 +43155,8 @@ const ClalRiskLifePdf = {
           agentForRepair: matched,
           resolvedRole: Auth.current?.role || 'agent',
           targetView,
-          loginDetailText: safeTrim(options.loginDetailText)
+          loginDetailText: safeTrim(options.loginDetailText),
+          loginAlreadyLogged: options.skipMfa === true
         });
       } catch(_e2) {}
     }
