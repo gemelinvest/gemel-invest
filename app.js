@@ -43047,6 +43047,10 @@ const ClalRiskLifePdf = {
 
   const getCurrentAgentRecord = () => findAgentRecordForSession();
   const completeAgentLogin = async (matched, options = {}) => {
+    if(options.skipMfa === true){
+      try { Auth._hideMfaStep(); } catch(_e) {}
+      try { document.getElementById("lcLogin")?.classList.remove("lcLogin--mfa"); } catch(_e) {}
+    }
     const loaderMs = Math.max(0, Number(options?.loaderMs) || 400);
     const resolvedRole = isOwnerIdentity(matched) ? 'owner'
       : isSystemAdminAgentIdentity(matched) ? 'admin'
@@ -64712,6 +64716,16 @@ ${inner}
         if(!sid) return null;
         return list.find((a) => String(a?.id || "").trim() === sid) || null;
       },
+      findLoginAgent(id, name){
+        const list = Array.isArray(State.data?.agents) ? State.data.agents : [];
+        const sid = String(id || "").trim();
+        const label = String(name || "").trim();
+        return list.find((a) => sid && String(a?.id || "").trim() === sid)
+          || list.find((a) => label && (String(a?.name || "").trim() === label || String(a?.username || "").trim() === label) && a?.active !== false)
+          || null;
+      },
+      hideMfaStep(){ try { Auth._hideMfaStep(); } catch(_e) {} },
+      unlock(){ try { Auth.unlock(); } catch(_e) {} },
       getCurrentAgent(){
         const rec = (typeof getCurrentAgentRecord === "function" ? getCurrentAgentRecord() : null)
           || (typeof findAgentRecordForSession === "function" ? findAgentRecordForSession() : null);

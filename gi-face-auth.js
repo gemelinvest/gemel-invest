@@ -56,6 +56,9 @@
       completeAgentLogin: b.completeAgentLogin,
       ensureLoginReady: b.ensureLoginReady,
       findAgentById: b.findAgentById,
+      findLoginAgent: b.findLoginAgent,
+      hideMfaStep: b.hideMfaStep,
+      unlock: b.unlock,
       getCurrentAgent: b.getCurrentAgent,
       closeUserMenu: b.closeUserMenu,
       setLoginError: b.setLoginError
@@ -414,6 +417,8 @@
 
     async startLogin(){
       const b = bridge();
+      window.__GI_FACE_LOGIN_ACTIVE__ = true;
+      try { if(typeof b.hideMfaStep === "function") b.hideMfaStep(); } catch(_e) {}
       try { if(typeof b.ensureLoginReady === "function") await b.ensureLoginReady(); } catch(_e) {}
       this.showLoginPanel(true);
       this.setLoginHint("סרקו את הקוד במצלמת הטלפון. הקוד מתחלף כל 30 שניות.");
@@ -437,22 +442,36 @@
           if(status === "pending") self.setLoginHint("סרקו את הקוד במצלמת הטלפון. הקוד מתחלף כל 30 שניות.");
         },
         onApproved: async (data) => {
-          const agent = typeof b.findAgentById === "function" ? b.findAgentById(data.agentId) : null;
+          let agent = typeof b.findLoginAgent === "function"
+            ? b.findLoginAgent(data.agentId, data.agentName)
+            : (typeof b.findAgentById === "function" ? b.findAgentById(data.agentId) : null);
+          if(!agent){
+            try {
+              const list = await fetchActiveAgents();
+              agent = matchAgentRow(list, { id: data.agentId, name: data.agentName });
+            } catch(_e) { agent = null; }
+          }
           if(!agent){
             self.setLoginHint("הנציג לא נמצא במערכת. היכנסו עם PIN.", "err");
             self.showLoginPanel(false);
+            window.__GI_FACE_LOGIN_ACTIVE__ = false;
             return;
           }
           self.setLoginHint("אומת. נכנסים…", "ok");
+          try { if(typeof b.hideMfaStep === "function") b.hideMfaStep(); } catch(_e) {}
           const detail = buildDetailText(data.deviceLabel, data.geoText);
           try {
-            await b.completeAgentLogin(agent, { loginDetailText: detail });
+            await b.completeAgentLogin(agent, { loginDetailText: detail, skipMfa: true });
+            try { if(typeof b.unlock === "function") b.unlock(); } catch(_e) {}
           } catch(_e) {
             self.setLoginHint("הכניסה נכשלה. היכנסו עם PIN.", "err");
             if(typeof b.setLoginError === "function") b.setLoginError("זיהוי הפנים אומת אך הכניסה נכשלה. היכנסו עם PIN.");
+          } finally {
+            window.__GI_FACE_LOGIN_ACTIVE__ = false;
           }
         },
         onDenied: async () => {
+          window.__GI_FACE_LOGIN_ACTIVE__ = false;
           self.setLoginHint("הפנים לא זוהו. אפשר להיכנס עם שם משתמש ו-PIN למטה.", "err");
           self.showLoginPanel(false);
           if(typeof b.setLoginError === "function"){
@@ -464,12 +483,14 @@
       try {
         await this._loginCtl.start();
       } catch(_e) {
+        window.__GI_FACE_LOGIN_ACTIVE__ = false;
         this.setLoginHint("לא ניתן לפתוח זיהוי פנים כרגע.", "err");
         this.showLoginPanel(false);
       }
     },
 
     async stopLogin(){
+      window.__GI_FACE_LOGIN_ACTIVE__ = false;
       if(this._loginCtl) await this._loginCtl.cancel();
       this._loginCtl = null;
       this.showLoginPanel(false);
@@ -542,6 +563,14 @@
       if(this._bound) return;
       this._bound = true;
       const els = this.els();
+      const form = document.getElementById("lcLoginForm");
+      if(form){
+        form.addEventListener("submit", (ev) => {
+          if(!window.__GI_FACE_LOGIN_ACTIVE__) return;
+          ev.preventDefault();
+          ev.stopImmediatePropagation();
+        }, true);
+      }
       if(els.btnLogin){
         els.btnLogin.addEventListener("click", (ev) => {
           ev.preventDefault();
