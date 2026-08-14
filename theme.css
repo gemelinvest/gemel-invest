@@ -5322,10 +5322,10 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
 }
 
 
-/* =====================================================================
-   CUSTOMER FILE (cfFile) ? align to GI enterprise language
-   BUILD: 20260801-cfFile-gi-v1
-   ===================================================================== */
+/* Policy details modal must sit above the open customer file (z-index 130). */
+.customerPolicyModal:not(#\9):not(#\9){
+  z-index: 160 !important;
+}
 
 #customerFull.cfFile .customerFull__panel:not(#\9):not(#\9){
   background: var(--gi-bg) !important;

@@ -18720,6 +18720,31 @@ UsersGateUI.init();
       </tr>`;
     },
 
+    resolveDisplayPolicy(policies, id, el){
+      const sid = String(id == null ? "" : id);
+      const list = Array.isArray(policies) ? policies : [];
+      let policy = sid ? list.find((x) => String(x?.id) === sid) : null;
+      if(policy) return policy;
+      const host = el?.closest?.(".cfNewPolicyCard, .cfFilePolicyTr, .customerPolicyRow");
+      const fallbackId = String(host?.getAttribute?.("data-policy-id") || "");
+      if(fallbackId && fallbackId !== sid){
+        policy = list.find((x) => String(x?.id) === fallbackId);
+        if(policy) return policy;
+      }
+      const rec = this.current();
+      if(!rec) return null;
+      const all = this.getWalletDisplayPolicies(rec, this.collectPolicies(rec));
+      const wanted = fallbackId || sid;
+      return wanted ? (all.find((x) => String(x?.id) === wanted) || null) : null;
+    },
+
+    openDisplayPolicy(rec, policies, id, el){
+      const policy = this.resolveDisplayPolicy(policies, id, el);
+      if(!policy) return;
+      this.closePolicyRowMenus();
+      this.openPolicyModal(rec, policy);
+    },
+
     bindPolicyTableActions(rec, policies){
       const root = this.els.main;
       if(!root) return;
@@ -18751,11 +18776,7 @@ UsersGateUI.init();
           ev.preventDefault();
           ev.stopPropagation();
           const id = btn.getAttribute('data-policy-open');
-          const policy = policies.find(x => String(x.id) === String(id));
-          if(policy) {
-            this.closePolicyRowMenus();
-            this.openPolicyModal(rec, policy);
-          }
+          this.openDisplayPolicy(rec, policies, id, btn);
         });
       });
       root.querySelectorAll('[data-policy-menu]').forEach(btn => {
@@ -18789,11 +18810,7 @@ UsersGateUI.init();
           const interactive = ev.target && ev.target.closest ? ev.target.closest('button,.cfFile__menu') : null;
           if(interactive) return;
           const id = row.getAttribute('data-policy-id');
-          const policy = policies.find(x => String(x.id) === String(id));
-          if(policy) {
-            this.closePolicyRowMenus();
-            this.openPolicyModal(rec, policy);
-          }
+          this.openDisplayPolicy(rec, policies, id, row);
         });
       });
       root.querySelectorAll('.cfNewPolicyCard').forEach(card => {
@@ -18801,11 +18818,7 @@ UsersGateUI.init();
           const interactive = ev.target && ev.target.closest ? ev.target.closest('button,.cfFile__menu') : null;
           if(interactive) return;
           const id = card.getAttribute('data-policy-id');
-          const policy = policies.find(x => String(x.id) === String(id));
-          if(policy) {
-            this.closePolicyRowMenus();
-            this.openPolicyModal(rec, policy);
-          }
+          this.openDisplayPolicy(rec, policies, id, card);
         });
       });
       this.bindPolicyRowMenuGlobalHandlers();
@@ -18987,11 +19000,7 @@ UsersGateUI.init();
           ev.preventDefault();
           ev.stopPropagation();
           const id = btn.getAttribute('data-policy-open');
-          const policy = policies.find(x => String(x.id) === String(id));
-          if(policy) {
-            this.closePolicyRowMenus();
-            this.openPolicyModal(rec, policy);
-          }
+          this.openDisplayPolicy(rec, policies, id, btn);
         });
       });
       root.querySelectorAll('[data-policy-menu]').forEach(btn => {
@@ -19006,11 +19015,7 @@ UsersGateUI.init();
           const interactive = ev.target && ev.target.closest ? ev.target.closest('button,.customerPolicyRow__menu') : null;
           if(interactive) return;
           const id = row.getAttribute('data-policy-id');
-          const policy = policies.find(x => String(x.id) === String(id));
-          if(policy) {
-            this.closePolicyRowMenus();
-            this.openPolicyModal(rec, policy);
-          }
+          this.openDisplayPolicy(rec, policies, id, row);
         });
       });
       this.bindPolicyRowMenuGlobalHandlers();

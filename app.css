@@ -989,8 +989,9 @@ body.lcUserModalOpen{
   overflow:hidden;
 }
 
-/* Customer edit success must appear above the customer file screen */
+/* Customer edit / policy details must appear above the customer file screen */
 .customerEditModal{ z-index: 160; }
+.customerPolicyModal{ z-index: 160; }
 .customerEditSuccessModal{ z-index: 260; }
 .customerEditSuccessModal .modal__panel{ z-index: 1; }
 .modal__head{
@@ -10464,6 +10465,7 @@ body.lcAuthLock .lcLogin__card:hover{
   -webkit-backdrop-filter: blur(10px);
 }
 .customerEditModal{ z-index:10220; }
+.customerPolicyModal{ z-index:10220; }
 .customerEditModal__panel{
   width:min(1180px, calc(100vw - 28px));
   max-height:calc(100vh - 34px);
@@ -16615,6 +16617,7 @@ body.lcAuthLock .lcLogin__card:hover{
   -webkit-backdrop-filter: blur(10px);
 }
 .customerEditModal{ z-index:10220; }
+.customerPolicyModal{ z-index:10220; }
 .customerEditModal__panel{
   width:min(1180px, calc(100vw - 28px));
   max-height:calc(100vh - 34px);
