@@ -8803,3 +8803,152 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   .cfGroup__head:not(#\9):not(#\9){ flex-wrap: wrap !important; }
   .cfGroup__sum:not(#\9):not(#\9){ border: none !important; padding-inline-start: 0 !important; }
 }
+
+/* ==========================================================================
+   GI-CF-POLICIES-UI — 2026-08-14
+   פוליסות חדשות ככרטיסיות; מינוי סוכן / אלמנטרי / ישנות סגורים כברירת מחדל.
+   ========================================================================== */
+
+.cfGroup__head--toggle:not(#\9):not(#\9){
+  cursor: pointer !important;
+}
+
+.cfGroup.is-collapsed .cfGroup__head--toggle:not(#\9):not(#\9){
+  border-bottom: none !important;
+}
+
+.cfGroup__head--toggle:hover:not(#\9):not(#\9){
+  background: var(--gi-surface-2) !important;
+}
+
+.cfGroup__openHint:not(#\9):not(#\9){
+  flex: none !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text-muted) !important;
+  white-space: nowrap !important;
+}
+
+.cfGroup__chev:not(#\9):not(#\9){
+  flex: none !important;
+  display: inline-block !important;
+  font-size: 12px !important;
+  color: var(--gi-text-muted) !important;
+  transition: transform .18s ease !important;
+}
+
+.cfGroup:not(.is-collapsed) .cfGroup__chev:not(#\9):not(#\9){
+  transform: rotate(180deg) !important;
+}
+
+.cfGroup.is-collapsed .cfFile__tableWrap:not(#\9):not(#\9){
+  display: none !important;
+}
+
+.cfNewPolicyGrid:not(#\9):not(#\9){
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) !important;
+  gap: 12px !important;
+  padding: 14px 16px 16px !important;
+  background: var(--gi-surface-2) !important;
+}
+
+.cfNewPolicyCard:not(#\9):not(#\9){
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 14px 14px !important;
+  background: var(--gi-surface) !important;
+  border: 1px solid var(--gi-border) !important;
+  border-radius: var(--gi-r-card) !important;
+  cursor: pointer !important;
+  min-height: 92px !important;
+}
+
+.cfNewPolicyCard:hover:not(#\9):not(#\9){
+  border-color: var(--gi-health) !important;
+  background: var(--gi-health-soft) !important;
+}
+
+.cfNewPolicyCard__logo:not(#\9):not(#\9){
+  flex: none !important;
+  width: 72px !important;
+  height: 48px !important;
+  display: grid !important;
+  place-items: center !important;
+}
+
+.cfNewPolicyCard__logo .lcCompanyLogo:not(#\9):not(#\9),
+.cfNewPolicyCard__logo .lcCompanyLogo__img:not(#\9):not(#\9){
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+}
+
+.cfNewPolicyCard__main:not(#\9):not(#\9){
+  min-width: 0 !important;
+  flex: 1 !important;
+}
+
+.cfNewPolicyCard__topline:not(#\9):not(#\9){
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+}
+
+.cfNewPolicyCard__product:not(#\9):not(#\9){
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  color: var(--gi-text) !important;
+  letter-spacing: -.01em !important;
+  line-height: 1.25 !important;
+}
+
+.cfNewPolicyCard__company:not(#\9):not(#\9){
+  margin-top: 3px !important;
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
+  color: var(--gi-text-2) !important;
+}
+
+.cfNewPolicyCard__coverage:not(#\9):not(#\9){
+  margin-top: 3px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text-muted) !important;
+}
+
+.cfNewPolicyCard__sum:not(#\9):not(#\9){
+  flex: none !important;
+  text-align: left !important;
+  padding-inline-start: 8px !important;
+}
+
+.cfNewPolicyCard__sumVal:not(#\9):not(#\9){
+  display: block !important;
+  font-family: var(--gi-num) !important;
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  color: var(--gi-text) !important;
+  letter-spacing: -.02em !important;
+  white-space: nowrap !important;
+}
+
+.cfNewPolicyCard__sumLbl:not(#\9):not(#\9){
+  display: block !important;
+  font-size: 10.5px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text-muted) !important;
+  margin-top: 2px !important;
+}
+
+.cfNewPolicyCard__menuCell:not(#\9):not(#\9){
+  flex: none !important;
+  position: relative !important;
+}
+
+@media (max-width: 720px){
+  .cfNewPolicyGrid:not(#\9):not(#\9){ grid-template-columns: 1fr !important; }
+  .cfNewPolicyCard:not(#\9):not(#\9){ flex-wrap: wrap !important; }
+}
