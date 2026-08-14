@@ -17435,29 +17435,6 @@ if(path === "birthDate"){
       return { ok: false, msg: ev.message, path: "cc.cardNumber" };
     },
 
-    healthCardBrandColor(key){
-      const map = {
-        visa: "#1A1F71",
-        mastercard: "#EB001B",
-        amex: "#006FCF",
-        diners: "#0079BE",
-        isracard: "#1B365D",
-        unknown: "#3870ED"
-      };
-      return map[key] || map.unknown;
-    },
-
-    renderHealthCardBrandLogo(key){
-      const logos = {
-        visa: '<svg viewBox="0 0 132 42" fill="none" aria-hidden="true"><path fill="#1A1F71" d="M54.2 31.2 60.4 5.6h9.4L63.6 31.2H54.2Zm43.4-18.4c-1.9-.8-4.8-1.7-8.5-1.7-9.4 0-16 4.9-16.1 12 0 5.2 4.8 8.1 8.5 9.8 3.8 1.8 5.1 2.9 5.1 4.5 0 2.4-3 3.5-5.8 3.5-3.9 0-5.9-.5-9.1-1.8l-1.3-.6-1.3 8c2.3.9 6.4 1.8 10.7 1.8 10.1 0 16.6-4.8 16.7-12.3 0-4.1-2.5-7.2-8-9.7-3.3-1.6-5.4-2.7-5.4-4.3.1-1.5 1.7-3 5.4-3 3.1 0 5.3.6 7 .1.6.3 1.4.6 1.8.8l1.4-7.9Zm21.2 25.8h8.3l7.3-25.6h-8.3c-1.5 0-2.6.4-3.2 1.9l-13.1 23.7h9.2l1.8-5h11.3l1.1 5Zm-10.4-11.4 4.6-12.6.3-.1 2.7 12.7h-7.6ZM47.3 5.6l-8.6 25.6h-9.2L24.8 12c-.6-2.2-1.1-3-2.9-3.9-6-2.6-12.5-5-12.5-5l.2-.8h15.3c2 0 3.7 1.3 4.2 3.6l3.8 20.3 9.4-23.9h9.2Z"/><path fill="#F7B600" d="M9.4 5.6 0 31.2h8.8l9.4-25.6H9.4Z"/></svg>',
-        mastercard: '<svg viewBox="0 0 78 48" aria-hidden="true"><circle cx="30" cy="24" r="18" fill="#EB001B"/><circle cx="48" cy="24" r="18" fill="#F79E1B"/><path fill="#FF5F00" d="M39 9.6a18 18 0 0 0 0 28.8 18 18 0 0 0 0-28.8Z"/></svg>',
-        amex: '<svg viewBox="0 0 84 52" aria-hidden="true"><rect width="84" height="52" rx="4" fill="#006FCF"/><text x="42" y="24" text-anchor="middle" fill="#fff" font-size="9" font-weight="800" font-family="Arial Black,Arial">AMERICAN</text><text x="42" y="38" text-anchor="middle" fill="#fff" font-size="9" font-weight="800" font-family="Arial Black,Arial">EXPRESS</text></svg>',
-        diners: '<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="23" fill="#0079BE"/><circle cx="24" cy="24" r="16" fill="#fff"/><path fill="#0079BE" d="M16 24c0-6.1 3.2-11.4 8-14.4v28.8c-4.8-3-8-8.3-8-14.4Zm8-14.4c4.8 3 8 8.3 8 14.4s-3.2 11.4-8 14.4V9.6Z"/></svg>',
-        isracard: '<svg viewBox="0 0 160 36" aria-hidden="true"><rect x="0" y="8" width="20" height="20" rx="3" fill="#E30613"/><path fill="#fff" d="M6.2 23V13h3.1l3.4 7.4h.1L16.2 13h3.1v10h-2.4v-6.7h-.1l-3.2 6.7h-1.8l-3.2-6.7h-.1V23H6.2Z"/><text x="28" y="25" fill="#1B365D" font-size="16" font-weight="800" font-family="Heebo,Arial">isracard</text></svg>'
-      };
-      return logos[key] || "";
-    },
-
     updateHealthPaymentCardUi(ins, opts){
       const root = this.els?.body;
       const card = root?.querySelector?.("#lcHealthPayCard");
@@ -17470,9 +17447,8 @@ if(path === "birthDate"){
       keys.forEach((k) => card.classList.remove("lcElemPaymentCard--" + k, "lcHealthPayCard--" + k));
       card.classList.add("lcElemPaymentCard--" + brand.key, "lcHealthPayCard--" + brand.key);
       card.dataset.brand = brand.key;
-      card.style.setProperty("--brand", this.healthCardBrandColor(brand.key));
-      const logo = root.querySelector("#lcHealthPayLogo");
-      if(logo) logo.innerHTML = this.renderHealthCardBrandLogo(brand.key);
+      const badge = root.querySelector("#lcHealthPayBrandBadge");
+      if(badge) badge.textContent = brand.labelHe || "כרטיס אשראי";
       const status = root.querySelector("#lcHealthPayPanStatus");
       if(status){
         const liveShort = ev.state === "short" && !(opts && opts.revealShort);
@@ -17582,16 +17558,16 @@ if(path === "birthDate"){
         const panShown = this.formatHealthPanDisplay(pan);
         const showStatus = ev.state && ev.state !== "idle" && ev.state !== "short";
         payHtml = `
-            <div id="lcHealthPayCard" class="lcElemPaymentCard lcHealthPayCard lcHealthPayCard--${escapeHtml(brand.key)} lcElemPaymentCard--${escapeHtml(brand.key)}" data-brand="${escapeHtml(brand.key)}" dir="ltr" style="--brand:${escapeHtml(this.healthCardBrandColor(brand.key))}">
+            <div class="lcHealthPayShell">
+            <div id="lcHealthPayCard" class="lcElemPaymentCard lcHealthPayCard lcHealthPayCard--${escapeHtml(brand.key)} lcElemPaymentCard--${escapeHtml(brand.key)}" data-brand="${escapeHtml(brand.key)}" dir="ltr">
               <div class="lcElemPaymentCard__noise" aria-hidden="true"></div>
-              <div class="lcHealthPayCard__top">
-                <div class="lcHealthPayCard__chipRow">
-                  <div class="lcElemPaymentCard__chip" aria-hidden="true"></div>
-                  <svg class="lcHealthPayCard__contactless" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 8c2.5 2.2 2.5 5.8 0 8M12 5.5c3.8 3.2 3.8 9.8 0 13M16 3c5 4.4 5 13.6 0 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+              <div class="lcElemPaymentCard__top">
+                <div class="lcElemPaymentCard__brandShell">
+                  <span id="lcHealthPayBrandBadge" class="lcElemPaymentCard__brandBadge">${escapeHtml(brand.labelHe)}</span>
                 </div>
-                <div class="lcHealthPayCard__logo" id="lcHealthPayLogo">${this.renderHealthCardBrandLogo(brand.key)}</div>
+                <div class="lcElemPaymentCard__chip" aria-hidden="true"></div>
               </div>
-              <div class="lcHealthPayCard__nums">
+              <div class="lcElemPaymentCard__numbersGrid lcHealthPayCard__nums">
                 <div class="lcElemPaymentCard__field lcElemPaymentCard__field--pan">
                   <label class="lcElemPaymentCard__label" for="lcHealthPayPan">מספר כרטיס</label>
                   <input id="lcHealthPayPan" class="lcElemPaymentCard__input lcElemPaymentCard__input--pan" type="text" inputmode="numeric" autocomplete="off" placeholder="0000 0000 0000 0000" data-bind="cc.cardNumber" value="${escapeHtml(panShown)}" dir="ltr" />
@@ -17616,26 +17592,27 @@ if(path === "birthDate"){
                   <input class="lcElemPaymentCard__input" type="text" inputmode="numeric" maxlength="9" autocomplete="off" data-bind="cc.holderId" value="${escapeHtml(d.cc?.holderId || "")}" dir="ltr" />
                 </div>
               </div>
+            </div>
             </div>`;
       } else {
         payHtml = `
-            <div class="lcElemPaymentCard lcHealthPayCard lcHealthPayCard--ho" dir="ltr" style="--brand:#3870ED">
+            <div class="lcHealthPayShell">
+            <div class="lcElemPaymentCard lcHealthPayCard lcHealthPayCard--ho" dir="ltr">
               <div class="lcElemPaymentCard__noise" aria-hidden="true"></div>
-              <div class="lcHealthPayCard__top">
-                <div class="lcHealthPayCard__chipRow">
-                  <div class="lcElemPaymentCard__chip" aria-hidden="true"></div>
-                  <svg class="lcHealthPayCard__contactless" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 8c2.5 2.2 2.5 5.8 0 8M12 5.5c3.8 3.2 3.8 9.8 0 13M16 3c5 4.4 5 13.6 0 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+              <div class="lcElemPaymentCard__top">
+                <div class="lcElemPaymentCard__brandShell">
+                  <span class="lcElemPaymentCard__brandBadge lcHealthPayCard__hoBadge">הוראת קבע</span>
                 </div>
-                <span class="lcHealthPayCard__hoBadge">הוראת קבע</span>
+                <div class="lcElemPaymentCard__chip" aria-hidden="true"></div>
               </div>
-              <div class="lcElemPaymentCard__field" style="position:relative;z-index:1">
+              <div class="lcElemPaymentCard__field">
                 <label class="lcElemPaymentCard__label">שם הבנק</label>
                 <select class="lcElemPaymentCard__input lcHealthPayCard__name" data-payer="ho.bankName" dir="rtl">
                   <option value="">בחר…</option>
                   ${this.bankNames.map(b => `<option value="${escapeHtml(b)}"${d.ho?.bankName===b?" selected":""}>${escapeHtml(b)}</option>`).join("")}
                 </select>
               </div>
-              <div class="lcHealthPayCard__hoNums">
+              <div class="lcElemPaymentCard__numbersGrid lcHealthPayCard__hoNums">
                 <div class="lcElemPaymentCard__field">
                   <label class="lcElemPaymentCard__label">מספר בנק</label>
                   <input class="lcElemPaymentCard__input" data-bind="ho.bankNo" value="${escapeHtml(d.ho?.bankNo || "")}" dir="ltr" inputmode="numeric" autocomplete="off" readonly />
@@ -17647,10 +17624,11 @@ if(path === "birthDate"){
                 </div>
               </div>
               <div class="lcHoBranchStatus" id="lcHoBranchStatus" hidden></div>
-              <div class="lcElemPaymentCard__field" style="position:relative;z-index:1;margin-bottom:2px">
+              <div class="lcElemPaymentCard__field" style="margin-bottom:2px">
                 <label class="lcElemPaymentCard__label">מספר חשבון</label>
                 <input class="lcElemPaymentCard__input" data-bind="ho.account" value="${escapeHtml(d.ho?.account || "")}" dir="ltr" inputmode="numeric" autocomplete="off" />
               </div>
+            </div>
             </div>`;
       }
       return `
