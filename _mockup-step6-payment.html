@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>מוקאפ · שלב 6 פרטי משלם</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<style>
+  :root{
+    --uf-navy:#3870ED; --uf-line:#E5E7EB; --uf-line-soft:#F1F5F9;
+    --uf-head-bg:#F8FAFC; --uf-ink:#0F172A; --uf-ink-2:#3D4A5C; --uf-ink-3:#647287;
+    --uf-ok:#16A34A; --uf-ok-bg:#ECFDF5; --uf-ok-line:#A7F3D0;
+    --uf-danger:#DC2626; --text:#0F172A; --brand:#1A1F71;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#E8EEF7;color:var(--uf-ink);font-family:Heebo,Arial,sans-serif}
+  body{padding:28px 24px 48px}
+  .pageHead{max-width:1320px;margin:0 auto 14px}
+  .pageHead h1{margin:0;font-size:22px;font-weight:800;color:var(--uf-navy)}
+  .pageHead p{margin:4px 0 0;color:var(--uf-ink-3);font-size:13px;font-weight:500}
+  .note{max-width:1320px;margin:0 auto 16px;padding:10px 14px;background:#FFFBEB;border:1px solid #FDE68A;color:#92400E;font-size:12.5px;font-weight:600}
+  .board{max-width:1320px;margin:0 auto;display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media (max-width:1100px){ .board{grid-template-columns:1fr} }
+  .wizard{background:#fff;border:1px solid var(--uf-line);min-height:760px;display:flex;flex-direction:column}
+  .wizard__head{padding:10px 16px;background:var(--uf-head-bg);border-bottom:1px solid var(--uf-line-soft);display:flex;justify-content:space-between;align-items:center}
+  .wizard__kicker{font-size:11px;font-weight:700;color:var(--uf-ink-3)}
+  .wizard__title{font-size:16px;font-weight:800;color:var(--uf-navy);margin-top:2px}
+  .wizard__body{padding:16px;flex:1}
+  .wizard__foot{padding:12px 16px;border-top:1px solid var(--uf-line-soft);background:var(--uf-head-bg);display:flex;justify-content:space-between}
+  .btn{height:38px;padding:0 16px;border:1px solid var(--uf-line);background:#fff;font:inherit;font-size:13px;font-weight:700}
+  .btn--primary{background:var(--uf-navy);border-color:var(--uf-navy);color:#fff}
+  .section{padding:16px;border:1px solid var(--uf-line)}
+  .title{font-size:16px;font-weight:800;color:var(--uf-navy);margin:0 0 8px}
+  .lead{margin:0 0 14px;font-size:13px;color:var(--uf-ink-3);line-height:1.45}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .label{font-size:12px;font-weight:700;color:var(--uf-ink-2)}
+  .label::after{content:" *";color:var(--uf-danger);font-weight:800}
+  .select{min-height:38px;width:100%;border:1px solid var(--uf-line);font:inherit;font-size:13px;padding:0 10px}
+  .divider{border-top:1px solid var(--uf-line);margin:14px 0}
+  .help{margin:4px 0 0;font-size:11px;color:var(--uf-ink-3)}
+  .pills{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 10px}
+  .pill{height:30px;padding:0 10px;border:1px solid var(--uf-line);background:#fff;font:inherit;font-size:12px;font-weight:700;cursor:pointer;color:var(--uf-ink-2)}
+  .pill.is-on{border-color:var(--uf-navy);background:#EEF3FF;color:var(--uf-navy)}
+  .payCard{
+    --brand:#3870ED;position:relative;overflow:hidden;isolation:isolate;
+    padding:20px;border-radius:18px;
+    border:1px solid color-mix(in srgb, var(--brand) 28%, #e5e7eb);
+    background:linear-gradient(155deg,#fff 0%, color-mix(in srgb, var(--brand) 16%, #fff) 42%, color-mix(in srgb, var(--brand) 10%, #f8fafc) 100%);
+    box-shadow:0 1px 0 #fff inset, 0 16px 36px color-mix(in srgb, var(--brand) 18%, transparent);
+    transition:background .25s,border-color .25s,box-shadow .25s;
+  }
+  .payCard::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+    background:radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--brand) 22%, transparent), transparent 58%);}
+  .payCard::after{content:"";position:absolute;top:-62%;left:-30%;width:90%;height:150%;
+    background:linear-gradient(118deg, rgba(255,255,255,.62), transparent 64%);opacity:.5;pointer-events:none;z-index:0;transform:rotate(-12deg);}
+  .top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;position:relative;z-index:1}
+  .chipRow{display:flex;align-items:center;gap:10px}
+  .chip{width:50px;height:38px;border-radius:8px;position:relative;flex-shrink:0;
+    background:linear-gradient(145deg,#f7f4ea,#e4d7a8 36%,#c4b070 70%,#eee6c8);
+    box-shadow:inset 0 1px 1px #fff, 0 6px 14px rgba(15,23,42,.1)}
+  .chip::before{content:"";position:absolute;inset:8px 7px;border-radius:3px;
+    background:linear-gradient(#0000 0 7px, rgba(90,70,20,.22) 7px 8px) 0 0/100% 8px,
+               linear-gradient(90deg,#0000 0 10px, rgba(90,70,20,.22) 10px 11px) 0 0/11px 100%}
+  .contactless{width:22px;height:22px;opacity:.55}
+  .logo svg{height:32px;width:auto;max-width:140px;display:block}
+  .hoBadge{
+    display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;
+    font-size:12px;font-weight:800;color:rgba(43,75,138,.92);
+    background:rgba(255,255,255,.86);border:1px solid rgba(43,75,138,.14)
+  }
+  .nums{display:grid;grid-template-columns:minmax(0,1fr) 108px 92px;gap:0 12px;position:relative;z-index:1}
+  .hoNums{display:grid;grid-template-columns:1fr 1fr;gap:0 12px;position:relative;z-index:1}
+  .idGrid{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:0 14px;position:relative;z-index:1}
+  .cf{margin-bottom:12px}
+  .cl{display:block;font-size:11px;font-weight:800;color:color-mix(in srgb, var(--brand) 55%, #334155);margin-bottom:6px}
+  .ci{width:100%;border:1px solid color-mix(in srgb, var(--brand) 18%, #e5e7eb);background:rgba(255,255,255,.92);
+      font-family:ui-monospace,monospace;font-size:15px;font-weight:650;padding:11px 12px;border-radius:10px}
+  .ci--pan{font-size:17px;letter-spacing:.06em;font-weight:700}
+  .ci--name{font-family:Heebo,Arial,sans-serif;font-size:14px;font-weight:700;letter-spacing:0}
+  .ci[readonly]{background:color-mix(in srgb, var(--brand) 6%, #f8fafc);color:#475569}
+  .status{margin:0 0 12px;padding:8px 10px;position:relative;z-index:1;border-radius:10px;font-size:12.5px;
+          border:1px solid var(--uf-ok-line);background:var(--uf-ok-bg);color:var(--uf-ok)}
+  .status strong{display:block}
+</style>
+</head>
+<body>
+  <div class="pageHead">
+    <h1>מוקאפ · שלב 6 פרטי משלם</h1>
+    <p>אשראי: לוגו וגוון לפי מותג הכרטיס. הוראת קבע: בלי לוגואים.</p>
+  </div>
+  <div class="note">בהוראת קבע אין לוגואים של בנקים. בחירת בנק ממלאת מספר בנק ומאמתת סניף כמו קודם.</div>
+
+  <div class="board">
+    <section class="wizard">
+      <header class="wizard__head"><div><div class="wizard__kicker">בריאות וסיכונים</div><div class="wizard__title">פרטי משלם</div></div><div class="wizard__kicker">שלב 6 מתוך 8</div></header>
+      <div class="wizard__body"><div class="section">
+        <div class="title">פרטי משלם</div>
+        <p class="lead">בחירת משלם, אמצעי תשלום ופרטי חיוב. בכרטיס אשראי נדרש גם CVV.</p>
+        <div class="grid">
+          <div class="field"><label class="label">בחירת משלם</label><select class="select"><option selected>מבוטח קיים</option></select></div>
+          <div class="field"><label class="label">אמצעי תשלום</label><select class="select"><option selected>כרטיס אשראי</option></select></div>
+        </div>
+        <div class="field" style="margin-bottom:12px">
+          <label class="label">מי המשלם?</label>
+          <select class="select"><option selected>ישראל ישראלי (מבוטח ראשי)</option></select>
+          <div class="help">קטין לא יכול להיות משלם.</div>
+        </div>
+        <div class="divider"></div>
+        <div class="pills" id="brandPills"></div>
+        <div class="payCard" id="ccCard" dir="ltr" style="--brand:#1A1F71">
+          <div class="top">
+            <div class="chipRow">
+              <div class="chip"></div>
+              <svg class="contactless" viewBox="0 0 24 24" fill="none"><path d="M8 8c2.5 2.2 2.5 5.8 0 8M12 5.5c3.8 3.2 3.8 9.8 0 13M16 3c5 4.4 5 13.6 0 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </div>
+            <div class="logo" id="ccLogo"></div>
+          </div>
+          <div class="nums">
+            <div class="cf"><label class="cl">CARD NUMBER</label><input class="ci ci--pan" id="ccPan" value="4580 1234 5678 9012"/></div>
+            <div class="cf"><label class="cl">EXPIRY</label><input class="ci" value="08/28"/></div>
+            <div class="cf"><label class="cl">CVV</label><input class="ci" value="123"/></div>
+          </div>
+          <div class="status" id="ccStatus">16 / 16 ספרות · המספר תואם לכרטיס ויזה</div>
+          <div class="idGrid">
+            <div class="cf"><label class="cl">CARDHOLDER</label><input class="ci ci--name" value="ישראל ישראלי"/></div>
+            <div class="cf"><label class="cl">ID</label><input class="ci" value="123456782"/></div>
+          </div>
+        </div>
+      </div></div>
+      <footer class="wizard__foot"><button class="btn" type="button">הקודם</button><button class="btn btn--primary" type="button">הבא</button></footer>
+    </section>
+
+    <section class="wizard">
+      <header class="wizard__head"><div><div class="wizard__kicker">בריאות וסיכונים</div><div class="wizard__title">פרטי משלם</div></div><div class="wizard__kicker">שלב 6 מתוך 8</div></header>
+      <div class="wizard__body"><div class="section">
+        <div class="title">פרטי משלם</div>
+        <p class="lead">בחירת משלם, אמצעי תשלום ופרטי חיוב. בהוראת קבע: בנק, מספר בנק, סניף וחשבון.</p>
+        <div class="grid">
+          <div class="field"><label class="label">בחירת משלם</label><select class="select"><option selected>מבוטח קיים</option></select></div>
+          <div class="field"><label class="label">אמצעי תשלום</label><select class="select"><option selected>הוראת קבע</option></select></div>
+        </div>
+        <div class="field" style="margin-bottom:12px">
+          <label class="label">מי המשלם?</label>
+          <select class="select"><option selected>ישראל ישראלי (מבוטח ראשי)</option></select>
+          <div class="help">קטין לא יכול להיות משלם.</div>
+        </div>
+        <div class="divider"></div>
+        <div class="payCard" id="hoCard" dir="ltr" style="--brand:#3870ED">
+          <div class="top">
+            <div class="chipRow">
+              <div class="chip"></div>
+              <svg class="contactless" viewBox="0 0 24 24" fill="none"><path d="M8 8c2.5 2.2 2.5 5.8 0 8M12 5.5c3.8 3.2 3.8 9.8 0 13M16 3c5 4.4 5 13.6 0 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </div>
+            <span class="hoBadge">הוראת קבע</span>
+          </div>
+          <div class="cf" style="position:relative;z-index:1">
+            <label class="cl">BANK</label>
+            <select class="ci ci--name" id="hoBank"></select>
+          </div>
+          <div class="hoNums">
+            <div class="cf"><label class="cl">BANK NO.</label><input class="ci" id="hoBankNo" value="12" readonly/><div class="help">מתמלא אוטומטית לפי הבנק שנבחר</div></div>
+            <div class="cf"><label class="cl">BRANCH</label><input class="ci" value="41"/></div>
+          </div>
+          <div class="status"><strong>סניף פועלים INVEST עפולה · מס׳ 41</strong><span>שד' יצחק רבין 20, עפולה</span></div>
+          <div class="cf" style="position:relative;z-index:1;margin-bottom:2px"><label class="cl">ACCOUNT</label><input class="ci" value="123456789"/></div>
+        </div>
+      </div></div>
+      <footer class="wizard__foot"><button class="btn" type="button">הקודם</button><button class="btn btn--primary" type="button">הבא</button></footer>
+    </section>
+  </div>
+
+<script>
+const ICONS = {
+  visa: '<svg viewBox="0 0 132 42" fill="none"><path fill="#1A1F71" d="M54.2 31.2 60.4 5.6h9.4L63.6 31.2H54.2Zm43.4-18.4c-1.9-.8-4.8-1.7-8.5-1.7-9.4 0-16 4.9-16.1 12 0 5.2 4.8 8.1 8.5 9.8 3.8 1.8 5.1 2.9 5.1 4.5 0 2.4-3 3.5-5.8 3.5-3.9 0-5.9-.5-9.1-1.8l-1.3-.6-1.3 8c2.3.9 6.4 1.8 10.7 1.8 10.1 0 16.6-4.8 16.7-12.3 0-4.1-2.5-7.2-8-9.7-3.3-1.6-5.4-2.7-5.4-4.3.1-1.5 1.7-3 5.4-3 3.1 0 5.3.6 7 .1.6.3 1.4.6 1.8.8l1.4-7.9Zm21.2 25.8h8.3l7.3-25.6h-8.3c-1.5 0-2.6.4-3.2 1.9l-13.1 23.7h9.2l1.8-5h11.3l1.1 5Zm-10.4-11.4 4.6-12.6.3-.1 2.7 12.7h-7.6ZM47.3 5.6l-8.6 25.6h-9.2L24.8 12c-.6-2.2-1.1-3-2.9-3.9-6-2.6-12.5-5-12.5-5l.2-.8h15.3c2 0 3.7 1.3 4.2 3.6l3.8 20.3 9.4-23.9h9.2Z"/><path fill="#F7B600" d="M9.4 5.6 0 31.2h8.8l9.4-25.6H9.4Z"/></svg>',
+  mastercard: '<svg viewBox="0 0 78 48"><circle cx="30" cy="24" r="18" fill="#EB001B"/><circle cx="48" cy="24" r="18" fill="#F79E1B"/><path fill="#FF5F00" d="M39 9.6a18 18 0 0 0 0 28.8 18 18 0 0 0 0-28.8Z"/></svg>',
+  amex: '<svg viewBox="0 0 84 52"><rect width="84" height="52" rx="4" fill="#006FCF"/><text x="42" y="24" text-anchor="middle" fill="#fff" font-size="9" font-weight="800" font-family="Arial Black,Arial">AMERICAN</text><text x="42" y="38" text-anchor="middle" fill="#fff" font-size="9" font-weight="800" font-family="Arial Black,Arial">EXPRESS</text></svg>',
+  diners: '<svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="23" fill="#0079BE"/><circle cx="24" cy="24" r="16" fill="#fff"/><path fill="#0079BE" d="M16 24c0-6.1 3.2-11.4 8-14.4v28.8c-4.8-3-8-8.3-8-14.4Zm8-14.4c4.8 3 8 8.3 8 14.4s-3.2 11.4-8 14.4V9.6Z"/></svg>',
+  isracard: '<svg viewBox="0 0 160 36"><rect x="0" y="8" width="20" height="20" rx="3" fill="#E30613"/><path fill="#fff" d="M6.2 23V13h3.1l3.4 7.4h.1L16.2 13h3.1v10h-2.4v-6.7h-.1l-3.2 6.7h-1.8l-3.2-6.7h-.1V23H6.2Z"/><text x="28" y="25" fill="#1B365D" font-size="16" font-weight="800" font-family="Heebo,Arial">isracard</text></svg>'
+};
+const brands = [
+  { id:"visa", he:"ויזה", pan:"4580 1234 5678 9012", status:"16 / 16 ספרות · המספר תואם לכרטיס ויזה", color:"#1A1F71" },
+  { id:"mastercard", he:"מאסטרקארד", pan:"5412 7534 5678 9010", status:"16 / 16 ספרות · המספר תואם לכרטיס מאסטרקארד", color:"#EB001B" },
+  { id:"amex", he:"אמריקן אקספרס", pan:"3782 822463 10005", status:"15 / 15 ספרות · המספר תואם לכרטיס אמקס", color:"#006FCF" },
+  { id:"diners", he:"דיינרס", pan:"3056 931111 0104", status:"14 / 14 ספרות · המספר תואם לכרטיס דיינרס", color:"#0079BE" },
+  { id:"isracard", he:"ישראכרט", pan:"1234 5678", status:"8 / 8 ספרות · המספר תואם לכרטיס ישראכרט", color:"#1B365D" }
+];
+const banks = [
+  { id:"poalim", name:"בנק הפועלים", code:"12" },
+  { id:"leumi", name:"בנק לאומי", code:"10" },
+  { id:"discount", name:"בנק דיסקונט", code:"11" },
+  { id:"mizrahi", name:"בנק מזרחי טפחות", code:"20" },
+  { id:"international", name:"הבנק הבינלאומי", code:"31" },
+  { id:"mercantile", name:"בנק מרכנתיל", code:"17" },
+  { id:"otzar", name:"בנק אוצר החייל", code:"14" },
+  { id:"yahav", name:"בנק יהב", code:"04" },
+  { id:"massad", name:"בנק מסד", code:"46" },
+  { id:"jerusalem", name:"בנק ירושלים", code:"54" },
+  { id:"pagi", name:"פאגי", code:"52" },
+  { id:"postal", name:"בנק הדואר", code:"09" }
+];
+const pills = document.getElementById("brandPills");
+brands.forEach((b, i) => {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "pill" + (i === 0 ? " is-on" : "");
+  btn.textContent = b.he;
+  btn.onclick = () => setBrand(b.id);
+  pills.appendChild(btn);
+});
+function setBrand(id){
+  const b = brands.find(x => x.id === id);
+  [...pills.children].forEach((el, i) => el.classList.toggle("is-on", brands[i].id === id));
+  document.getElementById("ccCard").style.setProperty("--brand", b.color);
+  document.getElementById("ccLogo").innerHTML = ICONS[b.id] || "";
+  document.getElementById("ccPan").value = b.pan;
+  document.getElementById("ccStatus").textContent = b.status;
+}
+const hoBank = document.getElementById("hoBank");
+banks.forEach((b, i) => {
+  const opt = document.createElement("option");
+  opt.value = b.id; opt.textContent = b.name; if(!i) opt.selected = true;
+  hoBank.appendChild(opt);
+});
+hoBank.onchange = () => {
+  const b = banks.find(x => x.id === hoBank.value) || banks[0];
+  document.getElementById("hoBankNo").value = b.code;
+};
+setBrand("visa");
+</script>
+</body>
+</html>
