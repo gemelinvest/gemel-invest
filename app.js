@@ -29405,6 +29405,7 @@ UsersGateUI.init();
         }
       } catch(_e) {}
       try { this.compareServerKpis?.(this._metricsCache || this._metricsLoadingShell()); } catch(_e) {}
+      try { this.fetchAgentAppointmentKpis?.(); } catch(_e) {}
       try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
       try { this.scheduleRefreshKpis(); } catch(_e) {}
     },
@@ -29414,16 +29415,71 @@ UsersGateUI.init();
       if(!root || root.querySelector(".bankDash--bootLoading")) return;
       const m = this._metricsCache;
       if(m){
-        const netEl = root.querySelector(".bankKpi--netPremium .bankKpi__value");
-        const apptEl = root.querySelector(".bankKpi--agentAppoint .bankKpi__value");
+        const netCard = root.querySelector(".bankKpi--netPremium");
+        const netEl = netCard?.querySelector(".bankKpi__value");
+        const apptCard = root.querySelector(".bankKpi--agentAppoint");
+        const apptEl = apptCard?.querySelector(".bankKpi__value");
         if(netEl && Number(m.netPremium) > 0) netEl.textContent = this.formatMoney(m.netPremium);
         if(apptEl && Number(m.agentAppointmentPremium) > 0) apptEl.textContent = this.formatMoney(m.agentAppointmentPremium);
+        const netBd = netCard?.querySelector(".bankKpiToday__breakdown");
+        if(netBd && m.netProductTotals && typeof m.netProductTotals === "object"){
+          const html = this.formatNetProductBreakdownHtml(m.netProductTotals);
+          netBd.dataset.breakdown = html;
+          const inner = netBd.querySelector(".bankKpiToday__breakdownInner");
+          if(inner) inner.innerHTML = html;
+        }
+        const apptBd = apptCard?.querySelector(".bankKpiToday__breakdown");
+        if(apptBd && Array.isArray(m.agentApptItems) && m.agentApptItems.length){
+          const html = this.formatAgentApptBreakdownHtml(m.agentApptItems);
+          apptBd.dataset.breakdown = html;
+          const inner = apptBd.querySelector(".bankKpiToday__breakdownInner");
+          if(inner) inner.innerHTML = html;
+        }
       }
       const today = this._todaySalesServerOverlay;
       if(today?.ok && (Number(today.totalPremium) > 0 || Number(today.totalPolicies) > 0)){
         const todayEl = root.querySelector("#bankKpiTodayCard .bankKpi__value");
         if(todayEl) todayEl.textContent = this.formatMoney(Number(today.totalPremium) || 0);
       }
+    },
+
+    fetchAgentAppointmentKpis(){
+      if(this._apptRpcBusy) return;
+      if(Number(this._metricsCache?.agentAppointmentPremium) > 0) return;
+      if(typeof Storage === "undefined" || typeof Storage.loadServerKpis !== "function") return;
+      this._apptRpcBusy = true;
+      void (async () => {
+        try {
+          const range = this.getMonthToDateRange();
+          const res = await Storage.loadServerKpis(range, { includeAppt: true, skipExtras: true });
+          if(!res?.ok) return;
+          const prem = Number(res.apptPremium) || 0;
+          const policies = Number(res.apptPolicies) || 0;
+          if(!(prem > 0 || policies > 0)) return;
+          const m = (this._metricsCache && typeof this._metricsCache === "object")
+            ? this._metricsCache
+            : this._metricsLoadingShell();
+          this._metricsCache = m;
+          if(!(Number(m.agentAppointmentPremium) > 0)){
+            m.agentAppointmentPremium = prem;
+            m.agentAppointments = policies;
+            m.agentApptItems = [{
+              rec: { fullName: policies + " מינויי סוכן", idNumber: "" },
+              premium: prem,
+              latestStamp: Date.now()
+            }];
+            m._serverKpiOverlay = true;
+            m._loading = false;
+          }
+          this._lastKpiPaintFp = "";
+          try { this.paintServerKpiDom(); } catch(_e) {}
+          try { this.refreshKpis(); } catch(_e) {}
+        } catch(err) {
+          try { console.warn("[GI-SERVER-KPI] agent_appointment retry:", err); } catch(_e) {}
+        } finally {
+          this._apptRpcBusy = false;
+        }
+      })();
     },
 
     paintDashboardAfterFaceLogin(){
@@ -42671,7 +42727,7 @@ const ClalRiskLifePdf = {
   ========================================================================= */
   const GI_SERVER_KPI_MODE = "compare";
 
-  Storage.loadServerKpis = async function(range){
+  Storage.loadServerKpis = async function(range, options = {}){
     if(!range?.start || !range?.end) return { ok:false, error:"BAD_RANGE" };
     const scope = (typeof getServerListAgentScopeFilter === "function")
       ? getServerListAgentScopeFilter() : null;
@@ -42683,26 +42739,28 @@ const ClalRiskLifePdf = {
     };
     try {
       const client = this.getClient();
-      /* GI-FACE-KPI: קודם נטו + מינוי סוכן בלבד. פירוט מוצר/חברה כבד
-         ואם הוא נופל/נתקע — Promise.all הישן ביטל גם את המספרים לכרטיסים. */
-      const [net, appt] = await Promise.all([
-        client.rpc("gi_dashboard_net_premium", args),
-        client.rpc("gi_dashboard_agent_appointment", args)
-      ]);
+      const net = await client.rpc("gi_dashboard_net_premium", args);
       if(net.error) throw net.error;
-      /* GI-FACE-KPI: מינוי סוכן נופל ב-timeout (500) בזמן כניסת פנים.
-         קודם throw כאן ביטל גם את הנטו שכבר חזר 200 — שלושת הכרטיסים נשארו ₪0.
-         החישוב עצמו לא משתנה: אם שתי הקריאות מצליחות, התוצאה זהה. */
-      let apptRes = appt;
-      if(appt.error){
-        try { console.warn("[GI-SERVER-KPI] agent_appointment:", appt.error); } catch(_e) {}
-        apptRes = { data: [{ appt_premium: 0, appt_policies: 0 }], error: appt.error };
-      }
       const n = Array.isArray(net.data) ? (net.data[0] || {}) : (net.data || {});
-      const a = Array.isArray(apptRes.data) ? (apptRes.data[0] || {}) : (apptRes.data || {});
+      let apptPremium = 0;
+      let apptPolicies = 0;
+      if(options.includeAppt === true){
+        try {
+          const appt = await client.rpc("gi_dashboard_agent_appointment", args);
+          if(appt.error){
+            try { console.warn("[GI-SERVER-KPI] agent_appointment:", appt.error); } catch(_e) {}
+          } else {
+            const a = Array.isArray(appt.data) ? (appt.data[0] || {}) : (appt.data || {});
+            apptPremium = Number(a.appt_premium) || 0;
+            apptPolicies = Number(a.appt_policies) || 0;
+          }
+        } catch(err) {
+          try { console.warn("[GI-SERVER-KPI] agent_appointment:", err); } catch(_e) {}
+        }
+      }
       let byProduct = { data: null, error: null };
       let byCompany = { data: null, error: null };
-      if(!appt.error){
+      if(options.skipExtras !== true){
         try {
           const extra = await Promise.allSettled([
             client.rpc("gi_dashboard_sales_by_product", args),
@@ -42755,8 +42813,8 @@ const ClalRiskLifePdf = {
         netPremium:    Number(n.net_premium)   || 0,
         soldPolicies:  Number(n.sold_policies) || 0,
         newClients:    Number(n.new_clients)   || 0,
-        apptPremium:   Number(a.appt_premium)  || 0,
-        apptPolicies:  Number(a.appt_policies) || 0,
+        apptPremium:   apptPremium,
+        apptPolicies:  apptPolicies,
         productTotals,
         productBreakdown,
         companyBreakdown
@@ -42820,7 +42878,8 @@ const ClalRiskLifePdf = {
             m.agentAppointments = apptPolicies;
           }
           /* פירוט מוצרים מ-RPC — בלי payloads בזיכרון אין מאיפה לבנות «הצג פירוט». */
-          if(res.productTotals && typeof res.productTotals === "object"){
+          if(res.productTotals && typeof res.productTotals === "object"
+            && Object.keys(res.productTotals).length){
             m.netProductTotals = res.productTotals;
           }
           /* אין RPC לפי לקוח למינוי סוכן — מציגים סיכום שרת עד שה-hydration ממלא פירוט מלא. */
@@ -42849,8 +42908,19 @@ const ClalRiskLifePdf = {
           try { this.paintServerKpiDom?.(); } catch(_e) {}
           try { this.scheduleRefreshKpis(); } catch(_e) {}
           try { this.refreshKpis(); } catch(_e) {}
+          try { this.fetchAgentAppointmentKpis?.(); } catch(_e) {}
           return;
         }
+        if(res.productTotals && typeof res.productTotals === "object"
+          && Object.keys(res.productTotals).length
+          && !Object.keys(this._metricsCache?.netProductTotals || {}).length){
+          if(this._metricsCache && typeof this._metricsCache === "object"){
+            this._metricsCache.netProductTotals = res.productTotals;
+            try { this.paintServerKpiDom?.(); } catch(_e) {}
+            try { this.refreshKpis(); } catch(_e) {}
+          }
+        }
+        try { this.fetchAgentAppointmentKpis?.(); } catch(_e) {}
         const round2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
         const pairs = [
           ["פרמיה נטו",        round2(metrics?.netPremium),              round2(res.netPremium)],
