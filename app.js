@@ -13573,6 +13573,10 @@
 
     lock(){
       try {
+        window.__GI_FACE_LOGIN_DONE__ = false;
+        window.__GI_FACE_LOGIN_ACTIVE__ = false;
+      } catch(_) {}
+      try {
         document.body.classList.add("lcAuthLock");
         this.els.wrap?.setAttribute?.("aria-hidden","false");
         setTimeout(() => this.els.user?.focus?.(), 50);
@@ -43050,23 +43054,31 @@ const ClalRiskLifePdf = {
     if(options.skipMfa === true){
       try { Auth._hideMfaStep(); } catch(_e) {}
       try { document.getElementById("lcLogin")?.classList.remove("lcLogin--mfa"); } catch(_e) {}
+      try { window.__GI_FACE_LOGIN_DONE__ = true; } catch(_e) {}
     }
     const loaderMs = Math.max(0, Number(options?.loaderMs) || 400);
-    const resolvedRole = isOwnerIdentity(matched) ? 'owner'
-      : isSystemAdminAgentIdentity(matched) ? 'admin'
-      : matched.role === 'manager' ? 'manager'
-      : matched.role === 'ops' ? 'ops'
-      : matched.role === 'opsAgent' ? 'opsAgent'
-      : matched.role === 'elementary' ? 'elementary'
-      : matched.role === 'referent' ? 'referent'
-      : matched.role === 'teamManager' ? 'teamManager'
-      : 'agent';
-    Auth.current = { name: matched.name, role: resolvedRole, id: safeTrim(matched?.id) };
-    const loaderName = safeTrim(Auth.current?.name || matched?.name);
-    try { localStorage.removeItem(LS_SESSION_KEY); } catch(_) {}
-    WelcomeLoader.open(loaderName);
-    const targetView = Auth.isReferent() ? 'campaignLeads' : 'dashboard';
+    let resolvedRole = 'agent';
+    let targetView = 'dashboard';
     try {
+      Auth.current = {
+        name: matched?.name || matched?.username,
+        role: 'agent',
+        id: safeTrim(matched?.id)
+      };
+      resolvedRole = isOwnerIdentity(matched) ? 'owner'
+        : isSystemAdminAgentIdentity(matched) ? 'admin'
+        : matched?.role === 'manager' ? 'manager'
+        : matched?.role === 'ops' ? 'ops'
+        : matched?.role === 'opsAgent' ? 'opsAgent'
+        : matched?.role === 'elementary' ? 'elementary'
+        : matched?.role === 'referent' ? 'referent'
+        : matched?.role === 'teamManager' ? 'teamManager'
+        : 'agent';
+      Auth.current.role = resolvedRole;
+      const loaderName = safeTrim(Auth.current?.name || matched?.name);
+      try { localStorage.removeItem(LS_SESSION_KEY); } catch(_) {}
+      try { WelcomeLoader.open(loaderName); } catch(_e) {}
+      targetView = Auth.isReferent() ? 'campaignLeads' : 'dashboard';
       if(!App._loginReady){
         try {
           await Promise.race([
@@ -43513,6 +43525,7 @@ const ClalRiskLifePdf = {
     }
   };
   Auth._showMfaStep = function(agent, factorId, options = {}){
+    if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
     const mode = options?.mode === 'enroll' ? 'enroll' : 'verify';
     this._pendingMfa = { agent, factorId, mode, qrHtml: options?.qrHtml || '' };
     $('#lcLoginCredentialsStep')?.setAttribute('hidden','hidden');
@@ -43628,6 +43641,7 @@ const ClalRiskLifePdf = {
   };
   const _authSetError = Auth._setError.bind(Auth);
   Auth._setError = function(msg){
+    if((window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) && safeTrim(msg)) return;
     _authSetError(msg);
     const isMfaVisible = !$('#lcLoginMfaStep')?.hidden;
     if(!isMfaVisible) return;
@@ -43643,6 +43657,7 @@ const ClalRiskLifePdf = {
   };
   Auth.logout = (function(orig){ return async function(reason='manual'){ try{ await SupabaseMFA.signOutSilently(); }catch(_e){} return orig.call(this, reason); }; })(Auth.logout);
   Auth._submit = async function(){
+    if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
     const username = safeTrim(this.els.user?.value);
     const pin = safeTrim(this.els.pin?.value);
     this._setError('');
@@ -43687,6 +43702,7 @@ const ClalRiskLifePdf = {
         serverPinOnly = false;
       }
       if(serverPinOnly){
+        if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
         if(pin !== expected) return this._setError('קוד כניסה שגוי');
         await completeAgentLogin(matched);
         return;
@@ -43699,22 +43715,27 @@ const ClalRiskLifePdf = {
       if(requiresAuthMfa){
         this._setPrimaryLoginLoading(true, 'מחבר אימות מאובטח...');
         if(!authEmail) return this._setError('לא הוגדר Auth email למשתמש ולכן לא ניתן להשלים חיבור Google Authenticator. עדכן את המייל בניהול משתמשים.');
+        if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
         const sr = await SupabaseMFA.signInWithPassword(authEmail, pin);
+        if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
         if(!sr.ok) return this._setError('סיסמת Auth שגויה או שהמשתמש לא קיים ב-Supabase Auth');
         authSigned = true;
         if(authEmail !== safeTrim(sec.authEmail)){
           setAgentSecurity(matched.id, { authEmail, mfaRequired:true });
         }
       } else if(pin !== expected) {
+        if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
         return this._setError('קוד כניסה שגוי');
       }
       if(authSigned){
         this._setPrimaryLoginLoading(true, 'פותח אימות דו־שלבי...');
         const flow = await this._prepareEnrollmentForLogin(matched, { ...sec, authEmail });
         if(!flow.ok) return this._setError(flow.error || 'לא הצלחתי להכין את האימות הדו־שלבי לכניסה');
+        if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
         this._showMfaStep(matched, flow.factorId, { mode: flow.mode, qrHtml: flow.qrHtml || '' });
         return;
       }
+      if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
       await completeAgentLogin(matched);
     } finally {
       this._clearPrimaryLoginLoading();
@@ -64726,6 +64747,12 @@ ${inner}
       },
       hideMfaStep(){ try { Auth._hideMfaStep(); } catch(_e) {} },
       unlock(){ try { Auth.unlock(); } catch(_e) {} },
+      abortPinLogin(){
+        try { Auth._hideMfaStep(); } catch(_e) {}
+        try { Auth._clearPrimaryLoginLoading(); } catch(_e) {}
+        try { Auth._setError(""); } catch(_e) {}
+        try { document.getElementById("lcLogin")?.classList.remove("lcLogin--mfa"); } catch(_e) {}
+      },
       getCurrentAgent(){
         const rec = (typeof getCurrentAgentRecord === "function" ? getCurrentAgentRecord() : null)
           || (typeof findAgentRecordForSession === "function" ? findAgentRecordForSession() : null);

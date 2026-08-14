@@ -58,6 +58,7 @@
       findAgentById: b.findAgentById,
       findLoginAgent: b.findLoginAgent,
       hideMfaStep: b.hideMfaStep,
+      abortPinLogin: b.abortPinLogin,
       unlock: b.unlock,
       getCurrentAgent: b.getCurrentAgent,
       closeUserMenu: b.closeUserMenu,
@@ -289,33 +290,39 @@
   };
 
   FaceSessionController.prototype.pollOnce = async function(){
-    if(this._closed || !this._secret) return;
-    const data = await callFn({ action: "poll", desktopSecret: this._secret });
-    const status = trim(data?.status);
-    this._status = status;
-    this.onStatus(status, data);
-    if(status === "scanned"){
-      if(this._timerRotate){
-        window.clearInterval(this._timerRotate);
-        this._timerRotate = 0;
+    if(this._closed || !this._secret || this._pollBusy) return;
+    this._pollBusy = true;
+    try {
+      const data = await callFn({ action: "poll", desktopSecret: this._secret });
+      const status = trim(data?.status);
+      this._status = status;
+      this.onStatus(status, data);
+      if(status === "scanned"){
+        if(this._timerRotate){
+          window.clearInterval(this._timerRotate);
+          this._timerRotate = 0;
+        }
+        return;
       }
-      return;
-    }
-    if(status === "approved"){
-      this._closed = true;
-      this.stopTimers();
-      await this.onApproved(data);
-    } else if(status === "enrolled"){
-      this._closed = true;
-      this.stopTimers();
-      await this.onEnrolled(data);
-    } else if(status === "denied"){
-      this.stopTimers();
-      await this.onDenied(data);
-    } else if(status === "expired" || status === "cancelled"){
-      if(this.kind === "login" || this.kind === "enroll"){
-        await this.rotate();
+      if(status === "approved"){
+        this._closed = true;
+        this.stopTimers();
+        await this.onApproved(data);
+      } else if(status === "enrolled"){
+        this._closed = true;
+        this.stopTimers();
+        await this.onEnrolled(data);
+      } else if(status === "denied"){
+        this.stopTimers();
+        await this.onDenied(data);
+      } else if(status === "expired" || status === "cancelled"){
+        if(this.kind === "login" || this.kind === "enroll"){
+          await this.rotate();
+        }
       }
+    } catch(_e) {
+    } finally {
+      this._pollBusy = false;
     }
   };
 
@@ -418,7 +425,9 @@
     async startLogin(){
       const b = bridge();
       window.__GI_FACE_LOGIN_ACTIVE__ = true;
+      window.__GI_FACE_LOGIN_DONE__ = false;
       try { if(typeof b.hideMfaStep === "function") b.hideMfaStep(); } catch(_e) {}
+      try { if(typeof b.abortPinLogin === "function") b.abortPinLogin(); } catch(_e) {}
       try { if(typeof b.ensureLoginReady === "function") await b.ensureLoginReady(); } catch(_e) {}
       this.showLoginPanel(true);
       this.setLoginHint("סרקו את הקוד במצלמת הטלפון. הקוד מתחלף כל 30 שניות.");
@@ -442,6 +451,9 @@
           if(status === "pending") self.setLoginHint("סרקו את הקוד במצלמת הטלפון. הקוד מתחלף כל 30 שניות.");
         },
         onApproved: async (data) => {
+          window.__GI_FACE_LOGIN_ACTIVE__ = true;
+          try { if(typeof b.abortPinLogin === "function") b.abortPinLogin(); } catch(_e) {}
+          try { if(typeof b.hideMfaStep === "function") b.hideMfaStep(); } catch(_e) {}
           let agent = typeof b.findLoginAgent === "function"
             ? b.findLoginAgent(data.agentId, data.agentName)
             : (typeof b.findAgentById === "function" ? b.findAgentById(data.agentId) : null);
@@ -451,27 +463,40 @@
               agent = matchAgentRow(list, { id: data.agentId, name: data.agentName });
             } catch(_e) { agent = null; }
           }
+          if(!agent && (trim(data.agentId) || trim(data.agentName))){
+            agent = {
+              id: trim(data.agentId),
+              name: trim(data.agentName),
+              role: trim(data.agentRole) || "agent",
+              username: trim(data.agentUsername)
+            };
+          }
           if(!agent){
-            self.setLoginHint("הנציג לא נמצא במערכת. היכנסו עם PIN.", "err");
-            self.showLoginPanel(false);
+            self.setLoginHint("הזיהוי הצליח אך כרטיס הנציג לא נטען. סרקו שוב.", "err");
             window.__GI_FACE_LOGIN_ACTIVE__ = false;
+            window.__GI_FACE_LOGIN_DONE__ = false;
             return;
           }
           self.setLoginHint("אומת. נכנסים…", "ok");
-          try { if(typeof b.hideMfaStep === "function") b.hideMfaStep(); } catch(_e) {}
           const detail = buildDetailText(data.deviceLabel, data.geoText);
           try {
+            window.__GI_FACE_LOGIN_DONE__ = true;
+            if(typeof b.completeAgentLogin !== "function") throw new Error("NO_COMPLETE_LOGIN");
             await b.completeAgentLogin(agent, { loginDetailText: detail, skipMfa: true });
             try { if(typeof b.unlock === "function") b.unlock(); } catch(_e) {}
+            self.showLoginPanel(false);
+            self.setLoginHint("");
           } catch(_e) {
-            self.setLoginHint("הכניסה נכשלה. היכנסו עם PIN.", "err");
-            if(typeof b.setLoginError === "function") b.setLoginError("זיהוי הפנים אומת אך הכניסה נכשלה. היכנסו עם PIN.");
+            window.__GI_FACE_LOGIN_DONE__ = false;
+            self.showLoginPanel(false);
+            self.setLoginHint("הזיהוי הצליח אך הכניסה לא הושלמה. נסו שוב את זיהוי הפנים.", "err");
           } finally {
             window.__GI_FACE_LOGIN_ACTIVE__ = false;
           }
         },
         onDenied: async () => {
           window.__GI_FACE_LOGIN_ACTIVE__ = false;
+          window.__GI_FACE_LOGIN_DONE__ = false;
           self.setLoginHint("הפנים לא זוהו. אפשר להיכנס עם שם משתמש ו-PIN למטה.", "err");
           self.showLoginPanel(false);
           if(typeof b.setLoginError === "function"){
@@ -484,6 +509,7 @@
         await this._loginCtl.start();
       } catch(_e) {
         window.__GI_FACE_LOGIN_ACTIVE__ = false;
+        window.__GI_FACE_LOGIN_DONE__ = false;
         this.setLoginHint("לא ניתן לפתוח זיהוי פנים כרגע.", "err");
         this.showLoginPanel(false);
       }
@@ -491,6 +517,7 @@
 
     async stopLogin(){
       window.__GI_FACE_LOGIN_ACTIVE__ = false;
+      window.__GI_FACE_LOGIN_DONE__ = false;
       if(this._loginCtl) await this._loginCtl.cancel();
       this._loginCtl = null;
       this.showLoginPanel(false);
@@ -566,7 +593,9 @@
       const form = document.getElementById("lcLoginForm");
       if(form){
         form.addEventListener("submit", (ev) => {
-          if(!window.__GI_FACE_LOGIN_ACTIVE__) return;
+          const panel = document.getElementById("lcFaceLoginPanel");
+          const panelOpen = !!(panel && !panel.hidden);
+          if(!window.__GI_FACE_LOGIN_ACTIVE__ && !window.__GI_FACE_LOGIN_DONE__ && !panelOpen) return;
           ev.preventDefault();
           ev.stopImmediatePropagation();
         }, true);
