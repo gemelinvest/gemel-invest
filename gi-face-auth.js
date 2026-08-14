@@ -34,6 +34,14 @@
     return "מחשב";
   }
 
+  function forceUnlockLogin(){
+    try { document.body.classList.remove("lcAuthLock"); } catch(_e) {}
+    try {
+      const wrap = document.getElementById("lcLogin");
+      if(wrap) wrap.setAttribute("aria-hidden", "true");
+    } catch(_e) {}
+  }
+
   function isAuthLocked(){
     return !!(document.body && document.body.classList.contains("lcAuthLock"));
   }
@@ -75,6 +83,7 @@
       findLoginAgent: b.findLoginAgent,
       hideMfaStep: b.hideMfaStep,
       abortPinLogin: b.abortPinLogin,
+      enterFromFaceSession: b.enterFromFaceSession,
       unlock: b.unlock,
       getCurrentAgent: b.getCurrentAgent,
       closeUserMenu: b.closeUserMenu,
@@ -469,8 +478,9 @@
         },
         onApproved: async (data) => {
           window.__GI_FACE_LOGIN_ACTIVE__ = true;
-          try { if(typeof b.abortPinLogin === "function") b.abortPinLogin(); } catch(_e) {}
-          try { if(typeof b.hideMfaStep === "function") b.hideMfaStep(); } catch(_e) {}
+          const live = bridge();
+          try { if(typeof live.abortPinLogin === "function") live.abortPinLogin(); } catch(_e) {}
+          try { if(typeof live.hideMfaStep === "function") live.hideMfaStep(); } catch(_e) {}
           const agent = agentFromApprovedSession(data);
           if(!agent){
             self.setLoginHint("הזיהוי הצליח אך כרטיס הנציג לא נטען. סרקו שוב.", "err");
@@ -480,28 +490,29 @@
           const detail = buildDetailText(data.deviceLabel, data.geoText);
           try {
             window.__GI_FACE_LOGIN_DONE__ = true;
-            if(typeof b.completeAgentLogin !== "function") throw new Error("NO_COMPLETE_LOGIN");
-            await b.completeAgentLogin(agent, { loginDetailText: detail, skipMfa: true });
-            try { if(typeof b.unlock === "function") b.unlock(); } catch(_e) {}
-            if(isAuthLocked()){
-              try { if(typeof b.unlock === "function") b.unlock(); } catch(_e2) {}
-            }
-            if(!isAuthLocked()){
-              self.showLoginPanel(false);
-              self.setLoginHint("");
+            const enter = (typeof window.__GI_FACE_ENTER__ === "function")
+              ? window.__GI_FACE_ENTER__
+              : live.enterFromFaceSession;
+            if(typeof enter === "function"){
+              await enter(agent, detail);
+            } else if(typeof live.completeAgentLogin === "function"){
+              await live.completeAgentLogin(agent, { loginDetailText: detail, skipMfa: true });
             } else {
-              self.setLoginHint("אומת. נכנסים…", "ok");
+              throw new Error("NO_COMPLETE_LOGIN");
             }
-          } catch(_e) {
-            window.__GI_FACE_LOGIN_DONE__ = false;
-            try { if(typeof b.unlock === "function") b.unlock(); } catch(_e2) {}
-            if(!isAuthLocked()){
-              self.showLoginPanel(false);
-            } else {
-              self.setLoginHint("הזיהוי הצליח. ממתינים לפתיחת המערכת…", "err");
-            }
+          } catch(err) {
+            console.error("GI_FACE_LOGIN_FINISH_FAILED:", err);
+            try {
+              if(typeof live.completeAgentLogin === "function"){
+                await live.completeAgentLogin(agent, { loginDetailText: detail, skipMfa: true });
+              }
+            } catch(_e2) {}
           } finally {
+            try { if(typeof live.unlock === "function") live.unlock(); } catch(_e) {}
+            forceUnlockLogin();
             window.__GI_FACE_LOGIN_ACTIVE__ = false;
+            self.showLoginPanel(false);
+            self.setLoginHint("");
           }
         },
         onDenied: async () => {

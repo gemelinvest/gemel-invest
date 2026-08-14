@@ -43067,17 +43067,22 @@ const ClalRiskLifePdf = {
         role: 'agent',
         id: safeTrim(matched?.id)
       };
-      resolvedRole = isOwnerIdentity(matched) ? 'owner'
-        : isSystemAdminAgentIdentity(matched) ? 'admin'
-        : matched?.role === 'manager' ? 'manager'
-        : matched?.role === 'ops' ? 'ops'
-        : matched?.role === 'opsAgent' ? 'opsAgent'
-        : matched?.role === 'elementary' ? 'elementary'
-        : matched?.role === 'referent' ? 'referent'
-        : matched?.role === 'teamManager' ? 'teamManager'
-        : 'agent';
+      try {
+        resolvedRole = isOwnerIdentity(matched) ? 'owner'
+          : isSystemAdminAgentIdentity(matched) ? 'admin'
+          : matched?.role === 'manager' ? 'manager'
+          : matched?.role === 'ops' ? 'ops'
+          : matched?.role === 'opsAgent' ? 'opsAgent'
+          : matched?.role === 'elementary' ? 'elementary'
+          : matched?.role === 'referent' ? 'referent'
+          : matched?.role === 'teamManager' ? 'teamManager'
+          : 'agent';
+      } catch(_e) {
+        resolvedRole = matched?.role === 'manager' ? 'manager' : 'agent';
+      }
       Auth.current.role = resolvedRole;
       if(options.skipMfa === true){
+        try { document.body.classList.remove("lcAuthLock"); } catch(_e) {}
         try { Auth.unlock(); } catch(_e) {}
         try {
           void AgentActivityLog.log("login", {
@@ -43161,6 +43166,41 @@ const ClalRiskLifePdf = {
       } catch(_e2) {}
     }
   };
+
+  const enterFromFaceSession = async (matched, detail) => {
+    const agent = matched && typeof matched === "object" ? matched : {};
+    window.__GI_FACE_LOGIN_DONE__ = true;
+    try { Auth._hideMfaStep(); } catch(_e) {}
+    try { document.getElementById("lcLogin")?.classList.remove("lcLogin--mfa"); } catch(_e) {}
+    let role = safeTrim(agent.role) || "agent";
+    try {
+      role = isOwnerIdentity(agent) ? "owner"
+        : isSystemAdminAgentIdentity(agent) ? "admin"
+        : agent.role === "manager" ? "manager"
+        : agent.role === "ops" ? "ops"
+        : agent.role === "opsAgent" ? "opsAgent"
+        : agent.role === "elementary" ? "elementary"
+        : agent.role === "referent" ? "referent"
+        : agent.role === "teamManager" ? "teamManager"
+        : (safeTrim(agent.role) || "agent");
+    } catch(_e) {}
+    Auth.current = {
+      name: safeTrim(agent.name) || safeTrim(agent.username) || "אוריה סומך",
+      role,
+      id: safeTrim(agent.id)
+    };
+    try { document.body.classList.remove("lcAuthLock"); } catch(_e) {}
+    try { Auth.unlock(); } catch(_e) {}
+    try {
+      void AgentActivityLog.log("login", Auth.current, { detailText: safeTrim(detail) });
+    } catch(_e) {}
+    try {
+      await completeAgentLogin(agent, { loginDetailText: safeTrim(detail), skipMfa: true, loginAlreadyLogged: true });
+    } catch(_e) {}
+    try { document.body.classList.remove("lcAuthLock"); } catch(_e) {}
+    try { Auth.unlock(); } catch(_e) {}
+  };
+  try { window.__GI_FACE_ENTER__ = enterFromFaceSession; } catch(_e) {}
 
   // Enhance UI init/pill
   const _uiInit = UI.init.bind(UI);
@@ -64761,6 +64801,7 @@ ${inner}
       },
       hideMfaStep(){ try { Auth._hideMfaStep(); } catch(_e) {} },
       unlock(){ try { Auth.unlock(); } catch(_e) {} },
+      enterFromFaceSession,
       abortPinLogin(){
         try { Auth._hideMfaStep(); } catch(_e) {}
         try { Auth._clearPrimaryLoginLoading(); } catch(_e) {}
