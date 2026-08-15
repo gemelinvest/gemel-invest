@@ -12015,6 +12015,12 @@
 
     async saveSheets(state, options = {}){
       try {
+        /* skipHeavy was previously ignored. Production import used it after
+           per-row upserts; a full customer sync then wrote stale local payloads
+           and wiped the production data that had just been saved. */
+        if(options.skipHeavy === true){
+          options = Object.assign({}, options, { skipCustomersSync: true, skipProposalsSync: true });
+        }
         const connection = await this.waitForConnection();
         if(!connection.ok) return { ok:false, error: connection.error || 'בעיה זמנית בחיבור לשרת' };
 
@@ -31957,7 +31963,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260815-har-notice-v1";
+  const GI_WIZARD_JS_VERSION = "20260815-prod-apply-v1";
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
   const TZAHAL_CLINIC = "קופה צהלית";
   const TZAHAL_CLINIC_SHABAN = "אין שב״ן";
@@ -61317,7 +61323,7 @@ ${inner}
      ========================================================================== */
 
   const CUSTOMER_IMPORT_VERSION = "1.2";
-  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260813-prod-v1";
+  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260815-prod-apply-v1";
   function ensureGiProductionJsLoaded(){
     return new Promise((resolve, reject) => {
       try {
@@ -62698,26 +62704,40 @@ ${inner}
       });
       let okCount = 0;
       let failCount = 0;
+      const touchedIds = [];
       for(let i = 0; i < custIds.length; i++){
         const custId = custIds[i];
         try {
-          let existingFull = null;
           const resLoad = await Storage.loadSingleRow(SUPABASE_TABLES.customers, custId, "*");
-          if(resLoad?.ok && resLoad.data) existingFull = resLoad.data;
+          const existingFull = (resLoad?.ok && resLoad.data) ? resLoad.data : null;
+          /* בלי שורה מלאה מהשרת אסור לבנות payload חדש — זה דורס את התיק. */
+          if(!existingFull){
+            failCount++;
+            continue;
+          }
           const rec = normalizeCustomerRecord({
-            id: existingFull?.id || custId,
-            status: existingFull?.status,
-            fullName: existingFull?.full_name,
-            idNumber: existingFull?.id_number,
-            phone: existingFull?.phone,
-            email: existingFull?.email,
-            city: existingFull?.city,
-            agentId: existingFull?.agent_id,
-            agentName: existingFull?.agent_name,
-            agentRole: existingFull?.agent_role,
-            createdAt: existingFull?.created_at,
-            payload: existingFull?.payload
+            id: existingFull.id || custId,
+            status: existingFull.status,
+            fullName: existingFull.full_name,
+            idNumber: existingFull.id_number,
+            phone: existingFull.phone,
+            email: existingFull.email,
+            city: existingFull.city,
+            agentId: existingFull.agent_id,
+            agentName: existingFull.agent_name,
+            agentRole: existingFull.agent_role,
+            createdAt: existingFull.created_at,
+            payload: existingFull.payload
           });
+          const expectedContent = (
+            Number(existingFull.insured_count || rec.insuredCount || 0) +
+            Number(existingFull.new_policies_count || rec.newPoliciesCount || 0) +
+            Number(existingFull.existing_policies_count || rec.existingPoliciesCount || 0)
+          ) > 0;
+          if(expectedContent && Storage.payloadIsEmpty?.(rec)){
+            failCount++;
+            continue;
+          }
           let payload = rec.payload && typeof rec.payload === "object" ? rec.payload : {};
           byCust.get(custId).forEach((it) => {
             it.insuredIds = P.insuredIdsForCustomer(rec, it.people || []);
@@ -62728,8 +62748,15 @@ ${inner}
           rec.updatedAt = nowISO();
           const row = Storage.buildCustomerRows({ customers: [rec] })[0];
           const saved = await Storage.upsertSingleRow(SUPABASE_TABLES.customers, row);
-          if(saved?.ok) okCount++;
-          else failCount++;
+          if(saved?.ok){
+            okCount++;
+            touchedIds.push(custId);
+            try { Storage.rememberRows(SUPABASE_TABLES.customers, [row]); } catch(_e) {}
+            try { ensureCustomerInActiveList(rec, { skipShadowRefresh: true }); } catch(_e) {}
+            try { CustomersUI.invalidatePolicyCollectCache?.(custId); } catch(_e) {}
+          } else {
+            failCount++;
+          }
         } catch(_e) {
           failCount++;
         }
@@ -62753,12 +62780,25 @@ ${inner}
             files: this._prod?.files,
             updatedCustomers: okCount,
             failed: failCount,
-            policies: items.length
+            policies: items.length,
+            customerIds: touchedIds
           }
         });
       } catch(_e) {}
 
-      try { await App.persist("ייבוא פרודוקציה", { skipHeavy: true }); } catch(_e) {}
+      try { refreshStateShadows({ skipNormalize: true, lightShadows: true }); } catch(_e) {}
+      /* הנתונים כבר נשמרו ישירות ל-Supabase. persist מלא היה כותב את State
+         המקומי הישן ודורס את הפרודוקציה בתיק הלקוח. */
+      try {
+        await App.persist("ייבוא פרודוקציה", {
+          silent: true,
+          metaOnly: true,
+          metaSyncScopes: ["data"],
+          skipNormalize: true,
+          yieldUi: true
+        });
+      } catch(_e) {}
+      try { CustomersUI.render({ forceServer: true }); } catch(_e) {}
 
       this.els.subtitle.textContent = "דוח פרודוקציה — סיום";
       this.els.body.innerHTML = `

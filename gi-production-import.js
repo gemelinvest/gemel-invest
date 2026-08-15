@@ -310,6 +310,15 @@
     });
   }
 
+  function sameCompany(a, b){
+    const na = safeTrim(a);
+    const nb = safeTrim(b);
+    if(!na || !nb) return false;
+    if(na === nb) return true;
+    const aliases = { "הכשרה": "הכשרה", "ביטוח הכשרה": "הכשרה" };
+    return !!(aliases[na] && aliases[nb] && aliases[na] === aliases[nb]);
+  }
+
   function getNewPolicies(cust){
     const payload = cust?.payload && typeof cust.payload === "object" ? cust.payload : {};
     if(Array.isArray(payload.newPolicies) && payload.newPolicies.length) return payload.newPolicies;
@@ -319,9 +328,20 @@
     return [];
   }
 
+  function seedNewPolicies(payload){
+    const next = payload && typeof payload === "object" ? payload : {};
+    if(Array.isArray(next.newPolicies) && next.newPolicies.length) return next;
+    if(Array.isArray(next?.operational?.newPolicies) && next.operational.newPolicies.length){
+      next.newPolicies = next.operational.newPolicies.slice();
+      return next;
+    }
+    if(!Array.isArray(next.newPolicies)) next.newPolicies = [];
+    return next;
+  }
+
   function matchExistingPolicy(cust, company, type, policyNumber){
     const list = getNewPolicies(cust);
-    const sameCo = list.filter((p) => safeTrim(p?.company) === company);
+    const sameCo = list.filter((p) => sameCompany(p?.company, company));
     const num = normPolicy(policyNumber);
     if(num){
       const hit = sameCo.find((p) => normPolicy(p?.policyNumber) === num);
@@ -416,9 +436,39 @@
     return ids;
   }
 
+  function findPolicyToUpdate(list, item){
+    const rows = Array.isArray(list) ? list : [];
+    const byId = safeTrim(item?.policyId)
+      ? rows.find((x) => safeTrim(x?.id) === safeTrim(item.policyId))
+      : null;
+    if(byId) return byId;
+    const num = normPolicy(item?.policyNumber);
+    if(num){
+      const byNum = rows.find((x) => sameCompany(x?.company, item.company) && normPolicy(x?.policyNumber) === num);
+      if(byNum) return byNum;
+    }
+    const sameType = rows.filter((x) => sameCompany(x?.company, item.company) && safeTrim(x?.type) === safeTrim(item?.type));
+    return sameType.length === 1 ? sameType[0] : null;
+  }
+
+  function applyPolicyFields(p, item, meta){
+    p.policyNumber = item.policyNumber || p.policyNumber;
+    p.premiumMonthly = item.premiumMonthly || p.premiumMonthly;
+    if(item.startDate && !safeTrim(p.startDate)) p.startDate = item.startDate;
+    if(item.type === "בריאות" && item.healthCovers && item.healthCovers.length){
+      const set = [];
+      (Array.isArray(p.healthCovers) ? p.healthCovers : []).concat(item.healthCovers).forEach((k) => {
+        const t = safeTrim(k);
+        if(t && set.indexOf(t) === -1) set.push(t);
+      });
+      p.healthCovers = set;
+    }
+    p.productionImport = meta;
+    return p;
+  }
+
   function applyToPayload(payload, item){
-    const next = payload && typeof payload === "object" ? payload : {};
-    if(!Array.isArray(next.newPolicies)) next.newPolicies = [];
+    const next = seedNewPolicies(payload && typeof payload === "object" ? payload : {});
     const insuredIds = item.insuredIds || [];
     const meta = {
       company: item.company,
@@ -428,23 +478,9 @@
       coverCount: (item.covers || []).length,
       personCount: (item.people || []).length
     };
-    if(item.action === "update"){
-      const p = next.newPolicies.find((x) => safeTrim(x?.id) === safeTrim(item.policyId))
-        || next.newPolicies.find((x) => normPolicy(x?.policyNumber) === normPolicy(item.policyNumber) && safeTrim(x?.company) === item.company);
-      if(p){
-        p.policyNumber = item.policyNumber || p.policyNumber;
-        p.premiumMonthly = item.premiumMonthly || p.premiumMonthly;
-        if(item.startDate && !safeTrim(p.startDate)) p.startDate = item.startDate;
-        if(item.type === "בריאות" && item.healthCovers && item.healthCovers.length){
-          const set = [];
-          (Array.isArray(p.healthCovers) ? p.healthCovers : []).concat(item.healthCovers).forEach((k) => {
-            const t = safeTrim(k);
-            if(t && set.indexOf(t) === -1) set.push(t);
-          });
-          p.healthCovers = set;
-        }
-        p.productionImport = meta;
-      }
+    let target = item.action === "update" ? findPolicyToUpdate(next.newPolicies, item) : null;
+    if(target){
+      applyPolicyFields(target, item, meta);
     } else {
       next.newPolicies.push({
         id: "npol_prod_" + item.policyNumber + "_" + Math.random().toString(16).slice(2, 8),
@@ -462,14 +498,13 @@
         productionImport: meta
       });
     }
-    if(next.operational && typeof next.operational === "object"){
-      next.operational.newPolicies = next.newPolicies;
-    }
+    if(!next.operational || typeof next.operational !== "object") next.operational = {};
+    next.operational.newPolicies = next.newPolicies;
     return next;
   }
 
   global.GI_PRODUCTION = {
-    version: "20260813-prod-v1",
+    version: "20260815-prod-apply-v1",
     COMPANIES,
     COMPANY_HACHSHARA,
     parseFileBuffer,
@@ -479,6 +514,7 @@
     matchExistingPolicy,
     insuredIdsForCustomer,
     applyToPayload,
+    sameCompany,
     normId,
     normPolicy,
     uniqueIds
