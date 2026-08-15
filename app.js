@@ -17812,7 +17812,13 @@ UsersGateUI.init();
         } catch(_e) {}
         const type = safeTrim(p?.type || p?.product || (p?.company === "מדיקר" ? "מדיקר" : "פוליסה"));
         const premium = safeTrim(p?.premiumMonthly || p?.premium || p?.premiumBefore || "");
-        const coverItems = Array.isArray(p?.healthCovers) ? p.healthCovers.filter(Boolean) : [];
+        const coverItems = Array.isArray(p?.healthCovers) && p.healthCovers.length
+          ? p.healthCovers.filter(Boolean)
+          : (Array.isArray(p?.lifeCovers) && p.lifeCovers.length
+            ? p.lifeCovers.filter(Boolean)
+            : (p?.productionCoverPremiums && typeof p.productionCoverPremiums === "object"
+              ? Object.keys(p.productionCoverPremiums)
+              : []));
         const coverageValue = type === "בריאות"
           ? (typeof Wizard !== "undefined" && Wizard?.getPolicyCoverageDisplayValue
             ? safeTrim(Wizard.getPolicyCoverageDisplayValue(p))
@@ -17858,6 +17864,8 @@ UsersGateUI.init();
             "מבוטח": insuredLabel,
             "חברה": safeTrim(p?.company),
             "סוג מוצר": type,
+            ...(safeTrim(p?.agentNumber) ? { "מספר סוכן": safeTrim(p.agentNumber) } : {}),
+            ...(safeTrim(p?.paymentPeriod) ? { "תקופת תשלום": (/^\d+$/.test(safeTrim(p.paymentPeriod)) ? (safeTrim(p.paymentPeriod) + " חודשים") : safeTrim(p.paymentPeriod)) } : {}),
             "פרמיה חודשית לאחר הנחה": premium ? this.formatMoney(premium) : "—",
             "הנחה": this.getPolicyDiscountDisplayText(p, { compact:true }),
             "פרמיה סופית": premiumAfterDiscount,
@@ -18614,6 +18622,66 @@ UsersGateUI.init();
       return list.find((p, idx) => String(safeTrim(p?.id) || `new_${idx}`) === rawId) || null;
     },
 
+    /* כיסויי פרודוקציה של הכשרה מגיעים לפעמים בכתב ויזואלי הפוך (IBM862).
+       כאן מציגים את השם הלוגי / את מפתח האשף — בלי לגעת בחישוב פרמיה. */
+    logicalHealthCoverLabel(name){
+      const raw = safeTrim(name).replace(/\s+/g, " ");
+      if(!raw) return "";
+      try {
+        if(window.GI_PRODUCTION?.mapHealthCover){
+          const mapped = window.GI_PRODUCTION.mapHealthCover(raw);
+          if(mapped) return mapped;
+        }
+      } catch(_e) {}
+      const flipHe = (s) => {
+        let out = "";
+        let i = 0;
+        while(i < s.length){
+          const ch = s.charAt(i);
+          if(ch >= "\u0590" && ch <= "\u05FF"){
+            let j = i;
+            while(j < s.length){
+              const c = s.charAt(j);
+              if((c >= "\u0590" && c <= "\u05FF") || c === " " || c === "\"" || c === "'" || c === "-" || c === "/" || c === ".") j += 1;
+              else break;
+            }
+            let k = j;
+            while(k > i){
+              const c = s.charAt(k - 1);
+              if(c >= "\u0590" && c <= "\u05FF") break;
+              k -= 1;
+            }
+            out += s.slice(i, k).split("").reverse().join("") + s.slice(k, j);
+            i = j;
+          } else {
+            out += ch;
+            i += 1;
+          }
+        }
+        return out.replace(/\s+/g, " ").trim();
+      };
+      const map = [
+        [/מחלות\s*קשות/, "מחלות קשות"],
+        [/השתל/, "השתלות וטיפולים מיוחדים מחוץ לישראל"],
+        [/ניתוח.*חו|מחליפ.*ניתוח/, "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל"],
+        [/תרופות/, "תרופות מחוץ לסל שירותי הבריאות"],
+        [/אמבולטור|ייעוץ.*בדיק/, "ייעוץ ובדיקות"],
+        [/שב.?ן/, "משלים שב\"ן ללא השתתפות עצמית"],
+        [/שקל\s*ראשון/, "ניתוחים בישראל מהשקל הראשון"],
+        [/ילד/, "שירות פרימיום לילד"]
+      ];
+      const flipped = flipHe(raw);
+      const cands = [raw];
+      if(flipped && flipped !== raw) cands.push(flipped);
+      for(let c = 0; c < cands.length; c++){
+        for(let i = 0; i < map.length; i++){
+          if(map[i][0].test(cands[c])) return map[i][1];
+        }
+      }
+      if(flipped && flipped !== raw && /^(תרופות|השתלות|ניתוח|אמבולטור|מחלות|משלים|ייעוץ|שירות)/.test(flipped)) return flipped;
+      return raw;
+    },
+
     getHealthCoverRowsForDisplay(rec, policy){
       const raw = this.getRawNewPolicy(rec, policy) || policy || {};
       let names = [];
@@ -18624,16 +18692,27 @@ UsersGateUI.init();
       } catch(_e) {}
       if(!names.length && Array.isArray(policy?.coverItems)) names = policy.coverItems;
       if(!names.length && Array.isArray(raw?.healthCovers)) names = raw.healthCovers;
+      if(!names.length && Array.isArray(raw?.lifeCovers)) names = raw.lifeCovers;
+      const prodPrem = (raw?.productionCoverPremiums && typeof raw.productionCoverPremiums === "object")
+        ? raw.productionCoverPremiums
+        : {};
+      if(!names.length) names = Object.keys(prodPrem);
       const amounts = (raw?.healthCoversWithAmounts && typeof raw.healthCoversWithAmounts === "object")
         ? raw.healthCoversWithAmounts
         : {};
       const seen = new Set();
       const rows = [];
       const push = (name) => {
-        const label = safeTrim(name);
+        const label = this.logicalHealthCoverLabel(name);
         if(!label || seen.has(label)) return;
         seen.add(label);
-        const amount = safeTrim(amounts[label]);
+        const addonSum = (() => {
+          const byIns = raw?.healthAddonPremiums?.[label] || raw?.healthAddonPremiums?.[name];
+          if(!byIns || typeof byIns !== "object") return "";
+          const n = Object.values(byIns).reduce((s, v) => s + this.asMoneyNumber(v), 0);
+          return n > 0 ? String(n) : "";
+        })();
+        const amount = safeTrim(prodPrem[label]) || safeTrim(prodPrem[name]) || addonSum || safeTrim(amounts[label]) || safeTrim(amounts[name]);
         rows.push({ label, amount });
       };
       names.forEach(push);
@@ -18661,7 +18740,8 @@ UsersGateUI.init();
         ? `${insuredSum.count} מבוטחים`
         : (insuredSum.names || "מבוטח ראשי");
       const isHealth = safeTrim(policy.type) === "בריאות";
-      const coverRows = isHealth ? this.getHealthCoverRowsForDisplay(rec, policy) : [];
+      const isLife = safeTrim(policy.type) === "ריסק" || safeTrim(policy.type) === "ריסק משכנתא";
+      const coverRows = (isHealth || isLife) ? this.getHealthCoverRowsForDisplay(rec, policy) : [];
       const coverBtn = coverRows.length
         ? `<button class="cfNewPolicyCard__coversBtn" type="button" data-cf-covers-toggle="${escapeHtml(policy.id)}" aria-expanded="false">פירוט כיסויים</button>`
         : `<span class="cfNewPolicyCard__coversBtn cfNewPolicyCard__coversBtn--empty" aria-hidden="true"></span>`;
@@ -18673,6 +18753,13 @@ UsersGateUI.init();
           </div>`).join("")}
         </div>`
         : "";
+      const rawPol = this.getRawNewPolicy(rec, policy) || {};
+      const agentNumber = safeTrim(rawPol.agentNumber);
+      const paymentPeriod = safeTrim(rawPol.paymentPeriod);
+      const periodLabel = paymentPeriod
+        ? (/^\d+$/.test(paymentPeriod) ? (paymentPeriod + " חודשים") : paymentPeriod)
+        : "";
+      const extraMeta = [agentNumber ? ("סוכן " + agentNumber) : "", periodLabel ? ("תקופה " + periodLabel) : ""].filter(Boolean).join(" · ");
       const cell = (label, value) =>
         `<div class="cfNewPolicyCard__cell"><span class="cfNewPolicyCard__lbl">${escapeHtml(label)}</span><strong class="cfNewPolicyCard__val">${escapeHtml(value)}</strong></div>`;
       return `<article class="cfNewPolicyCard ${escapeHtml(this.companyClass(policy.company))}" data-policy-id="${escapeHtml(policy.id)}">
@@ -18681,6 +18768,7 @@ UsersGateUI.init();
           <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--product">
             <span class="cfNewPolicyCard__product">${escapeHtml(policy.type || 'פוליסה')}</span>
             <span class="cfNewPolicyCard__company">${escapeHtml(policy.company || 'חברה')}</span>
+            ${extraMeta ? `<span class="cfNewPolicyCard__lbl">${escapeHtml(extraMeta)}</span>` : ""}
           </div>
           ${cell('מספר פוליסה', policyNumber)}
           ${cell('תחילת ביטוח', startDate)}
@@ -31963,7 +32051,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260815-prod-apply-v1";
+  const GI_WIZARD_JS_VERSION = "20260815-prod-enrich-v1";
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
   const TZAHAL_CLINIC = "קופה צהלית";
   const TZAHAL_CLINIC_SHABAN = "אין שב״ן";
@@ -61323,7 +61411,7 @@ ${inner}
      ========================================================================== */
 
   const CUSTOMER_IMPORT_VERSION = "1.2";
-  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260815-prod-apply-v1";
+  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260815-prod-enrich-v1";
   function ensureGiProductionJsLoaded(){
     return new Promise((resolve, reject) => {
       try {

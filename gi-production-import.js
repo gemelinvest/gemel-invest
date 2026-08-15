@@ -20,10 +20,10 @@
 
   const HEALTH_COVER_MAP = [
     { re: /מחלות\s*קשות/, key: "מחלות קשות" },
-    { re: /השתלות/, key: "השתלות וטיפולים מיוחדים מחוץ לישראל" },
-    { re: /ניתוח.*חו|תוחים.*חול/, key: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל" },
+    { re: /השתל/, key: "השתלות וטיפולים מיוחדים מחוץ לישראל" },
+    { re: /ניתוח.*חו|מחליפ.*ניתוח|תוחים.*חול|חול.*חותינ/, key: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל" },
     { re: /תרופות/, key: "תרופות מחוץ לסל שירותי הבריאות" },
-    { re: /אמבולטור/, key: "ייעוץ ובדיקות" },
+    { re: /אמבולטור|ייעוץ.*בדיק/, key: "ייעוץ ובדיקות" },
     { re: /שב.?ן/, key: "משלים שב\"ן ללא השתתפות עצמית" },
     { re: /שקל\s*ראשון/, key: "ניתוחים בישראל מהשקל הראשון" },
     { re: /ילד/, key: "שירות פרימיום לילד" }
@@ -129,13 +129,106 @@
     return fixVisualHebrew(raw).replace(/\s+/g, " ").trim();
   }
 
-  function mapHealthCover(name){
-    const n = cleanName(name);
-    if(!n) return "";
-    for(let i = 0; i < HEALTH_COVER_MAP.length; i++){
-      if(HEALTH_COVER_MAP[i].re.test(n)) return HEALTH_COVER_MAP[i].key;
-    }
+  function hebrewLogicScore(s){
+    const t = String(s || "");
+    let n = 0;
+    if(/^(תרופות|השתלות|ניתוח|אמבולטור|מחלות|משלים|ייעוץ|שירות|מגן|ריסק|משכנתא)/.test(t)) n += 6;
+    if(/מחוץ|בישראל|שב.?ן|טיפול|בדיק/.test(t)) n += 2;
     return n;
+  }
+
+  function mapHealthCover(name){
+    const raw = safeTrim(String(name || "")).replace(/\s+/g, " ");
+    if(!raw) return "";
+    const flipped = safeTrim(fixVisualHebrew(raw).replace(/\s+/g, " "));
+    const cands = [raw];
+    if(flipped && flipped !== raw) cands.push(flipped);
+    for(let c = 0; c < cands.length; c++){
+      for(let i = 0; i < HEALTH_COVER_MAP.length; i++){
+        if(HEALTH_COVER_MAP[i].re.test(cands[c])) return HEALTH_COVER_MAP[i].key;
+      }
+    }
+    if(flipped && flipped !== raw && hebrewLogicScore(flipped) > hebrewLogicScore(raw)) return flipped;
+    return raw;
+  }
+
+  function mapLifeCover(name){
+    const raw = safeTrim(String(name || "")).replace(/\s+/g, " ");
+    if(!raw) return "";
+    const flipped = safeTrim(fixVisualHebrew(raw).replace(/\s+/g, " "));
+    const cands = [raw];
+    if(flipped && flipped !== raw) cands.push(flipped);
+    let picked = raw;
+    for(let c = 0; c < cands.length; c++){
+      if(hebrewLogicScore(cands[c]) > hebrewLogicScore(picked)) picked = cands[c];
+    }
+    return picked;
+  }
+
+  function isMortgageLife(covers){
+    const blob = (covers || []).map((c) => {
+      const a = String(c?.coverName || "");
+      const b = fixVisualHebrew(a);
+      return a + " " + b;
+    }).join(" ");
+    return /משכנתא|אתנכשמ/.test(blob);
+  }
+
+  function money2(n){
+    const x = Math.round((Number(n) || 0) * 100) / 100;
+    if(!x) return "";
+    return x.toFixed(2);
+  }
+
+  function formatPaymentPeriod(raw){
+    const d = digits(raw);
+    if(!d) return "";
+    const n = Number(String(d).replace(/^0+/, "") || "0");
+    if(n >= 1 && n <= 600) return String(n);
+    return String(d).replace(/^0+/, "") || d;
+  }
+
+  function pickAgentNumber(people){
+    const counts = new Map();
+    (people || []).forEach((p) => {
+      const a = safeTrim(p?.agent);
+      if(!a) return;
+      counts.set(a, (counts.get(a) || 0) + 1);
+    });
+    let best = "";
+    let n = 0;
+    counts.forEach((c, k) => {
+      if(c > n){
+        n = c;
+        best = k;
+      }
+    });
+    return best;
+  }
+
+  function pickPaymentPeriod(people){
+    for(let i = 0; i < (people || []).length; i++){
+      const p = formatPaymentPeriod(people[i]?.period);
+      if(p) return p;
+    }
+    return "";
+  }
+
+  function coverNameForFamily(cover, family){
+    return family === "life" ? mapLifeCover(cover?.coverName) : mapHealthCover(cover?.coverName);
+  }
+
+  function sumCoverPremiums(covers, family){
+    const out = {};
+    (covers || []).forEach((c) => {
+      const name = coverNameForFamily(c, family);
+      if(!name) return;
+      const prem = Number(c.premium) || 0;
+      out[name] = Math.round(((Number(out[name]) || 0) + prem) * 100) / 100;
+    });
+    const str = {};
+    Object.keys(out).forEach((k) => { str[k] = money2(out[k]); });
+    return str;
   }
 
   function detectKind(fileName, rec0){
@@ -206,13 +299,14 @@
   function parseSbRecord(s){
     const policyNumber = normPolicy(col(s, 9, 15));
     if(!policyNumber) return null;
-    const name = cleanName(col(s, 128, 160));
+    const name = mapLifeCover(col(s, 128, 160));
     return {
       kind: "SB",
       policyNumber,
       coverCode: safeTrim(col(s, 16, 20)),
       startDate: dmy8(col(s, 23, 30)),
       premium: packedMoney(col(s, 37, 51), 7),
+      idNumber: normId(col(s, 71, 79)),
       coverName: name,
       coverNameRaw: name
     };
@@ -221,7 +315,7 @@
   function parseFileBuffer(fileName, buffer){
     const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
     const text = decodeCp862(bytes);
-    const recs = splitRecords(text).map(fixVisualHebrew);
+    const recs = splitRecords(text);
     const kind = detectKind(fileName, recs[0] || "");
     const rows = [];
     recs.forEach((s) => {
@@ -283,13 +377,16 @@
       const primary = (activePeople[0] || people[0] || {});
       let type = "בריאות";
       if(g.family === "life"){
-        const lifeNames = covers.map((c) => c.coverName || "").join(" ");
-        type = /משכנתא/.test(lifeNames) ? "ריסק משכנתא" : "ריסק";
+        type = isMortgageLife(covers) ? "ריסק משכנתא" : "ריסק";
       }
       const premium = covers.reduce((sum, c) => sum + (Number(c.premium) || 0), 0);
       const startDate = primary.startDate || covers.find((c) => c.startDate)?.startDate || "";
+      const coverPremiums = sumCoverPremiums(covers, g.family);
       const healthCovers = g.family === "health"
-        ? Array.from(new Set(covers.map((c) => c.coverName).filter(Boolean)))
+        ? Object.keys(coverPremiums)
+        : [];
+      const lifeCovers = g.family === "life"
+        ? Object.keys(coverPremiums)
         : [];
       const inactive = people.length > 0 && activePeople.length === 0;
       return {
@@ -300,6 +397,10 @@
         premiumMonthly: premium ? premium.toFixed(2) : "",
         startDate,
         healthCovers,
+        lifeCovers,
+        coverPremiums,
+        agentNumber: pickAgentNumber(activePeople.length ? activePeople : people),
+        paymentPeriod: pickPaymentPeriod(activePeople.length ? activePeople : people),
         people,
         covers,
         ids: uniqueIds(people),
@@ -423,17 +524,74 @@
     });
   }
 
+  function insuredIdForTz(payload, tz){
+    const idn = normId(tz);
+    if(!idn) return "";
+    const insureds = Array.isArray(payload?.insureds) ? payload.insureds : [];
+    for(let i = 0; i < insureds.length; i++){
+      const ins = insureds[i];
+      if(normId(ins?.data?.idNumber || ins?.idNumber) === idn && ins?.id) return ins.id;
+    }
+    return "";
+  }
+
   function insuredIdsForCustomer(cust, people){
     const payload = cust?.payload && typeof cust.payload === "object" ? cust.payload : {};
     const insureds = Array.isArray(payload.insureds) ? payload.insureds : [];
     const ids = [];
-    const wanted = new Set(uniqueIds(people));
-    insureds.forEach((ins) => {
-      const idn = normId(ins?.data?.idNumber || ins?.idNumber);
-      if(idn && wanted.has(idn) && ins.id) ids.push(ins.id);
+    const seen = new Set();
+    const active = (people || []).filter(isActivePerson);
+    const source = active.length ? active : (people || []);
+    source.forEach((p) => {
+      const hit = insuredIdForTz(payload, p?.idNumber) || insuredIdForTz(payload, p?.idNumber2);
+      if(hit && !seen.has(hit)){
+        seen.add(hit);
+        ids.push(hit);
+      }
     });
-    if(!ids.length && insureds[0]?.id) ids.push(insureds[0].id);
+    if(!ids.length && insureds[0]?.id && source.length <= 1) ids.push(insureds[0].id);
     return ids;
+  }
+
+  function premiumPerInsuredFromItem(payload, item){
+    const map = {};
+    (item.covers || []).forEach((c) => {
+      const iid = insuredIdForTz(payload, c?.idNumber);
+      if(!iid) return;
+      const prem = Number(c.premium) || 0;
+      map[iid] = Math.round(((Number(map[iid]) || 0) + prem) * 100) / 100;
+    });
+    if(!Object.keys(map).length){
+      const ids = Array.isArray(item.insuredIds) ? item.insuredIds.filter(Boolean) : [];
+      const total = Number(item.premiumMonthly) || 0;
+      if(ids.length === 1 && total){
+        map[ids[0]] = total;
+      } else if(ids.length > 1 && total){
+        const each = Math.round((total / ids.length) * 100) / 100;
+        ids.forEach((id, i) => {
+          map[id] = i === ids.length - 1
+            ? Math.round((total - each * (ids.length - 1)) * 100) / 100
+            : each;
+        });
+      }
+    }
+    const str = {};
+    Object.keys(map).forEach((k) => { str[k] = money2(map[k]) || String(map[k]); });
+    return str;
+  }
+
+  function applyCompanyAgentNumber(payload, item){
+    const num = safeTrim(item?.agentNumber);
+    if(!num) return;
+    const key = safeTrim(item?.company) || COMPANY_HACHSHARA;
+    if(!payload.companyAgentNumbers || typeof payload.companyAgentNumbers !== "object") payload.companyAgentNumbers = {};
+    if(!safeTrim(payload.companyAgentNumbers[key])) payload.companyAgentNumbers[key] = num;
+    if(payload.operational && typeof payload.operational === "object"){
+      if(!payload.operational.companyAgentNumbers || typeof payload.operational.companyAgentNumbers !== "object"){
+        payload.operational.companyAgentNumbers = {};
+      }
+      if(!safeTrim(payload.operational.companyAgentNumbers[key])) payload.operational.companyAgentNumbers[key] = num;
+    }
   }
 
   function findPolicyToUpdate(list, item){
@@ -451,60 +609,90 @@
     return sameType.length === 1 ? sameType[0] : null;
   }
 
-  function applyPolicyFields(p, item, meta){
+  function applyPolicyFields(p, item, meta, payload){
     p.policyNumber = item.policyNumber || p.policyNumber;
+    if(item.type) p.type = item.type;
     p.premiumMonthly = item.premiumMonthly || p.premiumMonthly;
-    if(item.startDate && !safeTrim(p.startDate)) p.startDate = item.startDate;
-    if(item.type === "בריאות" && item.healthCovers && item.healthCovers.length){
+    if(item.startDate) p.startDate = item.startDate;
+    const insuredIds = Array.isArray(item.insuredIds) ? item.insuredIds.filter(Boolean) : [];
+    if(insuredIds.length){
+      p.insuredIds = insuredIds.slice();
+      p.insuredId = insuredIds[0] || "";
+      p.insuredMode = insuredIds.length > 1 ? "multi" : "single";
+    }
+    const coverPrem = (item.coverPremiums && typeof item.coverPremiums === "object")
+      ? item.coverPremiums
+      : sumCoverPremiums(item.covers || [], item.family || (item.type === "בריאות" ? "health" : "life"));
+    if(Object.keys(coverPrem).length){
+      p.productionCoverPremiums = coverPrem;
+    }
+    if(item.type === "בריאות"){
       const set = [];
-      (Array.isArray(p.healthCovers) ? p.healthCovers : []).concat(item.healthCovers).forEach((k) => {
-        const t = safeTrim(k);
+      (Array.isArray(p.healthCovers) ? p.healthCovers : []).concat(item.healthCovers || Object.keys(coverPrem)).forEach((k) => {
+        const t = mapHealthCover(k);
         if(t && set.indexOf(t) === -1) set.push(t);
       });
-      p.healthCovers = set;
+      if(set.length) p.healthCovers = set;
     }
+    if(item.family === "life" || item.type === "ריסק" || item.type === "ריסק משכנתא"){
+      const set = [];
+      (Array.isArray(p.lifeCovers) ? p.lifeCovers : []).concat(item.lifeCovers || Object.keys(coverPrem)).forEach((k) => {
+        const t = mapLifeCover(k);
+        if(t && set.indexOf(t) === -1) set.push(t);
+      });
+      if(set.length) p.lifeCovers = set;
+    }
+    const perIns = premiumPerInsuredFromItem(payload, item);
+    if(Object.keys(perIns).length) p.premiumPerInsured = perIns;
+    if(safeTrim(item.agentNumber)) p.agentNumber = safeTrim(item.agentNumber);
+    if(safeTrim(item.paymentPeriod)) p.paymentPeriod = safeTrim(item.paymentPeriod);
     p.productionImport = meta;
     return p;
   }
 
   function applyToPayload(payload, item){
     const next = seedNewPolicies(payload && typeof payload === "object" ? payload : {});
-    const insuredIds = item.insuredIds || [];
+    const insuredIds = item.insuredIds || insuredIdsForCustomer({ payload: next }, item.people || []);
+    item.insuredIds = insuredIds;
     const meta = {
       company: item.company,
       policyNumber: item.policyNumber,
       importedAt: nowISO(),
       source: "hachshara-production",
       coverCount: (item.covers || []).length,
-      personCount: (item.people || []).length
+      personCount: (item.people || []).length,
+      agentNumber: safeTrim(item.agentNumber),
+      paymentPeriod: safeTrim(item.paymentPeriod)
     };
     let target = item.action === "update" ? findPolicyToUpdate(next.newPolicies, item) : null;
     if(target){
-      applyPolicyFields(target, item, meta);
+      applyPolicyFields(target, item, meta, next);
     } else {
-      next.newPolicies.push({
+      const created = {
         id: "npol_prod_" + item.policyNumber + "_" + Math.random().toString(16).slice(2, 8),
         company: item.company,
         type: item.type,
         policyNumber: item.policyNumber,
         premiumMonthly: item.premiumMonthly || "",
         startDate: item.startDate || "",
-        healthCovers: item.type === "בריאות" ? (item.healthCovers || []).slice() : [],
+        healthCovers: item.type === "בריאות" ? (item.healthCovers || []).map(mapHealthCover).filter(Boolean) : [],
         insuredIds: insuredIds.slice(),
         insuredId: insuredIds[0] || "",
         insuredMode: insuredIds.length > 1 ? "multi" : "single",
         discountPct: "0",
-        _addedAt: nowISO(),
-        productionImport: meta
-      });
+        _addedAt: nowISO()
+      };
+      applyPolicyFields(created, item, meta, next);
+      next.newPolicies.push(created);
     }
+    applyCompanyAgentNumber(next, item);
     if(!next.operational || typeof next.operational !== "object") next.operational = {};
     next.operational.newPolicies = next.newPolicies;
     return next;
   }
 
   global.GI_PRODUCTION = {
-    version: "20260815-prod-apply-v1",
+    version: "20260815-prod-enrich-v1",
     COMPANIES,
     COMPANY_HACHSHARA,
     parseFileBuffer,
@@ -515,6 +703,10 @@
     insuredIdsForCustomer,
     applyToPayload,
     sameCompany,
+    mapHealthCover,
+    mapLifeCover,
+    formatPaymentPeriod,
+    fixVisualHebrew,
     normId,
     normPolicy,
     uniqueIds
