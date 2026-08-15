@@ -3215,39 +3215,37 @@
 
       const modal = document.createElement("div");
       modal.id = "giWizardHarAlertModal";
-      modal.className = "giValModal giWizardHarAlertModal";
+      modal.className = "giHarNotice";
       modal.setAttribute("role", "dialog");
       modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-labelledby", "giHarNoticeTitle");
       modal.setAttribute("aria-label", title);
       modal.setAttribute("dir", "rtl");
       modal.innerHTML = `
-        <div class="giValModal__backdrop"></div>
-        <div class="giValModal__card">
-          <div class="giValModal__head">
-            <span class="giValModal__headIcon" aria-hidden="true">⚠️</span>
-            <div class="giValModal__headText">
-              <div class="giValModal__title">${escapeHtml(title)}</div>
-            </div>
+        <div class="giHarNotice__backdrop" data-har-alert-backdrop></div>
+        <div class="giHarNotice__card">
+          <div class="giHarNotice__mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4.75h6.5l4 4V18a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2V6.75a2 2 0 0 1 2-2Z"></path><path d="M14.5 4.75v4h4"></path><path d="M9 12h6"></path><path d="M9 15.5h6"></path></svg>
           </div>
-          <div class="giValModal__body">
-            <p class="giWizardHarAlertModal__text">${escapeHtml(text)}</p>
-          </div>
-          <div class="giValModal__foot">
-            ${showCancel ? `<button class="btn" type="button" data-har-alert-cancel>${escapeHtml(cancelText || "ביטול")}</button>` : ""}
-            ${showConfirm ? `<button class="btn btn--primary giValModal__closeBtn" type="button" data-har-alert-confirm>${escapeHtml(confirmText)}</button>` : ""}
+          <div class="giHarNotice__kicker">אשף בריאות וסיכונים</div>
+          <div class="giHarNotice__title" id="giHarNoticeTitle">${escapeHtml(title)}</div>
+          <p class="giHarNotice__text">${escapeHtml(text)}</p>
+          <div class="giHarNotice__actions">
+            ${showCancel ? `<button class="giHarNotice__btn giHarNotice__btn--ghost" type="button" data-har-alert-cancel>${escapeHtml(cancelText || "ביטול")}</button>` : ""}
+            ${showConfirm ? `<button class="giHarNotice__btn giHarNotice__btn--primary" type="button" data-har-alert-confirm>${escapeHtml(confirmText)}</button>` : ""}
           </div>
         </div>
       `;
 
       const close = (result) => {
-        modal.classList.add("giValModal--leaving");
+        modal.classList.add("giHarNotice--leaving");
         window.setTimeout(() => {
           modal.remove();
           resolve(result);
-        }, 220);
+        }, 180);
       };
 
-      modal.querySelector(".giValModal__backdrop")?.addEventListener("click", () => close(showCancel ? false : true));
+      modal.querySelector("[data-har-alert-backdrop]")?.addEventListener("click", () => close(showCancel ? false : true));
       modal.querySelector("[data-har-alert-confirm]")?.addEventListener("click", () => close(true));
       modal.querySelector("[data-har-alert-cancel]")?.addEventListener("click", () => close(false));
       document.addEventListener("keydown", function onKey(ev){
@@ -3262,7 +3260,11 @@
       });
 
       document.body.appendChild(modal);
-      requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
+      requestAnimationFrame(() => {
+        modal.classList.add("giHarNotice--visible");
+        const focusBtn = modal.querySelector("[data-har-alert-confirm]") || modal.querySelector("[data-har-alert-cancel]");
+        try{ focusBtn?.focus?.(); }catch(_e){}
+      });
     });
   }
 
@@ -31955,7 +31957,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260815-health-bmi-decl-v1";
+  const GI_WIZARD_JS_VERSION = "20260815-har-notice-v1";
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
   const TZAHAL_CLINIC = "קופה צהלית";
   const TZAHAL_CLINIC_SHABAN = "אין שב״ן";

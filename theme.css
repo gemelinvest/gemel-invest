@@ -9073,3 +9073,28 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   }
   .cfNewPolicyCard__cell--prem:not(#\9):not(#\9){ align-items: flex-start !important; text-align: right !important; }
 }
+
+.giHarNotice:not(#\9):not(#\9){ z-index: 100020 !important; }
+.giHarNotice__card:not(#\9):not(#\9){
+  max-width: 360px !important;
+  padding: 18px !important;
+  border-radius: 18px !important;
+  background: var(--gi-surface) !important;
+  border: 1px solid var(--gi-border) !important;
+  box-shadow: var(--gi-sh-lg) !important;
+}
+.giHarNotice__title:not(#\9):not(#\9){
+  font-size: 16px !important;
+  font-weight: 800 !important;
+  color: var(--gi-text) !important;
+}
+.giHarNotice__text:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text-2) !important;
+}
+.giHarNotice__btn--primary:not(#\9):not(#\9){
+  background: var(--gi-health) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+}
