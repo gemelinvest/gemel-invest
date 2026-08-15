@@ -16,7 +16,7 @@
    לאיפוס ידני: כפתור "החל עדכון" במערכת כבר מוחק את כל המטמונים ומבטל רישום SW.
 */
 
-const CACHE_VERSION = "gi-v12-20260814-cf-policies-v4";
+const CACHE_VERSION = "gi-v12-20260814-cf-policies-v6";
 const RUNTIME_CACHE = `gi-runtime-${CACHE_VERSION}`;
 
 // סיומות שמותר להגיש מהמטמון.

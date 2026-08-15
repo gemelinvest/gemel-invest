@@ -18554,9 +18554,10 @@ UsersGateUI.init();
       const STD_HEAD = `<th>חברה / מוצר</th><th>כיסוי</th><th>פרמיה חודשית</th><th>סטטוס</th><th></th>`;
       const APPT_HEAD = `<th>חברה / מוצר</th><th>מספר פוליסה</th><th>פרמיה חודשית</th><th>תאריך מינוי</th><th>סטטוס</th><th></th>`;
       const OLD_HEAD = `<th>חברה / מוצר</th><th>כיסוי</th><th>פרמיה חודשית</th><th>סטטוס טיפול</th><th>סיבת ביטול</th><th></th>`;
-      const insuredsInHealth = new Set(healthPolicies.map(p => safeTrim(p.insuredLabel)).filter(Boolean)).size;
-      const healthMeta = `${plural(healthPolicies.length)}${insuredsInHealth ? ` · ${insuredsInHealth} ${insuredsInHealth === 1 ? 'מבוטח' : 'מבוטחים'}` : ''}`;
-      const healthBlock = healthPolicies.length
+      const healthCards = healthPolicies.filter((p) => !p?.isHealthAddon);
+      const insuredsInHealth = new Set(healthCards.map(p => safeTrim(p.insuredLabel)).filter(Boolean)).size;
+      const healthMeta = `${plural(healthCards.length)}${insuredsInHealth ? ` · ${insuredsInHealth} ${insuredsInHealth === 1 ? 'מבוטח' : 'מבוטחים'}` : ''}`;
+      const healthBlock = healthCards.length
         ? `<section class="cfGroup cfGroup--health cfGroup--cards">
           <header class="cfGroup__head">
             ${headInner({
@@ -18564,7 +18565,7 @@ UsersGateUI.init();
               meta: healthMeta, sum: this.formatMoneyValue(this.sumPremiumAfterDiscount(healthPolicies)), collapsible: false
             })}
           </header>
-          <div class="cfNewPolicyGrid">${healthPolicies.map(p => this.renderNewPolicyCard(p)).join('')}</div>
+          <div class="cfNewPolicyGrid">${healthCards.map(p => this.renderNewPolicyCard(p, rec, healthPolicies)).join('')}</div>
         </section>`
         : '';
       const blocks = [
@@ -18597,19 +18598,93 @@ UsersGateUI.init();
       return blocks.join('');
     },
 
-    renderNewPolicyCard(policy){
+    getRawNewPolicy(rec, policy){
+      const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+      const list = Array.isArray(payload.newPolicies) ? payload.newPolicies : [];
+      const rawId = String(policy?.parentPolicyId || policy?.id || "").replace(/_addon_.*$/, "");
+      if(!rawId) return null;
+      return list.find((p, idx) => String(safeTrim(p?.id) || `new_${idx}`) === rawId) || null;
+    },
+
+    getHealthCoverRowsForDisplay(rec, policy){
+      const raw = this.getRawNewPolicy(rec, policy) || policy || {};
+      let names = [];
+      try {
+        if(typeof Wizard !== "undefined" && typeof Wizard.getPolicyCoverItems === "function"){
+          names = Wizard.getPolicyCoverItems(raw) || [];
+        }
+      } catch(_e) {}
+      if(!names.length && Array.isArray(policy?.coverItems)) names = policy.coverItems;
+      if(!names.length && Array.isArray(raw?.healthCovers)) names = raw.healthCovers;
+      const amounts = (raw?.healthCoversWithAmounts && typeof raw.healthCoversWithAmounts === "object")
+        ? raw.healthCoversWithAmounts
+        : {};
+      const seen = new Set();
+      const rows = [];
+      const push = (name) => {
+        const label = safeTrim(name);
+        if(!label || seen.has(label)) return;
+        seen.add(label);
+        const amount = safeTrim(amounts[label]);
+        rows.push({ label, amount });
+      };
+      names.forEach(push);
+      if(raw?.healthAddonPremiums && typeof raw.healthAddonPremiums === "object"){
+        Object.keys(raw.healthAddonPremiums).forEach(push);
+      }
+      return rows;
+    },
+
+    renderNewPolicyCard(policy, rec, healthPolicies){
       const logoHtml = renderCompanyLogoHtmlForCompany(policy.company, "card");
       const logoMark = logoHtml
         ? `<div class="cfNewPolicyCard__logo">${logoHtml}</div>`
         : `<div class="cfNewPolicyCard__logo"><span class="cfFile__policyLogoFallback">${escapeHtml((policy.company || '?').slice(0,2))}</span></div>`;
+      const related = (Array.isArray(healthPolicies) ? healthPolicies : []).filter((x) =>
+        String(x?.id) === String(policy.id) || String(x?.parentPolicyId) === String(policy.id)
+      );
+      const rowPremium = related.length
+        ? this.sumPremiumAfterDiscount(related)
+        : (this.asNumber(policy.premiumAfterDiscountValue ?? policy.premiumAfterDiscount ?? policy.premiumValue) || 0);
+      const insuredSum = this.getPolicyInsuredCoverageSummary(rec, policy);
+      const policyNumber = safeTrim(policy.policyNumber) || "—";
+      const startDate = safeTrim(policy.startDate) || "—";
+      const insuredText = insuredSum.count > 1
+        ? `${insuredSum.count} מבוטחים`
+        : (insuredSum.names || "מבוטח ראשי");
+      const isHealth = safeTrim(policy.type) === "בריאות";
+      const coverRows = isHealth ? this.getHealthCoverRowsForDisplay(rec, policy) : [];
+      const coverBtn = coverRows.length
+        ? `<button class="cfNewPolicyCard__coversBtn" type="button" data-cf-covers-toggle="${escapeHtml(policy.id)}" aria-expanded="false">פירוט כיסויים</button>`
+        : `<span class="cfNewPolicyCard__coversBtn cfNewPolicyCard__coversBtn--empty" aria-hidden="true"></span>`;
+      const coversList = coverRows.length
+        ? `<div class="cfNewPolicyCard__covers" hidden>
+          ${coverRows.map((row) => `<div class="cfNewPolicyCard__cover">
+            <span class="cfNewPolicyCard__coverName">${escapeHtml(row.label)}</span>
+            ${row.amount ? `<span class="cfNewPolicyCard__coverAmt">${escapeHtml(this.formatMoneyValue(this.asMoneyNumber(row.amount) || row.amount))}</span>` : ""}
+          </div>`).join("")}
+        </div>`
+        : "";
+      const cell = (label, value) =>
+        `<div class="cfNewPolicyCard__cell"><span class="cfNewPolicyCard__lbl">${escapeHtml(label)}</span><strong class="cfNewPolicyCard__val">${escapeHtml(value)}</strong></div>`;
       return `<article class="cfNewPolicyCard ${escapeHtml(this.companyClass(policy.company))}" data-policy-id="${escapeHtml(policy.id)}">
-        ${logoMark}
-        <div class="cfNewPolicyCard__main">
-          <span class="cfNewPolicyCard__product">${escapeHtml(policy.type || 'פוליסה')}</span>
-          <span class="cfNewPolicyCard__sep" aria-hidden="true">•</span>
-          <span class="cfNewPolicyCard__company">${escapeHtml(policy.company || 'חברה')}</span>
+        <div class="cfNewPolicyCard__row">
+          ${logoMark}
+          <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--product">
+            <span class="cfNewPolicyCard__product">${escapeHtml(policy.type || 'פוליסה')}</span>
+            <span class="cfNewPolicyCard__company">${escapeHtml(policy.company || 'חברה')}</span>
+          </div>
+          ${cell('מספר פוליסה', policyNumber)}
+          ${cell('תחילת ביטוח', startDate)}
+          ${cell('מבוטחים', insuredText)}
+          <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--action">${coverBtn}</div>
+          <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--prem">
+            <span class="cfNewPolicyCard__lbl">פרמיה חודשית</span>
+            <strong class="cfNewPolicyCard__prem">${escapeHtml(rowPremium ? this.formatMoneyValue(rowPremium) : (policy.premiumAfterDiscount || policy.premiumText || '—'))}</strong>
+            <span class="cfFile__statusBadge ${escapeHtml(policy.badgeClass || 'is-new')}">${escapeHtml(policy.badgeText || 'חדש')}</span>
+          </div>
         </div>
-        <button class="cfFile__menuBtn" type="button" aria-label="פרטי פוליסה" data-policy-open="${escapeHtml(policy.id)}">⋮</button>
+        ${coversList}
       </article>`;
     },
 
@@ -18805,20 +18880,25 @@ UsersGateUI.init();
           toggleGroup(ev);
         });
       });
+      root.querySelectorAll('[data-cf-covers-toggle]').forEach(btn => {
+        on(btn, 'click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const card = btn.closest('.cfNewPolicyCard');
+          const list = card?.querySelector?.('.cfNewPolicyCard__covers');
+          if(!list) return;
+          const open = !!list.hidden;
+          list.hidden = !open;
+          btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+          if(card) card.classList.toggle('is-covers-open', open);
+        });
+      });
       root.querySelectorAll('.cfFilePolicyTr').forEach(row => {
         on(row, 'click', (ev) => {
           const interactive = ev.target && ev.target.closest ? ev.target.closest('button,.cfFile__menu') : null;
           if(interactive) return;
           const id = row.getAttribute('data-policy-id');
           this.openDisplayPolicy(rec, policies, id, row);
-        });
-      });
-      root.querySelectorAll('.cfNewPolicyCard').forEach(card => {
-        on(card, 'click', (ev) => {
-          const interactive = ev.target && ev.target.closest ? ev.target.closest('button,.cfFile__menu') : null;
-          if(interactive) return;
-          const id = card.getAttribute('data-policy-id');
-          this.openDisplayPolicy(rec, policies, id, card);
         });
       });
       this.bindPolicyRowMenuGlobalHandlers();
