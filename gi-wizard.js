@@ -1247,6 +1247,19 @@ init(){
 
     handleHealthDelegatedFieldEvent(ev, phase='input'){
       if(Number(this.step) !== 7 || !this.els.body) return;
+      const bmiEl = ev?.target?.closest?.('[data-bmi-field]');
+      if(bmiEl && this.els.body.contains(bmiEl)){
+        const field = safeTrim(bmiEl.getAttribute('data-bmi-field'));
+        const insId = safeTrim(bmiEl.getAttribute('data-bmi-ins'));
+        const ins = (this.insureds || []).find((x) => String(x.id) === String(insId));
+        if(!ins || (field !== 'heightCm' && field !== 'weightKg')) return;
+        const v = String(bmiEl.value || '').replace(/[^\d.]/g, '');
+        if(v !== String(bmiEl.value || '')) bmiEl.value = v;
+        this.setPath(ins.data, field, v);
+        this.calcBmi(ins);
+        this.updateBmiUI(ins);
+        return;
+      }
       const searchEl = ev?.target?.closest?.('[data-health-search]');
       if(searchEl && this.els.body.contains(searchEl)){
         if(phase === 'input' || phase === 'change'){
@@ -3819,6 +3832,26 @@ init(){
                 }catch(_e){}
               });
             }
+            return;
+          }
+          if(/חסר גובה|חסר משקל/.test(String(v.msg || ""))){
+            this.setHint(v.msg || "יש למלא גובה ומשקל לכל מבוטח");
+            try{ window.showToast?.({ title: "חסר גובה / משקל", text: v.msg || "יש למלא גובה ומשקל לכל מבוטח בסוף הצהרת הבריאות.", singletonKey: "wizard-step7-bmi", variant: "warn", durationMs: 7000 }); }catch(_e){}
+            requestAnimationFrame(() => {
+              try{
+                const box = this.els?.body?.querySelector?.("[data-health-bmi]");
+                if(box){
+                  box.scrollIntoView({ behavior: "smooth", block: "center" });
+                  box.classList.add("lcPhxHealthBmi--highlight");
+                  const missingIns = (this.insureds || []).find((ins) => !this.insuredHasHeightWeight(ins));
+                  const scoped = missingIns
+                    ? box.querySelector(`[data-bmi-card-ins="${CSS.escape ? CSS.escape(String(missingIns.id)) : String(missingIns.id)}"] [data-bmi-field]`)
+                    : box.querySelector("[data-bmi-field]");
+                  scoped?.focus?.();
+                  setTimeout(() => box.classList.remove("lcPhxHealthBmi--highlight"), 2200);
+                }
+              }catch(_e){}
+            });
             return;
           }
         }
@@ -10688,16 +10721,11 @@ if(path === "birthDate"){
     },
 
     renderStep1(ins){
-      // מסך אחד מאוחד: פרטים בסיסיים + פרטים אישיים + פרטי קשר + BMI
+      // מסך אחד מאוחד: פרטים בסיסיים + פרטים אישיים + פרטי קשר
+      // גובה / משקל / BMI הועברו לסוף הצהרת הבריאות (שלב 7)
       this.syncInsuredShabanForClinic(ins);
       const questions = this.getStep1Questions(ins);
       const liveLabel = this.buildInsuredLiveLabel(ins);
-      this.calcBmi(ins);
-      const d = ins.data;
-      const st = this.bmiStatus(d.bmi);
-      const hasBmi = !(d.bmi === null || d.bmi === undefined || d.bmi === "");
-      const bmiTxt = hasBmi ? String(d.bmi) : "—";
-      const bmiLabelTxt = hasBmi ? (st.label || "—") : "מלא גובה ומשקל";
 
       const sections = questions.map(q => `
         <div class="lcWSection lcStep1UnifiedSection">
@@ -10706,29 +10734,9 @@ if(path === "birthDate"){
         </div>
       `).join('');
 
-      const bmiSection = `
-        <div class="lcWSection lcStep1UnifiedSection">
-          <div class="lcWTitle lcStep1UnifiedSection__title">BMI</div>
-          <div class="lcWGrid">
-            ${this.fieldText("גובה (ס\"מ)","heightCm", d.heightCm, "numeric")}
-            ${this.fieldText("משקל (ק\"ג)","weightKg", d.weightKg, "numeric")}
-            <div class="lcBmiCard ${hasBmi ? "" : "is-empty"}" data-bmi="card">
-              <div class="lcBmiCard__side">
-                <span class="lcLamp lcBmiDot ${st.lamp}" data-bmi="lamp" aria-hidden="true"></span>
-              </div>
-              <div class="lcBmiCard__main">
-                <div class="lcBmiCard__value" data-bmi="value">${escapeHtml(bmiTxt)}</div>
-                <div class="lcBmiCard__label" data-bmi="label">${escapeHtml(bmiLabelTxt)}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-
       return `
         <div class="lcStep1Unified__label" data-insured-live-label="1" style="display:none">${escapeHtml(liveLabel)}</div>
         ${sections}
-        ${bmiSection}
       `;
     },
 
@@ -10749,6 +10757,62 @@ if(path === "birthDate"){
       if(n >= 25 && n <= 29.9) return { lamp:"yellow", label:"עודף משקל", text:"צהוב · 25–29.9" };
       if(n >= 30) return { lamp:"red", label:"השמנה", text:"אדום · 30+" };
       return { lamp:"yellow", label:"נמוך", text:"מתחת ל-18.5" };
+    },
+
+    insuredHasHeightWeight(ins){
+      const d = ins?.data || {};
+      return Number(d.heightCm) > 0 && Number(d.weightKg) > 0;
+    },
+
+    getHealthHeightWeightBlockingIssue(){
+      for(const ins of (this.insureds || [])){
+        const name = this.getInsuredDisplayName(ins);
+        const d = ins?.data || {};
+        if(!(Number(d.heightCm) > 0)) return { ok:false, msg:`${name}: חסר גובה` };
+        if(!(Number(d.weightKg) > 0)) return { ok:false, msg:`${name}: חסר משקל` };
+      }
+      return { ok:true };
+    },
+
+    renderHealthHeightWeightSection(){
+      const cards = (this.insureds || []).map((ins) => {
+        this.calcBmi(ins);
+        const d = ins.data || {};
+        const st = this.bmiStatus(d.bmi);
+        const hasBmi = !(d.bmi === null || d.bmi === undefined || d.bmi === "");
+        const bmiTxt = hasBmi ? String(d.bmi) : "—";
+        const bmiLabelTxt = hasBmi ? (st.label || "—") : "מלא גובה ומשקל";
+        const insId = escapeHtml(ins.id);
+        return `<div class="lcPhxHealthBmi__card" data-bmi-card-ins="${insId}">
+          <div class="lcPhxHealthBmi__name">${escapeHtml(ins.label || this.getInsuredDisplayName(ins))}</div>
+          <div class="lcPhxHealthBmi__grid">
+            <div class="field">
+              <label class="label">גובה (ס״מ)</label>
+              <input class="input" inputmode="numeric" autocomplete="off" data-bmi-field="heightCm" data-bmi-ins="${insId}" value="${escapeHtml(d.heightCm || "")}" />
+            </div>
+            <div class="field">
+              <label class="label">משקל (ק״ג)</label>
+              <input class="input" inputmode="numeric" autocomplete="off" data-bmi-field="weightKg" data-bmi-ins="${insId}" value="${escapeHtml(d.weightKg || "")}" />
+            </div>
+            <div class="lcBmiCard ${hasBmi ? "" : "is-empty"}" data-bmi="card" data-bmi-ins="${insId}">
+              <div class="lcBmiCard__side">
+                <span class="lcLamp lcBmiDot ${st.lamp}" data-bmi="lamp" aria-hidden="true"></span>
+              </div>
+              <div class="lcBmiCard__main">
+                <div class="lcBmiCard__value" data-bmi="value">${escapeHtml(bmiTxt)}</div>
+                <div class="lcBmiCard__label" data-bmi="label">${escapeHtml(bmiLabelTxt)}</div>
+              </div>
+            </div>
+          </div>
+        </div>`;
+      }).join("");
+      return `<div class="lcPhxHealthBmi" data-health-bmi="1">
+        <div class="lcPhxHealthBmi__head">
+          <div class="lcPhxHealthBmi__title">גובה ומשקל</div>
+          <div class="lcPhxHealthBmi__sub">יש למלא גובה ומשקל לכל מבוטח בתיק. ה־BMI מחושב אוטומטית.</div>
+        </div>
+        <div class="lcPhxHealthBmi__list">${cards}</div>
+      </div>`;
     },
 
     renderStep2(ins){
@@ -22286,7 +22350,7 @@ if(path === "birthDate"){
       const policies = this.getPoliciesForWizardValidation() || [];
       const medicareOnly = policies.length > 0 && !this.wizardRequiresHealthDeclarationStep();
       if(medicareOnly){
-        return `<div class="lcHealthEmpty lcHealthEmpty--medicare"><div class="lcHealthEmpty__icon">✦</div><div class="lcHealthEmpty__title">הצהרת בריאות</div><div class="lcHealthEmpty__text">אין הצהרת בריאות למוצר מדיקר. ניתן להמשיך לשלב תיאום השיחה וסיום הקמת הלקוח.</div></div>`;
+        return `<div class="lcHealthEmpty lcHealthEmpty--medicare"><div class="lcHealthEmpty__icon">✦</div><div class="lcHealthEmpty__title">הצהרת בריאות</div><div class="lcHealthEmpty__text">אין הצהרת בריאות למוצר מדיקר. יש למלא גובה ומשקל לכל מבוטח ואז להמשיך לתיאום השיחה וסיום הקמת הלקוח.</div></div>${this.renderHealthHeightWeightSection()}`;
       }
 
       const showPicker = !!this._healthShowQuickPick || !list.length;
@@ -22352,6 +22416,7 @@ if(path === "birthDate"){
           <div class="lcPhxHealth__searchEmpty" data-health-search-empty hidden>לא נמצאה שאלה התואמת לחיפוש.</div>
         </div>
         <div class="lcPhxHealth__table">${rows}</div>
+        ${this.renderHealthHeightWeightSection()}
       </div>`;
     },
 
@@ -22794,7 +22859,9 @@ if(path === "birthDate"){
     },
 
     getHealthBlockingIssue(){
-      if(!this.wizardRequiresHealthDeclarationStep()) return { ok:true };
+      if(!this.wizardRequiresHealthDeclarationStep()){
+        return this.getHealthHeightWeightBlockingIssue();
+      }
       const list = this.getHealthValidationQuestionList();
       if(!list.length) return { ok:false, msg:'אין שאלות הצהרת בריאות להצגה. בחר פוליסה רלוונטית בשלב 5.' };
       // Only validate insureds that actually have at least one new policy assigned to them.
@@ -22826,7 +22893,7 @@ if(path === "birthDate"){
           }
         }
       }
-      return { ok:true };
+      return this.getHealthHeightWeightBlockingIssue();
     },
 
     getDraftPayload(){
@@ -26821,8 +26888,7 @@ if(path === "birthDate"){
           firstName:'שם פרטי', lastName:'שם משפחה', idNumber:'ת״ז',
           birthDate:'תאריך לידה', idIssueDate:'תאריך הנפקת ת״ז', gender:'מין', maritalStatus:'מצב משפחתי',
           occupation:'עיסוק', clinic:'קופת חולים', shaban:'שב״ן',
-          phone:'טלפון', city:'עיר', street:'רחוב', houseNumber:'מספר בית',
-          heightCm:'גובה', weightKg:'משקל'
+          phone:'טלפון', city:'עיר', street:'רחוב', houseNumber:'מספר בית'
         };
 
         for(const k of ['firstName','lastName','idNumber','birthDate','gender']){
@@ -26849,10 +26915,6 @@ if(path === "birthDate"){
             if(!safeTrim(p[k])) missing.push(fieldLabel[k] + ' (במבוטח הראשי)');
           }
         }
-
-        const h = Number(d.heightCm), w = Number(d.weightKg);
-        if(!(h > 0)) missing.push(fieldLabel.heightCm);
-        if(!(w > 0)) missing.push(fieldLabel.weightKg);
 
         if(missing.length) perInsured.push({ name, missing });
       }
@@ -27744,10 +27806,6 @@ if(path === "birthDate"){
               }
             }
           }
-          const h = Number(d.heightCm);
-          const w = Number(d.weightKg);
-          if(!(h > 0)) issues.push(`${name}: חסר גובה`);
-          if(!(w > 0)) issues.push(`${name}: חסר משקל`);
         }
         const duplicateIssues = this.isCustomerPurchaseMode()
           ? []
@@ -27803,10 +27861,7 @@ if(path === "birthDate"){
           // קטין: פרטי קשר נמשכים מהמבוטח הראשי — מוודאים שהם קיימים אצלו
           const p = this.insureds[0]?.data || {};
           if(!["phone","city","street","houseNumber"].every(k => safeTrim(p[k]))) return false;
-          // BMI לקטין
-          const hc = Number(d.heightCm);
-          const wc = Number(d.weightKg);
-          return !!(hc > 0 && wc > 0 && d.bmi !== null);
+          return true;
         }
 
         // --- מבוגר: פרטים אישיים ---
@@ -27831,11 +27886,7 @@ if(path === "birthDate"){
 
         // --- פרטי קשר וכתובת ---
         if(!["phone","city","street","houseNumber"].every(k => safeTrim(d[k]))) return false;
-
-        // --- BMI ---
-        const h = Number(d.heightCm);
-        const w = Number(d.weightKg);
-        return !!(h > 0 && w > 0 && d.bmi !== null);
+        return true;
       }
 
       if(stepId === 3){
@@ -27980,29 +28031,38 @@ if(path === "birthDate"){
     // ---------- UI micro-updaters (avoid full re-render on every keystroke) ----------
     updateBmiUI(ins){
       const body = this.els.body;
-      if(!body) return;
+      if(!body || !ins?.data) return;
+      const insId = String(ins.id || "");
+      let root = body;
+      if(insId){
+        try {
+          const esc = (typeof CSS !== "undefined" && CSS.escape) ? CSS.escape(insId) : insId.replace(/["\\]/g, "\\$&");
+          root = body.querySelector(`[data-bmi-card-ins="${esc}"]`) || body;
+        } catch(_e) {
+          root = body.querySelector(`[data-bmi-card-ins="${insId}"]`) || body;
+        }
+      }
 
       const has = !(ins.data.bmi === null || ins.data.bmi === undefined || ins.data.bmi === "");
       const v = has ? String(ins.data.bmi) : "—";
 
-      const cardEl = body.querySelector('[data-bmi="card"]');
+      const cardEl = root.querySelector('[data-bmi="card"]');
       if(cardEl) cardEl.classList.toggle("is-empty", !has);
 
-      const valEl = body.querySelector('[data-bmi="value"]');
+      const valEl = root.querySelector('[data-bmi="value"]');
       if(valEl){
-        // supports both <input> and <div>
         if("value" in valEl) valEl.value = v;
         else valEl.textContent = v;
       }
 
       const st = this.bmiStatus(ins.data.bmi);
-      const lampEl = body.querySelector('[data-bmi="lamp"]');
+      const lampEl = root.querySelector('[data-bmi="lamp"]');
       if(lampEl){
         lampEl.classList.remove("green","yellow","red");
         if(st.lamp) lampEl.classList.add(st.lamp);
       }
 
-      const labelEl = body.querySelector('[data-bmi="label"]');
+      const labelEl = root.querySelector('[data-bmi="label"]');
       if(labelEl) labelEl.textContent = has ? (st.label || "—") : "מלא גובה ומשקל";
     },
 

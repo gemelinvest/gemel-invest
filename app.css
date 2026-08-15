@@ -24688,7 +24688,7 @@ body.lcAuthLock .lcLogin__mfaManualHint{display:block;margin-top:6px;font-size:1
 .lcWizard__body{pointer-events:auto;position:relative;z-index:2;}
 .lcWizard__panel{pointer-events:auto;}
 .lcHLayout,.lcHMain,.lcHQuestionCard,.lcHQuestionCard__body,.lcHMatrixRow,.lcHAnswerBtns,.lcHNavRow{position:relative;z-index:6;pointer-events:auto;}
-.lcHAnswerBtn,[data-hans],[data-hnav],[data-hsave],[data-hedit],[data-hclear],[data-hgoto-cat],[data-hfield],.lcHQInput,.lcHQTextarea{position:relative;z-index:7;pointer-events:auto !important;}
+.lcHAnswerBtn,[data-hans],[data-hnav],[data-hsave],[data-hedit],[data-hclear],[data-hgoto-cat],[data-hfield],[data-bmi-field],.lcHQInput,.lcHQTextarea{position:relative;z-index:7;pointer-events:auto !important;}
 
 
 /* BUILD PATCH: 20260415-vHealthYesFlowFix-v1 */
@@ -24784,6 +24784,58 @@ body.lcAuthLock .lcLogin__mfaManualHint{display:block;margin-top:6px;font-size:1
   font-weight:800;
 }
 .lcPhxHealth__table{display:grid;gap:12px}
+.lcPhxHealthBmi{
+  display:grid;
+  gap:12px;
+  margin-top:4px;
+  padding:16px 18px;
+  border:1px solid rgba(43,75,138,.12);
+  border-radius:22px;
+  background:rgba(255,255,255,.92);
+  box-shadow:0 14px 34px rgba(15,23,42,.06);
+}
+.lcPhxHealthBmi--highlight{
+  box-shadow:0 0 0 2px rgba(43,75,138,.35), 0 14px 34px rgba(15,23,42,.08);
+}
+.lcPhxHealthBmi__title{
+  font-size:18px;
+  font-weight:950;
+  color:var(--brandA);
+}
+.lcPhxHealthBmi__sub{
+  margin-top:4px;
+  font-size:13px;
+  font-weight:700;
+  color:var(--muted);
+  line-height:1.45;
+}
+.lcPhxHealthBmi__list{display:grid;gap:12px}
+.lcPhxHealthBmi__card{
+  border:1px solid rgba(43,75,138,.12);
+  background:linear-gradient(180deg, rgba(249,251,255,.98), rgba(241,246,255,.88));
+  border-radius:18px;
+  padding:14px;
+}
+.lcPhxHealthBmi__name{
+  font-size:14px;
+  font-weight:950;
+  color:var(--brandA);
+  margin-bottom:10px;
+}
+.lcPhxHealthBmi__grid{
+  display:grid;
+  grid-template-columns:minmax(120px,1fr) minmax(120px,1fr) minmax(170px,auto);
+  gap:12px;
+  align-items:end;
+}
+.lcPhxHealthBmi__grid .lcBmiCard{
+  grid-column:auto;
+  padding:12px 14px;
+  min-height:64px;
+}
+@media (max-width:720px){
+  .lcPhxHealthBmi__grid{grid-template-columns:1fr}
+}
 .lcPhxHealth__row{
   display:grid;
   grid-template-columns:minmax(320px, 1.25fr) minmax(520px, 1fr);
