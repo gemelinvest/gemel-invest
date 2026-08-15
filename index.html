@@ -8,8 +8,8 @@
 <meta content="#f8fafc" name="theme-color"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20260815-prod-enrich-v1" rel="stylesheet"/>
-<link href="./theme.css?v=20260815-prod-enrich-v1" rel="stylesheet"/>
+<link href="./app.css?v=20260816-daily-sales-v1" rel="stylesheet"/>
+<link href="./theme.css?v=20260816-daily-sales-v1" rel="stylesheet"/>
 <link href="./theme-p2.css?v=20260805-workdays-goal-v1" rel="stylesheet"/>
 <link href="./login-split.css?v=20260814-face-ui-v1" rel="stylesheet"/>
 <!-- GI-PERF 2026-08-10: CSS משני (mirror/import/unify) נטען אחרי כניסה מ-app.js —
@@ -601,8 +601,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <div class="card__head giDailySalesPage__head">
 <div>
 <div class="card__title">מעקב מכירות יומי</div>
-<div class="card__hint">יום עבודה אחד · הנתונים מתאפסים בחצות ומתחילים מחדש <span class="giDailySalesPage__syncStamp" id="dailySalesSyncStamp"></span></div>
-<span class="giDailySalesPage__resetPill"><i class="giDailySalesPage__resetDot" aria-hidden="true"></i> איפוס אוטומטי בחצות · מציג רק את היום הנבחר</span>
+<span class="giDailySalesPage__syncStamp" id="dailySalesSyncStamp"></span>
 </div>
 <div class="giDailySalesPage__nav" role="group" aria-label="בחירת תאריך">
 <button class="btn giDailySalesPage__todayBtn" id="btnDailySalesToday" type="button">היום</button>
@@ -615,7 +614,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <button class="btn btn--primary" id="btnDailySalesPrint" type="button">הדפסה</button>
 </div>
 </div>
-<div class="giDailySalesPage__kpis" id="dailySalesKpis" aria-label="סיכום יומי"></div>
+<div class="giDailySalesPage__kpis" id="dailySalesKpis" hidden aria-hidden="true"></div>
 <div class="giDailySalesPage__sectors" id="dailySalesSectors" role="tablist" aria-label="בחירת ענף"></div>
 <div class="giDailySalesPage__summary" id="dailySalesSummary" hidden aria-hidden="true"></div>
 <p class="giDailySalesPage__note" id="dailySalesSectorNote" hidden>אלמנטרי: הפרמיה המוצגת היא <b>פרמיה שנתית</b>.</p>
@@ -635,7 +634,9 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 </tr>
 </thead>
 <tbody id="dailySalesTbody">
-<tr><td colspan="5" class="giDailySalesPage__emptyCell">טוען…</td></tr>
+<tr class="giDailySalesPage__skelRow"><td colspan="5"><div class="giDailySalesPage__skelLine"></div></td></tr>
+<tr class="giDailySalesPage__skelRow"><td colspan="5"><div class="giDailySalesPage__skelLine"></div></td></tr>
+<tr class="giDailySalesPage__skelRow"><td colspan="5"><div class="giDailySalesPage__skelLine"></div></td></tr>
 </tbody>
 </table>
 </div>
@@ -3628,24 +3629,29 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
   </div>
 </div>
 
-<!-- Update Popup (Premium) -->
+<!-- Update Popup — compact branded card; IDs/hooks unchanged -->
 <div aria-hidden="true" class="updatePopup" id="updatePopup">
   <div class="updatePopup__backdrop"></div>
   <div aria-label="עדכון גרסה למערכת" aria-modal="true" class="updatePopup__panel" role="dialog">
-    <div class="updatePopup__stripe" aria-hidden="true"></div>
     <div class="updatePopup__body">
-    <div class="updatePopup__icon" aria-hidden="true">↻</div>
-    <div class="updatePopup__title">עדכון גרסה למערכת</div>
-    <div class="updatePopup__lead">העדכונים שניכנסו:</div>
-    <div class="updatePopup__box">
-      <div class="updatePopup__versionRow">
-        <span class="updatePopup__versionLabel">גרסה</span>
-        <span class="updatePopup__versionValue" id="updatePopupVersion" dir="ltr"></span>
+      <div class="updatePopup__mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12a9 9 0 1 1-2.2-5.8"></path>
+          <path d="M21 3v6h-6"></path>
+        </svg>
       </div>
-      <div class="updatePopup__notes" id="updatePopupNotes" hidden></div>
-    </div>
-    <p class="updatePopup__hint" id="updatePopupHint">מומלץ לעדכן אחרי סיום הפעולה הנוכחית.</p>
-    <p class="updatePopup__hint updatePopup__hint--forced" id="updatePopupHintForced" hidden>יש לעדכן את המערכת כדי להמשיך לעבוד.</p>
+      <div class="updatePopup__kicker">GEMEL INVEST</div>
+      <div class="updatePopup__title">עדכון גרסה למערכת</div>
+      <p class="updatePopup__lead">העדכונים שנכנסו</p>
+      <div class="updatePopup__box">
+        <div class="updatePopup__versionRow">
+          <span class="updatePopup__versionLabel">גרסה</span>
+          <span class="updatePopup__versionValue" id="updatePopupVersion" dir="ltr"></span>
+        </div>
+        <div class="updatePopup__notes" id="updatePopupNotes" hidden></div>
+      </div>
+      <p class="updatePopup__hint" id="updatePopupHint">מומלץ לעדכן אחרי סיום הפעולה הנוכחית.</p>
+      <p class="updatePopup__hint updatePopup__hint--forced" id="updatePopupHintForced" hidden>יש לעדכן את המערכת כדי להמשיך לעבוד.</p>
     </div>
     <div class="updatePopup__footer">
       <button class="btn btn--primary updatePopup__btn updatePopup__btn--apply" id="btnApplyUpdate" type="button">עדכן</button>
@@ -3841,7 +3847,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 </div>
 
 <script src="./contacts-directory-seed.js?v=20260811-contacts-v1"></script>
-<script src="./app.js?v=20260815-prod-enrich-v1"></script>
+<script src="./app.js?v=20260816-daily-sales-v1"></script>
 <script src="./gi-face-auth.js?v=20260814-face-ui-v1"></script>
 
 

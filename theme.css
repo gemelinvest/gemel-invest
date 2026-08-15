@@ -6896,6 +6896,84 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
 }
 
 /* =====================================================================
+   GI 2026-08-16 · מעקב מכירות יומי — כרטיסי ענף + שלד טעינה
+   תחום ל-#view-dailySales. האוברליי והדשבורד לא מושפעים.
+   ===================================================================== */
+#view-dailySales .giDailySalesPage__kpis:not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__resetPill:not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage .card__hint:not(#\9):not(#\9){
+  display: none !important;
+}
+#view-dailySales .giDailySalesPage__syncStamp:not(#\9):not(#\9){
+  display: none;
+  margin-top: 8px;
+}
+#view-dailySales .giDailySalesPage__syncStamp:not(:empty):not(#\9):not(#\9){
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--gi-r-pill);
+  background: var(--gi-surface-3);
+  color: var(--gi-text-muted);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+#view-dailySales .giDailySalesPage__syncStamp:not(:empty):not(#\9):not(#\9)::before{
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #16A34A;
+}
+#view-dailySales .giDailySalesPage__sectorTab:not(#\9):not(#\9){
+  min-height: 108px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  text-align: right;
+  padding: 14px 16px;
+  border-radius: var(--gi-r-card);
+  box-shadow: var(--gi-sh-sm);
+}
+#view-dailySales .giDailySalesPage__sectorTabValue:not(#\9):not(#\9){
+  margin-top: 8px;
+  font-size: 24px;
+  letter-spacing: -.02em;
+}
+#view-dailySales .giDailySalesPage__sectorTabMeta:not(#\9):not(#\9){
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gi-text-3);
+}
+#view-dailySales .giDailySalesPage__skelLine:not(#\9):not(#\9){
+  display: block;
+  height: 12px;
+  width: 58%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #eef2f6 20%, #f8fafc 50%, #eef2f6 80%);
+  background-size: 200% 100%;
+  animation: giDailySalesSkel 1.1s linear infinite;
+}
+#view-dailySales .giDailySalesPage__skelLine--lg:not(#\9):not(#\9){
+  height: 26px;
+  width: 72%;
+  margin-top: 10px;
+}
+#view-dailySales .giDailySalesPage__skelLine--sm:not(#\9):not(#\9){
+  height: 10px;
+  width: 84%;
+  margin-top: 10px;
+}
+#view-dailySales .giDailySalesPage__skelRow td:not(#\9):not(#\9){
+  padding: 18px 16px;
+}
+@keyframes giDailySalesSkel{
+  to{ background-position: -200% 0; }
+}
+
+/* =====================================================================
    SETTINGS CONSOLE ? GI stretch (Settings Hub)
    Visual layer only; DOM/logic unchanged.
    ===================================================================== */
@@ -9097,4 +9175,20 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   background: var(--gi-health) !important;
   color: #fff !important;
   border-color: transparent !important;
+}
+
+.updatePopup__panel:not(#\9):not(#\9){
+  max-width: 360px !important;
+  border-radius: 18px !important;
+  text-align: right !important;
+  box-shadow: var(--gi-sh-lg) !important;
+}
+.updatePopup__title:not(#\9):not(#\9){
+  font-size: 16px !important;
+  font-weight: 800 !important;
+  color: var(--gi-text) !important;
+}
+.updatePopup__notesList li::before:not(#\9):not(#\9){
+  border-radius: 1.5px !important;
+  box-shadow: none !important;
 }

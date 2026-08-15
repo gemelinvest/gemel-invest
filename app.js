@@ -28079,27 +28079,32 @@ UsersGateUI.init();
         if(!products.length) return [];
         const rawList = Array.isArray(rec?.payload?.elementaryPolicies) ? rec.payload.elementaryPolicies : [];
         const custStamp = this.resolveCustomerMonthStamp(rec);
-        let referralSoldAt = "";
-        try {
-          const ref = (typeof pickBestElementaryReferralForCustomerFile === "function"
-            ? pickBestElementaryReferralForCustomerFile(findElementaryReferralsForCustomerOrIdNumber?.(rec?.id, rec?.idNumber))
-            : null)
-            || (typeof findElementaryReferralByCustomerId === "function" ? findElementaryReferralByCustomerId(rec?.id) : null);
-          referralSoldAt = safeTrim(ref?.soldAt || ref?.issuedAt || ref?.updatedAt);
-        } catch(_e) { referralSoldAt = ""; }
+        let referralSoldAt = null;
+        const getReferralSoldAt = () => {
+          if(referralSoldAt !== null) return referralSoldAt;
+          referralSoldAt = "";
+          try {
+            const ref = (typeof pickBestElementaryReferralForCustomerFile === "function"
+              ? pickBestElementaryReferralForCustomerFile(findElementaryReferralsForCustomerOrIdNumber?.(rec?.id, rec?.idNumber))
+              : null)
+              || (typeof findElementaryReferralByCustomerId === "function" ? findElementaryReferralByCustomerId(rec?.id) : null);
+            referralSoldAt = safeTrim(ref?.soldAt || ref?.issuedAt || ref?.updatedAt);
+          } catch(_e) { referralSoldAt = ""; }
+          return referralSoldAt;
+        };
         const stampFor = (p) => {
           const raw = rawList.find((row) => safeTrim(row?.id) && safeTrim(row.id) === safeTrim(p?.id)) || {};
           const details = (p?.details && typeof p.details === "object") ? p.details : {};
           const rawDetails = (raw.details && typeof raw.details === "object") ? raw.details : {};
-          return safeTrim(
+          const direct = safeTrim(
             p?._addedAt || raw._addedAt
             || p?.soldAt || raw.soldAt
             || p?.createdAt || raw.createdAt
             || p?.startDate || raw.startDate
             || details.soldAt || rawDetails.soldAt
-            || referralSoldAt
-            || custStamp
           );
+          if(direct) return direct;
+          return getReferralSoldAt() || custStamp;
         };
         return products.map((p) => {
           const stamp = stampFor(p);
@@ -28355,21 +28360,30 @@ UsersGateUI.init();
 
     renderDailySalesSectorTabsHtml(report){
       const selected = this.getDailySalesSelectedSectorKey();
-      let todayPrem = 0;
-      if(report?.isToday){
-        try { todayPrem = Math.round((Number(this.buildTodaySalesMetrics()?.totalPremium) || 0) * 100) / 100; } catch(_e) { todayPrem = 0; }
-      }
       return this.dailySalesSectorTabs().map((tab) => {
         const slice = this.dailySalesTabSlice(report, tab);
         const on = tab.key === selected;
         const unit = tab.annual ? "שנתית" : "חודשית";
-        const prem = (tab.combined && todayPrem > slice.premium) ? todayPrem : slice.premium;
         return `<button class="giDailySalesPage__sectorTab${on ? " is-active" : ""}" type="button" role="tab" aria-selected="${on ? "true" : "false"}" data-daily-sales-sector="${escapeHtml(tab.key)}">
           <span class="giDailySalesPage__sectorTabLabel">${escapeHtml(tab.label)}</span>
-          <span class="giDailySalesPage__sectorTabValue">${escapeHtml(this.formatMoney(prem))}</span>
-          <span class="giDailySalesPage__sectorTabMeta">${escapeHtml(unit)} · ${escapeHtml(String(slice.agents))} נציגים · ${escapeHtml(String(slice.deals))} עסקאות</span>
+          <span class="giDailySalesPage__sectorTabValue">${escapeHtml(this.formatMoney(slice.premium))}</span>
+          <span class="giDailySalesPage__sectorTabMeta">${escapeHtml(unit)} · ${escapeHtml(this.dailySalesDealsWord(slice.deals))} · ${escapeHtml(this.dailySalesAgentsWord(slice.agents))}</span>
         </button>`;
       }).join("");
+    },
+
+    renderDailySalesSkeletonTabsHtml(){
+      return this.dailySalesSectorTabs().map(() =>
+        `<div class="giDailySalesPage__sectorTab is-skel" aria-hidden="true">
+          <span class="giDailySalesPage__skelLine"></span>
+          <span class="giDailySalesPage__skelLine giDailySalesPage__skelLine--lg"></span>
+          <span class="giDailySalesPage__skelLine giDailySalesPage__skelLine--sm"></span>
+        </div>`
+      ).join("");
+    },
+
+    renderDailySalesSkeletonRowsHtml(){
+      return `<tr class="giDailySalesPage__skelRow"><td colspan="5"><div class="giDailySalesPage__skelLine"></div></td></tr>`.repeat(3);
     },
 
     renderDailySalesKpisHtml(report){
@@ -28381,18 +28395,6 @@ UsersGateUI.init();
       let healthPrat = Math.round(((Number(totals.health) || 0) + (Number(totals.risks) || 0) + (Number(totals.other) || 0)) * 100) / 100;
       let healthDeals = healthSlice.deals;
       let healthAgents = healthSlice.agents;
-      if(report?.isToday){
-        try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
-        try {
-          const today = this.buildTodaySalesMetrics();
-          const todayPrem = Math.round((Number(today?.totalPremium) || 0) * 100) / 100;
-          if(todayPrem > healthPrat){
-            healthPrat = todayPrem;
-            if(Number(today?.totalPolicies) > healthDeals) healthDeals = Number(today.totalPolicies) || healthDeals;
-            if(Number(today?.newClients) > healthAgents) healthAgents = Number(today.newClients) || healthAgents;
-          }
-        } catch(_e) {}
-      }
       const allAgents = new Set((Array.isArray(report?.groups) ? report.groups : []).map((g) => g.agentName)).size;
       const allDeals = (Array.isArray(report?.groups) ? report.groups : []).reduce((sum, g) => sum + (Number(g.deals) || 0), 0);
       return `
@@ -28597,35 +28599,43 @@ UsersGateUI.init();
       const todayBtn = document.getElementById("btnDailySalesToday");
       const tableTitle = document.getElementById("dailySalesTableTitle");
       const tableHint = document.getElementById("dailySalesTableHint");
-      // GI-FIX: בזמן hydration לא מוחקים טבלה מלאה ברינדור ריק זמני
+      const paintDateChrome = () => {
+        if(dateInput){
+          dateInput.value = report.dateKey;
+          dateInput.max = this.toLocalDateKey(new Date());
+        }
+        if(dateText) dateText.textContent = report.dateLabel || "—";
+        if(todayBtn){
+          todayBtn.disabled = !!report.isToday;
+          todayBtn.classList.toggle("is-active", !!report.isToday);
+        }
+      };
+      // GI-FIX 2026-08-16: בזמן hydration מציגים שלד — לא נתקעים על «טוען…»,
+      // ולא דורסים טבלה מלאה ברינדור ריק זמני.
       try {
         const missing = (typeof Storage !== "undefined" && Storage.countMissingCustomerPayloads)
           ? (Number(Storage.countMissingCustomerPayloads()) || 0)
           : 0;
-        const prevRows = tbody ? tbody.querySelectorAll("tr").length : 0;
+        const hasRealRows = tbody ? tbody.querySelectorAll("tr.giDailySalesPage__row").length > 0 : false;
         const nextEmpty = !(slice?.groups?.length) && !(Number(report?.groupTotalPremium) > 0) && !(Number(report?.totalPremium) > 0);
-        if(missing > 0 && prevRows > 0 && nextEmpty){
-          if(dateInput){
-            dateInput.value = report.dateKey;
-            dateInput.max = this.toLocalDateKey(new Date());
-          }
-          if(dateText) dateText.textContent = report.dateLabel || "—";
-          if(todayBtn){
-            todayBtn.disabled = !!report.isToday;
-            todayBtn.classList.toggle("is-active", !!report.isToday);
-          }
+        if(missing > 0 && nextEmpty){
+          paintDateChrome();
+          if(hasRealRows) return;
+          if(kpisEl) kpisEl.innerHTML = "";
+          if(sectorsEl) sectorsEl.innerHTML = this.renderDailySalesSkeletonTabsHtml();
+          if(tableTitle) tableTitle.textContent = `פירוט לפי נציג · ${tab.label}`;
+          if(tableHint) tableHint.textContent = "טוען נתונים…";
+          if(tbody) tbody.innerHTML = this.renderDailySalesSkeletonRowsHtml();
           return;
         }
       } catch(_e) {}
-      if(kpisEl) kpisEl.innerHTML = this.renderDailySalesKpisHtml(report);
+      if(kpisEl) kpisEl.innerHTML = "";
       if(sectorsEl) sectorsEl.innerHTML = this.renderDailySalesSectorTabsHtml(report);
       if(summary) summary.innerHTML = this.renderDailySalesGroupSummaryHtml(report, { tab, slice });
-      if(tableTitle) tableTitle.textContent = tab.combined
-        ? `פירוט לפי נציג · ${tab.label}`
-        : `פירוט לפי נציג · ${tab.label}`;
+      if(tableTitle) tableTitle.textContent = `פירוט לפי נציג · ${tab.label}`;
       if(tableHint){
         tableHint.textContent = tab.combined
-          ? "שורה אחת לנציג · הפרמיה מסוכמת יחד"
+          ? "פרמיה חודשית אחת · בריאות ופרט מסוכמים יחד"
           : (tab.annual ? "פרמיה שנתית" : "פרמיה חודשית");
       }
       if(tbody){
@@ -28637,21 +28647,12 @@ UsersGateUI.init();
       if(noteEl){
         noteEl.hidden = !tab.annual;
       }
-      if(dateInput){
-        dateInput.value = report.dateKey;
-        dateInput.max = this.toLocalDateKey(new Date());
-      }
-      if(dateText) dateText.textContent = report.dateLabel || "—";
-      if(todayBtn){
-        todayBtn.disabled = !!report.isToday;
-        todayBtn.classList.toggle("is-active", !!report.isToday);
-      }
+      paintDateChrome();
+      if(!(this._dailySalesLastSyncAt instanceof Date)) this._dailySalesLastSyncAt = new Date();
       const syncEl = document.getElementById("dailySalesSyncStamp");
       if(syncEl){
         const at = this._dailySalesLastSyncAt;
-        syncEl.textContent = at instanceof Date
-          ? `עודכן ${at.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`
-          : "";
+        syncEl.textContent = `עודכן ${at.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" })}`;
       }
     },
 
@@ -32051,7 +32052,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260815-prod-enrich-v1";
+  const GI_WIZARD_JS_VERSION = "20260816-daily-sales-v1";
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
   const TZAHAL_CLINIC = "קופה צהלית";
   const TZAHAL_CLINIC_SHABAN = "אין שב״ן";
