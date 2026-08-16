@@ -2007,6 +2007,19 @@
   const LS_TABLE_CACHE_PREFIX = "GEMEL_TABLE_CACHE_V1_"; // legacy only - Server Only mode clears and ignores it
   const FAST_CACHE_MAX_AGE_MS = 1000 * 60 * 15;
   const GI_SERVER_CACHE_KEY = "GEMEL_SERVER_STATE_CACHE_V2";
+  const GI_LAST_SESSION_USER_KEY = "GI_LAST_SESSION_USER_V1";
+
+  function persistLastSessionUserKey(key){
+    try {
+      const k = safeTrim(key);
+      if(!k) localStorage.removeItem(GI_LAST_SESSION_USER_KEY);
+      else localStorage.setItem(GI_LAST_SESSION_USER_KEY, k);
+    } catch(_e) {}
+  }
+
+  function readLastSessionUserKey(){
+    try { return safeTrim(localStorage.getItem(GI_LAST_SESSION_USER_KEY)); } catch(_e) { return ""; }
+  }
   const GI_SERVER_CACHE_TTL_MS = 1000 * 60 * 5;
   const GI_FULL_IDB_NAME = "gemel_invest_state_cache";
   const GI_FULL_IDB_STORE = "full_state";
@@ -9480,7 +9493,7 @@
           if(fp === this._lastLightCacheFingerprint) return;
           this._lastLightCacheFingerprint = fp;
           GiPerf.mark("saveBackup");
-          sessionStorage.setItem(GI_SERVER_CACHE_KEY, JSON.stringify({ at: entry.at, payload: light }));
+          sessionStorage.setItem(GI_SERVER_CACHE_KEY, JSON.stringify({ at: entry.at, payload: light, userKey: safeTrim(entry.userKey) }));
           GiPerf.mark("saveBackup:end");
           GiPerf.measure("saveBackup", "saveBackup");
         } catch(_e) {}
@@ -9496,7 +9509,7 @@
       const isFresh = (entry) => entry && entry.payload && (!maxAgeMs || (Date.now() - Number(entry.at || 0)) <= maxAgeMs);
       const userKey = this.fullCacheUserKey();
       if(isFresh(this._memoryCache)){
-        if(!userKey || !this._memoryCache.userKey || this._memoryCache.userKey === userKey){
+        if(userKey && this._memoryCache.userKey && this._memoryCache.userKey === userKey){
           // אותה בדיקה גם על מטמון הזיכרון: saveServerCache שומר את State.data
           // כמות שהוא, כך שאם הסשן עצמו הגיע ממקור מקוצץ — הוא יישמר מקוצץ.
           if(!this.sessionPayloadLooksLight(this._memoryCache.payload)){
@@ -9511,6 +9524,9 @@
         if(!raw) return null;
         const parsed = JSON.parse(raw);
         if(isFresh(parsed)){
+          const cachedUserKey = safeTrim(parsed.userKey);
+          if(userKey && cachedUserKey && cachedUserKey !== userKey) return null;
+          if(userKey && !cachedUserKey) return null;
           const rawPayload = parsed.payload;
           const payload = normalizeState(rawPayload);
           const looksLight = this.sessionPayloadLooksLight(rawPayload) || this.sessionPayloadLooksLight(payload);
@@ -9546,7 +9562,7 @@
       const entry = this._memoryCache;
       if(!entry?.payload) return null;
       const userKey = this.fullCacheUserKey();
-      if(userKey && entry.userKey && entry.userKey !== userKey) return null;
+      if(!userKey || !entry.userKey || entry.userKey !== userKey) return null;
       if(maxAgeMs && (Date.now() - Number(entry.at || 0)) > maxAgeMs) return null;
       if(this.sessionPayloadLooksLight(entry.payload)) return null;
       return entry.payload;
@@ -13496,6 +13512,20 @@
       try { localStorage.removeItem(LS_SESSION_KEY); } catch(_) {}
       this.lock();
 
+      if(!this._browserCloseBound){
+        this._browserCloseBound = true;
+        window.addEventListener("pagehide", (ev) => {
+          try {
+            if(ev?.persisted) return;
+            if(!this.current) return;
+            try { persistLastSessionUserKey(typeof Storage !== "undefined" ? Storage.fullCacheUserKey() : ""); } catch(_e) {}
+            try { App.resetSessionDataForUserSwitch("browser_close"); } catch(_e) {}
+            this.current = null;
+            try { this.lock(); } catch(_e) {}
+          } catch(_e) {}
+        });
+      }
+
       on(this.els.form, "submit", async (e) => {
         e.preventDefault();
         await this._submit();
@@ -13656,10 +13686,13 @@
         try { void AgentActivityLog.log(eventType, cur); } catch(_e) {}
       }
       try { AttendanceClock.onLoggedOut(); } catch(_e) {}
+      try { persistLastSessionUserKey(typeof Storage !== "undefined" ? Storage.fullCacheUserKey() : ""); } catch(_e) {}
       this.current = null;
-      try { App._fullDataReady = false; } catch(_e) {}
-      try { App._sessionDataScoped = false; } catch(_e) {}
-      try { App.clearPostLoginDataRecovery(); } catch(_e) {}
+      try { App.resetSessionDataForUserSwitch(reason === "browser" ? "browser_close" : "logout"); } catch(_e) {
+        try { App._fullDataReady = false; } catch(_e2) {}
+        try { App._sessionDataScoped = false; } catch(_e2) {}
+        try { App.clearPostLoginDataRecovery(); } catch(_e2) {}
+      }
       try { localStorage.removeItem(LS_SESSION_KEY); } catch(_) {}
       try { localStorage.removeItem(SIDEBAR_COLLAPSE_STORAGE_KEY); } catch(_) {}
       try { InactivityGuard.stop(); } catch(_e) {}
@@ -26684,6 +26717,21 @@ UsersGateUI.init();
     },
 
     invalidateMetricsCache(options = {}){
+      if(options.userSwitch === true){
+        this._metricsCacheKey = "";
+        this._metricsCache = null;
+        this._renderedDomKey = "";
+        this._metricsBuildKey = "";
+        this._metricsBuildBusy = false;
+        this._metricsBuildQueuedKey = "";
+        this._localMetricsAttemptedKey = "";
+        this._todaySalesCacheKey = "";
+        this._todaySalesCache = null;
+        this._todaySalesServerOverlay = null;
+        this._dailyAgentsCacheKey = "";
+        this._dailyAgentsCache = null;
+        return;
+      }
       const force = options.force === true;
       const keepUsableCache = () => {
         this._todaySalesCacheKey = "";
@@ -41631,6 +41679,72 @@ const ClalRiskLifePdf = {
     _postLoginDataRecoveryBusy: false,
     _postLoginDataRecoveryAttempt: 0,
     _postLoginDataRecoveryGeneration: 0,
+    _sessionGeneration: 0,
+    _reloadSessionGen: 0,
+    _reloadSessionUserKey: "",
+    _postLoginPipelineGen: 0,
+    _postLoginPipelineUserKey: "",
+
+    currentSessionGeneration(){
+      return Number(this._sessionGeneration) || 0;
+    },
+
+    isCurrentSessionGeneration(generation){
+      return Number(generation) === this.currentSessionGeneration();
+    },
+
+    /** GI-USER-SWITCH: איפוס נתוני סשן במעבר יוזר / סגירת חלון — בלי לגעת בסוכנים לכניסה. */
+    resetSessionDataForUserSwitch(reason = ""){
+      this._sessionGeneration = this.currentSessionGeneration() + 1;
+      this._fullDataReady = false;
+      this._sessionDataScoped = false;
+      this._postLoginPipelineBusy = false;
+      this._postLoginPipelinePromise = null;
+      this._postLoginPipelineGen = 0;
+      this._postLoginPipelineUserKey = "";
+      this._reloadSessionInFlight = null;
+      this._reloadSessionGen = 0;
+      this._reloadSessionUserKey = "";
+      this._ensureAdminCustomersBusy = false;
+      try { this.clearPostLoginDataRecovery(); } catch(_e) {}
+      try {
+        const agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
+        const meta = State.data?.meta && typeof State.data.meta === "object" ? State.data.meta : {};
+        const base = normalizeState(State.data || defaultState());
+        base.agents = agents;
+        base.meta = meta;
+        base.customers = [];
+        base.proposals = [];
+        State.data = base;
+        refreshStateShadows({ skipNormalize: true });
+      } catch(_e) {
+        try {
+          const keepAgents = Array.isArray(State.data?.agents) ? State.data.agents : [];
+          State.data = defaultState();
+          State.data.agents = keepAgents;
+        } catch(_e2) {}
+      }
+      this._loginReady = Array.isArray(State.data?.agents) && State.data.agents.length > 0;
+      try { Storage._memoryCache = null; } catch(_e) {}
+      try { sessionStorage.removeItem(GI_SERVER_CACHE_KEY); } catch(_e) {}
+      try { DashboardUI.invalidateMetricsCache?.({ force: true, userSwitch: true }); } catch(_e) {}
+      if(reason){
+        try { console.warn("GI_USER_SWITCH_RESET:", reason); } catch(_e) {}
+      }
+      return this.currentSessionGeneration();
+    },
+
+    shouldResetSessionForIncomingUser(){
+      const incoming = (typeof Storage !== "undefined" && Storage.fullCacheUserKey)
+        ? safeTrim(Storage.fullCacheUserKey())
+        : "";
+      const last = readLastSessionUserKey();
+      if(incoming && last && last !== incoming) return true;
+      const leftover = Array.isArray(State.data?.customers) ? State.data.customers.length : 0;
+      if(leftover > 0 && incoming && last && last !== incoming) return true;
+      if(leftover > 0 && incoming && !last) return true;
+      return false;
+    },
 
     clearPostLoginDataRecovery(){
       this._postLoginDataRecoveryGeneration = (Number(this._postLoginDataRecoveryGeneration) || 0) + 1;
@@ -42281,16 +42395,29 @@ const ClalRiskLifePdf = {
       if(!Auth.current) return { ok:false, error:"NO_SESSION" };
       /* GI-PERF 2026-08-08 — recovery/timeout מצטרפים לריצה אחת במקום שני
          reloadSessionState מקבילים (כל אחד עם loadSheets מלא). */
-      if(this._reloadSessionInFlight) return this._reloadSessionInFlight;
+      const gen = this.currentSessionGeneration();
+      const userKey = (typeof Storage !== "undefined" && Storage.fullCacheUserKey) ? safeTrim(Storage.fullCacheUserKey()) : "";
+      if(this._reloadSessionInFlight
+        && this._reloadSessionGen === gen
+        && this._reloadSessionUserKey === userKey){
+        return this._reloadSessionInFlight;
+      }
       const run = this._reloadSessionStateUnlocked(options).finally(() => {
         if(this._reloadSessionInFlight === run) this._reloadSessionInFlight = null;
       });
       this._reloadSessionInFlight = run;
+      this._reloadSessionGen = gen;
+      this._reloadSessionUserKey = userKey;
       return run;
     },
 
     async _reloadSessionStateUnlocked(options = {}){
       if(!Auth.current) return { ok:false, error:"NO_SESSION" };
+      const sessionGen = this.currentSessionGeneration();
+      const sessionUserKey = (typeof Storage !== "undefined" && Storage.fullCacheUserKey) ? safeTrim(Storage.fullCacheUserKey()) : "";
+      const stillSameSession = () => this.isCurrentSessionGeneration(sessionGen)
+        && !!Auth.current
+        && ((typeof Storage !== "undefined" && Storage.fullCacheUserKey) ? safeTrim(Storage.fullCacheUserKey()) : "") === sessionUserKey;
       // מנקה מטמון של משתמשים אחרים על אותו מכשיר (לא חוסם — רץ ברקע).
       try { void Storage.purgeOtherUserIdbCaches(); } catch(_e) {}
       const applyOpts = options.skipLoginSideEffects === true
@@ -42298,6 +42425,7 @@ const ClalRiskLifePdf = {
         : {};
 
       const paintFromLocalCache = (payload, label) => {
+        if(!stillSameSession()) return false;
         if(!payload || typeof payload !== "object") return false;
         if(Storage.sessionPayloadLooksLight(payload)) return false;
         const paintCustomers = Array.isArray(payload.customers) ? payload.customers.length : 0;
@@ -42373,6 +42501,7 @@ const ClalRiskLifePdf = {
           } else {
             // חריגה מהתקציב — צביעה מאוחרת, רק אם השרת טרם החזיר תשובה.
             idbPromise.then((late) => {
+              if(!stillSameSession()) return;
               if(serverSyncApplied || paintedFromFullCache) return;
               if(!late?.payload) return;
               paintedFromFullCache = paintFromLocalCache(late.payload, "נטען ממטמון · מסנכרן מהשרת…");
@@ -42415,6 +42544,7 @@ const ClalRiskLifePdf = {
       }
 
       if (r.ok) {
+        if(!stillSameSession()) return { ok:false, error:"SESSION_SWITCHED" };
         // חוסם צביעה מאוחרת מהמטמון אחרי שהשרת כבר החזיר נתונים טריים.
         serverSyncApplied = true;
         this.applyLoadResult(r, paintedFromFullCache ? "סונכרן מהשרת" : "נתוני משתמש נטענו", applyOpts);
@@ -42463,10 +42593,16 @@ const ClalRiskLifePdf = {
     },
 
     async runPostLoginPipeline(ctx = {}){
-      if(this._postLoginPipelineBusy && this._postLoginPipelinePromise){
+      const gen = this.currentSessionGeneration();
+      const userKey = (typeof Storage !== "undefined" && Storage.fullCacheUserKey) ? safeTrim(Storage.fullCacheUserKey()) : "";
+      if(this._postLoginPipelineBusy && this._postLoginPipelinePromise
+        && this._postLoginPipelineGen === gen
+        && this._postLoginPipelineUserKey === userKey){
         return this._postLoginPipelinePromise;
       }
       this._postLoginPipelineBusy = true;
+      this._postLoginPipelineGen = gen;
+      this._postLoginPipelineUserKey = userKey;
       const timeoutMs = Math.max(5000, Number(ctx?.timeoutMs) || POST_LOGIN_DATA_TIMEOUT_MS);
       const raceTimeout = (promise, ms) => Promise.race([
         promise,
@@ -42493,6 +42629,7 @@ const ClalRiskLifePdf = {
               // Keep the in-flight load alive: if it finishes after the UI timeout, paint the real data.
               reloadPromise.then((r) => {
                 if(!Auth?.current) return;
+                if(!this.isCurrentSessionGeneration(gen)) return;
                 if(r?.ok && this._fullDataReady){
                   try { this.clearPostLoginDataRecovery(); } catch(_e2) {}
                   try { BackgroundTimers.startIfLoggedIn(); } catch(_e2) {}
@@ -43765,6 +43902,12 @@ const ClalRiskLifePdf = {
         resolvedRole = matched?.role === 'manager' ? 'manager' : 'agent';
       }
       Auth.current.role = resolvedRole;
+      try {
+        if(App.shouldResetSessionForIncomingUser()){
+          App.resetSessionDataForUserSwitch("user_switch");
+        }
+        persistLastSessionUserKey(typeof Storage !== "undefined" ? Storage.fullCacheUserKey() : "");
+      } catch(_e) {}
       if(options.skipMfa === true){
         try { document.body.classList.remove("lcAuthLock"); } catch(_e) {}
         try { Auth.unlock(); } catch(_e) {}
