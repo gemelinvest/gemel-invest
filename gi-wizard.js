@@ -2735,6 +2735,48 @@ init(){
       return { ok:true, rec };
     },
 
+    _resolveExistingCustomerOfferTarget(options = {}){
+      const list = Array.isArray(this.insureds) ? this.insureds : [];
+      const byId = (id) => list.find((ins) => safeTrim(ins?.id) === safeTrim(id));
+      if(options?.insured){
+        const found = byId(options.insured.id);
+        if(found) return found;
+      }
+      if(options?.insuredId){
+        const found = byId(options.insuredId);
+        if(found) return found;
+      }
+      const active = byId(this.activeInsId);
+      if(active) return active;
+      return list[0] || null;
+    },
+
+    _fillChildInsuredFromExistingCustomer(childIns, rec){
+      if(!childIns || !rec) return false;
+      childIns.type = "child";
+      if(!safeTrim(childIns.label)) childIns.label = "קטין";
+      const payload = rec.payload && typeof rec.payload === "object" ? rec.payload : {};
+      let sourceInsureds = Array.isArray(payload.insureds) ? payload.insureds : [];
+      if(!sourceInsureds.length && Array.isArray(payload?.operational?.insureds)) sourceInsureds = payload.operational.insureds;
+      const recId = normalizeIdValue(rec.idNumber);
+      const matched = sourceInsureds.find((ins) => normalizeIdValue(ins?.data?.idNumber) === recId) || sourceInsureds[0] || null;
+      const src = (matched?.data && typeof matched.data === "object") ? matched.data : {};
+      const payloadPrimary = (payload.primary && typeof payload.primary === "object") ? payload.primary : {};
+      const nameParts = safeTrim(rec.fullName).split(/\s+/).filter(Boolean);
+      const fileData = {
+        firstName: safeTrim(src.firstName) || nameParts[0] || "",
+        lastName: safeTrim(src.lastName) || nameParts.slice(1).join(" ") || "",
+        idNumber: recId || normalizeIdValue(src.idNumber),
+        birthDate: safeTrim(src.birthDate) || safeTrim(payloadPrimary.birthDate),
+        idIssueDate: safeTrim(src.idIssueDate) || safeTrim(payloadPrimary.idIssueDate),
+        gender: safeTrim(src.gender) || safeTrim(payloadPrimary.gender),
+        maritalStatus: safeTrim(src.maritalStatus)
+      };
+      childIns.data = mergeInsuredDataPreferNonEmpty(childIns.data || {}, fileData);
+      childIns.type = "child";
+      return true;
+    },
+
     /**
      * דיאלוג על ת.ז. קיימת — המשך / שיחלוף. לא נוגע בלוגיקת רכישה קיימת מתיק לקוח.
      * @returns {{ handled:boolean, blocked?:boolean, loaded?:boolean }}
@@ -2746,8 +2788,10 @@ init(){
       if(this._existingCustomerOfferInFlight) return { handled:true, blocked:false };
 
       const primary = this.insureds?.[0];
+      const target = this._resolveExistingCustomerOfferTarget(options) || primary;
+      const isChildTarget = safeTrim(target?.type) === "child";
       // קוראים גם מה־DOM אם המודל עוד לא סונכרן (blur לפני setVal)
-      let idNumber = normalizeIdValue(primary?.data?.idNumber);
+      let idNumber = normalizeIdValue(target?.data?.idNumber);
       if(!idNumber || idNumber.length < 9){
         try {
           const field = this.els?.body?.querySelector?.('[data-bind="idNumber"]');
@@ -2764,7 +2808,7 @@ init(){
       if(safeTrim(this._existingCustomerOfferDeclinedFor) === idNumber){
         return { handled:false };
       }
-      if(safeTrim(this.lastSavedCustomerId)){
+      if(!isChildTarget && safeTrim(this.lastSavedCustomerId)){
         const linked = findCustomerRecordById(this.lastSavedCustomerId);
         if(normalizeIdValue(linked?.idNumber) === idNumber){
           this._existingCustomerOfferAcceptedFor = idNumber;
@@ -2776,9 +2820,9 @@ init(){
       let owned = null;
       let rec = null;
       try {
-        // סנכרון ת.ז. למודל לפני חיפוש
-        if(primary?.data && normalizeIdValue(primary.data.idNumber) !== idNumber){
-          primary.data.idNumber = idNumber;
+        // סנכרון ת.ז. למודל של המבוטח הנבדק בלבד — לא דורסים את הראשי כשמזינים ילד
+        if(target?.data && normalizeIdValue(target.data.idNumber) !== idNumber){
+          target.data.idNumber = idNumber;
         }
         owned = await this.classifyIdOwnership(idNumber);
         const ownedCustomerId = safeTrim(owned?.customerId);
@@ -2802,11 +2846,12 @@ init(){
         this._existingCustomerOfferInFlight = false;
         this._existingCustomerOfferAcceptedFor = "";
         // בזמן הקלדה לא מרעננים את המסך ולא קוטעים את הפוקוס — החסימה תוצג ביציאה מהשדה
+        const targetIdx = Math.max(0, (this.insureds || []).indexOf(target));
         if(safeTrim(options?.source) === "input"){
-          try { this.markDuplicateIdFields([this.buildForeignAgentDuplicateIssue(owned, primary, 0)]); } catch(_e) {}
+          try { this.markDuplicateIdFields([this.buildForeignAgentDuplicateIssue(owned, target || primary, targetIdx)]); } catch(_e) {}
           return { handled:true, blocked:true };
         }
-        const issue = this.buildForeignAgentDuplicateIssue(owned, primary, 0);
+        const issue = this.buildForeignAgentDuplicateIssue(owned, target || primary, targetIdx);
         this.showDuplicateIdGuard([issue]);
         if(safeTrim(this._foreignCustomerAlertShownFor) !== idNumber && typeof showWizardHarAlertModal === "function"){
           this._foreignCustomerAlertShownFor = idNumber;
@@ -2824,10 +2869,12 @@ init(){
         return { handled:true, blocked:true };
       }
 
-      const isSwitch = this.customerRecordHasSystemNewPolicies(rec);
+      const isSwitch = !isChildTarget && this.customerRecordHasSystemNewPolicies(rec);
       const name = safeTrim(rec.fullName) || "לקוח";
       const title = isSwitch ? "שיחלוף לקוח קיים" : "לקוח קיים במערכת";
-      const text = isSwitch
+      const text = isChildTarget
+        ? `שים לב: לקוח זה קיים במערכת (${name}). האם ברצונך להמשיך? הילד יתווסף להצעה כמבוטח משני והפרטים האישיים שכבר הוזנו יישמרו.`
+        : isSwitch
         ? `שים לב: ללקוח ${name} יש פוליסות שנרכשו דרך המערכת. המשך הוא תהליך שיחלוף — הסרת פוליסות קיימות מהמערכת והזנת חדשות במקומן. האם ברצונך להמשיך?`
         : `שים לב: לקוח זה קיים במערכת (${name}). האם ברצונך להמשיך? הפרטים ייטענו מהתיק הקיים ותוכלו להמשיך באשף בריאות וסיכונים.`;
 
@@ -2861,6 +2908,24 @@ init(){
 
       this._existingCustomerOfferDeclinedFor = "";
       this._existingCustomerOfferAcceptedFor = idNumber;
+      // GI-CHILD-EXIST: ילד קיים אצל אותו סוכן — מצורף כילד, בלי לטעון את התיק כהצעה ובלי לדרוס שלב 1.
+      if(isChildTarget){
+        const loaded = await this.ensureCustomerRecordPayloadLoaded(rec.id);
+        const childRec = loaded?.ok && loaded.rec ? loaded.rec : rec;
+        this._fillChildInsuredFromExistingCustomer(target, childRec);
+        this.activeInsId = target.id;
+        try { this.render(); } catch(_e) {}
+        this.setHint(`ילד קיים נוסף להצעה: ${safeTrim(childRec.fullName) || name} — המבוטח הראשי לא השתנה.`);
+        try {
+          window.showToast?.({
+            title: "ילד נוסף להצעה",
+            text: "הילד צורף כמבוטח משני. פרטי שלב 1 של המבוטח הראשי נשמרו.",
+            variant: "success",
+            durationMs: 4800
+          });
+        } catch(_e) {}
+        return { handled:true, blocked:false, loaded:false, attachedChild:true };
+      }
       // GI-FIX: אל תדרסו פרטי שלב 1 שהנציג כבר מילא באשף הנוכחי.
       // טוענים תיק/פוליסות מהלקוח הקיים, אבל ערכים לא־ריקים מהסשן גוברים.
       const preservePrimarySessionData = this._capturePrimarySessionDataForExistingOffer();
@@ -3707,7 +3772,7 @@ init(){
       }
 
       if(Number(this.step) === 1 && !this.isCustomerPurchaseMode() && !this.isElementaryFlow()){
-        const offer = await this.maybeOfferExistingCustomerOnId({ source: "next" });
+        const offer = await this.maybeOfferExistingCustomerOnId({ source: "next", insured: this.insureds.find((x) => x.id === this.activeInsId) || this.insureds[0] });
         if(offer?.blocked || offer?.loaded) return;
       }
       if(Number(this.step) === 1 && !this.isCustomerPurchaseMode() && await this.blockIfAgentDuplicateIdAsync()) return;
@@ -4718,7 +4783,7 @@ init(){
               && safeTrim(this._existingCustomerOfferAcceptedFor) !== idNumber
               && safeTrim(this._existingCustomerOfferDeclinedFor) !== idNumber){
               // דיאלוג המשך/שיחלוף — async; לא חוסם את setVal
-              void this.maybeOfferExistingCustomerOnId({ source: notify ? "blur" : "input" });
+              void this.maybeOfferExistingCustomerOnId({ source: notify ? "blur" : "input", insured: ins });
               return false;
             }
             if(!this.isAgentDuplicateIdGuardEnabled || !this.isAgentDuplicateIdGuardEnabled()) return false;
@@ -4832,7 +4897,7 @@ if(path === "birthDate"){
             setVal(false);
             window.clearTimeout(this._duplicateIdGuardTimer);
             this._duplicateIdGuardTimer = window.setTimeout(() => {
-              void this.maybeOfferExistingCustomerOnId({ source: "blur" });
+              void this.maybeOfferExistingCustomerOnId({ source: "blur", insured: ins });
             }, 40);
           }
           const validationCfg = getValidationConfigForBind(path);
@@ -27033,7 +27098,7 @@ if(path === "birthDate"){
         if(excludeCustomerId) duplicateGuardOpts.excludeCustomerId = excludeCustomerId;
       }
       if(!this.isCustomerPurchaseMode() && !this.isElementaryFlow()){
-        const offer = await this.maybeOfferExistingCustomerOnId({ source: "finish" });
+        const offer = await this.maybeOfferExistingCustomerOnId({ source: "finish", insured: this.insureds.find((x) => x.id === this.activeInsId) || this.insureds[0] });
         if(offer?.blocked) return;
         if(offer?.loaded) return;
       }
