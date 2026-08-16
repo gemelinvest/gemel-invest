@@ -21771,8 +21771,10 @@ if(path === "birthDate"){
         return [];
       };
 
-      // חוק עליון: אם נבחר מוצר בריאות בחבילה — פותחים הצהרת בריאות אחת בלבד.
-      // אם קיימות כמה חברות בריאות, נבחר המנוע הרחב ביותר לפי מספר שאלות.
+      // GI-HEALTH-ONE-DECL: נפתחת הצהרה אחת בלבד. אין מיזוג שאלות מחברות/מוצרים אחרים.
+      // 1) אם יש בריאות מגדל — תמיד מגדל בריאות.
+      // 2) אחרת אם יש בריאות — הצהרת הבריאות עם הכי הרבה שאלות.
+      // 3) אם אין בריאות — המוצר עם הכי הרבה שאלות.
       if(hasHealth){
         const healthCompanies = selectedCompaniesForType('בריאות');
         const healthCandidates = healthCompanies.map((company) => candidate(
@@ -21782,33 +21784,29 @@ if(path === "birthDate"){
           'הצהרת בריאות',
           'health'
         ));
-        const bestHealth = bestCandidate(healthCandidates);
-        // GI-HEALTH-DECL: הבסיס = המקיפה ביותר; שאלות ייחודיות משאר החברות מתווספות עם ייחוס
-        let mergedHealth = bestHealth ? cloneSchema(bestHealth.schema) : [];
-        healthCandidates.forEach((cand) => {
-          if(!cand || cand === bestHealth || !cand.questionCount) return;
-          mergedHealth = addUniqueQuestions(mergedHealth, cand.schema, cand);
-        });
-        cache.filteredQuestions = mergedHealth;
+        const migdalHealth = healthCandidates.find((cand) => cand && cand.company === 'מגדל' && cand.questionCount > 0) || null;
+        const chosenHealth = migdalHealth || bestCandidate(healthCandidates);
+        cache.filteredQuestions = chosenHealth ? cloneSchema(chosenHealth.schema) : [];
         return cache.filteredQuestions;
       }
 
       if(hasShortTypes){
-        let merged = [];
+        const productCandidates = [];
         declarationTypes.forEach((type) => {
           const companies = selectedCompaniesForType(type);
           if(!companies.length) return;
-          const candidates = companies.map((company) => candidate(
-            company,
-            type,
-            schemaForProductCompany(type, company),
-            `הצהרת בריאות ${type}`,
-            `product_${type}`
-          ));
-          const best = bestCandidate(candidates);
-          if(best) merged = addUniqueQuestions(merged, best.schema, (merged.length ? best : null));
+          companies.forEach((company) => {
+            productCandidates.push(candidate(
+              company,
+              type,
+              schemaForProductCompany(type, company),
+              `הצהרת בריאות ${type}`,
+              `product_${type}`
+            ));
+          });
         });
-        cache.filteredQuestions = merged.length ? merged : this.getShortHealthSchema();
+        const best = bestCandidate(productCandidates);
+        cache.filteredQuestions = best ? cloneSchema(best.schema) : this.getShortHealthSchema();
         return cache.filteredQuestions;
       }
 
