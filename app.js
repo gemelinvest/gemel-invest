@@ -10775,6 +10775,117 @@
       }
     },
 
+    /* GI-AGENT-SCOPE-FETCH 2026-08-16
+       List / search / working-set used a single PostgREST or=(agent_id.in.("…"),
+       agent_name.in.("…")). That or() is fragile (quoted in() + a second or()
+       for search can drop the agent filter), so an agent saw the global latest
+       slice instead of their own rows. Same ownership scope as before
+       (getServerListAgentScopeFilter) — only the wire query changes: .in()
+       per column, then merge. Managers/ops stay unscoped. */
+    _agentScopeColumnParts(tableName){
+      const table = safeTrim(tableName);
+      if(table !== SUPABASE_TABLES.customers && table !== SUPABASE_TABLES.proposals) return null;
+      const scope = getServerListAgentScopeFilter();
+      if(!scope) return null;
+      const parts = [];
+      if(scope.ids.length) parts.push({ column: "agent_id", values: scope.ids });
+      if(scope.names.length) parts.push({ column: "agent_name", values: scope.names });
+      return parts.length ? parts : null;
+    },
+
+    _sortLimitedRows(rows, col, ascending){
+      const list = Array.isArray(rows) ? rows.slice() : [];
+      const key = safeTrim(col) || "id";
+      list.sort((a, b) => {
+        const as = a?.[key] == null || a[key] === "" ? "" : String(a[key]);
+        const bs = b?.[key] == null || b[key] === "" ? "" : String(b[key]);
+        if(as === bs) return 0;
+        if(!as) return 1;
+        if(!bs) return -1;
+        if(as < bs) return ascending ? -1 : 1;
+        return ascending ? 1 : -1;
+      });
+      return list;
+    },
+
+    async _fetchLimitedRowsByColumn(tableName, selectExpr, column, values, options = {}){
+      const col = safeTrim(column);
+      const list = col ? (Array.isArray(values) ? values : []).map((v) => safeTrim(v)).filter(Boolean) : [];
+      if(col && !list.length) return { ok:true, data:[] };
+      const orderCol = safeTrim(options.orderCol) || "id";
+      const ascending = options.ascending === true;
+      const take = Math.max(1, Math.min(2000, Number(options.limit) || 80));
+      const extraOr = safeTrim(options.extraOrFilter);
+      const label = safeTrim(options.label) || "טעינת שורות מסוננות";
+      const client = this.getClient();
+
+      const fetchWithColumns = async (selectCols) => {
+        try {
+          let builder = client.from(tableName).select(selectCols);
+          if(col) builder = builder.in(col, list);
+          if(extraOr) builder = builder.or(extraOr);
+          builder = builder.order(orderCol, { ascending }).limit(take);
+          const { data, error } = await this.withRetry(() => builder, label);
+          if(error) throw error;
+          return Array.isArray(data) ? data : [];
+        } catch(primaryErr) {
+          if(this._isMissingColumnError(primaryErr)) throw primaryErr;
+          let path = tableName + "?select=" + encodeURIComponent(selectCols);
+          if(col){
+            const vals = list
+              .map((v) => encodeURIComponent('"' + String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"'))
+              .join(",");
+            path += "&" + col + "=in.(" + vals + ")";
+          }
+          if(extraOr) path += "&or=" + encodeURIComponent("(" + extraOr + ")");
+          path += "&order=" + encodeURIComponent(orderCol + (ascending ? ".asc" : ".desc"));
+          path += "&limit=" + take;
+          return await this.restRequest(path, { method: "GET" }) || [];
+        }
+      };
+
+      try {
+        const data = await fetchWithColumns(selectExpr);
+        return { ok:true, data };
+      } catch(err) {
+        if(this._isMissingColumnError(err)) throw err;
+        return { ok:false, error: String(err?.message || err), data: [] };
+      }
+    },
+
+    async _fetchLimitedRowsMergedAgentScope(tableName, selectExpr, options = {}){
+      const parts = this._agentScopeColumnParts(tableName);
+      const take = Math.max(1, Math.min(2000, Number(options.limit) || 80));
+      const orderCol = safeTrim(options.orderCol) || "created_at";
+      const ascending = options.ascending === true;
+      const run = (column, values) => this._fetchLimitedRowsByColumn(tableName, selectExpr, column, values, {
+        orderCol,
+        ascending,
+        limit: take,
+        extraOrFilter: options.extraOrFilter,
+        label: options.label
+      });
+      try {
+        if(!parts) return run("", null);
+        const results = await Promise.all(parts.map((p) => run(p.column, p.values)));
+        const errors = results.map((r) => safeTrim(r?.error)).filter(Boolean);
+        const anyOk = results.some((r) => r?.ok);
+        if(!anyOk) return { ok:false, error: errors.join(" | ") || "טעינת נתוני נציג נכשלה", data: [] };
+        const merged = this._sortLimitedRows(
+          this._mergeRowsById(results.flatMap((r) => (r?.ok ? (r.data || []) : []))),
+          orderCol,
+          ascending
+        ).slice(0, take);
+        if(errors.length){
+          try { console.warn("AGENT_SCOPE_PARTIAL_LOAD:", tableName, errors.join(" | ")); } catch(_e) {}
+        }
+        return { ok:true, data: merged, warning: errors.join(" | ") };
+      } catch(err) {
+        if(this._isMissingColumnError(err)) throw err;
+        return { ok:false, error: String(err?.message || err), data: [] };
+      }
+    },
+
     _applyListAgentScopeToQuery(builder, tableName){
       const table = safeTrim(tableName);
       if(table !== SUPABASE_TABLES.customers && table !== SUPABASE_TABLES.proposals) return builder;
@@ -10830,16 +10941,37 @@
         const connection = await this.waitForConnection({ retries: 1, delayMs: 400 });
         if(!connection?.ok) return { ok:false, count: 0, error: connection?.error || "NO_CONNECTION" };
         const client = this.getClient();
-        let builder = client.from(SUPABASE_TABLES.customers)
-          .select("id", { count: "exact", head: true });
-        builder = this._applyListAgentScopeToQuery(builder, SUPABASE_TABLES.customers);
-        const { count, error } = await this.withRetry(
-          () => builder,
-          "ספירת לקוחות לסשן",
-          { retries: 1 }
-        );
-        if(error) throw error;
-        return { ok:true, count: Math.max(0, Number(count) || 0) };
+        const countIn = async (column, values) => {
+          let builder = client.from(SUPABASE_TABLES.customers)
+            .select("id", { count: "exact", head: true });
+          const col = safeTrim(column);
+          if(col) builder = builder.in(col, values);
+          const { count, error } = await this.withRetry(
+            () => builder,
+            "ספירת לקוחות לסשן",
+            { retries: 1 }
+          );
+          if(error) throw error;
+          return Math.max(0, Number(count) || 0);
+        };
+        const parts = this._agentScopeColumnParts(SUPABASE_TABLES.customers);
+        if(!parts){
+          return { ok:true, count: await countIn("", null) };
+        }
+        const results = await Promise.all(parts.map(async (p) => {
+          try {
+            return { ok:true, n: await countIn(p.column, p.values) };
+          } catch(err) {
+            return { ok:false, n: 0, error: String(err?.message || err) };
+          }
+        }));
+        const okParts = results.filter((r) => r.ok);
+        if(!okParts.length){
+          return { ok:false, count: 0, error: results.map((r) => r.error).filter(Boolean).join(" | ") || "ספירת לקוחות נכשלה" };
+        }
+        // Overlap between agent_id and agent_name is the common case — max
+        // avoids inflating Large Session. Same scope as getServerListAgentScopeFilter.
+        return { ok:true, count: Math.max(...okParts.map((r) => r.n)) };
       } catch(err) {
         return { ok:false, count: 0, error: String(err?.message || err) };
       }
@@ -10852,19 +10984,15 @@
       try {
         const connection = await this.waitForConnection();
         if(!connection?.ok) return { ok:false, error: connection?.error || "NO_CONNECTION", data: [] };
-        const client = this.getClient();
         const fetchWithColumns = async (selectCols) => {
-          let builder = client.from(SUPABASE_TABLES.customers)
-            .select(selectCols)
-            .order("updated_at", { ascending: false })
-            .limit(take);
-          builder = this._applyListAgentScopeToQuery(builder, SUPABASE_TABLES.customers);
-          const { data, error } = await this.withRetry(
-            () => builder,
-            "טעינת working-set לקוחות"
-          );
-          if(error) throw error;
-          return Array.isArray(data) ? data : [];
+          const res = await this._fetchLimitedRowsMergedAgentScope(SUPABASE_TABLES.customers, selectCols, {
+            orderCol: "updated_at",
+            ascending: false,
+            limit: take,
+            label: "טעינת working-set לקוחות"
+          });
+          if(!res?.ok) throw new Error(res?.error || "טעינת working-set לקוחות נכשלה");
+          return Array.isArray(res.data) ? res.data : [];
         };
         let data = [];
         try {
@@ -10888,19 +11016,15 @@
       try {
         const connection = await this.waitForConnection();
         if(!connection?.ok) return { ok:false, error: connection?.error || "NO_CONNECTION", data: [] };
-        const client = this.getClient();
         const fetchWithColumns = async (selectCols) => {
-          let builder = client.from(SUPABASE_TABLES.proposals)
-            .select(selectCols)
-            .order("updated_at", { ascending: false })
-            .limit(take);
-          builder = this._applyListAgentScopeToQuery(builder, SUPABASE_TABLES.proposals);
-          const { data, error } = await this.withRetry(
-            () => builder,
-            "טעינת working-set הצעות"
-          );
-          if(error) throw error;
-          return Array.isArray(data) ? data : [];
+          const res = await this._fetchLimitedRowsMergedAgentScope(SUPABASE_TABLES.proposals, selectCols, {
+            orderCol: "updated_at",
+            ascending: false,
+            limit: take,
+            label: "טעינת working-set הצעות"
+          });
+          if(!res?.ok) throw new Error(res?.error || "טעינת working-set הצעות נכשלה");
+          return Array.isArray(res.data) ? res.data : [];
         };
         let data = [];
         try {
@@ -10935,28 +11059,17 @@
       try {
         const connection = await this.waitForConnection({ retries: 2, delayMs: 600 });
         if(!connection?.ok) return { ok:false, error: connection?.error || "NO_CONNECTION", data: [] };
-        const client = this.getClient();
-        // שליפה אחת מהשרת עם רשימת עמודות נתונה. הנתונים תמיד מהשרת —
-        // אין כאן שום מסלול מטמון.
+        // הנתונים תמיד מהשרת — אין כאן שום מסלול מטמון.
+        // GI-AGENT-SCOPE-FETCH: .in() לפי עמודת נציג, לא or() משותף עם החיפוש.
         const fetchWithColumns = async (selectExpr) => {
-          try {
-            let builder = client.from(SUPABASE_TABLES.customers)
-              .select(selectExpr)
-              .order("created_at", { ascending: false })
-              .limit(fetchLimit);
-            builder = this._applyListAgentScopeToQuery(builder, SUPABASE_TABLES.customers);
-            const { data: rows, error } = await this.withRetry(() => builder, "טעינת 10 לקוחות אחרונים");
-            if(error) throw error;
-            return rows || [];
-          } catch(primaryErr) {
-            if(this._isMissingColumnError(primaryErr)) throw primaryErr;
-            let path = SUPABASE_TABLES.customers
-              + "?select=" + encodeURIComponent(selectExpr)
-              + "&order=created_at.desc"
-              + "&limit=" + fetchLimit;
-            path = this._appendListAgentScopeToRestPath(path, SUPABASE_TABLES.customers);
-            return await this.restRequest(path, { method: "GET" }) || [];
-          }
+          const res = await this._fetchLimitedRowsMergedAgentScope(SUPABASE_TABLES.customers, selectExpr, {
+            orderCol: "created_at",
+            ascending: false,
+            limit: fetchLimit,
+            label: "טעינת 10 לקוחות אחרונים"
+          });
+          if(!res?.ok) throw new Error(res?.error || "טעינת לקוחות נכשלה");
+          return res.data || [];
         };
         let data = null;
         try {
@@ -10998,30 +11111,19 @@
       try {
         const connection = await this.waitForConnection({ retries: 2, delayMs: 600 });
         if(!connection?.ok) return { ok:false, error: connection?.error || "NO_CONNECTION", data: [] };
-        const client = this.getClient();
         // החיפוש רץ תמיד מול השרת. אם רשימת העמודות הרזה נדחית — מנסים שוב
         // מול השרת עם select *, ולא נופלים לחיפוש מקומי.
+        // GI-AGENT-SCOPE-FETCH: חיפוש or() על כל שליפת .in(נציג) בנפרד — לא or() שני שדורס.
         const fetchWithColumns = async (selectExpr) => {
-          try {
-            let builder = client.from(SUPABASE_TABLES.customers)
-              .select(selectExpr)
-              .or(orFilter)
-              .order("created_at", { ascending: false })
-              .limit(fetchLimit);
-            builder = this._applyListAgentScopeToQuery(builder, SUPABASE_TABLES.customers);
-            const { data: rows, error } = await this.withRetry(() => builder, "חיפוש לקוחות");
-            if(error) throw error;
-            return rows || [];
-          } catch(primaryErr) {
-            if(this._isMissingColumnError(primaryErr)) throw primaryErr;
-            let path = SUPABASE_TABLES.customers
-              + "?select=" + encodeURIComponent(selectExpr)
-              + "&or=" + encodeURIComponent("(" + orFilter + ")")
-              + "&order=created_at.desc"
-              + "&limit=" + fetchLimit;
-            path = this._appendListAgentScopeToRestPath(path, SUPABASE_TABLES.customers);
-            return await this.restRequest(path, { method: "GET" }) || [];
-          }
+          const res = await this._fetchLimitedRowsMergedAgentScope(SUPABASE_TABLES.customers, selectExpr, {
+            orderCol: "created_at",
+            ascending: false,
+            limit: fetchLimit,
+            extraOrFilter: orFilter,
+            label: "חיפוש לקוחות"
+          });
+          if(!res?.ok) throw new Error(res?.error || "חיפוש לקוחות נכשל");
+          return res.data || [];
         };
         let data = null;
         try {
