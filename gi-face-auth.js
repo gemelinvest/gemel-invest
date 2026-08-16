@@ -68,6 +68,7 @@
   function phonePageUrl(publicToken){
     const url = new URL("face-auth.html", window.location.href);
     url.searchParams.set("t", trim(publicToken));
+    url.searchParams.set("v", "20260816-face-ok-v1");
     return url.href;
   }
 
@@ -525,6 +526,7 @@
             window.__GI_FACE_LOGIN_ACTIVE__ = false;
             self.showLoginPanel(false);
             self.setLoginHint("");
+            try { self._loginCtl = null; } catch(_e) {}
           }
         },
         onDenied: async () => {

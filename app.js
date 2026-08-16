@@ -3776,16 +3776,21 @@
   }
 
   function reconcileAgentOwnershipForAgent(agent, options = {}){
-    if(!agent || !safeTrim(agent?.id)) return { changed: 0, customers: 0, proposals: 0 };
-    bootstrapAgentNameHistoryFromLinkedRecords(State.data);
+    if(!agent || !safeTrim(agent?.id)) return { changed: 0, customers: 0, proposals: 0, changedCustomers: [], changedProposals: [] };
+    if(options.skipBootstrap !== true){
+      bootstrapAgentNameHistoryFromLinkedRecords(State.data);
+    }
     let changed = 0;
     let customers = 0;
     let proposals = 0;
+    const changedCustomers = [];
+    const changedProposals = [];
     (Array.isArray(State.data?.customers) ? State.data.customers : []).forEach((rec) => {
       if(!recordBelongsToAgent(rec, agent, options)) return;
       if(stampAgentOwnershipOnRecord(rec, agent)){
         changed += 1;
         customers += 1;
+        changedCustomers.push(rec);
       }
     });
     (Array.isArray(State.data?.proposals) ? State.data.proposals : []).forEach((rec) => {
@@ -3793,9 +3798,10 @@
       if(stampAgentOwnershipOnRecord(rec, agent)){
         changed += 1;
         proposals += 1;
+        changedProposals.push(rec);
       }
     });
-    return { changed, customers, proposals };
+    return { changed, customers, proposals, changedCustomers, changedProposals };
   }
 
   function reconcileAllAgentOwnershipInState(stateRef){
@@ -12262,8 +12268,10 @@
         const agentSyncOptions = Array.isArray(options.syncAgentIds) && options.syncAgentIds.length
           ? { onlyAgentIds: options.syncAgentIds }
           : (options.forceAgentsSync === true ? { forceAll: true } : {});
-        const customerRows = this.buildCustomerRows(mergedState);
-        const proposalRows = this.buildProposalRows(mergedState);
+        const skipCustomers = options.skipCustomersSync === true;
+        const skipProposals = options.skipProposalsSync === true;
+        const customerRows = skipCustomers ? [] : this.buildCustomerRows(mergedState);
+        const proposalRows = skipProposals ? [] : this.buildProposalRows(mergedState);
         const [agentsSyncResult, customersSyncResult, proposalsSyncResult] = await Promise.all([
           this.syncAgentsFromState(mergedState, agentSyncOptions).catch((err) => ({
             ok: false,
@@ -12271,8 +12279,7 @@
           })),
           (async () => {
             try {
-              if(options.skipCustomersSync === true){
-                this.rememberRows(SUPABASE_TABLES.customers, customerRows);
+              if(skipCustomers){
                 return { ok: true, skipped: true };
               }
               await this.syncTable(SUPABASE_TABLES.customers, this.getChangedRows(SUPABASE_TABLES.customers, customerRows), { allowDelete:false });
@@ -12284,8 +12291,7 @@
           })(),
           (async () => {
             try {
-              if(options.skipProposalsSync === true){
-                this.rememberRows(SUPABASE_TABLES.proposals, proposalRows);
+              if(skipProposals){
                 return { ok: true, skipped: true };
               }
               await this.syncTable(SUPABASE_TABLES.proposals, this.getChangedRows(SUPABASE_TABLES.proposals, proposalRows), { allowDelete:false });
@@ -15502,8 +15508,12 @@ UsersGateUI.init();
     async _persistAgentAndVerify(agentId, label, E, options = {}){
       const id = safeTrim(agentId);
       if(!id) return { ok:false, error:"חסר מזהה נציג" };
-      refreshStateShadows();
-      const persistOptions = {};
+      const persistOptions = {
+        skipHeavy: options.skipHeavy !== false,
+        skipNormalize: options.skipNormalize !== false,
+        lightShadows: options.lightShadows !== false,
+        yieldUi: options.yieldUi !== false
+      };
       /* GI-FIX 2026-08-07 — הפונקציה תמיד ידעה איזה נציג נערך ולא השתמשה בזה.
          בלי הצמצום, עריכת נציג נפלה למסלול הכללי שמסתמך על מאגר ה-hashים
          בזיכרון; כשהוא לא נזרע, כל 51 השורות נכתבו מהזיכרון של הלשונית.
@@ -15529,7 +15539,7 @@ UsersGateUI.init();
         SUPABASE_TABLES.agents,
         id,
         { id: { equals: id } },
-        { retries: SUPABASE_SAVE_VERIFY_RETRY_COUNT, delayMs: SUPABASE_SAVE_VERIFY_RETRY_DELAY_MS }
+        { retries: 2, delayMs: 250 }
       );
       if(!verify?.ok){
         this._showErr(E.err, "הנציג לא אומת בשרת לאחר השמירה. בדוק חיבור ל-Supabase ונסה שוב.");
@@ -15548,9 +15558,46 @@ UsersGateUI.init();
       return { ok:true, agentId: id, persist: r };
     },
 
+    _ownershipNamePatchRow(rec){
+      const id = safeTrim(rec?.id);
+      if(!id) return null;
+      return {
+        id,
+        agent_name: safeTrim(rec?.agentName),
+        agent_id: safeTrim(rec?.agentId) || safeTrim(rec?.payload?.agentId) || "",
+        updated_at: safeTrim(rec?.updatedAt || rec?.updated_at) || nowISO()
+      };
+    },
+
+    async _persistOwnershipNamePatches(ownership){
+      const customers = Array.isArray(ownership?.changedCustomers) ? ownership.changedCustomers : [];
+      const proposals = Array.isArray(ownership?.changedProposals) ? ownership.changedProposals : [];
+      const jobs = [];
+      customers.forEach((rec) => {
+        const row = this._ownershipNamePatchRow(rec);
+        if(row) jobs.push({ table: SUPABASE_TABLES.customers, row });
+      });
+      proposals.forEach((rec) => {
+        const row = this._ownershipNamePatchRow(rec);
+        if(row) jobs.push({ table: SUPABASE_TABLES.proposals, row });
+      });
+      const chunkSize = 12;
+      for(let i = 0; i < jobs.length; i += chunkSize){
+        const chunk = jobs.slice(i, i + chunkSize);
+        await Promise.all(chunk.map((job) => Storage.upsertSingleRow(job.table, job.row)));
+        if(i + chunkSize < jobs.length){
+          await new Promise((resolve) => window.setTimeout(resolve, 0));
+        }
+      }
+    },
+
     async _saveFromModal(){
       const E = this._ensureModal();
-      if(E.save) E.save.disabled = true;
+      const prevSaveLabel = E.save ? E.save.textContent : "";
+      if(E.save){
+        E.save.disabled = true;
+        E.save.textContent = "שומר…";
+      }
       try {
       const name = safeTrim(E.name?.value);
       const username = safeTrim(E.username?.value) || name;
@@ -15619,7 +15666,13 @@ UsersGateUI.init();
         if(prevName !== name || prevUsername !== username){
           rememberAgentNameHistory(a.id, [prevName, prevUsername].filter(Boolean));
         }
-        reconcileAgentOwnershipForAgent(a);
+        let ownership = { changed: 0, changedCustomers: [], changedProposals: [] };
+        if(prevName !== name || prevUsername !== username){
+          await new Promise((resolve) => {
+            window.requestAnimationFrame(() => { window.setTimeout(resolve, 0); });
+          });
+          ownership = reconcileAgentOwnershipForAgent(a, { skipBootstrap: true });
+        }
         const teamSyncAgentIds = this._persistTeamLinksFromModal(a.id, a.role);
         const canAssignTeams = Auth.isAdmin() || Auth.isManager();
         const verifyTeamLinks = canAssignTeams && a.role === "teamManager";
@@ -15647,6 +15700,9 @@ UsersGateUI.init();
         if(!editRes.ok){
           this.render();
           return editRes;
+        }
+        if(ownership.changed > 0){
+          try { await this._persistOwnershipNamePatches(ownership); } catch(_e) {}
         }
         try {
           const teamSavedText = verifyTeamLinks
@@ -15686,6 +15742,9 @@ UsersGateUI.init();
         if(monthlySalesTarget > 0){
           setAgentMonthlyTarget(newId, monthlySalesTarget);
         }
+        if(E.reportAliases){
+          setAgentReportAliases(newId, parseAgentReportAliasesInput(E.reportAliases.value));
+        }
         State.data.meta.updatedAt = nowISO();
         appendAuditLog({
           type:"agent_created",
@@ -15722,7 +15781,10 @@ UsersGateUI.init();
         return addRes;
       }
       } finally {
-        if(E.save) E.save.disabled = false;
+        if(E.save){
+          E.save.disabled = false;
+          E.save.textContent = prevSaveLabel || "שמור";
+        }
       }
     },
 
@@ -15810,7 +15872,13 @@ UsersGateUI.init();
       a.updated_at = toggleNow;
       State.data.meta.updatedAt = toggleNow;
 
-      await App.persist(a.active ? "המשתמש הופעל" : "המשתמש הושבת");
+      await App.persist(a.active ? "המשתמש הופעל" : "המשתמש הושבת", {
+        skipHeavy: true,
+        skipNormalize: true,
+        lightShadows: true,
+        yieldUi: true,
+        syncAgentIds: [safeTrim(a.id)].filter(Boolean)
+      });
       this.render();
     },
 
@@ -27062,6 +27130,15 @@ UsersGateUI.init();
             this._metricsCacheKey = cacheKey;
             return this._metricsCache;
           }
+          /* GI-FACE-FREEZE: overlay ₪0 שכבר נשלף — לא לקרוא ל-RPC בכל רענון דשבורד. */
+          if(this._metricsCache?._serverKpiOverlay){
+            this._metricsCacheKey = cacheKey;
+            const lastCmp = Number(this._serverKpiCompareAt) || 0;
+            if(!this._serverKpiCompareBusy && !App?._fullDataReady && (Date.now() - lastCmp) > 8000){
+              try { this.compareServerKpis?.(this._metricsCache); } catch(_e) {}
+            }
+            return this._metricsCache;
+          }
           const shell = this._metricsLoadingShell();
           this._metricsCache = shell;
           this._metricsCacheKey = cacheKey;
@@ -27382,9 +27459,18 @@ UsersGateUI.init();
       const cachedOk = this._todaySalesServerOverlay?.ok && this._todaySalesServerOverlay?.dayKey === dayKey && ageMs < 45000;
       const cachedHasMoney = Number(this._todaySalesServerOverlay?.totalPremium) > 0
         || Number(this._todaySalesServerOverlay?.totalPolicies) > 0;
-      // GI-FACE-KPI: ₪0 שנשמר לפני שהסשן היה מוכן אינו סופי — ממשיכים לשלוף, עם השהיה קצרה.
-      if(cachedOk && (cachedHasMoney || App?._fullDataReady || ageMs < 2500)){
+      if(this._todaySalesServerOverlay?.dayKey && this._todaySalesServerOverlay.dayKey !== dayKey){
+        this._todaySalesPreReadyRetries = 0;
+      }
+      // GI-FACE-FREEZE: ₪0 לפני שהסשן מוכן — ניסיון נוסף אחד, בלי לולאה כל 2.5ש.
+      if(cachedOk && (cachedHasMoney || App?._fullDataReady)){
         return;
+      }
+      if(cachedOk && !cachedHasMoney && !App?._fullDataReady){
+        if(ageMs < 4000 || (Number(this._todaySalesPreReadyRetries) || 0) >= 1){
+          return;
+        }
+        this._todaySalesPreReadyRetries = (Number(this._todaySalesPreReadyRetries) || 0) + 1;
       }
       this._todaySalesServerBusy = true;
       void (async () => {
@@ -29769,6 +29855,24 @@ UsersGateUI.init();
     /* GI-FACE-KPI: אחרי זיהוי פנים — דשבורד אמיתי מיד, בלי מעטפת «מכין את הדשבורד»
        ובלי לנעול ₪0. PIN נשאר עם renderLoadingShell. */
     refillServerDashboardKpis(){
+      const now = Date.now();
+      const last = Number(this._refillKpisAt) || 0;
+      if(this._refillKpisBusy || (last && (now - last) < 2000)){
+        this._refillKpisQueued = true;
+        if(!this._refillKpisTimer){
+          const wait = this._refillKpisBusy ? 480 : Math.max(240, 2000 - (now - last));
+          this._refillKpisTimer = window.setTimeout(() => {
+            this._refillKpisTimer = null;
+            if(!this._refillKpisQueued) return;
+            this._refillKpisQueued = false;
+            this.refillServerDashboardKpis();
+          }, wait);
+        }
+        return;
+      }
+      this._refillKpisAt = now;
+      this._refillKpisBusy = true;
+      this._refillKpisQueued = false;
       try {
         if(this._metricsCache && !this._overlayHasMoney()){
           this._metricsCache._localBuildReady = false;
@@ -29786,6 +29890,7 @@ UsersGateUI.init();
       try { this.fetchAgentAppointmentKpis?.(); } catch(_e) {}
       try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
       try { this.scheduleRefreshKpis(); } catch(_e) {}
+      this._refillKpisBusy = false;
     },
 
     paintServerKpiDom(){
@@ -29881,20 +29986,21 @@ UsersGateUI.init();
       } catch(_e) {}
       try { this.refillServerDashboardKpis(); } catch(_e) {}
       void this.render({ skipDailyReportWait: true, forceFullRender: true });
-      [700, 1800, 4000].forEach((ms) => {
-        window.setTimeout(() => {
-          try {
-            if(this._overlayHasMoney()
-              && (Number(this._todaySalesServerOverlay?.totalPremium) > 0
-                || Number(this._todaySalesCache?.totalPremium) > 0
-                || App?._fullDataReady)){
-              try { this.scheduleRefreshKpis(); } catch(_e2) {}
-              return;
-            }
-            this.refillServerDashboardKpis();
-          } catch(_e) {}
-        }, ms);
-      });
+      /* GI-FACE-FREEZE: ניסיון אחד אחרי שהסשן הספיק להיטען — לא 700/1800/4000. */
+      if(this._faceKpiRetryTimer) window.clearTimeout(this._faceKpiRetryTimer);
+      this._faceKpiRetryTimer = window.setTimeout(() => {
+        this._faceKpiRetryTimer = null;
+        try {
+          if(this._overlayHasMoney()
+            && (Number(this._todaySalesServerOverlay?.totalPremium) > 0
+              || Number(this._todaySalesCache?.totalPremium) > 0
+              || App?._fullDataReady)){
+            try { this.scheduleRefreshKpis(); } catch(_e2) {}
+            return;
+          }
+          this.refillServerDashboardKpis();
+        } catch(_e) {}
+      }, 2200);
     },
 
     startLiveRefresh(){
@@ -32052,7 +32158,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260816-daily-sales-v1";
+  const GI_WIZARD_JS_VERSION = "20260816-users-save-v1";
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
   const TZAHAL_CLINIC = "קופה צהלית";
   const TZAHAL_CLINIC_SHABAN = "אין שב״ן";
@@ -43210,6 +43316,7 @@ const ClalRiskLifePdf = {
     }
     this._serverKpiCompareBusy = true;
     this._serverKpiCompareQueued = false;
+    this._serverKpiCompareAt = Date.now();
     void (async () => {
       try {
         const range = this.getMonthToDateRange();
@@ -43281,11 +43388,15 @@ const ClalRiskLifePdf = {
             Number(m.agentAppointments) || 0,
             Number(m.newClients) || 0
           ].join("|");
+          /* GI-FACE-FREEZE: אותו overlay — לא לרענן דשבורד ולא לשלוף שוב. */
+          if(prevFp === nextFp){
+            this._serverKpiCompareQueued = false;
+            return;
+          }
           try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
           this._lastKpiPaintFp = "";
           try { this.paintServerKpiDom?.(); } catch(_e) {}
           try { this.scheduleRefreshKpis(); } catch(_e) {}
-          try { this.refreshKpis(); } catch(_e) {}
           try { this.fetchAgentAppointmentKpis?.(); } catch(_e) {}
           return;
         }
@@ -43330,10 +43441,12 @@ const ClalRiskLifePdf = {
       try {
         if(window.__GI_FACE_LOGIN_DONE__ !== true) return;
         if(Auth.isElementary?.() || Auth.isOps?.() || Auth.isOpsAgent?.()) return;
+        if(DashboardUI._overlayHasMoney?.()
+          && (App?._fullDataReady || Number(DashboardUI._todaySalesServerOverlay?.totalPremium) > 0)){
+          try { DashboardUI.scheduleRefreshKpis?.(); } catch(_e2) {}
+          return;
+        }
         DashboardUI.refillServerDashboardKpis?.();
-        window.setTimeout(() => {
-          try { DashboardUI.refillServerDashboardKpis?.(); } catch(_e2) {}
-        }, 1500);
       } catch(_e) {}
     });
   } catch(_e) {}
@@ -43931,37 +44044,6 @@ const ClalRiskLifePdf = {
 
     // שמירה יחידה: persist + אימות שרת + סגירת מודאל רק בהצלחה (ללא persist שני).
     const saveResult = await _saveFromModal();
-    // כינויי דוח: שמירת meta נפרדת אחרי שמירת הנציג — מבטיחה התמדה ב-Supabase גם אחרי יציאה/כניסה.
-    if(saveResult?.ok && reportAliasesRaw !== null){
-      const aliasAgentId = safeTrim(modeSnapshot === 'add' ? saveResult.agentId : idSnapshot);
-      if(aliasAgentId){
-        setAgentReportAliases(aliasAgentId, reportAliasesRaw);
-        bumpMetaSyncClock(State.data.meta, "settings");
-        const aliasPersist = await App.persist('עודכן כינוי נציג לדוח', { metaOnly: true, silent: true });
-        if(aliasPersist?.ok !== true){
-          try {
-            window.showToast?.({
-              title: "אזהרה",
-              text: "שמירת שמות נוספים לדוח נכשלה — נסה שוב",
-              variant: "warn",
-              durationMs: 5200
-            });
-          } catch(_e) {}
-        } else {
-          const aliasVerify = await Storage.verifyAgentReportAliasesOnServer(aliasAgentId, reportAliasesRaw);
-          if(aliasVerify?.ok !== true){
-            try {
-              window.showToast?.({
-                title: "אזהרה",
-                text: "שמות נוספים לא אומתו בשרת — בדוק חיבור ונסה שוב",
-                variant: "warn",
-                durationMs: 5200
-              });
-            } catch(_e) {}
-          }
-        }
-      }
-    }
     return saveResult;
   };
   const _usersRender = UsersUI.render.bind(UsersUI);
