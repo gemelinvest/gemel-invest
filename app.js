@@ -5834,6 +5834,25 @@
   }
 
   /** When saving elementary / car-click on an existing customer, keep health & risk policies and declarations. */
+  /* חותמת מכירה על מוצר אלמנטרי חדש בלבד. לא דורסים שורה קיימת בלי חותמת. */
+  function applyElementaryAddedAtStamps(nextList, prevList){
+    const prev = Array.isArray(prevList) ? prevList : [];
+    const prevIds = new Set(prev.map((p) => safeTrim(p?.id)).filter(Boolean));
+    return (Array.isArray(nextList) ? nextList : []).map((row) => {
+      if(!row || typeof row !== "object") return row;
+      const existing = safeTrim(row._addedAt);
+      if(existing) return row;
+      const pid = safeTrim(row.id);
+      const old = pid ? prev.find((p) => safeTrim(p?.id) === pid) : null;
+      const oldStamp = safeTrim(old?._addedAt);
+      if(oldStamp) return Object.assign({}, row, { _addedAt: oldStamp });
+      if(pid && prevIds.has(pid)) return row;
+      return Object.assign({}, row, {
+        _addedAt: (typeof nowISO === "function" ? nowISO() : new Date().toISOString())
+      });
+    });
+  }
+
   function mergeElementarySaveWithExistingCustomerPayload(existingPayload, incomingPayload){
     if(!existingPayload || typeof existingPayload !== "object") return incomingPayload;
     const out = JSON.parse(JSON.stringify(incomingPayload && typeof incomingPayload === "object" ? incomingPayload : {}));
@@ -5871,6 +5890,9 @@
         else mergedElem.push(JSON.parse(JSON.stringify(policy)));
       });
       out.elementaryPolicies = mergedElem;
+    }
+    if(Array.isArray(out.elementaryPolicies) && out.elementaryPolicies.length){
+      out.elementaryPolicies = applyElementaryAddedAtStamps(out.elementaryPolicies, prevElemPolicies);
     }
     const prevElemFiles = Array.isArray(prev.elementaryPolicyFiles) ? prev.elementaryPolicyFiles : [];
     const nextElemFiles = Array.isArray(out.elementaryPolicyFiles) ? out.elementaryPolicyFiles : [];
@@ -8745,6 +8767,14 @@
       if(prevFull && Storage.payloadIsEmpty(nextProbe)){
         nextPayload = mergeElementarySaveWithExistingCustomerPayload(prev.payload, nextPayload);
         try { console.warn("PERSIST_CUSTOMER_PAYLOAD_MERGED_TO_AVOID_WIPE", cid, label || ""); } catch(_e) {}
+      }
+    } catch(_e) {}
+    try {
+      if(Array.isArray(nextPayload.elementaryPolicies) && nextPayload.elementaryPolicies.length){
+        nextPayload.elementaryPolicies = applyElementaryAddedAtStamps(
+          nextPayload.elementaryPolicies,
+          Array.isArray(prev?.payload?.elementaryPolicies) ? prev.payload.elementaryPolicies : []
+        );
       }
     } catch(_e) {}
     const nextInsuredCount = Array.isArray(nextPayload.insureds) ? nextPayload.insureds.length : (Number(prev.insuredCount || 0) || 0);
@@ -27659,6 +27689,8 @@ UsersGateUI.init();
           if(typeof LiveRefresh !== "undefined" && LiveRefresh.getCurrentView?.() === "dashboard"){
             try { this.scheduleRefreshKpis(); } catch(_e) {}
           } else if(typeof LiveRefresh !== "undefined" && LiveRefresh.getCurrentView?.() === "dailySales"){
+            this._dailyAgentsCacheKey = "";
+            this._dailyAgentsCache = null;
             try { this.renderDailySalesPage(); } catch(_e) {}
           }
         } catch(err) {
@@ -28406,13 +28438,16 @@ UsersGateUI.init();
       const dateKey = this.toLocalDateKey(ref);
       const dayRange = this.getTodayRange(ref);
       const customers = this.getVisibleCustomers();
+      const missingPayloads = this._countMissingCustomerPayloadsSafe();
       const cacheKey = [
         this.getMetricsCacheKey(),
         "dailyAgents",
         "alignTodayKpi",
         "groupedSectorsV3",
+        "noPartialCache",
         dateKey,
         String(customers.length),
+        String(missingPayloads),
         App?._fullDataReady ? "1" : "0"
       ].join("|");
       if(this._dailyAgentsCacheKey === cacheKey && this._dailyAgentsCache){
@@ -28510,7 +28545,10 @@ UsersGateUI.init();
         dateLabel: this.formatDailySalesReportDateLabel(dateKey),
         isToday: dateKey === todayKey
       };
-      // לא לקבע מטמון ריק לפני שנטענו נתונים מלאים
+      // לא לקבע מטמון חלקי: תיקים בלי payload עדיין חסרים מהספירה
+      if(missingPayloads > 0){
+        return result;
+      }
       if(App?._fullDataReady || agents.length || groups.length || customers.length){
         this._dailyAgentsCacheKey = cacheKey;
         this._dailyAgentsCache = result;
