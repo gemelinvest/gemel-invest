@@ -1,0 +1,301 @@
+﻿/* ===== GI-HACH-MORT-RISK-SIM 2026-08-16 · סימולטור ריסק משכנתא הכשרה =====================
+   קובץ CSS מבודד ועצמאי לחלוטין. כל המחלקות כאן ממוסגרות בקידומת ייחודית
+   "lcHachMort" / "lcHachMortBanner" שלא קיימת בשום מקום אחר באפליקציה.
+   GI-RISK-SIM-UI-BLUE 2026-08-08: כותרת בכחול בהיר תואם תפריט הצד
+   (--gi-navy / --gi-primary-soft), מרווחים צפופים יותר, מראה בוגר. */
+
+/* ---------- באנר "פתח סימולטור ריסק משכנתא הכשרה" בתוך שלב 5 ---------- */
+.lcHachMortBanner{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-top:12px;
+  padding:12px 14px;
+  border-radius:var(--gi-r-md, 12px);
+  border:1px solid rgba(56,112,237,.18);
+  background:linear-gradient(135deg, var(--gi-primary-soft, #EFF6FF) 0%, #e8f0fe 100%);
+}
+.lcHachMortBanner__text{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+.lcHachMortBanner__title{ font-weight:700; font-size:14px; color:var(--gi-primary, #2563EB); }
+.lcHachMortBanner__sub{ font-size:12px; color:var(--gi-text-muted, #647287); }
+.lcHachMortBanner__btn{
+  flex-shrink:0;
+  border:1px solid var(--gi-primary, #2563EB);
+  background:var(--gi-primary, #2563EB);
+  color:#fff;
+  font-weight:600;
+  font-size:13px;
+  padding:9px 14px;
+  border-radius:var(--gi-r-ctl, 8px);
+  cursor:pointer;
+  white-space:nowrap;
+  transition:background .15s ease, transform .1s ease;
+}
+.lcHachMortBanner__btn:hover{ background:var(--gi-primary-hover, #1D4ED8); }
+.lcHachMortBanner__btn:active{ transform:scale(.97); }
+
+@media (max-width: 560px){
+  .lcHachMortBanner{ flex-direction:column; align-items:stretch; }
+  .lcHachMortBanner__btn{ width:100%; }
+}
+
+/* ---------- מודאל הסימולטור ---------- */
+.lcHachMortModal .giValModal__card{
+  max-width:min(1180px, 96vw);
+  width:100%;
+  position:relative;
+  overflow:hidden;
+}
+.lcHachMortModal .giValModal__head{
+  padding:16px 24px 14px;
+  background:linear-gradient(135deg, var(--gi-primary-soft, #EFF6FF) 0%, #e0ecff 55%, #d7e6ff 100%);
+  border-bottom:1px solid rgba(56,112,237,.16);
+  position:relative;
+}
+.lcHachMortModal .giValModal__body{ padding:14px 24px; gap:12px; }
+.lcHachMortModal .giValModal__foot{
+  padding:12px 24px 16px;
+  gap:8px;
+  background:var(--gi-surface-2, #F8FAFC);
+  border-top:1px solid var(--gi-border-soft, #F1F5F9);
+}
+.lcHachMortModal .giValModal__title{ color:var(--gi-text, #0F172A); font-size:17px; }
+.lcHachMortModal .giValModal__sub{ color:var(--gi-text-muted, #647287); font-size:12.5px; }
+.lcHachMortModal .giValModal__headIcon{
+  width:40px;
+  height:40px;
+  border-radius:var(--gi-r-md, 12px);
+  background:#fff;
+  border:1px solid rgba(56,112,237,.14);
+  box-shadow:var(--gi-sh-xs, 0 1px 2px rgba(15,23,42,.04));
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  overflow:hidden;
+  font-size:0;
+}
+.lcHachMortModal .giValModal__headIcon .lcCompanyLogo,
+.lcHachMortModal .giValModal__headIcon .lcCompanyLogo--mini{
+  width:28px;
+  height:28px;
+}
+.lcHachMortModal .giValModal__headIcon .lcCompanyLogo__img{
+  width:100%;
+  height:100%;
+  object-fit:contain;
+}
+
+.lcHachMort__closeX{
+  position:absolute;
+  top:12px;
+  left:12px;
+  border:none;
+  background:rgba(255,255,255,.72);
+  color:var(--gi-text-muted, #647287);
+  font-size:15px;
+  line-height:1;
+  cursor:pointer;
+  padding:5px 8px;
+  border-radius:var(--gi-r-ctl, 8px);
+  transition:background .12s ease, color .12s ease;
+}
+.lcHachMort__closeX:hover{ background:#fff; color:var(--gi-text, #0F172A); }
+
+.lcHachMort__tabs{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-bottom:0;
+}
+.lcHachMort__tab{
+  border:1.5px solid var(--gi-border, #E5E7EB);
+  background:#fff;
+  color:var(--gi-text-muted, #647287);
+  font-size:12.5px;
+  font-weight:700;
+  padding:6px 12px;
+  border-radius:var(--gi-r-pill, 999px);
+  cursor:pointer;
+  transition:border-color .12s ease, background .12s ease, color .12s ease;
+}
+.lcHachMort__tab:hover{ border-color:var(--gi-border-strong, #CBD5E1); }
+.lcHachMort__tab.is-active{ border-color:var(--gi-primary, #2563EB); background:var(--gi-primary-soft, #EFF6FF); color:var(--gi-primary, #2563EB); }
+.lcHachMort__tab.has-result{ border-color:var(--gi-success, #16A34A); }
+.lcHachMort__tab.has-saved{ border-color:var(--gi-success, #16A34A); background:var(--gi-success-soft, #ECFDF5); color:var(--gi-success, #16A34A); }
+
+.lcHachMort__insuredLabel{
+  font-size:13px;
+  font-weight:600;
+  color:var(--gi-primary, #2563EB);
+  background:var(--gi-primary-soft, #EFF6FF);
+  border:1px solid rgba(37,99,235,.14);
+  border-radius:var(--gi-r-ctl, 8px);
+  padding:8px 12px;
+}
+.lcHachMort__insuredLabel strong{ color:inherit; }
+
+.lcHachMort__grid{
+  display:grid;
+  grid-template-columns:repeat(3, minmax(140px, 1fr));
+  gap:12px 14px;
+}
+.lcHachMort__field{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+.lcHachMort__field--wide{ grid-column:1 / -1; }
+.lcHachMort__label{ font-size:12.5px; font-weight:700; color:var(--gi-text-2, #3D4A5C); }
+.lcHachMort__input{
+  border:1.5px solid var(--gi-border, #E5E7EB);
+  border-radius:var(--gi-r-ctl, 8px);
+  padding:9px 12px;
+  font-size:14px;
+  background:#fff;
+  color:var(--gi-text, #0F172A);
+  width:100%;
+  box-sizing:border-box;
+  transition:border-color .12s ease, box-shadow .12s ease;
+}
+.lcHachMort__input:focus{ outline:none; border-color:var(--gi-primary, #2563EB); box-shadow:0 0 0 3px var(--gi-primary-ring, rgba(37,99,235,.18)); }
+
+.lcHachMort__segmented{ display:flex; gap:6px; }
+.lcHachMort__segBtn{
+  flex:1;
+  border:1.5px solid var(--gi-border, #E5E7EB);
+  background:#fff;
+  color:var(--gi-text-muted, #647287);
+  font-size:13px;
+  font-weight:700;
+  padding:9px 6px;
+  border-radius:var(--gi-r-ctl, 8px);
+  cursor:pointer;
+  text-align:center;
+  transition:border-color .12s ease, background .12s ease, color .12s ease;
+}
+.lcHachMort__segBtn:hover{ border-color:var(--gi-border-strong, #CBD5E1); }
+.lcHachMort__segBtn.is-active{ border-color:var(--gi-primary, #2563EB); background:var(--gi-primary, #2563EB); color:#fff; }
+
+.lcHachMort__hint{
+  font-size:11.5px;
+  font-weight:600;
+}
+.lcHachMort__hint--warn{
+  color:var(--gi-text-muted, #647287);
+  background:var(--gi-surface-3, #F1F5F9);
+  border:1px solid var(--gi-border, #E5E7EB);
+  border-radius:var(--gi-r-ctl, 8px);
+  padding:5px 8px;
+}
+
+.lcHachMort__calcBtn{ width:100%; padding:11px 14px !important; font-size:14px !important; font-weight:700 !important; }
+
+.lcHachMort__result{
+  border-radius:var(--gi-r-md, 12px);
+  padding:12px 16px;
+  font-size:13.5px;
+}
+.lcHachMort__result--error{
+  background:var(--gi-danger-soft, #FEF2F2);
+  border:1.5px solid rgba(220,38,38,.18);
+  color:var(--gi-danger, #DC2626);
+  font-weight:700;
+}
+.lcHachMort__result--ok{
+  background:var(--gi-success-soft, #ECFDF5);
+  border:1.5px solid rgba(22,163,74,.18);
+  color:var(--gi-success, #16A34A);
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.lcHachMort__resultRow{ display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.lcHachMort__resultRow--main{ font-size:20px; font-weight:800; border-top:1px dashed rgba(22,163,74,.28); padding-top:8px; margin-top:2px; color:var(--gi-success, #16A34A); }
+
+@media (max-width: 640px){
+  .lcHachMort__grid{ grid-template-columns:1fr; }
+  .lcHachMortModal .giValModal__head{ padding:14px 16px 12px; }
+  .lcHachMortModal .giValModal__body{ padding:12px 16px; }
+  .lcHachMortModal .giValModal__foot{ padding:12px 16px 14px; }
+}
+
+/* ---------- GI-RISK-SIM-OCCUPATION · "פרטי מקצוע וחיתום" ---------- */
+.lcHachMort__occBox{
+  border:1px solid var(--gi-border, #E5E7EB);
+  border-radius:var(--gi-r-md, 12px);
+  padding:12px 14px;
+  background:var(--gi-bg, #F8FAFC);
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.lcHachMort__occHead{ font-size:12px; font-weight:700; color:var(--gi-text-muted, #647287); text-transform:uppercase; letter-spacing:.02em; }
+.lcHachMort__occBadge{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  width:fit-content;
+  font-size:12.5px;
+  font-weight:700;
+  padding:5px 12px;
+  border-radius:var(--gi-r-pill, 999px);
+  border:1.5px solid var(--gi-border, #E5E7EB);
+  background:#fff;
+}
+.lcHachMort__occBadge--none{ border-color:rgba(22,163,74,.3); background:var(--gi-success-soft, #ECFDF5); color:var(--gi-success, #16A34A); }
+.lcHachMort__occBadge--risk{ border-color:rgba(217,119,6,.3); background:var(--gi-warn-soft, #FFFBEB); color:var(--gi-warn, #D97706); }
+.lcHachMort__occBadge--unclear{ border-color:rgba(37,99,235,.3); background:var(--gi-info-soft, #EFF6FF); color:var(--gi-info, #2563EB); }
+.lcHachMort__occBadge--needsUnderwriting{ border-color:rgba(220,38,38,.3); background:var(--gi-danger-soft, #FEF2F2); color:var(--gi-danger, #DC2626); }
+.lcHachMort__occRow{ display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:13px; color:var(--gi-text-muted, #647287); }
+.lcHachMort__occRow strong{ color:var(--gi-text, #0F172A); font-weight:700; }
+.lcHachMort__occNote{ font-size:12px; color:var(--gi-danger, #DC2626); font-weight:700; }
+
+/* ---------- מבוטחים בהצעה (מצב שמירה) ---------- */
+.lcHachMort__statusList{
+  border:1px solid var(--gi-border, #E5E7EB);
+  border-radius:var(--gi-r-md, 12px);
+  padding:10px 14px;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  background:#fff;
+}
+.lcHachMort__statusListTitle{ font-size:11.5px; font-weight:700; color:var(--gi-text-muted, #647287); text-transform:uppercase; letter-spacing:.02em; margin-bottom:2px; }
+.lcHachMort__statusRow{ display:flex; align-items:center; gap:8px; font-size:13px; color:var(--gi-text, #0F172A); }
+
+/* ---------- דיאלוג אישור מעבר בין מבוטחים ---------- */
+.lcHachMort__overlay{
+  position:absolute;
+  inset:0;
+  background:rgba(15,23,42,.5);
+  backdrop-filter:blur(2px);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+  border-radius:inherit;
+  z-index:5;
+}
+.lcHachMort__overlayCard{
+  background:#fff;
+  border-radius:var(--gi-r-md, 12px);
+  padding:18px;
+  max-width:360px;
+  width:100%;
+  box-shadow:var(--gi-sh-lg, 0 12px 32px rgba(15,23,42,.10));
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+.lcHachMort__overlayText{ font-size:14px; color:var(--gi-text, #0F172A); line-height:1.55; }
+.lcHachMort__overlayBtns{ display:flex; flex-direction:column; gap:8px; }
+
+/* ---------- סיכום סימולטור להצעה ---------- */
+.lcHachMort__summaryRow{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:9px 4px;
+  border-bottom:1px solid var(--gi-border-soft, #F1F5F9);
+  font-size:14px;
+  color:var(--gi-text, #0F172A);
+}
+.lcHachMort__summaryRow:last-child{ border-bottom:none; }
+.lcHachMort__summaryRow span:last-child{ margin-inline-start:auto; font-weight:700; color:var(--gi-success, #16A34A); }

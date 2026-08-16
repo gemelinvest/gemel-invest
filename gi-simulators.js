@@ -427,7 +427,7 @@
   function riskSimDetectClosePrefix(modal){
     if(!modal) return null;
     const hit = modal.querySelector(
-      "[data-phx-close],[data-phxh-close],[data-mnr-close],[data-phxmort-close],[data-mnrmort-close],[data-mnrh-close],[data-aylh-close],[data-mnrci-close],[data-hach-close],[data-hachr-close],[data-hachci-close],[data-mgdh-close],[data-mgdci-close],[data-mgdca-close],[data-mgdr-close],[data-mgdad-close],[data-mgdacd-close],[data-clalh-close],[data-clalci-close],[data-clalca-close],[data-clalmort-close],[data-clalrisk-close]"
+      "[data-phx-close],[data-phxh-close],[data-mnr-close],[data-phxmort-close],[data-mnrmort-close],[data-mnrh-close],[data-aylh-close],[data-mnrci-close],[data-hach-close],[data-hachr-close],[data-hachm-close],[data-hachci-close],[data-mgdh-close],[data-mgdci-close],[data-mgdca-close],[data-mgdr-close],[data-mgdad-close],[data-mgdacd-close],[data-clalh-close],[data-clalci-close],[data-clalca-close],[data-clalmort-close],[data-clalrisk-close]"
     );
     if(!hit || !hit.attributes) return null;
     for(let i = 0; i < hit.attributes.length; i++){
@@ -3327,6 +3327,555 @@
 
   RiskSimulators.register("הכשרה", "ריסק", HachsharaRiskSimulator);
   // ===== סוף GI-HACH-RISK-SIM =====================================================
+
+  // ===== GI-HACH-MORT-RISK-SIM 2026-08-16 · ריסק משכנתא הכשרה =================
+  // מקור: תעריפים סיכונים.xlsx · גיליון «משכנתא».
+  // פרמיה **שנתית** לכל 1,000 ₪ סכום ביטוח (העמודה השמאלית בגליון).
+  // העמודה הימנית (חודשית לכל 100,000 ₪) היא המרה: שנתי/1,000 × 100 / 12.
+  // אין מדרגות סכום. גיל כניסה 18–85, מין ומעשן/לא מעשן. חודשית = שנתית / 12.
+  // אין להמציא, לקרב או להשלים ערך שאינו רשום כאן במפורש.
+  //
+  // [age, maleNonSmoker, maleSmoker, femaleNonSmoker, femaleSmoker] — פרמיה שנתית ל-1,000 ₪
+  const HACHSHARA_MORT_RISK_RATE_TABLE = [
+    [18, 0.75, 1.11, 0.51, 0.7], [19, 0.75, 1.11, 0.51, 0.7], [20, 0.75, 1.11, 0.51, 0.7],
+    [21, 0.81, 1.22, 0.5, 0.68], [22, 0.85, 1.29, 0.5, 0.67], [23, 0.88, 1.34, 0.5, 0.66],
+    [24, 0.89, 1.34, 0.5, 0.66], [25, 0.88, 1.32, 0.5, 0.66], [26, 0.85, 1.27, 0.5, 0.65],
+    [27, 0.81, 1.19, 0.5, 0.64], [28, 0.77, 1.1, 0.49, 0.63], [29, 0.72, 1.02, 0.49, 0.63],
+    [30, 0.69, 0.97, 0.5, 0.65], [31, 0.67, 0.96, 0.51, 0.69], [32, 0.67, 0.98, 0.53, 0.74],
+    [33, 0.69, 1.03, 0.55, 0.78], [34, 0.73, 1.11, 0.58, 0.84], [35, 0.77, 1.2, 0.6, 0.9],
+    [36, 0.8, 1.28, 0.63, 0.96], [37, 0.84, 1.36, 0.64, 0.99], [38, 0.88, 1.46, 0.66, 1.05],
+    [39, 0.94, 1.58, 0.69, 1.11], [40, 0.96, 1.64, 0.7, 1.15], [41, 1.02, 1.77, 0.75, 1.25],
+    [42, 1.08, 1.91, 0.81, 1.39], [43, 1.16, 2.08, 0.88, 1.54], [44, 1.22, 2.24, 0.96, 1.72],
+    [45, 1.31, 2.43, 1.06, 1.95], [46, 1.41, 2.65, 1.16, 2.19], [47, 1.51, 2.9, 1.28, 2.45],
+    [48, 1.63, 3.17, 1.4, 2.73], [49, 1.8, 3.54, 1.52, 3.01], [50, 2.11, 4.05, 1.72, 3.26],
+    [51, 2.3, 4.44, 1.78, 3.36], [52, 2.49, 4.83, 1.86, 3.5], [53, 2.69, 5.26, 1.99, 3.74],
+    [54, 2.91, 5.7, 2.16, 4.06], [55, 3.2, 6.24, 2.4, 4.47], [56, 3.53, 6.83, 2.68, 4.92],
+    [57, 3.91, 7.51, 2.92, 5.3], [58, 4.35, 8.31, 3.16, 5.66], [59, 4.95, 9.4, 3.5, 6.17],
+    [60, 5.6, 10.57, 3.93, 6.85], [61, 6.38, 11.95, 4.51, 7.75], [62, 7.26, 13.5, 5.21, 8.83],
+    [63, 8.17, 15.05, 5.99, 10], [64, 9.1, 16.62, 6.77, 11.13], [65, 10.16, 18.4, 7.54, 12.21],
+    [66, 11.43, 20.5, 8.31, 13.22], [67, 12.92, 22.97, 9.16, 14.32], [68, 14.41, 25.37, 10.24, 15.73],
+    [69, 15.83, 27.57, 11.45, 17.3], [70, 17.22, 29.47, 13.01, 19.33], [71, 19.14, 32.79, 14.67, 21.82],
+    [72, 21.74, 37.32, 16.62, 24.76], [73, 24.63, 42.32, 18.56, 27.67], [74, 27.39, 47.11, 20.46, 30.51],
+    [75, 29.86, 51.38, 22.16, 33.05], [76, 32.11, 55.25, 24.06, 35.88], [77, 34.5, 59.36, 26.08, 38.89],
+    [78, 37.21, 64.01, 28.53, 42.55], [79, 40.07, 68.93, 31.93, 47.64], [80, 43.12, 74.17, 35.8, 53.44],
+    [81, 46.37, 79.79, 40.3, 60.19], [82, 50.47, 86.87, 45.57, 68.09], [83, 56.26, 96.88, 51.49, 76.98],
+    [84, 63.14, 108.79, 57.9, 86.6], [85, 70.29, 121.15, 64.7, 96.8]
+  ];
+
+  const HACHSHARA_MORT_RISK_RATE_MAP = new Map(
+    HACHSHARA_MORT_RISK_RATE_TABLE.map((row) => [row[0], {
+      maleNonSmoker: row[1], maleSmoker: row[2], femaleNonSmoker: row[3], femaleSmoker: row[4]
+    }])
+  );
+  const HACHSHARA_MORT_RISK_MIN_AGE = HACHSHARA_MORT_RISK_RATE_TABLE[0][0];
+  const HACHSHARA_MORT_RISK_MAX_AGE = HACHSHARA_MORT_RISK_RATE_TABLE[HACHSHARA_MORT_RISK_RATE_TABLE.length - 1][0];
+
+  function lookupHachsharaMortRiskRate({ age, gender, smoker }){
+    const ageNum = Number(age);
+    if(!Number.isInteger(ageNum)) return { ok:false, reason:"age_missing" };
+    const row = HACHSHARA_MORT_RISK_RATE_MAP.get(ageNum);
+    if(!row) return { ok:false, reason:"age_out_of_range" };
+    const genderKey = gender === "זכר" ? "male" : (gender === "נקבה" ? "female" : "");
+    if(!genderKey) return { ok:false, reason:"gender_missing" };
+    if(smoker !== true && smoker !== false) return { ok:false, reason:"smoker_missing" };
+    const rate = row[genderKey + (smoker ? "Smoker" : "NonSmoker")];
+    if(typeof rate !== "number" || !Number.isFinite(rate)) return { ok:false, reason:"rate_missing" };
+    return { ok:true, ratePerMille: rate };
+  }
+
+  function computeHachsharaMortRiskPremium({ age, gender, smoker, sumInsured }){
+    const lookup = lookupHachsharaMortRiskRate({ age, gender, smoker });
+    if(!lookup.ok) return lookup;
+    const sum = Number(sumInsured);
+    if(!Number.isFinite(sum) || sum <= 0) return { ok:false, reason:"sum_missing" };
+    const rateCenti = Math.round(lookup.ratePerMille * 100);
+    const annualPremium = (rateCenti * sum) / 100000;
+    const monthlyPremium = annualPremium / 12;
+    return {
+      ok:true,
+      ratePerMille: lookup.ratePerMille,
+      monthlyPremium,
+      annualPremium,
+      sumInsured: sum
+    };
+  }
+
+  const formatHachsharaMortRiskExactAmount = formatPhoenixExactAmount;
+
+  const HACHSHARA_MORT_RISK_SIM_MISSING_MESSAGES = {
+    age_missing: "יש להזין תאריך לידה תקין לפני חישוב הפרמיה.",
+    age_out_of_range: `לא נמצא תעריף מתאים לגיל שהוזן (התעריפון מכיל גילאים ${HACHSHARA_MORT_RISK_MIN_AGE}–${HACHSHARA_MORT_RISK_MAX_AGE} בלבד).`,
+    gender_missing: "יש להזין מין לפני חישוב הפרמיה.",
+    smoker_missing: "יש לציין האם המבוטח מעשן/ת לפני חישוב הפרמיה.",
+    sum_missing: "יש להזין סכום ביטוח תקין (גדול מאפס) לפני חישוב הפרמיה.",
+    rate_missing: "לא נמצא תעריף מתאים לנתונים שהוזנו."
+  };
+
+  const HachsharaMortRiskSimulator = {
+    _modal: null,
+    _ctx: null,
+    _state: {},
+    _activeInsuredId: null,
+    _escHandler: null,
+    _confirmSwitch: null,
+    _showFinalSummary: false,
+
+    open(ctx){
+      this.close();
+      this._ctx = ctx || {};
+      const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : [];
+      this._state = {};
+      insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); });
+      this._activeInsuredId = insureds[0]?.id || null;
+      this._confirmSwitch = null;
+      this._showFinalSummary = false;
+      this._mount();
+      this._render();
+    },
+
+    _prefillFromInsured(ins){
+      const d = ins?.data || {};
+      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
+      const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
+      const birthDate = safeTrim(d.birthDate || "");
+      const occupation = safeTrim(d.occupation || "");
+      const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
+      const st = {
+        birthDate,
+        birthDateSource: birthDate ? "step1" : "",
+        insuranceStartDate,
+        insuranceStartDateSource: insuranceStartDate ? "ctx" : "",
+        age: "",
+        ageSource: birthDate ? "step1" : "",
+        ageRaw: null,
+        entryDays: null,
+        gender, genderSource: gender ? "step1" : "",
+        smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "",
+        occupation,
+        occupationSource: occupation ? "step1" : "",
+        sumInsured: "",
+        result: null,
+        error: null,
+        savedAt: null,
+        dirtySinceSave: false
+      };
+      riskSimSyncAgeFromBirthDate(st, { minAge: HACHSHARA_MORT_RISK_MIN_AGE, maxAge: HACHSHARA_MORT_RISK_MAX_AGE, asOfDate: st.insuranceStartDate || "" });
+      return st;
+    },
+
+    _isInsuredRelevant(_ins){
+      return true;
+    },
+
+    close(){
+      if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; }
+      if(this._modal){
+        const m = this._modal;
+        m.classList.add("giValModal--leaving");
+        window.setTimeout(() => m.remove(), 200);
+        this._modal = null;
+      }
+      this._ctx = null;
+    },
+
+    _mount(){
+      const modal = document.createElement("div");
+      modal.id = "lcHachMortModal";
+      modal.className = "giValModal lcHachMortModal";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-label", "סימולטור ריסק משכנתא הכשרה");
+      document.body.appendChild(modal);
+      this._modal = modal;
+      this._escHandler = (ev) => { if(ev.key === "Escape") this.close(); };
+      document.addEventListener("keydown", this._escHandler);
+      requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
+    },
+
+    _getInsuredLabel(insId){
+      const ins = (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === insId);
+      return ins ? safeTrim(ins.label) || "מבוטח" : "מבוטח";
+    },
+
+    _getActiveInsured(){
+      return (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === this._activeInsuredId) || null;
+    },
+
+    _render(){
+      if(!this._modal) return;
+      const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+      const isMulti = insureds.length > 1;
+
+      if(this._showFinalSummary){
+        this._renderFinalSummary(insureds);
+        return;
+      }
+
+      const activeId = this._activeInsuredId;
+      const st = this._state[activeId] || this._prefillFromInsured(null);
+      const isStandalone = !!this._ctx?.standalone;
+
+      const tabsHtml = isMulti ? `<div class="lcHachMort__tabs">${insureds.map((ins) => {
+        const s = this._state[ins.id];
+        const statusCls = s?.savedAt ? ' has-saved' : (s?.result ? ' has-result' : '');
+        return `<button type="button" class="lcHachMort__tab${ins.id === activeId ? ' is-active' : ''}${statusCls}" data-hachm-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${s?.savedAt ? ' 🟢' : ''}</button>`;
+      }).join("")}</div>` : "";
+
+      const statusListHtml = isMulti ? `
+        <div class="lcHachMort__statusList">
+          <div class="lcHachMort__statusListTitle">מבוטחים בהצעה</div>
+          ${insureds.map((ins) => {
+            const s = this._state[ins.id];
+            const label = escapeHtml(safeTrim(ins.label) || "מבוטח");
+            if(!this._isInsuredRelevant(ins)) return `<div class="lcHachMort__statusRow"><span>⚪</span><span>${label} – לא נדרש סימולטור עבור מבוטח זה</span></div>`;
+            if(s?.savedAt) return `<div class="lcHachMort__statusRow"><span>🟢</span><span>${label} – נשמר</span></div>`;
+            return `<div class="lcHachMort__statusRow"><span>🟡</span><span>${label} – טרם חושב</span></div>`;
+          }).join("")}
+        </div>` : "";
+
+      const ageHintHtml = st.birthDate && Number.isInteger(st.ageRaw)
+        ? (st.age
+            ? `<div class="lcHachMort__hint">גיל ביטוחי בתחילת הביטוח: <strong>${escapeHtml(String(st.ageRaw))}</strong> (טווח תעריפון ${HACHSHARA_MORT_RISK_MIN_AGE}–${HACHSHARA_MORT_RISK_MAX_AGE})</div>`
+            : `<div class="lcHachMort__hint lcHachMort__hint--warn">הגיל המחושב מתאריך הלידה (${st.ageRaw}) חורג מטווח התעריפון (${HACHSHARA_MORT_RISK_MIN_AGE}–${HACHSHARA_MORT_RISK_MAX_AGE})</div>`)
+        : ((isStandalone || st.birthDate)
+            ? (st.birthDate ? `<div class="lcHachMort__hint lcHachMort__hint--warn">תאריך לידה לא תקין — יש להזין DD/MM/YYYY</div>` : "")
+            : `<div class="lcHachMort__hint lcHachMort__hint--warn">לא נמצא תאריך לידה תקין בפרטים האישיים — יש להזין</div>`);
+
+      const genderHintHtml = (isStandalone || st.gender)
+        ? ""
+        : `<div class="lcHachMort__hint lcHachMort__hint--warn">לא נמצא מין בפרטים האישיים — יש לבחור</div>`;
+      const smokerHintHtml = (isStandalone || st.smoker === true || st.smoker === false)
+        ? ""
+        : `<div class="lcHachMort__hint lcHachMort__hint--warn">לא נמצא סטטוס עישון בפרטים האישיים — יש לבחור</div>`;
+
+      const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company)
+        ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini")
+        : "🛡️";
+      const occAssessment = assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product);
+      const occBlockHtml = renderOccupationRiskBlockHtml(occAssessment, "lcHachMort");
+
+      const resultHtml = st.error
+        ? `<div class="lcHachMort__result lcHachMort__result--error">${escapeHtml(st.error)}</div>`
+        : (st.result ? `<div class="lcHachMort__result lcHachMort__result--ok">
+            <div class="lcHachMort__resultRow lcHachMort__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatHachsharaMortRiskExactAmount(st.result.monthlyPremium))}</strong></div>
+            <div class="lcHachMort__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatHachsharaMortRiskExactAmount(st.result.annualPremium))}</strong></div>
+          </div>` : "");
+
+      const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
+      const relevantInsureds = insureds.filter((ins) => this._isInsuredRelevant(ins));
+      const allRelevantSaved = relevantInsureds.length > 0 && relevantInsureds.every((ins) => !!this._state[ins.id]?.savedAt);
+
+      const footHtml = isStandalone ? `
+          <div class="giValModal__foot lcHachMort__foot">
+            <button type="button" class="btn btn--primary" data-hachm-close="1">סגור</button>
+          </div>` : (!isMulti ? `
+          <div class="giValModal__foot lcHachMort__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-hachm-close="1">ביטול</button>
+            <button type="button" class="btn btn--primary" data-hachm-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button>
+          </div>` : `
+          <div class="giValModal__foot lcHachMort__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-hachm-close="1">ביטול</button>
+            <button type="button" class="btn btn--secondary" data-hachm-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button>
+            <button type="button" class="btn btn--primary" data-hachm-finalconfirm="1"${allRelevantSaved ? "" : " disabled"}>אישור סופי</button>
+          </div>`);
+
+      const confirmOverlayHtml = this._confirmSwitch ? `
+        <div class="lcHachMort__overlay">
+          <div class="lcHachMort__overlayCard">
+            <div class="lcHachMort__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}. האם לשמור לפני המעבר?</div>
+            <div class="lcHachMort__overlayBtns">
+              <button type="button" class="btn btn--primary" data-hachm-switch="save">שמור ועבור</button>
+              <button type="button" class="btn btn--secondary" data-hachm-switch="discard">עבור ללא שמירה</button>
+              <button type="button" class="btn" data-hachm-switch="cancel">ביטול</button>
+            </div>
+          </div>
+        </div>` : "";
+
+      this._modal.innerHTML = `
+        <div class="giValModal__backdrop" data-hachm-close="1"></div>
+        <div class="giValModal__card lcHachMort__card">
+          <div class="giValModal__head">
+            <span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span>
+            <div class="giValModal__headText">
+              <div class="giValModal__title">סימולטור ריסק משכנתא הכשרה</div>
+              <div class="giValModal__sub">תעריף שנתי לכל ₪1,000 סכום ביטוח · גיליון משכנתא</div>
+            </div>
+            <button type="button" class="lcHachMort__closeX" data-hachm-close="1" aria-label="סגירה">✕</button>
+          </div>
+          <div class="giValModal__body lcHachMort__body">
+            ${statusListHtml}
+            ${tabsHtml}
+            ${isStandalone
+              ? `<div class="lcHachMort__insuredLabel lcHachMort__insuredLabel--standalone">מצב חישוב עצמאי — התוצאה לא נשמרת על אף פוליסה</div>`
+              : `<div class="lcHachMort__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}
+            <div class="lcHachMort__grid">
+              <div class="lcHachMort__field">
+                <label class="lcHachMort__label">תאריך לידה</label>
+                <input class="lcHachMort__input lcHachMort__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
+                  placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-hachm-field="birthDate"
+                  value="${escapeHtml(st.birthDate || "")}" />
+                ${ageHintHtml}
+              </div>
+              <div class="lcHachMort__field">
+                <label class="lcHachMort__label">תחילת ביטוח</label>
+                <input class="lcHachMort__input lcHachMort__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off"
+                  placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-hachm-field="insuranceStartDate"
+                  value="${escapeHtml(st.insuranceStartDate || "")}" />
+              </div>
+              <div class="lcHachMort__field">
+                <label class="lcHachMort__label">מין</label>
+                <div class="lcHachMort__segmented">
+                  <button type="button" class="lcHachMort__segBtn${st.gender === 'זכר' ? ' is-active' : ''}" data-hachm-field="gender" data-hachm-value="זכר">זכר</button>
+                  <button type="button" class="lcHachMort__segBtn${st.gender === 'נקבה' ? ' is-active' : ''}" data-hachm-field="gender" data-hachm-value="נקבה">נקבה</button>
+                </div>
+                ${genderHintHtml}
+              </div>
+              <div class="lcHachMort__field">
+                <label class="lcHachMort__label">עישון</label>
+                <div class="lcHachMort__segmented">
+                  <button type="button" class="lcHachMort__segBtn${st.smoker === false ? ' is-active' : ''}" data-hachm-field="smoker" data-hachm-value="0">לא מעשן/ת</button>
+                  <button type="button" class="lcHachMort__segBtn${st.smoker === true ? ' is-active' : ''}" data-hachm-field="smoker" data-hachm-value="1">מעשן/ת</button>
+                </div>
+                ${smokerHintHtml}
+              </div>
+              <div class="lcHachMort__field lcHachMort__field--wide">
+                <label class="lcHachMort__label">סכום ביטוח (₪)</label>
+                <input class="lcHachMort__input" type="text" inputmode="numeric" data-hachm-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="לדוגמה: 1,000,000" />
+              </div>
+              <div class="lcHachMort__field lcHachMort__field--wide">
+                <label class="lcHachMort__label">עיסוק</label>
+                <input class="lcHachMort__input" type="text" data-hachm-field="occupation" value="${escapeHtml(st.occupation || "")}" placeholder="לדוגמה: מהנדס, נהג משאית" autocomplete="off" />
+              </div>
+            </div>
+            ${occBlockHtml}
+            <button type="button" class="btn btn--secondary lcHachMort__calcBtn" data-hachm-calc="1">חשב פרמיה</button>
+            ${resultHtml}
+          </div>
+          ${footHtml}
+          ${confirmOverlayHtml}
+        </div>`;
+
+      this._bind();
+    },
+
+    _renderFinalSummary(insureds){
+      const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+      const rows = relevant.map((ins) => {
+        const ok = !!this._state[ins.id]?.savedAt;
+        return `<div class="lcHachMort__summaryRow"><span>${ok ? "✓" : "•"}</span><span>${escapeHtml(safeTrim(ins.label) || "מבוטח")}</span><span>${ok ? "הושלם" : "לא נשמר"}</span></div>`;
+      }).join("");
+      this._modal.innerHTML = `
+        <div class="giValModal__backdrop" data-hachm-close="1"></div>
+        <div class="giValModal__card lcHachMort__card">
+          <div class="giValModal__head">
+            <span class="giValModal__headIcon" aria-hidden="true">🛡️</span>
+            <div class="giValModal__headText">
+              <div class="giValModal__title">סיכום סימולטור להצעה</div>
+              <div class="giValModal__sub">בדקו את הנתונים לפני האישור הסופי</div>
+            </div>
+            <button type="button" class="lcHachMort__closeX" data-hachm-close="1" aria-label="סגירה">✕</button>
+          </div>
+          <div class="giValModal__body lcHachMort__body">
+            <div class="lcHachMort__statusListTitle">מבוטחים</div>
+            ${rows}
+          </div>
+          <div class="giValModal__foot lcHachMort__foot">
+            <button type="button" class="btn giValModal__closeBtn" data-hachm-summary-back="1">חזרה</button>
+            <button type="button" class="btn btn--primary" data-hachm-summary-confirm="1">אישור סופי</button>
+          </div>
+        </div>`;
+      this._bind();
+    },
+
+    _bind(){
+      const modal = this._modal;
+      if(!modal) return;
+      ensureSegFieldDelegation(modal, this, "hachm");
+      $$("[data-hachm-close]", modal).forEach((el) => on(el, "click", () => this.close()));
+      $$("[data-hachm-tab]", modal).forEach((el) => on(el, "click", () => {
+        this._switchInsured(el.getAttribute("data-hachm-tab"));
+      }));
+      $$("[data-hachm-switch]", modal).forEach((el) => on(el, "click", () => {
+        const action = el.getAttribute("data-hachm-switch");
+        const target = this._confirmSwitch?.targetId;
+        this._confirmSwitch = null;
+        if(action === "save"){
+          this._saveActive();
+          if(target) this._activeInsuredId = target;
+          this._render();
+        } else if(action === "discard"){
+          if(target) this._activeInsuredId = target;
+          this._render();
+        } else {
+          this._render();
+        }
+      }));
+      bindRiskSimDmyField(modal, '[data-hachm-field="birthDate"]', {
+        onInput: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.birthDate = val;
+          st.birthDateSource = "manual";
+          st.dirtySinceSave = true;
+        },
+        onCommit: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.birthDate = val;
+          st.birthDateSource = "manual";
+          const sync = riskSimSyncAgeFromBirthDate(st, { minAge: HACHSHARA_MORT_RISK_MIN_AGE, maxAge: HACHSHARA_MORT_RISK_MAX_AGE, asOfDate: st.insuranceStartDate || "" });
+          st.ageSource = "manual";
+          if(!sync.ok){ st.age = ""; }
+          st.result = null; st.error = null; st.dirtySinceSave = true;
+          this._render();
+        }
+      });
+      bindRiskSimDmyField(modal, '[data-hachm-field="insuranceStartDate"]', {
+        onInput: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.insuranceStartDate = val;
+          st.insuranceStartDateSource = "manual";
+          st.dirtySinceSave = true;
+        },
+        onCommit: (val) => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.insuranceStartDate = val || riskSimTodayDmy();
+          st.insuranceStartDateSource = "manual";
+          const sync = riskSimSyncAgeFromBirthDate(st, { minAge: HACHSHARA_MORT_RISK_MIN_AGE, maxAge: HACHSHARA_MORT_RISK_MAX_AGE, asOfDate: st.insuranceStartDate || "" });
+          if(!sync.ok){ st.age = ""; }
+          st.result = null; st.error = null; st.dirtySinceSave = true;
+          this._render();
+        }
+      });
+      const sumInput = modal.querySelector('[data-hachm-field="sumInsured"]');
+      if(sumInput) on(sumInput, "input", () => {
+        const st = this._state[this._activeInsuredId];
+        if(!st) return;
+        const formatted = formatRiskSimSumInsuredDigits(sumInput.value);
+        sumInput.value = formatted;
+        try { sumInput.setSelectionRange(formatted.length, formatted.length); } catch(_e){}
+        st.sumInsured = formatted;
+        st.result = null; st.error = null; st.dirtySinceSave = true;
+      });
+      const occInput = modal.querySelector('[data-hachm-field="occupation"]');
+      if(occInput){
+        on(occInput, "input", () => {
+          const st = this._state[this._activeInsuredId];
+          if(!st) return;
+          st.occupation = safeTrim(occInput.value);
+          st.occupationSource = "manual";
+          st.dirtySinceSave = true;
+        });
+        on(occInput, "change", () => this._render());
+        on(occInput, "blur", () => this._render());
+      }
+      const calcBtn = modal.querySelector("[data-hachm-calc]");
+      if(calcBtn) on(calcBtn, "click", () => this._calc(this._activeInsuredId));
+      const applyBtn = modal.querySelector("[data-hachm-apply]");
+      if(applyBtn) on(applyBtn, "click", () => this._apply());
+      const saveBtn = modal.querySelector("[data-hachm-save]");
+      if(saveBtn) on(saveBtn, "click", () => this._saveActive());
+      const finalBtn = modal.querySelector("[data-hachm-finalconfirm]");
+      if(finalBtn) on(finalBtn, "click", () => {
+        const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : [];
+        const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
+        const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
+        if(!allSaved){
+          window.showToast?.({ title: "לא כל המבוטחים נשמרו", text: "יש לשמור את הסימולטור עבור כל המבוטחים הרלוונטיים לפני האישור הסופי.", variant: "warn" });
+          return;
+        }
+        this._showFinalSummary = true;
+        this._render();
+      });
+      const summaryBackBtn = modal.querySelector("[data-hachm-summary-back]");
+      if(summaryBackBtn) on(summaryBackBtn, "click", () => { this._showFinalSummary = false; this._render(); });
+      const summaryConfirmBtn = modal.querySelector("[data-hachm-summary-confirm]");
+      if(summaryConfirmBtn) on(summaryConfirmBtn, "click", () => {
+        try { this._ctx?.onFinalConfirm?.(); } catch(_e){}
+        this.close();
+      });
+    },
+
+    _switchInsured(targetId){
+      if(!targetId || targetId === this._activeInsuredId) return;
+      const st = this._state[this._activeInsuredId];
+      if(st?.dirtySinceSave){
+        this._confirmSwitch = { targetId };
+        this._render();
+        return;
+      }
+      this._activeInsuredId = targetId;
+      this._render();
+    },
+
+    _calc(insuredId){
+      const st = this._state[insuredId];
+      if(!st) return;
+      const sumNum = Number(String(st.sumInsured || "").replace(/[^\d.]/g, ""));
+      const calc = computeHachsharaMortRiskPremium({ age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: sumNum });
+      if(calc.ok){
+        st.result = calc;
+        st.error = null;
+      } else {
+        st.result = null;
+        st.error = HACHSHARA_MORT_RISK_SIM_MISSING_MESSAGES[calc.reason] || "לא נמצא תעריף מתאים לנתונים שהוזנו.";
+      }
+      st.dirtySinceSave = true;
+      this._render();
+    },
+
+    _buildResultForInsured(insId){
+      const st = this._state[insId];
+      if(!st?.result?.ok) return null;
+      return {
+        sumInsured: st.sumInsured,
+        monthlyPremium: st.result.monthlyPremium,
+        annualPremium: st.result.annualPremium,
+        ratePerMille: st.result.ratePerMille,
+        birthDate: st.birthDate || "",
+        insuranceStartDate: st.insuranceStartDate || "",
+        age: st.age, ageSource: st.ageSource, gender: st.gender, smoker: st.smoker,
+        genderSource: st.genderSource, smokerSource: st.smokerSource,
+        occupation: st.occupation || "", occupationSource: st.occupationSource || ""
+      };
+    },
+
+    _apply(){
+      const results = {};
+      Object.keys(this._state).forEach((insId) => {
+        const r = this._buildResultForInsured(insId);
+        if(r) results[insId] = r;
+      });
+      if(!Object.keys(results).length){
+        window.showToast?.({ title: "אין תוצאה להחלה", text: "יש לחשב פרמיה לפחות למבוטח אחד לפני ההחלה על הפוליסה.", variant: "warn" });
+        return;
+      }
+      const onApply = this._ctx?.onApply;
+      this.close();
+      try { onApply?.(results); } catch(_e) {}
+    },
+
+    _saveActive(){
+      const insId = this._activeInsuredId;
+      const result = this._buildResultForInsured(insId);
+      if(!result){
+        window.showToast?.({ title: "אין תוצאה לשמירה", text: "יש לחשב פרמיה עבור מבוטח זה לפני השמירה.", variant: "warn" });
+        return;
+      }
+      try { this._ctx?.onApply?.({ [insId]: result }); } catch(_e) {}
+      const st = this._state[insId];
+      if(st){ st.savedAt = nowISO(); st.dirtySinceSave = false; }
+      window.showToast?.({ title: "נשמר", text: `הסימולטור עבור ${this._getInsuredLabel(insId)} נשמר על ההצעה.`, variant: "success" });
+      this._render();
+    }
+  };
+
+  RiskSimulators.register("הכשרה", "ריסק משכנתא", HachsharaMortRiskSimulator);
+  // ===== סוף GI-HACH-MORT-RISK-SIM ===============================================
+
+
 
 
   // ===== GI-PHX-MORT-RISK-SIM: סימולטור ריסק משכנתא הפניקס ========================
