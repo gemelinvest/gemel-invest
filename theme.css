@@ -6974,6 +6974,156 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
 }
 
 /* =====================================================================
+   GI 2026-08-16 · מכירות — פילים + גיבור + דירוג
+   תצוגה בלבד. תחום ל-#view-dailySales.
+   ===================================================================== */
+#view-dailySales .giDailySalesPage:not(#\9):not(#\9){
+  gap: 14px;
+  padding: 20px 22px 22px;
+}
+#view-dailySales .giDailySalesPage__sectors:not(#\9):not(#\9){
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-bottom: 0;
+  background: transparent;
+}
+#view-dailySales .giDailySalesPage__sectorTab:not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__sectorTab.is-active:not(#\9):not(#\9){
+  min-height: 0;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  box-shadow: none;
+  justify-content: center;
+  align-items: center;
+  flex-direction: row;
+}
+#view-dailySales .giDailySalesPage__sectorTab:not(#\9):not(#\9){
+  border: 1px solid var(--gi-border);
+  background: #fff;
+  color: var(--gi-text-2);
+}
+#view-dailySales .giDailySalesPage__sectorTab.is-active:not(#\9):not(#\9){
+  background: #1e3a5f;
+  border-color: #1e3a5f;
+  color: #fff;
+}
+#view-dailySales .giDailySalesPage__sectorTab.is-active:not(#\9):not(#\9)::after{
+  display: none;
+}
+#view-dailySales .giDailySalesPage__sectorTabLabel:not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__sectorTab.is-active .giDailySalesPage__sectorTabLabel:not(#\9):not(#\9){
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: inherit;
+}
+#view-dailySales .giDailySalesPage__sectorTabValue:not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__sectorTabMeta:not(#\9):not(#\9){
+  display: none;
+}
+#view-dailySales .giDailySalesPage__hero:not(#\9):not(#\9){
+  display: grid;
+  grid-template-columns: 1.4fr .7fr .7fr;
+  background: #fff;
+  border: 1px solid var(--gi-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+#view-dailySales .giDailySalesPage__hero[hidden]:not(#\9):not(#\9){
+  display: none !important;
+}
+#view-dailySales .giDailySalesPage__heroCell:not(#\9):not(#\9){
+  padding: 16px 20px;
+}
+#view-dailySales .giDailySalesPage__heroCell + .giDailySalesPage__heroCell:not(#\9):not(#\9){
+  border-inline-start: 1px solid var(--gi-border-soft);
+}
+#view-dailySales .giDailySalesPage__heroLabel:not(#\9):not(#\9){
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gi-text-muted);
+}
+#view-dailySales .giDailySalesPage__heroValue:not(#\9):not(#\9){
+  margin-top: 6px;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -.03em;
+  color: #1e3a5f;
+  font-variant-numeric: tabular-nums;
+}
+#view-dailySales .giDailySalesPage__heroCell--side .giDailySalesPage__heroValue:not(#\9):not(#\9){
+  font-size: 22px;
+  color: var(--gi-text);
+}
+#view-dailySales .giDailySalesPage__heroUnit:not(#\9):not(#\9){
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gi-text-muted);
+}
+#view-dailySales .giDailySalesPage__splitBar:not(#\9):not(#\9){
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  padding: 10px 20px;
+  border: 1px solid var(--gi-border);
+  border-radius: 10px;
+  background: #fff;
+}
+#view-dailySales .giDailySalesPage__splitBar[hidden]:not(#\9):not(#\9){
+  display: none !important;
+}
+#view-dailySales .giDailySalesPage__splitItem:not(#\9):not(#\9){
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+#view-dailySales .giDailySalesPage__splitItem span:not(#\9):not(#\9){
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gi-text-muted);
+}
+#view-dailySales .giDailySalesPage__splitItem b:not(#\9):not(#\9){
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+#view-dailySales .giDailySalesPage__splitItem--briut b:not(#\9):not(#\9){ color: #1a7a4a; }
+#view-dailySales .giDailySalesPage__splitItem--sikunim b:not(#\9):not(#\9){ color: #b42318; }
+#view-dailySales .giDailySalesPage__rank:not(#\9):not(#\9){
+  color: var(--gi-text-muted);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+#view-dailySales .giDailySalesPage__dealsCell:not(#\9):not(#\9){
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+#view-dailySales .giDailySalesPage__splitCell--briut .giDailySalesPage__splitNum:not(#\9):not(#\9){ color: #1a7a4a; }
+#view-dailySales .giDailySalesPage__splitCell--prat .giDailySalesPage__splitNum:not(#\9):not(#\9){ color: #b42318; }
+#view-dailySales .giDailySalesPage__note:not(#\9):not(#\9){
+  margin: 0;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--gi-text-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+@media (max-width: 900px){
+  #view-dailySales .giDailySalesPage__hero:not(#\9):not(#\9){
+    grid-template-columns: 1fr;
+  }
+  #view-dailySales .giDailySalesPage__heroCell + .giDailySalesPage__heroCell:not(#\9):not(#\9){
+    border-inline-start: 0;
+    border-top: 1px solid var(--gi-border-soft);
+  }
+}
+
+/* =====================================================================
    SETTINGS CONSOLE ? GI stretch (Settings Hub)
    Visual layer only; DOM/logic unchanged.
    ===================================================================== */

@@ -14483,7 +14483,7 @@ UsersGateUI.init();
           campaignMyLeads: "הלידים שלי",
           reportsHub: "דוחות",
           dailyReport: (typeof DailyReportUI !== "undefined" && DailyReportUI.activeRubric === "cancellations") ? "דוח ביטולים" : "דוח מכירות",
-          dailySales: "מעקב מכירות יומי",
+          dailySales: "מכירות",
           myTeam: "הצוות שלי",
           activityLog: "לוג פעילות",
           attendanceReport: "דוח נוכחות"
@@ -28615,17 +28615,177 @@ UsersGateUI.init();
       }).join("");
     },
 
+    /* תצוגה בלבד: קיבוץ שורות groups הקיימות לפי נציג, בלי לשנות את בניית הדוח. */
+    dailySalesPresentPivotByAgent(groups){
+      const map = new Map();
+      (Array.isArray(groups) ? groups : []).forEach((g) => {
+        const name = safeTrim(g?.agentName) || "נציג";
+        if(!map.has(name)){
+          map.set(name, {
+            agentName: name,
+            sectors: [],
+            products: new Map(),
+            companies: new Map(),
+            deals: 0,
+            health: 0,
+            prat: 0,
+            elementary: 0,
+            pension: 0,
+            other: 0,
+            premium: 0
+          });
+        }
+        const row = map.get(name);
+        const sector = safeTrim(g?.sector);
+        const prem = Number(g?.premium) || 0;
+        row.deals += Number(g?.deals) || 0;
+        row.premium += prem;
+        if(sector && !row.sectors.includes(sector)) row.sectors.push(sector);
+        if(sector === "בריאות") row.health += prem;
+        else if(sector === "סיכונים") row.prat += prem;
+        else if(sector === "אלמנטרי") row.elementary += prem;
+        else if(sector === "פנסיה") row.pension += prem;
+        else row.other += prem;
+        (Array.isArray(g?.products) ? g.products : []).forEach((p) => {
+          const pname = typeof p === "string" ? p : safeTrim(p?.name);
+          if(!pname) return;
+          const count = typeof p === "string" ? 1 : (Number(p?.count) || 1);
+          row.products.set(pname, (row.products.get(pname) || 0) + count);
+        });
+        (Array.isArray(g?.companies) ? g.companies : []).forEach((c) => {
+          const cname = typeof c === "string" ? c : safeTrim(c?.name);
+          if(!cname) return;
+          row.companies.set(cname, (row.companies.get(cname) || 0) + 1);
+        });
+      });
+      return Array.from(map.values()).map((row) => ({
+        agentName: row.agentName,
+        sectors: row.sectors,
+        products: Array.from(row.products.entries())
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => b.count - a.count || safeTrim(a.name).localeCompare(safeTrim(b.name), "he")),
+        companies: Array.from(row.companies.keys())
+          .sort((a, b) => safeTrim(a).localeCompare(safeTrim(b), "he")),
+        deals: Number(row.deals) || 0,
+        health: Math.round(row.health * 100) / 100,
+        prat: Math.round(row.prat * 100) / 100,
+        elementary: Math.round(row.elementary * 100) / 100,
+        pension: Math.round(row.pension * 100) / 100,
+        other: Math.round(row.other * 100) / 100,
+        premium: Math.round(row.premium * 100) / 100,
+        monthly: Math.round((row.health + row.prat + row.pension + row.other) * 100) / 100
+      })).sort((a, b) =>
+        (Number(b.premium) - Number(a.premium))
+        || safeTrim(a.agentName).localeCompare(safeTrim(b.agentName), "he")
+      );
+    },
+
+    dailySalesVisibleSectorTabs(report){
+      const selected = this.getDailySalesSelectedSectorKey();
+      return this.dailySalesSectorTabs().filter((tab) => {
+        if(tab.key !== "pensia") return true;
+        if(selected === "pensia") return true;
+        const slice = this.dailySalesTabSlice(report, tab);
+        return (Number(slice.deals) || 0) > 0 || (Number(slice.premium) || 0) > 0;
+      });
+    },
+
+    dailySalesTableColCount(tab){
+      return tab?.combined ? 8 : 6;
+    },
+
+    dailySalesPrintFileStem(dateKey){
+      const m = safeTrim(dateKey).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if(!m) return "מכירות-היום";
+      return `מכירות-היום-${m[3]}-${m[2]}-${m[1]}`;
+    },
+
+    dailySalesPrintMoney(value){
+      const n = Number(value) || 0;
+      if(!(n > 0)) return "—";
+      return `₪${n.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    },
+
     renderDailySalesSectorTabsHtml(report){
       const selected = this.getDailySalesSelectedSectorKey();
-      return this.dailySalesSectorTabs().map((tab) => {
-        const slice = this.dailySalesTabSlice(report, tab);
+      return this.dailySalesVisibleSectorTabs(report).map((tab) => {
         const on = tab.key === selected;
-        const unit = tab.annual ? "שנתית" : "חודשית";
         return `<button class="giDailySalesPage__sectorTab${on ? " is-active" : ""}" type="button" role="tab" aria-selected="${on ? "true" : "false"}" data-daily-sales-sector="${escapeHtml(tab.key)}">
           <span class="giDailySalesPage__sectorTabLabel">${escapeHtml(tab.label)}</span>
-          <span class="giDailySalesPage__sectorTabValue">${escapeHtml(this.formatMoney(slice.premium))}</span>
-          <span class="giDailySalesPage__sectorTabMeta">${escapeHtml(unit)} · ${escapeHtml(this.dailySalesDealsWord(slice.deals))} · ${escapeHtml(this.dailySalesAgentsWord(slice.agents))}</span>
         </button>`;
+      }).join("");
+    },
+
+    renderDailySalesHeroHtml(tab, slice){
+      const unit = tab?.annual ? "פרמיה שנתית" : "פרמיה חודשית";
+      return `
+        <div class="giDailySalesPage__heroCell">
+          <div class="giDailySalesPage__heroLabel">${escapeHtml(tab?.label || "—")}</div>
+          <div class="giDailySalesPage__heroValue">${escapeHtml(this.formatMoney(slice?.premium))}</div>
+          <div class="giDailySalesPage__heroUnit">${escapeHtml(unit)}</div>
+        </div>
+        <div class="giDailySalesPage__heroCell giDailySalesPage__heroCell--side">
+          <div class="giDailySalesPage__heroLabel">עסקאות</div>
+          <div class="giDailySalesPage__heroValue">${escapeHtml(String(Number(slice?.deals) || 0))}</div>
+        </div>
+        <div class="giDailySalesPage__heroCell giDailySalesPage__heroCell--side">
+          <div class="giDailySalesPage__heroLabel">נציגים</div>
+          <div class="giDailySalesPage__heroValue">${escapeHtml(String(Number(slice?.agents) || 0))}</div>
+        </div>`;
+    },
+
+    renderDailySalesSplitHtml(report, tab){
+      if(!tab?.combined) return "";
+      const raw = this.filterDailySalesGroupsBySource(report, tab.sources);
+      let health = 0;
+      let prat = 0;
+      raw.forEach((g) => {
+        const prem = Number(g?.premium) || 0;
+        const sector = safeTrim(g?.sector);
+        if(sector === "בריאות") health += prem;
+        else if(sector === "סיכונים") prat += prem;
+      });
+      return `<div class="giDailySalesPage__splitItem giDailySalesPage__splitItem--briut"><span>בריאות</span><b>${escapeHtml(this.formatMoney(health))}</b></div>
+        <div class="giDailySalesPage__splitItem giDailySalesPage__splitItem--sikunim"><span>פרט</span><b>${escapeHtml(this.formatMoney(prat))}</b></div>`;
+    },
+
+    renderDailySalesTheadHtml(tab){
+      const cols = tab?.combined
+        ? ["#", "נציג", "עסקאות", "בריאות", "פרט", "מוצרים", "חברות", "סה״כ"]
+        : ["#", "נציג", "עסקאות", "מוצרים", "חברות", "סה״כ"];
+      return `<tr>${cols.map((c) => `<th>${escapeHtml(c)}</th>`).join("")}</tr>`;
+    },
+
+    renderDailySalesPresentRowsHtml(report, tab, options = {}){
+      const raw = this.filterDailySalesGroupsBySource(report, tab?.sources || tab?.source || "");
+      const rows = this.dailySalesPresentPivotByAgent(raw);
+      const emptyMsg = safeTrim(options.emptyMessage) || "אין מכירות ביום זה";
+      const cols = this.dailySalesTableColCount(tab);
+      if(!rows.length){
+        return `<tr><td colspan="${cols}" class="giDailySalesPage__emptyCell">${escapeHtml(emptyMsg)}</td></tr>`;
+      }
+      return rows.map((row, idx) => {
+        const tone = this.agentSalesAvatarTone(row.agentName);
+        const initials = this.agentSalesInitials(row.agentName);
+        const moneyOrDash = (n) => (Number(n) > 0
+          ? `<span class="giDailySalesPage__splitNum">${escapeHtml(this.formatMoney(n))}</span>`
+          : `<span class="giDailySalesPage__dash">—</span>`);
+        const mid = tab?.combined
+          ? `<td class="giDailySalesPage__splitCell giDailySalesPage__splitCell--briut">${moneyOrDash(row.health)}</td>
+             <td class="giDailySalesPage__splitCell giDailySalesPage__splitCell--prat">${moneyOrDash(row.prat)}</td>`
+          : "";
+        return `<tr class="giDailySalesPage__row">
+          <td class="giDailySalesPage__rank">${escapeHtml(String(idx + 1))}</td>
+          <td class="giDailySalesPage__agentCell">
+            <span class="giDailySalesPage__av giDailySalesPage__av--${escapeHtml(tone)}" aria-hidden="true">${escapeHtml(initials)}</span>
+            <span class="giDailySalesPage__agentName">${escapeHtml(row.agentName)}</span>
+          </td>
+          <td class="giDailySalesPage__dealsCell">${escapeHtml(String(row.deals))}</td>
+          ${mid}
+          <td>${this.renderDailySalesChipsHtml(row.products)}</td>
+          <td>${this.renderDailySalesChipsHtml(row.companies, "co")}</td>
+          <td class="giDailySalesPage__premCell"><strong>${escapeHtml(this.formatMoney(row.premium))}</strong></td>
+        </tr>`;
       }).join("");
     },
 
@@ -28633,14 +28793,12 @@ UsersGateUI.init();
       return this.dailySalesSectorTabs().map(() =>
         `<div class="giDailySalesPage__sectorTab is-skel" aria-hidden="true">
           <span class="giDailySalesPage__skelLine"></span>
-          <span class="giDailySalesPage__skelLine giDailySalesPage__skelLine--lg"></span>
-          <span class="giDailySalesPage__skelLine giDailySalesPage__skelLine--sm"></span>
         </div>`
       ).join("");
     },
 
     renderDailySalesSkeletonRowsHtml(){
-      return `<tr class="giDailySalesPage__skelRow"><td colspan="5"><div class="giDailySalesPage__skelLine"></div></td></tr>`.repeat(3);
+      return `<tr class="giDailySalesPage__skelRow"><td colspan="8"><div class="giDailySalesPage__skelLine"></div></td></tr>`.repeat(3);
     },
 
     renderDailySalesKpisHtml(report){
@@ -28848,7 +29006,10 @@ UsersGateUI.init();
       const slice = this.dailySalesTabSlice(report, tab);
       const kpisEl = document.getElementById("dailySalesKpis");
       const sectorsEl = document.getElementById("dailySalesSectors");
+      const heroEl = document.getElementById("dailySalesHero");
+      const splitEl = document.getElementById("dailySalesSplit");
       const summary = document.getElementById("dailySalesSummary");
+      const thead = document.getElementById("dailySalesThead");
       const tbody = document.getElementById("dailySalesTbody");
       const noteEl = document.getElementById("dailySalesSectorNote");
       const dateInput = document.getElementById("dailySalesDateInput");
@@ -28880,7 +29041,9 @@ UsersGateUI.init();
           if(hasRealRows) return;
           if(kpisEl) kpisEl.innerHTML = "";
           if(sectorsEl) sectorsEl.innerHTML = this.renderDailySalesSkeletonTabsHtml();
-          if(tableTitle) tableTitle.textContent = `פירוט לפי נציג · ${tab.label}`;
+          if(heroEl){ heroEl.hidden = true; heroEl.innerHTML = ""; }
+          if(splitEl){ splitEl.hidden = true; splitEl.innerHTML = ""; }
+          if(tableTitle) tableTitle.textContent = `דירוג נציגים · ${tab.label}`;
           if(tableHint) tableHint.textContent = "טוען נתונים…";
           if(tbody) tbody.innerHTML = this.renderDailySalesSkeletonRowsHtml();
           return;
@@ -28888,16 +29051,25 @@ UsersGateUI.init();
       } catch(_e) {}
       if(kpisEl) kpisEl.innerHTML = "";
       if(sectorsEl) sectorsEl.innerHTML = this.renderDailySalesSectorTabsHtml(report);
+      if(heroEl){
+        heroEl.hidden = false;
+        heroEl.innerHTML = this.renderDailySalesHeroHtml(tab, slice);
+      }
+      if(splitEl){
+        const splitHtml = this.renderDailySalesSplitHtml(report, tab);
+        splitEl.innerHTML = splitHtml;
+        splitEl.hidden = !splitHtml;
+      }
       if(summary) summary.innerHTML = this.renderDailySalesGroupSummaryHtml(report, { tab, slice });
-      if(tableTitle) tableTitle.textContent = `פירוט לפי נציג · ${tab.label}`;
+      if(tableTitle) tableTitle.textContent = `דירוג נציגים · ${tab.label}`;
       if(tableHint){
         tableHint.textContent = tab.combined
-          ? "פרמיה חודשית אחת · בריאות ופרט מסוכמים יחד"
-          : (tab.annual ? "פרמיה שנתית" : "פרמיה חודשית");
+          ? "ממוין לפי פרמיה · בריאות ופרט בעמודות נפרדות"
+          : (tab.annual ? "ממוין לפי פרמיה · פרמיה שנתית" : "ממוין לפי פרמיה");
       }
+      if(thead) thead.innerHTML = this.renderDailySalesTheadHtml(tab);
       if(tbody){
-        tbody.innerHTML = this.renderDailySalesGroupRowsHtml(report, {
-          groups: slice.groups,
+        tbody.innerHTML = this.renderDailySalesPresentRowsHtml(report, tab, {
           emptyMessage: `אין מכירות בענף ${tab.label} ביום זה`
         });
       }
@@ -29515,7 +29687,7 @@ UsersGateUI.init();
         <div class="giDailySalesOverlay__panel giDailySalesOverlay__panel--detail" role="document">
           <header class="giDailySalesOverlay__head">
             <div class="giDailySales__titles">
-              <h2 class="giDailySales__title" id="giDailySalesOverlayTitle">דוח מעקב מכירות יומי</h2>
+              <h2 class="giDailySales__title" id="giDailySalesOverlayTitle">מכירות</h2>
               <div class="giDailySales__sub">נציג · מחלקה · מוצר · חברה · פרמיה · ${escapeHtml(report.dateLabel)}</div>
             </div>
             <div class="giDailySales__nav" role="group" aria-label="בחירת תאריך ושליטה">
@@ -29613,47 +29785,120 @@ UsersGateUI.init();
     printDailySalesReportScreen(){
       if(!this.canSeeDailySalesReport()) return;
       const report = this.buildDailyAgentSalesReport();
-      const tab = this.getDailySalesSelectedSectorTab();
-      const slice = this.dailySalesTabSlice(report, tab);
-      const groups = slice.groups;
-      const premLabel = tab.annual ? "סה״כ פרמיה שנתית" : (tab.combined ? "סה״כ פרמיה חודשית" : "סה״כ פרמיה");
-      const rows = groups.length
-        ? groups.map((g) => `<tr>
-            <td>${escapeHtml(g.agentName || "—")}</td>
-            <td>${escapeHtml((Array.isArray(g.sectors) && g.sectors.length ? g.sectors : [g.sector]).map((s) => this.dailySalesDisplaySectorLabel(s)).join(" · "))}</td>
-            <td>${escapeHtml((g.products || []).map((p) => p.count > 1 ? `${p.name} ×${p.count}` : p.name).join(" · ") || "—")}</td>
-            <td>${escapeHtml((g.companies || []).join(" · ") || "—")}</td>
-            <td class="prem">${escapeHtml(this.formatMoney(g.premium))}</td>
-          </tr>`).join("")
-        : `<tr><td colspan="5" style="text-align:center;padding:28px;color:#6b7c99">אין מכירות בענף ${escapeHtml(tab.label)} ביום זה</td></tr>`;
+      const rows = this.dailySalesPresentPivotByAgent(report.groups).sort((a, b) =>
+        (Number(b.monthly) - Number(a.monthly))
+        || (Number(b.elementary) - Number(a.elementary))
+        || safeTrim(a.agentName).localeCompare(safeTrim(b.agentName), "he")
+      );
+      const healthTab = this.dailySalesSectorTabs().find((t) => t.key === "healthPrat");
+      const healthSlice = this.dailySalesTabSlice(report, healthTab);
+      const totals = this.dailySalesBranchTotals(report);
+      const agentCount = new Set((Array.isArray(report.groups) ? report.groups : []).map((g) => g.agentName)).size;
+      const sum = (key) => Math.round(rows.reduce((n, r) => n + (Number(r[key]) || 0), 0) * 100) / 100;
+      const money = (v) => this.dailySalesPrintMoney(v);
+      const cell = (v) => (Number(v) > 0 ? escapeHtml(money(v)) : `<span class="empty">—</span>`);
+      const body = rows.length
+        ? rows.map((r) => {
+            const sectors = (r.sectors || []).map((s) => this.dailySalesDisplaySectorLabel(s)).join(", ");
+            return `<tr>
+              <td class="name">${escapeHtml(r.agentName)}</td>
+              <td class="sectors">${escapeHtml(sectors || "—")}</td>
+              <td class="num">${cell(r.health)}</td>
+              <td class="num">${cell(r.prat)}</td>
+              <td class="num">${cell(r.elementary)}</td>
+              <td class="num">${cell(r.pension)}</td>
+              <td class="num">${cell(r.monthly)}</td>
+            </tr>`;
+          }).join("")
+        : `<tr><td colspan="7" style="text-align:center;padding:28px;color:#5b6b7c">אין מכירות ביום זה</td></tr>`;
+      let dateLine = report.dateLabel || "";
+      try {
+        dateLine = this.parseLocalDateKey(report.dateKey).toLocaleDateString("he-IL", {
+          weekday: "long", day: "numeric", month: "long", year: "numeric"
+        }) + " · ישראל";
+      } catch(_e) {}
+      const fileStem = this.dailySalesPrintFileStem(report.dateKey);
+      let logoSrc = "";
+      try { logoSrc = new URL("./logo-login-clean.png", window.location.href).href; } catch(_e) { logoSrc = "./logo-login-clean.png"; }
+      const issued = report.dateLabel || "";
       const win = window.open("", "_blank", "width=1080,height=820");
       if(!win) return;
-      win.document.write(`<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><title>דוח מעקב מכירות יומי · ${escapeHtml(tab.label)}</title>
+      win.document.write(`<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><title>${escapeHtml(fileStem)}</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-  body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#fff;color:#1a2332}
-  .wrap{padding:28px 32px}
-  h1{margin:0 0 6px;font-size:20px;color:#1e3a5f}
-  .sub{margin:0 0 18px;color:#718096;font-size:13px;font-weight:600}
-  table{width:100%;border-collapse:collapse}
-  th,td{padding:10px 8px;border-bottom:1px solid #e8edf3;text-align:right;font-size:13px}
-  th{color:#718096;font-size:11px;font-weight:700}
-  .prem{color:#1e3a5f;font-weight:700;white-space:nowrap}
-  .foot{margin-top:16px;padding-top:14px;border-top:1px solid #d8dee8;display:flex;justify-content:space-between;gap:12px;font-weight:700}
-  .foot .prem{font-size:16px}
-  .note{margin:0 0 14px;padding:8px 10px;border:1px solid #d8dee8;background:#f7f8fb;color:#4a5568;font-size:12px}
-  @page{margin:14mm}
-</style></head><body><div class="wrap">
-  <h1>דוח מעקב מכירות יומי · ${escapeHtml(tab.label)}</h1>
-  <p class="sub">נציג · ענף · מוצרים · חברות · ${escapeHtml(premLabel)} · ${escapeHtml(report.dateLabel)}</p>
-  ${tab.annual ? `<p class="note">אלמנטרי: הפרמיה המוצגת היא פרמיה שנתית.</p>` : ""}
+  @page { size: A4; margin: 16mm 14mm; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #fff; color: #122033; font-family: "Segoe UI", "Arial Hebrew", Arial, sans-serif; }
+  .page { width: 100%; padding: 8px 4px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 2px solid #0b2a4a; padding-bottom: 14px; margin-bottom: 18px; }
+  .logo { height: 52px; width: auto; display: block; }
+  .head-text { text-align: left; }
+  .kicker { margin: 0 0 4px; font-size: 11px; letter-spacing: 0.08em; color: #5b6b7c; font-weight: 600; }
+  h1 { margin: 0; font-size: 22px; line-height: 1.2; color: #0b2a4a; }
+  .date { margin: 4px 0 0; font-size: 13px; color: #3d4d5e; }
+  .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 0 0 18px; }
+  .stat { border: 1px solid #d7dee6; padding: 10px 12px; }
+  .stat b { display: block; font-size: 18px; color: #0b2a4a; margin-bottom: 2px; }
+  .stat span { font-size: 11px; color: #5b6b7c; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th { background: #0b2a4a; color: #fff; font-weight: 600; text-align: right; padding: 9px 10px; }
+  th.num, td.num { text-align: left; font-variant-numeric: tabular-nums; }
+  td { padding: 8px 10px; border-bottom: 1px solid #e4e9ee; vertical-align: top; }
+  tbody tr:nth-child(even) td { background: #f6f8fb; }
+  .name { font-weight: 700; color: #0b2a4a; }
+  .sectors { color: #3d4d5e; font-size: 12px; }
+  .empty { color: #9aa6b2; }
+  tfoot td { background: #0b2a4a; color: #fff; font-weight: 700; border: 0; padding: 10px; }
+  .note { margin-top: 14px; font-size: 11px; color: #5b6b7c; line-height: 1.5; }
+  .foot { margin-top: 18px; padding-top: 10px; border-top: 1px solid #d7dee6; font-size: 10px; color: #7a8794; display: flex; justify-content: space-between; }
+</style></head><body><div class="page">
+  <header>
+    <img class="logo" src="${escapeHtml(logoSrc)}" alt="גמל INVEST"/>
+    <div class="head-text">
+      <p class="kicker">GEMEL INVEST · דוח מכירות</p>
+      <h1>מכירות היום</h1>
+      <p class="date">${escapeHtml(dateLine)}</p>
+    </div>
+  </header>
+  <div class="stats">
+    <div class="stat"><b>${escapeHtml(String(agentCount))}</b><span>נציגים שמכרו היום</span></div>
+    <div class="stat"><b>${escapeHtml(String(healthSlice.deals || 0))}</b><span>פוליסות בריאות + פרט</span></div>
+    <div class="stat"><b>${escapeHtml(money(healthSlice.premium))}</b><span>פרמיה חודשית · בריאות + פרט</span></div>
+    <div class="stat"><b>${escapeHtml(money(totals.elementary))}</b><span>פרמיה שנתית · אלמנטרי</span></div>
+    <div class="stat"><b>${escapeHtml(money(totals.pension))}</b><span>פרמיה חודשית · פנסיה</span></div>
+  </div>
   <table>
-    <thead><tr><th>נציג</th><th>ענף</th><th>מוצרים</th><th>חברות</th><th>${escapeHtml(premLabel)}</th></tr></thead>
-    <tbody>${rows}</tbody>
+    <thead>
+      <tr>
+        <th>שם הנציג</th>
+        <th>ענפים</th>
+        <th class="num">בריאות</th>
+        <th class="num">פרט</th>
+        <th class="num">אלמנטרי (שנתי)</th>
+        <th class="num">פנסיה</th>
+        <th class="num">סה״כ חודשי</th>
+      </tr>
+    </thead>
+    <tbody>${body}</tbody>
+    <tfoot>
+      <tr>
+        <td>סה״כ</td>
+        <td>${escapeHtml(this.dailySalesAgentsWord(agentCount))}</td>
+        <td class="num">${escapeHtml(money(sum("health")))}</td>
+        <td class="num">${escapeHtml(money(sum("prat")))}</td>
+        <td class="num">${escapeHtml(money(sum("elementary")))}</td>
+        <td class="num">${escapeHtml(money(sum("pension")))}</td>
+        <td class="num">${escapeHtml(money(sum("monthly")))}</td>
+      </tr>
+    </tfoot>
   </table>
+  <p class="note">
+    מוצגים רק נציגים עם מכירה ביום הנבחר. «פרט» הוא ענף הסיכונים במערכת.
+    פרמיית בריאות, פרט ופנסיה היא חודשית. פרמיית אלמנטרי מוצגת שנתית ואינה נכנסת לסה״כ החודשי.
+  </p>
   <div class="foot">
-    <span>${escapeHtml(this.dailySalesAgentsWord(slice.agents))} · ${escapeHtml(this.dailySalesDealsWord(slice.deals))}</span>
-    <span class="prem">${escapeHtml(this.formatMoney(slice.premium))}</span>
+    <span>גמל INVEST</span>
+    <span>הופק ב־${escapeHtml(issued)}</span>
   </div>
 </div></body></html>`);
       win.document.close();

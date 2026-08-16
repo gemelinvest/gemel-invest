@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <link href="./app.css?v=20260816-today-co-v1" rel="stylesheet"/>
-<link href="./theme.css?v=20260816-users-save-v1" rel="stylesheet"/>
+<link href="./theme.css?v=20260816-sales-screen-v1" rel="stylesheet"/>
 <link href="./theme-p2.css?v=20260805-workdays-goal-v1" rel="stylesheet"/>
 <link href="./login-split.css?v=20260814-face-ui-v1" rel="stylesheet"/>
 <!-- GI-PERF 2026-08-10: CSS משני (mirror/import/unify) נטען אחרי כניסה מ-app.js —
@@ -299,7 +299,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <path d="M17 6v12"></path>
 </svg>
 </span>
-<span class="nav__label">מעקב מכירות יומי</span>
+<span class="nav__label">מכירות</span>
 </button>
 <button class="nav__item" data-view="myTeam" id="navMyTeam" style="display:none" type="button">
 <span class="nav__icon" aria-hidden="true">
@@ -596,11 +596,11 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 </div>
 </div>
 </section>
-<section class="view" id="view-dailySales" aria-label="מעקב מכירות יומי">
+<section class="view" id="view-dailySales" aria-label="מכירות">
 <div class="card giDailySalesPage" id="dailySalesPageRoot">
 <div class="card__head giDailySalesPage__head">
 <div>
-<div class="card__title">מעקב מכירות יומי</div>
+<div class="card__title">מכירות</div>
 <span class="giDailySalesPage__syncStamp" id="dailySalesSyncStamp"></span>
 </div>
 <div class="giDailySalesPage__nav" role="group" aria-label="בחירת תאריך">
@@ -616,27 +616,32 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 </div>
 <div class="giDailySalesPage__kpis" id="dailySalesKpis" hidden aria-hidden="true"></div>
 <div class="giDailySalesPage__sectors" id="dailySalesSectors" role="tablist" aria-label="בחירת ענף"></div>
+<div class="giDailySalesPage__hero" id="dailySalesHero" hidden></div>
+<div class="giDailySalesPage__splitBar" id="dailySalesSplit" hidden></div>
 <div class="giDailySalesPage__summary" id="dailySalesSummary" hidden aria-hidden="true"></div>
 <p class="giDailySalesPage__note" id="dailySalesSectorNote" hidden>אלמנטרי: הפרמיה המוצגת היא <b>פרמיה שנתית</b>.</p>
 <div class="tableWrap giDailySalesPage__tableWrap">
 <div class="giDailySalesPage__tableBar">
-<h2 class="giDailySalesPage__tableTitle" id="dailySalesTableTitle">פירוט לפי נציג</h2>
+<h2 class="giDailySalesPage__tableTitle" id="dailySalesTableTitle">דירוג נציגים</h2>
 <span class="giDailySalesPage__tableHint" id="dailySalesTableHint"></span>
 </div>
 <table class="table giDailySalesPage__table">
-<thead>
+<thead id="dailySalesThead">
 <tr>
+<th>#</th>
 <th>נציג</th>
-<th>ענף</th>
+<th>עסקאות</th>
+<th>בריאות</th>
+<th>פרט</th>
 <th>מוצרים</th>
 <th>חברות</th>
-<th>סה״כ פרמיה</th>
+<th>סה״כ</th>
 </tr>
 </thead>
 <tbody id="dailySalesTbody">
-<tr class="giDailySalesPage__skelRow"><td colspan="5"><div class="giDailySalesPage__skelLine"></div></td></tr>
-<tr class="giDailySalesPage__skelRow"><td colspan="5"><div class="giDailySalesPage__skelLine"></div></td></tr>
-<tr class="giDailySalesPage__skelRow"><td colspan="5"><div class="giDailySalesPage__skelLine"></div></td></tr>
+<tr class="giDailySalesPage__skelRow"><td colspan="8"><div class="giDailySalesPage__skelLine"></div></td></tr>
+<tr class="giDailySalesPage__skelRow"><td colspan="8"><div class="giDailySalesPage__skelLine"></div></td></tr>
+<tr class="giDailySalesPage__skelRow"><td colspan="8"><div class="giDailySalesPage__skelLine"></div></td></tr>
 </tbody>
 </table>
 </div>
@@ -3847,7 +3852,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 </div>
 
 <script src="./contacts-directory-seed.js?v=20260811-contacts-v1"></script>
-<script src="./app.js?v=20260816-agent-scope-fetch-v1"></script>
+<script src="./app.js?v=20260816-sales-screen-v1"></script>
 <script src="./gi-face-auth.js?v=20260816-face-ok-v1"></script>
 
 
