@@ -20895,6 +20895,15 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
   opacity: 1;
   margin-top: 4px;
 }
+/* GI-TODAY-CO: בפתיחת פירוט הכרטיס גדל ומציג את כל החברות, בלי לחתוך שורות */
+#view-dashboard .bankKpi.bankKpi--todaySales:has(.bankKpiToday__breakdown--open){
+  overflow: visible;
+  min-height: auto;
+  z-index: 5;
+}
+#view-dashboard .bankKpi.bankKpi--todaySales .bankKpiToday__breakdown--open .bankKpiToday__breakdownInner{
+  overflow: visible;
+}
 
 /* ===== END TODAY SALES CARD ===== */
 
@@ -24350,7 +24359,7 @@ body.lcAuthLock .lcLogin__mfaManualHint{display:block;margin-top:6px;font-size:1
 }
 
 
-/* ===== System version + update popup (Premium) ===== */
+/* ===== System version + update popup — compact branded card ===== */
 
 .updatePopup{
   position:fixed;
@@ -24359,7 +24368,7 @@ body.lcAuthLock .lcLogin__mfaManualHint{display:block;margin-top:6px;font-size:1
   display:none;
   align-items:center;
   justify-content:center;
-  padding:20px;
+  padding:16px;
 }
 .updatePopup.is-open{
   display:flex;
@@ -24367,7 +24376,7 @@ body.lcAuthLock .lcLogin__mfaManualHint{display:block;margin-top:6px;font-size:1
 .updatePopup__backdrop{
   position:absolute;
   inset:0;
-  background:rgba(7,21,64,.42);
+  background:rgba(15,39,72,.38);
   backdrop-filter:blur(8px);
   -webkit-backdrop-filter:blur(8px);
 }
@@ -24375,124 +24384,123 @@ body.lcAuthLock .lcLogin__mfaManualHint{display:block;margin-top:6px;font-size:1
   position:relative;
   display:flex;
   flex-direction:column;
-  width:min(440px, calc(100vw - 28px));
-  max-height:min(88vh, 640px);
+  width:100%;
+  max-width:360px;
+  max-height:min(88vh, 560px);
   padding:0;
-  border-radius:26px;
+  border-radius:18px;
   overflow:hidden;
-  background:linear-gradient(180deg, rgba(255,255,255,.98), rgba(246,249,255,.97));
-  border:1px solid rgba(15,23,42,.10);
-  box-shadow:0 32px 80px rgba(7,21,64,.24);
-  text-align:center;
-  animation:updatePopupIn .22s ease;
-}
-.updatePopup__stripe{
-  height:6px;
-  background:linear-gradient(90deg, var(--brandA), var(--brandC), var(--blue2));
+  background:linear-gradient(180deg, rgba(249,251,255,.98), rgba(255,255,255,.96));
+  border:1px solid rgba(43,75,138,.16);
+  box-shadow:0 18px 40px rgba(15,39,72,.18);
+  text-align:right;
+  animation:updatePopupIn .18s cubic-bezier(.34,1.2,.64,1);
 }
 .updatePopup__body{
-  padding:22px 22px 10px;
+  padding:18px 18px 8px;
   overflow:auto;
 }
-.updatePopup__icon{
-  width:58px;
-  height:58px;
-  margin:0 auto 12px;
-  border-radius:18px;
+.updatePopup__mark{
+  width:36px;
+  height:36px;
+  border-radius:12px;
   display:grid;
   place-items:center;
-  font-size:26px;
-  font-weight:900;
-  color:var(--brandA);
-  background:linear-gradient(135deg, rgba(231,240,255,.98), rgba(255,255,255,.92));
+  margin:0 0 10px;
+  color:#1e4d6b;
+  background:rgba(217,234,255,.55);
   border:1px solid rgba(43,75,138,.14);
-  box-shadow:0 12px 28px rgba(11,31,74,.12);
-  animation:updatePopupIconPulse 2.4s ease-in-out infinite;
+}
+.updatePopup__mark svg{ width:18px; height:18px; }
+.updatePopup__kicker{
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.02em;
+  color:rgba(43,75,138,.78);
+  margin-bottom:4px;
 }
 .updatePopup__title{
-  font-size:20px;
-  font-weight:950;
-  color:var(--brandA);
-  letter-spacing:-.02em;
+  font-size:16px;
+  font-weight:900;
+  color:#0F2748;
+  line-height:1.3;
 }
 .updatePopup__lead{
-  margin-top:10px;
+  margin:8px 0 0;
   font-size:13px;
-  font-weight:800;
-  color:rgba(15,23,42,.78);
+  font-weight:700;
+  color:rgba(15,23,42,.62);
 }
 .updatePopup__box{
   margin-top:12px;
-  padding:14px 14px 12px;
-  border-radius:16px;
+  padding:12px;
+  border-radius:14px;
   text-align:right;
-  background:linear-gradient(180deg, rgba(240,246,255,.95), rgba(255,255,255,.88));
-  border:1px solid rgba(43,75,138,.12);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.75);
+  background:rgba(240,246,255,.55);
+  border:1px solid rgba(43,75,138,.10);
 }
 .updatePopup__versionRow{
   display:flex;
   align-items:center;
   justify-content:space-between;
   gap:10px;
+}
+.updatePopup__box:has(#updatePopupNotes:not([hidden])) .updatePopup__versionRow{
   padding-bottom:10px;
   border-bottom:1px solid rgba(15,23,42,.08);
+  margin-bottom:8px;
 }
 .updatePopup__versionLabel{
   font-size:12px;
   font-weight:800;
-  color:rgba(15,23,42,.62);
+  color:rgba(15,23,42,.55);
 }
 .updatePopup__versionValue{
-  display:inline-flex;
-  align-items:center;
-  max-width:72%;
-  padding:6px 10px;
-  border-radius:999px;
+  min-width:0;
+  max-width:70%;
   font-size:12px;
-  font-weight:800;
+  font-weight:700;
   font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  color:var(--brandA);
-  background:rgba(42,92,245,.10);
-  border:1px solid rgba(42,92,245,.18);
+  color:#1e4d6b;
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
 }
 .updatePopup__notes{
-  margin-top:10px;
+  margin-top:0;
   max-height:140px;
   overflow:auto;
 }
 .updatePopup__notesList{
   margin:0;
-  padding:0 18px 0 0;
+  padding:0;
   list-style:none;
 }
 .updatePopup__notesList li{
   position:relative;
-  margin:0 0 8px;
-  padding-right:14px;
+  margin:0 0 6px;
+  padding-right:12px;
   font-size:13px;
-  line-height:1.55;
-  color:rgba(15,23,42,.82);
+  font-weight:600;
+  line-height:1.5;
+  color:rgba(15,23,42,.78);
 }
+.updatePopup__notesList li:last-child{ margin-bottom:0; }
 .updatePopup__notesList li::before{
   content:"";
   position:absolute;
   right:0;
-  top:.62em;
-  width:6px;
-  height:6px;
-  border-radius:50%;
-  background:var(--brandC);
-  box-shadow:0 0 0 3px rgba(42,92,245,.14);
+  top:.72em;
+  width:5px;
+  height:5px;
+  border-radius:1.5px;
+  background:#2b4b8a;
 }
 .updatePopup__hint{
-  margin:12px 4px 0;
+  margin:10px 0 0;
   font-size:12px;
-  line-height:1.55;
-  color:rgba(15,23,42,.62);
+  line-height:1.5;
+  color:rgba(15,23,42,.55);
 }
 .updatePopup__hint--forced{
   color:#9a3412;
@@ -24500,26 +24508,21 @@ body.lcAuthLock .lcLogin__mfaManualHint{display:block;margin-top:6px;font-size:1
 }
 .updatePopup__footer{
   display:flex;
-  justify-content:center;
-  gap:10px;
+  justify-content:flex-start;
+  gap:8px;
   margin-top:auto;
-  padding:14px 18px 18px;
+  padding:14px 18px 16px;
   flex-wrap:wrap;
-  background:linear-gradient(180deg, rgba(255,255,255,.72), rgba(246,249,255,.96));
-  border-top:1px solid rgba(15,23,42,.08);
 }
 .updatePopup__btn{
-  min-width:128px;
+  min-width:108px;
 }
 .updatePopup__btn--apply{
-  min-width:148px;
-  font-weight:900;
+  font-weight:800;
 }
 .updatePopup__btn--ghost{
-  background:rgba(255,255,255,.9);
-}
-.updatePopup--forced .updatePopup__panel{
-  box-shadow:0 36px 90px rgba(7,21,64,.30);
+  background:#fff;
+  border:1px solid rgba(15,23,42,.12);
 }
 .updatePopup--forced .updatePopup__footer{
   justify-content:stretch;
@@ -24535,12 +24538,13 @@ body.lcAuthLock .lcLogin__mfaManualHint{display:block;margin-top:6px;font-size:1
 }
 
 @keyframes updatePopupIn{
-  from{ opacity:0; transform:translateY(10px) scale(.97); }
+  from{ opacity:0; transform:translateY(8px) scale(.98); }
   to{ opacity:1; transform:translateY(0) scale(1); }
 }
-@keyframes updatePopupIconPulse{
-  0%, 100%{ transform:scale(1); box-shadow:0 12px 28px rgba(11,31,74,.12); }
-  50%{ transform:scale(1.04); box-shadow:0 16px 34px rgba(42,92,245,.18); }
+@media (max-width: 420px){
+  .updatePopup__panel{ max-width:100%; }
+  .updatePopup__footer{ flex-direction:column; }
+  .updatePopup__btn{ width:100%; }
 }
 
 

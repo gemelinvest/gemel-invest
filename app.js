@@ -27519,11 +27519,31 @@ UsersGateUI.init();
       })();
     },
 
+    /** GI-TODAY-CO: פירוט חברות לכרטיס היום — איחוד מקורות בלי לשנות חישוב פרמיה. */
+    _mergeTodayCompanyBreakdown(localRows, serverRows){
+      const map = Object.create(null);
+      const add = (row) => {
+        if(!row) return;
+        const raw = safeTrim(row.label);
+        const key = (typeof resolveCompanyLogoKey === "function" && resolveCompanyLogoKey(raw)) || raw || "ללא חברה";
+        const premium = Number(row.premium) || 0;
+        const count = Number(row.count) || 0;
+        if(!map[key]) map[key] = { label: key, count: 0, premium: 0 };
+        if(premium > map[key].premium || (premium === map[key].premium && count > map[key].count)){
+          map[key].premium = Math.round(premium * 100) / 100;
+          map[key].count = count || map[key].count;
+        }
+      };
+      (Array.isArray(localRows) ? localRows : []).forEach(add);
+      (Array.isArray(serverRows) ? serverRows : []).forEach(add);
+      return Object.values(map).sort((a, b) => b.premium - a.premium);
+    },
+
     buildTodaySalesMetrics(){
       const todayRange = this.getTodayRange();
       const dayKey = todayRange.start.toISOString().slice(0, 10);
       // GI-FIX 2026-08-09c: כרטיס היום = בריאות וסיכונים בלבד (ללא אלמנטרי)
-      const cacheKey = this.getMetricsCacheKey() + "|today|" + dayKey + "|healthRiskOnly|rpc1|byCompany2";
+      const cacheKey = this.getMetricsCacheKey() + "|today|" + dayKey + "|healthRiskOnly|rpc1|byCompany3";
       if(this._todaySalesCacheKey === cacheKey && this._todaySalesCache){
         return this._todaySalesCache;
       }
@@ -27551,7 +27571,8 @@ UsersGateUI.init();
       const countedCustomers = new Set();
 
       const bump = (label, premium) => {
-        const key = safeTrim(label) || "ללא חברה";
+        const raw = safeTrim(label);
+        const key = (typeof resolveCompanyLogoKey === "function" && resolveCompanyLogoKey(raw)) || raw || "ללא חברה";
         if(!byCompany[key]) byCompany[key] = { count: 0, premium: 0 };
         byCompany[key].count += 1;
         byCompany[key].premium += premium;
@@ -27596,12 +27617,12 @@ UsersGateUI.init();
       };
 
       // מנהל בטעינה רזה: עדיפות ל-RPC יומי לסכומים;
-      // פירוט לפי חברה — מקומי אם יש, אחרת מה-RPC (gi_dashboard_sales_by_company).
+      // פירוט לפי חברה — איחוד מקומי + RPC, כדי שלא תיעלם חברה (למשל כלל) אם אחד המקורות חלקי.
       const serverOverlay = this._todaySalesServerOverlay;
       if(serverOverlay?.ok && serverOverlay.dayKey === dayKey){
         const localEmpty = !(result.totalPremium > 0 || result.totalPolicies > 0);
         const serverBreakdown = Array.isArray(serverOverlay.breakdown) ? serverOverlay.breakdown : [];
-        const resolvedBreakdown = breakdown.length ? breakdown : serverBreakdown;
+        const resolvedBreakdown = this._mergeTodayCompanyBreakdown(breakdown, serverBreakdown);
         // בזמן hydration — תמיד RPC לסכומים (גם אם יש סכום מקומי חלקי) כדי למנוע קפיצות
         if(missingPayloads > 0 || localEmpty){
           result = {
@@ -27612,8 +27633,8 @@ UsersGateUI.init();
             _loading: false,
             _fromServer: true
           };
-        } else if(!breakdown.length && serverBreakdown.length){
-          result = { ...result, breakdown: serverBreakdown };
+        } else if(serverBreakdown.length){
+          result = { ...result, breakdown: resolvedBreakdown };
         }
       } else if(deferToServer && !(result.totalPremium > 0)){
         // עדיין מחכים ל-RPC — לא לנעול מטמון על אפס
