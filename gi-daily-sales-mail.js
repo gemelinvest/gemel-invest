@@ -18,6 +18,21 @@
     return String(v == null ? "" : v).trim();
   }
 
+  function errText(err){
+    if(typeof err === "string" && trim(err) && trim(err) !== "[object Object]") return trim(err);
+    const msg = err && err.message;
+    if(typeof msg === "string" && trim(msg) && trim(msg) !== "[object Object]") return trim(msg);
+    if(msg && typeof msg === "object"){
+      if(typeof msg.message === "string" && trim(msg.message)) return trim(msg.message);
+      try { return JSON.stringify(msg); } catch(_e) {}
+    }
+    if(err && typeof err === "object"){
+      if(typeof err.error === "string" && trim(err.error)) return trim(err.error);
+      try { return JSON.stringify(err); } catch(_e) {}
+    }
+    return "שגיאה בחיבור המייל";
+  }
+
   function escapeHtml(value){
     return String(value == null ? "" : value)
       .replace(/&/g, "&amp;")
@@ -81,7 +96,7 @@
     let data = {};
     try { data = await res.json(); } catch(_e) { data = {}; }
     if(!res.ok || data.ok === false){
-      throw new Error(trim(data.error) || ("שגיאת שרת " + res.status));
+      throw new Error(errText(data.error) || ("שגיאת שרת " + res.status));
     }
     return data;
   }
@@ -286,6 +301,15 @@
   }
 
   async function connectOutlook(){
+    const nodes = els();
+    const clientId = trim(nodes.clientId?.value);
+    const tenantId = trim(nodes.tenantId?.value);
+    const clientSecret = trim(nodes.clientSecret?.value);
+    if(clientId && (clientSecret || tenantId)){
+      setMessage("שומר הגדרת Microsoft…");
+      await api("save-azure", { clientId, tenantId, clientSecret });
+      if(nodes.clientSecret) nodes.clientSecret.value = "";
+    }
     setMessage("פותח את Microsoft…");
     const data = await api("oauth-start");
     const url = trim(data.authUrl);
@@ -330,12 +354,12 @@
         await refreshStatus();
         setMessage("הגדרת Microsoft נשמרה. אפשר לחבר את Outlook.");
       } catch(err) {
-        setMessage(err.message || String(err), true);
+        setMessage(errText(err), true);
       }
     });
     nodes.connect?.addEventListener("click", async () => {
       try { await connectOutlook(); }
-      catch(err) { setMessage(err.message || String(err), true); }
+      catch(err) { setMessage(errText(err), true); }
     });
     nodes.disconnect?.addEventListener("click", async () => {
       try {
@@ -344,7 +368,7 @@
         await refreshStatus();
         setMessage("המייל נותק. אפשר לחבר כתובת אחרת.");
       } catch(err) {
-        setMessage(err.message || String(err), true);
+        setMessage(errText(err), true);
       }
     });
     nodes.snapshot?.addEventListener("click", async () => {
@@ -354,7 +378,7 @@
         await refreshStatus();
         setMessage("דוח היום נשמר לשליחה ב־20:00.");
       } catch(err) {
-        setMessage(err.message || String(err), true);
+        setMessage(errText(err), true);
       }
     });
     nodes.sendNow?.addEventListener("click", async () => {
@@ -365,7 +389,7 @@
         await refreshStatus();
         setMessage(trim(out.message) || "הדוח נשלח.");
       } catch(err) {
-        setMessage(err.message || String(err), true);
+        setMessage(errText(err), true);
       }
     });
   }
@@ -377,7 +401,7 @@
     if(!active) return;
     if(els().pageTitle) els().pageTitle.textContent = TITLE;
     bind();
-    refreshStatus().catch((err) => setMessage(err.message || String(err), true));
+    refreshStatus().catch((err) => setMessage(errText(err), true));
   }
 
   function startHeartbeat(){
