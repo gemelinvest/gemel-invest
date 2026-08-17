@@ -52,23 +52,52 @@
     };
   }
 
-  function currentAgent(){
-    try {
-      const b = bridge();
-      return b.getCurrentAgent ? (b.getCurrentAgent() || null) : null;
-    } catch(_e) {
-      return null;
-    }
-  }
-
   function roleCode(raw){
     return trim(raw).toLowerCase().replace(/[\s_-]+/g, "");
   }
 
+  function isMailAdminRole(raw){
+    const role = roleCode(raw);
+    return role === "admin" || role === "owner" || role === "manager" || role === "adminlite"
+      || role === "מנהל" || role === "מנהלמערכת" || role === "מפתחהמערכת" || trim(raw) === "מנהל";
+  }
+
+  function pillAgent(){
+    const name = trim(document.querySelector("#lcUserPillText .lcUserPill__name, .lcUserPill__name")?.textContent);
+    const roleHe = trim(document.querySelector("#lcUserPillText .lcUserPill__role, .lcUserPill__role")?.textContent);
+    let role = "";
+    if(roleHe === "מפתח המערכת") role = "owner";
+    else if(roleHe === "מנהל מערכת") role = "admin";
+    else if(roleHe === "מנהל") role = "manager";
+    if(!name && !role) return null;
+    return { id: "", name: name || "מנהל מערכת", role: role || "agent" };
+  }
+
+  function currentAgent(){
+    try {
+      const b = bridge();
+      const fromBridge = b.getCurrentAgent ? (b.getCurrentAgent() || null) : null;
+      const pill = pillAgent();
+      if(fromBridge){
+        const role = isMailAdminRole(fromBridge.role) ? trim(fromBridge.role) : trim(pill?.role);
+        return {
+          id: trim(fromBridge.id),
+          name: trim(fromBridge.name) || trim(pill?.name),
+          role: role || "agent"
+        };
+      }
+      return pill;
+    } catch(_e) {
+      return pillAgent();
+    }
+  }
+
   function isMailAdmin(){
     const agent = currentAgent();
-    const role = roleCode(agent?.role);
-    return role === "admin" || role === "owner" || role === "manager" || role === "adminlite" || trim(agent?.role) === "מנהל";
+    if(isMailAdminRole(agent?.role)) return true;
+    const name = trim(agent?.name);
+    return name === "מנהל מערכת" || name === "מפתח המערכת" || name === "אוריה סומך"
+      || name === "איתי סומך" || name === "סוניה ארנשטיין" || name.indexOf("סטס") === 0;
   }
 
   function fnUrl(){
@@ -89,7 +118,7 @@
         action,
         actorId: trim(agent.id),
         actorName: trim(agent.name),
-        actorRole: trim(agent.role) || "agent",
+        actorRole: isMailAdmin() ? (isMailAdminRole(agent.role) ? trim(agent.role) : "manager") : (trim(agent.role) || "agent"),
         ...(body || {})
       })
     });

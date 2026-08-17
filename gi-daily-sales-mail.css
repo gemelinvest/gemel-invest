@@ -26,6 +26,9 @@
   display:grid;
   gap:10px;
 }
+.giDailySalesMail__azureBlock[hidden]{
+  display:none !important;
+}
 .giDailySalesMail__redirect{
   word-break:break-all;
   font-family:Consolas,monospace;
