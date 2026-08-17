@@ -6912,7 +6912,8 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
   color: #92400E;
 }
 @media (max-width: 1100px){
-  #view-dailySales .giDailySalesPage__kpis:not(#\9):not(#\9){
+  #view-dailySales .giDailySalesPage__kpis:not([hidden]):not(#\9):not(#\9),
+  #view-dailySales .giDailySalesPage__kpis.is-five:not([hidden]):not(#\9):not(#\9){
     grid-template-columns: 1fr 1fr;
   }
 }
@@ -6931,9 +6932,19 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
    GI 2026-08-16 · מעקב מכירות יומי — כרטיסי ענף + שלד טעינה
    תחום ל-#view-dailySales. האוברליי והדשבורד לא מושפעים.
    ===================================================================== */
-#view-dailySales .giDailySalesPage__kpis:not(#\9):not(#\9),
 #view-dailySales .giDailySalesPage__resetPill:not(#\9):not(#\9),
 #view-dailySales .giDailySalesPage .card__hint:not(#\9):not(#\9){
+  display: none !important;
+}
+#view-dailySales .giDailySalesPage__kpis:not([hidden]):not(#\9):not(#\9){
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+#view-dailySales .giDailySalesPage__kpis.is-five:not([hidden]):not(#\9):not(#\9){
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+#view-dailySales .giDailySalesPage__kpis[hidden]:not(#\9):not(#\9){
   display: none !important;
 }
 #view-dailySales .giDailySalesPage__syncStamp:not(#\9):not(#\9){
@@ -7136,6 +7147,22 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
 }
 #view-dailySales .giDailySalesPage__splitCell--briut .giDailySalesPage__splitNum:not(#\9):not(#\9){ color: #1a7a4a; }
 #view-dailySales .giDailySalesPage__splitCell--prat .giDailySalesPage__splitNum:not(#\9):not(#\9){ color: #b42318; }
+#view-dailySales .giDailySalesPage__table--print .num:not(#\9):not(#\9){
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+#view-dailySales .giDailySalesPage__table--print .name:not(#\9):not(#\9){
+  font-weight: 800;
+  color: #0b2a4a;
+}
+#view-dailySales .giDailySalesPage__table--print .sectors:not(#\9):not(#\9){
+  color: var(--gi-text-2);
+  font-size: 12.5px;
+}
+#view-dailySales .giDailySalesPage__table--print .empty:not(#\9):not(#\9){
+  color: #9aa6b2;
+}
 #view-dailySales .giDailySalesPage__note:not(#\9):not(#\9){
   margin: 0;
   padding: 0 2px;

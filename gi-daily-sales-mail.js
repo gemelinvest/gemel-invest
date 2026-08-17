@@ -179,104 +179,34 @@
       const b = window.__GI_FACE_BRIDGE__;
       if(b && typeof b.getDashboardUI === "function"){
         const dash = b.getDashboardUI();
+        if(dash && typeof dash.buildDailySalesEmailHtml === "function") return dash;
         if(dash && typeof dash.buildDailyAgentSalesReport === "function") return dash;
       }
     } catch(_e) {}
-    const dash = window.DashboardUI;
-    return (dash && typeof dash.buildDailyAgentSalesReport === "function") ? dash : null;
+    try {
+      const dash = window.DashboardUI;
+      if(dash && typeof dash.buildDailySalesEmailHtml === "function") return dash;
+      if(dash && typeof dash.buildDailyAgentSalesReport === "function") return dash;
+    } catch(_e) {}
+    return null;
   }
 
   function buildEmailHtml(){
     const Dash = dashboardUI();
     if(!Dash){
-      throw new Error("דוח המכירות עדיין לא נטען. פתחו קודם את מסך «מכירות היום» ואז חזרו לכאן.");
+      throw new Error("הדף עדיין לא סיים להיטען. רעננו את העמוד ואז לחצו שוב על רענון הדוח.");
     }
-    const report = Dash.buildDailyAgentSalesReport();
-    const rows = typeof Dash.dailySalesPresentPivotByAgent === "function"
-      ? Dash.dailySalesPresentPivotByAgent(report.groups).sort((a, b) =>
-        (Number(b.monthly) - Number(a.monthly))
-        || (Number(b.elementary) - Number(a.elementary))
-        || trim(a.agentName).localeCompare(trim(b.agentName), "he")
-      )
-      : [];
-    const healthTab = Dash.dailySalesSectorTabs().find((t) => t.key === "healthPrat");
-    const healthSlice = Dash.dailySalesTabSlice(report, healthTab);
-    const totals = Dash.dailySalesBranchTotals(report);
-    const agentCount = new Set((Array.isArray(report.groups) ? report.groups : []).map((g) => g.agentName)).size;
-    const money = (v) => Dash.dailySalesPrintMoney(v);
-    const cell = (v) => (Number(v) > 0 ? escapeHtml(money(v)) : `<span style="color:#9aa6b2">—</span>`);
-    const body = rows.length
-      ? rows.map((r) => {
-          const sectors = (r.sectors || []).map((s) => Dash.dailySalesDisplaySectorLabel(s)).join(", ");
-          return `<tr>
-            <td style="padding:8px 10px;border-bottom:1px solid #e4e9ee;font-weight:700;color:#0b2a4a">${escapeHtml(r.agentName)}</td>
-            <td style="padding:8px 10px;border-bottom:1px solid #e4e9ee;color:#3d4d5e">${escapeHtml(sectors || "—")}</td>
-            <td style="padding:8px 10px;border-bottom:1px solid #e4e9ee;text-align:left">${cell(r.health)}</td>
-            <td style="padding:8px 10px;border-bottom:1px solid #e4e9ee;text-align:left">${cell(r.prat)}</td>
-            <td style="padding:8px 10px;border-bottom:1px solid #e4e9ee;text-align:left">${cell(r.elementary)}</td>
-            <td style="padding:8px 10px;border-bottom:1px solid #e4e9ee;text-align:left">${cell(r.pension)}</td>
-            <td style="padding:8px 10px;border-bottom:1px solid #e4e9ee;text-align:left">${cell(r.monthly)}</td>
-          </tr>`;
-        }).join("")
-      : `<tr><td colspan="7" style="text-align:center;padding:28px;color:#5b6b7c">אין מכירות ביום זה</td></tr>`;
-    let dateLine = report.dateLabel || israelDateKey();
-    try {
-      dateLine = Dash.parseLocalDateKey(report.dateKey).toLocaleDateString("he-IL", {
-        weekday: "long", day: "numeric", month: "long", year: "numeric"
-      }) + " · ישראל";
-    } catch(_e) {}
-    const sum = (key) => Math.round(rows.reduce((n, r) => n + (Number(r[key]) || 0), 0) * 100) / 100;
-    const agentsWord = typeof Dash.dailySalesAgentsWord === "function"
-      ? Dash.dailySalesAgentsWord(agentCount)
-      : (agentCount + " נציגים");
-    const html = `<!doctype html><html lang="he" dir="rtl"><body style="margin:0;padding:24px;background:#fff;color:#122033;font-family:'Segoe UI','Arial Hebrew',Arial,sans-serif">
-      <div style="max-width:920px;margin:0 auto">
-        <p style="margin:0 0 4px;font-size:11px;letter-spacing:.08em;color:#5b6b7c;font-weight:600">GEMEL INVEST · דוח מכירות</p>
-        <h1 style="margin:0;font-size:22px;color:#0b2a4a">מכירות היום</h1>
-        <p style="margin:4px 0 18px;font-size:13px;color:#3d4d5e">${escapeHtml(dateLine)}</p>
-        <table style="width:100%;border-collapse:collapse;margin:0 0 18px"><tr>
-          <td style="border:1px solid #d7dee6;padding:10px 12px"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(String(agentCount))}</b><span style="font-size:11px;color:#5b6b7c">נציגים שמכרו היום</span></td>
-          <td style="border:1px solid #d7dee6;padding:10px 12px"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(String(healthSlice.deals || 0))}</b><span style="font-size:11px;color:#5b6b7c">פוליסות בריאות + פרט</span></td>
-          <td style="border:1px solid #d7dee6;padding:10px 12px"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(healthSlice.premium))}</b><span style="font-size:11px;color:#5b6b7c">פרמיה חודשית · בריאות + פרט</span></td>
-          <td style="border:1px solid #d7dee6;padding:10px 12px"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(totals.elementary))}</b><span style="font-size:11px;color:#5b6b7c">פרמיה שנתית · אלמנטרי</span></td>
-          <td style="border:1px solid #d7dee6;padding:10px 12px"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(totals.pension))}</b><span style="font-size:11px;color:#5b6b7c">פרמיה חודשית · פנסיה</span></td>
-        </tr></table>
-        <table style="width:100%;border-collapse:collapse;font-size:12.5px">
-          <thead><tr>
-            <th style="background:#0b2a4a;color:#fff;text-align:right;padding:9px 10px">שם הנציג</th>
-            <th style="background:#0b2a4a;color:#fff;text-align:right;padding:9px 10px">ענפים</th>
-            <th style="background:#0b2a4a;color:#fff;text-align:left;padding:9px 10px">בריאות</th>
-            <th style="background:#0b2a4a;color:#fff;text-align:left;padding:9px 10px">פרט</th>
-            <th style="background:#0b2a4a;color:#fff;text-align:left;padding:9px 10px">אלמנטרי (שנתי)</th>
-            <th style="background:#0b2a4a;color:#fff;text-align:left;padding:9px 10px">פנסיה</th>
-            <th style="background:#0b2a4a;color:#fff;text-align:left;padding:9px 10px">סה״כ חודשי</th>
-          </tr></thead>
-          <tbody>${body}</tbody>
-          <tfoot><tr>
-            <td style="background:#0b2a4a;color:#fff;font-weight:700;padding:10px">סה״כ</td>
-            <td style="background:#0b2a4a;color:#fff;font-weight:700;padding:10px">${escapeHtml(agentsWord)}</td>
-            <td style="background:#0b2a4a;color:#fff;font-weight:700;padding:10px;text-align:left">${escapeHtml(money(sum("health")))}</td>
-            <td style="background:#0b2a4a;color:#fff;font-weight:700;padding:10px;text-align:left">${escapeHtml(money(sum("prat")))}</td>
-            <td style="background:#0b2a4a;color:#fff;font-weight:700;padding:10px;text-align:left">${escapeHtml(money(sum("elementary")))}</td>
-            <td style="background:#0b2a4a;color:#fff;font-weight:700;padding:10px;text-align:left">${escapeHtml(money(sum("pension")))}</td>
-            <td style="background:#0b2a4a;color:#fff;font-weight:700;padding:10px;text-align:left">${escapeHtml(money(sum("monthly")))}</td>
-          </tr></tfoot>
-        </table>
-        <p style="margin-top:14px;font-size:11px;color:#5b6b7c;line-height:1.5">מוצגים רק נציגים עם מכירה ביום הנבחר. «פרט» הוא ענף הסיכונים במערכת. פרמיית בריאות, פרט ופנסיה היא חודשית. פרמיית אלמנטרי מוצגת שנתית ואינה נכנסת לסה״כ החודשי.</p>
-      </div>
-    </body></html>`;
-    return {
-      dateKey: trim(report.dateKey) || israelDateKey(),
-      dateLabel: dateLine,
-      html,
-      summary: {
-        agentCount,
-        healthDeals: Number(healthSlice.deals) || 0,
-        healthPremium: Number(healthSlice.premium) || 0,
-        elementary: Number(totals.elementary) || 0,
-        pension: Number(totals.pension) || 0
-      }
-    };
+    if(typeof Dash.buildDailySalesEmailHtml === "function"){
+      const snap = Dash.buildDailySalesEmailHtml();
+      if(!snap || !snap.html) throw new Error("לא ניתן לבנות את דוח המכירות.");
+      return {
+        dateKey: trim(snap.dateKey) || israelDateKey(),
+        dateLabel: snap.dateLabel || israelDateKey(),
+        html: snap.html,
+        summary: snap.summary || {}
+      };
+    }
+    throw new Error("הדף עדיין לא סיים להיטען. רעננו את העמוד ואז לחצו שוב על רענון הדוח.");
   }
 
   async function persistSnapshot(force){
