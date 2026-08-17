@@ -26973,6 +26973,57 @@ UsersGateUI.init();
       return true;
     },
 
+    _applyAppointmentKpi(prem, policies, items){
+      const premium = Number(prem) || 0;
+      const count = Number(policies) || 0;
+      if(!(premium > 0 || count > 0)) return false;
+      const m = (this._metricsCache && typeof this._metricsCache === "object")
+        ? this._metricsCache
+        : this._metricsLoadingShell();
+      this._metricsCache = m;
+      if(premium > (Number(m.agentAppointmentPremium) || 0)){
+        m.agentAppointmentPremium = Math.round(premium * 100) / 100;
+        m.agentAppointments = count;
+        if(Array.isArray(items) && items.length) m.agentApptItems = items;
+        else if(!Array.isArray(m.agentApptItems) || !m.agentApptItems.length){
+          m.agentApptItems = [{
+            rec: { fullName: count + " מינויי סוכן", idNumber: "" },
+            premium,
+            latestStamp: Date.now()
+          }];
+        }
+        m._loading = false;
+        this._apptKpiSettled = true;
+        this._lastKpiPaintFp = "";
+        try { this.paintServerKpiDom(); } catch(_e) {}
+        return true;
+      }
+      if(Number(m.agentAppointmentPremium) > 0) this._apptKpiSettled = true;
+      return false;
+    },
+
+    /* אותו חישוב מינוי סוכן כמו בדשבורד אחרי PIN — רק ממלא את הכרטיס, בלי לדרוס נטו. */
+    _fillAppointmentFromLocalCustomers(){
+      if(!this._needsAgentAppointmentKpi()) return false;
+      try {
+        if(typeof CustomersUI?.aggregateAgentAppointmentMetrics !== "function") return false;
+        const customers = this.getVisibleCustomers();
+        if(!Array.isArray(customers) || !customers.length) return false;
+        const now = Date.now();
+        if(this._apptLocalAt && (now - this._apptLocalAt) < 1600) return false;
+        this._apptLocalAt = now;
+        const range = this.getMonthToDateRange();
+        const pack = CustomersUI.aggregateAgentAppointmentMetrics(
+          customers,
+          range,
+          (stamp, monthRange) => this.isWithinRange(stamp, monthRange)
+        );
+        return this._applyAppointmentKpi(pack?.totalPremium, pack?.policyCount, pack?.customerItems);
+      } catch(_e) {
+        return false;
+      }
+    },
+
     invalidateMetricsCache(options = {}){
       if(options.userSwitch === true){
         this._metricsCacheKey = "";
@@ -26991,6 +27042,7 @@ UsersGateUI.init();
         this._apptKpiSettled = false;
         this._apptRpcQueued = false;
         this._apptRpcAttempts = 0;
+        this._apptLocalAt = 0;
         return;
       }
       const force = options.force === true;
@@ -27100,7 +27152,7 @@ UsersGateUI.init();
       const next = metricsResult && typeof metricsResult === "object" ? metricsResult : null;
       if(!next) return this._metricsCache;
       if(!this._canPromoteLocalMetrics(next)){
-        // שומרים overlay; מסמנים שניסינו — בלי לולאת rebuild
+        try { this._applyAppointmentKpi(next.agentAppointmentPremium, next.agentAppointments, next.agentApptItems); } catch(_e) {}
         if(this._metricsCache?._serverKpiOverlay){
           try { this._metricsCacheKey = cacheKey || this.getMetricsCacheKey(); } catch(_e) {}
           this._localMetricsAttemptedKey = cacheKey || this._metricsCacheKey;
@@ -27439,6 +27491,7 @@ UsersGateUI.init();
             this._metricsCacheKey = cacheKey;
             if(this._needsAgentAppointmentKpi()){
               try { this.fetchAgentAppointmentKpis?.(); } catch(_e2) {}
+              try { this._fillAppointmentFromLocalCustomers?.(); } catch(_e2) {}
             }
             return this._metricsCache;
           }
@@ -27502,6 +27555,7 @@ UsersGateUI.init();
             this._metricsBuildBusy = false;
             if(this._needsAgentAppointmentKpi()){
               try { this.fetchAgentAppointmentKpis?.(); } catch(_e2) {}
+              try { this._fillAppointmentFromLocalCustomers?.(); } catch(_e2) {}
             }
             return;
           }
@@ -30507,6 +30561,9 @@ UsersGateUI.init();
     },
 
     _ensureBackgroundLocalMetricsBuild(cacheKey){
+      if(this._needsAgentAppointmentKpi()){
+        try { this._fillAppointmentFromLocalCustomers(); } catch(_e) {}
+      }
       if(this._metricsBuildBusy) return;
       if(this._countMissingCustomerPayloadsSafe() > 0) return;
       try { if(this._shouldDeferLocalMetricsToServer()) return; } catch(_e) {}
@@ -30727,6 +30784,7 @@ UsersGateUI.init();
       } catch(_e) {}
       try { this.compareServerKpis?.(this._metricsCache || this._metricsLoadingShell()); } catch(_e) {}
       try { this.fetchAgentAppointmentKpis?.(); } catch(_e) {}
+      try { this._fillAppointmentFromLocalCustomers?.(); } catch(_e) {}
       try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
       try { this.scheduleRefreshKpis(); } catch(_e) {}
       this._refillKpisBusy = false;
@@ -30795,37 +30853,40 @@ UsersGateUI.init();
         try {
           const range = this.getMonthToDateRange();
           const res = await Storage.loadServerKpis(range, { includeAppt: true, skipExtras: true });
-          if(!res?.ok) return;
-          if(res.apptFetched !== true) return;
-          this._apptKpiSettled = true;
+          if(!res?.ok){
+            try { this._fillAppointmentFromLocalCustomers(); } catch(_e) {}
+            return;
+          }
+          if(res.apptFetched !== true){
+            try { this._fillAppointmentFromLocalCustomers(); } catch(_e) {}
+            return;
+          }
           const prem = Number(res.apptPremium) || 0;
           const policies = Number(res.apptPolicies) || 0;
-          if(!(prem > 0 || policies > 0)) return;
-          const m = (this._metricsCache && typeof this._metricsCache === "object")
-            ? this._metricsCache
-            : this._metricsLoadingShell();
-          this._metricsCache = m;
-          if(!(Number(m.agentAppointmentPremium) > 0)){
-            m.agentAppointmentPremium = prem;
-            m.agentAppointments = policies;
-            m.agentApptItems = [{
-              rec: { fullName: policies + " מינויי סוכן", idNumber: "" },
-              premium: prem,
-              latestStamp: Date.now()
-            }];
-            m._serverKpiOverlay = true;
-            m._loading = false;
+          if(prem > 0 || policies > 0){
+            this._applyAppointmentKpi(prem, policies);
+            try { this.refreshKpis(); } catch(_e) {}
+            return;
           }
-          this._lastKpiPaintFp = "";
-          try { this.paintServerKpiDom(); } catch(_e) {}
-          try { this.refreshKpis(); } catch(_e) {}
+          try { this._fillAppointmentFromLocalCustomers(); } catch(_e) {}
         } catch(err) {
           try { console.warn("[GI-SERVER-KPI] agent_appointment retry:", err); } catch(_e) {}
+          try { this._fillAppointmentFromLocalCustomers(); } catch(_e) {}
         } finally {
           this._apptRpcBusy = false;
           if(this._apptRpcQueued){
             this._apptRpcQueued = false;
             if(this._needsAgentAppointmentKpi()) this.fetchAgentAppointmentKpis();
+          } else if(this._needsAgentAppointmentKpi() && (Number(this._apptRpcAttempts) || 0) < 4){
+            const delay = (Number(this._apptRpcAttempts) || 0) <= 1 ? 2500 : 6000;
+            this._apptRpcQueued = true;
+            if(!this._apptRpcTimer){
+              this._apptRpcTimer = window.setTimeout(() => {
+                this._apptRpcTimer = null;
+                this._apptRpcQueued = false;
+                if(this._needsAgentAppointmentKpi()) this.fetchAgentAppointmentKpis();
+              }, delay);
+            }
           }
         }
       })();
@@ -30861,6 +30922,7 @@ UsersGateUI.init();
         try {
           if(this._needsAgentAppointmentKpi()){
             try { this.fetchAgentAppointmentKpis(); } catch(_e2) {}
+            try { this._fillAppointmentFromLocalCustomers(); } catch(_e2) {}
           }
           if(this._overlayHasMoney()
             && (Number(this._todaySalesServerOverlay?.totalPremium) > 0
@@ -31024,6 +31086,13 @@ UsersGateUI.init();
 
       if(!skipMonthZeroPaint){
         root.querySelectorAll('.bankDash__kpis .bankKpi:not(.bankKpi--today)').forEach((card, i) => {
+          /* GI-FACE-APPT: אל תצבע ₪0 על כרטיס מינוי סוכן בזמן שנטו כבר נטען. */
+          if(card.classList.contains("bankKpi--agentAppoint")
+            && !(Number(metrics?.agentAppointmentPremium) > 0)
+            && (this._needsAgentAppointmentKpi()
+              || paintedMoneyLooksReal(card.querySelector(".bankKpi__value")?.textContent))){
+            return;
+          }
           applyKpiDatum(card, cardData[i]);
         });
       }
@@ -42588,6 +42657,7 @@ const ClalRiskLifePdf = {
               if(DashboardUI.els?.root?.querySelector(".bankDash__kpis")
                 && !DashboardUI.els.root.querySelector(".bankDash--bootLoading")){
                 try { DashboardUI.refillServerDashboardKpis?.(); } catch(_e2) {}
+                try { DashboardUI._fillAppointmentFromLocalCustomers?.(); } catch(_e2) {}
                 DashboardUI.scheduleRefreshKpis();
                 try { DashboardUI.refreshDashboardListPanels(); } catch(_e2) {}
               } else {
@@ -44355,9 +44425,11 @@ const ClalRiskLifePdf = {
             m.soldPolicies = Number(res.soldPolicies) || 0;
             m.newClients = Number(res.newClients) || 0;
           }
-          if(res.apptFetched === true && (apptPremium > 0 || !(Number(m.agentAppointmentPremium) > 0))){
-            m.agentAppointmentPremium = apptPremium;
-            m.agentAppointments = apptPolicies;
+          if(res.apptFetched === true && apptPremium > 0){
+            try { this._applyAppointmentKpi(apptPremium, apptPolicies); } catch(_e) {
+              m.agentAppointmentPremium = apptPremium;
+              m.agentAppointments = apptPolicies;
+            }
           }
           /* פירוט מוצרים מ-RPC — בלי payloads בזיכרון אין מאיפה לבנות «הצג פירוט». */
           if(res.productTotals && typeof res.productTotals === "object"
@@ -44395,6 +44467,7 @@ const ClalRiskLifePdf = {
           try { this.paintServerKpiDom?.(); } catch(_e) {}
           try { this.scheduleRefreshKpis(); } catch(_e) {}
           try { this.fetchAgentAppointmentKpis?.(); } catch(_e) {}
+          try { this._fillAppointmentFromLocalCustomers?.(); } catch(_e) {}
           return;
         }
         if(res.productTotals && typeof res.productTotals === "object"
@@ -44407,6 +44480,7 @@ const ClalRiskLifePdf = {
           }
         }
         try { this.fetchAgentAppointmentKpis?.(); } catch(_e) {}
+        try { this._fillAppointmentFromLocalCustomers?.(); } catch(_e) {}
         const round2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
         const pairs = [
           ["פרמיה נטו",        round2(metrics?.netPremium),              round2(res.netPremium)],
@@ -44440,6 +44514,7 @@ const ClalRiskLifePdf = {
         if(Auth.isElementary?.() || Auth.isOps?.() || Auth.isOpsAgent?.()) return;
         if(DashboardUI._needsAgentAppointmentKpi?.()){
           try { DashboardUI.fetchAgentAppointmentKpis?.(); } catch(_e2) {}
+          try { DashboardUI._fillAppointmentFromLocalCustomers?.(); } catch(_e2) {}
         }
         if(DashboardUI._overlayHasMoney?.()
           && (App?._fullDataReady || Number(DashboardUI._todaySalesServerOverlay?.totalPremium) > 0)
