@@ -54535,7 +54535,7 @@ ${inner}
 
     _phaseLabel(phase){
       const map = {
-        idle: "פתיחה",
+        idle: "הצגה עצמית",
         personalVerify: "פרטי מבוטח/ים",
         step2: "בירור והתאמת צרכים",
         premiumCost: "בירור והתאמת צרכים",
@@ -54648,16 +54648,10 @@ ${inner}
         this._renderStep2Body(rec);
         this._showStep2Panel();
       } else if(p === "premiumCost" || p === "newPolicies"){
-        // שלב עלות/פרמיה הוסר — ממשיכים לשלב שאחרי בירור הצרכים לפי הסדר הפעיל
-        if(this._mcPayStepEnabled()){
-          this._mirrorUiPhase = "futureCancel";
-          this._renderStep5FutureCancelBody();
-          this._showStep5Panel();
-        } else {
-          this._mirrorUiPhase = "disclosure";
-          this._renderStep6DisclosureBody(rec);
-          this._showStep6Panel();
-        }
+        // שלב עלות/פרמיה הוסר — אחרי בירור הצרכים ממשיכים לגילוי נאות
+        this._mirrorUiPhase = "disclosure";
+        this._renderStep6DisclosureBody(rec);
+        this._showStep6Panel();
       } else if(p === "cancelQuestionnaire"){
         this._renderCancelQuestionnaireBody(rec);
         this._showStepCancelQPanel();
@@ -54668,8 +54662,10 @@ ${inner}
         this._renderHealthDeclarationBody(rec);
         this._showStepHealthDeclPanel();
       } else if(p === "futureCancel"){
-        this._renderStep5FutureCancelBody();
-        this._showStep5Panel();
+        // מסך שינוי/ביטול בעתיד מושהה מהסדר הנוכחי — ממשיכים לגילוי נאות
+        this._mirrorUiPhase = "disclosure";
+        this._renderStep6DisclosureBody(rec);
+        this._showStep6Panel();
       } else if(p === "disclosure"){
         this._renderStep6DisclosureBody(rec);
         this._showStep6Panel();
@@ -54705,7 +54701,8 @@ ${inner}
         const rec = this._getFreshCustomerRecord();
         const sub = this._mirrorNeedsSubPhase;
         if(sub === "offer"){ this._handleNeedsAct("needs-to-existing"); return; }
-        if(sub === "reasons"){ this._handleNeedsAct("needs-to-offer"); return; }
+        if(sub === "reasons"){ this._handleNeedsAct("needs-to-disclosure"); return; }
+        if(sub === "compareNotice"){ this._handleNeedsAct("needs-to-reasons"); return; }
         if(sub === "existing"){ this._handleNeedsAct("har-back"); return; }
         this._mirrorUiPhase = "personalVerify";
         this._renderPersonalVerifyBody(rec);
@@ -54839,36 +54836,28 @@ ${inner}
 
     // ===== GI-FLOW-SCRIPT =====================================================
     // סדר השלבים ושמותיהם לפי "תסריט שיחת מכירה מעודכן 2026", מילה במילה.
-    // קודם הסדר היה מפוזר בין ה-HTML לשבע רשימות markDone, ו"שינוי או ביטול
-    // בעתיד" הופיע אחרון במקום במקום 7 שבטופס.
+    // קודם הסדר היה מפוזר בין ה-HTML לשבע רשימות markDone.
     // כאן הוא מוגדר במקום אחד. מתג: window.__GI_MC_PAYMENT_STEP = false
     // מחזיר את הסדר הקודם, בדיוק כפי שהיה.
+    // שינוי/ביטול בעתיד מושהה מהסדר החי. גילוי נאות אחרי הפוליסות המוצעות, ואחריו שיקולי המלצה.
     _mcFlowPlan(){
       const e = this.els;
-      if(this._mcPayStepEnabled()){
-        return [
-          { el: e.flowStep1,          label: "פתיח השיחה",            phases: ["idle", "declinePending"] },
-          { el: e.flowStepPersonal,   label: "פרטי המבוטח",           phases: ["personalVerify"] },
-          { el: e.flowStepHar,        label: "בירור צרכים והתאמה",     phases: ["step2", "newPolicies", "premiumCost"] },
-          { el: e.flowStepFuture,     label: "שינוי או ביטול בעתיד",   phases: ["futureCancel"] },
-          { el: e.flowStepDisclosure, label: "גילוי נאות",             phases: ["disclosure"] },
-          { el: e.flowStepCancelQ,    label: "שאלון ביטול",            phases: ["cancelQuestionnaire"] },
-          { el: e.flowStepBenef,      label: "פרטי מוטבים",            phases: ["beneficiaries"] },
-          { el: e.flowStepHealthDecl, label: "הצהרת בריאות",           phases: ["healthDeclaration"] },
-          { el: e.flowStepPay,        label: "פרטי אמצעי תשלום",       phases: ["paymentDetails"] },
-          { el: e.flowStepSummary,    label: "סיכום והצהרות",          phases: ["insuranceStart"] }
-        ];
-      }
-      return [
+      const core = [
         { el: e.flowStep1,          label: "הצגה עצמית",            phases: ["idle", "declinePending"] },
         { el: e.flowStepPersonal,   label: "פרטי מבוטח/ים",         phases: ["personalVerify"] },
         { el: e.flowStepHar,        label: "בירור והתאמת צרכים",     phases: ["step2", "newPolicies", "premiumCost"] },
         { el: e.flowStepDisclosure, label: "גילוי נאות",             phases: ["disclosure"] },
         { el: e.flowStepCancelQ,    label: "שאלון ביטול",            phases: ["cancelQuestionnaire"] },
         { el: e.flowStepBenef,      label: "פרטי מוטבים",            phases: ["beneficiaries"] },
-        { el: e.flowStepHealthDecl, label: "הצהרת בריאות",           phases: ["healthDeclaration"] },
-        { el: e.flowStepFuture,     label: "שינוי או ביטול בעתיד",   phases: ["futureCancel"] }
+        { el: e.flowStepHealthDecl, label: "הצהרת בריאות",           phases: ["healthDeclaration"] }
       ];
+      if(this._mcPayStepEnabled()){
+        return core.concat([
+          { el: e.flowStepPay,        label: "פרטי אמצעי תשלום",       phases: ["paymentDetails"] },
+          { el: e.flowStepSummary,    label: "סיכום והצהרות",          phases: ["insuranceStart"] }
+        ]);
+      }
+      return core;
     },
 
     _updateFlowBarSteps(){
@@ -55344,6 +55333,22 @@ ${inner}
       return false;
     },
 
+    _mcCompanyIsMigdal(value){
+      return /מגדל|migdal/i.test(safeTrim(value));
+    },
+
+    _mcHasMigdalNewPolicy(rec){
+      try{
+        return this._mirrorGetNewPoliciesRaw(rec).some((p) =>
+          this._mcCompanyIsMigdal(p?.company) ||
+          this._mcCompanyIsMigdal(p?.companyId) ||
+          this._mcCompanyIsMigdal(p?.companyKey)
+        );
+      }catch(_e){
+        return false;
+      }
+    },
+
     _validateMirrorForStep2(rec){
       const policies = this._collectMirrorPolicies(rec);
       const existing = policies.filter(p => String(p?.origin) === "existing");
@@ -55357,6 +55362,14 @@ ${inner}
         if(on){
           this.els.consentWrap.removeAttribute("hidden");
           this.els.consentWrap.hidden = false;
+          if(this.els.consentYes){
+            this.els.consentYes.disabled = false;
+            this.els.consentYes.removeAttribute("disabled");
+          }
+          if(this.els.consentNo){
+            this.els.consentNo.disabled = false;
+            this.els.consentNo.removeAttribute("disabled");
+          }
         } else {
           this.els.consentWrap.hidden = true;
           this.els.consentWrap.setAttribute("hidden", "");
@@ -56217,8 +56230,13 @@ ${inner}
     _mcPolicyCardHtml(opts){
       const rows = Array.isArray(opts.rows) ? opts.rows : [];
       const rowsHtml = rows.map((r) => {
-        const wide = !!r.wide || /כיסוי|סכום|לפני הנחה|אחרי הנחה/i.test(safeTrim(r.k) + " " + String(r.v || "").replace(/<[^>]+>/g, " "));
-        return `<div class="mcPolCard__row${wide ? " mcPolCard__row--wide" : ""}"><span class="mcPolCard__k">${escapeHtml(r.k)}</span><strong class="mcPolCard__v">${r.v}</strong></div>`;
+        const kind = safeTrim(r.kind);
+        const wide = !!r.wide || kind === "cover" || kind === "total" || /כיסוי|סכום|לפני הנחה|אחרי הנחה|סה״כ|סה"כ/i.test(safeTrim(r.k) + " " + String(r.v || "").replace(/<[^>]+>/g, " "));
+        const mods = ["mcPolCard__row"];
+        if(wide) mods.push("mcPolCard__row--wide");
+        if(kind === "cover") mods.push("mcPolCard__row--cover");
+        if(kind === "total") mods.push("mcPolCard__row--total");
+        return `<div class="${mods.join(" ")}"><span class="mcPolCard__k">${escapeHtml(r.k)}</span><strong class="mcPolCard__v">${r.v}</strong></div>`;
       }).join("");
       const body =
         (opts.badge ? `<div class="mcPolCard__badge">${escapeHtml(opts.badge)}</div>` : "") +
@@ -56248,13 +56266,19 @@ ${inner}
           consent: "שלב 3 · בירור והתאמת צרכים",
           existing: "שלב 3 · ביטוחים קיימים",
           offer: "שלב 3 · פוליסות מוצעות",
-          reasons: "שלב 3 · שיקולי המלצה"
+          reasons: "שלב 3 · שיקולי המלצה",
+          compareNotice: "שלב 3 · מסמך השוואה"
         };
-        kicker.textContent = map[sub] || map.consent;
+        if(sub === "compareNotice" && !this._mirrorHasExistingPolicies(rec)){
+          kicker.textContent = "שלב 3 · אישור היעדר ביטוח פרטי";
+        } else {
+          kicker.textContent = map[sub] || map.consent;
+        }
       }
       if(sub === "existing") this._renderNeedsExisting(rec);
       else if(sub === "offer") this._renderNeedsOffer(rec);
       else if(sub === "reasons") this._renderNeedsReasons(rec);
+      else if(sub === "compareNotice") this._renderNeedsCompareNotice(rec);
       else this._renderNeedsConsent(rec);
     },
 
@@ -56521,9 +56545,10 @@ ${inner}
         return;
       }
       if(dir === "back"){
-        this._mirrorUiPhase = "disclosure";
-        this._renderStep6DisclosureBody(rec);
-        this._showStep6Panel();
+        this._mirrorNeedsSubPhase = "compareNotice";
+        this._mirrorUiPhase = "step2";
+        this._renderStep2Body(rec);
+        this._showStep2Panel();
         return;
       }
       this._enterBeneficiariesOrSkip(rec, "forward");
@@ -57633,11 +57658,55 @@ ${inner}
           (err ? `<div class="mcCancelQError" role="alert">${escapeHtml(err)}</div>` : "") +
           this._mcNeedsNav(
             "health-to-future",
-            this._mcPayStepEnabled() ? "המשך · פרטי אמצעי תשלום" : "המשך · שינוי או ביטול בעתיד",
+            this._mcPayStepEnabled() ? "המשך · פרטי אמצעי תשלום" : "סיימתי · סיום שלבי השיקוף",
             "health-back",
             "חזרה"
           ) +
         `</div>`;
+    },
+
+    _mcIsExistingHealthProduct(p){
+      const type = safeTrim(p?.type || p?.product);
+      return type === "בריאות" || type === "פוליסה משולבת" || /בריאות/i.test(type);
+    },
+
+    _mcExistingHealthCoverPremiumRows(p){
+      const rows = [];
+      const seen = new Set();
+      const push = (label, premium) => {
+        const name = safeTrim(label).replace(/\s+/g, " ");
+        if(!name) return;
+        const key = name.toLowerCase();
+        if(seen.has(key)) return;
+        seen.add(key);
+        rows.push({ label: name, premium: safeTrim(premium) });
+      };
+      const breakdown = Array.isArray(p?.premiumBreakdown) ? p.premiumBreakdown : [];
+      breakdown.forEach((item) => {
+        if(!item) return;
+        if(safeTrim(item.label) || safeTrim(item.monthlyPremium) || safeTrim(item.premium)){
+          push(item.label || "כיסוי", item.monthlyPremium || item.premium || "");
+        }
+      });
+      if(rows.length) return rows;
+      const names = [];
+      const addNames = (list) => {
+        if(!Array.isArray(list)) return;
+        list.forEach((x) => {
+          if(typeof x === "string") names.push(x);
+          else if(x && typeof x === "object") names.push(x.label || x.name || x.cover || x.k || "");
+        });
+      };
+      addNames(p?.healthCovers);
+      addNames(p?.covers);
+      addNames(p?.includedProducts);
+      try{
+        if(typeof Wizard !== "undefined" && Wizard && typeof Wizard.getPolicyCoverItems === "function"){
+          addNames(Wizard.getPolicyCoverItems(p) || []);
+        }
+      }catch(_e){}
+      names.forEach((n) => push(n, ""));
+      return rows;
     },
 
     _collectExistingPolicyCards(rec){
@@ -57650,12 +57719,27 @@ ${inner}
           const company = safeTrim(p?.company) || "—";
           const product = safeTrim(p?.type || p?.product) || "—";
           const prem = this._fmtMcMoney(p?.monthlyPremium || p?.premiumMonthly || p?.premium || p?.premiumBefore || "");
+          const isHealth = this._mcIsExistingHealthProduct(p);
+          const coverRows = isHealth ? this._mcExistingHealthCoverPremiumRows(p) : [];
           const rows = [
             { k: "שם חברה", v: escapeHtml(company) },
-            { k: "שם מוצר", v: escapeHtml(product) },
-            { k: "פרמיה חודשית על סך", v: escapeHtml(prem) }
+            { k: "שם מוצר", v: escapeHtml(product) }
           ];
-          this._mcCoverageBits(p).forEach((b) => rows.push({ k: b.label, v: escapeHtml(b.value) }));
+          if(isHealth && coverRows.length){
+            coverRows.forEach((c) => {
+              rows.push({
+                k: c.label,
+                v: escapeHtml(this._fmtMcMoney(c.premium)),
+                kind: "cover"
+              });
+            });
+            rows.push({ k: "סה״כ פרמיה חודשית", v: escapeHtml(prem), kind: "total" });
+          } else {
+            rows.push({ k: "פרמיה חודשית על סך", v: escapeHtml(prem) });
+            if(!isHealth){
+              this._mcCoverageBits(p).forEach((b) => rows.push({ k: b.label, v: escapeHtml(b.value) }));
+            }
+          }
           const statusMeta = this._mcExistingPolicyStatusMeta(ins, p);
           const isCancel = statusMeta.raw === "full" || statusMeta.raw === "partial" || statusMeta.raw === "partial_health";
           let extra = "";
@@ -57705,11 +57789,6 @@ ${inner}
                 `<div class="mcAgentHint__title">הודעה לנציג</div>` +
                 `<div class="mcAgentHint__text">לא הוזנו ביטוחים קיימים באשף בריאות וסיכונים (שלב 2 · פוליסות בחברה נגדית). ניתן להמשיך בשיקוף — אין פוליסות לביטול ואין מסמך השוואה.</div>` +
               `</div>`) +
-          (hasExisting
-            ? `<div class="mcNeedsScript mcNeedsScript--readAloud mcNeedsScript--closing" aria-label="נוסח להקראה ללקוח — אחרי פוליסות קיימות">` +
-                `<p class="mcNeedsScript__p mcNeedsScript__p--ask">בהמשך ישלח אליך מסמך השוואה כתוב המשווה בין הפוליסות שקיימות לך כיום לעומת הפוליסות החדשות שאני מציע לך לרכוש, אותו תידרש לאשר לי בחתימתך.</p>` +
-              `</div>`
-            : "") +
           this._mcNeedsNav("needs-to-offer", "המשך · פוליסות מוצעות") +
         `</div>`;
     },
@@ -57734,6 +57813,17 @@ ${inner}
         const before = this._fmtMcMoney(this._mcPremiumBefore(p));
         const after = this._fmtMcMoney(this._mcPremiumAfter(p));
         const schedule = this._mcDiscountScheduleText(p);
+        if(opts.simple){
+          return this._mcPolicyCardHtml({
+            badge: getInsuredLabel(p),
+            title: "פוליסה מוצעת",
+            rows: [
+              { k: "שם חברה", v: escapeHtml(company) },
+              { k: "שם מוצר", v: escapeHtml(product) },
+              { k: "פרמיה חודשית על סך", v: escapeHtml(after) }
+            ]
+          });
+        }
         const uploadedCovers = this._getMirrorPremiumCoversForPolicy(rec, p);
         const rows = [
           { k: "שם חברה", v: escapeHtml(company) },
@@ -57777,20 +57867,24 @@ ${inner}
     },
 
     _renderNeedsOffer(rec){
-      const cards = this._collectNewPolicyCards(rec, { withDiscount: true, premiumMode: "after" });
-      const basis = this._mirrorHasExistingPolicies(rec)
-        ? "בהתאם לביטוחים הקיימים לך כיום"
-        : "בהתאם לצרכים הביטוחיים שעלו בשיחה";
-      const lead = cards.length === 1
-        ? `${basis}, הפוליסה שאנחנו מציעים לך לרכוש היא:`
-        : `${basis}, הפוליסות שאנחנו מציעים לך לרכוש הן:`;
+      const cards = this._collectNewPolicyCards(rec, { simple: true, withDiscount: false, premiumMode: "after" });
+      const hasExisting = this._mirrorHasExistingPolicies(rec);
+      const lead = hasExisting
+        ? (cards.length === 1
+          ? "בהתאם לביטוחים הקיימים לך כיום, הפוליסה שאנו מציעים לך לרכוש היא:"
+          : "בהתאם לביטוחים הקיימים לך כיום, הפוליסות שאנו מציעים לך לרכוש הן:")
+        : (cards.length === 1
+          ? "בהתאם לצרכים הביטוחיים שעלו בשיחה, הפוליסה שאנו מציעים לך לרכוש היא:"
+          : "בהתאם לצרכים הביטוחיים שעלו בשיחה, הפוליסות שאנו מציעים לך לרכוש הן:");
       this.els.step2Body.innerHTML =
         `<div class="mcNeedsScreen">` +
-          `<p class="mcNeedsLead">${lead}</p>` +
+          `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח להקראה ללקוח">` +
+            `<p class="mcNeedsScript__p mcNeedsScript__p--ask">${escapeHtml(lead)}</p>` +
+          `</div>` +
           (cards.length
             ? `<div class="mcPolCardList" role="list">${cards.join("")}</div>`
             : `<p class="mcNeedsEmpty">לא הוזנו פוליסות חדשות באשף (שלב פוליסות חדשות).</p>`) +
-          this._mcNeedsNav("needs-to-reasons", "המשך · שיקולי המלצה", "needs-to-existing", "חזרה") +
+          this._mcNeedsNav("needs-to-disclosure", "המשך · גילוי נאות", "needs-to-existing", "חזרה") +
         `</div>`;
     },
 
@@ -57818,14 +57912,60 @@ ${inner}
         : `<p class="mcNeedsEmpty">ללקוח אין ביטוחים קיימים — לא נדרשו שיקולי ביטול או החלפת פוליסה.</p>`;
       this.els.step2Body.innerHTML =
         `<div class="mcNeedsScreen">` +
-          `<p class="mcNeedsLead">השיקולים העיקריים במתן ההמלצה הינם:</p>` +
+          `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח להקראה ללקוח">` +
+            `<p class="mcNeedsScript__p mcNeedsScript__p--ask">השיקולים העיקריים במתן ההמלצה הם:</p>` +
+          `</div>` +
           (listHtml || emptyHtml) +
           this._mcNeedsNav(
+            "reasons-to-compare",
+            this._mirrorHasExistingPolicies(rec) ? "המשך · מסמך השוואה" : "המשך · אישור היעדר ביטוח",
             "needs-to-disclosure",
-            this._mcPayStepEnabled() ? "המשך · שינוי או ביטול בעתיד" : "המשך · גילוי נאות",
-            "needs-to-offer",
             "חזרה"
           ) +
+        `</div>`;
+    },
+
+    _renderNeedsCompareNotice(rec){
+      if(!this.els.step2Body) return;
+      const hasExisting = this._mirrorHasExistingPolicies(rec);
+      if(hasExisting){
+        const migdalHtml = this._mcHasMigdalNewPolicy(rec)
+          ? `<p class="mcNeedsScript__p">ההמלצה מבוססת על גילך. מצבך המשפחתי. הכיסויים שקיימים לך. הצרכים שציינת</p>`
+          : "";
+        this.els.step2Body.innerHTML =
+          `<div class="mcNeedsScreen">` +
+            `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח להקראה ללקוח">` +
+              migdalHtml +
+              `<p class="mcNeedsScript__p mcNeedsScript__p--ask">בהמשך אשלח לך מסמך השוואה שבו כתוב ההשוואה בין הפוליסות שקיימות לך כיום לעומת הפוליסות החדשות שאנו מציעים לך לרכוש אותם תידרש לאשר לי בחתימתך</p>` +
+            `</div>` +
+            this._mcNeedsNav(
+              "compare-to-cancelq",
+              this._hasCancelQuestionnairePolicies(rec) ? "המשך · שאלון ביטול" : "המשך · פרטי מוטבים",
+              "needs-to-reasons",
+              "חזרה"
+            ) +
+          `</div>`;
+        return;
+      }
+      const declined = this._compareNoPrivateDeclined === true;
+      this.els.step2Body.innerHTML =
+        `<div class="mcNeedsScreen">` +
+          `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח להקראה ללקוח">` +
+            `<p class="mcNeedsScript__p mcNeedsScript__p--ask">האם אתה מאשר שאין לך ביטוח פרטי כיום</p>` +
+          `</div>` +
+          (declined
+            ? `<div class="mcAgentHint mcAgentHint--warn" role="status">` +
+                `<div class="mcAgentHint__title">הלקוח לא אישר</div>` +
+                `<div class="mcAgentHint__text">הלקוח ציין שיש לו ביטוח פרטי כיום. יש לחזור לאשף ולהשלים פוליסות קיימות, או לחזור לנוסח ולשאול שוב.</div>` +
+              `</div>` +
+              `<div class="mcNeedsNav mcNeedsNav--split">` +
+                `<button type="button" class="btn btn--primary" data-mc-needs-act="reasons-to-compare">חזרה לנוסח</button>` +
+                `<button type="button" class="btn" data-mc-needs-act="needs-to-reasons">חזרה לשיקולי המלצה</button>` +
+              `</div>`
+            : `<div class="mcNeedsNav mcNeedsNav--split">` +
+                `<button type="button" class="btn btn--primary" data-mc-needs-act="compare-none-yes">מאשר</button>` +
+                `<button type="button" class="btn" data-mc-needs-act="compare-none-no">לא מאשר</button>` +
+              `</div>`) +
         `</div>`;
     },
 
@@ -57847,8 +57987,8 @@ ${inner}
       this._mirrorCoerceCustomerPayloadInPlace(rec);
       const cards = this._collectNewPolicyCards(rec, { withDiscount: true, premiumMode: "before", showRankScript: true });
       const hasCancelQ = this._hasCancelQuestionnairePolicies(rec);
-      const nextAct = hasCancelQ ? "premium-to-cancelq" : "premium-to-future";
-      const nextLabel = hasCancelQ ? "המשך · שאלון ביטול" : "המשך · שינוי או ביטול בעתיד";
+      const nextAct = hasCancelQ ? "premium-to-cancelq" : "needs-to-disclosure";
+      const nextLabel = hasCancelQ ? "המשך · שאלון ביטול" : "המשך · גילוי נאות";
       this.els.step4Body.innerHTML =
         `<div class="mcNeedsScreen">` +
           `<div class="mcAgentHint" role="note">` +
@@ -57887,7 +58027,7 @@ ${inner}
     _renderStep6DisclosureBody(rec){
       if(!this.els.step6Body) return;
       const kicker = document.getElementById("mcStep6Kicker");
-      if(kicker) kicker.textContent = this._mcPayStepEnabled() ? "שלב 5 · גילוי נאות" : "שלב 4 · גילוי נאות";
+      if(kicker) kicker.textContent = "שלב 4 · גילוי נאות";
       if(!rec){
         this.els.step6Body.innerHTML = `<p class="mcNeedsEmpty">לא נמצא תיק לקוח.</p>`;
         return;
@@ -57996,8 +58136,7 @@ ${inner}
         }
       }
 
-      const hasCancelQ = this._hasCancelQuestionnairePolicies(rec);
-      const nextLabel = hasCancelQ ? "המשך · שאלון ביטול" : "המשך · פרטי מוטבים";
+      const nextLabel = "המשך · שיקולי המלצה";
       this.els.step6Body.innerHTML =
         `<div class="mcNeedsScreen">` +
           `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח לפתיחת גילוי נאות">` +
@@ -58228,18 +58367,20 @@ ${inner}
     },
 
     _mcSyncStepKickers(){
-      if(!this._mcPayStepEnabled()) return;
       const set = (id, txt) => {
         const el = document.getElementById(id);
         if(el) el.textContent = txt;
       };
-      set("mcStep5Kicker", "שלב 4 · שינוי או ביטול בעתיד");
-      set("mcStep6Kicker", "שלב 5 · גילוי נאות");
-      set("mcStepCancelQKicker", "שלב 6 · שאלון ביטול");
-      set("mcStepBenefKicker", "שלב 7 · פרטי מוטבים");
-      set("mcStepHealthDeclKicker", "שלב 8 · הצהרת בריאות");
-      set("mcStepPayKicker", "שלב 9 · פרטי אמצעי תשלום");
-      set("mcStepInsStartKicker", "שלב 10 · סיכום והצהרות");
+      set("mcCallScriptKicker", "שלב 1 · הצגה עצמית");
+      set("mcStepVerifyKicker", "שלב 2 · פרטי מבוטח/ים");
+      set("mcStep6Kicker", "שלב 4 · גילוי נאות");
+      set("mcStepCancelQKicker", "שלב 5 · שאלון ביטול");
+      set("mcStepBenefKicker", "שלב 6 · פרטי מוטבים");
+      set("mcStepHealthDeclKicker", "שלב 7 · הצהרת בריאות");
+      if(this._mcPayStepEnabled()){
+        set("mcStepPayKicker", "שלב 8 · פרטי אמצעי תשלום");
+        set("mcStepInsStartKicker", "שלב 9 · סיכום והצהרות");
+      }
     },
 
     _showStepPayPanel(){
@@ -58574,22 +58715,16 @@ ${inner}
       }
       if(action === "needs-to-premium" || action === "needs-to-disclosure"
         || action === "premium-to-cancelq" || action === "premium-to-future" || action === "premium-done"){
-        // בסדר התסריט שלב 4 הוא "שינוי או ביטול בעתיד" ורק אחריו גילוי נאות
-        if(this._mcPayStepEnabled()){
-          this._mirrorUiPhase = "futureCancel";
-          this._renderStep5FutureCancelBody();
-          this._showStep5Panel();
-          return;
-        }
         this._mirrorUiPhase = "disclosure";
         this._renderStep6DisclosureBody(rec);
         this._showStep6Panel();
         return;
       }
       if(action === "cancelq-back"){
-        this._mirrorUiPhase = "disclosure";
-        this._renderStep6DisclosureBody(rec);
-        this._showStep6Panel();
+        this._mirrorNeedsSubPhase = "compareNotice";
+        this._mirrorUiPhase = "step2";
+        this._renderStep2Body(rec);
+        this._showStep2Panel();
         return;
       }
       if(action === "cancelq-to-benef" || action === "cancelq-to-future"){
@@ -58640,33 +58775,21 @@ ${inner}
           void this._persistHealthDeclarationIntro(rec);
           return;
         }
-        this._mirrorUiPhase = "futureCancel";
-        this._renderStep5FutureCancelBody();
-        this._showStep5Panel();
         void this._persistHealthDeclarationIntro(rec);
+        this.onNewPoliciesMirrorDone();
         return;
       }
       if(action === "future-back"){
-        if(this._mcPayStepEnabled()){
-          this._mirrorNeedsSubPhase = "reasons";
-          this._mirrorUiPhase = "step2";
-          this._renderStep2Body(rec);
-          this._showStep2Panel();
-          return;
-        }
-        this._mirrorUiPhase = "healthDeclaration";
-        this._renderHealthDeclarationBody(rec);
-        this._showStepHealthDeclPanel();
+        this._mirrorNeedsSubPhase = "offer";
+        this._mirrorUiPhase = "step2";
+        this._renderStep2Body(rec);
+        this._showStep2Panel();
         return;
       }
       if(action === "future-to-disclosure" || action === "future-done"){
-        if(this._mcPayStepEnabled()){
-          this._mirrorUiPhase = "disclosure";
-          this._renderStep6DisclosureBody(rec);
-          this._showStep6Panel();
-          return;
-        }
-        this.onNewPoliciesMirrorDone();
+        this._mirrorUiPhase = "disclosure";
+        this._renderStep6DisclosureBody(rec);
+        this._showStep6Panel();
         return;
       }
       if(action === "pay-back"){
@@ -58706,20 +58829,39 @@ ${inner}
         return;
       }
       if(action === "disclosure-back"){
-        if(this._mcPayStepEnabled()){
-          this._mirrorUiPhase = "futureCancel";
-          this._renderStep5FutureCancelBody();
-          this._showStep5Panel();
-          return;
-        }
-        this._mirrorNeedsSubPhase = "reasons";
+        this._mirrorNeedsSubPhase = "offer";
         this._mirrorUiPhase = "step2";
         this._renderStep2Body(rec);
         this._showStep2Panel();
         return;
       }
       if(action === "disclosure-done"){
+        this._mirrorNeedsSubPhase = "reasons";
+        this._mirrorUiPhase = "step2";
+        this._renderStep2Body(rec);
+        this._showStep2Panel();
+        return;
+      }
+      if(action === "offer-to-cancelq" || action === "reasons-to-cancelq" || action === "compare-to-cancelq" || action === "compare-none-yes"){
+        this._compareNoPrivateDeclined = false;
         this._enterCancelQuestionnaireOrSkip(rec, "forward");
+        return;
+      }
+      if(action === "reasons-to-compare"){
+        this._compareNoPrivateDeclined = false;
+        this._mirrorNeedsSubPhase = "compareNotice";
+        this._mirrorUiPhase = "step2";
+        this._renderStep2Body(rec);
+        this._showStep2Panel();
+        return;
+      }
+      if(action === "compare-none-no"){
+        this._compareNoPrivateDeclined = true;
+        this._mirrorNeedsSubPhase = "compareNotice";
+        this._mirrorUiPhase = "step2";
+        this._renderStep2Body(rec);
+        this._showStep2Panel();
+        return;
       }
     },
 

@@ -32410,7 +32410,7 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
 .mcWorkstation--callPhase.mcWorkstation--dockOpen .mcDiscoveryPanel{
   display:none !important;
 }
-.mcWorkstation--callLive.mcWorkstation--dockOpen .mcCallScript{
+.mcWorkstation--callLive.mcWorkstation--dockOpen .mcCallScript:not([hidden]){
   flex:1 1 auto;
   min-height:0;
   display:flex;
@@ -32437,7 +32437,7 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
   line-height:1.55;
 }
 /* אישור שלב 1 — פס תחתון קומפקטי, כפתורים בימין */
-.mcWorkstation--callLive.mcWorkstation--dockOpen .mcOpeningConsent{
+.mcWorkstation--callLive.mcWorkstation--dockOpen .mcOpeningConsent:not([hidden]){
   flex:0 0 auto;
   margin:0;
   padding:10px 14px;
@@ -32447,6 +32447,9 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
   flex-wrap:wrap;
   align-items:center;
   gap:10px 14px;
+  position:relative;
+  z-index:2;
+  pointer-events:auto;
 }
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcOpeningConsent__hint{
   order:2;
@@ -32469,6 +32472,8 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
   padding:11px 16px;
   font-size:13px;
   border-radius:12px;
+  pointer-events:auto;
+  cursor:pointer;
 }
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStep2:not([hidden]){
   flex:1 1 auto;
@@ -32492,22 +32497,26 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
 }
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStepVerify__ribbon{display:none;}
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStepVerify__kicker{
+  flex:0 0 auto;
   padding:0 4px 4px;
   font-size:clamp(20px, 2vw, 26px);
 }
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStepVerify__intro{
+  flex:0 0 auto;
   padding:0 4px 8px;
   margin:0;
   font-size:13px;
   line-height:1.4;
 }
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStepVerify__scriptBox{
+  flex:0 0 auto;
   margin:0 0 10px;
   padding:14px 16px;
   border-radius:14px;
   box-shadow:none;
   background:linear-gradient(135deg, rgba(42,92,245,.10), rgba(52,211,153,.08));
   border:1px solid rgba(42,92,245,.28);
+  overflow:visible;
 }
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStepVerify__scriptLabel{
   display:none;
@@ -32530,7 +32539,8 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStep2:not([hidden]) .mcStep2__body{
   flex:1 1 auto;
   min-height:0;
-  overflow:hidden;
+  overflow:auto;
+  -webkit-overflow-scrolling:touch;
   padding-top:0;
   font-size:clamp(16px, 1.55vw, 19px);
   line-height:1.55;
@@ -32545,7 +32555,8 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStep4:not([hidden]) .mcStep4__body{
   flex:1 1 auto;
   min-height:0;
-  overflow:hidden;
+  overflow:auto;
+  -webkit-overflow-scrolling:touch;
   font-size:clamp(16px, 1.55vw, 19px);
   line-height:1.55;
 }
@@ -32559,7 +32570,8 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStepCancelQ:not([hidden]) .mcStepCancelQ__body{
   flex:1 1 auto;
   min-height:0;
-  overflow:hidden;
+  overflow:auto;
+  -webkit-overflow-scrolling:touch;
   font-size:clamp(16px, 1.55vw, 19px);
   line-height:1.55;
 }
@@ -32594,7 +32606,8 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStep5:not([hidden]) .mcStep5__body{
   flex:1 1 auto;
   min-height:0;
-  overflow:hidden;
+  overflow:auto;
+  -webkit-overflow-scrolling:touch;
   font-size:clamp(16px, 1.55vw, 19px);
   line-height:1.55;
 }
@@ -32608,7 +32621,8 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStep6:not([hidden]) .mcStep6__body{
   flex:1 1 auto;
   min-height:0;
-  overflow:hidden;
+  overflow:auto;
+  -webkit-overflow-scrolling:touch;
   display:flex;
   flex-direction:column;
   font-size:clamp(16px, 1.55vw, 19px);
@@ -32648,20 +32662,22 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
   gap:8px;
 }
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStepVerify:not([hidden]) .mcStepVerify__script{
-  font-size:clamp(18px, 2vw, 22px);
-  line-height:1.45;
+  font-size:clamp(16px, 1.7vw, 20px);
+  line-height:1.55;
   font-weight:800;
   color:#0a1638;
   letter-spacing:0;
+  white-space:normal;
+  overflow:visible;
 }
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStepVerify__tabs{
   flex:0 0 auto;
   margin:0 0 2px;
 }
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStepVerify__insuredCard.is-active{
-  flex:0 1 auto;
+  flex:0 0 auto;
   min-height:0;
-  overflow:hidden;
+  overflow:visible;
 }
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStepVerify__insuredHead{
   margin:0 0 8px;
@@ -33466,6 +33482,7 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
   -webkit-backdrop-filter:blur(12px);
   box-sizing:border-box;
 }
+.mcOpeningConsent[hidden]{display:none !important;}
 .mcOpeningConsent__hint{font-size:clamp(13px, 1.3vw, 15px);color:rgba(30,58,122,.52);margin-bottom:10px;text-align:right;line-height:1.4;font-weight:600;}
 .mcOpeningConsent__row{display:flex;flex-wrap:wrap;gap:10px;justify-content:flex-start;}
 .mcOpeningConsent__yes{min-width:200px;padding:12px 18px;font-size:14px;font-weight:700;}
@@ -33681,6 +33698,48 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
 }
 .mcPolCard__row{display:flex;flex-direction:column;gap:2px;min-width:0;}
 .mcPolCard__row--wide{grid-column:1 / -1;}
+.mcPolCard__row--cover{
+  flex-direction:row;
+  justify-content:space-between;
+  align-items:baseline;
+  gap:12px;
+  padding:6px 0;
+  border-bottom:1px dashed rgba(30,58,122,.12);
+}
+.mcPolCard__row--cover .mcPolCard__k{
+  font-size:13px;
+  font-weight:700;
+  color:#1e3a7a;
+}
+.mcPolCard__row--cover .mcPolCard__v{
+  font-size:14px;
+  font-weight:800;
+  color:#0a1638;
+  direction:ltr;
+  text-align:left;
+  flex:0 0 auto;
+}
+.mcPolCard__row--total{
+  flex-direction:row;
+  justify-content:space-between;
+  align-items:baseline;
+  gap:12px;
+  margin-top:4px;
+  padding-top:10px;
+  border-top:1px solid rgba(30,58,122,.16);
+}
+.mcPolCard__row--total .mcPolCard__k{
+  font-size:12px;
+  font-weight:800;
+  color:#0a1638;
+}
+.mcPolCard__row--total .mcPolCard__v{
+  font-size:16px;
+  font-weight:900;
+  color:#0a1638;
+  direction:ltr;
+  text-align:left;
+}
 .mcPolCard__k{font-size:11px;font-weight:700;color:rgba(30,58,122,.48);}
 .mcPolCard__v{font-size:14px;font-weight:800;color:#0a1638;line-height:1.35;word-break:break-word;}
 @media (max-width:720px){
@@ -34418,11 +34477,13 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
 .mcStepVerify__scriptLabel{display:none;}
 .mcStepVerify__script{
   margin:0;
-  font-size:clamp(18px, 2.1vw, 24px);
+  font-size:clamp(16px, 1.85vw, 21px);
   font-weight:800;
-  line-height:1.45;
+  line-height:1.55;
   color:#0a1638;
   letter-spacing:0;
+  white-space:normal;
+  overflow:visible;
 }
 .mcStepVerify__body{padding:0 8px 6px;font-size:15px;line-height:1.5;color:#0f1f4a;}
 .mcStepVerify__tabs{
@@ -34466,10 +34527,9 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
   font-size:12px;
   font-weight:650;
   color:rgba(15,23,42,.62);
-  max-width:180px;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  white-space:nowrap;
+  max-width:none;
+  overflow:visible;
+  white-space:normal;
 }
 .mcStepVerify__tab.is-active .mcStepVerify__tabName{color:#2a5cf5;}
 .mcStepVerify__actions{padding:10px 8px 12px;display:flex;justify-content:flex-start;}
@@ -34610,6 +34670,8 @@ select.mcStepVerify__input{
   font-weight:800;
   flex:1;
   min-width:0;
+  overflow:visible;
+  white-space:normal;
 }
 .mcStepVerify__insuredBody{margin:0;padding:0;}
 .mcStepVerify__insuredBody[hidden]{display:none !important;}
@@ -34739,7 +34801,7 @@ body.view-mirrorAssignments-active .content{
   .mcWorkstation--callLive > .mcSessionPanel .mcCall__customerPill{
     max-width:100%;
   }
-  .mcWorkstation--callLive.mcWorkstation--dockOpen .mcOpeningConsent{
+  .mcWorkstation--callLive.mcWorkstation--dockOpen .mcOpeningConsent:not([hidden]){
     flex-direction:column;
     align-items:stretch;
   }
