@@ -26980,6 +26980,7 @@ UsersGateUI.init();
         this._todaySalesServerOverlay = null;
         this._dailyAgentsCacheKey = "";
         this._dailyAgentsCache = null;
+        this._dailySalesByAgentOverlay = null;
         return;
       }
       const force = options.force === true;
@@ -28261,6 +28262,7 @@ UsersGateUI.init();
       this._dailySalesReportDateKey = next;
       this._dailyAgentsCacheKey = "";
       this._dailyAgentsCache = null;
+      this._dailySalesByAgentOverlay = null;
       return next;
     },
 
@@ -28529,10 +28531,12 @@ UsersGateUI.init();
       } catch(_e) { return []; }
     },
 
-    _bumpDailySalesGroup(map, agentName, sector, product, company, premium){
+    _bumpDailySalesGroup(map, agentName, sector, product, company, premium, deals = 1){
       const agent = safeTrim(agentName) || "נציג";
       const sec = safeTrim(sector) || "אחר";
       const key = agent + "\u0000" + sec;
+      const dealCount = Number(deals);
+      const addDeals = Number.isFinite(dealCount) && dealCount > 0 ? dealCount : 1;
       if(!map[key]){
         map[key] = {
           agentName: agent,
@@ -28545,11 +28549,104 @@ UsersGateUI.init();
       }
       const g = map[key];
       g.premium += Number(premium) || 0;
-      g.deals += 1;
+      g.deals += addDeals;
       const prodName = safeTrim(product) || "—";
-      g.products.set(prodName, (g.products.get(prodName) || 0) + 1);
+      g.products.set(prodName, (g.products.get(prodName) || 0) + addDeals);
       const compName = safeTrim(company);
       if(compName && compName !== "—") g.companies.set(compName, (g.companies.get(compName) || 0) + 1);
+    },
+
+    _finalizeDailySalesGroups(groupMap){
+      return Object.values(groupMap)
+        .map((g) => ({
+          agentName: g.agentName,
+          sector: g.sector,
+          sectorSlug: this.dailySalesSectorSlug(g.sector),
+          products: Array.from(g.products.entries())
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count || safeTrim(a.name).localeCompare(safeTrim(b.name), "he")),
+          companies: Array.from(g.companies.keys())
+            .sort((a, b) => safeTrim(a).localeCompare(safeTrim(b), "he")),
+          premium: Math.round(g.premium * 100) / 100,
+          deals: Number(g.deals) || 0
+        }))
+        .sort((a, b) =>
+          safeTrim(a.agentName).localeCompare(safeTrim(b.agentName), "he")
+          || (Number(b.premium) - Number(a.premium))
+          || safeTrim(a.sector).localeCompare(safeTrim(b.sector), "he")
+        );
+    },
+
+    _dailySalesHealthSectorSet(){
+      return new Set(["בריאות", "סיכונים", "אחר"]);
+    },
+
+    /* אותו מקור כמו כרטיס «כמה נמכר» בדשבורד — לפי נציג. לא משנה חישוב פרמיה. */
+    ensureDailySalesServerOverlay(){
+      if(this._dailySalesByAgentBusy) return;
+      if(typeof Storage === "undefined" || typeof Storage.loadDailySalesByAgent !== "function") return;
+      const dateKey = this.getDailySalesReportDateKey();
+      const range = this.getTodayRange(this.parseLocalDateKey(dateKey));
+      const ageMs = Date.now() - (Number(this._dailySalesByAgentOverlay?.at) || 0);
+      const cachedOk = this._dailySalesByAgentOverlay?.ok && this._dailySalesByAgentOverlay?.dateKey === dateKey && ageMs < 45000;
+      const cachedHasRows = Array.isArray(this._dailySalesByAgentOverlay?.rows) && this._dailySalesByAgentOverlay.rows.length > 0;
+      if(cachedOk && (cachedHasRows || App?._fullDataReady)) return;
+      this._dailySalesByAgentBusy = true;
+      void (async () => {
+        try {
+          const res = await Storage.loadDailySalesByAgent(range);
+          if(!res?.ok){
+            try { console.warn("[GI-DAILY-SALES] agent overlay:", res?.error); } catch(_e) {}
+            return;
+          }
+          const rows = Array.isArray(res.rows) ? res.rows.slice() : [];
+          const prev = this._dailySalesByAgentOverlay;
+          const next = { ok: true, dateKey, at: Date.now(), rows };
+          const changed = !prev || prev.dateKey !== next.dateKey
+            || (Array.isArray(prev.rows) ? prev.rows.length : 0) !== rows.length
+            || Number(prev.rows?.reduce?.((s, r) => s + (Number(r.premium) || 0), 0)) !== Number(rows.reduce((s, r) => s + (Number(r.premium) || 0), 0));
+          this._dailySalesByAgentOverlay = next;
+          if(!changed) return;
+          this._dailyAgentsCacheKey = "";
+          this._dailyAgentsCache = null;
+          if(typeof LiveRefresh !== "undefined" && LiveRefresh.getCurrentView?.() === "dailySales"){
+            try { this.renderDailySalesPage(); } catch(_e) {}
+          }
+        } catch(err) {
+          try { console.warn("[GI-DAILY-SALES] agent overlay failed", err); } catch(_e) {}
+        } finally {
+          this._dailySalesByAgentBusy = false;
+        }
+      })();
+    },
+
+    _applyDailySalesServerHealthPrat(groups, dateKey){
+      const overlay = this._dailySalesByAgentOverlay;
+      const rows = (overlay?.ok && overlay.dateKey === dateKey && Array.isArray(overlay.rows)) ? overlay.rows : [];
+      if(!rows.length) return Array.isArray(groups) ? groups : [];
+      const healthSet = this._dailySalesHealthSectorSet();
+      const list = Array.isArray(groups) ? groups : [];
+      const localHealth = list.filter((g) => healthSet.has(safeTrim(g?.sector)));
+      const localDeals = localHealth.reduce((sum, g) => sum + (Number(g.deals) || 0), 0);
+      const localPrem = localHealth.reduce((sum, g) => sum + (Number(g.premium) || 0), 0);
+      const serverDeals = rows.reduce((sum, r) => sum + (Number(r.policies) || 0), 0);
+      const serverPrem = rows.reduce((sum, r) => sum + (Number(r.premium) || 0), 0);
+      if(!(serverDeals > localDeals || ((serverPrem - localPrem) > 0.009))) return list;
+      const kept = list.filter((g) => !healthSet.has(safeTrim(g?.sector)));
+      const map = Object.create(null);
+      rows.forEach((row) => {
+        const product = safeTrim(row?.product) || "פוליסה";
+        this._bumpDailySalesGroup(
+          map,
+          row?.agent_name,
+          this.resolveDailySalesSector(product, "אחר"),
+          product,
+          row?.company,
+          row?.premium,
+          row?.policies
+        );
+      });
+      return this._finalizeDailySalesGroups(map).concat(kept);
     },
 
     buildDailyAgentSalesReport(forDate){
@@ -28558,15 +28655,22 @@ UsersGateUI.init();
       const dayRange = this.getTodayRange(ref);
       const customers = this.getVisibleCustomers();
       const missingPayloads = this._countMissingCustomerPayloadsSafe();
+      try { this.ensureDailySalesServerOverlay(); } catch(_e) {}
+      const overlay = this._dailySalesByAgentOverlay;
+      const overlayFp = (overlay?.ok && overlay.dateKey === dateKey)
+        ? String((overlay.rows || []).length) + ":" + String(Math.round((overlay.rows || []).reduce((s, r) => s + (Number(r.premium) || 0), 0) * 100))
+        : "0";
       const cacheKey = [
         this.getMetricsCacheKey(),
         "dailyAgents",
         "alignTodayKpi",
         "groupedSectorsV3",
+        "agentRpc1",
         "noPartialCache",
         dateKey,
         String(customers.length),
         String(missingPayloads),
+        overlayFp,
         App?._fullDataReady ? "1" : "0"
       ].join("|");
       if(this._dailyAgentsCacheKey === cacheKey && this._dailyAgentsCache){
@@ -28611,24 +28715,7 @@ UsersGateUI.init();
         });
       });
 
-      const groups = Object.values(groupMap)
-        .map((g) => ({
-          agentName: g.agentName,
-          sector: g.sector,
-          sectorSlug: this.dailySalesSectorSlug(g.sector),
-          products: Array.from(g.products.entries())
-            .map(([name, count]) => ({ name, count }))
-            .sort((a, b) => b.count - a.count || safeTrim(a.name).localeCompare(safeTrim(b.name), "he")),
-          companies: Array.from(g.companies.keys())
-            .sort((a, b) => safeTrim(a).localeCompare(safeTrim(b), "he")),
-          premium: Math.round(g.premium * 100) / 100,
-          deals: Number(g.deals) || 0
-        }))
-        .sort((a, b) =>
-          safeTrim(a.agentName).localeCompare(safeTrim(b.agentName), "he")
-          || (Number(b.premium) - Number(a.premium))
-          || safeTrim(a.sector).localeCompare(safeTrim(b.sector), "he")
-        );
+      let groups = this._applyDailySalesServerHealthPrat(this._finalizeDailySalesGroups(groupMap), dateKey);
       const groupTotalPremium = Math.round(groups.reduce((sum, g) => sum + g.premium, 0) * 100) / 100;
       const groupDealCount = groups.reduce((sum, g) => sum + g.deals, 0);
       const groupAgentCount = new Set(groups.map((g) => g.agentName)).size;
@@ -28666,7 +28753,9 @@ UsersGateUI.init();
       };
       // לא לקבע מטמון חלקי: תיקים בלי payload עדיין חסרים מהספירה
       if(missingPayloads > 0){
-        return result;
+        if(!(overlay?.ok && overlay.dateKey === dateKey && overlay.rows?.length)){
+          return result;
+        }
       }
       if(App?._fullDataReady || agents.length || groups.length || customers.length){
         this._dailyAgentsCacheKey = cacheKey;
@@ -29335,6 +29424,7 @@ UsersGateUI.init();
       if(!this.canSeeDailySalesReport()) return;
       this._ensureDailySalesPageBound();
       try { this._scheduleMidnightReset(); } catch(_e) {}
+      try { this.ensureDailySalesServerOverlay(); } catch(_e) {}
       const report = this.buildDailyAgentSalesReport();
       const tab = this.getDailySalesSelectedSectorTab();
       const printView = this.dailySalesIsPrintViewTab(tab);
@@ -44129,6 +44219,26 @@ const ClalRiskLifePdf = {
       };
     } catch(err) {
       return { ok:false, error: String(err?.message || err) };
+    }
+  };
+
+  Storage.loadDailySalesByAgent = async function(range){
+    if(!range?.start || !range?.end) return { ok:false, error:"BAD_RANGE", rows: [] };
+    const scope = (typeof getServerListAgentScopeFilter === "function")
+      ? getServerListAgentScopeFilter() : null;
+    const args = {
+      p_start: new Date(range.start).toISOString(),
+      p_end:   new Date(range.end).toISOString(),
+      p_agent_ids:   scope?.ids?.length   ? scope.ids   : null,
+      p_agent_names: scope?.names?.length ? scope.names : null
+    };
+    try {
+      const client = this.getClient();
+      const res = await client.rpc("gi_daily_sales_by_agent", args);
+      if(res.error) throw res.error;
+      return { ok: true, rows: Array.isArray(res.data) ? res.data : [] };
+    } catch(err) {
+      return { ok:false, error: String(err?.message || err), rows: [] };
     }
   };
 
