@@ -30887,7 +30887,9 @@ UsersGateUI.init();
       void (async () => {
         try {
           const range = this.getMonthToDateRange();
-          const res = await Storage.loadServerKpis(range, { includeAppt: true, skipExtras: true });
+          const res = (typeof Storage.loadAgentAppointmentKpis === "function")
+            ? await Storage.loadAgentAppointmentKpis(range)
+            : await Storage.loadServerKpis(range, { includeAppt: true, skipExtras: true });
           if(!res?.ok){
             try {
               if(!this._shouldDeferLocalMetricsToServer()) this._fillAppointmentFromLocalCustomers();
@@ -31795,11 +31797,11 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260817-quiet-ui-v1",
+    "./simulators-center.css?v=20260818-sim-no-steps-v1",
     "./simulators-shell.css?v=20260817-quiet-ui-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
-    const ver = "20260817-quiet-ui-v1";
+    const ver = "20260818-sim-no-steps-v1";
     const prev = document.documentElement.dataset.giSimCssVer || "";
     document.documentElement.dataset.giSimCss = "1";
     document.documentElement.dataset.giSimCssVer = ver;
@@ -32563,34 +32565,17 @@ UsersGateUI.init();
       }));
     },
 
-    /* מחוון שני השלבים — כדי שהנציג ידע שאחרי הפרטים מגיעה בחירת חברה ומוצר. */
-    _stepsHtml(active){
-      const onPicker = active === 2;
-      return `
-              <div class="lcSimCenterSteps">
-                <span class="lcSimCenterSteps__item${onPicker ? " is-done" : " is-active"}">
-                  <span class="lcSimCenterSteps__dot">${onPicker ? "✓" : "1"}</span>
-                  <span class="lcSimCenterSteps__txt">פרטי המבוטח</span>
-                </span>
-                <span class="lcSimCenterSteps__bar${onPicker ? " is-done" : ""}"></span>
-                <span class="lcSimCenterSteps__item${onPicker ? " is-active" : ""}">
-                  <span class="lcSimCenterSteps__dot">2</span>
-                  <span class="lcSimCenterSteps__txt">חברה ומוצר</span>
-                </span>
-              </div>`;
-    },
-
-    _headHtml(sub, step){
-      const below = (step === 1 || step === 2)
-        ? this._stepsHtml(step)
-        : `<div class="giValModal__sub lcSimCenterModal__sub">${escapeHtml(sub)}</div>`;
+    _headHtml(sub){
+      const subHtml = safeTrim(sub)
+        ? `<div class="giValModal__sub lcSimCenterModal__sub">${escapeHtml(sub)}</div>`
+        : "";
       return `
           <div class="giValModal__head lcSimCenterModal__head">
             <button type="button" class="lcSimCenterModal__closeX" data-simc-close="1" aria-label="סגירה">✕</button>
             <img class="lcSimCenterModal__brandLogo" src="./logo-login-clean.png?v=20260810-sim-fix-v2" alt="GEMEL INVEST" width="1808" height="373" decoding="async" />
             <div class="giValModal__headText">
               <div class="giValModal__title lcSimCenterModal__title">מרכז הסימולטורים</div>
-              ${below}
+              ${subHtml}
             </div>
           </div>`;
     },
@@ -32802,7 +32787,7 @@ UsersGateUI.init();
       modal.innerHTML = `
         <div class="giValModal__backdrop" data-simc-close="1"></div>
         <div class="giValModal__card lcSimCenterModal__card">
-          ${this._headHtml("", 1)}
+          ${this._headHtml("")}
           <div class="giValModal__body lcSimCenterModal__body">
             ${this._tabsHtml()}
             <form class="lcSimCenterBlock" data-simc-details-form="1" novalidate>
@@ -33013,7 +32998,7 @@ UsersGateUI.init();
       modal.innerHTML = `
         <div class="giValModal__backdrop" data-simc-close="1"></div>
         <div class="giValModal__card lcSimCenterModal__card">
-          ${this._headHtml("", 2)}
+          ${this._headHtml("")}
           <div class="giValModal__body lcSimCenterModal__body">
             ${this._tabsHtml()}
             ${this._detailsSummaryHtml()}
@@ -44395,6 +44380,36 @@ const ClalRiskLifePdf = {
       };
     } catch(err) {
       return { ok:false, error: String(err?.message || err) };
+    }
+  };
+
+  Storage.loadAgentAppointmentKpis = async function(range){
+    if(!range?.start || !range?.end) return { ok:false, error:"BAD_RANGE" };
+    const scope = (typeof getServerListAgentScopeFilter === "function")
+      ? getServerListAgentScopeFilter() : null;
+    const args = {
+      p_start: new Date(range.start).toISOString(),
+      p_end:   new Date(range.end).toISOString(),
+      p_agent_ids:   scope?.ids?.length   ? scope.ids   : null,
+      p_agent_names: scope?.names?.length ? scope.names : null
+    };
+    try {
+      const client = this.getClient();
+      const appt = await client.rpc("gi_dashboard_agent_appointment", args);
+      if(appt.error){
+        try { console.warn("[GI-SERVER-KPI] agent_appointment:", appt.error); } catch(_e) {}
+        return { ok:false, error: String(appt.error?.message || appt.error), apptFetched: false };
+      }
+      const a = Array.isArray(appt.data) ? (appt.data[0] || {}) : (appt.data || {});
+      return {
+        ok: true,
+        apptFetched: true,
+        apptPremium: Number(a.appt_premium) || 0,
+        apptPolicies: Number(a.appt_policies) || 0
+      };
+    } catch(err) {
+      try { console.warn("[GI-SERVER-KPI] agent_appointment:", err); } catch(_e) {}
+      return { ok:false, error: String(err?.message || err), apptFetched: false };
     }
   };
 

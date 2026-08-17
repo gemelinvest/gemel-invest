@@ -81,7 +81,7 @@
 }
 .lcSimCenterModal .giValModal__head,
 .lcSimCenterModal__head{
-  padding:16px 22px 14px !important;
+  padding:14px 22px 12px !important;
   position:relative;
   flex:0 0 auto;
   background:linear-gradient(180deg,#FBFCFF 0%,#FFFFFF 100%) !important;
@@ -90,7 +90,7 @@
   flex-direction:column !important;
   align-items:center !important;
   text-align:center !important;
-  gap:4px;
+  gap:2px;
 }
 .lcSimCenterModal .giValModal__headIcon{ display:none !important; }
 .lcSimCenterModal .giValModal__headText{
@@ -98,7 +98,7 @@
   display:flex;
   flex-direction:column;
   align-items:center;
-  gap:4px;
+  gap:2px;
   padding-inline:56px;
   box-sizing:border-box;
 }
@@ -112,50 +112,6 @@
   text-align:center;
 }
 
-/* מחוון השלבים מתחת לכותרת: פרטי המבוטח → חברה ומוצר */
-.lcSimCenterSteps{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  direction:rtl;
-  margin-top:7px;
-}
-.lcSimCenterSteps__item{
-  display:inline-flex;
-  align-items:center;
-  gap:7px;
-}
-.lcSimCenterSteps__dot{
-  width:21px;
-  height:21px;
-  border-radius:50%;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  background:#E7EDF9;
-  color:#93A2B8;
-  font-size:11px;
-  font-weight:800;
-  line-height:1;
-}
-.lcSimCenterSteps__txt{
-  font-size:11.5px;
-  font-weight:700;
-  color:#93A2B8;
-  white-space:nowrap;
-}
-.lcSimCenterSteps__item.is-active .lcSimCenterSteps__dot{ background:#2563EB; color:#fff; }
-.lcSimCenterSteps__item.is-active .lcSimCenterSteps__txt{ color:#0B1F4B; }
-.lcSimCenterSteps__item.is-done .lcSimCenterSteps__dot{ background:#DBEAFE; color:#2563EB; }
-.lcSimCenterSteps__item.is-done .lcSimCenterSteps__txt{ color:#2563EB; }
-.lcSimCenterSteps__bar{
-  width:44px;
-  height:2px;
-  margin:0 10px;
-  border-radius:2px;
-  background:#E7EDF9;
-}
-.lcSimCenterSteps__bar.is-done{ background:#93BBF7; }
 .lcSimCenterModal .giValModal__sub,
 .lcSimCenterModal__sub{
   color:#7B8BA5 !important;
@@ -967,8 +923,6 @@
   .lcSimCenterModal__cancel,
   .lcSimCenterModal__ghost{ padding:0 13px !important; font-size:13.5px !important; }
   .lcSimCenterModal__hint{ display:none; }
-  .lcSimCenterSteps__txt{ font-size:11px; }
-  .lcSimCenterSteps__bar{ width:26px; margin:0 7px; }
   .lcSimCenterTiles{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
   .lcSimSavedRow{ flex-wrap:wrap; }
   .lcSimSavedRow__main{ flex:1 1 100%; }
@@ -1052,32 +1006,6 @@
   border-top:1px solid #d8dee6 !important;
   gap:8px;
 }
-
-.lcSimCenterSteps__dot{
-  width:18px;
-  height:18px;
-  border-radius:0;
-  background:#fff;
-  border:1px solid #d8dee6;
-  color:#5c6b7a;
-  font-weight:600;
-  font-size:11px;
-}
-.lcSimCenterSteps__txt{ color:#5c6b7a; font-weight:500; }
-.lcSimCenterSteps__item.is-active .lcSimCenterSteps__dot{
-  background:#1e3a5f;
-  border-color:#1e3a5f;
-  color:#fff;
-}
-.lcSimCenterSteps__item.is-active .lcSimCenterSteps__txt{ color:#1e3a5f; font-weight:700; }
-.lcSimCenterSteps__item.is-done .lcSimCenterSteps__dot{
-  background:#fff;
-  border-color:#1e3a5f;
-  color:#1e3a5f;
-}
-.lcSimCenterSteps__item.is-done .lcSimCenterSteps__txt{ color:#1e3a5f; }
-.lcSimCenterSteps__bar{ border-radius:0; background:#eceff3; }
-.lcSimCenterSteps__bar.is-done{ background:#1e3a5f; }
 
 .lcSimCenterModal .giValModal__closeBtn,
 .lcSimCenterModal__cancel,
