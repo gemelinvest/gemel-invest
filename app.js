@@ -54437,12 +54437,34 @@ ${inner}
       }
     },
 
+    _mcSearchRecencyMs(rec){
+      const t = Date.parse(safeTrim(rec?.updatedAt || rec?.updated_at || rec?.createdAt || rec?.created_at) || "");
+      return Number.isFinite(t) ? t : 0;
+    },
+
+    _mcCustomerHasHealthRiskPolicies(rec){
+      if(!rec) return false;
+      const payload = rec.payload && typeof rec.payload === "object" ? rec.payload : {};
+      const hasNew = (Number(rec.newPoliciesCount || rec.new_policies_count || 0) > 0)
+        || (Array.isArray(payload.newPolicies) && payload.newPolicies.length > 0)
+        || (Array.isArray(payload?.operational?.newPolicies) && payload.operational.newPolicies.length > 0);
+      if(hasNew) return true;
+      try{
+        if(typeof isHealthRisksWizardCompleted === "function" && isHealthRisksWizardCompleted(rec)) return true;
+      }catch(_e){}
+      if(safeTrim(payload.flowType) === "elementary" || safeTrim(payload.elementaryProduct)) return false;
+      const hasExisting = (Number(rec.existingPoliciesCount || rec.existing_policies_count || 0) > 0)
+        || (Array.isArray(payload.insureds) && payload.insureds.some((ins) => Array.isArray(ins?.data?.existingPolicies) && ins.data.existingPolicies.length));
+      return !!hasExisting;
+    },
+
     search(){
       const q = safeTrim(this.els.searchInput?.value || "");
       const customers = State.data?.customers || [];
       const agentOnly = !!Auth.isOpsAgent?.();
       if(agentOnly && this.filter !== "assignedToMe") this.filter = "assignedToMe";
       const results = customers.filter(c => {
+        if(!this._mcCustomerHasHealthRiskPolicies(c)) return false;
         const name  = safeTrim(c.fullName).toLowerCase();
         const idNum = safeTrim(c.idNumber);
         const phone = safeTrim(c.phone);
@@ -54459,23 +54481,29 @@ ${inner}
           return proposals.some(p => safeTrim(p.customerId) === safeTrim(c.id));
         }
         return true;
-      }).slice(0, 30);
-      this.renderResults(results);
+      }).sort((a, b) => this._mcSearchRecencyMs(b) - this._mcSearchRecencyMs(a));
+      const preview = !q;
+      this.renderResults(preview ? results.slice(0, 5) : results.slice(0, 30), { preview });
       this._syncAssignHint();
       this._syncMgrRow();
     },
 
-    renderResults(list){
+    renderResults(list, opts = {}){
       if(!this.els.results || !this.els.resultsLabel) return;
       if(this.els.selectBtn) this.els.selectBtn.hidden = true;
       this.selectedCustomer = null;
+      const preview = opts.preview === true;
       if(!list.length){
-        this.els.resultsLabel.textContent = "לא נמצאו לקוחות";
-        this.els.results.innerHTML = '<div class="mcSearch__empty">לא נמצאו לקוחות תואמים</div>';
+        this.els.resultsLabel.textContent = preview ? "אין לקוחות אחרונים להצגה" : "לא נמצאו לקוחות";
+        this.els.results.innerHTML = preview
+          ? '<div class="mcSearch__empty">מוצגים רק לקוחות עם פוליסות בריאות וסיכונים. הקלד שם, ת״ז או טלפון לחיפוש.</div>'
+          : '<div class="mcSearch__empty">לא נמצאו לקוחות תואמים עם פוליסות בריאות וסיכונים</div>';
         this._syncMgrRow();
         return;
       }
-      this.els.resultsLabel.textContent = list.length + " לקוחות נמצאו";
+      this.els.resultsLabel.textContent = preview
+        ? (list.length + " לקוחות אחרונים")
+        : (list.length + " לקוחות נמצאו");
       const colors = ["blue","teal","purple","coral"];
       const proposals = State.data?.proposals || [];
       this.els.results.innerHTML = list.map((c, i) => {
