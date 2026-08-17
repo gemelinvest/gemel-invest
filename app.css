@@ -41587,6 +41587,26 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   border-color: #5f8fdc;
 }
 .cfFileActionBtn--purchase:active{ background: #5584d0; border-color: #5584d0; }
+.cfFileActionBtn--reschedule{
+  color: #1e3a7a;
+  border-color: rgba(42,92,245,.28);
+  background: #eaf2ff;
+}
+.cfFileActionBtn--reschedule:hover{
+  background: #d8e8ff;
+  border-color: #2a5cf5;
+  color: #071540;
+}
+.cfPoliciesRescheduleBar{
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  justify-content: flex-start;
+  padding: 10px 12px 12px;
+  margin: 0 0 8px;
+  background: linear-gradient(180deg, #f8fbff 70%, rgba(248,251,255,0));
+}
 .cfFileActionBtn--edit{
   color: #111827;
   border-color: rgba(15,23,42,.16);
@@ -45767,16 +45787,32 @@ body.lcAuthLock .lcLogin__footBtn{
 /* GI-MIRROR-BLUE 2026-08-17 — כחול התפריט הצדדי במסכי שיקוף. תצוגה בלבד. */
 .mcWorkstation::before{
   background:
-    radial-gradient(120% 90% at 0% 0%, rgba(216,232,255,.92), transparent 54%),
-    radial-gradient(90% 70% at 100% 100%, rgba(210,228,255,.55), transparent 52%),
-    linear-gradient(180deg, var(--sideA), var(--sideB));
+    radial-gradient(120% 90% at 0% 0%, #d8e8ff, transparent 54%),
+    radial-gradient(90% 70% at 100% 100%, #e6f0ff, transparent 52%),
+    linear-gradient(180deg, var(--sideA), #eef4ff);
+}
+.mcWorkstation--callPhase:not(.mcWorkstation--callLive):not(.mcWorkstation--mirrorDecline):not(.mcWorkstation--preFlightComplete) .mcSessionPanel{
+  visibility:hidden !important;
+  pointer-events:none !important;
+}
+.mcPreFlightModal{
+  isolation:isolate;
+  background:#eaf1fb;
+}
+.mcPreFlightModal__backdrop{
+  background:rgba(15,32,74,.22);
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
 }
 .mcPreFlightModal__sheet{
-  background: linear-gradient(180deg, #f3f8ff 0%, #ffffff 38%);
-  border: 1px solid rgba(11,31,74,.16);
+  background:#ffffff;
+  border:1px solid rgba(11,31,74,.16);
+  overflow-x:hidden;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
 }
 .mcPreFlightItem__btn{
-  background: linear-gradient(180deg, #ffffff, rgba(216,232,255,.45));
+  background:#ffffff;
 }
 .mcPreFlightItem.is-open .mcPreFlightItem__btn{
   border-color: var(--brandC);
@@ -45789,7 +45825,7 @@ body.lcAuthLock .lcLogin__footBtn{
   border:1px solid rgba(42,92,245,.16);
   border-top:none;
   border-radius:0 0 14px 14px;
-  background: linear-gradient(180deg, rgba(216,232,255,.35), #fff);
+  background:#f7faff;
 }
 .mcPreFlightItem.is-open .mcPreFlightItem__detail{display:block;}
 .mcPreFlightItem__detailAct{margin-top:12px;}
@@ -45832,7 +45868,7 @@ body.lcAuthLock .lcLogin__footBtn{
 .mcStepHealthDecl,
 .mcStepPay,
 .mcStepInsStart{
-  background: linear-gradient(180deg, rgba(216,232,255,.42), rgba(255,255,255,.92));
+  background: linear-gradient(180deg, #eaf2ff, #ffffff);
   border-color: rgba(11,31,74,.14);
 }
 .mcCallScript__ribbon,
@@ -45847,18 +45883,48 @@ body.lcAuthLock .lcLogin__footBtn{
   background: linear-gradient(90deg, var(--brandA), var(--brandB), var(--brandC));
 }
 .mcNeedsScript--readAloud{
-  background: linear-gradient(135deg, var(--sideA), rgba(255,255,255,.94));
+  background: linear-gradient(135deg, var(--sideA), #ffffff);
   border-color: rgba(42,92,245,.30);
 }
 .mcPolCard{
   border-inline-start: 4px solid var(--brandC);
-  background: linear-gradient(180deg, #ffffff, rgba(216,232,255,.28));
+  background:#ffffff;
 }
 .mcDiscCard{
   border-inline-start: 4px solid var(--brandC);
-  background: linear-gradient(180deg, #ffffff, rgba(216,232,255,.22));
+  background:#ffffff;
 }
-.mcSessionPanel,
-.mcDiscoveryPanel{
-  background: linear-gradient(180deg, rgba(216,232,255,.38), rgba(255,255,255,.28));
+
+/* GI-MIRROR-RESCHEDULE 2026-08-17 — לחצן תזמון חדש לשיקוף, בלי חיבור עדיין */
+.mcRescheduleBar{
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: flex;
+  justify-content: flex-start;
+  padding: 0 0 4px;
+  background: linear-gradient(180deg, #eaf2ff 65%, rgba(234,242,255,0));
+}
+.mcRescheduleBtn{
+  appearance: none;
+  border: 1px solid rgba(42,92,245,.28);
+  background: #ffffff;
+  color: #1e3a7a;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(11,31,74,.06);
+}
+.mcRescheduleBtn:hover{
+  border-color: #2a5cf5;
+  background: #eaf2ff;
+  color: #071540;
+}
+.mcRescheduleBtn--dock{
+  min-width: 210px;
 }

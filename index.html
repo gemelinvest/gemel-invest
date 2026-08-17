@@ -8,7 +8,7 @@
 <meta content="#f8fafc" name="theme-color"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20260817-mirror-blue-ui-v1" rel="stylesheet"/>
+<link href="./app.css?v=20260817-newpol-file-parity-v1" rel="stylesheet"/>
 <link href="./theme.css?v=20260817-leads-track-v1" rel="stylesheet"/>
 <link href="./theme-p2.css?v=20260805-workdays-goal-v1" rel="stylesheet"/>
 <link href="./login-split.css?v=20260814-face-ui-v1" rel="stylesheet"/>
@@ -1631,6 +1631,9 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
   </div>
 
   <div class="mcFlowDock" id="mcFlowDock" hidden dir="rtl" aria-label="נוסחים ושלבי שיחה">
+    <div class="mcRescheduleBar" id="mcRescheduleBar">
+      <button class="mcRescheduleBtn mcRescheduleBtn--dock" id="mcRescheduleMirrorDockBtn" type="button" data-mc-reschedule-mirror="1">תזמון חדש לשיקוף</button>
+    </div>
     <section class="mcCallScript" id="mcCallScriptWrap" hidden tabindex="-1" aria-label="הצגה עצמית להקראה בשיחה מוקלטת">
       <div class="mcCallScript__ribbon" aria-hidden="true"></div>
       <div class="mcCallScript__kicker" id="mcCallScriptKicker">שלב 1 · הצגה עצמית</div>
@@ -2524,6 +2527,12 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
           <span class="cfFileActionBtn__label">עדכון נתונים</span>
           <span class="cfFileActionBtn__icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          </span>
+        </button>
+        <button class="cfFileActionBtn cfFileActionBtn--reschedule" id="customerFullRescheduleMirrorBtn" type="button" data-cf-reschedule-mirror="1">
+          <span class="cfFileActionBtn__label">תזמון חדש לשיקוף</span>
+          <span class="cfFileActionBtn__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
           </span>
         </button>
         <button class="cfFileActionBtn cfFileActionBtn--purchase" id="customerFullNewPurchaseBtn" type="button">
@@ -3838,7 +3847,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 </div>
 
 <script src="./contacts-directory-seed.js?v=20260811-contacts-v1"></script>
-<script src="./app.js?v=20260817-mirror-blue-ui-v1"></script>
+<script src="./app.js?v=20260817-newpol-file-parity-v1"></script>
 <script src="./gi-face-auth.js?v=20260816-face-ok-v1"></script>
 
 

@@ -16391,6 +16391,11 @@ UsersGateUI.init();
         void Wizard.openNewPurchaseForCustomer(rec.id);
       });
       on(this.els.body, "click", (ev) => {
+        const rescheduleBtn = ev.target?.closest?.("[data-cf-reschedule-mirror]");
+        if(rescheduleBtn){
+          ev.preventDefault();
+          return;
+        }
         const tabBtn = ev.target?.closest?.("[data-cf-tab]");
         if(tabBtn){
           ev.preventDefault();
@@ -18858,9 +18863,20 @@ UsersGateUI.init();
         })
       ].filter(Boolean);
       if(!blocks.length){
-        return `<div class="emptyState" style="padding:32px 16px"><div class="emptyState__icon">${premiumCustomerIcon("document")}</div><div class="emptyState__title">עדיין אין מוצרים בתיק</div><div class="emptyState__text">ברגע שתישמר הצעה, המוצרים יוצגו כאן אוטומטית.</div></div>`;
+        return this.renderPoliciesRescheduleBar() + `<div class="emptyState" style="padding:32px 16px"><div class="emptyState__icon">${premiumCustomerIcon("document")}</div><div class="emptyState__title">עדיין אין מוצרים בתיק</div><div class="emptyState__text">ברגע שתישמר הצעה, המוצרים יוצגו כאן אוטומטית.</div></div>`;
       }
-      return blocks.join('');
+      return this.renderPoliciesRescheduleBar() + blocks.join('');
+    },
+
+    renderPoliciesRescheduleBar(){
+      return `<div class="cfPoliciesRescheduleBar">
+        <button class="cfFileActionBtn cfFileActionBtn--reschedule" type="button" data-cf-reschedule-mirror="1">
+          <span class="cfFileActionBtn__label">תזמון חדש לשיקוף</span>
+          <span class="cfFileActionBtn__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
+          </span>
+        </button>
+      </div>`;
     },
 
     getRawNewPolicy(rec, policy){
@@ -55602,6 +55618,10 @@ ${inner}
 
     _onMcFlowDockDelegatedInteract(ev, kind){
       if(kind === "click"){
+        if(ev.target.closest("[data-mc-reschedule-mirror]")){
+          ev.preventDefault();
+          return;
+        }
         const needsAct = ev.target.closest("[data-mc-needs-act]");
         if(needsAct && this.els.flowDock && this.els.flowDock.contains(needsAct)){
           this._handleNeedsAct(needsAct.getAttribute("data-mc-needs-act"));
@@ -56254,7 +56274,7 @@ ${inner}
           if(typeof Wizard.getExistingPolicyCoverageDisplay === "function"){
             const unified = safeTrim(Wizard.getExistingPolicyCoverageDisplay(p));
             if(unified && unified !== "—"){
-              const isComp = type === "מחלות קשות" || type === "סרטן";
+              const isComp = type === "מחלות קשות" || type === "סרטן" || /מחלות קשות|סרטן/.test(type);
               const isHealth = type === "בריאות";
               bits.push({
                 label: isHealth ? "כיסויים שנרכשו" : (isComp ? "סכום פיצוי" : "סכום ביטוח"),
@@ -56265,7 +56285,7 @@ ${inner}
           }
         }
       }catch(_e){}
-      const isComp = type === "מחלות קשות" || type === "סרטן";
+      const isComp = type === "מחלות קשות" || type === "סרטן" || /מחלות קשות|סרטן/.test(type);
       const coverItems = Array.isArray(p?.healthCovers)
         ? p.healthCovers.map((x) => safeTrim(x)).filter(Boolean)
         : (Array.isArray(p?.covers) ? p.covers.map((x) => safeTrim(x)).filter(Boolean) : []);
@@ -57935,6 +57955,38 @@ ${inner}
         `</div>`;
     },
 
+    _mcNewPolicyFileParityRows(rec, p){
+      const rows = [];
+      const seen = new Set();
+      const push = (label, value, kind) => {
+        const k = safeTrim(label);
+        const raw = value == null ? "" : String(value);
+        const plain = safeTrim(raw.replace(/<[^>]+>/g, " "));
+        if(!k || !plain || plain === "—") return;
+        if(seen.has(k)) return;
+        seen.add(k);
+        rows.push({
+          k,
+          v: /</.test(raw) ? raw : escapeHtml(plain),
+          kind: kind || undefined
+        });
+      };
+      try{
+        if(typeof CustomersUI !== "undefined" && CustomersUI && typeof CustomersUI.getHealthCoverRowsForDisplay === "function"){
+          const coverRows = CustomersUI.getHealthCoverRowsForDisplay(rec, p) || [];
+          coverRows.forEach((c) => {
+            const amt = safeTrim(c?.amount);
+            push(safeTrim(c?.label) || "כיסוי", amt ? this._fmtMcMoney(amt) : "נרכש", "cover");
+          });
+        }
+      }catch(_e){}
+      this._mcCoverageBits(p).forEach((b) => {
+        if(/כיסויים/.test(safeTrim(b?.label)) && rows.some((r) => r.kind === "cover")) return;
+        push(b.label, b.value);
+      });
+      return rows;
+    },
+
     _collectNewPolicyCards(rec, opts = {}){
       const withDiscount = opts.withDiscount !== false;
       const premiumMode = opts.premiumMode || "after";
@@ -57956,14 +58008,16 @@ ${inner}
         const after = this._fmtMcMoney(this._mcPremiumAfter(p));
         const schedule = this._mcDiscountScheduleText(p);
         if(opts.simple){
+          const rows = [
+            { k: "שם חברה", v: escapeHtml(company) },
+            { k: "שם מוצר", v: escapeHtml(product) }
+          ];
+          this._mcNewPolicyFileParityRows(rec, p).forEach((r) => rows.push(r));
+          rows.push({ k: "פרמיה חודשית על סך", v: escapeHtml(after) });
           return this._mcPolicyCardHtml({
             badge: getInsuredLabel(p),
             title: "פוליסה מוצעת",
-            rows: [
-              { k: "שם חברה", v: escapeHtml(company) },
-              { k: "שם מוצר", v: escapeHtml(product) },
-              { k: "פרמיה חודשית על סך", v: escapeHtml(after) }
-            ]
+            rows
           });
         }
         const uploadedCovers = this._getMirrorPremiumCoversForPolicy(rec, p);
