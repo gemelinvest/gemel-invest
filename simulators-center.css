@@ -141,12 +141,6 @@
 }
 .lcSimCenterModal .giValModal__foot .btn{ white-space:nowrap; }
 .lcSimCenterModal__spacer{ flex:1 1 auto; }
-.lcSimCenterModal__hint{
-  margin-inline-start:auto;
-  font-size:11.5px;
-  font-weight:650;
-  color:#A3B0C4;
-}
 .lcSimCenterModal .giValModal__closeBtn,
 .lcSimCenterModal__cancel{
   min-width:auto;
@@ -922,7 +916,6 @@
   .lcSimCenterModal__open,
   .lcSimCenterModal__cancel,
   .lcSimCenterModal__ghost{ padding:0 13px !important; font-size:13.5px !important; }
-  .lcSimCenterModal__hint{ display:none; }
   .lcSimCenterTiles{ grid-template-columns:repeat(2, minmax(0, 1fr)); }
   .lcSimSavedRow{ flex-wrap:wrap; }
   .lcSimSavedRow__main{ flex:1 1 100%; }

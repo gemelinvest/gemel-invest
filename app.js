@@ -31797,11 +31797,11 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260818-sim-no-steps-v1",
+    "./simulators-center.css?v=20260818-sim-no-steps-v2",
     "./simulators-shell.css?v=20260817-quiet-ui-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
-    const ver = "20260818-sim-no-steps-v1";
+    const ver = "20260818-sim-no-steps-v2";
     const prev = document.documentElement.dataset.giSimCssVer || "";
     document.documentElement.dataset.giSimCss = "1";
     document.documentElement.dataset.giSimCssVer = ver;
@@ -32835,7 +32835,6 @@ UsersGateUI.init();
           <div class="giValModal__foot lcSimCenterModal__foot">
             <button type="button" class="btn btn--primary lcSimCenterModal__open" data-simc-next="1"${this._detailsReady() ? "" : " disabled"}>המשך לבחירת חברה ומוצר</button>
             <button type="button" class="btn giValModal__closeBtn lcSimCenterModal__cancel" data-simc-close="1">ביטול</button>
-            <span class="lcSimCenterModal__hint">הפרטים ימולאו אוטומטית בכל סימולטור</span>
           </div>
         </div>`;
 
