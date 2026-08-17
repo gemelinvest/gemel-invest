@@ -906,27 +906,8 @@
   /* ===== GI-SIM-DISC 2026-08-17 — הנחות בתוך הסימולטור בלבד ================
      סל נפרד לגמרי ממנוע «עדכון הנחה» של האשף. לא משנה תעריף, לא משנה onApply, לא כותב
      הנחה לפוליסה. רק בחירה במסך הסימולטור + תצוגת פרמיה לאחר הנחה.
-     מופיע גם במרכז הסימולטורים וגם בפתיחה מהאשף, כי ההזרקה רצה אחרי כל _bind. */
-  const GI_SIM_PHX_HEALTH_BASE = ["transplant", "abroad_surgery", "drugs"];
-  const GI_SIM_PHX_HEALTH_SHABAN = ["surgery_shaban", "surgery_shaban_5000"];
-  const GI_SIM_PHX_HEALTH_FIRST = ["surgery_first_shekel"];
-  const GI_SIM_PHX_HEALTH_AMB = ["ambulatory_consults", "fast_diagnosis", "ambulatory_package", "ambulatory_accompany"];
-  const GI_SIM_PHX_HEALTH_RIDERS = ["complementary", "child_dev", "expert_click"];
-
-  function giSimDiscCoverPctMap(ids, pct){
-    const out = {};
-    (ids || []).forEach((id) => { out[id] = pct; });
-    return out;
-  }
-  function giSimDiscMergeCoverPct(){
-    const out = {};
-    for(let i = 0; i < arguments.length; i++){
-      const m = arguments[i];
-      if(!m || typeof m !== "object") continue;
-      Object.keys(m).forEach((k) => { out[k] = m[k]; });
-    }
-    return out;
-  }
+     מופיע גם במרכז הסימולטורים וגם בפתיחה מהאשף, כי ההזרקה רצה אחרי כל _bind.
+     בריאות: האחוז הנבחר חל על כל פרמיית הבריאות. מרפא/סרטן לא נכנסים לכאן. */
   function giSimDiscOpt(id, label, scheduleOrPct, extra){
     const opt = { id: String(id || ""), label: String(label || "") };
     if(Array.isArray(scheduleOrPct)){
@@ -949,30 +930,10 @@
   const GI_SIMULATOR_DISCOUNT_CATALOG = {
     "הפניקס": {
       "בריאות": [
-        giSimDiscOpt("phx-h-per-cover", "לפי כיסוי — 10% רובד בסיס/משלים שב״ן · 15% שקל ראשון/אמבולטורי/כתבי שירות", 0, {
-          mode: "perCover",
-          years: 10,
-          coverPct: giSimDiscMergeCoverPct(
-            giSimDiscCoverPctMap(GI_SIM_PHX_HEALTH_BASE.concat(GI_SIM_PHX_HEALTH_SHABAN), 10),
-            giSimDiscCoverPctMap(GI_SIM_PHX_HEALTH_FIRST.concat(GI_SIM_PHX_HEALTH_AMB, GI_SIM_PHX_HEALTH_RIDERS), 15)
-          )
-        }),
-        giSimDiscOpt("phx-h-10-base-shaban", "10% ל-10 שנים — רובד בסיס + משלים שב״ן", 10, {
-          years: 10,
-          coverIds: GI_SIM_PHX_HEALTH_BASE.concat(GI_SIM_PHX_HEALTH_SHABAN)
-        }),
-        giSimDiscOpt("phx-h-15-first-amb", "15% ל-10 שנים — שקל ראשון + אמבולטורי + כתבי שירות", 15, {
-          years: 10,
-          coverIds: GI_SIM_PHX_HEALTH_FIRST.concat(GI_SIM_PHX_HEALTH_AMB, GI_SIM_PHX_HEALTH_RIDERS)
-        }),
-        giSimDiscOpt("phx-h-20-gemel", "20% ל-10 שנים — משלים שב״ן + שקל ראשון כולל כתבי שירות (גמל INVEST)", 20, {
-          years: 10,
-          coverIds: GI_SIM_PHX_HEALTH_SHABAN.concat(GI_SIM_PHX_HEALTH_FIRST, GI_SIM_PHX_HEALTH_RIDERS)
-        }),
-        giSimDiscOpt("phx-h-10-base-only", "10% ל-10 שנים — בסיס בלבד (גמל INVEST)", 10, {
-          years: 10,
-          coverIds: GI_SIM_PHX_HEALTH_BASE.slice()
-        })
+        giSimDiscOpt("phx-h-10-base-shaban", "10% ל-10 שנים — רובד בסיס + משלים שב״ן", 10, { years: 10 }),
+        giSimDiscOpt("phx-h-15-first-amb", "15% ל-10 שנים — שקל ראשון + אמבולטורי + כתבי שירות", 15, { years: 10 }),
+        giSimDiscOpt("phx-h-20-gemel", "20% ל-10 שנים — משלים שב״ן + שקל ראשון כולל כתבי שירות (גמל INVEST)", 20, { years: 10 }),
+        giSimDiscOpt("phx-h-10-base-only", "10% ל-10 שנים — בסיס בלבד (גמל INVEST)", 10, { years: 10 })
       ],
       "מחלות קשות": [
         giSimDiscOpt("phx-ci-20-age20", "20% ל-10 שנים — בטוח מרפא (עד גיל 20 כולל)", 20, { years: 10 }),
@@ -1052,27 +1013,6 @@
   }
   function giSimDiscountAfterMonthly(result, opt){
     if(!opt || !result || !result.ok) return null;
-    const covers = Array.isArray(result.covers) ? result.covers : [];
-    if(opt.mode === "perCover" && covers.length && opt.coverPct && typeof opt.coverPct === "object"){
-      let afterAg = 0;
-      covers.forEach((c) => {
-        const ag = Math.round((Number(c.monthlyPremium) || 0) * 100);
-        const pct = Number(opt.coverPct[c.id]) || 0;
-        afterAg += pct > 0 ? Math.round(ag * (100 - pct) / 100) : ag;
-      });
-      return afterAg / 100;
-    }
-    if(Array.isArray(opt.coverIds) && opt.coverIds.length && covers.length){
-      const set = {};
-      opt.coverIds.forEach((id) => { set[id] = true; });
-      const pct = giSimDiscountYear1Pct(opt);
-      let afterAg = 0;
-      covers.forEach((c) => {
-        const ag = Math.round((Number(c.monthlyPremium) || 0) * 100);
-        afterAg += set[c.id] && pct > 0 ? Math.round(ag * (100 - pct) / 100) : ag;
-      });
-      return afterAg / 100;
-    }
     const monthly = Number(result.monthlyPremium);
     if(!Number.isFinite(monthly)) return null;
     return giSimMoneyAfterPct(monthly, giSimDiscountYear1Pct(opt));
@@ -1244,6 +1184,9 @@
         origBind();
         try { riskSimBindStandaloneChrome(handler); } catch(_e2) {}
         try { giSimDiscountInstallChrome(handler); } catch(_e3) {}
+        try {
+          if(handler._modal) handler._modal.classList.add("giSimQuiet");
+        } catch(_e4) {}
       };
     }
     handler._giShellEnhanced = true;

@@ -981,3 +981,407 @@
   .lcSimSaveModal .giValModal__closeBtn,
   .lcSimSaveModal .btn--secondary{ padding:0 12px !important; }
 }
+
+/* ===== GI-SIM-UI 2026-08-17 · מרכז הסימולטורים — נראות חברת ביטוח ========
+   אותם אסימונים כמו הסימולטורים: נייבי #1e3a5f, 32px, בלי רדיוס/צל. */
+.lcSimCenterBtn{
+  width:32px !important;
+  height:32px !important;
+  border-radius:0 !important;
+  background:#1e3a5f !important;
+  border:1px solid #1e3a5f !important;
+  box-shadow:none !important;
+  color:#fff !important;
+}
+.lcSimCenterBtn:hover,
+.lcSimCenterBtn:focus-visible{
+  transform:none !important;
+  background:#16304f !important;
+  border-color:#16304f !important;
+  box-shadow:none !important;
+}
+.lcSimCenterBtn:focus-visible{
+  outline:1px solid #1e3a5f !important;
+  outline-offset:2px !important;
+}
+
+.lcSimCenterModal .giValModal__card,
+.lcSimCenterModal__card,
+.lcSimCenterModal .giValModal__card.lcSimCenterModal__card--wide,
+.lcSimCenterModal__card.lcSimCenterModal__card--wide{
+  border-radius:0 !important;
+  border:1px solid #d8dee6 !important;
+  box-shadow:none !important;
+  background:#fff !important;
+}
+.lcSimCenterModal .giValModal__head,
+.lcSimCenterModal__head{
+  padding:10px 16px 10px !important;
+  background:#fafbfc !important;
+  border-bottom:1px solid #d8dee6 !important;
+  align-items:flex-start !important;
+  text-align:right !important;
+}
+.lcSimCenterModal .giValModal__headText{
+  align-items:flex-start !important;
+  padding-inline:48px 0 !important;
+}
+.lcSimCenterModal .giValModal__title,
+.lcSimCenterModal__title{
+  color:#1e3a5f !important;
+  font-size:16px !important;
+  font-weight:700 !important;
+  text-align:right;
+  letter-spacing:0;
+}
+.lcSimCenterModal .giValModal__sub,
+.lcSimCenterModal__sub{
+  color:#5c6b7a !important;
+  font-size:12px !important;
+  font-weight:500 !important;
+  text-align:right;
+}
+.lcSimCenterModal .giValModal__body,
+.lcSimCenterModal__body{
+  padding:12px 16px 8px !important;
+}
+.lcSimCenterModal .giValModal__foot,
+.lcSimCenterModal__foot{
+  padding:8px 16px 12px !important;
+  background:#fafbfc !important;
+  border-top:1px solid #d8dee6 !important;
+  gap:8px;
+}
+
+.lcSimCenterSteps__dot{
+  width:18px;
+  height:18px;
+  border-radius:0;
+  background:#fff;
+  border:1px solid #d8dee6;
+  color:#5c6b7a;
+  font-weight:600;
+  font-size:11px;
+}
+.lcSimCenterSteps__txt{ color:#5c6b7a; font-weight:500; }
+.lcSimCenterSteps__item.is-active .lcSimCenterSteps__dot{
+  background:#1e3a5f;
+  border-color:#1e3a5f;
+  color:#fff;
+}
+.lcSimCenterSteps__item.is-active .lcSimCenterSteps__txt{ color:#1e3a5f; font-weight:700; }
+.lcSimCenterSteps__item.is-done .lcSimCenterSteps__dot{
+  background:#fff;
+  border-color:#1e3a5f;
+  color:#1e3a5f;
+}
+.lcSimCenterSteps__item.is-done .lcSimCenterSteps__txt{ color:#1e3a5f; }
+.lcSimCenterSteps__bar{ border-radius:0; background:#eceff3; }
+.lcSimCenterSteps__bar.is-done{ background:#1e3a5f; }
+
+.lcSimCenterModal .giValModal__closeBtn,
+.lcSimCenterModal__cancel,
+.lcSimCenterModal__ghost{
+  height:32px !important;
+  min-height:32px !important;
+  padding:0 12px !important;
+  border-radius:0 !important;
+  border:1px solid #d8dee6 !important;
+  background:#fff !important;
+  color:#1a2332 !important;
+  font-weight:500 !important;
+  font-size:13px !important;
+  box-shadow:none !important;
+}
+.lcSimCenterModal .giValModal__closeBtn:hover,
+.lcSimCenterModal__cancel:hover,
+.lcSimCenterModal__ghost:hover{
+  background:#f3f5f7 !important;
+}
+.lcSimCenterModal__open{
+  height:32px !important;
+  min-height:32px !important;
+  padding:0 12px !important;
+  border-radius:0 !important;
+  background:#1e3a5f !important;
+  border:1px solid #1e3a5f !important;
+  color:#fff !important;
+  font-weight:600 !important;
+  font-size:13px !important;
+  box-shadow:none !important;
+}
+.lcSimCenterModal__closeX{
+  top:10px;
+  left:12px;
+  border-radius:0;
+  color:#5c6b7a;
+}
+.lcSimCenterModal__closeX:hover{ background:#f3f5f7; color:#1a2332; }
+
+.lcSimCenterBlock{
+  border:1px solid #eceff3;
+  border-radius:0;
+  background:#fff;
+  padding:12px 14px;
+}
+.lcSimCenterBlock__title{
+  font-size:12px;
+  font-weight:700;
+  color:#5c6b7a;
+}
+
+.lcSimCenterField__label{
+  font-size:12px;
+  font-weight:500;
+  color:#5c6b7a;
+}
+.lcSimCenterField__input{
+  min-height:32px;
+  padding:6px 10px;
+  border:1px solid #d8dee6;
+  border-radius:0;
+  font-size:13px;
+  font-weight:500;
+  box-shadow:none;
+}
+.lcSimCenterField__input:hover,
+.lcSimCenterField__input:focus{
+  border-color:#1e3a5f;
+  box-shadow:none;
+}
+
+.lcSimCenterSeg{
+  gap:0;
+  padding:0;
+  background:#fff;
+  border:1px solid #d8dee6;
+  border-radius:0;
+}
+.lcSimCenterSeg__btn{
+  min-height:32px;
+  padding:6px 10px;
+  border:0;
+  border-radius:0;
+  background:#fff;
+  color:#5c6b7a;
+  font-size:13px;
+  font-weight:500;
+  box-shadow:none;
+}
+.lcSimCenterSeg__btn + .lcSimCenterSeg__btn{ border-right:1px solid #d8dee6; }
+.lcSimCenterSeg__btn:hover{ color:#1a2332; }
+.lcSimCenterSeg__btn.is-active{
+  border-color:transparent;
+  background:#f3f5f7;
+  color:#1a2332;
+  font-weight:700;
+  box-shadow:none;
+}
+.lcSimCenterSeg__btn:focus-visible{
+  outline:1px solid #1e3a5f;
+}
+
+.lcSimCenterSummary{
+  padding:8px 10px;
+  margin-bottom:10px;
+  border-radius:0;
+  background:#fafbfc;
+  border:1px solid #eceff3;
+}
+.lcSimCenterSummary__chip{
+  border-radius:0;
+  border:1px solid #d8dee6;
+  background:#fff;
+}
+.lcSimCenterSummary__k{ color:#5c6b7a; font-weight:500; }
+.lcSimCenterSummary__v{ color:#1a2332; font-weight:700; }
+.lcSimCenterSummary__edit{
+  color:#1e3a5f;
+  font-weight:600;
+  border-radius:0;
+}
+
+.lcSimCenterTile{
+  min-height:52px;
+  border:1px solid #d8dee6;
+  border-radius:0;
+  box-shadow:none;
+}
+.lcSimCenterTile:hover{ border-color:#1e3a5f; background:#fafbfc; }
+.lcSimCenterTile__name{ font-size:13px; font-weight:700; color:#1a2332; }
+.lcSimCenterTile__meta{ color:#5c6b7a; }
+.lcSimCenterTile.is-active{
+  border-color:#1e3a5f;
+  background:#fff;
+  box-shadow:none;
+}
+.lcSimCenterTile.is-active .lcSimCenterTile__name{ color:#1e3a5f; }
+.lcSimCenterTile.is-active .lcSimCenterTile__meta{ color:#5c6b7a; }
+.lcSimCenterTile:focus-visible{
+  outline:1px solid #1e3a5f;
+}
+
+.lcSimCenterProd{
+  padding:6px 12px;
+  border:1px solid #d8dee6;
+  border-radius:0;
+  background:#fff;
+  color:#1a2332;
+  font-size:13px;
+  font-weight:500;
+  box-shadow:none;
+}
+.lcSimCenterProd:hover{ border-color:#1e3a5f; color:#1e3a5f; }
+.lcSimCenterProd__dot{ border-radius:0; background:#d8dee6; }
+.lcSimCenterProd.is-active{
+  border-color:#1e3a5f;
+  background:#fff;
+  color:#1e3a5f;
+  font-weight:700;
+  box-shadow:none;
+}
+.lcSimCenterProd.is-active .lcSimCenterProd__dot{ background:#1e3a5f; }
+.lcSimCenterProd:focus-visible{ outline:1px solid #1e3a5f; }
+
+.lcSimCenterTabs{
+  gap:16px;
+  padding:0 0 0;
+  margin:0 0 12px;
+  background:transparent;
+  border:0;
+  border-bottom:1px solid #eceff3;
+  border-radius:0;
+}
+.lcSimCenterTabs__btn{
+  flex:0 0 auto;
+  min-height:auto;
+  padding:6px 0 8px;
+  border:0;
+  border-bottom:2px solid transparent;
+  border-radius:0;
+  background:transparent;
+  color:#5c6b7a;
+  font-size:13px;
+  font-weight:500;
+  box-shadow:none;
+}
+.lcSimCenterTabs__btn:hover{ color:#1e3a5f; }
+.lcSimCenterTabs__btn.is-active{
+  background:transparent;
+  color:#1e3a5f;
+  font-weight:700;
+  box-shadow:none;
+  border-bottom-color:#1e3a5f;
+}
+.lcSimCenterTabs__count{
+  border-radius:0;
+  background:#f3f5f7;
+  color:#1e3a5f;
+  font-weight:600;
+}
+.lcSimCenterTabs__btn.is-active .lcSimCenterTabs__count{
+  background:#1e3a5f;
+  color:#fff;
+}
+
+.lcSimSavedGroup{
+  border:1px solid #d8dee6;
+  border-radius:0;
+}
+.lcSimSavedGroup__head{
+  background:#fafbfc;
+  border-bottom:1px solid #eceff3;
+}
+.lcSimSavedGroup__avatar{
+  border-radius:0;
+  background:#f3f5f7;
+  color:#1e3a5f;
+}
+.lcSimSavedGroup__name{ color:#1a2332; font-weight:700; }
+.lcSimSavedGroup__totalV{ color:#1e3a5f; font-weight:700; }
+.lcSimSavedRow__badge{ border-radius:0; background:#f3f5f7; color:#5c6b7a; }
+.lcSimSavedRow__prem{ color:#1e3a5f; font-weight:700; }
+.lcSimSavedRow__btn{ border-radius:0 !important; }
+
+.lcSimSaveModal .giValModal__card,
+.lcSimSaveModal__card{
+  border-radius:0 !important;
+  border:1px solid #d8dee6 !important;
+  box-shadow:none !important;
+}
+.lcSimSaveModal .giValModal__head,
+.lcSimSaveModal__head{
+  padding:10px 16px 8px !important;
+  background:#fafbfc !important;
+  border-bottom:1px solid #d8dee6 !important;
+  align-items:flex-start !important;
+  text-align:right !important;
+}
+.lcSimSaveModal .giValModal__headText{ align-items:flex-start; padding-inline:40px 0; }
+.lcSimSaveModal .giValModal__title{
+  color:#1e3a5f !important;
+  font-size:16px !important;
+  font-weight:700 !important;
+  letter-spacing:0;
+}
+.lcSimSaveModal .giValModal__body,
+.lcSimSaveModal__body{
+  padding:12px 16px 8px !important;
+}
+.lcSimSaveModal .giValModal__foot,
+.lcSimSaveModal__foot{
+  padding:8px 16px 12px !important;
+  background:#fafbfc !important;
+  border-top:1px solid #d8dee6 !important;
+}
+.lcSimSaveModal .giValModal__foot .btn--primary{
+  height:32px !important;
+  min-height:32px !important;
+  padding:0 12px !important;
+  border-radius:0 !important;
+  background:#1e3a5f !important;
+  border-color:#1e3a5f !important;
+  font-weight:600 !important;
+  font-size:13px !important;
+}
+.lcSimSaveModal .giValModal__closeBtn,
+.lcSimSaveModal .btn--secondary{
+  height:32px !important;
+  min-height:32px !important;
+  padding:0 12px !important;
+  border-radius:0 !important;
+  border:1px solid #d8dee6 !important;
+  background:#fff !important;
+  color:#1a2332 !important;
+  font-weight:500 !important;
+  font-size:13px !important;
+}
+.lcSimSaveModal .btn--secondary{
+  border-color:#d8dee6 !important;
+  color:#1a2332 !important;
+}
+.lcSimSaveModal__closeX{ top:8px; left:10px; border-radius:0; }
+.lcSimSaveText{ font-size:14px; font-weight:700; color:#1a2332; }
+.lcSimSaveNote{ font-size:12px; font-weight:500; color:#5c6b7a; }
+.lcSimSaveNote strong{ color:#1a2332; font-weight:700; }
+.lcSimSaveChip{
+  border-radius:0;
+  background:#fafbfc;
+  border:1px solid #d8dee6;
+}
+.lcSimSaveChip__k{ color:#5c6b7a; }
+.lcSimSaveChip__v{ color:#1a2332; font-weight:700; }
+.lcSimSaveField__label{ font-size:12px; font-weight:500; color:#5c6b7a; }
+.lcSimSaveField__input{
+  min-height:32px;
+  padding:6px 10px;
+  border:1px solid #d8dee6;
+  border-radius:0;
+  font-size:13px;
+  font-weight:500;
+}
+.lcSimSaveField__input:focus{
+  border-color:#1e3a5f;
+  box-shadow:none;
+}
+.lcSimSaveErr{ border-radius:0; }

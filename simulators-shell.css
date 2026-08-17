@@ -521,3 +521,294 @@
   font-size:18px;
   font-weight:850;
 }
+
+/* ===== GI-SIM-UI 2026-08-17 · נראות חברת ביטוח (אושר במוקאפ) ==============
+   חל על מרכז (standalone) ועל פתיחה מהאשף (.giSimQuiet). לא משנה חישוב. */
+.giSimShellModal .giValModal__card,
+.giSimQuiet .giValModal__card{
+  border-radius:0 !important;
+  box-shadow:none !important;
+  border:1px solid #d8dee6 !important;
+  background:#fff !important;
+}
+.giSimShellModal .giValModal__head,
+.giSimQuiet .giValModal__head,
+.giSimShell__head{
+  padding:10px 16px 10px !important;
+  background:#fafbfc !important;
+  border-bottom:1px solid #d8dee6 !important;
+}
+.giSimShellModal .giValModal__title,
+.giSimQuiet .giValModal__title{
+  font-size:16px !important;
+  font-weight:700 !important;
+  color:#1e3a5f !important;
+}
+.giSimShell__crumb{
+  font-size:12px !important;
+  font-weight:500 !important;
+  color:#5c6b7a !important;
+}
+.giSimShellModal .giValModal__headIcon,
+.giSimQuiet .giValModal__headIcon{
+  width:36px !important;
+  height:36px !important;
+  border-radius:0 !important;
+  background:#fff !important;
+  border:1px solid #d8dee6 !important;
+}
+.giSimShellModal .giValModal__body,
+.giSimQuiet .giValModal__body{
+  padding:12px 16px 14px !important;
+  background:#fff !important;
+  gap:10px !important;
+}
+.giSimShell__tab{
+  min-height:auto !important;
+  padding:6px 0 8px !important;
+  border:0 !important;
+  border-bottom:2px solid transparent !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  color:#5c6b7a !important;
+  font-weight:500 !important;
+  font-size:13px !important;
+}
+.giSimShell__tab.is-active,
+.giSimShell__tab.has-result:not(.is-active){
+  background:transparent !important;
+  border-color:transparent !important;
+  color:#1e3a5f !important;
+}
+.giSimShell__tab.is-active{
+  border-bottom-color:#1e3a5f !important;
+  font-weight:700 !important;
+}
+.giSimShell__addIns{
+  min-height:auto !important;
+  padding:6px 0 8px !important;
+  border:0 !important;
+  border-bottom:2px solid transparent !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  color:#5c6b7a !important;
+  font-weight:500 !important;
+}
+.giSimShell__panel{
+  border:1px solid #eceff3 !important;
+  border-radius:0 !important;
+  box-shadow:none !important;
+  padding:14px 16px !important;
+}
+.giSimShell__panelTitle{
+  font-size:12px !important;
+  font-weight:700 !important;
+  color:#5c6b7a !important;
+}
+.giSimShell__ageBadge{
+  padding:6px 10px !important;
+  border-radius:0 !important;
+  background:#fff !important;
+  border:1px solid #d8dee6 !important;
+}
+.giSimShell__ageBadgeLabel{ color:#5c6b7a !important; font-weight:500 !important; font-size:12px !important; }
+.giSimShell__ageBadgeValue{
+  font-size:14px !important;
+  font-weight:700 !important;
+  color:#1a2332 !important;
+}
+.giSimShellModal [class*="__label"],
+.giSimQuiet [class*="__label"]{
+  font-size:12px !important;
+  font-weight:500 !important;
+  color:#5c6b7a !important;
+}
+.giSimShellModal [class*="__input"],
+.giSimShellModal input[type="text"],
+.giSimShellModal input[type="number"],
+.giSimShellModal select,
+.giSimQuiet [class*="__input"],
+.giSimQuiet input[type="text"],
+.giSimQuiet input[type="number"],
+.giSimQuiet select{
+  min-height:32px !important;
+  border-radius:0 !important;
+  border:1px solid #d8dee6 !important;
+  font-size:13px !important;
+  box-shadow:none !important;
+}
+.giSimShellModal [class*="__input"]:focus,
+.giSimShellModal input:focus,
+.giSimShellModal select:focus,
+.giSimQuiet [class*="__input"]:focus,
+.giSimQuiet input:focus,
+.giSimQuiet select:focus{
+  border-color:#1e3a5f !important;
+  box-shadow:none !important;
+}
+.giSimShellModal [class*="__segBtn"],
+.giSimQuiet [class*="__segBtn"]{
+  min-height:32px !important;
+  border-radius:0 !important;
+  border:1px solid #d8dee6 !important;
+  background:#fff !important;
+  color:#5c6b7a !important;
+  font-weight:500 !important;
+  font-size:13px !important;
+}
+.giSimShellModal [class*="__segBtn"] + [class*="__segBtn"],
+.giSimQuiet [class*="__segBtn"] + [class*="__segBtn"]{
+  border-right-width:0 !important;
+}
+.giSimShellModal [class*="__segBtn"].is-active,
+.giSimQuiet [class*="__segBtn"].is-active{
+  background:#f3f5f7 !important;
+  border-color:#d8dee6 !important;
+  color:#1a2332 !important;
+  font-weight:700 !important;
+}
+.giSimShellModal .giValModal__foot,
+.giSimQuiet .giValModal__foot,
+.giSimShell__foot{
+  padding:8px 16px !important;
+  background:#fafbfc !important;
+  border-top:1px solid #d8dee6 !important;
+  gap:8px !important;
+}
+.giSimShell__premValue,
+.giSimShell__premValue--total{
+  font-size:18px !important;
+  font-weight:700 !important;
+  color:#1e3a5f !important;
+}
+.giSimShell__premLabel{ font-size:12px !important; font-weight:500 !important; color:#5c6b7a !important; }
+.giSimShell__calcBtn,
+.giSimQuiet .giValModal__foot .btn--primary,
+.giSimQuiet [class*="__foot"] .btn--primary{
+  min-height:32px !important;
+  min-width:auto !important;
+  border-radius:0 !important;
+  background:#1e3a5f !important;
+  border:1px solid #1e3a5f !important;
+  color:#fff !important;
+  font-size:13px !important;
+  font-weight:600 !important;
+  padding:0 12px !important;
+  box-shadow:none !important;
+}
+.giSimShell__closeBtn,
+.giSimShell__backBtn,
+.giSimQuiet .giValModal__foot .btn:not(.btn--primary),
+.giSimQuiet [class*="__foot"] .btn:not(.btn--primary){
+  min-height:32px !important;
+  min-width:auto !important;
+  border-radius:0 !important;
+  border:1px solid #d8dee6 !important;
+  background:#fff !important;
+  color:#1a2332 !important;
+  font-weight:500 !important;
+  font-size:13px !important;
+}
+.giSimShell__backBtn,
+.giSimQuiet .giValModal__closeBtn{
+  border-color:transparent !important;
+  background:transparent !important;
+  color:#5c6b7a !important;
+}
+.giSimDisc__btn{
+  min-height:32px !important;
+  min-width:auto !important;
+  border-radius:0 !important;
+  border:1px solid #d8dee6 !important;
+  background:#fff !important;
+  color:#1a2332 !important;
+  font-weight:600 !important;
+  padding:0 12px !important;
+}
+.giSimDisc__btn[aria-expanded="true"]{
+  background:#1e3a5f !important;
+  border-color:#1e3a5f !important;
+  color:#fff !important;
+}
+.giSimDisc__menu{
+  border-radius:0 !important;
+  box-shadow:none !important;
+  border:1px solid #d8dee6 !important;
+}
+.giSimDisc__opt.is-selected,
+.giSimDisc__opt:hover{
+  background:#f3f5f7 !important;
+  color:#1e3a5f !important;
+}
+.giSimDisc__afterRow strong{ color:#1e3a5f !important; font-size:16px !important; }
+.giSimQuiet [class*="__resultRow--main"] strong,
+.giSimShellModal [class*="__resultRow--main"] strong{
+  color:#1e3a5f !important;
+  font-size:16px !important;
+}
+.giSimQuiet [class*="__cover"].is-checked,
+.giSimShellModal [class*="__cover"].is-checked{
+  background:#fafbfc !important;
+}
+.giSimQuiet [class*="__groupTitle"],
+.giSimShellModal [class*="__groupTitle"]{
+  background:#fafbfc !important;
+  color:#5c6b7a !important;
+}
+.giSimQuiet [class*="__tab"]:not([class*="__tabs"]),
+.giSimShellModal [class*="__tab"]:not([class*="__tabs"]):not(.giSimShell__tab){
+  min-height:auto !important;
+  padding:6px 0 8px !important;
+  border:0 !important;
+  border-bottom:2px solid transparent !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  color:#5c6b7a !important;
+  font-weight:500 !important;
+  font-size:13px !important;
+}
+.giSimQuiet [class*="__tab"].is-active:not([class*="__tabs"]),
+.giSimShellModal [class*="__tab"].is-active:not([class*="__tabs"]):not(.giSimShell__tab){
+  background:transparent !important;
+  border-bottom-color:#1e3a5f !important;
+  color:#1e3a5f !important;
+  font-weight:700 !important;
+}
+.giSimQuiet [class*="__calcBtn"],
+.giSimQuiet [class*="__coverPrem"],
+.giSimQuiet [class*="__selRow"] strong{
+  color:#1e3a5f !important;
+}
+.giSimQuiet [class*="__calcBtn"]{
+  min-height:32px !important;
+  border-radius:0 !important;
+  background:#1e3a5f !important;
+  border:1px solid #1e3a5f !important;
+  color:#fff !important;
+  font-size:13px !important;
+  font-weight:600 !important;
+  padding:0 12px !important;
+  box-shadow:none !important;
+}
+.giSimQuiet [class*="__insuredLabel"]{
+  background:#fff !important;
+  border:1px solid #d8dee6 !important;
+  border-radius:0 !important;
+  color:#1e3a5f !important;
+  font-weight:600 !important;
+}
+.giSimQuiet [class*="__closeX"],
+.giSimShellModal [class*="__closeX"]{
+  border-radius:0 !important;
+  background:transparent !important;
+  color:#5c6b7a !important;
+}
+.giSimQuiet [class*="__cover"]{
+  border-radius:0 !important;
+  border-color:#eceff3 !important;
+}
+.giSimQuiet [class*="__panel"],
+.giSimQuiet [class*="__card"]:not(.giValModal__card){
+  border-radius:0 !important;
+  box-shadow:none !important;
+}
