@@ -45928,3 +45928,38 @@ body.lcAuthLock .lcLogin__footBtn{
 .mcRescheduleBtn--dock{
   min-width: 210px;
 }
+
+/* GI-MIRROR-SOLID-BTNS 2026-08-17 — לחצני חיפוש/התחל נעלמו בגלל זכוכית שקופה */
+.mcSessionPanel,
+.mcDiscoveryPanel{
+  background:#eef4ff;
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+}
+.mcCall__card,
+.mcSearch__card{
+  background:#ffffff;
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+}
+.mcCall__btn,
+.mcSearch__btn,
+.mcSearch__selectBtn{
+  background:linear-gradient(135deg,#2f63f7 0%,#1a3bba 100%) !important;
+  color:#fff !important;
+  -webkit-text-fill-color:#fff !important;
+  background-clip:border-box !important;
+  -webkit-background-clip:border-box !important;
+  isolation:isolate;
+  opacity:1;
+}
+.mcCall__btn:disabled{
+  opacity:.72;
+  color:#fff !important;
+  -webkit-text-fill-color:#fff !important;
+}
+.mcCall__btn.is-end{
+  background:linear-gradient(135deg,#ef4444 0%,#b91c1c 100%) !important;
+  color:#fff !important;
+  -webkit-text-fill-color:#fff !important;
+}
