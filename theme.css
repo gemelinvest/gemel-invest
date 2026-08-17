@@ -7916,6 +7916,27 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   background-image: none !important;
 }
 
+/* GI-MIRROR-SOLID-BTNS 2026-08-17 — כלל Flat Pass מוחק linear-gradient מכל *.
+   לחצני חיפוש/התחל/המשך נשארים בצבע מלא (כמו .btn--primary), בלי גרדיאנט. */
+#view-mirrorCall:not(#\9):not(#\9) .mcSearch__btn,
+#view-mirrorCall:not(#\9):not(#\9) .mcSearch__selectBtn,
+#view-mirrorCall:not(#\9):not(#\9) .mcCall__btn,
+#view-elementaryMirror:not(#\9):not(#\9) .mcSearch__btn,
+#view-elementaryMirror:not(#\9):not(#\9) .mcSearch__selectBtn,
+#view-elementaryMirror:not(#\9):not(#\9) .mcCall__btn{
+  background-color: #2563EB !important;
+  background-image: none !important;
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+}
+#view-mirrorCall:not(#\9):not(#\9) .mcCall__btn.is-end,
+#view-elementaryMirror:not(#\9):not(#\9) .mcCall__btn.is-end{
+  background-color: #DC2626 !important;
+  background-image: none !important;
+  color: #FFFFFF !important;
+  -webkit-text-fill-color: #FFFFFF !important;
+}
+
 
 /* =====================================================================
    35. UTILITY ATOMS
