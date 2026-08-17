@@ -66956,6 +66956,9 @@ ${inner}
         try { Auth._setError(""); } catch(_e) {}
         try { document.getElementById("lcLogin")?.classList.remove("lcLogin--mfa"); } catch(_e) {}
       },
+      getDashboardUI(){
+        try { return DashboardUI || null; } catch(_e) { return null; }
+      },
       getCurrentAgent(){
         const rec = (typeof getCurrentAgentRecord === "function" ? getCurrentAgentRecord() : null)
           || (typeof findAgentRecordForSession === "function" ? findAgentRecordForSession() : null);

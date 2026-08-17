@@ -174,10 +174,22 @@
     }).format(d || new Date());
   }
 
+  function dashboardUI(){
+    try {
+      const b = window.__GI_FACE_BRIDGE__;
+      if(b && typeof b.getDashboardUI === "function"){
+        const dash = b.getDashboardUI();
+        if(dash && typeof dash.buildDailyAgentSalesReport === "function") return dash;
+      }
+    } catch(_e) {}
+    const dash = window.DashboardUI;
+    return (dash && typeof dash.buildDailyAgentSalesReport === "function") ? dash : null;
+  }
+
   function buildEmailHtml(){
-    const Dash = window.DashboardUI;
-    if(!Dash || typeof Dash.buildDailyAgentSalesReport !== "function"){
-      throw new Error("דוח המכירות עדיין לא נטען");
+    const Dash = dashboardUI();
+    if(!Dash){
+      throw new Error("דוח המכירות עדיין לא נטען. פתחו קודם את מסך «מכירות היום» ואז חזרו לכאן.");
     }
     const report = Dash.buildDailyAgentSalesReport();
     const rows = typeof Dash.dailySalesPresentPivotByAgent === "function"
