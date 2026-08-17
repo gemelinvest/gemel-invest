@@ -174,48 +174,98 @@
     }).format(d || new Date());
   }
 
+  function wrapSnap(snap){
+    if(!snap || !snap.html) return null;
+    return {
+      dateKey: trim(snap.dateKey) || israelDateKey(),
+      dateLabel: snap.dateLabel || israelDateKey(),
+      html: snap.html,
+      summary: snap.summary || {}
+    };
+  }
+
   function dashboardUI(){
+    const list = [];
+    try {
+      const hookDash = window.DashboardUI;
+      if(hookDash) list.push(hookDash);
+    } catch(_e) {}
     try {
       const b = window.__GI_FACE_BRIDGE__;
-      if(b && typeof b.getDashboardUI === "function"){
-        const dash = b.getDashboardUI();
-        if(dash && typeof dash.buildDailySalesEmailHtml === "function") return dash;
-        if(dash && typeof dash.buildDailyAgentSalesReport === "function") return dash;
-      }
+      if(b && typeof b.getDashboardUI === "function") list.push(b.getDashboardUI());
     } catch(_e) {}
     try {
-      const dash = window.DashboardUI;
-      if(dash && typeof dash.buildDailySalesEmailHtml === "function") return dash;
-      if(dash && typeof dash.buildDailyAgentSalesReport === "function") return dash;
+      const host = window.__GI_WIZARD_HOST;
+      if(host && host.DashboardUI) list.push(host.DashboardUI);
     } catch(_e) {}
+    for(let i = 0; i < list.length; i++){
+      const dash = list[i];
+      if(dash && (typeof dash.buildDailySalesEmailHtml === "function" || typeof dash.buildDailyAgentSalesReport === "function")){
+        return dash;
+      }
+    }
     return null;
   }
 
+  function mailHookReady(){
+    try {
+      if(typeof window.__GI_DAILY_SALES_MAIL_HOOK__ === "function") return true;
+    } catch(_e) {}
+    try {
+      const b = window.__GI_FACE_BRIDGE__;
+      if(b && typeof b.buildDailySalesEmailHtml === "function") return true;
+    } catch(_e) {}
+    return !!dashboardUI();
+  }
+
   function buildEmailHtml(){
+    let lastErr = null;
+    try {
+      if(typeof window.__GI_DAILY_SALES_MAIL_HOOK__ === "function"){
+        const snap = wrapSnap(window.__GI_DAILY_SALES_MAIL_HOOK__());
+        if(snap) return snap;
+      }
+    } catch(err) {
+      lastErr = err;
+    }
+    try {
+      const b = window.__GI_FACE_BRIDGE__;
+      if(b && typeof b.buildDailySalesEmailHtml === "function"){
+        const snap = wrapSnap(b.buildDailySalesEmailHtml());
+        if(snap) return snap;
+      }
+    } catch(err) {
+      lastErr = lastErr || err;
+    }
     const Dash = dashboardUI();
-    if(!Dash){
-      throw new Error("הדף עדיין לא סיים להיטען. רעננו את העמוד ואז לחצו שוב על רענון הדוח.");
+    if(Dash && typeof Dash.buildDailySalesEmailHtml === "function"){
+      const snap = wrapSnap(Dash.buildDailySalesEmailHtml());
+      if(snap) return snap;
     }
-    if(typeof Dash.buildDailySalesEmailHtml === "function"){
-      const snap = Dash.buildDailySalesEmailHtml();
-      if(!snap || !snap.html) throw new Error("לא ניתן לבנות את דוח המכירות.");
-      return {
-        dateKey: trim(snap.dateKey) || israelDateKey(),
-        dateLabel: snap.dateLabel || israelDateKey(),
-        html: snap.html,
-        summary: snap.summary || {}
-      };
+    if(lastErr) throw lastErr;
+    throw new Error("חסר חיבור לדוח מכירות. רעננו את העמוד ב־Ctrl+F5 ואז לחצו שוב.");
+  }
+
+  function wait(ms){
+    return new Promise((resolve) => window.setTimeout(resolve, ms));
+  }
+
+  async function waitForMailHook(timeoutMs){
+    const start = Date.now();
+    while(!mailHookReady() && (Date.now() - start) < timeoutMs){
+      await wait(200);
     }
-    throw new Error("הדף עדיין לא סיים להיטען. רעננו את העמוד ואז לחצו שוב על רענון הדוח.");
+    return mailHookReady();
   }
 
   async function persistSnapshot(force){
     if(!isMailAdmin()) return { skipped: true };
     const now = Date.now();
     if(!force && lastSnapshotAt && (now - lastSnapshotAt) < SNAPSHOT_GAP_MS) return { skipped: true };
+    await waitForMailHook(force ? 4000 : 1500);
     const snap = buildEmailHtml();
     await api("save-snapshot", snap);
-    lastSnapshotAt = now;
+    lastSnapshotAt = Date.now();
     return snap;
   }
 

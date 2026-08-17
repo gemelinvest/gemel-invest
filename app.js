@@ -32190,6 +32190,13 @@ UsersGateUI.init();
   };
 
   try {
+    window.DashboardUI = DashboardUI;
+    window.__GI_DAILY_SALES_MAIL_HOOK__ = function(){
+      return DashboardUI.buildDailySalesEmailHtml();
+    };
+  } catch(_e) {}
+
+  try {
     window.GI_SIM_SAVE_PROMPT = (snapshot, done) => SimulatorSavePrompt.open(snapshot, done);
   } catch(_e) {}
 
@@ -67230,6 +67237,9 @@ ${inner}
       },
       getDashboardUI(){
         try { return DashboardUI || null; } catch(_e) { return null; }
+      },
+      buildDailySalesEmailHtml(){
+        try { return DashboardUI.buildDailySalesEmailHtml(); } catch(_e) { return null; }
       },
       getCurrentAgent(){
         const rec = (typeof getCurrentAgentRecord === "function" ? getCurrentAgentRecord() : null)
