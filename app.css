@@ -40191,6 +40191,26 @@ body.view-dailyReport-active .content{
   gap:6px;
   flex-wrap:wrap;
 }
+.lcTrackActions{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:8px;
+  min-width:240px;
+}
+#campaignLeadsTrackingPanel .lcCampaignTable td.lcCampaign__actions,
+#campaignLeadsTrackingPanel .lcCampaignTable td.lcCampaign__agentCell{
+  overflow:visible;
+  white-space:normal;
+}
+#campaignLeadsTrackingPanel .lcMyLeadStatusSelect{
+  min-width:118px;
+  max-width:148px;
+  height:32px;
+  padding:0 10px;
+  font-size:12px;
+  font-weight:600;
+}
 .btn--small{
   padding: 6px 10px;
   font-size: 12px;

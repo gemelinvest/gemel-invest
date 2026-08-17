@@ -5306,14 +5306,30 @@
     return Number.isFinite(ms) ? ms : 0;
   }
 
+  /* GI-PERF 2026-08-17: toLocaleDateString+timeZone על כל ליד בכל רינדור חסם את המסך
+     (~380ms לסריקה, ~1.3s ב-renderList). המרה זהה, רק נשמרת לפי מחרוזת המקור. */
+  const _campaignLeadStampDateILCache = new Map();
+  const CAMPAIGN_LEAD_STAMP_DATE_IL_CACHE_MAX = 12000;
+
   function parseCampaignLeadStampDateIL(raw){
     const s = safeTrim(raw);
     if(!s) return "";
+    const cached = _campaignLeadStampDateILCache.get(s);
+    if(cached !== undefined) return cached;
+    const value = parseCampaignLeadStampDateILUncached(s);
+    if(_campaignLeadStampDateILCache.size >= CAMPAIGN_LEAD_STAMP_DATE_IL_CACHE_MAX){
+      _campaignLeadStampDateILCache.clear();
+    }
+    _campaignLeadStampDateILCache.set(s, value);
+    return value;
+  }
+
+  function parseCampaignLeadStampDateILUncached(s){
     const isoDay = /^(\d{4}-\d{2}-\d{2})$/.exec(s);
     if(isoDay) return isoDay[1];
     const ilDay = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s);
     if(ilDay) return `${ilDay[3]}-${ilDay[2]}-${ilDay[1]}`;
-    const ms = parseCampaignLeadStampMs(raw);
+    const ms = parseCampaignLeadStampMs(s);
     if(!ms){
       const prefix = /^(\d{4}-\d{2}-\d{2})/.exec(s);
       return prefix ? prefix[1] : "";
@@ -50797,11 +50813,35 @@ const CampaignLeadsStore = {
       return CampaignLeadsStore.leads.find((l) => String(l.id) === String(this.selectedId)) || null;
     },
 
+    _syncSelectedLeadHighlight(){
+      const sid = String(this.selectedId || "");
+      if(this.els.tbody){
+        this.els.tbody.querySelectorAll("tr[data-cl-id]").forEach((row) => {
+          row.classList.toggle("is-selected", String(row.getAttribute("data-cl-id")) === sid);
+        });
+      }
+      if(this.els.splitList){
+        this.els.splitList.querySelectorAll("[data-split-cl-id]").forEach((card) => {
+          card.classList.toggle("is-active", String(card.getAttribute("data-split-cl-id")) === sid);
+        });
+      }
+    },
+
+    _leadsPaintKey(){
+      const list = CampaignLeadsStore.leads || [];
+      let key = String(list.length);
+      for(let i = 0; i < list.length; i += 1){
+        const l = list[i];
+        key += "|" + (l.id || "") + ":" + (l.updatedAt || "") + ":" + (l.status || "") + ":" + (l.assignedAgentId || "");
+      }
+      return key;
+    },
+
     selectLead(id){
       this.selectedId = safeTrim(id);
       const lead = this.getSelectedLead();
       goldLeadMarkOpened(lead);   // GI-GOLD-LEAD
-      this.renderList();
+      this._syncSelectedLeadHighlight();
       if(!lead){
         if(this.els.editorTitle) this.els.editorTitle.textContent = "בחר ליד מהרשימה";
         return;
@@ -51010,6 +51050,7 @@ const CampaignLeadsStore = {
       this.setFormErr("");
       this.showAlert("");
       if(options.skipListRender !== true) this.renderList();
+      else this._syncSelectedLeadHighlight();
       try { this.els.phone?.focus?.(); } catch(_e) {}
     },
 
@@ -51056,8 +51097,7 @@ const CampaignLeadsStore = {
          עכשיו: צובעים מהמטמון, הטופס שמיש מיד, והרענון רץ ברקע. */
       try { CampaignLeadsStore.hydrateFromCacheIfEmpty(); } catch(_e) {}
       try { this.renderList(); } catch(_e) {}
-      if(!this.selectedId) this.beginNewLead();
-      this._renderAgentSummary();
+      if(!this.selectedId) this.beginNewLead({ skipListRender: true });
       this.scheduleMidnightReset();
       this.startPoll();
 
@@ -51074,7 +51114,12 @@ const CampaignLeadsStore = {
       this.pollTimer = window.setInterval(() => {
         if(LiveRefresh?.getCurrentView?.() !== "campaignLeads") return;
         if(LiveRefresh?.hasBlockingFlow?.()) return;
-        void CampaignLeadsStore.fetchAll({ scope: "all" }).then(() => this.renderList());
+        const before = this._leadsPaintKey();
+        void CampaignLeadsStore.fetchAll({ scope: "all" }).then(() => {
+          if(LiveRefresh?.getCurrentView?.() !== "campaignLeads") return;
+          if(this._leadsPaintKey() === before) return;
+          this.renderList();
+        });
       }, 60000);
     },
 
@@ -51392,7 +51437,7 @@ const CampaignLeadsStore = {
         }
         // קודם טוענים לידים — ואז מנקים/מתריעים (בלי התראה ריקה)
         const r = await CampaignLeadsStore.fetchAll({ scope: "mine" });
-        if(r.ok){
+        if(r.ok && LiveRefresh?.getCurrentView?.() === "campaignMyLeads"){
           try { CampaignMyLeadsUI.renderList(); } catch(_e) {}
         }
         await CampaignLeadAssignInbox.flushForCurrentUser();
@@ -51623,6 +51668,14 @@ const CampaignLeadsStore = {
           handleCampaignLeadAgentNoteBtn(noteBtn);
         }
       });
+      if(this.els.tbody) on(this.els.tbody, "change", (ev) => {
+        const sel = ev.target.closest("[data-cl-my-status-select]");
+        if(!sel) return;
+        const id = sel.getAttribute("data-cl-status-id");
+        const status = safeTrim(sel.value);
+        if(!status) return;
+        void CampaignMyLeadsUI.updateStatus(id, status, sel);
+      });
     },
 
     getFilteredLeads(){
@@ -51744,7 +51797,10 @@ const CampaignLeadsStore = {
           <td><span class="lcTrackBadge lcTrackBadge--${statusTone}">${escapeHtml(campaignLeadStatusLabel(statusKey))}${statusExtra}</span></td>
           <td>${escapeHtml(time)}</td>
           <td>${escapeHtml(lastMod)}</td>
-          <td class="lcCampaign__actions">${campaignLeadReassignBtnHtml(lead.id)}</td>
+          <td class="lcCampaign__actions lcTrackActions">
+            ${CampaignMyLeadsUI.renderMyLeadStatusSelect(lead)}
+            ${campaignLeadReassignBtnHtml(lead.id)}
+          </td>
         </tr>`;
       }).join("");
     },
@@ -52111,6 +52167,8 @@ const CampaignLeadsStore = {
         this._syncDayInput();
       }
       this.scheduleMidnightReset();
+      try { CampaignLeadsStore.hydrateFromCacheIfEmpty(); } catch(_e) {}
+      try { this.renderList(); } catch(_e) {}
       await this.refresh(false);
       this.applyHighlight();
     },
@@ -52123,6 +52181,7 @@ const CampaignLeadsStore = {
       const stamp = nowISO();
       const abortSelect = () => {
         try { void this.renderList(); } catch(_e) {}
+        try { TrackingReportUI.renderList(); } catch(_e) {}
       };
 
       if(nextStatus === "irrelevant"){
@@ -52149,6 +52208,8 @@ const CampaignLeadsStore = {
       try { void AgentActivityLog.logLead("lead_status", lead, { detailText: campaignLeadStatusLabel(nextStatus) }); } catch(_e) {}
       showCampaignLeadToast("הליד עודכן", "הסטטוס עודכן ל-" + campaignLeadStatusLabel(nextStatus), "ok");
       await this.refresh(false);
+      try { TrackingReportUI.renderList(); } catch(_e) {}
+      try { CampaignLeadsUI.scheduleListRender(); } catch(_e) {}
     }
   };
 
@@ -52623,6 +52684,8 @@ const CampaignLeadsStore = {
         }
         this.close();
         await CampaignMyLeadsUI.refresh(false);
+        try { TrackingReportUI.renderList(); } catch(_e) {}
+        try { CampaignLeadsUI.scheduleListRender(); } catch(_e) {}
       });
 
       try { textarea.focus(); } catch(_e){}
@@ -53050,6 +53113,8 @@ ${inner}
       showCampaignLeadToast("הליד עודכן", "הליד נסגר בהצלחה", "ok");
       try { void AgentActivityLog.logLead("lead_closed", lead, { detailText: "ליד נסגר" }); } catch(_e) {}
       await CampaignMyLeadsUI.refresh(false);
+      try { TrackingReportUI.renderList(); } catch(_e) {}
+      try { CampaignLeadsUI.scheduleListRender(); } catch(_e) {}
 
       try {
         this._openWizardWithLeadData(lead);

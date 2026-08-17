@@ -5266,6 +5266,7 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
 
 .lcTrackScreen__tableEl:not(#\9):not(#\9){
   width: 100% !important;
+  min-width: 1400px !important;
   border-collapse: separate !important;
   border-spacing: 0 !important;
   table-layout: fixed !important;
@@ -5291,6 +5292,37 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
   border-bottom: 1px solid var(--gi-border-soft) !important;
   background: #fff !important;
   vertical-align: middle !important;
+}
+
+.lcTrackScreen__tableEl th:nth-child(4):not(#\9):not(#\9),
+.lcTrackScreen__tableEl td:nth-child(4):not(#\9):not(#\9){
+  width: 13% !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  line-height: 1.35 !important;
+}
+
+.lcTrackScreen__tableEl th:last-child:not(#\9):not(#\9),
+.lcTrackScreen__tableEl td:last-child:not(#\9):not(#\9){
+  width: 280px !important;
+  min-width: 260px !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  position: sticky !important;
+  inset-inline-end: 0 !important;
+  z-index: 1 !important;
+  background: #fff !important;
+  border-inline-start: 1px solid var(--gi-border) !important;
+}
+
+.lcTrackScreen__tableEl thead th:last-child:not(#\9):not(#\9){
+  z-index: 3 !important;
+  background: #F8FAFC !important;
+}
+
+.lcTrackScreen__tableEl td.lcTrackActions:not(#\9):not(#\9){
+  overflow: visible !important;
+  white-space: normal !important;
 }
 
 .lcTrackScreen__tableEl tbody tr:hover td:not(#\9):not(#\9){
