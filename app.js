@@ -31324,7 +31324,7 @@ UsersGateUI.init();
 
     /* GI-PERF-LAZY-SIMS 2026-08-09 */
   // Lazy simulator registry — engines in gi-simulators.js (~220KB parse deferred).
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260816-hach-mort-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260817-phx-disc-v1";
   const GI_SIMULATOR_CATALOG = Object.freeze([
     { company: "הפניקס", product: "ריסק" },
     { company: "הפניקס", product: "בריאות" },
@@ -31380,10 +31380,10 @@ UsersGateUI.init();
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
     "./simulators-center.css?v=20260812-simc-redesign-v1",
-    "./simulators-shell.css?v=20260813-simc-back-v2"
+    "./simulators-shell.css?v=20260817-phx-disc-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
-    const ver = "20260812-cll-risk-v2";
+    const ver = "20260817-phx-disc-v1";
     const prev = document.documentElement.dataset.giSimCssVer || "";
     document.documentElement.dataset.giSimCss = "1";
     document.documentElement.dataset.giSimCssVer = ver;

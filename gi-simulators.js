@@ -903,6 +903,287 @@
     return riskSimHasSavableResult(sim);
   }
 
+  /* ===== GI-SIM-DISC 2026-08-17 — הנחות בתוך הסימולטור בלבד ================
+     סל נפרד לגמרי ממנוע «עדכון הנחה» של האשף. לא משנה תעריף, לא משנה onApply, לא כותב
+     הנחה לפוליסה. רק בחירה במסך הסימולטור + תצוגת פרמיה לאחר הנחה.
+     מופיע גם במרכז הסימולטורים וגם בפתיחה מהאשף, כי ההזרקה רצה אחרי כל _bind. */
+  const GI_SIM_PHX_HEALTH_BASE = ["transplant", "abroad_surgery", "drugs"];
+  const GI_SIM_PHX_HEALTH_SHABAN = ["surgery_shaban", "surgery_shaban_5000"];
+  const GI_SIM_PHX_HEALTH_FIRST = ["surgery_first_shekel"];
+  const GI_SIM_PHX_HEALTH_AMB = ["ambulatory_consults", "fast_diagnosis", "ambulatory_package", "ambulatory_accompany"];
+  const GI_SIM_PHX_HEALTH_RIDERS = ["complementary", "child_dev", "expert_click"];
+
+  function giSimDiscCoverPctMap(ids, pct){
+    const out = {};
+    (ids || []).forEach((id) => { out[id] = pct; });
+    return out;
+  }
+  function giSimDiscMergeCoverPct(){
+    const out = {};
+    for(let i = 0; i < arguments.length; i++){
+      const m = arguments[i];
+      if(!m || typeof m !== "object") continue;
+      Object.keys(m).forEach((k) => { out[k] = m[k]; });
+    }
+    return out;
+  }
+  function giSimDiscOpt(id, label, scheduleOrPct, extra){
+    const opt = { id: String(id || ""), label: String(label || "") };
+    if(Array.isArray(scheduleOrPct)){
+      opt.schedule = scheduleOrPct.slice();
+      opt.pct = Number(scheduleOrPct[0]) || 0;
+      opt.years = scheduleOrPct.length;
+    } else {
+      opt.pct = Number(scheduleOrPct) || 0;
+      opt.years = extra && extra.years != null ? extra.years : 10;
+    }
+    if(extra && typeof extra === "object"){
+      Object.keys(extra).forEach((k) => {
+        if(k === "years" && Array.isArray(scheduleOrPct)) return;
+        opt[k] = extra[k];
+      });
+    }
+    return opt;
+  }
+
+  const GI_SIMULATOR_DISCOUNT_CATALOG = {
+    "הפניקס": {
+      "בריאות": [
+        giSimDiscOpt("phx-h-per-cover", "לפי כיסוי — 10% רובד בסיס/משלים שב״ן · 15% שקל ראשון/אמבולטורי/כתבי שירות", 0, {
+          mode: "perCover",
+          years: 10,
+          coverPct: giSimDiscMergeCoverPct(
+            giSimDiscCoverPctMap(GI_SIM_PHX_HEALTH_BASE.concat(GI_SIM_PHX_HEALTH_SHABAN), 10),
+            giSimDiscCoverPctMap(GI_SIM_PHX_HEALTH_FIRST.concat(GI_SIM_PHX_HEALTH_AMB, GI_SIM_PHX_HEALTH_RIDERS), 15)
+          )
+        }),
+        giSimDiscOpt("phx-h-10-base-shaban", "10% ל-10 שנים — רובד בסיס + משלים שב״ן", 10, {
+          years: 10,
+          coverIds: GI_SIM_PHX_HEALTH_BASE.concat(GI_SIM_PHX_HEALTH_SHABAN)
+        }),
+        giSimDiscOpt("phx-h-15-first-amb", "15% ל-10 שנים — שקל ראשון + אמבולטורי + כתבי שירות", 15, {
+          years: 10,
+          coverIds: GI_SIM_PHX_HEALTH_FIRST.concat(GI_SIM_PHX_HEALTH_AMB, GI_SIM_PHX_HEALTH_RIDERS)
+        }),
+        giSimDiscOpt("phx-h-20-gemel", "20% ל-10 שנים — משלים שב״ן + שקל ראשון כולל כתבי שירות (גמל INVEST)", 20, {
+          years: 10,
+          coverIds: GI_SIM_PHX_HEALTH_SHABAN.concat(GI_SIM_PHX_HEALTH_FIRST, GI_SIM_PHX_HEALTH_RIDERS)
+        }),
+        giSimDiscOpt("phx-h-10-base-only", "10% ל-10 שנים — בסיס בלבד (גמל INVEST)", 10, {
+          years: 10,
+          coverIds: GI_SIM_PHX_HEALTH_BASE.slice()
+        })
+      ],
+      "מחלות קשות": [
+        giSimDiscOpt("phx-ci-20-age20", "20% ל-10 שנים — בטוח מרפא (עד גיל 20 כולל)", 20, { years: 10 }),
+        giSimDiscOpt("phx-ci-25-age21", "25% ל-10 שנים — בטוח מרפא (גיל 21+)", 25, { years: 10 })
+      ],
+      "סרטן": [
+        giSimDiscOpt("phx-ca-20-age20", "20% ל-10 שנים — מרפא סרטן (עד גיל 20 כולל)", 20, { years: 10 }),
+        giSimDiscOpt("phx-ca-25-age21", "25% ל-10 שנים — מרפא סרטן (גיל 21+)", 25, { years: 10 })
+      ],
+      "ריסק": [
+        giSimDiscOpt("phx-r-35-15x6", "15/15/15/15/15/15 — 35₪+ לאחר הנחה · ללא הגבלת גיל", [15,15,15,15,15,15]),
+        giSimDiscOpt("phx-r-35-30", "30/30/30/25/25/15 — 35₪+ לאחר הנחה · ללא הגבלת גיל", [30,30,30,25,25,15]),
+        giSimDiscOpt("phx-r-35-35", "35/35/30/20/15/15 — 35₪+ לאחר הנחה · ללא הגבלת גיל", [35,35,30,20,15,15]),
+        giSimDiscOpt("phx-r-35-45", "45/35/25/15/15/15 — 35₪+ לאחר הנחה · ללא הגבלת גיל", [45,35,25,15,15,15]),
+        giSimDiscOpt("phx-r-100-40", "40/40/40/40/30/15 — מעל 100₪ לפני הנחה · ללא הגבלת גיל", [40,40,40,40,30,15]),
+        giSimDiscOpt("phx-r-100-50", "50/50/40/30/20/15 — מעל 100₪ לפני הנחה · ללא הגבלת גיל", [50,50,40,30,20,15]),
+        giSimDiscOpt("phx-r-100-60", "60/50/35/25/15/15 — מעל 100₪ לפני הנחה · ללא הגבלת גיל", [60,50,35,25,15,15]),
+        giSimDiscOpt("phx-r-100-65", "65/50/35/20/15/15 — מעל 100₪ לפני הנחה · ללא הגבלת גיל", [65,50,35,20,15,15]),
+        giSimDiscOpt("phx-r-100-65a-50", "50/50/50/50/30/30 — מעל 100₪ לפני הנחה · עד גיל 65", [50,50,50,50,30,30]),
+        giSimDiscOpt("phx-r-100-65a-55", "55/55/55/40/30/25 — מעל 100₪ לפני הנחה · עד גיל 65", [55,55,55,40,30,25]),
+        giSimDiscOpt("phx-r-100-65a-60", "60/60/50/40/30/20 — מעל 100₪ לפני הנחה · עד גיל 65", [60,60,50,40,30,20]),
+        giSimDiscOpt("phx-r-100-65a-65", "65/55/50/40/30/20 — מעל 100₪ לפני הנחה · עד גיל 65", [65,55,50,40,30,20]),
+        giSimDiscOpt("phx-r-150-55", "55/55/55/55/35/25 — מעל 150₪ לפני הנחה · עד גיל 65", [55,55,55,55,35,25]),
+        giSimDiscOpt("phx-r-150-60", "60/60/50/50/40/20 — מעל 150₪ לפני הנחה · עד גיל 65", [60,60,50,50,40,20]),
+        giSimDiscOpt("phx-r-150-65", "65/65/55/45/30/20 — מעל 150₪ לפני הנחה · עד גיל 65", [65,65,55,45,30,20]),
+        giSimDiscOpt("phx-r-200-60", "60/60/60/50/40/20 — מעל 200₪ לפני הנחה · עד גיל 65", [60,60,60,50,40,20]),
+        giSimDiscOpt("phx-r-200-65a", "65/65/60/50/35/20 — מעל 200₪ לפני הנחה · עד גיל 65", [65,65,60,50,35,20]),
+        giSimDiscOpt("phx-r-200-65b", "65/65/65/50/30/20 — מעל 200₪ לפני הנחה · עד גיל 65", [65,65,65,50,30,20]),
+        giSimDiscOpt("phx-r-gemel-60", "60/60/60/60/60/60 — גמל INVEST · גיל 30–55 · עד 3M · 200₪+ לפני הנחה · חיים+מחלות קשות", [60,60,60,60,60,60]),
+        giSimDiscOpt("phx-r-gemel-70", "70/60/60/60/60/60 — גמל INVEST · גיל 30–55 · עד 3M · 200₪+ לפני הנחה · חיים+מחלות קשות", [70,60,60,60,60,60])
+      ],
+      "ריסק משכנתא": [
+        giSimDiscOpt("phx-m-100dn-40", "40/40/30/30/20/20 — 100₪ ומטה לפני הנחה", [40,40,30,30,20,20]),
+        giSimDiscOpt("phx-m-100up-50a", "50/45/35/25/15/15 — 100₪ ומעלה לפני הנחה", [50,45,35,25,15,15]),
+        giSimDiscOpt("phx-m-100up-50b", "50/45/35/25/20/20 — 100₪ ומעלה לפני הנחה", [50,45,35,25,20,20]),
+        giSimDiscOpt("phx-m-150dn-40", "40/40/30/30/20/20 — עד 150₪ לפני הנחה", [40,40,30,30,20,20]),
+        giSimDiscOpt("phx-m-150dn-50a", "50/45/35/25/20/20 — עד 150₪ לפני הנחה", [50,45,35,25,20,20]),
+        giSimDiscOpt("phx-m-150dn-50b", "50/50/40/30/20/15 — עד 150₪ לפני הנחה", [50,50,40,30,20,15]),
+        giSimDiscOpt("phx-m-150dn-55a", "55/45/35/25/15/15 — עד 150₪ לפני הנחה", [55,45,35,25,15,15]),
+        giSimDiscOpt("phx-m-150dn-55b", "55/50/40/30/25/15 — עד 150₪ לפני הנחה", [55,50,40,30,25,15]),
+        giSimDiscOpt("phx-m-150dn-60", "60/50/35/25/15/15 — עד 150₪ לפני הנחה", [60,50,35,25,15,15]),
+        giSimDiscOpt("phx-m-150dn-65", "65/50/35/25/15/15 — עד 150₪ לפני הנחה", [65,50,35,25,15,15]),
+        giSimDiscOpt("phx-m-150up-55", "55/50/45/40/30/20 — 150₪ ומעלה לפני הנחה", [55,50,45,40,30,20]),
+        giSimDiscOpt("phx-m-150up-60", "60/50/45/35/25/15 — 150₪ ומעלה לפני הנחה", [60,50,45,35,25,15]),
+        giSimDiscOpt("phx-m-150up-65a", "65/50/40/30/20/15 — 150₪ ומעלה לפני הנחה", [65,50,40,30,20,15]),
+        giSimDiscOpt("phx-m-150up-65b", "65/55/45/35/25/15 — 150₪ ומעלה לפני הנחה", [65,55,45,35,25,15])
+      ]
+    }
+  };
+
+  function giSimDiscountList(company, product){
+    const c = safeTrim(company);
+    const t = safeTrim(product);
+    const rows = GI_SIMULATOR_DISCOUNT_CATALOG[c] && GI_SIMULATOR_DISCOUNT_CATALOG[c][t];
+    return Array.isArray(rows) ? rows : [];
+  }
+  function giSimDiscountById(company, product, id){
+    const key = safeTrim(id);
+    if(!key) return null;
+    return giSimDiscountList(company, product).find((o) => o && o.id === key) || null;
+  }
+  function giSimDiscountYear1Pct(opt){
+    if(!opt) return 0;
+    if(Array.isArray(opt.schedule) && opt.schedule.length){
+      const n = Number(opt.schedule[0]);
+      return Number.isFinite(n) ? n : 0;
+    }
+    const n = Number(opt.pct);
+    return Number.isFinite(n) ? n : 0;
+  }
+  function giSimMoneyAfterPct(shekels, pct){
+    const ag = Math.round(Number(shekels) * 100);
+    if(!Number.isFinite(ag)) return null;
+    const p = Number(pct);
+    if(!Number.isFinite(p) || p <= 0) return ag / 100;
+    return Math.round(ag * (100 - p) / 100) / 100;
+  }
+  function giSimDiscountAfterMonthly(result, opt){
+    if(!opt || !result || !result.ok) return null;
+    const covers = Array.isArray(result.covers) ? result.covers : [];
+    if(opt.mode === "perCover" && covers.length && opt.coverPct && typeof opt.coverPct === "object"){
+      let afterAg = 0;
+      covers.forEach((c) => {
+        const ag = Math.round((Number(c.monthlyPremium) || 0) * 100);
+        const pct = Number(opt.coverPct[c.id]) || 0;
+        afterAg += pct > 0 ? Math.round(ag * (100 - pct) / 100) : ag;
+      });
+      return afterAg / 100;
+    }
+    if(Array.isArray(opt.coverIds) && opt.coverIds.length && covers.length){
+      const set = {};
+      opt.coverIds.forEach((id) => { set[id] = true; });
+      const pct = giSimDiscountYear1Pct(opt);
+      let afterAg = 0;
+      covers.forEach((c) => {
+        const ag = Math.round((Number(c.monthlyPremium) || 0) * 100);
+        afterAg += set[c.id] && pct > 0 ? Math.round(ag * (100 - pct) / 100) : ag;
+      });
+      return afterAg / 100;
+    }
+    const monthly = Number(result.monthlyPremium);
+    if(!Number.isFinite(monthly)) return null;
+    return giSimMoneyAfterPct(monthly, giSimDiscountYear1Pct(opt));
+  }
+  function giSimDiscountSelectedId(sim){
+    const map = sim && sim._giSimDiscountSel && typeof sim._giSimDiscountSel === "object" ? sim._giSimDiscountSel : null;
+    if(!map) return "";
+    return safeTrim(map[sim._activeInsuredId || "_"]);
+  }
+  function giSimDiscountSetSelected(sim, optionId){
+    if(!sim._giSimDiscountSel || typeof sim._giSimDiscountSel !== "object") sim._giSimDiscountSel = {};
+    sim._giSimDiscountSel[sim._activeInsuredId || "_"] = safeTrim(optionId);
+  }
+  function giSimDiscountCloseMenu(modal){
+    const menu = modal && modal.querySelector("[data-gisim-disc-menu]");
+    const btn = modal && modal.querySelector("[data-gisim-disc-toggle]");
+    if(menu) menu.setAttribute("hidden", "");
+    if(btn) btn.setAttribute("aria-expanded", "false");
+  }
+  function giSimDiscountInjectDom(sim){
+    const modal = sim && sim._modal;
+    if(!modal || sim._showFinalSummary) return;
+    const company = safeTrim(sim._ctx?.company);
+    const product = safeTrim(sim._ctx?.product);
+    const opts = giSimDiscountList(company, product);
+    if(!opts.length) return;
+    const result = sim._state?.[sim._activeInsuredId]?.result || null;
+    const selectedId = giSimDiscountSelectedId(sim);
+    const selected = giSimDiscountById(company, product, selectedId);
+    const after = selected ? giSimDiscountAfterMonthly(result, selected) : null;
+
+    let wrap = modal.querySelector(".giSimDisc");
+    if(!wrap){
+      wrap = document.createElement("div");
+      wrap.className = "giSimDisc";
+      const resultEl = modal.querySelector("[class*='__result']");
+      if(resultEl && resultEl.parentNode) resultEl.parentNode.insertBefore(wrap, resultEl);
+      else {
+        const body = modal.querySelector(".giValModal__body");
+        if(body) body.appendChild(wrap);
+        else return;
+      }
+    }
+    const menuHtml = [`<button type="button" class="giSimDisc__opt${selectedId ? "" : " is-selected"}" data-gisim-disc-pick="">ללא הנחה</button>`]
+      .concat(opts.map((o) =>
+        `<button type="button" class="giSimDisc__opt${o.id === selectedId ? " is-selected" : ""}" data-gisim-disc-pick="${escapeHtml(o.id)}">${escapeHtml(o.label)}</button>`
+      ))
+      .join("");
+    wrap.innerHTML = `
+      <div class="giSimDisc__row">
+        <button type="button" class="btn giSimDisc__btn" data-gisim-disc-toggle="1" aria-expanded="false" aria-haspopup="listbox">הנחה</button>
+        <span class="giSimDisc__picked">${selected ? escapeHtml(selected.label) : "לא נבחרה הנחה"}</span>
+      </div>
+      <div class="giSimDisc__menu" hidden data-gisim-disc-menu="1" role="listbox">${menuHtml}</div>`;
+
+    modal.querySelectorAll(".giSimDisc__afterRow").forEach((el) => el.remove());
+    modal.querySelectorAll(".giSimDisc__footPrem").forEach((el) => el.remove());
+    if(after != null && Number.isFinite(after)){
+      const ok = modal.querySelector("[class*='__result--ok']");
+      if(ok){
+        const row = document.createElement("div");
+        row.className = "giSimDisc__afterRow";
+        row.innerHTML = `<span>פרמיה לאחר הנחה</span><strong>₪${escapeHtml(riskSimFormatMoneyShekels(after))}</strong>`;
+        ok.appendChild(row);
+      }
+      const foot = modal.querySelector(".giSimShell__foot");
+      if(foot){
+        const block = document.createElement("div");
+        block.className = "giSimShell__premBlock giSimDisc__footPrem";
+        block.innerHTML = `<span class="giSimShell__premLabel">פרמיה לאחר הנחה</span><strong class="giSimShell__premValue">₪${escapeHtml(riskSimFormatMoneyShekels(after))}</strong>`;
+        const actions = foot.querySelector(".giSimShell__footActions");
+        if(actions) foot.insertBefore(block, actions);
+        else foot.appendChild(block);
+      }
+    }
+  }
+  function giSimDiscountEnsureDelegation(sim){
+    const modal = sim && sim._modal;
+    if(!modal || modal._giSimDiscDel) return;
+    modal._giSimDiscDel = true;
+    on(modal, "click", (ev) => {
+      const t = ev.target;
+      if(!t || typeof t.closest !== "function") return;
+      const toggle = t.closest("[data-gisim-disc-toggle]");
+      if(toggle && modal.contains(toggle)){
+        ev.preventDefault();
+        ev.stopPropagation();
+        const menu = modal.querySelector("[data-gisim-disc-menu]");
+        if(!menu) return;
+        const willOpen = menu.hasAttribute("hidden");
+        if(willOpen) menu.removeAttribute("hidden");
+        else menu.setAttribute("hidden", "");
+        toggle.setAttribute("aria-expanded", willOpen ? "true" : "false");
+        return;
+      }
+      const pick = t.closest("[data-gisim-disc-pick]");
+      if(pick && modal.contains(pick)){
+        ev.preventDefault();
+        ev.stopPropagation();
+        giSimDiscountSetSelected(sim, pick.getAttribute("data-gisim-disc-pick") || "");
+        try { if(typeof sim._render === "function") sim._render(); } catch(_e) {}
+        return;
+      }
+      if(!t.closest(".giSimDisc")) giSimDiscountCloseMenu(modal);
+    });
+  }
+  function giSimDiscountInstallChrome(sim){
+    try { giSimDiscountEnsureDelegation(sim); } catch(_e) {}
+    try { giSimDiscountInjectDom(sim); } catch(_e2) {}
+  }
+
   function riskSimInstallShellEnhancer(handler){
     if(!handler || handler._giShellEnhanced) return handler;
     if(typeof handler.open === "function"){
@@ -914,6 +1195,7 @@
         delete next.restoreState;
         delete next.restoreActiveId;
         handler._giOpening = true;
+        handler._giSimDiscountSel = {};
         let out;
         try { out = origOpen(next); }
         finally { handler._giOpening = false; }
@@ -961,6 +1243,7 @@
         try { riskSimAugmentStandaloneChrome(handler); } catch(_e) {}
         origBind();
         try { riskSimBindStandaloneChrome(handler); } catch(_e2) {}
+        try { giSimDiscountInstallChrome(handler); } catch(_e3) {}
       };
     }
     handler._giShellEnhanced = true;
