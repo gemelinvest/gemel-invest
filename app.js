@@ -25760,8 +25760,19 @@ UsersGateUI.init();
     _timerHandle: null,
     _typingQuery: "",
     _typingRange: "all",
+    _waitingMirrorLane: "no_answer_1",
     // Signatures stay frozen until product owner defines their customer source.
     _frozenBuckets: Object.freeze(["pending_signatures"]),
+
+    WAITING_MIRROR_LANES: Object.freeze([
+      { key: "no_answer_1", label: "ללא מענה 1" },
+      { key: "no_answer_2", label: "ללא מענה 2" },
+      { key: "no_answer_3", label: "ללא מענה 3" },
+      { key: "no_answer_long", label: "ללא מענה ממושך" },
+      { key: "scheduled", label: "מתוזמנים" },
+      { key: "on_hold", label: "בהשהייה" },
+      { key: "checklist_pending", label: "לא אושר צ׳ק־ליסט לשיקוף" }
+    ]),
 
     FLOW_STEPS: Object.freeze([
       { n: 1, keys: ["idle"], label: "הצגה עצמית" },
@@ -26044,6 +26055,62 @@ UsersGateUI.init();
       return this.collectRows().filter((row) => row.bucket === "waiting_mirror");
     },
 
+    scheduledMirrorCustomerIds(){
+      const ids = new Set();
+      let events = [];
+      try{
+        events = (typeof OpsEventsUI !== "undefined" && OpsEventsUI && typeof OpsEventsUI.getEvents === "function")
+          ? (OpsEventsUI.getEvents() || [])
+          : (Array.isArray(State.data?.meta?.opsEvents) ? State.data.meta.opsEvents : []);
+      }catch(_e){
+        events = Array.isArray(State.data?.meta?.opsEvents) ? State.data.meta.opsEvents : [];
+      }
+      events.forEach((ev) => {
+        const id = safeTrim(ev?.customerId);
+        if(!id) return;
+        if(safeTrim(ev?.status) === "done" || safeTrim(ev?.status) === "cancelled") return;
+        if(safeTrim(ev?.acknowledgedAt) || safeTrim(ev?.reminder?.acknowledgedAt)) return;
+        ids.add(id);
+      });
+      return ids;
+    },
+
+    waitingMirrorLaneOf(row, scheduledIds){
+      const rec = row?.rec;
+      const call = this.getCallStore(rec);
+      if(call?.paused) return "on_hold";
+      const cid = safeTrim(row?.id || rec?.id);
+      if(cid && scheduledIds && scheduledIds.has(cid)) return "scheduled";
+      const ops = (rec?.payload && typeof rec.payload === "object" && rec.payload.opsProcess && typeof rec.payload.opsProcess === "object")
+        ? rec.payload.opsProcess
+        : {};
+      if(safeTrim(ops.liveState) === "handling") return "checklist_pending";
+      return "no_answer_1";
+    },
+
+    waitingMirrorLaneLabel(key){
+      const hit = this.WAITING_MIRROR_LANES.find((lane) => lane.key === safeTrim(key));
+      return hit ? hit.label : "ממתינים לשיקוף";
+    },
+
+    filterWaitingMirrorRowsByLane(rows){
+      const list = Array.isArray(rows) ? rows : [];
+      const scheduledIds = this.scheduledMirrorCustomerIds();
+      const lane = safeTrim(this._waitingMirrorLane) || "no_answer_1";
+      const counts = {};
+      this.WAITING_MIRROR_LANES.forEach((item) => { counts[item.key] = 0; });
+      const tagged = list.map((row) => {
+        const key = this.waitingMirrorLaneOf(row, scheduledIds);
+        counts[key] = (counts[key] || 0) + 1;
+        return { row, key };
+      });
+      return {
+        lane,
+        counts,
+        rows: tagged.filter((item) => item.key === lane).map((item) => item.row)
+      };
+    },
+
     collectWaitingTypingRows(){
       return this.collectRows().filter((row) => row.bucket === "waiting_typing");
     },
@@ -26099,13 +26166,9 @@ UsersGateUI.init();
 
     buildModel(rows){
       const list = Array.isArray(rows) ? rows : this.collectRows();
-      const kpiKeys = ["waiting_mirror", "waiting_typing", "pending_signatures"];
+      const kpiKeys = ["waiting_mirror", "waiting_typing", "pending_signatures", "issuance"];
       const kpis = {};
       kpiKeys.forEach((key) => {
-        if(this.isBucketFrozen(key)){
-          kpis[key] = { count: 0, premium: 0 };
-          return;
-        }
         const items = list.filter((r) => r.bucket === key);
         kpis[key] = {
           count: items.length,
@@ -26171,9 +26234,9 @@ UsersGateUI.init();
       }).join("");
     },
 
-    renderWaitingMirrorList(rows, isManager){
+    renderWaitingMirrorList(rows, isManager, emptyText){
       if(!rows.length){
-        return `<div class="opsDashEmpty">אין כרגע לקוחות ממתינים לשיקוף</div>`;
+        return `<div class="opsDashEmpty">${escapeHtml(emptyText || "אין כרגע לקוחות ממתינים לשיקוף")}</div>`;
       }
       return `
         <div class="opsDashQueueList">
@@ -26192,6 +26255,7 @@ UsersGateUI.init();
                 </div>
                 <div class="opsDashQueueRow__side">
                   <span class="opsDashQueueRow__wait">${escapeHtml(row.waitLabel)}</span>
+                  <span class="opsDashQueueRow__prem">${escapeHtml(this.formatMoney(row.premium))}</span>
                   <span class="opsDashQueueRow__assign ${assigned ? "is-assigned" : "is-open"}">${assigned ? `משויך: ${escapeHtml(row.agentName)}` : "ממתין לשיוך"}</span>
                   <div class="opsDashQueueRow__actions">
                     ${isManager
@@ -26231,6 +26295,7 @@ UsersGateUI.init();
             <td>${escapeHtml(product.company)}${product.product ? `<br/><span class="mtqSubCell">${escapeHtml(product.product)}</span>` : ""}</td>
             <td>${escapeHtml(mirrorAgent)}</td>
             <td>${changeBadge}</td>
+            <td class="mtqMono">${escapeHtml(this.formatMoney(row.premium))}</td>
             <td class="mtqMono">${escapeHtml(row.waitLabel)}</td>
             <td><button class="mtqBtn mtqBtn--sm${idx === 0 ? " mtqBtn--primary" : ""}" type="button" data-ops-typing-open="${escapeHtml(row.id)}">פתח תיק הקלדה</button></td>
           </tr>`;
@@ -26245,6 +26310,7 @@ UsersGateUI.init();
               <th>מוצר / חברה</th>
               <th>נציג שיקוף</th>
               <th>שינויים</th>
+              <th>פרמיה</th>
               <th>זמן בתור</th>
               <th></th>
             </tr>
@@ -26337,6 +26403,9 @@ UsersGateUI.init();
       const iconUsers = `<svg class="opsDashActIcon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 11a3.5 3.5 0 1 0-3.5-3.5A3.5 3.5 0 0 0 9 11Zm6 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3ZM3.8 18.6A5.7 5.7 0 0 1 9 15.5a5.7 5.7 0 0 1 5.2 3.1 1 1 0 0 1-.9 1.4H4.7a1 1 0 0 1-.9-1.4Zm10.5-.1A7.4 7.4 0 0 1 15 15.5a4.8 4.8 0 0 1 4.5 2.8 1 1 0 0 1-.9 1.5h-3.4a2.2 2.2 0 0 1-.9-.3Z"/></svg>`;
       const iconDoc = `<svg class="opsDashActIcon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm7 1.5V8h4.5L14 3.5ZM8 12h8v1.6H8V12Zm0 3.4h8V17H8v-1.6Zm0-6.8h5V10H8V8.6Z"/></svg>`;
 
+      const waitingLane = listBucket === "waiting_mirror"
+        ? this.filterWaitingMirrorRowsByLane(model.waitingMirrorRows)
+        : null;
       const waitingListHtml = listBucket === "waiting_mirror"
         ? `<article class="card opsDashPanel opsDashPanel--queue">
             <div class="opsDashPanel__head">
@@ -26351,7 +26420,14 @@ UsersGateUI.init();
                 <button class="btn btn--small" type="button" data-ops-dash-back>חזרה לדשבורד</button>
               </div>
             </div>
-            ${this.renderWaitingMirrorList(model.waitingMirrorRows, isManager)}
+            <div class="opsDashLaneRow" role="tablist" aria-label="חלוקת ממתינים לשיקוף">
+              ${this.WAITING_MIRROR_LANES.map((lane) => {
+                const count = Number(waitingLane?.counts?.[lane.key] || 0) || 0;
+                const on = waitingLane?.lane === lane.key;
+                return `<button class="opsDashLane${on ? " is-active" : ""}" type="button" data-ops-mirror-lane="${escapeHtml(lane.key)}" role="tab" aria-selected="${on ? "true" : "false"}">${escapeHtml(lane.label)} <strong>${count}</strong></button>`;
+              }).join("")}
+            </div>
+            ${this.renderWaitingMirrorList(waitingLane?.rows || [], isManager, "אין לקוחות בחלוקה הזו")}
           </article>`
         : "";
 
@@ -26432,10 +26508,11 @@ UsersGateUI.init();
             </div>
           </header>
 
-          <div class="opsDash__kpis opsDash__kpis--3">
+          <div class="opsDash__kpis opsDash__kpis--4">
             ${kpiCard("waiting_mirror", "ממתינים לשיקוף")}
             ${kpiCard("waiting_typing", "ממתין להקלדה")}
             ${kpiCard("pending_signatures", "ממתין לחתימות")}
+            ${kpiCard("issuance", "עבר להפקה")}
           </div>
 
           ${mainMidHtml}
@@ -26465,6 +26542,7 @@ UsersGateUI.init();
           const bucket = safeTrim(card.getAttribute("data-ops-dash-bucket"));
           if(bucket === "waiting_mirror"){
             this._listBucket = "waiting_mirror";
+            this._waitingMirrorLane = "no_answer_1";
             this.render();
             return;
           }
@@ -26477,6 +26555,14 @@ UsersGateUI.init();
             try { window.showToast?.({ title: "בקרוב", text: "התור הזה יחובר בהמשך.", variant: "info", durationMs: 3200 }); } catch(_e){}
             return;
           }
+        });
+      });
+      mount.querySelectorAll("[data-ops-mirror-lane]").forEach((btn) => {
+        on(btn, "click", () => {
+          const lane = safeTrim(btn.getAttribute("data-ops-mirror-lane"));
+          if(!this.WAITING_MIRROR_LANES.some((item) => item.key === lane)) return;
+          this._waitingMirrorLane = lane;
+          this.render();
         });
       });
       mount.querySelectorAll("[data-ops-dash-back]").forEach((btn) => {
@@ -53292,6 +53378,8 @@ ${inner}
     _mirrorPendingHarValidation: null,
     _verifyOpenInsuredIds: null,
     _verifyActiveInsuredId: null,
+    _preFlightReviewed: null,
+    _preFlightConfirmed: false,
 
     els: {},
 
@@ -53395,6 +53483,11 @@ ${inner}
       this.els.preFlight    = document.getElementById("mcCallPreFlight");
       this.els.preFlightAlert = document.getElementById("mcCallPreFlightAlert");
       this.els.preFlightModal = document.getElementById("mcPreFlightModal");
+      this.els.preFlightList = document.getElementById("mcPreFlightList");
+      this.els.preFlightAckBtn = document.getElementById("mcPreFlightAckBtn");
+      this.els.preFlightConfirm = document.getElementById("mcPreFlightConfirm");
+      this.els.preFlightConfirmOk = document.getElementById("mcPreFlightConfirmOk");
+      this.els.preFlightConfirmCancel = document.getElementById("mcPreFlightConfirmCancel");
       this.els.readyPanel = document.getElementById("mcReadyPanel");
       this.els.readyCustomerName = document.getElementById("mcReadyCustomerName");
       this.els.readyCustomerId = document.getElementById("mcReadyCustomerId");
@@ -53444,14 +53537,16 @@ ${inner}
       if(this.els.assignCancelBtn) on(this.els.assignCancelBtn, "click", () => this.closeAssignModal());
       if(this.els.assignSaveBtn) on(this.els.assignSaveBtn, "click", () => this.saveAssignModal());
       if(this.els.assignClearBtn) on(this.els.assignClearBtn, "click", () => this.clearAssignModal());
-      if(this.els.preFlight){
-        on(this.els.preFlight, "change", (ev) => {
-          const t = ev.target;
-          if(!t || !t.matches || !t.matches("input[type=\"checkbox\"][data-mc-preitem]")) return;
-          if(this.els.preFlightAlert && this._allPreCheckComplete()) this.els.preFlightAlert.hidden = true;
-          this._syncMcCallStartButton();
+      if(this.els.preFlightList){
+        on(this.els.preFlightList, "click", (ev) => {
+          const btn = ev.target?.closest?.("[data-mc-prestep-review]");
+          if(!btn) return;
+          this._togglePreFlightStep(btn.getAttribute("data-mc-prestep-review"));
         });
       }
+      if(this.els.preFlightAckBtn) on(this.els.preFlightAckBtn, "click", () => this._openPreFlightConfirm());
+      if(this.els.preFlightConfirmOk) on(this.els.preFlightConfirmOk, "click", () => this._acceptPreFlightConfirm());
+      if(this.els.preFlightConfirmCancel) on(this.els.preFlightConfirmCancel, "click", () => this._cancelPreFlightConfirm());
       if(this.els.readyPremiumList){
         on(this.els.readyPremiumList, "click", (ev) => {
           const btn = ev.target?.closest?.("[data-mc-premium-upload]");
@@ -53471,20 +53566,205 @@ ${inner}
       }
     },
 
+    PREFLIGHT_STEPS: Object.freeze([
+      { key: "intro", n: 1, label: "הצגה עצמית" },
+      { key: "personal", n: 2, label: "פרטי מבוטח/ים" },
+      { key: "needs", n: 3, label: "בירור והתאמת צרכים" },
+      { key: "disclosure", n: 4, label: "גילוי נאות" },
+      { key: "cancel", n: 5, label: "שאלון ביטול" },
+      { key: "beneficiaries", n: 6, label: "פרטי מוטבים" },
+      { key: "health", n: 7, label: "הצהרת בריאות" },
+      { key: "future", n: 8, label: "שינוי או ביטול בעתיד" },
+      { key: "payment", n: 9, label: "פרטי אמצעי תשלום" },
+      { key: "summary", n: 10, label: "סיכום והצהרות" }
+    ]),
+
+    _preFlightReviewedSet(){
+      if(!(this._preFlightReviewed instanceof Set)) this._preFlightReviewed = new Set();
+      return this._preFlightReviewed;
+    },
+
+    _allPreFlightStepsReviewed(){
+      const set = this._preFlightReviewedSet();
+      return this.PREFLIGHT_STEPS.every((step) => set.has(step.key));
+    },
+
     _preCheckInputs(){
-      if(!this.els.preFlight) return [];
-      return Array.from(this.els.preFlight.querySelectorAll("input[type=\"checkbox\"][data-mc-preitem]"));
+      if(!this.els.preFlightList) return [];
+      return Array.from(this.els.preFlightList.querySelectorAll("[data-mc-prestep-review]"));
     },
 
     _allPreCheckComplete(){
-      const inputs = this._preCheckInputs();
-      if(!inputs.length) return true;
-      return inputs.every(inp => !!inp.checked);
+      return this._preFlightConfirmed === true;
+    },
+
+    _showPreFlightConfirm(on){
+      const box = this.els.preFlightConfirm;
+      const modal = this.els.preFlightModal;
+      if(box){
+        if(on){
+          box.hidden = false;
+          box.removeAttribute("hidden");
+        } else {
+          box.hidden = true;
+          box.setAttribute("hidden", "");
+        }
+      }
+      if(modal) modal.classList.toggle("is-confirming", !!on);
     },
 
     _resetPreFlightChecks(){
-      this._preCheckInputs().forEach(inp => { inp.checked = false; });
+      this._preFlightReviewed = new Set();
+      this._preFlightConfirmed = false;
+      this._showPreFlightConfirm(false);
       if(this.els.preFlightAlert) this.els.preFlightAlert.hidden = true;
+      this._paintPreFlightChecklist();
+      this._syncMcCallStartButton();
+    },
+
+    _preFlightPayload(rec){
+      const pl = rec?.payload;
+      return (pl && typeof pl === "object") ? pl : {};
+    },
+
+    _preFlightInsureds(rec){
+      const pl = this._preFlightPayload(rec);
+      if(Array.isArray(pl.insureds) && pl.insureds.length) return pl.insureds;
+      if(Array.isArray(pl.operational?.insureds) && pl.operational.insureds.length) return pl.operational.insureds;
+      return [];
+    },
+
+    _preFlightNewPolicies(rec){
+      const pl = this._preFlightPayload(rec);
+      const list = Array.isArray(pl.newPolicies) && pl.newPolicies.length
+        ? pl.newPolicies
+        : (Array.isArray(pl.operational?.newPolicies) ? pl.operational.newPolicies : []);
+      return Array.isArray(list) ? list.filter(Boolean) : [];
+    },
+
+    _preFlightInsuredLabel(ins, idx){
+      const d = (ins?.data && typeof ins.data === "object") ? ins.data : {};
+      const name = safeTrim(ins?.label)
+        || safeTrim(((d.firstName || "") + " " + (d.lastName || "")).trim())
+        || safeTrim(d.fullName)
+        || ("מבוטח " + (idx + 1));
+      const idNum = safeTrim(d.idNumber);
+      return idNum ? `${name} · ${idNum}` : name;
+    },
+
+    _preFlightStepSummary(rec, key){
+      const insureds = this._preFlightInsureds(rec);
+      const policies = this._preFlightNewPolicies(rec);
+      const existingCount = insureds.reduce((n, ins) => {
+        const list = Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : [];
+        return n + list.length;
+      }, 0);
+      if(key === "intro") return "נוסח פתיחה והסכמה להקלטה";
+      if(key === "personal"){
+        if(!insureds.length) return "לא נמצאו מבוטחים בתיק";
+        return insureds.map((ins, idx) => this._preFlightInsuredLabel(ins, idx)).join(" · ");
+      }
+      if(key === "needs"){
+        if(!policies.length) return "לא הוזנו פוליסות חדשות בתיק";
+        return policies.map((p) => {
+          const co = safeTrim(p?.company) || "חברה";
+          const type = safeTrim(p?.type || p?.product) || "מוצר";
+          return `${co} · ${type}`;
+        }).slice(0, 4).join(" | ") + (policies.length > 4 ? ` +${policies.length - 4}` : "");
+      }
+      if(key === "disclosure") return "נוסח גילוי נאות להקראה";
+      if(key === "cancel"){
+        return existingCount
+          ? `${existingCount} פוליסות קיימות בתיק לבדיקת ביטול`
+          : "אין פוליסות קיימות לביטול בתיק";
+      }
+      if(key === "beneficiaries"){
+        const risk = policies.filter((p) => /ריסק|משכנת|חיים|כושר/i.test(safeTrim(p?.type || p?.product)));
+        return risk.length
+          ? `${risk.length} פוליסות סיכונים למוטבים / שיעבוד`
+          : "אין פוליסות סיכונים למוטבים בתיק";
+      }
+      if(key === "health"){
+        const pl = this._preFlightPayload(rec);
+        const src = (pl.healthDeclaration && typeof pl.healthDeclaration === "object")
+          ? pl.healthDeclaration
+          : ((pl.primary && typeof pl.primary === "object" && pl.primary.healthDeclaration) || null);
+        const responses = src?.responses && typeof src.responses === "object" ? src.responses : null;
+        const qCount = responses ? Object.keys(responses).length : 0;
+        return qCount ? `הצהרת בריאות בתיק · ${qCount} שאלות` : "הצהרת בריאות לפי הפוליסות בתיק";
+      }
+      if(key === "future") return "נוסח שינוי או ביטול בעתיד";
+      if(key === "payment"){
+        const p = this._preFlightPayload(rec).primary;
+        const pay = (p && typeof p === "object") ? p : {};
+        const method = safeTrim(pay.paymentMethod || pay.payerChoice);
+        return method ? `אמצעי תשלום בתיק · ${method}` : "פרטי אמצעי תשלום מהתיק";
+      }
+      if(key === "summary") return "סיכום השיחה והצהרות סיום";
+      return "לבדיקה לפני השיחה";
+    },
+
+    _paintPreFlightChecklist(){
+      const host = this.els.preFlightList;
+      if(!host) return;
+      const rec = this.selectedCustomer;
+      const reviewed = this._preFlightReviewedSet();
+      host.innerHTML = this.PREFLIGHT_STEPS.map((step) => {
+        const done = reviewed.has(step.key);
+        return `<li class="mcPreFlightItem${done ? " is-done" : ""}" data-mc-prestep="${escapeHtml(step.key)}">` +
+          `<button type="button" class="mcPreFlightItem__btn" data-mc-prestep-review="${escapeHtml(step.key)}">` +
+            `<span class="mcPreFlightItem__n">${step.n}</span>` +
+            `<span class="mcPreFlightItem__body">` +
+              `<span class="mcPreFlightItem__title">${escapeHtml(step.label)}</span>` +
+              `<span class="mcPreFlightItem__sum">${escapeHtml(this._preFlightStepSummary(rec, step.key))}</span>` +
+            `</span>` +
+            `<span class="mcPreFlightItem__mark">${done ? "נבדק" : "לסמן שנבדק"}</span>` +
+          `</button>` +
+        `</li>`;
+      }).join("");
+      if(this.els.preFlightAckBtn) this.els.preFlightAckBtn.disabled = !this._allPreFlightStepsReviewed() || this._preFlightConfirmed;
+    },
+
+    _togglePreFlightStep(key){
+      const stepKey = safeTrim(key);
+      if(!this.PREFLIGHT_STEPS.some((s) => s.key === stepKey)) return;
+      if(this._preFlightConfirmed) return;
+      const set = this._preFlightReviewedSet();
+      if(set.has(stepKey)) set.delete(stepKey);
+      else set.add(stepKey);
+      if(this.els.preFlightAlert) this.els.preFlightAlert.hidden = true;
+      this._paintPreFlightChecklist();
+    },
+
+    _openPreFlightConfirm(){
+      if(this._preFlightConfirmed) return;
+      if(!this._allPreFlightStepsReviewed()){
+        if(this.els.preFlightAlert){
+          this.els.preFlightAlert.hidden = false;
+          this.els.preFlightAlert.textContent = "יש לעבור על כל השלבים לפני האישור";
+        }
+        return;
+      }
+      if(this.els.preFlightAlert) this.els.preFlightAlert.hidden = true;
+      this._showPreFlightConfirm(true);
+      window.requestAnimationFrame(() => {
+        try{ this.els.preFlightConfirmOk?.focus(); }catch(_e){}
+      });
+    },
+
+    _cancelPreFlightConfirm(){
+      this._showPreFlightConfirm(false);
+      window.requestAnimationFrame(() => {
+        try{ this.els.preFlightAckBtn?.focus(); }catch(_e){}
+      });
+    },
+
+    _acceptPreFlightConfirm(){
+      if(!this._allPreFlightStepsReviewed()) return;
+      this._preFlightConfirmed = true;
+      this._showPreFlightConfirm(false);
+      if(this.els.preFlightAlert) this.els.preFlightAlert.hidden = true;
+      this._paintPreFlightChecklist();
       this._syncMcCallStartButton();
     },
 
@@ -53987,9 +54267,9 @@ ${inner}
         window.requestAnimationFrame(() => {
           try{
             const btn = this.els.callStartBtn;
-            const firstChk = this._preCheckInputs()[0];
+            const firstStep = this._preCheckInputs()[0];
             if(btn && !btn.disabled) btn.focus();
-            else if(firstChk) firstChk.focus();
+            else if(firstStep) firstStep.focus();
           }catch(_e){}
         });
       } else {

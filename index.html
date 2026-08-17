@@ -8,7 +8,7 @@
 <meta content="#f8fafc" name="theme-color"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20260817-leads-track-v1" rel="stylesheet"/>
+<link href="./app.css?v=20260817-ops-dash-v1" rel="stylesheet"/>
 <link href="./theme.css?v=20260817-leads-track-v1" rel="stylesheet"/>
 <link href="./theme-p2.css?v=20260805-workdays-goal-v1" rel="stylesheet"/>
 <link href="./login-split.css?v=20260814-face-ui-v1" rel="stylesheet"/>
@@ -1473,35 +1473,21 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
     <div class="mcPreFlightModal__backdrop" aria-hidden="true"></div>
     <div class="mcPreFlightModal__sheet" role="dialog" aria-modal="true" aria-labelledby="mcCallPreFlightTitle">
       <div class="mcCall__preFlight mcPreFlightModal__preFlight" id="mcCallPreFlight" aria-labelledby="mcCallPreFlightTitle">
-        <div class="mcCall__preFlightTitle" id="mcCallPreFlightTitle">לפני תחילת השיקוף</div>
-        <p class="mcCall__preFlightSub">סמן וי בכל סעיף — רק אז ניתן להפעיל את השיחה המוקלטת.</p>
-        <ul class="mcCall__checklist" role="list">
-          <li class="mcCall__checkItem">
-            <label class="mcCall__checkLabel">
-              <input class="mcCall__checkInput" type="checkbox" data-mc-preitem="identity"/>
-              <span class="mcCall__checkText">וידאתי שזה הלקוח הנכון (שם, ת״ז / טלפון) לפני תחילת ההקלטה</span>
-            </label>
-          </li>
-          <li class="mcCall__checkItem">
-            <label class="mcCall__checkLabel">
-              <input class="mcCall__checkInput" type="checkbox" data-mc-preitem="environment"/>
-              <span class="mcCall__checkText">הלקוח עונה בסביבה מתאימה לשיחה מוקלטת ומודע לכך שהשיחה מוקלטת</span>
-            </label>
-          </li>
-          <li class="mcCall__checkItem">
-            <label class="mcCall__checkLabel">
-              <input class="mcCall__checkInput" type="checkbox" data-mc-preitem="proposal"/>
-              <span class="mcCall__checkText">בדקתי שפרטי ההצעה והחברה במערכת תואמים לנוסח שאקרא ללקוח</span>
-            </label>
-          </li>
-          <li class="mcCall__checkItem">
-            <label class="mcCall__checkLabel">
-              <input class="mcCall__checkInput" type="checkbox" data-mc-preitem="docs"/>
-              <span class="mcCall__checkText">מסך המערכת, כרום והרשאות מיקרופון מוכנים לתיעוד השיחה</span>
-            </label>
-          </li>
-        </ul>
-        <p class="mcCall__preFlightAlert" id="mcCallPreFlightAlert" hidden role="status">יש לסמן את כל הסעיפים כדי להתחיל</p>
+        <div class="mcCall__preFlightTitle" id="mcCallPreFlightTitle">בדיקת תיק לפני שיחת שיקוף</div>
+        <p class="mcCall__preFlightSub">עבור על כל שלבי השיקוף וודא שהתיק תקין. זו רשימת בדיקה — לא מסך השיחה עצמה.</p>
+        <ol class="mcPreFlightList" id="mcPreFlightList"></ol>
+        <p class="mcCall__preFlightAlert" id="mcCallPreFlightAlert" hidden role="status">יש לעבור על כל השלבים ולאשר לפני תחילת השיחה</p>
+        <div class="mcPreFlightActions">
+          <button class="btn btn--primary mcPreFlightAckBtn" id="mcPreFlightAckBtn" type="button" disabled>אני מאשר שעברתי על הצ׳ק־ליסט</button>
+        </div>
+      </div>
+      <div class="mcPreFlightConfirm" id="mcPreFlightConfirm" hidden>
+        <div class="mcPreFlightConfirm__title" id="mcPreFlightConfirmTitle">אישור יציאה לשיחה</div>
+        <p class="mcPreFlightConfirm__text">האם אתה מאשר שעברת על כל שלבי השיקוף ושהתיק תקין?</p>
+        <div class="mcPreFlightConfirm__actions">
+          <button class="btn" id="mcPreFlightConfirmCancel" type="button">חזרה לצ׳ק־ליסט</button>
+          <button class="btn btn--primary" id="mcPreFlightConfirmOk" type="button">מאשר · המשך להתחלת שיחה</button>
+        </div>
       </div>
     </div>
   </div>
@@ -3852,7 +3838,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 </div>
 
 <script src="./contacts-directory-seed.js?v=20260811-contacts-v1"></script>
-<script src="./app.js?v=20260817-ref-empty-dash-v1"></script>
+<script src="./app.js?v=20260817-ops-dash-v1"></script>
 <script src="./gi-face-auth.js?v=20260816-face-ok-v1"></script>
 
 
