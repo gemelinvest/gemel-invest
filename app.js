@@ -14497,7 +14497,7 @@ UsersGateUI.init();
         this._settingsRubric = safe;
         safe = "settings";
       }
-      if(Auth.isReferent() && safe !== "campaignLeads" && safe !== "contacts") safe = "campaignLeads";
+      if(Auth.isReferent() && safe !== "campaignLeads" && safe !== "contacts" && safe !== "dashboard") safe = "campaignLeads";
       try { CampaignLeadsUI.stopPoll?.(); } catch(_e) {}
       try { CustomersUI.stopOpsCardLoop?.(); } catch(_e) {}
       // hide all views
@@ -27544,7 +27544,7 @@ UsersGateUI.init();
     },
 
     shouldShowPerformanceBoard(){
-      if(Auth.isElementary() || Auth.isOpsAgent()) return false;
+      if(Auth.isElementary() || Auth.isOpsAgent() || Auth.isReferent()) return false;
       return !!(Auth.isAdmin() || Auth.isManager() || (!Auth.isOps() && !!Auth.current));
     },
 
