@@ -32120,10 +32120,20 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
   display:flex;
   flex-direction:column;
   gap:8px;
-  max-height:min(58dvh, 520px);
+  max-height:min(64dvh, 640px);
   overflow-y:auto;
   -webkit-overflow-scrolling:touch;
 }
+.mcPreFlightLoad{
+  list-style:none;
+  margin:0;
+  padding:16px 8px;
+  font-size:14px;
+  font-weight:700;
+  color:#1e3a7a;
+  text-align:center;
+}
+.mcPreFlightLoad--err{color:#b91c1c;}
 .mcPreFlightItem{margin:0;}
 .mcPreFlightItem__btn{
   width:100%;
@@ -45858,6 +45868,10 @@ body.lcAuthLock .lcLogin__footBtn{
   line-height:1.5;
   font-weight:600;
   color:#152a5c;
+}
+.mcPreFlightItem__detail .mcPolCard,
+.mcPreFlightItem__detail .mcDiscCompany{
+  margin:0 0 10px;
 }
 .mcCallScript,
 .mcStep2,

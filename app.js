@@ -53649,6 +53649,10 @@ ${inner}
     },
 
     _preFlightInsureds(rec){
+      try{
+        const list = this._mirrorGetInsureds(rec);
+        if(Array.isArray(list) && list.length) return list;
+      }catch(_e){}
       const pl = this._preFlightPayload(rec);
       if(Array.isArray(pl.insureds) && pl.insureds.length) return pl.insureds;
       if(Array.isArray(pl.operational?.insureds) && pl.operational.insureds.length) return pl.operational.insureds;
@@ -53656,6 +53660,10 @@ ${inner}
     },
 
     _preFlightNewPolicies(rec){
+      try{
+        const list = this._mirrorGetNewPoliciesRaw(rec);
+        if(Array.isArray(list) && list.length) return list;
+      }catch(_e){}
       const pl = this._preFlightPayload(rec);
       const list = Array.isArray(pl.newPolicies) && pl.newPolicies.length
         ? pl.newPolicies
@@ -53700,19 +53708,29 @@ ${inner}
           : "אין פוליסות קיימות לביטול בתיק";
       }
       if(key === "beneficiaries"){
-        const risk = policies.filter((p) => /ריסק|משכנת|חיים|כושר/i.test(safeTrim(p?.type || p?.product)));
+        const risk = policies.filter((p) => this._isRiskOrMortgageRiskType(p?.type || p?.product));
         return risk.length
           ? `${risk.length} פוליסות סיכונים למוטבים / שיעבוד`
           : "אין פוליסות סיכונים למוטבים בתיק";
       }
       if(key === "health"){
-        const pl = this._preFlightPayload(rec);
-        const src = (pl.healthDeclaration && typeof pl.healthDeclaration === "object")
-          ? pl.healthDeclaration
-          : ((pl.primary && typeof pl.primary === "object" && pl.primary.healthDeclaration) || null);
-        const responses = src?.responses && typeof src.responses === "object" ? src.responses : null;
-        const qCount = responses ? Object.keys(responses).length : 0;
-        return qCount ? `הצהרת בריאות בתיק · ${qCount} שאלות` : "הצהרת בריאות לפי הפוליסות בתיק";
+        let qCount = 0;
+        try{
+          if(typeof MirrorsUI !== "undefined" && typeof MirrorsUI.getHealthDeclarationSource === "function"){
+            const src = MirrorsUI.getHealthDeclarationSource(rec);
+            const responses = src?.responses && typeof src.responses === "object" ? src.responses : null;
+            qCount = responses ? Object.keys(responses).length : 0;
+          }
+        }catch(_e){ qCount = 0; }
+        if(!qCount){
+          const pl = this._preFlightPayload(rec);
+          const src = (pl.healthDeclaration && typeof pl.healthDeclaration === "object")
+            ? pl.healthDeclaration
+            : ((pl.primary && typeof pl.primary === "object" && pl.primary.healthDeclaration) || null);
+          const responses = src?.responses && typeof src.responses === "object" ? src.responses : null;
+          qCount = responses ? Object.keys(responses).length : 0;
+        }
+        return qCount ? `הצהרת בריאות בתיק · ${qCount} שאלות` : "אין תשובות הצהרת בריאות בתיק";
       }
       if(key === "future") return "נוסח שינוי או ביטול בעתיד";
       if(key === "payment"){
@@ -53737,36 +53755,135 @@ ${inner}
       return `<div class="mcPreFlightKv"><span>${escapeHtml(label)}</span><b>${escapeHtml(v)}</b></div>`;
     },
 
+    _preFlightOpeningHtml(rec){
+      const c = rec || this.selectedCustomer;
+      const customerName = safeTrim(c?.fullName) || "לא הוזן";
+      const repName = safeTrim(Auth?.current?.name) || "לא הוזן";
+      const proposals = State.data?.proposals || [];
+      const pr = proposals.find((p) => safeTrim(p.customerId) === safeTrim(c?.id));
+      const priorContact = safeTrim(c?.agentName) || safeTrim(pr?.agentName) || "לא הוזן";
+      const company = safeTrim(this._mirrorOpeningCompanyName(c, pr)) || "לא הוזן";
+      return `<div class="mcPreFlightDetailCard">` +
+        `<div class="mcPreFlightDetailCard__title">נוסח פתיחה מהתיק</div>` +
+        `<p class="mcPreFlightDetailP">שלום, אני מדבר/ת עם ${escapeHtml(customerName)} ?</p>` +
+        `<p class="mcPreFlightDetailP">מדבר/ת ${escapeHtml(repName)} ואני נציג/ת מכירות מטעם סוכן גרגורי יז'מסקי משווק ביטוחים של חברת ${escapeHtml(company)} , מה שלומך?</p>` +
+        `<p class="mcPreFlightDetailP">אני יוצר/ת איתך קשר בהמשך לפנייתך ולשיחתך עם ${escapeHtml(priorContact)} מטרת השיחה היא בחינת צרכיך הביטוחיים והצעת מוצרי ביטוח</p>` +
+        `<p class="mcPreFlightDetailP">מתאימים, וחשוב לי להדגיש בפניך שזוהי שיחת מכירה מוקלטת. האם אפשר להמשיך בשיחה?</p>` +
+      `</div>`;
+    },
+
+    _preFlightDisclosureHtml(rec){
+      let groups = [];
+      try{
+        if(typeof MirrorsUI !== "undefined" && MirrorsUI && typeof MirrorsUI.getDisclosureGroups === "function"){
+          groups = (MirrorsUI.getDisclosureGroups(rec) || []).filter((g) => Array.isArray(g?.items) && g.items.length);
+        }
+      }catch(_e){ groups = []; }
+      if(groups.length){
+        return groups.map((group) => {
+          const itemsHtml = (group.items || []).map((item) => {
+            const insureds = Array.isArray(item.insuredNames) ? item.insuredNames.filter(Boolean) : [];
+            const covers = Array.isArray(item.coverLabels) ? item.coverLabels.filter(Boolean) : [];
+            const textHtml = escapeHtml(safeTrim(item.text) || "").replace(/\n/g, "<br>");
+            return `<article class="mcDiscCard" role="listitem">` +
+              `<div class="mcDiscCard__head">` +
+                `<div class="mcDiscCard__title">${escapeHtml(safeTrim(item.title) || "גילוי נאות")}</div>` +
+                (covers.length ? `<div class="mcDiscCard__covers">${escapeHtml(covers.join(" · "))}</div>` : "") +
+              `</div>` +
+              `<div class="mcDiscCard__insureds">${(insureds.length ? insureds : ["מבוטח"]).map((n) =>
+                `<span class="mcDiscChip">${escapeHtml(n)}</span>`
+              ).join("")}</div>` +
+              `<div class="mcDiscCard__text">${textHtml || "—"}</div>` +
+            `</article>`;
+          }).join("");
+          return `<section class="mcDiscCompany">` +
+            `<div class="mcDiscCompany__head"><span class="mcDiscCompany__name">${escapeHtml(group.company)}</span></div>` +
+            `<div class="mcDiscCompany__list">${itemsHtml}</div>` +
+          `</section>`;
+        }).join("");
+      }
+      const cards = this._collectNewPolicyCards.call(this, rec, { simple: true, withDiscount: false, premiumMode: "after" });
+      return cards.length
+        ? `<div class="mcPreFlightDetailCard"><div class="mcPreFlightDetailCard__title">פוליסות חדשות לגילוי נאות</div></div>` + cards.join("")
+        : `<p class="mcPreFlightDetailP">אין פוליסות חדשות לגילוי נאות.</p>`;
+    },
+
+    _preFlightHealthHtml(rec){
+      const kv = (label, value) => this._preFlightKv(label, value);
+      try{
+        if(typeof MirrorsUI === "undefined" || typeof MirrorsUI.getHealthDeclarationSource !== "function"){
+          return kv("הצהרת בריאות", this._preFlightStepSummary(rec, "health"));
+        }
+        const source = MirrorsUI.getHealthDeclarationSource(rec);
+        const responses = source?.responses && typeof source.responses === "object" ? source.responses : null;
+        if(!responses || !Object.keys(responses).length){
+          return `<p class="mcPreFlightDetailP">אין תשובות הצהרת בריאות שמורות בתיק.</p>`;
+        }
+        let qMap = {};
+        try{
+          if(typeof MirrorsUI.buildMirrorHealthMeta === "function"){
+            qMap = MirrorsUI.buildMirrorHealthMeta(rec)?.map || {};
+          }
+        }catch(_e){ qMap = {}; }
+        const insureds = this._preFlightInsureds(rec);
+        const nameOf = (insId) => {
+          const idx = insureds.findIndex((ins, i) => (safeTrim(ins?.id) || `idx_${i}`) === insId);
+          if(idx < 0) return insId;
+          return this._mirrorFullNameFromIns(rec, insureds[idx], idx) || this._mirrorInsuredTitle(insureds[idx], idx);
+        };
+        const cards = Object.keys(responses).map((qKey) => {
+          const per = responses[qKey];
+          if(!per || typeof per !== "object") return "";
+          const rows = Object.keys(per).map((insId) => {
+            const a = safeTrim(per[insId]?.answer);
+            if(a !== "yes" && a !== "no") return "";
+            return kv(nameOf(insId), a === "yes" ? "כן" : "לא");
+          }).join("");
+          if(!rows) return "";
+          const title = safeTrim(qMap[qKey]?.text) || qKey;
+          return `<div class="mcPreFlightDetailCard"><div class="mcPreFlightDetailCard__title">${escapeHtml(title)}</div>${rows}</div>`;
+        }).filter(Boolean).join("");
+        return cards || `<p class="mcPreFlightDetailP">אין תשובות הצהרת בריאות שמורות בתיק.</p>`;
+      }catch(_e){
+        return `<p class="mcPreFlightDetailP">לא ניתן להציג את הצהרת הבריאות.</p>`;
+      }
+    },
+
     _preFlightStepDetailsHtml(rec, key){
       try{
         const insureds = this._preFlightInsureds(rec);
         const policies = this._preFlightNewPolicies(rec);
         const kv = (label, value) => this._preFlightKv(label, value);
         if(key === "intro"){
-          return `<p class="mcPreFlightDetailP">נוסח פתיחה והסכמה להקלטה. בשיחה: כפתורי כן / לא. הטיימר מתחיל רק אחרי אישור הצ׳ק-ליסט.</p>`;
+          return this._preFlightOpeningHtml(rec);
         }
         if(key === "personal"){
           if(!insureds.length) return `<p class="mcPreFlightDetailP">לא נמצאו מבוטחים בתיק.</p>`;
           const verify = rec?.payload?.mirrorFlow?.verify;
           const delivery = safeTrim(verify?.deliveryMethod);
-          const deliveryTxt = delivery === "home"
+          let deliveryTxt = delivery === "home"
             ? "לבית"
-            : (delivery === "email" ? ("למייל" + (safeTrim(verify?.deliveryEmail) ? ` · ${safeTrim(verify.deliveryEmail)}` : "")) : "לא נבחר עדיין");
+            : (delivery === "email" ? ("למייל" + (safeTrim(verify?.deliveryEmail) ? ` · ${safeTrim(verify.deliveryEmail)}` : "")) : "");
+          if(!deliveryTxt){
+            try{ deliveryTxt = this._mirrorDeliveryLabel(rec); }catch(_e){ deliveryTxt = ""; }
+          }
+          if(!deliveryTxt) deliveryTxt = "לא נבחר עדיין";
           const cards = insureds.map((ins, idx) => {
+            const data = this._mirrorEditableFromInsured(rec, ins, idx);
             const d = (ins?.data && typeof ins.data === "object") ? ins.data : {};
-            const name = safeTrim(((d.firstName || "") + " " + (d.lastName || "")).trim()) || safeTrim(d.fullName) || this._preFlightInsuredLabel(ins, idx);
-            const addr = [d.street, d.houseNumber, d.city, d.zip].map((x) => safeTrim(x)).filter(Boolean).join(" · ");
             const smoke = safeTrim(d.smokingStatus) === "yes" ? "כן" : (safeTrim(d.smokingStatus) === "no" ? "לא" : "");
+            const addr = this._mirrorGetAddressText(data);
+            const idNum = safeTrim(data.idNumber) || (idx === 0 ? safeTrim(rec?.idNumber) : "");
             return `<div class="mcPreFlightDetailCard">` +
-              `<div class="mcPreFlightDetailCard__title">${escapeHtml(this._preFlightInsuredLabel(ins, idx))}</div>` +
-              kv("שם מלא", name) +
-              kv("תעודת זהות", d.idNumber) +
-              kv("תאריך לידה", d.birthDate) +
-              kv("מצב משפחתי", d.maritalStatus) +
-              kv("ילדים", d.childrenText || d.children || d.childrenCount) +
-              kv("עיסוק", d.occupation) +
-              kv("קופת חולים", d.clinic) +
-              kv("שב״ן", d.shaban || d.shabanLevel) +
+              `<div class="mcPreFlightDetailCard__title">${escapeHtml(this._mirrorInsuredTitle(ins, idx))} · ${escapeHtml(this._mirrorFullNameFromIns(rec, ins, idx))}</div>` +
+              kv("שם מלא", data.fullName) +
+              kv("תעודת זהות", idNum) +
+              kv("תאריך לידה", data.birthDate) +
+              kv("מצב משפחתי", data.maritalStatus) +
+              kv("ילדים", data.childrenText) +
+              kv("עיסוק", data.occupation) +
+              kv("קופת חולים", data.clinic) +
+              kv("שב״ן", data.shaban) +
               kv("כתובת", addr) +
               kv("מעשן", smoke) +
             `</div>`;
@@ -53777,54 +53894,57 @@ ${inner}
           `</div>`;
         }
         if(key === "needs"){
-          const existingRows = [];
-          insureds.forEach((ins, idx) => {
-            const list = Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : [];
-            list.forEach((p) => {
-              existingRows.push(`${this._preFlightInsuredLabel(ins, idx)} · ${safeTrim(p?.company) || "חברה"} · ${safeTrim(p?.type || p?.product) || "מוצר"}`);
-            });
-          });
-          const newRows = policies.map((p) => {
-            const amt = safeTrim(p?.sumInsured || p?.compensation || "");
-            const pledge = (p?.pledge || p?.hasPledge) ? "שיעבוד" : "ללא שיעבוד";
-            return `${safeTrim(p?.company) || "חברה"} · ${safeTrim(p?.type || p?.product) || "מוצר"}${amt ? ` · ${amt}` : ""} · ${pledge}`;
-          });
-          return `<div class="mcPreFlightDetailCard"><div class="mcPreFlightDetailCard__title">ביטוחים קיימים</div>` +
-            (existingRows.length ? existingRows.map((t) => `<p class="mcPreFlightDetailP">${escapeHtml(t)}</p>`).join("") : `<p class="mcPreFlightDetailP">אין פוליסות קיימות בתיק.</p>`) +
-            `</div><div class="mcPreFlightDetailCard"><div class="mcPreFlightDetailCard__title">פוליסות חדשות</div>` +
-            (newRows.length ? newRows.map((t) => `<p class="mcPreFlightDetailP">${escapeHtml(t)}</p>`).join("") : `<p class="mcPreFlightDetailP">לא הוזנו פוליסות חדשות.</p>`) +
-            `</div>`;
+          const existingCards = this._collectExistingPolicyCards(rec);
+          const newCards = this._collectNewPolicyCards.call(this, rec, { simple: true, withDiscount: false, premiumMode: "after" });
+          let reasonsHtml = "";
+          try{
+            const recItems = typeof MirrorFlowReadModel?.getCancellationRecommendationItems === "function"
+              ? MirrorFlowReadModel.getCancellationRecommendationItems(rec)
+              : [];
+            if(Array.isArray(recItems) && recItems.length){
+              reasonsHtml = `<div class="mcPreFlightDetailCard"><div class="mcPreFlightDetailCard__title">שיקולי המלצה</div>` +
+                recItems.map((it) => `<p class="mcPreFlightDetailP">${escapeHtml([it.insuredLabel, it.company, it.type, it.reason].filter(Boolean).join(" · "))}</p>`).join("") +
+              `</div>`;
+            }
+          }catch(_e){}
+          return `<div class="mcPreFlightDetailCard"><div class="mcPreFlightDetailCard__title">ביטוחים קיימים</div></div>` +
+            (existingCards.length ? existingCards.join("") : `<p class="mcPreFlightDetailP">אין פוליסות קיימות בתיק.</p>`) +
+            `<div class="mcPreFlightDetailCard"><div class="mcPreFlightDetailCard__title">פוליסות מוצעות</div></div>` +
+            (newCards.length ? newCards.join("") : `<p class="mcPreFlightDetailP">לא הוזנו פוליסות חדשות.</p>`) +
+            reasonsHtml;
         }
         if(key === "disclosure"){
-          const lines = policies.map((p) => {
-            const type = safeTrim(p?.type || p?.product);
-            const amt = safeTrim(p?.compensation || p?.sumInsured || "");
-            const needsAmt = /ריסק|משכנת|מחלות קשות|סרטן/i.test(type);
-            return `${safeTrim(p?.company) || "חברה"} · ${type || "מוצר"}${needsAmt && amt ? ` · סכום ${amt}` : ""}`;
-          });
-          return `<div class="mcPreFlightDetailCard"><div class="mcPreFlightDetailCard__title">גילוי נאות לפי פוליסות חדשות</div>` +
-            (lines.length ? lines.map((t) => `<p class="mcPreFlightDetailP">${escapeHtml(t)}</p>`).join("") : `<p class="mcPreFlightDetailP">אין פוליסות חדשות לגילוי נאות.</p>`) +
-            `</div>`;
+          return this._preFlightDisclosureHtml(rec);
         }
         if(key === "cancel"){
-          const rows = [];
-          insureds.forEach((ins, idx) => {
-            const list = Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : [];
-            list.forEach((p) => {
-              rows.push(`${this._preFlightInsuredLabel(ins, idx)} · ${safeTrim(p?.company) || "חברה"} · ${safeTrim(p?.type || p?.product) || "מוצר"}`);
-            });
-          });
-          return `<div class="mcPreFlightDetailCard"><div class="mcPreFlightDetailCard__title">פוליסות קיימות לבדיקת ביטול</div>` +
-            (rows.length ? rows.map((t) => `<p class="mcPreFlightDetailP">${escapeHtml(t)}</p>`).join("") : `<p class="mcPreFlightDetailP">אין פוליסות קיימות לביטול.</p>`) +
-            `</div>`;
+          const existingCards = this._collectExistingPolicyCards(rec);
+          let marked = [];
+          try{ marked = this._collectCancelQuestionnairePolicies(rec) || []; }catch(_e){ marked = []; }
+          const markedHtml = marked.length
+            ? `<div class="mcPreFlightDetailCard"><div class="mcPreFlightDetailCard__title">סומנו לביטול באשף</div>` +
+              marked.map((it) => `<p class="mcPreFlightDetailP">${escapeHtml([it.insuredName, it.company, it.product, it.statusLabel, it.wizardMethodLabel].filter(Boolean).join(" · "))}</p>`).join("") +
+            `</div>`
+            : `<p class="mcPreFlightDetailP">אין פוליסות מסומנות לביטול באשף.</p>`;
+          return markedHtml +
+            `<div class="mcPreFlightDetailCard"><div class="mcPreFlightDetailCard__title">ביטוחים קיימים בתיק</div></div>` +
+            (existingCards.length ? existingCards.join("") : `<p class="mcPreFlightDetailP">אין פוליסות קיימות בתיק.</p>`);
         }
         if(key === "beneficiaries"){
-          const risk = policies.filter((p) => /ריסק|משכנת|חיים/i.test(safeTrim(p?.type || p?.product)));
+          const risk = policies.filter((p) => this._isRiskOrMortgageRiskType(p?.type || p?.product));
           if(!risk.length) return `<p class="mcPreFlightDetailP">אין פוליסות סיכונים למוטבים / שיעבוד בתיק.</p>`;
           return risk.map((p) => {
-            const banks = Array.isArray(p?.pledgeBanks) ? p.pledgeBanks : [(p?.pledgeBank && typeof p.pledgeBank === "object") ? p.pledgeBank : {}];
+            const banks = Array.isArray(p?.pledgeBanks) && p.pledgeBanks.length
+              ? p.pledgeBanks
+              : [(p?.pledgeBank && typeof p.pledgeBank === "object") ? p.pledgeBank : {}];
             const bank = banks[0] || {};
             const pledged = !!(p?.pledge || p?.hasPledge);
+            const bens = Array.isArray(p?.beneficiaries) ? p.beneficiaries : [];
+            const bensHtml = bens.length
+              ? bens.map((b, i) => {
+                  const nm = [b?.firstName, b?.lastName].map((x) => safeTrim(x)).filter(Boolean).join(" ") || ("מוטב " + (i + 1));
+                  return kv(nm, [safeTrim(b?.idNumber), safeTrim(b?.relationship), safeTrim(b?.sharePct) ? (String(b.sharePct) + "%") : ""].filter(Boolean).join(" · "));
+                }).join("")
+              : kv("מוטבים", "לא הוזנו");
             return `<div class="mcPreFlightDetailCard">` +
               `<div class="mcPreFlightDetailCard__title">${escapeHtml(safeTrim(p?.company) || "חברה")} · ${escapeHtml(safeTrim(p?.type || p?.product) || "ריסק")}</div>` +
               kv("סכום ביטוח", p?.sumInsured) +
@@ -53833,20 +53953,68 @@ ${inner}
               kv("מספר בנק / סניף", [bank.bankNo, bank.branch].filter(Boolean).join(" / ")) +
               kv("סכום לשיעבוד", bank.amount) +
               kv("שנים", bank.years) +
+              bensHtml +
             `</div>`;
           }).join("");
         }
         if(key === "health"){
-          return kv("הצהרת בריאות", this._preFlightStepSummary(rec, "health"));
+          return this._preFlightHealthHtml(rec);
         }
         if(key === "future"){
-          return `<p class="mcPreFlightDetailP">נוסח שינוי או ביטול בעתיד. בשיחה החיה המסך כרגע מושהה — כאן בודקים שהנוסח קיים בתיק.</p>`;
+          return `<div class="mcPreFlightDetailCard"><div class="mcPreFlightDetailCard__title">נוסח שינוי או ביטול בעתיד</div>` +
+            `<p class="mcPreFlightDetailP">במידה ובעתיד תרצה לעשות שינוי או ביטול — תוכל לבצע זאת בכל אחד מהאמצעים שמעמידה לרשותך חברת הביטוח: פקס, מייל, מוקד שירות, או באזור האישי באתר החברה.</p>` +
+            `<p class="mcPreFlightDetailP">חשוב לי שתדע שתוכל לבטל את כל אחד מהנספחים הכלולים בחבילה בכל עת, בתנאי שנותר מוצר הבסיס.</p>` +
+          `</div>`;
         }
         if(key === "payment"){
-          return kv("אמצעי תשלום", this._preFlightStepSummary(rec, "payment"));
+          const pl = this._preFlightPayload(rec);
+          const p = (pl.primary && typeof pl.primary === "object")
+            ? pl.primary
+            : ((insureds[0]?.data && typeof insureds[0].data === "object") ? insureds[0].data : {});
+          const method = safeTrim(p.paymentMethod);
+          const methodLabel = method === "cc" || method === "credit" || method === "אשראי"
+            ? "כרטיס אשראי"
+            : (method === "ho" || method === "hok" || /קבע|הו.?ק/i.test(method) ? "הוראת קבע" : method);
+          const cc = (p.cc && typeof p.cc === "object") ? p.cc : {};
+          const ho = (p.ho && typeof p.ho === "object") ? p.ho : {};
+          const ex = (p.externalPayer && typeof p.externalPayer === "object") ? p.externalPayer : {};
+          const isCc = methodLabel === "כרטיס אשראי" || (!method && Object.keys(cc).length);
+          let html = `<div class="mcPreFlightDetailCard"><div class="mcPreFlightDetailCard__title">אמצעי תשלום מהתיק</div>` +
+            kv("אופן תשלום", methodLabel) +
+            kv("משלם", safeTrim(p.payerChoice) === "external" ? "משלם חריג" : "המבוטח");
+          if(isCc){
+            html += kv("בעל הכרטיס", cc.holderName) +
+              kv("ת״ז בעל הכרטיס", cc.holderId) +
+              kv("מספר כרטיס", cc.cardNumber) +
+              kv("תוקף", cc.exp);
+          } else {
+            html += kv("שם הבנק", ho.bankName) +
+              kv("מספר בנק", ho.bankNo) +
+              kv("סניף", ho.branch) +
+              kv("מספר חשבון", ho.account);
+          }
+          html += `</div>`;
+          if(safeTrim(p.payerChoice) === "external"){
+            html += `<div class="mcPreFlightDetailCard"><div class="mcPreFlightDetailCard__title">משלם חריג</div>` +
+              kv("שם", ((ex.firstName || "") + " " + (ex.lastName || "")).trim()) +
+              kv("ת״ז", ex.idNumber) +
+              kv("טלפון", ex.phone) +
+              kv("קרבה", ex.relation) +
+            `</div>`;
+          }
+          return html;
         }
         if(key === "summary"){
-          return `<p class="mcPreFlightDetailP">סיכום השיחה והצהרות סיום לפני מעבר להפקה.</p>`;
+          const pols = this._mirrorPoliciesForStart(rec);
+          const delivery = this._mirrorDeliveryLabel(rec);
+          const startHtml = pols.length
+            ? pols.map((p) => kv([p.company, p.type].filter(Boolean).join(" · ") || "פוליסה", p.startDate || "לא הוזן תאריך תחילה")).join("")
+            : kv("פוליסות חדשות", "לא נמצאו בתיק");
+          return `<div class="mcPreFlightDetailCard"><div class="mcPreFlightDetailCard__title">תחילת ביטוח</div>${startHtml}</div>` +
+            `<div class="mcPreFlightDetailCard"><div class="mcPreFlightDetailCard__title">דיוורים והצהרות</div>` +
+              kv("אופן קבלת דיוורים", delivery) +
+              `<p class="mcPreFlightDetailP">המידע שמסרת בשיחה יעובד בהתאם למדיניות הפרטיות של החברה. מסמכי הפוליסה יישלחו לפי אופן הדיוור שבתיק.</p>` +
+            `</div>`;
         }
       }catch(_e){}
       return `<p class="mcPreFlightDetailP">לא ניתן להציג את פרטי השלב.</p>`;
@@ -53855,10 +54023,18 @@ ${inner}
     _paintPreFlightChecklist(){
       const host = this.els.preFlightList;
       if(!host) return;
-      const rec = this.selectedCustomer;
+      if(this._preFlightLoading){
+        host.innerHTML = `<li class="mcPreFlightLoad">טוען את נתוני התיק…</li>`;
+        if(this.els.preFlightAckBtn) this.els.preFlightAckBtn.disabled = true;
+        return;
+      }
+      const rec = this._getFreshCustomerRecord() || this.selectedCustomer;
       const reviewed = this._preFlightReviewedSet();
       const openKey = safeTrim(this._preFlightOpenKey);
-      host.innerHTML = this.PREFLIGHT_STEPS.map((step) => {
+      const err = safeTrim(this._preFlightLoadError)
+        ? `<li class="mcPreFlightLoad mcPreFlightLoad--err">${escapeHtml(this._preFlightLoadError)}</li>`
+        : "";
+      host.innerHTML = err + this.PREFLIGHT_STEPS.map((step) => {
         const done = reviewed.has(step.key);
         const open = openKey === step.key;
         return `<li class="mcPreFlightItem${done ? " is-done" : ""}${open ? " is-open" : ""}" data-mc-prestep="${escapeHtml(step.key)}">` +
@@ -54537,12 +54713,46 @@ ${inner}
       this._syncMgrRow();
     },
 
-    goToCall(){
+    async _ensureSelectedCustomerPayload(){
+      const ensureId = safeTrim(this.selectedCustomer?.id);
+      if(!ensureId) return { ok:false, error:"NO_CUSTOMER" };
+      const gateRec = (State.data?.customers || []).find((c) => safeTrim(c?.id) === ensureId) || this.selectedCustomer;
+      if(gateRec && typeof Storage !== "undefined" && typeof Storage.payloadIsEmpty === "function" && !Storage.payloadIsEmpty(gateRec)){
+        this.selectedCustomer = gateRec;
+        this._mirrorCoerceCustomerPayloadInPlace(this.selectedCustomer);
+        return { ok:true, record: this.selectedCustomer, cached:true };
+      }
+      let ensured = null;
+      try{
+        ensured = await Storage.ensureRecordPayload("customers", ensureId);
+      }catch(err){
+        ensured = { ok:false, error: String(err?.message || err) };
+      }
+      if(!ensured?.ok){
+        return { ok:false, error: ensured?.error || "LOAD_FAILED" };
+      }
+      const fresh = (State.data?.customers || []).find((c) => safeTrim(c?.id) === ensureId);
+      if(fresh) this.selectedCustomer = fresh;
+      if(this.selectedCustomer) this._mirrorCoerceCustomerPayloadInPlace(this.selectedCustomer);
+      return { ok:true, record: this.selectedCustomer };
+    },
+
+    async goToCall(){
       if(!this.selectedCustomer) return;
       if(this.els.customerName) this.els.customerName.textContent = safeTrim(this.selectedCustomer.fullName) || "לקוח";
       this._resetCallUI();
+      this._preFlightLoading = true;
+      this._preFlightLoadError = "";
+      this._paintPreFlightChecklist();
       this.showScreen("call");
       this._syncReadyPanel(this._allPreCheckComplete() && !this._callRunning);
+      const loaded = await this._ensureSelectedCustomerPayload();
+      this._preFlightLoading = false;
+      if(!loaded?.ok){
+        this._preFlightLoadError = "פרטי התיק לא הגיעו מהשרת. נסה שוב.";
+      }
+      if(this.els.customerName) this.els.customerName.textContent = safeTrim(this.selectedCustomer?.fullName) || "לקוח";
+      this._paintPreFlightChecklist();
     },
 
     goToSearch(){
@@ -54963,6 +55173,8 @@ ${inner}
       }
       this._syncLiveNav();
       this._resetMirrorFlowUi();
+      this._preFlightLoading = false;
+      this._preFlightLoadError = "";
       this._resetPreFlightChecks();
     },
 
