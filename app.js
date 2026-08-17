@@ -53539,9 +53539,13 @@ ${inner}
       if(this.els.assignClearBtn) on(this.els.assignClearBtn, "click", () => this.clearAssignModal());
       if(this.els.preFlightList){
         on(this.els.preFlightList, "click", (ev) => {
-          const btn = ev.target?.closest?.("[data-mc-prestep-review]");
-          if(!btn) return;
-          this._togglePreFlightStep(btn.getAttribute("data-mc-prestep-review"));
+          const mark = ev.target?.closest?.("[data-mc-prestep-review]");
+          if(mark){
+            this._togglePreFlightStep(mark.getAttribute("data-mc-prestep-review"));
+            return;
+          }
+          const openBtn = ev.target?.closest?.("[data-mc-prestep-open]");
+          if(openBtn) this._togglePreFlightOpen(openBtn.getAttribute("data-mc-prestep-open"));
         });
       }
       if(this.els.preFlightAckBtn) on(this.els.preFlightAckBtn, "click", () => this._openPreFlightConfirm());
@@ -53616,6 +53620,7 @@ ${inner}
     _resetPreFlightChecks(){
       this._preFlightReviewed = new Set();
       this._preFlightConfirmed = false;
+      this._preFlightOpenKey = "";
       this._showPreFlightConfirm(false);
       if(this.els.preFlightAlert) this.els.preFlightAlert.hidden = true;
       this._paintPreFlightChecklist();
@@ -53704,22 +53709,159 @@ ${inner}
       return "לבדיקה לפני השיחה";
     },
 
+    _togglePreFlightOpen(key){
+      const stepKey = safeTrim(key);
+      if(!this.PREFLIGHT_STEPS.some((s) => s.key === stepKey)) return;
+      this._preFlightOpenKey = this._preFlightOpenKey === stepKey ? "" : stepKey;
+      this._paintPreFlightChecklist();
+    },
+
+    _preFlightKv(label, value){
+      const v = safeTrim(value) || "לא הוזן";
+      return `<div class="mcPreFlightKv"><span>${escapeHtml(label)}</span><b>${escapeHtml(v)}</b></div>`;
+    },
+
+    _preFlightStepDetailsHtml(rec, key){
+      try{
+        const insureds = this._preFlightInsureds(rec);
+        const policies = this._preFlightNewPolicies(rec);
+        const kv = (label, value) => this._preFlightKv(label, value);
+        if(key === "intro"){
+          return `<p class="mcPreFlightDetailP">נוסח פתיחה והסכמה להקלטה. בשיחה: כפתורי כן / לא. הטיימר מתחיל רק אחרי אישור הצ׳ק-ליסט.</p>`;
+        }
+        if(key === "personal"){
+          if(!insureds.length) return `<p class="mcPreFlightDetailP">לא נמצאו מבוטחים בתיק.</p>`;
+          const verify = rec?.payload?.mirrorFlow?.verify;
+          const delivery = safeTrim(verify?.deliveryMethod);
+          const deliveryTxt = delivery === "home"
+            ? "לבית"
+            : (delivery === "email" ? ("למייל" + (safeTrim(verify?.deliveryEmail) ? ` · ${safeTrim(verify.deliveryEmail)}` : "")) : "לא נבחר עדיין");
+          const cards = insureds.map((ins, idx) => {
+            const d = (ins?.data && typeof ins.data === "object") ? ins.data : {};
+            const name = safeTrim(((d.firstName || "") + " " + (d.lastName || "")).trim()) || safeTrim(d.fullName) || this._preFlightInsuredLabel(ins, idx);
+            const addr = [d.street, d.houseNumber, d.city, d.zip].map((x) => safeTrim(x)).filter(Boolean).join(" · ");
+            const smoke = safeTrim(d.smokingStatus) === "yes" ? "כן" : (safeTrim(d.smokingStatus) === "no" ? "לא" : "");
+            return `<div class="mcPreFlightDetailCard">` +
+              `<div class="mcPreFlightDetailCard__title">${escapeHtml(this._preFlightInsuredLabel(ins, idx))}</div>` +
+              kv("שם מלא", name) +
+              kv("תעודת זהות", d.idNumber) +
+              kv("תאריך לידה", d.birthDate) +
+              kv("מצב משפחתי", d.maritalStatus) +
+              kv("ילדים", d.childrenText || d.children || d.childrenCount) +
+              kv("עיסוק", d.occupation) +
+              kv("קופת חולים", d.clinic) +
+              kv("שב״ן", d.shaban || d.shabanLevel) +
+              kv("כתובת", addr) +
+              kv("מעשן", smoke) +
+            `</div>`;
+          }).join("");
+          return cards + `<div class="mcPreFlightDetailCard">` +
+            `<div class="mcPreFlightDetailCard__title">אופן קבלת דיוורים</div>` +
+            kv("דיוורים", deliveryTxt) +
+          `</div>`;
+        }
+        if(key === "needs"){
+          const existingRows = [];
+          insureds.forEach((ins, idx) => {
+            const list = Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : [];
+            list.forEach((p) => {
+              existingRows.push(`${this._preFlightInsuredLabel(ins, idx)} · ${safeTrim(p?.company) || "חברה"} · ${safeTrim(p?.type || p?.product) || "מוצר"}`);
+            });
+          });
+          const newRows = policies.map((p) => {
+            const amt = safeTrim(p?.sumInsured || p?.compensation || "");
+            const pledge = (p?.pledge || p?.hasPledge) ? "שיעבוד" : "ללא שיעבוד";
+            return `${safeTrim(p?.company) || "חברה"} · ${safeTrim(p?.type || p?.product) || "מוצר"}${amt ? ` · ${amt}` : ""} · ${pledge}`;
+          });
+          return `<div class="mcPreFlightDetailCard"><div class="mcPreFlightDetailCard__title">ביטוחים קיימים</div>` +
+            (existingRows.length ? existingRows.map((t) => `<p class="mcPreFlightDetailP">${escapeHtml(t)}</p>`).join("") : `<p class="mcPreFlightDetailP">אין פוליסות קיימות בתיק.</p>`) +
+            `</div><div class="mcPreFlightDetailCard"><div class="mcPreFlightDetailCard__title">פוליסות חדשות</div>` +
+            (newRows.length ? newRows.map((t) => `<p class="mcPreFlightDetailP">${escapeHtml(t)}</p>`).join("") : `<p class="mcPreFlightDetailP">לא הוזנו פוליסות חדשות.</p>`) +
+            `</div>`;
+        }
+        if(key === "disclosure"){
+          const lines = policies.map((p) => {
+            const type = safeTrim(p?.type || p?.product);
+            const amt = safeTrim(p?.compensation || p?.sumInsured || "");
+            const needsAmt = /ריסק|משכנת|מחלות קשות|סרטן/i.test(type);
+            return `${safeTrim(p?.company) || "חברה"} · ${type || "מוצר"}${needsAmt && amt ? ` · סכום ${amt}` : ""}`;
+          });
+          return `<div class="mcPreFlightDetailCard"><div class="mcPreFlightDetailCard__title">גילוי נאות לפי פוליסות חדשות</div>` +
+            (lines.length ? lines.map((t) => `<p class="mcPreFlightDetailP">${escapeHtml(t)}</p>`).join("") : `<p class="mcPreFlightDetailP">אין פוליסות חדשות לגילוי נאות.</p>`) +
+            `</div>`;
+        }
+        if(key === "cancel"){
+          const rows = [];
+          insureds.forEach((ins, idx) => {
+            const list = Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : [];
+            list.forEach((p) => {
+              rows.push(`${this._preFlightInsuredLabel(ins, idx)} · ${safeTrim(p?.company) || "חברה"} · ${safeTrim(p?.type || p?.product) || "מוצר"}`);
+            });
+          });
+          return `<div class="mcPreFlightDetailCard"><div class="mcPreFlightDetailCard__title">פוליסות קיימות לבדיקת ביטול</div>` +
+            (rows.length ? rows.map((t) => `<p class="mcPreFlightDetailP">${escapeHtml(t)}</p>`).join("") : `<p class="mcPreFlightDetailP">אין פוליסות קיימות לביטול.</p>`) +
+            `</div>`;
+        }
+        if(key === "beneficiaries"){
+          const risk = policies.filter((p) => /ריסק|משכנת|חיים/i.test(safeTrim(p?.type || p?.product)));
+          if(!risk.length) return `<p class="mcPreFlightDetailP">אין פוליסות סיכונים למוטבים / שיעבוד בתיק.</p>`;
+          return risk.map((p) => {
+            const banks = Array.isArray(p?.pledgeBanks) ? p.pledgeBanks : [(p?.pledgeBank && typeof p.pledgeBank === "object") ? p.pledgeBank : {}];
+            const bank = banks[0] || {};
+            const pledged = !!(p?.pledge || p?.hasPledge);
+            return `<div class="mcPreFlightDetailCard">` +
+              `<div class="mcPreFlightDetailCard__title">${escapeHtml(safeTrim(p?.company) || "חברה")} · ${escapeHtml(safeTrim(p?.type || p?.product) || "ריסק")}</div>` +
+              kv("סכום ביטוח", p?.sumInsured) +
+              kv("שיעבוד", pledged ? "כן" : "לא") +
+              kv("בנק", bank.bankName || p?.pledgeBankName) +
+              kv("מספר בנק / סניף", [bank.bankNo, bank.branch].filter(Boolean).join(" / ")) +
+              kv("סכום לשיעבוד", bank.amount) +
+              kv("שנים", bank.years) +
+            `</div>`;
+          }).join("");
+        }
+        if(key === "health"){
+          return kv("הצהרת בריאות", this._preFlightStepSummary(rec, "health"));
+        }
+        if(key === "future"){
+          return `<p class="mcPreFlightDetailP">נוסח שינוי או ביטול בעתיד. בשיחה החיה המסך כרגע מושהה — כאן בודקים שהנוסח קיים בתיק.</p>`;
+        }
+        if(key === "payment"){
+          return kv("אמצעי תשלום", this._preFlightStepSummary(rec, "payment"));
+        }
+        if(key === "summary"){
+          return `<p class="mcPreFlightDetailP">סיכום השיחה והצהרות סיום לפני מעבר להפקה.</p>`;
+        }
+      }catch(_e){}
+      return `<p class="mcPreFlightDetailP">לא ניתן להציג את פרטי השלב.</p>`;
+    },
+
     _paintPreFlightChecklist(){
       const host = this.els.preFlightList;
       if(!host) return;
       const rec = this.selectedCustomer;
       const reviewed = this._preFlightReviewedSet();
+      const openKey = safeTrim(this._preFlightOpenKey);
       host.innerHTML = this.PREFLIGHT_STEPS.map((step) => {
         const done = reviewed.has(step.key);
-        return `<li class="mcPreFlightItem${done ? " is-done" : ""}" data-mc-prestep="${escapeHtml(step.key)}">` +
-          `<button type="button" class="mcPreFlightItem__btn" data-mc-prestep-review="${escapeHtml(step.key)}">` +
+        const open = openKey === step.key;
+        return `<li class="mcPreFlightItem${done ? " is-done" : ""}${open ? " is-open" : ""}" data-mc-prestep="${escapeHtml(step.key)}">` +
+          `<button type="button" class="mcPreFlightItem__btn" data-mc-prestep-open="${escapeHtml(step.key)}">` +
             `<span class="mcPreFlightItem__n">${step.n}</span>` +
             `<span class="mcPreFlightItem__body">` +
               `<span class="mcPreFlightItem__title">${escapeHtml(step.label)}</span>` +
               `<span class="mcPreFlightItem__sum">${escapeHtml(this._preFlightStepSummary(rec, step.key))}</span>` +
             `</span>` +
-            `<span class="mcPreFlightItem__mark">${done ? "נבדק" : "לסמן שנבדק"}</span>` +
+            `<span class="mcPreFlightItem__mark">${done ? "נבדק" : (open ? "פרטים פתוחים" : "לחץ לפתיחת הפרטים")}</span>` +
           `</button>` +
+          `<div class="mcPreFlightItem__detail">` +
+            this._preFlightStepDetailsHtml(rec, step.key) +
+            `<div class="mcPreFlightItem__detailAct">` +
+              `<button type="button" class="btn${done ? "" : " btn--primary"}" data-mc-prestep-review="${escapeHtml(step.key)}"${this._preFlightConfirmed ? " disabled" : ""}>` +
+                (done ? "בטל סימון" : "סימנתי שנבדק") +
+              `</button>` +
+            `</div>` +
+          `</div>` +
         `</li>`;
       }).join("");
       if(this.els.preFlightAckBtn) this.els.preFlightAckBtn.disabled = !this._allPreFlightStepsReviewed() || this._preFlightConfirmed;

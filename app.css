@@ -45763,3 +45763,102 @@ body.lcAuthLock .lcLogin__footBtn{
   font-weight:500;
   color:#64748b;
 }
+
+/* GI-MIRROR-BLUE 2026-08-17 — כחול התפריט הצדדי במסכי שיקוף. תצוגה בלבד. */
+.mcWorkstation::before{
+  background:
+    radial-gradient(120% 90% at 0% 0%, rgba(216,232,255,.92), transparent 54%),
+    radial-gradient(90% 70% at 100% 100%, rgba(210,228,255,.55), transparent 52%),
+    linear-gradient(180deg, var(--sideA), var(--sideB));
+}
+.mcPreFlightModal__sheet{
+  background: linear-gradient(180deg, #f3f8ff 0%, #ffffff 38%);
+  border: 1px solid rgba(11,31,74,.16);
+}
+.mcPreFlightItem__btn{
+  background: linear-gradient(180deg, #ffffff, rgba(216,232,255,.45));
+}
+.mcPreFlightItem.is-open .mcPreFlightItem__btn{
+  border-color: var(--brandC);
+  box-shadow: 0 0 0 3px rgba(42,92,245,.12);
+}
+.mcPreFlightItem__detail{
+  display:none;
+  margin:0 2px 2px;
+  padding:12px 14px 14px;
+  border:1px solid rgba(42,92,245,.16);
+  border-top:none;
+  border-radius:0 0 14px 14px;
+  background: linear-gradient(180deg, rgba(216,232,255,.35), #fff);
+}
+.mcPreFlightItem.is-open .mcPreFlightItem__detail{display:block;}
+.mcPreFlightItem__detailAct{margin-top:12px;}
+.mcPreFlightKv{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  padding:6px 0;
+  border-bottom:1px solid rgba(42,92,245,.10);
+  font-size:13px;
+  color:#152a5c;
+}
+.mcPreFlightKv b{font-weight:800;}
+.mcPreFlightDetailCard{
+  padding:10px 12px;
+  margin:0 0 10px;
+  border-radius:12px;
+  border:1px solid rgba(42,92,245,.14);
+  background:#fff;
+}
+.mcPreFlightDetailCard__title{
+  font-size:13px;
+  font-weight:800;
+  color:#1e3a7a;
+  margin:0 0 6px;
+}
+.mcPreFlightDetailP{
+  margin:0 0 6px;
+  font-size:13px;
+  line-height:1.5;
+  font-weight:600;
+  color:#152a5c;
+}
+.mcCallScript,
+.mcStep2,
+.mcStep6,
+.mcStepVerify,
+.mcStepCancelQ,
+.mcStepBenef,
+.mcStepHealthDecl,
+.mcStepPay,
+.mcStepInsStart{
+  background: linear-gradient(180deg, rgba(216,232,255,.42), rgba(255,255,255,.92));
+  border-color: rgba(11,31,74,.14);
+}
+.mcCallScript__ribbon,
+.mcStep2__ribbon,
+.mcStep6__ribbon,
+.mcStepVerify__ribbon,
+.mcStepCancelQ__ribbon,
+.mcStepBenef__ribbon,
+.mcStepHealthDecl__ribbon,
+.mcStepPay__ribbon,
+.mcStepInsStart__ribbon{
+  background: linear-gradient(90deg, var(--brandA), var(--brandB), var(--brandC));
+}
+.mcNeedsScript--readAloud{
+  background: linear-gradient(135deg, var(--sideA), rgba(255,255,255,.94));
+  border-color: rgba(42,92,245,.30);
+}
+.mcPolCard{
+  border-inline-start: 4px solid var(--brandC);
+  background: linear-gradient(180deg, #ffffff, rgba(216,232,255,.28));
+}
+.mcDiscCard{
+  border-inline-start: 4px solid var(--brandC);
+  background: linear-gradient(180deg, #ffffff, rgba(216,232,255,.22));
+}
+.mcSessionPanel,
+.mcDiscoveryPanel{
+  background: linear-gradient(180deg, rgba(216,232,255,.38), rgba(255,255,255,.28));
+}
