@@ -69,11 +69,33 @@
   button:disabled{opacity:.55;cursor:default}
   button.secondary{background:#e8eef8;color:#0f172a}
   .hint{font-size:13px;color:var(--muted);margin-top:8px;line-height:1.45}
-  .success{
-    display:none;background:var(--card);border-radius:22px;padding:36px 22px 28px;
-    text-align:center;border:1px solid #e2e8f0;margin-top:8px;
+  button.retry{
+    background:#0f172a;
   }
-  .success.is-on{display:block}
+  .success{
+    display:none;
+    position:fixed;
+    inset:0;
+    z-index:80;
+    margin:0;
+    border:0;
+    border-radius:0;
+    background:var(--bg);
+    padding:calc(24px + var(--safe-top)) 24px calc(28px + var(--safe-bottom));
+    text-align:center;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+  }
+  .success.is-on{display:flex}
+  .success .box{
+    width:min(360px,100%);
+    background:var(--card);
+    border:1px solid #e2e8f0;
+    border-radius:28px;
+    padding:40px 24px 32px;
+    box-shadow:0 18px 50px rgba(15,23,42,.12);
+  }
   .success .mark{
     width:76px;height:76px;border-radius:50%;margin:0 auto 16px;
     background:#dcfce7;color:#15803d;display:flex;align-items:center;justify-content:center;
@@ -81,6 +103,7 @@
   }
   .success .title{font-size:22px;font-weight:800;margin:0 0 8px;color:var(--text)}
   .success .sub{font-size:15px;color:var(--muted);margin:0;line-height:1.5;font-weight:600}
+  body.is-success{overflow:hidden}
 </style>
 </head>
 <body>
@@ -100,12 +123,15 @@
     <div class="status" id="status">בודק הרשאות…</div>
     <button type="button" id="btnCapture" hidden>צלמו עכשיו</button>
     <button type="button" id="btnConfirm" hidden>אישור וסיום</button>
+    <button type="button" id="btnRetry" class="retry" hidden>איפוס מצלמה וסריקה מחדש</button>
     <div class="hint" id="hint"></div>
   </div>
   <div class="success" id="success">
-    <div class="mark" aria-hidden="true">✓</div>
-    <p class="title" id="successTitle">החיבור הצליח</p>
-    <p class="sub" id="successSub">המערכת עולה במחשב. אפשר לסגור את החלון בטלפון.</p>
+    <div class="box">
+      <div class="mark" aria-hidden="true">✓</div>
+      <p class="title" id="successTitle">החיבור הצליח</p>
+      <p class="sub" id="successSub">המערכת עולה במחשב. אפשר לסגור את החלון בטלפון.</p>
+    </div>
   </div>
 </div>
 <script type="module">
@@ -131,6 +157,7 @@ const els = {
   steps: document.getElementById("steps"),
   btnCapture: document.getElementById("btnCapture"),
   btnConfirm: document.getElementById("btnConfirm"),
+  btnRetry: document.getElementById("btnRetry"),
   cam: document.getElementById("cam"),
   guide: document.getElementById("guide"),
   lockTag: document.getElementById("lockTag"),
@@ -141,9 +168,11 @@ const els = {
   successSub: document.getElementById("successSub")
 };
 
+const CAM_OK_KEY = "giFaceCamOk";
 let kind = "login";
 let modelsReady = false;
 let stream = null;
+let flowBusy = false;
 const descriptors = [];
 
 function sleep(ms){
@@ -169,14 +198,51 @@ function stopCamera(){
     els.cam.srcObject = null;
   } catch(_e) {}
 }
+function markCameraOk(){
+  try { localStorage.setItem(CAM_OK_KEY, "1"); } catch(_e) {}
+}
+function rememberedCameraOk(){
+  try { return localStorage.getItem(CAM_OK_KEY) === "1"; } catch(_e) { return false; }
+}
+function cameraTrackLive(){
+  return !!(stream && stream.getVideoTracks().some((t) => t.readyState === "live"));
+}
+function showWorkUi(){
+  try { document.body.classList.remove("is-success"); } catch(_e) {}
+  if(els.success) els.success.classList.remove("is-on");
+  if(els.stage) els.stage.hidden = false;
+  if(els.card) els.card.hidden = false;
+  if(els.btnRetry){
+    els.btnRetry.hidden = true;
+    els.btnRetry.disabled = false;
+  }
+}
+function showRetry(message){
+  try { document.body.classList.remove("is-success"); } catch(_e) {}
+  if(els.success) els.success.classList.remove("is-on");
+  if(els.stage) els.stage.hidden = false;
+  if(els.card) els.card.hidden = false;
+  if(els.btnCapture) els.btnCapture.hidden = true;
+  if(els.btnConfirm) els.btnConfirm.hidden = true;
+  setLock(false);
+  setStatus(message || "הזיהוי לא הצליח. אפשר לסרוק שוב.", "err");
+  setHint("לחצו לאיפוס המצלמה וסריקה מחדש.");
+  if(els.btnRetry){
+    els.btnRetry.hidden = false;
+    els.btnRetry.disabled = false;
+    els.btnRetry.textContent = "איפוס מצלמה וסריקה מחדש";
+  }
+}
 function showConnected(title, sub){
   stopCamera();
   setLock(false);
   if(els.stage) els.stage.hidden = true;
   if(els.card) els.card.hidden = true;
+  if(els.btnRetry) els.btnRetry.hidden = true;
   if(els.successTitle) els.successTitle.textContent = title || "החיבור הצליח";
   if(els.successSub) els.successSub.textContent = sub || "המערכת עולה במחשב. אפשר לסגור את החלון בטלפון.";
   if(els.success) els.success.classList.add("is-on");
+  try { document.body.classList.add("is-success"); } catch(_e) {}
 }
 
 async function callFn(payload){
@@ -241,6 +307,11 @@ async function applyFocus(track){
 }
 
 async function startCamera(){
+  if(cameraTrackLive()){
+    if(els.cam.srcObject !== stream) els.cam.srcObject = stream;
+    await els.cam.play().catch(() => {});
+    return;
+  }
   stream = await navigator.mediaDevices.getUserMedia({
     video: {
       facingMode: { ideal: "user" },
@@ -249,6 +320,7 @@ async function startCamera(){
     },
     audio: false
   });
+  markCameraOk();
   const track = stream.getVideoTracks()[0];
   await applyFocus(track);
   els.cam.srcObject = stream;
@@ -309,13 +381,26 @@ async function submitAll(){
   els.btnCapture.disabled = true;
   els.btnConfirm.disabled = true;
   setStatus("שולח לאימות…");
-  await callFn({
+  const data = await callFn({
     action: "submit",
     publicToken: token,
     descriptors,
     deviceLabel: deviceLabelFromUa(navigator.userAgent),
     geoText: ""
   });
+  const st = String(data?.status || "");
+  if(kind === "enroll"){
+    if(st && st !== "enrolled"){
+      const err = new Error(st);
+      err.code = st;
+      throw err;
+    }
+  } else if(st && st !== "approved"){
+    const err = new Error(st);
+    err.code = st === "denied" ? "NO_MATCH" : st;
+    throw err;
+  }
+  return data;
 }
 
 function showEnrollUi(){
@@ -343,10 +428,7 @@ function showEnrollUi(){
       }
       await runNext();
     } catch(_e) {
-      setStatus("לא זוהו פנים. נסו שוב בתאורה טובה.", "err");
-      els.btnCapture.hidden = false;
-      els.btnCapture.disabled = false;
-      els.btnCapture.textContent = "נסו שוב";
+      showRetry("לא זוהו פנים. נסו שוב בתאורה טובה.");
     }
   };
   els.btnCapture.onclick = async () => {
@@ -359,10 +441,12 @@ function showEnrollUi(){
       showConnected("נרשם בהצלחה", "אפשר לחזור למחשב.");
     } catch(err) {
       const code = String(err?.code || err?.message || "");
-      if(code === "LIVENESS") setStatus("הסריקות דומות מדי או רחוקות מדי. הזיזו מעט את הראש בין הצילומים.", "err");
-      else if(code === "EXPIRED" || code === "SESSION_CLOSED") setStatus("הקוד פג במחשב. סרקו שוב את ה-QR.", "err");
-      else setStatus("ההרשמה נכשלה. נסו שוב" + (code ? " (" + code + ")" : "") + ".", "err");
       els.btnConfirm.disabled = false;
+      showRetry(code === "LIVENESS"
+        ? "הסריקות דומות מדי או רחוקות מדי. הזיזו מעט את הראש בין הצילומים."
+        : (code === "EXPIRED" || code === "SESSION_CLOSED")
+          ? "הקוד פג במחשב. סרקו שוב את ה-QR."
+          : ("ההרשמה נכשלה. נסו שוב" + (code ? " (" + code + ")" : "") + "."));
     }
   };
   void runNext();
@@ -378,7 +462,7 @@ async function runLoginCapture(){
         { confirm: false }
       ));
     } catch(_e) {
-      setStatus("לא זוהו פנים. אפשר להיכנס עם PIN במחשב.", "err");
+      showRetry("לא זוהו פנים. לחצו לסריקה מחדש.");
       return;
     }
     if(i < LOGIN_PROMPTS.length - 1){
@@ -387,18 +471,23 @@ async function runLoginCapture(){
     }
   }
   try {
-    await submitAll();
+    const data = await submitAll();
+    if(!data || data.ok === false){
+      showRetry("הזיהוי לא הצליח. לחצו לסריקה מחדש.");
+      return;
+    }
     showConnected("החיבור הצליח", "המערכת עולה במחשב. אפשר לסגור את החלון בטלפון.");
   } catch(err) {
     const code = String(err?.code || err?.message || "");
-    if(code === "NO_MATCH") setStatus("הפנים לא זוהו. היכנסו עם שם משתמש ו-PIN במחשב.", "err");
-    else if(code === "EXPIRED" || code === "SESSION_CLOSED") setStatus("הקוד פג. סרקו שוב מהמסך.", "err");
-    else if(code === "LIVENESS") setStatus("הסריקה נראתה סטטית. נסו שוב מול המצלמה.", "err");
-    else setStatus("האימות נכשל. PIN עדיין זמין במחשב.", "err");
+    if(code === "NO_MATCH") showRetry("הפנים לא זוהו. לחצו לאיפוס מצלמה וסריקה מחדש.");
+    else if(code === "EXPIRED" || code === "SESSION_CLOSED") showRetry("הקוד פג. סרקו שוב את ה-QR במחשב, או לחצו לניסיון נוסף.");
+    else if(code === "LIVENESS") showRetry("הסריקה נראתה סטטית. לחצו לסריקה מחדש מול המצלמה.");
+    else showRetry("האימות נכשל. לחצו לסריקה מחדש.");
   }
 }
 
 async function startFaceFlow(){
+  showWorkUi();
   setStatus("פותחים מצלמה…");
   setHint(kind === "enroll"
     ? "הזיזו מעט בין הזוויות. התמונות לא נשמרות."
@@ -408,20 +497,59 @@ async function startFaceFlow(){
   else await runLoginCapture();
 }
 
+async function resetCameraAndRescan(){
+  if(flowBusy) return;
+  flowBusy = true;
+  if(els.btnRetry) els.btnRetry.disabled = true;
+  descriptors.length = 0;
+  showWorkUi();
+  setStatus("מאפסים מצלמה…");
+  setHint("ממקמים את הפנים במרכז.");
+  stopCamera();
+  try {
+    await startCamera();
+    if(!modelsReady) await loadModels();
+    if(kind === "enroll") showEnrollUi();
+    else await runLoginCapture();
+  } catch(err) {
+    const perm = String(err).includes("NotAllowedError") || String(err?.name || "") === "NotAllowedError";
+    showRetry(perm ? "יש לאפשר מצלמה בדפדפן ואז ללחוץ שוב." : "לא ניתן לפתוח מצלמה. לחצו שוב.");
+  } finally {
+    flowBusy = false;
+    if(els.btnRetry) els.btnRetry.disabled = false;
+  }
+}
+
+function isPermissionErr(err){
+  return String(err).includes("NotAllowedError")
+    || String(err).includes("Permission")
+    || String(err?.name || "") === "NotAllowedError";
+}
+
 async function boot(){
   if(!token){
     setStatus("חסר קוד סריקה.", "err");
     setHint("סרקו את ה-QR ממסך הכניסה או מתפריט המשתמש.");
     return;
   }
+  if(els.btnRetry){
+    els.btnRetry.addEventListener("click", () => { void resetCameraAndRescan(); });
+  }
   try {
     const peek = await callFn({ action: "peek", publicToken: token });
     kind = peek.kind === "enroll" ? "enroll" : "login";
+    if(rememberedCameraOk()) setStatus("פותחים מצלמה…");
     await startFaceFlow();
   } catch(err) {
     const code = String(err?.code || err?.message || "");
     if(code === "EXPIRED" || code === "UNKNOWN_TOKEN") setStatus("הקוד פג או לא תקף. סרקו שוב.", "err");
-    else if(String(err).includes("NotAllowedError") || String(err).includes("Permission") || String(err?.name || "") === "NotAllowedError") setStatus("יש לאשר גישה למצלמה.", "err");
+    else if(isPermissionErr(err)){
+      if(rememberedCameraOk()){
+        showRetry("המצלמה כבר אושרה. לחצו לפתיחה מחדש בלי אישור נוסף.");
+      } else {
+        showRetry("יש לאשר גישה למצלמה פעם אחת, ואז ללחוץ כאן.");
+      }
+    }
     else setStatus("לא ניתן להתחיל. בדקו חיבור וסרקו שוב.", "err");
   }
 }

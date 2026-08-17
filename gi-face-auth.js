@@ -68,7 +68,7 @@
   function phonePageUrl(publicToken){
     const url = new URL("face-auth.html", window.location.href);
     url.searchParams.set("t", trim(publicToken));
-    url.searchParams.set("v", "20260816-face-ok-v1");
+    url.searchParams.set("v", "20260817-face-retry-v1");
     return url.href;
   }
 
@@ -485,8 +485,11 @@
           }
           self.setLoginHint("סרקו את הקוד בטלפון");
         },
-        onStatus: (status) => {
-          if(status === "scanned") self.setLoginHint("הטלפון סרק · מזהים פנים…");
+        onStatus: (status, data) => {
+          if(status === "scanned"){
+            if(trim(data?.failReason) === "NO_MATCH") self.setLoginHint("הפנים לא זוהו. ממתינים לסריקה מחדש בטלפון…", "err");
+            else self.setLoginHint("הטלפון סרק · מזהים פנים…");
+          }
           if(status === "pending") self.setLoginHint("סרקו את הקוד בטלפון");
         },
         onApproved: async (data) => {
@@ -530,13 +533,9 @@
           }
         },
         onDenied: async () => {
-          window.__GI_FACE_LOGIN_ACTIVE__ = false;
+          window.__GI_FACE_LOGIN_ACTIVE__ = true;
           window.__GI_FACE_LOGIN_DONE__ = false;
-          self.setLoginHint("הפנים לא זוהו. אפשר להיכנס עם שם משתמש ו-PIN למטה.", "err");
-          self.showLoginPanel(false);
-          if(typeof b.setLoginError === "function"){
-            b.setLoginError("זיהוי הפנים לא הצליח. היכנסו עם שם משתמש וקוד כניסה.");
-          }
+          self.setLoginHint("הפנים לא זוהו בטלפון. המתינו לסריקה מחדש שם.", "err");
         },
         onEnrolled: async () => {}
       });
