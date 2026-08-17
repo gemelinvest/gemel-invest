@@ -1,0 +1,40 @@
+/* GI-DAILY-SALES-MAIL 2026-08-17 — isolated Outlook daily report settings. */
+.giDailySalesMail__grid{
+  display:grid;
+  gap:14px;
+}
+.giDailySalesMail__status{
+  grid-column:1 / -1;
+  border:1px solid #d7dee6;
+  background:#f6f8fb;
+  padding:14px 16px;
+  line-height:1.55;
+  font-size:14px;
+  color:#122033;
+  white-space:pre-wrap;
+}
+.giDailySalesMail__status.is-ok{
+  border-color:#b7e0c8;
+  background:#f1faf4;
+}
+.giDailySalesMail__status.is-warn{
+  border-color:#f0d48a;
+  background:#fff8e8;
+}
+.giDailySalesMail__azureBlock{
+  grid-column:1 / -1;
+  display:grid;
+  gap:10px;
+}
+.giDailySalesMail__redirect{
+  word-break:break-all;
+  font-family:Consolas,monospace;
+  font-size:12px;
+}
+.giDailySalesMail__actions{
+  flex-wrap:wrap;
+  gap:8px;
+}
+.giDailySalesMail #giDailySalesMailMessage{
+  grid-column:1 / -1;
+}

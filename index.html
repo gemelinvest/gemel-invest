@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <link href="./app.css?v=20260817-mirror-checklist-data-v1" rel="stylesheet"/>
 <link href="./theme.css?v=20260817-mirror-solid-btns-v2" rel="stylesheet"/>
+<link href="./gi-daily-sales-mail.css?v=20260817-daily-sales-mail-v1" rel="stylesheet"/>
 <link href="./theme-p2.css?v=20260805-workdays-goal-v1" rel="stylesheet"/>
 <link href="./login-split.css?v=20260814-face-ui-v1" rel="stylesheet"/>
 <!-- GI-PERF 2026-08-10: CSS משני (mirror/import/unify) נטען אחרי כניסה מ-app.js —
@@ -1818,6 +1819,15 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
           <span class="lcSettingsRubric__hint">קוד מורשה לניהול</span>
         </span>
       </button>
+      <button type="button" class="lcSettingsRubric" data-settings-rubric="dailySalesMail">
+        <span class="lcSettingsRubric__icon" aria-hidden="true">
+          <svg class="lcSettingsRubric__svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"></path><path d="m22 6-10 7L2 6"></path></svg>
+        </span>
+        <span class="lcSettingsRubric__text">
+          <span class="lcSettingsRubric__title">דוח מכירות למייל</span>
+          <span class="lcSettingsRubric__hint">Outlook · שליחה יומית 20:00</span>
+        </span>
+      </button>
     </div>
     <div class="lcSettingsHub__group" data-settings-group="marketing">
       <div class="lcSettingsHub__groupTitle">שיווק ולידים</div>
@@ -2032,6 +2042,40 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
         <button class="btn btn--primary" id="btnSaveUsersGatePin" type="button">שמור קוד מורשה</button>
       </div>
       <div class="lcLogin__error lcSettingsInlineError" id="usersGateSaveStatus" aria-live="polite"></div>
+    </div>
+  </div>
+  </div>
+
+  <div class="lcSettingsPanel" data-settings-panel="dailySalesMail" id="settingsPanel-dailySalesMail" hidden>
+  <div class="card lcSettingsCard giDailySalesMail">
+    <div class="card__head">
+      <div>
+        <div class="card__title">דוח מכירות למייל</div>
+        <div class="card__hint">שליחה אוטומטית כל יום ב־20:00 למנהל ולמנהל מערכת, מתיבת Outlook שמחוברת כאן</div>
+      </div>
+    </div>
+    <div class="formGrid lcSettingsGridForm giDailySalesMail__grid">
+      <div class="giDailySalesMail__status" id="giDailySalesMailStatus" aria-live="polite">טוען מצב חיבור…</div>
+      <div class="field giDailySalesMail__azureBlock" id="giDailySalesMailAzureBlock" hidden>
+        <label class="label" for="giDailySalesMailClientId">מזהה אפליקציית Microsoft</label>
+        <input class="input" id="giDailySalesMailClientId" type="text" dir="ltr" autocomplete="off" placeholder="Application (client) ID"/>
+        <label class="label" for="giDailySalesMailTenantId">מזהה ספרייה (Tenant ID)</label>
+        <input class="input" id="giDailySalesMailTenantId" type="text" dir="ltr" autocomplete="off" placeholder="Directory (tenant) ID"/>
+        <label class="label" for="giDailySalesMailClientSecret">סוד אפליקציה</label>
+        <input class="input" id="giDailySalesMailClientSecret" type="password" dir="ltr" autocomplete="off" placeholder="Client secret"/>
+        <div class="help" id="giDailySalesMailAzureHelp">נדרש פעם אחת כדי שהמערכת תוכל לשלוח מ־Outlook. כתובת ההפניה מוצגת למטה.</div>
+        <div class="help giDailySalesMail__redirect" id="giDailySalesMailRedirect" dir="ltr"></div>
+        <div class="row lcSettingsActions">
+          <button class="btn btn--primary" id="giDailySalesMailSaveAzureBtn" type="button">שמור הגדרת Microsoft</button>
+        </div>
+      </div>
+      <div class="row lcSettingsActions giDailySalesMail__actions" style="grid-column:1 / -1;">
+        <button class="btn btn--primary" id="giDailySalesMailConnectBtn" type="button">חבר מייל Outlook</button>
+        <button class="btn" id="giDailySalesMailDisconnectBtn" type="button">נתק / החלף מייל</button>
+        <button class="btn" id="giDailySalesMailSnapshotBtn" type="button">רענן דוח להיום</button>
+        <button class="btn" id="giDailySalesMailSendNowBtn" type="button">שלח עכשיו לבדיקה</button>
+      </div>
+      <div class="lcLogin__error lcSettingsInlineError" id="giDailySalesMailMessage" aria-live="polite"></div>
     </div>
   </div>
   </div>
@@ -3849,6 +3893,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <script src="./contacts-directory-seed.js?v=20260811-contacts-v1"></script>
 <script src="./app.js?v=20260817-mirror-checklist-data-v1"></script>
 <script src="./gi-face-auth.js?v=20260816-face-ok-v1"></script>
+<script src="./gi-daily-sales-mail.js?v=20260817-daily-sales-mail-v2"></script>
 
 
 <div id="giPwaInstallBanner" class="giPwaInstallBanner" hidden>
