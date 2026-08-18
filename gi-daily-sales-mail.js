@@ -189,12 +189,14 @@
   }
 
   function wrapSnap(snap){
-    if(!snap || !snap.html) return null;
+    if(!snap || (!snap.html && !snap.pdfBase64)) return null;
     return {
       dateKey: trim(snap.dateKey) || israelDateKey(),
       dateLabel: snap.dateLabel || israelDateKey(),
-      html: ensureRtlEmailHtml(snap.html),
-      summary: snap.summary || {}
+      html: snap.html ? ensureRtlEmailHtml(snap.html) : "",
+      summary: snap.summary || {},
+      pdfBase64: trim(snap.pdfBase64),
+      pdfName: trim(snap.pdfName)
     };
   }
 
@@ -214,7 +216,7 @@
     } catch(_e) {}
     for(let i = 0; i < list.length; i++){
       const dash = list[i];
-      if(dash && (typeof dash.buildDailySalesEmailHtml === "function" || typeof dash.buildDailyAgentSalesReport === "function")){
+      if(dash && (typeof dash.buildDailySalesMailSnapshot === "function" || typeof dash.buildDailySalesEmailHtml === "function" || typeof dash.buildDailyAgentSalesReport === "function")){
         return dash;
       }
     }
@@ -223,13 +225,48 @@
 
   function mailHookReady(){
     try {
+      if(typeof window.__GI_DAILY_SALES_MAIL_PDF_HOOK__ === "function") return true;
+    } catch(_e) {}
+    try {
       if(typeof window.__GI_DAILY_SALES_MAIL_HOOK__ === "function") return true;
     } catch(_e) {}
     try {
       const b = window.__GI_FACE_BRIDGE__;
-      if(b && typeof b.buildDailySalesEmailHtml === "function") return true;
+      if(b && (typeof b.buildDailySalesMailSnapshot === "function" || typeof b.buildDailySalesEmailHtml === "function")) return true;
     } catch(_e) {}
     return !!dashboardUI();
+  }
+
+  async function buildSnapshot(){
+    let lastErr = null;
+    try {
+      if(typeof window.__GI_DAILY_SALES_MAIL_PDF_HOOK__ === "function"){
+        const snap = wrapSnap(await window.__GI_DAILY_SALES_MAIL_PDF_HOOK__());
+        if(snap) return snap;
+      }
+    } catch(err) {
+      lastErr = err;
+    }
+    try {
+      const b = window.__GI_FACE_BRIDGE__;
+      if(b && typeof b.buildDailySalesMailSnapshot === "function"){
+        const snap = wrapSnap(await b.buildDailySalesMailSnapshot());
+        if(snap) return snap;
+      }
+    } catch(err) {
+      lastErr = lastErr || err;
+    }
+    const Dash = dashboardUI();
+    if(Dash && typeof Dash.buildDailySalesMailSnapshot === "function"){
+      const snap = wrapSnap(await Dash.buildDailySalesMailSnapshot());
+      if(snap) return snap;
+    }
+    try {
+      return buildEmailHtml();
+    } catch(err) {
+      if(lastErr) throw lastErr;
+      throw err;
+    }
   }
 
   function buildEmailHtml(){
@@ -277,7 +314,7 @@
     const now = Date.now();
     if(!force && lastSnapshotAt && (now - lastSnapshotAt) < SNAPSHOT_GAP_MS) return { skipped: true };
     await waitForMailHook(force ? 4000 : 1500);
-    const snap = buildEmailHtml();
+    const snap = await buildSnapshot();
     await api("save-snapshot", snap);
     lastSnapshotAt = Date.now();
     return snap;
@@ -288,6 +325,7 @@
     if(data.connectedEmail){
       lines.push("מייל שולח מחובר: " + data.connectedEmail);
       lines.push("שעת שליחה: כל יום ב־12:30, 15:00 ו־20:00 שעון ישראל");
+      lines.push("הדוח מצורף למייל כקובץ PDF, כמו דוח ההדפסה במערכת.");
     } else if(data.azureReady){
       lines.push("אפליקציית Microsoft מוגדרת. עדיין לא חובר מייל Outlook.");
       lines.push("לחץ «חבר מייל Outlook» והיכנס עם orias@i-s-f.co.il");
@@ -306,6 +344,7 @@
     }
     if(data.snapshotDateKey){
       lines.push("דוח אחרון שנשמר לשליחה: " + data.snapshotDateKey + (data.snapshotAt ? (" · " + data.snapshotAt) : ""));
+      lines.push(data.hasPdf ? "קובץ PDF מוכן לצירוף למייל." : "עדיין אין PDF שמור — לחצו «רענן דוח להיום».");
     }
     if(data.lastSend){
       lines.push("שליחה אחרונה: " + trim(data.lastSend.status) + (data.lastSend.at ? (" · " + data.lastSend.at) : ""));
@@ -418,7 +457,7 @@
     });
     nodes.sendNow?.addEventListener("click", async () => {
       try {
-        setMessage("שולח דוח בדיקה…");
+        setMessage("מפיק PDF ושולח דוח בדיקה…");
         await persistSnapshot(true);
         const out = await api("send-now");
         await refreshStatus();

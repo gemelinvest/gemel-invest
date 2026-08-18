@@ -30964,22 +30964,8 @@ UsersGateUI.init();
       overlay.innerHTML = nextHtml;
     },
 
-    printDailySalesReportScreen(){
-      if(!this.canSeeDailySalesReport()) return;
-      const model = this.buildDailySalesPrintModel();
-      const money = (v) => this.dailySalesPrintMoney(v);
-      const body = this.renderDailySalesPrintRowsHtml(model);
-      const pensionStat = model.showPension
-        ? `<div class="stat"><b>${escapeHtml(money(model.totals.pension))}</b><span>פרמיה חודשית · פנסיה</span></div>`
-        : "";
-      const statCount = model.showPension ? 5 : 4;
-      let logoSrc = "";
-      try { logoSrc = new URL("./logo-login-clean.png", window.location.href).href; } catch(_e) { logoSrc = "./logo-login-clean.png"; }
-      const win = window.open("", "_blank", "width=1080,height=820");
-      if(!win) return;
-      win.document.write(`<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><title>${escapeHtml(model.fileStem)}</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
+    dailySalesPrintCss(statCount){
+      return `
   @page { size: A4; margin: 16mm 14mm; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: #fff; color: #122033; font-family: "Segoe UI", "Arial Hebrew", Arial, sans-serif; }
@@ -31005,9 +30991,22 @@ UsersGateUI.init();
   tfoot td { background: #0b2a4a; color: #fff; font-weight: 700; border: 0; padding: 10px; }
   .note { margin-top: 14px; font-size: 11px; color: #5b6b7c; line-height: 1.5; }
   .foot { margin-top: 18px; padding-top: 10px; border-top: 1px solid #d7dee6; font-size: 10px; color: #7a8794; display: flex; justify-content: space-between; }
-</style></head><body><div class="page">
+`;
+    },
+
+    dailySalesPrintLogoSrc(){
+      try { return new URL("./logo-login-clean.png", window.location.href).href; }
+      catch(_e) { return "./logo-login-clean.png"; }
+    },
+
+    buildDailySalesPrintPageInnerHtml(model){
+      const money = (v) => this.dailySalesPrintMoney(v);
+      const pensionStat = model.showPension
+        ? `<div class="stat"><b>${escapeHtml(money(model.totals.pension))}</b><span>פרמיה חודשית · פנסיה</span></div>`
+        : "";
+      return `<div class="page">
   <header>
-    <img class="logo" src="${escapeHtml(logoSrc)}" alt="גמל INVEST"/>
+    <img class="logo" src="${escapeHtml(this.dailySalesPrintLogoSrc())}" alt="גמל INVEST"/>
     <div class="head-text">
       <p class="kicker">GEMEL INVEST · דוח מכירות</p>
       <h1>מכירות היום</h1>
@@ -31023,7 +31022,7 @@ UsersGateUI.init();
   </div>
   <table>
     <thead>${this.renderDailySalesPrintTheadHtml(model)}</thead>
-    <tbody>${body}</tbody>
+    <tbody>${this.renderDailySalesPrintRowsHtml(model)}</tbody>
     <tfoot>${this.renderDailySalesPrintFootHtml(model)}</tfoot>
   </table>
   <p class="note">
@@ -31034,7 +31033,86 @@ UsersGateUI.init();
     <span>גמל INVEST</span>
     <span>הופק ב־${escapeHtml(model.issued)}</span>
   </div>
-</div></body></html>`);
+</div>`;
+    },
+
+    buildDailySalesPrintDocumentHtml(forDate){
+      const model = this.buildDailySalesPrintModel(forDate);
+      const statCount = model.showPension ? 5 : 4;
+      const css = this.dailySalesPrintCss(statCount);
+      const inner = this.buildDailySalesPrintPageInnerHtml(model);
+      const html = `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><title>${escapeHtml(model.fileStem)}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>${css}</style></head><body>${inner}</body></html>`;
+      return { model, html, inner, css, fileStem: model.fileStem };
+    },
+
+    async _renderDailySalesPdfBase64(doc){
+      if(window.GI_LOAD_LIBS?.html2pdf) await window.GI_LOAD_LIBS.html2pdf();
+      if(typeof window.html2pdf !== "function") throw new Error("לא נטען מנוע PDF");
+      const container = document.createElement("div");
+      container.setAttribute("dir", "rtl");
+      container.setAttribute("lang", "he");
+      container.style.position = "fixed";
+      container.style.left = "-20000px";
+      container.style.top = "0";
+      container.style.width = "794px";
+      container.style.background = "#fff";
+      container.style.opacity = "1";
+      container.style.pointerEvents = "none";
+      container.style.zIndex = "0";
+      container.style.display = "block";
+      container.innerHTML = `<style>${doc.css}</style>${doc.inner}`;
+      document.body.appendChild(container);
+      try {
+        try { await document.fonts?.ready; } catch(_e) {}
+        await new Promise((r) => requestAnimationFrame(() => r()));
+        await new Promise((r) => requestAnimationFrame(() => r()));
+        const imgs = Array.from(container.querySelectorAll("img"));
+        if(imgs.length){
+          await Promise.all(imgs.map((img) => new Promise((resolve) => {
+            if(img.complete) return resolve();
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+          })));
+        }
+        const opts = {
+          margin: [10, 10, 10, 10],
+          filename: `${doc.fileStem}.pdf`,
+          image: { type: "jpeg", quality: 0.95 },
+          html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff", logging: false },
+          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+          pagebreak: { mode: ["avoid-all", "css", "legacy"] }
+        };
+        const dataUri = await window.html2pdf().set(opts).from(container).outputPdf("datauristring");
+        const raw = String(dataUri || "");
+        const base64 = raw.indexOf(",") >= 0 ? raw.slice(raw.indexOf(",") + 1) : raw;
+        if(!base64) throw new Error("PDF ריק");
+        return base64;
+      } finally {
+        try { container.remove(); } catch(_e) {}
+      }
+    },
+
+    async buildDailySalesMailSnapshot(forDate){
+      const email = this.buildDailySalesEmailHtml(forDate);
+      const doc = this.buildDailySalesPrintDocumentHtml(forDate);
+      let pdfBase64 = "";
+      try { pdfBase64 = await this._renderDailySalesPdfBase64(doc); }
+      catch(_e) { pdfBase64 = ""; }
+      return {
+        ...email,
+        pdfBase64,
+        pdfName: `${doc.fileStem}.pdf`
+      };
+    },
+
+    printDailySalesReportScreen(){
+      if(!this.canSeeDailySalesReport()) return;
+      const doc = this.buildDailySalesPrintDocumentHtml();
+      const win = window.open("", "_blank", "width=1080,height=820");
+      if(!win) return;
+      win.document.write(doc.html);
       win.document.close();
       try { win.focus(); win.print(); } catch(_e) {}
     },
@@ -32990,6 +33068,9 @@ UsersGateUI.init();
     window.DashboardUI = DashboardUI;
     window.__GI_DAILY_SALES_MAIL_HOOK__ = function(){
       return DashboardUI.buildDailySalesEmailHtml();
+    };
+    window.__GI_DAILY_SALES_MAIL_PDF_HOOK__ = function(){
+      return DashboardUI.buildDailySalesMailSnapshot();
     };
   } catch(_e) {}
 
@@ -68145,6 +68226,9 @@ ${inner}
       },
       buildDailySalesEmailHtml(){
         try { return DashboardUI.buildDailySalesEmailHtml(); } catch(_e) { return null; }
+      },
+      buildDailySalesMailSnapshot(){
+        try { return DashboardUI.buildDailySalesMailSnapshot(); } catch(_e) { return null; }
       },
       getCurrentAgent(){
         const rec = (typeof getCurrentAgentRecord === "function" ? getCurrentAgentRecord() : null)
