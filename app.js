@@ -16461,6 +16461,20 @@ UsersGateUI.init();
       });
 
       on(this.els.main, "click", async (ev) => {
+        const stoppedRow = ev.target?.closest?.('[data-ops-decline-row]');
+        if(stoppedRow){
+          const kindRaw = safeTrim(stoppedRow.getAttribute("data-ops-decline-kind"));
+          const reasonTitle = kindRaw === "addition_not_approved"
+            ? "שיחת שיקוף נעצרה · לקוח לא אישר כיסוי כתוספת"
+            : "שיחת שיקוף נעצרה";
+          const date = safeTrim(stoppedRow.getAttribute("data-ops-decline-date")) || "—";
+          const start = safeTrim(stoppedRow.getAttribute("data-ops-decline-start")) || "—";
+          const end = safeTrim(stoppedRow.getAttribute("data-ops-decline-end")) || "—";
+          const duration = safeTrim(stoppedRow.getAttribute("data-ops-decline-duration")) || "00:00";
+          const notes = safeTrim(stoppedRow.getAttribute("data-ops-decline-notes")) || "לא הוזן תיעוד";
+          alert(`${reasonTitle}\nתאריך: ${date}\nשעת התחלה: ${start}\nשעת סיום: ${end}\nמשך: ${duration}\n\nתיעוד הנציג:\n${notes}`);
+          return;
+        }
         const btn = ev.target?.closest?.('[data-ops-result]');
         if(!btn) return;
         const rec = this.current();
@@ -19576,15 +19590,18 @@ UsersGateUI.init();
       const idNumber = safeTrim(rec?.idNumber || '');
       const phone = safeTrim(rec?.phone || '');
       const agentName = safeTrim(rec?.agentName || '');
+      const ops = getOpsStatePresentation(rec);
       const idIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 10h6"/><path d="M8 14h4"/><circle cx="17" cy="12" r="1.4"/></svg>`;
       const phoneIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v2a2 2 0 0 1-2.18 2 19.86 19.86 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.86 19.86 0 0 1 2.12 3.18 2 2 0 0 1 4.11 1h2a2 2 0 0 1 2 1.72c.12.9.33 1.78.63 2.62a2 2 0 0 1-.45 2.11L7.1 8.91a16 16 0 0 0 8 8l1.46-1.19a2 2 0 0 1 2.11-.45c.84.3 1.72.51 2.62.63A2 2 0 0 1 22 16.92z"/></svg>`;
       const agentIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="8" r="4"/></svg>`;
+      const liveCallIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8Z"/></svg>`;
       const chip = (text, icon, dir) =>
         `<span class="cfFile__chip"><span class="cfFile__chipText" dir="${dir}">${escapeHtml(text)}</span><span class="cfFile__chipIcon" aria-hidden="true">${icon}</span></span>`;
       const chips = [
         idNumber ? chip(idNumber, idIcon, 'ltr') : '',
         phone ? chip(phone, phoneIcon, 'ltr') : '',
-        agentName ? chip(agentName, agentIcon, 'rtl') : ''
+        agentName ? chip(agentName, agentIcon, 'rtl') : '',
+        ops?.timerLive ? chip(`בשיחת שיקוף כעת · ${ops.timerText || "00:00"}`, liveCallIcon, 'rtl') : ''
       ].filter(Boolean);
       return chips.join('') || '<span class="muted small">אין פרטי זיהוי</span>';
     },
@@ -19764,6 +19781,27 @@ UsersGateUI.init();
       const canSetOpsResult = !!(Auth.isOps() || Auth.isOpsAgent());
       const owner = safeTrim(state?.ownerText) || 'מחלקת תפעול';
       const updated = safeTrim(state?.updatedText) ? ProcessesUI.formatDate(state.updatedText) : '—';
+      const payload = current?.payload && typeof current.payload === "object" ? current.payload : {};
+      const mirrorFlow = payload?.mirrorFlow && typeof payload.mirrorFlow === "object" ? payload.mirrorFlow : {};
+      const call = (mirrorFlow.callSession && typeof mirrorFlow.callSession === "object")
+        ? mirrorFlow.callSession
+        : ((mirrorFlow.call && typeof mirrorFlow.call === "object") ? mirrorFlow.call : {});
+      const endedCall = !call?.active && (safeTrim(call?.durationText) || safeTrim(call?.finishedAt) || safeTrim(call?.endTime));
+      let callDate = safeTrim(call?.dateFull) || "—";
+      if(callDate === "—" && safeTrim(call?.startedAt)){
+        const d = new Date(call.startedAt);
+        if(!Number.isNaN(d.getTime())){
+          callDate = d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
+        }
+      }
+      const callStart = safeTrim(call?.startTime) || "—";
+      const callEnd = safeTrim(call?.endTime) || "—";
+      const callDuration = safeTrim(call?.durationText) || "00:00";
+      const stoppedWithNotes = !call?.active && safeTrim(call?.noConsentNotes);
+      const stopReason = safeTrim(call?.endReason);
+      const stopTitle = stopReason === "addition_not_approved"
+        ? "שיחת שיקוף נעצרה · לקוח לא אישר כיסוי כתוספת"
+        : "שיחת שיקוף נעצרה";
       const resultButtons = canSetOpsResult ? Object.entries(OPS_RESULT_OPTIONS).map(([key, label]) => `
         <button class="customerOpsResultBtn${state?.resultKey === key ? ' is-active' : ''}" data-ops-result="${escapeHtml(key)}" type="button">${escapeHtml(label)}</button>`).join('') : '';
       return `
@@ -19774,14 +19812,12 @@ UsersGateUI.init();
               <span class="customerOpsBadge customerOpsBadge--${escapeHtml(state?.tone || 'info')}">${escapeHtml(state?.liveLabel || 'ממתין לשיקוף')}</span>
               <span class="customerOpsOwner">${escapeHtml(owner)}</span>
             </div>
-            <div class="customerOpsTimerRow">
-              <strong class="customerOpsTimer${state?.timerLive ? ' is-live' : ''}" id="customerOpsTimerText">${escapeHtml(state?.timerText || '00:00')}</strong>
-              <span class="customerOpsTimerMeta" id="customerOpsTimerMeta">${escapeHtml(state?.timerMeta || 'הטיימר יתחיל ברגע שתופעל שיחת שיקוף')}</span>
-            </div>
             <div class="customerOpsResultWrap">
               <div class="customerOpsResultTitle">תוצאה</div>
               <div class="customerOpsResultValue" id="customerOpsResultValue">${escapeHtml(state?.finalLabel || 'טרם נקבעה תוצאה סופית')}</div>
             </div>
+            ${stoppedWithNotes ? `<button type="button" class="customerOpsCallLog customerOpsCallLog--stopped" data-ops-decline-row="1" data-ops-decline-notes="${escapeHtml(safeTrim(call.noConsentNotes))}" data-ops-decline-date="${escapeHtml(callDate)}" data-ops-decline-start="${escapeHtml(callStart)}" data-ops-decline-end="${escapeHtml(callEnd)}" data-ops-decline-duration="${escapeHtml(callDuration)}" data-ops-decline-kind="${escapeHtml(safeTrim(call?.endReason) || "")}">${escapeHtml(stopTitle)} · ${escapeHtml(callDate)} · ${escapeHtml(callEnd)} · משך ${escapeHtml(callDuration)} · לחץ לצפייה בתיעוד</button>` : ""}
+            ${endedCall ? `<div class="customerOpsCallLog">בוצע שיקוף ללקוח · ${escapeHtml(callDate)} · התחלה ${escapeHtml(callStart)} · סיום ${escapeHtml(callEnd)} · משך ${escapeHtml(callDuration)}</div>` : ""}
             ${canSetOpsResult ? `<div class="customerOpsResultBtns">${resultButtons}</div>` : ''}
             <div class="customerStatCard__sub">עודכן לאחרונה: ${escapeHtml(updated)}</div>
           </div>
@@ -19792,21 +19828,12 @@ UsersGateUI.init();
       const rec = this.current();
       if(!rec) return;
       const ops = getOpsStatePresentation(rec);
+      if(this.els.meta) this.els.meta.innerHTML = this.renderHeroMeta(rec);
       const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
       const mirrorFlow = payload?.mirrorFlow && typeof payload.mirrorFlow === "object" ? payload.mirrorFlow : {};
       const call = (mirrorFlow.callSession && typeof mirrorFlow.callSession === "object")
         ? mirrorFlow.callSession
         : ((mirrorFlow.call && typeof mirrorFlow.call === "object") ? mirrorFlow.call : {});
-      if(call?.active){
-        const timerEl = this.els?.main?.querySelector?.("#customerOpsTimerText");
-        const timerMetaEl = this.els?.main?.querySelector?.("#customerOpsTimerMeta");
-        if(timerEl){
-          timerEl.textContent = ops.timerText || "00:00";
-          timerEl.classList.toggle("is-live", !!ops.timerLive);
-        }
-        if(timerMetaEl) timerMetaEl.textContent = ops.timerMeta || "";
-        return;
-      }
       const updatedOps = safeTrim(ops?.updatedText) ? ProcessesUI.formatDate(ops.updatedText) : '—';
       const kpi = this.els?.dash?.querySelector?.('#customerFullKpiOps');
       if(kpi){
@@ -19817,6 +19844,7 @@ UsersGateUI.init();
             <div class="cfFile__kpiSub">עודכן ${escapeHtml(updatedOps)}</div>
           </div>`;
       }
+      if(call?.active) return;
       const card = this.els?.main?.querySelector?.('#customerOpsReflectionCard');
       if(card){
         card.outerHTML = this.renderOperationalReflectionCard(ops);
@@ -53971,6 +53999,7 @@ ${inner}
       this.els.preFlightModal = document.getElementById("mcPreFlightModal");
       this.els.preFlightList = document.getElementById("mcPreFlightList");
       this.els.preFlightAckBtn = document.getElementById("mcPreFlightAckBtn");
+      this.els.preFlightMarkAllBtn = document.getElementById("mcPreFlightMarkAllBtn");
       this.els.preFlightConfirm = document.getElementById("mcPreFlightConfirm");
       this.els.preFlightConfirmOk = document.getElementById("mcPreFlightConfirmOk");
       this.els.preFlightConfirmCancel = document.getElementById("mcPreFlightConfirmCancel");
@@ -53982,9 +54011,11 @@ ${inner}
       this.els.readyPremiumList = document.getElementById("mcReadyPremiumList");
       this.els.readyPremiumHint = document.getElementById("mcReadyPremiumHint");
       this.els.readyPremiumAlert = document.getElementById("mcReadyPremiumAlert");
+      this.els.readyPremiumBypassBtn = document.getElementById("mcReadyPremiumBypassBtn");
       this.els.readyPremiumFileInput = document.getElementById("mcReadyPremiumFileInput");
       this.els.readyStatus = document.querySelector("#mcReadyPanel .mcReadyPanel__status");
       this._premiumUploadTarget = null;
+      this._premiumUploadsBypassed = false;
 
       if(this.els.searchBtn)  on(this.els.searchBtn,  "click",   () => this.search());
       if(this.els.searchInput) on(this.els.searchInput, "keydown", (ev) => { if(ev.key === "Enter"){ ev.preventDefault(); this.search(); } });
@@ -54035,6 +54066,7 @@ ${inner}
         });
       }
       if(this.els.preFlightAckBtn) on(this.els.preFlightAckBtn, "click", () => this._openPreFlightConfirm());
+      if(this.els.preFlightMarkAllBtn) on(this.els.preFlightMarkAllBtn, "click", () => this._markAllPreFlightReviewed());
       if(this.els.preFlightConfirmOk) on(this.els.preFlightConfirmOk, "click", () => this._acceptPreFlightConfirm());
       if(this.els.preFlightConfirmCancel) on(this.els.preFlightConfirmCancel, "click", () => this._cancelPreFlightConfirm());
       if(this.els.readyPremiumList){
@@ -54053,6 +54085,9 @@ ${inner}
           try{ ev.target.value = ""; }catch(_e){}
           if(file) void this._handleMirrorPremiumFile(file);
         });
+      }
+      if(this.els.readyPremiumBypassBtn){
+        on(this.els.readyPremiumBypassBtn, "click", () => this._markMirrorPremiumUploadsBypassed());
       }
     },
 
@@ -54077,6 +54112,13 @@ ${inner}
     _allPreFlightStepsReviewed(){
       const set = this._preFlightReviewedSet();
       return this.PREFLIGHT_STEPS.every((step) => set.has(step.key));
+    },
+
+    _markAllPreFlightReviewed(){
+      if(this._preFlightConfirmed) return;
+      this._preFlightReviewed = new Set(this.PREFLIGHT_STEPS.map((step) => step.key));
+      if(this.els.preFlightAlert) this.els.preFlightAlert.hidden = true;
+      this._paintPreFlightChecklist();
     },
 
     _preCheckInputs(){
@@ -54106,6 +54148,7 @@ ${inner}
     _resetPreFlightChecks(){
       this._preFlightReviewed = new Set();
       this._preFlightConfirmed = false;
+      this._premiumUploadsBypassed = false;
       this._preFlightOpenKey = "";
       this._showPreFlightConfirm(false);
       if(this.els.preFlightAlert) this.els.preFlightAlert.hidden = true;
@@ -54527,6 +54570,9 @@ ${inner}
         `</li>`;
       }).join("");
       if(this.els.preFlightAckBtn) this.els.preFlightAckBtn.disabled = !this._allPreFlightStepsReviewed() || this._preFlightConfirmed;
+      if(this.els.preFlightMarkAllBtn){
+        this.els.preFlightMarkAllBtn.disabled = this._preFlightConfirmed || this._allPreFlightStepsReviewed();
+      }
     },
 
     _togglePreFlightStep(key){
@@ -54586,7 +54632,7 @@ ${inner}
     _canStartMirrorCall(){
       if(!this._allPreCheckComplete()) return false;
       const rec = this._getFreshCustomerRecord?.() || this.selectedCustomer;
-      return this._isMirrorPremiumUploadsComplete(rec);
+      return this._isMirrorPremiumGatePassed(rec);
     },
 
     _syncPreFlightGate(inCallPhase){
@@ -54740,6 +54786,18 @@ ${inner}
         const afterOk = Array.isArray(row?.after?.covers) && row.after.covers.length > 0;
         return beforeOk && afterOk;
       });
+    },
+
+    _isMirrorPremiumGatePassed(rec){
+      return !!this._premiumUploadsBypassed || this._isMirrorPremiumUploadsComplete(rec);
+    },
+
+    _markMirrorPremiumUploadsBypassed(){
+      if(this._premiumUploadsBypassed) return;
+      this._premiumUploadsBypassed = true;
+      if(this.els.readyPremiumAlert) this.els.readyPremiumAlert.hidden = true;
+      this._renderReadyPremiumUploads();
+      this._syncMcCallStartButton();
     },
 
     _parseMirrorPremiumMoney(raw){
@@ -54920,13 +54978,22 @@ ${inner}
       wrap.removeAttribute("hidden");
       wrap.hidden = false;
       const allDone = this._isMirrorPremiumUploadsComplete(rec);
+      const bypassed = !!this._premiumUploadsBypassed;
       if(this.els.readyStatus){
-        this.els.readyStatus.textContent = allDone
-          ? "הצ׳קליסט והעלאות הפרמיות הושלמו · ניתן להתחיל הקלטה"
-          : "יש להעלות את כל קבצי הפרמיות לפני התחלת השיחה";
-        this.els.readyStatus.classList.toggle("is-warn", !allDone);
+        this.els.readyStatus.textContent = bypassed
+          ? "בוצע סימון זמני לפרמיות · ניתן להתחיל הקלטה"
+          : (allDone
+            ? "הצ׳קליסט והעלאות הפרמיות הושלמו · ניתן להתחיל הקלטה"
+            : "יש להעלות את כל קבצי הפרמיות לפני התחלת השיחה");
+        this.els.readyStatus.classList.toggle("is-warn", !(allDone || bypassed));
       }
-      if(this.els.readyPremiumAlert) this.els.readyPremiumAlert.hidden = allDone;
+      if(this.els.readyPremiumAlert) this.els.readyPremiumAlert.hidden = allDone || bypassed;
+      if(this.els.readyPremiumBypassBtn){
+        this.els.readyPremiumBypassBtn.disabled = bypassed;
+        this.els.readyPremiumBypassBtn.textContent = bypassed
+          ? "✓ סומן וי זמני לפרמיות"
+          : "סמן וי על הפרמיות (זמני)";
+      }
       list.innerHTML = slots.map((slot) => {
         const row = store.slots?.[slot.key] || {};
         const before = row.before;
@@ -55245,11 +55312,11 @@ ${inner}
         return;
       }
       const recGate = this._getFreshCustomerRecord() || this.selectedCustomer;
-      if(!this._isMirrorPremiumUploadsComplete(recGate)){
+      if(!this._isMirrorPremiumGatePassed(recGate)){
         this._renderReadyPremiumUploads();
         if(this.els.readyPremiumAlert) this.els.readyPremiumAlert.hidden = false;
         try{ this.els.readyPremiumWrap?.scrollIntoView?.({ block: "nearest", behavior: "smooth" }); }catch(_e){}
-        this._mcToast("חסרים קבצים", "יש להעלות את כל קבצי הפרמיות (לפני ואחרי הנחה) לפני התחלת השיחה.", "warn");
+        this._mcToast("חסרים קבצים", "יש להעלות את כל קבצי הפרמיות (לפני ואחרי הנחה) או לסמן וי זמני לפני התחלת השיחה.", "warn");
         this._syncMcCallStartButton();
         return;
       }
@@ -55395,7 +55462,7 @@ ${inner}
         }
       }
       if(this.els.callPauseBtn){
-        this.els.callPauseBtn.textContent = this._callPaused ? "המשך" : "השהה";
+        this.els.callPauseBtn.textContent = "השהה";
       }
     },
 
@@ -55421,8 +55488,11 @@ ${inner}
 
     _toggleCallPause(){
       if(!this._callRunning) return;
-      if(this._callPaused) this._resumeCallFromPause();
-      else this._pauseCall();
+      this._openMirrorDeclinePanel({
+        kind: "paused_documented",
+        statusTxt: "שיחה נעצרה · ממתין לתיעוד הנציג",
+        liveState: "mirror_call_stopped_pending"
+      });
     },
 
     _pauseCall(){
@@ -56809,6 +56879,11 @@ ${inner}
         if(subEl) subEl.textContent = "יש לפרט מדוע הלקוח לא מאשר את רכישת הכיסוי החדש כתוספת לקיים. התיעוד יישמר בתיק הלקוח ויסיים את תהליך השיקוף.";
         if(labelEl) labelEl.textContent = "פירוט מדוע הלקוח לא מאשר";
         if(this.els.declineNotes) this.els.declineNotes.placeholder = "פרט את נימוק הלקוח לסירוב לאישור הכיסוי כתוספת לקיים";
+      } else if(kind === "paused_documented"){
+        if(titleEl) titleEl.textContent = "שיחת שיקוף נעצרה";
+        if(subEl) subEl.textContent = "יש לתעד מדוע השיחה נעצרה. התיעוד יישמר בתיק הלקוח בכרטיסיית תפעול.";
+        if(labelEl) labelEl.textContent = "תיעוד עצירת השיחה";
+        if(this.els.declineNotes) this.els.declineNotes.placeholder = "פרט מדוע השיחה נעצרה, מה נאמר ללקוח ומה הצעד הבא";
       } else {
         if(titleEl) titleEl.textContent = "סיום שיחה";
         if(subEl) subEl.textContent = "הלקוח לא אישר להמשיך. התיעוד יישמר לסיכום שיחת שיקוף.";
@@ -56920,7 +56995,9 @@ ${inner}
       rec.updatedAt = finishedAt;
       try{
         setOpsTouch(rec,{
-          liveState: declineKind === "addition_not_approved" ? "mirror_addition_rejected_saved" : "mirror_no_consent_saved",
+          liveState: declineKind === "addition_not_approved"
+            ? "mirror_addition_rejected_saved"
+            : (declineKind === "paused_documented" ? "mirror_call_stopped_saved" : "mirror_no_consent_saved"),
           ownerName:safeTrim(Auth?.current?.name),
           updatedBy:safeTrim(Auth?.current?.name)
         });

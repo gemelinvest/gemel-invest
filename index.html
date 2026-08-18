@@ -8,7 +8,7 @@
 <meta content="#f8fafc" name="theme-color"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20260817-mirror-checklist-data-v1" rel="stylesheet"/>
+<link href="./app.css?v=20260818-mirror-sync-v2" rel="stylesheet"/>
 <link href="./theme.css?v=20260817-daily-sales-mail-v6" rel="stylesheet"/>
 <link href="./gi-daily-sales-mail.css?v=20260817-daily-sales-mail-v2" rel="stylesheet"/>
 <link href="./theme-p2.css?v=20260805-workdays-goal-v1" rel="stylesheet"/>
@@ -1479,6 +1479,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
         <ol class="mcPreFlightList" id="mcPreFlightList"></ol>
         <p class="mcCall__preFlightAlert" id="mcCallPreFlightAlert" hidden role="status">יש לעבור על כל השלבים ולאשר לפני תחילת השיחה</p>
         <div class="mcPreFlightActions">
+          <button class="btn" id="mcPreFlightMarkAllBtn" type="button">סמן וי על הכל</button>
           <button class="btn btn--primary mcPreFlightAckBtn" id="mcPreFlightAckBtn" type="button" disabled>אני מאשר שעברתי על הצ׳ק־ליסט</button>
         </div>
       </div>
@@ -1589,6 +1590,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
         <div class="mcReadyPremium__head">
           <div class="mcReadyPremium__title">קבצי פרמיות וכיסויים</div>
           <p class="mcReadyPremium__hint" id="mcReadyPremiumHint">חובה להעלות לכל מבוטח ומוצר שני קבצי Excel: לפני הנחה ואחרי הנחה. נלקחת רק שורת הנתונים הראשונה מכל קובץ.</p>
+          <button class="btn mcReadyPremium__bypassBtn" id="mcReadyPremiumBypassBtn" type="button">סמן וי על הפרמיות (זמני)</button>
         </div>
         <div class="mcReadyPremium__list" id="mcReadyPremiumList"></div>
         <p class="mcReadyPremium__alert" id="mcReadyPremiumAlert" hidden role="status">יש להשלים את כל העלאות הפרמיות לפני התחלת השיחה</p>
@@ -3891,7 +3893,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 </div>
 
 <script src="./contacts-directory-seed.js?v=20260811-contacts-v1"></script>
-<script src="./app.js?v=20260818-sim-no-steps-v2"></script>
+<script src="./app.js?v=20260818-mirror-sync-v2"></script>
 <script src="./gi-face-auth.js?v=20260817-face-retry-v1"></script>
 <script src="./gi-daily-sales-mail.js?v=20260817-daily-sales-mail-v8"></script>
 
