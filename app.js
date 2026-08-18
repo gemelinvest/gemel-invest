@@ -34029,7 +34029,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260818-har-compact-row-v1";
+  const GI_WIZARD_JS_VERSION = "20260818-har-compact-row-v2";
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
   const TZAHAL_CLINIC = "קופה צהלית";
   const TZAHAL_CLINIC_SHABAN = "אין שב״ן";
@@ -34114,7 +34114,7 @@ UsersGateUI.init();
       try {
         res = await fetch(href, {
           credentials: "same-origin",
-          cache: String(href).includes("nocache=") ? "no-store" : "default"
+          cache: "no-store"
         });
       } catch(err) {
         throw new Error("network error fetching gi-wizard.js: " + String(err && err.message || err));
@@ -34128,6 +34128,10 @@ UsersGateUI.init();
       }
       if(/^\s*<(!DOCTYPE|html[\s>])/i.test(text)){
         throw new Error("השרת החזיר HTML במקום JS (כנראה קובץ חסר): " + href);
+      }
+      const buildMark = 'GI_WIZARD_BUILD = "' + GI_WIZARD_JS_VERSION + '"';
+      if(text.indexOf(buildMark) < 0){
+        throw new Error("stale gi-wizard.js (build mismatch): " + href);
       }
       const blobUrl = URL.createObjectURL(new Blob([text], { type: "text/javascript" }));
       return new Promise((resolve, reject) => {
@@ -67378,7 +67382,7 @@ ${inner}
   async function registerServiceWorker(){
     if(!("serviceWorker" in navigator)) return;
     try {
-      await navigator.serviceWorker.register("./service-worker.js");
+      await navigator.serviceWorker.register("./service-worker.js", { updateViaCache: "none" });
     } catch(err){
       console.error("PWA service worker registration failed:", err);
     }

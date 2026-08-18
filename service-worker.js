@@ -16,7 +16,7 @@
    לאיפוס ידני: כפתור "החל עדכון" במערכת כבר מוחק את כל המטמונים ומבטל רישום SW.
 */
 
-const CACHE_VERSION = "gi-v12-20260818-har-compact-row-v1";
+const CACHE_VERSION = "gi-v12-20260818-har-compact-row-v2";
 const RUNTIME_CACHE = `gi-runtime-${CACHE_VERSION}`;
 
 // סיומות שמותר להגיש מהמטמון.
@@ -77,16 +77,51 @@ async function handleNavigate(request) {
   }
 }
 
-/** נכס מגורסן (‎?v=‎): המטמון תמיד תקף, כי URL חדש = דיפלוי חדש. */
+/** נכס מגורסן (‎?v=‎): במטמון רק אחרי משיכה טרייה מהשרת.
+   cache:reload מדלג על מטמון HTTP של הדפדפן, אחרת gi-wizard.js/?v=חדש
+   יכול לקבל גוף ישן כי השרת מתעלם מ-query. */
 async function handleVersioned(request) {
   const cache = await caches.open(RUNTIME_CACHE);
   const cached = await cache.match(request);
   if (cached) return cached;
-  const fresh = await fetch(request);
+  let fresh;
+  try {
+    fresh = await fetch(new Request(request.url, {
+      cache: "reload",
+      credentials: "same-origin",
+      redirect: "follow"
+    }));
+  } catch (_reloadErr) {
+    fresh = await fetch(request);
+  }
   if (isCacheableResponse(fresh)) {
     cache.put(request, fresh.clone()).catch(() => {});
   }
   return fresh;
+}
+
+/** gi-wizard.js תמיד מהרשת — לא מחזירים עותק ישן מה-SW. */
+async function handleWizardChunk(request) {
+  const cache = await caches.open(RUNTIME_CACHE);
+  try {
+    let fresh;
+    try {
+      fresh = await fetch(new Request(request.url, {
+        cache: "reload",
+        credentials: "same-origin",
+        redirect: "follow"
+      }));
+    } catch (_reloadErr) {
+      fresh = await fetch(request);
+    }
+    if (isCacheableResponse(fresh)) {
+      cache.put(request, fresh.clone()).catch(() => {});
+    }
+    if (fresh) return fresh;
+  } catch (_e) {}
+  const cached = await cache.match(request);
+  if (cached) return cached;
+  throw new Error("offline and wizard chunk not cached");
 }
 
 /** נכס רגיל: מגיש מיד מהמטמון ומרענן ברקע. */
@@ -139,6 +174,11 @@ self.addEventListener("fetch", (event) => {
 
   // עקיפת מטמון מכוונת (כפתור "החל עדכון" מוסיף ‎?nocache=‎).
   if (url.searchParams.has("nocache")) return;
+
+  if (url.pathname.endsWith("/gi-wizard.js")) {
+    event.respondWith(handleWizardChunk(request));
+    return;
+  }
 
   if (!STATIC_EXT.test(url.pathname)) return;
 
