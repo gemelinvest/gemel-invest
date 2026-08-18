@@ -13980,6 +13980,7 @@
       try { localStorage.removeItem(SIDEBAR_COLLAPSE_STORAGE_KEY); } catch(_) {}
       try { InactivityGuard.stop(); } catch(_e) {}
       try { CampaignAgentLeadWatcher.stop(); } catch(_e) {}
+      try { MirrorCallAgentToastWatcher.stop(); } catch(_e) {}
       try { BackgroundTimers.stopAll(); } catch(_e) {}
       this.lock();
       try { UI.applySidebarCollapse(true); } catch(_e) {}
@@ -16387,6 +16388,161 @@ UsersGateUI.init();
 
   window.showToast = function(message, opts = {}){
     return AppToast.show(message, opts);
+  };
+
+  const MirrorCallAgentToastWatcher = {
+    intervalMs: 4000,
+    timer: null,
+    busy: false,
+    _shownKeys: (() => {
+      try {
+        const raw = localStorage.getItem("GI_MIRROR_CALL_AGENT_TOAST_KEYS_V1");
+        return new Set(raw ? JSON.parse(raw) : []);
+      } catch(_e) { return new Set(); }
+    })(),
+    noticeKey(customerId, startedAt){
+      return `${safeTrim(customerId)}::${safeTrim(startedAt)}`;
+    },
+    wasShown(key){
+      return this._shownKeys.has(safeTrim(key));
+    },
+    markShown(key){
+      const k = safeTrim(key);
+      if(!k) return;
+      this._shownKeys.add(k);
+      if(this._shownKeys.size > 160){
+        this._shownKeys = new Set(Array.from(this._shownKeys).slice(-80));
+      }
+      try {
+        localStorage.setItem("GI_MIRROR_CALL_AGENT_TOAST_KEYS_V1", JSON.stringify(Array.from(this._shownKeys)));
+      } catch(_e) {}
+    },
+    isSelfOnThisCall(rec){
+      const cid = safeTrim(rec?.id);
+      if(!cid) return false;
+      try{
+        if(typeof MirrorCallUI !== "undefined" && MirrorCallUI?._callRunning){
+          if(safeTrim(MirrorCallUI?.selectedCustomer?.id) === cid) return true;
+        }
+      }catch(_e){}
+      try{
+        if(typeof ElementaryMirrorUI !== "undefined" && ElementaryMirrorUI?._callRunning){
+          const eid = safeTrim(ElementaryMirrorUI._customerId || ElementaryMirrorUI.selectedCustomer?.id);
+          if(eid && eid === cid) return true;
+        }
+      }catch(_e){}
+      return false;
+    },
+    isFileAlreadyOpen(rec){
+      const cid = safeTrim(rec?.id);
+      if(!cid) return false;
+      try{
+        return !!(typeof CustomersUI !== "undefined" && CustomersUI?._isOpenCustomerId?.(cid));
+      }catch(_e){
+        return false;
+      }
+    },
+    inspectRecord(rec){
+      if(!Auth?.current || !rec) return false;
+      try{
+        if(typeof customerOwnedByCurrentAgent === "function" && !customerOwnedByCurrentAgent(rec)) return false;
+      }catch(_e){
+        return false;
+      }
+      if(this.isSelfOnThisCall(rec)) return false;
+      if(this.isFileAlreadyOpen(rec)) return false;
+      const persisted = typeof getPersistedLiveCall === "function" ? getPersistedLiveCall(rec) : null;
+      if(!persisted?.startedAt) return false;
+      const cid = safeTrim(rec.id);
+      const key = this.noticeKey(cid, persisted.startedAt);
+      if(!cid || this.wasShown(key)) return false;
+      const name = safeTrim(rec.fullName) || "לקוח";
+      let toastShown = false;
+      try{
+        toastShown = !!window.showToast?.({
+          title: "לקוח בשיחת שיקוף כעת",
+          text: name,
+          variant: "info",
+          durationMs: 7000,
+          singletonKey: `gi-mirror-call-live-${cid}`,
+          actions: [{
+            label: "פתח תיק",
+            onClick: () => {
+              try { CustomersUI?.handleOpenCustomerClick?.(null, cid); } catch(_e) {
+                try { CustomersUI?.openByIdWithLoader?.(cid, 400); } catch(_e2) {}
+              }
+            }
+          }]
+        });
+      }catch(_e){}
+      if(toastShown) this.markShown(key);
+      return toastShown;
+    },
+    inspectIds(ids){
+      const list = Array.isArray(ids) ? ids : [];
+      list.forEach((id) => {
+        const rec = (State.data?.customers || []).find((c) => safeTrim(c?.id) === safeTrim(id));
+        if(rec) this.inspectRecord(rec);
+      });
+    },
+    inspectLocalCustomers(){
+      (Array.isArray(State.data?.customers) ? State.data.customers : []).forEach((rec) => {
+        if(!rec?.payload?.mirrorFlow?.callSession?.active) return;
+        this.inspectRecord(rec);
+      });
+    },
+    async fetchRecentOwnedRows(){
+      const rows = [];
+      try{
+        const client = Storage.getClient?.();
+        if(!client?.from) return rows;
+        const since = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+        let builder = client.from(SUPABASE_TABLES.customers)
+          .select("id,full_name,agent_id,agent_name,payload,updated_at")
+          .gte("updated_at", since)
+          .order("updated_at", { ascending: false })
+          .limit(40);
+        if(typeof Storage._applyListAgentScopeToQuery === "function"){
+          builder = Storage._applyListAgentScopeToQuery(builder, SUPABASE_TABLES.customers);
+        }
+        const res = await builder;
+        if(res?.error || !Array.isArray(res?.data)) return rows;
+        res.data.forEach((row, idx) => {
+          try{
+            const rec = Storage.mapCustomerRow ? Storage.mapCustomerRow(row, idx) : row;
+            if(rec) rows.push(rec);
+          }catch(_e){}
+        });
+      }catch(_e){}
+      return rows;
+    },
+    async tick(){
+      if(this.busy || !Auth?.current) return;
+      if(typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      if(document.body.classList.contains("lcAuthLock")) return;
+      this.busy = true;
+      try{
+        this.inspectLocalCustomers();
+        const remote = await this.fetchRecentOwnedRows();
+        remote.forEach((rec) => this.inspectRecord(rec));
+      }catch(_e){}
+      finally{
+        this.busy = false;
+      }
+    },
+    start(){
+      if(!Auth?.current || document.body.classList.contains("lcAuthLock")) return;
+      if(this.timer) return;
+      window.setTimeout(() => { void this.tick(); }, 700);
+      this.timer = window.setInterval(() => { void this.tick(); }, this.intervalMs);
+    },
+    stop(){
+      if(this.timer){
+        window.clearInterval(this.timer);
+        this.timer = null;
+      }
+      this.busy = false;
+    }
   };
 
   // ---------- Customers UI ----------
@@ -19774,41 +19930,109 @@ UsersGateUI.init();
       return view.mode === "live";
     },
 
-    async _refreshOpenFileCallSession(id){
-      const cid = safeTrim(id);
-      if(!cid || typeof Storage?.loadSingleRow !== "function") return;
-      const applyRemoteCall = (remoteCall) => {
-        if(!remoteCall || typeof remoteCall !== "object") return false;
-        if(safeTrim(this.currentId) !== cid) return false;
-        if(!this.els?.wrap?.classList.contains("is-open")) return false;
-        const rec = this.byId(cid);
-        if(!rec) return false;
-        if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
-        if(!rec.payload.mirrorFlow || typeof rec.payload.mirrorFlow !== "object") rec.payload.mirrorFlow = {};
-        const localCall = rec.payload.mirrorFlow.callSession || {};
-        if(typeof shouldKeepLocalMirrorCallSession === "function" && shouldKeepLocalMirrorCallSession(localCall, remoteCall, rec)){
-          this.paintHeroLiveTimer(rec);
-          if(this._hasLiveMirrorCallOnOpenFile()) this.startOpsCardLoop();
-          else this.stopOpsCardLoop();
-          return false;
-        }
-        rec.payload.mirrorFlow.callSession = Object.assign({}, localCall, remoteCall);
+    _openFileCallWatchMs: 2000,
+
+    _callSessionWatchSig(call){
+      if(!call || typeof call !== "object") return "";
+      return [
+        call.active ? "1" : "0",
+        safeTrim(call.startedAt),
+        safeTrim(call.finishedAt),
+        safeTrim(call.endReason),
+        safeTrim(call.durationText),
+        safeTrim(call.noConsentNotes)
+      ].join("|");
+    },
+
+    _applyOpenFileRemotePayload(cid, payload){
+      if(safeTrim(this.currentId) !== cid) return false;
+      if(!this.els?.wrap?.classList.contains("is-open")) return false;
+      const rec = this.byId(cid);
+      if(!rec) return false;
+      if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+      if(!rec.payload.mirrorFlow || typeof rec.payload.mirrorFlow !== "object") rec.payload.mirrorFlow = {};
+      const remoteCall = payload?.mirrorFlow?.callSession;
+      if(!remoteCall || typeof remoteCall !== "object"){
         this.paintHeroLiveTimer(rec);
-        this.startOpsCardLoop();
-        return true;
-      };
-      const pull = async () => {
-        const res = await Storage.loadSingleRow(SUPABASE_TABLES.customers, cid, "id,payload,updated_at");
+        return false;
+      }
+      const localCall = rec.payload.mirrorFlow.callSession || {};
+      if(typeof shouldKeepLocalMirrorCallSession === "function" && shouldKeepLocalMirrorCallSession(localCall, remoteCall, rec)){
+        this.paintHeroLiveTimer(rec);
+        if(this._hasLiveMirrorCallOnOpenFile()) this.startOpsCardLoop();
+        else this.stopOpsCardLoop();
+        return false;
+      }
+      const nextSig = this._callSessionWatchSig(remoteCall);
+      const sameSession = nextSig && nextSig === this._openFileCallSig;
+      rec.payload.mirrorFlow.callSession = Object.assign({}, localCall, remoteCall);
+      const remoteOps = payload?.opsProcess;
+      if(remoteOps && typeof remoteOps === "object"){
+        rec.payload.opsProcess = Object.assign({}, rec.payload.opsProcess || {}, {
+          liveState: remoteOps.liveState,
+          updatedAt: remoteOps.updatedAt,
+          updatedBy: remoteOps.updatedBy,
+          ownerName: remoteOps.ownerName
+        });
+      }
+      this._openFileCallSig = nextSig;
+      this.paintHeroLiveTimer(rec);
+      this.startOpsCardLoop();
+      if(!sameSession && !this._hasLiveMirrorCallOnOpenFile()){
+        this.refreshOperationalReflectionCard();
+      }
+      return !sameSession;
+    },
+
+    async _pullOpenFileCallSession(cid){
+      const id = safeTrim(cid);
+      if(!id || typeof Storage?.loadSingleRow !== "function") return;
+      if(this._openFileCallPullBusy) return;
+      this._openFileCallPullBusy = true;
+      try{
+        const res = await Storage.loadSingleRow(SUPABASE_TABLES.customers, id, "id,payload,updated_at");
         if(!res?.ok) return;
         let payload = res.data?.payload;
         if(typeof payload === "string"){
           try { payload = JSON.parse(safeTrim(payload) || "{}"); } catch(_e) { payload = null; }
         }
-        const remoteCall = payload?.mirrorFlow?.callSession;
-        applyRemoteCall(remoteCall);
-      };
-      try { await pull(); } catch(_e) {}
-      window.setTimeout(() => { void pull().catch(() => {}); }, 1600);
+        this._applyOpenFileRemotePayload(id, payload);
+      }catch(_e){}
+      finally{
+        this._openFileCallPullBusy = false;
+      }
+    },
+
+    startOpenFileCallWatch(){
+      this.stopOpenFileCallWatch();
+      if(!this.els?.wrap?.classList.contains("is-open")) return;
+      if(!safeTrim(this.currentId)) return;
+      this._openFileCallWatch = window.setInterval(() => {
+        if(!this.els?.wrap?.classList.contains("is-open")){
+          this.stopOpenFileCallWatch();
+          return;
+        }
+        const id = safeTrim(this.currentId);
+        if(!id){
+          this.stopOpenFileCallWatch();
+          return;
+        }
+        void this._pullOpenFileCallSession(id);
+      }, this._openFileCallWatchMs || 2000);
+    },
+
+    stopOpenFileCallWatch(){
+      if(this._openFileCallWatch){
+        window.clearInterval(this._openFileCallWatch);
+        this._openFileCallWatch = null;
+      }
+    },
+
+    async _refreshOpenFileCallSession(id){
+      const cid = safeTrim(id);
+      if(!cid) return;
+      await this._pullOpenFileCallSession(cid);
+      this.startOpenFileCallWatch();
     },
 
     /* GI-FIX 2026-08-01 (תוכניות 1+3): תיק לקוח לא נפתח ריק.
@@ -20029,16 +20253,12 @@ UsersGateUI.init();
               <span class="customerOpsBadge customerOpsBadge--${escapeHtml(state?.tone || 'info')}">${escapeHtml(state?.liveLabel || 'ממתין לשיקוף')}</span>
               <span class="customerOpsOwner">${escapeHtml(owner)}</span>
             </div>
-            <div class="customerOpsResultWrap">
-              <div class="customerOpsResultTitle">תוצאה</div>
-              <div class="customerOpsResultValue" id="customerOpsResultValue">${escapeHtml(state?.finalLabel || 'טרם נקבעה תוצאה סופית')}</div>
-            </div>
             ${stoppedWithNotes ? `<button type="button" class="customerOpsCallLog customerOpsCallLog--stopped" data-ops-decline-row="1" data-ops-decline-kind="${escapeHtml(stopReason)}">
               <span class="customerOpsCallLog__title">${escapeHtml(stopTitle)}</span>
               <span class="customerOpsCallLog__meta">${escapeHtml(callDate)} · התחלה ${escapeHtml(callStart)} · סיום ${escapeHtml(callEnd)} · משך ${escapeHtml(callDuration)}</span>
               <span class="customerOpsCallLog__notes">${escapeHtml(agentNotes)}</span>
             </button>` : ""}
-            ${endedCall ? `<div class="customerOpsCallLog">בוצע שיקוף ללקוח · ${escapeHtml(callDate)} · התחלה ${escapeHtml(callStart)} · סיום ${escapeHtml(callEnd)} · משך ${escapeHtml(callDuration)}</div>` : ""}
+            ${endedCall ? `<div class="customerOpsCallLog">בוצע שיחת שיקוף ממתין לחתימות מבוטח/ים וסוכן · ${escapeHtml(callDate)} · התחלה ${escapeHtml(callStart)} · סיום ${escapeHtml(callEnd)} · משך ${escapeHtml(callDuration)}</div>` : ""}
             ${canSetOpsResult ? `<div class="customerOpsResultBtns">${resultButtons}</div>` : ''}
             <div class="customerStatCard__sub">עודכן לאחרונה: ${escapeHtml(updated)}</div>
           </div>
@@ -20104,8 +20324,8 @@ UsersGateUI.init();
 
     resumeLiveMirrorTimerIfNeeded(){
       if(!this.els?.wrap?.classList.contains("is-open")) return;
-      if(!this._hasLiveMirrorCallOnOpenFile()) return;
-      this.startOpsCardLoop();
+      try{ void this._refreshOpenFileCallSession(this.currentId); }catch(_e){}
+      if(this._hasLiveMirrorCallOnOpenFile()) this.startOpsCardLoop();
     },
 
     syncMirrorCallLiveTimer(customerId){
@@ -20115,6 +20335,7 @@ UsersGateUI.init();
       if(safeTrim(this.currentId) && safeTrim(this.currentId) !== cid) return;
       const rec = this.current() || this.byId(cid);
       this.paintHeroLiveTimer(rec);
+      this.startOpenFileCallWatch();
       if(this._opsCardTimer){
         this.refreshOperationalReflectionCard();
         return;
@@ -20303,6 +20524,8 @@ UsersGateUI.init();
     },
 
     close(){
+      this.stopOpenFileCallWatch();
+      this._openFileCallSig = "";
       this.stopOpsCardLoop();
       this._openRefreshSig = "";
       if(!this.els.wrap) return;
@@ -24877,6 +25100,7 @@ UsersGateUI.init();
 
         const customerIds = cust.ids || [];
         const proposalIds = prop.ids || [];
+        try { MirrorCallAgentToastWatcher.inspectIds(customerIds); } catch(_e) {}
         HeavySyncGate.scheduleUi(() => {
           if(LiveRefresh?.hasBlockingFlow?.()) return;
           try {
@@ -25294,6 +25518,7 @@ UsersGateUI.init();
       this._pollingStarted = true;
       LiveRefresh.start();
       ReferralQuietRefresh.start();
+      try { MirrorCallAgentToastWatcher.start(); } catch(_e) {}
       try { DashboardUI.startLiveRefresh(); } catch(_e) {}
     },
     stopAll(){
@@ -25303,6 +25528,7 @@ UsersGateUI.init();
       }
       LiveRefresh.stop();
       ReferralQuietRefresh.stop();
+      try { MirrorCallAgentToastWatcher.stop(); } catch(_e) {}
       try { DashboardUI.stopLiveRefresh(); } catch(_e) {}
       try { ListRecordRealtime.stopAll(); } catch(_e) {}
       this._pollingStarted = false;
@@ -43207,6 +43433,7 @@ const ClalRiskLifePdf = {
         try { void CustomerAssignInbox.flushForCurrentUser(); } catch(_e) {}
         try { void CampaignLeadAssignInbox.flushForCurrentUser(); } catch(_e) {}
         try { CampaignAgentLeadWatcher.start(); } catch(_e) {}
+        try { MirrorCallAgentToastWatcher.start(); } catch(_e) {}
         if(options.skipNavigation){
           try { LiveRefresh.renderActiveView(); } catch(_e) {}
         } else {
@@ -54048,6 +54275,7 @@ ${inner}
   CampaignMyLeadsUI.init();
   try {
     if(Auth.current && Auth.canAccessCampaignMyLeads()) CampaignAgentLeadWatcher.start();
+    if(Auth.current) MirrorCallAgentToastWatcher.start();
   } catch(_e) {}
   CampaignLinesSettingsUI.init();
   LandingLeadIngestSettingsUI.init();
