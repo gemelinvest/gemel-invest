@@ -11227,6 +11227,67 @@ if(path === "birthDate"){
       return Array.from(mapped);
     },
 
+    // GI-HAR-ELEM-LINK 2026-08-18: שם מוצר הרכוש ליד הדגל הקיים. לא משנה אילו שורות מיובאות.
+    classifyHarElementaryProduct(row){
+      const source = [
+        safeTrim(row?.main),
+        safeTrim(row?.sub),
+        safeTrim(row?.productType),
+        safeTrim(row?.section),
+        safeTrim(row?.extra),
+        safeTrim(row?.classification)
+      ].join(" | ");
+      if(!source) return "רכוש";
+      if(/ביטוח דירה|מבנה|תכולה/i.test(source) || /דירה/i.test(source)) return "דירה";
+      if(/ביטוח רכב|רכב חובה|ביטוח מקיף|שירותי רכב|גרירה|שמשות|צד שלישי/i.test(source) || /רכב/i.test(source)) return "רכב";
+      return "רכוש";
+    },
+
+    uniqueLinkedElementaryProducts(list){
+      const out = [];
+      (Array.isArray(list) ? list : []).forEach((item) => {
+        const label = safeTrim(item);
+        if(label && !out.includes(label)) out.push(label);
+      });
+      return out;
+    },
+
+    getLinkedElementaryProducts(policy){
+      const named = this.uniqueLinkedElementaryProducts(policy?.linkedElementaryProducts);
+      if(named.length) return named;
+      if(policy?.hasElementaryLinkedPolicy) return ["רכוש"];
+      return [];
+    },
+
+    policyHasLinkedElementary(policy){
+      return this.getLinkedElementaryProducts(policy).length > 0;
+    },
+
+    formatLinkedElementaryProductLabel(products){
+      const list = this.uniqueLinkedElementaryProducts(products);
+      if(!list.length) return "רכוש";
+      if(list.length === 1) return list[0];
+      return list.slice(0, -1).join(", ") + " וגם " + list[list.length - 1];
+    },
+
+    formatLinkedElementaryWarningText(policy){
+      const names = this.formatLinkedElementaryProductLabel(this.getLinkedElementaryProducts(policy));
+      return `שים לב: על אותו מספר פוליסה קיים גם ביטוח ${names}`;
+    },
+
+    formatLinkedElementaryReportNote(policy, cancel){
+      const names = this.formatLinkedElementaryProductLabel(this.getLinkedElementaryProducts(policy));
+      const healthLabel = safeTrim(policy?.type) || "בריאות / סיכונים";
+      const status = safeTrim(cancel?.status);
+      if(status === "full" && cancel?.cancelLinkedElementary === true){
+        return `לבטל את ביטוח ${healthLabel} וגם את ביטוח ${names}`;
+      }
+      if(status === "full" && cancel?.cancelLinkedElementary === false){
+        return `לבטל רק את ביטוח ${healthLabel}. לא לבטל את ביטוח ${names}`;
+      }
+      return this.formatLinkedElementaryWarningText(policy);
+    },
+
     parseHarBituachWorkbook(buffer, ins){
       if(!window.XLSX) throw new Error("ספריית הקריאה לקובצי Excel לא נטענה.");
       const wb = window.XLSX.read(buffer, { type: "array" });
@@ -11290,6 +11351,7 @@ if(path === "birthDate"){
       const extracted = [];
       const fileIdNumbers = new Set();
       const elementaryPolicyNumbers = new Set();
+      const elementaryProductsByPolicy = new Map();
       sheetNames.forEach((sheetName) => {
         const sheet = wb.Sheets[sheetName];
         if(!sheet) return;
@@ -11337,6 +11399,11 @@ if(path === "birthDate"){
           const rawPolicyNumber = safeTrim(idx.policyNumber >= 0 ? row[idx.policyNumber] : "");
           if(rawPolicyNumber && isElementaryRow(record)){
             elementaryPolicyNumbers.add(rawPolicyNumber);
+            const productLabel = this.classifyHarElementaryProduct(record);
+            if(productLabel){
+              if(!elementaryProductsByPolicy.has(rawPolicyNumber)) elementaryProductsByPolicy.set(rawPolicyNumber, new Set());
+              elementaryProductsByPolicy.get(rawPolicyNumber).add(productLabel);
+            }
           }
           if(!isHealthLifeRow(record)) return;
 
@@ -11459,6 +11526,7 @@ if(path === "birthDate"){
           includedProducts,
           premiumBreakdown,
           hasElementaryLinkedPolicy: elementaryPolicyNumbers.has(bucket.policyNumber),
+          linkedElementaryProducts: Array.from(elementaryProductsByPolicy.get(bucket.policyNumber) || []),
           classification,
           isCollectiveReadOnly: this.isHarCollectiveClassification(classification),
           covers: this.mapHarIncludedToHealthCovers(includedProducts),
@@ -11510,7 +11578,14 @@ if(path === "birthDate"){
           covers: Array.from(covers),
           premiumBreakdown,
           classification,
-          hasElementaryLinkedPolicy: !!(match.hasElementaryLinkedPolicy || payload.hasElementaryLinkedPolicy),
+          hasElementaryLinkedPolicy: !!(match.hasElementaryLinkedPolicy || payload.hasElementaryLinkedPolicy || this.uniqueLinkedElementaryProducts([
+            ...(Array.isArray(match.linkedElementaryProducts) ? match.linkedElementaryProducts : []),
+            ...(Array.isArray(payload.linkedElementaryProducts) ? payload.linkedElementaryProducts : [])
+          ]).length),
+          linkedElementaryProducts: this.uniqueLinkedElementaryProducts([
+            ...(Array.isArray(match.linkedElementaryProducts) ? match.linkedElementaryProducts : []),
+            ...(Array.isArray(payload.linkedElementaryProducts) ? payload.linkedElementaryProducts : [])
+          ]),
           isCollectiveReadOnly: this.isHarCollectiveClassification(classification) || !!match.isCollectiveReadOnly || !!payload.isCollectiveReadOnly
         });
         return match;
@@ -11526,6 +11601,76 @@ if(path === "birthDate"){
       input.click();
     },
 
+    // GI-HAR-FILE-DOCS 2026-08-18: שומרים את קובץ הר הביטוח המקורי כמו שהועלה,
+    // בנפרד מפירוק הפוליסות. מצורף למסמכי לקוח רק בסיום האשף.
+    arrayBufferToDataUrl(buffer, mime){
+      const bytes = new Uint8Array(buffer || []);
+      let binary = "";
+      const chunk = 0x8000;
+      for(let i = 0; i < bytes.length; i += chunk){
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+      }
+      const safeMime = safeTrim(mime) || "application/octet-stream";
+      return "data:" + safeMime + ";base64," + btoa(binary);
+    },
+
+    async readUploadFileAsDataUrl(file, fallbackBuffer){
+      if(file && typeof FileReader === "function"){
+        try {
+          const dataUrl = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onerror = () => reject(new Error("FILE_READ_FAILED"));
+            reader.onload = () => resolve(String(reader.result || ""));
+            reader.readAsDataURL(file);
+          });
+          if(safeTrim(dataUrl).indexOf("data:") === 0) return dataUrl;
+        } catch(_e) {}
+      }
+      if(fallbackBuffer) return this.arrayBufferToDataUrl(fallbackBuffer, file?.type);
+      return "";
+    },
+
+    storeHarBituachOriginalFile(ins, file, dataUrl){
+      const url = safeTrim(dataUrl);
+      if(!ins || !url) return;
+      this.setHarImportState(ins, {
+        originalFile: {
+          originalName: safeTrim(file?.name) || "har.xlsx",
+          mime: safeTrim(file?.type) || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          size: Number(file?.size) || 0,
+          dataUrl: url,
+          capturedAt: nowISO()
+        }
+      });
+    },
+
+    peekHarOriginalFile(ins){
+      const key = safeTrim(ins?.id) || "default";
+      const original = this._harImportState?.[key]?.originalFile;
+      return (original && typeof original === "object" && safeTrim(original.dataUrl)) ? original : null;
+    },
+
+    attachHarBituachOriginalFilesToPayload(payload){
+      if(!payload || typeof payload !== "object") return payload;
+      if(typeof CustomerDocuments?.createHarBituachFileDoc !== "function") return payload;
+      (this.insureds || []).forEach((ins) => {
+        const original = this.peekHarOriginalFile(ins);
+        if(!original) return;
+        const doc = CustomerDocuments.createHarBituachFileDoc({
+          insuredId: safeTrim(ins?.id),
+          insuredLabel: this.getInsuredDisplayName(ins),
+          originalName: original.originalName,
+          mime: original.mime,
+          size: original.size,
+          dataUrl: original.dataUrl,
+          uploadedAt: original.capturedAt,
+          uploadedBy: safeTrim(Auth?.current?.name)
+        });
+        CustomerDocuments.upsertHarBituachFileDoc(payload, doc);
+      });
+      return payload;
+    },
+
     async handleHarBituachFile(ins, file){
       if(!file || !ins) return;
       try {
@@ -11538,10 +11683,12 @@ if(path === "birthDate"){
         this.render();
         if(window.GI_LOAD_LIBS?.xlsx) await window.GI_LOAD_LIBS.xlsx();
         const buffer = await file.arrayBuffer();
+        const originalDataUrl = await this.readUploadFileAsDataUrl(file, buffer);
         const parsed = this.parseHarBituachWorkbook(buffer, ins);
         const policies = Array.isArray(parsed?.policies) ? parsed.policies : [];
 
         if(!policies.length){
+          this.storeHarBituachOriginalFile(ins, file, originalDataUrl);
           this.markHarBituachAcknowledged(ins, { fileName: file.name || "", empty: true, policyCount: 0 });
           this.setHarImportState(ins, {
             status: "empty",
@@ -11599,6 +11746,7 @@ if(path === "birthDate"){
         });
 
         policies.forEach((policy) => this.mergeImportedExistingPolicy(ins, policy, file.name || ""));
+        this.storeHarBituachOriginalFile(ins, file, originalDataUrl);
         this.markHarBituachAcknowledged(ins, { fileName: file.name || "", empty: false, policyCount: policies.length });
         this.setHarImportState(ins, {
           status: "done",
@@ -11646,6 +11794,7 @@ if(path === "birthDate"){
         fileName: "",
         count: 0,
         importedAt: "",
+        originalFile: null,
         message: "נתוני הר הביטוח נמחקו. ניתן להעלות כעת קובץ חדש."
       });
     },
@@ -11831,7 +11980,7 @@ if(path === "birthDate"){
         const insuredName = safeTrim(p.insuredName);
         const insuredIdNumber = safeTrim(p.insuredIdNumber);
         const importedBadge = p.importedFromHarBituach ? `<span class="lcPolMetaBadge lcPolMetaBadge--imported">יובא מהר הביטוח</span>` : "";
-        const elementaryLinkWarn = p.hasElementaryLinkedPolicy ? `<span class="lcPolMetaBadge lcPolMetaBadge--warn">שים לב! משולב עם ביטוח דירה</span>` : "";
+        const elementaryLinkWarn = this.policyHasLinkedElementary(p) ? `<span class="lcPolMetaBadge lcPolMetaBadge--warn">שים לב! משולב עם ביטוח ${escapeHtml(this.formatLinkedElementaryProductLabel(this.getLinkedElementaryProducts(p)))}</span>` : "";
         const monthlyPremiumTxt = safeTrim(p.monthlyPremium) ? `${escapeHtml(safeTrim(p.monthlyPremium))} ₪` : '—';
         const pledgeLabel = isRisk ? (p.hasPledge ? `יש שיעבוד${safeTrim(p.pledgeBankName) ? ` · ${escapeHtml(safeTrim(p.pledgeBankName))}` : ''}` : 'ללא שיעבוד') : '—';
         const classificationLabel = safeTrim(p.classification);
@@ -11859,8 +12008,8 @@ if(path === "birthDate"){
             ? premiumBreakdown.map(item => `<div class="lcPolCard__breakdownItem"><span class="lcPolCard__breakdownItem__label">${escapeHtml(safeTrim(item.label) || 'כיסוי')}</span><span class="lcPolCard__breakdownItem__value">${escapeHtml(safeTrim(item.monthlyPremium) || '0.00')} ₪</span></div>`).join('')
             : '';
           const collBadge = p.isCollectiveReadOnly ? `<span class="lcPolCard__badge lcPolCard__badge--muted">קבוצתי</span>` : '';
-          const linkedHomeWarning = p.hasElementaryLinkedPolicy
-            ? `<div class="lcPolCard__warn">שים לב !! הפוליסה הנ"ל משולב עם ביטוח דירה .וודא שאתה לא מבטל ללקוח את פוליסת הדירה</div>`
+          const linkedHomeWarning = this.policyHasLinkedElementary(p)
+            ? `<div class="lcPolCard__warn">${escapeHtml(this.formatLinkedElementaryWarningText(p))}</div>`
             : '';
           return `
             <tr class="lcPolImportedWrapRow">
@@ -12125,13 +12274,36 @@ if(path === "birthDate"){
         if(!pid || !key) return;
         const row = this.ensureExistingPolicyCancellationRow(ins, pid);
         if(!row) return;
+        const prevStatus = key === "status" ? safeTrim(row.status) : "";
         row[key] = safeTrim(value);
+        if(key === "status" && safeTrim(value) !== "full") delete row.cancelLinkedElementary;
         if(key === "status") this.syncCancellationExecutionMethodState(ins, pid);
         if(key === "status" && typeof CustomersUI !== "undefined"){
           CustomersUI.syncAgentAppointmentStampForInsured(ins, pid, nowISO());
         }
         this.render();
+        if(key === "status" && safeTrim(value) === "full" && prevStatus !== "full"){
+          void this.maybeAskCancelLinkedElementary(ins, pid);
+        }
       }
+    },
+
+    async maybeAskCancelLinkedElementary(ins, pid){
+      const policy = (Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : []).find((p) => safeTrim(p?.id) === safeTrim(pid));
+      if(!this.policyHasLinkedElementary(policy)) return;
+      const names = this.formatLinkedElementaryProductLabel(this.getLinkedElementaryProducts(policy));
+      const num = safeTrim(policy?.policyNumber) || "זה";
+      const approved = await showWizardHarAlertModal({
+        title: "ביטוח רכוש על אותו מספר פוליסה",
+        text: `שים לב: על מספר פוליסה ${num} קיים גם ביטוח ${names}. האם לבטל גם את ביטוח ${names}?`,
+        confirmText: "כן, לבטל גם",
+        cancelText: "לא, רק בריאות/סיכונים",
+        showCancel: true
+      });
+      const row = this.ensureExistingPolicyCancellationRow(ins, pid);
+      if(!row) return;
+      row.cancelLinkedElementary = approved === true;
+      this.render();
     },
 
     // Step3/5 use virtual binding for policy rows by id
@@ -24748,8 +24920,8 @@ if(path === "birthDate"){
             ? this.getCancellationExecutionMethodLabel(this.getCancellationExecutionMethodValue(ins, safeTrim(policy?.id)))
             : '';
           const isAgentAppointment = ['agent_appoint','agentappoint','appoint_agent'].includes(safeTrim(statusMeta?.raw));
-          const linkedHomeWarn = policy?.hasElementaryLinkedPolicy
-            ? 'שים לב !! הפוליסה הנ"ל משולב עם ביטוח דירה .וודא שאתה לא מבטל ללקוח את פוליסת הדירה'
+          const linkedHomeWarn = this.policyHasLinkedElementary(policy)
+            ? this.formatLinkedElementaryReportNote(policy, d?.cancellations?.[policy.id] || {})
             : '';
           const statusParts = [isAgentAppointment ? 'בוצע מינוי סוכן בפוליסה זו' : '', linkedHomeWarn, safeTrim(statusMeta?.reason), cancelExecutionLabel ? `אופן ביצוע הביטול: ${cancelExecutionLabel}` : '', safeTrim(statusMeta?.partialDetails)].filter(Boolean);
           const pType = safeTrim(policy?.type || policy?.product);
@@ -27437,6 +27609,7 @@ if(path === "birthDate"){
         }
       }
       if(!this.isElementaryFlow()){
+        this.attachHarBituachOriginalFilesToPayload(payload);
         const docContext = {
           kind: "health_wizard",
           uploadedBy: safeTrim(Auth?.current?.name) || safeTrim(existingCustomer?.agentName)

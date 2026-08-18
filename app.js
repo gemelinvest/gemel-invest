@@ -6157,7 +6157,8 @@
     TYPES: {
       healthOps: "operational_report_health",
       agentApptOps: "operational_report_agent_appointment",
-      agentApptForm: "agent_appointment_form"
+      agentApptForm: "agent_appointment_form",
+      harBituach: "har_bituach_file"
     },
     REPORT_SCOPES: {
       proposal: "health_proposal",
@@ -6341,6 +6342,71 @@
         payloadSnapshot: { agentAppointmentMeta: JSON.parse(JSON.stringify(meta || {})) }
       };
     },
+    sanitizeFileNamePart(value){
+      return safeTrim(value).replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
+    },
+    fileExtensionFromName(name){
+      const n = safeTrim(name);
+      const idx = n.lastIndexOf(".");
+      if(idx <= 0 || idx === n.length - 1) return "";
+      const ext = n.slice(idx).toLowerCase();
+      return /^\.[a-z0-9]{1,8}$/.test(ext) ? ext : "";
+    },
+    formatHarBituachDocName(insuredLabel, originalName){
+      const label = this.sanitizeFileNamePart(insuredLabel) || "מבוטח";
+      const ext = this.fileExtensionFromName(originalName) || ".xlsx";
+      return "הר ביטוח · " + label + ext;
+    },
+    createHarBituachFileDoc(options = {}){
+      const insuredLabel = this.sanitizeFileNamePart(options.insuredLabel) || "מבוטח";
+      const name = this.formatHarBituachDocName(insuredLabel, options.originalName);
+      const uploadedAt = safeTrim(options.uploadedAt) || nowISO();
+      return {
+        id: this.newDocId("doc_har_"),
+        type: this.TYPES.harBituach,
+        name,
+        fileName: name,
+        originalFileName: safeTrim(options.originalName),
+        insuredId: safeTrim(options.insuredId),
+        insuredLabel,
+        mime: safeTrim(options.mime) || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        size: Number(options.size) || 0,
+        dataUrl: safeTrim(options.dataUrl),
+        source: "הר הביטוח",
+        uploadedAt,
+        uploadedBy: safeTrim(options.uploadedBy) || safeTrim(Auth?.current?.name)
+      };
+    },
+    upsertHarBituachFileDoc(payload, doc){
+      if(!payload || typeof payload !== "object" || !doc || typeof doc !== "object") return payload;
+      const list = this.listFromPayload(payload);
+      const insuredId = safeTrim(doc.insuredId);
+      const idx = list.findIndex((row) => {
+        if(safeTrim(row?.type) !== this.TYPES.harBituach) return false;
+        if(insuredId) return safeTrim(row?.insuredId) === insuredId;
+        return safeTrim(row?.insuredLabel) === safeTrim(doc.insuredLabel);
+      });
+      if(idx >= 0){
+        const prevId = safeTrim(list[idx]?.id);
+        list[idx] = { ...doc, id: prevId || doc.id };
+      } else {
+        list.unshift(doc);
+      }
+      payload.customerDocuments = list;
+      return payload;
+    },
+    downloadFileDoc(doc){
+      const url = safeTrim(doc?.dataUrl) || safeTrim(doc?.url);
+      if(!url) return false;
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = safeTrim(doc?.fileName) || safeTrim(doc?.name) || "document";
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return true;
+    },
     append(payload, doc){
       if(!payload || typeof payload !== "object" || !doc || typeof doc !== "object") return payload;
       const list = this.listFromPayload(payload);
@@ -6473,7 +6539,7 @@
       return this.sortByDateDesc(list.filter((doc) => {
         if(!doc || typeof doc !== "object") return false;
         const type = safeTrim(doc.type);
-        if(type === this.TYPES.healthOps || type === this.TYPES.agentApptOps || type === this.TYPES.agentApptForm) return true;
+        if(type === this.TYPES.healthOps || type === this.TYPES.agentApptOps || type === this.TYPES.agentApptForm || type === this.TYPES.harBituach) return true;
         return !!(safeTrim(doc.name) || safeTrim(doc.url) || safeTrim(doc.dataUrl) || safeTrim(doc.fileName));
       }));
     },
@@ -16822,6 +16888,18 @@ UsersGateUI.init();
           void AgentAppointmentPdf.exportOperationalReport(doc, rec, dlAgentOps);
           return;
         }
+        const dlCustomerFile = ev.target?.closest?.("[data-download-customer-file-doc]");
+        if(dlCustomerFile){
+          ev.preventDefault();
+          const rec = this.current();
+          if(!rec) return;
+          const docId = safeTrim(dlCustomerFile.getAttribute("data-download-customer-file-doc"));
+          const doc = docId ? CustomerDocuments.findDoc(rec, docId) : null;
+          if(!CustomerDocuments.downloadFileDoc(doc)){
+            try { window.showToast?.({ title: "אין קובץ", text: "לא נמצא עותק להורדה.", variant: "warn", durationMs: 4200 }); } catch(_e){}
+          }
+          return;
+        }
         const previewClalRisk = ev.target?.closest?.("[data-preview-clal-risk-form]");
         if(previewClalRisk){
           ev.preventDefault();
@@ -19136,6 +19214,8 @@ UsersGateUI.init();
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-ops-health-doc="${escapeHtml(docId)}">הורדה</button>`;
         }else if(docType === CustomerDocuments.TYPES.agentApptOps){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-ops-agent-doc="${escapeHtml(docId)}">הורדה</button>`;
+        }else if(docType === CustomerDocuments.TYPES.harBituach || safeTrim(doc.dataUrl) || safeTrim(doc.url)){
+          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-customer-file-doc="${escapeHtml(docId)}">הורדה</button>`;
         }
         return `<article class="cfFile__documentRow">
           <div class="cfFile__documentRowMain">
@@ -33949,7 +34029,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260816-child-exist-v1";
+  const GI_WIZARD_JS_VERSION = "20260818-har-elem-link-v1";
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
   const TZAHAL_CLINIC = "קופה צהלית";
   const TZAHAL_CLINIC_SHABAN = "אין שב״ן";
