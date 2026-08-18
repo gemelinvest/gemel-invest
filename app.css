@@ -11827,6 +11827,32 @@ body.view-myProcesses-active .lcMyProcessesTable thead th{
 }
 .lcHarCompactCover span{ color:#5b6b86; font-weight:700; }
 .lcHarCompactCover--missing{ background:#fff7ed; border-color:#fdba74; color:#9a3412; }
+.lcHarCompactSumInline{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  max-width:100%;
+  min-width:0;
+}
+.lcHarCompactSumInline .lcHarCompactSumInput:not(#\9):not(#\9),
+.lcHarCompactSumInput{
+  width:100%;
+  max-width:128px;
+  min-width:0;
+  height:34px !important;
+  min-height:34px !important;
+  padding:4px 8px !important;
+  font-size:12px !important;
+  font-weight:800;
+  direction:ltr;
+  text-align:left;
+  box-sizing:border-box;
+}
+.lcHarCompactSumInline.is-missing .lcHarCompactSumInput{
+  border-color:#fdba74;
+  background:#fff7ed;
+}
+.lcHarCompactSumSym{ font-size:12px; font-weight:800; color:#5b6b86; flex-shrink:0; }
 .lcHarCompactPremium{ font-size:15px; font-weight:800; color:#1e3d7a; white-space:nowrap; }
 .lcHarCompactPledge{ color:#5b6b86; font-weight:700; overflow:hidden; text-overflow:ellipsis; }
 .lcHarCompactActions{ min-width:0 !important; width:auto; }
@@ -11838,11 +11864,6 @@ body.view-myProcesses-active .lcMyProcessesTable thead th{
   max-width:100%;
 }
 .lcHarCompactChips .lcPolChip{ white-space:nowrap; }
-.lcHarCompactMeta .lcHarCompactSum,
-.lcHarCompactMeta .lcPolCard__sumRow{
-  margin:10px 0 0;
-  max-width:min(420px, 100%);
-}
 .lcHarCompactExtra{
   margin-top:8px;
   padding:10px 12px;

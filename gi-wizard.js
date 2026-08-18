@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260818-har-compact-row-v4";
+  const GI_WIZARD_BUILD = "20260818-har-compact-row-v5";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -12072,30 +12072,27 @@ if(path === "birthDate"){
           const needsSum  = (p.type === "ריסק" || p.type === "ריסק משכנתא" || p.type === "אובדן כושר עבודה");
           const needsComp = (p.type === "מחלות קשות" || p.type === "סרטן");
           const sumField = needsComp ? "compensation" : "sumInsured";
-          const sumLabel = needsComp ? "סכום פיצוי (חובה)" : "סכום ביטוח (חובה)";
           const sumVal   = escapeHtml(p[sumField] || "");
           const isMissing = (needsSum || needsComp) && !safeTrim(p[sumField] || "");
-          const sumHtml = (needsSum || needsComp) ? `<div class="lcPolCard__sumRow lcHarCompactSum${isMissing ? ' lcPolCard__sumRow--warn' : ''}">
-                        <label class="lcPolCard__sumLabel">${sumLabel}</label>
-                        <div class="lcPolCard__sumInputWrap">
-                          <input class="input lcPolCard__sumInput${isMissing ? ' lcPolCard__sumInput--warn' : ''}"
-                            data-bind="existingPolicies.${escapeHtml(p.id)}.${sumField}"
-                            value="${sumVal}"
-                            placeholder="${needsComp ? 'הזן סכום פיצוי' : 'הזן סכום ביטוח'}"
-                            inputmode="numeric" dir="ltr" />
-                          <span class="lcPolCard__sumSym">₪</span>
-                        </div>
-                        ${isMissing ? `<div class="lcPolCard__sumWarnMsg">⚠ שדה חובה — יש למלא לפני מעבר לשלב הבא</div>` : ''}
-                      </div>` : '';
           const coverPills = premiumBreakdown.length
             ? `<div class="lcHarCompactCovers">${premiumBreakdown.map(item => `<span class="lcHarCompactCover"><b>${escapeHtml(safeTrim(item.label) || 'כיסוי')}</b><span>${escapeHtml(safeTrim(item.monthlyPremium) || '0.00')} ₪</span></span>`).join('')}</div>`
             : (includedList.length
               ? `<span class="lcHarCompactCover" title="${escapeHtml(includedList.join(' • '))}">${escapeHtml(includedSummary)}</span>`
               : `<span class="muted small">—</span>`);
           const coverCell = (needsSum || needsComp)
-            ? (safeTrim(p[sumField] || "")
-              ? `<span class="lcHarCompactCover">${escapeHtml(sumLabel.replace(" (חובה)", ""))} <span>${escapeHtml(this.formatMoneyValue(p[sumField]))}</span></span>`
-              : `<span class="lcHarCompactCover lcHarCompactCover--missing">—</span>`)
+            ? (p.isCollectiveReadOnly
+              ? (safeTrim(p[sumField] || "")
+                ? `<span class="lcHarCompactCover">${needsComp ? "סכום פיצוי" : "סכום ביטוח"} <span>${escapeHtml(this.formatMoneyValue(p[sumField]))}</span></span>`
+                : `<span class="lcHarCompactCover lcHarCompactCover--missing">—</span>`)
+              : `<div class="lcHarCompactSumInline${isMissing ? " is-missing" : ""}">
+                    <input class="input lcHarCompactSumInput"
+                      data-bind="existingPolicies.${escapeHtml(p.id)}.${sumField}"
+                      data-har-sum-confirm="1"
+                      value="${sumVal}"
+                      placeholder="הזן סכום"
+                      inputmode="numeric" dir="ltr" />
+                    <span class="lcHarCompactSumSym">₪</span>
+                  </div>`)
             : coverPills;
           const chipsBox = p.isCollectiveReadOnly
             ? cancellationBox
@@ -12125,7 +12122,6 @@ if(path === "birthDate"){
               <td colspan="7">
                 <div class="lcHarCompactMeta__line">${insuredDots || ''}</div>
                 ${linkedHomeWarning}
-                ${sumHtml}
                 ${expandedBox}
               </td>
             </tr>
@@ -12371,6 +12367,54 @@ if(path === "birthDate"){
       this.render();
     },
 
+    async confirmImportedPolicySumIfNeeded(ins, path, value){
+      const v = safeTrim(value);
+      const parts = String(path || "").split(".");
+      const pid = parts[1] || "";
+      const field = parts.slice(2).join(".");
+      if(!pid || (field !== "sumInsured" && field !== "compensation")) return;
+      const key = `${safeTrim(ins?.id || "")}:${pid}:${field}`;
+      this._confirmedHarPolicySums = this._confirmedHarPolicySums && typeof this._confirmedHarPolicySums === "object"
+        ? this._confirmedHarPolicySums
+        : {};
+      if(!v){
+        delete this._confirmedHarPolicySums[key];
+        return;
+      }
+      if(this._confirmedHarPolicySums[key] === v) return;
+      if(this._harSumConfirmBusy) return;
+      this._harSumConfirmBusy = true;
+      let approved = true;
+      try {
+        const ask = (typeof host.showWizardHarAlertModal === "function")
+          ? host.showWizardHarAlertModal
+          : showWizardHarAlertModal;
+        if(typeof ask === "function"){
+          approved = !!(await ask({
+            title: "סכום ביטוח",
+            text: "סכום ביטוח זה מושקף ללקוח בשיחת השיקוף האם אתה בטוח שזהו הסכום בפוליסה?",
+            confirmText: "מאשר",
+            cancelText: "לא מאשר",
+            showCancel: true
+          }));
+        }
+      } catch(_e) {
+        approved = true;
+      }
+      this._harSumConfirmBusy = false;
+      if(approved){
+        this._confirmedHarPolicySums[key] = v;
+        return;
+      }
+      this.resolvePolicyBind(ins, path, "");
+      delete this._confirmedHarPolicySums[key];
+      this.render();
+      try {
+        const again = this.els?.body?.querySelector?.(`[data-bind="${path}"]`);
+        if(again && typeof again.focus === "function") again.focus();
+      } catch(_e) {}
+    },
+
     // Step3/5 use virtual binding for policy rows by id
     resolvePolicyBind(ins, path, value, kind){
       // path example: existingPolicies.<id>.company
@@ -12414,6 +12458,9 @@ if(path === "birthDate"){
               if(path.endsWith(".type")) this.render(); // to refresh conditional fields
               if(path.endsWith(".hasPledge") || path.endsWith(".bankAgency") || path.endsWith(".pledgeBankName") || path.endsWith(".bankAgencyName")) this.render();
               if(path.endsWith(".premiumBefore") || path.endsWith(".discountPct") || path.endsWith(".discountYears")) this.render();
+              if(doRender && el.getAttribute("data-har-sum-confirm") && (path.endsWith(".sumInsured") || path.endsWith(".compensation"))){
+                void this.confirmImportedPolicySumIfNeeded(ins, path, v);
+              }
               this.setHint("");
               return;
             }
