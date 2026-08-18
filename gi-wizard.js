@@ -11996,58 +11996,23 @@ if(path === "birthDate"){
           : this.renderExistingPolicyCancellationControls(p, d.cancellations?.[p.id] || {}, { compact: true, insured: ins });
 
         if(p.importedFromHarBituach){
-          const importedIncludedText = includedList.length ? includedList.join(' • ') : '';
           const logoHtml = this.renderCompanyLogoHtml(p.company, "mini");
           const insuredDots = [
             insuredName ? escapeHtml(insuredName) : null,
             insuredIdNumber ? `ת״ז ${escapeHtml(insuredIdNumber)}` : null,
-            safeTrim(p.classification) ? escapeHtml(safeTrim(p.classification)) : null,
-            importedIncludedText ? escapeHtml(importedIncludedText) : null
+            safeTrim(p.classification) ? escapeHtml(safeTrim(p.classification)) : null
           ].filter(Boolean).map((item, i) => i === 0 ? `<span class="lcPolCard__insuredName">${item}</span>` : `<span class="lcPolCard__dot" aria-hidden="true"></span><span>${item}</span>`).join('');
-          const breakdownRows = premiumBreakdown.length
-            ? premiumBreakdown.map(item => `<div class="lcPolCard__breakdownItem"><span class="lcPolCard__breakdownItem__label">${escapeHtml(safeTrim(item.label) || 'כיסוי')}</span><span class="lcPolCard__breakdownItem__value">${escapeHtml(safeTrim(item.monthlyPremium) || '0.00')} ₪</span></div>`).join('')
-            : '';
           const collBadge = p.isCollectiveReadOnly ? `<span class="lcPolCard__badge lcPolCard__badge--muted">קבוצתי</span>` : '';
           const linkedHomeWarning = this.policyHasLinkedElementary(p)
             ? `<div class="lcPolCard__warn">${escapeHtml(this.formatLinkedElementaryWarningText(p))}</div>`
             : '';
-          return `
-            <tr class="lcPolImportedWrapRow">
-              <td colspan="7" class="lcPolImportedWrapCell">
-                <div class="lcPolCard" data-policy-id="${escapeHtml(p.id || '')}">
-                  <div class="lcPolCard__top">
-                    <div class="lcPolCard__company">
-                      <div class="lcPolCardLogo">${logoHtml}</div>
-                      <div class="lcPolCard__companyInfo">
-                        <div class="lcPolCard__companyName">${escapeHtml(p.company || 'חברה לא ידועה')}</div>
-                        <div class="lcPolCard__sourceBadge">יובא מהר הביטוח</div>
-                      </div>
-                    </div>
-                    <div class="lcPolCard__meta">
-                      <div class="lcPolCard__metaTop">
-                        ${safeTrim(p.type) ? `<span class="lcPolCard__type">${escapeHtml(safeTrim(p.type))}</span>` : ''}
-                        ${safeTrim(p.policyNumber) ? `<span class="lcPolCard__num">מס׳ ${escapeHtml(safeTrim(p.policyNumber))}</span>` : ''}
-                        ${collBadge}
-                      </div>
-                      <div class="lcPolCard__insured">${insuredDots}</div>
-                    </div>
-                    <div class="lcPolCard__premium">
-                      <span class="lcPolCard__premiumLabel">פרמיה חודשית</span>
-                      <strong class="lcPolCard__premiumAmount">${monthlyPremiumTxt}</strong>
-                    </div>
-                  </div>
-                  ${linkedHomeWarning}
-                  ${breakdownRows ? `<div class="lcPolCard__breakdownShell"><div class="lcPolCard__breakdownTitle">פירוט כיסויים</div><div class="lcPolCard__breakdownGrid">${breakdownRows}</div></div>` : ''}
-                  <div class="lcPolCard__actionShell">
-                    ${(() => {
-                      const needsSum  = (p.type === "ריסק" || p.type === "ריסק משכנתא" || p.type === "אובדן כושר עבודה");
-                      const needsComp = (p.type === "מחלות קשות" || p.type === "סרטן");
-                      if(!needsSum && !needsComp) return '';
-                      const sumField = needsComp ? "compensation" : "sumInsured";
-                      const sumLabel = needsComp ? "סכום פיצוי (חובה)" : "סכום ביטוח (חובה)";
-                      const sumVal   = escapeHtml(p[sumField] || "");
-                      const isMissing = !safeTrim(p[sumField] || "");
-                      return `<div class="lcPolCard__sumRow${isMissing ? ' lcPolCard__sumRow--warn' : ''}">
+          const needsSum  = (p.type === "ריסק" || p.type === "ריסק משכנתא" || p.type === "אובדן כושר עבודה");
+          const needsComp = (p.type === "מחלות קשות" || p.type === "סרטן");
+          const sumField = needsComp ? "compensation" : "sumInsured";
+          const sumLabel = needsComp ? "סכום פיצוי (חובה)" : "סכום ביטוח (חובה)";
+          const sumVal   = escapeHtml(p[sumField] || "");
+          const isMissing = (needsSum || needsComp) && !safeTrim(p[sumField] || "");
+          const sumHtml = (needsSum || needsComp) ? `<div class="lcPolCard__sumRow lcHarCompactSum${isMissing ? ' lcPolCard__sumRow--warn' : ''}">
                         <label class="lcPolCard__sumLabel">${sumLabel}</label>
                         <div class="lcPolCard__sumInputWrap">
                           <input class="input lcPolCard__sumInput${isMissing ? ' lcPolCard__sumInput--warn' : ''}"
@@ -12058,11 +12023,35 @@ if(path === "birthDate"){
                           <span class="lcPolCard__sumSym">₪</span>
                         </div>
                         ${isMissing ? `<div class="lcPolCard__sumWarnMsg">⚠ שדה חובה — יש למלא לפני מעבר לשלב הבא</div>` : ''}
-                      </div>`;
-                    })()}
-                    ${cancellationBox}
+                      </div>` : '';
+          const coverPills = premiumBreakdown.length
+            ? `<div class="lcHarCompactCovers">${premiumBreakdown.map(item => `<span class="lcHarCompactCover"><b>${escapeHtml(safeTrim(item.label) || 'כיסוי')}</b><span>${escapeHtml(safeTrim(item.monthlyPremium) || '0.00')} ₪</span></span>`).join('')}</div>`
+            : (includedList.length
+              ? `<span class="lcHarCompactCover" title="${escapeHtml(includedList.join(' • '))}">${escapeHtml(includedSummary)}</span>`
+              : `<span class="muted small">—</span>`);
+          const coverCell = sumHtml || coverPills;
+          return `
+            <tr class="lcHarCompactRow" data-policy-id="${escapeHtml(p.id || '')}">
+              <td>
+                <div class="lcHarCompactCompany">
+                  ${logoHtml}
+                  <div class="lcHarCompactCompany__text">
+                    <div class="lcHarCompactCompany__name">${escapeHtml(p.company || 'חברה לא ידועה')}</div>
+                    <div class="lcHarCompactCompany__src">יובא מהר הביטוח</div>
                   </div>
                 </div>
+              </td>
+              <td class="lcHarCompactType">${safeTrim(p.type) ? escapeHtml(safeTrim(p.type)) : '—'}${collBadge}</td>
+              <td class="lcHarCompactNum">${safeTrim(p.policyNumber) ? escapeHtml(safeTrim(p.policyNumber)) : '—'}</td>
+              <td>${coverCell}</td>
+              <td class="lcHarCompactPremium">${monthlyPremiumTxt}</td>
+              <td class="lcHarCompactPledge">${pledgeLabel}</td>
+              <td class="lcHarCompactActions">${cancellationBox}</td>
+            </tr>
+            <tr class="lcHarCompactMeta">
+              <td colspan="7">
+                <div class="lcHarCompactMeta__line">${insuredDots || ''}</div>
+                ${linkedHomeWarning}
               </td>
             </tr>
           `;
@@ -12143,6 +12132,7 @@ if(path === "birthDate"){
         `;
       }).join("");
 
+      const hasImportedHar = (d.existingPolicies || []).some((p) => p && p.importedFromHarBituach);
       const statusTone = importState.status || "idle";
       const statusClass = `lcPolImportStatus lcPolImportStatus--${escapeHtml(statusTone)}`;
       const statusText = safeTrim(importState.message);
@@ -12173,7 +12163,7 @@ if(path === "birthDate"){
           ${statusText ? `<div class="${statusClass}">${escapeHtml(statusText)}</div>` : ""}
 
           <div class="lcPolTableWrap" style="padding:0">
-            <table class="lcPolTable">
+            <table class="lcPolTable${hasImportedHar ? " lcPolTable--harCompact" : ""}">
               <thead>
                 <tr>
                   <th>חברה</th>
@@ -18595,20 +18585,9 @@ if(path === "birthDate"){
       };
 
       const mirrorSchedule = this.getMirrorSchedule();
-      const purchaseHeroSub = this.isCustomerPurchaseSwitchMode()
-        ? "קבע מועד לשיחת השיקוף. בשיחלוף יישמרו הפוליסות שנותרו והחדשות שהוזנו במקום שהוסרו."
-        : (this.isCustomerPurchaseMode()
-          ? "קבע מועד לשיחת השיקוף. הדוח התפעולי יכלול רק את המוצר החדש שנוסף בסשן זה."
-          : "קבע מועד לשיחת השיקוף עם הלקוח והוסף הערות לנציג לפני שמירת ההקמה.");
 
       return `
         <section class="lcOpSummary">
-          <div class="lcOpHero">
-            <div class="lcOpHero__eyebrow">100% הושלם</div>
-            <div class="lcOpHero__title">${this.isCustomerPurchaseSwitchMode() ? "סיום שיחלוף" : (this.isCustomerPurchaseMode() ? "סיום רכישת ביטוח חדש" : "תיאום שיחה וסיום הקמה")}</div>
-            <div class="lcOpHero__sub">${purchaseHeroSub}</div>
-          </div>
-
           <section class="lcOpSection lcOpSection--mirrorSchedule">
             <div class="lcMirrorSchedule__banner">
               <div class="lcMirrorSchedule__bannerIcon" aria-hidden="true">
