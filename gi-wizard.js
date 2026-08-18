@@ -18594,30 +18594,12 @@ if(path === "birthDate"){
         }).join('') + `</div>`;
       };
 
-      const normalizedNewPolicies = (this.isCustomerPurchaseMode() ? this.getWizardNewPolicies() : (this.newPolicies || [])).map((policy, idx) => ({
-        ...policy,
-        id: safeTrim(policy?.id) || `new_${idx}`,
-        insuredLabel: formatPolicyInsured(policy)
-      }));
-
-      const totalPremium = normalizedNewPolicies.reduce((sum, policy) => sum + this.getPolicyPremiumAfterDiscount(policy), 0);
       const mirrorSchedule = this.getMirrorSchedule();
       const purchaseHeroSub = this.isCustomerPurchaseSwitchMode()
         ? "קבע מועד לשיחת השיקוף. בשיחלוף יישמרו הפוליסות שנותרו והחדשות שהוזנו במקום שהוסרו."
         : (this.isCustomerPurchaseMode()
           ? "קבע מועד לשיחת השיקוף. הדוח התפעולי יכלול רק את המוצר החדש שנוסף בסשן זה."
           : "קבע מועד לשיחת השיקוף עם הלקוח והוסף הערות לנציג לפני שמירת ההקמה.");
-      const purchasePremiumStatsHtml = this.isCustomerPurchaseMode() && normalizedNewPolicies.length ? `
-            <div class="lcOpHero__stats">
-              <div class="lcOpStat">
-                <span>${this.isCustomerPurchaseSwitchMode() ? "פרמייה חודשית · מוצרים חדשים בשיחלוף" : "פרמייה חודשית · מוצרים חדשים בסשן"}</span>
-                <strong>${escapeHtml(this.formatMoneyValue(totalPremium))}</strong>
-              </div>
-              <div class="lcOpStat">
-                <span>${this.isCustomerPurchaseSwitchMode() ? "פוליסות חדשות בשיחלוף" : "פוליסות שנוספו בסשן"}</span>
-                <strong>${normalizedNewPolicies.length}</strong>
-              </div>
-            </div>` : "";
 
       return `
         <section class="lcOpSummary">
@@ -18625,7 +18607,6 @@ if(path === "birthDate"){
             <div class="lcOpHero__eyebrow">100% הושלם</div>
             <div class="lcOpHero__title">${this.isCustomerPurchaseSwitchMode() ? "סיום שיחלוף" : (this.isCustomerPurchaseMode() ? "סיום רכישת ביטוח חדש" : "תיאום שיחה וסיום הקמה")}</div>
             <div class="lcOpHero__sub">${purchaseHeroSub}</div>
-            ${purchasePremiumStatsHtml}
           </div>
 
           <section class="lcOpSection lcOpSection--mirrorSchedule">
