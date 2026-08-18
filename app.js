@@ -31048,27 +31048,36 @@ UsersGateUI.init();
     },
 
     async _renderDailySalesPdfBase64(doc){
-      if(window.GI_LOAD_LIBS?.html2pdf) await window.GI_LOAD_LIBS.html2pdf();
-      if(typeof window.html2pdf !== "function") throw new Error("לא נטען מנוע PDF");
-      const container = document.createElement("div");
-      container.setAttribute("dir", "rtl");
-      container.setAttribute("lang", "he");
-      container.style.position = "fixed";
-      container.style.left = "-20000px";
-      container.style.top = "0";
-      container.style.width = "794px";
-      container.style.background = "#fff";
-      container.style.opacity = "1";
-      container.style.pointerEvents = "none";
-      container.style.zIndex = "0";
-      container.style.display = "block";
-      container.innerHTML = `<style>${doc.css}</style>${doc.inner}`;
-      document.body.appendChild(container);
+      const libs = window.GI_LOAD_LIBS;
+      if(libs?.pdfExport) await libs.pdfExport();
+      else {
+        if(libs?.html2canvas) await libs.html2canvas();
+        if(libs?.jspdf) await libs.jspdf();
+      }
+      const JsPDF = window.jspdf?.jsPDF || window.jsPDF;
+      if(typeof window.html2canvas !== "function" || typeof JsPDF !== "function"){
+        throw new Error("לא נטען מנוע PDF");
+      }
+      const iframe = document.createElement("iframe");
+      iframe.setAttribute("aria-hidden", "true");
+      iframe.setAttribute("title", " ");
+      iframe.style.cssText = "position:fixed;left:0;top:0;width:794px;height:1123px;border:0;background:#fff;opacity:1;pointer-events:none;z-index:2147483000;";
+      const mask = document.createElement("div");
+      mask.setAttribute("aria-hidden", "true");
+      mask.style.cssText = "position:fixed;left:0;top:0;width:794px;height:1123px;background:#fff;z-index:2147483001;pointer-events:none;";
+      document.body.appendChild(iframe);
+      document.body.appendChild(mask);
       try {
-        try { await document.fonts?.ready; } catch(_e) {}
+        const idoc = iframe.contentDocument || iframe.contentWindow?.document;
+        if(!idoc) throw new Error("לא נפתח חלון PDF");
+        idoc.open();
+        idoc.write(doc.html);
+        idoc.close();
+        await new Promise((r) => setTimeout(r, 60));
+        try { await idoc.fonts?.ready; } catch(_e) {}
         await new Promise((r) => requestAnimationFrame(() => r()));
         await new Promise((r) => requestAnimationFrame(() => r()));
-        const imgs = Array.from(container.querySelectorAll("img"));
+        const imgs = Array.from(idoc.querySelectorAll("img"));
         if(imgs.length){
           await Promise.all(imgs.map((img) => new Promise((resolve) => {
             if(img.complete) return resolve();
@@ -31076,30 +31085,66 @@ UsersGateUI.init();
             img.onerror = () => resolve();
           })));
         }
-        const opts = {
-          margin: [10, 10, 10, 10],
-          filename: `${doc.fileStem}.pdf`,
-          image: { type: "jpeg", quality: 0.95 },
-          html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff", logging: false },
-          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-          pagebreak: { mode: ["avoid-all", "css", "legacy"] }
-        };
-        const dataUri = await window.html2pdf().set(opts).from(container).outputPdf("datauristring");
+        const source = idoc.body;
+        const page = idoc.querySelector(".page") || source;
+        const width = Math.max(794, Number(page.scrollWidth) || 0, Number(source.scrollWidth) || 0);
+        const height = Math.max(200, Number(page.scrollHeight) || 0, Number(source.scrollHeight) || 0);
+        iframe.style.height = Math.max(1123, height) + "px";
+        mask.style.height = iframe.style.height;
+        await new Promise((r) => requestAnimationFrame(() => r()));
+        const canvas = await window.html2canvas(source, {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+          logging: false,
+          scrollX: 0,
+          scrollY: 0,
+          windowWidth: width,
+          windowHeight: height,
+          width,
+          height
+        });
+        if(!canvas || canvas.width < 80 || canvas.height < 80) throw new Error("PDF ריק");
+        const img = canvas.toDataURL("image/jpeg", 0.95);
+        if(!img || img.length < 10000) throw new Error("PDF ריק");
+        const pdf = new JsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+        const pageW = pdf.internal.pageSize.getWidth();
+        const pageH = pdf.internal.pageSize.getHeight();
+        const margin = 10;
+        const usableW = pageW - margin * 2;
+        const usableH = pageH - margin * 2;
+        const imgW = usableW;
+        const pageCanvasH = Math.max(1, Math.floor(canvas.width * (usableH / usableW)));
+        let y = 0;
+        let first = true;
+        while(y < canvas.height){
+          const sliceH = Math.min(pageCanvasH, canvas.height - y);
+          const slice = document.createElement("canvas");
+          slice.width = canvas.width;
+          slice.height = sliceH;
+          slice.getContext("2d").drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+          const sliceImg = slice.toDataURL("image/jpeg", 0.95);
+          const sliceMmH = (sliceH / canvas.width) * imgW;
+          if(!first) pdf.addPage();
+          first = false;
+          pdf.addImage(sliceImg, "JPEG", margin, margin, imgW, sliceMmH);
+          y += sliceH;
+        }
+        const dataUri = pdf.output("datauristring");
         const raw = String(dataUri || "");
         const base64 = raw.indexOf(",") >= 0 ? raw.slice(raw.indexOf(",") + 1) : raw;
-        if(!base64) throw new Error("PDF ריק");
+        if(base64.length < 10000) throw new Error("PDF ריק");
         return base64;
       } finally {
-        try { container.remove(); } catch(_e) {}
+        try { mask.remove(); } catch(_e) {}
+        try { iframe.remove(); } catch(_e) {}
       }
     },
 
     async buildDailySalesMailSnapshot(forDate){
       const email = this.buildDailySalesEmailHtml(forDate);
       const doc = this.buildDailySalesPrintDocumentHtml(forDate);
-      let pdfBase64 = "";
-      try { pdfBase64 = await this._renderDailySalesPdfBase64(doc); }
-      catch(_e) { pdfBase64 = ""; }
+      const pdfBase64 = await this._renderDailySalesPdfBase64(doc);
       return {
         ...email,
         pdfBase64,
