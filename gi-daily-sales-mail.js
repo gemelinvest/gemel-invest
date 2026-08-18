@@ -365,10 +365,25 @@
     if(!force && lastSnapshotAt && (now - lastSnapshotAt) < gap) return { skipped: true };
     await waitForMailHook(force ? 4000 : 1500);
     if(force){
-      const ready = await waitForCompleteSnapshot(8000);
-      if(!ready) throw new Error("הנתונים עדיין נטענים. המתינו שהמערכת תסיים ואז לחצו שוב.");
-    } else if(!snapshotReady()){
-      return { skipped: true, reason: "incomplete" };
+      try {
+        if(typeof window.__GI_DAILY_SALES_MAIL_PREPARE_HOOK__ === "function"){
+          await window.__GI_DAILY_SALES_MAIL_PREPARE_HOOK__();
+        } else {
+          const b = window.__GI_FACE_BRIDGE__;
+          if(b && typeof b.prepareDailySalesMailSnapshot === "function"){
+            await b.prepareDailySalesMailSnapshot();
+          } else {
+            const Dash = dashboardUI();
+            if(Dash && typeof Dash.prepareDailySalesMailSnapshot === "function"){
+              await Dash.prepareDailySalesMailSnapshot();
+            }
+          }
+        }
+      } catch(_e) {}
+      await waitForCompleteSnapshot(1500);
+    } else {
+      snapshotReady();
+      if(!snapshotReady()) return { skipped: true, reason: "incomplete" };
     }
     const snap = await buildSnapshot();
     await api("save-snapshot", snap);

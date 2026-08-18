@@ -31155,7 +31155,8 @@ UsersGateUI.init();
 
     dailySalesMailSnapshotReady(){
       try {
-        const dateKey = this.toLocalDateKey(new Date());
+        try { this.ensureDailySalesServerOverlay(); } catch(_e) {}
+        const dateKey = this.getDailySalesReportDateKey();
         const overlay = this._dailySalesByAgentOverlay;
         const overlayOk = !!(overlay?.ok && overlay.dateKey === dateKey && Array.isArray(overlay.rows));
         const missing = this._countMissingCustomerPayloadsSafe();
@@ -31165,6 +31166,11 @@ UsersGateUI.init();
       } catch(_e) {
         return false;
       }
+    },
+
+    async prepareDailySalesMailSnapshot(){
+      try { this.ensureDailySalesServerOverlay(); } catch(_e) {}
+      return this._waitDailySalesOverlayForMail(12000);
     },
 
     async _waitDailySalesOverlayForMail(ms){
@@ -33161,6 +33167,9 @@ UsersGateUI.init();
     };
     window.__GI_DAILY_SALES_MAIL_READY_HOOK__ = function(){
       try { return !!DashboardUI.dailySalesMailSnapshotReady(); } catch(_e) { return false; }
+    };
+    window.__GI_DAILY_SALES_MAIL_PREPARE_HOOK__ = function(){
+      return DashboardUI.prepareDailySalesMailSnapshot();
     };
   } catch(_e) {}
 
@@ -68322,6 +68331,9 @@ ${inner}
       },
       dailySalesMailSnapshotReady(){
         try { return !!DashboardUI.dailySalesMailSnapshotReady(); } catch(_e) { return false; }
+      },
+      prepareDailySalesMailSnapshot(){
+        try { return DashboardUI.prepareDailySalesMailSnapshot(); } catch(_e) { return null; }
       },
       getCurrentAgent(){
         const rec = (typeof getCurrentAgentRecord === "function" ? getCurrentAgentRecord() : null)
