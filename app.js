@@ -1455,7 +1455,11 @@
   const MIRROR_LIVE_CALL_MAX_MS = 8 * 60 * 60 * 1000;
 
   function getPersistedLiveCall(rec){
-    const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+    let payload = rec?.payload;
+    if(typeof payload === "string"){
+      try { payload = JSON.parse(safeTrim(payload) || "{}"); } catch(_e) { payload = {}; }
+    }
+    payload = payload && typeof payload === "object" ? payload : {};
     const mirrorFlow = payload.mirrorFlow && typeof payload.mirrorFlow === "object" ? payload.mirrorFlow : {};
     const call = (mirrorFlow.callSession && typeof mirrorFlow.callSession === "object")
       ? mirrorFlow.callSession
@@ -1513,6 +1517,47 @@
       return { mode: "stopped", status: "שיחת שיקוף נעצרה", count: "" };
     }
     return { mode: "hidden", status: "", count: "" };
+  }
+
+  function archiveMirrorCallIfDocumented(rec){
+    if(!rec || typeof rec !== "object") return false;
+    if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+    if(!rec.payload.mirrorFlow || typeof rec.payload.mirrorFlow !== "object") rec.payload.mirrorFlow = {};
+    const mf = rec.payload.mirrorFlow;
+    const store = (mf.callSession && typeof mf.callSession === "object")
+      ? mf.callSession
+      : ((mf.call && typeof mf.call === "object") ? mf.call : null);
+    if(!store) return false;
+    const hasDoc = !store.active && (
+      safeTrim(store.finishedAt)
+      || safeTrim(store.endReason)
+      || safeTrim(store.durationText)
+      || safeTrim(store.noConsentNotes)
+      || safeTrim(store.endTime)
+    );
+    if(!hasDoc) return false;
+    if(!Array.isArray(mf.callHistory)) mf.callHistory = [];
+    const sig = [safeTrim(store.startedAt), safeTrim(store.finishedAt), safeTrim(store.endReason), safeTrim(store.durationText)].join("|");
+    const dup = mf.callHistory.some((row) => (
+      [safeTrim(row?.startedAt), safeTrim(row?.finishedAt), safeTrim(row?.endReason), safeTrim(row?.durationText)].join("|") === sig
+    ));
+    if(dup) return false;
+    mf.callHistory.unshift({
+      active: false,
+      startedAt: store.startedAt || "",
+      finishedAt: store.finishedAt || "",
+      startTime: store.startTime || "",
+      endTime: store.endTime || "",
+      dateFull: store.dateFull || "",
+      durationText: store.durationText || "",
+      durationSec: store.durationSec || 0,
+      endReason: store.endReason || "",
+      noConsentNotes: store.noConsentNotes || "",
+      startedBy: store.startedBy || "",
+      finishedBy: store.finishedBy || ""
+    });
+    if(mf.callHistory.length > 25) mf.callHistory.length = 25;
+    return true;
   }
 
   function isLiveMirrorCallForCustomer(rec){
@@ -16391,7 +16436,7 @@ UsersGateUI.init();
   };
 
   const MirrorCallAgentToastWatcher = {
-    intervalMs: 4000,
+    intervalMs: 2500,
     timer: null,
     busy: false,
     _shownKeys: (() => {
@@ -16442,21 +16487,40 @@ UsersGateUI.init();
         return false;
       }
     },
+    matchesAssignedAgent(rec){
+      if(!rec || !Auth?.current) return false;
+      try{
+        if(typeof customerOwnedByCurrentAgent === "function" && customerOwnedByCurrentAgent(rec)) return true;
+      }catch(_e){}
+      const myId = safeTrim(Auth.current.id);
+      const recId = safeTrim(rec.agentId) || safeTrim(rec.payload?.agentId) || safeTrim(rec.agent_id);
+      if(myId && recId && String(myId) === String(recId)) return true;
+      let payload = rec.payload;
+      if(typeof payload === "string"){
+        try { payload = JSON.parse(safeTrim(payload) || "{}"); } catch(_e) { payload = {}; }
+      }
+      const notifyId = safeTrim(payload?.mirrorFlow?.callSession?.notifyAgentId);
+      if(myId && notifyId && String(myId) === String(notifyId)) return true;
+      const myName = safeTrim(Auth.current.name).toLowerCase();
+      const recName = safeTrim(rec.agentName || rec.payload?.agentName || rec.agent_name || payload?.mirrorFlow?.callSession?.notifyAgentName).toLowerCase();
+      return !!(myName && recName && myName === recName);
+    },
     inspectRecord(rec){
       if(!Auth?.current || !rec) return false;
-      try{
-        if(typeof customerOwnedByCurrentAgent === "function" && !customerOwnedByCurrentAgent(rec)) return false;
-      }catch(_e){
-        return false;
+      let viewRec = rec;
+      if(typeof rec.payload === "string"){
+        try { viewRec = Object.assign({}, rec, { payload: JSON.parse(safeTrim(rec.payload) || "{}") }); }
+        catch(_e) { viewRec = rec; }
       }
-      if(this.isSelfOnThisCall(rec)) return false;
-      if(this.isFileAlreadyOpen(rec)) return false;
-      const persisted = typeof getPersistedLiveCall === "function" ? getPersistedLiveCall(rec) : null;
+      if(!this.matchesAssignedAgent(viewRec)) return false;
+      if(this.isSelfOnThisCall(viewRec)) return false;
+      if(this.isFileAlreadyOpen(viewRec)) return false;
+      const persisted = typeof getPersistedLiveCall === "function" ? getPersistedLiveCall(viewRec) : null;
       if(!persisted?.startedAt) return false;
-      const cid = safeTrim(rec.id);
+      const cid = safeTrim(viewRec.id);
       const key = this.noticeKey(cid, persisted.startedAt);
       if(!cid || this.wasShown(key)) return false;
-      const name = safeTrim(rec.fullName) || "לקוח";
+      const name = safeTrim(viewRec.fullName || viewRec.full_name) || "לקוח";
       let toastShown = false;
       try{
         toastShown = !!window.showToast?.({
@@ -16493,26 +16557,54 @@ UsersGateUI.init();
     },
     async fetchRecentOwnedRows(){
       const rows = [];
-      try{
-        const client = Storage.getClient?.();
-        if(!client?.from) return rows;
-        const since = new Date(Date.now() - 20 * 60 * 1000).toISOString();
-        let builder = client.from(SUPABASE_TABLES.customers)
-          .select("id,full_name,agent_id,agent_name,payload,updated_at")
-          .gte("updated_at", since)
-          .order("updated_at", { ascending: false })
-          .limit(40);
-        if(typeof Storage._applyListAgentScopeToQuery === "function"){
-          builder = Storage._applyListAgentScopeToQuery(builder, SUPABASE_TABLES.customers);
-        }
-        const res = await builder;
-        if(res?.error || !Array.isArray(res?.data)) return rows;
-        res.data.forEach((row, idx) => {
+      const take = (list) => {
+        (Array.isArray(list) ? list : []).forEach((row, idx) => {
           try{
             const rec = Storage.mapCustomerRow ? Storage.mapCustomerRow(row, idx) : row;
             if(rec) rows.push(rec);
           }catch(_e){}
         });
+      };
+      try{
+        const client = Storage.getClient?.();
+        if(client?.from){
+          let builder = client.from(SUPABASE_TABLES.customers)
+            .select("id,full_name,agent_id,agent_name,payload,updated_at")
+            .limit(25);
+          if(typeof Storage._applyListAgentScopeToQuery === "function"){
+            builder = Storage._applyListAgentScopeToQuery(builder, SUPABASE_TABLES.customers);
+          }
+          try{
+            const live = await builder.filter("payload->mirrorFlow->callSession->>active", "eq", "true");
+            if(!live?.error && Array.isArray(live?.data) && live.data.length){
+              take(live.data);
+              return rows;
+            }
+          }catch(_e){}
+          const since = new Date(Date.now() - 45 * 60 * 1000).toISOString();
+          let recent = client.from(SUPABASE_TABLES.customers)
+            .select("id,full_name,agent_id,agent_name,payload,updated_at")
+            .gte("updated_at", since)
+            .order("updated_at", { ascending: false })
+            .limit(40);
+          if(typeof Storage._applyListAgentScopeToQuery === "function"){
+            recent = Storage._applyListAgentScopeToQuery(recent, SUPABASE_TABLES.customers);
+          }
+          const res = await recent;
+          if(!res?.error) take(res?.data);
+        }
+      }catch(_e){}
+      if(rows.length) return rows;
+      try{
+        let path = SUPABASE_TABLES.customers
+          + "?select=" + encodeURIComponent("id,full_name,agent_id,agent_name,payload,updated_at")
+          + "&" + encodeURIComponent("payload->mirrorFlow->callSession->>active") + "=eq.true"
+          + "&limit=25";
+        if(typeof Storage._appendListAgentScopeToRestPath === "function"){
+          path = Storage._appendListAgentScopeToRestPath(path, SUPABASE_TABLES.customers);
+        }
+        const data = await Storage.restRequest(path, { method: "GET", timeoutMs: 8000 });
+        take(data);
       }catch(_e){}
       return rows;
     },
@@ -16760,17 +16852,18 @@ UsersGateUI.init();
           const call = rec?.payload?.mirrorFlow?.callSession && typeof rec.payload.mirrorFlow.callSession === "object"
             ? rec.payload.mirrorFlow.callSession
             : {};
-          const kindRaw = safeTrim(call?.endReason || stoppedRow.getAttribute("data-ops-decline-kind"));
+          const notesFromRow = safeTrim(stoppedRow.querySelector?.(".customerOpsCallLog__notes")?.textContent);
+          const kindRaw = safeTrim(stoppedRow.getAttribute("data-ops-decline-kind") || call?.endReason);
           const reasonTitle = kindRaw === "addition_not_approved"
             ? "שיחת שיקוף נעצרה · לקוח לא אישר כיסוי כתוספת"
             : (kindRaw === "paused_documented"
               ? "שיחת שיקוף נעצרה · תועד על ידי נציג תפעול"
               : "שיחת שיקוף נעצרה");
-          const date = safeTrim(call?.dateFull) || "—";
-          const start = safeTrim(call?.startTime) || "—";
-          const end = safeTrim(call?.endTime) || "—";
-          const duration = safeTrim(call?.durationText) || "00:00";
-          const notes = safeTrim(call?.noConsentNotes) || "לא הוזן תיעוד";
+          const date = safeTrim(stoppedRow.getAttribute("data-ops-call-date") || call?.dateFull) || "—";
+          const start = safeTrim(stoppedRow.getAttribute("data-ops-call-start") || call?.startTime) || "—";
+          const end = safeTrim(stoppedRow.getAttribute("data-ops-call-end") || call?.endTime) || "—";
+          const duration = safeTrim(stoppedRow.getAttribute("data-ops-call-duration") || call?.durationText) || "00:00";
+          const notes = notesFromRow || safeTrim(call?.noConsentNotes) || "לא הוזן תיעוד";
           alert(`${reasonTitle}\nתאריך: ${date}\nשעת התחלה: ${start}\nשעת סיום: ${end}\nמשך: ${duration}\n\nתיעוד הנציג:\n${notes}`);
           return;
         }
@@ -20223,26 +20316,49 @@ UsersGateUI.init();
       const call = (mirrorFlow.callSession && typeof mirrorFlow.callSession === "object")
         ? mirrorFlow.callSession
         : ((mirrorFlow.call && typeof mirrorFlow.call === "object") ? mirrorFlow.call : {});
-      let callDate = safeTrim(call?.dateFull) || "—";
-      if(callDate === "—" && safeTrim(call?.startedAt)){
-        const d = new Date(call.startedAt);
-        if(!Number.isNaN(d.getTime())){
-          callDate = d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
+      const renderCallLog = (row) => {
+        const c = row && typeof row === "object" ? row : {};
+        if(c.active) return "";
+        let date = safeTrim(c.dateFull) || "—";
+        if(date === "—" && safeTrim(c.startedAt)){
+          const d = new Date(c.startedAt);
+          if(!Number.isNaN(d.getTime())){
+            date = d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
+          }
         }
-      }
-      const callStart = safeTrim(call?.startTime) || "—";
-      const callEnd = safeTrim(call?.endTime) || "—";
-      const callDuration = safeTrim(call?.durationText) || "00:00";
-      const agentNotes = safeTrim(call?.noConsentNotes);
-      const stopReason = safeTrim(call?.endReason);
-      const isCompletedCall = stopReason === "completed" || stopReason === "call_finished";
-      const stoppedWithNotes = !call?.active && agentNotes && !isCompletedCall;
-      const stopTitle = stopReason === "addition_not_approved"
-        ? "שיחת שיקוף נעצרה · לקוח לא אישר כיסוי כתוספת"
-        : (stopReason === "paused_documented"
-          ? "שיחת שיקוף נעצרה · תועד על ידי נציג תפעול"
-          : "שיחת שיקוף נעצרה");
-      const endedCall = !call?.active && (isCompletedCall || (!stoppedWithNotes && (safeTrim(call?.durationText) || safeTrim(call?.finishedAt) || safeTrim(call?.endTime))));
+        const start = safeTrim(c.startTime) || "—";
+        const end = safeTrim(c.endTime) || "—";
+        const duration = safeTrim(c.durationText) || "00:00";
+        const notes = safeTrim(c.noConsentNotes);
+        const reason = safeTrim(c.endReason);
+        const completed = reason === "completed" || reason === "call_finished";
+        const stopped = notes && !completed;
+        const title = reason === "addition_not_approved"
+          ? "שיחת שיקוף נעצרה · לקוח לא אישר כיסוי כתוספת"
+          : (reason === "paused_documented"
+            ? "שיחת שיקוף נעצרה · תועד על ידי נציג תפעול"
+            : "שיחת שיקוף נעצרה");
+        const ended = completed || (!stopped && (safeTrim(c.durationText) || safeTrim(c.finishedAt) || safeTrim(c.endTime)));
+        if(stopped){
+          return `<button type="button" class="customerOpsCallLog customerOpsCallLog--stopped" data-ops-decline-row="1" data-ops-decline-kind="${escapeHtml(reason)}" data-ops-call-date="${escapeHtml(date)}" data-ops-call-start="${escapeHtml(start)}" data-ops-call-end="${escapeHtml(end)}" data-ops-call-duration="${escapeHtml(duration)}">
+              <span class="customerOpsCallLog__title">${escapeHtml(title)}</span>
+              <span class="customerOpsCallLog__meta">${escapeHtml(date)} · התחלה ${escapeHtml(start)} · סיום ${escapeHtml(end)} · משך ${escapeHtml(duration)}</span>
+              <span class="customerOpsCallLog__notes">${escapeHtml(notes)}</span>
+            </button>`;
+        }
+        if(ended){
+          return `<div class="customerOpsCallLog">בוצע שיחת שיקוף ממתין לחתימות מבוטח/ים וסוכן · ${escapeHtml(date)} · התחלה ${escapeHtml(start)} · סיום ${escapeHtml(end)} · משך ${escapeHtml(duration)}</div>`;
+        }
+        return "";
+      };
+      const history = Array.isArray(mirrorFlow.callHistory) ? mirrorFlow.callHistory : [];
+      const currentStart = safeTrim(call?.startedAt);
+      const historyHtml = history
+        .filter((row) => safeTrim(row?.startedAt) !== currentStart)
+        .map((row) => renderCallLog(row))
+        .filter(Boolean)
+        .join("");
+      const currentLog = renderCallLog(call);
       const resultButtons = canSetOpsResult ? Object.entries(OPS_RESULT_OPTIONS).map(([key, label]) => `
         <button class="customerOpsResultBtn${state?.resultKey === key ? ' is-active' : ''}" data-ops-result="${escapeHtml(key)}" type="button">${escapeHtml(label)}</button>`).join('') : '';
       return `
@@ -20253,12 +20369,8 @@ UsersGateUI.init();
               <span class="customerOpsBadge customerOpsBadge--${escapeHtml(state?.tone || 'info')}">${escapeHtml(state?.liveLabel || 'ממתין לשיקוף')}</span>
               <span class="customerOpsOwner">${escapeHtml(owner)}</span>
             </div>
-            ${stoppedWithNotes ? `<button type="button" class="customerOpsCallLog customerOpsCallLog--stopped" data-ops-decline-row="1" data-ops-decline-kind="${escapeHtml(stopReason)}">
-              <span class="customerOpsCallLog__title">${escapeHtml(stopTitle)}</span>
-              <span class="customerOpsCallLog__meta">${escapeHtml(callDate)} · התחלה ${escapeHtml(callStart)} · סיום ${escapeHtml(callEnd)} · משך ${escapeHtml(callDuration)}</span>
-              <span class="customerOpsCallLog__notes">${escapeHtml(agentNotes)}</span>
-            </button>` : ""}
-            ${endedCall ? `<div class="customerOpsCallLog">בוצע שיחת שיקוף ממתין לחתימות מבוטח/ים וסוכן · ${escapeHtml(callDate)} · התחלה ${escapeHtml(callStart)} · סיום ${escapeHtml(callEnd)} · משך ${escapeHtml(callDuration)}</div>` : ""}
+            ${currentLog}
+            ${historyHtml}
             ${canSetOpsResult ? `<div class="customerOpsResultBtns">${resultButtons}</div>` : ''}
             <div class="customerStatCard__sub">עודכן לאחרונה: ${escapeHtml(updated)}</div>
           </div>
@@ -55856,6 +55968,7 @@ ${inner}
       if(rec){
         if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
         if(!rec.payload.mirrorFlow || typeof rec.payload.mirrorFlow !== "object") rec.payload.mirrorFlow = {};
+        try { archiveMirrorCallIfDocumented(rec); } catch(_e) {}
         if(!rec.payload.mirrorFlow.callSession || typeof rec.payload.mirrorFlow.callSession !== "object") rec.payload.mirrorFlow.callSession = {};
         const store = rec.payload.mirrorFlow.callSession;
         const startedAt = nowISO();
@@ -55863,6 +55976,8 @@ ${inner}
         store.startedAt = startedAt;
         store.startedBy = safeTrim(Auth?.current?.name);
         store.runtimeSessionId = this._runtimeId;
+        store.notifyAgentId = safeTrim(rec.agentId) || safeTrim(rec.payload?.agentId);
+        store.notifyAgentName = safeTrim(rec.agentName) || safeTrim(rec.payload?.agentName);
         store.finishedAt = ""; store.durationSec = 0; store.durationText = ""; store.endTime = "";
         store.endReason = "";
         store.noConsentNotes = "";

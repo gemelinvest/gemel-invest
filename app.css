@@ -41625,6 +41625,10 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   flex-shrink: 0;
   flex-wrap: wrap;
   justify-content: flex-end;
+  align-items: center;
+}
+.cfFile__actions .cfFile__liveTimer{
+  margin-inline-start: 4px;
 }
 .cfFileActionBtn{
   display: inline-flex;
