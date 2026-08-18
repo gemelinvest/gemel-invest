@@ -1455,18 +1455,22 @@
   function isLiveMirrorCallForCustomer(rec){
     const cid = safeTrim(rec?.id);
     if(!cid) return { live:false, seconds:0, startedAt:"", source:"" };
+    const mf = rec?.payload?.mirrorFlow && typeof rec.payload.mirrorFlow === "object" ? rec.payload.mirrorFlow : {};
+    const store = (mf.callSession && typeof mf.callSession === "object") ? mf.callSession : {};
+    const startedAtFromStore = safeTrim(store?.startedAt);
     try{
-      if(typeof MirrorCallUI !== "undefined" && MirrorCallUI?._callRunning
-        && safeTrim(MirrorCallUI?.selectedCustomer?.id) === cid){
-        const startedAt = safeTrim(rec?.payload?.mirrorFlow?.callSession?.startedAt)
-          || safeTrim(MirrorCallUI?._liveStartedAt)
-          || "";
-        return {
-          live: true,
-          seconds: Math.max(0, Number(MirrorCallUI._callSeconds) || 0),
-          startedAt,
-          source: "mirrorCall"
-        };
+      if(typeof MirrorCallUI !== "undefined" && MirrorCallUI?._callRunning){
+        const selId = safeTrim(MirrorCallUI?.selectedCustomer?.id);
+        const sameCustomer = !!selId && selId === cid;
+        const sameRuntime = !!(store?.active && safeTrim(store.runtimeSessionId) === safeTrim(MirrorCallUI._runtimeId));
+        if(sameCustomer || sameRuntime){
+          return {
+            live: true,
+            seconds: Math.max(0, Number(MirrorCallUI._callSeconds) || 0),
+            startedAt: startedAtFromStore || safeTrim(MirrorCallUI?._liveStartedAt) || "",
+            source: "mirrorCall"
+          };
+        }
       }
     }catch(_e){}
     try{
@@ -1519,6 +1523,16 @@
     } else if(liveKey === "call_finished"){
       liveLabel = "הלקוח סיים שיחת שיקוף";
       tone = "success";
+    } else if(
+      liveKey === "mirror_call_stopped_saved"
+      || liveKey === "mirror_no_consent_saved"
+      || liveKey === "mirror_addition_rejected_saved"
+      || (!call?.active && safeTrim(call?.noConsentNotes))
+    ){
+      liveLabel = safeTrim(call?.endReason) === "addition_not_approved"
+        ? "שיחת שיקוף נעצרה · לא אושר כיסוי כתוספת"
+        : "שיחת שיקוף נעצרה";
+      tone = "danger";
     } else if(liveKey === "handling"){
       liveLabel = "הלקוח בטיפול מחלקת תפעול";
       tone = "info";
@@ -16371,6 +16385,7 @@ UsersGateUI.init();
       this.els.archiveBtn = $("#customerFullArchiveBtn");
       this.els.assignBtn = $("#customerFullAssignBtn");
       this.els.name = $("#customerFullName");
+      this.els.liveTimer = $("#customerFullLiveTimer");
       this.els.meta = $("#customerFullMeta");
       this.els.avatar = $("#customerFullAvatar");
       this.els.dash = $("#customerFullDash");
@@ -16517,15 +16532,21 @@ UsersGateUI.init();
       on(this.els.main, "click", async (ev) => {
         const stoppedRow = ev.target?.closest?.('[data-ops-decline-row]');
         if(stoppedRow){
-          const kindRaw = safeTrim(stoppedRow.getAttribute("data-ops-decline-kind"));
+          const rec = this.current();
+          const call = rec?.payload?.mirrorFlow?.callSession && typeof rec.payload.mirrorFlow.callSession === "object"
+            ? rec.payload.mirrorFlow.callSession
+            : {};
+          const kindRaw = safeTrim(call?.endReason || stoppedRow.getAttribute("data-ops-decline-kind"));
           const reasonTitle = kindRaw === "addition_not_approved"
             ? "שיחת שיקוף נעצרה · לקוח לא אישר כיסוי כתוספת"
-            : "שיחת שיקוף נעצרה";
-          const date = safeTrim(stoppedRow.getAttribute("data-ops-decline-date")) || "—";
-          const start = safeTrim(stoppedRow.getAttribute("data-ops-decline-start")) || "—";
-          const end = safeTrim(stoppedRow.getAttribute("data-ops-decline-end")) || "—";
-          const duration = safeTrim(stoppedRow.getAttribute("data-ops-decline-duration")) || "00:00";
-          const notes = safeTrim(stoppedRow.getAttribute("data-ops-decline-notes")) || "לא הוזן תיעוד";
+            : (kindRaw === "paused_documented"
+              ? "שיחת שיקוף נעצרה · תועד על ידי נציג תפעול"
+              : "שיחת שיקוף נעצרה");
+          const date = safeTrim(call?.dateFull) || "—";
+          const start = safeTrim(call?.startTime) || "—";
+          const end = safeTrim(call?.endTime) || "—";
+          const duration = safeTrim(call?.durationText) || "00:00";
+          const notes = safeTrim(call?.noConsentNotes) || "לא הוזן תיעוד";
           alert(`${reasonTitle}\nתאריך: ${date}\nשעת התחלה: ${start}\nשעת סיום: ${end}\nמשך: ${duration}\n\nתיעוד הנציג:\n${notes}`);
           return;
         }
@@ -18609,6 +18630,7 @@ UsersGateUI.init();
       const policies = this.collectPolicies(rec);
       if(this.els.name) this.els.name.textContent = rec.fullName || "תיק לקוח";
       if(this.els.avatar) this.els.avatar.setAttribute("data-customer-name", safeTrim(rec.fullName || "תיק לקוח"));
+      this.paintHeroLiveTimer(rec);
       if(this.els.meta) this.els.meta.innerHTML = this.renderHeroMeta(rec);
       if(this.els.dash) this.els.dash.innerHTML = "";
       if(this.els.side) this.els.side.innerHTML = this.renderSidebar(rec, policies);
@@ -19645,6 +19667,7 @@ UsersGateUI.init();
       const phone = safeTrim(rec?.phone || '');
       const agentName = safeTrim(rec?.agentName || '');
       const ops = getOpsStatePresentation(rec);
+      this.paintHeroLiveTimer(rec, ops);
       const idIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 10h6"/><path d="M8 14h4"/><circle cx="17" cy="12" r="1.4"/></svg>`;
       const phoneIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v2a2 2 0 0 1-2.18 2 19.86 19.86 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.86 19.86 0 0 1 2.12 3.18 2 2 0 0 1 4.11 1h2a2 2 0 0 1 2 1.72c.12.9.33 1.78.63 2.62a2 2 0 0 1-.45 2.11L7.1 8.91a16 16 0 0 0 8 8l1.46-1.19a2 2 0 0 1 2.11-.45c.84.3 1.72.51 2.62.63A2 2 0 0 1 22 16.92z"/></svg>`;
       const agentIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="8" r="4"/></svg>`;
@@ -19658,6 +19681,26 @@ UsersGateUI.init();
         ops?.timerLive ? chip(`בשיחת שיקוף כעת · ${ops.timerText || "00:00"}`, liveCallIcon, 'rtl') : ''
       ].filter(Boolean);
       return chips.join('') || '<span class="muted small">אין פרטי זיהוי</span>';
+    },
+
+    paintHeroLiveTimer(rec, opsState){
+      const el = this.els?.liveTimer;
+      if(!el) return false;
+      const ops = opsState || (rec ? getOpsStatePresentation(rec) : null);
+      const live = !!(ops?.timerLive);
+      const text = live ? `בשיחת שיקוף כעת · ${ops.timerText || "00:00"}` : "";
+      if(live){
+        el.hidden = false;
+        el.removeAttribute("hidden");
+        el.textContent = text;
+        el.classList.add("is-live");
+      } else {
+        el.hidden = true;
+        el.setAttribute("hidden", "");
+        el.textContent = "";
+        el.classList.remove("is-live");
+      }
+      return live;
     },
 
     /* GI-FIX 2026-08-01 (תוכניות 1+3): תיק לקוח לא נפתח ריק.
@@ -19679,6 +19722,7 @@ UsersGateUI.init();
     _showFileLoading(rec){
       if(!this.els.wrap) return;
       if(this.els.name) this.els.name.textContent = safeTrim(rec?.fullName) || "תיק לקוח";
+      this.paintHeroLiveTimer(rec);
       if(this.els.meta) this.els.meta.innerHTML = "";
       if(this.els.dash) this.els.dash.innerHTML = "";
       if(this.els.side) this.els.side.innerHTML = "";
@@ -19795,6 +19839,7 @@ UsersGateUI.init();
         this.currentId = rec.id;
         if(this.els.name) this.els.name.textContent = safeTrim(rec.fullName) || "תיק לקוח";
         if(this.els.avatar) this.els.avatar.setAttribute("data-customer-name", safeTrim(rec.fullName || "תיק לקוח"));
+        this.paintHeroLiveTimer(rec);
         if(this.els.main){
           this.els.main.innerHTML = `<div class="muted" style="padding:32px;text-align:center;">טוען פרטי תיק…</div>`;
         }
@@ -19840,7 +19885,6 @@ UsersGateUI.init();
       const call = (mirrorFlow.callSession && typeof mirrorFlow.callSession === "object")
         ? mirrorFlow.callSession
         : ((mirrorFlow.call && typeof mirrorFlow.call === "object") ? mirrorFlow.call : {});
-      const endedCall = !call?.active && (safeTrim(call?.durationText) || safeTrim(call?.finishedAt) || safeTrim(call?.endTime));
       let callDate = safeTrim(call?.dateFull) || "—";
       if(callDate === "—" && safeTrim(call?.startedAt)){
         const d = new Date(call.startedAt);
@@ -19851,11 +19895,15 @@ UsersGateUI.init();
       const callStart = safeTrim(call?.startTime) || "—";
       const callEnd = safeTrim(call?.endTime) || "—";
       const callDuration = safeTrim(call?.durationText) || "00:00";
-      const stoppedWithNotes = !call?.active && safeTrim(call?.noConsentNotes);
+      const agentNotes = safeTrim(call?.noConsentNotes);
+      const stoppedWithNotes = !call?.active && agentNotes;
       const stopReason = safeTrim(call?.endReason);
       const stopTitle = stopReason === "addition_not_approved"
         ? "שיחת שיקוף נעצרה · לקוח לא אישר כיסוי כתוספת"
-        : "שיחת שיקוף נעצרה";
+        : (stopReason === "paused_documented"
+          ? "שיחת שיקוף נעצרה · תועד על ידי נציג תפעול"
+          : "שיחת שיקוף נעצרה");
+      const endedCall = !call?.active && !stoppedWithNotes && (safeTrim(call?.durationText) || safeTrim(call?.finishedAt) || safeTrim(call?.endTime));
       const resultButtons = canSetOpsResult ? Object.entries(OPS_RESULT_OPTIONS).map(([key, label]) => `
         <button class="customerOpsResultBtn${state?.resultKey === key ? ' is-active' : ''}" data-ops-result="${escapeHtml(key)}" type="button">${escapeHtml(label)}</button>`).join('') : '';
       return `
@@ -19870,7 +19918,11 @@ UsersGateUI.init();
               <div class="customerOpsResultTitle">תוצאה</div>
               <div class="customerOpsResultValue" id="customerOpsResultValue">${escapeHtml(state?.finalLabel || 'טרם נקבעה תוצאה סופית')}</div>
             </div>
-            ${stoppedWithNotes ? `<button type="button" class="customerOpsCallLog customerOpsCallLog--stopped" data-ops-decline-row="1" data-ops-decline-notes="${escapeHtml(safeTrim(call.noConsentNotes))}" data-ops-decline-date="${escapeHtml(callDate)}" data-ops-decline-start="${escapeHtml(callStart)}" data-ops-decline-end="${escapeHtml(callEnd)}" data-ops-decline-duration="${escapeHtml(callDuration)}" data-ops-decline-kind="${escapeHtml(safeTrim(call?.endReason) || "")}">${escapeHtml(stopTitle)} · ${escapeHtml(callDate)} · ${escapeHtml(callEnd)} · משך ${escapeHtml(callDuration)} · לחץ לצפייה בתיעוד</button>` : ""}
+            ${stoppedWithNotes ? `<button type="button" class="customerOpsCallLog customerOpsCallLog--stopped" data-ops-decline-row="1" data-ops-decline-kind="${escapeHtml(stopReason)}">
+              <span class="customerOpsCallLog__title">${escapeHtml(stopTitle)}</span>
+              <span class="customerOpsCallLog__meta">${escapeHtml(callDate)} · התחלה ${escapeHtml(callStart)} · סיום ${escapeHtml(callEnd)} · משך ${escapeHtml(callDuration)}</span>
+              <span class="customerOpsCallLog__notes">${escapeHtml(agentNotes)}</span>
+            </button>` : ""}
             ${endedCall ? `<div class="customerOpsCallLog">בוצע שיקוף ללקוח · ${escapeHtml(callDate)} · התחלה ${escapeHtml(callStart)} · סיום ${escapeHtml(callEnd)} · משך ${escapeHtml(callDuration)}</div>` : ""}
             ${canSetOpsResult ? `<div class="customerOpsResultBtns">${resultButtons}</div>` : ''}
             <div class="customerStatCard__sub">עודכן לאחרונה: ${escapeHtml(updated)}</div>
@@ -19942,7 +19994,12 @@ UsersGateUI.init();
     },
 
     syncMirrorCallLiveTimer(customerId){
-      if(!this._isOpenCustomerId(customerId)) return;
+      const cid = safeTrim(customerId);
+      if(!cid) return;
+      if(!this.els?.wrap?.classList.contains("is-open")) return;
+      if(safeTrim(this.currentId) && safeTrim(this.currentId) !== cid) return;
+      const rec = this.current() || this.byId(cid);
+      this.paintHeroLiveTimer(rec);
       if(this._opsCardTimer){
         this.refreshOperationalReflectionCard();
         return;
@@ -57110,8 +57167,15 @@ ${inner}
       if(this.els.workstation) this.els.workstation.classList.remove("mcWorkstation--mirrorDecline");
       this._syncMcCallStartButton();
       try{ CustomersUI?.refreshOperationalReflectionCard?.(); }catch(_e){}
-      alert("הסיכום נשמר בתיק הלקוח.");
-      window.setTimeout(() => { this._persistMirrorCall("שיחת שיקוף — ללא הסכמה, נשמר סיכום", { immediate: true }); }, 0);
+      alert(declineKind === "paused_documented"
+        ? "התיעוד נשמר בתיק הלקוח בכרטיסיית תפעול."
+        : "הסיכום נשמר בתיק הלקוח.");
+      const persistLabel = declineKind === "paused_documented"
+        ? "שיחת שיקוף נעצרה — נשמר תיעוד"
+        : (declineKind === "addition_not_approved"
+          ? "שיחת שיקוף — כיסוי כתוספת לא אושר, נשמר סיכום"
+          : "שיחת שיקוף — ללא הסכמה, נשמר סיכום");
+      window.setTimeout(() => { this._persistMirrorCall(persistLabel, { immediate: true }); }, 0);
     },
 
     _fmtMcMoney(raw){
