@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260818-har-compact-row-v3";
+  const GI_WIZARD_BUILD = "20260818-har-compact-row-v4";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -11865,6 +11865,11 @@ if(path === "birthDate"){
         const isActive = executionMethod === item.value;
         return `<button type="button" class="lcPolicyActionBox__execOption ${isActive ? 'is-active' : ''}" data-cancel-policy="${escapeHtml(p.id || '')}" data-cancel-key="executionMethod" data-cancel-exec-option="${escapeHtml(item.value)}" aria-pressed="${isActive ? 'true' : 'false'}"><span class="lcPolicyActionBox__execMark" aria-hidden="true">${isActive ? '✓' : ''}</span><span>${escapeHtml(item.label)}</span></button>`;
       }).join("");
+      const executionSelectOpts = [`<option value="">בחר…</option>`].concat(
+        this.getCancellationExecutionMethodOptions().map((item) =>
+          `<option value="${escapeHtml(item.value)}"${executionMethod === item.value ? " selected" : ""}>${escapeHtml(item.label)}</option>`
+        )
+      ).join("");
       const wrapCls = compact ? 'lcPolicyActionBox lcPolicyActionBox--compact' : 'lcPolicyActionBox';
       const pledgeBadgeCls = compact ? 'lcWBadge lcWBadge--compact' : 'lcWBadge';
       const chipOptions = this.getExistingPolicyCancelOptions().filter(o => o.v !== "");
@@ -11931,10 +11936,56 @@ if(path === "birthDate"){
           ` : "";
 
       if(part === "chips"){
-        return `<div class="${wrapCls}">${chipsBlock}</div>`;
+        return `<div class="lcHarCompactChips">${chipsHtml}${pledgedBank ? `<span class="${pledgeBadgeCls}"><span class="lcStopBlink" aria-hidden="true">🛑</span>יש לשלוח ביטול גם לחברה וגם לסוכנות</span>` : ``}</div>`;
       }
       if(part === "expanded"){
-        return expandedBlock ? `<div class="${wrapCls}">${expandedBlock}</div>` : "";
+        if(!(needReason || needExecutionMethod || showPartialNote)) return "";
+        return `
+          <div class="lcHarCompactExtra">
+            ${(needReason || needExecutionMethod) ? `
+              <div class="lcHarCompactExtra__fields">
+                ${needReason ? `
+                  <div class="field">
+                    <label class="label">סיבת ביטול</label>
+                    <select class="input" data-cancel-policy="${escapeHtml(p.id || '')}" data-cancel-key="reason">${reasonOpts}</select>
+                  </div>
+                ` : ``}
+                ${needExecutionMethod ? `
+                  <div class="field">
+                    <label class="label">אופן ביצוע</label>
+                    <select class="input" data-cancel-policy="${escapeHtml(p.id || '')}" data-cancel-key="executionMethod">${executionSelectOpts}</select>
+                  </div>
+                ` : ``}
+              </div>
+            ` : ``}
+            ${showPartialNote ? `
+              <div class="lcHarCompactExtra__partial">
+                <div class="lcPolicyActionBox__annexTitle">מה ברצונך לבטל חלקית?</div>
+                ${hasBreakdown ? `
+                  <div class="lcPartialCovers">
+                    <div class="lcPartialCovers__hint">סמן את הכיסויים לביטול חלקי:</div>
+                    <div class="lcPartialCovers__grid">
+                      ${breakdown.map(item => {
+                        const lbl = safeTrim(item.label);
+                        const val = safeTrim(item.monthlyPremium);
+                        const checked = partialCovers.includes(lbl);
+                        return `<label class="lcPartialCovers__item ${checked ? 'is-checked' : ''}" aria-checked="${checked ? 'true' : 'false'}">
+                          <input type="checkbox" class="lcPartialCovers__cb" data-cancel-policy="${escapeHtml(p.id||'')}" data-cancel-key="partialCovers" data-cover-label="${escapeHtml(lbl)}" ${checked ? 'checked' : ''} tabindex="-1" />
+                          <span class="lcPartialCovers__label">${escapeHtml(lbl)}</span>
+                          <span class="lcPartialCovers__value">${escapeHtml(val)} ₪</span>
+                        </label>`;
+                      }).join('')}
+                    </div>
+                  </div>
+                ` : ''}
+                <div class="field" style="margin-top:${hasBreakdown ? '10px' : '0'}">
+                  <label class="label">${hasBreakdown ? 'הערות נוספות (אופציונלי)' : 'פירוט ביטול חלקי'}</label>
+                  <textarea class="input lcPolicyActionBox__textarea" data-cancel-policy="${escapeHtml(p.id || '')}" data-cancel-key="partialDetails" placeholder="לדוגמה: לבטל נספח אמבולטורי בלבד / להשאיר כיסוי תרופות ולבטל השתלות">${escapeHtml(partialDetails)}</textarea>
+                </div>
+              </div>
+            ` : ``}
+          </div>
+        `;
       }
 
       return `
@@ -12186,7 +12237,7 @@ if(path === "birthDate"){
 
           ${statusText ? `<div class="${statusClass}">${escapeHtml(statusText)}</div>` : ""}
 
-          <div class="lcPolTableWrap" style="padding:0">
+          <div class="lcPolTableWrap${hasImportedHar ? " lcPolTableWrap--harCompact" : ""}" style="padding:0">
             <table class="lcPolTable${hasImportedHar ? " lcPolTable--harCompact" : ""}">
               <thead>
                 <tr>
@@ -12196,7 +12247,7 @@ if(path === "birthDate"){
                   <th>${escapeHtml(col4Label)}</th>
                   <th>פרמיה חודשית</th>
                   <th>שיעבוד</th>
-                  <th style="width:100px">פעולות</th>
+                  <th${hasImportedHar ? ' class="lcHarCompactActionsHead"' : ' style="width:100px"'}>פעולות</th>
                 </tr>
               </thead>
               <tbody>${rows || `<tr><td colspan="7" class="muted">אין פוליסות עדיין</td></tr>`}</tbody>
