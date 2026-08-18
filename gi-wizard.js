@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260818-har-compact-row-v5";
+  const GI_WIZARD_BUILD = "20260818-na-fullwidth-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -4712,7 +4712,7 @@ init(){
       const isCaseLevel = (this.step >= 5);
       const addBtn = "";
       const summaryHeaderBrand = "";
-      const hideStepHeader = (this.step === 1 || this.step === 3 || this.step === 5 || this.step === 8);
+      const hideStepHeader = (this.step === 1 || this.step === 3 || this.step === 4 || this.step === 5 || this.step === 8);
       const head = hideStepHeader ? "" : (isCaseLevel ? `<div class="lcWSection lcSummaryHeaderSection">
         <div class="row row--between lcSummaryHeaderRow">
           ${summaryHeaderBrand}
