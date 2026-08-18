@@ -14961,9 +14961,9 @@ if(path === "birthDate"){
           : { tone: "bad", text: `בריסק משכנתא סך השיעבוד חייב להיות שווה לסכום הביטוח — חסרים ${this.formatMoneyValue(pt.remaining)}` };
       }
       if(pt.remaining > 0){
-        return { tone: "ok", text: `יתרה פנויה לחלוקה בין המוטבים: ${this.formatMoneyValue(pt.remaining)}` };
+        return { tone: "ok", text: `נותרה יתרה של ${this.formatMoneyValue(pt.remaining)} — רק על הסכום הזה ניתן לשעבד לבנק נוסף או להכניס ליורשים החוקיים` };
       }
-      return { tone: "ok", text: "כל סכום הביטוח משועבד — לא נותרה יתרה למוטבים" };
+      return { tone: "ok", text: "כל סכום הביטוח משועבד — לא נותרה יתרה ליורשים החוקיים" };
     },
 
     // עדכון חי של פס המאזן + סכומי המוטבים, בלי re-render (שומר על הפוקוס בשדה).
@@ -15003,10 +15003,10 @@ if(path === "birthDate"){
         const isRemainder = !!d.pledge && !this.isMortgageRiskPolicy(d);
         if(benBase > 0){
           baseNote.classList.remove("lcBenBaseNote--empty");
-          baseNote.innerHTML = `${isRemainder ? 'יתרה לחלוקה בין המוטבים (אחרי השיעבוד)' : 'סכום לחלוקה בין המוטבים'}: <b>${escapeHtml(this.formatMoneyValue(benBase))}</b>`;
+          baseNote.innerHTML = `${isRemainder ? 'יתרה לחלוקה בין היורשים החוקיים (אחרי השיעבוד)' : 'סכום לחלוקה בין המוטבים'}: <b>${escapeHtml(this.formatMoneyValue(benBase))}</b>`;
         }else if(isRemainder){
           baseNote.classList.add("lcBenBaseNote--empty");
-          baseNote.textContent = "כל סכום הביטוח משועבד — לא נותרה יתרה לחלוקה בין מוטבים";
+          baseNote.textContent = "כל סכום הביטוח משועבד — לא נותרה יתרה ליורשים החוקיים";
         }
       }
     },
@@ -16805,7 +16805,7 @@ if(path === "birthDate"){
                 <div class="lcRiskUmbrellaBox__eyebrow">GEMEL INVEST</div>
                 <div class="lcRiskUmbrellaBox__title">מוטבים</div>
                 ${bens.length ? `<div class="lcRiskUmbrellaBox__sub">${bens.length} מוטב${bens.length>1?'ים':''} · סה"כ ${totalPct}%${!pctOk ? ' ⚠️ לא מסתכמים ל-100%' : ' ✓'}</div>` : ''}
-                ${benBase > 0 ? `<div class="lcBenBaseNote" data-ben-base-note="1">${benBaseIsRemainder ? 'יתרה לחלוקה בין המוטבים (אחרי השיעבוד)' : 'סכום לחלוקה בין המוטבים'}: <b>${escapeHtml(this.formatMoneyValue(benBase))}</b></div>` : (benBaseIsRemainder ? `<div class="lcBenBaseNote lcBenBaseNote--empty" data-ben-base-note="1">כל סכום הביטוח משועבד — לא נותרה יתרה לחלוקה בין מוטבים</div>` : '')}
+                ${benBase > 0 ? `<div class="lcBenBaseNote" data-ben-base-note="1">${benBaseIsRemainder ? 'יתרה לחלוקה בין היורשים החוקיים (אחרי השיעבוד)' : 'סכום לחלוקה בין המוטבים'}: <b>${escapeHtml(this.formatMoneyValue(benBase))}</b></div>` : (benBaseIsRemainder ? `<div class="lcBenBaseNote lcBenBaseNote--empty" data-ben-base-note="1">כל סכום הביטוח משועבד — לא נותרה יתרה ליורשים החוקיים</div>` : '')}
               </div>
               <button class="lcRiskUmbrellaBox__toggle" type="button" id="lcBenAddBtn" aria-label="הוסף מוטב">
                 <span class="lcRiskUmbrellaBox__toggleText">+ הוסף מוטב</span>
@@ -16837,8 +16837,12 @@ if(path === "birthDate"){
                     ${this.bankNames.map(bn => `<option value="${escapeHtml(bn)}"${safeTrim(b.bankName)===bn?" selected":""}>${escapeHtml(bn)}</option>`).join("")}
                   </select>
                 </div>
-                <div class="lcField lcField--pledgeReference"><label class="lcLabel">מספר בנק</label><input class="lcInput" data-pdraft-bank="bankNo" data-pdraft-bank-idx="${i}" value="${escapeHtml(b.bankNo||"")}" inputmode="numeric" /></div>
-                <div class="lcField lcField--pledgeReference"><label class="lcLabel">מספר סניף</label><input class="lcInput" data-pdraft-bank="branch" data-pdraft-bank-idx="${i}" value="${escapeHtml(b.branch||"")}" inputmode="numeric" /></div>
+                <div class="lcField lcField--pledgeReference"><label class="lcLabel">מספר בנק</label><input class="lcInput" data-pdraft-bank="bankNo" data-pdraft-bank-idx="${i}" value="${escapeHtml(b.bankNo||"")}" inputmode="numeric" readonly /><div class="help">מתמלא אוטומטית לפי הבנק שנבחר</div></div>
+                <div class="lcField lcField--pledgeReference">
+                  <label class="lcLabel">מספר סניף</label>
+                  <input class="lcInput" data-pdraft-bank="branch" data-pdraft-bank-idx="${i}" value="${escapeHtml(b.branch||"")}" inputmode="numeric" />
+                  <div class="lcHoBranchStatus lcPledgeBranchStatus" data-pledge-branch-status="${i}" hidden></div>
+                </div>
                 <div class="lcField lcField--pledgeReference">
                   <label class="lcLabel">סכום לשיעבוד${banks.length === 1 ? ' <span class="lcPledgeAutoTag">מולא אוטומטית</span>' : ''}</label>
                   <input class="lcInput lcPledgeAmountInput" data-pdraft-bank="amount" data-pdraft-bank-idx="${i}" value="${escapeHtml(b.amount||"")}" inputmode="numeric" />
@@ -17360,6 +17364,16 @@ if(path === "birthDate"){
             const banks = this.normalizePledgeBanks(this.policyDraft);
             if(!banks[idx]) return;
             banks[idx][k] = el.value;
+            if(k === "bankName"){
+              const code = this.getBankCodeForName(el.value);
+              if(code){
+                banks[idx].bankNo = code;
+                const noEl = this.els.body.querySelector(`[data-pdraft-bank="bankNo"][data-pdraft-bank-idx="${idx}"]`);
+                if(noEl) noEl.value = code;
+              }
+              void this.ensureBankBranchesLoaded().then(() => this.applyPledgeBranchLookup(idx));
+            }
+            if(k === "branch") this.schedulePledgeBranchLookup(idx);
             if(k === "amount"){
               // תצוגה בלבד — הערך בשדה ובמודל נשאר נקי לחלוטין
               const hint = this.els.body.querySelector(`[data-money-hint="pledge-${idx}"]`);
@@ -17373,6 +17387,7 @@ if(path === "birthDate"){
           on(el, "input", handler);
           on(el, "change", handler);
         });
+        this.applyAllPledgeBranchLookups();
 
         // הוספת בנק שני
         const pledgeAddBtn = this.els.body.querySelector('#lcPledgeBankAddBtn');
@@ -17673,6 +17688,77 @@ if(path === "birthDate"){
         return;
       }
       el.innerHTML = "מספר הסניף לא נמצא בבנק שנבחר. בדקו שהמספר נכון.";
+    },
+
+    // GI-PLEDGE-BRANCH 2026-08-18: חיבור למנוע סניפים הקיים, בלי לשנות הוראת קבע.
+    schedulePledgeBranchLookup(idx){
+      this._pledgeBranchTimers = this._pledgeBranchTimers || {};
+      window.clearTimeout(this._pledgeBranchTimers[idx]);
+      this._pledgeBranchTimers[idx] = window.setTimeout(() => {
+        void this.ensureBankBranchesLoaded().then(() => this.applyPledgeBranchLookup(idx));
+      }, 180);
+    },
+
+    applyPledgeBranchLookup(idx){
+      this.ensurePolicyDraft();
+      const banks = this.normalizePledgeBanks(this.policyDraft);
+      const b = banks[idx];
+      if(!b) return;
+      const bankNo = safeTrim(b.bankNo) || this.getBankCodeForName(b.bankName);
+      if(bankNo && safeTrim(b.bankNo) !== bankNo){
+        b.bankNo = bankNo;
+        const noEl = this.els?.body?.querySelector?.(`[data-pdraft-bank="bankNo"][data-pdraft-bank-idx="${idx}"]`);
+        if(noEl) noEl.value = bankNo;
+      }
+      const found = this.lookupHoBranch(bankNo, b.branch);
+      const addrEl = this.els?.body?.querySelector?.(`[data-pdraft-bank="address"][data-pdraft-bank-idx="${idx}"]`);
+      if(found.state === "ok"){
+        b.address = found.address;
+        b.branchValid = true;
+        if(addrEl) addrEl.value = found.address || "";
+      } else if(found.state !== "loading"){
+        if(found.state === "bad" || found.state === "idle"){
+          b.address = "";
+          if(addrEl) addrEl.value = "";
+        }
+        b.branchValid = found.state === "idle" ? "" : false;
+      }
+      this.updatePledgeBranchStatusUI(idx, found);
+    },
+
+    updatePledgeBranchStatusUI(idx, found){
+      const el = this.els?.body?.querySelector?.(`[data-pledge-branch-status="${idx}"]`);
+      if(!el) return;
+      const state = found?.state || "idle";
+      if(state === "idle"){
+        el.hidden = true;
+        el.className = "lcHoBranchStatus lcPledgeBranchStatus";
+        el.innerHTML = "";
+        return;
+      }
+      el.hidden = false;
+      el.className = "lcHoBranchStatus lcPledgeBranchStatus is-" + state;
+      if(state === "loading"){
+        el.innerHTML = "בודק את מספר הסניף…";
+        return;
+      }
+      if(state === "need-bank"){
+        el.innerHTML = "יש לבחור בנק לפני אימות הסניף.";
+        return;
+      }
+      if(state === "ok"){
+        el.innerHTML = "<strong>מס סניף תקין</strong>";
+        return;
+      }
+      el.innerHTML = "מס בנק לא תקין";
+    },
+
+    applyAllPledgeBranchLookups(){
+      if(!this.els?.body?.querySelector?.("[data-pledge-bank-card]")) return;
+      void this.ensureBankBranchesLoaded().then(() => {
+        const banks = this.normalizePledgeBanks(this.policyDraft);
+        banks.forEach((_, i) => this.applyPledgeBranchLookup(i));
+      });
     },
 
     detectHealthCardBrand(panDigitsRaw){
