@@ -174,12 +174,26 @@
     }).format(d || new Date());
   }
 
+  function ensureRtlEmailHtml(raw){
+    let inner = String(raw == null ? "" : raw);
+    const body = inner.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+    if(body) inner = body[1];
+    inner = inner.replace(/dir\s*=\s*(['"])ltr\1/gi, "dir=$1rtl$1");
+    inner = inner.replace(/direction\s*:\s*ltr/gi, "direction:rtl");
+    inner = inner.replace(/<table(?![^>]*\bdir\s*=)/gi, '<table dir="rtl" align="right"');
+    return '<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>'
+      + '<body dir="rtl" style="margin:0;padding:24px;background:#fff;color:#122033;font-family:Arial,sans-serif;direction:rtl;text-align:right;unicode-bidi:embed">'
+      + '<table dir="rtl" align="right" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="width:100%;direction:rtl;text-align:right"><tr><td dir="rtl" align="right" style="direction:rtl;text-align:right">'
+      + inner
+      + "</td></tr></table></body></html>";
+  }
+
   function wrapSnap(snap){
     if(!snap || !snap.html) return null;
     return {
       dateKey: trim(snap.dateKey) || israelDateKey(),
       dateLabel: snap.dateLabel || israelDateKey(),
-      html: snap.html,
+      html: ensureRtlEmailHtml(snap.html),
       summary: snap.summary || {}
     };
   }
@@ -273,7 +287,7 @@
     const lines = [];
     if(data.connectedEmail){
       lines.push("מייל שולח מחובר: " + data.connectedEmail);
-      lines.push("שעת שליחה: כל יום ב־20:00 שעון ישראל");
+      lines.push("שעת שליחה: כל יום ב־12:30, 15:00 ו־20:00 שעון ישראל");
     } else if(data.azureReady){
       lines.push("אפליקציית Microsoft מוגדרת. עדיין לא חובר מייל Outlook.");
       lines.push("לחץ «חבר מייל Outlook» והיכנס עם orias@i-s-f.co.il");
@@ -397,7 +411,7 @@
         setMessage("שומר את דוח היום…");
         await persistSnapshot(true);
         await refreshStatus();
-        setMessage("דוח היום נשמר לשליחה ב־20:00.");
+        setMessage("דוח היום נשמר. יישלח אוטומטית ב־12:30, 15:00 ו־20:00.");
       } catch(err) {
         setMessage(errText(err), true);
       }
