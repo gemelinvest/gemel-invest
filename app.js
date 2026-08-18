@@ -29716,7 +29716,19 @@ UsersGateUI.init();
         showPension,
         dateLine,
         fileStem: this.dailySalesPrintFileStem(report.dateKey),
-        issued: report.dateLabel || "",
+        issued: (() => {
+          try {
+            return new Date().toLocaleString("he-IL", {
+              timeZone: "Asia/Jerusalem",
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+              hourCycle: "h23"
+            });
+          } catch(_e) { return report.dateLabel || ""; }
+        })(),
         colCount: showPension ? 7 : 6,
         sums: {
           health: sum("health"),
@@ -31141,7 +31153,37 @@ UsersGateUI.init();
       }
     },
 
+    dailySalesMailSnapshotReady(){
+      try {
+        const dateKey = this.toLocalDateKey(new Date());
+        const overlay = this._dailySalesByAgentOverlay;
+        const overlayOk = !!(overlay?.ok && overlay.dateKey === dateKey && Array.isArray(overlay.rows));
+        const missing = this._countMissingCustomerPayloadsSafe();
+        if(missing > 0 && !overlayOk) return false;
+        if(!App?._fullDataReady && !overlayOk) return false;
+        return true;
+      } catch(_e) {
+        return false;
+      }
+    },
+
+    async _waitDailySalesOverlayForMail(ms){
+      try { this.ensureDailySalesServerOverlay(); } catch(_e) {}
+      const dateKey = this.getDailySalesReportDateKey();
+      const started = Date.now();
+      const budget = Math.max(0, Number(ms) || 0);
+      while((Date.now() - started) < budget){
+        const overlay = this._dailySalesByAgentOverlay;
+        if(overlay?.ok && overlay.dateKey === dateKey) return true;
+        if(overlay && overlay.dateKey === dateKey && overlay.ok === false) return false;
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      const overlay = this._dailySalesByAgentOverlay;
+      return !!(overlay?.ok && overlay.dateKey === dateKey);
+    },
+
     async buildDailySalesMailSnapshot(forDate){
+      await this._waitDailySalesOverlayForMail(4000);
       const email = this.buildDailySalesEmailHtml(forDate);
       const doc = this.buildDailySalesPrintDocumentHtml(forDate);
       const pdfBase64 = await this._renderDailySalesPdfBase64(doc);
@@ -33116,6 +33158,9 @@ UsersGateUI.init();
     };
     window.__GI_DAILY_SALES_MAIL_PDF_HOOK__ = function(){
       return DashboardUI.buildDailySalesMailSnapshot();
+    };
+    window.__GI_DAILY_SALES_MAIL_READY_HOOK__ = function(){
+      try { return !!DashboardUI.dailySalesMailSnapshotReady(); } catch(_e) { return false; }
     };
   } catch(_e) {}
 
@@ -68274,6 +68319,9 @@ ${inner}
       },
       buildDailySalesMailSnapshot(){
         try { return DashboardUI.buildDailySalesMailSnapshot(); } catch(_e) { return null; }
+      },
+      dailySalesMailSnapshotReady(){
+        try { return !!DashboardUI.dailySalesMailSnapshotReady(); } catch(_e) { return false; }
       },
       getCurrentAgent(){
         const rec = (typeof getCurrentAgentRecord === "function" ? getCurrentAgentRecord() : null)

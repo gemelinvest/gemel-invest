@@ -8,6 +8,7 @@
   const FALLBACK_SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
   const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
   const SNAPSHOT_GAP_MS = 10 * 60 * 1000;
+  const SNAPSHOT_POLL_MS = 45 * 1000;
   const TITLE = "דוח מכירות למייל";
 
   let lastSnapshotAt = 0;
@@ -309,11 +310,66 @@
     return mailHookReady();
   }
 
+  function snapshotReady(){
+    try {
+      if(typeof window.__GI_DAILY_SALES_MAIL_READY_HOOK__ === "function"){
+        return !!window.__GI_DAILY_SALES_MAIL_READY_HOOK__();
+      }
+    } catch(_e) {}
+    try {
+      const b = window.__GI_FACE_BRIDGE__;
+      if(b && typeof b.dailySalesMailSnapshotReady === "function"){
+        return !!b.dailySalesMailSnapshotReady();
+      }
+    } catch(_e) {}
+    const Dash = dashboardUI();
+    if(Dash && typeof Dash.dailySalesMailSnapshotReady === "function"){
+      return !!Dash.dailySalesMailSnapshotReady();
+    }
+    return false;
+  }
+
+  async function waitForCompleteSnapshot(timeoutMs){
+    const start = Date.now();
+    while((Date.now() - start) < timeoutMs){
+      if(snapshotReady()) return true;
+      await wait(250);
+    }
+    return snapshotReady();
+  }
+
+  function israelMinutesNow(){
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Jerusalem",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      hourCycle: "h23"
+    }).formatToParts(new Date());
+    const hour = Number(parts.find((p) => p.type === "hour")?.value);
+    const minute = Number(parts.find((p) => p.type === "minute")?.value);
+    if(!Number.isFinite(hour) || !Number.isFinite(minute)) return -1;
+    return hour * 60 + minute;
+  }
+
+  function nearSendSlot(){
+    const now = israelMinutesNow();
+    if(now < 0) return false;
+    return [12 * 60 + 30, 15 * 60, 20 * 60].some((slot) => now >= (slot - 8) && now < slot);
+  }
+
   async function persistSnapshot(force){
     if(!isMailAdmin()) return { skipped: true };
     const now = Date.now();
-    if(!force && lastSnapshotAt && (now - lastSnapshotAt) < SNAPSHOT_GAP_MS) return { skipped: true };
+    const gap = (!force && nearSendSlot()) ? 60 * 1000 : SNAPSHOT_GAP_MS;
+    if(!force && lastSnapshotAt && (now - lastSnapshotAt) < gap) return { skipped: true };
     await waitForMailHook(force ? 4000 : 1500);
+    if(force){
+      const ready = await waitForCompleteSnapshot(8000);
+      if(!ready) throw new Error("הנתונים עדיין נטענים. המתינו שהמערכת תסיים ואז לחצו שוב.");
+    } else if(!snapshotReady()){
+      return { skipped: true, reason: "incomplete" };
+    }
     const snap = await buildSnapshot();
     await api("save-snapshot", snap);
     lastSnapshotAt = Date.now();
@@ -483,7 +539,7 @@
     pollTimer = window.setInterval(() => {
       if(!isMailAdmin()) return;
       persistSnapshot(false).catch(() => {});
-    }, SNAPSHOT_GAP_MS);
+    }, SNAPSHOT_POLL_MS);
     window.setTimeout(() => {
       if(isMailAdmin()) persistSnapshot(false).catch(() => {});
     }, 8000);
