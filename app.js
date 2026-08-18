@@ -19869,6 +19869,21 @@ UsersGateUI.init();
       }
     },
 
+    syncMirrorCallLiveTimer(customerId){
+      const cid = safeTrim(customerId);
+      if(!cid || !this.els?.wrap?.classList.contains("is-open")) return;
+      if(safeTrim(this.currentId) !== cid) return;
+      this.startOpsCardLoop();
+    },
+
+    endMirrorCallLiveTimer(customerId){
+      const cid = safeTrim(customerId);
+      if(!cid || !this.els?.wrap?.classList.contains("is-open")) return;
+      if(safeTrim(this.currentId) !== cid) return;
+      this.stopOpsCardLoop();
+      this.refreshOperationalReflectionCard();
+    },
+
     animatePremiumStats(root){
       const scope = root || this.els?.dash;
       if(!scope) return;
@@ -55371,6 +55386,7 @@ ${inner}
         try{ MirrorChangeReport.captureBaseline(rec, { force: true }); }catch(_e){}
         State.data.meta.updatedAt = startedAt;
         rec.updatedAt = startedAt;
+        try{ CustomersUI?.syncMirrorCallLiveTimer?.(rec.id); }catch(_e){}
       }
       if(this.els.callStartBtn){ this.els.callStartBtn.textContent="סיים שיחה"; this.els.callStartBtn.classList.add("is-end"); }
       if(this.els.callTimer) this.els.callTimer.classList.add("is-live");
@@ -55447,7 +55463,7 @@ ${inner}
       this._hideMirrorFlowPanels();
       this._mirrorUiPhase = "idle";
       this._resetPreFlightChecks();
-      try{ CustomersUI?.refreshOperationalReflectionCard?.(); }catch(_e){}
+      try{ CustomersUI?.endMirrorCallLiveTimer?.(rec?.id); }catch(_e){}
     },
 
     _syncLiveNav(){
@@ -56933,7 +56949,7 @@ ${inner}
           setOpsTouch(rec,{ liveState, ownerName:safeTrim(Auth?.current?.name), updatedBy:safeTrim(Auth?.current?.name) });
         }catch(_e){}
       }
-      try{ CustomersUI?.refreshOperationalReflectionCard?.(); }catch(_e){}
+      try{ CustomersUI?.endMirrorCallLiveTimer?.(rec?.id); }catch(_e){}
       this._syncFlowChrome();
       this._syncMcCallStartButton();
       window.requestAnimationFrame(() => {
