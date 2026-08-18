@@ -1452,6 +1452,23 @@
     return OPS_RESULT_OPTIONS[k] || "";
   }
 
+  const MIRROR_LIVE_CALL_MAX_MS = 8 * 60 * 60 * 1000;
+
+  function getPersistedLiveCall(rec){
+    const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+    const mirrorFlow = payload.mirrorFlow && typeof payload.mirrorFlow === "object" ? payload.mirrorFlow : {};
+    const call = (mirrorFlow.callSession && typeof mirrorFlow.callSession === "object")
+      ? mirrorFlow.callSession
+      : ((mirrorFlow.call && typeof mirrorFlow.call === "object") ? mirrorFlow.call : null);
+    if(!call?.active || !safeTrim(call?.startedAt) || safeTrim(call?.finishedAt)) return null;
+    const startedMs = Date.parse(call.startedAt);
+    if(!Number.isFinite(startedMs)) return null;
+    const ageMs = Date.now() - startedMs;
+    if(ageMs > MIRROR_LIVE_CALL_MAX_MS) return null;
+    const seconds = Math.max(0, Math.floor(ageMs / 1000));
+    return { call, startedAt: safeTrim(call.startedAt), seconds };
+  }
+
   function isLiveMirrorCallForCustomer(rec){
     const cid = safeTrim(rec?.id);
     if(!cid) return { live:false, seconds:0, startedAt:"", source:"" };
@@ -1496,6 +1513,11 @@
         }
       }
     }catch(_e){}
+    /* יוזר אחר שפותח את אותו תיק: אין סשן מקומי, רק callSession שנשמר בשרת */
+    const persisted = getPersistedLiveCall(rec);
+    if(persisted){
+      return { live:true, seconds: persisted.seconds, startedAt: persisted.startedAt, source:"persisted" };
+    }
     return { live:false, seconds:0, startedAt:"", source:"" };
   }
 
@@ -19703,6 +19725,36 @@ UsersGateUI.init();
       return live;
     },
 
+    async _refreshOpenFileCallSession(id){
+      const cid = safeTrim(id);
+      if(!cid || typeof Storage?.loadSingleRow !== "function") return;
+      const applyRemoteCall = (remoteCall) => {
+        if(!remoteCall || typeof remoteCall !== "object") return false;
+        if(safeTrim(this.currentId) !== cid) return false;
+        if(!this.els?.wrap?.classList.contains("is-open")) return false;
+        const rec = this.byId(cid);
+        if(!rec) return false;
+        if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+        if(!rec.payload.mirrorFlow || typeof rec.payload.mirrorFlow !== "object") rec.payload.mirrorFlow = {};
+        rec.payload.mirrorFlow.callSession = Object.assign({}, rec.payload.mirrorFlow.callSession || {}, remoteCall);
+        this.paintHeroLiveTimer(rec);
+        this.startOpsCardLoop();
+        return true;
+      };
+      const pull = async () => {
+        const res = await Storage.loadSingleRow(SUPABASE_TABLES.customers, cid, "id,payload,updated_at");
+        if(!res?.ok) return;
+        let payload = res.data?.payload;
+        if(typeof payload === "string"){
+          try { payload = JSON.parse(safeTrim(payload) || "{}"); } catch(_e) { payload = null; }
+        }
+        const remoteCall = payload?.mirrorFlow?.callSession;
+        applyRemoteCall(remoteCall);
+      };
+      try { await pull(); } catch(_e) {}
+      window.setTimeout(() => { void pull().catch(() => {}); }, 1600);
+    },
+
     /* GI-FIX 2026-08-01 (תוכניות 1+3): תיק לקוח לא נפתח ריק.
        אם ה-payload חסר — מציגים "טוען פרטי תיק…" ומושכים את השורה מהשרת
        לפני הרינדור, במקום להציג תיק בלי פוליסות שנראה כאילו הנתונים נמחקו. */
@@ -19711,12 +19763,18 @@ UsersGateUI.init();
       if(!rec || !this.els.wrap) return;
       // הקורא (openWithLoader) עוטף ב-try/catch סינכרוני, שלא תופס דחיית Promise —
       // לכן בולעים כאן ומדווחים ללוג, במקום unhandled rejection.
+      const afterOpen = () => {
+        try { void this._refreshOpenFileCallSession(id); } catch(_e) {}
+      };
       if(Storage.payloadIsEmpty(rec)){
         return Promise.resolve()
           .then(() => this._openByIdAfterPayload(id, opts))
+          .then(() => afterOpen())
           .catch((err) => { try { console.error("CUSTOMER_OPEN_AFTER_PAYLOAD_FAILED", err, id); } catch(_e) {} });
       }
-      return this._openByIdResolved(rec, opts);
+      const opened = this._openByIdResolved(rec, opts);
+      afterOpen();
+      return opened;
     },
 
     _showFileLoading(rec){
@@ -19896,14 +19954,15 @@ UsersGateUI.init();
       const callEnd = safeTrim(call?.endTime) || "—";
       const callDuration = safeTrim(call?.durationText) || "00:00";
       const agentNotes = safeTrim(call?.noConsentNotes);
-      const stoppedWithNotes = !call?.active && agentNotes;
       const stopReason = safeTrim(call?.endReason);
+      const isCompletedCall = stopReason === "completed" || stopReason === "call_finished";
+      const stoppedWithNotes = !call?.active && agentNotes && !isCompletedCall;
       const stopTitle = stopReason === "addition_not_approved"
         ? "שיחת שיקוף נעצרה · לקוח לא אישר כיסוי כתוספת"
         : (stopReason === "paused_documented"
           ? "שיחת שיקוף נעצרה · תועד על ידי נציג תפעול"
           : "שיחת שיקוף נעצרה");
-      const endedCall = !call?.active && !stoppedWithNotes && (safeTrim(call?.durationText) || safeTrim(call?.finishedAt) || safeTrim(call?.endTime));
+      const endedCall = !call?.active && (isCompletedCall || (!stoppedWithNotes && (safeTrim(call?.durationText) || safeTrim(call?.finishedAt) || safeTrim(call?.endTime))));
       const resultButtons = canSetOpsResult ? Object.entries(OPS_RESULT_OPTIONS).map(([key, label]) => `
         <button class="customerOpsResultBtn${state?.resultKey === key ? ' is-active' : ''}" data-ops-result="${escapeHtml(key)}" type="button">${escapeHtml(label)}</button>`).join('') : '';
       return `
@@ -55517,6 +55576,11 @@ ${inner}
         store.startedBy = safeTrim(Auth?.current?.name);
         store.runtimeSessionId = this._runtimeId;
         store.finishedAt = ""; store.durationSec = 0; store.durationText = ""; store.endTime = "";
+        store.endReason = "";
+        store.noConsentNotes = "";
+        store.paused = false;
+        store.pausedAt = "";
+        store.pauseNotes = "";
         store.startTime = new Date(startedAt).toLocaleTimeString("he-IL",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
         store.dateFull  = new Date(startedAt).toLocaleDateString("he-IL",{day:"2-digit",month:"2-digit",year:"numeric"});
         this._liveStartedAt = startedAt;
@@ -55557,7 +55621,7 @@ ${inner}
             else if(this.els.consentYes) this.els.consentYes.focus();
           }catch(_e){}
           const persistStart = () => {
-            if(this._callRunning) this._persistMirrorCall("שיחת שיקוף התחילה");
+            if(this._callRunning) this._persistMirrorCall("שיחת שיקוף התחילה", { immediate: true });
           };
           if(typeof requestIdleCallback === "function"){
             requestIdleCallback(() => persistStart(), { timeout: 800 });
@@ -55582,6 +55646,8 @@ ${inner}
           store.durationText=this._fmtTime(dur);
           store.endTime=new Date(finishedAt).toLocaleTimeString("he-IL",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
           store.finishedBy=safeTrim(Auth?.current?.name);
+          store.endReason = "completed";
+          store.noConsentNotes = "";
           try{ setOpsTouch(rec,{liveState:"call_finished",ownerName:safeTrim(Auth?.current?.name),updatedBy:safeTrim(Auth?.current?.name)}); }catch(_e){}
           State.data.meta.updatedAt=finishedAt; rec.updatedAt=finishedAt;
           this._persistMirrorCall("שיחת שיקוף הסתיימה", { immediate: true });
