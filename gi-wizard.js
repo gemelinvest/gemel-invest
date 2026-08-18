@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260818-har-compact-row-v2";
+  const GI_WIZARD_BUILD = "20260818-har-compact-row-v3";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -11871,16 +11871,16 @@ if(path === "birthDate"){
       const chipsHtml = chipOptions.map((o) =>
         `<button type="button" class="lcPolChip ${status === o.v ? 'is-active' : ''}" data-cancel-policy="${escapeHtml(p.id || '')}" data-cancel-key="status" data-cancel-chip-value="${escapeHtml(o.v)}" aria-pressed="${status === o.v ? 'true' : 'false'}">${escapeHtml(o.t)}</button>`
       ).join("");
+      const part = safeTrim(options.part);
 
-      return `
-        <div class="${wrapCls}">
+      const chipsBlock = `
           <div class="lcPolicyActionBox__chipRow">
             <span class="lcPolicyActionBox__chipLabel">סטטוס:</span>
             <div class="lcPolicyActionBox__chips">${chipsHtml}</div>
             ${pledgedBank ? `<span class="${pledgeBadgeCls}"><span class="lcStopBlink" aria-hidden="true">🛑</span>יש לשלוח ביטול גם לחברה וגם לסוכנות</span>` : ``}
-          </div>
+          </div>`;
 
-          ${needReason || needExecutionMethod || showPartialNote ? `
+      const expandedBlock = (needReason || needExecutionMethod || showPartialNote) ? `
             <div class="lcPolicyActionBox__expandedSection">
               ${needReason ? `
                 <div class="lcPolicyActionBox__grid">
@@ -11911,7 +11911,6 @@ if(path === "birthDate"){
                           const lbl = safeTrim(item.label);
                           const val = safeTrim(item.monthlyPremium);
                           const checked = partialCovers.includes(lbl);
-                          const cbId = 'pcover_' + escapeHtml(p.id||'') + '_' + escapeHtml(lbl);
                           return `<label class="lcPartialCovers__item ${checked ? 'is-checked' : ''}" aria-checked="${checked ? 'true' : 'false'}">
                             <input type="checkbox" class="lcPartialCovers__cb" data-cancel-policy="${escapeHtml(p.id||'')}" data-cancel-key="partialCovers" data-cover-label="${escapeHtml(lbl)}" ${checked ? 'checked' : ''} tabindex="-1" />
                             <span class="lcPartialCovers__label">${escapeHtml(lbl)}</span>
@@ -11929,7 +11928,19 @@ if(path === "birthDate"){
                 </div>
               ` : ``}
             </div>
-          ` : ``}
+          ` : "";
+
+      if(part === "chips"){
+        return `<div class="${wrapCls}">${chipsBlock}</div>`;
+      }
+      if(part === "expanded"){
+        return expandedBlock ? `<div class="${wrapCls}">${expandedBlock}</div>` : "";
+      }
+
+      return `
+        <div class="${wrapCls}">
+          ${chipsBlock}
+          ${expandedBlock}
         </div>
       `;
     },
@@ -12030,7 +12041,17 @@ if(path === "birthDate"){
             : (includedList.length
               ? `<span class="lcHarCompactCover" title="${escapeHtml(includedList.join(' • '))}">${escapeHtml(includedSummary)}</span>`
               : `<span class="muted small">—</span>`);
-          const coverCell = sumHtml || coverPills;
+          const coverCell = (needsSum || needsComp)
+            ? (safeTrim(p[sumField] || "")
+              ? `<span class="lcHarCompactCover">${escapeHtml(sumLabel.replace(" (חובה)", ""))} <span>${escapeHtml(this.formatMoneyValue(p[sumField]))}</span></span>`
+              : `<span class="lcHarCompactCover lcHarCompactCover--missing">—</span>`)
+            : coverPills;
+          const chipsBox = p.isCollectiveReadOnly
+            ? cancellationBox
+            : this.renderExistingPolicyCancellationControls(p, d.cancellations?.[p.id] || {}, { compact: true, insured: ins, part: "chips" });
+          const expandedBox = p.isCollectiveReadOnly
+            ? ""
+            : this.renderExistingPolicyCancellationControls(p, d.cancellations?.[p.id] || {}, { compact: true, insured: ins, part: "expanded" });
           return `
             <tr class="lcHarCompactRow" data-policy-id="${escapeHtml(p.id || '')}">
               <td>
@@ -12047,12 +12068,14 @@ if(path === "birthDate"){
               <td>${coverCell}</td>
               <td class="lcHarCompactPremium">${monthlyPremiumTxt}</td>
               <td class="lcHarCompactPledge">${pledgeLabel}</td>
-              <td class="lcHarCompactActions">${cancellationBox}</td>
+              <td class="lcHarCompactActions">${chipsBox}</td>
             </tr>
             <tr class="lcHarCompactMeta">
               <td colspan="7">
                 <div class="lcHarCompactMeta__line">${insuredDots || ''}</div>
                 ${linkedHomeWarning}
+                ${sumHtml}
+                ${expandedBox}
               </td>
             </tr>
           `;
