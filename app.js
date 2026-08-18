@@ -1452,6 +1452,49 @@
     return OPS_RESULT_OPTIONS[k] || "";
   }
 
+  function isLiveMirrorCallForCustomer(rec){
+    const cid = safeTrim(rec?.id);
+    if(!cid) return { live:false, seconds:0, startedAt:"", source:"" };
+    try{
+      if(typeof MirrorCallUI !== "undefined" && MirrorCallUI?._callRunning
+        && safeTrim(MirrorCallUI?.selectedCustomer?.id) === cid){
+        const startedAt = safeTrim(rec?.payload?.mirrorFlow?.callSession?.startedAt)
+          || safeTrim(MirrorCallUI?._liveStartedAt)
+          || "";
+        return {
+          live: true,
+          seconds: Math.max(0, Number(MirrorCallUI._callSeconds) || 0),
+          startedAt,
+          source: "mirrorCall"
+        };
+      }
+    }catch(_e){}
+    try{
+      if(typeof MirrorsUI !== "undefined" && MirrorsUI){
+        const store = rec?.payload?.mirrorFlow?.callSession;
+        if(store?.active && store?.startedAt
+          && safeTrim(store.runtimeSessionId) === safeTrim(MirrorsUI.runtimeSessionId)){
+          const sec = Math.max(0, Math.floor((Date.now() - new Date(store.startedAt).getTime()) / 1000));
+          return { live:true, seconds:sec, startedAt:safeTrim(store.startedAt), source:"mirrors" };
+        }
+      }
+    }catch(_e){}
+    try{
+      if(typeof ElementaryMirrorUI !== "undefined" && ElementaryMirrorUI?._callRunning){
+        const eid = safeTrim(ElementaryMirrorUI._customerId || ElementaryMirrorUI.selectedCustomer?.id);
+        if(eid && eid === cid){
+          return {
+            live: true,
+            seconds: Math.max(0, Number(ElementaryMirrorUI._callSeconds) || 0),
+            startedAt: safeTrim(rec?.payload?.mirrorFlow?.callSession?.startedAt),
+            source: "elementary"
+          };
+        }
+      }
+    }catch(_e){}
+    return { live:false, seconds:0, startedAt:"", source:"" };
+  }
+
   function getOpsStatePresentation(rec){
     const ops = ensureOpsProcess(rec);
     const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
@@ -1459,12 +1502,14 @@
     const call = (mirrorFlow.callSession && typeof mirrorFlow.callSession === 'object')
       ? mirrorFlow.callSession
       : ((mirrorFlow.call && typeof mirrorFlow.call === 'object') ? mirrorFlow.call : {});
+    const liveCall = isLiveMirrorCallForCustomer(rec);
     const finalLabel = getOpsResultLabel(ops.resultStatus);
     let liveKey = safeTrim(ops.liveState);
     let liveLabel = "ממתין לשיקוף";
     let tone = "info";
 
-    if(call?.active){
+    /* טיימר חי רק מסשן רץ במסך השיקוף. סטטוס in_call יכול להישאר גם מתיק שנשמר. */
+    if(liveCall.live || call?.active){
       liveKey = "in_call";
       liveLabel = "הלקוח בשיחת שיקוף כעת";
       tone = "warn";
@@ -1482,10 +1527,18 @@
     let timerText = "00:00";
     let timerMeta = "הטיימר יתחיל ברגע שתופעל שיחת שיקוף";
     let timerLive = false;
-    if(call?.active && call?.startedAt){
-      const sec = Math.max(0, Math.floor((Date.now() - new Date(call.startedAt).getTime()) / 1000));
-      timerText = MirrorFlowReadModel?.formatDuration?.(sec) || "00:00";
-      timerMeta = `בשיחה החל מ־${MirrorFlowReadModel?.formatClock?.(call.startedAt) || '—'}`;
+    if(liveCall.live){
+      if(liveCall.source === "mirrorCall" && typeof MirrorCallUI?._fmtTime === "function"){
+        timerText = MirrorCallUI._fmtTime(liveCall.seconds);
+      } else if(liveCall.source === "elementary" && typeof ElementaryMirrorUI?._fmtTime === "function"){
+        timerText = ElementaryMirrorUI._fmtTime(liveCall.seconds);
+      } else {
+        timerText = MirrorFlowReadModel?.formatDuration?.(liveCall.seconds)
+          || `${String(Math.floor(liveCall.seconds / 60)).padStart(2,"0")}:${String(liveCall.seconds % 60).padStart(2,"0")}`;
+      }
+      timerMeta = liveCall.startedAt
+        ? `בשיחה החל מ־${MirrorFlowReadModel?.formatClock?.(liveCall.startedAt) || '—'}`
+        : "שיחת שיקוף פעילה כעת";
       timerLive = true;
     } else if(call?.durationText){
       timerText = safeTrim(call.durationText) || "00:00";
@@ -14500,6 +14553,7 @@ UsersGateUI.init();
       if(Auth.isReferent() && safe !== "campaignLeads" && safe !== "contacts" && safe !== "dashboard") safe = "campaignLeads";
       try { CampaignLeadsUI.stopPoll?.(); } catch(_e) {}
       try { CustomersUI.stopOpsCardLoop?.(); } catch(_e) {}
+      try { CustomersUI.resumeLiveMirrorTimerIfNeeded?.(); } catch(_e) {}
       // hide all views
       $$(".view").forEach(v => v.classList.remove("is-visible"));
       const el = $("#view-" + safe);
@@ -19851,14 +19905,26 @@ UsersGateUI.init();
       }
     },
 
+    _isOpenCustomerId(customerId){
+      const cid = safeTrim(customerId);
+      if(!cid || !this.els?.wrap?.classList.contains("is-open")) return false;
+      return safeTrim(this.currentId) === cid;
+    },
+
+    _hasLiveMirrorCallOnOpenFile(){
+      const rec = this.current();
+      if(!rec) return false;
+      try{
+        return !!(typeof isLiveMirrorCallForCustomer === "function" && isLiveMirrorCallForCustomer(rec)?.live);
+      }catch(_e){
+        return false;
+      }
+    },
+
     startOpsCardLoop(){
       this.stopOpsCardLoop();
-      const rec = this.current();
-      const payload = rec?.payload && typeof rec.payload === 'object' ? rec.payload : {};
-      const mirrorFlow = payload?.mirrorFlow && typeof payload.mirrorFlow === 'object' ? payload.mirrorFlow : {};
-      const call = (mirrorFlow.callSession && typeof mirrorFlow.callSession === 'object') ? mirrorFlow.callSession : ((mirrorFlow.call && typeof mirrorFlow.call === 'object') ? mirrorFlow.call : {});
       this.refreshOperationalReflectionCard();
-      if(!call?.active) return;
+      if(!this._hasLiveMirrorCallOnOpenFile()) return;
       this._opsCardTimer = window.setInterval(() => this.refreshOperationalReflectionCard(), 1000);
     },
 
@@ -19869,17 +19935,23 @@ UsersGateUI.init();
       }
     },
 
+    resumeLiveMirrorTimerIfNeeded(){
+      if(!this.els?.wrap?.classList.contains("is-open")) return;
+      if(!this._hasLiveMirrorCallOnOpenFile()) return;
+      this.startOpsCardLoop();
+    },
+
     syncMirrorCallLiveTimer(customerId){
-      const cid = safeTrim(customerId);
-      if(!cid || !this.els?.wrap?.classList.contains("is-open")) return;
-      if(safeTrim(this.currentId) !== cid) return;
+      if(!this._isOpenCustomerId(customerId)) return;
+      if(this._opsCardTimer){
+        this.refreshOperationalReflectionCard();
+        return;
+      }
       this.startOpsCardLoop();
     },
 
     endMirrorCallLiveTimer(customerId){
-      const cid = safeTrim(customerId);
-      if(!cid || !this.els?.wrap?.classList.contains("is-open")) return;
-      if(safeTrim(this.currentId) !== cid) return;
+      if(!this._isOpenCustomerId(customerId)) return;
       this.stopOpsCardLoop();
       this.refreshOperationalReflectionCard();
     },
@@ -53901,6 +53973,7 @@ ${inner}
     _callRunning: false,
     _callPaused: false,
     _callSeconds: 0,
+    _liveStartedAt: "",
     _runtimeId: "mc_" + Date.now() + "_" + Math.random().toString(16).slice(2),
     _mirrorUiPhase: "idle",
     _mirrorNeedsSubPhase: "consent",
@@ -55303,6 +55376,14 @@ ${inner}
       if(!loaded?.ok){
         this._preFlightLoadError = "פרטי התיק לא הגיעו מהשרת. נסה שוב.";
       }
+      /* מנקים שיחה "פעילה" ישנה שנשארה בתיק בלי סשן חי — מונע טיימר מזויף בתיק הלקוח */
+      try{
+        const fresh = this._getFreshCustomerRecord();
+        const store = fresh?.payload?.mirrorFlow?.callSession;
+        if(store?.active && safeTrim(store.runtimeSessionId) !== safeTrim(this._runtimeId) && !this._callRunning){
+          store.active = false;
+        }
+      }catch(_e){}
       if(this.els.customerName) this.els.customerName.textContent = safeTrim(this.selectedCustomer?.fullName) || "לקוח";
       this._paintPreFlightChecklist();
     },
@@ -55381,6 +55462,7 @@ ${inner}
         store.finishedAt = ""; store.durationSec = 0; store.durationText = ""; store.endTime = "";
         store.startTime = new Date(startedAt).toLocaleTimeString("he-IL",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
         store.dateFull  = new Date(startedAt).toLocaleDateString("he-IL",{day:"2-digit",month:"2-digit",year:"numeric"});
+        this._liveStartedAt = startedAt;
         try{ setOpsTouch(rec,{liveState:"in_call",ownerName:safeTrim(Auth?.current?.name),updatedBy:safeTrim(Auth?.current?.name)}); }catch(_e){}
         // תצלום "לפני" לדוח התיקונים — חייב להילכד לפני העריכה הראשונה בשיחה.
         try{ MirrorChangeReport.captureBaseline(rec, { force: true }); }catch(_e){}
@@ -55399,6 +55481,7 @@ ${inner}
       this._timerHandle = window.setInterval(()=>{
         this._callSeconds++;
         if(this.els.callTimer) this.els.callTimer.textContent=this._fmtTime(this._callSeconds);
+        try{ CustomersUI?.syncMirrorCallLiveTimer?.(this.selectedCustomer?.id); }catch(_e){}
       },1000);
       // קודם UI חי + טיימר, אחר כך נוסח; שמירה נדחית (skipNormalize) כדי לא לחסום את ה-main thread
       window.requestAnimationFrame(() => {
@@ -55463,6 +55546,7 @@ ${inner}
       this._hideMirrorFlowPanels();
       this._mirrorUiPhase = "idle";
       this._resetPreFlightChecks();
+      this._liveStartedAt = "";
       try{ CustomersUI?.endMirrorCallLiveTimer?.(rec?.id); }catch(_e){}
     },
 
@@ -56944,6 +57028,7 @@ ${inner}
       if(rec?.payload?.mirrorFlow?.callSession){
         rec.payload.mirrorFlow.callSession.active = false;
       }
+      this._liveStartedAt = "";
       if(rec){
         try{
           setOpsTouch(rec,{ liveState, ownerName:safeTrim(Auth?.current?.name), updatedBy:safeTrim(Auth?.current?.name) });
