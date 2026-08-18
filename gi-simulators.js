@@ -907,7 +907,9 @@
      סל נפרד לגמרי ממנוע «עדכון הנחה» של האשף. לא משנה תעריף, לא משנה onApply, לא כותב
      הנחה לפוליסה. רק בחירה במסך הסימולטור + תצוגת פרמיה לאחר הנחה.
      מופיע גם במרכז הסימולטורים וגם בפתיחה מהאשף, כי ההזרקה רצה אחרי כל _bind.
-     בריאות: האחוז הנבחר חל על כל פרמיית הבריאות. מרפא/סרטן לא נכנסים לכאן. */
+     בריאות: אפשר אחוז אחיד, כיסויים פטורים במחיר מלא (fullPriceIds), או פיצול לפי
+     תעריפון (pctByCover). בפיצול — כיסוי שלא במפה נשאר במחיר מלא. מרפא/סרטן לא
+     נכנסים לסימולטור בריאות. */
   function giSimDiscOpt(id, label, scheduleOrPct, extra){
     const opt = { id: String(id || ""), label: String(label || "") };
     if(Array.isArray(scheduleOrPct)){
@@ -981,6 +983,213 @@
         giSimDiscOpt("phx-m-150up-65a", "65/50/40/30/20/15 — 150₪ ומעלה לפני הנחה", [65,50,40,30,20,15]),
         giSimDiscOpt("phx-m-150up-65b", "65/55/45/35/25/15 — 150₪ ומעלה לפני הנחה", [65,55,45,35,25,15])
       ]
+    },
+    "כלל": {
+      "בריאות": [
+        giSimDiscOpt("cll-h-10-3494", "10% ל-10 שנים — קוד 3494 (ללא רפואה משלימה וללא שירותים לילד)", 10, { years: 10, fullPriceIds: ["complementary", "child_services"] }),
+        giSimDiscOpt("cll-h-15-all", "15% על הכול — קוד 3494 (ללא רפואה משלימה וללא שירותים לילד)", 15, { years: 10, fullPriceIds: ["complementary", "child_services"] }),
+        giSimDiscOpt("cll-h-20-exca", "20% על הכול מלבד סרטן — קוד 3494 (ללא רפואה משלימה וללא שירותים לילד)", 20, { years: 10, fullPriceIds: ["complementary", "child_services"] })
+      ],
+      "מחלות קשות": [
+        giSimDiscOpt("cll-ci-10-250", "10% ל-10 שנים — עד 250,000 ₪", 10, { years: 10 }),
+        giSimDiscOpt("cll-ci-15-250-400", "15% ל-10 שנים — 250,000–400,000 ₪", 15, { years: 10 }),
+        giSimDiscOpt("cll-ci-20-400", "20% ל-10 שנים — מ-400,000 ₪", 20, { years: 10 })
+      ],
+      "סרטן": [
+        giSimDiscOpt("cll-ca-10-3494", "10% ל-10 שנים — פיצוי לסרטן · קוד 3494", 10, { years: 10 })
+      ],
+      "ריסק": [
+        giSimDiscOpt("cll-r-5001", "65/65/60/60/50/40 — קוד 5001 · מינ׳ 1M · גיל 35–60", [65,65,60,60,50,40]),
+        giSimDiscOpt("cll-r-5002", "70/65/60/60/50/40 — קוד 5002 · מינ׳ 1.3M · גיל 30–60", [70,65,60,60,50,40]),
+        giSimDiscOpt("cll-r-3584", "72/62/62/52/52/42 — קוד 3584 · מינ׳ 2M · גיל 30–60", [72,62,62,52,52,42]),
+        giSimDiscOpt("cll-r-3585", "60/60/60/50/50/50 — קוד 3585 · מינ׳ 2M · גיל 30–60", [60,60,60,50,50,50]),
+        giSimDiscOpt("cll-r-3586", "58/58/58/58/58/58 — קוד 3586 · מינ׳ 2M · גיל 30–60", [58,58,58,58,58,58]),
+        giSimDiscOpt("cll-r-3587", "70/58/58/48/48/38 — קוד 3587 · מינ׳ 1.5M · גיל 30–60", [70,58,58,48,48,38]),
+        giSimDiscOpt("cll-r-3588", "70/60/60/45/45/40 — קוד 3588 · מינ׳ 1.5M · גיל 30–60", [70,60,60,45,45,40]),
+        giSimDiscOpt("cll-r-3589", "53/53/53/53/53/53 — קוד 3589 · מינ׳ 1.5M · גיל 30–60", [53,53,53,53,53,53]),
+        giSimDiscOpt("cll-r-3590", "65/55/55/45/45/35 — קוד 3590 · מינ׳ 1M · גיל 30–60", [65,55,55,45,45,35]),
+        giSimDiscOpt("cll-r-3592", "50/50/50/50/50/50 — קוד 3592 · מינ׳ 1M · גיל 30–60", [50,50,50,50,50,50]),
+        giSimDiscOpt("cll-r-sup-1m", "55/50/50/50/50/50 — דרך המפקח · מינ׳ 1M · גיל 35–65", [55,50,50,50,50,50]),
+        giSimDiscOpt("cll-r-3593", "38/38/38/38/38/38 — קוד 3593 · מינ׳ 750K · גיל 30–60", [38,38,38,38,38,38]),
+        giSimDiscOpt("cll-r-3594", "55/45/45/35/35/20 — קוד 3594 · מינ׳ 750K · גיל 30–60", [55,45,45,35,35,20]),
+        giSimDiscOpt("cll-r-3595", "55/45/45/45/45/45 — קוד 3595 · מינ׳ 500K · גיל 30–60", [55,45,45,45,45,45]),
+        giSimDiscOpt("cll-r-sup-500k", "55/45/45/45/45/45 — דרך המפקח · מינ׳ 500K · גיל 35–65", [55,45,45,45,45,45]),
+        giSimDiscOpt("cll-r-3674", "65/60/60/50/45/40 — קוד 3674 · קיץ 2026 · מינ׳ 1M · גיל 50–65 · עד 4M", [65,60,60,50,45,40]),
+        giSimDiscOpt("cll-r-3675", "65/55/55/45/45/35 — קוד 3675 · קיץ 2026 · מינ׳ 750K · גיל 50–65 · עד 4M", [65,55,55,45,45,35]),
+        giSimDiscOpt("cll-r-3676", "60/55/50/40/40/30 — קוד 3676 · קיץ 2026 · מינ׳ 500K · גיל 50–65 · עד 4M", [60,55,50,40,40,30])
+      ],
+      "ריסק משכנתא": [
+        giSimDiscOpt("cll-m-3621", "30/15/15/15/15/15 — כלל סייל 3621 · כל גיל", [30,15,15,15,15,15]),
+        giSimDiscOpt("cll-m-3619", "40/30/20/20/20/20 — כלל סייל 3619 · מעל 500K · כל גיל", [40,30,20,20,20,20]),
+        giSimDiscOpt("cll-m-3618", "30/20/20/20/20/20 — כלל סייל 3618 · מעל 500K · גיל 30–56 · משנה 15: 45%", [30,20,20,20,20,20]),
+        giSimDiscOpt("cll-m-3620", "50/40/30/20/15/15 — כלל סייל 3620 · מעל 750K · גיל 30–56", [50,40,30,20,15,15]),
+        giSimDiscOpt("cll-m-3614", "60/50/40/40/30/30 — כלל סייל 3614 · מעל 1M · גיל 30–56", [60,50,40,40,30,30]),
+        giSimDiscOpt("cll-m-3636", "50/40/30/20/20/15 — כלל סייל 3636 · מעל 1M · גיל 30–65", [50,40,30,20,20,15]),
+        giSimDiscOpt("cll-m-3615", "60/55/45/45/35/30 — כלל סייל 3615 · מעל 1.3M · גיל 30–56", [60,55,45,45,35,30]),
+        giSimDiscOpt("cll-m-3622", "43/43/43/43/43/43 — כלל סייל 3622 · מעל 1.3M · גיל 30–56", [43,43,43,43,43,43]),
+        giSimDiscOpt("cll-m-3616", "65/55/55/45/45/35 — כלל סייל 3616 · מעל 1.5M · גיל 30–56", [65,55,55,45,45,35]),
+        giSimDiscOpt("cll-m-3623", "48/48/48/48/48/48 — כלל סייל 3623 · מעל 1.5M · גיל 30–56", [48,48,48,48,48,48]),
+        giSimDiscOpt("cll-m-3617", "53/53/53/53/53/53 — כלל סייל 3617 · מעל 1.8M · גיל 30–56", [53,53,53,53,53,53]),
+        giSimDiscOpt("cll-m-3624", "65/55/50/45/40/35 — זהב 3624 · מעל 1M · גיל 30–56", [65,55,50,45,40,35]),
+        giSimDiscOpt("cll-m-3637", "55/45/35/35/25/10 — זהב 3637 · מעל 1M · גיל 30–65", [55,45,35,35,25,10]),
+        giSimDiscOpt("cll-m-3638", "50/45/45/35/25/25 — זהב 3638 · מעל 1M · גיל 35–60 · משנה 15: 99%", [50,45,45,35,25,25]),
+        giSimDiscOpt("cll-m-3639", "55/50/50/40/30/30 — זהב 3639 · מעל 1.3M · גיל 35–60 · משנה 15: 99%", [55,50,50,40,30,30]),
+        giSimDiscOpt("cll-m-3625", "65/60/55/50/45/35 — זהב 3625 · מעל 1.3M · גיל 30–56", [65,60,55,50,45,35]),
+        giSimDiscOpt("cll-m-3626", "50/50/50/50/50/50 — זהב 3626 · מעל 1.3M · גיל 30–56", [50,50,50,50,50,50]),
+        giSimDiscOpt("cll-m-3627", "70/65/60/55/50/40 — זהב 3627 · מעל 1.5M · גיל 30–56", [70,65,60,55,50,40]),
+        giSimDiscOpt("cll-m-3628", "55/55/55/55/55/55 — זהב 3628 · מעל 1.5M · גיל 30–56", [55,55,55,55,55,55]),
+        giSimDiscOpt("cll-m-3629", "60/60/60/60/60/60 — זהב 3629 · מעל 1.8M · גיל 30–56", [60,60,60,60,60,60]),
+        giSimDiscOpt("cll-m-3635", "70/60/55/50/45/35 — פלטינה 3635 · מעל 1M · גיל 30–56", [70,60,55,50,45,35]),
+        giSimDiscOpt("cll-m-3640", "60/55/55/45/40/35 — פלטינה 3640 · מעל 1M · גיל 30–65", [60,55,55,45,40,35]),
+        giSimDiscOpt("cll-m-3641", "55/50/45/40/35/30 — פלטינה 3641 · מעל 1M · גיל 35–60 · משנה 15: 99%", [55,50,45,40,35,30]),
+        giSimDiscOpt("cll-m-3642", "60/55/55/45/40/35 — פלטינה 3642 · מעל 1.3M · גיל 35–60 · משנה 15: 99%", [60,55,55,45,40,35]),
+        giSimDiscOpt("cll-m-3630", "70/65/60/55/50/40 — פלטינה 3630 · מעל 1.3M · גיל 30–56", [70,65,60,55,50,40]),
+        giSimDiscOpt("cll-m-3631", "55/55/55/55/55/55 — פלטינה 3631 · מעל 1.3M · גיל 30–56", [55,55,55,55,55,55]),
+        giSimDiscOpt("cll-m-3632", "70/70/65/60/55/45 — פלטינה 3632 · מעל 1.5M · גיל 30–56", [70,70,65,60,55,45]),
+        giSimDiscOpt("cll-m-3633", "60/60/60/60/60/60 — פלטינה 3633 · מעל 1.5M · גיל 30–56", [60,60,60,60,60,60]),
+        giSimDiscOpt("cll-m-3634", "65/65/65/65/65/65 — פלטינה 3634 · מעל 1.8M · גיל 30–56", [65,65,65,65,65,65])
+      ]
+    },
+    "הכשרה": {
+      "בריאות": [
+        giSimDiscOpt("hach-h-20-core", "20% ל-10 שנים — תרופות + השתלות + ניתוחים בחו״ל + משלים שב״ן + שקל ראשון (ללא אמבולטורי וללא פרימיום לילד)", 20, { years: 10, fullPriceIds: ["ambulatory_consults", "child_premium"] })
+      ],
+      "מחלות קשות": [
+        giSimDiscOpt("hach-ci-40", "40% ל-10 שנים — מחלות קשות", 40, { years: 10 })
+      ],
+      "ריסק": [
+        giSimDiscOpt("hach-r-100", "55/50/30/15/15/15 — מגן 1 מסלול 100 · 125₪+ ברוטו · חודש ראשון חינם לפי בקשת סוכן", [55,50,30,15,15,15]),
+        giSimDiscOpt("hach-r-200", "60/50/40/30/25/15 — מגן 1 מסלול 200 · 150₪+ ברוטו", [60,50,40,30,25,15]),
+        giSimDiscOpt("hach-r-300", "40/30/15/15/15/15 — מגן 1 מסלול 300 · 100₪+ ברוטו", [40,30,15,15,15,15]),
+        giSimDiscOpt("hach-r-400", "15/15/15/15/15/15 — מגן 1 מסלול 400 · 60₪+ ברוטו", [15,15,15,15,15,15]),
+        giSimDiscOpt("hach-r-silver", "65/60/50/50/50/50 — מגן 1 סילבר · מינ׳ 1M · גיל 35–60 · 200₪+ ברוטו", [65,60,50,50,50,50]),
+        giSimDiscOpt("hach-r-gold", "65/60/50/50/50/50 — מגן 1 גולד · מינ׳ 1.5M · גיל 35–55 · 300₪+ ברוטו · שנים 7–10: 30%", [65,60,50,50,50,50,30,30,30,30])
+      ],
+      "ריסק משכנתא": [
+        giSimDiscOpt("hach-m-100", "55/50/30/15/15/15 — מגן למשכנתא 100–101 · 125₪+ ברוטו · מינ׳ 10 שנים", [55,50,30,15,15,15]),
+        giSimDiscOpt("hach-m-200", "60/50/40/30/25/15 — מגן למשכנתא 200 · 150₪+ ברוטו · מינ׳ 10 שנים", [60,50,40,30,25,15]),
+        giSimDiscOpt("hach-m-500", "40/30/15/15/15/15 — מגן למשכנתא 500 · 100₪+ ברוטו · מינ׳ 10 שנים", [40,30,15,15,15,15]),
+        giSimDiscOpt("hach-m-600", "50/40/30/25/15/15 — מגן למשכנתא 600–601 · 100₪+ ברוטו · מינ׳ 10 שנים", [50,40,30,25,15,15]),
+        giSimDiscOpt("hach-m-700", "50/40/30/25/15/15 — מגן למשכנתא 700/701–702 · 100₪+ ברוטו · מינ׳ 15 שנים · משנה 13: 100%", [50,40,30,25,15,15]),
+        giSimDiscOpt("hach-m-800", "40% לשנים 1–10 — מגן למשכנתא 800 · מינ׳ 1M · 150₪+ ברוטו", [40,40,40,40,40,40,40,40,40,40]),
+        giSimDiscOpt("hach-m-850", "60/50/50/50/50/50 — מגן למשכנתא 850 · מינ׳ 1M · 150₪+ ברוטו · מינ׳ 10 שנים", [60,50,50,50,50,50]),
+        giSimDiscOpt("hach-m-860", "30/30/30/30/30/30 — מגן למשכנתא 860 · 100₪+ ברוטו · שנים 1–15: 30% · 16–20: 20%", [30,30,30,30,30,30])
+      ]
+    },
+    "מגדל": {
+      "בריאות": [
+        giSimDiscOpt("mgd-h-start-21355", "15% ל-10 שנים — START 21355 · רובד א׳ / ניתוחים בישראל / אמבולטורי", 15, { years: 10, pctByCover: { drugs:15, transplant:15, abroad_surgery:15, surgery_first_shekel:15, surgery_shaban:15, surgery_shaban_5000:15, ambulatory_base:15, ambulatory_extended:15, ambulatory_accompany:15, ambulatory_tech:15, fast_diagnosis:15, treatments_general:15, treatments_child_dev:15 } }),
+        giSimDiscOpt("mgd-h-plus-21585", "PLUS 21585 — 15% רובד א׳ + 20% ניתוחים בישראל + כתבי שירות (דורש ניתוחים בישראל)", 15, { years: 10, pctByCover: { drugs:15, transplant:15, abroad_surgery:15, surgery_first_shekel:20, surgery_shaban:20, surgery_shaban_5000:20, complementary:20, online_consult:20, doctor_home:20 } }),
+        giSimDiscOpt("mgd-h-top-21594", "TOP 21594 — 15% רובד א׳ + 25% שקל ראשון + כתבי שירות (דורש שקל ראשון)", 15, { years: 10, pctByCover: { drugs:15, transplant:15, abroad_surgery:15, surgery_first_shekel:25, complementary:25, online_consult:25, doctor_home:25 } })
+      ],
+      "מחלות קשות": [
+        giSimDiscOpt("mgd-ci-20452", "10% ל-20 שנים — 20452 מזור מורחב · גיל 0–65", 10, { years: 20 }),
+        giSimDiscOpt("mgd-ci-20890", "20% ל-10 שנים — 20890 מזור מורחב · גיל 0–65", 20, { years: 10 }),
+        giSimDiscOpt("mgd-ci-start-plus", "20% ל-10 שנים — במסגרת START/PLUS", 20, { years: 10 }),
+        giSimDiscOpt("mgd-ci-top", "25% ל-10 שנים — במסגרת TOP", 25, { years: 10 })
+      ],
+      "סרטן": [
+        giSimDiscOpt("mgd-ca-20452", "10% ל-20 שנים — 20452 מזור לסרטן · גיל 0–65", 10, { years: 20 }),
+        giSimDiscOpt("mgd-ca-20890", "20% ל-10 שנים — 20890 מזור לסרטן · גיל 0–65", 20, { years: 10 }),
+        giSimDiscOpt("mgd-ca-start-plus", "20% ל-10 שנים — במסגרת START/PLUS", 20, { years: 10 }),
+        giSimDiscOpt("mgd-ca-top", "25% ל-10 שנים — במסגרת TOP", 25, { years: 10 })
+      ],
+      "ריסק": [
+        giSimDiscOpt("mgd-r-21527", "45/35/30/15/15/15 — 21527 מדורג עד 1M · עד גיל 39", [45,35,30,15,15,15]),
+        giSimDiscOpt("mgd-r-21533", "45/35/30/15/15/15 — 21533 מדורג עד 1M · עד גיל 39 · חודש חינם", [45,35,30,15,15,15]),
+        giSimDiscOpt("mgd-r-21528", "50/40/35/25/25/25 — 21528 מדורג עד 1M · גיל 40–49", [50,40,35,25,25,25]),
+        giSimDiscOpt("mgd-r-21534", "50/40/35/25/25/25 — 21534 מדורג עד 1M · גיל 40–49 · חודש חינם", [50,40,35,25,25,25]),
+        giSimDiscOpt("mgd-r-21529", "55/55/45/45/35/35 — 21529 מדורג עד 1M · גיל 50–67", [55,55,45,45,35,35]),
+        giSimDiscOpt("mgd-r-21535", "55/55/45/45/35/35 — 21535 מדורג עד 1M · גיל 50–67 · חודש חינם", [55,55,45,45,35,35]),
+        giSimDiscOpt("mgd-r-21530", "55/45/35/25/25/25 — 21530 מדורג 1–3M · עד גיל 39", [55,45,35,25,25,25]),
+        giSimDiscOpt("mgd-r-21536", "55/45/35/25/25/25 — 21536 מדורג 1–3M · עד גיל 39 · חודש חינם", [55,45,35,25,25,25]),
+        giSimDiscOpt("mgd-r-21531", "55/50/45/35/35/35 — 21531 מדורג 1–3M · גיל 40–49", [55,50,45,35,35,35]),
+        giSimDiscOpt("mgd-r-21537", "55/50/45/35/35/35 — 21537 מדורג 1–3M · גיל 40–49 · חודש חינם", [55,50,45,35,35,35]),
+        giSimDiscOpt("mgd-r-21532", "60/60/50/50/40/40 — 21532 מדורג 1–3M · גיל 50–67", [60,60,50,50,40,40]),
+        giSimDiscOpt("mgd-r-21538", "60/60/50/50/40/40 — 21538 מדורג 1–3M · גיל 50–67 · חודש חינם", [60,60,50,50,40,40]),
+        giSimDiscOpt("mgd-r-21721", "70/65/65/55/45/45 — 21721 זהב · 1–3M · 180₪+ לפני הנחה", [70,65,65,55,45,45]),
+        giSimDiscOpt("mgd-r-21722", "70/65/65/55/45/45 — 21722 זהב · 1–3M · 180₪+ לפני הנחה · חודש חינם", [70,65,65,55,45,45]),
+        giSimDiscOpt("mgd-r-21723", "65/65/65/55/50/40 — 21723 זהב · 1–3M · 180₪+ לפני הנחה", [65,65,65,55,50,40]),
+        giSimDiscOpt("mgd-r-21724", "65/65/65/55/50/40 — 21724 זהב · 1–3M · 180₪+ לפני הנחה · חודש חינם", [65,65,65,55,50,40]),
+        giSimDiscOpt("mgd-r-21539", "30/30/30/30/30/30 — 21539 קבוע עד 3M · עד גיל 39", [30,30,30,30,30,30]),
+        giSimDiscOpt("mgd-r-21542", "30/30/30/30/30/30 — 21542 קבוע עד 3M · עד גיל 39 · חודש חינם", [30,30,30,30,30,30]),
+        giSimDiscOpt("mgd-r-21540", "35/35/35/35/35/35 — 21540 קבוע עד 3M · גיל 40–49", [35,35,35,35,35,35]),
+        giSimDiscOpt("mgd-r-21543", "35/35/35/35/35/35 — 21543 קבוע עד 3M · גיל 40–49 · חודש חינם", [35,35,35,35,35,35]),
+        giSimDiscOpt("mgd-r-21541", "45/45/45/45/45/45 — 21541 קבוע עד 3M · גיל 50–67", [45,45,45,45,45,45]),
+        giSimDiscOpt("mgd-r-21544", "45/45/45/45/45/45 — 21544 קבוע עד 3M · גיל 50–67 · חודש חינם", [45,45,45,45,45,45]),
+        giSimDiscOpt("mgd-r-or-point", "40/20/20/20/20/20 — נקודת אור · עד גיל 55 · עד 1M", [40,20,20,20,20,20]),
+        giSimDiscOpt("mgd-r-am", "40/20/20/20/20/20 — ריסק am · עד גיל 46 · מינ׳ 750K", [40,20,20,20,20,20]),
+        giSimDiscOpt("mgd-r-20344", "40/20/20/20/20/20 — 20344 ריסק am · עד גיל 46 · מינ׳ 750K · חודש חינם", [40,20,20,20,20,20]),
+        giSimDiscOpt("mgd-r-21190", "60/60/60/60/60/60 — 21190 חריג · עד 5M · גיל 0–65 · קיזוז 5% נפרע", [60,60,60,60,60,60]),
+        giSimDiscOpt("mgd-r-21191", "60/60/60/60/60/60 — 21191 חריג · עד 5M · גיל 0–65 · קיזוז 5% נפרע · חודש חינם", [60,60,60,60,60,60]),
+        giSimDiscOpt("mgd-r-21192", "50/50/50/50/50/50 — 21192 חריג · עד 5M · גיל 0–65 · תוקן מהדפסה 60/60/60/50", [50,50,50,50,50,50]),
+        giSimDiscOpt("mgd-r-21193", "50/50/50/50/50/50 — 21193 חריג · עד 5M · גיל 0–65 · תוקן מהדפסה 60/60/60/50 · חודש חינם", [50,50,50,50,50,50]),
+        giSimDiscOpt("mgd-r-21194", "70/54/54/54/54/54 — 21194 חריג · עד 5M · גיל 0–65", [70,54,54,54,54,54]),
+        giSimDiscOpt("mgd-r-21195", "70/54/54/54/54/54 — 21195 חריג · עד 5M · גיל 0–65 · חודש חינם", [70,54,54,54,54,54]),
+        giSimDiscOpt("mgd-r-21196", "65/60/55/50/50/50 — 21196 חריג · עד 5M · גיל 0–65", [65,60,55,50,50,50]),
+        giSimDiscOpt("mgd-r-21197", "65/60/55/50/50/50 — 21197 חריג · עד 5M · גיל 0–65 · חודש חינם", [65,60,55,50,50,50])
+      ],
+      "ריסק משכנתא": [
+        giSimDiscOpt("mgd-m-co", "20/20/20/20/20/20 — הסכם חברה · 25% משנה 20", [20,20,20,20,20,20]),
+        giSimDiscOpt("mgd-m-18536", "30/30/30/30/30/30/30/30 — 18536 · עד גיל 69", [30,30,30,30,30,30,30,30]),
+        giSimDiscOpt("mgd-m-18538", "30/30/30/30/30/30 — 18538 · חודשיים חינם", [30,30,30,30,30,30]),
+        giSimDiscOpt("mgd-m-18537", "30/30/30/30/30/30 — 18537 · 3 חודשי חינם", [30,30,30,30,30,30]),
+        giSimDiscOpt("mgd-m-19154", "50/35/20/20/20/20 — 19154 · 55% משנה 15", [50,35,20,20,20,20]),
+        giSimDiscOpt("mgd-m-19155", "50/35/20/20/20/20 — 19155 · 55% משנה 15 · 3 חודשי חינם", [50,35,20,20,20,20]),
+        giSimDiscOpt("mgd-m-21174", "60/45/35/25/25/25 — 21174 · מינ׳ 15 שנים · 60% אחרי 20 שנה", [60,45,35,25,25,25]),
+        giSimDiscOpt("mgd-m-21175", "60/45/35/25/25/25 — 21175 · מינ׳ 15 שנים · 60% אחרי 20 שנה · חודש חינם", [60,45,35,25,25,25]),
+        giSimDiscOpt("mgd-m-21176", "60/45/35/25/25/25 — 21176 · מינ׳ 15 שנים · 60% אחרי 20 שנה · חודשיים חינם", [60,45,35,25,25,25]),
+        giSimDiscOpt("mgd-m-21177", "65/50/40/30/30/30 — 21177 · מינ׳ 25 שנים · 65% אחרי 20 שנה", [65,50,40,30,30,30]),
+        giSimDiscOpt("mgd-m-21178", "65/50/40/30/30/30 — 21178 · מינ׳ 25 שנים · 65% אחרי 20 שנה · חודש חינם", [65,50,40,30,30,30]),
+        giSimDiscOpt("mgd-m-21179", "65/50/40/30/30/30 — 21179 · מינ׳ 25 שנים · 65% אחרי 20 שנה · חודשיים חינם", [65,50,40,30,30,30]),
+        giSimDiscOpt("mgd-m-21550", "45/35/30/15/15/15 — 21550 · מינ׳ 50K · גיל 18–67", [45,35,30,15,15,15]),
+        giSimDiscOpt("mgd-m-21551", "45/35/30/15/15/15 — 21551 · מינ׳ 50K · גיל 18–67 · חודש חינם", [45,35,30,15,15,15])
+      ],
+      "מוות מתאונה": [
+        giSimDiscOpt("mgd-ad-25", "25% קבוע לכל השנים — הסכם חברה · עד 2M", 25, { years: 99 })
+      ]
+    },
+    "מנורה": {
+      "בריאות": [
+        giSimDiscOpt("mnr-h-101527", "101527 — 20% שקל ראשון+ייעוץ · 15% השתלות/תרופות/חו״ל · 10% שב״ן+טכנולוגיות TOP", 20, { years: 10, pctByCover: { surgery_first_shekel:20, ambulatory_consults:20, transplant:15, drugs:15, abroad_surgery:15, surgery_shaban:10, surgery_shaban_5000:10, tech_devices:10 } }),
+        giSimDiscOpt("mnr-h-child-100", "100% ל-10 שנים — ניתוחים שקל ראשון לילד אחד · כניסה עד גיל 10 · רובד בסיס+שקל ראשון לכל המשפחה · מינ׳ הורה + 2 ילדים · לציין מי הילד", 100, { years: 10, pctByCover: { surgery_first_shekel:100 } })
+      ],
+      "מחלות קשות": [
+        giSimDiscOpt("mnr-ci-25-top", "25% ל-10 שנים — קרן אור TOP · 101527 · מינ׳ 100K עד גיל 39 / 50K מגיל 40", 25, { years: 10 })
+      ],
+      "סרטן": [
+        giSimDiscOpt("mnr-ca-15-101527", "15% ל-10 שנים — קרן לחיים · 101527 · מינ׳ 100K", 15, { years: 10 }),
+        giSimDiscOpt("mnr-ca-10-101527", "10% ל-10 שנים — קרן לחיים · 101527 · מינ׳ 100K עד גיל 50 / 50K מגיל 51", 10, { years: 10 })
+      ],
+      "ריסק": [
+        giSimDiscOpt("mnr-r-101316", "60/55/50/40/30/25/20/20/20/20 — 101316 · 60₪+ לאחר הנחה", [60,55,50,40,30,25,20,20,20,20]),
+        giSimDiscOpt("mnr-r-101334", "60/55/55/50/40/35/30/30/30/30 — 101334 · 100₪+ לאחר הנחה · תוקן משנה ב׳ 60→55", [60,55,55,50,40,35,30,30,30,30]),
+        giSimDiscOpt("mnr-r-101317", "60/60/55/55/45/40/30/30/30/30 — 101317 · 140₪+ לאחר הנחה", [60,60,55,55,45,40,30,30,30,30]),
+        giSimDiscOpt("mnr-r-101318", "65/60/55/55/50/40/30/30/30/30 — 101318 · 280₪+ לאחר הנחה", [65,60,55,55,50,40,30,30,30,30]),
+        giSimDiscOpt("mnr-r-101340", "20% לכל חיי הפוליסה — 101340", 20, { years: 99 }),
+        giSimDiscOpt("mnr-r-100878", "15/15/15/15/15/15 — 100878", [15,15,15,15,15,15]),
+        giSimDiscOpt("mnr-r-101136", "30/30/20/20/15/15 — 101136 · מינ׳ 500K", [30,30,20,20,15,15]),
+        giSimDiscOpt("mnr-r-100973", "50/45/30/25/20/15 — 100973 זוגי · מינ׳ 500K", [50,45,30,25,20,15]),
+        giSimDiscOpt("mnr-r-101212", "45/40/35/30/25/20/15/15 — 101212 · גיל 25+ · מינ׳ 500K", [45,40,35,30,25,20,15,15]),
+        giSimDiscOpt("mnr-r-100977", "50/40/30/30/20/15 — 100977 · גיל 25+ · מינ׳ 750K", [50,40,30,30,20,15]),
+        giSimDiscOpt("mnr-r-101211", "60/50/40/30/25/15/15/15 — 101211 · גיל 25+ · מינ׳ 1M", [60,50,40,30,25,15,15,15]),
+        giSimDiscOpt("mnr-r-101137", "30/30/30/20/20/20/15/15 — 101137 · גיל 25+ · מינ׳ 1M", [30,30,30,20,20,20,15,15]),
+        giSimDiscOpt("mnr-r-101139", "60/55/45/35/25/25/25/25 — 101139 מעשנים · גיל 30+ · מינ׳ 1M", [60,55,45,35,25,25,25,25]),
+        giSimDiscOpt("mnr-r-101338", "65/65/60/60/50/40/30/30/30/30 — 101338 מעשנים · גיל 25+ · מינ׳ 1M", [65,65,60,60,50,40,30,30,30,30]),
+        giSimDiscOpt("mnr-r-101558", "65/65/60/60/60/50/40/30/20/10 — 101558 חריג · נטו 125₪ לאחר הנחה · עד 31.03.2026", [65,65,60,60,60,50,40,30,20,10]),
+        giSimDiscOpt("mnr-r-101569", "15/10/5 — 101569 שנה של הנחות · מינ׳ 500K · מקס׳ 2M · כניסה 25–60 · תום 80 · 30% משנה 16", [15,10,5]),
+        giSimDiscOpt("mnr-r-101276", "15/10/5 — 101276 שנה של הנחות · מינ׳ 500K · מקס׳ 2M · כניסה 25–60 · תום 80", [15,10,5])
+      ],
+      "ריסק משכנתא": [
+        giSimDiscOpt("mnr-m-101341", "20% לכל חיי הפוליסה — 101341", 20, { years: 99 }),
+        giSimDiscOpt("mnr-m-101431", "30/25/20/15/15/15 — 101431", [30,25,20,15,15,15]),
+        giSimDiscOpt("mnr-m-101141", "30/30/20/20/15/15 — 101141 · מינ׳ 500K", [30,30,20,20,15,15]),
+        giSimDiscOpt("mnr-m-101144", "45/40/30/20/15/15 — 101144 · גיל 25+ · מינ׳ 750K", [45,40,30,20,15,15]),
+        giSimDiscOpt("mnr-m-101146", "40/30/25/15/15/15 — 101146 שלמות 462 · גיל 25+ · מינ׳ 500K · 100% משנה 13", [40,30,25,15,15,15]),
+        giSimDiscOpt("mnr-m-101149", "50/40/30/25/15/15 — 101149 · גיל 25+ · מינ׳ 500K", [50,40,30,25,15,15]),
+        giSimDiscOpt("mnr-m-101145", "55/45/40/30/20/20/20/20 — 101145 · גיל 30+ · מינ׳ 1M", [55,45,40,30,20,20,20,20]),
+        giSimDiscOpt("mnr-m-101151", "60/50/40/30/20/20/20/20 — 101151 · גיל 40+ · מינ׳ 1M", [60,50,40,30,20,20,20,20])
+      ]
     }
   };
 
@@ -1011,8 +1220,40 @@
     if(!Number.isFinite(p) || p <= 0) return ag / 100;
     return Math.round(ag * (100 - p) / 100) / 100;
   }
+  function giSimCoverDiscountPct(opt, coverId){
+    if(!opt) return 0;
+    const id = String(coverId || "");
+    const map = opt.pctByCover && typeof opt.pctByCover === "object" ? opt.pctByCover : null;
+    if(map && Object.prototype.hasOwnProperty.call(map, id)){
+      const n = Number(map[id]);
+      return Number.isFinite(n) ? n : 0;
+    }
+    const fullPriceIds = Array.isArray(opt.fullPriceIds) ? opt.fullPriceIds : [];
+    if(fullPriceIds.indexOf(id) >= 0) return 0;
+    if(map) return 0;
+    return giSimDiscountYear1Pct(opt);
+  }
+  function giSimCoverMonthlyAgorot(cover){
+    if(Number.isInteger(cover && cover.monthlyAgorot)) return cover.monthlyAgorot;
+    const ag = Math.round(Number(cover && cover.monthlyPremium) * 100);
+    return Number.isFinite(ag) ? ag : null;
+  }
   function giSimDiscountAfterMonthly(result, opt){
     if(!opt || !result || !result.ok) return null;
+    const covers = Array.isArray(result.covers) ? result.covers : [];
+    const map = opt.pctByCover && typeof opt.pctByCover === "object" ? opt.pctByCover : null;
+    const fullPriceIds = Array.isArray(opt.fullPriceIds) ? opt.fullPriceIds : [];
+    if(covers.length && (map || fullPriceIds.length)){
+      let totalAg = 0;
+      for(let i = 0; i < covers.length; i++){
+        const c = covers[i];
+        const ag = giSimCoverMonthlyAgorot(c);
+        if(!Number.isFinite(ag)) continue;
+        const pct = giSimCoverDiscountPct(opt, (c && c.id) || "");
+        totalAg += Math.round(ag * (100 - pct) / 100);
+      }
+      return totalAg / 100;
+    }
     const monthly = Number(result.monthlyPremium);
     if(!Number.isFinite(monthly)) return null;
     return giSimMoneyAfterPct(monthly, giSimDiscountYear1Pct(opt));
@@ -10674,10 +10915,12 @@
   RiskSimulators.register("מגדל", "סרטן", MigdalCancerSimulator);
 
   const MIGDAL_RISK_MIN_AGE = 18, MIGDAL_RISK_MAX_ENTRY_AGE = 67, MIGDAL_RISK_MAX_TABLE_AGE = 79, MIGDAL_RISK_MIN_ENTRY_DAYS = 0;
+  const MIGDAL_MORT_RISK_MAX_ENTRY_AGE = 69, MIGDAL_MORT_RISK_END_AGE = 85;
   const MIGDAL_RISK_RATE_MAP = {"18": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "19": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "20": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "21": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "22": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "23": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "24": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "25": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "26": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "27": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "28": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "29": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "30": {"mNS": 600, "fNS": 310, "mS": 883, "fS": 615}, "31": {"mNS": 600, "fNS": 310, "mS": 912, "fS": 615}, "32": {"mNS": 600, "fNS": 310, "mS": 940, "fS": 615}, "33": {"mNS": 600, "fNS": 342, "mS": 969, "fS": 615}, "34": {"mNS": 600, "fNS": 383, "mS": 998, "fS": 676}, "35": {"mNS": 600, "fNS": 423, "mS": 1026, "fS": 737}, "36": {"mNS": 600, "fNS": 458, "mS": 1105, "fS": 787}, "37": {"mNS": 600, "fNS": 478, "mS": 1183, "fS": 814}, "38": {"mNS": 600, "fNS": 508, "mS": 1261, "fS": 855}, "39": {"mNS": 664, "fNS": 549, "mS": 1340, "fS": 914}, "40": {"mNS": 691, "fNS": 557, "mS": 1418, "fS": 921}, "41": {"mNS": 758, "fNS": 622, "mS": 1546, "fS": 1015}, "42": {"mNS": 834, "fNS": 721, "mS": 1689, "fS": 1162}, "43": {"mNS": 924, "fNS": 830, "mS": 1861, "fS": 1321}, "44": {"mNS": 1008, "fNS": 953, "mS": 2019, "fS": 1500}, "45": {"mNS": 1112, "fNS": 1108, "mS": 2213, "fS": 1725}, "46": {"mNS": 1232, "fNS": 1277, "mS": 2438, "fS": 1968}, "47": {"mNS": 1366, "fNS": 1455, "mS": 2688, "fS": 2224}, "48": {"mNS": 1518, "fNS": 1641, "mS": 2968, "fS": 2485}, "49": {"mNS": 1728, "fNS": 1817, "mS": 3359, "fS": 2732}, "50": {"mNS": 1951, "fNS": 1901, "mS": 3771, "fS": 2838}, "51": {"mNS": 2192, "fNS": 1975, "mS": 4212, "fS": 2927}, "52": {"mNS": 2433, "fNS": 2078, "mS": 4646, "fS": 3059}, "53": {"mNS": 2692, "fNS": 2260, "mS": 5111, "fS": 3303}, "54": {"mNS": 2963, "fNS": 2518, "mS": 5591, "fS": 3653}, "55": {"mNS": 3294, "fNS": 2836, "mS": 6179, "fS": 4083}, "56": {"mNS": 3646, "fNS": 3187, "mS": 6800, "fS": 4556}, "57": {"mNS": 4058, "fNS": 3481, "mS": 7524, "fS": 4943}, "58": {"mNS": 4544, "fNS": 3761, "mS": 8375, "fS": 5305}, "59": {"mNS": 5220, "fNS": 4164, "mS": 9563, "fS": 5833}, "60": {"mNS": 5943, "fNS": 4705, "mS": 10824, "fS": 6546}, "61": {"mNS": 6811, "fNS": 5431, "mS": 12330, "fS": 7505}, "62": {"mNS": 7787, "fNS": 6309, "mS": 14015, "fS": 8659}, "63": {"mNS": 8767, "fNS": 7263, "mS": 15684, "fS": 9903}, "64": {"mNS": 9768, "fNS": 8179, "mS": 17370, "fS": 11081}, "65": {"mNS": 10911, "fNS": 9059, "mS": 19287, "fS": 12195}, "66": {"mNS": 12298, "fNS": 9881, "mS": 21608, "fS": 13218}, "67": {"mNS": 13950, "fNS": 10778, "mS": 24364, "fS": 14330}, "68": {"mNS": 15586, "fNS": 11932, "mS": 27058, "fS": 15762}, "69": {"mNS": 17123, "fNS": 13214, "mS": 29548, "fS": 17347}, "70": {"mNS": 18630, "fNS": 14907, "mS": 31956, "fS": 19447}, "71": {"mNS": 21076, "fNS": 16842, "mS": 36235, "fS": 22019}, "72": {"mNS": 23995, "fNS": 19128, "mS": 41351, "fS": 25060}, "73": {"mNS": 27590, "fNS": 21361, "mS": 47655, "fS": 28047}, "74": {"mNS": 31056, "fNS": 23514, "mS": 53767, "fS": 30942}, "75": {"mNS": 34183, "fNS": 25383, "mS": 59317, "fS": 33475}, "76": {"mNS": 37058, "fNS": 27492, "mS": 64450, "fS": 36333}, "77": {"mNS": 40175, "fNS": 29725, "mS": 70025, "fS": 39383}, "78": {"mNS": 43783, "fNS": 32525, "mS": 76500, "fS": 43183}, "79": {"mNS": 47700, "fNS": 36525, "mS": 83533, "fS": 48592}};
-  function lookupMigdalRiskRate({ age, gender, smoker }){
+  function lookupMigdalRiskRate({ age, gender, smoker, maxEntryAge }){
     const ageNum = Number(age); if(!Number.isInteger(ageNum)) return { ok:false, reason:"age_missing" };
-    if(ageNum < MIGDAL_RISK_MIN_AGE || ageNum > MIGDAL_RISK_MAX_ENTRY_AGE) return { ok:false, reason:"age_out_of_range" };
+    const cap = Number.isInteger(maxEntryAge) ? maxEntryAge : MIGDAL_RISK_MAX_ENTRY_AGE;
+    if(ageNum < MIGDAL_RISK_MIN_AGE || ageNum > cap) return { ok:false, reason:"age_out_of_range" };
     const row = MIGDAL_RISK_RATE_MAP[String(ageNum)]; if(!row) return { ok:false, reason:"age_out_of_range" };
     if(gender !== "זכר" && gender !== "נקבה") return { ok:false, reason:"gender_missing" };
     if(smoker !== true && smoker !== false) return { ok:false, reason:"smoker_missing" };
@@ -10685,10 +10928,10 @@
     const rateAgorot = row[key]; if(rateAgorot == null || !Number.isInteger(rateAgorot)) return { ok:false, reason:"rate_missing" };
     return { ok:true, rateAgorot, ratePerHundredThousand: migdalAgorotToShekels(rateAgorot) };
   }
-  function computeMigdalRiskPremium({ age, gender, smoker, sumInsured }){
+  function computeMigdalRiskPremium({ age, gender, smoker, sumInsured, maxEntryAge }){
     const sum = Number(String(sumInsured == null ? "" : sumInsured).replace(/[^\d.-]/g, ""));
     if(!Number.isFinite(sum) || sum <= 0) return { ok:false, reason:"sum_missing" };
-    const rate = lookupMigdalRiskRate({ age, gender, smoker }); if(!rate.ok) return rate;
+    const rate = lookupMigdalRiskRate({ age, gender, smoker, maxEntryAge }); if(!rate.ok) return rate;
     const monthlyAgorot = Math.round(rate.rateAgorot * (sum / 100000));
     return { ok:true, monthlyAgorot, monthlyPremium: migdalAgorotToShekels(monthlyAgorot), annualPremium: migdalAgorotToShekels(monthlyAgorot * 12), ratePerHundredThousand: rate.ratePerHundredThousand, sumInsured: sum };
   }
@@ -10698,7 +10941,21 @@
     age_out_of_range:`לא נמצא תעריף לכניסה בגיל זה (טווח כניסה ${MIGDAL_RISK_MIN_AGE}–${MIGDAL_RISK_MAX_ENTRY_AGE}; טבלה עד ${MIGDAL_RISK_MAX_TABLE_AGE}).`,
     gender_missing:"יש לבחור מין.", smoker_missing:"יש לבחור סטטוס עישון.", sum_missing:"יש להזין סכום ביטוח.", rate_missing:"לא נמצא תעריף מתאים."
   };
-  const MigdalRiskSimulator = {
+  function createMigdalOr1RiskSimulator(cfg){
+    const FP = cfg.fieldPrefix;
+    const modalId = cfg.modalId;
+    const title = cfg.title;
+    const ariaLabel = cfg.ariaLabel || title;
+    const subtitle = cfg.subtitle || "";
+    const maxEntry = Number.isInteger(cfg.maxEntryAge) ? cfg.maxEntryAge : MIGDAL_RISK_MAX_ENTRY_AGE;
+    const MSG = {
+      birth_missing:"יש להזין תאריך לידה תקין לפני חישוב הפרמיה.",
+      entry_too_young:"גיל הכניסה המינימלי הוא 0 ימים.",
+      age_missing:"יש להזין תאריך לידה תקין לפני חישוב הפרמיה.",
+      age_out_of_range:`לא נמצא תעריף לכניסה בגיל זה (טווח כניסה ${MIGDAL_RISK_MIN_AGE}–${maxEntry}; טבלה עד ${MIGDAL_RISK_MAX_TABLE_AGE}).`,
+      gender_missing:"יש לבחור מין.", smoker_missing:"יש לבחור סטטוס עישון.", sum_missing:"יש להזין סכום ביטוח.", rate_missing:"לא נמצא תעריף מתאים."
+    };
+    return {
     _modal:null,_ctx:null,_state:{},_activeInsuredId:null,_escHandler:null,_confirmSwitch:null,_showFinalSummary:false,
     open(ctx){ this.close(); this._ctx = ctx || {}; const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : []; this._state = {}; insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); }); this._activeInsuredId = insureds[0]?.id || null; this._confirmSwitch = null; this._showFinalSummary = false; this._mount(); this._render(); },
     _prefillFromInsured(ins){
@@ -10710,17 +10967,17 @@
       const st = { birthDate, birthDateSource: birthDate ? "step1" : "", insuranceStartDate, insuranceStartDateSource: insuranceStartDate ? "ctx" : "", age:"", ageSource: birthDate ? "step1" : "", ageRaw:null, entryDays:null, gender, genderSource: gender ? "step1" : "", smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "", occupation, occupationSource: occupation ? "step1" : "", sumInsured:"", result:null, error:null, savedAt:null, dirtySinceSave:false };
       this._syncAge(st); return st;
     },
-    _syncAge(st){ return riskSimSyncAgeFromBirthDate(st, { minAge: MIGDAL_RISK_MIN_AGE, maxAge: MIGDAL_RISK_MAX_ENTRY_AGE, minEntryDays: MIGDAL_RISK_MIN_ENTRY_DAYS, asOfDate: st?.insuranceStartDate || "" }); },
+    _syncAge(st){ return riskSimSyncAgeFromBirthDate(st, { minAge: MIGDAL_RISK_MIN_AGE, maxAge: maxEntry, minEntryDays: MIGDAL_RISK_MIN_ENTRY_DAYS, asOfDate: st?.insuranceStartDate || "" }); },
     _isInsuredRelevant(_ins){ return true; },
     close(){ if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; } if(this._modal){ const m = this._modal; m.classList.add("giValModal--leaving"); window.setTimeout(() => m.remove(), 200); this._modal = null; } this._ctx = null; },
-    _mount(){ const modal = document.createElement("div"); modal.id = "lcMgdRiskModal"; modal.className = "giValModal lcMgdRiskModal"; modal.setAttribute("role","dialog"); modal.setAttribute("aria-modal","true"); modal.setAttribute("aria-label","סימולטור ריסק מגדל אור 1"); document.body.appendChild(modal); this._modal = modal; this._escHandler = (ev) => { if(ev.key === "Escape") this.close(); }; document.addEventListener("keydown", this._escHandler); requestAnimationFrame(() => modal.classList.add("giValModal--visible")); },
+    _mount(){ const modal = document.createElement("div"); modal.id = modalId; modal.className = "giValModal lcMgdRiskModal"; modal.setAttribute("role","dialog"); modal.setAttribute("aria-modal","true"); modal.setAttribute("aria-label", ariaLabel); document.body.appendChild(modal); this._modal = modal; this._escHandler = (ev) => { if(ev.key === "Escape") this.close(); }; document.addEventListener("keydown", this._escHandler); requestAnimationFrame(() => modal.classList.add("giValModal--visible")); },
     _getInsuredLabel(insId){ const ins = (Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []).find((x) => x.id === insId); return ins ? safeTrim(ins.label) || "מבוטח" : "מבוטח"; },
     _calc(insuredId){
       const st = this._state[insuredId]; if(!st) return;
       const ageSync = this._syncAge(st);
-      if(!ageSync.ok){ st.result = null; st.error = MIGDAL_RISK_MSG[ageSync.reason] || MIGDAL_RISK_MSG.birth_missing; st.dirtySinceSave = true; this._render(); return; }
-      const calc = computeMigdalRiskPremium({ age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: st.sumInsured });
-      if(calc.ok){ st.result = calc; st.error = null; } else { st.result = null; st.error = MIGDAL_RISK_MSG[calc.reason] || "לא נמצא תעריף מתאים."; }
+      if(!ageSync.ok){ st.result = null; st.error = MSG[ageSync.reason] || MSG.birth_missing; st.dirtySinceSave = true; this._render(); return; }
+      const calc = computeMigdalRiskPremium({ age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: st.sumInsured, maxEntryAge: maxEntry });
+      if(calc.ok){ st.result = calc; st.error = null; } else { st.result = null; st.error = MSG[calc.reason] || "לא נמצא תעריף מתאים."; }
       st.dirtySinceSave = true; this._render();
     },
     _render(){
@@ -10728,46 +10985,47 @@
       const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []; const isMulti = insureds.length > 1;
       if(this._showFinalSummary){ this._renderFinalSummary(insureds); return; }
       const activeId = this._activeInsuredId; const st = this._state[activeId] || this._prefillFromInsured(null); const isStandalone = !!this._ctx?.standalone;
-      const tabsHtml = isMulti ? `<div class="lcMgdRisk__tabs">${insureds.map((ins) => { const s = this._state[ins.id]; const statusCls = s?.savedAt ? " has-saved" : (s?.result ? " has-result" : ""); return `<button type="button" class="lcMgdRisk__tab${ins.id === activeId ? " is-active" : ""}${statusCls}" data-mgdr-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${s?.savedAt ? " 🟢" : ""}</button>`; }).join("")}</div>` : "";
+      const tabsHtml = isMulti ? `<div class="lcMgdRisk__tabs">${insureds.map((ins) => { const s = this._state[ins.id]; const statusCls = s?.savedAt ? " has-saved" : (s?.result ? " has-result" : ""); return `<button type="button" class="lcMgdRisk__tab${ins.id === activeId ? " is-active" : ""}${statusCls}" data-${FP}-tab="${escapeHtml(ins.id)}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}${s?.savedAt ? " 🟢" : ""}</button>`; }).join("")}</div>` : "";
       const ageSync = this._syncAge(st);
-      const ageHintHtml = !st.birthDate ? `<div class="lcMgdRisk__hint lcMgdRisk__hint--warn">${isStandalone ? "יש להזין תאריך לידה" : "לא נמצא תאריך לידה — יש להזין"}</div>` : (!ageSync.ok ? `<div class="lcMgdRisk__hint lcMgdRisk__hint--warn">${escapeHtml(MIGDAL_RISK_MSG[ageSync.reason] || "תאריך לא תקין")}</div>` : `<div class="lcMgdRisk__hint">גיל ביטוחי בתחילת הביטוח: <strong>${escapeHtml(String(ageSync.age))}</strong> (כניסה ${MIGDAL_RISK_MIN_AGE}–${MIGDAL_RISK_MAX_ENTRY_AGE})</div>`);
+      const ageHintHtml = !st.birthDate ? `<div class="lcMgdRisk__hint lcMgdRisk__hint--warn">${isStandalone ? "יש להזין תאריך לידה" : "לא נמצא תאריך לידה — יש להזין"}</div>` : (!ageSync.ok ? `<div class="lcMgdRisk__hint lcMgdRisk__hint--warn">${escapeHtml(MSG[ageSync.reason] || "תאריך לא תקין")}</div>` : `<div class="lcMgdRisk__hint">גיל ביטוחי בתחילת הביטוח: <strong>${escapeHtml(String(ageSync.age))}</strong> (כניסה ${MIGDAL_RISK_MIN_AGE}–${maxEntry})</div>`);
       const genderHintHtml = (isStandalone || st.gender) ? "" : `<div class="lcMgdRisk__hint lcMgdRisk__hint--warn">יש לבחור מין</div>`;
       const smokerHintHtml = (isStandalone || st.smoker === true || st.smoker === false) ? "" : `<div class="lcMgdRisk__hint lcMgdRisk__hint--warn">יש לבחור סטטוס עישון</div>`;
+      const subHtml = subtitle ? `<div class="giValModal__sub">${escapeHtml(subtitle)}</div>` : "";
       const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company) ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini") : "🛡️";
       const occBlockHtml = renderOccupationRiskBlockHtml(assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product), "lcMgdRisk");
       const resultHtml = st.error ? `<div class="lcMgdRisk__result lcMgdRisk__result--error">${escapeHtml(st.error)}</div>` : (st.result ? `<div class="lcMgdRisk__result lcMgdRisk__result--ok"><div class="lcMgdRisk__resultRow"><span>תעריף ל-₪100,000</span><strong>₪${escapeHtml(formatMigdalExactAmount(st.result.ratePerHundredThousand))}</strong></div><div class="lcMgdRisk__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatMigdalExactAmount(st.result.annualPremium))}</strong></div><div class="lcMgdRisk__resultRow lcMgdRisk__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatMigdalExactAmount(st.result.monthlyPremium))}</strong></div></div>` : "");
       const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
       const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins));
       const allSaved = relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt);
-      const footHtml = isStandalone ? `<div class="giValModal__foot lcMgdRisk__foot"><button type="button" class="btn btn--primary" data-mgdr-close="1">סגור</button></div>` : (!isMulti ? `<div class="giValModal__foot lcMgdRisk__foot"><button type="button" class="btn giValModal__closeBtn" data-mgdr-close="1">ביטול</button><button type="button" class="btn btn--primary" data-mgdr-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button></div>` : `<div class="giValModal__foot lcMgdRisk__foot"><button type="button" class="btn giValModal__closeBtn" data-mgdr-close="1">ביטול</button><button type="button" class="btn btn--secondary" data-mgdr-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button><button type="button" class="btn btn--primary" data-mgdr-finalconfirm="1"${allSaved ? "" : " disabled"}>אישור סופי</button></div>`);
-      const confirmOverlayHtml = this._confirmSwitch ? `<div class="lcMgdRisk__overlay"><div class="lcMgdRisk__overlayCard"><div class="lcMgdRisk__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}.</div><div class="lcMgdRisk__overlayBtns"><button type="button" class="btn btn--primary" data-mgdr-switch="save">שמור ועבור</button><button type="button" class="btn btn--secondary" data-mgdr-switch="discard">עבור ללא שמירה</button><button type="button" class="btn" data-mgdr-switch="cancel">ביטול</button></div></div></div>` : "";
-      this._modal.innerHTML = `<div class="giValModal__backdrop" data-mgdr-close="1"></div><div class="giValModal__card lcMgdRisk__card"><div class="giValModal__head"><span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span><div class="giValModal__headText"><div class="giValModal__title">סימולטור ריסק מגדל · אור 1</div></div><button type="button" class="lcMgdRisk__closeX" data-mgdr-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body lcMgdRisk__body">${tabsHtml}${isStandalone ? `<div class="lcMgdRisk__insuredLabel lcMgdRisk__insuredLabel--standalone">מצב חישוב עצמאי</div>` : `<div class="lcMgdRisk__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}<div class="lcMgdRisk__grid"><div class="lcMgdRisk__field"><label class="lcMgdRisk__label">תאריך לידה</label><input class="lcMgdRisk__input lcMgdRisk__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-mgdr-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />${ageHintHtml}</div><div class="lcMgdRisk__field"><label class="lcMgdRisk__label">תחילת ביטוח</label><input class="lcMgdRisk__input lcMgdRisk__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-mgdr-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" /></div><div class="lcMgdRisk__field"><label class="lcMgdRisk__label">מין</label><div class="lcMgdRisk__segmented"><button type="button" class="lcMgdRisk__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-mgdr-field="gender" data-mgdr-value="זכר">זכר</button><button type="button" class="lcMgdRisk__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-mgdr-field="gender" data-mgdr-value="נקבה">נקבה</button></div>${genderHintHtml}</div><div class="lcMgdRisk__field"><label class="lcMgdRisk__label">עישון</label><div class="lcMgdRisk__segmented"><button type="button" class="lcMgdRisk__segBtn${st.smoker === false ? " is-active" : ""}" data-mgdr-field="smoker" data-mgdr-value="0">לא מעשן/ת</button><button type="button" class="lcMgdRisk__segBtn${st.smoker === true ? " is-active" : ""}" data-mgdr-field="smoker" data-mgdr-value="1">מעשן/ת</button></div>${smokerHintHtml}</div><div class="lcMgdRisk__field lcMgdRisk__field--wide"><label class="lcMgdRisk__label">סכום ביטוח (₪)</label><input class="lcMgdRisk__input" type="text" inputmode="numeric" data-mgdr-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="1,000,000" /></div><div class="lcMgdRisk__field lcMgdRisk__field--wide"><label class="lcMgdRisk__label">עיסוק</label><input class="lcMgdRisk__input" type="text" data-mgdr-field="occupation" value="${escapeHtml(st.occupation || "")}" autocomplete="off" /></div></div>${occBlockHtml}<button type="button" class="btn btn--secondary lcMgdRisk__calcBtn" data-mgdr-calc="1">חשב פרמיה</button>${resultHtml}</div>${footHtml}${confirmOverlayHtml}</div>`;
+      const footHtml = isStandalone ? `<div class="giValModal__foot lcMgdRisk__foot"><button type="button" class="btn btn--primary" data-${FP}-close="1">סגור</button></div>` : (!isMulti ? `<div class="giValModal__foot lcMgdRisk__foot"><button type="button" class="btn giValModal__closeBtn" data-${FP}-close="1">ביטול</button><button type="button" class="btn btn--primary" data-${FP}-apply="1"${anyApplyable ? "" : " disabled"}>החל על הפוליסה</button></div>` : `<div class="giValModal__foot lcMgdRisk__foot"><button type="button" class="btn giValModal__closeBtn" data-${FP}-close="1">ביטול</button><button type="button" class="btn btn--secondary" data-${FP}-save="1"${st.result?.ok ? "" : " disabled"}>שמור מבוטח זה</button><button type="button" class="btn btn--primary" data-${FP}-finalconfirm="1"${allSaved ? "" : " disabled"}>אישור סופי</button></div>`);
+      const confirmOverlayHtml = this._confirmSwitch ? `<div class="lcMgdRisk__overlay"><div class="lcMgdRisk__overlayCard"><div class="lcMgdRisk__overlayText">קיימים שינויים שלא נשמרו עבור ${escapeHtml(this._getInsuredLabel(activeId))}.</div><div class="lcMgdRisk__overlayBtns"><button type="button" class="btn btn--primary" data-${FP}-switch="save">שמור ועבור</button><button type="button" class="btn btn--secondary" data-${FP}-switch="discard">עבור ללא שמירה</button><button type="button" class="btn" data-${FP}-switch="cancel">ביטול</button></div></div></div>` : "";
+      this._modal.innerHTML = `<div class="giValModal__backdrop" data-${FP}-close="1"></div><div class="giValModal__card lcMgdRisk__card"><div class="giValModal__head"><span class="giValModal__headIcon" aria-hidden="true">${headLogoHtml}</span><div class="giValModal__headText"><div class="giValModal__title">${escapeHtml(title)}</div>${subHtml}</div><button type="button" class="lcMgdRisk__closeX" data-${FP}-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body lcMgdRisk__body">${tabsHtml}${isStandalone ? `<div class="lcMgdRisk__insuredLabel lcMgdRisk__insuredLabel--standalone">מצב חישוב עצמאי</div>` : `<div class="lcMgdRisk__insuredLabel">מחשב עבור: <strong>${escapeHtml(this._getInsuredLabel(activeId))}</strong></div>`}<div class="lcMgdRisk__grid"><div class="lcMgdRisk__field"><label class="lcMgdRisk__label">תאריך לידה</label><input class="lcMgdRisk__input lcMgdRisk__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-${FP}-field="birthDate" value="${escapeHtml(st.birthDate || "")}" />${ageHintHtml}</div><div class="lcMgdRisk__field"><label class="lcMgdRisk__label">תחילת ביטוח</label><input class="lcMgdRisk__input lcMgdRisk__input--date" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-${FP}-field="insuranceStartDate" value="${escapeHtml(st.insuranceStartDate || "")}" /></div><div class="lcMgdRisk__field"><label class="lcMgdRisk__label">מין</label><div class="lcMgdRisk__segmented"><button type="button" class="lcMgdRisk__segBtn${st.gender === "זכר" ? " is-active" : ""}" data-${FP}-field="gender" data-${FP}-value="זכר">זכר</button><button type="button" class="lcMgdRisk__segBtn${st.gender === "נקבה" ? " is-active" : ""}" data-${FP}-field="gender" data-${FP}-value="נקבה">נקבה</button></div>${genderHintHtml}</div><div class="lcMgdRisk__field"><label class="lcMgdRisk__label">עישון</label><div class="lcMgdRisk__segmented"><button type="button" class="lcMgdRisk__segBtn${st.smoker === false ? " is-active" : ""}" data-${FP}-field="smoker" data-${FP}-value="0">לא מעשן/ת</button><button type="button" class="lcMgdRisk__segBtn${st.smoker === true ? " is-active" : ""}" data-${FP}-field="smoker" data-${FP}-value="1">מעשן/ת</button></div>${smokerHintHtml}</div><div class="lcMgdRisk__field lcMgdRisk__field--wide"><label class="lcMgdRisk__label">סכום ביטוח (₪)</label><input class="lcMgdRisk__input" type="text" inputmode="numeric" data-${FP}-field="sumInsured" value="${escapeHtml(st.sumInsured || "")}" placeholder="1,000,000" /></div><div class="lcMgdRisk__field lcMgdRisk__field--wide"><label class="lcMgdRisk__label">עיסוק</label><input class="lcMgdRisk__input" type="text" data-${FP}-field="occupation" value="${escapeHtml(st.occupation || "")}" autocomplete="off" /></div></div>${occBlockHtml}<button type="button" class="btn btn--secondary lcMgdRisk__calcBtn" data-${FP}-calc="1">חשב פרמיה</button>${resultHtml}</div>${footHtml}${confirmOverlayHtml}</div>`;
       this._bind();
     },
     _renderFinalSummary(insureds){
       const rows = insureds.filter((ins) => this._isInsuredRelevant(ins)).map((ins) => { const ok = !!this._state[ins.id]?.savedAt; return `<div class="lcMgdRisk__summaryRow"><span>${ok ? "✓" : "•"}</span><span>${escapeHtml(safeTrim(ins.label) || "מבוטח")}</span><span>${ok ? "הושלם" : "לא נשמר"}</span></div>`; }).join("");
-      this._modal.innerHTML = `<div class="giValModal__backdrop" data-mgdr-close="1"></div><div class="giValModal__card lcMgdRisk__card"><div class="giValModal__head"><div class="giValModal__headText"><div class="giValModal__title">סיכום סימולטור להצעה</div></div><button type="button" class="lcMgdRisk__closeX" data-mgdr-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body lcMgdRisk__body">${rows}</div><div class="giValModal__foot lcMgdRisk__foot"><button type="button" class="btn giValModal__closeBtn" data-mgdr-summary-back="1">חזרה</button><button type="button" class="btn btn--primary" data-mgdr-summary-confirm="1">אישור סופי</button></div></div>`;
+      this._modal.innerHTML = `<div class="giValModal__backdrop" data-${FP}-close="1"></div><div class="giValModal__card lcMgdRisk__card"><div class="giValModal__head"><div class="giValModal__headText"><div class="giValModal__title">סיכום סימולטור להצעה</div></div><button type="button" class="lcMgdRisk__closeX" data-${FP}-close="1" aria-label="סגירה">✕</button></div><div class="giValModal__body lcMgdRisk__body">${rows}</div><div class="giValModal__foot lcMgdRisk__foot"><button type="button" class="btn giValModal__closeBtn" data-${FP}-summary-back="1">חזרה</button><button type="button" class="btn btn--primary" data-${FP}-summary-confirm="1">אישור סופי</button></div></div>`;
       this._bind();
     },
     _bind(){
       const modal = this._modal; if(!modal) return;
-      ensureSegFieldDelegation(modal, this, "mgdr");
-      $$("[data-mgdr-close]", modal).forEach((el) => on(el, "click", () => this.close()));
-      $$("[data-mgdr-tab]", modal).forEach((el) => on(el, "click", () => this._switchInsured(el.getAttribute("data-mgdr-tab"))));
-      $$("[data-mgdr-switch]", modal).forEach((el) => on(el, "click", () => { const action = el.getAttribute("data-mgdr-switch"); const target = this._confirmSwitch?.targetId; this._confirmSwitch = null; if(action === "save"){ this._saveActive(); if(target) this._activeInsuredId = target; this._render(); } else if(action === "discard"){ if(target) this._activeInsuredId = target; this._render(); } else this._render(); }));
-      bindRiskSimDmyField(modal, '[data-mgdr-field="birthDate"]', { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.ageSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
-      bindRiskSimDmyField(modal, '[data-mgdr-field="insuranceStartDate"]', { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val || riskSimTodayDmy(); st.insuranceStartDateSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
-      const sumInput = modal.querySelector('[data-mgdr-field="sumInsured"]');
+      ensureSegFieldDelegation(modal, this, FP);
+      $$(`[data-${FP}-close]`, modal).forEach((el) => on(el, "click", () => this.close()));
+      $$(`[data-${FP}-tab]`, modal).forEach((el) => on(el, "click", () => this._switchInsured(el.getAttribute(`data-${FP}-tab`))));
+      $$(`[data-${FP}-switch]`, modal).forEach((el) => on(el, "click", () => { const action = el.getAttribute(`data-${FP}-switch`); const target = this._confirmSwitch?.targetId; this._confirmSwitch = null; if(action === "save"){ this._saveActive(); if(target) this._activeInsuredId = target; this._render(); } else if(action === "discard"){ if(target) this._activeInsuredId = target; this._render(); } else this._render(); }));
+      bindRiskSimDmyField(modal, `[data-${FP}-field="birthDate"]`, { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.ageSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
+      bindRiskSimDmyField(modal, `[data-${FP}-field="insuranceStartDate"]`, { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val || riskSimTodayDmy(); st.insuranceStartDateSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
+      const sumInput = modal.querySelector(`[data-${FP}-field="sumInsured"]`);
       if(sumInput) on(sumInput, "input", () => { const st = this._state[this._activeInsuredId]; if(!st) return; const formatted = formatRiskSimSumInsuredDigits(sumInput.value); sumInput.value = formatted; try{ sumInput.setSelectionRange(formatted.length, formatted.length); }catch(_e){} st.sumInsured = formatted; st.result = null; st.error = null; st.dirtySinceSave = true; });
-      const occInput = modal.querySelector('[data-mgdr-field="occupation"]');
+      const occInput = modal.querySelector(`[data-${FP}-field="occupation"]`);
       if(occInput){ on(occInput, "input", () => { const st = this._state[this._activeInsuredId]; if(!st) return; st.occupation = safeTrim(occInput.value); st.occupationSource = "manual"; st.dirtySinceSave = true; }); on(occInput, "change", () => this._render()); on(occInput, "blur", () => this._render()); }
-      const calcBtn = modal.querySelector("[data-mgdr-calc]"); if(calcBtn) on(calcBtn, "click", () => this._calc(this._activeInsuredId));
-      const applyBtn = modal.querySelector("[data-mgdr-apply]"); if(applyBtn) on(applyBtn, "click", () => this._apply());
-      const saveBtn = modal.querySelector("[data-mgdr-save]"); if(saveBtn) on(saveBtn, "click", () => this._saveActive());
-      const finalBtn = modal.querySelector("[data-mgdr-finalconfirm]");
+      const calcBtn = modal.querySelector(`[data-${FP}-calc]`); if(calcBtn) on(calcBtn, "click", () => this._calc(this._activeInsuredId));
+      const applyBtn = modal.querySelector(`[data-${FP}-apply]`); if(applyBtn) on(applyBtn, "click", () => this._apply());
+      const saveBtn = modal.querySelector(`[data-${FP}-save]`); if(saveBtn) on(saveBtn, "click", () => this._saveActive());
+      const finalBtn = modal.querySelector(`[data-${FP}-finalconfirm]`);
       if(finalBtn) on(finalBtn, "click", () => { const insureds = Array.isArray(this._ctx?.insureds) ? this._ctx.insureds : []; const relevant = insureds.filter((ins) => this._isInsuredRelevant(ins)); if(!(relevant.length > 0 && relevant.every((ins) => !!this._state[ins.id]?.savedAt))){ window.showToast?.({ title: "לא כל המבוטחים נשמרו", text: "יש לשמור לפני אישור סופי.", variant: "warn" }); return; } this._showFinalSummary = true; this._render(); });
-      const summaryBackBtn = modal.querySelector("[data-mgdr-summary-back]"); if(summaryBackBtn) on(summaryBackBtn, "click", () => { this._showFinalSummary = false; this._render(); });
-      const summaryConfirmBtn = modal.querySelector("[data-mgdr-summary-confirm]"); if(summaryConfirmBtn) on(summaryConfirmBtn, "click", () => { try{ this._ctx?.onFinalConfirm?.(); }catch(_e){} this.close(); });
+      const summaryBackBtn = modal.querySelector(`[data-${FP}-summary-back]`); if(summaryBackBtn) on(summaryBackBtn, "click", () => { this._showFinalSummary = false; this._render(); });
+      const summaryConfirmBtn = modal.querySelector(`[data-${FP}-summary-confirm]`); if(summaryConfirmBtn) on(summaryConfirmBtn, "click", () => { try{ this._ctx?.onFinalConfirm?.(); }catch(_e){} this.close(); });
     },
     _switchInsured(targetId){ if(!targetId || targetId === this._activeInsuredId) return; if(this._state[this._activeInsuredId]?.dirtySinceSave){ this._confirmSwitch = { targetId }; this._render(); return; } this._activeInsuredId = targetId; this._render(); },
     _buildResultForInsured(insId){
@@ -10776,8 +11034,26 @@
     },
     _apply(){ const results = {}; Object.keys(this._state).forEach((insId) => { const r = this._buildResultForInsured(insId); if(r) results[insId] = r; }); if(!Object.keys(results).length){ window.showToast?.({ title: "אין תוצאה להחלה", text: "יש לחשב פרמיה לפחות למבוטח אחד.", variant: "warn" }); return; } const onApply = this._ctx?.onApply; this.close(); try{ onApply?.(results); }catch(_e){} },
     _saveActive(){ const insId = this._activeInsuredId; const result = this._buildResultForInsured(insId); if(!result){ window.showToast?.({ title: "אין תוצאה לשמירה", text: "יש לחשב פרמיה לפני השמירה.", variant: "warn" }); return; } try{ this._ctx?.onApply?.({ [insId]: result }); }catch(_e){} const st = this._state[insId]; if(st){ st.savedAt = nowISO(); st.dirtySinceSave = false; } window.showToast?.({ title: "נשמר", text: `הסימולטור עבור ${this._getInsuredLabel(insId)} נשמר.`, variant: "success" }); this._render(); }
-  };
+    };
+  }
+
+  const MigdalRiskSimulator = createMigdalOr1RiskSimulator({
+    fieldPrefix: "mgdr",
+    modalId: "lcMgdRiskModal",
+    title: "סימולטור ריסק מגדל · אור 1",
+    ariaLabel: "סימולטור ריסק מגדל אור 1",
+    maxEntryAge: MIGDAL_RISK_MAX_ENTRY_AGE
+  });
+  const MigdalMortgageRiskSimulator = createMigdalOr1RiskSimulator({
+    fieldPrefix: "mgdm",
+    modalId: "lcMgdMortRiskModal",
+    title: "סימולטור ריסק משכנתא מגדל",
+    ariaLabel: "סימולטור ריסק משכנתא מגדל",
+    subtitle: "תעריף אור 1 · כניסה עד גיל 69 · תום תקופה עד גיל " + MIGDAL_MORT_RISK_END_AGE,
+    maxEntryAge: MIGDAL_MORT_RISK_MAX_ENTRY_AGE
+  });
   RiskSimulators.register("מגדל", "ריסק", MigdalRiskSimulator);
+  RiskSimulators.register("מגדל", "ריסק משכנתא", MigdalMortgageRiskSimulator);
   // ===== סוף GI-MGD-SIM ============================================================
 
   // ===== GI-MGD-ACC-SIM 2026-08-13 · מוות מתאונה / נכות מתאונה מגדל ============

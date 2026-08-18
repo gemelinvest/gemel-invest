@@ -32370,7 +32370,7 @@ UsersGateUI.init();
 
     /* GI-PERF-LAZY-SIMS 2026-08-09 */
   // Lazy simulator registry — engines in gi-simulators.js (~220KB parse deferred).
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260817-quiet-ui-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260818-disc-menora-v1";
   const GI_SIMULATOR_CATALOG = Object.freeze([
     { company: "הפניקס", product: "ריסק" },
     { company: "הפניקס", product: "בריאות" },
@@ -32387,6 +32387,7 @@ UsersGateUI.init();
     { company: "מגדל", product: "מחלות קשות" },
     { company: "מגדל", product: "סרטן" },
     { company: "מגדל", product: "ריסק" },
+    { company: "מגדל", product: "ריסק משכנתא" },
     { company: "מגדל", product: "מוות מתאונה" },
     { company: "מגדל", product: "נכות מתאונה" },
     { company: "מנורה", product: "בריאות" },
