@@ -41517,25 +41517,59 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 .cfFile__liveTimer{
   display: inline-flex;
   align-items: center;
-  min-height: 28px;
-  padding: 4px 10px;
+  gap: 8px;
+  min-height: 30px;
+  padding: 5px 12px 5px 10px;
   border-radius: 999px;
-  background: #fff1f0;
-  border: 1px solid #f19990;
-  color: #9b1c1c;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
-  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
   white-space: nowrap;
   flex-shrink: 0;
+  line-height: 1.2;
 }
 .cfFile__liveTimer.is-live{
-  background: #fff1f0;
-  border-color: #e35d5d;
-  color: #9b1c1c;
+  background: linear-gradient(180deg, #ecfdf3 0%, #d1fae5 100%);
+  border: 1px solid #34d399;
+  color: #065f46;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, .14);
+}
+.cfFile__liveTimer.is-done{
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+.cfFile__liveTimer.is-stopped{
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #9a3412;
+}
+.cfFile__liveTimerPulse{
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, .7);
+  animation: cfLivePulse 1.6s ease-out infinite;
+  flex-shrink: 0;
+}
+.cfFile__liveTimerCount{
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  font-weight: 900;
+  color: #047857;
+}
+.cfFile__liveTimer.is-done .cfFile__liveTimerCount,
+.cfFile__liveTimer.is-stopped .cfFile__liveTimerCount{
+  display: none;
 }
 .cfFile__liveTimer[hidden]{
   display: none !important;
+}
+@keyframes cfLivePulse{
+  0%{ box-shadow: 0 0 0 0 rgba(16, 185, 129, .55); }
+  70%{ box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+  100%{ box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
 }
 .cfFile__chips{
   display: flex;
