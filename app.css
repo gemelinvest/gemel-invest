@@ -13127,8 +13127,8 @@ body.lcAuthLock .lcLogin:not(.lcLogin--mfa){
 .lcWelcomeLoader__orb--b{ width:168px; height:168px; inset-inline-end:-38px; bottom:58px; background:rgba(194,223,255,.44); }
 .lcWelcomeLoader__mark{
   position:relative !important;
-  width:260px;
-  height:260px;
+  width:360px;
+  height:360px;
   margin:0 auto 22px;
   display:grid;
   place-items:center;
