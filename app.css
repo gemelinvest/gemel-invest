@@ -20659,9 +20659,9 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
   font-size:38px;
   line-height:.95;
   font-weight:700;
-  /* זהב לוגו משמאל → שחור מימין (כמו המוקאפ) */
+  /* זהב לוגו משמאל → כחול תפריט הצד מימין */
   color:transparent !important;
-  background-image:linear-gradient(to right, #C7B281 0%, #9E8A58 42%, #3A3220 72%, #000000 100%) !important;
+  background-image:linear-gradient(to right, #C7B281 0%, #9E8A58 32%, #5B7AD4 68%, var(--gi-navy) 100%) !important;
   -webkit-background-clip:text !important;
   background-clip:text !important;
   -webkit-text-fill-color:transparent !important;
@@ -20823,7 +20823,7 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
 #view-dashboard .bankKpi--todaySales .bankKpi__value{
   color:transparent !important;
   font-weight:800;
-  background-image:linear-gradient(to right, #C7B281 0%, #9E8A58 42%, #3A3220 72%, #000000 100%) !important;
+  background-image:linear-gradient(to right, #C7B281 0%, #9E8A58 32%, #5B7AD4 68%, var(--gi-navy) 100%) !important;
   -webkit-background-clip:text !important;
   background-clip:text !important;
   -webkit-text-fill-color:transparent !important;
@@ -23312,7 +23312,7 @@ body.sidebar-collapsed .sidebar .nav__icon{
 }
 #view-dashboard .bankKpi__value{
   color:transparent !important;
-  background-image:linear-gradient(to right, #C7B281 0%, #9E8A58 42%, #3A3220 72%, #000000 100%) !important;
+  background-image:linear-gradient(to right, #C7B281 0%, #9E8A58 32%, #5B7AD4 68%, var(--gi-navy) 100%) !important;
   -webkit-background-clip:text !important;
   background-clip:text !important;
   -webkit-text-fill-color:transparent !important;
