@@ -14343,6 +14343,7 @@
     el: null,
     statusTimer: null,
     _hideTimer: null,
+    _ringRaf: 0,
     _openedAt: 0,
     DISPLAY_MS: 6000,
     statuses: ["מאמת הרשאות","טוען נתוני מערכת","מכין סביבת עבודה","כמעט מוכן"],
@@ -14357,10 +14358,8 @@
         <div class="lcWelcomeLoader__panel" role="status" aria-live="polite" aria-atomic="true">
           <div class="lcWelcomeLoader__content">
             <div class="lcWelcomeLoader__mark" aria-hidden="true">
-              <svg class="lcWelcomeLoader__ring" viewBox="0 0 120 120" focusable="false">
-                <circle class="lcWelcomeLoader__ringTrack" cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="6"></circle>
-                <circle class="lcWelcomeLoader__ringFill" cx="60" cy="60" r="52" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round"></circle>
-              </svg>
+              <div class="lcWelcomeLoader__ringTrack"></div>
+              <div class="lcWelcomeLoader__ringFill" id="lcWelcomeRingFill"></div>
               <div class="lcWelcomeLoader__logoPlate">
                 <img class="lcWelcomeLoader__logo" src="./logo-login-clean.png" alt="GEMEL INVEST" />
               </div>
@@ -14398,6 +14397,30 @@
         this.statusTimer = null;
       }
     },
+    stopRingFill(){
+      if(this._ringRaf){
+        window.cancelAnimationFrame(this._ringRaf);
+        this._ringRaf = 0;
+      }
+    },
+    startRingFill(){
+      const root = this.ensure();
+      const fill = root.querySelector('#lcWelcomeRingFill');
+      this.stopRingFill();
+      const started = this._openedAt || Date.now();
+      const dur = this.DISPLAY_MS;
+      if(fill) fill.style.setProperty('--ring-deg', '0deg');
+      const tick = () => {
+        const p = Math.min(1, (Date.now() - started) / dur);
+        if(fill) fill.style.setProperty('--ring-deg', (p * 360).toFixed(2) + 'deg');
+        if(p < 1 && root.classList.contains('is-open')){
+          this._ringRaf = window.requestAnimationFrame(tick);
+        } else {
+          this._ringRaf = 0;
+        }
+      };
+      this._ringRaf = window.requestAnimationFrame(tick);
+    },
     open(name){
       const root = this.ensure();
       if(this._hideTimer){
@@ -14414,9 +14437,11 @@
       root.classList.add('is-open');
       root.setAttribute('aria-hidden', 'false');
       this.startStatusCycle();
+      this.startRingFill();
     },
     _hideNow(root){
       const el = root || this.el;
+      this.stopRingFill();
       if(this._hideTimer){
         window.clearTimeout(this._hideTimer);
         this._hideTimer = null;

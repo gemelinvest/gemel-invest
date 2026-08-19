@@ -9522,7 +9522,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   box-shadow: none !important;
 }
 
-/* GI-WELCOME 2026-08-20 — לוגו חד כמו בתפריט הצד + עיגול שמתמלא ב-6 שניות */
+/* GI-WELCOME 2026-08-20 — מסך קיצי + טבעת שמתמלאת לפי הזמן */
 .lcWelcomeLoader:not(#\9):not(#\9){
   z-index: 14000 !important;
   filter: none !important;
@@ -9530,13 +9530,28 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   -webkit-backdrop-filter: none !important;
 }
 .lcWelcomeLoader__backdrop:not(#\9):not(#\9){
-  background: #3870ED !important;
-  background-image: none !important;
+  background: linear-gradient(180deg, #7ED6F5 0%, #9BE4D6 46%, #FFE7A8 100%) !important;
+  background-image: linear-gradient(180deg, #7ED6F5 0%, #9BE4D6 46%, #FFE7A8 100%) !important;
   filter: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
-.lcWelcomeLoader__backdrop:not(#\9):not(#\9)::before,
+.lcWelcomeLoader__backdrop:not(#\9):not(#\9)::before{
+  content: "" !important;
+  display: block !important;
+  position: absolute !important;
+  inset: auto !important;
+  width: 520px !important;
+  height: 520px !important;
+  left: 50% !important;
+  top: 22% !important;
+  transform: translate(-50%, -50%) !important;
+  border-radius: 50% !important;
+  background: radial-gradient(circle, rgba(255,250,214,.82) 0%, rgba(255,250,214,0) 70%) !important;
+  filter: none !important;
+  opacity: 1 !important;
+  pointer-events: none !important;
+}
 .lcWelcomeLoader__backdrop:not(#\9):not(#\9)::after{
   content: none !important;
   display: none !important;
@@ -9553,8 +9568,8 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 }
 .lcWelcomeLoader__mark:not(#\9):not(#\9){
   position: relative !important;
-  width: 260px !important;
-  height: 260px !important;
+  width: 268px !important;
+  height: 268px !important;
   margin: 0 auto 22px !important;
   display: grid !important;
   place-items: center !important;
@@ -9566,30 +9581,30 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   background: none !important;
 }
 .lcWelcomeLoader__ring:not(#\9):not(#\9){
-  position: absolute !important;
-  inset: 0 !important;
-  width: 260px !important;
-  height: 260px !important;
-  transform: rotate(-90deg) !important;
-  overflow: visible !important;
-  filter: none !important;
-}
-.lcWelcomeLoader__ringTrack:not(#\9):not(#\9),
-.lcWelcomeLoader__ringFill:not(#\9):not(#\9){
-  fill: none !important;
-  stroke-width: 6 !important;
+  display: none !important;
 }
 .lcWelcomeLoader__ringTrack:not(#\9):not(#\9){
-  stroke: rgba(255,255,255,.35) !important;
+  position: absolute !important;
+  inset: 0 !important;
+  border-radius: 50% !important;
+  box-sizing: border-box !important;
+  border: 9px solid rgba(255,255,255,.42) !important;
+  background: none !important;
+  filter: none !important;
+  stroke: none !important;
 }
 .lcWelcomeLoader__ringFill:not(#\9):not(#\9){
-  stroke: #ffffff !important;
-  stroke-linecap: round !important;
-  stroke-dasharray: 326.73 !important;
-  stroke-dashoffset: 326.73 !important;
-}
-.lcWelcomeLoader.is-open .lcWelcomeLoader__ringFill:not(#\9):not(#\9){
-  animation: lcWelcomeRingFill 6s linear forwards !important;
+  position: absolute !important;
+  inset: 0 !important;
+  border-radius: 50% !important;
+  --ring-deg: 0deg;
+  background: conic-gradient(#F6D36A 0deg, #3ED8B0 var(--ring-deg, 0deg), rgba(255,255,255,.08) var(--ring-deg, 0deg)) !important;
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 8px)) !important;
+  mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 8px)) !important;
+  animation: none !important;
+  filter: none !important;
+  stroke: none !important;
+  transform: none !important;
 }
 .lcWelcomeLoader__logoPlate:not(#\9):not(#\9){
   width: 196px !important;
@@ -9598,7 +9613,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   background: #ffffff !important;
   display: grid !important;
   place-items: center !important;
-  box-shadow: none !important;
+  box-shadow: 0 16px 36px rgba(28, 92, 110, .16) !important;
   filter: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
@@ -9624,27 +9639,18 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 }
 .lcWelcomeLoader__sub:not(#\9):not(#\9),
 .lcWelcomeLoader__status:not(#\9):not(#\9){
-  color: #ffffff !important;
+  color: #164A5C !important;
   text-shadow: none !important;
   filter: none !important;
 }
 .lcWelcomeLoader__sub:not(#\9):not(#\9){
   font-size: 17px !important;
-  font-weight: 600 !important;
+  font-weight: 700 !important;
   margin-top: 4px !important;
 }
 .lcWelcomeLoader__status:not(#\9):not(#\9){
   font-size: 14px !important;
   font-weight: 500 !important;
-  opacity: .9 !important;
+  opacity: .82 !important;
   margin-top: 8px !important;
-}
-@keyframes lcWelcomeRingFill{
-  to { stroke-dashoffset: 0; }
-}
-@media (prefers-reduced-motion: reduce){
-  .lcWelcomeLoader.is-open .lcWelcomeLoader__ringFill:not(#\9):not(#\9){
-    animation: none !important;
-    stroke-dashoffset: 0 !important;
-  }
 }
