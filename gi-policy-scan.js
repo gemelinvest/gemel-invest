@@ -71,24 +71,61 @@
     return unique(out);
   }
 
-  function moneyFound(text, amount) {
+  /* pdf.js על פוליסות עבריות מפרק לעיתים 344.00 ל־"3 4 4 . 0 0".
+     בפוליסת הכשרה העמודה היא "פרמיה תקופתית בש״ח", לא "פרמיה חודשית". */
+  function normalizePdfMoneyText(text) {
+    return String(text || "")
+      .replace(/(?<=\d)[\s\u00a0\u2007\u202f]+(?=\d)/g, "")
+      .replace(/(\d)\s*[.,]\s*(\d{1,2})(?!\d)/g, "$1.$2");
+  }
+
+  function extractMoneyFigures(text) {
+    const norm = normalizePdfMoneyText(text);
+    const out = [];
+    const rx = /\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})?|\d+[.,]\d{1,2}/g;
+    let m;
+    while ((m = rx.exec(norm)) !== null) {
+      const n = asMoneyNumber(String(m[0]).replace(/,/g, ""));
+      if (n > 0) out.push(Math.round(n * 100) / 100);
+    }
+    return out;
+  }
+
+  function moneyFoundInHay(hay, amount) {
     const n = Math.round(asMoneyNumber(amount) * 100) / 100;
-    if (!(n > 0)) return false;
-    const raw = String(text || "");
+    if (!(n > 0) || !hay) return false;
     const variants = moneyVariants(n);
     for (let i = 0; i < variants.length; i++) {
       const v = variants[i];
       if (!v) continue;
       const escaped = v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const rx = new RegExp("(?<![0-9])" + escaped + "(?![0-9])");
-      if (rx.test(raw)) return true;
+      if (rx.test(hay)) return true;
     }
     const intPart = String(Math.floor(n));
-    if (intPart.length >= 6) {
-      const compact = digitsOnly(raw);
-      if (compact.indexOf(intPart) >= 0) return true;
-    }
+    if (intPart.length >= 6 && digitsOnly(hay).indexOf(intPart) >= 0) return true;
     return false;
+  }
+
+  function moneyFound(text, amount) {
+    const raw = String(text || "");
+    if (moneyFoundInHay(raw, amount)) return true;
+    const norm = normalizePdfMoneyText(raw);
+    if (norm !== raw && moneyFoundInHay(norm, amount)) return true;
+    const want = Math.round(asMoneyNumber(amount) * 100) / 100;
+    if (!(want > 0)) return false;
+    return extractMoneyFigures(raw).some((n) => Math.abs(n - want) < 0.05);
+  }
+
+  function premiumFound(text, amount) {
+    if (moneyFound(text, amount)) return true;
+    const raw = String(text || "");
+    const want = Math.round(asMoneyNumber(amount) * 100) / 100;
+    if (!(want > 0)) return false;
+    const folded = fold(raw);
+    const hasPremiumLabel = folded.indexOf("פרמיה") >= 0 || folded.indexOf("תקופתית") >= 0;
+    if (!hasPremiumLabel) return false;
+    return extractMoneyFigures(raw).some((n) => Math.abs(n - want) < 0.51 && Math.round(n) === Math.round(want));
   }
 
   function pad2(n) {
@@ -332,15 +369,6 @@
           parts: addressParts
         });
       }
-      if (digitsOnly(ins.zip).length >= 5) {
-        push({
-          key: "zip_" + idx,
-          label: who + "מיקוד",
-          expected: digitsOnly(ins.zip),
-          kind: "zip",
-          optional: true
-        });
-      }
       if (digitsOnly(ins.phone).length >= 9) {
         push({
           key: "phone_" + idx,
@@ -356,15 +384,6 @@
           label: who + "דוא״ל",
           expected: safeTrim(ins.email),
           kind: "email",
-          optional: true
-        });
-      }
-      if (smokingLabel(ins.smokingStatus)) {
-        push({
-          key: "smoke_" + idx,
-          label: who + "עישון",
-          expected: smokingLabel(ins.smokingStatus),
-          kind: "smoking",
           optional: true
         });
       }
@@ -390,9 +409,9 @@
     if (premiums.length) {
       push({
         key: "premium",
-        label: "פרמיה חודשית",
+        label: "פרמיה תקופתית",
         expected: String(premiums[0]),
-        kind: "money",
+        kind: "premium",
         candidates: premiums
       });
     }
@@ -453,12 +472,14 @@
       const hits = parts.filter((p) => textHas(text, p) || (digitsOnly(p).length && digitsOnly(text).indexOf(digitsOnly(p)) >= 0));
       return hits.length >= Math.min(parts.length, Math.max(1, parts.length - (parts.length >= 3 ? 1 : 0)));
     }
-    if (kind === "zip") return digitsOnly(text).indexOf(digitsOnly(field.expected)) >= 0;
     if (kind === "phone") return phoneFound(text, field.expected);
     if (kind === "email") return fold(text).indexOf(fold(field.expected)) >= 0;
-    if (kind === "smoking") return smokingFound(text, field.expected);
     if (kind === "payment") return paymentFound(text, field.expected);
     if (kind === "cover") return coverFound(text, field.expected);
+    if (kind === "premium") {
+      const cands = Array.isArray(field.candidates) && field.candidates.length ? field.candidates : [field.expected];
+      return cands.some((c) => premiumFound(text, c));
+    }
     if (kind === "money") {
       const cands = Array.isArray(field.candidates) && field.candidates.length ? field.candidates : [field.expected];
       return cands.some((c) => moneyFound(text, c));
@@ -468,16 +489,14 @@
 
   function shouldSkip(text, field) {
     if (!field.optional) return false;
-    if (field.kind === "smoking") return !smokingSignal(text);
     if (field.kind === "phone") return !phoneSignal(text);
     if (field.kind === "email") return !emailSignal(text);
-    if (field.kind === "zip") return !zipSignal(text);
     if (field.kind === "payment") return !paymentSignal(text);
     return false;
   }
 
   function formatExpected(field) {
-    if (field.kind === "money") {
+    if (field.kind === "money" || field.kind === "premium") {
       const n = asMoneyNumber(field.expected);
       return n ? n.toLocaleString("he-IL") : field.expected;
     }
@@ -550,6 +569,8 @@
     digitsOnly,
     asMoneyNumber,
     moneyFound,
+    premiumFound,
+    normalizePdfMoneyText,
     dateFound,
     coverFound,
     buildExpectedFields,
