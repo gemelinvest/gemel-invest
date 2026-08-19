@@ -417,6 +417,59 @@
     return [];
   }
 
+  function _giNormExistingStatusForList(value){
+    const raw = safeTrim(value).toLowerCase().replace(/[\s_\-]+/g, "");
+    if(raw === "מינויסוכן" || raw === "agentappoint" || raw === "appointagent" || raw === "agentappointment") return "agent_appoint";
+    return raw;
+  }
+
+  /** חותמת מסך לקוחות: הקמה / מכירה חדשה (בריאות+סיכונים+אלמנטרי) / מינוי סוכן. לא updated_at. */
+  function customerListActivityStamp(rec){
+    const stamps = [];
+    const push = (v) => {
+      const s = safeTrim(v);
+      if(s) stamps.push(s);
+    };
+    push(rec?.listActivityAt || rec?.list_activity_at);
+    push(rec?.createdAt || rec?.created_at);
+    const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+    const newPols = getCustomerRawNewPolicies(rec);
+    (Array.isArray(newPols) ? newPols : []).forEach((p) => {
+      if(String(p?.origin || "") === "existing") return;
+      push(p?._addedAt);
+    });
+    const elem = Array.isArray(payload.elementaryPolicies) ? payload.elementaryPolicies : [];
+    elem.forEach((p) => push(p?._addedAt));
+    const insureds = Array.isArray(payload.insureds) && payload.insureds.length
+      ? payload.insureds
+      : (Array.isArray(payload?.operational?.insureds) ? payload.operational.insureds : []);
+    insureds.forEach((ins) => {
+      (ins?.data?.existingPolicies || []).forEach((p) => {
+        const pid = safeTrim(p?.id);
+        const cancelStatus = pid && ins?.data?.cancellations?.[pid] ? safeTrim(ins.data.cancellations[pid].status) : "";
+        if(_giNormExistingStatusForList(cancelStatus || p?.existingStatus || p?.status) !== "agent_appoint") return;
+        push(p?._appointedAt);
+        if(pid) push(ins?.data?.cancellations?.[pid]?.appointedAt);
+        push(payload?.agentAppointmentMeta?.savedAt);
+        push(payload?.agentAppointmentMeta?.requestDate);
+      });
+    });
+    if(safeTrim(payload.flowType).toLowerCase() === "agent_appointment"){
+      push(payload?.agentAppointmentMeta?.savedAt);
+      push(payload?.agentAppointmentMeta?.requestDate);
+    }
+    let bestMs = 0;
+    let best = "";
+    stamps.forEach((s) => {
+      const t = Date.parse(s);
+      if(Number.isFinite(t) && t >= bestMs){
+        bestMs = t;
+        best = s;
+      }
+    });
+    return best;
+  }
+
   function clonePolicyForMetrics(raw){
     if(!raw || typeof raw !== "object") return raw;
     try {
@@ -5965,6 +6018,7 @@
     const agentName = safeTrim(c?.agentName) || safeTrim(c?.createdBy) || safeTrim(payload?.createdBy) || "";
     const createdAt = safeTrim(c?.createdAt) || nowISO();
     const updatedAt = safeTrim(c?.updatedAt) || createdAt;
+    const listActivityAt = safeTrim(c?.listActivityAt || c?.list_activity_at);
     const insuredCount = Number(c?.insuredCount || payload?.insureds?.length || 0) || 0;
     const existingPoliciesCount = Number(c?.existingPoliciesCount || ((payload?.insureds || []).reduce((acc, ins) => acc + ((ins?.data?.existingPolicies || []).length), 0))) || 0;
     const newPoliciesCount = Number(c?.newPoliciesCount || (payload?.newPolicies || []).length) || 0;
@@ -5982,6 +6036,7 @@
       agentRole: safeTrim(c?.agentRole) || "",
       createdAt,
       updatedAt,
+      listActivityAt,
       insuredCount,
       existingPoliciesCount,
       newPoliciesCount,
@@ -10902,6 +10957,7 @@
         newPoliciesCount: row?.new_policies_count,
         createdAt: row?.created_at,
         updatedAt: row?.updated_at,
+        listActivityAt: row?.list_activity_at || row?.listActivityAt,
         payload: row?.payload || {}
       }, idx);
     },
@@ -11373,14 +11429,34 @@
       const take = Math.max(1, Math.min(50, Number(limit) || 10));
       // over-fetch קל לסינון ארכיון/הרשאות בצד לקוח
       const fetchLimit = Math.min(80, take * 4);
+      const mapLatestRows = (data) => (Array.isArray(data) ? data : [])
+        .map((row, idx) => this.mapCustomerRow(row, idx))
+        .filter((rec) => rec && !isServerArchivedCustomerRecord(rec));
       try {
         const connection = await this.waitForConnection({ retries: 2, delayMs: 600 });
         if(!connection?.ok) return { ok:false, error: connection?.error || "NO_CONNECTION", data: [] };
-        // הנתונים תמיד מהשרת — אין כאן שום מסלול מטמון.
-        // GI-AGENT-SCOPE-FETCH: .in() לפי עמודת נציג, לא or() משותף עם החיפוש.
+        const scope = getServerListAgentScopeFilter();
+        const rpcArgs = {
+          p_limit: fetchLimit,
+          p_agent_ids: scope?.ids?.length ? scope.ids : null,
+          p_agent_names: scope?.names?.length ? scope.names : null
+        };
+        // GI-FIX 2026-08-19: דירוג לפי הקמה / מכירה חדשה / מינוי סוכן — לא updated_at (סנכרון המוני).
+        try {
+          const client = this.getClient();
+          const rpc = await this.withRetry(
+            () => client.rpc("gi_latest_customers", rpcArgs),
+            "טעינת 10 לקוחות אחרונים",
+            { timeoutMs: 30000 }
+          );
+          if(rpc?.error) throw rpc.error;
+          return { ok:true, data: mapLatestRows(rpc?.data) };
+        } catch(rpcErr) {
+          try { console.warn("LATEST_CUSTOMERS_RPC_FALLBACK:", String(rpcErr?.message || rpcErr)); } catch(_e) {}
+        }
+        // נפילה: שליפת light לפי updated_at; המיון הסופי בצד לקוח לפי חותמת פעילות.
         const fetchWithColumns = async (selectExpr) => {
           const res = await this._fetchLimitedRowsMergedAgentScope(SUPABASE_TABLES.customers, selectExpr, {
-            // GI-FIX 2026-08-19: 10 אחרונים לפי עדכון תיק (מכירה ללקוח קיים), לא לפי תאריך הקמה.
             orderCol: "updated_at",
             ascending: false,
             limit: fetchLimit,
@@ -11397,10 +11473,7 @@
           try { console.warn("LATEST_CUSTOMERS_LIGHT_SELECT_REJECTED_RETRYING_FULL:", String(lightErr?.message || lightErr)); } catch(_e) {}
           data = await fetchWithColumns("*");
         }
-        const mapped = (Array.isArray(data) ? data : [])
-          .map((row, idx) => this.mapCustomerRow(row, idx))
-          .filter((rec) => rec && !isServerArchivedCustomerRecord(rec));
-        return { ok:true, data: mapped };
+        return { ok:true, data: mapLatestRows(data) };
       } catch(err) {
         return { ok:false, error: String(err?.message || err), data: [] };
       }
@@ -17027,9 +17100,9 @@ UsersGateUI.init();
       return visible.slice(0, take);
     },
 
-    /** חותמת תצוגת «10 אחרונים»: עדכון אחרון, עם נפילה לתאריך הקמה. לא משמש חיפוש/מכירות. */
+    /** חותמת תצוגת «10 אחרונים»: הקמה / מכירה / מינוי סוכן. לא משמש חיפוש/מכירות. */
     latestCustomerListStamp(rec){
-      return rec?.updatedAt || rec?.updated_at || rec?.createdAt || rec?.created_at;
+      return customerListActivityStamp(rec);
     },
 
     /** שורות מוצגות במסך לקוחות — מגיעות מהשרת (10 אחרונים / חיפוש). */
