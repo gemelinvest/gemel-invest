@@ -20619,7 +20619,7 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
 #view-dashboard .bankKpi__bar{ position:relative; z-index:2; }
 #view-dashboard .bankKpi__top{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; min-height:0; }
 #view-dashboard .bankKpi__caret{ color:#7a90b8; font-size:13px; font-weight:700; transition:transform .24s ease, color .24s ease; }
-#view-dashboard .bankKpi__he{ margin-top:0; font-size:13px; font-weight:700; color:#4a6490; line-height:1.2; transition:transform .24s ease, color .24s ease; }
+#view-dashboard .bankKpi__he{ margin-top:0; font-size:15px; font-weight:700; color:#4a6490; line-height:1.2; transition:transform .24s ease, color .24s ease; }
 #view-dashboard .bankKpi__hint{ display:none !important; }
 #view-dashboard .bankKpi:hover{
   transform:translateY(-6px);
@@ -20656,7 +20656,7 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
 #view-dashboard .bankKpi__watermark svg{ width:52px; height:52px; }
 #view-dashboard .bankKpi__value{
   margin-top:2px;
-  font-size:38px;
+  font-size:42px;
   line-height:.95;
   font-weight:700;
   /* זהב לוגו משמאל (בולט) → דירוג לכחול תפריט הצד מימין */
@@ -20971,7 +20971,7 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 12px;
+  font-size: 13px;
   padding: 4px 7px;
   border-radius: 8px;
   background: rgba(42,92,245,.07);
@@ -20988,13 +20988,13 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
 #view-dashboard .bankKpiTodayRow__val{
   font-weight: 700;
   color: var(--blueDeep);
-  font-size: 12px;
+  font-size: 13px;
   white-space: nowrap;
 }
 #view-dashboard .bankKpiTodayRow--empty{
   background: transparent;
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 13px;
   justify-content: center;
   font-style: italic;
 }
@@ -21025,7 +21025,7 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
   border-radius: 20px;
   background: linear-gradient(135deg, rgba(42,92,245,.12), rgba(42,92,245,.07));
   color: var(--blueDeep, #1a3fa3);
-  font-size: 11.5px;
+  font-size: 13.5px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -24228,7 +24228,7 @@ html, body {
   font-family:'Rubik', system-ui, sans-serif;
   line-height:1.5;
   color:#258b57;
-  font-size:15px;
+  font-size:17px;
   font-weight:500;
   letter-spacing:.3px;
   text-shadow:0 1px 0 rgba(255,255,255,.45);
@@ -24243,6 +24243,7 @@ html, body {
   -webkit-backdrop-filter:blur(8px) saturate(120%);
 }
 #view-dashboard .bankDash__topStatsGreeting__intro{
+  font-size:16px;
   font-weight:500;
   color:rgba(37,139,87,.92);
   letter-spacing:.35px;
@@ -24293,7 +24294,7 @@ html, body {
 @media (max-width: 1200px){
   #view-dashboard .bankDash__topStatsGreeting--inlineMetrics{
     padding:8px 10px;
-    font-size:14px;
+    font-size:16px;
     border-radius:14px;
   }
   #view-dashboard .bankDash__topStatsGreeting__metricLabel{
@@ -36129,7 +36130,7 @@ body.lcHealthDetailModalOpen .lcHealthDetailModal{
   opacity:.16;
   background:linear-gradient(135deg, rgba(255,255,255,.12), rgba(255,255,255,0) 54%);
 }
-#view-dashboard .bankDash__row--goalOnly .bankGoal .bankGoal__title{ margin-bottom:4px; font-size:15px; }
+#view-dashboard .bankDash__row--goalOnly .bankGoal .bankGoal__title{ margin-bottom:4px; font-size:17px; }
 #view-dashboard .bankDash__row--goalOnly .bankGoal .bankGoal__shell{
   flex:0 0 auto; min-height:0; align-items:start; gap:8px 16px;
   grid-template-columns:minmax(200px,1.05fr) minmax(160px,0.92fr) minmax(220px,1.08fr);

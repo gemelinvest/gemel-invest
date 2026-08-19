@@ -653,7 +653,7 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
 }
 
 .bankKpi__he:not(#\9):not(#\9){
-  font-size: 13px !important;
+  font-size: 15px !important;
   font-weight: 600 !important;
   color: var(--gi-text-2) !important;
   letter-spacing: 0 !important;
@@ -662,7 +662,7 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
 }
 
 .bankKpi__value:not(#\9):not(#\9){
-  font-size: 30px !important;
+  font-size: 34px !important;
   font-weight: 700 !important;
   color: transparent !important;
   background-image: linear-gradient(90deg, #C7B281 0%, #C7B281 46%, #3870ED 100%) !important;
@@ -735,7 +735,7 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
   border: none !important;
   background: none !important;
   color: var(--gi-primary) !important;
-  font-size: 12px !important;
+  font-size: 14px !important;
   font-weight: 600 !important;
   cursor: pointer;
   box-shadow: none !important;
@@ -779,7 +779,7 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
 }
 
 .bankDash__topStatsGreeting__intro:not(#\9):not(#\9){
-  font-size: 22px !important;
+  font-size: 24px !important;
   font-weight: 700 !important;
   color: var(--gi-text) !important;
   text-shadow: none !important;
@@ -1796,7 +1796,7 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 
 .bankGoal:not(#\9):not(#\9) *{ text-shadow: none !important; }
 
-.bankGoal__title:not(#\9):not(#\9){ font-size: 16px !important; font-weight: 700 !important; }
+.bankGoal__title:not(#\9):not(#\9){ font-size: 18px !important; font-weight: 700 !important; }
 
 /* --- Leaderboard card: grafmtzayen.png --- */
 .bankLeader--photoBg:not(#\9):not(#\9),
@@ -1869,7 +1869,7 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 .bankDash__topStatsGreeting__intro:not(#\9):not(#\9){
   display: block !important;
   margin: 0 !important;
-  font-size: 13px !important;
+  font-size: 16px !important;
   font-weight: 400 !important;
   color: var(--gi-text-3) !important;
   letter-spacing: 0 !important;
