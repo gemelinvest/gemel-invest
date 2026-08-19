@@ -11355,7 +11355,8 @@
         // GI-AGENT-SCOPE-FETCH: .in() לפי עמודת נציג, לא or() משותף עם החיפוש.
         const fetchWithColumns = async (selectExpr) => {
           const res = await this._fetchLimitedRowsMergedAgentScope(SUPABASE_TABLES.customers, selectExpr, {
-            orderCol: "created_at",
+            // GI-FIX 2026-08-19: 10 אחרונים לפי עדכון תיק (מכירה ללקוח קיים), לא לפי תאריך הקמה.
+            orderCol: "updated_at",
             ascending: false,
             limit: fetchLimit,
             label: "טעינת 10 לקוחות אחרונים"
@@ -16997,8 +16998,13 @@ UsersGateUI.init();
         }
         visible.push(rec);
       }
-      giSortByDateDesc(visible, (r) => r.createdAt || r.created_at);
+      giSortByDateDesc(visible, (r) => this.latestCustomerListStamp(r));
       return visible.slice(0, take);
+    },
+
+    /** חותמת תצוגת «10 אחרונים»: עדכון אחרון, עם נפילה לתאריך הקמה. לא משמש חיפוש/מכירות. */
+    latestCustomerListStamp(rec){
+      return rec?.updatedAt || rec?.updated_at || rec?.createdAt || rec?.created_at;
     },
 
     /** שורות מוצגות במסך לקוחות — מגיעות מהשרת (10 אחרונים / חיפוש). */
@@ -17010,7 +17016,7 @@ UsersGateUI.init();
       return this.listLatest(CUSTOMERS_DEFAULT_VISIBLE);
     },
 
-    _scopeServerRows(rows){
+    _scopeServerRows(rows, stampFn){
       const list = Array.isArray(rows) ? rows.filter(Boolean) : [];
       let visible;
       if(Auth.isElementary()){
@@ -17020,11 +17026,12 @@ UsersGateUI.init();
       } else {
         visible = list.filter((rec) => customerVisibleToCurrentUser(rec));
       }
-      giSortByDateDesc(visible, (r) => r.createdAt || r.created_at);
+      const stamp = typeof stampFn === "function" ? stampFn : ((r) => r.createdAt || r.created_at);
+      giSortByDateDesc(visible, stamp);
       return visible;
     },
 
-    _ingestServerRows(rows){
+    _ingestServerRows(rows, stampFn){
       const out = [];
       State.data.customers = Array.isArray(State.data.customers) ? State.data.customers : [];
       const byId = new Map();
@@ -17066,7 +17073,7 @@ UsersGateUI.init();
         }
       });
       try { refreshStateShadows({ skipNormalize: true, lightShadows: true }); } catch(_e) {}
-      return this._scopeServerRows(out);
+      return this._scopeServerRows(out, stampFn);
     },
 
     _showListLoading(){
@@ -17100,7 +17107,7 @@ UsersGateUI.init();
             this.paintTable();
             return;
           }
-          const scoped = this._ingestServerRows(res.data).slice(0, CUSTOMERS_DEFAULT_VISIBLE);
+          const scoped = this._ingestServerRows(res.data, (r) => this.latestCustomerListStamp(r)).slice(0, CUSTOMERS_DEFAULT_VISIBLE);
           this._viewRows = scoped;
           this._viewMode = "latest";
           this._viewQuery = "";
