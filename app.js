@@ -14342,6 +14342,9 @@
   const WelcomeLoader = {
     el: null,
     statusTimer: null,
+    _hideTimer: null,
+    _openedAt: 0,
+    DISPLAY_MS: 6000,
     statuses: ["מאמת הרשאות","טוען נתוני מערכת","מכין סביבת עבודה","כמעט מוכן"],
     ensure(){
       if(this.el) return this.el;
@@ -14353,7 +14356,15 @@
         <div class="lcWelcomeLoader__backdrop"></div>
         <div class="lcWelcomeLoader__panel" role="status" aria-live="polite" aria-atomic="true">
           <div class="lcWelcomeLoader__content">
-            <img class="lcWelcomeLoader__logo" src="./logo-login-clean.png" alt="GEMEL INVEST" />
+            <div class="lcWelcomeLoader__orb" aria-hidden="true">
+              <svg class="lcWelcomeLoader__ring" viewBox="0 0 120 120" focusable="false">
+                <circle class="lcWelcomeLoader__ringTrack" cx="60" cy="60" r="52"></circle>
+                <circle class="lcWelcomeLoader__ringFill" cx="60" cy="60" r="52"></circle>
+              </svg>
+              <div class="lcWelcomeLoader__logoPlate">
+                <img class="lcWelcomeLoader__logo" src="./logo-login-clean.png" alt="GEMEL INVEST" />
+              </div>
+            </div>
             <div class="lcWelcomeLoader__greeting" id="lcWelcomeGreeting"></div>
             <div class="lcWelcomeLoader__name" id="lcWelcomeName"></div>
             <div class="lcWelcomeLoader__sub">טוען מערכת, אנא המתן</div>
@@ -14389,19 +14400,46 @@
     },
     open(name){
       const root = this.ensure();
+      if(this._hideTimer){
+        window.clearTimeout(this._hideTimer);
+        this._hideTimer = null;
+      }
       const greetingEl = root.querySelector('#lcWelcomeGreeting');
       const nameEl = root.querySelector('#lcWelcomeName');
       if(greetingEl) greetingEl.textContent = getTimeGreeting();
       if(nameEl) nameEl.textContent = safeTrim(name);
+      this._openedAt = Date.now();
+      root.classList.remove('is-open');
+      void root.offsetWidth;
       root.classList.add('is-open');
       root.setAttribute('aria-hidden', 'false');
       this.startStatusCycle();
     },
-    close(){
+    _hideNow(root){
+      const el = root || this.el;
+      if(this._hideTimer){
+        window.clearTimeout(this._hideTimer);
+        this._hideTimer = null;
+      }
+      this._openedAt = 0;
+      if(!el) return;
+      el.classList.remove('is-open');
+      el.setAttribute('aria-hidden', 'true');
+    },
+    close(immediate){
       const root = this.ensure();
       this.stopStatusCycle();
-      root.classList.remove('is-open');
-      root.setAttribute('aria-hidden', 'true');
+      if(immediate === true || !root.classList.contains('is-open')){
+        this._hideNow(root);
+        return;
+      }
+      if(this._hideTimer) return;
+      const elapsed = this._openedAt ? (Date.now() - this._openedAt) : this.DISPLAY_MS;
+      const remain = Math.max(0, this.DISPLAY_MS - elapsed);
+      this._hideTimer = window.setTimeout(() => {
+        this._hideTimer = null;
+        this._hideNow(root);
+      }, remain);
     },
     async play(name, ms=3000){
       this.open(name);
@@ -46256,7 +46294,7 @@ const ClalRiskLifePdf = {
       });
     } catch(err) {
       console.error("COMPLETE_AGENT_LOGIN_FAILED:", err);
-      try { WelcomeLoader.close(); } catch(_e) {}
+      try { WelcomeLoader.close(true); } catch(_e) {}
       try {
         Auth.unlock();
         if(targetView === 'dashboard' && (Auth.isOps() || Auth.isOpsAgent())){

@@ -1561,8 +1561,8 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 }
 
 .lcLogin__input--mfa:not(#\9):not(#\9){
-  min-height: 56px !important;
-  height: 56px !important;
+  min-height: 64px !important;
+  height: 64px !important;
   padding: 0 var(--gi-s4) !important;
   border: 1px solid var(--gi-border) !important;
   border-radius: var(--gi-r-ctl) !important;
@@ -1570,9 +1570,11 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   box-shadow: none !important;
   color: var(--gi-text) !important;
   font-family: var(--gi-mono) !important;
-  font-size: 24px !important;
-  font-weight: 600 !important;
-  letter-spacing: .30em !important;
+  font-size: 32px !important;
+  font-weight: 700 !important;
+  letter-spacing: .28em !important;
+  text-align: center !important;
+  line-height: 1 !important;
   animation: none !important;
   transform: none !important;
 }
@@ -9518,4 +9520,102 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 .updatePopup__notesList li::before:not(#\9):not(#\9){
   border-radius: 1.5px !important;
   box-shadow: none !important;
+}
+
+/* GI-WELCOME 2026-08-20 — לוגו כמו בתפריט הצד + עיגול שמתמלא ב-6 שניות */
+.lcWelcomeLoader:not(#\9):not(#\9){
+  z-index: 14000 !important;
+}
+.lcWelcomeLoader__backdrop:not(#\9):not(#\9){
+  background: #3870ED !important;
+  background-image: none !important;
+}
+.lcWelcomeLoader__backdrop:not(#\9):not(#\9)::before,
+.lcWelcomeLoader__backdrop:not(#\9):not(#\9)::after{
+  content: none !important;
+  display: none !important;
+}
+.lcWelcomeLoader__content:not(#\9):not(#\9)::before{
+  content: none !important;
+  display: none !important;
+}
+.lcWelcomeLoader__orb:not(#\9):not(#\9){
+  position: relative !important;
+  width: 220px !important;
+  height: 220px !important;
+  margin: 0 auto 18px !important;
+  display: grid !important;
+  place-items: center !important;
+}
+.lcWelcomeLoader__ring:not(#\9):not(#\9){
+  position: absolute !important;
+  inset: 0 !important;
+  width: 220px !important;
+  height: 220px !important;
+  transform: rotate(-90deg) !important;
+}
+.lcWelcomeLoader__ringTrack:not(#\9):not(#\9),
+.lcWelcomeLoader__ringFill:not(#\9):not(#\9){
+  fill: none !important;
+  stroke-width: 5.5 !important;
+}
+.lcWelcomeLoader__ringTrack:not(#\9):not(#\9){
+  stroke: rgba(255,255,255,.28) !important;
+}
+.lcWelcomeLoader__ringFill:not(#\9):not(#\9){
+  stroke: #ffffff !important;
+  stroke-linecap: round !important;
+  stroke-dasharray: 326.73 !important;
+  stroke-dashoffset: 326.73 !important;
+}
+.lcWelcomeLoader.is-open .lcWelcomeLoader__ringFill:not(#\9):not(#\9){
+  animation: lcWelcomeRingFill 6s linear forwards !important;
+}
+.lcWelcomeLoader__logoPlate:not(#\9):not(#\9){
+  width: 168px !important;
+  height: 168px !important;
+  border-radius: 50% !important;
+  background: #ffffff !important;
+  display: grid !important;
+  place-items: center !important;
+  box-shadow: 0 10px 28px rgba(15, 37, 92, .18) !important;
+  z-index: 1 !important;
+}
+.lcWelcomeLoader__logo:not(#\9):not(#\9){
+  width: 132px !important;
+  max-width: 132px !important;
+  height: auto !important;
+  margin: 0 !important;
+  filter: none !important;
+  animation: none !important;
+}
+.lcWelcomeLoader__greeting:not(#\9):not(#\9),
+.lcWelcomeLoader__name:not(#\9):not(#\9),
+.lcWelcomeLoader__line:not(#\9):not(#\9){
+  display: none !important;
+}
+.lcWelcomeLoader__sub:not(#\9):not(#\9),
+.lcWelcomeLoader__status:not(#\9):not(#\9){
+  color: rgba(255,255,255,.92) !important;
+  text-shadow: none !important;
+}
+.lcWelcomeLoader__sub:not(#\9):not(#\9){
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  margin-top: 4px !important;
+}
+.lcWelcomeLoader__status:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  opacity: .86 !important;
+  margin-top: 8px !important;
+}
+@keyframes lcWelcomeRingFill{
+  to { stroke-dashoffset: 0; }
+}
+@media (prefers-reduced-motion: reduce){
+  .lcWelcomeLoader.is-open .lcWelcomeLoader__ringFill:not(#\9):not(#\9){
+    animation: none !important;
+    stroke-dashoffset: 0 !important;
+  }
 }

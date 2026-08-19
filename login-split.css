@@ -218,6 +218,20 @@ body.lcAuthLock .lcLogin__input:not(#\9):not(#\9){
   -webkit-backdrop-filter:none !important;
 }
 
+body.lcAuthLock #lcLoginMfaCode.lcLogin__input:not(#\9):not(#\9),
+body.lcAuthLock .lcLogin__input--mfa:not(#\9):not(#\9){
+  height:64px !important;
+  min-height:64px !important;
+  padding-inline-start:18px !important;
+  padding-inline-end:18px !important;
+  font-size:32px !important;
+  font-weight:700 !important;
+  letter-spacing:.28em !important;
+  text-align:center !important;
+  line-height:1 !important;
+  font-variant-numeric:tabular-nums !important;
+}
+
 body.lcAuthLock .lcLogin__field > .lcLogin__input:focus:not(#\9):not(#\9),
 body.lcAuthLock .lcLogin__input:focus:not(#\9):not(#\9){
   border-color:#2563EB !important;

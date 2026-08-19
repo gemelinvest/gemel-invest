@@ -18901,9 +18901,9 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
     inset 0 1px 0 rgba(255,255,255,.96) !important;
   direction:ltr !important;
   text-align:center !important;
-  font-size:28px !important;
+  font-size:32px !important;
   font-weight:800;
-  letter-spacing:.34em !important;
+  letter-spacing:.28em !important;
   color:#0b1f4a;
   caret-color:#2d5bcb;
   transition:border-color .18s ease, box-shadow .22s ease, transform .18s ease, background .22s ease;
@@ -22382,8 +22382,8 @@ body.lcAuthLock .lcLogin__input:focus{
 body.lcAuthLock .lcLogin__input--mfa{
   padding:0 24px !important;
   text-align:center;
-  letter-spacing:.45em;
-  font-size:28px;
+  letter-spacing:.28em;
+  font-size:32px;
   color:#7c879d;
 }
 body.lcAuthLock .lcLogin__input--mfa::placeholder{

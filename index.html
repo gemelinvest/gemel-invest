@@ -8,11 +8,11 @@
 <meta content="#f8fafc" name="theme-color"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20260820-dash-text-size-v1" rel="stylesheet"/>
-<link href="./theme.css?v=20260820-dash-text-size-v1" rel="stylesheet"/>
+<link href="./app.css?v=20260820-welcome-mfa-v1" rel="stylesheet"/>
+<link href="./theme.css?v=20260820-welcome-mfa-v1" rel="stylesheet"/>
 <link href="./gi-daily-sales-mail.css?v=20260817-daily-sales-mail-v2" rel="stylesheet"/>
 <link href="./theme-p2.css?v=20260805-workdays-goal-v1" rel="stylesheet"/>
-<link href="./login-split.css?v=20260814-face-ui-v1" rel="stylesheet"/>
+<link href="./login-split.css?v=20260820-welcome-mfa-v1" rel="stylesheet"/>
 <!-- GI-PERF 2026-08-10: CSS משני (mirror/import/unify) נטען אחרי כניסה מ-app.js —
      לא חוסם מסך login ולא מרעיש 404 לפני שהמשתמש התחבר. -->
 <!-- GI-PERF 2026-08-09: סימולטורים — CSS נטען לפי צורך מ-ensureGiSimulatorStylesLoaded ב-app.js -->
@@ -82,6 +82,12 @@ body.lcAuthLock #lcLogin .lcLogin__input:not(#\9):not(#\9){
   width:100%!important;height:50px!important;padding-block:0!important;padding-inline-start:46px!important;padding-inline-end:16px!important;
   border:1px solid #E5E7EB!important;border-radius:12px!important;background:#fff!important;box-shadow:none!important;
   color:#0F172A!important;font-size:15px!important;font-weight:500!important;outline:none!important;
+}
+body.lcAuthLock #lcLogin #lcLoginMfaCode.lcLogin__input:not(#\9):not(#\9),
+body.lcAuthLock #lcLogin .lcLogin__input--mfa:not(#\9):not(#\9){
+  height:64px!important;min-height:64px!important;padding-block:0!important;padding-inline:18px!important;
+  font-size:32px!important;font-weight:700!important;letter-spacing:.28em!important;text-align:center!important;
+  line-height:1!important;font-variant-numeric:tabular-nums!important;
 }
 body.lcAuthLock #lcLogin .lcLogin__field > .lcLogin__input:focus:not(#\9):not(#\9),
 body.lcAuthLock #lcLogin .lcLogin__input:focus:not(#\9):not(#\9){
@@ -3897,7 +3903,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 
 <script src="./contacts-directory-seed.js?v=20260811-contacts-v1"></script>
 <script src="./gi-policy-scan.js?v=20260819-issued-scan-v3"></script>
-<script src="./app.js?v=20260820-kpi-gold-blue-v1"></script>
+<script src="./app.js?v=20260820-welcome-mfa-v1"></script>
 <script src="./gi-face-auth.js?v=20260817-face-retry-v1"></script>
 <script src="./gi-daily-sales-mail.js?v=20260818-sales-mail-pdf-v4"></script>
 
