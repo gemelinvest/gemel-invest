@@ -665,7 +665,7 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
   font-size: 30px !important;
   font-weight: 700 !important;
   color: transparent !important;
-  background-image: linear-gradient(90deg, #C7B281 0%, #C7B281 10%, #3870ED 48%, #3870ED 100%) !important;
+  background-image: linear-gradient(90deg, #C7B281 0%, #C7B281 46%, #3870ED 100%) !important;
   -webkit-background-clip: text !important;
   background-clip: text !important;
   -webkit-text-fill-color: transparent !important;
@@ -1736,7 +1736,7 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 
 .bankKpi__value:not(#\9):not(#\9){
   color: transparent !important;
-  background-image: linear-gradient(90deg, #C7B281 0%, #C7B281 10%, #3870ED 48%, #3870ED 100%) !important;
+  background-image: linear-gradient(90deg, #C7B281 0%, #C7B281 46%, #3870ED 100%) !important;
   -webkit-background-clip: text !important;
   background-clip: text !important;
   -webkit-text-fill-color: transparent !important;

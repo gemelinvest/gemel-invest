@@ -29182,7 +29182,7 @@ UsersGateUI.init();
       } catch(_e){}
     },
 
-    buildDailyReportIssuedPremiumKpi(orgScope){
+    buildDailyReportIssuedPremiumKpi(_orgScope){
       let issued = { totalPremium: 0, policyCount: 0, items: [], hasReport: false };
       try {
         if(typeof DailyReportStore !== "undefined" && DailyReportStore.getIssuedPremiumMetrics){
@@ -29201,9 +29201,7 @@ UsersGateUI.init();
           : `<div class="bankKpiTodayRow bankKpiTodayRow--empty">טרם הועלה דוח יומי</div>`);
       const policyWord = issued.policyCount === 1 ? "פוליסה" : "פוליסות";
       return {
-        he: orgScope
-          ? ("פרמייה מהפקה (" + (getDashboardScopeLabelHe("allAgents") || "סיכום") + ")")
-          : "פרמייה מהפקה",
+        he: "פרמייה מהפקה",
         cardClass: "bankKpi--newClients bankKpi--issuedPremium",
         value: this.formatMoney(issued.totalPremium),
         deltaText: `${issued.policyCount} ${policyWord} הופקו · דוח יומי`,
@@ -32835,7 +32833,7 @@ UsersGateUI.init();
         return `
           <article class="bankKpi card bankKpi--compact bankKpi--today bankKpi--todaySales" id="bankKpiTodayCard" style="display:flex;flex-direction:column;">
             <div class="bankKpi__top">
-              <div class="bankKpi__he">${orgScope ? ('נמכר היום (' + (getDashboardScopeLabelHe('allAgents') || 'סיכום') + ')') : 'כמה מכרתי היום'}</div>
+              <div class="bankKpi__he">${orgScope ? 'נמכר היום' : 'כמה מכרתי היום'}</div>
               <div class="bankKpi__caret">⌃</div>
             </div>
             <div class="bankKpi__watermark" aria-hidden="true">${premiumCustomerIcon('building')}</div>
@@ -32862,7 +32860,7 @@ UsersGateUI.init();
 
       const regularCards = [
         {
-          he: orgScope ? ('פרמיה חודשית נטו (' + (getDashboardScopeLabelHe('allAgents') || 'סיכום') + ')') : 'פרמיה חודשית נטו',
+          he: 'פרמיה חודשית נטו',
           cardClass: 'bankKpi--netPremium',
           value: this.formatMoney(metrics.netPremium),
           delta: metrics.netDelta,
