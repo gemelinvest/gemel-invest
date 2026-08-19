@@ -9522,7 +9522,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   box-shadow: none !important;
 }
 
-/* GI-WELCOME 2026-08-20 — כחול תפריט הצד + אנימציה מוגדלת */
+/* GI-WELCOME 2026-08-20 — רקע לבן + טבעת מכחול חלש לכחול התפריט */
 .lcWelcomeLoader:not(#\9):not(#\9){
   z-index: 14000 !important;
   filter: none !important;
@@ -9530,7 +9530,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   -webkit-backdrop-filter: none !important;
 }
 .lcWelcomeLoader__backdrop:not(#\9):not(#\9){
-  background: #3870ED !important;
+  background: #ffffff !important;
   background-image: none !important;
   filter: none !important;
   backdrop-filter: none !important;
@@ -9573,7 +9573,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   inset: 0 !important;
   border-radius: 50% !important;
   box-sizing: border-box !important;
-  border: 12px solid rgba(255,255,255,.42) !important;
+  border: 12px solid rgba(56, 112, 237, .22) !important;
   background: none !important;
   filter: none !important;
   stroke: none !important;
@@ -9583,7 +9583,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   inset: 0 !important;
   border-radius: 50% !important;
   --ring-deg: 0deg;
-  background: conic-gradient(#F6D36A 0deg, #3ED8B0 var(--ring-deg, 0deg), rgba(255,255,255,.08) var(--ring-deg, 0deg)) !important;
+  background: conic-gradient(#B8CCF8 0deg, #3870ED var(--ring-deg, 0deg), transparent var(--ring-deg, 0deg)) !important;
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 12px), #000 calc(100% - 11px)) !important;
   mask: radial-gradient(farthest-side, transparent calc(100% - 12px), #000 calc(100% - 11px)) !important;
   animation: none !important;
@@ -9624,7 +9624,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 }
 .lcWelcomeLoader__sub:not(#\9):not(#\9),
 .lcWelcomeLoader__status:not(#\9):not(#\9){
-  color: #ffffff !important;
+  color: #3870ED !important;
   text-shadow: none !important;
   filter: none !important;
 }
