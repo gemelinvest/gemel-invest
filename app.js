@@ -420,7 +420,7 @@
   function clonePolicyForMetrics(raw){
     if(!raw || typeof raw !== "object") return raw;
     try {
-      const p = JSON.parse(JSON.stringify(raw));
+      const p = JSON.parse(JSON.stringify(raw, (key, value) => key === "issuedPolicyFiles" ? undefined : value));
       if(typeof Wizard !== "undefined" && Wizard?.normalizeAllNewPolicies){
         const normalized = Wizard.normalizeAllNewPolicies([p]);
         return normalized[0] || p;
@@ -2274,11 +2274,35 @@
     try {
       const src = (payload && typeof payload === "object") ? payload : {};
       const out = JSON.parse(JSON.stringify(src, function(key, value){
-        if(key === "customerDocuments" || key === "elementaryPolicyFiles") return undefined;
+        if(key === "customerDocuments" || key === "elementaryPolicyFiles" || key === "issuedPolicyFiles") return undefined;
         return value;
       }));
       return (out && typeof out === "object") ? out : {};
     } catch(_e) { return {}; }
+  }
+
+  function stripIssuedPolicyBlobsInPlace(payload){
+    if(!payload || typeof payload !== "object") return false;
+    let changed = false;
+    const lists = [];
+    if(Array.isArray(payload.newPolicies)) lists.push(payload.newPolicies);
+    if(Array.isArray(payload.operational?.newPolicies)) lists.push(payload.operational.newPolicies);
+    lists.forEach((list) => {
+      list.forEach((policy) => {
+        if(!policy || typeof policy !== "object") return;
+        if(Object.prototype.hasOwnProperty.call(policy, "issuedPolicyFiles")){
+          delete policy.issuedPolicyFiles;
+          changed = true;
+        }
+      });
+    });
+    return changed;
+  }
+
+  function stripIssuedPolicyBlobsFromCustomers(customers){
+    (Array.isArray(customers) ? customers : []).forEach((rec) => {
+      stripIssuedPolicyBlobsInPlace(rec?.payload);
+    });
   }
 
 
@@ -9015,6 +9039,7 @@
     const idx = State.data.customers.findIndex((row) => String(row?.id) === String(cid));
     if(idx < 0) return false;
     const prev = State.data.customers[idx];
+    try { stripIssuedPolicyBlobsInPlace(payload); } catch(_e) {}
     let nextPayload = JSON.parse(JSON.stringify(payload));
     // GI-FIX 2026-08-02b: לא לדרוס תיק מלא ב-payload רדוד (primary/ops בלי מוצרים).
     // אם הנכנס חסר תוכן מוצרים והקיים מלא — ממזגים לשימור הפוליסות.
@@ -18546,7 +18571,7 @@ UsersGateUI.init();
       });
 
       sourceNewPolicies.forEach((rawPolicy, idx) => {
-        const p = JSON.parse(JSON.stringify(rawPolicy || {}));
+        const p = JSON.parse(JSON.stringify(rawPolicy || {}, (key, value) => key === "issuedPolicyFiles" ? undefined : value));
         try {
           if(typeof Wizard !== "undefined" && Wizard?.normalizeAllNewPolicies){
             const normalized = Wizard.normalizeAllNewPolicies([p]);
@@ -19029,6 +19054,7 @@ UsersGateUI.init();
 
     renderFileView(rec, opts={}){
       if(!rec) return;
+      try { stripIssuedPolicyBlobsInPlace(rec?.payload); } catch(_e) {}
       const policies = this.collectPolicies(rec);
       if(this.els.name) this.els.name.textContent = rec.fullName || "תיק לקוח";
       if(this.els.avatar) this.els.avatar.setAttribute("data-customer-name", safeTrim(rec.fullName || "תיק לקוח"));
@@ -19646,24 +19672,6 @@ UsersGateUI.init();
       return chunks.join("\n");
     },
 
-    readIssuedPolicyFile(file){
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onerror = () => reject(new Error("FILE_READ_FAILED"));
-        reader.onload = () => {
-          resolve({
-            id: "issuedfile_" + Date.now().toString(16) + "_" + Math.random().toString(16).slice(2, 8),
-            name: safeTrim(file?.name) || "פוליסה שהופקה.pdf",
-            mime: safeTrim(file?.type) || "application/pdf",
-            size: Number(file?.size) || 0,
-            uploadedAt: nowISO(),
-            dataUrl: String(reader.result || "")
-          });
-        };
-        reader.readAsDataURL(file);
-      });
-    },
-
     async handleIssuedPolicyUpload(rec, policyId, file, triggerBtn){
       if(!rec || !policyId || !file) return;
       const prevLabel = triggerBtn ? triggerBtn.textContent : "";
@@ -19680,9 +19688,9 @@ UsersGateUI.init();
           throw new Error("מנוע הסריקה לא נטען");
         }
         const result = engine.compareProposalToIssuedText(snapshot, text);
-        const fileRec = await this.readIssuedPolicyFile(file);
         const live = this.byId(rec.id) || rec;
-        const payload = JSON.parse(JSON.stringify(live.payload && typeof live.payload === "object" ? live.payload : {}));
+        const payload = live.payload && typeof live.payload === "object" ? live.payload : {};
+        try { stripIssuedPolicyBlobsInPlace(payload); } catch(_e) {}
         const list = Array.isArray(payload.newPolicies) ? payload.newPolicies : [];
         const rawId = String(policyId).replace(/_addon_.*$/, "");
         const pol = list.find((p, idx) => String(safeTrim(p?.id) || ("new_" + idx)) === rawId);
@@ -19696,10 +19704,10 @@ UsersGateUI.init();
           gaps: Array.isArray(result.gaps) ? result.gaps : [],
           skipped: Array.isArray(result.skipped) ? result.skipped : [],
           compared: Number(result.compared) || 0,
-          fileName: safeTrim(fileRec.name),
+          fileName: safeTrim(file?.name) || "פוליסה.pdf",
           scannedAt: nowISO()
         };
-        pol.issuedPolicyFiles = [fileRec];
+        delete pol.issuedPolicyFiles;
         payload.newPolicies = list;
         await persistCustomerPayloadRecord(rec.id, payload, "הועלה קובץ פוליסה שהופקה");
         if(this.currentId && String(this.currentId) === String(rec.id) && this.els.wrap?.classList.contains("is-open")){
@@ -19728,6 +19736,10 @@ UsersGateUI.init();
       const raw = this.getRawNewPolicy(rec, { id: policyId });
       const scan = raw?.issuedPolicyScan;
       const gaps = Array.isArray(scan?.gaps) ? scan.gaps : [];
+      if(!scan || (safeTrim(scan.status) !== "gaps" && !gaps.length)){
+        try { window.showToast?.({ title: "אין פערים להצגה", text: "לא נמצאה השוואה עם פערים לשורה הזו.", variant: "warn", durationMs: 4200 }); } catch(_e){}
+        return;
+      }
       const existing = document.getElementById("cfIssuedGapsModal");
       if(existing) existing.remove();
       const modal = document.createElement("div");
@@ -19761,10 +19773,23 @@ UsersGateUI.init();
           </div>
         </div>`;
       document.body.appendChild(modal);
-      const close = () => { try { modal.remove(); } catch(_e){} };
+      const close = () => {
+        try { modal.classList.remove("giValModal--visible"); } catch(_e){}
+        try { modal.remove(); } catch(_e){}
+        document.removeEventListener("keydown", onEsc, true);
+      };
+      const onEsc = (ev) => {
+        if(ev.key === "Escape") close();
+      };
       modal.querySelectorAll("[data-issued-gaps-close]").forEach((el) => {
-        on(el, "click", close);
+        on(el, "click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          close();
+        });
       });
+      document.addEventListener("keydown", onEsc, true);
+      requestAnimationFrame(() => modal.classList.add("giValModal--visible"));
     },
 
     renderPolicyTableRow(policy){
@@ -44230,6 +44255,7 @@ const ClalRiskLifePdf = {
           window.requestAnimationFrame(() => { window.setTimeout(resolve, 0); });
         });
       }
+      try { stripIssuedPolicyBlobsFromCustomers(State.data?.customers); } catch(_e) {}
       refreshStateShadows({
         skipNormalize: options.skipNormalize === true,
         lightShadows: options.lightShadows === true
