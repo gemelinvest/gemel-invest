@@ -19521,6 +19521,7 @@ UsersGateUI.init();
       const extraMeta = [agentNumber ? ("סוכן " + agentNumber) : "", periodLabel ? ("תקופה " + periodLabel) : ""].filter(Boolean).join(" · ");
       const cell = (label, value) =>
         `<div class="cfNewPolicyCard__cell"><span class="cfNewPolicyCard__lbl">${escapeHtml(label)}</span><strong class="cfNewPolicyCard__val">${escapeHtml(value)}</strong></div>`;
+      const scan = rawPol.issuedPolicyScan && typeof rawPol.issuedPolicyScan === "object" ? rawPol.issuedPolicyScan : null;
       return `<article class="cfNewPolicyCard ${escapeHtml(this.companyClass(policy.company))}" data-policy-id="${escapeHtml(policy.id)}">
         <div class="cfNewPolicyCard__row">
           ${logoMark}
@@ -19536,11 +19537,234 @@ UsersGateUI.init();
           <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--prem">
             <span class="cfNewPolicyCard__lbl">פרמיה חודשית</span>
             <strong class="cfNewPolicyCard__prem">${escapeHtml(rowPremium ? this.formatMoneyValue(rowPremium) : (policy.premiumAfterDiscount || policy.premiumText || '—'))}</strong>
-            <span class="cfFile__statusBadge ${escapeHtml(policy.badgeClass || 'is-new')}">${escapeHtml(policy.badgeText || 'חדש')}</span>
+            ${this.renderIssuedPolicyBadge(scan, policy)}
           </div>
         </div>
         ${coversList}
+        ${this.renderIssuedPolicyScanBar(policy, scan)}
       </article>`;
+    },
+
+    renderIssuedPolicyBadge(scan, policy){
+      if(safeTrim(scan?.status) === "ok"){
+        return `<span class="cfFile__statusBadge is-issuedOk">פוליסה פעילה תקינה ✓</span>`;
+      }
+      if(safeTrim(scan?.status) === "gaps"){
+        return `<span class="cfFile__statusBadge is-issuedGaps">יש פערים בין הפוליסה להצעה</span>`;
+      }
+      if(safeTrim(scan?.status) === "unreadable"){
+        return `<span class="cfFile__statusBadge is-issuedBad">לא ניתן לקרוא את הפוליסה</span>`;
+      }
+      return `<span class="cfFile__statusBadge ${escapeHtml(policy?.badgeClass || "is-new")}">${escapeHtml(policy?.badgeText || "חדש")}</span>`;
+    },
+
+    renderIssuedPolicyScanBar(policy, scan){
+      const pid = escapeHtml(policy?.id || "");
+      const status = safeTrim(scan?.status);
+      const uploadLabel = status ? "החלף פוליסה" : "העלה פוליסה";
+      const showGaps = status === "gaps"
+        ? `<button class="cfIssuedScan__show" type="button" data-issued-policy-gaps="${pid}">הצג</button>`
+        : "";
+      return `<div class="cfIssuedScan">
+        <input class="cfIssuedScan__file" type="file" accept=".pdf,application/pdf,image/png,image/jpeg,image/webp" hidden data-issued-policy-file="${pid}" />
+        <button class="cfIssuedScan__upload" type="button" data-issued-policy-upload="${pid}">${uploadLabel}</button>
+        ${showGaps}
+      </div>`;
+    },
+
+    buildIssuedScanSnapshot(rec, policy){
+      const raw = this.getRawNewPolicy(rec, policy) || {};
+      const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+      const insuredsAll = Array.isArray(payload.insureds) ? payload.insureds : [];
+      const ids = this.getPolicyInsuredIdsForDisplay(raw);
+      let people = [];
+      if(ids.length){
+        people = ids.map((id) => insuredsAll.find((x) => String(x?.id) === String(id))).filter(Boolean);
+      } else if(safeTrim(raw?.insuredMode) === "couple"){
+        people = insuredsAll.filter((x) => x?.type === "primary" || x?.type === "spouse");
+      } else if(insuredsAll[0]){
+        people = [insuredsAll[0]];
+      }
+      const insureds = people.map((ins) => {
+        const d = ins?.data && typeof ins.data === "object" ? ins.data : {};
+        const fullName = safeTrim(((d.firstName || "") + " " + (d.lastName || "")).trim()) || safeTrim(ins?.label);
+        return {
+          firstName: d.firstName,
+          lastName: d.lastName,
+          fullName,
+          idNumber: d.idNumber,
+          gender: d.gender,
+          birthDate: d.birthDate,
+          phone: d.phone,
+          email: d.email,
+          city: d.city,
+          street: d.street,
+          houseNumber: d.houseNumber,
+          zip: d.zip,
+          smokingStatus: d.smokingStatus
+        };
+      });
+      const covers = this.getHealthCoverRowsForDisplay(rec, policy);
+      const premAfter = this.asMoneyNumber(this.getPolicyPremiumAfterDiscount(raw));
+      const premRaw = this.asMoneyNumber(raw.premiumMonthly || raw.premium);
+      const sumCandidates = [raw.sumInsured, raw.compensation]
+        .concat(Object.values(raw.sumInsuredPerInsured || {}))
+        .concat(Object.values(raw.compensationPerInsured || {}));
+      const payer = people[0]?.data && typeof people[0].data === "object" ? people[0].data : {};
+      return {
+        insureds,
+        policy: {
+          type: raw.type || policy?.type,
+          company: raw.company || policy?.company,
+          sumInsured: raw.sumInsured,
+          compensation: raw.compensation,
+          sumCandidates,
+          premiumMonthly: premRaw || premAfter,
+          premiumCandidates: [premAfter, premRaw],
+          startDate: raw.startDate || policy?.startDate,
+          paymentMethod: payer.paymentMethod,
+          covers
+        }
+      };
+    },
+
+    async extractIssuedPolicyText(file){
+      const mime = safeTrim(file?.type).toLowerCase();
+      const name = safeTrim(file?.name).toLowerCase();
+      const isPdf = mime.indexOf("pdf") >= 0 || /\.pdf$/i.test(name);
+      if(!isPdf) return "";
+      if(window.GI_LOAD_LIBS?.pdfjs) await window.GI_LOAD_LIBS.pdfjs();
+      if(!window.pdfjsLib) throw new Error("ספריית PDF לא נטענה. רענן את המערכת ונסה שוב.");
+      const buffer = await file.arrayBuffer();
+      const pdf = await window.pdfjsLib.getDocument({ data: buffer }).promise;
+      const chunks = [];
+      for(let pageNo = 1; pageNo <= pdf.numPages; pageNo += 1){
+        const page = await pdf.getPage(pageNo);
+        const content = await page.getTextContent();
+        chunks.push((content.items || []).map((item) => item.str || "").join(" "));
+      }
+      return chunks.join("\n");
+    },
+
+    readIssuedPolicyFile(file){
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error("FILE_READ_FAILED"));
+        reader.onload = () => {
+          resolve({
+            id: "issuedfile_" + Date.now().toString(16) + "_" + Math.random().toString(16).slice(2, 8),
+            name: safeTrim(file?.name) || "פוליסה שהופקה.pdf",
+            mime: safeTrim(file?.type) || "application/pdf",
+            size: Number(file?.size) || 0,
+            uploadedAt: nowISO(),
+            dataUrl: String(reader.result || "")
+          });
+        };
+        reader.readAsDataURL(file);
+      });
+    },
+
+    async handleIssuedPolicyUpload(rec, policyId, file, triggerBtn){
+      if(!rec || !policyId || !file) return;
+      const prevLabel = triggerBtn ? triggerBtn.textContent : "";
+      if(triggerBtn){
+        triggerBtn.disabled = true;
+        triggerBtn.textContent = "סורק…";
+      }
+      try {
+        const text = await this.extractIssuedPolicyText(file);
+        const displayPolicy = { id: policyId };
+        const snapshot = this.buildIssuedScanSnapshot(rec, displayPolicy);
+        const engine = window.GIPolicyScan;
+        if(!engine || typeof engine.compareProposalToIssuedText !== "function"){
+          throw new Error("מנוע הסריקה לא נטען");
+        }
+        const result = engine.compareProposalToIssuedText(snapshot, text);
+        const fileRec = await this.readIssuedPolicyFile(file);
+        const live = this.byId(rec.id) || rec;
+        const payload = JSON.parse(JSON.stringify(live.payload && typeof live.payload === "object" ? live.payload : {}));
+        const list = Array.isArray(payload.newPolicies) ? payload.newPolicies : [];
+        const rawId = String(policyId).replace(/_addon_.*$/, "");
+        const pol = list.find((p, idx) => String(safeTrim(p?.id) || ("new_" + idx)) === rawId);
+        if(!pol){
+          try { window.showToast?.({ title: "לא נמצאה פוליסה", text: "לא ניתן לשייך את הקובץ לשורה בתיק.", variant: "warn", durationMs: 4800 }); } catch(_e){}
+          return;
+        }
+        pol.issuedPolicyScan = {
+          status: result.status,
+          message: result.message,
+          gaps: Array.isArray(result.gaps) ? result.gaps : [],
+          skipped: Array.isArray(result.skipped) ? result.skipped : [],
+          compared: Number(result.compared) || 0,
+          fileName: safeTrim(fileRec.name),
+          scannedAt: nowISO()
+        };
+        pol.issuedPolicyFiles = [fileRec];
+        payload.newPolicies = list;
+        await persistCustomerPayloadRecord(rec.id, payload, "הועלה קובץ פוליסה שהופקה");
+        if(this.currentId && String(this.currentId) === String(rec.id) && this.els.wrap?.classList.contains("is-open")){
+          this._openRefreshSig = "";
+          const next = this.byId(rec.id);
+          if(next) this.renderFileView(next, { bodyScrollTop: this.els.main?.scrollTop || 0 });
+        }
+        if(result.status === "ok"){
+          try { window.showToast?.({ title: "פוליסה פעילה תקינה", text: "הנתונים בפוליסה תואמים להצעה.", variant: "ok", durationMs: 4200 }); } catch(_e){}
+        } else if(result.status === "gaps"){
+          try { window.showToast?.({ title: "יש פערים בין הפוליסה להצעה", text: "לחצו «הצג» בשורת הפוליסה לפירוט.", variant: "warn", durationMs: 5200 }); } catch(_e){}
+        } else {
+          try { window.showToast?.({ title: "לא ניתן לקרוא", text: result.message || "העלו PDF עם טקסט קריא.", variant: "warn", durationMs: 5200 }); } catch(_e){}
+        }
+      } catch(err){
+        try { window.showToast?.({ title: "סריקה נכשלה", text: safeTrim(err?.message) || "לא ניתן לקרוא את הקובץ.", variant: "warn", durationMs: 5200 }); } catch(_e){}
+      } finally {
+        if(triggerBtn){
+          triggerBtn.disabled = false;
+          triggerBtn.textContent = prevLabel || "העלה פוליסה";
+        }
+      }
+    },
+
+    openIssuedPolicyGapsModal(rec, policyId){
+      const raw = this.getRawNewPolicy(rec, { id: policyId });
+      const scan = raw?.issuedPolicyScan;
+      const gaps = Array.isArray(scan?.gaps) ? scan.gaps : [];
+      const existing = document.getElementById("cfIssuedGapsModal");
+      if(existing) existing.remove();
+      const modal = document.createElement("div");
+      modal.id = "cfIssuedGapsModal";
+      modal.className = "giValModal cfIssuedGapsModal";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-label", "פערים בין הפוליסה להצעה");
+      const rows = gaps.length
+        ? gaps.map((gap) => `<div class="cfIssuedGapsModal__row">
+            <div class="cfIssuedGapsModal__field">${escapeHtml(gap.label || "שדה")}</div>
+            <div class="cfIssuedGapsModal__pair">
+              <div><span>בהצעה</span><strong>${escapeHtml(gap.expected || "—")}</strong></div>
+              <div><span>בפוליסה שהופקה</span><strong>${escapeHtml(gap.found || "לא נמצא בפוליסה")}</strong></div>
+            </div>
+          </div>`).join("")
+        : `<div class="cfIssuedGapsModal__empty">לא נמצאו פערים להצגה.</div>`;
+      modal.innerHTML = `
+        <div class="giValModal__backdrop" data-issued-gaps-close="1"></div>
+        <div class="giValModal__card cfIssuedGapsModal__card">
+          <div class="giValModal__head">
+            <span class="giValModal__headIcon" aria-hidden="true">⚠️</span>
+            <div class="giValModal__headText">
+              <div class="giValModal__title">יש פערים בין הפוליסה להצעה</div>
+              <div class="giValModal__sub">מה שהוגש בהצעה מול מה שמופיע בפוליסה שהופקה.</div>
+            </div>
+          </div>
+          <div class="giValModal__body">${rows}</div>
+          <div class="giValModal__foot">
+            <button class="btn btn--primary" type="button" data-issued-gaps-close="1">סגור</button>
+          </div>
+        </div>`;
+      document.body.appendChild(modal);
+      const close = () => { try { modal.remove(); } catch(_e){} };
+      modal.querySelectorAll("[data-issued-gaps-close]").forEach((el) => {
+        on(el, "click", close);
+      });
     },
 
     renderPolicyTableRow(policy){
@@ -19746,6 +19970,37 @@ UsersGateUI.init();
           list.hidden = !open;
           btn.setAttribute('aria-expanded', open ? 'true' : 'false');
           if(card) card.classList.toggle('is-covers-open', open);
+        });
+      });
+      root.querySelectorAll('[data-issued-policy-upload]').forEach((btn) => {
+        on(btn, 'click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const pid = btn.getAttribute('data-issued-policy-upload');
+          const card = btn.closest('.cfNewPolicyCard');
+          const input = card?.querySelector?.('[data-issued-policy-file]')
+            || (pid ? root.querySelector('[data-issued-policy-file="' + pid + '"]') : null);
+          if(input) input.click();
+        });
+      });
+      root.querySelectorAll('[data-issued-policy-file]').forEach((input) => {
+        on(input, 'change', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const file = input.files && input.files[0];
+          input.value = "";
+          if(!file) return;
+          const pid = input.getAttribute('data-issued-policy-file');
+          const card = input.closest('.cfNewPolicyCard');
+          const btn = card?.querySelector?.('[data-issued-policy-upload]');
+          void this.handleIssuedPolicyUpload(rec, pid, file, btn);
+        });
+      });
+      root.querySelectorAll('[data-issued-policy-gaps]').forEach((btn) => {
+        on(btn, 'click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          this.openIssuedPolicyGapsModal(rec, btn.getAttribute('data-issued-policy-gaps'));
         });
       });
       root.querySelectorAll('.cfFilePolicyTr').forEach(row => {

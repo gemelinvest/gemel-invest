@@ -9070,6 +9070,21 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 .cfFile__statusBadge.is-nochangeCollective:not(#\9):not(#\9){
   background: var(--gi-legacy-soft) !important; color: #475569 !important; border-color: var(--gi-border-strong) !important;
 }
+.cfFile__statusBadge.is-issuedOk:not(#\9):not(#\9){
+  background: #ecfdf3 !important;
+  color: #166534 !important;
+  border-color: rgba(22,163,74,.28) !important;
+}
+.cfFile__statusBadge.is-issuedGaps:not(#\9):not(#\9){
+  background: #fff7ed !important;
+  color: #9a3412 !important;
+  border-color: rgba(234,88,12,.28) !important;
+}
+.cfFile__statusBadge.is-issuedBad:not(#\9):not(#\9){
+  background: #fef2f2 !important;
+  color: #991b1b !important;
+  border-color: rgba(220,38,38,.25) !important;
+}
 .cfFile__statusBadge.is-pending:not(#\9):not(#\9){
   background: transparent !important; color: var(--gi-text-muted) !important; border: 1px dashed var(--gi-border-strong) !important;
 }
@@ -9380,6 +9395,68 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
     grid-template-columns: 48px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) !important;
   }
   .cfNewPolicyCard__cell--prem:not(#\9):not(#\9){ align-items: flex-start !important; text-align: right !important; }
+}
+
+.cfIssuedScan:not(#\9):not(#\9){
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-wrap: wrap !important;
+  padding-top: 2px !important;
+}
+.cfIssuedScan__upload:not(#\9):not(#\9),
+.cfIssuedScan__show:not(#\9):not(#\9){
+  height: 30px !important;
+  padding: 0 12px !important;
+  border-radius: var(--gi-r-ctl) !important;
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  color: var(--gi-text) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+}
+.cfIssuedScan__upload:not(#\9):not(#\9){
+  background: var(--gi-health-soft) !important;
+  border-color: rgba(26,66,168,.22) !important;
+  color: #1a42a8 !important;
+}
+.cfIssuedScan__show:not(#\9):not(#\9){
+  background: #fff7ed !important;
+  border-color: rgba(234,88,12,.28) !important;
+  color: #9a3412 !important;
+}
+.cfIssuedGapsModal__card:not(#\9):not(#\9){
+  max-width: 560px !important;
+}
+.cfIssuedGapsModal__row:not(#\9):not(#\9){
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  padding: 12px 0 !important;
+  border-bottom: 1px solid var(--gi-border) !important;
+}
+.cfIssuedGapsModal__field:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  color: var(--gi-text) !important;
+}
+.cfIssuedGapsModal__pair:not(#\9):not(#\9){
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 10px !important;
+}
+.cfIssuedGapsModal__pair span:not(#\9):not(#\9){
+  display: block !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text-3) !important;
+  margin-bottom: 2px !important;
+}
+.cfIssuedGapsModal__pair strong:not(#\9):not(#\9){
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  color: var(--gi-text) !important;
 }
 
 .giHarNotice:not(#\9):not(#\9){ z-index: 100020 !important; }
