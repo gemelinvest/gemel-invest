@@ -45534,6 +45534,23 @@ body.view-elementaryMirror-active .pageTitle{ /* keep default */ }
   font-size: 12px;
   color: var(--lc-ink-mute);
 }
+#view-customers .lcCustomers__existingSaleBadge{
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 3px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  color: #c2410c;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+}
 #view-customers .lcCustomers__sectorCell{
   display: flex;
   flex-wrap: wrap;

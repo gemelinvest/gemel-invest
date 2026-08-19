@@ -8720,6 +8720,23 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   color: #718096 !important;
   font-weight: 400 !important;
 }
+#view-customers .lcCustomers__nameMeta span.lcCustomers__existingSaleBadge:not(#\9):not(#\9){
+  display: inline-flex !important;
+  align-items: center !important;
+  width: fit-content !important;
+  max-width: 100% !important;
+  margin-top: 3px !important;
+  height: 20px !important;
+  padding: 0 7px !important;
+  border-radius: 4px !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  color: #c2410c !important;
+  background: #fff7ed !important;
+  border: 1px solid #fdba74 !important;
+}
 #view-customers .lcCustomers__date:not(#\9):not(#\9),
 #view-customers .lcCustomers__mono:not(#\9):not(#\9){
   color: #4a5568 !important;

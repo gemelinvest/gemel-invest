@@ -470,6 +470,36 @@
     return best;
   }
 
+  function israelCalendarDay(iso){
+    const s = safeTrim(iso);
+    if(!s) return "";
+    const t = Date.parse(s);
+    if(!Number.isFinite(t)) return "";
+    try {
+      return getIsraelDateString(new Date(t));
+    } catch(_e) {
+      return "";
+    }
+  }
+
+  /** תיק קיים שנמכרה לו היום פוליסה חדשה (בריאות/סיכונים/אלמנטרי). לא הקמה מהיום ולא מינוי בלבד. */
+  function customerHasExistingFileNewSaleToday(rec, todayDay){
+    const today = safeTrim(todayDay) || getIsraelDateString();
+    if(!today) return false;
+    const createdDay = israelCalendarDay(rec?.createdAt || rec?.created_at);
+    if(!createdDay || createdDay >= today) return false;
+    const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+    const saleToday = (p) => {
+      if(!p) return false;
+      if(String(p.origin || "") === "existing") return false;
+      return israelCalendarDay(p._addedAt) === today;
+    };
+    const newPols = getCustomerRawNewPolicies(rec);
+    if((Array.isArray(newPols) ? newPols : []).some(saleToday)) return true;
+    const elem = Array.isArray(payload.elementaryPolicies) ? payload.elementaryPolicies : [];
+    return elem.some(saleToday);
+  }
+
   function clonePolicyForMetrics(raw){
     if(!raw || typeof raw !== "object") return raw;
     try {
@@ -17105,6 +17135,16 @@ UsersGateUI.init();
       return customerListActivityStamp(rec);
     },
 
+    shouldShowExistingSaleBadge(rec){
+      if(this._viewMode === "search") return false;
+      if(safeTrim(UI.els.customersSearch?.value)) return false;
+      return customerHasExistingFileNewSaleToday(rec);
+    },
+
+    existingSaleBadgeHtml(){
+      return `<span class="lcCustomers__existingSaleBadge">רכישה ללקוח קיים</span>`;
+    },
+
     /** שורות מוצגות במסך לקוחות — מגיעות מהשרת (10 אחרונים / חיפוש). */
     filtered(){
       if(Array.isArray(this._viewRows)) return this._viewRows.slice();
@@ -17302,6 +17342,7 @@ UsersGateUI.init();
         safeTrim(rec?.updatedAt || rec?.updated_at),
         safeTrim(rec?.createdAt || rec?.created_at),
         this.collectCustomerSectors(rec).join(","),
+        customerHasExistingFileNewSaleToday(rec) ? "existingSaleToday" : "",
         (() => {
           try {
             const parts = this.customerListPremiumParts(rec);
@@ -17510,6 +17551,16 @@ UsersGateUI.init();
       if(nameStrong) nameStrong.textContent = safeTrim(rec.fullName) || '—';
       const citySpan = tr.querySelector('.lcCustomers__nameMeta .muted.small');
       if(citySpan) citySpan.textContent = safeTrim(rec.city) || '';
+      const meta = tr.querySelector('.lcCustomers__nameMeta');
+      if(meta){
+        let badge = meta.querySelector('.lcCustomers__existingSaleBadge');
+        const show = this.shouldShowExistingSaleBadge(rec);
+        if(show && !badge){
+          meta.insertAdjacentHTML("beforeend", this.existingSaleBadgeHtml());
+        } else if(!show && badge){
+          badge.remove();
+        }
+      }
       return true;
     },
 
@@ -17586,7 +17637,7 @@ UsersGateUI.init();
       UI.els.customersTbody.innerHTML = rows.length ? rows.map(rec => {
         const quietSig = escapeHtml(this.buildCustomerQuietSig(rec));
         return `<tr class="lcCustomerRow" data-customer-id="${escapeHtml(String(rec.id || ""))}" data-quiet-sig="${quietSig}">
-          <td><div class="lcCustomers__nameCell"><div class="lcCustomers__avatar" aria-hidden="true">${(rec.fullName||'').split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase()||'?'}</div><div class="lcCustomers__nameMeta"><strong>${escapeHtml(rec.fullName || "—")}</strong><span class="muted small">${escapeHtml(rec.city || "")}</span></div></div></td>
+          <td><div class="lcCustomers__nameCell"><div class="lcCustomers__avatar" aria-hidden="true">${(rec.fullName||'').split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase()||'?'}</div><div class="lcCustomers__nameMeta"><strong>${escapeHtml(rec.fullName || "—")}</strong><span class="muted small">${escapeHtml(rec.city || "")}</span>${this.shouldShowExistingSaleBadge(rec) ? this.existingSaleBadgeHtml() : ""}</div></div></td>
           <td><div class="lcCustomers__sectorCellWrap">${sectorCellHtml(rec)}</div></td>
           <td><span class="lcCustomers__date">${escapeHtml(formatCreatedAt(rec.createdAt || rec.created_at))}</span></td>
           <td><span class="lcCustomers__mono">${escapeHtml(rec.idNumber || "—")}</span></td>
