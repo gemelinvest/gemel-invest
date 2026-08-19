@@ -19774,15 +19774,24 @@ UsersGateUI.init();
     renderIssuedPolicyScanBar(policy, scan){
       const pid = escapeHtml(policy?.id || "");
       const status = safeTrim(scan?.status);
+      const canUpload = this.canShowIssuedPolicyUpload();
       const uploadLabel = status ? "החלף פוליסה" : "העלה פוליסה";
       const showGaps = status === "gaps"
         ? `<button class="cfIssuedScan__show" type="button" data-issued-policy-gaps="${pid}">הצג</button>`
         : "";
+      const uploadHtml = canUpload
+        ? `<input class="cfIssuedScan__file" type="file" accept=".pdf,application/pdf,image/png,image/jpeg,image/webp" hidden data-issued-policy-file="${pid}" />
+        <button class="cfIssuedScan__upload" type="button" data-issued-policy-upload="${pid}">${uploadLabel}</button>`
+        : "";
+      if(!uploadHtml && !showGaps) return "";
       return `<div class="cfIssuedScan">
-        <input class="cfIssuedScan__file" type="file" accept=".pdf,application/pdf,image/png,image/jpeg,image/webp" hidden data-issued-policy-file="${pid}" />
-        <button class="cfIssuedScan__upload" type="button" data-issued-policy-upload="${pid}">${uploadLabel}</button>
+        ${uploadHtml}
         ${showGaps}
       </div>`;
+    },
+
+    canShowIssuedPolicyUpload(){
+      try { return !!(Auth.isAdmin() || Auth.isManager()); } catch(_e){ return false; }
     },
 
     buildIssuedScanSnapshot(rec, policy){
