@@ -9522,45 +9522,65 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   box-shadow: none !important;
 }
 
-/* GI-WELCOME 2026-08-20 — לוגו כמו בתפריט הצד + עיגול שמתמלא ב-6 שניות */
+/* GI-WELCOME 2026-08-20 — לוגו חד כמו בתפריט הצד + עיגול שמתמלא ב-6 שניות */
 .lcWelcomeLoader:not(#\9):not(#\9){
   z-index: 14000 !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 .lcWelcomeLoader__backdrop:not(#\9):not(#\9){
   background: #3870ED !important;
   background-image: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 .lcWelcomeLoader__backdrop:not(#\9):not(#\9)::before,
 .lcWelcomeLoader__backdrop:not(#\9):not(#\9)::after{
   content: none !important;
   display: none !important;
 }
+.lcWelcomeLoader__content:not(#\9):not(#\9){
+  filter: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
 .lcWelcomeLoader__content:not(#\9):not(#\9)::before{
   content: none !important;
   display: none !important;
+  filter: none !important;
 }
-.lcWelcomeLoader__orb:not(#\9):not(#\9){
+.lcWelcomeLoader__mark:not(#\9):not(#\9){
   position: relative !important;
-  width: 220px !important;
-  height: 220px !important;
-  margin: 0 auto 18px !important;
+  width: 260px !important;
+  height: 260px !important;
+  margin: 0 auto 22px !important;
   display: grid !important;
   place-items: center !important;
+  filter: none !important;
+  opacity: 1 !important;
+  pointer-events: none !important;
+  inset: auto !important;
+  border-radius: 0 !important;
+  background: none !important;
 }
 .lcWelcomeLoader__ring:not(#\9):not(#\9){
   position: absolute !important;
   inset: 0 !important;
-  width: 220px !important;
-  height: 220px !important;
+  width: 260px !important;
+  height: 260px !important;
   transform: rotate(-90deg) !important;
+  overflow: visible !important;
+  filter: none !important;
 }
 .lcWelcomeLoader__ringTrack:not(#\9):not(#\9),
 .lcWelcomeLoader__ringFill:not(#\9):not(#\9){
   fill: none !important;
-  stroke-width: 5.5 !important;
+  stroke-width: 6 !important;
 }
 .lcWelcomeLoader__ringTrack:not(#\9):not(#\9){
-  stroke: rgba(255,255,255,.28) !important;
+  stroke: rgba(255,255,255,.35) !important;
 }
 .lcWelcomeLoader__ringFill:not(#\9):not(#\9){
   stroke: #ffffff !important;
@@ -9572,22 +9592,30 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   animation: lcWelcomeRingFill 6s linear forwards !important;
 }
 .lcWelcomeLoader__logoPlate:not(#\9):not(#\9){
-  width: 168px !important;
-  height: 168px !important;
+  width: 196px !important;
+  height: 196px !important;
   border-radius: 50% !important;
   background: #ffffff !important;
   display: grid !important;
   place-items: center !important;
-  box-shadow: 0 10px 28px rgba(15, 37, 92, .18) !important;
+  box-shadow: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
   z-index: 1 !important;
+  overflow: hidden !important;
+  padding: 22px !important;
+  box-sizing: border-box !important;
 }
 .lcWelcomeLoader__logo:not(#\9):not(#\9){
-  width: 132px !important;
-  max-width: 132px !important;
+  width: 150px !important;
+  max-width: 150px !important;
   height: auto !important;
   margin: 0 !important;
   filter: none !important;
   animation: none !important;
+  opacity: 1 !important;
+  display: block !important;
 }
 .lcWelcomeLoader__greeting:not(#\9):not(#\9),
 .lcWelcomeLoader__name:not(#\9):not(#\9),
@@ -9596,18 +9624,19 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 }
 .lcWelcomeLoader__sub:not(#\9):not(#\9),
 .lcWelcomeLoader__status:not(#\9):not(#\9){
-  color: rgba(255,255,255,.92) !important;
+  color: #ffffff !important;
   text-shadow: none !important;
+  filter: none !important;
 }
 .lcWelcomeLoader__sub:not(#\9):not(#\9){
-  font-size: 16px !important;
+  font-size: 17px !important;
   font-weight: 600 !important;
   margin-top: 4px !important;
 }
 .lcWelcomeLoader__status:not(#\9):not(#\9){
-  font-size: 13px !important;
+  font-size: 14px !important;
   font-weight: 500 !important;
-  opacity: .86 !important;
+  opacity: .9 !important;
   margin-top: 8px !important;
 }
 @keyframes lcWelcomeRingFill{

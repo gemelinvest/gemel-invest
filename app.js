@@ -14356,10 +14356,10 @@
         <div class="lcWelcomeLoader__backdrop"></div>
         <div class="lcWelcomeLoader__panel" role="status" aria-live="polite" aria-atomic="true">
           <div class="lcWelcomeLoader__content">
-            <div class="lcWelcomeLoader__orb" aria-hidden="true">
+            <div class="lcWelcomeLoader__mark" aria-hidden="true">
               <svg class="lcWelcomeLoader__ring" viewBox="0 0 120 120" focusable="false">
-                <circle class="lcWelcomeLoader__ringTrack" cx="60" cy="60" r="52"></circle>
-                <circle class="lcWelcomeLoader__ringFill" cx="60" cy="60" r="52"></circle>
+                <circle class="lcWelcomeLoader__ringTrack" cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="6"></circle>
+                <circle class="lcWelcomeLoader__ringFill" cx="60" cy="60" r="52" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round"></circle>
               </svg>
               <div class="lcWelcomeLoader__logoPlate">
                 <img class="lcWelcomeLoader__logo" src="./logo-login-clean.png" alt="GEMEL INVEST" />
@@ -46237,9 +46237,7 @@ const ClalRiskLifePdf = {
       }
       const loaderName = safeTrim(Auth.current?.name || matched?.name);
       try { localStorage.removeItem(LS_SESSION_KEY); } catch(_) {}
-      if(options.skipMfa !== true){
-        try { WelcomeLoader.open(loaderName); } catch(_e) {}
-      }
+      try { WelcomeLoader.open(loaderName); } catch(_e) {}
       targetView = Auth.isReferent() ? 'campaignLeads' : 'dashboard';
       if(!App._loginReady){
         try {

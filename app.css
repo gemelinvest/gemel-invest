@@ -13125,6 +13125,17 @@ body.lcAuthLock .lcLogin:not(.lcLogin--mfa){
 }
 .lcWelcomeLoader__orb--a{ width:118px; height:118px; inset-inline-start:-26px; top:74px; background:rgba(111,187,255,.36); }
 .lcWelcomeLoader__orb--b{ width:168px; height:168px; inset-inline-end:-38px; bottom:58px; background:rgba(194,223,255,.44); }
+.lcWelcomeLoader__mark{
+  position:relative !important;
+  width:260px;
+  height:260px;
+  margin:0 auto 22px;
+  display:grid;
+  place-items:center;
+  filter:none !important;
+  opacity:1 !important;
+  pointer-events:none;
+}
 .lcWelcomeLoader__logoWrap{
   position:relative;
   isolation:isolate;
