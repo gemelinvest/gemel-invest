@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260818-na-fullwidth-v1";
+  const GI_WIZARD_BUILD = "20260819-gov-vehicle-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -5816,9 +5816,18 @@ if(path === "birthDate"){
       this._elemGovVehicleFetchCache[key] = { ts: Date.now(), snapshot };
     },
 
+    elemGovVehicleProxyUrl(){
+      const base = safeTrim(Storage?.supabaseUrl) || 'https://vhvlkerectggovfihjgm.supabase.co';
+      return String(base).replace(/\/+$/, '') + '/functions/v1/gi-gov-vehicle';
+    },
+
+    elemGovVehicleProxyKey(){
+      return safeTrim(Storage?.publishableKey) || 'sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb';
+    },
+
     /**
-     * שליפת רשומות רכב מ־data.gov.il לפי ספרות רישוי מנורמלות.
-     * משתמש בקאש סשן (30 דק׳) למניעת קריאות כפולות.
+     * שליפת רשומות רכב לפי ספרות רישוי.
+     * דרך Edge Function (עוקף CORS של data.gov.il). קאש סשן 30 דק׳.
      */
     async fetchElementaryGovVehicleRecordsForDigits(digitsRaw, signal){
       const digits = this.normalizeElementaryLicenseDigits(digitsRaw);
@@ -5828,29 +5837,24 @@ if(path === "birthDate"){
       const cached = this._elemGovVehicleCacheGet(digits);
       if(cached) return cached;
 
-      const RESOURCE = '053cea08-09bc-40ec-8f7a-156f0677aff3';
-      const govUrl = (params) => 'https://data.gov.il/api/3/action/datastore_search?' + params.toString();
-      const govFetch = async (params) => {
-        const res = await fetch(govUrl(params), { signal, credentials:'omit' });
-        if(!res.ok) throw new Error('מאגר הרכב לא זמין כרגע (' + res.status + ')');
-        return res.json().catch(() => ({}));
-      };
+      const key = this.elemGovVehicleProxyKey();
+      const url = this.elemGovVehicleProxyUrl() + '?plate=' + encodeURIComponent(digits);
       try{
-        let records = [];
-        const tryFilters = new URLSearchParams({
-          resource_id: RESOURCE,
-          limit: '5',
-          filters: JSON.stringify({ mispar_rechev: digits })
+        const res = await fetch(url, {
+          method: 'GET',
+          signal,
+          credentials: 'omit',
+          headers: {
+            Accept: 'application/json',
+            apikey: key,
+            Authorization: 'Bearer ' + key
+          }
         });
-        let json = await govFetch(tryFilters);
-        records = json?.result?.records;
-        records = Array.isArray(records) ? this.elementaryRecordsMatchPlate(records, digits) : [];
-        if(!records.length){
-          const tryQ = new URLSearchParams({ resource_id: RESOURCE, limit: '20', q: digits });
-          json = await govFetch(tryQ);
-          const loose = json?.result?.records;
-          records = Array.isArray(loose) ? this.elementaryRecordsMatchPlate(loose, digits) : [];
+        const body = await res.json().catch(() => ({}));
+        if(!res.ok){
+          throw new Error(safeTrim(body?.error) || ('מאגר הרכב לא זמין כרגע (' + res.status + ')'));
         }
+        const records = this.elementaryRecordsMatchPlate(body?.records, digits);
         const snap = { ok:true, records, error:null };
         this._elemGovVehicleCacheSet(digits, snap);
         return snap;
@@ -5858,8 +5862,7 @@ if(path === "birthDate"){
         if(String(e?.name || '') === 'AbortError'){
           return { ok:false, records:[], error:e };
         }
-        const snap = { ok:false, records:[], error:e };
-        return snap;
+        return { ok:false, records:[], error:e };
       }
     },
 
