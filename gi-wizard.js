@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260819-gov-vehicle-v1";
+  const GI_WIZARD_BUILD = "20260819-collective-comp-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -16075,7 +16075,6 @@ if(path === "birthDate"){
         const d = ins.data || {};
         const insLabel = this.getInsuredDisplayName ? this.getInsuredDisplayName(ins) : (safeTrim(ins.label) || `מבוטח`);
         const list = this.getStep3ActionablePolicies ? this.getStep3ActionablePolicies(ins) : [];
-        const allExisting = Array.isArray(d.existingPolicies) ? d.existingPolicies : [];
         const pItems = [];
 
         // פרמיה חודשית
@@ -16086,8 +16085,8 @@ if(path === "birthDate"){
           }
         }
 
-        // סכום ביטוח / פיצוי
-        for(const p of allExisting){
+        // סכום ביטוח / פיצוי — קולקטיב/קבוצתי לא דורש הזנה (כבר מסונן מ-list)
+        for(const p of list){
           const needsSum  = (p.type === 'ריסק' || p.type === 'ריסק משכנתא' || p.type === 'אובדן כושר עבודה');
           const needsComp = (p.type === 'מחלות קשות' || p.type === 'סרטן');
           const pName = [safeTrim(p.company), safeTrim(p.type)].filter(Boolean).join(' · ') || 'פוליסה';
@@ -28307,8 +28306,8 @@ if(path === "birthDate"){
           if(this.shouldValidateStep3PolicyPremium(p) && safeTrim(p.monthlyPremium) === "") return false;
         }
         // ולידציה: ריסק/ריסק משכנתא/אובדן כושר עבודה/מחלות קשות/סרטן — חובה למלא סכום ביטוח/פיצוי
-        const allExisting = Array.isArray(d.existingPolicies) ? d.existingPolicies : [];
-        for(const p of allExisting){
+        // פוליסה קולקטיבית/קבוצתית (מיובאת מהר הביטוח) לא דורשת סכום — היא לא ב-list
+        for(const p of list){
           const needsSum  = (p.type === "ריסק" || p.type === "ריסק משכנתא" || p.type === "אובדן כושר עבודה");
           const needsComp = (p.type === "מחלות קשות" || p.type === "סרטן");
           if(needsSum  && !safeTrim(p.sumInsured || "")) return false;
