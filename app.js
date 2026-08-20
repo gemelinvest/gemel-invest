@@ -14208,20 +14208,10 @@
         try { AgentActivityLog.logBeacon(eventType, cur); } catch(_e) {}
         try { void AgentActivityLog.log(eventType, cur); } catch(_e) {}
       }
-      try { AttendanceClock.onLoggedOut(); } catch(_e) {}
       try { persistLastSessionUserKey(typeof Storage !== "undefined" ? Storage.fullCacheUserKey() : ""); } catch(_e) {}
       this.current = null;
-      try { App.resetSessionDataForUserSwitch(reason === "browser" ? "browser_close" : "logout"); } catch(_e) {
-        try { App._fullDataReady = false; } catch(_e2) {}
-        try { App._sessionDataScoped = false; } catch(_e2) {}
-        try { App.clearPostLoginDataRecovery(); } catch(_e2) {}
-      }
       try { localStorage.removeItem(LS_SESSION_KEY); } catch(_) {}
       try { localStorage.removeItem(SIDEBAR_COLLAPSE_STORAGE_KEY); } catch(_) {}
-      try { InactivityGuard.stop(); } catch(_e) {}
-      try { CampaignAgentLeadWatcher.stop(); } catch(_e) {}
-      try { MirrorCallAgentToastWatcher.stop(); } catch(_e) {}
-      try { BackgroundTimers.stopAll(); } catch(_e) {}
       this.lock();
       try { UI.applySidebarCollapse(true); } catch(_e) {}
       if(reason === "idle"){
@@ -14243,6 +14233,16 @@
       } catch(_e) {}
       UI.applyRoleUI();
       UI.goView("dashboard");
+      try { AttendanceClock.onLoggedOut(); } catch(_e) {}
+      try { InactivityGuard.stop(); } catch(_e) {}
+      try { CampaignAgentLeadWatcher.stop(); } catch(_e) {}
+      try { MirrorCallAgentToastWatcher.stop(); } catch(_e) {}
+      try { BackgroundTimers.stopAll(); } catch(_e) {}
+      try { App.resetSessionDataForUserSwitch(reason === "browser" ? "browser_close" : "logout"); } catch(_e) {
+        try { App._fullDataReady = false; } catch(_e2) {}
+        try { App._sessionDataScoped = false; } catch(_e2) {}
+        try { App.clearPostLoginDataRecovery(); } catch(_e2) {}
+      }
       try { window.dispatchEvent(new CustomEvent('gi:app-logout')); } catch(_e) {}
       try {
         const isElectron = typeof navigator !== 'undefined' && /electron/i.test(String(navigator.userAgent || ''));
@@ -46863,7 +46863,12 @@ const ClalRiskLifePdf = {
     this._bindMfaInput();
     on($('#btnVerifyLoginMfa'),'click',()=> this._verifyPendingMfa({ source:'button' }));
   };
-  Auth.logout = (function(orig){ return async function(reason='manual'){ try{ await SupabaseMFA.signOutSilently(); }catch(_e){} return orig.call(this, reason); }; })(Auth.logout);
+  Auth.logout = (function(orig){
+    return function(reason='manual'){
+      try { void SupabaseMFA.signOutSilently(); } catch(_e) {}
+      return orig.call(this, reason);
+    };
+  })(Auth.logout);
   Auth._submit = async function(){
     if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
     const username = safeTrim(this.els.user?.value);
