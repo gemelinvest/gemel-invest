@@ -8681,6 +8681,389 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 }
 
 /* =====================================================================
+   36c. AGENT APPOINTMENT wizard (#lcAgentApptWizard)
+
+   Visual only. Same family as the health-risk chooser: navy top bar,
+   Heebo, colour-only hover, pill stepper. Company picker is a compact
+   two-column row list instead of oversized tiles. Extra :not(#\9)
+   beats theme-unify-flat.css after login. JS IDs / data-attrs stay.
+   ===================================================================== */
+
+#lcAgentApptWizard .lcWizard__backdrop:not(#\9):not(#\9):not(#\9){
+  background: rgba(15,23,42,.45) !important;
+  background-image: none !important;
+  backdrop-filter: blur(2px) !important;
+  -webkit-backdrop-filter: blur(2px) !important;
+}
+
+#lcAgentApptWizard .lcWizard__panel:not(#\9):not(#\9):not(#\9){
+  inset: 24px !important;
+  height: calc(100vh - 48px) !important;
+  max-height: calc(100vh - 48px) !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  border-radius: 20px !important;
+  box-shadow: var(--gi-sh-lg) !important;
+  overflow: hidden !important;
+}
+
+#lcAgentApptWizard .lcAgentApptWizard__bar:not(#\9):not(#\9):not(#\9){
+  display: block !important;
+  height: 6px !important;
+  flex: 0 0 6px !important;
+  background: var(--gi-navy) !important;
+}
+
+#lcAgentApptWizard .lcWizard__head:not(#\9):not(#\9):not(#\9){
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  padding: 18px 56px 8px 28px !important;
+  border-bottom: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+}
+
+#lcAgentApptWizard .lcAgentApptWizard__crumb:not(#\9):not(#\9):not(#\9){
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  margin: 0 0 8px !important;
+  padding: 5px 12px !important;
+  border-radius: var(--gi-r-pill) !important;
+  background: var(--gi-primary-soft) !important;
+  color: var(--gi-primary) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+
+#lcAgentApptWizard .lcAgentApptWizard__crumb span:not(#\9):not(#\9):not(#\9){
+  opacity: .55 !important;
+  font-weight: 600 !important;
+  color: var(--gi-text-muted) !important;
+}
+
+#lcAgentApptWizard .lcWizard__kicker:not(#\9):not(#\9):not(#\9){
+  margin: 0 0 4px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 1.4px !important;
+  text-transform: uppercase !important;
+  color: var(--gi-text-muted) !important;
+}
+
+#lcAgentApptWizard .lcWizard__title:not(#\9):not(#\9):not(#\9){
+  margin: 0 !important;
+  font-size: 22px !important;
+  font-weight: 800 !important;
+  letter-spacing: -.02em !important;
+  line-height: 1.25 !important;
+  color: var(--gi-text) !important;
+}
+
+#lcAgentApptWizard .giAgentApptBadge:not(#\9):not(#\9):not(#\9){
+  display: inline-flex !important;
+  align-items: center !important;
+  height: 24px !important;
+  margin-top: 10px !important;
+  padding: 0 10px !important;
+  border-radius: var(--gi-r-pill) !important;
+  background: var(--gi-primary-soft) !important;
+  border: 1px solid rgba(37,99,235,.18) !important;
+  color: var(--gi-primary) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  white-space: nowrap !important;
+}
+
+#lcAgentApptWizard #lcAgentApptClose.lcWizard__close:not(#\9):not(#\9):not(#\9){
+  position: absolute !important;
+  top: 18px !important;
+  inset-inline-start: auto !important;
+  inset-inline-end: 18px !important;
+  z-index: 2 !important;
+  width: 32px !important;
+  height: 32px !important;
+  margin: 0 !important;
+  border-radius: var(--gi-r-ctl) !important;
+  background: #fff !important;
+  border: 1px solid var(--gi-border) !important;
+  color: var(--gi-text-3) !important;
+  font-size: 15px !important;
+  line-height: 1 !important;
+  box-shadow: none !important;
+}
+
+#lcAgentApptWizard #lcAgentApptClose.lcWizard__close:hover:not(#\9):not(#\9):not(#\9){
+  background: var(--gi-surface-3) !important;
+  color: var(--gi-text) !important;
+  transform: none !important;
+}
+
+#lcAgentApptWizard .lcWizard__stepper:not(#\9):not(#\9):not(#\9){
+  margin: 8px 28px 0 !important;
+  padding: 10px !important;
+  border: 1px solid var(--gi-border-soft) !important;
+  border-radius: 12px !important;
+  background: var(--gi-bg) !important;
+}
+
+#lcAgentApptWizard .lcWizard__progressBar:not(#\9):not(#\9):not(#\9){
+  display: none !important;
+}
+
+#lcAgentApptWizard .lcSteps:not(#\9):not(#\9):not(#\9){
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  flex-wrap: nowrap !important;
+}
+
+#lcAgentApptWizard .lcStep:not(#\9):not(#\9):not(#\9){
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  min-width: 0 !important;
+  padding: 6px 10px !important;
+  border: 0 !important;
+  border-radius: var(--gi-r-pill) !important;
+  background: transparent !important;
+  color: var(--gi-text-muted) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+
+#lcAgentApptWizard .lcStep__num:not(#\9):not(#\9):not(#\9){
+  width: 22px !important;
+  height: 22px !important;
+  flex: 0 0 22px !important;
+  border-radius: 50% !important;
+  background: #fff !important;
+  border: 1px solid var(--gi-border) !important;
+  color: var(--gi-text-3) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+}
+
+#lcAgentApptWizard .lcStep.is-active:not(#\9):not(#\9):not(#\9){
+  background: #fff !important;
+  color: var(--gi-primary) !important;
+  box-shadow: 0 0 0 1px rgba(37,99,235,.18) !important;
+}
+
+#lcAgentApptWizard .lcStep.is-active .lcStep__num:not(#\9):not(#\9):not(#\9){
+  background: var(--gi-navy) !important;
+  border-color: var(--gi-navy) !important;
+  color: #fff !important;
+}
+
+#lcAgentApptWizard .lcStep.is-done:not(#\9):not(#\9):not(#\9){
+  background: transparent !important;
+  color: var(--gi-success) !important;
+}
+
+#lcAgentApptWizard .lcStep.is-done .lcStep__num:not(#\9):not(#\9):not(#\9){
+  background: var(--gi-success) !important;
+  border-color: var(--gi-success) !important;
+  color: #fff !important;
+}
+
+#lcAgentApptWizard .lcWizard__body:not(#\9):not(#\9):not(#\9){
+  padding: 22px 28px 12px !important;
+  background: var(--gi-surface) !important;
+}
+
+#lcAgentApptWizard .giApptStepCompanies .lcWTitle:not(#\9):not(#\9):not(#\9){
+  margin: 0 0 4px !important;
+  font-size: 18px !important;
+  font-weight: 800 !important;
+  color: var(--gi-text) !important;
+}
+
+#lcAgentApptWizard .giApptStepCompanies__sub:not(#\9):not(#\9):not(#\9){
+  margin: 0 0 14px !important;
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  line-height: 1.55 !important;
+  color: var(--gi-text-3) !important;
+}
+
+#lcAgentApptWizard .giApptSelectedChip:not(#\9):not(#\9):not(#\9){
+  display: inline-flex !important;
+  align-items: center !important;
+  height: 26px !important;
+  padding: 0 10px !important;
+  margin-bottom: 14px !important;
+  border-radius: var(--gi-r-pill) !important;
+  background: var(--gi-success-soft) !important;
+  border: 1px solid rgba(22,163,74,.20) !important;
+  color: var(--gi-success) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+
+#lcAgentApptWizard .giApptSelectedChip--empty:not(#\9):not(#\9):not(#\9){
+  background: #F1F5F9 !important;
+  border-color: var(--gi-border) !important;
+  color: var(--gi-text-muted) !important;
+}
+
+#lcAgentApptWizard .giApptCompanyGrid:not(#\9):not(#\9):not(#\9){
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 10px !important;
+}
+
+#lcAgentApptWizard .giApptCompanyCard:not(#\9):not(#\9):not(#\9){
+  position: relative !important;
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  justify-items: stretch !important;
+  text-align: start !important;
+  gap: 12px !important;
+  min-height: 64px !important;
+  padding: 10px 12px !important;
+  background: #fff !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  border-radius: 14px !important;
+  box-shadow: none !important;
+  transform: none !important;
+  animation: none !important;
+  cursor: pointer !important;
+  transition: border-color .15s ease, background-color .15s ease, box-shadow .15s ease !important;
+}
+
+#lcAgentApptWizard .giApptCompanyCard:hover:not(#\9):not(#\9):not(#\9),
+#lcAgentApptWizard .giApptCompanyCard:focus-visible:not(#\9):not(#\9):not(#\9){
+  background: var(--gi-primary-soft) !important;
+  border-color: var(--gi-primary) !important;
+  box-shadow: 0 0 0 3px rgba(37,99,235,.10) !important;
+  transform: none !important;
+  outline: none !important;
+}
+
+#lcAgentApptWizard .giApptCompanyCard.is-selected:not(#\9):not(#\9):not(#\9){
+  background: var(--gi-primary-soft) !important;
+  border-color: var(--gi-primary) !important;
+  box-shadow: inset 0 0 0 1px var(--gi-primary) !important;
+}
+
+#lcAgentApptWizard .giApptCompanyCard__logo:not(#\9):not(#\9):not(#\9){
+  width: 44px !important;
+  height: 44px !important;
+  flex: 0 0 44px !important;
+  border-radius: 10px !important;
+  background: #fff !important;
+  border: 1px solid var(--gi-border-soft) !important;
+}
+
+#lcAgentApptWizard .giApptCompanyCard__logo .lcCompanyLogo:not(#\9):not(#\9):not(#\9){
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 10px !important;
+}
+
+#lcAgentApptWizard .giApptCompanyCard__name:not(#\9):not(#\9):not(#\9){
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  color: var(--gi-text) !important;
+  text-align: start !important;
+}
+
+#lcAgentApptWizard .giApptCompanyCard__check:not(#\9):not(#\9):not(#\9){
+  position: static !important;
+  top: auto !important;
+  inset: auto !important;
+  margin-inline-start: auto !important;
+  width: 20px !important;
+  height: 20px !important;
+  flex: 0 0 20px !important;
+  border-radius: 50% !important;
+  border: 1.5px solid var(--gi-border-strong) !important;
+  background: #fff !important;
+  color: transparent !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+}
+
+#lcAgentApptWizard .giApptCompanyCard.is-selected .giApptCompanyCard__check:not(#\9):not(#\9):not(#\9){
+  background: var(--gi-navy) !important;
+  border-color: var(--gi-navy) !important;
+  color: #fff !important;
+}
+
+#lcAgentApptWizard .lcWizard__foot:not(#\9):not(#\9):not(#\9){
+  padding: 14px 28px 18px !important;
+  border-top: 1px solid var(--gi-border-soft) !important;
+  background: var(--gi-bg) !important;
+}
+
+#lcAgentApptWizard .lcWizard__foot .btn:not(#\9):not(#\9):not(#\9){
+  height: 40px !important;
+  padding: 0 18px !important;
+  border-radius: var(--gi-r-ctl) !important;
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+
+#lcAgentApptWizard #lcAgentApptSaveDraft.btn:not(#\9):not(#\9):not(#\9),
+#lcAgentApptWizard #lcAgentApptPrev.btn:not(#\9):not(#\9):not(#\9){
+  background: #fff !important;
+  color: var(--gi-text-3) !important;
+  border: 1px solid var(--gi-border) !important;
+}
+
+#lcAgentApptWizard #lcAgentApptNext.btn--primary:not(#\9):not(#\9):not(#\9){
+  background: var(--gi-primary) !important;
+  border-color: var(--gi-primary) !important;
+  color: #fff !important;
+  min-width: 112px !important;
+}
+
+@media (max-width: 720px){
+  #lcAgentApptWizard .lcWizard__panel:not(#\9):not(#\9):not(#\9){
+    inset: 10px !important;
+    height: calc(100vh - 20px) !important;
+    max-height: calc(100vh - 20px) !important;
+  }
+  #lcAgentApptWizard .lcWizard__head:not(#\9):not(#\9):not(#\9),
+  #lcAgentApptWizard .lcWizard__body:not(#\9):not(#\9):not(#\9){
+    padding-inline: 16px !important;
+  }
+  #lcAgentApptWizard .lcWizard__head:not(#\9):not(#\9):not(#\9){
+    padding: 16px 48px 8px 16px !important;
+  }
+  #lcAgentApptWizard .lcWizard__stepper:not(#\9):not(#\9):not(#\9){
+    margin-inline: 16px !important;
+  }
+  #lcAgentApptWizard .lcWizard__foot:not(#\9):not(#\9):not(#\9){
+    padding-inline: 16px !important;
+  }
+  #lcAgentApptWizard .giApptCompanyGrid:not(#\9):not(#\9):not(#\9){
+    grid-template-columns: 1fr !important;
+  }
+  #lcAgentApptWizard .lcStep:not(#\9):not(#\9):not(#\9){
+    justify-content: center !important;
+    font-size: 0 !important;
+  }
+  #lcAgentApptWizard .lcStep__num:not(#\9):not(#\9):not(#\9){
+    font-size: 11px !important;
+  }
+}
+
+/* =====================================================================
    GI-FIX 2026-08-01 — כפתורי השמירה בשיקוף שיחה אלמנטרי
 
    הכפתור "שמור דוח והפק PDF" (‎#emMirrorSaveReportBtn‎) היה בלתי נראה: קיים,
