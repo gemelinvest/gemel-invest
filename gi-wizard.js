@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260819-collective-comp-v1";
+  const GI_WIZARD_BUILD = "20260820-elem-car-lookup-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -5232,6 +5232,28 @@ if(path === "birthDate"){
       return !!safeTrim(d?.leviYitzhakModel);
     },
 
+    /** שליפת מאגר הסתיימה למספר הרישוי הנוכחי (נמצא או לא) — בלי לשלוף שוב */
+    elementaryLicenseLookupSettled(data){
+      const dig = this.normalizeElementaryLicenseDigits(data?.licensePlate);
+      if(dig.length < 7) return false;
+      return this.normalizeElementaryLicenseDigits(data?._elemPlateLoadedFor || '') === dig;
+    },
+
+    elementaryGovSourceSubtitle(d){
+      const src = safeTrim(d?.elementaryGovSource);
+      if(src === 'inactive') return 'רכב לא פעיל במאגר משרד התחבורה · ניתן להמשיך';
+      if(src === 'import') return 'ייבוא אישי · לפי data.gov.il';
+      return 'לפי data.gov.il · מאגר משרד התחבורה והבטיחות בדרכים';
+    },
+
+    renderElementaryVehicleMissingNotice(){
+      const Tc = "d" + "iv";
+      return `<${Tc} class="lcElementaryVehicleFetched__card lcElementaryVehicleFetched__card--compact">
+        <${Tc} class="lcElementaryVehicleFetched__title lcElementaryVehicleFetched__title--compact">הרכב לא נמצא במאגר הממשלתי</${Tc}>
+        <${Tc} class="lcElementaryVehicleFetched__sub">ניתן להמשיך — ציינו שיעבוד ולחצו «הבא»</${Tc}>
+      </${Tc}>`;
+    },
+
     elementaryGovModelTxtIsCodeLike(s){
       const t = safeTrim(s);
       if(t.length < 5) return false;
@@ -5250,7 +5272,7 @@ if(path === "birthDate"){
       const govModelCode = this.elementaryGovVehicleRecordToGovModelCode(rec);
       const manufacturerLogoSlug = this.elementaryGovManufacturerToLogoSlug(manufacturer || commercial);
       const engineVol = safeTrim(rec.nefah_manoa ?? rec.mazonnet ?? rec.nefah ?? '');
-      const fuelType = safeTrim(rec.delek_nm ?? rec.delek ?? '');
+      const fuelType = safeTrim(rec.sug_delek_nm ?? rec.delek_nm ?? rec.delek ?? '');
       const vehicleCategory = safeTrim(rec.sug_rechev_nm ?? rec.sug_rishuy_nm ?? rec.sug_degem ?? '');
       const hasAny = !!(manufacturer || commercial || modelTxt || trim || year || color || govModelCode || engineVol || fuelType || vehicleCategory);
       return hasAny ? { manufacturer, commercial, modelTxt, trim, year, color, govModelCode, manufacturerLogoSlug, engineVol, fuelType, vehicleCategory } : null;
@@ -5393,7 +5415,7 @@ if(path === "birthDate"){
             ${brandBlock}
             <div class="lcElementaryVehicleFetched__headText">
             <div class="lcElementaryVehicleFetched__title">פרטי רכב מהמאגר הממשלתי</div>
-            <div class="lcElementaryVehicleFetched__sub">לפי data.gov.il · מאגר משרד התחבורה והבטיחות בדרכים</div>
+            <div class="lcElementaryVehicleFetched__sub">${escapeHtml(this.elementaryGovSourceSubtitle(d))}</div>
             </div>
           </div>
           <div class="lcElementaryVehicleFetched__tilesScroll">
@@ -5438,13 +5460,15 @@ if(path === "birthDate"){
       if(!this.els?.body || !ins?.data) return;
       const box = this.els.body.querySelector("[data-elem-vehicle-details]");
       if(!box) return;
-      const lienStatus = safeTrim(this.getElementaryVehicleLien(ins.data).status);
-      const compact = this.getElementaryStep2Phase(ins.data) === 'split';
-      const html = this.renderElementaryVehicleDetailsReadonly(ins.data, { compact });
+      const compact = this.getElementaryStep2Phase(ins.data) === 'split' || this.elementaryLicenseLookupSettled(ins.data);
+      const hasVeh = this.elementaryVehicleDetailsHasDisplayData(ins.data);
+      const lookupSettled = this.elementaryLicenseLookupSettled(ins.data);
+      const html = hasVeh
+        ? this.renderElementaryVehicleDetailsReadonly(ins.data, { compact })
+        : (lookupSettled ? this.renderElementaryVehicleMissingNotice() : "");
       if(html){
         box.innerHTML = html;
-        const phase = this.getElementaryStep2Phase(ins.data);
-        box.hidden = phase !== 'split';
+        box.hidden = false;
       } else {
         box.innerHTML = "";
         box.hidden = true;
@@ -5465,12 +5489,14 @@ if(path === "birthDate"){
       if(!this.els?.body || Number(this.step) !== 2 || !ins?.data) return;
       const phase = this.getElementaryStep2Phase(ins.data);
       const hasVeh = this.elementaryVehicleDetailsHasDisplayData(ins.data);
+      const lookupSettled = this.elementaryLicenseLookupSettled(ins.data);
+      const isSplit = phase !== 'loading' && (phase === 'split' || lookupSettled);
       const body = this.els.body.querySelector('[data-elem-step2-body]');
       if(!body) return;
       const lienStatus = safeTrim(this.getElementaryVehicleLien(ins.data).status);
       body.classList.toggle('is-loading', phase === 'loading');
-      body.classList.toggle('is-split', phase === 'split' && hasVeh);
-      body.classList.toggle('is-plate-only', phase === 'idle' || phase === 'loading');
+      body.classList.toggle('is-split', isSplit);
+      body.classList.toggle('is-plate-only', !isSplit);
       body.classList.toggle('is-lien-form', lienStatus === 'exists');
       body.classList.toggle('is-lien-none', lienStatus === 'none');
       const ov = body.querySelector('[data-elem-step2-loading]');
@@ -5483,9 +5509,9 @@ if(path === "birthDate"){
       const plateSpin = body.querySelector('[data-elem-license-spinner]');
       if(plateSpin) plateSpin.hidden = true;
       const veh = body.querySelector('[data-elem-vehicle-details]');
-      if(veh) veh.hidden = !(phase === 'split' && hasVeh);
+      if(veh) veh.hidden = !(isSplit && (hasVeh || lookupSettled));
       const lien = body.querySelector('[data-elem-lien-section]');
-      if(lien) lien.hidden = !(phase === 'split' && hasVeh);
+      if(lien) lien.hidden = !lookupSettled;
     },
 
     syncElementaryStep2AfterRender(ins){
@@ -5503,7 +5529,7 @@ if(path === "birthDate"){
         this.applyElementaryStep2UiFromState(ins);
         return;
       }
-      if(loadedFor === dig && this.elementaryVehicleDetailsHasDisplayData(ins.data)){
+      if(loadedFor === dig){
         if(phase !== 'split'){
           this.setElementaryStep2Phase(ins, 'split');
           this.render();
@@ -5512,9 +5538,7 @@ if(path === "birthDate"){
         }
         return;
       }
-      if(loadedFor !== dig || !this.elementaryVehicleDetailsHasDisplayData(ins.data)){
-        this.scheduleElementaryLicenseLookup(ins);
-      }
+      this.scheduleElementaryLicenseLookup(ins);
     },
 
     elementaryLicensePlateDigitsOk(data){
@@ -5647,8 +5671,7 @@ if(path === "birthDate"){
       const showExistsForm = L.status === "exists";
       const showYesNo = !L.status;
       const resolved = this.isElementaryVehicleLienResolved(d);
-      const phase = this.getElementaryStep2Phase(d);
-      const showLien = phase === 'split' && this.elementaryVehicleDetailsHasDisplayData(d);
+      const showLien = this.elementaryLicenseLookupSettled(d) && this.getElementaryStep2Phase(d) !== 'loading';
       const lienTitle = showExistsForm ? 'פרטי משעבד' : 'האם קיים שיעבוד לרכב?';
       const T = "d" + "iv";
       const el = (cls, inner) => `<${T}${cls ? ` class="${cls}"` : ""}>${inner}</${T}>`;
@@ -5702,10 +5725,13 @@ if(path === "birthDate"){
       const d = ins?.data || {};
       const phase = this.getElementaryStep2Phase(d);
       const hasVeh = this.elementaryVehicleDetailsHasDisplayData(d);
-      const isSplit = phase === 'split' && hasVeh;
+      const lookupSettled = this.elementaryLicenseLookupSettled(d);
+      const isSplit = phase !== 'loading' && (phase === 'split' || lookupSettled);
       const isLoading = phase === 'loading';
       const lienStatus = safeTrim(this.getElementaryVehicleLien(d).status);
-      const panelHtml = this.renderElementaryVehicleDetailsReadonly(d, { compact: isSplit });
+      const panelHtml = hasVeh
+        ? this.renderElementaryVehicleDetailsReadonly(d, { compact: isSplit })
+        : (lookupSettled ? this.renderElementaryVehicleMissingNotice() : "");
       const plateInputId = "lcElemPlateInput_" + String(safeTrim(ins?.id) || "p").replace(/[^a-zA-Z0-9_-]/g, "_");
       const lienHtml = this.renderElementaryVehicleLienSection(ins);
       const coverageHtml = "";
@@ -5742,7 +5768,7 @@ if(path === "birthDate"){
             </label>
           </div>
             </${T}>
-            <${T} class="lcElementaryVehicleFetched" data-elem-vehicle-details ${isSplit && hasVeh ? '' : 'hidden'}>${panelHtml}</${T}>
+            <${T} class="lcElementaryVehicleFetched" data-elem-vehicle-details ${isSplit && (hasVeh || lookupSettled) ? '' : 'hidden'}>${panelHtml}</${T}>
           </${T}>
         </${T}>
         ${lienHtml}
@@ -5855,7 +5881,7 @@ if(path === "birthDate"){
           throw new Error(safeTrim(body?.error) || ('מאגר הרכב לא זמין כרגע (' + res.status + ')'));
         }
         const records = this.elementaryRecordsMatchPlate(body?.records, digits);
-        const snap = { ok:true, records, error:null };
+        const snap = { ok:true, records, source: safeTrim(body?.source) || '', error:null };
         this._elemGovVehicleCacheSet(digits, snap);
         return snap;
       }catch(e){
@@ -6098,7 +6124,7 @@ if(path === "birthDate"){
       const fetchingFor = this.normalizeElementaryLicenseDigits(this._elemLicenseFetchingFor?.[id] || '');
       if((inflight || phase === 'loading') && fetchingFor === digits) return;
       const loadedFor = this.normalizeElementaryLicenseDigits(ins.data._elemPlateLoadedFor || '');
-      if(loadedFor === digits && this.elementaryVehicleDetailsHasDisplayData(ins.data)) return;
+      if(loadedFor === digits) return;
       this._elemLicenseTimers = this._elemLicenseTimers || {};
       window.clearTimeout(this._elemLicenseTimers[id]);
       if(fetchingFor && fetchingFor !== digits) this.cancelElementaryLicenseLookup(ins);
@@ -6139,7 +6165,7 @@ if(path === "birthDate"){
       const isCurrentReq = () => this._elemLicenseGen[insId] === reqGen;
       this._elemLicenseInFlight = this._elemLicenseInFlight || {};
       this._elemLicenseInFlight[insId] = true;
-      const lookupTimeoutMs = 15000;
+      const lookupTimeoutMs = 18000;
       let lookupTimedOut = false;
       let lookupTimeoutId = window.setTimeout(() => {
         lookupTimedOut = true;
@@ -6192,31 +6218,41 @@ if(path === "birthDate"){
         clearLookupTimeout();
         if(!isCurrentReq()) return;
         if(Number(this.step) !== 2 || safeTrim(this.insureds[0]?.id) !== insId) return;
-        if(fetchResult.error === 'abort') return;
+        const errName = String(fetchResult.error?.name || '');
+        const abortedQuietly = fetchResult.error === 'abort' || (errName === 'AbortError' && !lookupTimedOut);
+        if(abortedQuietly) return;
 
-        if(fetchResult.error){
-          this.setElementaryStep2Phase(ins, 'idle');
-          this.render();
-          try {
-            window.showToast?.({ title: 'שליפת פרטי רכב נכשלה', text: safeTrim(fetchResult.error?.message) || 'בעיית רשת או חסימת גישה ל־data.gov.il', variant: 'warn', durationMs: 5500 });
-          } catch(_e){}
-          return;
-        }
-
-        const records = fetchResult.records || [];
-        if(!records.length){
+        const settleWithoutCard = (toastTitle, toastText) => {
           ins.data.leviYitzhakModel = '';
           ins.data.vehicleModelCode = '';
           ins.data.elementaryGovCard = null;
           ins.data.elementaryLeviYitzhakCode = '';
           ins.data.elementaryLeviCodeSource = '';
           ins.data._elemLastGovRawRecord = null;
+          ins.data.elementaryGovSource = '';
           ins.data._elemPlateLoadedFor = digits;
-          this.setElementaryStep2Phase(ins, 'idle');
+          this.setElementaryStep2Phase(ins, 'split');
           this.render();
+          try { ElementaryDatePicker.attachToContainer(this.els.body); } catch(_e){}
           try {
-            window.showToast?.({ title: 'מספר רכב לא נמצא במאגר', text: 'בדקו שהמספר נכון (7 או 8 ספרות) ונסו שוב.', variant: 'warn', durationMs: 5200 });
+            window.showToast?.({ title: toastTitle, text: toastText, variant: 'warn', durationMs: 5200 });
           } catch(_e){}
+        };
+
+        if(fetchResult.error){
+          settleWithoutCard(
+            'שליפת פרטי רכב נכשלה',
+            (safeTrim(fetchResult.error?.message) || 'לא ניתן לשלוף מהמאגר כרגע') + ' — ניתן להמשיך ידנית'
+          );
+          return;
+        }
+
+        const records = fetchResult.records || [];
+        if(!records.length){
+          settleWithoutCard(
+            'מספר רכב לא נמצא במאגר',
+            'ניתן להמשיך — ציינו שיעבוד ולחצו «הבא».'
+          );
           return;
         }
 
@@ -6229,6 +6265,7 @@ if(path === "birthDate"){
         const levi = this.elementaryGovVehicleRecordToLeviLabel(rec);
         const govModelCode = this.elementaryGovVehicleRecordToGovModelCode(rec);
         ins.data.elementaryGovCard = this.elementaryGovVehicleRecordToCard(rec) || null;
+        ins.data.elementaryGovSource = safeTrim(fetchResult.source) || 'active';
         let got = false;
         if(levi){
           ins.data.leviYitzhakModel = levi;
@@ -6244,17 +6281,17 @@ if(path === "birthDate"){
         }
         ins.data._elemPlateLoadedFor = digits;
         this.applyElementaryLeviCodeAfterGovFetch(ins, rec);
+        this.setElementaryStep2Phase(ins, 'split');
+        this.render();
+        try { ElementaryDatePicker.attachToContainer(this.els.body); } catch(_e){}
         if(this.elementaryVehicleDetailsHasDisplayData(ins.data)){
-          this.setElementaryStep2Phase(ins, 'split');
-          this.render();
-          try { ElementaryDatePicker.attachToContainer(this.els.body); } catch(_e){}
           if(got){
             if(this.isCarInsuranceClickFlow()){
               this.notifyCarInsuranceClickVehicleReady(ins);
             } else {
               try {
                 window.showToast?.({
-                  title: 'נתוני רכב נשלפו בהצלחה',
+                  title: ins.data.elementaryGovSource === 'inactive' ? 'נתוני רכב נשלפו (לא פעיל במאגר)' : 'נתוני רכב נשלפו בהצלחה',
                   variant: 'ok',
                   singletonKey: 'elem-step2-vehicle-fetched',
                   durationMs: 3800
@@ -6263,19 +6300,23 @@ if(path === "birthDate"){
             }
           }
         } else {
-          this.setElementaryStep2Phase(ins, 'idle');
-          this.render();
           try {
-            window.showToast?.({ title: 'לא נמצאו פרטי דגם במאגר', text: 'נמצא רישום לרכב אך ללא פרטי דגם — נסו מספר אחר.', variant: 'warn', durationMs: 5200 });
+            window.showToast?.({
+              title: 'לא נמצאו פרטי דגם במאגר',
+              text: 'ניתן להמשיך — ציינו שיעבוד ולחצו «הבא».',
+              variant: 'warn',
+              durationMs: 5200
+            });
           } catch(_e){}
         }
       } catch(e){
         if(!isCurrentReq()) return;
         if(String(e?.name || '') === 'AbortError') return;
-        this.setElementaryStep2Phase(ins, 'idle');
+        ins.data._elemPlateLoadedFor = digits;
+        this.setElementaryStep2Phase(ins, 'split');
         this.render();
         try {
-          window.showToast?.({ title: 'שליפת פרטי רכב נכשלה', text: safeTrim(e?.message) || 'בעיית רשת או חסימת גישה ל־data.gov.il', variant: 'warn', durationMs: 5500 });
+          window.showToast?.({ title: 'שליפת פרטי רכב נכשלה', text: (safeTrim(e?.message) || 'לא ניתן לשלוף מהמאגר כרגע') + ' — ניתן להמשיך ידנית', variant: 'warn', durationMs: 5500 });
         } catch(_e2){}
       } finally {
         if(isCurrentReq()) finishLoadingUi();
@@ -9453,6 +9494,7 @@ if(path === "birthDate"){
               ins.data.elementaryLeviYitzhakCode = '';
               ins.data.elementaryLeviCodeSource = '';
               ins.data._elemLastGovRawRecord = null;
+              ins.data.elementaryGovSource = '';
             }
             ins.data._elemPlateNorm = dig;
             if(dig.length < 7){
@@ -9462,6 +9504,7 @@ if(path === "birthDate"){
               ins.data.elementaryLeviYitzhakCode = '';
               ins.data.elementaryLeviCodeSource = '';
               ins.data._elemLastGovRawRecord = null;
+              ins.data.elementaryGovSource = '';
               ins.data._elemStep2Phase = 'idle';
               ins.data._elemPlateLoadedFor = '';
             }
@@ -27031,7 +27074,7 @@ if(path === "birthDate"){
       }
       if(sid === 2){
         if(!this.elementaryLicensePlateDigitsOk(d)) return "licensePlate";
-        if(!this.elementaryVehicleDetailsHasDisplayData(d)) return "vehicleDetails";
+        if(!this.elementaryLicenseLookupSettled(d)) return "licensePlate";
         if(!this.isElementaryVehicleLienResolved(d)) return "vehicleLien";
         return null;
       }
@@ -27119,9 +27162,7 @@ if(path === "birthDate"){
       if(sid === 2){
         const out = [];
         if(!this.elementaryLicensePlateDigitsOk(d)) out.push(`${primaryLabel}: חסר ${fieldLabel.licensePlate} תקף (7 או 8 ספרות)`);
-        if(this.elementaryLicensePlateDigitsOk(d) && !this.elementaryVehicleDetailsHasDisplayData(d)){
-          out.push(`${primaryLabel}: לא נשלפו פרטי דגם מהמאגר — בדקו את מספר הרישוי או נסו שוב`);
-        }
+        else if(!this.elementaryLicenseLookupSettled(d)) out.push(`${primaryLabel}: נא להמתין לשליפת פרטי הרכב מהמאגר`);
         const lienErr = this.getElementaryVehicleLienValidationError(d);
         if(lienErr) out.push(`${primaryLabel}: ${lienErr}`);
         return out;
@@ -28060,8 +28101,8 @@ if(path === "birthDate"){
         }
         if(Number(stepId) === 2){
           if(!this.elementaryLicensePlateDigitsOk(d)) return { ok:false, msg:'חסר מספר רישוי תקף (7 או 8 ספרות)' };
-          if(!this.elementaryVehicleDetailsHasDisplayData(d)){
-            return { ok:false, msg:'לא נשלפו פרטי דגם מהמאגר — בדקו את מספר הרישוי או נסו שוב' };
+          if(!this.elementaryLicenseLookupSettled(d)){
+            return { ok:false, msg:'נא להמתין לשליפת פרטי הרכב מהמאגר' };
           }
           const lienErr = this.getElementaryVehicleLienValidationError(d);
           if(lienErr) return { ok:false, msg: lienErr };
@@ -28246,7 +28287,7 @@ if(path === "birthDate"){
         });
         if(Number(stepId) === 2){
           if(!this.elementaryLicensePlateDigitsOk(d)) return false;
-          if(!this.elementaryVehicleDetailsHasDisplayData(d)) return false;
+          if(!this.elementaryLicenseLookupSettled(d)) return false;
           return this.isElementaryVehicleLienResolved(d);
         }
         if(Number(stepId) === 3){
