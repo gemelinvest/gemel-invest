@@ -8360,6 +8360,327 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 }
 
 /* =====================================================================
+   36b. HEALTH & RISK action chooser (#lcHealthRiskChoiceModal)
+
+   Visual only. Same dialog family as screen 1 (white card, navy top bar,
+   Heebo, colour-only hover). Extra :not(#\9) beats theme-unify-flat.css
+   which still targets this modal after login. JS IDs / data-attrs stay.
+   ===================================================================== */
+
+#lcHealthRiskChoiceModal.lcHealthRiskChoiceModal:not(#\9):not(#\9):not(#\9){
+  background: transparent !important;
+}
+
+#lcHealthRiskChoiceModal .lcHealthRiskChoiceModal__backdrop:not(#\9):not(#\9):not(#\9){
+  background: rgba(15,23,42,.45) !important;
+  background-image: none !important;
+  backdrop-filter: blur(2px) !important;
+  -webkit-backdrop-filter: blur(2px) !important;
+}
+
+#lcHealthRiskChoiceModal .lcHealthRiskChoiceModal__panel:not(#\9):not(#\9):not(#\9){
+  position: fixed !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  display: block !important;
+  width: min(880px, calc(100vw - 32px)) !important;
+  max-width: none !important;
+  height: auto !important;
+  max-height: calc(100vh - 48px) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  padding: 0 !important;
+  background: var(--gi-surface) !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  border-radius: 20px !important;
+  box-shadow: var(--gi-sh-lg) !important;
+  isolation: auto !important;
+  justify-content: stretch !important;
+  align-items: stretch !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceModal__bar:not(#\9):not(#\9):not(#\9){
+  display: block !important;
+  height: 6px !important;
+  background: var(--gi-navy) !important;
+}
+
+#lcHealthRiskChoiceModal #lcHealthRiskChoiceModalClose.lcHrChoiceModal__close:not(#\9):not(#\9):not(#\9){
+  position: absolute !important;
+  top: 18px !important;
+  inset-inline-start: auto !important;
+  inset-inline-end: 18px !important;
+  z-index: 2 !important;
+  width: 32px !important;
+  height: 32px !important;
+  border-radius: var(--gi-r-ctl) !important;
+  background: #fff !important;
+  border: 1px solid var(--gi-border) !important;
+  color: var(--gi-text-3) !important;
+  font-size: 15px !important;
+  line-height: 1 !important;
+  box-shadow: none !important;
+}
+
+#lcHealthRiskChoiceModal #lcHealthRiskChoiceModalClose.lcHrChoiceModal__close:hover:not(#\9):not(#\9):not(#\9){
+  background: var(--gi-surface-3) !important;
+  color: var(--gi-text) !important;
+  transform: none !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceModal__head:not(#\9):not(#\9):not(#\9){
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  text-align: center !important;
+  gap: 0 !important;
+  padding: 28px 40px 8px !important;
+  border-bottom: 0 !important;
+  background: transparent !important;
+  background-image: none !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceModal__crumb:not(#\9):not(#\9):not(#\9){
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  margin: 0 0 12px !important;
+  padding: 5px 12px !important;
+  border-radius: var(--gi-r-pill) !important;
+  background: var(--gi-primary-soft) !important;
+  color: var(--gi-primary) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceModal__crumb span:not(#\9):not(#\9):not(#\9){
+  opacity: .55 !important;
+  font-weight: 600 !important;
+  color: var(--gi-text-muted) !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceModal__head .modal__kicker:not(#\9):not(#\9):not(#\9){
+  margin: 0 0 8px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 1.4px !important;
+  text-transform: uppercase !important;
+  color: var(--gi-text-muted) !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceModal__head .modal__title:not(#\9):not(#\9):not(#\9){
+  margin: 0 0 8px !important;
+  font-size: 26px !important;
+  font-weight: 800 !important;
+  letter-spacing: -.02em !important;
+  line-height: 1.25 !important;
+  color: var(--gi-text) !important;
+  text-shadow: none !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceModal__sub:not(#\9):not(#\9):not(#\9){
+  margin: 0 auto !important;
+  max-width: 42ch !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  line-height: 1.6 !important;
+  color: var(--gi-text-3) !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceModal__body:not(#\9):not(#\9):not(#\9){
+  padding: 22px 28px 28px !important;
+  background: var(--gi-surface) !important;
+}
+
+#lcHealthRiskChoiceModal .lcHealthRiskChoiceModal__grid:not(#\9):not(#\9):not(#\9){
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 16px !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceCard:not(#\9):not(#\9):not(#\9){
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  text-align: start !important;
+  gap: 0 !important;
+  min-height: 280px !important;
+  padding: 22px 20px 18px !important;
+  margin: 0 !important;
+  font: inherit !important;
+  color: inherit !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background: #fff !important;
+  background-image: none !important;
+  border: 1px solid var(--gi-border) !important;
+  border-radius: 14px !important;
+  box-shadow: none !important;
+  cursor: pointer !important;
+  animation: none !important;
+  transform: none !important;
+  transition: border-color .15s ease, background-color .15s ease, box-shadow .15s ease !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceCard--main:not(#\9):not(#\9):not(#\9){
+  border-color: rgba(37,99,235,.28) !important;
+  box-shadow: inset 0 3px 0 var(--gi-navy) !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceCard:hover:not(#\9):not(#\9):not(#\9),
+#lcHealthRiskChoiceModal .lcHrChoiceCard:focus-visible:not(#\9):not(#\9):not(#\9){
+  background: var(--gi-primary-soft) !important;
+  border-color: var(--gi-primary) !important;
+  box-shadow: 0 0 0 3px rgba(37,99,235,.10) !important;
+  transform: none !important;
+  outline: none !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceCard--main:hover:not(#\9):not(#\9):not(#\9),
+#lcHealthRiskChoiceModal .lcHrChoiceCard--main:focus-visible:not(#\9):not(#\9):not(#\9){
+  box-shadow: inset 0 3px 0 var(--gi-navy), 0 0 0 3px rgba(37,99,235,.10) !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceCard:not(#\9):not(#\9):not(#\9)::before,
+#lcHealthRiskChoiceModal .lcHrChoiceCard:not(#\9):not(#\9):not(#\9)::after{
+  content: none !important;
+  display: none !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceCard__top:not(#\9):not(#\9):not(#\9){
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceCard__icon:not(#\9):not(#\9):not(#\9){
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: 12px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: var(--gi-primary-soft) !important;
+  background-image: none !important;
+  border: 1px solid rgba(37,99,235,.14) !important;
+  color: var(--gi-primary) !important;
+  box-shadow: none !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceCard:hover:not(#\9):not(#\9):not(#\9) .lcHrChoiceCard__icon{
+  background: #fff !important;
+  color: var(--gi-navy) !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceCard__icon svg:not(#\9):not(#\9):not(#\9){
+  width: 24px !important;
+  height: 24px !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceCard__pill:not(#\9):not(#\9):not(#\9){
+  display: inline-flex !important;
+  align-items: center !important;
+  height: 24px !important;
+  padding: 0 10px !important;
+  border-radius: var(--gi-r-pill) !important;
+  background: var(--gi-success-soft) !important;
+  border: 1px solid rgba(22,163,74,.20) !important;
+  color: var(--gi-success) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceCard__pill--blue:not(#\9):not(#\9):not(#\9){
+  background: var(--gi-primary-soft) !important;
+  border-color: rgba(37,99,235,.18) !important;
+  color: var(--gi-primary) !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceCard__title:not(#\9):not(#\9):not(#\9){
+  display: block !important;
+  margin: 14px 0 6px !important;
+  font-size: 20px !important;
+  font-weight: 800 !important;
+  line-height: 1.3 !important;
+  color: var(--gi-text) !important;
+  text-shadow: none !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceCard__lead:not(#\9):not(#\9):not(#\9){
+  display: block !important;
+  margin: 0 0 14px !important;
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+  line-height: 1.5 !important;
+  color: var(--gi-text-3) !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceCard__list:not(#\9):not(#\9):not(#\9){
+  display: grid !important;
+  gap: 8px !important;
+  margin: 0 0 18px !important;
+  padding: 0 !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceCard__item:not(#\9):not(#\9):not(#\9){
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: var(--gi-text-3) !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceCard__dot:not(#\9):not(#\9):not(#\9){
+  width: 7px !important;
+  height: 7px !important;
+  border-radius: 50% !important;
+  flex: 0 0 7px !important;
+  background: var(--gi-navy) !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceCard__cta:not(#\9):not(#\9):not(#\9){
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin-top: auto !important;
+  height: 40px !important;
+  border: 1px solid rgba(37,99,235,.28) !important;
+  border-radius: var(--gi-r-ctl) !important;
+  background: #fff !important;
+  color: var(--gi-primary) !important;
+  font-size: 13.5px !important;
+  font-weight: 700 !important;
+  pointer-events: none !important;
+}
+
+#lcHealthRiskChoiceModal .lcHrChoiceCard--main .lcHrChoiceCard__cta:not(#\9):not(#\9):not(#\9){
+  background: var(--gi-primary) !important;
+  border-color: var(--gi-primary) !important;
+  color: #fff !important;
+}
+
+@media (max-width: 720px){
+  #lcHealthRiskChoiceModal .lcHealthRiskChoiceModal__grid:not(#\9):not(#\9):not(#\9){
+    grid-template-columns: 1fr !important;
+  }
+  #lcHealthRiskChoiceModal .lcHrChoiceModal__head:not(#\9):not(#\9):not(#\9){
+    padding: 24px 20px 4px !important;
+  }
+  #lcHealthRiskChoiceModal .lcHrChoiceModal__body:not(#\9):not(#\9):not(#\9){
+    padding: 16px !important;
+  }
+}
+
+/* =====================================================================
    GI-FIX 2026-08-01 — כפתורי השמירה בשיקוף שיחה אלמנטרי
 
    הכפתור "שמור דוח והפק PDF" (‎#emMirrorSaveReportBtn‎) היה בלתי נראה: קיים,

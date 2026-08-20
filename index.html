@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <link href="./app.css?v=20260820-kpi-gold-more-blue-v1" rel="stylesheet"/>
-<link href="./theme.css?v=20260820-welcome-white-v1" rel="stylesheet"/>
+<link href="./theme.css?v=20260820-health-choice-ui-v1" rel="stylesheet"/>
 <link href="./gi-daily-sales-mail.css?v=20260817-daily-sales-mail-v2" rel="stylesheet"/>
 <link href="./theme-p2.css?v=20260805-workdays-goal-v1" rel="stylesheet"/>
 <link href="./login-split.css?v=20260820-welcome-mfa-v4" rel="stylesheet"/>
@@ -2718,43 +2718,54 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <div aria-hidden="true" class="modal lcHealthRiskChoiceModal" id="lcHealthRiskChoiceModal">
   <div class="modal__backdrop lcHealthRiskChoiceModal__backdrop" data-close="1"></div>
   <div aria-label="בריאות וסיכונים — בחירת פעולה" aria-modal="true" class="modal__panel lcHealthRiskChoiceModal__panel" role="dialog">
-    <div class="lcNewCustomerTypeModal__glow lcNewCustomerTypeModal__glow--a" aria-hidden="true"></div>
-    <div class="lcNewCustomerTypeModal__glow lcNewCustomerTypeModal__glow--b" aria-hidden="true"></div>
-    <button aria-label="סגור" class="iconBtn" id="lcHealthRiskChoiceModalClose" type="button">✕</button>
-    <div class="modal__head lcNewCustomerTypeModal__head">
-      <div class="modal__kicker">GEMEL INVEST · בריאות וסיכונים</div>
+    <div class="lcHrChoiceModal__bar" aria-hidden="true"></div>
+    <button aria-label="סגור" class="iconBtn lcHrChoiceModal__close" id="lcHealthRiskChoiceModalClose" type="button">✕</button>
+    <div class="modal__head lcHrChoiceModal__head">
+      <div class="lcHrChoiceModal__crumb">בריאות וסיכונים <span>←</span> בחירת פעולה</div>
+      <div class="modal__kicker">GEMEL INVEST</div>
       <div class="modal__title">מה תרצה לבצע?</div>
-      <div class="lcNewCustomerTypeModal__sub">בחר בין הקמת הצעה חדשה לבין מינוי סוכן על פוליסות קיימות</div>
+      <div class="lcHrChoiceModal__sub">בחרתם בריאות וסיכונים. עכשיו בחרו אם להקים הצעה חדשה או לבצע מינוי סוכן על פוליסות קיימות.</div>
     </div>
-    <div class="modal__body lcNewCustomerTypeModal__body">
+    <div class="modal__body lcHrChoiceModal__body">
       <div class="lcHealthRiskChoiceModal__grid">
-        <button class="lcNewCustomerTypeCard lcNewCustomerTypeCard--health lcNewCustomerTypeCard--primary" data-health-risk-choice="proposal" type="button">
-          <span class="lcNewCustomerTypeCard__iconWrap">
-            <span class="lcNewCustomerTypeCard__icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="38" height="38">
-                <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z"></path><path d="M14 2v5h5"></path><path d="M12 11v6"></path><path d="M9 14h6"></path>
+        <button class="lcHrChoiceCard lcHrChoiceCard--main" data-health-risk-choice="proposal" type="button">
+          <span class="lcHrChoiceCard__top">
+            <span class="lcHrChoiceCard__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
               </svg>
             </span>
+            <span class="lcHrChoiceCard__pill">זמין עכשיו</span>
           </span>
-          <span class="lcNewCustomerTypeCard__content">
-            <span class="lcNewCustomerTypeCard__title">הצעה חדשה</span>
-            <span class="lcNewCustomerTypeCard__text">אשף מלא — רכישת ביטוח חדש</span>
+          <span class="lcHrChoiceCard__title">הצעה חדשה</span>
+          <span class="lcHrChoiceCard__lead">אשף מלא לרכישת ביטוח בריאות, מחלות קשות וסיכונים.</span>
+          <span class="lcHrChoiceCard__list">
+            <span class="lcHrChoiceCard__item"><span class="lcHrChoiceCard__dot" aria-hidden="true"></span>פרטים אישיים והצהרת בריאות</span>
+            <span class="lcHrChoiceCard__item"><span class="lcHrChoiceCard__dot" aria-hidden="true"></span>כיסויים, הנחות ופרמיה</span>
+            <span class="lcHrChoiceCard__item"><span class="lcHrChoiceCard__dot" aria-hidden="true"></span>שמירה והגשה לחיתום</span>
           </span>
-          <span class="lcNewCustomerTypeCard__meta"><span class="lcNewCustomerTypeCard__badge">מסלול קיים</span></span>
+          <span class="lcHrChoiceCard__cta">התחל אשף</span>
         </button>
-        <button class="lcNewCustomerTypeCard lcNewCustomerTypeCard--health lcNewCustomerTypeCard--primary lcNewCustomerTypeCard--agentAppt" data-health-risk-choice="agent_appointment" type="button">
-          <span class="lcNewCustomerTypeCard__iconWrap">
-            <span class="lcNewCustomerTypeCard__icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="38" height="38">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+        <button class="lcHrChoiceCard" data-health-risk-choice="agent_appointment" type="button">
+          <span class="lcHrChoiceCard__top">
+            <span class="lcHrChoiceCard__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
               </svg>
             </span>
+            <span class="lcHrChoiceCard__pill lcHrChoiceCard__pill--blue">פוליסות קיימות</span>
           </span>
-          <span class="lcNewCustomerTypeCard__content">
-            <span class="lcNewCustomerTypeCard__title">מינוי סוכן</span>
-            <span class="lcNewCustomerTypeCard__text">מינוי על פוליסות קיימות + פרמיה</span>
+          <span class="lcHrChoiceCard__title">מינוי סוכן</span>
+          <span class="lcHrChoiceCard__lead">מינוי על פוליסות שכבר קיימות אצל הלקוח, כולל פרמיה.</span>
+          <span class="lcHrChoiceCard__list">
+            <span class="lcHrChoiceCard__item"><span class="lcHrChoiceCard__dot" aria-hidden="true"></span>בחירת חברות ופוליסות קיימות</span>
+            <span class="lcHrChoiceCard__item"><span class="lcHrChoiceCard__dot" aria-hidden="true"></span>פרמיה ודוח תפעולי</span>
+            <span class="lcHrChoiceCard__item"><span class="lcHrChoiceCard__dot" aria-hidden="true"></span>שמירת מינוי בתיק הלקוח</span>
           </span>
-          <span class="lcNewCustomerTypeCard__meta"><span class="lcNewCustomerTypeCard__badge lcNewCustomerTypeCard__badge--agentAppt">חדש</span></span>
+          <span class="lcHrChoiceCard__cta">המשך למינוי סוכן</span>
         </button>
       </div>
     </div>
