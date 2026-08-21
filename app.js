@@ -32355,7 +32355,6 @@ UsersGateUI.init();
           try { if(this.shouldShowPerformanceBoard()) this.scheduleRefreshLeaderboard(); } catch(_e){}
         }, 60000);
       }
-      this.startLeaderConfetti();
     },
 
     revealKpiMetricValues(root = this.els?.root){
@@ -32641,46 +32640,6 @@ UsersGateUI.init();
       root.querySelectorAll('.bankLeader__badge').forEach((el) => el.remove());
     },
 
-    burstLeaderFirstConfetti(){
-      const root = this.els.root;
-      if(!root) return;
-      const layer = root.querySelector('.bankLeader__podiumSlot--first .bankLeader__confetti');
-      if(!layer) return;
-      for(let i = 0; i < 24; i += 1){
-        const piece = document.createElement('span');
-        piece.className = 'bankLeader__confettiPiece' + (i % 2 === 0 ? ' bankLeader__confettiPiece--gold' : ' bankLeader__confettiPiece--aqua');
-        piece.style.insetInlineStart = (12 + Math.random() * 76).toFixed(1) + '%';
-        piece.style.top = (8 + Math.random() * 52).toFixed(1) + '%';
-        piece.style.setProperty('--x', ((Math.random() * 160) - 80).toFixed(1) + 'px');
-        piece.style.setProperty('--y', ((Math.random() * 90) + 18).toFixed(1) + 'px');
-        piece.style.setProperty('--r', (Math.random() * 300 - 150).toFixed(1) + 'deg');
-        piece.style.setProperty('--d', (1.85 + Math.random() * 0.85).toFixed(2) + 's');
-        piece.style.setProperty('--delay', (Math.random() * 0.35).toFixed(2) + 's');
-        layer.appendChild(piece);
-        window.setTimeout(() => piece.remove(), 3200);
-      }
-    },
-
-    startLeaderConfetti(){
-      if(this._leaderConfettiTimer) return;
-      const tick = () => {
-        try {
-          if(!this.shouldShowPerformanceBoard()) return;
-          this.burstLeaderFirstConfetti();
-        } catch(_e){}
-      };
-      window.setTimeout(tick, 450);
-      this._leaderConfettiTimer = window.setInterval(tick, 7000);
-    },
-
-    stopLeaderConfetti(){
-      if(this._leaderConfettiTimer){
-        clearInterval(this._leaderConfettiTimer);
-        this._leaderConfettiTimer = null;
-      }
-      this.els.root?.querySelectorAll('.bankLeader__confettiPiece').forEach((piece) => piece.remove());
-    },
-
     leaderboardTrophyImg(rank){
       const sizeClass = rank === 1 ? 'bankLeader__trophyImg--lg' : rank === 2 ? 'bankLeader__trophyImg--md' : 'bankLeader__trophyImg--sm';
       return `<img class="bankLeader__trophyImg ${sizeClass}" src="./gavia.png" alt="" aria-hidden="true" loading="lazy" decoding="async" />`;
@@ -32709,7 +32668,6 @@ UsersGateUI.init();
       if(rank === 1){
         return `
         <div class="bankLeader__podiumSlot bankLeader__podiumSlot--first">
-          <div class="bankLeader__confetti" aria-hidden="true"></div>
           ${entry}
         </div>`;
       }
@@ -32793,7 +32751,6 @@ UsersGateUI.init();
       if(this._leaderTimer){ clearInterval(this._leaderTimer); this._leaderTimer = null; }
       if(this._kpiRefreshTimer){ clearTimeout(this._kpiRefreshTimer); this._kpiRefreshTimer = null; }
       if(this._leaderRefreshTimer){ clearTimeout(this._leaderRefreshTimer); this._leaderRefreshTimer = null; }
-      this.stopLeaderConfetti();
       try { this._stopWaitingAnimation(); } catch(_e){}
     },
 
@@ -32975,20 +32932,21 @@ UsersGateUI.init();
             const yestStr2 = yesterday2.toLocaleDateString('he-IL', { day:'numeric', month:'long' });
             const displayDate2 = isYesterday2 ? yestStr2 : todayStr2;
             if(!leaderboard2.length) return `
-              <article class="bankLeader card bankLeader--photoBg bankLeader--waiting bankLeader--solo bankLeader--elevated" id="bankLeaderWaiting">
-                <div class="bankLeader__head bankLeader__head--podium">
+              <article class="bankLeader card bankLeader--elevated bankLeader--waiting" id="bankLeaderWaiting" aria-label="מצטיין יומי">
+                <header class="bankLeader__head bankLeader__head--podium">
                   ${this.leaderboardHeadHtml(false, todayStr2)}
-                </div>
+                </header>
+                <div class="bankLeader__empty">אין מכירות היום עדיין — הזמן לפתוח!</div>
               </article>`;
             const first = leaderboard2[0];
             const second = leaderboard2[1] || null;
             const third = leaderboard2[2] || null;
             return `
-              <article class="bankLeader card bankLeader--photoBg bankLeader--podiumTop3 bankLeader--elevated${isYesterday2 ? ' bankLeader--yesterday' : ''}">
+              <article class="bankLeader card bankLeader--podiumTop3 bankLeader--elevated${isYesterday2 ? ' bankLeader--yesterday' : ''}" aria-label="מצטיין יומי">
                 <div class="bankLeader__podiumShell" id="bankLeaderHero">
-                  <div class="bankLeader__head bankLeader__head--podium">
+                  <header class="bankLeader__head bankLeader__head--podium">
                     ${this.leaderboardHeadHtml(isYesterday2, displayDate2)}
-                  </div>
+                  </header>
                   <div class="bankLeader__podium">
                     ${this.leaderboardPodiumSlot(first, 1, isYesterday2)}
                     ${second ? this.leaderboardPodiumSlot(second, 2, isYesterday2) : ''}
