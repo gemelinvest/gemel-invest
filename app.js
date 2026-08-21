@@ -26002,7 +26002,7 @@ UsersGateUI.init();
         if(Auth.isElementary()){
           if(!ElementaryDashboardUI.quietRefresh()) ElementaryDashboardUI.refreshAfterReferralChange();
         } else if(Auth.isOps() || Auth.isOpsAgent()){
-          try { OpsDashboardUI.render(); } catch(_e) {}
+          if(!OpsDashboardUI.quietRefresh()) OpsDashboardUI.render();
         } else if(DashboardUI.els?.root?.querySelector(".bankDash__kpis")) {
           /* GI-PERF 2026-08-09 — בזמן overlay לא מרעננים leaderboard בכל tick (קפיצות). */
           DashboardUI.scheduleRefreshKpis();
@@ -27557,6 +27557,12 @@ UsersGateUI.init();
       }, 40);
     },
 
+    quietRefresh(){
+      const mount = this.root();
+      if(!mount?.querySelector(".opsDash")) return false;
+      return true;
+    },
+
     openAssignForCustomer(id){
       const cid = safeTrim(id);
       if(!cid || !Auth.canMirrorAssign()) return;
@@ -28902,12 +28908,11 @@ UsersGateUI.init();
           if(typeof document !== "undefined" && document.visibilityState === "hidden") return;
           if(LiveRefresh.getCurrentView() !== "dashboard" || Auth.isElementary()) return;
           if(!this.shouldShowPerformanceBoard()) return;
-          /* GI-FACE-KPI: מעטפת boot יש בה .bankDash__kpis — אסור לרענן במקום במקום לבנות דשבורד. */
-          if(!this.els.root
-            || !this.els.root.querySelector(".bankDash__kpis")
-            || this.els.root.querySelector(".bankDash--bootLoading")) {
+          /* GI-FACE-KPI: מעטפת boot יש בה .bankDash__kpis — אסור לרענן במקום במקום לבנות דשבורד.
+             GI-FIX 2026-08-21: בחזרה לטאב לא בונים DOM מחדש אם הכרטיסים כבר על המסך. */
+          if(this.els.root?.querySelector(".bankDash--bootLoading")){
             void this.render({ skipDailyReportWait: true, forceFullRender: true });
-          } else {
+          } else if(this.els.root?.querySelector(".bankDash__kpis")){
             this.refreshKpis();
           }
         } catch(_e){}
@@ -35436,13 +35441,21 @@ const MIRROR_DISCLOSURE_LIBRARY = {
 
     init(){
       this.startAutoRefreshLoop();
-      document.addEventListener('visibilitychange', () => {
+      const onResume = () => {
+        if(document.hidden) return;
+        this.scheduleResumeRefresh();
+      };
+      document.addEventListener('visibilitychange', onResume);
+      window.addEventListener('focus', onResume);
+    },
+
+    scheduleResumeRefresh(){
+      if(this._resumeRefreshTimer) window.clearTimeout(this._resumeRefreshTimer);
+      this._resumeRefreshTimer = window.setTimeout(() => {
+        this._resumeRefreshTimer = null;
         if(document.hidden) return;
         if(this.shouldAutoRefresh()) this.refreshFromServer({ reason:'visibility' });
-      });
-      window.addEventListener('focus', () => {
-        if(this.shouldAutoRefresh()) this.refreshFromServer({ reason:'focus' });
-      });
+      }, 300);
     },
 
     currentScope(){

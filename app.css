@@ -379,10 +379,10 @@ body:not(.lcAuthLock){
 
 .view{display:none}
 .view.is-visible{display:block}
-/* PERF: contain layout/paint to the active screen — no visual change */
+/* GI-FIX 2026-08-21: contain:layout on the whole view left the main pane blank
+   for a frame after Chrome discarded GPU tiles (other window covering the tab). */
 .view.is-visible{
   content-visibility: visible;
-  contain: layout style;
 }
 
 .grid{display:grid; gap:14px}
