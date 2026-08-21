@@ -1480,18 +1480,35 @@
       .trim();
   }
 
+  const HAR_OFFICIAL_META_RE = /התיק הביטוחי|הופק מאתר|משרד האוצר/;
+  const GI_HAR_ORIGIN_PROP = "GiHarOrigin";
+  const GI_HAR_ORIGIN_SHEET = "_gi_har_origin";
+  const HAR_BITUACH_FRESH_MS = 30 * 24 * 60 * 60 * 1000;
+
+  function isHarWorkbookOfficialMetaRow(row, options = {}){
+    if(!Array.isArray(row) || !row.length) return false;
+    const rawRowStr = row.map((v) => String(v ?? "")).join(" ");
+    if(!HAR_OFFICIAL_META_RE.test(rawRowStr)) return false;
+    const normalize = typeof options.normalize === "function" ? options.normalize : ((value) => normalizeHarWorkbookCell(value));
+    const headerMatchers = options.headerMatchers && typeof options.headerMatchers === "object" ? options.headerMatchers : null;
+    if(!headerMatchers) return true;
+    const requiredKeys = Array.isArray(options.requiredKeys) && options.requiredKeys.length ? options.requiredKeys : ["idNumber", "main", "company", "policyNumber"];
+    const normalizedRow = row.map((value) => normalize(value)).filter(Boolean);
+    const hitsByKey = Object.fromEntries(Object.entries(headerMatchers).map(([key, patterns]) => [key, normalizedRow.some((cell) => Array.isArray(patterns) && patterns.some((pattern) => pattern.test(cell)))]));
+    const requiredHits = requiredKeys.reduce((sum, key) => sum + (hitsByKey[key] ? 1 : 0), 0);
+    return requiredHits < 3;
+  }
+
   function findHarWorkbookHeaderRow(rows, headerMatchers, options = {}){
     if(!Array.isArray(rows) || !rows.length) return { index:-1, score:0, requiredHits:0 };
     const normalize = typeof options.normalize === "function" ? options.normalize : ((value) => normalizeHarWorkbookCell(value));
     const requiredKeys = Array.isArray(options.requiredKeys) && options.requiredKeys.length ? options.requiredKeys : ["idNumber", "main", "company", "policyNumber"];
     let best = { index:-1, score:0, requiredHits:0, populated:0 };
-    const HAR_META_ROW_RE = /התיק הביטוחי|הופק מאתר|משרד האוצר|בתאריך/;
     rows.forEach((row, idx) => {
       if(!Array.isArray(row) || !row.length) return;
-      // דלג על שורות מטא של הר הביטוח — בדיקה על הטקסט הגולמי לפני normalize
-      // (התאריך עשוי להיות בתא נפרד, לכן בודקים את כל השורה הגולמית יחד)
-      const rawRowStr = row.map((v) => String(v ?? "")).join(" ");
-      if(HAR_META_ROW_RE.test(rawRowStr)) return;
+      // שורת מטא רשמית בלבד (הופק מאתר / התיק הביטוחי / משרד האוצר).
+      // לא מדלגים בגלל המילה «בתאריך» — היא עלולה לשבת על שורת הכותרות ולהפיל את הפירוק.
+      if(isHarWorkbookOfficialMetaRow(row, { normalize, headerMatchers, requiredKeys })) return;
       const normalizedRow = row.map((value) => normalize(value)).filter(Boolean);
       if(!normalizedRow.length) return;
       const hitsByKey = Object.fromEntries(Object.entries(headerMatchers || {}).map(([key, patterns]) => [key, normalizedRow.some((cell) => patterns.some((pattern) => pattern.test(cell)))]));
@@ -1503,6 +1520,82 @@
       }
     });
     return { index: best.index, score: best.score, requiredHits: best.requiredHits };
+  }
+
+  async function sha256HexFromArrayBuffer(buffer){
+    const subtle = window.crypto && window.crypto.subtle;
+    if(!subtle || !buffer) return "";
+    try {
+      const digest = await subtle.digest("SHA-256", buffer);
+      return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, "0")).join("");
+    } catch(_e) {
+      return "";
+    }
+  }
+
+  function arrayBufferToBase64(buffer){
+    const bytes = new Uint8Array(buffer || []);
+    let binary = "";
+    const chunk = 0x8000;
+    for(let i = 0; i < bytes.length; i += chunk){
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    return btoa(binary);
+  }
+
+  function dataUrlToArrayBuffer(dataUrl){
+    const raw = safeTrim(dataUrl);
+    if(!raw) return null;
+    try {
+      const comma = raw.indexOf(",");
+      const b64 = comma >= 0 ? raw.slice(comma + 1) : raw;
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for(let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+      return bytes.buffer;
+    } catch(_e) {
+      return null;
+    }
+  }
+
+  function readGiHarOriginStamp(wb){
+    if(!wb || typeof wb !== "object") return "";
+    const props = (wb.Custprops && typeof wb.Custprops === "object") ? wb.Custprops : {};
+    const fromProp = safeTrim(props[GI_HAR_ORIGIN_PROP] || props.giHarOrigin);
+    if(fromProp) return fromProp;
+    const sheet = wb.Sheets && wb.Sheets[GI_HAR_ORIGIN_SHEET];
+    if(!sheet) return "";
+    const cell = sheet.A1 || sheet.B1 || sheet.A2;
+    return safeTrim(cell && (cell.v || cell.w));
+  }
+
+  function stampGiHarOriginOnWorkbook(wb, token){
+    const origin = safeTrim(token);
+    if(!wb || !origin || !window.XLSX?.utils) return wb;
+    wb.Custprops = Object.assign({}, wb.Custprops || {}, { [GI_HAR_ORIGIN_PROP]: origin });
+    if(!wb.Sheets || !wb.Sheets[GI_HAR_ORIGIN_SHEET]){
+      const ws = window.XLSX.utils.aoa_to_sheet([[GI_HAR_ORIGIN_PROP, origin]]);
+      window.XLSX.utils.book_append_sheet(wb, ws, GI_HAR_ORIGIN_SHEET);
+    } else {
+      try { wb.Sheets[GI_HAR_ORIGIN_SHEET].A1 = { t: "s", v: origin }; } catch(_e) {}
+    }
+    wb.Workbook = wb.Workbook && typeof wb.Workbook === "object" ? wb.Workbook : {};
+    const list = Array.isArray(wb.Workbook.Sheets) ? wb.Workbook.Sheets : (wb.Workbook.Sheets = []);
+    let meta = list.find((row) => row && safeTrim(row.name) === GI_HAR_ORIGIN_SHEET);
+    if(!meta){
+      meta = { name: GI_HAR_ORIGIN_SHEET };
+      list.push(meta);
+    }
+    meta.Hidden = 2;
+    return wb;
+  }
+
+  function isHarBituachTimestampStale(iso){
+    const raw = safeTrim(iso);
+    if(!raw) return true;
+    const t = Date.parse(raw);
+    if(!Number.isFinite(t) || t <= 0) return true;
+    return (Date.now() - t) > HAR_BITUACH_FRESH_MS;
   }
 
   const OPS_RESULT_OPTIONS = {
@@ -6483,7 +6576,9 @@
         dataUrl: safeTrim(options.dataUrl),
         source: "הר הביטוח",
         uploadedAt,
-        uploadedBy: safeTrim(options.uploadedBy) || safeTrim(Auth?.current?.name)
+        uploadedBy: safeTrim(options.uploadedBy) || safeTrim(Auth?.current?.name),
+        contentSha256: safeTrim(options.contentSha256),
+        originToken: safeTrim(options.originToken) || this.newDocId("gihar_")
       };
     },
     upsertHarBituachFileDoc(payload, doc){
@@ -6515,6 +6610,42 @@
       a.click();
       a.remove();
       return true;
+    },
+    triggerDataUrlDownload(dataUrl, fileName){
+      const url = safeTrim(dataUrl);
+      if(!url) return false;
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = safeTrim(fileName) || "document";
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return true;
+    },
+    async downloadHarBituachFileDoc(doc){
+      const url = safeTrim(doc?.dataUrl) || safeTrim(doc?.url);
+      if(!url) return false;
+      const fileName = safeTrim(doc?.fileName) || safeTrim(doc?.name) || "הר ביטוח.xlsx";
+      const token = safeTrim(doc?.originToken) || safeTrim(doc?.id);
+      const fallback = () => this.triggerDataUrlDownload(url, fileName);
+      if(!token) return fallback();
+      try {
+        if(window.GI_LOAD_LIBS?.xlsx) await window.GI_LOAD_LIBS.xlsx();
+        if(!window.XLSX?.read || !window.XLSX?.write) return fallback();
+        const buffer = dataUrlToArrayBuffer(url);
+        if(!buffer) return fallback();
+        const wb = window.XLSX.read(buffer, { type: "array" });
+        stampGiHarOriginOnWorkbook(wb, token);
+        const ext = this.fileExtensionFromName(fileName) || this.fileExtensionFromName(doc?.originalFileName) || ".xlsx";
+        const bookType = ext.toLowerCase() === ".xls" ? "xls" : "xlsx";
+        const out = window.XLSX.write(wb, { bookType, type: "array" });
+        const stampedUrl = "data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64," +
+          arrayBufferToBase64(out);
+        return this.triggerDataUrlDownload(stampedUrl, fileName);
+      } catch(_e) {
+        return fallback();
+      }
     },
     append(payload, doc){
       if(!payload || typeof payload !== "object" || !doc || typeof doc !== "object") return payload;
@@ -17033,7 +17164,7 @@ UsersGateUI.init();
         if(!rec) return;
         void Wizard.openNewPurchaseForCustomer(rec.id);
       });
-      on(this.els.body, "click", (ev) => {
+      on(this.els.body, "click", async (ev) => {
         const tabBtn = ev.target?.closest?.("[data-cf-tab]");
         if(tabBtn){
           ev.preventDefault();
@@ -17082,7 +17213,10 @@ UsersGateUI.init();
           if(!rec) return;
           const docId = safeTrim(dlCustomerFile.getAttribute("data-download-customer-file-doc"));
           const doc = docId ? CustomerDocuments.findDoc(rec, docId) : null;
-          if(!CustomerDocuments.downloadFileDoc(doc)){
+          const downloaded = (safeTrim(doc?.type) === CustomerDocuments.TYPES.harBituach)
+            ? await CustomerDocuments.downloadHarBituachFileDoc(doc)
+            : CustomerDocuments.downloadFileDoc(doc);
+          if(!downloaded){
             try { window.showToast?.({ title: "אין קובץ", text: "לא נמצא עותק להורדה.", variant: "warn", durationMs: 4200 }); } catch(_e){}
           }
           return;
@@ -34457,7 +34591,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260820-elem-car-lookup-v1";
+  const GI_WIZARD_JS_VERSION = "20260821-purchase-har-fresh-v1";
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
   const TZAHAL_CLINIC = "קופה צהלית";
   const TZAHAL_CLINIC_SHABAN = "אין שב״ן";
@@ -34652,6 +34786,15 @@ UsersGateUI.init();
           activateElementaryPoliciesInPayload,
           renderCompactShabanFieldHtml,
           findHarWorkbookHeaderRow,
+          isHarWorkbookOfficialMetaRow,
+          sha256HexFromArrayBuffer,
+          dataUrlToArrayBuffer,
+          readGiHarOriginStamp,
+          stampGiHarOriginOnWorkbook,
+          isHarBituachTimestampStale,
+          GI_HAR_ORIGIN_PROP,
+          GI_HAR_ORIGIN_SHEET,
+          HAR_BITUACH_FRESH_MS,
           appendAuditLog,
           normalizeCompanyDiscountOverrides,
           normalizeElementaryLicenseIssueYearInput,

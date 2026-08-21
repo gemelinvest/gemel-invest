@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260820-elem-car-lookup-v1";
+  const GI_WIZARD_BUILD = "20260821-purchase-har-fresh-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -117,6 +117,15 @@
   const activateElementaryPoliciesInPayload = host.activateElementaryPoliciesInPayload;
   const renderCompactShabanFieldHtml = host.renderCompactShabanFieldHtml;
   const findHarWorkbookHeaderRow = host.findHarWorkbookHeaderRow;
+  const isHarWorkbookOfficialMetaRow = host.isHarWorkbookOfficialMetaRow;
+  const sha256HexFromArrayBuffer = host.sha256HexFromArrayBuffer;
+  const dataUrlToArrayBuffer = host.dataUrlToArrayBuffer;
+  const readGiHarOriginStamp = host.readGiHarOriginStamp;
+  const stampGiHarOriginOnWorkbook = host.stampGiHarOriginOnWorkbook;
+  const isHarBituachTimestampStale = host.isHarBituachTimestampStale;
+  const GI_HAR_ORIGIN_PROP = host.GI_HAR_ORIGIN_PROP;
+  const GI_HAR_ORIGIN_SHEET = host.GI_HAR_ORIGIN_SHEET;
+  const HAR_BITUACH_FRESH_MS = host.HAR_BITUACH_FRESH_MS;
   const appendAuditLog = host.appendAuditLog;
   const normalizeCompanyDiscountOverrides = host.normalizeCompanyDiscountOverrides;
   const normalizeElementaryLicenseIssueYearInput = host.normalizeElementaryLicenseIssueYearInput;
@@ -3190,7 +3199,7 @@ init(){
       this._restorePrimarySessionDataOverLoaded(preservePrimarySessionData);
       this._existingCustomerOfferAcceptedFor = normalizeIdValue(this.insureds[0]?.data?.idNumber || rec.idNumber);
       this._existingCustomerOfferDeclinedFor = "";
-      this.step = 5;
+      this.step = purchaseMode === "switch" ? 5 : 1;
       this.open();
       if(purchaseMode === "switch"){
         this.setHint(`שיחלוף עבור ${this.customerPurchaseMode.customerName} — הסירו פוליסות מהמערכת שברצונכם להחליף והוסיפו פוליסות חדשות במקומן.`);
@@ -3205,7 +3214,7 @@ init(){
           });
         } catch(_e) {}
       } else {
-        this.setHint(`רכישת ביטוח חדש עבור ${this.customerPurchaseMode.customerName} — התחלה בשלב פוליסות חדשות. ניתן לנווט לכל השלבים (פרטים אישיים, מבוטחים נוספים ועוד), להוסיף מוצר חדש, ולהשלים רק את הצהרת הבריאות הרלוונטית למוצר שנוסף.`);
+        this.setHint(`רכישת ביטוח חדש עבור ${this.customerPurchaseMode.customerName} — התחלה בשלב פרטי לקוח. עברו על כל השלבים, ובשלב הר הביטוח העלו קובץ עדכני אם עבר יותר מחודש.`);
       }
     },
 
@@ -3778,6 +3787,19 @@ init(){
       }
       if(Number(this.step) === 1 && !this.isCustomerPurchaseMode() && await this.blockIfAgentDuplicateIdAsync()) return;
       if(this.step === 3 && !this.isElementaryFlow()){
+        const staleHarInsureds = this.getStep3HarStaleInsureds();
+        if(staleHarInsureds.length){
+          const target = staleHarInsureds[0];
+          const insuredName = this.getInsuredDisplayName(target);
+          await showWizardHarAlertModal({
+            title: "שים לב",
+            text: `עבר יותר מחודש מאז הר הביטוח בתיק של מבוטח "${insuredName}". יש להעלות הר ביטוח עדכני מאתר הר הביטוח.`,
+            confirmText: "הבנתי",
+            showCancel: false
+          });
+          this.render();
+          return;
+        }
         const missingHarInsureds = this.getStep3HarUploadMissingInsureds();
         if(missingHarInsureds.length){
           const target = missingHarInsureds[0];
@@ -11033,11 +11055,14 @@ if(path === "birthDate"){
       const fileName = safeTrim(options.fileName);
       const empty = !!options.empty;
       const policyCount = Math.max(0, Number(options.policyCount) || 0);
+      const prev = (ins.data.harBituachAck && typeof ins.data.harBituachAck === "object") ? ins.data.harBituachAck : {};
       ins.data.harBituachAck = {
         at: nowISO(),
         fileName,
         empty,
-        policyCount
+        policyCount,
+        contentSha256: safeTrim(options.contentSha256) || safeTrim(prev.contentSha256),
+        originToken: safeTrim(options.originToken) || safeTrim(prev.originToken) || ("gihar_" + Math.random().toString(16).slice(2))
       };
     },
 
@@ -11067,22 +11092,30 @@ if(path === "birthDate"){
         : null;
       const empty = ack?.empty === true;
       const count = policies.length || Math.max(0, Number(ack?.policyCount) || 0);
+      const importedAt = safeTrim(ack?.at || ack?.verifiedAt) || safeTrim(policies[0]?.importSourceAt) || "";
+      const stale = this.isCustomerPurchaseMode() && (typeof isHarBituachTimestampStale === "function" ? isHarBituachTimestampStale(importedAt) : !importedAt);
       this.setHarImportState(ins, {
-        status: count > 0 ? "done" : (empty ? "empty" : "done"),
-        fileUploaded: true,
+        status: stale ? "stale" : (count > 0 ? "done" : (empty ? "empty" : "done")),
+        fileUploaded: !stale,
+        freshThisSession: false,
         count,
         fileName: safeTrim(ack?.fileName) || safeTrim(policies[0]?.importSourceFile) || "",
-        importedAt: safeTrim(ack?.at || ack?.verifiedAt) || safeTrim(policies[0]?.importSourceAt) || "",
-        message: count > 0
-          ? `הר הביטוח כבר קיים בתיק (${count} פוליסות). ניתן להמשיך.`
-          : "הר הביטוח כבר הועלה ללקוח — ניתן להמשיך."
+        importedAt,
+        message: stale
+          ? "עבר יותר מחודש מאז הר הביטוח בתיק. יש להעלות הר ביטוח עדכני מאתר הר הביטוח."
+          : (count > 0
+            ? `הר הביטוח כבר קיים בתיק (${count} פוליסות). ניתן להמשיך.`
+            : "הר הביטוח כבר הועלה ללקוח — ניתן להמשיך.")
       });
       return true;
     },
 
     getHarImportState(ins){
       const { state } = this._ensureHarImportStateEntry(ins);
-      if(!state.fileUploaded) this.hydrateHarImportStateFromInsured(ins);
+      const status = safeTrim(state.status);
+      if(!state.fileUploaded && status !== "stale" && status !== "loading" && status !== "error" && status !== "cancelled"){
+        this.hydrateHarImportStateFromInsured(ins);
+      }
       return this._ensureHarImportStateEntry(ins).state;
     },
 
@@ -11116,6 +11149,27 @@ if(path === "birthDate"){
         return { ok: true };
       }
       return { ok: false, reason: "id_mismatch" };
+    },
+
+    isHarBituachStaleForInsured(ins){
+      if(!this.isCustomerPurchaseMode()) return false;
+      const st = this._harImportState?.[safeTrim(ins?.id) || "default"];
+      if(st?.freshThisSession) return false;
+      if(safeTrim(st?.status) === "stale") return true;
+      if(!this.insuredHasPersistedHarBituach(ins)) return false;
+      const ack = ins?.data?.harBituachAck && typeof ins.data.harBituachAck === "object" ? ins.data.harBituachAck : null;
+      const importedAt = safeTrim(st?.importedAt) || safeTrim(ack?.at || ack?.verifiedAt) || safeTrim(ins?.data?.existingPolicies?.[0]?.importSourceAt);
+      if(typeof isHarBituachTimestampStale === "function") return isHarBituachTimestampStale(importedAt);
+      const raw = safeTrim(importedAt);
+      if(!raw) return true;
+      const t = Date.parse(raw);
+      if(!Number.isFinite(t) || t <= 0) return true;
+      return (Date.now() - t) > (Number(HAR_BITUACH_FRESH_MS) || (30 * 24 * 60 * 60 * 1000));
+    },
+
+    getStep3HarStaleInsureds(){
+      if(this.isElementaryFlow() || !this.isCustomerPurchaseMode()) return [];
+      return (this.insureds || []).filter((ins) => this.isHarBituachStaleForInsured(ins));
     },
 
     getStep3HarUploadMissingInsureds(){
@@ -11370,7 +11424,7 @@ if(path === "birthDate"){
         const source = [safeTrim(row.main), safeTrim(row.sub), safeTrim(row.productType), safeTrim(row.company), safeTrim(row.extra), safeTrim(row.classification)].join(" | ");
         if(!source) return false;
         if(/תחום\s*-/.test(source)) return false;
-        if(/התיק הביטוחי|הופק מאתר|משרד האוצר|בתאריך/.test(source)) return false;
+        if(/התיק הביטוחי|הופק מאתר|משרד האוצר/.test(source)) return false;
         return true;
       };
 
@@ -11677,7 +11731,7 @@ if(path === "birthDate"){
       return "";
     },
 
-    storeHarBituachOriginalFile(ins, file, dataUrl){
+    storeHarBituachOriginalFile(ins, file, dataUrl, extra = {}){
       const url = safeTrim(dataUrl);
       if(!ins || !url) return;
       this.setHarImportState(ins, {
@@ -11686,7 +11740,9 @@ if(path === "birthDate"){
           mime: safeTrim(file?.type) || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           size: Number(file?.size) || 0,
           dataUrl: url,
-          capturedAt: nowISO()
+          capturedAt: nowISO(),
+          contentSha256: safeTrim(extra.contentSha256),
+          originToken: safeTrim(extra.originToken) || ("gihar_" + Math.random().toString(16).slice(2))
         }
       });
     },
@@ -11711,11 +11767,77 @@ if(path === "birthDate"){
           size: original.size,
           dataUrl: original.dataUrl,
           uploadedAt: original.capturedAt,
-          uploadedBy: safeTrim(Auth?.current?.name)
+          uploadedBy: safeTrim(Auth?.current?.name),
+          contentSha256: original.contentSha256,
+          originToken: original.originToken
         });
         CustomerDocuments.upsertHarBituachFileDoc(payload, doc);
       });
       return payload;
+    },
+
+    readHarOriginStampFromBuffer(buffer){
+      try {
+        if(!window.XLSX?.read || !buffer) return "";
+        const wb = window.XLSX.read(buffer, { type: "array" });
+        return typeof readGiHarOriginStamp === "function" ? readGiHarOriginStamp(wb) : "";
+      } catch(_e) {
+        return "";
+      }
+    },
+
+    async collectKnownHarContentHashes(ins){
+      const hashes = new Set();
+      const add = (value) => {
+        const hex = safeTrim(value).toLowerCase();
+        if(hex.length >= 32) hashes.add(hex);
+      };
+      const ack = ins?.data?.harBituachAck && typeof ins.data.harBituachAck === "object" ? ins.data.harBituachAck : null;
+      add(ack?.contentSha256);
+      const original = this.peekHarOriginalFile(ins);
+      add(original?.contentSha256);
+      if(!original?.contentSha256 && original?.dataUrl && typeof sha256HexFromArrayBuffer === "function" && typeof dataUrlToArrayBuffer === "function"){
+        const buf = dataUrlToArrayBuffer(original.dataUrl);
+        if(buf) add(await sha256HexFromArrayBuffer(buf));
+      }
+      const cid = safeTrim(this.customerPurchaseMode?.customerId);
+      const rec = cid ? (State.data?.customers || []).find((row) => String(row?.id) === String(cid)) : null;
+      const docs = typeof CustomerDocuments?.listFromPayload === "function"
+        ? CustomerDocuments.listFromPayload(rec?.payload)
+        : (Array.isArray(rec?.payload?.customerDocuments) ? rec.payload.customerDocuments : []);
+      for(const doc of docs){
+        if(safeTrim(doc?.type) !== CustomerDocuments?.TYPES?.harBituach) continue;
+        add(doc.contentSha256);
+        if(!safeTrim(doc.contentSha256) && safeTrim(doc.dataUrl) && typeof sha256HexFromArrayBuffer === "function" && typeof dataUrlToArrayBuffer === "function"){
+          const buf = dataUrlToArrayBuffer(doc.dataUrl);
+          if(buf) add(await sha256HexFromArrayBuffer(buf));
+        }
+      }
+      return hashes;
+    },
+
+    async rejectRecycledHarBituachFile(ins, buffer){
+      const originStamp = this.readHarOriginStampFromBuffer(buffer);
+      if(originStamp){
+        await showWizardHarAlertModal({
+          title: "שים לב",
+          text: "זהו קובץ הר הביטוח שהורד ממערכת GEMEL INVEST. יש להוריד הר ביטוח עדכני מאתר הר הביטוח ולהעלות אותו.",
+          confirmText: "הבנתי",
+          showCancel: false
+        });
+        return true;
+      }
+      const sha = typeof sha256HexFromArrayBuffer === "function" ? safeTrim(await sha256HexFromArrayBuffer(buffer)).toLowerCase() : "";
+      if(!sha) return false;
+      const known = await this.collectKnownHarContentHashes(ins);
+      if(!known.has(sha)) return false;
+      await showWizardHarAlertModal({
+        title: "שים לב",
+        text: "זהו קובץ הר הביטוח הישן ששמור בתיק. יש להוריד הר ביטוח עדכני מאתר הר הביטוח ולהעלות אותו.",
+        confirmText: "הבנתי",
+        showCancel: false
+      });
+      return true;
     },
 
     async handleHarBituachFile(ins, file){
@@ -11730,16 +11852,29 @@ if(path === "birthDate"){
         this.render();
         if(window.GI_LOAD_LIBS?.xlsx) await window.GI_LOAD_LIBS.xlsx();
         const buffer = await file.arrayBuffer();
+        if(await this.rejectRecycledHarBituachFile(ins, buffer)){
+          this.setHarImportState(ins, {
+            status: this.isHarBituachStaleForInsured(ins) ? "stale" : "idle",
+            fileUploaded: false,
+            fileName: file.name || "",
+            message: "הקובץ שהועלה הוא הר הביטוח הישן מהתיק. יש להעלות קובץ עדכני מאתר הר הביטוח."
+          });
+          this.render();
+          return;
+        }
+        const contentSha256 = typeof sha256HexFromArrayBuffer === "function" ? await sha256HexFromArrayBuffer(buffer) : "";
+        const originToken = "gihar_" + Math.random().toString(16).slice(2);
         const originalDataUrl = await this.readUploadFileAsDataUrl(file, buffer);
         const parsed = this.parseHarBituachWorkbook(buffer, ins);
         const policies = Array.isArray(parsed?.policies) ? parsed.policies : [];
 
         if(!policies.length){
-          this.storeHarBituachOriginalFile(ins, file, originalDataUrl);
-          this.markHarBituachAcknowledged(ins, { fileName: file.name || "", empty: true, policyCount: 0 });
+          this.storeHarBituachOriginalFile(ins, file, originalDataUrl, { contentSha256, originToken });
+          this.markHarBituachAcknowledged(ins, { fileName: file.name || "", empty: true, policyCount: 0, contentSha256, originToken });
           this.setHarImportState(ins, {
             status: "empty",
             fileUploaded: true,
+            freshThisSession: true,
             count: 0,
             fileName: file.name || "",
             importedAt: nowISO(),
@@ -11793,11 +11928,12 @@ if(path === "birthDate"){
         });
 
         policies.forEach((policy) => this.mergeImportedExistingPolicy(ins, policy, file.name || ""));
-        this.storeHarBituachOriginalFile(ins, file, originalDataUrl);
-        this.markHarBituachAcknowledged(ins, { fileName: file.name || "", empty: false, policyCount: policies.length });
+        this.storeHarBituachOriginalFile(ins, file, originalDataUrl, { contentSha256, originToken });
+        this.markHarBituachAcknowledged(ins, { fileName: file.name || "", empty: false, policyCount: policies.length, contentSha256, originToken });
         this.setHarImportState(ins, {
           status: "done",
           fileUploaded: true,
+          freshThisSession: true,
           count: policies.length,
           fileName: file.name || "",
           importedAt: nowISO(),
@@ -28337,6 +28473,7 @@ if(path === "birthDate"){
       }
 
       if(stepId === 3){
+        if(this.isHarBituachStaleForInsured(ins)) return false;
         if(!this.hasHarFileUploaded(ins) && !this.insuredHasPersistedHarBituach(ins)){
           const policies = Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : [];
           if(!policies.length) return false;
