@@ -9592,9 +9592,10 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   display: flex !important;
   align-items: center !important;
   gap: var(--gi-s3) !important;
-  padding: 14px 18px !important;
+  padding: 16px 20px !important;
   position: relative !important;
-  border-bottom: 1px solid var(--gi-border) !important;
+  background: var(--gi-cf-acc-soft, var(--gi-primary-soft)) !important;
+  border-bottom: 2px solid var(--gi-cf-acc-line, var(--gi-border)) !important;
 }
 
 .cfGroup__head:not(#\9):not(#\9)::before{
@@ -9614,7 +9615,8 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   display: grid !important;
   place-items: center !important;
   border-radius: var(--gi-r-md) !important;
-  background: var(--gi-cf-acc-soft, var(--gi-primary-soft)) !important;
+  background: var(--gi-surface) !important;
+  border: 1px solid var(--gi-cf-acc-line, rgba(37,99,235,.22)) !important;
   color: var(--gi-cf-acc, var(--gi-primary)) !important;
 }
 
@@ -9652,7 +9654,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   flex: none !important;
   padding: 6px 12px !important;
   border-radius: var(--gi-r-pill) !important;
-  background: var(--gi-cf-acc-soft, var(--gi-primary-soft)) !important;
+  background: var(--gi-surface) !important;
   color: var(--gi-cf-acc, var(--gi-primary)) !important;
   font-size: 12px !important;
   font-weight: 800 !important;
@@ -9905,6 +9907,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 /* ==========================================================================
    GI-CF-POLICIES-UI — 2026-08-14
    פוליסות חדשות ככרטיסיות; מינוי סוכן / אלמנטרי / ישנות סגורים כברירת מחדל.
+   GI-CF-GROUP-HEAD 2026-08-21 — כותרת קטגוריה צבועה, מוצרים בבאר נפרדת.
    ========================================================================== */
 
 .cfGroup__head--toggle:not(#\9):not(#\9){
@@ -9916,7 +9919,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 }
 
 .cfGroup__head--toggle:hover:not(#\9):not(#\9){
-  background: var(--gi-surface-2) !important;
+  background: color-mix(in srgb, var(--gi-cf-acc) 14%, var(--gi-cf-acc-soft)) !important;
 }
 
 .cfGroup__openBtn:not(#\9):not(#\9){
@@ -9954,13 +9957,17 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   display: none !important;
 }
 
+.cfGroup .cfFile__tableWrap:not(#\9):not(#\9){
+  background: var(--gi-surface-2) !important;
+}
+
 .cfNewPolicyGrid:not(#\9):not(#\9){
   display: flex !important;
   flex-direction: column !important;
   gap: 8px !important;
   width: 100% !important;
   padding: 10px 12px 12px !important;
-  background: var(--gi-surface) !important;
+  background: var(--gi-surface-2) !important;
 }
 
 .cfNewPolicyCard:not(#\9):not(#\9){
