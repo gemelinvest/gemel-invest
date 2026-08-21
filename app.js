@@ -17034,11 +17034,6 @@ UsersGateUI.init();
         void Wizard.openNewPurchaseForCustomer(rec.id);
       });
       on(this.els.body, "click", (ev) => {
-        const rescheduleBtn = ev.target?.closest?.("[data-cf-reschedule-mirror]");
-        if(rescheduleBtn){
-          ev.preventDefault();
-          return;
-        }
         const tabBtn = ev.target?.closest?.("[data-cf-tab]");
         if(tabBtn){
           ev.preventDefault();
@@ -19570,20 +19565,9 @@ UsersGateUI.init();
         })
       ].filter(Boolean);
       if(!blocks.length){
-        return this.renderPoliciesRescheduleBar() + `<div class="emptyState" style="padding:32px 16px"><div class="emptyState__icon">${premiumCustomerIcon("document")}</div><div class="emptyState__title">עדיין אין מוצרים בתיק</div><div class="emptyState__text">ברגע שתישמר הצעה, המוצרים יוצגו כאן אוטומטית.</div></div>`;
+        return `<div class="emptyState" style="padding:32px 16px"><div class="emptyState__icon">${premiumCustomerIcon("document")}</div><div class="emptyState__title">עדיין אין מוצרים בתיק</div><div class="emptyState__text">ברגע שתישמר הצעה, המוצרים יוצגו כאן אוטומטית.</div></div>`;
       }
-      return this.renderPoliciesRescheduleBar() + blocks.join('');
-    },
-
-    renderPoliciesRescheduleBar(){
-      return `<div class="cfPoliciesRescheduleBar">
-        <button class="cfFileActionBtn cfFileActionBtn--reschedule" type="button" data-cf-reschedule-mirror="1">
-          <span class="cfFileActionBtn__label">תזמון חדש לשיקוף</span>
-          <span class="cfFileActionBtn__icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
-          </span>
-        </button>
-      </div>`;
+      return blocks.join('');
     },
 
     getRawNewPolicy(rec, policy){

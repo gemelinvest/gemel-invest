@@ -41878,16 +41878,6 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   border-color: #2a5cf5;
   color: #071540;
 }
-.cfPoliciesRescheduleBar{
-  position: sticky;
-  top: 0;
-  z-index: 4;
-  display: flex;
-  justify-content: flex-start;
-  padding: 10px 12px 12px;
-  margin: 0 0 8px;
-  background: linear-gradient(180deg, #f8fbff 70%, rgba(248,251,255,0));
-}
 .cfFileActionBtn--edit{
   color: #111827;
   border-color: rgba(15,23,42,.16);
