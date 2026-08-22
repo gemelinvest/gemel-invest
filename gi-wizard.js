@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260822-ops-submit-last5-v1";
+  const GI_WIZARD_BUILD = "20260822-ops-open-file-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -636,11 +636,7 @@ init(){
         if(t && t.getAttribute && t.getAttribute("data-close") === "1") this.closeOperationalReport();
       });
       on(this.els.btnOpenCustomerFile, "click", () => {
-        const customerId = this.lastSavedCustomerId;
-        this.hideFinishFlow();
-        this.close();
-        UI.goView("customers");
-        if(customerId) setTimeout(() => CustomersUI.openByIdWithLoader(customerId, 1080), 80);
+        this.openLastSavedCustomerFile();
       });
       on(this.els.btnSendToOps, "click", () => {
         void this.submitHealthRisksToOpsFromFinish();
@@ -27052,6 +27048,14 @@ if(path === "birthDate"){
       return customers.find((row) => safeTrim(row?.id) === customerId) || null;
     },
 
+    openLastSavedCustomerFile(){
+      const customerId = safeTrim(this.lastSavedCustomerId);
+      this.hideFinishFlow();
+      this.close();
+      UI.goView("customers");
+      if(customerId) setTimeout(() => CustomersUI.openByIdWithLoader(customerId, 1080), 80);
+    },
+
     async submitHealthRisksToOpsFromFinish(){
       if(this.isElementaryFlow() || this.isCarInsuranceClickFlow() || this.isElementaryReferralContinueFlow()) return;
       const rec = this.getLastSavedCustomerRecord();
@@ -27092,6 +27096,7 @@ if(path === "birthDate"){
       }
       if(result.alreadySubmitted){
         this.syncElementaryFinishFlowActions();
+        this.openLastSavedCustomerFile();
         return;
       }
       const originalText = btn ? btn.textContent : "";
@@ -27131,6 +27136,7 @@ if(path === "birthDate"){
           });
         } catch(_e) {}
         this.syncElementaryFinishFlowActions();
+        this.openLastSavedCustomerFile();
       } catch(err) {
         if(btn){
           btn.disabled = false;
