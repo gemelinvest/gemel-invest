@@ -32050,20 +32050,55 @@ UsersGateUI.init();
         </div>`;
     },
 
+    _panelHtmlFingerprint(html){
+      return String(html || "").replace(/\s+/g, " ").trim();
+    },
+
+    _recentRowIds(root){
+      if(!root) return "";
+      return Array.from(root.querySelectorAll(".bankRecent__row[data-customer-id]"))
+        .map((tr) => safeTrim(tr.getAttribute("data-customer-id")))
+        .join("|");
+    },
+
+    /* GI-FIX 2026-08-23: קוביות שמאל — טקסט במקום, בלי replaceWith. */
+    syncDashboardSideCubesInPlace(){
+      const root = this.els.root;
+      if(!root || !root.querySelector(".bankDash__kpis")) return;
+      if(root.querySelector(".bankDash--bootLoading")) return;
+      const cube = root.querySelector(".bankOpsCube");
+      if(!cube) return;
+      const rows = this.buildAgentOpsCubeModel();
+      for(let i = 0; i < rows.length; i++){
+        const r = rows[i];
+        const btn = cube.querySelector('[data-agent-ops-bucket="' + String(r.key || "").replace(/"/g, "") + '"]');
+        if(!btn) continue;
+        const metric = btn.querySelector(".bankOpsCube__metric");
+        const sub = btn.querySelector(".bankOpsCube__metricSub");
+        const nextMetric = r.metric === "premium" ? this.formatMoney(r.premium) : String(r.count);
+        const nextSub = r.metric === "premium" ? (String(r.count) + " לקוחות") : "לקוחות";
+        if(metric && metric.textContent !== nextMetric) metric.textContent = nextMetric;
+        if(sub && sub.textContent !== nextSub) sub.textContent = nextSub;
+      }
+    },
+
     /* GI-PERF 2026-08-09 — רענון שקט לכרטיסי דשבורד שלא עוברים דרך refreshKpis.
        מונע מצב שבו רינדור מלא עם רשימה ריקה זמנית מוחק «לקוחות אחרונים»
-       ואז רק KPI מתעדכנים והטבלה נשארת ריקה. */
+       ואז רק KPI מתעדכנים והטבלה נשארת ריקה.
+       GI-FIX 2026-08-23: לא מחליפים קוביה/רשימה אם התוכן לא השתנה. */
     refreshDashboardListPanels(){
       const root = this.els.root;
       if(!root || !root.querySelector(".bankDash__kpis")) return;
       if(root.querySelector(".bankDash--bootLoading")) return;
-      const replacePanel = (selector, html) => {
+      const replacePanelIfMissing = (selector, html) => {
         const cur = root.querySelector(selector);
-        if(!cur || !html) return;
+        if(cur || !html) return;
+        const host = root.querySelector(".bankDash__elevatedCol") || root.querySelector(".bankDash");
+        if(!host) return;
         const tmp = document.createElement("div");
         tmp.innerHTML = String(html).trim();
         const next = tmp.firstElementChild;
-        if(next) cur.replaceWith(next);
+        if(next) host.appendChild(next);
       };
       try {
         const rows = this.recentCustomersRows(5);
@@ -32076,9 +32111,13 @@ UsersGateUI.init();
           const next = tmp.firstElementChild;
           const curFilled = this._recentPanelFilledCount(cur);
           const nextFilled = this._recentPanelFilledCount(next);
+          const sameIds = !!(cur && next && this._recentRowIds(cur) === this._recentRowIds(next));
+          const sameHtml = !!(cur && next && this._panelHtmlFingerprint(cur.innerHTML) === this._panelHtmlFingerprint(next.innerHTML));
           // GI-FIX 2026-08-11: רענון KPI/דלתא לא מוחק ענף+פרמיה שכבר נצבעו.
           if(cur && next && curFilled > 0 && nextFilled < curFilled){
             // משאירים את הטבלה הקיימת
+          } else if(sameHtml || (sameIds && nextFilled <= curFilled)){
+            // אותה רשימה — בלי replaceWith
           } else if(next){
             if(cur) cur.replaceWith(next);
           }
@@ -32090,10 +32129,13 @@ UsersGateUI.init();
         try { this.ensureRecentCustomersPayloads(); } catch(_e3) {}
       } catch(_e) {}
       try {
-        replacePanel(".bankOpsCube", this.renderAgentOpsCubeHtml());
+        if(root.querySelector(".bankOpsCube")) this.syncDashboardSideCubesInPlace();
+        else replacePanelIfMissing(".bankOpsCube", this.renderAgentOpsCubeHtml());
       } catch(_e) {}
       try {
-        replacePanel(".bankServiceCube", this.renderAgentServiceCubeHtml());
+        if(!root.querySelector(".bankServiceCube")){
+          replacePanelIfMissing(".bankServiceCube", this.renderAgentServiceCubeHtml());
+        }
       } catch(_e) {}
     },
 
@@ -32829,6 +32871,8 @@ UsersGateUI.init();
           const nextIsEmptyMsg = !!next.querySelector(".giDailySalesReport__empty, .bankKpiTodayRow--empty");
           if(prevHadRows && !nextHasRows && nextIsEmptyMsg){
             // שומרים את מה שכבר מוצג
+          } else if(this._panelHtmlFingerprint(mount.innerHTML) === this._panelHtmlFingerprint(next.innerHTML)){
+            // אותו תוכן — בלי replaceWith
           } else {
             mount.replaceWith(next);
           }
@@ -33613,7 +33657,7 @@ UsersGateUI.init();
       }
       this.revealKpiMetricValues(root);
       try { this.refreshDailySalesReportPanel(); } catch(_e){}
-      try { this.refreshDashboardListPanels(); } catch(_e){}
+      try { this.syncDashboardSideCubesInPlace(); } catch(_e){}
       if(!skipMonthZeroPaint || !skipTodayZeroPaint){
         this._lastKpiPaintFp = paintFp;
         this._kpiPendingPaintFp = "";
@@ -33759,12 +33803,27 @@ UsersGateUI.init();
       const top = leaderboard[0];
       const second = leaderboard[1] || null;
       const third = leaderboard[2] || null;
-      const replacePodiumRank = (rank, agent) => {
+      const patchPodiumRank = (rank, agent) => {
         if(!podiumEl) return;
         const side = rank === 1 ? 'first' : rank === 2 ? 'second' : 'third';
         const slotOld = podiumEl.querySelector(`.bankLeader__podiumSlot--${side}`);
         if(!agent){
           if(slotOld) slotOld.remove();
+          return;
+        }
+        const nameSel = rank === 1 ? ".bankLeader__heroName" : ".bankLeader__sideName";
+        const amtSel = rank === 1 ? ".bankLeader__heroAmount" : ".bankLeader__sideAmount";
+        const subSel = rank === 1 ? ".bankLeader__heroSub" : ".bankLeader__sideSub";
+        const nameEl = slotOld?.querySelector(nameSel);
+        const amtEl = slotOld?.querySelector(amtSel);
+        const subEl = slotOld?.querySelector(subSel);
+        if(nameEl && amtEl && subEl){
+          const nextName = String(agent.name || "");
+          const nextAmt = this.formatMoney(agent.premium);
+          const nextSub = this.leaderboardAgentSub(agent, isYesterday);
+          if(nameEl.textContent !== nextName) nameEl.textContent = nextName;
+          if(amtEl.textContent !== nextAmt) amtEl.textContent = nextAmt;
+          if(subEl.textContent !== nextSub) subEl.textContent = nextSub;
           return;
         }
         const html = this.leaderboardPodiumSlot(agent, rank, isYesterday).trim();
@@ -33780,10 +33839,10 @@ UsersGateUI.init();
         else podiumEl.appendChild(next);
       };
       if(heroEl) heroEl.style.display = '';
-      replacePodiumRank(1, top);
-      replacePodiumRank(2, second);
-      replacePodiumRank(3, third);
-      if(listEl){
+      patchPodiumRank(1, top);
+      patchPodiumRank(2, second);
+      patchPodiumRank(3, third);
+      if(listEl && (listEl.innerHTML || !listEl.hasAttribute("hidden"))){
         listEl.style.display = 'none';
         listEl.innerHTML = '';
         listEl.setAttribute('hidden', '');
@@ -34191,7 +34250,7 @@ UsersGateUI.init();
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
     "./gi-customers-import.css?v=20260813-cq-v1",
-    "./theme-unify-flat.css?v=20260822-app-chrome-720-v1"
+    "./theme-unify-flat.css?v=20260823-dash-cube-inplace-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
     if(document.documentElement.dataset.giSecondaryCss === "1") return;
@@ -35512,7 +35571,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260822-app-chrome-720-v1";
+  const GI_WIZARD_JS_VERSION = "20260823-dash-cube-inplace-v1";
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
   const TZAHAL_CLINIC = "קופה צהלית";
   const TZAHAL_CLINIC_SHABAN = "אין שב״ן";
