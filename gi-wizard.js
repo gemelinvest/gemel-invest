@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260821-ops-status-live-timer-v1";
+  const GI_WIZARD_BUILD = "20260822-ops-submit-last5-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -143,6 +143,9 @@
   const renderHmoClinicDropdownHtml = host.renderHmoClinicDropdownHtml;
   const bindHmoClinicDropdown = host.bindHmoClinicDropdown;
   const stampHealthRisksWaitingMirror = host.stampHealthRisksWaitingMirror;
+  const submitHealthRisksProposalToOps = host.submitHealthRisksProposalToOps;
+  const persistCustomerOpsResultLight = host.persistCustomerOpsResultLight;
+  const OpsDashboardUI = host.OpsDashboardUI;
   const normalizeDiscountOptionRow = host.normalizeDiscountOptionRow;
   const parseAnyDmyDate = host.parseAnyDmyDate;
   const currentAgentIdentity = host.currentAgentIdentity;
@@ -640,7 +643,7 @@ init(){
         if(customerId) setTimeout(() => CustomersUI.openByIdWithLoader(customerId, 1080), 80);
       });
       on(this.els.btnSendToOps, "click", () => {
-        window.alert("הגשה לתפעול עדיין בפיתוח. בקרוב הכפתור יחובר לתהליך תפעול מלא.");
+        void this.submitHealthRisksToOpsFromFinish();
       });
       on(this.els.btnSubmitToUnderwriting, "click", () => {
         void this.submitElementaryUnderwritingReferral();
@@ -26890,16 +26893,22 @@ if(path === "birthDate"){
     syncClalRiskFinishFlowActions(){
       const btn = this.els.btnDownloadClalRiskForm;
       if(!btn) return;
-      const payload = this._lastFinishPayload || this.getOperationalPayload?.() || null;
-      const show = !!(payload && typeof ClalRiskLifePdf?.isEligible === "function" && ClalRiskLifePdf.isEligible(payload) && !this.isElementaryFlow());
-      btn.style.display = show ? "" : "none";
+      btn.style.display = "none";
     },
 
     syncElementaryFinishFlowActions(){
       const handoff = this._lastElementaryHandoff;
       const isElem = !!(this.isElementaryFlow() || handoff);
       const hidePostFinishUnderwriting = this.isCarInsuranceClickFlow() || this.isElementaryReferralContinueFlow();
-      if(this.els.btnSendToOps) this.els.btnSendToOps.style.display = isElem ? "none" : "";
+      if(this.els.btnSendToOps){
+        this.els.btnSendToOps.style.display = isElem ? "none" : "";
+        if(!isElem){
+          const rec = this.getLastSavedCustomerRecord();
+          const submitted = !!safeTrim(rec?.payload?.opsProcess?.submittedToOpsAt);
+          this.els.btnSendToOps.disabled = submitted;
+          this.els.btnSendToOps.textContent = submitted ? "הוגש לתפעול" : "הגש לתפעול";
+        }
+      }
       if(this.els.btnDownloadOpsFile) this.els.btnDownloadOpsFile.style.display = isElem ? "none" : "";
       this.syncClalRiskFinishFlowActions();
       if(!this.els.btnSubmitToUnderwriting) return;
@@ -27033,6 +27042,108 @@ if(path === "birthDate"){
           window.alert("שליחה לחיתום נכשלה");
         }
         return { ok: false, error: safeTrim(err?.message || err) || "שליחה לחיתום נכשלה" };
+      }
+    },
+
+    getLastSavedCustomerRecord(){
+      const customerId = safeTrim(this.lastSavedCustomerId);
+      if(!customerId) return null;
+      const customers = Array.isArray(State?.data?.customers) ? State.data.customers : [];
+      return customers.find((row) => safeTrim(row?.id) === customerId) || null;
+    },
+
+    async submitHealthRisksToOpsFromFinish(){
+      if(this.isElementaryFlow() || this.isCarInsuranceClickFlow() || this.isElementaryReferralContinueFlow()) return;
+      const rec = this.getLastSavedCustomerRecord();
+      const btn = this.els.btnSendToOps;
+      if(!rec){
+        try {
+          showToast({
+            title: "לא ניתן להגיש",
+            text: "לא נמצא תיק לקוח להגשה לתפעול.",
+            variant: "warn",
+            durationMs: 5200
+          });
+        } catch(_e) {}
+        return;
+      }
+      if(typeof submitHealthRisksProposalToOps !== "function"){
+        try {
+          showToast({
+            title: "לא ניתן להגיש",
+            text: "חיבור ההגשה לתפעול לא זמין כרגע.",
+            variant: "warn",
+            durationMs: 5200
+          });
+        } catch(_e) {}
+        return;
+      }
+      const result = submitHealthRisksProposalToOps(rec);
+      if(!result?.ok){
+        try {
+          showToast({
+            title: "לא ניתן להגיש",
+            text: "לא ניתן להעביר את ההצעה לממתינים לשיקוף כרגע.",
+            variant: "warn",
+            durationMs: 5200
+          });
+        } catch(_e) {}
+        return;
+      }
+      if(result.alreadySubmitted){
+        this.syncElementaryFinishFlowActions();
+        return;
+      }
+      const originalText = btn ? btn.textContent : "";
+      if(btn){
+        btn.disabled = true;
+        btn.textContent = "שולח לתפעול…";
+      }
+      try {
+        const saved = typeof persistCustomerOpsResultLight === "function"
+          ? await persistCustomerOpsResultLight(rec, "הוגש לתפעול · ממתין לשיקוף")
+          : { ok: false, error: "NO_PERSIST" };
+        if(!saved?.ok){
+          try {
+            if(rec.payload?.opsProcess) rec.payload.opsProcess.submittedToOpsAt = "";
+          } catch(_e) {}
+          if(btn){
+            btn.disabled = false;
+            btn.textContent = originalText || "הגש לתפעול";
+          }
+          try {
+            showToast({
+              title: "השמירה נכשלה",
+              text: "ההגשה לתפעול לא נשמרה. נסו שוב.",
+              variant: "warn",
+              durationMs: 5200
+            });
+          } catch(_e) {}
+          return;
+        }
+        try { OpsDashboardUI?.render?.(); } catch(_e) {}
+        try {
+          showToast({
+            title: "הוגש לתפעול",
+            text: "ההצעה עברה לממתינים לשיקוף בדשבורד התפעול.",
+            variant: "success",
+            durationMs: 6200
+          });
+        } catch(_e) {}
+        this.syncElementaryFinishFlowActions();
+      } catch(err) {
+        if(btn){
+          btn.disabled = false;
+          btn.textContent = originalText || "הגש לתפעול";
+        }
+        try {
+          showToast({
+            title: "השמירה נכשלה",
+            text: safeTrim(err?.message) || "ההגשה לתפעול לא נשמרה. נסו שוב.",
+            variant: "warn",
+            durationMs: 5200
+          });
+        } catch(_e) {}
       }
     },
 
@@ -27995,9 +28106,6 @@ if(path === "birthDate"){
       const preserveExistingOwner = !!(existingOwnerAgentId && sessionAgentId
         && String(existingOwnerAgentId) !== String(sessionAgentId));
       stampRecordAgentOwnership(record, preserveExistingOwner ? { preserveExistingOwner: true } : {});
-      if(!this.isElementaryFlow()){
-        try { stampHealthRisksWaitingMirror(record); } catch(_e){}
-      }
 
       const draftProposalId = safeTrim(this.editingDraftId);
       const draftProposalSnapshot = draftProposalId

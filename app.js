@@ -2157,9 +2157,37 @@
       : ((mirrorFlow.call && typeof mirrorFlow.call === "object") ? mirrorFlow.call : {});
   }
 
-  /** ממתינים לשיקוף: סיימו אשף בריאות וסיכונים, עדיין לא בשיחה ולא עברו לתוצאת שיקוף */
+  /* GI-OPS-SUBMIT-MIRROR-START */
+  const OPS_WAITING_MIRROR_LAST_CREATED_LIMIT = 5;
+
+  function listCustomersByCreatedAtDesc(){
+    const customers = Array.isArray(State?.data?.customers) ? State.data.customers : [];
+    return customers.slice().sort((a, b) => {
+      const tb = Date.parse(safeTrim(b?.createdAt) || "") || 0;
+      const ta = Date.parse(safeTrim(a?.createdAt) || "") || 0;
+      if(tb !== ta) return tb - ta;
+      return String(safeTrim(b?.id)).localeCompare(String(safeTrim(a?.id)));
+    });
+  }
+
+  function isAmongLastCreatedCustomers(rec, limit){
+    const n = Math.max(1, Number(limit) || OPS_WAITING_MIRROR_LAST_CREATED_LIMIT);
+    const id = safeTrim(rec?.id);
+    if(!id) return false;
+    return listCustomersByCreatedAtDesc().slice(0, n).some((row) => safeTrim(row?.id) === id);
+  }
+
+  function hasSubmittedHealthRisksToOps(rec){
+    const ops = rec?.payload?.opsProcess && typeof rec.payload.opsProcess === "object"
+      ? rec.payload.opsProcess
+      : {};
+    return !!safeTrim(ops.submittedToOpsAt);
+  }
+
+  /** ממתינים לשיקוף: רק 5 הלקוחות האחרונים שהוקמו, שעדיין לא בשיחה ולא בתוצאת שיקוף */
   function isWaitingMirrorQueueCustomer(rec){
     if(!isHealthRisksWizardCompleted(rec)) return false;
+    if(!isAmongLastCreatedCustomers(rec, OPS_WAITING_MIRROR_LAST_CREATED_LIMIT)) return false;
     const call = getMirrorCallStore(rec);
     if(call?.active) return false;
     const ops = getOpsStatePresentation(rec);
@@ -2187,6 +2215,23 @@
     if(!safeTrim(ops.liveState) || safeTrim(ops.liveState) === "waiting") patch.liveState = "waiting";
     setOpsTouch(rec, patch);
   }
+
+  function submitHealthRisksProposalToOps(rec){
+    if(!rec) return { ok: false, error: "NO_CUSTOMER" };
+    if(!isHealthRisksWizardCompleted(rec)) return { ok: false, error: "NOT_HEALTH_RISKS" };
+    if(getMirrorCallStore(rec)?.active) return { ok: false, error: "IN_CALL" };
+    const alreadySubmitted = hasSubmittedHealthRisksToOps(rec);
+    stampHealthRisksWaitingMirror(rec);
+    if(!alreadySubmitted){
+      setOpsTouch(rec, {
+        submittedToOpsAt: nowISO(),
+        queueSource: "health_risks_wizard",
+        updatedBy: safeTrim(Auth?.current?.name)
+      });
+    }
+    return { ok: true, alreadySubmitted };
+  }
+  /* GI-OPS-SUBMIT-MIRROR-END */
 
 
   /* =====================================================================
@@ -17680,22 +17725,6 @@ UsersGateUI.init();
           }
           return;
         }
-        const previewClalRisk = ev.target?.closest?.("[data-preview-clal-risk-form]");
-        if(previewClalRisk){
-          ev.preventDefault();
-          const rec = this.current();
-          if(!rec?.payload) return;
-          void ClalRiskLifePdf.downloadForPayload(rec.payload, previewClalRisk, { previewOnly: true });
-          return;
-        }
-        const dlClalRisk = ev.target?.closest?.("[data-download-clal-risk-form]");
-        if(dlClalRisk){
-          ev.preventDefault();
-          const rec = this.current();
-          if(!rec?.payload) return;
-          void ClalRiskLifePdf.downloadForPayload(rec.payload, dlClalRisk, { preview: true, download: true });
-          return;
-        }
         const backBtn = ev.target?.closest?.("#customerMedicalBackBtn");
         if(!backBtn) return;
         const rec = this.current();
@@ -20014,33 +20043,14 @@ UsersGateUI.init();
       return CustomerDocuments.resolveListForCustomer(rec);
     },
 
-    renderClalRiskFormPanel(rec){
-      const payload = rec?.payload;
-      if(typeof ClalRiskLifePdf === "undefined" || !ClalRiskLifePdf.isEligible(payload)) return "";
-      const name = safeTrim(rec?.fullName) || "לקוח";
-      return `<div class="cfFile__documentsPanel cfFile__documentsPanel--clalRisk" style="margin-bottom:14px">
-        <div class="cfFile__groupLabel">טופס חברה · כלל ריסק L007</div>
-        <article class="cfFile__documentRow">
-          <div class="cfFile__documentRowMain">
-            <div class="cfFile__documentRowIcon" aria-hidden="true">${premiumCustomerIcon("document")}</div>
-            <div>
-              <div class="cfFile__documentRowName">טופס מקורי כלל ריסק · ${escapeHtml(name)}</div>
-              <div class="cfFile__documentRowMeta">ממולא אוטומטית מנתוני התיק</div>
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn--small" type="button" data-preview-clal-risk-form>תצוגה מקדימה</button>
-            <button class="btn btn--primary btn--small" type="button" data-download-clal-risk-form>הורדה</button>
-          </div>
-        </article>
-      </div>`;
+    renderClalRiskFormPanel(_rec){
+      return "";
     },
 
     renderDocumentsSection(rec){
-      const clalPanel = this.renderClalRiskFormPanel(rec);
       const docs = this.getCustomerDocuments(rec);
       if(!docs.length){
-        return `${clalPanel}<div class="cfFile__documentsPanel">
+        return `<div class="cfFile__documentsPanel">
           <div class="cfFile__groupLabel">מסמכי לקוח</div>
           <div class="emptyState cfFile__documentsEmpty">
             <div class="emptyState__icon">${premiumCustomerIcon("document")}</div>
@@ -20079,7 +20089,7 @@ UsersGateUI.init();
       const footerHtml = (footerAgent || footerUpdated !== "—")
         ? `<div class="cfFile__documentsFooter muted small">${footerAgent ? `נציג מטפל: ${escapeHtml(footerAgent)}` : ""}${footerAgent && footerUpdated !== "—" ? " · " : ""}${footerUpdated !== "—" ? `עודכן: ${escapeHtml(footerUpdated)}` : ""}</div>`
         : "";
-      return `${clalPanel}<div class="cfFile__documentsPanel">
+      return `<div class="cfFile__documentsPanel">
         <div class="cfFile__groupLabel">מסמכי לקוח · ${docs.length} ${docs.length === 1 ? 'מסמך' : 'מסמכים'}</div>
         <div class="cfFile__documentsList">${rows}</div>
         ${footerHtml}
@@ -35230,7 +35240,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260821-ops-status-live-timer-v1";
+  const GI_WIZARD_JS_VERSION = "20260822-ops-submit-last5-v1";
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
   const TZAHAL_CLINIC = "קופה צהלית";
   const TZAHAL_CLINIC_SHABAN = "אין שב״ן";
@@ -35451,6 +35461,9 @@ UsersGateUI.init();
           renderHmoClinicDropdownHtml,
           bindHmoClinicDropdown,
           stampHealthRisksWaitingMirror,
+          submitHealthRisksProposalToOps,
+          persistCustomerOpsResultLight,
+          OpsDashboardUI,
           normalizeDiscountOptionRow,
           parseAnyDmyDate,
           currentAgentIdentity,
