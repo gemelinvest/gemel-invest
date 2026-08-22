@@ -28511,6 +28511,20 @@ input[inputmode="tel"] {
   flex: 0 0 auto;
   min-height: 0;
 }
+.lcElementaryHistoryGate--choose{
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  align-content: center;
+}
+.lcElementaryHistoryChoice{
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  width: min(100%, 440px);
+  margin-inline: auto;
+}
 .lcElementaryHistoryStep3.is-history-results .lcElementaryHistoryGate{
   padding: 4px 4px 2px;
 }
@@ -28538,12 +28552,12 @@ input[inputmode="tel"] {
   margin-inline-start: auto;
 }
 .lcElementaryHistoryCtaBtn{
-  max-width: min(100%, 520px);
-  width: auto;
-  min-width: min(100%, 320px);
-  min-height: 52px;
-  margin-inline: auto;
-  padding: 12px 24px;
+  max-width: none;
+  width: 100%;
+  min-width: 0;
+  min-height: 56px;
+  margin-inline: 0;
+  padding: 14px 22px;
   line-height: 1.35;
   display: inline-flex;
   align-items: center;
@@ -28605,44 +28619,119 @@ input[inputmode="tel"] {
   background: linear-gradient(180deg, rgba(255,255,255,.9), rgba(224,238,255,.78));
   border: 1px solid rgba(125, 178, 255, 0.55);
 }
-@media (max-width: 720px){
-  .lcElementaryHistoryCtaBtn{ min-height: 48px; min-width: min(100%, 280px); padding: 10px 16px; }
-  .lcElementaryHistoryCtaBtn__pre{ font-size: 13px; }
-  .lcElementaryHistoryCtaBtn__name{ font-size: 15px; }
-  .lcElementaryHistoryActions{ width: 100%; justify-content: stretch; }
-  .lcElementaryHistoryClearBtn,
-  .lcElementaryHistoryAppendBtn{ flex: 1 1 calc(50% - 6px); }
-}
 .lcElementaryHistoryNoHistoryBtn{
-  margin-top: 10px;
-  font-size: 13px;
-  color: var(--muted);
-  border: 1px dashed rgba(100,116,139,.4);
-  background: transparent;
-  padding: 8px 18px;
-  border-radius: 8px;
+  margin-top: 0;
+  width: 100%;
+  min-height: 56px;
+  padding: 14px 22px;
+  border-radius: 16px;
+  font-family: 'Rubik', system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--brandA, #1e3a8a);
+  background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(241,245,255,.86));
+  border: 1px solid rgba(125, 178, 255, 0.5);
+  box-shadow: 0 10px 28px rgba(43, 75, 138, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
   cursor: pointer;
-  transition: background .15s, border-color .15s;
+  transition: transform .15s ease, box-shadow .15s ease, background .15s ease;
 }
 .lcElementaryHistoryNoHistoryBtn:hover{
-  background: rgba(100,116,139,.06);
-  border-color: rgba(100,116,139,.6);
+  transform: translateY(-1px);
+  background: linear-gradient(180deg, #fff, rgba(226,236,255,.92));
+  border-color: rgba(56, 112, 237, 0.45);
+  box-shadow: 0 14px 34px rgba(43, 75, 138, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.95);
+}
+.lcElementaryHistoryNoHistoryBtn:active{
+  transform: translateY(0);
+}
+.lcElementaryHistoryNoHistForm{
+  width: min(100%, 440px);
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px 20px 18px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,.9), rgba(196,224,255,.55));
+  border: 1px solid rgba(125, 178, 255, 0.55);
+  box-shadow: 0 14px 36px rgba(43, 75, 138, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.84);
+  backdrop-filter: blur(16px) saturate(145%);
+  -webkit-backdrop-filter: blur(16px) saturate(145%);
+}
+.lcElementaryHistoryNoHistForm__title{
+  font-size: 17px;
+  font-weight: 900;
+  color: var(--brandA, #1e3a8a);
+  text-align: center;
+}
+.lcElementaryHistoryNoHistForm__lead{
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(30, 58, 138, 0.72);
+  text-align: center;
+}
+.lcElementaryHistoryNoHistForm__field{
+  margin: 0;
+}
+.lcElementaryHistoryNoHistForm__check{
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 12px;
+  border-radius: 12px;
+  background: rgba(255,255,255,.72);
+  border: 1px solid rgba(125, 178, 255, 0.4);
+  font-size: 14px;
+  font-weight: 650;
+  color: #1e3a5f;
+  cursor: pointer;
+}
+.lcElementaryHistoryNoHistForm__check input{
+  margin-top: 2px;
+  width: 18px;
+  height: 18px;
+  accent-color: #3870ED;
+  flex: 0 0 auto;
+}
+.lcElementaryHistoryNoHistForm__actions{
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.lcElementaryHistoryNoHistForm__actions .btn{
+  min-height: 42px;
+  padding: 8px 18px;
+  border-radius: 12px;
+  font-weight: 800;
 }
 .lcElementaryHistoryNoHistoryBadge{
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  margin: 10px 0;
-  border-radius: 10px;
-  background: rgba(59,130,246,.08);
-  border: 1px solid rgba(59,130,246,.25);
+  margin: 0 auto;
+  width: min(100%, 440px);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,.9), rgba(219,234,254,.78));
+  border: 1px solid rgba(56, 112, 237, 0.28);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 650;
   color: #1d4ed8;
 }
 .lcElementaryHistoryNoHistoryBadge__icon{
   font-size: 16px;
+}
+@media (max-width: 720px){
+  .lcElementaryHistoryCtaBtn{ min-height: 50px; min-width: 0; padding: 12px 16px; }
+  .lcElementaryHistoryNoHistoryBtn{ min-height: 50px; padding: 12px 16px; }
+  .lcElementaryHistoryChoice,
+  .lcElementaryHistoryNoHistForm{ width: min(100%, 440px); }
+  .lcElementaryHistoryCtaBtn__pre{ font-size: 13px; }
+  .lcElementaryHistoryCtaBtn__name{ font-size: 15px; }
+  .lcElementaryHistoryActions{ width: 100%; justify-content: stretch; }
+  .lcElementaryHistoryClearBtn,
+  .lcElementaryHistoryAppendBtn{ flex: 1 1 calc(50% - 6px); }
 }
 .lcElementaryHistoryResults{
   flex: 0 0 auto;

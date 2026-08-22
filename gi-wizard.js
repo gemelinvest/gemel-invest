@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260823-levi-map-safe-v1";
+  const GI_WIZARD_BUILD = "20260823-hist-no-drop-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -6405,7 +6405,7 @@ if(path === "birthDate"){
     },
 
     getElementaryInsuranceHistoryStore(ins){
-      if(!ins?.data) return { rows:[], claimsCount:0, importedAt:'', fileName:'', sourceFiles:[], status:'idle', message:'', ownerMeta:{}, calendarWarnings:[], harGeneralRows:[], harGeneralImportedAt:'', harGeneralFileName:'', harGeneralSourceFiles:[] };
+      if(!ins?.data) return { rows:[], claimsCount:0, importedAt:'', fileName:'', sourceFiles:[], status:'idle', message:'', ownerMeta:{}, calendarWarnings:[], harGeneralRows:[], harGeneralImportedAt:'', harGeneralFileName:'', harGeneralSourceFiles:[], noInsuranceHistory:false, noHistoryClientConfirmed:false, noHistoryFormOpen:false };
       const current = ins.data.elementaryInsuranceHistory && typeof ins.data.elementaryInsuranceHistory === 'object' ? ins.data.elementaryInsuranceHistory : {};
       const fileName = safeTrim(current.fileName);
       const sourceFiles = Array.isArray(current.sourceFiles) && current.sourceFiles.length
@@ -6428,7 +6428,10 @@ if(path === "birthDate"){
         harGeneralRows,
         harGeneralImportedAt: safeTrim(current.harGeneralImportedAt),
         harGeneralFileName: safeTrim(current.harGeneralFileName),
-        harGeneralSourceFiles
+        harGeneralSourceFiles,
+        noInsuranceHistory: !!current.noInsuranceHistory,
+        noHistoryClientConfirmed: !!current.noHistoryClientConfirmed,
+        noHistoryFormOpen: !!current.noHistoryFormOpen
       };
       ins.data.elementaryInsuranceHistory = normalized;
       return normalized;
@@ -6525,6 +6528,43 @@ if(path === "birthDate"){
       if(files.length > 1) return `${files.length} קבצים: ${files.join(' · ')}`;
       if(files.length === 1) return files[0];
       return safeTrim(history?.fileName) || 'הועלה';
+    },
+
+    elementaryHistoryHasLoadedData(history){
+      const hist = history && typeof history === 'object' ? history : {};
+      return (Array.isArray(hist.rows) && hist.rows.length > 0)
+        || (Array.isArray(hist.harGeneralRows) && hist.harGeneralRows.length > 0)
+        || (Array.isArray(hist.calendarWarnings) && hist.calendarWarnings.length > 0)
+        || Number(hist.claimsCount || 0) > 0;
+    },
+
+    elementaryNoHistoryDateOk(d){
+      return this._harValidateDate(safeTrim(d?.insuranceStartDate));
+    },
+
+    elementaryNoHistoryConfirmed(history, d){
+      const hist = history && typeof history === 'object' ? history : {};
+      return !!hist.noInsuranceHistory && !!hist.noHistoryClientConfirmed && this.elementaryNoHistoryDateOk(d);
+    },
+
+    getElementaryHistoryStepValidation(ins){
+      const d = ins?.data || {};
+      const hist = this.getElementaryInsuranceHistoryStore(ins);
+      if(Number(hist.claimsCount || 0) > 3){
+        return { ok:false, msg:'לא ניתן לבטח מבוטח זה — אנא פנה לחיתום' };
+      }
+      if(this.elementaryHistoryHasLoadedData(hist)) return { ok:true };
+      if(this.elementaryNoHistoryConfirmed(hist, d)) return { ok:true };
+      if(hist.noHistoryFormOpen || hist.noInsuranceHistory){
+        if(!this.elementaryNoHistoryDateOk(d)){
+          return { ok:false, msg:'יש למלא תאריך תחילת ביטוח' };
+        }
+        if(!hist.noHistoryClientConfirmed){
+          return { ok:false, msg:'יש לאשר מול הלקוח שאין לו עבר ביטוחי' };
+        }
+        return { ok:false, msg:'יש לאשר שאין ללקוח עבר ביטוחי' };
+      }
+      return { ok:false, msg:'יש לבדוק עבר ביטוחי או לאשר שאין ללקוח עבר ביטוחי' };
     },
 
     setElementaryInsuranceHistoryState(ins, patch = {}){
@@ -8447,7 +8487,8 @@ if(path === "birthDate"){
       const isLoading = history.status === 'loading';
       const hasLoadedData = !isLoading && (rowsLen > 0 || blocked || calWarnings.length > 0 || harLen > 0);
       const noHistory = !!history.noInsuranceHistory;
-      const showPrimaryCta = !isLoading && rowsLen === 0 && !blocked && calWarnings.length === 0 && !noHistory;
+      const noHistFormOpen = !!history.noHistoryFormOpen && !noHistory && !isLoading && !hasLoadedData;
+      const showPrimaryCta = !isLoading && rowsLen === 0 && !blocked && calWarnings.length === 0 && !noHistory && !noHistFormOpen;
       const showHistoryActions = hasLoadedData || noHistory;
       const filesLabel = this.formatElementaryHistoryFilesLabel(history);
       const hasResults = blocked || isLoading || rowsLen > 0 || harLen > 0;
@@ -8488,26 +8529,39 @@ if(path === "birthDate"){
         ${rowsLen > 0 || harLen > 0 ? this.renderElementaryHistoryRows(history, displayName) : ''}` : '';
       return `<div class="lcElementaryWrap lcElementaryWrap--step3History">
         ${this.renderElementaryProgress()}
-        <div class="lcElementaryHistoryStep3${hasLoadedData ? ' is-history-results' : ''}">
-          <div class="lcElementaryHistoryGate${showHistoryActions ? ' lcElementaryHistoryGate--actions' : ''}">
-            ${showPrimaryCta ? `<button class="btn lcElementaryHistoryCtaBtn" id="lcElementaryHistoryUploadBtn" type="button" aria-label="בדיקת עבר ביטוחי עבור: ${escapeHtml(displayName)}">
+        <div class="lcElementaryHistoryStep3${hasLoadedData ? ' is-history-results' : ''}${noHistFormOpen ? ' is-nohist-form' : ''}">
+          <div class="lcElementaryHistoryGate${showHistoryActions ? ' lcElementaryHistoryGate--actions' : ''}${showPrimaryCta || noHistFormOpen ? ' lcElementaryHistoryGate--choose' : ''}">
+            ${showPrimaryCta ? `<div class="lcElementaryHistoryChoice">
+            <button class="btn lcElementaryHistoryCtaBtn" id="lcElementaryHistoryUploadBtn" type="button" aria-label="בדיקת עבר ביטוחי עבור: ${escapeHtml(displayName)}">
               <span class="lcElementaryHistoryCtaBtn__line">
                 <span class="lcElementaryHistoryCtaBtn__pre">בדיקת עבר ביטוחי עבור:</span>
                 <strong class="lcElementaryHistoryCtaBtn__name">${escapeHtml(displayName)}</strong>
               </span>
             </button>
-            <button class="btn lcElementaryHistoryNoHistoryBtn" id="lcElementaryHistoryNoHistoryBtn" type="button">אין ללקוח עבר ביטוחי</button>` : ''}
-            ${noHistory ? `<div class="lcElementaryHistoryNoHistoryBadge"><span class="lcElementaryHistoryNoHistoryBadge__icon">ℹ️</span> סומן: אין ללקוח עבר ביטוחי</div>` : ''}
+            <button class="btn lcElementaryHistoryNoHistoryBtn" id="lcElementaryHistoryNoHistoryBtn" type="button">אין ללקוח עבר ביטוחי</button>
+            </div>` : ''}
+            ${noHistFormOpen ? `<form class="lcElementaryHistoryNoHistForm" id="lcElementaryHistoryNoHistForm" autocomplete="off">
+              <div class="lcElementaryHistoryNoHistForm__title">אין עבר ביטוחי</div>
+              <p class="lcElementaryHistoryNoHistForm__lead">מלאו תאריך תחילת ביטוח ואשרו מול הלקוח שאין לו עבר ביטוחי.</p>
+              <div class="field lcElementaryHistoryNoHistForm__field">
+                <label class="label" for="lcElemNoHistStartDate">תאריך תחילת ביטוח</label>
+                <input class="input lcElementaryDateInput" id="lcElemNoHistStartDate" type="text" dir="ltr" inputmode="numeric" autocomplete="off" placeholder="DD/MM/YYYY" maxlength="10" data-datefmt="dmy" data-bind="insuranceStartDate" value="${escapeHtml(d.insuranceStartDate || '')}" />
+              </div>
+              <label class="lcElementaryHistoryNoHistForm__check">
+                <input type="checkbox" id="lcElemNoHistConfirm" data-elem-nohist-confirm ${history.noHistoryClientConfirmed ? 'checked' : ''} />
+                <span>אישרתי מול הלקוח שאין לו עבר ביטוחי</span>
+              </label>
+              <div class="lcElementaryHistoryNoHistForm__actions">
+                <button class="btn btn--primary lcElementaryHistoryNoHistConfirm" id="lcElementaryHistoryNoHistConfirm" type="button">אישור</button>
+                <button class="btn lcElementaryHistoryNoHistBack" id="lcElementaryHistoryNoHistBack" type="button">חזרה</button>
+              </div>
+            </form>` : ''}
+            ${noHistory ? `<div class="lcElementaryHistoryNoHistoryBadge">סומן: אין ללקוח עבר ביטוחי${this.elementaryNoHistoryDateOk(d) ? ` · תחילה ${escapeHtml(safeTrim(d.insuranceStartDate))}` : ''}</div>` : ''}
             ${isLoading ? `<div class="lcElementaryHistoryGate__loading muted small" role="status">${escapeHtml(statusMessage || 'טוען נתוני עבר ביטוחי…')}</div>` : ''}
             ${showHistoryActions ? `<div class="lcElementaryHistoryActions">
               <button class="btn lcElementaryHistoryClearBtn" id="lcElementaryHistoryClearBtn" type="button">${noHistory ? 'בטל סימון אין עבר ביטוחי' : 'נקה נתוני עבר ביטוח'}</button>
               ${!noHistory ? `<button class="btn lcElementaryHistoryAppendBtn" id="lcElementaryHistoryAppendBtn" type="button">צרף עבר ביטוחי נוסף</button>` : ''}
             </div>` : ''}
-            <div class="lcFileDropZone lcFileDropZone--excel" id="lcElementaryHarExcelDrop" role="button" tabindex="0" aria-label="העלאת קובץ PDF או Excel מהר הביטוח">
-              <span class="lcFileDropZone__icon" aria-hidden="true">📄</span>
-              <span class="lcFileDropZone__label">גרור לכאן קובץ PDF של עבר ביטוחי או Excel מהר הביטוח</span>
-              <span class="lcFileDropZone__sub muted small">PDF = עבר ביטוחי · Excel = תחום כללי (אופציונלי)</span>
-            </div>
             <input id="lcElementaryHistoryFile" type="file" accept="application/pdf,.pdf" hidden />
             <input id="lcElementaryHarExcelFile" type="file" accept="application/pdf,.pdf,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" hidden />
           </div>
@@ -10000,14 +10054,71 @@ if(path === "birthDate"){
         this.openHarOwnerModal(ins);
       });
       on(historyNoHistoryBtn, 'click', () => {
-        this.setElementaryInsuranceHistoryState(ins, { noInsuranceHistory: true, rows: [], claimsCount: 0 });
+        this.setElementaryInsuranceHistoryState(ins, {
+          noHistoryFormOpen: true,
+          noInsuranceHistory: false,
+          noHistoryClientConfirmed: false,
+          rows: [],
+          claimsCount: 0
+        });
         this.render();
-        try { window.showToast?.({ title: 'אין עבר ביטוחי', text: 'סומן שללקוח אין עבר ביטוחי. ניתן להמשיך לשלב הבא.', variant: 'info', durationMs: 4200 }); } catch(_e){}
+        try { ElementaryDatePicker.attachToContainer(this.els.body); } catch(_e){}
+        requestAnimationFrame(() => {
+          try { this.els.body?.querySelector?.('#lcElemNoHistStartDate')?.focus?.(); } catch(_e){}
+        });
+      });
+      const noHistForm = $('#lcElementaryHistoryNoHistForm', this.els.body);
+      const noHistConfirmBtn = $('#lcElementaryHistoryNoHistConfirm', this.els.body);
+      const noHistBackBtn = $('#lcElementaryHistoryNoHistBack', this.els.body);
+      const noHistConfirmCb = $('#lcElemNoHistConfirm', this.els.body);
+      on(noHistForm, 'submit', (e) => { try { e.preventDefault(); } catch(_e){} });
+      on(noHistConfirmCb, 'change', () => {
+        this.setElementaryInsuranceHistoryState(ins, { noHistoryClientConfirmed: !!noHistConfirmCb.checked });
+      });
+      on(noHistBackBtn, 'click', () => {
+        this.setElementaryInsuranceHistoryState(ins, {
+          noHistoryFormOpen: false,
+          noInsuranceHistory: false,
+          noHistoryClientConfirmed: false
+        });
+        this.render();
+      });
+      on(noHistConfirmBtn, 'click', () => {
+        const dateOk = this.elementaryNoHistoryDateOk(ins.data);
+        const confirmed = !!(noHistConfirmCb?.checked);
+        this.setElementaryInsuranceHistoryState(ins, { noHistoryClientConfirmed: confirmed });
+        if(!dateOk){
+          try { window.showToast?.({ title: 'חסר תאריך', text: 'יש למלא תאריך תחילת ביטוח.', variant: 'warn', durationMs: 4200 }); } catch(_e){}
+          try { this.els.body?.querySelector?.('#lcElemNoHistStartDate')?.focus?.(); } catch(_e){}
+          return;
+        }
+        if(!confirmed){
+          try { window.showToast?.({ title: 'נדרש אישור', text: 'יש לאשר מול הלקוח שאין לו עבר ביטוחי.', variant: 'warn', durationMs: 4200 }); } catch(_e){}
+          return;
+        }
+        const hist = this.getElementaryInsuranceHistoryStore(ins);
+        const ownerMeta = Object.assign({}, hist.ownerMeta || {}, { startDate: safeTrim(ins.data.insuranceStartDate) });
+        this.setElementaryInsuranceHistoryState(ins, {
+          noInsuranceHistory: true,
+          noHistoryClientConfirmed: true,
+          noHistoryFormOpen: false,
+          rows: [],
+          claimsCount: 0,
+          ownerMeta
+        });
+        this.render();
+        try { window.showToast?.({ title: 'אין עבר ביטוחי', text: 'סומן לאחר אישור מול הלקוח. ניתן להמשיך לשלב הבא.', variant: 'ok', durationMs: 4200 }); } catch(_e){}
       });
       on(historyClearBtn, 'click', () => {
         const hist = this.getElementaryInsuranceHistoryStore(ins);
         if(hist?.noInsuranceHistory){
-          this.setElementaryInsuranceHistoryState(ins, { noInsuranceHistory: false, rows: [], claimsCount: 0 });
+          this.setElementaryInsuranceHistoryState(ins, {
+            noInsuranceHistory: false,
+            noHistoryClientConfirmed: false,
+            noHistoryFormOpen: false,
+            rows: [],
+            claimsCount: 0
+          });
           this.render();
           return;
         }
@@ -28396,9 +28507,7 @@ if(path === "birthDate"){
           return { ok:true };
         }
         if(Number(stepId) === 3){
-          const hist = d.elementaryInsuranceHistory && typeof d.elementaryInsuranceHistory === 'object' ? d.elementaryInsuranceHistory : {};
-          if(Number(hist.claimsCount || 0) > 3) return { ok:false, msg:'לא ניתן לבטח מבוטח זה — אנא פנה לחיתום' };
-          return { ok:true };
+          return this.getElementaryHistoryStepValidation(primary);
         }
         if(Number(stepId) === 4){
           if(!safeTrim(d.coverageType)) return { ok:false, msg:'יש לבחור סוג כיסוי' };
@@ -28578,8 +28687,7 @@ if(path === "birthDate"){
           return this.isElementaryVehicleLienResolved(d);
         }
         if(Number(stepId) === 3){
-          const hist = d.elementaryInsuranceHistory && typeof d.elementaryInsuranceHistory === 'object' ? d.elementaryInsuranceHistory : {};
-          return Number(hist.claimsCount || 0) <= 3;
+          return this.getElementaryHistoryStepValidation(ins).ok;
         }
         if(Number(stepId) === 4) return !!(safeTrim(d.coverageType));
         return true;
