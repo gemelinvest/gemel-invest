@@ -1681,17 +1681,20 @@
       : {};
     let phase = safeTrim(call.uiPhase);
     let label = safeTrim(call.flowStepLabel);
+    let kicker = safeTrim(call.flowStepKicker);
     let index = Number(call.flowStepIndex || 0) || 0;
     let count = Number(call.flowStepCount || 0) || 0;
     try{
-      if(typeof MirrorCallUI !== "undefined" && MirrorCallUI?._callRunning && typeof MirrorCallUI._currentFlowStepInfo === "function"){
-        const selId = safeTrim(MirrorCallUI?.selectedCustomer?.id);
+      if(typeof MirrorCallUI !== "undefined" && (MirrorCallUI?._callRunning || safeTrim(MirrorCallUI?._fileTimerArmedId)) && typeof MirrorCallUI._currentFlowStepInfo === "function"){
+        const armedId = safeTrim(MirrorCallUI?._fileTimerArmedId);
+        const selId = safeTrim(MirrorCallUI?.selectedCustomer?.id) || armedId;
         const sameCustomer = !!cid && !!selId && selId === cid;
         const sameRuntime = !!(call.active && safeTrim(call.runtimeSessionId) === safeTrim(MirrorCallUI._runtimeId));
-        if(sameCustomer || sameRuntime){
+        if(sameCustomer || sameRuntime || (armedId && armedId === cid)){
           const info = MirrorCallUI._currentFlowStepInfo() || {};
           phase = safeTrim(info.phase) || phase;
           label = safeTrim(info.label) || label;
+          kicker = safeTrim(info.kicker) || kicker;
           index = Number(info.index || 0) || index;
           count = Number(info.count || 0) || count;
         }
@@ -1701,17 +1704,12 @@
       const fallback = safeTrim(MirrorCallUI._phaseLabel(phase));
       if(fallback && fallback !== "—") label = fallback;
     }
-    if(!label) return null;
-    return { phase, label, index, count };
+    if(!label && !kicker) return null;
+    return { phase, label, index, count, kicker };
   }
 
   function getHeroCallTimerView(rec, opsState){
     const ops = opsState || (rec ? getOpsStatePresentation(rec) : null);
-    const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
-    const mirrorFlow = payload?.mirrorFlow && typeof payload.mirrorFlow === "object" ? payload.mirrorFlow : {};
-    const call = (mirrorFlow.callSession && typeof mirrorFlow.callSession === "object")
-      ? mirrorFlow.callSession
-      : ((mirrorFlow.call && typeof mirrorFlow.call === "object") ? mirrorFlow.call : {});
     if(ops?.timerLive){
       const step = typeof getLiveMirrorCallStepView === "function" ? getLiveMirrorCallStepView(rec) : null;
       return {
@@ -1719,20 +1717,20 @@
         status: "הלקוח בשיחה כעת",
         count: ops.timerText || "00:00",
         stepLabel: safeTrim(step?.label),
+        stepKicker: safeTrim(step?.kicker),
         stepIndex: Number(step?.index || 0) || 0,
         stepCount: Number(step?.count || 0) || 0
       };
     }
-    const endReason = safeTrim(call?.endReason);
-    const notes = safeTrim(call?.noConsentNotes);
-    const isCompleted = endReason === "completed" || endReason === "call_finished";
-    if(!call?.active && (isCompleted || (!notes && (safeTrim(call?.finishedAt) || safeTrim(call?.durationText))))){
-      return { mode: "done", status: "הלקוח סיים שיחה", count: "" };
-    }
-    if(!call?.active && (endReason === "paused_documented" || notes || safeTrim(ops?.liveKey) === "mirror_call_stopped_saved")){
-      return { mode: "stopped", status: "שיחת שיקוף נעצרה", count: "" };
-    }
     return { mode: "hidden", status: "", count: "" };
+  }
+
+  function getCustomerFileOpsBadge(state){
+    if(!state) return "ממתין לשיקוף";
+    if(state.timerLive) return safeTrim(state.liveLabel) || "הלקוח בשיחה כעת";
+    if(safeTrim(state.finalLabel)) return safeTrim(state.finalLabel);
+    if(safeTrim(state.liveKey) === "call_finished") return "ממתין לסטטוס תפעול";
+    return safeTrim(state.liveLabel) || "ממתין לשיקוף";
   }
 
   function archiveMirrorCallIfDocumented(rec){
@@ -1783,11 +1781,12 @@
     const store = (mf.callSession && typeof mf.callSession === "object") ? mf.callSession : {};
     const startedAtFromStore = safeTrim(store?.startedAt);
     try{
-      if(typeof MirrorCallUI !== "undefined" && MirrorCallUI?._callRunning){
-        const selId = safeTrim(MirrorCallUI?.selectedCustomer?.id);
+      if(typeof MirrorCallUI !== "undefined" && (MirrorCallUI?._callRunning || safeTrim(MirrorCallUI?._fileTimerArmedId))){
+        const armedId = safeTrim(MirrorCallUI?._fileTimerArmedId);
+        const selId = safeTrim(MirrorCallUI?.selectedCustomer?.id) || armedId;
         const sameCustomer = !!selId && selId === cid;
         const sameRuntime = !!(store?.active && safeTrim(store.runtimeSessionId) === safeTrim(MirrorCallUI._runtimeId));
-        if(sameCustomer || sameRuntime){
+        if(sameCustomer || sameRuntime || (armedId && armedId === cid)){
           return {
             live: true,
             seconds: Math.max(0, Number(MirrorCallUI._callSeconds) || 0),
@@ -19541,7 +19540,7 @@ UsersGateUI.init();
         <div class="cfFile__kpi" id="customerFullKpiOps">
           <div class="cfFile__kpiIcon cfFile__kpiIcon--amber">${pulseIcon}</div>
           <div>
-            <span class="cfFile__opsBadge">${escapeHtml(ops?.liveLabel || 'ממתין לשיקוף')}</span>
+            <span class="cfFile__opsBadge">${escapeHtml(typeof getCustomerFileOpsBadge === "function" ? getCustomerFileOpsBadge(ops) : (ops?.liveLabel || 'ממתין לשיקוף'))}</span>
             <div class="cfFile__kpiLabel" style="margin-top:6px">סטטוס תפעולי</div>
             <div class="cfFile__kpiSub">עודכן ${escapeHtml(updatedOps)}</div>
           </div>
@@ -20805,10 +20804,11 @@ UsersGateUI.init();
       el.removeAttribute("hidden");
       el.classList.add(`is-${view.mode}`);
       const stepLabel = safeTrim(view.stepLabel);
-      const hasStep = view.mode === "live" && !!stepLabel;
+      const stepKicker = safeTrim(view.stepKicker);
+      const hasStep = view.mode === "live" && !!(stepKicker || stepLabel);
       if(hasStep) el.classList.add("has-step");
       const stepText = hasStep
-        ? `${view.stepIndex ? `שלב ${view.stepIndex}` : "שלב"}${view.stepCount ? ` מתוך ${view.stepCount}` : ""} · ${stepLabel}`
+        ? (stepKicker || `${view.stepIndex ? `שלב ${view.stepIndex}` : "שלב"}${view.stepCount ? ` מתוך ${view.stepCount}` : ""} · ${stepLabel}`)
         : "";
       const parts = [safeTrim(view.status), stepText, safeTrim(view.count)].filter(Boolean);
       if(parts.length) el.setAttribute("aria-label", parts.join(" · "));
@@ -21196,7 +21196,7 @@ UsersGateUI.init();
           <div class="customerStatCard__icon">${premiumCustomerIcon("activity")}</div>
           <div class="customerStatCard__content customerStatCard__content--ops">
             <div class="customerOpsStateRow">
-              <span class="customerOpsBadge customerOpsBadge--${escapeHtml(state?.tone || 'info')}">${escapeHtml(state?.liveLabel || 'ממתין לשיקוף')}</span>
+              <span class="customerOpsBadge customerOpsBadge--${escapeHtml(state?.tone || 'info')}">${escapeHtml(typeof getCustomerFileOpsBadge === "function" ? getCustomerFileOpsBadge(state) : (state?.liveLabel || 'ממתין לשיקוף'))}</span>
               <span class="customerOpsOwner">${escapeHtml(owner)}</span>
             </div>
             ${currentLog}
@@ -21222,7 +21222,7 @@ UsersGateUI.init();
       if(kpi){
         kpi.innerHTML = `<div class="cfFile__kpiIcon cfFile__kpiIcon--amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
           <div>
-            <span class="cfFile__opsBadge">${escapeHtml(ops?.liveLabel || 'ממתין לשיקוף')}</span>
+            <span class="cfFile__opsBadge">${escapeHtml(typeof getCustomerFileOpsBadge === "function" ? getCustomerFileOpsBadge(ops) : (ops?.liveLabel || 'ממתין לשיקוף'))}</span>
             <div class="cfFile__kpiLabel" style="margin-top:6px">סטטוס תפעולי</div>
             <div class="cfFile__kpiSub">עודכן ${escapeHtml(updatedOps)}</div>
           </div>`;
@@ -21260,7 +21260,7 @@ UsersGateUI.init();
       this.stopOpsCardLoop();
       this.refreshOperationalReflectionCard();
       if(!this._hasLiveMirrorCallOnOpenFile()) return;
-      this._opsCardTimer = window.setInterval(() => this.refreshOperationalReflectionCard(), 1000);
+      this._opsCardTimer = window.setInterval(() => this.paintHeroLiveTimer(this.current()), 1000);
     },
 
     stopOpsCardLoop(){
@@ -21284,10 +21284,7 @@ UsersGateUI.init();
       const rec = this.current() || this.byId(cid);
       this.paintHeroLiveTimer(rec);
       this.startOpenFileCallWatch();
-      if(this._opsCardTimer){
-        this.refreshOperationalReflectionCard();
-        return;
-      }
+      if(this._opsCardTimer) return;
       this.startOpsCardLoop();
     },
 
@@ -55493,6 +55490,7 @@ ${inner}
     _callPaused: false,
     _callSeconds: 0,
     _liveStartedAt: "",
+    _fileTimerArmedId: "",
     _runtimeId: "mc_" + Date.now() + "_" + Math.random().toString(16).slice(2),
     _mirrorUiPhase: "idle",
     _mirrorNeedsSubPhase: "consent",
@@ -56937,6 +56935,8 @@ ${inner}
       }
       /* GI-PERF 2026-08-08 — בטעינה רזה חובה payload מלא לפני mutate+persist. */
       const ensureId = safeTrim(this.selectedCustomer?.id || recGate?.id);
+      this._fileTimerArmedId = ensureId;
+      try{ CustomersUI?.syncMirrorCallLiveTimer?.(ensureId); }catch(_e){}
       if(ensureId){
         const gateRec = (State.data?.customers || []).find((c) => safeTrim(c?.id) === ensureId);
         if(!gateRec || Storage.payloadIsEmpty(gateRec)){
@@ -56947,6 +56947,8 @@ ${inner}
             ensured = { ok:false, error: String(err?.message || err) };
           }
           if(!ensured?.ok){
+            this._fileTimerArmedId = "";
+            try{ CustomersUI?.endMirrorCallLiveTimer?.(ensureId); }catch(_e){}
             this._mcToast("לא ניתן להתחיל שיחה", "פרטי התיק לא הגיעו מהשרת. נסה שוב בעוד רגע.", "warn");
             this._syncMcCallStartButton();
             return;
@@ -57081,6 +57083,7 @@ ${inner}
       this._mirrorUiPhase = "idle";
       this._resetPreFlightChecks();
       this._liveStartedAt = "";
+      this._fileTimerArmedId = "";
       try{ CustomersUI?.endMirrorCallLiveTimer?.(rec?.id); }catch(_e){}
     },
 
@@ -57432,28 +57435,66 @@ ${inner}
       return core;
     },
 
+    _isMcPanelVisible(el){
+      return !!(el && !el.hidden && el.getAttribute("hidden") == null);
+    },
+
+    _parseMirrorStepKicker(text){
+      const raw = safeTrim(text);
+      const match = raw.match(/שלב\s+(\d+)\s*(?:מתוך\s+(\d+))?\s*[·.\-–]\s*(.+)/);
+      if(match){
+        return {
+          index: Number(match[1]) || 0,
+          count: Number(match[2]) || 0,
+          label: safeTrim(match[3]),
+          kicker: raw
+        };
+      }
+      return { index: 0, count: 0, label: raw, kicker: raw };
+    },
+
+    _readVisibleMirrorStepKicker(){
+      const rows = [
+        { wrap: this.els.scriptWrap, id: "mcCallScriptKicker" },
+        { wrap: this.els.verifyWrap, id: "mcStepVerifyKicker" },
+        { wrap: this.els.step2Wrap, id: "mcStep2Kicker" },
+        { wrap: this.els.step6Wrap, id: "mcStep6Kicker" },
+        { wrap: this.els.stepCancelQWrap, id: "mcStepCancelQKicker" },
+        { wrap: this.els.stepBenefWrap, id: "mcStepBenefKicker" },
+        { wrap: this.els.stepHealthDeclWrap, id: "mcStepHealthDeclKicker" },
+        { wrap: this.els.step5Wrap, id: "mcStep5Kicker" },
+        { wrap: this.els.stepPayWrap, id: "mcStepPayKicker" },
+        { wrap: this.els.stepInsStartWrap, id: "mcStepInsStartKicker" }
+      ];
+      let found = "";
+      rows.forEach((row) => {
+        if(!this._isMcPanelVisible(row.wrap)) return;
+        const txt = safeTrim(document.getElementById(row.id)?.textContent);
+        if(txt) found = txt;
+      });
+      if(!found && this._isMcPanelVisible(this.els.mirrorSummaryWrap)){
+        found = safeTrim(this.els.mirrorSummaryWrap.getAttribute("aria-label")) || "סיכום תיקוני שיחת השיקוף";
+      }
+      return found;
+    },
+
     _currentFlowStepInfo(){
-      const plan = this._mcFlowPlan() || [];
       const phase = safeTrim(this._mirrorUiPhase) || "idle";
-      const count = plan.length || 0;
-      if(phase === "mirrorFlowDone"){
-        return { phase, index: count, count, label: "סיום" };
+      const visible = this._readVisibleMirrorStepKicker();
+      if(visible){
+        const parsed = this._parseMirrorStepKicker(visible);
+        return {
+          phase,
+          index: parsed.index,
+          count: parsed.count,
+          label: parsed.label,
+          kicker: parsed.kicker
+        };
       }
-      let idx = plan.findIndex((s) => Array.isArray(s.phases) && s.phases.includes(phase));
-      if(idx < 0 && phase === "futureCancel" && this.els?.flowStepFuture){
-        idx = plan.findIndex((s) => s.el === this.els.flowStepFuture);
+      if(this._callRunning || this._fileTimerArmedId){
+        return { phase, index: 1, count: 0, label: "הצגה עצמית", kicker: "שלב 1 · הצגה עצמית" };
       }
-      if(idx < 0 && this._callRunning) idx = 0;
-      if(idx < 0){
-        const fallback = safeTrim(this._phaseLabel?.(phase));
-        return { phase, index: 0, count, label: (fallback && fallback !== "—") ? fallback : "" };
-      }
-      return {
-        phase,
-        index: idx + 1,
-        count,
-        label: safeTrim(plan[idx].label) || safeTrim(this._phaseLabel?.(phase))
-      };
+      return { phase, index: 0, count: 0, label: "", kicker: "" };
     },
 
     _publishMirrorCallStep(){
@@ -57465,14 +57506,17 @@ ${inner}
       const info = this._currentFlowStepInfo() || {};
       const nextPhase = safeTrim(info.phase);
       const nextLabel = safeTrim(info.label);
+      const nextKicker = safeTrim(info.kicker);
       const nextIndex = Number(info.index || 0) || 0;
       const nextCount = Number(info.count || 0) || 0;
       const changed = safeTrim(store.uiPhase) !== nextPhase
         || safeTrim(store.flowStepLabel) !== nextLabel
+        || safeTrim(store.flowStepKicker) !== nextKicker
         || Number(store.flowStepIndex || 0) !== nextIndex
         || Number(store.flowStepCount || 0) !== nextCount;
       store.uiPhase = nextPhase;
       store.flowStepLabel = nextLabel;
+      store.flowStepKicker = nextKicker;
       store.flowStepIndex = nextIndex;
       store.flowStepCount = nextCount;
       if(!changed) return;
@@ -58612,6 +58656,7 @@ ${inner}
         rec.payload.mirrorFlow.callSession.active = false;
       }
       this._liveStartedAt = "";
+      this._fileTimerArmedId = "";
       if(rec){
         try{
           setOpsTouch(rec,{ liveState, ownerName:safeTrim(Auth?.current?.name), updatedBy:safeTrim(Auth?.current?.name) });
