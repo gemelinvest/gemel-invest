@@ -36383,12 +36383,18 @@ const MIRROR_DISCLOSURE_LIBRARY = {
 
     init(){
       this.startAutoRefreshLoop();
-      const onResume = () => {
-        if(document.hidden) return;
+      /* GI-FIX 2026-08-22: uncovering Chrome fires focus without ever hiding
+         the tab. Resume only after a real document.hidden cycle. */
+      this._resumeAfterHidden = false;
+      document.addEventListener('visibilitychange', () => {
+        if(document.hidden){
+          this._resumeAfterHidden = true;
+          return;
+        }
+        if(!this._resumeAfterHidden) return;
+        this._resumeAfterHidden = false;
         this.scheduleResumeRefresh();
-      };
-      document.addEventListener('visibilitychange', onResume);
-      window.addEventListener('focus', onResume);
+      });
     },
 
     scheduleResumeRefresh(){
@@ -36904,12 +36910,16 @@ const MIRROR_DISCLOSURE_LIBRARY = {
     init(){
       this.ensureShell();
       this.startLoop();
+      /* GI-FIX 2026-08-22: window focus after dragging another window is not
+         a tab-hide. Repaint the list only after a real hidden cycle. */
+      this._resumeAfterHidden = false;
       document.addEventListener('visibilitychange', () => {
-        if(document.hidden) return;
-        this.checkReminders();
-        if(this.isListOpen()) this.renderList();
-      });
-      window.addEventListener('focus', () => {
+        if(document.hidden){
+          this._resumeAfterHidden = true;
+          return;
+        }
+        if(!this._resumeAfterHidden) return;
+        this._resumeAfterHidden = false;
         this.checkReminders();
         if(this.isListOpen()) this.renderList();
       });
