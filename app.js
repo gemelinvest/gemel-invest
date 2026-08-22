@@ -1628,6 +1628,236 @@
     return OPS_RESULT_OPTIONS[k] || "";
   }
 
+  /* GI-OPS-THREAD-LANE-START */
+  var OpsThreadLane = {
+    OPTIONS: {
+      no_answer_1: "ללא מענה 1",
+      no_answer_2: "ללא מענה 2",
+      no_answer_3: "ללא מענה 3",
+      no_answer_long: "ללא מענה ממושך",
+      checklist_pending: "לא אושר צ׳ק־ליסט לשיקוף"
+    },
+    getLabel(key){
+      return this.OPTIONS[safeTrim(key)] || "";
+    },
+    actorOf(actor){
+      const a = actor && typeof actor === "object" ? actor : {};
+      return {
+        id: safeTrim(a.id) || safeTrim(Auth?.current?.id),
+        name: safeTrim(a.name) || safeTrim(Auth?.current?.name)
+      };
+    },
+    ensure(rec){
+      const store = ensureOpsProcess(rec);
+      if(!store.correspondence || typeof store.correspondence !== "object") store.correspondence = {};
+      if(!Array.isArray(store.correspondence.items)) store.correspondence.items = [];
+      if(!Array.isArray(store.statusLog)) store.statusLog = [];
+      return store;
+    },
+    snapshot(rec){
+      const store = rec?.payload?.opsProcess;
+      try { return JSON.parse(JSON.stringify(store && typeof store === "object" ? store : {})); }
+      catch(_e){ return {}; }
+    },
+    restore(rec, snap){
+      const store = ensureOpsProcess(rec);
+      Object.keys(store).forEach((k) => { delete store[k]; });
+      Object.assign(store, (snap && typeof snap === "object") ? JSON.parse(JSON.stringify(snap)) : {});
+      return store;
+    },
+    laneOf(ops, call, scheduledIds, cid){
+      if(call?.paused) return "on_hold";
+      if(cid && scheduledIds && scheduledIds.has(cid)) return "scheduled";
+      const documented = safeTrim(ops?.waitingMirrorLane);
+      if(this.OPTIONS[documented]) return documented;
+      if(safeTrim(ops?.liveState) === "handling") return "checklist_pending";
+      return "no_answer_1";
+    },
+    canSee(rec){
+      if(!rec) return false;
+      try { if(Auth?.isOps?.() || Auth?.isOpsAgent?.()) return true; } catch(_e){}
+      try { if(typeof customerOwnedByCurrentAgent === "function" && customerOwnedByCurrentAgent(rec)) return true; } catch(_e){}
+      return false;
+    },
+    openThread(rec, text, actor){
+      const body = safeTrim(text);
+      if(!body) return { ok: false, error: "EMPTY_TEXT" };
+      const store = this.ensure(rec);
+      if(store.correspondence.open) return { ok: false, error: "ALREADY_OPEN" };
+      const who = this.actorOf(actor);
+      const now = nowISO();
+      const cid = safeTrim(rec?.id);
+      const prevItems = store.correspondence.items.slice();
+      store.correspondence.open = true;
+      store.correspondence.openedAt = now;
+      store.correspondence.openedBy = who.name;
+      store.correspondence.openedById = who.id;
+      store.correspondence.handledAt = "";
+      store.correspondence.handledBy = "";
+      store.correspondence.items = prevItems;
+      store.correspondence.items.push({
+        id: "ops_msg_" + now + "_" + Math.random().toString(16).slice(2, 8),
+        at: now,
+        by: who.name,
+        byId: who.id,
+        byRole: "ops",
+        kind: "open",
+        text: body
+      });
+      store.agentNotice = {
+        key: "waitingAgentInfo:" + now + ":" + cid,
+        statusKey: "waitingAgentInfo",
+        label: getOpsResultLabel("waitingAgentInfo") || "ממתין להשלמת מידע מהנציג",
+        at: now,
+        customerId: cid,
+        byId: who.id,
+        byName: who.name
+      };
+      setOpsTouch(rec, {
+        resultStatus: "waitingAgentInfo",
+        ownerName: who.name,
+        updatedBy: who.name
+      });
+      return { ok: true, store };
+    },
+    replyThread(rec, text, actor, markHandled){
+      const store = this.ensure(rec);
+      if(!store.correspondence.open) return { ok: false, error: "NOT_OPEN" };
+      const body = safeTrim(text);
+      const who = this.actorOf(actor);
+      const now = nowISO();
+      const cid = safeTrim(rec?.id);
+      if(body){
+        store.correspondence.items.push({
+          id: "ops_msg_" + now + "_" + Math.random().toString(16).slice(2, 8),
+          at: now,
+          by: who.name,
+          byId: who.id,
+          byRole: "agent",
+          kind: "reply",
+          text: body
+        });
+      }
+      if(markHandled){
+        store.correspondence.open = false;
+        store.correspondence.handledAt = now;
+        store.correspondence.handledBy = who.name;
+        store.opsNotice = {
+          key: "handled:" + now + ":" + cid,
+          at: now,
+          by: who.name,
+          byId: who.id,
+          customerId: cid,
+          openedById: safeTrim(store.correspondence.openedById),
+          label: "הנציג טיפל בפנייה"
+        };
+        setOpsTouch(rec, { updatedBy: who.name, resultStatus: "" });
+        return { ok: true, store };
+      }
+      if(!body) return { ok: false, error: "EMPTY_TEXT" };
+      setOpsTouch(rec, { updatedBy: who.name });
+      return { ok: true, store };
+    },
+    applyLane(rec, laneKey, actor){
+      const key = safeTrim(laneKey);
+      const label = this.getLabel(key);
+      if(!label) return { ok: false, error: "INVALID_LANE" };
+      const store = this.ensure(rec);
+      const who = this.actorOf(actor);
+      const now = nowISO();
+      const cid = safeTrim(rec?.id);
+      store.waitingMirrorLane = key;
+      store.statusLog.push({
+        at: now,
+        key,
+        label,
+        by: who.name,
+        byId: who.id
+      });
+      store.agentNotice = {
+        key: key + ":" + now + ":" + cid,
+        statusKey: key,
+        label,
+        at: now,
+        customerId: cid,
+        byId: who.id,
+        byName: who.name
+      };
+      const patch = {
+        waitingMirrorLane: key,
+        ownerName: who.name,
+        updatedBy: who.name
+      };
+      if(safeTrim(store.resultStatus)) patch.resultStatus = "";
+      setOpsTouch(rec, patch);
+      return { ok: true, store, label, key };
+    },
+    shouldShowAgentToast(rec, session){
+      const s = session && typeof session === "object" ? session : {};
+      const notice = rec?.payload?.opsProcess?.agentNotice;
+      const key = safeTrim(notice?.key);
+      const label = safeTrim(notice?.label);
+      if(!key || !label) return { show: false, reason: "NO_NOTICE" };
+      const sessionId = safeTrim(s.currentUserId);
+      const actorId = safeTrim(notice.byId);
+      if(sessionId && actorId && sessionId === actorId) return { show: false, reason: "SELF_AUTHOR" };
+      if(!s.matchesAssignedAgent) return { show: false, reason: "NOT_ASSIGNED" };
+      if(s.fileOpen) return { show: false, reason: "FILE_OPEN" };
+      if(s.shownKeys && typeof s.shownKeys.has === "function" && s.shownKeys.has(key)) return { show: false, reason: "ALREADY_SHOWN" };
+      return {
+        show: true,
+        key,
+        title: label,
+        text: safeTrim(rec?.fullName || rec?.full_name) || "לקוח",
+        customerId: safeTrim(rec?.id)
+      };
+    },
+    shouldShowOpsHandledToast(rec, session){
+      const s = session && typeof session === "object" ? session : {};
+      const notice = rec?.payload?.opsProcess?.opsNotice;
+      const key = safeTrim(notice?.key);
+      if(!key) return { show: false, reason: "NO_NOTICE" };
+      if(!s.isOps) return { show: false, reason: "NOT_OPS" };
+      const sessionId = safeTrim(s.currentUserId);
+      const openerId = safeTrim(notice.openedById);
+      if(!openerId || !sessionId || openerId !== sessionId) return { show: false, reason: "NOT_OPENER" };
+      if(s.fileOpen) return { show: false, reason: "FILE_OPEN" };
+      if(s.shownKeys && typeof s.shownKeys.has === "function" && s.shownKeys.has(key)) return { show: false, reason: "ALREADY_SHOWN" };
+      return {
+        show: true,
+        key,
+        title: safeTrim(notice.label) || "הנציג טיפל בפנייה",
+        text: safeTrim(rec?.fullName || rec?.full_name) || "לקוח",
+        customerId: safeTrim(rec?.id)
+      };
+    }
+  };
+
+  async function persistOpsProcessLightGuarded(host, rec, label, snapshot){
+    if(!host) return { ok: false, error: "NO_HOST" };
+    if(host._opsResultSaveBusy) return { ok: false, error: "BUSY" };
+    host._opsResultSaveBusy = true;
+    try {
+      const saved = await persistCustomerOpsResultLight(rec, label);
+      if(!saved?.ok){
+        try { OpsThreadLane.restore(rec, snapshot); } catch(_e){}
+        try {
+          window.showToast?.({
+            title: "השמירה נכשלה",
+            text: "הסטטוס התפעולי לא נשמר. נסו שוב.",
+            variant: "warn",
+            durationMs: 4800
+          });
+        } catch(_e){}
+        return saved || { ok: false, error: "SAVE_FAILED" };
+      }
+      return { ok: true };
+    } finally {
+      host._opsResultSaveBusy = false;
+    }
+  }
+  /* GI-OPS-THREAD-LANE-END */
+
   const MIRROR_LIVE_CALL_MAX_MS = 8 * 60 * 60 * 1000;
 
   function getPersistedLiveCall(rec){
@@ -17104,6 +17334,147 @@ UsersGateUI.init();
     }
   };
 
+  const OpsAgentStatusToastWatcher = {
+    intervalMs: 2500,
+    timer: null,
+    busy: false,
+    _shownKeys: (() => {
+      try {
+        const raw = localStorage.getItem("GI_OPS_AGENT_STATUS_TOAST_KEYS_V1");
+        return new Set(raw ? JSON.parse(raw) : []);
+      } catch(_e) { return new Set(); }
+    })(),
+    wasShown(key){
+      return this._shownKeys.has(safeTrim(key));
+    },
+    markShown(key){
+      const k = safeTrim(key);
+      if(!k) return;
+      this._shownKeys.add(k);
+      if(this._shownKeys.size > 160){
+        this._shownKeys = new Set(Array.from(this._shownKeys).slice(-80));
+      }
+      try {
+        localStorage.setItem("GI_OPS_AGENT_STATUS_TOAST_KEYS_V1", JSON.stringify(Array.from(this._shownKeys)));
+      } catch(_e) {}
+    },
+    isFileAlreadyOpen(rec){
+      try { return !!MirrorCallAgentToastWatcher.isFileAlreadyOpen(rec); } catch(_e){ return false; }
+    },
+    matchesAssignedAgent(rec){
+      try { return !!MirrorCallAgentToastWatcher.matchesAssignedAgent(rec); } catch(_e){ return false; }
+    },
+    sessionFor(rec){
+      return {
+        currentUserId: safeTrim(Auth?.current?.id),
+        matchesAssignedAgent: this.matchesAssignedAgent(rec),
+        fileOpen: this.isFileAlreadyOpen(rec),
+        shownKeys: this._shownKeys,
+        isOps: !!(Auth?.isOps?.() || Auth?.isOpsAgent?.())
+      };
+    },
+    showNoticeToast(notice){
+      if(!notice?.show) return false;
+      const cid = safeTrim(notice.customerId);
+      let toastShown = false;
+      try{
+        toastShown = !!window.showToast?.({
+          title: notice.title,
+          text: notice.text,
+          variant: "info",
+          durationMs: 7000,
+          singletonKey: `gi-ops-status-${cid}-${notice.key}`,
+          actions: cid ? [{
+            label: "פתח תיק",
+            onClick: () => {
+              try { CustomersUI?.handleOpenCustomerClick?.(null, cid); } catch(_e) {
+                try { CustomersUI?.openByIdWithLoader?.(cid, 400); } catch(_e2) {}
+              }
+            }
+          }] : []
+        });
+      }catch(_e){}
+      if(toastShown) this.markShown(notice.key);
+      return toastShown;
+    },
+    inspectRecord(rec){
+      if(!Auth?.current || !rec || typeof OpsThreadLane === "undefined") return false;
+      let viewRec = rec;
+      if(typeof rec.payload === "string"){
+        try { viewRec = Object.assign({}, rec, { payload: JSON.parse(safeTrim(rec.payload) || "{}") }); }
+        catch(_e) { viewRec = rec; }
+      }
+      const session = this.sessionFor(viewRec);
+      const agent = OpsThreadLane.shouldShowAgentToast(viewRec, session);
+      if(agent.show) return this.showNoticeToast(agent);
+      const handled = OpsThreadLane.shouldShowOpsHandledToast(viewRec, session);
+      if(handled.show) return this.showNoticeToast(handled);
+      return false;
+    },
+    inspectLocalCustomers(){
+      (Array.isArray(State.data?.customers) ? State.data.customers : []).forEach((rec) => {
+        const ops = rec?.payload?.opsProcess;
+        if(!ops?.agentNotice?.key && !ops?.opsNotice?.key) return;
+        this.inspectRecord(rec);
+      });
+    },
+    async fetchRecentOwnedRows(){
+      const rows = [];
+      const take = (list) => {
+        (Array.isArray(list) ? list : []).forEach((row, idx) => {
+          try{
+            const rec = Storage.mapCustomerRow ? Storage.mapCustomerRow(row, idx) : row;
+            if(rec) rows.push(rec);
+          }catch(_e){}
+        });
+      };
+      try{
+        const client = Storage.getClient?.();
+        if(client?.from){
+          const since = new Date(Date.now() - 45 * 60 * 1000).toISOString();
+          let recent = client.from(SUPABASE_TABLES.customers)
+            .select("id,full_name,agent_id,agent_name,payload,updated_at")
+            .gte("updated_at", since)
+            .order("updated_at", { ascending: false })
+            .limit(40);
+          if(typeof Storage._applyListAgentScopeToQuery === "function"){
+            recent = Storage._applyListAgentScopeToQuery(recent, SUPABASE_TABLES.customers);
+          }
+          const res = await recent;
+          if(!res?.error) take(res?.data);
+        }
+      }catch(_e){}
+      return rows;
+    },
+    async tick(){
+      if(this.busy || !Auth?.current) return;
+      if(typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      if(document.body.classList.contains("lcAuthLock")) return;
+      this.busy = true;
+      try{
+        this.inspectLocalCustomers();
+        const remote = await this.fetchRecentOwnedRows();
+        remote.forEach((rec) => this.inspectRecord(rec));
+      }catch(_e){}
+      finally{
+        this.busy = false;
+      }
+    },
+    start(){
+      if(!Auth?.current || document.body.classList.contains("lcAuthLock")) return;
+      if(this.timer) return;
+      window.setTimeout(() => { void this.tick(); }, 800);
+      this.timer = window.setInterval(() => { void this.tick(); }, this.intervalMs);
+    },
+    stop(){
+      if(this.timer){
+        window.clearInterval(this.timer);
+        this.timer = null;
+      }
+      this.busy = false;
+    }
+  };
+
   // ---------- Customers UI ----------
   const CUSTOMERS_DEFAULT_VISIBLE = 10;
   // PERF: same idea as customers — avoid painting hundreds of proposal rows for admin/manager
@@ -17342,6 +17713,18 @@ UsersGateUI.init();
           const duration = safeTrim(stoppedRow.getAttribute("data-ops-call-duration") || call?.durationText) || "00:00";
           const notes = notesFromRow || safeTrim(call?.noConsentNotes) || "לא הוזן תיעוד";
           alert(`${reasonTitle}\nתאריך: ${date}\nשעת התחלה: ${start}\nשעת סיום: ${end}\nמשך: ${duration}\n\nתיעוד הנציג:\n${notes}`);
+          return;
+        }
+        const openThreadBtn = ev.target?.closest?.("[data-ops-thread-open]");
+        if(openThreadBtn){
+          ev.preventDefault();
+          await this._openOpsAgentThreadFromCard();
+          return;
+        }
+        const handledBtn = ev.target?.closest?.("[data-ops-thread-handled]");
+        if(handledBtn){
+          ev.preventDefault();
+          await this._handleOpsAgentThreadFromCard();
           return;
         }
         const btn = ev.target?.closest?.('[data-ops-result]');
@@ -21119,6 +21502,45 @@ UsersGateUI.init();
       }));
     },
 
+    async _openOpsAgentThreadFromCard(){
+      if(!(Auth.isOps() || Auth.isOpsAgent())) return { ok: false, error: "FORBIDDEN" };
+      if(this._opsResultSaveBusy) return { ok: false, error: "BUSY" };
+      const rec = this.current();
+      if(!rec) return { ok: false, error: "MISSING_CUSTOMER" };
+      const card = this.els?.main?.querySelector?.("#customerOpsReflectionCard");
+      const text = card?.querySelector?.("[data-ops-thread-open-text]")?.value;
+      const snap = OpsThreadLane.snapshot(rec);
+      const opened = OpsThreadLane.openThread(rec, text, { id: Auth?.current?.id, name: Auth?.current?.name });
+      if(!opened.ok){
+        if(opened.error === "EMPTY_TEXT"){
+          try { window.showToast?.({ title: "יש לכתוב את תוכן הפנייה", variant: "warn", durationMs: 3600 }); } catch(_e){}
+        }
+        return opened;
+      }
+      this.refreshOperationalReflectionCard();
+      const saved = await persistOpsProcessLightGuarded(this, rec, "נפתחה פנייה לנציג", snap);
+      this.refreshOperationalReflectionCard();
+      return saved;
+    },
+
+    async _handleOpsAgentThreadFromCard(){
+      if(this._opsResultSaveBusy) return { ok: false, error: "BUSY" };
+      const rec = this.current();
+      if(!rec) return { ok: false, error: "MISSING_CUSTOMER" };
+      if(!(typeof customerOwnedByCurrentAgent === "function" && customerOwnedByCurrentAgent(rec))){
+        return { ok: false, error: "FORBIDDEN" };
+      }
+      const card = this.els?.main?.querySelector?.("#customerOpsReflectionCard");
+      const text = card?.querySelector?.("[data-ops-thread-reply-text]")?.value;
+      const snap = OpsThreadLane.snapshot(rec);
+      const replied = OpsThreadLane.replyThread(rec, text, { id: Auth?.current?.id, name: Auth?.current?.name }, true);
+      if(!replied.ok) return replied;
+      this.refreshOperationalReflectionCard();
+      const saved = await persistOpsProcessLightGuarded(this, rec, "הנציג טיפל בפנייה", snap);
+      this.refreshOperationalReflectionCard();
+      return saved;
+    },
+
     refreshArchiveBtnVisibility(){
       const btn = this.els.archiveBtn;
       if(!btn) return;
@@ -21191,6 +21613,52 @@ UsersGateUI.init();
       const resultButtons = canSetOpsResult ? Object.entries(OPS_RESULT_OPTIONS).map(([key, label]) => `
         <button class="customerOpsResultBtn${state?.resultKey === key ? ' is-active' : ''}${this._opsResultSaveBusy ? ' is-saving' : ''}" data-ops-result="${escapeHtml(key)}" type="button"${this._opsResultSaveBusy ? ' disabled' : ''}>${escapeHtml(label)}</button>`).join('') : '';
       const updatedLine = this._opsResultSaveBusy ? 'שומר סטטוס…' : `עודכן לאחרונה: ${escapeHtml(updated)}`;
+      const canSeeThread = !!(typeof OpsThreadLane !== "undefined" && OpsThreadLane.canSee(current));
+      const canReplyThread = !!(typeof customerOwnedByCurrentAgent === "function" && customerOwnedByCurrentAgent(current));
+      const opsStore = (current?.payload && typeof current.payload === "object" && current.payload.opsProcess && typeof current.payload.opsProcess === "object")
+        ? current.payload.opsProcess
+        : {};
+      const corr = (opsStore.correspondence && typeof opsStore.correspondence === "object") ? opsStore.correspondence : {};
+      const threadItems = Array.isArray(corr.items) ? corr.items : [];
+      const statusLog = Array.isArray(opsStore.statusLog) ? opsStore.statusLog : [];
+      const fmtOpsStamp = (raw) => {
+        const value = safeTrim(raw);
+        if(!value) return "";
+        try { return ProcessesUI.formatDate(value) || value; } catch(_e){ return value; }
+      };
+      const statusRowsHtml = statusLog.length ? `<div class="customerOpsStatusLog">${statusLog.map((row) => {
+        const item = row && typeof row === "object" ? row : {};
+        const meta = [safeTrim(item.by), fmtOpsStamp(item.at)].filter(Boolean).join(" · ");
+        return `<div class="customerOpsStatusRow" data-ops-status-key="${escapeHtml(item.key || "")}">
+          <span class="customerOpsStatusRow__label">${escapeHtml(item.label || "")}</span>
+          ${meta ? `<span class="customerOpsStatusRow__meta">${escapeHtml(meta)}</span>` : ""}
+        </div>`;
+      }).join("")}</div>` : "";
+      let threadHtml = "";
+      if(canSeeThread){
+        const msgs = threadItems.map((row) => {
+          const item = row && typeof row === "object" ? row : {};
+          const meta = [safeTrim(item.by), fmtOpsStamp(item.at)].filter(Boolean).join(" · ");
+          return `<div class="customerOpsThread__msg customerOpsThread__msg--${escapeHtml(item.kind || "note")}">
+            ${meta ? `<div class="customerOpsThread__meta">${escapeHtml(meta)}</div>` : ""}
+            <div class="customerOpsThread__text">${escapeHtml(item.text || "")}</div>
+          </div>`;
+        }).join("");
+        const openComposer = (canSetOpsResult && !corr.open) ? `<div class="customerOpsThread__composer">
+            <textarea class="customerOpsThread__input" data-ops-thread-open-text rows="3" placeholder="כתבו את הפנייה לנציג" ${this._opsResultSaveBusy ? "disabled" : ""}></textarea>
+            <button class="customerOpsThread__btn" data-ops-thread-open type="button"${this._opsResultSaveBusy ? " disabled" : ""}>פתח פנייה לנציג</button>
+          </div>` : "";
+        const replyComposer = (canReplyThread && corr.open) ? `<div class="customerOpsThread__composer">
+            <textarea class="customerOpsThread__input" data-ops-thread-reply-text rows="3" placeholder="כתבו תשובה לנציג התפעול" ${this._opsResultSaveBusy ? "disabled" : ""}></textarea>
+            <button class="customerOpsThread__btn customerOpsThread__btn--handled" data-ops-thread-handled type="button"${this._opsResultSaveBusy ? " disabled" : ""}>טופל</button>
+          </div>` : "";
+        threadHtml = `<div class="customerOpsThread">
+          ${corr.open ? `<div class="customerOpsThread__flag">פנייה פתוחה לנציג</div>` : ""}
+          ${msgs}
+          ${openComposer}
+          ${replyComposer}
+        </div>`;
+      }
       return `
         <div class="customerStatCard customerStatCard--ops customerStatCard--ops-${escapeHtml(state?.tone || 'info')}" id="customerOpsReflectionCard" data-customer-id="${escapeHtml(current?.id || '')}">
           <div class="customerStatCard__icon">${premiumCustomerIcon("activity")}</div>
@@ -21201,7 +21669,9 @@ UsersGateUI.init();
             </div>
             ${currentLog}
             ${historyHtml}
+            ${statusRowsHtml}
             ${canSetOpsResult ? `<div class="customerOpsResultBtns">${resultButtons}</div>` : ''}
+            ${threadHtml}
             <div class="customerStatCard__sub">${updatedLine}</div>
           </div>
         </div>`;
@@ -26464,6 +26934,7 @@ UsersGateUI.init();
       LiveRefresh.start();
       ReferralQuietRefresh.start();
       try { MirrorCallAgentToastWatcher.start(); } catch(_e) {}
+      try { OpsAgentStatusToastWatcher.start(); } catch(_e) {}
       try { DashboardUI.startLiveRefresh(); } catch(_e) {}
     },
     stopAll(){
@@ -27555,12 +28026,15 @@ UsersGateUI.init();
     waitingMirrorLaneOf(row, scheduledIds){
       const rec = row?.rec;
       const call = this.getCallStore(rec);
-      if(call?.paused) return "on_hold";
       const cid = safeTrim(row?.id || rec?.id);
-      if(cid && scheduledIds && scheduledIds.has(cid)) return "scheduled";
       const ops = (rec?.payload && typeof rec.payload === "object" && rec.payload.opsProcess && typeof rec.payload.opsProcess === "object")
         ? rec.payload.opsProcess
         : {};
+      if(typeof OpsThreadLane !== "undefined" && typeof OpsThreadLane.laneOf === "function"){
+        return OpsThreadLane.laneOf(ops, call, scheduledIds, cid);
+      }
+      if(call?.paused) return "on_hold";
+      if(cid && scheduledIds && scheduledIds.has(cid)) return "scheduled";
       if(safeTrim(ops.liveState) === "handling") return "checklist_pending";
       return "no_answer_1";
     },
@@ -44543,6 +45017,7 @@ const ClalRiskLifePdf = {
         try { void CampaignLeadAssignInbox.flushForCurrentUser(); } catch(_e) {}
         try { CampaignAgentLeadWatcher.start(); } catch(_e) {}
         try { MirrorCallAgentToastWatcher.start(); } catch(_e) {}
+        try { OpsAgentStatusToastWatcher.start(); } catch(_e) {}
         if(options.skipNavigation){
           try { LiveRefresh.renderActiveView(); } catch(_e) {}
         } else {
@@ -55389,6 +55864,7 @@ ${inner}
   try {
     if(Auth.current && Auth.canAccessCampaignMyLeads()) CampaignAgentLeadWatcher.start();
     if(Auth.current) MirrorCallAgentToastWatcher.start();
+    if(Auth.current) OpsAgentStatusToastWatcher.start();
   } catch(_e) {}
   CampaignLinesSettingsUI.init();
   LandingLeadIngestSettingsUI.init();
@@ -55612,6 +56088,7 @@ ${inner}
       this.els.readyCustomerName = document.getElementById("mcReadyCustomerName");
       this.els.readyCustomerId = document.getElementById("mcReadyCustomerId");
       this.els.readyCustomerPhone = document.getElementById("mcReadyCustomerPhone");
+      this.els.readyLaneBtns = document.getElementById("mcReadyLaneBtns");
       this.els.readyPremiumWrap = document.getElementById("mcReadyPremiumUploads");
       this.els.readyPremiumList = document.getElementById("mcReadyPremiumList");
       this.els.readyPremiumHint = document.getElementById("mcReadyPremiumHint");
@@ -55674,6 +56151,11 @@ ${inner}
       if(this.els.preFlightMarkAllBtn) on(this.els.preFlightMarkAllBtn, "click", () => this._markAllPreFlightReviewed());
       if(this.els.preFlightConfirmOk) on(this.els.preFlightConfirmOk, "click", () => this._acceptPreFlightConfirm());
       if(this.els.preFlightConfirmCancel) on(this.els.preFlightConfirmCancel, "click", () => this._cancelPreFlightConfirm());
+      if(this.els.readyLaneBtns) on(this.els.readyLaneBtns, "click", (ev) => {
+        const btn = ev.target?.closest?.("[data-mc-ready-lane]");
+        if(!btn) return;
+        void this._documentReadyMirrorLane(btn.getAttribute("data-mc-ready-lane"));
+      });
       if(this.els.readyPremiumList){
         on(this.els.readyPremiumList, "click", (ev) => {
           const btn = ev.target?.closest?.("[data-mc-premium-upload]");
@@ -56287,8 +56769,41 @@ ${inner}
       if(this.els.readyCustomerId) this.els.readyCustomerId.textContent = idNum;
       if(this.els.readyCustomerPhone) this.els.readyCustomerPhone.textContent = phone;
       this._renderReadyPremiumUploads();
+      this._paintReadyLaneButtons();
       panel.removeAttribute("hidden");
       panel.hidden = false;
+    },
+
+    _paintReadyLaneButtons(){
+      const host = this.els.readyLaneBtns;
+      if(!host || typeof OpsThreadLane === "undefined") return;
+      const rec = this._getFreshCustomerRecord() || this.selectedCustomer;
+      const current = safeTrim(rec?.payload?.opsProcess?.waitingMirrorLane);
+      const busy = !!(this._opsLaneSaveBusy || (typeof CustomersUI !== "undefined" && CustomersUI?._opsResultSaveBusy));
+      host.innerHTML = Object.entries(OpsThreadLane.OPTIONS).map(([key, label]) => (
+        `<button type="button" class="mcReadyLaneBtn${current === key ? " is-active" : ""}" data-mc-ready-lane="${escapeHtml(key)}"${busy ? " disabled" : ""}>${escapeHtml(label)}</button>`
+      )).join("");
+    },
+
+    async _documentReadyMirrorLane(laneKey){
+      if(!(Auth.isOps() || Auth.isOpsAgent())) return { ok: false, error: "FORBIDDEN" };
+      const host = (typeof CustomersUI !== "undefined" && CustomersUI) ? CustomersUI : this;
+      if(host._opsResultSaveBusy || this._opsLaneSaveBusy) return { ok: false, error: "BUSY" };
+      const rec = this._getFreshCustomerRecord() || this.selectedCustomer;
+      if(!rec) return { ok: false, error: "MISSING_CUSTOMER" };
+      const snap = OpsThreadLane.snapshot(rec);
+      const applied = OpsThreadLane.applyLane(rec, laneKey, { id: Auth?.current?.id, name: Auth?.current?.name });
+      if(!applied.ok) return applied;
+      this._opsLaneSaveBusy = true;
+      this._paintReadyLaneButtons();
+      try {
+        const saved = await persistOpsProcessLightGuarded(host, rec, "תועד סטטוס המתנה לשיקוף", snap);
+        try { CustomersUI?.refreshOperationalReflectionCard?.(); } catch(_e){}
+        return saved?.ok ? { ok: true, label: applied.label, key: applied.key } : saved;
+      } finally {
+        this._opsLaneSaveBusy = false;
+        this._paintReadyLaneButtons();
+      }
     },
 
     _mirrorPremiumProductKey(typeRaw){
