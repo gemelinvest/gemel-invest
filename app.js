@@ -15444,10 +15444,16 @@ UsersGateUI.init();
       try { CampaignLeadsUI.stopPoll?.(); } catch(_e) {}
       try { CustomersUI.stopOpsCardLoop?.(); } catch(_e) {}
       try { CustomersUI.resumeLiveMirrorTimerIfNeeded?.(); } catch(_e) {}
-      // hide all views
-      $$(".view").forEach(v => v.classList.remove("is-visible"));
       const el = $("#view-" + safe);
-      if (el) el.classList.add("is-visible");
+      /* GI-FIX 2026-08-23: already on this view — do not hide it for a frame.
+         Boot/session applyLoadResult used to call goView("dashboard") again
+         after face login, which set display:none on the work area. */
+      const alreadyOnView = !!(el && el.classList.contains("is-visible")
+        && document.body.classList.contains("view-" + safe + "-active"));
+      if(!alreadyOnView){
+        $$(".view").forEach(v => v.classList.remove("is-visible"));
+        if (el) el.classList.add("is-visible");
+      }
 
       // title
       if (this.els.pageTitle) {
@@ -15482,8 +15488,10 @@ UsersGateUI.init();
       }
 
       this.setActiveNav(safe);
-      document.body.classList.remove("view-users-active","view-dashboard-active","view-settings-active","view-myTools-active","view-contacts-active","view-customers-active","view-archivedCustomers-active","view-proposals-active","view-elementaryProposals-active","view-elementaryPending-active","view-agentElementaryTracking-active","view-myProcesses-active","view-mirrorCall-active","view-elementaryMirror-active","view-mirrorAssignments-active","view-typingPacket-active","view-systemUpdates-active","view-campaignLeads-active","view-campaignMyLeads-active","view-reportsHub-active","view-dailyReport-active","view-dailySales-active","view-myTeam-active","view-activityLog-active","view-attendanceReport-active");
-      document.body.classList.add("view-" + safe + "-active");
+      if(!alreadyOnView){
+        document.body.classList.remove("view-users-active","view-dashboard-active","view-settings-active","view-myTools-active","view-contacts-active","view-customers-active","view-archivedCustomers-active","view-proposals-active","view-elementaryProposals-active","view-elementaryPending-active","view-agentElementaryTracking-active","view-myProcesses-active","view-mirrorCall-active","view-elementaryMirror-active","view-mirrorAssignments-active","view-typingPacket-active","view-systemUpdates-active","view-campaignLeads-active","view-campaignMyLeads-active","view-reportsHub-active","view-dailyReport-active","view-dailySales-active","view-myTeam-active","view-activityLog-active","view-attendanceReport-active");
+        document.body.classList.add("view-" + safe + "-active");
+      }
       if(safe !== "settings"){
         ["connection","version","campaigns","landing","security","systemUpdates","activityLog","attendanceReport","archivedCustomers"].forEach((name) => {
           document.body.classList.remove("lcSettingsRubric-" + name);
@@ -15499,6 +15507,13 @@ UsersGateUI.init();
 
          _navToken מבטל רינדור מיושן: אם המשתמש לחץ על פריט אחר בינתיים,
          הרינדור הישן לא ירוץ ולא ידרוס את המסך החדש. */
+      if(alreadyOnView && options.forceRender !== true){
+        if(!options.skipDashboardRender){
+          try { LiveRefresh.renderActiveView(); } catch(_e) {}
+        }
+        return;
+      }
+
       const prevRenderedView = this._lastRenderedView;
       this._lastRenderedView = safe;
       this._lastRenderedViewAt = Date.now();
@@ -34250,7 +34265,7 @@ UsersGateUI.init();
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
     "./gi-customers-import.css?v=20260813-cq-v1",
-    "./theme-unify-flat.css?v=20260823-dash-cube-inplace-v1"
+    "./theme-unify-flat.css?v=20260823-goview-same-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
     if(document.documentElement.dataset.giSecondaryCss === "1") return;
@@ -35571,7 +35586,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260823-dash-cube-inplace-v1";
+  const GI_WIZARD_JS_VERSION = "20260823-goview-same-v1";
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
   const TZAHAL_CLINIC = "קופה צהלית";
   const TZAHAL_CLINIC_SHABAN = "אין שב״ן";
@@ -45390,13 +45405,18 @@ const ClalRiskLifePdf = {
         try { CampaignAgentLeadWatcher.start(); } catch(_e) {}
         try { MirrorCallAgentToastWatcher.start(); } catch(_e) {}
         try { OpsAgentStatusToastWatcher.start(); } catch(_e) {}
-        if(options.skipNavigation){
+        const alreadyOnApp = !!document.querySelector(".view.is-visible");
+        if(options.skipNavigation || alreadyOnApp){
           try { LiveRefresh.renderActiveView(); } catch(_e) {}
         } else {
           UI.goView(Auth.isReferent() ? "campaignLeads" : "dashboard");
         }
       } else if(!options.skipNavigation) {
-        UI.goView("dashboard");
+        if(document.querySelector(".view.is-visible")){
+          try { LiveRefresh.renderActiveView(); } catch(_e) {}
+        } else {
+          UI.goView("dashboard");
+        }
       }
       return state;
     },
