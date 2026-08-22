@@ -15257,6 +15257,15 @@ UsersGateUI.init();
       }
     },
 
+    applyOpsFamilyNavVisibility(){
+      const hide = (el) => { if(el) el.style.display = "none"; };
+      if(!(Auth.isOps() || Auth.isOpsAgent())) return;
+      hide(this.els?.navElementaryPending || document.getElementById("navElementaryPending"));
+      hide(this.els?.navCampaignMyLeads || document.getElementById("navCampaignMyLeads"));
+      hide(this.els?.navDailyReport || document.getElementById("navDailyReport"));
+      hide(document.getElementById("navSystemFileUpload"));
+    },
+
     applyRoleUI(){
       const isAdmin = Auth.isAdmin();
       const isOps = Auth.isOps();
@@ -15326,6 +15335,7 @@ UsersGateUI.init();
       try { this.syncSettingsRubricPermissions?.(); } catch(_e) {}
       try { CustomersUI.refreshArchiveBtnVisibility?.(); } catch(_e){}
       try { CustomersUI.refreshAssignBtnVisibility?.(); } catch(_e){}
+      try { this.applyOpsFamilyNavVisibility(); } catch(_e){}
       /* GI-PERF: אחרי login עם הרשאת סימולטורים — prefetch שקט של ה-chunk. */
       if(Auth.canAccessSimulators?.()){
         try { perfIdle(() => { void ensureGiSimulatorJsLoaded(); }, 4000); } catch(_e) {}
@@ -28420,11 +28430,10 @@ UsersGateUI.init();
           </section>`;
       }
 
-      const mainMidHtml = listBucket === "waiting_typing"
+      const queueHtml = listBucket === "waiting_typing"
         ? typingListHtml
-        : listBucket
-        ? waitingListHtml
-        : `<div class="opsDash__mid opsDash__mid--agents">
+        : (listBucket === "waiting_mirror" ? waitingListHtml : "");
+      const agentsHtml = `<div class="opsDash__mid opsDash__mid--agents">
             <article class="card opsDashPanel opsDashPanel--agents">
               <div class="opsDashPanel__head">
                 <div class="opsDashPanel__title">מעקב נציגים בשיחה</div>
@@ -28472,7 +28481,8 @@ UsersGateUI.init();
             ${kpiCard("issuance", "עבר להפקה")}
           </div>
 
-          ${mainMidHtml}
+          ${queueHtml}
+          ${agentsHtml}
         </section>`;
 
       this.bind(mount);
@@ -66458,6 +66468,7 @@ ${inner}
         <span class="nav__label">טעינת קבצי מערכת</span>`;
       nav.appendChild(btn);
       on(btn, "click", () => this.openHub());
+      try { UI.applyOpsFamilyNavVisibility?.(); } catch(_e) {}
 
       try {
         window.__GI_IMPORT_READY = true;
