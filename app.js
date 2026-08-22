@@ -34162,7 +34162,7 @@ UsersGateUI.init();
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
     "./gi-customers-import.css?v=20260813-cq-v1",
-    "./theme-unify-flat.css?v=20260822-leads-hide-dup-v1"
+    "./theme-unify-flat.css?v=20260822-my-leads-cards-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
     if(document.documentElement.dataset.giSecondaryCss === "1") return;
@@ -54959,7 +54959,7 @@ const CampaignLeadsStore = {
         if(ev.target.closest("button")) return;
         const cell = ev.target.closest("[data-copy-field]");
         if(!cell) return;
-        const row = cell.closest("tr[data-cl-my-id]");
+        const row = cell.closest("[data-cl-my-id]");
         if(!row) return;
         ev.preventDefault();
         ev.stopPropagation();
@@ -55079,48 +55079,61 @@ const CampaignLeadsStore = {
         const emptyMsg = this.dayFilter === "ALL"
           ? "אין לידים משויכים אליך"
           : "אין לידים לתאריך זה";
-        this.els.tbody.innerHTML = `<tr><td colspan="10" class="muted">${emptyMsg}</td></tr>`;
+        this.els.tbody.innerHTML = `<div class="lcMyLeadCards__empty muted">${emptyMsg}</div>`;
         return;
       }
       this.els.tbody.innerHTML = rows.map((lead) => {
         const desc = safeTrim(lead.descriptionDisplay || stripCampaignLeadPayloadMarker(lead.description));
-        const short = desc.length > 48 ? desc.slice(0, 48) + "…" : desc;
         const highlight = String(lead.id) === String(this.pendingHighlightId) ? " is-highlight" : "";
-        const rowClass = campaignLeadRowStatusClass(lead.status);
         const statusTone = campaignLeadStatusTone(lead.status);
+        const cardTone = TrackingReportUI._trackCardTone(lead.status);
         const callNoteTitle = safeTrim(lead.callNote) ? "עריכת תיעוד שיחה" : "תיעוד שיחה";
         const isGold = isGoldMirrorCampaignLead(lead);
-        const campaignCell = isGold
-          ? `<span class="lcGoldLeadBadge" title="ליד זהב · שיקוף אלמנטרי">ליד זהב</span>`
-          : escapeHtml(lead.campaignLabel);
-        // צבע שורה ידני — מבטל את צבע הסטטוס אם הנציג בחר צבע
+        const goldBadge = isGold
+          ? ` <span class="lcGoldLeadBadge" title="ליד זהב · שיקוף אלמנטרי">ליד זהב</span>`
+          : "";
         const customColor = safeTrim(lead.rowColor);
         const rowStyle = customColor ? ` style="--lead-custom-color:${escapeHtml(customColor)}"` : "";
         const rowColorClass = customColor ? " lcLeadRow--custom-color" : "";
         const goldContinue = isGold && lead.status !== "closed"
           ? `<button class="btn btn--small btn--primary lcMyLeadProposeBtn" type="button" data-cl-continue-proposal="1" data-cl-id="${escapeHtml(lead.id)}" title="הקמת הצעה בריאות וסיכונים">הקמת הצעה</button>`
           : "";
-        return `<tr data-cl-my-id="${escapeHtml(lead.id)}" class="${rowClass}${rowColorClass}${highlight}${isGold ? " lcLeadRow--gold" : ""}"${rowStyle}>
-          <td class="lcMyLeadCopy" data-copy-field="customerName" data-copy-label="שם לקוח" title="דאבל-קליק להעתקה">${escapeHtml(lead.customerName || "—")}</td>
-          <td class="lcMyLeadCopy" data-copy-field="idNumber" data-copy-label="תעודת זהות" dir="ltr" title="דאבל-קליק להעתקה">${escapeHtml(lead.idNumber || "—")}</td>
-          <td class="lcMyLeadCopy" data-copy-field="birthDate" data-copy-label="תאריך לידה" dir="ltr" title="דאבל-קליק להעתקה">${escapeHtml(lead.birthDate || "—")}</td>
-          <td class="lcMyLeadCopy" data-copy-field="idIssueDate" data-copy-label="תאריך הנפקת ת״ז" dir="ltr" title="דאבל-קליק להעתקה">${escapeHtml(lead.idIssueDate || "—")}</td>
-          <td class="lcMyLeadCopy" data-copy-field="phone" data-copy-label="טלפון" dir="ltr" title="דאבל-קליק להעתקה">${escapeHtml(lead.phone)}</td>
-          <td class="lcMyLeadCopy" data-copy-field="campaignLabel" data-copy-label="קמפיין" title="דאבל-קליק להעתקה">${campaignCell}</td>
-          <td class="lcMyLeadCopy" data-copy-field="insuranceCompany" data-copy-label="חברת ביטוח" title="דאבל-קליק להעתקה">${escapeHtml(safeTrim(lead.insuranceCompany) || "—")}</td>
-          <td class="lcMyLeadCopy" data-copy-field="description" data-copy-label="תיאור" title="דאבל-קליק להעתקה — ${escapeHtml(desc)}">${escapeHtml(short)}</td>
-          <td class="lcMyLeadCopy" data-copy-field="status" data-copy-label="סטטוס" title="דאבל-קליק להעתקה"><span class="lcTrackBadge lcTrackBadge--${statusTone}">${escapeHtml(campaignLeadStatusLabel(lead.status))}</span></td>
-          <td class="lcCampaign__actions lcMyLeadActions">
-            ${goldContinue}
-            <div class="lcMyLeadActions__tools" role="group" aria-label="פעולות ליד">
-              <button class="lcMyLeadIconBtn" type="button" data-cl-open-id="${escapeHtml(lead.id)}" title="פרטי ליד" aria-label="פרטי ליד">${MY_LEAD_ICON_DETAILS}</button>
-              <button class="lcMyLeadIconBtn" type="button" data-cl-call-note-id="${escapeHtml(lead.id)}" title="${escapeHtml(callNoteTitle)}" aria-label="${escapeHtml(callNoteTitle)}">${MY_LEAD_ICON_CALL_NOTE}</button>
-              <button class="lcMyLeadIconBtn lcLeadColorBtn" type="button" data-cl-color-id="${escapeHtml(lead.id)}" title="צבע שורה" aria-label="בחר צבע לשורה">${MY_LEAD_ICON_COLOR}</button>
-              <button class="lcMyLeadIconBtn" type="button" data-cl-reminder-id="${escapeHtml(lead.id)}" title="צור תזכורת" aria-label="צור תזכורת">${MY_LEAD_ICON_REMINDER}</button>
+        const timeRaw = safeTrim(lead.createdAt);
+        let time = "";
+        try {
+          const d = new Date(timeRaw);
+          if(!isNaN(d.getTime())){
+            time = d.toLocaleString("he-IL", { timeZone:"Asia/Jerusalem", day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" });
+          }
+        } catch(_e){ time = timeRaw.slice(0,16).replace("T"," "); }
+        const noteBlock = TrackingReportUI._trackNoteBlocksHtml(lead);
+        const descBlock = (!safeTrim(lead.closedNote) && !safeTrim(lead.irrelevantNote) && !safeTrim(lead.callNote) && desc)
+          ? `<div class="lcTrackCard__block"><div class="lcTrackCard__label">תיאור</div><div class="lcTrackCard__box lcMyLeadCopy" data-copy-field="description" data-copy-label="תיאור" title="דאבל-קליק להעתקה">${escapeHtml(desc).replace(/\n/g, "<br/>")}</div></div>`
+          : noteBlock;
+        return `<article data-cl-my-id="${escapeHtml(lead.id)}" class="lcMyLeadCard lcMyLeadCard--${cardTone}${rowColorClass}${highlight}${isGold ? " lcLeadRow--gold" : ""}" role="listitem"${rowStyle}>
+          <div class="lcMyLeadCard__main">
+            <h3 class="lcMyLeadCard__name lcMyLeadCopy" data-copy-field="customerName" data-copy-label="שם לקוח" title="דאבל-קליק להעתקה">${escapeHtml(lead.customerName || "—")}${goldBadge}</h3>
+            <div class="lcMyLeadCard__facts">
+              <span class="lcMyLeadCard__fact lcMyLeadCopy" data-copy-field="phone" data-copy-label="טלפון" title="דאבל-קליק להעתקה"><span class="lcMyLeadCard__k">טלפון</span><span class="lcMyLeadCard__v lcMyLeadCard__v--phone">${escapeHtml(lead.phone || "—")}</span></span>
+              <span class="lcMyLeadCard__fact"><span class="lcMyLeadCard__k">הגשת הליד</span><span class="lcMyLeadCard__v">${escapeHtml(time || "—")}</span></span>
             </div>
+            ${descBlock}
+            <div class="lcMyLeadCard__tools">
+              ${goldContinue}
+              <div class="lcMyLeadActions__tools" role="group" aria-label="פעולות ליד">
+                <button class="lcMyLeadIconBtn" type="button" data-cl-open-id="${escapeHtml(lead.id)}" title="פרטי ליד" aria-label="פרטי ליד">${MY_LEAD_ICON_DETAILS}</button>
+                <button class="lcMyLeadIconBtn" type="button" data-cl-call-note-id="${escapeHtml(lead.id)}" title="${escapeHtml(callNoteTitle)}" aria-label="${escapeHtml(callNoteTitle)}">${MY_LEAD_ICON_CALL_NOTE}</button>
+                <button class="lcMyLeadIconBtn lcLeadColorBtn" type="button" data-cl-color-id="${escapeHtml(lead.id)}" title="צבע שורה" aria-label="בחר צבע לשורה">${MY_LEAD_ICON_COLOR}</button>
+                <button class="lcMyLeadIconBtn" type="button" data-cl-reminder-id="${escapeHtml(lead.id)}" title="צור תזכורת" aria-label="צור תזכורת">${MY_LEAD_ICON_REMINDER}</button>
+              </div>
+              <button class="btn btn--small btn--outline lcMyLeadCard__more" type="button" data-cl-open-id="${escapeHtml(lead.id)}">פתח לפרטים נוספים</button>
+            </div>
+          </div>
+          <div class="lcMyLeadCard__side">
+            <span class="lcTrackBadge lcTrackBadge--${statusTone} lcMyLeadCopy" data-copy-field="status" data-copy-label="סטטוס" title="דאבל-קליק להעתקה">${escapeHtml(campaignLeadStatusLabel(lead.status))}</span>
             ${this.renderMyLeadStatusSelect(lead)}
-          </td>
-        </tr>`;
+          </div>
+        </article>`;
       }).join("");
       this.applyHighlight();
     },

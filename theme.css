@@ -5155,6 +5155,58 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
   box-shadow: none !important;
 }
 
+#view-campaignMyLeads.is-visible:not(#\9):not(#\9){
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+#view-campaignMyLeads > .lcCampaignCard:not(#\9):not(#\9){
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+#view-campaignMyLeads .lcMyLeadCards:not(#\9):not(#\9){
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 2px 2px 18px !important;
+}
+#view-campaignMyLeads .search.lcMyLeads__search:not(#\9):not(#\9),
+#view-campaignMyLeads .lcMyLeads__search:not(#\9):not(#\9){
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+#view-campaignMyLeads .search.lcMyLeads__search:focus-within:not(#\9):not(#\9){
+  border: none !important;
+  box-shadow: none !important;
+}
+#view-campaignMyLeads .lcMyLeads__search .search__input:not(#\9):not(#\9){
+  border: 1px solid var(--gi-border) !important;
+  border-radius: 10px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  padding: 10px 14px !important;
+  height: 40px !important;
+}
+
 #campaignLeadsTrackingPanel.lcTrackScreen:not(#\9):not(#\9),
 #campaignLeadsTrackingPanel:not(#\9):not(#\9){
   flex: 1 1 auto !important;
@@ -10504,7 +10556,8 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   overflow: visible !important;
   text-overflow: clip !important;
 }
-#campaignLeadsTrackingPanel .lcTrackCard__side .lcMyLeadStatusSelect:not(#\9):not(#\9){
+#campaignLeadsTrackingPanel .lcTrackCard__side .lcMyLeadStatusSelect:not(#\9):not(#\9),
+#view-campaignMyLeads .lcMyLeadCard__side .lcMyLeadStatusSelect:not(#\9):not(#\9){
   width: 100% !important;
   min-width: 0 !important;
 }

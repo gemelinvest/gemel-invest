@@ -43271,22 +43271,131 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   margin-bottom:10px;
   padding:0 4px;
 }
-.lcMyLeads__search{
+.lcMyLeads__search,
+.search.lcMyLeads__search{
   flex:0 1 280px;
   min-width:140px;
-  background:rgba(255,255,255,.82);
-  backdrop-filter:blur(8px);
-  -webkit-backdrop-filter:blur(8px);
-  border:1px solid rgba(15,25,45,.14);
-  border-radius:12px;
-  padding:4px 6px;
-  box-shadow:0 2px 8px rgba(15,25,45,.06);
+  background:transparent;
+  border:none;
+  border-radius:0;
+  padding:0;
+  box-shadow:none;
+  overflow:visible;
+}
+#view-campaignMyLeads .lcMyLeads__search .search__input{
+  border:1px solid var(--gi-border,#E5E7EB);
+  border-radius:10px;
+  background:#fff;
+  box-shadow:none;
+  padding:10px 14px;
+  height:40px;
 }
 .lcMyLeads__statusFilters{
   display:flex;
   gap:6px;
   flex-wrap:wrap;
   align-items:center;
+}
+#view-campaignMyLeads.is-visible{
+  display:flex;
+  flex-direction:column;
+  height:100%;
+  min-height:0;
+  overflow:hidden;
+}
+#view-campaignMyLeads > .lcCampaignCard{
+  flex:1 1 0;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+#view-campaignMyLeads > .lcCampaignCard > .card__head,
+#view-campaignMyLeads .lcCampaign__alert,
+#view-campaignMyLeads .lcMyLeads__toolbar{
+  flex-shrink:0;
+}
+.lcMyLeadCards{
+  flex:1 1 auto;
+  min-height:0;
+  overflow:auto;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:2px 2px 18px;
+}
+.lcMyLeadCards__empty{
+  padding:28px 16px;
+  text-align:center;
+  font-size:14px;
+  font-weight:600;
+}
+.lcMyLeadCard{
+  background:#fff;
+  border:1px solid var(--gi-border,#E5E7EB);
+  border-radius:12px;
+  box-shadow:0 1px 2px rgba(15,23,42,.04);
+  display:flex;
+  align-items:stretch;
+  border-inline-start:4px solid #94A3B8;
+}
+.lcMyLeadCard--new{ border-inline-start-color:#2563EB; }
+.lcMyLeadCard--progress{ border-inline-start-color:#D97706; }
+.lcMyLeadCard--noanswer{ border-inline-start-color:#F97316; }
+.lcMyLeadCard--appt{ border-inline-start-color:#7C3AED; }
+.lcMyLeadCard--closed{ border-inline-start-color:#16A34A; }
+.lcMyLeadCard--irr{ border-inline-start-color:#DC2626; }
+.lcMyLeadCard.lcLeadRow--custom-color{
+  background: var(--lead-custom-color) !important;
+}
+.lcMyLeadCard.is-highlight{
+  box-shadow:0 0 0 2px rgba(42,92,245,.35);
+}
+.lcMyLeadCard__main{
+  flex:1;
+  min-width:0;
+  padding:10px 14px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.lcMyLeadCard__side{
+  width:210px;
+  flex:0 0 210px;
+  padding:10px 12px;
+  background:#F8FAFC;
+  border-inline-start:1px solid var(--gi-border,#E5E7EB);
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.lcMyLeadCard__name{
+  margin:0;
+  font-size:16px;
+  font-weight:800;
+  color:var(--gi-text,#0F172A);
+  line-height:1.25;
+}
+.lcMyLeadCard__facts{ display:flex; flex-wrap:wrap; gap:8px 16px; }
+.lcMyLeadCard__fact{ display:inline-flex; flex-direction:column; gap:1px; }
+.lcMyLeadCard__k{ font-size:11px; font-weight:700; color:#647287; }
+.lcMyLeadCard__v{ font-size:13.5px; font-weight:650; color:#0F172A; }
+.lcMyLeadCard__v--phone{ color:#1D4ED8; direction:ltr; unicode-bidi:plaintext; }
+.lcMyLeadCard__tools{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.lcMyLeadCard__more{ white-space:nowrap; }
+.lcMyLeadCard__side .lcMyLeadStatusSelect{
+  width:100%;
+  min-width:0;
+}
+.lcMyLeadCard__side .lcTrackBadge{ align-self:flex-start; }
+@media (max-width:980px){
+  .lcMyLeadCard{ flex-direction:column; }
+  .lcMyLeadCard__side{
+    width:auto;
+    flex:1 1 auto;
+    border-inline-start:none;
+    border-top:1px solid var(--gi-border,#E5E7EB);
+  }
 }
 
 /* ===== Agent Activity Log — professional audit table ===== */

@@ -358,6 +358,23 @@
 #view-campaignMyLeads .search__input:not(#\9):not(#\9){
   color: var(--uf-ink) !important; font-size: 13.5px !important;
 }
+#view-campaignMyLeads .search.lcMyLeads__search:not(#\9):not(#\9){
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+#view-campaignMyLeads .search.lcMyLeads__search:focus-within:not(#\9):not(#\9){
+  border: none !important;
+  box-shadow: none !important;
+}
+#view-campaignMyLeads .lcMyLeads__search .search__input:not(#\9):not(#\9){
+  border: 1px solid var(--uf-line) !important;
+  border-radius: 10px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
 
 /* ---- טבלאות ---- */
 #view-customers .tableWrap:not(#\9):not(#\9),
@@ -1490,7 +1507,8 @@
   padding-inline-end: 2rem !important;
   font-size: 14px !important;
 }
-#campaignLeadsTrackingPanel .lcTrackCard__side .lcMyLeadStatusSelect:not(#\9):not(#\9){
+#campaignLeadsTrackingPanel .lcTrackCard__side .lcMyLeadStatusSelect:not(#\9):not(#\9),
+#view-campaignMyLeads .lcMyLeadCard__side .lcMyLeadStatusSelect:not(#\9):not(#\9){
   width: 100% !important;
   min-width: 0 !important;
 }
