@@ -28433,7 +28433,7 @@ UsersGateUI.init();
       const queueHtml = listBucket === "waiting_typing"
         ? typingListHtml
         : (listBucket === "waiting_mirror" ? waitingListHtml : "");
-      const agentsHtml = `<div class="opsDash__mid opsDash__mid--agents">
+      const agentsHtml = listBucket ? "" : `<div class="opsDash__mid opsDash__mid--agents">
             <article class="card opsDashPanel opsDashPanel--agents">
               <div class="opsDashPanel__head">
                 <div class="opsDashPanel__title">מעקב נציגים בשיחה</div>
@@ -28458,31 +28458,34 @@ UsersGateUI.init();
           </div>`;
 
       mount.innerHTML = `
-        <section class="opsDash" dir="rtl" aria-label="דשבורד תפעול">
+        <section class="opsDash${listBucket ? " opsDash--queueScreen" : " opsDash--home"}" dir="rtl" aria-label="${listBucket ? "חוצץ תפעול" : "דשבורד תפעול"}">
           <header class="opsDash__head">
             <div>
               <div class="opsDash__kicker">${escapeHtml(roleLabel)}</div>
               <h1 class="opsDash__title">${escapeHtml(getTimeGreeting() + " " + name)}</h1>
-              <p class="opsDash__sub">${isManager
-                ? "מעקב חי אחרי נציגי התפעול בשיחת שיקוף"
-                : "מוצגים רק הלקוחות ששויכו אליך לטיפול"}</p>
+              <p class="opsDash__sub">${listBucket
+                ? (listBucket === "waiting_typing" ? "מסך ממתינים להקלדה" : "מסך ממתינים לשיקוף")
+                : (isManager
+                  ? "מעקב חי אחרי נציגי התפעול בשיחת שיקוף"
+                  : "מוצגים רק הלקוחות ששויכו אליך לטיפול")}</p>
             </div>
             <div class="opsDash__actions">
-              <button class="btn btn--primary opsDashAct" type="button" data-ops-dash-go="mirrorCall">${iconPhone}<span>שיחת שיקוף</span></button>
+              ${listBucket
+                ? `<button class="btn opsDashAct" type="button" data-ops-dash-back>חזרה לדשבורד</button>`
+                : `<button class="btn btn--primary opsDashAct" type="button" data-ops-dash-go="mirrorCall">${iconPhone}<span>שיחת שיקוף</span></button>
               ${isManager ? `<button class="btn opsDashAct" type="button" data-ops-dash-go="mirrorAssignments">${iconUsers}<span>שיוכי שיקוף</span></button>
-              <button class="btn opsDashAct" type="button" data-ops-dash-go="myProcesses">${iconDoc}<span>התהליכים שלי</span></button>` : ""}
+              <button class="btn opsDashAct" type="button" data-ops-dash-go="myProcesses">${iconDoc}<span>התהליכים שלי</span></button>` : ""}`}
             </div>
           </header>
 
-          <div class="opsDash__kpis opsDash__kpis--4">
+          ${listBucket ? "" : `<div class="opsDash__kpis opsDash__kpis--4">
             ${kpiCard("waiting_mirror", "ממתינים לשיקוף")}
             ${kpiCard("waiting_typing", "ממתין להקלדה")}
             ${kpiCard("pending_signatures", "ממתין לחתימות")}
             ${kpiCard("issuance", "עבר להפקה")}
-          </div>
+          </div>`}
 
-          ${queueHtml}
-          ${agentsHtml}
+          ${listBucket ? queueHtml : agentsHtml}
         </section>`;
 
       this.bind(mount);
