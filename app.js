@@ -1673,6 +1673,38 @@
     return false;
   }
 
+  function getLiveMirrorCallStepView(rec){
+    const cid = safeTrim(rec?.id);
+    const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+    const call = payload?.mirrorFlow?.callSession && typeof payload.mirrorFlow.callSession === "object"
+      ? payload.mirrorFlow.callSession
+      : {};
+    let phase = safeTrim(call.uiPhase);
+    let label = safeTrim(call.flowStepLabel);
+    let index = Number(call.flowStepIndex || 0) || 0;
+    let count = Number(call.flowStepCount || 0) || 0;
+    try{
+      if(typeof MirrorCallUI !== "undefined" && MirrorCallUI?._callRunning && typeof MirrorCallUI._currentFlowStepInfo === "function"){
+        const selId = safeTrim(MirrorCallUI?.selectedCustomer?.id);
+        const sameCustomer = !!cid && !!selId && selId === cid;
+        const sameRuntime = !!(call.active && safeTrim(call.runtimeSessionId) === safeTrim(MirrorCallUI._runtimeId));
+        if(sameCustomer || sameRuntime){
+          const info = MirrorCallUI._currentFlowStepInfo() || {};
+          phase = safeTrim(info.phase) || phase;
+          label = safeTrim(info.label) || label;
+          index = Number(info.index || 0) || index;
+          count = Number(info.count || 0) || count;
+        }
+      }
+    }catch(_e){}
+    if(!label && phase && typeof MirrorCallUI?._phaseLabel === "function"){
+      const fallback = safeTrim(MirrorCallUI._phaseLabel(phase));
+      if(fallback && fallback !== "—") label = fallback;
+    }
+    if(!label) return null;
+    return { phase, label, index, count };
+  }
+
   function getHeroCallTimerView(rec, opsState){
     const ops = opsState || (rec ? getOpsStatePresentation(rec) : null);
     const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
@@ -1681,7 +1713,15 @@
       ? mirrorFlow.callSession
       : ((mirrorFlow.call && typeof mirrorFlow.call === "object") ? mirrorFlow.call : {});
     if(ops?.timerLive){
-      return { mode: "live", status: "הלקוח בשיחה כעת", count: ops.timerText || "00:00" };
+      const step = typeof getLiveMirrorCallStepView === "function" ? getLiveMirrorCallStepView(rec) : null;
+      return {
+        mode: "live",
+        status: "הלקוח בשיחה כעת",
+        count: ops.timerText || "00:00",
+        stepLabel: safeTrim(step?.label),
+        stepIndex: Number(step?.index || 0) || 0,
+        stepCount: Number(step?.count || 0) || 0
+      };
     }
     const endReason = safeTrim(call?.endReason);
     const notes = safeTrim(call?.noConsentNotes);
@@ -1807,8 +1847,10 @@
       liveLabel = "הלקוח בשיחה כעת";
       tone = "warn";
     } else if(finalLabel){
-      liveLabel = "הלקוח סיים שיחה";
-      tone = ops.resultStatus === 'notInterested' ? 'danger' : 'success';
+      liveLabel = finalLabel;
+      tone = ops.resultStatus === 'notInterested'
+        ? 'danger'
+        : (ops.resultStatus === 'waitingAgentInfo' ? 'warn' : 'success');
     } else if(liveKey === "call_finished"){
       liveLabel = "הלקוח סיים שיחה";
       tone = "success";
@@ -9296,6 +9338,43 @@
     } catch(_e){}
     try { await App.persist(label || "עודכן תיק לקוח"); } catch(_e){}
     return true;
+  }
+
+  async function persistCustomerOpsResultLight(rec, label){
+    const cid = safeTrim(rec?.id);
+    if(!cid || !rec) return { ok: false, error: "MISSING_CUSTOMER" };
+    State.data.customers = Array.isArray(State.data.customers) ? State.data.customers : [];
+    const idx = State.data.customers.findIndex((row) => String(row?.id) === String(cid));
+    if(idx < 0) return { ok: false, error: "CUSTOMER_NOT_FOUND" };
+    State.data.customers[idx] = rec;
+    if(State.data.meta && typeof State.data.meta === "object"){
+      State.data.meta.updatedAt = safeTrim(rec.updatedAt) || nowISO();
+    }
+    let directRow = null;
+    try {
+      directRow = Storage.buildCustomerRows({ customers: [rec] })[0];
+    } catch(err){
+      return { ok: false, error: String(err?.message || err || "BUILD_ROW_FAILED") };
+    }
+    if(!directRow) return { ok: false, error: "BUILD_ROW_FAILED" };
+    let save = null;
+    try {
+      save = await Storage.upsertSingleRow(SUPABASE_TABLES.customers, directRow);
+    } catch(err){
+      return { ok: false, error: String(err?.message || err || "SAVE_FAILED") };
+    }
+    if(!save?.ok) return { ok: false, error: safeTrim(save?.error) || "SAVE_FAILED" };
+    try {
+      appendAuditLog({
+        type: "ops_result_status",
+        entity: "customer",
+        entityId: cid,
+        label: safeTrim(label) || "עודכן סטטוס תפעולי",
+        actorName: safeTrim(Auth?.current?.name),
+        details: { resultStatus: safeTrim(rec?.payload?.opsProcess?.resultStatus) }
+      });
+    } catch(_e){}
+    return { ok: true };
   }
 
   function preserveTableWrapScroll(tbody, fn){
@@ -17270,7 +17349,13 @@ UsersGateUI.init();
         if(!btn) return;
         const rec = this.current();
         if(!rec || !(Auth.isOps() || Auth.isOpsAgent())) return;
+        if(this._opsResultSaveBusy) return;
         const next = safeTrim(btn.getAttribute('data-ops-result'));
+        if(!next || !OPS_RESULT_OPTIONS[next]) return;
+        const prevStatus = safeTrim(rec?.payload?.opsProcess?.resultStatus);
+        const prevLive = safeTrim(rec?.payload?.opsProcess?.liveState);
+        if(next === prevStatus) return;
+        this._opsResultSaveBusy = true;
         setOpsTouch(rec, {
           ownerName: safeTrim(Auth?.current?.name),
           updatedBy: safeTrim(Auth?.current?.name),
@@ -17278,8 +17363,28 @@ UsersGateUI.init();
           liveState: 'call_finished'
         });
         this.refreshOperationalReflectionCard();
-        ProcessesUI.render();
-        await App.persist('עודכן סטטוס תפעולי');
+        try {
+          const saved = await persistCustomerOpsResultLight(rec, 'עודכן סטטוס תפעולי');
+          if(!saved?.ok){
+            setOpsTouch(rec, {
+              ownerName: safeTrim(Auth?.current?.name),
+              updatedBy: safeTrim(Auth?.current?.name),
+              resultStatus: prevStatus,
+              liveState: prevLive || 'call_finished'
+            });
+            try {
+              window.showToast?.({
+                title: "השמירה נכשלה",
+                text: "הסטטוס התפעולי לא נשמר. נסו שוב.",
+                variant: "warn",
+                durationMs: 4800
+              });
+            } catch(_e){}
+          }
+        } finally {
+          this._opsResultSaveBusy = false;
+          this.refreshOperationalReflectionCard();
+        }
       });
 
       on(this.policyModal.close, "click", () => this.closePolicyModal());
@@ -20686,21 +20791,59 @@ UsersGateUI.init();
       const view = typeof getHeroCallTimerView === "function"
         ? getHeroCallTimerView(rec, ops)
         : { mode: ops?.timerLive ? "live" : "hidden", status: ops?.timerLive ? "הלקוח בשיחה כעת" : "", count: ops?.timerText || "" };
-      el.classList.remove("is-live", "is-done", "is-stopped");
+      el.classList.remove("is-live", "is-done", "is-stopped", "has-step");
       if(!view || view.mode === "hidden"){
         el.hidden = true;
         el.setAttribute("hidden", "");
         el.innerHTML = "";
+        el.removeAttribute("aria-label");
+        el.style.removeProperty("--gi-call-progress");
+        el.style.removeProperty("--gi-call-hand");
         return false;
       }
       el.hidden = false;
       el.removeAttribute("hidden");
       el.classList.add(`is-${view.mode}`);
-      const pulse = view.mode === "live" ? `<span class="cfFile__liveTimerPulse" aria-hidden="true"></span>` : "";
+      const stepLabel = safeTrim(view.stepLabel);
+      const hasStep = view.mode === "live" && !!stepLabel;
+      if(hasStep) el.classList.add("has-step");
+      const stepText = hasStep
+        ? `${view.stepIndex ? `שלב ${view.stepIndex}` : "שלב"}${view.stepCount ? ` מתוך ${view.stepCount}` : ""} · ${stepLabel}`
+        : "";
+      const parts = [safeTrim(view.status), stepText, safeTrim(view.count)].filter(Boolean);
+      if(parts.length) el.setAttribute("aria-label", parts.join(" · "));
+      else el.removeAttribute("aria-label");
+      let progress = 12;
+      if(view.mode === "live" && Number(view.stepIndex) > 0 && Number(view.stepCount) > 0){
+        progress = Math.max(8, Math.min(100, Math.round((Number(view.stepIndex) / Number(view.stepCount)) * 100)));
+      }
+      const countBits = String(view.count || "").split(":");
+      const mins = Number(countBits[0] || 0) || 0;
+      const secs = Number(countBits[1] || 0) || 0;
+      const hand = ((mins * 60 + secs) % 60) * 6;
+      el.style.setProperty("--gi-call-progress", `${progress}%`);
+      el.style.setProperty("--gi-call-hand", `${hand}deg`);
+      const countEl = el.querySelector(".cfFile__liveTimerCount");
+      const statusEl = el.querySelector(".cfFile__liveTimerStatus");
+      const stepEl = el.querySelector(".cfFile__liveTimerStep");
+      const sameShell = view.mode === "live" && !!(countEl && statusEl && el.querySelector(".cfFile__liveTimerClock"));
+      if(sameShell){
+        if(countEl) countEl.textContent = view.count || "";
+        if(statusEl) statusEl.textContent = view.status || "";
+        if(stepEl){
+          stepEl.textContent = stepText;
+          stepEl.hidden = !stepText;
+        }
+        return true;
+      }
+      const clock = view.mode === "live"
+        ? `<span class="cfFile__liveTimerClock" aria-hidden="true"><span class="cfFile__liveTimerFace"></span><span class="cfFile__liveTimerHand"></span><span class="cfFile__liveTimerPulse"></span></span>`
+        : "";
       const count = view.count
         ? `<span class="cfFile__liveTimerCount">${escapeHtml(view.count)}</span>`
         : "";
-      el.innerHTML = `${pulse}<span class="cfFile__liveTimerStatus">${escapeHtml(view.status)}</span>${count}`;
+      const step = `<span class="cfFile__liveTimerStep"${stepText ? "" : " hidden"}>${escapeHtml(stepText)}</span>`;
+      el.innerHTML = `${clock}<span class="cfFile__liveTimerBody"><span class="cfFile__liveTimerStatus">${escapeHtml(view.status)}</span>${count}${step}</span>`;
       return view.mode === "live";
     },
 
@@ -20714,7 +20857,9 @@ UsersGateUI.init();
         safeTrim(call.finishedAt),
         safeTrim(call.endReason),
         safeTrim(call.durationText),
-        safeTrim(call.noConsentNotes)
+        safeTrim(call.noConsentNotes),
+        safeTrim(call.uiPhase),
+        safeTrim(call.flowStepLabel)
       ].join("|");
     },
 
@@ -20739,6 +20884,7 @@ UsersGateUI.init();
       }
       const nextSig = this._callSessionWatchSig(remoteCall);
       const sameSession = nextSig && nextSig === this._openFileCallSig;
+      const prevResult = safeTrim(rec.payload?.opsProcess?.resultStatus);
       rec.payload.mirrorFlow.callSession = Object.assign({}, localCall, remoteCall);
       const remoteOps = payload?.opsProcess;
       if(remoteOps && typeof remoteOps === "object"){
@@ -20746,13 +20892,15 @@ UsersGateUI.init();
           liveState: remoteOps.liveState,
           updatedAt: remoteOps.updatedAt,
           updatedBy: remoteOps.updatedBy,
-          ownerName: remoteOps.ownerName
+          ownerName: remoteOps.ownerName,
+          resultStatus: remoteOps.resultStatus
         });
       }
       this._openFileCallSig = nextSig;
       this.paintHeroLiveTimer(rec);
       this.startOpsCardLoop();
-      if(!sameSession && !this._hasLiveMirrorCallOnOpenFile()){
+      const resultChanged = prevResult !== safeTrim(rec.payload?.opsProcess?.resultStatus);
+      if((!sameSession || resultChanged) && !this._hasLiveMirrorCallOnOpenFile()){
         this.refreshOperationalReflectionCard();
       }
       return !sameSession;
@@ -21041,7 +21189,8 @@ UsersGateUI.init();
         .join("");
       const currentLog = renderCallLog(call);
       const resultButtons = canSetOpsResult ? Object.entries(OPS_RESULT_OPTIONS).map(([key, label]) => `
-        <button class="customerOpsResultBtn${state?.resultKey === key ? ' is-active' : ''}" data-ops-result="${escapeHtml(key)}" type="button">${escapeHtml(label)}</button>`).join('') : '';
+        <button class="customerOpsResultBtn${state?.resultKey === key ? ' is-active' : ''}${this._opsResultSaveBusy ? ' is-saving' : ''}" data-ops-result="${escapeHtml(key)}" type="button"${this._opsResultSaveBusy ? ' disabled' : ''}>${escapeHtml(label)}</button>`).join('') : '';
+      const updatedLine = this._opsResultSaveBusy ? 'שומר סטטוס…' : `עודכן לאחרונה: ${escapeHtml(updated)}`;
       return `
         <div class="customerStatCard customerStatCard--ops customerStatCard--ops-${escapeHtml(state?.tone || 'info')}" id="customerOpsReflectionCard" data-customer-id="${escapeHtml(current?.id || '')}">
           <div class="customerStatCard__icon">${premiumCustomerIcon("activity")}</div>
@@ -21053,7 +21202,7 @@ UsersGateUI.init();
             ${currentLog}
             ${historyHtml}
             ${canSetOpsResult ? `<div class="customerOpsResultBtns">${resultButtons}</div>` : ''}
-            <div class="customerStatCard__sub">עודכן לאחרונה: ${escapeHtml(updated)}</div>
+            <div class="customerStatCard__sub">${updatedLine}</div>
           </div>
         </div>`;
     },
@@ -21078,7 +21227,13 @@ UsersGateUI.init();
             <div class="cfFile__kpiSub">עודכן ${escapeHtml(updatedOps)}</div>
           </div>`;
       }
-      if(call?.active) return;
+      if(call?.active && !this._opsResultSaveBusy){
+        const liveCard = this.els?.main?.querySelector?.('#customerOpsReflectionCard');
+        if(liveCard && liveCard.querySelector('.customerOpsResultBtn.is-saving, .customerOpsResultBtn[disabled]')){
+          liveCard.outerHTML = this.renderOperationalReflectionCard(ops);
+        }
+        return;
+      }
       const card = this.els?.main?.querySelector?.('#customerOpsReflectionCard');
       if(card){
         card.outerHTML = this.renderOperationalReflectionCard(ops);
@@ -34591,7 +34746,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260821-purchase-har-fresh-v1";
+  const GI_WIZARD_JS_VERSION = "20260821-ops-status-live-timer-v1";
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
   const TZAHAL_CLINIC = "קופה צהלית";
   const TZAHAL_CLINIC_SHABAN = "אין שב״ן";
@@ -56835,6 +56990,10 @@ ${inner}
         store.pauseNotes = "";
         store.startTime = new Date(startedAt).toLocaleTimeString("he-IL",{hour:"2-digit",minute:"2-digit",second:"2-digit"});
         store.dateFull  = new Date(startedAt).toLocaleDateString("he-IL",{day:"2-digit",month:"2-digit",year:"numeric"});
+        store.uiPhase = safeTrim(this._mirrorUiPhase) || "idle";
+        store.flowStepLabel = "הצגה עצמית";
+        store.flowStepIndex = 1;
+        store.flowStepCount = (this._mcFlowPlan?.() || []).length || 0;
         this._liveStartedAt = startedAt;
         try{ setOpsTouch(rec,{liveState:"in_call",ownerName:safeTrim(Auth?.current?.name),updatedBy:safeTrim(Auth?.current?.name)}); }catch(_e){}
         // תצלום "לפני" לדוח התיקונים — חייב להילכד לפני העריכה הראשונה בשיחה.
@@ -57273,6 +57432,54 @@ ${inner}
       return core;
     },
 
+    _currentFlowStepInfo(){
+      const plan = this._mcFlowPlan() || [];
+      const phase = safeTrim(this._mirrorUiPhase) || "idle";
+      const count = plan.length || 0;
+      if(phase === "mirrorFlowDone"){
+        return { phase, index: count, count, label: "סיום" };
+      }
+      let idx = plan.findIndex((s) => Array.isArray(s.phases) && s.phases.includes(phase));
+      if(idx < 0 && phase === "futureCancel" && this.els?.flowStepFuture){
+        idx = plan.findIndex((s) => s.el === this.els.flowStepFuture);
+      }
+      if(idx < 0 && this._callRunning) idx = 0;
+      if(idx < 0){
+        const fallback = safeTrim(this._phaseLabel?.(phase));
+        return { phase, index: 0, count, label: (fallback && fallback !== "—") ? fallback : "" };
+      }
+      return {
+        phase,
+        index: idx + 1,
+        count,
+        label: safeTrim(plan[idx].label) || safeTrim(this._phaseLabel?.(phase))
+      };
+    },
+
+    _publishMirrorCallStep(){
+      if(!this._callRunning) return;
+      const rec = this.selectedCustomer
+        || (State.data?.customers || []).find((c) => safeTrim(c?.id) === safeTrim(this.selectedCustomer?.id));
+      const store = rec?.payload?.mirrorFlow?.callSession;
+      if(!store || typeof store !== "object") return;
+      const info = this._currentFlowStepInfo() || {};
+      const nextPhase = safeTrim(info.phase);
+      const nextLabel = safeTrim(info.label);
+      const nextIndex = Number(info.index || 0) || 0;
+      const nextCount = Number(info.count || 0) || 0;
+      const changed = safeTrim(store.uiPhase) !== nextPhase
+        || safeTrim(store.flowStepLabel) !== nextLabel
+        || Number(store.flowStepIndex || 0) !== nextIndex
+        || Number(store.flowStepCount || 0) !== nextCount;
+      store.uiPhase = nextPhase;
+      store.flowStepLabel = nextLabel;
+      store.flowStepIndex = nextIndex;
+      store.flowStepCount = nextCount;
+      if(!changed) return;
+      try { CustomersUI?.syncMirrorCallLiveTimer?.(rec.id); } catch(_e){}
+      this._persistMirrorCall("עודכן שלב שיחת שיקוף");
+    },
+
     _updateFlowBarSteps(){
       const plan = this._mcFlowPlan();
       const all = [this.els.flowStep1, this.els.flowStepPersonal, this.els.flowStepHar,
@@ -57329,6 +57536,7 @@ ${inner}
 
     _syncFlowChrome(){
       try { this._mcSyncStepKickers(); } catch(_e) {}
+      try { this._publishMirrorCallStep(); } catch(_e) {}
       const callPhase = !!(this.els.workstation && this.els.workstation.classList.contains("mcWorkstation--callPhase"));
       if(!callPhase){
         if(this.els.flowBar) this.els.flowBar.hidden = true;

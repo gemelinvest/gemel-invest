@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260821-purchase-har-fresh-v1";
+  const GI_WIZARD_BUILD = "20260821-ops-status-live-timer-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
