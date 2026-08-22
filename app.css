@@ -42593,6 +42593,46 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 .cfFile__documentsPreviewDoc{
   padding: 12px;
 }
+.cfFile__sheetBlock + .cfFile__sheetBlock{ margin-top: 16px; }
+.cfFile__sheetName{
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--blueDeep);
+  margin-bottom: 8px;
+}
+.cfFile__sheetScroll{
+  overflow: auto;
+  max-height: 62vh;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+.cfFile__sheetTable{
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  font-size: 12px;
+}
+.cfFile__sheetTable th,
+.cfFile__sheetTable td{
+  border: 1px solid #d7deea;
+  padding: 5px 8px;
+  white-space: nowrap;
+  text-align: right;
+}
+.cfFile__sheetTable th{
+  background: #eef3fb;
+  font-weight: 800;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.cfFile__sheetNote{
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 700;
+}
 .cfFile__documentRow{
   cursor: pointer;
 }

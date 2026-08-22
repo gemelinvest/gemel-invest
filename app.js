@@ -17729,7 +17729,7 @@ UsersGateUI.init();
         const previewRow = ev.target?.closest?.("[data-cf-doc-preview]");
         if(previewRow){
           ev.preventDefault();
-          this.showCustomerDocumentPreview(previewRow.getAttribute("data-cf-doc-preview"));
+          void this.showCustomerDocumentPreview(previewRow.getAttribute("data-cf-doc-preview"));
           return;
         }
         const backBtn = ev.target?.closest?.("#customerMedicalBackBtn");
@@ -20066,50 +20066,112 @@ UsersGateUI.init();
       return { kind: "none", url: "" };
     },
 
-    renderDocumentPreviewInner(rec, docId){
+    findCustomerDocument(rec, docId){
+      const id = safeTrim(docId);
       const docs = this.getCustomerDocuments(rec);
-      const doc = docs.find((row) => safeTrim(row?.id) === safeTrim(docId)) || CustomerDocuments.findDoc?.(rec, docId) || null;
+      return docs.find((row) => safeTrim(row?.id) === id) || CustomerDocuments.findDoc?.(rec, id) || null;
+    },
+
+    renderSheetMatrixHtml(rows, sheetName){
+      const maxRows = 800;
+      const list = Array.isArray(rows) ? rows : [];
+      const sliced = list.slice(0, maxRows);
+      const width = sliced.reduce((acc, row) => Math.max(acc, Array.isArray(row) ? row.length : 0), 0);
+      const cell = (value, tag) => `<${tag}>${escapeHtml(String(value == null ? "" : value))}</${tag}>`;
+      const rowHtml = (row, tag) => {
+        const cells = Array.isArray(row) ? row.slice() : [];
+        while(cells.length < width) cells.push("");
+        return `<tr>${cells.map((value) => cell(value, tag)).join("")}</tr>`;
+      };
+      const head = sliced[0] ? `<thead>${rowHtml(sliced[0], "th")}</thead>` : "";
+      const body = `<tbody>${sliced.slice(sliced[0] ? 1 : 0).map((row) => rowHtml(row, "td")).join("")}</tbody>`;
+      const note = list.length > maxRows
+        ? `<div class="cfFile__sheetNote">מוצגות ${maxRows} שורות ראשונות מתוך ${list.length}</div>`
+        : "";
+      return `<div class="cfFile__sheetBlock">
+        <div class="cfFile__sheetName">${escapeHtml(sheetName || "גיליון")}</div>
+        <div class="cfFile__sheetScroll"><table class="cfFile__sheetTable">${head}${body}</table></div>
+        ${note}
+      </div>`;
+    },
+
+    async renderSheetPreviewHtml(doc){
+      const url = safeTrim(doc?.dataUrl) || safeTrim(doc?.url);
+      if(!url) return "";
+      try{
+        if(window.GI_LOAD_LIBS?.xlsx) await window.GI_LOAD_LIBS.xlsx();
+        if(!window.XLSX?.read || !window.XLSX?.utils?.sheet_to_json) return "";
+        const buffer = dataUrlToArrayBuffer(url);
+        if(!buffer) return "";
+        const wb = window.XLSX.read(buffer, { type: "array" });
+        const names = Array.isArray(wb?.SheetNames) ? wb.SheetNames.filter((name) => {
+          return safeTrim(name) && safeTrim(name) !== (typeof GI_HAR_ORIGIN_SHEET !== "undefined" ? GI_HAR_ORIGIN_SHEET : "");
+        }) : [];
+        if(!names.length) return "";
+        return names.map((name) => {
+          const sheet = wb.Sheets?.[name];
+          const rows = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false, blankrows: false });
+          return this.renderSheetMatrixHtml(rows, name);
+        }).join("");
+      }catch(_e){
+        return "";
+      }
+    },
+
+    renderGeneratedDocumentPreview(rec, doc){
+      const type = safeTrim(doc?.type);
+      try{
+        if(type === CustomerDocuments.TYPES.healthOps && typeof Wizard?.renderOperationalReport === "function"){
+          const snapshot = (safeTrim(doc?.reportScope) === CustomerDocuments.REPORT_SCOPES.purchase)
+            ? (doc?.payloadSnapshot || rec?.payload)
+            : rec?.payload;
+          return `<div class="cfFile__documentsPreviewDoc">${Wizard.renderOperationalReport(snapshot)}</div>`;
+        }
+        if((type === CustomerDocuments.TYPES.agentApptOps || type === CustomerDocuments.TYPES.agentApptForm)
+          && typeof AgentAppointmentPdf?.buildOperationalReportHtml === "function"){
+          const meta = doc?.payloadSnapshot?.agentAppointmentMeta
+            || doc?.metaSnapshot
+            || rec?.payload?.agentAppointmentMeta;
+          if(meta) return `<div class="cfFile__documentsPreviewDoc">${AgentAppointmentPdf.buildOperationalReportHtml(meta)}</div>`;
+        }
+      }catch(_e){}
+      return "";
+    },
+
+    renderDocumentPreviewInner(rec, docId, options = {}){
+      const doc = this.findCustomerDocument(rec, docId);
       if(!doc){
         return `<div class="cfFile__documentsPreviewEmpty">בחרו קובץ מימין כדי לראות תצוגה מקדימה</div>`;
       }
       const display = CustomerDocuments.getDocumentDisplay(doc);
       const src = this.customerDocPreviewKind(doc);
-      const type = safeTrim(doc?.type);
+      const sheetHtml = safeTrim(options.sheetHtml);
       let body = "";
       if(src.kind === "image" && src.url){
         body = `<img class="cfFile__documentsPreviewImg" alt="${escapeHtml(display.title)}" src="${escapeHtml(src.url)}" />`;
       }else if(src.kind === "pdf" && src.url){
         body = `<iframe class="cfFile__documentsPreviewFrame" title="${escapeHtml(display.title)}" src="${escapeHtml(src.url)}"></iframe>`;
-      }else if(type === CustomerDocuments.TYPES.healthOps){
-        try{
-          const snapshot = (safeTrim(doc?.reportScope) === CustomerDocuments.REPORT_SCOPES.purchase)
-            ? (doc?.payloadSnapshot || rec?.payload)
-            : rec?.payload;
-          if(typeof Wizard?.renderOperationalReport === "function"){
-            body = `<div class="cfFile__documentsPreviewDoc">${Wizard.renderOperationalReport(snapshot)}</div>`;
-          }
-        }catch(_e){ body = ""; }
-      }else if(type === CustomerDocuments.TYPES.agentApptOps){
-        try{
-          const meta = doc?.payloadSnapshot?.agentAppointmentMeta
-            || doc?.metaSnapshot
-            || rec?.payload?.agentAppointmentMeta;
-          if(meta && typeof AgentAppointmentPdf?.buildOperationalReportHtml === "function"){
-            body = `<div class="cfFile__documentsPreviewDoc">${AgentAppointmentPdf.buildOperationalReportHtml(meta)}</div>`;
-          }
-        }catch(_e){ body = ""; }
-      }
-      if(!body && src.kind === "sheet"){
-        body = `<div class="cfFile__documentsPreviewEmpty">אין תצוגה מקדימה לקובץ גיליון. אפשר להוריד אותו מימין.</div>`;
+      }else if(src.kind === "sheet"){
+        body = sheetHtml
+          ? `<div class="cfFile__documentsPreviewDoc">${sheetHtml}</div>`
+          : `<div class="cfFile__documentsPreviewEmpty">טוען תצוגה מקדימה…</div>`;
+      }else{
+        body = this.renderGeneratedDocumentPreview(rec, doc);
+        if(!body && src.url){
+          body = `<iframe class="cfFile__documentsPreviewFrame" title="${escapeHtml(display.title)}" src="${escapeHtml(src.url)}"></iframe>`;
+        }
       }
       if(!body){
-        body = `<div class="cfFile__documentsPreviewEmpty">אין תצוגה מקדימה לקובץ זה. אפשר להוריד אותו מימין.</div>`;
+        body = this.renderGeneratedDocumentPreview(rec, doc)
+          || (src.url
+            ? `<iframe class="cfFile__documentsPreviewFrame" title="${escapeHtml(display.title)}" src="${escapeHtml(src.url)}"></iframe>`
+            : `<div class="cfFile__documentsPreviewEmpty">טוען תצוגה מקדימה…</div>`);
       }
       return `<div class="cfFile__documentsPreviewHead">${escapeHtml(display.title)}</div>
         <div class="cfFile__documentsPreviewBody">${body}</div>`;
     },
 
-    showCustomerDocumentPreview(docId){
+    async showCustomerDocumentPreview(docId){
       const rec = this.current();
       const id = safeTrim(docId);
       if(!rec || !id) return;
@@ -20120,7 +20182,18 @@ UsersGateUI.init();
         row.classList.toggle("is-selected", safeTrim(row.getAttribute("data-cf-doc-preview")) === id);
       });
       const pane = root.querySelector("[data-cf-doc-preview-pane]");
-      if(pane) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
+      if(!pane) return;
+      const doc = this.findCustomerDocument(rec, id);
+      const src = this.customerDocPreviewKind(doc);
+      pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
+      if(src.kind !== "sheet") return;
+      const sheetHtml = await this.renderSheetPreviewHtml(doc);
+      if(this._previewDocId !== id) return;
+      pane.innerHTML = this.renderDocumentPreviewInner(rec, id, {
+        sheetHtml: sheetHtml || (src.url
+          ? `<iframe class="cfFile__documentsPreviewFrame" title="preview" src="${escapeHtml(src.url)}"></iframe>`
+          : this.renderGeneratedDocumentPreview(rec, doc))
+      });
     },
 
     renderDocumentsSection(rec){
@@ -20195,6 +20268,9 @@ UsersGateUI.init();
     bindSectionActions(rec, policies){
       const section = this.normalizeSection(this.currentSection);
       if(section === 'policies') this.bindPolicyTableActions(rec, this.getWalletDisplayPolicies(rec, policies));
+      if(section === "documents" && this._previewDocId){
+        void this.showCustomerDocumentPreview(this._previewDocId);
+      }
     },
 
     renderPolicyTableView(rec, policies){
