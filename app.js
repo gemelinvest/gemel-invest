@@ -19825,71 +19825,77 @@ UsersGateUI.init();
     renderMedicalInfo(rec){
       const groups = this.getMedicalGroups(rec);
       const summary = this.getMedicalSummary(rec, groups);
-      const summaryCards = [
-        { icon:'🩺', label:'סעיפים רפואיים', value:String(summary.total || 0), sub:'כל ממצאי ההצהרה שנשמרו בתיק' },
-        { icon:'⚠️', label:'סומנו כן', value:String(summary.positive || 0), sub:'סעיפים שדורשים תשומת לב רפואית' },
-        { icon:'📄', label:'שאלוני המשך', value:String(summary.detailed || 0), sub:'שדות פירוט שנשמרו בפועל' },
-        { icon:'🔄', label:'עודכן בשיקוף', value: summary.corrected ? 'כן' : 'לא', sub: summary.corrected ? (summary.updatedBy ? `עודכן ע"י ${summary.updatedBy}` : 'נשמרה גרסה מתוקנת') : 'כרגע מוצגת הגרסה המקורית' }
-      ];
-      const chips = `
-        <div class="customerMedical__metaRow">
-          <span class="customerMedical__metaPill">תאריך עדכון: ${escapeHtml(this.formatDate(summary.updatedAt || rec?.updatedAt || rec?.createdAt))}</span>
-          <span class="customerMedical__metaPill ${summary.corrected ? 'is-corrected' : ''}">${summary.corrected ? 'סונכרן עם שיקוף' : 'מקור: הצהרת הבריאות'}</span>
-          <span class="customerMedical__metaPill">מבוטחים עם מידע: ${escapeHtml(String((groups || []).length || 0))}</span>
-        </div>`;
-      const groupsHtml = groups.length ? groups.map((group, gIdx) => {
-        const items = (group.items || []).map((item, idx) => {
-          const answer = safeTrim(item?.response?.answer);
-          const fields = item?.response?.fields && typeof item.response.fields === 'object' ? Object.entries(item.response.fields).filter(([k,v]) => safeTrim(v)) : [];
-          const badge = answer === 'yes' ? 'כן' : answer === 'no' ? 'לא' : 'טרם סומן';
-          const badgeClass = answer === 'yes' ? 'is-yes' : answer === 'no' ? 'is-no' : 'is-empty';
-          return `
-            <article class="customerMedicalItem">
-              <div class="customerMedicalItem__glow" aria-hidden="true"></div>
-              <div class="customerMedicalItem__head">
-                <div>
-                  <div class="customerMedicalItem__title">${escapeHtml(item?.meta?.text || item?.qKey || `שאלה ${idx+1}`)}</div>
-                  <div class="customerMedicalItem__sub">${escapeHtml(item?.meta?.title || 'הצהרת בריאות')}</div>
-                </div>
-                <span class="customerMedicalItem__badge ${badgeClass}">${escapeHtml(badge)}</span>
-              </div>
-              ${fields.length ? `<div class="customerMedicalItem__fields">${fields.map(([key,val]) => `<div class="customerMedicalField"><span class="customerMedicalField__k">${escapeHtml(key)}</span><span class="customerMedicalField__v">${escapeHtml(String(val))}</span></div>`).join('')}</div>` : `<div class="customerMedicalItem__empty">${answer === 'yes' ? 'סומן כן ללא פירוט נוסף בשדה המשך.' : answer === 'no' ? 'לא דווח ממצא רפואי בשאלה זו.' : 'הסעיף טרם סומן.'}</div>`}
-              <div class="customerMedicalItem__footer">
-                <span class="customerMedicalItem__footPill">${summary.corrected ? 'מוצג לפי גרסת השיקוף המעודכנת' : 'מוצג לפי הטופס המקורי'}</span>
-              </div>
-            </article>`;
-        }).join('');
-        return `
-          <section class="customerMedicalGroup">
-            <div class="customerMedicalGroup__head">
-              <div>
-                <div class="customerMedicalGroup__title">${escapeHtml(group?.insured?.label || `מבוטח ${gIdx+1}`)}</div>
-                <div class="customerMedicalGroup__sub">${escapeHtml(String((group.items || []).length || 0))} סעיפים רפואיים שמורים בתיק</div>
-              </div>
-              <div class="customerMedicalGroup__pulse" aria-hidden="true"></div>
-            </div>
-            <div class="customerMedicalGroup__grid">${items}</div>
-          </section>`;
-      }).join('') : `<div class="emptyState customerMedical__empty"><div class="emptyState__icon">${premiumCustomerIcon("medical")}</div><div class="emptyState__title">עדיין אין מידע רפואי להצגה</div><div class="emptyState__text">ברגע שתישמר הצהרת בריאות ללקוח, הממצאים יוצגו כאן אוטומטית. אם יתבצע תיקון בשיקוף, המסך הזה יתעדכן בהתאם.</div></div>`;
-      return `<section class="customerMedicalView">
-        <div class="customerMedicalHero">
-          <div class="customerMedicalHero__scan" aria-hidden="true"></div>
-          <div class="customerWalletSection__head customerMedicalHero__head">
-            <div class="customerWalletSection__titleWrap">
-              <div class="customerWalletSection__icon">${premiumCustomerIcon("medical")}</div>
-              <div>
-                <div class="customerWalletSection__title">מידע רפואי</div>
-                <div class="customerWalletSection__sub">סיכום פרימיום של הצהרת הבריאות — כולל סנכרון אוטומטי מול תיקוני שיקוף</div>
-              </div>
-            </div>
-            <div class="customerMedicalHero__tools">
-              <button class="customerMedicalHero__backBtn" id="customerMedicalBackBtn" type="button">חזרה לתיק הביטוח</button>
-            </div>
+      if(!groups.length){
+        return `<section class="cfMedical">
+          <div class="emptyState customerMedical__empty">
+            <div class="emptyState__icon">${premiumCustomerIcon("medical")}</div>
+            <div class="emptyState__title">עדיין אין מידע רפואי להצגה</div>
+            <div class="emptyState__text">ברגע שתישמר הצהרת בריאות ללקוח, הממצאים יוצגו כאן אוטומטית. אם יתבצע תיקון בשיקוף, המסך הזה יתעדכן בהתאם.</div>
           </div>
-          ${chips}
-          <div class="customerMedicalSummary">${summaryCards.map(card => `<div class="customerMedicalSummaryCard"><div class="customerMedicalSummaryCard__icon">${card.icon}</div><div class="customerMedicalSummaryCard__value">${escapeHtml(card.value)}</div><div class="customerMedicalSummaryCard__label">${escapeHtml(card.label)}</div><div class="customerMedicalSummaryCard__sub">${escapeHtml(card.sub)}</div></div>`).join('')}</div>
+        </section>`;
+      }
+      const itemTitle = (item, idx) => escapeHtml(item?.meta?.text || item?.qKey || (`שאלה ${idx + 1}`));
+      const itemFields = (item) => {
+        const fields = item?.response?.fields && typeof item.response.fields === "object"
+          ? Object.entries(item.response.fields).filter(([, v]) => safeTrim(v))
+          : [];
+        if(fields.length){
+          return fields.map(([key, val]) => `<div class="cfMedicalField"><div class="cfMedicalField__k">${escapeHtml(key)}</div><div class="cfMedicalField__v">${escapeHtml(String(val))}</div></div>`).join("");
+        }
+        return `<div class="cfMedicalField"><div class="cfMedicalField__v">סומן כן ללא פירוט נוסף בשדה המשך.</div></div>`;
+      };
+      const groupsHtml = groups.map((group, gIdx) => {
+        const items = Array.isArray(group.items) ? group.items : [];
+        const yesItems = items.filter((item) => safeTrim(item?.response?.answer) === "yes");
+        const noItems = items.filter((item) => safeTrim(item?.response?.answer) === "no");
+        const pendingItems = items.filter((item) => {
+          const answer = safeTrim(item?.response?.answer);
+          return answer !== "yes" && answer !== "no";
+        });
+        const yesHtml = yesItems.length
+          ? yesItems.map((item, idx) => `
+              <article class="cfMedicalYes${idx === 0 ? " is-open" : ""}">
+                <button class="cfMedicalYes__row" type="button" data-cf-med-yes-toggle>
+                  <span class="cfMedicalYes__q">${itemTitle(item, idx)}</span>
+                  <span class="cfMedicalBadge is-yes">כן</span>
+                </button>
+                <div class="cfMedicalYes__body">${itemFields(item)}</div>
+              </article>`).join("")
+          : `<div class="cfMedicalEmpty">אין ממצאים שסומנו כן</div>`;
+        const compactList = (list, badge, badgeClass) => list.map((item, idx) => `
+          <div class="cfMedicalNoRow">
+            <span>${itemTitle(item, idx)}</span>
+            <span class="cfMedicalBadge ${badgeClass}">${badge}</span>
+          </div>`).join("");
+        const noHtml = noItems.length
+          ? `<button class="cfMedicalNoToggle" type="button" data-cf-med-no-toggle>${noItems.length} סעיפים סומנו לא · הצג רשימה</button>
+             <div class="cfMedicalNoList" hidden>${compactList(noItems, "לא", "is-no")}</div>`
+          : "";
+        const pendingHtml = pendingItems.length
+          ? `<button class="cfMedicalNoToggle" type="button" data-cf-med-no-toggle>${pendingItems.length} סעיפים טרם סומנו · הצג רשימה</button>
+             <div class="cfMedicalNoList" hidden>${compactList(pendingItems, "טרם", "is-empty")}</div>`
+          : "";
+        return `<section class="cfMedicalInsured">
+          <div class="cfMedicalInsured__head">
+            <div class="cfMedicalInsured__name">${escapeHtml(group?.insured?.label || (`מבוטח ${gIdx + 1}`))}</div>
+            <div class="cfMedicalInsured__sub">${yesItems.length} ממצאים · ${noItems.length} סעיפים תקינים${pendingItems.length ? ` · ${pendingItems.length} טרם סומנו` : ""}</div>
+          </div>
+          <div class="cfMedicalBlock">
+            <div class="cfMedicalBlock__title">ממצאים שסומנו כן</div>
+            ${yesHtml}
+          </div>
+          ${noHtml ? `<div class="cfMedicalBlock">${noHtml}</div>` : ""}
+          ${pendingHtml ? `<div class="cfMedicalBlock">${pendingHtml}</div>` : ""}
+        </section>`;
+      }).join("");
+      return `<section class="cfMedical">
+        <div class="cfMedicalSummary">
+          <div class="cfMedicalSum"><div class="cfMedicalSum__v">${escapeHtml(String(summary.total || 0))}</div><div class="cfMedicalSum__l">סעיפים שמורים</div></div>
+          <div class="cfMedicalSum"><div class="cfMedicalSum__v is-yes">${escapeHtml(String(summary.positive || 0))}</div><div class="cfMedicalSum__l">סומנו כן</div></div>
+          <div class="cfMedicalSum"><div class="cfMedicalSum__v is-no">${escapeHtml(String(summary.negative || 0))}</div><div class="cfMedicalSum__l">סומנו לא</div></div>
+          <div class="cfMedicalSum"><div class="cfMedicalSum__v cfMedicalSum__v--date">${escapeHtml(this.formatDate(summary.updatedAt || rec?.updatedAt || rec?.createdAt))}</div><div class="cfMedicalSum__l">עודכן בהצהרה</div></div>
         </div>
-        <div class="customerMedicalGroups">${groupsHtml}</div>
+        ${groupsHtml}
       </section>`;
     },
 
@@ -20279,9 +20285,35 @@ UsersGateUI.init();
     bindSectionActions(rec, policies){
       const section = this.normalizeSection(this.currentSection);
       if(section === 'policies') this.bindPolicyTableActions(rec, this.getWalletDisplayPolicies(rec, policies));
+      if(section === "medical") this.bindMedicalTabActions();
       if(section === "documents" && this._previewDocId){
         void this.showCustomerDocumentPreview(this._previewDocId);
       }
+    },
+
+    bindMedicalTabActions(){
+      const root = this.els.main;
+      if(!root) return;
+      root.querySelectorAll("[data-cf-med-yes-toggle]").forEach((btn) => {
+        on(btn, "click", (ev) => {
+          ev.preventDefault();
+          btn.closest(".cfMedicalYes")?.classList.toggle("is-open");
+        });
+      });
+      root.querySelectorAll("[data-cf-med-no-toggle]").forEach((btn) => {
+        on(btn, "click", (ev) => {
+          ev.preventDefault();
+          const list = btn.nextElementSibling;
+          if(!list || !list.classList.contains("cfMedicalNoList")) return;
+          const open = list.hasAttribute("hidden");
+          if(open) list.removeAttribute("hidden");
+          else list.setAttribute("hidden", "");
+          const label = safeTrim(btn.textContent);
+          btn.textContent = open
+            ? label.replace("הצג רשימה", "הסתר רשימה")
+            : label.replace("הסתר רשימה", "הצג רשימה");
+        });
+      });
     },
 
     renderPolicyTableView(rec, policies){
