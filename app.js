@@ -33903,16 +33903,15 @@ UsersGateUI.init();
       // PERF: when the dashboard is already on screen with the same data, update
       // values in place (same as LiveRefresh) instead of rebuilding the whole DOM.
       /* GI-PERF 2026-08-09 — גם כש-cacheKey משתנה (hydration/fullDataReady),
-         אם כרטיסי ה-KPI כבר קיימים מעדכנים במקום ולא בונים DOM מחדש. */
+         אם כרטיסי ה-KPI כבר קיימים מעדכנים במקום ולא בונים DOM מחדש.
+         GI-FIX 2026-08-23: בלי תנאי _renderedDomKey — מפתח ריק בזמן טעינה
+         גרם לבנייה מחדש והאזור (כרטיסיות/תפעול/טבלה) קפץ וחזר. */
       if(!options.forceFullRender
         && this.els.root
         && !Auth.isElementary()
         && this.shouldShowPerformanceBoard()
         && this.els.root.querySelector(".bankDash__kpis")
-        && !this.els.root.querySelector(".bankDash--bootLoading")
-        && (this._renderedDomKey === this.getMetricsCacheKey()
-          || this._metricsCache?._serverKpiOverlay
-          || !!this._renderedDomKey)){
+        && !this.els.root.querySelector(".bankDash--bootLoading")){
         try { this.refreshKpis(); } catch(_e) {}
         if(!this.hasStableServerKpiOverlay()){
           try { this.scheduleRefreshLeaderboard(); } catch(_e) {}
@@ -34125,7 +34124,7 @@ UsersGateUI.init();
           ${goalPanelHtml}
 
         </section>`;
-      this._renderedDomKey = (metrics && !metrics._loading) ? this.getMetricsCacheKey() : "";
+      this._renderedDomKey = this.getMetricsCacheKey() || this._renderedDomKey || "painted";
       await perfYield();
       this.revealKpiMetricValues(this.els.root);
       try { this.applyLeaderPhotoBg(); } catch(_e){}

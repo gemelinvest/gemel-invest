@@ -665,11 +665,11 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
 .bankKpi__value:not(#\9):not(#\9){
   font-size: 34px !important;
   font-weight: 700 !important;
-  color: transparent !important;
-  background-image: linear-gradient(90deg, #DCC38A 0%, #C7B281 22%, #3870ED 50%, #3870ED 100%) !important;
-  -webkit-background-clip: text !important;
-  background-clip: text !important;
-  -webkit-text-fill-color: transparent !important;
+  color: #3870ED !important;
+  background-image: none !important;
+  -webkit-background-clip: border-box !important;
+  background-clip: border-box !important;
+  -webkit-text-fill-color: #3870ED !important;
   margin-top: 6px !important;
   letter-spacing: -.02em !important;
   text-shadow: none !important;
@@ -1738,11 +1738,11 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 }
 
 .bankKpi__value:not(#\9):not(#\9){
-  color: transparent !important;
-  background-image: linear-gradient(90deg, #DCC38A 0%, #C7B281 22%, #3870ED 50%, #3870ED 100%) !important;
-  -webkit-background-clip: text !important;
-  background-clip: text !important;
-  -webkit-text-fill-color: transparent !important;
+  color: #3870ED !important;
+  background-image: none !important;
+  -webkit-background-clip: border-box !important;
+  background-clip: border-box !important;
+  -webkit-text-fill-color: #3870ED !important;
   font-weight: 700 !important;
   text-shadow: none !important;
 }
