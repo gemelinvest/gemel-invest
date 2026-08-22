@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260822-ops-open-file-v1";
+  const GI_WIZARD_BUILD = "20260822-har-date-notice-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -1355,6 +1355,7 @@ init(){
     open(){
       prepareInteractiveWizardOpen();
       if(this.isCustomerPurchaseMode()) this.sanitizeCustomerPurchaseWizardPolicies();
+      this._harDateNoticeAcked = false;
       this.isOpen = true;
       this.els.wrap.classList.add("is-open");
       try { ChatUI?.syncVisibility?.('wizard'); } catch(_e) {}
@@ -3620,6 +3621,25 @@ init(){
       this.render();
     },
 
+    async ensureHarDateUploadNoticeAck(){
+      if(this.isElementaryFlow()) return true;
+      if(this._harDateNoticeAcked) return true;
+      if(typeof showWizardHarAlertModal !== "function"){
+        this._harDateNoticeAcked = true;
+        return true;
+      }
+      const ok = await showWizardHarAlertModal({
+        title: "משתמש יקר, שים לב",
+        text: "מהיום לא נדרש להסיר את התאריך מקובץ הר הביטוח. ניתן ונדרש להעלות אותו כמו שירד מאתר הר הביטוח.",
+        confirmText: "קראתי והבנתי",
+        showCancel: false,
+        requireConfirmClick: true
+      });
+      if(!ok) return false;
+      this._harDateNoticeAcked = true;
+      return true;
+    },
+
     async nextStep(){
       const maybeBlockForStep1PersonalIssues = () => {
         if(Number(this.step) !== 1) return false;
@@ -3985,6 +4005,10 @@ init(){
       }
       if(maybeBlockForStep1PersonalIssues()) return;
       if(this.step === 3 && this.ensureCancellationExecutionMethodBeforeStep3Exit()) return;
+      if(Number(this.step) === 1 && !this.isElementaryFlow()){
+        const acked = await this.ensureHarDateUploadNoticeAck();
+        if(!acked) return;
+      }
       const currentSteps = this.getCurrentSteps();
       const lastStepId = Number(currentSteps[currentSteps.length - 1]?.id);
       if(Number(this.step) >= lastStepId){
@@ -4497,9 +4521,13 @@ init(){
       }).join("");
 
       $$(".lcStep", this.els.steps).forEach(el => {
-        on(el, "click", () => {
+        on(el, "click", async () => {
           const st = Number(el.getAttribute("data-step") || "1");
           if(!this.canJumpToWizardStep(st)) return;
+          if(Number(st) === 3 && Number(this.step) === 1 && !this.isElementaryFlow()){
+            const acked = await this.ensureHarDateUploadNoticeAck();
+            if(!acked) return;
+          }
           const fromStep = this.step;
           this.step = st;
           this.handleStepEntry(fromStep, st);

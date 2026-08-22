@@ -3917,6 +3917,7 @@
     const cancelText = safeTrim(options.cancelText);
     const showCancel = options.showCancel === true || !!cancelText;
     const showConfirm = options.showConfirm !== false;
+    const requireConfirmClick = options.requireConfirmClick === true;
 
     return new Promise((resolve) => {
       const existing = document.getElementById("giWizardHarAlertModal");
@@ -3954,7 +3955,10 @@
         }, 180);
       };
 
-      modal.querySelector("[data-har-alert-backdrop]")?.addEventListener("click", () => close(showCancel ? false : true));
+      modal.querySelector("[data-har-alert-backdrop]")?.addEventListener("click", () => {
+        if(requireConfirmClick) return;
+        close(showCancel ? false : true);
+      });
       modal.querySelector("[data-har-alert-confirm]")?.addEventListener("click", () => close(true));
       modal.querySelector("[data-har-alert-cancel]")?.addEventListener("click", () => close(false));
       document.addEventListener("keydown", function onKey(ev){
@@ -3963,6 +3967,7 @@
           return;
         }
         if(ev.key === "Escape"){
+          if(requireConfirmClick) return;
           document.removeEventListener("keydown", onKey);
           close(false);
         }
@@ -34162,7 +34167,7 @@ UsersGateUI.init();
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
     "./gi-customers-import.css?v=20260813-cq-v1",
-    "./theme-unify-flat.css?v=20260822-my-leads-cards-v1"
+    "./theme-unify-flat.css?v=20260822-har-date-notice-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
     if(document.documentElement.dataset.giSecondaryCss === "1") return;
@@ -35483,7 +35488,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260822-ops-open-file-v1";
+  const GI_WIZARD_JS_VERSION = "20260822-har-date-notice-v1";
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
   const TZAHAL_CLINIC = "קופה צהלית";
   const TZAHAL_CLINIC_SHABAN = "אין שב״ן";
