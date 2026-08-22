@@ -54651,6 +54651,14 @@ const CampaignLeadsStore = {
         if(noteBtn){
           ev.stopPropagation();
           handleCampaignLeadAgentNoteBtn(noteBtn);
+          return;
+        }
+        const openBtn = ev.target.closest("[data-cl-open-id]");
+        if(openBtn){
+          ev.stopPropagation();
+          const id = openBtn.getAttribute("data-cl-open-id");
+          const lead = CampaignLeadsStore.leads.find((l) => String(l.id) === String(id));
+          if(lead) LeadDetailsModal.open(lead);
         }
       });
       if(this.els.tbody) on(this.els.tbody, "change", (ev) => {
@@ -54747,15 +54755,6 @@ const CampaignLeadsStore = {
             time = d.toLocaleString("he-IL", { timeZone:"Asia/Jerusalem", day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" });
           }
         } catch(_e){ time = timeRaw.slice(0,16).replace("T"," "); }
-        const lastModRaw = safeTrim(lead.lastModifiedAt || lead.updatedAt);
-        let lastMod = "";
-        try {
-          const dm = new Date(lastModRaw);
-          if(!isNaN(dm.getTime())){
-            lastMod = dm.toLocaleString("he-IL", { timeZone:"Asia/Jerusalem", day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit" });
-          }
-        } catch(_e){ lastMod = lastModRaw ? lastModRaw.slice(0,16).replace("T"," ") : ""; }
-        const agentName = this._getAgentName(lead, agents);
         const leadName = safeTrim(lead.customerName) || "—";
         const statusKey = safeTrim(lead.status);
         const statusTone = campaignLeadStatusTone(statusKey);
@@ -54769,24 +54768,17 @@ const CampaignLeadsStore = {
             }
           } catch(_e){}
         }
-        const desc = safeTrim(lead.descriptionDisplay || stripCampaignLeadPayloadMarker(lead.description)) || "—";
-        const cell = (label, value, extraClass) => `<div class="lcTrackCard__cell"><div class="lcTrackCard__k">${label}</div><div class="lcTrackCard__v${extraClass || ""}">${value}</div></div>`;
         return `<article class="lcTrackCard lcTrackCard--${cardTone}" data-cl-track-status="${escapeHtml(statusKey)}" role="listitem">
           <div class="lcTrackCard__main">
             <div class="lcTrackCard__top">
               <h3 class="lcTrackCard__name">${escapeHtml(leadName)}${campaignLeadGoldBadgeHtml(lead)}</h3>
-            </div>
-            <div class="lcTrackCard__meta">
-              ${cell("טלפון", escapeHtml(lead.phone || "—"), " lcTrackCard__v--phone")}
-              ${cell("תעודת זהות", escapeHtml(lead.idNumber || "—"))}
-              ${cell("נציג", escapeHtml(agentName))}
-              ${cell("קמפיין", escapeHtml(lead.campaignLabel || "—"))}
-              ${cell("חברת ביטוח", escapeHtml(safeTrim(lead.insuranceCompany) || "—"))}
-              ${cell("הגשת הליד", escapeHtml(time || "—"))}
-              ${cell("שינוי אחרון", escapeHtml(lastMod || "—"))}
-              ${cell("סיבת פנייה", escapeHtml(desc))}
+              <div class="lcTrackCard__facts">
+                <span class="lcTrackCard__fact"><span class="lcTrackCard__k">טלפון</span><span class="lcTrackCard__v lcTrackCard__v--phone">${escapeHtml(lead.phone || "—")}</span></span>
+                <span class="lcTrackCard__fact"><span class="lcTrackCard__k">הגשת הליד</span><span class="lcTrackCard__v">${escapeHtml(time || "—")}</span></span>
+              </div>
             </div>
             ${this._trackNoteBlocksHtml(lead)}
+            <button class="btn btn--small btn--outline lcTrackCard__more" type="button" data-cl-open-id="${escapeHtml(String(lead.id))}">פתח לפרטים נוספים</button>
           </div>
           <div class="lcTrackCard__side">
             <span class="lcTrackBadge lcTrackBadge--${statusTone}">${escapeHtml(campaignLeadStatusLabel(statusKey))}${statusExtra}</span>
