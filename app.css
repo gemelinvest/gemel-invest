@@ -42538,6 +42538,73 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   box-shadow: none;
 }
 
+.cfFile__documentsSplit{
+  display: grid;
+  grid-template-columns: minmax(280px, 38%) minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+  min-height: 420px;
+}
+.cfFile__documentsPreview{
+  min-width: 0;
+  min-height: 420px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.cfFile__documentsPreview [data-cf-doc-preview-pane]{
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+}
+.cfFile__documentsPreviewHead{
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--blueDeep);
+}
+.cfFile__documentsPreviewBody{
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: #f6f8fc;
+}
+.cfFile__documentsPreviewEmpty{
+  padding: 36px 20px;
+  text-align: center;
+  color: var(--muted);
+  font-weight: 700;
+  line-height: 1.6;
+}
+.cfFile__documentsPreviewImg,
+.cfFile__documentsPreviewFrame{
+  display: block;
+  width: 100%;
+  min-height: 380px;
+  height: 100%;
+  border: 0;
+  background: #fff;
+}
+.cfFile__documentsPreviewDoc{
+  padding: 12px;
+}
+.cfFile__documentRow{
+  cursor: pointer;
+}
+.cfFile__documentRow.is-selected{
+  border-color: rgba(30,61,122,.35);
+  box-shadow: 0 0 0 2px rgba(200,222,255,.7);
+  background: rgba(200,222,255,.18);
+}
+@media (max-width: 900px){
+  .cfFile__documentsSplit{ grid-template-columns: 1fr; }
+  .cfFile__documentsPreview{ order: -1; min-height: 280px; }
+}
 .cfFile__documentsPanel{ min-height: 220px; }
 .cfFile__documentsEmpty{
   padding: 36px 20px 40px;

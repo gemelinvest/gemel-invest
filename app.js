@@ -17558,6 +17558,7 @@ UsersGateUI.init();
 
   const CustomersUI = {
     currentId: null,
+    _previewDocId: "",
     els: {},
     policyModal: {},
     _policyCollectCache: null,
@@ -17723,6 +17724,12 @@ UsersGateUI.init();
           if(!downloaded){
             try { window.showToast?.({ title: "אין קובץ", text: "לא נמצא עותק להורדה.", variant: "warn", durationMs: 4200 }); } catch(_e){}
           }
+          return;
+        }
+        const previewRow = ev.target?.closest?.("[data-cf-doc-preview]");
+        if(previewRow){
+          ev.preventDefault();
+          this.showCustomerDocumentPreview(previewRow.getAttribute("data-cf-doc-preview"));
           return;
         }
         const backBtn = ev.target?.closest?.("#customerMedicalBackBtn");
@@ -20047,9 +20054,79 @@ UsersGateUI.init();
       return "";
     },
 
+    customerDocPreviewKind(doc){
+      const url = safeTrim(doc?.dataUrl) || safeTrim(doc?.url);
+      const name = (safeTrim(doc?.fileName) || safeTrim(doc?.originalFileName) || safeTrim(doc?.name) || "").toLowerCase();
+      const mime = url.startsWith("data:") ? url.slice(5, Math.max(5, url.indexOf(";"))).toLowerCase() : "";
+      const hint = mime + " " + name;
+      if(/image\/|\.(png|jpe?g|gif|webp|bmp)$/i.test(hint)) return { kind: "image", url };
+      if(/pdf|\.pdf/i.test(hint)) return { kind: "pdf", url };
+      if(/spreadsheet|\.xlsx?|\.csv/i.test(hint) || safeTrim(doc?.type) === CustomerDocuments.TYPES.harBituach) return { kind: "sheet", url };
+      if(url) return { kind: "file", url };
+      return { kind: "none", url: "" };
+    },
+
+    renderDocumentPreviewInner(rec, docId){
+      const docs = this.getCustomerDocuments(rec);
+      const doc = docs.find((row) => safeTrim(row?.id) === safeTrim(docId)) || CustomerDocuments.findDoc?.(rec, docId) || null;
+      if(!doc){
+        return `<div class="cfFile__documentsPreviewEmpty">בחרו קובץ מימין כדי לראות תצוגה מקדימה</div>`;
+      }
+      const display = CustomerDocuments.getDocumentDisplay(doc);
+      const src = this.customerDocPreviewKind(doc);
+      const type = safeTrim(doc?.type);
+      let body = "";
+      if(src.kind === "image" && src.url){
+        body = `<img class="cfFile__documentsPreviewImg" alt="${escapeHtml(display.title)}" src="${escapeHtml(src.url)}" />`;
+      }else if(src.kind === "pdf" && src.url){
+        body = `<iframe class="cfFile__documentsPreviewFrame" title="${escapeHtml(display.title)}" src="${escapeHtml(src.url)}"></iframe>`;
+      }else if(type === CustomerDocuments.TYPES.healthOps){
+        try{
+          const snapshot = (safeTrim(doc?.reportScope) === CustomerDocuments.REPORT_SCOPES.purchase)
+            ? (doc?.payloadSnapshot || rec?.payload)
+            : rec?.payload;
+          if(typeof Wizard?.renderOperationalReport === "function"){
+            body = `<div class="cfFile__documentsPreviewDoc">${Wizard.renderOperationalReport(snapshot)}</div>`;
+          }
+        }catch(_e){ body = ""; }
+      }else if(type === CustomerDocuments.TYPES.agentApptOps){
+        try{
+          const meta = doc?.payloadSnapshot?.agentAppointmentMeta
+            || doc?.metaSnapshot
+            || rec?.payload?.agentAppointmentMeta;
+          if(meta && typeof AgentAppointmentPdf?.buildOperationalReportHtml === "function"){
+            body = `<div class="cfFile__documentsPreviewDoc">${AgentAppointmentPdf.buildOperationalReportHtml(meta)}</div>`;
+          }
+        }catch(_e){ body = ""; }
+      }
+      if(!body && src.kind === "sheet"){
+        body = `<div class="cfFile__documentsPreviewEmpty">אין תצוגה מקדימה לקובץ גיליון. אפשר להוריד אותו מימין.</div>`;
+      }
+      if(!body){
+        body = `<div class="cfFile__documentsPreviewEmpty">אין תצוגה מקדימה לקובץ זה. אפשר להוריד אותו מימין.</div>`;
+      }
+      return `<div class="cfFile__documentsPreviewHead">${escapeHtml(display.title)}</div>
+        <div class="cfFile__documentsPreviewBody">${body}</div>`;
+    },
+
+    showCustomerDocumentPreview(docId){
+      const rec = this.current();
+      const id = safeTrim(docId);
+      if(!rec || !id) return;
+      this._previewDocId = id;
+      const root = this.els.main || this.els.body;
+      if(!root) return;
+      root.querySelectorAll("[data-cf-doc-preview]").forEach((row) => {
+        row.classList.toggle("is-selected", safeTrim(row.getAttribute("data-cf-doc-preview")) === id);
+      });
+      const pane = root.querySelector("[data-cf-doc-preview-pane]");
+      if(pane) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
+    },
+
     renderDocumentsSection(rec){
       const docs = this.getCustomerDocuments(rec);
       if(!docs.length){
+        this._previewDocId = "";
         return `<div class="cfFile__documentsPanel">
           <div class="cfFile__groupLabel">מסמכי לקוח</div>
           <div class="emptyState cfFile__documentsEmpty">
@@ -20059,10 +20136,15 @@ UsersGateUI.init();
           </div>
         </div>`;
       }
+      const selectedId = safeTrim(this._previewDocId) && docs.some((doc) => safeTrim(doc.id) === safeTrim(this._previewDocId))
+        ? safeTrim(this._previewDocId)
+        : (safeTrim(docs[0]?.id) || "0");
+      this._previewDocId = selectedId;
       const rows = docs.map((doc, idx) => {
         const display = CustomerDocuments.getDocumentDisplay(doc);
         const docType = safeTrim(doc.type);
         const docId = safeTrim(doc.id) || String(idx);
+        const selected = docId === selectedId ? " is-selected" : "";
         let downloadBtn = "";
         if(docType === CustomerDocuments.TYPES.agentApptForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-agent-appt-doc="${escapeHtml(docId)}">הורדה</button>`;
@@ -20073,7 +20155,7 @@ UsersGateUI.init();
         }else if(docType === CustomerDocuments.TYPES.harBituach || safeTrim(doc.dataUrl) || safeTrim(doc.url)){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-customer-file-doc="${escapeHtml(docId)}">הורדה</button>`;
         }
-        return `<article class="cfFile__documentRow">
+        return `<article class="cfFile__documentRow${selected}" data-cf-doc-preview="${escapeHtml(docId)}">
           <div class="cfFile__documentRowMain">
             <div class="cfFile__documentRowIcon" aria-hidden="true">${premiumCustomerIcon("document")}</div>
             <div>
@@ -20089,10 +20171,15 @@ UsersGateUI.init();
       const footerHtml = (footerAgent || footerUpdated !== "—")
         ? `<div class="cfFile__documentsFooter muted small">${footerAgent ? `נציג מטפל: ${escapeHtml(footerAgent)}` : ""}${footerAgent && footerUpdated !== "—" ? " · " : ""}${footerUpdated !== "—" ? `עודכן: ${escapeHtml(footerUpdated)}` : ""}</div>`
         : "";
-      return `<div class="cfFile__documentsPanel">
-        <div class="cfFile__groupLabel">מסמכי לקוח · ${docs.length} ${docs.length === 1 ? 'מסמך' : 'מסמכים'}</div>
-        <div class="cfFile__documentsList">${rows}</div>
-        ${footerHtml}
+      return `<div class="cfFile__documentsSplit">
+        <div class="cfFile__documentsPanel">
+          <div class="cfFile__groupLabel">מסמכי לקוח · ${docs.length} ${docs.length === 1 ? 'מסמך' : 'מסמכים'}</div>
+          <div class="cfFile__documentsList">${rows}</div>
+          ${footerHtml}
+        </div>
+        <aside class="cfFile__documentsPreview" aria-label="תצוגה מקדימה של מסמך">
+          <div data-cf-doc-preview-pane>${this.renderDocumentPreviewInner(rec, selectedId)}</div>
+        </aside>
       </div>`;
     },
 
