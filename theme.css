@@ -10508,3 +10508,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   width: 100% !important;
   min-width: 0 !important;
 }
+#view-campaignLeads #campaignLeadEditorTitle[hidden]:not(#\9):not(#\9),
+#view-campaignLeads #btnTrackingDateAll[hidden]:not(#\9):not(#\9){
+  display: none !important;
+}

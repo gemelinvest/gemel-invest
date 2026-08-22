@@ -892,6 +892,8 @@
 #view-campaignLeads .lcAgentSummary__title:not(#\9):not(#\9){ color: var(--uf-navy) !important; }
 #view-campaignLeads .lcTrackAgentCard:not(#\9):not(#\9){ border: 1px solid var(--uf-line) !important; border-radius: 0 !important; background: var(--uf-surface) !important; }
 #view-campaignLeads .lcTrackScreen__btn:not(#\9):not(#\9){ border-radius: 0 !important; }
+#view-campaignLeads #campaignLeadEditorTitle[hidden]:not(#\9):not(#\9),
+#view-campaignLeads #btnTrackingDateAll[hidden]:not(#\9):not(#\9){ display: none !important; }
 #view-campaignLeads .lcTrackScreen__btn--primary:not(#\9):not(#\9){ background: var(--uf-accent) !important; border-color: var(--uf-accent) !important; color: #fff !important; }
 #view-campaignLeads .lcTrackScreen__btn--accent:not(#\9):not(#\9){ background: var(--uf-accent) !important; border-color: var(--uf-accent) !important; color: #fff !important; }
 #view-campaignLeads .lcTracking__agentChips .lcTracking__agentChip:not(#\9):not(#\9){ border-radius: 0 !important; }

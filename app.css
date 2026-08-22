@@ -46702,6 +46702,10 @@ body.lcAuthLock .lcLogin__footBtn{
 #campaignLeadsFormPanel .lcCampaign__fieldGroup{
   font-size:16px;
 }
+#campaignLeadEditorTitle[hidden],
+#btnTrackingDateAll[hidden]{
+  display:none !important;
+}
 .lcTrackCards{
   display:flex;
   flex-direction:column;

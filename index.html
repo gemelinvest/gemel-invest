@@ -8,8 +8,8 @@
 <meta content="#f8fafc" name="theme-color"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20260822-leads-track-compact-v1" rel="stylesheet"/>
-<link href="./theme.css?v=20260822-leads-track-compact-v1" rel="stylesheet"/>
+<link href="./app.css?v=20260822-leads-hide-dup-v1" rel="stylesheet"/>
+<link href="./theme.css?v=20260822-leads-hide-dup-v1" rel="stylesheet"/>
 <link href="./gi-daily-sales-mail.css?v=20260817-daily-sales-mail-v2" rel="stylesheet"/>
 <link href="./theme-p2.css?v=20260805-workdays-goal-v1" rel="stylesheet"/>
 <link href="./login-split.css?v=20260820-welcome-mfa-v4" rel="stylesheet"/>
@@ -804,7 +804,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
   <!-- RIGHT: Form -->
   <div class="lcCampaign__splitForm">
     <div class="lcCampaign__editor">
-      <div class="lcCampaign__editorTitle" id="campaignLeadEditorTitle">ליד חדש — הזן פרטים</div>
+      <div class="lcCampaign__editorTitle" id="campaignLeadEditorTitle" hidden>ליד חדש — הזן פרטים</div>
       <form class="lcCampaign__form" id="campaignLeadForm" autocomplete="off">
         <div class="lcCampaign__fieldGroup">פרטי לקוח</div>
         <div class="field">
@@ -1005,7 +1005,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
     <div class="lcCampaign__datePicker" id="clTrackDatePickerWrap">
       <input class="lcCampaign__datePickerInput lcTrackScreen__month" id="trackingDateFilter" type="month" dir="ltr" aria-label="בחירת חודש"/>
       <button class="btn lcTrackScreen__btn lcTrackScreen__btn--primary" id="btnTrackingDateToday" type="button">חודש נוכחי</button>
-      <button class="btn lcTrackScreen__btn" id="btnTrackingDateAll" type="button">כל הזמנים</button>
+      <button class="btn lcTrackScreen__btn" id="btnTrackingDateAll" type="button" hidden>כל הזמנים</button>
     </div>
     <button class="btn lcTrackScreen__btn lcTrackScreen__btn--accent" id="btnCampaignShowFormFromTracking" type="button">
       <span aria-hidden="true">+</span> הקמת ליד חדש
@@ -3909,7 +3909,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 
 <script src="./contacts-directory-seed.js?v=20260811-contacts-v1"></script>
 <script src="./gi-policy-scan.js?v=20260819-issued-scan-v3"></script>
-<script src="./app.js?v=20260822-leads-track-compact-v1"></script>
+<script src="./app.js?v=20260822-leads-hide-dup-v1"></script>
 <script src="./gi-face-auth.js?v=20260817-face-retry-v1"></script>
 <script src="./gi-daily-sales-mail.js?v=20260818-sales-mail-pdf-v4"></script>
 
