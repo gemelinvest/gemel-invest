@@ -33037,14 +33037,8 @@ UsersGateUI.init();
               const root = this.els?.root;
               const onDashboard = LiveRefresh.getCurrentView() === "dashboard" && this.shouldShowPerformanceBoard();
               if(!onDashboard) return;
-              const hasPodium = !!root?.querySelector(".bankLeader__podium");
-              if(hasPodium){
-                // יש כבר מבנה פודיום — עדכון במקום (קל ומהיר).
-                this.scheduleRefreshLeaderboard();
-              } else {
-                // מצב "ממתין" (לנציג לא היו מכירות משלו) — בונים מחדש כדי להציג פודיום.
-                void this.render();
-              }
+              // גם ממצב «ממתין» — רק קוביית המצטיין, בלי לבנות את כל הדשבורד.
+              this.scheduleRefreshLeaderboard();
             } catch(_e) {}
           }
         })
@@ -33790,10 +33784,38 @@ UsersGateUI.init();
     refreshLeaderboard(){
       const root = this.els.root;
       if(!root) return;
-      const heroEl     = root.querySelector('#bankLeaderHero');
-      const listEl     = root.querySelector('.bankLeader__list');
-      const emptyEl    = root.querySelector('.bankLeader__empty');
-      const podiumEl   = root.querySelector('.bankLeader__podium');
+      const ensurePodiumShell = () => {
+        if(root.querySelector(".bankLeader__podium")) return true;
+        const card = root.querySelector(".bankLeader.card");
+        if(!card) return false;
+        const head = card.querySelector(".bankLeader__head");
+        card.classList.remove("bankLeader--waiting");
+        card.classList.add("bankLeader--podiumTop3", "bankLeader--elevated");
+        const shell = document.createElement("div");
+        shell.className = "bankLeader__podiumShell";
+        shell.id = "bankLeaderHero";
+        const podium = document.createElement("div");
+        podium.className = "bankLeader__podium";
+        if(head) shell.appendChild(head);
+        shell.appendChild(podium);
+        card.insertBefore(shell, card.firstChild);
+        if(!card.querySelector(".bankLeader__empty")){
+          const empty = document.createElement("div");
+          empty.className = "bankLeader__empty";
+          card.appendChild(empty);
+        }
+        if(!card.querySelector(".bankLeader__list")){
+          const list = document.createElement("div");
+          list.className = "bankLeader__list";
+          list.hidden = true;
+          card.appendChild(list);
+        }
+        return true;
+      };
+      let heroEl     = root.querySelector('#bankLeaderHero');
+      let listEl     = root.querySelector('.bankLeader__list');
+      let emptyEl    = root.querySelector('.bankLeader__empty');
+      let podiumEl   = root.querySelector('.bankLeader__podium');
       if(!heroEl && !emptyEl && !podiumEl) return;
       const { board: leaderboard, isYesterday } = this.buildLeaderboardWithFallback();
       const todayStr = new Date().toLocaleDateString('he-IL', { day:'numeric', month:'long' });
@@ -33812,6 +33834,13 @@ UsersGateUI.init();
         if(listEl) listEl.style.display = 'none';
         if(emptyEl) { emptyEl.style.display = ''; emptyEl.textContent = 'אין מכירות היום עדיין — הזמן לפתוח!'; }
         return;
+      }
+      if(!podiumEl){
+        if(!ensurePodiumShell()) return;
+        heroEl = root.querySelector('#bankLeaderHero');
+        listEl = root.querySelector('.bankLeader__list');
+        emptyEl = root.querySelector('.bankLeader__empty');
+        podiumEl = root.querySelector('.bankLeader__podium');
       }
       if(emptyEl) emptyEl.style.display = 'none';
       if(podiumEl) podiumEl.style.display = '';
