@@ -39580,7 +39580,8 @@ body.view-settings-active.lcSettingsRubric-systemUpdates .main{ overflow-y: auto
   flex-shrink:0;
 }
 #campaignLeadsTrackingPanel .lcCampaign__tableWrap,
-#campaignLeadsTrackingPanel .lcTrackScreen__table{
+#campaignLeadsTrackingPanel .lcTrackScreen__table,
+#campaignLeadsTrackingPanel .lcTrackCards{
   flex:1 1 auto;
   min-height:0;
   max-height:none !important;
@@ -40065,11 +40066,13 @@ body.view-settings-active.lcSettingsRubric-systemUpdates .main{ overflow-y: auto
   font-weight:700 !important;
 }
 .lcMyLeadStatusSelect{
-  min-width:118px;
-  max-width:148px;
-  height:32px;
-  padding:0 10px;
-  font-size:12px;
+  min-width:168px;
+  max-width:none;
+  width:auto;
+  height:36px;
+  padding:0 12px;
+  padding-inline-end:2rem;
+  font-size:13.5px;
   font-weight:600;
   border-radius:10px;
   border:1px solid rgba(15,25,45,.14);
@@ -40081,6 +40084,9 @@ body.view-settings-active.lcSettingsRubric-systemUpdates .main{ overflow-y: auto
   color:var(--text, #080f1e);
   box-shadow:0 1px 2px rgba(15,23,42,.04);
   flex-shrink:0;
+  overflow:visible;
+  text-overflow:clip;
+  white-space:nowrap;
 }
 .lcMyLeadStatusSelect:focus{
   outline:none;
@@ -40630,17 +40636,30 @@ body.view-dailyReport-active .content{
   gap:8px;
   min-width:240px;
 }
+.lcTrackCard__side .lcTrackActions{
+  flex-direction:column;
+  align-items:stretch;
+  min-width:0;
+  width:100%;
+}
+.lcTrackCard__side .lcLeadReassignBtn{
+  width:100%;
+  justify-content:center;
+  white-space:nowrap;
+}
 #campaignLeadsTrackingPanel .lcCampaignTable td.lcCampaign__actions,
 #campaignLeadsTrackingPanel .lcCampaignTable td.lcCampaign__agentCell{
   overflow:visible;
   white-space:normal;
 }
 #campaignLeadsTrackingPanel .lcMyLeadStatusSelect{
-  min-width:118px;
-  max-width:148px;
-  height:32px;
-  padding:0 10px;
-  font-size:12px;
+  min-width:0;
+  max-width:none;
+  width:100%;
+  height:38px;
+  padding:0 12px;
+  padding-inline-end:2rem;
+  font-size:14px;
   font-weight:600;
 }
 .btn--small{
@@ -46663,3 +46682,146 @@ body.lcAuthLock .lcLogin__footBtn{
 }
 .cfMedicalNoRow:last-child{ border-bottom:0; }
 @media (max-width:760px){ .cfMedicalSummary{ grid-template-columns:1fr 1fr; } }
+
+/* GI-LEADS-TRACK-CARDS 2026-08-22 — display only */
+#campaignLeadsFormPanel .card__title{
+  font-size:22px;
+}
+#campaignLeadsFormPanel .lcCampaign__form .label{
+  font-size:15px;
+  font-weight:700;
+}
+#campaignLeadsFormPanel .lcCampaign__form .input,
+#campaignLeadsFormPanel .lcCampaign__form .lcCampaign__textarea,
+#campaignLeadsFormPanel .lcCampaign__form select.input{
+  font-size:15.5px;
+}
+#campaignLeadsFormPanel .lcNpCoDd__triggerLabel{
+  font-size:15.5px;
+}
+#campaignLeadsFormPanel .lcCampaign__fieldGroup{
+  font-size:16px;
+}
+.lcTrackCards{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  padding:2px 2px 18px;
+}
+.lcTrackCards__empty{
+  padding:28px 16px;
+  text-align:center;
+  font-size:14px;
+  font-weight:600;
+}
+.lcTrackCard{
+  background:#fff;
+  border:1px solid var(--gi-border, #E5E7EB);
+  border-radius:16px;
+  box-shadow:0 1px 2px rgba(15,23,42,.04);
+  overflow:hidden;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 220px;
+  border-inline-start:4px solid #94A3B8;
+}
+.lcTrackCard--new{ border-inline-start-color:#2563EB; }
+.lcTrackCard--progress{ border-inline-start-color:#D97706; }
+.lcTrackCard--noanswer{ border-inline-start-color:#F97316; }
+.lcTrackCard--appt{ border-inline-start-color:#7C3AED; }
+.lcTrackCard--closed{ border-inline-start-color:#16A34A; }
+.lcTrackCard--irr{ border-inline-start-color:#DC2626; }
+.lcTrackCard__main{ padding:14px 16px 16px; min-width:0; }
+.lcTrackCard__side{
+  padding:14px 14px 16px;
+  background:#F8FAFC;
+  border-inline-start:1px solid var(--gi-border, #E5E7EB);
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.lcTrackCard__top{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:12px;
+}
+.lcTrackCard__name{
+  margin:0;
+  font-size:18px;
+  font-weight:800;
+  color:var(--gi-text, #0F172A);
+  line-height:1.25;
+}
+.lcTrackCard__meta{
+  display:grid;
+  grid-template-columns:repeat(4, minmax(0,1fr));
+  gap:0;
+  border:1px solid var(--gi-border, #E5E7EB);
+  border-radius:12px;
+  overflow:hidden;
+  background:#fff;
+  margin-bottom:12px;
+}
+.lcTrackCard__cell{
+  padding:8px 12px;
+  border-bottom:1px solid var(--gi-border, #E5E7EB);
+  border-inline-end:1px solid var(--gi-border, #E5E7EB);
+  min-width:0;
+}
+.lcTrackCard__cell:nth-child(4n){ border-inline-end:none; }
+.lcTrackCard__cell:nth-last-child(-n+4){ border-bottom:none; }
+.lcTrackCard__k{
+  font-size:11px;
+  font-weight:700;
+  color:var(--gi-text-muted, #647287);
+  margin-bottom:2px;
+}
+.lcTrackCard__v{
+  font-size:13.5px;
+  font-weight:650;
+  color:var(--gi-text, #0F172A);
+  line-height:1.35;
+  word-break:break-word;
+  white-space:normal;
+}
+.lcTrackCard__v--phone{ color:#1D4ED8; direction:ltr; unicode-bidi:plaintext; }
+.lcTrackCard__block{ margin-top:10px; }
+.lcTrackCard__label{
+  font-size:12px;
+  font-weight:700;
+  color:var(--gi-text, #0F172A);
+  margin-bottom:6px;
+}
+.lcTrackCard__label--ok{ color:#166534; }
+.lcTrackCard__label--warn{ color:#991B1B; }
+.lcTrackCard__label--call{ color:#1D4ED8; }
+.lcTrackCard__box{
+  padding:10px 12px;
+  border-radius:10px;
+  background:#F8FAFC;
+  border:1px solid var(--gi-border, #E5E7EB);
+  font-size:13.5px;
+  line-height:1.65;
+  color:var(--gi-text, #0F172A);
+  white-space:pre-wrap;
+  word-break:break-word;
+}
+.lcTrackCard__box--ok{ background:#ECFDF5; border-color:#A7F3D0; }
+.lcTrackCard__box--warn{ background:#FEF2F2; border-color:#FECACA; }
+.lcTrackCard__box--call{ background:#EFF6FF; border-color:#BFDBFE; }
+.lcTrackCard__box--empty{
+  color:#94A3B8;
+  font-weight:600;
+  background:#F8FAFC;
+}
+.lcTrackCard__side .lcTrackBadge{ align-self:flex-start; }
+@media (max-width: 980px){
+  .lcTrackCard{ grid-template-columns:1fr; }
+  .lcTrackCard__side{ border-inline-start:none; border-top:1px solid var(--gi-border, #E5E7EB); }
+  .lcTrackCard__meta{ grid-template-columns:repeat(2, minmax(0,1fr)); }
+  .lcTrackCard__cell:nth-child(4n){ border-inline-end:1px solid var(--gi-border, #E5E7EB); }
+  .lcTrackCard__cell:nth-child(2n){ border-inline-end:none; }
+  .lcTrackCard__cell:nth-last-child(-n+4){ border-bottom:1px solid var(--gi-border, #E5E7EB); }
+  .lcTrackCard__cell:nth-last-child(-n+2){ border-bottom:none; }
+}

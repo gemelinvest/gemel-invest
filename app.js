@@ -34162,7 +34162,7 @@ UsersGateUI.init();
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
     "./gi-customers-import.css?v=20260813-cq-v1",
-    "./theme-unify-flat.css?v=20260814-pay-card-v2"
+    "./theme-unify-flat.css?v=20260822-leads-track-cards-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
     if(document.documentElement.dataset.giSecondaryCss === "1") return;
@@ -54467,6 +54467,35 @@ const CampaignLeadsStore = {
       return campaignLeadAgentsDisplay(lead, agents);
     },
 
+    _trackCardTone(statusKey){
+      const key = safeTrim(statusKey);
+      if(key === "new") return "new";
+      if(key === "in_progress") return "progress";
+      if(key === "no_answer") return "noanswer";
+      if(key === "agent_appointment") return "appt";
+      if(key === "closed") return "closed";
+      if(key === "irrelevant") return "irr";
+      return "neutral";
+    },
+
+    _trackNoteBlocksHtml(lead){
+      const noteHtml = (text) => escapeHtml(text).replace(/\n/g, "<br/>");
+      const blocks = [];
+      if(safeTrim(lead?.closedNote)){
+        blocks.push(`<div class="lcTrackCard__block"><div class="lcTrackCard__label lcTrackCard__label--ok">תיעוד מכירה</div><div class="lcTrackCard__box lcTrackCard__box--ok">${noteHtml(lead.closedNote)}</div></div>`);
+      }
+      if(safeTrim(lead?.irrelevantNote)){
+        blocks.push(`<div class="lcTrackCard__block"><div class="lcTrackCard__label lcTrackCard__label--warn">תיעוד נציג — לא רלוונטי</div><div class="lcTrackCard__box lcTrackCard__box--warn">${noteHtml(lead.irrelevantNote)}</div></div>`);
+      }
+      if(safeTrim(lead?.callNote)){
+        blocks.push(`<div class="lcTrackCard__block"><div class="lcTrackCard__label lcTrackCard__label--call">תיעוד שיחה</div><div class="lcTrackCard__box lcTrackCard__box--call">${noteHtml(lead.callNote)}</div></div>`);
+      }
+      if(!blocks.length){
+        return `<div class="lcTrackCard__block"><div class="lcTrackCard__label">תיעוד נציג</div><div class="lcTrackCard__box lcTrackCard__box--empty">אין תיעוד</div></div>`;
+      }
+      return blocks.join("");
+    },
+
     _buildAgentChips(monthScopedLeads){
       const agentSelectEl = document.getElementById("trackingAgentSelect");
       const agentFilterEl = document.getElementById("trackingAgentFilter");
@@ -54700,12 +54729,12 @@ const CampaignLeadsStore = {
       this._renderStatsBar(base, rows.length, dateLabel);
 
       if(!this._isAgentFilterActive()){
-        this.els.tbody.innerHTML = '<tr><td colspan="11" class="muted">בחר נציג כדי להציג את הלידים</td></tr>';
+        this.els.tbody.innerHTML = '<div class="lcTrackCards__empty muted">בחר נציג כדי להציג את הלידים</div>';
         return;
       }
 
       if(!rows.length){
-        this.els.tbody.innerHTML = '<tr><td colspan="11" class="muted">אין לידים בסינון הנוכחי</td></tr>';
+        this.els.tbody.innerHTML = '<div class="lcTrackCards__empty muted">אין לידים בסינון הנוכחי</div>';
         return;
       }
 
@@ -54730,7 +54759,7 @@ const CampaignLeadsStore = {
         const leadName = safeTrim(lead.customerName) || "—";
         const statusKey = safeTrim(lead.status);
         const statusTone = campaignLeadStatusTone(statusKey);
-        const rowClass = campaignLeadRowStatusClass(statusKey);
+        const cardTone = this._trackCardTone(statusKey);
         let statusExtra = "";
         if(statusKey === "closed" && safeTrim(lead.closedAt)){
           try {
@@ -54740,24 +54769,33 @@ const CampaignLeadsStore = {
             }
           } catch(_e){}
         }
-        statusExtra += campaignLeadAgentNoteBtnHtml(lead);
-        const desc = safeTrim(lead.descriptionDisplay || lead.description || "").slice(0, 40);
-        return `<tr class="lcTrackRow ${rowClass}" data-cl-track-status="${escapeHtml(statusKey)}">
-          <td><span class="lcTrackRow__name">${escapeHtml(leadName)}</span>${campaignLeadGoldBadgeHtml(lead)}</td>
-          <td dir="ltr"><span class="lcTrackRow__phone">${escapeHtml(lead.phone || "—")}</span></td>
-          <td dir="ltr">${escapeHtml(lead.idNumber || "—")}</td>
-          <td class="lcCampaign__agentCell">${escapeHtml(agentName)}</td>
-          <td>${escapeHtml(lead.campaignLabel || "—")}</td>
-          <td>${escapeHtml(safeTrim(lead.insuranceCompany) || "—")}</td>
-          <td>${escapeHtml(desc) || "—"}</td>
-          <td><span class="lcTrackBadge lcTrackBadge--${statusTone}">${escapeHtml(campaignLeadStatusLabel(statusKey))}${statusExtra}</span></td>
-          <td>${escapeHtml(time)}</td>
-          <td>${escapeHtml(lastMod)}</td>
-          <td class="lcCampaign__actions lcTrackActions">
-            ${CampaignMyLeadsUI.renderMyLeadStatusSelect(lead)}
-            ${campaignLeadReassignBtnHtml(lead.id)}
-          </td>
-        </tr>`;
+        const desc = safeTrim(lead.descriptionDisplay || stripCampaignLeadPayloadMarker(lead.description)) || "—";
+        const cell = (label, value, extraClass) => `<div class="lcTrackCard__cell"><div class="lcTrackCard__k">${label}</div><div class="lcTrackCard__v${extraClass || ""}">${value}</div></div>`;
+        return `<article class="lcTrackCard lcTrackCard--${cardTone}" data-cl-track-status="${escapeHtml(statusKey)}" role="listitem">
+          <div class="lcTrackCard__main">
+            <div class="lcTrackCard__top">
+              <h3 class="lcTrackCard__name">${escapeHtml(leadName)}${campaignLeadGoldBadgeHtml(lead)}</h3>
+            </div>
+            <div class="lcTrackCard__meta">
+              ${cell("טלפון", escapeHtml(lead.phone || "—"), " lcTrackCard__v--phone")}
+              ${cell("תעודת זהות", escapeHtml(lead.idNumber || "—"))}
+              ${cell("נציג", escapeHtml(agentName))}
+              ${cell("קמפיין", escapeHtml(lead.campaignLabel || "—"))}
+              ${cell("חברת ביטוח", escapeHtml(safeTrim(lead.insuranceCompany) || "—"))}
+              ${cell("הגשת הליד", escapeHtml(time || "—"))}
+              ${cell("שינוי אחרון", escapeHtml(lastMod || "—"))}
+              ${cell("סיבת פנייה", escapeHtml(desc))}
+            </div>
+            ${this._trackNoteBlocksHtml(lead)}
+          </div>
+          <div class="lcTrackCard__side">
+            <span class="lcTrackBadge lcTrackBadge--${statusTone}">${escapeHtml(campaignLeadStatusLabel(statusKey))}${statusExtra}</span>
+            <div class="lcTrackActions">
+              ${CampaignMyLeadsUI.renderMyLeadStatusSelect(lead)}
+              ${campaignLeadReassignBtnHtml(lead.id)}
+            </div>
+          </div>
+        </article>`;
       }).join("");
     },
 

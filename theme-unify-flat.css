@@ -1463,3 +1463,32 @@
   position: relative;
   z-index: 1;
 }
+
+/* GI-LEADS-TRACK-CARDS 2026-08-22 — form text + readable status select */
+#view-campaignLeads #campaignLeadsFormPanel .label:not(#\9):not(#\9){
+  font-size: 15px !important;
+  font-weight: 700 !important;
+}
+#view-campaignLeads #campaignLeadsFormPanel .input:not(#\9):not(#\9),
+#view-campaignLeads #campaignLeadsFormPanel textarea:not(#\9):not(#\9),
+#view-campaignLeads #campaignLeadsFormPanel select:not(#\9):not(#\9){
+  font-size: 15.5px !important;
+}
+#view-campaignLeads #campaignLeadsFormPanel .lcNpCoDd__triggerLabel:not(#\9):not(#\9){
+  font-size: 15.5px !important;
+}
+#view-campaignLeads #campaignLeadsFormPanel .lcCampaign__fieldGroup:not(#\9):not(#\9){
+  font-size: 16px !important;
+}
+#view-campaignLeads .lcMyLeadStatusSelect:not(#\9):not(#\9),
+#view-campaignMyLeads .lcMyLeadStatusSelect:not(#\9):not(#\9){
+  min-width: 168px !important;
+  max-width: none !important;
+  height: 38px !important;
+  padding-inline-end: 2rem !important;
+  font-size: 14px !important;
+}
+#campaignLeadsTrackingPanel .lcTrackCard__side .lcMyLeadStatusSelect:not(#\9):not(#\9){
+  width: 100% !important;
+  min-width: 0 !important;
+}

@@ -8,8 +8,8 @@
 <meta content="#f8fafc" name="theme-color"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20260822-cf-medical-labels-v1" rel="stylesheet"/>
-<link href="./theme.css?v=20260822-cf-medical-labels-v1" rel="stylesheet"/>
+<link href="./app.css?v=20260822-leads-track-cards-v1" rel="stylesheet"/>
+<link href="./theme.css?v=20260822-leads-track-cards-v1" rel="stylesheet"/>
 <link href="./gi-daily-sales-mail.css?v=20260817-daily-sales-mail-v2" rel="stylesheet"/>
 <link href="./theme-p2.css?v=20260805-workdays-goal-v1" rel="stylesheet"/>
 <link href="./login-split.css?v=20260820-welcome-mfa-v4" rel="stylesheet"/>
@@ -783,7 +783,6 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <div class="card__head">
 <div>
 <div class="card__title">ליד חדש — הזן פרטים</div>
-<div class="card__hint">שיחות נכנסות ולידים מדף נחיתה (בריאות וסיכונים) — השלמת פרטים ושיוך לנציג</div>
 </div>
 <div class="lcCampaign__headMeta">
 <div class="lcCampaign__datePicker" id="clDatePickerWrap">
@@ -1044,26 +1043,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
   </div>
   <div class="lcTrackAgentCard__pills" id="trackingAgentCardPills"></div>
 </div>
-<div class="tableWrap lcCampaign__tableWrap lcTrackScreen__table">
-<table class="table lcCampaignTable lcTrackScreen__tableEl">
-<thead>
-<tr>
-<th>שם</th>
-<th>טלפון</th>
-<th>תעודת זהות</th>
-<th>נציג</th>
-<th>קמפיין</th>
-<th>חברת ביטוח</th>
-<th>סיבת פנייה</th>
-<th>סטטוס</th>
-<th>תאריך הגשת הליד</th>
-<th>תאריך שינוי אחרון</th>
-<th>פעולות</th>
-</tr>
-</thead>
-<tbody id="trackingTbody"></tbody>
-</table>
-</div>
+<div class="lcTrackCards" id="trackingTbody" role="list"></div>
 </div>
 </div>
 </section>
@@ -3929,7 +3909,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 
 <script src="./contacts-directory-seed.js?v=20260811-contacts-v1"></script>
 <script src="./gi-policy-scan.js?v=20260819-issued-scan-v3"></script>
-<script src="./app.js?v=20260822-cf-medical-labels-v1"></script>
+<script src="./app.js?v=20260822-leads-track-cards-v1"></script>
 <script src="./gi-face-auth.js?v=20260817-face-retry-v1"></script>
 <script src="./gi-daily-sales-mail.js?v=20260818-sales-mail-pdf-v4"></script>
 

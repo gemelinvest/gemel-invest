@@ -2220,13 +2220,14 @@ body.sidebar-collapsed .sidebar .nav__item.is-active .nav__label:not(#\9):not(#\
 
 /* =====================================================================
    25. DASHBOARD GRID — two columns
-   BUILD: 20260810-dash-ops-v2
+   BUILD: 20260822-view-flash-v2
 
    RTL: column 1 = right, column 2 = left.
    Right (wide): לקוחות אחרונים → ביצועים מול יעד מתחתיו
    Left (narrow stack): תפעול → שירות → מצטיין היום (צמודים)
 
-   Rows still use display:contents so placement is via grid-column/row only.
+   GI-FIX 2026-08-22: row wrappers are real grid items. display:contents
+   made Chrome drop the left tiles after another window covered the tab.
    ===================================================================== */
 
 #view-dashboard .bankDash:not(#\9):not(#\9){
@@ -2237,9 +2238,10 @@ body.sidebar-collapsed .sidebar .nav__item.is-active .nav__label:not(#\9):not(#\
   gap: 10px !important;
 }
 
-/* Row wrappers dissolve so children place directly on .bankDash */
+/* Real boxes so compositor tiles stay attached to the row, not dissolved. */
 #view-dashboard .bankDash__row:not(#\9):not(#\9){
-  display: contents !important;
+  display: grid !important;
+  min-width: 0 !important;
 }
 
 #view-dashboard .bankDash__topStats:not(#\9):not(#\9){
@@ -2252,17 +2254,27 @@ body.sidebar-collapsed .sidebar .nav__item.is-active .nav__label:not(#\9):not(#\
   grid-row: 2 !important;
 }
 
-/* Right: recent customers (wide) */
-#view-dashboard .bankRecent:not(#\9):not(#\9){
+/* Right: recent customers (wide) — place the ROW, not the inner card */
+#view-dashboard .bankDash__row--recentCustomers:not(#\9):not(#\9){
   grid-column: 1 !important;
   grid-row: 3 !important;
+}
+
+#view-dashboard .bankRecent:not(#\9):not(#\9){
+  grid-column: auto !important;
+  grid-row: auto !important;
   min-width: 0 !important;
 }
 
 /* Left elevated stack: תפעול → שירות → מצטיין */
-#view-dashboard .bankDash__elevatedCol:not(#\9):not(#\9){
+#view-dashboard .bankDash__row--elevatedCol:not(#\9):not(#\9){
   grid-column: 2 !important;
   grid-row: 3 / span 2 !important;
+}
+
+#view-dashboard .bankDash__elevatedCol:not(#\9):not(#\9){
+  grid-column: auto !important;
+  grid-row: auto !important;
   display: flex !important;
   flex-direction: column !important;
   gap: 10px !important;
@@ -2279,9 +2291,15 @@ body.sidebar-collapsed .sidebar .nav__item.is-active .nav__label:not(#\9):not(#\
 }
 
 /* Right under recent: ביצועים מול יעד */
-#view-dashboard .bankGoal:not(#\9):not(#\9){
+#view-dashboard .bankDash__row--goalOnly:not(#\9):not(#\9),
+#view-dashboard .bankDash__row--goalUnderRecent:not(#\9):not(#\9){
   grid-column: 1 !important;
   grid-row: 4 !important;
+}
+
+#view-dashboard .bankGoal:not(#\9):not(#\9){
+  grid-column: auto !important;
+  grid-row: auto !important;
   min-width: 0 !important;
 }
 
@@ -2299,10 +2317,16 @@ body.sidebar-collapsed .sidebar .nav__item.is-active .nav__label:not(#\9):not(#\
 
 
 
-@media (max-width: 1200px){
+/* GI-FIX 2026-08-22: collapse only when the window is actually narrow.
+   1200px snapped the left stack off during ordinary window drag. */
+@media (max-width: 900px){
   #view-dashboard .bankDash:not(#\9):not(#\9){
     grid-template-columns: 1fr !important;
   }
+  #view-dashboard .bankDash__row--recentCustomers:not(#\9):not(#\9),
+  #view-dashboard .bankDash__row--elevatedCol:not(#\9):not(#\9),
+  #view-dashboard .bankDash__row--goalOnly:not(#\9):not(#\9),
+  #view-dashboard .bankDash__row--goalUnderRecent:not(#\9):not(#\9),
   #view-dashboard .bankRecent:not(#\9):not(#\9),
   #view-dashboard .bankDash__elevatedCol:not(#\9):not(#\9),
   #view-dashboard .bankSideCard:not(#\9):not(#\9),
@@ -5355,6 +5379,15 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
   border: 1px solid var(--gi-border) !important;
   border-radius: 12px !important;
   padding: 0 !important;
+}
+#campaignLeadsTrackingPanel .lcTrackCards:not(#\9):not(#\9){
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow: auto !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  padding: 2px 2px 18px !important;
 }
 
 .lcTrackScreen__tableEl:not(#\9):not(#\9){
@@ -10440,4 +10473,38 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   font-weight: 500 !important;
   opacity: .9 !important;
   margin-top: 10px !important;
+}
+
+/* GI-LEADS-TRACK-CARDS 2026-08-22 — form text + status select display */
+#view-campaignLeads #campaignLeadsFormPanel .label:not(#\9):not(#\9){
+  font-size: 15px !important;
+  font-weight: 700 !important;
+}
+#view-campaignLeads #campaignLeadsFormPanel .input:not(#\9):not(#\9),
+#view-campaignLeads #campaignLeadsFormPanel textarea:not(#\9):not(#\9),
+#view-campaignLeads #campaignLeadsFormPanel select:not(#\9):not(#\9){
+  font-size: 15.5px !important;
+}
+#view-campaignLeads #campaignLeadsFormPanel .lcNpCoDd__triggerLabel:not(#\9):not(#\9){
+  font-size: 15.5px !important;
+}
+#view-campaignLeads #campaignLeadsFormPanel .lcCampaign__fieldGroup:not(#\9):not(#\9){
+  font-size: 16px !important;
+}
+#view-campaignLeads #campaignLeadsFormPanel .card__title:not(#\9):not(#\9){
+  font-size: 22px !important;
+}
+#view-campaignLeads .lcMyLeadStatusSelect:not(#\9):not(#\9),
+#view-campaignMyLeads .lcMyLeadStatusSelect:not(#\9):not(#\9){
+  min-width: 168px !important;
+  max-width: none !important;
+  height: 38px !important;
+  padding-inline-end: 2rem !important;
+  font-size: 14px !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+#campaignLeadsTrackingPanel .lcTrackCard__side .lcMyLeadStatusSelect:not(#\9):not(#\9){
+  width: 100% !important;
+  min-width: 0 !important;
 }
