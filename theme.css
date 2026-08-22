@@ -1091,8 +1091,8 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
   color: var(--gi-text-2) !important;
 }
 
-.input:not(#\9):not(#\9),
-input[type="text"]:not(#\9):not(#\9), input[type="number"]:not(#\9):not(#\9), input[type="tel"]:not(#\9):not(#\9),
+.input:not(#\9):not(#\9):not(.lcElementaryPlateInput),
+input[type="text"]:not(#\9):not(#\9):not(.lcElementaryPlateInput), input[type="number"]:not(#\9):not(#\9), input[type="tel"]:not(#\9):not(#\9),
 input[type="email"]:not(#\9):not(#\9), input[type="date"]:not(#\9):not(#\9), input[type="password"]:not(#\9):not(#\9),
 input[type="search"]:not(#\9):not(#\9), select:not(#\9):not(#\9), textarea:not(#\9):not(#\9){
   padding: 9px var(--gi-s3) !important;
@@ -1105,14 +1105,26 @@ input[type="search"]:not(#\9):not(#\9), select:not(#\9):not(#\9), textarea:not(#
   transition: border-color .15s ease, box-shadow .15s ease;
 }
 
-.input:focus:not(#\9):not(#\9),
-input:focus:not(#\9):not(#\9), select:focus:not(#\9):not(#\9), textarea:focus:not(#\9):not(#\9){
+.input:focus:not(#\9):not(#\9):not(.lcElementaryPlateInput),
+input:focus:not(#\9):not(#\9):not(.lcElementaryPlateInput), select:focus:not(#\9):not(#\9), textarea:focus:not(#\9):not(#\9){
   border-color: var(--gi-primary) !important;
   box-shadow: var(--focus) !important;
   outline: none !important;
 }
 
-input:not(#\9):not(#\9)::placeholder, textarea:not(#\9):not(#\9)::placeholder{ color: var(--gi-text-muted) !important; }
+input:not(#\9):not(#\9):not(.lcElementaryPlateInput)::placeholder, textarea:not(#\9):not(#\9)::placeholder{ color: var(--gi-text-muted) !important; }
+
+/* לוחית רישוי — הקלדה על הצהוב, בלי רקע/מסגרת של שדה רגיל */
+input.lcElementaryPlateInput[type="text"]:not(#\9):not(#\9),
+input.lcElementaryPlateInput[type="text"]:focus:not(#\9):not(#\9){
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
 
 .help:not(#\9):not(#\9){ font-size: 12px !important; color: var(--gi-text-3) !important; }
 

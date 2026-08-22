@@ -302,15 +302,15 @@
 
 /* ---- שדות טופס: input / select / textarea / label / help ---- */
 #view-customers .input:not(#\9):not(#\9), #view-customers input[type="text"]:not(#\9):not(#\9), #view-customers input[type="number"]:not(#\9):not(#\9), #view-customers input[type="tel"]:not(#\9):not(#\9), #view-customers input[type="email"]:not(#\9):not(#\9), #view-customers input[type="date"]:not(#\9):not(#\9), #view-customers input[type="password"]:not(#\9):not(#\9), #view-customers input[type="search"]:not(#\9):not(#\9), #view-customers select:not(#\9):not(#\9), #view-customers textarea:not(#\9):not(#\9),
-#view-proposals .input:not(#\9):not(#\9), #view-proposals input[type="text"]:not(#\9):not(#\9), #view-proposals select:not(#\9):not(#\9), #view-proposals textarea:not(#\9):not(#\9),
-#view-elementaryProposals .input:not(#\9):not(#\9), #view-elementaryProposals input[type="text"]:not(#\9):not(#\9), #view-elementaryProposals select:not(#\9):not(#\9), #view-elementaryProposals textarea:not(#\9):not(#\9),
+#view-proposals .input:not(#\9):not(#\9):not(.lcElementaryPlateInput), #view-proposals input[type="text"]:not(#\9):not(#\9):not(.lcElementaryPlateInput), #view-proposals select:not(#\9):not(#\9), #view-proposals textarea:not(#\9):not(#\9),
+#view-elementaryProposals .input:not(#\9):not(#\9):not(.lcElementaryPlateInput), #view-elementaryProposals input[type="text"]:not(#\9):not(#\9):not(.lcElementaryPlateInput), #view-elementaryProposals select:not(#\9):not(#\9), #view-elementaryProposals textarea:not(#\9):not(#\9),
 #view-settings .input:not(#\9):not(#\9), #view-settings input[type="text"]:not(#\9):not(#\9), #view-settings input[type="number"]:not(#\9):not(#\9), #view-settings input[type="tel"]:not(#\9):not(#\9), #view-settings input[type="email"]:not(#\9):not(#\9), #view-settings input[type="date"]:not(#\9):not(#\9), #view-settings input[type="password"]:not(#\9):not(#\9), #view-settings input[type="datetime-local"]:not(#\9):not(#\9), #view-settings select:not(#\9):not(#\9), #view-settings textarea:not(#\9):not(#\9),
 #view-users .input:not(#\9):not(#\9), #view-users input[type="text"]:not(#\9):not(#\9), #view-users input[type="date"]:not(#\9):not(#\9), #view-users input[type="email"]:not(#\9):not(#\9), #view-users select:not(#\9):not(#\9), #view-users textarea:not(#\9):not(#\9),
 #view-myProcesses .input:not(#\9):not(#\9), #view-myProcesses input[type="text"]:not(#\9):not(#\9), #view-myProcesses select:not(#\9):not(#\9),
 #view-campaignLeads .input:not(#\9):not(#\9), #view-campaignLeads input[type="text"]:not(#\9):not(#\9), #view-campaignLeads input[type="tel"]:not(#\9):not(#\9), #view-campaignLeads input[type="date"]:not(#\9):not(#\9), #view-campaignLeads input[type="month"]:not(#\9):not(#\9), #view-campaignLeads select:not(#\9):not(#\9), #view-campaignLeads textarea:not(#\9):not(#\9),
 #view-campaignMyLeads .input:not(#\9):not(#\9), #view-campaignMyLeads input[type="text"]:not(#\9):not(#\9), #view-campaignMyLeads input[type="date"]:not(#\9):not(#\9), #view-campaignMyLeads select:not(#\9):not(#\9),
 #lcUserModal .input:not(#\9):not(#\9), #lcUserModal input[type="text"]:not(#\9):not(#\9), #lcUserModal input[type="date"]:not(#\9):not(#\9), #lcUserModal input[type="email"]:not(#\9):not(#\9), #lcUserModal input[type="password"]:not(#\9):not(#\9), #lcUserModal select:not(#\9):not(#\9),
-#lcWizard .input:not(#\9):not(#\9), #lcWizard input[type="text"]:not(#\9):not(#\9), #lcWizard select:not(#\9):not(#\9), #lcWizard textarea:not(#\9):not(#\9),
+#lcWizard .input:not(#\9):not(#\9):not(.lcElementaryPlateInput), #lcWizard input[type="text"]:not(#\9):not(#\9):not(.lcElementaryPlateInput), #lcWizard select:not(#\9):not(#\9), #lcWizard textarea:not(#\9):not(#\9),
 #lcAgentApptWizard .input:not(#\9):not(#\9), #lcAgentApptWizard input[type="text"]:not(#\9):not(#\9), #lcAgentApptWizard select:not(#\9):not(#\9),
 .cqPanel .input:not(#\9):not(#\9), .cqPanel input[type="text"]:not(#\9):not(#\9),
 .ciModal .input:not(#\9):not(#\9), .ciModal select:not(#\9):not(#\9){
@@ -322,7 +322,32 @@
   font-size: 13.5px !important;
   box-shadow: none !important;
 }
-#view-customers .input:focus:not(#\9):not(#\9), #view-settings .input:focus:not(#\9):not(#\9), #view-users .input:focus:not(#\9):not(#\9), #view-myProcesses .input:focus:not(#\9):not(#\9), #view-campaignLeads .input:focus:not(#\9):not(#\9), #view-campaignMyLeads .input:focus:not(#\9):not(#\9), #lcUserModal .input:focus:not(#\9):not(#\9), #lcWizard .input:focus:not(#\9):not(#\9){
+/* לוחית רישוי — המספר על הצהוב, בלי קופסה לבנה של שדה טופס */
+#lcWizard input.lcElementaryPlateInput[type="text"]:not(#\9):not(#\9),
+#view-elementaryProposals input.lcElementaryPlateInput[type="text"]:not(#\9):not(#\9),
+#view-proposals input.lcElementaryPlateInput[type="text"]:not(#\9):not(#\9){
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+  color: #0a0a0a !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+}
+#lcWizard input.lcElementaryPlateInput[type="text"]:focus:not(#\9):not(#\9),
+#view-elementaryProposals input.lcElementaryPlateInput[type="text"]:focus:not(#\9):not(#\9),
+#view-proposals input.lcElementaryPlateInput[type="text"]:focus:not(#\9):not(#\9){
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+#view-customers .input:focus:not(#\9):not(#\9), #view-settings .input:focus:not(#\9):not(#\9), #view-users .input:focus:not(#\9):not(#\9), #view-myProcesses .input:focus:not(#\9):not(#\9), #view-campaignLeads .input:focus:not(#\9):not(#\9), #view-campaignMyLeads .input:focus:not(#\9):not(#\9), #lcUserModal .input:focus:not(#\9):not(#\9), #lcWizard .input:focus:not(#\9):not(#\9):not(.lcElementaryPlateInput){
   border-color: var(--uf-accent) !important;
   box-shadow: 0 0 0 2px var(--uf-accent-soft) !important;
 }

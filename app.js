@@ -34293,7 +34293,7 @@ UsersGateUI.init();
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
     "./gi-customers-import.css?v=20260813-cq-v1",
-    "./theme-unify-flat.css?v=20260823-goview-same-v1"
+    "./theme-unify-flat.css?v=20260823-plate-clear-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
     if(document.documentElement.dataset.giSecondaryCss === "1") return;
@@ -35614,7 +35614,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260823-goview-same-v1";
+  const GI_WIZARD_JS_VERSION = "20260823-levi-map-safe-v1";
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
   const TZAHAL_CLINIC = "קופה צהלית";
   const TZAHAL_CLINIC_SHABAN = "אין שב״ן";
@@ -36071,6 +36071,7 @@ UsersGateUI.init();
             get(){ try { return ClalRiskLifePdf; } catch(_e) { return undefined; } }
           });
         } catch(_e) {}
+        try { host.ELEMENTARY_LEVI_CODE_MAPPINGS = ELEMENTARY_LEVI_CODE_MAPPINGS; } catch(_e) {}
         globalThis.__GI_WIZARD_HOST = host;
         const done = () => {
           if(!giWizardIsInstalled()){

@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260823-goview-same-v1";
+  const GI_WIZARD_BUILD = "20260823-levi-map-safe-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -5979,7 +5979,16 @@ if(path === "birthDate"){
       const gov = this.normalizeGovModelCodeKey(vehicleData?.govModelCode || '');
       const year = safeTrim(String(vehicleData?.year || ''));
       const cat = safeTrim(String(vehicleData?.category || '')).toLowerCase();
-      const rows = Array.isArray(ELEMENTARY_LEVI_CODE_MAPPINGS) ? ELEMENTARY_LEVI_CODE_MAPPINGS : [];
+      let rows = [];
+      try {
+        if(typeof ELEMENTARY_LEVI_CODE_MAPPINGS !== "undefined" && Array.isArray(ELEMENTARY_LEVI_CODE_MAPPINGS)){
+          rows = ELEMENTARY_LEVI_CODE_MAPPINGS;
+        } else if(Array.isArray(host.ELEMENTARY_LEVI_CODE_MAPPINGS)){
+          rows = host.ELEMENTARY_LEVI_CODE_MAPPINGS;
+        }
+      } catch(_e) {
+        rows = [];
+      }
       if(!gov || !rows.length){
         return { ok:false, reason:'none', candidates:[], detail:'empty-map-or-code' };
       }

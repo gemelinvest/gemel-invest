@@ -29490,6 +29490,14 @@ input[inputmode="tel"] {
   background: transparent !important;
   background-color: transparent !important;
 }
+.lcElementaryPlateInput:-webkit-autofill,
+.lcElementaryPlateInput:-webkit-autofill:hover,
+.lcElementaryPlateInput:-webkit-autofill:focus{
+  -webkit-text-fill-color: #0a0a0a;
+  caret-color: #0a0a0a;
+  transition: background-color 99999s ease-out 0s;
+  box-shadow: none !important;
+}
 .lcElementaryPlateInput::placeholder{
   color: rgba(10,10,10,.22);
 }
