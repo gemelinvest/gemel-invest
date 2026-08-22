@@ -19822,6 +19822,42 @@ UsersGateUI.init();
       };
     },
 
+    medicalFollowupFieldLabel(item, fieldKey){
+      const key = safeTrim(fieldKey);
+      if(!key) return "";
+      if(/[\u0590-\u05FF]/.test(key)) return key;
+      const fields = Array.isArray(item?.meta?.fields) ? item.meta.fields : [];
+      const matchField = (cand) => fields.find((field) => {
+        if(!field || field.type === "section") return false;
+        const fk = safeTrim(field.key);
+        return fk === cand
+          || fk.endsWith("__" + cand)
+          || fk.endsWith("_" + cand)
+          || fk.replace(/_\d+$/, "") === cand;
+      });
+      const exact = matchField(key);
+      if(safeTrim(exact?.label)) return exact.label;
+      const noPrefix = key.includes("__") ? key.split("__").slice(1).join("__") : key;
+      const noSuffix = key.replace(/_\d+$/, "");
+      for(const cand of [noPrefix, noSuffix, noPrefix.replace(/_\d+$/, "")]){
+        const hit = matchField(cand);
+        if(safeTrim(hit?.label)) return hit.label;
+      }
+      const num = (key.match(/_(\d+)$/) || key.match(/^(\d+)__/))?.[1];
+      const base = noSuffix !== key ? noSuffix : noPrefix;
+      try {
+        const schema = (num && typeof Wizard?.getPhoenixFollowupSchemas === "function")
+          ? Wizard.getPhoenixFollowupSchemas()?.[String(num)]
+          : null;
+        const hit = (schema?.fields || []).find((field) => {
+          const fk = safeTrim(field?.key);
+          return fk === base || fk === noPrefix || `${fk}_${num}` === key || `${num}__${fk}` === key;
+        });
+        if(safeTrim(hit?.label)) return hit.label;
+      } catch(_e) {}
+      return key;
+    },
+
     renderMedicalInfo(rec){
       const groups = this.getMedicalGroups(rec);
       const summary = this.getMedicalSummary(rec, groups);
@@ -19840,7 +19876,7 @@ UsersGateUI.init();
           ? Object.entries(item.response.fields).filter(([, v]) => safeTrim(v))
           : [];
         if(fields.length){
-          return fields.map(([key, val]) => `<div class="cfMedicalField"><div class="cfMedicalField__k">${escapeHtml(key)}</div><div class="cfMedicalField__v">${escapeHtml(String(val))}</div></div>`).join("");
+          return fields.map(([key, val]) => `<div class="cfMedicalField"><div class="cfMedicalField__k">${escapeHtml(this.medicalFollowupFieldLabel(item, key))}</div><div class="cfMedicalField__v">${escapeHtml(String(val))}</div></div>`).join("");
         }
         return `<div class="cfMedicalField"><div class="cfMedicalField__v">סומן כן ללא פירוט נוסף בשדה המשך.</div></div>`;
       };
