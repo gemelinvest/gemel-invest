@@ -27166,6 +27166,9 @@ UsersGateUI.init();
     _pollingStarted: false,
     _loginGraceUntil: 0,
     _graceTimer: null,
+    _resumeDelay: null,
+    _shownAt: 0,
+    RESUME_SETTLE_MS: 400,
     init(){
       if(this._bound || typeof document === "undefined") return;
       this._bound = true;
@@ -27174,6 +27177,11 @@ UsersGateUI.init();
         if(document.hidden) this.pause();
         else this.resume();
       });
+    },
+    justBecameVisible(ms = 800){
+      const shown = Number(this._shownAt) || 0;
+      if(!shown) return false;
+      return (Date.now() - shown) < Math.max(0, Number(ms) || 800);
     },
     markLoginGrace(ms = POST_LOGIN_BACKGROUND_GRACE_MS){
       this._loginGraceUntil = Date.now() + Math.max(0, Number(ms) || POST_LOGIN_BACKGROUND_GRACE_MS);
@@ -27210,6 +27218,10 @@ UsersGateUI.init();
         window.clearTimeout(this._graceTimer);
         this._graceTimer = null;
       }
+      if(this._resumeDelay){
+        window.clearTimeout(this._resumeDelay);
+        this._resumeDelay = null;
+      }
       LiveRefresh.stop();
       ReferralQuietRefresh.stop();
       try { MirrorCallAgentToastWatcher.stop(); } catch(_e) {}
@@ -27225,7 +27237,14 @@ UsersGateUI.init();
     resume(){
       if(!this._paused) return;
       this._paused = false;
-      this.startIfLoggedIn();
+      this._shownAt = Date.now();
+      if(this._resumeDelay) window.clearTimeout(this._resumeDelay);
+      /* GI-FIX 2026-08-22: restart the same intervals after Chrome paints
+         the restored scroll layer. No extra first tick and no full dashboard rebuild. */
+      this._resumeDelay = window.setTimeout(() => {
+        this._resumeDelay = null;
+        this.startIfLoggedIn();
+      }, this.RESUME_SETTLE_MS);
     }
   };
 
@@ -29936,14 +29955,19 @@ UsersGateUI.init();
 
     scheduleRefreshLeaderboard(){
       if(this._leaderRefreshTimer) window.clearTimeout(this._leaderRefreshTimer);
+      const settleMs = (typeof BackgroundTimers !== "undefined" && BackgroundTimers.justBecameVisible?.(800)) ? 800 : 500;
       this._leaderRefreshTimer = window.setTimeout(() => {
         this._leaderRefreshTimer = null;
         try {
           if(typeof document !== "undefined" && document.visibilityState === "hidden") return;
           if(LiveRefresh.getCurrentView() !== "dashboard" || !this.shouldShowPerformanceBoard()) return;
+          if(typeof BackgroundTimers !== "undefined" && BackgroundTimers.justBecameVisible?.(800)){
+            this.scheduleRefreshLeaderboard();
+            return;
+          }
           this.refreshLeaderboard();
         } catch(_e){}
-      }, 500);
+      }, settleMs);
     },
 
     toggleKpiBreakdown(btn){
@@ -34167,7 +34191,7 @@ UsersGateUI.init();
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
     "./gi-customers-import.css?v=20260813-cq-v1",
-    "./theme-unify-flat.css?v=20260822-har-date-notice-v1"
+    "./theme-unify-flat.css?v=20260822-app-chrome-720-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
     if(document.documentElement.dataset.giSecondaryCss === "1") return;
@@ -35488,7 +35512,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260822-har-date-notice-v1";
+  const GI_WIZARD_JS_VERSION = "20260822-app-chrome-720-v1";
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
   const TZAHAL_CLINIC = "קופה צהלית";
   const TZAHAL_CLINIC_SHABAN = "אין שב״ן";
@@ -36488,7 +36512,7 @@ const MIRROR_DISCLOSURE_LIBRARY = {
         this._resumeRefreshTimer = null;
         if(document.hidden) return;
         if(this.shouldAutoRefresh()) this.refreshFromServer({ reason:'visibility' });
-      }, 300);
+      }, 500);
     },
 
     currentScope(){
@@ -37006,7 +37030,12 @@ const MIRROR_DISCLOSURE_LIBRARY = {
         if(!this._resumeAfterHidden) return;
         this._resumeAfterHidden = false;
         this.checkReminders();
-        if(this.isListOpen()) this.renderList();
+        if(this.isListOpen()){
+          window.setTimeout(() => {
+            if(document.hidden) return;
+            if(this.isListOpen()) this.renderList();
+          }, 400);
+        }
       });
     },
 

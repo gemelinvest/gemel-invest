@@ -168,6 +168,7 @@ body.sidebar-collapsed #app:not(#\9):not(#\9){
 .content:not(#\9):not(#\9){
   padding: var(--gi-s5) var(--gi-s5) var(--gi-s6) !important;
   background: var(--gi-bg);
+  overflow-anchor: none;
 }
 
 
