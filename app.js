@@ -6731,9 +6731,14 @@
         }
       }
       if(!title) title = `מסמך · ${insured}`;
+      const dateLabel = this.formatDocDateLabel(uploadedAt);
+      /* Display-only: the row already shows "תאריך:" under the title. */
+      if(dateLabel && dateLabel !== "—" && title.endsWith(" · " + dateLabel)){
+        title = title.slice(0, title.length - dateLabel.length - 3).trim();
+      }
       return {
         title,
-        dateLabel: this.formatDocDateLabel(uploadedAt),
+        dateLabel,
         agentLabel: safeTrim(doc?.uploadedBy) || safeTrim(doc?.source) || ""
       };
     },
@@ -22126,6 +22131,7 @@ UsersGateUI.init();
       this._openFileCallSig = "";
       this.stopOpsCardLoop();
       this._openRefreshSig = "";
+      this.currentSection = "policies";
       if(!this.els.wrap) return;
       window.clearTimeout(this._loaderTimer);
       this.hideLoader();
