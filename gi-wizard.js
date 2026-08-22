@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260823-hist-no-drop-v1";
+  const GI_WIZARD_BUILD = "20260823-pay-skip-mirror-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -3661,6 +3661,7 @@ init(){
           this.setHint("יש לבחור תחום אלמנטרי כדי להמשיך");
           return;
         }
+        if((await this.ensureElementaryPaymentSkipAckIfNeeded()) === false) return;
         const validation = this.validateStep(this.step);
         if(!validation.ok){
           this.setHint(validation.msg || "נא להשלים את כל השדות");
@@ -8713,6 +8714,63 @@ if(path === "birthDate"){
       if(d._elemNamedDriverPanel) return ['יש לשמור או לבטל עריכת נהג נקוב לפני המשך'];
       if(!named.length) return ['יש להוסיף לפחות נהג נקוב אחד'];
       return [];
+    },
+
+    elementaryPaymentCanSkipToMirror(d){
+      const src = d && typeof d === "object" ? d : (this.insureds[0]?.data || {});
+      const pay = src.elementaryPayment && typeof src.elementaryPayment === "object" ? src.elementaryPayment : {};
+      const pan = digitsOnly(pay.cardNumber || "");
+      if(this.elementaryPanSixteenDigitsOk(pan) && this.elementaryExpiryOk(pay.expiry) && safeTrim(pay.holderName) && normalizeIdValue(pay.holderId || "").length === 9){
+        return false;
+      }
+      return !pan;
+    },
+
+    isElementaryPaymentLeavingToMirror(){
+      if(!this.isElementaryFlow()) return false;
+      if(this.getElementaryStepKind(this.step) !== "payment") return false;
+      const d = this.insureds[0]?.data || {};
+      if(this.getElementaryStep5Phase(d) !== "payment") return false;
+      const steps = this.getCurrentSteps();
+      const idx = this.getElementaryStepIndex(this.step);
+      const nextId = Number(steps[idx + 1]?.id);
+      return this.getElementaryStepKind(nextId) === "mirror";
+    },
+
+    async ensureElementaryPaymentSkipAckIfNeeded(){
+      if(!this.isElementaryPaymentLeavingToMirror()) return true;
+      const d = this.insureds[0]?.data || {};
+      if(!this.elementaryPaymentCanSkipToMirror(d)) return true;
+      if(this._elemPaymentSkipAck) return true;
+      if(typeof showWizardHarAlertModal !== "function"){
+        this._elemPaymentSkipAck = true;
+        return true;
+      }
+      const ok = await showWizardHarAlertModal({
+        title: "שים לב",
+        text: "יש לקחת בשיחה מול הלקוח אמצעי תשלום לצורך הפקה",
+        confirmText: "אישור",
+        cancelText: "חזרה למילוי",
+        showCancel: true
+      });
+      if(!ok) return false;
+      this._elemPaymentSkipAck = true;
+      return true;
+    },
+
+    attachWizardElementaryMirrorToPayload(payload){
+      if(!payload || typeof payload !== "object" || !this.isElementaryFlow()) return payload;
+      try{
+        if(typeof ElementaryMirrorUI?.isWizardEmbed === "function" && ElementaryMirrorUI.isWizardEmbed()){
+          try { ElementaryMirrorUI._captureReportFromDom?.(); } catch(_e){}
+        }
+        const draft = ElementaryMirrorUI?.reportDraft;
+        if(draft && typeof draft === "object"){
+          payload.mirrorFlow = payload.mirrorFlow && typeof payload.mirrorFlow === "object" ? payload.mirrorFlow : {};
+          payload.mirrorFlow.elementaryReport = JSON.parse(JSON.stringify(draft));
+        }
+      }catch(_e){}
+      return payload;
     },
 
     ensureElementaryPaymentDefaults(ins){
@@ -23660,6 +23718,7 @@ if(path === "birthDate"){
           deferCustomerUntilAgentSetup: true
         };
       }
+      this.attachWizardElementaryMirrorToPayload(payload);
       return payload;
     },
 
@@ -24147,6 +24206,7 @@ if(path === "birthDate"){
       if(this.flowType === "health" || this.isCustomerPurchaseMode()){
         payload.flowType = "health";
       }
+      this.attachWizardElementaryMirrorToPayload(payload);
       return payload;
     },
 
@@ -27520,6 +27580,7 @@ if(path === "birthDate"){
           return null;
         }
         if(ins0) this.ensureElementaryPaymentDefaults(ins0);
+        if(this._elemPaymentSkipAck && this.elementaryPaymentCanSkipToMirror(d)) return null;
         const pay = d.elementaryPayment && typeof d.elementaryPayment === 'object' ? d.elementaryPayment : {};
         const pan = digitsOnly(pay.cardNumber || '');
         if(!this.elementaryPanSixteenDigitsOk(pan)) return "elementaryPayment.cardNumber";
@@ -27620,6 +27681,7 @@ if(path === "birthDate"){
         }
         const ins0 = this.insureds[0];
         if(ins0) this.ensureElementaryPaymentDefaults(ins0);
+        if(this._elemPaymentSkipAck && this.elementaryPaymentCanSkipToMirror(d)) return [];
         const pay = d.elementaryPayment && typeof d.elementaryPayment === 'object' ? d.elementaryPayment : {};
         const pan = digitsOnly(pay.cardNumber || '');
         const out = [];
@@ -28558,6 +28620,9 @@ if(path === "birthDate"){
             return { ok:true };
           }
           this.ensureElementaryPaymentDefaults(primary);
+          if(this._elemPaymentSkipAck && this.elementaryPaymentCanSkipToMirror(d)){
+            return { ok:true };
+          }
           const pay = d.elementaryPayment && typeof d.elementaryPayment === 'object' ? d.elementaryPayment : {};
           const pan = digitsOnly(pay.cardNumber || '');
           if(!this.elementaryPanSixteenDigitsOk(pan)){

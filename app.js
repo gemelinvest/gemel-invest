@@ -35614,7 +35614,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260823-hist-no-drop-v1";
+  const GI_WIZARD_JS_VERSION = "20260823-pay-skip-mirror-v1";
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
   const TZAHAL_CLINIC = "קופה צהלית";
   const TZAHAL_CLINIC_SHABAN = "אין שב״ן";
@@ -64299,6 +64299,18 @@ ${inner}
       return { model, year, combined: [model, year].filter(Boolean).join(" · ") };
     },
 
+    _applyWizardPaymentToDraft(draft, pay){
+      if(!draft || !pay || typeof pay !== "object") return draft;
+      const pan = digitsOnly(pay.cardNumber || "");
+      if(pan.length < 4) return draft;
+      if(!safeTrim(draft.paymentMethod)) draft.paymentMethod = "credit";
+      if(!safeTrim(draft.cardExpiry) && safeTrim(pay.expiry)) draft.cardExpiry = safeTrim(pay.expiry);
+      if(!safeTrim(draft.payerName) && safeTrim(pay.holderName)) draft.payerName = safeTrim(pay.holderName);
+      if(!safeTrim(draft.payerId) && safeTrim(pay.holderId)) draft.payerId = normalizeIdValue(pay.holderId);
+      if(!safeTrim(draft.cardLast4) && pan.length >= 4) draft.cardLast4 = pan.slice(-4);
+      return draft;
+    },
+
     buildReportDraft(rec){
       const { data, referral, payload } = this._pickElementaryData(rec);
       // בלי _getReportStore — לא ליצור {} ריק שעלול להישמר ולדרוס דוח בשרת
@@ -64423,6 +64435,7 @@ ${inner}
       merged.harPolicies = harPolicies;
       merged.history = history;
       if(savedHasStamp) merged.updatedAt = saved.updatedAt;
+      this._applyWizardPaymentToDraft(merged, pay);
       if(!safeTrim(merged.agentName)) merged.agentName = this._agentLabel();
       if(!safeTrim(merged.customerName)) merged.customerName = fullName || "לקוח";
       if(!safeTrim(merged.policyEnd) && safeTrim(merged.policyStart)) merged.policyEnd = this._addOneYearDmy(merged.policyStart);
