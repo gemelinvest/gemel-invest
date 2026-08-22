@@ -17600,6 +17600,7 @@ UsersGateUI.init();
       this.els.archiveBtn = $("#customerFullArchiveBtn");
       this.els.assignBtn = $("#customerFullAssignBtn");
       this.els.name = $("#customerFullName");
+      this.els.nameBtn = $("#customerFullNameBtn");
       this.els.liveTimer = $("#customerFullLiveTimer");
       this.els.meta = $("#customerFullMeta");
       this.els.avatar = $("#customerFullAvatar");
@@ -17662,6 +17663,11 @@ UsersGateUI.init();
           this.handleArchiveCustomerClick(ev, rec.id);
         });
       }
+      on(this.els.nameBtn, "click", (ev) => {
+        ev?.preventDefault?.();
+        if(!this.current()) return;
+        this.switchSection("personal");
+      });
       on(this.els.editBtn, "click", (ev) => {
         ev?.preventDefault?.();
         const rec = this.current();
