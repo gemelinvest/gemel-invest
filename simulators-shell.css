@@ -521,6 +521,27 @@
   font-size:18px;
   font-weight:850;
 }
+.giSimDisc__split{
+  margin-top:8px;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+.giSimDisc__splitRow{
+  display:flex;
+  justify-content:space-between;
+  align-items:baseline;
+  gap:10px;
+  font-size:12px;
+  font-weight:600;
+  color:#475569;
+  line-height:1.35;
+}
+.giSimDisc__splitRow span:last-child{
+  font-weight:700;
+  color:#0F172A;
+  white-space:nowrap;
+}
 
 /* ===== GI-SIM-UI 2026-08-17 · נראות חברת ביטוח (אושר במוקאפ) ==============
    חל על מרכז (standalone) ועל פתיחה מהאשף (.giSimQuiet). לא משנה חישוב. */

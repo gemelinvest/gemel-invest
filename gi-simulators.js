@@ -908,8 +908,9 @@
      הנחה לפוליסה. רק בחירה במסך הסימולטור + תצוגת פרמיה לאחר הנחה.
      מופיע גם במרכז הסימולטורים וגם בפתיחה מהאשף, כי ההזרקה רצה אחרי כל _bind.
      בריאות: אפשר אחוז אחיד, כיסויים פטורים במחיר מלא (fullPriceIds), או פיצול לפי
-     תעריפון (pctByCover). בפיצול — כיסוי שלא במפה נשאר במחיר מלא. מרפא/סרטן לא
-     נכנסים לסימולטור בריאות. */
+     תעריפון (pctByCover). בפיצול — כיסוי שלא במפה נשאר במחיר מלא. חבילת בריאות
+     בלי מפה/פטורים לא מקבלת אחוז מוצר כ-fallback. מרפא/סרטן לא נכנסים לסימולטור
+     בריאות. */
   function giSimDiscOpt(id, label, scheduleOrPct, extra){
     const opt = { id: String(id || ""), label: String(label || "") };
     if(Array.isArray(scheduleOrPct)){
@@ -932,10 +933,10 @@
   const GI_SIMULATOR_DISCOUNT_CATALOG = {
     "הפניקס": {
       "בריאות": [
-        giSimDiscOpt("phx-h-10-base-shaban", "10% ל-10 שנים — רובד בסיס + משלים שב״ן", 10, { years: 10 }),
-        giSimDiscOpt("phx-h-15-first-amb", "15% ל-10 שנים — שקל ראשון + אמבולטורי + כתבי שירות", 15, { years: 10 }),
-        giSimDiscOpt("phx-h-20-gemel", "20% ל-10 שנים — משלים שב״ן + שקל ראשון כולל כתבי שירות (גמל INVEST)", 20, { years: 10 }),
-        giSimDiscOpt("phx-h-10-base-only", "10% ל-10 שנים — בסיס בלבד (גמל INVEST)", 10, { years: 10 })
+        giSimDiscOpt("phx-h-10-base-shaban", "10% ל-10 שנים — רובד בסיס + משלים שב״ן", 10, { years: 10, pctByCover: { transplant:10, abroad_surgery:10, drugs:10, surgery_shaban:10, surgery_shaban_5000:10 } }),
+        giSimDiscOpt("phx-h-15-first-amb", "15% ל-10 שנים — שקל ראשון + אמבולטורי + כתבי שירות", 15, { years: 10, pctByCover: { surgery_first_shekel:15, ambulatory_consults:15, fast_diagnosis:15, ambulatory_package:15, ambulatory_accompany:15, complementary:15, child_dev:15, expert_click:15 } }),
+        giSimDiscOpt("phx-h-20-gemel", "20% ל-10 שנים — משלים שב״ן + שקל ראשון כולל כתבי שירות (גמל INVEST)", 20, { years: 10, pctByCover: { surgery_shaban:20, surgery_shaban_5000:20, surgery_first_shekel:20, complementary:20, child_dev:20, expert_click:20 } }),
+        giSimDiscOpt("phx-h-10-base-only", "10% ל-10 שנים — בסיס בלבד (גמל INVEST)", 10, { years: 10, pctByCover: { transplant:10, abroad_surgery:10, drugs:10 } })
       ],
       "מחלות קשות": [
         giSimDiscOpt("phx-ci-20-age20", "20% ל-10 שנים — בטוח מרפא (עד גיל 20 כולל)", 20, { years: 10 }),
@@ -1221,6 +1222,8 @@
     return Math.round(ag * (100 - p) / 100) / 100;
   }
   function giSimCoverDiscountPct(opt, coverId){
+    const eng = (typeof globalThis !== "undefined" && globalThis.GiSimDiscountEngine) || null;
+    if(eng && typeof eng.coverDiscountPct === "function") return eng.coverDiscountPct(opt, coverId);
     if(!opt) return 0;
     const id = String(coverId || "");
     const map = opt.pctByCover && typeof opt.pctByCover === "object" ? opt.pctByCover : null;
@@ -1239,6 +1242,8 @@
     return Number.isFinite(ag) ? ag : null;
   }
   function giSimDiscountAfterMonthly(result, opt){
+    const eng = (typeof globalThis !== "undefined" && globalThis.GiSimDiscountEngine) || null;
+    if(eng && typeof eng.afterMonthly === "function") return eng.afterMonthly(result, opt);
     if(!opt || !result || !result.ok) return null;
     const covers = Array.isArray(result.covers) ? result.covers : [];
     const map = opt.pctByCover && typeof opt.pctByCover === "object" ? opt.pctByCover : null;
@@ -1254,9 +1259,22 @@
       }
       return totalAg / 100;
     }
+    if(covers.length){
+      let totalAg = 0;
+      for(let i = 0; i < covers.length; i++){
+        const ag = giSimCoverMonthlyAgorot(covers[i]);
+        if(Number.isFinite(ag)) totalAg += ag;
+      }
+      return totalAg / 100;
+    }
     const monthly = Number(result.monthlyPremium);
     if(!Number.isFinite(monthly)) return null;
     return giSimMoneyAfterPct(monthly, giSimDiscountYear1Pct(opt));
+  }
+  function giSimDiscountExplain(result, opt, company, product){
+    const eng = (typeof globalThis !== "undefined" && globalThis.GiSimDiscountEngine) || null;
+    if(eng && typeof eng.explain === "function") return eng.explain(result, opt, company, product);
+    return { after: giSimDiscountAfterMonthly(result, opt), rows: [], company: safeTrim(company), product: safeTrim(product), optionId: safeTrim(opt && opt.id), optionLabel: safeTrim(opt && opt.label) };
   }
   function giSimDiscountSelectedId(sim){
     const map = sim && sim._giSimDiscountSel && typeof sim._giSimDiscountSel === "object" ? sim._giSimDiscountSel : null;
@@ -1283,7 +1301,8 @@
     const result = sim._state?.[sim._activeInsuredId]?.result || null;
     const selectedId = giSimDiscountSelectedId(sim);
     const selected = giSimDiscountById(company, product, selectedId);
-    const after = selected ? giSimDiscountAfterMonthly(result, selected) : null;
+    const explained = selected ? giSimDiscountExplain(result, selected, company, product) : null;
+    const after = explained && explained.after != null ? explained.after : (selected ? giSimDiscountAfterMonthly(result, selected) : null);
 
     let wrap = modal.querySelector(".giSimDisc");
     if(!wrap){
@@ -1311,6 +1330,7 @@
 
     modal.querySelectorAll(".giSimDisc__afterRow").forEach((el) => el.remove());
     modal.querySelectorAll(".giSimDisc__footPrem").forEach((el) => el.remove());
+    modal.querySelectorAll(".giSimDisc__split").forEach((el) => el.remove());
     if(after != null && Number.isFinite(after)){
       const ok = modal.querySelector("[class*='__result--ok']");
       if(ok){
@@ -1318,6 +1338,17 @@
         row.className = "giSimDisc__afterRow";
         row.innerHTML = `<span>פרמיה לאחר הנחה</span><strong>₪${escapeHtml(riskSimFormatMoneyShekels(after))}</strong>`;
         ok.appendChild(row);
+        const splitRows = explained && Array.isArray(explained.rows) ? explained.rows.filter((r) => r && r.rule === "cover") : [];
+        if(splitRows.length){
+          const split = document.createElement("div");
+          split.className = "giSimDisc__split";
+          split.setAttribute("data-gisim-disc-split", "1");
+          split.innerHTML = splitRows.map((r) => {
+            const pctTxt = r.status === "APPLIED" && r.pct > 0 ? (String(r.pct) + "%") : "ללא";
+            return `<div class="giSimDisc__splitRow"><span>${escapeHtml(r.label)}</span><span>₪${escapeHtml(riskSimFormatMoneyShekels(r.original))} → ${escapeHtml(pctTxt)} → ₪${escapeHtml(riskSimFormatMoneyShekels(r.after))}</span></div>`;
+          }).join("");
+          ok.appendChild(split);
+        }
       }
       const foot = modal.querySelector(".giSimShell__foot");
       if(foot){

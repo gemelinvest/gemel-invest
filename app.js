@@ -34211,7 +34211,8 @@ UsersGateUI.init();
 
     /* GI-PERF-LAZY-SIMS 2026-08-09 */
   // Lazy simulator registry — engines in gi-simulators.js (~220KB parse deferred).
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260818-disc-menora-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260823-disc-cover-split-v1";
+  const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
   const GI_SIMULATOR_CATALOG = Object.freeze([
     { company: "הפניקס", product: "ריסק" },
     { company: "הפניקס", product: "בריאות" },
@@ -34268,7 +34269,7 @@ UsersGateUI.init();
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
     "./simulators-center.css?v=20260818-sim-no-steps-v2",
-    "./simulators-shell.css?v=20260817-quiet-ui-v1"
+    "./simulators-shell.css?v=20260823-disc-cover-split-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -34393,13 +34394,26 @@ UsersGateUI.init();
           existing.addEventListener("error", () => reject(new Error("gi-simulators.js failed")), { once: true });
           return;
         }
-        const s = document.createElement("script");
-        s.id = "gi-simulators-js";
-        s.src = GI_SIMULATOR_JS_HREF;
-        s.async = true;
-        s.onload = done;
-        s.onerror = () => reject(new Error("gi-simulators.js failed to load"));
-        document.head.appendChild(s);
+        const loadSims = () => {
+          const s = document.createElement("script");
+          s.id = "gi-simulators-js";
+          s.src = GI_SIMULATOR_JS_HREF;
+          s.async = true;
+          s.onload = done;
+          s.onerror = () => reject(new Error("gi-simulators.js failed to load"));
+          document.head.appendChild(s);
+        };
+        if(document.getElementById("gi-sim-disc-engine-js") || globalThis.GiSimDiscountEngine){
+          loadSims();
+          return;
+        }
+        const eng = document.createElement("script");
+        eng.id = "gi-sim-disc-engine-js";
+        eng.src = GI_SIM_DISC_ENGINE_HREF;
+        eng.async = true;
+        eng.onload = loadSims;
+        eng.onerror = () => reject(new Error("gi-sim-discount-engine.js failed to load"));
+        document.head.appendChild(eng);
       } catch(err) {
         reject(err);
       }
