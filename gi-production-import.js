@@ -1205,10 +1205,35 @@
     return Array.from(byName.values());
   }
 
+  function relocateMisreadLifePremium(p){
+    const t = safeTrim(p?.type);
+    if(t !== "ריסק" && t !== "ריסק משכנתא") return p;
+    const prem = Number(p?.premiumMonthly) || 0;
+    if(prem >= 10000){
+      if(!Number(p.sumInsured)) p.sumInsured = money2(prem);
+      p.premiumMonthly = "";
+    }
+    if(p.premiumPerInsured && typeof p.premiumPerInsured === "object"){
+      Object.keys(p.premiumPerInsured).forEach((k) => {
+        if(Number(p.premiumPerInsured[k]) >= 10000) p.premiumPerInsured[k] = "";
+      });
+    }
+    if(p.productionCoverPremiums && typeof p.productionCoverPremiums === "object"){
+      Object.keys(p.productionCoverPremiums).forEach((k) => {
+        if(Number(p.productionCoverPremiums[k]) >= 10000) p.productionCoverPremiums[k] = "";
+      });
+    }
+    return p;
+  }
+
   function applyPolicyFields(p, item, meta, payload){
     p.policyNumber = item.policyNumber || p.policyNumber;
     if(item.type) p.type = preferredPolicyType(p.type, item.type);
-    p.premiumMonthly = item.premiumMonthly || p.premiumMonthly;
+    const incomingPrem = safeTrim(item.premiumMonthly);
+    if(incomingPrem) p.premiumMonthly = incomingPrem;
+    else if(safeTrim(item.sumInsured) && (isBenefitLike(p.premiumMonthly) || Number(p.premiumMonthly) === Number(item.sumInsured))){
+      p.premiumMonthly = "";
+    }
     if(item.startDate) p.startDate = item.startDate;
     if(item.endDate) p.endDate = item.endDate;
     if(Number(item.insuredCount) > 0) p.insuredCount = Number(item.insuredCount);
@@ -1274,6 +1299,7 @@
       }
     }
     p.productionImport = meta;
+    relocateMisreadLifePremium(p);
     return p;
   }
 
@@ -1331,7 +1357,7 @@
   }
 
   global.GI_PRODUCTION = {
-    version: "20260823-migdal-sums-v1",
+    version: "20260823-migdal-sumfix-v1",
     COMPANIES,
     COMPANY_HACHSHARA,
     COMPANY_MIGDAL,

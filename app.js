@@ -19462,7 +19462,12 @@ UsersGateUI.init();
           }
         } catch(_e) {}
         const type = safeTrim(p?.type || p?.product || (p?.company === "מדיקר" ? "מדיקר" : "פוליסה"));
-        const premium = safeTrim(p?.premiumMonthly || p?.premium || p?.premiumBefore || "");
+        let premium = safeTrim(p?.premiumMonthly || p?.premium || p?.premiumBefore || "");
+        if((type === "ריסק" || type === "ריסק משכנתא") && Number(premium) >= 10000){
+          if(!safeTrim(p.sumInsured)) p.sumInsured = premium;
+          premium = "";
+          p.premiumMonthly = "";
+        }
         const coverItems = Array.isArray(p?.healthCovers) && p.healthCovers.length
           ? p.healthCovers.filter(Boolean)
           : (Array.isArray(p?.lifeCovers) && p.lifeCovers.length
@@ -20575,7 +20580,9 @@ UsersGateUI.init();
           const n = Object.values(byIns).reduce((s, v) => s + this.asMoneyNumber(v), 0);
           return n > 0 ? String(n) : "";
         })();
-        const amount = safeTrim(prodPrem[label]) || safeTrim(prodPrem[name]) || addonSum || safeTrim(amounts[label]) || safeTrim(amounts[name]);
+        let amount = safeTrim(prodPrem[label]) || safeTrim(prodPrem[name]) || addonSum || safeTrim(amounts[label]) || safeTrim(amounts[name]);
+        const isLifeCover = safeTrim(raw?.type) === "ריסק" || safeTrim(raw?.type) === "ריסק משכנתא";
+        if(isLifeCover && Number(amount) >= 10000) amount = "";
         const detail = (Array.isArray(raw?.productionCoverDetails) ? raw.productionCoverDetails : []).find((x) => {
           const n = this.logicalHealthCoverLabel(x?.name);
           return n === label || safeTrim(x?.name) === safeTrim(name);
@@ -20613,12 +20620,19 @@ UsersGateUI.init();
       const policyNumber = safeTrim(policy.policyNumber) || "—";
       const startDate = safeTrim(policy.startDate) || "—";
       const endDate = safeTrim(rawPol.endDate || policy.endDate);
+      const sumInsured = safeTrim(rawPol.sumInsured || policy.coverageValue);
+      const compensation = safeTrim(rawPol.compensation);
       const counted = insuredSum.count || Number(rawPol.insuredCount || policy.insuredCount || 0) || 0;
       const insuredText = counted > 1
         ? `${counted} מבוטחים`
         : (insuredSum.names || "מבוטח ראשי");
       const isHealth = ["בריאות", "מחלות קשות", "סרטן"].indexOf(safeTrim(policy.type)) >= 0;
       const isLife = safeTrim(policy.type) === "ריסק" || safeTrim(policy.type) === "ריסק משכנתא";
+      const rawPrem = this.asNumber(rawPol.premiumMonthly || policy.premiumValue || 0) || 0;
+      const displayPrem = (isLife && (rowPremium >= 10000 || rawPrem >= 10000)) ? 0 : rowPremium;
+      const displaySum = sumInsured && Number(sumInsured) >= 1000
+        ? sumInsured
+        : ((isLife && (rowPremium >= 10000 || rawPrem >= 10000)) ? String(rowPremium || rawPrem) : "");
       const coverRows = (isHealth || isLife) ? this.getHealthCoverRowsForDisplay(rec, policy) : [];
       const coverBtn = coverRows.length
         ? `<button class="cfNewPolicyCard__coversBtn" type="button" data-cf-covers-toggle="${escapeHtml(policy.id)}" aria-expanded="false">פירוט כיסויים</button>`
@@ -20651,11 +20665,13 @@ UsersGateUI.init();
           ${cell('מספר פוליסה', policyNumber)}
           ${cell('תחילת ביטוח', startDate)}
           ${endDate ? cell('תום ביטוח', endDate) : ""}
+          ${isLife && displaySum ? cell('סכום ביטוח', this.formatMoneyValue(this.asMoneyNumber(displaySum) || displaySum)) : ""}
+          ${isHealth && compensation && Number(compensation) >= 1000 ? cell('סכום פיצוי', this.formatMoneyValue(this.asMoneyNumber(compensation) || compensation)) : ""}
           ${cell('מבוטחים', insuredText)}
           <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--action">${coverBtn}</div>
           <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--prem">
             <span class="cfNewPolicyCard__lbl">פרמיה חודשית</span>
-            <strong class="cfNewPolicyCard__prem">${escapeHtml(rowPremium ? this.formatMoneyValue(rowPremium) : (policy.premiumAfterDiscount || policy.premiumText || '—'))}</strong>
+            <strong class="cfNewPolicyCard__prem">${escapeHtml(displayPrem ? this.formatMoneyValue(displayPrem) : (isLife ? "—" : (policy.premiumAfterDiscount || policy.premiumText || "—")))}</strong>
             ${this.renderIssuedPolicyBadge(scan, policy)}
           </div>
         </div>
@@ -66422,7 +66438,7 @@ ${inner}
      ========================================================================== */
 
   const CUSTOMER_IMPORT_VERSION = "1.2";
-  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260823-migdal-sums-v1";
+  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260823-migdal-sumfix-v1";
   const GI_PROD_FALLBACK_COMPANIES = Object.freeze([
     { id: "הכשרה", label: "הכשרה", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד." },
     { id: "הפניקס", label: "הפניקס", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
