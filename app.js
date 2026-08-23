@@ -14711,7 +14711,7 @@
       try { localStorage.removeItem(LS_SESSION_KEY); } catch(_) {}
       try { localStorage.removeItem(SIDEBAR_COLLAPSE_STORAGE_KEY); } catch(_) {}
       this.lock();
-      try { UI.applySidebarCollapse(true); } catch(_e) {}
+      try { UI.applySidebarCollapse(false); } catch(_e) {}
       if(reason === "idle"){
         this._setError("בוצעה התנתקות אוטומטית לאחר 40 דקות של אי פעילות במערכת");
       } else {
@@ -15284,7 +15284,7 @@ UsersGateUI.init();
     },
 
     initSidebarCollapse(){
-      this.applySidebarCollapse(true);
+      this.applySidebarCollapse(false);
       try { localStorage.removeItem(SIDEBAR_COLLAPSE_STORAGE_KEY); } catch(_e) {}
       if (this.els.sidebarToggle) {
         on(this.els.sidebarToggle, "click", () => this.toggleSidebarCollapse());
@@ -15299,9 +15299,6 @@ UsersGateUI.init();
     toggleSidebarCollapse(){
       const next = !document.body.classList.contains('sidebar-collapsed');
       this.applySidebarCollapse(next);
-      try {
-        localStorage.setItem(SIDEBAR_COLLAPSE_STORAGE_KEY, next ? "1" : "0");
-      } catch(_e) {}
     },
 
     applySidebarCollapse(collapsed){

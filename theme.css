@@ -151,13 +151,16 @@ body:not(.lcAuthLock):not(#\9):not(#\9){
   color: var(--gi-text);
 }
 
-.app:not(#\9):not(#\9){
-  grid-template-columns: clamp(216px, 17vw, 260px) 1fr;
+.app:not(#\9):not(#\9),
+#app:not(#\9):not(#\9){
+  grid-template-columns: 248px 1fr;
   background: var(--gi-bg);
+  transition: grid-template-columns .2s ease-out;
 }
 
-body.sidebar-collapsed #app:not(#\9):not(#\9){
-  grid-template-columns: 84px 1fr !important;
+body.sidebar-collapsed #app:not(#\9):not(#\9),
+body.sidebar-collapsed .app:not(#\9):not(#\9){
+  grid-template-columns: 80px 1fr !important;
 }
 
 .main:not(#\9):not(#\9){
@@ -2010,99 +2013,17 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 
 
 /* =====================================================================
-   23. SIDEBAR ? LOCKED OPEN
-   BUILD: 20260730-enterprise-v3
-
-   ?????? ???? ????. ????? ?????? ???? ???????.
-
-   ????: ??????? ?-app.js ?????? ???? ?????? ????? ??? ?-localStorage,
-   ???? ??????? ??????? ???? ????? ?????? ?? body.sidebar-collapsed.
-   ?????? ??? ??????? ?? ???? ?????? ????, ?? ????? ????? ??? ??????
-   ???? ?? ???? ?? ????? ???? ???? ????? ????? ????.
-
-   ?????? ???, ???? ?-collapsed ???????? 3 ?-4 (????? 157, 186) ?????
-   "Collapse switch" ???? ??? ?????????. ?? ?????? ?????? ??? ?????
-   ????? ??? ????? ?? ??????? ?????? ??????.
+   23. SIDEBAR PIN — collapse to icons (unlocked)
+   BUILD: 20260823-sidebar-pin-v1
    ===================================================================== */
 
-/* --- ????? ?????? ???? ??????? --- */
 .sidebarModeSwitch:not(#\9):not(#\9){
   display: none !important;
 }
 
-/* --- ???? ????: ???? ????? ?????? --- */
-body.sidebar-collapsed #app:not(#\9):not(#\9),
-body.sidebar-collapsed .app:not(#\9):not(#\9){
-  grid-template-columns: clamp(216px, 17vw, 260px) 1fr !important;
-}
-
-body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
-  padding: var(--gi-s5) var(--gi-s3) var(--gi-s4) !important;
-}
-
-/* --- ???? ????? ???? ???? --- */
-body.sidebar-collapsed .sidebar__topBar:not(#\9):not(#\9){
-  display: flex !important;
-  align-items: flex-start !important;
-  justify-content: center !important;
-  margin-bottom: var(--gi-s5) !important;
-  padding: 0 var(--gi-s2) !important;
-}
-
-body.sidebar-collapsed .sidebar__topBar .topbarBrand--sidebar:not(#\9):not(#\9){
-  width: 100% !important;
-  margin-inline-start: 0 !important;
-  padding-inline-start: 0 !important;
-  pointer-events: none !important;
-}
-
-body.sidebar-collapsed .sidebar__topBar .topbarBrand--sidebar > .topbarBrand__img:not(#\9):not(#\9){
-  width: min(100%, 196px) !important;
-  margin: 0 auto !important;
-}
-
-/* ????? ????? ?????? ????? ?? ???? ????? ? ????? ????? ???? */
 .topbar__right > .topbarBrand:not(#\9):not(#\9),
 .topbar .topbarBrand:not(.topbarBrand--sidebar):not(#\9):not(#\9){
   display: none !important;
-}
-
-/* --- ?????????? ??????: ???? ???? ????? --- */
-body.sidebar-collapsed .sidebar .nav:not(#\9):not(#\9){
-  gap: 2px !important;
-  padding-inline: var(--gi-s1) !important;
-}
-
-body.sidebar-collapsed .sidebar .nav__item:not(#\9):not(#\9){
-  justify-content: flex-start !important;
-  align-items: center !important;
-  gap: var(--gi-s3) !important;
-  padding: 10px var(--gi-s3) !important;
-  min-height: 40px !important;
-  border-radius: var(--gi-r-ctl) !important;
-}
-
-body.sidebar-collapsed .sidebar .nav__icon:not(#\9):not(#\9){
-  width: 20px !important;
-  min-width: 20px !important;
-  height: 20px !important;
-  flex: 0 0 20px !important;
-  margin: 0 !important;
-}
-
-/* ??????? ??? ??????? ?-opacity/max-width ? ??????? ?????? ???? */
-body.sidebar-collapsed .sidebar .nav__label:not(#\9):not(#\9){
-  opacity: 1 !important;
-  max-width: none !important;
-  overflow: visible !important;
-  pointer-events: auto !important;
-  transform: none !important;
-  font-size: 14px !important;
-  font-weight: 500 !important;
-}
-
-body.sidebar-collapsed .sidebar .nav__item.is-active .nav__label:not(#\9):not(#\9){
-  font-weight: 600 !important;
 }
 
 
@@ -10577,4 +10498,167 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 #view-campaignLeads #campaignLeadEditorTitle[hidden]:not(#\9):not(#\9),
 #view-campaignLeads #btnTrackingDateAll[hidden]:not(#\9):not(#\9){
   display: none !important;
+}
+
+/* =====================================================================
+   GI-SIDEBAR-PIN 2026-08-23
+   Pin collapses the rail to icons. Logo stays above the icons, flush right.
+   Fast 200ms grid + 120ms label fade. No max-width / filter animation.
+   ===================================================================== */
+
+.sidebar__topBar:not(#\9):not(#\9){
+  display: flex !important;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin-bottom: var(--gi-s4) !important;
+  padding: 0 !important;
+}
+
+.sidebarPin:not(#\9):not(#\9){
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  margin: 0;
+  margin-inline-start: auto;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 10px;
+  background: rgba(255,255,255,.08);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: none;
+  transition: background .15s ease-out, border-color .15s ease-out, transform .18s ease-out;
+}
+
+.sidebarPin:hover:not(#\9):not(#\9){
+  background: rgba(255,255,255,.16);
+  border-color: rgba(255,255,255,.28);
+}
+
+.sidebarPin:focus-visible:not(#\9):not(#\9){
+  outline: 2px solid var(--gi-primary);
+  outline-offset: 2px;
+}
+
+.sidebarPin.is-collapsed:not(#\9):not(#\9){
+  background: var(--gi-primary);
+  border-color: transparent;
+}
+
+.sidebarPin__icon:not(#\9):not(#\9){
+  width: 16px;
+  height: 16px;
+  display: block;
+  transform-origin: 50% 40%;
+  transition: transform .18s ease-out;
+}
+
+.sidebarPin.is-collapsed .sidebarPin__icon:not(#\9):not(#\9){
+  transform: rotate(-45deg);
+}
+
+.sidebar .topbarBrand--sidebar > .topbarBrand__img:not(#\9):not(#\9),
+.sidebar .brand__logoImg:not(#\9):not(#\9){
+  width: min(100%, 196px);
+  transition: width .2s ease-out;
+}
+
+.sidebar .nav__label:not(#\9):not(#\9){
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity .12s ease-out;
+}
+
+body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
+  padding: 12px 8px 10px !important;
+  overflow: hidden;
+}
+
+body.sidebar-collapsed .sidebar__topBar:not(#\9):not(#\9){
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: flex-start !important;
+  gap: 6px;
+  margin-bottom: 10px !important;
+  padding: 0 !important;
+}
+
+body.sidebar-collapsed .sidebar__topBar .topbarBrand--sidebar:not(#\9):not(#\9){
+  width: auto !important;
+  margin-inline-start: 0 !important;
+  margin-inline-end: auto !important;
+  padding: 0 !important;
+  pointer-events: none !important;
+}
+
+body.sidebar-collapsed .sidebar__topBar .topbarBrand--sidebar > .topbarBrand__img:not(#\9):not(#\9){
+  width: 56px !important;
+  margin: 0 !important;
+}
+
+body.sidebar-collapsed .sidebarPin:not(#\9):not(#\9){
+  margin-inline: auto;
+}
+
+body.sidebar-collapsed .sidebar .nav:not(#\9):not(#\9){
+  gap: 4px !important;
+  padding-inline: 0 !important;
+}
+
+body.sidebar-collapsed .sidebar .nav__item:not(#\9):not(#\9){
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 0 !important;
+  padding: 8px 0 !important;
+  min-height: 44px !important;
+  overflow: hidden;
+}
+
+body.sidebar-collapsed .sidebar .nav__icon:not(#\9):not(#\9){
+  width: 36px !important;
+  min-width: 36px !important;
+  height: 36px !important;
+  flex: 0 0 36px !important;
+  margin: 0 !important;
+}
+
+body.sidebar-collapsed .sidebar .nav__label:not(#\9):not(#\9){
+  opacity: 0 !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  flex: 0 0 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  transform: none !important;
+}
+
+@media (max-width: 720px){
+  .sidebarPin:not(#\9):not(#\9){
+    display: none !important;
+  }
+  body.sidebar-collapsed #app:not(#\9):not(#\9),
+  body.sidebar-collapsed .app:not(#\9):not(#\9),
+  .app:not(#\9):not(#\9),
+  #app:not(#\9):not(#\9){
+    grid-template-columns: 1fr !important;
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .app:not(#\9):not(#\9),
+  #app:not(#\9):not(#\9),
+  .sidebar .topbarBrand--sidebar > .topbarBrand__img:not(#\9):not(#\9),
+  .sidebar .nav__label:not(#\9):not(#\9),
+  .sidebarPin:not(#\9):not(#\9),
+  .sidebarPin__icon:not(#\9):not(#\9){
+    transition: none !important;
+  }
 }
