@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260823-mnr-ayl-disc-v1";
+  const GI_WIZARD_BUILD = "20260823-phx-gemel-20-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -13875,7 +13875,7 @@ if(path === "birthDate"){
         "בריאות": [
           { label:'10% ל-10 שנים — רובד בסיס + משלים שב"ן', pct:10, years:10 },
           { label:'15% ל-10 שנים — שקל ראשון + אמבולטורי + כתבי שירות', pct:15, years:10 },
-          { label:'20% ל-10 שנים — בסיס + משלים שב"ן (גמל INVEST)', pct:20, years:10 },
+          { label:'20% ל-10 שנים — משלים שב"ן + שקל ראשון כולל כתבי שירות (גמל INVEST)', pct:20, years:10 },
         ],
         "מחלות קשות": [
           { label:'20% ל-10 שנים — בטוח מרפא / מרפא סרטן (עד גיל 20)', pct:20, years:10 },
