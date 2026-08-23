@@ -1205,25 +1205,72 @@
     return Array.from(byName.values());
   }
 
+  function asMoneyNum(v){
+    return Number(String(v == null ? "" : v).replace(/[^\d.\-]/g, "")) || 0;
+  }
+
   function relocateMisreadLifePremium(p){
     const t = safeTrim(p?.type);
     if(t !== "ריסק" && t !== "ריסק משכנתא") return p;
-    const prem = Number(p?.premiumMonthly) || 0;
+    const prem = asMoneyNum(p?.premiumMonthly || p?.monthlyPremium);
     if(prem >= 10000){
-      if(!Number(p.sumInsured)) p.sumInsured = money2(prem);
+      if(!asMoneyNum(p.sumInsured)) p.sumInsured = money2(prem);
       p.premiumMonthly = "";
+      if(asMoneyNum(p.monthlyPremium) >= 10000) p.monthlyPremium = "";
     }
     if(p.premiumPerInsured && typeof p.premiumPerInsured === "object"){
       Object.keys(p.premiumPerInsured).forEach((k) => {
-        if(Number(p.premiumPerInsured[k]) >= 10000) p.premiumPerInsured[k] = "";
+        if(asMoneyNum(p.premiumPerInsured[k]) >= 10000) p.premiumPerInsured[k] = "";
       });
     }
     if(p.productionCoverPremiums && typeof p.productionCoverPremiums === "object"){
       Object.keys(p.productionCoverPremiums).forEach((k) => {
-        if(Number(p.productionCoverPremiums[k]) >= 10000) p.productionCoverPremiums[k] = "";
+        if(asMoneyNum(p.productionCoverPremiums[k]) >= 10000) p.productionCoverPremiums[k] = "";
       });
     }
+    if(!safeTrim(p.premiumMonthly) && p.premiumPerInsured && typeof p.premiumPerInsured === "object"){
+      const small = [];
+      Object.keys(p.premiumPerInsured).forEach((k) => {
+        const n = asMoneyNum(p.premiumPerInsured[k]);
+        if(n > 0 && n < 10000) small.push(n);
+      });
+      const uniq = Array.from(new Set(small));
+      if(uniq.length === 1) p.premiumMonthly = money2(uniq[0]);
+    }
     return p;
+  }
+
+  function sanitizeCustomerPolicies(payload){
+    if(!payload || typeof payload !== "object") return false;
+    let changed = false;
+    function snap(p){
+      return [
+        safeTrim(p?.premiumMonthly),
+        safeTrim(p?.monthlyPremium),
+        safeTrim(p?.sumInsured),
+        JSON.stringify(p?.premiumPerInsured || {}),
+        JSON.stringify(p?.productionCoverPremiums || {})
+      ].join("|");
+    }
+    function touch(list){
+      (Array.isArray(list) ? list : []).forEach((p) => {
+        if(!p || typeof p !== "object") return;
+        const t = safeTrim(p.type);
+        if(t !== "ריסק" && t !== "ריסק משכנתא") return;
+        const before = snap(p);
+        relocateMisreadLifePremium(p);
+        if(snap(p) !== before) changed = true;
+      });
+    }
+    touch(payload.newPolicies);
+    if(payload.operational && typeof payload.operational === "object") touch(payload.operational.newPolicies);
+    (Array.isArray(payload.insureds) ? payload.insureds : []).forEach((ins) => {
+      touch(ins?.data?.existingPolicies);
+    });
+    (Array.isArray(payload.operational?.insureds) ? payload.operational.insureds : []).forEach((ins) => {
+      touch(ins?.data?.existingPolicies);
+    });
+    return changed;
   }
 
   function applyPolicyFields(p, item, meta, payload){
@@ -1357,7 +1404,9 @@
   }
 
   global.GI_PRODUCTION = {
-    version: "20260823-migdal-sumfix-v1",
+    version: "20260823-migdal-sumall-v1",
+    relocateMisreadLifePremium,
+    sanitizeCustomerPolicies,
     COMPANIES,
     COMPANY_HACHSHARA,
     COMPANY_MIGDAL,

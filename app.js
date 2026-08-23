@@ -12808,6 +12808,7 @@
                שנבנה על השורה הרזה חייב להתבטל כאן, אחרת הדשבורד ממשיך לחשב עליה כריקה. */
             if(spec.key === "customers" && hydratedIds.length){
               try { CustomersUI.invalidatePolicyCollectCache?.(hydratedIds); } catch(_e) {}
+              try { CustomersUI.queueLifeSumSweep?.(hydratedIds); } catch(_e) {}
             }
             if(onBatch){ try { onBatch(filled, failed); } catch(_e) {} }
             await this.sleep(0);
@@ -17614,6 +17615,132 @@ UsersGateUI.init();
       if(!this._policyCollectCache.size) this._policyCollectCache = null;
     },
 
+    /* GI-FIX 2026-08-23 — סכום ביטוח של ריסק ששמר כפרמיה (>=10,000)
+       מתוקן לכל התיקים אחרי hydration, בלי לפתוח תיק אחד-אחד. */
+    _lifeSumSweepTimer: 0,
+    _lifeSumSweepRunning: false,
+    _lifeSumScanAll: false,
+    _lifeSumPendingIds: null,
+    _lifeSumSavedIds: new Set(),
+
+    asLifeMoneyNumber(v){
+      return Number(String(v == null ? "" : v).replace(/[^\d.\-]/g, "")) || 0;
+    },
+
+    sanitizeLifePolicyInPlace(p){
+      const t = safeTrim(p?.type);
+      if(t !== "ריסק" && t !== "ריסק משכנתא") return false;
+      const before = JSON.stringify([p.premiumMonthly, p.monthlyPremium, p.sumInsured, p.premiumPerInsured, p.productionCoverPremiums]);
+      const P = window.GI_PRODUCTION;
+      if(P && typeof P.relocateMisreadLifePremium === "function"){
+        P.relocateMisreadLifePremium(p);
+      } else {
+        const prem = this.asLifeMoneyNumber(p.premiumMonthly || p.monthlyPremium);
+        if(prem >= 10000){
+          if(!this.asLifeMoneyNumber(p.sumInsured)) p.sumInsured = prem.toFixed(2);
+          p.premiumMonthly = "";
+          if(this.asLifeMoneyNumber(p.monthlyPremium) >= 10000) p.monthlyPremium = "";
+        }
+        if(p.premiumPerInsured && typeof p.premiumPerInsured === "object"){
+          Object.keys(p.premiumPerInsured).forEach((k) => {
+            if(this.asLifeMoneyNumber(p.premiumPerInsured[k]) >= 10000) p.premiumPerInsured[k] = "";
+          });
+        }
+        if(p.productionCoverPremiums && typeof p.productionCoverPremiums === "object"){
+          Object.keys(p.productionCoverPremiums).forEach((k) => {
+            if(this.asLifeMoneyNumber(p.productionCoverPremiums[k]) >= 10000) p.productionCoverPremiums[k] = "";
+          });
+        }
+        if(!safeTrim(p.premiumMonthly) && p.premiumPerInsured && typeof p.premiumPerInsured === "object"){
+          const small = [];
+          Object.keys(p.premiumPerInsured).forEach((k) => {
+            const n = this.asLifeMoneyNumber(p.premiumPerInsured[k]);
+            if(n > 0 && n < 10000) small.push(n);
+          });
+          const uniq = Array.from(new Set(small));
+          if(uniq.length === 1) p.premiumMonthly = uniq[0].toFixed(2);
+        }
+      }
+      return JSON.stringify([p.premiumMonthly, p.monthlyPremium, p.sumInsured, p.premiumPerInsured, p.productionCoverPremiums]) !== before;
+    },
+
+    sanitizeCustomerPayload(payload){
+      if(window.GI_PRODUCTION && typeof window.GI_PRODUCTION.sanitizeCustomerPolicies === "function"){
+        return !!window.GI_PRODUCTION.sanitizeCustomerPolicies(payload);
+      }
+      if(!payload || typeof payload !== "object") return false;
+      let changed = false;
+      const lists = [];
+      if(Array.isArray(payload.newPolicies)) lists.push(payload.newPolicies);
+      if(Array.isArray(payload.operational?.newPolicies)) lists.push(payload.operational.newPolicies);
+      (Array.isArray(payload.insureds) ? payload.insureds : []).forEach((ins) => {
+        if(Array.isArray(ins?.data?.existingPolicies)) lists.push(ins.data.existingPolicies);
+      });
+      (Array.isArray(payload.operational?.insureds) ? payload.operational.insureds : []).forEach((ins) => {
+        if(Array.isArray(ins?.data?.existingPolicies)) lists.push(ins.data.existingPolicies);
+      });
+      lists.forEach((list) => list.forEach((p) => { if(this.sanitizeLifePolicyInPlace(p)) changed = true; }));
+      return changed;
+    },
+
+    queueLifeSumSweep(ids){
+      if(!this._lifeSumPendingIds) this._lifeSumPendingIds = new Set();
+      if(ids === undefined || ids === null){
+        this._lifeSumScanAll = true;
+      } else {
+        (Array.isArray(ids) ? ids : [ids]).forEach((id) => {
+          const s = String(id || "");
+          if(s) this._lifeSumPendingIds.add(s);
+        });
+      }
+      if(this._lifeSumSweepTimer) clearTimeout(this._lifeSumSweepTimer);
+      this._lifeSumSweepTimer = setTimeout(() => { void this.flushLifeSumSweep(); }, 1600);
+    },
+
+    async flushLifeSumSweep(){
+      if(this._lifeSumSweepRunning) return;
+      this._lifeSumSweepRunning = true;
+      try {
+        const list = Array.isArray(State.data?.customers) ? State.data.customers : [];
+        const pending = this._lifeSumPendingIds;
+        const scanAll = this._lifeSumScanAll === true;
+        this._lifeSumPendingIds = new Set();
+        this._lifeSumScanAll = false;
+        const dirty = [];
+        for(let i = 0; i < list.length; i += 1){
+          const rec = list[i];
+          const id = safeTrim(rec?.id);
+          if(!id || this._lifeSumSavedIds.has(id)) continue;
+          if(!scanAll && pending && pending.size && !pending.has(id)) continue;
+          if(!Storage.payloadHasPolicyOrInsuredContent?.(rec?.payload)) continue;
+          if(this.sanitizeCustomerPayload(rec.payload)){
+            rec.updatedAt = nowISO();
+            dirty.push(rec);
+          } else {
+            this._lifeSumSavedIds.add(id);
+          }
+        }
+        for(let i = 0; i < dirty.length; i += 1){
+          const rec = dirty[i];
+          try {
+            const row = Storage.buildCustomerRows({ customers: [rec] })[0];
+            if(!row || !row.payload) continue;
+            const saved = await Storage.upsertSingleRow(SUPABASE_TABLES.customers, row);
+            if(saved?.ok){
+              this._lifeSumSavedIds.add(safeTrim(rec.id));
+              try { Storage.rememberRows(SUPABASE_TABLES.customers, [row]); } catch(_e) {}
+            }
+          } catch(_e) {}
+          if(i % 4 === 0) await new Promise((r) => setTimeout(r, 0));
+        }
+        if(dirty.length){
+          try { this.invalidatePolicyCollectCache(dirty.map((r) => r.id)); } catch(_e) {}
+        }
+      } finally {
+        this._lifeSumSweepRunning = false;
+      }
+    },
+
     init(){
       this.els.wrap = $("#customerFull");
       this.els.backdrop = $("#customerFullBackdrop");
@@ -17852,6 +17979,7 @@ UsersGateUI.init();
       on(this.policyModal.wrap, "click", (ev) => {
         if(ev.target?.getAttribute?.("data-close") === "1") this.closePolicyModal();
       });
+      try { this.queueLifeSumSweep(); } catch(_e) {}
     },
 
     list(){
@@ -19390,7 +19518,11 @@ UsersGateUI.init();
         const insuredLabel = safeTrim(ins?.label) || safeTrim(ins?.type) || `מבוטח ${idx+1}`;
         (ins?.data?.existingPolicies || []).forEach((p, pIdx) => {
           const type = safeTrim(p?.type || p?.product || "פוליסה");
-          const monthlyPremium = safeTrim(p?.monthlyPremium || p?.premiumMonthly || p?.premium || p?.premiumBefore || "");
+          let monthlyPremium = safeTrim(p?.monthlyPremium || p?.premiumMonthly || p?.premium || p?.premiumBefore || "");
+          if((type === "ריסק" || type === "ריסק משכנתא") && this.asLifeMoneyNumber(monthlyPremium) >= 10000){
+            if(!safeTrim(p.sumInsured)) p.sumInsured = monthlyPremium;
+            monthlyPremium = "";
+          }
           const isAgentAppt = this.isAgentAppointmentExistingPolicy(ins, p);
           const coverItems = Array.isArray(p?.covers) ? p.covers.filter(Boolean) : [];
           const coverageValue = safeTrim(p?.sumInsured || p?.compensation || p?.coverage || (coverItems.length ? coverItems.join(", ") : ""));
@@ -19463,10 +19595,11 @@ UsersGateUI.init();
         } catch(_e) {}
         const type = safeTrim(p?.type || p?.product || (p?.company === "מדיקר" ? "מדיקר" : "פוליסה"));
         let premium = safeTrim(p?.premiumMonthly || p?.premium || p?.premiumBefore || "");
-        if((type === "ריסק" || type === "ריסק משכנתא") && Number(premium) >= 10000){
+        if((type === "ריסק" || type === "ריסק משכנתא") && this.asLifeMoneyNumber(premium) >= 10000){
           if(!safeTrim(p.sumInsured)) p.sumInsured = premium;
           premium = "";
           p.premiumMonthly = "";
+          try { this.sanitizeLifePolicyInPlace(rawPolicy); } catch(_e) {}
         }
         const coverItems = Array.isArray(p?.healthCovers) && p.healthCovers.length
           ? p.healthCovers.filter(Boolean)
@@ -66438,7 +66571,7 @@ ${inner}
      ========================================================================== */
 
   const CUSTOMER_IMPORT_VERSION = "1.2";
-  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260823-migdal-sumfix-v1";
+  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260823-migdal-sumall-v1";
   const GI_PROD_FALLBACK_COMPANIES = Object.freeze([
     { id: "הכשרה", label: "הכשרה", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד." },
     { id: "הפניקס", label: "הפניקס", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
