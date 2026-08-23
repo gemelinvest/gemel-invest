@@ -1017,7 +1017,12 @@
         giSimDiscOpt("cll-r-sup-500k", "55/45/45/45/45/45 — דרך המפקח · מינ׳ 500K · גיל 35–65", [55,45,45,45,45,45]),
         giSimDiscOpt("cll-r-3674", "65/60/60/50/45/40 — קוד 3674 · קיץ 2026 · מינ׳ 1M · גיל 50–65 · עד 4M", [65,60,60,50,45,40]),
         giSimDiscOpt("cll-r-3675", "65/55/55/45/45/35 — קוד 3675 · קיץ 2026 · מינ׳ 750K · גיל 50–65 · עד 4M", [65,55,55,45,45,35]),
-        giSimDiscOpt("cll-r-3676", "60/55/50/40/40/30 — קוד 3676 · קיץ 2026 · מינ׳ 500K · גיל 50–65 · עד 4M", [60,55,50,40,40,30])
+        giSimDiscOpt("cll-r-3676", "60/55/50/40/40/30 — קוד 3676 · קיץ 2026 · מינ׳ 500K · גיל 50–65 · עד 4M", [60,55,50,40,40,30]),
+        giSimDiscOpt("cll-r-3703", "72/65/65/55/45/45 — קוד 3703 · מכוננות מעודכן · מינ׳ 2M · גיל 30–67", [72,65,65,55,45,45]),
+        giSimDiscOpt("cll-r-3704", "70/65/60/55/50/40 — קוד 3704 · מכוננות מעודכן · מינ׳ 1.5M · גיל 30–67", [70,65,60,55,50,40]),
+        giSimDiscOpt("cll-r-3705", "70/65/60/50/40/40 — קוד 3705 · מכוננות מעודכן · מינ׳ 1M · גיל 30–67", [70,65,60,50,40,40]),
+        giSimDiscOpt("cll-r-3706", "65/60/55/50/45/40 — קוד 3706 · מכוננות מעודכן · מינ׳ 750K · גיל 30–67", [65,60,55,50,45,40]),
+        giSimDiscOpt("cll-r-3707", "65/55/55/50/40/30 — קוד 3707 · מכוננות מעודכן · מינ׳ 500K · גיל 30–67", [65,55,55,50,40,30])
       ],
       "ריסק משכנתא": [
         giSimDiscOpt("cll-m-3621", "30/15/15/15/15/15 — כלל סייל 3621 · כל גיל", [30,15,15,15,15,15]),
@@ -1190,6 +1195,27 @@
         giSimDiscOpt("mnr-m-101149", "50/40/30/25/15/15 — 101149 · גיל 25+ · מינ׳ 500K", [50,40,30,25,15,15]),
         giSimDiscOpt("mnr-m-101145", "55/45/40/30/20/20/20/20 — 101145 · גיל 30+ · מינ׳ 1M", [55,45,40,30,20,20,20,20]),
         giSimDiscOpt("mnr-m-101151", "60/50/40/30/20/20/20/20 — 101151 · גיל 40+ · מינ׳ 1M", [60,50,40,30,20,20,20,20])
+      ]
+    },
+    "איילון": {
+      "בריאות": [
+        giSimDiscOpt("ayl-h-20-shaban", "20% ל-10 שנים — שב״ן (על הכל)", 20, { years: 10, pctByCover: {
+          transplant:20, drugs:20, abroad_surgery:20, surgery_first_shekel:20, surgery_shaban:20, surgery_shaban_5000:20,
+          ambulatory_extended:20, ambulatory_consults:20, ambulatory_treatments:20, fast_diagnosis:20, tech_devices:20,
+          child_dev:20, complementary:20, online:20, home:20, sports:20, crisis_bar_gefen:20
+        } }),
+        giSimDiscOpt("ayl-h-33-first", "33% שקל ראשון + 20% על היתר (ללא שב״ן)", 33, { years: 10, pctByCover: {
+          surgery_first_shekel:33,
+          transplant:20, drugs:20, abroad_surgery:20,
+          ambulatory_extended:20, ambulatory_consults:20, ambulatory_treatments:20, fast_diagnosis:20, tech_devices:20,
+          child_dev:20, complementary:20, online:20, home:20, sports:20, crisis_bar_gefen:20
+        } })
+      ],
+      "מחלות קשות": [
+        giSimDiscOpt("ayl-ci-25", "25% ל-10 שנים — בשביל החוסן · גיל 21+ · מינ׳ 100K", 25, { years: 10 })
+      ],
+      "סרטן": [
+        giSimDiscOpt("ayl-ca-25", "25% ל-10 שנים — בשביל החוסן סרטן · גיל 21+ · מינ׳ 100K", 25, { years: 10 })
       ]
     }
   };

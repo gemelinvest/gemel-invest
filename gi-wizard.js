@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260823-pay-skip-mirror-v1";
+  const GI_WIZARD_BUILD = "20260823-ayl-clal-disc-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -13803,7 +13803,7 @@ if(path === "birthDate"){
           { label:'25% ל-10 שנים — סרטן (גיל 21+, מינ׳ 100K)', pct:25, years:10 },
         ],
         "ריסק": [
-          { label:'דרור 1 — חבילה 56095 (כל גיל, מינ׳ 500K)', pct:0, years:6, schedule:"55/35/30/15/15/15", packageNum:"56095" },
+          { label:'דרור 1 — חבילה 56095 (כל גיל, מינ׳ 500K)', pct:0, years:6, schedule:"55/30/20/15/15/15", packageNum:"56095" },
           { label:'דרור 1 — חבילה 1373 (גיל 30+, מינ׳ 1M)', pct:0, years:6, schedule:"55/35/25/15/15/15", packageNum:"1373" },
           { label:'דרור 1 — חבילה 19993 (גיל 40, מינ׳ 1M יחיד / 500K זוג)', pct:0, years:6, schedule:"65/55/40/30/20/15", packageNum:"19993" },
           { label:'דרור 1 — חבילה 60094 (גיל 45, מינ׳ 1.5M יחיד / 750K זוג)', pct:0, years:6, schedule:"65/55/45/35/25/20", packageNum:"60094" },
@@ -13856,6 +13856,11 @@ if(path === "birthDate"){
           { label:'ריסק כלל — 3594 (גיל 30-60, מינ׳ 750K) | א׳55 ב׳45 ג׳45 ד׳35 ה׳35 ו׳20', pct:0, years:6, schedule:"55/45/45/35/35/20", packageNum:"3594" },
           { label:'ריסק כלל — 3595 (גיל 30-60, מינ׳ 500K) | א׳55 ב׳45 ג׳45 ד׳45 ה׳45 ו׳45', pct:0, years:6, schedule:"55/45/45/45/45/45", packageNum:"3595" },
           { label:'ריסק כלל — דרך המפקח (גיל 35-65, מינ׳ 500K) | א׳55 ב׳45 ג׳45 ד׳45 ה׳45 ו׳45', pct:0, years:6, schedule:"55/45/45/45/45/45", packageNum:"דרך המפקח" },
+          { label:'ריסק כלל — 3703 מכוננות מעודכן (גיל 30-67, מינ׳ 2M) | א׳72 ב׳65 ג׳65 ד׳55 ה׳45 ו׳45', pct:0, years:6, schedule:"72/65/65/55/45/45", packageNum:"3703" },
+          { label:'ריסק כלל — 3704 מכוננות מעודכן (גיל 30-67, מינ׳ 1.5M) | א׳70 ב׳65 ג׳60 ד׳55 ה׳50 ו׳40', pct:0, years:6, schedule:"70/65/60/55/50/40", packageNum:"3704" },
+          { label:'ריסק כלל — 3705 מכוננות מעודכן (גיל 30-67, מינ׳ 1M) | א׳70 ב׳65 ג׳60 ד׳50 ה׳40 ו׳40', pct:0, years:6, schedule:"70/65/60/50/40/40", packageNum:"3705" },
+          { label:'ריסק כלל — 3706 מכוננות מעודכן (גיל 30-67, מינ׳ 750K) | א׳65 ב׳60 ג׳55 ד׳50 ה׳45 ו׳40', pct:0, years:6, schedule:"65/60/55/50/45/40", packageNum:"3706" },
+          { label:'ריסק כלל — 3707 מכוננות מעודכן (גיל 30-67, מינ׳ 500K) | א׳65 ב׳55 ג׳55 ד׳50 ה׳40 ו׳30', pct:0, years:6, schedule:"65/55/55/50/40/30", packageNum:"3707" },
         ],
         "ריסק משכנתא": [
           { label:'שוהם משכנתא — כלל סייל 3621 (כל גיל)', pct:0, years:6, schedule:"30/15/15/15/15/15", packageNum:"3621" },
