@@ -30539,7 +30539,8 @@ UsersGateUI.init();
     },
 
     buildDailyLeaderboard(forDate){
-      // תחרות כלל-ארגונית — אך מדלגים על תיקים כבדים שחונקים את ה-main thread
+      // כלל עסקי: מצטיין יומי = בריאות וסיכונים בלבד.
+      // אלמנטרי לא נכנס לדירוג (נשאר בדוח מכירות יומי / דשבורד אלמנטרי).
       const all = this.getLeaderboardSourceCustomers();
       const ref = forDate || new Date();
       const dayRange = {
@@ -30556,12 +30557,13 @@ UsersGateUI.init();
         });
         if(!policies.length) return;
         const premium = policies.reduce((sum, p) => sum + DashboardUI.policyNetPremium(p), 0);
+        if(!(premium > 0)) return;
         if(!map[name]) map[name] = { name, premium: 0, clients: 0 };
         map[name].premium += premium;
         map[name].clients += 1;
       });
       return Object.values(map)
-        .sort((a, b) => b.premium - a.premium)
+        .sort((a, b) => b.premium - a.premium || safeTrim(a.name).localeCompare(safeTrim(b.name), "he"))
         .slice(0, 3);
     },
 
@@ -30976,6 +30978,7 @@ UsersGateUI.init();
           if(typeof LiveRefresh !== "undefined" && LiveRefresh.getCurrentView?.() === "dailySales"){
             try { this.renderDailySalesPage(); } catch(_e) {}
           }
+          try { this.scheduleRefreshLeaderboard(); } catch(_e) {}
         } catch(err) {
           try { console.warn("[GI-DAILY-SALES] agent overlay failed", err); } catch(_e) {}
         } finally {
