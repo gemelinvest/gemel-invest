@@ -588,6 +588,55 @@
     try { riskSimHideNativeBodyCalc(body); } catch(_e) {}
   }
 
+  function riskSimCoverScrollKey(el){
+    if(!el || !el.classList) return "";
+    if(el.classList.contains("giValModal__body")) return "body";
+    if(el.classList.contains("giSimShell__panel--covers")) return "coversPanel";
+    if(el.classList.contains("giSimShell__layout")) return "layout";
+    if(String(el.className || "").indexOf("__coversWrap") >= 0) return "coversWrap";
+    return "";
+  }
+
+  function riskSimCoverScrollEls(modal){
+    if(!modal || typeof modal.querySelector !== "function") return [];
+    const out = [];
+    const add = (el) => { if(el && out.indexOf(el) < 0) out.push(el); };
+    add(modal.querySelector(".giValModal__body"));
+    add(modal.querySelector("[class*='__coversWrap']"));
+    add(modal.querySelector(".giSimShell__panel--covers"));
+    add(modal.querySelector(".giSimShell__layout"));
+    return out;
+  }
+
+  function riskSimCaptureCoverScroll(modal){
+    return riskSimCoverScrollEls(modal).map((el) => ({
+      key: riskSimCoverScrollKey(el),
+      top: el.scrollTop || 0,
+      left: el.scrollLeft || 0
+    })).filter((s) => s.key && (s.top || s.left));
+  }
+
+  function riskSimRestoreCoverScroll(modal, snap){
+    if(!modal || !Array.isArray(snap) || !snap.length) return;
+    const apply = () => {
+      const els = riskSimCoverScrollEls(modal);
+      snap.forEach((s) => {
+        const el = els.find((e) => riskSimCoverScrollKey(e) === s.key);
+        if(!el) return;
+        try { el.scrollTop = s.top; el.scrollLeft = s.left; } catch(_e) {}
+      });
+    };
+    apply();
+    if(typeof requestAnimationFrame === "function") requestAnimationFrame(apply);
+  }
+
+  function riskSimRenderPreservingCoverScroll(sim){
+    const modal = sim && sim._modal;
+    const snap = riskSimCaptureCoverScroll(modal);
+    try { sim._render(); } catch(_e) {}
+    riskSimRestoreCoverScroll(sim && sim._modal, snap);
+  }
+
   function riskSimHideNativeBodyCalc(root){
     if(!root) return;
     const hide = (el) => {
@@ -5981,7 +6030,7 @@
         const id = el.getAttribute("data-mnrh-cover");
         st.selected[id] = !!el.checked;
         st.dirtySinceSave = true;
-        this._render();
+        riskSimRenderPreservingCoverScroll(this);
       }));
       const applyBtn = modal.querySelector("[data-mnrh-apply]");
       if(applyBtn) on(applyBtn, "click", () => this._apply());
@@ -6714,7 +6763,7 @@
         const id = el.getAttribute("data-phxh-cover");
         st.selected[id] = !!el.checked;
         st.dirtySinceSave = true;
-        this._render();
+        riskSimRenderPreservingCoverScroll(this);
       }));
       const applyBtn = modal.querySelector("[data-phxh-apply]");
       if(applyBtn) on(applyBtn, "click", () => this._apply());
@@ -7599,7 +7648,7 @@
         const id = el.getAttribute("data-aylh-cover");
         st.selected[id] = !!el.checked;
         st.dirtySinceSave = true;
-        this._render();
+        riskSimRenderPreservingCoverScroll(this);
       }));
       $$("[data-aylh-info]", modal).forEach((el) => on(el, "click", (ev) => {
         try { ev.preventDefault(); ev.stopPropagation(); } catch(_e) {}
@@ -10136,7 +10185,7 @@
         const id = el.getAttribute("data-hachh-cover");
         st.selected[id] = !!el.checked;
         st.dirtySinceSave = true;
-        this._render();
+        riskSimRenderPreservingCoverScroll(this);
       }));
       const applyBtn = modal.querySelector("[data-hachh-apply]");
       if(applyBtn) on(applyBtn, "click", () => this._apply());
@@ -10829,7 +10878,7 @@
       $$("[data-mgdh-cover]", modal).forEach((el) => on(el, "change", () => {
         const st = this._state[this._activeInsuredId]; if(!st) return;
         if(!st.selected || typeof st.selected !== "object") st.selected = {};
-        st.selected[el.getAttribute("data-mgdh-cover")] = !!el.checked; st.dirtySinceSave = true; this._render();
+        st.selected[el.getAttribute("data-mgdh-cover")] = !!el.checked; st.dirtySinceSave = true; riskSimRenderPreservingCoverScroll(this);
       }));
       const applyBtn = modal.querySelector("[data-mgdh-apply]"); if(applyBtn) on(applyBtn, "click", () => this._apply());
       const saveBtn = modal.querySelector("[data-mgdh-save]"); if(saveBtn) on(saveBtn, "click", () => this._saveActive());
@@ -11526,7 +11575,7 @@
       $$("[data-clalh-cover]", modal).forEach((el) => on(el, "change", () => {
         const st = this._state[this._activeInsuredId]; if(!st) return;
         if(!st.selected || typeof st.selected !== "object") st.selected = {};
-        st.selected[el.getAttribute("data-clalh-cover")] = !!el.checked; st.dirtySinceSave = true; this._render();
+        st.selected[el.getAttribute("data-clalh-cover")] = !!el.checked; st.dirtySinceSave = true; riskSimRenderPreservingCoverScroll(this);
       }));
       const applyBtn = modal.querySelector("[data-clalh-apply]"); if(applyBtn) on(applyBtn, "click", () => this._apply());
       const saveBtn = modal.querySelector("[data-clalh-save]"); if(saveBtn) on(saveBtn, "click", () => this._saveActive());
