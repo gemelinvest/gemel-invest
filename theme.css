@@ -5226,10 +5226,12 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
 
 #customerFull.cfFile .customerFull__top:not(#\9):not(#\9),
 .cfFile__header:not(#\9):not(#\9){
-  background: var(--gi-surface) !important;
-  border-bottom: 1px solid var(--gi-border) !important;
-  box-shadow: none !important;
-  background-image: none !important;
+  background:
+    radial-gradient(760px 210px at 100% -30%, rgba(56,112,237,.20), transparent 62%),
+    radial-gradient(520px 160px at 0% 130%, rgba(37,99,235,.10), transparent 58%),
+    linear-gradient(180deg, #E8F1FF 0%, #F3F7FF 68%, #F8FAFC 100%) !important;
+  border-bottom: 1px solid rgba(56,112,237,.16) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.72) !important;
 }
 
 #customerFull.cfFile .customerFull__top:not(#\9):not(#\9){
@@ -5283,8 +5285,10 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
 }
 
 .cfFile__idCard:not(#\9):not(#\9){
-  border: 1px solid var(--gi-border) !important;
-  background: var(--gi-surface) !important;
+  border: 1px solid rgba(56,112,237,.18) !important;
+  background:
+    radial-gradient(220px 90px at 100% 0%, rgba(56,112,237,.08), transparent 70%),
+    #fff !important;
   border-radius: var(--gi-r-md) !important;
 }
 .cfFile__nameBtn:not(#\9):not(#\9){
@@ -5320,9 +5324,9 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
 
 .cfFileActionsMenu__trigger:not(#\9):not(#\9){
   min-height: 36px !important;
-  border: 1px solid var(--gi-border) !important;
-  background: var(--gi-surface-2) !important;
-  color: var(--gi-text) !important;
+  border: 1px solid rgba(56,112,237,.28) !important;
+  background: rgba(255,255,255,.82) !important;
+  color: var(--gi-primary) !important;
   border-radius: var(--gi-r-ctl) !important;
 }
 .cfFileActionsMenu__trigger:hover:not(#\9):not(#\9),
