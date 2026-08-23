@@ -205,6 +205,50 @@
     return x.toFixed(2);
   }
 
+  function isMonthlyLike(n){
+    const x = Number(n) || 0;
+    return x > 0 && x < 10000;
+  }
+
+  function isBenefitLike(n){
+    return (Number(n) || 0) >= 10000;
+  }
+
+  function maxCoverBenefit(covers){
+    let best = 0;
+    (covers || []).forEach((c) => {
+      const n = Number(c?.sumInsured) || 0;
+      if(n > best) best = n;
+    });
+    return best;
+  }
+
+  function splitLifeMoney(headerPrem, coverMonthly, coverBenefit){
+    const h = Number(headerPrem) || 0;
+    const c = Number(coverMonthly) || 0;
+    const b = Number(coverBenefit) || 0;
+    if(isBenefitLike(h) && isMonthlyLike(c)){
+      return { premiumMonthly: money2(c), sumInsured: money2(h) };
+    }
+    if(isBenefitLike(h) && (!c || Math.abs(h - c) < 0.05)){
+      return { premiumMonthly: "", sumInsured: money2(h) };
+    }
+    if(isBenefitLike(c) && !isMonthlyLike(c) && !isMonthlyLike(h)){
+      return { premiumMonthly: isMonthlyLike(h) ? money2(h) : "", sumInsured: money2(c) };
+    }
+    return {
+      premiumMonthly: c ? money2(c) : (isMonthlyLike(h) ? money2(h) : ""),
+      sumInsured: isBenefitLike(b) ? money2(b) : ""
+    };
+  }
+
+  function pickCompensation(type, covers){
+    const t = safeTrim(type);
+    if(t !== "מחלות קשות" && t !== "סרטן") return "";
+    const n = maxCoverBenefit(covers);
+    return n >= 1000 ? money2(n) : "";
+  }
+
   function formatPaymentPeriod(raw){
     const d = digits(raw);
     if(!d) return "";
@@ -688,10 +732,20 @@
       } else {
         type = inferHealthProductType(covers, Object.keys(sumCoverPremiums(covers, "health")));
       }
-      const premium = covers.reduce((sum, c) => sum + (Number(c.premium) || 0), 0);
-      const premiumMonthly = premium
-        ? money2(premium)
+      const coverMonthly = covers.reduce((sum, c) => sum + (Number(c.premium) || 0), 0);
+      const coverBenefit = maxCoverBenefit(covers);
+      let premiumMonthly = coverMonthly
+        ? money2(coverMonthly)
         : (header.premiumMonthly ? money2(header.premiumMonthly) : "");
+      let sumInsured = "";
+      let compensation = "";
+      if(family === "life"){
+        const split = splitLifeMoney(header.premiumMonthly, coverMonthly, coverBenefit);
+        premiumMonthly = split.premiumMonthly;
+        sumInsured = split.sumInsured;
+      } else {
+        compensation = pickCompensation(type, covers);
+      }
       const coverPremiums = sumCoverPremiums(covers, family);
       const peopleCount = (activePeople.length ? activePeople : people).length;
       return {
@@ -700,6 +754,8 @@
         family,
         policyNumber: header.policyNumber,
         premiumMonthly,
+        sumInsured,
+        compensation,
         startDate: header.startDate || covers.find((c) => c.startDate)?.startDate || "",
         endDate: header.endDate || covers.find((c) => c.endDate)?.endDate || "",
         insuredCount: header.insuredCount || peopleCount || 0,
@@ -1191,6 +1247,32 @@
     if(Object.keys(perIns).length) p.premiumPerInsured = perIns;
     if(safeTrim(item.agentNumber)) p.agentNumber = safeTrim(item.agentNumber);
     if(safeTrim(item.paymentPeriod)) p.paymentPeriod = safeTrim(item.paymentPeriod);
+    const finalType = safeTrim(p.type || item.type);
+    const coversForBenefit = incomingDetails.length ? incomingDetails : (item.covers || []);
+    if(finalType === "מחלות קשות" || finalType === "סרטן"){
+      const amt = safeTrim(item.compensation) || pickCompensation(finalType, coversForBenefit);
+      if(amt){
+        p.compensation = amt;
+        const per = {};
+        (item.covers || []).forEach((c) => {
+          const iid = insuredIdForTz(payload, c?.idNumber);
+          const n = Number(c?.sumInsured) || 0;
+          if(iid && n >= 1000) per[iid] = money2(Math.max(Number(per[iid]) || 0, n));
+        });
+        if(!Object.keys(per).length && insuredIds.length === 1) per[insuredIds[0]] = amt;
+        if(Object.keys(per).length) p.compensationPerInsured = Object.assign({}, p.compensationPerInsured || {}, per);
+      }
+    }
+    if(finalType === "ריסק" || finalType === "ריסק משכנתא"){
+      const amt = safeTrim(item.sumInsured) || (isBenefitLike(maxCoverBenefit(coversForBenefit)) ? money2(maxCoverBenefit(coversForBenefit)) : "");
+      if(amt){
+        p.sumInsured = amt;
+        if(insuredIds.length === 1){
+          if(!p.sumInsuredPerInsured || typeof p.sumInsuredPerInsured !== "object") p.sumInsuredPerInsured = {};
+          if(!safeTrim(p.sumInsuredPerInsured[insuredIds[0]])) p.sumInsuredPerInsured[insuredIds[0]] = amt;
+        }
+      }
+    }
     p.productionImport = meta;
     return p;
   }
@@ -1249,7 +1331,7 @@
   }
 
   global.GI_PRODUCTION = {
-    version: "20260823-migdal-fields-v1",
+    version: "20260823-migdal-sums-v1",
     COMPANIES,
     COMPANY_HACHSHARA,
     COMPANY_MIGDAL,
@@ -1263,6 +1345,8 @@
     productFamily,
     inferHealthProductType,
     inferLifeProductType,
+    splitLifeMoney,
+    pickCompensation,
     insuredIdsForCustomer,
     applyToPayload,
     sameCompany,
