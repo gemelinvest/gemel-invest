@@ -421,6 +421,18 @@
     };
   }
 
+  function mapGender(raw){
+    const t = safeTrim(raw).toLowerCase();
+    if(t === "1" || t === "ז" || t === "m" || t === "male" || t === "זכר") return "זכר";
+    if(t === "2" || t === "נ" || t === "f" || t === "female" || t === "נקבה") return "נקבה";
+    return "";
+  }
+
+  function moneyOrEmpty(raw){
+    const n = parseMoneyField(raw);
+    return n > 0 ? money2(n) : "";
+  }
+
   function parseMigdalPerson(parts){
     const idNumber = normId(parts[2] || parts[0]);
     if(!idNumber) return null;
@@ -436,9 +448,10 @@
       city: cleanName(parts[16] || ""),
       street: cleanName(parts[15] || ""),
       email: safeTrim(parts[5] || ""),
+      phone: safeTrim(parts[7] || ""),
       birthDate: dmy8(parts[26] || ""),
       occupation: cleanName(parts[4] || ""),
-      gender: safeTrim(parts[31] || ""),
+      gender: mapGender(parts[31] || ""),
       agent: safeTrim(parts[44] || ""),
       status: "",
       period: ""
@@ -457,6 +470,10 @@
       startDate: dmy8(parts[4] || ""),
       endDate: dmy8(parts[5] || ""),
       premium: parseMoneyField(parts[9]),
+      premiumListed: moneyOrEmpty(parts[8]),
+      sumInsured: moneyOrEmpty(parts[7]),
+      deductible: moneyOrEmpty(parts[10]),
+      extraAmount: moneyOrEmpty(parts[11]),
       idNumber: normId(parts[18]),
       agent: safeTrim(parts[17] || ""),
       coverName: familyGuess === "life" ? mapLifeCover(rawName) : mapHealthCover(rawName),
@@ -469,6 +486,7 @@
     const policyNumber = migdalPolicyNumber(parts[8] || parts[10]);
     if(!policyNumber) return null;
     const headerPrem = kind === "LIFE" ? (parseMoneyField(parts[81]) || parseMoneyField(parts[52])) : parseMoneyField(parts[49]);
+    const insuredCount = Number(digits(parts[2] || "")) || 0;
     return {
       kind,
       family: kind === "LIFE" ? "life" : "health",
@@ -479,6 +497,7 @@
       endDate: dmy8(parts[16] || ""),
       premiumMonthly: headerPrem,
       paymentPeriod: formatPaymentPeriod(parts[43] || ""),
+      insuredCount: insuredCount >= 1 && insuredCount <= 20 ? insuredCount : 0,
       productLabelRaw: cleanName(parts[14] || "")
     };
   }
@@ -674,6 +693,7 @@
         ? money2(premium)
         : (header.premiumMonthly ? money2(header.premiumMonthly) : "");
       const coverPremiums = sumCoverPremiums(covers, family);
+      const peopleCount = (activePeople.length ? activePeople : people).length;
       return {
         company: COMPANY_MIGDAL,
         type,
@@ -681,6 +701,9 @@
         policyNumber: header.policyNumber,
         premiumMonthly,
         startDate: header.startDate || covers.find((c) => c.startDate)?.startDate || "",
+        endDate: header.endDate || covers.find((c) => c.endDate)?.endDate || "",
+        insuredCount: header.insuredCount || peopleCount || 0,
+        coverDetails: covers.map(coverDetailFromRow),
         healthCovers: family === "health" ? Object.keys(coverPremiums) : [],
         lifeCovers: family === "life" ? Object.keys(coverPremiums) : [],
         coverPremiums,
@@ -706,6 +729,8 @@
         ownerId: covers[0]?.idNumber || "",
         agent: covers[0]?.agent || "",
         startDate: covers[0]?.startDate || "",
+        endDate: covers[0]?.endDate || "",
+        insuredCount: 0,
         paymentPeriod: "",
         premiumMonthly: 0
       }, lifeish ? "life" : "health"));
@@ -1040,11 +1065,97 @@
     return kept;
   }
 
+  function coverDetailFromRow(c){
+    const name = safeTrim(c?.coverName || c?.name);
+    return {
+      name,
+      startDate: safeTrim(c?.startDate),
+      endDate: safeTrim(c?.endDate),
+      premiumMonthly: c?.premium ? money2(c.premium) : safeTrim(c?.premiumMonthly),
+      premiumListed: safeTrim(c?.premiumListed),
+      sumInsured: safeTrim(c?.sumInsured),
+      deductible: safeTrim(c?.deductible),
+      extraAmount: safeTrim(c?.extraAmount)
+    };
+  }
+
+  function fillEmpty(target, key, value){
+    const next = safeTrim(value);
+    if(!next) return;
+    if(!safeTrim(target[key])) target[key] = next;
+  }
+
+  function fillInsuredData(data, person){
+    const d = data && typeof data === "object" ? data : {};
+    fillEmpty(d, "firstName", person?.firstName);
+    fillEmpty(d, "lastName", person?.lastName);
+    fillEmpty(d, "idNumber", person?.idNumber);
+    fillEmpty(d, "email", person?.email);
+    fillEmpty(d, "phone", person?.phone);
+    fillEmpty(d, "city", person?.city);
+    fillEmpty(d, "street", person?.street);
+    fillEmpty(d, "houseNumber", person?.house);
+    fillEmpty(d, "zip", person?.zip);
+    fillEmpty(d, "birthDate", person?.birthDate);
+    fillEmpty(d, "occupation", person?.occupation);
+    fillEmpty(d, "gender", person?.gender || mapGender(person?.gender));
+    return d;
+  }
+
+  function ensureInsuredsFromPeople(payload, people){
+    if(!Array.isArray(payload.insureds)) payload.insureds = [];
+    const source = (people || []).filter((p) => normId(p?.idNumber));
+    source.forEach((person) => {
+      const existingId = insuredIdForTz(payload, person.idNumber);
+      if(existingId){
+        const row = payload.insureds.find((x) => safeTrim(x?.id) === existingId);
+        if(row){
+          row.data = fillInsuredData(row.data || {}, person);
+        }
+        return;
+      }
+      const hasPrimary = payload.insureds.some((x) => safeTrim(x?.type) === "primary");
+      const created = {
+        id: "ins_prod_" + normId(person.idNumber),
+        type: hasPrimary ? (payload.insureds.some((x) => safeTrim(x?.type) === "spouse") ? "adult" : "spouse") : "primary",
+        label: hasPrimary ? (payload.insureds.some((x) => safeTrim(x?.type) === "spouse") ? "מבוטח נוסף" : "בת/בן זוג") : "מבוטח ראשי",
+        data: fillInsuredData({
+          firstName: "", lastName: "", idNumber: "", birthDate: "", gender: "",
+          phone: "", email: "", city: "", street: "", houseNumber: "", zip: "", occupation: ""
+        }, person)
+      };
+      payload.insureds.push(created);
+    });
+    return payload;
+  }
+
+  function mergeCoverDetails(existing, incoming){
+    const byName = new Map();
+    (Array.isArray(existing) ? existing : []).concat(Array.isArray(incoming) ? incoming : []).forEach((row) => {
+      const name = safeTrim(row?.name);
+      if(!name) return;
+      const prev = byName.get(name) || { name };
+      byName.set(name, {
+        name,
+        startDate: safeTrim(row.startDate) || prev.startDate || "",
+        endDate: safeTrim(row.endDate) || prev.endDate || "",
+        premiumMonthly: safeTrim(row.premiumMonthly) || prev.premiumMonthly || "",
+        premiumListed: safeTrim(row.premiumListed) || prev.premiumListed || "",
+        sumInsured: safeTrim(row.sumInsured) || prev.sumInsured || "",
+        deductible: safeTrim(row.deductible) || prev.deductible || "",
+        extraAmount: safeTrim(row.extraAmount) || prev.extraAmount || ""
+      });
+    });
+    return Array.from(byName.values());
+  }
+
   function applyPolicyFields(p, item, meta, payload){
     p.policyNumber = item.policyNumber || p.policyNumber;
     if(item.type) p.type = preferredPolicyType(p.type, item.type);
     p.premiumMonthly = item.premiumMonthly || p.premiumMonthly;
     if(item.startDate) p.startDate = item.startDate;
+    if(item.endDate) p.endDate = item.endDate;
+    if(Number(item.insuredCount) > 0) p.insuredCount = Number(item.insuredCount);
     const insuredIds = Array.isArray(item.insuredIds) ? item.insuredIds.filter(Boolean) : [];
     if(insuredIds.length){
       p.insuredIds = insuredIds.slice();
@@ -1056,6 +1167,12 @@
       : sumCoverPremiums(item.covers || [], item.family || (item.type === "בריאות" ? "health" : "life"));
     if(Object.keys(coverPrem).length){
       p.productionCoverPremiums = coverPrem;
+    }
+    const incomingDetails = Array.isArray(item.coverDetails) && item.coverDetails.length
+      ? item.coverDetails
+      : (item.covers || []).map(coverDetailFromRow);
+    if(incomingDetails.length){
+      p.productionCoverDetails = mergeCoverDetails(p.productionCoverDetails, incomingDetails);
     }
     if(productFamily(item.type || p.type) === "health"){
       const incoming = item.healthCovers || Object.keys(coverPrem);
@@ -1080,6 +1197,7 @@
 
   function applyToPayload(payload, item){
     const next = seedNewPolicies(payload && typeof payload === "object" ? payload : {});
+    ensureInsuredsFromPeople(next, item.people || []);
     const insuredIds = item.insuredIds || insuredIdsForCustomer({ payload: next }, item.people || []);
     item.insuredIds = insuredIds;
     const meta = {
@@ -1107,6 +1225,8 @@
         policyNumber: item.policyNumber,
         premiumMonthly: item.premiumMonthly || "",
         startDate: item.startDate || "",
+        endDate: item.endDate || "",
+        insuredCount: Number(item.insuredCount) || insuredIds.length || 0,
         healthCovers: productFamily(item.type) === "health" ? (item.healthCovers || []).map(mapHealthCover).filter(Boolean) : [],
         insuredIds: insuredIds.slice(),
         insuredId: insuredIds[0] || "",
@@ -1119,6 +1239,9 @@
       target = created;
     }
     next.newPolicies = absorbRelatedProposals(next.newPolicies, target, item);
+    if(target && insuredIds.length && Number(target.insuredCount || 0) < insuredIds.length){
+      target.insuredCount = insuredIds.length;
+    }
     applyCompanyAgentNumber(next, item);
     if(!next.operational || typeof next.operational !== "object") next.operational = {};
     next.operational.newPolicies = next.newPolicies;
@@ -1126,7 +1249,7 @@
   }
 
   global.GI_PRODUCTION = {
-    version: "20260823-migdal-alias-v1",
+    version: "20260823-migdal-fields-v1",
     COMPANIES,
     COMPANY_HACHSHARA,
     COMPANY_MIGDAL,

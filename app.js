@@ -19502,6 +19502,7 @@ UsersGateUI.init();
           premiumAfterDiscountValue,
           ...(policyAddedAt ? { _addedAt: policyAddedAt } : {}),
           startDate: safeTrim(p?.startDate),
+          endDate: safeTrim(p?.endDate),
           policyNumber: safeTrim(p?.policyNumber),
           coverageLabel: (type === "מחלות קשות" || type === "סרטן") ? "סכום פיצוי" : (coverageValue && String(coverageValue).includes(",") ? "כיסויים" : "סכום ביטוח"),
           coverageValue,
@@ -19521,6 +19522,8 @@ UsersGateUI.init();
             "הנחה": this.getPolicyDiscountDisplayText(p, { compact:true }),
             "פרמיה סופית": premiumAfterDiscount,
             "תחילת ביטוח": safeTrim(p?.startDate) || "—",
+            ...(safeTrim(p?.endDate) ? { "תום ביטוח": safeTrim(p.endDate) } : {}),
+            ...(Number(p?.insuredCount) > 0 ? { "מבוטחים בפוליסה": String(p.insuredCount) } : {}),
             [(coverageValue ? ((type === "מחלות קשות" || type === "סרטן") ? "סכום פיצוי" : (String(coverageValue).includes(",") ? "כיסויים" : "סכום ביטוח")) : "פרט נוסף")]: coverageValue || "—",
             "שיעבוד": p?.pledge ? "כן" : "לא"
           }
@@ -20573,7 +20576,19 @@ UsersGateUI.init();
           return n > 0 ? String(n) : "";
         })();
         const amount = safeTrim(prodPrem[label]) || safeTrim(prodPrem[name]) || addonSum || safeTrim(amounts[label]) || safeTrim(amounts[name]);
-        rows.push({ label, amount });
+        const detail = (Array.isArray(raw?.productionCoverDetails) ? raw.productionCoverDetails : []).find((x) => {
+          const n = this.logicalHealthCoverLabel(x?.name);
+          return n === label || safeTrim(x?.name) === safeTrim(name);
+        }) || {};
+        const noteParts = [];
+        if(safeTrim(detail.endDate)) noteParts.push("תום " + safeTrim(detail.endDate));
+        if(safeTrim(detail.sumInsured)) noteParts.push("סכום " + this.formatMoneyValue(this.asMoneyNumber(detail.sumInsured) || detail.sumInsured));
+        if(safeTrim(detail.deductible)) noteParts.push("השתתפות " + this.formatMoneyValue(this.asMoneyNumber(detail.deductible) || detail.deductible));
+        if(safeTrim(detail.extraAmount)) noteParts.push("תוספת " + this.formatMoneyValue(this.asMoneyNumber(detail.extraAmount) || detail.extraAmount));
+        if(safeTrim(detail.premiumListed) && safeTrim(detail.premiumListed) !== safeTrim(amount)){
+          noteParts.push("שנתי " + this.formatMoneyValue(this.asMoneyNumber(detail.premiumListed) || detail.premiumListed));
+        }
+        rows.push({ label, amount, note: noteParts.join(" · ") });
       };
       names.forEach(push);
       if(raw?.healthAddonPremiums && typeof raw.healthAddonPremiums === "object"){
@@ -20593,13 +20608,16 @@ UsersGateUI.init();
       const rowPremium = related.length
         ? this.sumPremiumAfterDiscount(related)
         : (this.asNumber(policy.premiumAfterDiscountValue ?? policy.premiumAfterDiscount ?? policy.premiumValue) || 0);
+      const rawPol = this.getRawNewPolicy(rec, policy) || {};
       const insuredSum = this.getPolicyInsuredCoverageSummary(rec, policy);
       const policyNumber = safeTrim(policy.policyNumber) || "—";
       const startDate = safeTrim(policy.startDate) || "—";
-      const insuredText = insuredSum.count > 1
-        ? `${insuredSum.count} מבוטחים`
+      const endDate = safeTrim(rawPol.endDate || policy.endDate);
+      const counted = insuredSum.count || Number(rawPol.insuredCount || policy.insuredCount || 0) || 0;
+      const insuredText = counted > 1
+        ? `${counted} מבוטחים`
         : (insuredSum.names || "מבוטח ראשי");
-      const isHealth = safeTrim(policy.type) === "בריאות";
+      const isHealth = ["בריאות", "מחלות קשות", "סרטן"].indexOf(safeTrim(policy.type)) >= 0;
       const isLife = safeTrim(policy.type) === "ריסק" || safeTrim(policy.type) === "ריסק משכנתא";
       const coverRows = (isHealth || isLife) ? this.getHealthCoverRowsForDisplay(rec, policy) : [];
       const coverBtn = coverRows.length
@@ -20608,12 +20626,11 @@ UsersGateUI.init();
       const coversList = coverRows.length
         ? `<div class="cfNewPolicyCard__covers" hidden>
           ${coverRows.map((row) => `<div class="cfNewPolicyCard__cover">
-            <span class="cfNewPolicyCard__coverName">${escapeHtml(row.label)}</span>
+            <span class="cfNewPolicyCard__coverName">${escapeHtml(row.label)}${row.note ? `<small class="cfNewPolicyCard__coverNote"> · ${escapeHtml(row.note)}</small>` : ""}</span>
             ${row.amount ? `<span class="cfNewPolicyCard__coverAmt">${escapeHtml(this.formatMoneyValue(this.asMoneyNumber(row.amount) || row.amount))}</span>` : ""}
           </div>`).join("")}
         </div>`
         : "";
-      const rawPol = this.getRawNewPolicy(rec, policy) || {};
       const agentNumber = safeTrim(rawPol.agentNumber);
       const paymentPeriod = safeTrim(rawPol.paymentPeriod);
       const periodLabel = paymentPeriod
@@ -20633,6 +20650,7 @@ UsersGateUI.init();
           </div>
           ${cell('מספר פוליסה', policyNumber)}
           ${cell('תחילת ביטוח', startDate)}
+          ${endDate ? cell('תום ביטוח', endDate) : ""}
           ${cell('מבוטחים', insuredText)}
           <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--action">${coverBtn}</div>
           <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--prem">
@@ -66404,7 +66422,7 @@ ${inner}
      ========================================================================== */
 
   const CUSTOMER_IMPORT_VERSION = "1.2";
-  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260823-migdal-alias-v1";
+  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260823-migdal-fields-v1";
   const GI_PROD_FALLBACK_COMPANIES = Object.freeze([
     { id: "הכשרה", label: "הכשרה", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד." },
     { id: "הפניקס", label: "הפניקס", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
