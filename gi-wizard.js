@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260823-ayl-clal-disc-v1";
+  const GI_WIZARD_BUILD = "20260823-mnr-ayl-disc-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -13807,20 +13807,20 @@ if(path === "birthDate"){
           { label:'דרור 1 — חבילה 1373 (גיל 30+, מינ׳ 1M)', pct:0, years:6, schedule:"55/35/25/15/15/15", packageNum:"1373" },
           { label:'דרור 1 — חבילה 19993 (גיל 40, מינ׳ 1M יחיד / 500K זוג)', pct:0, years:6, schedule:"65/55/40/30/20/15", packageNum:"19993" },
           { label:'דרור 1 — חבילה 60094 (גיל 45, מינ׳ 1.5M יחיד / 750K זוג)', pct:0, years:6, schedule:"65/55/45/35/25/20", packageNum:"60094" },
-          { label:'דרור למשכנתא — חבילה 60095 (כל גיל, מינ׳ 500K)', pct:0, years:6, schedule:"55/35/15/15/15/15", packageNum:"60095" },
-          { label:'דרור למשכנתא — חבילה 13626 (גיל 35+, מינ׳ 1M)', pct:0, years:6, schedule:"50/35/15/15/15/15", packageNum:"13626" },
-          { label:'דרור למשכנתא — חבילה 60096 (גיל 40+, מינ׳ 1.5M)', pct:0, years:6, schedule:"50/50/30/15/15/15", packageNum:"60096" },
-          { label:'דרור למשכנתא — חבילה 62439 (גיל 45, מינ׳ 2M יחיד)', pct:0, years:6, schedule:"55/50/45/35/25/20", packageNum:"62439" },
-          { label:'דרור למשכנתא — חבילה 17211 (עד 20 שנה)', pct:0, years:6, schedule:"40/20/15/15/15/15", packageNum:"17211" },
-          { label:'דרור למשכנתא — חבילה 60098 (21-30 שנה)', pct:0, years:6, schedule:"40/20/15/15/15/15", packageNum:"60098" },
+          { label:'דרור למשכנתא — חבילה 60095 (כל גיל, מינ׳ 500K)', pct:0, years:6, schedule:"55/30/20/15/15/15", packageNum:"60095" },
+          { label:'דרור למשכנתא — חבילה 13626 (גיל 35+, מינ׳ 1M)', pct:0, years:6, schedule:"50/35/25/15/15/15", packageNum:"13626" },
+          { label:'דרור למשכנתא — חבילה 60096 (גיל 40+/1.5M או גיל 45+/1M)', pct:0, years:6, schedule:"50/50/45/40/30/15", packageNum:"60096" },
+          { label:'דרור למשכנתא — חבילה 62439 (גיל 45, מינ׳ 2M יחיד / 1M זוג)', pct:0, years:6, schedule:"55/50/45/35/25/20", packageNum:"62439" },
+          { label:'דרור למשכנתא — חבילה 17211 (הלוואה עד 20 שנה · משנה 13: 100%)', pct:0, years:6, schedule:"40/20/15/15/15/15", packageNum:"17211" },
+          { label:'דרור למשכנתא — חבילה 60098 (הלוואה 21-30 שנה · משנה 18: 100%)', pct:0, years:6, schedule:"40/20/15/15/15/15", packageNum:"60098" },
         ],
         "ריסק משכנתא": [
-          { label:'דרור למשכנתא — חבילה 60095 (כל גיל, מינ׳ 500K)', pct:0, years:6, schedule:"55/35/15/15/15/15", packageNum:"60095" },
-          { label:'דרור למשכנתא — חבילה 13626 (גיל 35+, מינ׳ 1M)', pct:0, years:6, schedule:"50/35/15/15/15/15", packageNum:"13626" },
-          { label:'דרור למשכנתא — חבילה 60096 (גיל 40+, מינ׳ 1.5M)', pct:0, years:6, schedule:"50/50/30/15/15/15", packageNum:"60096" },
-          { label:'דרור למשכנתא — חבילה 62439 (גיל 45, מינ׳ 2M)', pct:0, years:6, schedule:"55/50/45/35/25/20", packageNum:"62439" },
-          { label:'דרור למשכנתא — חבילה 17211 (עד 20 שנה)', pct:0, years:6, schedule:"40/20/15/15/15/15", packageNum:"17211" },
-          { label:'דרור למשכנתא — חבילה 60098 (21-30 שנה)', pct:0, years:6, schedule:"40/20/15/15/15/15", packageNum:"60098" },
+          { label:'דרור למשכנתא — חבילה 60095 (כל גיל, מינ׳ 500K)', pct:0, years:6, schedule:"55/30/20/15/15/15", packageNum:"60095" },
+          { label:'דרור למשכנתא — חבילה 13626 (גיל 35+, מינ׳ 1M)', pct:0, years:6, schedule:"50/35/25/15/15/15", packageNum:"13626" },
+          { label:'דרור למשכנתא — חבילה 60096 (גיל 40+/1.5M או גיל 45+/1M)', pct:0, years:6, schedule:"50/50/45/40/30/15", packageNum:"60096" },
+          { label:'דרור למשכנתא — חבילה 62439 (גיל 45, מינ׳ 2M יחיד / 1M זוג)', pct:0, years:6, schedule:"55/50/45/35/25/20", packageNum:"62439" },
+          { label:'דרור למשכנתא — חבילה 17211 (הלוואה עד 20 שנה · משנה 13: 100%)', pct:0, years:6, schedule:"40/20/15/15/15/15", packageNum:"17211" },
+          { label:'דרור למשכנתא — חבילה 60098 (הלוואה 21-30 שנה · משנה 18: 100%)', pct:0, years:6, schedule:"40/20/15/15/15/15", packageNum:"60098" },
         ],
       },
       "כלל": {
