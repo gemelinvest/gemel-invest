@@ -34592,15 +34592,117 @@ UsersGateUI.init();
 
     /* GI-PERF-LAZY-SIMS 2026-08-09 */
   // Lazy simulator registry — engines in gi-simulators.js (~220KB parse deferred).
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-menora-mort-form-v1";
-  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-menora-mort-form-v1";
-  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-menora-mort-form-v1";
-  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-menora-mort-form-v1";
-  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-menora-mort-form-v1";
-  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-menora-mort-form-v1";
-  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-menora-mort-form-v1";
-  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-menora-mort-form-v1";
-  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-menora-mort-form-v1";
+  const GI_OFFICIAL_FORM_FILL = {
+    FONT_FILE: "Heebo-Bold.ttf",
+    FONT_SIZE: 10,
+    visualHebrew(value){
+      const s = String(value == null ? "" : value);
+      if(!/[\u0590-\u05FF]/.test(s)) return s;
+      const parts = s.match(/[\u0590-\u05FF]+|[^\u0590-\u05FF]+/g) || [s];
+      return parts.reverse().map((part) => {
+        if(/[\u0590-\u05FF]/.test(part)) return part.split("").reverse().join("");
+        return part;
+      }).join("");
+    },
+    layerOf(obj){
+      if(!obj || typeof obj !== "object") return {};
+      if(obj.data && typeof obj.data === "object") return obj.data;
+      return obj;
+    },
+    pick(layers, keys){
+      const list = Array.isArray(layers) ? layers : [layers];
+      const keyList = Array.isArray(keys) ? keys : [keys];
+      for(let i = 0; i < list.length; i++){
+        const layer = this.layerOf(list[i]);
+        for(let k = 0; k < keyList.length; k++){
+          const v = String(layer?.[keyList[k]] == null ? "" : layer[keyList[k]]).trim();
+          if(v) return v;
+        }
+      }
+      return "";
+    },
+    fileFallbacks(rec, payload){
+      return [
+        payload?.primary,
+        rec,
+        {
+          firstName: rec?.firstName,
+          lastName: rec?.lastName,
+          fullName: rec?.fullName,
+          idNumber: rec?.idNumber,
+          phone: rec?.phone,
+          email: rec?.email,
+          city: rec?.city
+        }
+      ];
+    },
+    pickPerson(ins, fallbacks){
+      const layers = [ins].concat(Array.isArray(fallbacks) ? fallbacks : (fallbacks ? [fallbacks] : []));
+      const firstName = this.pick(layers, ["firstName"]);
+      const lastName = this.pick(layers, ["lastName"]);
+      let fullName = this.pick(layers, ["fullName"]);
+      if(!firstName && !lastName && fullName){
+        const parts = fullName.split(/\s+/).filter(Boolean);
+        return this._personBag(parts[0] || "", parts.slice(1).join(" "), fullName, layers);
+      }
+      fullName = String((firstName + " " + lastName).trim() || fullName || ins?.label || "").trim();
+      return this._personBag(firstName, lastName, fullName, layers);
+    },
+    _personBag(firstName, lastName, fullName, layers){
+      return {
+        firstName, lastName, fullName,
+        idNumber: this.pick(layers, ["idNumber", "id_number"]),
+        birthDate: this.pick(layers, ["birthDate"]),
+        gender: this.pick(layers, ["gender"]),
+        maritalStatus: this.pick(layers, ["maritalStatus", "familyStatus"]),
+        phone: this.pick(layers, ["phone", "cellPhone", "mobile"]),
+        phoneHome: this.pick(layers, ["phoneHome", "homePhone"]),
+        email: this.pick(layers, ["email"]),
+        city: this.pick(layers, ["city"]),
+        street: this.pick(layers, ["street"]),
+        houseNumber: this.pick(layers, ["houseNumber"]),
+        apt: this.pick(layers, ["apartment", "aptNumber", "apt"]),
+        zip: this.pick(layers, ["zip", "zipCode"]),
+        occupation: this.pick(layers, ["occupation", "profession", "job"]),
+        clinic: this.pick(layers, ["clinic", "hmo", "kupatHolim"]),
+        shaban: this.pick(layers, ["shaban", "shabanLevel"]),
+        heightCm: this.pick(layers, ["heightCm", "height"]),
+        weightKg: this.pick(layers, ["weightKg", "weight"]),
+        smokingStatus: this.pick(layers, ["smokingStatus", "smoker"]),
+        smokingAmount: this.pick(layers, ["smokingAmount"]),
+        smokingType: this.pick(layers, ["smokingType"]),
+        childrenCount: this.pick(layers, ["childrenCount", "children"]),
+        idIssueDate: this.pick(layers, ["idIssueDate"])
+      };
+    },
+    setTextSafe(form, fieldName, value, font){
+      const text = String(value == null ? "" : value).trim();
+      if(!text) return;
+      try {
+        const field = form.getTextField(fieldName);
+        const painted = font ? this.visualHebrew(text) : text;
+        field.setText(painted);
+        try { field.setFontSize(this.FONT_SIZE); } catch(_e) {}
+        if(font && /[\u0590-\u05FF]/.test(text)){
+          try {
+            const PDFLib = window.PDFLib;
+            if(PDFLib?.TextAlignment?.Right) field.setAlignment(PDFLib.TextAlignment.Right);
+          } catch(_e2) {}
+        }
+        if(font && field.updateAppearances) field.updateAppearances(font);
+      } catch(_e) {}
+    }
+  };
+  try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-official-he-bold-v1";
+  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-official-he-bold-v1";
+  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-official-he-bold-v1";
+  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-official-he-bold-v1";
+  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-official-he-bold-v1";
+  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-official-he-bold-v1";
+  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-official-he-bold-v1";
+  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-official-he-bold-v1";
+  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-official-he-bold-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){

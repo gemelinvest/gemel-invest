@@ -18,8 +18,8 @@
   const HachsharaLifeForm = {
     TEMPLATE_BASE: "./forms/hachshara-life/",
     TEMPLATE_FILE: "hachshara-life-join.pdf",
-    FONT_URL: "./fonts/Rubik-Regular.ttf",
-    VERSION: "20260824-hach-life-form-v1",
+    FONT_URL: "./fonts/Heebo-Bold.ttf",
+    VERSION: "20260824-official-he-bold-v1",
     DOC_ID: "doc_hachshara_life_form",
     DOC_TYPE: "hachshara_life_form",
 
@@ -43,7 +43,7 @@
     },
     composeAddress(person){
       if(!person) return "";
-      const parts = [person.street, person.houseNumber, person.city, person.zip]
+      const parts = [person.street, person.houseNumber, person.apt, person.city, person.zip]
         .map(safeTrim).filter(Boolean);
       return parts.join(" ");
     },
@@ -79,18 +79,21 @@
       return "";
     },
 
-    personFromInsured(ins){
-      const d = (ins && ins.data && typeof ins.data === "object") ? ins.data : (ins || {});
+    personFromInsured(ins, fallbacks){
+      const picked = global.GI_OFFICIAL_FORM_FILL?.pickPerson?.(ins, fallbacks);
+      const d = picked || ((ins && ins.data && typeof ins.data === "object") ? ins.data : (ins || {}));
       const firstName = safeTrim(d.firstName);
       const lastName = safeTrim(d.lastName);
-      const fullName = safeTrim((firstName + " " + lastName).trim()) || safeTrim(ins?.label);
+      const fullName = safeTrim(d.fullName) || safeTrim((firstName + " " + lastName).trim()) || safeTrim(ins?.label);
       return {
         firstName, lastName, fullName,
         idNumber: safeTrim(d.idNumber),
         birthDate: this.fmtDateHe(d.birthDate),
         gender: safeTrim(d.gender),
-        maritalStatus: safeTrim(d.maritalStatus),
+        maritalStatus: safeTrim(d.maritalStatus || d.familyStatus),
         phone: safeTrim(d.phone),
+        phoneHome: safeTrim(d.phoneHome),
+        childrenCount: safeTrim(d.childrenCount),
         email: safeTrim(d.email),
         city: safeTrim(d.city),
         street: safeTrim(d.street),
@@ -98,7 +101,7 @@
         apt: safeTrim(d.apartment || d.aptNumber),
         zip: safeTrim(d.zip),
         occupation: safeTrim(d.occupation),
-        clinic: safeTrim(d.clinic),
+        clinic: safeTrim(d.clinic || d.hmo || d.kupatHolim),
         heightCm: safeTrim(d.heightCm),
         weightKg: safeTrim(d.weightKg),
         smokingStatus: safeTrim(d.smokingStatus),
@@ -142,7 +145,7 @@
       const policies = this.listHachsharaLifePolicies(payload);
       const policy = policies[0] || {};
       const { primary, spouse } = this.classifyInsureds(payload);
-      const primaryPerson = this.personFromInsured(primary || payload.primary || {});
+      const primaryPerson = this.personFromInsured(primary || payload.primary || {}, global.GI_OFFICIAL_FORM_FILL?.fileFallbacks?.(rec, payload));
       const spousePerson = spouse ? this.personFromInsured(spouse) : null;
       primaryPerson.sumInsured = this.sumInsuredFor(policy, primary?.id);
       if(spousePerson) spousePerson.sumInsured = this.sumInsuredFor(policy, spouse?.id);
@@ -237,6 +240,11 @@
     },
 
     setTextSafe(form, fieldName, value, font){
+      const helper = global.GI_OFFICIAL_FORM_FILL;
+      if(helper && helper.setTextSafe){
+        helper.setTextSafe(form, fieldName, value, font);
+        return;
+      }
       const text = safeTrim(value);
       if(!text) return;
       try {
@@ -325,7 +333,7 @@
       let font = null;
       try {
         const fontBytes = await this.fetchFirstOk(
-          this.candidateUrls("fonts/", "Rubik-Regular.ttf"),
+          this.candidateUrls("fonts/", "Heebo-Bold.ttf"),
           "font"
         );
         if(fontBytes){

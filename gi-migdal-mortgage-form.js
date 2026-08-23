@@ -18,8 +18,8 @@
   const MigdalMortgageForm = {
     TEMPLATE_BASE: "./forms/migdal-mortgage/",
     TEMPLATE_FILE: "migdal-mortgage-join.pdf",
-    FONT_URL: "./fonts/Rubik-Regular.ttf",
-    VERSION: "20260824-migdal-mort-form-v1",
+    FONT_URL: "./fonts/Heebo-Bold.ttf",
+    VERSION: "20260824-official-he-bold-v1",
     DOC_ID: "doc_migdal_mortgage_form",
     DOC_TYPE: "migdal_mortgage_form",
 
@@ -66,18 +66,21 @@
       return [];
     },
 
-    personFromInsured(ins){
-      const d = (ins && ins.data && typeof ins.data === "object") ? ins.data : (ins || {});
+    personFromInsured(ins, fallbacks){
+      const picked = global.GI_OFFICIAL_FORM_FILL?.pickPerson?.(ins, fallbacks);
+      const d = picked || ((ins && ins.data && typeof ins.data === "object") ? ins.data : (ins || {}));
       const firstName = safeTrim(d.firstName);
       const lastName = safeTrim(d.lastName);
-      const fullName = safeTrim((firstName + " " + lastName).trim()) || safeTrim(ins?.label);
+      const fullName = safeTrim(d.fullName) || safeTrim((firstName + " " + lastName).trim()) || safeTrim(ins?.label);
       return {
         firstName, lastName, fullName,
         idNumber: safeTrim(d.idNumber),
         birthDate: this.fmtDateHe(d.birthDate),
         gender: safeTrim(d.gender),
-        maritalStatus: safeTrim(d.maritalStatus),
+        maritalStatus: safeTrim(d.maritalStatus || d.familyStatus),
         phone: safeTrim(d.phone),
+        phoneHome: safeTrim(d.phoneHome),
+        childrenCount: safeTrim(d.childrenCount),
         email: safeTrim(d.email),
         city: safeTrim(d.city),
         street: safeTrim(d.street),
@@ -134,7 +137,7 @@
       const policies = this.listMigdalMortgagePolicies(payload);
       const policy = policies[0] || {};
       const { primary, spouse } = this.classifyInsureds(payload);
-      const primaryPerson = this.personFromInsured(primary || payload.primary || {});
+      const primaryPerson = this.personFromInsured(primary || payload.primary || {}, global.GI_OFFICIAL_FORM_FILL?.fileFallbacks?.(rec, payload));
       const spousePerson = spouse ? this.personFromInsured(spouse) : null;
       primaryPerson.sumInsured = this.sumInsuredFor(policy, primary?.id);
       if(spousePerson) spousePerson.sumInsured = this.sumInsuredFor(policy, spouse?.id);
@@ -228,6 +231,11 @@
     },
 
     setTextSafe(form, fieldName, value, font){
+      const helper = global.GI_OFFICIAL_FORM_FILL;
+      if(helper && helper.setTextSafe){
+        helper.setTextSafe(form, fieldName, value, font);
+        return;
+      }
       const text = safeTrim(value);
       if(!text) return;
       try {
@@ -308,7 +316,7 @@
       let font = null;
       try {
         const fontBytes = await this.fetchFirstOk(
-          this.candidateUrls("fonts/", "Rubik-Regular.ttf"),
+          this.candidateUrls("fonts/", "Heebo-Bold.ttf"),
           "font"
         );
         if(fontBytes){

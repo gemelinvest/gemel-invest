@@ -18,8 +18,8 @@
   const MenoraMortgageForm = {
     TEMPLATE_BASE: "./forms/menora-mortgage/",
     TEMPLATE_FILE: "menora-mortgage-join.pdf",
-    FONT_URL: "./fonts/Rubik-Regular.ttf",
-    VERSION: "20260824-menora-mort-form-v1",
+    FONT_URL: "./fonts/Heebo-Bold.ttf",
+    VERSION: "20260824-official-he-bold-v1",
     DOC_ID: "doc_menora_mortgage_form",
     DOC_TYPE: "menora_mortgage_form",
     LOAN_SUM_FIELDS: ["Text38", "Text44", "Text51", "Text57"],
@@ -61,7 +61,7 @@
     },
     composeAddress(person){
       if(!person) return "";
-      return [person.street, person.houseNumber, person.city, person.zip].map(safeTrim).filter(Boolean).join(" ");
+      return [person.street, person.houseNumber, person.apt, person.city, person.zip].map(safeTrim).filter(Boolean).join(" ");
     },
     listPledgeBanks(policy){
       if(!policy || typeof policy !== "object") return [];
@@ -72,18 +72,21 @@
       return [];
     },
 
-    personFromInsured(ins){
-      const d = (ins && ins.data && typeof ins.data === "object") ? ins.data : (ins || {});
+    personFromInsured(ins, fallbacks){
+      const picked = global.GI_OFFICIAL_FORM_FILL?.pickPerson?.(ins, fallbacks);
+      const d = picked || ((ins && ins.data && typeof ins.data === "object") ? ins.data : (ins || {}));
       const firstName = safeTrim(d.firstName);
       const lastName = safeTrim(d.lastName);
-      const fullName = safeTrim((firstName + " " + lastName).trim()) || safeTrim(ins?.label);
+      const fullName = safeTrim(d.fullName) || safeTrim((firstName + " " + lastName).trim()) || safeTrim(ins?.label);
       return {
         firstName, lastName, fullName,
         idNumber: safeTrim(d.idNumber),
         birthDate: this.fmtDateHe(d.birthDate),
         gender: safeTrim(d.gender),
-        maritalStatus: safeTrim(d.maritalStatus),
+        maritalStatus: safeTrim(d.maritalStatus || d.familyStatus),
         phone: safeTrim(d.phone),
+        phoneHome: safeTrim(d.phoneHome),
+        childrenCount: safeTrim(d.childrenCount),
         email: safeTrim(d.email),
         city: safeTrim(d.city),
         street: safeTrim(d.street),
@@ -140,7 +143,7 @@
       const policies = this.listMenoraMortgagePolicies(payload);
       const policy = policies[0] || {};
       const { primary, spouse } = this.classifyInsureds(payload);
-      const primaryPerson = this.personFromInsured(primary || payload.primary || {});
+      const primaryPerson = this.personFromInsured(primary || payload.primary || {}, global.GI_OFFICIAL_FORM_FILL?.fileFallbacks?.(rec, payload));
       const spousePerson = spouse ? this.personFromInsured(spouse) : null;
       primaryPerson.sumInsured = this.sumInsuredFor(policy, primary?.id);
       if(spousePerson) spousePerson.sumInsured = this.sumInsuredFor(policy, spouse?.id);
@@ -242,6 +245,11 @@
     },
 
     setTextSafe(form, fieldName, value, font){
+      const helper = global.GI_OFFICIAL_FORM_FILL;
+      if(helper && helper.setTextSafe){
+        helper.setTextSafe(form, fieldName, value, font);
+        return;
+      }
       const text = safeTrim(value);
       if(!text) return;
       try {
@@ -287,6 +295,10 @@
       if(person.smokingAmount){
         this.setTextSafe(form, isSpouse ? "ClientSmokeNumSpouse" : "ClientSmokeNum", person.smokingAmount, font);
       }
+      if(person.childrenCount){
+        this.setTextSafe(form, isSpouse ? "NumberOfChildrenSpouse" : "NumberOfChildren", person.childrenCount, font);
+      }
+      if(person.phoneHome && isSpouse) this.setTextSafe(form, "PhoneNumberSpouse", person.phoneHome, font);
     },
     applyLoaner(form, loaner, font){
       if(!loaner) return;
@@ -313,7 +325,7 @@
       let font = null;
       try {
         const fontBytes = await this.fetchFirstOk(
-          this.candidateUrls("fonts/", "Rubik-Regular.ttf"),
+          this.candidateUrls("fonts/", "Heebo-Bold.ttf"),
           "font"
         );
         if(fontBytes){

@@ -21,8 +21,8 @@
   const ClalHealthForm = {
     TEMPLATE_BASE: "./forms/clal-health/",
     TEMPLATE_FILE: "clal-health-join.pdf",
-    FONT_URL: "./fonts/Rubik-Regular.ttf",
-    VERSION: "20260824-clal-health-form-v1",
+    FONT_URL: "./fonts/Heebo-Bold.ttf",
+    VERSION: "20260824-official-he-bold-v1",
     DOC_ID: "doc_clal_health_form",
     DOC_TYPE: "clal_health_form",
 
@@ -114,19 +114,22 @@
       return "";
     },
 
-    personFromInsured(ins){
-      const d = (ins && ins.data && typeof ins.data === "object") ? ins.data : (ins || {});
+    personFromInsured(ins, fallbacks){
+      const picked = global.GI_OFFICIAL_FORM_FILL?.pickPerson?.(ins, fallbacks);
+      const d = picked || ((ins && ins.data && typeof ins.data === "object") ? ins.data : (ins || {}));
       const firstName = safeTrim(d.firstName);
       const lastName = safeTrim(d.lastName);
-      const fullName = safeTrim((firstName + " " + lastName).trim()) || safeTrim(ins?.label);
+      const fullName = safeTrim(d.fullName) || safeTrim((firstName + " " + lastName).trim()) || safeTrim(ins?.label);
       return {
         id: safeTrim(ins?.id),
         firstName, lastName, fullName,
         idNumber: safeTrim(d.idNumber),
         birthDate: this.fmtDateHe(d.birthDate),
         gender: safeTrim(d.gender),
-        maritalStatus: safeTrim(d.maritalStatus),
+        maritalStatus: safeTrim(d.maritalStatus || d.familyStatus),
         phone: safeTrim(d.phone),
+        phoneHome: safeTrim(d.phoneHome),
+        childrenCount: safeTrim(d.childrenCount),
         email: safeTrim(d.email),
         city: safeTrim(d.city),
         street: safeTrim(d.street),
@@ -134,8 +137,8 @@
         apt: safeTrim(d.apartment || d.aptNumber),
         zip: safeTrim(d.zip),
         occupation: safeTrim(d.occupation),
-        clinic: safeTrim(d.clinic),
-        shaban: safeTrim(d.shaban),
+        clinic: safeTrim(d.clinic || d.hmo || d.kupatHolim),
+        shaban: safeTrim(d.shaban || d.shabanLevel),
         heightCm: safeTrim(d.heightCm),
         weightKg: safeTrim(d.weightKg),
         smokingStatus: safeTrim(d.smokingStatus),
@@ -190,7 +193,7 @@
       const policies = this.listClalHealthPolicies(payload);
       const policy = policies[0] || {};
       const { primary, spouse, children } = this.classifyInsureds(payload);
-      const primaryPerson = this.personFromInsured(primary || payload.primary || {});
+      const primaryPerson = this.personFromInsured(primary || payload.primary || {}, global.GI_OFFICIAL_FORM_FILL?.fileFallbacks?.(rec, payload));
       const spousePerson = spouse ? this.personFromInsured(spouse) : null;
       const childPeople = children.map((ins) => this.personFromInsured(ins));
       policies.forEach((p) => {
@@ -289,6 +292,11 @@
     },
 
     setTextSafe(form, fieldName, value, font){
+      const helper = global.GI_OFFICIAL_FORM_FILL;
+      if(helper && helper.setTextSafe){
+        helper.setTextSafe(form, fieldName, value, font);
+        return;
+      }
       const text = safeTrim(value);
       if(!text) return;
       try {
@@ -365,7 +373,7 @@
       let font = null;
       try {
         const fontBytes = await this.fetchFirstOk(
-          this.candidateUrls("fonts/", "Rubik-Regular.ttf"),
+          this.candidateUrls("fonts/", "Heebo-Bold.ttf"),
           "font"
         );
         if(fontBytes){
