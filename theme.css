@@ -14,7 +14,6 @@
    ???? ??? ???? ?? ????? ?????.
    ===================================================================== */
 
-
 /* =====================================================================
    1. TOKENS
    ===================================================================== */
@@ -109,12 +108,13 @@
   --focus:     0 0 0 3px rgba(37,99,235,.18);
 }
 
-
 /* =====================================================================
    2. TYPOGRAPHY ? Heebo
    ===================================================================== */
 
-*, *::before, *::after{
+*,
+*::before,
+*::after{
   font-family: var(--gi-font) !important;
 }
 
@@ -125,7 +125,10 @@
 .mcCallScript__missing:not(#\9):not(#\9),
 #giElementaryLeviCodeModal .lcElemLeviModal__pickCode:not(#\9):not(#\9),
 #view-dashboard .opsDashAgent__clock:not(#\9):not(#\9),
-code:not(#\9):not(#\9), pre:not(#\9):not(#\9), kbd:not(#\9):not(#\9), samp:not(#\9):not(#\9){
+code:not(#\9):not(#\9),
+pre:not(#\9):not(#\9),
+kbd:not(#\9):not(#\9),
+samp:not(#\9):not(#\9){
   font-family: var(--gi-mono) !important;
 }
 
@@ -138,8 +141,9 @@ body:not(#\9):not(#\9){
 }
 
 /* Heebo tops out at 900 ? normalize the legacy 950/750 weights */
-[style*="font-weight:950"], .kpi__value:not(#\9):not(#\9), .modal__title:not(#\9):not(#\9){ font-weight: 800; }
-
+[style*="font-weight:950"],
+.kpi__value:not(#\9):not(#\9),
+.modal__title:not(#\9):not(#\9){ font-weight: 800; }
 
 /* =====================================================================
    3. CANVAS
@@ -173,7 +177,6 @@ body.sidebar-collapsed .app:not(#\9):not(#\9){
   background: var(--gi-bg);
   overflow-anchor: none;
 }
-
 
 /* =====================================================================
    4. SIDEBAR ? solid navy
@@ -382,7 +385,6 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
   color: #FFFFFF !important;
 }
 
-
 /* =====================================================================
    5. TOPBAR ? white bar with hairline
    ===================================================================== */
@@ -549,7 +551,6 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
 .lcAttendanceClock__btn--in:not(#\9):not(#\9){  background: var(--gi-success-soft) !important; color: var(--gi-success) !important; border: 1px solid rgba(22,163,74,.20) !important; }
 .lcAttendanceClock__btn--out:not(#\9):not(#\9){ background: var(--gi-danger-soft) !important;  color: var(--gi-danger) !important;  border: 1px solid rgba(220,38,38,.20) !important; }
 
-
 /* =====================================================================
    6. PAGE TITLES
    ===================================================================== */
@@ -566,7 +567,6 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
   color: var(--gi-text) !important;
   letter-spacing: -.01em !important;
 }
-
 
 /* =====================================================================
    7. CARDS
@@ -605,7 +605,6 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
 .grid--kpis:not(#\9):not(#\9){ gap: var(--gi-s4) !important; }
 
 .divider:not(#\9):not(#\9){ background: var(--gi-border) !important; }
-
 
 /* =====================================================================
    8. KPI CARDS
@@ -763,9 +762,8 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
 .bankKpiTodayRow__val:not(#\9):not(#\9){   color: var(--gi-text) !important; font-weight: 600 !important; }
 .bankKpiTodayRow--empty:not(#\9):not(#\9){ color: var(--gi-text-muted) !important; justify-content: center; }
 
-
 /* =====================================================================
-   9. DASHBOARD ? greeting, goal, chart, leaderboard
+   9. DASHBOARD ? greeting, goal, chart
    ===================================================================== */
 
 .bankDash:not(#\9):not(#\9){ display: grid; gap: 10px; }
@@ -902,29 +900,6 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
   font-size: 12px !important;
 }
 
-/* --- Leaderboard --- */
-.bankLeader:not(#\9):not(#\9),
-.bankLeader__sideCard:not(#\9):not(#\9){
-  background: var(--gi-surface) !important;
-  border: 1px solid var(--gi-border) !important;
-  border-radius: var(--gi-r-card) !important;
-  box-shadow: var(--gi-sh-sm) !important;
-  color: var(--gi-text) !important;
-}
-
-.bankLeader__title:not(#\9):not(#\9){    font-size: 16px !important; font-weight: 700 !important; color: var(--gi-text) !important; text-shadow: none !important; }
-.bankLeader__headDate:not(#\9):not(#\9){ font-size: 12px !important; color: var(--gi-text-3) !important; text-shadow: none !important; }
-.bankLeader__entryText:not(#\9):not(#\9){ color: var(--gi-text-2) !important; text-shadow: none !important; }
-.bankLeader__empty:not(#\9):not(#\9){    color: var(--gi-text-muted) !important; }
-
-.bankLeader__entryRow:not(#\9):not(#\9){
-  padding: var(--gi-s3) 0 !important;
-  border-bottom: 1px solid var(--gi-border-soft) !important;
-}
-
-.bankLeader__entryRow:last-child:not(#\9):not(#\9){ border-bottom: none !important; }
-
-
 /* =====================================================================
    10. TABLES
    ===================================================================== */
@@ -976,7 +951,6 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
   font-weight: 600 !important;
 }
 
-
 /* =====================================================================
    11. BADGES / STATUS PILLS
    ===================================================================== */
@@ -994,16 +968,27 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
   box-shadow: none !important;
 }
 
-.badge.ok:not(#\9):not(#\9),      .badge--ok:not(#\9):not(#\9),      .badge.is-ok:not(#\9):not(#\9),      .badge--success:not(#\9):not(#\9){ background: var(--gi-success-soft) !important; color: var(--gi-success) !important; }
-.badge.warn:not(#\9):not(#\9),    .badge--warn:not(#\9):not(#\9),    .badge.is-warn:not(#\9):not(#\9),    .badge--warning:not(#\9):not(#\9){ background: var(--gi-warn-soft) !important;    color: var(--gi-warn) !important; }
-.badge.err:not(#\9):not(#\9),     .badge--danger:not(#\9):not(#\9),  .badge.is-err:not(#\9):not(#\9),     .badge--error:not(#\9):not(#\9){   background: var(--gi-danger-soft) !important;  color: var(--gi-danger) !important; }
-.badge.info:not(#\9):not(#\9),    .badge--info:not(#\9):not(#\9),    .badge.is-info:not(#\9):not(#\9),    .badge--primary:not(#\9):not(#\9){ background: var(--gi-info-soft) !important;    color: var(--gi-info) !important; }
+.badge.ok:not(#\9):not(#\9),
+.badge--ok:not(#\9):not(#\9),
+.badge.is-ok:not(#\9):not(#\9),
+.badge--success:not(#\9):not(#\9){ background: var(--gi-success-soft) !important; color: var(--gi-success) !important; }
+.badge.warn:not(#\9):not(#\9),
+.badge--warn:not(#\9):not(#\9),
+.badge.is-warn:not(#\9):not(#\9),
+.badge--warning:not(#\9):not(#\9){ background: var(--gi-warn-soft) !important;    color: var(--gi-warn) !important; }
+.badge.err:not(#\9):not(#\9),
+.badge--danger:not(#\9):not(#\9),
+.badge.is-err:not(#\9):not(#\9),
+.badge--error:not(#\9):not(#\9){   background: var(--gi-danger-soft) !important;  color: var(--gi-danger) !important; }
+.badge.info:not(#\9):not(#\9),
+.badge--info:not(#\9):not(#\9),
+.badge.is-info:not(#\9):not(#\9),
+.badge--primary:not(#\9):not(#\9){ background: var(--gi-info-soft) !important;    color: var(--gi-info) !important; }
 
 .dot:not(#\9):not(#\9){ box-shadow: none !important; }
 .dot.ok:not(#\9):not(#\9){   background: var(--gi-success) !important; }
 .dot.warn:not(#\9):not(#\9){ background: var(--gi-warn) !important; }
 .dot.err:not(#\9):not(#\9){  background: var(--gi-danger) !important; }
-
 
 /* =====================================================================
    12. BUTTONS
@@ -1055,8 +1040,8 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
 
 .btn--small:not(#\9):not(#\9){ padding: 6px var(--gi-s3) !important; font-size: 12px !important; }
 
-.btn[disabled]:not(#\9):not(#\9), .btn:disabled:not(#\9):not(#\9){ opacity: .5; cursor: not-allowed; }
-
+.btn[disabled]:not(#\9):not(#\9),
+.btn:disabled:not(#\9):not(#\9){ opacity: .5; cursor: not-allowed; }
 
 /* =====================================================================
    13. FORMS
@@ -1095,9 +1080,15 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
 }
 
 .input:not(#\9):not(#\9):not(.lcElementaryPlateInput),
-input[type="text"]:not(#\9):not(#\9):not(.lcElementaryPlateInput), input[type="number"]:not(#\9):not(#\9), input[type="tel"]:not(#\9):not(#\9),
-input[type="email"]:not(#\9):not(#\9), input[type="date"]:not(#\9):not(#\9), input[type="password"]:not(#\9):not(#\9),
-input[type="search"]:not(#\9):not(#\9), select:not(#\9):not(#\9), textarea:not(#\9):not(#\9){
+input[type="text"]:not(#\9):not(#\9):not(.lcElementaryPlateInput),
+input[type="number"]:not(#\9):not(#\9),
+input[type="tel"]:not(#\9):not(#\9),
+input[type="email"]:not(#\9):not(#\9),
+input[type="date"]:not(#\9):not(#\9),
+input[type="password"]:not(#\9):not(#\9),
+input[type="search"]:not(#\9):not(#\9),
+select:not(#\9):not(#\9),
+textarea:not(#\9):not(#\9){
   padding: 9px var(--gi-s3) !important;
   border-radius: var(--gi-r-ctl) !important;
   border: 1px solid var(--gi-border) !important;
@@ -1109,13 +1100,16 @@ input[type="search"]:not(#\9):not(#\9), select:not(#\9):not(#\9), textarea:not(#
 }
 
 .input:focus:not(#\9):not(#\9):not(.lcElementaryPlateInput),
-input:focus:not(#\9):not(#\9):not(.lcElementaryPlateInput), select:focus:not(#\9):not(#\9), textarea:focus:not(#\9):not(#\9){
+input:focus:not(#\9):not(#\9):not(.lcElementaryPlateInput),
+select:focus:not(#\9):not(#\9),
+textarea:focus:not(#\9):not(#\9){
   border-color: var(--gi-primary) !important;
   box-shadow: var(--focus) !important;
   outline: none !important;
 }
 
-input:not(#\9):not(#\9):not(.lcElementaryPlateInput)::placeholder, textarea:not(#\9):not(#\9)::placeholder{ color: var(--gi-text-muted) !important; }
+input:not(#\9):not(#\9):not(.lcElementaryPlateInput)::placeholder,
+textarea:not(#\9):not(#\9)::placeholder{ color: var(--gi-text-muted) !important; }
 
 /* לוחית רישוי — הקלדה על הצהוב, בלי רקע/מסגרת של שדה רגיל */
 input.lcElementaryPlateInput[type="text"]:not(#\9):not(#\9),
@@ -1134,7 +1128,6 @@ input.lcElementaryPlateInput[type="text"]:focus:not(#\9):not(#\9){
 .fieldError:not(#\9):not(#\9){ color: var(--gi-danger) !important; font-size: 12px !important; }
 
 .moneyField__sym:not(#\9):not(#\9){ color: var(--gi-text-3) !important; font-weight: 600 !important; }
-
 
 /* =====================================================================
    14. MODALS / DRAWERS
@@ -1168,7 +1161,6 @@ input.lcElementaryPlateInput[type="text"]:focus:not(#\9):not(#\9){
   border-top: 1px solid var(--gi-border-soft) !important;
   background: var(--gi-surface-2) !important;
 }
-
 
 /* =====================================================================
    15. MISC COMPONENTS
@@ -1236,7 +1228,6 @@ input.lcElementaryPlateInput[type="text"]:focus:not(#\9):not(#\9){
 .miniStats__label:not(#\9):not(#\9){    font-size: 13px !important; color: var(--gi-text-2) !important; }
 .miniStats__value:not(#\9):not(#\9){    font-size: 12px !important; color: var(--gi-text-3) !important; }
 
-
 /* =====================================================================
    16. SCROLLBARS
    ===================================================================== */
@@ -1260,7 +1251,6 @@ input.lcElementaryPlateInput[type="text"]:focus:not(#\9):not(#\9){
 .content:not(#\9):not(#\9)::-webkit-scrollbar-thumb:hover,
 .tableWrap:not(#\9):not(#\9)::-webkit-scrollbar-thumb:hover,
 .modal__panel:not(#\9):not(#\9)::-webkit-scrollbar-thumb:hover{ background: var(--gi-text-muted); }
-
 
 /* =====================================================================
    17. LOGIN SCREEN
@@ -1531,7 +1521,6 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   text-decoration: underline !important;
 }
 
-
 /* --- Two-factor step ----------------------------------------------------- */
 
 .lcLogin__mfaTitle:not(#\9):not(#\9){
@@ -1668,7 +1657,6 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   border-color: var(--gi-success) !important;
 }
 
-
 /* =====================================================================
    18. MOTION ? calm the legacy animations
    ===================================================================== */
@@ -1680,7 +1668,6 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 .card:not(#\9):not(#\9),
 .bankKpi:not(#\9):not(#\9),
 .lcNaCard:not(#\9):not(#\9){ animation-duration: .22s !important; }
-
 
 /* =====================================================================
    19. FLAT PASS ? strip the glass/photo styling the app was built on
@@ -1816,36 +1803,6 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 
 .bankGoal__title:not(#\9):not(#\9){ font-size: 18px !important; font-weight: 700 !important; }
 
-/* --- Leaderboard card: grafmtzayen.png --- */
-.bankLeader--photoBg:not(#\9):not(#\9),
-.bankLeader:not(#\9):not(#\9){
-  background-color: var(--gi-surface) !important;
-  background-image: none !important;
-  border: 1px solid var(--gi-border) !important;
-  box-shadow: var(--gi-sh-sm) !important;
-}
-
-.bankLeader--photoBg:not(#\9):not(#\9)::before,
-.bankLeader--photoBg:not(#\9):not(#\9)::after,
-.bankLeader:not(#\9):not(#\9)::before,
-.bankLeader:not(#\9):not(#\9)::after{
-  content: none !important;
-  display: none !important;
-}
-
-.bankLeader:not(#\9):not(#\9) *{ text-shadow: none !important; }
-
-.bankLeader__podiumSlot:not(#\9):not(#\9),
-.bankLeader__podiumSlot--first:not(#\9):not(#\9){
-  background: var(--gi-surface-2) !important;
-  border: 1px solid var(--gi-border) !important;
-  border-radius: var(--gi-r-md) !important;
-  box-shadow: none !important;
-}
-
-.bankLeader__confetti:not(#\9):not(#\9){ display: none !important; }
-
-
 /* =====================================================================
    20. PAGE HEADER ? title block above the KPI row
    ===================================================================== */
@@ -1916,7 +1873,6 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 .bankDash__topStats__value--low:not(#\9):not(#\9){     color: var(--gi-danger) !important; }
 .bankDash__topStats__value--neutral:not(#\9):not(#\9){ color: var(--gi-text) !important; }
 
-
 /* =====================================================================
    21. TOOLBARS, TABLES, PAGINATION
    ===================================================================== */
@@ -1983,7 +1939,6 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   text-shadow: none !important;
 }
 
-
 /* =====================================================================
    22. GLOBAL FLATTENING ? decorative layers left over from the glass era
    ===================================================================== */
@@ -2011,7 +1966,6 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   color: var(--gi-text-muted);
 }
 
-
 /* =====================================================================
    23. SIDEBAR PIN — collapse to icons (unlocked)
    BUILD: 20260823-sidebar-pin-v1
@@ -2025,7 +1979,6 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 .topbar .topbarBrand:not(.topbarBrand--sidebar):not(#\9):not(#\9){
   display: none !important;
 }
-
 
 /* =====================================================================
    24. TOPBAR SEARCH
@@ -2151,14 +2104,13 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   .giTopSearch:not(#\9):not(#\9){ display: none !important; }
 }
 
-
 /* =====================================================================
    25. DASHBOARD GRID — two columns
    BUILD: 20260822-view-flash-v2
 
    RTL: column 1 = right, column 2 = left.
    Right (wide): לקוחות אחרונים → ביצועים מול יעד מתחתיו
-   Left (narrow stack): תפעול → שירות → מצטיין היום (צמודים)
+   Left (narrow stack): תפעול → שירות (צמודים)
 
    GI-FIX 2026-08-22: row wrappers are real grid items. display:contents
    made Chrome drop the left tiles after another window covered the tab.
@@ -2220,7 +2172,7 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   min-width: 0 !important;
 }
 
-/* Left elevated stack: תפעול → שירות → מצטיין */
+/* Left elevated stack: תפעול → שירות */
 #view-dashboard .bankDash__row--elevatedCol:not(#\9):not(#\9){
   grid-column: 2 !important;
   grid-row: 3 / span 2 !important;
@@ -2237,8 +2189,7 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 }
 
 #view-dashboard .bankDash__elevatedCol .bankOpsCube:not(#\9):not(#\9),
-#view-dashboard .bankDash__elevatedCol .bankServiceCube:not(#\9):not(#\9),
-#view-dashboard .bankDash__elevatedCol .bankLeader:not(#\9):not(#\9){
+#view-dashboard .bankDash__elevatedCol .bankServiceCube:not(#\9):not(#\9){
   width: 100% !important;
   min-width: 0 !important;
   flex: 0 0 auto !important;
@@ -2269,8 +2220,6 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   min-width: 0 !important;
 }
 
-
-
 /* GI-FIX 2026-08-22: collapse only when the window is actually narrow.
    1200px snapped the left stack off during ordinary window drag. */
 @media (max-width: 900px){
@@ -2278,20 +2227,19 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
     grid-template-columns: 1fr !important;
   }
   #view-dashboard .bankDash__row--recentGoalCol:not(#\9):not(#\9),
-  #view-dashboard .bankDash__row--recentCustomers:not(#\9):not(#\9),
-  #view-dashboard .bankDash__row--elevatedCol:not(#\9):not(#\9),
-  #view-dashboard .bankDash__row--goalOnly:not(#\9):not(#\9),
-  #view-dashboard .bankDash__row--goalUnderRecent:not(#\9):not(#\9),
-  #view-dashboard .bankRecent:not(#\9):not(#\9),
-  #view-dashboard .bankDash__elevatedCol:not(#\9):not(#\9),
-  #view-dashboard .bankSideCard:not(#\9):not(#\9),
-  #view-dashboard .bankGoal:not(#\9):not(#\9),
-  #view-dashboard .giDailySales:not(#\9):not(#\9){
+#view-dashboard .bankDash__row--recentCustomers:not(#\9):not(#\9),
+#view-dashboard .bankDash__row--elevatedCol:not(#\9):not(#\9),
+#view-dashboard .bankDash__row--goalOnly:not(#\9):not(#\9),
+#view-dashboard .bankDash__row--goalUnderRecent:not(#\9):not(#\9),
+#view-dashboard .bankRecent:not(#\9):not(#\9),
+#view-dashboard .bankDash__elevatedCol:not(#\9):not(#\9),
+#view-dashboard .bankSideCard:not(#\9):not(#\9),
+#view-dashboard .bankGoal:not(#\9):not(#\9),
+#view-dashboard .giDailySales:not(#\9):not(#\9){
     grid-column: 1 !important;
     grid-row: auto !important;
   }
 }
-
 
 /* =====================================================================
    26. DASHBOARD ? same flat language as the rest of the sheet
@@ -2303,116 +2251,9 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 
 /* --- ?????? ???? --- */
 
-/* gavia.png hidden on legacy podium; cube layout re-enables it */
-.bankLeader__trophyImg:not(#\9):not(#\9){
-  display: none !important;
-}
-.bankLeader__confetti:not(#\9):not(#\9),
-.bankLeader__confettiPiece:not(#\9):not(#\9){
-  display: none !important;
-}
-
 /* ??????? ?????? ???? ?????? ????? ? ???? ?????? ???? */
-.bankLeader__podium:not(#\9):not(#\9){
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 0 !important;
-  align-items: stretch !important;
-}
-
-.bankLeader__podiumShell:not(#\9):not(#\9){
-  background: none !important;
-  box-shadow: none !important;
-  padding: 0 !important;
-}
-
-.bankLeader__podiumSlot:not(#\9):not(#\9),
-.bankLeader__podiumSlot--first:not(#\9):not(#\9),
-.bankLeader__podiumSlot--second:not(#\9):not(#\9),
-.bankLeader__podiumSlot--third:not(#\9):not(#\9){
-  order: 0 !important;
-  /* ????? ??? ??? ????? flex-basis ??????? ?? flex-shrink:1. ???? ????
-     ??????? ???????? ?????, ??????? ??????? ???? ?????, ?????? ??? ???
-     ?? ????. flex:0 0 auto ???? ?? ??. */
-  flex: 0 0 auto !important;
-  align-self: stretch !important;
-  width: 100% !important;
-  max-width: none !important;
-  min-width: 0 !important;
-  min-height: 0 !important;
-  margin: 0 !important;
-  padding: var(--gi-s3) 0 !important;
-  background: transparent !important;
-  border: 0 !important;
-  border-bottom: 1px solid var(--gi-border-soft) !important;
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  transform: none !important;
-  overflow: visible !important;
-}
-
-.bankLeader__podium:not(#\9):not(#\9){
-  flex-wrap: nowrap !important;
-  align-items: stretch !important;
-  justify-content: flex-start !important;
-  margin-bottom: 0 !important;
-}
-
-.bankLeader__podiumSlot:last-child:not(#\9):not(#\9){
-  border-bottom: 0 !important;
-  padding-bottom: 0 !important;
-}
-
-.bankLeader__sideCard:not(#\9):not(#\9){
-  background: transparent !important;
-  border: 0 !important;
-  box-shadow: none !important;
-  padding: 0 !important;
-}
 
 /* ???? ????? ????? ??????????, ?? ?????? */
-.bankLeader__heroName:not(#\9):not(#\9){
-  font-size: 15px !important;
-  font-weight: 600 !important;
-  color: var(--gi-text) !important;
-}
-
-.bankLeader__heroAmount:not(#\9):not(#\9){
-  font-size: 20px !important;
-  font-weight: 700 !important;
-  color: var(--gi-primary) !important;
-}
-
-.bankLeader__sideName:not(#\9):not(#\9){
-  font-size: 14px !important;
-  font-weight: 500 !important;
-  color: var(--gi-text-2) !important;
-}
-
-.bankLeader__sideAmount:not(#\9):not(#\9){
-  font-size: 15px !important;
-  font-weight: 600 !important;
-  color: var(--gi-text) !important;
-}
-
-.bankLeader__heroSub:not(#\9):not(#\9),
-.bankLeader__sideSub:not(#\9):not(#\9),
-.bankLeader__sub:not(#\9):not(#\9){
-  font-size: 12px !important;
-  font-weight: 400 !important;
-  color: var(--gi-text-3) !important;
-}
-
-.bankLeader__badge:not(#\9):not(#\9){
-  background: var(--gi-surface-3) !important;
-  border: 1px solid var(--gi-border) !important;
-  border-radius: var(--gi-r-pill) !important;
-  box-shadow: none !important;
-  color: var(--gi-text-2) !important;
-  font-size: 11px !important;
-  font-weight: 600 !important;
-  text-shadow: none !important;
-}
 
 /* --- ??????? ??? ??? --- */
 
@@ -2503,8 +2344,8 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
     grid-template-columns: 1fr !important;
   }
   #view-dashboard .bankGoal .bankGoal__meter:not(#\9):not(#\9),
-  #view-dashboard .bankGoal .bankGoal__center:not(#\9):not(#\9),
-  #view-dashboard .bankGoal .bankGoal__details:not(#\9):not(#\9){
+#view-dashboard .bankGoal .bankGoal__center:not(#\9):not(#\9),
+#view-dashboard .bankGoal .bankGoal__details:not(#\9):not(#\9){
     grid-row: auto !important;
   }
   #view-dashboard .bankGoal .bankGoal__center:not(#\9):not(#\9){
@@ -2594,7 +2435,6 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   font-weight: 600 !important;
   color: var(--gi-text) !important;
 }
-
 
 /* =====================================================================
    27. REPORTS VIEW ? daily report + cancellations
@@ -2979,7 +2819,6 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   font-size: 13px !important;
   font-weight: 500 !important;
 }
-
 
 /* =====================================================================
    28. INVEST CHAT ? window, roster, thread, composer
@@ -3672,7 +3511,6 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   font-weight: 600 !important;
 }
 
-
 /* =====================================================================
    29. RECENT CUSTOMERS CARD
    BUILD: 20260731-recent
@@ -3896,7 +3734,6 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   background: #f3e8ff !important; color: #5b21b6 !important; border-color: #e9d5ff !important;
 }
 
-
 /* =====================================================================
    30. SIDE CARDS ? latest lead / saved-but-untouched proposal
    BUILD: 20260731-sidecards
@@ -4079,125 +3916,6 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   color: var(--gi-text-muted) !important;
   font-size: 16px !important;
   line-height: 1 !important;
-}
-
-/* מצטיין יומי — קובייה כמו תפעול/שירות: ראשון למעלה, שני/שלישי בשורה */
-#view-dashboard .bankDash__elevatedCol .bankLeader--elevated:not(#\9):not(#\9){
-  display: flex !important;
-  flex-direction: column !important;
-  padding: 0 !important;
-  overflow: visible !important;
-  background: var(--gi-surface) !important;
-  border: 1px solid var(--gi-border) !important;
-  border-radius: var(--gi-r-card) !important;
-  box-shadow: var(--gi-sh-sm) !important;
-}
-#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__head--podium:not(#\9):not(#\9){
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  gap: var(--gi-s2) !important;
-  margin: 0 !important;
-  padding: var(--gi-s4) var(--gi-s4) var(--gi-s3) !important;
-  border-bottom: 1px solid var(--gi-border-soft) !important;
-}
-#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__headLine:not(#\9):not(#\9){
-  display: flex !important;
-  align-items: baseline !important;
-  justify-content: space-between !important;
-  gap: 8px !important;
-  width: 100% !important;
-}
-#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__title:not(#\9):not(#\9){
-  font-size: 15px !important;
-  font-weight: 700 !important;
-  color: var(--gi-text) !important;
-}
-#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__podiumShell:not(#\9):not(#\9){
-  display: flex !important;
-  flex-direction: column !important;
-  min-width: 0 !important;
-}
-#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__podium:not(#\9):not(#\9){
-  display: grid !important;
-  grid-template-columns: 1fr 1fr !important;
-  gap: 8px !important;
-  padding: 10px 12px 12px !important;
-  margin: 0 !important;
-  align-items: stretch !important;
-  direction: rtl !important;
-}
-#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__podiumSlot--first:not(#\9):not(#\9){
-  grid-column: 1 / -1 !important;
-  min-height: 0 !important;
-  min-width: 0 !important;
-  max-width: none !important;
-  flex: none !important;
-  padding: 10px 10px !important;
-  background: var(--gi-surface-2) !important;
-  border: 1px solid var(--gi-border) !important;
-  border-radius: var(--gi-r-md) !important;
-}
-#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__podiumSlot--second:not(#\9):not(#\9),
-#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__podiumSlot--third:not(#\9):not(#\9){
-  grid-column: auto !important;
-  min-width: 0 !important;
-  max-width: none !important;
-  min-height: 0 !important;
-  flex: none !important;
-  padding: 8px 8px !important;
-  background: var(--gi-surface) !important;
-  border: 1px solid var(--gi-border-soft) !important;
-  border-radius: var(--gi-r-md) !important;
-}
-#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__entryRow:not(#\9):not(#\9){
-  display: flex !important;
-  align-items: center !important;
-  gap: 8px !important;
-  padding: 0 !important;
-  border: 0 !important;
-}
-#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__entryText:not(#\9):not(#\9){
-  min-width: 0 !important;
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 2px !important;
-}
-#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__heroName:not(#\9):not(#\9),
-#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__sideName:not(#\9):not(#\9){
-  font-size: 13px !important;
-  font-weight: 800 !important;
-  color: var(--gi-text) !important;
-  line-height: 1.25 !important;
-}
-#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__heroAmount:not(#\9):not(#\9){
-  font-size: 16px !important;
-  font-weight: 800 !important;
-  color: var(--gi-primary) !important;
-}
-#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__sideAmount:not(#\9):not(#\9){
-  font-size: 13px !important;
-  font-weight: 800 !important;
-  color: var(--gi-text) !important;
-}
-#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__trophyImg:not(#\9):not(#\9){
-  display: block !important;
-  flex: none !important;
-  width: auto !important;
-  object-fit: contain !important;
-}
-#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__trophyImg--lg:not(#\9):not(#\9){ height: 36px !important; }
-#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__trophyImg--md:not(#\9):not(#\9){ height: 28px !important; }
-#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__trophyImg--sm:not(#\9):not(#\9){ height: 24px !important; }
-#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__empty:not(#\9):not(#\9){
-  display: block !important;
-  padding: 14px 16px 16px !important;
-  font-size: 13px !important;
-  font-weight: 600 !important;
-  color: var(--gi-text-muted) !important;
-}
-#view-dashboard .bankDash__elevatedCol .bankLeader--elevated .bankLeader__empty[hidden]:not(#\9):not(#\9){
-  display: none !important;
 }
 
 .giAgentOpsOverlay:not(#\9):not(#\9){
@@ -4398,7 +4116,6 @@ body.giAgentOpsOverlay-open:not(#\9):not(#\9){
   text-align: center !important;
 }
 
-
 /* =====================================================================
    31. REPORTS ? hide the upload meta line, strengthen every header
    BUILD: 20260731-reports-v2
@@ -4454,13 +4171,11 @@ body.giAgentOpsOverlay-open:not(#\9):not(#\9){
 /* --- ?????? ???????? ???????, ????? ??? --- */
 .bankRecent__title:not(#\9):not(#\9),
 .bankSideCard__title:not(#\9):not(#\9),
-.bankGoal__title:not(#\9):not(#\9),
-.bankLeader__title:not(#\9):not(#\9){
+.bankGoal__title:not(#\9):not(#\9){
   font-size: 18px !important;
   font-weight: 700 !important;
   color: var(--gi-text) !important;
 }
-
 
 /* =====================================================================
    20. USER MANAGEMENT ? screen + edit modal
@@ -4739,7 +4454,6 @@ body.giAgentOpsOverlay-open:not(#\9):not(#\9){
   .lcUserModal__teamPick:not(#\9):not(#\9){ grid-template-columns: 1fr !important; }
   .lcUsers__search:not(#\9):not(#\9){ margin-inline-start: 0 !important; flex: 1 1 100% !important; }
 }
-
 
 /* =====================================================================
    25. TOPBAR ? ????? ?????? ??????
@@ -5062,7 +4776,6 @@ body.giAgentOpsOverlay-open:not(#\9):not(#\9){
   .giUserMenu__chev:not(#\9):not(#\9){ display: none; }
   .topbar__actions:not(#\9):not(#\9){ gap: var(--gi-s2) !important; }
 }
-
 
 /* =====================================================================
    26. CAMPAIGN TRACKING ? ????? exact (no topbar, table-first)
@@ -5485,7 +5198,6 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
 #trackingSummary:not(#\9):not(#\9){
   display: none !important;
 }
-
 
 /* Policy details modal must sit above the open customer file (z-index 130). */
 .customerPolicyModal:not(#\9):not(#\9){
@@ -5975,7 +5687,7 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
     grid-template-columns: 1fr !important;
   }
   .cfFile__side:not(#\9):not(#\9),
-  .cfFile__mainWrap:not(#\9):not(#\9){ grid-column: auto !important; grid-row: auto !important; }
+.cfFile__mainWrap:not(#\9):not(#\9){ grid-column: auto !important; grid-row: auto !important; }
 }
 /* ===== ???? ?????? ???? ? ??? ??? ===== */
 #view-dailySales .giDailySalesPage:not(#\9):not(#\9){
@@ -6159,18 +5871,17 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
 
 @media (max-width: 900px){
   #view-dailySales .giDailySalesPage__summary:not(#\9):not(#\9),
-  .giDailySalesOverlay__summary:not(#\9):not(#\9){
+.giDailySalesOverlay__summary:not(#\9):not(#\9){
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 640px){
   #view-dailySales .giDailySalesPage__summary:not(#\9):not(#\9),
-  .giDailySalesOverlay__summary:not(#\9):not(#\9){
+.giDailySalesOverlay__summary:not(#\9):not(#\9){
     grid-template-columns: 1fr;
   }
 }
-
 
 /* =====================================================================
    GI-FIX 2026-08-03 · מעקב מכירות יומי — שכבת עיצוב מחודשת
@@ -6491,7 +6202,6 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
     padding: var(--gi-s3) var(--gi-s3) var(--gi-s4);
   }
 }
-
 
 /* ---------- פיצול סה״כ הפרמיה לפי ענף (בתוך כרטיס הסה״כ) ---------- */
 #view-dailySales .giDailySalesPage__stat--prem:not(#\9):not(#\9){
@@ -7046,7 +6756,7 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
 }
 @media (max-width: 1100px){
   #view-dailySales .giDailySalesPage__kpis:not([hidden]):not(#\9):not(#\9),
-  #view-dailySales .giDailySalesPage__kpis.is-five:not([hidden]):not(#\9):not(#\9){
+#view-dailySales .giDailySalesPage__kpis.is-five:not([hidden]):not(#\9):not(#\9){
     grid-template-columns: 1fr 1fr;
   }
 }
@@ -7055,7 +6765,7 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
     grid-template-columns: 1fr;
   }
   #view-dailySales .giDailySalesPage__sectorTab:nth-child(n+2):not(#\9):not(#\9),
-  #view-dailySales .giDailySalesPage__sectorTab:nth-child(n+3):not(#\9):not(#\9){
+#view-dailySales .giDailySalesPage__sectorTab:nth-child(n+3):not(#\9):not(#\9){
     border-top: 0;
     border-inline-start: 1px solid var(--gi-border);
   }
@@ -7653,7 +7363,6 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   }
 }
 
-
 /* =====================================================================
    GEMEL INVEST - Enterprise Theme Layer
    PRIORITY 1 ADDENDUM  |  BUILD: 20260801-p1-crosscut
@@ -7670,7 +7379,6 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
    two ID-level units, which outranks app.css's #id rules. !important is
    kept only where app.css also declared !important on the same property.
    ===================================================================== */
-
 
 /* =====================================================================
    32. LEGACY FORM ATOMS
@@ -7750,7 +7458,6 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   cursor: not-allowed !important;
 }
 
-
 /* --- Validation states -----------------------------------------------
    The base rules above are !important, so they would have swallowed
    app.css's error colouring. Re-declared here at higher specificity so
@@ -7772,7 +7479,6 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 .lcInput.lcNpValidationMiss:focus:not(#\9):not(#\9){
   box-shadow: 0 0 0 3px rgba(220,38,38,.14) !important;
 }
-
 
 /* --- Shell wrapper pattern -------------------------------------------
    .lcNpDetailField__shell is the visible control; the .lcInput inside it
@@ -7846,7 +7552,6 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   font-weight: 600 !important;
   box-shadow: none !important;
 }
-
 
 /* =====================================================================
    33. UNIFIED MODAL LAYER
@@ -8012,7 +7717,6 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   to{   opacity: 1; transform: none; }
 }
 
-
 /* =====================================================================
    34. FLAT PASS II - the views section 19 never reached
 
@@ -8097,7 +7801,6 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   -webkit-text-fill-color: #FFFFFF !important;
 }
 
-
 /* =====================================================================
    35. UTILITY ATOMS
 
@@ -8119,7 +7822,6 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 .muted.small:not(#\9):not(#\9){
   color: var(--gi-text-muted) !important;
 }
-
 
 /* =====================================================================
    36. NEW PROPOSAL - "type of proposal" chooser
@@ -9170,7 +8872,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
     max-height: calc(100vh - 20px) !important;
   }
   #lcAgentApptWizard .lcWizard__head:not(#\9):not(#\9):not(#\9),
-  #lcAgentApptWizard .lcWizard__body:not(#\9):not(#\9):not(#\9){
+#lcAgentApptWizard .lcWizard__body:not(#\9):not(#\9):not(#\9){
     padding-inline: 16px !important;
   }
   #lcAgentApptWizard .lcWizard__head:not(#\9):not(#\9):not(#\9){
@@ -9295,8 +8997,8 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 }
 
 @keyframes giGSPanelIn{
-  from { opacity: 0; transform: translateY(-4px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from{ opacity: 0; transform: translateY(-4px); }
+  to{ opacity: 1; transform: translateY(0); }
 }
 
 .giGSPanel__group:not(#\9):not(#\9){
@@ -9424,7 +9126,6 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 @media (max-width: 1200px){
   .giGSPanel:not(#\9):not(#\9){ max-height: min(400px, calc(100vh - 140px)); }
 }
-
 
 /* =====================================================================
    GI-DESIGN 2026-08-04 · Customers list (#view-customers)
@@ -9663,7 +9364,6 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   border-color: #1e4d6b !important;
   color: #fff !important;
 }
-
 
 /* =====================================================================
    Proposals list (#view-proposals): readable black row text
@@ -10665,9 +10365,9 @@ body.sidebar-collapsed .sidebar .nav__label:not(#\9):not(#\9){
     display: none !important;
   }
   body.sidebar-collapsed #app:not(#\9):not(#\9),
-  body.sidebar-collapsed .app:not(#\9):not(#\9),
-  .app:not(#\9):not(#\9),
-  #app:not(#\9):not(#\9){
+body.sidebar-collapsed .app:not(#\9):not(#\9),
+.app:not(#\9):not(#\9),
+#app:not(#\9):not(#\9){
     grid-template-columns: 1fr !important;
     transition: none;
   }
@@ -10675,11 +10375,11 @@ body.sidebar-collapsed .sidebar .nav__label:not(#\9):not(#\9){
 
 @media (prefers-reduced-motion: reduce){
   .app:not(#\9):not(#\9),
-  #app:not(#\9):not(#\9),
-  .sidebar .topbarBrand--sidebar > .topbarBrand__img:not(#\9):not(#\9),
-  .sidebar .nav__label:not(#\9):not(#\9),
-  .sidebarPin:not(#\9):not(#\9),
-  .sidebarPin__icon:not(#\9):not(#\9){
+#app:not(#\9):not(#\9),
+.sidebar .topbarBrand--sidebar > .topbarBrand__img:not(#\9):not(#\9),
+.sidebar .nav__label:not(#\9):not(#\9),
+.sidebarPin:not(#\9):not(#\9),
+.sidebarPin__icon:not(#\9):not(#\9){
     transition: none !important;
   }
 }

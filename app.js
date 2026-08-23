@@ -11824,19 +11824,6 @@
       return this._loadTableRowsUnscoped(tableName, selectExpr);
     },
 
-    // מצטיין יומי כלל-ארגוני — שליפה קריא-בלבד של רשומות לקוחות שעודכנו מאז sinceIso,
-    // ללא סינון-הנציג, אך ורק לצורך חישוב הפודיום. הנתונים לעולם לא נכנסים ל-State.data.
-    // GI-PERF 2026-08-10: בלי payload (היה מושך עשרות MB) — מספיק עמודות לחישוב פודיום.
-    async loadLeaderboardCustomerRows(sinceIso){
-      const since = safeTrim(sinceIso);
-      const selectExpr = "id,agent_name,agent_id,agent_role,insured_count,existing_policies_count,new_policies_count,created_at,updated_at";
-      const res = await this._loadTableRowsUnscoped(SUPABASE_TABLES.customers, selectExpr, { sinceIso: since });
-      if(!res?.ok) return { ok:false, error: res?.error || "טעינת נתוני מצטיינים נכשלה" };
-      const rows = Array.isArray(res.data) ? res.data : [];
-      const mapped = rows.map((row, idx) => this.mapCustomerRow(row, idx));
-      return { ok:true, rows: mapped };
-    },
-
     async probeCustomersCount(){
       try {
         const connection = await this.waitForConnection({ retries: 1, delayMs: 400 });
@@ -27220,11 +27207,7 @@ UsersGateUI.init();
         } else if(Auth.isOps() || Auth.isOpsAgent()){
           if(!OpsDashboardUI.quietRefresh()) OpsDashboardUI.render();
         } else if(DashboardUI.els?.root?.querySelector(".bankDash__kpis")) {
-          /* GI-PERF 2026-08-09 — בזמן overlay לא מרעננים leaderboard בכל tick (קפיצות). */
           DashboardUI.scheduleRefreshKpis();
-          if(!DashboardUI.hasStableServerKpiOverlay?.() || DashboardUI._leaderboardNeedsPaint?.()){
-            try { DashboardUI.scheduleRefreshLeaderboard(); } catch(_e){}
-          }
         } else {
           try { DashboardUI.schedulePostLoginRender({ skipDailyReportWait: true }); } catch(_e) {
             try { void DashboardUI.render(); } catch(_e2) {}
@@ -27419,7 +27402,6 @@ UsersGateUI.init();
       ReferralQuietRefresh.start();
       try { MirrorCallAgentToastWatcher.start(); } catch(_e) {}
       try { OpsAgentStatusToastWatcher.start(); } catch(_e) {}
-      try { DashboardUI.startLiveRefresh(); } catch(_e) {}
     },
     stopAll(){
       if(this._graceTimer){
@@ -30161,40 +30143,6 @@ UsersGateUI.init();
       }, 400);
     },
 
-    _leaderboardNeedsPaint(){
-      try {
-        const root = this.els?.root;
-        if(!root) return false;
-        const card = root.querySelector(".bankLeader.card");
-        if(!card) return true;
-        if(card.classList.contains("bankLeader--waiting")) return true;
-        const podium = root.querySelector(".bankLeader__podium");
-        if(!podium) return true;
-        if(podium.style.display === "none") return true;
-        if(!podium.querySelector(".bankLeader__podiumSlot")) return true;
-        return false;
-      } catch(_e) {
-        return false;
-      }
-    },
-
-    scheduleRefreshLeaderboard(){
-      if(this._leaderRefreshTimer) window.clearTimeout(this._leaderRefreshTimer);
-      const settleMs = (typeof BackgroundTimers !== "undefined" && BackgroundTimers.justBecameVisible?.(800)) ? 800 : 500;
-      this._leaderRefreshTimer = window.setTimeout(() => {
-        this._leaderRefreshTimer = null;
-        try {
-          if(typeof document !== "undefined" && document.visibilityState === "hidden") return;
-          if(LiveRefresh.getCurrentView() !== "dashboard" || !this.shouldShowPerformanceBoard()) return;
-          if(typeof BackgroundTimers !== "undefined" && BackgroundTimers.justBecameVisible?.(800)){
-            this.scheduleRefreshLeaderboard();
-            return;
-          }
-          this.refreshLeaderboard();
-        } catch(_e){}
-      }, settleMs);
-    },
-
     toggleKpiBreakdown(btn){
       const bd = btn?.closest?.("article")?.querySelector?.(".bankKpiToday__breakdown");
       if(!bd) return;
@@ -30746,46 +30694,6 @@ UsersGateUI.init();
       return daily.map((item) => ({ ...item, premium: Math.round(item.premium * 100) / 100 }));
     },
 
-    buildDailyLeaderboard(forDate){
-      // כלל עסקי: מצטיין יומי = בריאות וסיכונים בלבד.
-      // אלמנטרי לא נכנס לדירוג (נשאר בדוח מכירות יומי / דשבורד אלמנטרי).
-      const all = this.getLeaderboardSourceCustomers();
-      const ref = forDate || new Date();
-      const dayRange = {
-        start: new Date(ref.getFullYear(), ref.getMonth(), ref.getDate(), 0, 0, 0, 0),
-        end: new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() + 1, 0, 0, 0, 0)
-      };
-      const map = {};
-      all.forEach((rec) => {
-        const name = safeTrim(rec?.agentName) || safeTrim(rec?.createdBy) || 'נציג';
-        const policies = CustomersUI.collectNewPoliciesForMetrics(rec, {
-          range: dayRange,
-          resolveCustomerMonthStamp: (row) => this.resolveCustomerMonthStamp(row),
-          isWithinRange: (stamp, monthRange) => this.isWithinRange(stamp, monthRange)
-        });
-        if(!policies.length) return;
-        const premium = policies.reduce((sum, p) => sum + DashboardUI.policyNetPremium(p), 0);
-        if(!(premium > 0)) return;
-        if(!map[name]) map[name] = { name, premium: 0, clients: 0 };
-        map[name].premium += premium;
-        map[name].clients += 1;
-      });
-      return Object.values(map)
-        .sort((a, b) => b.premium - a.premium || safeTrim(a.name).localeCompare(safeTrim(b.name), "he"))
-        .slice(0, 3);
-    },
-
-    buildLeaderboardWithFallback(){
-      // נציג מסונן: מוודאים שיש בידינו נתוני ארגון עדכניים למצטיין היומי (שליפה עצלה, אחת ל-60ש').
-      try { this.ensureOrgLeaderboardData(); } catch(_e) {}
-      const todayBoard = this.buildDailyLeaderboard();
-      if(todayBoard.length) return { board: todayBoard, isYesterday: false };
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yBoard = this.buildDailyLeaderboard(yesterday);
-      return { board: yBoard, isYesterday: true };
-    },
-
     canSeeDailySalesReport(){
       try{ return !!(Auth.isAdmin() || Auth.isManager()); }catch(_e){ return false; }
     },
@@ -31186,7 +31094,6 @@ UsersGateUI.init();
           if(typeof LiveRefresh !== "undefined" && LiveRefresh.getCurrentView?.() === "dailySales"){
             try { this.renderDailySalesPage(); } catch(_e) {}
           }
-          try { this.scheduleRefreshLeaderboard(); } catch(_e) {}
         } catch(err) {
           try { console.warn("[GI-DAILY-SALES] agent overlay failed", err); } catch(_e) {}
         } finally {
@@ -32423,7 +32330,6 @@ UsersGateUI.init();
           replacePanelIfMissing(".bankServiceCube", this.renderAgentServiceCubeHtml());
         }
       } catch(_e) {}
-      try { this.refreshLeaderboard(); } catch(_e) {}
     },
 
     /* GI-FIX 2026-08-11: רשימת 5 האחרונים מגיעה רזה (בלי payload),
@@ -33279,65 +33185,6 @@ UsersGateUI.init();
       });
     },
 
-    // === מצטיין יומי כלל-ארגוני עבור נציגים ===
-    // נציג רגיל טוען רק את הלקוחות שלו, ולכן הפודיום הראה רק אותו. כאן מחזיקים מטמון
-    // מבודד של רשומות הארגון שעודכנו מאתמול והלאה (מספיק כדי לחשב מצטייני היום/אמש),
-    // בלי לגעת ב-State.data ובלי לשנות הרשאות/מסכים אחרים.
-    _orgLeaderRows: null,
-    _orgLeaderFetchAt: 0,
-    _orgLeaderFetchBusy: false,
-
-    getLeaderboardSourceCustomers(){
-      const own = Array.isArray(State.data?.customers) ? State.data.customers : [];
-      const org = Array.isArray(this._orgLeaderRows) ? this._orgLeaderRows : null;
-      // GI-PERF 2026-08-10: במצב Large Session גם מנהל משתמש בשורות פודיום מהשרת (בלי payload),
-      // כי State מחזיק רק working-set ולא את כל הארגון.
-      if(Auth?.canViewAllCustomers?.() && !Storage.isLargeCustomersSession?.()) return own;
-      if(!org || !org.length) return own;
-      // מיזוג לפי id: הרשומה המקומית קודמת (טרייה ביותר), ואז נוספות שאר רשומות הארגון.
-      const byId = new Map();
-      own.forEach((rec) => { const id = safeTrim(rec?.id); if(id) byId.set(id, rec); });
-      org.forEach((rec) => { const id = safeTrim(rec?.id); if(id && !byId.has(id)) byId.set(id, rec); });
-      return Array.from(byId.values());
-    },
-
-    leaderboardOrgSinceIso(){
-      const d = new Date();
-      d.setDate(d.getDate() - 1);
-      d.setHours(0, 0, 0, 0);
-      return d.toISOString();
-    },
-
-    ensureOrgLeaderboardData(options = {}){
-      // רלוונטי לנציג מסונן — וב-Large Session גם למנהל (State אינו כל הארגון).
-      if(!Auth?.current) return;
-      if(Auth.canViewAllCustomers?.() && !Storage.isLargeCustomersSession?.()) return;
-      if(!this.shouldShowPerformanceBoard?.()) return;
-      if(this._orgLeaderFetchBusy) return;
-      const fresh = Number(this._orgLeaderFetchAt) > 0 && (Date.now() - Number(this._orgLeaderFetchAt)) < 60000;
-      if(fresh && !options.force) return;
-      if(typeof Storage?.loadLeaderboardCustomerRows !== "function") return;
-      this._orgLeaderFetchBusy = true;
-      const sinceIso = this.leaderboardOrgSinceIso();
-      Promise.resolve()
-        .then(() => Storage.loadLeaderboardCustomerRows(sinceIso))
-        .then((res) => {
-          if(res && res.ok && Array.isArray(res.rows)){
-            this._orgLeaderRows = res.rows;
-            this._orgLeaderFetchAt = Date.now();
-            try {
-              const root = this.els?.root;
-              const onDashboard = LiveRefresh.getCurrentView() === "dashboard" && this.shouldShowPerformanceBoard();
-              if(!onDashboard) return;
-              // גם ממצב «ממתין» — רק קוביית המצטיין, בלי לבנות את כל הדשבורד.
-              this.scheduleRefreshLeaderboard();
-            } catch(_e) {}
-          }
-        })
-        .catch(() => { /* נפילה רכה: נשארים עם ההתנהגות הקיימת (הנציג רואה את עצמו) */ })
-        .finally(() => { this._orgLeaderFetchBusy = false; });
-    },
-
     _ensureBackgroundLocalMetricsBuild(cacheKey){
       if(this._needsAgentAppointmentKpi()){
         try { this._fillAppointmentFromLocalCustomers(); } catch(_e) {}
@@ -33407,7 +33254,6 @@ UsersGateUI.init();
           }
           if(hasKpiDom || this.els.root.querySelector(".bankDash__kpis")){
             this.scheduleRefreshKpis();
-            if(this._leaderboardNeedsPaint()) this.scheduleRefreshLeaderboard();
             return;
           }
           void this.render(options);
@@ -33422,7 +33268,6 @@ UsersGateUI.init();
             && !this.els.root.querySelector(".bankDash--bootLoading")
             && !options.forceFullRender){
             this.scheduleRefreshKpis();
-            if(this._leaderboardNeedsPaint()) this.scheduleRefreshLeaderboard();
             return;
           }
           void this.render(options);
@@ -33712,15 +33557,11 @@ UsersGateUI.init();
       } catch(_e) {}
       try { this.refillServerDashboardKpis(); } catch(_e) {}
       void this.render({ skipDailyReportWait: true, forceFullRender: true });
-      try { this.ensureOrgLeaderboardData({ force: true }); } catch(_e) {}
-      try { this.scheduleRefreshLeaderboard(); } catch(_e) {}
       /* GI-FACE-FREEZE: ניסיון אחד אחרי שהסשן הספיק להיטען — לא 700/1800/4000. */
       if(this._faceKpiRetryTimer) window.clearTimeout(this._faceKpiRetryTimer);
       this._faceKpiRetryTimer = window.setTimeout(() => {
         this._faceKpiRetryTimer = null;
         try {
-          try { this.ensureOrgLeaderboardData({ force: true }); } catch(_e2) {}
-          try { this.scheduleRefreshLeaderboard(); } catch(_e2) {}
           if(this._needsAgentAppointmentKpi()){
             try { this.fetchAgentAppointmentKpis(); } catch(_e2) {}
             try { this._fillAppointmentFromLocalCustomers(); } catch(_e2) {}
@@ -33740,16 +33581,6 @@ UsersGateUI.init();
           this.refillServerDashboardKpis();
         } catch(_e) {}
       }, 2200);
-    },
-
-    startLiveRefresh(){
-      if(this._leaderTimer) return;
-      // מצטיין יומי בלבד — KPI מתעדכן דרך LiveRefresh + scheduleRefreshKpis (ללא כפילות כל 30s)
-      if(!this._leaderTimer){
-        this._leaderTimer = window.setInterval(() => {
-          try { if(this.shouldShowPerformanceBoard()) this.scheduleRefreshLeaderboard(); } catch(_e){}
-        }, 60000);
-      }
     },
 
     revealKpiMetricValues(root = this.els?.root){
@@ -33971,240 +33802,9 @@ UsersGateUI.init();
       }
     },
 
-    leaderboardAgentSub(agent, isYesterday){
-      const n = `${agent.clients} לקוח${agent.clients !== 1 ? 'ות' : ''}`;
-      return isYesterday ? `${n} באותו יום` : `${n} היום`;
-    },
-
-    leaderboardTitleLabel(isYesterday){
-      return isYesterday ? 'מצטיין אמש' : 'מצטיין יומי';
-    },
-
-    leaderboardHeadHtml(isYesterday, displayDate){
-      const title = this.leaderboardTitleLabel(isYesterday);
-      return `
-                    <div class="bankLeader__headLine">
-                      <span class="bankLeader__title">${escapeHtml(title)}</span>
-                      <span class="bankLeader__headDate">${escapeHtml(displayDate)}</span>
-                    </div>`;
-    },
-
-    applyLeaderPhotoBg(){
-      const root = this.els.root;
-      if(!root) return;
-      const cards = root.querySelectorAll(".bankDash__row--leaderSolo .bankLeader--photoBg");
-      if(!cards.length) return;
-      /* GI-PERF 2026-08-05: היה Date.now() — כל רינדור ייצר URL ייחודי ולכן
-         הדפדפן הוריד מחדש 2.2MB בכל פעם. BUILD משתנה רק בגרסה חדשה, כך
-         שהמטמון עובד ורענון גרסה עדיין מביא תמונה מעודכנת. */
-      const stamp = BUILD;
-      const probe = new Image();
-      probe.onload = () => {
-        cards.forEach((el) => {
-          el.classList.remove("bankLeader--photoMissing");
-          el.classList.add("bankLeader--photoReady");
-          el.style.setProperty(
-            "background",
-            `var(--leaderPhotoGrad), url('grafmtzayen.png?v=${stamp}') center center / cover no-repeat`,
-            "important"
-          );
-          el.style.setProperty("background-color", "transparent", "important");
-        });
-      };
-      probe.onerror = () => {
-        cards.forEach((el) => {
-          el.classList.remove("bankLeader--photoReady");
-          el.classList.add("bankLeader--photoMissing");
-        });
-      };
-      probe.src = `grafmtzayen.png?v=${stamp}`;
-    },
-
-    updateLeaderboardHead(isYesterday, displayDate){
-      const root = this.els.root;
-      if(!root) return;
-      const titleLabel = this.leaderboardTitleLabel(isYesterday);
-      const headLine = root.querySelector('.bankLeader__headLine');
-      if(headLine){
-        const titleEl = headLine.querySelector('.bankLeader__title');
-        const dateEl = headLine.querySelector('.bankLeader__headDate');
-        if(titleEl) titleEl.textContent = titleLabel;
-        if(dateEl) dateEl.textContent = displayDate;
-      }
-      root.querySelectorAll('.bankLeader__sub').forEach((el) => el.remove());
-      root.querySelectorAll('.bankLeader__badge').forEach((el) => el.remove());
-    },
-
-    leaderboardTrophyImg(rank){
-      const sizeClass = rank === 1 ? 'bankLeader__trophyImg--lg' : rank === 2 ? 'bankLeader__trophyImg--md' : 'bankLeader__trophyImg--sm';
-      return `<img class="bankLeader__trophyImg ${sizeClass}" src="./gavia.png" alt="" aria-hidden="true" loading="lazy" decoding="async" />`;
-    },
-
-    leaderboardEntryRow(agent, rank, isYesterday, nameClass, amountClass, subClass){
-      return `
-          <div class="bankLeader__entryRow">
-            ${this.leaderboardTrophyImg(rank)}
-            <div class="bankLeader__entryText">
-              <div class="${nameClass}">${escapeHtml(agent.name)}</div>
-              <div class="${amountClass}">${escapeHtml(this.formatMoney(agent.premium))}</div>
-              <div class="${subClass}">${escapeHtml(this.leaderboardAgentSub(agent, isYesterday))}</div>
-            </div>
-          </div>`;
-    },
-
-    leaderboardPodiumSlot(agent, rank, isYesterday){
-      const side = rank === 1 ? 'first' : rank === 2 ? 'second' : 'third';
-      if(!agent){
-        return '';
-      }
-      const entry = rank === 1
-        ? this.leaderboardEntryRow(agent, rank, isYesterday, 'bankLeader__heroName', 'bankLeader__heroAmount', 'bankLeader__heroSub')
-        : this.leaderboardEntryRow(agent, rank, isYesterday, 'bankLeader__sideName', 'bankLeader__sideAmount', 'bankLeader__sideSub');
-      if(rank === 1){
-        return `
-        <div class="bankLeader__podiumSlot bankLeader__podiumSlot--first">
-          ${entry}
-        </div>`;
-      }
-      return `
-        <div class="bankLeader__podiumSlot bankLeader__podiumSlot--${side}">
-          <div class="bankLeader__sideCard">
-            ${entry}
-          </div>
-        </div>`;
-    },
-
-    leaderboardSideSlot(agent, medal, side, isYesterday){
-      const rank = side === 'first' ? 1 : side === 'second' ? 2 : 3;
-      return this.leaderboardPodiumSlot(agent, rank, isYesterday);
-    },
-
-    refreshLeaderboard(){
-      const root = this.els.root;
-      if(!root) return;
-      const ensurePodiumShell = () => {
-        if(root.querySelector(".bankLeader__podium")) return true;
-        const card = root.querySelector(".bankLeader.card");
-        if(!card) return false;
-        const head = card.querySelector(".bankLeader__head");
-        card.classList.remove("bankLeader--waiting");
-        card.classList.add("bankLeader--podiumTop3", "bankLeader--elevated");
-        const shell = document.createElement("div");
-        shell.className = "bankLeader__podiumShell";
-        shell.id = "bankLeaderHero";
-        const podium = document.createElement("div");
-        podium.className = "bankLeader__podium";
-        if(head) shell.appendChild(head);
-        shell.appendChild(podium);
-        card.insertBefore(shell, card.firstChild);
-        if(!card.querySelector(".bankLeader__empty")){
-          const empty = document.createElement("div");
-          empty.className = "bankLeader__empty";
-          card.appendChild(empty);
-        }
-        if(!card.querySelector(".bankLeader__list")){
-          const list = document.createElement("div");
-          list.className = "bankLeader__list";
-          list.hidden = true;
-          card.appendChild(list);
-        }
-        return true;
-      };
-      let heroEl     = root.querySelector('#bankLeaderHero');
-      let listEl     = root.querySelector('.bankLeader__list');
-      let emptyEl    = root.querySelector('.bankLeader__empty');
-      let podiumEl   = root.querySelector('.bankLeader__podium');
-      if(!heroEl && !emptyEl && !podiumEl && !root.querySelector(".bankLeader.card")) return;
-      const { board: leaderboard, isYesterday } = this.buildLeaderboardWithFallback();
-      const todayStr = new Date().toLocaleDateString('he-IL', { day:'numeric', month:'long' });
-      const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-      const yestStr = yesterday.toLocaleDateString('he-IL', { day:'numeric', month:'long' });
-      const displayDate = isYesterday ? yestStr : todayStr;
-      const leaderCard = root.querySelector('.bankLeader.card');
-      if(leaderCard){
-        if(isYesterday) leaderCard.classList.add('bankLeader--yesterday');
-        else leaderCard.classList.remove('bankLeader--yesterday');
-      }
-      this.updateLeaderboardHead(isYesterday, displayDate);
-      if(!leaderboard.length){
-        if(podiumEl) podiumEl.style.display = 'none';
-        if(heroEl) heroEl.style.display = 'none';
-        if(listEl) listEl.style.display = 'none';
-        if(emptyEl) { emptyEl.style.display = 'none'; emptyEl.textContent = ''; }
-        const retries = Number(this._leaderWaitRetry) || 0;
-        if(retries < 6){
-          this._leaderWaitRetry = retries + 1;
-          window.setTimeout(() => {
-            try { this.scheduleRefreshLeaderboard(); } catch(_e) {}
-          }, 700);
-        }
-        return;
-      }
-      this._leaderWaitRetry = 0;
-      if(!podiumEl){
-        if(!ensurePodiumShell()) return;
-        heroEl = root.querySelector('#bankLeaderHero');
-        listEl = root.querySelector('.bankLeader__list');
-        emptyEl = root.querySelector('.bankLeader__empty');
-        podiumEl = root.querySelector('.bankLeader__podium');
-      }
-      if(emptyEl) emptyEl.style.display = 'none';
-      if(podiumEl) podiumEl.style.display = '';
-      const top = leaderboard[0];
-      const second = leaderboard[1] || null;
-      const third = leaderboard[2] || null;
-      const patchPodiumRank = (rank, agent) => {
-        if(!podiumEl) return;
-        const side = rank === 1 ? 'first' : rank === 2 ? 'second' : 'third';
-        const slotOld = podiumEl.querySelector(`.bankLeader__podiumSlot--${side}`);
-        if(!agent){
-          if(slotOld) slotOld.remove();
-          return;
-        }
-        const nameSel = rank === 1 ? ".bankLeader__heroName" : ".bankLeader__sideName";
-        const amtSel = rank === 1 ? ".bankLeader__heroAmount" : ".bankLeader__sideAmount";
-        const subSel = rank === 1 ? ".bankLeader__heroSub" : ".bankLeader__sideSub";
-        const nameEl = slotOld?.querySelector(nameSel);
-        const amtEl = slotOld?.querySelector(amtSel);
-        const subEl = slotOld?.querySelector(subSel);
-        if(nameEl && amtEl && subEl){
-          const nextName = String(agent.name || "");
-          const nextAmt = this.formatMoney(agent.premium);
-          const nextSub = this.leaderboardAgentSub(agent, isYesterday);
-          if(nameEl.textContent !== nextName) nameEl.textContent = nextName;
-          if(amtEl.textContent !== nextAmt) amtEl.textContent = nextAmt;
-          if(subEl.textContent !== nextSub) subEl.textContent = nextSub;
-          return;
-        }
-        const html = this.leaderboardPodiumSlot(agent, rank, isYesterday).trim();
-        if(!html) return;
-        const tmp = document.createElement('template');
-        tmp.innerHTML = html;
-        const next = tmp.content.firstChild;
-        if(!next) return;
-        if(slotOld){ slotOld.replaceWith(next); return; }
-        const anchorSel = rank === 2 ? '.bankLeader__podiumSlot--first' : rank === 3 ? '.bankLeader__podiumSlot--second' : null;
-        const anchor = anchorSel ? podiumEl.querySelector(anchorSel) : null;
-        if(anchor) anchor.insertAdjacentElement('afterend', next);
-        else podiumEl.appendChild(next);
-      };
-      if(heroEl) heroEl.style.display = '';
-      patchPodiumRank(1, top);
-      patchPodiumRank(2, second);
-      patchPodiumRank(3, third);
-      if(listEl && (listEl.innerHTML || !listEl.hasAttribute("hidden"))){
-        listEl.style.display = 'none';
-        listEl.innerHTML = '';
-        listEl.setAttribute('hidden', '');
-      }
-    },
-
     stopLiveRefresh(){
       if(this._liveRefreshTimer){ clearInterval(this._liveRefreshTimer); this._liveRefreshTimer = null; }
-      if(this._leaderTimer){ clearInterval(this._leaderTimer); this._leaderTimer = null; }
       if(this._kpiRefreshTimer){ clearTimeout(this._kpiRefreshTimer); this._kpiRefreshTimer = null; }
-      if(this._leaderRefreshTimer){ clearTimeout(this._leaderRefreshTimer); this._leaderRefreshTimer = null; }
-      try { this._stopWaitingAnimation(); } catch(_e){}
     },
 
     renderEmpty(){
@@ -34248,9 +33848,6 @@ UsersGateUI.init();
         && this.els.root.querySelector(".bankDash__kpis")
         && !this.els.root.querySelector(".bankDash--bootLoading")){
         try { this.refreshKpis(); } catch(_e) {}
-        if(!this.hasStableServerKpiOverlay() || this._leaderboardNeedsPaint()){
-          try { this.scheduleRefreshLeaderboard(); } catch(_e) {}
-        }
         return;
       }
       if(this._renderInFlight){
@@ -34385,38 +33982,6 @@ UsersGateUI.init();
         ? existingServiceEl.outerHTML
         : this.renderAgentServiceCubeHtml();
       const goalPanelHtml = this.renderGoalCardHtml(metrics, orgScope);
-      const leaderboardPanelHtml = (() => {
-            const { board: leaderboard2, isYesterday: isYesterday2 } = this.buildLeaderboardWithFallback();
-            const todayStr2 = new Date().toLocaleDateString('he-IL', { day:'numeric', month:'long' });
-            const yesterday2 = new Date(); yesterday2.setDate(yesterday2.getDate() - 1);
-            const yestStr2 = yesterday2.toLocaleDateString('he-IL', { day:'numeric', month:'long' });
-            const displayDate2 = isYesterday2 ? yestStr2 : todayStr2;
-            if(!leaderboard2.length) return `
-              <article class="bankLeader card bankLeader--elevated bankLeader--waiting" id="bankLeaderWaiting" aria-label="מצטיין יומי">
-                <header class="bankLeader__head bankLeader__head--podium">
-                  ${this.leaderboardHeadHtml(false, todayStr2)}
-                </header>
-                <div class="bankLeader__empty" hidden></div>
-              </article>`;
-            const first = leaderboard2[0];
-            const second = leaderboard2[1] || null;
-            const third = leaderboard2[2] || null;
-            return `
-              <article class="bankLeader card bankLeader--podiumTop3 bankLeader--elevated${isYesterday2 ? ' bankLeader--yesterday' : ''}" aria-label="מצטיין יומי">
-                <div class="bankLeader__podiumShell" id="bankLeaderHero">
-                  <header class="bankLeader__head bankLeader__head--podium">
-                    ${this.leaderboardHeadHtml(isYesterday2, displayDate2)}
-                  </header>
-                  <div class="bankLeader__podium">
-                    ${this.leaderboardPodiumSlot(first, 1, isYesterday2)}
-                    ${second ? this.leaderboardPodiumSlot(second, 2, isYesterday2) : ''}
-                    ${third ? this.leaderboardPodiumSlot(third, 3, isYesterday2) : ''}
-                  </div>
-                </div>
-                <div class="bankLeader__list" hidden></div>
-                <div class="bankLeader__empty" hidden></div>
-              </article>`;
-          })();
       const cubePark = this._parkDashboardSideCubes();
       this.els.root.innerHTML = `
         <section class="bankDash bankDash--cleanTop">
@@ -34459,7 +34024,6 @@ UsersGateUI.init();
             <div class="bankDash__elevatedCol">
               ${opsCubeHtml}
               ${serviceCubeHtml}
-              ${leaderboardPanelHtml}
             </div>
           </div>
 
@@ -34473,8 +34037,6 @@ UsersGateUI.init();
       this._renderedDomKey = this.getMetricsCacheKey() || this._renderedDomKey || "painted";
       await perfYield();
       this.revealKpiMetricValues(this.els.root);
-      try { this.applyLeaderPhotoBg(); } catch(_e){}
-      try { this._stopWaitingAnimation(); } catch(_e){}
       try { this._ensureRecentCustomersBound(); } catch(_e){}
       try { this._ensureAgentOpsServiceBound(); } catch(_e){}
       try { this._ensureDailySalesReportBound(); } catch(_e){}
@@ -34488,10 +34050,6 @@ UsersGateUI.init();
           void this.render({ skipDailyReportWait: true });
         }
       }
-    },
-
-    _stopWaitingAnimation(){
-      if(this._waitDollarInterval){ clearInterval(this._waitDollarInterval); this._waitDollarInterval = null; }
     },
 
     _scheduleMidnightReset(){
