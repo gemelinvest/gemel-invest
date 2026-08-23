@@ -2169,6 +2169,7 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   /* col1 (right/RTL) wide for recent+goal; col2 (left/RTL) narrow elevated stack */
   grid-template-columns: minmax(0, 3fr) minmax(0, 1.15fr) !important;
   align-items: start !important;
+  align-content: start !important;
   gap: 10px !important;
 }
 
@@ -2186,6 +2187,25 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 #view-dashboard .bankDash__kpis:not(#\9):not(#\9){
   grid-column: 1 / -1 !important;
   grid-row: 2 !important;
+}
+
+/* Right: table + goal stacked flush, independent of the left column height */
+#view-dashboard .bankDash__row--recentGoalCol:not(#\9):not(#\9){
+  grid-column: 1 !important;
+  grid-row: 3 / span 2 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  align-self: start !important;
+  min-width: 0 !important;
+}
+
+#view-dashboard .bankDash__row--recentGoalCol .bankDash__row--recentCustomers:not(#\9):not(#\9),
+#view-dashboard .bankDash__row--recentGoalCol .bankDash__row--goalOnly:not(#\9):not(#\9),
+#view-dashboard .bankDash__row--recentGoalCol .bankDash__row--goalUnderRecent:not(#\9):not(#\9){
+  grid-column: auto !important;
+  grid-row: auto !important;
+  width: 100% !important;
 }
 
 /* Right: recent customers (wide) — place the ROW, not the inner card */
@@ -2257,6 +2277,7 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   #view-dashboard .bankDash:not(#\9):not(#\9){
     grid-template-columns: 1fr !important;
   }
+  #view-dashboard .bankDash__row--recentGoalCol:not(#\9):not(#\9),
   #view-dashboard .bankDash__row--recentCustomers:not(#\9):not(#\9),
   #view-dashboard .bankDash__row--elevatedCol:not(#\9):not(#\9),
   #view-dashboard .bankDash__row--goalOnly:not(#\9):not(#\9),

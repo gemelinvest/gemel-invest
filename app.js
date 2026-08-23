@@ -32486,7 +32486,7 @@ UsersGateUI.init();
       return `
           <div class="bankDash__row bankDash__row--goalOnly bankDash__row--goalUnderRecent">
           <article class="bankGoal card bankGoal--${metrics.targetTone}">
-            <div class="bankGoal__title">${orgScope ? ('ביצועים מול יעד (' + (getDashboardScopeLabelHe('goal') || 'סיכום') + ')') : 'ביצועים מול יעד'}</div>
+            <div class="bankGoal__title">ביצועים מול יעד</div>
             <div class="bankGoal__shell">
               <div class="bankGoal__meter">
                 <div class="bankGoal__meterTop">
@@ -33833,7 +33833,7 @@ UsersGateUI.init();
         if(podiumEl) podiumEl.style.display = 'none';
         if(heroEl) heroEl.style.display = 'none';
         if(listEl) listEl.style.display = 'none';
-        if(emptyEl) { emptyEl.style.display = ''; emptyEl.textContent = 'אין מכירות היום עדיין — הזמן לפתוח!'; }
+        if(emptyEl) { emptyEl.style.display = 'none'; emptyEl.textContent = ''; }
         return;
       }
       if(!podiumEl){
@@ -34083,7 +34083,7 @@ UsersGateUI.init();
                 <header class="bankLeader__head bankLeader__head--podium">
                   ${this.leaderboardHeadHtml(false, todayStr2)}
                 </header>
-                <div class="bankLeader__empty">אין מכירות היום עדיין — הזמן לפתוח!</div>
+                <div class="bankLeader__empty" hidden></div>
               </article>`;
             const first = leaderboard2[0];
             const second = leaderboard2[1] || null;
@@ -34149,9 +34149,10 @@ UsersGateUI.init();
             </div>
           </div>
 
+          <div class="bankDash__row bankDash__row--recentGoalCol">
           ${recentCustomersPanelHtml}
-
           ${goalPanelHtml}
+          </div>
 
         </section>`;
       this._renderedDomKey = this.getMetricsCacheKey() || this._renderedDomKey || "painted";
