@@ -7079,7 +7079,8 @@
       }
       return payload;
     },
-    OFFICIAL_JOIN_FORM_FROM_DAY: "2026-08-01",
+    // Official join PDFs only from 23.8.2026 — not from 1 August.
+    OFFICIAL_JOIN_FORM_FROM_DAY: "2026-08-23",
     officialJoinFormDayOnOrAfter(iso){
       const day = israelCalendarDay(iso);
       return !!(day && day >= this.OFFICIAL_JOIN_FORM_FROM_DAY);
@@ -34363,11 +34364,11 @@ UsersGateUI.init();
 
     /* GI-PERF-LAZY-SIMS 2026-08-09 */
   // Lazy simulator registry — engines in gi-simulators.js (~220KB parse deferred).
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-menora-ci-form-v1";
-  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-menora-ci-form-v1";
-  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-menora-ci-form-v1";
-  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-menora-ci-form-v1";
-  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-menora-ci-form-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-official-from-aug23-v1";
+  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-official-from-aug23-v1";
+  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-official-from-aug23-v1";
+  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-official-from-aug23-v1";
+  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-official-from-aug23-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){

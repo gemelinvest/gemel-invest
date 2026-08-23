@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/menora-ci/",
     TEMPLATE_FILE: "menora-ci-join.pdf",
     FONT_URL: "./fonts/Rubik-Regular.ttf",
-    VERSION: "20260824-menora-ci-form-v1",
+    VERSION: "20260824-official-from-aug23-v1",
     DOC_ID: "doc_menora_ci_form",
     DOC_TYPE: "menora_ci_form",
 
