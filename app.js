@@ -6691,7 +6691,8 @@
       migdalLifeForm: "migdal_life_form",
       migdalMortgageForm: "migdal_mortgage_form",
       menoraCiForm: "menora_ci_form",
-      ayalonHealthForm: "ayalon_health_form"
+      ayalonHealthForm: "ayalon_health_form",
+      clalHealthForm: "clal_health_form"
     },
     REPORT_SCOPES: {
       proposal: "health_proposal",
@@ -7147,6 +7148,17 @@
       });
       return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
     },
+    qualifiesForClalHealthForm(payload, rec){
+      const list = this.listOfficialJoinFormPolicies(payload, rec);
+      const matched = list.filter((p) => {
+        if(safeTrim(p?.company) !== "כלל") return false;
+        const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
+        if(/משכנתא/.test(blob) || /ריסק/.test(blob)) return false;
+        if(/מחלות\s*קשות/.test(blob) && !/בריאות/.test(blob)) return false;
+        return /בריאות/.test(blob);
+      });
+      return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
+    },
     qualifiesForMenoraCiForm(payload, rec){
       const list = this.listOfficialJoinFormPolicies(payload, rec);
       const matched = list.filter((p) => {
@@ -7240,6 +7252,19 @@
           uploadedBy: safeTrim(rec?.agentName)
         });
       }
+      const hasClalHealth = list.some((d) => safeTrim(d?.type) === this.TYPES.clalHealthForm);
+      if(!hasClalHealth && this.qualifiesForClalHealthForm(payload, rec)){
+        const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
+        list.unshift({
+          id: "doc_clal_health_form",
+          type: this.TYPES.clalHealthForm,
+          isLegacy: true,
+          name: "טופס מקורי — בריאות · כלל",
+          source: "מערכת",
+          uploadedAt,
+          uploadedBy: safeTrim(rec?.agentName)
+        });
+      }
       const hasMenoraCi = list.some((d) => safeTrim(d?.type) === this.TYPES.menoraCiForm);
       if(!hasMenoraCi && this.qualifiesForMenoraCiForm(payload, rec)){
         const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
@@ -7274,6 +7299,7 @@
         if(type === this.TYPES.migdalMortgageForm) return this.qualifiesForMigdalMortgageForm(payload, rec);
         if(type === this.TYPES.menoraCiForm) return this.qualifiesForMenoraCiForm(payload, rec);
         if(type === this.TYPES.ayalonHealthForm) return this.qualifiesForAyalonHealthForm(payload, rec);
+        if(type === this.TYPES.clalHealthForm) return this.qualifiesForClalHealthForm(payload, rec);
         if(type === this.TYPES.healthOps || type === this.TYPES.agentApptOps || type === this.TYPES.agentApptForm || type === this.TYPES.harBituach) return true;
         return !!(safeTrim(doc.name) || safeTrim(doc.url) || safeTrim(doc.dataUrl) || safeTrim(doc.fileName));
       }));
@@ -18018,6 +18044,13 @@ UsersGateUI.init();
           if(rec) void this.openMigdalMortgageForm(rec);
           return;
         }
+        const openClalHealth = ev.target?.closest?.("[data-open-clal-health-doc], [data-clalhealth-open]");
+        if(openClalHealth){
+          ev.preventDefault();
+          const rec = this.current();
+          if(rec) void this.openClalHealthForm(rec);
+          return;
+        }
         const openAyalHealth = ev.target?.closest?.("[data-open-ayalon-health-doc], [data-ayalhealth-open]");
         if(openAyalHealth){
           ev.preventDefault();
@@ -20588,6 +20621,12 @@ UsersGateUI.init();
             return `<div class="cfFile__documentsPreviewDoc">${window.MigdalMortgageForm.renderPreviewHtml(draft)}</div>`;
           } catch(_e) {}
         }
+        if(type === CustomerDocuments.TYPES.clalHealthForm && window.ClalHealthForm){
+          try {
+            const draft = window.ClalHealthForm.buildDraft(rec);
+            return `<div class="cfFile__documentsPreviewDoc">${window.ClalHealthForm.renderPreviewHtml(draft)}</div>`;
+          } catch(_e) {}
+        }
         if(type === CustomerDocuments.TYPES.ayalonHealthForm && window.AyalonHealthForm){
           try {
             const draft = window.AyalonHealthForm.buildDraft(rec);
@@ -20687,6 +20726,13 @@ UsersGateUI.init();
         } catch(_e) {}
         return;
       }
+      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.clalHealthForm && !window.ClalHealthForm){
+        try {
+          await ensureClalHealthFormLoaded();
+          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
+        } catch(_e) {}
+        return;
+      }
       if(safeTrim(doc?.type) === CustomerDocuments.TYPES.ayalonHealthForm && !window.AyalonHealthForm){
         try {
           await ensureAyalonHealthFormLoaded();
@@ -20751,6 +20797,16 @@ UsersGateUI.init();
         try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
       }
     },
+    async openClalHealthForm(rec){
+      try {
+        await ensureClalHealthFormLoaded();
+        if(!window.ClalHealthForm) throw new Error("ClalHealthForm missing");
+        window.ClalHealthForm.open(rec);
+      } catch(err){
+        try { console.error("CLAL_HEALTH_FORM_OPEN_FAILED", err); } catch(_e) {}
+        try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
+      }
+    },
     async openAyalonHealthForm(rec){
       try {
         await ensureAyalonHealthFormLoaded();
@@ -20805,6 +20861,8 @@ UsersGateUI.init();
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-migdal-life-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(docType === CustomerDocuments.TYPES.migdalMortgageForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-migdal-mortgage-doc="${escapeHtml(docId)}">פתח טופס</button>`;
+        }else if(docType === CustomerDocuments.TYPES.clalHealthForm){
+          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-clal-health-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(docType === CustomerDocuments.TYPES.ayalonHealthForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-ayalon-health-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(docType === CustomerDocuments.TYPES.menoraCiForm){
@@ -34478,13 +34536,14 @@ UsersGateUI.init();
 
     /* GI-PERF-LAZY-SIMS 2026-08-09 */
   // Lazy simulator registry — engines in gi-simulators.js (~220KB parse deferred).
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-ayalon-health-form-v1";
-  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-ayalon-health-form-v1";
-  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-ayalon-health-form-v1";
-  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-ayalon-health-form-v1";
-  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-ayalon-health-form-v1";
-  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-ayalon-health-form-v1";
-  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-ayalon-health-form-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-clal-health-form-v1";
+  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-clal-health-form-v1";
+  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-clal-health-form-v1";
+  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-clal-health-form-v1";
+  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-clal-health-form-v1";
+  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-clal-health-form-v1";
+  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-clal-health-form-v1";
+  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-clal-health-form-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -34648,6 +34707,33 @@ UsersGateUI.init();
       throw err;
     });
     return ensureAyalonHealthFormLoaded._p;
+  }
+  function ensureClalHealthFormLoaded(){
+    if(window.ClalHealthForm) return Promise.resolve(window.ClalHealthForm);
+    if(ensureClalHealthFormLoaded._p) return ensureClalHealthFormLoaded._p;
+    ensureClalHealthFormLoaded._p = new Promise((resolve, reject) => {
+      const existing = document.getElementById("gi-clal-health-form-js");
+      const done = () => {
+        if(window.ClalHealthForm) resolve(window.ClalHealthForm);
+        else reject(new Error("gi-clal-health-form.js loaded without ClalHealthForm"));
+      };
+      if(existing){
+        existing.addEventListener("load", done, { once: true });
+        existing.addEventListener("error", () => reject(new Error("gi-clal-health-form.js failed")), { once: true });
+        return;
+      }
+      const s = document.createElement("script");
+      s.id = "gi-clal-health-form-js";
+      s.src = GI_CLAL_HEALTH_FORM_HREF;
+      s.async = true;
+      s.onload = done;
+      s.onerror = () => reject(new Error("gi-clal-health-form.js failed to load"));
+      document.head.appendChild(s);
+    }).catch((err) => {
+      ensureClalHealthFormLoaded._p = null;
+      throw err;
+    });
+    return ensureClalHealthFormLoaded._p;
   }
   const GI_SIMULATOR_CATALOG = Object.freeze([
     { company: "הפניקס", product: "ריסק" },
