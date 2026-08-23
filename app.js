@@ -66404,22 +66404,54 @@ ${inner}
      ========================================================================== */
 
   const CUSTOMER_IMPORT_VERSION = "1.2";
-  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260815-prod-enrich-v1";
+  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260823-migdal-open-v1";
+  const GI_PROD_FALLBACK_COMPANIES = Object.freeze([
+    { id: "הכשרה", label: "הכשרה", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד." },
+    { id: "הפניקס", label: "הפניקס", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
+    { id: "מגדל", label: "מגדל", ready: true, hint: "קבצי LIFEHLTH, LIFE, COVRLIFE, PERSON (.MBT)", dropHint: "מגדל: LIFEHLTH (בריאות), LIFE (חיים), COVRLIFE (כיסויים), PERSON (מבוטחים). אפשר גם AGENTS / COMPANY." },
+    { id: "מנורה", label: "מנורה", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
+    { id: "כלל", label: "כלל", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
+    { id: "איילון", label: "איילון", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" }
+  ]);
+  function giProductionEngineIsCurrent(eng){
+    if(!eng || typeof eng.parseFileBuffer !== "function") return false;
+    const migdal = (eng.COMPANIES || []).find((c) => c && c.id === "מגדל");
+    return !!(migdal && migdal.ready === true);
+  }
+  function productionCompanyList(){
+    const fromEngine = Array.isArray(window.GI_PRODUCTION?.COMPANIES) ? window.GI_PRODUCTION.COMPANIES : [];
+    const byId = new Map(GI_PROD_FALLBACK_COMPANIES.map((c) => [c.id, Object.assign({}, c)]));
+    fromEngine.forEach((c) => {
+      const id = safeTrim(c?.id);
+      if(!id) return;
+      const prev = byId.get(id) || {};
+      const forceReady = (id === "הכשרה" || id === "מגדל");
+      byId.set(id, Object.assign({}, prev, c, {
+        ready: forceReady ? true : !!c.ready,
+        hint: forceReady ? (prev.hint || c.hint) : (c.hint || prev.hint),
+        dropHint: forceReady ? (c.dropHint || prev.dropHint) : (c.dropHint || prev.dropHint)
+      }));
+    });
+    return GI_PROD_FALLBACK_COMPANIES.map((c) => byId.get(c.id)).filter(Boolean);
+  }
   function ensureGiProductionJsLoaded(){
     return new Promise((resolve, reject) => {
       try {
-        if(window.GI_PRODUCTION){ resolve(window.GI_PRODUCTION); return; }
-        const existing = document.getElementById("gi-production-js");
-        if(existing){
-          existing.addEventListener("load", () => resolve(window.GI_PRODUCTION), { once: true });
-          existing.addEventListener("error", () => reject(new Error("gi-production-import.js failed")), { once: true });
+        if(giProductionEngineIsCurrent(window.GI_PRODUCTION)){
+          resolve(window.GI_PRODUCTION);
           return;
         }
+        const existing = document.getElementById("gi-production-js");
+        if(existing) existing.remove();
+        try { delete window.GI_PRODUCTION; } catch(_e) { window.GI_PRODUCTION = undefined; }
         const s = document.createElement("script");
         s.id = "gi-production-js";
         s.src = GI_PRODUCTION_JS_HREF;
         s.async = true;
-        s.onload = () => resolve(window.GI_PRODUCTION);
+        s.onload = () => {
+          if(window.GI_PRODUCTION) resolve(window.GI_PRODUCTION);
+          else reject(new Error("missing GI_PRODUCTION"));
+        };
         s.onerror = () => reject(new Error("gi-production-import.js failed to load"));
         document.head.appendChild(s);
       } catch(err) { reject(err); }
@@ -67522,7 +67554,7 @@ ${inner}
     },
 
     renderProductionCompanyStep(){
-      const companies = window.GI_PRODUCTION?.COMPANIES || [];
+      const companies = productionCompanyList();
       this.els.subtitle.textContent = "דוח פרודוקציה — בחירת חברה";
       const cards = companies.map((c) => `
         <button class="ciHubCard${c.ready ? "" : " is-disabled"}" type="button" data-prod-company="${escapeHtml(c.id)}" ${c.ready ? "" : "disabled"}>
@@ -67551,12 +67583,15 @@ ${inner}
 
     renderProductionPickStep(){
       const company = safeTrim(this._prod?.company);
+      const companyMeta = productionCompanyList().find((c) => safeTrim(c?.id) === company) || {};
+      const dropHint = safeTrim(companyMeta.dropHint) || safeTrim(companyMeta.hint)
+        || "הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד.";
       this.els.subtitle.textContent = "דוח פרודוקציה · " + company + " — בחירת קבצים";
       this.els.body.innerHTML = `
         <div class="ciDrop" id="ciProdDrop">
           <div class="ciDrop__icon">📊</div>
           <div class="ciDrop__title">גררו לכאן את קבצי הפרודוקציה של ${escapeHtml(company)} או לחצו לבחירה</div>
-          <div class="ciDrop__hint">הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד.</div>
+          <div class="ciDrop__hint">${escapeHtml(dropHint)}</div>
           <input type="file" id="ciProdFileInput" multiple hidden />
         </div>
         <ul class="ciNotes">
@@ -67619,11 +67654,21 @@ ${inner}
 
       const usable = parsed.filter((f) => f.kind && f.kind !== "RM" && (f.rows || []).length);
       if(!usable.length){
-        this.renderError("לא זוהו רשומות פרודוקציה בקבצים. להכשרה נדרשים RB / RP / SB / SP.");
+        const migdal = safeTrim(this._prod?.company) === "מגדל";
+        this.renderError(migdal
+          ? "לא זוהו רשומות פרודוקציה בקבצים. למגדל נדרשים LIFEHLTH / LIFE / COVRLIFE / PERSON."
+          : "לא זוהו רשומות פרודוקציה בקבצים. להכשרה נדרשים RB / RP / SB / SP.");
         return;
       }
 
-      const policies = P.buildPolicies(usable);
+      const policies = P.buildPolicies(usable, this._prod?.company);
+      if(!policies.length){
+        const migdal = safeTrim(this._prod?.company) === "מגדל";
+        this.renderError(migdal
+          ? "הקבצים נקראו, אך לא נבנו פוליסות. ודאו שיש LIFEHLTH או LIFE יחד עם COVRLIFE."
+          : "הקבצים נקראו, אך לא נבנו פוליסות.");
+        return;
+      }
       const idSet = new Set();
       policies.forEach((p) => (p.ids || []).forEach((id) => { if(id) idSet.add(id); }));
       const ids = Array.from(idSet);

@@ -16,7 +16,7 @@
    לאיפוס ידני: כפתור "החל עדכון" במערכת כבר מוחק את כל המטמונים ומבטל רישום SW.
 */
 
-const CACHE_VERSION = "gi-v12-20260823-ops-cube-keep-v1";
+const CACHE_VERSION = "gi-v12-20260823-migdal-open-v1";
 const RUNTIME_CACHE = `gi-runtime-${CACHE_VERSION}`;
 
 // סיומות שמותר להגיש מהמטמון.
@@ -175,7 +175,7 @@ self.addEventListener("fetch", (event) => {
   // עקיפת מטמון מכוונת (כפתור "החל עדכון" מוסיף ‎?nocache=‎).
   if (url.searchParams.has("nocache")) return;
 
-  if (url.pathname.endsWith("/gi-wizard.js")) {
+  if (url.pathname.endsWith("/gi-wizard.js") || url.pathname.endsWith("/gi-production-import.js")) {
     event.respondWith(handleWizardChunk(request));
     return;
   }

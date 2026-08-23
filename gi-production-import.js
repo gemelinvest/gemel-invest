@@ -1,18 +1,28 @@
-/* GEMEL INVEST — ייבוא דוח פרודוקציה (GI-PROD 2026-08-13)
+/* GEMEL INVEST — ייבוא דוח פרודוקציה (GI-PROD 2026-08-23)
    נטען לפי דרישה ממסך טעינת קבצי מערכת.
-   חברה ראשונה: הכשרה (קבצי רוחב-קבוע IBM862: RB/RP/SB/SP).
+   הכשרה: קבצי רוחב-קבוע IBM862 (RB/RP/SB/SP).
+   מגדל: קבצי MBT מופרדי-צינור UTF-8 (LIFEHLTH/LIFE/COVRLIFE/PERSON).
 */
 (function installGiProduction(global){
   "use strict";
 
   const CP862_HE = "אבגדהוזחטיךכלםמןנסעףפץצקרשת";
   const COMPANY_HACHSHARA = "הכשרה";
+  const COMPANY_MIGDAL = "מגדל";
   const ACTIVE_STATUS = "כ";
+  const MIGDAL_KIND_SET = Object.freeze({
+    LIFEHLTH: true,
+    LIFE: true,
+    COVRLIFE: true,
+    PERSON: true,
+    AGENTS: true,
+    COMPANY: true
+  });
 
   const COMPANIES = Object.freeze([
-    { id: COMPANY_HACHSHARA, label: "הכשרה", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)" },
+    { id: COMPANY_HACHSHARA, label: "הכשרה", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד." },
     { id: "הפניקס", label: "הפניקס", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
-    { id: "מגדל", label: "מגדל", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
+    { id: COMPANY_MIGDAL, label: "מגדל", ready: true, hint: "קבצי LIFEHLTH, LIFE, COVRLIFE, PERSON (.MBT)", dropHint: "מגדל: LIFEHLTH (בריאות), LIFE (חיים), COVRLIFE (כיסויים), PERSON (מבוטחים). אפשר גם AGENTS / COMPANY." },
     { id: "מנורה", label: "מנורה", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
     { id: "כלל", label: "כלל", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
     { id: "איילון", label: "איילון", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" }
@@ -20,12 +30,15 @@
 
   const HEALTH_COVER_MAP = [
     { re: /מחלות\s*קשות/, key: "מחלות קשות" },
-    { re: /השתל/, key: "השתלות וטיפולים מיוחדים מחוץ לישראל" },
-    { re: /ניתוח.*חו|מחליפ.*ניתוח|תוחים.*חול|חול.*חותינ/, key: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל" },
-    { re: /תרופות/, key: "תרופות מחוץ לסל שירותי הבריאות" },
-    { re: /אמבולטור|ייעוץ.*בדיק/, key: "ייעוץ ובדיקות" },
+    { re: /מזור\s*לסרטן/, key: "מזור לסרטן" },
+    { re: /מזור/, key: "מזור מורחב" },
+    { re: /שקל\s*ראשון|מהשקל/, key: "ניתוחים בישראל מהשקל הראשון" },
+    { re: /ניתוח.*ישראל|ניתוחים\s*בישראל/, key: "ניתוחים בישראל מורחב" },
     { re: /שב.?ן/, key: "משלים שב\"ן ללא השתתפות עצמית" },
-    { re: /שקל\s*ראשון/, key: "ניתוחים בישראל מהשקל הראשון" },
+    { re: /השתל/, key: "השתלות וטיפולים מיוחדים מחוץ לישראל" },
+    { re: /ניתוח.*חו|תוחים.*חול|חול.*חותינ|בחול/, key: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל" },
+    { re: /תרופות/, key: "תרופות מחוץ לסל שירותי הבריאות" },
+    { re: /אמבולטור|ייעוץ.*בדיק|יעוץ.*בדיק|אבחון\s*מהיר/, key: "ייעוץ ובדיקות" },
     { re: /ילד/, key: "שירות פרימיום לילד" }
   ];
 
@@ -231,7 +244,91 @@
     return str;
   }
 
+  function pipeFields(line){
+    return String(line || "").split("|").map((s) => safeTrim(s));
+  }
+
+  function parseMoneyField(raw){
+    const s = safeTrim(raw).replace(/,/g, "");
+    if(!s) return 0;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function decodeUtf8Bytes(bytes){
+    try {
+      if(typeof TextDecoder !== "undefined") return new TextDecoder("utf-8").decode(bytes);
+    } catch(_e) {}
+    try {
+      if(typeof Buffer !== "undefined") return Buffer.from(bytes).toString("utf8");
+    } catch(_e) {}
+    let out = "";
+    for(let i = 0; i < bytes.length; i++){
+      const b = bytes[i] & 0xff;
+      if(b < 0x80){
+        out += String.fromCharCode(b);
+      } else if(b >= 0xC0 && b < 0xE0 && i + 1 < bytes.length){
+        out += String.fromCharCode(((b & 0x1f) << 6) | (bytes[++i] & 0x3f));
+      } else if(b >= 0xE0 && b < 0xF0 && i + 2 < bytes.length){
+        const b2 = bytes[++i] & 0x3f;
+        const b3 = bytes[++i] & 0x3f;
+        out += String.fromCharCode(((b & 0x0f) << 12) | (b2 << 6) | b3);
+      } else if(b >= 0xF0 && i + 3 < bytes.length){
+        const cp = ((b & 0x07) << 18) | ((bytes[i + 1] & 0x3f) << 12) | ((bytes[i + 2] & 0x3f) << 6) | (bytes[i + 3] & 0x3f);
+        i += 3;
+        const adj = cp - 0x10000;
+        out += String.fromCharCode(0xD800 + (adj >> 10), 0xDC00 + (adj & 0x3ff));
+      } else {
+        out += "\uFFFD";
+      }
+    }
+    return out;
+  }
+
+  function looksLikeMigdalPipe(bytes){
+    const n = Math.min(bytes.length, 500);
+    let pipes = 0;
+    for(let i = 0; i < n; i++){
+      if(bytes[i] === 124) pipes++;
+    }
+    return pipes >= 5;
+  }
+
+  function detectMigdalKindFromName(fileName){
+    const n = String(fileName || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if(!n) return "";
+    if(n.indexOf("LIFEHLTH") >= 0) return "LIFEHLTH";
+    if(n.indexOf("COVRLIFE") >= 0) return "COVRLIFE";
+    if(n.indexOf("PERSON") >= 0) return "PERSON";
+    if(n.indexOf("AGENTS") >= 0) return "AGENTS";
+    if(n.indexOf("COMPANY") >= 0) return "COMPANY";
+    if(n === "LIFE" || n === "LIFEMBT" || (n.indexOf("LIFE") === 0 && n.indexOf("HLTH") < 0 && n.indexOf("COVR") < 0)){
+      return "LIFE";
+    }
+    return "";
+  }
+
+  function detectMigdalKindFromRecord(line){
+    const n = String(line || "").split("|").length;
+    if(n >= 120) return "LIFE";
+    if(n >= 50 && n <= 80) return "LIFEHLTH";
+    if(n >= 40 && n <= 48) return "PERSON";
+    if(n >= 30 && n <= 38) return "COMPANY";
+    if(n >= 20 && n <= 26) return "COVRLIFE";
+    if(n === 1 && /^\d{6,10}$/.test(safeTrim(line))) return "AGENTS";
+    return "";
+  }
+
+  function migdalPolicyNumber(raw){
+    const d = digits(raw);
+    if(!d) return "";
+    if(d.length >= 11 && d.slice(0, 2) === "01") return normPolicy(d.slice(2));
+    return normPolicy(d);
+  }
+
   function detectKind(fileName, rec0){
+    const mig = detectMigdalKindFromName(fileName) || (String(rec0 || "").indexOf("|") >= 0 ? detectMigdalKindFromRecord(rec0) : "");
+    if(mig) return mig;
     const n = String(fileName || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
     if(n.indexOf("RB") === 0) return "RB";
     if(n.indexOf("RP") === 0) return "RP";
@@ -312,8 +409,92 @@
     };
   }
 
+  function parseMigdalPerson(parts){
+    const idNumber = normId(parts[2] || parts[0]);
+    if(!idNumber) return null;
+    const last = cleanName(parts[24] || "");
+    const first = cleanName(parts[25] || "");
+    return {
+      kind: "PERSON",
+      idNumber,
+      idNumber2: "",
+      firstName: first,
+      lastName: last,
+      fullName: (first + " " + last).replace(/\s+/g, " ").trim(),
+      city: cleanName(parts[16] || ""),
+      street: cleanName(parts[15] || ""),
+      email: safeTrim(parts[5] || ""),
+      birthDate: dmy8(parts[26] || ""),
+      occupation: cleanName(parts[4] || ""),
+      gender: safeTrim(parts[31] || ""),
+      agent: safeTrim(parts[44] || ""),
+      status: "",
+      period: ""
+    };
+  }
+
+  function parseMigdalCover(parts){
+    const policyNumber = migdalPolicyNumber(parts[1]);
+    if(!policyNumber) return null;
+    const rawName = safeTrim(parts[19] || "");
+    const familyGuess = /חיים|ריסק|משכנתא|מגדלור/.test(rawName) ? "life" : "health";
+    return {
+      kind: "COVRLIFE",
+      policyNumber,
+      coverCode: safeTrim(parts[0] || ""),
+      startDate: dmy8(parts[4] || ""),
+      endDate: dmy8(parts[5] || ""),
+      premium: parseMoneyField(parts[9]),
+      idNumber: normId(parts[18]),
+      agent: safeTrim(parts[17] || ""),
+      coverName: familyGuess === "life" ? mapLifeCover(rawName) : mapHealthCover(rawName),
+      coverNameRaw: rawName,
+      familyGuess
+    };
+  }
+
+  function parseMigdalPolicyHeader(parts, kind){
+    const policyNumber = migdalPolicyNumber(parts[8] || parts[10]);
+    if(!policyNumber) return null;
+    const headerPrem = kind === "LIFE" ? (parseMoneyField(parts[81]) || parseMoneyField(parts[52])) : parseMoneyField(parts[49]);
+    return {
+      kind,
+      family: kind === "LIFE" ? "life" : "health",
+      policyNumber,
+      ownerId: normId(parts[9] || parts[11]),
+      agent: safeTrim(parts[1] || parts[5] || ""),
+      startDate: dmy8(parts[15] || ""),
+      endDate: dmy8(parts[16] || ""),
+      premiumMonthly: headerPrem,
+      paymentPeriod: formatPaymentPeriod(parts[43] || ""),
+      productLabelRaw: cleanName(parts[14] || "")
+    };
+  }
+
   function parseFileBuffer(fileName, buffer){
     const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+    const namedMigdal = detectMigdalKindFromName(fileName);
+    if(namedMigdal || looksLikeMigdalPipe(bytes)){
+      const text = decodeUtf8Bytes(bytes);
+      const recs = splitRecords(text);
+      const kind = namedMigdal || detectMigdalKindFromRecord(recs[0] || "");
+      const rows = [];
+      recs.forEach((s) => {
+        const parts = pipeFields(s);
+        let row = null;
+        if(kind === "PERSON") row = parseMigdalPerson(parts);
+        else if(kind === "COVRLIFE") row = parseMigdalCover(parts);
+        else if(kind === "LIFEHLTH" || kind === "LIFE") row = parseMigdalPolicyHeader(parts, kind);
+        else if(kind === "AGENTS"){
+          const agent = safeTrim(parts[0] || s);
+          if(agent) row = { kind: "AGENTS", agent };
+        } else if(kind === "COMPANY"){
+          row = { kind: "COMPANY", companyId: safeTrim(parts[0] || ""), name: cleanName(parts[1] || "") };
+        }
+        if(row) rows.push(row);
+      });
+      return { fileName, kind, records: recs.length, rows };
+    }
     const text = decodeCp862(bytes);
     const recs = splitRecords(text);
     const kind = detectKind(fileName, recs[0] || "");
@@ -342,7 +523,7 @@
     return !st || st === ACTIVE_STATUS;
   }
 
-  function buildPolicies(parsedFiles){
+  function buildHachsharaPolicies(parsedFiles){
     const byKind = { RB: [], RP: [], SB: [], SP: [] };
     (parsedFiles || []).forEach((f) => {
       if(byKind[f.kind]) byKind[f.kind] = byKind[f.kind].concat(f.rows || []);
@@ -411,12 +592,134 @@
     });
   }
 
+  function buildMigdalPolicies(parsedFiles){
+    const byKind = { LIFEHLTH: [], LIFE: [], COVRLIFE: [], PERSON: [] };
+    (parsedFiles || []).forEach((f) => {
+      if(byKind[f.kind]) byKind[f.kind] = byKind[f.kind].concat(f.rows || []);
+    });
+
+    const personsById = new Map();
+    byKind.PERSON.forEach((p) => {
+      if(p.idNumber && !personsById.has(p.idNumber)) personsById.set(p.idNumber, p);
+    });
+
+    const coversByPol = new Map();
+    byKind.COVRLIFE.forEach((c) => {
+      const k = c.policyNumber;
+      if(!k) return;
+      if(!coversByPol.has(k)) coversByPol.set(k, []);
+      coversByPol.get(k).push(c);
+    });
+
+    function peopleFor(policyNumber, ownerId, covers){
+      const people = [];
+      const seen = new Set();
+      function add(id, extra){
+        const nid = normId(id);
+        if(!nid || seen.has(nid)) return;
+        seen.add(nid);
+        const known = personsById.get(nid);
+        if(known){
+          people.push(Object.assign({}, known, { policyNumber }, extra || {}));
+        } else {
+          people.push(Object.assign({
+            policyNumber,
+            idNumber: nid,
+            fullName: "",
+            status: "",
+            agent: "",
+            period: ""
+          }, extra || {}));
+        }
+      }
+      add(ownerId);
+      (covers || []).forEach((c) => add(c.idNumber, c.agent ? { agent: c.agent } : null));
+      return people;
+    }
+
+    function finalize(header, family){
+      const covers = (coversByPol.get(header.policyNumber) || []).map((c) => {
+        const raw = c.coverNameRaw || c.coverName;
+        const name = family === "life" ? mapLifeCover(raw) : mapHealthCover(raw);
+        return Object.assign({}, c, { coverName: name });
+      });
+      coversByPol.delete(header.policyNumber);
+      const people = peopleFor(header.policyNumber, header.ownerId, covers);
+      people.forEach((p) => {
+        if(!p.agent && header.agent) p.agent = header.agent;
+        if(!p.period && header.paymentPeriod) p.period = header.paymentPeriod;
+      });
+      const activePeople = people.filter(isActivePerson);
+      const primary = activePeople[0] || people[0] || {};
+      let type = "בריאות";
+      if(family === "life"){
+        type = isMortgageLife(covers) ? "ריסק משכנתא" : "ריסק";
+      }
+      const premium = covers.reduce((sum, c) => sum + (Number(c.premium) || 0), 0);
+      const premiumMonthly = premium
+        ? money2(premium)
+        : (header.premiumMonthly ? money2(header.premiumMonthly) : "");
+      const coverPremiums = sumCoverPremiums(covers, family);
+      return {
+        company: COMPANY_MIGDAL,
+        type,
+        family,
+        policyNumber: header.policyNumber,
+        premiumMonthly,
+        startDate: header.startDate || covers.find((c) => c.startDate)?.startDate || "",
+        healthCovers: family === "health" ? Object.keys(coverPremiums) : [],
+        lifeCovers: family === "life" ? Object.keys(coverPremiums) : [],
+        coverPremiums,
+        agentNumber: header.agent || pickAgentNumber(activePeople.length ? activePeople : people),
+        paymentPeriod: header.paymentPeriod || pickPaymentPeriod(activePeople.length ? activePeople : people),
+        people,
+        covers,
+        ids: uniqueIds(people),
+        primary,
+        inactive: false,
+        productLabel: family === "life" ? type : "בריאות",
+        importSource: "migdal-production"
+      };
+    }
+
+    const out = [];
+    byKind.LIFEHLTH.forEach((h) => out.push(finalize(h, "health")));
+    byKind.LIFE.forEach((h) => out.push(finalize(h, "life")));
+    coversByPol.forEach((covers, policyNumber) => {
+      const lifeish = covers.some((c) => c.familyGuess === "life" || /חיים|ריסק|משכנתא|מגדלור/.test(c.coverNameRaw || c.coverName || ""));
+      out.push(finalize({
+        policyNumber,
+        ownerId: covers[0]?.idNumber || "",
+        agent: covers[0]?.agent || "",
+        startDate: covers[0]?.startDate || "",
+        paymentPeriod: "",
+        premiumMonthly: 0
+      }, lifeish ? "life" : "health"));
+    });
+    return out;
+  }
+
+  function buildPolicies(parsedFiles, company){
+    const files = parsedFiles || [];
+    const hasMigdal = files.some((f) => f && MIGDAL_KIND_SET[f.kind]);
+    const hasHach = files.some((f) => f && (f.kind === "RB" || f.kind === "RP" || f.kind === "SB" || f.kind === "SP"));
+    if(hasMigdal && !hasHach) return buildMigdalPolicies(files);
+    if(safeTrim(company) === COMPANY_MIGDAL && hasMigdal) return buildMigdalPolicies(files);
+    return buildHachsharaPolicies(files);
+  }
+
   function sameCompany(a, b){
     const na = safeTrim(a);
     const nb = safeTrim(b);
     if(!na || !nb) return false;
     if(na === nb) return true;
-    const aliases = { "הכשרה": "הכשרה", "ביטוח הכשרה": "הכשרה" };
+    const aliases = {
+      "הכשרה": "הכשרה",
+      "ביטוח הכשרה": "הכשרה",
+      "מגדל": "מגדל",
+      "מגדל ביטוח": "מגדל",
+      "מגדל חברה לביטוח": "מגדל"
+    };
     return !!(aliases[na] && aliases[nb] && aliases[na] === aliases[nb]);
   }
 
@@ -658,7 +961,7 @@
       company: item.company,
       policyNumber: item.policyNumber,
       importedAt: nowISO(),
-      source: "hachshara-production",
+      source: item.importSource || (item.company === COMPANY_MIGDAL ? "migdal-production" : "hachshara-production"),
       coverCount: (item.covers || []).length,
       personCount: (item.people || []).length,
       agentNumber: safeTrim(item.agentNumber),
@@ -692,11 +995,14 @@
   }
 
   global.GI_PRODUCTION = {
-    version: "20260815-prod-enrich-v1",
+    version: "20260823-migdal-open-v1",
     COMPANIES,
     COMPANY_HACHSHARA,
+    COMPANY_MIGDAL,
     parseFileBuffer,
     detectKind,
+    detectMigdalKindFromName,
+    migdalPolicyNumber,
     buildPolicies,
     classifyPolicies,
     matchExistingPolicy,
