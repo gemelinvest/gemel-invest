@@ -5332,6 +5332,9 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
   color: var(--gi-primary) !important;
 }
 .cfFileActionsMenu__panel:not(#\9):not(#\9){
+  left: 0 !important;
+  right: auto !important;
+  min-width: 268px !important;
   background: var(--gi-surface) !important;
   border: 1px solid var(--gi-border) !important;
   box-shadow: var(--gi-sh-lg) !important;

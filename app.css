@@ -41357,6 +41357,9 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  position: relative;
+  z-index: 40;
+  overflow: visible;
 }
 .cfFile__headerRight{
   display: flex;
@@ -41642,6 +41645,9 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   flex-wrap: wrap;
   justify-content: flex-end;
   align-items: center;
+  position: relative;
+  z-index: 41;
+  overflow: visible;
 }
 .cfFile__actions .cfFile__liveTimer{
   margin-inline-start: 4px;
@@ -41683,26 +41689,30 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 }
 .cfFileActionsMenu__panel{
   position: absolute;
-  inset-block-start: calc(100% + 6px);
-  inset-inline-end: 0;
-  z-index: 90;
-  min-width: 248px;
+  top: calc(100% + 6px);
+  left: 0;
+  right: auto;
+  z-index: 80;
+  min-width: 268px;
+  width: max-content;
   display: flex;
   flex-direction: column;
+  direction: rtl;
   gap: 4px;
-  padding: 6px;
+  padding: 8px;
   border-radius: 12px;
   border: 1px solid rgba(15,23,42,.14);
   background: #fff;
-  box-shadow: 0 12px 28px rgba(15,23,42,.14);
+  box-shadow: 0 16px 36px rgba(15,23,42,.16);
 }
 .cfFileActionsMenu__panel[hidden]{
   display: none !important;
 }
 .cfFileActionsMenu__panel .cfFileActionBtn{
   width: 100%;
-  justify-content: flex-start;
-  min-height: 40px;
+  justify-content: space-between;
+  min-height: 42px;
+  padding-inline: 12px 14px;
 }
 .cfFileActionBtn{
   display: inline-flex;
