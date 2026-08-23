@@ -41382,6 +41382,18 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   display: none !important;
 }
 .cfFile__identity{ min-width: 0; }
+.cfFile__idCard{
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+  max-width: min(640px, 100%);
+  padding: 8px 10px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(15,23,42,.16);
+  background: #fff;
+}
 .cfFile__nameRow{
   display: flex;
   align-items: center;
@@ -41395,21 +41407,20 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   align-items: center;
   gap: 10px;
   margin: 0;
-  padding: 7px 12px 7px 10px;
+  padding: 2px 4px;
   border-radius: 8px;
-  border: 1px solid rgba(15,23,42,.16);
-  background: #fff;
+  border: none;
+  background: transparent;
   cursor: pointer;
   text-align: right;
   font-family: inherit;
   color: var(--blueDeep);
   flex: 0 0 auto;
-  max-width: min(360px, 100%);
+  max-width: 100%;
 }
 .cfFile__nameBtn:hover,
 .cfFile__nameBtn:focus-visible{
   background: #eaf2ff;
-  border-color: rgba(42,92,245,.35);
   outline: none;
 }
 .cfFile__nameBtnIcon{
@@ -41581,7 +41592,7 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  margin-top: 8px;
+  margin-top: 0;
 }
 .cfFile__chip{
   display: inline-flex;

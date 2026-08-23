@@ -5282,9 +5282,22 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
   letter-spacing: -.01em !important;
 }
 
+.cfFile__idCard:not(#\9):not(#\9){
+  border: 1px solid var(--gi-border) !important;
+  background: var(--gi-surface) !important;
+  border-radius: var(--gi-r-md) !important;
+}
+.cfFile__nameBtn:not(#\9):not(#\9){
+  border: none !important;
+  background: transparent !important;
+}
+.cfFile__nameBtn:hover:not(#\9):not(#\9),
+.cfFile__nameBtn:focus-visible:not(#\9):not(#\9){
+  background: var(--gi-primary-soft) !important;
+}
 .cfFile__chips:not(#\9):not(#\9){
   gap: var(--gi-s2) !important;
-  margin-top: var(--gi-s2) !important;
+  margin-top: 0 !important;
 }
 
 .cfFile__chip:not(#\9):not(#\9){
