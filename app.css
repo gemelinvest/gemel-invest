@@ -28257,8 +28257,8 @@ input[inputmode="tel"]{
   bottom:auto !important;
   top:auto !important;
   right:auto !important;
-  width:40px;
-  height:40px;
+  width:44px;
+  height:44px;
   border-radius:12px;
   flex-shrink:0;
   cursor:pointer;
@@ -31998,7 +31998,7 @@ input[inputmode="tel"]{
 .giReminderFab--topbar{
   position:relative !important;
   left:auto !important; bottom:auto !important;
-  width:40px; height:40px;
+  width:44px; height:44px;
   border-radius:12px;
   flex-shrink:0;
   cursor:pointer;
@@ -32200,7 +32200,7 @@ input[inputmode="tel"]{
 .giOfferFab--topbar{
   position:static !important;
   left:auto !important; bottom:auto !important;
-  width:40px; height:40px;
+  width:44px; height:44px;
   border-radius:12px;
   flex-shrink:0;
   cursor:pointer;
@@ -37228,7 +37228,7 @@ body.lcHealthDetailModalOpen .lcHealthDetailModal{
 }
 .topbar__actions .lcUserPill__text{
   font-weight: 600;
-  font-size: 13px;
+  font-size: 15px;
   letter-spacing: 0.01em;
   color: rgba(17, 24, 39, 0.9);
   opacity: 1;
@@ -37238,11 +37238,11 @@ body.lcHealthDetailModalOpen .lcHealthDetailModal{
 }
 .topbar__actions .lcUserPill__name{
   font-weight: 600;
-  font-size: 13px;
+  font-size: 15px;
   color: rgba(17, 24, 39, 0.92);
 }
 .topbar__actions .lcUserPill__role{
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: rgba(55, 65, 81, 0.62);
   opacity: 1;
