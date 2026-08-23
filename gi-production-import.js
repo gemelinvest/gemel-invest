@@ -1117,6 +1117,7 @@
       if(fam === "health"){
         target.healthCovers = mergeCoverList(target.healthCovers, p.healthCovers, mapHealthCover);
       }
+      if(safeTrim(p?._addedAt) && !safeTrim(target._addedAt)) target._addedAt = p._addedAt;
     });
     return kept;
   }
@@ -1386,8 +1387,7 @@
         insuredIds: insuredIds.slice(),
         insuredId: insuredIds[0] || "",
         insuredMode: insuredIds.length > 1 ? "multi" : "single",
-        discountPct: "0",
-        _addedAt: nowISO()
+        discountPct: "0"
       };
       applyPolicyFields(created, item, meta, next);
       next.newPolicies.push(created);
@@ -1404,7 +1404,7 @@
   }
 
   global.GI_PRODUCTION = {
-    version: "20260823-migdal-sumall-v1",
+    version: "20260823-prod-nosale-v1",
     relocateMisreadLifePremium,
     sanitizeCustomerPolicies,
     COMPANIES,

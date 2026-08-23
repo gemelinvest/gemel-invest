@@ -18369,20 +18369,45 @@ UsersGateUI.init();
       }
     },
 
+    /* פרודוקציה ממלאת תיק — לא מכירה. npol_prod_ נספר רק אם ירש _addedAt
+       מתאריך מכירה אמיתי (יום שונה מ-importedAt). */
+    isProductionBackfillPolicy(p){
+      const id = safeTrim(p?.id);
+      if(!id || id.indexOf("npol_prod_") !== 0) return false;
+      const addedDay = safeTrim(p?._addedAt).slice(0, 10);
+      const importedDay = safeTrim(p?.productionImport?.importedAt).slice(0, 10);
+      if(addedDay && importedDay && addedDay !== importedDay) return false;
+      return true;
+    },
+
     collectNewPoliciesForMetrics(rec, options = {}){
       if(!rec) return [];
       // PERF: new policies live only under payload.newPolicies / operational.newPolicies.
       // Skip collectPolicies (builds full UI rows for existing policies too) when empty.
       const rawNew = getCustomerRawNewPolicies(rec);
       if(!rawNew.length) return [];
+      const saleIds = new Set();
+      rawNew.forEach((raw) => {
+        if(String(raw?.origin || "") === "existing") return;
+        if(this.isProductionBackfillPolicy(raw)) return;
+        const id = safeTrim(raw?.id);
+        if(id) saleIds.add(id);
+      });
+      if(!saleIds.size) return [];
       const range = options.range || null;
       const resolveCustomerMonthStamp = typeof options.resolveCustomerMonthStamp === "function"
         ? options.resolveCustomerMonthStamp
         : null;
       const isWithinRange = typeof options.isWithinRange === "function" ? options.isWithinRange : null;
+      const isSaleRow = (p) => {
+        const pid = safeTrim(p?.id);
+        const parent = safeTrim(p?.parentPolicyId);
+        return (pid && saleIds.has(pid)) || (parent && saleIds.has(parent));
+      };
       if(!isCustomerPayloadTooHeavyForSyncMetrics(rec)){
         return this.collectPolicies(rec).filter((p) => {
           if(String(p?.origin || "") !== "new") return false;
+          if(!isSaleRow(p)) return false;
           if(!range || !isWithinRange) return true;
           const stamp = safeTrim(p?._addedAt) || (resolveCustomerMonthStamp ? resolveCustomerMonthStamp(rec) : "");
           return !!stamp && isWithinRange(stamp, range);
@@ -18390,7 +18415,7 @@ UsersGateUI.init();
       }
       const out = [];
       rawNew.forEach((raw) => {
-        if(String(raw?.origin || "") === "existing") return;
+        if(!saleIds.has(safeTrim(raw?.id))) return;
         const stamp = safeTrim(raw?._addedAt) || (resolveCustomerMonthStamp ? resolveCustomerMonthStamp(rec) : "");
         if(range && isWithinRange && (!stamp || !isWithinRange(stamp, range))) return;
         const p = clonePolicyForMetrics(raw);
@@ -66571,7 +66596,7 @@ ${inner}
      ========================================================================== */
 
   const CUSTOMER_IMPORT_VERSION = "1.2";
-  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260823-migdal-sumall-v1";
+  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260823-prod-nosale-v1";
   const GI_PROD_FALLBACK_COMPANIES = Object.freeze([
     { id: "הכשרה", label: "הכשרה", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד." },
     { id: "הפניקס", label: "הפניקס", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
