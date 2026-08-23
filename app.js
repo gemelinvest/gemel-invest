@@ -6690,7 +6690,8 @@
       hachsharaLifeForm: "hachshara_life_form",
       migdalLifeForm: "migdal_life_form",
       migdalMortgageForm: "migdal_mortgage_form",
-      menoraCiForm: "menora_ci_form"
+      menoraCiForm: "menora_ci_form",
+      ayalonHealthForm: "ayalon_health_form"
     },
     REPORT_SCOPES: {
       proposal: "health_proposal",
@@ -7135,6 +7136,17 @@
       });
       return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
     },
+    qualifiesForAyalonHealthForm(payload, rec){
+      const list = this.listOfficialJoinFormPolicies(payload, rec);
+      const matched = list.filter((p) => {
+        if(safeTrim(p?.company) !== "איילון") return false;
+        const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
+        if(/משכנתא/.test(blob) || /ריסק/.test(blob)) return false;
+        if(/מחלות\s*קשות/.test(blob) && !/בריאות/.test(blob)) return false;
+        return /בריאות/.test(blob);
+      });
+      return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
+    },
     qualifiesForMenoraCiForm(payload, rec){
       const list = this.listOfficialJoinFormPolicies(payload, rec);
       const matched = list.filter((p) => {
@@ -7215,6 +7227,19 @@
           uploadedBy: safeTrim(rec?.agentName)
         });
       }
+      const hasAyalHealth = list.some((d) => safeTrim(d?.type) === this.TYPES.ayalonHealthForm);
+      if(!hasAyalHealth && this.qualifiesForAyalonHealthForm(payload, rec)){
+        const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
+        list.unshift({
+          id: "doc_ayalon_health_form",
+          type: this.TYPES.ayalonHealthForm,
+          isLegacy: true,
+          name: "טופס מקורי — בריאות · איילון",
+          source: "מערכת",
+          uploadedAt,
+          uploadedBy: safeTrim(rec?.agentName)
+        });
+      }
       const hasMenoraCi = list.some((d) => safeTrim(d?.type) === this.TYPES.menoraCiForm);
       if(!hasMenoraCi && this.qualifiesForMenoraCiForm(payload, rec)){
         const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
@@ -7248,6 +7273,7 @@
         if(type === this.TYPES.migdalLifeForm) return this.qualifiesForMigdalLifeForm(payload, rec);
         if(type === this.TYPES.migdalMortgageForm) return this.qualifiesForMigdalMortgageForm(payload, rec);
         if(type === this.TYPES.menoraCiForm) return this.qualifiesForMenoraCiForm(payload, rec);
+        if(type === this.TYPES.ayalonHealthForm) return this.qualifiesForAyalonHealthForm(payload, rec);
         if(type === this.TYPES.healthOps || type === this.TYPES.agentApptOps || type === this.TYPES.agentApptForm || type === this.TYPES.harBituach) return true;
         return !!(safeTrim(doc.name) || safeTrim(doc.url) || safeTrim(doc.dataUrl) || safeTrim(doc.fileName));
       }));
@@ -17992,6 +18018,13 @@ UsersGateUI.init();
           if(rec) void this.openMigdalMortgageForm(rec);
           return;
         }
+        const openAyalHealth = ev.target?.closest?.("[data-open-ayalon-health-doc], [data-ayalhealth-open]");
+        if(openAyalHealth){
+          ev.preventDefault();
+          const rec = this.current();
+          if(rec) void this.openAyalonHealthForm(rec);
+          return;
+        }
         const openMenoraCi = ev.target?.closest?.("[data-open-menora-ci-doc], [data-menoraci-open]");
         if(openMenoraCi){
           ev.preventDefault();
@@ -20555,6 +20588,12 @@ UsersGateUI.init();
             return `<div class="cfFile__documentsPreviewDoc">${window.MigdalMortgageForm.renderPreviewHtml(draft)}</div>`;
           } catch(_e) {}
         }
+        if(type === CustomerDocuments.TYPES.ayalonHealthForm && window.AyalonHealthForm){
+          try {
+            const draft = window.AyalonHealthForm.buildDraft(rec);
+            return `<div class="cfFile__documentsPreviewDoc">${window.AyalonHealthForm.renderPreviewHtml(draft)}</div>`;
+          } catch(_e) {}
+        }
         if(type === CustomerDocuments.TYPES.menoraCiForm && window.MenoraCiForm){
           try {
             const draft = window.MenoraCiForm.buildDraft(rec);
@@ -20648,6 +20687,13 @@ UsersGateUI.init();
         } catch(_e) {}
         return;
       }
+      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.ayalonHealthForm && !window.AyalonHealthForm){
+        try {
+          await ensureAyalonHealthFormLoaded();
+          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
+        } catch(_e) {}
+        return;
+      }
       if(safeTrim(doc?.type) === CustomerDocuments.TYPES.menoraCiForm && !window.MenoraCiForm){
         try {
           await ensureMenoraCiFormLoaded();
@@ -20705,6 +20751,16 @@ UsersGateUI.init();
         try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
       }
     },
+    async openAyalonHealthForm(rec){
+      try {
+        await ensureAyalonHealthFormLoaded();
+        if(!window.AyalonHealthForm) throw new Error("AyalonHealthForm missing");
+        window.AyalonHealthForm.open(rec);
+      } catch(err){
+        try { console.error("AYALON_HEALTH_FORM_OPEN_FAILED", err); } catch(_e) {}
+        try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
+      }
+    },
     async openMenoraCiForm(rec){
       try {
         await ensureMenoraCiFormLoaded();
@@ -20749,6 +20805,8 @@ UsersGateUI.init();
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-migdal-life-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(docType === CustomerDocuments.TYPES.migdalMortgageForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-migdal-mortgage-doc="${escapeHtml(docId)}">פתח טופס</button>`;
+        }else if(docType === CustomerDocuments.TYPES.ayalonHealthForm){
+          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-ayalon-health-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(docType === CustomerDocuments.TYPES.menoraCiForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-menora-ci-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(docType === CustomerDocuments.TYPES.healthOps){
@@ -34420,12 +34478,13 @@ UsersGateUI.init();
 
     /* GI-PERF-LAZY-SIMS 2026-08-09 */
   // Lazy simulator registry — engines in gi-simulators.js (~220KB parse deferred).
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-migdal-mort-form-v1";
-  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-migdal-mort-form-v1";
-  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-migdal-mort-form-v1";
-  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-migdal-mort-form-v1";
-  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-migdal-mort-form-v1";
-  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-migdal-mort-form-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-ayalon-health-form-v1";
+  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-ayalon-health-form-v1";
+  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-ayalon-health-form-v1";
+  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-ayalon-health-form-v1";
+  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-ayalon-health-form-v1";
+  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-ayalon-health-form-v1";
+  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-ayalon-health-form-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -34562,6 +34621,33 @@ UsersGateUI.init();
       throw err;
     });
     return ensureMenoraCiFormLoaded._p;
+  }
+  function ensureAyalonHealthFormLoaded(){
+    if(window.AyalonHealthForm) return Promise.resolve(window.AyalonHealthForm);
+    if(ensureAyalonHealthFormLoaded._p) return ensureAyalonHealthFormLoaded._p;
+    ensureAyalonHealthFormLoaded._p = new Promise((resolve, reject) => {
+      const existing = document.getElementById("gi-ayalon-health-form-js");
+      const done = () => {
+        if(window.AyalonHealthForm) resolve(window.AyalonHealthForm);
+        else reject(new Error("gi-ayalon-health-form.js loaded without AyalonHealthForm"));
+      };
+      if(existing){
+        existing.addEventListener("load", done, { once: true });
+        existing.addEventListener("error", () => reject(new Error("gi-ayalon-health-form.js failed")), { once: true });
+        return;
+      }
+      const s = document.createElement("script");
+      s.id = "gi-ayalon-health-form-js";
+      s.src = GI_AYALON_HEALTH_FORM_HREF;
+      s.async = true;
+      s.onload = done;
+      s.onerror = () => reject(new Error("gi-ayalon-health-form.js failed to load"));
+      document.head.appendChild(s);
+    }).catch((err) => {
+      ensureAyalonHealthFormLoaded._p = null;
+      throw err;
+    });
+    return ensureAyalonHealthFormLoaded._p;
   }
   const GI_SIMULATOR_CATALOG = Object.freeze([
     { company: "הפניקס", product: "ריסק" },
