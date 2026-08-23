@@ -654,6 +654,8 @@
       let type = "בריאות";
       if(family === "life"){
         type = isMortgageLife(covers) ? "ריסק משכנתא" : "ריסק";
+      } else {
+        type = inferHealthProductType(covers, Object.keys(sumCoverPremiums(covers, "health")));
       }
       const premium = covers.reduce((sum, c) => sum + (Number(c.premium) || 0), 0);
       const premiumMonthly = premium
@@ -677,7 +679,7 @@
         ids: uniqueIds(people),
         primary,
         inactive: false,
-        productLabel: family === "life" ? type : "בריאות",
+        productLabel: type,
         importSource: "migdal-production"
       };
     }
@@ -743,6 +745,56 @@
     return next;
   }
 
+  function productFamily(type){
+    const t = safeTrim(type);
+    if(t === "ריסק" || t === "ריסק משכנתא") return "life";
+    if(t === "בריאות" || t === "מחלות קשות" || t === "סרטן" || t === "מוות מתאונה" || t === "נכות מתאונה") return "health";
+    return t || "";
+  }
+
+  function isProposalPolicy(p){
+    return !normPolicy(p?.policyNumber);
+  }
+
+  function inferHealthProductType(covers, healthCovers){
+    const names = [];
+    (Array.isArray(healthCovers) ? healthCovers : []).forEach((k) => names.push(String(k || "")));
+    (covers || []).forEach((c) => names.push(String(c?.coverName || c?.coverNameRaw || "")));
+    const mapped = names.map(mapHealthCover).filter(Boolean);
+    const blob = mapped.join(" ");
+    const hasCancer = mapped.some((n) => n === "מזור לסרטן" || n === "סרטן") || /מזור\s*לסרטן/.test(blob);
+    const hasCi = mapped.some((n) => n === "מחלות קשות") || /מחלות\s*קשות/.test(blob);
+    const hasCoreHealth = mapped.some((n) => (
+      n === "השתלות וטיפולים מיוחדים מחוץ לישראל" ||
+      n === "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל" ||
+      n === "תרופות מחוץ לסל שירותי הבריאות" ||
+      n === "ייעוץ ובדיקות" ||
+      n === "משלים שב\"ן ללא השתתפות עצמית" ||
+      n === "ניתוחים בישראל מהשקל הראשון" ||
+      n === "ניתוחים בישראל מורחב" ||
+      /השתל|ניתוח|תרופות|ייעוץ|שב.?ן|אמבולטור/.test(n)
+    ));
+    if(hasCoreHealth) return "בריאות";
+    if(hasCi && !hasCancer) return "מחלות קשות";
+    if(hasCancer && !hasCi) return "סרטן";
+    if(hasCi) return "מחלות קשות";
+    return "בריאות";
+  }
+
+  function typeSpecificity(type){
+    const t = safeTrim(type);
+    if(t === "מחלות קשות" || t === "סרטן" || t === "ריסק משכנתא" || t === "מוות מתאונה" || t === "נכות מתאונה") return 2;
+    if(t === "בריאות" || t === "ריסק") return 1;
+    return 0;
+  }
+
+  function preferredPolicyType(existing, incoming){
+    const a = safeTrim(existing);
+    const b = safeTrim(incoming);
+    if(a && b && productFamily(a) === productFamily(b) && typeSpecificity(a) > typeSpecificity(b)) return a;
+    return b || a;
+  }
+
   function matchExistingPolicy(cust, company, type, policyNumber){
     const list = getNewPolicies(cust);
     const sameCo = list.filter((p) => sameCompany(p?.company, company));
@@ -751,9 +803,23 @@
       const hit = sameCo.find((p) => normPolicy(p?.policyNumber) === num);
       if(hit) return { action: "update", policy: hit, reason: "מספר פוליסה זהה" };
     }
-    const sameType = sameCo.filter((p) => safeTrim(p?.type) === type);
+    const sameType = sameCo.filter((p) => safeTrim(p?.type) === safeTrim(type));
+    const sameTypeOffers = sameType.filter(isProposalPolicy);
+    if(sameTypeOffers.length === 1){
+      return { action: "update", policy: sameTypeOffers[0], reason: "הצעה מאותו סוג הוחלפה בפוליסה שהופקה" };
+    }
+    const fam = productFamily(type);
+    const familyOffers = sameCo.filter((p) => productFamily(p?.type) === fam && isProposalPolicy(p));
+    if(familyOffers.length === 1){
+      return { action: "update", policy: familyOffers[0], reason: "הצעה בתיק הוחלפה בפוליסה שהופקה" };
+    }
     if(sameType.length === 1) return { action: "update", policy: sameType[0], reason: "פוליסה יחידה מאותו סוג" };
-    if(sameType.length === 0) return { action: "create", policy: null, reason: "אין פוליסה מהסוג הזה בתיק" };
+    if(!sameType.length && !familyOffers.length){
+      return { action: "create", policy: null, reason: "אין פוליסה מהסוג הזה בתיק" };
+    }
+    if(familyOffers.length > 1){
+      return { action: "review", policy: null, reason: "כמה הצעות מאותה משפחה בלי מספר ברור", candidates: familyOffers };
+    }
     return { action: "review", policy: null, reason: "כמה פוליסות מאותו סוג בלי מספר ברור", candidates: sameType };
   }
 
@@ -909,12 +975,50 @@
       if(byNum) return byNum;
     }
     const sameType = rows.filter((x) => sameCompany(x?.company, item.company) && safeTrim(x?.type) === safeTrim(item?.type));
-    return sameType.length === 1 ? sameType[0] : null;
+    if(sameType.length === 1) return sameType[0];
+    const fam = productFamily(item?.type);
+    const familyOffers = rows.filter((x) => sameCompany(x?.company, item.company) && productFamily(x?.type) === fam && isProposalPolicy(x));
+    return familyOffers.length === 1 ? familyOffers[0] : null;
+  }
+
+  function mergeCoverList(existing, incoming, mapper){
+    const set = [];
+    (Array.isArray(existing) ? existing : []).concat(Array.isArray(incoming) ? incoming : []).forEach((k) => {
+      const t = mapper(k);
+      if(t && set.indexOf(t) === -1) set.push(t);
+    });
+    return set;
+  }
+
+  function absorbRelatedProposals(list, target, item){
+    const rows = Array.isArray(list) ? list : [];
+    if(!target) return rows;
+    const fam = productFamily(item?.type || target.type);
+    const kept = [];
+    rows.forEach((p) => {
+      if(p === target){
+        kept.push(p);
+        return;
+      }
+      const relatedOffer = sameCompany(p?.company, target.company)
+        && productFamily(p?.type) === fam
+        && isProposalPolicy(p)
+        && safeTrim(p?.id) !== safeTrim(target.id);
+      if(!relatedOffer){
+        kept.push(p);
+        return;
+      }
+      target.type = preferredPolicyType(p.type, target.type);
+      if(fam === "health"){
+        target.healthCovers = mergeCoverList(target.healthCovers, p.healthCovers, mapHealthCover);
+      }
+    });
+    return kept;
   }
 
   function applyPolicyFields(p, item, meta, payload){
     p.policyNumber = item.policyNumber || p.policyNumber;
-    if(item.type) p.type = item.type;
+    if(item.type) p.type = preferredPolicyType(p.type, item.type);
     p.premiumMonthly = item.premiumMonthly || p.premiumMonthly;
     if(item.startDate) p.startDate = item.startDate;
     const insuredIds = Array.isArray(item.insuredIds) ? item.insuredIds.filter(Boolean) : [];
@@ -929,12 +1033,9 @@
     if(Object.keys(coverPrem).length){
       p.productionCoverPremiums = coverPrem;
     }
-    if(item.type === "בריאות"){
-      const set = [];
-      (Array.isArray(p.healthCovers) ? p.healthCovers : []).concat(item.healthCovers || Object.keys(coverPrem)).forEach((k) => {
-        const t = mapHealthCover(k);
-        if(t && set.indexOf(t) === -1) set.push(t);
-      });
+    if(productFamily(item.type || p.type) === "health"){
+      const incoming = item.healthCovers || Object.keys(coverPrem);
+      const set = mergeCoverList(p.healthCovers, incoming, mapHealthCover);
       if(set.length) p.healthCovers = set;
     }
     if(item.family === "life" || item.type === "ריסק" || item.type === "ריסק משכנתא"){
@@ -968,6 +1069,10 @@
       paymentPeriod: safeTrim(item.paymentPeriod)
     };
     let target = item.action === "update" ? findPolicyToUpdate(next.newPolicies, item) : null;
+    if(!target && productFamily(item.type) === "health"){
+      const familyOffers = next.newPolicies.filter((x) => sameCompany(x?.company, item.company) && productFamily(x?.type) === "health" && isProposalPolicy(x));
+      if(familyOffers.length === 1) target = familyOffers[0];
+    }
     if(target){
       applyPolicyFields(target, item, meta, next);
     } else {
@@ -978,7 +1083,7 @@
         policyNumber: item.policyNumber,
         premiumMonthly: item.premiumMonthly || "",
         startDate: item.startDate || "",
-        healthCovers: item.type === "בריאות" ? (item.healthCovers || []).map(mapHealthCover).filter(Boolean) : [],
+        healthCovers: productFamily(item.type) === "health" ? (item.healthCovers || []).map(mapHealthCover).filter(Boolean) : [],
         insuredIds: insuredIds.slice(),
         insuredId: insuredIds[0] || "",
         insuredMode: insuredIds.length > 1 ? "multi" : "single",
@@ -987,7 +1092,9 @@
       };
       applyPolicyFields(created, item, meta, next);
       next.newPolicies.push(created);
+      target = created;
     }
+    next.newPolicies = absorbRelatedProposals(next.newPolicies, target, item);
     applyCompanyAgentNumber(next, item);
     if(!next.operational || typeof next.operational !== "object") next.operational = {};
     next.operational.newPolicies = next.newPolicies;
@@ -995,7 +1102,7 @@
   }
 
   global.GI_PRODUCTION = {
-    version: "20260823-migdal-open-v1",
+    version: "20260823-migdal-merge-v1",
     COMPANIES,
     COMPANY_HACHSHARA,
     COMPANY_MIGDAL,
@@ -1006,6 +1113,8 @@
     buildPolicies,
     classifyPolicies,
     matchExistingPolicy,
+    productFamily,
+    inferHealthProductType,
     insuredIdsForCustomer,
     applyToPayload,
     sameCompany,
