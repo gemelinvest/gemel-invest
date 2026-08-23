@@ -161,6 +161,10 @@
   const LARGE_SESSION_CUSTOMER_WORKING_SET = 500;
   /* אותה תקרה להצעות — אחרת מסך "הצעות" מקפיא על buildRows של כל הטבלה. */
   const LARGE_SESSION_PROPOSAL_WORKING_SET = 500;
+  /* GI-PERF 2026-08-23 — מנהל צוות מתחת לסף 5,000 (למשל ואדים, ~2,100 תיקים)
+     היה טוען payload+מסמכים של כל הצוות. רשימה נשארת רזה; תיק מלא ב-ensureRecordPayload.
+     מטמון ישן שמנ + payload מלא לא נצבע מחדש מעל הסף הזה. */
+  const TEAM_MANAGER_FAT_CACHE_PAINT_CAP = 400;
 
   const DAILY_REPORT_ACTIVE_ID = "active";
   // ארכיון חודשי באותה טבלה: id = "m-YYYY-MM" (לא דורס את "active").
@@ -45778,6 +45782,20 @@ const ClalRiskLifePdf = {
         } catch(_e) {}
         return;
       }
+      // GI-PERF 2026-08-23: מנהל צוות טוען את כל הצוות. בלי hydration המוני
+      // (אותו רעיון כמו Large Session). נציג רגיל לא נכנס לכאן.
+      try {
+        if(Auth?.isTeamManager?.()){
+          try { console.warn("TEAM_MANAGER_SKIP_MASS_HYDRATION"); } catch(_e) {}
+          try {
+            UI.renderSyncStatus(
+              "מצב צוות · פרטי לקוח נטענים בפתיחת תיק",
+              "warn"
+            );
+          } catch(_e2) {}
+          return;
+        }
+      } catch(_e) {}
       // GI-FIX 2026-07-31: השער הקודם היה `if(!Storage._lastLoadWasLight) return`,
       // כלומר הוא שאל *איך* נטענו הנתונים במקום *האם חסר משהו*. זה יצר פגם קבוע:
       // מנה שנכשלה נשמרה חלקית למטמון, בכניסה הבאה רץ מסלול הדלתא (ולא loadSheets),
@@ -45872,6 +45890,14 @@ const ClalRiskLifePdf = {
           } catch(_e) {}
           return false;
         }
+        // GI-PERF 2026-08-23: מטמון ישן של מנהל צוות עם אלפי payload-ים מלאים
+        // (לפני דילוג ה-hydration) — לא לצבוע, ללכת לשרת הרזה.
+        try {
+          if(Auth?.isTeamManager?.() && paintCustomers >= TEAM_MANAGER_FAT_CACHE_PAINT_CAP){
+            try { console.warn("TEAM_MANAGER_SKIP_FAT_CACHE_PAINT:", paintCustomers); } catch(_e2) {}
+            return false;
+          }
+        } catch(_e) {}
         let next = payload;
         try {
           if(Auth?.current && !Auth.canViewAllCustomers()){
