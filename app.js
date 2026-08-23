@@ -27030,7 +27030,7 @@ UsersGateUI.init();
         } else if(DashboardUI.els?.root?.querySelector(".bankDash__kpis")) {
           /* GI-PERF 2026-08-09 — בזמן overlay לא מרעננים leaderboard בכל tick (קפיצות). */
           DashboardUI.scheduleRefreshKpis();
-          if(!DashboardUI.hasStableServerKpiOverlay?.()){
+          if(!DashboardUI.hasStableServerKpiOverlay?.() || DashboardUI._leaderboardNeedsPaint?.()){
             try { DashboardUI.scheduleRefreshLeaderboard(); } catch(_e){}
           }
         } else {
@@ -29969,6 +29969,23 @@ UsersGateUI.init();
       }, 400);
     },
 
+    _leaderboardNeedsPaint(){
+      try {
+        const root = this.els?.root;
+        if(!root) return false;
+        const card = root.querySelector(".bankLeader.card");
+        if(!card) return true;
+        if(card.classList.contains("bankLeader--waiting")) return true;
+        const podium = root.querySelector(".bankLeader__podium");
+        if(!podium) return true;
+        if(podium.style.display === "none") return true;
+        if(!podium.querySelector(".bankLeader__podiumSlot")) return true;
+        return false;
+      } catch(_e) {
+        return false;
+      }
+    },
+
     scheduleRefreshLeaderboard(){
       if(this._leaderRefreshTimer) window.clearTimeout(this._leaderRefreshTimer);
       const settleMs = (typeof BackgroundTimers !== "undefined" && BackgroundTimers.justBecameVisible?.(800)) ? 800 : 500;
@@ -32153,6 +32170,7 @@ UsersGateUI.init();
           replacePanelIfMissing(".bankServiceCube", this.renderAgentServiceCubeHtml());
         }
       } catch(_e) {}
+      try { this.refreshLeaderboard(); } catch(_e) {}
     },
 
     /* GI-FIX 2026-08-11: רשימת 5 האחרונים מגיעה רזה (בלי payload),
@@ -33116,6 +33134,7 @@ UsersGateUI.init();
           }
           if(hasKpiDom || this.els.root.querySelector(".bankDash__kpis")){
             this.scheduleRefreshKpis();
+            if(this._leaderboardNeedsPaint()) this.scheduleRefreshLeaderboard();
             return;
           }
           void this.render(options);
@@ -33130,6 +33149,7 @@ UsersGateUI.init();
             && !this.els.root.querySelector(".bankDash--bootLoading")
             && !options.forceFullRender){
             this.scheduleRefreshKpis();
+            if(this._leaderboardNeedsPaint()) this.scheduleRefreshLeaderboard();
             return;
           }
           void this.render(options);
@@ -33419,11 +33439,15 @@ UsersGateUI.init();
       } catch(_e) {}
       try { this.refillServerDashboardKpis(); } catch(_e) {}
       void this.render({ skipDailyReportWait: true, forceFullRender: true });
+      try { this.ensureOrgLeaderboardData({ force: true }); } catch(_e) {}
+      try { this.scheduleRefreshLeaderboard(); } catch(_e) {}
       /* GI-FACE-FREEZE: ניסיון אחד אחרי שהסשן הספיק להיטען — לא 700/1800/4000. */
       if(this._faceKpiRetryTimer) window.clearTimeout(this._faceKpiRetryTimer);
       this._faceKpiRetryTimer = window.setTimeout(() => {
         this._faceKpiRetryTimer = null;
         try {
+          try { this.ensureOrgLeaderboardData({ force: true }); } catch(_e2) {}
+          try { this.scheduleRefreshLeaderboard(); } catch(_e2) {}
           if(this._needsAgentAppointmentKpi()){
             try { this.fetchAgentAppointmentKpis(); } catch(_e2) {}
             try { this._fillAppointmentFromLocalCustomers(); } catch(_e2) {}
@@ -33817,7 +33841,7 @@ UsersGateUI.init();
       let listEl     = root.querySelector('.bankLeader__list');
       let emptyEl    = root.querySelector('.bankLeader__empty');
       let podiumEl   = root.querySelector('.bankLeader__podium');
-      if(!heroEl && !emptyEl && !podiumEl) return;
+      if(!heroEl && !emptyEl && !podiumEl && !root.querySelector(".bankLeader.card")) return;
       const { board: leaderboard, isYesterday } = this.buildLeaderboardWithFallback();
       const todayStr = new Date().toLocaleDateString('he-IL', { day:'numeric', month:'long' });
       const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
@@ -33834,8 +33858,16 @@ UsersGateUI.init();
         if(heroEl) heroEl.style.display = 'none';
         if(listEl) listEl.style.display = 'none';
         if(emptyEl) { emptyEl.style.display = 'none'; emptyEl.textContent = ''; }
+        const retries = Number(this._leaderWaitRetry) || 0;
+        if(retries < 6){
+          this._leaderWaitRetry = retries + 1;
+          window.setTimeout(() => {
+            try { this.scheduleRefreshLeaderboard(); } catch(_e) {}
+          }, 700);
+        }
         return;
       }
+      this._leaderWaitRetry = 0;
       if(!podiumEl){
         if(!ensurePodiumShell()) return;
         heroEl = root.querySelector('#bankLeaderHero');
@@ -33943,7 +33975,7 @@ UsersGateUI.init();
         && this.els.root.querySelector(".bankDash__kpis")
         && !this.els.root.querySelector(".bankDash--bootLoading")){
         try { this.refreshKpis(); } catch(_e) {}
-        if(!this.hasStableServerKpiOverlay()){
+        if(!this.hasStableServerKpiOverlay() || this._leaderboardNeedsPaint()){
           try { this.scheduleRefreshLeaderboard(); } catch(_e) {}
         }
         return;
