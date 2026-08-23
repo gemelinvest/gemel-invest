@@ -17746,6 +17746,9 @@ UsersGateUI.init();
       this.els.main = $("#customerFullMain");
       this.els.editBtn = $("#customerFullEditBtn");
       this.els.newPurchaseBtn = $("#customerFullNewPurchaseBtn");
+      this.els.actionsBtn = $("#customerFullActionsBtn");
+      this.els.actionsPanel = $("#customerFullActionsPanel");
+      this.initFileActionsMenu();
 
       this.policyModal.wrap = $("#customerPolicyModal");
       this.policyModal.backdrop = $("#customerPolicyModalBackdrop");
@@ -22019,6 +22022,40 @@ UsersGateUI.init();
       btn.style.display = show ? "" : "none";
     },
 
+    initFileActionsMenu(){
+      const trigger = this.els.actionsBtn;
+      const panel = this.els.actionsPanel;
+      if(!trigger || !panel || trigger._giMenuBound) return;
+      trigger._giMenuBound = true;
+      const setOpen = (open) => {
+        panel.hidden = !open;
+        trigger.setAttribute("aria-expanded", open ? "true" : "false");
+        trigger.classList.toggle("is-open", !!open);
+      };
+      const isOpen = () => !panel.hidden;
+      this._closeFileActionsMenu = () => setOpen(false);
+      on(trigger, "click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        setOpen(!isOpen());
+      });
+      on(panel, "click", (ev) => {
+        if(ev.target?.closest?.(".cfFileActionBtn")) setOpen(false);
+      });
+      on(document, "click", (ev) => {
+        if(!isOpen()) return;
+        if(panel.contains(ev.target) || trigger.contains(ev.target)) return;
+        setOpen(false);
+      });
+      on(document, "keydown", (ev) => {
+        if(ev.key === "Escape" && isOpen()){
+          setOpen(false);
+          try { trigger.focus(); } catch(_e) {}
+        }
+      });
+      setOpen(false);
+    },
+
     renderOperationalReflectionCard(state){
       const current = this.current();
       const canSetOpsResult = !!(Auth.isOps() || Auth.isOpsAgent());
@@ -22406,6 +22443,7 @@ UsersGateUI.init();
       this.stopOpsCardLoop();
       this._openRefreshSig = "";
       this.currentSection = "policies";
+      try { this._closeFileActionsMenu?.(); } catch(_e) {}
       if(!this.els.wrap) return;
       window.clearTimeout(this._loaderTimer);
       this.hideLoader();
