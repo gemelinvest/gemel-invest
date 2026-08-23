@@ -6686,7 +6686,8 @@
       agentApptOps: "operational_report_agent_appointment",
       agentApptForm: "agent_appointment_form",
       harBituach: "har_bituach_file",
-      hachsharaCiForm: "hachshara_ci_form"
+      hachsharaCiForm: "hachshara_ci_form",
+      hachsharaLifeForm: "hachshara_life_form"
     },
     REPORT_SCOPES: {
       proposal: "health_proposal",
@@ -7084,6 +7085,15 @@
         return /מחלות\s*קשות/.test(blob);
       });
     },
+    qualifiesForHachsharaLifeForm(payload){
+      const list = Array.isArray(payload?.newPolicies) ? payload.newPolicies : [];
+      return list.some((p) => {
+        if(safeTrim(p?.company) !== "הכשרה") return false;
+        const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
+        if(/משכנתא/.test(blob) || /מחלות\s*קשות/.test(blob)) return false;
+        return /ריסק/.test(blob) || /מגן\s*לעתיד/.test(blob) || /ביטוח\s*חיים/.test(blob);
+      });
+    },
     resolveListForCustomer(rec){
       const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
       const list = this.listFromPayload(payload);
@@ -7116,6 +7126,19 @@
           uploadedBy: safeTrim(rec?.agentName)
         });
       }
+      const hasHachLife = list.some((d) => safeTrim(d?.type) === this.TYPES.hachsharaLifeForm);
+      if(!hasHachLife && this.qualifiesForHachsharaLifeForm(payload)){
+        const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
+        list.unshift({
+          id: "doc_hachshara_life_form",
+          type: this.TYPES.hachsharaLifeForm,
+          isLegacy: true,
+          name: "טופס מקורי — ריסק חיים · הכשרה",
+          source: "מערכת",
+          uploadedAt,
+          uploadedBy: safeTrim(rec?.agentName)
+        });
+      }
       const hasApptForm = list.some((d) => safeTrim(d?.type) === this.TYPES.agentApptForm);
       if(!hasApptForm && payload.agentAppointmentMeta){
         const meta = payload.agentAppointmentMeta;
@@ -7131,7 +7154,7 @@
       return this.sortByDateDesc(list.filter((doc) => {
         if(!doc || typeof doc !== "object") return false;
         const type = safeTrim(doc.type);
-        if(type === this.TYPES.healthOps || type === this.TYPES.agentApptOps || type === this.TYPES.agentApptForm || type === this.TYPES.harBituach || type === this.TYPES.hachsharaCiForm) return true;
+        if(type === this.TYPES.healthOps || type === this.TYPES.agentApptOps || type === this.TYPES.agentApptForm || type === this.TYPES.harBituach || type === this.TYPES.hachsharaCiForm || type === this.TYPES.hachsharaLifeForm) return true;
         return !!(safeTrim(doc.name) || safeTrim(doc.url) || safeTrim(doc.dataUrl) || safeTrim(doc.fileName));
       }));
     },
@@ -17854,6 +17877,13 @@ UsersGateUI.init();
           if(rec) void this.openHachsharaCiForm(rec);
           return;
         }
+        const openHachLife = ev.target?.closest?.("[data-open-hachshara-life-doc], [data-hachlife-open]");
+        if(openHachLife){
+          ev.preventDefault();
+          const rec = this.current();
+          if(rec) void this.openHachsharaLifeForm(rec);
+          return;
+        }
         const dlAppt = ev.target?.closest?.("[data-download-agent-appt-doc]");
         if(dlAppt){
           ev.preventDefault();
@@ -20392,6 +20422,12 @@ UsersGateUI.init();
             return `<div class="cfFile__documentsPreviewDoc">${window.HachsharaCiForm.renderPreviewHtml(draft)}</div>`;
           } catch(_e) {}
         }
+        if(type === CustomerDocuments.TYPES.hachsharaLifeForm && window.HachsharaLifeForm){
+          try {
+            const draft = window.HachsharaLifeForm.buildDraft(rec);
+            return `<div class="cfFile__documentsPreviewDoc">${window.HachsharaLifeForm.renderPreviewHtml(draft)}</div>`;
+          } catch(_e) {}
+        }
         if((type === CustomerDocuments.TYPES.agentApptOps || type === CustomerDocuments.TYPES.agentApptForm)
           && typeof AgentAppointmentPdf?.buildOperationalReportHtml === "function"){
           const meta = doc?.payloadSnapshot?.agentAppointmentMeta
@@ -20458,6 +20494,13 @@ UsersGateUI.init();
         } catch(_e) {}
         return;
       }
+      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.hachsharaLifeForm && !window.HachsharaLifeForm){
+        try {
+          await ensureHachsharaLifeFormLoaded();
+          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
+        } catch(_e) {}
+        return;
+      }
       if(src.kind !== "sheet") return;
       const sheetHtml = await this.renderSheetPreviewHtml(doc);
       if(this._previewDocId !== id) return;
@@ -20475,6 +20518,16 @@ UsersGateUI.init();
         window.HachsharaCiForm.open(rec);
       } catch(err){
         try { console.error("HACHSHARA_CI_FORM_OPEN_FAILED", err); } catch(_e) {}
+        try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
+      }
+    },
+    async openHachsharaLifeForm(rec){
+      try {
+        await ensureHachsharaLifeFormLoaded();
+        if(!window.HachsharaLifeForm) throw new Error("HachsharaLifeForm missing");
+        window.HachsharaLifeForm.open(rec);
+      } catch(err){
+        try { console.error("HACHSHARA_LIFE_FORM_OPEN_FAILED", err); } catch(_e) {}
         try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
       }
     },
@@ -20506,6 +20559,8 @@ UsersGateUI.init();
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-agent-appt-doc="${escapeHtml(docId)}">הורדה</button>`;
         }else if(docType === CustomerDocuments.TYPES.hachsharaCiForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-hachshara-ci-doc="${escapeHtml(docId)}">פתח טופס</button>`;
+        }else if(docType === CustomerDocuments.TYPES.hachsharaLifeForm){
+          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-hachshara-life-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(docType === CustomerDocuments.TYPES.healthOps){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-ops-health-doc="${escapeHtml(docId)}">הורדה</button>`;
         }else if(docType === CustomerDocuments.TYPES.agentApptOps){
@@ -34175,8 +34230,9 @@ UsersGateUI.init();
 
     /* GI-PERF-LAZY-SIMS 2026-08-09 */
   // Lazy simulator registry — engines in gi-simulators.js (~220KB parse deferred).
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-hach-ci-form-v1";
-  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-hach-ci-form-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-hach-life-form-v1";
+  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-hach-life-form-v1";
+  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-hach-life-form-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -34205,6 +34261,33 @@ UsersGateUI.init();
       throw err;
     });
     return ensureHachsharaCiFormLoaded._p;
+  }
+  function ensureHachsharaLifeFormLoaded(){
+    if(window.HachsharaLifeForm) return Promise.resolve(window.HachsharaLifeForm);
+    if(ensureHachsharaLifeFormLoaded._p) return ensureHachsharaLifeFormLoaded._p;
+    ensureHachsharaLifeFormLoaded._p = new Promise((resolve, reject) => {
+      const existing = document.getElementById("gi-hachshara-life-form-js");
+      const done = () => {
+        if(window.HachsharaLifeForm) resolve(window.HachsharaLifeForm);
+        else reject(new Error("gi-hachshara-life-form.js loaded without HachsharaLifeForm"));
+      };
+      if(existing){
+        existing.addEventListener("load", done, { once: true });
+        existing.addEventListener("error", () => reject(new Error("gi-hachshara-life-form.js failed")), { once: true });
+        return;
+      }
+      const s = document.createElement("script");
+      s.id = "gi-hachshara-life-form-js";
+      s.src = GI_HACHSHARA_LIFE_FORM_HREF;
+      s.async = true;
+      s.onload = done;
+      s.onerror = () => reject(new Error("gi-hachshara-life-form.js failed to load"));
+      document.head.appendChild(s);
+    }).catch((err) => {
+      ensureHachsharaLifeFormLoaded._p = null;
+      throw err;
+    });
+    return ensureHachsharaLifeFormLoaded._p;
   }
   const GI_SIMULATOR_CATALOG = Object.freeze([
     { company: "הפניקס", product: "ריסק" },
