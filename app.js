@@ -30021,6 +30021,15 @@ UsersGateUI.init();
       if(!this.els.root) this.init();
       if(!this.els.root) return;
       const name = safeTrim(Auth?.current?.name) || "נציג";
+      const existingOps = this.els.root.querySelector(".bankOpsCube");
+      const existingService = this.els.root.querySelector(".bankServiceCube");
+      const opsCubeHtml = existingOps
+        ? existingOps.outerHTML
+        : this.renderAgentOpsCubeHtml(this._emptyAgentOpsCubeModel());
+      const serviceCubeHtml = existingService
+        ? existingService.outerHTML
+        : this.renderAgentServiceCubeHtml();
+      const cubePark = this._parkDashboardSideCubes();
       this.els.root.innerHTML = `
         <section class="bankDash bankDash--bootLoading" aria-busy="true">
           <div class="bankDash__topStats bankDash__topStats--empty">
@@ -30038,7 +30047,14 @@ UsersGateUI.init();
             <article class="card bankKpi bankKpi--compact bankDash__bootPlaceholder"></article>
           </div>
           <div class="bankDash__bootStatus muted" role="status" aria-live="polite">מכין את הדשבורד… אפשר בינתיים לנווט בתפריט</div>
+          <div class="bankDash__row bankDash__row--elevatedCol">
+            <div class="bankDash__elevatedCol">
+              ${opsCubeHtml}
+              ${serviceCubeHtml}
+            </div>
+          </div>
         </section>`;
+      this._restoreDashboardSideCubes(cubePark);
     },
 
     renderHiddenForRole(){
@@ -32097,6 +32113,48 @@ UsersGateUI.init();
         .join("|");
     },
 
+    /* GI-FIX 2026-08-23b: מוציאים את הקוביות החיות לפני innerHTML ומחזירים אותן
+       באותו סיבוב — בלי פריים ריק ובלי סריקה מחדש אם הן כבר על המסך. */
+    _parkDashboardSideCubes(){
+      const root = this.els?.root;
+      const park = { ops: null, service: null };
+      if(!root) return park;
+      const ops = root.querySelector(".bankOpsCube");
+      const service = root.querySelector(".bankServiceCube");
+      if(ops){
+        park.ops = ops;
+        ops.remove();
+      }
+      if(service){
+        park.service = service;
+        service.remove();
+      }
+      return park;
+    },
+
+    _restoreDashboardSideCubes(park){
+      const root = this.els?.root;
+      if(!root || !park) return;
+      if(park.ops){
+        const slot = root.querySelector(".bankOpsCube");
+        if(slot) slot.replaceWith(park.ops);
+        else {
+          const host = root.querySelector(".bankDash__elevatedCol");
+          if(host) host.insertBefore(park.ops, host.firstChild);
+        }
+      }
+      if(park.service){
+        const slot = root.querySelector(".bankServiceCube");
+        if(slot) slot.replaceWith(park.service);
+        else {
+          const host = root.querySelector(".bankDash__elevatedCol");
+          const ops = host?.querySelector(".bankOpsCube");
+          if(ops) ops.insertAdjacentElement("afterend", park.service);
+          else if(host) host.insertBefore(park.service, host.firstChild);
+        }
+      }
+    },
+
     /* GI-FIX 2026-08-23: קוביות שמאל — טקסט במקום, בלי replaceWith. */
     syncDashboardSideCubesInPlace(){
       const root = this.els.root;
@@ -32310,19 +32368,37 @@ UsersGateUI.init();
       }
     },
 
-    agentOpsBucketRows(bucketKey){
-      const key = safeTrim(bucketKey);
-      const rows = [];
+    agentOpsCubeRowDefs(){
+      return [
+        { key: "waiting_mirror", label: "ממתין לשיקוף", lamp: "amber", metric: "premium" },
+        { key: "waiting_typing", label: "ממתין להקלדה", lamp: "blue", metric: "count" },
+        { key: "pending_signatures", label: "ממתין לחתימות", lamp: "purple", metric: "count" },
+        { key: "issuance", label: "עבר להפקה", lamp: "green", metric: "count" }
+      ];
+    },
+
+    _emptyAgentOpsCubeModel(){
+      return this.agentOpsCubeRowDefs().map((d) => Object.assign({}, d, { count: 0, premium: 0, items: [] }));
+    },
+
+    /* סריקה אחת לכל הלקוחות הנראים — במקום 4 סריקות (באקט לכל שורה). */
+    buildAgentOpsBucketIndex(){
+      const index = Object.create(null);
+      const defs = this.agentOpsCubeRowDefs();
+      for(let i = 0; i < defs.length; i++){
+        index[defs[i].key] = [];
+      }
       const list = this.agentOpsVisibleCustomers();
       for(let i = 0; i < list.length; i++){
         const rec = list[i];
         if(!rec) continue;
         let bucket = "other";
         try { bucket = OpsDashboardUI.classifyBucket(rec); } catch(_e) {}
-        if(bucket !== key) continue;
+        const bucketRows = index[bucket];
+        if(!bucketRows) continue;
         let premium = 0;
         try { premium = OpsDashboardUI.getPremium(rec) || 0; } catch(_e2) {}
-        rows.push({
+        bucketRows.push({
           id: rec.id,
           fullName: safeTrim(rec.fullName) || "לקוח",
           phone: safeTrim(rec.phone),
@@ -32332,26 +32408,28 @@ UsersGateUI.init();
           bucket
         });
       }
-      return rows;
+      return index;
+    },
+
+    agentOpsBucketRows(bucketKey){
+      const key = safeTrim(bucketKey);
+      const index = this.buildAgentOpsBucketIndex();
+      return index[key] || [];
     },
 
     buildAgentOpsCubeModel(){
-      const defs = [
-        { key: "waiting_mirror", label: "ממתין לשיקוף", lamp: "amber", metric: "premium" },
-        { key: "waiting_typing", label: "ממתין להקלדה", lamp: "blue", metric: "count" },
-        { key: "pending_signatures", label: "ממתין לחתימות", lamp: "purple", metric: "count" },
-        { key: "issuance", label: "עבר להפקה", lamp: "green", metric: "count" }
-      ];
+      const defs = this.agentOpsCubeRowDefs();
+      const index = this.buildAgentOpsBucketIndex();
       return defs.map((d) => {
-        const items = this.agentOpsBucketRows(d.key);
+        const items = index[d.key] || [];
         const count = items.length;
         const premium = items.reduce((s, r) => s + (Number(r.premium) || 0), 0);
         return Object.assign({}, d, { count, premium, items });
       });
     },
 
-    renderAgentOpsCubeHtml(){
-      const rows = this.buildAgentOpsCubeModel();
+    renderAgentOpsCubeHtml(model){
+      const rows = Array.isArray(model) ? model : this.buildAgentOpsCubeModel();
       const body = rows.map((r) => {
         const valueHtml = r.metric === "premium"
           ? `<strong class="bankOpsCube__metric">${escapeHtml(this.formatMoney(r.premium))}</strong><span class="bankOpsCube__metricSub">${r.count} לקוחות</span>`
@@ -34104,8 +34182,16 @@ UsersGateUI.init();
       const recentCustomersPanelHtml = keepExistingRecent
         ? existingRecentEl.outerHTML
         : renderedRecentHtml;
-      const opsCubeHtml = this.renderAgentOpsCubeHtml();
-      const serviceCubeHtml = this.renderAgentServiceCubeHtml();
+      /* GI-FIX 2026-08-23b: אם הקוביות כבר על המסך — משאירים את ה-DOM החי,
+         בלי סריקה ובלי בניית HTML מחדש. */
+      const existingOpsEl = this.els.root.querySelector(".bankOpsCube");
+      const existingServiceEl = this.els.root.querySelector(".bankServiceCube");
+      const opsCubeHtml = existingOpsEl
+        ? existingOpsEl.outerHTML
+        : this.renderAgentOpsCubeHtml();
+      const serviceCubeHtml = existingServiceEl
+        ? existingServiceEl.outerHTML
+        : this.renderAgentServiceCubeHtml();
       const goalPanelHtml = this.renderGoalCardHtml(metrics, orgScope);
       const leaderboardPanelHtml = (() => {
             const { board: leaderboard2, isYesterday: isYesterday2 } = this.buildLeaderboardWithFallback();
@@ -34139,6 +34225,7 @@ UsersGateUI.init();
                 <div class="bankLeader__empty" hidden></div>
               </article>`;
           })();
+      const cubePark = this._parkDashboardSideCubes();
       this.els.root.innerHTML = `
         <section class="bankDash bankDash--cleanTop">
           <div class="bankDash__topStats">
@@ -34190,6 +34277,7 @@ UsersGateUI.init();
           </div>
 
         </section>`;
+      this._restoreDashboardSideCubes(cubePark);
       this._renderedDomKey = this.getMetricsCacheKey() || this._renderedDomKey || "painted";
       await perfYield();
       this.revealKpiMetricValues(this.els.root);

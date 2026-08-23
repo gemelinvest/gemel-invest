@@ -20532,6 +20532,8 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
 #view-dashboard .bankDash__topStats--empty{ justify-content:space-between; }
 
 #view-dashboard .bankDash--bootLoading .bankDash__bootStatus{
+  grid-column:1;
+  grid-row:3;
   margin:10px 4px 0;
   font-size:13px;
   font-weight:700;
