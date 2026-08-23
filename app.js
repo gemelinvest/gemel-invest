@@ -7077,22 +7077,40 @@
       }
       return payload;
     },
-    qualifiesForHachsharaCiForm(payload){
-      const list = Array.isArray(payload?.newPolicies) ? payload.newPolicies : [];
-      return list.some((p) => {
+    OFFICIAL_JOIN_FORM_FROM_DAY: "2026-08-01",
+    officialJoinFormDayOnOrAfter(iso){
+      const day = israelCalendarDay(iso);
+      return !!(day && day >= this.OFFICIAL_JOIN_FORM_FROM_DAY);
+    },
+    officialJoinFormInPeriod(rec, payload, matchedPolicies){
+      if(this.officialJoinFormDayOnOrAfter(rec?.createdAt || rec?.created_at)) return true;
+      if(this.officialJoinFormDayOnOrAfter(payload?.createdAt || payload?.created_at)) return true;
+      return (Array.isArray(matchedPolicies) ? matchedPolicies : []).some((p) =>
+        this.officialJoinFormDayOnOrAfter(p?._addedAt) || this.officialJoinFormDayOnOrAfter(p?.soldAt)
+      );
+    },
+    listOfficialJoinFormPolicies(payload, rec){
+      if(rec) return getCustomerRawNewPolicies(rec);
+      return getNewPoliciesFromCustomerPayload(payload);
+    },
+    qualifiesForHachsharaCiForm(payload, rec){
+      const list = this.listOfficialJoinFormPolicies(payload, rec);
+      const matched = list.filter((p) => {
         if(safeTrim(p?.company) !== "הכשרה") return false;
         const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
         return /מחלות\s*קשות/.test(blob);
       });
+      return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
     },
-    qualifiesForHachsharaLifeForm(payload){
-      const list = Array.isArray(payload?.newPolicies) ? payload.newPolicies : [];
-      return list.some((p) => {
+    qualifiesForHachsharaLifeForm(payload, rec){
+      const list = this.listOfficialJoinFormPolicies(payload, rec);
+      const matched = list.filter((p) => {
         if(safeTrim(p?.company) !== "הכשרה") return false;
         const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
         if(/משכנתא/.test(blob) || /מחלות\s*קשות/.test(blob)) return false;
         return /ריסק/.test(blob) || /מגן\s*לעתיד/.test(blob) || /ביטוח\s*חיים/.test(blob);
       });
+      return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
     },
     resolveListForCustomer(rec){
       const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
@@ -7114,7 +7132,7 @@
         });
       }
       const hasHachCi = list.some((d) => safeTrim(d?.type) === this.TYPES.hachsharaCiForm);
-      if(!hasHachCi && this.qualifiesForHachsharaCiForm(payload)){
+      if(!hasHachCi && this.qualifiesForHachsharaCiForm(payload, rec)){
         const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
         list.unshift({
           id: "doc_hachshara_ci_form",
@@ -7127,7 +7145,7 @@
         });
       }
       const hasHachLife = list.some((d) => safeTrim(d?.type) === this.TYPES.hachsharaLifeForm);
-      if(!hasHachLife && this.qualifiesForHachsharaLifeForm(payload)){
+      if(!hasHachLife && this.qualifiesForHachsharaLifeForm(payload, rec)){
         const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
         list.unshift({
           id: "doc_hachshara_life_form",
@@ -7154,7 +7172,9 @@
       return this.sortByDateDesc(list.filter((doc) => {
         if(!doc || typeof doc !== "object") return false;
         const type = safeTrim(doc.type);
-        if(type === this.TYPES.healthOps || type === this.TYPES.agentApptOps || type === this.TYPES.agentApptForm || type === this.TYPES.harBituach || type === this.TYPES.hachsharaCiForm || type === this.TYPES.hachsharaLifeForm) return true;
+        if(type === this.TYPES.hachsharaCiForm) return this.qualifiesForHachsharaCiForm(payload, rec);
+        if(type === this.TYPES.hachsharaLifeForm) return this.qualifiesForHachsharaLifeForm(payload, rec);
+        if(type === this.TYPES.healthOps || type === this.TYPES.agentApptOps || type === this.TYPES.agentApptForm || type === this.TYPES.harBituach) return true;
         return !!(safeTrim(doc.name) || safeTrim(doc.url) || safeTrim(doc.dataUrl) || safeTrim(doc.fileName));
       }));
     },
@@ -34230,9 +34250,9 @@ UsersGateUI.init();
 
     /* GI-PERF-LAZY-SIMS 2026-08-09 */
   // Lazy simulator registry — engines in gi-simulators.js (~220KB parse deferred).
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-hach-life-form-v1";
-  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-hach-life-form-v1";
-  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-hach-life-form-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-official-aug-v1";
+  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-official-aug-v1";
+  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-official-aug-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
