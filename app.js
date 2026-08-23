@@ -6687,7 +6687,8 @@
       agentApptForm: "agent_appointment_form",
       harBituach: "har_bituach_file",
       hachsharaCiForm: "hachshara_ci_form",
-      hachsharaLifeForm: "hachshara_life_form"
+      hachsharaLifeForm: "hachshara_life_form",
+      migdalLifeForm: "migdal_life_form"
     },
     REPORT_SCOPES: {
       proposal: "health_proposal",
@@ -7112,6 +7113,16 @@
       });
       return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
     },
+    qualifiesForMigdalLifeForm(payload, rec){
+      const list = this.listOfficialJoinFormPolicies(payload, rec);
+      const matched = list.filter((p) => {
+        if(safeTrim(p?.company) !== "מגדל") return false;
+        const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
+        if(/משכנתא/.test(blob) || /מחלות\s*קשות/.test(blob) || /סרטן/.test(blob)) return false;
+        return /ריסק/.test(blob) || /ביטוח\s*חיים/.test(blob) || /מגדלור/.test(blob) || /אור\s*1/.test(blob);
+      });
+      return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
+    },
     resolveListForCustomer(rec){
       const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
       const list = this.listFromPayload(payload);
@@ -7157,6 +7168,19 @@
           uploadedBy: safeTrim(rec?.agentName)
         });
       }
+      const hasMigLife = list.some((d) => safeTrim(d?.type) === this.TYPES.migdalLifeForm);
+      if(!hasMigLife && this.qualifiesForMigdalLifeForm(payload, rec)){
+        const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
+        list.unshift({
+          id: "doc_migdal_life_form",
+          type: this.TYPES.migdalLifeForm,
+          isLegacy: true,
+          name: "טופס מקורי — ריסק חיים · מגדל",
+          source: "מערכת",
+          uploadedAt,
+          uploadedBy: safeTrim(rec?.agentName)
+        });
+      }
       const hasApptForm = list.some((d) => safeTrim(d?.type) === this.TYPES.agentApptForm);
       if(!hasApptForm && payload.agentAppointmentMeta){
         const meta = payload.agentAppointmentMeta;
@@ -7174,6 +7198,7 @@
         const type = safeTrim(doc.type);
         if(type === this.TYPES.hachsharaCiForm) return this.qualifiesForHachsharaCiForm(payload, rec);
         if(type === this.TYPES.hachsharaLifeForm) return this.qualifiesForHachsharaLifeForm(payload, rec);
+        if(type === this.TYPES.migdalLifeForm) return this.qualifiesForMigdalLifeForm(payload, rec);
         if(type === this.TYPES.healthOps || type === this.TYPES.agentApptOps || type === this.TYPES.agentApptForm || type === this.TYPES.harBituach) return true;
         return !!(safeTrim(doc.name) || safeTrim(doc.url) || safeTrim(doc.dataUrl) || safeTrim(doc.fileName));
       }));
@@ -17904,6 +17929,13 @@ UsersGateUI.init();
           if(rec) void this.openHachsharaLifeForm(rec);
           return;
         }
+        const openMigLife = ev.target?.closest?.("[data-open-migdal-life-doc], [data-miglife-open]");
+        if(openMigLife){
+          ev.preventDefault();
+          const rec = this.current();
+          if(rec) void this.openMigdalLifeForm(rec);
+          return;
+        }
         const dlAppt = ev.target?.closest?.("[data-download-agent-appt-doc]");
         if(dlAppt){
           ev.preventDefault();
@@ -20448,6 +20480,12 @@ UsersGateUI.init();
             return `<div class="cfFile__documentsPreviewDoc">${window.HachsharaLifeForm.renderPreviewHtml(draft)}</div>`;
           } catch(_e) {}
         }
+        if(type === CustomerDocuments.TYPES.migdalLifeForm && window.MigdalLifeForm){
+          try {
+            const draft = window.MigdalLifeForm.buildDraft(rec);
+            return `<div class="cfFile__documentsPreviewDoc">${window.MigdalLifeForm.renderPreviewHtml(draft)}</div>`;
+          } catch(_e) {}
+        }
         if((type === CustomerDocuments.TYPES.agentApptOps || type === CustomerDocuments.TYPES.agentApptForm)
           && typeof AgentAppointmentPdf?.buildOperationalReportHtml === "function"){
           const meta = doc?.payloadSnapshot?.agentAppointmentMeta
@@ -20521,6 +20559,13 @@ UsersGateUI.init();
         } catch(_e) {}
         return;
       }
+      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.migdalLifeForm && !window.MigdalLifeForm){
+        try {
+          await ensureMigdalLifeFormLoaded();
+          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
+        } catch(_e) {}
+        return;
+      }
       if(src.kind !== "sheet") return;
       const sheetHtml = await this.renderSheetPreviewHtml(doc);
       if(this._previewDocId !== id) return;
@@ -20548,6 +20593,16 @@ UsersGateUI.init();
         window.HachsharaLifeForm.open(rec);
       } catch(err){
         try { console.error("HACHSHARA_LIFE_FORM_OPEN_FAILED", err); } catch(_e) {}
+        try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
+      }
+    },
+    async openMigdalLifeForm(rec){
+      try {
+        await ensureMigdalLifeFormLoaded();
+        if(!window.MigdalLifeForm) throw new Error("MigdalLifeForm missing");
+        window.MigdalLifeForm.open(rec);
+      } catch(err){
+        try { console.error("MIGDAL_LIFE_FORM_OPEN_FAILED", err); } catch(_e) {}
         try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
       }
     },
@@ -20581,6 +20636,8 @@ UsersGateUI.init();
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-hachshara-ci-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(docType === CustomerDocuments.TYPES.hachsharaLifeForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-hachshara-life-doc="${escapeHtml(docId)}">פתח טופס</button>`;
+        }else if(docType === CustomerDocuments.TYPES.migdalLifeForm){
+          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-migdal-life-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(docType === CustomerDocuments.TYPES.healthOps){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-ops-health-doc="${escapeHtml(docId)}">הורדה</button>`;
         }else if(docType === CustomerDocuments.TYPES.agentApptOps){
@@ -34250,9 +34307,10 @@ UsersGateUI.init();
 
     /* GI-PERF-LAZY-SIMS 2026-08-09 */
   // Lazy simulator registry — engines in gi-simulators.js (~220KB parse deferred).
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-official-aug-v1";
-  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-official-aug-v1";
-  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-official-aug-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-migdal-life-form-v1";
+  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-migdal-life-form-v1";
+  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-migdal-life-form-v1";
+  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-migdal-life-form-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -34308,6 +34366,33 @@ UsersGateUI.init();
       throw err;
     });
     return ensureHachsharaLifeFormLoaded._p;
+  }
+  function ensureMigdalLifeFormLoaded(){
+    if(window.MigdalLifeForm) return Promise.resolve(window.MigdalLifeForm);
+    if(ensureMigdalLifeFormLoaded._p) return ensureMigdalLifeFormLoaded._p;
+    ensureMigdalLifeFormLoaded._p = new Promise((resolve, reject) => {
+      const existing = document.getElementById("gi-migdal-life-form-js");
+      const done = () => {
+        if(window.MigdalLifeForm) resolve(window.MigdalLifeForm);
+        else reject(new Error("gi-migdal-life-form.js loaded without MigdalLifeForm"));
+      };
+      if(existing){
+        existing.addEventListener("load", done, { once: true });
+        existing.addEventListener("error", () => reject(new Error("gi-migdal-life-form.js failed")), { once: true });
+        return;
+      }
+      const s = document.createElement("script");
+      s.id = "gi-migdal-life-form-js";
+      s.src = GI_MIGDAL_LIFE_FORM_HREF;
+      s.async = true;
+      s.onload = done;
+      s.onerror = () => reject(new Error("gi-migdal-life-form.js failed to load"));
+      document.head.appendChild(s);
+    }).catch((err) => {
+      ensureMigdalLifeFormLoaded._p = null;
+      throw err;
+    });
+    return ensureMigdalLifeFormLoaded._p;
   }
   const GI_SIMULATOR_CATALOG = Object.freeze([
     { company: "הפניקס", product: "ריסק" },
