@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/hachshara-life/",
     TEMPLATE_FILE: "hachshara-life-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-official-pay-role-v1",
+    VERSION: "20260824-official-decl-pay-he-v1",
     DOC_ID: "doc_hachshara_life_form",
     DOC_TYPE: "hachshara_life_form",
 
@@ -165,6 +165,7 @@
         agentNumber: safeTrim(agentNumbers["הכשרה"]) || safeTrim(policy.agentNumber),
         primary: primaryPerson,
         spouse: spousePerson,
+        ...(global.GI_OFFICIAL_FORM_FILL?.attachDraftHealth?.(payload, primary, spouse) || {}),
         payer: {
           name: useExternal ? safeTrim((external.firstName + " " + external.lastName).trim()) : "",
           idNumber: useExternal ? safeTrim(external.idNumber) : "",
@@ -358,9 +359,14 @@
         this.setTextSafe(form, "PayerPID", draft.payer.idNumber, font);
         this.setTextSafe(form, "PayerRelation", draft.payer.relation, font);
       }
+      global.GI_OFFICIAL_FORM_FILL?.applyOfficialHealthAndNames?.(form, draft, font, {
+        keys: "hachshara_life",
+        altKeys: "hachshara_life_full"
+      });
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
-        bank: draft.bank || {}
+        bank: draft.bank || {},
+        cc: draft.payment?.cc || {}
       }, font, {
         hoMarks: [{ field: "CollectionMethod", value: "Hok" }],
         ccMarks: [{ field: "CollectionMethod", value: "Credit" }]
@@ -527,7 +533,7 @@
             <button type="button" class="giValModal__closeX" data-hachlife-close="1" aria-label="סגירה">✕</button>
           </div>
           <div class="giValModal__body">
-            <div class="hachLifeForm__hint">ממולא אוטומטית רק מה ששמור בתיק. הצהרת בריאות, מוטבים, החלפת ביטוח, חתימות ומספר כרטיס אשראי לא ממולאים — אותם משלימים בטופס או ב-PDF אחרי ההורדה.</div>
+            <div class="hachLifeForm__hint">ממולא אוטומטית רק מה ששמור בתיק, כולל כן/לא בהצהרת בריאות ואמצעי תשלום. פירוט רפואי, מוטבים, החלפת ביטוח וחתימות לא ממולאים — אותם משלימים בטופס או ב-PDF אחרי ההורדה.</div>
             <section class="hachLifeForm__block">
               <div class="hachLifeForm__blockTitle">פרטי הצעה וסוכן</div>
               <div class="hachLifeForm__grid">

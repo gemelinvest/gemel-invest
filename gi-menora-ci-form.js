@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/menora-ci/",
     TEMPLATE_FILE: "menora-ci-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-official-pay-role-v1",
+    VERSION: "20260824-official-decl-pay-he-v1",
     DOC_ID: "doc_menora_ci_form",
     DOC_TYPE: "menora_ci_form",
 
@@ -161,6 +161,7 @@
         primary: primaryPerson,
         spouse: spousePerson,
         children: childPeople,
+        ...(global.GI_OFFICIAL_FORM_FILL?.attachDraftHealth?.(payload, primary, spouse, children) || {}),
         payer: {
           firstName: useExternal ? safeTrim(external.firstName) : "",
           lastName: useExternal ? safeTrim(external.lastName) : "",
@@ -351,9 +352,13 @@
         this.setTextSafe(form, "CellPhoneNumberMeshalem", draft.payer.phone, font);
         this.setTextSafe(form, "EmailMeshalem", draft.payer.email, font);
       }
+      global.GI_OFFICIAL_FORM_FILL?.applyOfficialHealthAndNames?.(form, draft, font, {
+        keys: "menora_ci"
+      });
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
-        bank: draft.bank || {}
+        bank: draft.bank || {},
+        cc: draft.payment?.cc || {}
       }, font, {
         bankAccountAlt: "MBankAccountNumber",
         hoMarks: [{ field: "PayWay", value: "3" }],
@@ -528,7 +533,7 @@
             <button type="button" class="giValModal__closeX" data-menoraci-close="1" aria-label="סגירה">✕</button>
           </div>
           <div class="giValModal__body">
-            <div class="menoraCiForm__hint">ממולא אוטומטית רק מה ששמור בתיק. הצהרת בריאות, חתימות ומספר כרטיס אשראי לא ממולאים — אותם משלימים בטופס או ב-PDF אחרי ההורדה.</div>
+            <div class="menoraCiForm__hint">ממולא אוטומטית רק מה ששמור בתיק, כולל כן/לא בהצהרת בריאות ואמצעי תשלום. פירוט רפואי וחתימות לא ממולאים — אותם משלימים בטופס או ב-PDF אחרי ההורדה.</div>
             <section class="menoraCiForm__block">
               <div class="menoraCiForm__blockTitle">פרטי הצעה וסוכן</div>
               <div class="menoraCiForm__grid">

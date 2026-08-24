@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/menora-mortgage/",
     TEMPLATE_FILE: "menora-mortgage-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-official-pay-role-v1",
+    VERSION: "20260824-official-decl-pay-he-v1",
     DOC_ID: "doc_menora_mortgage_form",
     DOC_TYPE: "menora_mortgage_form",
     LOAN_SUM_FIELDS: ["Text38", "Text44", "Text51", "Text57"],
@@ -164,6 +164,7 @@
         agentNumber: safeTrim(agentNumbers["מנורה"]) || safeTrim(policy.agentNumber),
         primary: primaryPerson,
         spouse: spousePerson,
+        ...(global.GI_OFFICIAL_FORM_FILL?.attachDraftHealth?.(payload, primary, spouse) || {}),
         loaner: {
           name: safeTrim(firstLoan.bankName),
           bankNo: safeTrim(firstLoan.bankNo),
@@ -348,9 +349,13 @@
         this.setTextSafe(form, "CellPhoneNumberMeshalem", draft.payer.phone, font);
         this.setTextSafe(form, "EmailMeshalem", draft.payer.email, font);
       }
+      global.GI_OFFICIAL_FORM_FILL?.applyOfficialHealthAndNames?.(form, draft, font, {
+        keys: "menora_mortgage"
+      });
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
-        bank: draft.bank || {}
+        bank: draft.bank || {},
+        cc: draft.payment?.cc || {}
       }, font, {});
       if(font && form.updateFieldAppearances) form.updateFieldAppearances(font);
       return pdfDoc.save({ updateFieldAppearances: !!font });
@@ -519,7 +524,7 @@
             <button type="button" class="giValModal__closeX" data-menormort-close="1" aria-label="סגירה">✕</button>
           </div>
           <div class="giValModal__body">
-            <div class="menoraMortForm__hint">ממולא אוטומטית רק מה ששמור בתיק. הצהרת בריאות, ביטול/החלפת ביטוח, סוג ריבית, Extra LIFE, חתימות ומספר כרטיס אשראי לא ממולאים — אותם משלימים בטופס או ב-PDF אחרי ההורדה.</div>
+            <div class="menoraMortForm__hint">ממולא אוטומטית רק מה ששמור בתיק, כולל כן/לא בהצהרת בריאות ואמצעי תשלום. פירוט רפואי, ביטול/החלפת ביטוח, סוג ריבית, Extra LIFE וחתימות לא ממולאים — אותם משלימים בטופס או ב-PDF אחרי ההורדה.</div>
             <section class="menoraMortForm__block">
               <div class="menoraMortForm__blockTitle">פרטי הצעה וסוכן</div>
               <div class="menoraMortForm__grid">

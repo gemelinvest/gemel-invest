@@ -34712,12 +34712,13 @@ UsersGateUI.init();
         idIssueDate: this.pick(layers, ["idIssueDate"])
       };
     },
-    setTextSafe(form, fieldName, value, font){
+    setTextSafe(form, fieldName, value, font, opts){
       const text = String(value == null ? "" : value).trim();
       if(!text) return;
+      const useVisual = !(opts && opts.visual === false);
       try {
         const field = form.getTextField(fieldName);
-        const painted = font ? this.visualHebrew(text) : text;
+        const painted = (font && useVisual) ? this.visualHebrew(text) : text;
         field.setText(painted);
         try { field.setFontSize(this.FONT_SIZE); } catch(_e) {}
         if(font && /[\u0590-\u05FF]/.test(text)){
@@ -34740,6 +34741,117 @@ UsersGateUI.init();
         field.acroField.dict.set(PDFLib.PDFName.of("AS"), name);
       } catch(_e) {}
     },
+    HEALTH_QKEYS: {
+      clal_health: ["clal_smoking","clal_drugs_cannabis","clal_alcohol","clal_family_hereditary","clal_family_heart_diabetes","clal_neuro_development","clal_mental","clal_respiratory","clal_skin","clal_heart_blood_vessels","clal_digestive","clal_hernia","clal_liver_gallbladder_pancreas","clal_kidney_urinary","clal_metabolic_endocrine","clal_blood_immune","clal_infectious_hiv","clal_tumors","clal_musculoskeletal","clal_vision","clal_ent","clal_reproductive","clal_rheumatic_connective","clal_regular_meds","clal_future_tests","clal_hospital_surgery","clal_child_under_6m_followup","clal_child_family_history","clal_child_congenital"],
+      ayalon_health: ["ayalon__alcohol","ayalon__drugs","ayalon__smoking","ayalon__medications","ayalon__hospitalization","ayalon__tests","ayalon__disability","ayalon__family_history","ayalon__neuro","ayalon__mental","ayalon__cancer","ayalon__respiratory","ayalon__eyes","ayalon__ent","ayalon__heart","ayalon__digestive","ayalon__kidneys","ayalon__endocrine","ayalon__musculoskeletal","ayalon__skin","ayalon__infectious","ayalon__female"],
+      hachshara_ci: ["hachshara_crit__smoking","hachshara_crit__hospitalization","hachshara_crit__tests_5y","hachshara_crit__treatment_5y","hachshara_crit__chronic","hachshara_crit__memory","hachshara_crit__disability","hachshara_crit__mental","hachshara_crit__substances","hachshara_crit__neuro","hachshara_crit__respiratory","hachshara_crit__heart","hachshara_crit__blood","hachshara_crit__liver","hachshara_crit__digestive","hachshara_crit__kidneys","hachshara_crit__glands","hachshara_crit__skin","hachshara_crit__aids","hachshara_crit__musculoskeletal","hachshara_crit__cancer","hachshara_crit__autoimmune","hachshara_crit__eyes","hachshara_crit__ent","hachshara_crit__hernia","hachshara_crit__female","hachshara_crit__child_dev","hachshara_crit__family_critical","hachshara_crit__infant_1","hachshara_crit__infant_2"],
+      hachshara_life: ["hachshara_risk_s__smoking","hachshara_risk_s__q1","hachshara_risk_s__q2","hachshara_risk_s__q3","hachshara_risk_s__q4a","hachshara_risk_s__q4b","hachshara_risk_s__q4c","hachshara_risk_s__q4d","hachshara_risk_s__q4e","hachshara_risk_s__q4f","hachshara_risk_s__q4g","hachshara_risk_s__q4h","hachshara_risk_s__q4i"],
+      hachshara_life_full: ["hachshara_risk_f__smoking","hachshara_risk_f__a1","hachshara_risk_f__a2","hachshara_risk_f__a3","hachshara_risk_f__a4","hachshara_risk_f__a5","hachshara_risk_f__a6","hachshara_risk_f__b1","hachshara_risk_f__b2","hachshara_risk_f__b3","hachshara_risk_f__b4","hachshara_risk_f__b5","hachshara_risk_f__b6","hachshara_risk_f__b7","hachshara_risk_f__b8","hachshara_risk_f__b9","hachshara_risk_f__b10","hachshara_risk_f__b11","hachshara_risk_f__b12","hachshara_risk_f__b13","hachshara_risk_f__b14","hachshara_risk_f__b15","hachshara_risk_f__b16","hachshara_risk_f__b17","hachshara_risk_f__b18","hachshara_risk_f__b19"],
+      menora_ci: ["menora_crit__smoking","menora_crit__alcohol","menora_crit__drugs","menora_crit__inquiry","menora_crit__family","menora_crit__neuro","menora_crit__heart","menora_crit__metabolic","menora_crit__tumors","menora_crit__digestive","menora_crit__lungs","menora_crit__infectious","menora_crit__kidneys","menora_crit__eyes","menora_crit__ent","menora_crit__surgery","menora_crit__hospital","menora_crit__meds","menora_crit__infant_family","menora_crit__infant_nicu","menora_crit__infant_tests","menora_crit__infant_followup","menora_crit__ortho_top","menora_crit__child_dev_top"],
+      menora_mortgage: ["menora_mort__hobby","menora_mort__aviation","menora_mort__smoking","menora_mort__alcohol","menora_mort__drugs","menora_mort__inquiry","menora_mort__neuro","menora_mort__heart","menora_mort__mental","menora_mort__metabolic","menora_mort__tumors","menora_mort__digestive","menora_mort__lungs","menora_mort__kidneys","menora_mort__infectious","menora_mort__surgery","menora_mort__hospital","menora_mort__meds","menora_mort__eyes","menora_mort__ent","menora_mort__rheum","menora_mort__ortho","menora_mort__female","menora_mort__adl","menora_mort__family"],
+      migdal_mortgage: ["magdal_mort__smoking","magdal_mort__cancer","magdal_mort__neuro","magdal_mort__mental","magdal_mort__respiratory","magdal_mort__heart","magdal_mort__kidneys","magdal_mort__digestive","magdal_mort__diabetes","magdal_mort__immune","magdal_mort__disability","magdal_mort__hospital","magdal_mort__tests","magdal_mort__hobby","magdal_mort__accident_eyes","magdal_mort__accident_msk"]
+    },
+    healthResponses(payload){
+      const primary = payload?.primary && typeof payload.primary === "object" ? payload.primary : {};
+      const fromPrimary = primary.healthDeclaration && typeof primary.healthDeclaration === "object"
+        ? primary.healthDeclaration.responses : null;
+      if(fromPrimary && typeof fromPrimary === "object") return fromPrimary;
+      const ins0 = Array.isArray(payload?.insureds) ? payload.insureds[0] : null;
+      const fromIns = ins0?.data?.healthDeclaration?.responses;
+      return (fromIns && typeof fromIns === "object") ? fromIns : {};
+    },
+    healthAnswer(responses, qKey, insId){
+      if(!qKey || !insId) return "";
+      const row = responses?.[qKey]?.[insId];
+      const a = String(row?.answer == null ? "" : row.answer).trim().toLowerCase();
+      return (a === "yes" || a === "no") ? a : "";
+    },
+    hasPdfField(form, fieldName){
+      try { return !!(form && fieldName && form.getField(fieldName)); } catch(_e){ return false; }
+    },
+    applyHealthYesNo(form, spec){
+      const cfg = spec && typeof spec === "object" ? spec : {};
+      if(!form) return;
+      const responses = cfg.responses && typeof cfg.responses === "object" ? cfg.responses : {};
+      let keys = Array.isArray(cfg.keys) ? cfg.keys.slice() : [];
+      const alt = Array.isArray(cfg.altKeys) ? cfg.altKeys : [];
+      if(alt.length){
+        const altHit = alt.some((k) => responses[k]);
+        const mainHit = keys.some((k) => responses[k]);
+        if(altHit && !mainHit) keys = alt.slice();
+      }
+      if(!keys.length) return;
+      const nums = [];
+      for(let n = 1; n <= 40; n++){
+        if(this.hasPdfField(form, "HealthDecMainQ" + n) || this.hasPdfField(form, "HealthDecBzugQ" + n)) nums.push(n);
+      }
+      if(!nums.length) return;
+      const yesNo = (answer) => answer === "yes" ? "1" : (answer === "no" ? "2" : "");
+      const fillRole = (prefix, insId, qn, qKey) => {
+        if(!insId || !prefix) return;
+        const answer = this.healthAnswer(responses, qKey, insId);
+        const exportValue = yesNo(answer);
+        if(!exportValue) return;
+        this.setExport(form, prefix + qn, exportValue);
+      };
+      const childIds = Array.isArray(cfg.childIds) ? cfg.childIds : [];
+      keys.forEach((qKey, idx) => {
+        if(idx >= nums.length) return;
+        const qn = nums[idx];
+        fillRole("HealthDecMainQ", cfg.primaryId, qn, qKey);
+        fillRole("HealthDecBzugQ", cfg.spouseId, qn, qKey);
+        childIds.forEach((cid, cIdx) => {
+          fillRole("HealthDecC" + (cIdx + 1) + "Q", cid, qn, qKey);
+        });
+      });
+    },
+    attachDraftHealth(payload, primary, spouse, children){
+      const idOf = (x) => String(x && x.id == null ? "" : x.id).trim();
+      return {
+        healthResponses: this.healthResponses(payload),
+        primaryId: idOf(primary),
+        spouseId: idOf(spouse),
+        childIds: (children || []).map(idOf).filter(Boolean)
+      };
+    },
+    applyOfficialHealthAndNames(form, draft, font, spec){
+      spec = spec || {};
+      const extra = spec.extraNames || ["FullNameBagir", "FullNameHolder"];
+      const opts = spec.visual === false ? { visual: false } : undefined;
+      const person = draft && draft.primary;
+      this.applyPrimaryNameExtras(form, person && person.fullName, font, extra, opts);
+      if(spec.skipHealth) return;
+      const keys = typeof spec.keys === "string" ? (this.HEALTH_QKEYS[spec.keys] || []) : (spec.keys || []);
+      const altKeys = typeof spec.altKeys === "string" ? (this.HEALTH_QKEYS[spec.altKeys] || []) : (spec.altKeys || []);
+      const childIds = (draft && Array.isArray(draft.childIds) && draft.childIds.length)
+        ? draft.childIds
+        : ((draft && draft.children) || []).map((c) => String(c && c.id == null ? "" : c.id).trim()).filter(Boolean);
+      this.applyHealthYesNo(form, {
+        keys,
+        altKeys,
+        responses: draft && draft.healthResponses,
+        primaryId: (draft && draft.primaryId) || (person && person.id) || "",
+        spouseId: (draft && draft.spouseId) || (draft && draft.spouse && draft.spouse.id) || "",
+        childIds
+      });
+    },
+    applyPrimaryNameExtras(form, fullName, font, extraFields, opts){
+      const name = String(fullName == null ? "" : fullName).trim();
+      if(!name) return;
+      this.setTextSafe(form, "FullName", name, font, opts);
+      (Array.isArray(extraFields) ? extraFields : []).forEach((field) => {
+        this.setTextSafe(form, field, name, font, opts);
+      });
+    },
+    parseCardExp(expRaw){
+      const exp = String(expRaw == null ? "" : expRaw).trim();
+      const match = exp.match(/^(\d{1,2})\s*[\/.\-]\s*(\d{2,4})$/);
+      if(!match) return { exp, expirationDate: exp, monthDigit: "", yearDigit: "" };
+      const monthDigit = String(match[1]).padStart(2, "0");
+      const yy = match[2];
+      const yearDigit = yy.length === 4 ? yy.slice(-2) : yy;
+      return { exp, expirationDate: monthDigit + "/" + yearDigit, monthDigit, yearDigit };
+    },
     pickPayment(payload, primarySrc){
       const layers = [primarySrc, payload?.primary, payload];
       const methodRaw = this.pick(layers, ["paymentMethod"]);
@@ -34748,17 +34860,32 @@ UsersGateUI.init();
       const hoAlt = this.layerOf(payload?.primary);
       const ho = (hoLayer.ho && typeof hoLayer.ho === "object") ? hoLayer.ho
         : ((hoAlt.ho && typeof hoAlt.ho === "object") ? hoAlt.ho : {});
+      const ccSrc = (hoLayer.cc && typeof hoLayer.cc === "object") ? hoLayer.cc
+        : ((hoAlt.cc && typeof hoAlt.cc === "object") ? hoAlt.cc : {});
       const bank = {
         name: String(ho.bankName == null ? "" : ho.bankName).trim(),
         branch: String(ho.branch == null ? "" : ho.branch).trim(),
         account: String(ho.account == null ? "" : ho.account).trim(),
         bankNo: String(ho.bankNo == null ? "" : ho.bankNo).trim()
       };
+      const parsed = this.parseCardExp(ccSrc.exp);
+      const cc = {
+        holderName: String(ccSrc.holderName == null ? "" : ccSrc.holderName).trim(),
+        holderId: String(ccSrc.holderId == null ? "" : ccSrc.holderId).trim(),
+        cardNumber: String(ccSrc.cardNumber == null ? "" : ccSrc.cardNumber).trim(),
+        exp: parsed.exp,
+        expirationDate: parsed.expirationDate,
+        monthDigit: parsed.monthDigit,
+        yearDigit: parsed.yearDigit
+      };
       const isHo = method === "ho" && !!(bank.name || bank.branch || bank.account || bank.bankNo);
+      const hasCc = !!(cc.cardNumber || cc.holderName || cc.holderId || cc.expirationDate);
       return {
         method,
         isHo,
-        bank: isHo ? bank : { name: "", branch: "", account: "", bankNo: "" }
+        hasCc: method === "cc" && hasCc,
+        bank: isHo ? bank : { name: "", branch: "", account: "", bankNo: "" },
+        cc: method === "cc" ? cc : { holderName: "", holderId: "", cardNumber: "", exp: "", expirationDate: "", monthDigit: "", yearDigit: "" }
       };
     },
     applyStoredPayment(form, payment, font, spec){
@@ -34766,14 +34893,16 @@ UsersGateUI.init();
       if(!payment || !form) return;
       const method = payment.method === "ho" || payment.method === "cc" ? payment.method : "";
       const bank = payment.bank && typeof payment.bank === "object" ? payment.bank : {};
+      const cc = payment.cc && typeof payment.cc === "object" ? payment.cc : {};
       const hasBank = !!(bank.name || bank.branch || bank.account || bank.bankNo);
+      const opts = cfg.textOpts || {};
       if(method === "ho" && hasBank){
-        this.setTextSafe(form, cfg.bankName || "BankName", bank.name, font);
-        this.setTextSafe(form, cfg.bankBranch || "BankBranch", bank.branch, font);
-        if(cfg.bankBranchCode) this.setTextSafe(form, cfg.bankBranchCode, bank.branch, font);
-        this.setTextSafe(form, cfg.bankAccount || "BankAccountNumber", bank.account, font);
-        if(cfg.bankAccountAlt) this.setTextSafe(form, cfg.bankAccountAlt, bank.account, font);
-        if(cfg.bankNameCode) this.setTextSafe(form, cfg.bankNameCode, bank.bankNo, font);
+        this.setTextSafe(form, cfg.bankName || "BankName", bank.name, font, opts);
+        this.setTextSafe(form, cfg.bankBranch || "BankBranch", bank.branch, font, opts);
+        if(cfg.bankBranchCode) this.setTextSafe(form, cfg.bankBranchCode, bank.branch, font, opts);
+        this.setTextSafe(form, cfg.bankAccount || "BankAccountNumber", bank.account, font, opts);
+        if(cfg.bankAccountAlt) this.setTextSafe(form, cfg.bankAccountAlt, bank.account, font, opts);
+        if(cfg.bankNameCode) this.setTextSafe(form, cfg.bankNameCode, bank.bankNo, font, opts);
         (cfg.hoMarks || []).forEach((mark) => {
           this.setExport(form, mark.field, mark.value);
         });
@@ -34781,19 +34910,31 @@ UsersGateUI.init();
         (cfg.ccMarks || []).forEach((mark) => {
           this.setExport(form, mark.field, mark.value);
         });
+        this.setTextSafe(form, "CreditCardNumber", cc.cardNumber, font, opts);
+        this.setTextSafe(form, "FullNameCreditCardHolder", cc.holderName, font, opts);
+        this.setTextSafe(form, "PIDCreditCardHolder", cc.holderId, font, opts);
+        if(cc.holderName){
+          const parts = cc.holderName.split(/\s+/).filter(Boolean);
+          this.setTextSafe(form, "FirstNameCreditCardHolder", parts[0] || "", font, opts);
+          this.setTextSafe(form, "LastNameCreditCardHolder", parts.slice(1).join(" "), font, opts);
+        }
+        this.setTextSafe(form, "ExpirationDate", cc.expirationDate, font, opts);
+        this.setTextSafe(form, "DayExpiryText", cc.expirationDate, font, opts);
+        this.setTextSafe(form, "DayExpiryDate", cc.monthDigit, font, opts);
+        this.setTextSafe(form, "DayExpireDate", cc.monthDigit, font, opts);
       }
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
   const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-official-he-bold-v1";
-  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-official-pay-role-v1";
-  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-official-pay-role-v1";
-  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-official-pay-role-v1";
-  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-official-pay-role-v1";
-  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-official-pay-role-v1";
-  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-official-pay-role-v1";
-  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-official-pay-role-v1";
-  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-official-pay-role-v1";
+  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-official-decl-pay-he-v1";
+  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-official-decl-pay-he-v1";
+  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-official-decl-pay-he-v1";
+  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-official-decl-pay-he-v1";
+  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-official-decl-pay-he-v1";
+  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-official-decl-pay-he-v1";
+  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-official-decl-pay-he-v1";
+  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-official-decl-pay-he-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){

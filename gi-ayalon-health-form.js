@@ -22,7 +22,7 @@
     TEMPLATE_BASE: "./forms/ayalon-health/",
     TEMPLATE_FILE: "ayalon-health-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-official-pay-role-v1",
+    VERSION: "20260824-official-decl-pay-he-v1",
     DOC_ID: "doc_ayalon_health_form",
     DOC_TYPE: "ayalon_health_form",
 
@@ -216,6 +216,7 @@
         primary: primaryPerson,
         spouse: spousePerson,
         children: childPeople,
+        ...(global.GI_OFFICIAL_FORM_FILL?.attachDraftHealth?.(payload, primary, spouse, children) || {}),
         payer: {
           firstName: useExternal ? safeTrim(external.firstName) : "",
           lastName: useExternal ? safeTrim(external.lastName) : "",
@@ -397,9 +398,13 @@
         this.setTextSafe(form, "HouseNumberPayer", draft.payer.houseNumber, font);
         this.setTextSafe(form, "ZipCodePayer", draft.payer.zip, font);
       }
+      global.GI_OFFICIAL_FORM_FILL?.applyOfficialHealthAndNames?.(form, draft, font, {
+        keys: "ayalon_health"
+      });
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
-        bank: draft.bank || {}
+        bank: draft.bank || {},
+        cc: draft.payment?.cc || {}
       }, font, {});
       if(font && form.updateFieldAppearances) form.updateFieldAppearances(font);
       return pdfDoc.save({ updateFieldAppearances: !!font });
@@ -561,7 +566,7 @@
             <button type="button" class="giValModal__closeX" data-ayalhealth-close="1" aria-label="סגירה">✕</button>
           </div>
           <div class="giValModal__body">
-            <div class="ayalHealthForm__hint">ממולא אוטומטית רק מה ששמור בתיק, כולל כיסויי הבריאות שנבחרו. הצהרת בריאות, ביטול/החלפת ביטוח, חתימות ומספר כרטיס אשראי לא ממולאים — אותם משלימים בטופס או ב-PDF אחרי ההורדה.</div>
+            <div class="ayalHealthForm__hint">ממולא אוטומטית רק מה ששמור בתיק, כולל כיסויי הבריאות שנבחרו, כן/לא בהצהרת בריאות ואמצעי תשלום. פירוט רפואי, ביטול/החלפת ביטוח וחתימות לא ממולאים — אותם משלימים בטופס או ב-PDF אחרי ההורדה.</div>
             <section class="ayalHealthForm__block">
               <div class="ayalHealthForm__blockTitle">פרטי הצעה וסוכן</div>
               <div class="ayalHealthForm__grid">

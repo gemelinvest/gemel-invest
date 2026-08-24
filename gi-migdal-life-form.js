@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/migdal-life/",
     TEMPLATE_FILE: "migdal-life-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-official-pay-role-v1",
+    VERSION: "20260824-official-decl-pay-he-v1",
     DOC_ID: "doc_migdal_life_form",
     DOC_TYPE: "migdal_life_form",
 
@@ -151,6 +151,7 @@
         agentNumber: safeTrim(agentNumbers["מגדל"]) || safeTrim(policy.agentNumber),
         primary: primaryPerson,
         spouse: spousePerson,
+        ...(global.GI_OFFICIAL_FORM_FILL?.attachDraftHealth?.(payload, primary, spouse) || {}),
         payer: {
           name: useExternal ? safeTrim((external.firstName + " " + external.lastName).trim()) : "",
           idNumber: useExternal ? safeTrim(external.idNumber) : ""
@@ -336,9 +337,13 @@
       if(draft.payer){
         this.setTextSafe(form, "FullNamePayer", draft.payer.name, font);
       }
+      global.GI_OFFICIAL_FORM_FILL?.applyOfficialHealthAndNames?.(form, draft, font, {
+        skipHealth: true
+      });
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
-        bank: draft.bank || {}
+        bank: draft.bank || {},
+        cc: draft.payment?.cc || {}
       }, font, {
         hoMarks: [{ field: "PayWay", value: "3" }],
         ccMarks: [{ field: "PayWay", value: "1" }]
@@ -498,7 +503,7 @@
             <button type="button" class="giValModal__closeX" data-miglife-close="1" aria-label="סגירה">✕</button>
           </div>
           <div class="giValModal__body">
-            <div class="migLifeForm__hint">ממולא אוטומטית רק מה ששמור בתיק. הצהרת בריאות, מוטבים, החלפת ביטוח, חתימות ומספר כרטיס אשראי לא ממולאים — אותם משלימים בטופס או ב-PDF אחרי ההורדה.</div>
+            <div class="migLifeForm__hint">ממולא אוטומטית רק מה ששמור בתיק, כולל אמצעי תשלום. הצהרת בריאות, מוטבים, החלפת ביטוח וחתימות לא ממולאים — אותם משלימים בטופס או ב-PDF אחרי ההורדה.</div>
             <section class="migLifeForm__block">
               <div class="migLifeForm__blockTitle">פרטי הצעה וסוכן</div>
               <div class="migLifeForm__grid">

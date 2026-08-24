@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/migdal-mortgage/",
     TEMPLATE_FILE: "migdal-mortgage-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-official-pay-role-v1",
+    VERSION: "20260824-official-decl-pay-he-v1",
     DOC_ID: "doc_migdal_mortgage_form",
     DOC_TYPE: "migdal_mortgage_form",
 
@@ -155,6 +155,7 @@
         agentNumber: safeTrim(agentNumbers["מגדל"]) || safeTrim(policy.agentNumber),
         primary: primaryPerson,
         spouse: spousePerson,
+        ...(global.GI_OFFICIAL_FORM_FILL?.attachDraftHealth?.(payload, primary, spouse) || {}),
         loaner: {
           name: safeTrim(firstLoan.bankName),
           bankNo: safeTrim(firstLoan.bankNo),
@@ -330,9 +331,13 @@
       this.applyPerson(form, draft.spouse, true, font);
       this.applyLoaner(form, draft.loaner, font);
       this.applyLoans(form, draft.loans, font);
+      global.GI_OFFICIAL_FORM_FILL?.applyOfficialHealthAndNames?.(form, draft, font, {
+        keys: "migdal_mortgage"
+      });
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
-        bank: draft.bank || {}
+        bank: draft.bank || {},
+        cc: draft.payment?.cc || {}
       }, font, {
         bankBranch: "BankBranchCode"
       });
@@ -503,7 +508,7 @@
             <button type="button" class="giValModal__closeX" data-migmort-close="1" aria-label="סגירה">✕</button>
           </div>
           <div class="giValModal__body">
-            <div class="migMortForm__hint">ממולא אוטומטית רק מה ששמור בתיק. הצהרת בריאות, ביטול/החלפת ביטוח, חתימות ומספר כרטיס אשראי לא ממולאים — אותם משלימים בטופס או ב-PDF אחרי ההורדה.</div>
+            <div class="migMortForm__hint">ממולא אוטומטית רק מה ששמור בתיק, כולל כן/לא בהצהרת בריאות ואמצעי תשלום. פירוט רפואי, ביטול/החלפת ביטוח וחתימות לא ממולאים — אותם משלימים בטופס או ב-PDF אחרי ההורדה.</div>
             <section class="migMortForm__block">
               <div class="migMortForm__blockTitle">פרטי הצעה וסוכן</div>
               <div class="migMortForm__grid">
