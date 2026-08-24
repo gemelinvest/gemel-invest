@@ -20976,30 +20976,25 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
   font-size:42px;
   line-height:.95;
   font-weight:700;
-  color:#3870ED !important;
-  background-image:none !important;
-  -webkit-background-clip:border-box !important;
-  background-clip:border-box !important;
-  -webkit-text-fill-color:#3870ED !important;
+  color:#1a4fb8;
+  background-image:linear-gradient(165deg, #6b9af8 0%, #3870ED 48%, #1a4a9e 100%) !important;
+  -webkit-background-clip:text !important;
+  background-clip:text !important;
+  -webkit-text-fill-color:transparent !important;
   text-shadow:none !important;
   opacity:1;
   transform:translateY(0);
   animation:none;
   transition:none;
   letter-spacing:-.5px;
-  /* מסגרת דקה סביב הסכום — בולטות ויזואלית בלי לגעת בלוגיקת KPI */
-  display:inline-block;
-  width:fit-content;
-  max-width:100%;
-  box-sizing:border-box;
-  border:1px solid #000;
-  padding:4px 8px;
-  border-radius:4px;
 }
 #view-dashboard .bankKpi:hover .bankKpi__value{
   transform:none;
-  color:#3870ED !important;
-  -webkit-text-fill-color:#3870ED !important;
+  color:#1a4fb8;
+  background-image:linear-gradient(165deg, #6b9af8 0%, #3870ED 48%, #1a4a9e 100%) !important;
+  -webkit-background-clip:text !important;
+  background-clip:text !important;
+  -webkit-text-fill-color:transparent !important;
   text-shadow:none !important;
 }
 #view-dashboard .bankKpi__delta{
@@ -21145,12 +21140,12 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
 #view-dashboard .bankKpi--agentAppoint .bankKpi__value,
 #view-dashboard .bankKpi--newClients .bankKpi__value,
 #view-dashboard .bankKpi--todaySales .bankKpi__value{
-  color:#3870ED !important;
+  color:#1a4fb8;
   font-weight:800;
-  background-image:none !important;
-  -webkit-background-clip:border-box !important;
-  background-clip:border-box !important;
-  -webkit-text-fill-color:#3870ED !important;
+  background-image:linear-gradient(165deg, #6b9af8 0%, #3870ED 48%, #1a4a9e 100%) !important;
+  -webkit-background-clip:text !important;
+  background-clip:text !important;
+  -webkit-text-fill-color:transparent !important;
   text-shadow:none !important;
 }
 #view-dashboard .bankKpi--netPremium .bankKpi__delta,
@@ -21251,8 +21246,11 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
 #view-dashboard .bankKpi--agentAppoint:hover .bankKpi__value,
 #view-dashboard .bankKpi--newClients:hover .bankKpi__value,
 #view-dashboard .bankKpi--todaySales:hover .bankKpi__value{
-  color:#3870ED !important;
-  -webkit-text-fill-color:#3870ED !important;
+  color:#1a4fb8;
+  background-image:linear-gradient(165deg, #6b9af8 0%, #3870ED 48%, #1a4a9e 100%) !important;
+  -webkit-background-clip:text !important;
+  background-clip:text !important;
+  -webkit-text-fill-color:transparent !important;
   text-shadow:none !important;
 }
 
@@ -21295,7 +21293,7 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 13px;
+  font-size: 15px;
   padding: 4px 7px;
   border-radius: 8px;
   background: rgba(42,92,245,.07);
@@ -21304,7 +21302,7 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
 }
 #view-dashboard .bankKpiTodayRow__label{
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12.5px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -21312,18 +21310,18 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
 #view-dashboard .bankKpiTodayRow__val{
   font-weight: 700;
   color: var(--blueDeep);
-  font-size: 13px;
+  font-size: 15px;
   white-space: nowrap;
 }
 #view-dashboard .bankKpiTodayRow--empty{
   background: transparent;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 15px;
   justify-content: center;
   font-style: italic;
 }
 #view-dashboard .bankKpiTodayRow__id{
-  font-size: 10px;
+  font-size: 11.5px;
   color: var(--muted);
   font-weight: 400;
   margin-inline-start: 4px;
@@ -21332,7 +21330,7 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep::before{
   display: inline-block;
 }
 #view-dashboard .bankKpiTodayRow__val--id{
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--muted);
   direction: ltr;
@@ -23604,11 +23602,11 @@ body.sidebar-collapsed .sidebar .nav__icon{
   filter:drop-shadow(0 10px 18px rgba(122,161,231,.08));
 }
 #view-dashboard .bankKpi__value{
-  color:#3870ED !important;
-  background-image:none !important;
-  -webkit-background-clip:border-box !important;
-  background-clip:border-box !important;
-  -webkit-text-fill-color:#3870ED !important;
+  color:#1a4fb8;
+  background-image:linear-gradient(165deg, #6b9af8 0%, #3870ED 48%, #1a4a9e 100%) !important;
+  -webkit-background-clip:text !important;
+  background-clip:text !important;
+  -webkit-text-fill-color:transparent !important;
   text-shadow:none !important;
 }
 #view-dashboard .bankKpi__delta{
