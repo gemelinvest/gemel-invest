@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/migdal-life/",
     TEMPLATE_FILE: "migdal-life-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-official-decl-pay-he-v1",
+    VERSION: "20260824-migdal-life-health-v1",
     DOC_ID: "doc_migdal_life_form",
     DOC_TYPE: "migdal_life_form",
 
@@ -123,14 +123,15 @@
         const t = safeTrim(x.type);
         return t !== "child" && idx > 0;
       }) || null;
-      return { primary, spouse };
+      const children = raw.filter((x) => safeTrim(x?.type) === "child");
+      return { primary, spouse, children };
     },
 
     buildDraft(rec){
       const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
       const policies = this.listMigdalLifePolicies(payload);
       const policy = policies[0] || {};
-      const { primary, spouse } = this.classifyInsureds(payload);
+      const { primary, spouse, children } = this.classifyInsureds(payload);
       const primaryPerson = this.personFromInsured(primary || payload.primary || {}, global.GI_OFFICIAL_FORM_FILL?.fileFallbacks?.(rec, payload));
       const spousePerson = spouse ? this.personFromInsured(spouse) : null;
       primaryPerson.sumInsured = this.sumInsuredFor(policy, primary?.id);
@@ -151,7 +152,7 @@
         agentNumber: safeTrim(agentNumbers["מגדל"]) || safeTrim(policy.agentNumber),
         primary: primaryPerson,
         spouse: spousePerson,
-        ...(global.GI_OFFICIAL_FORM_FILL?.attachDraftHealth?.(payload, primary, spouse) || {}),
+        ...(global.GI_OFFICIAL_FORM_FILL?.attachDraftHealth?.(payload, primary, spouse, children) || {}),
         payer: {
           name: useExternal ? safeTrim((external.firstName + " " + external.lastName).trim()) : "",
           idNumber: useExternal ? safeTrim(external.idNumber) : ""
@@ -341,6 +342,13 @@
         skipHealth: true,
         visual: false
       });
+      global.GI_OFFICIAL_FORM_FILL?.applyMappedHealthYesNo?.(form, {
+        map: "migdal_life",
+        responses: draft.healthResponses,
+        primaryId: draft.primaryId,
+        spouseId: draft.spouseId,
+        childIds: draft.childIds
+      });
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
         bank: draft.bank || {},
@@ -505,7 +513,7 @@
             <button type="button" class="giValModal__closeX" data-miglife-close="1" aria-label="סגירה">✕</button>
           </div>
           <div class="giValModal__body">
-            <div class="migLifeForm__hint">ממולא אוטומטית רק מה ששמור בתיק, כולל אמצעי תשלום. הצהרת בריאות, מוטבים, החלפת ביטוח וחתימות לא ממולאים — אותם משלימים בטופס או ב-PDF אחרי ההורדה.</div>
+            <div class="migLifeForm__hint">ממולא אוטומטית רק מה ששמור בתיק, כולל אמצעי תשלום והצהרת בריאות (כן/לא מהאשף). מוטבים, החלפת ביטוח וחתימות לא ממולאים — אותם משלימים בטופס או ב-PDF אחרי ההורדה.</div>
             <section class="migLifeForm__block">
               <div class="migLifeForm__blockTitle">פרטי הצעה וסוכן</div>
               <div class="migLifeForm__grid">
