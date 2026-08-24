@@ -20,7 +20,7 @@
     TEMPLATE_BASE: "./forms/migdal-cancer/",
     TEMPLATE_FILE: "migdal-cancer-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-migdal-cancer-v1",
+    VERSION: "20260824-health-align-v1",
     DOC_ID: "doc_migdal_cancer_form",
     DOC_TYPE: "migdal_cancer_form",
 
@@ -346,10 +346,15 @@
         this.setTextSafe(form, "BankAccOwner", draft.payer.name, font);
         this.setTextSafe(form, "PIDBankAccOwner", draft.payer.idNumber, font);
       }
-      global.GI_OFFICIAL_FORM_FILL?.applyOfficialHealthAndNames?.(form, draft, font, {
-        keys: "migdal_cancer",
-        visual: false,
-        extraNames: ["FullNameBagir", "FullNameHolder"]
+      global.GI_OFFICIAL_FORM_FILL?.applyPrimaryNameExtras?.(form, draft.primary && draft.primary.fullName, font, ["FullNameBagir", "FullNameHolder"], { visual: false });
+      global.GI_OFFICIAL_FORM_FILL?.applyMappedHealthYesNo?.(form, {
+        map: "migdal_cancer",
+        responses: draft.healthResponses,
+        primaryId: draft.primaryId || (draft.primary && draft.primary.id) || "",
+        spouseId: draft.spouseId || (draft.spouse && draft.spouse.id) || "",
+        childIds: (draft.childIds && draft.childIds.length)
+          ? draft.childIds
+          : (draft.children || []).map((c) => String(c && c.id != null ? c.id : "").trim()).filter(Boolean)
       });
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",

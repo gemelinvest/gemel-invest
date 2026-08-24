@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/migdal-life/",
     TEMPLATE_FILE: "migdal-life-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-mig-life-v1",
+    VERSION: "20260824-health-align-v1",
     DOC_ID: "doc_migdal_life_form",
     DOC_TYPE: "migdal_life_form",
 

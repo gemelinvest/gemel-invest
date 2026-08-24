@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/menora-risk/",
     TEMPLATE_FILE: "menora-risk-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-menora-risk-v1",
+    VERSION: "20260824-health-align-v1",
     DOC_ID: "doc_menora_risk_form",
     DOC_TYPE: "menora_risk_form",
 
@@ -206,7 +206,7 @@
         { field: "MKQ7", keys: ["menora_risk__mental"] },
         { field: "MKQ8", keys: ["menora_risk__metabolic"] },
         { field: "MKQ9", keys: ["menora_risk__metabolic"] },
-        { field: "MKQ10", keys: ["menora_risk__surgery", "menora_risk__hospital", "menora_risk__inquiry"] },
+        { field: "MKQ10", keys: ["menora_risk__surgery", "menora_risk__hospital", "menora_risk__inquiry", "menora_risk__meds"] },
         { field: "MKQ11", keys: ["menora_risk__tumors"] },
         { field: "MKQ12", keys: ["menora_risk__digestive"] },
         { field: "MKQ13", keys: ["menora_risk__digestive"] },
@@ -216,7 +216,7 @@
         { field: "MKQ17", keys: ["menora_risk__ortho"] },
         { field: "MKQ18", keys: ["menora_risk__ortho"] },
         { field: "MKQ19", keys: ["menora_risk__ortho"] },
-        { field: "MKQ20", keys: ["menora_risk__female", "menora_risk__family"] },
+        { field: "MKQ20", keys: ["menora_risk__female", "menora_risk__family", "menora_risk__adl"] },
         { field: "MKQ21", keys: ["menora_risk__eyes"] },
         { field: "MKQ22", keys: ["menora_risk__ent"] }
       ];
@@ -262,6 +262,22 @@
         const sYn = yesNo(spouseA);
         if(sYn) this.setExport(form, row.field + "S", sYn);
       });
+    },
+    applyMenoraHealthTextFields(form, draft, font){
+      const helper = global.GI_OFFICIAL_FORM_FILL;
+      if(!form || !draft) return;
+      const responses = draft.healthResponses && typeof draft.healthResponses === "object" ? draft.healthResponses : {};
+      const primaryId = safeTrim(draft.primaryId);
+      const detailOf = (qKey, parts) => {
+        if(!qKey || !primaryId) return "";
+        const row = responses?.[qKey]?.[primaryId];
+        const bag = row?.details || row?.fields || row || {};
+        return parts.map((k) => safeTrim(bag[k])).filter(Boolean).join(" · ");
+      };
+      const medsText = detailOf("menora_risk__meds", ["name", "diagnosis", "since", "dose"]);
+      if(medsText) this.setTextSafe(form, "Medication", medsText, font);
+      const adlText = detailOf("menora_risk__adl", ["details"]);
+      if(adlText) this.setTextSafe(form, "diagnosis", adlText, font);
     },
     applySmokingAndSport(form, draft){
       const helper = global.GI_OFFICIAL_FORM_FILL;
@@ -458,6 +474,7 @@
       }
       this.applySmokingAndSport(form, draft);
       this.applyMenoraMkqHealth(form, draft);
+      this.applyMenoraHealthTextFields(form, draft, font);
       global.GI_OFFICIAL_FORM_FILL?.applyInsuredPayerOwner?.(form, draft.payerPerson, font, {
         relation: draft.payer?.relation || ""
       });
