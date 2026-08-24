@@ -47,7 +47,7 @@
     TEMPLATE_BASE: "./forms/clal-mortgage/",
     TEMPLATE_FILE: "clal-mortgage-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-clal-mort-v2",
+    VERSION: "20260824-clal-mort-v3",
     DOC_ID: "doc_clal_mortgage_form",
     DOC_TYPE: "clal_mortgage_form",
     HEALTH_ROWS,
@@ -435,7 +435,8 @@
       }, font, {
         textOpts: { visual: false },
         bankBranchCode: "BankBranchCode",
-        bankNameCode: "BankNameCode"
+        bankNameCode: "BankNameCode",
+        person: draft.primary
       });
       if(draft.payment?.method === "ho" && draft.primary){
         global.GI_OFFICIAL_FORM_FILL?.applyInsuredPayerOwner?.(form, draft.primary, font, {

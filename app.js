@@ -35351,14 +35351,25 @@ UsersGateUI.init();
         bankNo: String(ho.bankNo == null ? "" : ho.bankNo).trim()
       };
       const parsed = this.parseCardExp(ccSrc.exp);
+      const personAddr = {
+        street: this.pick(layers, ["street"]),
+        houseNumber: this.pick(layers, ["houseNumber"]),
+        city: this.pick(layers, ["city"]),
+        zip: this.pick(layers, ["zip", "zipCode"])
+      };
       const cc = {
         holderName: String(ccSrc.holderName == null ? "" : ccSrc.holderName).trim(),
         holderId: String(ccSrc.holderId == null ? "" : ccSrc.holderId).trim(),
         cardNumber: String(ccSrc.cardNumber == null ? "" : ccSrc.cardNumber).trim(),
+        brand: String(ccSrc.brand || ccSrc.type || ccSrc.cardType || "").trim(),
         exp: parsed.exp,
         expirationDate: parsed.expirationDate,
         monthDigit: parsed.monthDigit,
-        yearDigit: parsed.yearDigit
+        yearDigit: parsed.yearDigit,
+        street: String(ccSrc.street == null ? "" : ccSrc.street).trim() || personAddr.street,
+        houseNumber: String(ccSrc.houseNumber == null ? "" : ccSrc.houseNumber).trim() || personAddr.houseNumber,
+        city: String(ccSrc.city == null ? "" : ccSrc.city).trim() || personAddr.city,
+        zip: String(ccSrc.zip == null ? "" : ccSrc.zip).trim() || personAddr.zip
       };
       const isHo = method === "ho" && !!(bank.name || bank.branch || bank.account || bank.bankNo);
       const hasCc = !!(cc.cardNumber || cc.holderName || cc.holderId || cc.expirationDate);
@@ -35367,8 +35378,22 @@ UsersGateUI.init();
         isHo,
         hasCc: method === "cc" && hasCc,
         bank: isHo ? bank : { name: "", branch: "", account: "", bankNo: "" },
-        cc: method === "cc" ? cc : { holderName: "", holderId: "", cardNumber: "", exp: "", expirationDate: "", monthDigit: "", yearDigit: "" }
+        cc: method === "cc" ? cc : { holderName: "", holderId: "", cardNumber: "", brand: "", exp: "", expirationDate: "", monthDigit: "", yearDigit: "", street: "", houseNumber: "", city: "", zip: "" }
       };
+    },
+    mapCreditCardTypeExport(cc){
+      const bag = cc && typeof cc === "object" ? cc : {};
+      const stored = String(bag.brand || bag.type || bag.cardType || "").trim().toLowerCase();
+      if(/visa|ויזה/.test(stored)) return "Visa";
+      if(/isracar|ישראכ/.test(stored)) return "Isracart";
+      if(/amex|american|אמריקן/.test(stored)) return "AmericanExp";
+      if(/diner|דיינר/.test(stored)) return "Diners";
+      const digits = String(bag.cardNumber == null ? "" : bag.cardNumber).replace(/\D/g, "");
+      if(/^3[47]/.test(digits)) return "AmericanExp";
+      if(/^36/.test(digits)) return "Diners";
+      if(/^4/.test(digits)) return "Visa";
+      if(digits) return "Other";
+      return "";
     },
     applyStoredPayment(form, payment, font, spec){
       const cfg = spec && typeof spec === "object" ? spec : {};
@@ -35407,6 +35432,18 @@ UsersGateUI.init();
         this.setTextSafe(form, "DayExpireDate", cc.monthDigit, font, opts);
         this.setTextSafe(form, "MonthDigit", cc.monthDigit, font, opts);
         this.setTextSafe(form, "YearDigit", cc.yearDigit, font, opts);
+        const addr = {
+          street: String(cc.street || "").trim() || String(cfg.person?.street || "").trim(),
+          houseNumber: String(cc.houseNumber || "").trim() || String(cfg.person?.houseNumber || "").trim(),
+          city: String(cc.city || "").trim() || String(cfg.person?.city || "").trim(),
+          zip: String(cc.zip || "").trim() || String(cfg.person?.zip || "").trim()
+        };
+        this.setTextSafe(form, "CCHStreetName", addr.street, font, opts);
+        this.setTextSafe(form, "CCHHouseNumber", addr.houseNumber, font, opts);
+        this.setTextSafe(form, "CCHCity", addr.city, font, opts);
+        this.setTextSafe(form, "CCHZipCode", addr.zip, font, opts);
+        const cardType = this.mapCreditCardTypeExport(cc);
+        if(cardType) this.setExport(form, "CreditCardType", cardType);
       }
     },
     applyNamedHealthYesNo(form, spec){
@@ -35715,6 +35752,7 @@ UsersGateUI.init();
       this.setTextSafe(form, "PIDBankAccOwner", idNumber, font, opts);
       this.setTextSafe(form, "BAOCity", person.city, font, opts);
       this.setTextSafe(form, "BAOStreetName", person.street, font, opts);
+      this.setTextSafe(form, "BAOHouseNumber", person.houseNumber, font, opts);
       this.setTextSafe(form, "BAOZipCode", person.zip, font, opts);
       this.setTextSafe(form, "PayerName", full, font, opts);
       this.setTextSafe(form, "PayerPID", idNumber, font, opts);
@@ -35897,19 +35935,19 @@ UsersGateUI.init();
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
   const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-official-he-bold-v1";
-  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-clal-mort-v2";
-  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-clal-mort-v2";
-  const GI_HACHSHARA_LIFE_SHORT_FORM_HREF = "./gi-hachshara-life-short-form.js?v=20260824-clal-mort-v2";
-  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-clal-mort-v2";
-  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-clal-mort-v2";
-  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-clal-mort-v2";
-  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-clal-mort-v2";
-  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-clal-mort-v2";
-  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-clal-mort-v2";
-  const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-clal-mort-v2";
-  const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260824-clal-mort-v2";
-  const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260824-clal-mort-v2";
-  const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-clal-mort-v2";
+  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-clal-mort-v3";
+  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-clal-mort-v3";
+  const GI_HACHSHARA_LIFE_SHORT_FORM_HREF = "./gi-hachshara-life-short-form.js?v=20260824-clal-mort-v3";
+  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-clal-mort-v3";
+  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-clal-mort-v3";
+  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-clal-mort-v3";
+  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-clal-mort-v3";
+  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-clal-mort-v3";
+  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-clal-mort-v3";
+  const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-clal-mort-v3";
+  const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260824-clal-mort-v3";
+  const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260824-clal-mort-v3";
+  const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-clal-mort-v3";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
