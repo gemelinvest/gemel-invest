@@ -6696,6 +6696,7 @@
       ayalonHealthForm: "ayalon_health_form",
       clalHealthForm: "clal_health_form",
       clalLifeCoupleForm: "clal_life_couple_form",
+      clalMortgageForm: "clal_mortgage_form",
       migdalCancerForm: "migdal_cancer_form",
       phoenixLifeShortForm: "phoenix_life_short_form",
       phoenixLifeFullForm: "phoenix_life_full_form"
@@ -6711,6 +6712,7 @@
       "ayalon_health_form",
       "clal_health_form",
       "clal_life_couple_form",
+      "clal_mortgage_form",
       "migdal_cancer_form",
       "phoenix_life_short_form",
       "phoenix_life_full_form"
@@ -7270,6 +7272,15 @@
       });
       return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
     },
+    qualifiesForClalMortgageForm(payload, rec){
+      const list = this.listOfficialJoinFormPolicies(payload, rec);
+      const matched = list.filter((p) => {
+        if(safeTrim(p?.company) !== "כלל") return false;
+        const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
+        return /משכנתא/.test(blob);
+      });
+      return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
+    },
     isPhoenixRiskMortgagePolicy(policy){
       if(!policy || typeof policy !== "object") return false;
       if(safeTrim(policy.company) !== "הפניקס") return false;
@@ -7529,6 +7540,19 @@
           uploadedBy: safeTrim(rec?.agentName)
         });
       }
+      const hasClalMort = list.some((d) => safeTrim(d?.type) === this.TYPES.clalMortgageForm);
+      if(!hasClalMort && this.qualifiesForClalMortgageForm(payload, rec)){
+        const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
+        list.unshift({
+          id: "doc_clal_mortgage_form",
+          type: this.TYPES.clalMortgageForm,
+          isLegacy: true,
+          name: "טופס מקורי — ריסק משכנתא · כלל",
+          source: "מערכת",
+          uploadedAt,
+          uploadedBy: safeTrim(rec?.agentName)
+        });
+      }
       const hasApptForm = list.some((d) => safeTrim(d?.type) === this.TYPES.agentApptForm);
       if(!hasApptForm && payload.agentAppointmentMeta){
         const meta = payload.agentAppointmentMeta;
@@ -7553,6 +7577,7 @@
         if(type === this.TYPES.migdalMortgageForm) return this.qualifiesForMigdalMortgageForm(payload, rec);
         if(type === this.TYPES.menoraCiForm) return this.qualifiesForMenoraCiForm(payload, rec);
         if(type === this.TYPES.menoraMortgageForm) return this.qualifiesForMenoraMortgageForm(payload, rec);
+        if(type === this.TYPES.clalMortgageForm) return this.qualifiesForClalMortgageForm(payload, rec);
         if(type === this.TYPES.ayalonHealthForm) return this.qualifiesForAyalonHealthForm(payload, rec);
         if(type === this.TYPES.clalHealthForm) return this.qualifiesForClalHealthForm(payload, rec);
         if(type === this.TYPES.clalLifeCoupleForm) return this.qualifiesForClalLifeCoupleForm(payload, rec);
@@ -18364,6 +18389,13 @@ UsersGateUI.init();
           if(rec) void this.openMenoraMortgageForm(rec);
           return;
         }
+        const openClalMort = ev.target?.closest?.("[data-open-clal-mortgage-doc], [data-clalmort-open]");
+        if(openClalMort){
+          ev.preventDefault();
+          const rec = this.current();
+          if(rec) void this.openClalMortgageForm(rec);
+          return;
+        }
         const dlAppt = ev.target?.closest?.("[data-download-agent-appt-doc]");
         if(dlAppt){
           ev.preventDefault();
@@ -20974,6 +21006,12 @@ UsersGateUI.init();
             return `<div class="cfFile__documentsPreviewDoc">${window.MenoraMortgageForm.renderPreviewHtml(draft)}</div>`;
           } catch(_e) {}
         }
+        if(type === CustomerDocuments.TYPES.clalMortgageForm && window.ClalMortgageForm){
+          try {
+            const draft = window.ClalMortgageForm.buildDraft(rec);
+            return `<div class="cfFile__documentsPreviewDoc">${window.ClalMortgageForm.renderPreviewHtml(draft)}</div>`;
+          } catch(_e) {}
+        }
         if((type === CustomerDocuments.TYPES.agentApptOps || type === CustomerDocuments.TYPES.agentApptForm)
           && typeof AgentAppointmentPdf?.buildOperationalReportHtml === "function"){
           const meta = doc?.payloadSnapshot?.agentAppointmentMeta
@@ -21113,6 +21151,13 @@ UsersGateUI.init();
       if(safeTrim(doc?.type) === CustomerDocuments.TYPES.menoraMortgageForm && !window.MenoraMortgageForm){
         try {
           await ensureMenoraMortgageFormLoaded();
+          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
+        } catch(_e) {}
+        return;
+      }
+      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.clalMortgageForm && !window.ClalMortgageForm){
+        try {
+          await ensureClalMortgageFormLoaded();
           if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
         } catch(_e) {}
         return;
@@ -21282,6 +21327,17 @@ UsersGateUI.init();
         try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
       }
     },
+    async openClalMortgageForm(rec){
+      if(this.denyOfficialJoinFormDownload()) return;
+      try {
+        await ensureClalMortgageFormLoaded();
+        if(!window.ClalMortgageForm) throw new Error("ClalMortgageForm missing");
+        window.ClalMortgageForm.open(rec);
+      } catch(err){
+        try { console.error("CLAL_MORTGAGE_FORM_OPEN_FAILED", err); } catch(_e) {}
+        try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
+      }
+    },
 
     renderDocumentsSection(rec){
       const docs = this.getCustomerDocuments(rec);
@@ -21335,6 +21391,8 @@ UsersGateUI.init();
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-menora-ci-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.menoraMortgageForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-menora-mortgage-doc="${escapeHtml(docId)}">פתח טופס</button>`;
+        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.clalMortgageForm){
+          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-clal-mortgage-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(docType === CustomerDocuments.TYPES.healthOps){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-ops-health-doc="${escapeHtml(docId)}">הורדה</button>`;
         }else if(docType === CustomerDocuments.TYPES.agentApptOps){
@@ -35839,18 +35897,19 @@ UsersGateUI.init();
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
   const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-official-he-bold-v1";
-  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-hach-health-v2";
-  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-hach-health-v2";
-  const GI_HACHSHARA_LIFE_SHORT_FORM_HREF = "./gi-hachshara-life-short-form.js?v=20260824-hach-health-v2";
-  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-hach-health-v2";
-  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-hach-health-v2";
-  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-hach-health-v2";
-  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-hach-health-v2";
-  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-hach-health-v2";
-  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-hach-health-v2";
-  const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-hach-health-v2";
-  const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260824-hach-health-v2";
-  const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-hach-health-v2";
+  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-clal-mort-v1";
+  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-clal-mort-v1";
+  const GI_HACHSHARA_LIFE_SHORT_FORM_HREF = "./gi-hachshara-life-short-form.js?v=20260824-clal-mort-v1";
+  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-clal-mort-v1";
+  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-clal-mort-v1";
+  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-clal-mort-v1";
+  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-clal-mort-v1";
+  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-clal-mort-v1";
+  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-clal-mort-v1";
+  const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-clal-mort-v1";
+  const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260824-clal-mort-v1";
+  const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260824-clal-mort-v1";
+  const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-clal-mort-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -36041,6 +36100,33 @@ UsersGateUI.init();
       throw err;
     });
     return ensureMenoraMortgageFormLoaded._p;
+  }
+  function ensureClalMortgageFormLoaded(){
+    if(window.ClalMortgageForm) return Promise.resolve(window.ClalMortgageForm);
+    if(ensureClalMortgageFormLoaded._p) return ensureClalMortgageFormLoaded._p;
+    ensureClalMortgageFormLoaded._p = new Promise((resolve, reject) => {
+      const existing = document.getElementById("gi-clal-mortgage-form-js");
+      const done = () => {
+        if(window.ClalMortgageForm) resolve(window.ClalMortgageForm);
+        else reject(new Error("gi-clal-mortgage-form.js loaded without ClalMortgageForm"));
+      };
+      if(existing){
+        existing.addEventListener("load", done, { once: true });
+        existing.addEventListener("error", () => reject(new Error("gi-clal-mortgage-form.js failed")), { once: true });
+        return;
+      }
+      const s = document.createElement("script");
+      s.id = "gi-clal-mortgage-form-js";
+      s.src = GI_CLAL_MORTGAGE_FORM_HREF;
+      s.async = true;
+      s.onload = done;
+      s.onerror = () => reject(new Error("gi-clal-mortgage-form.js failed to load"));
+      document.head.appendChild(s);
+    }).catch((err) => {
+      ensureClalMortgageFormLoaded._p = null;
+      throw err;
+    });
+    return ensureClalMortgageFormLoaded._p;
   }
   function ensureAyalonHealthFormLoaded(){
     if(window.AyalonHealthForm) return Promise.resolve(window.AyalonHealthForm);
