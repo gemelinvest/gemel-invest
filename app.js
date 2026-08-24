@@ -35493,31 +35493,32 @@ UsersGateUI.init();
     migdalLifeHealthRows(){
       if(this._migdalLifeHealthRows) return this._migdalLifeHealthRows;
       // PDF radios: MGQ1, MGQ3–MGQ24 (no MGQ2 — smoking uses IsSmoking).
-      // Extended wizard order maps 1:1; short schema maps by topic onto the same fields.
+      // Prefer risk keys; fall back to magdal_full (בריאות מגדל) when that was the master.
       this._migdalLifeHealthRows = [
         { field: "MGQ1", keys: ["magdal_riskx__hobby", "magdal_risk2m__hobby"] },
-        { smoke: true, keys: ["magdal_riskx__smoking", "magdal_risk2m__smoking"] },
-        { field: "MGQ3", keys: ["magdal_riskx__alcohol"] },
-        { field: "MGQ4", keys: ["magdal_riskx__drugs"] },
-        { field: "MGQ5", keys: ["magdal_riskx__meds"] },
-        { field: "MGQ6", keys: ["magdal_riskx__hospital", "magdal_risk2m__hospital"] },
-        { field: "MGQ7", keys: ["magdal_riskx__tests", "magdal_risk2m__tests"] },
-        { field: "MGQ8", keys: ["magdal_riskx__disability", "magdal_risk2m__disability"] },
-        { field: "MGQ9", keys: ["magdal_riskx__family"] },
-        { field: "MGQ10", keys: ["magdal_riskx__neuro", "magdal_risk2m__neuro"] },
-        { field: "MGQ11", keys: ["magdal_riskx__mental", "magdal_risk2m__mental"] },
-        { field: "MGQ12", keys: ["magdal_riskx__cancer", "magdal_risk2m__cancer"] },
-        { field: "MGQ13", keys: ["magdal_riskx__respiratory", "magdal_risk2m__respiratory"] },
-        { field: "MGQ14", keys: ["magdal_riskx__eyes"] },
-        { field: "MGQ15", keys: ["magdal_riskx__ent"] },
-        { field: "MGQ16", keys: ["magdal_riskx__heart", "magdal_risk2m__heart"] },
-        { field: "MGQ17", keys: ["magdal_riskx__digestive", "magdal_risk2m__digestive"] },
-        { field: "MGQ18", keys: ["magdal_riskx__kidneys", "magdal_risk2m__kidneys"] },
-        { field: "MGQ19", keys: ["magdal_riskx__endocrine", "magdal_risk2m__diabetes"] },
-        { field: "MGQ20", keys: ["magdal_riskx__blood", "magdal_risk2m__immune"] },
-        { field: "MGQ21", keys: ["magdal_riskx__msk"] },
-        { field: "MGQ22", keys: ["magdal_riskx__skin"] },
-        { field: "MGQ23", keys: ["magdal_riskx__repro"] }
+        { smoke: true, keys: ["magdal_riskx__smoking", "magdal_risk2m__smoking", "magdal_full__smoking_now"] },
+        { field: "MGQ3", keys: ["magdal_riskx__alcohol", "magdal_full__alcohol"] },
+        { field: "MGQ4", keys: ["magdal_riskx__drugs", "magdal_full__drugs"] },
+        { field: "MGQ5", keys: ["magdal_riskx__meds", "magdal_full__medications"] },
+        { field: "MGQ6", keys: ["magdal_riskx__hospital", "magdal_risk2m__hospital", "magdal_full__hospitalization"] },
+        { field: "MGQ7", keys: ["magdal_riskx__tests", "magdal_risk2m__tests", "magdal_full__tests"] },
+        { field: "MGQ8", keys: ["magdal_riskx__disability", "magdal_risk2m__disability", "magdal_full__disability"] },
+        { field: "MGQ9", keys: ["magdal_riskx__family", "magdal_full__family_critical"] },
+        { field: "MGQ10", keys: ["magdal_riskx__neuro", "magdal_risk2m__neuro", "magdal_full__neuro"] },
+        { field: "MGQ11", keys: ["magdal_riskx__mental", "magdal_risk2m__mental", "magdal_full__mental"] },
+        { field: "MGQ12", keys: ["magdal_riskx__cancer", "magdal_risk2m__cancer", "magdal_full__cancer"] },
+        { field: "MGQ13", keys: ["magdal_riskx__respiratory", "magdal_risk2m__respiratory", "magdal_full__respiratory"] },
+        { field: "MGQ14", keys: ["magdal_riskx__eyes", "magdal_full__eyes"] },
+        { field: "MGQ15", keys: ["magdal_riskx__ent", "magdal_full__ent"] },
+        { field: "MGQ16", keys: ["magdal_riskx__heart", "magdal_risk2m__heart", "magdal_full__heart"] },
+        { field: "MGQ17", keys: ["magdal_riskx__digestive", "magdal_risk2m__digestive", "magdal_full__digestive"] },
+        { field: "MGQ18", keys: ["magdal_riskx__kidneys", "magdal_risk2m__kidneys", "magdal_full__kidneys"] },
+        { field: "MGQ19", keys: ["magdal_riskx__endocrine", "magdal_risk2m__diabetes", "magdal_full__endocrine"] },
+        { field: "MGQ20", keys: ["magdal_riskx__blood", "magdal_risk2m__immune", "magdal_full__blood_immune"] },
+        { field: "MGQ21", keys: ["magdal_riskx__msk", "magdal_full__musculoskeletal"] },
+        { field: "MGQ22", keys: ["magdal_riskx__skin", "magdal_full__skin"] },
+        { field: "MGQ23", keys: ["magdal_riskx__repro", "magdal_full__reproductive"] },
+        { field: "MGQ24", keys: ["magdal_full__adl"] }
       ];
       return this._migdalLifeHealthRows;
     },
@@ -35783,18 +35784,18 @@ UsersGateUI.init();
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
   const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-official-he-bold-v1";
-  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-migdal-life-health-v1";
-  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-migdal-life-health-v1";
-  const GI_HACHSHARA_LIFE_SHORT_FORM_HREF = "./gi-hachshara-life-short-form.js?v=20260824-migdal-life-health-v1";
-  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-migdal-life-health-v1";
-  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-migdal-life-health-v1";
-  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-migdal-life-health-v1";
-  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-migdal-life-health-v1";
-  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-migdal-life-health-v1";
-  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-migdal-life-health-v1";
-  const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-migdal-life-health-v1";
-  const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260824-migdal-life-health-v1";
-  const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-migdal-life-health-v1";
+  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-migdal-life-fill-v2";
+  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-migdal-life-fill-v2";
+  const GI_HACHSHARA_LIFE_SHORT_FORM_HREF = "./gi-hachshara-life-short-form.js?v=20260824-migdal-life-fill-v2";
+  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-migdal-life-fill-v2";
+  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-migdal-life-fill-v2";
+  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-migdal-life-fill-v2";
+  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-migdal-life-fill-v2";
+  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-migdal-life-fill-v2";
+  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-migdal-life-fill-v2";
+  const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-migdal-life-fill-v2";
+  const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260824-migdal-life-fill-v2";
+  const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-migdal-life-fill-v2";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){

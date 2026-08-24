@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/migdal-life/",
     TEMPLATE_FILE: "migdal-life-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-migdal-life-health-v1",
+    VERSION: "20260824-migdal-life-fill-v2",
     DOC_ID: "doc_migdal_life_form",
     DOC_TYPE: "migdal_life_form",
 
@@ -79,6 +79,7 @@
       const lastName = safeTrim(d.lastName);
       const fullName = safeTrim(d.fullName) || safeTrim((firstName + " " + lastName).trim()) || safeTrim(ins?.label);
       return {
+        id: safeTrim(ins?.id),
         firstName, lastName, fullName,
         idNumber: safeTrim(d.idNumber),
         birthDate: this.fmtDateHe(d.birthDate),
@@ -98,6 +99,7 @@
         weightKg: safeTrim(d.weightKg),
         smokingStatus: safeTrim(d.smokingStatus),
         smokingAmount: safeTrim(d.smokingAmount),
+        clinic: safeTrim(d.clinic || d.hmo || d.kupatHolim),
         sumInsured: ""
       };
     },
@@ -126,6 +128,117 @@
       const children = raw.filter((x) => safeTrim(x?.type) === "child");
       return { primary, spouse, children };
     },
+    mapHmoExport(clinicRaw){
+      const s = safeTrim(clinicRaw).replace(/\s+/g, "");
+      if(!s) return "";
+      if(/כללית|clalit/i.test(s)) return "1";
+      if(/מכבי|maccabi/i.test(s)) return "2";
+      if(/מאוחדת|meuhedet/i.test(s)) return "3";
+      if(/לאומית|leumit/i.test(s)) return "4";
+      return "";
+    },
+    collectPledgeBanks(policy){
+      if(!policy || typeof policy !== "object") return [];
+      if(Array.isArray(policy.pledgeBanks) && policy.pledgeBanks.length){
+        return policy.pledgeBanks.filter((b) => b && typeof b === "object" && safeTrim(b.bankName || b.name));
+      }
+      if(policy.pledgeBank && typeof policy.pledgeBank === "object" && safeTrim(policy.pledgeBank.bankName || policy.pledgeBank.name)){
+        return [policy.pledgeBank];
+      }
+      if(safeTrim(policy.pledgeBankName)){
+        return [{ bankName: safeTrim(policy.pledgeBankName) }];
+      }
+      return [];
+    },
+    policyHasPledge(policy){
+      if(!policy) return false;
+      if(policy.pledge === true || policy.hasPledge === true) return true;
+      return this.collectPledgeBanks(policy).length > 0;
+    },
+    normalizeBeneficiaries(policy){
+      const list = Array.isArray(policy?.beneficiaries) ? policy.beneficiaries : [];
+      return list.map((b) => {
+        if(!b || typeof b !== "object") return null;
+        const firstName = safeTrim(b.firstName);
+        const lastName = safeTrim(b.lastName);
+        const fullName = safeTrim(b.fullName) || safeTrim((firstName + " " + lastName).trim());
+        const idNumber = safeTrim(b.idNumber || b.pid);
+        const relation = safeTrim(b.relationship || b.relation);
+        const pct = safeTrim(b.sharePct != null ? b.sharePct : (b.percentage != null ? b.percentage : b.pct));
+        const birthDate = this.fmtDateHe(b.birthDate);
+        if(!fullName && !idNumber) return null;
+        return { fullName, idNumber, relation, percentage: pct, birthDate };
+      }).filter(Boolean);
+    },
+    buildBeneficiaryRows(policy){
+      const rows = [];
+      const pledgeBanks = this.policyHasPledge(policy) ? this.collectPledgeBanks(policy) : [];
+      pledgeBanks.forEach((bank) => {
+        const name = safeTrim(bank.bankName || bank.name);
+        if(!name) return;
+        rows.push({
+          fullName: name,
+          idNumber: "",
+          relation: "מוטב בלתי חוזר",
+          percentage: safeTrim(bank.amount) ? "" : (pledgeBanks.length === 1 ? "100" : ""),
+          birthDate: "",
+          irrevocableBank: true
+        });
+      });
+      this.normalizeBeneficiaries(policy).forEach((ben) => {
+        if(rows.length >= 4) return;
+        rows.push(ben);
+      });
+      return rows.slice(0, 4);
+    },
+    collectCancellations(payload, primaryData){
+      const src = (primaryData && primaryData.cancellations && typeof primaryData.cancellations === "object")
+        ? primaryData.cancellations
+        : ((payload?.primary?.cancellations && typeof payload.primary.cancellations === "object")
+          ? payload.primary.cancellations : {});
+      const existing = Array.isArray(primaryData?.existingPolicies) ? primaryData.existingPolicies
+        : (Array.isArray(payload?.primary?.existingPolicies) ? payload.primary.existingPolicies : []);
+      const byId = Object.create(null);
+      existing.forEach((p) => {
+        if(p && p.id) byId[p.id] = p;
+      });
+      const rows = [];
+      Object.keys(src).forEach((polId) => {
+        const c = src[polId];
+        if(!c || typeof c !== "object") return;
+        const status = safeTrim(c.status).toLowerCase();
+        if(!status || status === "nochange" || status === "nochange_client" || status === "keep") return;
+        const pol = byId[polId] || {};
+        rows.push({
+          policyId: polId,
+          status,
+          executionMethod: safeTrim(c.executionMethod).toLowerCase(),
+          company: safeTrim(pol.company),
+          policyNumber: safeTrim(pol.policyNumber),
+          type: safeTrim(pol.type)
+        });
+      });
+      return rows;
+    },
+    collectHealthDetailLines(responses, insuredIds){
+      const lines = [];
+      const ids = (insuredIds || []).filter(Boolean);
+      const resp = responses && typeof responses === "object" ? responses : {};
+      Object.keys(resp).forEach((qKey) => {
+        const block = resp[qKey];
+        if(!block || typeof block !== "object") return;
+        ids.forEach((insId) => {
+          const row = block[insId];
+          if(!row || String(row.answer || "").toLowerCase() !== "yes") return;
+          const fields = row.fields && typeof row.fields === "object" ? row.fields : {};
+          const parts = Object.keys(fields).map((k) => safeTrim(fields[k])).filter(Boolean);
+          if(!parts.length) return;
+          const label = qKey.replace(/^magdal_(full|riskx|risk2m)__/, "");
+          lines.push(label + ": " + parts.join(" · "));
+        });
+      });
+      return lines.slice(0, 3);
+    },
 
     buildDraft(rec){
       const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
@@ -134,6 +247,7 @@
       const { primary, spouse, children } = this.classifyInsureds(payload);
       const primaryPerson = this.personFromInsured(primary || payload.primary || {}, global.GI_OFFICIAL_FORM_FILL?.fileFallbacks?.(rec, payload));
       const spousePerson = spouse ? this.personFromInsured(spouse) : null;
+      const childPeople = children.map((ch) => this.personFromInsured(ch));
       primaryPerson.sumInsured = this.sumInsuredFor(policy, primary?.id);
       if(spousePerson) spousePerson.sumInsured = this.sumInsuredFor(policy, spouse?.id);
       const agentNumbers = payload.companyAgentNumbers || payload.operational?.companyAgentNumbers
@@ -141,21 +255,32 @@
       const payerSrc = payload.primary || primary?.data || {};
       const external = payerSrc.externalPayer && typeof payerSrc.externalPayer === "object" ? payerSrc.externalPayer : {};
       const useExternal = safeTrim(payerSrc.payerChoice) === "external";
+      const payerIsInsured = safeTrim(payerSrc.payerChoice) === "insured" || !useExternal;
       const pay = global.GI_OFFICIAL_FORM_FILL?.pickPayment?.(payload, payerSrc) || { method: "", isHo: false, bank: { name: "", branch: "", account: "", bankNo: "" } };
+      const healthAttached = global.GI_OFFICIAL_FORM_FILL?.attachDraftHealth?.(payload, primary, spouse, children) || {};
+      const healthResponses = healthAttached.healthResponses || {};
+      const detailIds = [primary?.id, spouse?.id].concat(children.map((c) => c?.id)).filter(Boolean);
       return {
         today: this.fmtTodayHe(),
         insuranceBegin: this.fmtDateHe(policy.startDate || payload.insuranceStartDate),
         riskMax: this.isRiskMax(policy),
+        riskDiscountPack: safeTrim(policy.discountPackageNum || policy.discountOption?.packageNum),
         payWay: this.payWayFor(payload, payerSrc),
         payment: pay,
         agentName: safeTrim(global.Auth?.current?.name) || safeTrim(rec?.agentName),
         agentNumber: safeTrim(agentNumbers["מגדל"]) || safeTrim(policy.agentNumber),
         primary: primaryPerson,
         spouse: spousePerson,
-        ...(global.GI_OFFICIAL_FORM_FILL?.attachDraftHealth?.(payload, primary, spouse, children) || {}),
+        children: childPeople,
+        ...healthAttached,
+        healthDetailLines: this.collectHealthDetailLines(healthResponses, detailIds),
+        beneficiaries: this.buildBeneficiaryRows(policy),
+        cancellations: this.collectCancellations(payload, payerSrc),
         payer: {
           name: useExternal ? safeTrim((external.firstName + " " + external.lastName).trim()) : "",
-          idNumber: useExternal ? safeTrim(external.idNumber) : ""
+          idNumber: useExternal ? safeTrim(external.idNumber) : "",
+          isInsured: payerIsInsured && !useExternal,
+          relation: useExternal ? safeTrim(external.relation) : ""
         },
         bank: pay.bank
       };
@@ -237,6 +362,11 @@
       } catch(_e) {}
     },
     setExport(form, fieldName, exportValue){
+      const helper = global.GI_OFFICIAL_FORM_FILL;
+      if(helper && helper.setExport){
+        helper.setExport(form, fieldName, exportValue);
+        return;
+      }
       if(!exportValue) return;
       try {
         const field = form.getField(fieldName);
@@ -257,7 +387,6 @@
       this.setTextSafe(form, "PID" + s, person.idNumber, font);
       this.setTextSafe(form, "BirthDate" + s, person.birthDate, font);
       this.setTextSafe(form, "EmailAddress" + s, person.email, font);
-      if(!isSpouse) this.setTextSafe(form, "Email", person.email, font);
       this.setTextSafe(form, isSpouse ? "CitySpouseCode" : "CityCode", person.city, font);
       this.setTextSafe(form, isSpouse ? "StreetCodeSpouse" : "StreetCode", person.street, font);
       this.setTextSafe(form, "HouseNumber" + s, person.houseNumber, font);
@@ -279,6 +408,7 @@
       if(person.smokingAmount){
         this.setTextSafe(form, isSpouse ? "ClientSmokeNumSpouse" : "ClientSmokeNum", person.smokingAmount, font);
       }
+      this.setExport(form, isSpouse ? "HMORadioSpouse" : "HMORadio", this.mapHmoExport(person.clinic));
     },
     applyOwnerFromPrimary(form, person, font){
       if(!person) return;
@@ -298,11 +428,58 @@
         if(!this.isMobilePhone(phone)) this.setTextSafe(form, "PhoneNumberOwner", phone, font);
       }
     },
+    applyChildren(form, children, font){
+      (children || []).slice(0, 4).forEach((child, idx) => {
+        if(!child) return;
+        const n = idx + 1;
+        this.setTextSafe(form, "FullNameChild" + n, child.fullName, font);
+        this.setExport(form, "IsSmokingChild" + n, this.mapSmokingExport(child.smokingStatus));
+      });
+    },
+    applyBeneficiaries(form, rows, font){
+      (rows || []).slice(0, 4).forEach((ben, idx) => {
+        if(!ben) return;
+        const n = idx + 1;
+        this.setTextSafe(form, "BeneficiaryName" + n, ben.fullName, font);
+        this.setTextSafe(form, "PIDBeneficiary" + n, ben.idNumber, font);
+        this.setTextSafe(form, "BeneficiaryRelation" + n, ben.relation, font);
+        this.setTextSafe(form, "Beneficiarypercentage" + n, ben.percentage, font);
+        this.setTextSafe(form, "BirthDateBeneficiary" + n, ben.birthDate, font);
+      });
+    },
+    applyCancellations(form, rows, font){
+      const list = Array.isArray(rows) ? rows : [];
+      if(!list.length) return;
+      const hasFull = list.some((r) => r.status === "full" || r.status === "cancel" || r.status === "cancelled");
+      const hasReduce = list.some((r) => r.status === "reduce" || r.status === "partial" || r.status === "reduce_only");
+      if(hasFull) this.setExport(form, "ExistPCancel", "1");
+      if(hasReduce) this.setExport(form, "ExistPReduce", "1");
+      if(hasFull || hasReduce){
+        this.setExport(form, "CancelCompare", "1");
+        const methods = list.map((r) => r.executionMethod).filter(Boolean);
+        let cancelBy = "";
+        if(methods.some((m) => m === "agent")) cancelBy = "Agent";
+        else if(methods.some((m) => m === "client" || m === "customer")) cancelBy = "Client";
+        else if(methods.some((m) => m === "company")) cancelBy = "Company";
+        if(cancelBy) this.setExport(form, "PolicyCancel", cancelBy);
+      }
+      list.slice(0, 5).forEach((row, idx) => {
+        const field = idx === 0 ? "insCompera" : ("insCompera" + (idx + 1));
+        const label = [row.company, row.type, row.policyNumber].filter(Boolean).join(" · ");
+        if(label) this.setTextSafe(form, field, label, font);
+      });
+    },
+    applyHealthDetails(form, lines, font){
+      (lines || []).slice(0, 3).forEach((line, idx) => {
+        this.setTextSafe(form, "DetailLine" + (idx + 1), line, font);
+      });
+    },
 
     async fillOriginalTemplate(draft){
       if(global.GI_LOAD_LIBS?.pdfLib) await global.GI_LOAD_LIBS.pdfLib();
       const PDFLib = global.PDFLib;
       if(!PDFLib?.PDFDocument) throw new Error("PDFLib missing");
+      const helper = global.GI_OFFICIAL_FORM_FILL;
       const templateBytes = await this.fetchFirstOk(
         this.candidateUrls("forms/migdal-life/", this.TEMPLATE_FILE),
         "לא נמצא טופס ריסק חיים של מגדל"
@@ -324,8 +501,10 @@
       this.setTextSafe(form, "InsuranceBegin", draft.insuranceBegin, font);
       this.setTextSafe(form, "AgentName", draft.agentName, font);
       this.setTextSafe(form, "AgentNumber", draft.agentNumber, font);
+      this.setTextSafe(form, "RiskDiscountPack", draft.riskDiscountPack, font);
       this.applyPerson(form, draft.primary, false, font);
       this.applyPerson(form, draft.spouse, true, font);
+      this.applyChildren(form, draft.children, font);
       this.applyOwnerFromPrimary(form, draft.primary, font);
       if(draft.primary){
         const sumField = draft.riskMax ? "GiluiTotalRiskMax" : "GiluiTotalRisk";
@@ -335,26 +514,35 @@
         const sumField = draft.riskMax ? "RiskMaxBzugSum" : "OrRizikoBzugSum";
         this.setTextSafe(form, sumField, draft.spouse.sumInsured, font);
       }
-      if(draft.payer){
+      if(draft.payer && draft.payer.name){
         this.setTextSafe(form, "FullNamePayer", draft.payer.name, font);
       }
-      global.GI_OFFICIAL_FORM_FILL?.applyOfficialHealthAndNames?.(form, draft, font, {
+      this.applyBeneficiaries(form, draft.beneficiaries, font);
+      this.applyCancellations(form, draft.cancellations, font);
+      this.applyHealthDetails(form, draft.healthDetailLines, font);
+      helper?.applyOfficialHealthAndNames?.(form, draft, font, {
         skipHealth: true,
         visual: false
       });
-      global.GI_OFFICIAL_FORM_FILL?.applyMappedHealthYesNo?.(form, {
+      helper?.applyMappedHealthYesNo?.(form, {
         map: "migdal_life",
         responses: draft.healthResponses,
         primaryId: draft.primaryId,
         spouseId: draft.spouseId,
         childIds: draft.childIds
       });
-      global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
+      if(draft.payer && draft.payer.isInsured && draft.primary){
+        helper?.applyInsuredPayerOwner?.(form, draft.primary, font, { relation: "המבוטח" });
+        this.setExport(form, "PayerRelationOwner", "1");
+      }
+      helper?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
         bank: draft.bank || {},
         cc: draft.payment?.cc || {}
       }, font, {
         textOpts: { visual: false },
+        bankBranchCode: "BankBranchCode",
+        bankNameCode: "BankNameCode",
         hoMarks: [{ field: "PayWay", value: "3" }],
         ccMarks: [{ field: "PayWay", value: "1" }]
       });
@@ -513,7 +701,7 @@
             <button type="button" class="giValModal__closeX" data-miglife-close="1" aria-label="סגירה">✕</button>
           </div>
           <div class="giValModal__body">
-            <div class="migLifeForm__hint">ממולא אוטומטית רק מה ששמור בתיק, כולל אמצעי תשלום והצהרת בריאות (כן/לא מהאשף). מוטבים, החלפת ביטוח וחתימות לא ממולאים — אותם משלימים בטופס או ב-PDF אחרי ההורדה.</div>
+            <div class="migLifeForm__hint">ממולא אוטומטית רק מה ששמור בתיק: פרטים, תשלום, הצהרת בריאות (כן/לא), מוטבים/שיעבוד בנק, ביטולים וקופ״ח. חתימות נשארות להשלמה ידנית.</div>
             <section class="migLifeForm__block">
               <div class="migLifeForm__blockTitle">פרטי הצעה וסוכן</div>
               <div class="migLifeForm__grid">

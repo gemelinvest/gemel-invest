@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/hachshara-ci/",
     TEMPLATE_FILE: "hachshara-ci-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-migdal-life-health-v1",
+    VERSION: "20260824-migdal-life-fill-v2",
     DOC_ID: "doc_hachshara_ci_form",
     DOC_TYPE: "hachshara_ci_form",
 
