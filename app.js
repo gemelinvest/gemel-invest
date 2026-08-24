@@ -6695,6 +6695,22 @@
       ayalonHealthForm: "ayalon_health_form",
       clalHealthForm: "clal_health_form"
     },
+    OFFICIAL_JOIN_FORM_TYPES: [
+      "hachshara_ci_form",
+      "hachshara_life_form",
+      "migdal_life_form",
+      "migdal_mortgage_form",
+      "menora_ci_form",
+      "menora_mortgage_form",
+      "ayalon_health_form",
+      "clal_health_form"
+    ],
+    isOfficialJoinFormType(type){
+      return this.OFFICIAL_JOIN_FORM_TYPES.indexOf(safeTrim(type)) >= 0;
+    },
+    canDownloadOfficialJoinForm(){
+      try { return !!(Auth.isAdmin() || Auth.isManager()); } catch(_e){ return false; }
+    },
     REPORT_SCOPES: {
       proposal: "health_proposal",
       purchase: "health_purchase"
@@ -20801,7 +20817,20 @@ UsersGateUI.init();
       });
     },
 
+    denyOfficialJoinFormDownload(){
+      if(CustomerDocuments.canDownloadOfficialJoinForm()) return false;
+      try {
+        window.showToast?.({
+          title: "אין הרשאה",
+          text: "הורדת טופס הצעה רשמי זמינה למנהל ולמנהל מערכת בלבד.",
+          variant: "warn",
+          durationMs: 5200
+        });
+      } catch(_e) {}
+      return true;
+    },
     async openHachsharaCiForm(rec){
+      if(this.denyOfficialJoinFormDownload()) return;
       try {
         await ensureHachsharaCiFormLoaded();
         if(!window.HachsharaCiForm) throw new Error("HachsharaCiForm missing");
@@ -20812,6 +20841,7 @@ UsersGateUI.init();
       }
     },
     async openHachsharaLifeForm(rec){
+      if(this.denyOfficialJoinFormDownload()) return;
       try {
         await ensureHachsharaLifeFormLoaded();
         if(!window.HachsharaLifeForm) throw new Error("HachsharaLifeForm missing");
@@ -20822,6 +20852,7 @@ UsersGateUI.init();
       }
     },
     async openMigdalLifeForm(rec){
+      if(this.denyOfficialJoinFormDownload()) return;
       try {
         await ensureMigdalLifeFormLoaded();
         if(!window.MigdalLifeForm) throw new Error("MigdalLifeForm missing");
@@ -20832,6 +20863,7 @@ UsersGateUI.init();
       }
     },
     async openMigdalMortgageForm(rec){
+      if(this.denyOfficialJoinFormDownload()) return;
       try {
         await ensureMigdalMortgageFormLoaded();
         if(!window.MigdalMortgageForm) throw new Error("MigdalMortgageForm missing");
@@ -20842,6 +20874,7 @@ UsersGateUI.init();
       }
     },
     async openClalHealthForm(rec){
+      if(this.denyOfficialJoinFormDownload()) return;
       try {
         await ensureClalHealthFormLoaded();
         if(!window.ClalHealthForm) throw new Error("ClalHealthForm missing");
@@ -20852,6 +20885,7 @@ UsersGateUI.init();
       }
     },
     async openAyalonHealthForm(rec){
+      if(this.denyOfficialJoinFormDownload()) return;
       try {
         await ensureAyalonHealthFormLoaded();
         if(!window.AyalonHealthForm) throw new Error("AyalonHealthForm missing");
@@ -20862,6 +20896,7 @@ UsersGateUI.init();
       }
     },
     async openMenoraCiForm(rec){
+      if(this.denyOfficialJoinFormDownload()) return;
       try {
         await ensureMenoraCiFormLoaded();
         if(!window.MenoraCiForm) throw new Error("MenoraCiForm missing");
@@ -20872,6 +20907,7 @@ UsersGateUI.init();
       }
     },
     async openMenoraMortgageForm(rec){
+      if(this.denyOfficialJoinFormDownload()) return;
       try {
         await ensureMenoraMortgageFormLoaded();
         if(!window.MenoraMortgageForm) throw new Error("MenoraMortgageForm missing");
@@ -20899,6 +20935,7 @@ UsersGateUI.init();
         ? safeTrim(this._previewDocId)
         : (safeTrim(docs[0]?.id) || "0");
       this._previewDocId = selectedId;
+      const canOfficialPdf = CustomerDocuments.canDownloadOfficialJoinForm();
       const rows = docs.map((doc, idx) => {
         const display = CustomerDocuments.getDocumentDisplay(doc);
         const docType = safeTrim(doc.type);
@@ -20907,21 +20944,21 @@ UsersGateUI.init();
         let downloadBtn = "";
         if(docType === CustomerDocuments.TYPES.agentApptForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-agent-appt-doc="${escapeHtml(docId)}">הורדה</button>`;
-        }else if(docType === CustomerDocuments.TYPES.hachsharaCiForm){
+        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.hachsharaCiForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-hachshara-ci-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(docType === CustomerDocuments.TYPES.hachsharaLifeForm){
+        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.hachsharaLifeForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-hachshara-life-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(docType === CustomerDocuments.TYPES.migdalLifeForm){
+        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.migdalLifeForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-migdal-life-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(docType === CustomerDocuments.TYPES.migdalMortgageForm){
+        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.migdalMortgageForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-migdal-mortgage-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(docType === CustomerDocuments.TYPES.clalHealthForm){
+        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.clalHealthForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-clal-health-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(docType === CustomerDocuments.TYPES.ayalonHealthForm){
+        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.ayalonHealthForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-ayalon-health-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(docType === CustomerDocuments.TYPES.menoraCiForm){
+        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.menoraCiForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-menora-ci-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(docType === CustomerDocuments.TYPES.menoraMortgageForm){
+        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.menoraMortgageForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-menora-mortgage-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(docType === CustomerDocuments.TYPES.healthOps){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-ops-health-doc="${escapeHtml(docId)}">הורדה</button>`;
@@ -34691,18 +34728,72 @@ UsersGateUI.init();
         }
         if(font && field.updateAppearances) field.updateAppearances(font);
       } catch(_e) {}
+    },
+    setExport(form, fieldName, exportValue){
+      if(!exportValue) return;
+      try {
+        const field = form.getField(fieldName);
+        const PDFLib = window.PDFLib;
+        const name = PDFLib?.PDFName?.of ? PDFLib.PDFName.of(String(exportValue)) : null;
+        if(!field || !name) return;
+        field.acroField.dict.set(PDFLib.PDFName.of("V"), name);
+        field.acroField.dict.set(PDFLib.PDFName.of("AS"), name);
+      } catch(_e) {}
+    },
+    pickPayment(payload, primarySrc){
+      const layers = [primarySrc, payload?.primary, payload];
+      const methodRaw = this.pick(layers, ["paymentMethod"]);
+      const method = methodRaw === "ho" || methodRaw === "cc" ? methodRaw : "";
+      const hoLayer = this.layerOf(primarySrc);
+      const hoAlt = this.layerOf(payload?.primary);
+      const ho = (hoLayer.ho && typeof hoLayer.ho === "object") ? hoLayer.ho
+        : ((hoAlt.ho && typeof hoAlt.ho === "object") ? hoAlt.ho : {});
+      const bank = {
+        name: String(ho.bankName == null ? "" : ho.bankName).trim(),
+        branch: String(ho.branch == null ? "" : ho.branch).trim(),
+        account: String(ho.account == null ? "" : ho.account).trim(),
+        bankNo: String(ho.bankNo == null ? "" : ho.bankNo).trim()
+      };
+      const isHo = method === "ho" && !!(bank.name || bank.branch || bank.account || bank.bankNo);
+      return {
+        method,
+        isHo,
+        bank: isHo ? bank : { name: "", branch: "", account: "", bankNo: "" }
+      };
+    },
+    applyStoredPayment(form, payment, font, spec){
+      const cfg = spec && typeof spec === "object" ? spec : {};
+      if(!payment || !form) return;
+      const method = payment.method === "ho" || payment.method === "cc" ? payment.method : "";
+      const bank = payment.bank && typeof payment.bank === "object" ? payment.bank : {};
+      const hasBank = !!(bank.name || bank.branch || bank.account || bank.bankNo);
+      if(method === "ho" && hasBank){
+        this.setTextSafe(form, cfg.bankName || "BankName", bank.name, font);
+        this.setTextSafe(form, cfg.bankBranch || "BankBranch", bank.branch, font);
+        if(cfg.bankBranchCode) this.setTextSafe(form, cfg.bankBranchCode, bank.branch, font);
+        this.setTextSafe(form, cfg.bankAccount || "BankAccountNumber", bank.account, font);
+        if(cfg.bankAccountAlt) this.setTextSafe(form, cfg.bankAccountAlt, bank.account, font);
+        if(cfg.bankNameCode) this.setTextSafe(form, cfg.bankNameCode, bank.bankNo, font);
+        (cfg.hoMarks || []).forEach((mark) => {
+          this.setExport(form, mark.field, mark.value);
+        });
+      } else if(method === "cc"){
+        (cfg.ccMarks || []).forEach((mark) => {
+          this.setExport(form, mark.field, mark.value);
+        });
+      }
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
   const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-official-he-bold-v1";
-  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-official-he-bold-v1";
-  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-official-he-bold-v1";
-  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-official-he-bold-v1";
-  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-official-he-bold-v1";
-  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-official-he-bold-v1";
-  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-official-he-bold-v1";
-  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-official-he-bold-v1";
-  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-official-he-bold-v1";
+  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-official-pay-role-v1";
+  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-official-pay-role-v1";
+  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-official-pay-role-v1";
+  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-official-pay-role-v1";
+  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-official-pay-role-v1";
+  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-official-pay-role-v1";
+  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-official-pay-role-v1";
+  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-official-pay-role-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){

@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/hachshara-life/",
     TEMPLATE_FILE: "hachshara-life-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-official-he-bold-v1",
+    VERSION: "20260824-official-pay-role-v1",
     DOC_ID: "doc_hachshara_life_form",
     DOC_TYPE: "hachshara_life_form",
 
@@ -154,12 +154,13 @@
       const payerSrc = payload.primary || primary?.data || {};
       const external = payerSrc.externalPayer && typeof payerSrc.externalPayer === "object" ? payerSrc.externalPayer : {};
       const useExternal = safeTrim(payerSrc.payerChoice) === "external";
-      const ho = payerSrc.ho && typeof payerSrc.ho === "object" ? payerSrc.ho : {};
+      const pay = global.GI_OFFICIAL_FORM_FILL?.pickPayment?.(payload, payerSrc) || { method: "", isHo: false, bank: { name: "", branch: "", account: "", bankNo: "" } };
       return {
         today: this.fmtTodayHe(),
         insuranceBegin: this.fmtDateHe(policy.startDate || payload.insuranceStartDate),
         planType: this.planTypeFor(policy),
         collectionMethod: this.collectionMethodFor(payload, payerSrc),
+        payment: pay,
         agentName: safeTrim(global.Auth?.current?.name) || safeTrim(rec?.agentName),
         agentNumber: safeTrim(agentNumbers["הכשרה"]) || safeTrim(policy.agentNumber),
         primary: primaryPerson,
@@ -169,11 +170,7 @@
           idNumber: useExternal ? safeTrim(external.idNumber) : "",
           relation: useExternal ? safeTrim(external.relation) : ""
         },
-        bank: {
-          name: safeTrim(ho.bankName),
-          branch: safeTrim(ho.branch),
-          account: safeTrim(ho.account)
-        }
+        bank: pay.bank
       };
     },
 
@@ -347,7 +344,6 @@
       this.setTextSafe(form, "AgentName", draft.agentName, font);
       this.setTextSafe(form, "AgentNumber", draft.agentNumber, font);
       this.setExport(form, "InsurancePlanType", draft.planType);
-      this.setExport(form, "CollectionMethod", draft.collectionMethod);
       this.applyPerson(form, draft.primary, "", font);
       this.applyPerson(form, draft.spouse, "Spouse", font);
       this.applyOwnerFromPrimary(form, draft.primary, font);
@@ -362,11 +358,13 @@
         this.setTextSafe(form, "PayerPID", draft.payer.idNumber, font);
         this.setTextSafe(form, "PayerRelation", draft.payer.relation, font);
       }
-      if(draft.bank){
-        this.setTextSafe(form, "BankName", draft.bank.name, font);
-        this.setTextSafe(form, "BankBranch", draft.bank.branch, font);
-        this.setTextSafe(form, "BankAccountNumber", draft.bank.account, font);
-      }
+      global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
+        method: draft.payment?.method || "",
+        bank: draft.bank || {}
+      }, font, {
+        hoMarks: [{ field: "CollectionMethod", value: "Hok" }],
+        ccMarks: [{ field: "CollectionMethod", value: "Credit" }]
+      });
       if(font && form.updateFieldAppearances) form.updateFieldAppearances(font);
       return pdfDoc.save({ updateFieldAppearances: !!font });
     },
@@ -473,7 +471,7 @@
         <div class="hachLifeFormPreview__row"><span>חברה / מוצר</span><strong>הכשרה · ריסק חיים</strong></div>
         <div class="hachLifeFormPreview__row"><span>תחילת ביטוח</span><strong>${escapeHtml(draft.insuranceBegin || "—")}</strong></div>
         ${rows}
-        <button class="btn btn--primary" type="button" data-hachlife-open="1">פתח טופס דיגיטלי</button>
+        ${global.CustomerDocuments?.canDownloadOfficialJoinForm?.() ? `<button class="btn btn--primary" type="button" data-hachlife-open="1">פתח טופס דיגיטלי</button>` : ""}
       </div>`;
     },
 
@@ -511,6 +509,7 @@
     },
 
     open(rec){
+      if(global.CustomerFileUI?.denyOfficialJoinFormDownload?.()) return;
       this.ensureStyles();
       this.close();
       const draft = this.buildDraft(rec);

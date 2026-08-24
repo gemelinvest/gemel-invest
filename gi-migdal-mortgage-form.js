@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/migdal-mortgage/",
     TEMPLATE_FILE: "migdal-mortgage-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-official-he-bold-v1",
+    VERSION: "20260824-official-pay-role-v1",
     DOC_ID: "doc_migdal_mortgage_form",
     DOC_TYPE: "migdal_mortgage_form",
 
@@ -144,12 +144,13 @@
       const agentNumbers = payload.companyAgentNumbers || payload.operational?.companyAgentNumbers
         || payload.primary?.operationalAgentNumbers || {};
       const payerSrc = payload.primary || primary?.data || {};
-      const ho = payerSrc.ho && typeof payerSrc.ho === "object" ? payerSrc.ho : {};
+      const pay = global.GI_OFFICIAL_FORM_FILL?.pickPayment?.(payload, payerSrc) || { method: "", isHo: false, bank: { name: "", branch: "", account: "", bankNo: "" } };
       const loans = this.loansFromPolicy(policy);
       const firstLoan = loans[0] || {};
       return {
         today: this.fmtTodayHe(),
         insuranceBegin: this.fmtDateHe(policy.startDate || payload.insuranceStartDate),
+        payment: pay,
         agentName: safeTrim(global.Auth?.current?.name) || safeTrim(rec?.agentName),
         agentNumber: safeTrim(agentNumbers["מגדל"]) || safeTrim(policy.agentNumber),
         primary: primaryPerson,
@@ -161,11 +162,7 @@
           address: safeTrim(firstLoan.address)
         },
         loans,
-        bank: {
-          name: safeTrim(ho.bankName),
-          branch: safeTrim(ho.branch),
-          account: safeTrim(ho.account)
-        }
+        bank: pay.bank
       };
     },
 
@@ -333,11 +330,12 @@
       this.applyPerson(form, draft.spouse, true, font);
       this.applyLoaner(form, draft.loaner, font);
       this.applyLoans(form, draft.loans, font);
-      if(draft.bank){
-        this.setTextSafe(form, "BankName", draft.bank.name, font);
-        this.setTextSafe(form, "BankBranchCode", draft.bank.branch, font);
-        this.setTextSafe(form, "BankAccountNumber", draft.bank.account, font);
-      }
+      global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
+        method: draft.payment?.method || "",
+        bank: draft.bank || {}
+      }, font, {
+        bankBranch: "BankBranchCode"
+      });
       if(font && form.updateFieldAppearances) form.updateFieldAppearances(font);
       return pdfDoc.save({ updateFieldAppearances: !!font });
     },
@@ -448,7 +446,7 @@
         <div class="migMortFormPreview__row"><span>תחילת ביטוח</span><strong>${escapeHtml(draft.insuranceBegin || "—")}</strong></div>
         <div class="migMortFormPreview__row"><span>בנק משעבד</span><strong>${escapeHtml(draft.loaner?.name || "—")}</strong></div>
         ${rows}
-        <button class="btn btn--primary" type="button" data-migmort-open="1">פתח טופס דיגיטלי</button>
+        ${global.CustomerDocuments?.canDownloadOfficialJoinForm?.() ? `<button class="btn btn--primary" type="button" data-migmort-open="1">פתח טופס דיגיטלי</button>` : ""}
       </div>`;
     },
     close(){
@@ -483,6 +481,7 @@
       }
     },
     open(rec){
+      if(global.CustomerFileUI?.denyOfficialJoinFormDownload?.()) return;
       this.ensureStyles();
       this.close();
       const draft = this.buildDraft(rec);

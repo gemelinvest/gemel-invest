@@ -22,7 +22,7 @@
     TEMPLATE_BASE: "./forms/clal-health/",
     TEMPLATE_FILE: "clal-health-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-official-he-bold-v1",
+    VERSION: "20260824-official-pay-role-v1",
     DOC_ID: "doc_clal_health_form",
     DOC_TYPE: "clal_health_form",
 
@@ -207,10 +207,11 @@
       const payerSrc = payload.primary || primary?.data || {};
       const external = payerSrc.externalPayer && typeof payerSrc.externalPayer === "object" ? payerSrc.externalPayer : {};
       const useExternal = safeTrim(payerSrc.payerChoice) === "external";
-      const ho = payerSrc.ho && typeof payerSrc.ho === "object" ? payerSrc.ho : {};
+      const pay = global.GI_OFFICIAL_FORM_FILL?.pickPayment?.(payload, payerSrc) || { method: "", isHo: false, bank: { name: "", branch: "", account: "", bankNo: "" } };
       return {
         today: this.fmtTodayHe(),
         insuranceBegin: this.fmtDateHe(policy.startDate || payload.insuranceStartDate),
+        payment: pay,
         agentName: safeTrim(global.Auth?.current?.name) || safeTrim(rec?.agentName),
         agentNumber: safeTrim(agentNumbers["כלל"]) || safeTrim(policy.agentNumber),
         discountPack: safeTrim(policy.discountPackageNum || policy.packageNum),
@@ -231,11 +232,7 @@
           houseNumber: useExternal ? safeTrim(external.houseNumber) : "",
           zip: useExternal ? safeTrim(external.zip) : ""
         },
-        bank: {
-          name: safeTrim(ho.bankName),
-          branch: safeTrim(ho.branch),
-          account: safeTrim(ho.account)
-        }
+        bank: pay.bank
       };
     },
 
@@ -398,11 +395,13 @@
         this.setTextSafe(form, "BirthDatePay", draft.payer.birthDate, font);
         this.setExport(form, "PayGender", this.mapGenderExport(draft.payer.gender));
       }
-      if(draft.bank){
-        this.setTextSafe(form, "BankName", draft.bank.name, font);
-        this.setTextSafe(form, "BankBranch", draft.bank.branch, font);
-        this.setTextSafe(form, "BankAccountNumber", draft.bank.account, font);
-      }
+      global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
+        method: draft.payment?.method || "",
+        bank: draft.bank || {}
+      }, font, {
+        hoMarks: [{ field: "BankUse", value: "1" }],
+        ccMarks: [{ field: "CreditUse", value: "1" }]
+      });
       if(font && form.updateFieldAppearances) form.updateFieldAppearances(font);
       return pdfDoc.save({ updateFieldAppearances: !!font });
     },
@@ -509,7 +508,7 @@
         <div class="clalHealthFormPreview__row"><span>חברה / מוצר</span><strong>כלל · בריאות</strong></div>
         <div class="clalHealthFormPreview__row"><span>תחילת ביטוח</span><strong>${escapeHtml(draft.insuranceBegin || "—")}</strong></div>
         ${rows}
-        <button class="btn btn--primary" type="button" data-clalhealth-open="1">פתח טופס דיגיטלי</button>
+        ${global.CustomerDocuments?.canDownloadOfficialJoinForm?.() ? `<button class="btn btn--primary" type="button" data-clalhealth-open="1">פתח טופס דיגיטלי</button>` : ""}
       </div>`;
     },
     close(){
@@ -544,6 +543,7 @@
       }
     },
     open(rec){
+      if(global.CustomerFileUI?.denyOfficialJoinFormDownload?.()) return;
       this.ensureStyles();
       this.close();
       const draft = this.buildDraft(rec);

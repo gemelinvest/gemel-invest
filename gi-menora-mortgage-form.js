@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/menora-mortgage/",
     TEMPLATE_FILE: "menora-mortgage-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-official-he-bold-v1",
+    VERSION: "20260824-official-pay-role-v1",
     DOC_ID: "doc_menora_mortgage_form",
     DOC_TYPE: "menora_mortgage_form",
     LOAN_SUM_FIELDS: ["Text38", "Text44", "Text51", "Text57"],
@@ -152,13 +152,14 @@
       const payerSrc = payload.primary || primary?.data || {};
       const external = payerSrc.externalPayer && typeof payerSrc.externalPayer === "object" ? payerSrc.externalPayer : {};
       const useExternal = safeTrim(payerSrc.payerChoice) === "external";
-      const ho = payerSrc.ho && typeof payerSrc.ho === "object" ? payerSrc.ho : {};
+      const pay = global.GI_OFFICIAL_FORM_FILL?.pickPayment?.(payload, payerSrc) || { method: "", isHo: false, bank: { name: "", branch: "", account: "", bankNo: "" } };
       const loans = this.loansFromPolicy(policy);
       const firstLoan = loans[0] || {};
       return {
         today: this.fmtTodayHe(),
         insuranceBegin: this.fmtDateHe(policy.startDate || payload.insuranceStartDate),
         discountPack: safeTrim(policy.discountPackageNum || policy.packageNum),
+        payment: pay,
         agentName: safeTrim(global.Auth?.current?.name) || safeTrim(rec?.agentName),
         agentNumber: safeTrim(agentNumbers["מנורה"]) || safeTrim(policy.agentNumber),
         primary: primaryPerson,
@@ -178,11 +179,7 @@
           phone: useExternal ? safeTrim(external.phone) : "",
           email: useExternal ? safeTrim(external.email) : ""
         },
-        bank: {
-          name: safeTrim(ho.bankName),
-          branch: safeTrim(ho.branch),
-          account: safeTrim(ho.account)
-        }
+        bank: pay.bank
       };
     },
 
@@ -351,11 +348,10 @@
         this.setTextSafe(form, "CellPhoneNumberMeshalem", draft.payer.phone, font);
         this.setTextSafe(form, "EmailMeshalem", draft.payer.email, font);
       }
-      if(draft.bank){
-        this.setTextSafe(form, "BankName", draft.bank.name, font);
-        this.setTextSafe(form, "BankBranch", draft.bank.branch, font);
-        this.setTextSafe(form, "BankAccountNumber", draft.bank.account, font);
-      }
+      global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
+        method: draft.payment?.method || "",
+        bank: draft.bank || {}
+      }, font, {});
       if(font && form.updateFieldAppearances) form.updateFieldAppearances(font);
       return pdfDoc.save({ updateFieldAppearances: !!font });
     },
@@ -466,7 +462,7 @@
         <div class="menoraMortFormPreview__row"><span>תחילת ביטוח</span><strong>${escapeHtml(draft.insuranceBegin || "—")}</strong></div>
         <div class="menoraMortFormPreview__row"><span>בנק משעבד</span><strong>${escapeHtml(draft.loaner?.name || "—")}</strong></div>
         ${rows}
-        <button class="btn btn--primary" type="button" data-menormort-open="1">פתח טופס דיגיטלי</button>
+        ${global.CustomerDocuments?.canDownloadOfficialJoinForm?.() ? `<button class="btn btn--primary" type="button" data-menormort-open="1">פתח טופס דיגיטלי</button>` : ""}
       </div>`;
     },
     close(){
@@ -501,6 +497,7 @@
       }
     },
     open(rec){
+      if(global.CustomerFileUI?.denyOfficialJoinFormDownload?.()) return;
       this.ensureStyles();
       this.close();
       const draft = this.buildDraft(rec);
