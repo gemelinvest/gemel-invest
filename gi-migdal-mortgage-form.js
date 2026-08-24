@@ -284,6 +284,9 @@
       if(person.smokingAmount){
         this.setTextSafe(form, isSpouse ? "ClientSmokeNumSpouse" : "ClientSmokeNum", person.smokingAmount, font);
       }
+      if(person.sumInsured){
+        this.setTextSafe(form, isSpouse ? "GiluiTotalRiskSpouse" : "GiluiTotalRisk", person.sumInsured, font);
+      }
     },
     applyLoaner(form, loaner, font){
       if(!loaner) return;

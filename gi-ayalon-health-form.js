@@ -65,18 +65,9 @@
       return this.listAyalonHealthPolicies(payload).length > 0;
     },
     listPolicyCovers(policy){
-      const out = [];
-      (Array.isArray(policy?.healthCovers) ? policy.healthCovers : []).forEach((x) => {
-        const s = safeTrim(x);
-        if(s && out.indexOf(s) < 0) out.push(s);
-      });
-      const amounts = policy?.healthCoversWithAmounts && typeof policy.healthCoversWithAmounts === "object"
-        ? policy.healthCoversWithAmounts : {};
-      Object.keys(amounts).forEach((k) => {
-        const s = safeTrim(k);
-        if(s && out.indexOf(s) < 0) out.push(s);
-      });
-      return out;
+      const helper = global.GI_OFFICIAL_FORM_FILL;
+      if(helper && helper.listStoredHealthCovers) return helper.listStoredHealthCovers(policy);
+      return [];
     },
     coverLetters(covers){
       const blob = coverBlob(covers);

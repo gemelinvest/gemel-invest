@@ -285,6 +285,11 @@
         const shabanField = !s ? "ShabanR" : (s === "Spouse" ? "ShabanSpouse" : "Shaban" + s);
         this.setExport(form, shabanField, "1");
       }
+      if(person.compensation){
+        if(!s) this.setTextSafe(form, "MaximumAmount", person.compensation, font);
+        else if(s === "Spouse") this.setTextSafe(form, "MaximumAmountText", person.compensation, font);
+        else if(s.indexOf("Child") === 0) this.setTextSafe(form, "MaximumAmount" + s, person.compensation, font);
+      }
     },
 
     payerPersonOf(draft){
@@ -308,9 +313,6 @@
       (draft.children || []).forEach((child, idx) => {
         this.applyPerson(form, child, "Child" + (idx + 1), font);
       });
-      if(draft.primary && draft.primary.compensation){
-        this.setTextSafe(form, "MaximumAmount", draft.primary.compensation, font);
-      }
       helper?.applyInsuredPayerOwner?.(form, this.payerPersonOf(draft), font, {
         relation: draft.payer && draft.payer.relation
       });

@@ -82,23 +82,11 @@
       return this.listPhoenixHealthPolicies(payload).length > 0;
     },
     listPolicyCovers(policy){
-      const out = [];
-      (Array.isArray(policy?.healthCovers) ? policy.healthCovers : []).forEach((x) => {
-        const s = safeTrim(x);
-        if(s && out.indexOf(s) < 0) out.push(s);
-      });
-      const amounts = policy?.healthCoversWithAmounts && typeof policy.healthCoversWithAmounts === "object"
-        ? policy.healthCoversWithAmounts : {};
-      Object.keys(amounts).forEach((k) => {
-        const s = safeTrim(k);
-        if(s && out.indexOf(s) < 0) out.push(s);
-      });
-      const selected = policy?.phoenixHealthSelected && typeof policy.phoenixHealthSelected === "object"
-        ? policy.phoenixHealthSelected : {};
-      Object.keys(selected).forEach((k) => {
-        if(selected[k] && out.indexOf(k) < 0) out.push(k);
-      });
-      return out;
+      const helper = global.GI_OFFICIAL_FORM_FILL;
+      if(helper && helper.listStoredHealthCovers){
+        return helper.listStoredHealthCovers(policy, { phoenixSelected: true });
+      }
+      return [];
     },
     coverLetters(covers){
       const list = (Array.isArray(covers) ? covers : []).map(safeTrim).filter(Boolean);

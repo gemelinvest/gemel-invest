@@ -297,6 +297,9 @@
         this.setTextSafe(form, isSpouse ? "NumberOfChildrenSpouse" : "NumberOfChildren", person.childrenCount, font);
       }
       if(person.phoneHome && isSpouse) this.setTextSafe(form, "PhoneNumberSpouse", person.phoneHome, font);
+      if(person.sumInsured){
+        this.setTextSafe(form, isSpouse ? "GiluiTotalRiskSpouse" : "GiluiTotalRisk", person.sumInsured, font);
+      }
     },
     applyLoaner(form, loaner, font){
       if(!loaner) return;

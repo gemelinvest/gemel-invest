@@ -329,6 +329,9 @@
       this.setExport(form, "Gender" + s, this.mapGenderExport(person.gender));
       this.setExport(form, "FamilyStatus" + s, this.mapMaritalExport(person.maritalStatus));
       this.setExport(form, isSpouse ? "IsSmokingBzug" : "IsSmoking", this.mapSmokingExport(person.smokingStatus));
+      if(person.sumInsured){
+        this.setTextSafe(form, isSpouse ? "MaximumAmountText" : "MaximumAmount", person.sumInsured, font);
+      }
     },
     applyLoaner(form, loaner, font){
       if(!loaner) return;
