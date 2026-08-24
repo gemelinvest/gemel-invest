@@ -6694,6 +6694,7 @@
       menoraCiForm: "menora_ci_form",
       menoraMortgageForm: "menora_mortgage_form",
       ayalonHealthForm: "ayalon_health_form",
+      ayalonMortgageForm: "ayalon_mortgage_form",
       clalHealthForm: "clal_health_form",
       clalLifeCoupleForm: "clal_life_couple_form",
       clalMortgageForm: "clal_mortgage_form",
@@ -6710,6 +6711,7 @@
       "menora_ci_form",
       "menora_mortgage_form",
       "ayalon_health_form",
+      "ayalon_mortgage_form",
       "clal_health_form",
       "clal_life_couple_form",
       "clal_mortgage_form",
@@ -7231,6 +7233,16 @@
       });
       return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
     },
+    qualifiesForAyalonMortgageForm(payload, rec){
+      const list = this.listOfficialJoinFormPolicies(payload, rec);
+      const matched = list.filter((p) => {
+        if(safeTrim(p?.company) !== "איילון") return false;
+        const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
+        if(/בריאות/.test(blob) && !/משכנתא/.test(blob)) return false;
+        return /משכנתא/.test(blob);
+      });
+      return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
+    },
     qualifiesForClalHealthForm(payload, rec){
       const list = this.listOfficialJoinFormPolicies(payload, rec);
       const matched = list.filter((p) => {
@@ -7475,6 +7487,19 @@
           uploadedBy: safeTrim(rec?.agentName)
         });
       }
+      const hasAyalMort = list.some((d) => safeTrim(d?.type) === this.TYPES.ayalonMortgageForm);
+      if(!hasAyalMort && this.qualifiesForAyalonMortgageForm(payload, rec)){
+        const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
+        list.unshift({
+          id: "doc_ayalon_mortgage_form",
+          type: this.TYPES.ayalonMortgageForm,
+          isLegacy: true,
+          name: "טופס מקורי — ריסק משכנתא · איילון",
+          source: "מערכת",
+          uploadedAt,
+          uploadedBy: safeTrim(rec?.agentName)
+        });
+      }
       const hasClalHealth = list.some((d) => safeTrim(d?.type) === this.TYPES.clalHealthForm);
       if(!hasClalHealth && this.qualifiesForClalHealthForm(payload, rec)){
         const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
@@ -7579,6 +7604,7 @@
         if(type === this.TYPES.menoraMortgageForm) return this.qualifiesForMenoraMortgageForm(payload, rec);
         if(type === this.TYPES.clalMortgageForm) return this.qualifiesForClalMortgageForm(payload, rec);
         if(type === this.TYPES.ayalonHealthForm) return this.qualifiesForAyalonHealthForm(payload, rec);
+        if(type === this.TYPES.ayalonMortgageForm) return this.qualifiesForAyalonMortgageForm(payload, rec);
         if(type === this.TYPES.clalHealthForm) return this.qualifiesForClalHealthForm(payload, rec);
         if(type === this.TYPES.clalLifeCoupleForm) return this.qualifiesForClalLifeCoupleForm(payload, rec);
         if(type === this.TYPES.migdalCancerForm) return this.qualifiesForMigdalCancerForm(payload, rec);
@@ -18375,6 +18401,13 @@ UsersGateUI.init();
           if(rec) void this.openAyalonHealthForm(rec);
           return;
         }
+        const openAyalMort = ev.target?.closest?.("[data-open-ayalon-mortgage-doc], [data-ayalmort-open]");
+        if(openAyalMort){
+          ev.preventDefault();
+          const rec = this.current();
+          if(rec) void this.openAyalonMortgageForm(rec);
+          return;
+        }
         const openMenoraCi = ev.target?.closest?.("[data-open-menora-ci-doc], [data-menoraci-open]");
         if(openMenoraCi){
           ev.preventDefault();
@@ -20994,6 +21027,12 @@ UsersGateUI.init();
             return `<div class="cfFile__documentsPreviewDoc">${window.AyalonHealthForm.renderPreviewHtml(draft)}</div>`;
           } catch(_e) {}
         }
+        if(type === CustomerDocuments.TYPES.ayalonMortgageForm && window.AyalonMortgageForm){
+          try {
+            const draft = window.AyalonMortgageForm.buildDraft(rec);
+            return `<div class="cfFile__documentsPreviewDoc">${window.AyalonMortgageForm.renderPreviewHtml(draft)}</div>`;
+          } catch(_e) {}
+        }
         if(type === CustomerDocuments.TYPES.menoraCiForm && window.MenoraCiForm){
           try {
             const draft = window.MenoraCiForm.buildDraft(rec);
@@ -21137,6 +21176,13 @@ UsersGateUI.init();
       if(safeTrim(doc?.type) === CustomerDocuments.TYPES.ayalonHealthForm && !window.AyalonHealthForm){
         try {
           await ensureAyalonHealthFormLoaded();
+          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
+        } catch(_e) {}
+        return;
+      }
+      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.ayalonMortgageForm && !window.AyalonMortgageForm){
+        try {
+          await ensureAyalonMortgageFormLoaded();
           if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
         } catch(_e) {}
         return;
@@ -21305,6 +21351,17 @@ UsersGateUI.init();
         try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
       }
     },
+    async openAyalonMortgageForm(rec){
+      if(this.denyOfficialJoinFormDownload()) return;
+      try {
+        await ensureAyalonMortgageFormLoaded();
+        if(!window.AyalonMortgageForm) throw new Error("AyalonMortgageForm missing");
+        window.AyalonMortgageForm.open(rec);
+      } catch(err){
+        try { console.error("AYALON_MORTGAGE_FORM_OPEN_FAILED", err); } catch(_e) {}
+        try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
+      }
+    },
     async openMenoraCiForm(rec){
       if(this.denyOfficialJoinFormDownload()) return;
       try {
@@ -21387,6 +21444,8 @@ UsersGateUI.init();
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-migdal-cancer-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.ayalonHealthForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-ayalon-health-doc="${escapeHtml(docId)}">פתח טופס</button>`;
+        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.ayalonMortgageForm){
+          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-ayalon-mortgage-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.menoraCiForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-menora-ci-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.menoraMortgageForm){
@@ -35204,6 +35263,7 @@ UsersGateUI.init();
     HEALTH_QKEYS: {
       clal_health: ["clal_smoking","clal_drugs_cannabis","clal_alcohol","clal_family_hereditary","clal_family_heart_diabetes","clal_neuro_development","clal_mental","clal_respiratory","clal_skin","clal_heart_blood_vessels","clal_digestive","clal_hernia","clal_liver_gallbladder_pancreas","clal_kidney_urinary","clal_metabolic_endocrine","clal_blood_immune","clal_infectious_hiv","clal_tumors","clal_musculoskeletal","clal_vision","clal_ent","clal_reproductive","clal_rheumatic_connective","clal_regular_meds","clal_future_tests","clal_hospital_surgery","clal_child_under_6m_followup","clal_child_family_history","clal_child_congenital"],
       ayalon_health: ["ayalon__alcohol","ayalon__drugs","ayalon__smoking","ayalon__medications","ayalon__hospitalization","ayalon__tests","ayalon__disability","ayalon__family_history","ayalon__neuro","ayalon__mental","ayalon__cancer","ayalon__respiratory","ayalon__eyes","ayalon__ent","ayalon__heart","ayalon__digestive","ayalon__kidneys","ayalon__endocrine","ayalon__musculoskeletal","ayalon__skin","ayalon__infectious","ayalon__female"],
+      ayalon_mortgage: ["ayalon_mort__smoking_current","ayalon_mort__smoking_past","ayalon_mort__drugs","ayalon_mort__alcohol","ayalon_mort__tests","ayalon_mort__disability","ayalon_mort__hospitalization","ayalon_mort__insurance_rejection","ayalon_mort__medications","ayalon_mort__neuro","ayalon_mort__blood","ayalon_mort__heart","ayalon_mort__mental","ayalon_mort__respiratory","ayalon_mort__digestive","ayalon_mort__kidneys","ayalon_mort__endocrine","ayalon_mort__skin","ayalon_mort__joints","ayalon_mort__cancer","ayalon_mort__infectious","ayalon_mort__female"],
       hachshara_ci: ["hachshara_crit__smoking","hachshara_crit__hospitalization","hachshara_crit__tests_5y","hachshara_crit__treatment_5y","hachshara_crit__chronic","hachshara_crit__memory","hachshara_crit__disability","hachshara_crit__mental","hachshara_crit__substances","hachshara_crit__neuro","hachshara_crit__respiratory","hachshara_crit__heart","hachshara_crit__blood","hachshara_crit__liver","hachshara_crit__digestive","hachshara_crit__kidneys","hachshara_crit__glands","hachshara_crit__skin","hachshara_crit__aids","hachshara_crit__musculoskeletal","hachshara_crit__cancer","hachshara_crit__autoimmune","hachshara_crit__eyes","hachshara_crit__ent","hachshara_crit__hernia","hachshara_crit__female","hachshara_crit__child_dev","hachshara_crit__family_critical","hachshara_crit__infant_1","hachshara_crit__infant_2"],
       hachshara_life: ["hachshara_risk_s__smoking","hachshara_risk_s__q1","hachshara_risk_s__q2","hachshara_risk_s__q3","hachshara_risk_s__q4a","hachshara_risk_s__q4b","hachshara_risk_s__q4c","hachshara_risk_s__q4d","hachshara_risk_s__q4e","hachshara_risk_s__q4f","hachshara_risk_s__q4g","hachshara_risk_s__q4h","hachshara_risk_s__q4i"],
       hachshara_life_short_decl: ["hachshara_risk_s__q1","hachshara_risk_s__q2","hachshara_risk_s__q3","hachshara_risk_s__q4a","hachshara_risk_s__q4b","hachshara_risk_s__q4c","hachshara_risk_s__q4d","hachshara_risk_s__q4e","hachshara_risk_s__q4f","hachshara_risk_s__q4g","hachshara_risk_s__q4h","hachshara_risk_s__q4i"],
@@ -35647,6 +35707,56 @@ UsersGateUI.init();
             { q: 10, keys: ["hachshara_risk_s__q4g", "hachshara_mort_s__q4g"] },
             { q: 11, keys: ["hachshara_risk_s__q4h", "hachshara_mort_s__q4h"] },
             { q: 12, keys: ["hachshara_risk_s__q4i", "hachshara_mort_s__q4i"] }
+          ],
+          menora_ci: [
+            { smoke: true, keys: ["menora_crit__smoking"] },
+            { q: 1, keys: ["menora_crit__alcohol"] },
+            { q: 2, keys: ["menora_crit__drugs"] },
+            { q: 3, keys: ["menora_crit__inquiry"] },
+            { q: 4, keys: ["menora_crit__family"] },
+            { q: 5, keys: ["menora_crit__neuro"] },
+            { q: 6, keys: ["menora_crit__heart"] },
+            { q: 7, keys: ["menora_crit__metabolic"] },
+            { q: 8, keys: ["menora_crit__tumors"] },
+            { q: 9, keys: ["menora_crit__digestive"] },
+            { q: 10, keys: ["menora_crit__lungs"] },
+            { q: 11, keys: ["menora_crit__infectious"] },
+            { q: 12, keys: ["menora_crit__kidneys"] },
+            { q: 13, keys: ["menora_crit__eyes"] },
+            { q: 14, keys: ["menora_crit__ent"] },
+            { q: 15, keys: ["menora_crit__surgery"] },
+            { q: 16, keys: ["menora_crit__hospital"] },
+            { q: 17, keys: ["menora_crit__meds"] },
+            { q: 18, keys: ["menora_crit__infant_family"] },
+            { q: 19, keys: ["menora_crit__infant_nicu"] },
+            { q: 20, keys: ["menora_crit__infant_tests"] },
+            { q: 21, keys: ["menora_crit__infant_followup"] },
+            { q: 22, keys: ["menora_crit__ortho_top"] },
+            { q: 23, keys: ["menora_crit__child_dev_top"] }
+          ],
+          ayalon_mortgage: [
+            { smoke: true, keys: ["ayalon_mort__smoking_current"] },
+            { q: 1, keys: ["ayalon_mort__smoking_past"] },
+            { q: 2, keys: ["ayalon_mort__drugs"] },
+            { q: 3, keys: ["ayalon_mort__alcohol"] },
+            { q: 4, keys: ["ayalon_mort__tests"] },
+            { q: 5, keys: ["ayalon_mort__disability"] },
+            { q: 6, keys: ["ayalon_mort__hospitalization"] },
+            { q: 7, keys: ["ayalon_mort__insurance_rejection"] },
+            { q: 8, keys: ["ayalon_mort__medications"] },
+            { q: 9, keys: ["ayalon_mort__neuro"] },
+            { q: 10, keys: ["ayalon_mort__blood"] },
+            { q: 11, keys: ["ayalon_mort__heart"] },
+            { q: 12, keys: ["ayalon_mort__mental"] },
+            { q: 13, keys: ["ayalon_mort__respiratory"] },
+            { q: 14, keys: ["ayalon_mort__digestive"] },
+            { q: 15, keys: ["ayalon_mort__kidneys"] },
+            { q: 16, keys: ["ayalon_mort__endocrine"] },
+            { q: 17, keys: ["ayalon_mort__skin"] },
+            { q: 18, keys: ["ayalon_mort__joints"] },
+            { q: 19, keys: ["ayalon_mort__cancer"] },
+            { q: 20, keys: ["ayalon_mort__infectious"] },
+            { q: 21, keys: ["ayalon_mort__female"] }
           ]
         };
       }
@@ -35949,19 +36059,20 @@ UsersGateUI.init();
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
   const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-official-he-bold-v1";
-  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-mig-life-v1";
-  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-mig-life-v1";
-  const GI_HACHSHARA_LIFE_SHORT_FORM_HREF = "./gi-hachshara-life-short-form.js?v=20260824-mig-life-v1";
-  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-mig-life-v1";
-  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-mig-life-v1";
-  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-mig-life-v1";
-  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-mig-life-v1";
-  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-mig-life-v1";
-  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-mig-life-v1";
-  const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-mig-life-v1";
-  const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260824-mig-life-v1";
-  const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260824-mig-life-v1";
-  const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-mig-life-v1";
+  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-menora-ayalon-mort-v1";
+  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-menora-ayalon-mort-v1";
+  const GI_HACHSHARA_LIFE_SHORT_FORM_HREF = "./gi-hachshara-life-short-form.js?v=20260824-menora-ayalon-mort-v1";
+  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-menora-ayalon-mort-v1";
+  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-menora-ayalon-mort-v1";
+  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-menora-ayalon-mort-v1";
+  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-menora-ayalon-mort-v1";
+  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-menora-ayalon-mort-v1";
+  const GI_AYALON_MORTGAGE_FORM_HREF = "./gi-ayalon-mortgage-form.js?v=20260824-menora-ayalon-mort-v1";
+  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-menora-ayalon-mort-v1";
+  const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-menora-ayalon-mort-v1";
+  const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260824-menora-ayalon-mort-v1";
+  const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260824-menora-ayalon-mort-v1";
+  const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-menora-ayalon-mort-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -36206,6 +36317,33 @@ UsersGateUI.init();
       throw err;
     });
     return ensureAyalonHealthFormLoaded._p;
+  }
+  function ensureAyalonMortgageFormLoaded(){
+    if(window.AyalonMortgageForm) return Promise.resolve(window.AyalonMortgageForm);
+    if(ensureAyalonMortgageFormLoaded._p) return ensureAyalonMortgageFormLoaded._p;
+    ensureAyalonMortgageFormLoaded._p = new Promise((resolve, reject) => {
+      const existing = document.getElementById("gi-ayalon-mortgage-form-js");
+      const done = () => {
+        if(window.AyalonMortgageForm) resolve(window.AyalonMortgageForm);
+        else reject(new Error("gi-ayalon-mortgage-form.js loaded without AyalonMortgageForm"));
+      };
+      if(existing){
+        existing.addEventListener("load", done, { once: true });
+        existing.addEventListener("error", () => reject(new Error("gi-ayalon-mortgage-form.js failed")), { once: true });
+        return;
+      }
+      const s = document.createElement("script");
+      s.id = "gi-ayalon-mortgage-form-js";
+      s.src = GI_AYALON_MORTGAGE_FORM_HREF;
+      s.async = true;
+      s.onload = done;
+      s.onerror = () => reject(new Error("gi-ayalon-mortgage-form.js failed to load"));
+      document.head.appendChild(s);
+    }).catch((err) => {
+      ensureAyalonMortgageFormLoaded._p = null;
+      throw err;
+    });
+    return ensureAyalonMortgageFormLoaded._p;
   }
   function ensureClalHealthFormLoaded(){
     if(window.ClalHealthForm) return Promise.resolve(window.ClalHealthForm);

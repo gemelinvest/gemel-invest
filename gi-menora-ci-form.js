@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/menora-ci/",
     TEMPLATE_FILE: "menora-ci-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-official-decl-pay-he-v1",
+    VERSION: "20260824-menora-ayalon-mort-v1",
     DOC_ID: "doc_menora_ci_form",
     DOC_TYPE: "menora_ci_form",
 
@@ -263,6 +263,32 @@
         field.acroField.dict.set(PDFLib.PDFName.of("AS"), name);
       } catch(_e) {}
     },
+    setMenoraGenderExport(form, fieldName, exportValue){
+      if(!exportValue || !fieldName) return;
+      try {
+        const field = form.getField(fieldName);
+        if(!field) return;
+        const PDFLib = global.PDFLib;
+        const widgets = field.acroField.getWidgets?.() || [];
+        if(widgets.length < 2){
+          this.setExport(form, fieldName, exportValue);
+          return;
+        }
+        const wantTrue = exportValue === "True";
+        const wantFalse = exportValue === "False";
+        widgets.forEach((w) => {
+          const n = w.dict.lookup(PDFLib.PDFName.of("AP"))?.lookup(PDFLib.PDFName.of("N"));
+          const keys = [];
+          if(n && n.dict) n.dict.keys().forEach((k) => keys.push(String(k)));
+          let as = "Off";
+          if(wantTrue && keys.some((k) => /\/True$/.test(k))) as = "True";
+          else if(wantFalse && keys.some((k) => /\/False$/.test(k))) as = "False";
+          w.dict.set(PDFLib.PDFName.of("AS"), PDFLib.PDFName.of(as));
+        });
+        const vName = wantTrue ? "True" : (wantFalse ? "False" : String(exportValue));
+        field.acroField.dict.set(PDFLib.PDFName.of("V"), PDFLib.PDFName.of(vName));
+      } catch(_e) {}
+    },
 
     applyPerson(form, person, role, font){
       if(!person) return;
@@ -296,7 +322,8 @@
         else this.setTextSafe(form, "PhoneNumber" + nameS, phone, font);
         this.setTextSafe(form, "CellPhoneNumber" + nameS, phone, font);
       }
-      this.setExport(form, "Gender" + nameS, this.mapGenderExport(person.gender));
+      const genderField = isSpouse ? "GenderSpouse" : (isChild ? ("GenderChild" + childIdx) : "Gender");
+      this.setMenoraGenderExport(form, genderField, this.mapGenderExport(person.gender));
       if(!isChild) this.setExport(form, "FamilyStatus" + nameS, this.mapMaritalExport(person.maritalStatus));
       const smokeField = !nameS ? "IsSmoking" : (isSpouse ? "IsSmokingBzug" : "IsSmoking" + nameS);
       this.setExport(form, smokeField, this.mapSmokingExport(person.smokingStatus));
@@ -353,8 +380,16 @@
         this.setTextSafe(form, "EmailMeshalem", draft.payer.email, font);
       }
       global.GI_OFFICIAL_FORM_FILL?.applyOfficialHealthAndNames?.(form, draft, font, {
-        keys: "menora_ci",
+        skipHealth: true,
         visual: false
+      });
+      global.GI_OFFICIAL_FORM_FILL?.applyMappedHealthYesNo?.(form, {
+        map: "menora_ci",
+        responses: draft.healthResponses,
+        primaryId: draft.primaryId,
+        spouseId: draft.spouseId,
+        childIds: draft.childIds,
+        childSmokingField: "IsSmokingChild"
       });
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
