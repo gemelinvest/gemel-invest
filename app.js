@@ -6693,7 +6693,8 @@
       menoraCiForm: "menora_ci_form",
       menoraMortgageForm: "menora_mortgage_form",
       ayalonHealthForm: "ayalon_health_form",
-      clalHealthForm: "clal_health_form"
+      clalHealthForm: "clal_health_form",
+      clalLifeCoupleForm: "clal_life_couple_form"
     },
     OFFICIAL_JOIN_FORM_TYPES: [
       "hachshara_ci_form",
@@ -6703,7 +6704,8 @@
       "menora_ci_form",
       "menora_mortgage_form",
       "ayalon_health_form",
-      "clal_health_form"
+      "clal_health_form",
+      "clal_life_couple_form"
     ],
     isOfficialJoinFormType(type){
       return this.OFFICIAL_JOIN_FORM_TYPES.indexOf(safeTrim(type)) >= 0;
@@ -7176,6 +7178,18 @@
       });
       return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
     },
+    qualifiesForClalLifeCoupleForm(payload, rec){
+      const list = this.listOfficialJoinFormPolicies(payload, rec);
+      const matched = list.filter((p) => {
+        if(safeTrim(p?.company) !== "כלל") return false;
+        const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
+        if(/משכנתא/.test(blob) || /בריאות/.test(blob) || /מחלות\s*קשות/.test(blob)) return false;
+        const isLife = /ריסק/.test(blob) || /ביטוח\s*חיים/.test(blob);
+        if(!isLife) return false;
+        return safeTrim(p?.insuredMode) === "couple" || /זוגי|כפול למשפחה|כלל כפול/.test(blob);
+      });
+      return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
+    },
     qualifiesForMenoraCiForm(payload, rec){
       const list = this.listOfficialJoinFormPolicies(payload, rec);
       const matched = list.filter((p) => {
@@ -7291,6 +7305,19 @@
           uploadedBy: safeTrim(rec?.agentName)
         });
       }
+      const hasClalCouple = list.some((d) => safeTrim(d?.type) === this.TYPES.clalLifeCoupleForm);
+      if(!hasClalCouple && this.qualifiesForClalLifeCoupleForm(payload, rec)){
+        const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
+        list.unshift({
+          id: "doc_clal_life_couple_form",
+          type: this.TYPES.clalLifeCoupleForm,
+          isLegacy: true,
+          name: "טופס מקורי — ריסק זוגי · כלל",
+          source: "מערכת",
+          uploadedAt,
+          uploadedBy: safeTrim(rec?.agentName)
+        });
+      }
       const hasMenoraCi = list.some((d) => safeTrim(d?.type) === this.TYPES.menoraCiForm);
       if(!hasMenoraCi && this.qualifiesForMenoraCiForm(payload, rec)){
         const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
@@ -7340,6 +7367,7 @@
         if(type === this.TYPES.menoraMortgageForm) return this.qualifiesForMenoraMortgageForm(payload, rec);
         if(type === this.TYPES.ayalonHealthForm) return this.qualifiesForAyalonHealthForm(payload, rec);
         if(type === this.TYPES.clalHealthForm) return this.qualifiesForClalHealthForm(payload, rec);
+        if(type === this.TYPES.clalLifeCoupleForm) return this.qualifiesForClalLifeCoupleForm(payload, rec);
         if(type === this.TYPES.healthOps || type === this.TYPES.agentApptOps || type === this.TYPES.agentApptForm || type === this.TYPES.harBituach) return true;
         return !!(safeTrim(doc.name) || safeTrim(doc.url) || safeTrim(doc.dataUrl) || safeTrim(doc.fileName));
       }));
@@ -18091,6 +18119,13 @@ UsersGateUI.init();
           if(rec) void this.openClalHealthForm(rec);
           return;
         }
+        const openClalCouple = ev.target?.closest?.("[data-open-clal-life-couple-doc], [data-clalcouple-open]");
+        if(openClalCouple){
+          ev.preventDefault();
+          const rec = this.current();
+          if(rec) void this.openClalLifeCoupleForm(rec);
+          return;
+        }
         const openAyalHealth = ev.target?.closest?.("[data-open-ayalon-health-doc], [data-ayalhealth-open]");
         if(openAyalHealth){
           ev.preventDefault();
@@ -20674,6 +20709,12 @@ UsersGateUI.init();
             return `<div class="cfFile__documentsPreviewDoc">${window.ClalHealthForm.renderPreviewHtml(draft)}</div>`;
           } catch(_e) {}
         }
+        if(type === CustomerDocuments.TYPES.clalLifeCoupleForm && window.ClalLifeCoupleForm){
+          try {
+            const draft = window.ClalLifeCoupleForm.buildDraft(rec);
+            return `<div class="cfFile__documentsPreviewDoc">${window.ClalLifeCoupleForm.renderPreviewHtml(draft)}</div>`;
+          } catch(_e) {}
+        }
         if(type === CustomerDocuments.TYPES.ayalonHealthForm && window.AyalonHealthForm){
           try {
             const draft = window.AyalonHealthForm.buildDraft(rec);
@@ -20786,6 +20827,13 @@ UsersGateUI.init();
         } catch(_e) {}
         return;
       }
+      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.clalLifeCoupleForm && !window.ClalLifeCoupleForm){
+        try {
+          await ensureClalLifeCoupleFormLoaded();
+          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
+        } catch(_e) {}
+        return;
+      }
       if(safeTrim(doc?.type) === CustomerDocuments.TYPES.ayalonHealthForm && !window.AyalonHealthForm){
         try {
           await ensureAyalonHealthFormLoaded();
@@ -20884,6 +20932,17 @@ UsersGateUI.init();
         try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
       }
     },
+    async openClalLifeCoupleForm(rec){
+      if(this.denyOfficialJoinFormDownload()) return;
+      try {
+        await ensureClalLifeCoupleFormLoaded();
+        if(!window.ClalLifeCoupleForm) throw new Error("ClalLifeCoupleForm missing");
+        window.ClalLifeCoupleForm.open(rec);
+      } catch(err){
+        try { console.error("CLAL_LIFE_COUPLE_FORM_OPEN_FAILED", err); } catch(_e) {}
+        try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
+      }
+    },
     async openAyalonHealthForm(rec){
       if(this.denyOfficialJoinFormDownload()) return;
       try {
@@ -20954,6 +21013,8 @@ UsersGateUI.init();
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-migdal-mortgage-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.clalHealthForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-clal-health-doc="${escapeHtml(docId)}">פתח טופס</button>`;
+        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.clalLifeCoupleForm){
+          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-clal-life-couple-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.ayalonHealthForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-ayalon-health-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.menoraCiForm){
@@ -34749,7 +34810,8 @@ UsersGateUI.init();
       hachshara_life_full: ["hachshara_risk_f__smoking","hachshara_risk_f__a1","hachshara_risk_f__a2","hachshara_risk_f__a3","hachshara_risk_f__a4","hachshara_risk_f__a5","hachshara_risk_f__a6","hachshara_risk_f__b1","hachshara_risk_f__b2","hachshara_risk_f__b3","hachshara_risk_f__b4","hachshara_risk_f__b5","hachshara_risk_f__b6","hachshara_risk_f__b7","hachshara_risk_f__b8","hachshara_risk_f__b9","hachshara_risk_f__b10","hachshara_risk_f__b11","hachshara_risk_f__b12","hachshara_risk_f__b13","hachshara_risk_f__b14","hachshara_risk_f__b15","hachshara_risk_f__b16","hachshara_risk_f__b17","hachshara_risk_f__b18","hachshara_risk_f__b19"],
       menora_ci: ["menora_crit__smoking","menora_crit__alcohol","menora_crit__drugs","menora_crit__inquiry","menora_crit__family","menora_crit__neuro","menora_crit__heart","menora_crit__metabolic","menora_crit__tumors","menora_crit__digestive","menora_crit__lungs","menora_crit__infectious","menora_crit__kidneys","menora_crit__eyes","menora_crit__ent","menora_crit__surgery","menora_crit__hospital","menora_crit__meds","menora_crit__infant_family","menora_crit__infant_nicu","menora_crit__infant_tests","menora_crit__infant_followup","menora_crit__ortho_top","menora_crit__child_dev_top"],
       menora_mortgage: ["menora_mort__hobby","menora_mort__aviation","menora_mort__smoking","menora_mort__alcohol","menora_mort__drugs","menora_mort__inquiry","menora_mort__neuro","menora_mort__heart","menora_mort__mental","menora_mort__metabolic","menora_mort__tumors","menora_mort__digestive","menora_mort__lungs","menora_mort__kidneys","menora_mort__infectious","menora_mort__surgery","menora_mort__hospital","menora_mort__meds","menora_mort__eyes","menora_mort__ent","menora_mort__rheum","menora_mort__ortho","menora_mort__female","menora_mort__adl","menora_mort__family"],
-      migdal_mortgage: ["magdal_mort__smoking","magdal_mort__cancer","magdal_mort__neuro","magdal_mort__mental","magdal_mort__respiratory","magdal_mort__heart","magdal_mort__kidneys","magdal_mort__digestive","magdal_mort__diabetes","magdal_mort__immune","magdal_mort__disability","magdal_mort__hospital","magdal_mort__tests","magdal_mort__hobby","magdal_mort__accident_eyes","magdal_mort__accident_msk"]
+      migdal_mortgage: ["magdal_mort__smoking","magdal_mort__cancer","magdal_mort__neuro","magdal_mort__mental","magdal_mort__respiratory","magdal_mort__heart","magdal_mort__kidneys","magdal_mort__digestive","magdal_mort__diabetes","magdal_mort__immune","magdal_mort__disability","magdal_mort__hospital","magdal_mort__tests","magdal_mort__hobby","magdal_mort__accident_eyes","magdal_mort__accident_msk"],
+      clal_couple: ["clal_couple_neuro","clal_couple_mental","clal_couple_respiratory","clal_couple_skin","clal_couple_heart","clal_couple_digestive","clal_couple_liver","clal_couple_kidney","clal_couple_metabolic","clal_couple_blood","clal_couple_infectious","clal_couple_tumors","clal_couple_musculoskeletal","clal_couple_vision","clal_couple_ent","clal_couple_reproductive","clal_couple_rheumatic","clal_couple_alcohol","clal_couple_drugs"]
     },
     healthResponses(payload){
       const primary = payload?.primary && typeof payload.primary === "object" ? payload.primary : {};
@@ -34920,21 +34982,50 @@ UsersGateUI.init();
         }
         this.setTextSafe(form, "ExpirationDate", cc.expirationDate, font, opts);
         this.setTextSafe(form, "DayExpiryText", cc.expirationDate, font, opts);
+        this.setTextSafe(form, "DayExpireText", cc.expirationDate, font, opts);
         this.setTextSafe(form, "DayExpiryDate", cc.monthDigit, font, opts);
         this.setTextSafe(form, "DayExpireDate", cc.monthDigit, font, opts);
+        this.setTextSafe(form, "MonthDigit", cc.monthDigit, font, opts);
+        this.setTextSafe(form, "YearDigit", cc.yearDigit, font, opts);
       }
+    },
+    applyClalCoupleHealthYesNo(form, draft){
+      if(!form) return;
+      const responses = (draft && draft.healthResponses) || {};
+      const primaryId = (draft && draft.primaryId) || (draft && draft.primary && draft.primary.id) || "";
+      const spouseId = (draft && draft.spouseId) || (draft && draft.spouse && draft.spouse.id) || "";
+      const yesNo = (answer) => answer === "yes" ? "1" : (answer === "no" ? "2" : "");
+      const fill = (field, insId, qKey) => {
+        const exportValue = yesNo(this.healthAnswer(responses, qKey, insId));
+        if(exportValue) this.setExport(form, field, exportValue);
+      };
+      (this.HEALTH_QKEYS.clal_couple || []).forEach((qKey, idx) => {
+        const n = idx + 1;
+        fill("CRQ" + n, primaryId, qKey);
+        fill("CRQ" + n + "S", spouseId, qKey);
+      });
+      [
+        ["clal_couple_regular_meds", "RegularMeds", "SRegularMeds"],
+        ["clal_couple_future_surgery", "FutureInvasiveExam", "SFutureInvasiveExam"],
+        ["clal_couple_hospital_surgery", "PastInvasiveExam", "SPastInvasiveExam"],
+        ["clal_couple_disability", "ExistingDisability", "SExistingDisability"]
+      ].forEach((row) => {
+        fill(row[1], primaryId, row[0]);
+        fill(row[2], spouseId, row[0]);
+      });
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
   const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-official-he-bold-v1";
-  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-official-nullid-v1";
-  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-official-nullid-v1";
-  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-official-nullid-v1";
-  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-official-nullid-v1";
-  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-official-nullid-v1";
-  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-official-nullid-v1";
-  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-official-nullid-v1";
-  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-official-nullid-v1";
+  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-clal-couple-v1";
+  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-clal-couple-v1";
+  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-clal-couple-v1";
+  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-clal-couple-v1";
+  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-clal-couple-v1";
+  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-clal-couple-v1";
+  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-clal-couple-v1";
+  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-clal-couple-v1";
+  const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-clal-couple-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -35152,6 +35243,33 @@ UsersGateUI.init();
       throw err;
     });
     return ensureClalHealthFormLoaded._p;
+  }
+  function ensureClalLifeCoupleFormLoaded(){
+    if(window.ClalLifeCoupleForm) return Promise.resolve(window.ClalLifeCoupleForm);
+    if(ensureClalLifeCoupleFormLoaded._p) return ensureClalLifeCoupleFormLoaded._p;
+    ensureClalLifeCoupleFormLoaded._p = new Promise((resolve, reject) => {
+      const existing = document.getElementById("gi-clal-life-couple-form-js");
+      const done = () => {
+        if(window.ClalLifeCoupleForm) resolve(window.ClalLifeCoupleForm);
+        else reject(new Error("gi-clal-life-couple-form.js loaded without ClalLifeCoupleForm"));
+      };
+      if(existing){
+        existing.addEventListener("load", done, { once: true });
+        existing.addEventListener("error", () => reject(new Error("gi-clal-life-couple-form.js failed")), { once: true });
+        return;
+      }
+      const s = document.createElement("script");
+      s.id = "gi-clal-life-couple-form-js";
+      s.src = GI_CLAL_LIFE_COUPLE_FORM_HREF;
+      s.async = true;
+      s.onload = done;
+      s.onerror = () => reject(new Error("gi-clal-life-couple-form.js failed to load"));
+      document.head.appendChild(s);
+    }).catch((err) => {
+      ensureClalLifeCoupleFormLoaded._p = null;
+      throw err;
+    });
+    return ensureClalLifeCoupleFormLoaded._p;
   }
   const GI_SIMULATOR_CATALOG = Object.freeze([
     { company: "הפניקס", product: "ריסק" },
