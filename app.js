@@ -38647,7 +38647,10 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260825-clal-wording-v1";
+  const GI_WIZARD_JS_VERSION = "20260825-wiz-stale-fix-v1";
+  const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
+  const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
+  let _giWizardFailToastShown = false;
   const DISCOUNT_SELECT_PLACEHOLDER = "בחר הנחה";
   const TZAHAL_CLINIC = "קופה צהלית";
   const TZAHAL_CLINIC_SHABAN = "אין שב״ן";
@@ -38682,6 +38685,7 @@ UsersGateUI.init();
         const run = () => {
           void ensureGiWizardJsLoaded().catch((err) => {
             try {
+              if(err && err.__giSoftRecovering) return;
               console.warn("GI_WIZARD_PREFETCH_FAILED", err);
             } catch(_e) {}
           });
@@ -38713,6 +38717,9 @@ UsersGateUI.init();
       return false;
     }
   }
+  function isWizardBuildMismatchError(err){
+    return /stale gi-wizard\.js \(build mismatch\)/i.test(String(err && err.message || err || ""));
+  }
   async function clearGiWizardLoadCaches(){
     try {
       if(typeof caches !== "undefined" && caches.keys){
@@ -38722,6 +38729,37 @@ UsersGateUI.init();
         );
       }
     } catch(_e) {}
+  }
+  /** רענון רך חד־פעמי: מטמון ישן של app.js מצפה ל־BUILD ישן בזמן שהשרת כבר מגיש gi-wizard חדש. */
+  async function softRecoverStaleWizardBuild(){
+    try {
+      if(sessionStorage.getItem(GI_WIZARD_SOFT_RECOVERY_KEY) === "1") return false;
+      sessionStorage.setItem(GI_WIZARD_SOFT_RECOVERY_KEY, "1");
+    } catch(_e) {
+      if(Wizard._softRecoveryStarted) return false;
+      Wizard._softRecoveryStarted = true;
+    }
+    try { await clearGiWizardLoadCaches(); } catch(_e) {}
+    try {
+      if(typeof caches !== "undefined" && caches.keys){
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch(_e) {}
+    try {
+      if(typeof navigator !== "undefined" && navigator.serviceWorker && navigator.serviceWorker.getRegistrations){
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+    } catch(_e) {}
+    try {
+      const cleanUrl = String(window.location.href || "").split("?")[0].split("#")[0] || "./";
+      window.location.replace(cleanUrl + "?nocache=" + Date.now());
+      return true;
+    } catch(_e) {
+      try { window.location.reload(); return true; } catch(_e2) {}
+    }
+    return false;
   }
   function ensureGiWizardJsLoaded(){
     if(Wizard._chunkReady && giWizardIsInstalled()) return Promise.resolve(Wizard);
@@ -39143,6 +39181,19 @@ UsersGateUI.init();
         return wiz;
       } catch(firstErr) {
         try { console.warn("GI_WIZARD_CHUNK_LOAD_FAILED", firstErr); } catch(_e) {}
+        // build mismatch: רענון רך חד־פעמי (app.js ישן מול gi-wizard חדש מהשרת).
+        if(isWizardBuildMismatchError(firstErr)){
+          try {
+            const recovering = await softRecoverStaleWizardBuild();
+            if(recovering){
+              Wizard._chunkReady = false;
+              // משאירים את _chunkLoading כ־promise תלוי כדי שקריאות מקבילות לא יפתחו toastים.
+              await new Promise(() => {});
+            }
+          } catch(_softErr) {
+            /* ממשיכים לניסיון nocache */
+          }
+        }
         // ניסיון שני: ניקוי מטמון SW + טעינה עם nocache (עוקף Service Worker).
         try { await clearGiWizardLoadCaches(); } catch(_e) {}
         const retryHref = resolveGiWizardHref({ nocache: true });
@@ -39162,16 +39213,32 @@ UsersGateUI.init();
     return Wizard._chunkLoading;
   }
   function notifyWizardChunkFailed(err){
+    if(err && err.__giSoftRecovering) return;
+    try {
+      if(_giWizardFailToastShown) return;
+      if(sessionStorage.getItem(GI_WIZARD_FAIL_TOAST_KEY) === "1"){
+        _giWizardFailToastShown = true;
+        return;
+      }
+    } catch(_e) {
+      if(_giWizardFailToastShown) return;
+    }
+    _giWizardFailToastShown = true;
+    try { sessionStorage.setItem(GI_WIZARD_FAIL_TOAST_KEY, "1"); } catch(_e) {}
     let href = "";
     try { href = resolveGiWizardHref({ nocache: true }); } catch(_e) {}
     const detail = String(err && err.message || err || "").slice(0, 220);
+    const isMismatch = /build mismatch/i.test(detail);
     const looksMissingFile = /HTTP\s*404|לא קיים בשרת|network error|HTML במקום JS|קצר מדי/i.test(detail);
+    const text = isMismatch
+      ? "גרסת האשף לא תואמת למערכת אחרי רענון. לחצו Ctrl+F5 או «החל עדכון» אם מופיע, ונסו שוב."
+      : (looksMissingFile
+        ? ((detail ? detail + " — " : "") + "ודא ש־gi-wizard.js (~1.6MB) הועלה ליד index.html. בדוק בטאב: " + (href || "./gi-wizard.js"))
+        : ((detail || "שגיאה בטעינת האשף") + (href ? (" | " + href) : "")));
     try {
       window.showToast?.({
         title: "אשף לא נטען",
-        text: looksMissingFile
-          ? ((detail ? detail + " — " : "") + "ודא ש־gi-wizard.js (~1.6MB) הועלה ליד index.html. בדוק בטאב: " + (href || "./gi-wizard.js"))
-          : ((detail || "שגיאה בטעינת האשף") + (href ? (" | " + href) : "")),
+        text,
         variant: "err",
         durationMs: 14000
       });
