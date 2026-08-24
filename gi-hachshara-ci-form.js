@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/hachshara-ci/",
     TEMPLATE_FILE: "hachshara-ci-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-official-decl-pay-he-v1",
+    VERSION: "20260824-hach-editor-v1",
     DOC_ID: "doc_hachshara_ci_form",
     DOC_TYPE: "hachshara_ci_form",
 
@@ -64,6 +64,7 @@
       const lastName = safeTrim(d.lastName);
       const fullName = safeTrim(d.fullName) || safeTrim((firstName + " " + lastName).trim()) || safeTrim(ins?.label);
       return {
+        id: safeTrim(ins?.id),
         firstName, lastName, fullName,
         idNumber: safeTrim(d.idNumber),
         birthDate: this.fmtDateHe(d.birthDate),
@@ -233,6 +234,11 @@
       } catch(_e) {}
     },
     setExport(form, fieldName, exportValue){
+      const helper = global.GI_OFFICIAL_FORM_FILL;
+      if(helper && helper.setExport){
+        helper.setExport(form, fieldName, exportValue);
+        return;
+      }
       if(!exportValue) return;
       try {
         const field = form.getField(fieldName);
@@ -281,7 +287,57 @@
       }
     },
 
-    async fillOriginalTemplate(draft){
+    payerPersonOf(draft){
+      if(draft && draft.payer && draft.payer.name){
+        return {
+          fullName: draft.payer.name,
+          idNumber: draft.payer.idNumber,
+          firstName: "", lastName: "", city: "", street: "", zip: ""
+        };
+      }
+      return draft && draft.primary;
+    },
+    applyDraftToForm(form, draft, font){
+      const helper = global.GI_OFFICIAL_FORM_FILL;
+      this.setTextSafe(form, "Date", draft.today, font);
+      this.setTextSafe(form, "InsuranceBegin", draft.insuranceBegin, font);
+      this.setTextSafe(form, "AgentName", draft.agentName, font);
+      this.setTextSafe(form, "AgentNumber", draft.agentNumber, font);
+      this.applyPerson(form, draft.primary, "", font);
+      this.applyPerson(form, draft.spouse, "Spouse", font);
+      (draft.children || []).forEach((child, idx) => {
+        this.applyPerson(form, child, "Child" + (idx + 1), font);
+      });
+      if(draft.primary && draft.primary.compensation){
+        this.setTextSafe(form, "MaximumAmount", draft.primary.compensation, font);
+      }
+      helper?.applyInsuredPayerOwner?.(form, this.payerPersonOf(draft), font, {
+        relation: draft.payer && draft.payer.relation
+      });
+      helper?.applyOfficialHealthAndNames?.(form, draft, font, {
+        skipHealth: true,
+        visual: false
+      });
+      helper?.applyMappedHealthYesNo?.(form, {
+        map: "ci",
+        responses: draft.healthResponses,
+        primaryId: draft.primaryId,
+        spouseId: draft.spouseId,
+        childIds: draft.childIds
+      });
+      helper?.applyStoredPayment?.(form, {
+        method: draft.payment?.method || "",
+        bank: draft.bank || {},
+        cc: draft.payment?.cc || {}
+      }, font, {
+        textOpts: { visual: false },
+        bankNameCode: "BankNameCode",
+        bankBranchCode: "BankBranchCode",
+        hoMarks: [{ field: "CollectionMethod", value: "Hok" }],
+        ccMarks: [{ field: "CollectionMethod", value: "Credit" }]
+      });
+    },
+    async loadPdfDoc(){
       if(global.GI_LOAD_LIBS?.pdfLib) await global.GI_LOAD_LIBS.pdfLib();
       const PDFLib = global.PDFLib;
       if(!PDFLib?.PDFDocument) throw new Error("PDFLib missing");
@@ -301,34 +357,16 @@
           font = await pdfDoc.embedFont(fontBytes);
         }
       } catch(_e) {}
-      const form = pdfDoc.getForm();
-      this.setTextSafe(form, "Date", draft.today, font);
-      this.setTextSafe(form, "InsuranceBegin", draft.insuranceBegin, font);
-      this.setTextSafe(form, "AgentName", draft.agentName, font);
-      this.setTextSafe(form, "AgentNumber", draft.agentNumber, font);
-      this.applyPerson(form, draft.primary, "", font);
-      this.applyPerson(form, draft.spouse, "Spouse", font);
-      (draft.children || []).forEach((child, idx) => {
-        this.applyPerson(form, child, "Child" + (idx + 1), font);
-      });
-      if(draft.payer){
-        this.setTextSafe(form, "PayerName", draft.payer.name, font);
-        this.setTextSafe(form, "PayerPID", draft.payer.idNumber, font);
-        this.setTextSafe(form, "PayerRelation", draft.payer.relation, font);
+      return { pdfDoc, form: pdfDoc.getForm(), font };
+    },
+    async fillOriginalTemplate(draft, editorValues){
+      const { pdfDoc, form, font } = await this.loadPdfDoc();
+      const helper = global.GI_OFFICIAL_FORM_FILL;
+      if(editorValues && typeof editorValues === "object"){
+        helper?.applyPdfValues?.(form, editorValues, font, { visual: false });
+      } else {
+        this.applyDraftToForm(form, draft, font);
       }
-      global.GI_OFFICIAL_FORM_FILL?.applyOfficialHealthAndNames?.(form, draft, font, {
-        keys: "hachshara_ci",
-        visual: false
-      });
-      global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
-        method: draft.payment?.method || "",
-        bank: draft.bank || {},
-        cc: draft.payment?.cc || {}
-      }, font, {
-        textOpts: { visual: false },
-        bankNameCode: "BankNameCode",
-        bankBranchCode: "BankBranchCode"
-      });
       if(font && form.updateFieldAppearances) form.updateFieldAppearances(font);
       return pdfDoc.save({ updateFieldAppearances: !!font });
     },
@@ -350,90 +388,12 @@
       return "מחלות_קשות_הכשרה_" + name.replace(/[\\/:*?\"<>|]/g, "_") + "_" + nowISO().slice(0, 10) + ".pdf";
     },
 
-    fieldRow(label, name, value, extra){
-      return `<label class="hachCiForm__field">
-        <span>${escapeHtml(label)}</span>
-        <input class="input" type="text" data-hachci="${escapeHtml(name)}" value="${escapeHtml(value || "")}" ${extra || ""} />
-      </label>`;
+    editorHint(){
+      return "כל שדות הטופס הרשמי כאן, כולל הצהרת בריאות ותשלום. ממולא רק מה ששמור בתיק — אפשר להשלים שדות ריקים לפני ההורדה. חתימות לא מוצגות ולא ממולאות.";
     },
-    personBlock(title, prefix, person){
-      const p = person || {};
-      return `<section class="hachCiForm__block">
-        <div class="hachCiForm__blockTitle">${escapeHtml(title)}</div>
-        <div class="hachCiForm__grid">
-          ${this.fieldRow("שם פרטי", prefix + ".firstName", p.firstName)}
-          ${this.fieldRow("שם משפחה", prefix + ".lastName", p.lastName)}
-          ${this.fieldRow("תעודת זהות", prefix + ".idNumber", p.idNumber, 'dir="ltr"')}
-          ${this.fieldRow("תאריך לידה", prefix + ".birthDate", p.birthDate, 'dir="ltr"')}
-          ${this.fieldRow("מין", prefix + ".gender", p.gender)}
-          ${this.fieldRow("מצב משפחתי", prefix + ".maritalStatus", p.maritalStatus)}
-          ${this.fieldRow("טלפון", prefix + ".phone", p.phone, 'dir="ltr"')}
-          ${this.fieldRow("דוא״ל", prefix + ".email", p.email, 'dir="ltr"')}
-          ${this.fieldRow("עיר", prefix + ".city", p.city)}
-          ${this.fieldRow("רחוב", prefix + ".street", p.street)}
-          ${this.fieldRow("מספר בית", prefix + ".houseNumber", p.houseNumber, 'dir="ltr"')}
-          ${this.fieldRow("מיקוד", prefix + ".zip", p.zip, 'dir="ltr"')}
-          ${this.fieldRow("עיסוק", prefix + ".occupation", p.occupation)}
-          ${this.fieldRow("קופת חולים", prefix + ".clinic", p.clinic)}
-          ${this.fieldRow("שב״ן", prefix + ".shaban", p.shaban)}
-          ${this.fieldRow("גובה", prefix + ".heightCm", p.heightCm, 'dir="ltr"')}
-          ${this.fieldRow("משקל", prefix + ".weightKg", p.weightKg, 'dir="ltr"')}
-          ${this.fieldRow("עישון", prefix + ".smokingStatus", p.smokingStatus)}
-          ${this.fieldRow("סכום פיצוי", prefix + ".compensation", p.compensation, 'dir="ltr"')}
-        </div>
-      </section>`;
-    },
-
-    collectDraftFromModal(root, draft){
-      const next = JSON.parse(JSON.stringify(draft || {}));
-      root.querySelectorAll("[data-hachci]").forEach((el) => {
-        const path = safeTrim(el.getAttribute("data-hachci"));
-        if(!path) return;
-        const parts = path.split(".");
-        let cur = next;
-        for(let i = 0; i < parts.length - 1; i++){
-          const key = parts[i];
-          const idx = key.match(/^children\[(\d+)\]$/);
-          if(idx){
-            if(!Array.isArray(cur.children)) cur.children = [];
-            const n = Number(idx[1]);
-            if(!cur.children[n]) cur.children[n] = {};
-            cur = cur.children[n];
-          } else {
-            if(!cur[key] || typeof cur[key] !== "object") cur[key] = {};
-            cur = cur[key];
-          }
-        }
-        const last = parts[parts.length - 1];
-        cur[last] = safeTrim(el.value);
-        if(last === "firstName" || last === "lastName"){
-          cur.fullName = safeTrim(((cur.firstName || "") + " " + (cur.lastName || "")).trim());
-        }
-      });
-      return next;
-    },
-
     ensureStyles(){
-      if(document.getElementById("hachCiFormStyle")) return;
-      const style = document.createElement("style");
-      style.id = "hachCiFormStyle";
-      style.textContent = `
-        .hachCiFormModal .giValModal__card{ max-width:min(980px,96vw); width:100%; height:min(92vh,920px); max-height:min(92vh,920px); }
-        .hachCiForm__hint{ font-size:13px; line-height:1.45; color:#475569; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px; padding:10px 12px; }
-        .hachCiForm__block{ border:1px solid #E5EAF3; border-radius:14px; padding:12px 14px 14px; background:#fff; }
-        .hachCiForm__blockTitle{ font-size:14px; font-weight:800; color:#0B1F4B; margin-bottom:10px; }
-        .hachCiForm__grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 12px; }
-        .hachCiForm__field{ display:flex; flex-direction:column; gap:4px; min-width:0; }
-        .hachCiForm__field span{ font-size:12px; font-weight:700; color:#647287; }
-        .hachCiFormPreview{ padding:12px 4px; display:flex; flex-direction:column; gap:10px; }
-        .hachCiFormPreview__row{ display:flex; justify-content:space-between; gap:12px; font-size:13.5px; }
-        .hachCiFormPreview__row span{ color:#647287; }
-        .hachCiFormPreview__row strong{ color:#0F172A; font-weight:750; }
-        @media (max-width:720px){ .hachCiForm__grid{ grid-template-columns:1fr; } }
-      `;
-      document.head.appendChild(style);
+      global.GI_OFFICIAL_FORM_FILL?.ensurePdfEditorStyles?.();
     },
-
     renderPreviewHtml(draft){
       const people = [draft.primary, draft.spouse].concat(draft.children || []).filter(Boolean);
       const rows = people.map((p, idx) => {
@@ -455,7 +415,7 @@
       if(modal && modal.parentNode) modal.parentNode.removeChild(modal);
     },
 
-    bind(modal, rec){
+    bind(modal){
       modal.querySelectorAll("[data-hachci-close]").forEach((el) => {
         el.addEventListener("click", () => this.close());
       });
@@ -466,10 +426,10 @@
           dl.disabled = true;
           dl.textContent = "מפיק PDF…";
           try {
-            const draft = this.collectDraftFromModal(modal, this._draft);
-            const bytes = await this.fillOriginalTemplate(draft);
-            this.downloadBytes(bytes, this.fileName(draft));
-            try { global.showToast?.({ title: "הטופס הורד", text: "PDF מקורי של הכשרה — ממולא מהפרטים שבתיק.", variant: "success", durationMs: 5200 }); } catch(_e) {}
+            const values = global.GI_OFFICIAL_FORM_FILL?.collectPdfFieldEditor?.(modal, "pdf-field") || {};
+            const bytes = await this.fillOriginalTemplate(this._draft, values);
+            this.downloadBytes(bytes, this.fileName(this._draft));
+            try { global.showToast?.({ title: "הטופס הורד", text: "PDF מקורי של הכשרה — ממולא מהעורך.", variant: "success", durationMs: 5200 }); } catch(_e) {}
           } catch(err){
             try { console.error("HACHSHARA_CI_PDF_FAILED", err); } catch(_e) {}
             try { global.showToast?.({ title: "שגיאה בהפקת PDF", text: safeTrim(err?.message) || "לא ניתן למלא את הטופס המקורי", variant: "warn", durationMs: 6200 }); } catch(_e2) {}
@@ -481,61 +441,55 @@
       }
     },
 
-    open(rec){
+    async open(rec){
       if(global.CustomerFileUI?.denyOfficialJoinFormDownload?.()) return;
       this.ensureStyles();
       this.close();
       const draft = this.buildDraft(rec);
       this._draft = draft;
-      const childrenHtml = (draft.children || []).map((child, idx) =>
-        this.personBlock("ילד " + (idx + 1), "children[" + idx + "]", child)
-      ).join("");
       const modal = document.createElement("div");
-      modal.className = "giValModal hachCiFormModal is-open giValModal--visible";
+      modal.className = "giValModal hachCiFormModal giPdfEditorModal is-open giValModal--visible";
       modal.innerHTML = `
         <div class="giValModal__backdrop" data-hachci-close="1"></div>
         <div class="giValModal__card">
           <div class="giValModal__head">
             <div class="giValModal__headText">
               <div class="giValModal__title">טופס מקורי — מחלות קשות · הכשרה</div>
-              <div class="giValModal__sub">פרטים מהתיק כבר ממולאים. השלימו מה שחסר והורידו PDF רשמי.</div>
+              <div class="giValModal__sub">טוען את כל שדות הטופס הרשמי…</div>
             </div>
             <button type="button" class="giValModal__closeX" data-hachci-close="1" aria-label="סגירה">✕</button>
           </div>
-          <div class="giValModal__body">
-            <div class="hachCiForm__hint">ממולא אוטומטית רק מה ששמור בתיק, כולל כן/לא בהצהרת בריאות ואמצעי תשלום. פירוט רפואי, החלפת ביטוח וחתימות לא ממולאים — אותם משלימים בטופס או ב-PDF אחרי ההורדה.</div>
-            <section class="hachCiForm__block">
-              <div class="hachCiForm__blockTitle">פרטי הצעה וסוכן</div>
-              <div class="hachCiForm__grid">
-                ${this.fieldRow("תחילת ביטוח", "insuranceBegin", draft.insuranceBegin, 'dir="ltr"')}
-                ${this.fieldRow("תאריך היום", "today", draft.today, 'dir="ltr"')}
-                ${this.fieldRow("שם סוכן", "agentName", draft.agentName)}
-                ${this.fieldRow("מספר סוכן", "agentNumber", draft.agentNumber, 'dir="ltr"')}
-              </div>
-            </section>
-            ${this.personBlock("מבוטח ראשי", "primary", draft.primary)}
-            ${draft.spouse ? this.personBlock("בן / בת זוג", "spouse", draft.spouse) : ""}
-            ${childrenHtml}
-            <section class="hachCiForm__block">
-              <div class="hachCiForm__blockTitle">משלם והוראת קבע — רק אם נרשם בתיק</div>
-              <div class="hachCiForm__grid">
-                ${this.fieldRow("שם משלם", "payer.name", draft.payer.name)}
-                ${this.fieldRow("ת״ז משלם", "payer.idNumber", draft.payer.idNumber, 'dir="ltr"')}
-                ${this.fieldRow("קרבה", "payer.relation", draft.payer.relation)}
-                ${this.fieldRow("בנק", "bank.name", draft.bank.name)}
-                ${this.fieldRow("סניף", "bank.branch", draft.bank.branch, 'dir="ltr"')}
-                ${this.fieldRow("חשבון", "bank.account", draft.bank.account, 'dir="ltr"')}
-              </div>
-            </section>
-          </div>
+          <div class="giValModal__body"><div class="gi-pdf-ed-hint">טוען שדות הטופס…</div></div>
           <div class="giValModal__foot">
             <button type="button" class="btn" data-hachci-close="1">סגור</button>
-            <button type="button" class="btn btn--primary" data-hachci-download="1">הורד PDF רשמי</button>
+            <button type="button" class="btn btn--primary" data-hachci-download="1" disabled>הורד PDF רשמי</button>
           </div>
         </div>`;
       document.body.appendChild(modal);
       this._modal = modal;
-      this.bind(modal, rec);
+      this.bind(modal);
+      try {
+        const { form } = await this.loadPdfDoc();
+        const helper = global.GI_OFFICIAL_FORM_FILL;
+        const fields = helper?.listEditablePdfFields?.(form) || [];
+        const capture = {};
+        form.__giCapture = capture;
+        this.applyDraftToForm(form, draft, null);
+        delete form.__giCapture;
+        const body = modal.querySelector(".giValModal__body");
+        if(body){
+          body.innerHTML = '<div class="gi-pdf-ed-hint">' + escapeHtml(this.editorHint()) + "</div>"
+            + (helper?.renderPdfFieldEditor?.(fields, capture, "pdf-field") || "");
+        }
+        const sub = modal.querySelector(".giValModal__sub");
+        if(sub) sub.textContent = "פרטים מהתיק כבר ממולאים. השלימו מה שחסר והורידו PDF רשמי.";
+        const dl = modal.querySelector("[data-hachci-download]");
+        if(dl) dl.disabled = false;
+      } catch(err){
+        try { console.error("HACHSHARA_CI_EDITOR_FAILED", err); } catch(_e) {}
+        try { global.showToast?.({ title: "שגיאה בטעינת הטופס", text: safeTrim(err?.message) || "לא ניתן לפתוח את עורך הטופס", variant: "warn", durationMs: 6200 }); } catch(_e2) {}
+        this.close();
+      }
     }
   };
 

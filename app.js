@@ -35090,6 +35090,10 @@ UsersGateUI.init();
     setTextSafe(form, fieldName, value, font, opts){
       const text = String(value == null ? "" : value).trim();
       if(!text) return;
+      if(form && form.__giCapture){
+        form.__giCapture[String(fieldName)] = text;
+        return;
+      }
       const useVisual = !(opts && opts.visual === false);
       try {
         const field = form.getTextField(fieldName);
@@ -35107,10 +35111,33 @@ UsersGateUI.init();
     },
     setExport(form, fieldName, exportValue){
       if(!exportValue) return;
+      if(form && form.__giCapture){
+        form.__giCapture[String(fieldName)] = String(exportValue);
+        return;
+      }
       try {
         const field = form.getField(fieldName);
+        if(!field) return;
+        const raw = String(exportValue);
+        if(typeof field.select === "function"){
+          const opts = (typeof field.getOptions === "function") ? (field.getOptions() || []) : [];
+          const candidates = [raw, raw.replace(/^\//, ""), "/" + raw.replace(/^\//, "")];
+          for(let i = 0; i < candidates.length; i++){
+            const c = candidates[i];
+            if(!opts.length || opts.indexOf(c) >= 0){
+              try { field.select(c); return; } catch(_e) {}
+            }
+          }
+          try { field.select(raw); return; } catch(_e2) {}
+        }
+        if(typeof field.check === "function"){
+          const off = raw === "Off" || raw === "off" || raw === "false";
+          if(off){ try { field.uncheck(); } catch(_e) {} }
+          else { try { field.check(); } catch(_e3) {} }
+          return;
+        }
         const PDFLib = window.PDFLib;
-        const name = PDFLib?.PDFName?.of ? PDFLib.PDFName.of(String(exportValue)) : null;
+        const name = PDFLib?.PDFName?.of ? PDFLib.PDFName.of(raw) : null;
         if(!field || !name) return;
         field.acroField.dict.set(PDFLib.PDFName.of("V"), name);
         field.acroField.dict.set(PDFLib.PDFName.of("AS"), name);
@@ -35159,6 +35186,7 @@ UsersGateUI.init();
       return this.healthAnswer(responses, qKey, ids[0]);
     },
     hasPdfField(form, fieldName){
+      if(form && form.__giCapture) return !!fieldName;
       try { return !!(form && fieldName && form.getField(fieldName)); } catch(_e){ return false; }
     },
     applyHealthYesNo(form, spec){
@@ -35245,15 +35273,19 @@ UsersGateUI.init();
       return { exp, expirationDate: monthDigit + "/" + yearDigit, monthDigit, yearDigit };
     },
     pickPayment(payload, primarySrc){
-      const layers = [primarySrc, payload?.primary, payload];
+      const ins0 = Array.isArray(payload?.insureds) ? payload.insureds[0] : null;
+      const layers = [primarySrc, ins0 && ins0.data, payload?.primary, payload];
       const methodRaw = this.pick(layers, ["paymentMethod"]);
       const method = methodRaw === "ho" || methodRaw === "cc" ? methodRaw : "";
       const hoLayer = this.layerOf(primarySrc);
       const hoAlt = this.layerOf(payload?.primary);
+      const hoIns = this.layerOf(ins0 && ins0.data);
       const ho = (hoLayer.ho && typeof hoLayer.ho === "object") ? hoLayer.ho
-        : ((hoAlt.ho && typeof hoAlt.ho === "object") ? hoAlt.ho : {});
+        : ((hoAlt.ho && typeof hoAlt.ho === "object") ? hoAlt.ho
+          : ((hoIns.ho && typeof hoIns.ho === "object") ? hoIns.ho : {}));
       const ccSrc = (hoLayer.cc && typeof hoLayer.cc === "object") ? hoLayer.cc
-        : ((hoAlt.cc && typeof hoAlt.cc === "object") ? hoAlt.cc : {});
+        : ((hoAlt.cc && typeof hoAlt.cc === "object") ? hoAlt.cc
+          : ((hoIns.cc && typeof hoIns.cc === "object") ? hoIns.cc : {}));
       const bank = {
         name: String(ho.bankName == null ? "" : ho.bankName).trim(),
         branch: String(ho.branch == null ? "" : ho.branch).trim(),
@@ -35433,22 +35465,272 @@ UsersGateUI.init();
         fill(row[1], primaryId, row[0]);
         fill(row[2], spouseId, row[0]);
       });
+    },
+    hachsharaHealthRows(kind){
+      if(!this._hachHealthRows){
+        const pack = (keys, maxQ, skipRe) => {
+          const rows = [];
+          let q = 1;
+          (keys || []).forEach((key) => {
+            if(skipRe && skipRe.test(key)) return;
+            if(/smoking/.test(key)){
+              rows.push({ key, smoke: true });
+              return;
+            }
+            if(maxQ && q > maxQ) return;
+            rows.push({ key, q: q++ });
+          });
+          return rows;
+        };
+        this._hachHealthRows = {
+          ci: pack(this.HEALTH_QKEYS.hachshara_ci, 27, /infant_/),
+          life_full: pack(this.HEALTH_QKEYS.hachshara_life_full, 20, null),
+          life_short: pack(this.HEALTH_QKEYS.hachshara_life, 12, null)
+        };
+      }
+      return this._hachHealthRows[kind] || [];
+    },
+    applyMappedHealthYesNo(form, spec){
+      const cfg = spec && typeof spec === "object" ? spec : {};
+      if(!form) return;
+      const rows = Array.isArray(cfg.rows) ? cfg.rows : this.hachsharaHealthRows(cfg.map);
+      const responses = cfg.responses && typeof cfg.responses === "object" ? cfg.responses : {};
+      const primaryId = String(cfg.primaryId == null ? "" : cfg.primaryId).trim();
+      const spouseId = String(cfg.spouseId == null ? "" : cfg.spouseId).trim();
+      const childIds = Array.isArray(cfg.childIds) ? cfg.childIds.map((id) => String(id == null ? "" : id).trim()).filter(Boolean) : [];
+      const yesNo = (answer) => answer === "yes" ? "1" : (answer === "no" ? "2" : "");
+      const smokeVal = (answer) => answer === "yes" ? "True" : (answer === "no" ? "False" : "");
+      const ans = (key, insId) => {
+        let a = this.healthAnswer(responses, key, insId);
+        if(!a && insId && insId === primaryId) a = this.healthAnswerOrSolo(responses, key, "");
+        return a;
+      };
+      rows.forEach((row) => {
+        if(!row || !row.key) return;
+        const primaryA = ans(row.key, primaryId);
+        const spouseA = spouseId ? this.healthAnswer(responses, row.key, spouseId) : "";
+        if(row.smoke){
+          const pSmoke = smokeVal(primaryA);
+          if(pSmoke) this.setExport(form, cfg.smokingField || "IsSmoking", pSmoke);
+          const sSmoke = smokeVal(spouseA);
+          if(sSmoke) this.setExport(form, cfg.spouseSmokingField || "IsSmokingBzug", sSmoke);
+          return;
+        }
+        if(!row.q) return;
+        const pYn = yesNo(primaryA);
+        if(pYn) this.setExport(form, "HealthDecMainQ" + row.q, pYn);
+        const sYn = yesNo(spouseA);
+        if(sYn) this.setExport(form, "HealthDecBzugQ" + row.q, sYn);
+        childIds.forEach((cid, idx) => {
+          const cYn = yesNo(this.healthAnswer(responses, row.key, cid));
+          if(cYn) this.setExport(form, "HealthDecC" + (idx + 1) + "Q" + row.q, cYn);
+        });
+      });
+    },
+    applyInsuredPayerOwner(form, person, font, extra){
+      if(!person || !form) return;
+      const opts = { visual: false };
+      const full = String(person.fullName || [person.firstName, person.lastName].filter(Boolean).join(" ")).trim();
+      const idNumber = String(person.idNumber == null ? "" : person.idNumber).trim();
+      this.setTextSafe(form, "BankAccOwner", full, font, opts);
+      this.setTextSafe(form, "BAccOwners", full, font, opts);
+      this.setTextSafe(form, "PIDBankAccOwner", idNumber, font, opts);
+      this.setTextSafe(form, "BAOCity", person.city, font, opts);
+      this.setTextSafe(form, "BAOStreetName", person.street, font, opts);
+      this.setTextSafe(form, "BAOZipCode", person.zip, font, opts);
+      this.setTextSafe(form, "PayerName", full, font, opts);
+      this.setTextSafe(form, "PayerPID", idNumber, font, opts);
+      const relation = extra && extra.relation ? String(extra.relation).trim() : "";
+      if(relation) this.setTextSafe(form, "PayerRelation", relation, font, opts);
+    },
+    listEditablePdfFields(form){
+      const skipRe = /sign|Must\d|MustDate|MustName|MustSign|BituachSign|AccOwnerSignature|Siganture/i;
+      const out = [];
+      const seen = Object.create(null);
+      try {
+        const raw = form && typeof form.getFields === "function" ? form.getFields() : [];
+        raw.forEach((field) => {
+          let name = "";
+          try { name = String(field.getName() || "").trim(); } catch(_){ name = ""; }
+          if(!name || seen[name] || skipRe.test(name)) return;
+          seen[name] = true;
+          const ctor = field && field.constructor && field.constructor.name;
+          const type = (ctor === "PDFCheckBox" || ctor === "PDFRadioGroup") ? "choice"
+            : (ctor === "PDFDropdown" || ctor === "PDFOptionList" ? "dropdown" : "text");
+          let options = [];
+          try {
+            if(typeof field.getOptions === "function") options = field.getOptions() || [];
+          } catch(_){ options = []; }
+          out.push({ name, type, options: Array.isArray(options) ? options.map((o) => String(o)) : [] });
+        });
+      } catch(_){ }
+      return out;
+    },
+    applyPdfValues(form, values, font, opts){
+      const bag = values && typeof values === "object" ? values : {};
+      const textOpts = opts && typeof opts === "object" ? opts : { visual: false };
+      Object.keys(bag).forEach((name) => {
+        const str = String(bag[name] == null ? "" : bag[name]).trim();
+        if(!str) return;
+        let isChoice = false;
+        try {
+          const field = form && form.getField ? form.getField(name) : null;
+          if(field && (typeof field.select === "function" || typeof field.check === "function")) isChoice = true;
+        } catch(_){ isChoice = false; }
+        if(isChoice) this.setExport(form, name, str);
+        else this.setTextSafe(form, name, str, font, textOpts);
+      });
+    },
+    hebrewPdfFieldLabel(name){
+      const n = String(name || "");
+      const map = {
+        FirstName: "שם פרטי", LastName: "שם משפחה", FullName: "שם מלא", PID: "תעודת זהות",
+        BirthDate: "תאריך לידה", Gender: "מין", StreetName: "רחוב", HouseNumber: "מספר בית",
+        City: "עיר", ZipCode: "מיקוד", EmailAddress: "דוא״ל", CellPhoneNumber: "נייד",
+        PhoneNumber: "טלפון", AptNumber: "דירה", OccupationCode: "עיסוק", Proffession: "מקצוע",
+        BankName: "שם בנק", BankBranch: "סניף", BankAccountNumber: "מספר חשבון",
+        BankAccOwner: "בעל החשבון", BankNameCode: "קוד בנק", BankBranchCode: "קוד סניף",
+        CollectionMethod: "אופן גבייה", CreditCardNumber: "מספר כרטיס",
+        FullNameCreditCardHolder: "שם בעל הכרטיס", PIDCreditCardHolder: "ת.ז. בעל הכרטיס",
+        FirstNameOwner: "שם פרטי בעל פוליסה", LastNameOwner: "שם משפחה בעל פוליסה",
+        PIDOwner: "ת.ז. בעל פוליסה", PayerName: "שם המשלם", PayerPID: "ת.ז. משלם",
+        PayerRelation: "קרבת משלם", AgentName: "שם סוכן", AgentNumber: "מספר סוכן",
+        IsSmoking: "מעשן", IsSmokingBzug: "בן/בת זוג מעשן", Hight: "גובה", Weight: "משקל",
+        InsuranceBegin: "תחילת ביטוח", Date: "תאריך", GiluiTotalRisk: "סכום ביטוח",
+        GiluiTotalRiskSpouse: "סכום ביטוח משני", MaximumAmount: "סכום פיצוי",
+        FamilyStatus: "מצב משפחתי", HMOName: "קופת חולים", HMO: "קופת חולים"
+      };
+      if(map[n]) return map[n];
+      const hq = n.match(/^HealthDecMainQ(\d+)$/);
+      if(hq) return "הצהרת בריאות מבוטח — שאלה " + hq[1];
+      const bz = n.match(/^HealthDecBzugQ(\d+)$/);
+      if(bz) return "הצהרת בריאות בן/בת זוג — שאלה " + bz[1];
+      const ch = n.match(/^HealthDecC(\d+)Q(\d+)$/);
+      if(ch) return "הצהרת בריאות ילד " + ch[1] + " — שאלה " + ch[2];
+      const child = n.match(/^(.*)Child(\d+)$/);
+      if(child && map[child[1]]) return "ילד " + child[2] + " — " + map[child[1]];
+      const spouse = n.match(/^(.*)Spouse$/);
+      if(spouse && map[spouse[1]]) return "בן/בת זוג — " + map[spouse[1]];
+      const owner = n.match(/^(.*)Owner$/);
+      if(owner && map[owner[1]]) return "בעל פוליסה — " + map[owner[1]];
+      return n;
+    },
+    pdfFieldSection(name){
+      const n = String(name || "");
+      if(/^HealthDec|^IsSmoking|^Hight|^Weight|^BMI|^ClientSmoke|^Shaban/.test(n)) return "הצהרת בריאות";
+      if(/Child\d/.test(n) || /^HealthDecC/.test(n)) return "ילדים";
+      if(/Owner/.test(n) && !/BankAccOwner|PIDBankAccOwner|BAccOwners/.test(n)) return "בעל פוליסה";
+      if(/^Payer|^Bank|^Credit|^Collection|^PayWay|^BAO|^AccOwner|^Hok|^BAcc/.test(n)) return "תשלום";
+      if(/^Agent|^Agency/.test(n)) return "סוכן";
+      if(/^Ben\d|^Beneficiary/.test(n)) return "מוטבים";
+      if(/Spouse/.test(n) || /^Bzug/.test(n)) return "בן/בת זוג";
+      return "פרטי טופס";
+    },
+    choiceOptionLabel(fieldName, opt){
+      const o = String(opt == null ? "" : opt);
+      if(o === "1") return "כן";
+      if(o === "2") return "לא";
+      if(o === "True") return /Gender/i.test(fieldName) ? "זכר" : "כן";
+      if(o === "False") return /Gender/i.test(fieldName) ? "נקבה" : "לא";
+      if(o === "Hok") return "הוראת קבע";
+      if(o === "Credit") return "כרטיס אשראי";
+      if(o === "Past") return "עישן בעבר";
+      if(o === "Single") return "רווק/ה";
+      if(o === "Married") return "נשוי/אה";
+      if(o === "Divorced") return "גרוש/ה";
+      if(o === "Widow") return "אלמן/ה";
+      return o;
+    },
+    renderPdfFieldEditor(fields, values, dataAttr){
+      const attr = dataAttr || "pdf-field";
+      const bag = values && typeof values === "object" ? values : {};
+      const groups = Object.create(null);
+      const order = [];
+      (fields || []).forEach((f) => {
+        const sec = this.pdfFieldSection(f.name);
+        if(!groups[sec]){ groups[sec] = []; order.push(sec); }
+        groups[sec].push(f);
+      });
+      const esc = (s) => String(s == null ? "" : s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+      return order.map((sec) => {
+        const rows = groups[sec].map((f) => {
+          const val = bag[f.name] == null ? "" : String(bag[f.name]);
+          const label = this.hebrewPdfFieldLabel(f.name);
+          let control = "";
+          if(f.type === "choice" || f.type === "dropdown"){
+            const opts = ['<option value="">—</option>'];
+            let choices = Array.isArray(f.options) ? f.options.slice() : [];
+            if(!choices.length){
+              if(/HealthDec/.test(f.name)) choices = ["1", "2"];
+              else if(/IsSmoking|Gender/.test(f.name)) choices = ["True", "False"];
+              else if(f.name === "CollectionMethod") choices = ["Hok", "Credit"];
+              else if(f.name === "FamilyStatus" || f.name === "FamilyStatusSpouse") choices = ["Single", "Married", "Divorced", "Widow"];
+            }
+            const seenOpt = Object.create(null);
+            choices.forEach((raw) => {
+              const o = String(raw == null ? "" : raw);
+              if(!o || seenOpt[o]) return;
+              seenOpt[o] = true;
+              const sel = val === o ? " selected" : "";
+              opts.push('<option value="' + esc(o) + '"' + sel + ">" + esc(this.choiceOptionLabel(f.name, o)) + "</option>");
+            });
+            if(val && !seenOpt[val]){
+              opts.push('<option value="' + esc(val) + '" selected>' + esc(val) + "</option>");
+            }
+            control = '<select class="gi-pdf-ed-input" data-' + attr + '="' + esc(f.name) + '">' + opts.join("") + "</select>";
+          } else {
+            control = '<input class="gi-pdf-ed-input" data-' + attr + '="' + esc(f.name) + '" value="' + esc(val) + '">';
+          }
+          return '<label class="gi-pdf-ed-row"><span class="gi-pdf-ed-lab" title="' + esc(f.name) + '">' + esc(label) + "</span>" + control + "</label>";
+        }).join("");
+        return '<details class="gi-pdf-ed-sec" open><summary>' + esc(sec) + " (" + groups[sec].length + ")</summary><div class=\"gi-pdf-ed-grid\">" + rows + "</div></details>";
+      }).join("");
+    },
+    collectPdfFieldEditor(root, dataAttr){
+      const attr = dataAttr || "pdf-field";
+      const out = {};
+      if(!root || !root.querySelectorAll) return out;
+      root.querySelectorAll("[data-" + attr + "]").forEach((el) => {
+        const name = el.getAttribute("data-" + attr);
+        if(!name) return;
+        out[name] = el.value == null ? "" : String(el.value);
+      });
+      return out;
+    },
+    ensurePdfEditorStyles(){
+      if(typeof document === "undefined" || document.getElementById("giPdfEditorStyle")) return;
+      const style = document.createElement("style");
+      style.id = "giPdfEditorStyle";
+      style.textContent = [
+        ".giPdfEditorModal .giValModal__card{ max-width:min(1100px,96vw); width:100%; height:min(92vh,940px); max-height:min(92vh,940px); }",
+        ".gi-pdf-ed-hint{ font-size:13px; line-height:1.45; color:#475569; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px; padding:10px 12px; margin-bottom:10px; }",
+        ".gi-pdf-ed-sec{ border:1px solid #E5EAF3; border-radius:12px; margin:0 0 10px; background:#fff; }",
+        ".gi-pdf-ed-sec > summary{ font-size:14px; font-weight:800; color:#0B1F4B; padding:10px 12px; cursor:pointer; }",
+        ".gi-pdf-ed-grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px 12px; padding:0 12px 12px; }",
+        ".gi-pdf-ed-row{ display:flex; flex-direction:column; gap:3px; min-width:0; }",
+        ".gi-pdf-ed-lab{ font-size:11px; font-weight:700; color:#647287; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }",
+        ".gi-pdf-ed-input{ width:100%; min-height:34px; border:1px solid #D6DEEA; border-radius:8px; padding:6px 8px; font-size:13px; }",
+        "@media (max-width:720px){ .gi-pdf-ed-grid{ grid-template-columns:1fr; } }"
+      ].join("");
+      document.head.appendChild(style);
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
   const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-official-he-bold-v1";
-  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-phoenix-life-v1";
-  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-phoenix-life-v1";
-  const GI_HACHSHARA_LIFE_SHORT_FORM_HREF = "./gi-hachshara-life-short-form.js?v=20260824-phoenix-life-v1";
-  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-phoenix-life-v1";
-  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-phoenix-life-v1";
-  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-phoenix-life-v1";
-  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-phoenix-life-v1";
-  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-phoenix-life-v1";
-  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-phoenix-life-v1";
-  const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-phoenix-life-v1";
-  const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260824-phoenix-life-v1";
-  const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-phoenix-life-v1";
+  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-hach-editor-v1";
+  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-hach-editor-v1";
+  const GI_HACHSHARA_LIFE_SHORT_FORM_HREF = "./gi-hachshara-life-short-form.js?v=20260824-hach-editor-v1";
+  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-hach-editor-v1";
+  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-hach-editor-v1";
+  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-hach-editor-v1";
+  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-hach-editor-v1";
+  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-hach-editor-v1";
+  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-hach-editor-v1";
+  const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-hach-editor-v1";
+  const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260824-hach-editor-v1";
+  const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-hach-editor-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
