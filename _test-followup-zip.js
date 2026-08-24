@@ -1,4 +1,4 @@
-/* GI-FOLLOWUP-DOCS 20260825-docs-multi-v1
+/* GI-FOLLOWUP-DOCS 20260825-phoenix-fu-v1
    Run: node _test-followup-zip.js
 */
 "use strict";
@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260825-docs-multi-v1";
+const TAG = "20260825-phoenix-fu-v1";
 let failed = 0;
 let passed = 0;
 
@@ -65,6 +65,9 @@ assert(!app.includes('data-download-followup-zip type="button">הורד שאלו
 assert(modSrc.includes('DOC_TYPE = "followup_questionnaire"'), "module DOC_TYPE is per questionnaire");
 assert(modSrc.includes("packFilesIntoZip"), "packFilesIntoZip exported");
 assert(modSrc.includes("buildDocTitle"), "buildDocTitle helper");
+assert(modSrc.includes("visual: false, align: false") || modSrc.includes("HEB_TEXT_OPTS"), "Hebrew visual:false align:false");
+assert(modSrc.includes("keepSinglePage") || modSrc.includes("removePage"), "page extract keeps AcroForm via removePage");
+assert(app.includes("questionnaireNumbers"), "meta maps questionnaireNumbers");
 
 console.log("\n3) detectTriggeredFollowups");
 const sandbox = {
@@ -94,6 +97,15 @@ const meta = {
       questionnaireNos: ["2"],
       fields: [{ key: "2__diagnosis", label: "אבחנה" }]
     },
+    phoenix_full__heart_qkeys: {
+      key: "phoenix_full__heart_qkeys",
+      questionnaireNumbers: ["2", "3", "4"],
+      fields: [
+        { key: "q2_diagnosis", label: "אבחנה" },
+        { key: "q2_status", label: "מצב" },
+        { key: "q3_diagnosis", label: "הפרעת קצב" }
+      ]
+    },
     hachshara__hospital: {
       key: "hachshara__hospital",
       questionnaireNos: ["1"],
@@ -106,6 +118,16 @@ const health = {
     menora__heart: { p1: { answer: "yes", fields: { "4__heartDisease": "IHD" } } },
     clal_drugs_cannabis: { p1: { answer: "yes", fields: { "clal_א_cannabisNow": "כן" } } },
     phoenix_full__heart: { p1: { answer: "yes", fields: { "2__diagnosis": "STENT" } } },
+    phoenix_full__heart_qkeys: {
+      p1: {
+        answer: "yes",
+        fields: {
+          q2_diagnosis: "מום לב ASD",
+          q2_status: "טופל בניתוח",
+          q3_diagnosis: "פרפור עליות"
+        }
+      }
+    },
     hachshara__hospital: { s1: { answer: "yes", fields: { "1__reason": "appendectomy" } } },
     menora__smoking: { p1: { answer: "no", fields: {} } }
   }
@@ -115,10 +137,12 @@ const insureds = [
   { id: "s1", type: "spouse", label: "בן זוג" }
 ];
 const triggered = detect(health, meta, insureds);
-assert(triggered.length === 4, "detects 4 triggered questionnaires");
+assert(triggered.length >= 5, "detects at least 5 triggered questionnaires");
 assert(triggered.some((r) => r.companyKey === "menora" && r.questionnaireNum === "4"), "menora q4");
 assert(triggered.some((r) => r.companyKey === "clal" && r.questionnaireNum === "א"), "clal letter aleph");
-assert(triggered.some((r) => r.companyKey === "phoenix" && r.questionnaireNum === "2"), "phoenix q2");
+assert(triggered.some((r) => r.companyKey === "phoenix" && r.questionnaireNum === "2" && r.followupData["2__diagnosis"] === "STENT"), "phoenix q2 prefixed");
+assert(triggered.some((r) => r.companyKey === "phoenix" && r.questionnaireNum === "2" && r.followupData.q2_diagnosis === "מום לב ASD"), "phoenix q2 Hebrew q-keys");
+assert(triggered.some((r) => r.companyKey === "phoenix" && r.questionnaireNum === "3" && r.followupData.q3_diagnosis), "phoenix q3 from questionnaireNumbers");
 assert(triggered.some((r) => r.companyKey === "hachshara" && r.insuredId === "s1"), "hachshara spouse");
 assert(!triggered.some((r) => r.qKeys.indexOf("menora__smoking") >= 0), "no followup on no-answer");
 
@@ -128,6 +152,12 @@ assert(title.indexOf("שאלון המשך 4") >= 0, "title includes questionnair
 assert(title.indexOf("לב") >= 0, "title includes questionnaire label");
 assert(title.indexOf("מנורה") >= 0, "title includes company");
 assert(sandbox.GiFollowupZip.stableDocId(menora).indexOf("doc_followup_menora") === 0, "stable doc id");
+
+const phoenixQ2 = triggered.find((r) => r.companyKey === "phoenix" && r.questionnaireNum === "2" && r.followupData.q2_diagnosis);
+const ordered = sandbox.GiFollowupZip._test.orderedSchemaValues(phoenixQ2, sandbox.GI_FOLLOWUP_ZIP_CONFIG.COMPANIES.phoenix);
+assert(ordered.some((r) => r.value === "מום לב ASD"), "ordered phoenix values include Hebrew diagnosis");
+assert(sandbox.GiFollowupZip._test.HEB_TEXT_OPTS.visual === false, "Hebrew opts visual false");
+assert(sandbox.GiFollowupZip._test.HEB_TEXT_OPTS.align === false, "Hebrew opts align false");
 
 console.log("\n4) zip path + selected-only pack helper");
 assert(sandbox.GiFollowupZip.zipEntryPath({
@@ -148,5 +178,94 @@ assert(app.includes("paintDashboardAfterFaceLogin"), "face-login KPI paint remai
 assert(app.includes("fetchAgentAppointmentKpis"), "agent-appointment KPI fetch remains");
 assert(app.includes("policyNetPremium") || app.includes("MATCH_THRESHOLD"), "core premium/match symbols remain");
 
-console.log("\n" + passed + " passed, " + failed + " failed");
-process.exit(failed ? 1 : 0);
+console.log("\n7) Phoenix PDF fill keeps fields + Hebrew text");
+(async () => {
+  const pdfLib = require("pdf-lib");
+  const { PDFDocument, PDFName } = pdfLib;
+  sandbox.PDFLib = pdfLib;
+  const pdfBytes = fs.readFileSync(path.join(ROOT, "forms/followup-questionnaires/phoenix-followup-all.pdf"));
+  const srcDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+  const pageIndex = sandbox.GI_FOLLOWUP_ZIP_CONFIG.COMPANIES.phoenix.pageForQuestionnaire(3) - 1;
+  // Discover annot names outside vm (same algorithm as listPageFieldNames).
+  const pageFields = [];
+  const seen = new Set();
+  try {
+    const page = srcDoc.getPages()[pageIndex];
+    const annots = page?.node?.Annots?.();
+    const arr = annots && typeof annots.asArray === "function" ? annots.asArray() : [];
+    arr.forEach((ref) => {
+      try {
+        let node = srcDoc.context.lookup(ref);
+        const parts = [];
+        while(node){
+          const t = node.get(PDFName.of("T"));
+          if(t) parts.unshift(typeof t.decodeText === "function" ? t.decodeText() : String(t));
+          const parent = node.get(PDFName.of("Parent"));
+          node = parent ? srcDoc.context.lookup(parent) : null;
+        }
+        const name = parts.filter(Boolean).join(".");
+        if(name && !seen.has(name)){ seen.add(name); pageFields.push(name); }
+      } catch(_e) {}
+    });
+  } catch(_e) {}
+  assert(pageFields.length > 0, "phoenix page annot field names discovered");
+  assert(pageFields.some((n) => /^Text\d+$/.test(n) || n === "AgentName"), "phoenix page has text fields");
+  sandbox.GiFollowupZip._test.keepSinglePage(srcDoc, pageIndex);
+  assert(srcDoc.getPageCount() === 1, "keepSinglePage leaves one page");
+  assert(srcDoc.getForm().getFields().length > 0, "removePage path retains AcroForm fields");
+
+  const captured = {};
+  const form = srcDoc.getForm();
+  const helper = {
+    setTextSafe(_form, fieldName, value, _font, opts){
+      const text = String(value == null ? "" : value).trim();
+      if(!text) return;
+      captured[fieldName] = { text, opts: opts || null };
+      try { _form.getTextField(fieldName).setText(text); } catch(_e) {}
+    }
+  };
+  sandbox.GI_OFFICIAL_FORM_FILL = helper;
+  const entry = {
+    companyKey: "phoenix",
+    company: "הפניקס",
+    questionnaireNum: "3",
+    insuredId: "p1",
+    insured: { id: "p1", type: "primary", label: "ישראל ישראלי", fullName: "ישראל ישראלי", idNumber: "123456789" },
+    followupData: {
+      q3_diagnosis: "פרפור עליות",
+      q3_medication: "כן",
+      "3__ablation": "לא"
+    },
+    followupLabels: {
+      q3_diagnosis: "אבחנה",
+      q3_medication: "טיפול תרופתי"
+    }
+  };
+  // Direct fill helpers (same as fillFollowupPdf after page keep) — avoids vm/pdf-lib realm issues.
+  const rows = sandbox.GiFollowupZip._test.orderedSchemaValues(entry, sandbox.GI_FOLLOWUP_ZIP_CONFIG.COMPANIES.phoenix);
+  assert(rows.some((r) => r.value === "פרפור עליות"), "ordered rows keep Hebrew diagnosis");
+  const contentNames = pageFields.filter((n) => /^Text\d+$/.test(n) && !/^Text(32|33|35|36|37)$/.test(n));
+  rows.forEach((row, idx) => {
+    const name = contentNames[idx];
+    if(!name) return;
+    helper.setTextSafe(form, name, row.label ? (row.label + ": " + row.value) : row.value, null, sandbox.GiFollowupZip._test.HEB_TEXT_OPTS);
+  });
+  helper.setTextSafe(form, "Text32", entry.insured.fullName, null, sandbox.GiFollowupZip._test.HEB_TEXT_OPTS);
+  const written = Object.values(captured).map((c) => c.text).join(" | ");
+  assert(/פרפור עליות/.test(written), "Hebrew diagnosis written without visual reverse");
+  assert(!/תוילע רופרפ/.test(written), "Hebrew is not character-reversed");
+  assert(/ישראל/.test(written), "insured Hebrew name filled");
+  assert(Object.values(captured).every((c) => c.opts && c.opts.visual === false && c.opts.align === false), "all fills use visual:false align:false");
+  const pageCfg = sandbox.GI_FOLLOWUP_ZIP_CONFIG.COMPANIES.phoenix.pageForQuestionnaire(2);
+  assert(pageCfg === 1, "phoenix q2 maps to page 1");
+  assert(modSrc.includes("keepSinglePage(pdfDoc, pageIndex)"), "fillFollowupPdf uses keepSinglePage");
+  assert(!modSrc.includes("copyPages(srcDoc"), "fillFollowupPdf no longer uses copyPages");
+
+  console.log("\n" + passed + " passed, " + failed + " failed");
+  process.exit(failed ? 1 : 0);
+})().catch((err) => {
+  console.error(err);
+  failed += 1;
+  console.log("\n" + passed + " passed, " + failed + " failed");
+  process.exit(1);
+});

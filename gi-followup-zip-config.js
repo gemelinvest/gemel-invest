@@ -1,4 +1,4 @@
-/* GI-FOLLOWUP-ZIP-CONFIG 20260825-docs-multi-v1
+/* GI-FOLLOWUP-ZIP-CONFIG 20260825-phoenix-fu-v1
    ספריית PDF משולבת לכל חברה (מ-fw.zip, ללא הראל). */
 (function installFollowupZipConfig(global){
   "use strict";
@@ -46,19 +46,35 @@
         if(!Number.isFinite(n) || n < 2) return 1;
         return pageOneBased(n - 1, this.pageCount);
       },
+      /* מיפוי סמנטי לפי מפתחות אשף (qN_* / N__*) → שדות טקסט בדף השאלון.
+         Q2Q* שייכים לטופס הצטרפות בריאות, לא ל־phoenix-followup-all.pdf. */
+      phoenixFieldMap: [
+        { qNo: "2", keys: ["defect", "diagnosis", "q2_diagnosis", "q2_defect"] },
+        { qNo: "2", keys: ["status", "q2_status", "currentStatus"] },
+        { qNo: "2", keys: ["docs", "q2_docs", "requiredDocs"] },
+        { qNo: "2", keys: ["date", "q2_date", "dates", "diagnosisDate"] },
+        { qNo: "2", keys: ["tests", "q2_tests", "complications"] },
+        { qNo: "2", keys: ["treatment", "q2_treatment"] },
+        { qNo: "3", keys: ["diagnosis", "q3_diagnosis", "q3_reason"] },
+        { qNo: "3", keys: ["medication", "q3_medication", "treatment"] },
+        { qNo: "3", keys: ["ablation", "q3_ablation"] },
+        { qNo: "3", keys: ["pacemaker", "q3_pacemaker"] },
+        { qNo: "3", keys: ["date", "q3_date", "duration", "q3_duration", "outcome", "q3_outcome", "docs", "q3_docs"] },
+        { qNo: "4", keys: ["bpValue", "q4_bp_value", "q4_value", "value"] }
+      ],
       phoenixHeartMap: [
-        { pdf: "Q2Q1", keys: ["q2_defect", "q2_diagnosis", "diagnosis"] },
-        { pdf: "Q2Q2", keys: ["q2_status", "currentStatus", "status"] },
-        { pdf: "Q2Q3", keys: ["q2_docs", "docs", "requiredDocs"] },
-        { pdf: "Q2Q4", keys: ["q3_diagnosis"] },
-        { pdf: "Q2Q5", keys: ["q3_medication", "treatment"] },
-        { pdf: "Q2Q6", keys: ["q3_ablation"] },
-        { pdf: "Q2Q7", keys: ["q3_pacemaker"] },
-        { pdf: "Q2Q8", keys: ["q4_bp_value"] },
-        { pdf: "Q2Q9", keys: ["q4_bp_value"] },
-        { pdf: "Q2Q10", keys: ["q2_treatment", "treatment"] },
-        { pdf: "Q2Q11", keys: ["q2_date", "dates", "diagnosisDate"] },
-        { pdf: "Q2Q12", keys: ["q2_tests", "complications"] }
+        { pdf: "Q2Q1", keys: ["defect", "diagnosis", "q2_defect", "q2_diagnosis"] },
+        { pdf: "Q2Q2", keys: ["status", "q2_status", "currentStatus"] },
+        { pdf: "Q2Q3", keys: ["docs", "q2_docs", "requiredDocs"] },
+        { pdf: "Q2Q4", keys: ["diagnosis", "q3_diagnosis"] },
+        { pdf: "Q2Q5", keys: ["medication", "q3_medication", "treatment"] },
+        { pdf: "Q2Q6", keys: ["ablation", "q3_ablation"] },
+        { pdf: "Q2Q7", keys: ["pacemaker", "q3_pacemaker"] },
+        { pdf: "Q2Q8", keys: ["bpValue", "q4_bp_value"] },
+        { pdf: "Q2Q9", keys: ["bpValue", "q4_bp_value"] },
+        { pdf: "Q2Q10", keys: ["treatment", "q2_treatment"] },
+        { pdf: "Q2Q11", keys: ["date", "q2_date", "dates", "diagnosisDate"] },
+        { pdf: "Q2Q12", keys: ["tests", "q2_tests", "complications"] }
       ],
       fileLabel(qNo){
         return "שאלון-" + String(qNo).padStart(2, "0") + "-פניקס";
@@ -133,7 +149,7 @@
   };
 
   global.GI_FOLLOWUP_ZIP_CONFIG = {
-    VERSION: "20260825-followup-zip-v1",
+    VERSION: "20260825-phoenix-fu-v1",
     CLAL_LETTERS,
     COMPANIES,
     companyKeyFromQKey(qKey){

@@ -36729,8 +36729,8 @@ UsersGateUI.init();
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260825-docs-multi-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260825-docs-multi-v1";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260825-phoenix-fu-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260825-phoenix-fu-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -40855,7 +40855,10 @@ const MIRROR_DISCLOSURE_LIBRARY = {
             fields: Array.isArray(q.fields) ? q.fields.slice() : [],
             questionnaireLabel: safeTrim(q.questionnaireLabel),
             questionnaireSource: safeTrim(q.questionnaireSource),
-            questionnaireNos: Array.isArray(q.questionnaireNos) ? q.questionnaireNos.map(String) : [],
+            questionnaireNos: Array.isArray(q.questionnaireNos) && q.questionnaireNos.length
+              ? q.questionnaireNos.map(String)
+              : (Array.isArray(q.questionnaireNumbers) ? q.questionnaireNumbers.map(String) : []),
+            questionnaireNumbers: Array.isArray(q.questionnaireNumbers) ? q.questionnaireNumbers.map(String) : [],
             // GI-HEALTH-DECL: ייחוס שאלה שהתווספה מהצהרה של חברה אחרת
             addedFromOtherDecl: q._addedFromOtherDecl === true,
             addedFromCompany: safeTrim(q._addedFromCompany),
@@ -43076,7 +43079,10 @@ const MIRROR_DISCLOSURE_LIBRARY = {
             fields: Array.isArray(q.fields) ? q.fields.slice() : [],
             questionnaireLabel: safeTrim(q.questionnaireLabel),
             questionnaireSource: safeTrim(q.questionnaireSource),
-            questionnaireNos: Array.isArray(q.questionnaireNos) ? q.questionnaireNos.map(String) : [],
+            questionnaireNos: Array.isArray(q.questionnaireNos) && q.questionnaireNos.length
+              ? q.questionnaireNos.map(String)
+              : (Array.isArray(q.questionnaireNumbers) ? q.questionnaireNumbers.map(String) : []),
+            questionnaireNumbers: Array.isArray(q.questionnaireNumbers) ? q.questionnaireNumbers.map(String) : [],
             // GI-HEALTH-DECL: ייחוס שאלה שהתווספה מהצהרה של חברה אחרת
             addedFromOtherDecl: q._addedFromOtherDecl === true,
             addedFromCompany: safeTrim(q._addedFromCompany),

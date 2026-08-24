@@ -1,11 +1,13 @@
-/* GI-FOLLOWUP-ZIP 20260825-docs-multi-v1
+/* GI-FOLLOWUP-ZIP 20260825-phoenix-fu-v1
    שאלוני המשך ממולאים — מסמך נפרד לכל שאלון + ZIP זמני לנבחרים בלבד. */
 (function installGiFollowupZip(global){
   "use strict";
 
-  const TAG = "20260825-docs-multi-v1";
+  const TAG = "20260825-phoenix-fu-v1";
   const DOC_TYPE = "followup_questionnaire";
   const DOC_TYPE_ZIP_LEGACY = "followup_questionnaires_zip";
+  const HEB_TEXT_OPTS = { visual: false, align: false };
+  const HEADER_FIELD_RE = /^(AgentName|AgentNumber|Date|FullName|FirstName|LastName|PID|Text1|Text2|dsddfddf|ghjhjhgjhg)$/i;
 
   function safeTrim(v){
     return String(v == null ? "" : v).trim();
@@ -40,6 +42,7 @@
       out.push(s);
     };
     (Array.isArray(meta?.questionnaireNos) ? meta.questionnaireNos : []).forEach(push);
+    (Array.isArray(meta?.questionnaireNumbers) ? meta.questionnaireNumbers : []).forEach(push);
     const letter = safeTrim(meta?.questionnaireLetter);
     if(letter){
       letter.split(/[,،\s]+/).forEach(push);
@@ -59,6 +62,18 @@
 
   function hasValuesForPrefix(values, prefix){
     return Object.keys(values || {}).some((k) => k.startsWith(prefix) && safeTrim(values[k]));
+  }
+
+  function hasValuesForQuestionnaire(values, qId, cfg){
+    const id = safeTrim(qId);
+    if(!id) return false;
+    if(cfg.fillMode === "clal_cq"){
+      return hasValuesForPrefix(values, cfg.fieldPrefix(id));
+    }
+    if(hasValuesForPrefix(values, cfg.fieldPrefix(id))) return true;
+    const qPrefix = "q" + id + "_";
+    if(Object.keys(values || {}).some((k) => k.toLowerCase().startsWith(qPrefix.toLowerCase()) && safeTrim(values[k]))) return true;
+    return false;
   }
 
   function mergeValues(target, source){
@@ -106,8 +121,7 @@
         if(!cfg) return;
         const ids = qIds.length ? qIds : inferQuestionnaireIdsFromFields(values, cfg);
         ids.forEach((qId) => {
-          const prefix = cfg.fieldPrefix(qId);
-          if(!hasValuesForPrefix(values, prefix) && !hasGenericFollowup(values, qMeta)) return;
+          if(!hasValuesForQuestionnaire(values, qId, cfg) && !hasGenericFollowup(values, qMeta)) return;
           const dedupeKey = [companyKey, insId, qId].join("|");
           if(!bucket[dedupeKey]){
             bucket[dedupeKey] = {
@@ -151,7 +165,9 @@
       return out;
     }
     Object.keys(values || {}).forEach((k) => {
-      const m = /^(\d+)__/.exec(k);
+      let m = /^(\d+)__/.exec(k);
+      if(m && out.indexOf(m[1]) < 0) out.push(m[1]);
+      m = /^q(\d+)_/i.exec(k);
       if(m && out.indexOf(m[1]) < 0) out.push(m[1]);
     });
     return out;
@@ -162,14 +178,22 @@
     return fields.some((f) => f && f.key && safeTrim(values[f.key]));
   }
 
+  function keyMatchesQuestionnaire(key, qId, cfg){
+    const id = safeTrim(qId);
+    const k = safeTrim(key);
+    if(!id || !k) return false;
+    if(cfg.fillMode === "clal_cq") return k.startsWith(cfg.fieldPrefix(id));
+    if(k.startsWith(cfg.fieldPrefix(id))) return true;
+    if(k.toLowerCase().startsWith(("q" + id + "_").toLowerCase())) return true;
+    return false;
+  }
+
   function orderedSchemaValues(entry, cfg){
     const qId = entry.questionnaireNum;
-    const prefix = cfg.fieldPrefix(qId);
     const labels = entry.followupLabels || {};
     const rows = [];
     Object.keys(entry.followupData || {}).forEach((key) => {
-      if(!key.startsWith(prefix) && cfg.fillMode !== "clal_cq") return;
-      if(cfg.fillMode === "clal_cq" && !key.startsWith(prefix)) return;
+      if(!keyMatchesQuestionnaire(key, qId, cfg)) return;
       const val = safeTrim(entry.followupData[key]);
       if(!val) return;
       rows.push({ key, label: labels[key] || key, value: val });
@@ -192,26 +216,104 @@
     });
   }
 
-  function applySequentialFill(form, entry, cfg, font){
+  function isTextField(field){
+    try { return field.constructor.name === "PDFTextField"; } catch(_e){
+      return /Text/i.test(String(field?.getName?.() || ""));
+    }
+  }
+
+  function isCheckBox(field){
+    try { return field.constructor.name === "PDFCheckBox"; } catch(_e){
+      return /Check/i.test(String(field?.getName?.() || ""));
+    }
+  }
+
+  function setHebText(helper, form, fieldName, text, font){
+    if(!safeTrim(text) || !fieldName) return;
+    if(helper?.setTextSafe) helper.setTextSafe(form, fieldName, text, font, HEB_TEXT_OPTS);
+  }
+
+  function listPageFieldNames(pdfDoc, pageIndex){
+    const PDFName = global.PDFLib?.PDFName;
+    const out = [];
+    const seen = new Set();
+    try {
+      const page = pdfDoc.getPages()[pageIndex];
+      const annots = page?.node?.Annots?.();
+      if(!annots || !PDFName) return out;
+      const arr = typeof annots.asArray === "function" ? annots.asArray() : [];
+      arr.forEach((ref) => {
+        try {
+          let node = pdfDoc.context.lookup(ref);
+          const parts = [];
+          while(node){
+            const t = node.get(PDFName.of("T"));
+            if(t){
+              const raw = typeof t.decodeText === "function" ? t.decodeText() : String(t);
+              parts.unshift(raw);
+            }
+            const parent = node.get(PDFName.of("Parent"));
+            node = parent ? pdfDoc.context.lookup(parent) : null;
+          }
+          const name = parts.filter(Boolean).join(".");
+          if(name && !seen.has(name)){
+            seen.add(name);
+            out.push(name);
+          }
+        } catch(_e) {}
+      });
+    } catch(_e) {}
+    return out;
+  }
+
+  function keepSinglePage(pdfDoc, pageIndex){
+    const keep = Math.max(0, Math.min(pageIndex, pdfDoc.getPageCount() - 1));
+    for(let i = pdfDoc.getPageCount() - 1; i > keep; i--) pdfDoc.removePage(i);
+    for(let i = 0; i < keep; i++) pdfDoc.removePage(0);
+  }
+
+  function contentTextFieldNames(form, pageFieldNames){
+    const allow = Array.isArray(pageFieldNames) && pageFieldNames.length
+      ? new Set(pageFieldNames)
+      : null;
+    const names = form.getFields()
+      .filter(isTextField)
+      .map((f) => f.getName())
+      .filter((name) => {
+        if(!name || HEADER_FIELD_RE.test(name)) return false;
+        if(allow && !allow.has(name)) return false;
+        return true;
+      });
+    return sortFieldNames(names);
+  }
+
+  function applySequentialFill(form, entry, cfg, font, pageFieldNames){
     const helper = global.GI_OFFICIAL_FORM_FILL;
     const rows = orderedSchemaValues(entry, cfg);
-    const textFields = sortFieldNames(form.getFields().filter((f) => {
-      try { return f.constructor.name === "PDFTextField"; } catch(_e){ return /Text/i.test(String(f?.getName?.() || "")); }
-    }).map((f) => f.getName()));
+    const textFields = contentTextFieldNames(form, pageFieldNames);
     rows.forEach((row, idx) => {
       const fieldName = textFields[idx];
       if(!fieldName) return;
       const text = row.label ? (row.label + ": " + row.value) : row.value;
-      if(helper?.setTextSafe) helper.setTextSafe(form, fieldName, text, font, { visual: false });
+      setHebText(helper, form, fieldName, text, font);
     });
+    if(rows.length && !textFields.length){
+      const fallback = sortFieldNames(form.getFields().filter(isTextField).map((f) => f.getName())
+        .filter((n) => n && !/^Agent/i.test(n) && n !== "Date" && (!pageFieldNames || !pageFieldNames.length || pageFieldNames.indexOf(n) >= 0)));
+      if(fallback.length){
+        const blob = rows.map((r) => (r.label ? (r.label + ": " + r.value) : r.value)).join(" | ");
+        setHebText(helper, form, fallback[fallback.length - 1], blob, font);
+      }
+    }
     rows.forEach((row) => {
-      if(!/^לא|כן$/i.test(row.value) && row.value !== "לא" && row.value !== "כן") return;
+      if(row.value !== "לא" && row.value !== "כן") return;
       const yes = row.value === "כן";
       form.getFields().forEach((field) => {
         try {
-          if(field.constructor.name !== "PDFCheckBox") return;
+          if(!isCheckBox(field)) return;
           const name = field.getName();
           if(!name || name.indexOf("Check") < 0) return;
+          if(pageFieldNames && pageFieldNames.length && pageFieldNames.indexOf(name) < 0) return;
           if(yes) field.check(); else field.uncheck();
         } catch(_e) {}
       });
@@ -228,43 +330,64 @@
       const qIdx = idx + 1;
       const candidates = ["CQ" + cq + "Q" + qIdx, "CQ" + cq + "Q" + String(qIdx).padStart(2, "0")];
       const text = row.value;
-      candidates.forEach((name) => {
-        if(helper?.setTextSafe) helper.setTextSafe(form, name, text, font, { visual: false });
-      });
+      candidates.forEach((name) => setHebText(helper, form, name, text, font));
       if(row.value === "כן" || row.value === "לא"){
         candidates.forEach((name) => {
           try {
             const field = form.getField(name);
-            if(!field || field.constructor.name !== "PDFCheckBox") return;
+            if(!field || !isCheckBox(field)) return;
             if(row.value === "כן") field.check(); else field.uncheck();
           } catch(_e) {}
         });
       }
     });
     try {
-      if(helper?.setTextSafe) helper.setTextSafe(form, "CQ" + cq, entry.insured?.label || "", font, { visual: false });
+      setHebText(helper, form, "CQ" + cq, entry.insured?.label || "", font);
     } catch(_e) {}
   }
 
-  function applyPhoenixFill(form, entry, cfg, font){
-    applySequentialFill(form, entry, cfg, font);
-    if(String(entry.questionnaireNum) !== "2") return;
-    const helper = global.GI_OFFICIAL_FORM_FILL;
-    (cfg.phoenixHeartMap || []).forEach((row) => {
-      const val = pickFirstValue(entry.followupData, row.keys.map((k) => "2__" + k).concat(row.keys));
-      if(!val) return;
-      if(helper?.setTextSafe) helper.setTextSafe(form, row.pdf, val, font, { visual: false });
+  function phoenixKeyCandidates(qNo, keys){
+    const out = [];
+    (keys || []).forEach((k) => {
+      out.push(String(qNo) + "__" + k);
+      out.push("q" + qNo + "_" + k);
+      out.push(k);
     });
+    return out;
+  }
+
+  function applyPhoenixFill(form, entry, cfg, font, pageFieldNames){
+    const helper = global.GI_OFFICIAL_FORM_FILL;
+    const qNo = String(entry.questionnaireNum || "");
+    // Q2Q* קיימים בטופס הצטרפות בריאות בלבד; אם מופיעים בדף — ממלאים גם אותם.
+    (cfg.phoenixHeartMap || []).forEach((row) => {
+      if(!row.pdf) return;
+      const val = pickFirstValue(entry.followupData, phoenixKeyCandidates(qNo, row.keys || []));
+      if(val) setHebText(helper, form, row.pdf, val, font);
+    });
+    applySequentialFill(form, entry, cfg, font, pageFieldNames);
   }
 
   function applyInsuredHeader(form, entry, font){
     const helper = global.GI_OFFICIAL_FORM_FILL;
     const person = entry.insured?.data || entry.insured || {};
     const fullName = safeTrim(person.fullName) || safeTrim((person.firstName || "") + " " + (person.lastName || "")).trim() || safeTrim(entry.insured?.label);
-    const headerFields = ["FullName", "FirstName", "LastName", "PID", "Text1", "Text2"];
-    headerFields.forEach((name, idx) => {
-      const val = idx === 0 ? fullName : (idx === 3 ? safeTrim(person.idNumber) : (idx <= 2 ? fullName : ""));
-      if(val && helper?.setTextSafe) helper.setTextSafe(form, name, val, font, { visual: false });
+    const idNumber = safeTrim(person.idNumber);
+    const headerFields = [
+      ["FullName", fullName],
+      ["FirstName", safeTrim(person.firstName) || fullName],
+      ["LastName", safeTrim(person.lastName) || fullName],
+      ["PID", idNumber],
+      ["Text32", fullName],
+      ["Text33", idNumber || fullName],
+      ["Text35", fullName],
+      ["Text36", idNumber],
+      ["Text37", safeTrim(entry.insured?.label) || fullName],
+      ["Text1", fullName],
+      ["Text2", idNumber]
+    ];
+    headerFields.forEach((pair) => {
+      if(pair[1]) setHebText(helper, form, pair[0], pair[1], font);
     });
   }
 
@@ -303,20 +426,20 @@
     const cfg = getConfig().COMPANIES?.[entry.companyKey];
     if(!cfg) throw new Error("unknown company " + entry.companyKey);
     const templateBytes = await fetchTemplate(cfg.combinedPdf);
-    const srcDoc = await global.PDFLib.PDFDocument.load(templateBytes, { ignoreEncryption: true });
+    // copyPages drops AcroForm fields — keep one page via removePage so widgets stay fillable.
+    const pdfDoc = await global.PDFLib.PDFDocument.load(templateBytes, { ignoreEncryption: true });
     const pageNum = cfg.pageForQuestionnaire(entry.questionnaireNum);
-    const pageIndex = Math.max(0, pageNum - 1);
-    const outDoc = await global.PDFLib.PDFDocument.create();
-    const [copied] = await outDoc.copyPages(srcDoc, [Math.min(pageIndex, srcDoc.getPageCount() - 1)]);
-    outDoc.addPage(copied);
-    const form = outDoc.getForm();
-    const font = await loadFont(outDoc);
+    const pageIndex = Math.max(0, Math.min((Number(pageNum) || 1) - 1, pdfDoc.getPageCount() - 1));
+    const pageFieldNames = listPageFieldNames(pdfDoc, pageIndex);
+    keepSinglePage(pdfDoc, pageIndex);
+    const form = pdfDoc.getForm();
+    const font = await loadFont(pdfDoc);
     applyInsuredHeader(form, entry, font);
     if(cfg.fillMode === "clal_cq") applyClalCqFill(form, entry, cfg, font);
-    else if(cfg.fillMode === "phoenix") applyPhoenixFill(form, entry, cfg, font);
-    else applySequentialFill(form, entry, cfg, font);
+    else if(cfg.fillMode === "phoenix") applyPhoenixFill(form, entry, cfg, font, pageFieldNames);
+    else applySequentialFill(form, entry, cfg, font, pageFieldNames);
     try { form.updateFieldAppearances(font || undefined); } catch(_e) {}
-    return outDoc.save();
+    return pdfDoc.save();
   }
 
   function zipEntryPath(entry){
@@ -415,6 +538,16 @@
     roleSuffix,
     blobToDataUrl,
     zipEntryPath,
+    // test helpers
+    _test: {
+      parseQuestionnaireIds,
+      inferQuestionnaireIdsFromFields,
+      hasValuesForQuestionnaire,
+      orderedSchemaValues,
+      keepSinglePage,
+      listPageFieldNames,
+      HEB_TEXT_OPTS
+    },
     resolveForCustomer(rec, meta, insureds){
       const list = detectTriggeredFollowups(
         rec?.payload?.primary?.healthDeclaration
