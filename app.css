@@ -45558,13 +45558,13 @@ body.view-elementaryMirror-active .pageTitle{ /* keep default */ }
 }
 #view-customers .lcCustomers__searchWrap .search__input{
   flex: 1;
-  border: 0;
-  outline: 0;
+  border: 0 !important;
+  outline: 0 !important;
   height: 100%;
   padding: 0 14px;
   font-size: 14px;
-  background: transparent;
-  box-shadow: none;
+  background: transparent !important;
+  box-shadow: none !important;
 }
 #view-customers .lcCustomers__searchWrap .search__btn{
   border: 0;

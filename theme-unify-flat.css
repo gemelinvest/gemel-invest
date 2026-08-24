@@ -610,6 +610,15 @@
 }
 #view-customers .lcCustomers__toolbar:not(#\9):not(#\9){ background: var(--uf-head-bg) !important; border-bottom: 1px solid var(--uf-line-soft) !important; }
 #view-customers .lcCustomers__searchWrap:not(#\9):not(#\9){ border: 1px solid var(--uf-line) !important; border-radius: 0 !important; background: var(--uf-surface) !important; }
+#view-customers .lcCustomers__searchWrap .search__input:not(#\9):not(#\9),
+#view-customers .lcCustomers__searchWrap .search__input:focus:not(#\9):not(#\9),
+#view-customers .lcCustomers__searchWrap #customersSearch:not(#\9):not(#\9),
+#view-customers .lcCustomers__searchWrap #customersSearch:focus:not(#\9):not(#\9){
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+  background: transparent !important;
+}
 #view-customers .lcCustomers__searchWrap .search__btn:not(#\9):not(#\9){ border-inline-start: 1px solid var(--uf-line) !important; background: var(--uf-head-bg) !important; border-radius: 0 !important; color: var(--uf-ink-2) !important; }
 #view-customers .lcCustomers__toolbar .btn.btn--primary:not(#\9):not(#\9), #view-customers #btnCustomersExport:not(#\9):not(#\9){
   border-radius: 0 !important; border: 1px solid var(--uf-accent) !important; background: var(--uf-accent) !important;

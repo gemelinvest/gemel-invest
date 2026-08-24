@@ -9222,6 +9222,16 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   background: #fff !important;
   overflow: hidden !important;
 }
+/* מסגרת אחת — בלי border פנימי על ה-input בתוך שדה החיפוש */
+#view-customers .lcCustomers__searchWrap .search__input:not(#\9):not(#\9),
+#view-customers .lcCustomers__searchWrap .search__input:focus:not(#\9):not(#\9),
+#view-customers .lcCustomers__searchWrap #customersSearch:not(#\9):not(#\9),
+#view-customers .lcCustomers__searchWrap #customersSearch:focus:not(#\9):not(#\9){
+  border: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+  background: transparent !important;
+}
 #view-customers #btnCustomersExport:not(#\9):not(#\9),
 #view-customers .lcCustomers__toolbar .btn.btn--primary:not(#\9):not(#\9){
   height: 40px !important;
