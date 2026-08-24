@@ -6696,7 +6696,9 @@
       ayalonHealthForm: "ayalon_health_form",
       clalHealthForm: "clal_health_form",
       clalLifeCoupleForm: "clal_life_couple_form",
-      migdalCancerForm: "migdal_cancer_form"
+      migdalCancerForm: "migdal_cancer_form",
+      phoenixLifeShortForm: "phoenix_life_short_form",
+      phoenixLifeFullForm: "phoenix_life_full_form"
     },
     OFFICIAL_JOIN_FORM_TYPES: [
       "hachshara_ci_form",
@@ -6709,7 +6711,9 @@
       "ayalon_health_form",
       "clal_health_form",
       "clal_life_couple_form",
-      "migdal_cancer_form"
+      "migdal_cancer_form",
+      "phoenix_life_short_form",
+      "phoenix_life_full_form"
     ],
     isOfficialJoinFormType(type){
       return this.OFFICIAL_JOIN_FORM_TYPES.indexOf(safeTrim(type)) >= 0;
@@ -7266,6 +7270,77 @@
       });
       return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
     },
+    isPhoenixRiskMortgagePolicy(policy){
+      if(!policy || typeof policy !== "object") return false;
+      if(safeTrim(policy.company) !== "הפניקס") return false;
+      const t = safeTrim(policy.type);
+      if(t === "ריסק משכנתא" || t === "ריסק") return true;
+      const blob = [policy.type, policy.productName, policy.planName, policy.label].map(safeTrim).join(" ");
+      if(/מחלות\s*קשות/.test(blob) || /סרטן/.test(blob) || /בריאות/.test(blob)) return false;
+      if(/משכנתא/.test(blob)) return true;
+      return /ריסק/.test(blob) || /ביטוח\s*חיים/.test(blob);
+    },
+    calcAgeYears(birthDate){
+      const s = safeTrim(birthDate);
+      if(!s) return "";
+      try {
+        const d = new Date(s);
+        if(isNaN(d.getTime())) return "";
+        const today = new Date();
+        let age = today.getFullYear() - d.getFullYear();
+        const m = today.getMonth() - d.getMonth();
+        if(m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
+        return (age >= 0 && age < 130) ? age : "";
+      } catch(_e){ return ""; }
+    },
+    phoenixRiskSumNumber(policy){
+      const nums = [];
+      const push = (value) => {
+        const n = Number(String(value == null ? "" : value).replace(/[^\d.]/g, ""));
+        if(Number.isFinite(n) && n > 0) nums.push(n);
+      };
+      if(!policy || typeof policy !== "object") return 0;
+      push(policy.sumInsured);
+      push(policy.compensation);
+      push(policy.coverageAmount);
+      [policy.sumInsuredPerInsured, policy.compensationPerInsured].forEach((map) => {
+        if(!map || typeof map !== "object") return;
+        Object.keys(map).forEach((key) => push(map[key]));
+      });
+      return nums.length ? Math.max.apply(null, nums) : 0;
+    },
+    phoenixRiskMortgageDecision(payload, rec){
+      const list = this.listOfficialJoinFormPolicies(payload, rec).filter((p) => this.isPhoenixRiskMortgagePolicy(p));
+      if(!list.length) return null;
+      const ages = [];
+      const pushAge = (bd) => {
+        const a = this.calcAgeYears(bd);
+        if(a !== "" && Number.isFinite(Number(a))) ages.push(Number(a));
+      };
+      const insureds = Array.isArray(payload?.insureds) ? payload.insureds : [];
+      insureds.forEach((ins) => {
+        const d = (ins && ins.data && typeof ins.data === "object") ? ins.data : (ins || {});
+        pushAge(d.birthDate);
+      });
+      if(payload?.primary && typeof payload.primary === "object") pushAge(payload.primary.birthDate);
+      const maxAge = ages.length ? Math.max.apply(null, ages) : 0;
+      const sums = list.map((p) => this.phoenixRiskSumNumber(p));
+      const maxSum = sums.length ? Math.max.apply(null, sums) : 0;
+      return {
+        list,
+        maxAge,
+        maxSum,
+        isExtended: maxAge > 55 || maxSum > 2000000
+      };
+    },
+    qualifiesForPhoenixLifeShortForm(payload, rec){
+      const d = this.phoenixRiskMortgageDecision(payload, rec);
+      return !!(d && !d.isExtended && this.officialJoinFormInPeriod(rec, payload, d.list));
+    },
+    qualifiesForPhoenixLifeFullForm(payload, rec){
+      const d = this.phoenixRiskMortgageDecision(payload, rec);
+      return !!(d && d.isExtended && this.officialJoinFormInPeriod(rec, payload, d.list));
+    },
     resolveListForCustomer(rec){
       const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
       const list = this.listFromPayload(payload);
@@ -7319,6 +7394,32 @@
           type: this.TYPES.hachsharaLifeShortForm,
           isLegacy: true,
           name: "טופס מקורי — ריסק חיים מקוצר עד 1,000,000 · הכשרה",
+          source: "מערכת",
+          uploadedAt,
+          uploadedBy: safeTrim(rec?.agentName)
+        });
+      }
+      const hasPhxLifeShort = list.some((d) => safeTrim(d?.type) === this.TYPES.phoenixLifeShortForm);
+      if(!hasPhxLifeShort && this.qualifiesForPhoenixLifeShortForm(payload, rec)){
+        const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
+        list.unshift({
+          id: "doc_phoenix_life_short_form",
+          type: this.TYPES.phoenixLifeShortForm,
+          isLegacy: true,
+          name: "טופס מקורי — ריסק / משכנתא עד גיל 55 · הפניקס",
+          source: "מערכת",
+          uploadedAt,
+          uploadedBy: safeTrim(rec?.agentName)
+        });
+      }
+      const hasPhxLifeFull = list.some((d) => safeTrim(d?.type) === this.TYPES.phoenixLifeFullForm);
+      if(!hasPhxLifeFull && this.qualifiesForPhoenixLifeFullForm(payload, rec)){
+        const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
+        list.unshift({
+          id: "doc_phoenix_life_full_form",
+          type: this.TYPES.phoenixLifeFullForm,
+          isLegacy: true,
+          name: "טופס מקורי — ריסק / משכנתא מעל גיל 55 / מעל 2 מיליון · הפניקס",
           source: "מערכת",
           uploadedAt,
           uploadedBy: safeTrim(rec?.agentName)
@@ -7446,6 +7547,8 @@
         if(type === this.TYPES.hachsharaCiForm) return this.qualifiesForHachsharaCiForm(payload, rec);
         if(type === this.TYPES.hachsharaLifeForm) return this.qualifiesForHachsharaLifeForm(payload, rec);
         if(type === this.TYPES.hachsharaLifeShortForm) return this.qualifiesForHachsharaLifeShortForm(payload, rec);
+        if(type === this.TYPES.phoenixLifeShortForm) return this.qualifiesForPhoenixLifeShortForm(payload, rec);
+        if(type === this.TYPES.phoenixLifeFullForm) return this.qualifiesForPhoenixLifeFullForm(payload, rec);
         if(type === this.TYPES.migdalLifeForm) return this.qualifiesForMigdalLifeForm(payload, rec);
         if(type === this.TYPES.migdalMortgageForm) return this.qualifiesForMigdalMortgageForm(payload, rec);
         if(type === this.TYPES.menoraCiForm) return this.qualifiesForMenoraCiForm(payload, rec);
@@ -18184,6 +18287,20 @@ UsersGateUI.init();
           if(rec) void this.openHachsharaLifeShortForm(rec);
           return;
         }
+        const openPhxLifeShort = ev.target?.closest?.("[data-open-phoenix-life-short-doc], [data-phxlifeshort-open]");
+        if(openPhxLifeShort){
+          ev.preventDefault();
+          const rec = this.current();
+          if(rec) void this.openPhoenixLifeShortForm(rec);
+          return;
+        }
+        const openPhxLifeFull = ev.target?.closest?.("[data-open-phoenix-life-full-doc], [data-phxlifefull-open]");
+        if(openPhxLifeFull){
+          ev.preventDefault();
+          const rec = this.current();
+          if(rec) void this.openPhoenixLifeFullForm(rec);
+          return;
+        }
         const openHachLife = ev.target?.closest?.("[data-open-hachshara-life-doc], [data-hachlife-open]");
         if(openHachLife){
           ev.preventDefault();
@@ -20797,6 +20914,18 @@ UsersGateUI.init();
             return `<div class="cfFile__documentsPreviewDoc">${window.HachsharaLifeShortForm.renderPreviewHtml(draft)}</div>`;
           } catch(_e) {}
         }
+        if(type === CustomerDocuments.TYPES.phoenixLifeShortForm && window.PhoenixLifeForm){
+          try {
+            const draft = window.PhoenixLifeForm.buildDraft(rec, "short");
+            return `<div class="cfFile__documentsPreviewDoc">${window.PhoenixLifeForm.renderPreviewHtml(draft)}</div>`;
+          } catch(_e) {}
+        }
+        if(type === CustomerDocuments.TYPES.phoenixLifeFullForm && window.PhoenixLifeForm){
+          try {
+            const draft = window.PhoenixLifeForm.buildDraft(rec, "full");
+            return `<div class="cfFile__documentsPreviewDoc">${window.PhoenixLifeForm.renderPreviewHtml(draft)}</div>`;
+          } catch(_e) {}
+        }
         if(type === CustomerDocuments.TYPES.migdalLifeForm && window.MigdalLifeForm){
           try {
             const draft = window.MigdalLifeForm.buildDraft(rec);
@@ -20925,6 +21054,13 @@ UsersGateUI.init();
         } catch(_e) {}
         return;
       }
+      if((safeTrim(doc?.type) === CustomerDocuments.TYPES.phoenixLifeShortForm || safeTrim(doc?.type) === CustomerDocuments.TYPES.phoenixLifeFullForm) && !window.PhoenixLifeForm){
+        try {
+          await ensurePhoenixLifeFormLoaded();
+          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
+        } catch(_e) {}
+        return;
+      }
       if(safeTrim(doc?.type) === CustomerDocuments.TYPES.migdalLifeForm && !window.MigdalLifeForm){
         try {
           await ensureMigdalLifeFormLoaded();
@@ -21033,6 +21169,28 @@ UsersGateUI.init();
         window.HachsharaLifeShortForm.open(rec);
       } catch(err){
         try { console.error("HACHSHARA_LIFE_SHORT_FORM_OPEN_FAILED", err); } catch(_e) {}
+        try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
+      }
+    },
+    async openPhoenixLifeShortForm(rec){
+      if(this.denyOfficialJoinFormDownload()) return;
+      try {
+        await ensurePhoenixLifeFormLoaded();
+        if(!window.PhoenixLifeForm) throw new Error("PhoenixLifeForm missing");
+        window.PhoenixLifeForm.open(rec, "short");
+      } catch(err){
+        try { console.error("PHOENIX_LIFE_SHORT_FORM_OPEN_FAILED", err); } catch(_e) {}
+        try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
+      }
+    },
+    async openPhoenixLifeFullForm(rec){
+      if(this.denyOfficialJoinFormDownload()) return;
+      try {
+        await ensurePhoenixLifeFormLoaded();
+        if(!window.PhoenixLifeForm) throw new Error("PhoenixLifeForm missing");
+        window.PhoenixLifeForm.open(rec, "full");
+      } catch(err){
+        try { console.error("PHOENIX_LIFE_FULL_FORM_OPEN_FAILED", err); } catch(_e) {}
         try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
       }
     },
@@ -21157,6 +21315,10 @@ UsersGateUI.init();
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-hachshara-life-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.hachsharaLifeShortForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-hachshara-life-short-doc="${escapeHtml(docId)}">פתח טופס</button>`;
+        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.phoenixLifeShortForm){
+          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-phoenix-life-short-doc="${escapeHtml(docId)}">פתח טופס</button>`;
+        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.phoenixLifeFullForm){
+          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-phoenix-life-full-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.migdalLifeForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-migdal-life-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.migdalMortgageForm){
@@ -34968,19 +35130,33 @@ UsersGateUI.init();
       clal_couple: ["clal_couple_neuro","clal_couple_mental","clal_couple_respiratory","clal_couple_skin","clal_couple_heart","clal_couple_digestive","clal_couple_liver","clal_couple_kidney","clal_couple_metabolic","clal_couple_blood","clal_couple_infectious","clal_couple_tumors","clal_couple_musculoskeletal","clal_couple_vision","clal_couple_ent","clal_couple_reproductive","clal_couple_rheumatic","clal_couple_alcohol","clal_couple_drugs"]
     },
     healthResponses(payload){
+      const raw = (obj) => {
+        const r = obj && obj.healthDeclaration && typeof obj.healthDeclaration === "object"
+          ? obj.healthDeclaration.responses : null;
+        return (r && typeof r === "object") ? r : null;
+      };
+      const nonempty = (r) => (r && Object.keys(r).length) ? r : null;
       const primary = payload?.primary && typeof payload.primary === "object" ? payload.primary : {};
-      const fromPrimary = primary.healthDeclaration && typeof primary.healthDeclaration === "object"
-        ? primary.healthDeclaration.responses : null;
-      if(fromPrimary && typeof fromPrimary === "object") return fromPrimary;
       const ins0 = Array.isArray(payload?.insureds) ? payload.insureds[0] : null;
-      const fromIns = ins0?.data?.healthDeclaration?.responses;
-      return (fromIns && typeof fromIns === "object") ? fromIns : {};
+      const fromPrimary = raw(primary);
+      const fromIns = raw(ins0 && ins0.data);
+      return nonempty(fromPrimary) || nonempty(fromIns) || fromPrimary || fromIns || {};
     },
     healthAnswer(responses, qKey, insId){
       if(!qKey || !insId) return "";
       const row = responses?.[qKey]?.[insId];
       const a = String(row?.answer == null ? "" : row.answer).trim().toLowerCase();
       return (a === "yes" || a === "no") ? a : "";
+    },
+    healthAnswerOrSolo(responses, qKey, insId){
+      const direct = this.healthAnswer(responses, qKey, insId);
+      if(direct) return direct;
+      if(insId) return "";
+      const block = responses?.[qKey];
+      if(!block || typeof block !== "object") return "";
+      const ids = Object.keys(block);
+      if(ids.length !== 1) return "";
+      return this.healthAnswer(responses, qKey, ids[0]);
     },
     hasPdfField(form, fieldName){
       try { return !!(form && fieldName && form.getField(fieldName)); } catch(_e){ return false; }
@@ -35143,6 +35319,96 @@ UsersGateUI.init();
         this.setTextSafe(form, "YearDigit", cc.yearDigit, font, opts);
       }
     },
+    applyNamedHealthYesNo(form, spec){
+      const cfg = spec && typeof spec === "object" ? spec : {};
+      if(!form) return;
+      const mode = cfg.mode === "full" ? "full" : "short";
+      const prefixes = this.PHOENIX_HEALTH_PREFIXES[mode] || [];
+      const rows = this.PHOENIX_HEALTH_ROWS[mode] || [];
+      const responses = cfg.responses && typeof cfg.responses === "object" ? cfg.responses : {};
+      const primaryId = String(cfg.primaryId == null ? "" : cfg.primaryId).trim();
+      const spouseId = String(cfg.spouseId == null ? "" : cfg.spouseId).trim();
+      const yesNo = (answer) => answer === "yes" ? "1" : (answer === "no" ? "2" : "");
+      const smokeVal = (answer) => answer === "yes" ? "True" : (answer === "no" ? "False" : "");
+      const lookup = (step, insId, allowSolo) => {
+        for(let i = 0; i < prefixes.length; i++){
+          const qKey = prefixes[i] + "__" + step;
+          let a = this.healthAnswer(responses, qKey, insId);
+          if(!a && allowSolo && !insId) a = this.healthAnswerOrSolo(responses, qKey, "");
+          if(a) return a;
+        }
+        return "";
+      };
+      rows.forEach((row) => {
+        const primaryA = lookup(row.step, primaryId, true);
+        const spouseA = lookup(row.step, spouseId, false);
+        if(row.smoke){
+          const pSmoke = smokeVal(primaryA);
+          if(pSmoke) this.setExport(form, "IsSmoking", pSmoke);
+          const sSmoke = smokeVal(spouseA);
+          if(sSmoke) this.setExport(form, "IsSmokingBzug", sSmoke);
+          return;
+        }
+        if(!row.field || !this.hasPdfField(form, row.field)) return;
+        const pYn = yesNo(primaryA);
+        if(pYn) this.setExport(form, row.field, pYn);
+        const spouseField = row.field + "S";
+        const sYn = yesNo(spouseA);
+        if(sYn && this.hasPdfField(form, spouseField)) this.setExport(form, spouseField, sYn);
+      });
+    },
+    PHOENIX_HEALTH_PREFIXES: {
+      short: ["phoenix_risk_u55_under2m", "phoenix_mortgage_u55_under2m"],
+      full: ["phoenix_risk_o55_or_over2m", "phoenix_mortgage_o55_or_over2m"]
+    },
+    PHOENIX_HEALTH_ROWS: {
+      short: [
+        { step: "s2_treatment", field: "Q1" },
+        { step: "s3_tests", field: "Q2" },
+        { step: "s4_smoking", smoke: true },
+        { step: "s5_1_heart", field: "Q4" },
+        { step: "s5_2_neuro", field: "Q5" },
+        { step: "s5_3_cancer", field: "Q6" },
+        { step: "s5_4_kidney", field: "Q7" },
+        { step: "s5_5_liver", field: "Q8" },
+        { step: "s5_6_lungs", field: "Q9" },
+        { step: "s6_vision", field: "Q10" },
+        { step: "s7_ortho", field: "Q11" },
+        { step: "s8_hearing", field: "Q12" },
+        { step: "s9_digestive", field: "Q13" },
+        { step: "s10_endocrine", field: "Q14" },
+        { step: "s11_mental", field: "Q15" },
+        { step: "s12_disability", field: "Q16" }
+      ],
+      full: [
+        { step: "e2_weight", field: "Q1" },
+        { step: "e3_meds", field: "Q2" },
+        { step: "e4_hospital", field: "Q3" },
+        { step: "e5_disability", field: "Q4" },
+        { step: "e6_tests", field: "Q5" },
+        { step: "e7_surgery", field: "Q6" },
+        { step: "e8_smoking", smoke: true },
+        { step: "e9_drugs", field: "Q8" },
+        { step: "e10_alcohol", field: "Q9" },
+        { step: "e11_1_heart", field: "Q10" },
+        { step: "e11_2_neuro", field: "Q11" },
+        { step: "e11_3_digestive", field: "Q12" },
+        { step: "e11_4_endocrine", field: "Q13" },
+        { step: "e11_5_liver", field: "Q14" },
+        { step: "e11_6_ortho", field: "Q15" },
+        { step: "e11_7_lungs", field: "Q16" },
+        { step: "e11_8_kidney", field: "Q17" },
+        { step: "e11_9_mental", field: "Q18" },
+        { step: "e11_10_senses", field: "Q19" },
+        { step: "e11_11_hiv", field: "Q20" },
+        { step: "e11_12_cancer", field: "Q21" },
+        { step: "e11_13_blood", field: "Q22" },
+        { step: "e11_14_immune", field: "Q23" },
+        { step: "e11_15_male", field: "Q24" },
+        { step: "e11_16_female", field: "Q25" },
+        { step: "e11_17_family", field: "Q26" }
+      ]
+    },
     applyClalCoupleHealthYesNo(form, draft){
       if(!form) return;
       const responses = (draft && draft.healthResponses) || {};
@@ -35171,17 +35437,18 @@ UsersGateUI.init();
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
   const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-official-he-bold-v1";
-  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-hach-short-he-v1";
-  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-hach-short-he-v1";
-  const GI_HACHSHARA_LIFE_SHORT_FORM_HREF = "./gi-hachshara-life-short-form.js?v=20260824-hach-short-he-v1";
-  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-hach-short-he-v1";
-  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-hach-short-he-v1";
-  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-hach-short-he-v1";
-  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-hach-short-he-v1";
-  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-hach-short-he-v1";
-  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-hach-short-he-v1";
-  const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-hach-short-he-v1";
-  const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260824-hach-short-he-v1";
+  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-phoenix-life-v1";
+  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-phoenix-life-v1";
+  const GI_HACHSHARA_LIFE_SHORT_FORM_HREF = "./gi-hachshara-life-short-form.js?v=20260824-phoenix-life-v1";
+  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-phoenix-life-v1";
+  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-phoenix-life-v1";
+  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-phoenix-life-v1";
+  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-phoenix-life-v1";
+  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-phoenix-life-v1";
+  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-phoenix-life-v1";
+  const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-phoenix-life-v1";
+  const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260824-phoenix-life-v1";
+  const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-phoenix-life-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -35480,6 +35747,33 @@ UsersGateUI.init();
       throw err;
     });
     return ensureMigdalCancerFormLoaded._p;
+  }
+  function ensurePhoenixLifeFormLoaded(){
+    if(window.PhoenixLifeForm) return Promise.resolve(window.PhoenixLifeForm);
+    if(ensurePhoenixLifeFormLoaded._p) return ensurePhoenixLifeFormLoaded._p;
+    ensurePhoenixLifeFormLoaded._p = new Promise((resolve, reject) => {
+      const existing = document.getElementById("gi-phoenix-life-form-js");
+      const done = () => {
+        if(window.PhoenixLifeForm) resolve(window.PhoenixLifeForm);
+        else reject(new Error("gi-phoenix-life-form.js loaded without PhoenixLifeForm"));
+      };
+      if(existing){
+        existing.addEventListener("load", done, { once: true });
+        existing.addEventListener("error", () => reject(new Error("gi-phoenix-life-form.js failed")), { once: true });
+        return;
+      }
+      const s = document.createElement("script");
+      s.id = "gi-phoenix-life-form-js";
+      s.src = GI_PHOENIX_LIFE_FORM_HREF;
+      s.async = true;
+      s.onload = done;
+      s.onerror = () => reject(new Error("gi-phoenix-life-form.js failed to load"));
+      document.head.appendChild(s);
+    }).catch((err) => {
+      ensurePhoenixLifeFormLoaded._p = null;
+      throw err;
+    });
+    return ensurePhoenixLifeFormLoaded._p;
   }
   const GI_SIMULATOR_CATALOG = Object.freeze([
     { company: "הפניקס", product: "ריסק" },
