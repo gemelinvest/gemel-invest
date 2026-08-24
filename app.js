@@ -6694,7 +6694,8 @@
       menoraMortgageForm: "menora_mortgage_form",
       ayalonHealthForm: "ayalon_health_form",
       clalHealthForm: "clal_health_form",
-      clalLifeCoupleForm: "clal_life_couple_form"
+      clalLifeCoupleForm: "clal_life_couple_form",
+      migdalCancerForm: "migdal_cancer_form"
     },
     OFFICIAL_JOIN_FORM_TYPES: [
       "hachshara_ci_form",
@@ -6705,7 +6706,8 @@
       "menora_mortgage_form",
       "ayalon_health_form",
       "clal_health_form",
-      "clal_life_couple_form"
+      "clal_life_couple_form",
+      "migdal_cancer_form"
     ],
     isOfficialJoinFormType(type){
       return this.OFFICIAL_JOIN_FORM_TYPES.indexOf(safeTrim(type)) >= 0;
@@ -7156,6 +7158,17 @@
       });
       return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
     },
+    qualifiesForMigdalCancerForm(payload, rec){
+      const list = this.listOfficialJoinFormPolicies(payload, rec);
+      const matched = list.filter((p) => {
+        if(safeTrim(p?.company) !== "מגדל") return false;
+        if(safeTrim(p?.type) === "סרטן") return true;
+        const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
+        if(/משכנתא/.test(blob) || /בריאות/.test(blob) || /ריסק/.test(blob) || /מחלות\s*קשות/.test(blob)) return false;
+        return /סרטן/.test(blob);
+      });
+      return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
+    },
     qualifiesForAyalonHealthForm(payload, rec){
       const list = this.listOfficialJoinFormPolicies(payload, rec);
       const matched = list.filter((p) => {
@@ -7318,6 +7331,19 @@
           uploadedBy: safeTrim(rec?.agentName)
         });
       }
+      const hasMigCancer = list.some((d) => safeTrim(d?.type) === this.TYPES.migdalCancerForm);
+      if(!hasMigCancer && this.qualifiesForMigdalCancerForm(payload, rec)){
+        const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
+        list.unshift({
+          id: "doc_migdal_cancer_form",
+          type: this.TYPES.migdalCancerForm,
+          isLegacy: true,
+          name: "טופס מקורי — סרטן · מגדל",
+          source: "מערכת",
+          uploadedAt,
+          uploadedBy: safeTrim(rec?.agentName)
+        });
+      }
       const hasMenoraCi = list.some((d) => safeTrim(d?.type) === this.TYPES.menoraCiForm);
       if(!hasMenoraCi && this.qualifiesForMenoraCiForm(payload, rec)){
         const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
@@ -7368,6 +7394,7 @@
         if(type === this.TYPES.ayalonHealthForm) return this.qualifiesForAyalonHealthForm(payload, rec);
         if(type === this.TYPES.clalHealthForm) return this.qualifiesForClalHealthForm(payload, rec);
         if(type === this.TYPES.clalLifeCoupleForm) return this.qualifiesForClalLifeCoupleForm(payload, rec);
+        if(type === this.TYPES.migdalCancerForm) return this.qualifiesForMigdalCancerForm(payload, rec);
         if(type === this.TYPES.healthOps || type === this.TYPES.agentApptOps || type === this.TYPES.agentApptForm || type === this.TYPES.harBituach) return true;
         return !!(safeTrim(doc.name) || safeTrim(doc.url) || safeTrim(doc.dataUrl) || safeTrim(doc.fileName));
       }));
@@ -18126,6 +18153,13 @@ UsersGateUI.init();
           if(rec) void this.openClalLifeCoupleForm(rec);
           return;
         }
+        const openMigCancer = ev.target?.closest?.("[data-open-migdal-cancer-doc], [data-migcancer-open]");
+        if(openMigCancer){
+          ev.preventDefault();
+          const rec = this.current();
+          if(rec) void this.openMigdalCancerForm(rec);
+          return;
+        }
         const openAyalHealth = ev.target?.closest?.("[data-open-ayalon-health-doc], [data-ayalhealth-open]");
         if(openAyalHealth){
           ev.preventDefault();
@@ -20715,6 +20749,12 @@ UsersGateUI.init();
             return `<div class="cfFile__documentsPreviewDoc">${window.ClalLifeCoupleForm.renderPreviewHtml(draft)}</div>`;
           } catch(_e) {}
         }
+        if(type === CustomerDocuments.TYPES.migdalCancerForm && window.MigdalCancerForm){
+          try {
+            const draft = window.MigdalCancerForm.buildDraft(rec);
+            return `<div class="cfFile__documentsPreviewDoc">${window.MigdalCancerForm.renderPreviewHtml(draft)}</div>`;
+          } catch(_e) {}
+        }
         if(type === CustomerDocuments.TYPES.ayalonHealthForm && window.AyalonHealthForm){
           try {
             const draft = window.AyalonHealthForm.buildDraft(rec);
@@ -20834,6 +20874,13 @@ UsersGateUI.init();
         } catch(_e) {}
         return;
       }
+      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.migdalCancerForm && !window.MigdalCancerForm){
+        try {
+          await ensureMigdalCancerFormLoaded();
+          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
+        } catch(_e) {}
+        return;
+      }
       if(safeTrim(doc?.type) === CustomerDocuments.TYPES.ayalonHealthForm && !window.AyalonHealthForm){
         try {
           await ensureAyalonHealthFormLoaded();
@@ -20943,6 +20990,17 @@ UsersGateUI.init();
         try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
       }
     },
+    async openMigdalCancerForm(rec){
+      if(this.denyOfficialJoinFormDownload()) return;
+      try {
+        await ensureMigdalCancerFormLoaded();
+        if(!window.MigdalCancerForm) throw new Error("MigdalCancerForm missing");
+        window.MigdalCancerForm.open(rec);
+      } catch(err){
+        try { console.error("MIGDAL_CANCER_FORM_OPEN_FAILED", err); } catch(_e) {}
+        try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
+      }
+    },
     async openAyalonHealthForm(rec){
       if(this.denyOfficialJoinFormDownload()) return;
       try {
@@ -21015,6 +21073,8 @@ UsersGateUI.init();
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-clal-health-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.clalLifeCoupleForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-clal-life-couple-doc="${escapeHtml(docId)}">פתח טופס</button>`;
+        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.migdalCancerForm){
+          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-migdal-cancer-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.ayalonHealthForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-ayalon-health-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.menoraCiForm){
@@ -34811,6 +34871,7 @@ UsersGateUI.init();
       menora_ci: ["menora_crit__smoking","menora_crit__alcohol","menora_crit__drugs","menora_crit__inquiry","menora_crit__family","menora_crit__neuro","menora_crit__heart","menora_crit__metabolic","menora_crit__tumors","menora_crit__digestive","menora_crit__lungs","menora_crit__infectious","menora_crit__kidneys","menora_crit__eyes","menora_crit__ent","menora_crit__surgery","menora_crit__hospital","menora_crit__meds","menora_crit__infant_family","menora_crit__infant_nicu","menora_crit__infant_tests","menora_crit__infant_followup","menora_crit__ortho_top","menora_crit__child_dev_top"],
       menora_mortgage: ["menora_mort__hobby","menora_mort__aviation","menora_mort__smoking","menora_mort__alcohol","menora_mort__drugs","menora_mort__inquiry","menora_mort__neuro","menora_mort__heart","menora_mort__mental","menora_mort__metabolic","menora_mort__tumors","menora_mort__digestive","menora_mort__lungs","menora_mort__kidneys","menora_mort__infectious","menora_mort__surgery","menora_mort__hospital","menora_mort__meds","menora_mort__eyes","menora_mort__ent","menora_mort__rheum","menora_mort__ortho","menora_mort__female","menora_mort__adl","menora_mort__family"],
       migdal_mortgage: ["magdal_mort__smoking","magdal_mort__cancer","magdal_mort__neuro","magdal_mort__mental","magdal_mort__respiratory","magdal_mort__heart","magdal_mort__kidneys","magdal_mort__digestive","magdal_mort__diabetes","magdal_mort__immune","magdal_mort__disability","magdal_mort__hospital","magdal_mort__tests","magdal_mort__hobby","magdal_mort__accident_eyes","magdal_mort__accident_msk"],
+      migdal_cancer: ["magdal_cancer__tests","magdal_cancer__tumors","magdal_cancer__digestive","magdal_cancer__diabetes"],
       clal_couple: ["clal_couple_neuro","clal_couple_mental","clal_couple_respiratory","clal_couple_skin","clal_couple_heart","clal_couple_digestive","clal_couple_liver","clal_couple_kidney","clal_couple_metabolic","clal_couple_blood","clal_couple_infectious","clal_couple_tumors","clal_couple_musculoskeletal","clal_couple_vision","clal_couple_ent","clal_couple_reproductive","clal_couple_rheumatic","clal_couple_alcohol","clal_couple_drugs"]
     },
     healthResponses(payload){
@@ -35017,15 +35078,16 @@ UsersGateUI.init();
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
   const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-official-he-bold-v1";
-  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-clal-couple-v1";
-  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-clal-couple-v1";
-  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-clal-couple-v1";
-  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-clal-couple-v1";
-  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-clal-couple-v1";
-  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-clal-couple-v1";
-  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-clal-couple-v1";
-  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-clal-couple-v1";
-  const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-clal-couple-v1";
+  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-migdal-cancer-v1";
+  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-migdal-cancer-v1";
+  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-migdal-cancer-v1";
+  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-migdal-cancer-v1";
+  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-migdal-cancer-v1";
+  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-migdal-cancer-v1";
+  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-migdal-cancer-v1";
+  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-migdal-cancer-v1";
+  const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-migdal-cancer-v1";
+  const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260824-migdal-cancer-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -35270,6 +35332,33 @@ UsersGateUI.init();
       throw err;
     });
     return ensureClalLifeCoupleFormLoaded._p;
+  }
+  function ensureMigdalCancerFormLoaded(){
+    if(window.MigdalCancerForm) return Promise.resolve(window.MigdalCancerForm);
+    if(ensureMigdalCancerFormLoaded._p) return ensureMigdalCancerFormLoaded._p;
+    ensureMigdalCancerFormLoaded._p = new Promise((resolve, reject) => {
+      const existing = document.getElementById("gi-migdal-cancer-form-js");
+      const done = () => {
+        if(window.MigdalCancerForm) resolve(window.MigdalCancerForm);
+        else reject(new Error("gi-migdal-cancer-form.js loaded without MigdalCancerForm"));
+      };
+      if(existing){
+        existing.addEventListener("load", done, { once: true });
+        existing.addEventListener("error", () => reject(new Error("gi-migdal-cancer-form.js failed")), { once: true });
+        return;
+      }
+      const s = document.createElement("script");
+      s.id = "gi-migdal-cancer-form-js";
+      s.src = GI_MIGDAL_CANCER_FORM_HREF;
+      s.async = true;
+      s.onload = done;
+      s.onerror = () => reject(new Error("gi-migdal-cancer-form.js failed to load"));
+      document.head.appendChild(s);
+    }).catch((err) => {
+      ensureMigdalCancerFormLoaded._p = null;
+      throw err;
+    });
+    return ensureMigdalCancerFormLoaded._p;
   }
   const GI_SIMULATOR_CATALOG = Object.freeze([
     { company: "הפניקס", product: "ריסק" },
