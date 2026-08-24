@@ -1,4 +1,4 @@
-/* GI-FOLLOWUP-ZIP-CONFIG 20260825-followup-zip-v1
+/* GI-FOLLOWUP-ZIP-CONFIG 20260825-docs-multi-v1
    ספריית PDF משולבת לכל חברה (מ-fw.zip, ללא הראל). */
 (function installFollowupZipConfig(global){
   "use strict";

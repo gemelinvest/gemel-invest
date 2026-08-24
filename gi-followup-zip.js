@@ -1,10 +1,11 @@
-/* GI-FOLLOWUP-ZIP 20260825-followup-zip-v1
-   ZIP אחד של שאלוני המשך ממולאים — רק שאלונים שנפתחו בפועל. */
+/* GI-FOLLOWUP-ZIP 20260825-docs-multi-v1
+   שאלוני המשך ממולאים — מסמך נפרד לכל שאלון + ZIP זמני לנבחרים בלבד. */
 (function installGiFollowupZip(global){
   "use strict";
 
-  const TAG = "20260825-followup-zip-v1";
-  const DOC_TYPE = "followup_questionnaires_zip";
+  const TAG = "20260825-docs-multi-v1";
+  const DOC_TYPE = "followup_questionnaire";
+  const DOC_TYPE_ZIP_LEGACY = "followup_questionnaires_zip";
 
   function safeTrim(v){
     return String(v == null ? "" : v).trim();
@@ -222,7 +223,6 @@
     const letter = entry.questionnaireNum;
     const cq = cfg.cqForLetter(letter);
     if(!cq) return;
-    const prefix = cfg.fieldPrefix(letter);
     const rows = orderedSchemaValues(entry, cfg);
     rows.forEach((row, idx) => {
       const qIdx = idx + 1;
@@ -326,6 +326,29 @@
     return entry.company + "/" + role + "/" + base + ".pdf";
   }
 
+  function buildDocTitle(entry){
+    const qNo = safeTrim(entry?.questionnaireNum) || "?";
+    const label = safeTrim(entry?.questionnaireLabel);
+    const company = safeTrim(entry?.company) || "חברה";
+    const role = roleLabel(entry?.insured);
+    const parts = ["שאלון המשך " + qNo];
+    if(label) parts.push(label);
+    parts.push(company);
+    if(role && role !== "ראשי") parts.push(role);
+    return parts.join(" · ");
+  }
+
+  function stableDocId(entry){
+    const co = safeTrim(entry?.companyKey) || "co";
+    const ins = safeTrim(entry?.insuredId) || "ins";
+    const q = safeTrim(entry?.questionnaireNum) || "q";
+    return "doc_followup_" + co + "__" + ins + "__" + encodeURIComponent(q);
+  }
+
+  function sanitizeZipName(name){
+    return safeTrim(name).replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim() || "document";
+  }
+
   async function buildFollowupZip(triggeredList){
     if(!global.JSZip) throw new Error("JSZip missing");
     const zip = new global.JSZip();
@@ -337,14 +360,35 @@
     return zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
   }
 
+  async function packFilesIntoZip(files){
+    if(!global.JSZip) throw new Error("JSZip missing");
+    const zip = new global.JSZip();
+    const used = Object.create(null);
+    (Array.isArray(files) ? files : []).forEach((file, idx) => {
+      if(!file || !file.bytes) return;
+      let name = sanitizeZipName(file.fileName || ("document-" + (idx + 1)));
+      if(used[name]){
+        const extIdx = name.lastIndexOf(".");
+        const base = extIdx > 0 ? name.slice(0, extIdx) : name;
+        const ext = extIdx > 0 ? name.slice(extIdx) : "";
+        let n = 2;
+        while(used[base + "-" + n + ext]) n += 1;
+        name = base + "-" + n + ext;
+      }
+      used[name] = true;
+      zip.file(name, file.bytes);
+    });
+    return zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
+  }
+
   function buildZipFileName(rec, companies){
     const docs = global.CustomerDocuments;
     const insured = docs?.getPrimaryInsuredLabel?.(rec?.payload) || "מבוטח";
     const co = (Array.isArray(companies) && companies.length === 1)
       ? companies[0]
-      : ((companies || []).slice(0, 2).join("-") || "שאלוני-המשך");
+      : ((companies || []).slice(0, 2).join("-") || "מסמכים-נבחרים");
     const safe = String(insured).replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
-    return "שאלוני-המשך-" + co + "-" + safe + ".zip";
+    return "מסמכים-נבחרים-" + co + "-" + safe + ".zip";
   }
 
   async function blobToDataUrl(blob){
@@ -359,10 +403,16 @@
   const GiFollowupZip = {
     TAG,
     DOC_TYPE,
+    DOC_TYPE_ZIP_LEGACY,
     detectTriggeredFollowups,
     fillFollowupPdf,
     buildFollowupZip,
+    packFilesIntoZip,
     buildZipFileName,
+    buildDocTitle,
+    stableDocId,
+    roleLabel,
+    roleSuffix,
     blobToDataUrl,
     zipEntryPath,
     resolveForCustomer(rec, meta, insureds){

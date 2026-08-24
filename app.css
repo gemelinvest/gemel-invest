@@ -42381,6 +42381,39 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   color: var(--muted);
   font-weight: 700;
 }
+.cfFile__documentsToolbar{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 16px 8px;
+  flex-wrap: wrap;
+}
+.cfFile__documentsSelectAll{
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(43,75,138,.88);
+  cursor: pointer;
+  user-select: none;
+}
+.cfFile__documentCheck{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  margin-inline-end: 2px;
+  cursor: pointer;
+}
+.cfFile__documentCheck input,
+.cfFile__documentsSelectAll input{
+  width: 16px;
+  height: 16px;
+  accent-color: #1e3d7a;
+  cursor: pointer;
+}
 .cfFile__documentRow{
   cursor: pointer;
 }
@@ -43708,6 +43741,8 @@ body.view-settings-active.lcSettingsRubric-activityLog .content{
 .giApptSummaryTable td strong{font-weight:900;}
 .cfFile__documentRow{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:nowrap;}
 .cfFile__documentRow > .btn{flex:0 0 auto;}
+.cfFile__documentRow > .cfFile__documentCheck{flex:0 0 auto;}
+.cfFile__documentRowMain{min-width:0;}
 @media (max-width:900px){.giApptSummaryLayout__grid{grid-template-columns:1fr;}}
 @media (max-width:720px){
   .lcHealthRiskChoiceModal__grid{grid-template-columns:1fr;}

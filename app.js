@@ -6704,6 +6704,7 @@
       phoenixLifeShortForm: "phoenix_life_short_form",
       phoenixLifeFullForm: "phoenix_life_full_form",
       phoenixHealthForm: "phoenix_health_form",
+      followupQuestionnaire: "followup_questionnaire",
       followupQuestionnairesZip: "followup_questionnaires_zip"
     },
     OFFICIAL_JOIN_FORM_TYPES: [
@@ -7052,7 +7053,56 @@
       payload.customerDocuments = list;
       return payload;
     },
+    createFollowupQuestionnaireDoc(entry, options = {}){
+      const uploadedAt = safeTrim(options.uploadedAt) || nowISO();
+      const helper = (typeof window !== "undefined" && window.GiFollowupZip) ? window.GiFollowupZip : null;
+      const title = helper?.buildDocTitle?.(entry) || ("שאלון המשך " + safeTrim(entry?.questionnaireNum) + " · " + safeTrim(entry?.company));
+      const cfg = window.GI_FOLLOWUP_ZIP_CONFIG?.COMPANIES?.[entry?.companyKey];
+      const fileBase = cfg?.fileLabel?.(entry?.questionnaireNum) || ("שאלון-" + safeTrim(entry?.questionnaireNum));
+      const role = helper?.roleSuffix?.(entry?.insured) || "primary";
+      const stableId = helper?.stableDocId?.(entry) || this.newDocId("doc_followup_");
+      let followupEntry = null;
+      try { followupEntry = JSON.parse(JSON.stringify(entry || {})); } catch(_e){ followupEntry = entry || {}; }
+      return {
+        id: stableId,
+        type: this.TYPES.followupQuestionnaire,
+        name: title,
+        fileName: this.sanitizeFileNamePart(fileBase + "-" + role) + ".pdf",
+        mime: "application/pdf",
+        companyKey: safeTrim(entry?.companyKey),
+        company: safeTrim(entry?.company),
+        questionnaireNo: safeTrim(entry?.questionnaireNum),
+        questionnaireLabel: safeTrim(entry?.questionnaireLabel),
+        insuredId: safeTrim(entry?.insuredId),
+        insuredLabel: safeTrim(entry?.insured?.label) || this.getPrimaryInsuredLabel(options.payload || {}),
+        role,
+        followupEntry,
+        source: "מערכת",
+        uploadedAt,
+        uploadedBy: safeTrim(options.uploadedBy) || safeTrim(Auth?.current?.name)
+      };
+    },
+    syncFollowupQuestionnaireDocs(payload, triggeredList, options = {}){
+      if(!payload || typeof payload !== "object") return payload;
+      const list = this.listFromPayload(payload).filter((row) => {
+        const t = safeTrim(row?.type);
+        return t !== this.TYPES.followupQuestionnaire && t !== this.TYPES.followupQuestionnairesZip;
+      });
+      const triggered = Array.isArray(triggeredList) ? triggeredList : [];
+      const now = safeTrim(options.uploadedAt) || nowISO();
+      const by = safeTrim(options.uploadedBy) || safeTrim(Auth?.current?.name);
+      triggered.slice().reverse().forEach((entry) => {
+        list.unshift(this.createFollowupQuestionnaireDoc(entry, {
+          uploadedAt: now,
+          uploadedBy: by,
+          payload
+        }));
+      });
+      payload.customerDocuments = list;
+      return payload;
+    },
     createFollowupQuestionnairesZipDoc(meta, options = {}){
+      /* Legacy ZIP doc — kept for old payloads; new flow uses per-questionnaire docs. */
       const uploadedAt = safeTrim(options.uploadedAt) || nowISO();
       const insured = this.getPrimaryInsuredLabel(meta?.payloadSnapshot || meta?.payload || {});
       const companies = Array.isArray(meta?.companies) ? meta.companies.filter(Boolean) : [];
@@ -7750,6 +7800,8 @@
         if(type === this.TYPES.clalLifeCoupleForm) return this.qualifiesForClalLifeCoupleForm(payload, rec);
         if(type === this.TYPES.migdalCancerForm) return this.qualifiesForMigdalCancerForm(payload, rec);
         if(type === this.TYPES.healthOps || type === this.TYPES.agentApptOps || type === this.TYPES.agentApptForm || type === this.TYPES.harBituach) return true;
+        if(type === this.TYPES.followupQuestionnaire) return true;
+        if(type === this.TYPES.followupQuestionnairesZip) return false;
         return !!(safeTrim(doc.name) || safeTrim(doc.url) || safeTrim(doc.dataUrl) || safeTrim(doc.fileName));
       }));
     },
@@ -18213,6 +18265,14 @@ UsersGateUI.init();
   const CustomersUI = {
     currentId: null,
     _previewDocId: "",
+    _selectedDocIds: null,
+    getSelectedDocIds(){
+      if(!(this._selectedDocIds instanceof Set)) this._selectedDocIds = new Set();
+      return this._selectedDocIds;
+    },
+    clearSelectedDocIds(){
+      this.getSelectedDocIds().clear();
+    },
     els: {},
     policyModal: {},
     _policyCollectCache: null,
@@ -18641,6 +18701,28 @@ UsersGateUI.init();
           }
           return;
         }
+        const dlFollowupDoc = ev.target?.closest?.("[data-download-followup-doc]");
+        if(dlFollowupDoc){
+          ev.preventDefault();
+          const rec = this.current();
+          if(!rec) return;
+          const docId = safeTrim(dlFollowupDoc.getAttribute("data-download-followup-doc"));
+          const doc = docId ? this.findCustomerDocument(rec, docId) : null;
+          if(doc) void this.downloadFollowupQuestionnaireDoc(rec, doc);
+          return;
+        }
+        const dlSelected = ev.target?.closest?.("[data-download-selected-docs]");
+        if(dlSelected){
+          ev.preventDefault();
+          const rec = this.current();
+          if(rec) void this.downloadSelectedCustomerDocuments(rec);
+          return;
+        }
+        const selectWrap = ev.target?.closest?.("[data-doc-select-wrap], [data-doc-select], [data-doc-select-all]");
+        if(selectWrap){
+          ev.stopPropagation();
+          return;
+        }
         const previewRow = ev.target?.closest?.("[data-cf-doc-preview]");
         if(previewRow){
           ev.preventDefault();
@@ -18652,6 +18734,45 @@ UsersGateUI.init();
         const rec = this.current();
         if(!rec) return;
         this.switchSection("policies");
+      });
+
+      on(this.els.main, "change", (ev) => {
+        const selectAll = ev.target?.closest?.("[data-doc-select-all]");
+        if(selectAll){
+          const rec = this.current();
+          if(!rec) return;
+          const docs = this.getCustomerDocuments(rec);
+          const set = this.getSelectedDocIds();
+          set.clear();
+          if(selectAll.checked){
+            docs.forEach((doc, idx) => {
+              const id = safeTrim(doc?.id) || String(idx);
+              if(id) set.add(id);
+            });
+          }
+          this.render();
+          return;
+        }
+        const selectOne = ev.target?.closest?.("[data-doc-select]");
+        if(selectOne){
+          const id = safeTrim(selectOne.getAttribute("data-doc-select"));
+          if(!id) return;
+          const set = this.getSelectedDocIds();
+          if(selectOne.checked) set.add(id);
+          else set.delete(id);
+          const btn = this.els.main?.querySelector?.("[data-download-selected-docs]");
+          if(btn){
+            btn.textContent = "הורד נבחרים (" + set.size + ")";
+            if(set.size) btn.removeAttribute("disabled");
+            else btn.setAttribute("disabled", "");
+          }
+          const all = this.els.main?.querySelector?.("[data-doc-select-all]");
+          const boxes = this.els.main?.querySelectorAll?.("[data-doc-select]") || [];
+          if(all && boxes.length){
+            all.checked = [...boxes].every((el) => el.checked);
+          }
+          return;
+        }
       });
 
       on(this.els.main, "click", async (ev) => {
@@ -21575,9 +21696,14 @@ UsersGateUI.init();
       }
     },
     getFollowupZipMeta(rec){
-      const meta = this.buildMirrorHealthMeta(rec);
-      const insureds = meta.insureds || this.getInsureds(rec);
-      const health = this.getHealthDeclarationSource(rec);
+      const mirror = (typeof MirrorsUI !== "undefined" && MirrorsUI) ? MirrorsUI : null;
+      const meta = (typeof mirror?.buildMirrorHealthMeta === "function")
+        ? mirror.buildMirrorHealthMeta(rec)
+        : { map: {}, insureds: this.getInsureds?.(rec) || [] };
+      const insureds = meta.insureds || this.getInsureds?.(rec) || [];
+      const health = (typeof mirror?.getHealthDeclarationSource === "function")
+        ? mirror.getHealthDeclarationSource(rec)
+        : (rec?.payload?.primary?.healthDeclaration || { responses: {} });
       const triggered = window.GiFollowupZip?.resolveForCustomer?.(rec, meta, insureds)
         || window.GiFollowupZip?.detectTriggeredFollowups?.(health, meta, insureds)
         || [];
@@ -21592,6 +21718,18 @@ UsersGateUI.init();
         return false;
       }
     },
+    async ensureFollowupDocuments(rec, options = {}){
+      if(!rec?.payload || typeof rec.payload !== "object") return false;
+      try {
+        await ensureFollowupZipLoaded();
+        const pack = this.getFollowupZipMeta(rec);
+        CustomerDocuments.syncFollowupQuestionnaireDocs(rec.payload, pack.triggered, options);
+        return pack.triggered.length > 0;
+      } catch(err){
+        try { console.warn("FOLLOWUP_DOCS_ENSURE_SKIPPED", err); } catch(_e) {}
+        return false;
+      }
+    },
     async buildFollowupZipBlob(rec){
       await ensureFollowupZipLoaded();
       const pack = this.getFollowupZipMeta(rec);
@@ -21599,6 +21737,111 @@ UsersGateUI.init();
       const blob = await window.GiFollowupZip.buildFollowupZip(pack.triggered);
       const fileName = window.GiFollowupZip.buildZipFileName(rec, pack.companies);
       return { blob, fileName, triggered: pack.triggered, companies: pack.companies };
+    },
+    async downloadFollowupQuestionnaireDoc(rec, doc){
+      try {
+        await ensureFollowupZipLoaded();
+        let entry = doc?.followupEntry && typeof doc.followupEntry === "object" ? doc.followupEntry : null;
+        if(!entry){
+          const pack = this.getFollowupZipMeta(rec);
+          entry = pack.triggered.find((row) => {
+            return safeTrim(row.companyKey) === safeTrim(doc?.companyKey)
+              && safeTrim(row.insuredId) === safeTrim(doc?.insuredId)
+              && safeTrim(row.questionnaireNum) === safeTrim(doc?.questionnaireNo);
+          }) || null;
+        }
+        if(!entry) throw new Error("לא נמצא שאלון המשך להורדה");
+        const bytes = await window.GiFollowupZip.fillFollowupPdf(entry);
+        const fileName = safeTrim(doc?.fileName) || (window.GiFollowupZip.buildDocTitle(entry) + ".pdf");
+        const blob = new Blob([bytes], { type: "application/pdf" });
+        const url = URL.createObjectURL(blob);
+        CustomerDocuments.triggerDataUrlDownload(url, fileName);
+        setTimeout(() => { try { URL.revokeObjectURL(url); } catch(_e){} }, 60000);
+        try {
+          window.showToast?.({ title: "הורדת שאלון המשך", text: fileName, variant: "ok", durationMs: 3600 });
+        } catch(_e2) {}
+      } catch(err){
+        try { console.error("FOLLOWUP_DOC_DOWNLOAD_FAILED", err); } catch(_e) {}
+        alert(safeTrim(err?.message) || "לא ניתן להוריד את שאלון ההמשך.");
+      }
+    },
+    async resolveDocumentBytes(rec, doc){
+      if(!doc || typeof doc !== "object") return null;
+      const type = safeTrim(doc.type);
+      const fileName = safeTrim(doc.fileName) || safeTrim(doc.name) || "document";
+      if(type === CustomerDocuments.TYPES.followupQuestionnaire){
+        await ensureFollowupZipLoaded();
+        let entry = doc.followupEntry && typeof doc.followupEntry === "object" ? doc.followupEntry : null;
+        if(!entry){
+          const pack = this.getFollowupZipMeta(rec);
+          entry = pack.triggered.find((row) => {
+            return safeTrim(row.companyKey) === safeTrim(doc.companyKey)
+              && safeTrim(row.insuredId) === safeTrim(doc.insuredId)
+              && safeTrim(row.questionnaireNum) === safeTrim(doc.questionnaireNo);
+          }) || null;
+        }
+        if(!entry) return null;
+        const bytes = await window.GiFollowupZip.fillFollowupPdf(entry);
+        return { fileName: /\.pdf$/i.test(fileName) ? fileName : (fileName + ".pdf"), bytes };
+      }
+      const dataUrl = safeTrim(doc.dataUrl) || safeTrim(doc.url);
+      if(dataUrl){
+        if(dataUrl.startsWith("data:")){
+          const buf = dataUrlToArrayBuffer(dataUrl);
+          if(!buf) return null;
+          return { fileName, bytes: new Uint8Array(buf) };
+        }
+        try {
+          const res = await fetch(dataUrl);
+          if(!res.ok) return null;
+          return { fileName, bytes: new Uint8Array(await res.arrayBuffer()) };
+        } catch(_e){
+          return null;
+        }
+      }
+      return null;
+    },
+    async downloadSelectedCustomerDocuments(rec){
+      const selected = this.getSelectedDocIds();
+      const ids = [...selected];
+      if(!ids.length){
+        try { window.showToast?.({ title: "לא נבחרו מסמכים", text: "סמנו מסמכים ואז לחצו «הורד נבחרים».", variant: "warn", durationMs: 4200 }); } catch(_e) {}
+        return;
+      }
+      try {
+        await ensureFollowupZipLoaded();
+        if(!window.JSZip) throw new Error("JSZip missing");
+        const files = [];
+        let skipped = 0;
+        for(let i = 0; i < ids.length; i++){
+          const doc = this.findCustomerDocument(rec, ids[i]);
+          if(!doc){ skipped += 1; continue; }
+          const resolved = await this.resolveDocumentBytes(rec, doc);
+          if(!resolved){ skipped += 1; continue; }
+          files.push(resolved);
+        }
+        if(!files.length){
+          try { window.showToast?.({ title: "אין קבצים להורדה", text: "המסמכים שנבחרו אינם ניתנים לאריזה כרגע (למשל טפסים דיגיטליים בלבד).", variant: "warn", durationMs: 5200 }); } catch(_e) {}
+          return;
+        }
+        const blob = await window.GiFollowupZip.packFilesIntoZip(files);
+        const insured = CustomerDocuments.getPrimaryInsuredLabel(rec?.payload) || "מבוטח";
+        const fileName = "מסמכים-נבחרים-" + CustomerDocuments.sanitizeFileNamePart(insured) + "-" + files.length + ".zip";
+        const url = URL.createObjectURL(blob);
+        CustomerDocuments.triggerDataUrlDownload(url, fileName);
+        setTimeout(() => { try { URL.revokeObjectURL(url); } catch(_e){} }, 60000);
+        try {
+          window.showToast?.({
+            title: "הורדת מסמכים נבחרים",
+            text: files.length + " קבצים בארכיון" + (skipped ? (" · " + skipped + " דולגו") : ""),
+            variant: "ok",
+            durationMs: 4200
+          });
+        } catch(_e2) {}
+      } catch(err){
+        try { console.error("SELECTED_DOCS_ZIP_FAILED", err); } catch(_e) {}
+        alert(safeTrim(err?.message) || "לא ניתן להוריד את המסמכים שנבחרו.");
+      }
     },
     async downloadFollowupQuestionnairesZip(rec){
       try {
@@ -21615,26 +21858,8 @@ UsersGateUI.init();
       }
     },
     async syncFollowupQuestionnairesZipDoc(rec, options = {}){
-      if(!rec?.payload || typeof rec.payload !== "object") return false;
-      try {
-        await ensureFollowupZipLoaded();
-        const built = await this.buildFollowupZipBlob(rec);
-        const dataUrl = await window.GiFollowupZip.blobToDataUrl(built.blob);
-        const doc = CustomerDocuments.createFollowupQuestionnairesZipDoc({
-          payloadSnapshot: giSnapshotWithoutDocs(rec.payload),
-          payload: rec.payload,
-          fileName: built.fileName,
-          dataUrl,
-          size: built.blob.size || 0,
-          companies: built.companies,
-          questionnaireCount: built.triggered.length
-        }, options);
-        CustomerDocuments.upsertFollowupQuestionnairesZipDoc(rec.payload, doc);
-        return true;
-      } catch(err){
-        try { console.warn("FOLLOWUP_ZIP_DOC_SYNC_SKIPPED", err); } catch(_e) {}
-        return false;
-      }
+      /* Back-compat alias — now creates per-questionnaire docs instead of one ZIP. */
+      return this.ensureFollowupDocuments(rec, options);
     },
     async openAyalonMortgageForm(rec){
       if(this.denyOfficialJoinFormDownload()) return;
@@ -21696,6 +21921,7 @@ UsersGateUI.init();
       const docs = this.getCustomerDocuments(rec);
       if(!docs.length){
         this._previewDocId = "";
+        this.clearSelectedDocIds();
         return `<div class="cfFile__documentsPanel">
           <div class="cfFile__groupLabel">מסמכי לקוח</div>
           <div class="emptyState cfFile__documentsEmpty">
@@ -21709,12 +21935,17 @@ UsersGateUI.init();
         ? safeTrim(this._previewDocId)
         : (safeTrim(docs[0]?.id) || "0");
       this._previewDocId = selectedId;
+      const selectedSet = this.getSelectedDocIds();
+      const validIds = new Set(docs.map((doc, idx) => safeTrim(doc.id) || String(idx)));
+      [...selectedSet].forEach((id) => { if(!validIds.has(id)) selectedSet.delete(id); });
+      const selectedCount = selectedSet.size;
       const canOfficialPdf = CustomerDocuments.canDownloadOfficialJoinForm();
       const rows = docs.map((doc, idx) => {
         const display = CustomerDocuments.getDocumentDisplay(doc);
         const docType = safeTrim(doc.type);
         const docId = safeTrim(doc.id) || String(idx);
         const selected = docId === selectedId ? " is-selected" : "";
+        const checked = selectedSet.has(docId) ? " checked" : "";
         let downloadBtn = "";
         if(docType === CustomerDocuments.TYPES.agentApptForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-agent-appt-doc="${escapeHtml(docId)}">הורדה</button>`;
@@ -21754,6 +21985,8 @@ UsersGateUI.init();
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-menora-risk-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.clalMortgageForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-clal-mortgage-doc="${escapeHtml(docId)}">פתח טופס</button>`;
+        }else if(docType === CustomerDocuments.TYPES.followupQuestionnaire){
+          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-followup-doc="${escapeHtml(docId)}">הורדה</button>`;
         }else if(docType === CustomerDocuments.TYPES.followupQuestionnairesZip || (safeTrim(doc.mime) === "application/zip" && safeTrim(doc.dataUrl))){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-customer-file-doc="${escapeHtml(docId)}">הורד ZIP</button>`;
         }else if(docType === CustomerDocuments.TYPES.healthOps){
@@ -21764,6 +21997,9 @@ UsersGateUI.init();
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-customer-file-doc="${escapeHtml(docId)}">הורדה</button>`;
         }
         return `<article class="cfFile__documentRow${selected}" data-cf-doc-preview="${escapeHtml(docId)}">
+          <label class="cfFile__documentCheck" data-doc-select-wrap="${escapeHtml(docId)}">
+            <input type="checkbox" data-doc-select="${escapeHtml(docId)}"${checked} aria-label="בחר מסמך"/>
+          </label>
           <div class="cfFile__documentRowMain">
             <div class="cfFile__documentRowIcon" aria-hidden="true">${premiumCustomerIcon("document")}</div>
             <div>
@@ -21779,9 +22015,18 @@ UsersGateUI.init();
       const footerHtml = (footerAgent || footerUpdated !== "—")
         ? `<div class="cfFile__documentsFooter muted small">${footerAgent ? `נציג מטפל: ${escapeHtml(footerAgent)}` : ""}${footerAgent && footerUpdated !== "—" ? " · " : ""}${footerUpdated !== "—" ? `עודכן: ${escapeHtml(footerUpdated)}` : ""}</div>`
         : "";
+      const allChecked = selectedCount > 0 && selectedCount === docs.length;
+      const toolbar = `<div class="cfFile__documentsToolbar">
+          <label class="cfFile__documentsSelectAll">
+            <input type="checkbox" data-doc-select-all${allChecked ? " checked" : ""} aria-label="בחר הכל"/>
+            <span>בחר הכל</span>
+          </label>
+          <button class="btn btn--ghost btn--small" type="button" data-download-selected-docs${selectedCount ? "" : " disabled"}>הורד נבחרים (${selectedCount})</button>
+        </div>`;
       return `<div class="cfFile__documentsSplit">
         <div class="cfFile__documentsPanel">
           <div class="cfFile__groupLabel">מסמכי לקוח · ${docs.length} ${docs.length === 1 ? 'מסמך' : 'מסמכים'}</div>
+          ${toolbar}
           <div class="cfFile__documentsList">${rows}</div>
           ${footerHtml}
         </div>
@@ -23747,6 +23992,7 @@ UsersGateUI.init();
       this._openFileCallSig = "";
       this.stopOpsCardLoop();
       this._openRefreshSig = "";
+      this.clearSelectedDocIds();
       this.currentSection = "policies";
       try { this._closeFileActionsMenu?.(); } catch(_e) {}
       if(!this.els.wrap) return;
@@ -36483,8 +36729,8 @@ UsersGateUI.init();
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260825-followup-zip-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260825-followup-zip-v1";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260825-docs-multi-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260825-docs-multi-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -40977,8 +41223,7 @@ const MIRROR_DISCLOSURE_LIBRARY = {
         const followupZipBtn = ev.target?.closest?.("[data-download-followup-zip]");
         if(followupZipBtn){
           ev.preventDefault();
-          const rec = this.current();
-          if(rec) void CustomerFileUI.downloadFollowupQuestionnairesZip(rec);
+          /* Deprecated global ZIP — followups are per-document in CustomerDocuments. */
           return;
         }
         const saveBtn = ev.target?.closest?.('[data-mirror-health-save]');
@@ -43013,7 +43258,6 @@ const MIRROR_DISCLOSURE_LIBRARY = {
         </div>
         ${body}
         ${savedNote}
-        ${this.hasFollowupZipCandidate(rec) ? `<div class="mirrorsReflectActions mirrorsReflectActions--followup"><button class="btn btn--ghost" data-download-followup-zip type="button">הורד שאלוני המשך (ZIP)</button><span class="muted small">רק שאלונים שנפתחו בפועל · ממולאים מתשובות האשף</span></div>` : ""}
         <div class="mirrorsReflectActions"><button class="btn btn--primary" data-mirror-health-save type="button">שמור שלב הצהרת בריאות</button></div>`;
     },
 
@@ -43051,6 +43295,7 @@ const MIRROR_DISCLOSURE_LIBRARY = {
       stepState.savedAt = nowISO();
       stepState.savedBy = safeTrim(Auth?.current?.name);
       stepState.itemsCount = groups.reduce((sum, group) => sum + ((group.items || []).length), 0);
+      try { await CustomerFileUI.ensureFollowupDocuments(rec); } catch(_e) {}
       State.data.meta.updatedAt = nowISO();
       rec.updatedAt = State.data.meta.updatedAt;
       await App.persist('שלב הצהרת בריאות נשמר');
@@ -43059,7 +43304,6 @@ const MIRROR_DISCLOSURE_LIBRARY = {
       else if(rec) { if(!rec.payload) rec.payload={}; if(!rec.payload.mirrorFlow) rec.payload.mirrorFlow={}; if(!rec.payload.mirrorFlow.ui) rec.payload.mirrorFlow.ui={}; rec.payload.mirrorFlow.ui.focusStep=8; }
       this.render();
       alert('שלב הצהרת בריאות נשמר בהצלחה.');
-      try { void CustomerFileUI.syncFollowupQuestionnairesZipDoc(rec); } catch(_e) {}
     },
 
     hasFollowupZipCandidate(rec){

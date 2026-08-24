@@ -1,4 +1,4 @@
-/* GI-FOLLOWUP-ZIP 20260825
+/* GI-FOLLOWUP-DOCS 20260825-docs-multi-v1
    Run: node _test-followup-zip.js
 */
 "use strict";
@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260825-followup-zip-v1";
+const TAG = "20260825-docs-multi-v1";
 let failed = 0;
 let passed = 0;
 
@@ -32,6 +32,7 @@ const sw = fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8");
 console.log("1) syntax + files");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-followup-zip-config.js")]).status === 0, "node --check gi-followup-zip-config.js");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-followup-zip.js")]).status === 0, "node --check gi-followup-zip.js");
+assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 const pdfs = [
   "forms/followup-questionnaires/menora-followup-all.pdf",
   "forms/followup-questionnaires/phoenix-followup-all.pdf",
@@ -50,12 +51,20 @@ assert(!fs.existsSync(path.join(ROOT, "forms/followup-questionnaires/harel-follo
 console.log("\n2) cache + wiring");
 assert(html.includes("app.js?v=" + TAG), "index.html bumps app.js cache");
 assert(html.includes("gi-followup-zip-config.js?v=" + TAG), "index loads followup config");
+assert(html.includes("app.css?v=" + TAG), "index.html bumps app.css cache");
 assert(app.includes('GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=' + TAG + '"'), "app.js followup chunk cache");
 assert(sw.includes("gi-v12-" + TAG), "service worker cache bumped");
-assert(app.includes('followupQuestionnairesZip: "followup_questionnaires_zip"'), "document type registered");
-assert(app.includes("downloadFollowupQuestionnairesZip"), "download helper exists");
-assert(app.includes("data-download-followup-zip"), "health UI download button");
-assert(app.includes("הורד שאלוני המשך"), "Hebrew download label");
+assert(app.includes('followupQuestionnaire: "followup_questionnaire"'), "per-doc type registered");
+assert(app.includes("ensureFollowupDocuments"), "ensureFollowupDocuments exists");
+assert(app.includes("syncFollowupQuestionnaireDocs"), "syncFollowupQuestionnaireDocs exists");
+assert(app.includes("data-download-followup-doc"), "per-doc download button");
+assert(app.includes("הורד נבחרים"), "multi-select download label");
+assert(app.includes("data-download-selected-docs"), "download-selected attr");
+assert(app.includes("data-doc-select"), "checkbox select attr");
+assert(!app.includes('data-download-followup-zip type="button">הורד שאלוני המשך (ZIP)'), "global ZIP button removed from health UI");
+assert(modSrc.includes('DOC_TYPE = "followup_questionnaire"'), "module DOC_TYPE is per questionnaire");
+assert(modSrc.includes("packFilesIntoZip"), "packFilesIntoZip exported");
+assert(modSrc.includes("buildDocTitle"), "buildDocTitle helper");
 
 console.log("\n3) detectTriggeredFollowups");
 const sandbox = {
@@ -72,6 +81,7 @@ const meta = {
     menora__heart: {
       key: "menora__heart",
       questionnaireNos: ["4"],
+      questionnaireLabel: "לב",
       fields: [{ key: "4__heartDisease", label: "מחלת לב" }]
     },
     clal_drugs_cannabis: {
@@ -112,17 +122,31 @@ assert(triggered.some((r) => r.companyKey === "phoenix" && r.questionnaireNum ==
 assert(triggered.some((r) => r.companyKey === "hachshara" && r.insuredId === "s1"), "hachshara spouse");
 assert(!triggered.some((r) => r.qKeys.indexOf("menora__smoking") >= 0), "no followup on no-answer");
 
-console.log("\n4) zip path naming");
+const menora = triggered.find((r) => r.companyKey === "menora");
+const title = sandbox.GiFollowupZip.buildDocTitle(menora);
+assert(title.indexOf("שאלון המשך 4") >= 0, "title includes questionnaire number");
+assert(title.indexOf("לב") >= 0, "title includes questionnaire label");
+assert(title.indexOf("מנורה") >= 0, "title includes company");
+assert(sandbox.GiFollowupZip.stableDocId(menora).indexOf("doc_followup_menora") === 0, "stable doc id");
+
+console.log("\n4) zip path + selected-only pack helper");
 assert(sandbox.GiFollowupZip.zipEntryPath({
   company: "מנורה",
   companyKey: "menora",
   questionnaireNum: "4",
   insured: { id: "p1", type: "primary" }
 }).includes("מנורה/primary/"), "zip path includes company and role");
+assert(typeof sandbox.GiFollowupZip.packFilesIntoZip === "function", "packFilesIntoZip is a function");
 
-console.log("\n5) face-login KPI untouched");
+console.log("\n5) per-doc sync logic (CustomerDocuments helpers present)");
+assert(app.includes("createFollowupQuestionnaireDoc"), "createFollowupQuestionnaireDoc");
+assert(app.includes("TYPE.followupQuestionnaire") || app.includes("TYPES.followupQuestionnaire"), "uses followupQuestionnaire type");
+assert(app.includes("await CustomerFileUI.ensureFollowupDocuments(rec)"), "health save ensures followup docs before persist");
+
+console.log("\n6) face-login KPI untouched");
 assert(app.includes("paintDashboardAfterFaceLogin"), "face-login KPI paint remains");
 assert(app.includes("fetchAgentAppointmentKpis"), "agent-appointment KPI fetch remains");
+assert(app.includes("policyNetPremium") || app.includes("MATCH_THRESHOLD"), "core premium/match symbols remain");
 
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);
