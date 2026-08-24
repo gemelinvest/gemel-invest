@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/migdal-life/",
     TEMPLATE_FILE: "migdal-life-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-hach-health-v2",
+    VERSION: "20260824-mig-life-v1",
     DOC_ID: "doc_migdal_life_form",
     DOC_TYPE: "migdal_life_form",
 
@@ -233,11 +233,43 @@
           const fields = row.fields && typeof row.fields === "object" ? row.fields : {};
           const parts = Object.keys(fields).map((k) => safeTrim(fields[k])).filter(Boolean);
           if(!parts.length) return;
-          const label = qKey.replace(/^magdal_(full|riskx|risk2m)__/, "");
+          const label = qKey.replace(/^magdal_(full|riskx|risk2m|mort)__/, "");
           lines.push(label + ": " + parts.join(" · "));
         });
       });
       return lines.slice(0, 3);
+    },
+
+    parseDmy(value){
+      const s = safeTrim(value);
+      const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if(iso) return { d: +iso[3], m: +iso[2], y: +iso[1] };
+      const dmy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if(dmy) return { d: +dmy[1], m: +dmy[2], y: +dmy[3] };
+      return null;
+    },
+    ageAtDate(birthRaw, endRaw){
+      const b = this.parseDmy(birthRaw);
+      const e = this.parseDmy(endRaw);
+      if(!b || !e) return null;
+      let age = e.y - b.y;
+      if(e.m < b.m || (e.m === b.m && e.d < b.d)) age -= 1;
+      return age;
+    },
+    endAgeFromPolicy(policy, person){
+      if(!policy || typeof policy !== "object") return "";
+      const allowed = ["65", "67", "70", "75", "80"];
+      const direct = safeTrim(policy.coverEndAge || policy.policyEndAge || policy.endAge);
+      if(allowed.indexOf(direct) >= 0) return direct;
+      const label = safeTrim(policy.discountOption?.label || policy.discountLabel || policy.discountPackageLabel || "");
+      const fromLabel = label.match(/עד\s*גיל\s*(65|67|70|75|80)/);
+      if(fromLabel) return fromLabel[1];
+      const endDate = safeTrim(policy.endDate);
+      if(endDate && person){
+        const age = this.ageAtDate(person.birthDate, endDate);
+        if(age != null && allowed.indexOf(String(age)) >= 0) return String(age);
+      }
+      return "";
     },
 
     buildDraft(rec){
@@ -274,6 +306,9 @@
         children: childPeople,
         ...healthAttached,
         healthDetailLines: this.collectHealthDetailLines(healthResponses, detailIds),
+        policy,
+        primaryEndAge: this.endAgeFromPolicy(policy, primaryPerson),
+        spouseEndAge: spousePerson ? this.endAgeFromPolicy(policy, spousePerson) : "",
         beneficiaries: this.buildBeneficiaryRows(policy),
         cancellations: this.collectCancellations(payload, payerSrc),
         payer: {
@@ -347,10 +382,11 @@
       throw new Error(label + (last ? " (" + last + ")" : ""));
     },
 
-    setTextSafe(form, fieldName, value, font){
+    setTextSafe(form, fieldName, value, font, opts){
       const helper = global.GI_OFFICIAL_FORM_FILL;
+      const textOpts = opts || { visual: false };
       if(helper && helper.setTextSafe){
-        helper.setTextSafe(form, fieldName, value, font, { visual: false });
+        helper.setTextSafe(form, fieldName, value, font, textOpts);
         return;
       }
       const text = safeTrim(value);
@@ -470,9 +506,23 @@
       });
     },
     applyHealthDetails(form, lines, font){
+      const textOpts = { visual: false, align: false };
       (lines || []).slice(0, 3).forEach((line, idx) => {
-        this.setTextSafe(form, "DetailLine" + (idx + 1), line, font);
+        this.setTextSafe(form, "DetailLine" + (idx + 1), line, font, textOpts);
       });
+    },
+    applyHealthSignatureNames(form, draft, font){
+      const textOpts = { visual: false, align: false };
+      if(draft?.primary?.fullName){
+        this.setTextSafe(form, "FullName", draft.primary.fullName, font, textOpts);
+      }
+      if(draft?.spouse?.fullName){
+        this.setTextSafe(form, "FullNameSpouse", draft.spouse.fullName, font, textOpts);
+      }
+    },
+    applyBasicInsurance(form, draft){
+      if(draft?.primaryEndAge) this.setExport(form, "MGRiskAge", draft.primaryEndAge);
+      if(draft?.spouseEndAge) this.setExport(form, "MGSRiskAge", draft.spouseEndAge);
     },
 
     async fillOriginalTemplate(draft){
@@ -517,6 +567,7 @@
       if(draft.payer && draft.payer.name){
         this.setTextSafe(form, "FullNamePayer", draft.payer.name, font);
       }
+      this.applyBasicInsurance(form, draft);
       this.applyBeneficiaries(form, draft.beneficiaries, font);
       this.applyCancellations(form, draft.cancellations, font);
       this.applyHealthDetails(form, draft.healthDetailLines, font);
@@ -531,6 +582,7 @@
         spouseId: draft.spouseId,
         childIds: draft.childIds
       });
+      this.applyHealthSignatureNames(form, draft, font);
       if(draft.payer && draft.payer.isInsured && draft.primary){
         helper?.applyInsuredPayerOwner?.(form, draft.primary, font, { relation: "המבוטח" });
         this.setExport(form, "PayerRelationOwner", "1");
@@ -543,6 +595,8 @@
         textOpts: { visual: false },
         bankBranchCode: "BankBranchCode",
         bankNameCode: "BankNameCode",
+        bankStreetName: "BankStreetName",
+        bankCity: "BankCity",
         hoMarks: [{ field: "PayWay", value: "3" }],
         ccMarks: [{ field: "PayWay", value: "1" }]
       });

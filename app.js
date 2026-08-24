@@ -35158,7 +35158,7 @@ UsersGateUI.init();
         const painted = (font && useVisual) ? this.visualHebrew(text) : text;
         field.setText(painted);
         try { field.setFontSize(this.FONT_SIZE); } catch(_e) {}
-        if(font && /[\u0590-\u05FF]/.test(text)){
+        if(font && /[\u0590-\u05FF]/.test(text) && !(opts && opts.align === false)){
           try {
             const PDFLib = window.PDFLib;
             if(PDFLib?.TextAlignment?.Right) field.setAlignment(PDFLib.TextAlignment.Right);
@@ -35344,11 +35344,23 @@ UsersGateUI.init();
       const ccSrc = (hoLayer.cc && typeof hoLayer.cc === "object") ? hoLayer.cc
         : ((hoAlt.cc && typeof hoAlt.cc === "object") ? hoAlt.cc
           : ((hoIns.cc && typeof hoIns.cc === "object") ? hoIns.cc : {}));
+      let branchStreet = String(ho.branchAddress == null ? "" : ho.branchAddress).trim();
+      let branchCity = String(ho.branchCity == null ? "" : ho.branchCity).trim();
+      if(branchStreet && !branchCity){
+        const comma = branchStreet.lastIndexOf(",");
+        if(comma >= 0){
+          branchCity = branchStreet.slice(comma + 1).trim();
+          branchStreet = branchStreet.slice(0, comma).trim();
+        }
+      }
       const bank = {
         name: String(ho.bankName == null ? "" : ho.bankName).trim(),
         branch: String(ho.branch == null ? "" : ho.branch).trim(),
         account: String(ho.account == null ? "" : ho.account).trim(),
-        bankNo: String(ho.bankNo == null ? "" : ho.bankNo).trim()
+        bankNo: String(ho.bankNo == null ? "" : ho.bankNo).trim(),
+        branchName: String(ho.branchName == null ? "" : ho.branchName).trim(),
+        branchStreet,
+        branchCity
       };
       const parsed = this.parseCardExp(ccSrc.exp);
       const personAddr = {
@@ -35410,6 +35422,8 @@ UsersGateUI.init();
         this.setTextSafe(form, cfg.bankAccount || "BankAccountNumber", bank.account, font, opts);
         if(cfg.bankAccountAlt) this.setTextSafe(form, cfg.bankAccountAlt, bank.account, font, opts);
         if(cfg.bankNameCode) this.setTextSafe(form, cfg.bankNameCode, bank.bankNo, font, opts);
+        if(cfg.bankStreetName) this.setTextSafe(form, cfg.bankStreetName, bank.branchStreet, font, opts);
+        if(cfg.bankCity) this.setTextSafe(form, cfg.bankCity, bank.branchCity, font, opts);
         (cfg.hoMarks || []).forEach((mark) => {
           this.setExport(form, mark.field, mark.value);
         });
@@ -35643,7 +35657,7 @@ UsersGateUI.init();
       // PDF radios: MGQ1, MGQ3–MGQ24 (no MGQ2 — smoking uses IsSmoking).
       // Prefer risk keys; fall back to magdal_full (בריאות מגדל) when that was the master.
       this._migdalLifeHealthRows = [
-        { field: "MGQ1", keys: ["magdal_riskx__hobby", "magdal_risk2m__hobby"] },
+        { field: "MGQ1", keys: ["magdal_riskx__hobby", "magdal_risk2m__hobby", "magdal_mort__hobby", "magdal_full__hobby"] },
         { smoke: true, keys: ["magdal_riskx__smoking", "magdal_risk2m__smoking", "magdal_full__smoking_now"] },
         { field: "MGQ3", keys: ["magdal_riskx__alcohol", "magdal_full__alcohol"] },
         { field: "MGQ4", keys: ["magdal_riskx__drugs", "magdal_full__drugs"] },
@@ -35935,19 +35949,19 @@ UsersGateUI.init();
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
   const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-official-he-bold-v1";
-  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-clal-mort-v3";
-  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-clal-mort-v3";
-  const GI_HACHSHARA_LIFE_SHORT_FORM_HREF = "./gi-hachshara-life-short-form.js?v=20260824-clal-mort-v3";
-  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-clal-mort-v3";
-  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-clal-mort-v3";
-  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-clal-mort-v3";
-  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-clal-mort-v3";
-  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-clal-mort-v3";
-  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-clal-mort-v3";
-  const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-clal-mort-v3";
-  const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260824-clal-mort-v3";
-  const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260824-clal-mort-v3";
-  const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-clal-mort-v3";
+  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-mig-life-v1";
+  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-mig-life-v1";
+  const GI_HACHSHARA_LIFE_SHORT_FORM_HREF = "./gi-hachshara-life-short-form.js?v=20260824-mig-life-v1";
+  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-mig-life-v1";
+  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-mig-life-v1";
+  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-mig-life-v1";
+  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-mig-life-v1";
+  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-mig-life-v1";
+  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-mig-life-v1";
+  const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-mig-life-v1";
+  const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260824-mig-life-v1";
+  const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260824-mig-life-v1";
+  const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-mig-life-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
