@@ -15,39 +15,39 @@
     try { return new Date().toISOString(); } catch(_e){ return ""; }
   }
 
-  /* Page 3: מועמד ראשי = עמודת ימין (x גבוה), מועמד שני = שמאל.
-     כן/לא הם CheckBox עם on=Yes — מסמנים את התיבה המתאימה בלבד. */
+  /* Page 3: מועמד ראשי = ימין (x גבוה), מועמד שני = שמאל.
+     בתוך כל זוג: x גבוה יותר = לא, x נמוך יותר = כן (אומת מול PDF ממולא). */
   const HEALTH_ROWS = [
-    { keys: ["clal_risk_neuro"], primaryNo: "Check Box210", primaryYes: "Check Box209", spouseNo: "Check Box88", spouseYes: "Check Box89" },
-    { keys: ["clal_risk_mental"], primaryNo: "Check Box116", primaryYes: "Check Box117", spouseNo: "Check Box87", spouseYes: "Check Box86" },
-    { keys: ["clal_risk_respiratory"], primaryNo: "Check Box115", primaryYes: "Check Box114", spouseNo: "Check Box74", spouseYes: "Check Box85" },
-    { keys: ["clal_risk_skin"], primaryNo: "Check Box111", primaryYes: "Check Box113", spouseNo: "Check Box73", spouseYes: "Check Box84" },
-    { keys: ["clal_risk_heart"], primaryNo: "Check Box109", primaryYes: "Check Box110", spouseNo: "Check Box72", spouseYes: "Check Box83" },
-    { keys: ["clal_risk_digestive"], primaryNo: "Check Box108", primaryYes: "Check Box107", spouseNo: "Check Box70", spouseYes: "Check Box82" },
-    { keys: ["clal_risk_liver"], primaryNo: "Check Box105", primaryYes: "Check Box106", spouseNo: "Check Box81", spouseYes: "Check Box71" },
-    { keys: ["clal_risk_kidney"], primaryNo: "Check Box104", primaryYes: "Check Box103", spouseNo: "Check Box69", spouseYes: "Check Box80" },
-    { keys: ["clal_risk_metabolic"], primaryNo: "Check Box101", primaryYes: "Check Box102", spouseNo: "Check Box68", spouseYes: "Check Box79" },
-    { keys: ["clal_risk_blood"], primaryNo: "Check Box100", primaryYes: "Check Box99", spouseNo: "Check Box25", spouseYes: "Check Box78" },
-    { keys: ["clal_risk_infectious"], primaryNo: "Check Box97", primaryYes: "Check Box98", spouseNo: "Check Box26", spouseYes: "Check Box77" },
-    { keys: ["clal_risk_tumors"], primaryNo: "Check Box95", primaryYes: "Check Box94", spouseNo: "Check Box27", spouseYes: "Check Box76" },
-    { keys: ["clal_risk_musculoskeletal"], primaryNo: "Check Box91", primaryYes: "Check Box92", spouseNo: "fhfgh", spouseYes: "Check Box75" },
-    { keys: ["clal_risk_vision"], primaryNo: "Check Box90", primaryYes: "Check Box93", spouseNo: "Check Box29", spouseYes: "Check Box67" },
-    { keys: ["clal_risk_ent"], primaryNo: "Check Box37", primaryYes: "Check Box38", spouseNo: "Check Box30", spouseYes: "Check Box66" },
-    { keys: ["clal_risk_reproductive"], primaryNo: "Check Box39", primaryYes: "Check Box40", spouseNo: "Check Box31", spouseYes: "Check Box65" },
-    { keys: ["clal_risk_rheumatic"], primaryNo: "Check Box41", primaryYes: "Check Box42", spouseNo: "gfsxbhgf", spouseYes: "Check Box64" },
-    { keys: ["clal_mortgage_alcohol"], primaryNo: "Check Box435454", primaryYes: "Check Box445454", spouseNo: "hnjfhjmkhj", spouseYes: "Check Box34" },
-    { keys: ["clal_mortgage_drugs"], primaryNo: "Check Box45", primaryYes: "Check Box465454", spouseNo: "Check Box35", spouseYes: "Check Box36" },
-    { keys: ["clal_risk_regular_meds"], primaryNo: "Check Box211", primaryYes: "Check Box212", spouseNo: "Check Box221", spouseYes: "Check Box222", detailPrimary: "Text1", detailSpouse: "Text6" },
-    { keys: ["clal_risk_future_surgery"], primaryNo: "Check Box213", primaryYes: "Check Box214", spouseNo: "Check Box223", spouseYes: "Check Box224", detailPrimary: "Text2", detailSpouse: "Text7" },
-    { keys: ["clal_risk_hospital_surgery"], primaryNo: "Check Box215", primaryYes: "Check Box216", spouseNo: "Check Box225", spouseYes: "Check Box226", detailPrimary: "Text3", detailSpouse: "Text8" },
-    { keys: ["clal_risk_disability"], primaryNo: "Check Box217", primaryYes: "Check Box218", spouseNo: "Check Box227", spouseYes: "Check Box228", detailPrimary: "Text4", detailSpouse: "Text9" }
+    { keys: ["clal_risk_neuro"], primaryNo: "Check Box209", primaryYes: "Check Box210", spouseNo: "Check Box89", spouseYes: "Check Box88" },
+    { keys: ["clal_risk_mental"], primaryNo: "Check Box117", primaryYes: "Check Box116", spouseNo: "Check Box86", spouseYes: "Check Box87" },
+    { keys: ["clal_risk_respiratory"], primaryNo: "Check Box114", primaryYes: "Check Box115", spouseNo: "Check Box85", spouseYes: "Check Box74" },
+    { keys: ["clal_risk_skin"], primaryNo: "Check Box113", primaryYes: "Check Box111", spouseNo: "Check Box84", spouseYes: "Check Box73" },
+    { keys: ["clal_risk_heart"], primaryNo: "Check Box110", primaryYes: "Check Box109", spouseNo: "Check Box83", spouseYes: "Check Box72" },
+    { keys: ["clal_risk_digestive"], primaryNo: "Check Box107", primaryYes: "Check Box108", spouseNo: "Check Box82", spouseYes: "Check Box70" },
+    { keys: ["clal_risk_liver"], primaryNo: "Check Box106", primaryYes: "Check Box105", spouseNo: "Check Box71", spouseYes: "Check Box81" },
+    { keys: ["clal_risk_kidney"], primaryNo: "Check Box103", primaryYes: "Check Box104", spouseNo: "Check Box80", spouseYes: "Check Box69" },
+    { keys: ["clal_risk_metabolic"], primaryNo: "Check Box102", primaryYes: "Check Box101", spouseNo: "Check Box79", spouseYes: "Check Box68" },
+    { keys: ["clal_risk_blood"], primaryNo: "Check Box99", primaryYes: "Check Box100", spouseNo: "Check Box78", spouseYes: "Check Box25" },
+    { keys: ["clal_risk_infectious"], primaryNo: "Check Box98", primaryYes: "Check Box97", spouseNo: "Check Box77", spouseYes: "Check Box26" },
+    { keys: ["clal_risk_tumors"], primaryNo: "Check Box94", primaryYes: "Check Box95", spouseNo: "Check Box76", spouseYes: "Check Box27" },
+    { keys: ["clal_risk_musculoskeletal"], primaryNo: "Check Box92", primaryYes: "Check Box91", spouseNo: "Check Box75", spouseYes: "fhfgh" },
+    { keys: ["clal_risk_vision"], primaryNo: "Check Box93", primaryYes: "Check Box90", spouseNo: "Check Box67", spouseYes: "Check Box29" },
+    { keys: ["clal_risk_ent"], primaryNo: "Check Box38", primaryYes: "Check Box37", spouseNo: "Check Box66", spouseYes: "Check Box30" },
+    { keys: ["clal_risk_reproductive"], primaryNo: "Check Box40", primaryYes: "Check Box39", spouseNo: "Check Box65", spouseYes: "Check Box31" },
+    { keys: ["clal_risk_rheumatic"], primaryNo: "Check Box42", primaryYes: "Check Box41", spouseNo: "Check Box64", spouseYes: "gfsxbhgf" },
+    { keys: ["clal_mortgage_alcohol"], primaryNo: "Check Box445454", primaryYes: "Check Box435454", spouseNo: "Check Box34", spouseYes: "hnjfhjmkhj" },
+    { keys: ["clal_mortgage_drugs"], primaryNo: "Check Box465454", primaryYes: "Check Box45", spouseNo: "Check Box36", spouseYes: "Check Box35" },
+    { keys: ["clal_risk_regular_meds"], primaryNo: "Check Box212", primaryYes: "Check Box211", spouseNo: "Check Box222", spouseYes: "Check Box221", detailPrimary: "Text1", detailSpouse: "Text6" },
+    { keys: ["clal_risk_future_surgery"], primaryNo: "Check Box214", primaryYes: "Check Box213", spouseNo: "Check Box224", spouseYes: "Check Box223", detailPrimary: "Text2", detailSpouse: "Text7" },
+    { keys: ["clal_risk_hospital_surgery"], primaryNo: "Check Box216", primaryYes: "Check Box215", spouseNo: "Check Box226", spouseYes: "Check Box225", detailPrimary: "Text3", detailSpouse: "Text8" },
+    { keys: ["clal_risk_disability"], primaryNo: "Check Box218", primaryYes: "Check Box217", spouseNo: "Check Box228", spouseYes: "Check Box227", detailPrimary: "Text4", detailSpouse: "Text9" }
   ];
 
   const ClalMortgageForm = {
     TEMPLATE_BASE: "./forms/clal-mortgage/",
     TEMPLATE_FILE: "clal-mortgage-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-clal-mort-v1",
+    VERSION: "20260824-clal-mort-v2",
     DOC_ID: "doc_clal_mortgage_form",
     DOC_TYPE: "clal_mortgage_form",
     HEALTH_ROWS,
