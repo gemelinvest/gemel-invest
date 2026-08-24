@@ -34806,7 +34806,7 @@ UsersGateUI.init();
       });
     },
     attachDraftHealth(payload, primary, spouse, children){
-      const idOf = (x) => String(x && x.id == null ? "" : x.id).trim();
+      const idOf = (x) => String(x && x.id != null ? x.id : "").trim();
       return {
         healthResponses: this.healthResponses(payload),
         primaryId: idOf(primary),
@@ -34825,7 +34825,7 @@ UsersGateUI.init();
       const altKeys = typeof spec.altKeys === "string" ? (this.HEALTH_QKEYS[spec.altKeys] || []) : (spec.altKeys || []);
       const childIds = (draft && Array.isArray(draft.childIds) && draft.childIds.length)
         ? draft.childIds
-        : ((draft && draft.children) || []).map((c) => String(c && c.id == null ? "" : c.id).trim()).filter(Boolean);
+        : ((draft && draft.children) || []).map((c) => String(c && c.id != null ? c.id : "").trim()).filter(Boolean);
       this.applyHealthYesNo(form, {
         keys,
         altKeys,
@@ -34927,14 +34927,14 @@ UsersGateUI.init();
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
   const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-official-he-bold-v1";
-  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-official-decl-pay-he-v1";
-  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-official-decl-pay-he-v1";
-  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-official-decl-pay-he-v1";
-  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-official-decl-pay-he-v1";
-  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-official-decl-pay-he-v1";
-  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-official-decl-pay-he-v1";
-  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-official-decl-pay-he-v1";
-  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-official-decl-pay-he-v1";
+  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-official-nullid-v1";
+  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-official-nullid-v1";
+  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-official-nullid-v1";
+  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-official-nullid-v1";
+  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-official-nullid-v1";
+  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-official-nullid-v1";
+  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-official-nullid-v1";
+  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-official-nullid-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
