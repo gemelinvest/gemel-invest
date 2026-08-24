@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260825-wiz-stale-fix-v1";
+  const GI_WIZARD_BUILD = "20260825-health-decl-cleanup-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -1416,14 +1416,30 @@ init(){
           questions: Array.isArray(cat?.questions) ? cat.questions.map((q) => ({ ...q })) : []
         }))
         .filter((cat) => (cat.questions || []).length);
+      // GI-HEALTH-DEDUP: כפילות לפי key ולפי דמיון תוכן — מונע «ישן+חדש» אחרי שינוי ניסוח.
+      const STOP = new Set(['האם','אתה','את','של','או','עם','אם','כל','לא','כן','יש','היה','הינך','הנך','שנים','שנה','בעבר','כיום','מתי','כמה','אנא','ציין','נא','פרט','פירוט','כולל','וכן','אחר','אחרת','לרבות','במידה']);
+      const qText = (q) => safeTrim(q?.text || q?.label || q?.title || '');
+      const qTokens = (q) => {
+        const words = qText(q).match(/[\u0590-\u05FF]{3,}/g) || [];
+        return new Set(words.filter((w) => !STOP.has(w)));
+      };
+      const qSim = (a, b) => {
+        if(!a.size || !b.size) return 0;
+        let inter = 0;
+        a.forEach((w) => { if(b.has(w)) inter += 1; });
+        return inter / (a.size + b.size - inter);
+      };
       const target = cloneSchema(baseSchema);
       const seen = new Set(target.flatMap((cat) => (cat.questions || []).map((q) => safeTrim(q?.key))).filter(Boolean));
+      const seenTok = target.flatMap((cat) => (cat.questions || []).map((q) => qTokens(q))).filter((s) => s.size >= 2);
       cloneSchema(extraSchema).forEach((cat) => {
         const newQs = (cat.questions || []).filter((q) => {
           const key = safeTrim(q?.key);
-          if(!key) return true;
-          if(seen.has(key)) return false;
-          seen.add(key);
+          if(key && seen.has(key)) return false;
+          const tok = qTokens(q);
+          if(tok.size >= 2 && seenTok.some((t) => qSim(tok, t) >= 0.5)) return false;
+          if(key) seen.add(key);
+          if(tok.size >= 2) seenTok.push(tok);
           return true;
         });
         if(!newQs.length) return;
@@ -22376,17 +22392,19 @@ if(path === "birthDate"){
       const cache = this.getHealthDerivedCache();
       if(cache.filteredQuestions) return cache.filteredQuestions;
 
-      if(this.isCustomerPurchaseMode() && !this._internalHealthSchemaBuild){
+        if(this.isCustomerPurchaseMode() && !this._internalHealthSchemaBuild){
         const sessionPolicies = this.getWizardNewPolicies();
         const baselinePolicies = this.getCustomerPurchaseBaselinePolicies();
         const sessionSchema = this._resolveHealthSchemaForPolicyList(sessionPolicies);
         cache._purchaseSessionSchema = sessionSchema;
         if(!baselinePolicies.length){
-          cache.filteredQuestions = sessionSchema;
+          cache.filteredQuestions = this.sanitizeHealthSchemaQuestionTexts(sessionSchema);
           return cache.filteredQuestions;
         }
         const baselineSchema = this._resolveHealthSchemaForPolicyList(baselinePolicies);
-        cache.filteredQuestions = this._mergeHealthQuestionSchemas(baselineSchema, sessionSchema);
+        cache.filteredQuestions = this.sanitizeHealthSchemaQuestionTexts(
+          this._mergeHealthQuestionSchemas(baselineSchema, sessionSchema)
+        );
         return cache.filteredQuestions;
       }
 
@@ -22623,7 +22641,9 @@ if(path === "birthDate"){
         ));
         const migdalHealth = healthCandidates.find((cand) => cand && cand.company === 'מגדל' && cand.questionCount > 0) || null;
         const chosenHealth = migdalHealth || bestCandidate(healthCandidates);
-        cache.filteredQuestions = chosenHealth ? cloneSchema(chosenHealth.schema) : [];
+        cache.filteredQuestions = chosenHealth
+          ? this.sanitizeHealthSchemaQuestionTexts(cloneSchema(chosenHealth.schema))
+          : [];
         return cache.filteredQuestions;
       }
 
@@ -22643,7 +22663,11 @@ if(path === "birthDate"){
           });
         });
         const best = bestCandidate(productCandidates);
-        cache.filteredQuestions = best ? cloneSchema(best.schema) : this.getShortHealthSchema();
+        cache.filteredQuestions = best
+          ? this.sanitizeHealthSchemaQuestionTexts(cloneSchema(best.schema))
+          : this.sanitizeHealthSchemaQuestionTexts(
+              (typeof this.getShortHealthSchema === 'function' ? this.getShortHealthSchema() : null) || []
+            );
         return cache.filteredQuestions;
       }
 
@@ -22663,23 +22687,154 @@ if(path === "birthDate"){
       return cache.questionList;
     },
 
+    // GI-HEALTH-CLEANUP 2026-08-25: aliases + dual-read + strip שאלון-annotations
+    HEALTH_QKEY_ALIASES: {
+      // short/extended/full engine → company keys (common legacy)
+      short__smoking: ['clal_smoking', 'menora__smoking', 'ayalon__smoking', 'phoenix_full__smoking', 'magdal_full__smoking_now'],
+      short__heart: ['clal_heart_blood_vessels', 'menora__heart', 'ayalon__heart', 'phoenix_full__heart', 'magdal_full__heart'],
+      short__neuro: ['clal_neuro_development', 'menora__neuro', 'ayalon__neuro', 'phoenix_full__neuro', 'magdal_full__neuro'],
+      short__cancer: ['clal_tumors', 'menora__tumors', 'ayalon__cancer', 'phoenix_full__cancer', 'magdal_full__cancer'],
+      short__mental: ['clal_mental', 'menora__mental', 'ayalon__mental', 'phoenix_full__mental', 'magdal_full__mental'],
+      short__tests: ['clal_future_tests', 'menora__medical_tests', 'ayalon__tests', 'phoenix_full__tests', 'magdal_full__tests'],
+      short__treatment: ['clal_regular_meds', 'ayalon__medications', 'phoenix_full__medications', 'magdal_full__medications'],
+      short__disability: ['clal_risk_disability', 'ayalon__disability', 'hachshara__disability', 'magdal_full__disability'],
+      extended__smoking: ['clal_smoking', 'menora__smoking', 'phoenix_full__smoking'],
+      extended__heart: ['clal_heart_blood_vessels', 'phoenix_full__heart'],
+      full__smoking: ['clal_smoking', 'phoenix_full__smoking', 'magdal_full__smoking_now'],
+      full__heart: ['clal_heart_blood_vessels', 'phoenix_full__heart', 'magdal_full__heart'],
+      // Clal CI / rename leftovers
+      clal_disability: ['clal_risk_disability'],
+      clal_mortgage_smoking: ['clal_smoking'],
+      // Magdala smoking past/now cross-read
+      magdal_full__smoking: ['magdal_full__smoking_now', 'magdal_full__smoking_past'],
+      // Menora renamed topics
+      menora__epilepsy: ['menora__neuro'],
+      menora__malignant_tumors: ['menora__tumors'],
+      menora__asthma: ['menora__respiratory'],
+      menora__joints: ['menora__ortho'],
+      menora__liver_hepatitis: ['menora__digestive'],
+      menora__kidneys_urinary: ['menora__kidneys'],
+      menora__skin_genital: ['menora__skin'],
+      menora__family_diseases: ['menora__family'],
+      menora__infectious_immune: ['menora__infectious']
+    },
+
+    stripHealthQuestionnaireAnnotation(text){
+      let t = String(text == null ? '' : text);
+      // "(שאלון 2)" / "(שאלון 1 / 28)" / "(שאלונים 12, 13)"
+      t = t.replace(/\s*\(שאלון(?:ים)?[^)]*\)/g, '');
+      // trailing / mid "(21)" or "(2, 28, 14)" or "(2 / 28)" — מספרי שאלוני המשך בלבד
+      t = t.replace(/\s*\(\s*\d+(?:\s*[,/]\s*\d+)*\s*\)(?=\s*[,.]|$)/g, '');
+      t = t.replace(/\s{2,}/g, ' ').replace(/\s+([,.])/g, '$1').trim();
+      return t;
+    },
+
+    sanitizeHealthSchemaQuestionTexts(schema){
+      return (Array.isArray(schema) ? schema : []).map((cat) => ({
+        ...cat,
+        questions: (Array.isArray(cat?.questions) ? cat.questions : []).map((q) => {
+          if(!q || typeof q !== 'object') return q;
+          const cleaned = this.stripHealthQuestionnaireAnnotation(q.text);
+          if(!cleaned || cleaned === safeTrim(q.text)) return { ...q };
+          return { ...q, text: cleaned };
+        })
+      }));
+    },
+
+    getHealthQkeyAliasGroups(){
+      if(this._healthQkeyAliasGroups) return this._healthQkeyAliasGroups;
+      const groups = [];
+      const pushGroup = (keys) => {
+        const clean = [...new Set((keys || []).map((k) => safeTrim(k)).filter(Boolean))];
+        if(clean.length < 2) return;
+        groups.push(clean);
+      };
+      Object.entries(this.HEALTH_QKEY_ALIASES || {}).forEach(([legacy, canons]) => {
+        pushGroup([legacy, ...(Array.isArray(canons) ? canons : [canons])]);
+      });
+      // גם קידומות short/extended/full עם אותו suffix
+      ['short', 'extended', 'full'].forEach((prefix) => {
+        Object.keys(this.HEALTH_QKEY_ALIASES || {}).forEach((legacy) => {
+          if(!legacy.startsWith(prefix + '__')) return;
+          const suffix = legacy.slice(prefix.length + 2);
+          const canons = this.HEALTH_QKEY_ALIASES[legacy] || [];
+          pushGroup([legacy, ...canons, suffix]);
+        });
+      });
+      this._healthQkeyAliasGroups = groups;
+      return groups;
+    },
+
+    resolveHealthResponseAliasKeys(qKey){
+      const key = safeTrim(qKey);
+      if(!key) return [];
+      const out = [key];
+      const seen = new Set([key]);
+      const add = (k) => {
+        const t = safeTrim(k);
+        if(!t || seen.has(t)) return;
+        seen.add(t);
+        out.push(t);
+      };
+      const aliases = this.HEALTH_QKEY_ALIASES || {};
+      if(Array.isArray(aliases[key])) aliases[key].forEach(add);
+      Object.entries(aliases).forEach(([legacy, canons]) => {
+        const list = Array.isArray(canons) ? canons : [canons];
+        if(list.includes(key)){
+          add(legacy);
+          list.forEach(add);
+        }
+      });
+      // suffix after __
+      const sep = key.indexOf('__');
+      if(sep >= 0){
+        const suffix = key.slice(sep + 2);
+        add(suffix);
+        ['short__' + suffix, 'extended__' + suffix, 'full__' + suffix].forEach(add);
+        if(Array.isArray(aliases['short__' + suffix])) aliases['short__' + suffix].forEach(add);
+      }
+      return out;
+    },
+
     getHealthResponse(qKey, insId){
       const store = this.getHealthStore();
-      const qBlock = store.responses[qKey] || {};
-      const out = qBlock[insId] || { answer:"", fields:{}, saved:false, editing:false };
+      const empty = { answer:"", fields:{}, saved:false, editing:false };
+      const aliasKeys = this.resolveHealthResponseAliasKeys(qKey);
+      let best = null;
+      for(const ak of aliasKeys){
+        const qBlock = store.responses[ak];
+        if(!qBlock || typeof qBlock !== 'object') continue;
+        const hit = qBlock[insId] || qBlock[String(insId)];
+        if(!hit || typeof hit !== 'object') continue;
+        const hasAnswer = !!safeTrim(hit.answer);
+        const hasFields = hit.fields && typeof hit.fields === 'object' && Object.keys(hit.fields).some((fk) => safeTrim(hit.fields[fk]));
+        if(!hasAnswer && !hasFields && !hit.saved) continue;
+        if(!best){ best = hit; continue; }
+        // העדף תשובה מלאה יותר (כן+שדות) על פני ריקה
+        const bestScore = (safeTrim(best.answer) === 'yes' ? 2 : safeTrim(best.answer) ? 1 : 0)
+          + (best.fields && Object.keys(best.fields).length ? 1 : 0)
+          + (best.saved ? 1 : 0);
+        const hitScore = (safeTrim(hit.answer) === 'yes' ? 2 : safeTrim(hit.answer) ? 1 : 0)
+          + (hit.fields && Object.keys(hit.fields).length ? 1 : 0)
+          + (hit.saved ? 1 : 0);
+        if(hitScore > bestScore) best = hit;
+      }
+      const out = best ? { ...best } : { ...empty };
       if(!out.fields) out.fields = {};
       return out;
     },
 
     setHealthResponse(qKey, insId, patch){
       const store = this.getHealthStore();
-      store.responses[qKey] = store.responses[qKey] || {};
-      const prev = this.getHealthResponse(qKey, insId);
-      store.responses[qKey][insId] = {
+      const canon = safeTrim(qKey);
+      store.responses[canon] = store.responses[canon] || {};
+      const prev = this.getHealthResponse(canon, insId);
+      store.responses[canon][insId] = {
         ...prev,
         ...patch,
         fields: { ...(prev.fields || {}), ...((patch && patch.fields) || {}) }
       };
+      // שמירה גם תחת מפתח קנוני בלבד — aliases נקראים ב-dual-read, לא נדרסים
     },
 
     getHealthProgress(){
@@ -24632,20 +24787,37 @@ if(path === "birthDate"){
     },
 
     getHealthReportAnswerForInsured(responses, qKey, insId, insIndex){
-      const block = responses?.[qKey] && typeof responses[qKey] === 'object' ? responses[qKey] : {};
-      return block?.[insId]
-        || block?.[String(insId)]
-        || block?.[`payload_ins_${insIndex}`]
-        || block?.[String(insIndex)]
-        || null;
+      const aliasKeys = typeof this.resolveHealthResponseAliasKeys === 'function'
+        ? this.resolveHealthResponseAliasKeys(qKey)
+        : [safeTrim(qKey)].filter(Boolean);
+      let best = null;
+      for(const ak of aliasKeys){
+        const block = responses?.[ak] && typeof responses[ak] === 'object' ? responses[ak] : {};
+        const hit = block?.[insId]
+          || block?.[String(insId)]
+          || block?.[`payload_ins_${insIndex}`]
+          || block?.[String(insIndex)]
+          || null;
+        if(!hit || typeof hit !== 'object') continue;
+        if(!safeTrim(hit.answer) && !(hit.fields && Object.keys(hit.fields).length) && !hit.saved) continue;
+        if(!best){ best = hit; continue; }
+        const score = (h) => (safeTrim(h.answer) === 'yes' ? 2 : safeTrim(h.answer) ? 1 : 0)
+          + (h.fields && Object.keys(h.fields).length ? 1 : 0)
+          + (h.saved ? 1 : 0);
+        if(score(hit) > score(best)) best = hit;
+      }
+      return best;
     },
 
     getHealthReportQuestionKeys(responses, questionList){
+      // רק מפתחות הסכמה הקנונית — לא מצרפים מפתחות orphan מתשובות ישנות כשורות נפרדות.
+      // תשובות ישנות נמשכות דרך alias ב-getHealthReportAnswerForInsured.
       const ordered = (Array.isArray(questionList) ? questionList : [])
         .map((item) => safeTrim(item?.question?.key))
         .filter(Boolean);
-      const fromResponses = Object.keys(responses || {}).map((key) => safeTrim(key)).filter(Boolean);
-      return Array.from(new Set([...ordered, ...fromResponses]));
+      if(ordered.length) return Array.from(new Set(ordered));
+      // fallback: אין סכמה (למשל payload בלי פוליסות) — הצג מפתחות עם תשובה בפועל
+      return Object.keys(responses || {}).map((key) => safeTrim(key)).filter(Boolean);
     },
 
     buildHealthItemsFromPayload(payload){

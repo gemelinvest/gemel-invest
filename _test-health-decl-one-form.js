@@ -43,9 +43,9 @@ assert(syntaxWiz.status === 0, "node --check gi-wizard.js");
 if(syntaxWiz.status !== 0) console.error(syntaxWiz.stderr || syntaxWiz.stdout);
 const syntaxApp = spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")], { encoding: "utf8" });
 assert(syntaxApp.status === 0, "node --check app.js");
-assert(app.includes('GI_WIZARD_JS_VERSION = "20260825-wiz-stale-fix-v1"'), "app.js bumps gi-wizard cache");
-assert(html.includes("app.js?v=20260825-wiz-stale-fix-v1"), "index.html bumps app.js cache");
-assert(sw.includes("gi-v12-20260825-wiz-stale-fix-v1"), "service worker cache bumped");
+assert(app.includes('GI_WIZARD_JS_VERSION = "20260825-health-decl-cleanup-v1"'), "app.js bumps gi-wizard cache");
+assert(html.includes("app.js?v=20260825-health-decl-cleanup-v1"), "index.html bumps app.js cache");
+assert(sw.includes("gi-v12-20260825-health-decl-cleanup-v1"), "service worker cache bumped");
 
 console.log("\n2) one declaration only — no cross-company merge");
 assert(filterFn.includes("getHealthQuestionsFiltered(){"), "filtered-questions resolver exists");
@@ -57,7 +57,11 @@ assert(!pickBlock.includes("addUniqueQuestions"), "selection no longer merges le
 assert(!pickBlock.includes("mergedHealth"), "health path no longer builds a merged schema");
 assert(pickBlock.includes("productCandidates"), "non-health path collects every product candidate");
 assert(pickBlock.includes("bestCandidate(productCandidates)"), "non-health path picks one product by question count");
-assert(pickBlock.includes("cache.filteredQuestions = best ? cloneSchema(best.schema)"), "non-health path returns a single cloned schema");
+assert(
+  pickBlock.includes("sanitizeHealthSchemaQuestionTexts(cloneSchema(best.schema))")
+    || pickBlock.includes("cache.filteredQuestions = best ? cloneSchema(best.schema)"),
+  "non-health path returns a single cloned schema"
+);
 
 console.log("\n3) company schemas and follow-ups stay in place");
 assert(wiz.includes("getMagdalHealthSchema(){"), "Migdal health schema unchanged");
