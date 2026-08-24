@@ -35468,24 +35468,77 @@ UsersGateUI.init();
     },
     hachsharaHealthRows(kind){
       if(!this._hachHealthRows){
-        const pack = (keys, maxQ, skipRe) => {
-          const rows = [];
-          let q = 1;
-          (keys || []).forEach((key) => {
-            if(skipRe && skipRe.test(key)) return;
-            if(/smoking/.test(key)){
-              rows.push({ key, smoke: true });
-              return;
-            }
-            if(maxQ && q > maxQ) return;
-            rows.push({ key, q: q++ });
-          });
-          return rows;
-        };
+        // rows use keys[] so legacy aliases / health-master fallbacks still fill the PDF.
         this._hachHealthRows = {
-          ci: pack(this.HEALTH_QKEYS.hachshara_ci, 27, /infant_/),
-          life_full: pack(this.HEALTH_QKEYS.hachshara_life_full, 20, null),
-          life_short: pack(this.HEALTH_QKEYS.hachshara_life, 12, null)
+          ci: [
+            { smoke: true, keys: ["hachshara_crit__smoking", "hachshara__smoking"] },
+            { q: 1, keys: ["hachshara_crit__hospitalization", "hachshara__hospitalization"] },
+            { q: 2, keys: ["hachshara_crit__tests_5y", "hachshara__tests_5y"] },
+            { q: 3, keys: ["hachshara_crit__treatment_5y", "hachshara__treatment_5y"] },
+            { q: 4, keys: ["hachshara_crit__chronic", "hachshara__chronic"] },
+            { q: 5, keys: ["hachshara_crit__memory", "hachshara__memory"] },
+            { q: 6, keys: ["hachshara_crit__disability", "hachshara__disability"] },
+            { q: 7, keys: ["hachshara_crit__mental", "hachshara__mental"] },
+            { q: 8, keys: ["hachshara_crit__substances", "hachshara__substances"] },
+            { q: 9, keys: ["hachshara_crit__neuro", "hachshara__neuro"] },
+            { q: 10, keys: ["hachshara_crit__respiratory", "hachshara__respiratory", "hachshara__breath_chest"] },
+            { q: 11, keys: ["hachshara_crit__heart", "hachshara_crit__heart_disease", "hachshara_crit__heart_vessels", "hachshara__heart"] },
+            { q: 12, keys: ["hachshara_crit__blood", "hachshara__blood"] },
+            { q: 13, keys: ["hachshara_crit__liver", "hachshara__liver"] },
+            { q: 14, keys: ["hachshara_crit__digestive", "hachshara__digestive"] },
+            { q: 15, keys: ["hachshara_crit__kidneys", "hachshara__kidneys"] },
+            { q: 16, keys: ["hachshara_crit__glands", "hachshara__glands"] },
+            { q: 17, keys: ["hachshara_crit__skin", "hachshara__skin"] },
+            { q: 18, keys: ["hachshara_crit__aids", "hachshara__aids"] },
+            { q: 19, keys: ["hachshara_crit__musculoskeletal", "hachshara__musculoskeletal"] },
+            { q: 20, keys: ["hachshara_crit__cancer", "hachshara__cancer"] },
+            { q: 21, keys: ["hachshara_crit__autoimmune", "hachshara__autoimmune"] },
+            { q: 22, keys: ["hachshara_crit__eyes", "hachshara__eyes"] },
+            { q: 23, keys: ["hachshara_crit__ent", "hachshara__ent"] },
+            { q: 24, keys: ["hachshara_crit__hernia", "hachshara__hernia"] },
+            { q: 25, keys: ["hachshara_crit__female", "hachshara__female"] },
+            { q: 26, keys: ["hachshara_crit__child_dev", "hachshara__child_dev"] },
+            { q: 27, keys: ["hachshara_crit__family_critical", "hachshara__family_critical"] }
+          ],
+          life_full: [
+            { smoke: true, keys: ["hachshara_risk_f__smoking"] },
+            // Current schema a1–a6; legacy files stored q1–q8 for section א
+            { q: 1, keys: ["hachshara_risk_f__a1", "hachshara_risk_f__q1", "hachshara_risk_f__c1"] },
+            { q: 2, keys: ["hachshara_risk_f__a2", "hachshara_risk_f__q2"] },
+            { q: 3, keys: ["hachshara_risk_f__a3", "hachshara_risk_f__q3"] },
+            { q: 4, keys: ["hachshara_risk_f__a4", "hachshara_risk_f__q4"] },
+            { q: 5, keys: ["hachshara_risk_f__a5", "hachshara_risk_f__q5"] },
+            { q: 6, keys: ["hachshara_risk_f__a6", "hachshara_risk_f__q6"] },
+            { q: 7, keys: ["hachshara_risk_f__b1", "hachshara_risk_f__q7"] },
+            { q: 8, keys: ["hachshara_risk_f__b2", "hachshara_risk_f__q8"] },
+            { q: 9, keys: ["hachshara_risk_f__b3"] },
+            { q: 10, keys: ["hachshara_risk_f__b4"] },
+            { q: 11, keys: ["hachshara_risk_f__b5"] },
+            { q: 12, keys: ["hachshara_risk_f__b6"] },
+            { q: 13, keys: ["hachshara_risk_f__b7"] },
+            { q: 14, keys: ["hachshara_risk_f__b8"] },
+            { q: 15, keys: ["hachshara_risk_f__b9"] },
+            { q: 16, keys: ["hachshara_risk_f__b10"] },
+            { q: 17, keys: ["hachshara_risk_f__b11"] },
+            { q: 18, keys: ["hachshara_risk_f__b12"] },
+            { q: 19, keys: ["hachshara_risk_f__b13"] },
+            { q: 20, keys: ["hachshara_risk_f__b14"] }
+          ],
+          life_short: [
+            { smoke: true, keys: ["hachshara_risk_s__smoking", "hachshara_mort_s__smoking"] },
+            { q: 1, keys: ["hachshara_risk_s__q1", "hachshara_mort_s__q1"] },
+            { q: 2, keys: ["hachshara_risk_s__q2", "hachshara_mort_s__q2"] },
+            { q: 3, keys: ["hachshara_risk_s__q3", "hachshara_mort_s__q3"] },
+            { q: 4, keys: ["hachshara_risk_s__q4a", "hachshara_mort_s__q4a"] },
+            { q: 5, keys: ["hachshara_risk_s__q4b", "hachshara_mort_s__q4b"] },
+            { q: 6, keys: ["hachshara_risk_s__q4c", "hachshara_mort_s__q4c"] },
+            { q: 7, keys: ["hachshara_risk_s__q4d", "hachshara_mort_s__q4d"] },
+            { q: 8, keys: ["hachshara_risk_s__q4e", "hachshara_mort_s__q4e"] },
+            { q: 9, keys: ["hachshara_risk_s__q4f", "hachshara_mort_s__q4f"] },
+            { q: 10, keys: ["hachshara_risk_s__q4g", "hachshara_mort_s__q4g"] },
+            { q: 11, keys: ["hachshara_risk_s__q4h", "hachshara_mort_s__q4h"] },
+            { q: 12, keys: ["hachshara_risk_s__q4i", "hachshara_mort_s__q4i"] }
+          ]
         };
       }
       return this._hachHealthRows[kind] || [];
@@ -35539,12 +35592,14 @@ UsersGateUI.init();
         return [];
       };
       const ans = (keys, insId) => {
+        let sawNo = false;
         for(let i = 0; i < keys.length; i++){
           let a = this.healthAnswer(responses, keys[i], insId);
           if(!a && insId && insId === primaryId) a = this.healthAnswerOrSolo(responses, keys[i], "");
-          if(a) return a;
+          if(a === "yes") return "yes";
+          if(a === "no") sawNo = true;
         }
-        return "";
+        return sawNo ? "no" : "";
       };
       const primaryFieldOf = (row) => {
         if(row.field) return row.field;
@@ -35784,18 +35839,18 @@ UsersGateUI.init();
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
   const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-official-he-bold-v1";
-  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-migdal-life-fill-v2";
-  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-migdal-life-fill-v2";
-  const GI_HACHSHARA_LIFE_SHORT_FORM_HREF = "./gi-hachshara-life-short-form.js?v=20260824-migdal-life-fill-v2";
-  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-migdal-life-fill-v2";
-  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-migdal-life-fill-v2";
-  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-migdal-life-fill-v2";
-  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-migdal-life-fill-v2";
-  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-migdal-life-fill-v2";
-  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-migdal-life-fill-v2";
-  const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-migdal-life-fill-v2";
-  const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260824-migdal-life-fill-v2";
-  const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-migdal-life-fill-v2";
+  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-hach-health-v2";
+  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-hach-health-v2";
+  const GI_HACHSHARA_LIFE_SHORT_FORM_HREF = "./gi-hachshara-life-short-form.js?v=20260824-hach-health-v2";
+  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-hach-health-v2";
+  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-hach-health-v2";
+  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-hach-health-v2";
+  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-hach-health-v2";
+  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-hach-health-v2";
+  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-hach-health-v2";
+  const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-hach-health-v2";
+  const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260824-hach-health-v2";
+  const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-hach-health-v2";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){

@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/migdal-life/",
     TEMPLATE_FILE: "migdal-life-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-migdal-life-fill-v2",
+    VERSION: "20260824-hach-health-v2",
     DOC_ID: "doc_migdal_life_form",
     DOC_TYPE: "migdal_life_form",
 
