@@ -231,7 +231,7 @@
     setTextSafe(form, fieldName, value, font){
       const helper = global.GI_OFFICIAL_FORM_FILL;
       if(helper && helper.setTextSafe){
-        helper.setTextSafe(form, fieldName, value, font);
+        helper.setTextSafe(form, fieldName, value, font, { visual: false });
         return;
       }
       const text = safeTrim(value);
@@ -332,13 +332,15 @@
       this.applyLoaner(form, draft.loaner, font);
       this.applyLoans(form, draft.loans, font);
       global.GI_OFFICIAL_FORM_FILL?.applyOfficialHealthAndNames?.(form, draft, font, {
-        keys: "migdal_mortgage"
+        keys: "migdal_mortgage",
+        visual: false
       });
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
         bank: draft.bank || {},
         cc: draft.payment?.cc || {}
       }, font, {
+        textOpts: { visual: false },
         bankBranch: "BankBranchCode"
       });
       if(font && form.updateFieldAppearances) form.updateFieldAppearances(font);

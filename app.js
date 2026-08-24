@@ -6688,6 +6688,7 @@
       harBituach: "har_bituach_file",
       hachsharaCiForm: "hachshara_ci_form",
       hachsharaLifeForm: "hachshara_life_form",
+      hachsharaLifeShortForm: "hachshara_life_short_form",
       migdalLifeForm: "migdal_life_form",
       migdalMortgageForm: "migdal_mortgage_form",
       menoraCiForm: "menora_ci_form",
@@ -6700,6 +6701,7 @@
     OFFICIAL_JOIN_FORM_TYPES: [
       "hachshara_ci_form",
       "hachshara_life_form",
+      "hachshara_life_short_form",
       "migdal_life_form",
       "migdal_mortgage_form",
       "menora_ci_form",
@@ -7120,6 +7122,49 @@
       if(rec) return getCustomerRawNewPolicies(rec);
       return getNewPoliciesFromCustomerPayload(payload);
     },
+    hachsharaLifePolicyBlob(policy){
+      return [policy?.type, policy?.productName, policy?.planName, policy?.label].map(safeTrim).join(" ");
+    },
+    isHachsharaLifeLikePolicy(policy){
+      if(!policy || typeof policy !== "object") return false;
+      if(safeTrim(policy.company) !== "הכשרה") return false;
+      const blob = this.hachsharaLifePolicyBlob(policy);
+      if(/משכנתא/.test(blob) || /מחלות\s*קשות/.test(blob)) return false;
+      return /ריסק/.test(blob) || /מגן\s*לעתיד/.test(blob) || /ביטוח\s*חיים/.test(blob);
+    },
+    hachsharaRiskSumNumber(policy){
+      const nums = [];
+      const push = (value) => {
+        const n = Number(String(value == null ? "" : value).replace(/[^\d.]/g, ""));
+        if(Number.isFinite(n) && n > 0) nums.push(n);
+      };
+      if(!policy || typeof policy !== "object") return 0;
+      push(policy.sumInsured);
+      push(policy.compensation);
+      push(policy.coverageAmount);
+      [policy.sumInsuredPerInsured, policy.compensationPerInsured].forEach((map) => {
+        if(!map || typeof map !== "object") return;
+        Object.keys(map).forEach((key) => push(map[key]));
+      });
+      return nums.length ? Math.max.apply(null, nums) : 0;
+    },
+    hachsharaRiskAmountMode(payload){
+      const primary = payload?.primary && typeof payload.primary === "object" ? payload.primary : {};
+      const fromPrimary = primary.healthDeclaration && typeof primary.healthDeclaration === "object"
+        ? primary.healthDeclaration : {};
+      const ins0 = Array.isArray(payload?.insureds) ? payload.insureds[0] : null;
+      const fromIns = ins0?.data?.healthDeclaration && typeof ins0.data.healthDeclaration === "object"
+        ? ins0.data.healthDeclaration : {};
+      return safeTrim(fromPrimary.hachsharaRiskAmountMode || fromIns.hachsharaRiskAmountMode);
+    },
+    hachsharaRiskIsShort(policy, payload){
+      if(!this.isHachsharaLifeLikePolicy(policy)) return false;
+      if(/מגן\s*לעתיד/.test(this.hachsharaLifePolicyBlob(policy))) return false;
+      const n = this.hachsharaRiskSumNumber(policy);
+      if(n > 1000000) return false;
+      if(n > 0 && n <= 1000000) return true;
+      return this.hachsharaRiskAmountMode(payload) !== "full";
+    },
     qualifiesForHachsharaCiForm(payload, rec){
       const list = this.listOfficialJoinFormPolicies(payload, rec);
       const matched = list.filter((p) => {
@@ -7131,12 +7176,12 @@
     },
     qualifiesForHachsharaLifeForm(payload, rec){
       const list = this.listOfficialJoinFormPolicies(payload, rec);
-      const matched = list.filter((p) => {
-        if(safeTrim(p?.company) !== "הכשרה") return false;
-        const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
-        if(/משכנתא/.test(blob) || /מחלות\s*קשות/.test(blob)) return false;
-        return /ריסק/.test(blob) || /מגן\s*לעתיד/.test(blob) || /ביטוח\s*חיים/.test(blob);
-      });
+      const matched = list.filter((p) => this.isHachsharaLifeLikePolicy(p) && !this.hachsharaRiskIsShort(p, payload));
+      return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
+    },
+    qualifiesForHachsharaLifeShortForm(payload, rec){
+      const list = this.listOfficialJoinFormPolicies(payload, rec);
+      const matched = list.filter((p) => this.hachsharaRiskIsShort(p, payload));
       return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
     },
     qualifiesForMigdalLifeForm(payload, rec){
@@ -7266,6 +7311,19 @@
           uploadedBy: safeTrim(rec?.agentName)
         });
       }
+      const hasHachLifeShort = list.some((d) => safeTrim(d?.type) === this.TYPES.hachsharaLifeShortForm);
+      if(!hasHachLifeShort && this.qualifiesForHachsharaLifeShortForm(payload, rec)){
+        const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
+        list.unshift({
+          id: "doc_hachshara_life_short_form",
+          type: this.TYPES.hachsharaLifeShortForm,
+          isLegacy: true,
+          name: "טופס מקורי — ריסק חיים מקוצר עד 1,000,000 · הכשרה",
+          source: "מערכת",
+          uploadedAt,
+          uploadedBy: safeTrim(rec?.agentName)
+        });
+      }
       const hasMigLife = list.some((d) => safeTrim(d?.type) === this.TYPES.migdalLifeForm);
       if(!hasMigLife && this.qualifiesForMigdalLifeForm(payload, rec)){
         const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
@@ -7387,6 +7445,7 @@
         const type = safeTrim(doc.type);
         if(type === this.TYPES.hachsharaCiForm) return this.qualifiesForHachsharaCiForm(payload, rec);
         if(type === this.TYPES.hachsharaLifeForm) return this.qualifiesForHachsharaLifeForm(payload, rec);
+        if(type === this.TYPES.hachsharaLifeShortForm) return this.qualifiesForHachsharaLifeShortForm(payload, rec);
         if(type === this.TYPES.migdalLifeForm) return this.qualifiesForMigdalLifeForm(payload, rec);
         if(type === this.TYPES.migdalMortgageForm) return this.qualifiesForMigdalMortgageForm(payload, rec);
         if(type === this.TYPES.menoraCiForm) return this.qualifiesForMenoraCiForm(payload, rec);
@@ -18118,6 +18177,13 @@ UsersGateUI.init();
           if(rec) void this.openHachsharaCiForm(rec);
           return;
         }
+        const openHachLifeShort = ev.target?.closest?.("[data-open-hachshara-life-short-doc], [data-hachlifeshort-open]");
+        if(openHachLifeShort){
+          ev.preventDefault();
+          const rec = this.current();
+          if(rec) void this.openHachsharaLifeShortForm(rec);
+          return;
+        }
         const openHachLife = ev.target?.closest?.("[data-open-hachshara-life-doc], [data-hachlife-open]");
         if(openHachLife){
           ev.preventDefault();
@@ -20725,6 +20791,12 @@ UsersGateUI.init();
             return `<div class="cfFile__documentsPreviewDoc">${window.HachsharaLifeForm.renderPreviewHtml(draft)}</div>`;
           } catch(_e) {}
         }
+        if(type === CustomerDocuments.TYPES.hachsharaLifeShortForm && window.HachsharaLifeShortForm){
+          try {
+            const draft = window.HachsharaLifeShortForm.buildDraft(rec);
+            return `<div class="cfFile__documentsPreviewDoc">${window.HachsharaLifeShortForm.renderPreviewHtml(draft)}</div>`;
+          } catch(_e) {}
+        }
         if(type === CustomerDocuments.TYPES.migdalLifeForm && window.MigdalLifeForm){
           try {
             const draft = window.MigdalLifeForm.buildDraft(rec);
@@ -20846,6 +20918,13 @@ UsersGateUI.init();
         } catch(_e) {}
         return;
       }
+      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.hachsharaLifeShortForm && !window.HachsharaLifeShortForm){
+        try {
+          await ensureHachsharaLifeShortFormLoaded();
+          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
+        } catch(_e) {}
+        return;
+      }
       if(safeTrim(doc?.type) === CustomerDocuments.TYPES.migdalLifeForm && !window.MigdalLifeForm){
         try {
           await ensureMigdalLifeFormLoaded();
@@ -20943,6 +21022,17 @@ UsersGateUI.init();
         window.HachsharaLifeForm.open(rec);
       } catch(err){
         try { console.error("HACHSHARA_LIFE_FORM_OPEN_FAILED", err); } catch(_e) {}
+        try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
+      }
+    },
+    async openHachsharaLifeShortForm(rec){
+      if(this.denyOfficialJoinFormDownload()) return;
+      try {
+        await ensureHachsharaLifeShortFormLoaded();
+        if(!window.HachsharaLifeShortForm) throw new Error("HachsharaLifeShortForm missing");
+        window.HachsharaLifeShortForm.open(rec);
+      } catch(err){
+        try { console.error("HACHSHARA_LIFE_SHORT_FORM_OPEN_FAILED", err); } catch(_e) {}
         try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
       }
     },
@@ -21065,6 +21155,8 @@ UsersGateUI.init();
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-hachshara-ci-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.hachsharaLifeForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-hachshara-life-doc="${escapeHtml(docId)}">פתח טופס</button>`;
+        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.hachsharaLifeShortForm){
+          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-hachshara-life-short-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.migdalLifeForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-migdal-life-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.migdalMortgageForm){
@@ -34867,6 +34959,7 @@ UsersGateUI.init();
       ayalon_health: ["ayalon__alcohol","ayalon__drugs","ayalon__smoking","ayalon__medications","ayalon__hospitalization","ayalon__tests","ayalon__disability","ayalon__family_history","ayalon__neuro","ayalon__mental","ayalon__cancer","ayalon__respiratory","ayalon__eyes","ayalon__ent","ayalon__heart","ayalon__digestive","ayalon__kidneys","ayalon__endocrine","ayalon__musculoskeletal","ayalon__skin","ayalon__infectious","ayalon__female"],
       hachshara_ci: ["hachshara_crit__smoking","hachshara_crit__hospitalization","hachshara_crit__tests_5y","hachshara_crit__treatment_5y","hachshara_crit__chronic","hachshara_crit__memory","hachshara_crit__disability","hachshara_crit__mental","hachshara_crit__substances","hachshara_crit__neuro","hachshara_crit__respiratory","hachshara_crit__heart","hachshara_crit__blood","hachshara_crit__liver","hachshara_crit__digestive","hachshara_crit__kidneys","hachshara_crit__glands","hachshara_crit__skin","hachshara_crit__aids","hachshara_crit__musculoskeletal","hachshara_crit__cancer","hachshara_crit__autoimmune","hachshara_crit__eyes","hachshara_crit__ent","hachshara_crit__hernia","hachshara_crit__female","hachshara_crit__child_dev","hachshara_crit__family_critical","hachshara_crit__infant_1","hachshara_crit__infant_2"],
       hachshara_life: ["hachshara_risk_s__smoking","hachshara_risk_s__q1","hachshara_risk_s__q2","hachshara_risk_s__q3","hachshara_risk_s__q4a","hachshara_risk_s__q4b","hachshara_risk_s__q4c","hachshara_risk_s__q4d","hachshara_risk_s__q4e","hachshara_risk_s__q4f","hachshara_risk_s__q4g","hachshara_risk_s__q4h","hachshara_risk_s__q4i"],
+      hachshara_life_short_decl: ["hachshara_risk_s__q1","hachshara_risk_s__q2","hachshara_risk_s__q3","hachshara_risk_s__q4a","hachshara_risk_s__q4b","hachshara_risk_s__q4c","hachshara_risk_s__q4d","hachshara_risk_s__q4e","hachshara_risk_s__q4f","hachshara_risk_s__q4g","hachshara_risk_s__q4h","hachshara_risk_s__q4i"],
       hachshara_life_full: ["hachshara_risk_f__smoking","hachshara_risk_f__a1","hachshara_risk_f__a2","hachshara_risk_f__a3","hachshara_risk_f__a4","hachshara_risk_f__a5","hachshara_risk_f__a6","hachshara_risk_f__b1","hachshara_risk_f__b2","hachshara_risk_f__b3","hachshara_risk_f__b4","hachshara_risk_f__b5","hachshara_risk_f__b6","hachshara_risk_f__b7","hachshara_risk_f__b8","hachshara_risk_f__b9","hachshara_risk_f__b10","hachshara_risk_f__b11","hachshara_risk_f__b12","hachshara_risk_f__b13","hachshara_risk_f__b14","hachshara_risk_f__b15","hachshara_risk_f__b16","hachshara_risk_f__b17","hachshara_risk_f__b18","hachshara_risk_f__b19"],
       menora_ci: ["menora_crit__smoking","menora_crit__alcohol","menora_crit__drugs","menora_crit__inquiry","menora_crit__family","menora_crit__neuro","menora_crit__heart","menora_crit__metabolic","menora_crit__tumors","menora_crit__digestive","menora_crit__lungs","menora_crit__infectious","menora_crit__kidneys","menora_crit__eyes","menora_crit__ent","menora_crit__surgery","menora_crit__hospital","menora_crit__meds","menora_crit__infant_family","menora_crit__infant_nicu","menora_crit__infant_tests","menora_crit__infant_followup","menora_crit__ortho_top","menora_crit__child_dev_top"],
       menora_mortgage: ["menora_mort__hobby","menora_mort__aviation","menora_mort__smoking","menora_mort__alcohol","menora_mort__drugs","menora_mort__inquiry","menora_mort__neuro","menora_mort__heart","menora_mort__mental","menora_mort__metabolic","menora_mort__tumors","menora_mort__digestive","menora_mort__lungs","menora_mort__kidneys","menora_mort__infectious","menora_mort__surgery","menora_mort__hospital","menora_mort__meds","menora_mort__eyes","menora_mort__ent","menora_mort__rheum","menora_mort__ortho","menora_mort__female","menora_mort__adl","menora_mort__family"],
@@ -35078,16 +35171,17 @@ UsersGateUI.init();
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
   const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-official-he-bold-v1";
-  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-migdal-cancer-v1";
-  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-migdal-cancer-v1";
-  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-migdal-cancer-v1";
-  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-migdal-cancer-v1";
-  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-migdal-cancer-v1";
-  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-migdal-cancer-v1";
-  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-migdal-cancer-v1";
-  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-migdal-cancer-v1";
-  const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-migdal-cancer-v1";
-  const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260824-migdal-cancer-v1";
+  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-hach-short-he-v1";
+  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-hach-short-he-v1";
+  const GI_HACHSHARA_LIFE_SHORT_FORM_HREF = "./gi-hachshara-life-short-form.js?v=20260824-hach-short-he-v1";
+  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-hach-short-he-v1";
+  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-hach-short-he-v1";
+  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-hach-short-he-v1";
+  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-hach-short-he-v1";
+  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-hach-short-he-v1";
+  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-hach-short-he-v1";
+  const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-hach-short-he-v1";
+  const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260824-hach-short-he-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -35143,6 +35237,33 @@ UsersGateUI.init();
       throw err;
     });
     return ensureHachsharaLifeFormLoaded._p;
+  }
+  function ensureHachsharaLifeShortFormLoaded(){
+    if(window.HachsharaLifeShortForm) return Promise.resolve(window.HachsharaLifeShortForm);
+    if(ensureHachsharaLifeShortFormLoaded._p) return ensureHachsharaLifeShortFormLoaded._p;
+    ensureHachsharaLifeShortFormLoaded._p = new Promise((resolve, reject) => {
+      const existing = document.getElementById("gi-hachshara-life-short-form-js");
+      const done = () => {
+        if(window.HachsharaLifeShortForm) resolve(window.HachsharaLifeShortForm);
+        else reject(new Error("gi-hachshara-life-short-form.js loaded without HachsharaLifeShortForm"));
+      };
+      if(existing){
+        existing.addEventListener("load", done, { once: true });
+        existing.addEventListener("error", () => reject(new Error("gi-hachshara-life-short-form.js failed")), { once: true });
+        return;
+      }
+      const s = document.createElement("script");
+      s.id = "gi-hachshara-life-short-form-js";
+      s.src = GI_HACHSHARA_LIFE_SHORT_FORM_HREF;
+      s.async = true;
+      s.onload = done;
+      s.onerror = () => reject(new Error("gi-hachshara-life-short-form.js failed to load"));
+      document.head.appendChild(s);
+    }).catch((err) => {
+      ensureHachsharaLifeShortFormLoaded._p = null;
+      throw err;
+    });
+    return ensureHachsharaLifeShortFormLoaded._p;
   }
   function ensureMigdalLifeFormLoaded(){
     if(window.MigdalLifeForm) return Promise.resolve(window.MigdalLifeForm);

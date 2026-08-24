@@ -224,7 +224,7 @@
     setTextSafe(form, fieldName, value, font){
       const helper = global.GI_OFFICIAL_FORM_FILL;
       if(helper && helper.setTextSafe){
-        helper.setTextSafe(form, fieldName, value, font);
+        helper.setTextSafe(form, fieldName, value, font, { visual: false });
         return;
       }
       const text = safeTrim(value);
@@ -338,13 +338,15 @@
         this.setTextSafe(form, "FullNamePayer", draft.payer.name, font);
       }
       global.GI_OFFICIAL_FORM_FILL?.applyOfficialHealthAndNames?.(form, draft, font, {
-        skipHealth: true
+        skipHealth: true,
+        visual: false
       });
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
         bank: draft.bank || {},
         cc: draft.payment?.cc || {}
       }, font, {
+        textOpts: { visual: false },
         hoMarks: [{ field: "PayWay", value: "3" }],
         ccMarks: [{ field: "PayWay", value: "1" }]
       });

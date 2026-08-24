@@ -245,7 +245,7 @@
     setTextSafe(form, fieldName, value, font){
       const helper = global.GI_OFFICIAL_FORM_FILL;
       if(helper && helper.setTextSafe){
-        helper.setTextSafe(form, fieldName, value, font);
+        helper.setTextSafe(form, fieldName, value, font, { visual: false });
         return;
       }
       const text = safeTrim(value);
@@ -350,13 +350,16 @@
         this.setTextSafe(form, "EmailMeshalem", draft.payer.email, font);
       }
       global.GI_OFFICIAL_FORM_FILL?.applyOfficialHealthAndNames?.(form, draft, font, {
-        keys: "menora_mortgage"
+        keys: "menora_mortgage",
+        visual: false
       });
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
         bank: draft.bank || {},
         cc: draft.payment?.cc || {}
-      }, font, {});
+      }, font, {
+        textOpts: { visual: false }
+      });
       if(font && form.updateFieldAppearances) form.updateFieldAppearances(font);
       return pdfDoc.save({ updateFieldAppearances: !!font });
     },

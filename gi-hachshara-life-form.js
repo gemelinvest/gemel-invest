@@ -1,5 +1,6 @@
 /* GEMEL INVEST — טופס מקורי ריסק / חיים הכשרה (12.2025, 3327)
-   נטען לפי דרישה ממסמכי לקוח. ממלא רק ערכים שכבר שמורים בתיק. */
+   נטען לפי דרישה ממסמכי לקוח. ממלא רק ערכים שכבר שמורים בתיק.
+   עברית לוגית (לא הפוכה). */
 (function installHachsharaLifeForm(global){
   "use strict";
 
@@ -51,17 +52,15 @@
       return [policy?.type, policy?.productName, policy?.planName, policy?.label, policy?.cover, policy?.product]
         .map(safeTrim).join(" ");
     },
-    isHachsharaLifePolicy(policy){
-      if(!policy || typeof policy !== "object") return false;
-      if(safeTrim(policy.company) !== "הכשרה") return false;
-      const blob = this.policyBlob(policy);
-      if(/משכנתא/.test(blob)) return false;
-      if(/מחלות\s*קשות/.test(blob)) return false;
-      return /ריסק/.test(blob) || /מגן\s*לעתיד/.test(blob) || /ביטוח\s*חיים/.test(blob);
+    isHachsharaLifePolicy(policy, payload){
+      const docs = global.CustomerDocuments;
+      if(!docs || typeof docs.isHachsharaLifeLikePolicy !== "function") return false;
+      if(!docs.isHachsharaLifeLikePolicy(policy)) return false;
+      return !docs.hachsharaRiskIsShort(policy, payload);
     },
     listHachsharaLifePolicies(payload){
       const list = Array.isArray(payload?.newPolicies) ? payload.newPolicies : [];
-      return list.filter((p) => this.isHachsharaLifePolicy(p));
+      return list.filter((p) => this.isHachsharaLifePolicy(p, payload));
     },
     qualifies(payload){
       return this.listHachsharaLifePolicies(payload).length > 0;
@@ -240,7 +239,7 @@
     setTextSafe(form, fieldName, value, font){
       const helper = global.GI_OFFICIAL_FORM_FILL;
       if(helper && helper.setTextSafe){
-        helper.setTextSafe(form, fieldName, value, font);
+        helper.setTextSafe(form, fieldName, value, font, { visual: false });
         return;
       }
       const text = safeTrim(value);
@@ -361,13 +360,15 @@
       }
       global.GI_OFFICIAL_FORM_FILL?.applyOfficialHealthAndNames?.(form, draft, font, {
         keys: "hachshara_life",
-        altKeys: "hachshara_life_full"
+        altKeys: "hachshara_life_full",
+        visual: false
       });
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
         bank: draft.bank || {},
         cc: draft.payment?.cc || {}
       }, font, {
+        textOpts: { visual: false },
         hoMarks: [{ field: "CollectionMethod", value: "Hok" }],
         ccMarks: [{ field: "CollectionMethod", value: "Credit" }]
       });

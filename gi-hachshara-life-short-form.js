@@ -1,6 +1,7 @@
-/* GEMEL INVEST — טופס מקורי מחלות קשות הכשרה (09.2025)
-   נטען לפי דרישה ממסמכי לקוח. ממלא רק ערכים שכבר שמורים בתיק. */
-(function installHachsharaCiForm(global){
+/* GEMEL INVEST — טופס מקורי ריסק חיים מקוצר עד 1,000,000 ₪ · הכשרה (3025)
+   נטען לפי דרישה ממסמכי לקוח. ממלא רק ערכים שכבר שמורים בתיק.
+   עברית לוגית (לא הפוכה). */
+(function installHachsharaLifeShortForm(global){
   "use strict";
 
   function safeTrim(v){
@@ -15,13 +16,13 @@
     try { return new Date().toISOString(); } catch(_e){ return ""; }
   }
 
-  const HachsharaCiForm = {
-    TEMPLATE_BASE: "./forms/hachshara-ci/",
-    TEMPLATE_FILE: "hachshara-ci-join.pdf",
+  const HachsharaLifeShortForm = {
+    TEMPLATE_BASE: "./forms/hachshara-life-short/",
+    TEMPLATE_FILE: "hachshara-life-short-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-official-decl-pay-he-v1",
-    DOC_ID: "doc_hachshara_ci_form",
-    DOC_TYPE: "hachshara_ci_form",
+    VERSION: "20260824-hach-short-he-v1",
+    DOC_ID: "doc_hachshara_life_short_form",
+    DOC_TYPE: "hachshara_life_short_form",
 
     fmtDateHe(value){
       const s = safeTrim(value);
@@ -41,20 +42,25 @@
       if(!Number.isFinite(n) || n <= 0) return "";
       try { return Math.round(n).toLocaleString("he-IL"); } catch(_e){ return String(Math.round(n)); }
     },
-
-    isHachsharaCiPolicy(policy){
-      if(!policy || typeof policy !== "object") return false;
-      if(safeTrim(policy.company) !== "הכשרה") return false;
-      const blob = [policy.type, policy.productName, policy.planName, policy.label, policy.cover]
-        .map(safeTrim).join(" ");
-      return /מחלות\s*קשות/.test(blob);
+    composeAddress(person){
+      if(!person) return "";
+      const parts = [person.street, person.houseNumber, person.apt, person.city, person.zip]
+        .map(safeTrim).filter(Boolean);
+      return parts.join(" ");
     },
-    listHachsharaCiPolicies(payload){
+    policyBlob(policy){
+      return [policy?.type, policy?.productName, policy?.planName, policy?.label, policy?.cover, policy?.product]
+        .map(safeTrim).join(" ");
+    },
+    isHachsharaLifeShortPolicy(policy, payload){
+      return !!(global.CustomerDocuments && global.CustomerDocuments.hachsharaRiskIsShort(policy, payload));
+    },
+    listHachsharaLifeShortPolicies(payload){
       const list = Array.isArray(payload?.newPolicies) ? payload.newPolicies : [];
-      return list.filter((p) => this.isHachsharaCiPolicy(p));
+      return list.filter((p) => this.isHachsharaLifeShortPolicy(p, payload));
     },
     qualifies(payload){
-      return this.listHachsharaCiPolicies(payload).length > 0;
+      return this.listHachsharaLifeShortPolicies(payload).length > 0;
     },
 
     personFromInsured(ins, fallbacks){
@@ -64,6 +70,7 @@
       const lastName = safeTrim(d.lastName);
       const fullName = safeTrim(d.fullName) || safeTrim((firstName + " " + lastName).trim()) || safeTrim(ins?.label);
       return {
+        id: safeTrim(ins?.id),
         firstName, lastName, fullName,
         idNumber: safeTrim(d.idNumber),
         birthDate: this.fmtDateHe(d.birthDate),
@@ -80,24 +87,25 @@
         zip: safeTrim(d.zip),
         occupation: safeTrim(d.occupation),
         clinic: safeTrim(d.clinic || d.hmo || d.kupatHolim),
-        shaban: safeTrim(d.shaban || d.shabanLevel),
         heightCm: safeTrim(d.heightCm),
         weightKg: safeTrim(d.weightKg),
         smokingStatus: safeTrim(d.smokingStatus),
-        smokingType: safeTrim(d.smokingType),
         smokingAmount: safeTrim(d.smokingAmount),
-        compensation: ""
+        sumInsured: ""
       };
     },
 
-    compensationFor(policy, insuredId, isChild){
+    sumInsuredFor(policy, insuredId){
       if(!policy) return "";
-      const map = policy.compensationPerInsured && typeof policy.compensationPerInsured === "object"
-        ? policy.compensationPerInsured : {};
+      const map = policy.sumInsuredPerInsured && typeof policy.sumInsuredPerInsured === "object"
+        ? policy.sumInsuredPerInsured : {};
       const fromMap = safeTrim(map[insuredId]);
       if(fromMap) return this.fmtMoneyPlain(fromMap);
-      const field = isChild ? policy.hachsharaChildCriticalAmount : policy.hachsharaCriticalAmount;
-      return this.fmtMoneyPlain(field || policy.compensation || policy.sumInsured);
+      const compMap = policy.compensationPerInsured && typeof policy.compensationPerInsured === "object"
+        ? policy.compensationPerInsured : {};
+      const fromComp = safeTrim(compMap[insuredId]);
+      if(fromComp) return this.fmtMoneyPlain(fromComp);
+      return this.fmtMoneyPlain(policy.sumInsured || policy.compensation || policy.coverageAmount);
     },
 
     classifyInsureds(payload){
@@ -114,23 +122,18 @@
         const t = safeTrim(x.type);
         return t !== "child" && idx > 0;
       }) || null;
-      const children = raw.filter((x) => x && x !== primary && x !== spouse && safeTrim(x.type) === "child").slice(0, 4);
-      return { primary, spouse, children };
+      return { primary, spouse };
     },
 
     buildDraft(rec){
       const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
-      const policies = this.listHachsharaCiPolicies(payload);
+      const policies = this.listHachsharaLifeShortPolicies(payload);
       const policy = policies[0] || {};
-      const { primary, spouse, children } = this.classifyInsureds(payload);
+      const { primary, spouse } = this.classifyInsureds(payload);
       const primaryPerson = this.personFromInsured(primary || payload.primary || {}, global.GI_OFFICIAL_FORM_FILL?.fileFallbacks?.(rec, payload));
       const spousePerson = spouse ? this.personFromInsured(spouse) : null;
-      const childPeople = children.map((ins) => this.personFromInsured(ins));
-      primaryPerson.compensation = this.compensationFor(policy, primary?.id, false);
-      if(spousePerson) spousePerson.compensation = this.compensationFor(policy, spouse?.id, false);
-      childPeople.forEach((p, idx) => {
-        p.compensation = this.compensationFor(policy, children[idx]?.id, true);
-      });
+      primaryPerson.sumInsured = this.sumInsuredFor(policy, primary?.id);
+      if(spousePerson) spousePerson.sumInsured = this.sumInsuredFor(policy, spouse?.id);
       const agentNumbers = payload.companyAgentNumbers || payload.operational?.companyAgentNumbers
         || payload.primary?.operationalAgentNumbers || {};
       const payerSrc = payload.primary || primary?.data || {};
@@ -145,8 +148,7 @@
         agentNumber: safeTrim(agentNumbers["הכשרה"]) || safeTrim(policy.agentNumber),
         primary: primaryPerson,
         spouse: spousePerson,
-        children: childPeople,
-        ...(global.GI_OFFICIAL_FORM_FILL?.attachDraftHealth?.(payload, primary, spouse, children) || {}),
+        ...(global.GI_OFFICIAL_FORM_FILL?.attachDraftHealth?.(payload, primary, spouse) || {}),
         payer: {
           name: useExternal ? safeTrim((external.firstName + " " + external.lastName).trim()) : "",
           idNumber: useExternal ? safeTrim(external.idNumber) : "",
@@ -247,9 +249,10 @@
     applyPerson(form, person, suffix, font){
       if(!person) return;
       const s = suffix || "";
+      const address = this.composeAddress(person);
       this.setTextSafe(form, "FirstName" + s, person.firstName, font);
       this.setTextSafe(form, "LastName" + s, person.lastName, font);
-      this.setTextSafe(form, (s ? "FullName" + s : "FullName"), person.fullName, font);
+      this.setTextSafe(form, s ? ("FullName" + s) : "FullName", person.fullName, font);
       this.setTextSafe(form, "PID" + s, person.idNumber, font);
       this.setTextSafe(form, "BirthDate" + s, person.birthDate, font);
       this.setTextSafe(form, "EmailAddress" + s, person.email, font);
@@ -258,10 +261,14 @@
       this.setTextSafe(form, "HouseNumber" + s, person.houseNumber, font);
       this.setTextSafe(form, "ZipCode" + s, person.zip, font);
       this.setTextSafe(form, "OccupationCode" + s, person.occupation, font);
-      this.setTextSafe(form, s.indexOf("Child") === 0 ? ("HMO" + s) : ("HMOName" + s), person.clinic, font);
+      this.setTextSafe(form, s === "Spouse" ? "ProfessionSpouse" : "Proffession", person.occupation, font);
+      this.setTextSafe(form, s ? ("HMOName" + s) : "HMOName", person.clinic, font);
+      this.setTextSafe(form, s ? ("HMO" + s) : "HMO", person.clinic, font);
       this.setTextSafe(form, "Hight" + s, person.heightCm, font);
       this.setTextSafe(form, "Weight" + s, person.weightKg, font);
-      if(!s) this.setTextSafe(form, "AptNumber", person.apt, font);
+      this.setTextSafe(form, s ? ("AptNumber" + s) : "AptNumber", person.apt, font);
+      if(!s) this.setTextSafe(form, "Address", address, font);
+      if(s === "Spouse") this.setTextSafe(form, "FullAddressSpouse", address, font);
       const phone = person.phone;
       if(phone){
         if(this.isMobilePhone(phone)) this.setTextSafe(form, "CellPhoneNumber" + s, phone, font);
@@ -270,14 +277,28 @@
       }
       this.setExport(form, "Gender" + s, this.mapGenderExport(person.gender));
       if(!s || s === "Spouse") this.setExport(form, "FamilyStatus" + s, this.mapMaritalExport(person.maritalStatus));
-      const smokeField = !s ? "IsSmoking" : (s === "Spouse" ? "IsSmokingBzug" : "IsSmoking" + s);
+      const smokeField = !s ? "IsSmoking" : "IsSmokingBzug";
       this.setExport(form, smokeField, this.mapSmokingExport(person.smokingStatus));
       if(person.smokingAmount){
-        this.setTextSafe(form, "ClientSmokeNum" + (s === "Spouse" ? "Spouse" : s), person.smokingAmount, font);
+        this.setTextSafe(form, "ClientSmokeNum" + (s === "Spouse" ? "Spouse" : ""), person.smokingAmount, font);
       }
-      if(person.shaban){
-        const shabanField = !s ? "ShabanR" : (s === "Spouse" ? "ShabanSpouse" : "Shaban" + s);
-        this.setExport(form, shabanField, "1");
+    },
+
+    applyOwnerFromPrimary(form, person, font){
+      if(!person) return;
+      this.setTextSafe(form, "FirstNameOwner", person.firstName, font);
+      this.setTextSafe(form, "LastNameOwner", person.lastName, font);
+      this.setTextSafe(form, "PIDOwner", person.idNumber, font);
+      this.setTextSafe(form, "EmailAddressOwner", person.email, font);
+      this.setTextSafe(form, "CityOwner", person.city, font);
+      this.setTextSafe(form, "StreetNameOwner", person.street, font);
+      this.setTextSafe(form, "HouseNumberOwner", person.houseNumber, font);
+      this.setTextSafe(form, "ZipCodeOwner", person.zip, font);
+      const phone = person.phone;
+      if(phone){
+        if(this.isMobilePhone(phone)) this.setTextSafe(form, "CellPhoneNumberOwner", phone, font);
+        else this.setTextSafe(form, "PhoneNumberOwner", phone, font);
+        this.setTextSafe(form, "CellPhoneNumberOwner", phone, font);
       }
     },
 
@@ -286,8 +307,8 @@
       const PDFLib = global.PDFLib;
       if(!PDFLib?.PDFDocument) throw new Error("PDFLib missing");
       const templateBytes = await this.fetchFirstOk(
-        this.candidateUrls("forms/hachshara-ci/", this.TEMPLATE_FILE),
-        "לא נמצא טופס מחלות קשות של הכשרה"
+        this.candidateUrls("forms/hachshara-life-short/", this.TEMPLATE_FILE),
+        "לא נמצא טופס ריסק חיים מקוצר של הכשרה"
       );
       const pdfDoc = await PDFLib.PDFDocument.load(templateBytes, { ignoreEncryption: true });
       let font = null;
@@ -308,17 +329,21 @@
       this.setTextSafe(form, "AgentNumber", draft.agentNumber, font);
       this.applyPerson(form, draft.primary, "", font);
       this.applyPerson(form, draft.spouse, "Spouse", font);
-      (draft.children || []).forEach((child, idx) => {
-        this.applyPerson(form, child, "Child" + (idx + 1), font);
-      });
-      if(draft.payer){
-        this.setTextSafe(form, "PayerName", draft.payer.name, font);
-        this.setTextSafe(form, "PayerPID", draft.payer.idNumber, font);
-        this.setTextSafe(form, "PayerRelation", draft.payer.relation, font);
+      this.applyOwnerFromPrimary(form, draft.primary, font);
+      if(draft.primary){
+        this.setTextSafe(form, "GiluiTotalRisk", draft.primary.sumInsured, font);
+      }
+      if(draft.spouse){
+        this.setTextSafe(form, "GiluiTotalRiskSpouse", draft.spouse.sumInsured, font);
+      }
+      if((draft.payment?.method === "ho") && draft.payer){
+        this.setTextSafe(form, "BankAccOwner", draft.payer.name, font);
+        this.setTextSafe(form, "PIDBankAccOwner", draft.payer.idNumber, font);
       }
       global.GI_OFFICIAL_FORM_FILL?.applyOfficialHealthAndNames?.(form, draft, font, {
-        keys: "hachshara_ci",
-        visual: false
+        keys: "hachshara_life_short_decl",
+        visual: false,
+        extraNames: ["FullNameBagir", "FullNameHolder"]
       });
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
@@ -347,20 +372,20 @@
     },
     fileName(draft){
       const name = safeTrim(draft?.primary?.fullName) || "לקוח";
-      return "מחלות_קשות_הכשרה_" + name.replace(/[\\/:*?\"<>|]/g, "_") + "_" + nowISO().slice(0, 10) + ".pdf";
+      return "ריסק_חיים_מקוצר_הכשרה_" + name.replace(/[\\/:*?\"<>|]/g, "_") + "_" + nowISO().slice(0, 10) + ".pdf";
     },
 
     fieldRow(label, name, value, extra){
-      return `<label class="hachCiForm__field">
+      return `<label class="hachLifeShortForm__field">
         <span>${escapeHtml(label)}</span>
-        <input class="input" type="text" data-hachci="${escapeHtml(name)}" value="${escapeHtml(value || "")}" ${extra || ""} />
+        <input class="input" type="text" data-hachlifeshort="${escapeHtml(name)}" value="${escapeHtml(value || "")}" ${extra || ""} />
       </label>`;
     },
     personBlock(title, prefix, person){
       const p = person || {};
-      return `<section class="hachCiForm__block">
-        <div class="hachCiForm__blockTitle">${escapeHtml(title)}</div>
-        <div class="hachCiForm__grid">
+      return `<section class="hachLifeShortForm__block">
+        <div class="hachLifeShortForm__blockTitle">${escapeHtml(title)}</div>
+        <div class="hachLifeShortForm__grid">
           ${this.fieldRow("שם פרטי", prefix + ".firstName", p.firstName)}
           ${this.fieldRow("שם משפחה", prefix + ".lastName", p.lastName)}
           ${this.fieldRow("תעודת זהות", prefix + ".idNumber", p.idNumber, 'dir="ltr"')}
@@ -375,34 +400,25 @@
           ${this.fieldRow("מיקוד", prefix + ".zip", p.zip, 'dir="ltr"')}
           ${this.fieldRow("עיסוק", prefix + ".occupation", p.occupation)}
           ${this.fieldRow("קופת חולים", prefix + ".clinic", p.clinic)}
-          ${this.fieldRow("שב״ן", prefix + ".shaban", p.shaban)}
           ${this.fieldRow("גובה", prefix + ".heightCm", p.heightCm, 'dir="ltr"')}
           ${this.fieldRow("משקל", prefix + ".weightKg", p.weightKg, 'dir="ltr"')}
           ${this.fieldRow("עישון", prefix + ".smokingStatus", p.smokingStatus)}
-          ${this.fieldRow("סכום פיצוי", prefix + ".compensation", p.compensation, 'dir="ltr"')}
+          ${this.fieldRow("סכום ביטוח", prefix + ".sumInsured", p.sumInsured, 'dir="ltr"')}
         </div>
       </section>`;
     },
 
     collectDraftFromModal(root, draft){
       const next = JSON.parse(JSON.stringify(draft || {}));
-      root.querySelectorAll("[data-hachci]").forEach((el) => {
-        const path = safeTrim(el.getAttribute("data-hachci"));
+      root.querySelectorAll("[data-hachlifeshort]").forEach((el) => {
+        const path = safeTrim(el.getAttribute("data-hachlifeshort"));
         if(!path) return;
         const parts = path.split(".");
         let cur = next;
         for(let i = 0; i < parts.length - 1; i++){
           const key = parts[i];
-          const idx = key.match(/^children\[(\d+)\]$/);
-          if(idx){
-            if(!Array.isArray(cur.children)) cur.children = [];
-            const n = Number(idx[1]);
-            if(!cur.children[n]) cur.children[n] = {};
-            cur = cur.children[n];
-          } else {
-            if(!cur[key] || typeof cur[key] !== "object") cur[key] = {};
-            cur = cur[key];
-          }
+          if(!cur[key] || typeof cur[key] !== "object") cur[key] = {};
+          cur = cur[key];
         }
         const last = parts[parts.length - 1];
         cur[last] = safeTrim(el.value);
@@ -414,37 +430,37 @@
     },
 
     ensureStyles(){
-      if(document.getElementById("hachCiFormStyle")) return;
+      if(document.getElementById("hachLifeShortFormStyle")) return;
       const style = document.createElement("style");
-      style.id = "hachCiFormStyle";
+      style.id = "hachLifeShortFormStyle";
       style.textContent = `
-        .hachCiFormModal .giValModal__card{ max-width:min(980px,96vw); width:100%; height:min(92vh,920px); max-height:min(92vh,920px); }
-        .hachCiForm__hint{ font-size:13px; line-height:1.45; color:#475569; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px; padding:10px 12px; }
-        .hachCiForm__block{ border:1px solid #E5EAF3; border-radius:14px; padding:12px 14px 14px; background:#fff; }
-        .hachCiForm__blockTitle{ font-size:14px; font-weight:800; color:#0B1F4B; margin-bottom:10px; }
-        .hachCiForm__grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 12px; }
-        .hachCiForm__field{ display:flex; flex-direction:column; gap:4px; min-width:0; }
-        .hachCiForm__field span{ font-size:12px; font-weight:700; color:#647287; }
-        .hachCiFormPreview{ padding:12px 4px; display:flex; flex-direction:column; gap:10px; }
-        .hachCiFormPreview__row{ display:flex; justify-content:space-between; gap:12px; font-size:13.5px; }
-        .hachCiFormPreview__row span{ color:#647287; }
-        .hachCiFormPreview__row strong{ color:#0F172A; font-weight:750; }
-        @media (max-width:720px){ .hachCiForm__grid{ grid-template-columns:1fr; } }
+        .hachLifeShortFormModal .giValModal__card{ max-width:min(980px,96vw); width:100%; height:min(92vh,920px); max-height:min(92vh,920px); }
+        .hachLifeShortForm__hint{ font-size:13px; line-height:1.45; color:#475569; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px; padding:10px 12px; }
+        .hachLifeShortForm__block{ border:1px solid #E5EAF3; border-radius:14px; padding:12px 14px 14px; background:#fff; }
+        .hachLifeShortForm__blockTitle{ font-size:14px; font-weight:800; color:#0B1F4B; margin-bottom:10px; }
+        .hachLifeShortForm__grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px 12px; }
+        .hachLifeShortForm__field{ display:flex; flex-direction:column; gap:4px; min-width:0; }
+        .hachLifeShortForm__field span{ font-size:12px; font-weight:700; color:#647287; }
+        .hachLifeShortFormPreview{ padding:12px 4px; display:flex; flex-direction:column; gap:10px; }
+        .hachLifeShortFormPreview__row{ display:flex; justify-content:space-between; gap:12px; font-size:13.5px; }
+        .hachLifeShortFormPreview__row span{ color:#647287; }
+        .hachLifeShortFormPreview__row strong{ color:#0F172A; font-weight:750; }
+        @media (max-width:720px){ .hachLifeShortForm__grid{ grid-template-columns:1fr; } }
       `;
       document.head.appendChild(style);
     },
 
     renderPreviewHtml(draft){
-      const people = [draft.primary, draft.spouse].concat(draft.children || []).filter(Boolean);
+      const people = [draft.primary, draft.spouse].filter(Boolean);
       const rows = people.map((p, idx) => {
-        const role = idx === 0 ? "מבוטח ראשי" : (idx === 1 && draft.spouse ? "בן/בת זוג" : "ילד");
-        return `<div class="hachCiFormPreview__row"><span>${escapeHtml(role)}</span><strong>${escapeHtml(p.fullName || "—")}</strong></div>`;
+        const role = idx === 0 ? "מבוטח ראשי" : "מועמד משני";
+        return `<div class="hachLifeShortFormPreview__row"><span>${escapeHtml(role)}</span><strong>${escapeHtml(p.fullName || "—")}</strong></div>`;
       }).join("");
-      return `<div class="hachCiFormPreview">
-        <div class="hachCiFormPreview__row"><span>חברה / מוצר</span><strong>הכשרה · מחלות קשות</strong></div>
-        <div class="hachCiFormPreview__row"><span>תחילת ביטוח</span><strong>${escapeHtml(draft.insuranceBegin || "—")}</strong></div>
+      return `<div class="hachLifeShortFormPreview">
+        <div class="hachLifeShortFormPreview__row"><span>חברה / מוצר</span><strong>הכשרה · ריסק חיים מקוצר עד 1,000,000 ₪</strong></div>
+        <div class="hachLifeShortFormPreview__row"><span>תחילת ביטוח</span><strong>${escapeHtml(draft.insuranceBegin || "—")}</strong></div>
         ${rows}
-        ${global.CustomerDocuments?.canDownloadOfficialJoinForm?.() ? `<button class="btn btn--primary" type="button" data-hachci-open="1">פתח טופס דיגיטלי</button>` : ""}
+        ${global.CustomerDocuments?.canDownloadOfficialJoinForm?.() ? `<button class="btn btn--primary" type="button" data-hachlifeshort-open="1">פתח טופס דיגיטלי</button>` : ""}
       </div>`;
     },
 
@@ -455,11 +471,11 @@
       if(modal && modal.parentNode) modal.parentNode.removeChild(modal);
     },
 
-    bind(modal, rec){
-      modal.querySelectorAll("[data-hachci-close]").forEach((el) => {
+    bind(modal){
+      modal.querySelectorAll("[data-hachlifeshort-close]").forEach((el) => {
         el.addEventListener("click", () => this.close());
       });
-      const dl = modal.querySelector("[data-hachci-download]");
+      const dl = modal.querySelector("[data-hachlifeshort-download]");
       if(dl){
         dl.addEventListener("click", async () => {
           const original = dl.textContent;
@@ -471,7 +487,7 @@
             this.downloadBytes(bytes, this.fileName(draft));
             try { global.showToast?.({ title: "הטופס הורד", text: "PDF מקורי של הכשרה — ממולא מהפרטים שבתיק.", variant: "success", durationMs: 5200 }); } catch(_e) {}
           } catch(err){
-            try { console.error("HACHSHARA_CI_PDF_FAILED", err); } catch(_e) {}
+            try { console.error("HACHSHARA_LIFE_SHORT_PDF_FAILED", err); } catch(_e) {}
             try { global.showToast?.({ title: "שגיאה בהפקת PDF", text: safeTrim(err?.message) || "לא ניתן למלא את הטופס המקורי", variant: "warn", durationMs: 6200 }); } catch(_e2) {}
           } finally {
             dl.disabled = false;
@@ -487,26 +503,23 @@
       this.close();
       const draft = this.buildDraft(rec);
       this._draft = draft;
-      const childrenHtml = (draft.children || []).map((child, idx) =>
-        this.personBlock("ילד " + (idx + 1), "children[" + idx + "]", child)
-      ).join("");
       const modal = document.createElement("div");
-      modal.className = "giValModal hachCiFormModal is-open giValModal--visible";
+      modal.className = "giValModal hachLifeShortFormModal is-open giValModal--visible";
       modal.innerHTML = `
-        <div class="giValModal__backdrop" data-hachci-close="1"></div>
+        <div class="giValModal__backdrop" data-hachlifeshort-close="1"></div>
         <div class="giValModal__card">
           <div class="giValModal__head">
             <div class="giValModal__headText">
-              <div class="giValModal__title">טופס מקורי — מחלות קשות · הכשרה</div>
+              <div class="giValModal__title">טופס מקורי — ריסק חיים מקוצר עד 1,000,000 · הכשרה</div>
               <div class="giValModal__sub">פרטים מהתיק כבר ממולאים. השלימו מה שחסר והורידו PDF רשמי.</div>
             </div>
-            <button type="button" class="giValModal__closeX" data-hachci-close="1" aria-label="סגירה">✕</button>
+            <button type="button" class="giValModal__closeX" data-hachlifeshort-close="1" aria-label="סגירה">✕</button>
           </div>
           <div class="giValModal__body">
-            <div class="hachCiForm__hint">ממולא אוטומטית רק מה ששמור בתיק, כולל כן/לא בהצהרת בריאות ואמצעי תשלום. פירוט רפואי, החלפת ביטוח וחתימות לא ממולאים — אותם משלימים בטופס או ב-PDF אחרי ההורדה.</div>
-            <section class="hachCiForm__block">
-              <div class="hachCiForm__blockTitle">פרטי הצעה וסוכן</div>
-              <div class="hachCiForm__grid">
+            <div class="hachLifeShortForm__hint">ממולא אוטומטית רק מה ששמור בתיק, כולל כן/לא בהצהרת בריאות ואמצעי תשלום. פירוט רפואי, מוטבים, החלפת ביטוח וחתימות לא ממולאים — אותם משלימים בטופס או ב-PDF אחרי ההורדה.</div>
+            <section class="hachLifeShortForm__block">
+              <div class="hachLifeShortForm__blockTitle">פרטי הצעה וסוכן</div>
+              <div class="hachLifeShortForm__grid">
                 ${this.fieldRow("תחילת ביטוח", "insuranceBegin", draft.insuranceBegin, 'dir="ltr"')}
                 ${this.fieldRow("תאריך היום", "today", draft.today, 'dir="ltr"')}
                 ${this.fieldRow("שם סוכן", "agentName", draft.agentName)}
@@ -514,11 +527,10 @@
               </div>
             </section>
             ${this.personBlock("מבוטח ראשי", "primary", draft.primary)}
-            ${draft.spouse ? this.personBlock("בן / בת זוג", "spouse", draft.spouse) : ""}
-            ${childrenHtml}
-            <section class="hachCiForm__block">
-              <div class="hachCiForm__blockTitle">משלם והוראת קבע — רק אם נרשם בתיק</div>
-              <div class="hachCiForm__grid">
+            ${draft.spouse ? this.personBlock("מועמד משני", "spouse", draft.spouse) : ""}
+            <section class="hachLifeShortForm__block">
+              <div class="hachLifeShortForm__blockTitle">משלם והוראת קבע — רק אם נרשם בתיק</div>
+              <div class="hachLifeShortForm__grid">
                 ${this.fieldRow("שם משלם", "payer.name", draft.payer.name)}
                 ${this.fieldRow("ת״ז משלם", "payer.idNumber", draft.payer.idNumber, 'dir="ltr"')}
                 ${this.fieldRow("קרבה", "payer.relation", draft.payer.relation)}
@@ -529,15 +541,15 @@
             </section>
           </div>
           <div class="giValModal__foot">
-            <button type="button" class="btn" data-hachci-close="1">סגור</button>
-            <button type="button" class="btn btn--primary" data-hachci-download="1">הורד PDF רשמי</button>
+            <button type="button" class="btn" data-hachlifeshort-close="1">סגור</button>
+            <button type="button" class="btn btn--primary" data-hachlifeshort-download="1">הורד PDF רשמי</button>
           </div>
         </div>`;
       document.body.appendChild(modal);
       this._modal = modal;
-      this.bind(modal, rec);
+      this.bind(modal);
     }
   };
 
-  global.HachsharaCiForm = HachsharaCiForm;
+  global.HachsharaLifeShortForm = HachsharaLifeShortForm;
 })(typeof window !== "undefined" ? window : globalThis);

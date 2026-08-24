@@ -241,7 +241,7 @@
     setTextSafe(form, fieldName, value, font){
       const helper = global.GI_OFFICIAL_FORM_FILL;
       if(helper && helper.setTextSafe){
-        helper.setTextSafe(form, fieldName, value, font);
+        helper.setTextSafe(form, fieldName, value, font, { visual: false });
         return;
       }
       const text = safeTrim(value);
@@ -353,13 +353,15 @@
         this.setTextSafe(form, "EmailMeshalem", draft.payer.email, font);
       }
       global.GI_OFFICIAL_FORM_FILL?.applyOfficialHealthAndNames?.(form, draft, font, {
-        keys: "menora_ci"
+        keys: "menora_ci",
+        visual: false
       });
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
         bank: draft.bank || {},
         cc: draft.payment?.cc || {}
       }, font, {
+        textOpts: { visual: false },
         bankAccountAlt: "MBankAccountNumber",
         hoMarks: [{ field: "PayWay", value: "3" }],
         ccMarks: [{ field: "PayWay", value: "1" }]
