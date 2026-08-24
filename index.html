@@ -3561,6 +3561,11 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
           return !!window.XLSX;
         });
       },
+      jszip: function(){
+        return load("https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js", function(){
+          return !!window.JSZip;
+        });
+      },
       pdfjs: function(){
         return load("https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js", function(){
           return !!window.pdfjsLib;
@@ -3897,7 +3902,8 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 
 <script src="./contacts-directory-seed.js?v=20260811-contacts-v1"></script>
 <script src="./gi-policy-scan.js?v=20260819-issued-scan-v3"></script>
-<script src="./app.js?v=20260824-hach-mort-v1"></script>
+<script src="./gi-followup-zip-config.js?v=20260825-followup-zip-v1"></script>
+<script src="./app.js?v=20260825-followup-zip-v1"></script>
 <script src="./gi-face-auth.js?v=20260817-face-retry-v1"></script>
 <script src="./gi-daily-sales-mail.js?v=20260823-mail-pdf-always-v1"></script>
 
