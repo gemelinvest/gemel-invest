@@ -9883,17 +9883,36 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 
 .cfNewPolicyCard__logo:not(#\9):not(#\9){
   flex: none !important;
-  width: 44px !important;
-  height: 32px !important;
+  width: 78px !important;
+  height: 48px !important;
   display: grid !important;
   place-items: center !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
 }
 
 .cfNewPolicyCard__logo .lcCompanyLogo:not(#\9):not(#\9),
+.cfNewPolicyCard__logo .lcCompanyLogo--mini:not(#\9):not(#\9),
+.cfNewPolicyCard__logo .lcCompanyLogo--fallback:not(#\9):not(#\9){
+  width: 100% !important;
+  height: 100% !important;
+  padding: 0 !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  overflow: visible !important;
+}
+
 .cfNewPolicyCard__logo .lcCompanyLogo__img:not(#\9):not(#\9){
   width: 100% !important;
   height: 100% !important;
   object-fit: contain !important;
+  object-position: center !important;
 }
 
 .cfNewPolicyCard__cell:not(#\9):not(#\9){
