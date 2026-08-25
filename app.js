@@ -165,6 +165,17 @@
      היה טוען payload+מסמכים של כל הצוות. רשימה נשארת רזה; תיק מלא ב-ensureRecordPayload.
      מטמון ישן שמנ + payload מלא לא נצבע מחדש מעל הסף הזה. */
   const TEAM_MANAGER_FAT_CACHE_PAINT_CAP = 400;
+  /* GI-PERF 2026-08-25 — מצב light קבוע למנהל צוות מעל CAP.
+     משלים את תיקון 23.08: אותן הגנות כמו Large Session (delta רזה, בלי
+     LiveRefresh מלא, בלי realtime על כל הטבלה, LRU ל-payloads, בלי IDB שמן).
+     לכיבוי חירום: TEAM_MANAGER_LIGHT_SESSION_ENABLED = false + רענון. */
+  const TEAM_MANAGER_LIGHT_SESSION_ENABLED = true;
+  const TEAM_MANAGER_LIGHT_SESSION_THRESHOLD = TEAM_MANAGER_FAT_CACHE_PAINT_CAP;
+  const TEAM_MANAGER_PAYLOAD_LRU_CAP = 80;
+  /* GI-PERF 2026-08-25c: גם LIGHT של כל 2,100 תיקים מקפיא (normalize/backup/KPI).
+     מנהל צוות מעל הסף מקבל working-set כמו Large Session — לא את כל הרוסטר. */
+  const TEAM_MANAGER_LIGHT_WORKING_SET = LARGE_SESSION_CUSTOMER_WORKING_SET;
+  const TEAM_MANAGER_LIGHT_PROPOSAL_WORKING_SET = LARGE_SESSION_PROPOSAL_WORKING_SET;
 
   const DAILY_REPORT_ACTIVE_ID = "active";
   // ארכיון חודשי באותה טבלה: id = "m-YYYY-MM" (לא דורס את "active").
@@ -5058,7 +5069,79 @@
       } catch(_e) {}
       return rec;
     });
-    return changed ? { ...next, customers: merged } : next;
+    const out = changed ? { ...next, customers: merged } : next;
+    return trimTeamManagerCustomerPayloadLru(out);
+  }
+
+  /* GI-PERF 2026-08-25: במנהל-צוות-light משאירים רק LRU של payloads מלאים
+     (+ תיק פתוח) כדי ש-delta/preserve לא יצבור שוב את כל הצוות בזיכרון. */
+  function getTeamManagerProtectedPayloadIds(){
+    const ids = new Set();
+    try {
+      if(CustomersUI?.currentId && CustomersUI?.els?.wrap?.classList?.contains?.("is-open")){
+        ids.add(String(CustomersUI.currentId));
+      }
+    } catch(_e) {}
+    try {
+      if(CustomerEditUI?.els?.wrap?.classList?.contains?.("is-open")){
+        const editId = safeTrim(CustomerEditUI?.currentId || CustomersUI?.currentId);
+        if(editId) ids.add(String(editId));
+      }
+    } catch(_e) {}
+    try {
+      if(MirrorCallUI?._callRunning && MirrorCallUI?.selectedCustomer?.id){
+        ids.add(String(MirrorCallUI.selectedCustomer.id));
+      }
+    } catch(_e) {}
+    try {
+      if(ElementaryMirrorUI?._callRunning){
+        const eid = safeTrim(ElementaryMirrorUI._customerId || ElementaryMirrorUI.selectedCustomer?.id);
+        if(eid) ids.add(String(eid));
+      }
+    } catch(_e) {}
+    return ids;
+  }
+
+  function trimTeamManagerCustomerPayloadLru(stateLike){
+    try {
+      if(!Storage?.isTeamManagerLightSession?.()) return stateLike;
+    } catch(_e) {
+      return stateLike;
+    }
+    const list = Array.isArray(stateLike?.customers) ? stateLike.customers : null;
+    if(!list || !list.length) return stateLike;
+    const protectedIds = getTeamManagerProtectedPayloadIds();
+    const fat = [];
+    for(let i = 0; i < list.length; i += 1){
+      const rec = list[i];
+      const id = String(rec?.id || "");
+      if(!id) continue;
+      if(protectedIds.has(id)) continue;
+      try {
+        if(Storage.payloadHasPolicyOrInsuredContent(rec?.payload)){
+          const stamp = Date.parse(safeTrim(rec?.updatedAt) || safeTrim(rec?.createdAt) || "") || 0;
+          fat.push({ idx: i, stamp });
+        }
+      } catch(_e) {}
+    }
+    if(fat.length <= TEAM_MANAGER_PAYLOAD_LRU_CAP) return stateLike;
+    fat.sort((a, b) => b.stamp - a.stamp);
+    const keepIdx = new Set(fat.slice(0, TEAM_MANAGER_PAYLOAD_LRU_CAP).map((x) => x.idx));
+    let stripped = 0;
+    const nextCustomers = list.map((rec, idx) => {
+      const id = String(rec?.id || "");
+      if(protectedIds.has(id) || keepIdx.has(idx)) return rec;
+      try {
+        if(!Storage.payloadHasPolicyOrInsuredContent(rec?.payload)) return rec;
+      } catch(_e) {
+        return rec;
+      }
+      stripped += 1;
+      return { ...rec, payload: {} };
+    });
+    if(!stripped) return stateLike;
+    try { console.warn("TEAM_MANAGER_PAYLOAD_LRU_TRIM:", stripped, "stripped,", TEAM_MANAGER_PAYLOAD_LRU_CAP, "kept"); } catch(_e) {}
+    return { ...stateLike, customers: nextCustomers };
   }
 
   function agentSessionDataLooksSuspiciouslyEmpty(){
@@ -10564,6 +10647,51 @@
       return LARGE_SESSION_MODE_ENABLED && this._largeCustomersSession === true;
     },
 
+    /* GI-PERF 2026-08-25: מנהל צוות עם רוסטר גדול (מתחת לסף 5k) —
+       אותן הגנות סשן כמו Large Session, בלי working-set של אדמין. */
+    _teamManagerLightLoginHint: false,
+    _teamManagerRosterEstimate: 0,
+
+    isTeamManagerLightSession(){
+      if(!TEAM_MANAGER_LIGHT_SESSION_ENABLED) return false;
+      try {
+        if(!Auth?.isTeamManager?.()) return false;
+      } catch(_e) {
+        return false;
+      }
+      if(this.isLargeCustomersSession()) return false;
+      if(this._teamManagerLightLoginHint) return true;
+      const n = Array.isArray(State.data?.customers) ? State.data.customers.length : 0;
+      if(n >= TEAM_MANAGER_LIGHT_SESSION_THRESHOLD) return true;
+      try {
+        const estimate = Math.max(
+          0,
+          Number(this._teamManagerRosterEstimate) || 0,
+          Number(this._largeCustomersTotalEstimate) || 0
+        );
+        if(estimate >= TEAM_MANAGER_LIGHT_SESSION_THRESHOLD) return true;
+      } catch(_e) {}
+      return false;
+    },
+
+    markTeamManagerLightRoster(estimate = 0){
+      this._teamManagerLightLoginHint = true;
+      this._teamManagerRosterEstimate = Math.max(
+        Number(this._teamManagerRosterEstimate) || 0,
+        Number(estimate) || 0
+      );
+      return this.isTeamManagerLightSession();
+    },
+
+    clearTeamManagerLightRoster(){
+      this._teamManagerLightLoginHint = false;
+      this._teamManagerRosterEstimate = 0;
+    },
+
+    isHeavyRosterSession(){
+      return this.isLargeCustomersSession() || this.isTeamManagerLightSession();
+    },
+
     setLargeCustomersSession(on, totalEstimate = 0){
       this._largeCustomersSession = !!on && LARGE_SESSION_MODE_ENABLED;
       this._largeCustomersTotalEstimate = this._largeCustomersSession
@@ -10736,12 +10864,13 @@
       if(!userKey) return false;
       const payload = st && typeof st === "object" ? st : null;
       if(!payload) return false;
-      // Large-session: אל תכתוב עשרות אלפי לקוחות ל-IDB (סערת shards + הקפאה).
-      if(this.isLargeCustomersSession()) return false;
+      // Large-session / team-manager light: אל תכתוב עשרות אלפי לקוחות ל-IDB (סערת shards + הקפאה).
+      if(this.isHeavyRosterSession()) return false;
       if(this.sessionPayloadLooksLight(payload)) return false;
       try {
         const n = Array.isArray(payload.customers) ? payload.customers.length : 0;
         if(LARGE_SESSION_MODE_ENABLED && n >= LARGE_SESSION_CUSTOMER_THRESHOLD) return false;
+        if(TEAM_MANAGER_LIGHT_SESSION_ENABLED && Auth?.isTeamManager?.() && n >= TEAM_MANAGER_FAT_CACHE_PAINT_CAP) return false;
       } catch(_e) {}
 
       if(this._idbWriteInFlight) { this._idbWriteQueued = true; return false; }
@@ -10818,7 +10947,7 @@
 
     scheduleFullIdbCacheSave(st){
       const payload = st && typeof st === "object" ? st : (State.data || null);
-      if(!payload || this.isLargeCustomersSession() || this.sessionPayloadLooksLight(payload)) return;
+      if(!payload || this.isHeavyRosterSession() || this.sessionPayloadLooksLight(payload)) return;
       try {
         const n = Array.isArray(payload.customers) ? payload.customers.length : 0;
         if(LARGE_SESSION_MODE_ENABLED && n >= LARGE_SESSION_CUSTOMER_THRESHOLD) return;
@@ -10868,6 +10997,14 @@
         if(!ageOk) return null;
 
         let payload = entry.payload;
+
+        // GI-PERF 2026-08-25: מנהל צוות עם מטמון מפוצל גדול — לא לטעון מנות.
+        // הקריאה עצמה (עשרות/מאות get) מקפיאה את הדף עוד לפני paint.
+        if(this.shouldSkipTeamManagerFatIdbLoad(payload)){
+          try { console.warn("TEAM_MANAGER_SKIP_FAT_IDB_READ"); } catch(_e) {}
+          try { void this.purgeCurrentUserFullIdbCache(); } catch(_e) {}
+          return null;
+        }
 
         // רשומה מפוצלת (GI-PERF שלב ט'): מחברים בחזרה את מנות הלקוחות.
         if(payload && payload[GI_FULL_IDB_SKELETON_FLAG] === true){
@@ -10943,6 +11080,62 @@
       } catch(_e) {
         return false;
       }
+    },
+
+    /* GI-PERF 2026-08-25: מוחק את מטמון ה-IDB השמן של המשתמש הנוכחי.
+       אצל ואדים (~2.1K תיקים מפוצלים ל־~140 מנות) הקריאה עצמה הקפיאה את הדף
+       עוד לפני דילוג הצביעה. */
+    async purgeCurrentUserFullIdbCache(){
+      const userKey = this.fullCacheUserKey();
+      if(!userKey) return false;
+      try {
+        const db = await this._openFullIdb();
+        if(!db) return false;
+        await new Promise((resolve) => {
+          try {
+            const tx = db.transaction(GI_FULL_IDB_STORE, "readwrite");
+            const store = tx.objectStore(GI_FULL_IDB_STORE);
+            const req = store.getAllKeys();
+            req.onsuccess = () => {
+              try {
+                (req.result || []).forEach((k) => {
+                  if(Storage._idbKeyBelongsToUser(k, userKey)) store.delete(k);
+                });
+              } catch(_e) {}
+            };
+            req.onerror = () => {};
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => resolve(false);
+            tx.onabort = () => resolve(false);
+          } catch(_e) {
+            resolve(false);
+          }
+        });
+        try {
+          if(this._memoryCache?.userKey === userKey) this._memoryCache = null;
+        } catch(_e) {}
+        try { console.warn("TEAM_MANAGER_PURGE_FAT_IDB:", userKey); } catch(_e) {}
+        return true;
+      } catch(_e) {
+        return false;
+      }
+    },
+
+    shouldSkipTeamManagerFatIdbLoad(entryPayload){
+      try {
+        if(!Auth?.isTeamManager?.()) return false;
+      } catch(_e) {
+        return false;
+      }
+      const p = entryPayload && typeof entryPayload === "object" ? entryPayload : null;
+      if(!p) return true;
+      if(p[GI_FULL_IDB_SKELETON_FLAG] === true){
+        const shardCount = Math.max(0, Number(p._giShardCount) || 0);
+        const estimated = shardCount * GI_FULL_IDB_SHARD_SIZE;
+        return estimated >= TEAM_MANAGER_FAT_CACHE_PAINT_CAP;
+      }
+      const n = Array.isArray(p.customers) ? p.customers.length : 0;
+      return n >= TEAM_MANAGER_FAT_CACHE_PAINT_CAP;
     },
 
     buildLightCachePayload(st){
@@ -11044,9 +11237,14 @@
 
     _scheduleServerCacheFlush(){
       if(this._serverCacheFlushHandle) return;
+      // GI-PERF 2026-08-25c: מנהל צוות / Large Session — לא לעשות JSON.stringify של הרוסטר ב־sessionStorage.
+      try {
+        if(this.isHeavyRosterSession()) return;
+      } catch(_e) {}
       const flush = () => {
         this._serverCacheFlushHandle = null;
         try {
+          if(this.isHeavyRosterSession()) return;
           const entry = this._memoryCache;
           if(!entry?.payload) return;
           const light = this.buildLightCachePayload(entry.payload);
@@ -12838,6 +13036,12 @@
           archivedAdds
         );
       }
+      try {
+        if(this.isTeamManagerLightSession()){
+          const trimmed = trimTeamManagerCustomerPayloadLru({ customers: State.data.customers });
+          if(Array.isArray(trimmed?.customers)) State.data.customers = trimmed.customers;
+        }
+      } catch(_e) {}
       return merged;
     },
 
@@ -12873,7 +13077,16 @@
       if(!serverRec) return localRec;
       const localAt = Date.parse(safeTrim(localRec?.updatedAt || localRec?.updated_at) || "") || 0;
       const serverAt = Date.parse(safeTrim(serverRec?.updatedAt || serverRec?.updated_at) || "") || 0;
-      return serverAt >= localAt ? serverRec : localRec;
+      const newer = serverAt >= localAt ? serverRec : localRec;
+      const older = newer === serverRec ? localRec : serverRec;
+      // GI-PERF 2026-08-25: מיזוג מול שורת LIGHT לא ימחק payload מלא שכבר בזיכרון.
+      try {
+        if(this.payloadHasPolicyOrInsuredContent(older?.payload)
+          && !this.payloadHasPolicyOrInsuredContent(newer?.payload)){
+          return { ...newer, payload: older.payload };
+        }
+      } catch(_e) {}
+      return newer;
     },
 
     async mergeConflictRemoteTablesIntoState(localState){
@@ -12886,10 +13099,46 @@
       const dirtyProposalIds = new Set(
         this.getChangedRows(SUPABASE_TABLES.proposals, proposalRows).map((row) => String(row?.id)).filter(Boolean)
       );
-      const [customersRes, proposalsRes] = await Promise.all([
-        this.loadTableRows(SUPABASE_TABLES.customers),
-        this.loadTableRows(SUPABASE_TABLES.proposals)
-      ]);
+      // GI-PERF 2026-08-25: במנהל-צוות-light לא למשוך select=* של כל הצוות (~22MB אצל ואדים).
+      // GI-PERF 2026-08-25c: גם LIGHT של כל הצוות מיותר — רק dirty / תיקים פתוחים.
+      const lightConflict = this.isTeamManagerLightSession();
+      let customersRes = { ok:true, data:[] };
+      let proposalsRes = { ok:true, data:[] };
+      if(lightConflict){
+        const custIds = [...dirtyCustomerIds];
+        try {
+          getTeamManagerProtectedPayloadIds().forEach((id) => {
+            if(id) custIds.push(String(id));
+          });
+        } catch(_e) {}
+        const propIds = [...dirtyProposalIds];
+        const uniq = (arr) => [...new Set(arr.map(String).filter(Boolean))];
+        const cIds = uniq(custIds);
+        const pIds = uniq(propIds);
+        const fetchByIds = async (table, ids, selectExpr) => {
+          if(!ids.length) return { ok:true, data:[] };
+          try {
+            const client = this.getClient();
+            const { data, error } = await this.withRetry(
+              () => client.from(table).select(selectExpr).in("id", ids),
+              "מיזוג קונפליקט לפי מזהים"
+            );
+            if(error) throw error;
+            return { ok:true, data: Array.isArray(data) ? data : [] };
+          } catch(err) {
+            return { ok:false, error: String(err?.message || err), data:[] };
+          }
+        };
+        [customersRes, proposalsRes] = await Promise.all([
+          fetchByIds(SUPABASE_TABLES.customers, cIds, CUSTOMER_LIGHT_COLUMNS + ",payload"),
+          fetchByIds(SUPABASE_TABLES.proposals, pIds, PROPOSAL_LIGHT_COLUMNS + ",payload")
+        ]);
+      } else {
+        [customersRes, proposalsRes] = await Promise.all([
+          this.loadTableRows(SUPABASE_TABLES.customers, "*"),
+          this.loadTableRows(SUPABASE_TABLES.proposals, "*")
+        ]);
+      }
       let merged = 0;
       if(customersRes?.ok){
         const map = new Map((state.customers || []).map((c) => [String(c?.id), c]));
@@ -12932,8 +13181,12 @@
         });
         state.proposals = Array.from(map.values());
       }
+      let outState = Auth?.current && !Auth.canViewAllCustomers()
+        ? filterSessionStateForCurrentUserScope(state)
+        : state;
+      try { outState = trimTeamManagerCustomerPayloadLru(outState); } catch(_e) {}
       return {
-        state: Auth?.current && !Auth.canViewAllCustomers() ? filterSessionStateForCurrentUserScope(state) : state,
+        state: outState,
         merged,
         warning: (!customersRes?.ok && !proposalsRes?.ok) ? "לא ניתן היה למזג נתונים מהשרת לפני השמירה" : ""
       };
@@ -12944,6 +13197,8 @@
       // GI-PERF 2026-08-10: בסשן ענק דלתא עלולה למשוך עשרות אלפי שורות מאז since —
       // חוזרים ל-loadSheets (working-set בלבד).
       if(this.isLargeCustomersSession()) return this.loadSheets(options);
+      // GI-PERF 2026-08-25c: מנהל צוות light — אותה הגנה; דלתא עלולה להשמין/להקפיא.
+      if(this.isTeamManagerLightSession()) return this.loadSheets(options);
       const localAt = safeTrim(options.sinceIso || getMetaSyncAt(State.data?.meta, "data") || State.data?.meta?.updatedAt);
       if(!localAt) return this.loadSheets(options);
       const useCachedFallback = options.useCachedFallback === true;
@@ -12966,8 +13221,16 @@
         const [metaRes, agentsRes, customersRes, proposalsRes] = await Promise.all([
           this.loadMetaRow(),
           this.loadTableRows(SUPABASE_TABLES.agents),
-          this.loadTableRowsSince(SUPABASE_TABLES.customers, querySince),
-          this.loadTableRowsSince(SUPABASE_TABLES.proposals, querySince)
+          this.loadTableRowsSince(
+            SUPABASE_TABLES.customers,
+            querySince,
+            this.isTeamManagerLightSession() ? CUSTOMER_LIGHT_COLUMNS : "*"
+          ),
+          this.loadTableRowsSince(
+            SUPABASE_TABLES.proposals,
+            querySince,
+            this.isTeamManagerLightSession() ? PROPOSAL_LIGHT_COLUMNS : "*"
+          )
         ]);
 
         if(!metaRes.ok){
@@ -13513,31 +13776,56 @@
           ? PROPOSAL_LIGHT_COLUMNS : "*";
 
         // GI-PERF 2026-08-10 — Large Session: ספירה זולה לפני משיכת כל הטבלה.
+        // GI-PERF 2026-08-25c — מנהל צוות מעל 400: working-set (לא כל 2.1K).
         let useLargeCustomers = false;
+        let useTeamManagerWorkingSet = false;
         let largeCustomersTotal = 0;
         let largeProbeUncertain = false;
         this.setLargeCustomersSession(false, 0);
+        let rosterProbe = { ok:false, count: 0 };
+        if(LARGE_SESSION_MODE_ENABLED || (TEAM_MANAGER_LIGHT_SESSION_ENABLED && Auth?.isTeamManager?.())){
+          rosterProbe = await this.probeCustomersCount();
+        }
         if(LARGE_SESSION_MODE_ENABLED){
-          const probe = await this.probeCustomersCount();
-          if(probe.ok && probe.count >= LARGE_SESSION_CUSTOMER_THRESHOLD){
+          if(rosterProbe.ok && rosterProbe.count >= LARGE_SESSION_CUSTOMER_THRESHOLD){
             useLargeCustomers = true;
-            largeCustomersTotal = probe.count;
-          } else if(!probe.ok){
+            largeCustomersTotal = rosterProbe.count;
+          } else if(!rosterProbe.ok && LARGE_SESSION_MODE_ENABLED){
             // ספירה נכשלה: מושכים working-set (לא 52K). אם חזר פחות מהתקרה — זה סשן רגיל.
             useLargeCustomers = true;
             largeProbeUncertain = true;
             largeCustomersTotal = 0;
-            try { console.warn("LARGE_SESSION_PROBE_FAILED_USING_WORKING_SET:", probe.error || ""); } catch(_e) {}
+            try { console.warn("LARGE_SESSION_PROBE_FAILED_USING_WORKING_SET:", rosterProbe.error || ""); } catch(_e) {}
           }
+        }
+        if(!useLargeCustomers
+          && TEAM_MANAGER_LIGHT_SESSION_ENABLED
+          && Auth?.isTeamManager?.()
+          && rosterProbe.ok
+          && rosterProbe.count >= TEAM_MANAGER_LIGHT_SESSION_THRESHOLD){
+          useTeamManagerWorkingSet = true;
+          this.markTeamManagerLightRoster(rosterProbe.count);
+          try {
+            console.warn(
+              "TEAM_MANAGER_WORKING_SET:",
+              rosterProbe.count,
+              "→",
+              TEAM_MANAGER_LIGHT_WORKING_SET
+            );
+          } catch(_e) {}
         }
 
         const customersFetch = useLargeCustomers
           ? this.loadRecentCustomerRows(LARGE_SESSION_CUSTOMER_WORKING_SET, initialCustomerColumns)
-          : this.loadTableRows(SUPABASE_TABLES.customers, initialCustomerColumns);
+          : useTeamManagerWorkingSet
+            ? this.loadRecentCustomerRows(TEAM_MANAGER_LIGHT_WORKING_SET, initialCustomerColumns)
+            : this.loadTableRows(SUPABASE_TABLES.customers, initialCustomerColumns);
         // GI-PERF 2026-08-10: בסשן גדול גם הצעות רק working-set — אחרת מסך "הצעות" מקפיא.
         const proposalsFetch = useLargeCustomers
           ? this.loadRecentProposalRows(LARGE_SESSION_PROPOSAL_WORKING_SET, initialProposalColumns)
-          : this.loadTableRows(SUPABASE_TABLES.proposals, initialProposalColumns);
+          : useTeamManagerWorkingSet
+            ? this.loadRecentProposalRows(TEAM_MANAGER_LIGHT_PROPOSAL_WORKING_SET, initialProposalColumns)
+            : this.loadTableRows(SUPABASE_TABLES.proposals, initialProposalColumns);
 
         const [metaRes, agentsRes, customersLightRes, proposalsLightRes] = await Promise.all([
           this.loadMetaRow(),
@@ -13555,14 +13843,20 @@
         if(!customersRes.ok || !proposalsRes.ok){
           try { console.warn("LIGHT_SELECT_FAILED_FALLBACK_TO_FULL:", safeTrim(customersRes.error) || safeTrim(proposalsRes.error)); } catch(_e) {}
           lightSelectUsed = false;
-          if(useLargeCustomers){
+          if(useLargeCustomers || useTeamManagerWorkingSet){
+            const custCap = useLargeCustomers
+              ? LARGE_SESSION_CUSTOMER_WORKING_SET
+              : TEAM_MANAGER_LIGHT_WORKING_SET;
+            const propCap = useLargeCustomers
+              ? LARGE_SESSION_PROPOSAL_WORKING_SET
+              : TEAM_MANAGER_LIGHT_PROPOSAL_WORKING_SET;
             const [cRecent, pRecent] = await Promise.all([
               customersRes.ok
                 ? Promise.resolve(customersRes)
-                : this.loadRecentCustomerRows(LARGE_SESSION_CUSTOMER_WORKING_SET, "*"),
+                : this.loadRecentCustomerRows(custCap, "*"),
               proposalsRes.ok
                 ? Promise.resolve(proposalsRes)
-                : this.loadRecentProposalRows(LARGE_SESSION_PROPOSAL_WORKING_SET, "*")
+                : this.loadRecentProposalRows(propCap, "*")
             ]);
             customersRes = cRecent;
             proposalsRes = pRecent;
@@ -13585,6 +13879,11 @@
               ...customersRes,
               data: customersRes.data.slice(0, LARGE_SESSION_CUSTOMER_WORKING_SET)
             };
+          } else if(useTeamManagerWorkingSet && rawLen > TEAM_MANAGER_LIGHT_WORKING_SET){
+            customersRes = {
+              ...customersRes,
+              data: customersRes.data.slice(0, TEAM_MANAGER_LIGHT_WORKING_SET)
+            };
           }
           const propLen = Array.isArray(proposalsRes?.data) ? proposalsRes.data.length : 0;
           if(LARGE_SESSION_MODE_ENABLED && (useLargeCustomers || propLen >= LARGE_SESSION_CUSTOMER_THRESHOLD)
@@ -13594,8 +13893,18 @@
               ...proposalsRes,
               data: proposalsRes.data.slice(0, LARGE_SESSION_PROPOSAL_WORKING_SET)
             };
+          } else if(useTeamManagerWorkingSet && propLen > TEAM_MANAGER_LIGHT_PROPOSAL_WORKING_SET){
+            proposalsRes = {
+              ...proposalsRes,
+              data: proposalsRes.data.slice(0, TEAM_MANAGER_LIGHT_PROPOSAL_WORKING_SET)
+            };
           }
         } catch(_e) {}
+        if(useTeamManagerWorkingSet && !useLargeCustomers){
+          this.markTeamManagerLightRoster(
+            Math.max(rosterProbe.count || 0, Array.isArray(customersRes?.data) ? customersRes.data.length : 0)
+          );
+        }
         if(useLargeCustomers){
           const loadedN = Array.isArray(customersRes?.data) ? customersRes.data.length : 0;
           const loadedP = Array.isArray(proposalsRes?.data) ? proposalsRes.data.length : 0;
@@ -28398,8 +28707,8 @@ UsersGateUI.init();
           if(eid) ids.add(eid);
         }
       } catch(_e) {}
-      // GI-PERF 2026-08-10: לא לבנות את כל שורות הלקוחות בכל flush — יקר בסשן גדול.
-      if(!Storage.isLargeCustomersSession?.()){
+      // GI-PERF 2026-08-10 / 08-25: בסשן ענק או מנהל-צוות-light לא לבנות את כל שורות הלקוחות בכל flush.
+      if(!Storage.isHeavyRosterSession?.()){
         try {
           const rows = Storage.buildCustomerRows(State.data);
           Storage.getChangedRows(SUPABASE_TABLES.customers, rows).forEach((r) => {
@@ -28590,9 +28899,9 @@ UsersGateUI.init();
     },
 
     startCustomers(){
-      // GI-PERF 2026-08-10: בסשן גדול realtime על כל טבלת customers מציף את ה-UI (52K).
+      // GI-PERF 2026-08-10 / 08-25: בסשן גדול או מנהל-צוות-light realtime על כל הטבלה מציף את ה-UI.
       // מסך הלקוחות מסתנכרן ב-pull קל (10 אחרונים / חיפוש).
-      if(Storage.isLargeCustomersSession?.()) return;
+      if(Storage.isHeavyRosterSession?.()) return;
       if(this._customersChannel) return;
       try {
         const client = Storage.getClient();
@@ -28624,6 +28933,8 @@ UsersGateUI.init();
     },
 
     startProposals(){
+      // GI-PERF 2026-08-25: כמו customers — בלי realtime שמן במנהל-צוות-light / Large Session.
+      if(Storage.isHeavyRosterSession?.()) return;
       if(this._proposalsChannel) return;
       try {
         const client = Storage.getClient();
@@ -28800,6 +29111,10 @@ UsersGateUI.init();
       if(view !== "dashboard" || Auth.isElementary()) return false;
       // PERF: admin/manager already hold the full org dataset — periodic force pull causes freezes
       try { if(Auth?.canViewAllCustomers?.()) return false; } catch(_e) {}
+      // GI-PERF 2026-08-25: מנהל צוות עם רוסטר גדול — אותו פטור; force pull מחזיר delta שמן ומקפיא.
+      try {
+        if(Auth?.isTeamManager?.() && Storage?.isTeamManagerLightSession?.()) return false;
+      } catch(_e) {}
       if(!DashboardUI.shouldShowPerformanceBoard?.()) return false;
       const last = Number(this._lastDashboardPullAt) || 0;
       return !last || (Date.now() - last) >= this.DASHBOARD_FORCE_PULL_MS;
@@ -28814,6 +29129,7 @@ UsersGateUI.init();
         const forceDashboardPull = this.shouldForceDashboardPull();
         const localDataAt = getMetaSyncAt(State.data?.meta, "data");
         const largeSession = !!Storage.isLargeCustomersSession?.();
+        const teamMgrLight = !!Storage.isTeamManagerLightSession?.();
         if(!forceDashboardPull){
           const metaRes = await Storage.loadMetaRowCached();
           if(!metaRes?.ok) return;
@@ -28827,9 +29143,8 @@ UsersGateUI.init();
           if(remoteDataAt && localDataAt && compareIsoStamps(remoteDataAt, localDataAt) <= 0) return;
         }
         if(this.hasBlockingFlow()) return;
-        // GI-PERF 2026-08-10: בסשן גדול לא מושכים שוב working-set מלא בטיימר —
-        // זה מה שנתקע במעבר ללקוחות. רשימת הלקוחות מתעדכנת ב-syncListFromServer.
-        if(largeSession){
+        // GI-PERF 2026-08-10 / 08-25: בסשן גדול או מנהל-צוות-light לא מושכים שוב roster מלא בטיימר.
+        if(largeSession || teamMgrLight){
           const view = this.getCurrentView();
           if(view === "customers"){
             HeavySyncGate.scheduleUi(() => {
@@ -31106,6 +31421,8 @@ UsersGateUI.init();
     _shouldDeferLocalMetricsToServer(){
       try {
         if(typeof Storage !== "undefined" && Storage.isLargeCustomersSession?.()) return true;
+        if(typeof Storage !== "undefined" && Storage.isTeamManagerLightSession?.()) return true;
+        if(typeof Storage !== "undefined" && Storage.isHeavyRosterSession?.()) return true;
         if(this._countMissingCustomerPayloadsSafe() > 0) return true;
         const n = Array.isArray(State.data?.customers) ? State.data.customers.length : 0;
         if(n === 0 && !App?._fullDataReady) return true;
@@ -48242,6 +48559,7 @@ const ClalRiskLifePdf = {
       }
       this._loginReady = Array.isArray(State.data?.agents) && State.data.agents.length > 0;
       try { Storage._memoryCache = null; } catch(_e) {}
+      try { Storage.clearTeamManagerLightRoster?.(); } catch(_e) {}
       try { sessionStorage.removeItem(GI_SERVER_CACHE_KEY); } catch(_e) {}
       try { DashboardUI.invalidateMetricsCache?.({ force: true, userSwitch: true }); } catch(_e) {}
       if(reason){
@@ -48869,10 +49187,9 @@ const ClalRiskLifePdf = {
         } catch(_e) {}
         return;
       }
-      // GI-PERF 2026-08-23: מנהל צוות טוען את כל הצוות. בלי hydration המוני
-      // (אותו רעיון כמו Large Session). נציג רגיל לא נכנס לכאן.
+      // GI-PERF 2026-08-23 / 08-25: מנהל צוות — בלי hydration המוני (אותו רעיון כמו Large Session).
       try {
-        if(Auth?.isTeamManager?.()){
+        if(Auth?.isTeamManager?.() || Storage.isTeamManagerLightSession?.()){
           try { console.warn("TEAM_MANAGER_SKIP_MASS_HYDRATION"); } catch(_e) {}
           try {
             UI.renderSyncStatus(
@@ -48963,6 +49280,18 @@ const ClalRiskLifePdf = {
         ? { skipNavigation: true, skipLoginSideEffects: true, skipNormalize: true }
         : {};
 
+      // GI-PERF 2026-08-25: מנהל צוות — אל תטען/תאמץ IDB שמן בכניסה.
+      // גם כש-paint מדלג, עצם קריאת המנות הקפיאה את ואדים מיד אחרי לוגין.
+      let skipFatFullCache = false;
+      try {
+        if(Auth?.isTeamManager?.()){
+          skipFatFullCache = true;
+          Storage.markTeamManagerLightRoster?.(0);
+          try { void Storage.purgeCurrentUserFullIdbCache(); } catch(_e2) {}
+          try { console.warn("TEAM_MANAGER_LOGIN_SKIP_FAT_CACHE"); } catch(_e2) {}
+        }
+      } catch(_e) {}
+
       const paintFromLocalCache = (payload, label) => {
         if(!stillSameSession()) return false;
         if(!payload || typeof payload !== "object") return false;
@@ -49014,12 +49343,14 @@ const ClalRiskLifePdf = {
 
       // PERF: paint instantly from memory/IDB full cache, then sync quietly from server
       let paintedFromFullCache = false;
-      try {
-        const memPayload = Storage.loadMemoryCacheForCurrentUser(GI_FULL_IDB_TTL_MS);
-        if(memPayload){
-          paintedFromFullCache = paintFromLocalCache(memPayload, "נטען ממטמון · מסנכרן מהשרת…");
-        }
-      } catch(_e) {}
+      if(!skipFatFullCache){
+        try {
+          const memPayload = Storage.loadMemoryCacheForCurrentUser(GI_FULL_IDB_TTL_MS);
+          if(memPayload){
+            paintedFromFullCache = paintFromLocalCache(memPayload, "נטען ממטמון · מסנכרן מהשרת…");
+          }
+        } catch(_e) {}
+      }
       // GI-PERF 2026-07-31 (שלב א'): אם קריאת ה-IDB חורגת מהתקציב, לא מוותרים עליה —
       // ממשיכים לחכות לה ברקע, וצובעים כשהיא מגיעה כל עוד השרת עוד לא ענה.
       // קודם: ה-race החזיר null, הצביעה בוטלה, והמשתמש נשאר מול מסך ריק עד סוף הטעינה המלאה.
@@ -49035,7 +49366,7 @@ const ClalRiskLifePdf = {
         } catch(_e) {}
         return true;
       };
-      if(!paintedFromFullCache){
+      if(!skipFatFullCache && !paintedFromFullCache){
         try {
           const idbPromise = Storage.loadFullIdbCache(GI_FULL_IDB_TTL_MS);
           const idbEntry = await Promise.race([
@@ -49044,7 +49375,8 @@ const ClalRiskLifePdf = {
           ]);
           if(idbEntry?.payload){
             paintedFromFullCache = paintFromLocalCache(idbEntry.payload, "נטען ממטמון · מסנכרן מהשרת…");
-            adoptIdbEntry(idbEntry);
+            // רק אם באמת צבענו — אחרת אימוץ לזיכרון משאיר 20MB+ ומקפיא בהמשך.
+            if(paintedFromFullCache) adoptIdbEntry(idbEntry);
           } else {
             // חריגה מהתקציב — צביעה מאוחרת, רק אם השרת טרם החזיר תשובה.
             idbPromise.then((late) => {
@@ -49052,7 +49384,7 @@ const ClalRiskLifePdf = {
               if(serverSyncApplied || paintedFromFullCache) return;
               if(!late?.payload) return;
               paintedFromFullCache = paintFromLocalCache(late.payload, "נטען ממטמון · מסנכרן מהשרת…");
-              adoptIdbEntry(late);
+              if(paintedFromFullCache) adoptIdbEntry(late);
             }).catch(() => {});
           }
         } catch(_e) {}
@@ -53404,6 +53736,13 @@ const CampaignLeadsStore = {
         || safeTrim(rec?.payload?.updatedAt);
       const stampMs = Date.parse(stamp);
       if(Number.isFinite(stampMs) && stampMs > lastStampMs) lastStampMs = stampMs;
+      // GI-PERF 2026-08-25: לא סורקים collectPolicies על payloads ריקים.
+      // במצב light (ואדים) רוב התיקים רזים — דילג; רק LRU/תיקים שנפתחו נסרקים.
+      try {
+        if(Storage.payloadIsEmpty?.(rec) || !Storage.payloadHasPolicyOrInsuredContent?.(rec?.payload)){
+          return;
+        }
+      } catch(_e) {}
       const policies = CustomersUI.collectPolicies(rec).filter((p) => String(p?.origin || "") === "new");
       policies.forEach((p) => {
         const premium = DashboardUI.policyNetPremium(p);
