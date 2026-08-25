@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260825-hmo-text-v1";
+  const GI_WIZARD_BUILD = "20260825-elem-policy-details-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -8970,7 +8970,8 @@ if(path === "birthDate"){
           productKey: w.key,
           label: w.label,
           premium: safeTrim(old?.premium ?? ''),
-          installments: safeTrim(old?.installments ?? '')
+          installments: safeTrim(old?.installments ?? ''),
+          company: safeTrim(old?.company ?? '')
         };
       });
     },
