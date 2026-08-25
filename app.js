@@ -12982,7 +12982,16 @@
       if(!serverRec) return localRec;
       const localAt = Date.parse(safeTrim(localRec?.updatedAt || localRec?.updated_at) || "") || 0;
       const serverAt = Date.parse(safeTrim(serverRec?.updatedAt || serverRec?.updated_at) || "") || 0;
-      return serverAt >= localAt ? serverRec : localRec;
+      const newer = serverAt >= localAt ? serverRec : localRec;
+      const older = newer === serverRec ? localRec : serverRec;
+      // GI-PERF 2026-08-25: מיזוג מול שורת LIGHT לא ימחק payload מלא שכבר בזיכרון.
+      try {
+        if(this.payloadHasPolicyOrInsuredContent(older?.payload)
+          && !this.payloadHasPolicyOrInsuredContent(newer?.payload)){
+          return { ...newer, payload: older.payload };
+        }
+      } catch(_e) {}
+      return newer;
     },
 
     async mergeConflictRemoteTablesIntoState(localState){
@@ -12995,9 +13004,13 @@
       const dirtyProposalIds = new Set(
         this.getChangedRows(SUPABASE_TABLES.proposals, proposalRows).map((row) => String(row?.id)).filter(Boolean)
       );
+      // GI-PERF 2026-08-25: במנהל-צוות-light לא למשוך select=* של כל הצוות (~22MB אצל ואדים).
+      const lightConflict = this.isTeamManagerLightSession();
+      const customerSelect = lightConflict ? CUSTOMER_LIGHT_COLUMNS : "*";
+      const proposalSelect = lightConflict ? PROPOSAL_LIGHT_COLUMNS : "*";
       const [customersRes, proposalsRes] = await Promise.all([
-        this.loadTableRows(SUPABASE_TABLES.customers),
-        this.loadTableRows(SUPABASE_TABLES.proposals)
+        this.loadTableRows(SUPABASE_TABLES.customers, customerSelect),
+        this.loadTableRows(SUPABASE_TABLES.proposals, proposalSelect)
       ]);
       let merged = 0;
       if(customersRes?.ok){
@@ -13041,8 +13054,12 @@
         });
         state.proposals = Array.from(map.values());
       }
+      let outState = Auth?.current && !Auth.canViewAllCustomers()
+        ? filterSessionStateForCurrentUserScope(state)
+        : state;
+      try { outState = trimTeamManagerCustomerPayloadLru(outState); } catch(_e) {}
       return {
-        state: Auth?.current && !Auth.canViewAllCustomers() ? filterSessionStateForCurrentUserScope(state) : state,
+        state: outState,
         merged,
         warning: (!customersRes?.ok && !proposalsRes?.ok) ? "לא ניתן היה למזג נתונים מהשרת לפני השמירה" : ""
       };
@@ -28741,6 +28758,8 @@ UsersGateUI.init();
     },
 
     startProposals(){
+      // GI-PERF 2026-08-25: כמו customers — בלי realtime שמן במנהל-צוות-light / Large Session.
+      if(Storage.isHeavyRosterSession?.()) return;
       if(this._proposalsChannel) return;
       try {
         const client = Storage.getClient();

@@ -40,9 +40,12 @@ console.log("\nהגנות שחוברו");
 assert(app.includes("this.isHeavyRosterSession()") || app.includes("Storage.isHeavyRosterSession"), "heavy roster בשימוש");
 assert(app.includes("isTeamManagerLightSession() ? CUSTOMER_LIGHT_COLUMNS"), "delta לקוחות בעמודות רזות");
 assert(app.includes("isTeamManagerLightSession() ? PROPOSAL_LIGHT_COLUMNS"), "delta הצעות בעמודות רזות");
+assert(app.includes("lightConflict ? CUSTOMER_LIGHT_COLUMNS"), "conflict-merge לקוחות בעמודות רזות");
+assert(app.includes("lightConflict ? PROPOSAL_LIGHT_COLUMNS"), "conflict-merge הצעות בעמודות רזות");
 assert(app.includes("largeSession || teamMgrLight"), "LiveRefresh מתייחס למנהל צוות light");
 assert(app.includes("Auth?.isTeamManager?.() && Storage?.isTeamManagerLightSession?.()"), "פטור force dashboard pull");
 assert(app.includes("payloadHasPolicyOrInsuredContent?.(rec?.payload)"), "MyTeam מדלג על payloads ריקים");
+assert(/startProposals\(\)\{[\s\S]*?isHeavyRosterSession/.test(app), "proposals realtime נחסם ב-heavy roster");
 
 console.log("\nתיקון 23.08 נשמר");
 assert(app.includes("TEAM_MANAGER_SKIP_MASS_HYDRATION"), "דילוג hydrate מסיבי נשאר");
@@ -56,8 +59,8 @@ assert(app.includes("LIGHT_INITIAL_LOAD_ENABLED = true"), "טעינה רזה נ�
 assert(!/LARGE_SESSION_CUSTOMER_THRESHOLD\s*=\s*2000/.test(app), "לא הורדנו סף ל-2000");
 
 console.log("\ncache");
-assert(indexHtml.includes("app.js?v=20260825-team-mgr-light-v1"), "cache bust app.js");
-assert(sw.includes("20260825-team-mgr-light-v1"), "service-worker version");
+assert(indexHtml.includes("app.js?v=20260825-team-mgr-light-v2"), "cache bust app.js");
+assert(sw.includes("20260825-team-mgr-light-v2"), "service-worker version");
 
 console.log("\nלוגיקה טהורה — LRU");
 function trimLru(list, cap, protectedIds){
@@ -90,6 +93,25 @@ const out = trimLru(sample, 80, new Set(["open"]));
 assert(out.stripped === 39, "LRU מסיר עודפים מעל 80 (+protected)");
 assert(out.list.find((r) => r.id === "open").payload.newPolicies, "תיק פתוח נשמר");
 assert(out.list.filter((r) => r.payload && r.payload.newPolicies).length === 81, "נשארו 80 + פתוח");
+
+console.log("\nלוגיקה טהורה — שימור payload ב-conflict merge");
+function pickNewer(localRec, serverRec, keepLocal){
+  if(keepLocal) return localRec;
+  if(!localRec) return serverRec;
+  if(!serverRec) return localRec;
+  const localAt = Date.parse(localRec.updatedAt || "") || 0;
+  const serverAt = Date.parse(serverRec.updatedAt || "") || 0;
+  const newer = serverAt >= localAt ? serverRec : localRec;
+  const older = newer === serverRec ? localRec : serverRec;
+  const has = (p) => !!(p && Array.isArray(p.newPolicies) && p.newPolicies.length);
+  if(has(older.payload) && !has(newer.payload)) return { ...newer, payload: older.payload };
+  return newer;
+}
+const localFat = { id: "x", updatedAt: "2026-08-01T10:00:00.000Z", payload: { newPolicies: [{ id: "p1" }] } };
+const serverLight = { id: "x", updatedAt: "2026-08-02T10:00:00.000Z", fullName: "חדש", payload: {} };
+const merged = pickNewer(localFat, serverLight, false);
+assert(merged.fullName === "חדש", "מטא-דאטה מהשרת נשמר");
+assert(merged.payload.newPolicies[0].id === "p1", "payload מקומי מלא לא נמחק ע״י LIGHT");
 
 console.log("\n-----");
 console.log("passed=" + passed + " failed=" + failed);
