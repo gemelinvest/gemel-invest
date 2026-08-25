@@ -20,7 +20,7 @@
     TEMPLATE_BASE: "./forms/migdal-cancer/",
     TEMPLATE_FILE: "migdal-cancer-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-health-align-v1",
+    VERSION: "20260825-migdal-health-fill-v1",
     DOC_ID: "doc_migdal_cancer_form",
     DOC_TYPE: "migdal_cancer_form",
 

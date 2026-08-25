@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/migdal-mortgage/",
     TEMPLATE_FILE: "migdal-mortgage-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-official-decl-pay-he-v1",
+    VERSION: "20260825-migdal-health-fill-v1",
     DOC_ID: "doc_migdal_mortgage_form",
     DOC_TYPE: "migdal_mortgage_form",
 
@@ -243,6 +243,11 @@
       } catch(_e) {}
     },
     setExport(form, fieldName, exportValue){
+      const helper = global.GI_OFFICIAL_FORM_FILL;
+      if(helper && helper.setExport){
+        helper.setExport(form, fieldName, exportValue);
+        return;
+      }
       if(!exportValue) return;
       try {
         const field = form.getField(fieldName);
@@ -335,8 +340,14 @@
       this.applyLoaner(form, draft.loaner, font);
       this.applyLoans(form, draft.loans, font);
       global.GI_OFFICIAL_FORM_FILL?.applyOfficialHealthAndNames?.(form, draft, font, {
-        keys: "migdal_mortgage",
+        skipHealth: true,
         visual: false
+      });
+      global.GI_OFFICIAL_FORM_FILL?.applyMappedHealthYesNo?.(form, {
+        map: "migdal_mortgage",
+        responses: draft.healthResponses,
+        primaryId: draft.primaryId,
+        spouseId: draft.spouseId
       });
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
