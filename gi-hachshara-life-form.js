@@ -20,7 +20,7 @@
     TEMPLATE_BASE: "./forms/hachshara-life/",
     TEMPLATE_FILE: "hachshara-life-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-hach-health-v2",
+    VERSION: "20260825-hach-fill-audit-v1",
     DOC_ID: "doc_hachshara_life_form",
     DOC_TYPE: "hachshara_life_form",
 
@@ -372,6 +372,9 @@
         hoMarks: [{ field: "CollectionMethod", value: "Hok" }],
         ccMarks: [{ field: "CollectionMethod", value: "Credit" }]
       });
+      if(draft.collectionMethod){
+        this.setExport(form, "CollectionMethod", draft.collectionMethod);
+      }
     },
     async loadPdfDoc(){
       if(global.GI_LOAD_LIBS?.pdfLib) await global.GI_LOAD_LIBS.pdfLib();

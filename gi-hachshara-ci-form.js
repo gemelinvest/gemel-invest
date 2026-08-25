@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/hachshara-ci/",
     TEMPLATE_FILE: "hachshara-ci-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-hach-health-v2",
+    VERSION: "20260825-hach-fill-audit-v1",
     DOC_ID: "doc_hachshara_ci_form",
     DOC_TYPE: "hachshara_ci_form",
 
@@ -253,23 +253,27 @@
     applyPerson(form, person, suffix, font){
       if(!person) return;
       const s = suffix || "";
+      const isChild = s.indexOf("Child") === 0;
       this.setTextSafe(form, "FirstName" + s, person.firstName, font);
       this.setTextSafe(form, "LastName" + s, person.lastName, font);
       this.setTextSafe(form, (s ? "FullName" + s : "FullName"), person.fullName, font);
       this.setTextSafe(form, "PID" + s, person.idNumber, font);
       this.setTextSafe(form, "BirthDate" + s, person.birthDate, font);
-      this.setTextSafe(form, "EmailAddress" + s, person.email, font);
-      this.setTextSafe(form, "City" + s, person.city, font);
-      this.setTextSafe(form, "StreetName" + s, person.street, font);
-      this.setTextSafe(form, "HouseNumber" + s, person.houseNumber, font);
-      this.setTextSafe(form, "ZipCode" + s, person.zip, font);
-      this.setTextSafe(form, "OccupationCode" + s, person.occupation, font);
-      this.setTextSafe(form, s.indexOf("Child") === 0 ? ("HMO" + s) : ("HMOName" + s), person.clinic, font);
+      // ילדים בטופס CI: אין שדות אימייל/כתובת/מקצוע — רק זהות, קופ״ח, גובה/משקל, עישון.
+      if(!isChild){
+        this.setTextSafe(form, "EmailAddress" + s, person.email, font);
+        this.setTextSafe(form, "City" + s, person.city, font);
+        this.setTextSafe(form, "StreetName" + s, person.street, font);
+        this.setTextSafe(form, "HouseNumber" + s, person.houseNumber, font);
+        this.setTextSafe(form, "ZipCode" + s, person.zip, font);
+        this.setTextSafe(form, "OccupationCode" + s, person.occupation, font);
+      }
+      this.setTextSafe(form, isChild ? ("HMO" + s) : ("HMOName" + s), person.clinic, font);
       this.setTextSafe(form, "Hight" + s, person.heightCm, font);
       this.setTextSafe(form, "Weight" + s, person.weightKg, font);
       if(!s) this.setTextSafe(form, "AptNumber", person.apt, font);
       const phone = person.phone;
-      if(phone){
+      if(phone && !isChild){
         if(this.isMobilePhone(phone)) this.setTextSafe(form, "CellPhoneNumber" + s, phone, font);
         else this.setTextSafe(form, "PhoneNumber" + s, phone, font);
         if(this.isMobilePhone(phone) || !s) this.setTextSafe(form, "CellPhoneNumber" + s, phone, font);
@@ -285,10 +289,11 @@
         const shabanField = !s ? "ShabanR" : (s === "Spouse" ? "ShabanSpouse" : "Shaban" + s);
         this.setExport(form, shabanField, "1");
       }
-      if(person.compensation){
-        if(!s) this.setTextSafe(form, "MaximumAmount", person.compensation, font);
-        else if(s === "Spouse") this.setTextSafe(form, "MaximumAmountText", person.compensation, font);
-        else if(s.indexOf("Child") === 0) this.setTextSafe(form, "MaximumAmount" + s, person.compensation, font);
+      // PDF: MaximumAmount = checkbox (/True), MaximumAmountText = סכום הפיצוי.
+      // אין שדה טקסט נפרד לבן־זוג/ילדים — ממלאים את הסכום רק מהמבוטח הראשי.
+      if(person.compensation && !s){
+        this.setTextSafe(form, "MaximumAmountText", person.compensation, font);
+        this.setExport(form, "MaximumAmount", "True");
       }
     },
 

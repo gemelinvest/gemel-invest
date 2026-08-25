@@ -20,7 +20,7 @@
     TEMPLATE_BASE: "./forms/hachshara-mortgage/",
     TEMPLATE_FILE: "hachshara-mortgage-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-hach-mort-v1",
+    VERSION: "20260825-hach-fill-audit-v1",
     DOC_ID: "doc_hachshara_mortgage_form",
     DOC_TYPE: "hachshara_mortgage_form",
 
@@ -338,8 +338,10 @@
       this.setTextSafe(form, s ? ("AptNumber" + s) : "AptNumber", person.apt, font);
       if(!s) this.setTextSafe(form, "Address", address, font);
       if(s === "Spouse") this.setTextSafe(form, "FullAddressSpouse", address, font);
-      if(person.sumInsured){
-        this.setTextSafe(form, s === "Spouse" ? "MaximumAmountText" : "MaximumAmount", person.sumInsured, font);
+      // PDF: MaximumAmount = checkbox (/True), MaximumAmountText = סכום הביטוח (שדה יחיד).
+      if(person.sumInsured && !s){
+        this.setTextSafe(form, "MaximumAmountText", person.sumInsured, font);
+        this.setExport(form, "MaximumAmount", "True");
       }
       const phone = person.phone;
       if(phone){
@@ -365,10 +367,13 @@
       });
     },
     applyPurchaseType(form, purchaseType){
+      // PDF radios: /1 = כן, /2 = לא (לא True/False).
       if(purchaseType === "apartment"){
-        this.setExport(form, "ApartmentPurchase", "True");
+        this.setExport(form, "ApartmentPurchase", "1");
+        this.setExport(form, "LandPurchase", "2");
       }else if(purchaseType === "land"){
-        this.setExport(form, "LandPurchase", "True");
+        this.setExport(form, "LandPurchase", "1");
+        this.setExport(form, "ApartmentPurchase", "2");
       }
     },
     payerPersonOf(draft){

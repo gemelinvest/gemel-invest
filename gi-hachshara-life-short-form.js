@@ -20,7 +20,7 @@
     TEMPLATE_BASE: "./forms/hachshara-life-short/",
     TEMPLATE_FILE: "hachshara-life-short-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-hach-health-v2",
+    VERSION: "20260825-hach-fill-audit-v1",
     DOC_ID: "doc_hachshara_life_short_form",
     DOC_TYPE: "hachshara_life_short_form",
 
