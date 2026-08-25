@@ -10645,6 +10645,8 @@
 
     /* GI-PERF 2026-08-25: מנהל צוות עם רוסטר גדול (מתחת לסף 5k) —
        אותן הגנות סשן כמו Large Session, בלי working-set של אדמין. */
+    _teamManagerLightLoginHint: false,
+
     isTeamManagerLightSession(){
       if(!TEAM_MANAGER_LIGHT_SESSION_ENABLED) return false;
       try {
@@ -10653,6 +10655,7 @@
         return false;
       }
       if(this.isLargeCustomersSession()) return false;
+      if(this._teamManagerLightLoginHint) return true;
       const n = Array.isArray(State.data?.customers) ? State.data.customers.length : 0;
       if(n >= TEAM_MANAGER_LIGHT_SESSION_THRESHOLD) return true;
       try {
@@ -10972,6 +10975,14 @@
 
         let payload = entry.payload;
 
+        // GI-PERF 2026-08-25: מנהל צוות עם מטמון מפוצל גדול — לא לטעון מנות.
+        // הקריאה עצמה (עשרות/מאות get) מקפיאה את הדף עוד לפני paint.
+        if(this.shouldSkipTeamManagerFatIdbLoad(payload)){
+          try { console.warn("TEAM_MANAGER_SKIP_FAT_IDB_READ"); } catch(_e) {}
+          try { void this.purgeCurrentUserFullIdbCache(); } catch(_e) {}
+          return null;
+        }
+
         // רשומה מפוצלת (GI-PERF שלב ט'): מחברים בחזרה את מנות הלקוחות.
         if(payload && payload[GI_FULL_IDB_SKELETON_FLAG] === true){
           const shardCount = Math.max(0, Number(payload._giShardCount) || 0);
@@ -11046,6 +11057,62 @@
       } catch(_e) {
         return false;
       }
+    },
+
+    /* GI-PERF 2026-08-25: מוחק את מטמון ה-IDB השמן של המשתמש הנוכחי.
+       אצל ואדים (~2.1K תיקים מפוצלים ל־~140 מנות) הקריאה עצמה הקפיאה את הדף
+       עוד לפני דילוג הצביעה. */
+    async purgeCurrentUserFullIdbCache(){
+      const userKey = this.fullCacheUserKey();
+      if(!userKey) return false;
+      try {
+        const db = await this._openFullIdb();
+        if(!db) return false;
+        await new Promise((resolve) => {
+          try {
+            const tx = db.transaction(GI_FULL_IDB_STORE, "readwrite");
+            const store = tx.objectStore(GI_FULL_IDB_STORE);
+            const req = store.getAllKeys();
+            req.onsuccess = () => {
+              try {
+                (req.result || []).forEach((k) => {
+                  if(Storage._idbKeyBelongsToUser(k, userKey)) store.delete(k);
+                });
+              } catch(_e) {}
+            };
+            req.onerror = () => {};
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => resolve(false);
+            tx.onabort = () => resolve(false);
+          } catch(_e) {
+            resolve(false);
+          }
+        });
+        try {
+          if(this._memoryCache?.userKey === userKey) this._memoryCache = null;
+        } catch(_e) {}
+        try { console.warn("TEAM_MANAGER_PURGE_FAT_IDB:", userKey); } catch(_e) {}
+        return true;
+      } catch(_e) {
+        return false;
+      }
+    },
+
+    shouldSkipTeamManagerFatIdbLoad(entryPayload){
+      try {
+        if(!Auth?.isTeamManager?.()) return false;
+      } catch(_e) {
+        return false;
+      }
+      const p = entryPayload && typeof entryPayload === "object" ? entryPayload : null;
+      if(!p) return true;
+      if(p[GI_FULL_IDB_SKELETON_FLAG] === true){
+        const shardCount = Math.max(0, Number(p._giShardCount) || 0);
+        const estimated = shardCount * GI_FULL_IDB_SHARD_SIZE;
+        return estimated >= TEAM_MANAGER_FAT_CACHE_PAINT_CAP;
+      }
+      const n = Array.isArray(p.customers) ? p.customers.length : 0;
+      return n >= TEAM_MANAGER_FAT_CACHE_PAINT_CAP;
     },
 
     buildLightCachePayload(st){
@@ -48382,6 +48449,7 @@ const ClalRiskLifePdf = {
       }
       this._loginReady = Array.isArray(State.data?.agents) && State.data.agents.length > 0;
       try { Storage._memoryCache = null; } catch(_e) {}
+      try { Storage._teamManagerLightLoginHint = false; } catch(_e) {}
       try { sessionStorage.removeItem(GI_SERVER_CACHE_KEY); } catch(_e) {}
       try { DashboardUI.invalidateMetricsCache?.({ force: true, userSwitch: true }); } catch(_e) {}
       if(reason){
@@ -49102,6 +49170,18 @@ const ClalRiskLifePdf = {
         ? { skipNavigation: true, skipLoginSideEffects: true, skipNormalize: true }
         : {};
 
+      // GI-PERF 2026-08-25: מנהל צוות — אל תטען/תאמץ IDB שמן בכניסה.
+      // גם כש-paint מדלג, עצם קריאת המנות הקפיאה את ואדים מיד אחרי לוגין.
+      let skipFatFullCache = false;
+      try {
+        if(Auth?.isTeamManager?.()){
+          skipFatFullCache = true;
+          this._teamManagerLightLoginHint = true;
+          try { void Storage.purgeCurrentUserFullIdbCache(); } catch(_e2) {}
+          try { console.warn("TEAM_MANAGER_LOGIN_SKIP_FAT_CACHE"); } catch(_e2) {}
+        }
+      } catch(_e) {}
+
       const paintFromLocalCache = (payload, label) => {
         if(!stillSameSession()) return false;
         if(!payload || typeof payload !== "object") return false;
@@ -49153,12 +49233,14 @@ const ClalRiskLifePdf = {
 
       // PERF: paint instantly from memory/IDB full cache, then sync quietly from server
       let paintedFromFullCache = false;
-      try {
-        const memPayload = Storage.loadMemoryCacheForCurrentUser(GI_FULL_IDB_TTL_MS);
-        if(memPayload){
-          paintedFromFullCache = paintFromLocalCache(memPayload, "נטען ממטמון · מסנכרן מהשרת…");
-        }
-      } catch(_e) {}
+      if(!skipFatFullCache){
+        try {
+          const memPayload = Storage.loadMemoryCacheForCurrentUser(GI_FULL_IDB_TTL_MS);
+          if(memPayload){
+            paintedFromFullCache = paintFromLocalCache(memPayload, "נטען ממטמון · מסנכרן מהשרת…");
+          }
+        } catch(_e) {}
+      }
       // GI-PERF 2026-07-31 (שלב א'): אם קריאת ה-IDB חורגת מהתקציב, לא מוותרים עליה —
       // ממשיכים לחכות לה ברקע, וצובעים כשהיא מגיעה כל עוד השרת עוד לא ענה.
       // קודם: ה-race החזיר null, הצביעה בוטלה, והמשתמש נשאר מול מסך ריק עד סוף הטעינה המלאה.
@@ -49174,7 +49256,7 @@ const ClalRiskLifePdf = {
         } catch(_e) {}
         return true;
       };
-      if(!paintedFromFullCache){
+      if(!skipFatFullCache && !paintedFromFullCache){
         try {
           const idbPromise = Storage.loadFullIdbCache(GI_FULL_IDB_TTL_MS);
           const idbEntry = await Promise.race([
@@ -49183,7 +49265,8 @@ const ClalRiskLifePdf = {
           ]);
           if(idbEntry?.payload){
             paintedFromFullCache = paintFromLocalCache(idbEntry.payload, "נטען ממטמון · מסנכרן מהשרת…");
-            adoptIdbEntry(idbEntry);
+            // רק אם באמת צבענו — אחרת אימוץ לזיכרון משאיר 20MB+ ומקפיא בהמשך.
+            if(paintedFromFullCache) adoptIdbEntry(idbEntry);
           } else {
             // חריגה מהתקציב — צביעה מאוחרת, רק אם השרת טרם החזיר תשובה.
             idbPromise.then((late) => {
@@ -49191,7 +49274,7 @@ const ClalRiskLifePdf = {
               if(serverSyncApplied || paintedFromFullCache) return;
               if(!late?.payload) return;
               paintedFromFullCache = paintFromLocalCache(late.payload, "נטען ממטמון · מסנכרן מהשרת…");
-              adoptIdbEntry(late);
+              if(paintedFromFullCache) adoptIdbEntry(late);
             }).catch(() => {});
           }
         } catch(_e) {}

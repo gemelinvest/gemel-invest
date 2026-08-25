@@ -46,6 +46,11 @@ assert(app.includes("largeSession || teamMgrLight"), "LiveRefresh מתייחס �
 assert(app.includes("Auth?.isTeamManager?.() && Storage?.isTeamManagerLightSession?.()"), "פטור force dashboard pull");
 assert(app.includes("payloadHasPolicyOrInsuredContent?.(rec?.payload)"), "MyTeam מדלג על payloads ריקים");
 assert(/startProposals\(\)\{[\s\S]*?isHeavyRosterSession/.test(app), "proposals realtime נחסם ב-heavy roster");
+assert(app.includes("TEAM_MANAGER_LOGIN_SKIP_FAT_CACHE"), "דילוג IDB שמן בכניסה");
+assert(app.includes("purgeCurrentUserFullIdbCache"), "מחיקת IDB שמן למשתמש נוכחי");
+assert(app.includes("shouldSkipTeamManagerFatIdbLoad"), "בדיקת מטמון מפוצל לפני טעינת מנות");
+assert(app.includes("_teamManagerLightLoginHint"), "hint light מיד בלוגין");
+assert(app.includes("if(paintedFromFullCache) adoptIdbEntry"), "לא מאמצים IDB כשצביעה נדחתה");
 
 console.log("\nתיקון 23.08 נשמר");
 assert(app.includes("TEAM_MANAGER_SKIP_MASS_HYDRATION"), "דילוג hydrate מסיבי נשאר");
@@ -59,8 +64,8 @@ assert(app.includes("LIGHT_INITIAL_LOAD_ENABLED = true"), "טעינה רזה נ�
 assert(!/LARGE_SESSION_CUSTOMER_THRESHOLD\s*=\s*2000/.test(app), "לא הורדנו סף ל-2000");
 
 console.log("\ncache");
-assert(indexHtml.includes("app.js?v=20260825-team-mgr-light-v2"), "cache bust app.js");
-assert(sw.includes("20260825-team-mgr-light-v2"), "service-worker version");
+assert(indexHtml.includes("app.js?v=20260825-team-mgr-light-v3"), "cache bust app.js");
+assert(sw.includes("20260825-team-mgr-light-v3"), "service-worker version");
 
 console.log("\nלוגיקה טהורה — LRU");
 function trimLru(list, cap, protectedIds){
