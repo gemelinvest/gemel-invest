@@ -1546,3 +1546,33 @@
   width: 100% !important;
   min-width: 0 !important;
 }
+
+/* GI-WIZARD-TYPE 2026-08-25 — #lcWizard only (health/risks + elementary). Not agent-appointment. */
+#lcWizard .input:not(#\9):not(#\9):not(.lcElementaryPlateInput),
+#lcWizard input[type="text"]:not(#\9):not(#\9):not(.lcElementaryPlateInput),
+#lcWizard select:not(#\9):not(#\9),
+#lcWizard textarea:not(#\9):not(#\9){
+  font-size: 15px !important;
+}
+#lcWizard .label:not(#\9):not(#\9){ font-size: 15px !important; }
+#lcWizard .help:not(#\9):not(#\9){ font-size: 16px !important; }
+#lcWizard .lcWizard__title:not(#\9):not(#\9){ font-size: 24px !important; }
+#lcWizard .lcWizard__kicker:not(#\9):not(#\9){ font-size: 14px !important; }
+#lcWizard .lcStep:not(#\9):not(#\9){ font-size: 13px !important; }
+#lcWizard .lcTab:not(#\9):not(#\9){ font-size: 16px !important; }
+#lcWizard .lcWTitle:not(#\9):not(#\9){ font-size: 17px !important; }
+#lcWizard .lcHmoDdWrap .lcNpCoDd__triggerLabel:not(#\9):not(#\9),
+#lcWizard .lcHmoDdWrap .lcNpCoDd__itemLabel:not(#\9):not(#\9){ font-size: 16px !important; }
+#lcWizard .lcWizard__foot .btn:not(#\9):not(#\9){ font-size: 15px !important; }
+#lcWizard .lcElementaryChooser__kicker:not(#\9):not(#\9){ font-size: 13px !important; }
+#lcWizard .lcElementaryChooser__title:not(#\9):not(#\9),
+#lcWizard .lcElementaryIntro__title:not(#\9):not(#\9){ font-size: 26px !important; }
+#lcWizard .lcElementaryChooser__text:not(#\9):not(#\9),
+#lcWizard .lcElementaryIntro__text:not(#\9):not(#\9){ font-size: 16px !important; }
+#lcWizard .lcElementaryCard__title:not(#\9):not(#\9){ font-size: 24px !important; }
+#lcWizard .lcElementaryAgeInline__label:not(#\9):not(#\9){ font-size: 13px !important; }
+#lcWizard .lcElementaryFieldLegend:not(#\9):not(#\9){ font-size: 14px !important; }
+#lcWizard .lcElementaryPolicyRow__top:not(#\9):not(#\9){ font-size: 15px !important; }
+#lcWizard .lcStep1QuestionCard__body .label:not(#\9):not(#\9){ font-size: 14px !important; }
+#lcWizard .lcStep1QuestionCard__sub:not(#\9):not(#\9){ font-size: 16px !important; }
+#lcWizard .lcStep1InfoCard__label:not(#\9):not(#\9){ font-size: 13px !important; }

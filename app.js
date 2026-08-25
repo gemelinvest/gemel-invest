@@ -696,44 +696,14 @@
     return `<div class="lcCompanyLogo lcCompanyLogo--fallback${mod}" aria-hidden="true">${initials}</div>`;
   }
 
-  /** לוגואי קופות חולים — קבצים ב-assets/logos/hmo */
-  const HMO_LOGO_FILES = {
-    "כללית": "clalit_transparent.png",
-    "מכבי": "maccabi_transparent.png",
-    "מאוחדת": "meuhedet_transparent.png",
-    "לאומית": "leumit_transparent.png",
-    "קופה צהלית": "tzahal_transparent.png"
-  };
-
-  function getHmoLogoSrcForClinic(clinic){
-    const file = HMO_LOGO_FILES[safeTrim(clinic)];
-    return file ? `./assets/logos/hmo/${file}` : "";
-  }
-
-  function renderHmoLogoHtmlForClinic(clinic, variant = "dd"){
-    const name = safeTrim(clinic || "");
-    const src = getHmoLogoSrcForClinic(name);
-    const mod = variant === "mini" ? " lcCompanyLogo--mini" : variant === "dd" ? " lcCompanyLogo--dd" : "";
-    if(src){
-      return `<div class="lcCompanyLogo lcCompanyLogo--hmo${mod}" title="${escapeHtml(name)}"><img class="lcCompanyLogo__img" src="${escapeHtml(src)}" alt="${escapeHtml(name || "קופת חולים")}" loading="lazy" /></div>`;
-    }
-    const initials = escapeHtml(name.slice(0, 2) || "•");
-    return `<div class="lcCompanyLogo lcCompanyLogo--fallback lcCompanyLogo--hmo${mod}" aria-hidden="true">${initials}</div>`;
-  }
+  const HMO_CLINICS = ["כללית","מכבי","מאוחדת","לאומית","קופה צהלית"];
 
   function renderHmoClinicDropdownHtml(label, selectedClinic, fieldAttr, fieldPath){
     const selected = safeTrim(selectedClinic || "");
-    const clinics = (typeof Wizard !== "undefined" && Array.isArray(Wizard.clinics)) ? Wizard.clinics : Object.keys(HMO_LOGO_FILES);
-    const triggerLogoHtml = selected
-      ? renderHmoLogoHtmlForClinic(selected, "dd")
-      : `<span class="lcNpCoDd__logoPlaceholder" aria-hidden="true">
-           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" width="18" height="18"><path d="M12 2l7 4v6c0 5-3 8.5-7 10-4-1.5-7-5-7-10V6l7-4z"/></svg>
-         </span>`;
+    const clinics = (typeof Wizard !== "undefined" && Array.isArray(Wizard.clinics)) ? Wizard.clinics : HMO_CLINICS;
     const checkSvg = `<svg class="lcNpCoDd__check" viewBox="0 0 20 20" fill="none" width="16" height="16"><circle cx="10" cy="10" r="10" fill="#2563eb"/><path d="M5.5 10l3 3 5-5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     const dropdownItems = clinics.map((c) => {
-      const logoEl = renderHmoLogoHtmlForClinic(c, "dd");
       return `<button type="button" class="lcNpCoDd__item${selected === c ? " is-selected" : ""}" data-hmo-val="${escapeHtml(c)}">
-        ${logoEl}
         <span class="lcNpCoDd__itemLabel">${escapeHtml(c)}</span>
         ${selected === c ? checkSvg : ""}
       </button>`;
@@ -741,7 +711,6 @@
     return `<div class="field lcNpCoDdWrap lcHmoDdWrap" id="lcHmoDdWrap">
       <label class="label">${escapeHtml(label)}</label>
       <button type="button" class="lcNpCoDd__trigger${selected ? " has-value" : ""}" id="lcHmoDdTrigger" aria-haspopup="listbox" aria-expanded="false">
-        ${triggerLogoHtml}
         <span class="lcNpCoDd__triggerLabel">${selected ? escapeHtml(selected) : "בחר…"}</span>
         <svg class="lcNpCoDd__arrow" viewBox="0 0 20 20" fill="none" width="16" height="16"><path d="M5 7.5l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
@@ -37313,7 +37282,7 @@ UsersGateUI.init();
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
     "./gi-customers-import.css?v=20260813-cq-v1",
-    "./theme-unify-flat.css?v=20260825-cust-search-border-v1"
+    "./theme-unify-flat.css?v=20260825-hmo-text-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
     if(document.documentElement.dataset.giSecondaryCss === "1") return;
@@ -38647,7 +38616,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260825-health-decl-cleanup-v1";
+  const GI_WIZARD_JS_VERSION = "20260825-hmo-text-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -38902,7 +38871,6 @@ UsersGateUI.init();
           getRequestedCoverageFromPayload,
           resolveCompanyLogoKey,
           getCompanyLogoSrcForCompany,
-          renderHmoLogoHtmlForClinic,
           renderHmoClinicDropdownHtml,
           bindHmoClinicDropdown,
           stampHealthRisksWaitingMirror,
@@ -59089,7 +59057,6 @@ const CampaignLeadsStore = {
         <div class="lcLeadFloatCard" data-lead-id="${escapeHtml(String(lead.id || ""))}">
           <div class="lcLeadFloatCard__header">
             <div class="lcLeadFloatCard__headerMain">
-              <div class="lcLeadFloatCard__kicker">תיעוד ליד</div>
               <h3 class="lcLeadFloatCard__title">${escapeHtml(lead.customerName || "ליד")}</h3>
               <span class="lcTrackBadge lcTrackBadge--${statusTone} lcLeadFloatCard__badge">${escapeHtml(statusLabel)}</span>
             </div>
@@ -59110,8 +59077,8 @@ const CampaignLeadsStore = {
               ${row("עדכון אחרון", this._formatDate(lead.lastModifiedAt || lead.updatedAt), lead.lastModifiedAt || lead.updatedAt)}
             </div>
             <div class="lcLeadDetails__descSection">
-              <div class="lcLeadDetails__descLabel">תיאור מלא</div>
-              <div class="lcLeadDetails__descBox lcMyLeadCopy" data-copy-text="${escapeHtml(desc === "—" ? "" : desc)}" data-copy-label="תיאור מלא" title="דאבל-קליק להעתקה">${escapeHtml(desc).replace(/\n/g, "<br/>")}</div>
+              <div class="lcLeadDetails__descLabel">פניית הלקוח:</div>
+              <div class="lcLeadDetails__descBox lcMyLeadCopy" data-copy-text="${escapeHtml(desc === "—" ? "" : desc)}" data-copy-label="פניית הלקוח" title="דאבל-קליק להעתקה">${escapeHtml(desc).replace(/\n/g, "<br/>")}</div>
             </div>
             ${safeTrim(lead.irrelevantNote) ? `
             <div class="lcLeadDetails__descSection">
@@ -59143,30 +59110,29 @@ const CampaignLeadsStore = {
         html,body{margin:0;padding:0;background:#EEF2F6;color:var(--gi-text);font-family:Heebo,Arial,Helvetica,sans-serif}
         body{padding:14px;min-height:100vh}
         .lcLeadFloatCard{background:#fff;border:1px solid var(--gi-border);border-radius:16px;box-shadow:0 8px 28px rgba(15,23,42,.08);overflow:hidden;max-width:520px;margin:0 auto;display:flex;flex-direction:column;min-height:calc(100vh - 28px)}
-        .lcLeadFloatCard__header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 18px;border-bottom:1px solid var(--gi-border);background:#fff}
+        .lcLeadFloatCard__header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:18px 18px;border-bottom:1px solid rgba(11,31,74,.18);background:linear-gradient(180deg,#d8e8ff,rgba(210,228,255,.70))}
         .lcLeadFloatCard__headerMain{display:flex;flex-direction:column;gap:4px;min-width:0}
-        .lcLeadFloatCard__kicker{font-size:11px;font-weight:700;color:var(--gi-muted);letter-spacing:.04em}
-        .lcLeadFloatCard__title{margin:0;font-size:20px;font-weight:800;line-height:1.25;color:var(--gi-text)}
+        .lcLeadFloatCard__title{margin:0;font-size:22px;font-weight:800;line-height:1.25;color:#0b1f4a}
         .lcLeadFloatCard__badge{margin-top:4px;display:inline-block;align-self:flex-start}
-        .lcLeadFloatCard__close{width:32px;height:32px;border-radius:8px;border:1px solid var(--gi-border);background:#fff;color:var(--gi-muted);cursor:pointer;font-size:14px;line-height:1;flex-shrink:0}
+        .lcLeadFloatCard__close{width:32px;height:32px;border-radius:8px;border:1px solid rgba(11,31,74,.22);background:rgba(255,255,255,.78);color:#334155;cursor:pointer;font-size:14px;line-height:1;flex-shrink:0}
         .lcLeadFloatCard__close:hover{background:var(--gi-bg);color:var(--gi-text)}
         .lcLeadFloatCard__body{padding:16px 18px 8px;flex:1;overflow:auto}
         .lcLeadDetails__grid{display:grid;grid-template-columns:1fr 1fr;gap:0;margin-bottom:16px;border:1px solid var(--gi-border);border-radius:12px;overflow:hidden;background:#fff}
         .lcLeadDetails__row{display:flex;flex-direction:column;gap:3px;padding:10px 12px;border-bottom:1px solid var(--gi-border);border-inline-end:1px solid var(--gi-border);background:#fff}
         .lcLeadDetails__row:nth-child(2n){border-inline-end:none}
-        .lcLeadDetails__label{font-size:11px;font-weight:700;color:var(--gi-muted)}
-        .lcLeadDetails__value{font-size:14px;font-weight:600;color:var(--gi-text);word-break:break-word}
+        .lcLeadDetails__label{font-size:13px;font-weight:700;color:var(--gi-muted)}
+        .lcLeadDetails__value{font-size:16px;font-weight:600;color:var(--gi-text);word-break:break-word}
         .lcMyLeadCopy{cursor:copy}
         .lcMyLeadCopy:hover{background:rgba(37,99,235,.04)}
         .lcLeadDetails__descSection{margin-bottom:14px}
-        .lcLeadDetails__descLabel{font-size:12px;font-weight:700;color:var(--gi-text);margin-bottom:6px}
+        .lcLeadDetails__descLabel{font-size:14px;font-weight:700;color:var(--gi-text);margin-bottom:6px}
         .lcLeadDetails__descLabel--warn{color:#B91C1C}
         .lcLeadDetails__descLabel--success{color:#166534}
-        .lcLeadDetails__descBox{padding:12px 14px;border-radius:10px;background:var(--gi-bg);border:1px solid var(--gi-border);font-size:14px;line-height:1.7;white-space:pre-wrap;word-break:break-word;min-height:48px;max-height:220px;overflow:auto}
+        .lcLeadDetails__descBox{padding:12px 14px;border-radius:10px;background:var(--gi-bg);border:1px solid var(--gi-border);font-size:16px;line-height:1.7;white-space:pre-wrap;word-break:break-word;min-height:48px;max-height:220px;overflow:auto}
         .lcLeadDetails__descBox--warn{background:#FEF2F2;border-color:#FECACA}
         .lcLeadDetails__descBox--success{background:#ECFDF5;border-color:#A7F3D0}
         .lcLeadFloatCard__footer{display:flex;justify-content:flex-start;gap:8px;padding:14px 18px;border-top:1px solid var(--gi-border);background:#fff}
-        .lcLeadFloatCard__btn{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:0 14px;border-radius:8px;border:1px solid var(--gi-border);background:#fff;color:var(--gi-text);font:inherit;font-size:13px;font-weight:700;text-decoration:none;cursor:pointer}
+        .lcLeadFloatCard__btn{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:0 16px;border-radius:8px;border:1px solid var(--gi-border);background:#fff;color:var(--gi-text);font:inherit;font-size:15px;font-weight:700;text-decoration:none;cursor:pointer}
         .lcLeadFloatCard__btn:hover{background:var(--gi-bg)}
         .lcLeadFloatCard__btn--primary{background:var(--gi-primary);border-color:var(--gi-primary);color:#fff}
         .lcLeadFloatCard__btn--primary:hover{background:#1D4ED8;border-color:#1D4ED8;color:#fff}

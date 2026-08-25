@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260825-health-decl-cleanup-v1";
+  const GI_WIZARD_BUILD = "20260825-hmo-text-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -139,7 +139,6 @@
   const getRequestedCoverageFromPayload = host.getRequestedCoverageFromPayload;
   const resolveCompanyLogoKey = host.resolveCompanyLogoKey;
   const getCompanyLogoSrcForCompany = host.getCompanyLogoSrcForCompany;
-  const renderHmoLogoHtmlForClinic = host.renderHmoLogoHtmlForClinic;
   const renderHmoClinicDropdownHtml = host.renderHmoClinicDropdownHtml;
   const bindHmoClinicDropdown = host.bindHmoClinicDropdown;
   const stampHealthRisksWaitingMirror = host.stampHealthRisksWaitingMirror;
@@ -13387,10 +13386,6 @@ if(path === "birthDate"){
 
     renderCompanyLogoHtml(company, variant = "card"){
       return renderCompanyLogoHtmlForCompany(company, variant);
-    },
-
-    renderHmoLogoHtml(clinic, variant = "dd"){
-      return renderHmoLogoHtmlForClinic(clinic, variant);
     },
 
     fieldClinicSelect(label, selectedClinic, fieldAttr = "data-bind", fieldPath = "clinic"){
