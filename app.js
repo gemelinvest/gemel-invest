@@ -20110,6 +20110,144 @@ UsersGateUI.init();
       return this.collectElementaryProducts(rec).length > 0;
     },
 
+    /** מקור נתוני רכב/נהגים מהתיק (או מהפניה) — לצפייה בנתוני פוליסה. */
+    resolveElementaryInsuredData(rec){
+      const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+      const candidates = [];
+      const push = (d) => {
+        if(d && typeof d === "object") candidates.push(d);
+      };
+      const ins0 = Array.isArray(payload.insureds) ? payload.insureds[0] : null;
+      push(ins0?.data);
+      push(payload.primary);
+      push(payload.operational?.primary);
+      (Array.isArray(payload.operational?.insureds) ? payload.operational.insureds : []).forEach((ins) => push(ins?.data));
+
+      const scoreData = (d) => {
+        let s = 0;
+        if(Array.isArray(d.namedDrivers) && d.namedDrivers.length) s += 10;
+        if(safeTrim(d.insuranceEndDate)) s += 5;
+        if(safeTrim(d.driverMinAge)) s += 5;
+        if(safeTrim(d.driverPolicyMode) || safeTrim(d.driverAnyEnabled)) s += 2;
+        if(Array.isArray(d.elementaryProductPricing) && d.elementaryProductPricing.length) s += 3;
+        if(safeTrim(d.insuranceStartDate)) s += 1;
+        return s;
+      };
+
+      let best = null;
+      let bestScore = -1;
+      candidates.forEach((d) => {
+        const s = scoreData(d);
+        if(s > bestScore){
+          bestScore = s;
+          best = d;
+        }
+      });
+
+      if(bestScore < 5){
+        try {
+          const ref = (typeof pickBestElementaryReferralForCustomerFile === "function"
+            ? pickBestElementaryReferralForCustomerFile(
+              findElementaryReferralsForCustomerOrIdNumber(rec?.id, rec?.idNumber)
+            )
+            : null)
+            || (typeof findElementaryReferralByCustomerId === "function" ? findElementaryReferralByCustomerId(rec?.id) : null)
+            || (typeof findPendingElementaryReferralByIdNumber === "function" ? findPendingElementaryReferralByIdNumber(rec?.idNumber) : null);
+          const refPayload = ref?.payload && typeof ref.payload === "object" ? ref.payload : {};
+          const refIns = Array.isArray(refPayload.insureds) ? refPayload.insureds[0] : null;
+          [refIns?.data, refPayload.primary].forEach((d) => {
+            if(!d || typeof d !== "object") return;
+            const s = scoreData(d);
+            if(s > bestScore){
+              bestScore = s;
+              best = d;
+            }
+          });
+        } catch(_e) {}
+      }
+      return best && typeof best === "object" ? best : {};
+    },
+
+    getElementaryDriverAgeValidityLabel(data){
+      const d = data && typeof data === "object" ? data : {};
+      let mode = "";
+      try {
+        if(typeof Wizard !== "undefined" && typeof Wizard.getElementaryDriverPolicyMode === "function"){
+          mode = Wizard.getElementaryDriverPolicyMode(d) || "";
+        }
+      } catch(_e) {}
+      if(!mode){
+        if(Array.isArray(d.namedDrivers) && d.namedDrivers.length) mode = "named";
+        else if(safeTrim(d.driverMinAge) || d.driverAnyEnabled) mode = "any";
+      }
+      if(mode === "any"){
+        const age = safeTrim(d.driverMinAge) || "—";
+        const exp = safeTrim(d.driverMinExperienceYears);
+        return exp
+          ? `כל נהג מעל גיל ${age} · ותק ${exp} שנים`
+          : `מעל גיל ${age}`;
+      }
+      if(mode === "named"){
+        return "נהגים נקובים בלבד";
+      }
+      if(safeTrim(d.driverMinAge)){
+        return `מעל גיל ${safeTrim(d.driverMinAge)}`;
+      }
+      return "—";
+    },
+
+    getElementaryNamedDriverNames(data){
+      const named = Array.isArray(data?.namedDrivers) ? data.namedDrivers : [];
+      return named.map((drv, idx) => {
+        const nm = [safeTrim(drv?.firstName), safeTrim(drv?.lastName)].filter(Boolean).join(" ");
+        return nm || (`נהג ${idx + 1}`);
+      });
+    },
+
+    getElementaryProductCompanyRows(rec, data){
+      const products = this.collectElementaryProducts(rec);
+      const fromPolicies = products.map((p) => ({
+        id: safeTrim(p?.id),
+        label: safeTrim(p?.type) || safeTrim(p?.label) || "מוצר",
+        company: safeTrim(p?.company) || "—"
+      }));
+      const pricing = Array.isArray(data?.elementaryProductPricing) ? data.elementaryProductPricing : [];
+      if(pricing.length){
+        return pricing.map((row) => {
+          const key = safeTrim(row?.productKey);
+          const match = fromPolicies.find((p) => {
+            const pid = safeTrim(p.id);
+            return pid === (`elementary_${key}`) || pid === key;
+          });
+          return {
+            id: match?.id || (key ? `elementary_${key}` : ""),
+            label: safeTrim(row?.label) || key || match?.label || "מוצר",
+            company: safeTrim(row?.company) || safeTrim(match?.company) || "—"
+          };
+        });
+      }
+      return fromPolicies;
+    },
+
+    buildElementaryPolicyDetailsModel(rec, policy){
+      const data = this.resolveElementaryInsuredData(rec);
+      const driverNames = this.getElementaryNamedDriverNames(data);
+      const companyRows = this.getElementaryProductCompanyRows(rec, data);
+      return {
+        data,
+        ageLabel: this.getElementaryDriverAgeValidityLabel(data),
+        endDate: safeTrim(data.insuranceEndDate) || "—",
+        startDate: safeTrim(data.insuranceStartDate) || safeTrim(policy?.startDate) || "",
+        driverNames,
+        driversText: driverNames.length ? driverNames.join(" · ") : "—",
+        companyRows,
+        currentProduct: safeTrim(policy?.type) || safeTrim(policy?.label) || "מוצר אלמנטרי",
+        currentCompany: safeTrim(policy?.company) || "—",
+        plate: safeTrim(policy?.licensePlate) || safeTrim(data.licensePlate) || "",
+        vehicleDesc: safeTrim(policy?.vehicleDesc) || ""
+      };
+    },
+
     customerNeedsHealthPoliciesRecovery(rec){
       if(!rec?.id) return false;
       const policies = this.collectPolicies(rec);
@@ -20771,7 +20909,7 @@ UsersGateUI.init();
       ].filter(Boolean).slice(0, 3);
       const policyFiles = Array.isArray(policy.policyFiles) ? policy.policyFiles : [];
       const menuActions = [
-        `<button class="customerPolicyRow__menuItem" type="button" data-policy-open="${escapeHtml(policy.id)}">${isElementary ? 'פרטי מוצר' : 'פרטי פוליסה'}</button>`
+        `<button class="customerPolicyRow__menuItem" type="button" data-elem-policy-details="${escapeHtml(policy.id)}" data-policy-open="${escapeHtml(policy.id)}">${isElementary ? 'הצג נתוני פוליסה' : 'פרטי פוליסה'}</button>`
       ];
       if(isElementary && policyFiles.length){
         policyFiles.forEach((file, fIdx) => {
@@ -20780,6 +20918,9 @@ UsersGateUI.init();
           menuActions.push(`<button class="customerPolicyRow__menuItem" type="button" data-policy-download="${escapeHtml(policy.id)}" data-policy-file-idx="${fIdx}">${dlLabel}</button>`);
         });
       }
+      const detailsBtnHtml = isElementary
+        ? `<button class="customerPolicyRow__detailsBtn" type="button" data-elem-policy-details="${escapeHtml(policy.id)}" title="הצג נתוני פוליסה">הצג נתוני פוליסה</button>`
+        : '';
       const downloadBtnHtml = (isElementary && policyFiles.length)
         ? `<button class="customerPolicyRow__downloadBtn" type="button" data-policy-download="${escapeHtml(policy.id)}" data-policy-file-idx="0" title="הורד העתק פוליסה">הורד העתק פוליסה</button>`
         : '';
@@ -20814,6 +20955,7 @@ UsersGateUI.init();
           <div class="customerPolicyRow__numbers">
             ${priceNumbersHtml}
             <div class="customerPolicyRow__actions">
+              ${detailsBtnHtml}
               ${downloadBtnHtml}
               <button class="customerPolicyRow__menuBtn" type="button" aria-label="פעולות" aria-haspopup="menu" aria-expanded="false" data-policy-menu="${escapeHtml(policy.id)}"><span class="customerPolicyRow__menuIcon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg></span></button>
               <div class="customerPolicyRow__menu" role="menu">
@@ -22587,7 +22729,7 @@ UsersGateUI.init();
       const startDate = safeTrim(policy.startDate);
       const policyFiles = Array.isArray(policy.policyFiles) ? policy.policyFiles : [];
       const menuActions = [
-        `<button class="cfFile__menuItem" type="button" data-policy-open="${escapeHtml(policy.id)}">${isElementary ? 'פרטי מוצר' : 'פרטי פוליסה'}</button>`
+        `<button class="cfFile__menuItem" type="button" data-elem-policy-details="${escapeHtml(policy.id)}" data-policy-open="${escapeHtml(policy.id)}">${isElementary ? 'הצג נתוני פוליסה' : 'פרטי פוליסה'}</button>`
       ];
       if(isElementary && policyFiles.length){
         policyFiles.forEach((file, fIdx) => {
@@ -22596,6 +22738,9 @@ UsersGateUI.init();
           menuActions.push(`<button class="cfFile__menuItem" type="button" data-policy-download="${escapeHtml(policy.id)}" data-policy-file-idx="${fIdx}">${dlLabel}</button>`);
         });
       }
+      const detailsBtnHtml = isElementary
+        ? `<button class="cfFile__detailsBtn" type="button" data-elem-policy-details="${escapeHtml(policy.id)}" title="הצג נתוני פוליסה">הצג נתוני פוליסה</button>`
+        : "";
       const companyCls = isElementary ? 'is-elementary' : this.companyClass(policy.company);
       const logoMark = logoHtml
         ? `<div class="cfFile__policyLogoMark">${logoHtml}</div>`
@@ -22614,8 +22759,11 @@ UsersGateUI.init();
         <td><span class="cfFile__premium">${escapeHtml(afterPremium)}</span></td>
         <td><span class="cfFile__statusBadge ${escapeHtml(policy.badgeClass || '')}">${escapeHtml(policy.badgeText || 'חדש')}</span></td>
         <td class="cfFile__menuCell">
-          <button class="cfFile__menuBtn" type="button" aria-label="פעולות" data-policy-menu="${escapeHtml(policy.id)}">⋮</button>
-          <div class="cfFile__menu" role="menu">${menuActions.join('')}</div>
+          <div class="cfFile__menuCellActions">
+            ${detailsBtnHtml}
+            <button class="cfFile__menuBtn" type="button" aria-label="פעולות" data-policy-menu="${escapeHtml(policy.id)}">⋮</button>
+            <div class="cfFile__menu" role="menu">${menuActions.join('')}</div>
+          </div>
         </td>
       </tr>`;
     },
@@ -22739,7 +22887,16 @@ UsersGateUI.init();
         on(btn, 'click', (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
-          const id = btn.getAttribute('data-policy-open');
+          const id = btn.getAttribute('data-policy-open') || btn.getAttribute('data-elem-policy-details');
+          this.openDisplayPolicy(rec, policies, id, btn);
+        });
+      });
+      root.querySelectorAll('[data-elem-policy-details]').forEach(btn => {
+        if(btn.hasAttribute('data-policy-open')) return;
+        on(btn, 'click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const id = btn.getAttribute('data-elem-policy-details');
           this.openDisplayPolicy(rec, policies, id, btn);
         });
       });
@@ -22999,7 +23156,16 @@ UsersGateUI.init();
         on(btn, 'click', (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
-          const id = btn.getAttribute('data-policy-open');
+          const id = btn.getAttribute('data-policy-open') || btn.getAttribute('data-elem-policy-details');
+          this.openDisplayPolicy(rec, policies, id, btn);
+        });
+      });
+      root.querySelectorAll('[data-elem-policy-details]').forEach(btn => {
+        if(btn.hasAttribute('data-policy-open')) return;
+        on(btn, 'click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const id = btn.getAttribute('data-elem-policy-details');
           this.openDisplayPolicy(rec, policies, id, btn);
         });
       });
@@ -23869,6 +24035,11 @@ UsersGateUI.init();
       if(!this.policyModal.wrap || !this.policyModal.body) return;
       this._openPolicyId = safeTrim(policy?.id || "");
       this.policyModal.wrap.dataset.policyId = this._openPolicyId;
+      const isElementary = policy?.origin === "elementary" || policy?.domain === "elementary";
+      if(isElementary){
+        this.renderElementaryPolicyDetailsModal(rec, policy);
+        return;
+      }
       if(this.policyModal.title){
         this.policyModal.title.textContent = `${policy.company || "חברה"} · ${policy.type || "פוליסה"}`;
       }
@@ -23898,6 +24069,57 @@ UsersGateUI.init();
           <div class="customerPolicyModal__heroSub">${escapeHtml(rec.fullName || "לקוח")} · ${escapeHtml(policy.insuredLabel || "מבוטח")}</div>
         </div>
         <div class="customerPolicyModal__grid">${detailRows}</div>
+      `;
+      this.policyModal.wrap.classList.add("is-open");
+      this.policyModal.wrap.setAttribute("aria-hidden", "false");
+    },
+
+    renderElementaryPolicyDetailsModal(rec, policy){
+      const model = this.buildElementaryPolicyDetailsModel(rec, policy);
+      if(this.policyModal.title){
+        this.policyModal.title.textContent = `נתוני פוליסה · ${model.currentProduct}`;
+      }
+      const companyRowsHtml = model.companyRows.length
+        ? model.companyRows.map((row) => {
+          const isCurrent = safeTrim(row.id) && safeTrim(row.id) === safeTrim(policy?.id);
+          return `<div class="customerPolicyModal__companyRow${isCurrent ? " is-current" : ""}">
+            <div class="customerPolicyModal__companyProduct">${escapeHtml(row.label)}</div>
+            <div class="customerPolicyModal__companyName">${escapeHtml(row.company || "—")}</div>
+          </div>`;
+        }).join("")
+        : `<div class="customerPolicyModal__emptyHint">לא נמצאו מוצרי רכב עם חברה בתיק.</div>`;
+      const driversHtml = model.driverNames.length
+        ? `<ul class="customerPolicyModal__driversList">${model.driverNames.map((nm) => `<li>${escapeHtml(nm)}</li>`).join("")}</ul>`
+        : `<div class="customerPolicyModal__emptyHint">לא נרשמו נהגים נקובים</div>`;
+      const metaBits = [model.plate ? `רכב ${model.plate}` : "", model.vehicleDesc].filter(Boolean);
+      this.policyModal.body.innerHTML = `
+        <div class="customerPolicyModal__hero is-elementary">
+          <div class="customerPolicyModal__heroTop">
+            <div class="customerPolicyModal__heroBadge ${escapeHtml(policy.badgeClass || "is-elementary")}">${escapeHtml(policy.badgeText || "אלמנטרי")}</div>
+            <div class="customerPolicyModal__heroPremium">${escapeHtml(policy.premiumText || "—")}</div>
+          </div>
+          <div class="customerPolicyModal__heroCompany">${escapeHtml(model.currentCompany)}</div>
+          <div class="customerPolicyModal__heroType">${escapeHtml(model.currentProduct)}</div>
+          <div class="customerPolicyModal__heroSub">${escapeHtml(rec?.fullName || "לקוח")}${metaBits.length ? ` · ${escapeHtml(metaBits.join(" · "))}` : ""}</div>
+        </div>
+        <div class="customerPolicyModal__elemDetails" data-elem-policy-details-panel="1">
+          <div class="customerPolicyModal__row">
+            <div class="customerPolicyModal__k">מאיזה גיל הביטוח תקף</div>
+            <div class="customerPolicyModal__v">${escapeHtml(model.ageLabel)}</div>
+          </div>
+          <div class="customerPolicyModal__row">
+            <div class="customerPolicyModal__k">תאריך סיום ביטוח</div>
+            <div class="customerPolicyModal__v" dir="ltr">${escapeHtml(model.endDate)}</div>
+          </div>
+          <div class="customerPolicyModal__block">
+            <div class="customerPolicyModal__blockTitle">שמות הנהגים המנוקבים</div>
+            ${driversHtml}
+          </div>
+          <div class="customerPolicyModal__block">
+            <div class="customerPolicyModal__blockTitle">חברה לפי מוצר</div>
+            <div class="customerPolicyModal__companyList">${companyRowsHtml}</div>
+          </div>
+        </div>
       `;
       this.policyModal.wrap.classList.add("is-open");
       this.policyModal.wrap.setAttribute("aria-hidden", "false");
@@ -38798,7 +39020,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260825-hmo-text-v1";
+  const GI_WIZARD_JS_VERSION = "20260825-elem-policy-details-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
