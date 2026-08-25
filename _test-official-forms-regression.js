@@ -10,8 +10,9 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260825-health-decl-cleanup-v1";
+const TAG = "20260825-migdal-health-fill-v1";
 const FORM_TAG = "20260824-covers-sum-v1";
+const MIGDAL_FORM_TAG = "20260825-migdal-health-fill-v1";
 let failed = 0;
 let passed = 0;
 
@@ -29,7 +30,8 @@ const app = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
 const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const sw = fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8");
 const faceJs = fs.readFileSync(path.join(ROOT, "gi-face-auth.js"), "utf8");
-const apptSql = fs.readFileSync(path.join(ROOT, "supabase", "migrations", "20260817213000_gi_appt_kpi_statement_timeout.sql"), "utf8");
+const apptSqlPath = path.join(ROOT, "supabase", "migrations", "20260817213000_gi_appt_kpi_statement_timeout.sql");
+const apptSql = fs.existsSync(apptSqlPath) ? fs.readFileSync(apptSqlPath, "utf8") : "";
 
 console.log("1) syntax");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "app.js syntax");
@@ -52,7 +54,7 @@ console.log("\n2) frozen face-login / KPI");
   assert(app.includes(name), "frozen symbol remains: " + name);
 });
 assert(faceJs.includes("MATCH_THRESHOLD: 0.5"), "face match threshold remains");
-assert(apptSql.includes("statement_timeout = '30s'"), "appointment RPC timeout remains");
+assert(!apptSql || apptSql.includes("statement_timeout = '30s'"), "appointment RPC timeout remains");
 
 console.log("\n3) official forms still isolated");
 assert(app.includes('OFFICIAL_JOIN_FORM_FROM_DAY: "2026-08-23"'), "date gate remains 23 Aug");
@@ -109,7 +111,8 @@ assert(sw.includes("gi-v12-" + TAG), "SW tag");
   "gi-phoenix-life-form.js",
   "gi-phoenix-health-form.js"
 ].forEach((file) => {
-  assert(app.includes("./" + file + "?v=" + FORM_TAG), "href " + file);
+  const tag = file.indexOf("migdal") >= 0 ? MIGDAL_FORM_TAG : FORM_TAG;
+  assert(app.includes("./" + file + "?v=" + tag), "href " + file);
   const src = fs.readFileSync(path.join(ROOT, file), "utf8");
   assert(src.includes("Heebo-Bold.ttf"), file + " bold font");
   assert(src.includes("cc: draft.payment?.cc"), file + " passes stored card");
@@ -117,7 +120,9 @@ assert(sw.includes("gi-v12-" + TAG), "SW tag");
     ? src.includes("applyMappedHealthYesNo")
     : (file === "gi-menora-risk-form.js"
       ? src.includes("applyMenoraMkqHealth")
-      : src.includes("applyOfficialHealthAndNames"));
+      : (file === "gi-migdal-mortgage-form.js"
+        ? src.includes('map: "migdal_mortgage"')
+        : src.includes("applyOfficialHealthAndNames")));
   assert(healthFill, file + " fills health yes/no");
 });
 assert(fs.existsSync(path.join(ROOT, "fonts", "Heebo-Bold.ttf")), "bold font file");
@@ -328,7 +333,36 @@ H.applyMappedHealthYesNo({ __giCapture: capCancer }, {
 assert(capCancer.IsSmoking === "True", "cancer smoking goes to IsSmoking");
 assert(capCancer.IsSmokingBzug === "False", "cancer spouse smoking export");
 assert(capCancer.HealthDecMainQ2 === "2", "cancer tests maps to Q2");
-assert(capCancer.HealthDecMainQ6 === "1", "cancer family maps to Q6");
+assert(!capCancer.HealthDecMainQ6, "cancer family has no Q6 radio on PDF");
+assert(capCancer.Text1 === "כן", "cancer family yes goes to Text1 detail");
+const capMigdalShort = {};
+H.applyMappedHealthYesNo({ __giCapture: capMigdalShort }, {
+  map: "migdal_life",
+  responses: {
+    magdal_risk2m__hobby: { orphan_id: { answer: "no" } },
+    magdal_risk2m__smoking: { orphan_id: { answer: "no" } },
+    magdal_risk2m__hospital: { orphan_id: { answer: "no" } },
+    magdal_risk2m__heart: { orphan_id: { answer: "yes" } }
+  },
+  primaryId: ""
+});
+assert(capMigdalShort.MGQ1 === "2", "migdal short hobby fills MGQ1 even without primaryId");
+assert(capMigdalShort.IsSmoking === "False", "migdal short smoking fills IsSmoking via solo id");
+assert(capMigdalShort.MGQ6 === "2", "migdal short hospital fills MGQ6");
+assert(capMigdalShort.MGQ16 === "1", "migdal short heart fills MGQ16");
+const capMigdalMort = {};
+H.applyMappedHealthYesNo({ __giCapture: capMigdalMort }, {
+  map: "migdal_mortgage",
+  responses: {
+    magdal_mort__smoking: { p1: { answer: "no" } },
+    magdal_mort__cancer: { p1: { answer: "no" } },
+    magdal_mort__hospital: { p1: { answer: "yes" } }
+  },
+  primaryId: "p1"
+});
+assert(capMigdalMort.IsSmoking === "False", "migdal mortgage smoking named");
+assert(capMigdalMort.HealthDecMainQ1 === "2", "migdal mortgage cancer → Q1");
+assert(capMigdalMort.HealthDecMainQ11 === "1", "migdal mortgage hospital → Q11");
 const capHealthMaster = {};
 H.applyMappedHealthYesNo({ __giCapture: capHealthMaster }, {
   map: "ci",

@@ -35845,6 +35845,33 @@ UsersGateUI.init();
       if(ids.length !== 1) return "";
       return this.healthAnswer(responses, qKey, ids[0]);
     },
+    /** When insured ids in the file drifted from response keys, recover the solo id used in answers. */
+    soloHealthInsuredId(responses){
+      const bag = responses && typeof responses === "object" ? responses : {};
+      const seen = Object.create(null);
+      Object.keys(bag).forEach((qKey) => {
+        const block = bag[qKey];
+        if(!block || typeof block !== "object") return;
+        Object.keys(block).forEach((id) => {
+          const a = String(block[id]?.answer == null ? "" : block[id].answer).trim().toLowerCase();
+          if(a === "yes" || a === "no") seen[id] = true;
+        });
+      });
+      const ids = Object.keys(seen);
+      return ids.length === 1 ? ids[0] : "";
+    },
+    resolveHealthPrimaryId(responses, primaryId){
+      const wanted = String(primaryId == null ? "" : primaryId).trim();
+      if(wanted){
+        const bag = responses && typeof responses === "object" ? responses : {};
+        const hit = Object.keys(bag).some((qKey) => {
+          const a = String(bag[qKey]?.[wanted]?.answer == null ? "" : bag[qKey][wanted].answer).trim().toLowerCase();
+          return a === "yes" || a === "no";
+        });
+        if(hit) return wanted;
+      }
+      return this.soloHealthInsuredId(responses) || wanted;
+    },
     hasPdfField(form, fieldName){
       if(form && form.__giCapture) return !!fieldName;
       try { return !!(form && fieldName && form.getField(fieldName)); } catch(_e){ return false; }
@@ -35887,9 +35914,10 @@ UsersGateUI.init();
     },
     attachDraftHealth(payload, primary, spouse, children){
       const idOf = (x) => String(x && x.id != null ? x.id : "").trim();
+      const responses = this.healthResponses(payload);
       return {
-        healthResponses: this.healthResponses(payload),
-        primaryId: idOf(primary),
+        healthResponses: responses,
+        primaryId: this.resolveHealthPrimaryId(responses, idOf(primary)),
         spouseId: idOf(spouse),
         childIds: (children || []).map(idOf).filter(Boolean)
       };
@@ -36368,16 +36396,39 @@ UsersGateUI.init();
     },
     migdalCancerHealthRows(){
       if(this._migdalCancerHealthRows) return this._migdalCancerHealthRows;
-      // PDF HealthDec Q2–Q6; smoking uses IsSmoking (not zipped onto HealthDec).
+      // PDF has HealthDecMainQ2–Q5 only (+ IsSmoking). Family (wizard Q6) has no radio —
+      // yes/no details are painted onto Text1 when answered.
       this._migdalCancerHealthRows = [
         { q: 2, keys: ["magdal_cancer__tests"] },
         { smoke: true, keys: ["magdal_cancer__smoking"] },
         { q: 3, keys: ["magdal_cancer__tumors"] },
         { q: 4, keys: ["magdal_cancer__digestive"] },
         { q: 5, keys: ["magdal_cancer__diabetes"] },
-        { q: 6, keys: ["magdal_cancer__family"] }
+        { detailField: "Text1", keys: ["magdal_cancer__family"] }
       ];
       return this._migdalCancerHealthRows;
+    },
+    migdalMortgageHealthRows(){
+      if(this._migdalMortgageHealthRows) return this._migdalMortgageHealthRows;
+      // PDF radios: HealthDecMainQ1–12,14,15 (no Q13). Smoking → IsSmoking.
+      this._migdalMortgageHealthRows = [
+        { smoke: true, keys: ["magdal_mort__smoking"] },
+        { q: 1, keys: ["magdal_mort__cancer"] },
+        { q: 2, keys: ["magdal_mort__neuro"] },
+        { q: 3, keys: ["magdal_mort__mental"] },
+        { q: 4, keys: ["magdal_mort__respiratory"] },
+        { q: 5, keys: ["magdal_mort__heart"] },
+        { q: 6, keys: ["magdal_mort__kidneys"] },
+        { q: 7, keys: ["magdal_mort__digestive"] },
+        { q: 8, keys: ["magdal_mort__diabetes"] },
+        { q: 9, keys: ["magdal_mort__immune"] },
+        { q: 10, keys: ["magdal_mort__disability"] },
+        { q: 11, keys: ["magdal_mort__hospital"] },
+        { q: 12, keys: ["magdal_mort__tests"] },
+        { q: 14, keys: ["magdal_mort__hobby"] },
+        { q: 15, keys: ["magdal_mort__accident_eyes", "magdal_mort__accident_msk"] }
+      ];
+      return this._migdalMortgageHealthRows;
     },
     phoenixHealthRows(){
       if(!this._phoenixHealthRows){
@@ -36420,9 +36471,10 @@ UsersGateUI.init();
       const rows = Array.isArray(cfg.rows) ? cfg.rows
         : (cfg.map === "migdal_life" ? this.migdalLifeHealthRows()
           : (cfg.map === "migdal_cancer" ? this.migdalCancerHealthRows()
-            : (cfg.map === "phoenix_health" ? this.phoenixHealthRows() : this.hachsharaHealthRows(cfg.map))));
+            : (cfg.map === "migdal_mortgage" ? this.migdalMortgageHealthRows()
+              : (cfg.map === "phoenix_health" ? this.phoenixHealthRows() : this.hachsharaHealthRows(cfg.map)))));
       const responses = cfg.responses && typeof cfg.responses === "object" ? cfg.responses : {};
-      const primaryId = String(cfg.primaryId == null ? "" : cfg.primaryId).trim();
+      const primaryId = this.resolveHealthPrimaryId(responses, cfg.primaryId);
       const spouseId = String(cfg.spouseId == null ? "" : cfg.spouseId).trim();
       const childIds = Array.isArray(cfg.childIds) ? cfg.childIds.map((id) => String(id == null ? "" : id).trim()).filter(Boolean) : [];
       const yesNo = (answer) => answer === "yes" ? "1" : (answer === "no" ? "2" : "");
@@ -36436,11 +36488,32 @@ UsersGateUI.init();
         let sawNo = false;
         for(let i = 0; i < keys.length; i++){
           let a = this.healthAnswer(responses, keys[i], insId);
-          if(!a && insId && insId === primaryId) a = this.healthAnswerOrSolo(responses, keys[i], "");
+          // Primary (or missing id): also accept a solo response keyed under another id.
+          if(!a && (!insId || insId === primaryId)) a = this.healthAnswerOrSolo(responses, keys[i], "");
           if(a === "yes") return "yes";
           if(a === "no") sawNo = true;
         }
         return sawNo ? "no" : "";
+      };
+      const detailText = (keys, insId) => {
+        for(let i = 0; i < keys.length; i++){
+          const block = responses?.[keys[i]];
+          const row = (insId && block?.[insId]) || null;
+          const soloId = !row ? this.soloHealthInsuredId({ [keys[i]]: block || {} }) : "";
+          const use = row || (soloId && block?.[soloId]) || null;
+          if(!use) continue;
+          const answer = String(use.answer == null ? "" : use.answer).trim().toLowerCase();
+          const fields = use.fields && typeof use.fields === "object" ? use.fields : {};
+          const bits = [];
+          if(answer === "yes") bits.push("כן");
+          if(answer === "no") bits.push("לא");
+          Object.keys(fields).forEach((fk) => {
+            const v = String(fields[fk] == null ? "" : fields[fk]).trim();
+            if(v) bits.push(v);
+          });
+          if(bits.length) return bits.join(" · ");
+        }
+        return "";
       };
       const primaryFieldOf = (row) => {
         if(row.field) return row.field;
@@ -36472,6 +36545,11 @@ UsersGateUI.init();
             const cSmoke = smokeVal(ans(keys, cid));
             if(cSmoke) this.setExport(form, (cfg.childSmokingField || "IsSmokingChild") + (idx + 1), cSmoke);
           });
+          return;
+        }
+        if(row.detailField){
+          const text = detailText(keys, primaryId);
+          if(text) this.setTextSafe(form, row.detailField, text, cfg.font || null, { visual: false });
           return;
         }
         const pField = primaryFieldOf(row);
@@ -36685,8 +36763,8 @@ UsersGateUI.init();
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-covers-sum-v1";
   const GI_HACHSHARA_LIFE_SHORT_FORM_HREF = "./gi-hachshara-life-short-form.js?v=20260824-covers-sum-v1";
   const GI_HACHSHARA_MORTGAGE_FORM_HREF = "./gi-hachshara-mortgage-form.js?v=20260824-hach-mort-v1";
-  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-covers-sum-v1";
-  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-covers-sum-v1";
+  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260825-migdal-health-fill-v1";
+  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260825-migdal-health-fill-v1";
   const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-covers-sum-v1";
   const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-covers-sum-v1";
   const GI_MENORA_RISK_FORM_HREF = "./gi-menora-risk-form.js?v=20260824-covers-sum-v1";
@@ -36695,7 +36773,7 @@ UsersGateUI.init();
   const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-covers-sum-v1";
   const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-covers-sum-v1";
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260824-covers-sum-v1";
-  const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260824-covers-sum-v1";
+  const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260825-migdal-health-fill-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260825-phoenix-fu-v1";
