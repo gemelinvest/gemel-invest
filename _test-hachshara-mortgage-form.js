@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260824-hach-mort-v1";
+const TAG = "20260825-hach-fill-audit-v1";
 let failed = 0;
 let passed = 0;
 
@@ -62,8 +62,11 @@ assert(form.includes("LoanSum"), "fills official loan sum");
 assert(form.includes("LoanYears"), "fills official loan years");
 assert(form.includes("LoanInterest"), "fills loan interest track");
 assert(form.includes("LoanTerminationDate"), "fills loan termination date");
-assert(form.includes("ApartmentPurchase"), "fills apartment purchase when stored");
-assert(form.includes("LandPurchase"), "fills land purchase when stored");
+assert(form.includes('ApartmentPurchase", "1"') || form.includes('ApartmentPurchase", "1")'), "apartment purchase uses PDF export 1");
+assert(form.includes('LandPurchase", "1"') || form.includes("LandPurchase\", \"1\""), "land purchase uses PDF export 1");
+assert(form.includes("MaximumAmountText"), "sum insured writes MaximumAmountText");
+assert(form.includes('MaximumAmount", "True"') || form.includes("MaximumAmount\", \"True\""), "marks MaximumAmount checkbox");
+assert(!/setTextSafe\(form,\s*s === "Spouse" \? "MaximumAmountText" : "MaximumAmount"/.test(form), "no longer writes sum into MaximumAmount button");
 assert(form.includes("applyMappedHealthYesNo"), "named health map for yes/no");
 assert(form.includes('map: draft.healthMap'), "health map follows mortgage amount mode");
 assert(form.includes("mortgage_full"), "full mode uses mortgage_full rows");

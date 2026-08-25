@@ -10,8 +10,9 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260825-migdal-health-fill-v1";
+const TAG = "20260825-hach-fill-audit-v1";
 const FORM_TAG = "20260824-covers-sum-v1";
+const HACH_FORM_TAG = "20260825-hach-fill-audit-v1";
 const MIGDAL_FORM_TAG = "20260825-migdal-health-fill-v1";
 let failed = 0;
 let passed = 0;
@@ -111,7 +112,8 @@ assert(sw.includes("gi-v12-" + TAG), "SW tag");
   "gi-phoenix-life-form.js",
   "gi-phoenix-health-form.js"
 ].forEach((file) => {
-  const tag = file.indexOf("migdal") >= 0 ? MIGDAL_FORM_TAG : FORM_TAG;
+  const tag = file.indexOf("hachshara") >= 0 ? HACH_FORM_TAG
+    : (file.indexOf("migdal") >= 0 ? MIGDAL_FORM_TAG : FORM_TAG);
   assert(app.includes("./" + file + "?v=" + tag), "href " + file);
   const src = fs.readFileSync(path.join(ROOT, file), "utf8");
   assert(src.includes("Heebo-Bold.ttf"), file + " bold font");
@@ -125,6 +127,8 @@ assert(sw.includes("gi-v12-" + TAG), "SW tag");
         : src.includes("applyOfficialHealthAndNames")));
   assert(healthFill, file + " fills health yes/no");
 });
+assert(fs.existsSync(path.join(ROOT, "gi-hachshara-mortgage-form.js")), "hachshara mortgage form file");
+assert(app.includes("./gi-hachshara-mortgage-form.js?v=" + HACH_FORM_TAG), "href gi-hachshara-mortgage-form.js");
 assert(fs.existsSync(path.join(ROOT, "fonts", "Heebo-Bold.ttf")), "bold font file");
 
 console.log("\n5) 1:1 picker + RTL");
