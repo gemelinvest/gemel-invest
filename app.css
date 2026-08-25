@@ -10614,6 +10614,7 @@ body.lcAuthLock .lcLogin__card:hover{
 .customerEditPolicyCard{ border:1px solid rgba(43,75,138,.12); border-radius:18px; background:rgba(255,255,255,.84); padding:14px; box-shadow:0 10px 24px rgba(15,23,42,.05); }
 .customerEditEmpty{ border:1px dashed rgba(43,75,138,.18); border-radius:18px; padding:18px; text-align:center; color:rgba(16,33,63,.66); background:rgba(255,255,255,.5); }
 .customerEditSection--health{ background:linear-gradient(180deg, rgba(248,251,255,.96), rgba(238,245,255,.82)); }
+.customerEditSection--elementary{ background:linear-gradient(180deg, rgba(255,252,246,.96), rgba(255,246,232,.78)); }
 .customerEditSection__head--health{ align-items:center; }
 .customerEditHealth__companies,
 .customerEditHealthQuestion__companies{ display:flex; flex-wrap:wrap; gap:8px; }
@@ -17048,6 +17049,7 @@ body.lcAuthLock .lcLogin__card:hover{
 .customerEditPolicyCard{ border:1px solid rgba(43,75,138,.12); border-radius:18px; background:rgba(255,255,255,.84); padding:14px; box-shadow:0 10px 24px rgba(15,23,42,.05); }
 .customerEditEmpty{ border:1px dashed rgba(43,75,138,.18); border-radius:18px; padding:18px; text-align:center; color:rgba(16,33,63,.66); background:rgba(255,255,255,.5); }
 .customerEditSection--health{ background:linear-gradient(180deg, rgba(248,251,255,.96), rgba(238,245,255,.82)); }
+.customerEditSection--elementary{ background:linear-gradient(180deg, rgba(255,252,246,.96), rgba(255,246,232,.78)); }
 .customerEditSection__head--health{ align-items:center; }
 .customerEditHealth__companies,
 .customerEditHealthQuestion__companies{ display:flex; flex-wrap:wrap; gap:8px; }

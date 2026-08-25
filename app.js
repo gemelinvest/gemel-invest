@@ -24617,7 +24617,27 @@ UsersGateUI.init();
         return next;
       });
       if(!safeTrim(primary.selectedPayerId) && insureds[0]?.id) primary.selectedPayerId = insureds[0].id;
-      return { payload, primary, insureds, newPolicies };
+
+      /* GI-FEAT 2026-08-25: טיוטת מוצרי אלמנטרי/רכב לעריכת פרמיות בעדכון נתונים.
+         לא משנה לוגיקת בריאות/סיכונים — רק מוסיף מערך נפרד לטיוטה. */
+      let elementaryPolicies = Array.isArray(payload.elementaryPolicies)
+        ? this.deepClone(payload.elementaryPolicies)
+        : [];
+      elementaryPolicies = elementaryPolicies
+        .filter((pol) => pol && typeof pol === "object")
+        .map((pol, idx) => {
+          const next = Object.assign({}, pol);
+          next.id = safeTrim(next.id) || (`elementary_${idx}`);
+          const prem = this.asEditMoneyNumber(
+            next.premiumAfterDiscountValue ?? next.premiumValue ?? next.premium ?? next.premiumText
+          );
+          if(prem > 0){
+            if(!safeTrim(next.premiumValue)) next.premiumValue = String(Math.round(prem * 100) / 100);
+          }
+          return next;
+        });
+
+      return { payload, primary, insureds, newPolicies, elementaryPolicies };
     },
 
     /* GI-FIX 2026-08-01 (תוכניות 1+3): buildDraft קורא rec.payload סינכרונית,
@@ -25331,6 +25351,50 @@ UsersGateUI.init();
       return null;
     },
 
+    /** מוצרי אלמנטרי/רכב — מוצג רק כשיש פוליסות בתיק; עריכת פרמיה שנתית + תשלומים. */
+    renderElementaryPoliciesSection(){
+      const list = Array.isArray(this.draft?.elementaryPolicies) ? this.draft.elementaryPolicies : [];
+      if(!list.length) return "";
+      return `
+        <section class="customerEditSection customerEditSection--elementary" data-ce-elementary-section="1">
+          <div class="customerEditSection__head">
+            <div>
+              <div class="customerEditSection__title">ביטוח אלמנטרי / רכב</div>
+              <div class="customerEditSection__sub">עריכה ותיקון של פרמיות שנתיות למוצרי האלמנטרי בתיק הלקוח.</div>
+            </div>
+          </div>
+          <div class="customerEditList">
+            ${list.map((policy, idx) => {
+              const prefix = `elementaryPolicies.${idx}`;
+              const premNum = this.asEditMoneyNumber(
+                policy?.premiumValue ?? policy?.premiumAfterDiscountValue ?? policy?.premium
+              );
+              const premVal = safeTrim(policy?.premiumValue)
+                || (premNum > 0 ? String(Math.round(premNum * 100) / 100) : "");
+              const title = safeTrim(policy?.type) || safeTrim(policy?.label) || `מוצר אלמנטרי ${idx + 1}`;
+              const metaBits = [
+                safeTrim(policy?.company),
+                safeTrim(policy?.licensePlate) ? (`רכב ${safeTrim(policy.licensePlate)}`) : "",
+                safeTrim(policy?.vehicleDesc),
+                safeTrim(policy?.coverageTypeHe) || safeTrim(policy?.coverageValue)
+              ].filter(Boolean);
+              return `<article class="customerEditPolicyCard" data-ce-elementary-card="${this.esc(String(idx))}">
+                <div class="customerEditPolicyCard__head">
+                  <div>
+                    <div class="customerEditPolicyCard__title">${this.esc(title)}</div>
+                    ${metaBits.length ? `<div class="customerEditSection__sub">${this.esc(metaBits.join(" · "))}</div>` : ""}
+                  </div>
+                </div>
+                <div class="customerEditGrid customerEditGrid--policy">
+                  ${this.renderInput("פרמיה שנתית (₪)", `${prefix}.premiumValue`, premVal, { dir:"ltr", inputmode:"decimal" })}
+                  ${this.renderInput("מספר תשלומים", `${prefix}.installments`, safeTrim(policy?.installments) || "", { dir:"ltr", inputmode:"numeric" })}
+                </div>
+              </article>`;
+            }).join("")}
+          </div>
+        </section>`;
+    },
+
     renderPaymentSection(){
       const payerOptions = (this.draft.insureds || []).map(ins => `<option value="${this.esc(ins.id)}">${this.esc(ins.label || ins.data?.firstName || "מבוטח")}</option>`).join("");
       const isCc = safeTrim(this.field("primary.paymentMethod", "cc")) !== "ho";
@@ -25381,6 +25445,7 @@ UsersGateUI.init();
             </div>
           </section>
           ${this.renderNewPoliciesSection()}
+          ${this.renderElementaryPoliciesSection()}
           ${this.renderHealthEditSection()}
           ${this.renderPaymentSection()}
         </div>`;
@@ -25705,6 +25770,120 @@ UsersGateUI.init();
       }
     },
 
+    /** מעדכן שדות פרמיה/תשלומים על מוצר אלמנטרי לפי ערכי הטיוטה. */
+    applyElementaryPremiumFields(policy, draftPolicy){
+      if(!policy) return false;
+      const src = draftPolicy || policy;
+      const rawPrem = safeTrim(src?.premiumValue ?? src?.premiumAfterDiscountValue ?? src?.premium ?? "");
+      const prem = this.asEditMoneyNumber(rawPrem);
+      if(prem <= 0) return false;
+
+      const rounded = Math.round(prem * 100) / 100;
+      const premStr = String(rounded);
+      let inst = "";
+      try {
+        if(typeof Wizard !== "undefined" && typeof Wizard.normalizeElementaryInstallmentsInput === "function"){
+          inst = Wizard.normalizeElementaryInstallmentsInput(src?.installments || policy?.installments || "");
+        } else {
+          const n = parseInt(String(src?.installments || policy?.installments || "").replace(/\D/g, ""), 10);
+          inst = Number.isFinite(n) && n >= 1 ? String(Math.min(120, n)) : "";
+        }
+      } catch(_e) {
+        inst = safeTrim(src?.installments || policy?.installments || "");
+      }
+
+      let premText = "";
+      try {
+        if(typeof Wizard !== "undefined" && typeof Wizard.formatElementaryMoneyShekel === "function"){
+          premText = Wizard.formatElementaryMoneyShekel(rounded);
+        }
+      } catch(_e) {}
+      if(!safeTrim(premText)){
+        premText = this.formatEditPremiumMoney(rounded) || (`${premStr} ₪`);
+      }
+
+      const instN = inst ? parseInt(inst, 10) : NaN;
+      let perStr = "";
+      if(Number.isFinite(instN) && instN >= 1){
+        const per = Math.round((rounded / instN) * 100) / 100;
+        try {
+          if(typeof Wizard !== "undefined" && typeof Wizard.formatElementaryMoneyShekel === "function"){
+            perStr = Wizard.formatElementaryMoneyShekel(per);
+          }
+        } catch(_e) {}
+        if(!safeTrim(perStr)) perStr = this.formatEditPremiumMoney(per) || String(per);
+      }
+
+      policy.premiumValue = premStr;
+      policy.premiumAfterDiscountValue = rounded;
+      policy.premiumAfterDiscount = premText;
+      policy.premiumText = premText;
+      policy.installments = inst;
+      policy.perPayment = perStr;
+      return true;
+    },
+
+    /** מסנכרן פרמיות מ-elementaryPolicies חזרה ל-elementaryProductPricing בנתוני המבוטח (אם קיים). */
+    syncElementaryPricingFromPolicies(payload, policies){
+      if(!payload || !Array.isArray(policies) || !policies.length) return;
+      const applyToData = (data) => {
+        if(!data || typeof data !== "object") return;
+        const pricing = Array.isArray(data.elementaryProductPricing) ? data.elementaryProductPricing : null;
+        if(!pricing || !pricing.length) return;
+        let sum = 0;
+        let touched = false;
+        pricing.forEach((row) => {
+          if(!row || typeof row !== "object") return;
+          const key = safeTrim(row.productKey);
+          if(!key) return;
+          const match = policies.find((p) => {
+            const pid = safeTrim(p?.id);
+            return pid === (`elementary_${key}`) || pid === key;
+          });
+          if(!match) return;
+          const prem = this.asEditMoneyNumber(match.premiumValue ?? match.premiumAfterDiscountValue);
+          if(prem > 0){
+            row.premium = String(Math.round(prem * 100) / 100);
+            sum += prem;
+            touched = true;
+          }
+          if(safeTrim(match.installments)){
+            row.installments = safeTrim(match.installments);
+            touched = true;
+          }
+        });
+        if(touched && sum > 0){
+          data.elementaryPremium = String(Math.round(sum * 100) / 100);
+        }
+      };
+      applyToData(payload.primary);
+      (Array.isArray(payload.insureds) ? payload.insureds : []).forEach((ins) => applyToData(ins?.data));
+      if(payload.operational && typeof payload.operational === "object"){
+        applyToData(payload.operational.primary);
+        (Array.isArray(payload.operational.insureds) ? payload.operational.insureds : []).forEach((ins) => applyToData(ins?.data));
+      }
+    },
+
+    /** כותב פרמיות אלמנטרי מהטיוטה ל-payload בשמירה — בלי לגעת בפוליסות בריאות/סיכונים. */
+    applyElementaryPoliciesFromDraft(payload){
+      if(!payload || !this.draft) return;
+      const draftList = Array.isArray(this.draft.elementaryPolicies) ? this.draft.elementaryPolicies : [];
+      if(!draftList.length) return;
+      const origList = Array.isArray(payload.elementaryPolicies) ? payload.elementaryPolicies : [];
+      const nextList = draftList.map((draftPol, idx) => {
+        const id = safeTrim(draftPol?.id);
+        const origPol = id
+          ? (origList.find((p) => safeTrim(p?.id) === id) || null)
+          : (origList[idx] || null);
+        const next = Object.assign({}, this.deepClone(origPol || {}), this.deepClone(draftPol || {}));
+        next.id = safeTrim(next.id) || id || (`elementary_${idx}`);
+        this.applyElementaryPremiumFields(next, draftPol);
+        return next;
+      });
+      payload.elementaryPolicies = nextList;
+      this.syncElementaryPricingFromPolicies(payload, nextList);
+    },
+
     normalizeDraftForSave(rec){
       const payload = this.deepClone(rec?.payload || {});
       const primary = Object.assign(this.defaultPrimary(), this.deepClone(this.draft.primary || {}));
@@ -25783,6 +25962,9 @@ UsersGateUI.init();
         primary: operationalPrimary,
         mirrorSchedule: this.deepClone(mirrorSchedule)
       };
+      /* GI-FEAT 2026-08-25: שמירת פרמיות אלמנטרי/רכב מהטיוטה — אחרי בניית insureds/newPolicies
+         כדי לא להפריע ללוגיקת בריאות/סיכונים הקיימת. */
+      this.applyElementaryPoliciesFromDraft(payload);
       return payload;
     },
 
