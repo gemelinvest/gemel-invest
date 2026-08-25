@@ -165,6 +165,13 @@
      היה טוען payload+מסמכים של כל הצוות. רשימה נשארת רזה; תיק מלא ב-ensureRecordPayload.
      מטמון ישן שמנ + payload מלא לא נצבע מחדש מעל הסף הזה. */
   const TEAM_MANAGER_FAT_CACHE_PAINT_CAP = 400;
+  /* GI-PERF 2026-08-25 — מצב light קבוע למנהל צוות מעל CAP.
+     משלים את תיקון 23.08: אותן הגנות כמו Large Session (delta רזה, בלי
+     LiveRefresh מלא, בלי realtime על כל הטבלה, LRU ל-payloads, בלי IDB שמן).
+     לכיבוי חירום: TEAM_MANAGER_LIGHT_SESSION_ENABLED = false + רענון. */
+  const TEAM_MANAGER_LIGHT_SESSION_ENABLED = true;
+  const TEAM_MANAGER_LIGHT_SESSION_THRESHOLD = TEAM_MANAGER_FAT_CACHE_PAINT_CAP;
+  const TEAM_MANAGER_PAYLOAD_LRU_CAP = 80;
 
   const DAILY_REPORT_ACTIVE_ID = "active";
   // ארכיון חודשי באותה טבלה: id = "m-YYYY-MM" (לא דורס את "active").
@@ -5058,7 +5065,79 @@
       } catch(_e) {}
       return rec;
     });
-    return changed ? { ...next, customers: merged } : next;
+    const out = changed ? { ...next, customers: merged } : next;
+    return trimTeamManagerCustomerPayloadLru(out);
+  }
+
+  /* GI-PERF 2026-08-25: במנהל-צוות-light משאירים רק LRU של payloads מלאים
+     (+ תיק פתוח) כדי ש-delta/preserve לא יצבור שוב את כל הצוות בזיכרון. */
+  function getTeamManagerProtectedPayloadIds(){
+    const ids = new Set();
+    try {
+      if(CustomersUI?.currentId && CustomersUI?.els?.wrap?.classList?.contains?.("is-open")){
+        ids.add(String(CustomersUI.currentId));
+      }
+    } catch(_e) {}
+    try {
+      if(CustomerEditUI?.els?.wrap?.classList?.contains?.("is-open")){
+        const editId = safeTrim(CustomerEditUI?.currentId || CustomersUI?.currentId);
+        if(editId) ids.add(String(editId));
+      }
+    } catch(_e) {}
+    try {
+      if(MirrorCallUI?._callRunning && MirrorCallUI?.selectedCustomer?.id){
+        ids.add(String(MirrorCallUI.selectedCustomer.id));
+      }
+    } catch(_e) {}
+    try {
+      if(ElementaryMirrorUI?._callRunning){
+        const eid = safeTrim(ElementaryMirrorUI._customerId || ElementaryMirrorUI.selectedCustomer?.id);
+        if(eid) ids.add(String(eid));
+      }
+    } catch(_e) {}
+    return ids;
+  }
+
+  function trimTeamManagerCustomerPayloadLru(stateLike){
+    try {
+      if(!Storage?.isTeamManagerLightSession?.()) return stateLike;
+    } catch(_e) {
+      return stateLike;
+    }
+    const list = Array.isArray(stateLike?.customers) ? stateLike.customers : null;
+    if(!list || !list.length) return stateLike;
+    const protectedIds = getTeamManagerProtectedPayloadIds();
+    const fat = [];
+    for(let i = 0; i < list.length; i += 1){
+      const rec = list[i];
+      const id = String(rec?.id || "");
+      if(!id) continue;
+      if(protectedIds.has(id)) continue;
+      try {
+        if(Storage.payloadHasPolicyOrInsuredContent(rec?.payload)){
+          const stamp = Date.parse(safeTrim(rec?.updatedAt) || safeTrim(rec?.createdAt) || "") || 0;
+          fat.push({ idx: i, stamp });
+        }
+      } catch(_e) {}
+    }
+    if(fat.length <= TEAM_MANAGER_PAYLOAD_LRU_CAP) return stateLike;
+    fat.sort((a, b) => b.stamp - a.stamp);
+    const keepIdx = new Set(fat.slice(0, TEAM_MANAGER_PAYLOAD_LRU_CAP).map((x) => x.idx));
+    let stripped = 0;
+    const nextCustomers = list.map((rec, idx) => {
+      const id = String(rec?.id || "");
+      if(protectedIds.has(id) || keepIdx.has(idx)) return rec;
+      try {
+        if(!Storage.payloadHasPolicyOrInsuredContent(rec?.payload)) return rec;
+      } catch(_e) {
+        return rec;
+      }
+      stripped += 1;
+      return { ...rec, payload: {} };
+    });
+    if(!stripped) return stateLike;
+    try { console.warn("TEAM_MANAGER_PAYLOAD_LRU_TRIM:", stripped, "stripped,", TEAM_MANAGER_PAYLOAD_LRU_CAP, "kept"); } catch(_e) {}
+    return { ...stateLike, customers: nextCustomers };
   }
 
   function agentSessionDataLooksSuspiciouslyEmpty(){
@@ -10564,6 +10643,29 @@
       return LARGE_SESSION_MODE_ENABLED && this._largeCustomersSession === true;
     },
 
+    /* GI-PERF 2026-08-25: מנהל צוות עם רוסטר גדול (מתחת לסף 5k) —
+       אותן הגנות סשן כמו Large Session, בלי working-set של אדמין. */
+    isTeamManagerLightSession(){
+      if(!TEAM_MANAGER_LIGHT_SESSION_ENABLED) return false;
+      try {
+        if(!Auth?.isTeamManager?.()) return false;
+      } catch(_e) {
+        return false;
+      }
+      if(this.isLargeCustomersSession()) return false;
+      const n = Array.isArray(State.data?.customers) ? State.data.customers.length : 0;
+      if(n >= TEAM_MANAGER_LIGHT_SESSION_THRESHOLD) return true;
+      try {
+        const estimate = Math.max(0, Number(this._largeCustomersTotalEstimate) || 0);
+        if(estimate >= TEAM_MANAGER_LIGHT_SESSION_THRESHOLD) return true;
+      } catch(_e) {}
+      return false;
+    },
+
+    isHeavyRosterSession(){
+      return this.isLargeCustomersSession() || this.isTeamManagerLightSession();
+    },
+
     setLargeCustomersSession(on, totalEstimate = 0){
       this._largeCustomersSession = !!on && LARGE_SESSION_MODE_ENABLED;
       this._largeCustomersTotalEstimate = this._largeCustomersSession
@@ -10736,12 +10838,13 @@
       if(!userKey) return false;
       const payload = st && typeof st === "object" ? st : null;
       if(!payload) return false;
-      // Large-session: אל תכתוב עשרות אלפי לקוחות ל-IDB (סערת shards + הקפאה).
-      if(this.isLargeCustomersSession()) return false;
+      // Large-session / team-manager light: אל תכתוב עשרות אלפי לקוחות ל-IDB (סערת shards + הקפאה).
+      if(this.isHeavyRosterSession()) return false;
       if(this.sessionPayloadLooksLight(payload)) return false;
       try {
         const n = Array.isArray(payload.customers) ? payload.customers.length : 0;
         if(LARGE_SESSION_MODE_ENABLED && n >= LARGE_SESSION_CUSTOMER_THRESHOLD) return false;
+        if(TEAM_MANAGER_LIGHT_SESSION_ENABLED && Auth?.isTeamManager?.() && n >= TEAM_MANAGER_FAT_CACHE_PAINT_CAP) return false;
       } catch(_e) {}
 
       if(this._idbWriteInFlight) { this._idbWriteQueued = true; return false; }
@@ -10818,7 +10921,7 @@
 
     scheduleFullIdbCacheSave(st){
       const payload = st && typeof st === "object" ? st : (State.data || null);
-      if(!payload || this.isLargeCustomersSession() || this.sessionPayloadLooksLight(payload)) return;
+      if(!payload || this.isHeavyRosterSession() || this.sessionPayloadLooksLight(payload)) return;
       try {
         const n = Array.isArray(payload.customers) ? payload.customers.length : 0;
         if(LARGE_SESSION_MODE_ENABLED && n >= LARGE_SESSION_CUSTOMER_THRESHOLD) return;
@@ -12838,6 +12941,12 @@
           archivedAdds
         );
       }
+      try {
+        if(this.isTeamManagerLightSession()){
+          const trimmed = trimTeamManagerCustomerPayloadLru({ customers: State.data.customers });
+          if(Array.isArray(trimmed?.customers)) State.data.customers = trimmed.customers;
+        }
+      } catch(_e) {}
       return merged;
     },
 
@@ -12966,8 +13075,16 @@
         const [metaRes, agentsRes, customersRes, proposalsRes] = await Promise.all([
           this.loadMetaRow(),
           this.loadTableRows(SUPABASE_TABLES.agents),
-          this.loadTableRowsSince(SUPABASE_TABLES.customers, querySince),
-          this.loadTableRowsSince(SUPABASE_TABLES.proposals, querySince)
+          this.loadTableRowsSince(
+            SUPABASE_TABLES.customers,
+            querySince,
+            this.isTeamManagerLightSession() ? CUSTOMER_LIGHT_COLUMNS : "*"
+          ),
+          this.loadTableRowsSince(
+            SUPABASE_TABLES.proposals,
+            querySince,
+            this.isTeamManagerLightSession() ? PROPOSAL_LIGHT_COLUMNS : "*"
+          )
         ]);
 
         if(!metaRes.ok){
@@ -28398,8 +28515,8 @@ UsersGateUI.init();
           if(eid) ids.add(eid);
         }
       } catch(_e) {}
-      // GI-PERF 2026-08-10: לא לבנות את כל שורות הלקוחות בכל flush — יקר בסשן גדול.
-      if(!Storage.isLargeCustomersSession?.()){
+      // GI-PERF 2026-08-10 / 08-25: בסשן ענק או מנהל-צוות-light לא לבנות את כל שורות הלקוחות בכל flush.
+      if(!Storage.isHeavyRosterSession?.()){
         try {
           const rows = Storage.buildCustomerRows(State.data);
           Storage.getChangedRows(SUPABASE_TABLES.customers, rows).forEach((r) => {
@@ -28590,9 +28707,9 @@ UsersGateUI.init();
     },
 
     startCustomers(){
-      // GI-PERF 2026-08-10: בסשן גדול realtime על כל טבלת customers מציף את ה-UI (52K).
+      // GI-PERF 2026-08-10 / 08-25: בסשן גדול או מנהל-צוות-light realtime על כל הטבלה מציף את ה-UI.
       // מסך הלקוחות מסתנכרן ב-pull קל (10 אחרונים / חיפוש).
-      if(Storage.isLargeCustomersSession?.()) return;
+      if(Storage.isHeavyRosterSession?.()) return;
       if(this._customersChannel) return;
       try {
         const client = Storage.getClient();
@@ -28800,6 +28917,10 @@ UsersGateUI.init();
       if(view !== "dashboard" || Auth.isElementary()) return false;
       // PERF: admin/manager already hold the full org dataset — periodic force pull causes freezes
       try { if(Auth?.canViewAllCustomers?.()) return false; } catch(_e) {}
+      // GI-PERF 2026-08-25: מנהל צוות עם רוסטר גדול — אותו פטור; force pull מחזיר delta שמן ומקפיא.
+      try {
+        if(Auth?.isTeamManager?.() && Storage?.isTeamManagerLightSession?.()) return false;
+      } catch(_e) {}
       if(!DashboardUI.shouldShowPerformanceBoard?.()) return false;
       const last = Number(this._lastDashboardPullAt) || 0;
       return !last || (Date.now() - last) >= this.DASHBOARD_FORCE_PULL_MS;
@@ -28814,6 +28935,7 @@ UsersGateUI.init();
         const forceDashboardPull = this.shouldForceDashboardPull();
         const localDataAt = getMetaSyncAt(State.data?.meta, "data");
         const largeSession = !!Storage.isLargeCustomersSession?.();
+        const teamMgrLight = !!Storage.isTeamManagerLightSession?.();
         if(!forceDashboardPull){
           const metaRes = await Storage.loadMetaRowCached();
           if(!metaRes?.ok) return;
@@ -28827,9 +28949,8 @@ UsersGateUI.init();
           if(remoteDataAt && localDataAt && compareIsoStamps(remoteDataAt, localDataAt) <= 0) return;
         }
         if(this.hasBlockingFlow()) return;
-        // GI-PERF 2026-08-10: בסשן גדול לא מושכים שוב working-set מלא בטיימר —
-        // זה מה שנתקע במעבר ללקוחות. רשימת הלקוחות מתעדכנת ב-syncListFromServer.
-        if(largeSession){
+        // GI-PERF 2026-08-10 / 08-25: בסשן גדול או מנהל-צוות-light לא מושכים שוב roster מלא בטיימר.
+        if(largeSession || teamMgrLight){
           const view = this.getCurrentView();
           if(view === "customers"){
             HeavySyncGate.scheduleUi(() => {
@@ -48869,10 +48990,9 @@ const ClalRiskLifePdf = {
         } catch(_e) {}
         return;
       }
-      // GI-PERF 2026-08-23: מנהל צוות טוען את כל הצוות. בלי hydration המוני
-      // (אותו רעיון כמו Large Session). נציג רגיל לא נכנס לכאן.
+      // GI-PERF 2026-08-23 / 08-25: מנהל צוות — בלי hydration המוני (אותו רעיון כמו Large Session).
       try {
-        if(Auth?.isTeamManager?.()){
+        if(Auth?.isTeamManager?.() || Storage.isTeamManagerLightSession?.()){
           try { console.warn("TEAM_MANAGER_SKIP_MASS_HYDRATION"); } catch(_e) {}
           try {
             UI.renderSyncStatus(
@@ -53404,6 +53524,13 @@ const CampaignLeadsStore = {
         || safeTrim(rec?.payload?.updatedAt);
       const stampMs = Date.parse(stamp);
       if(Number.isFinite(stampMs) && stampMs > lastStampMs) lastStampMs = stampMs;
+      // GI-PERF 2026-08-25: לא סורקים collectPolicies על payloads ריקים.
+      // במצב light (ואדים) רוב התיקים רזים — דילג; רק LRU/תיקים שנפתחו נסרקים.
+      try {
+        if(Storage.payloadIsEmpty?.(rec) || !Storage.payloadHasPolicyOrInsuredContent?.(rec?.payload)){
+          return;
+        }
+      } catch(_e) {}
       const policies = CustomersUI.collectPolicies(rec).filter((p) => String(p?.origin || "") === "new");
       policies.forEach((p) => {
         const premium = DashboardUI.policyNetPremium(p);
