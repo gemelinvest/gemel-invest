@@ -172,6 +172,10 @@
   const TEAM_MANAGER_LIGHT_SESSION_ENABLED = true;
   const TEAM_MANAGER_LIGHT_SESSION_THRESHOLD = TEAM_MANAGER_FAT_CACHE_PAINT_CAP;
   const TEAM_MANAGER_PAYLOAD_LRU_CAP = 80;
+  /* GI-PERF 2026-08-25c: גם LIGHT של כל 2,100 תיקים מקפיא (normalize/backup/KPI).
+     מנהל צוות מעל הסף מקבל working-set כמו Large Session — לא את כל הרוסטר. */
+  const TEAM_MANAGER_LIGHT_WORKING_SET = LARGE_SESSION_CUSTOMER_WORKING_SET;
+  const TEAM_MANAGER_LIGHT_PROPOSAL_WORKING_SET = LARGE_SESSION_PROPOSAL_WORKING_SET;
 
   const DAILY_REPORT_ACTIVE_ID = "active";
   // ארכיון חודשי באותה טבלה: id = "m-YYYY-MM" (לא דורס את "active").
@@ -10646,6 +10650,7 @@
     /* GI-PERF 2026-08-25: מנהל צוות עם רוסטר גדול (מתחת לסף 5k) —
        אותן הגנות סשן כמו Large Session, בלי working-set של אדמין. */
     _teamManagerLightLoginHint: false,
+    _teamManagerRosterEstimate: 0,
 
     isTeamManagerLightSession(){
       if(!TEAM_MANAGER_LIGHT_SESSION_ENABLED) return false;
@@ -10659,10 +10664,28 @@
       const n = Array.isArray(State.data?.customers) ? State.data.customers.length : 0;
       if(n >= TEAM_MANAGER_LIGHT_SESSION_THRESHOLD) return true;
       try {
-        const estimate = Math.max(0, Number(this._largeCustomersTotalEstimate) || 0);
+        const estimate = Math.max(
+          0,
+          Number(this._teamManagerRosterEstimate) || 0,
+          Number(this._largeCustomersTotalEstimate) || 0
+        );
         if(estimate >= TEAM_MANAGER_LIGHT_SESSION_THRESHOLD) return true;
       } catch(_e) {}
       return false;
+    },
+
+    markTeamManagerLightRoster(estimate = 0){
+      this._teamManagerLightLoginHint = true;
+      this._teamManagerRosterEstimate = Math.max(
+        Number(this._teamManagerRosterEstimate) || 0,
+        Number(estimate) || 0
+      );
+      return this.isTeamManagerLightSession();
+    },
+
+    clearTeamManagerLightRoster(){
+      this._teamManagerLightLoginHint = false;
+      this._teamManagerRosterEstimate = 0;
     },
 
     isHeavyRosterSession(){
@@ -11214,9 +11237,14 @@
 
     _scheduleServerCacheFlush(){
       if(this._serverCacheFlushHandle) return;
+      // GI-PERF 2026-08-25c: מנהל צוות / Large Session — לא לעשות JSON.stringify של הרוסטר ב־sessionStorage.
+      try {
+        if(this.isHeavyRosterSession()) return;
+      } catch(_e) {}
       const flush = () => {
         this._serverCacheFlushHandle = null;
         try {
+          if(this.isHeavyRosterSession()) return;
           const entry = this._memoryCache;
           if(!entry?.payload) return;
           const light = this.buildLightCachePayload(entry.payload);
@@ -13072,13 +13100,45 @@
         this.getChangedRows(SUPABASE_TABLES.proposals, proposalRows).map((row) => String(row?.id)).filter(Boolean)
       );
       // GI-PERF 2026-08-25: במנהל-צוות-light לא למשוך select=* של כל הצוות (~22MB אצל ואדים).
+      // GI-PERF 2026-08-25c: גם LIGHT של כל הצוות מיותר — רק dirty / תיקים פתוחים.
       const lightConflict = this.isTeamManagerLightSession();
-      const customerSelect = lightConflict ? CUSTOMER_LIGHT_COLUMNS : "*";
-      const proposalSelect = lightConflict ? PROPOSAL_LIGHT_COLUMNS : "*";
-      const [customersRes, proposalsRes] = await Promise.all([
-        this.loadTableRows(SUPABASE_TABLES.customers, customerSelect),
-        this.loadTableRows(SUPABASE_TABLES.proposals, proposalSelect)
-      ]);
+      let customersRes = { ok:true, data:[] };
+      let proposalsRes = { ok:true, data:[] };
+      if(lightConflict){
+        const custIds = [...dirtyCustomerIds];
+        try {
+          getTeamManagerProtectedPayloadIds().forEach((id) => {
+            if(id) custIds.push(String(id));
+          });
+        } catch(_e) {}
+        const propIds = [...dirtyProposalIds];
+        const uniq = (arr) => [...new Set(arr.map(String).filter(Boolean))];
+        const cIds = uniq(custIds);
+        const pIds = uniq(propIds);
+        const fetchByIds = async (table, ids, selectExpr) => {
+          if(!ids.length) return { ok:true, data:[] };
+          try {
+            const client = this.getClient();
+            const { data, error } = await this.withRetry(
+              () => client.from(table).select(selectExpr).in("id", ids),
+              "מיזוג קונפליקט לפי מזהים"
+            );
+            if(error) throw error;
+            return { ok:true, data: Array.isArray(data) ? data : [] };
+          } catch(err) {
+            return { ok:false, error: String(err?.message || err), data:[] };
+          }
+        };
+        [customersRes, proposalsRes] = await Promise.all([
+          fetchByIds(SUPABASE_TABLES.customers, cIds, CUSTOMER_LIGHT_COLUMNS + ",payload"),
+          fetchByIds(SUPABASE_TABLES.proposals, pIds, PROPOSAL_LIGHT_COLUMNS + ",payload")
+        ]);
+      } else {
+        [customersRes, proposalsRes] = await Promise.all([
+          this.loadTableRows(SUPABASE_TABLES.customers, "*"),
+          this.loadTableRows(SUPABASE_TABLES.proposals, "*")
+        ]);
+      }
       let merged = 0;
       if(customersRes?.ok){
         const map = new Map((state.customers || []).map((c) => [String(c?.id), c]));
@@ -13137,6 +13197,8 @@
       // GI-PERF 2026-08-10: בסשן ענק דלתא עלולה למשוך עשרות אלפי שורות מאז since —
       // חוזרים ל-loadSheets (working-set בלבד).
       if(this.isLargeCustomersSession()) return this.loadSheets(options);
+      // GI-PERF 2026-08-25c: מנהל צוות light — אותה הגנה; דלתא עלולה להשמין/להקפיא.
+      if(this.isTeamManagerLightSession()) return this.loadSheets(options);
       const localAt = safeTrim(options.sinceIso || getMetaSyncAt(State.data?.meta, "data") || State.data?.meta?.updatedAt);
       if(!localAt) return this.loadSheets(options);
       const useCachedFallback = options.useCachedFallback === true;
@@ -13714,31 +13776,56 @@
           ? PROPOSAL_LIGHT_COLUMNS : "*";
 
         // GI-PERF 2026-08-10 — Large Session: ספירה זולה לפני משיכת כל הטבלה.
+        // GI-PERF 2026-08-25c — מנהל צוות מעל 400: working-set (לא כל 2.1K).
         let useLargeCustomers = false;
+        let useTeamManagerWorkingSet = false;
         let largeCustomersTotal = 0;
         let largeProbeUncertain = false;
         this.setLargeCustomersSession(false, 0);
+        let rosterProbe = { ok:false, count: 0 };
+        if(LARGE_SESSION_MODE_ENABLED || (TEAM_MANAGER_LIGHT_SESSION_ENABLED && Auth?.isTeamManager?.())){
+          rosterProbe = await this.probeCustomersCount();
+        }
         if(LARGE_SESSION_MODE_ENABLED){
-          const probe = await this.probeCustomersCount();
-          if(probe.ok && probe.count >= LARGE_SESSION_CUSTOMER_THRESHOLD){
+          if(rosterProbe.ok && rosterProbe.count >= LARGE_SESSION_CUSTOMER_THRESHOLD){
             useLargeCustomers = true;
-            largeCustomersTotal = probe.count;
-          } else if(!probe.ok){
+            largeCustomersTotal = rosterProbe.count;
+          } else if(!rosterProbe.ok && LARGE_SESSION_MODE_ENABLED){
             // ספירה נכשלה: מושכים working-set (לא 52K). אם חזר פחות מהתקרה — זה סשן רגיל.
             useLargeCustomers = true;
             largeProbeUncertain = true;
             largeCustomersTotal = 0;
-            try { console.warn("LARGE_SESSION_PROBE_FAILED_USING_WORKING_SET:", probe.error || ""); } catch(_e) {}
+            try { console.warn("LARGE_SESSION_PROBE_FAILED_USING_WORKING_SET:", rosterProbe.error || ""); } catch(_e) {}
           }
+        }
+        if(!useLargeCustomers
+          && TEAM_MANAGER_LIGHT_SESSION_ENABLED
+          && Auth?.isTeamManager?.()
+          && rosterProbe.ok
+          && rosterProbe.count >= TEAM_MANAGER_LIGHT_SESSION_THRESHOLD){
+          useTeamManagerWorkingSet = true;
+          this.markTeamManagerLightRoster(rosterProbe.count);
+          try {
+            console.warn(
+              "TEAM_MANAGER_WORKING_SET:",
+              rosterProbe.count,
+              "→",
+              TEAM_MANAGER_LIGHT_WORKING_SET
+            );
+          } catch(_e) {}
         }
 
         const customersFetch = useLargeCustomers
           ? this.loadRecentCustomerRows(LARGE_SESSION_CUSTOMER_WORKING_SET, initialCustomerColumns)
-          : this.loadTableRows(SUPABASE_TABLES.customers, initialCustomerColumns);
+          : useTeamManagerWorkingSet
+            ? this.loadRecentCustomerRows(TEAM_MANAGER_LIGHT_WORKING_SET, initialCustomerColumns)
+            : this.loadTableRows(SUPABASE_TABLES.customers, initialCustomerColumns);
         // GI-PERF 2026-08-10: בסשן גדול גם הצעות רק working-set — אחרת מסך "הצעות" מקפיא.
         const proposalsFetch = useLargeCustomers
           ? this.loadRecentProposalRows(LARGE_SESSION_PROPOSAL_WORKING_SET, initialProposalColumns)
-          : this.loadTableRows(SUPABASE_TABLES.proposals, initialProposalColumns);
+          : useTeamManagerWorkingSet
+            ? this.loadRecentProposalRows(TEAM_MANAGER_LIGHT_PROPOSAL_WORKING_SET, initialProposalColumns)
+            : this.loadTableRows(SUPABASE_TABLES.proposals, initialProposalColumns);
 
         const [metaRes, agentsRes, customersLightRes, proposalsLightRes] = await Promise.all([
           this.loadMetaRow(),
@@ -13756,14 +13843,20 @@
         if(!customersRes.ok || !proposalsRes.ok){
           try { console.warn("LIGHT_SELECT_FAILED_FALLBACK_TO_FULL:", safeTrim(customersRes.error) || safeTrim(proposalsRes.error)); } catch(_e) {}
           lightSelectUsed = false;
-          if(useLargeCustomers){
+          if(useLargeCustomers || useTeamManagerWorkingSet){
+            const custCap = useLargeCustomers
+              ? LARGE_SESSION_CUSTOMER_WORKING_SET
+              : TEAM_MANAGER_LIGHT_WORKING_SET;
+            const propCap = useLargeCustomers
+              ? LARGE_SESSION_PROPOSAL_WORKING_SET
+              : TEAM_MANAGER_LIGHT_PROPOSAL_WORKING_SET;
             const [cRecent, pRecent] = await Promise.all([
               customersRes.ok
                 ? Promise.resolve(customersRes)
-                : this.loadRecentCustomerRows(LARGE_SESSION_CUSTOMER_WORKING_SET, "*"),
+                : this.loadRecentCustomerRows(custCap, "*"),
               proposalsRes.ok
                 ? Promise.resolve(proposalsRes)
-                : this.loadRecentProposalRows(LARGE_SESSION_PROPOSAL_WORKING_SET, "*")
+                : this.loadRecentProposalRows(propCap, "*")
             ]);
             customersRes = cRecent;
             proposalsRes = pRecent;
@@ -13786,6 +13879,11 @@
               ...customersRes,
               data: customersRes.data.slice(0, LARGE_SESSION_CUSTOMER_WORKING_SET)
             };
+          } else if(useTeamManagerWorkingSet && rawLen > TEAM_MANAGER_LIGHT_WORKING_SET){
+            customersRes = {
+              ...customersRes,
+              data: customersRes.data.slice(0, TEAM_MANAGER_LIGHT_WORKING_SET)
+            };
           }
           const propLen = Array.isArray(proposalsRes?.data) ? proposalsRes.data.length : 0;
           if(LARGE_SESSION_MODE_ENABLED && (useLargeCustomers || propLen >= LARGE_SESSION_CUSTOMER_THRESHOLD)
@@ -13795,8 +13893,18 @@
               ...proposalsRes,
               data: proposalsRes.data.slice(0, LARGE_SESSION_PROPOSAL_WORKING_SET)
             };
+          } else if(useTeamManagerWorkingSet && propLen > TEAM_MANAGER_LIGHT_PROPOSAL_WORKING_SET){
+            proposalsRes = {
+              ...proposalsRes,
+              data: proposalsRes.data.slice(0, TEAM_MANAGER_LIGHT_PROPOSAL_WORKING_SET)
+            };
           }
         } catch(_e) {}
+        if(useTeamManagerWorkingSet && !useLargeCustomers){
+          this.markTeamManagerLightRoster(
+            Math.max(rosterProbe.count || 0, Array.isArray(customersRes?.data) ? customersRes.data.length : 0)
+          );
+        }
         if(useLargeCustomers){
           const loadedN = Array.isArray(customersRes?.data) ? customersRes.data.length : 0;
           const loadedP = Array.isArray(proposalsRes?.data) ? proposalsRes.data.length : 0;
@@ -31313,6 +31421,8 @@ UsersGateUI.init();
     _shouldDeferLocalMetricsToServer(){
       try {
         if(typeof Storage !== "undefined" && Storage.isLargeCustomersSession?.()) return true;
+        if(typeof Storage !== "undefined" && Storage.isTeamManagerLightSession?.()) return true;
+        if(typeof Storage !== "undefined" && Storage.isHeavyRosterSession?.()) return true;
         if(this._countMissingCustomerPayloadsSafe() > 0) return true;
         const n = Array.isArray(State.data?.customers) ? State.data.customers.length : 0;
         if(n === 0 && !App?._fullDataReady) return true;
@@ -48449,7 +48559,7 @@ const ClalRiskLifePdf = {
       }
       this._loginReady = Array.isArray(State.data?.agents) && State.data.agents.length > 0;
       try { Storage._memoryCache = null; } catch(_e) {}
-      try { Storage._teamManagerLightLoginHint = false; } catch(_e) {}
+      try { Storage.clearTeamManagerLightRoster?.(); } catch(_e) {}
       try { sessionStorage.removeItem(GI_SERVER_CACHE_KEY); } catch(_e) {}
       try { DashboardUI.invalidateMetricsCache?.({ force: true, userSwitch: true }); } catch(_e) {}
       if(reason){
@@ -49176,7 +49286,7 @@ const ClalRiskLifePdf = {
       try {
         if(Auth?.isTeamManager?.()){
           skipFatFullCache = true;
-          this._teamManagerLightLoginHint = true;
+          Storage.markTeamManagerLightRoster?.(0);
           try { void Storage.purgeCurrentUserFullIdbCache(); } catch(_e2) {}
           try { console.warn("TEAM_MANAGER_LOGIN_SKIP_FAT_CACHE"); } catch(_e2) {}
         }

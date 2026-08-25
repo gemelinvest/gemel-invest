@@ -40,8 +40,8 @@ console.log("\nהגנות שחוברו");
 assert(app.includes("this.isHeavyRosterSession()") || app.includes("Storage.isHeavyRosterSession"), "heavy roster בשימוש");
 assert(app.includes("isTeamManagerLightSession() ? CUSTOMER_LIGHT_COLUMNS"), "delta לקוחות בעמודות רזות");
 assert(app.includes("isTeamManagerLightSession() ? PROPOSAL_LIGHT_COLUMNS"), "delta הצעות בעמודות רזות");
-assert(app.includes("lightConflict ? CUSTOMER_LIGHT_COLUMNS"), "conflict-merge לקוחות בעמודות רזות");
-assert(app.includes("lightConflict ? PROPOSAL_LIGHT_COLUMNS"), "conflict-merge הצעות בעמודות רזות");
+assert(app.includes("מיזוג קונפליקט לפי מזהים") || app.includes("fetchByIds"), "conflict-merge לפי מזהים dirty בלבד");
+assert(app.includes("CUSTOMER_LIGHT_COLUMNS + \",payload\"") || app.includes('CUSTOMER_LIGHT_COLUMNS + ",payload"'), "conflict-merge לקוחות עם payload נקודתי");
 assert(app.includes("largeSession || teamMgrLight"), "LiveRefresh מתייחס למנהל צוות light");
 assert(app.includes("Auth?.isTeamManager?.() && Storage?.isTeamManagerLightSession?.()"), "פטור force dashboard pull");
 assert(app.includes("payloadHasPolicyOrInsuredContent?.(rec?.payload)"), "MyTeam מדלג על payloads ריקים");
@@ -51,6 +51,11 @@ assert(app.includes("purgeCurrentUserFullIdbCache"), "מחיקת IDB שמן למ
 assert(app.includes("shouldSkipTeamManagerFatIdbLoad"), "בדיקת מטמון מפוצל לפני טעינת מנות");
 assert(app.includes("_teamManagerLightLoginHint"), "hint light מיד בלוגין");
 assert(app.includes("if(paintedFromFullCache) adoptIdbEntry"), "לא מאמצים IDB כשצביעה נדחתה");
+assert(app.includes("TEAM_MANAGER_LIGHT_WORKING_SET"), "working-set למנהל צוות");
+assert(app.includes("TEAM_MANAGER_WORKING_SET:"), "לוג working-set");
+assert(app.includes("useTeamManagerWorkingSet"), "טעינת working-set ב-loadSheets");
+assert(app.includes("isTeamManagerLightSession()) return this.loadSheets"), "delta חוזר ל-working-set");
+assert(app.includes("isTeamManagerLightSession?.()) return true"), "KPI מדולג לשרת במצב light");
 
 console.log("\nתיקון 23.08 נשמר");
 assert(app.includes("TEAM_MANAGER_SKIP_MASS_HYDRATION"), "דילוג hydrate מסיבי נשאר");
@@ -64,8 +69,8 @@ assert(app.includes("LIGHT_INITIAL_LOAD_ENABLED = true"), "טעינה רזה נ�
 assert(!/LARGE_SESSION_CUSTOMER_THRESHOLD\s*=\s*2000/.test(app), "לא הורדנו סף ל-2000");
 
 console.log("\ncache");
-assert(indexHtml.includes("app.js?v=20260825-team-mgr-light-v3"), "cache bust app.js");
-assert(sw.includes("20260825-team-mgr-light-v3"), "service-worker version");
+assert(indexHtml.includes("app.js?v=20260825-team-mgr-light-v4"), "cache bust app.js");
+assert(sw.includes("20260825-team-mgr-light-v4"), "service-worker version");
 
 console.log("\nלוגיקה טהורה — LRU");
 function trimLru(list, cap, protectedIds){
