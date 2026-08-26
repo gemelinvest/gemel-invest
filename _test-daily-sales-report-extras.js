@@ -9,7 +9,8 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260826-live-fix-v1";
+const APP_TAG = "20260826-menora-prod-v1";
+const THEME_TAG = "20260826-live-fix-v1";
 let failed = 0;
 let passed = 0;
 
@@ -36,9 +37,9 @@ const mail = read("gi-daily-sales-mail.js");
 console.log("1) syntax + cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
-assert(html.includes("theme.css?v=" + APP_TAG), "index.html theme.css cache");
+assert(html.includes("theme.css?v=" + THEME_TAG), "index.html theme.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
-assert(html.includes("gi-daily-sales-mail.js?v=20260826-mail-overwrite-v1"), "index.html mail script cache");
+assert(html.includes("gi-daily-sales-mail.js?v=20260826-mail-layout-v2"), "index.html mail script cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-daily-sales-mail.js")]).status === 0, "node --check gi-daily-sales-mail.js");
 assert(mail.includes("function snapshotHasNewLayout"), "חסימת שליחת דוח ישן");
 assert(mail.includes("מכירות מודיעין"), "בודק תווית מודיעין בסנאפשוט");
@@ -298,6 +299,10 @@ assert(fn.includes("if(pdfOk(incomingPdf)) return false"), "PDF תקין מחל�
 assert(fn.includes("usedRequestSnapshot"), "send-now מדווח אם השתמש בדוח מהבקשה");
 assert(fn.includes("action === \"send-now\""), "send-now נשאר");
 assert(fn.includes("send-slot"), "שורת השליחה האוטומטית נשארת");
+assert(fn.includes("function snapshotHasNewLayout"), "השרת בודק תבנית חדשה");
+assert(fn.includes("OLD_LAYOUT_ERROR"), "שגיאה אם מנסים לשלוח תבנית ישנה");
+assert(fn.includes("if(!snapshotHasNewLayout(snap.html))"), "send-now/send-slot מסרבים לדוח ישן");
+assert(fn.includes("if(incoming.html && !snapshotHasNewLayout(incoming.html))"), "save-snapshot מסרב לשמור תבנית ישנה");
 
 function pdfOk(raw){
   return String(raw || "").replace(/\s+/g, "").length >= 10000;

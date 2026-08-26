@@ -144,6 +144,20 @@ function shouldKeepExisting(existing: { pdf_base64?: string } | null, incomingPd
   return true;
 }
 
+function snapshotHasNewLayout(html: unknown){
+  const s = String(html || "");
+  if(!s) return false;
+  if(s.indexOf("מוצגים רק נציגים עם מכירה") >= 0) return false;
+  if(s.indexOf("נציגים שמכרו היום") >= 0) return false;
+  if(s.indexOf("פוליסות בריאות + פרט") >= 0) return false;
+  return s.indexOf("מכירות מודיעין") >= 0
+    && s.indexOf("מכירות חיפה") >= 0
+    && s.indexOf("לידים שויכו") >= 0
+    && s.indexOf("פרמייה מהפקה") >= 0;
+}
+
+const OLD_LAYOUT_ERROR = "הדוח השמור הוא תבנית ישנה (בלי מכירות חיפה / מודיעין / לידים). רעננו את ה-CRM ב־Ctrl+F5 ולחצו «רענן דוח להיום».";
+
 async function listRecipients(sb: SupabaseClient){
   const [{ data: agents, error: agentsErr }, { data: metaRows, error: metaErr }] = await Promise.all([
     sb.from("agents").select("id, name, role, email, active"),
@@ -291,6 +305,9 @@ async function handleSaveSnapshot(sb: SupabaseClient, body: Json){
   const today = israelDateKey();
   const incoming = snapshotFromBody(body, today);
   if(!incoming) return json({ ok: false, error: "חסר תוכן דוח" }, 400);
+  if(incoming.html && !snapshotHasNewLayout(incoming.html)){
+    return json({ ok: false, error: OLD_LAYOUT_ERROR }, 400);
+  }
   const dateKey = incoming.date_key || today;
   const existing = await loadSnapshot(sb, dateKey);
   const force = body.force === true || body.replace === true;
@@ -332,6 +349,9 @@ async function handleSendNow(sb: SupabaseClient, body: Json){
   let snap = useRequest ? fromBody : stored;
   if(!snap || (!snap.html && !pdfOk(snap.pdf_base64))){
     return json({ ok: false, error: "אין דוח שמור להיום. לחצו «רענן דוח להיום»." }, 400);
+  }
+  if(!snapshotHasNewLayout(snap.html)){
+    return json({ ok: false, error: OLD_LAYOUT_ERROR }, 400);
   }
   if(useRequest && pdfOk(fromBody?.pdf_base64)){
     await sb.from("gi_daily_sales_mail_snapshots").upsert({
