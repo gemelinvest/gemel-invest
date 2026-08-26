@@ -9,6 +9,7 @@
   const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
   const SNAPSHOT_GAP_MS = 10 * 60 * 1000;
   const SNAPSHOT_POLL_MS = 45 * 1000;
+  const MIN_PDF_CHARS = 10000;
   const TITLE = "דוח מכירות למייל";
 
   let lastSnapshotAt = 0;
@@ -251,12 +252,17 @@
     return !!dashboardUI();
   }
 
-  async function buildSnapshot(){
+  function snapHasPdf(snap){
+    return trim(snap && snap.pdfBase64).length >= MIN_PDF_CHARS;
+  }
+
+  async function buildSnapshot(requirePdf){
     let lastErr = null;
     try {
       if(typeof window.__GI_DAILY_SALES_MAIL_PDF_HOOK__ === "function"){
         const snap = wrapSnap(await window.__GI_DAILY_SALES_MAIL_PDF_HOOK__());
-        if(snap) return snap;
+        if(snap && (!requirePdf || snapHasPdf(snap))) return snap;
+        if(snap && requirePdf) lastErr = new Error("PDF ריק");
       }
     } catch(err) {
       lastErr = err;
@@ -265,15 +271,24 @@
       const b = window.__GI_FACE_BRIDGE__;
       if(b && typeof b.buildDailySalesMailSnapshot === "function"){
         const snap = wrapSnap(await b.buildDailySalesMailSnapshot());
-        if(snap) return snap;
+        if(snap && (!requirePdf || snapHasPdf(snap))) return snap;
+        if(snap && requirePdf) lastErr = lastErr || new Error("PDF ריק");
       }
     } catch(err) {
       lastErr = lastErr || err;
     }
     const Dash = dashboardUI();
     if(Dash && typeof Dash.buildDailySalesMailSnapshot === "function"){
-      const snap = wrapSnap(await Dash.buildDailySalesMailSnapshot());
-      if(snap) return snap;
+      try {
+        const snap = wrapSnap(await Dash.buildDailySalesMailSnapshot());
+        if(snap && (!requirePdf || snapHasPdf(snap))) return snap;
+        if(snap && requirePdf) lastErr = lastErr || new Error("PDF ריק");
+      } catch(err) {
+        lastErr = lastErr || err;
+      }
+    }
+    if(requirePdf){
+      throw lastErr || new Error("לא נוצר קובץ PDF. רעננו את העמוד ב־Ctrl+F5, פתחו את דוח המכירות, ואז לחצו שוב.");
     }
     try {
       return buildEmailHtml();
@@ -398,13 +413,20 @@
       snapshotReady();
       if(!snapshotReady()) return { skipped: true, reason: "incomplete" };
     }
-    const snap = await buildSnapshot();
+    const snap = await buildSnapshot(!!force);
     if(!snapshotHasNewLayout(snap)){
       throw new Error("נטען דוח ישן מהמטמון (בלי מודיעין / חיפה / לידים). רעננו את העמוד ב־Ctrl+F5, ואז לחצו שוב «שלח עכשיו לבדיקה».");
     }
-    await api("save-snapshot", snap);
+    if(force && !snapHasPdf(snap)){
+      throw new Error("לא נוצר קובץ PDF. רעננו את העמוד ב־Ctrl+F5, פתחו את דוח המכירות, ואז לחצו שוב.");
+    }
+    const save = await api("save-snapshot", {
+      ...snap,
+      force: !!force,
+      replace: !!force
+    });
     lastSnapshotAt = Date.now();
-    return snap;
+    return { snap, save, kept: !!(save && save.kept) };
   }
 
   function formatStatus(data){
@@ -432,6 +454,9 @@
     if(data.snapshotDateKey){
       lines.push("דוח אחרון שנשמר לשליחה: " + data.snapshotDateKey + (data.snapshotAt ? (" · " + data.snapshotAt) : ""));
       lines.push(data.hasPdf ? "קובץ PDF מוכן לצירוף למייל." : "עדיין אין PDF שמור — לחצו «רענן דוח להיום».");
+      if(data.snapshotLayout){
+        lines.push("תבנית שמורה: " + trim(data.snapshotLayout));
+      }
     }
     if(data.lastSend){
       lines.push("שליחה אחרונה: " + trim(data.lastSend.status) + (data.lastSend.at ? (" · " + data.lastSend.at) : ""));
@@ -535,8 +560,12 @@
     nodes.snapshot?.addEventListener("click", async () => {
       try {
         setMessage("שומר את דוח היום…");
-        await persistSnapshot(true);
+        const persist = await persistSnapshot(true);
         await refreshStatus();
+        if(persist && persist.kept){
+          setMessage("השרת לא החליף את קובץ ה-PDF הישן של היום. לחצו «שלח עכשיו לבדיקה» אחרי עדכון פונקציית המייל, או נסו שוב אחרי חצות שעון ישראל.", true);
+          return;
+        }
         setMessage("דוח היום נשמר. יישלח אוטומטית ב־12:30, 15:00 ו־20:00.");
       } catch(err) {
         setMessage(errText(err), true);
@@ -545,8 +574,18 @@
     nodes.sendNow?.addEventListener("click", async () => {
       try {
         setMessage("מפיק PDF ושולח דוח בדיקה…");
-        await persistSnapshot(true);
-        const out = await api("send-now");
+        const persist = await persistSnapshot(true);
+        await refreshStatus();
+        if(persist && persist.kept){
+          setMessage("השרת לא החליף את קובץ ה-PDF הישן של היום, ולכן לא נשלח שוב את הדוח הישן. אחרי עדכון פונקציית המייל לחצו שוב «שלח עכשיו לבדיקה».", true);
+          return;
+        }
+        const snap = persist && persist.snap ? persist.snap : persist;
+        const out = await api("send-now", {
+          ...(snap || {}),
+          force: true,
+          replace: true
+        });
         await refreshStatus();
         setMessage(trim(out.message) || "הדוח נשלח.");
       } catch(err) {

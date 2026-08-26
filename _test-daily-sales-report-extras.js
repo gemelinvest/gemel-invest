@@ -38,13 +38,21 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).statu
 assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
 assert(html.includes("theme.css?v=" + APP_TAG), "index.html theme.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
-assert(html.includes("gi-daily-sales-mail.js?v=20260826-mail-layout-v1"), "index.html mail script cache");
+assert(html.includes("gi-daily-sales-mail.js?v=20260826-mail-overwrite-v1"), "index.html mail script cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-daily-sales-mail.js")]).status === 0, "node --check gi-daily-sales-mail.js");
 assert(mail.includes("function snapshotHasNewLayout"), "חסימת שליחת דוח ישן");
 assert(mail.includes("מכירות מודיעין"), "בודק תווית מודיעין בסנאפשוט");
 assert(mail.includes("לידים שויכו"), "בודק תווית לידים בסנאפשוט");
 assert(mail.includes("פרמייה מהפקה"), "בודק תווית פרמייה מהפקה בסנאפשוט");
 assert(mail.includes("נטען דוח ישן מהמטמון"), "הודעת Ctrl+F5 אם נטען דוח ישן");
+assert(mail.includes("MIN_PDF_CHARS = 10000"), "לא שומרים HTML בלי PDF תקין");
+assert(mail.includes("buildSnapshot(!!force)"), "שליחה יזומה דורשת PDF");
+assert(mail.includes('replace: !!force'), "save-snapshot מקבל replace בלחיצה");
+assert(mail.includes('api("send-now"'), "send-now עדיין קיים");
+assert(mail.includes("...(snap || {})"), "send-now שולח את ה-snapshot המלא ולא רק actor");
+assert(mail.includes("persist.kept"), "בודקים kept מהשרת");
+assert(mail.includes("לא נשלח שוב את הדוח הישן"), "לא שולחים שוב PDF ישן כש-kept");
+assert(!mail.includes('await api("send-now");'), "send-now לא נקרא בלי גוף הדוח");
 
 console.log("\n2) שיוך סוכנות בניהול משתמשים");
 assert(html.includes('id="lcUserOfficeBranch"'), "שדה שיוך לסוכנות במודל משתמש");
@@ -194,6 +202,34 @@ assert(countAssignedLeads([
   { assignedAgentId: "", assignedAgentName: "" },
   { assignedAgentId: "", assignedAgentName: "יוסי" }
 ]) === 2, "נספרים רק לידים ששויכו");
+
+console.log("\n6) edge function — החלפת PDF באותו יום");
+const fnPath = path.join(ROOT, "supabase", "functions", "gi-daily-sales-mail", "index.ts");
+assert(fs.existsSync(fnPath), "supabase/functions/gi-daily-sales-mail/index.ts");
+const fn = read("supabase/functions/gi-daily-sales-mail/index.ts");
+assert(fn.includes("function shouldKeepExisting"), "כלל keep מפורש בפונקציה");
+assert(fn.includes("if(force && pdfOk(incomingPdf)) return false"), "force+PDF תקין תמיד מחליף");
+assert(fn.includes("if(pdfOk(incomingPdf)) return false"), "PDF תקין מחליף גם בלי force (heartbeat)");
+assert(fn.includes("usedRequestSnapshot"), "send-now מדווח אם השתמש בדוח מהבקשה");
+assert(fn.includes("action === \"send-now\""), "send-now נשאר");
+assert(fn.includes("send-slot"), "שורת השליחה האוטומטית נשארת");
+
+function pdfOk(raw){
+  return String(raw || "").replace(/\s+/g, "").length >= 10000;
+}
+function shouldKeepExisting(existing, incomingPdf, force){
+  const haveStoredPdf = String(existing?.pdf_base64 || "").length >= 10000;
+  if(!haveStoredPdf) return false;
+  if(force && pdfOk(incomingPdf)) return false;
+  if(pdfOk(incomingPdf)) return false;
+  return true;
+}
+const stored = { pdf_base64: "P".repeat(12000) };
+assert(shouldKeepExisting(stored, "", false) === true, "HTML בלי PDF לא דורס PDF קיים");
+assert(shouldKeepExisting(stored, "x".repeat(12000), false) === false, "PDF חדש מחליף את הישן");
+assert(shouldKeepExisting(stored, "x".repeat(12000), true) === false, "שלח עכשיו מחליף");
+assert(shouldKeepExisting(null, "", false) === false, "אין שמור — לא keep");
+assert(shouldKeepExisting({ pdf_base64: "tiny" }, "", false) === false, "PDF שמור קטן לא נחשב");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);

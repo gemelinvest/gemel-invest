@@ -1,0 +1,5 @@
+# Minimal config so the reconstructed daily-sales mail function can be deployed.
+project_id = "vhvlkerectggovfihjgm"
+
+[functions.gi-daily-sales-mail]
+verify_jwt = false
