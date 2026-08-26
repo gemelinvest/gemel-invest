@@ -2882,6 +2882,8 @@
       teamManagerAssignmentsUpdatedAt: null,
       agentReportAliases: {},
       agentReportAliasesUpdatedAt: null,
+      agentBranches: {},
+      agentBranchesUpdatedAt: null,
       directoryContactExtras: [],
       directoryContactsUpdatedAt: null,
       agentSecurity: {},
@@ -2974,6 +2976,10 @@
     out.meta.agentReportAliases = normalizeAgentReportAliasesMap(out.meta.agentReportAliases);
     if(!safeTrim(out.meta.agentReportAliasesUpdatedAt) && Object.keys(out.meta.agentReportAliases || {}).length){
       out.meta.agentReportAliasesUpdatedAt = safeTrim(out.meta.updatedAt) || nowISO();
+    }
+    out.meta.agentBranches = normalizeAgentBranchesMap(out.meta.agentBranches);
+    if(!safeTrim(out.meta.agentBranchesUpdatedAt) && Object.keys(out.meta.agentBranches || {}).length){
+      out.meta.agentBranchesUpdatedAt = safeTrim(out.meta.updatedAt) || nowISO();
     }
     out.meta.directoryContactExtras = normalizeDirectoryContactsList(out.meta.directoryContactExtras);
     if(!safeTrim(out.meta.directoryContactsUpdatedAt) && out.meta.directoryContactExtras.length){
@@ -3229,6 +3235,14 @@
           remoteAt: safeTrim(server.agentReportAliasesUpdatedAt)
         }
       ),
+      agentBranches: mergeAgentBranchesMapsByRecency(
+        local.agentBranches,
+        server.agentBranches,
+        {
+          localAt: safeTrim(local.agentBranchesUpdatedAt),
+          remoteAt: safeTrim(server.agentBranchesUpdatedAt)
+        }
+      ),
       directoryContactExtras: mergeDirectoryContactsListsByRecency(
         local.directoryContactExtras,
         server.directoryContactExtras,
@@ -3242,6 +3256,14 @@
     merged.agentReportAliasesUpdatedAt = (() => {
       const localAt = safeTrim(local.agentReportAliasesUpdatedAt);
       const serverAt = safeTrim(server.agentReportAliasesUpdatedAt);
+      if(localAt && serverAt){
+        return compareIsoStamps(localAt, serverAt) >= 0 ? localAt : serverAt;
+      }
+      return localAt || serverAt || preferredUpdatedAt || nowISO();
+    })();
+    merged.agentBranchesUpdatedAt = (() => {
+      const localAt = safeTrim(local.agentBranchesUpdatedAt);
+      const serverAt = safeTrim(server.agentBranchesUpdatedAt);
       if(localAt && serverAt){
         return compareIsoStamps(localAt, serverAt) >= 0 ? localAt : serverAt;
       }
@@ -4270,6 +4292,74 @@
       .filter(Boolean);
   }
 
+  /* שיוך סניף (חיפה / מודיעין) — נשמר ב-meta כמו כינויי דוח,
+     בלי שינוי סכימת טבלת agents ובלי נגיעה בחישוב מכירות. */
+  function normalizeOfficeBranchLabel(value){
+    const raw = safeTrim(value).toLowerCase().replace(/[\s_-]+/g, "");
+    if(!raw) return "";
+    if(raw === "חיפה" || raw === "haifa") return "חיפה";
+    if(raw === "מודיעין" || raw === "modiin" || raw === "modi'in" || raw === "מודיעיןמכביםרעות") return "מודיעין";
+    return "";
+  }
+
+  function normalizeAgentNameKey(value){
+    return safeTrim(value).replace(/\s+/g, " ").toLowerCase();
+  }
+
+  function normalizeAgentBranchesMap(raw){
+    const out = {};
+    if(raw && typeof raw === "object"){
+      Object.keys(raw).forEach((k) => {
+        const id = safeTrim(k);
+        const branch = normalizeOfficeBranchLabel(raw[k]);
+        if(id && branch) out[id] = branch;
+      });
+    }
+    return out;
+  }
+
+  function getAgentOfficeBranch(agentId){
+    const id = safeTrim(agentId);
+    if(!id) return "";
+    State.data.meta = State.data.meta && typeof State.data.meta === "object" ? State.data.meta : {};
+    const map = normalizeAgentBranchesMap(State.data.meta.agentBranches);
+    if(map[id]) return map[id];
+    const lower = id.toLowerCase();
+    for(const k of Object.keys(map)){
+      if(k.toLowerCase() === lower) return map[k];
+    }
+    return "";
+  }
+
+  function setAgentOfficeBranch(agentId, branch){
+    const id = safeTrim(agentId);
+    if(!id) return;
+    State.data.meta = State.data.meta && typeof State.data.meta === "object" ? State.data.meta : {};
+    const map = normalizeAgentBranchesMap(State.data.meta.agentBranches);
+    Object.keys(map).forEach((k) => { if(k.toLowerCase() === id.toLowerCase()) delete map[k]; });
+    const clean = normalizeOfficeBranchLabel(branch);
+    if(clean) map[id] = clean;
+    State.data.meta.agentBranches = map;
+    State.data.meta.agentBranchesUpdatedAt = nowISO();
+    State.data.meta.updatedAt = nowISO();
+  }
+
+  function mergeAgentBranchesMapsByRecency(localMap, remoteMap, options = {}){
+    const loc = normalizeAgentBranchesMap(localMap);
+    const rem = normalizeAgentBranchesMap(remoteMap);
+    const localAt = safeTrim(options.localAt);
+    const remoteAt = safeTrim(options.remoteAt);
+    if(localAt && remoteAt){
+      const localNewer = compareIsoStamps(localAt, remoteAt) >= 0;
+      const winner = localNewer ? loc : rem;
+      const loser = localNewer ? rem : loc;
+      return normalizeAgentBranchesMap({ ...loser, ...winner });
+    }
+    if(localAt && Object.keys(loc).length) return loc;
+    if(remoteAt && Object.keys(rem).length) return rem;
+    return normalizeAgentBranchesMap({ ...rem, ...loc });
+  }
+
   function normalizeDirectoryContact(row, idx){
     if(!row || typeof row !== "object") return null;
     const fullName = safeTrim(row.fullName || row.full_name || row.name);
@@ -4356,6 +4446,66 @@
       map.set(key, c);
     });
     return [...map.values()].sort((a, b) => safeTrim(a.fullName).localeCompare(safeTrim(b.fullName), "he"));
+  }
+
+  function lookupOfficeBranchFromDirectory(agentOrName){
+    const isObj = agentOrName && typeof agentOrName === "object";
+    const nameKey = normalizeAgentNameKey(isObj ? (agentOrName.name || agentOrName.username) : agentOrName);
+    const email = isObj ? safeTrim(agentOrName.email).toLowerCase() : "";
+    if(!nameKey && !email) return "";
+    try {
+      const list = listDirectoryContacts();
+      for(let i = 0; i < list.length; i += 1){
+        const c = list[i];
+        const cEmail = safeTrim(c.email).toLowerCase();
+        if(email && cEmail && email === cEmail){
+          const fromEmail = normalizeOfficeBranchLabel(c.agency);
+          if(fromEmail) return fromEmail;
+        }
+      }
+      for(let i = 0; i < list.length; i += 1){
+        const c = list[i];
+        const cName = normalizeAgentNameKey(c.fullName);
+        if(nameKey && cName && nameKey === cName){
+          const fromName = normalizeOfficeBranchLabel(c.agency);
+          if(fromName) return fromName;
+        }
+      }
+    } catch(_e) {}
+    return "";
+  }
+
+  function findAgentRecordBySalesName(agentName){
+    const key = normalizeAgentNameKey(agentName);
+    if(!key) return null;
+    const agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
+    for(let i = 0; i < agents.length; i += 1){
+      const a = agents[i];
+      const names = [a?.name, a?.username];
+      try {
+        const aliases = getAgentReportAliases(a?.id);
+        if(Array.isArray(aliases)) names.push.apply(names, aliases);
+      } catch(_e) {}
+      if(names.some((n) => normalizeAgentNameKey(n) === key)) return a;
+    }
+    return null;
+  }
+
+  function resolveOfficeBranchForSalesAgentName(agentName){
+    const agent = findAgentRecordBySalesName(agentName);
+    if(agent){
+      const saved = getAgentOfficeBranch(agent.id);
+      if(saved) return saved;
+      const fromDir = lookupOfficeBranchFromDirectory(agent);
+      if(fromDir) return fromDir;
+    }
+    return lookupOfficeBranchFromDirectory(agentName);
+  }
+
+  function suggestOfficeBranchForAgent(user){
+    const saved = getAgentOfficeBranch(user?.id);
+    if(saved) return saved;
+    return lookupOfficeBranchFromDirectory(user) || "";
   }
 
   function canManageDirectoryContacts(){
@@ -11712,6 +11862,8 @@
           teamManagerAssignmentsUpdatedAt: safeTrim(state?.meta?.teamManagerAssignmentsUpdatedAt) || null,
           agentReportAliases: normalizeAgentReportAliasesMap(state?.meta?.agentReportAliases),
           agentReportAliasesUpdatedAt: safeTrim(state?.meta?.agentReportAliasesUpdatedAt) || null,
+          agentBranches: normalizeAgentBranchesMap(state?.meta?.agentBranches),
+          agentBranchesUpdatedAt: safeTrim(state?.meta?.agentBranchesUpdatedAt) || null,
           directoryContactExtras: normalizeDirectoryContactsList(state?.meta?.directoryContactExtras),
           directoryContactsUpdatedAt: safeTrim(state?.meta?.directoryContactsUpdatedAt) || null,
           // GI-FIX 2026-08-03c: agentSecurity/agentTargets חייבים ב-buildMetaRow עצמו,
@@ -12340,6 +12492,8 @@
         teamManagerAssignmentsUpdatedAt: safeTrim(payload?.teamManagerAssignmentsUpdatedAt) || null,
         agentReportAliases: normalizeAgentReportAliasesMap(payload?.agentReportAliases),
         agentReportAliasesUpdatedAt: safeTrim(payload?.agentReportAliasesUpdatedAt) || null,
+        agentBranches: normalizeAgentBranchesMap(payload?.agentBranches),
+        agentBranchesUpdatedAt: safeTrim(payload?.agentBranchesUpdatedAt) || null,
         directoryContactExtras: normalizeDirectoryContactsList(payload?.directoryContactExtras),
         directoryContactsUpdatedAt: safeTrim(payload?.directoryContactsUpdatedAt) || null,
         // GI-FIX 2026-08-03c: קריאת agentSecurity מ-payload ב-mapMeta עצמו (לא רק ב-wrapper).
@@ -13393,6 +13547,22 @@
           }
           return localAt || remoteAt || safeTrim(mappedMeta.updatedAt) || nowISO();
         })();
+        mappedMeta.agentBranches = mergeAgentBranchesMapsByRecency(
+          prevMeta.agentBranches,
+          mappedMeta.agentBranches,
+          {
+            localAt: safeTrim(prevMeta.agentBranchesUpdatedAt),
+            remoteAt: safeTrim(mappedMeta.agentBranchesUpdatedAt)
+          }
+        );
+        mappedMeta.agentBranchesUpdatedAt = (() => {
+          const localAt = safeTrim(prevMeta.agentBranchesUpdatedAt);
+          const remoteAt = safeTrim(mappedMeta.agentBranchesUpdatedAt);
+          if(localAt && remoteAt){
+            return compareIsoStamps(localAt, remoteAt) >= 0 ? localAt : remoteAt;
+          }
+          return localAt || remoteAt || safeTrim(mappedMeta.updatedAt) || nowISO();
+        })();
         mappedMeta.directoryContactExtras = mergeDirectoryContactsListsByRecency(
           prevMeta.directoryContactExtras,
           mappedMeta.directoryContactExtras,
@@ -14164,6 +14334,22 @@
                 }
                 return localAt || remoteAt || safeTrim(mergedState.meta.updatedAt) || nowISO();
               })();
+              mergedState.meta.agentBranches = mergeAgentBranchesMapsByRecency(
+                mergedState.meta.agentBranches,
+                remoteMeta.agentBranches,
+                {
+                  localAt: safeTrim(mergedState.meta.agentBranchesUpdatedAt),
+                  remoteAt: safeTrim(remoteMeta.agentBranchesUpdatedAt)
+                }
+              );
+              mergedState.meta.agentBranchesUpdatedAt = (() => {
+                const localAt = safeTrim(mergedState.meta.agentBranchesUpdatedAt);
+                const remoteAt = safeTrim(remoteMeta.agentBranchesUpdatedAt);
+                if(localAt && remoteAt){
+                  return compareIsoStamps(localAt, remoteAt) >= 0 ? localAt : remoteAt;
+                }
+                return localAt || remoteAt || safeTrim(mergedState.meta.updatedAt) || nowISO();
+              })();
               mergedState.meta.directoryContactExtras = mergeDirectoryContactsListsByRecency(
                 mergedState.meta.directoryContactExtras,
                 remoteMeta.directoryContactExtras,
@@ -14294,6 +14480,22 @@
               return compareIsoStamps(localAt, serverAt) >= 0 ? localAt : serverAt;
             }
             return localAt || serverAt || safeTrim(localState.meta?.agentReportAliasesUpdatedAt) || null;
+          })();
+          localState.meta.agentBranches = mergeAgentBranchesMapsByRecency(
+            localState.meta?.agentBranches,
+            serverState.meta.agentBranches,
+            {
+              localAt: safeTrim(localState.meta?.agentBranchesUpdatedAt),
+              remoteAt: safeTrim(serverState.meta.agentBranchesUpdatedAt)
+            }
+          );
+          localState.meta.agentBranchesUpdatedAt = (() => {
+            const localAt = safeTrim(localState.meta?.agentBranchesUpdatedAt);
+            const serverAt = safeTrim(serverState.meta.agentBranchesUpdatedAt);
+            if(localAt && serverAt){
+              return compareIsoStamps(localAt, serverAt) >= 0 ? localAt : serverAt;
+            }
+            return localAt || serverAt || safeTrim(localState.meta?.agentBranchesUpdatedAt) || null;
           })();
           localState.meta.directoryContactExtras = mergeDirectoryContactsListsByRecency(
             localState.meta?.directoryContactExtras,
@@ -17402,6 +17604,7 @@ UsersGateUI.init();
         teamAgentsCount: $("#lcUserTeamAgentsCount"),
         teamAgentsPick: $("#lcUserTeamAgentsPick"),
         reportAliases: $("#lcUserReportAliases"),
+        officeBranch: $("#lcUserOfficeBranch"),
       };
 
       const E = this._modalEls;
@@ -17547,6 +17750,7 @@ UsersGateUI.init();
         }
       }
       if(E.role) E.role.value = user ? (user.role || "agent") : "agent";
+      if(E.officeBranch) E.officeBranch.value = user ? suggestOfficeBranchForAgent(user) : "";
       if(E.active) E.active.checked = user ? (user.active !== false) : true;
       this._teamSearchTerm = "";
       if(E.teamAgentsSearch) E.teamAgentsSearch.value = "";
@@ -17868,6 +18072,9 @@ UsersGateUI.init();
         a.active = active;
         a.updatedAt = agentNow;
         a.updated_at = agentNow;
+        if(E.officeBranch){
+          setAgentOfficeBranch(a.id, E.officeBranch.value);
+        }
         if(prevName !== name || prevUsername !== username){
           rememberAgentNameHistory(a.id, [prevName, prevUsername].filter(Boolean));
         }
@@ -17949,6 +18156,9 @@ UsersGateUI.init();
         }
         if(E.reportAliases){
           setAgentReportAliases(newId, parseAgentReportAliasesInput(E.reportAliases.value));
+        }
+        if(E.officeBranch){
+          setAgentOfficeBranch(newId, E.officeBranch.value);
         }
         State.data.meta.updatedAt = nowISO();
         appendAuditLog({
@@ -33932,6 +34142,113 @@ UsersGateUI.init();
       return !!(tab && (tab.printView || tab.key === "all"));
     },
 
+    /* קריאה בלבד: אותו נתון כמו כרטיס «פרמייה מהפקה» בדשבורד. לא משנה חישוב. */
+    dailySalesIssuedPremiumTotal(){
+      try {
+        if(typeof DailyReportStore !== "undefined" && DailyReportStore.getIssuedPremiumMetrics){
+          const issued = DailyReportStore.getIssuedPremiumMetrics();
+          return {
+            total: Number(issued?.totalPremium) || 0,
+            policyCount: Number(issued?.policyCount) || 0,
+            hasReport: !!issued?.hasReport
+          };
+        }
+      } catch(_e) {}
+      return { total: 0, policyCount: 0, hasReport: false };
+    },
+
+    /* קריאה בלבד: כמה לידים שויכו ביום הדוח — אותו סינון יום כמו מערכת הלידים. */
+    dailySalesAssignedLeadsCount(dateKey){
+      const day = safeTrim(dateKey);
+      if(!day) return 0;
+      try {
+        const raw = (typeof CampaignLeadsStore !== "undefined" && Array.isArray(CampaignLeadsStore.leads))
+          ? CampaignLeadsStore.leads
+          : [];
+        const scoped = typeof scopeElderlyCampaignLeads === "function"
+          ? scopeElderlyCampaignLeads(raw)
+          : raw;
+        const forDay = scoped.filter((l) => {
+          try {
+            return typeof campaignLeadMatchesDateIL === "function"
+              ? campaignLeadMatchesDateIL(l, day)
+              : false;
+          } catch(_e) { return false; }
+        });
+        return forDay.filter((l) => {
+          const id = safeTrim(l?.assignedAgentId);
+          const name = safeTrim(l?.assignedAgentName);
+          if(id) return true;
+          return !!(name && name !== "—" && name !== "לא שויך");
+        }).length;
+      } catch(_e) { return 0; }
+    },
+
+    /* קריאה בלבד: ה-KPI «לידים שויכו» קורא מ-CampaignLeadsStore.leads.
+       המערך מתמלא ב-fetchAll / hydrateFromCacheIfEmpty — בדרך כלל רק כשנפתחה
+       מערכת לידים. כאן קוראים לאותן מתודות קיימות, בלי לשנות שיוך או fetch. */
+    ensureDailySalesAssignedLeadsLoaded(options = {}){
+      try {
+        if(typeof CampaignLeadsStore !== "undefined" && typeof CampaignLeadsStore.hydrateFromCacheIfEmpty === "function"){
+          CampaignLeadsStore.hydrateFromCacheIfEmpty();
+        }
+      } catch(_e) {}
+      if(!options.force && this._dailySalesLeadsFetchPromise) return this._dailySalesLeadsFetchPromise;
+      const store = (typeof CampaignLeadsStore !== "undefined") ? CampaignLeadsStore : null;
+      if(!store || typeof store.fetchAll !== "function"){
+        return Promise.resolve({ ok: false, skipped: true });
+      }
+      const p = Promise.resolve()
+        .then(() => store.fetchAll())
+        .then((r) => r || { ok: false })
+        .catch((err) => ({ ok: false, error: String((err && err.message) || err || "") }));
+      this._dailySalesLeadsFetchPromise = p;
+      return p;
+    },
+
+    _kickDailySalesAssignedLeadsLoad(){
+      if(this._dailySalesLeadsKickStarted) return;
+      this._dailySalesLeadsKickStarted = true;
+      void this.ensureDailySalesAssignedLeadsLoaded().then(() => {
+        this._paintDailySalesAssignedLeadsKpis();
+      });
+    },
+
+    _paintDailySalesAssignedLeadsKpis(){
+      try {
+        const kpisEl = document.getElementById("dailySalesKpis");
+        if(!kpisEl || kpisEl.hidden) return;
+        const report = this.buildDailyAgentSalesReport();
+        const model = this.buildDailySalesPrintModel(report);
+        kpisEl.innerHTML = this.renderDailySalesPrintKpisHtml(model);
+      } catch(_e) {}
+    },
+
+    /* נגזר משורות הדוח שכבר חושבו — בלי מעבר נוסף על לקוחות. */
+    dailySalesOfficeBranchTotals(rows){
+      const out = {
+        haifa: { premium: 0, agents: 0 },
+        modiin: { premium: 0, agents: 0 }
+      };
+      const seen = { haifa: new Set(), modiin: new Set() };
+      (Array.isArray(rows) ? rows : []).forEach((r) => {
+        const branch = typeof resolveOfficeBranchForSalesAgentName === "function"
+          ? resolveOfficeBranchForSalesAgentName(r?.agentName)
+          : "";
+        const bucket = branch === "חיפה" ? "haifa" : (branch === "מודיעין" ? "modiin" : "");
+        if(!bucket) return;
+        out[bucket].premium += Number(r?.monthly) || 0;
+        const name = safeTrim(r?.agentName);
+        if(name && !seen[bucket].has(name)){
+          seen[bucket].add(name);
+          out[bucket].agents += 1;
+        }
+      });
+      out.haifa.premium = Math.round(out.haifa.premium * 100) / 100;
+      out.modiin.premium = Math.round(out.modiin.premium * 100) / 100;
+      return out;
+    },
+
     /* תצוגה בלבד: אותו מודל כמו כפתור הדפסה / PDF / מייל. לא משנה חישוב פרמיה. */
     buildDailySalesPrintModel(forDate){
       const report = (forDate && typeof forDate === "object" && Array.isArray(forDate.groups))
@@ -33955,6 +34272,9 @@ UsersGateUI.init();
           weekday: "long", day: "numeric", month: "long", year: "numeric"
         }) + " · ישראל";
       } catch(_e) {}
+      const issuedPremium = this.dailySalesIssuedPremiumTotal();
+      const officeBranches = this.dailySalesOfficeBranchTotals(rows);
+      const assignedLeads = this.dailySalesAssignedLeadsCount(report.dateKey);
       return {
         report,
         rows,
@@ -33963,6 +34283,9 @@ UsersGateUI.init();
         agentCount,
         showPension,
         dateLine,
+        issuedPremium,
+        officeBranches,
+        assignedLeads,
         fileStem: this.dailySalesPrintFileStem(report.dateKey),
         issued: (() => {
           try {
@@ -34042,20 +34365,33 @@ UsersGateUI.init();
 
     renderDailySalesPrintKpisHtml(model){
       const money = (v) => this.dailySalesPrintMoney(v);
+      const issued = model.issuedPremium || { total: 0 };
+      const branches = model.officeBranches || { haifa: { premium: 0 }, modiin: { premium: 0 } };
       const cards = [
         { value: String(model.agentCount), label: "נציגים שמכרו היום" },
         { value: String(model.healthSlice.deals || 0), label: "פוליסות בריאות + פרט" },
         { value: money(model.healthSlice.premium), label: "פרמיה חודשית · בריאות + פרט", hero: true },
-        { value: money(model.totals.elementary), label: "פרמיה שנתית · אלמנטרי", elem: true }
+        { value: money(issued.total), label: "פרמייה מהפקה", elem: true }
       ];
       if(model.showPension){
         cards.push({ value: money(model.totals.pension), label: "פרמיה חודשית · פנסיה" });
       }
-      return cards.map((c) => `
+      const main = cards.map((c) => `
         <article class="giDailySalesPage__kpi${c.hero ? " giDailySalesPage__kpi--hero" : ""}${c.elem ? " giDailySalesPage__kpi--elem" : ""}">
           <div class="giDailySalesPage__kpiLabel">${escapeHtml(c.label)}</div>
           <div class="giDailySalesPage__kpiValue">${escapeHtml(c.value)}</div>
         </article>`).join("");
+      const extra = [
+        { value: money(branches.modiin.premium), label: "מכירות מודיעין" },
+        { value: money(branches.haifa.premium), label: "מכירות חיפה" },
+        { value: String(Number(model.assignedLeads) || 0), label: "לידים שויכו" }
+      ].map((c) => `
+        <article class="giDailySalesPage__kpi">
+          <div class="giDailySalesPage__kpiLabel">${escapeHtml(c.label)}</div>
+          <div class="giDailySalesPage__kpiValue">${escapeHtml(c.value)}</div>
+        </article>`).join("");
+      return `<div class="giDailySalesPage__kpiRow${model.showPension ? " is-five" : ""}">${main}</div>
+        <div class="giDailySalesPage__kpiRow giDailySalesPage__kpiRow--extra">${extra}</div>`;
     },
 
     buildDailySalesEmailHtml(forDate){
@@ -34088,18 +34424,25 @@ UsersGateUI.init();
       const pensionStat = model.showPension
         ? `<td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(model.totals.pension))}</b><span style="font-size:11px;color:#5b6b7c">פרמיה חודשית · פנסיה</span></td>`
         : "";
+      const issued = model.issuedPremium || { total: 0 };
+      const branches = model.officeBranches || { haifa: { premium: 0 }, modiin: { premium: 0 } };
       const html = `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>
       <body dir="rtl" style="margin:0;padding:24px;background:#fff;color:#122033;font-family:'Segoe UI','Arial Hebrew',Arial,sans-serif;direction:rtl;text-align:right;unicode-bidi:embed">
         <table dir="rtl" align="right" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:920px;margin:0 auto;direction:rtl;text-align:right"><tr><td dir="rtl" align="right" style="direction:rtl;text-align:right">
           <p style="margin:0 0 4px;font-size:11px;letter-spacing:.08em;color:#5b6b7c;font-weight:600;direction:rtl;text-align:right">GEMEL INVEST · דוח מכירות</p>
           <h1 style="margin:0;font-size:22px;color:#0b2a4a;direction:rtl;text-align:right">מכירות היום</h1>
           <p style="margin:4px 0 18px;font-size:13px;color:#3d4d5e;direction:rtl;text-align:right">${escapeHtml(model.dateLine)}</p>
-          <table dir="rtl" align="right" style="width:100%;border-collapse:collapse;margin:0 0 18px;direction:rtl;text-align:right"><tr>
+          <table dir="rtl" align="right" style="width:100%;border-collapse:collapse;margin:0 0 10px;direction:rtl;text-align:right"><tr>
             <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(String(model.agentCount))}</b><span style="font-size:11px;color:#5b6b7c">נציגים שמכרו היום</span></td>
             <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(String(model.healthSlice.deals || 0))}</b><span style="font-size:11px;color:#5b6b7c">פוליסות בריאות + פרט</span></td>
             <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(model.healthSlice.premium))}</b><span style="font-size:11px;color:#5b6b7c">פרמיה חודשית · בריאות + פרט</span></td>
-            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(model.totals.elementary))}</b><span style="font-size:11px;color:#5b6b7c">פרמיה שנתית · אלמנטרי</span></td>
+            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(issued.total))}</b><span style="font-size:11px;color:#5b6b7c">פרמייה מהפקה</span></td>
             ${pensionStat}
+          </tr></table>
+          <table dir="rtl" align="right" style="width:100%;border-collapse:collapse;margin:0 0 18px;direction:rtl;text-align:right"><tr>
+            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(branches.modiin.premium))}</b><span style="font-size:11px;color:#5b6b7c">מכירות מודיעין</span></td>
+            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(branches.haifa.premium))}</b><span style="font-size:11px;color:#5b6b7c">מכירות חיפה</span></td>
+            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(String(Number(model.assignedLeads) || 0))}</b><span style="font-size:11px;color:#5b6b7c">לידים שויכו</span></td>
           </tr></table>
           <table dir="rtl" align="right" style="width:100%;border-collapse:collapse;font-size:12.5px;direction:rtl;text-align:right">
             <thead><tr>
@@ -34122,7 +34465,6 @@ UsersGateUI.init();
               <td style="background:#0b2a4a;color:#fff;font-weight:700;padding:10px;text-align:right">${escapeHtml(money(model.sums.monthly))}</td>
             </tr></tfoot>
           </table>
-          <p style="margin-top:14px;font-size:11px;color:#5b6b7c;line-height:1.5;direction:rtl;text-align:right">מוצגים רק נציגים עם מכירה ביום הנבחר. «פרט» הוא ענף הסיכונים במערכת. פרמיית בריאות, פרט ופנסיה היא חודשית. פרמיית אלמנטרי מוצגת שנתית ואינה נכנסת לסה״כ החודשי.</p>
         </td></tr></table>
       </body></html>`;
       return {
@@ -34133,7 +34475,10 @@ UsersGateUI.init();
           agentCount: model.agentCount,
           healthDeals: Number(model.healthSlice.deals) || 0,
           healthPremium: Number(model.healthSlice.premium) || 0,
-          elementary: Number(model.totals.elementary) || 0,
+          issuedPremium: Number(issued.total) || 0,
+          modiin: Number(branches.modiin.premium) || 0,
+          haifa: Number(branches.haifa.premium) || 0,
+          assignedLeads: Number(model.assignedLeads) || 0,
           pension: Number(model.totals.pension) || 0
         }
       };
@@ -34380,7 +34725,9 @@ UsersGateUI.init();
       }
       try {
         try { UI.renderSyncStatus?.("מרענן נתוני מכירות…", "warn"); } catch(_e) {}
+        const leadsP = this.ensureDailySalesAssignedLeadsLoaded({ force: true });
         const r = await Storage.loadSheets({ useCachedFallback: false });
+        try { await leadsP; } catch(_e) {}
         if(r?.ok){
           App.applyLoadResult(r, "נתוני מכירות עודכנו", { skipNavigation: true, skipLoginSideEffects: true });
           try { Storage.scheduleFullIdbCacheSave(State.data); } catch(_e) {}
@@ -34412,6 +34759,7 @@ UsersGateUI.init();
       this._ensureDailySalesPageBound();
       try { this._scheduleMidnightReset(); } catch(_e) {}
       try { this.ensureDailySalesServerOverlay(); } catch(_e) {}
+      try { this._kickDailySalesAssignedLeadsLoad(); } catch(_e) {}
       const report = this.buildDailyAgentSalesReport();
       const tab = this.getDailySalesSelectedSectorTab();
       const printView = this.dailySalesIsPrintViewTab(tab);
@@ -34468,7 +34816,7 @@ UsersGateUI.init();
         kpisEl.innerHTML = this.renderDailySalesPrintKpisHtml(model);
         kpisEl.hidden = false;
         kpisEl.setAttribute("aria-hidden", "false");
-        kpisEl.classList.toggle("is-five", !!model.showPension);
+        kpisEl.classList.remove("is-five");
       }
       if(sectorsEl) sectorsEl.innerHTML = this.renderDailySalesSectorTabsHtml(report);
       if(heroEl){
@@ -34511,11 +34859,14 @@ UsersGateUI.init();
       const tableEl = tbody?.closest?.("table");
       if(tableEl) tableEl.classList.toggle("giDailySalesPage__table--print", printView);
       if(noteEl){
-        noteEl.hidden = printView ? false : !tab.annual;
         if(printView){
-          noteEl.innerHTML = "מוצגים רק נציגים עם מכירה ביום הנבחר. «פרט» הוא ענף הסיכונים במערכת. פרמיית אלמנטרי מוצגת שנתית ואינה נכנסת לסה״כ החודשי.";
-        } else if(tab.annual){
-          noteEl.innerHTML = "אלמנטרי: הפרמיה המוצגת היא <b>פרמיה שנתית</b>.";
+          noteEl.hidden = true;
+          noteEl.innerHTML = "";
+        } else {
+          noteEl.hidden = !tab.annual;
+          if(tab.annual){
+            noteEl.innerHTML = "אלמנטרי: הפרמיה המוצגת היא <b>פרמיה שנתית</b>.";
+          }
         }
       }
       paintDateChrome();
@@ -35340,7 +35691,8 @@ UsersGateUI.init();
   .kicker { margin: 0 0 4px; font-size: 11px; letter-spacing: 0.08em; color: #5b6b7c; font-weight: 600; }
   h1 { margin: 0; font-size: 22px; line-height: 1.2; color: #0b2a4a; }
   .date { margin: 4px 0 0; font-size: 13px; color: #3d4d5e; }
-  .stats { display: grid; grid-template-columns: repeat(${statCount}, 1fr); gap: 10px; margin: 0 0 18px; }
+  .stats { display: grid; grid-template-columns: repeat(${statCount}, 1fr); gap: 10px; margin: 0 0 10px; }
+  .stats--extra { grid-template-columns: repeat(3, 1fr); margin: 0 0 18px; }
   .stat { border: 1px solid #d7dee6; padding: 10px 12px; }
   .stat b { display: block; font-size: 18px; color: #0b2a4a; margin-bottom: 2px; }
   .stat span { font-size: 11px; color: #5b6b7c; }
@@ -35368,6 +35720,8 @@ UsersGateUI.init();
       const pensionStat = model.showPension
         ? `<div class="stat"><b>${escapeHtml(money(model.totals.pension))}</b><span>פרמיה חודשית · פנסיה</span></div>`
         : "";
+      const issued = model.issuedPremium || { total: 0 };
+      const branches = model.officeBranches || { haifa: { premium: 0 }, modiin: { premium: 0 } };
       return `<div class="page">
   <header>
     <img class="logo" src="${escapeHtml(this.dailySalesPrintLogoSrc())}" alt="גמל INVEST"/>
@@ -35381,18 +35735,19 @@ UsersGateUI.init();
     <div class="stat"><b>${escapeHtml(String(model.agentCount))}</b><span>נציגים שמכרו היום</span></div>
     <div class="stat"><b>${escapeHtml(String(model.healthSlice.deals || 0))}</b><span>פוליסות בריאות + פרט</span></div>
     <div class="stat"><b>${escapeHtml(money(model.healthSlice.premium))}</b><span>פרמיה חודשית · בריאות + פרט</span></div>
-    <div class="stat"><b>${escapeHtml(money(model.totals.elementary))}</b><span>פרמיה שנתית · אלמנטרי</span></div>
+    <div class="stat"><b>${escapeHtml(money(issued.total))}</b><span>פרמייה מהפקה</span></div>
     ${pensionStat}
+  </div>
+  <div class="stats stats--extra">
+    <div class="stat"><b>${escapeHtml(money(branches.modiin.premium))}</b><span>מכירות מודיעין</span></div>
+    <div class="stat"><b>${escapeHtml(money(branches.haifa.premium))}</b><span>מכירות חיפה</span></div>
+    <div class="stat"><b>${escapeHtml(String(Number(model.assignedLeads) || 0))}</b><span>לידים שויכו</span></div>
   </div>
   <table>
     <thead>${this.renderDailySalesPrintTheadHtml(model)}</thead>
     <tbody>${this.renderDailySalesPrintRowsHtml(model)}</tbody>
     <tfoot>${this.renderDailySalesPrintFootHtml(model)}</tfoot>
   </table>
-  <p class="note">
-    מוצגים רק נציגים עם מכירה ביום הנבחר. «פרט» הוא ענף הסיכונים במערכת.
-    פרמיית בריאות, פרט ופנסיה היא חודשית. פרמיית אלמנטרי מוצגת שנתית ואינה נכנסת לסה״כ החודשי.
-  </p>
   <div class="foot">
     <span>גמל INVEST</span>
     <span>הופק ב־${escapeHtml(model.issued)}</span>
@@ -35522,7 +35877,11 @@ UsersGateUI.init();
 
     async prepareDailySalesMailSnapshot(){
       try { this.ensureDailySalesServerOverlay(); } catch(_e) {}
-      return this._waitDailySalesOverlayForMail(12000);
+      const [overlayOk] = await Promise.all([
+        this._waitDailySalesOverlayForMail(12000),
+        this._waitDailySalesAssignedLeadsForMail(12000)
+      ]);
+      return overlayOk;
     },
 
     async _waitDailySalesOverlayForMail(ms){
@@ -35540,8 +35899,19 @@ UsersGateUI.init();
       return !!(overlay?.ok && overlay.dateKey === dateKey);
     },
 
+    _waitDailySalesAssignedLeadsForMail(ms){
+      const budget = Math.max(0, Number(ms) || 0);
+      return Promise.race([
+        this.ensureDailySalesAssignedLeadsLoaded().catch(() => false),
+        new Promise((resolve) => setTimeout(() => resolve(false), budget))
+      ]);
+    },
+
     async buildDailySalesMailSnapshot(forDate){
-      await this._waitDailySalesOverlayForMail(4000);
+      await Promise.all([
+        this._waitDailySalesOverlayForMail(4000),
+        this._waitDailySalesAssignedLeadsForMail(12000)
+      ]);
       const email = this.buildDailySalesEmailHtml(forDate);
       const doc = this.buildDailySalesPrintDocumentHtml(forDate);
       const pdfBase64 = await this._renderDailySalesPdfBase64(doc);
@@ -51050,6 +51420,8 @@ const ClalRiskLifePdf = {
     row.payload.agentTargets = normalizeAgentTargetMap(state?.meta?.agentTargets);
     row.payload.agentReportAliases = normalizeAgentReportAliasesMap(state?.meta?.agentReportAliases);
     row.payload.agentReportAliasesUpdatedAt = safeTrim(state?.meta?.agentReportAliasesUpdatedAt) || null;
+    row.payload.agentBranches = normalizeAgentBranchesMap(state?.meta?.agentBranches);
+    row.payload.agentBranchesUpdatedAt = safeTrim(state?.meta?.agentBranchesUpdatedAt) || null;
     row.payload.directoryContactExtras = normalizeDirectoryContactsList(state?.meta?.directoryContactExtras);
     row.payload.directoryContactsUpdatedAt = safeTrim(state?.meta?.directoryContactsUpdatedAt) || null;
     row.payload.usersManagementAccess = normalizeUsersManagementAccess(state?.meta?.usersManagementAccess);
@@ -51546,6 +51918,10 @@ const ClalRiskLifePdf = {
     out.agentReportAliasesUpdatedAt = safeTrim(metaRow?.payload?.agentReportAliasesUpdatedAt)
       || safeTrim(out.agentReportAliasesUpdatedAt)
       || null;
+    out.agentBranches = normalizeAgentBranchesMap(metaRow?.payload?.agentBranches || out.agentBranches);
+    out.agentBranchesUpdatedAt = safeTrim(metaRow?.payload?.agentBranchesUpdatedAt)
+      || safeTrim(out.agentBranchesUpdatedAt)
+      || null;
     out.directoryContactExtras = normalizeDirectoryContactsList(
       Array.isArray(metaRow?.payload?.directoryContactExtras) ? metaRow.payload.directoryContactExtras : (out.directoryContactExtras || [])
     );
@@ -51832,6 +52208,7 @@ const ClalRiskLifePdf = {
     els.authEmail = $('#lcUserAuthEmail');
     els.monthlyTarget = $('#lcUserMonthlyTarget');
     els.reportAliases = $('#lcUserReportAliases');
+    els.officeBranch = $('#lcUserOfficeBranch');
     return els;
   };
   const _openModal = UsersUI.openModal.bind(UsersUI);
@@ -51869,6 +52246,9 @@ const ClalRiskLifePdf = {
       }
       if(E.reportAliases){
         E.reportAliases.value = user ? getAgentReportAliases(user.id).join(', ') : '';
+      }
+      if(E.officeBranch){
+        E.officeBranch.value = user ? suggestOfficeBranchForAgent(user) : '';
       }
     };
     fillExtra();
@@ -51970,6 +52350,9 @@ const ClalRiskLifePdf = {
       // Only write aliases if the field was actually present in the DOM.
       if(reportAliasesRaw !== null){
         setAgentReportAliases(agentId, reportAliasesRaw);
+      }
+      if(!!E.officeBranch){
+        setAgentOfficeBranch(agentId, E.officeBranch.value);
       }
       if(agentRow){
         agentRow.email = authEmailToSave;

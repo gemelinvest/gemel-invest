@@ -6629,9 +6629,20 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
   background: var(--gi-primary);
 }
 #view-dailySales .giDailySalesPage__kpis:not(#\9):not(#\9){
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+#view-dailySales .giDailySalesPage__kpiRow:not(#\9):not(#\9){
   display: grid;
   grid-template-columns: 1.4fr 1fr 1fr 1fr;
   gap: 12px;
+}
+#view-dailySales .giDailySalesPage__kpiRow.is-five:not(#\9):not(#\9){
+  grid-template-columns: 1.2fr 1fr 1fr 1fr 1fr;
+}
+#view-dailySales .giDailySalesPage__kpiRow--extra:not(#\9):not(#\9){
+  grid-template-columns: 1fr 1fr 1fr;
 }
 #view-dailySales .giDailySalesPage__kpi:not(#\9):not(#\9){
   display: flex;
@@ -6793,8 +6804,9 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
   color: #92400E;
 }
 @media (max-width: 1100px){
-  #view-dailySales .giDailySalesPage__kpis:not([hidden]):not(#\9):not(#\9),
-#view-dailySales .giDailySalesPage__kpis.is-five:not([hidden]):not(#\9):not(#\9){
+  #view-dailySales .giDailySalesPage__kpiRow:not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__kpiRow.is-five:not(#\9):not(#\9),
+#view-dailySales .giDailySalesPage__kpiRow--extra:not(#\9):not(#\9){
     grid-template-columns: 1fr 1fr;
   }
 }
@@ -6818,12 +6830,20 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
   display: none !important;
 }
 #view-dailySales .giDailySalesPage__kpis:not([hidden]):not(#\9):not(#\9){
+  display: flex !important;
+  flex-direction: column;
+  gap: 12px;
+}
+#view-dailySales .giDailySalesPage__kpiRow:not(#\9):not(#\9){
   display: grid !important;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
-#view-dailySales .giDailySalesPage__kpis.is-five:not([hidden]):not(#\9):not(#\9){
+#view-dailySales .giDailySalesPage__kpiRow.is-five:not(#\9):not(#\9){
   grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+#view-dailySales .giDailySalesPage__kpiRow--extra:not(#\9):not(#\9){
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 #view-dailySales .giDailySalesPage__kpis[hidden]:not(#\9):not(#\9){
   display: none !important;
