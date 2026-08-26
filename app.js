@@ -16598,7 +16598,7 @@ UsersGateUI.init();
       const canUsers = Auth.canManageUsers();
       const settingsBtn = document.querySelector('.nav__item[data-view="settings"]');
       const newCustomerBtn = document.getElementById("btnNewCustomerWizard");
-      const offerFab = document.getElementById("giOfferFab");
+      const travelInsuranceBtn = document.getElementById("btnTravelInsuranceAbroad");
       const carInsuranceBtn = document.getElementById("btnCarInsuranceClick");
       const myToolsNav = document.getElementById("navMyTools");
       const campaignLinesCard = document.getElementById("campaignLinesSettingsCard");
@@ -16620,7 +16620,7 @@ UsersGateUI.init();
           btn.style.display = (v === "campaignLeads" || v === "dashboard" || v === "contacts") ? "" : "none";
         });
         if (newCustomerBtn) newCustomerBtn.style.display = "none";
-        if (offerFab) offerFab.style.display = "none";
+        if (travelInsuranceBtn) travelInsuranceBtn.style.display = "none";
         if (carInsuranceBtn) carInsuranceBtn.style.display = "none";
         try { SimulatorsCenterUI.syncVisibility?.(); } catch(_e) {}
         document.body.classList.add("is-referent-role");
@@ -16649,7 +16649,7 @@ UsersGateUI.init();
       try { ContactsUI.syncAddButton?.(); } catch(_e) {}
       // הקמת הצעה חדשה: זמין גם לאלמנטרי (כמו נציג רגיל); מוסתר לתפעול / נציג תפעול / סוקרת
       if (newCustomerBtn) newCustomerBtn.style.display = isOpsFamily ? "none" : "";
-      if (offerFab) offerFab.style.display = isElementary ? "none" : "";
+      if (travelInsuranceBtn) travelInsuranceBtn.style.display = isElementary ? "none" : "";
       if (carInsuranceBtn) carInsuranceBtn.style.display = (isOpsFamily || isElementary || isReferent) ? "none" : "";
       if (this.els.navArchivedCustomers) this.els.navArchivedCustomers.style.display = "none";
       if (this.els.navSystemUpdates) this.els.navSystemUpdates.style.display = "none";
@@ -45309,6 +45309,7 @@ const MIRROR_DISCLOSURE_LIBRARY = {
 
 
   const HAR_BITUACH_SITE_URL = "https://harb.cma.gov.il/";
+  const TRAVEL_INSURANCE_ABROAD_URL = "https://buy.passportcard.co.il/?AffiliateId=vINm9OCbeh0%2BTAjGxvVjjQ%3D%3D";
 
   const HarHabituachTopbarUI = {
     init(){
@@ -45334,6 +45335,45 @@ const MIRROR_DISCLOSURE_LIBRARY = {
             window.showToast?.({
               title: "לא נפתח חלון",
               text: "אפשר חלונות קופצים בדפדפן כדי לפתוח את אתר הר הביטוח.",
+              variant: "warn",
+              durationMs: 4600
+            });
+          }catch(_e){}
+        }
+      });
+    }
+  };
+
+  const TravelInsuranceTopbarUI = {
+    init(){
+      const btn = document.getElementById("btnTravelInsuranceAbroad");
+      if(!btn) return;
+      on(btn, "click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if(!Auth.current){
+          try{
+            window.showToast?.({
+              title: "נדרשת התחברות",
+              text: "יש להתחבר למערכת לפני פתיחת ביטוח נסיעות לחו״ל.",
+              variant: "warn",
+              durationMs: 4200
+            });
+          }catch(_e){}
+          return;
+        }
+        const opened = window.open(
+          TRAVEL_INSURANCE_ABROAD_URL,
+          "giTravelInsuranceAbroad",
+          "width=1200,height=860,scrollbars=yes,resizable=yes"
+        );
+        if(opened){
+          try { opened.opener = null; } catch(_e) {}
+        } else {
+          try{
+            window.showToast?.({
+              title: "לא נפתח חלון",
+              text: "אפשר חלונות קופצים בדפדפן כדי לפתוח את ביטוח הנסיעות לחו״ל.",
               variant: "warn",
               durationMs: 4600
             });
@@ -53100,6 +53140,7 @@ const ClalRiskLifePdf = {
   AgentAppointmentWizard.init();
   NewCustomerEntryUI.init();
   HarHabituachTopbarUI.init();
+  TravelInsuranceTopbarUI.init();
   CarInsuranceClickUI.init();
   SimulatorsCenterUI.init();
   LeadShellUI.init();
@@ -53618,430 +53659,6 @@ const ClalRiskLifePdf = {
         });
       } catch(_){}
     },
-  };
-
-  const OfferCompareUI = {
-    els: {},
-    state: {
-      customerName: "",
-      letterText: "",
-      letterHtml: "",
-      hasResult: false
-    },
-
-    init(){
-      this.els = {
-        fab: $("#giOfferFab"),
-        modal: $("#giOfferModal"),
-        backdrop: $("#giOfferBackdrop"),
-        close: $("#giOfferClose"),
-        reset: $("#giOfferReset"),
-        compare: $("#giOfferCompare"),
-        customerName: $("#giOfferCustomerName"),
-        addExisting: $("#giOfferAddExisting"),
-        addOurs: $("#giOfferAddOurs"),
-        existingRows: $("#giOfferExistingRows"),
-        ourRows: $("#giOfferOurRows"),
-        error: $("#giOfferError"),
-        result: $("#giOfferResult"),
-        copyText: $("#giOfferCopyText"),
-        print: $("#giOfferPrint"),
-        pdf: $("#giOfferPdf")
-      };
-      if(!this.els.fab || !this.els.modal) return;
-
-      on(this.els.fab, "click", () => this.open());
-      on(this.els.close, "click", () => this.close());
-      on(this.els.backdrop, "click", () => this.close());
-      on(this.els.reset, "click", () => this.reset());
-      on(this.els.compare, "click", () => this.compareRows());
-      on(this.els.addExisting, "click", () => this.addRow("existing"));
-      on(this.els.addOurs, "click", () => this.addRow("ours"));
-      on(this.els.existingRows, "click", (ev) => this.handleRemoveRow(ev));
-      on(this.els.ourRows, "click", (ev) => this.handleRemoveRow(ev));
-      on(this.els.copyText, "click", () => this.copyClientText());
-      on(this.els.print, "click", () => this.printOffer());
-      on(this.els.pdf, "click", () => this.exportPdf());
-    },
-
-    open(){
-      this.reset();
-      this.els.modal.setAttribute("aria-hidden", "false");
-      this.els.modal.classList.add("is-open");
-    },
-
-    close(){
-      this.els.modal.setAttribute("aria-hidden", "true");
-      this.els.modal.classList.remove("is-open");
-    },
-
-    reset(){
-      this.state = { customerName: "", letterText: "", letterHtml: "", hasResult: false };
-      if(this.els.customerName) this.els.customerName.value = "";
-      if(this.els.error) this.els.error.textContent = "";
-      if(this.els.result){
-        this.els.result.classList.add("is-hidden");
-        this.els.result.innerHTML = "";
-      }
-      if(this.els.existingRows) this.els.existingRows.innerHTML = "";
-      if(this.els.ourRows) this.els.ourRows.innerHTML = "";
-      this.addRow("existing");
-      this.addRow("ours");
-    },
-
-    getCompanyOptions(kind){
-      const fromWizard = (kind === "existing"
-        ? (Array.isArray(Wizard?.existingCompanies) ? Wizard.existingCompanies : [])
-        : (Array.isArray(Wizard?.companies) ? Wizard.companies : [])
-      ).map((v) => safeTrim(v)).filter(Boolean);
-      const fallback = kind === "existing"
-        ? ["איילון","הראל","כלל","מגדל","מנורה","הפניקס","הכשרה","AIG","ביטוח ישיר","9 מיליון"]
-        : ["איילון","כלל","מגדל","מנורה","הפניקס","הכשרה","מדיקר"];
-      const values = Array.from(new Set([...(fromWizard.length ? fromWizard : fallback), "אחר"]));
-      return values.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("");
-    },
-
-    getProductOptions(){
-      const fromWizard = (Array.isArray(Wizard?.insTypes) ? Wizard.insTypes : []).map((v) => safeTrim(v)).filter(Boolean);
-      const fallback = ["בריאות","מחלות קשות","סרטן","אובדן כושר עבודה","ריסק","ריסק משכנתא"];
-      const values = Array.from(new Set([...(fromWizard.length ? fromWizard : fallback), "אחר"]));
-      return values.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("");
-    },
-
-    addRow(kind){
-      const host = kind === "existing" ? this.els.existingRows : this.els.ourRows;
-      if(!host) return;
-      const row = document.createElement("div");
-      row.className = "giOfferRow";
-      const companyOptions = this.getCompanyOptions(kind);
-      const productOptions = this.getProductOptions();
-      row.innerHTML = [
-        `<select class="input" data-field="company"><option value="">בחר חברה</option>${companyOptions}</select>`,
-        `<select class="input" data-field="product"><option value="">בחר מוצר</option>${productOptions}</select>`,
-        "<input class=\"input\" data-field=\"price\" type=\"number\" min=\"0\" step=\"0.01\" placeholder=\"מחיר חודשי\"/>",
-        "<button class=\"btn giOfferRow__remove\" data-remove-offer-row type=\"button\" aria-label=\"הסר שורה\">✕</button>"
-      ].join("");
-      host.appendChild(row);
-    },
-
-    handleRemoveRow(ev){
-      const btn = ev.target.closest("[data-remove-offer-row]");
-      if(!btn) return;
-      const row = btn.closest(".giOfferRow");
-      const parent = row?.parentElement;
-      if(!row || !parent) return;
-      if(parent.children.length <= 1) return;
-      row.remove();
-    },
-
-    readRows(kind){
-      const host = kind === "existing" ? this.els.existingRows : this.els.ourRows;
-      if(!host) return [];
-      return $$(".giOfferRow", host).map((row) => {
-        const company = safeTrim($("[data-field=\"company\"]", row)?.value);
-        const product = safeTrim($("[data-field=\"product\"]", row)?.value);
-        const priceRaw = safeTrim($("[data-field=\"price\"]", row)?.value).replace(",", ".");
-        const price = Number(priceRaw);
-        return { company, product, price: Number.isFinite(price) ? price : NaN };
-      }).filter((item) => item.company || item.product || Number.isFinite(item.price));
-    },
-
-    compareRows(){
-      if(this.els.error) this.els.error.textContent = "";
-      if(this.els.result){
-        this.els.result.classList.add("is-hidden");
-        this.els.result.innerHTML = "";
-      }
-
-      const customerName = safeTrim(this.els.customerName?.value);
-      const existing = this.readRows("existing");
-      const ours = this.readRows("ours");
-
-      if(!customerName){
-        if(this.els.error) this.els.error.textContent = "יש להזין שם לקוח לפני ביצוע השוואה.";
-        return;
-      }
-      if(!existing.length || !ours.length){
-        if(this.els.error) this.els.error.textContent = "יש להזין לפחות שורה אחת בכל צד (קיים ומוצע).";
-        return;
-      }
-      if(existing.some((row) => !Number.isFinite(row.price)) || ours.some((row) => !Number.isFinite(row.price))){
-        if(this.els.error) this.els.error.textContent = "יש להזין מחיר תקין בכל שורה שהוזנה.";
-        return;
-      }
-
-      const maxLen = Math.max(existing.length, ours.length);
-      const rows = [];
-      let totalExisting = 0;
-      let totalOurs = 0;
-      for(let i = 0; i < maxLen; i += 1){
-        const oldRow = existing[i] || { company:"—", product:"—", price:0 };
-        const newRow = ours[i] || { company:"—", product:"—", price:0 };
-        const delta = oldRow.price - newRow.price;
-        totalExisting += Number(oldRow.price || 0);
-        totalOurs += Number(newRow.price || 0);
-        rows.push({ oldRow, newRow, delta });
-      }
-
-      const monthlyDelta = totalExisting - totalOurs;
-      const yearlyDelta = monthlyDelta * 12;
-      const savingsLabel = monthlyDelta >= 0 ? "חיסכון" : "תוספת";
-      const formatMoney = (value) => "₪" + Number(value || 0).toLocaleString("he-IL", { maximumFractionDigits: 2 });
-      const deltaClass = monthlyDelta > 0 ? "giOfferResult__delta--good" : monthlyDelta < 0 ? "giOfferResult__delta--bad" : "giOfferResult__delta--same";
-      const deltaWord = monthlyDelta > 0 ? "חיסכון" : monthlyDelta < 0 ? "תוספת" : "איזון";
-
-      const detailRows = rows.map((entry, idx) => {
-        const rowDelta = Number(entry.delta || 0);
-        const rowDeltaClass = rowDelta > 0 ? "giOfferResult__delta--good" : rowDelta < 0 ? "giOfferResult__delta--bad" : "giOfferResult__delta--same";
-        const rowDeltaText = (rowDelta > 0 ? "-" : rowDelta < 0 ? "+" : "") + formatMoney(Math.abs(rowDelta));
-        return [
-          "<tr>",
-          `<td>${idx + 1}</td>`,
-          `<td>${entry.oldRow.company} / ${entry.oldRow.product}</td>`,
-          `<td>${formatMoney(entry.oldRow.price)}</td>`,
-          `<td>${entry.newRow.company} / ${entry.newRow.product}</td>`,
-          `<td>${formatMoney(entry.newRow.price)}</td>`,
-          `<td class="${rowDeltaClass}">${rowDeltaText}</td>`,
-          "</tr>"
-        ].join("");
-      }).join("");
-
-      const letterText = [
-        `לכבוד ${customerName},`,
-        "",
-        "להלן השוואת הצעה לביטוח:",
-        `סה\"כ עלות ביטוחים קיימים: ${formatMoney(totalExisting)} לחודש`,
-        `סה\"כ עלות בהצעה החדשה: ${formatMoney(totalOurs)} לחודש`,
-        `${deltaWord} חודשי: ${formatMoney(Math.abs(monthlyDelta))}`,
-        `${deltaWord} שנתי: ${formatMoney(Math.abs(yearlyDelta))}`,
-        "",
-        "נשמח להתקדם יחד ולעזור לך להשלים את התהליך."
-      ].join("\n");
-
-      const letterHtml = [
-        `<div class="giOfferClientLetter__title">לכבוד ${escapeHtml(customerName)}</div>`,
-        "<div class=\"giOfferClientLetter__body\">",
-        "להלן השוואת הצעה לביטוח:<br>",
-        `סה&quot;כ עלות ביטוחים קיימים: <strong>${formatMoney(totalExisting)}</strong> לחודש<br>`,
-        `סה&quot;כ עלות בהצעה החדשה: <strong>${formatMoney(totalOurs)}</strong> לחודש<br>`,
-        `${deltaWord} חודשי: <strong>${formatMoney(Math.abs(monthlyDelta))}</strong><br>`,
-        `${deltaWord} שנתי: <strong>${formatMoney(Math.abs(yearlyDelta))}</strong><br><br>`,
-        "נשמח להתקדם יחד ולעזור לך להשלים את התהליך.",
-        "</div>"
-      ].join("");
-
-      this.state.customerName = customerName;
-      this.state.letterText = letterText;
-      this.state.letterHtml = letterHtml;
-      this.state.hasResult = true;
-
-      if(this.els.result){
-        this.els.result.innerHTML = [
-          "<div class=\"giOfferResult__totals\">",
-          `<span class=\"giOfferResult__pill\">לקוח: ${customerName}</span>`,
-          `<span class=\"giOfferResult__pill\">סה\"כ קיים: ${formatMoney(totalExisting)}</span>`,
-          `<span class=\"giOfferResult__pill\">סה\"כ מוצע: ${formatMoney(totalOurs)}</span>`,
-          `<span class=\"giOfferResult__pill ${deltaClass}\">${savingsLabel} חודשי: ${formatMoney(Math.abs(monthlyDelta))}</span>`,
-          `<span class=\"giOfferResult__pill ${deltaClass}\">${savingsLabel} שנתי: ${formatMoney(Math.abs(yearlyDelta))}</span>`,
-          "</div>",
-          `<div class="giOfferClientLetter">${letterHtml}</div>`,
-          "<table class=\"giOfferResult__table\">",
-          "<thead><tr><th>#</th><th>קיים</th><th>מחיר קיים</th><th>מוצע</th><th>מחיר מוצע</th><th>פער</th></tr></thead>",
-          `<tbody>${detailRows}</tbody>`,
-          "</table>"
-        ].join("");
-        this.els.result.classList.remove("is-hidden");
-      }
-    },
-
-    async copyClientText(){
-      if(!this.state.hasResult || !this.state.letterText){
-        if(this.els.error) this.els.error.textContent = "צריך לבצע השוואה לפני העתקת נוסח ללקוח.";
-        return;
-      }
-      if(this.els.error) this.els.error.textContent = "";
-      try {
-        await navigator.clipboard.writeText(this.state.letterText);
-        if(typeof toast === "function") toast("נוסח ההצעה הועתק", "אפשר להדביק ולשלוח ללקוח");
-      } catch(_e){
-        if(this.els.error) this.els.error.textContent = "לא הצלחתי להעתיק אוטומטית. אפשר לסמן ולהעתיק ידנית.";
-      }
-    },
-
-    printOffer(){
-      if(!this.state.hasResult || !this.els.result || this.els.result.classList.contains("is-hidden")){
-        if(this.els.error) this.els.error.textContent = "צריך לבצע השוואה לפני הפקת הצעה.";
-        return;
-      }
-      if(this.els.error) this.els.error.textContent = "";
-      const win = window.open("", "_blank", "width=1040,height=820");
-      if(!win) return;
-      const docHtml = this.buildDocumentHtml({ mode: "print" });
-      win.document.write(`<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><title>הצעה ללקוח</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
-<style>
-  body{margin:0;font-family:Rubik,Arial,sans-serif;background:#fff;color:#0b1f4a}
-  .wrap{padding:22px}
-  ${this._getOfferDocPrintCss()}
-</style></head><body><div class="wrap">${docHtml}</div></body></html>`);
-      win.document.close();
-      setTimeout(() => {
-        try { win.focus(); win.print(); } catch(_e) {}
-      }, 120);
-    },
-
-    _getOfferDocPrintCss(){
-      return `
-        .giOfferDoc{background:#fff}
-        .giOfferDoc__head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding-bottom:12px;border-bottom:1px solid rgba(15,23,42,.10);margin-bottom:12px}
-        .giOfferDoc__brand{display:flex;align-items:center;gap:10px}
-        .giOfferDoc__logo{width:46px;height:46px;border-radius:12px;border:1px solid rgba(15,23,42,.10);object-fit:contain;background:#fff}
-        .giOfferDoc__brandName{font-weight:900}
-        .giOfferDoc__brandSub{font-size:12px;color:rgba(15,23,42,.70);font-weight:700}
-        .giOfferDoc__meta{text-align:left;font-size:12px;color:rgba(15,23,42,.70);font-weight:700;line-height:1.5}
-        .giOfferDoc__title{font-size:18px;font-weight:900;margin:2px 0 8px}
-        .giOfferDoc__to{font-size:14px;font-weight:900;margin:0 0 10px}
-        .giOfferDoc__note{font-size:13px;color:rgba(15,23,42,.76);line-height:1.6;margin-bottom:12px}
-        .giOfferDoc__summary{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 12px}
-        .giOfferDoc__pill{background:#f7faff;border:1px solid rgba(42,92,245,.20);border-radius:999px;padding:7px 10px;font-size:12px;font-weight:800}
-        .giOfferDoc__pill--good{border-color:rgba(15,157,109,.28);color:#0f9d6d;background:rgba(15,157,109,.06)}
-        .giOfferDoc__pill--bad{border-color:rgba(215,32,74,.26);color:#d7204a;background:rgba(215,32,74,.05)}
-        .giOfferDoc__table{width:100%;border-collapse:collapse;border:1px solid rgba(15,23,42,.10);border-radius:12px;overflow:hidden}
-        .giOfferDoc__table th,.giOfferDoc__table td{padding:10px 8px;border-bottom:1px solid rgba(15,23,42,.08);font-size:13px;text-align:right}
-        .giOfferDoc__table th{background:linear-gradient(180deg, rgba(235,242,255,.90), rgba(255,255,255,.86));font-size:12px;color:rgba(15,23,42,.76);font-weight:900}
-        /* fallback if replacement didn't hit */
-        .giOfferResult__table{width:100%;border-collapse:collapse;border:1px solid rgba(15,23,42,.10);border-radius:12px;overflow:hidden}
-        .giOfferResult__table th,.giOfferResult__table td{padding:10px 8px;border-bottom:1px solid rgba(15,23,42,.08);font-size:13px;text-align:right}
-        .giOfferResult__table th{background:linear-gradient(180deg, rgba(235,242,255,.90), rgba(255,255,255,.86));font-size:12px;color:rgba(15,23,42,.76);font-weight:900}
-        .giOfferDoc__foot{margin-top:12px;padding-top:10px;border-top:1px solid rgba(15,23,42,.10);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px;color:rgba(15,23,42,.70);font-weight:700}
-        @page { size: A4; margin: 14mm; }
-      `;
-    },
-
-    buildDocumentHtml(options = {}){
-      const customerName = safeTrim(this.state.customerName);
-      const generatedAt = new Date().toLocaleString("he-IL");
-      const agentName = safeTrim(Auth?.current?.name) || "";
-      const agentRole = safeTrim(Auth?.current?.roleLabel || "");
-      const mode = safeTrim(options.mode) || "pdf";
-
-      const resultRoot = this.els.result;
-      const pills = resultRoot ? Array.from(resultRoot.querySelectorAll(".giOfferResult__pill")).map((el) => safeTrim(el.textContent)).filter(Boolean) : [];
-      const tableHtml = resultRoot ? (resultRoot.querySelector("table")?.outerHTML || "") : "";
-
-      const logoSrc = "./logo-login-clean.png";
-      const title = "הצעה לביטוח";
-
-      const deltaMonthly = pills.find(t => t.includes("חודשי")) || "";
-      const deltaCls = deltaMonthly.includes("חיסכון") ? "giOfferDoc__pill--good" : (deltaMonthly.includes("תוספת") ? "giOfferDoc__pill--bad" : "");
-
-      const summaryHtml = pills.map((t) => {
-        const cls = t.includes("חודשי") || t.includes("שנתי") ? deltaCls : "";
-        return `<span class="giOfferDoc__pill ${cls}">${escapeHtml(t)}</span>`;
-      }).join("");
-
-      const note = (mode === "pdf")
-        ? "מסמך זה הופק אוטומטית מתוך מערכת GEMEL INVEST."
-        : "מסמך זה הופק אוטומטית מתוך מערכת GEMEL INVEST (תצוגת הדפסה).";
-
-      return [
-        `<section class="giOfferDoc">`,
-          `<div class="giOfferDoc__head">`,
-            `<div class="giOfferDoc__brand">`,
-              `<img class="giOfferDoc__logo" src="${escapeHtml(logoSrc)}" alt="GEMEL INVEST">`,
-              `<div class="giOfferDoc__brandText">`,
-                `<div class="giOfferDoc__brandName">GEMEL INVEST</div>`,
-                `<div class="giOfferDoc__brandSub">הצעה והשוואת מחירים</div>`,
-              `</div>`,
-            `</div>`,
-            `<div class="giOfferDoc__meta">`,
-              `<div>תאריך: ${escapeHtml(generatedAt)}</div>`,
-              `${agentName ? `<div>נציג: ${escapeHtml(agentName)}${agentRole ? ` (${escapeHtml(agentRole)})` : ""}</div>` : ``}`,
-            `</div>`,
-          `</div>`,
-          `<div class="giOfferDoc__title">${escapeHtml(title)}</div>`,
-          `<div class="giOfferDoc__to">לכבוד ${escapeHtml(customerName || "הלקוח")}</div>`,
-          `<div class="giOfferDoc__note">${escapeHtml(note)}</div>`,
-          `<div class="giOfferDoc__summary">${summaryHtml}</div>`,
-          tableHtml ? tableHtml.replace("giOfferResult__table", "giOfferDoc__table") : "",
-          `<div class="giOfferDoc__foot">`,
-            `<div>לכל שאלה נשמח לסייע.</div>`,
-            `<div>GEMEL INVEST • CRM</div>`,
-          `</div>`,
-        `</section>`
-      ].join("");
-    },
-
-    async exportPdf(){
-      if(!this.state.hasResult || !this.els.result || this.els.result.classList.contains("is-hidden")){
-        if(this.els.error) this.els.error.textContent = "צריך לבצע השוואה לפני הורדת PDF.";
-        return;
-      }
-      if(typeof window.html2pdf !== "function"){
-        if(this.els.error) this.els.error.textContent = "html2pdf לא נטען. בדוק שהספרייה קיימת בעמוד.";
-        return;
-      }
-      if(this.els.error) this.els.error.textContent = "";
-
-      const container = document.createElement("div");
-      container.setAttribute("dir", "rtl");
-      container.setAttribute("lang", "he");
-      container.style.position = "fixed";
-      // חשוב: לא להשתמש ב-opacity:0 / z-index:-1, כי זה גורם ל-html2canvas
-      // לעיתים להפיק דף ריק.
-      container.style.left = "-20000px";
-      container.style.top = "0";
-      container.style.width = "794px"; // ~A4 at 96dpi
-      container.style.background = "#fff";
-      container.style.opacity = "1";
-      container.style.pointerEvents = "none";
-      container.style.zIndex = "0";
-      container.style.display = "block";
-      container.innerHTML = [
-        "<style>",
-        "  body{margin:0;font-family:Rubik,Arial,sans-serif;background:#fff;color:#0b1f4a}",
-        this._getOfferDocPrintCss(),
-        "</style>",
-        this.buildDocumentHtml({ mode: "pdf" })
-      ].join("\n");
-      document.body.appendChild(container);
-
-      const customerName = safeTrim(this.state.customerName) || "הצעה";
-      const safeName = customerName.replace(/[\\/:*?\"<>|]+/g, "-").slice(0, 80);
-      const filename = `${safeName}.pdf`;
-
-      try {
-        // Ensure fonts/images are ready before capture (prevents blank PDFs)
-        try { await document.fonts?.ready; } catch(_e) {}
-        await new Promise((r) => requestAnimationFrame(() => r()));
-        await new Promise((r) => requestAnimationFrame(() => r()));
-        const imgs = Array.from(container.querySelectorAll("img"));
-        if(imgs.length){
-          await Promise.all(imgs.map((img) => new Promise((resolve) => {
-            if(img.complete) return resolve();
-            img.onload = () => resolve();
-            img.onerror = () => resolve();
-          })));
-        }
-
-        const opts = {
-          margin:       [10, 10, 10, 10],
-          filename,
-          image:        { type: "jpeg", quality: 0.98 },
-          html2canvas:  { scale: 3, useCORS: true, backgroundColor: "#ffffff", logging: false },
-          jsPDF:        { unit: "mm", format: "a4", orientation: "portrait" },
-          pagebreak:    { mode: ["avoid-all", "css", "legacy"] }
-        };
-        await window.html2pdf().set(opts).from(container).save();
-        if(typeof toast === "function") toast("PDF הופק בהצלחה", filename);
-      } catch(err){
-        console.error("OFFER_PDF_EXPORT_FAILED", err);
-        if(this.els.error) this.els.error.textContent = "לא הצלחתי להפיק PDF. נסה שוב או השתמש בתצוגת הדפסה.";
-      } finally {
-        try { container.remove(); } catch(_e) {}
-      }
-    }
   };
 
 const CampaignLeadsStore = {
@@ -61003,7 +60620,6 @@ ${inner}
     try { ChatUI.init(); } catch(_e) {}
     try { ReminderUI.init(); } catch(_e) {}
   }, 1200);
-  OfferCompareUI.init();
   AssignProposalModal.init();
   AssignCustomerModal.init();
   DeleteProposalModal.init();
