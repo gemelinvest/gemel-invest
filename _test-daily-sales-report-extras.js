@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260826-daily-sales-branch-v2";
+const APP_TAG = "20260826-daily-sales-branch-v3";
 let failed = 0;
 let passed = 0;
 
@@ -85,11 +85,12 @@ assert(kick.includes("if(this._dailySalesLeadsKickStarted) return"), "לא טו�
 
 const prepStart = app.indexOf("async prepareDailySalesMailSnapshot(){");
 const prep = prepStart > 0 ? app.slice(prepStart, prepStart + 700) : "";
-assert(prep.includes("ensureDailySalesAssignedLeadsLoaded"), "prepare של המייל ממתין ללידים");
+assert(prep.includes("ensureDailySalesAssignedLeadsLoaded") || prep.includes("_waitDailySalesAssignedLeadsForMail"), "prepare של המייל ממתין ללידים");
+assert(app.includes("_waitDailySalesAssignedLeadsForMail"), "המתנת מייל ללידים עם תקרת זמן");
 
 const snapStart = app.indexOf("async buildDailySalesMailSnapshot(forDate){");
 const snap = snapStart > 0 ? app.slice(snapStart, snapStart + 500) : "";
-assert(snap.includes("ensureDailySalesAssignedLeadsLoaded"), "בניית snapshot למייל ממתינה ללידים");
+assert(snap.includes("_waitDailySalesAssignedLeadsForMail") || snap.includes("ensureDailySalesAssignedLeadsLoaded"), "בניית snapshot למייל ממתינה ללידים");
 
 console.log("\n4) רגרסיה — לוגיקת ליבה לא ננגעה");
 assert(app.includes("buildDailyAgentSalesReport"), "בניית דוח מכירות נשארה");

@@ -35879,7 +35879,7 @@ UsersGateUI.init();
       try { this.ensureDailySalesServerOverlay(); } catch(_e) {}
       const [overlayOk] = await Promise.all([
         this._waitDailySalesOverlayForMail(12000),
-        this.ensureDailySalesAssignedLeadsLoaded().catch(() => false)
+        this._waitDailySalesAssignedLeadsForMail(12000)
       ]);
       return overlayOk;
     },
@@ -35899,10 +35899,18 @@ UsersGateUI.init();
       return !!(overlay?.ok && overlay.dateKey === dateKey);
     },
 
+    _waitDailySalesAssignedLeadsForMail(ms){
+      const budget = Math.max(0, Number(ms) || 0);
+      return Promise.race([
+        this.ensureDailySalesAssignedLeadsLoaded().catch(() => false),
+        new Promise((resolve) => setTimeout(() => resolve(false), budget))
+      ]);
+    },
+
     async buildDailySalesMailSnapshot(forDate){
       await Promise.all([
         this._waitDailySalesOverlayForMail(4000),
-        this.ensureDailySalesAssignedLeadsLoaded().catch(() => false)
+        this._waitDailySalesAssignedLeadsForMail(12000)
       ]);
       const email = this.buildDailySalesEmailHtml(forDate);
       const doc = this.buildDailySalesPrintDocumentHtml(forDate);
