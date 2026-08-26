@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260826-phoenix-ci-3148-v1";
+  const GI_WIZARD_BUILD = "20260826-migdal-smoke-fu-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -19875,12 +19875,15 @@ if(path === "birthDate"){
         ]
       };
 
-      const buildFields = (numbers, prefix) => {
+      const buildFields = (numbers, prefix, extraFields) => {
         const list = [];
         (numbers || []).forEach((num) => {
           const fields = questionnaireFields[String(num)] || [];
           if(fields.length) list.push(...fields);
         });
+        if(Array.isArray(extraFields) && extraFields.length){
+          extraFields.forEach((field) => { if(field) list.push(field); });
+        }
         if(!list.length) list.push(section('פירוט רפואי לפי מגדל'), ...genericFields(prefix));
         return list;
       };
@@ -19893,10 +19896,10 @@ if(path === "birthDate"){
           declarationNumber: number || '',
           questionnaireNumbers: nums,
           questionnaireLabel: label,
-          questionnaireSource: nums.length ? `מגדל · ${label}` : 'מגדל · פירוט רפואי מובנה',
+          questionnaireSource: nums.length ? `מגדל · ${label}` : `מגדל · ${options.label || 'פירוט רפואי מובנה'}`,
           text,
           companies,
-          fields: buildFields(nums, key)
+          fields: buildFields(nums, key, options.fields)
         };
       };
 
@@ -19907,8 +19910,21 @@ if(path === "birthDate"){
         policyId,
         questions: [
           // אורח חיים
-          q('magdal_full__smoking_now', '', '1א. האם הנך מעשן כיום? (השאלה מתייחסת לכל מוצרי הטבק לרבות סיגריות אלקטרוניות / מכשיר אידוי). אם כן — ציין מספר סיגריות/פעמים ליום. לילדים החל מגיל 16.', [], { label:'פירוט עישון' }),
-          q('magdal_full__smoking_past', '', '1ב. אם ענית כי אינך מעשן כיום — האם עישנת בשנתיים האחרונות? (לילדים החל מגיל 16)', [], { label:'פירוט עישון בעבר' }),
+          q('magdal_full__smoking_now', '', '1א. האם הנך מעשן כיום? (השאלה מתייחסת לכל מוצרי הטבק לרבות סיגריות אלקטרוניות / מכשיר אידוי). אם כן — ציין מספר סיגריות/פעמים ליום. לילדים החל מגיל 16.', [], {
+            label:'פירוט עישון',
+            fields: [
+              { key:'amount', label:'מספר סיגריות / פעמים ליום', type:'text' },
+              { key:'product', label:'סוג (סיגריות / אלקטרונית / נרגילה / אחר)', type:'text' }
+            ]
+          }),
+          q('magdal_full__smoking_past', '', '1ב. אם ענית כי אינך מעשן כיום — האם עישנת בשנתיים האחרונות? (לילדים החל מגיל 16)', [], {
+            label:'פירוט עישון בעבר',
+            fields: [
+              { key:'amount', label:'מספר סיגריות / פעמים ליום בעבר', type:'text' },
+              { key:'quitDate', label:'מתי הפסיק לעשן', type:'text' },
+              { key:'years', label:'כמה זמן עישן', type:'text' }
+            ]
+          }),
           q('magdal_full__hobby', '', 'האם קיימים עיסוקים / תחביבים / ספורט בסיכון מיוחד (ספורט אתגרי, טיסה, צלילה וכו׳)? אם כן לצרף שאלון מתאים', [], { label:'פירוט עיסוק / תחביב / סיכון' }),
           q('magdal_full__alcohol', '22', '2. האם הנך שותה באופן קבוע יותר מ־2 כוסות אלכוהול ליום? (לילדים החל מגיל 16) (22)', ['22']),
           q('magdal_full__drugs', '22', '3. האם הנך צורך או צרכת סמים כעת או בעבר? (לילדים החל מגיל 16) (22)', ['22']),
@@ -22709,8 +22725,8 @@ if(path === "birthDate"){
       // Clal CI / rename leftovers
       clal_disability: ['clal_risk_disability'],
       clal_mortgage_smoking: ['clal_smoking'],
-      // Magdala smoking past/now cross-read
-      magdal_full__smoking: ['magdal_full__smoking_now', 'magdal_full__smoking_past'],
+      // GI-FIX 2026-08-26: 1א/1ב הן שאלות נפרדות — לא לקרוא אותן כאותה תשובה
+      magdal_full__smoking: ['magdal_full__smoking_now'],
       // Menora renamed topics
       menora__epilepsy: ['menora__neuro'],
       menora__malignant_tumors: ['menora__tumors'],
@@ -22803,18 +22819,30 @@ if(path === "birthDate"){
     getHealthResponse(qKey, insId){
       const store = this.getHealthStore();
       const empty = { answer:"", fields:{}, saved:false, editing:false };
+      const readHit = (ak) => {
+        const qBlock = store.responses[ak];
+        if(!qBlock || typeof qBlock !== 'object') return null;
+        const hit = qBlock[insId] || qBlock[String(insId)];
+        if(!hit || typeof hit !== 'object') return null;
+        const hasAnswer = !!safeTrim(hit.answer);
+        const hasFields = hit.fields && typeof hit.fields === 'object' && Object.keys(hit.fields).some((fk) => safeTrim(hit.fields[fk]));
+        if(!hasAnswer && !hasFields && !hit.saved) return null;
+        return hit;
+      };
+      // GI-FIX 2026-08-26: מפתח מדויק קודם. אחרת 1א עישון "כן" גובר על 1ב וחוסם שמירת פירוט.
+      const exact = readHit(safeTrim(qKey));
+      if(exact){
+        const outExact = { ...exact };
+        if(!outExact.fields) outExact.fields = {};
+        return outExact;
+      }
       const aliasKeys = this.resolveHealthResponseAliasKeys(qKey);
       let best = null;
       for(const ak of aliasKeys){
-        const qBlock = store.responses[ak];
-        if(!qBlock || typeof qBlock !== 'object') continue;
-        const hit = qBlock[insId] || qBlock[String(insId)];
-        if(!hit || typeof hit !== 'object') continue;
-        const hasAnswer = !!safeTrim(hit.answer);
-        const hasFields = hit.fields && typeof hit.fields === 'object' && Object.keys(hit.fields).some((fk) => safeTrim(hit.fields[fk]));
-        if(!hasAnswer && !hasFields && !hit.saved) continue;
+        if(safeTrim(ak) === safeTrim(qKey)) continue;
+        const hit = readHit(ak);
+        if(!hit) continue;
         if(!best){ best = hit; continue; }
-        // העדף תשובה מלאה יותר (כן+שדות) על פני ריקה
         const bestScore = (safeTrim(best.answer) === 'yes' ? 2 : safeTrim(best.answer) ? 1 : 0)
           + (best.fields && Object.keys(best.fields).length ? 1 : 0)
           + (best.saved ? 1 : 0);

@@ -11,7 +11,7 @@ const vm = require("vm");
 const { execFileSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260826-hach-hmo-health-v1";
+const APP_TAG = "20260826-hach-hmo-health-v2";
 const TAG = "20260826-hach-hmo-health-v1"; // form module / href cache
 let failed = 0;
 let passed = 0;

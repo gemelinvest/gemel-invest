@@ -11,8 +11,9 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260826-hach-hmo-health-v1";
+const APP_TAG = "20260826-hach-hmo-health-v2";
 const FORM_TAG = "20260826-phoenix-ci-3148-v1";
+const WIZARD_TAG = "20260826-migdal-smoke-fu-v1";
 let failed = 0;
 let passed = 0;
 
@@ -44,8 +45,8 @@ console.log("\n2) cache");
 assert(html.includes("app.js?v=" + APP_TAG), "index.html bumps app.js cache");
 assert(html.includes("app.css?v=" + APP_TAG), "index.html bumps app.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service worker cache bumped");
-assert(app.includes('GI_WIZARD_JS_VERSION = "' + FORM_TAG + '"'), "app wizard version");
-assert(wiz.includes('GI_WIZARD_BUILD = "' + FORM_TAG + '"'), "wizard build mark");
+assert(app.includes('GI_WIZARD_JS_VERSION = "' + WIZARD_TAG + '"'), "app wizard version");
+assert(wiz.includes('GI_WIZARD_BUILD = "' + WIZARD_TAG + '"'), "wizard build mark");
 assert(app.includes("./gi-phoenix-ci-form.js?v=" + FORM_TAG), "form chunk cache");
 assert(form.includes('VERSION: "' + FORM_TAG + '"'), "form VERSION");
 
