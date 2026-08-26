@@ -11,7 +11,7 @@ const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
 const TAG = "20260826-migdal-smoke-fu-v1";
-const APP_TAG = "20260826-insureds-dossier-v2";
+const APP_TAG = "20260826-hach-health-form-v1";
 let failed = 0;
 let passed = 0;
 

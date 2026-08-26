@@ -11,7 +11,7 @@ const vm = require("vm");
 const { execFileSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260826-insureds-dossier-v2";
+const APP_TAG = "20260826-hach-health-form-v1";
 const TAG = "20260826-hach-hmo-health-v1"; // form module / href cache
 let failed = 0;
 let passed = 0;
@@ -141,6 +141,7 @@ function basePayload(overrides){
   const responses = {};
   const keys = [
     "hachshara_crit__hospitalization", "hachshara_crit__tests_5y", "hachshara_crit__treatment_5y",
+    "hachshara__hospitalization", "hachshara__breath_chest", "hachshara__respiratory",
     "hachshara_risk_f__a1", "hachshara_risk_f__a2", "hachshara_risk_s__q1",
     "hachshara_mort_s__q1", "hachshara_mort_f__a1"
   ];
@@ -200,12 +201,14 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-hachshara-ci-
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-hachshara-life-form.js")]).status === 0, "life form syntax");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-hachshara-life-short-form.js")]).status === 0, "life-short form syntax");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-hachshara-mortgage-form.js")]).status === 0, "mortgage form syntax");
+assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-hachshara-health-form.js")]).status === 0, "health form syntax");
 assert(html.includes("app.js?v=" + APP_TAG), "index cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "SW cache");
 assert(app.includes("gi-hachshara-ci-form.js?v=" + TAG), "ci href");
 assert(app.includes("gi-hachshara-life-form.js?v=" + TAG), "life href");
 assert(app.includes("gi-hachshara-life-short-form.js?v=" + TAG), "life-short href");
 assert(app.includes("gi-hachshara-mortgage-form.js?v=" + TAG), "mortgage href");
+assert(app.includes("gi-hachshara-health-form.js?v=" + APP_TAG), "health href");
 
 const helper = loadHelper();
 global.GI_OFFICIAL_FORM_FILL = helper;
@@ -214,6 +217,7 @@ const ciFields = pdfFields(path.join(ROOT, "forms/hachshara-ci/hachshara-ci-join
 const lifeFields = pdfFields(path.join(ROOT, "forms/hachshara-life/hachshara-life-join.pdf"));
 const shortFields = pdfFields(path.join(ROOT, "forms/hachshara-life-short/hachshara-life-short-join.pdf"));
 const mortFields = pdfFields(path.join(ROOT, "forms/hachshara-mortgage/hachshara-mortgage-join.pdf"));
+const healthFields = pdfFields(path.join(ROOT, "forms/hachshara-health/hachshara-health-join.pdf"));
 
 console.log("\n2) CI — מחלות קשות");
 {
@@ -345,7 +349,52 @@ console.log("\n5) Mortgage — ריסק משכנתא");
   assertCaptureKeysExistInPdf(cap, mortFields, "Mortgage", ["FullNameBagir", "FullNameHolder"]);
 }
 
-console.log("\n6) source guards");
+console.log("\n6) Health — בריאות 2400/2498");
+{
+  const Form = loadFormModule("gi-hachshara-health-form.js", "HachsharaHealthForm");
+  const payload = basePayload({
+    newPolicies: [{
+      company: "הכשרה",
+      type: "בריאות",
+      startDate: "2026-09-01",
+      insuredIds: ["ins_primary", "ins_spouse", "ins_child"],
+      healthCovers: ["ניתוחים בישראל מהשקל הראשון", "ייעוץ ובדיקות", "שירות פרימיום לילד"]
+    }]
+  });
+  payload.insureds[0].data.healthDeclaration.responses.hachshara__breath_chest = {
+    ins_primary: { answer: "yes" }, ins_spouse: { answer: "no" }
+  };
+  const draft = Form.buildDraft(makeRec(payload));
+  assert(draft.primary.firstName === "דוד", "Health draft primary firstName");
+  assert(draft.agentNumber === "998877", "Health draft agent number");
+  assert((draft.primary.coverLetters || []).indexOf("B") >= 0, "Health draft שקל ראשון");
+  assert((draft.children[0].coverLetters || []).indexOf("M") >= 0, "Health child gets premium letter M");
+  assert((draft.primary.coverLetters || []).indexOf("M") < 0, "Health adult does not get child premium M");
+  const form = captureForm();
+  Form.applyDraftToForm(form, draft, null);
+  const cap = form.getCapture();
+  requireFields(cap, [
+    "FirstName", "LastName", "PID", "BirthDate", "EmailAddress", "City", "StreetName",
+    "HouseNumber", "ZipCode", "CellPhoneNumber", "HMORadio", "Hight", "Weight",
+    "FirstNameSpouse", "PIDSpouse", "HMORadioSpouse", "AgentNumber", "InsuranceBegin",
+    "BankName", "BankBranch", "BankAccountNumber"
+  ], "Health");
+  assert(cap.Gender === "True", "Health gender male → True");
+  assert(cap.GenderSpouse === "False", "Health spouse female → False");
+  assert(cap.HMORadio === "1", "Health HMO מכבי → 1");
+  assert(cap.HMORadioSpouse === "1", "Health spouse HMO → HMORadioSpouse");
+  assert(cap.chkMainB === "1", "Health chkMainB שקל ראשון");
+  assert(cap.chkMainF === "1", "Health chkMainF אמבולטורי");
+  assert(cap.chkChild1M === "1", "Health child premium chkChild1M");
+  assert(cap.HealthDecMainQ1 === "2", "Health Q1 hospitalization no");
+  assert(cap.HealthDecMainQ5 === "1", "Health Q5 breath_chest yes");
+  assertCaptureKeysExistInPdf(cap, healthFields, "Health", [
+    "FullNameBagir", "FullNameHolder", "FullNameChild1", "IsSmokingChild1",
+    "PayerName", "PayerPID", "CollectionMethod"
+  ]);
+}
+
+console.log("\n7) source guards");
 const ciSrc = fs.readFileSync(path.join(ROOT, "gi-hachshara-ci-form.js"), "utf8");
 const mortSrc = fs.readFileSync(path.join(ROOT, "gi-hachshara-mortgage-form.js"), "utf8");
 assert(ciSrc.includes('MaximumAmountText", person.compensation'), "CI writes amount text field");
@@ -357,6 +406,10 @@ assert(!/setTextSafe\(form,\s*isChild \? \("HMO" \+ s\) : \("HMOName" \+ s\),\s*
 assert(mortSrc.includes('ApartmentPurchase", "1"'), "mortgage apartment export 1");
 assert(mortSrc.includes('LandPurchase", "1"'), "mortgage land export 1");
 assert(!mortSrc.includes('ApartmentPurchase", "True"'), "mortgage no longer uses True for purchase");
+const healthSrc = fs.readFileSync(path.join(ROOT, "gi-hachshara-health-form.js"), "utf8");
+assert(healthSrc.includes("HMORadioSpouse"), "health spouse HMO field is HMORadioSpouse");
+assert(healthSrc.includes('map: "health"'), "health declaration uses map health");
+assert(healthSrc.includes("chkMain"), "health marks cover checkboxes");
 
 console.log("\n" + passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);
