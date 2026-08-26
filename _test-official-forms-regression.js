@@ -10,7 +10,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260826-insureds-dossier-v2";
+const TAG = "20260826-hach-health-form-v1";
 const FORM_TAG = "20260824-covers-sum-v1";
 const HACH_FORM_TAG = "20260826-hach-hmo-health-v1";
 const MIGDAL_FORM_TAG = "20260825-migdal-health-fill-v1";
@@ -60,6 +60,7 @@ assert(!apptSql || apptSql.includes("statement_timeout = '30s'"), "appointment R
 console.log("\n3) official forms still isolated");
 assert(app.includes('OFFICIAL_JOIN_FORM_FROM_DAY: "2026-08-23"'), "date gate remains 23 Aug");
 assert(app.includes("qualifiesForHachsharaCiForm"), "hachshara CI qualify");
+assert(app.includes("qualifiesForHachsharaHealthForm"), "hachshara health qualify");
 assert(app.includes("qualifiesForHachsharaLifeForm"), "hachshara life qualify");
 assert(app.includes("qualifiesForHachsharaLifeShortForm"), "hachshara short-risk qualify");
 assert(app.includes("qualifiesForMigdalLifeForm"), "migdal life qualify");
@@ -77,6 +78,7 @@ assert(app.includes("qualifiesForPhoenixLifeFullForm"), "phoenix extended-risk q
 assert(app.includes("qualifiesForPhoenixHealthForm"), "phoenix health qualify");
 assert(app.includes("qualifiesForPhoenixCiForm"), "phoenix CI / merape qualify");
 assert(app.includes("טופס מקורי — מחלות קשות · הכשרה"), "hachshara CI title");
+assert(app.includes("טופס מקורי — בריאות · הכשרה"), "hachshara health title");
 assert(app.includes("טופס מקורי — ריסק חיים · הכשרה"), "hachshara life title");
 assert(app.includes("טופס מקורי — ריסק חיים מקוצר עד 1,000,000 · הכשרה"), "hachshara short-risk title");
 assert(app.includes("טופס מקורי — ריסק חיים · מגדל"), "migdal life title");
@@ -139,6 +141,13 @@ assert(phxCiSrc.includes("overlayPlan"), "phoenix CI overlays flattened official
 assert(phxCiSrc.includes("healthAnswer"), "phoenix CI fills health yes/no overlay");
 assert(fs.existsSync(path.join(ROOT, "gi-hachshara-mortgage-form.js")), "hachshara mortgage form file");
 assert(app.includes("./gi-hachshara-mortgage-form.js?v=" + HACH_FORM_TAG), "href gi-hachshara-mortgage-form.js");
+assert(fs.existsSync(path.join(ROOT, "gi-hachshara-health-form.js")), "hachshara health form file");
+assert(app.includes("./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1"), "href gi-hachshara-health-form.js");
+assert(fs.existsSync(path.join(ROOT, "forms", "hachshara-health", "hachshara-health-join.pdf")), "hachshara health PDF template");
+const hachHealthSrc = fs.readFileSync(path.join(ROOT, "gi-hachshara-health-form.js"), "utf8");
+assert(hachHealthSrc.includes("Heebo-Bold.ttf"), "hachshara health bold font");
+assert(hachHealthSrc.includes("cc: draft.payment?.cc"), "hachshara health passes stored card");
+assert(hachHealthSrc.includes('map: "health"'), "hachshara health uses dedicated 2498 map");
 assert(fs.existsSync(path.join(ROOT, "fonts", "Heebo-Bold.ttf")), "bold font file");
 
 console.log("\n5) 1:1 picker + RTL");
@@ -287,6 +296,22 @@ assert(ciRows.filter((r) => r.q).length === 29, "CI has 29 health radios");
 assert((ciRows.find((r) => r.q === 28)?.keys || []).indexOf("hachshara_crit__infant_1") >= 0, "CI infant_1 maps to Q28");
 assert((ciRows.find((r) => r.q === 29)?.keys || []).indexOf("hachshara_crit__infant_2") >= 0, "CI infant_2 maps to Q29");
 assert((ciRows.find((r) => r.q === 11)?.keys || []).indexOf("hachshara_crit__heart_disease") >= 0, "CI heart accepts legacy heart_disease key");
+const healthRows = H.hachsharaHealthRows("health");
+assert(healthRows[0] && healthRows[0].smoke === true, "health smoking is named onto IsSmoking");
+assert(healthRows.filter((r) => r.q).length === 29, "health form has 29 declaration radios");
+assert((healthRows.find((r) => r.q === 5)?.keys || []).indexOf("hachshara__breath_chest") >= 0, "health Q5 is breath_chest");
+assert((healthRows.find((r) => r.q === 10)?.keys || []).indexOf("hachshara__breath_chest") < 0, "health Q10 does not steal breath_chest");
+const capHealthForm = {};
+H.applyMappedHealthYesNo({ __giCapture: capHealthForm }, {
+  map: "health",
+  responses: {
+    hachshara__hospitalization: { p1: { answer: "no" } },
+    hachshara__breath_chest: { p1: { answer: "yes" } }
+  },
+  primaryId: "p1"
+});
+assert(capHealthForm.HealthDecMainQ1 === "2", "health form Q1 hospitalization no");
+assert(capHealthForm.HealthDecMainQ5 === "1", "health form Q5 breath_chest yes");
 const fullRows = H.hachsharaHealthRows("life_full");
 assert(fullRows[0] && fullRows[0].smoke === true, "full smoking is named");
 assert(fullRows.filter((r) => r.q).length === 25, "full has 25 health radios");
