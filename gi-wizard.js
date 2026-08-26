@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260826-hach-health-adv-v1";
+  const GI_WIZARD_BUILD = "20260826-followup-docs-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -28610,6 +28610,13 @@ if(path === "birthDate"){
       const preserveExistingOwner = !!(existingOwnerAgentId && sessionAgentId
         && String(existingOwnerAgentId) !== String(sessionAgentId));
       stampRecordAgentOwnership(record, preserveExistingOwner ? { preserveExistingOwner: true } : {});
+      if(!this.isElementaryFlow()){
+        try {
+          if(typeof CustomersUI?.ensureFollowupDocuments === "function"){
+            await CustomersUI.ensureFollowupDocuments(record);
+          }
+        } catch(_e) {}
+      }
 
       const draftProposalId = safeTrim(this.editingDraftId);
       const draftProposalSnapshot = draftProposalId

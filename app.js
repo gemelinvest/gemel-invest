@@ -7238,6 +7238,7 @@
         if(this.qualifiesForHealthReport(reportPayload)){
           this.upsertHealthEditReportDoc(payload, reportPayload, options);
         }
+        this.syncFollowupDocsFromLiveDetect(payload, options);
         return payload;
       }
       if(kind === "health_wizard"){
@@ -7256,8 +7257,23 @@
             reportScope
           }));
         }
+        this.syncFollowupDocsFromLiveDetect(payload, options);
         return payload;
       }
+      return payload;
+    },
+    syncFollowupDocsFromLiveDetect(payload, options = {}){
+      const helper = (typeof window !== "undefined" && window.GiFollowupZip) ? window.GiFollowupZip : null;
+      if(!helper?.resolveForCustomer || !payload || typeof payload !== "object") return payload;
+      try {
+        const rec = { payload };
+        const mirror = (typeof MirrorsUI !== "undefined" && MirrorsUI) ? MirrorsUI : null;
+        const meta = (typeof mirror?.buildMirrorHealthMeta === "function")
+          ? mirror.buildMirrorHealthMeta(rec)
+          : { map: {}, insureds: [] };
+        const triggered = helper.resolveForCustomer(rec, meta, meta.insureds || []) || [];
+        if(triggered.length) this.syncFollowupQuestionnaireDocs(payload, triggered, options);
+      } catch(_e) {}
       return payload;
     },
     // Official join PDFs only from 23.8.2026 — not from 1 August.
@@ -7830,6 +7846,7 @@
         const coLabel = safeTrim(meta?.companyLabel) || "חברה";
         list.unshift({ id: "doc_ops_agent_legacy", type: this.TYPES.agentApptOps, isLegacy: true, name: "דוח תפעולי — מינוי סוכן · " + coLabel, source: "מערכת", uploadedAt: safeTrim(meta?.savedAt) || safeTrim(rec?.updatedAt) || safeTrim(rec?.createdAt), uploadedBy: safeTrim(meta?.agent?.name) || safeTrim(rec?.agentName), payloadSnapshot: { agentAppointmentMeta: JSON.parse(JSON.stringify(meta)) } });
       }
+      this.injectTriggeredFollowupQuestionnaireDocs(list, rec, payload);
       return this.sortByDateDesc(list.filter((doc) => {
         if(!doc || typeof doc !== "object") return false;
         const type = safeTrim(doc.type);
@@ -7861,6 +7878,35 @@
       const id = safeTrim(docId);
       if(!id) return null;
       return this.resolveListForCustomer(rec).find((doc) => String(doc?.id) === String(id)) || null;
+    },
+    injectTriggeredFollowupQuestionnaireDocs(list, rec, payload){
+      if(!Array.isArray(list)) return list;
+      const helper = (typeof window !== "undefined" && window.GiFollowupZip) ? window.GiFollowupZip : null;
+      if(!helper?.resolveForCustomer) return list;
+      try {
+        const mirror = (typeof MirrorsUI !== "undefined" && MirrorsUI) ? MirrorsUI : null;
+        const meta = (typeof mirror?.buildMirrorHealthMeta === "function")
+          ? mirror.buildMirrorHealthMeta(rec)
+          : { map: {}, insureds: [] };
+        const triggered = helper.resolveForCustomer(rec, meta, meta.insureds || []) || [];
+        if(!triggered.length) return list;
+        const existingIds = new Set(list
+          .filter((d) => safeTrim(d?.type) === this.TYPES.followupQuestionnaire)
+          .map((d) => safeTrim(d?.id)));
+        const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
+        triggered.slice().reverse().forEach((entry) => {
+          const doc = this.createFollowupQuestionnaireDoc(entry, {
+            uploadedAt,
+            uploadedBy: safeTrim(rec?.agentName),
+            payload
+          });
+          const docId = safeTrim(doc.id);
+          if(docId && existingIds.has(docId)) return;
+          list.unshift(doc);
+          if(docId) existingIds.add(docId);
+        });
+      } catch(_e) {}
+      return list;
     }
   };
 
@@ -21436,6 +21482,7 @@ UsersGateUI.init();
         this.els.main.innerHTML = this.renderSectionContent(rec, policies);
         this.bindSectionActions(rec, policies);
       }
+      this.queueFollowupDocumentsSync(rec);
     },
 
     renderFileView(rec, opts={}){
@@ -21458,6 +21505,7 @@ UsersGateUI.init();
         });
       }
       this.startOpsCardLoop();
+      this.queueFollowupDocumentsSync(rec, opts);
     },
 
     renderKpiBar(rec, policies){
@@ -22121,9 +22169,10 @@ UsersGateUI.init();
         ? mirror.buildMirrorHealthMeta(rec)
         : { map: {}, insureds: this.getInsureds?.(rec) || [] };
       const insureds = meta.insureds || this.getInsureds?.(rec) || [];
-      const health = (typeof mirror?.getHealthDeclarationSource === "function")
-        ? mirror.getHealthDeclarationSource(rec)
-        : (rec?.payload?.primary?.healthDeclaration || { responses: {} });
+      const health = window.GiFollowupZip?._test?.collectHealthResponses?.(rec)
+        || ((typeof mirror?.getHealthDeclarationSource === "function")
+          ? mirror.getHealthDeclarationSource(rec)
+          : (rec?.payload?.primary?.healthDeclaration || { responses: {} }));
       const triggered = window.GiFollowupZip?.resolveForCustomer?.(rec, meta, insureds)
         || window.GiFollowupZip?.detectTriggeredFollowups?.(health, meta, insureds)
         || [];
@@ -22142,13 +22191,46 @@ UsersGateUI.init();
       if(!rec?.payload || typeof rec.payload !== "object") return false;
       try {
         await ensureFollowupZipLoaded();
+        try {
+          if(typeof ensureGiWizardJsLoaded === "function"){
+            await ensureGiWizardJsLoaded();
+          }
+        } catch(_e) {}
         const pack = this.getFollowupZipMeta(rec);
+        const hasMap = !!(pack.meta && pack.meta.map && Object.keys(pack.meta.map).length);
+        if(!pack.triggered.length && !hasMap) return false;
         CustomerDocuments.syncFollowupQuestionnaireDocs(rec.payload, pack.triggered, options);
         return pack.triggered.length > 0;
       } catch(err){
         try { console.warn("FOLLOWUP_DOCS_ENSURE_SKIPPED", err); } catch(_e) {}
         return false;
       }
+    },
+    queueFollowupDocumentsSync(rec, opts){
+      if(!rec || opts?._skipFollowupSync) return;
+      this._followupDocsSyncSeq = (this._followupDocsSyncSeq || 0) + 1;
+      const seq = this._followupDocsSyncSeq;
+      const id = rec.id;
+      const beforeIds = (CustomerDocuments.listFromPayload(rec.payload) || [])
+        .filter((d) => safeTrim(d?.type) === CustomerDocuments.TYPES.followupQuestionnaire)
+        .map((d) => safeTrim(d.id))
+        .join("|");
+      Promise.resolve(this.ensureFollowupDocuments(rec)).then(() => {
+        if(seq !== this._followupDocsSyncSeq) return;
+        if(this.currentId !== id) return;
+        const afterIds = (CustomerDocuments.listFromPayload(rec.payload) || [])
+          .filter((d) => safeTrim(d?.type) === CustomerDocuments.TYPES.followupQuestionnaire)
+          .map((d) => safeTrim(d.id))
+          .join("|");
+        if(beforeIds === afterIds) return;
+        const section = this.normalizeSection(this.currentSection);
+        if(section === "documents"){
+          this.renderFileView(rec, { bodyScrollTop: this.els.main?.scrollTop || 0, _skipFollowupSync: true });
+        } else if(this.els.tabs){
+          const policies = this.collectPolicies(rec);
+          this.els.tabs.innerHTML = this.renderTabBar(rec, policies);
+        }
+      }).catch(() => {});
     },
     async buildFollowupZipBlob(rec){
       await ensureFollowupZipLoaded();
@@ -24517,8 +24599,10 @@ UsersGateUI.init();
       return d.toLocaleString("he-IL");
     }
   };
+  const CustomerFileUI = CustomersUI;
   try{
     if(typeof globalThis !== "undefined") globalThis.__GI_CustomersUI = CustomersUI;
+    if(typeof globalThis !== "undefined") globalThis.CustomerFileUI = CustomersUI;
     // GI-PERF 2026-07-31 (שלב ו'): giPerfReport() בקונסול מדפיס טבלת מדידות אמיתית.
     if(typeof globalThis !== "undefined"){
       globalThis.giPerfReport = () => GiPerf.report();
@@ -26540,6 +26624,11 @@ UsersGateUI.init();
           kind: "health_edit",
           uploadedBy: safeTrim(Auth?.current?.name) || safeTrim(rec?.agentName)
         });
+        try {
+          if(typeof CustomersUI?.ensureFollowupDocuments === "function"){
+            await CustomersUI.ensureFollowupDocuments({ payload });
+          }
+        } catch(_e) {}
         const primary = payload.primary || {};
         const updatedAt = nowISO();
         const record = normalizeCustomerRecord({
@@ -37497,8 +37586,8 @@ UsersGateUI.init();
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260825-migdal-health-fill-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260825-phoenix-fu-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260825-phoenix-fu-v1";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260826-followup-docs-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260826-followup-docs-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -39415,7 +39504,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260826-hach-health-adv-v1";
+  const GI_WIZARD_JS_VERSION = "20260826-followup-docs-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
