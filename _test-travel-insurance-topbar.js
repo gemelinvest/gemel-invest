@@ -1,4 +1,4 @@
-/* GI-TRAVEL-INSURANCE-TOPBAR 20260826-travel-insurance-v1
+/* GI-TRAVEL-INSURANCE-TOPBAR 20260826-sales-kpis-v1
    Replace topbar "שליחת הצעה" with PassportCard travel insurance popup.
    Run: node _test-travel-insurance-topbar.js
 */
@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260826-travel-insurance-v1";
+const TAG = "20260826-sales-kpis-v1";
 const URL = "https://buy.passportcard.co.il/?AffiliateId=vINm9OCbeh0%2BTAjGxvVjjQ%3D%3D";
 let failed = 0;
 let passed = 0;
