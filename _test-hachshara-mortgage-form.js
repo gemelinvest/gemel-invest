@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260826-travel-insurance-v1";
+const APP_TAG = "20260826-travel-insurance-v2";
 const TAG = "20260826-hach-hmo-health-v1";
 let failed = 0;
 let passed = 0;
