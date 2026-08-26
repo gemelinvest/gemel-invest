@@ -6636,7 +6636,8 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
   grid-template-columns: 1.2fr 1fr 1fr 1fr 1fr;
 }
 #view-dailySales .giDailySalesPage__kpiRow--extra:not(#\9):not(#\9){
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 280px;
 }
 #view-dailySales .giDailySalesPage__kpi:not(#\9):not(#\9){
   display: flex;
@@ -6799,9 +6800,12 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
 }
 @media (max-width: 1100px){
   #view-dailySales .giDailySalesPage__kpiRow:not(#\9):not(#\9),
-#view-dailySales .giDailySalesPage__kpiRow.is-five:not(#\9):not(#\9),
-#view-dailySales .giDailySalesPage__kpiRow--extra:not(#\9):not(#\9){
+#view-dailySales .giDailySalesPage__kpiRow.is-five:not(#\9):not(#\9){
     grid-template-columns: 1fr 1fr;
+  }
+  #view-dailySales .giDailySalesPage__kpiRow--extra:not(#\9):not(#\9){
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 280px;
   }
 }
 @media (max-width: 860px){
@@ -6837,7 +6841,8 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 #view-dailySales .giDailySalesPage__kpiRow--extra:not(#\9):not(#\9){
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 280px;
 }
 #view-dailySales .giDailySalesPage__kpis[hidden]:not(#\9):not(#\9){
   display: none !important;

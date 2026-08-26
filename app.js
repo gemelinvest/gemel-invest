@@ -4078,8 +4078,9 @@
   }
 
   const AGENT_LABEL_TOKEN_ALIASES = {
-    "ודים": ["ואדים"],
-    "ואדים": ["ודים"]
+    "ודים": ["ואדים", "vadim"],
+    "ואדים": ["ודים", "vadim"],
+    "vadim": ["ואדים", "ודים"]
   };
 
   function agentLabelTokenMatches(candidate, token){
@@ -4306,6 +4307,18 @@
     return safeTrim(value).replace(/\s+/g, " ").toLowerCase();
   }
 
+  /* שם בדוח המכירות הוא לפעמים כינוי קצר ("ואדים") מול שם מלא באנשי קשר
+     ("ואדים שאולוב"). התאמה רק כשכל מילות שם הדוח מופיעות בשם המלא. */
+  function salesAgentNameMatchesPersonName(salesName, personName){
+    const salesKey = normalizeAgentNameKey(salesName);
+    const personKey = normalizeAgentNameKey(personName);
+    if(salesKey && personKey && salesKey === personKey) return true;
+    const salesTokens = agentLabelTokens(salesName);
+    const personTokens = agentLabelTokens(personName);
+    if(!salesTokens.length || !personTokens.length) return false;
+    return agentLabelTokensSubset(personTokens, salesTokens);
+  }
+
   function normalizeAgentBranchesMap(raw){
     const out = {};
     if(raw && typeof raw === "object"){
@@ -4450,7 +4463,8 @@
 
   function lookupOfficeBranchFromDirectory(agentOrName){
     const isObj = agentOrName && typeof agentOrName === "object";
-    const nameKey = normalizeAgentNameKey(isObj ? (agentOrName.name || agentOrName.username) : agentOrName);
+    const displayName = isObj ? (agentOrName.name || agentOrName.username) : agentOrName;
+    const nameKey = normalizeAgentNameKey(displayName);
     const email = isObj ? safeTrim(agentOrName.email).toLowerCase() : "";
     if(!nameKey && !email) return "";
     try {
@@ -4463,14 +4477,15 @@
           if(fromEmail) return fromEmail;
         }
       }
+      const branches = [];
       for(let i = 0; i < list.length; i += 1){
         const c = list[i];
-        const cName = normalizeAgentNameKey(c.fullName);
-        if(nameKey && cName && nameKey === cName){
-          const fromName = normalizeOfficeBranchLabel(c.agency);
-          if(fromName) return fromName;
-        }
+        if(!salesAgentNameMatchesPersonName(displayName, c.fullName)) continue;
+        const fromName = normalizeOfficeBranchLabel(c.agency);
+        if(fromName) branches.push(fromName);
       }
+      const unique = [...new Set(branches)];
+      if(unique.length === 1) return unique[0];
     } catch(_e) {}
     return "";
   }
@@ -4479,6 +4494,8 @@
     const key = normalizeAgentNameKey(agentName);
     if(!key) return null;
     const agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
+    const exact = [];
+    const fuzzy = [];
     for(let i = 0; i < agents.length; i += 1){
       const a = agents[i];
       const names = [a?.name, a?.username];
@@ -4486,8 +4503,12 @@
         const aliases = getAgentReportAliases(a?.id);
         if(Array.isArray(aliases)) names.push.apply(names, aliases);
       } catch(_e) {}
-      if(names.some((n) => normalizeAgentNameKey(n) === key)) return a;
+      if(names.some((n) => normalizeAgentNameKey(n) === key)) exact.push(a);
+      else if(names.some((n) => salesAgentNameMatchesPersonName(agentName, n))) fuzzy.push(a);
     }
+    if(exact.length === 1) return exact[0];
+    if(exact.length > 1) return null;
+    if(fuzzy.length === 1) return fuzzy[0];
     return null;
   }
 
@@ -34224,6 +34245,11 @@ UsersGateUI.init();
       } catch(_e) {}
     },
 
+    /* אותו סל כמו KPI «פרמיה חודשית · בריאות + פרט» — בלי פנסיה/אלמנטרי. */
+    dailySalesOfficeBranchPremium(row){
+      return (Number(row?.health) || 0) + (Number(row?.prat) || 0) + (Number(row?.other) || 0);
+    },
+
     /* נגזר משורות הדוח שכבר חושבו — בלי מעבר נוסף על לקוחות. */
     dailySalesOfficeBranchTotals(rows){
       const out = {
@@ -34237,7 +34263,7 @@ UsersGateUI.init();
           : "";
         const bucket = branch === "חיפה" ? "haifa" : (branch === "מודיעין" ? "modiin" : "");
         if(!bucket) return;
-        out[bucket].premium += Number(r?.monthly) || 0;
+        out[bucket].premium += this.dailySalesOfficeBranchPremium(r);
         const name = safeTrim(r?.agentName);
         if(name && !seen[bucket].has(name)){
           seen[bucket].add(name);
@@ -34368,8 +34394,8 @@ UsersGateUI.init();
       const issued = model.issuedPremium || { total: 0 };
       const branches = model.officeBranches || { haifa: { premium: 0 }, modiin: { premium: 0 } };
       const cards = [
-        { value: String(model.agentCount), label: "נציגים שמכרו היום" },
-        { value: String(model.healthSlice.deals || 0), label: "פוליסות בריאות + פרט" },
+        { value: money(branches.modiin.premium), label: "מכירות מודיעין" },
+        { value: money(branches.haifa.premium), label: "מכירות חיפה" },
         { value: money(model.healthSlice.premium), label: "פרמיה חודשית · בריאות + פרט", hero: true },
         { value: money(issued.total), label: "פרמייה מהפקה", elem: true }
       ];
@@ -34382,8 +34408,6 @@ UsersGateUI.init();
           <div class="giDailySalesPage__kpiValue">${escapeHtml(c.value)}</div>
         </article>`).join("");
       const extra = [
-        { value: money(branches.modiin.premium), label: "מכירות מודיעין" },
-        { value: money(branches.haifa.premium), label: "מכירות חיפה" },
         { value: String(Number(model.assignedLeads) || 0), label: "לידים שויכו" }
       ].map((c) => `
         <article class="giDailySalesPage__kpi">
@@ -34433,15 +34457,13 @@ UsersGateUI.init();
           <h1 style="margin:0;font-size:22px;color:#0b2a4a;direction:rtl;text-align:right">מכירות היום</h1>
           <p style="margin:4px 0 18px;font-size:13px;color:#3d4d5e;direction:rtl;text-align:right">${escapeHtml(model.dateLine)}</p>
           <table dir="rtl" align="right" style="width:100%;border-collapse:collapse;margin:0 0 10px;direction:rtl;text-align:right"><tr>
-            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(String(model.agentCount))}</b><span style="font-size:11px;color:#5b6b7c">נציגים שמכרו היום</span></td>
-            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(String(model.healthSlice.deals || 0))}</b><span style="font-size:11px;color:#5b6b7c">פוליסות בריאות + פרט</span></td>
+            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(branches.modiin.premium))}</b><span style="font-size:11px;color:#5b6b7c">מכירות מודיעין</span></td>
+            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(branches.haifa.premium))}</b><span style="font-size:11px;color:#5b6b7c">מכירות חיפה</span></td>
             <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(model.healthSlice.premium))}</b><span style="font-size:11px;color:#5b6b7c">פרמיה חודשית · בריאות + פרט</span></td>
             <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(issued.total))}</b><span style="font-size:11px;color:#5b6b7c">פרמייה מהפקה</span></td>
             ${pensionStat}
           </tr></table>
-          <table dir="rtl" align="right" style="width:100%;border-collapse:collapse;margin:0 0 18px;direction:rtl;text-align:right"><tr>
-            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(branches.modiin.premium))}</b><span style="font-size:11px;color:#5b6b7c">מכירות מודיעין</span></td>
-            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(branches.haifa.premium))}</b><span style="font-size:11px;color:#5b6b7c">מכירות חיפה</span></td>
+          <table dir="rtl" align="right" style="width:auto;min-width:220px;border-collapse:collapse;margin:0 0 18px;direction:rtl;text-align:right"><tr>
             <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(String(Number(model.assignedLeads) || 0))}</b><span style="font-size:11px;color:#5b6b7c">לידים שויכו</span></td>
           </tr></table>
           <table dir="rtl" align="right" style="width:100%;border-collapse:collapse;font-size:12.5px;direction:rtl;text-align:right">
@@ -35692,7 +35714,7 @@ UsersGateUI.init();
   h1 { margin: 0; font-size: 22px; line-height: 1.2; color: #0b2a4a; }
   .date { margin: 4px 0 0; font-size: 13px; color: #3d4d5e; }
   .stats { display: grid; grid-template-columns: repeat(${statCount}, 1fr); gap: 10px; margin: 0 0 10px; }
-  .stats--extra { grid-template-columns: repeat(3, 1fr); margin: 0 0 18px; }
+  .stats--extra { grid-template-columns: minmax(0, 1fr); max-width: 240px; margin: 0 0 18px; }
   .stat { border: 1px solid #d7dee6; padding: 10px 12px; }
   .stat b { display: block; font-size: 18px; color: #0b2a4a; margin-bottom: 2px; }
   .stat span { font-size: 11px; color: #5b6b7c; }
@@ -35732,15 +35754,13 @@ UsersGateUI.init();
     </div>
   </header>
   <div class="stats">
-    <div class="stat"><b>${escapeHtml(String(model.agentCount))}</b><span>נציגים שמכרו היום</span></div>
-    <div class="stat"><b>${escapeHtml(String(model.healthSlice.deals || 0))}</b><span>פוליסות בריאות + פרט</span></div>
+    <div class="stat"><b>${escapeHtml(money(branches.modiin.premium))}</b><span>מכירות מודיעין</span></div>
+    <div class="stat"><b>${escapeHtml(money(branches.haifa.premium))}</b><span>מכירות חיפה</span></div>
     <div class="stat"><b>${escapeHtml(money(model.healthSlice.premium))}</b><span>פרמיה חודשית · בריאות + פרט</span></div>
     <div class="stat"><b>${escapeHtml(money(issued.total))}</b><span>פרמייה מהפקה</span></div>
     ${pensionStat}
   </div>
   <div class="stats stats--extra">
-    <div class="stat"><b>${escapeHtml(money(branches.modiin.premium))}</b><span>מכירות מודיעין</span></div>
-    <div class="stat"><b>${escapeHtml(money(branches.haifa.premium))}</b><span>מכירות חיפה</span></div>
     <div class="stat"><b>${escapeHtml(String(Number(model.assignedLeads) || 0))}</b><span>לידים שויכו</span></div>
   </div>
   <table>
