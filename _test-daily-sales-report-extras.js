@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260826-daily-sales-branch-v3";
+const APP_TAG = "20260826-daily-sales-branch-v4";
 let failed = 0;
 let passed = 0;
 
@@ -38,10 +38,11 @@ assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
 assert(html.includes("theme.css?v=" + APP_TAG), "index.html theme.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
 
-console.log("\n2) שיוך סניף בניהול משתמשים");
-assert(html.includes('id="lcUserOfficeBranch"'), "שדה שיוך לסניף במודל משתמש");
-assert(html.includes('<option value="חיפה">חיפה</option>'), "אפשרות חיפה");
-assert(html.includes('<option value="מודיעין">מודיעין</option>'), "אפשרות מודיעין");
+console.log("\n2) שיוך סוכנות בניהול משתמשים");
+assert(html.includes('id="lcUserOfficeBranch"'), "שדה שיוך לסוכנות במודל משתמש");
+assert(html.includes("שיוך לסוכנות"), "כותרת מקטע שיוך לסוכנות");
+assert(html.includes('<option value="חיפה">סוכנות חיפה</option>'), "אפשרות סוכנות חיפה");
+assert(html.includes('<option value="מודיעין">סוכנות מודיעין</option>'), "אפשרות סוכנות מודיעין");
 assert(app.includes("function normalizeOfficeBranchLabel"), "normalizeOfficeBranchLabel");
 assert(app.includes("function getAgentOfficeBranch"), "getAgentOfficeBranch");
 assert(app.includes("function setAgentOfficeBranch"), "setAgentOfficeBranch");
