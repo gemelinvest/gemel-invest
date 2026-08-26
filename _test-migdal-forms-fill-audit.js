@@ -10,6 +10,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
+const APP_TAG = "20260826-cf-summary-gone-v3";
 const TAG = "20260825-migdal-health-fill-v1";
 let failed = 0;
 let passed = 0;
@@ -96,8 +97,8 @@ const sw = fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8");
   assert(spawnSync(process.execPath, ["--check", path.join(ROOT, f)]).status === 0, f + " syntax");
   assert(app.includes("./" + f + "?v=" + TAG), "href " + f);
 });
-assert(html.includes("app.js?v=" + TAG), "index cache");
-assert(sw.includes("gi-v12-" + TAG), "SW cache");
+assert(html.includes("app.js?v=" + APP_TAG), "index cache");
+assert(sw.includes("gi-v12-" + APP_TAG), "SW cache");
 assert(app.includes("resolveHealthPrimaryId"), "primary health id resolver");
 assert(app.includes("migdalMortgageHealthRows"), "mortgage named health rows");
 assert(app.includes('detailField: "Text1"'), "cancer family detail field");
