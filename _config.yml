@@ -1,0 +1,4 @@
+# Static CRM on GitHub Pages. Do not run Jekyll on app files or Edge Functions.
+exclude:
+  - supabase
+  - node_modules

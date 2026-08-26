@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260826-sales-kpis-v1";
+const APP_TAG = "20260826-live-fix-v1";
 const WIZARD_TAG = "20260826-migdal-smoke-fu-v1";
 let failed = 0;
 let passed = 0;

@@ -16641,7 +16641,7 @@ UsersGateUI.init();
           btn.style.display = (v === "campaignLeads" || v === "dashboard" || v === "contacts") ? "" : "none";
         });
         if (newCustomerBtn) newCustomerBtn.style.display = "none";
-        if (travelInsuranceBtn) travelInsuranceBtn.style.display = "none";
+        if (travelInsuranceBtn) travelInsuranceBtn.style.display = "";
         if (carInsuranceBtn) carInsuranceBtn.style.display = "none";
         try { SimulatorsCenterUI.syncVisibility?.(); } catch(_e) {}
         document.body.classList.add("is-referent-role");
@@ -16670,7 +16670,7 @@ UsersGateUI.init();
       try { ContactsUI.syncAddButton?.(); } catch(_e) {}
       // הקמת הצעה חדשה: זמין גם לאלמנטרי (כמו נציג רגיל); מוסתר לתפעול / נציג תפעול / סוקרת
       if (newCustomerBtn) newCustomerBtn.style.display = isOpsFamily ? "none" : "";
-      if (travelInsuranceBtn) travelInsuranceBtn.style.display = isElementary ? "none" : "";
+      if (travelInsuranceBtn) travelInsuranceBtn.style.display = "";
       if (carInsuranceBtn) carInsuranceBtn.style.display = (isOpsFamily || isElementary || isReferent) ? "none" : "";
       if (this.els.navArchivedCustomers) this.els.navArchivedCustomers.style.display = "none";
       if (this.els.navSystemUpdates) this.els.navSystemUpdates.style.display = "none";

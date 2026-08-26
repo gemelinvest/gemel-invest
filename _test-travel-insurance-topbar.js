@@ -1,4 +1,4 @@
-/* GI-TRAVEL-INSURANCE-TOPBAR 20260826-sales-kpis-v1
+/* GI-TRAVEL-INSURANCE-TOPBAR 20260826-live-fix-v1
    Replace topbar "שליחת הצעה" with PassportCard travel insurance popup.
    Run: node _test-travel-insurance-topbar.js
 */
@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260826-sales-kpis-v1";
+const TAG = "20260826-live-fix-v1";
 const URL = "https://buy.passportcard.co.il/?AffiliateId=vINm9OCbeh0%2BTAjGxvVjjQ%3D%3D";
 let failed = 0;
 let passed = 0;
@@ -73,7 +73,9 @@ assert(app.includes('window.open(') && app.includes("giTravelInsuranceAbroad"), 
 assert(app.includes("TravelInsuranceTopbarUI"), "TravelInsuranceTopbarUI");
 assert(app.includes("TravelInsuranceTopbarUI.init()"), "init בבוט");
 assert(app.includes('getElementById("btnTravelInsuranceAbroad")'), "applyRoleUI / init על הלחצן החדש");
-assert(css.includes("body.is-referent-role .lcTravelInsuranceBtn"), "מוסתר לסוקרת כמו הלחצן הישן");
+assert(app.includes('if (travelInsuranceBtn) travelInsuranceBtn.style.display = "";'), "לחצן נסיעות מוצג גם לסוקרת ואלמנטרי");
+assert(!app.includes("travelInsuranceBtn.style.display = isElementary"), "לא מוסתר לאלמנטרי");
+assert(!css.includes("body.is-referent-role .lcTravelInsuranceBtn"), "CSS לא מסתיר לסוקרת");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);
