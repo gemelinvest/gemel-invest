@@ -58,9 +58,9 @@ assert(block.includes("this.applyElementaryPoliciesFromDraft(payload)"), "שמי
 
 console.log("\nעיצוב + cache");
 assert(css.includes("customerEditSection--elementary"), "CSS לסעיף אלמנטרי");
-assert(indexHtml.includes("app.js?v=20260825-open-company-logo-v1"), "cache bust ל-app.js");
-assert(indexHtml.includes("app.css?v=20260825-open-company-logo-v1"), "cache bust ל-app.css");
-assert(sw.includes("20260825-open-company-logo-v1"), "service-worker cache version");
+assert(indexHtml.includes("app.js?v=20260826-daily-sales-branch-v1"), "cache bust ל-app.js");
+assert(indexHtml.includes("app.css?v=20260826-daily-sales-branch-v1"), "cache bust ל-app.css");
+assert(sw.includes("20260826-daily-sales-branch-v1"), "service-worker cache version");
 
 console.log("\nלוגיקה טהורה — החלת פרמיה");
 function asEditMoneyNumber(v){
