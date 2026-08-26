@@ -1,7 +1,8 @@
-/* GEMEL INVEST — ייבוא דוח פרודוקציה (GI-PROD 2026-08-23)
+/* GEMEL INVEST — ייבוא דוח פרודוקציה (GI-PROD 2026-08-26)
    נטען לפי דרישה ממסך טעינת קבצי מערכת.
    הכשרה: קבצי רוחב-קבוע IBM862 (RB/RP/SB/SP).
    מגדל: קבצי MBT מופרדי-צינור UTF-8 (LIFEHLTH/LIFE/COVRLIFE/PERSON).
+   מנורה: חיים פרודוקציה ישן — M/N/G/P.TXT + TRFR.ALL (IBM862), ZIP פרט (MP) / מבוטלות (MM).
 */
 (function installGiProduction(global){
   "use strict";
@@ -9,6 +10,7 @@
   const CP862_HE = "אבגדהוזחטיךכלםמןנסעףפץצקרשת";
   const COMPANY_HACHSHARA = "הכשרה";
   const COMPANY_MIGDAL = "מגדל";
+  const COMPANY_MENORA = "מנורה";
   const ACTIVE_STATUS = "כ";
   const MIGDAL_KIND_SET = Object.freeze({
     LIFEHLTH: true,
@@ -18,12 +20,21 @@
     AGENTS: true,
     COMPANY: true
   });
+  const MENORA_KIND_SET = Object.freeze({
+    MENORA_M: true,
+    MENORA_N: true,
+    MENORA_G: true,
+    MENORA_P: true,
+    MENORA_TRFR: true
+  });
+  const MENORA_LIFE_CLASS = Object.freeze({ "01": true, "04": true, "05": true, "06": true, "07": true, "08": true });
+  const MENORA_HEALTH_CLASS = Object.freeze({ "10": true, "11": true, "20": true, "21": true, "30": true, "50": true });
 
   const COMPANIES = Object.freeze([
     { id: COMPANY_HACHSHARA, label: "הכשרה", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד." },
     { id: "הפניקס", label: "הפניקס", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
     { id: COMPANY_MIGDAL, label: "מגדל", ready: true, hint: "קבצי LIFEHLTH, LIFE, COVRLIFE, PERSON (.MBT)", dropHint: "מגדל: LIFEHLTH (בריאות), LIFE (חיים), COVRLIFE (כיסויים), PERSON (מבוטחים). אפשר גם AGENTS / COMPANY." },
-    { id: "מנורה", label: "מנורה", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
+    { id: COMPANY_MENORA, label: "מנורה", ready: true, hint: "קבצי M, N, G, P + TRFR (ZIP פרט / מבוטלות)", dropHint: "מנורה: ZIP של פרט (MP) או מבוטלות (MM), או קבצי ‎*M.TXT / *N.TXT / *G.TXT / *P.TXT ו־TRFR.ALL." },
     { id: "כלל", label: "כלל", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
     { id: "איילון", label: "איילון", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" }
   ]);
@@ -136,6 +147,45 @@
     const yi = Number(yy);
     if(di < 1 || di > 31 || mi < 1 || mi > 12 || yi < 1900 || yi > 2100) return "";
     return dd + "/" + mm + "/" + yy;
+  }
+
+  function ymd8(raw){
+    const d = digits(raw);
+    if(d.length !== 8) return "";
+    const yy = d.slice(0, 4);
+    const mm = d.slice(4, 6);
+    const dd = d.slice(6, 8);
+    const di = Number(dd);
+    const mi = Number(mm);
+    const yi = Number(yy);
+    if(di < 1 || di > 31 || mi < 1 || mi > 12 || yi < 1900 || yi > 2100) return "";
+    return dd + "/" + mm + "/" + yy;
+  }
+
+  function ym6(raw){
+    const d = digits(raw);
+    if(d.length !== 6) return "";
+    const yy = d.slice(0, 4);
+    const mm = d.slice(4, 6);
+    const mi = Number(mm);
+    const yi = Number(yy);
+    if(mi < 1 || mi > 12 || yi < 1900 || yi > 2100) return "";
+    return "01/" + mm + "/" + yy;
+  }
+
+  function round2(n){
+    return Math.round((Number(n) || 0) * 100) / 100;
+  }
+
+  function splitFullName(full){
+    const parts = safeTrim(full).split(/\s+/).filter(Boolean);
+    if(!parts.length) return { firstName: "", lastName: "", fullName: "" };
+    if(parts.length === 1) return { firstName: parts[0], lastName: "", fullName: parts[0] };
+    return {
+      firstName: parts.slice(0, -1).join(" "),
+      lastName: parts[parts.length - 1],
+      fullName: parts.join(" ")
+    };
   }
 
   function cleanName(raw){
@@ -284,7 +334,12 @@
   }
 
   function coverNameForFamily(cover, family){
-    return family === "life" ? mapLifeCover(cover?.coverName) : mapHealthCover(cover?.coverName);
+    const raw = safeTrim(cover?.coverName || cover?.coverNameRaw);
+    if(family === "life") return mapLifeCover(raw);
+    for(let i = 0; i < HEALTH_COVER_MAP.length; i++){
+      if(HEALTH_COVER_MAP[i].key === raw) return raw;
+    }
+    return mapHealthCover(raw);
   }
 
   function sumCoverPremiums(covers, family){
@@ -383,6 +438,8 @@
   }
 
   function detectKind(fileName, rec0){
+    const menora = detectMenoraKindFromName(fileName) || detectMenoraKindFromRecord(rec0);
+    if(menora) return menora;
     const mig = detectMigdalKindFromName(fileName) || (String(rec0 || "").indexOf("|") >= 0 ? detectMigdalKindFromRecord(rec0) : "");
     if(mig) return mig;
     const n = String(fileName || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -397,6 +454,152 @@
     if(normId(idMaybe) && /[\u0590-\u05FF]/.test(cleanName(col(s, 44, 80)))) return (coverTail.indexOf("מגן") >= 0) ? "SP" : "RP";
     if(coverTail) return (coverTail.indexOf("מגן") >= 0) ? "SB" : "RB";
     return "";
+  }
+
+  function fileBaseName(fileName){
+    return String(fileName || "").replace(/\\/g, "/").split("/").pop();
+  }
+
+  function detectMenoraKindFromName(fileName){
+    const base = fileBaseName(fileName).toUpperCase();
+    if(base === "TRFR.ALL") return "MENORA_TRFR";
+    const m = base.match(/^(\d+)([MNGP])\.TXT$/);
+    if(m) return "MENORA_" + m[2];
+    return "";
+  }
+
+  function looksLikeMenoraRecord(rec){
+    const s = String(rec || "").replace(/\r$/, "");
+    if(!/^06\d{9}/.test(s)) return false;
+    const ch = s.charAt(9);
+    if(ch === "X" || ch === "x") return false;
+    const len = s.length;
+    return len === 166 || len === 201 || len === 287 || len === 301;
+  }
+
+  function looksLikeMenoraTrfr(rec){
+    const s = String(rec || "").replace(/\s+$/g, "");
+    if(s.length !== 31) return false;
+    if(!/[\u0590-\u05FF]/.test(s)) return false;
+    return /^\d{2}$/.test(s.slice(-2));
+  }
+
+  function detectMenoraKindFromRecord(rec0){
+    const s = String(rec0 || "").replace(/\r$/, "");
+    if(looksLikeMenoraTrfr(s)) return "MENORA_TRFR";
+    if(!looksLikeMenoraRecord(s)) return "";
+    if(s.length === 166) return "MENORA_N";
+    if(s.length === 201) return "MENORA_M";
+    if(s.length === 287) return "MENORA_G";
+    if(s.length === 301) return "MENORA_P";
+    return "";
+  }
+
+  function parseMenoraMoney(raw){
+    const s = safeTrim(raw).replace(/,/g, "");
+    if(!s) return 0;
+    const n = Number(s);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function parseMenoraM(s){
+    const policyNumber = digits(s.slice(0, 11));
+    if(!policyNumber) return null;
+    return {
+      kind: "MENORA_M",
+      policyNumber,
+      agent: safeTrim(s.slice(11, 17)),
+      plan: safeTrim(s.slice(17, 28)),
+      idNumber: normId(s.slice(40, 49))
+    };
+  }
+
+  function parseMenoraN(s){
+    const policyNumber = digits(s.slice(0, 11));
+    if(!policyNumber) return null;
+    const visCode = s.slice(43, 47);
+    const productCode = fixVisualHebrew(visCode).replace(/\s+/g, "");
+    const premAnnual = parseMenoraMoney(s.slice(97, 106));
+    const tail = s.slice(131);
+    const moneyHits = String(tail).match(/\d+\.\d+/g) || [];
+    const sumInsured = moneyHits.length ? parseMenoraMoney(moneyHits[moneyHits.length - 1]) : 0;
+    return {
+      kind: "MENORA_N",
+      policyNumber,
+      agent: safeTrim(s.slice(11, 17)),
+      plan: safeTrim(s.slice(17, 28)),
+      seq: safeTrim(s.slice(39, 43)),
+      productCode,
+      coverNameRaw: productCode,
+      premiumAnnual: premAnnual,
+      premium: round2(premAnnual / 12),
+      startYm: digits(s.slice(106, 112)),
+      startDate: ym6(s.slice(106, 112)),
+      idNumber: normId(s.slice(112, 121)),
+      birthDate: ymd8(s.slice(123, 131)),
+      sumInsured
+    };
+  }
+
+  function parseMenoraG(s){
+    const policyNumber = digits(s.slice(0, 11));
+    if(!policyNumber) return null;
+    return {
+      kind: "MENORA_G",
+      policyNumber,
+      agent: safeTrim(s.slice(11, 17)),
+      premiumAnnual: parseMenoraMoney(s.slice(148, 163)),
+      premiumMonthly: parseMenoraMoney(s.slice(163, 174))
+    };
+  }
+
+  function parseMenoraP(s){
+    const policyNumber = digits(s.slice(0, 11));
+    if(!policyNumber) return null;
+    const names = splitFullName(cleanName(s.slice(56, 80)));
+    return {
+      kind: "MENORA_P",
+      policyNumber,
+      agent: safeTrim(s.slice(11, 17)),
+      idNumber: normId(s.slice(39, 48)),
+      birthDate: ymd8(s.slice(48, 56)),
+      firstName: names.firstName,
+      lastName: names.lastName,
+      fullName: names.fullName,
+      gender: mapGender(s.slice(80, 81)),
+      city: cleanName(s.slice(128, 140)),
+      street: cleanName(s.slice(145, 165)),
+      house: safeTrim(s.slice(140, 145)),
+      status: "",
+      period: ""
+    };
+  }
+
+  function parseMenoraTrfr(s){
+    const code = fixVisualHebrew(s.slice(0, 4)).replace(/\s+/g, "");
+    if(!code) return null;
+    return {
+      kind: "MENORA_TRFR",
+      code,
+      desc: cleanName(s.slice(4, 29)),
+      class: digits(s.slice(29, 31)).padStart(2, "0").slice(-2)
+    };
+  }
+
+  function menoraCoverFamily(cls, desc){
+    const c = String(cls || "");
+    if(MENORA_HEALTH_CLASS[c]) return "health";
+    if(MENORA_LIFE_CLASS[c]) return "life";
+    if(/בריאות|סיעוד|אבחון|שיניים|אמבולטור|ניתוח|השתל|תרופות/.test(String(desc || ""))) return "health";
+    return "life";
+  }
+
+  function mapMenoraHealthCover(desc){
+    const t = safeTrim(desc);
+    if(!t) return "";
+    if(/שקל\s*ר/.test(t)) return "ניתוחים בישראל מהשקל הראשון";
+    if(/תרופה/.test(t) && !/תרופות/.test(t)) return mapHealthCover("תרופות");
+    return mapHealthCover(t);
   }
 
   function parseRbRecord(s){
@@ -546,7 +749,8 @@
     };
   }
 
-  function parseFileBuffer(fileName, buffer){
+  function parseFileBuffer(fileName, buffer, opts){
+    const cancelled = !!(opts && (opts.cancelled || opts.inactive));
     const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
     const namedMigdal = detectMigdalKindFromName(fileName);
     if(namedMigdal || looksLikeMigdalPipe(bytes)){
@@ -568,11 +772,33 @@
         }
         if(row) rows.push(row);
       });
-      return { fileName, kind, records: recs.length, rows };
+      return { fileName, kind, records: recs.length, rows, cancelled };
     }
     const text = decodeCp862(bytes);
     const recs = splitRecords(text);
-    const kind = detectKind(fileName, recs[0] || "");
+    const rec0 = recs[0] || "";
+    const namedMenora = detectMenoraKindFromName(fileName);
+    const menoraKind = namedMenora || detectMenoraKindFromRecord(rec0);
+    const menoraOk = menoraKind === "MENORA_TRFR"
+      ? (namedMenora === "MENORA_TRFR" || looksLikeMenoraTrfr(rec0))
+      : looksLikeMenoraRecord(rec0);
+    if(menoraKind && (menoraOk || namedMenora === "MENORA_TRFR")){
+      const rows = [];
+      recs.forEach((s) => {
+        let row = null;
+        if(menoraKind === "MENORA_TRFR") row = parseMenoraTrfr(s);
+        else if(menoraKind === "MENORA_M") row = parseMenoraM(s);
+        else if(menoraKind === "MENORA_N") row = parseMenoraN(s);
+        else if(menoraKind === "MENORA_G") row = parseMenoraG(s);
+        else if(menoraKind === "MENORA_P") row = parseMenoraP(s);
+        if(row){
+          if(cancelled) row.cancelled = true;
+          rows.push(row);
+        }
+      });
+      return { fileName, kind: menoraKind, records: recs.length, rows, cancelled };
+    }
+    const kind = detectKind(fileName, rec0);
     const rows = [];
     recs.forEach((s) => {
       let row = null;
@@ -581,7 +807,7 @@
       else if(kind === "SB") row = parseSbRecord(s);
       if(row) rows.push(row);
     });
-    return { fileName, kind, records: recs.length, rows };
+    return { fileName, kind, records: recs.length, rows, cancelled };
   }
 
   function uniqueIds(people){
@@ -794,10 +1020,168 @@
     return out;
   }
 
+  function buildMenoraPolicies(parsedFiles){
+    const byKind = { MENORA_M: [], MENORA_N: [], MENORA_G: [], MENORA_P: [], MENORA_TRFR: [] };
+    const cancelledFiles = {};
+    (parsedFiles || []).forEach((f) => {
+      if(!byKind[f.kind]) return;
+      byKind[f.kind] = byKind[f.kind].concat(f.rows || []);
+      if(f.cancelled) cancelledFiles[f.kind] = true;
+    });
+
+    const catalog = {};
+    byKind.MENORA_TRFR.forEach((t) => {
+      if(t && t.code) catalog[t.code] = t;
+    });
+
+    const pByPol = new Map();
+    byKind.MENORA_P.forEach((p) => {
+      if(p.policyNumber && !pByPol.has(p.policyNumber)) pByPol.set(p.policyNumber, p);
+    });
+    const gByPol = new Map();
+    byKind.MENORA_G.forEach((g) => {
+      if(g.policyNumber) gByPol.set(g.policyNumber, g);
+    });
+    const mByPol = new Map();
+    byKind.MENORA_M.forEach((m) => {
+      if(m.policyNumber) mByPol.set(m.policyNumber, m);
+    });
+    const nByPol = new Map();
+    byKind.MENORA_N.forEach((n) => {
+      if(!n.policyNumber) return;
+      if(!nByPol.has(n.policyNumber)) nByPol.set(n.policyNumber, []);
+      nByPol.get(n.policyNumber).push(n);
+    });
+
+    const keys = new Set();
+    nByPol.forEach((_v, k) => keys.add(k));
+    mByPol.forEach((_v, k) => keys.add(k));
+
+    const out = [];
+    keys.forEach((pol) => {
+      const header = mByPol.get(pol) || {};
+      const g = gByPol.get(pol) || {};
+      const person = pByPol.get(pol) || {};
+      const ns = nByPol.get(pol) || [];
+      const cancelled = !!(
+        cancelledFiles.MENORA_M || cancelledFiles.MENORA_N || cancelledFiles.MENORA_G || cancelledFiles.MENORA_P
+        || header.cancelled || g.cancelled || person.cancelled
+        || ns.some((n) => n.cancelled)
+      );
+
+      const healthRows = [];
+      const lifeRows = [];
+      ns.forEach((n) => {
+        const cat = catalog[n.productCode] || {};
+        const desc = cat.desc || n.productCode || "";
+        const cls = cat.class || "";
+        const family = menoraCoverFamily(cls, desc);
+        const mapped = family === "health" ? mapMenoraHealthCover(desc) : mapLifeCover(desc);
+        const row = {
+          kind: "MENORA_N",
+          policyNumber: pol,
+          coverCode: n.productCode,
+          coverName: mapped || desc,
+          coverNameRaw: desc,
+          premium: n.premium,
+          premiumAnnual: n.premiumAnnual,
+          startDate: n.startDate,
+          idNumber: n.idNumber || person.idNumber || header.idNumber,
+          sumInsured: n.sumInsured ? money2(n.sumInsured) : "",
+          familyGuess: family,
+          class: cls
+        };
+        if(family === "health") healthRows.push(row);
+        else lifeRows.push(row);
+      });
+
+      const covers = healthRows.concat(lifeRows);
+      const hasHealth = healthRows.length > 0;
+      const family = hasHealth ? "health" : "life";
+      let type = "בריאות";
+      if(family === "life") type = inferLifeProductType(lifeRows);
+      else type = inferHealthProductType(healthRows, Object.keys(sumCoverPremiums(healthRows, "health")));
+
+      const coverMonthly = covers.reduce((sum, c) => sum + (Number(c.premium) || 0), 0);
+      const premiumMonthly = (g.premiumMonthly != null && g.premiumMonthly > 0)
+        ? money2(g.premiumMonthly)
+        : (coverMonthly ? money2(coverMonthly) : "");
+
+      const coverBenefit = maxCoverBenefit(covers.map((c) => ({ sumInsured: Number(c.sumInsured) || 0 })));
+      let sumInsured = "";
+      let compensation = "";
+      if(family === "life"){
+        const split = splitLifeMoney(g.premiumMonthly, coverMonthly, coverBenefit);
+        sumInsured = split.sumInsured;
+      } else {
+        compensation = pickCompensation(type, covers);
+      }
+
+      const idNumber = person.idNumber || header.idNumber || (ns[0] && ns[0].idNumber) || "";
+      const people = [];
+      if(idNumber || person.fullName){
+        people.push({
+          kind: "MENORA_P",
+          policyNumber: pol,
+          idNumber: idNumber,
+          idNumber2: "",
+          firstName: person.firstName || "",
+          lastName: person.lastName || "",
+          fullName: person.fullName || "",
+          birthDate: person.birthDate || (ns[0] && ns[0].birthDate) || "",
+          gender: person.gender || "",
+          city: person.city || "",
+          street: person.street || "",
+          house: person.house || "",
+          agent: person.agent || header.agent || (ns[0] && ns[0].agent) || "",
+          status: "",
+          period: ""
+        });
+      }
+
+      const dated = ns.filter((n) => n.startDate).sort((a, b) => String(a.startYm).localeCompare(String(b.startYm)));
+      const startDate = (dated[0] && dated[0].startDate) || "";
+      const healthPrem = sumCoverPremiums(healthRows, "health");
+      const lifePrem = sumCoverPremiums(lifeRows, "life");
+      const coverPremiums = Object.assign({}, healthPrem, lifePrem);
+      const primary = people[0] || {};
+
+      out.push({
+        company: COMPANY_MENORA,
+        type,
+        family,
+        policyNumber: normPolicy(pol),
+        premiumMonthly,
+        sumInsured,
+        compensation,
+        startDate,
+        insuredCount: people.length,
+        coverDetails: covers.map(coverDetailFromRow),
+        healthCovers: Object.keys(healthPrem),
+        lifeCovers: Object.keys(lifePrem),
+        coverPremiums,
+        agentNumber: header.agent || person.agent || (ns[0] && ns[0].agent) || pickAgentNumber(people),
+        paymentPeriod: "",
+        people,
+        covers,
+        ids: uniqueIds(people),
+        primary,
+        inactive: cancelled,
+        productLabel: type,
+        importSource: "menora-production"
+      });
+    });
+    return out;
+  }
+
   function buildPolicies(parsedFiles, company){
     const files = parsedFiles || [];
+    const hasMenora = files.some((f) => f && MENORA_KIND_SET[f.kind]);
     const hasMigdal = files.some((f) => f && MIGDAL_KIND_SET[f.kind]);
     const hasHach = files.some((f) => f && (f.kind === "RB" || f.kind === "RP" || f.kind === "SB" || f.kind === "SP"));
+    if(safeTrim(company) === COMPANY_MENORA || (hasMenora && !hasMigdal && !hasHach)){
+      return buildMenoraPolicies(files);
+    }
     if(hasMigdal && !hasHach) return buildMigdalPolicies(files);
     if(safeTrim(company) === COMPANY_MIGDAL && hasMigdal) return buildMigdalPolicies(files);
     return buildHachsharaPolicies(files);
@@ -813,7 +1197,10 @@
       "ביטוח הכשרה": "הכשרה",
       "מגדל": "מגדל",
       "מגדל ביטוח": "מגדל",
-      "מגדל חברה לביטוח": "מגדל"
+      "מגדל חברה לביטוח": "מגדל",
+      "מנורה": "מנורה",
+      "מנורה מבטחים": "מנורה",
+      "מנורה מבטחים ביטוח": "מנורה"
     };
     return !!(aliases[na] && aliases[nb] && aliases[na] === aliases[nb]);
   }
@@ -1308,9 +1695,9 @@
       const set = mergeCoverList(p.healthCovers, incoming, mapHealthCover);
       if(set.length) p.healthCovers = set;
     }
-    if(item.family === "life" || item.type === "ריסק" || item.type === "ריסק משכנתא"){
+    if(item.family === "life" || item.type === "ריסק" || item.type === "ריסק משכנתא" || (item.lifeCovers && item.lifeCovers.length)){
       const set = [];
-      (Array.isArray(p.lifeCovers) ? p.lifeCovers : []).concat(item.lifeCovers || Object.keys(coverPrem)).forEach((k) => {
+      (Array.isArray(p.lifeCovers) ? p.lifeCovers : []).concat(item.lifeCovers || []).forEach((k) => {
         const t = mapLifeCover(k);
         if(t && set.indexOf(t) === -1) set.push(t);
       });
@@ -1360,7 +1747,7 @@
       company: item.company,
       policyNumber: item.policyNumber,
       importedAt: nowISO(),
-      source: item.importSource || (item.company === COMPANY_MIGDAL ? "migdal-production" : "hachshara-production"),
+      source: item.importSource || (item.company === COMPANY_MIGDAL ? "migdal-production" : item.company === COMPANY_MENORA ? "menora-production" : "hachshara-production"),
       coverCount: (item.covers || []).length,
       personCount: (item.people || []).length,
       agentNumber: safeTrim(item.agentNumber),
@@ -1404,15 +1791,17 @@
   }
 
   global.GI_PRODUCTION = {
-    version: "20260823-prod-nosale-v1",
+    version: "20260826-menora-prod-v1",
     relocateMisreadLifePremium,
     sanitizeCustomerPolicies,
     COMPANIES,
     COMPANY_HACHSHARA,
     COMPANY_MIGDAL,
+    COMPANY_MENORA,
     parseFileBuffer,
     detectKind,
     detectMigdalKindFromName,
+    detectMenoraKindFromName,
     migdalPolicyNumber,
     buildPolicies,
     classifyPolicies,
