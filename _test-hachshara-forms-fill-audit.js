@@ -11,7 +11,8 @@ const vm = require("vm");
 const { execFileSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260825-hach-fill-audit-v1";
+const APP_TAG = "20260826-hach-health-adv-v1";
+const TAG = "20260825-hach-fill-audit-v1"; // form module / href cache
 let failed = 0;
 let passed = 0;
 
@@ -198,8 +199,8 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-hachshara-ci-
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-hachshara-life-form.js")]).status === 0, "life form syntax");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-hachshara-life-short-form.js")]).status === 0, "life-short form syntax");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-hachshara-mortgage-form.js")]).status === 0, "mortgage form syntax");
-assert(html.includes("app.js?v=" + TAG), "index cache");
-assert(sw.includes("gi-v12-" + TAG), "SW cache");
+assert(html.includes("app.js?v=" + APP_TAG), "index cache");
+assert(sw.includes("gi-v12-" + APP_TAG), "SW cache");
 assert(app.includes("gi-hachshara-ci-form.js?v=" + TAG), "ci href");
 assert(app.includes("gi-hachshara-life-form.js?v=" + TAG), "life href");
 assert(app.includes("gi-hachshara-life-short-form.js?v=" + TAG), "life-short href");

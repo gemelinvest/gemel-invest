@@ -9,6 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
+const APP_TAG = "20260826-hach-health-adv-v1";
 const TAG = "20260825-hach-fill-audit-v1";
 let failed = 0;
 let passed = 0;
@@ -36,9 +37,9 @@ assert(fs.existsSync(pdfPath), "official PDF template exists");
 assert(fs.statSync(pdfPath).size > 100000, "PDF template is not empty");
 
 console.log("\n2) cache");
-assert(html.includes("app.js?v=" + TAG), "index.html bumps app.js cache");
+assert(html.includes("app.js?v=" + APP_TAG), "index.html bumps app.js cache");
 assert(app.includes('GI_HACHSHARA_MORTGAGE_FORM_HREF = "./gi-hachshara-mortgage-form.js?v=' + TAG + '"'), "form chunk cache bumped");
-assert(sw.includes("gi-v12-" + TAG), "service worker cache bumped");
+assert(sw.includes("gi-v12-" + APP_TAG), "service worker cache bumped");
 
 console.log("\n3) customer-file document");
 assert(app.includes('hachsharaMortgageForm: "hachshara_mortgage_form"'), "document type registered");
