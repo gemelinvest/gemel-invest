@@ -36591,12 +36591,47 @@ UsersGateUI.init();
           ? obj.healthDeclaration.responses : null;
         return (r && typeof r === "object") ? r : null;
       };
-      const nonempty = (r) => (r && Object.keys(r).length) ? r : null;
+      const merge = (target, src) => {
+        if(!src || typeof src !== "object") return target;
+        Object.keys(src).forEach((qKey) => {
+          const block = src[qKey];
+          if(!block || typeof block !== "object") return;
+          if(!target[qKey] || typeof target[qKey] !== "object") target[qKey] = {};
+          Object.keys(block).forEach((insId) => {
+            const incoming = block[insId];
+            if(!incoming || typeof incoming !== "object") return;
+            const prev = target[qKey][insId] && typeof target[qKey][insId] === "object" ? target[qKey][insId] : {};
+            target[qKey][insId] = Object.assign({}, prev, incoming, {
+              fields: Object.assign({}, prev.fields || {}, incoming.fields || {})
+            });
+          });
+        });
+        return target;
+      };
+      const out = {};
       const primary = payload?.primary && typeof payload.primary === "object" ? payload.primary : {};
-      const ins0 = Array.isArray(payload?.insureds) ? payload.insureds[0] : null;
-      const fromPrimary = raw(primary);
-      const fromIns = raw(ins0 && ins0.data);
-      return nonempty(fromPrimary) || nonempty(fromIns) || fromPrimary || fromIns || {};
+      merge(out, raw(primary));
+      merge(out, raw(payload?.operational && payload.operational.primary));
+      (Array.isArray(payload?.insureds) ? payload.insureds : []).forEach((ins) => merge(out, raw(ins && ins.data)));
+      merge(out, raw(payload));
+      return out;
+    },
+    /* Hachshara CI 2554: HMORadio widgets on page 1, right→left:
+       כללית=/2, מאוחדת=/3, מכבי=/1, לאומית=/4. HMOName is the סניף text box — not the fund. */
+    mapHmoExport(clinicRaw){
+      const s = String(clinicRaw == null ? "" : clinicRaw).trim().replace(/\s+/g, "");
+      if(!s) return "";
+      if(/כללית|clalit/i.test(s)) return "2";
+      if(/מאוחדת|meuhedet/i.test(s)) return "3";
+      if(/מכבי|maccabi/i.test(s)) return "1";
+      if(/לאומית|leumit/i.test(s)) return "4";
+      return "";
+    },
+    mapShabanExport(shabanRaw){
+      const s = String(shabanRaw == null ? "" : shabanRaw).trim();
+      if(!s) return "";
+      if(/אין|ללא|^לא$|^no$/i.test(s)) return "2";
+      return "1";
     },
     healthAnswer(responses, qKey, insId){
       if(!qKey || !insId) return "";
@@ -36979,103 +37014,103 @@ UsersGateUI.init();
         // rows use keys[] so legacy aliases / health-master fallbacks still fill the PDF.
         this._hachHealthRows = {
           ci: [
-            { smoke: true, keys: ["hachshara_crit__smoking", "hachshara__smoking"] },
-            { q: 1, keys: ["hachshara_crit__hospitalization", "hachshara__hospitalization"] },
-            { q: 2, keys: ["hachshara_crit__tests_5y", "hachshara__tests_5y"] },
-            { q: 3, keys: ["hachshara_crit__treatment_5y", "hachshara__treatment_5y"] },
-            { q: 4, keys: ["hachshara_crit__chronic", "hachshara__chronic"] },
-            { q: 5, keys: ["hachshara_crit__memory", "hachshara__memory"] },
-            { q: 6, keys: ["hachshara_crit__disability", "hachshara__disability"] },
-            { q: 7, keys: ["hachshara_crit__mental", "hachshara__mental"] },
-            { q: 8, keys: ["hachshara_crit__substances", "hachshara__substances"] },
-            { q: 9, keys: ["hachshara_crit__neuro", "hachshara__neuro"] },
-            { q: 10, keys: ["hachshara_crit__respiratory", "hachshara__respiratory", "hachshara__breath_chest"] },
-            { q: 11, keys: ["hachshara_crit__heart", "hachshara_crit__heart_disease", "hachshara_crit__heart_vessels", "hachshara__heart"] },
+            { smoke: true, keys: ["hachshara_crit__smoking", "hachshara__smoking", "hachshara_risk_s__smoking", "hachshara_risk_f__smoking", "hachshara_mort_s__smoking", "hachshara_mort_f__smoking"] },
+            { q: 1, keys: ["hachshara_crit__hospitalization", "hachshara__hospitalization", "hachshara_risk_s__q2", "hachshara_risk_f__a2", "hachshara_mort_s__q2", "hachshara_mort_f__a2"] },
+            { q: 2, keys: ["hachshara_crit__tests_5y", "hachshara__tests_5y", "hachshara_risk_s__q3", "hachshara_risk_f__a3", "hachshara_mort_s__q3", "hachshara_mort_f__a3"] },
+            { q: 3, keys: ["hachshara_crit__treatment_5y", "hachshara__treatment_5y", "hachshara_risk_f__a4", "hachshara_mort_f__a4"] },
+            { q: 4, keys: ["hachshara_crit__chronic", "hachshara__chronic", "hachshara_risk_s__q4b", "hachshara_risk_f__b1", "hachshara_mort_s__q4b", "hachshara_mort_f__b1"] },
+            { q: 5, keys: ["hachshara_crit__memory", "hachshara__memory", "hachshara_risk_f__b3", "hachshara_mort_f__b3"] },
+            { q: 6, keys: ["hachshara_crit__disability", "hachshara__disability", "hachshara_risk_f__a5", "hachshara_mort_f__a5"] },
+            { q: 7, keys: ["hachshara_crit__mental", "hachshara__mental", "hachshara_risk_s__q4g", "hachshara_risk_f__b6", "hachshara_mort_s__q4g"] },
+            { q: 8, keys: ["hachshara_crit__substances", "hachshara__substances", "hachshara_risk_s__q1", "hachshara_risk_f__a6", "hachshara_mort_s__q1", "hachshara_mort_f__a6"] },
+            { q: 9, keys: ["hachshara_crit__neuro", "hachshara__neuro", "hachshara_risk_s__q4e", "hachshara_risk_f__b2", "hachshara_mort_s__q4e"] },
+            { q: 10, keys: ["hachshara_crit__respiratory", "hachshara__respiratory", "hachshara__breath_chest", "hachshara_risk_s__q4f", "hachshara_risk_f__b4", "hachshara_mort_s__q4f"] },
+            { q: 11, keys: ["hachshara_crit__heart", "hachshara_crit__heart_disease", "hachshara_crit__heart_vessels", "hachshara__heart", "hachshara_risk_s__q4a", "hachshara_risk_f__b5", "hachshara_mort_s__q4a"] },
             { q: 12, keys: ["hachshara_crit__blood", "hachshara__blood"] },
-            { q: 13, keys: ["hachshara_crit__liver", "hachshara__liver"] },
-            { q: 14, keys: ["hachshara_crit__digestive", "hachshara__digestive"] },
-            { q: 15, keys: ["hachshara_crit__kidneys", "hachshara__kidneys"] },
-            { q: 16, keys: ["hachshara_crit__glands", "hachshara__glands"] },
+            { q: 13, keys: ["hachshara_crit__liver", "hachshara__liver", "hachshara_risk_f__b7"] },
+            { q: 14, keys: ["hachshara_crit__digestive", "hachshara__digestive", "hachshara_risk_s__q4d", "hachshara_risk_f__b8", "hachshara_mort_s__q4d"] },
+            { q: 15, keys: ["hachshara_crit__kidneys", "hachshara__kidneys", "hachshara_risk_s__q4h", "hachshara_risk_f__b9", "hachshara_mort_s__q4h"] },
+            { q: 16, keys: ["hachshara_crit__glands", "hachshara__glands", "hachshara_risk_f__b14"] },
             { q: 17, keys: ["hachshara_crit__skin", "hachshara__skin"] },
-            { q: 18, keys: ["hachshara_crit__aids", "hachshara__aids"] },
-            { q: 19, keys: ["hachshara_crit__musculoskeletal", "hachshara__musculoskeletal"] },
-            { q: 20, keys: ["hachshara_crit__cancer", "hachshara__cancer"] },
-            { q: 21, keys: ["hachshara_crit__autoimmune", "hachshara__autoimmune"] },
-            { q: 22, keys: ["hachshara_crit__eyes", "hachshara__eyes"] },
-            { q: 23, keys: ["hachshara_crit__ent", "hachshara__ent"] },
+            { q: 18, keys: ["hachshara_crit__aids", "hachshara__aids", "hachshara_risk_f__b10"] },
+            { q: 19, keys: ["hachshara_crit__musculoskeletal", "hachshara__musculoskeletal", "hachshara_risk_f__b11"] },
+            { q: 20, keys: ["hachshara_crit__cancer", "hachshara__cancer", "hachshara_risk_s__q4c", "hachshara_risk_f__b12", "hachshara_mort_s__q4c"] },
+            { q: 21, keys: ["hachshara_crit__autoimmune", "hachshara__autoimmune", "hachshara_risk_s__q4i", "hachshara_risk_f__b13", "hachshara_mort_s__q4i"] },
+            { q: 22, keys: ["hachshara_crit__eyes", "hachshara__eyes", "hachshara_risk_f__b15"] },
+            { q: 23, keys: ["hachshara_crit__ent", "hachshara__ent", "hachshara_risk_f__b16"] },
             { q: 24, keys: ["hachshara_crit__hernia", "hachshara__hernia"] },
-            { q: 25, keys: ["hachshara_crit__female", "hachshara__female"] },
-            { q: 26, keys: ["hachshara_crit__child_dev", "hachshara__child_dev"] },
-            { q: 27, keys: ["hachshara_crit__family_critical", "hachshara__family_critical"] },
-            { q: 28, keys: ["hachshara_crit__infant_1"] },
-            { q: 29, keys: ["hachshara_crit__infant_2"] }
+            { q: 25, keys: ["hachshara_crit__female", "hachshara__female", "hachshara_risk_f__b18"] },
+            { q: 26, keys: ["hachshara_crit__child_dev", "hachshara__child_dev", "hachshara_risk_f__b19"] },
+            { q: 27, keys: ["hachshara_crit__family_critical", "hachshara__family_critical", "hachshara_risk_f__a1"] },
+            { q: 28, keys: ["hachshara_crit__infant_1", "hachshara__infant_1"] },
+            { q: 29, keys: ["hachshara_crit__infant_2", "hachshara__infant_2"] }
           ],
           life_full: [
-            { smoke: true, keys: ["hachshara_risk_f__smoking"] },
+            { smoke: true, keys: ["hachshara_risk_f__smoking", "hachshara_crit__smoking", "hachshara__smoking"] },
             // Current schema a1–a6; legacy files stored q1–q8 for section א
-            { q: 1, keys: ["hachshara_risk_f__a1", "hachshara_risk_f__q1", "hachshara_risk_f__c1"] },
-            { q: 2, keys: ["hachshara_risk_f__a2", "hachshara_risk_f__q2"] },
-            { q: 3, keys: ["hachshara_risk_f__a3", "hachshara_risk_f__q3"] },
-            { q: 4, keys: ["hachshara_risk_f__a4", "hachshara_risk_f__q4"] },
-            { q: 5, keys: ["hachshara_risk_f__a5", "hachshara_risk_f__q5"] },
-            { q: 6, keys: ["hachshara_risk_f__a6", "hachshara_risk_f__q6"] },
-            { q: 7, keys: ["hachshara_risk_f__b1", "hachshara_risk_f__q7"] },
-            { q: 8, keys: ["hachshara_risk_f__b2", "hachshara_risk_f__q8"] },
-            { q: 9, keys: ["hachshara_risk_f__b3"] },
-            { q: 10, keys: ["hachshara_risk_f__b4"] },
-            { q: 11, keys: ["hachshara_risk_f__b5"] },
-            { q: 12, keys: ["hachshara_risk_f__b6"] },
-            { q: 13, keys: ["hachshara_risk_f__b7"] },
-            { q: 14, keys: ["hachshara_risk_f__b8"] },
-            { q: 15, keys: ["hachshara_risk_f__b9"] },
-            { q: 16, keys: ["hachshara_risk_f__b10"] },
-            { q: 17, keys: ["hachshara_risk_f__b11"] },
-            { q: 18, keys: ["hachshara_risk_f__b12"] },
-            { q: 19, keys: ["hachshara_risk_f__b13"] },
-            { q: 20, keys: ["hachshara_risk_f__b14"] },
-            { q: 21, keys: ["hachshara_risk_f__b15"] },
-            { q: 22, keys: ["hachshara_risk_f__b16"] },
+            { q: 1, keys: ["hachshara_risk_f__a1", "hachshara_risk_f__q1", "hachshara_risk_f__c1", "hachshara__family_critical", "hachshara_crit__family_critical"] },
+            { q: 2, keys: ["hachshara_risk_f__a2", "hachshara_risk_f__q2", "hachshara__hospitalization", "hachshara_crit__hospitalization"] },
+            { q: 3, keys: ["hachshara_risk_f__a3", "hachshara_risk_f__q3", "hachshara__tests_5y", "hachshara_crit__tests_5y"] },
+            { q: 4, keys: ["hachshara_risk_f__a4", "hachshara_risk_f__q4", "hachshara__treatment_5y", "hachshara_crit__treatment_5y"] },
+            { q: 5, keys: ["hachshara_risk_f__a5", "hachshara_risk_f__q5", "hachshara__disability", "hachshara_crit__disability"] },
+            { q: 6, keys: ["hachshara_risk_f__a6", "hachshara_risk_f__q6", "hachshara__substances", "hachshara_crit__substances"] },
+            { q: 7, keys: ["hachshara_risk_f__b1", "hachshara_risk_f__q7", "hachshara__chronic", "hachshara_crit__chronic"] },
+            { q: 8, keys: ["hachshara_risk_f__b2", "hachshara_risk_f__q8", "hachshara__neuro", "hachshara_crit__neuro"] },
+            { q: 9, keys: ["hachshara_risk_f__b3", "hachshara__memory", "hachshara_crit__memory"] },
+            { q: 10, keys: ["hachshara_risk_f__b4", "hachshara__respiratory", "hachshara__breath_chest", "hachshara_crit__respiratory"] },
+            { q: 11, keys: ["hachshara_risk_f__b5", "hachshara__heart", "hachshara_crit__heart"] },
+            { q: 12, keys: ["hachshara_risk_f__b6", "hachshara__mental", "hachshara_crit__mental"] },
+            { q: 13, keys: ["hachshara_risk_f__b7", "hachshara__liver", "hachshara_crit__liver"] },
+            { q: 14, keys: ["hachshara_risk_f__b8", "hachshara__digestive", "hachshara_crit__digestive"] },
+            { q: 15, keys: ["hachshara_risk_f__b9", "hachshara__kidneys", "hachshara_crit__kidneys"] },
+            { q: 16, keys: ["hachshara_risk_f__b10", "hachshara__aids", "hachshara_crit__aids"] },
+            { q: 17, keys: ["hachshara_risk_f__b11", "hachshara__musculoskeletal", "hachshara_crit__musculoskeletal"] },
+            { q: 18, keys: ["hachshara_risk_f__b12", "hachshara__cancer", "hachshara_crit__cancer"] },
+            { q: 19, keys: ["hachshara_risk_f__b13", "hachshara__autoimmune", "hachshara_crit__autoimmune"] },
+            { q: 20, keys: ["hachshara_risk_f__b14", "hachshara__glands", "hachshara_crit__glands"] },
+            { q: 21, keys: ["hachshara_risk_f__b15", "hachshara__eyes", "hachshara_crit__eyes"] },
+            { q: 22, keys: ["hachshara_risk_f__b16", "hachshara__ent", "hachshara_crit__ent"] },
             { q: 23, keys: ["hachshara_risk_f__b17"] },
-            { q: 24, keys: ["hachshara_risk_f__b18"] },
-            { q: 25, keys: ["hachshara_risk_f__b19"] }
+            { q: 24, keys: ["hachshara_risk_f__b18", "hachshara__female", "hachshara_crit__female"] },
+            { q: 25, keys: ["hachshara_risk_f__b19", "hachshara__child_dev", "hachshara_crit__child_dev"] }
           ],
           life_short: [
-            { smoke: true, keys: ["hachshara_risk_s__smoking", "hachshara_mort_s__smoking"] },
-            { q: 1, keys: ["hachshara_risk_s__q1", "hachshara_mort_s__q1"] },
-            { q: 2, keys: ["hachshara_risk_s__q2", "hachshara_mort_s__q2"] },
-            { q: 3, keys: ["hachshara_risk_s__q3", "hachshara_mort_s__q3"] },
-            { q: 4, keys: ["hachshara_risk_s__q4a", "hachshara_mort_s__q4a"] },
-            { q: 5, keys: ["hachshara_risk_s__q4b", "hachshara_mort_s__q4b"] },
-            { q: 6, keys: ["hachshara_risk_s__q4c", "hachshara_mort_s__q4c"] },
-            { q: 7, keys: ["hachshara_risk_s__q4d", "hachshara_mort_s__q4d"] },
-            { q: 8, keys: ["hachshara_risk_s__q4e", "hachshara_mort_s__q4e"] },
-            { q: 9, keys: ["hachshara_risk_s__q4f", "hachshara_mort_s__q4f"] },
-            { q: 10, keys: ["hachshara_risk_s__q4g", "hachshara_mort_s__q4g"] },
-            { q: 11, keys: ["hachshara_risk_s__q4h", "hachshara_mort_s__q4h"] },
-            { q: 12, keys: ["hachshara_risk_s__q4i", "hachshara_mort_s__q4i"] }
+            { smoke: true, keys: ["hachshara_risk_s__smoking", "hachshara_mort_s__smoking", "hachshara_crit__smoking", "hachshara__smoking"] },
+            { q: 1, keys: ["hachshara_risk_s__q1", "hachshara_mort_s__q1", "hachshara__substances", "hachshara_crit__substances"] },
+            { q: 2, keys: ["hachshara_risk_s__q2", "hachshara_mort_s__q2", "hachshara__hospitalization", "hachshara_crit__hospitalization"] },
+            { q: 3, keys: ["hachshara_risk_s__q3", "hachshara_mort_s__q3", "hachshara__tests_5y", "hachshara_crit__tests_5y"] },
+            { q: 4, keys: ["hachshara_risk_s__q4a", "hachshara_mort_s__q4a", "hachshara__heart", "hachshara_crit__heart"] },
+            { q: 5, keys: ["hachshara_risk_s__q4b", "hachshara_mort_s__q4b", "hachshara__chronic", "hachshara_crit__chronic"] },
+            { q: 6, keys: ["hachshara_risk_s__q4c", "hachshara_mort_s__q4c", "hachshara__cancer", "hachshara_crit__cancer"] },
+            { q: 7, keys: ["hachshara_risk_s__q4d", "hachshara_mort_s__q4d", "hachshara__digestive", "hachshara__liver", "hachshara_crit__digestive", "hachshara_crit__liver"] },
+            { q: 8, keys: ["hachshara_risk_s__q4e", "hachshara_mort_s__q4e", "hachshara__neuro", "hachshara_crit__neuro"] },
+            { q: 9, keys: ["hachshara_risk_s__q4f", "hachshara_mort_s__q4f", "hachshara__respiratory", "hachshara_crit__respiratory"] },
+            { q: 10, keys: ["hachshara_risk_s__q4g", "hachshara_mort_s__q4g", "hachshara__mental", "hachshara_crit__mental"] },
+            { q: 11, keys: ["hachshara_risk_s__q4h", "hachshara_mort_s__q4h", "hachshara__kidneys", "hachshara_crit__kidneys"] },
+            { q: 12, keys: ["hachshara_risk_s__q4i", "hachshara_mort_s__q4i", "hachshara__autoimmune", "hachshara__aids", "hachshara_crit__autoimmune", "hachshara_crit__aids"] }
           ],
           mortgage_full: [
-            { smoke: true, keys: ["hachshara_mort_f__smoking"] },
-            { q: 1, keys: ["hachshara_mort_f__a1"] },
-            { q: 2, keys: ["hachshara_mort_f__a2"] },
-            { q: 3, keys: ["hachshara_mort_f__a3"] },
-            { q: 4, keys: ["hachshara_mort_f__a4"] },
-            { q: 5, keys: ["hachshara_mort_f__a5"] },
-            { q: 6, keys: ["hachshara_mort_f__a6"] },
-            { q: 7, keys: ["hachshara_mort_f__b1"] },
-            { q: 8, keys: ["hachshara_mort_f__b2"] },
-            { q: 9, keys: ["hachshara_mort_f__b3"] },
-            { q: 10, keys: ["hachshara_mort_f__b4"] },
-            { q: 11, keys: ["hachshara_mort_f__b5"] },
-            { q: 12, keys: ["hachshara_mort_f__b6"] },
-            { q: 13, keys: ["hachshara_mort_f__b7"] },
-            { q: 14, keys: ["hachshara_mort_f__b8"] },
-            { q: 15, keys: ["hachshara_mort_f__b9"] },
-            { q: 16, keys: ["hachshara_mort_f__b10"] },
-            { q: 17, keys: ["hachshara_mort_f__b11"] },
-            { q: 18, keys: ["hachshara_mort_f__b12"] },
-            { q: 19, keys: ["hachshara_mort_f__b13"] },
-            { q: 20, keys: ["hachshara_mort_f__b14"] }
+            { smoke: true, keys: ["hachshara_mort_f__smoking", "hachshara_risk_f__smoking", "hachshara_crit__smoking"] },
+            { q: 1, keys: ["hachshara_mort_f__a1", "hachshara_risk_f__a1", "hachshara__family_critical"] },
+            { q: 2, keys: ["hachshara_mort_f__a2", "hachshara_risk_f__a2", "hachshara__hospitalization", "hachshara_crit__hospitalization"] },
+            { q: 3, keys: ["hachshara_mort_f__a3", "hachshara_risk_f__a3", "hachshara__tests_5y", "hachshara_crit__tests_5y"] },
+            { q: 4, keys: ["hachshara_mort_f__a4", "hachshara_risk_f__a4", "hachshara__treatment_5y", "hachshara_crit__treatment_5y"] },
+            { q: 5, keys: ["hachshara_mort_f__a5", "hachshara_risk_f__a5", "hachshara__disability", "hachshara_crit__disability"] },
+            { q: 6, keys: ["hachshara_mort_f__a6", "hachshara_risk_f__a6", "hachshara__substances", "hachshara_crit__substances"] },
+            { q: 7, keys: ["hachshara_mort_f__b1", "hachshara_risk_f__b1", "hachshara__chronic", "hachshara_crit__chronic"] },
+            { q: 8, keys: ["hachshara_mort_f__b2", "hachshara_risk_f__b2", "hachshara__neuro", "hachshara_crit__neuro"] },
+            { q: 9, keys: ["hachshara_mort_f__b3", "hachshara_risk_f__b3", "hachshara__memory", "hachshara_crit__memory"] },
+            { q: 10, keys: ["hachshara_mort_f__b4", "hachshara_risk_f__b4", "hachshara__respiratory", "hachshara_crit__respiratory"] },
+            { q: 11, keys: ["hachshara_mort_f__b5", "hachshara_risk_f__b5", "hachshara__heart", "hachshara_crit__heart"] },
+            { q: 12, keys: ["hachshara_mort_f__b6", "hachshara_risk_f__b6", "hachshara__mental", "hachshara_crit__mental"] },
+            { q: 13, keys: ["hachshara_mort_f__b7", "hachshara_risk_f__b7", "hachshara__liver", "hachshara_crit__liver"] },
+            { q: 14, keys: ["hachshara_mort_f__b8", "hachshara_risk_f__b8", "hachshara__digestive", "hachshara_crit__digestive"] },
+            { q: 15, keys: ["hachshara_mort_f__b9", "hachshara_risk_f__b9", "hachshara__kidneys", "hachshara_crit__kidneys"] },
+            { q: 16, keys: ["hachshara_mort_f__b10", "hachshara_risk_f__b10", "hachshara__aids", "hachshara_crit__aids"] },
+            { q: 17, keys: ["hachshara_mort_f__b11", "hachshara_risk_f__b11", "hachshara__musculoskeletal", "hachshara_crit__musculoskeletal"] },
+            { q: 18, keys: ["hachshara_mort_f__b12", "hachshara_risk_f__b12", "hachshara__cancer", "hachshara_crit__cancer"] },
+            { q: 19, keys: ["hachshara_mort_f__b13", "hachshara_risk_f__b13", "hachshara__autoimmune", "hachshara_crit__autoimmune"] },
+            { q: 20, keys: ["hachshara_mort_f__b14", "hachshara_risk_f__b14", "hachshara__glands", "hachshara_crit__glands"] }
           ],
           menora_ci: [
             { smoke: true, keys: ["menora_crit__smoking"] },
@@ -37407,7 +37442,9 @@ UsersGateUI.init();
         IsSmoking: "מעשן", IsSmokingBzug: "בן/בת זוג מעשן", Hight: "גובה", Weight: "משקל",
         InsuranceBegin: "תחילת ביטוח", Date: "תאריך", GiluiTotalRisk: "סכום ביטוח",
         GiluiTotalRiskSpouse: "סכום ביטוח משני", MaximumAmount: "סכום פיצוי",
-        FamilyStatus: "מצב משפחתי", HMOName: "קופת חולים", HMO: "קופת חולים"
+        FamilyStatus: "מצב משפחתי", HMOName: "סניף קופת חולים", HMO: "קופת חולים",
+        HMORadio: "קופת חולים", HMOSpouse: "בן/בת זוג — קופת חולים",
+        ShabanR: "שב״ן", ShabanSpouse: "בן/בת זוג — שב״ן"
       };
       if(map[n]) return map[n];
       const hq = n.match(/^HealthDecMainQ(\d+)$/);
@@ -37448,6 +37485,16 @@ UsersGateUI.init();
       if(o === "Married") return "נשוי/אה";
       if(o === "Divorced") return "גרוש/ה";
       if(o === "Widow") return "אלמן/ה";
+      if(/HMORadio|^HMOSpouse$/.test(fieldName)){
+        if(o === "1") return "מכבי";
+        if(o === "2") return "כללית";
+        if(o === "3") return "מאוחדת";
+        if(o === "4") return "לאומית";
+      }
+      if(/^Shaban/.test(fieldName)){
+        if(o === "1") return "כן";
+        if(o === "2") return "לא";
+      }
       return o;
     },
     renderPdfFieldEditor(fields, values, dataAttr){
@@ -37473,6 +37520,8 @@ UsersGateUI.init();
             let choices = Array.isArray(f.options) ? f.options.slice() : [];
             if(!choices.length){
               if(/HealthDec/.test(f.name)) choices = ["1", "2"];
+              else if(/HMORadio|^HMOSpouse$/.test(f.name)) choices = ["2", "3", "1", "4"];
+              else if(/^Shaban/.test(f.name)) choices = ["1", "2"];
               else if(/IsSmoking|Gender/.test(f.name)) choices = ["True", "False"];
               else if(f.name === "CollectionMethod") choices = ["Hok", "Credit"];
               else if(f.name === "FamilyStatus" || f.name === "FamilyStatusSpouse") choices = ["Single", "Married", "Divorced", "Widow"];
@@ -37528,10 +37577,10 @@ UsersGateUI.init();
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
   const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-official-he-bold-v1";
-  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260825-hach-fill-audit-v1";
-  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260825-hach-fill-audit-v1";
-  const GI_HACHSHARA_LIFE_SHORT_FORM_HREF = "./gi-hachshara-life-short-form.js?v=20260825-hach-fill-audit-v1";
-  const GI_HACHSHARA_MORTGAGE_FORM_HREF = "./gi-hachshara-mortgage-form.js?v=20260825-hach-fill-audit-v1";
+  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
+  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
+  const GI_HACHSHARA_LIFE_SHORT_FORM_HREF = "./gi-hachshara-life-short-form.js?v=20260826-hach-hmo-health-v1";
+  const GI_HACHSHARA_MORTGAGE_FORM_HREF = "./gi-hachshara-mortgage-form.js?v=20260826-hach-hmo-health-v1";
   const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260825-migdal-health-fill-v1";
   const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260825-migdal-health-fill-v1";
   const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-covers-sum-v1";

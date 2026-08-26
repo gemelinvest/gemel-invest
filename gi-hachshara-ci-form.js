@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/hachshara-ci/",
     TEMPLATE_FILE: "hachshara-ci-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260825-hach-fill-audit-v1",
+    VERSION: "20260826-hach-hmo-health-v1",
     DOC_ID: "doc_hachshara_ci_form",
     DOC_TYPE: "hachshara_ci_form",
 
@@ -268,7 +268,15 @@
         this.setTextSafe(form, "ZipCode" + s, person.zip, font);
         this.setTextSafe(form, "OccupationCode" + s, person.occupation, font);
       }
-      this.setTextSafe(form, isChild ? ("HMO" + s) : ("HMOName" + s), person.clinic, font);
+      // HMOName is סניף (branch). The fund itself is HMORadio / HMOSpouse (כללית/מאוחדת/מכבי/לאומית).
+      const helper = global.GI_OFFICIAL_FORM_FILL;
+      if(isChild){
+        this.setTextSafe(form, "HMO" + s, person.clinic, font);
+      } else {
+        const hmoField = s === "Spouse" ? "HMOSpouse" : "HMORadio";
+        const hmoExport = helper?.mapHmoExport?.(person.clinic) || "";
+        if(hmoExport) this.setExport(form, hmoField, hmoExport);
+      }
       this.setTextSafe(form, "Hight" + s, person.heightCm, font);
       this.setTextSafe(form, "Weight" + s, person.weightKg, font);
       if(!s) this.setTextSafe(form, "AptNumber", person.apt, font);
@@ -285,9 +293,10 @@
       if(person.smokingAmount){
         this.setTextSafe(form, "ClientSmokeNum" + (s === "Spouse" ? "Spouse" : s), person.smokingAmount, font);
       }
-      if(person.shaban){
+      const shabanExport = helper?.mapShabanExport?.(person.shaban) || "";
+      if(shabanExport){
         const shabanField = !s ? "ShabanR" : (s === "Spouse" ? "ShabanSpouse" : "Shaban" + s);
-        this.setExport(form, shabanField, "1");
+        this.setExport(form, shabanField, shabanExport);
       }
       // PDF: MaximumAmount = checkbox (/True), MaximumAmountText = סכום הפיצוי.
       // אין שדה טקסט נפרד לבן־זוג/ילדים — ממלאים את הסכום רק מהמבוטח הראשי.

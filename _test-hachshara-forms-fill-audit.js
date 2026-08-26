@@ -11,8 +11,8 @@ const vm = require("vm");
 const { execFileSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260826-cf-summary-gone-v3";
-const TAG = "20260825-hach-fill-audit-v1"; // form module / href cache
+const APP_TAG = "20260826-hach-hmo-health-v3";
+const TAG = "20260826-hach-hmo-health-v1"; // form module / href cache
 let failed = 0;
 let passed = 0;
 
@@ -99,6 +99,7 @@ function samplePerson(extra){
     zip: "5821000",
     occupation: "נהג",
     clinic: "מכבי",
+    shaban: "אין שב״ן",
     heightCm: "178",
     weightKg: "82",
     smokingStatus: "לא",
@@ -235,7 +236,7 @@ console.log("\n2) CI — מחלות קשות");
   const cap = form.getCapture();
   requireFields(cap, [
     "FirstName", "LastName", "PID", "BirthDate", "EmailAddress", "City", "StreetName",
-    "HouseNumber", "ZipCode", "CellPhoneNumber", "HMOName", "Hight", "Weight",
+    "HouseNumber", "ZipCode", "CellPhoneNumber", "HMORadio", "Hight", "Weight",
     "FirstNameSpouse", "PIDSpouse", "MaximumAmountText", "AgentNumber", "InsuranceBegin",
     "BankName", "BankBranch", "BankAccountNumber", "BankAccOwner"
   ], "CI");
@@ -244,6 +245,11 @@ console.log("\n2) CI — מחלות קשות");
   assert(cap.GenderSpouse === "False", "CI spouse female → False");
   assert(cap.FamilyStatus === "Married", "CI marital → Married");
   assert(cap.HealthDecMainQ1 === "2", "CI health Q1 no → 2");
+  assert(cap.HMORadio === "1", "CI HMO מכבי → radio 1, not the סניף text field");
+  assert(cap.HMOSpouse === "1", "CI spouse HMO → HMOSpouse radio");
+  assert(!cap.HMOName, "CI does not dump HMO name into סניף / HMOName");
+  assert(cap.ShabanR === "2", "CI אין שב״ן → Shaban לא (2)");
+  assert(ciFields.HMORadio === "/Btn", "CI HMORadio is a button group");
   assert(!cap.MaximumAmountChild1, "CI does not invent child amount field");
   assertInPdf(ciFields, ["MaximumAmountText", "MaximumAmount", "FirstName", "HealthDecMainQ1"], "CI");
   assert(ciFields.MaximumAmount === "/Btn", "CI MaximumAmount is button");
@@ -344,7 +350,10 @@ const ciSrc = fs.readFileSync(path.join(ROOT, "gi-hachshara-ci-form.js"), "utf8"
 const mortSrc = fs.readFileSync(path.join(ROOT, "gi-hachshara-mortgage-form.js"), "utf8");
 assert(ciSrc.includes('MaximumAmountText", person.compensation'), "CI writes amount text field");
 assert(ciSrc.includes('MaximumAmount", "True"'), "CI checks amount checkbox");
-assert(!/setTextSafe\(form,\s*"MaximumAmount",\s*person\.compensation/.test(ciSrc), "CI no longer setText on MaximumAmount button");
+assert(ciSrc.includes('HMORadio'), "CI marks HMORadio checkbox group");
+assert(ciSrc.includes("mapHmoExport"), "CI uses shared HMO export mapper");
+assert(ciSrc.includes("mapShabanExport"), "CI uses shared shaban export mapper");
+assert(!/setTextSafe\(form,\s*isChild \? \("HMO" \+ s\) : \("HMOName" \+ s\),\s*person\.clinic/.test(ciSrc), "CI no longer writes clinic into HMOName/סניף");
 assert(mortSrc.includes('ApartmentPurchase", "1"'), "mortgage apartment export 1");
 assert(mortSrc.includes('LandPurchase", "1"'), "mortgage land export 1");
 assert(!mortSrc.includes('ApartmentPurchase", "True"'), "mortgage no longer uses True for purchase");
