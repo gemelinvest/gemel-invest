@@ -18621,6 +18621,7 @@ UsersGateUI.init();
   const CustomersUI = {
     currentId: null,
     _previewDocId: "",
+    _insuredsTabSelectedId: "",
     _selectedDocIds: null,
     getSelectedDocIds(){
       if(!(this._selectedDocIds instanceof Set)) this._selectedDocIds = new Set();
@@ -22520,6 +22521,7 @@ UsersGateUI.init();
     bindSectionActions(rec, policies){
       const section = this.normalizeSection(this.currentSection);
       if(section === 'policies') this.bindPolicyTableActions(rec, this.getWalletDisplayPolicies(rec, policies));
+      if(section === "personal") this.bindInsuredsTabActions(rec);
       if(section === "medical") this.bindMedicalTabActions();
       if(section === "documents" && this._previewDocId){
         void this.showCustomerDocumentPreview(this._previewDocId);
@@ -23342,75 +23344,182 @@ UsersGateUI.init();
       this.bindPolicyRowMenuGlobalHandlers();
     },
 
+    /* GI-CF-INSUREDS-DOSSIER 2026-08-26
+       תצוגת פרטים אישיים בלשונית מבוטחים בתיק.
+       קריאה בלבד מתוך ins.data / payload.primary — בלי כתיבה לתיק, בלי אשף, בלי פוליסות. */
+    _pickInsuredDisplayValue(layers, keys){
+      const list = Array.isArray(layers) ? layers : [];
+      const names = Array.isArray(keys) ? keys : [];
+      for(let i = 0; i < list.length; i++){
+        const src = list[i];
+        if(!src || typeof src !== "object") continue;
+        for(let k = 0; k < names.length; k++){
+          const v = safeTrim(src[names[k]]);
+          if(v) return v;
+        }
+      }
+      return "";
+    },
+
+    _insuredDossierRole(ins, idx){
+      const roleKey = safeTrim(ins?.type) || (idx === 0 ? "primary" : "adult");
+      const roleLabels = { primary:"מבוטח ראשי", spouse:"בת/בן זוג", secondary:"בת/בן זוג", child:"ילד/ה", adult:"מבוטח נוסף" };
+      return roleLabels[roleKey] || roleKey;
+    },
+
+    _insuredDossierFullName(ins){
+      const d = ins?.data && typeof ins.data === "object" ? ins.data : {};
+      const joined = `${safeTrim(d.firstName)} ${safeTrim(d.lastName)}`.trim();
+      return joined || safeTrim(ins?.label) || "";
+    },
+
+    buildInsuredDossierView(ins, rec, idx){
+      const d = ins?.data && typeof ins.data === "object" ? ins.data : {};
+      const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+      const primary = (idx === 0 && payload.primary && typeof payload.primary === "object") ? payload.primary : {};
+      const layers = idx === 0 ? [d, primary, rec] : [d];
+      const pick = (keys) => this._pickInsuredDisplayValue(layers, keys);
+      const genderRaw = pick(["gender"]);
+      const genderMap = { male:"זכר", female:"נקבה", m:"זכר", f:"נקבה" };
+      const smokeRaw = pick(["smokingStatus", "smoker"]);
+      const smokeType = pick(["smokingType"]);
+      const smokeAmount = pick(["smokingAmount"]);
+      let smoking = "";
+      if(smokeRaw === "yes" || smokeRaw === "כן"){
+        smoking = ["כן", smokeType, smokeAmount ? `${smokeAmount} ליום` : ""].filter(Boolean).join(" · ");
+      } else if(smokeRaw === "no" || smokeRaw === "לא"){
+        smoking = "לא";
+      } else {
+        smoking = smokeRaw;
+      }
+      const house = pick(["houseNumber"]);
+      const apt = pick(["apartment", "aptNumber", "apt"]);
+      const houseApt = [house, apt].filter(Boolean).join(" / ");
+      const fullName = this._insuredDossierFullName(ins) || pick(["fullName"]);
+      return {
+        id: safeTrim(ins?.id) || `idx_${idx}`,
+        fullName,
+        role: this._insuredDossierRole(ins, idx),
+        clinic: pick(["clinic", "hmo", "kupatHolim"]),
+        smoking,
+        smokingYes: smokeRaw === "yes" || smokeRaw === "כן",
+        fields: {
+          identity: [
+            ["שם מלא", fullName],
+            ["תעודת זהות", pick(["idNumber", "id_number"])],
+            ["תאריך לידה", pick(["birthDate"])],
+            ["מין", genderMap[genderRaw] || genderRaw],
+            ["מצב משפחתי", pick(["maritalStatus", "familyStatus"])],
+            ["עיסוק", pick(["occupation", "profession", "job"])],
+            ["תאריך הנפקת ת״ז", pick(["idIssueDate"])]
+          ],
+          contact: [
+            ["עיר", pick(["city"])],
+            ["רחוב", pick(["street"])],
+            ["בית / דירה", houseApt],
+            ["מיקוד", pick(["zip", "zipCode"])],
+            ["טלפון נייד", pick(["phone", "cellPhone", "mobile"])],
+            ["דוא״ל", pick(["email"])]
+          ],
+          health: [
+            ["קופת חולים", pick(["clinic", "hmo", "kupatHolim"])],
+            ["שב״ן", pick(["shaban", "shabanLevel"])],
+            ["עישון", smoking],
+            ["גובה", (() => { const v = pick(["heightCm", "height"]); return v ? (/\D/.test(v) ? v : `${v} ס״מ`) : ""; })()],
+            ["משקל", (() => { const v = pick(["weightKg", "weight"]); return v ? (/\D/.test(v) ? v : `${v} ק״ג`) : ""; })()],
+            ["ילדים", pick(["childrenCount", "children", "hasChildren"])]
+          ]
+        }
+      };
+    },
+
+    _renderDossierFields(rows){
+      return rows.map(([lab, val]) => {
+        const shown = safeTrim(val) || "—";
+        return `<div class="cfInsDossier__field"><div class="cfInsDossier__lab">${escapeHtml(lab)}</div><div class="cfInsDossier__val">${escapeHtml(shown)}</div></div>`;
+      }).join("");
+    },
+
     renderInsuredsTab(rec){
-      const payload = rec?.payload && typeof rec.payload === 'object' ? rec.payload : {};
+      const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
       const insureds = Array.isArray(payload.insureds) && payload.insureds.length ? payload.insureds : [];
-      const newPolicies = Array.isArray(payload.newPolicies) ? payload.newPolicies : [];
 
       if(!insureds.length){
         return `<div class="emptyState" style="padding:32px 16px"><div class="emptyState__title">אין מבוטחים בתיק</div></div>`;
       }
 
-      const avatarColors = ['av--blue','av--teal','av--pink','av--amber'];
-      const roleLabels = { primary:'מבוטח ראשי', spouse:'בת/בן זוג', child:'ילד/ה', adult:'מבוטח נוסף' };
+      const avatarColors = ["av--blue", "av--teal", "av--pink", "av--amber"];
+      let selectedIdx = insureds.findIndex((ins) => safeTrim(ins?.id) === safeTrim(this._insuredsTabSelectedId));
+      if(selectedIdx < 0) selectedIdx = 0;
+      const selected = this.buildInsuredDossierView(insureds[selectedIdx], rec, selectedIdx);
 
-      const insuredsHtml = insureds.map((ins, idx) => {
-        const label = safeTrim(ins?.label) || `מבוטח ${idx+1}`;
-        const initials = label.trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('');
+      const peopleHtml = insureds.map((ins, idx) => {
+        const view = this.buildInsuredDossierView(ins, rec, idx);
+        const name = view.fullName || `מבוטח ${idx + 1}`;
+        const initials = name.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("");
         const avClass = avatarColors[idx % avatarColors.length];
-        const roleKey = safeTrim(ins?.type) || (idx === 0 ? 'primary' : 'adult');
-        const roleText = roleLabels[roleKey] || roleKey;
-        const insId = safeTrim(ins?.id);
+        const on = idx === selectedIdx ? " is-on" : "";
+        const pickId = view.id;
+        return `<button class="cfInsDossier__person${on}" type="button" data-cf-ins-pick="${escapeHtml(pickId)}">
+            <div class="cfInsDossier__av ${avClass}">${escapeHtml(initials)}</div>
+            <div class="cfInsDossier__personTxt">
+              <div class="cfInsDossier__personName">${escapeHtml(name)}</div>
+              <div class="cfInsDossier__personRole">${escapeHtml(view.role)}</div>
+            </div>
+          </button>`;
+      }).join("");
 
-        const myNewPolicies = newPolicies.filter(p => this.policyCoversInsuredForDisplay(p, ins, idx));
-        const myExisting = Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : [];
+      const chips = [
+        `<span class="cfInsDossier__chip cfInsDossier__chip--role">${escapeHtml(selected.role)}</span>`
+      ];
+      if(selected.clinic) chips.push(`<span class="cfInsDossier__chip cfInsDossier__chip--ok">${escapeHtml(selected.clinic)}</span>`);
+      if(selected.smokingYes) chips.push(`<span class="cfInsDossier__chip cfInsDossier__chip--warn">מעשן</span>`);
+      else if(selected.smoking === "לא") chips.push(`<span class="cfInsDossier__chip">לא מעשן</span>`);
 
-        const rows = [];
-        myNewPolicies.forEach((p) => {
-          const name = safeTrim(p?.product || p?.type || 'פוליסה');
-          const company = safeTrim(p?.company || '');
-          const shareVal = this.getInsuredDisplayPremium(p, insId);
-          const premiumDisplay = shareVal > 0 ? this.formatMoneyValue(shareVal) : '—';
-          const policyNumber = safeTrim(p?.policyNumber || '');
-          const meta = [company, policyNumber ? `פוליסה ${policyNumber}` : 'פוליסה חדשה'].filter(Boolean).join(' · ');
-          rows.push({ name, meta, premiumDisplay, premiumVal: shareVal });
-        });
-        myExisting.forEach((p) => {
-          const name = safeTrim(p?.type || p?.product || 'פוליסה קיימת');
-          const company = safeTrim(p?.company || '');
-          const premVal = this.getPolicyPremiumAfterDiscount(p);
-          const premiumDisplay = premVal > 0 ? this.formatMoneyValue(premVal) : (safeTrim(p?.monthlyPremium || p?.premiumMonthly || p?.premium) ? this.formatMoney(p.monthlyPremium || p.premiumMonthly || p.premium) : '—');
-          const policyNumber = safeTrim(p?.policyNumber || '');
-          const meta = [company, policyNumber ? `פוליסה ${policyNumber}` : 'פוליסה קיימת'].filter(Boolean).join(' · ');
-          rows.push({ name, meta, premiumDisplay, premiumVal: premVal });
-        });
-
-        const totalVal = rows.reduce((sum, row) => sum + (Number(row.premiumVal) || 0), 0);
-        const totalDisplay = totalVal > 0 ? this.formatMoneyValue(totalVal) : '—';
-        const policiesHtml = rows.length
-          ? `${rows.map((row) => `<div class="cfInsuredTab__policyRow">
-                <div class="cfInsuredTab__policyName">${escapeHtml(row.name)}</div>
-                ${row.meta ? `<div class="cfInsuredTab__policyMeta">${escapeHtml(row.meta)}</div>` : ''}
-                <div class="cfInsuredTab__policyPremium">${escapeHtml(row.premiumDisplay)}</div>
-              </div>`).join('')}
-              <div class="cfInsuredTab__total"><span>סה״כ פרמיה למבוטח</span><strong>${escapeHtml(totalDisplay)}</strong></div>`
-          : `<div class="cfInsuredTab__policyEmpty">אין פוליסות למבוטח זה</div>`;
-
-        return `<div class="cfInsuredTab__card" data-insured-idx="${idx}">
-          <button class="cfInsuredTab__header" type="button" onclick="(function(btn){const card=btn.closest('.cfInsuredTab__card');const body=card.querySelector('.cfInsuredTab__body');const chev=card.querySelector('.cfInsuredTab__chev');const open=body.classList.toggle('is-open');chev.classList.toggle('is-open',open);})(this)">
-            <div class="cfInsuredTab__avatar ${avClass}">${escapeHtml(initials)}</div>
-            <div class="cfInsuredTab__name">${escapeHtml(label)}</div>
-            <span class="cfInsuredTab__role">${escapeHtml(roleText)}</span>
-            <span class="cfInsuredTab__premSum">${escapeHtml(totalDisplay)}</span>
-            <span class="cfInsuredTab__chev">▾</span>
-          </button>
-          <div class="cfInsuredTab__body">
-            ${policiesHtml}
+      return `<div class="cfInsDossier">
+        <aside class="cfInsDossier__rail">
+          <div class="cfInsDossier__railHead">בחירת מבוטח</div>
+          <div class="cfInsDossier__railHint">לחצו על שם מלא כדי לראות את כל הפרטים האישיים שמילא הנציג באשף.</div>
+          <div class="cfInsDossier__people">${peopleHtml}</div>
+        </aside>
+        <section class="cfInsDossier__sheet">
+          <div class="cfInsDossier__hero">
+            <div>
+              <h2 class="cfInsDossier__title">${escapeHtml(selected.fullName || "מבוטח")}</h2>
+              <div class="cfInsDossier__chips">${chips.join("")}</div>
+            </div>
+            <div class="cfInsDossier__note">תצוגה בלבד · הנתונים מגיעים מהקמת הלקוח באשף בריאות וסיכונים</div>
           </div>
-        </div>`;
-      }).join('');
+          <div class="cfInsDossier__sec">
+            <h3 class="cfInsDossier__secTitle">זהות</h3>
+            <div class="cfInsDossier__fields">${this._renderDossierFields(selected.fields.identity)}</div>
+          </div>
+          <div class="cfInsDossier__sec">
+            <h3 class="cfInsDossier__secTitle">מגורים ויצירת קשר</h3>
+            <div class="cfInsDossier__fields">${this._renderDossierFields(selected.fields.contact)}</div>
+          </div>
+          <div class="cfInsDossier__sec">
+            <h3 class="cfInsDossier__secTitle">קופת חולים, עישון ומדדים</h3>
+            <div class="cfInsDossier__fields">${this._renderDossierFields(selected.fields.health)}</div>
+          </div>
+        </section>
+      </div>`;
+    },
 
-      return `<div class="cfInsuredTab">${insuredsHtml}</div>`;
+    bindInsuredsTabActions(rec){
+      const root = this.els.main;
+      if(!root) return;
+      root.querySelectorAll("[data-cf-ins-pick]").forEach((btn) => {
+        on(btn, "click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          this._insuredsTabSelectedId = safeTrim(btn.getAttribute("data-cf-ins-pick"));
+          if(this.els.main){
+            this.els.main.innerHTML = this.renderInsuredsTab(rec);
+            this.bindInsuredsTabActions(rec);
+          }
+        });
+      });
     },
 
     renderOpsSection(rec){
