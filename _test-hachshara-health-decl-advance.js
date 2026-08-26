@@ -12,6 +12,7 @@ const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
 const TAG = "20260826-phoenix-ci-3148-v1";
+const APP_TAG = "20260826-remove-cf-summary-v1";
 let failed = 0;
 let passed = 0;
 
@@ -35,8 +36,8 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-wizard.js")])
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "app.js syntax");
 assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "wizard build mark");
 assert(app.includes('GI_WIZARD_JS_VERSION = "' + TAG + '"'), "app wizard version");
-assert(html.includes("app.js?v=" + TAG), "index app.js cache");
-assert(sw.includes("gi-v12-" + TAG), "service-worker cache");
+assert(html.includes("app.js?v=" + APP_TAG), "index app.js cache");
+assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
 
 console.log("\n2) shared insured resolver for UI + validation");
 assert(wiz.includes("GI-FIX 2026-08-26: מקור אחד ל־UI + סימון-הכל + ולידציית המשך"), "shared insured fix marker");

@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260826-phoenix-ci-3148-v1";
+const APP_TAG = "20260826-remove-cf-summary-v1";
 const TAG = "20260825-hach-fill-audit-v1";
 let failed = 0;
 let passed = 0;
