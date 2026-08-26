@@ -10,9 +10,9 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260826-remove-cf-summary-v1";
+const TAG = "20260826-hach-hmo-health-v1";
 const FORM_TAG = "20260824-covers-sum-v1";
-const HACH_FORM_TAG = "20260825-hach-fill-audit-v1";
+const HACH_FORM_TAG = "20260826-hach-hmo-health-v1";
 const MIGDAL_FORM_TAG = "20260825-migdal-health-fill-v1";
 let failed = 0;
 let passed = 0;
@@ -389,6 +389,45 @@ H.applyMappedHealthYesNo({ __giCapture: capHealthMaster }, {
 });
 assert(capHealthMaster.HealthDecMainQ1 === "1", "CI falls back to hachshara__ hospitalization");
 assert(capHealthMaster.HealthDecMainQ11 === "1", "CI heart yes if any heart_* alias is yes");
+assert(H.mapHmoExport("כללית") === "2", "Hachshara HMO כללית → radio 2");
+assert(H.mapHmoExport("מכבי") === "1", "Hachshara HMO מכבי → radio 1");
+assert(H.mapHmoExport("מאוחדת") === "3", "Hachshara HMO מאוחדת → radio 3");
+assert(H.mapHmoExport("לאומית") === "4", "Hachshara HMO לאומית → radio 4");
+assert(H.mapShabanExport("אין שב״ן") === "2", "אין שב״ן → לא");
+assert(H.mapShabanExport("כללית מושלם") === "1", "שבן plan → כן");
+const capHealthOnRisk = {};
+H.applyMappedHealthYesNo({ __giCapture: capHealthOnRisk }, {
+  map: "life_short",
+  responses: {
+    hachshara__hospitalization: { p1: { answer: "no" } },
+    hachshara__heart: { p1: { answer: "yes" } },
+    hachshara__substances: { p1: { answer: "no" } }
+  },
+  primaryId: "p1"
+});
+assert(capHealthOnRisk.HealthDecMainQ1 === "2", "risk short Q1 fills from health-master substances");
+assert(capHealthOnRisk.HealthDecMainQ2 === "2", "risk short Q2 fills from health-master hospitalization");
+assert(capHealthOnRisk.HealthDecMainQ4 === "1", "risk short Q4a fills from health-master heart");
+const capRiskOnCi = {};
+H.applyMappedHealthYesNo({ __giCapture: capRiskOnCi }, {
+  map: "ci",
+  responses: {
+    hachshara_risk_s__q2: { p1: { answer: "no" } },
+    hachshara__infant_1: { p1: { answer: "no" } }
+  },
+  primaryId: "p1"
+});
+assert(capRiskOnCi.HealthDecMainQ1 === "2", "CI Q1 fills from risk-short hospitalization");
+assert(capRiskOnCi.HealthDecMainQ28 === "2", "CI infant_1 accepts health-master infant key");
+const mergedHealth = H.healthResponses({
+  primary: { healthDeclaration: { responses: {} } },
+  insureds: [
+    { data: { healthDeclaration: { responses: { hachshara__hospitalization: { p1: { answer: "no" } } } } } },
+    { data: { healthDeclaration: { responses: { hachshara__heart: { p1: { answer: "yes" } } } } } }
+  ]
+});
+assert(mergedHealth.hachshara__hospitalization.p1.answer === "no", "healthResponses merges insured[0]");
+assert(mergedHealth.hachshara__heart.p1.answer === "yes", "healthResponses merges later insureds");
 const insPay = H.pickPayment(
   { insureds: [{ data: { paymentMethod: "ho", ho: { bankName: "פועלים", branch: "1", account: "99" } } }] },
   {}
