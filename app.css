@@ -42401,17 +42401,10 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   padding: 14px 10px 12px;
 }
 .cfInsDossier__railHead{
-  padding: 0 6px 6px;
+  padding: 0 6px 12px;
   font-size: 13px;
   font-weight: 900;
   color: var(--blueDeep);
-}
-.cfInsDossier__railHint{
-  padding: 0 6px 12px;
-  font-size: 12px;
-  color: var(--muted);
-  font-weight: 600;
-  line-height: 1.45;
 }
 .cfInsDossier__people{
   display: flex;
@@ -42471,10 +42464,8 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   align-content: start;
 }
 .cfInsDossier__hero{
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+  display: grid;
+  gap: 8px;
 }
 .cfInsDossier__title{ margin: 0 0 8px; font-size: 26px; font-weight: 900; color: var(--text); }
 .cfInsDossier__chips{ display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -42491,14 +42482,6 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 .cfInsDossier__chip--role{ background: rgba(200,222,255,.55); color: var(--blueDeep); }
 .cfInsDossier__chip--ok{ background: #e8f8ee; color: #166534; }
 .cfInsDossier__chip--warn{ background: #fff4e0; color: #92400e; }
-.cfInsDossier__note{
-  font-size: 12px;
-  color: var(--muted);
-  font-weight: 600;
-  max-width: 280px;
-  text-align: left;
-  line-height: 1.45;
-}
 .cfInsDossier__sec{
   border: 1px solid var(--line);
   border-radius: 16px;
@@ -42539,7 +42522,6 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   .cfInsDossier{ grid-template-columns: 1fr; }
   .cfInsDossier__rail{ border-inline-end: none; border-bottom: 1px solid var(--line); }
   .cfInsDossier__fields{ grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .cfInsDossier__note{ text-align: right; max-width: none; }
 }
 .cfFile__opsPanel{ padding: 16px; }
 .cfFile__opsPanel .customerStatCard--ops{

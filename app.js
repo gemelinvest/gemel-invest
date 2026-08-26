@@ -23479,16 +23479,12 @@ UsersGateUI.init();
       return `<div class="cfInsDossier">
         <aside class="cfInsDossier__rail">
           <div class="cfInsDossier__railHead">בחירת מבוטח</div>
-          <div class="cfInsDossier__railHint">לחצו על שם מלא כדי לראות את כל הפרטים האישיים שמילא הנציג באשף.</div>
           <div class="cfInsDossier__people">${peopleHtml}</div>
         </aside>
         <section class="cfInsDossier__sheet">
           <div class="cfInsDossier__hero">
-            <div>
-              <h2 class="cfInsDossier__title">${escapeHtml(selected.fullName || "מבוטח")}</h2>
-              <div class="cfInsDossier__chips">${chips.join("")}</div>
-            </div>
-            <div class="cfInsDossier__note">תצוגה בלבד · הנתונים מגיעים מהקמת הלקוח באשף בריאות וסיכונים</div>
+            <h2 class="cfInsDossier__title">${escapeHtml(selected.fullName || "מבוטח")}</h2>
+            <div class="cfInsDossier__chips">${chips.join("")}</div>
           </div>
           <div class="cfInsDossier__sec">
             <h3 class="cfInsDossier__secTitle">זהות</h3>
