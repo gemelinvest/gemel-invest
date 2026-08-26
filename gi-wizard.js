@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260825-elem-policy-details-v1";
+  const GI_WIZARD_BUILD = "20260826-hach-health-adv-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -1194,9 +1194,11 @@ init(){
       if(target.hasAttribute('data-hedit')){
         const [qKey, insId] = String(target.getAttribute('data-hedit') || '').split('|');
         if(!qKey || !insId) return;
+        const prev = this.getHealthResponse(qKey, insId);
+        const hadSaved = !!prev.saved;
         this.setHealthResponse(qKey, insId, { saved:false, answer:'yes', editing:false });
         this.renderHealthStepUi();
-        this.openHealthDetailModal(qKey, insId);
+        this.openHealthDetailModal(qKey, insId, { hadSaved });
         return;
       }
       if(target.hasAttribute('data-hclear')){
@@ -3902,17 +3904,10 @@ init(){
         if(this.step === 7){
           const store = this.getHealthStore();
           const list = this.getHealthValidationQuestionList();
-          const allNewPolicies = this.getPoliciesForWizardValidation();
-          const insuredsWithPolicies = this.insureds.filter(ins =>
-            allNewPolicies.some(p => {
-              if(p.insuredMode === 'couple') return true;
-              if(Array.isArray(p.insuredIds) && p.insuredIds.length) return p.insuredIds.includes(ins.id);
-              return safeTrim(p.insuredId) === safeTrim(ins.id);
-            })
-          );
-          const insuredsToValidate = insuredsWithPolicies.length ? insuredsWithPolicies : this.insureds;
+          const insuredsToValidate = this.getHealthStepRelevantInsureds();
           let firstUnansweredIdx = -1;
           let firstUnansweredLabel = '';
+          let firstBlockReason = 'unanswered';
           outer: for(let i = 0; i < list.length; i++){
             const item = list[i];
             for(const ins of insuredsToValidate){
@@ -3920,6 +3915,7 @@ init(){
               if(r.answer !== 'yes' && r.answer !== 'no'){
                 firstUnansweredIdx = i;
                 firstUnansweredLabel = ins.label || '';
+                firstBlockReason = 'unanswered';
                 break outer;
               }
               if(r.answer === 'yes'){
@@ -3927,6 +3923,7 @@ init(){
                 if(detailFields.length && !r.saved){
                   firstUnansweredIdx = i;
                   firstUnansweredLabel = ins.label || '';
+                  firstBlockReason = 'unsaved';
                   break outer;
                 }
               }
@@ -3940,8 +3937,13 @@ init(){
             const qKey = item?.question?.key || '';
             const shortText = item?.question?.text ? String(item.question.text).slice(0, 60) + (item.question.text.length > 60 ? '…' : '') : `שאלה ${firstUnansweredIdx + 1}`;
             const insNote = firstUnansweredLabel ? ` (${firstUnansweredLabel})` : '';
-            this.setHint(`שים לב! יש לענות על שאלה ${firstUnansweredIdx + 1} מתוך ${list.length}`);
-            try{ window.showToast?.({ title: `שאלה ${firstUnansweredIdx + 1} מתוך ${list.length} — לא נענתה${insNote}`, text: shortText, singletonKey: 'wizard-step7-health-unanswered', variant: 'warn', durationMs: 7000 }); }catch(_e){}
+            if(firstBlockReason === 'unsaved'){
+              this.setHint(`שים לב! יש לשמור את הפירוט בשאלה ${firstUnansweredIdx + 1} מתוך ${list.length}`);
+              try{ window.showToast?.({ title: `שאלה ${firstUnansweredIdx + 1} מתוך ${list.length} — חסר שמירת פירוט${insNote}`, text: shortText, singletonKey: 'wizard-step7-health-unanswered', variant: 'warn', durationMs: 7000 }); }catch(_e){}
+            } else {
+              this.setHint(`שים לב! יש לענות על שאלה ${firstUnansweredIdx + 1} מתוך ${list.length}`);
+              try{ window.showToast?.({ title: `שאלה ${firstUnansweredIdx + 1} מתוך ${list.length} — לא נענתה${insNote}`, text: shortText, singletonKey: 'wizard-step7-health-unanswered', variant: 'warn', durationMs: 7000 }); }catch(_e){}
+            }
             if(qKey && this.els && this.els.body){
               requestAnimationFrame(() => {
                 try{
@@ -19183,7 +19185,16 @@ if(path === "birthDate"){
         safeTrim(policy?.insuredMode),
         safeTrim(policy?.compensation || policy?.sumInsured || policy?.coverageAmount || policy?.sum || '')
       ].join('~')).join('|');
-      return `${insuredKey}__${policyKey}`;
+      // GI-FIX 2026-08-26: מצב סכום הכשרה משנה short/full — חייב להיות ב-cache key
+      let amountModeKey = "";
+      try{
+        const store = this.getHealthStore?.();
+        amountModeKey = [
+          safeTrim(store?.hachsharaRiskAmountMode),
+          safeTrim(store?.hachsharaMortgageAmountMode)
+        ].join("~");
+      }catch(_e){}
+      return `${insuredKey}__${policyKey}__${amountModeKey}`;
     },
 
     getHealthDerivedCache(){
@@ -22825,10 +22836,24 @@ if(path === "birthDate"){
       const canon = safeTrim(qKey);
       store.responses[canon] = store.responses[canon] || {};
       const prev = this.getHealthResponse(canon, insId);
+      const nextPatch = patch && typeof patch === "object" ? patch : {};
+      const answer = Object.prototype.hasOwnProperty.call(nextPatch, "answer")
+        ? nextPatch.answer
+        : prev.answer;
+      // סימון "לא" / איפוס — מחליף fields ולא ממזג שאריות מפירוט כן קודם
+      const clearFields = safeTrim(answer) === "no"
+        || (Object.prototype.hasOwnProperty.call(nextPatch, "fields")
+          && nextPatch.fields
+          && typeof nextPatch.fields === "object"
+          && !Object.keys(nextPatch.fields).length
+          && safeTrim(answer) !== "yes");
+      const fields = clearFields
+        ? { ...((nextPatch.fields && typeof nextPatch.fields === "object") ? nextPatch.fields : {}) }
+        : { ...(prev.fields || {}), ...((nextPatch.fields && typeof nextPatch.fields === "object") ? nextPatch.fields : {}) };
       store.responses[canon][insId] = {
         ...prev,
-        ...patch,
-        fields: { ...(prev.fields || {}), ...((patch && patch.fields) || {}) }
+        ...nextPatch,
+        fields
       };
       // שמירה גם תחת מפתח קנוני בלבד — aliases נקראים ב-dual-read, לא נדרסים
     },
@@ -23092,12 +23117,21 @@ if(path === "birthDate"){
       return wrap;
     },
 
-    openHealthDetailModal(qKey, insId){
+    openHealthDetailModal(qKey, insId, options = {}){
       const item = this.getHealthQuestionList().find(x => x.question?.key === qKey);
       const ins = (this.insureds || []).find(x => String(x.id) === String(insId));
       if(!item || !ins) return;
       this.ensureHealthDetailModal();
-      this._activeHealthDetail = { qKey, insId };
+      const prior = this.getHealthResponse(qKey, insId);
+      const hadSaved = Object.prototype.hasOwnProperty.call(options || {}, "hadSaved")
+        ? !!options.hadSaved
+        : !!prior.saved;
+      this._activeHealthDetail = {
+        qKey,
+        insId,
+        // אם נפתח מעריכה של פירוט שכבר נשמר — ביטול לא ימחק את הסימון
+        hadSaved
+      };
       const q = item.question || {};
       const r = this.getHealthResponse(qKey, insId);
       if(this.els.healthDetailModalTitle) this.els.healthDetailModalTitle.textContent = `${ins.label} · ${q.questionnaireLabel || item.catTitle || 'פירוט רפואי'}`;
@@ -23169,7 +23203,31 @@ if(path === "birthDate"){
     },
 
     closeHealthDetailModal(){
-      if(!this.els.healthDetailModal) return;
+      const active = this._activeHealthDetail;
+      // GI-FIX 2026-08-26: ביטול/סגירה אחרי סימון "כן" בלי שמירה — מאפסים את
+      // הסימון כדי שלא יישאר "כן" פעיל שחוסם המשך עם הודעת "לא נענתה".
+      if(active?.qKey && active?.insId && !active.hadSaved){
+        try{
+          const r = this.getHealthResponse(active.qKey, active.insId);
+          if(safeTrim(r.answer) === "yes" && !r.saved){
+            const hasFields = !!(r.fields && typeof r.fields === "object"
+              && Object.keys(r.fields).some((fk) => safeTrim(r.fields[fk])));
+            if(!hasFields){
+              this.setHealthResponse(active.qKey, active.insId, {
+                answer: "",
+                fields: {},
+                saved: false,
+                editing: false
+              });
+              try{ this.renderHealthStepUi?.(); }catch(_e){}
+            }
+          }
+        }catch(_e){}
+      }
+      if(!this.els.healthDetailModal){
+        this._activeHealthDetail = null;
+        return;
+      }
       this.els.healthDetailModal.classList.remove('is-open');
       this.els.healthDetailModal.setAttribute('aria-hidden', 'true');
       try {
@@ -23345,12 +23403,7 @@ if(path === "birthDate"){
       }
 
       const section = list[0] || {};
-      const relevantInsuredIds = new Set();
-      (this.getWizardNewPolicies() || []).forEach(p => {
-        const ids = Array.isArray(p.insuredIds) && p.insuredIds.length ? p.insuredIds : (p.insuredId ? [p.insuredId] : []);
-        ids.forEach(id => relevantInsuredIds.add(id));
-      });
-      const relevantInsureds = this.insureds.filter(ins => relevantInsuredIds.has(ins.id) || relevantInsuredIds.size === 0);
+      const relevantInsureds = this.getHealthStepRelevantInsureds();
       const searchQuery = safeTrim(this._healthSearchQuery || "");
       const hasQuickPick = !!(this.newPolicies || []).some((p) => p && p._healthQuickPick);
       const rows = list.map((item) => {
@@ -23607,13 +23660,42 @@ if(path === "birthDate"){
     },
 
     getHealthStepRelevantInsureds(){
-      const relevantInsuredIds = new Set();
-      (this.getWizardNewPolicies() || []).forEach((p) => {
-        const ids = Array.isArray(p.insuredIds) && p.insuredIds.length ? p.insuredIds : (p.insuredId ? [p.insuredId] : []);
-        ids.forEach((id) => relevantInsuredIds.add(id));
+      // GI-FIX 2026-08-26: מקור אחד ל־UI + סימון-הכל + ולידציית המשך.
+      // בעבר couple בוולידציה דרש את כל המבוטחים (כולל ילדים) בזמן שהמסך
+      // הציג רק insuredIds — ולכן אחרי סימון כל התשובות עדיין נחסם המעבר.
+      const policies = (typeof this.getPoliciesForWizardValidation === "function"
+        ? this.getPoliciesForWizardValidation()
+        : null)
+        || (typeof this.getWizardNewPolicies === "function"
+          ? this.getWizardNewPolicies()
+          : null)
+        || this.newPolicies
+        || [];
+      const wizardInsureds = Array.isArray(this.insureds) ? this.insureds : [];
+      const primary = wizardInsureds.find((x) => x?.type === "primary") || wizardInsureds[0] || null;
+      const spouse = wizardInsureds.find((x) => x?.type === "spouse") || null;
+      const idSet = new Set();
+
+      (Array.isArray(policies) ? policies : []).forEach((policy) => {
+        const mode = safeTrim(policy?.insuredMode);
+        if(mode === "couple"){
+          if(primary?.id != null && safeTrim(primary.id)) idSet.add(String(primary.id));
+          if(spouse?.id != null && safeTrim(spouse.id)) idSet.add(String(spouse.id));
+        }
+        const ids = (typeof this.getPolicyInsuredIds === "function")
+          ? this.getPolicyInsuredIds(policy)
+          : (Array.isArray(policy?.insuredIds) && policy.insuredIds.length
+            ? policy.insuredIds
+            : (policy?.insuredId ? [policy.insuredId] : []));
+        (Array.isArray(ids) ? ids : []).forEach((id) => {
+          if(id != null && safeTrim(id)) idSet.add(String(id));
+        });
       });
-      const relevantInsureds = (this.insureds || []).filter((ins) => relevantInsuredIds.has(ins.id) || relevantInsuredIds.size === 0);
-      return relevantInsureds.length ? relevantInsureds : (this.insureds || []);
+
+      const matched = wizardInsureds.filter((ins) => idSet.has(String(ins?.id)));
+      if(matched.length) return matched;
+      // נתונים ישנים בלי שיוך מבוטח לפוליסה — נשאיר את כל הרשימה כמו קודם
+      return wizardInsureds.slice();
     },
 
     markAllHealthQuestionsNo(){
@@ -23826,10 +23908,12 @@ if(path === "birthDate"){
         on(btn, 'click', () => {
           const [qKey, insId] = String(btn.getAttribute('data-hedit') || '').split('|');
           if(!qKey || !insId) return;
+          const prev = this.getHealthResponse(qKey, insId);
+          const hadSaved = !!prev.saved;
           this.setHealthResponse(qKey, insId, { saved:false, answer:'yes', editing:true });
           this.setHint('אפשר לעדכן את הפירוט ולשמור מחדש');
           this.render();
-          setTimeout(() => this.openHealthDetailModal(qKey, insId), 30);
+          setTimeout(() => this.openHealthDetailModal(qKey, insId, { hadSaved }), 30);
         });
       });
 
@@ -23850,18 +23934,8 @@ if(path === "birthDate"){
       }
       const list = this.getHealthValidationQuestionList();
       if(!list.length) return { ok:false, msg:'אין שאלות הצהרת בריאות להצגה. בחר פוליסה רלוונטית בשלב 5.' };
-      // Only validate insureds that actually have at least one new policy assigned to them.
-      // An insured with no policies should not block the health declaration step.
-      const allNewPolicies = this.getPoliciesForWizardValidation();
-      const insuredsWithPolicies = this.insureds.filter(ins => {
-        return allNewPolicies.some(p => {
-          if(p.insuredMode === 'couple') return true;
-          if(Array.isArray(p.insuredIds) && p.insuredIds.length) return p.insuredIds.includes(ins.id);
-          return safeTrim(p.insuredId) === safeTrim(ins.id);
-        });
-      });
-      // Fallback: if filtering yields nobody (e.g. old data without insuredId), validate all
-      const insuredsToValidate = insuredsWithPolicies.length ? insuredsWithPolicies : this.insureds;
+      // Only validate insureds that are shown / markable on the health step.
+      const insuredsToValidate = this.getHealthStepRelevantInsureds();
       for(const item of list){
         for(const ins of insuredsToValidate){
           const r = this.getHealthResponse(item.question.key, ins.id);
