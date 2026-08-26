@@ -34184,6 +34184,46 @@ UsersGateUI.init();
       } catch(_e) { return 0; }
     },
 
+    /* קריאה בלבד: ה-KPI «לידים שויכו» קורא מ-CampaignLeadsStore.leads.
+       המערך מתמלא ב-fetchAll / hydrateFromCacheIfEmpty — בדרך כלל רק כשנפתחה
+       מערכת לידים. כאן קוראים לאותן מתודות קיימות, בלי לשנות שיוך או fetch. */
+    ensureDailySalesAssignedLeadsLoaded(options = {}){
+      try {
+        if(typeof CampaignLeadsStore !== "undefined" && typeof CampaignLeadsStore.hydrateFromCacheIfEmpty === "function"){
+          CampaignLeadsStore.hydrateFromCacheIfEmpty();
+        }
+      } catch(_e) {}
+      if(!options.force && this._dailySalesLeadsFetchPromise) return this._dailySalesLeadsFetchPromise;
+      const store = (typeof CampaignLeadsStore !== "undefined") ? CampaignLeadsStore : null;
+      if(!store || typeof store.fetchAll !== "function"){
+        return Promise.resolve({ ok: false, skipped: true });
+      }
+      const p = Promise.resolve()
+        .then(() => store.fetchAll())
+        .then((r) => r || { ok: false })
+        .catch((err) => ({ ok: false, error: String((err && err.message) || err || "") }));
+      this._dailySalesLeadsFetchPromise = p;
+      return p;
+    },
+
+    _kickDailySalesAssignedLeadsLoad(){
+      if(this._dailySalesLeadsKickStarted) return;
+      this._dailySalesLeadsKickStarted = true;
+      void this.ensureDailySalesAssignedLeadsLoaded().then(() => {
+        this._paintDailySalesAssignedLeadsKpis();
+      });
+    },
+
+    _paintDailySalesAssignedLeadsKpis(){
+      try {
+        const kpisEl = document.getElementById("dailySalesKpis");
+        if(!kpisEl || kpisEl.hidden) return;
+        const report = this.buildDailyAgentSalesReport();
+        const model = this.buildDailySalesPrintModel(report);
+        kpisEl.innerHTML = this.renderDailySalesPrintKpisHtml(model);
+      } catch(_e) {}
+    },
+
     /* נגזר משורות הדוח שכבר חושבו — בלי מעבר נוסף על לקוחות. */
     dailySalesOfficeBranchTotals(rows){
       const out = {
@@ -34685,7 +34725,9 @@ UsersGateUI.init();
       }
       try {
         try { UI.renderSyncStatus?.("מרענן נתוני מכירות…", "warn"); } catch(_e) {}
+        const leadsP = this.ensureDailySalesAssignedLeadsLoaded({ force: true });
         const r = await Storage.loadSheets({ useCachedFallback: false });
+        try { await leadsP; } catch(_e) {}
         if(r?.ok){
           App.applyLoadResult(r, "נתוני מכירות עודכנו", { skipNavigation: true, skipLoginSideEffects: true });
           try { Storage.scheduleFullIdbCacheSave(State.data); } catch(_e) {}
@@ -34717,6 +34759,7 @@ UsersGateUI.init();
       this._ensureDailySalesPageBound();
       try { this._scheduleMidnightReset(); } catch(_e) {}
       try { this.ensureDailySalesServerOverlay(); } catch(_e) {}
+      try { this._kickDailySalesAssignedLeadsLoad(); } catch(_e) {}
       const report = this.buildDailyAgentSalesReport();
       const tab = this.getDailySalesSelectedSectorTab();
       const printView = this.dailySalesIsPrintViewTab(tab);
@@ -35834,7 +35877,11 @@ UsersGateUI.init();
 
     async prepareDailySalesMailSnapshot(){
       try { this.ensureDailySalesServerOverlay(); } catch(_e) {}
-      return this._waitDailySalesOverlayForMail(12000);
+      const [overlayOk] = await Promise.all([
+        this._waitDailySalesOverlayForMail(12000),
+        this.ensureDailySalesAssignedLeadsLoaded().catch(() => false)
+      ]);
+      return overlayOk;
     },
 
     async _waitDailySalesOverlayForMail(ms){
@@ -35853,7 +35900,10 @@ UsersGateUI.init();
     },
 
     async buildDailySalesMailSnapshot(forDate){
-      await this._waitDailySalesOverlayForMail(4000);
+      await Promise.all([
+        this._waitDailySalesOverlayForMail(4000),
+        this.ensureDailySalesAssignedLeadsLoaded().catch(() => false)
+      ]);
       const email = this.buildDailySalesEmailHtml(forDate);
       const doc = this.buildDailySalesPrintDocumentHtml(forDate);
       const pdfBase64 = await this._renderDailySalesPdfBase64(doc);

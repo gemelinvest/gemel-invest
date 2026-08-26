@@ -69,8 +69,8 @@ assert(app.includes("LIGHT_INITIAL_LOAD_ENABLED = true"), "טעינה רזה נ�
 assert(!/LARGE_SESSION_CUSTOMER_THRESHOLD\s*=\s*2000/.test(app), "לא הורדנו סף ל-2000");
 
 console.log("\ncache");
-assert(indexHtml.includes("app.js?v=20260826-daily-sales-branch-v1"), "cache bust app.js");
-assert(sw.includes("20260826-daily-sales-branch-v1"), "service-worker version");
+assert(indexHtml.includes("app.js?v=20260826-daily-sales-branch-v2"), "cache bust app.js");
+assert(sw.includes("20260826-daily-sales-branch-v2"), "service-worker version");
 
 console.log("\nלוגיקה טהורה — LRU");
 function trimLru(list, cap, protectedIds){

@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260826-daily-sales-branch-v1";
+const APP_TAG = "20260826-daily-sales-branch-v2";
 let failed = 0;
 let passed = 0;
 
@@ -67,6 +67,29 @@ assert(app.includes("dailySalesAssignedLeadsCount"), "ספירת לידים שו
 assert(app.includes("campaignLeadMatchesDateIL"), "סינון לידים לפי אותו יום כמו מערכת הלידים");
 assert(app.includes("dailySalesOfficeBranchTotals"), "סיכום סניפים משורות הדוח הקיימות");
 assert(theme.includes("giDailySalesPage__kpiRow--extra"), "CSS לשורת KPI נוספת");
+assert(app.includes("ensureDailySalesAssignedLeadsLoaded"), "טעינת לידים ל-KPI אם מערכת הלידים לא נפתחה");
+assert(app.includes("_kickDailySalesAssignedLeadsLoad"), "רינדור הדוח מפעיל טעינה חד-פעמית");
+assert(app.includes("_paintDailySalesAssignedLeadsKpis"), "צביעת KPI אחרי שהלידים נטענו");
+assert(app.includes("try { this._kickDailySalesAssignedLeadsLoad(); } catch(_e) {}"), "renderDailySalesPage קורא לטעינה");
+assert(app.includes("ensureDailySalesAssignedLeadsLoaded({ force: true })"), "רענון דוח מרענן גם לידים");
+
+const ensStart = app.indexOf("ensureDailySalesAssignedLeadsLoaded(options = {}){");
+const ens = ensStart > 0 ? app.slice(ensStart, ensStart + 1400) : "";
+assert(ens.includes("hydrateFromCacheIfEmpty"), "hydrate מהמטמון לפני fetch");
+assert(ens.includes("store.fetchAll()"), "קורא ל-fetchAll הקיים — בלי מימוש חדש");
+assert(!ens.includes("assignedAgentId ="), "ensure לא משנה שיוך ליד");
+
+const kickStart = app.indexOf("_kickDailySalesAssignedLeadsLoad(){");
+const kick = kickStart > 0 ? app.slice(kickStart, kickStart + 400) : "";
+assert(kick.includes("if(this._dailySalesLeadsKickStarted) return"), "לא טוען מחדש בכל רינדור");
+
+const prepStart = app.indexOf("async prepareDailySalesMailSnapshot(){");
+const prep = prepStart > 0 ? app.slice(prepStart, prepStart + 700) : "";
+assert(prep.includes("ensureDailySalesAssignedLeadsLoaded"), "prepare של המייל ממתין ללידים");
+
+const snapStart = app.indexOf("async buildDailySalesMailSnapshot(forDate){");
+const snap = snapStart > 0 ? app.slice(snapStart, snapStart + 500) : "";
+assert(snap.includes("ensureDailySalesAssignedLeadsLoaded"), "בניית snapshot למייל ממתינה ללידים");
 
 console.log("\n4) רגרסיה — לוגיקת ליבה לא ננגעה");
 assert(app.includes("buildDailyAgentSalesReport"), "בניית דוח מכירות נשארה");
@@ -79,6 +102,12 @@ assert(app.includes("_persistAgentAndVerify"), "שמירת נציג לשרת נ�
 assert(app.includes("pinOnlyLogin"), "לוגיקת PIN בלבד נשארה");
 assert(app.includes("setAgentSecurity"), "לוגיקת 2FA נשארה");
 assert(app.includes("function campaignLeadAgentAccess"), "שיוך לידים לנציג לא שונה");
+assert(app.includes("async fetchAll(options = {}){"), "CampaignLeadsStore.fetchAll נשאר");
+assert(app.includes("async __fetchAllImpl(scope){"), "מימוש fetchAll לא הוחלף");
+const fetchStart = app.indexOf("async fetchAll(options = {}){");
+const fetchFn = fetchStart > 0 ? app.slice(fetchStart, fetchStart + 500) : "";
+assert(fetchFn.includes("this.resolveFetchScope(options)"), "fetchAll עדיין ב-resolveFetchScope");
+assert(fetchFn.includes("this._fetchAllImpl(scope)"), "fetchAll עדיין קורא ל-_fetchAllImpl");
 
 const issuedFnStart = app.indexOf("getIssuedPremiumMetrics(){");
 const issuedFn = issuedFnStart > 0 ? app.slice(issuedFnStart, issuedFnStart + 900) : "";
