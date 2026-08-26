@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260826-migdal-smoke-fu-v1";
+const APP_TAG = "20260826-cf-summary-gone-v3";
 const TAG = "20260826-followup-docs-v1";
 let failed = 0;
 let passed = 0;

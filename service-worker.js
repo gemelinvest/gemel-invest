@@ -16,7 +16,7 @@
    לאיפוס ידני: כפתור "החל עדכון" במערכת כבר מוחק את כל המטמונים ומבטל רישום SW.
 */
 
-const CACHE_VERSION = "gi-v12-20260826-migdal-smoke-fu-v1";
+const CACHE_VERSION = "gi-v12-20260826-cf-summary-gone-v3";
 const RUNTIME_CACHE = `gi-runtime-${CACHE_VERSION}`;
 
 // סיומות שמותר להגיש מהמטמון.
@@ -35,8 +35,7 @@ self.addEventListener("activate", (event) => {
     try {
       const keys = await caches.keys();
       await Promise.all(
-        keys.filter((k) => k.startsWith("gi-runtime-") && k !== RUNTIME_CACHE)
-            .map((k) => caches.delete(k))
+        keys.filter((k) => k !== RUNTIME_CACHE).map((k) => caches.delete(k))
       );
     } catch (_e) {}
     await self.clients.claim();
