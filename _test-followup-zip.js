@@ -9,6 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
+const APP_TAG = "20260826-phoenix-ci-3148-v1";
 const TAG = "20260826-followup-docs-v1";
 let failed = 0;
 let passed = 0;
@@ -50,11 +51,11 @@ pdfs.forEach((rel) => {
 assert(!fs.existsSync(path.join(ROOT, "forms/followup-questionnaires/harel-followup-all.pdf")), "harel excluded");
 
 console.log("\n2) cache + wiring");
-assert(html.includes("app.js?v=" + TAG), "index.html bumps app.js cache");
+assert(html.includes("app.js?v=" + APP_TAG), "index.html bumps app.js cache");
 assert(html.includes("gi-followup-zip-config.js?v=" + TAG), "index loads followup config");
-assert(html.includes("app.css?v=" + TAG), "index.html bumps app.css cache");
+assert(html.includes("app.css?v=" + APP_TAG), "index.html bumps app.css cache");
 assert(app.includes('GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=' + TAG + '"'), "app.js followup chunk cache");
-assert(sw.includes("gi-v12-" + TAG), "service worker cache bumped");
+assert(sw.includes("gi-v12-" + APP_TAG), "service worker cache bumped");
 assert(app.includes('followupQuestionnaire: "followup_questionnaire"'), "per-doc type registered");
 assert(app.includes("ensureFollowupDocuments"), "ensureFollowupDocuments exists");
 assert(app.includes("syncFollowupQuestionnaireDocs"), "syncFollowupQuestionnaireDocs exists");

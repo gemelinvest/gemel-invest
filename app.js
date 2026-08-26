@@ -6756,6 +6756,7 @@
       phoenixLifeShortForm: "phoenix_life_short_form",
       phoenixLifeFullForm: "phoenix_life_full_form",
       phoenixHealthForm: "phoenix_health_form",
+      phoenixCiForm: "phoenix_ci_form",
       followupQuestionnaire: "followup_questionnaire",
       followupQuestionnairesZip: "followup_questionnaires_zip"
     },
@@ -6777,7 +6778,8 @@
       "migdal_cancer_form",
       "phoenix_life_short_form",
       "phoenix_life_full_form",
-      "phoenix_health_form"
+      "phoenix_health_form",
+      "phoenix_ci_form"
     ],
     isOfficialJoinFormType(type){
       return this.OFFICIAL_JOIN_FORM_TYPES.indexOf(safeTrim(type)) >= 0;
@@ -7581,6 +7583,22 @@
       });
       return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
     },
+    isPhoenixCiPolicy(policy){
+      if(!policy || typeof policy !== "object") return false;
+      if(safeTrim(policy.company) !== "הפניקס") return false;
+      if(this.isPhoenixRiskMortgagePolicy(policy)) return false;
+      const t = safeTrim(policy.type);
+      if(t === "מחלות קשות" || t === "סרטן") return true;
+      const blob = [policy.type, policy.productName, policy.planName, policy.label].map(safeTrim).join(" ");
+      if(/משכנתא/.test(blob) || (/ריסק/.test(blob) && !/מחלות\s*קשות/.test(blob) && !/מרפא/.test(blob))) return false;
+      if(/בריאות/.test(blob) && !/מחלות\s*קשות/.test(blob) && !/מרפא/.test(blob) && !/סרטן/.test(blob)) return false;
+      return /מחלות\s*קשות/.test(blob) || /מרפא/.test(blob) || /סרטן/.test(blob);
+    },
+    qualifiesForPhoenixCiForm(payload, rec){
+      const list = this.listOfficialJoinFormPolicies(payload, rec);
+      const matched = list.filter((p) => this.isPhoenixCiPolicy(p));
+      return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
+    },
     resolveListForCustomer(rec){
       const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
       const list = this.listFromPayload(payload);
@@ -7686,6 +7704,19 @@
           type: this.TYPES.phoenixHealthForm,
           isLegacy: true,
           name: "טופס מקורי — בריאות · הפניקס",
+          source: "מערכת",
+          uploadedAt,
+          uploadedBy: safeTrim(rec?.agentName)
+        });
+      }
+      const hasPhxCi = list.some((d) => safeTrim(d?.type) === this.TYPES.phoenixCiForm);
+      if(!hasPhxCi && this.qualifiesForPhoenixCiForm(payload, rec)){
+        const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
+        list.unshift({
+          id: "doc_phoenix_ci_form",
+          type: this.TYPES.phoenixCiForm,
+          isLegacy: true,
+          name: "טופס מקורי — מחלות קשות / מרפא · הפניקס",
           source: "מערכת",
           uploadedAt,
           uploadedBy: safeTrim(rec?.agentName)
@@ -7857,6 +7888,7 @@
         if(type === this.TYPES.phoenixLifeShortForm) return this.qualifiesForPhoenixLifeShortForm(payload, rec);
         if(type === this.TYPES.phoenixLifeFullForm) return this.qualifiesForPhoenixLifeFullForm(payload, rec);
         if(type === this.TYPES.phoenixHealthForm) return this.qualifiesForPhoenixHealthForm(payload, rec);
+        if(type === this.TYPES.phoenixCiForm) return this.qualifiesForPhoenixCiForm(payload, rec);
         if(type === this.TYPES.migdalLifeForm) return this.qualifiesForMigdalLifeForm(payload, rec);
         if(type === this.TYPES.migdalMortgageForm) return this.qualifiesForMigdalMortgageForm(payload, rec);
         if(type === this.TYPES.menoraCiForm) return this.qualifiesForMenoraCiForm(payload, rec);
@@ -18940,6 +18972,13 @@ UsersGateUI.init();
           if(rec) void this.openPhoenixHealthForm(rec);
           return;
         }
+        const openPhxCi = ev.target?.closest?.("[data-open-phoenix-ci-doc], [data-phxci-open]");
+        if(openPhxCi){
+          ev.preventDefault();
+          const rec = this.current();
+          if(rec) void this.openPhoenixCiForm(rec);
+          return;
+        }
         const openAyalMort = ev.target?.closest?.("[data-open-ayalon-mortgage-doc], [data-ayalmort-open]");
         if(openAyalMort){
           ev.preventDefault();
@@ -21790,6 +21829,12 @@ UsersGateUI.init();
             return `<div class="cfFile__documentsPreviewDoc">${window.PhoenixHealthForm.renderPreviewHtml(draft)}</div>`;
           } catch(_e) {}
         }
+        if(type === CustomerDocuments.TYPES.phoenixCiForm && window.PhoenixCiForm){
+          try {
+            const draft = window.PhoenixCiForm.buildDraft(rec);
+            return `<div class="cfFile__documentsPreviewDoc">${window.PhoenixCiForm.renderPreviewHtml(draft)}</div>`;
+          } catch(_e) {}
+        }
         if(type === CustomerDocuments.TYPES.ayalonMortgageForm && window.AyalonMortgageForm){
           try {
             const draft = window.AyalonMortgageForm.buildDraft(rec);
@@ -21959,6 +22004,13 @@ UsersGateUI.init();
       if(safeTrim(doc?.type) === CustomerDocuments.TYPES.phoenixHealthForm && !window.PhoenixHealthForm){
         try {
           await ensurePhoenixHealthFormLoaded();
+          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
+        } catch(_e) {}
+        return;
+      }
+      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.phoenixCiForm && !window.PhoenixCiForm){
+        try {
+          await ensurePhoenixCiFormLoaded();
           if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
         } catch(_e) {}
         return;
@@ -22160,6 +22212,17 @@ UsersGateUI.init();
         window.PhoenixHealthForm.open(rec);
       } catch(err){
         try { console.error("PHOENIX_HEALTH_FORM_OPEN_FAILED", err); } catch(_e) {}
+        try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
+      }
+    },
+    async openPhoenixCiForm(rec){
+      if(this.denyOfficialJoinFormDownload()) return;
+      try {
+        await ensurePhoenixCiFormLoaded();
+        if(!window.PhoenixCiForm) throw new Error("PhoenixCiForm missing");
+        window.PhoenixCiForm.open(rec);
+      } catch(err){
+        try { console.error("PHOENIX_CI_FORM_OPEN_FAILED", err); } catch(_e) {}
         try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
       }
     },
@@ -22477,6 +22540,8 @@ UsersGateUI.init();
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-ayalon-health-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.phoenixHealthForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-phoenix-health-doc="${escapeHtml(docId)}">פתח טופס</button>`;
+        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.phoenixCiForm){
+          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-phoenix-ci-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.ayalonMortgageForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-ayalon-mortgage-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.menoraCiForm){
@@ -36624,7 +36689,8 @@ UsersGateUI.init();
       migdal_mortgage: ["magdal_mort__smoking","magdal_mort__cancer","magdal_mort__neuro","magdal_mort__mental","magdal_mort__respiratory","magdal_mort__heart","magdal_mort__kidneys","magdal_mort__digestive","magdal_mort__diabetes","magdal_mort__immune","magdal_mort__disability","magdal_mort__hospital","magdal_mort__tests","magdal_mort__hobby","magdal_mort__accident_eyes","magdal_mort__accident_msk"],
       migdal_cancer: ["magdal_cancer__tests","magdal_cancer__smoking","magdal_cancer__tumors","magdal_cancer__digestive","magdal_cancer__diabetes","magdal_cancer__family"],
       clal_couple: ["clal_couple_neuro","clal_couple_mental","clal_couple_respiratory","clal_couple_skin","clal_couple_heart","clal_couple_digestive","clal_couple_liver","clal_couple_kidney","clal_couple_metabolic","clal_couple_blood","clal_couple_infectious","clal_couple_tumors","clal_couple_musculoskeletal","clal_couple_vision","clal_couple_ent","clal_couple_reproductive","clal_couple_rheumatic","clal_couple_alcohol","clal_couple_drugs"],
-      phoenix_health: ["phoenix_full__smoking","phoenix_full__family","phoenix_full__drugs","phoenix_full__alcohol","phoenix_full__heart","phoenix_full__neuro","phoenix_full__digestive","phoenix_full__endocrine","phoenix_full__eyes","phoenix_full__ent","phoenix_full__musculoskeletal","phoenix_full__respiratory","phoenix_full__kidneys","phoenix_full__cancer","phoenix_full__blood","phoenix_full__skin","phoenix_full__immune","phoenix_full__hernia","phoenix_full__mental","phoenix_full__child_premature","phoenix_full__child_growth","phoenix_full__child_undescended","phoenix_full__male","phoenix_full__female","phoenix_full__tests","phoenix_full__hospitalization","phoenix_full__medications","phoenix_full__disability"]
+      phoenix_health: ["phoenix_full__smoking","phoenix_full__family","phoenix_full__drugs","phoenix_full__alcohol","phoenix_full__heart","phoenix_full__neuro","phoenix_full__digestive","phoenix_full__endocrine","phoenix_full__eyes","phoenix_full__ent","phoenix_full__musculoskeletal","phoenix_full__respiratory","phoenix_full__kidneys","phoenix_full__cancer","phoenix_full__blood","phoenix_full__skin","phoenix_full__immune","phoenix_full__hernia","phoenix_full__mental","phoenix_full__child_premature","phoenix_full__child_growth","phoenix_full__child_undescended","phoenix_full__male","phoenix_full__female","phoenix_full__tests","phoenix_full__hospitalization","phoenix_full__medications","phoenix_full__disability"],
+      phoenix_ci: ["phoenix_critical_illness__ci_smoking","phoenix_critical_illness__ci_tests","phoenix_critical_illness__ci_heart","phoenix_critical_illness__ci_neuro","phoenix_critical_illness__ci_cancer","phoenix_critical_illness__ci_kidney","phoenix_critical_illness__ci_digestive","phoenix_critical_illness__ci_lungs","phoenix_critical_illness__ci_diabetes","phoenix_critical_illness__ci_ortho","phoenix_critical_illness__ci_mental","phoenix_critical_illness__ci_senses","phoenix_critical_illness__ci_family"]
     },
     healthResponses(payload){
       const raw = (obj) => {
@@ -37586,6 +37652,7 @@ UsersGateUI.init();
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260825-migdal-health-fill-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
+  const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260826-followup-docs-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260826-followup-docs-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -38048,6 +38115,33 @@ UsersGateUI.init();
       throw err;
     });
     return ensurePhoenixHealthFormLoaded._p;
+  }
+  function ensurePhoenixCiFormLoaded(){
+    if(window.PhoenixCiForm) return Promise.resolve(window.PhoenixCiForm);
+    if(ensurePhoenixCiFormLoaded._p) return ensurePhoenixCiFormLoaded._p;
+    ensurePhoenixCiFormLoaded._p = new Promise((resolve, reject) => {
+      const existing = document.getElementById("gi-phoenix-ci-form-js");
+      const done = () => {
+        if(window.PhoenixCiForm) resolve(window.PhoenixCiForm);
+        else reject(new Error("gi-phoenix-ci-form.js loaded without PhoenixCiForm"));
+      };
+      if(existing){
+        existing.addEventListener("load", done, { once: true });
+        existing.addEventListener("error", () => reject(new Error("gi-phoenix-ci-form.js failed")), { once: true });
+        return;
+      }
+      const s = document.createElement("script");
+      s.id = "gi-phoenix-ci-form-js";
+      s.src = GI_PHOENIX_CI_FORM_HREF;
+      s.async = true;
+      s.onload = done;
+      s.onerror = () => reject(new Error("gi-phoenix-ci-form.js failed to load"));
+      document.head.appendChild(s);
+    }).catch((err) => {
+      ensurePhoenixCiFormLoaded._p = null;
+      throw err;
+    });
+    return ensurePhoenixCiFormLoaded._p;
   }
   function ensureFollowupZipLoaded(){
     if(window.GiFollowupZip && window.GI_FOLLOWUP_ZIP_CONFIG) return Promise.resolve(window.GiFollowupZip);
@@ -39504,7 +39598,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260826-followup-docs-v1";
+  const GI_WIZARD_JS_VERSION = "20260826-phoenix-ci-3148-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
