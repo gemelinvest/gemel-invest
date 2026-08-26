@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260826-hach-health-adv-v1";
+  const GI_WIZARD_BUILD = "20260826-phoenix-ci-3148-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -19430,25 +19430,22 @@ if(path === "birthDate"){
           steps: []
         },
         critical_illness: {
-          title: 'הפניקס · הצהרת בריאות מחלות קשות',
-          sourceLabel: 'מחלות קשות · טופס 300301515 · חלק א׳ + חלק ב׳',
+          title: 'הפניקס · הצהרת בריאות מקוצרת למחלות קשות',
+          sourceLabel: 'מחלות קשות / מרפא · טופס 300101240 · הצהרה 303 · עד גיל 60 ועד 2 מיליון ₪',
           steps: [
-            { key:'ci_smoking', text:'חלק א׳ · 1. האם הנך מעשן או עישנת בשנתיים האחרונות לרבות סיגריה אלקטרונית ו/או נרגילה? (מגיל 16) — ציין כמות סיגריות ליום', fields:[{ key:'cigarettes', label:'כמות סיגריות ליום', type:'text' }]},
-            { key:'ci_family', text:'חלק א׳ · 2. האם למיטב ידיעתך התגלו בקרב קרוב מדרגה ראשונה (אב/אם/אח/אחות) עד גיל 60: מחלות לב, סרטן המעי הגס/שחלות/שד/ערמונית/אחר, סוכרת, כליות פוליציסטיות, טרשת נפוצה, ניוון שרירים, פרקינסון, אלצהיימר?', questionnaireNos:['22'], fields: familyFields },
-            { key:'ci_tests', text:'חלק א׳ · 3. האם עברת או הומלץ לך לעבור בדיקות פולשניות ו/או בדיקות הדמיה ו/או בדיקות לגילוי מוקדם של סרטן בחמש השנים האחרונות?', questionnaireNos:['18'], fields:[{ key:'testType', label:'איזו בדיקה', type:'text' },{ key:'date', label:'מתי', type:'text' },{ key:'result', label:'תוצאה / סטטוס', type:'textarea' }]},
-            { key:'ci_cancer', text:'חלק א׳ · 4.1 מחלה או גידול ממאיר (סרטן) לרבות BCC, SCC, גידול טרום סרטני, CIN, גידול שפיר?', questionnaireNos:['17'], fields: detailFields },
-            { key:'ci_digestive', text:'חלק א׳ · 4.2 קרוהן, קוליטיס, קיבה, מעיים, ושט, כבד, גושה, שחמת הכבד, צהבת, דם בצואה?', questionnaireNos:['9','10'], fields: detailFields },
-            { key:'ci_immune', text:'חלק א׳ · 4.3 דיכוי חיסוני לרבות איידס (HIV), מושתל איברים?', fields: detailFields },
-            { key:'ci_heightweight', text:'חלק ב׳ · 5. גובה ומשקל (מגיל 16)', fields:[{ key:'height', label:'גובה (ס״מ)', type:'text' },{ key:'weight', label:'משקל (ק״ג)', type:'text' }]},
-            { key:'ci_alcohol', text:'חלק ב׳ · 6. האם הנך צורך באופן קבוע יותר מ־2 כוסות משקה אלכוהולי ליום? (מגיל 18)', fields:[{ key:'amount', label:'כמות יומית', type:'text' },{ key:'details', label:'פירוט', type:'textarea' }]},
-            { key:'ci_hospital', text:'חלק ב׳ · 7. האם ב־5 השנים האחרונות אושפזת ו/או עברת ניתוח ו/או הומלץ לך לעבור ניתוח עתידי לרבות ניתוח קוסמטי?', questionnaireNos:['20'], fields:[{ key:'procedure', label:'איזה ניתוח / אשפוז', type:'text' },{ key:'date', label:'מתי', type:'text' },{ key:'status', label:'מצב כיום', type:'textarea' }]},
-            { key:'ci_meds', text:'חלק ב׳ · 8. האם הינך נוטל ו/או הומלץ לך ליטול תרופות באופן קבוע בשלוש השנים האחרונות?', fields:[{ key:'medName', label:'שם התרופה', type:'text' },{ key:'reason', label:'סיבת טיפול', type:'textarea' }]},
-            { key:'ci_heart', text:'חלק ב׳ · 9.1 מחלות לב, כלי דם ודם, לרבות יתר לחץ דם בעשר השנים האחרונות', questionnaireNos:['2','3','4'], fields: detailFields },
-            { key:'ci_neuro', text:'חלק ב׳ · 9.2 מערכת העצבים והמוח לרבות: אירוע מוחי/שבץ, אוטיזם, אפילפסיה, פרקינסון, ניוון שרירים, טרשת נפוצה, רעד, פוליו, תסמונת דאון, שיתוק מוחין, גידול מוחי', questionnaireNos:['8'], fields: detailFields },
-            { key:'ci_senses', text:'חלק ב׳ · 9.3 מחלות חושים (ראייה, שמיעה) לרבות משקפיים מספר 8 ומעלה וליקוי שמיעה', fields: detailFields },
-            { key:'ci_lungs', text:'חלק ב׳ · 9.4 מחלות והפרעות במערכת הנשימה והריאות', questionnaireNos:['16'], fields: detailFields },
-            { key:'ci_ortho', text:'חלק ב׳ · 9.5 מחלות אורטופדיות / ראומטולוגיות לרבות מחלת מפרקים, לופוס/זאבת, בריחת סידן, בעיות בברכיים/ירכיים/כתפיים, שברים באגן', questionnaireNos:['12','13','14'], fields: detailFields },
-            { key:'ci_kidney', text:'חלק ב׳ · 9.6 מחלות והפרעות במערכת הכליות והשתן לרבות דם או חלבון בשתן', fields: detailFields }
+            { key:'ci_smoking', text:'2.1 האם הינך מעשן או עישנת במהלך השנתיים האחרונות לרבות סיגריה אלקטרונית? (מגיל 16) — אם כן: כמות סיגריות ותאריך הפסקת עישון', fields:[{ key:'cigarettes', label:'כמות סיגריות ליום', type:'text' },{ key:'quitDate', label:'תאריך הפסקת עישון', type:'text' }]},
+            { key:'ci_tests', text:'2.2 האם בשנתיים האחרונות עברת או הומלץ לך או שהינך מועמד לביצוע בדיקות פולשניות, בדיקות הדמיה (לרבות US, CT ו-MRI) או ניתוח/אשפוז?', questionnaireNos:['18','20'], fields:[{ key:'testType', label:'סוג בדיקה / ניתוח', type:'text' },{ key:'date', label:'תאריך', type:'text' },{ key:'hospitalDays', label:'משך אשפוז', type:'text' }]},
+            { key:'ci_heart', text:'3.1 מחלות לב, כלי דם ודם', questionnaireNos:['2','3','4'], fields: detailFields },
+            { key:'ci_neuro', text:'3.2 מחלות מערכת העצבים והמוח, אירוע מוחי, אוטיזם, תסמונת דאון, פרקינסון, רעד, ניוון שרירים, טרשת נפוצה?', questionnaireNos:['8'], fields: detailFields },
+            { key:'ci_cancer', text:'3.3 מחלה או גידול ממאיר (סרטן), גידול שפיר או טרום סרטני, CIN?', questionnaireNos:['17'], fields: detailFields },
+            { key:'ci_kidney', text:'3.4 מחלות מערכת כליות ושתן, דם או חלבון בשתן, PSA גבוה?', fields: detailFields },
+            { key:'ci_digestive', text:'3.5 מחלות מערכת העיכול, דם בצואה, כבד?', questionnaireNos:['9','10'], fields: detailFields },
+            { key:'ci_lungs', text:'3.6 מחלות מערכת הנשימה והריאות?', questionnaireNos:['16'], fields: detailFields },
+            { key:'ci_diabetes', text:'3.7 מחלת סוכרת?', questionnaireNos:['6'], fields: detailFields },
+            { key:'ci_ortho', text:'3.8 מחלות ראומטולוגיות, מפרקים/אורטופדי או שלד לרבות לופוס/זאבת, בריחת סידן?', questionnaireNos:['12','13','14'], fields: detailFields },
+            { key:'ci_mental', text:'3.9 מחלה נפשית לרבות דיכאון, הפרעה דו קוטבית, סכיזופרניה או פוסט טראומה PTSD?', questionnaireNos:['15'], fields: detailFields },
+            { key:'ci_senses', text:'3.10 מחלות חושים (ראייה, שמיעה) לרבות משקפיים מספר העדשות 8 ומעלה?', fields: detailFields },
+            { key:'ci_family', text:'3.11 האם למיטב ידיעתך התגלו בקרב קרוב מדרגה ראשונה (אב/אם/אח/אחות) לפני גיל 60 מחלות מהרשימה (לב, סרטן, סוכרת נעורים, כליות פוליציסטיות, טרשת נפוצה, ניוון שרירים, פרקינסון, אלצהיימר)?', questionnaireNos:['22'], fields: familyFields }
           ]
         },
         cancer_short_under_600k: {
@@ -19568,8 +19565,8 @@ if(path === "birthDate"){
       };
       return [{
         key: 'phoenix_critical_illness',
-        title: 'הצהרת בריאות · הפניקס מחלות קשות',
-        summary: 'הצהרת בריאות מחלות קשות של הפניקס. כל תשובת כן פותחת מודאל מרכזי עם שאלון ההמשך המדויק.',
+        title: 'הצהרת בריאות · הפניקס מחלות קשות / מרפא',
+        summary: 'הצהרת בריאות מקוצרת 303 לטופס 300101240 (מרפא / מחלות קשות, עד גיל 60 ועד 2 מיליון ₪). גובה ומשקל ממולאים מפרטי המבוטח. כל תשובת כן פותחת מודאל מרכזי עם שאלון ההמשך המדויק.',
         policyId,
         questions: (picked.steps || []).map(q)
       }];
@@ -28610,6 +28607,13 @@ if(path === "birthDate"){
       const preserveExistingOwner = !!(existingOwnerAgentId && sessionAgentId
         && String(existingOwnerAgentId) !== String(sessionAgentId));
       stampRecordAgentOwnership(record, preserveExistingOwner ? { preserveExistingOwner: true } : {});
+      if(!this.isElementaryFlow()){
+        try {
+          if(typeof CustomersUI?.ensureFollowupDocuments === "function"){
+            await CustomersUI.ensureFollowupDocuments(record);
+          }
+        } catch(_e) {}
+      }
 
       const draftProposalId = safeTrim(this.editingDraftId);
       const draftProposalSnapshot = draftProposalId

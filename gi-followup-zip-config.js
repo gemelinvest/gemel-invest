@@ -1,4 +1,4 @@
-/* GI-FOLLOWUP-ZIP-CONFIG 20260825-phoenix-fu-v1
+/* GI-FOLLOWUP-ZIP-CONFIG 20260826-followup-docs-v1
    ספריית PDF משולבת לכל חברה (מ-fw.zip, ללא הראל). */
 (function installFollowupZipConfig(global){
   "use strict";
@@ -149,7 +149,7 @@
   };
 
   global.GI_FOLLOWUP_ZIP_CONFIG = {
-    VERSION: "20260825-phoenix-fu-v1",
+    VERSION: "20260826-followup-docs-v1",
     CLAL_LETTERS,
     COMPANIES,
     companyKeyFromQKey(qKey){

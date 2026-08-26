@@ -11,7 +11,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260826-hach-health-adv-v1";
+const TAG = "20260826-phoenix-ci-3148-v1";
 const APP_TAG = "20260826-remove-cf-summary-v1";
 let failed = 0;
 let passed = 0;

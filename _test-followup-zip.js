@@ -1,4 +1,4 @@
-/* GI-FOLLOWUP-DOCS 20260825-phoenix-fu-v1
+/* GI-FOLLOWUP-DOCS 20260826-followup-docs-v1
    Run: node _test-followup-zip.js
 */
 "use strict";
@@ -9,7 +9,8 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260825-phoenix-fu-v1";
+const APP_TAG = "20260826-remove-cf-summary-v1";
+const TAG = "20260826-followup-docs-v1";
 let failed = 0;
 let passed = 0;
 
@@ -26,6 +27,7 @@ function assert(cond, msg){
 const app = fs.readFileSync(path.join(ROOT, "app.js"), "utf8");
 const cfgSrc = fs.readFileSync(path.join(ROOT, "gi-followup-zip-config.js"), "utf8");
 const modSrc = fs.readFileSync(path.join(ROOT, "gi-followup-zip.js"), "utf8");
+const wizSrc = fs.readFileSync(path.join(ROOT, "gi-wizard.js"), "utf8");
 const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const sw = fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8");
 
@@ -49,11 +51,11 @@ pdfs.forEach((rel) => {
 assert(!fs.existsSync(path.join(ROOT, "forms/followup-questionnaires/harel-followup-all.pdf")), "harel excluded");
 
 console.log("\n2) cache + wiring");
-assert(html.includes("app.js?v=" + TAG), "index.html bumps app.js cache");
+assert(html.includes("app.js?v=" + APP_TAG), "index.html bumps app.js cache");
 assert(html.includes("gi-followup-zip-config.js?v=" + TAG), "index loads followup config");
-assert(html.includes("app.css?v=" + TAG), "index.html bumps app.css cache");
+assert(html.includes("app.css?v=" + APP_TAG), "index.html bumps app.css cache");
 assert(app.includes('GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=' + TAG + '"'), "app.js followup chunk cache");
-assert(sw.includes("gi-v12-" + TAG), "service worker cache bumped");
+assert(sw.includes("gi-v12-" + APP_TAG), "service worker cache bumped");
 assert(app.includes('followupQuestionnaire: "followup_questionnaire"'), "per-doc type registered");
 assert(app.includes("ensureFollowupDocuments"), "ensureFollowupDocuments exists");
 assert(app.includes("syncFollowupQuestionnaireDocs"), "syncFollowupQuestionnaireDocs exists");
@@ -146,6 +148,45 @@ assert(triggered.some((r) => r.companyKey === "phoenix" && r.questionnaireNum ==
 assert(triggered.some((r) => r.companyKey === "hachshara" && r.insuredId === "s1"), "hachshara spouse");
 assert(!triggered.some((r) => r.qKeys.indexOf("menora__smoking") >= 0), "no followup on no-answer");
 
+const yesEmptyFields = detect({
+  responses: {
+    menora__heart: { p1: { answer: "yes", fields: {} } }
+  }
+}, meta, insureds);
+assert(yesEmptyFields.some((r) => r.companyKey === "menora" && r.questionnaireNum === "4"), "yes without detail fields still attaches the questionnaire PDF");
+
+const yesNoQuestionnaire = detect({
+  responses: {
+    menora__smoking: { p1: { answer: "yes", fields: {} } }
+  }
+}, meta, insureds);
+assert(!yesNoQuestionnaire.length, "yes without questionnaire numbers does not invent a PDF");
+
+const mergedHealth = sandbox.GiFollowupZip._test.collectHealthResponses({
+  payload: {
+    primary: { healthDeclaration: { responses: {} } },
+    insureds: [{
+      id: "p1",
+      data: {
+        healthDeclaration: {
+          responses: {
+            menora__heart: { p1: { answer: "yes", fields: { "4__heartDisease": "IHD" } } }
+          }
+        }
+      }
+    }]
+  }
+});
+const fromInsureds = detect(mergedHealth, meta, insureds);
+assert(fromInsureds.some((r) => r.companyKey === "menora" && r.questionnaireNum === "4"), "collectHealthResponses merges insureds when primary is empty");
+
+const resolved = sandbox.GiFollowupZip.resolveForCustomer({
+  payload: {
+    insureds: [{ id: "p1", data: { healthDeclaration: health } }]
+  }
+}, meta, insureds);
+assert(resolved.length >= 5, "resolveForCustomer reads health from insureds, not only primary");
+
 const menora = triggered.find((r) => r.companyKey === "menora");
 const title = sandbox.GiFollowupZip.buildDocTitle(menora);
 assert(title.indexOf("שאלון המשך 4") >= 0, "title includes questionnaire number");
@@ -172,6 +213,12 @@ console.log("\n5) per-doc sync logic (CustomerDocuments helpers present)");
 assert(app.includes("createFollowupQuestionnaireDoc"), "createFollowupQuestionnaireDoc");
 assert(app.includes("TYPE.followupQuestionnaire") || app.includes("TYPES.followupQuestionnaire"), "uses followupQuestionnaire type");
 assert(app.includes("await CustomerFileUI.ensureFollowupDocuments(rec)"), "health save ensures followup docs before persist");
+assert(app.includes("const CustomerFileUI = CustomersUI"), "CustomerFileUI alias points at CustomersUI");
+assert(app.includes("globalThis.CustomerFileUI = CustomersUI"), "CustomerFileUI is exported globally");
+assert(app.includes("queueFollowupDocumentsSync"), "customer file queues followup doc sync on open");
+assert(app.includes("injectTriggeredFollowupQuestionnaireDocs"), "documents list injects missing followup PDFs");
+assert(app.includes("syncFollowupDocsFromLiveDetect"), "health_wizard/health_edit attach followup docs");
+assert(wizSrc.includes("CustomersUI.ensureFollowupDocuments(record)"), "wizard save attaches followup docs to the customer file");
 
 console.log("\n6) face-login KPI untouched");
 assert(app.includes("paintDashboardAfterFaceLogin"), "face-login KPI paint remains");

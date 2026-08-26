@@ -1,9 +1,9 @@
-/* GI-FOLLOWUP-ZIP 20260825-phoenix-fu-v1
+/* GI-FOLLOWUP-ZIP 20260826-followup-docs-v1
    שאלוני המשך ממולאים — מסמך נפרד לכל שאלון + ZIP זמני לנבחרים בלבד. */
 (function installGiFollowupZip(global){
   "use strict";
 
-  const TAG = "20260825-phoenix-fu-v1";
+  const TAG = "20260826-followup-docs-v1";
   const DOC_TYPE = "followup_questionnaire";
   const DOC_TYPE_ZIP_LEGACY = "followup_questionnaires_zip";
   const HEB_TEXT_OPTS = { visual: false, align: false };
@@ -116,12 +116,15 @@
         const row = perIns[insId];
         if(!isYes(row?.answer)) return;
         const values = collectFieldValues(row?.fields);
-        if(!Object.keys(values).length) return;
         const cfg = cfgRoot.COMPANIES?.[companyKey];
         if(!cfg) return;
         const ids = qIds.length ? qIds : inferQuestionnaireIdsFromFields(values, cfg);
+        if(!ids.length) return;
+        const hasAnyValues = Object.keys(values).length > 0;
         ids.forEach((qId) => {
-          if(!hasValuesForQuestionnaire(values, qId, cfg) && !hasGenericFollowup(values, qMeta)) return;
+          // כן + מספר שאלון → הקובץ נכנס לתיק גם בלי שדות פירוט.
+          // אם יש שדות, משאירים רק שאלונים שמתאימים לערכים / לשדות הגנריים.
+          if(hasAnyValues && !hasValuesForQuestionnaire(values, qId, cfg) && !hasGenericFollowup(values, qMeta)) return;
           const dedupeKey = [companyKey, insId, qId].join("|");
           if(!bucket[dedupeKey]){
             bucket[dedupeKey] = {
@@ -442,6 +445,48 @@
     return pdfDoc.save();
   }
 
+  function mergeHealthResponses(target, decl){
+    const responses = decl && decl.responses && typeof decl.responses === "object" ? decl.responses : null;
+    if(!responses) return target;
+    Object.keys(responses).forEach((qKey) => {
+      const row = responses[qKey];
+      if(!row || typeof row !== "object") return;
+      if(!target[qKey]) target[qKey] = {};
+      Object.keys(row).forEach((insId) => {
+        const incoming = row[insId];
+        if(!incoming || typeof incoming !== "object") return;
+        const prev = target[qKey][insId];
+        if(!prev){
+          target[qKey][insId] = incoming;
+          return;
+        }
+        const prevYes = isYes(prev.answer);
+        const nextYes = isYes(incoming.answer);
+        const prevFields = collectFieldValues(prev.fields);
+        const nextFields = collectFieldValues(incoming.fields);
+        target[qKey][insId] = {
+          ...prev,
+          ...incoming,
+          answer: (nextYes || prevYes) ? "yes" : (incoming.answer != null ? incoming.answer : prev.answer),
+          fields: { ...prevFields, ...nextFields }
+        };
+      });
+    });
+    return target;
+  }
+
+  function collectHealthResponses(rec){
+    const payload = rec && rec.payload && typeof rec.payload === "object" ? rec.payload : {};
+    const merged = {};
+    mergeHealthResponses(merged, payload.primary && payload.primary.healthDeclaration);
+    mergeHealthResponses(merged, payload.healthDeclaration);
+    mergeHealthResponses(merged, payload.operational && payload.operational.primary && payload.operational.primary.healthDeclaration);
+    (Array.isArray(payload.insureds) ? payload.insureds : []).forEach((ins) => {
+      mergeHealthResponses(merged, ins && ins.data && ins.data.healthDeclaration);
+    });
+    return { responses: merged };
+  }
+
   function zipEntryPath(entry){
     const cfg = getConfig().COMPANIES?.[entry.companyKey];
     const base = cfg?.fileLabel ? cfg.fileLabel(entry.questionnaireNum) : ("q-" + entry.questionnaireNum);
@@ -546,18 +591,11 @@
       orderedSchemaValues,
       keepSinglePage,
       listPageFieldNames,
+      collectHealthResponses,
       HEB_TEXT_OPTS
     },
     resolveForCustomer(rec, meta, insureds){
-      const list = detectTriggeredFollowups(
-        rec?.payload?.primary?.healthDeclaration
-          || rec?.payload?.insureds?.[0]?.data?.healthDeclaration
-          || rec?.payload?.operational?.primary?.healthDeclaration
-          || { responses: {} },
-        meta,
-        insureds
-      );
-      return list;
+      return detectTriggeredFollowups(collectHealthResponses(rec), meta, insureds);
     },
     hasTriggered(rec, meta, insureds){
       return this.resolveForCustomer(rec, meta, insureds).length > 0;
