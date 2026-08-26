@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260826-hach-hmo-health-v2";
+const APP_TAG = "20260826-hach-hmo-health-v3";
 let failed = 0;
 let passed = 0;
 
@@ -46,20 +46,24 @@ assert(html.includes("theme.css?v=" + APP_TAG), "index.html theme.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
 
 console.log("\n2) summary column removed");
-assert(!html.includes("customerFullSide"), "HTML no longer has the side column element");
+assert(!html.includes('id="customerFullSide"'), "HTML no longer mounts customerFullSide");
 assert(!html.includes("cfFile__side card"), "HTML no longer mounts cfFile__side");
+assert(!html.includes('id="customerFullDash"'), "HTML no longer mounts the leftover KPI dash");
 assert(!fileBlock.includes("renderSidebar"), "CustomersUI no longer renders a sidebar");
+assert(!fileBlock.includes("renderKpiBar"), "CustomersUI no longer paints the KPI summary bar");
 assert(!fileBlock.includes("סיכום תיק"), "CustomersUI no longer paints סיכום תיק");
-assert(!fileBlock.includes("customerFullSide"), "CustomersUI no longer binds customerFullSide");
-assert(!fileBlock.includes("els.side"), "CustomersUI no longer writes els.side");
+assert(!fileBlock.includes('this.els.side'), "CustomersUI no longer writes els.side");
+assert(!fileBlock.includes("this.els.dash"), "CustomersUI no longer writes els.dash");
+assert(fileBlock.includes("stripLegacyFileSummary"), "CustomersUI strips leftover summary DOM");
+assert(html.includes("giCfSummaryKill"), "HTML injects a hard-kill for leftover summary nodes");
 
 console.log("\n3) layout uses the full width");
 assert(css.includes("grid-template-columns: minmax(0, 1fr);"), "app.css customer file grid is one column");
 assert(!css.includes("grid-template-columns: minmax(0, 1fr) 280px"), "app.css dropped the 280px summary column");
 assert(theme.includes("grid-template-columns: minmax(0, 1fr) !important;"), "theme.css customer file grid is one column");
 assert(!theme.includes("grid-template-columns: minmax(0, 1fr) 280px"), "theme.css dropped the 280px summary column");
-assert(/\.cfFile__side\{[\s\S]{0,80}display:\s*none/.test(css), "app.css hides leftover side styles");
-assert(/\.cfFile__side:not\(#\\9\):not\(#\\9\)\{\s*display:\s*none !important;/.test(theme), "theme.css hides leftover side styles");
+assert(/#customerFullSide[\s\S]{0,180}display:\s*none !important;/.test(css), "app.css hard-kills leftover side");
+assert(/#customerFullSide:not\(#\\9\):not\(#\\9\)[\s\S]{0,180}display:\s*none !important;/.test(theme), "theme.css hard-kills leftover side");
 assert(html.includes('id="customerFullTabs"'), "tabs bar remains");
 assert(html.includes('id="customerFullMain"'), "main file panel remains");
 

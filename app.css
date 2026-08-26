@@ -46841,3 +46841,19 @@ body.lcAuthLock .lcLogin__footBtn{
     border-top:1px solid var(--gi-border, #E5E7EB);
   }
 }
+
+/* GI-CF-REMOVE-SUMMARY 2026-08-26 — hard-kill leftover file-summary column */
+#customerFullSide,
+.cfFile__side,
+#customerFullDash,
+#customerFull.cfFile .customerFull__dash{
+  display: none !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+}

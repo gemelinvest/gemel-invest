@@ -10450,3 +10450,19 @@ body.sidebar-collapsed .app:not(#\9):not(#\9),
     transition: none !important;
   }
 }
+
+/* GI-CF-REMOVE-SUMMARY 2026-08-26 — hard-kill leftover file-summary column */
+#customerFullSide:not(#\9):not(#\9),
+.cfFile__side:not(#\9):not(#\9),
+#customerFullDash:not(#\9):not(#\9),
+#customerFull.cfFile .customerFull__dash:not(#\9):not(#\9){
+  display: none !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+}
