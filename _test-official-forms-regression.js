@@ -10,7 +10,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260826-followup-docs-v1";
+const TAG = "20260826-phoenix-ci-3148-v1";
 const FORM_TAG = "20260824-covers-sum-v1";
 const HACH_FORM_TAG = "20260825-hach-fill-audit-v1";
 const MIGDAL_FORM_TAG = "20260825-migdal-health-fill-v1";
@@ -75,6 +75,7 @@ assert(app.includes("qualifiesForMigdalCancerForm"), "migdal cancer qualify");
 assert(app.includes("qualifiesForPhoenixLifeShortForm"), "phoenix short-risk qualify");
 assert(app.includes("qualifiesForPhoenixLifeFullForm"), "phoenix extended-risk qualify");
 assert(app.includes("qualifiesForPhoenixHealthForm"), "phoenix health qualify");
+assert(app.includes("qualifiesForPhoenixCiForm"), "phoenix CI / merape qualify");
 assert(app.includes("טופס מקורי — מחלות קשות · הכשרה"), "hachshara CI title");
 assert(app.includes("טופס מקורי — ריסק חיים · הכשרה"), "hachshara life title");
 assert(app.includes("טופס מקורי — ריסק חיים מקוצר עד 1,000,000 · הכשרה"), "hachshara short-risk title");
@@ -91,6 +92,7 @@ assert(app.includes("טופס מקורי — סרטן · מגדל"), "migdal can
 assert(app.includes("טופס מקורי — ריסק / משכנתא עד גיל 55 · הפניקס"), "phoenix short title");
 assert(app.includes("טופס מקורי — ריסק / משכנתא מעל גיל 55 / מעל 2 מיליון · הפניקס"), "phoenix full title");
 assert(app.includes("טופס מקורי — בריאות · הפניקס"), "phoenix health title");
+assert(app.includes("טופס מקורי — מחלות קשות / מרפא · הפניקס"), "phoenix CI title");
 
 console.log("\n4) cache consistency");
 assert(html.includes("app.js?v=" + TAG), "index tag");
@@ -127,6 +129,14 @@ assert(sw.includes("gi-v12-" + TAG), "SW tag");
         : src.includes("applyOfficialHealthAndNames")));
   assert(healthFill, file + " fills health yes/no");
 });
+assert(fs.existsSync(path.join(ROOT, "gi-phoenix-ci-form.js")), "phoenix CI form file");
+assert(app.includes("./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1"), "href gi-phoenix-ci-form.js");
+assert(fs.existsSync(path.join(ROOT, "forms", "phoenix-ci", "phoenix-ci-join.pdf")), "phoenix CI PDF template");
+const phxCiSrc = fs.readFileSync(path.join(ROOT, "gi-phoenix-ci-form.js"), "utf8");
+assert(phxCiSrc.includes("Heebo-Bold.ttf"), "phoenix CI bold font");
+assert(phxCiSrc.includes("cc: draft.payment?.cc"), "phoenix CI passes stored card");
+assert(phxCiSrc.includes("overlayPlan"), "phoenix CI overlays flattened official PDF");
+assert(phxCiSrc.includes("healthAnswer"), "phoenix CI fills health yes/no overlay");
 assert(fs.existsSync(path.join(ROOT, "gi-hachshara-mortgage-form.js")), "hachshara mortgage form file");
 assert(app.includes("./gi-hachshara-mortgage-form.js?v=" + HACH_FORM_TAG), "href gi-hachshara-mortgage-form.js");
 assert(fs.existsSync(path.join(ROOT, "fonts", "Heebo-Bold.ttf")), "bold font file");
@@ -410,6 +420,9 @@ assert(phxRows[0] && phxRows[0].smoke === true, "Phoenix health smoking is named
 assert(phxRows[1] && phxRows[1].field === "Q2", "Phoenix health family maps to Q2");
 assert(phxRows[phxRows.length - 1].field === "Q28", "Phoenix health disability maps to Q28");
 assert(H.HEALTH_QKEYS.phoenix_health.length === 28, "Phoenix health wizard has 28 keys");
+assert(H.HEALTH_QKEYS.phoenix_ci.length === 13, "Phoenix CI declaration 303 has 13 keys");
+assert(H.HEALTH_QKEYS.phoenix_ci[0] === "phoenix_critical_illness__ci_smoking", "Phoenix CI starts at smoking 2.1");
+assert(H.HEALTH_QKEYS.phoenix_ci[8] === "phoenix_critical_illness__ci_diabetes", "Phoenix CI includes diabetes 3.7");
 const capPhx = {};
 H.applyMappedHealthYesNo({ __giCapture: capPhx }, {
   map: "phoenix_health",
