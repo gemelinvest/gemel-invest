@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260826-insureds-dossier-v1";
+const APP_TAG = "20260826-insureds-dossier-v2";
 const WIZARD_TAG = "20260826-migdal-smoke-fu-v1";
 let failed = 0;
 let passed = 0;
@@ -82,7 +82,8 @@ assert(tabBlock.includes("בחירת מבוטח"), "people rail title");
 assert(tabBlock.includes("קופת חולים"), "shows HMO");
 assert(tabBlock.includes("עישון"), "shows smoking");
 assert(tabBlock.includes("מגורים ויצירת קשר"), "shows address/contact");
-assert(tabBlock.includes("תצוגה בלבד"), "read-only note");
+assert(!tabBlock.includes("לחצו על שם מלא"), "rail hint text removed");
+assert(!tabBlock.includes("תצוגה בלבד"), "sheet note text removed");
 assert(!tabBlock.includes("policyCoversInsuredForDisplay"), "tab no longer reads policy coverage");
 assert(!tabBlock.includes("getInsuredDisplayPremium"), "tab no longer reads policy premium");
 assert(!tabBlock.includes("cfInsuredTab__policy"), "old policy rows removed from tab");
