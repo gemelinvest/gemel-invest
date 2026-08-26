@@ -460,7 +460,6 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
 
 /* --- Topbar icon buttons --- */
 .lcTopBtn:not(#\9):not(#\9),
-.giOfferFab--topbar:not(#\9):not(#\9),
 .giReminderFab--topbar:not(#\9):not(#\9),
 .iconBtn:not(#\9):not(#\9){
   width: 44px !important;
@@ -479,7 +478,6 @@ body.sidebar-collapsed .sidebar:not(#\9):not(#\9){
 }
 
 .lcTopBtn:hover:not(#\9):not(#\9),
-.giOfferFab--topbar:hover:not(#\9):not(#\9),
 .giReminderFab--topbar:hover:not(#\9):not(#\9),
 .iconBtn:hover:not(#\9):not(#\9){
   background: var(--gi-surface-2) !important;
@@ -4728,7 +4726,6 @@ body.giAgentOpsOverlay-open:not(#\9):not(#\9){
 /* ?? ???? ???????? ??????. ?? ?????? ????? ??????. */
 
 .topbar__actions .lcTopBtn:not(#\9):not(#\9),
-.topbar__actions .giOfferFab--topbar:not(#\9):not(#\9),
 .topbar__actions .giReminderFab--topbar:not(#\9):not(#\9),
 .topbar__actions .giChatFab--topbar:not(#\9):not(#\9){
   width: 44px !important;
@@ -4740,7 +4737,6 @@ body.giAgentOpsOverlay-open:not(#\9):not(#\9){
 }
 
 .topbar__actions .lcTopBtn:hover:not(#\9):not(#\9),
-.topbar__actions .giOfferFab--topbar:hover:not(#\9):not(#\9),
 .topbar__actions .giReminderFab--topbar:hover:not(#\9):not(#\9),
 .topbar__actions .giChatFab--topbar:hover:not(#\9):not(#\9){
   background: var(--gi-surface-3) !important;
@@ -4749,7 +4745,6 @@ body.giAgentOpsOverlay-open:not(#\9):not(#\9){
 }
 
 .topbar__actions .lcTopBtn:focus-visible:not(#\9):not(#\9),
-.topbar__actions .giOfferFab--topbar:focus-visible:not(#\9):not(#\9),
 .topbar__actions .giReminderFab--topbar:focus-visible:not(#\9):not(#\9),
 .topbar__actions .giChatFab--topbar:focus-visible:not(#\9):not(#\9){
   outline: none;
@@ -4757,7 +4752,6 @@ body.giAgentOpsOverlay-open:not(#\9):not(#\9){
 }
 
 .topbar__actions .lcTopBtn svg:not(#\9):not(#\9),
-.topbar__actions .giOfferFab--topbar svg:not(#\9):not(#\9),
 .topbar__actions .giReminderFab--topbar svg:not(#\9):not(#\9),
 .topbar__actions .giChatFab--topbar svg:not(#\9):not(#\9){
   width: 24px;
