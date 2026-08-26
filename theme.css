@@ -5247,13 +5247,13 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
   gap: var(--gi-s4) !important;
   background: transparent !important;
   display: grid !important;
-  grid-template-columns: minmax(0, 1fr) 280px !important;
+  grid-template-columns: minmax(0, 1fr) !important;
   grid-template-rows: minmax(0, 1fr) !important;
   min-height: 0 !important;
   overflow: hidden !important;
   align-items: stretch !important;
 }
-.cfFile__side:not(#\9):not(#\9){ grid-column: 2 !important; grid-row: 1 !important; }
+.cfFile__side:not(#\9):not(#\9){ display: none !important; }
 .cfFile__mainWrap:not(#\9):not(#\9){ grid-column: 1 !important; grid-row: 1 !important; }
 
 .cfFile__avatar:not(#\9):not(#\9),
@@ -5534,11 +5534,7 @@ body.view-campaignLeads-active .content:not(#\9):not(#\9){
   box-shadow: var(--gi-sh-sm) !important;
 }
 .cfFile__side:not(#\9):not(#\9){
-  display: flex !important;
-  flex-direction: column !important;
-  height: 100% !important;
-  overflow: hidden !important;
-  align-self: stretch !important;
+  display: none !important;
 }
 
 .cfFile__sideHead:not(#\9):not(#\9){

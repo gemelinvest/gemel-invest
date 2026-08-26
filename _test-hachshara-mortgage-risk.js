@@ -35,8 +35,8 @@ assert(fs.existsSync(path.join(ROOT, "hachshara-mortgage-risk-sim.css")), "mortg
 assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-official-he-bold-v1"'), "app.js loads bumped simulators chunk");
 assert(app.includes('{ company: "הכשרה", product: "ריסק משכנתא" }'), "catalog lists הכשרה × ריסק משכנתא");
 assert(app.includes("hachshara-mortgage-risk-sim.css?v=20260816-hach-mort-v1"), "app.js loads mortgage CSS");
-assert(html.includes("app.js?v=20260826-hach-health-adv-v1"), "index.html bumps app.js cache");
-assert(sw.includes("gi-v12-20260826-hach-health-adv-v1"), "service worker cache bumped");
+assert(html.includes("app.js?v=20260826-remove-cf-summary-v1"), "index.html bumps app.js cache");
+assert(sw.includes("gi-v12-20260826-remove-cf-summary-v1"), "service worker cache bumped");
 
 console.log("\n2) source-of-truth table from גיליון משכנתא");
 assert(sims.includes("GI-HACH-MORT-RISK-SIM"), "mortgage engine block exists");

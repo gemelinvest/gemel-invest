@@ -41514,7 +41514,7 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   min-height: 0;
   overflow: hidden;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
   gap: 14px;
   align-items: stretch;
@@ -42023,15 +42023,7 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 
 .cfFile__layout{ /* grid set on customerFull__body */ }
 .cfFile__side{
-  grid-column: 2;
-  grid-row: 1;
-  padding: 0;
-  min-height: 0;
-  height: 100%;
-  overflow: hidden;
-  align-self: stretch;
-  display: flex;
-  flex-direction: column;
+  display: none;
 }
 .cfFile__mainWrap{
   grid-column: 1;

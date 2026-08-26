@@ -18719,7 +18719,6 @@ UsersGateUI.init();
       this.els.avatar = $("#customerFullAvatar");
       this.els.dash = $("#customerFullDash");
       this.els.body = $("#customerFullBody");
-      this.els.side = $("#customerFullSide");
       this.els.tabs = $("#customerFullTabs");
       this.els.main = $("#customerFullMain");
       this.els.editBtn = $("#customerFullEditBtn");
@@ -21447,7 +21446,6 @@ UsersGateUI.init();
       this.paintHeroLiveTimer(rec);
       if(this.els.meta) this.els.meta.innerHTML = this.renderHeroMeta(rec);
       if(this.els.dash) this.els.dash.innerHTML = "";
-      if(this.els.side) this.els.side.innerHTML = this.renderSidebar(rec, policies);
       if(this.els.tabs) this.els.tabs.innerHTML = this.renderTabBar(rec, policies);
       if(this.els.main){
         this.els.main.innerHTML = this.renderSectionContent(rec, policies);
@@ -21512,59 +21510,6 @@ UsersGateUI.init();
           </div>
         </div>
       </div>`;
-    },
-
-    renderSidebar(rec, policies){
-      const healthPolicies = this.getNewPoliciesOnly(policies);
-      const elementaryProducts = this.collectElementaryProducts(rec);
-      const agentApptPolicies = this.collectAgentAppointmentPolicies(rec);
-      const healthSum = this.sumPremiumAfterDiscount(healthPolicies);
-      const agentApptSum = this.sumAgentAppointmentPremium(agentApptPolicies);
-      const elemSum = this.sumElementaryPremium(elementaryProducts);
-      const total = healthSum + elemSum + agentApptSum;
-      const insuredCount = Number(rec?.insuredCount || rec?.payload?.insureds?.length || 0) || 0;
-      const fmtShort = (val) => {
-        if(!val) return '—';
-        try {
-          const d = new Date(val);
-          if(Number.isNaN(d.getTime())) return '—';
-          return d.toLocaleDateString('he-IL');
-        } catch(_e){ return '—'; }
-      };
-      /* GI-CF-HIER 2026-08-04 — נקודת צבע לכל נושא, זהה לצבע הסקשן בטבלה. */
-      const oldSum = this.sumPremiumAfterDiscount(this.getExistingOldPoliciesOnly(policies));
-      const idNumber = safeTrim(rec?.idNumber);
-      const phone = safeTrim(rec?.phone || rec?.payload?.primary?.phone);
-      const email = safeTrim(rec?.email || rec?.payload?.primary?.email);
-      const agentName = safeTrim(rec?.agentName || rec?.payload?.agentName);
-      const isArchived = rec?.isArchived === true || rec?.is_archived === true || safeTrim(rec?.status) === "גנוז";
-      const statusLabel = isArchived ? "גנוז" : "פעיל";
-      const statusCls = isArchived ? "is-archived" : "is-active";
-      const dotRow = (dot, label, val) =>
-        `<div class="cfFile__sideRow"><span><i class="cfFile__sideDot cfFile__sideDot--${dot}"></i>${escapeHtml(label)}</span><strong>${escapeHtml(val ? this.formatMoneyValue(val) : '—')}</strong></div>`;
-      const infoRow = (label, valHtml, extraCls="") =>
-        `<div class="cfFile__sideRow${extraCls ? ` ${extraCls}` : ""}"><span>${escapeHtml(label)}</span><strong>${valHtml}</strong></div>`;
-      return `<div class="cfFile__sideHead">סיכום תיק</div>
-        <div class="cfFile__sideBody">
-          <div class="cfFile__sideTotal">
-            <div class="cfFile__sideTotalVal">${escapeHtml(total ? this.formatMoneyValue(total) : '—')}</div>
-            <div class="cfFile__sideTotalLbl">פרמיה חודשית לתשלום</div>
-          </div>
-          <div class="cfFile__sideGroup">פילוח לפי נושא</div>
-          ${dotRow('health', 'בריאות וסיכונים', healthSum)}
-          ${dotRow('appt', 'מינוי סוכן', agentApptSum)}
-          ${dotRow('elem', 'אלמנטרי', elemSum)}
-          ${dotRow('legacy', 'פוליסות ישנות', oldSum)}
-          <div class="cfFile__sideDivide"></div>
-          <div class="cfFile__sideGroup">פרטי תיק</div>
-          ${infoRow('מספר תיק', escapeHtml(idNumber || rec?.id || '—'))}
-          ${infoRow('תאריך פתיחה', escapeHtml(fmtShort(rec.createdAt || rec.created_at)))}
-          ${infoRow('סטטוס', `<span class="cfFile__sideStatus ${statusCls}">${escapeHtml(statusLabel)}</span>`)}
-          ${infoRow('נציג מטפל', escapeHtml(agentName || '—'))}
-          ${infoRow('מבוטחים', escapeHtml(String(insuredCount || '—')))}
-          ${infoRow('טלפון', escapeHtml(phone || '—'))}
-          ${infoRow('דוא״ל', escapeHtml(email || '—'), 'cfFile__sideRow--wrap')}
-        </div>`;
     },
 
     renderTabBar(rec, policies){
@@ -23827,7 +23772,6 @@ UsersGateUI.init();
       this.paintHeroLiveTimer(rec);
       if(this.els.meta) this.els.meta.innerHTML = "";
       if(this.els.dash) this.els.dash.innerHTML = "";
-      if(this.els.side) this.els.side.innerHTML = "";
       if(this.els.tabs) this.els.tabs.innerHTML = "";
       if(this.els.main){
         this.els.main.innerHTML = `<div class="muted" style="padding:32px;text-align:center;">טוען פרטי תיק…</div>`;
@@ -23919,7 +23863,6 @@ UsersGateUI.init();
         if(this.els.avatar) this.els.avatar.setAttribute("data-customer-name", safeTrim(rec.fullName || "תיק לקוח"));
         if(this.els.meta) this.els.meta.innerHTML = this.renderHeroMeta(rec);
         if(this.els.dash) this.els.dash.innerHTML = "";
-        if(this.els.side) this.els.side.innerHTML = "";
         if(this.els.tabs) this.els.tabs.innerHTML = "";
         if(this.els.main){
           this.els.main.innerHTML = `<div class="emptyState" style="padding:32px 16px"><div class="emptyState__icon">🗂️</div><div class="emptyState__title">התיק נפתח במצב בטוח</div><div class="emptyState__text">נמצאה תקלה בהצגת חלק מהנתונים, אבל התיק עצמו כן נפתח.</div></div>`;
