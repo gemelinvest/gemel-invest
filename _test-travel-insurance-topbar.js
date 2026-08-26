@@ -51,7 +51,10 @@ assert(html.includes('title="ביטוח נסיעות לחו״ל"'), "title");
 assert(html.includes("lcTravelInsuranceBtn"), "מחלקת lcTopBtn ייעודית");
 assert(block.includes('stroke-width="1.9"'), "אותו עובי קו כמו שאר האייקונים");
 assert(block.includes('stroke="currentColor"'), "currentColor כמו השכנים");
-assert(block.includes('viewBox="0 0 24 24"'), "viewBox 24");
+assert(block.includes('data-gi-travel-icon="plane"'), "האייקון מסומן כמטוס");
+assert(block.includes("M21 16v-2l-8-5V3.5"), "גוף המטוס בצדודית");
+assert(block.includes("V19l-2 1.5V22"), "זנב המטוס");
+assert(!block.includes("M17.8 19.2"), "הוסר האייקון הישן שהיה קשה לזהות");
 
 console.log("\n3) old offer UI removed");
 assert(!html.includes('id="giOfferFab"'), "לחצן שליחת הצעה הוסר");
