@@ -18795,7 +18795,6 @@ UsersGateUI.init();
       this.els.liveTimer = $("#customerFullLiveTimer");
       this.els.meta = $("#customerFullMeta");
       this.els.avatar = $("#customerFullAvatar");
-      this.els.dash = $("#customerFullDash");
       this.els.body = $("#customerFullBody");
       this.els.tabs = $("#customerFullTabs");
       this.els.main = $("#customerFullMain");
@@ -18811,6 +18810,7 @@ UsersGateUI.init();
       this.policyModal.title = $("#customerPolicyModalTitle");
       this.policyModal.body = $("#customerPolicyModalBody");
       this.els.loader = $("#customerLoader");
+      this.stripLegacyFileSummary();
 
       on(UI.els.customersTbody, "click", (ev) => {
         const openBtn = ev.target?.closest?.("[data-open-customer]");
@@ -21523,15 +21523,29 @@ UsersGateUI.init();
       this.queueFollowupDocumentsSync(rec);
     },
 
+    stripLegacyFileSummary(){
+      try {
+        const root = this.els?.wrap || document;
+        root.querySelectorAll("#customerFullSide, .cfFile__side, #customerFullDash").forEach((el) => {
+          try { el.remove(); } catch(_e) {}
+        });
+        if(document.getElementById("giCfSummaryKill")) return;
+        const style = document.createElement("style");
+        style.id = "giCfSummaryKill";
+        style.textContent = "#customerFullSide,.cfFile__side,#customerFullDash,#customerFull.cfFile .customerFull__dash{display:none!important}#customerFull.cfFile .customerFull__body,.cfFile__layout{grid-template-columns:minmax(0,1fr)!important}";
+        document.head.appendChild(style);
+      } catch(_e) {}
+    },
+
     renderFileView(rec, opts={}){
       if(!rec) return;
       try { stripIssuedPolicyBlobsInPlace(rec?.payload); } catch(_e) {}
+      this.stripLegacyFileSummary();
       const policies = this.collectPolicies(rec);
       if(this.els.name) this.els.name.textContent = rec.fullName || "תיק לקוח";
       if(this.els.avatar) this.els.avatar.setAttribute("data-customer-name", safeTrim(rec.fullName || "תיק לקוח"));
       this.paintHeroLiveTimer(rec);
       if(this.els.meta) this.els.meta.innerHTML = this.renderHeroMeta(rec);
-      if(this.els.dash) this.els.dash.innerHTML = "";
       if(this.els.tabs) this.els.tabs.innerHTML = this.renderTabBar(rec, policies);
       if(this.els.main){
         this.els.main.innerHTML = this.renderSectionContent(rec, policies);
@@ -21543,60 +21557,6 @@ UsersGateUI.init();
       }
       this.startOpsCardLoop();
       this.queueFollowupDocumentsSync(rec, opts);
-    },
-
-    renderKpiBar(rec, policies){
-      const healthPolicies = this.getNewPoliciesOnly(policies);
-      const elementaryProducts = this.collectElementaryProducts(rec);
-      const agentApptPolicies = this.collectAgentAppointmentPolicies(rec);
-      const premiumAfter = this.sumPremiumAfterDiscount(healthPolicies);
-      const agentApptSum = this.sumAgentAppointmentPremium(agentApptPolicies);
-      const elemSum = this.sumElementaryPremium(elementaryProducts);
-      const totalDisplay = premiumAfter + elemSum + agentApptSum;
-      const uniqueCompanies = Array.from(new Set(
-        [...healthPolicies, ...elementaryProducts, ...agentApptPolicies].map(p => safeTrim(p.company)).filter(Boolean)
-      ));
-      const activeCount = healthPolicies.length + elementaryProducts.length + agentApptPolicies.length;
-      const ops = getOpsStatePresentation(rec);
-      const updatedOps = safeTrim(ops?.updatedText) ? ProcessesUI.formatDate(ops.updatedText) : '—';
-      const premiumIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>`;
-      const buildingIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>`;
-      const docIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>`;
-      const pulseIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>`;
-      return `<div class="cfFile__kpiBar">
-        <div class="cfFile__kpi">
-          <div class="cfFile__kpiIcon cfFile__kpiIcon--green">${premiumIcon}</div>
-          <div>
-            <div class="cfFile__kpiVal cfFile__kpiVal--green" data-animate-key="premium-after-${escapeHtml(rec.id || '')}" data-animate-number="${escapeHtml(String(totalDisplay))}">${escapeHtml(this.formatMoneyValue(totalDisplay))}</div>
-            <div class="cfFile__kpiLabel">סה״כ פרמיה בתיק</div>
-            <div class="cfFile__kpiSub">${activeCount ? `${activeCount} מוצר${activeCount === 1 ? '' : 'ים'} בתיק` : 'טרם נוספו מוצרים'}</div>
-          </div>
-        </div>
-        <div class="cfFile__kpi">
-          <div class="cfFile__kpiIcon cfFile__kpiIcon--blue">${buildingIcon}</div>
-          <div>
-            <div class="cfFile__kpiVal">${escapeHtml(String(uniqueCompanies.length || 0))}</div>
-            <div class="cfFile__kpiLabel">חברות ביטוח</div>
-            <div class="cfFile__kpiSub">${escapeHtml(uniqueCompanies.length ? uniqueCompanies.join(' · ') : 'טרם נוספו')}</div>
-          </div>
-        </div>
-        <div class="cfFile__kpi">
-          <div class="cfFile__kpiIcon">${docIcon}</div>
-          <div>
-            <div class="cfFile__kpiVal">${escapeHtml(String(activeCount || 0))}</div>
-            <div class="cfFile__kpiLabel">פוליסות פעילות</div>
-            <div class="cfFile__kpiSub">${healthPolicies.length && elementaryProducts.length ? 'בריאות + אלמנטרי' : (elementaryProducts.length ? 'אלמנטרי' : 'בריאות וסיכונים')}</div>
-          </div>
-        </div>
-        <div class="cfFile__kpi" id="customerFullKpiOps">
-          <div class="cfFile__kpiIcon cfFile__kpiIcon--amber">${pulseIcon}</div>
-          <div>
-            <span class="cfFile__opsBadge">${escapeHtml(typeof getCustomerFileOpsBadge === "function" ? getCustomerFileOpsBadge(ops) : (ops?.liveLabel || 'ממתין לשיקוף'))}</span>
-            <div class="cfFile__kpiLabel" style="margin-top:6px">סטטוס תפעולי</div>
-            <div class="cfFile__kpiSub">עודכן ${escapeHtml(updatedOps)}</div>
-          </div>
-        </div>
-      </div>`;
     },
 
     renderTabBar(rec, policies){
@@ -23918,7 +23878,7 @@ UsersGateUI.init();
       if(this.els.name) this.els.name.textContent = safeTrim(rec?.fullName) || "תיק לקוח";
       this.paintHeroLiveTimer(rec);
       if(this.els.meta) this.els.meta.innerHTML = "";
-      if(this.els.dash) this.els.dash.innerHTML = "";
+      this.stripLegacyFileSummary();
       if(this.els.tabs) this.els.tabs.innerHTML = "";
       if(this.els.main){
         this.els.main.innerHTML = `<div class="muted" style="padding:32px;text-align:center;">טוען פרטי תיק…</div>`;
@@ -24009,7 +23969,7 @@ UsersGateUI.init();
         if(this.els.name) this.els.name.textContent = rec.fullName || "תיק לקוח";
         if(this.els.avatar) this.els.avatar.setAttribute("data-customer-name", safeTrim(rec.fullName || "תיק לקוח"));
         if(this.els.meta) this.els.meta.innerHTML = this.renderHeroMeta(rec);
-        if(this.els.dash) this.els.dash.innerHTML = "";
+        this.stripLegacyFileSummary();
         if(this.els.tabs) this.els.tabs.innerHTML = "";
         if(this.els.main){
           this.els.main.innerHTML = `<div class="emptyState" style="padding:32px 16px"><div class="emptyState__icon">🗂️</div><div class="emptyState__title">התיק נפתח במצב בטוח</div><div class="emptyState__text">נמצאה תקלה בהצגת חלק מהנתונים, אבל התיק עצמו כן נפתח.</div></div>`;
@@ -24270,16 +24230,6 @@ UsersGateUI.init();
       const call = (mirrorFlow.callSession && typeof mirrorFlow.callSession === "object")
         ? mirrorFlow.callSession
         : ((mirrorFlow.call && typeof mirrorFlow.call === "object") ? mirrorFlow.call : {});
-      const updatedOps = safeTrim(ops?.updatedText) ? ProcessesUI.formatDate(ops.updatedText) : '—';
-      const kpi = this.els?.dash?.querySelector?.('#customerFullKpiOps');
-      if(kpi){
-        kpi.innerHTML = `<div class="cfFile__kpiIcon cfFile__kpiIcon--amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
-          <div>
-            <span class="cfFile__opsBadge">${escapeHtml(typeof getCustomerFileOpsBadge === "function" ? getCustomerFileOpsBadge(ops) : (ops?.liveLabel || 'ממתין לשיקוף'))}</span>
-            <div class="cfFile__kpiLabel" style="margin-top:6px">סטטוס תפעולי</div>
-            <div class="cfFile__kpiSub">עודכן ${escapeHtml(updatedOps)}</div>
-          </div>`;
-      }
       if(call?.active && !this._opsResultSaveBusy){
         const liveCard = this.els?.main?.querySelector?.('#customerOpsReflectionCard');
         if(liveCard && liveCard.querySelector('.customerOpsResultBtn.is-saving, .customerOpsResultBtn[disabled]')){
@@ -73315,6 +73265,14 @@ ${inner}
     if(!("serviceWorker" in navigator)) return;
     try {
       await navigator.serviceWorker.register("./service-worker.js", { updateViaCache: "none" });
+      if(!window.__GI_SW_RELOAD_BOUND){
+        window.__GI_SW_RELOAD_BOUND = true;
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          if(window.__GI_SW_RELOADED) return;
+          window.__GI_SW_RELOADED = true;
+          window.location.reload();
+        });
+      }
     } catch(err){
       console.error("PWA service worker registration failed:", err);
     }
