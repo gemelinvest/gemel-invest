@@ -70546,19 +70546,20 @@ ${inner}
      ========================================================================== */
 
   const CUSTOMER_IMPORT_VERSION = "1.2";
-  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260823-prod-nosale-v1";
+  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260826-menora-prod-v1";
   const GI_PROD_FALLBACK_COMPANIES = Object.freeze([
     { id: "הכשרה", label: "הכשרה", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד." },
     { id: "הפניקס", label: "הפניקס", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
     { id: "מגדל", label: "מגדל", ready: true, hint: "קבצי LIFEHLTH, LIFE, COVRLIFE, PERSON (.MBT)", dropHint: "מגדל: LIFEHLTH (בריאות), LIFE (חיים), COVRLIFE (כיסויים), PERSON (מבוטחים). אפשר גם AGENTS / COMPANY." },
-    { id: "מנורה", label: "מנורה", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
+    { id: "מנורה", label: "מנורה", ready: true, hint: "קבצי M, N, G, P + TRFR (ZIP פרט / מבוטלות)", dropHint: "מנורה: ZIP של פרט (MP) או מבוטלות (MM), או קבצי ‎*M.TXT / *N.TXT / *G.TXT / *P.TXT ו־TRFR.ALL." },
     { id: "כלל", label: "כלל", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
     { id: "איילון", label: "איילון", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" }
   ]);
   function giProductionEngineIsCurrent(eng){
     if(!eng || typeof eng.parseFileBuffer !== "function") return false;
     const migdal = (eng.COMPANIES || []).find((c) => c && c.id === "מגדל");
-    return !!(migdal && migdal.ready === true);
+    const menora = (eng.COMPANIES || []).find((c) => c && c.id === "מנורה");
+    return !!(migdal && migdal.ready === true && menora && menora.ready === true);
   }
   function productionCompanyList(){
     const fromEngine = Array.isArray(window.GI_PRODUCTION?.COMPANIES) ? window.GI_PRODUCTION.COMPANIES : [];
@@ -70567,7 +70568,7 @@ ${inner}
       const id = safeTrim(c?.id);
       if(!id) return;
       const prev = byId.get(id) || {};
-      const forceReady = (id === "הכשרה" || id === "מגדל");
+      const forceReady = (id === "הכשרה" || id === "מגדל" || id === "מנורה");
       byId.set(id, Object.assign({}, prev, c, {
         ready: forceReady ? true : !!c.ready,
         hint: forceReady ? (prev.hint || c.hint) : (c.hint || prev.hint),
@@ -70575,6 +70576,16 @@ ${inner}
       }));
     });
     return GI_PROD_FALLBACK_COMPANIES.map((c) => byId.get(c.id)).filter(Boolean);
+  }
+  function productionPathLooksCancelled(name){
+    const s = String(name || "");
+    if(/מבוטל/.test(s)) return true;
+    if(/(^|[^A-Za-z0-9])MM\d{8,}/i.test(s)) return true;
+    return false;
+  }
+  function isProductionLookupFile(name){
+    const base = String(name || "").split(/[/\\]/).pop().toUpperCase();
+    return /^(BANKIM|SNIFIM|MIQZOA|MADAD|TRFN|SEFERBNK)\.ALL$/.test(base);
   }
   function ensureGiProductionJsLoaded(){
     return new Promise((resolve, reject) => {
@@ -71709,8 +71720,9 @@ ${inner}
       this.els.body.innerHTML = `
         <div class="ciHub">${cards}</div>
         <ul class="ciNotes">
-          <li>כל טעינה היא של <strong>חברה אחת</strong>. קבצי הכשרה ומגדל לא מעורבבים באותו סבב.</li>
+          <li>כל טעינה היא של <strong>חברה אחת</strong>. קבצי הכשרה, מגדל ומנורה לא מעורבבים באותו סבב.</li>
           <li>קודם תיק במערכת (דוח לקוחות), ואחר כך הפרודוקציה — השיוך לפי ת״ז.</li>
+          <li>מנורה: ZIP של פרט (MP) נכנס לתיק; ZIP של מבוטלות (MM) מסומן «לא פעיל» ולא נשמר.</li>
         </ul>`;
       this.els.foot.innerHTML = `<button class="btn" type="button" id="ciBackToHub">חזור</button>`;
       on(this.els.foot.querySelector("#ciBackToHub"), "click", () => this.renderHubStep());
@@ -71740,6 +71752,7 @@ ${inner}
           <li>פוליסה שכבר קיימת בתיק כפוליסה חדשה פעילה — תתעדכן (מספר, פרמיה, כיסויים).</li>
           <li>תיק בלי מוצר — תיווצר שורת פוליסה חדשה.</li>
           <li>ת״ז בלי תיק תישאר ברשימת «לא נמצא תיק» ולא תיזרק על לקוח אחר.</li>
+          ${company === "מנורה" ? "<li>אפשר לגרור ZIP שלם. קבצי מבוטלות (MM) מסומנים «לא פעיל» ולא נכנסים לתיק.</li>" : ""}
         </ul>`;
       this.els.foot.innerHTML = `<button class="btn" type="button" id="ciProdBackCo">חזרה לחברה</button>`;
       on(this.els.foot.querySelector("#ciProdBackCo"), "click", () => this.renderProductionCompanyStep());
@@ -71776,6 +71789,16 @@ ${inner}
         startedAt: overallStart
       });
       const parsed = [];
+      const needZip = files.some((f) => /\.zip$/i.test(f.name || ""));
+      if(needZip){
+        try {
+          if(window.GI_LOAD_LIBS?.jszip) await window.GI_LOAD_LIBS.jszip();
+        } catch(_e) {}
+        if(!window.JSZip){
+          this.renderError("לפתיחת ZIP נדרש JSZip. בדקו את החיבור לאינטרנט ורעננו את הדף.");
+          return;
+        }
+      }
       try {
         for(let i = 0; i < files.length; i++){
           const file = files[i];
@@ -71785,8 +71808,26 @@ ${inner}
             done: i,
             total: files.length
           });
-          const buf = await file.arrayBuffer();
-          parsed.push(P.parseFileBuffer(file.name, buf));
+          const cancelledOuter = productionPathLooksCancelled(file.name);
+          if(/\.zip$/i.test(file.name || "")){
+            const zip = await window.JSZip.loadAsync(await file.arrayBuffer());
+            const names = Object.keys(zip.files || {});
+            for(let j = 0; j < names.length; j++){
+              const name = names[j];
+              const entry = zip.files[name];
+              if(!entry || entry.dir) continue;
+              const base = String(name).split(/[/\\]/).pop();
+              if(!base || base.charAt(0) === ".") continue;
+              if(isProductionLookupFile(base)) continue;
+              const buf = await entry.async("arraybuffer");
+              parsed.push(P.parseFileBuffer(base, buf, {
+                cancelled: cancelledOuter || productionPathLooksCancelled(name)
+              }));
+            }
+          } else {
+            const buf = await file.arrayBuffer();
+            parsed.push(P.parseFileBuffer(file.name, buf, { cancelled: cancelledOuter }));
+          }
           await ciYieldToUi();
         }
       } catch(err){
@@ -71796,19 +71837,27 @@ ${inner}
 
       const usable = parsed.filter((f) => f.kind && f.kind !== "RM" && (f.rows || []).length);
       if(!usable.length){
-        const migdal = safeTrim(this._prod?.company) === "מגדל";
-        this.renderError(migdal
-          ? "לא זוהו רשומות פרודוקציה בקבצים. למגדל נדרשים LIFEHLTH / LIFE / COVRLIFE / PERSON."
-          : "לא זוהו רשומות פרודוקציה בקבצים. להכשרה נדרשים RB / RP / SB / SP.");
+        const company = safeTrim(this._prod?.company);
+        this.renderError(
+          company === "מגדל"
+            ? "לא זוהו רשומות פרודוקציה בקבצים. למגדל נדרשים LIFEHLTH / LIFE / COVRLIFE / PERSON."
+            : company === "מנורה"
+              ? "לא זוהו רשומות פרודוקציה בקבצים. למנורה נדרשים ZIP של פרט (MP) או מבוטלות (MM), או קבצי *M.TXT / *N.TXT / *G.TXT / *P.TXT ו־TRFR.ALL."
+              : "לא זוהו רשומות פרודוקציה בקבצים. להכשרה נדרשים RB / RP / SB / SP."
+        );
         return;
       }
 
       const policies = P.buildPolicies(usable, this._prod?.company);
       if(!policies.length){
-        const migdal = safeTrim(this._prod?.company) === "מגדל";
-        this.renderError(migdal
-          ? "הקבצים נקראו, אך לא נבנו פוליסות. ודאו שיש LIFEHLTH או LIFE יחד עם COVRLIFE."
-          : "הקבצים נקראו, אך לא נבנו פוליסות.");
+        const company = safeTrim(this._prod?.company);
+        this.renderError(
+          company === "מגדל"
+            ? "הקבצים נקראו, אך לא נבנו פוליסות. ודאו שיש LIFEHLTH או LIFE יחד עם COVRLIFE."
+            : company === "מנורה"
+              ? "הקבצים נקראו, אך לא נבנו פוליסות. ודאו שיש M/N יחד עם TRFR.ALL."
+              : "הקבצים נקראו, אך לא נבנו פוליסות."
+        );
         return;
       }
       const idSet = new Set();
