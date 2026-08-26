@@ -31,12 +31,20 @@ const app = read("app.js");
 const html = read("index.html");
 const theme = read("theme.css");
 const sw = read("service-worker.js");
+const mail = read("gi-daily-sales-mail.js");
 
 console.log("1) syntax + cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
 assert(html.includes("theme.css?v=" + APP_TAG), "index.html theme.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
+assert(html.includes("gi-daily-sales-mail.js?v=20260826-mail-layout-v1"), "index.html mail script cache");
+assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-daily-sales-mail.js")]).status === 0, "node --check gi-daily-sales-mail.js");
+assert(mail.includes("function snapshotHasNewLayout"), "חסימת שליחת דוח ישן");
+assert(mail.includes("מכירות מודיעין"), "בודק תווית מודיעין בסנאפשוט");
+assert(mail.includes("לידים שויכו"), "בודק תווית לידים בסנאפשוט");
+assert(mail.includes("פרמייה מהפקה"), "בודק תווית פרמייה מהפקה בסנאפשוט");
+assert(mail.includes("נטען דוח ישן מהמטמון"), "הודעת Ctrl+F5 אם נטען דוח ישן");
 
 console.log("\n2) שיוך סוכנות בניהול משתמשים");
 assert(html.includes('id="lcUserOfficeBranch"'), "שדה שיוך לסוכנות במודל משתמש");

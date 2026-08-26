@@ -191,14 +191,27 @@
 
   function wrapSnap(snap){
     if(!snap || (!snap.html && !snap.pdfBase64)) return null;
+    const html = snap.html ? ensureRtlEmailHtml(snap.html) : "";
+    const summary = snap.summary && typeof snap.summary === "object" ? { ...snap.summary } : {};
+    summary.layout = "20260826-branch-leads";
     return {
       dateKey: trim(snap.dateKey) || israelDateKey(),
       dateLabel: snap.dateLabel || israelDateKey(),
-      html: snap.html ? ensureRtlEmailHtml(snap.html) : "",
-      summary: snap.summary || {},
+      html,
+      summary,
       pdfBase64: trim(snap.pdfBase64),
       pdfName: trim(snap.pdfName)
     };
+  }
+
+  function snapshotHasNewLayout(snap){
+    const html = String(snap && snap.html || "");
+    if(!html) return false;
+    if(html.indexOf("מוצגים רק נציגים עם מכירה") >= 0) return false;
+    return html.indexOf("מכירות מודיעין") >= 0
+      && html.indexOf("מכירות חיפה") >= 0
+      && html.indexOf("לידים שויכו") >= 0
+      && html.indexOf("פרמייה מהפקה") >= 0;
   }
 
   function dashboardUI(){
@@ -386,6 +399,9 @@
       if(!snapshotReady()) return { skipped: true, reason: "incomplete" };
     }
     const snap = await buildSnapshot();
+    if(!snapshotHasNewLayout(snap)){
+      throw new Error("נטען דוח ישן מהמטמון (בלי מודיעין / חיפה / לידים). רעננו את העמוד ב־Ctrl+F5, ואז לחצו שוב «שלח עכשיו לבדיקה».");
+    }
     await api("save-snapshot", snap);
     lastSnapshotAt = Date.now();
     return snap;
