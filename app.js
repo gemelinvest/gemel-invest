@@ -31375,6 +31375,19 @@ UsersGateUI.init();
       return this.FLOW_STEPS[0];
     },
 
+    liveCustomerName(rec){
+      const full = safeTrim(rec?.fullName);
+      if(full && full !== "לקוח ללא שם") return full;
+      const p = rec?.payload?.primary && typeof rec.payload.primary === "object" ? rec.payload.primary : {};
+      const fromPrimary = `${safeTrim(p.firstName)} ${safeTrim(p.lastName)}`.trim();
+      if(fromPrimary) return fromPrimary;
+      const ins0 = rec?.payload?.insureds?.[0]?.data && typeof rec.payload.insureds[0].data === "object"
+        ? rec.payload.insureds[0].data
+        : {};
+      const fromIns = `${safeTrim(ins0.firstName)} ${safeTrim(ins0.lastName)}`.trim();
+      return fromIns || "לקוח";
+    },
+
     agentMatchesCall(agent, rec, call){
       const assign = getMirrorAssign(rec);
       const agentId = safeTrim(agent?.id);
@@ -31431,7 +31444,7 @@ UsersGateUI.init();
           live,
           paused,
           customerId: live ? safeTrim(liveRec.id) : "",
-          customerName: live ? (safeTrim(liveRec.fullName) || "לקוח") : "",
+          customerName: live ? this.liveCustomerName(liveRec) : "",
           stepNo: step?.n || 0,
           stepLabel: step ? `שלב ${step.n} · ${step.label}` : "לא בשיחה",
           startedAt: live ? safeTrim(call.startedAt) : "",
@@ -31667,7 +31680,11 @@ UsersGateUI.init();
             <span class="opsDashAgent__avatar opsDashAgent__avatar--t${agent.tone}" aria-hidden="true">${escapeHtml(agent.initials)}</span>
             <span class="opsDashAgent__meta">
               <strong class="opsDashAgent__name">${escapeHtml(agent.name)}</strong>
-              <span class="opsDashAgent__customer">${agent.live ? `לקוח: ${escapeHtml(agent.customerName)}` : "פנוי"}</span>
+              <span class="opsDashAgent__role">${agent.live ? "בשיחה כעת" : "פנוי"}</span>
+            </span>
+            <span class="opsDashAgent__who${agent.live ? " is-live" : ""}">
+              <span class="opsDashAgent__whoLbl">לקוח בשיחה</span>
+              <strong class="opsDashAgent__whoName">${escapeHtml(agent.live ? agent.customerName : "—")}</strong>
             </span>
             ${agent.live
               ? `<span class="opsDashAgent__step">${escapeHtml(agent.stepLabel)}</span>`
@@ -31921,7 +31938,7 @@ UsersGateUI.init();
             <article class="card opsDashPanel opsDashPanel--agents">
               <div class="opsDashPanel__head">
                 <div class="opsDashPanel__title">מעקב נציגים בשיחה</div>
-                <div class="opsDashPanel__sub">שידור חי · מונה שיחה</div>
+                <div class="opsDashPanel__sub">שידור חי · שם הלקוח · מונה שיחה</div>
               </div>
               <div class="opsDashAgents">${this.renderAgentRows(model.agentsLive)}</div>
             </article>
