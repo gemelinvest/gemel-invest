@@ -45164,13 +45164,46 @@ const MIRROR_DISCLOSURE_LIBRARY = {
     getPolicyDisclosureAmount(policy){
       if(!policy || typeof policy !== "object") return "";
       const type = safeTrim(policy?.type || policy?.product);
-      const isComp = type === "מחלות קשות" || type === "סרטן";
-      return isComp
-        ? safeTrim(policy?.compensation || policy?.sumInsured || policy?.coverage || "")
-        : safeTrim(policy?.sumInsured || policy?.compensation || policy?.coverage || "");
+      const isComp = type === "מחלות קשות" || type === "סרטן" || /מחלות קשות|סרטן/.test(type);
+      const pick = (...keys) => {
+        for(const k of keys){
+          const v = safeTrim(policy?.[k]);
+          if(v) return v;
+        }
+        return "";
+      };
+      const direct = isComp
+        ? pick("compensation", "sumInsured", "coverageAmount", "coverage", "sum")
+        : pick("sumInsured", "compensation", "coverageAmount", "coverage", "sum");
+      if(direct) return direct;
+      const per = (isComp ? policy.compensationPerInsured : null)
+        || policy.sumInsuredPerInsured
+        || policy.compensationPerInsured;
+      if(per && typeof per === "object"){
+        const vals = Object.values(per).map((v) => safeTrim(v)).filter(Boolean);
+        if(!vals.length) return "";
+        if(vals.length === 1) return vals[0];
+        let total = 0;
+        let allNum = true;
+        vals.forEach((v) => {
+          let n = NaN;
+          try {
+            if(typeof CustomersUI !== "undefined" && CustomersUI && typeof CustomersUI.asMoneyNumber === "function"){
+              n = CustomersUI.asMoneyNumber(v);
+            } else {
+              n = Number(String(v).replace(/[^\d.\-]/g, ""));
+            }
+          } catch(_e) {}
+          if(Number.isFinite(n) && n > 0) total += n;
+          else allNum = false;
+        });
+        if(allNum && total > 0) return String(total);
+        return vals[0];
+      }
+      return "";
     },
 
-    /** מחליף קווים ריקים של סכום (____ ₪ / ____ ש"ח) בסכום שהוזן בפוליסה המוצעת */
+    /** מחליף מקום ריק של סכום (____ ₪ / רווחים + ₪) בסכום שהוזן בפוליסה המוצעת */
     fillDisclosureAmountBlanks(text, amountRaw){
       const src = safeTrim(text);
       const amount = safeTrim(amountRaw);
@@ -45188,7 +45221,7 @@ const MIRROR_DISCLOSURE_LIBRARY = {
         }
       }catch(_e){}
       // רק מקומות ריקים שצמודים למטבע — לא נוגעים בקווים של בנק/סניף/אחוזים
-      return src.replace(/_{3,}\s*\.?\s*(₪|ש["״']?ח\.?)/g, `${formatted} $1`);
+      return src.replace(/(?:_{2,}|\s{2,})\s*\.?\s*(₪|ש["״']?ח\.?)/g, (_, cur) => `${formatted} ${cur}`);
     },
 
     getDisclosureEntries(rec){
