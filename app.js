@@ -2142,25 +2142,6 @@
   }
 
   /* GI-OPS-SUBMIT-MIRROR-START */
-  const OPS_WAITING_MIRROR_LAST_CREATED_LIMIT = 5;
-
-  function listCustomersByCreatedAtDesc(){
-    const customers = Array.isArray(State?.data?.customers) ? State.data.customers : [];
-    return customers.slice().sort((a, b) => {
-      const tb = Date.parse(safeTrim(b?.createdAt) || "") || 0;
-      const ta = Date.parse(safeTrim(a?.createdAt) || "") || 0;
-      if(tb !== ta) return tb - ta;
-      return String(safeTrim(b?.id)).localeCompare(String(safeTrim(a?.id)));
-    });
-  }
-
-  function isAmongLastCreatedCustomers(rec, limit){
-    const n = Math.max(1, Number(limit) || OPS_WAITING_MIRROR_LAST_CREATED_LIMIT);
-    const id = safeTrim(rec?.id);
-    if(!id) return false;
-    return listCustomersByCreatedAtDesc().slice(0, n).some((row) => safeTrim(row?.id) === id);
-  }
-
   function hasSubmittedHealthRisksToOps(rec){
     const ops = rec?.payload?.opsProcess && typeof rec.payload.opsProcess === "object"
       ? rec.payload.opsProcess
@@ -2168,10 +2149,10 @@
     return !!safeTrim(ops.submittedToOpsAt);
   }
 
-  /** ממתינים לשיקוף: רק 5 הלקוחות האחרונים שהוקמו, שעדיין לא בשיחה ולא בתוצאת שיקוף */
+  /** ממתינים לשיקוף: רק הצעות שהוגשו בלחיצה על «הגש לתפעול», שעדיין לא בשיחה ולא בתוצאת שיקוף */
   function isWaitingMirrorQueueCustomer(rec){
     if(!isHealthRisksWizardCompleted(rec)) return false;
-    if(!isAmongLastCreatedCustomers(rec, OPS_WAITING_MIRROR_LAST_CREATED_LIMIT)) return false;
+    if(!hasSubmittedHealthRisksToOps(rec)) return false;
     const call = getMirrorCallStore(rec);
     if(call?.active) return false;
     const ops = getOpsStatePresentation(rec);
@@ -31567,8 +31548,8 @@ UsersGateUI.init();
               <div>
                 <div class="opsDashPanel__title">ממתינים לשיקוף</div>
                 <div class="opsDashPanel__sub">${isManager
-                  ? "לקוחות שנסגרו באשף בריאות וסיכונים · לפי סדר כניסה לתור"
-                  : "לקוחות ששויכו אליך וממתינים לשיחת שיקוף"}</div>
+                  ? "הצעות שהוגשו לתפעול · לפי סדר כניסה לתור"
+                  : "הצעות ששויכו אליך וממתינות לשיחת שיקוף"}</div>
               </div>
               <div class="opsDashPanel__headActions">
                 <span class="opsDashPanel__sub">${model.waitingMirrorRows.length} לקוחות</span>
@@ -31621,7 +31602,7 @@ UsersGateUI.init();
       const queueHtml = listBucket === "waiting_typing"
         ? typingListHtml
         : (listBucket === "waiting_mirror" ? waitingListHtml : "");
-      const agentsHtml = listBucket ? "" : `<div class="opsDash__mid opsDash__mid--agents">
+      const agentsHtml = (!listBucket && isManager) ? `<div class="opsDash__mid opsDash__mid--agents">
             <article class="card opsDashPanel opsDashPanel--agents">
               <div class="opsDashPanel__head">
                 <div class="opsDashPanel__title">מעקב נציגים בשיחה</div>
@@ -31643,7 +31624,7 @@ UsersGateUI.init();
                 <div class="opsDashLegend">${legendHtml}</div>
               </div>
             </article>
-          </div>`;
+          </div>` : "";
 
       mount.innerHTML = `
         <section class="opsDash${listBucket ? " opsDash--queueScreen" : " opsDash--home"}" dir="rtl" aria-label="${listBucket ? "חוצץ תפעול" : "דשבורד תפעול"}">
