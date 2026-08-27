@@ -2279,20 +2279,33 @@
       return [];
     },
 
-    _healthDetail(response){
+    _healthDetail(response, meta){
       const fields = response?.fields && typeof response.fields === "object" ? response.fields : {};
+      try{
+        if(typeof Wizard !== "undefined" && typeof Wizard.formatHealthFieldsForOperationalReport === "function"){
+          const labeled = safeTrim(Wizard.formatHealthFieldsForOperationalReport(meta || {}, fields));
+          if(labeled) return labeled.replace(/ • /g, " · ");
+        }
+      }catch(_e){}
       return Object.entries(fields)
         .filter(([, v]) => safeTrim(v))
         .map(([k, v]) => `${k}: ${safeTrim(v)}`)
         .join(" · ");
     },
 
-    _healthAnswerText(response){
+    _healthAnswerText(response, meta){
       const answer = safeTrim(response?.answer);
       if(!answer) return "";
       const base = answer === "yes" ? "כן" : answer === "no" ? "לא" : answer;
-      const detail = this._healthDetail(response);
+      const detail = this._healthDetail(response, meta);
       return detail ? `${base} · ${detail}` : base;
+    },
+
+    _healthInsuredReportLabel(ins, idx, fallback){
+      const title = this._insuredTitle(ins, idx);
+      const name = this._insuredFullName(ins);
+      if(title && name) return `${title}: ${name}`;
+      return name || title || safeTrim(fallback) || "מבוטח";
     },
 
     /** תצלום של כל השדות שהשיקוף עשוי לשנות, במבנה שטוח וניתן להשוואה. */
@@ -2344,13 +2357,24 @@
       };
 
       this._healthSource(rec).forEach((group) => {
-        const insuredLabel = safeTrim(group?.insured?.label) || "מבוטח";
+        const insId = safeTrim(group?.insured?.id);
+        const insIdx = insureds.findIndex((ins, idx) => this._insuredKey(ins, idx) === insId || safeTrim(ins?.id) === insId);
+        const ins = insIdx >= 0 ? insureds[insIdx] : null;
+        const insuredLabel = ins
+          ? this._healthInsuredReportLabel(ins, insIdx, group?.insured?.label)
+          : (safeTrim(group?.insured?.label) || "מבוטח");
         (group.items || []).forEach((item) => {
-          const key = `${safeTrim(item.qKey)}|${safeTrim(item.insId)}`;
+          const itemInsId = safeTrim(item.insId) || insId;
+          const itemIdx = insureds.findIndex((row, idx) => this._insuredKey(row, idx) === itemInsId || safeTrim(row?.id) === itemInsId);
+          const itemIns = itemIdx >= 0 ? insureds[itemIdx] : ins;
+          const itemLabel = itemIns
+            ? this._healthInsuredReportLabel(itemIns, itemIdx >= 0 ? itemIdx : insIdx, item.insLabel || group?.insured?.label)
+            : insuredLabel;
+          const key = `${safeTrim(item.qKey)}|${itemInsId}`;
           snap.health[key] = {
             label: safeTrim(item?.meta?.text) || safeTrim(item.qKey) || "שאלה רפואית",
-            insuredLabel,
-            value: this._healthAnswerText(item.response)
+            insuredLabel: itemLabel,
+            value: this._healthAnswerText(item.response, item.meta)
           };
         });
       });
@@ -2461,8 +2485,7 @@
         const was = before.health?.[key];
         const label = safeTrim(now?.label) || safeTrim(was?.label) || "שאלה רפואית";
         const insuredLabel = safeTrim(now?.insuredLabel) || safeTrim(was?.insuredLabel);
-        const multi = new Set(Object.values(after.health || {}).map((x) => safeTrim(x?.insuredLabel))).size > 1;
-        const row = this._row(multi && insuredLabel ? `${insuredLabel} · ${label}` : label, was?.value, now?.value);
+        const row = this._row(insuredLabel ? `${insuredLabel} · ${label}` : label, was?.value, now?.value);
         if(row.changed) healthRows.push(row);
       });
       areas.push({ key: "health", label: "הצהרת בריאות", rows: healthRows });
@@ -65297,17 +65320,29 @@ ${inner}
     },
 
     async _persistHealthDeclarationIntro(rec){
+      return this._persistHealthDeclarationStep(rec);
+    },
+
+    async _persistHealthDeclarationStep(rec){
       if(!rec) return;
       const store = this._mirrorGetHealthDeclStore(rec);
-      store.introSavedAt = nowISO();
-      store.introSavedBy = safeTrim(Auth?.current?.name);
+      const stamp = nowISO();
+      store.introSavedAt = store.introSavedAt || stamp;
+      store.introSavedBy = store.introSavedBy || safeTrim(Auth?.current?.name);
+      store.savedAt = stamp;
+      store.savedBy = safeTrim(Auth?.current?.name);
       store.hasChildrenNote = this._mirrorHasChildrenForHealthDecl(rec);
       try{
-        if(typeof State !== "undefined" && State?.data?.meta) State.data.meta.updatedAt = store.introSavedAt;
-        rec.updatedAt = store.introSavedAt;
+        if(typeof MirrorsUI !== "undefined" && typeof MirrorsUI.getHealthDeclarationSource === "function"){
+          this._mcSyncHealthDeclarationCopies(rec, MirrorsUI.getHealthDeclarationSource(rec));
+        }
       }catch(_e){}
       try{
-        await App.persist("פתיחת הצהרת בריאות בשיחת שיקוף נשמרה", {
+        if(typeof State !== "undefined" && State?.data?.meta) State.data.meta.updatedAt = stamp;
+        rec.updatedAt = stamp;
+      }catch(_e){}
+      try{
+        await App.persist("הצהרת בריאות בשיחת שיקוף נשמרה", {
           silent: true,
           yieldUi: true,
           skipNormalize: true,
@@ -65361,7 +65396,6 @@ ${inner}
           });
         };
         let qKeys = [];
-        const answeredByIns = new Map();
         if(fromFileOnly){
           const seenAlias = new Set();
           const seenText = new Set();
@@ -65383,7 +65417,6 @@ ${inner}
             if(text && seenText.has(text)) return;
             seenAlias.add(alias);
             if(text) seenText.add(text);
-            answeredByIns.set(key, new Set(ids));
             qKeys.push(key);
           });
         }
@@ -65437,26 +65470,23 @@ ${inner}
         const giInsLabel = (ins, idx) => {
           const role = giInsRole(ins, idx);
           const name = giInsName(ins, idx);
-          if(role && name) return role + " \u00b7 " + name;
+          if(role && name) return role + ": " + name;
           return name || role || this._mirrorInsuredTitle(ins, idx);
         };
         // האינדקס המקורי נשמר כדי שתפקיד המבוטח (ילד 1 / ילד 2) לא יזוז בסינון
         const indexedInsureds = insureds.map((ins, idx) => ({ ins, idx }));
         const giRelevantInsureds = (qMeta, qKey) => {
-          // רק מבוטחים שיש להם תשובה שמורה בתיק עבור השאלה הזו
-          const answered = answeredByIns.get(qKey);
-          if(answered && answered.size){
+          // GI-OPS-HEALTH-DECL: כן/לא לכל מבוטח בהצעה (ראשי, בן/בת זוג, ילד).
+          // שאלות שהתווספו ממבוטח ספציפי נשארות מיוחסות אליו בלבד.
+          const added = Array.isArray(qMeta?.addedForInsureds) ? qMeta.addedForInsureds : [];
+          if(qMeta?.addedFromOtherDecl && added.length){
+            const ids = new Set(added.map((x) => safeTrim(x?.id)).filter(Boolean));
+            const names = new Set(added.map((x) => safeTrim(x?.name)).filter(Boolean));
             const hit = indexedInsureds.filter(({ ins, idx }) =>
-              answered.has(safeTrim(ins?.id) || `ins_${idx}`));
+              ids.has(safeTrim(ins?.id)) || names.has(giInsLabel(ins, idx)) || names.has(giInsName(ins, idx)));
             if(hit.length) return hit;
           }
-          const added = Array.isArray(qMeta?.addedForInsureds) ? qMeta.addedForInsureds : [];
-          if(!qMeta?.addedFromOtherDecl || !added.length) return indexedInsureds;
-          const ids = new Set(added.map((x) => safeTrim(x?.id)).filter(Boolean));
-          const names = new Set(added.map((x) => safeTrim(x?.name)).filter(Boolean));
-          const hit = indexedInsureds.filter(({ ins, idx }) =>
-            ids.has(safeTrim(ins?.id)) || names.has(giInsLabel(ins, idx)));
-          return hit.length ? hit : indexedInsureds;
+          return indexedInsureds;
         };
         const giGroups = qKeys.map((qKey) => {
           const qMeta = map[qKey] || { key: qKey, text: qKey, title: "", fields: [] };
@@ -65496,6 +65526,74 @@ ${inner}
       }
     },
 
+    _mcSyncHealthDeclarationCopies(rec, source){
+      if(!rec || !source || typeof source !== "object") return;
+      if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+      const attach = (host) => {
+        if(!host || typeof host !== "object") return;
+        host.healthDeclaration = source;
+      };
+      if(!rec.payload.primary || typeof rec.payload.primary !== "object") rec.payload.primary = {};
+      attach(rec.payload.primary);
+      if(rec.payload.operational && typeof rec.payload.operational === "object"){
+        if(!rec.payload.operational.primary || typeof rec.payload.operational.primary !== "object"){
+          rec.payload.operational.primary = {};
+        }
+        attach(rec.payload.operational.primary);
+      }
+      rec.payload.healthDeclaration = source;
+      try{
+        (this._mirrorGetInsureds(rec) || []).forEach((ins) => {
+          if(!ins.data || typeof ins.data !== "object") ins.data = {};
+          attach(ins.data);
+        });
+      }catch(_e){}
+    },
+
+    _mcHealthQuestionnaireTitle(meta){
+      const src = safeTrim(meta?.questionnaireSource);
+      if(src) return src;
+      const label = safeTrim(meta?.questionnaireLabel);
+      if(label) return label;
+      const nos = Array.isArray(meta?.questionnaireNos) ? meta.questionnaireNos.map(String).filter(Boolean) : [];
+      const nums = Array.isArray(meta?.questionnaireNumbers) ? meta.questionnaireNumbers.map(String).filter(Boolean) : [];
+      const all = nos.length ? nos : nums;
+      return all.length ? ("שאלון " + all.join(", ")) : "שאלון המשך";
+    },
+
+    _mcHealthFollowupFields(item){
+      const schema = Array.isArray(item?.meta?.fields)
+        ? item.meta.fields.filter((f) => f && f.type !== "section")
+        : [];
+      const seen = new Set(schema.map((f) => safeTrim(f?.key)).filter(Boolean));
+      const extra = [];
+      const stored = item?.response?.fields && typeof item.response.fields === "object" ? item.response.fields : {};
+      Object.keys(stored).forEach((k) => {
+        const key = safeTrim(k);
+        if(!key || seen.has(key)) return;
+        if(!safeTrim(stored[k])) return;
+        let label = key;
+        try{
+          if(typeof Wizard !== "undefined" && typeof Wizard.resolveHealthFieldLabel === "function"){
+            label = safeTrim(Wizard.resolveHealthFieldLabel(item.meta || {}, key)) || key;
+          }
+        }catch(_e){}
+        extra.push({ key, label, type: "text" });
+      });
+      return schema.concat(extra);
+    },
+
+    _mcHealthFieldInputHtml(item, field){
+      const val = safeTrim(item.response?.fields?.[field.key] || "");
+      const q = escapeHtml(item.qKey);
+      const ins = escapeHtml(item.insId);
+      const fk = escapeHtml(field.key);
+      if(field.type === "textarea"){
+        return `<label class="mcStepVerify__field mcStepVerify__field--wide"><span class="mcStepVerify__label">${escapeHtml(field.label || field.key)}</span><textarea class="mcStepVerify__input" rows="2" data-mc-health-q="${q}" data-mc-health-ins="${ins}" data-mc-health-field="${fk}">${escapeHtml(val)}</textarea></label>`;
+      }
+      return `<label class="mcStepVerify__field"><span class="mcStepVerify__label">${escapeHtml(field.label || field.key)}</span><input class="mcStepVerify__input" type="text" data-mc-health-q="${q}" data-mc-health-ins="${ins}" data-mc-health-field="${fk}" value="${escapeHtml(val)}"/></label>`;
+    },
+
     _onMcHealthAnswerClick(btn){
       const rec = this._getFreshCustomerRecord();
       if(!rec || !btn) return;
@@ -65515,19 +65613,7 @@ ${inner}
           saved: answer === "yes",
           editing: false
         };
-        // סנכרון לעותקי insureds / primary
-        try{
-          const insureds = this._mirrorGetInsureds(rec);
-          const ins = insureds.find((x) => safeTrim(x?.id) === insId);
-          if(ins?.data){
-            if(!ins.data.healthDeclaration) ins.data.healthDeclaration = source;
-            else ins.data.healthDeclaration.responses = source.responses;
-          }
-          if(rec.payload?.primary){
-            if(!rec.payload.primary.healthDeclaration) rec.payload.primary.healthDeclaration = source;
-            else rec.payload.primary.healthDeclaration.responses = source.responses;
-          }
-        }catch(_e){}
+        this._mcSyncHealthDeclarationCopies(rec, source);
       }catch(_e){}
       this._renderHealthDeclarationBody(rec);
     },
@@ -65548,17 +65634,23 @@ ${inner}
           ...prev,
           fields: { ...(prev.fields || {}), [field]: el.value }
         };
+        this._mcSyncHealthDeclarationCopies(rec, source);
       }catch(_e){}
     },
 
     _validateHealthDeclarationStep(rec){
       const groups = this._mirrorBuildHealthGroups(rec);
       if(!groups.length) return { ok: true };
+      const anyAnswered = groups.some((group) => (group.items || []).some((item) => {
+        const a = safeTrim(item.response?.answer);
+        return a === "yes" || a === "no";
+      }));
       for(const group of groups){
         for(const item of group.items || []){
           const giWho = safeTrim(item.insLabel) || safeTrim(group.insured?.label);
           const answer = safeTrim(item.response?.answer);
           if(answer !== "yes" && answer !== "no"){
+            if(anyAnswered) continue;
             return { ok: false, message: `יש לסמן כן/לא עבור ${giWho}: ${item.meta?.text || item.qKey}` };
           }
           if(answer === "yes" && typeof MirrorsUI !== "undefined" && typeof MirrorsUI.validateMirrorHealthItem === "function"){
@@ -65590,24 +65682,12 @@ ${inner}
           const answer = safeTrim(item.response?.answer);
           const yesSelected = answer === "yes";
           const noSelected = answer === "no";
-          const fields = Array.isArray(item.meta?.fields) ? item.meta.fields.filter((f) => f && f.type !== "section") : [];
           const wizardBadge = answer ? `<span class="mcHealthQ__badge ${yesSelected ? "is-yes" : "is-no"}">מהאשף: ${yesSelected ? "כן" : "לא"}</span>` : `<span class="mcHealthQ__badge is-empty">טרם סומן באשף</span>`;
-          const fieldsHtml = yesSelected && fields.length
-            ? `<div class="mcHealthQ__fields">${fields.map((field) => {
-                const val = safeTrim(item.response?.fields?.[field.key] || "");
-                if(field.type === "textarea"){
-                  return `<label class="mcStepVerify__field mcStepVerify__field--wide"><span class="mcStepVerify__label">${escapeHtml(field.label || field.key)}</span><textarea class="mcStepVerify__input" rows="2" data-mc-health-q="${escapeHtml(item.qKey)}" data-mc-health-ins="${escapeHtml(item.insId)}" data-mc-health-field="${escapeHtml(field.key)}">${escapeHtml(val)}</textarea></label>`;
-                }
-                return `<label class="mcStepVerify__field"><span class="mcStepVerify__label">${escapeHtml(field.label || field.key)}</span><input class="mcStepVerify__input" type="text" data-mc-health-q="${escapeHtml(item.qKey)}" data-mc-health-ins="${escapeHtml(item.insId)}" data-mc-health-field="${escapeHtml(field.key)}" value="${escapeHtml(val)}"/></label>`;
-              }).join("")}</div>`
-            : "";
           return `<article class="mcHealthQ${item.meta?.addedFromOtherDecl ? " mcHealthQ--added" : ""}" data-mc-health-item="${escapeHtml(item.qKey)}|${escapeHtml(item.insId)}">` +
             `<div class="mcHealthQ__head">` +
-              `<div class="mcHealthQ__text">${escapeHtml(item.insRole || item.insLabel || item.qKey)}</div>` +
-              (safeTrim(item.insName) ? `<div class="mcHealthQ__who">${escapeHtml(item.insName)}</div>` : "") +
+              `<div class="mcHealthQ__text">${escapeHtml(item.insLabel || item.insRole || item.qKey)}</div>` +
               wizardBadge +
             `</div>` +
-            (safeTrim(item.meta?.title) ? `<div class="mcHealthQ__cat">${escapeHtml(item.meta.title)}</div>` : "") +
             (item.meta?.addedFromOtherDecl
               ? `<div class="mcHealthQ__added" role="note">${escapeHtml(giHealthAddedNoteText(item.meta))}</div>`
               : "") +
@@ -65615,13 +65695,30 @@ ${inner}
               `<button type="button" class="mcHealthQ__choice${yesSelected ? " is-selected" : ""}" data-mc-health-q="${escapeHtml(item.qKey)}" data-mc-health-ins="${escapeHtml(item.insId)}" data-mc-health-answer="yes">כן</button>` +
               `<button type="button" class="mcHealthQ__choice${noSelected ? " is-selected" : ""}" data-mc-health-q="${escapeHtml(item.qKey)}" data-mc-health-ins="${escapeHtml(item.insId)}" data-mc-health-answer="no">לא</button>` +
             `</div>` +
-            fieldsHtml +
           `</article>`;
         }).join("");
-        return `<section class="mcHealthGroup">` +
+        const quests = (group.items || []).map((item) => {
+          if(safeTrim(item.response?.answer) !== "yes") return "";
+          const fields = this._mcHealthFollowupFields(item);
+          const who = escapeHtml(item.insLabel || item.insRole || "מבוטח");
+          const src = this._mcHealthQuestionnaireTitle(item.meta);
+          if(!fields.length){
+            return `<div class="mcHealthQuest mcHealthQuest--empty" data-mc-health-quest="${escapeHtml(item.qKey)}|${escapeHtml(item.insId)}">` +
+              `<div class="mcHealthQuest__head">שאלון המשך · ${who}</div>` +
+              `<div class="mcHealthQuest__empty">סומן כן · אין שאלון המשך מובנה לשאלה זו</div>` +
+            `</div>`;
+          }
+          return `<div class="mcHealthQuest" data-mc-health-quest="${escapeHtml(item.qKey)}|${escapeHtml(item.insId)}">` +
+            `<div class="mcHealthQuest__head">שאלון שנפתח · ${who}</div>` +
+            (src ? `<div class="mcHealthQuest__src">${escapeHtml(src)}</div>` : "") +
+            `<div class="mcHealthQ__fields">${fields.map((field) => this._mcHealthFieldInputHtml(item, field)).join("")}</div>` +
+          `</div>`;
+        }).join("");
+        return `<section class="mcHealthGroup${quests ? " mcHealthGroup--hasQuest" : ""}">` +
           `<div class="mcHealthGroup__name">${escapeHtml(group.question?.text || group.insured?.label || "")}</div>` +
           (safeTrim(group.question?.title) ? `<div class="mcHealthGroup__cat">${escapeHtml(group.question.title)}</div>` : "") +
           `<div class="mcHealthGroup__list">${cards}</div>` +
+          quests +
         `</section>`;
       }).join("") : `<div class="mcAgentHint" role="note"><div class="mcAgentHint__title">אין שאלות להצגה</div><div class="mcAgentHint__text">לא נמצאו שאלות הצהרת בריאות תואמות לפוליסות בתיק. ניתן להמשיך אחרי הקראת נוסח הפתיחה.</div></div>`;
 
@@ -66790,10 +66887,10 @@ ${inner}
           this._mirrorUiPhase = "paymentDetails";
           this._renderPaymentBody(rec);
           this._showStepPayPanel();
-          void this._persistHealthDeclarationIntro(rec);
+          void this._persistHealthDeclarationStep(rec);
           return;
         }
-        void this._persistHealthDeclarationIntro(rec);
+        void this._persistHealthDeclarationStep(rec);
         this.onNewPoliciesMirrorDone();
         return;
       }

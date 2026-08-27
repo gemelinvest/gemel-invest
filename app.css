@@ -45095,6 +45095,47 @@ body.view-elementaryMirror-active .pageTitle{ /* keep default */ }
   margin: 0 0 1px;
 }
 .mcHealthGroups .mcHealthQ__head{ flex-wrap: wrap; row-gap: 1px; }
+
+/* GI-OPS-HEALTH-DECL: שאלון המשך שנפתח בלחיצת כן — רוחב מלא מתחת לשורת השאלה */
+.mcHealthGroups .mcHealthQuest{
+  grid-column: 1 / -1;
+  margin: 4px 0 2px;
+  padding: 10px 13px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(15, 32, 96, .12);
+  background: rgba(15, 32, 96, .03);
+}
+.mcHealthGroups .mcHealthQuest--empty{
+  background: rgba(15, 32, 96, .018);
+}
+.mcHealthGroups .mcHealthQuest__head{
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--declInk);
+  line-height: 1.35;
+  margin: 0 0 4px;
+}
+.mcHealthGroups .mcHealthQuest__src{
+  font-size: 11.5px;
+  font-weight: 650;
+  color: #1d4ed8;
+  margin: 0 0 8px;
+}
+.mcHealthGroups .mcHealthQuest__empty{
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.mcHealthGroups .mcHealthGroup--hasQuest{
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.mcHealthGroups .mcHealthGroup--hasQuest .mcHealthQuest .mcHealthQ__fields{
+  margin-top: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
 /* ===== /GI-DECL-REGISTER ================================================== */
 
 /* ===== GI-MC-PAY-START-UI ==================================================
