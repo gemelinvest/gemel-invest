@@ -31617,6 +31617,55 @@ UsersGateUI.init();
       return fromIns || "לקוח";
     },
 
+    presenceMap(){
+      try{
+        if(typeof ChatUI !== "undefined" && ChatUI && typeof ChatUI.getPresenceMap === "function"){
+          return ChatUI.getPresenceMap() || new Map();
+        }
+      }catch(_e){}
+      return new Map();
+    },
+
+    presenceUserId(agent){
+      try{
+        if(typeof ChatUI !== "undefined" && ChatUI && typeof ChatUI.userIdFromAgent === "function"){
+          return safeTrim(ChatUI.userIdFromAgent(agent));
+        }
+      }catch(_e){}
+      return "";
+    },
+
+    latestFinishedCallAt(agent, customers){
+      let bestIso = "";
+      let bestMs = 0;
+      (Array.isArray(customers) ? customers : []).forEach((rec) => {
+        const call = this.getCallStore(rec);
+        if(!call || call.active) return;
+        const finished = safeTrim(call.finishedAt);
+        if(!finished) return;
+        if(!this.agentMatchesCall(agent, rec, call)) return;
+        const ms = new Date(finished).getTime();
+        if(!Number.isNaN(ms) && ms > bestMs){
+          bestMs = ms;
+          bestIso = finished;
+        }
+      });
+      return bestIso;
+    },
+
+    availableSinceIso(sessionStartedAt, lastFinishedAt){
+      const a = safeTrim(sessionStartedAt);
+      const b = safeTrim(lastFinishedAt);
+      const am = a ? new Date(a).getTime() : 0;
+      const bm = b ? new Date(b).getTime() : 0;
+      const aOk = !!(am && !Number.isNaN(am));
+      const bOk = !!(bm && !Number.isNaN(bm));
+      if(!aOk && !bOk) return "";
+      if(!aOk) return b;
+      if(!bOk) return a;
+      return bm > am ? b : a;
+    },
+
     agentMatchesCall(agent, rec, call){
       const assign = getMirrorAssign(rec);
       const agentId = safeTrim(agent?.id);
@@ -31650,12 +31699,23 @@ UsersGateUI.init();
         const call = this.getCallStore(rec);
         return !!(call?.active && safeTrim(call?.startedAt));
       });
+      const presence = this.presenceMap();
 
       return agents.map((agent, idx) => {
         const liveRec = liveCalls.find((rec) => this.agentMatchesCall(agent, rec, this.getCallStore(rec))) || null;
         const call = liveRec ? this.getCallStore(liveRec) : null;
         const live = !!(liveRec && call?.active && safeTrim(call?.startedAt));
         const paused = !!(live && call?.paused);
+        const pid = this.presenceUserId(agent);
+        const pres = pid ? (presence.get(pid) || null) : null;
+        const connected = !!pres;
+        const sessionStartedAt = connected
+          ? (safeTrim(pres.sessionStartedAt) || safeTrim(pres.onlineAt) || "")
+          : "";
+        const lastFinishedAt = (!live && connected) ? this.latestFinishedCallAt(agent, customers) : "";
+        const availableSince = (!live && connected)
+          ? this.availableSinceIso(sessionStartedAt, lastFinishedAt)
+          : "";
         let seconds = 0;
         if(live){
           if(paused){
@@ -31663,24 +31723,31 @@ UsersGateUI.init();
           } else {
             seconds = Math.max(0, Math.floor((Date.now() - new Date(call.startedAt).getTime()) / 1000));
           }
+        } else if(connected && availableSince){
+          const startMs = new Date(availableSince).getTime();
+          if(!Number.isNaN(startMs)){
+            seconds = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+          }
         }
         const step = live ? this.resolveLiveStep(liveRec, call) : null;
+        const startedAt = live ? safeTrim(call.startedAt) : (connected ? availableSince : "");
         return {
           id: safeTrim(agent.id) || `ops-agent-${idx}`,
           name: safeTrim(agent.name || agent.username) || "נציג תפעול",
           initials: this.initials(safeTrim(agent.name || agent.username)),
           tone: idx % 4,
           live,
+          connected,
           paused,
           customerId: live ? safeTrim(liveRec.id) : "",
           customerName: live ? this.liveCustomerName(liveRec) : "",
           stepNo: step?.n || 0,
-          stepLabel: step ? `שלב ${step.n} · ${step.label}` : "לא בשיחה",
-          startedAt: live ? safeTrim(call.startedAt) : "",
+          stepLabel: step ? `שלב ${step.n} · ${step.label}` : (connected ? "זמין" : "לא מחובר"),
+          startedAt,
           seconds,
-          clock: live ? this.formatCallClock(seconds) : "—"
+          clock: (live || (connected && startedAt)) ? this.formatCallClock(seconds) : "—"
         };
-      }).sort((a, b) => Number(b.live) - Number(a.live) || a.name.localeCompare(b.name, "he"));
+      }).sort((a, b) => Number(b.live) - Number(a.live) || Number(b.connected) - Number(a.connected) || a.name.localeCompare(b.name, "he"));
     },
 
     collectRows(){
@@ -31900,16 +31967,21 @@ UsersGateUI.init();
         return `<div class="opsDashEmpty opsDashEmpty--agents">אין עדיין נציגי תפעול במערכת — ברגע שיתווספו, המעקב החי יופיע כאן</div>`;
       }
       return agents.map((agent) => {
-        const liveAttrs = agent.live
-          ? ` data-ops-agent-started="${escapeHtml(agent.startedAt)}" data-ops-agent-paused="${agent.paused ? "1" : "0"}" data-ops-agent-paused-sec="${escapeHtml(String(agent.seconds))}"`
+        const ticking = !!(agent.startedAt && (agent.live || agent.connected));
+        const liveAttrs = ticking
+          ? ` data-ops-agent-started="${escapeHtml(agent.startedAt)}" data-ops-agent-paused="${agent.live && agent.paused ? "1" : "0"}" data-ops-agent-paused-sec="${escapeHtml(String(agent.live && agent.paused ? agent.seconds : 0))}"`
           : "";
         const openAttr = agent.customerId ? ` data-ops-dash-open="${escapeHtml(agent.customerId)}"` : "";
+        const rowClass = agent.live ? " is-live" : (agent.connected ? " is-connected" : " is-idle");
+        const roleTxt = agent.live ? "בשיחה כעת" : (agent.connected ? "מחובר" : "לא מחובר");
+        const badgeTxt = agent.live ? agent.stepLabel : (agent.connected ? "זמין" : "לא מחובר");
+        const liveTxt = agent.live ? "LIVE" : (agent.connected ? "מחובר" : "—");
         return `
-          <button class="opsDashAgent${agent.live ? " is-live" : " is-idle"}" type="button"${liveAttrs}${openAttr} ${agent.customerId ? "" : "disabled"}>
+          <button class="opsDashAgent${rowClass}" type="button"${liveAttrs}${openAttr} ${agent.customerId ? "" : "disabled"}>
             <span class="opsDashAgent__avatar opsDashAgent__avatar--t${agent.tone}" aria-hidden="true">${escapeHtml(agent.initials)}</span>
             <span class="opsDashAgent__meta">
               <strong class="opsDashAgent__name">${escapeHtml(agent.name)}</strong>
-              <span class="opsDashAgent__role">${agent.live ? "בשיחה כעת" : "פנוי"}</span>
+              <span class="opsDashAgent__role">${roleTxt}</span>
             </span>
             <span class="opsDashAgent__who${agent.live ? " is-live" : ""}">
               <span class="opsDashAgent__whoLbl">לקוח בשיחה</span>
@@ -31917,14 +31989,33 @@ UsersGateUI.init();
             </span>
             ${agent.live
               ? `<span class="opsDashAgent__step">${escapeHtml(agent.stepLabel)}</span>`
-              : `<span class="opsDashAgent__idleBadge">לא בשיחה</span>`}
+              : `<span class="opsDashAgent__idleBadge">${escapeHtml(badgeTxt)}</span>`}
             <span class="opsDashAgent__clock" dir="ltr">${escapeHtml(agent.clock)}</span>
             <span class="opsDashAgent__live">
               <span class="opsDashAgent__liveDot" aria-hidden="true"></span>
-              <span class="opsDashAgent__liveTxt">${agent.live ? "LIVE" : "—"}</span>
+              <span class="opsDashAgent__liveTxt">${liveTxt}</span>
             </span>
           </button>`;
       }).join("");
+    },
+
+    refreshAgentRows(){
+      try{
+        if(typeof Auth === "undefined" || !Auth.isOps || !Auth.isOps()) return false;
+      }catch(_e){ return false; }
+      const mount = this.root();
+      const wrap = mount?.querySelector(".opsDashAgents");
+      if(!wrap) return false;
+      wrap.innerHTML = this.renderAgentRows(this.collectLiveAgents());
+      wrap.querySelectorAll("[data-ops-dash-open]").forEach((btn) => {
+        on(btn, "click", () => {
+          const id = safeTrim(btn.getAttribute("data-ops-dash-open"));
+          if(!id) return;
+          try { CustomersUI.openByIdWithLoader(id, 900); } catch(_e){}
+        });
+      });
+      this.startTimerLoop(mount);
+      return true;
     },
 
     renderWaitingMirrorList(rows, isManager, emptyText){
@@ -32167,7 +32258,7 @@ UsersGateUI.init();
             <article class="card opsDashPanel opsDashPanel--agents">
               <div class="opsDashPanel__head">
                 <div class="opsDashPanel__title">מעקב נציגים בשיחה</div>
-                <div class="opsDashPanel__sub">שידור חי · שם הלקוח · מונה שיחה</div>
+                <div class="opsDashPanel__sub">שידור חי · מחובר · זמן זמינות</div>
               </div>
               <div class="opsDashAgents">${this.renderAgentRows(model.agentsLive)}</div>
             </article>
@@ -49120,6 +49211,11 @@ const ClalRiskLifePdf = {
           this.renderUsers();
           this.renderPeerMeta(true);
           this.renderTypingIndicator();
+          try {
+            if(typeof OpsDashboardUI !== "undefined" && OpsDashboardUI.refreshAgentRows){
+              OpsDashboardUI.refreshAgentRows();
+            }
+          } catch(_e) {}
         }, 280);
       }
       this._presenceUiDebounced();
@@ -49627,6 +49723,7 @@ const ClalRiskLifePdf = {
     },
 
     buildPresencePayload(extra={}){
+      if(!this._sessionStartedAt) this._sessionStartedAt = nowISO();
       return {
         userId: this.userKey,
         name: this.currentUser?.name || 'נציג',
@@ -49635,6 +49732,7 @@ const ClalRiskLifePdf = {
         avatar: this.avatarUrlForUser(this.currentUser || {}),
         avatarUpdatedAt: this.currentUser?.avatarUpdatedAt || safeTrim(getChatAvatarEntry(this.userKey)?.updatedAt || ''),
         onlineAt: nowISO(),
+        sessionStartedAt: extra.sessionStartedAt || this._sessionStartedAt,
         updatedAt: Date.now(),
         typingTo: '',
         typingUntil: 0,
@@ -50316,6 +50414,7 @@ const ClalRiskLifePdf = {
       this.refreshCurrentUser();
       const currentKey = safeTrim(this.userKey);
       if(prevUserKey && currentKey && prevUserKey !== currentKey){
+        this._sessionStartedAt = "";
         this.teardownRealtime(true);
         this.initStarted = false;
       }
@@ -50327,6 +50426,7 @@ const ClalRiskLifePdf = {
     },
 
     onLogout(){
+      this._sessionStartedAt = "";
       this.teardownRealtime(true);
       this.hideFab();
       this.closeWindow(false, true);

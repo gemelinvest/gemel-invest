@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260827-ops-assign-arrival-alert-v1";
+const APP_TAG = "20260827-ops-agent-connected-v1";
 let failed = 0;
 let passed = 0;
 
@@ -58,7 +58,7 @@ assert(dashBlock.includes("liveCustomerName(rec){"), "עוזר שם לקוח ח�
 assert(dashBlock.includes("this.liveCustomerName(liveRec)"), "collectLiveAgents משתמש בשם החי");
 assert(dashBlock.includes('opsDashAgent__whoLbl">לקוח בשיחה'), "תווית לקוח בשיחה בשורה");
 assert(dashBlock.includes("opsDashAgent__whoName"), "שם הלקוח בעמודה נפרדת");
-assert(dashBlock.includes('opsDashPanel__sub">שידור חי · שם הלקוח · מונה שיחה'), "כותרת המשנה מציינת שם לקוח");
+assert(dashBlock.includes('opsDashPanel__sub">שידור חי · מחובר · זמן זמינות'), "כותרת המשנה מציינת מחובר וזמן זמינות");
 assert(dashBlock.includes('const agentsHtml = (!listBucket && isManager)'), "מעקב נציגים נשאר למנהל בלבד");
 assert(css.includes(".opsDashAgent__who"), "עיצוב עמודת הלקוח");
 assert(css.includes("grid-area:who"), "במובייל עמודת הלקוח מקבלת שורה");
