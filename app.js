@@ -1116,6 +1116,58 @@
     }
   }
 
+  /** צלצול טלפון כפול-תדר למשך durationMs (ברירת מחדל 5 שניות). מחזיר stop(). */
+  function playGiPhoneRing(durationMs){
+    const ms = Math.max(400, Number(durationMs) || 5000);
+    const stoppers = [];
+    let stopped = false;
+    const stop = () => {
+      if(stopped) return;
+      stopped = true;
+      stoppers.forEach((fn) => { try { fn(); } catch(_e) {} });
+    };
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if(!Ctx) return stop;
+      if(!playGiNotifySound._ctx) playGiNotifySound._ctx = new Ctx();
+      const ctx = playGiNotifySound._ctx;
+      if(ctx.state === "suspended"){
+        try { void ctx.resume(); } catch(_e) {}
+      }
+      const master = ctx.createGain();
+      master.gain.value = 0.22;
+      master.connect(ctx.destination);
+      stoppers.push(() => {
+        try { master.gain.setValueAtTime(0.0001, ctx.currentTime); } catch(_e) {}
+        try { master.disconnect(); } catch(_e) {}
+      });
+      const endAt = ctx.currentTime + (ms / 1000);
+      let t = ctx.currentTime;
+      while(t < endAt){
+        const burst = Math.min(0.4, endAt - t);
+        [440, 480].forEach((freq) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, t);
+          gain.gain.setValueAtTime(0.0001, t);
+          gain.gain.exponentialRampToValueAtTime(0.9, t + 0.018);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t + burst);
+          osc.connect(gain);
+          gain.connect(master);
+          osc.start(t);
+          osc.stop(t + burst + 0.05);
+          stoppers.push(() => { try { osc.stop(); } catch(_e) {} });
+        });
+        t += 0.62;
+      }
+      window.setTimeout(stop, ms + 80);
+    } catch(_e) {
+      try { playGiNotifySound(); } catch(_e2) {}
+    }
+    return stop;
+  }
+
   /**
    * GI-LEADNOTIFY 2026-08-02
    * מנסה להשמיע צלצול מסונתז (Web Audio) ומחזיר האם זה באמת יצא לפועל.
@@ -13580,6 +13632,7 @@
           if(Array.isArray(trimmed?.customers)) State.data.customers = trimmed.customers;
         }
       } catch(_e) {}
+      try { OpsAssignArrivalAlert.inspect(); } catch(_e) {}
       return merged;
     },
 
@@ -16279,6 +16332,7 @@
       try { InactivityGuard.stop(); } catch(_e) {}
       try { CampaignAgentLeadWatcher.stop(); } catch(_e) {}
       try { MirrorCallAgentToastWatcher.stop(); } catch(_e) {}
+      try { OpsAssignArrivalAlert.stop(); } catch(_e) {}
       try { BackgroundTimers.stopAll(); } catch(_e) {}
       try { App.resetSessionDataForUserSwitch(reason === "browser" ? "browser_close" : "logout"); } catch(_e) {
         try { App._fullDataReady = false; } catch(_e2) {}
@@ -19105,6 +19159,178 @@ UsersGateUI.init();
         this.timer = null;
       }
       this.busy = false;
+    }
+  };
+
+  /* Arrival alerts for the ops-manager assignment queue (מסך שיוכי שיקוף).
+     New customers who just submitted the health-risks proposal to ops play a 5s
+     ringtone and a jumping toast with "שייך לנציג". Existing queue rows are
+     seeded on first scan / empty localStorage so a page reload does not ring. */
+  const OpsAssignArrivalAlert = {
+    _LS: "gi_ops_assign_arrival_seen_v1",
+    _started: false,
+    _seen: {},
+    _timer: 0,
+    _host: null,
+    _ringStop: null,
+
+    _load(){
+      try{
+        const j = JSON.parse(localStorage.getItem(this._LS) || "{}");
+        return (j && typeof j === "object" && !Array.isArray(j)) ? j : {};
+      }catch(_e){ return {}; }
+    },
+    _save(){
+      try{ localStorage.setItem(this._LS, JSON.stringify(this._seen || {})); }catch(_e){}
+    },
+    _isOpsManager(){
+      try{
+        if(typeof Auth === "undefined" || !Auth.current) return false;
+        if(typeof Auth.isOpsAgent === "function" && Auth.isOpsAgent()) return false;
+        if(typeof Auth.canMirrorAssign === "function" && Auth.canMirrorAssign()) return true;
+        return !!(typeof Auth.isOps === "function" && Auth.isOps());
+      }catch(_e){ return false; }
+    },
+    _assignmentQueueIds(){
+      const out = {};
+      try{
+        const list = (typeof State !== "undefined" && Array.isArray(State.data?.customers))
+          ? State.data.customers
+          : [];
+        list.forEach((c) => {
+          if(!c || !c.id) return;
+          const completed = (typeof isHealthRisksWizardCompleted === "function")
+            ? !!isHealthRisksWizardCompleted(c)
+            : false;
+          const submitted = (typeof hasSubmittedHealthRisksToOps === "function")
+            ? !!hasSubmittedHealthRisksToOps(c)
+            : false;
+          if(completed && submitted) out[String(c.id)] = true;
+        });
+      }catch(_e){}
+      return out;
+    },
+    _findCustomer(id){
+      const want = String(id || "");
+      try{
+        const list = (typeof State !== "undefined" && Array.isArray(State.data?.customers))
+          ? State.data.customers
+          : [];
+        return list.find((c) => String(c?.id || "") === want) || null;
+      }catch(_e){ return null; }
+    },
+    _customerName(id){
+      try{
+        const rec = this._findCustomer(id);
+        const n = rec && rec.fullName ? String(rec.fullName).trim() : "";
+        return n || "לקוח";
+      }catch(_e){ return "לקוח"; }
+    },
+    _ensureHost(){
+      if(this._host && this._host.isConnected) return this._host;
+      let host = document.getElementById("giOpsAssignArrivalHost");
+      if(!host){
+        host = document.createElement("div");
+        host.id = "giOpsAssignArrivalHost";
+        host.className = "opsAssignArrivalHost";
+        host.setAttribute("aria-live", "polite");
+        (document.body || document.documentElement).appendChild(host);
+      }
+      this._host = host;
+      return host;
+    },
+    _assignCustomer(id){
+      try{
+        const rec = this._findCustomer(id);
+        if(!rec) return;
+        if(typeof MirrorCallUI !== "undefined" && typeof MirrorCallUI.openAssignModalForCustomer === "function"){
+          MirrorCallUI.openAssignModalForCustomer(rec, () => {
+            try { MirrorAssignmentsUI.render(); } catch(_e) {}
+          });
+        }
+      }catch(_e){}
+    },
+    _showToast(id){
+      const host = this._ensureHost();
+      const toast = document.createElement("div");
+      toast.className = "opsAssignArrivalToast";
+      toast.setAttribute("data-customer-id", String(id));
+      const title = document.createElement("div");
+      title.className = "opsAssignArrivalToast__title";
+      title.textContent = "התקבלה הצעה חדשה";
+      const who = document.createElement("div");
+      who.className = "opsAssignArrivalToast__who";
+      who.textContent = this._customerName(id);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "opsAssignArrivalToast__btn";
+      btn.textContent = "שייך לנציג";
+      const self = this;
+      btn.addEventListener("click", (ev) => {
+        try{ ev.preventDefault(); ev.stopPropagation(); }catch(_e){}
+        self._assignCustomer(id);
+        try{ toast.remove(); }catch(_e){}
+      });
+      toast.appendChild(title);
+      toast.appendChild(who);
+      toast.appendChild(btn);
+      host.appendChild(toast);
+      window.setTimeout(() => {
+        try{ toast.remove(); }catch(_e){}
+      }, 20000);
+    },
+    _playRing(){
+      try{ if(this._ringStop) this._ringStop(); }catch(_e){}
+      this._ringStop = null;
+      try{
+        if(typeof playGiPhoneRing === "function"){
+          this._ringStop = playGiPhoneRing(5000);
+        }
+      }catch(_e){ this._ringStop = null; }
+    },
+    inspect(){
+      if(!this._started) return { seeded: false, announced: [] };
+      if(!this._isOpsManager()) return { seeded: false, announced: [] };
+      const now = this._assignmentQueueIds();
+      const keys = Object.keys(now);
+      const seenKeys = Object.keys(this._seen || {});
+      if(!seenKeys.length){
+        this._seen = now;
+        this._save();
+        return { seeded: true, announced: [] };
+      }
+      const announced = [];
+      keys.forEach((id) => {
+        if(this._seen[id]) return;
+        this._seen[id] = true;
+        announced.push(id);
+      });
+      if(announced.length){
+        this._playRing();
+        announced.forEach((id) => this._showToast(id));
+      }
+      this._save();
+      return { seeded: false, announced };
+    },
+    start(){
+      if(this._started) return;
+      if(!this._isOpsManager()) return;
+      this._started = true;
+      this._seen = this._load();
+      this.inspect();
+      const self = this;
+      if(this._timer) window.clearInterval(this._timer);
+      this._timer = window.setInterval(() => { self.inspect(); }, 4000);
+    },
+    stop(){
+      this._started = false;
+      if(this._timer){
+        try{ window.clearInterval(this._timer); }catch(_e){}
+        this._timer = 0;
+      }
+      try{ if(this._ringStop) this._ringStop(); }catch(_e){}
+      this._ringStop = null;
+      try{ if(this._host) this._host.innerHTML = ""; }catch(_e){}
     }
   };
 
@@ -29967,6 +30193,7 @@ UsersGateUI.init();
         const customerIds = cust.ids || [];
         const proposalIds = prop.ids || [];
         try { MirrorCallAgentToastWatcher.inspectIds(customerIds); } catch(_e) {}
+        try { OpsAssignArrivalAlert.inspect(); } catch(_e) {}
         HeavySyncGate.scheduleUi(() => {
           if(LiveRefresh?.hasBlockingFlow?.()) return;
           try {
@@ -30396,6 +30623,7 @@ UsersGateUI.init();
       ReferralQuietRefresh.start();
       try { MirrorCallAgentToastWatcher.start(); } catch(_e) {}
       try { OpsAgentStatusToastWatcher.start(); } catch(_e) {}
+      try { OpsAssignArrivalAlert.start(); } catch(_e) {}
     },
     stopAll(){
       if(this._graceTimer){
@@ -30409,6 +30637,7 @@ UsersGateUI.init();
       LiveRefresh.stop();
       ReferralQuietRefresh.stop();
       try { MirrorCallAgentToastWatcher.stop(); } catch(_e) {}
+      try { OpsAssignArrivalAlert.stop(); } catch(_e) {}
       try { DashboardUI.stopLiveRefresh(); } catch(_e) {}
       try { ListRecordRealtime.stopAll(); } catch(_e) {}
       this._pollingStarted = false;
@@ -50528,6 +50757,7 @@ const ClalRiskLifePdf = {
         try { CampaignAgentLeadWatcher.start(); } catch(_e) {}
         try { MirrorCallAgentToastWatcher.start(); } catch(_e) {}
         try { OpsAgentStatusToastWatcher.start(); } catch(_e) {}
+        try { OpsAssignArrivalAlert.start(); } catch(_e) {}
         const alreadyOnApp = !!document.querySelector(".view.is-visible");
         if(options.skipNavigation || alreadyOnApp){
           try { LiveRefresh.renderActiveView(); } catch(_e) {}
@@ -61054,6 +61284,7 @@ ${inner}
     if(Auth.current && Auth.canAccessCampaignMyLeads()) CampaignAgentLeadWatcher.start();
     if(Auth.current) MirrorCallAgentToastWatcher.start();
     if(Auth.current) OpsAgentStatusToastWatcher.start();
+    if(Auth.current) OpsAssignArrivalAlert.start();
   } catch(_e) {}
   CampaignLinesSettingsUI.init();
   LandingLeadIngestSettingsUI.init();
@@ -67743,6 +67974,7 @@ ${inner}
           <td><button type="button" class="btn btn--primary" data-mc-ma-action="assign" data-mc-ma-id="${cid}">שיוך לנציג תפעול</button></td>
         </tr>`;
       }).join("");
+      try { OpsAssignArrivalAlert.inspect(); } catch(_e) {}
     },
     _openAssign(customerId){
       const rec = (State.data?.customers || []).find(x => safeTrim(x.id) === safeTrim(customerId));
