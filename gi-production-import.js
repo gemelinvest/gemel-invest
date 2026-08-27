@@ -1949,7 +1949,7 @@
   }
 
   function classifyPolicies(policies, customersById){
-    return (policies || []).map((pol) => {
+    const items = (policies || []).map((pol) => {
       if(pol.inactive){
         return Object.assign({}, pol, {
           category: "inactive",
@@ -2010,17 +2010,21 @@
       if(!found.length){
         const hasId = (pol.ids || []).some((id) => !!normId(id));
         const hasPhone = phones.some((ph) => !!normPhone(ph));
-        const hasName = (pol.people || []).some((p) => personNameKeys(p.fullName).length > 0);
+        const hasName = (pol.people || []).some((p) => personNameKeys(p.fullName).length > 0)
+          || (pol.names || []).some((nm) => personNameKeys(nm).length > 0);
+        if(hasId || hasPhone || hasName){
+          return Object.assign({}, pol, {
+            category: "create",
+            action: "create",
+            newFolder: true,
+            reason: "יצירת תיק חדש מהפרודוקציה",
+            customer: null
+          });
+        }
         return Object.assign({}, pol, {
           category: "unmatched",
           action: "skip",
-          reason: hasId
-            ? "לא נמצא תיק במערכת לפי הת״ז שבדוח הפרודוקציה"
-            : (hasPhone
-              ? "לא נמצא תיק במערכת לפי הטלפון שבדוח הפרודוקציה"
-              : (hasName
-                ? "לא נמצא תיק במערכת לפי השם שבדוח הפרודוקציה"
-                : "אין ת״ז או טלפון תקינים בדוח הפרודוקציה")),
+          reason: "אין ת״ז או טלפון תקינים בדוח הפרודוקציה",
           customer: null
         });
       }
@@ -2065,6 +2069,91 @@
         policyId: match.policy ? match.policy.id : null
       });
     });
+    return attachNewFolderStubs(items);
+  }
+
+  function hashKey(s){
+    let h = 2166136261;
+    const t = String(s || "");
+    for(let i = 0; i < t.length; i++){
+      h ^= t.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0).toString(16);
+  }
+
+  function newFolderGroupKey(pol){
+    const ids = [];
+    (pol.ids || []).forEach((id) => {
+      const n = normId(id);
+      if(n) ids.push(n);
+    });
+    (pol.people || []).forEach((p) => {
+      const n = normId(p?.idNumber);
+      if(n) ids.push(n);
+    });
+    ids.sort();
+    if(ids[0]) return "id:" + ids[0];
+    const phones = [];
+    (pol.phones || []).concat((pol.people || []).map((p) => p.phone)).forEach((ph) => {
+      const n = normPhone(ph);
+      if(n) phones.push(n);
+    });
+    phones.sort();
+    if(phones[0]) return "tel:" + phones[0];
+    const person = (pol.people && pol.people[0]) || {};
+    const nm = safeTrim(person.fullName);
+    if(nm) return "name:" + nm + "|" + safeTrim(person.city);
+    const fromList = (pol.names || []).map((n) => safeTrim(n)).filter(Boolean)[0];
+    if(fromList) return "name:" + fromList + "|";
+    return "pol:" + (normPolicy(pol.policyNumber) || "x");
+  }
+
+  function attachNewFolderStubs(items){
+    const groups = new Map();
+    (items || []).forEach((it, idx) => {
+      if(!(it && it.newFolder && it.action === "create")) return;
+      const key = newFolderGroupKey(it) || ("pol:" + idx);
+      if(!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(it);
+    });
+    groups.forEach((list, key) => {
+      const first = list[0] || {};
+      const person = (first.people && first.people[0]) || {};
+      let idNumber = "";
+      (first.ids || []).concat([person.idNumber]).some((id) => {
+        const n = normId(id);
+        if(n){
+          idNumber = n;
+          return true;
+        }
+        return false;
+      });
+      let phone = "";
+      (first.phones || []).concat((first.people || []).map((p) => p.phone)).some((ph) => {
+        const n = normPhone(ph);
+        if(n){
+          phone = n;
+          return true;
+        }
+        return false;
+      });
+      const split = splitFullName(person.fullName || "");
+      const fullName = safeTrim(person.fullName)
+        || [split.firstName, split.lastName].filter(Boolean).join(" ")
+        || "לקוח ללא שם";
+      const stub = {
+        id: "cust_prod_" + hashKey(key),
+        fullName,
+        idNumber,
+        phone,
+        city: safeTrim(person.city),
+        isNewFolder: true,
+        payload: { insureds: [], newPolicies: [] }
+      };
+      list.forEach((it) => { it.customer = stub; });
+    });
+    return items;
   }
 
   function insuredIdForTz(payload, tz){
@@ -2078,6 +2167,37 @@
     return "";
   }
 
+  function personFullName(person){
+    return safeTrim(person?.fullName)
+      || [safeTrim(person?.firstName), safeTrim(person?.lastName)].filter(Boolean).join(" ");
+  }
+
+  function personNameSlug(person){
+    const nm = personFullName(person);
+    const keys = personNameKeys(nm);
+    const base = keys[0] || nm;
+    return String(base || "").replace(/\s+/g, "_").slice(0, 40);
+  }
+
+  function insuredIdForName(payload, person){
+    const slug = personNameSlug(person);
+    if(!slug) return "";
+    const insureds = Array.isArray(payload?.insureds) ? payload.insureds : [];
+    const want = "ins_prod_nm_" + slug;
+    for(let i = 0; i < insureds.length; i++){
+      const ins = insureds[i];
+      if(safeTrim(ins?.id) === want) return ins.id;
+      const d = ins?.data || {};
+      const other = personNameSlug({
+        fullName: d.fullName,
+        firstName: d.firstName,
+        lastName: d.lastName
+      });
+      if(other && other === slug && ins?.id) return ins.id;
+    }
+    return "";
+  }
+
   function insuredIdsForCustomer(cust, people){
     const payload = cust?.payload && typeof cust.payload === "object" ? cust.payload : {};
     const insureds = Array.isArray(payload.insureds) ? payload.insureds : [];
@@ -2086,7 +2206,9 @@
     const active = (people || []).filter(isActivePerson);
     const source = active.length ? active : (people || []);
     source.forEach((p) => {
-      const hit = insuredIdForTz(payload, p?.idNumber) || insuredIdForTz(payload, p?.idNumber2);
+      const hit = insuredIdForTz(payload, p?.idNumber)
+        || insuredIdForTz(payload, p?.idNumber2)
+        || insuredIdForName(payload, p);
       if(hit && !seen.has(hit)){
         seen.add(hit);
         ids.push(hit);
@@ -2214,8 +2336,9 @@
 
   function fillInsuredData(data, person){
     const d = data && typeof data === "object" ? data : {};
-    fillEmpty(d, "firstName", person?.firstName);
-    fillEmpty(d, "lastName", person?.lastName);
+    const split = splitFullName(person?.fullName || "");
+    fillEmpty(d, "firstName", person?.firstName || split.firstName);
+    fillEmpty(d, "lastName", person?.lastName || split.lastName);
     fillEmpty(d, "idNumber", person?.idNumber);
     fillEmpty(d, "email", person?.email);
     fillEmpty(d, "phone", person?.phone);
@@ -2231,9 +2354,9 @@
 
   function ensureInsuredsFromPeople(payload, people){
     if(!Array.isArray(payload.insureds)) payload.insureds = [];
-    const source = (people || []).filter((p) => normId(p?.idNumber));
+    const source = (people || []).filter((p) => normId(p?.idNumber) || personFullName(p));
     source.forEach((person) => {
-      const existingId = insuredIdForTz(payload, person.idNumber);
+      const existingId = insuredIdForTz(payload, person.idNumber) || insuredIdForName(payload, person);
       if(existingId){
         const row = payload.insureds.find((x) => safeTrim(x?.id) === existingId);
         if(row){
@@ -2242,8 +2365,9 @@
         return;
       }
       const hasPrimary = payload.insureds.some((x) => safeTrim(x?.type) === "primary");
+      const tz = normId(person.idNumber);
       const created = {
-        id: "ins_prod_" + normId(person.idNumber),
+        id: tz ? ("ins_prod_" + tz) : ("ins_prod_nm_" + (personNameSlug(person) || "x")),
         type: hasPrimary ? (payload.insureds.some((x) => safeTrim(x?.type) === "spouse") ? "adult" : "spouse") : "primary",
         label: hasPrimary ? (payload.insureds.some((x) => safeTrim(x?.type) === "spouse") ? "מבוטח נוסף" : "בת/בן זוג") : "מבוטח ראשי",
         data: fillInsuredData({
@@ -2424,7 +2548,10 @@
   function applyToPayload(payload, item){
     const next = seedNewPolicies(payload && typeof payload === "object" ? payload : {});
     ensureInsuredsFromPeople(next, item.people || []);
-    const insuredIds = item.insuredIds || insuredIdsForCustomer({ payload: next }, item.people || []);
+    const computedIds = insuredIdsForCustomer({ payload: next }, item.people || []);
+    const insuredIds = computedIds.length
+      ? computedIds
+      : (Array.isArray(item.insuredIds) ? item.insuredIds.filter(Boolean) : []);
     item.insuredIds = insuredIds;
     const meta = {
       company: item.company,
@@ -2480,7 +2607,7 @@
   }
 
   global.GI_PRODUCTION = {
-    version: "20260827-clal-name-match-v1",
+    version: "20260827-clal-new-folder-v1",
     idOverlapsPolicy,
     relocateMisreadLifePremium,
     sanitizeCustomerPolicies,
@@ -2498,6 +2625,8 @@
     migdalPolicyNumber,
     buildPolicies,
     classifyPolicies,
+    newFolderGroupKey,
+    attachNewFolderStubs,
     matchExistingPolicy,
     productFamily,
     inferHealthProductType,

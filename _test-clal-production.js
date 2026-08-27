@@ -10,8 +10,8 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260827-clal-name-match-v1";
-const APP_CACHE = "20260827-clal-name-match-v1";
+const TAG = "20260827-clal-new-folder-v1";
+const APP_CACHE = "20260827-clal-new-folder-v1";
 let failed = 0;
 let passed = 0;
 
@@ -69,7 +69,7 @@ const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const sw = fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8");
 const engSrc = fs.readFileSync(path.join(ROOT, "gi-production-import.js"), "utf8");
 
-assert(engSrc.includes('version: "20260827-clal-name-match-v1"'), "engine version");
+assert(engSrc.includes('version: "20260827-clal-new-folder-v1"'), "engine version");
 assert(app.includes('GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=' + TAG + '"'), "app production js href");
 assert(html.includes("app.js?v=" + APP_CACHE), "index app.js cache");
 assert(sw.includes("gi-v12-" + APP_CACHE), "service-worker cache");
@@ -86,8 +86,12 @@ assert(app.includes("CI_PROD_PAYLOAD_CHUNK"), "payload hydrate in small chunks")
 assert(app.includes("customersShadow"), "production match also scans customersShadow");
 assert(engSrc.includes("אין ת״ז או טלפון תקינים בדוח הפרודוקציה"), "no-id-or-phone reason string");
 assert(!engSrc.includes("טענו קודם דוח לקוחות") && !app.includes("טענו קודם דוח לקוחות"), "does not tell user to re-upload customer report");
-assert(engSrc.includes("לא נמצא תיק במערכת לפי הת״ז") && engSrc.includes("לא נמצא תיק במערכת לפי הטלפון"), "unmatched reasons search existing folders");
+assert(engSrc.includes("יצירת תיק חדש מהפרודוקציה"), "unmatched with identity creates a folder");
+assert(engSrc.includes("ins_prod_nm_"), "name-only insureds get ins_prod_nm_ ids");
 assert(app.includes("אין צורך להעלות שוב דוח לקוחות"), "production UI says existing folders are enough");
+assert(app.includes("ייפתח תיק חדש"), "UI says unmatched identity opens a new folder");
+assert(app.includes("יצירת תיק"), "preview labels new folder vs new row");
+assert(app.includes("cust_prod_"), "production-created folder id prefix");
 assert(app.includes("personNameKeys") && engSrc.includes("personNameKeys"), "name-key helper for matching existing folders");
 assert(app.includes(".range(from, from + PAGE - 1)") || app.includes(".range(from, from + PAGE"), "production fetch pages customer roster for names");
 assert(app.includes("wantNames"), "production fetch collects names");
@@ -254,9 +258,12 @@ byId.set("123456782", { id: "cust-1", fullName: "בדיקה", idNumber: "1234567
 const classified = P.classifyPolicies(policies, byId);
 assert(classified[0] && (classified[0].action === "create" || classified[0].action === "update"), "matched ת״ז is create/update (got " + (classified[0] && classified[0].action) + ")");
 assert(classified[0] && classified[0].customer && classified[0].customer.id === "cust-1", "classified customer is cust-1");
+assert(!classified[0].newFolder, "matched existing folder is not newFolder");
 const noCust = P.classifyPolicies(policies, new Map());
-assert(noCust[0] && noCust[0].action === "skip" && noCust[0].category === "unmatched", "no customer map → unmatched skip");
-assert(noCust.filter((x) => x.action === "create" || x.action === "update").length === 0, "empty map cannot commit");
+assert(noCust[0] && noCust[0].action === "create" && noCust[0].newFolder === true, "no customer map + ת״ז → new folder create");
+assert(noCust[0] && noCust[0].category === "create", "new folder counted as יצירה");
+assert(noCust[0] && noCust[0].customer && String(noCust[0].customer.id).indexOf("cust_prod_") === 0, "new folder stub id is cust_prod_");
+assert(typeof P.newFolderGroupKey === "function", "newFolderGroupKey exported");
 
 const byPhone = new Map();
 byPhone.set("tel:0521234567", { id: "cust-p", fullName: "טל", phone: "0521234567", payload: { newPolicies: [] } });
@@ -283,7 +290,29 @@ const classifiedName = P.classifyPolicies([namedPol], byName);
 assert(classifiedName[0] && (classifiedName[0].action === "create" || classifiedName[0].action === "update"), "unique name match is create/update (got " + (classifiedName[0] && classifiedName[0].action) + ")");
 assert(classifiedName[0] && classifiedName[0].customer && classifiedName[0].customer.id === "cust-n", "name match customer is cust-n");
 const emptyName = P.classifyPolicies([namedPol], new Map());
-assert(emptyName[0] && emptyName[0].category === "unmatched", "name without folder stays unmatched");
+assert(emptyName[0] && emptyName[0].newFolder === true && emptyName[0].action === "create", "name without folder creates a new folder");
+assert(emptyName[0] && emptyName[0].customer && String(emptyName[0].customer.id).indexOf("cust_prod_") === 0, "name-only stub id is cust_prod_");
+const twoSameName = P.classifyPolicies([
+  Object.assign({}, namedPol, { policyNumber: "14993141" }),
+  Object.assign({}, namedPol, { policyNumber: "14993142" })
+], new Map());
+assert(twoSameName[0] && twoSameName[1] && twoSameName[0].customer.id === twoSameName[1].customer.id, "two policies same name share a new folder");
+assert(P.newFolderGroupKey(namedPol) === P.newFolderGroupKey(Object.assign({}, namedPol, { policyNumber: "x" })), "group key ignores policy number when name exists");
+const noIdent = {
+  company: "כלל",
+  type: "בריאות",
+  policyNumber: "999",
+  ids: [],
+  phones: [],
+  people: [],
+  premiumMonthly: "1.00",
+  inactive: false
+};
+const noIdentClass = P.classifyPolicies([noIdent], new Map());
+assert(noIdentClass[0] && noIdentClass[0].action === "skip" && noIdentClass[0].category === "unmatched", "no identity stays unmatched skip");
+const namePayload = P.applyToPayload({ insureds: [], newPolicies: [] }, Object.assign({}, namedPol, { action: "create" }));
+assert((namePayload.insureds || []).some((x) => String(x.id || "").indexOf("ins_prod_nm_") === 0), "name-only insured id is ins_prod_nm_");
+assert(String((namePayload.newPolicies || [])[0] && (namePayload.newPolicies || [])[0].id || "").indexOf("npol_prod_") === 0, "name-only policy still npol_prod_");
 
 const garbagePol = overlay(386, [
   { at: 0, bytes: "87580" },
@@ -357,7 +386,7 @@ if(fs.existsSync(path.join(healthDir, "87580.POL"))){
   const healthPols = P.buildPolicies(["87580.POL","87580.MEV","87580.TAR","87580.SGB"].map((n) => P.parseFileBuffer(n, fs.readFileSync(path.join(healthDir, n)))), "כלל");
   const emptyN = countCommit(P.classifyPolicies(healthPols, new Map()));
   console.log("  MEASURE live health 87580: policies=" + healthPols.length + " emptyMap create+update=" + emptyN + " canCommit=" + (emptyN > 0));
-  assert(emptyN === 0, "empty customer map → canCommit false (button stays disabled)");
+  assert(emptyN > 0, "empty customer map with identity → canCommit true via new folders (got " + emptyN + ")");
   const byBoth = new Map();
   healthPols.forEach((p, i) => {
     (p.ids || []).forEach((id) => {

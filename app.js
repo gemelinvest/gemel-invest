@@ -39572,7 +39572,7 @@ UsersGateUI.init();
   /* GI-PERF 2026-08-10 — CSS משני אחרי login בלבד (לא במסך הכניסה). */
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
-    "./gi-customers-import.css?v=20260827-clal-name-match-v1",
+    "./gi-customers-import.css?v=20260827-clal-new-folder-v1",
     "./theme-unify-flat.css?v=20260825-hmo-text-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
@@ -71753,7 +71753,7 @@ ${inner}
      ========================================================================== */
 
   const CUSTOMER_IMPORT_VERSION = "1.2";
-  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260827-clal-name-match-v1";
+  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260827-clal-new-folder-v1";
   const GI_PROD_FALLBACK_COMPANIES = Object.freeze([
     { id: "הכשרה", label: "הכשרה", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד." },
     { id: "הפניקס", label: "הפניקס", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
@@ -72999,7 +72999,7 @@ ${inner}
         <div class="ciHub">${cards}</div>
         <ul class="ciNotes">
           <li>כל טעינה היא של <strong>חברה אחת</strong>. קבצי הכשרה, מגדל, מנורה וכלל לא מעורבבים באותו סבב.</li>
-          <li>השיוך לתיקים שכבר במערכת (גם כאלה שנשמרו לפני שבועות) לפי ת״ז, טלפון או שם מתוך דוח הפרודוקציה. אין צורך להעלות שוב דוח לקוחות.</li>
+          <li>השיוך לתיקים שכבר במערכת (גם כאלה שנשמרו לפני שבועות) לפי ת״ז, טלפון או שם מתוך דוח הפרודוקציה. אין צורך להעלות שוב דוח לקוחות. פוליסה עם זיהוי בלי תיק קיים — ייפתח תיק חדש.</li>
           <li>מנורה: ZIP של פרט (MP) נכנס לתיק; ZIP של מבוטלות (MM) מסומן «לא פעיל» ולא נשמר.</li>
           <li>כלל: תיבת EXE או ZIP של אפקס. ממשק אחזקות (HOLDNGINP) לא נטען כאן.</li>
         </ul>`;
@@ -73030,7 +73030,7 @@ ${inner}
         <ul class="ciNotes">
           <li>פוליסה שכבר קיימת בתיק כפוליסה חדשה פעילה — תתעדכן (מספר, פרמיה, כיסויים).</li>
           <li>תיק בלי מוצר — תיווצר שורת פוליסה חדשה.</li>
-          <li>ת״ז בלי תיק תישאר ברשימת «לא נמצא תיק» ולא תיזרק על לקוח אחר.</li>
+          <li>ת״ז, טלפון או שם בלי תיק קיים — ייפתח תיק חדש. בלי זיהוי — יישאר ב«אין תיק». «לבדיקה» לא נשמר אוטומטית.</li>
           ${company === "מנורה" ? "<li>אפשר לגרור ZIP שלם. קבצי מבוטלות (MM) מסומנים «לא פעיל» ולא נכנסים לתיק.</li>" : ""}
           ${company === "כלל" ? "<li>גוררים את קובץ ה-EXE עצמו, או את תיקיית «אפקס חיים» / «אפקס חיים - בריאות» אחרי חילוץ. לא ממשק אחזקות.</li>" : ""}
         </ul>`;
@@ -73503,6 +73503,8 @@ ${inner}
       const noIdCount = items.filter((it) => it.category === "unmatched" && /אין ת״ז|אין ת״ז או טלפון/.test(String(it.reason || ""))).length;
       this.els.subtitle.textContent = "דוח פרודוקציה · " + company + " — תצוגה מקדימה";
       const fileLine = files.map((f) => escapeHtml(f.kind) + " " + f.rows).join(" · ");
+      const newFolderCount = items.filter((it) => it.category === "create" && it.newFolder).length;
+      const newRowCount = Math.max(0, counts.create - newFolderCount);
       const canCommit = (counts.update + counts.create) > 0;
       this._prodFilter = "all";
       this._prodPage = 0;
@@ -73516,8 +73518,8 @@ ${inner}
           <button class="ciChip ciChip--err" type="button" data-prod-filter="unmatched">אין תיק <span>${counts.unmatched}</span></button>
           <button class="ciChip ciChip--dup" type="button" data-prod-filter="inactive">לא פעיל <span>${counts.inactive}</span></button>
         </div>
-        <div class="ciBanner">קבצים: ${fileLine || "—"} · פרמיה מחושבת מסכומי הכיסוי (2 ספרות אחרי הנקודה). פוליסות «לבדיקה» לא יישמרו עד שתבחרו ידנית בסבב הבא.</div>
-        ${canCommit ? "" : `<div class="ciError" role="status"><div class="ciError__icon">!</div><div>לא נמצאו שורות לשיוך — הלחצן כבוי. המערכת מחפשת תיקים <strong>שכבר שמורים</strong> לפי ת״ז, טלפון או שם מתוך דוח הפרודוקציה. ${noIdCount ? noIdCount + " פוליסות בלי ת״ז/טלפון/שם לזיהוי בדוח האפקס. " : ""}${counts.unmatched && !noIdCount ? "המפתח בדוח לא תואם לאף תיק קיים. " : ""}אין צורך להעלות שוב דוח לקוחות. פוליסות «לבדיקה» לא נשמרות בסבב הזה.</div></div>`}
+        <div class="ciBanner">קבצים: ${fileLine || "—"} · פרמיה מחושבת מסכומי הכיסוי (2 ספרות אחרי הנקודה). פוליסה עם ת״ז/טלפון/שם בלי תיק קיים תיצור תיק חדש. פוליסות «לבדיקה» לא יישמרו עד שתבחרו ידנית בסבב הבא.</div>
+        ${canCommit ? "" : `<div class="ciError" role="status"><div class="ciError__icon">!</div><div>לא נמצאו שורות לשיוך — הלחצן כבוי. ${noIdCount ? noIdCount + " פוליסות בלי ת״ז/טלפון/שם לזיהוי בדוח. " : ""}אין צורך להעלות שוב דוח לקוחות. פוליסות «לבדיקה» לא נשמרות בסבב הזה.</div></div>`}
         <div class="ciTableWrap">
           <table class="ciTable">
             <thead><tr><th>#</th><th>פוליסה</th><th>מוצר</th><th>תיק / מבוטחים</th><th>פרמיה</th><th>פעולה</th></tr></thead>
@@ -73526,10 +73528,10 @@ ${inner}
         </div>
         <div class="ciPager" id="ciProdPager"></div>`;
       this.els.foot.innerHTML = `
-        <div class="ciFoot__summary">${counts.update} עדכונים · ${counts.create} יצירות · ${counts.unmatched + counts.review + counts.inactive} דלג</div>
+        <div class="ciFoot__summary">${counts.update} עדכונים · ${newRowCount} יצירות שורה · ${newFolderCount} יצירות תיק · ${counts.unmatched + counts.review + counts.inactive} דלג</div>
         <div class="ciFoot__actions">
           <button class="btn" type="button" id="ciProdBackFiles">חזרה לקבצים</button>
-          <button class="btn btn--primary" type="button" id="ciProdCommit"${canCommit ? "" : " disabled"} title="${canCommit ? "שמירה לתיקים שזוהו לפי ת״ז, טלפון או שם" : "אין שורות לעדכון או יצירה — אין תיק תואם"}">אשר ושייך לתיקים</button>
+          <button class="btn btn--primary" type="button" id="ciProdCommit"${canCommit ? "" : " disabled"} title="${canCommit ? "שמירה לתיקים קיימים ויצירת תיקים חדשים לפי ת״ז, טלפון או שם" : "אין שורות לעדכון או יצירה — אין תיק תואם ואין זיהוי ליצירת תיק"}">אשר ושייך לתיקים</button>
         </div>`;
       this.paintProductionPreviewRows();
       if(!this._prodPreviewClickBound){
@@ -73593,13 +73595,14 @@ ${inner}
         const idx = items.indexOf(it);
         const custName = it.customer ? escapeHtml(it.customer.fullName) : "—";
         const people = (it.people || []).map((p) => escapeHtml(p.fullName || p.idNumber)).filter(Boolean).slice(0, 3).join(" · ");
+        const actionLabel = (it.category === "create" && it.newFolder) ? "יצירת תיק" : (catLabel[it.category] || it.category);
         return `<tr class="ciRow ciRow--${escapeHtml(it.category)}">
           <td class="ciMono">${idx + 1}</td>
           <td class="ciMono">${escapeHtml(it.policyNumber || "")}</td>
           <td>${escapeHtml(it.type || "")}</td>
           <td>${custName}<div class="ciIssues">${people}</div></td>
           <td class="ciMono">${escapeHtml(it.premiumMonthly || "—")}</td>
-          <td><span class="ciBadge ciBadge--${badge[it.category] || "dup"}">${catLabel[it.category] || it.category}</span><div class="ciIssues">${escapeHtml(it.reason || "")}</div></td>
+          <td><span class="ciBadge ciBadge--${badge[it.category] || "dup"}">${actionLabel}</span><div class="ciIssues">${escapeHtml(it.reason || "")}</div></td>
         </tr>`;
       }).join("") : `<tr><td colspan="6" class="muted" style="text-align:center;padding:24px">אין רשומות בקטגוריה הזו</td></tr>`;
       if(pager){
@@ -73640,52 +73643,86 @@ ${inner}
       });
       let okCount = 0;
       let failCount = 0;
+      let createdFolderCount = 0;
       const touchedIds = [];
       for(let i = 0; i < custIds.length; i++){
         const custId = custIds[i];
         try {
+          const batch = byCust.get(custId) || [];
+          const isNewFolder = batch.some((it) => it.newFolder || it.customer?.isNewFolder)
+            || String(custId).indexOf("cust_prod_") === 0;
           const resLoad = await Storage.loadSingleRow(SUPABASE_TABLES.customers, custId, "*");
           const existingFull = (resLoad?.ok && resLoad.data) ? resLoad.data : null;
-          /* בלי שורה מלאה מהשרת אסור לבנות payload חדש — זה דורס את התיק. */
-          if(!existingFull){
+          /* בלי שורה מלאה מהשרת אסור לבנות payload חדש על תיק קיים — זה דורס את התיק.
+             תיק חדש מהפרודוקציה (cust_prod_) כן נבנה כאן. */
+          if(!existingFull && !isNewFolder){
             failCount++;
             continue;
           }
-          const rec = normalizeCustomerRecord({
-            id: existingFull.id || custId,
-            status: existingFull.status,
-            fullName: existingFull.full_name,
-            idNumber: existingFull.id_number,
-            phone: existingFull.phone,
-            email: existingFull.email,
-            city: existingFull.city,
-            agentId: existingFull.agent_id,
-            agentName: existingFull.agent_name,
-            agentRole: existingFull.agent_role,
-            createdAt: existingFull.created_at,
-            payload: existingFull.payload
-          });
-          const expectedContent = (
-            Number(existingFull.insured_count || rec.insuredCount || 0) +
-            Number(existingFull.new_policies_count || rec.newPoliciesCount || 0) +
-            Number(existingFull.existing_policies_count || rec.existingPoliciesCount || 0)
-          ) > 0;
-          if(expectedContent && Storage.payloadIsEmpty?.(rec)){
-            failCount++;
-            continue;
+          let rec;
+          if(existingFull){
+            rec = normalizeCustomerRecord({
+              id: existingFull.id || custId,
+              status: existingFull.status,
+              fullName: existingFull.full_name,
+              idNumber: existingFull.id_number,
+              phone: existingFull.phone,
+              email: existingFull.email,
+              city: existingFull.city,
+              agentId: existingFull.agent_id,
+              agentName: existingFull.agent_name,
+              agentRole: existingFull.agent_role,
+              createdAt: existingFull.created_at,
+              payload: existingFull.payload
+            });
+            const expectedContent = (
+              Number(existingFull.insured_count || rec.insuredCount || 0) +
+              Number(existingFull.new_policies_count || rec.newPoliciesCount || 0) +
+              Number(existingFull.existing_policies_count || rec.existingPoliciesCount || 0)
+            ) > 0;
+            if(expectedContent && Storage.payloadIsEmpty?.(rec)){
+              failCount++;
+              continue;
+            }
+          } else {
+            const stub = batch[0]?.customer || {};
+            const now = nowISO();
+            rec = normalizeCustomerRecord({
+              id: custId,
+              status: "חדש",
+              fullName: stub.fullName,
+              idNumber: stub.idNumber,
+              phone: stub.phone,
+              city: stub.city,
+              createdAt: now,
+              updatedAt: now,
+              payload: {
+                insureds: [],
+                newPolicies: [],
+                importSource: {
+                  kind: "production-new-folder",
+                  company: this._prod?.company,
+                  importedAt: now,
+                  importedBy: safeTrim(Auth?.current?.name)
+                }
+              }
+            });
+            stampRecordAgentOwnership(rec, { force: true });
           }
           let payload = rec.payload && typeof rec.payload === "object" ? rec.payload : {};
-          byCust.get(custId).forEach((it) => {
+          batch.forEach((it) => {
             it.insuredIds = P.insuredIdsForCustomer(rec, it.people || []);
             payload = P.applyToPayload(payload, it);
           });
           rec.payload = payload;
           rec.newPoliciesCount = Array.isArray(payload.newPolicies) ? payload.newPolicies.length : rec.newPoliciesCount;
+          rec.insuredCount = Array.isArray(payload.insureds) ? payload.insureds.length : rec.insuredCount;
           rec.updatedAt = nowISO();
           const row = Storage.buildCustomerRows({ customers: [rec] })[0];
           const saved = await Storage.upsertSingleRow(SUPABASE_TABLES.customers, row);
           if(saved?.ok){
             okCount++;
+            if(!existingFull) createdFolderCount++;
             touchedIds.push(custId);
             try { Storage.rememberRows(SUPABASE_TABLES.customers, [row]); } catch(_e) {}
             try { ensureCustomerInActiveList(rec, { skipShadowRefresh: true }); } catch(_e) {}
@@ -73715,6 +73752,7 @@ ${inner}
             company: this._prod?.company,
             files: this._prod?.files,
             updatedCustomers: okCount,
+            createdFolders: createdFolderCount,
             failed: failCount,
             policies: items.length,
             customerIds: touchedIds
@@ -73741,8 +73779,8 @@ ${inner}
         <div class="ciDone">
           <div class="ciDone__icon">✅</div>
           <div class="ciDone__stats">
-            <div><strong>${okCount}</strong> תיקים עודכנו</div>
-            <div>${items.length} פוליסות שויכו</div>
+            <div><strong>${okCount}</strong> תיקים עודכנו או נוצרו</div>
+            <div>${createdFolderCount ? createdFolderCount + " תיקים חדשים · " : ""}${items.length} פוליסות שויכו</div>
             ${failCount ? `<div class="ciDone__err"><strong>${failCount}</strong> נכשלו</div>` : ""}
           </div>
         </div>`;
