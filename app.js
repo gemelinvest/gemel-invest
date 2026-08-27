@@ -2142,25 +2142,6 @@
   }
 
   /* GI-OPS-SUBMIT-MIRROR-START */
-  const OPS_WAITING_MIRROR_LAST_CREATED_LIMIT = 5;
-
-  function listCustomersByCreatedAtDesc(){
-    const customers = Array.isArray(State?.data?.customers) ? State.data.customers : [];
-    return customers.slice().sort((a, b) => {
-      const tb = Date.parse(safeTrim(b?.createdAt) || "") || 0;
-      const ta = Date.parse(safeTrim(a?.createdAt) || "") || 0;
-      if(tb !== ta) return tb - ta;
-      return String(safeTrim(b?.id)).localeCompare(String(safeTrim(a?.id)));
-    });
-  }
-
-  function isAmongLastCreatedCustomers(rec, limit){
-    const n = Math.max(1, Number(limit) || OPS_WAITING_MIRROR_LAST_CREATED_LIMIT);
-    const id = safeTrim(rec?.id);
-    if(!id) return false;
-    return listCustomersByCreatedAtDesc().slice(0, n).some((row) => safeTrim(row?.id) === id);
-  }
-
   function hasSubmittedHealthRisksToOps(rec){
     const ops = rec?.payload?.opsProcess && typeof rec.payload.opsProcess === "object"
       ? rec.payload.opsProcess
@@ -2168,10 +2149,10 @@
     return !!safeTrim(ops.submittedToOpsAt);
   }
 
-  /** ממתינים לשיקוף: רק 5 הלקוחות האחרונים שהוקמו, שעדיין לא בשיחה ולא בתוצאת שיקוף */
+  /** ממתינים לשיקוף: רק הצעות שהוגשו בלחיצה על «הגש לתפעול», שעדיין לא בשיחה ולא בתוצאת שיקוף */
   function isWaitingMirrorQueueCustomer(rec){
     if(!isHealthRisksWizardCompleted(rec)) return false;
-    if(!isAmongLastCreatedCustomers(rec, OPS_WAITING_MIRROR_LAST_CREATED_LIMIT)) return false;
+    if(!hasSubmittedHealthRisksToOps(rec)) return false;
     const call = getMirrorCallStore(rec);
     if(call?.active) return false;
     const ops = getOpsStatePresentation(rec);
@@ -24561,6 +24542,17 @@ UsersGateUI.init();
       const corr = (opsStore.correspondence && typeof opsStore.correspondence === "object") ? opsStore.correspondence : {};
       const threadItems = Array.isArray(corr.items) ? corr.items : [];
       const statusLog = Array.isArray(opsStore.statusLog) ? opsStore.statusLog : [];
+      const fmtOpsClock = (raw) => {
+        const value = safeTrim(raw);
+        if(!value) return "";
+        const d = new Date(value);
+        if(Number.isNaN(d.getTime())) return value;
+        try {
+          return d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+        } catch(_e) {
+          return value;
+        }
+      };
       const fmtOpsStamp = (raw) => {
         const value = safeTrim(raw);
         if(!value) return "";
@@ -24568,7 +24560,12 @@ UsersGateUI.init();
       };
       const statusRowsHtml = statusLog.length ? `<div class="customerOpsStatusLog">${statusLog.map((row) => {
         const item = row && typeof row === "object" ? row : {};
-        const meta = [safeTrim(item.by), fmtOpsStamp(item.at)].filter(Boolean).join(" · ");
+        const agent = safeTrim(item.by);
+        const clock = fmtOpsClock(item.at);
+        const meta = [
+          agent ? ("נציג משקף: " + agent) : "",
+          clock ? ("שעה: " + clock) : ""
+        ].filter(Boolean).join(" · ");
         return `<div class="customerOpsStatusRow" data-ops-status-key="${escapeHtml(item.key || "")}">
           <span class="customerOpsStatusRow__label">${escapeHtml(item.label || "")}</span>
           ${meta ? `<span class="customerOpsStatusRow__meta">${escapeHtml(meta)}</span>` : ""}
@@ -31179,6 +31176,26 @@ UsersGateUI.init();
           const premium = this.getPremium(rec);
           const arrival = this.queueArrivalStamp(rec);
           const stamp = arrival || safeTrim(ops.updatedText) || safeTrim(rec.updatedAt) || safeTrim(rec.createdAt);
+          const opsStore = rec?.payload?.opsProcess && typeof rec.payload.opsProcess === "object"
+            ? rec.payload.opsProcess
+            : {};
+          const laneKey = safeTrim(opsStore.waitingMirrorLane);
+          const statusLog = Array.isArray(opsStore.statusLog) ? opsStore.statusLog : [];
+          let laneDoc = null;
+          for(let i = statusLog.length - 1; i >= 0; i--){
+            if(!laneKey || safeTrim(statusLog[i]?.key) === laneKey){
+              laneDoc = statusLog[i];
+              break;
+            }
+          }
+          let laneClock = "";
+          if(laneDoc?.at){
+            const d = new Date(laneDoc.at);
+            if(!Number.isNaN(d.getTime())){
+              try { laneClock = d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" }); }
+              catch(_e){ laneClock = safeTrim(laneDoc.at); }
+            }
+          }
           return {
             id: safeTrim(rec.id),
             rec,
@@ -31191,7 +31208,13 @@ UsersGateUI.init();
             waitLabel: formatRelativeTimeHe(stamp) || "—",
             statusLabel: this.bucketLabel(bucket),
             agentName: safeTrim(assign?.agentName) || "לא משויך",
-            salesAgentName: safeTrim(rec.agentName) || "—"
+            salesAgentName: safeTrim(rec.agentName) || "—",
+            laneKey,
+            laneLabel: (typeof OpsThreadLane !== "undefined" && OpsThreadLane.getLabel)
+              ? (OpsThreadLane.getLabel(laneKey) || "")
+              : "",
+            laneBy: safeTrim(laneDoc?.by),
+            laneClock
           };
         })
         .sort((a, b) => new Date(a.arrival || a.stamp || 0) - new Date(b.arrival || b.stamp || 0));
@@ -31400,6 +31423,8 @@ UsersGateUI.init();
                     <span>ת״ז ${escapeHtml(safeTrim(row.rec.idNumber) || "—")}</span>
                     <span>טל׳ ${escapeHtml(safeTrim(row.rec.phone) || "—")}</span>
                     <span>נציג מכירות: ${escapeHtml(row.salesAgentName)}</span>
+                    ${row.laneLabel ? `<span>סטטוס: ${escapeHtml(row.laneLabel)}</span>` : ""}
+                    ${row.laneBy ? `<span>שיקף: ${escapeHtml(row.laneBy)}${row.laneClock ? " · " + escapeHtml(row.laneClock) : ""}</span>` : ""}
                   </div>
                 </div>
                 <div class="opsDashQueueRow__side">
@@ -31567,8 +31592,8 @@ UsersGateUI.init();
               <div>
                 <div class="opsDashPanel__title">ממתינים לשיקוף</div>
                 <div class="opsDashPanel__sub">${isManager
-                  ? "לקוחות שנסגרו באשף בריאות וסיכונים · לפי סדר כניסה לתור"
-                  : "לקוחות ששויכו אליך וממתינים לשיחת שיקוף"}</div>
+                  ? "הצעות שהוגשו לתפעול · לפי סדר כניסה לתור"
+                  : "הצעות ששויכו אליך וממתינות לשיחת שיקוף"}</div>
               </div>
               <div class="opsDashPanel__headActions">
                 <span class="opsDashPanel__sub">${model.waitingMirrorRows.length} לקוחות</span>
@@ -31621,7 +31646,7 @@ UsersGateUI.init();
       const queueHtml = listBucket === "waiting_typing"
         ? typingListHtml
         : (listBucket === "waiting_mirror" ? waitingListHtml : "");
-      const agentsHtml = listBucket ? "" : `<div class="opsDash__mid opsDash__mid--agents">
+      const agentsHtml = (!listBucket && isManager) ? `<div class="opsDash__mid opsDash__mid--agents">
             <article class="card opsDashPanel opsDashPanel--agents">
               <div class="opsDashPanel__head">
                 <div class="opsDashPanel__title">מעקב נציגים בשיחה</div>
@@ -31643,7 +31668,7 @@ UsersGateUI.init();
                 <div class="opsDashLegend">${legendHtml}</div>
               </div>
             </article>
-          </div>`;
+          </div>` : "";
 
       mount.innerHTML = `
         <section class="opsDash${listBucket ? " opsDash--queueScreen" : " opsDash--home"}" dir="rtl" aria-label="${listBucket ? "חוצץ תפעול" : "דשבורד תפעול"}">
@@ -60946,16 +60971,14 @@ ${inner}
     },
 
     PREFLIGHT_STEPS: Object.freeze([
-      { key: "intro", n: 1, label: "הצגה עצמית" },
-      { key: "personal", n: 2, label: "פרטי מבוטח/ים" },
-      { key: "needs", n: 3, label: "בירור והתאמת צרכים" },
-      { key: "disclosure", n: 4, label: "גילוי נאות" },
-      { key: "cancel", n: 5, label: "שאלון ביטול" },
-      { key: "beneficiaries", n: 6, label: "פרטי מוטבים" },
-      { key: "health", n: 7, label: "הצהרת בריאות" },
-      { key: "future", n: 8, label: "שינוי או ביטול בעתיד" },
-      { key: "payment", n: 9, label: "פרטי אמצעי תשלום" },
-      { key: "summary", n: 10, label: "סיכום והצהרות" }
+      { key: "personal", label: "פרטי מבוטח/ים" },
+      { key: "needs", label: "בירור והתאמת צרכים" },
+      { key: "disclosure", label: "גילוי נאות" },
+      { key: "cancel", label: "שאלון ביטול" },
+      { key: "beneficiaries", label: "פרטי מוטבים" },
+      { key: "health", label: "הצהרת בריאות" },
+      { key: "payment", label: "פרטי אמצעי תשלום" },
+      { key: "summary", label: "סיכום והצהרות" }
     ]),
 
     _preFlightReviewedSet(){
@@ -61406,7 +61429,6 @@ ${inner}
         const open = openKey === step.key;
         return `<li class="mcPreFlightItem${done ? " is-done" : ""}${open ? " is-open" : ""}" data-mc-prestep="${escapeHtml(step.key)}">` +
           `<button type="button" class="mcPreFlightItem__btn" data-mc-prestep-open="${escapeHtml(step.key)}">` +
-            `<span class="mcPreFlightItem__n">${step.n}</span>` +
             `<span class="mcPreFlightItem__body">` +
               `<span class="mcPreFlightItem__title">${escapeHtml(step.label)}</span>` +
               `<span class="mcPreFlightItem__sum">${escapeHtml(this._preFlightStepSummary(rec, step.key))}</span>` +

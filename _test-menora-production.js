@@ -11,6 +11,7 @@ const vm = require("vm");
 
 const ROOT = __dirname;
 const TAG = "20260826-menora-prod-v1";
+const APP_CACHE = "20260827-ops-mirror-ui-v1";
 let failed = 0;
 let passed = 0;
 
@@ -53,8 +54,8 @@ const engSrc = fs.readFileSync(path.join(ROOT, "gi-production-import.js"), "utf8
 
 assert(engSrc.includes('version: "20260826-menora-prod-v1"'), "engine version");
 assert(app.includes('GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=' + TAG + '"'), "app production js href");
-assert(html.includes("app.js?v=" + TAG), "index app.js cache");
-assert(sw.includes("gi-v12-" + TAG), "service-worker cache");
+assert(html.includes("app.js?v=" + APP_CACHE), "index app.js cache");
+assert(sw.includes("gi-v12-" + APP_CACHE), "service-worker cache");
 assert(app.includes('id === "מנורה"'), "forceReady includes Menora");
 assert(app.includes("productionPathLooksCancelled"), "zip cancelled helper");
 assert(app.includes("JSZip.loadAsync"), "zip expansion in handleProductionFiles");
