@@ -85,6 +85,9 @@ assert(app.includes("paintProductionPreviewRows"), "production preview is pagina
 assert(app.includes("CI_PROD_PAYLOAD_CHUNK"), "payload hydrate in small chunks");
 assert(app.includes("customersShadow"), "production match also scans customersShadow");
 assert(engSrc.includes("אין ת״ז או טלפון תקינים בדוח הפרודוקציה"), "no-id-or-phone reason string");
+assert(!engSrc.includes("טענו קודם דוח לקוחות") && !app.includes("טענו קודם דוח לקוחות"), "does not tell user to re-upload customer report");
+assert(engSrc.includes("לא נמצא תיק במערכת לפי הת״ז") && engSrc.includes("לא נמצא תיק במערכת לפי הטלפון"), "unmatched reasons search existing folders");
+assert(app.includes("אין צורך להעלות שוב דוח לקוחות"), "production UI says existing folders are enough");
 assert(app.includes('.in("phone"') || app.includes(".in(\"phone\""), "customer fetch queries phone column");
 assert(app.includes("wantPhones"), "production fetch collects phones");
 assert(fs.readFileSync(path.join(ROOT, "gi-customers-import.css"), "utf8").includes("min-height:0"), "modal body min-height");
@@ -331,7 +334,7 @@ if(fs.existsSync(path.join(healthDir, "87580.POL"))){
   });
   const matchedN = countCommit(P.classifyPolicies(healthPols, byBoth));
   console.log("  MEASURE live health 87580: id+phone map size=" + byBoth.size + " create+update=" + matchedN + " canCommit=" + (matchedN > 0));
-  assert(matchedN > 0, "with matching ת״ז/טלפון from דוח לקוחות, canCommit true (got " + matchedN + ")");
+  assert(matchedN > 0, "with matching ת״ז/טלפון already in the customer table, canCommit true (got " + matchedN + ")");
 }
 
 console.log("\n" + passed + " passed, " + failed + " failed");

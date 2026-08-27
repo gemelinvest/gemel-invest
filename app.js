@@ -72999,7 +72999,7 @@ ${inner}
         <div class="ciHub">${cards}</div>
         <ul class="ciNotes">
           <li>כל טעינה היא של <strong>חברה אחת</strong>. קבצי הכשרה, מגדל, מנורה וכלל לא מעורבבים באותו סבב.</li>
-          <li>קודם תיק במערכת (דוח לקוחות), ואחר כך הפרודוקציה — השיוך לפי ת״ז.</li>
+          <li>השיוך לתיקים שכבר במערכת (גם כאלה שנשמרו לפני שבועות) לפי ת״ז או טלפון מתוך דוח הפרודוקציה. אין צורך להעלות שוב דוח לקוחות.</li>
           <li>מנורה: ZIP של פרט (MP) נכנס לתיק; ZIP של מבוטלות (MM) מסומן «לא פעיל» ולא נשמר.</li>
           <li>כלל: תיבת EXE או ZIP של אפקס. ממשק אחזקות (HOLDNGINP) לא נטען כאן.</li>
         </ul>`;
@@ -73448,7 +73448,7 @@ ${inner}
           <button class="ciChip ciChip--dup" type="button" data-prod-filter="inactive">לא פעיל <span>${counts.inactive}</span></button>
         </div>
         <div class="ciBanner">קבצים: ${fileLine || "—"} · פרמיה מחושבת מסכומי הכיסוי (2 ספרות אחרי הנקודה). פוליסות «לבדיקה» לא יישמרו עד שתבחרו ידנית בסבב הבא.</div>
-        ${canCommit ? "" : `<div class="ciError" role="status"><div class="ciError__icon">!</div><div>לא נמצאו שורות לשיוך — הלחצן כבוי. טענו קודם <strong>דוח לקוחות</strong> לאותן ת״ז או טלפונים. ${noIdCount ? noIdCount + " פוליסות בלי ת״ז/טלפון תקינים בדוח (נפוץ בחיים של כלל) לא ניתנות לשיוך אוטומטי. " : ""}${counts.unmatched && !noIdCount ? "יש ת״ז או טלפון בדוח אבל אין תיק תואם במערכת. " : ""}פוליסות מסומנות «לבדיקה» לא נשמרות בסבב הזה.</div></div>`}
+        ${canCommit ? "" : `<div class="ciError" role="status"><div class="ciError__icon">!</div><div>לא נמצאו שורות לשיוך — הלחצן כבוי. המערכת מחפשת תיקים <strong>שכבר שמורים</strong> לפי הת״ז והטלפון שבדוח הפרודוקציה. ${noIdCount ? noIdCount + " פוליסות בלי ת״ז/טלפון תקינים בדוח האפקס (נפוץ בחיים של כלל) לא ניתנות לשיוך אוטומטי. " : ""}${counts.unmatched && !noIdCount ? "המפתח בדוח לא תואם לאף תיק קיים. " : ""}אין צורך להעלות שוב דוח לקוחות. פוליסות «לבדיקה» לא נשמרות בסבב הזה.</div></div>`}
         <div class="ciTableWrap">
           <table class="ciTable">
             <thead><tr><th>#</th><th>פוליסה</th><th>מוצר</th><th>תיק / מבוטחים</th><th>פרמיה</th><th>פעולה</th></tr></thead>
