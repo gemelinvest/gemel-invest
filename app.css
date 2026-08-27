@@ -43968,6 +43968,13 @@ body.view-elementaryMirror-active .pageTitle{ /* keep default */ }
   color:#0f2f6d;
   line-height:1.15;
 }
+#view-dashboard .opsDash__hello{
+  margin:6px 0 0;
+  font-size:16px;
+  font-weight:700;
+  color:#334155;
+  line-height:1.35;
+}
 #view-dashboard .opsDash__sub{
   margin:8px 0 0;
   color:#64748b;

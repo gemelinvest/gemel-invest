@@ -31267,12 +31267,11 @@ UsersGateUI.init();
 
     filterWaitingMirrorRowsByLane(rows){
       const list = Array.isArray(rows) ? rows : [];
-      const scheduledIds = this.scheduledMirrorCustomerIds();
       const lane = safeTrim(this._waitingMirrorLane) || "no_answer_1";
       const counts = {};
       this.WAITING_MIRROR_LANES.forEach((item) => { counts[item.key] = 0; });
       const tagged = list.map((row) => {
-        const key = this.waitingMirrorLaneOf(row, scheduledIds);
+        const key = safeTrim(row.laneKey) || "no_answer_1";
         counts[key] = (counts[key] || 0) + 1;
         return { row, key };
       });
@@ -31579,10 +31578,6 @@ UsersGateUI.init();
             <strong class="opsDashLegend__count">${statusTotal} <span class="opsDashLegend__pct">(${statusTotal ? 100 : 0}%)</span></strong>
           </div>`;
 
-      const iconPhone = `<svg class="opsDashActIcon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7v2.2c0 .5-.2 1-.5 1.4L3.2 15A1.5 1.5 0 0 0 4.5 17.3h15a1.5 1.5 0 0 0 1.3-2.3l-1.3-2.4c-.3-.4-.5-.9-.5-1.4V9a7 7 0 0 0-7-7Zm0 18a3.2 3.2 0 0 0 3-2H9a3.2 3.2 0 0 0 3 2Z"/></svg>`;
-      const iconUsers = `<svg class="opsDashActIcon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 11a3.5 3.5 0 1 0-3.5-3.5A3.5 3.5 0 0 0 9 11Zm6 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3ZM3.8 18.6A5.7 5.7 0 0 1 9 15.5a5.7 5.7 0 0 1 5.2 3.1 1 1 0 0 1-.9 1.4H4.7a1 1 0 0 1-.9-1.4Zm10.5-.1A7.4 7.4 0 0 1 15 15.5a4.8 4.8 0 0 1 4.5 2.8 1 1 0 0 1-.9 1.5h-3.4a2.2 2.2 0 0 1-.9-.3Z"/></svg>`;
-      const iconDoc = `<svg class="opsDashActIcon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm7 1.5V8h4.5L14 3.5ZM8 12h8v1.6H8V12Zm0 3.4h8V17H8v-1.6Zm0-6.8h5V10H8V8.6Z"/></svg>`;
-
       const waitingLane = listBucket === "waiting_mirror"
         ? this.filterWaitingMirrorRowsByLane(model.waitingMirrorRows)
         : null;
@@ -31671,23 +31666,23 @@ UsersGateUI.init();
           </div>` : "";
 
       mount.innerHTML = `
-        <section class="opsDash${listBucket ? " opsDash--queueScreen" : " opsDash--home"}" dir="rtl" aria-label="${listBucket ? "חוצץ תפעול" : "דשבורד תפעול"}">
+        <section class="opsDash${listBucket ? " opsDash--queueScreen" : " opsDash--home"}${listBucket === "waiting_mirror" ? " opsDash--waitingHead" : ""}" dir="rtl" aria-label="${listBucket ? "חוצץ תפעול" : "דשבורד תפעול"}">
           <header class="opsDash__head">
             <div>
               <div class="opsDash__kicker">${escapeHtml(roleLabel)}</div>
-              <h1 class="opsDash__title">${escapeHtml(getTimeGreeting() + " " + name)}</h1>
+              ${listBucket === "waiting_mirror"
+                ? `<p class="opsDash__hello">${escapeHtml(getTimeGreeting() + " " + name)}</p>`
+                : `<h1 class="opsDash__title">${escapeHtml(getTimeGreeting() + " " + name)}</h1>
               <p class="opsDash__sub">${listBucket
-                ? (listBucket === "waiting_typing" ? "מסך ממתינים להקלדה" : "מסך ממתינים לשיקוף")
+                ? (listBucket === "waiting_typing" ? "מסך ממתינים להקלדה" : "")
                 : (isManager
                   ? "מעקב חי אחרי נציגי התפעול בשיחת שיקוף"
-                  : "מוצגים רק הלקוחות ששויכו אליך לטיפול")}</p>
+                  : "מוצגים רק הלקוחות ששויכו אליך לטיפול")}</p>`}
             </div>
             <div class="opsDash__actions">
               ${listBucket
                 ? `<button class="btn opsDashAct" type="button" data-ops-dash-back>חזרה לדשבורד</button>`
-                : `<button class="btn btn--primary opsDashAct" type="button" data-ops-dash-go="mirrorCall">${iconPhone}<span>שיחת שיקוף</span></button>
-              ${isManager ? `<button class="btn opsDashAct" type="button" data-ops-dash-go="mirrorAssignments">${iconUsers}<span>שיוכי שיקוף</span></button>
-              <button class="btn opsDashAct" type="button" data-ops-dash-go="myProcesses">${iconDoc}<span>התהליכים שלי</span></button>` : ""}`}
+                : ""}
             </div>
           </header>
 
@@ -67250,6 +67245,8 @@ ${inner}
       const q = safeTrim(this.els.search?.value || "").toLowerCase();
       const customers = State.data?.customers || [];
       const list = customers.filter(c => {
+        if(typeof isHealthRisksWizardCompleted === "function" && !isHealthRisksWizardCompleted(c)) return false;
+        if(typeof hasSubmittedHealthRisksToOps === "function" && !hasSubmittedHealthRisksToOps(c)) return false;
         const name = safeTrim(c.fullName).toLowerCase();
         const idNum = safeTrim(c.idNumber);
         const phone = safeTrim(c.phone);
@@ -67257,7 +67254,7 @@ ${inner}
         const assignLabel = safeTrim(as?.agentName).toLowerCase();
         if(q && !name.includes(q) && !idNum.includes(q) && !phone.includes(q) && !assignLabel.includes(q)) return false;
         return true;
-      }).slice(0, 400);
+      });
       if(this.els.badge) this.els.badge.textContent = list.length + " לקוחות";
       this.els.tbody.innerHTML = list.map(c => {
         const as = getMirrorAssign(c);
