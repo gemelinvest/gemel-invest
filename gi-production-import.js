@@ -2272,7 +2272,7 @@
   }
 
   global.GI_PRODUCTION = {
-    version: "20260827-clal-prod-v1",
+    version: "20260827-clal-exe-zip-v1",
     relocateMisreadLifePremium,
     sanitizeCustomerPolicies,
     COMPANIES,
