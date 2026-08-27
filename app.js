@@ -71753,20 +71753,21 @@ ${inner}
      ========================================================================== */
 
   const CUSTOMER_IMPORT_VERSION = "1.2";
-  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260826-menora-prod-v1";
+  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260827-clal-prod-v1";
   const GI_PROD_FALLBACK_COMPANIES = Object.freeze([
     { id: "הכשרה", label: "הכשרה", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד." },
     { id: "הפניקס", label: "הפניקס", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
     { id: "מגדל", label: "מגדל", ready: true, hint: "קבצי LIFEHLTH, LIFE, COVRLIFE, PERSON (.MBT)", dropHint: "מגדל: LIFEHLTH (בריאות), LIFE (חיים), COVRLIFE (כיסויים), PERSON (מבוטחים). אפשר גם AGENTS / COMPANY." },
     { id: "מנורה", label: "מנורה", ready: true, hint: "קבצי M, N, G, P + TRFR (ZIP פרט / מבוטלות)", dropHint: "מנורה: ZIP של פרט (MP) או מבוטלות (MM), או קבצי ‎*M.TXT / *N.TXT / *G.TXT / *P.TXT ו־TRFR.ALL." },
-    { id: "כלל", label: "כלל", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
+    { id: "כלל", label: "כלל", ready: true, hint: "תיבת EXE / ZIP של אפקס (POL, MEV, TAR, SGB)", dropHint: "כלל: תיבת EXE או ZIP של אפקס חיים / אפקס בריאות, או קבצי POL, MEV, TAR, SGB. ממשק אחזקות לא נטען כאן." },
     { id: "איילון", label: "איילון", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" }
   ]);
   function giProductionEngineIsCurrent(eng){
     if(!eng || typeof eng.parseFileBuffer !== "function") return false;
     const migdal = (eng.COMPANIES || []).find((c) => c && c.id === "מגדל");
     const menora = (eng.COMPANIES || []).find((c) => c && c.id === "מנורה");
-    return !!(migdal && migdal.ready === true && menora && menora.ready === true);
+    const clal = (eng.COMPANIES || []).find((c) => c && c.id === "כלל");
+    return !!(migdal && migdal.ready === true && menora && menora.ready === true && clal && clal.ready === true);
   }
   function productionCompanyList(){
     const fromEngine = Array.isArray(window.GI_PRODUCTION?.COMPANIES) ? window.GI_PRODUCTION.COMPANIES : [];
@@ -71775,7 +71776,7 @@ ${inner}
       const id = safeTrim(c?.id);
       if(!id) return;
       const prev = byId.get(id) || {};
-      const forceReady = (id === "הכשרה" || id === "מגדל" || id === "מנורה");
+      const forceReady = (id === "הכשרה" || id === "מגדל" || id === "מנורה" || id === "כלל");
       byId.set(id, Object.assign({}, prev, c, {
         ready: forceReady ? true : !!c.ready,
         hint: forceReady ? (prev.hint || c.hint) : (c.hint || prev.hint),
@@ -71791,8 +71792,28 @@ ${inner}
     return false;
   }
   function isProductionLookupFile(name){
-    const base = String(name || "").split(/[/\\]/).pop().toUpperCase();
-    return /^(BANKIM|SNIFIM|MIQZOA|MADAD|TRFN|SEFERBNK)\.ALL$/.test(base);
+    const s = String(name || "");
+    const base = s.split(/[/\\]/).pop().toUpperCase();
+    if(/^(BANKIM|SNIFIM|MIQZOA|MADAD|TRFN|SEFERBNK)\.ALL$/.test(base)) return true;
+    if(/HOLDNGINP/i.test(s) || /אחזקות/.test(s)) return true;
+    if(/\.(TRF|SGP|MAS|HLV|MV2)$/i.test(base)) return true;
+    return false;
+  }
+  function isProductionArchiveName(name){
+    return /\.(zip|exe)$/i.test(String(name || ""));
+  }
+  async function loadProductionArchive(arrayBuffer, fileName){
+    let buf = arrayBuffer;
+    const u8 = new Uint8Array(arrayBuffer);
+    const looksExe = /\.exe$/i.test(fileName || "") || (u8.length >= 2 && u8[0] === 0x4d && u8[1] === 0x5a);
+    if(looksExe){
+      const off = typeof window.GI_PRODUCTION?.findEmbeddedZipOffset === "function"
+        ? window.GI_PRODUCTION.findEmbeddedZipOffset(u8)
+        : -1;
+      if(off < 0) throw new Error("תיבת EXE בלי ZIP פנימי");
+      buf = arrayBuffer.slice(off);
+    }
+    return window.JSZip.loadAsync(buf);
   }
   function ensureGiProductionJsLoaded(){
     return new Promise((resolve, reject) => {
@@ -72927,9 +72948,10 @@ ${inner}
       this.els.body.innerHTML = `
         <div class="ciHub">${cards}</div>
         <ul class="ciNotes">
-          <li>כל טעינה היא של <strong>חברה אחת</strong>. קבצי הכשרה, מגדל ומנורה לא מעורבבים באותו סבב.</li>
+          <li>כל טעינה היא של <strong>חברה אחת</strong>. קבצי הכשרה, מגדל, מנורה וכלל לא מעורבבים באותו סבב.</li>
           <li>קודם תיק במערכת (דוח לקוחות), ואחר כך הפרודוקציה — השיוך לפי ת״ז.</li>
           <li>מנורה: ZIP של פרט (MP) נכנס לתיק; ZIP של מבוטלות (MM) מסומן «לא פעיל» ולא נשמר.</li>
+          <li>כלל: תיבת EXE או ZIP של אפקס. ממשק אחזקות (HOLDNGINP) לא נטען כאן.</li>
         </ul>`;
       this.els.foot.innerHTML = `<button class="btn" type="button" id="ciBackToHub">חזור</button>`;
       on(this.els.foot.querySelector("#ciBackToHub"), "click", () => this.renderHubStep());
@@ -72960,6 +72982,7 @@ ${inner}
           <li>תיק בלי מוצר — תיווצר שורת פוליסה חדשה.</li>
           <li>ת״ז בלי תיק תישאר ברשימת «לא נמצא תיק» ולא תיזרק על לקוח אחר.</li>
           ${company === "מנורה" ? "<li>אפשר לגרור ZIP שלם. קבצי מבוטלות (MM) מסומנים «לא פעיל» ולא נכנסים לתיק.</li>" : ""}
+          ${company === "כלל" ? "<li>אפשר לגרור תיבת EXE או ZIP של אפקס. קבצי אחזקות לא נכנסים.</li>" : ""}
         </ul>`;
       this.els.foot.innerHTML = `<button class="btn" type="button" id="ciProdBackCo">חזרה לחברה</button>`;
       on(this.els.foot.querySelector("#ciProdBackCo"), "click", () => this.renderProductionCompanyStep());
@@ -72996,17 +73019,43 @@ ${inner}
         startedAt: overallStart
       });
       const parsed = [];
-      const needZip = files.some((f) => /\.zip$/i.test(f.name || ""));
+      const needZip = files.some((f) => isProductionArchiveName(f.name));
       if(needZip){
         try {
           if(window.GI_LOAD_LIBS?.jszip) await window.GI_LOAD_LIBS.jszip();
         } catch(_e) {}
         if(!window.JSZip){
-          this.renderError("לפתיחת ZIP נדרש JSZip. בדקו את החיבור לאינטרנט ורעננו את הדף.");
+          this.renderError("לפתיחת ZIP או תיבת EXE נדרש JSZip. בדקו את החיבור לאינטרנט ורעננו את הדף.");
           return;
         }
       }
       try {
+        const pushParsed = (name, buf, cancelled) => {
+          const base = String(name || "").split(/[/\\]/).pop();
+          if(!base || base.charAt(0) === ".") return;
+          if(isProductionLookupFile(name) || isProductionLookupFile(base)) return;
+          parsed.push(P.parseFileBuffer(base, buf, { cancelled: !!cancelled }));
+        };
+        const expandArchive = async (arrayBuffer, archiveName, cancelledOuter, depth) => {
+          const zip = await loadProductionArchive(arrayBuffer, archiveName);
+          const names = Object.keys(zip.files || {});
+          for(let j = 0; j < names.length; j++){
+            const name = names[j];
+            const entry = zip.files[name];
+            if(!entry || entry.dir) continue;
+            const base = String(name).split(/[/\\]/).pop();
+            if(!base || base.charAt(0) === ".") continue;
+            if(isProductionLookupFile(name) || isProductionLookupFile(base)) continue;
+            const innerCancelled = cancelledOuter || productionPathLooksCancelled(name);
+            if(depth < 2 && isProductionArchiveName(base)){
+              const innerBuf = await entry.async("arraybuffer");
+              await expandArchive(innerBuf, base, innerCancelled, depth + 1);
+              continue;
+            }
+            const buf = await entry.async("arraybuffer");
+            pushParsed(name, buf, innerCancelled);
+          }
+        };
         for(let i = 0; i < files.length; i++){
           const file = files[i];
           this.updateProgress({
@@ -73016,24 +73065,11 @@ ${inner}
             total: files.length
           });
           const cancelledOuter = productionPathLooksCancelled(file.name);
-          if(/\.zip$/i.test(file.name || "")){
-            const zip = await window.JSZip.loadAsync(await file.arrayBuffer());
-            const names = Object.keys(zip.files || {});
-            for(let j = 0; j < names.length; j++){
-              const name = names[j];
-              const entry = zip.files[name];
-              if(!entry || entry.dir) continue;
-              const base = String(name).split(/[/\\]/).pop();
-              if(!base || base.charAt(0) === ".") continue;
-              if(isProductionLookupFile(base)) continue;
-              const buf = await entry.async("arraybuffer");
-              parsed.push(P.parseFileBuffer(base, buf, {
-                cancelled: cancelledOuter || productionPathLooksCancelled(name)
-              }));
-            }
+          if(isProductionArchiveName(file.name)){
+            await expandArchive(await file.arrayBuffer(), file.name, cancelledOuter, 0);
           } else {
             const buf = await file.arrayBuffer();
-            parsed.push(P.parseFileBuffer(file.name, buf, { cancelled: cancelledOuter }));
+            pushParsed(file.name, buf, cancelledOuter);
           }
           await ciYieldToUi();
         }
@@ -73050,7 +73086,9 @@ ${inner}
             ? "לא זוהו רשומות פרודוקציה בקבצים. למגדל נדרשים LIFEHLTH / LIFE / COVRLIFE / PERSON."
             : company === "מנורה"
               ? "לא זוהו רשומות פרודוקציה בקבצים. למנורה נדרשים ZIP של פרט (MP) או מבוטלות (MM), או קבצי *M.TXT / *N.TXT / *G.TXT / *P.TXT ו־TRFR.ALL."
-              : "לא זוהו רשומות פרודוקציה בקבצים. להכשרה נדרשים RB / RP / SB / SP."
+              : company === "כלל"
+                ? "לא זוהו רשומות פרודוקציה בקבצים. לכלל נדרשת תיבת EXE/ZIP של אפקס, או קבצי POL / MEV / TAR / SGB. ממשק אחזקות לא נטען."
+                : "לא זוהו רשומות פרודוקציה בקבצים. להכשרה נדרשים RB / RP / SB / SP."
         );
         return;
       }
@@ -73063,7 +73101,9 @@ ${inner}
             ? "הקבצים נקראו, אך לא נבנו פוליסות. ודאו שיש LIFEHLTH או LIFE יחד עם COVRLIFE."
             : company === "מנורה"
               ? "הקבצים נקראו, אך לא נבנו פוליסות. ודאו שיש M/N יחד עם TRFR.ALL."
-              : "הקבצים נקראו, אך לא נבנו פוליסות."
+              : company === "כלל"
+                ? "הקבצים נקראו, אך לא נבנו פוליסות. ודאו שיש POL או MEV של אפקס (לא אחזקות)."
+                : "הקבצים נקראו, אך לא נבנו פוליסות."
         );
         return;
       }
