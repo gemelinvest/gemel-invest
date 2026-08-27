@@ -1,16 +1,19 @@
-/* GEMEL INVEST — ייבוא דוח פרודוקציה (GI-PROD 2026-08-26)
+/* GEMEL INVEST — ייבוא דוח פרודוקציה (GI-PROD 2026-08-27)
    נטען לפי דרישה ממסך טעינת קבצי מערכת.
    הכשרה: קבצי רוחב-קבוע IBM862 (RB/RP/SB/SP).
    מגדל: קבצי MBT מופרדי-צינור UTF-8 (LIFEHLTH/LIFE/COVRLIFE/PERSON).
    מנורה: חיים פרודוקציה ישן — M/N/G/P.TXT + TRFR.ALL (IBM862), ZIP פרט (MP) / מבוטלות (MM).
+   כלל: תיבת EXE/ZIP של אפקס — POL/MEV/TAR/SGB (Windows-1255 או IBM862).
 */
 (function installGiProduction(global){
   "use strict";
 
   const CP862_HE = "אבגדהוזחטיךכלםמןנסעףפץצקרשת";
+  const CP1255_HE = "אבגדהוזחטיךכלםמןנסעףפץצקרשת";
   const COMPANY_HACHSHARA = "הכשרה";
   const COMPANY_MIGDAL = "מגדל";
   const COMPANY_MENORA = "מנורה";
+  const COMPANY_CLAL = "כלל";
   const ACTIVE_STATUS = "כ";
   const MIGDAL_KIND_SET = Object.freeze({
     LIFEHLTH: true,
@@ -29,27 +32,36 @@
   });
   const MENORA_LIFE_CLASS = Object.freeze({ "01": true, "04": true, "05": true, "06": true, "07": true, "08": true });
   const MENORA_HEALTH_CLASS = Object.freeze({ "10": true, "11": true, "20": true, "21": true, "30": true, "50": true });
+  const CLAL_KIND_SET = Object.freeze({
+    CLAL_POL: true,
+    CLAL_MEV: true,
+    CLAL_TAR: true,
+    CLAL_SGB: true
+  });
+  const CLAL_HEALTH_PRODUCT = Object.freeze({ "211": true, "214": true, "111": true });
 
   const COMPANIES = Object.freeze([
     { id: COMPANY_HACHSHARA, label: "הכשרה", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד." },
     { id: "הפניקס", label: "הפניקס", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
     { id: COMPANY_MIGDAL, label: "מגדל", ready: true, hint: "קבצי LIFEHLTH, LIFE, COVRLIFE, PERSON (.MBT)", dropHint: "מגדל: LIFEHLTH (בריאות), LIFE (חיים), COVRLIFE (כיסויים), PERSON (מבוטחים). אפשר גם AGENTS / COMPANY." },
     { id: COMPANY_MENORA, label: "מנורה", ready: true, hint: "קבצי M, N, G, P + TRFR (ZIP פרט / מבוטלות)", dropHint: "מנורה: ZIP של פרט (MP) או מבוטלות (MM), או קבצי ‎*M.TXT / *N.TXT / *G.TXT / *P.TXT ו־TRFR.ALL." },
-    { id: "כלל", label: "כלל", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
+    { id: COMPANY_CLAL, label: "כלל", ready: true, hint: "תיבת EXE / ZIP של אפקס (POL, MEV, TAR, SGB)", dropHint: "כלל: תיבת EXE או ZIP של אפקס חיים / אפקס בריאות, או קבצי POL, MEV, TAR, SGB. ממשק אחזקות לא נטען כאן." },
     { id: "איילון", label: "איילון", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" }
   ]);
 
   const HEALTH_COVER_MAP = [
     { re: /מחלות\s*קשות/, key: "מחלות קשות" },
+    { re: /פיצוי\s*לסרטן/, key: "מזור לסרטן" },
     { re: /מזור\s*לסרטן/, key: "מזור לסרטן" },
     { re: /מזור/, key: "מזור מורחב" },
     { re: /שקל\s*ראשון|מהשקל/, key: "ניתוחים בישראל מהשקל הראשון" },
+    { re: /ניתוחים וטיפולים מח/, key: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל" },
     { re: /ניתוח.*ישראל|ניתוחים\s*בישראל/, key: "ניתוחים בישראל מורחב" },
     { re: /שב.?ן/, key: "משלים שב\"ן ללא השתתפות עצמית" },
     { re: /השתל/, key: "השתלות וטיפולים מיוחדים מחוץ לישראל" },
     { re: /ניתוח.*חו|תוחים.*חול|חול.*חותינ|בחול/, key: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל" },
     { re: /תרופות/, key: "תרופות מחוץ לסל שירותי הבריאות" },
-    { re: /אמבולטור|ייעוץ.*בדיק|יעוץ.*בדיק|אבחון\s*מהיר/, key: "ייעוץ ובדיקות" },
+    { re: /אמבולטור|ייעוץ.*בדיק|יעוץ.*בדיק|אבחון/, key: "ייעוץ ובדיקות" },
     { re: /ילד/, key: "שירות פרימיום לילד" }
   ];
 
@@ -87,6 +99,43 @@
       else out.push(" ");
     }
     return out.join("");
+  }
+
+  function decodeWin1255(bytes){
+    const out = [];
+    const n = bytes.length;
+    for(let i = 0; i < n; i++){
+      const b = bytes[i] & 0xff;
+      if(b >= 0xE0 && b <= 0xFA) out.push(CP1255_HE.charAt(b - 0xE0));
+      else if(b === 13) out.push("\r");
+      else if(b === 10) out.push("\n");
+      else if(b >= 32 && b < 127) out.push(String.fromCharCode(b));
+      else out.push(" ");
+    }
+    return out.join("");
+  }
+
+  function decodeClalBytes(bytes){
+    let he1255 = 0;
+    let he862 = 0;
+    const n = Math.min(bytes.length, 8000);
+    for(let i = 0; i < n; i++){
+      const b = bytes[i] & 0xff;
+      if(b >= 0xE0 && b <= 0xFA) he1255++;
+      else if(b >= 0x80 && b <= 0x9A) he862++;
+    }
+    return he1255 >= he862 && he1255 > 0 ? decodeWin1255(bytes) : decodeCp862(bytes);
+  }
+
+  function findEmbeddedZipOffset(buffer){
+    const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+    const n = bytes.length - 3;
+    for(let i = 0; i < n; i++){
+      if(bytes[i] === 0x50 && bytes[i + 1] === 0x4b && bytes[i + 2] === 0x03 && bytes[i + 3] === 0x04){
+        return i;
+      }
+    }
+    return -1;
   }
 
   function fixVisualHebrew(s){
@@ -173,6 +222,28 @@
     return "01/" + mm + "/" + yy;
   }
 
+  function yyMMdd(raw){
+    const d = digits(raw);
+    if(d.length !== 6) return "";
+    const yy = Number(d.slice(0, 2));
+    const mm = Number(d.slice(2, 4));
+    const dd = Number(d.slice(4, 6));
+    if(dd < 1 || dd > 31 || mm < 1 || mm > 12) return "";
+    const year = yy >= 30 ? 1900 + yy : 2000 + yy;
+    const ds = dd < 10 ? "0" + dd : String(dd);
+    const ms = mm < 10 ? "0" + mm : String(mm);
+    return ds + "/" + ms + "/" + year;
+  }
+
+  function keepLogicalHebrew(raw){
+    const t = safeTrim(String(raw || "")).replace(/\s+/g, " ");
+    if(!t) return "";
+    if(/^(תל |חיפה|ירושל|רחובות|נתניה|אשדוד|באר |פתח |רמת |קריית|הרצליה|חולון|ראשון|אשקלון|בת ים|רעננה|כפר |מודיעין|לוד|רמלה|עפולה|טבריה|אילת|נהריה|כרמיאל|גבעתיים|בני ברק|הוד |נס צ|יהוד|ראש העין|אור |יקנעם|מעלה |שדרות|דימונה|טירת |נצרת|עכו|צפת|בית ש|גבעת |קרית )/.test(t)){
+      return t;
+    }
+    return cleanName(t);
+  }
+
   function round2(n){
     return Math.round((Number(n) || 0) * 100) / 100;
   }
@@ -240,7 +311,7 @@
   function inferLifeProductType(covers){
     if(isMortgageLife(covers)) return "ריסק משכנתא";
     const names = (covers || []).map((c) => String(c?.coverName || c?.coverNameRaw || "")).join(" ");
-    const hasCoreLife = /ריסק|מגדלור|קשת|חיים|חסכון|כושר|שלוה|מוטב/.test(names);
+    const hasCoreLife = /ריסק|מגדלור|קשת|חיים|חסכון|כושר|שלוה|מוטב|מעורב|משענת/.test(names);
     const hasDeathAcc = /מוות מתאונה/.test(names);
     const hasDisAcc = /נכות מתאונה/.test(names);
     if(hasCoreLife) return "ריסק";
@@ -438,6 +509,8 @@
   }
 
   function detectKind(fileName, rec0){
+    const clal = detectClalKindFromName(fileName);
+    if(clal) return clal;
     const menora = detectMenoraKindFromName(fileName) || detectMenoraKindFromRecord(rec0);
     if(menora) return menora;
     const mig = detectMigdalKindFromName(fileName) || (String(rec0 || "").indexOf("|") >= 0 ? detectMigdalKindFromRecord(rec0) : "");
@@ -465,6 +538,18 @@
     if(base === "TRFR.ALL") return "MENORA_TRFR";
     const m = base.match(/^(\d+)([MNGP])\.TXT$/);
     if(m) return "MENORA_" + m[2];
+    return "";
+  }
+
+  function detectClalKindFromName(fileName){
+    const base = fileBaseName(fileName).toUpperCase();
+    if(/HOLDNGINP/.test(base) || /אחזקות/.test(String(fileName || ""))) return "";
+    const m = base.match(/\.([A-Z0-9]+)$/);
+    const ext = m ? m[1] : "";
+    if(ext === "POL") return "CLAL_POL";
+    if(ext === "MEV") return "CLAL_MEV";
+    if(ext === "TAR") return "CLAL_TAR";
+    if(ext === "SGB") return "CLAL_SGB";
     return "";
   }
 
@@ -584,6 +669,196 @@
       desc: cleanName(s.slice(4, 29)),
       class: digits(s.slice(29, 31)).padStart(2, "0").slice(-2)
     };
+  }
+
+  function clalDigitHints(s, from, to){
+    const chunk = String(s || "").slice(from, to);
+    const out = [];
+    const re = /\d{8,11}/g;
+    let m;
+    while((m = re.exec(chunk))){
+      const n = normPolicy(m[0]);
+      if(n && out.indexOf(n) < 0) out.push(n);
+    }
+    return out;
+  }
+
+  function parseClalPol(s){
+    const rec = String(s || "");
+    if(rec.length < 40 || !/^\d{5}/.test(rec)) return null;
+    const agent = rec.slice(0, 5);
+    const policyHints = clalDigitHints(rec, 5, 90);
+    let policyNumber = "";
+    if(rec.length >= 380){
+      policyNumber = normPolicy(rec.slice(23, 31));
+    } else {
+      policyNumber = normPolicy(rec.slice(31, 40)) || normPolicy(rec.slice(23, 31));
+    }
+    if(!policyNumber && policyHints.length) policyNumber = policyHints[0];
+    if(!policyNumber) return null;
+    const product = safeTrim(rec.slice(41, 44));
+    let premium = 0;
+    let sumInsured = 0;
+    if(rec.length >= 380){
+      premium = packedMoney(rec.slice(66, 74), 8);
+    } else {
+      const a = packedMoney(rec.slice(58, 66), 8);
+      const b = packedMoney(rec.slice(66, 74), 8);
+      if(isMonthlyLike(a)) premium = a;
+      else if(isMonthlyLike(b)) premium = b;
+      if(isBenefitLike(b)) sumInsured = b;
+      else if(isBenefitLike(a)) sumInsured = a;
+    }
+    const idA = rec.length >= 41 ? normId(rec.slice(32, 41)) : "";
+    const idTail = rec.length >= 377 ? normId(rec.slice(368, 377)) : "";
+    const hintSet = {};
+    policyHints.concat([policyNumber]).forEach((h) => { hintSet[h] = true; });
+    function usableId(id){
+      const n = normId(id);
+      if(!n || /^0+$/.test(n)) return "";
+      if(hintSet[normPolicy(n)] || hintSet[n]) return "";
+      return n;
+    }
+    const idNumber = usableId(idA);
+    const idNumber2 = usableId(idTail) && usableId(idTail) !== idNumber ? usableId(idTail) : (idNumber ? "" : usableId(idTail));
+    return {
+      kind: "CLAL_POL",
+      policyNumber,
+      policyHints,
+      agent,
+      product,
+      familyHint: (CLAL_HEALTH_PRODUCT[product] || rec.length >= 380) ? "health" : "life",
+      premium,
+      sumInsured: sumInsured ? money2(sumInsured) : "",
+      idNumber,
+      idNumber2
+    };
+  }
+
+  function parseClalMev(s){
+    const rec = String(s || "");
+    if(rec.length < 40 || !/^\d{5}/.test(rec)) return null;
+    const agent = rec.slice(0, 5);
+    const policyNumber = normPolicy(rec.slice(5, 14));
+    if(!policyNumber) return null;
+    const gender = mapGender(rec.charAt(117)) || mapGender((rec.slice(90, 160).match(/[זנ]/) || [])[0]);
+    const birthDate = yyMMdd(rec.slice(111, 117));
+    const phDigits = digits(rec.slice(90, 120));
+    let phone = "";
+    const ph0 = phDigits.match(/0\d{9}/);
+    if(ph0) phone = ph0[0];
+    else {
+      const rest = phDigits.replace(/^0+/, "");
+      if(rest.length >= 9) phone = "0" + rest.slice(0, 9);
+    }
+    let nameRaw = rec.slice(40, 70);
+    const firstHe = rec.search(/[\u0590-\u05FF]/);
+    if(firstHe >= 14 && firstHe < 70){
+      let j = firstHe;
+      while(j < 90){
+        const c = rec.charAt(j);
+        if((c >= "\u0590" && c <= "\u05FF") || c === " " || c === "\"" || c === "'" || c === "-" || c === "/" || c === ".") j++;
+        else break;
+      }
+      nameRaw = rec.slice(firstHe, j);
+    }
+    let house = "";
+    const houseInName = nameRaw.match(/(\d+)\s*$/);
+    if(houseInName){
+      house = houseInName[1];
+      nameRaw = nameRaw.replace(/\d+\s*$/, "");
+    }
+    const afterName = rec.slice(64, 78);
+    const houseAfter = afterName.match(/(\d{1,5})/);
+    if(!house && houseAfter) house = houseAfter[1];
+    const names = splitFullName(cleanName(nameRaw));
+    const cityBand = safeTrim(rec.slice(70, 95).replace(/[0-9]+/g, " "));
+    const cityKeep = keepLogicalHebrew(cityBand);
+    const useHealthLayout = rec.length >= 345 || (!!cityBand && cityKeep === cityBand);
+    let city = "";
+    let street = "";
+    if(useHealthLayout){
+      city = cityKeep;
+    } else {
+      street = cleanName(rec.slice(67, 88).replace(/\d+/g, " "));
+      city = keepLogicalHebrew(rec.slice(88, 110).replace(/[0-9]+/g, " "));
+    }
+    const idMaybe = normId(rec.slice(94, 103));
+    const idNumber = idMaybe && !/^0+$/.test(idMaybe) && rec.charAt(94) !== "0" ? idMaybe : "";
+    return {
+      kind: "CLAL_MEV",
+      policyNumber,
+      agent,
+      idNumber,
+      idNumber2: "",
+      firstName: names.firstName,
+      lastName: names.lastName,
+      fullName: names.fullName,
+      house,
+      city,
+      street,
+      gender,
+      birthDate,
+      phone,
+      status: "",
+      period: ""
+    };
+  }
+
+  function parseClalTar(s){
+    const rec = String(s || "");
+    if(rec.length < 24 || !/^\d{5}/.test(rec)) return null;
+    const agent = rec.slice(0, 5);
+    const policyNumber = normPolicy(rec.slice(15, 24));
+    if(!policyNumber) return null;
+    const rawCode = digits(rec.slice(-8)).padStart(8, "0").slice(-8);
+    if(!rawCode || /^0+$/.test(rawCode)) return null;
+    const startDate = dmy8(rec.slice(28, 36)) || ymd8(rec.slice(28, 36)) || dmy8(rec.slice(24, 32)) || "";
+    const tarId = rec.length >= 177 ? normId(rec.slice(168, 177)) : "";
+    return {
+      kind: "CLAL_TAR",
+      policyNumber,
+      agent,
+      coverCodeRaw: rawCode,
+      startDate,
+      premium: 0,
+      idNumber: tarId && !/^0+$/.test(tarId) ? tarId : ""
+    };
+  }
+
+  function parseClalSgb(s){
+    const rec = String(s || "");
+    const code = digits(rec.slice(0, 6)).padStart(6, "0");
+    if(!code || code === "000000") return null;
+    return {
+      kind: "CLAL_SGB",
+      code,
+      desc: mapLifeCover(rec.slice(6)) || cleanName(rec.slice(6))
+    };
+  }
+
+  function resolveClalCoverCode(raw8, catalog){
+    const d = digits(raw8).padStart(8, "0").slice(-8);
+    const cands = [
+      d.slice(0, 6),
+      ("00" + d.slice(0, 4)).slice(-6),
+      d.slice(2, 6).padStart(6, "0"),
+      (d.replace(/00$/, "")).padStart(6, "0"),
+      d.slice(0, 4).padStart(6, "0")
+    ];
+    for(let i = 0; i < cands.length; i++){
+      const c = cands[i];
+      if(catalog[c]) return catalog[c];
+    }
+    return null;
+  }
+
+  function clalCoverFamily(desc, product, recLen){
+    const t = String(desc || "");
+    if(/ניתוח|תרופות|השתל|ייעוץ|אבחון|בריאות|שב.?ן|אמבולטור|מחלות\s*קשות|סרטן|מדיכלל/.test(t)) return "health";
+    if(/ריסק|משכנתא|מעורב|משענת|חיים/.test(t)) return "life";
+    if(CLAL_HEALTH_PRODUCT[product] || recLen >= 380) return "health";
+    return "life";
   }
 
   function menoraCoverFamily(cls, desc){
@@ -798,6 +1073,24 @@
       });
       return { fileName, kind: menoraKind, records: recs.length, rows, cancelled };
     }
+    const namedClal = detectClalKindFromName(fileName);
+    if(namedClal){
+      const clalText = decodeClalBytes(bytes);
+      const clalRecs = splitRecords(clalText);
+      const rows = [];
+      clalRecs.forEach((s) => {
+        let row = null;
+        if(namedClal === "CLAL_POL") row = parseClalPol(s);
+        else if(namedClal === "CLAL_MEV") row = parseClalMev(s);
+        else if(namedClal === "CLAL_TAR") row = parseClalTar(s);
+        else if(namedClal === "CLAL_SGB") row = parseClalSgb(s);
+        if(row){
+          if(cancelled) row.cancelled = true;
+          rows.push(row);
+        }
+      });
+      return { fileName, kind: namedClal, records: clalRecs.length, rows, cancelled };
+    }
     const kind = detectKind(fileName, rec0);
     const rows = [];
     recs.forEach((s) => {
@@ -813,8 +1106,8 @@
   function uniqueIds(people){
     const set = new Set();
     (people || []).forEach((p) => {
-      if(p.idNumber) set.add(p.idNumber);
-      if(p.idNumber2) set.add(p.idNumber2);
+      if(p.idNumber && !/^0+$/.test(String(p.idNumber))) set.add(p.idNumber);
+      if(p.idNumber2 && !/^0+$/.test(String(p.idNumber2))) set.add(p.idNumber2);
     });
     return Array.from(set);
   }
@@ -1174,11 +1467,196 @@
     return out;
   }
 
+  function buildClalPolicies(parsedFiles){
+    const byKind = { CLAL_POL: [], CLAL_MEV: [], CLAL_TAR: [], CLAL_SGB: [] };
+    const cancelledFiles = {};
+    (parsedFiles || []).forEach((f) => {
+      if(!byKind[f.kind]) return;
+      byKind[f.kind] = byKind[f.kind].concat(f.rows || []);
+      if(f.cancelled) cancelledFiles[f.kind] = true;
+    });
+
+    const catalog = {};
+    byKind.CLAL_SGB.forEach((t) => {
+      if(t && t.code) catalog[t.code] = t;
+    });
+
+    const mevKeys = new Set();
+    byKind.CLAL_MEV.forEach((p) => {
+      if(p.policyNumber) mevKeys.add(normPolicy(p.policyNumber));
+    });
+
+    function resolvePolKey(row){
+      const primary = normPolicy(row.policyNumber);
+      if(primary && mevKeys.has(primary)) return primary;
+      const hints = row.policyHints || [];
+      for(let i = 0; i < hints.length; i++){
+        const h = normPolicy(hints[i]);
+        if(h && mevKeys.has(h)) return h;
+      }
+      return primary;
+    }
+
+    const pByPol = new Map();
+    byKind.CLAL_POL.forEach((p) => {
+      const k = resolvePolKey(p);
+      if(!k) return;
+      p.policyNumber = k;
+      if(!pByPol.has(k)) pByPol.set(k, p);
+      else {
+        const prev = pByPol.get(k);
+        if(!prev.idNumber && p.idNumber) prev.idNumber = p.idNumber;
+        if(!prev.idNumber2 && p.idNumber2) prev.idNumber2 = p.idNumber2;
+        if(!(Number(prev.premium) > 0) && Number(p.premium) > 0) prev.premium = p.premium;
+        if(!prev.sumInsured && p.sumInsured) prev.sumInsured = p.sumInsured;
+      }
+    });
+    const peopleByPol = new Map();
+    byKind.CLAL_MEV.forEach((p) => {
+      const k = normPolicy(p.policyNumber);
+      if(!k) return;
+      if(!peopleByPol.has(k)) peopleByPol.set(k, []);
+      peopleByPol.get(k).push(p);
+    });
+    const tarByPol = new Map();
+    byKind.CLAL_TAR.forEach((c) => {
+      const k = normPolicy(c.policyNumber);
+      if(!k) return;
+      if(!tarByPol.has(k)) tarByPol.set(k, []);
+      tarByPol.get(k).push(c);
+    });
+
+    const keys = new Set();
+    pByPol.forEach((_v, k) => keys.add(k));
+    peopleByPol.forEach((_v, k) => keys.add(k));
+    tarByPol.forEach((_v, k) => keys.add(k));
+
+    const out = [];
+    keys.forEach((pol) => {
+      const header = pByPol.get(pol) || {};
+      const people = (peopleByPol.get(pol) || []).slice();
+      const tars = tarByPol.get(pol) || [];
+      const cancelled = !!(cancelledFiles.CLAL_POL || cancelledFiles.CLAL_MEV || cancelledFiles.CLAL_TAR
+        || header.cancelled || people.some((p) => p.cancelled) || tars.some((t) => t.cancelled));
+
+      const ownerId = header.idNumber2 || header.idNumber || "";
+      const extraId = header.idNumber && header.idNumber2 && header.idNumber !== header.idNumber2
+        ? header.idNumber
+        : "";
+      if(people.length){
+        if(!people[0].idNumber && ownerId) people[0].idNumber = ownerId;
+          if(!people[0].idNumber2 && extraId && extraId !== people[0].idNumber) people[0].idNumber2 = extraId;
+        if(people.length && !people[0].idNumber){
+          const fromTar = (tars[0] && tars[0].idNumber) || "";
+          if(fromTar) people[0].idNumber = fromTar;
+        }
+      } else if(ownerId || extraId){
+        people.push({
+          kind: "CLAL_MEV",
+          policyNumber: pol,
+          idNumber: ownerId || extraId,
+          idNumber2: extraId && extraId !== ownerId ? extraId : "",
+          firstName: "",
+          lastName: "",
+          fullName: "",
+          agent: header.agent || "",
+          status: "",
+          period: ""
+        });
+      }
+
+      const healthRows = [];
+      const lifeRows = [];
+      tars.forEach((t) => {
+        const cat = resolveClalCoverCode(t.coverCodeRaw, catalog);
+        const desc = (cat && cat.desc) || t.coverCodeRaw || "";
+        const family = clalCoverFamily(desc, header.product, 0);
+        const mapped = family === "health" ? mapHealthCover(desc) : mapLifeCover(desc);
+        const row = {
+          kind: "CLAL_TAR",
+          policyNumber: pol,
+          coverCode: (cat && cat.code) || t.coverCodeRaw,
+          coverName: mapped || desc,
+          coverNameRaw: desc,
+          premium: t.premium,
+          startDate: t.startDate,
+          idNumber: t.idNumber || (people[0] && people[0].idNumber) || ownerId,
+          familyGuess: family
+        };
+        if(family === "health") healthRows.push(row);
+        else lifeRows.push(row);
+      });
+
+      const covers = healthRows.concat(lifeRows);
+      const hasHealthCovers = healthRows.length > 0;
+      const hasLifeCovers = lifeRows.length > 0;
+      let family = header.familyHint || "health";
+      if(hasHealthCovers) family = "health";
+      else if(hasLifeCovers) family = "life";
+      let type = "בריאות";
+      if(family === "life") type = inferLifeProductType(lifeRows);
+      else type = inferHealthProductType(healthRows, Object.keys(sumCoverPremiums(healthRows, "health")));
+
+      const coverMonthly = covers.reduce((sum, c) => sum + (Number(c.premium) || 0), 0);
+      const headerPrem = Number(header.premium) || 0;
+      const premiumMonthly = headerPrem > 0
+        ? money2(headerPrem)
+        : (coverMonthly ? money2(coverMonthly) : "");
+
+      const coverBenefit = maxCoverBenefit(covers.map((c) => ({ sumInsured: Number(c.sumInsured) || 0 })));
+      let sumInsured = "";
+      let compensation = "";
+      if(family === "life"){
+        const split = splitLifeMoney(headerPrem, coverMonthly, coverBenefit || Number(header.sumInsured) || 0);
+        sumInsured = split.sumInsured || header.sumInsured || "";
+      } else {
+        compensation = pickCompensation(type, covers);
+      }
+
+      const dated = tars.filter((t) => t.startDate);
+      const startDate = (dated[0] && dated[0].startDate) || "";
+      const healthPrem = sumCoverPremiums(healthRows, "health");
+      const lifePrem = sumCoverPremiums(lifeRows, "life");
+      const coverPremiums = Object.assign({}, healthPrem, lifePrem);
+      const primary = people[0] || {};
+
+      out.push({
+        company: COMPANY_CLAL,
+        type,
+        family,
+        policyNumber: normPolicy(pol),
+        premiumMonthly,
+        sumInsured,
+        compensation,
+        startDate,
+        insuredCount: people.length,
+        coverDetails: covers.map(coverDetailFromRow),
+        healthCovers: Object.keys(healthPrem),
+        lifeCovers: Object.keys(lifePrem),
+        coverPremiums,
+        agentNumber: header.agent || pickAgentNumber(people),
+        paymentPeriod: "",
+        people,
+        covers,
+        ids: uniqueIds(people),
+        primary,
+        inactive: cancelled,
+        productLabel: type,
+        importSource: "clal-production"
+      });
+    });
+    return out;
+  }
+
   function buildPolicies(parsedFiles, company){
     const files = parsedFiles || [];
+    const hasClal = files.some((f) => f && CLAL_KIND_SET[f.kind]);
     const hasMenora = files.some((f) => f && MENORA_KIND_SET[f.kind]);
     const hasMigdal = files.some((f) => f && MIGDAL_KIND_SET[f.kind]);
     const hasHach = files.some((f) => f && (f.kind === "RB" || f.kind === "RP" || f.kind === "SB" || f.kind === "SP"));
+    if(safeTrim(company) === COMPANY_CLAL || (hasClal && !hasMenora && !hasMigdal && !hasHach)){
+      return buildClalPolicies(files);
+    }
     if(safeTrim(company) === COMPANY_MENORA || (hasMenora && !hasMigdal && !hasHach)){
       return buildMenoraPolicies(files);
     }
@@ -1200,7 +1678,10 @@
       "מגדל חברה לביטוח": "מגדל",
       "מנורה": "מנורה",
       "מנורה מבטחים": "מנורה",
-      "מנורה מבטחים ביטוח": "מנורה"
+      "מנורה מבטחים ביטוח": "מנורה",
+      "כלל": "כלל",
+      "כלל ביטוח": "כלל",
+      "ביטוח כלל": "כלל"
     };
     return !!(aliases[na] && aliases[nb] && aliases[na] === aliases[nb]);
   }
@@ -1747,7 +2228,7 @@
       company: item.company,
       policyNumber: item.policyNumber,
       importedAt: nowISO(),
-      source: item.importSource || (item.company === COMPANY_MIGDAL ? "migdal-production" : item.company === COMPANY_MENORA ? "menora-production" : "hachshara-production"),
+      source: item.importSource || (item.company === COMPANY_MIGDAL ? "migdal-production" : item.company === COMPANY_MENORA ? "menora-production" : item.company === COMPANY_CLAL ? "clal-production" : "hachshara-production"),
       coverCount: (item.covers || []).length,
       personCount: (item.people || []).length,
       agentNumber: safeTrim(item.agentNumber),
@@ -1791,17 +2272,20 @@
   }
 
   global.GI_PRODUCTION = {
-    version: "20260826-menora-prod-v1",
+    version: "20260827-clal-prod-v1",
     relocateMisreadLifePremium,
     sanitizeCustomerPolicies,
     COMPANIES,
     COMPANY_HACHSHARA,
     COMPANY_MIGDAL,
     COMPANY_MENORA,
+    COMPANY_CLAL,
     parseFileBuffer,
     detectKind,
     detectMigdalKindFromName,
     detectMenoraKindFromName,
+    detectClalKindFromName,
+    findEmbeddedZipOffset,
     migdalPolicyNumber,
     buildPolicies,
     classifyPolicies,
