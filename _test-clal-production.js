@@ -10,8 +10,8 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260827-clal-prod-v1";
-const APP_CACHE = "20260827-clal-prod-v1";
+const TAG = "20260827-clal-exe-zip-v1";
+const APP_CACHE = "20260827-clal-exe-zip-v1";
 let failed = 0;
 let passed = 0;
 
@@ -69,15 +69,18 @@ const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const sw = fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8");
 const engSrc = fs.readFileSync(path.join(ROOT, "gi-production-import.js"), "utf8");
 
-assert(engSrc.includes('version: "20260827-clal-prod-v1"'), "engine version");
+assert(engSrc.includes('version: "20260827-clal-exe-zip-v1"'), "engine version");
 assert(app.includes('GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=' + TAG + '"'), "app production js href");
 assert(html.includes("app.js?v=" + APP_CACHE), "index app.js cache");
 assert(sw.includes("gi-v12-" + APP_CACHE), "service-worker cache");
 assert(app.includes('id === "כלל"'), "forceReady includes Clal");
 assert(app.includes("isProductionArchiveName"), "exe/zip helper");
 assert(app.includes("loadProductionArchive"), "SFX unzip helper");
+assert(app.includes("filesFromDataTransfer"), "folder drop helper");
 assert(app.includes("HOLDNGINP"), "holdings skipped");
 assert(app.includes("findEmbeddedZipOffset"), "embedded zip offset used");
+assert(/loadAsync\(arrayBuffer\)/.test(app), "JSZip gets full EXE first (SFX CD offsets)");
+assert(!/looksExe[\s\S]{0,80}arrayBuffer\.slice\(off\)/.test(app), "does not slice EXE before first JSZip load");
 
 const P = loadEngine();
 assert(!!P && typeof P.parseFileBuffer === "function", "GI_PRODUCTION loaded");

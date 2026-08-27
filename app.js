@@ -71753,7 +71753,7 @@ ${inner}
      ========================================================================== */
 
   const CUSTOMER_IMPORT_VERSION = "1.2";
-  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260827-clal-prod-v1";
+  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260827-clal-exe-zip-v1";
   const GI_PROD_FALLBACK_COMPANIES = Object.freeze([
     { id: "הכשרה", label: "הכשרה", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד." },
     { id: "הפניקס", label: "הפניקס", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
@@ -71802,18 +71802,66 @@ ${inner}
   function isProductionArchiveName(name){
     return /\.(zip|exe)$/i.test(String(name || ""));
   }
+  /* תיבת כלל היא SFX: טבלת ה-ZIP מצביעה מתחילת ה-EXE, לא אחרי ה-stub.
+     חיתוך ב-PK שובר את JSZip («missing 155639 bytes»). קודם הקובץ המלא. */
   async function loadProductionArchive(arrayBuffer, fileName){
-    let buf = arrayBuffer;
-    const u8 = new Uint8Array(arrayBuffer);
-    const looksExe = /\.exe$/i.test(fileName || "") || (u8.length >= 2 && u8[0] === 0x4d && u8[1] === 0x5a);
-    if(looksExe){
-      const off = typeof window.GI_PRODUCTION?.findEmbeddedZipOffset === "function"
-        ? window.GI_PRODUCTION.findEmbeddedZipOffset(u8)
-        : -1;
-      if(off < 0) throw new Error("תיבת EXE בלי ZIP פנימי");
-      buf = arrayBuffer.slice(off);
+    try {
+      return await window.JSZip.loadAsync(arrayBuffer);
+    } catch (err) {
+      const msg = String(err && err.message || "");
+      const miss = msg.match(/missing\s+(\d+)\s+bytes/i);
+      let off = miss ? Number(miss[1]) : -1;
+      if(!(off > 0) && typeof window.GI_PRODUCTION?.findEmbeddedZipOffset === "function"){
+        off = window.GI_PRODUCTION.findEmbeddedZipOffset(new Uint8Array(arrayBuffer));
+      }
+      if(!(off > 0) || off >= (arrayBuffer.byteLength || 0)) throw err;
+      return await window.JSZip.loadAsync(arrayBuffer.slice(off));
     }
-    return window.JSZip.loadAsync(buf);
+  }
+  function readDirectoryEntries(dirEntry){
+    const reader = dirEntry.createReader();
+    const all = [];
+    function next(){
+      return new Promise((resolve, reject) => {
+        reader.readEntries((batch) => {
+          if(!batch || !batch.length) return resolve(all);
+          all.push.apply(all, batch);
+          resolve(next());
+        }, reject);
+      });
+    }
+    return next();
+  }
+  async function walkFsEntry(entry, out){
+    if(!entry) return;
+    if(entry.isFile){
+      const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+      if(file) out.push(file);
+      return;
+    }
+    if(entry.isDirectory){
+      const kids = await readDirectoryEntries(entry);
+      for(let i = 0; i < kids.length; i++) await walkFsEntry(kids[i], out);
+    }
+  }
+  async function filesFromDataTransfer(dt){
+    const out = [];
+    const items = dt && dt.items;
+    if(items && items.length){
+      const walks = [];
+      for(let i = 0; i < items.length; i++){
+        const it = items[i];
+        const entry = (it.webkitGetAsEntry && it.webkitGetAsEntry()) || null;
+        if(entry) walks.push(walkFsEntry(entry, out));
+        else {
+          const f = it.getAsFile ? it.getAsFile() : null;
+          if(f) out.push(f);
+        }
+      }
+      if(walks.length) await Promise.all(walks);
+      if(out.length) return out;
+    }
+    return Array.from((dt && dt.files) || []);
   }
   function ensureGiProductionJsLoaded(){
     return new Promise((resolve, reject) => {
@@ -72982,7 +73030,7 @@ ${inner}
           <li>תיק בלי מוצר — תיווצר שורת פוליסה חדשה.</li>
           <li>ת״ז בלי תיק תישאר ברשימת «לא נמצא תיק» ולא תיזרק על לקוח אחר.</li>
           ${company === "מנורה" ? "<li>אפשר לגרור ZIP שלם. קבצי מבוטלות (MM) מסומנים «לא פעיל» ולא נכנסים לתיק.</li>" : ""}
-          ${company === "כלל" ? "<li>אפשר לגרור תיבת EXE או ZIP של אפקס. קבצי אחזקות לא נכנסים.</li>" : ""}
+          ${company === "כלל" ? "<li>גוררים את קובץ ה-EXE עצמו, או את תיקיית «אפקס חיים» / «אפקס חיים - בריאות» אחרי חילוץ. לא ממשק אחזקות.</li>" : ""}
         </ul>`;
       this.els.foot.innerHTML = `<button class="btn" type="button" id="ciProdBackCo">חזרה לחברה</button>`;
       on(this.els.foot.querySelector("#ciProdBackCo"), "click", () => this.renderProductionCompanyStep());
@@ -73002,8 +73050,12 @@ ${inner}
         ev.preventDefault(); drop.classList.remove("is-over");
       }));
       on(drop, "drop", (ev) => {
-        const list = ev.dataTransfer?.files;
-        if(list && list.length) void this.handleProductionFiles(list);
+        ev.preventDefault();
+        drop.classList.remove("is-over");
+        void (async () => {
+          const list = await filesFromDataTransfer(ev.dataTransfer);
+          if(list && list.length) void this.handleProductionFiles(list);
+        })();
       });
     },
 
@@ -73074,7 +73126,12 @@ ${inner}
           await ciYieldToUi();
         }
       } catch(err){
-        this.renderError("פענוח הקבצים נכשל: " + (safeTrim(err?.message) || "שגיאה לא ידועה"));
+        const raw = safeTrim(err?.message) || "שגיאה לא ידועה";
+        this.renderError(
+          /missing\s+\d+\s+bytes|Corrupted zip/i.test(raw)
+            ? "תיבת כלל לא נפתחה. גררו את קובץ ה-EXE עצמו (תיבה_16396 חיים או תיבה_16398 בריאות), לא תיקייה מחולצת ולא ממשק אחזקות."
+            : "פענוח הקבצים נכשל: " + raw
+        );
         return;
       }
 
