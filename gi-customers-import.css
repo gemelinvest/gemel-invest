@@ -26,11 +26,12 @@
   width:34px; height:34px; border-radius:10px; cursor:pointer; font-size:15px; line-height:1;
 }
 .ciModal__close:hover{ background:var(--gi-surface-3, #F1F5F9); }
-.ciModal__body{ padding:20px 22px; overflow:auto; flex:1 1 auto; }
+.ciModal__body{ padding:20px 22px; overflow:auto; flex:1 1 auto; min-height:0; }
 .ciModal__foot{
   display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
   padding:14px 22px; border-top:1px solid var(--gi-border, #E5E7EB);
   background:var(--gi-surface-2, #F8FAFC);
+  flex-shrink:0;
 }
 .ciFoot__summary{ font-size:13.5px; color:var(--gi-text-2, #3D4A5C); }
 .ciFoot__actions{ display:flex; gap:10px; margin-inline-start:auto; }

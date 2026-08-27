@@ -39572,7 +39572,7 @@ UsersGateUI.init();
   /* GI-PERF 2026-08-10 — CSS משני אחרי login בלבד (לא במסך הכניסה). */
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
-    "./gi-customers-import.css?v=20260827-clal-prod-commit-v1",
+    "./gi-customers-import.css?v=20260827-clal-id-phone-v1",
     "./theme-unify-flat.css?v=20260825-hmo-text-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
@@ -71753,7 +71753,7 @@ ${inner}
      ========================================================================== */
 
   const CUSTOMER_IMPORT_VERSION = "1.2";
-  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260827-clal-prod-commit-v1";
+  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260827-clal-id-phone-v1";
   const GI_PROD_FALLBACK_COMPANIES = Object.freeze([
     { id: "הכשרה", label: "הכשרה", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד." },
     { id: "הפניקס", label: "הפניקס", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
@@ -72999,7 +72999,7 @@ ${inner}
         <div class="ciHub">${cards}</div>
         <ul class="ciNotes">
           <li>כל טעינה היא של <strong>חברה אחת</strong>. קבצי הכשרה, מגדל, מנורה וכלל לא מעורבבים באותו סבב.</li>
-          <li>קודם תיק במערכת (דוח לקוחות), ואחר כך הפרודוקציה — השיוך לפי ת״ז.</li>
+          <li>השיוך לתיקים שכבר במערכת (גם כאלה שנשמרו לפני שבועות) לפי ת״ז או טלפון מתוך דוח הפרודוקציה. אין צורך להעלות שוב דוח לקוחות.</li>
           <li>מנורה: ZIP של פרט (MP) נכנס לתיק; ZIP של מבוטלות (MM) מסומן «לא פעיל» ולא נשמר.</li>
           <li>כלל: תיבת EXE או ZIP של אפקס. ממשק אחזקות (HOLDNGINP) לא נטען כאן.</li>
         </ul>`;
@@ -73167,23 +73167,35 @@ ${inner}
         return;
       }
       const idSet = new Set();
-      policies.forEach((p) => (p.ids || []).forEach((id) => { if(id) idSet.add(id); }));
+      const phoneSet = new Set();
+      policies.forEach((p) => {
+        (p.ids || []).forEach((id) => { if(id) idSet.add(id); });
+        (p.phones || []).forEach((ph) => {
+          const n = P.normPhone ? P.normPhone(ph) : "";
+          if(n) phoneSet.add(n);
+        });
+        (p.people || []).forEach((person) => {
+          const n = P.normPhone ? P.normPhone(person.phone) : "";
+          if(n) phoneSet.add(n);
+        });
+      });
       const ids = Array.from(idSet);
+      const phones = Array.from(phoneSet);
 
       this.renderProgress({
-        title: "מאתר תיקי לקוח לפי ת״ז…",
+        title: "מאתר תיקי לקוח לפי ת״ז וטלפון…",
         done: 0,
-        total: Math.max(ids.length, 1),
+        total: Math.max(ids.length + phones.length, 1),
         startedAt: Date.now()
       });
 
       const customersById = await this.fetchProductionCustomers(ids, (prog) => {
         this.updateProgress({
-          title: "מאתר תיקי לקוח לפי ת״ז…",
+          title: "מאתר תיקי לקוח לפי ת״ז וטלפון…",
           done: prog.done,
           total: prog.total
         });
-      });
+      }, phones);
 
       const items = P.classifyPolicies(policies, customersById);
       this._prod.files = usable.map((f) => ({ name: f.fileName, kind: f.kind, rows: (f.rows || []).length }));
@@ -73191,17 +73203,27 @@ ${inner}
       this.renderProductionPreview();
     },
 
-    async fetchProductionCustomers(ids, onProgress){
+    async fetchProductionCustomers(ids, onProgress, phones){
       const P = window.GI_PRODUCTION;
       const found = new Map();
       const byUuid = new Map();
       const want = [];
       const wantSet = new Set();
+      const wantPhones = [];
+      const wantPhoneSet = new Set();
       (ids || []).forEach((id) => {
         const padded = P.normId(id);
         if(padded && !wantSet.has(padded)){
           wantSet.add(padded);
           want.push(padded);
+        }
+      });
+      (phones || []).forEach((ph) => {
+        const n = P.normPhone ? P.normPhone(ph) : String(ph || "").replace(/\D/g, "");
+        const k = n ? ("tel:" + n) : "";
+        if(k && !wantPhoneSet.has(k)){
+          wantPhoneSet.add(k);
+          wantPhones.push(n);
         }
       });
 
@@ -73220,12 +73242,22 @@ ${inner}
           const stripped = String(n).replace(/^0+/, "");
           if(stripped) keys.add(stripped);
         };
+        const addPhone = (v) => {
+          const n = P.normPhone ? P.normPhone(v) : "";
+          if(n) keys.add("tel:" + n);
+        };
         addKey(live.idNumber);
+        addPhone(live.phone);
         const payload = live.payload && typeof live.payload === "object" ? live.payload : {};
         (Array.isArray(payload.insureds) ? payload.insureds : []).forEach((ins) => {
           addKey(ins?.data?.idNumber || ins?.idNumber);
+          addPhone(ins?.data?.phone || ins?.phone);
         });
         keys.forEach((k) => {
+          if(String(k).indexOf("tel:") === 0){
+            if(wantPhoneSet.has(k)) found.set(k, live);
+            return;
+          }
           const padded = P.normId(k);
           if(wantSet.has(k) || (padded && wantSet.has(padded))){
             found.set(k, live);
@@ -73291,18 +73323,64 @@ ${inner}
         await ciYieldToUi();
       }
 
+      const missingPhones = [];
+      const seenPhoneQ = new Set();
+      wantPhones.forEach((p) => {
+        if(found.has("tel:" + p) || seenPhoneQ.has(p)) return;
+        seenPhoneQ.add(p);
+        missingPhones.push(p);
+        const stripped = String(p).replace(/^0/, "");
+        if(stripped && stripped !== p && !seenPhoneQ.has(stripped)){
+          seenPhoneQ.add(stripped);
+          missingPhones.push(stripped);
+        }
+      });
+      for(let i = 0; i < missingPhones.length; i += CI_DUP_FETCH_CHUNK){
+        const chunk = missingPhones.slice(i, i + CI_DUP_FETCH_CHUNK);
+        let rows = null;
+        try {
+          const client = Storage.getClient();
+          if(client){
+            const res = await client.from(SUPABASE_TABLES.customers).select(lightSelect).in("phone", chunk);
+            if(!res?.error) rows = res?.data || [];
+          }
+        } catch(_e) {}
+        if(!rows){
+          try {
+            const inList = "(" + chunk.map((v) => '"' + String(v).replace(/"/g, "") + '"').join(",") + ")";
+            rows = await Storage.restRequest(
+              SUPABASE_TABLES.customers + "?phone=in." + encodeURIComponent(inList) + "&select=" + encodeURIComponent(lightSelect),
+              { method: "GET" }
+            ) || [];
+          } catch(_e) { rows = []; }
+        }
+        (rows || []).forEach((row) => indexRec(recFromRow(row)));
+        if(typeof onProgress === "function"){
+          try {
+            onProgress({
+              done: missing.length + Math.min(i + chunk.length, missingPhones.length),
+              total: Math.max(missing.length + missingPhones.length, 1)
+            });
+          } catch(_e) {}
+        }
+        await ciYieldToUi();
+      }
+
       const matchedUuids = [];
       const seenUuid = new Set();
-      want.forEach((id) => {
-        const stripped = String(id).replace(/^0+/, "");
-        const rec = found.get(id) || (stripped ? found.get(stripped) : null) || byUuid.get(id);
+      const considerHydrate = (rec) => {
         if(!rec || seenUuid.has(String(rec.id))) return;
         seenUuid.add(String(rec.id));
         const p = rec.payload;
         const hasPay = p && typeof p === "object"
           && (Array.isArray(p.newPolicies) || Array.isArray(p.insureds) || p.operational);
         if(!hasPay) matchedUuids.push(String(rec.id));
+      };
+      want.forEach((id) => {
+        const stripped = String(id).replace(/^0+/, "");
+        considerHydrate(found.get(id) || (stripped ? found.get(stripped) : null) || byUuid.get(id));
       });
+      wantPhones.forEach((n) => considerHydrate(found.get("tel:" + n)));
 
       const hydrateSelect = "id,full_name,id_number,phone,city,status,agent_id,agent_name,payload,new_policies_count";
       for(let i = 0; i < matchedUuids.length; i += CI_PROD_PAYLOAD_CHUNK){
@@ -73353,7 +73431,7 @@ ${inner}
       const company = safeTrim(this._prod?.company);
       const counts = { update: 0, create: 0, review: 0, unmatched: 0, inactive: 0 };
       items.forEach((it) => { if(counts[it.category] != null) counts[it.category]++; });
-      const noIdCount = items.filter((it) => it.category === "unmatched" && String(it.reason || "").indexOf("אין ת״ז") >= 0).length;
+      const noIdCount = items.filter((it) => it.category === "unmatched" && /אין ת״ז|אין ת״ז או טלפון/.test(String(it.reason || ""))).length;
       this.els.subtitle.textContent = "דוח פרודוקציה · " + company + " — תצוגה מקדימה";
       const fileLine = files.map((f) => escapeHtml(f.kind) + " " + f.rows).join(" · ");
       const canCommit = (counts.update + counts.create) > 0;
@@ -73370,7 +73448,7 @@ ${inner}
           <button class="ciChip ciChip--dup" type="button" data-prod-filter="inactive">לא פעיל <span>${counts.inactive}</span></button>
         </div>
         <div class="ciBanner">קבצים: ${fileLine || "—"} · פרמיה מחושבת מסכומי הכיסוי (2 ספרות אחרי הנקודה). פוליסות «לבדיקה» לא יישמרו עד שתבחרו ידנית בסבב הבא.</div>
-        ${canCommit ? "" : `<div class="ciError" role="status"><div class="ciError__icon">!</div><div>לא נמצאו שורות לשיוך — הלחצן כבוי. טענו קודם <strong>דוח לקוחות</strong> לאותן ת״ז. ${noIdCount ? noIdCount + " פוליסות בלי ת״ז בדוח (נפוץ בחיים של כלל) לא ניתנות לשיוך אוטומטי. " : ""}${counts.unmatched && !noIdCount ? "יש ת״ז בדוח אבל אין תיק תואם במערכת. " : ""}פוליסות מסומנות «לבדיקה» לא נשמרות בסבב הזה.</div></div>`}
+        ${canCommit ? "" : `<div class="ciError" role="status"><div class="ciError__icon">!</div><div>לא נמצאו שורות לשיוך — הלחצן כבוי. המערכת מחפשת תיקים <strong>שכבר שמורים</strong> לפי הת״ז והטלפון שבדוח הפרודוקציה. ${noIdCount ? noIdCount + " פוליסות בלי ת״ז/טלפון תקינים בדוח האפקס (נפוץ בחיים של כלל) לא ניתנות לשיוך אוטומטי. " : ""}${counts.unmatched && !noIdCount ? "המפתח בדוח לא תואם לאף תיק קיים. " : ""}אין צורך להעלות שוב דוח לקוחות. פוליסות «לבדיקה» לא נשמרות בסבב הזה.</div></div>`}
         <div class="ciTableWrap">
           <table class="ciTable">
             <thead><tr><th>#</th><th>פוליסה</th><th>מוצר</th><th>תיק / מבוטחים</th><th>פרמיה</th><th>פעולה</th></tr></thead>
@@ -73382,7 +73460,7 @@ ${inner}
         <div class="ciFoot__summary">${counts.update} עדכונים · ${counts.create} יצירות · ${counts.unmatched + counts.review + counts.inactive} דלג</div>
         <div class="ciFoot__actions">
           <button class="btn" type="button" id="ciProdBackFiles">חזרה לקבצים</button>
-          <button class="btn btn--primary" type="button" id="ciProdCommit"${canCommit ? "" : " disabled"} title="${canCommit ? "שמירה לתיקים שזוהו לפי ת״ז" : "אין שורות לעדכון או יצירה — אין תיק לפי ת״ז"}">אשר ושייך לתיקים</button>
+          <button class="btn btn--primary" type="button" id="ciProdCommit"${canCommit ? "" : " disabled"} title="${canCommit ? "שמירה לתיקים שזוהו לפי ת״ז או טלפון" : "אין שורות לעדכון או יצירה — אין תיק לפי ת״ז או טלפון"}">אשר ושייך לתיקים</button>
         </div>`;
       this.paintProductionPreviewRows();
       if(!this._prodPreviewClickBound){

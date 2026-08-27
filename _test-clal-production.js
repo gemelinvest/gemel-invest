@@ -10,8 +10,8 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260827-clal-prod-commit-v1";
-const APP_CACHE = "20260827-clal-prod-commit-v1";
+const TAG = "20260827-clal-id-phone-v1";
+const APP_CACHE = "20260827-clal-id-phone-v1";
 let failed = 0;
 let passed = 0;
 
@@ -69,7 +69,7 @@ const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const sw = fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8");
 const engSrc = fs.readFileSync(path.join(ROOT, "gi-production-import.js"), "utf8");
 
-assert(engSrc.includes('version: "20260827-clal-prod-commit-v1"'), "engine version");
+assert(engSrc.includes('version: "20260827-clal-id-phone-v1"'), "engine version");
 assert(app.includes('GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=' + TAG + '"'), "app production js href");
 assert(html.includes("app.js?v=" + APP_CACHE), "index app.js cache");
 assert(sw.includes("gi-v12-" + APP_CACHE), "service-worker cache");
@@ -84,7 +84,15 @@ assert(!/looksExe[\s\S]{0,80}arrayBuffer\.slice\(off\)/.test(app), "does not sli
 assert(app.includes("paintProductionPreviewRows"), "production preview is paginated");
 assert(app.includes("CI_PROD_PAYLOAD_CHUNK"), "payload hydrate in small chunks");
 assert(app.includes("customersShadow"), "production match also scans customersShadow");
-assert(app.includes("אין ת״ז בדוח הפרודוקציה") || engSrc.includes("אין ת״ז בדוח הפרודוקציה"), "no-id reason string");
+assert(engSrc.includes("אין ת״ז או טלפון תקינים בדוח הפרודוקציה"), "no-id-or-phone reason string");
+assert(!engSrc.includes("טענו קודם דוח לקוחות") && !app.includes("טענו קודם דוח לקוחות"), "does not tell user to re-upload customer report");
+assert(engSrc.includes("לא נמצא תיק במערכת לפי הת״ז") && engSrc.includes("לא נמצא תיק במערכת לפי הטלפון"), "unmatched reasons search existing folders");
+assert(app.includes("אין צורך להעלות שוב דוח לקוחות"), "production UI says existing folders are enough");
+assert(app.includes('.in("phone"') || app.includes(".in(\"phone\""), "customer fetch queries phone column");
+assert(app.includes("wantPhones"), "production fetch collects phones");
+assert(fs.readFileSync(path.join(ROOT, "gi-customers-import.css"), "utf8").includes("min-height:0"), "modal body min-height");
+assert(fs.readFileSync(path.join(ROOT, "gi-customers-import.css"), "utf8").includes("flex-shrink:0"), "modal foot does not shrink");
+assert(app.includes("gi-customers-import.css?v=" + TAG), "customers css cache");
 
 const P = loadEngine();
 assert(!!P && typeof P.parseFileBuffer === "function", "GI_PRODUCTION loaded");
@@ -143,6 +151,17 @@ assert(parsed[0].rows[0] && parsed[0].rows[0].premium === 91.2, "POL monthly 91.
 assert(parsed[1].rows[0] && String(parsed[1].rows[0].fullName || "").indexOf("שלום") >= 0, "MEV name שלום after visual fix");
 assert(parsed[1].rows[0] && String(parsed[1].rows[0].city || "").indexOf("תל אביב") >= 0, "MEV city stays logical");
 assert(parsed[1].rows[0] && parsed[1].rows[0].gender === "זכר", "MEV gender זכר");
+assert(parsed[1].rows[0] && parsed[1].rows[0].phone === "0521234567", "MEV phone 0521234567 not zeros");
+assert(P.isValidIsraeliId("123456782") === true, "fixture ת״ז 123456782 checksum ok");
+assert(P.isValidIsraeliId("818841410") === false, "garbage POL ת״ז 818841410 checksum fail");
+assert(P.isPlausiblePhone("0000000000") === false, "all-zero phone rejected");
+assert(P.isPlausiblePhone("0521234567") === true, "mobile 0521234567 accepted");
+assert(P.looksVisualHebrew("םולש") === true, "םולש is visual");
+assert(P.looksLogicalHebrew("שלום") === true, "שלום is logical");
+assert(P.cleanPersonName("םולש") === "שלום", "cleanPersonName reverses visual");
+assert(P.cleanPersonName("סבאן רפאלאש שלום") === "סבאן רפאלאש שלום", "logical health name is not reversed");
+assert(P.cleanPersonName("רדנסכלא בוליאמש", true) === "שמאילוב אלכסנדר", "cp862-ambiguous name reverses when file is visual");
+assert(P.cleanPersonName("רדנסכלא בוליאמש", false) === "רדנסכלא בוליאמש", "win1255-ambiguous name stays when file is logical");
 
 const policies = P.buildPolicies(parsed, "כלל");
 assert(policies.length === 1, "one policy built");
@@ -152,6 +171,7 @@ assert(pol.policyNumber === "87654321", "policy number stripped");
 assert(pol.premiumMonthly === "91.20", "monthly premium 91.20");
 assert(pol.agentNumber === "12345", "agent 12345");
 assert((pol.ids || []).indexOf("123456782") >= 0, "id from POL");
+assert((pol.phones || []).indexOf("0521234567") >= 0, "phone from MEV");
 assert(pol.type === "בריאות", "type בריאות");
 assert((pol.healthCovers || []).indexOf("ניתוחים בישראל מורחב") >= 0, "cover mapped to ניתוחים בישראל מורחב");
 assert(pol.inactive !== true, "in-force is active");
@@ -185,8 +205,14 @@ if(fs.existsSync(path.join(liveDir, "87580.POL"))){
   assert(!!hit, "live includes 10356715");
   assert(hit && hit.premiumMonthly === "91.20", "live premium 91.20");
   assert(hit && hit.company === "כלל", "live company כלל");
-  assert(hit && (hit.ids || []).length > 0, "live has owner id");
+  assert(hit && String((hit.people && hit.people[0] && hit.people[0].fullName) || "").indexOf("שלום") >= 0, "live 10356715 name contains שלום");
+  assert(hit && (hit.ids || []).every((id) => P.isValidIsraeliId(id)), "live 10356715 ids checksum-only");
+  assert(hit && !(hit.ids || []).includes("818841410"), "live 10356715 dropped garbage 818841410");
   assert(hit && hit.type === "בריאות", "live type בריאות");
+  const badIds = live.filter((p) => (p.ids || []).some((id) => !P.isValidIsraeliId(id)));
+  assert(badIds.length === 0, "live health ids are all checksum-valid (got " + badIds.length + ")");
+  const zeroPhones = live.filter((p) => (p.phones || []).concat((p.people || []).map((x) => x.phone)).some((ph) => ph === "0000000000"));
+  assert(zeroPhones.length === 0, "live health has no 0000000000 phones (got " + zeroPhones.length + ")");
   assert(live.every((p) => p.importSource === "clal-production"), "live import source");
 } else {
   console.log("  skip live health box (no extract)");
@@ -215,6 +241,47 @@ assert(classified[0] && (classified[0].action === "create" || classified[0].acti
 assert(classified[0] && classified[0].customer && classified[0].customer.id === "cust-1", "classified customer is cust-1");
 const noCust = P.classifyPolicies(policies, new Map());
 assert(noCust[0] && noCust[0].action === "skip" && noCust[0].category === "unmatched", "no customer map → unmatched skip");
+assert(noCust.filter((x) => x.action === "create" || x.action === "update").length === 0, "empty map cannot commit");
+
+const byPhone = new Map();
+byPhone.set("tel:0521234567", { id: "cust-p", fullName: "טל", phone: "0521234567", payload: { newPolicies: [] } });
+const classifiedPhone = P.classifyPolicies(policies, byPhone);
+assert(classifiedPhone[0] && (classifiedPhone[0].action === "create" || classifiedPhone[0].action === "update"), "matched phone is create/update (got " + (classifiedPhone[0] && classifiedPhone[0].action) + ")");
+assert(classifiedPhone[0] && classifiedPhone[0].customer && classifiedPhone[0].customer.id === "cust-p", "classified customer is cust-p");
+
+const garbagePol = overlay(386, [
+  { at: 0, bytes: "87580" },
+  { at: 23, bytes: "10356715" },
+  { at: 32, bytes: "516770780" },
+  { at: 41, bytes: "211" },
+  { at: 66, bytes: "00009120" },
+  { at: 368, bytes: "818841410" },
+  { at: 382, bytes: "2174" }
+], 0x30);
+const garbageRow = (P.parseFileBuffer("87580.POL", recBuf(garbagePol)).rows || [])[0] || {};
+assert(!garbageRow.idNumber && !garbageRow.idNumber2, "POL checksum-invalid IDs are dropped");
+
+const CP862_HE = "אבגדהוזחטיךכלםמןנסעףפץצקרשת";
+function encodeCp862(str){
+  const out = [];
+  const s = String(str || "");
+  for(let i = 0; i < s.length; i++){
+    const ch = s.charAt(i);
+    const idx = CP862_HE.indexOf(ch);
+    if(idx >= 0) out.push(0x80 + idx);
+    else out.push(s.charCodeAt(i) & 0xff);
+  }
+  return Buffer.from(out);
+}
+const lifeMevVisual = overlay(220, [
+  { at: 0, bytes: "12345065640070" },
+  { at: 39, bytes: encodeCp862("רדנסכלא בוליאמש") },
+  { at: 104, bytes: "0542383257" }
+], 0x20);
+const lifeMevParsed = P.parseFileBuffer("12345.MEV", recBuf(lifeMevVisual));
+const lifeMevRow = (lifeMevParsed.rows || [])[0] || {};
+assert(String(lifeMevRow.fullName || "").indexOf("שמאילוב") >= 0, "cp862 visual name becomes שמאילוב (got " + lifeMevRow.fullName + ")");
+assert(lifeMevRow.phone === "0542383257", "cp862 MEV phone 0542383257");
 
 const lifeDir = "/tmp/clal-boxes/_____16396_________________10-08-2026______12-52-52_e4cd/off_155639/16396_כלל_חיים/2026.07.31 00-00/אפקס חיים";
 if(fs.existsSync(path.join(lifeDir, "87580.POL"))){
@@ -224,8 +291,50 @@ if(fs.existsSync(path.join(lifeDir, "87580.POL"))){
   ], "כלל");
   const fake = liveLife.filter((p) => (p.ids || []).some((id) => P.idOverlapsPolicy(id, p.policyNumber)));
   assert(fake.length === 0, "live life agent 87580 has no policy-as-id leftovers (got " + fake.length + ")");
+  const alex = liveLife.find((p) => p.policyNumber === "11227428")
+    || liveLife.find((p) => String(((p.people || [])[0] || {}).fullName || "").indexOf("שמאילוב") >= 0);
+  assert(!!alex && String(((alex.people || [])[0] || {}).fullName || "").indexOf("שמאילוב") >= 0,
+    "live life name שמאילוב not reversed (got " + String(((alex || {}).people || [])[0] && ((alex || {}).people || [])[0].fullName) + ")");
+  const lifeZero = liveLife.filter((p) => (p.phones || []).includes("0000000000"));
+  assert(lifeZero.length === 0, "live life has no 0000000000 phones");
+  const byTel = new Map();
+  liveLife.forEach((p, i) => {
+    (p.phones || []).forEach((ph) => {
+      const k = P.phoneKey(ph);
+      if(k && !byTel.has(k)) byTel.set(k, { id: "life-"+i, fullName: "x", phone: ph, payload: { newPolicies: [] } });
+    });
+  });
+  const lifeClass = P.classifyPolicies(liveLife, byTel);
+  const lifeCreate = lifeClass.filter((x) => x.action === "create" || x.action === "update").length;
+  console.log("  MEASURE live life 87580: policies=" + liveLife.length + " uniquePhones=" + byTel.size + " create+update=" + lifeCreate + " canCommit=" + (lifeCreate > 0));
+  assert(lifeCreate > 0, "live life canCommit true when customers exist for extracted phones (got " + lifeCreate + ")");
 } else {
   console.log("  skip live life overlap check");
+}
+
+console.log("\n7) measured button enablement vs empty customer map");
+function countCommit(items){
+  return (items || []).filter((x) => x.action === "create" || x.action === "update").length;
+}
+const healthDir = "/tmp/clal-boxes/_____16398____________________04-08-2026______07-27-49_14aa/off_182472/16398_בריאות_חיים/2026.08.03 02-16/אפקס חיים - בריאות";
+if(fs.existsSync(path.join(healthDir, "87580.POL"))){
+  const healthPols = P.buildPolicies(["87580.POL","87580.MEV","87580.TAR","87580.SGB"].map((n) => P.parseFileBuffer(n, fs.readFileSync(path.join(healthDir, n)))), "כלל");
+  const emptyN = countCommit(P.classifyPolicies(healthPols, new Map()));
+  console.log("  MEASURE live health 87580: policies=" + healthPols.length + " emptyMap create+update=" + emptyN + " canCommit=" + (emptyN > 0));
+  assert(emptyN === 0, "empty customer map → canCommit false (button stays disabled)");
+  const byBoth = new Map();
+  healthPols.forEach((p, i) => {
+    (p.ids || []).forEach((id) => {
+      if(!byBoth.has(id)) byBoth.set(id, { id: "h-id-"+i, fullName: "x", idNumber: id, payload: { newPolicies: [] } });
+    });
+    (p.phones || []).forEach((ph) => {
+      const k = P.phoneKey(ph);
+      if(k && !byBoth.has(k)) byBoth.set(k, { id: "h-ph-"+i, fullName: "x", phone: ph, payload: { newPolicies: [] } });
+    });
+  });
+  const matchedN = countCommit(P.classifyPolicies(healthPols, byBoth));
+  console.log("  MEASURE live health 87580: id+phone map size=" + byBoth.size + " create+update=" + matchedN + " canCommit=" + (matchedN > 0));
+  assert(matchedN > 0, "with matching ת״ז/טלפון already in the customer table, canCommit true (got " + matchedN + ")");
 }
 
 console.log("\n" + passed + " passed, " + failed + " failed");
