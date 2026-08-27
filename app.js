@@ -2257,17 +2257,181 @@
       return [line, city].filter(Boolean).join(", ");
     },
 
-    _smokingText(d){
-      const status = safeTrim(d?.smokingStatus);
+    _smokingText(d, extra){
+      const extraAns = safeTrim(extra?.answer);
+      const status = extraAns || safeTrim(d?.smokingStatus);
       if(status !== "yes") return status === "no" ? "לא" : "";
-      const type = safeTrim(d?.smokingType);
-      const amount = safeTrim(d?.smokingAmount);
+      const products = Array.isArray(extra?.products)
+        ? extra.products.map((x) => safeTrim(x)).filter(Boolean).join(", ")
+        : "";
+      const type = products || safeTrim(d?.smokingType);
+      const amount = safeTrim(extra?.quantity) || safeTrim(d?.smokingAmount);
       return ["כן", type, amount].filter(Boolean).join(" · ");
     },
 
     _last4(value){
       const digits = safeTrim(value).replace(/\D/g, "");
       return digits ? digits.slice(-4) : "";
+    },
+
+    _paymentMethodLabel(v){
+      const s = safeTrim(v).toLowerCase();
+      if(s === "cc" || s === "card" || s === "credit") return "כרטיס אשראי";
+      if(s === "ho" || s === "bank" || s === "hova" || s === "standing") return "הוראת קבע";
+      return safeTrim(v);
+    },
+
+    _payerChoiceLabel(v){
+      const s = safeTrim(v).toLowerCase();
+      if(s === "insured") return "מבוטח קיים";
+      if(s === "external") return "משלם חריג";
+      return safeTrim(v);
+    },
+
+    _deliveryMethodLabel(v){
+      const s = safeTrim(v).toLowerCase();
+      if(s === "home" || s === "post" || s === "address") return "לבית";
+      if(s === "email" || s === "mail") return "למייל";
+      return safeTrim(v);
+    },
+
+    _yesNoLabel(v){
+      const s = safeTrim(v).toLowerCase();
+      if(s === "yes" || s === "true" || v === true) return "כן";
+      if(s === "no" || s === "false" || v === false) return "לא";
+      return safeTrim(v);
+    },
+
+    _cancelExecLabel(v){
+      const s = safeTrim(v);
+      if(s === "agent") return "באמצעות הנציג המטפל";
+      if(s === "company") return "באמצעות החברה המבטחת";
+      if(s === "client" || s === "customer") return "באמצעות הלקוח עצמו";
+      return s;
+    },
+
+    _policyTitle(p, fallback){
+      const company = safeTrim(p?.company);
+      const type = safeTrim(p?.type || p?.product);
+      return [company, type].filter(Boolean).join(" · ") || safeTrim(fallback) || "פוליסה";
+    },
+
+    _isRiskProduct(p){
+      const t = safeTrim(p?.type || p?.product);
+      return t === "ריסק" || t === "ריסק משכנתא";
+    },
+
+    _fmtBeneficiaries(list){
+      return (Array.isArray(list) ? list : []).map((b) => {
+        const name = `${safeTrim(b?.firstName)} ${safeTrim(b?.lastName)}`.trim()
+          || safeTrim(b?.fullName) || safeTrim(b?.name);
+        if(!name && !safeTrim(b?.idNumber) && !safeTrim(b?.sharePct) && !safeTrim(b?.percent)) return "";
+        const parts = [name];
+        const id = safeTrim(b?.idNumber || b?.id);
+        const rel = safeTrim(b?.relationship || b?.relation);
+        const pct = safeTrim(b?.sharePct ?? b?.percent);
+        const birth = safeTrim(b?.birthDate);
+        const phone = safeTrim(b?.phone);
+        if(id) parts.push(`ת.ז. ${id}`);
+        if(rel) parts.push(rel);
+        if(pct) parts.push(`${pct}%`);
+        if(birth) parts.push(`לידה ${birth}`);
+        if(phone) parts.push(phone);
+        return parts.filter(Boolean).join(" · ");
+      }).filter(Boolean).join(" | ");
+    },
+
+    _fmtPledgeBanks(policy){
+      const banks = Array.isArray(policy?.pledgeBanks) && policy.pledgeBanks.length
+        ? policy.pledgeBanks
+        : (policy?.pledgeBank && typeof policy.pledgeBank === "object" ? [policy.pledgeBank] : []);
+      return banks.map((b) => {
+        const name = safeTrim(b?.bankName || b?.name);
+        if(!name && !safeTrim(b?.bankNo) && !safeTrim(b?.amount) && !safeTrim(b?.branch)) return "";
+        const parts = [name];
+        if(safeTrim(b?.bankNo)) parts.push(`מס׳ בנק ${safeTrim(b.bankNo)}`);
+        if(safeTrim(b?.branch)) parts.push(`סניף ${safeTrim(b.branch)}`);
+        if(safeTrim(b?.amount)) parts.push(`סכום ${safeTrim(b.amount)}`);
+        if(safeTrim(b?.years)) parts.push(`${safeTrim(b.years)} שנים`);
+        if(safeTrim(b?.address)) parts.push(safeTrim(b.address));
+        return parts.filter(Boolean).join(" · ");
+      }).filter(Boolean).join(" | ");
+    },
+
+    _readVerify(rec){
+      const v = rec?.payload?.mirrorFlow?.verify;
+      return (v && typeof v === "object") ? v : {};
+    },
+
+    _emptySnap(){
+      return { personal: {}, contact: {}, payment: {}, health: {}, delivery: {}, beneficiaries: {}, cancel: { policies: {} } };
+    },
+
+    _deliverySnapshot(rec){
+      const v = this._readVerify(rec);
+      return {
+        method: this._deliveryMethodLabel(v.deliveryMethod),
+        email: safeTrim(v.deliveryEmail)
+      };
+    },
+
+    _beneficiariesSnapshot(rec){
+      const out = {};
+      const nps = Array.isArray(rec?.payload?.newPolicies) ? rec.payload.newPolicies : [];
+      const store = rec?.payload?.mirrorFlow?.beneficiariesStep?.policies || {};
+      nps.forEach((p, idx) => {
+        if(!this._isRiskProduct(p)) return;
+        const pid = safeTrim(p?.id) || `np_${idx}`;
+        const st = store[pid] && typeof store[pid] === "object" ? store[pid] : {};
+        const legalHeirs = st.legalHeirs === true || safeTrim(p?.beneficiariesMode) === "legalHeirs";
+        out[pid] = {
+          title: this._policyTitle(p),
+          legalHeirs: legalHeirs ? "כן" : "לא",
+          beneficiaries: legalHeirs ? "יורשים חוקיים" : this._fmtBeneficiaries(p?.beneficiaries),
+          pledgeBanks: this._fmtPledgeBanks(p)
+        };
+      });
+      return out;
+    },
+
+    _cancelSnapshot(rec){
+      const cq = rec?.payload?.mirrorFlow?.cancelQuestionnaire || {};
+      const polMap = (cq.policies && typeof cq.policies === "object") ? cq.policies : {};
+      const out = {
+        policies: {},
+        keepExisting: cq.keepExistingDespiteDuplicate === true ? "כן" : (cq.keepExistingDespiteDuplicate === false ? "לא" : ""),
+        approveAddition: this._yesNoLabel(cq.approveAddition)
+      };
+      const seen = new Set();
+      const addPolicy = (pid, title, st, insCanc) => {
+        if(!pid || seen.has(pid)) return;
+        seen.add(pid);
+        const row = st && typeof st === "object" ? st : {};
+        const method = safeTrim(row.executionMethod)
+          || safeTrim(insCanc?.executionMethod)
+          || safeTrim(insCanc?.cancellationExecutionMethod);
+        out.policies[pid] = {
+          title: title || pid,
+          confirmed: this._yesNoLabel(row.confirmed),
+          executionMethod: this._cancelExecLabel(method)
+        };
+      };
+      this._insureds(rec).forEach((ins, idx) => {
+        const nm = this._insuredFullName(ins) || this._insuredTitle(ins, idx);
+        (Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : []).forEach((p) => {
+          const pid = safeTrim(p?.id);
+          if(!pid) return;
+          const c = ins?.data?.cancellations?.[pid];
+          const status = safeTrim(c?.status);
+          const eligible = status === "full" || status === "partial" || status === "partial_health";
+          if(!eligible && !polMap[pid]) return;
+          addPolicy(pid, [nm, this._policyTitle(p)].filter(Boolean).join(" · "), polMap[pid], c);
+        });
+      });
+      Object.keys(polMap).forEach((pid) => {
+        addPolicy(pid, pid, polMap[pid], null);
+      });
+      return out;
     },
 
     _healthSource(rec){
@@ -2310,13 +2474,16 @@
 
     /** תצלום של כל השדות שהשיקוף עשוי לשנות, במבנה שטוח וניתן להשוואה. */
     buildSnapshot(rec){
-      const snap = { personal: {}, contact: {}, payment: {}, health: {} };
+      const snap = this._emptySnap();
       if(!rec) return snap;
 
       const insureds = this._insureds(rec);
+      const verify = this._readVerify(rec);
       insureds.forEach((ins, idx) => {
         const d = ins?.data || {};
-        snap.personal[this._insuredKey(ins, idx)] = {
+        const insKey = this._insuredKey(ins, idx);
+        const smokeExtra = (verify.perInsuredSmoking && verify.perInsuredSmoking[insKey]) || null;
+        snap.personal[insKey] = {
           title: this._insuredTitle(ins, idx),
           fullName: this._insuredFullName(ins),
           idNumber: safeTrim(d.idNumber),
@@ -2328,7 +2495,7 @@
           shaban: safeTrim(d.shaban || d.shabanLevel),
           address: this._addressText(d),
           zip: safeTrim(d.zip),
-          smoking: this._smokingText(d)
+          smoking: this._smokingText(d, smokeExtra)
         };
       });
 
@@ -2343,9 +2510,10 @@
       const cc = (p.cc && typeof p.cc === "object") ? p.cc : {};
       const ho = (p.ho && typeof p.ho === "object") ? p.ho : {};
       const payStep = rec?.payload?.mirrorFlow?.paymentStep || {};
+      const ex = (p.externalPayer && typeof p.externalPayer === "object") ? p.externalPayer : {};
       snap.payment = {
-        method: safeTrim(payStep.method) || safeTrim(p.paymentMethod) || "",
-        payerChoice: safeTrim(p.payerChoice),
+        method: this._paymentMethodLabel(safeTrim(payStep.method) || safeTrim(p.paymentMethod) || ""),
+        payerChoice: this._payerChoiceLabel(p.payerChoice),
         holderName: safeTrim(cc.holderName),
         holderId: safeTrim(cc.holderId),
         cardLast4: this._last4(cc.cardNumber),
@@ -2353,7 +2521,12 @@
         bankName: safeTrim(ho.bankName),
         bankNo: safeTrim(ho.bankNo),
         branch: safeTrim(ho.branch),
-        account: safeTrim(ho.account)
+        account: safeTrim(ho.account),
+        payerName: `${safeTrim(ex.firstName)} ${safeTrim(ex.lastName)}`.trim() || safeTrim(ex.fullName),
+        payerId: safeTrim(ex.idNumber),
+        payerBirth: safeTrim(ex.birthDate),
+        payerPhone: safeTrim(ex.phone),
+        payerRelation: safeTrim(ex.relation)
       };
 
       this._healthSource(rec).forEach((group) => {
@@ -2378,6 +2551,10 @@
           };
         });
       });
+
+      snap.delivery = this._deliverySnapshot(rec);
+      snap.beneficiaries = this._beneficiariesSnapshot(rec);
+      snap.cancel = this._cancelSnapshot(rec);
 
       return snap;
     },
@@ -2430,6 +2607,7 @@
     ]),
 
     PAYMENT_FIELDS: Object.freeze([
+      ["method", "אמצעי תשלום"],
       ["holderName", "שם בעל הכרטיס"],
       ["holderId", "ת״ז בעל הכרטיס"],
       ["cardLast4", "4 ספרות אחרונות"],
@@ -2438,7 +2616,33 @@
       ["bankNo", "מספר בנק"],
       ["branch", "סניף"],
       ["account", "מספר חשבון"],
-      ["payerChoice", "זהות המשלם"]
+      ["payerChoice", "זהות המשלם"],
+      ["payerName", "שם משלם חריג"],
+      ["payerId", "ת.ז. משלם חריג"],
+      ["payerBirth", "תאריך לידה משלם חריג"],
+      ["payerPhone", "טלפון משלם חריג"],
+      ["payerRelation", "קרבה למבוטח (משלם חריג)"]
+    ]),
+
+    DELIVERY_FIELDS: Object.freeze([
+      ["method", "אופן קבלת דיוורים"],
+      ["email", "אימייל למשלוח דיוורים"]
+    ]),
+
+    CANCEL_POLICY_FIELDS: Object.freeze([
+      ["confirmed", "אישור ביטול"],
+      ["executionMethod", "אופן ביצוע ביטול"]
+    ]),
+
+    CANCEL_GLOBAL_FIELDS: Object.freeze([
+      ["keepExisting", "השארת כיסוי קיים"],
+      ["approveAddition", "אישור תוספת לכיסוי קיים"]
+    ]),
+
+    BENEFICIARY_FIELDS: Object.freeze([
+      ["legalHeirs", "יורשים חוקיים"],
+      ["beneficiaries", "מוטבים"],
+      ["pledgeBanks", "בנקים משעבדים"]
     ]),
 
     CONTACT_FIELDS: Object.freeze([
@@ -2451,17 +2655,22 @@
     /** משווה בסיס מול המצב הנוכחי ומחזיר את האזורים לפי סדר התצוגה בדוח. */
     collect(rec){
       const baseline = this.getBaseline(rec);
-      const before = baseline?.data || { personal: {}, contact: {}, payment: {}, health: {} };
+      const before = baseline?.data || this._emptySnap();
       const after = this.buildSnapshot(rec);
       const areas = [];
 
       const personalRows = [];
-      Object.keys(after.personal).forEach((key) => {
-        const now = after.personal[key] || {};
+      const personalKeys = new Set([
+        ...Object.keys(before.personal || {}),
+        ...Object.keys(after.personal || {})
+      ]);
+      personalKeys.forEach((key) => {
+        const now = after.personal?.[key] || {};
         const was = before.personal?.[key] || {};
-        const multi = Object.keys(after.personal).length > 1;
+        const multi = personalKeys.size > 1;
+        const title = now.title || was.title || "מבוטח";
         this.PERSONAL_FIELDS.forEach(([field, label]) => {
-          const row = this._row(multi ? `${now.title || "מבוטח"} · ${label}` : label, was[field], now[field]);
+          const row = this._row(multi ? `${title} · ${label}` : label, was[field], now[field]);
           if(row.changed) personalRows.push(row);
         });
       });
@@ -2471,12 +2680,49 @@
       });
       areas.push({ key: "personal", label: "פרטים אישיים", rows: personalRows });
 
-      const paymentRows = [];
-      this.PAYMENT_FIELDS.forEach(([field, label]) => {
-        const row = this._row(label, before.payment?.[field], after.payment?.[field]);
-        if(row.changed) paymentRows.push(row);
+      const deliveryRows = [];
+      this.DELIVERY_FIELDS.forEach(([field, label]) => {
+        const row = this._row(label, before.delivery?.[field], after.delivery?.[field]);
+        if(row.changed) deliveryRows.push(row);
       });
-      areas.push({ key: "payment", label: "אמצעי תשלום", rows: paymentRows });
+      areas.push({ key: "delivery", label: "אופן קבלת דיוורים", rows: deliveryRows });
+
+      const cancelRows = [];
+      const cancelBefore = before.cancel || { policies: {} };
+      const cancelAfter = after.cancel || { policies: {} };
+      const cancelKeys = new Set([
+        ...Object.keys(cancelBefore.policies || {}),
+        ...Object.keys(cancelAfter.policies || {})
+      ]);
+      cancelKeys.forEach((pid) => {
+        const now = cancelAfter.policies?.[pid] || {};
+        const was = cancelBefore.policies?.[pid] || {};
+        const title = now.title || was.title || "פוליסה";
+        this.CANCEL_POLICY_FIELDS.forEach(([field, label]) => {
+          const row = this._row(`${title} · ${label}`, was[field], now[field]);
+          if(row.changed) cancelRows.push(row);
+        });
+      });
+      this.CANCEL_GLOBAL_FIELDS.forEach(([field, label]) => {
+        const row = this._row(label, cancelBefore[field], cancelAfter[field]);
+        if(row.changed) cancelRows.push(row);
+      });
+      areas.push({ key: "cancel", label: "שאלון ביטול", rows: cancelRows });
+
+      const benefRows = [];
+      const bBefore = before.beneficiaries || {};
+      const bAfter = after.beneficiaries || {};
+      const bKeys = new Set([...Object.keys(bBefore), ...Object.keys(bAfter)]);
+      bKeys.forEach((pid) => {
+        const now = bAfter[pid] || {};
+        const was = bBefore[pid] || {};
+        const title = now.title || was.title || "פוליסה";
+        this.BENEFICIARY_FIELDS.forEach(([field, label]) => {
+          const row = this._row(`${title} · ${label}`, was[field], now[field]);
+          if(row.changed) benefRows.push(row);
+        });
+      });
+      areas.push({ key: "beneficiaries", label: "מוטבים ושעבוד", rows: benefRows });
 
       const healthRows = [];
       const healthKeys = new Set([...Object.keys(before.health || {}), ...Object.keys(after.health || {})]);
@@ -2489,6 +2735,13 @@
         if(row.changed) healthRows.push(row);
       });
       areas.push({ key: "health", label: "הצהרת בריאות", rows: healthRows });
+
+      const paymentRows = [];
+      this.PAYMENT_FIELDS.forEach(([field, label]) => {
+        const row = this._row(label, before.payment?.[field], after.payment?.[field]);
+        if(row.changed) paymentRows.push(row);
+      });
+      areas.push({ key: "payment", label: "אמצעי תשלום", rows: paymentRows });
 
       return {
         hasBaseline: !!baseline,
@@ -31955,10 +32208,15 @@ UsersGateUI.init();
         this.field("טלפון נייד", snap.contact.phone, chg("personal", "טלפון נייד")) +
         this.field("דוא״ל", snap.contact.email, chg("personal", "דוא״ל")) +
         this.field("כתובת", snap.contact.address || primary.address, chg("personal", "כתובת") || chg("personal", pLabel("כתובת"))) +
-        this.field("מיקוד", snap.contact.zip || primary.zip, chg("personal", "מיקוד") || chg("personal", pLabel("מיקוד")));
+        this.field("מיקוד", snap.contact.zip || primary.zip, chg("personal", "מיקוד") || chg("personal", pLabel("מיקוד"))) +
+        this.field("אופן קבלת דיוורים", snap.delivery?.method, chg("delivery", "אופן קבלת דיוורים")) +
+        this.field("אימייל למשלוח דיוורים", snap.delivery?.email, chg("delivery", "אימייל למשלוח דיוורים"));
 
-      const isBank = safeTrim(snap.payment.method) === "ho" || safeTrim(snap.payment.method) === "bank";
-      const payFields = isBank
+      const isBank = safeTrim(snap.payment.method) === "הוראת קבע" || safeTrim(snap.payment.method) === "ho" || safeTrim(snap.payment.method) === "bank";
+      const payFields =
+        this.field("אמצעי תשלום", snap.payment.method, chg("payment", "אמצעי תשלום")) +
+        this.field("זהות המשלם", snap.payment.payerChoice, chg("payment", "זהות המשלם")) +
+        (isBank
         ? this.field("שם הבנק", snap.payment.bankName, chg("payment", "שם הבנק")) +
           this.field("מספר בנק", snap.payment.bankNo, chg("payment", "מספר בנק")) +
           this.field("סניף", snap.payment.branch, chg("payment", "סניף")) +
@@ -31966,7 +32224,7 @@ UsersGateUI.init();
         : this.field("שם בעל הכרטיס", snap.payment.holderName, chg("payment", "שם בעל הכרטיס")) +
           this.field("ת״ז בעל הכרטיס", snap.payment.holderId, chg("payment", "ת״ז בעל הכרטיס")) +
           this.field("4 ספרות אחרונות", snap.payment.cardLast4, chg("payment", "4 ספרות אחרונות")) +
-          this.field("תוקף", snap.payment.exp, chg("payment", "תוקף כרטיס"));
+          this.field("תוקף", snap.payment.exp, chg("payment", "תוקף כרטיס")));
 
       const healthEntries = Object.values(snap.health || {});
       const multiIns = new Set(healthEntries.map((x) => safeTrim(x.insuredLabel))).size > 1;
@@ -31976,6 +32234,27 @@ UsersGateUI.init();
             return this.field(label, item.value, chg("health", label));
           }).join("")
         : "";
+
+      const benefEntries = Object.values(snap.beneficiaries || {});
+      const benefFields = benefEntries.map((item) => {
+        const title = item.title || "פוליסה";
+        return this.field(`${title} · יורשים חוקיים`, item.legalHeirs, chg("beneficiaries", `${title} · יורשים חוקיים`)) +
+          this.field(`${title} · מוטבים`, item.beneficiaries, chg("beneficiaries", `${title} · מוטבים`)) +
+          this.field(`${title} · בנקים משעבדים`, item.pledgeBanks, chg("beneficiaries", `${title} · בנקים משעבדים`));
+      }).join("");
+
+      const cancelEntries = Object.values(snap.cancel?.policies || {});
+      const cancelFields = cancelEntries.map((item) => {
+        const title = item.title || "פוליסה";
+        return this.field(`${title} · אישור ביטול`, item.confirmed, chg("cancel", `${title} · אישור ביטול`)) +
+          this.field(`${title} · אופן ביצוע ביטול`, item.executionMethod, chg("cancel", `${title} · אופן ביצוע ביטול`));
+      }).join("") +
+        this.field("השארת כיסוי קיים", snap.cancel?.keepExisting, chg("cancel", "השארת כיסוי קיים")) +
+        this.field("אישור תוספת לכיסוי קיים", snap.cancel?.approveAddition, chg("cancel", "אישור תוספת לכיסוי קיים"));
+      const cancelHasRows = !!(report.areas.find((a) => a.key === "cancel")?.rows.length
+        || cancelEntries.length
+        || safeTrim(snap.cancel?.keepExisting)
+        || safeTrim(snap.cancel?.approveAddition));
 
       let policies = [];
       try{ policies = (getCustomerRawNewPolicies(rec) || []).filter((p) => String(p?.origin || "") !== "existing"); }catch(_e){ policies = []; }
@@ -31993,8 +32272,8 @@ UsersGateUI.init();
       const changeTableHtml = changeRows.length ? `
           <div class="mtqSectionBlock mtqPanel" id="mtqPktChanges">
             <div class="mtqPanel__head">
-              <h2 class="mtqPanel__title">סיכום שינויי שיקוף</h2>
-              <span class="mtqPanel__hint">למעקב מהיר של מקליד</span>
+              <h2 class="mtqPanel__title">דוח תיקוני הצעה</h2>
+              <span class="mtqPanel__hint">כל השינויים שבוצעו בשיחת השיקוף</span>
             </div>
             <div class="mtqPanel__body" style="padding-top:0;padding-bottom:12px">
               <table class="mtqChgTable" style="margin-top:12px">
@@ -32019,7 +32298,9 @@ UsersGateUI.init();
         ["mtqPktContact", "יצירת קשר וכתובת"],
         ["mtqPktPay", "אמצעי תשלום"],
         healthFields ? ["mtqPktHealth", "הצהרת בריאות"] : null,
-        changeTableHtml ? ["mtqPktChanges", "סיכום שינויי שיקוף"] : null,
+        benefFields ? ["mtqPktBenef", "מוטבים ושעבוד"] : null,
+        cancelHasRows ? ["mtqPktCancel", "שאלון ביטול"] : null,
+        changeTableHtml ? ["mtqPktChanges", "דוח תיקוני הצעה"] : null,
         productFields ? ["mtqPktProduct", "פוליסות / מוצר"] : null
       ].filter(Boolean);
 
@@ -32053,9 +32334,11 @@ UsersGateUI.init();
 
           <div>
             ${this.section("mtqPktId", "פרטי לקוח", `<span class="mtqPanel__hint">מזהים בסיסיים</span>`, idFields)}
-            ${this.section("mtqPktContact", "יצירת קשר וכתובת", sectionHasChange(["טלפון נייד", "דוא״ל", "כתובת", "מיקוד"], "personal") ? changedBadge : `<span class="mtqPanel__hint">פרטי התקשרות</span>`, contactFields)}
+            ${this.section("mtqPktContact", "יצירת קשר וכתובת", (sectionHasChange(["טלפון נייד", "דוא״ל", "כתובת", "מיקוד"], "personal") || report.areas.find((a) => a.key === "delivery")?.rows.length) ? changedBadge : `<span class="mtqPanel__hint">פרטי התקשרות</span>`, contactFields)}
             ${this.section("mtqPktPay", "אמצעי תשלום", report.areas.find((a) => a.key === "payment")?.rows.length ? changedBadge : `<span class="mtqPanel__hint">${isBank ? "הוראת קבע" : "כרטיס אשראי"}</span>`, payFields)}
             ${healthFields ? this.section("mtqPktHealth", "הצהרת בריאות — סיכום לשיקוף", report.areas.find((a) => a.key === "health")?.rows.length ? changedBadge : `<span class="mtqPanel__hint">כפי שנשמר בתיק</span>`, healthFields) : ""}
+            ${benefFields ? this.section("mtqPktBenef", "מוטבים ושעבוד", report.areas.find((a) => a.key === "beneficiaries")?.rows.length ? changedBadge : `<span class="mtqPanel__hint">כפי שנשמר בתיק</span>`, benefFields) : ""}
+            ${cancelHasRows ? this.section("mtqPktCancel", "שאלון ביטול", report.areas.find((a) => a.key === "cancel")?.rows.length ? changedBadge : `<span class="mtqPanel__hint">כפי שנשמר בתיק</span>`, cancelFields) : ""}
             ${changeTableHtml}
             ${productFields ? this.section("mtqPktProduct", "מוצר להקלדה", `<span class="mtqPanel__hint">${policies.length} פוליסות</span>`, productFields) : ""}
           </div>
@@ -67055,9 +67338,9 @@ ${inner}
       this._handleNeedsAct("needs-to-offer");
     },
 
-    /* ===== GI-MIRROR-DIFF · מסך סיכום תיקוני השיקוף =========================
-       נפתח בלחיצה על «סיים שיקוף» ולפני שהלקוח עובר להקלדה. הנציג רואה מה
-       תוקן בשיחה לפי אזור, מאשר שעבר על הכל, ורק אז הלקוח נכנס לתור ההקלדה. */
+    /* ===== GI-MIRROR-DIFF · דוח תיקוני הצעה =================================
+       נפתח בלחיצה על «סיים שיקוף» ולפני שהלקוח עובר להקלדה. הנציג רואה כל
+       שינוי שבוצע בכל מסך בשיחה, מאשר שעבר על הכל, ורק אז הלקוח נכנס לתור. */
 
     _mirrorSummaryCallMeta(rec){
       const call = getMirrorCallStore(rec);
@@ -67080,7 +67363,7 @@ ${inner}
               <div class="mtqChgSection">
                 <div class="mtqChgSection__head">
                   <div class="mtqChgSection__name">${escapeHtml(area.label)} <span class="mtqBadge mtqBadge--chg">${area.rows.length}</span></div>
-                  ${area.key === "personal" ? `<div class="mtqChgSection__count">לעומת נתוני האשף לפני השיקוף</div>` : ""}
+                  ${`<div class="mtqChgSection__count">לעומת נתוני האשף לפני השיקוף</div>`}
                 </div>
                 <table class="mtqChgTable">
                   <thead>
@@ -67109,11 +67392,11 @@ ${inner}
               <div class="mtqUnchangedNote" style="margin-bottom:18px">לא נלכד תצלום נתונים בתחילת השיחה, ולכן לא ניתן להציג השוואת «לפני / אחרי» עבור שיחה זו. ניתן להמשיך ולאשר את העברת הלקוח להקלדה.</div>`;
 
       this.els.mirrorSummaryBody.innerHTML = `
-        <div class="mtqCrumb">שיחת שיקוף <span>›</span> שלב אחרון <span>›</span> <span>דוח שינויים לפני העברה להקלדה</span></div>
+        <div class="mtqCrumb">שיחת שיקוף <span>›</span> שלב אחרון <span>›</span> <span>דוח תיקוני הצעה</span></div>
         <div class="mtqPageHead">
           <div>
-            <div class="mtqPageHead__title">סיכום תיקונים בשיחת השיקוף</div>
-            <p class="mtqPageHead__sub">סקירה לפני אישור העברת הלקוח לתור «ממתין להקלדה»</p>
+            <div class="mtqPageHead__title">דוח תיקוני הצעה</div>
+            <p class="mtqPageHead__sub">כל שינוי שבוצע בכל מסך בשיחת השיקוף — סקירה לפני אישור העברה לתור «ממתין להקלדה»</p>
           </div>
           <div class="mtqBtnRow">
             <button class="mtqBtn mtqBtn--ghost" type="button" data-mc-summary-act="back">חזרה לשיחה</button>
