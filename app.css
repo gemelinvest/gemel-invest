@@ -34868,11 +34868,47 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
   gap:10px;
 }
 .mcDiscCard{
-  padding:12px 14px;
+  padding:0;
   border-radius:14px;
   border:1px solid rgba(42,92,245,.14);
   background:rgba(255,255,255,.96);
   box-shadow:0 4px 14px rgba(15,32,96,.05);
+}
+.mcDiscCard__summary{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  cursor:pointer;
+  list-style:none;
+  padding:12px 14px;
+  border-radius:14px;
+}
+.mcDiscCard[open] > .mcDiscCard__summary{
+  border-radius:14px 14px 0 0;
+}
+.mcDiscCard__summary:hover{
+  background:rgba(42,92,245,.04);
+}
+.mcDiscCard__summary::-webkit-details-marker,
+.mcDiscCard__summary::marker{
+  display:none;
+  content:"";
+}
+.mcDiscCard__summaryMain{min-width:0;flex:1;}
+.mcDiscCard__chev{
+  flex:0 0 auto;
+  width:18px;
+  height:18px;
+  margin-top:4px;
+  border-inline-end:2px solid #2a5cf5;
+  border-bottom:2px solid #2a5cf5;
+  transform:rotate(45deg);
+  transition:transform .18s ease;
+}
+.mcDiscCard[open] > .mcDiscCard__summary .mcDiscCard__chev{
+  transform:rotate(225deg);
+  margin-top:8px;
 }
 .mcDiscCard__head{margin:0 0 8px;}
 .mcDiscCard__title{
@@ -34892,7 +34928,7 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
   display:flex;
   flex-wrap:wrap;
   gap:6px;
-  margin:0 0 10px;
+  margin:0;
 }
 .mcDiscChip{
   display:inline-flex;
@@ -34907,6 +34943,7 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
   line-height:1.3;
 }
 .mcDiscCard__text{
+  margin:0 14px 12px;
   max-height:min(38vh, 280px);
   overflow:auto;
   padding:10px 12px;

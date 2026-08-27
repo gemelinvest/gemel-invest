@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260827-ops-mirror-health-decl-v1";
+const APP_TAG = "20260827-ops-disclosure-hach-ayalon-v1";
 const THEME_TAG = "20260826-live-fix-v1";
 let failed = 0;
 let passed = 0;
