@@ -33673,6 +33673,11 @@ UsersGateUI.init();
         this._todaySalesForceAt = now;
         try { this.ensureTodaySalesServerOverlay({ force: true }); } catch(_e) {}
         try { this._scheduleTodaySalesOverlayRetry(); } catch(_e) {}
+        try {
+          this._metricsCacheKey = "";
+          this._localMetricsAttemptedKey = "";
+          this.compareServerKpis?.(this._metricsCache);
+        } catch(_e) {}
       }
       try {
         if(typeof LiveRefresh !== "undefined" && LiveRefresh.getCurrentView?.() === "dashboard"){
@@ -33688,6 +33693,7 @@ UsersGateUI.init();
       }
       this._todaySalesRetryTimers = delays.map((ms) => window.setTimeout(() => {
         try { this.ensureTodaySalesServerOverlay({ force: true }); } catch(_e) {}
+        try { this.compareServerKpis?.(this._metricsCache); } catch(_e) {}
         try { this.scheduleRefreshKpis(); } catch(_e) {}
       }, ms));
     },
@@ -33722,6 +33728,28 @@ UsersGateUI.init();
 
     _shouldPaintTodayOverlayValue(overlayPrem, localPrem){
       return !(Number(localPrem) > Number(overlayPrem));
+    },
+
+    /**
+     * האם למלא «פרמיה חודשית נטו» מ-RPC.
+     * לא משנה policyNetPremium / שיוך / טווח חודש — רק איזה מקור מוצג.
+     * חוסר: אל תדרוס סכום מקומי גבוה ב-RPC נמוך.
+     * עודף: כשהחישוב המקומי מוכן, אל תעבור ל-RPC רק כי הוא גדול יותר.
+     */
+    _shouldApplyServerNetOverlay(opts){
+      opts = opts && typeof opts === "object" ? opts : {};
+      const localNet = Number(opts.localNet) || 0;
+      const serverNet = Number(opts.serverNet) || 0;
+      const missingCustomers = Number(opts.missingCustomers) || 0;
+      const localReady = opts.localReady === true;
+      const localHasNet = opts.localHasNet === true || localNet > 0;
+      if(!(serverNet > 0) && localNet > 0) return false;
+      if(serverNet > 0 && serverNet < localNet) return false;
+      const hydrating = missingCustomers > 0 || localReady !== true;
+      if(!hydrating && localHasNet) return false;
+      if(serverNet > localNet) return true;
+      if(!(localNet > 0) && serverNet > 0) return true;
+      return false;
     },
 
     /** GI-FIX: מנהל/טעינה רזה — «נמכר היום» מ-RPC (gi_dashboard_net_premium בטווח היום = בריאות/סיכונים בלבד). */
@@ -52502,12 +52530,22 @@ const ClalRiskLifePdf = {
         const localReady = !!(this._metricsCache && this._metricsCache._localBuildReady === true);
         const localHasMoney = (Number(this._metricsCache?.netPremium) > 0)
           || (Number(this._metricsCache?.agentAppointmentPremium) > 0);
-        const serverHasMore = (Number(res.netPremium) || 0) > (Number(this._metricsCache?.netPremium) || 0)
-          || (Number(res.apptPremium) || 0) > (Number(this._metricsCache?.agentAppointmentPremium) || 0);
+        const localNet = Number(this._metricsCache?.netPremium) || 0;
+        const serverNet = Number(res.netPremium) || 0;
+        const applyServerNet = this._shouldApplyServerNetOverlay({
+          localNet,
+          serverNet,
+          missingCustomers,
+          localReady,
+          localHasNet: localNet > 0
+        });
+        const serverHasMoreAppt = (Number(res.apptPremium) || 0) > (Number(this._metricsCache?.agentAppointmentPremium) || 0);
         /* GI-FIX 2026-08-09b: ממלאים מ-RPC כל עוד אין חישוב מקומי מוכן —
            לא רק בזמן missing payloads (אחרת אחרי hydration המסך קופץ ל־0).
-           GI-FACE-KPI 2026-08-14: גם אם סומן localReady על ₪0 (כניסת פנים מוקדמת). */
-        if(missingCustomers > 0 || !localReady || !localHasMoney || serverHasMore){
+           GI-FACE-KPI 2026-08-14: גם אם סומן localReady על ₪0 (כניסת פנים מוקדמת).
+           GI-NET-LIVE 2026-08-27: נטו — לא דורסים סכום מקומי גבוה, ולא עוברים ל-RPC
+           גדול יותר אחרי שהחישוב המקומי מוכן. מינוי סוכן נשאר במסלול הקיים. */
+        if(applyServerNet || missingCustomers > 0 || !localReady || !localHasMoney || serverHasMoreAppt){
           const m = (this._metricsCache && typeof this._metricsCache === "object")
             ? this._metricsCache
             : (metrics && typeof metrics === "object" ? metrics : this._metricsLoadingShell());
@@ -52520,25 +52558,35 @@ const ClalRiskLifePdf = {
             Number(m.agentAppointments) || 0,
             Number(m.newClients) || 0
           ].join("|");
-          const netPremium = Number(res.netPremium) || 0;
+          const netPremium = serverNet;
           const apptPremium = Number(res.apptPremium) || 0;
           const apptPolicies = Number(res.apptPolicies) || 0;
-          // אל תדרוס מספרים טובים באפסים אם ה-RPC החזיר ריק זמנית
-          if(netPremium > 0 || !(Number(m.netPremium) > 0)){
+          if(applyServerNet){
             m.netPremium = netPremium;
             m.soldPolicies = Number(res.soldPolicies) || 0;
             m.newClients = Number(res.newClients) || 0;
+            if(res.productTotals && typeof res.productTotals === "object"
+              && Object.keys(res.productTotals).length){
+              m.netProductTotals = res.productTotals;
+            }
+            try { this.applyTargetFieldsToMetrics(m, Number(m.netPremium) || 0); } catch(_e) {}
+            m.avgPremium = m.customersMonth?.length ? ((Number(m.netPremium) || 0) / m.customersMonth.length) : 0;
+            if(!localReady || missingCustomers > 0){
+              m._serverKpiOverlay = true;
+              m._localBuildReady = false;
+            }
+            m._loading = false;
+          } else if(netPremium > 0 && !(Number(m.netPremium) > 0)){
+            m.netPremium = netPremium;
+            m.soldPolicies = Number(res.soldPolicies) || 0;
+            m.newClients = Number(res.newClients) || 0;
+            m._loading = false;
           }
           if(res.apptFetched === true && apptPremium > 0){
             try { this._applyAppointmentKpi(apptPremium, apptPolicies, null, "server"); } catch(_e) {
               m.agentAppointmentPremium = apptPremium;
               m.agentAppointments = apptPolicies;
             }
-          }
-          /* פירוט מוצרים מ-RPC — בלי payloads בזיכרון אין מאיפה לבנות «הצג פירוט». */
-          if(res.productTotals && typeof res.productTotals === "object"
-            && Object.keys(res.productTotals).length){
-            m.netProductTotals = res.productTotals;
           }
           /* אין RPC לפי לקוח למינוי סוכן — מציגים סיכום שרת עד שה-hydration ממלא פירוט מלא. */
           if((apptPolicies > 0 || apptPremium > 0) && !Array.isArray(m.agentApptItems)){
@@ -52548,12 +52596,10 @@ const ClalRiskLifePdf = {
               latestStamp: Date.now()
             }];
           }
-          /* GI-FIX 2026-08-09 — יעד לפי היקף (כל הנציגים/צוות/אישי), לא רק יעד אישי של המנהל. */
-          try { this.applyTargetFieldsToMetrics(m, Number(m.netPremium) || 0); } catch(_e) {}
-          m.avgPremium = m.customersMonth?.length ? ((Number(m.netPremium) || 0) / m.customersMonth.length) : 0;
-          m._serverKpiOverlay = true;
-          m._localBuildReady = false;
-          m._loading = false;
+          if(!applyServerNet && !localReady){
+            m._serverKpiOverlay = true;
+            m._loading = false;
+          }
           const nextFp = [
             Number(m.netPremium) || 0,
             Number(m.soldPolicies) || 0,
