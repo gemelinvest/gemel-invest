@@ -62200,6 +62200,7 @@ ${inner}
             (existingCards.length ? existingCards.join("") : `<p class="mcPreFlightDetailP">אין פוליסות קיימות בתיק.</p>`);
         }
         if(key === "beneficiaries"){
+          try{ this._seedBeneficiariesStepFromProposal(rec); }catch(_e){}
           const risk = policies.filter((p) => this._isRiskOrMortgageRiskType(p?.type || p?.product));
           if(!risk.length) return `<p class="mcPreFlightDetailP">אין פוליסות סיכונים למוטבים / שיעבוד בתיק.</p>`;
           return risk.map((p) => {
@@ -62207,7 +62208,7 @@ ${inner}
               ? p.pledgeBanks
               : [(p?.pledgeBank && typeof p.pledgeBank === "object") ? p.pledgeBank : {}];
             const bank = banks[0] || {};
-            const pledged = !!(p?.pledge || p?.hasPledge);
+            const pledged = this._policyHasFilledPledge ? this._policyHasFilledPledge(p) : !!(p?.pledge || p?.hasPledge);
             const bens = Array.isArray(p?.beneficiaries) ? p.beneficiaries : [];
             const bensHtml = bens.length
               ? bens.map((b, i) => {
@@ -65551,15 +65552,252 @@ ${inner}
       return rec.payload.mirrorFlow.healthDeclaration;
     },
 
+    _benefRowHasData(b){
+      if(!b || typeof b !== "object") return false;
+      return !!(
+        safeTrim(b.firstName) || safeTrim(b.lastName) || safeTrim(b.fullName) || safeTrim(b.name) ||
+        safeTrim(b.idNumber) || safeTrim(b.id) ||
+        safeTrim(b.sharePct ?? b.percent) ||
+        safeTrim(b.relationship || b.relation) ||
+        safeTrim(b.phone) || safeTrim(b.birthDate)
+      );
+    },
+
+    _normalizeBenefRow(b){
+      const src = (b && typeof b === "object") ? b : {};
+      const full = safeTrim(src.fullName || src.name);
+      let first = safeTrim(src.firstName);
+      let last = safeTrim(src.lastName);
+      if((!first || !last) && full){
+        const parts = full.split(/\s+/).filter(Boolean);
+        if(!first && parts.length) first = parts.shift() || "";
+        if(!last && parts.length) last = parts.join(" ");
+      }
+      const share = (src.sharePct != null && String(src.sharePct) !== "")
+        ? src.sharePct
+        : (src.percent != null && String(src.percent) !== "" ? src.percent : "");
+      return {
+        firstName: first,
+        lastName: last,
+        idNumber: safeTrim(src.idNumber || src.id),
+        birthDate: safeTrim(src.birthDate),
+        phone: safeTrim(src.phone),
+        relationship: safeTrim(src.relationship || src.relation),
+        sharePct: share
+      };
+    },
+
+    _emptyPledgeBankRow(){
+      return { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" };
+    },
+
+    _pledgeBankHasData(b){
+      if(!b || typeof b !== "object") return false;
+      return !!(
+        safeTrim(b.bankName || b.name) || safeTrim(b.bankNo) ||
+        safeTrim(b.branch || b.branchNo) || safeTrim(b.amount) ||
+        safeTrim(b.years) || safeTrim(b.address)
+      );
+    },
+
+    _copyMissingPledgeBankFields(target, source){
+      if(!target || typeof target !== "object") return target;
+      const src = (source && typeof source === "object") ? source : {};
+      const take = (key, aliases) => {
+        if(safeTrim(target[key])) return;
+        for(const alias of aliases){
+          const v = src[alias];
+          if(v != null && safeTrim(v) !== ""){
+            target[key] = v;
+            return;
+          }
+        }
+      };
+      take("bankName", ["bankName", "name"]);
+      take("bankNo", ["bankNo"]);
+      take("branch", ["branch", "branchNo"]);
+      take("amount", ["amount"]);
+      take("years", ["years"]);
+      take("address", ["address"]);
+      return target;
+    },
+
+    _pledgeBanksFromPolicy(policy){
+      if(!policy || typeof policy !== "object") return [];
+      let list = Array.isArray(policy.pledgeBanks) ? policy.pledgeBanks.filter((b) => b && typeof b === "object") : [];
+      if(!list.length && policy.pledgeBank && typeof policy.pledgeBank === "object") list = [policy.pledgeBank];
+      if(!list.length && this._policyHasFilledPledge(policy)) list = [this._emptyPledgeBankRow()];
+      return list.map((b) => {
+        const next = Object.assign(this._emptyPledgeBankRow(), b);
+        this._copyMissingPledgeBankFields(next, b);
+        if(!safeTrim(next.bankName) && safeTrim(policy.pledgeBankName)) next.bankName = safeTrim(policy.pledgeBankName);
+        if(!safeTrim(next.amount) && safeTrim(policy.mortgageAmount)) next.amount = policy.mortgageAmount;
+        if(!safeTrim(next.years) && safeTrim(policy.mortgageYears)) next.years = policy.mortgageYears;
+        if(!safeTrim(next.address) && safeTrim(policy.mortgageAddress)) next.address = policy.mortgageAddress;
+        return next;
+      }).filter((b) => this._pledgeBankHasData(b));
+    },
+
+    _policyHasFilledPledge(policy){
+      if(!policy || typeof policy !== "object") return false;
+      if(policy.pledge === true || policy.hasPledge === true) return true;
+      if(safeTrim(policy.pledgeBankName)) return true;
+      if(this._pledgeBankHasData(policy.pledgeBank)) return true;
+      if(Array.isArray(policy.pledgeBanks) && policy.pledgeBanks.some((b) => this._pledgeBankHasData(b))) return true;
+      if(safeTrim(policy.mortgageAmount) || safeTrim(policy.mortgageYears) || safeTrim(policy.mortgageAddress)) return true;
+      return false;
+    },
+
     _policyHasPledge(policy){
-      return !!(policy?.pledge || policy?.hasPledge);
+      return this._policyHasFilledPledge(policy);
+    },
+
+    _fillEmptyPledgeBankFields(policy){
+      if(!policy || typeof policy !== "object") return [];
+      let banks = Array.isArray(policy.pledgeBanks) ? policy.pledgeBanks.filter((b) => b && typeof b === "object") : [];
+      if(!banks.length){
+        banks = [policy.pledgeBank && typeof policy.pledgeBank === "object"
+          ? policy.pledgeBank
+          : this._emptyPledgeBankRow()];
+        policy.pledgeBanks = banks;
+      }
+      const first = banks[0];
+      if(first && typeof first === "object"){
+        if(!safeTrim(first.bankName) && safeTrim(policy.pledgeBankName)) first.bankName = safeTrim(policy.pledgeBankName);
+        if(!safeTrim(first.amount) && safeTrim(policy.mortgageAmount)) first.amount = policy.mortgageAmount;
+        if(!safeTrim(first.years) && safeTrim(policy.mortgageYears)) first.years = policy.mortgageYears;
+        if(!safeTrim(first.address) && safeTrim(policy.mortgageAddress)) first.address = policy.mortgageAddress;
+      }
+      policy.pledgeBank = banks[0];
+      return banks;
+    },
+
+    _policiesMatchForBenefSeed(a, b){
+      if(!a || !b) return false;
+      const idA = safeTrim(a.id), idB = safeTrim(b.id);
+      if(idA && idB && idA === idB) return true;
+      const coA = safeTrim(a.company), coB = safeTrim(b.company);
+      const tyA = safeTrim(a.type || a.product), tyB = safeTrim(b.type || b.product);
+      if(!coA || !tyA || coA !== coB || tyA !== tyB) return false;
+      const insA = safeTrim(a.insuredId || (Array.isArray(a.insuredIds) ? a.insuredIds[0] : ""));
+      const insB = safeTrim(b.insuredId || (Array.isArray(b.insuredIds) ? b.insuredIds[0] : ""));
+      return !insA || !insB || insA === insB;
+    },
+
+    _proposalPolicyBenefScore(p){
+      if(!p || typeof p !== "object") return 0;
+      let s = 0;
+      const bens = Array.isArray(p.beneficiaries) ? p.beneficiaries : [];
+      if(bens.some((b) => this._benefRowHasData(b))) s += 10;
+      if(this._policyHasFilledPledge(p)) s += 10;
+      if(safeTrim(p.beneficiariesMode) === "legalHeirs") s += 5;
+      return s;
+    },
+
+    _collectProposalPolicySourceLists(rec){
+      const lists = [];
+      const pl = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+      if(Array.isArray(pl.newPolicies) && pl.newPolicies.length) lists.push(pl.newPolicies);
+      if(Array.isArray(pl.operational?.newPolicies) && pl.operational.newPolicies.length) lists.push(pl.operational.newPolicies);
+      try{
+        const props = (typeof findProposalsLinkedToCustomer === "function")
+          ? (findProposalsLinkedToCustomer(rec) || [])
+          : [];
+        props.forEach((prop) => {
+          const ppl = prop?.payload && typeof prop.payload === "object" ? prop.payload : {};
+          if(Array.isArray(ppl.newPolicies) && ppl.newPolicies.length) lists.push(ppl.newPolicies);
+          if(Array.isArray(ppl.operational?.newPolicies) && ppl.operational.newPolicies.length) lists.push(ppl.operational.newPolicies);
+        });
+      }catch(_e){}
+      return lists;
+    },
+
+    _findBestProposalPolicySource(policy, lists){
+      let best = null;
+      let bestScore = 0;
+      (Array.isArray(lists) ? lists : []).forEach((list) => {
+        (Array.isArray(list) ? list : []).forEach((src) => {
+          if(!src || src === policy) return;
+          if(!this._policiesMatchForBenefSeed(policy, src)) return;
+          const score = this._proposalPolicyBenefScore(src);
+          if(score > bestScore){
+            best = src;
+            bestScore = score;
+          }
+        });
+      });
+      return bestScore > 0 ? best : null;
+    },
+
+    _seedPolicyBeneficiariesFromSource(policy, source){
+      if(!policy || typeof policy !== "object" || !source || typeof source !== "object") return policy;
+      if(!safeTrim(policy.beneficiariesMode) && safeTrim(source.beneficiariesMode)){
+        policy.beneficiariesMode = source.beneficiariesMode;
+      }
+      const liveBens = Array.isArray(policy.beneficiaries) ? policy.beneficiaries : [];
+      const liveHas = liveBens.some((b) => this._benefRowHasData(b));
+      if(!liveHas){
+        const srcBens = Array.isArray(source.beneficiaries) ? source.beneficiaries : [];
+        const copied = srcBens.map((b) => this._normalizeBenefRow(b)).filter((b) => this._benefRowHasData(b));
+        if(copied.length) policy.beneficiaries = copied;
+      } else {
+        liveBens.forEach((b) => {
+          if(!b || typeof b !== "object") return;
+          const n = this._normalizeBenefRow(b);
+          if(!safeTrim(b.firstName) && n.firstName) b.firstName = n.firstName;
+          if(!safeTrim(b.lastName) && n.lastName) b.lastName = n.lastName;
+          if(!safeTrim(b.idNumber) && n.idNumber) b.idNumber = n.idNumber;
+          if(!safeTrim(b.relationship) && n.relationship) b.relationship = n.relationship;
+          if((b.sharePct == null || String(b.sharePct) === "") && n.sharePct !== "") b.sharePct = n.sharePct;
+          if(!safeTrim(b.phone) && n.phone) b.phone = n.phone;
+          if(!safeTrim(b.birthDate) && n.birthDate) b.birthDate = n.birthDate;
+        });
+      }
+      if(!policy.pledge && !policy.hasPledge && this._policyHasFilledPledge(source)){
+        policy.pledge = true;
+      }
+      this._fillEmptyPledgeBankFields(policy);
+      if(source !== policy){
+        const srcBanks = this._pledgeBanksFromPolicy(source);
+        const liveBanks = this._ensurePledgeBanks(policy);
+        const liveHasBanks = liveBanks.some((b) => this._pledgeBankHasData(b));
+        if(!liveHasBanks && srcBanks.length){
+          const cloned = srcBanks.slice(0, GI_MAX_PLEDGE_BANKS).map((b) => Object.assign(this._emptyPledgeBankRow(), b));
+          if(cloned.length){
+            policy.pledgeBanks = cloned;
+            policy.pledgeBank = cloned[0];
+          }
+        } else {
+          srcBanks.forEach((sb, i) => {
+            if(!liveBanks[i]) return;
+            this._copyMissingPledgeBankFields(liveBanks[i], sb);
+          });
+        }
+      }
+      return policy;
+    },
+
+    /** מושך מוטבים / בנק משעבד מההצעה לכרטיס שלב 6 — בלי לדרוס מה שכבר מולא, בלי חישוב פרמיה/שיעבוד. */
+    _seedBeneficiariesStepFromProposal(rec){
+      if(!rec || typeof rec !== "object") return;
+      this._mirrorCoerceCustomerPayloadInPlace(rec);
+      const live = this._mirrorGetNewPoliciesRaw(rec);
+      const lists = this._collectProposalPolicySourceLists(rec);
+      live.forEach((policy) => {
+        if(!this._isRiskOrMortgageRiskType(policy?.type || policy?.product)) return;
+        this._fillEmptyPledgeBankFields(policy);
+        const src = this._findBestProposalPolicySource(policy, lists) || policy;
+        this._seedPolicyBeneficiariesFromSource(policy, src);
+      });
     },
 
     // GI-PLEDGE-MULTI — מחזיר את מערך הבנקים המשעבדים (עם מיגרציה מהמבנה הישן)
     _ensurePledgeBanks(policy){
-      if(!policy || typeof policy !== "object") return [{ bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" }];
+      if(!policy || typeof policy !== "object") return [this._emptyPledgeBankRow()];
       if(typeof Wizard !== "undefined" && typeof Wizard.normalizePledgeBanks === "function"){
-        return Wizard.normalizePledgeBanks(policy);
+        const banks = Wizard.normalizePledgeBanks(policy);
+        this._fillEmptyPledgeBankFields(policy);
+        return Array.isArray(policy.pledgeBanks) && policy.pledgeBanks.length ? policy.pledgeBanks : banks;
       }
       if(!Array.isArray(policy.pledgeBanks) || !policy.pledgeBanks.length){
         policy.pledgeBanks = [policy.pledgeBank && typeof policy.pledgeBank === "object"
@@ -65567,6 +65805,7 @@ ${inner}
           : { bankName: safeTrim(policy.pledgeBankName) || "", bankNo:"", branch:"", amount:"", years:"", address:"" }];
       }
       policy.pledgeBank = policy.pledgeBanks[0];
+      this._fillEmptyPledgeBankFields(policy);
       return policy.pledgeBanks;
     },
 
@@ -65592,6 +65831,7 @@ ${inner}
     },
 
     _collectRiskBeneficiaryPolicies(rec){
+      try{ this._seedBeneficiariesStepFromProposal(rec); }catch(_e){}
       const pl = rec?.payload || {};
       const insureds = this._mirrorGetInsureds(rec);
       const rawList = this._mirrorGetNewPoliciesRaw(rec);
@@ -65637,6 +65877,7 @@ ${inner}
 
     _enterBeneficiariesOrSkip(rec, direction){
       const dir = safeTrim(direction) || "forward";
+      try{ this._seedBeneficiariesStepFromProposal(rec); }catch(_e){}
       if(this._hasBeneficiariesStepPolicies(rec)){
         this._mirrorUiPhase = "beneficiaries";
         this._renderBeneficiariesBody(rec);
@@ -66027,11 +66268,16 @@ ${inner}
       const addBtnHtml = pledgeBanks.length < GI_MAX_PLEDGE_BANKS
         ? `<button type="button" class="btn mcPledgeAddBtn" data-mc-pledge-add>+ הוסף בנק שני</button>`
         : `<span class="mcPledgeMaxNote">מקסימום ${GI_MAX_PLEDGE_BANKS} בנקים</span>`;
+      const fromProposal = pledgeBanks.some((b) => this._pledgeBankHasData(b));
+      const hintHtml = fromProposal
+        ? `<div class="mcBenefCard__hint">פרטי הבנק המשעבד מההצעה — אמת מול הלקוח ועדכן אם צריך.</div>`
+        : `<div class="mcBenefCard__hint">לא הוזן בנק משעבד בהצעה — יש למלא מול הלקוח.</div>`;
       return `<div class="mcPledgeBox" aria-label="פרטי הבנק המשעבד">` +
         `<div class="mcPledgeBox__head">` +
           `<div class="mcPledgeBox__title">פרטי הבנק${multi ? "ים" : ""} המשעבד${multi ? "ים" : ""} (מוטב בלתי חוזר)</div>` +
           addBtnHtml +
         `</div>` +
+        hintHtml +
         balanceHtml +
         cards +
       `</div>`;
@@ -66044,6 +66290,7 @@ ${inner}
         return;
       }
       this._mirrorCoerceCustomerPayloadInPlace(rec);
+      try{ this._seedBeneficiariesStepFromProposal(rec); }catch(_e){}
       const items = this._collectRiskBeneficiaryPolicies(rec);
       const store = this._mirrorGetBenefStore(rec);
       store.openedAt = store.openedAt || nowISO();
@@ -66066,7 +66313,7 @@ ${inner}
           if(!item.policy.beneficiaries.length) item.policy.beneficiaries.push(this._benefEmptyRow());
         }
         const bens = Array.isArray(item.policy.beneficiaries) ? item.policy.beneficiaries : [];
-        const hasBens = bens.some((b) => safeTrim(b?.firstName) || safeTrim(b?.lastName) || safeTrim(b?.idNumber));
+        const hasBens = bens.some((b) => this._benefRowHasData(b));
         const total = bens.reduce((s, b) => s + (Number(b?.sharePct) || 0), 0);
         // GI-PLEDGE-MULTI — בסיס החלוקה: יתרה אחרי שיעבוד (ריסק רגיל) או מלוא הסכום
         const benBase = this._mcBenefBaseAmount(item.policy);

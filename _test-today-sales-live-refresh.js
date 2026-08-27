@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260827-mirror-disc-amount-v1";
+const APP_TAG = "20260827-mirror-benef-autofill-v1";
 const WIZARD_TAG = "20260827-today-sales-refresh-v1";
 let failed = 0;
 let passed = 0;
