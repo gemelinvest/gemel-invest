@@ -134,6 +134,12 @@
 }
 .ciPager__actions{ display:flex; flex-wrap:wrap; gap:6px; }
 .ciPager__actions .btn[disabled]{ opacity:.45; cursor:not-allowed; }
+.ciModal .btn--primary[disabled],
+.ciModal .btn--primary:disabled{
+  opacity:.45 !important;
+  cursor:not-allowed !important;
+  pointer-events:none;
+}
 .ciDone{ display:flex; align-items:center; gap:18px; padding:12px 0 4px; }
 .ciDone__icon{ font-size:40px; }
 .ciDone__stats{ display:grid; gap:5px; font-size:14.5px; }
