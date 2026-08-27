@@ -24542,6 +24542,17 @@ UsersGateUI.init();
       const corr = (opsStore.correspondence && typeof opsStore.correspondence === "object") ? opsStore.correspondence : {};
       const threadItems = Array.isArray(corr.items) ? corr.items : [];
       const statusLog = Array.isArray(opsStore.statusLog) ? opsStore.statusLog : [];
+      const fmtOpsClock = (raw) => {
+        const value = safeTrim(raw);
+        if(!value) return "";
+        const d = new Date(value);
+        if(Number.isNaN(d.getTime())) return value;
+        try {
+          return d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+        } catch(_e) {
+          return value;
+        }
+      };
       const fmtOpsStamp = (raw) => {
         const value = safeTrim(raw);
         if(!value) return "";
@@ -24549,7 +24560,12 @@ UsersGateUI.init();
       };
       const statusRowsHtml = statusLog.length ? `<div class="customerOpsStatusLog">${statusLog.map((row) => {
         const item = row && typeof row === "object" ? row : {};
-        const meta = [safeTrim(item.by), fmtOpsStamp(item.at)].filter(Boolean).join(" · ");
+        const agent = safeTrim(item.by);
+        const clock = fmtOpsClock(item.at);
+        const meta = [
+          agent ? ("נציג משקף: " + agent) : "",
+          clock ? ("שעה: " + clock) : ""
+        ].filter(Boolean).join(" · ");
         return `<div class="customerOpsStatusRow" data-ops-status-key="${escapeHtml(item.key || "")}">
           <span class="customerOpsStatusRow__label">${escapeHtml(item.label || "")}</span>
           ${meta ? `<span class="customerOpsStatusRow__meta">${escapeHtml(meta)}</span>` : ""}
@@ -31160,6 +31176,26 @@ UsersGateUI.init();
           const premium = this.getPremium(rec);
           const arrival = this.queueArrivalStamp(rec);
           const stamp = arrival || safeTrim(ops.updatedText) || safeTrim(rec.updatedAt) || safeTrim(rec.createdAt);
+          const opsStore = rec?.payload?.opsProcess && typeof rec.payload.opsProcess === "object"
+            ? rec.payload.opsProcess
+            : {};
+          const laneKey = safeTrim(opsStore.waitingMirrorLane);
+          const statusLog = Array.isArray(opsStore.statusLog) ? opsStore.statusLog : [];
+          let laneDoc = null;
+          for(let i = statusLog.length - 1; i >= 0; i--){
+            if(!laneKey || safeTrim(statusLog[i]?.key) === laneKey){
+              laneDoc = statusLog[i];
+              break;
+            }
+          }
+          let laneClock = "";
+          if(laneDoc?.at){
+            const d = new Date(laneDoc.at);
+            if(!Number.isNaN(d.getTime())){
+              try { laneClock = d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" }); }
+              catch(_e){ laneClock = safeTrim(laneDoc.at); }
+            }
+          }
           return {
             id: safeTrim(rec.id),
             rec,
@@ -31172,7 +31208,13 @@ UsersGateUI.init();
             waitLabel: formatRelativeTimeHe(stamp) || "—",
             statusLabel: this.bucketLabel(bucket),
             agentName: safeTrim(assign?.agentName) || "לא משויך",
-            salesAgentName: safeTrim(rec.agentName) || "—"
+            salesAgentName: safeTrim(rec.agentName) || "—",
+            laneKey,
+            laneLabel: (typeof OpsThreadLane !== "undefined" && OpsThreadLane.getLabel)
+              ? (OpsThreadLane.getLabel(laneKey) || "")
+              : "",
+            laneBy: safeTrim(laneDoc?.by),
+            laneClock
           };
         })
         .sort((a, b) => new Date(a.arrival || a.stamp || 0) - new Date(b.arrival || b.stamp || 0));
@@ -31381,6 +31423,8 @@ UsersGateUI.init();
                     <span>ת״ז ${escapeHtml(safeTrim(row.rec.idNumber) || "—")}</span>
                     <span>טל׳ ${escapeHtml(safeTrim(row.rec.phone) || "—")}</span>
                     <span>נציג מכירות: ${escapeHtml(row.salesAgentName)}</span>
+                    ${row.laneLabel ? `<span>סטטוס: ${escapeHtml(row.laneLabel)}</span>` : ""}
+                    ${row.laneBy ? `<span>שיקף: ${escapeHtml(row.laneBy)}${row.laneClock ? " · " + escapeHtml(row.laneClock) : ""}</span>` : ""}
                   </div>
                 </div>
                 <div class="opsDashQueueRow__side">
@@ -60927,16 +60971,14 @@ ${inner}
     },
 
     PREFLIGHT_STEPS: Object.freeze([
-      { key: "intro", n: 1, label: "הצגה עצמית" },
-      { key: "personal", n: 2, label: "פרטי מבוטח/ים" },
-      { key: "needs", n: 3, label: "בירור והתאמת צרכים" },
-      { key: "disclosure", n: 4, label: "גילוי נאות" },
-      { key: "cancel", n: 5, label: "שאלון ביטול" },
-      { key: "beneficiaries", n: 6, label: "פרטי מוטבים" },
-      { key: "health", n: 7, label: "הצהרת בריאות" },
-      { key: "future", n: 8, label: "שינוי או ביטול בעתיד" },
-      { key: "payment", n: 9, label: "פרטי אמצעי תשלום" },
-      { key: "summary", n: 10, label: "סיכום והצהרות" }
+      { key: "personal", label: "פרטי מבוטח/ים" },
+      { key: "needs", label: "בירור והתאמת צרכים" },
+      { key: "disclosure", label: "גילוי נאות" },
+      { key: "cancel", label: "שאלון ביטול" },
+      { key: "beneficiaries", label: "פרטי מוטבים" },
+      { key: "health", label: "הצהרת בריאות" },
+      { key: "payment", label: "פרטי אמצעי תשלום" },
+      { key: "summary", label: "סיכום והצהרות" }
     ]),
 
     _preFlightReviewedSet(){
@@ -61387,7 +61429,6 @@ ${inner}
         const open = openKey === step.key;
         return `<li class="mcPreFlightItem${done ? " is-done" : ""}${open ? " is-open" : ""}" data-mc-prestep="${escapeHtml(step.key)}">` +
           `<button type="button" class="mcPreFlightItem__btn" data-mc-prestep-open="${escapeHtml(step.key)}">` +
-            `<span class="mcPreFlightItem__n">${step.n}</span>` +
             `<span class="mcPreFlightItem__body">` +
               `<span class="mcPreFlightItem__title">${escapeHtml(step.label)}</span>` +
               `<span class="mcPreFlightItem__sum">${escapeHtml(this._preFlightStepSummary(rec, step.key))}</span>` +
