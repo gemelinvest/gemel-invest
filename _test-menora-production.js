@@ -11,7 +11,7 @@ const vm = require("vm");
 
 const ROOT = __dirname;
 const TAG = "20260826-menora-prod-v1";
-const APP_CACHE = "20260827-ops-agent-connected-v1";
+const APP_CACHE = "20260827-today-sales-refresh-v1";
 let failed = 0;
 let passed = 0;
 
