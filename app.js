@@ -39572,7 +39572,7 @@ UsersGateUI.init();
   /* GI-PERF 2026-08-10 — CSS משני אחרי login בלבד (לא במסך הכניסה). */
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
-    "./gi-customers-import.css?v=20260813-cq-v1",
+    "./gi-customers-import.css?v=20260827-clal-prod-commit-v1",
     "./theme-unify-flat.css?v=20260825-hmo-text-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
@@ -71753,7 +71753,7 @@ ${inner}
      ========================================================================== */
 
   const CUSTOMER_IMPORT_VERSION = "1.2";
-  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260827-clal-exe-zip-v1";
+  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260827-clal-prod-commit-v1";
   const GI_PROD_FALLBACK_COMPANIES = Object.freeze([
     { id: "הכשרה", label: "הכשרה", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד." },
     { id: "הפניקס", label: "הפניקס", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
@@ -71893,6 +71893,8 @@ ${inner}
   const CI_PREVIEW_PAGE_SIZE = 100;
   /** מרווח עדכון מונה התקדמות בזמן בדיקת כפילויות מול השרת */
   const CI_DUP_FETCH_CHUNK = 80;
+  /** מנת payload מלא לתיקים שזוהו בפרודוקציה — בלי זה שאילתת אלפי ת״ז עם payload מקריסה את השיוך */
+  const CI_PROD_PAYLOAD_CHUNK = 25;
 
   function ciYieldToUi(){
     return new Promise((resolve) => {
@@ -73192,11 +73194,73 @@ ${inner}
     async fetchProductionCustomers(ids, onProgress){
       const P = window.GI_PRODUCTION;
       const found = new Map();
-      const list = (ids || []).filter(Boolean);
-      const total = list.length;
-      const select = "id,full_name,id_number,phone,city,status,agent_id,agent_name,payload,new_policies_count";
-      for(let i = 0; i < list.length; i += CI_DUP_FETCH_CHUNK){
-        const chunk = list.slice(i, i + CI_DUP_FETCH_CHUNK);
+      const byUuid = new Map();
+      const want = [];
+      const wantSet = new Set();
+      (ids || []).forEach((id) => {
+        const padded = P.normId(id);
+        if(padded && !wantSet.has(padded)){
+          wantSet.add(padded);
+          want.push(padded);
+        }
+      });
+
+      const indexRec = (rec) => {
+        if(!rec || !safeTrim(rec.id)) return;
+        const prev = byUuid.get(String(rec.id));
+        const hasPay = rec.payload && typeof rec.payload === "object"
+          && (Array.isArray(rec.payload.newPolicies) || Array.isArray(rec.payload.insureds) || rec.payload.operational);
+        if(!prev || hasPay) byUuid.set(String(rec.id), rec);
+        const live = byUuid.get(String(rec.id));
+        const keys = new Set();
+        const addKey = (v) => {
+          const n = P.normId(v);
+          if(!n) return;
+          keys.add(n);
+          const stripped = String(n).replace(/^0+/, "");
+          if(stripped) keys.add(stripped);
+        };
+        addKey(live.idNumber);
+        const payload = live.payload && typeof live.payload === "object" ? live.payload : {};
+        (Array.isArray(payload.insureds) ? payload.insureds : []).forEach((ins) => {
+          addKey(ins?.data?.idNumber || ins?.idNumber);
+        });
+        keys.forEach((k) => {
+          const padded = P.normId(k);
+          if(wantSet.has(k) || (padded && wantSet.has(padded))){
+            found.set(k, live);
+            if(padded) found.set(padded, live);
+          }
+        });
+      };
+
+      const recFromRow = (row, payload) => normalizeCustomerRecord({
+        id: row.id,
+        status: row.status,
+        fullName: row.full_name || row.fullName,
+        idNumber: row.id_number || row.idNumber,
+        phone: row.phone,
+        city: row.city,
+        agentId: row.agent_id || row.agentId,
+        agentName: row.agent_name || row.agentName,
+        newPoliciesCount: row.new_policies_count || row.newPoliciesCount,
+        payload: payload !== undefined ? payload : row.payload
+      });
+
+      const local = []
+        .concat(Array.isArray(State.data?.customers) ? State.data.customers : [])
+        .concat(Array.isArray(State.data?.meta?.customersShadow) ? State.data.meta.customersShadow : []);
+      local.forEach((rec) => indexRec(rec));
+
+      const missing = want.filter((id) => {
+        const stripped = String(id).replace(/^0+/, "");
+        return !found.has(id) && !(stripped && found.has(stripped));
+      });
+
+      const lightSelect = "id,full_name,id_number,phone,city,status,agent_id,agent_name,new_policies_count";
+      const lightTotal = Math.max(missing.length, 1);
+      for(let i = 0; i < missing.length; i += CI_DUP_FETCH_CHUNK){
+        const chunk = missing.slice(i, i + CI_DUP_FETCH_CHUNK);
         const queryIds = [];
         chunk.forEach((id) => {
           queryIds.push(id);
@@ -73207,7 +73271,7 @@ ${inner}
         try {
           const client = Storage.getClient();
           if(client){
-            const res = await client.from(SUPABASE_TABLES.customers).select(select).in("id_number", queryIds);
+            const res = await client.from(SUPABASE_TABLES.customers).select(lightSelect).in("id_number", queryIds);
             if(!res?.error) rows = res?.data || [];
           }
         } catch(_e) {}
@@ -73215,32 +73279,71 @@ ${inner}
           try {
             const inList = "(" + queryIds.map((v) => '"' + String(v).replace(/"/g, "") + '"').join(",") + ")";
             rows = await Storage.restRequest(
-              SUPABASE_TABLES.customers + "?id_number=in." + encodeURIComponent(inList) + "&select=" + encodeURIComponent(select),
+              SUPABASE_TABLES.customers + "?id_number=in." + encodeURIComponent(inList) + "&select=" + encodeURIComponent(lightSelect),
               { method: "GET" }
             ) || [];
           } catch(_e) { rows = []; }
         }
-        (rows || []).forEach((row) => {
-          const rec = normalizeCustomerRecord({
-            id: row.id,
-            status: row.status,
-            fullName: row.full_name,
-            idNumber: row.id_number,
-            phone: row.phone,
-            city: row.city,
-            agentId: row.agent_id,
-            agentName: row.agent_name,
-            newPoliciesCount: row.new_policies_count,
-            payload: row.payload
-          });
-          const key = P.normId(rec.idNumber);
-          if(key && !found.has(key)) found.set(key, rec);
-        });
+        (rows || []).forEach((row) => indexRec(recFromRow(row)));
         if(typeof onProgress === "function"){
-          try { onProgress({ done: Math.min(i + chunk.length, total), total }); } catch(_e) {}
+          try { onProgress({ done: Math.min(i + chunk.length, missing.length), total: lightTotal }); } catch(_e) {}
         }
         await ciYieldToUi();
       }
+
+      const matchedUuids = [];
+      const seenUuid = new Set();
+      want.forEach((id) => {
+        const stripped = String(id).replace(/^0+/, "");
+        const rec = found.get(id) || (stripped ? found.get(stripped) : null) || byUuid.get(id);
+        if(!rec || seenUuid.has(String(rec.id))) return;
+        seenUuid.add(String(rec.id));
+        const p = rec.payload;
+        const hasPay = p && typeof p === "object"
+          && (Array.isArray(p.newPolicies) || Array.isArray(p.insureds) || p.operational);
+        if(!hasPay) matchedUuids.push(String(rec.id));
+      });
+
+      const hydrateSelect = "id,full_name,id_number,phone,city,status,agent_id,agent_name,payload,new_policies_count";
+      for(let i = 0; i < matchedUuids.length; i += CI_PROD_PAYLOAD_CHUNK){
+        const chunk = matchedUuids.slice(i, i + CI_PROD_PAYLOAD_CHUNK);
+        let rows = null;
+        try {
+          const client = Storage.getClient();
+          if(client){
+            const res = await client.from(SUPABASE_TABLES.customers).select(hydrateSelect).in("id", chunk);
+            if(!res?.error) rows = res?.data || [];
+          }
+        } catch(_e) {}
+        if(!rows){
+          try {
+            const inList = "(" + chunk.map((v) => '"' + String(v).replace(/"/g, "") + '"').join(",") + ")";
+            rows = await Storage.restRequest(
+              SUPABASE_TABLES.customers + "?id=in." + encodeURIComponent(inList) + "&select=" + encodeURIComponent(hydrateSelect),
+              { method: "GET" }
+            ) || [];
+          } catch(_e) { rows = []; }
+        }
+        (rows || []).forEach((row) => indexRec(recFromRow(row, row.payload)));
+        if(typeof onProgress === "function"){
+          try {
+            onProgress({
+              done: want.length,
+              total: Math.max(want.length, 1)
+            });
+          } catch(_e) {}
+        }
+        await ciYieldToUi();
+      }
+
+      want.forEach((id) => {
+        const stripped = String(id).replace(/^0+/, "");
+        const rec = found.get(id) || (stripped ? found.get(stripped) : null);
+        if(rec){
+          found.set(id, rec);
+          if(stripped) found.set(stripped, rec);
+        }
+      });
       return found;
     },
 
@@ -73250,60 +73353,124 @@ ${inner}
       const company = safeTrim(this._prod?.company);
       const counts = { update: 0, create: 0, review: 0, unmatched: 0, inactive: 0 };
       items.forEach((it) => { if(counts[it.category] != null) counts[it.category]++; });
+      const noIdCount = items.filter((it) => it.category === "unmatched" && String(it.reason || "").indexOf("אין ת״ז") >= 0).length;
       this.els.subtitle.textContent = "דוח פרודוקציה · " + company + " — תצוגה מקדימה";
       const fileLine = files.map((f) => escapeHtml(f.kind) + " " + f.rows).join(" · ");
-      const rowsHtml = items.map((it, idx) => {
+      const canCommit = (counts.update + counts.create) > 0;
+      this._prodFilter = "all";
+      this._prodPage = 0;
+
+      this.els.body.innerHTML = `
+        <div class="ciChips">
+          <button class="ciChip is-active" type="button" data-prod-filter="all">הכל <span>${items.length}</span></button>
+          <button class="ciChip ciChip--ok" type="button" data-prod-filter="update">עדכון <span>${counts.update}</span></button>
+          <button class="ciChip ciChip--ok" type="button" data-prod-filter="create">יצירה <span>${counts.create}</span></button>
+          <button class="ciChip ciChip--warn" type="button" data-prod-filter="review">לבדיקה <span>${counts.review}</span></button>
+          <button class="ciChip ciChip--err" type="button" data-prod-filter="unmatched">אין תיק <span>${counts.unmatched}</span></button>
+          <button class="ciChip ciChip--dup" type="button" data-prod-filter="inactive">לא פעיל <span>${counts.inactive}</span></button>
+        </div>
+        <div class="ciBanner">קבצים: ${fileLine || "—"} · פרמיה מחושבת מסכומי הכיסוי (2 ספרות אחרי הנקודה). פוליסות «לבדיקה» לא יישמרו עד שתבחרו ידנית בסבב הבא.</div>
+        ${canCommit ? "" : `<div class="ciError" role="status"><div class="ciError__icon">!</div><div>לא נמצאו שורות לשיוך — הלחצן כבוי. טענו קודם <strong>דוח לקוחות</strong> לאותן ת״ז. ${noIdCount ? noIdCount + " פוליסות בלי ת״ז בדוח (נפוץ בחיים של כלל) לא ניתנות לשיוך אוטומטי. " : ""}${counts.unmatched && !noIdCount ? "יש ת״ז בדוח אבל אין תיק תואם במערכת. " : ""}פוליסות מסומנות «לבדיקה» לא נשמרות בסבב הזה.</div></div>`}
+        <div class="ciTableWrap">
+          <table class="ciTable">
+            <thead><tr><th>#</th><th>פוליסה</th><th>מוצר</th><th>תיק / מבוטחים</th><th>פרמיה</th><th>פעולה</th></tr></thead>
+            <tbody id="ciProdRows"></tbody>
+          </table>
+        </div>
+        <div class="ciPager" id="ciProdPager"></div>`;
+      this.els.foot.innerHTML = `
+        <div class="ciFoot__summary">${counts.update} עדכונים · ${counts.create} יצירות · ${counts.unmatched + counts.review + counts.inactive} דלג</div>
+        <div class="ciFoot__actions">
+          <button class="btn" type="button" id="ciProdBackFiles">חזרה לקבצים</button>
+          <button class="btn btn--primary" type="button" id="ciProdCommit"${canCommit ? "" : " disabled"} title="${canCommit ? "שמירה לתיקים שזוהו לפי ת״ז" : "אין שורות לעדכון או יצירה — אין תיק לפי ת״ז"}">אשר ושייך לתיקים</button>
+        </div>`;
+      this.paintProductionPreviewRows();
+      if(!this._prodPreviewClickBound){
+        this._prodPreviewClickBound = true;
+        on(this.els.body, "click", (ev) => {
+          if(!this.els.body?.querySelector("#ciProdRows")) return;
+          const chip = ev.target?.closest?.("[data-prod-filter]");
+          if(chip){
+            this._prodFilter = chip.getAttribute("data-prod-filter") || "all";
+            this._prodPage = 0;
+            this.els.body.querySelectorAll("[data-prod-filter]").forEach((el) => el.classList.toggle("is-active", el === chip));
+            this.paintProductionPreviewRows();
+            return;
+          }
+          const pageBtn = ev.target?.closest?.("[data-prod-page]");
+          if(pageBtn){
+            const dir = pageBtn.getAttribute("data-prod-page");
+            if(dir === "prev") this._prodPage = Math.max(0, (this._prodPage || 0) - 1);
+            else if(dir === "next") this._prodPage = (this._prodPage || 0) + 1;
+            else if(dir === "first") this._prodPage = 0;
+            else if(dir === "last") this._prodPage = Number(pageBtn.getAttribute("data-prod-last") || 0);
+            this.paintProductionPreviewRows();
+          }
+        });
+      }
+      on(this.els.foot.querySelector("#ciProdBackFiles"), "click", () => this.renderProductionPickStep());
+      const commit = this.els.foot.querySelector("#ciProdCommit");
+      if(commit && canCommit) on(commit, "click", () => void this.commitProduction());
+    },
+
+    paintProductionPreviewRows(){
+      const tbody = this.els.body?.querySelector("#ciProdRows");
+      const pager = this.els.body?.querySelector("#ciProdPager");
+      if(!tbody) return;
+      const filter = this._prodFilter || "all";
+      const items = this._prod?.items || [];
+      const rows = filter === "all" ? items : items.filter((it) => it.category === filter);
+      const pageSize = CI_PREVIEW_PAGE_SIZE;
+      const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+      let page = Number(this._prodPage) || 0;
+      if(page >= totalPages) page = totalPages - 1;
+      if(page < 0) page = 0;
+      this._prodPage = page;
+      const from = page * pageSize;
+      const pageRows = rows.slice(from, from + pageSize);
+      const catLabel = {
+        update: "עדכון פוליסה",
+        create: "יצירת שורה",
+        review: "לבדיקה",
+        unmatched: "אין תיק",
+        inactive: "לא פעיל"
+      };
+      const badge = {
+        update: "ok",
+        create: "ok",
+        review: "warn",
+        unmatched: "err",
+        inactive: "dup"
+      };
+      tbody.innerHTML = pageRows.length ? pageRows.map((it) => {
+        const idx = items.indexOf(it);
         const custName = it.customer ? escapeHtml(it.customer.fullName) : "—";
-        const catLabel = ({
-          update: "עדכון פוליסה",
-          create: "יצירת שורה",
-          review: "לבדיקה",
-          unmatched: "אין תיק",
-          inactive: "לא פעיל"
-        })[it.category] || it.category;
-        const badge = ({
-          update: "ok",
-          create: "ok",
-          review: "warn",
-          unmatched: "err",
-          inactive: "dup"
-        })[it.category] || "dup";
         const people = (it.people || []).map((p) => escapeHtml(p.fullName || p.idNumber)).filter(Boolean).slice(0, 3).join(" · ");
-        return `<tr class="ciRow--${escapeHtml(it.category)}">
+        return `<tr class="ciRow ciRow--${escapeHtml(it.category)}">
           <td class="ciMono">${idx + 1}</td>
           <td class="ciMono">${escapeHtml(it.policyNumber || "")}</td>
           <td>${escapeHtml(it.type || "")}</td>
           <td>${custName}<div class="ciIssues">${people}</div></td>
           <td class="ciMono">${escapeHtml(it.premiumMonthly || "—")}</td>
-          <td><span class="ciBadge ciBadge--${badge}">${catLabel}</span><div class="ciIssues">${escapeHtml(it.reason || "")}</div></td>
+          <td><span class="ciBadge ciBadge--${badge[it.category] || "dup"}">${catLabel[it.category] || it.category}</span><div class="ciIssues">${escapeHtml(it.reason || "")}</div></td>
         </tr>`;
-      }).join("");
-
-      this.els.body.innerHTML = `
-        <div class="ciChips">
-          <span class="ciChip ciChip--ok is-active">עדכון <span>${counts.update}</span></span>
-          <span class="ciChip ciChip--ok">יצירה <span>${counts.create}</span></span>
-          <span class="ciChip ciChip--warn">לבדיקה <span>${counts.review}</span></span>
-          <span class="ciChip ciChip--err">אין תיק <span>${counts.unmatched}</span></span>
-          <span class="ciChip ciChip--dup">לא פעיל <span>${counts.inactive}</span></span>
-        </div>
-        <div class="ciBanner">קבצים: ${fileLine || "—"} · פרמיה מחושבת מסכומי הכיסוי (2 ספרות אחרי הנקודה). פוליסות «לבדיקה» לא יישמרו עד שתבחרו ידנית בסבב הבא.</div>
-        <div class="ciTableWrap">
-          <table class="ciTable">
-            <thead><tr><th>#</th><th>פוליסה</th><th>מוצר</th><th>תיק / מבוטחים</th><th>פרמיה</th><th>פעולה</th></tr></thead>
-            <tbody>${rowsHtml || `<tr><td colspan="6">אין רשומות</td></tr>`}</tbody>
-          </table>
-        </div>`;
-      const canCommit = (counts.update + counts.create) > 0;
-      this.els.foot.innerHTML = `
-        <div class="ciFoot__summary">${counts.update} עדכונים · ${counts.create} יצירות · ${counts.unmatched + counts.review + counts.inactive} דלג</div>
-        <div class="ciFoot__actions">
-          <button class="btn" type="button" id="ciProdBackFiles">חזרה לקבצים</button>
-          <button class="btn btn--primary" type="button" id="ciProdCommit"${canCommit ? "" : " disabled"}>אשר ושייך לתיקים</button>
-        </div>`;
-      on(this.els.foot.querySelector("#ciProdBackFiles"), "click", () => this.renderProductionPickStep());
-      const commit = this.els.foot.querySelector("#ciProdCommit");
-      if(commit && canCommit) on(commit, "click", () => void this.commitProduction());
+      }).join("") : `<tr><td colspan="6" class="muted" style="text-align:center;padding:24px">אין רשומות בקטגוריה הזו</td></tr>`;
+      if(pager){
+        const showingFrom = rows.length ? (from + 1) : 0;
+        const showingTo = Math.min(from + pageSize, rows.length);
+        pager.innerHTML = `
+          <div class="ciPager__info">
+            מציג ${showingFrom.toLocaleString("he-IL")}–${showingTo.toLocaleString("he-IL")}
+            מתוך ${rows.length.toLocaleString("he-IL")} שורות
+            · עמוד ${page + 1}/${totalPages}
+          </div>
+          <div class="ciPager__actions">
+            <button type="button" class="btn btn--tiny" data-prod-page="first" ${page <= 0 ? "disabled" : ""}>ראשון</button>
+            <button type="button" class="btn btn--tiny" data-prod-page="prev" ${page <= 0 ? "disabled" : ""}>הקודם</button>
+            <button type="button" class="btn btn--tiny" data-prod-page="next" ${page >= totalPages - 1 ? "disabled" : ""}>הבא</button>
+            <button type="button" class="btn btn--tiny" data-prod-page="last" data-prod-last="${totalPages - 1}" ${page >= totalPages - 1 ? "disabled" : ""}>אחרון</button>
+          </div>`;
+      }
     },
 
     async commitProduction(){

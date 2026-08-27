@@ -80,6 +80,24 @@
   function normPolicy(v){
     return digits(v).replace(/^0+/, "") || "";
   }
+  /** ת״ז שנגזרה ממספר פוליסה (חפיפת שדות באפקס חיים) — לא לשיוך תיק. */
+  function idOverlapsPolicy(id, policyNumber, hints){
+    const nRaw = digits(id);
+    const n = nRaw.replace(/^0+/, "") || nRaw;
+    if(!n) return true;
+    const list = [policyNumber].concat(Array.isArray(hints) ? hints : []);
+    for(let i = 0; i < list.length; i++){
+      const pRaw = digits(list[i]);
+      const p = pRaw.replace(/^0+/, "") || pRaw;
+      if(!p) continue;
+      if(n === p) return true;
+      if(n.length >= 7 && p.length >= 7 && Math.abs(n.length - p.length) <= 1){
+        if(n.length === p.length + 1 && (n.slice(0, p.length) === p || n.slice(1) === p)) return true;
+        if(p.length === n.length + 1 && (p.slice(0, n.length) === n || p.slice(1) === n)) return true;
+      }
+    }
+    return false;
+  }
   function col(s, a, b){
     return String(s || "").slice(a - 1, b);
   }
@@ -709,14 +727,13 @@
       if(isBenefitLike(b)) sumInsured = b;
       else if(isBenefitLike(a)) sumInsured = a;
     }
-    const idA = rec.length >= 41 ? normId(rec.slice(32, 41)) : "";
+    const idA = rec.length >= 380 ? normId(rec.slice(32, 41)) : "";
     const idTail = rec.length >= 377 ? normId(rec.slice(368, 377)) : "";
-    const hintSet = {};
-    policyHints.concat([policyNumber]).forEach((h) => { hintSet[h] = true; });
     function usableId(id){
       const n = normId(id);
       if(!n || /^0+$/.test(n)) return "";
-      if(hintSet[normPolicy(n)] || hintSet[n]) return "";
+      if(n.replace(/^0+/, "").length < 5) return "";
+      if(idOverlapsPolicy(n, policyNumber, policyHints)) return "";
       return n;
     }
     const idNumber = usableId(idA);
@@ -784,7 +801,11 @@
       city = keepLogicalHebrew(rec.slice(88, 110).replace(/[0-9]+/g, " "));
     }
     const idMaybe = normId(rec.slice(94, 103));
-    const idNumber = idMaybe && !/^0+$/.test(idMaybe) && rec.charAt(94) !== "0" ? idMaybe : "";
+    const idNumber = idMaybe && !/^0+$/.test(idMaybe)
+      && idMaybe.replace(/^0+/, "").length >= 5
+      && !idOverlapsPolicy(idMaybe, policyNumber)
+      ? idMaybe
+      : "";
     return {
       kind: "CLAL_MEV",
       policyNumber,
@@ -822,7 +843,7 @@
       coverCodeRaw: rawCode,
       startDate,
       premium: 0,
-      idNumber: tarId && !/^0+$/.test(tarId) ? tarId : ""
+      idNumber: tarId && !/^0+$/.test(tarId) && !idOverlapsPolicy(tarId, policyNumber) ? tarId : ""
     };
   }
 
@@ -1106,8 +1127,15 @@
   function uniqueIds(people){
     const set = new Set();
     (people || []).forEach((p) => {
-      if(p.idNumber && !/^0+$/.test(String(p.idNumber))) set.add(p.idNumber);
-      if(p.idNumber2 && !/^0+$/.test(String(p.idNumber2))) set.add(p.idNumber2);
+      function add(id){
+        const n = normId(id);
+        if(!n || /^0+$/.test(n)) return;
+        if(n.replace(/^0+/, "").length < 5) return;
+        if(idOverlapsPolicy(n, p.policyNumber, p.policyHints)) return;
+        set.add(n);
+      }
+      add(p.idNumber);
+      add(p.idNumber2);
     });
     return Array.from(set);
   }
@@ -1808,17 +1836,24 @@
       const found = [];
       const seen = new Set();
       (pol.ids || []).forEach((id) => {
-        const c = customersById.get(id);
+        const padded = normId(id);
+        const stripped = String(padded || id || "").replace(/^0+/, "");
+        const c = customersById.get(id)
+          || (padded ? customersById.get(padded) : null)
+          || (stripped ? customersById.get(stripped) : null);
         if(c && !seen.has(c.id)){
           seen.add(c.id);
           found.push(c);
         }
       });
       if(!found.length){
+        const hasId = (pol.ids || []).some((id) => !!normId(id));
         return Object.assign({}, pol, {
           category: "unmatched",
           action: "skip",
-          reason: "לא נמצא תיק לפי ת״ז — טענו קודם דוח לקוחות",
+          reason: hasId
+            ? "לא נמצא תיק לפי ת״ז — טענו קודם דוח לקוחות"
+            : "אין ת״ז בדוח הפרודוקציה",
           customer: null
         });
       }
@@ -2235,6 +2270,12 @@
       paymentPeriod: safeTrim(item.paymentPeriod)
     };
     let target = item.action === "update" ? findPolicyToUpdate(next.newPolicies, item) : null;
+    if(!target){
+      const num = normPolicy(item.policyNumber);
+      if(num){
+        target = next.newPolicies.find((x) => sameCompany(x?.company, item.company) && normPolicy(x?.policyNumber) === num) || null;
+      }
+    }
     if(!target && productFamily(item.type) === "health"){
       const familyOffers = next.newPolicies.filter((x) => sameCompany(x?.company, item.company) && productFamily(x?.type) === "health" && isProposalPolicy(x) && canReplaceProposal(x?.type, item.type));
       if(familyOffers.length === 1) target = familyOffers[0];
@@ -2272,7 +2313,8 @@
   }
 
   global.GI_PRODUCTION = {
-    version: "20260827-clal-exe-zip-v1",
+    version: "20260827-clal-prod-commit-v1",
+    idOverlapsPolicy,
     relocateMisreadLifePremium,
     sanitizeCustomerPolicies,
     COMPANIES,

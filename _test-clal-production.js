@@ -10,8 +10,8 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260827-clal-exe-zip-v1";
-const APP_CACHE = "20260827-clal-exe-zip-v1";
+const TAG = "20260827-clal-prod-commit-v1";
+const APP_CACHE = "20260827-clal-prod-commit-v1";
 let failed = 0;
 let passed = 0;
 
@@ -69,7 +69,7 @@ const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const sw = fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8");
 const engSrc = fs.readFileSync(path.join(ROOT, "gi-production-import.js"), "utf8");
 
-assert(engSrc.includes('version: "20260827-clal-exe-zip-v1"'), "engine version");
+assert(engSrc.includes('version: "20260827-clal-prod-commit-v1"'), "engine version");
 assert(app.includes('GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=' + TAG + '"'), "app production js href");
 assert(html.includes("app.js?v=" + APP_CACHE), "index app.js cache");
 assert(sw.includes("gi-v12-" + APP_CACHE), "service-worker cache");
@@ -81,6 +81,10 @@ assert(app.includes("HOLDNGINP"), "holdings skipped");
 assert(app.includes("findEmbeddedZipOffset"), "embedded zip offset used");
 assert(/loadAsync\(arrayBuffer\)/.test(app), "JSZip gets full EXE first (SFX CD offsets)");
 assert(!/looksExe[\s\S]{0,80}arrayBuffer\.slice\(off\)/.test(app), "does not slice EXE before first JSZip load");
+assert(app.includes("paintProductionPreviewRows"), "production preview is paginated");
+assert(app.includes("CI_PROD_PAYLOAD_CHUNK"), "payload hydrate in small chunks");
+assert(app.includes("customersShadow"), "production match also scans customersShadow");
+assert(app.includes("אין ת״ז בדוח הפרודוקציה") || engSrc.includes("אין ת״ז בדוח הפרודוקציה"), "no-id reason string");
 
 const P = loadEngine();
 assert(!!P && typeof P.parseFileBuffer === "function", "GI_PRODUCTION loaded");
@@ -186,6 +190,42 @@ if(fs.existsSync(path.join(liveDir, "87580.POL"))){
   assert(live.every((p) => p.importSource === "clal-production"), "live import source");
 } else {
   console.log("  skip live health box (no extract)");
+}
+
+console.log("\n6) commit matching — IDs, classify, no policy-as-id");
+assert(typeof P.idOverlapsPolicy === "function", "idOverlapsPolicy exported");
+assert(P.idOverlapsPolicy("392236070", "39223607") === true, "policy + trailing 0 is not an ID");
+assert(P.idOverlapsPolicy("123456782", "87654321") === false, "real ID is not the policy");
+
+const lifePolBody = overlay(350, [
+  { at: 0, bytes: "12345" },
+  { at: 31, bytes: "039223607" },
+  { at: 41, bytes: "114" },
+  { at: 58, bytes: "00000120" }
+], 0x30);
+const lifeParsed = P.parseFileBuffer("39223.POL", recBuf(lifePolBody));
+const lifeRow = (lifeParsed.rows || [])[0] || {};
+assert(P.normPolicy(lifeRow.policyNumber) === "39223607", "life POL policy 39223607");
+assert(!lifeRow.idNumber && !lifeRow.idNumber2, "life POL overlapping digits are not used as ת״ז");
+
+const byId = new Map();
+byId.set("123456782", { id: "cust-1", fullName: "בדיקה", idNumber: "123456782", payload: { newPolicies: [] } });
+const classified = P.classifyPolicies(policies, byId);
+assert(classified[0] && (classified[0].action === "create" || classified[0].action === "update"), "matched ת״ז is create/update (got " + (classified[0] && classified[0].action) + ")");
+assert(classified[0] && classified[0].customer && classified[0].customer.id === "cust-1", "classified customer is cust-1");
+const noCust = P.classifyPolicies(policies, new Map());
+assert(noCust[0] && noCust[0].action === "skip" && noCust[0].category === "unmatched", "no customer map → unmatched skip");
+
+const lifeDir = "/tmp/clal-boxes/_____16396_________________10-08-2026______12-52-52_e4cd/off_155639/16396_כלל_חיים/2026.07.31 00-00/אפקס חיים";
+if(fs.existsSync(path.join(lifeDir, "87580.POL"))){
+  const liveLife = P.buildPolicies([
+    P.parseFileBuffer("87580.POL", fs.readFileSync(path.join(lifeDir, "87580.POL"))),
+    P.parseFileBuffer("87580.MEV", fs.readFileSync(path.join(lifeDir, "87580.MEV")))
+  ], "כלל");
+  const fake = liveLife.filter((p) => (p.ids || []).some((id) => P.idOverlapsPolicy(id, p.policyNumber)));
+  assert(fake.length === 0, "live life agent 87580 has no policy-as-id leftovers (got " + fake.length + ")");
+} else {
+  console.log("  skip live life overlap check");
 }
 
 console.log("\n" + passed + " passed, " + failed + " failed");
