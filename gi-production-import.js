@@ -98,6 +98,78 @@
     }
     return false;
   }
+  function isValidIsraeliId(v){
+    const raw = digits(v);
+    if(!raw) return false;
+    const id = raw.length > 9 ? raw.slice(-9) : raw.padStart(9, "0");
+    if(/^0+$/.test(id) || id.replace(/^0+/, "").length < 5) return false;
+    let sum = 0;
+    for(let i = 0; i < 9; i++){
+      let num = Number(id.charAt(i)) * ((i % 2) + 1);
+      if(num > 9) num -= 9;
+      sum += num;
+    }
+    return sum % 10 === 0;
+  }
+  function hebrewDirectionVotes(s){
+    const words = String(s || "").split(/\s+/).filter(Boolean);
+    let visual = 0;
+    let logical = 0;
+    words.forEach((w) => {
+      const he = w.replace(/[^\u0590-\u05FF]/g, "");
+      if(!he) return;
+      if(/^[םןץףך]/.test(he)) visual += 1;
+      if(/[םןץףך]$/.test(he)) logical += 1;
+    });
+    return { visual, logical };
+  }
+  function looksVisualHebrew(s){
+    const v = hebrewDirectionVotes(s);
+    return v.visual > v.logical;
+  }
+  function looksLogicalHebrew(s){
+    const v = hebrewDirectionVotes(s);
+    return v.logical > v.visual;
+  }
+  function cleanPersonName(raw, visualHint){
+    const a = safeTrim(String(raw || "")).replace(/\s+/g, " ");
+    if(!a) return "";
+    if(looksVisualHebrew(a)) return fixVisualHebrew(a).replace(/\s+/g, " ").trim();
+    if(looksLogicalHebrew(a)) return a;
+    if(visualHint) return fixVisualHebrew(a).replace(/\s+/g, " ").trim();
+    return a;
+  }
+  function isPlausiblePhone(p){
+    const s = String(p || "");
+    if(!/^05\d{8}$/.test(s) && !/^0(?:2|3|4|7|8|9)\d{7}$/.test(s)) return false;
+    const uniq = new Set(s.slice(1).split("")).size;
+    if(uniq < 4) return false;
+    const zeros = (s.match(/0/g) || []).length;
+    return zeros < 6;
+  }
+  function extractIsraeliPhone(raw){
+    const d = digits(raw);
+    if(!d) return "";
+    const mobiles = d.match(/05\d{8}/g) || [];
+    for(let i = 0; i < mobiles.length; i++){
+      if(isPlausiblePhone(mobiles[i])) return mobiles[i];
+    }
+    const all = d.match(/0\d{8,9}/g) || [];
+    for(let j = 0; j < all.length; j++){
+      if(isPlausiblePhone(all[j])) return all[j];
+    }
+    return "";
+  }
+  function normPhone(v){
+    const d = digits(v);
+    if(!d) return "";
+    const s = d.charAt(0) === "0" ? d : ("0" + d);
+    return isPlausiblePhone(s) ? s : "";
+  }
+  function phoneKey(v){
+    const n = normPhone(v);
+    return n ? ("tel:" + n) : "";
+  }
   function col(s, a, b){
     return String(s || "").slice(a - 1, b);
   }
@@ -133,7 +205,7 @@
     return out.join("");
   }
 
-  function decodeClalBytes(bytes){
+  function clalUseWin1255(bytes){
     let he1255 = 0;
     let he862 = 0;
     const n = Math.min(bytes.length, 8000);
@@ -142,7 +214,13 @@
       if(b >= 0xE0 && b <= 0xFA) he1255++;
       else if(b >= 0x80 && b <= 0x9A) he862++;
     }
-    return he1255 >= he862 && he1255 > 0 ? decodeWin1255(bytes) : decodeCp862(bytes);
+    return he1255 >= he862 && he1255 > 0;
+  }
+  function decodeClalBytes(bytes){
+    return clalUseWin1255(bytes) ? decodeWin1255(bytes) : decodeCp862(bytes);
+  }
+  function clalNamesAreVisual(bytes){
+    return !clalUseWin1255(bytes);
   }
 
   function findEmbeddedZipOffset(buffer){
@@ -734,6 +812,7 @@
       if(!n || /^0+$/.test(n)) return "";
       if(n.replace(/^0+/, "").length < 5) return "";
       if(idOverlapsPolicy(n, policyNumber, policyHints)) return "";
+      if(!isValidIsraeliId(n)) return "";
       return n;
     }
     const idNumber = usableId(idA);
@@ -752,7 +831,7 @@
     };
   }
 
-  function parseClalMev(s){
+  function parseClalMev(s, visualHint){
     const rec = String(s || "");
     if(rec.length < 40 || !/^\d{5}/.test(rec)) return null;
     const agent = rec.slice(0, 5);
@@ -760,14 +839,7 @@
     if(!policyNumber) return null;
     const gender = mapGender(rec.charAt(117)) || mapGender((rec.slice(90, 160).match(/[זנ]/) || [])[0]);
     const birthDate = yyMMdd(rec.slice(111, 117));
-    const phDigits = digits(rec.slice(90, 120));
-    let phone = "";
-    const ph0 = phDigits.match(/0\d{9}/);
-    if(ph0) phone = ph0[0];
-    else {
-      const rest = phDigits.replace(/^0+/, "");
-      if(rest.length >= 9) phone = "0" + rest.slice(0, 9);
-    }
+    const phone = extractIsraeliPhone(rec.slice(80, 140)) || extractIsraeliPhone(rec);
     let nameRaw = rec.slice(40, 70);
     const firstHe = rec.search(/[\u0590-\u05FF]/);
     if(firstHe >= 14 && firstHe < 70){
@@ -788,7 +860,7 @@
     const afterName = rec.slice(64, 78);
     const houseAfter = afterName.match(/(\d{1,5})/);
     if(!house && houseAfter) house = houseAfter[1];
-    const names = splitFullName(cleanName(nameRaw));
+    const names = splitFullName(cleanPersonName(nameRaw, visualHint));
     const cityBand = safeTrim(rec.slice(70, 95).replace(/[0-9]+/g, " "));
     const cityKeep = keepLogicalHebrew(cityBand);
     const useHealthLayout = rec.length >= 345 || (!!cityBand && cityKeep === cityBand);
@@ -801,8 +873,7 @@
       city = keepLogicalHebrew(rec.slice(88, 110).replace(/[0-9]+/g, " "));
     }
     const idMaybe = normId(rec.slice(94, 103));
-    const idNumber = idMaybe && !/^0+$/.test(idMaybe)
-      && idMaybe.replace(/^0+/, "").length >= 5
+    const idNumber = idMaybe && isValidIsraeliId(idMaybe)
       && !idOverlapsPolicy(idMaybe, policyNumber)
       ? idMaybe
       : "";
@@ -843,7 +914,7 @@
       coverCodeRaw: rawCode,
       startDate,
       premium: 0,
-      idNumber: tarId && !/^0+$/.test(tarId) && !idOverlapsPolicy(tarId, policyNumber) ? tarId : ""
+      idNumber: tarId && isValidIsraeliId(tarId) && !idOverlapsPolicy(tarId, policyNumber) ? tarId : ""
     };
   }
 
@@ -1097,12 +1168,13 @@
     const namedClal = detectClalKindFromName(fileName);
     if(namedClal){
       const clalText = decodeClalBytes(bytes);
+      const visualNames = clalNamesAreVisual(bytes);
       const clalRecs = splitRecords(clalText);
       const rows = [];
       clalRecs.forEach((s) => {
         let row = null;
         if(namedClal === "CLAL_POL") row = parseClalPol(s);
-        else if(namedClal === "CLAL_MEV") row = parseClalMev(s);
+        else if(namedClal === "CLAL_MEV") row = parseClalMev(s, visualNames);
         else if(namedClal === "CLAL_TAR") row = parseClalTar(s);
         else if(namedClal === "CLAL_SGB") row = parseClalSgb(s);
         if(row){
@@ -1130,12 +1202,20 @@
       function add(id){
         const n = normId(id);
         if(!n || /^0+$/.test(n)) return;
-        if(n.replace(/^0+/, "").length < 5) return;
+        if(!isValidIsraeliId(n)) return;
         if(idOverlapsPolicy(n, p.policyNumber, p.policyHints)) return;
         set.add(n);
       }
       add(p.idNumber);
       add(p.idNumber2);
+    });
+    return Array.from(set);
+  }
+  function uniquePhones(people){
+    const set = new Set();
+    (people || []).forEach((p) => {
+      const n = normPhone(p.phone);
+      if(n) set.add(n);
     });
     return Array.from(set);
   }
@@ -1667,6 +1747,7 @@
         people,
         covers,
         ids: uniqueIds(people),
+        phones: uniquePhones(people),
         primary,
         inactive: cancelled,
         productLabel: type,
@@ -1846,14 +1927,27 @@
           found.push(c);
         }
       });
+      const phones = (pol.phones || []).concat((pol.people || []).map((p) => p.phone));
+      phones.forEach((ph) => {
+        const k = phoneKey(ph);
+        if(!k) return;
+        const c = customersById.get(k);
+        if(c && !seen.has(c.id)){
+          seen.add(c.id);
+          found.push(c);
+        }
+      });
       if(!found.length){
         const hasId = (pol.ids || []).some((id) => !!normId(id));
+        const hasPhone = phones.some((ph) => !!normPhone(ph));
         return Object.assign({}, pol, {
           category: "unmatched",
           action: "skip",
           reason: hasId
             ? "לא נמצא תיק לפי ת״ז — טענו קודם דוח לקוחות"
-            : "אין ת״ז בדוח הפרודוקציה",
+            : (hasPhone
+              ? "לא נמצא תיק לפי טלפון — טענו קודם דוח לקוחות"
+              : "אין ת״ז או טלפון תקינים בדוח הפרודוקציה"),
           customer: null
         });
       }
@@ -2313,7 +2407,7 @@
   }
 
   global.GI_PRODUCTION = {
-    version: "20260827-clal-prod-commit-v1",
+    version: "20260827-clal-id-phone-v1",
     idOverlapsPolicy,
     relocateMisreadLifePremium,
     sanitizeCustomerPolicies,
@@ -2346,6 +2440,16 @@
     fixVisualHebrew,
     normId,
     normPolicy,
-    uniqueIds
+    uniqueIds,
+    isValidIsraeliId,
+    extractIsraeliPhone,
+    cleanPersonName,
+    normPhone,
+    phoneKey,
+    uniquePhones,
+    looksVisualHebrew,
+    looksLogicalHebrew,
+    isPlausiblePhone,
+    clalNamesAreVisual
   };
 })(typeof window !== "undefined" ? window : this);
