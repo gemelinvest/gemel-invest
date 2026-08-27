@@ -33656,8 +33656,76 @@ UsersGateUI.init();
       return { start, end };
     },
 
+    /** אחרי מכירה חדשה: שוברים מטמון «נמכר היום» + מטמון RPC של 45ש, בלי לגעת בחישוב פרמיה. */
+    invalidateTodaySalesLive(){
+      try {
+        this._todaySalesCacheKey = "";
+        this._todaySalesCache = null;
+        this._lastKpiPaintFp = "";
+        // לא מוחקים את המספר האחרון מה-overlay — רק מפקיעים את מטמון ה-45ש כדי לא לקפוץ ל־₪0.
+        if(this._todaySalesServerOverlay && typeof this._todaySalesServerOverlay === "object"){
+          this._todaySalesServerOverlay.at = 0;
+        }
+      } catch(_e) {}
+      const now = Date.now();
+      const lastForce = Number(this._todaySalesForceAt) || 0;
+      if(!lastForce || (now - lastForce) > 400){
+        this._todaySalesForceAt = now;
+        try { this.ensureTodaySalesServerOverlay({ force: true }); } catch(_e) {}
+        try { this._scheduleTodaySalesOverlayRetry(); } catch(_e) {}
+      }
+      try {
+        if(typeof LiveRefresh !== "undefined" && LiveRefresh.getCurrentView?.() === "dashboard"){
+          this.scheduleRefreshKpis();
+        }
+      } catch(_e) {}
+    },
+
+    _scheduleTodaySalesOverlayRetry(){
+      const delays = [900, 2800];
+      if(Array.isArray(this._todaySalesRetryTimers)){
+        this._todaySalesRetryTimers.forEach((id) => { try { window.clearTimeout(id); } catch(_e) {} });
+      }
+      this._todaySalesRetryTimers = delays.map((ms) => window.setTimeout(() => {
+        try { this.ensureTodaySalesServerOverlay({ force: true }); } catch(_e) {}
+        try { this.scheduleRefreshKpis(); } catch(_e) {}
+      }, ms));
+    },
+
+    /** מיזוג overlay יומי: לא מחליפים סכום מקומי גבוה יותר ב-RPC ישן. חישוב פרמיה לא משתנה. */
+    _resolveTodaySalesOverlayMerge(localResult, serverOverlay, missingPayloads){
+      if(!localResult || !serverOverlay?.ok) return localResult;
+      const localPrem = Number(localResult.totalPremium) || 0;
+      const localPol = Number(localResult.totalPolicies) || 0;
+      const localEmpty = !(localPrem > 0 || localPol > 0);
+      const serverPrem = Number(serverOverlay.totalPremium) || 0;
+      const serverPol = Number(serverOverlay.totalPolicies) || 0;
+      const serverHigher = serverPrem > localPrem || (serverPrem === localPrem && serverPol > localPol);
+      const serverBreakdown = Array.isArray(serverOverlay.breakdown) ? serverOverlay.breakdown : [];
+      const localBreakdown = Array.isArray(localResult.breakdown) ? localResult.breakdown : [];
+      const resolvedBreakdown = this._mergeTodayCompanyBreakdown(localBreakdown, serverBreakdown);
+      if(localEmpty || ((Number(missingPayloads) || 0) > 0 && serverHigher)){
+        return {
+          totalPremium: serverPrem,
+          totalPolicies: serverPol,
+          newClients: Number(serverOverlay.newClients) || 0,
+          breakdown: resolvedBreakdown,
+          _loading: false,
+          _fromServer: true
+        };
+      }
+      if(serverBreakdown.length){
+        return { ...localResult, breakdown: resolvedBreakdown };
+      }
+      return localResult;
+    },
+
+    _shouldPaintTodayOverlayValue(overlayPrem, localPrem){
+      return !(Number(localPrem) > Number(overlayPrem));
+    },
+
     /** GI-FIX: מנהל/טעינה רזה — «נמכר היום» מ-RPC (gi_dashboard_net_premium בטווח היום = בריאות/סיכונים בלבד). */
-    ensureTodaySalesServerOverlay(){
+    ensureTodaySalesServerOverlay(options = {}){
       if(this._todaySalesServerBusy) return;
       if(typeof Storage === "undefined" || typeof Storage.loadServerKpis !== "function") return;
       const todayRange = this.getTodayRange();
@@ -33669,11 +33737,12 @@ UsersGateUI.init();
       if(this._todaySalesServerOverlay?.dayKey && this._todaySalesServerOverlay.dayKey !== dayKey){
         this._todaySalesPreReadyRetries = 0;
       }
+      const force = options && options.force === true;
       // GI-FACE-FREEZE: ₪0 לפני שהסשן מוכן — ניסיון נוסף אחד, בלי לולאה כל 2.5ש.
-      if(cachedOk && (cachedHasMoney || App?._fullDataReady)){
+      if(!force && cachedOk && (cachedHasMoney || App?._fullDataReady)){
         return;
       }
-      if(cachedOk && !cachedHasMoney && !App?._fullDataReady){
+      if(!force && cachedOk && !cachedHasMoney && !App?._fullDataReady){
         if(ageMs < 4000 || (Number(this._todaySalesPreReadyRetries) || 0) >= 1){
           return;
         }
@@ -33827,24 +33896,10 @@ UsersGateUI.init();
 
       // מנהל בטעינה רזה: עדיפות ל-RPC יומי לסכומים;
       // פירוט לפי חברה — איחוד מקומי + RPC, כדי שלא תיעלם חברה (למשל כלל) אם אחד המקורות חלקי.
+      // GI-TODAY-LIVE: overlay ישן (מטמון 45ש) לא דורס סכום מקומי גבוה יותר אחרי מכירה חדשה.
       const serverOverlay = this._todaySalesServerOverlay;
       if(serverOverlay?.ok && serverOverlay.dayKey === dayKey){
-        const localEmpty = !(result.totalPremium > 0 || result.totalPolicies > 0);
-        const serverBreakdown = Array.isArray(serverOverlay.breakdown) ? serverOverlay.breakdown : [];
-        const resolvedBreakdown = this._mergeTodayCompanyBreakdown(breakdown, serverBreakdown);
-        // בזמן hydration — תמיד RPC לסכומים (גם אם יש סכום מקומי חלקי) כדי למנוע קפיצות
-        if(missingPayloads > 0 || localEmpty){
-          result = {
-            totalPremium: Number(serverOverlay.totalPremium) || 0,
-            totalPolicies: Number(serverOverlay.totalPolicies) || 0,
-            newClients: Number(serverOverlay.newClients) || 0,
-            breakdown: resolvedBreakdown,
-            _loading: false,
-            _fromServer: true
-          };
-        } else if(serverBreakdown.length){
-          result = { ...result, breakdown: resolvedBreakdown };
-        }
+        result = this._resolveTodaySalesOverlayMerge(result, serverOverlay, missingPayloads) || result;
       } else if(deferToServer && !(result.totalPremium > 0)){
         // עדיין מחכים ל-RPC — לא לנעול מטמון על אפס
         try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
@@ -36989,7 +37044,11 @@ UsersGateUI.init();
       const today = this._todaySalesServerOverlay;
       if(today?.ok && (Number(today.totalPremium) > 0 || Number(today.totalPolicies) > 0)){
         const todayEl = root.querySelector("#bankKpiTodayCard .bankKpi__value");
-        if(todayEl) todayEl.textContent = this.formatMoney(Number(today.totalPremium) || 0);
+        const overlayPrem = Number(today.totalPremium) || 0;
+        const localPrem = Number(this._todaySalesCache?.totalPremium) || 0;
+        if(todayEl && this._shouldPaintTodayOverlayValue(overlayPrem, localPrem)){
+          todayEl.textContent = this.formatMoney(overlayPrem);
+        }
       }
     },
 
@@ -40820,7 +40879,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260826-migdal-smoke-fu-v1";
+  const GI_WIZARD_JS_VERSION = "20260827-today-sales-refresh-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -51087,6 +51146,9 @@ const ClalRiskLifePdf = {
         try { void CustomerAssignInbox.flushForCurrentUser(); } catch(_) {}
         try { void CampaignLeadAssignInbox.flushForCurrentUser(); } catch(_) {}
         try {
+          if(DashboardUI.shouldShowPerformanceBoard?.()){
+            DashboardUI.invalidateTodaySalesLive?.();
+          }
           if(DashboardUI.els?.root?.querySelector(".bankDash__kpis")) DashboardUI.scheduleRefreshKpis();
           else if(LiveRefresh.getCurrentView() === "dashboard") DashboardUI.render();
         } catch(_e){}
