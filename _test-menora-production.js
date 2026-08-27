@@ -10,8 +10,8 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260827-clal-id-phone-v1";
-const APP_CACHE = "20260827-clal-id-phone-v1";
+const TAG = "20260827-clal-name-match-v1";
+const APP_CACHE = "20260827-clal-name-match-v1";
 let failed = 0;
 let passed = 0;
 
@@ -52,7 +52,7 @@ const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const sw = fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8");
 const engSrc = fs.readFileSync(path.join(ROOT, "gi-production-import.js"), "utf8");
 
-assert(engSrc.includes('version: "20260827-clal-id-phone-v1"'), "engine version");
+assert(engSrc.includes('version: "20260827-clal-name-match-v1"'), "engine version");
 assert(app.includes('GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=' + TAG + '"'), "app production js href");
 assert(html.includes("app.js?v=" + APP_CACHE), "index app.js cache");
 assert(sw.includes("gi-v12-" + APP_CACHE), "service-worker cache");

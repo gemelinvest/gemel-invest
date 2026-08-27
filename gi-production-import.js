@@ -344,6 +344,50 @@
     return Math.round((Number(n) || 0) * 100) / 100;
   }
 
+  function personNameTokens(raw){
+    const s = String(raw || "").replace(/[^\u0590-\u05FF\s]/g, " ").replace(/\s+/g, " ").trim();
+    const out = [];
+    const seen = new Set();
+    s.split(" ").forEach((w) => {
+      const he = w.replace(/[^\u0590-\u05FF]/g, "");
+      if(he.length < 2) return;
+      if(!seen.has(he)){
+        seen.add(he);
+        out.push(he);
+      }
+      if(he.length >= 8){
+        for(let n = 3; n <= he.length - 3; n++){
+          const pre = he.slice(0, n);
+          if(pre.length >= 3 && !seen.has(pre)){
+            seen.add(pre);
+            out.push(pre);
+          }
+        }
+      }
+    });
+    return out;
+  }
+  function personNameKeys(raw){
+    const toks = personNameTokens(raw).filter((t) => t.length >= 3);
+    const keys = [];
+    const seen = new Set();
+    for(let i = 0; i < toks.length; i++){
+      for(let j = i + 1; j < toks.length; j++){
+        const a = toks[i] + " " + toks[j];
+        const b = toks[j] + " " + toks[i];
+        if(!seen.has(a)){
+          seen.add(a);
+          keys.push(a);
+        }
+        if(!seen.has(b)){
+          seen.add(b);
+          keys.push(b);
+        }
+      }
+    }
+    return keys;
+  }
+
   function splitFullName(full){
     const parts = safeTrim(full).split(/\s+/).filter(Boolean);
     if(!parts.length) return { firstName: "", lastName: "", fullName: "" };
@@ -872,11 +916,11 @@
       street = cleanName(rec.slice(67, 88).replace(/\d+/g, " "));
       city = keepLogicalHebrew(rec.slice(88, 110).replace(/[0-9]+/g, " "));
     }
-    const idMaybe = normId(rec.slice(94, 103));
-    const idNumber = idMaybe && isValidIsraeliId(idMaybe)
-      && !idOverlapsPolicy(idMaybe, policyNumber)
-      ? idMaybe
-      : "";
+    const idMaybe94 = normId(rec.slice(94, 103));
+    const idMaybe104 = rec.length >= 300 && !visualHint ? normId(rec.slice(104, 113)) : "";
+    const idNumber = [idMaybe94, idMaybe104].filter((id) => {
+      return id && isValidIsraeliId(id) && !idOverlapsPolicy(id, policyNumber);
+    })[0] || "";
     return {
       kind: "CLAL_MEV",
       policyNumber,
@@ -1938,8 +1982,35 @@
         }
       });
       if(!found.length){
+        let nameAmbiguous = false;
+        const nameSrc = (pol.people || []).map((p) => p.fullName).concat(pol.names || []);
+        nameSrc.forEach((nm) => {
+          personNameKeys(nm).forEach((k) => {
+            const c = customersById.get("name:" + k);
+            if(!c) return;
+            if(c.ambiguous){
+              nameAmbiguous = true;
+              return;
+            }
+            if(!seen.has(c.id)){
+              seen.add(c.id);
+              found.push(c);
+            }
+          });
+        });
+        if(nameAmbiguous && found.length !== 1){
+          return Object.assign({}, pol, {
+            category: "review",
+            action: "skip",
+            reason: "כמה תיקים לפי שם — יש לבחור ידנית",
+            customer: null
+          });
+        }
+      }
+      if(!found.length){
         const hasId = (pol.ids || []).some((id) => !!normId(id));
         const hasPhone = phones.some((ph) => !!normPhone(ph));
+        const hasName = (pol.people || []).some((p) => personNameKeys(p.fullName).length > 0);
         return Object.assign({}, pol, {
           category: "unmatched",
           action: "skip",
@@ -1947,7 +2018,9 @@
             ? "לא נמצא תיק במערכת לפי הת״ז שבדוח הפרודוקציה"
             : (hasPhone
               ? "לא נמצא תיק במערכת לפי הטלפון שבדוח הפרודוקציה"
-              : "אין ת״ז או טלפון תקינים בדוח הפרודוקציה"),
+              : (hasName
+                ? "לא נמצא תיק במערכת לפי השם שבדוח הפרודוקציה"
+                : "אין ת״ז או טלפון תקינים בדוח הפרודוקציה")),
           customer: null
         });
       }
@@ -2407,7 +2480,7 @@
   }
 
   global.GI_PRODUCTION = {
-    version: "20260827-clal-id-phone-v1",
+    version: "20260827-clal-name-match-v1",
     idOverlapsPolicy,
     relocateMisreadLifePremium,
     sanitizeCustomerPolicies,
@@ -2450,6 +2523,7 @@
     looksVisualHebrew,
     looksLogicalHebrew,
     isPlausiblePhone,
-    clalNamesAreVisual
+    clalNamesAreVisual,
+    personNameKeys
   };
 })(typeof window !== "undefined" ? window : this);

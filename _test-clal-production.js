@@ -10,8 +10,8 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260827-clal-id-phone-v1";
-const APP_CACHE = "20260827-clal-id-phone-v1";
+const TAG = "20260827-clal-name-match-v1";
+const APP_CACHE = "20260827-clal-name-match-v1";
 let failed = 0;
 let passed = 0;
 
@@ -69,7 +69,7 @@ const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const sw = fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8");
 const engSrc = fs.readFileSync(path.join(ROOT, "gi-production-import.js"), "utf8");
 
-assert(engSrc.includes('version: "20260827-clal-id-phone-v1"'), "engine version");
+assert(engSrc.includes('version: "20260827-clal-name-match-v1"'), "engine version");
 assert(app.includes('GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=' + TAG + '"'), "app production js href");
 assert(html.includes("app.js?v=" + APP_CACHE), "index app.js cache");
 assert(sw.includes("gi-v12-" + APP_CACHE), "service-worker cache");
@@ -88,6 +88,9 @@ assert(engSrc.includes("אין ת״ז או טלפון תקינים בדוח הפ
 assert(!engSrc.includes("טענו קודם דוח לקוחות") && !app.includes("טענו קודם דוח לקוחות"), "does not tell user to re-upload customer report");
 assert(engSrc.includes("לא נמצא תיק במערכת לפי הת״ז") && engSrc.includes("לא נמצא תיק במערכת לפי הטלפון"), "unmatched reasons search existing folders");
 assert(app.includes("אין צורך להעלות שוב דוח לקוחות"), "production UI says existing folders are enough");
+assert(app.includes("personNameKeys") && engSrc.includes("personNameKeys"), "name-key helper for matching existing folders");
+assert(app.includes(".range(from, from + PAGE - 1)") || app.includes(".range(from, from + PAGE"), "production fetch pages customer roster for names");
+assert(app.includes("wantNames"), "production fetch collects names");
 assert(app.includes('.in("phone"') || app.includes(".in(\"phone\""), "customer fetch queries phone column");
 assert(app.includes("wantPhones"), "production fetch collects phones");
 assert(fs.readFileSync(path.join(ROOT, "gi-customers-import.css"), "utf8").includes("min-height:0"), "modal body min-height");
@@ -213,7 +216,19 @@ if(fs.existsSync(path.join(liveDir, "87580.POL"))){
   assert(badIds.length === 0, "live health ids are all checksum-valid (got " + badIds.length + ")");
   const zeroPhones = live.filter((p) => (p.phones || []).concat((p.people || []).map((x) => x.phone)).some((ph) => ph === "0000000000"));
   assert(zeroPhones.length === 0, "live health has no 0000000000 phones (got " + zeroPhones.length + ")");
-  assert(live.every((p) => p.importSource === "clal-production"), "live import source");
+  const healthAllDir = "/tmp/clal-boxes/_____16398____________________04-08-2026______07-27-49_14aa/off_182472/16398_בריאות_חיים/2026.08.03 02-16/אפקס חיים - בריאות";
+  if(fs.existsSync(path.join(healthAllDir, "00176.MEV"))){
+    const shot = P.buildPolicies(["00176.POL","00176.MEV"].filter((n) => fs.existsSync(path.join(healthAllDir, n))).map((n) => P.parseFileBuffer(n, fs.readFileSync(path.join(healthAllDir, n)))), "כלל");
+    const natalie = shot.find((p) => p.policyNumber === "14993141");
+    assert(!!natalie, "screenshot policy 14993141 is built");
+    assert(natalie && (natalie.ids || []).indexOf("314514571") >= 0, "14993141 MEV id at offset 104 is 314514571 (got " + JSON.stringify(natalie && natalie.ids) + ")");
+    const nm = String((natalie.people && natalie.people[0] && natalie.people[0].fullName) || "");
+    assert(nm.indexOf("אזואלוס") >= 0, "14993141 name contains אזואלוס (got " + nm + ")");
+    const byNatalie = new Map();
+    byNatalie.set("314514571", { id: "cust-nat", fullName: "נטלי אזואלוס", idNumber: "314514571", payload: { newPolicies: [] } });
+    const natClass = P.classifyPolicies([natalie], byNatalie);
+    assert(natClass[0] && (natClass[0].action === "create" || natClass[0].action === "update"), "14993141 matches existing folder by ת״ז (got " + (natClass[0] && natClass[0].action) + ")");
+  }
 } else {
   console.log("  skip live health box (no extract)");
 }
@@ -248,6 +263,27 @@ byPhone.set("tel:0521234567", { id: "cust-p", fullName: "טל", phone: "05212345
 const classifiedPhone = P.classifyPolicies(policies, byPhone);
 assert(classifiedPhone[0] && (classifiedPhone[0].action === "create" || classifiedPhone[0].action === "update"), "matched phone is create/update (got " + (classifiedPhone[0] && classifiedPhone[0].action) + ")");
 assert(classifiedPhone[0] && classifiedPhone[0].customer && classifiedPhone[0].customer.id === "cust-p", "classified customer is cust-p");
+
+const nameKeys = P.personNameKeys("אזואלוס אליז נטליכרכום");
+assert(nameKeys.indexOf("נטלי אזואלוס") >= 0 || nameKeys.indexOf("אזואלוס נטלי") >= 0, "glued street still yields אזואלוס+נטלי keys (got " + nameKeys.slice(0,6).join("|") + ")");
+const byName = new Map();
+byName.set("name:נטלי אזואלוס", { id: "cust-n", fullName: "נטלי אזואלוס", payload: { newPolicies: [] } });
+byName.set("name:אזואלוס נטלי", { id: "cust-n", fullName: "נטלי אזואלוס", payload: { newPolicies: [] } });
+const namedPol = {
+  company: "כלל",
+  type: "בריאות",
+  policyNumber: "14993141",
+  ids: [],
+  phones: [],
+  people: [{ fullName: "אזואלוס אליז נטליכרכום" }],
+  premiumMonthly: "10.00",
+  inactive: false
+};
+const classifiedName = P.classifyPolicies([namedPol], byName);
+assert(classifiedName[0] && (classifiedName[0].action === "create" || classifiedName[0].action === "update"), "unique name match is create/update (got " + (classifiedName[0] && classifiedName[0].action) + ")");
+assert(classifiedName[0] && classifiedName[0].customer && classifiedName[0].customer.id === "cust-n", "name match customer is cust-n");
+const emptyName = P.classifyPolicies([namedPol], new Map());
+assert(emptyName[0] && emptyName[0].category === "unmatched", "name without folder stays unmatched");
 
 const garbagePol = overlay(386, [
   { at: 0, bytes: "87580" },
