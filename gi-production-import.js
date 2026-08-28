@@ -2607,7 +2607,7 @@
   }
 
   global.GI_PRODUCTION = {
-    version: "20260828-hach-quest-fill-v1",
+    version: "20260828-sales-mail-hide-v1",
     idOverlapsPolicy,
     relocateMisreadLifePremium,
     sanitizeCustomerPolicies,

@@ -36543,13 +36543,16 @@ UsersGateUI.init();
       if(typeof window.html2canvas !== "function" || typeof JsPDF !== "function"){
         throw new Error("לא נטען מנוע PDF");
       }
+      /* Off-screen: on-screen iframe+mask at left:0 covered the RTL
+         customer pane for 1–2s while html2canvas ran. Capture still uses
+         idoc.body, so the iframe does not need to be visible. */
       const iframe = document.createElement("iframe");
       iframe.setAttribute("aria-hidden", "true");
       iframe.setAttribute("title", " ");
-      iframe.style.cssText = "position:fixed;left:0;top:0;width:794px;height:1123px;border:0;background:#fff;opacity:1;pointer-events:none;z-index:2147483000;";
+      iframe.style.cssText = "position:fixed;left:-14000px;top:0;width:794px;height:1123px;border:0;background:#fff;opacity:1;pointer-events:none;z-index:0;";
       const mask = document.createElement("div");
       mask.setAttribute("aria-hidden", "true");
-      mask.style.cssText = "position:fixed;left:0;top:0;width:794px;height:1123px;background:#fff;z-index:2147483001;pointer-events:none;";
+      mask.style.cssText = "position:fixed;left:-14000px;top:0;width:794px;height:1123px;background:#fff;z-index:0;pointer-events:none;";
       document.body.appendChild(iframe);
       document.body.appendChild(mask);
       try {
@@ -38940,8 +38943,8 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-hach-quest-fill-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-hach-quest-fill-v1";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -39577,7 +39580,7 @@ UsersGateUI.init();
   /* GI-PERF 2026-08-10 — CSS משני אחרי login בלבד (לא במסך הכניסה). */
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
-    "./gi-customers-import.css?v=20260828-hach-quest-fill-v1",
+    "./gi-customers-import.css?v=20260828-sales-mail-hide-v1",
     "./theme-unify-flat.css?v=20260825-hmo-text-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
@@ -71758,7 +71761,7 @@ ${inner}
      ========================================================================== */
 
   const CUSTOMER_IMPORT_VERSION = "1.2";
-  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260828-hach-quest-fill-v1";
+  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260828-sales-mail-hide-v1";
   const GI_PROD_FALLBACK_COMPANIES = Object.freeze([
     { id: "הכשרה", label: "הכשרה", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד." },
     { id: "הפניקס", label: "הפניקס", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
