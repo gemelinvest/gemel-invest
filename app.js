@@ -37821,14 +37821,19 @@ UsersGateUI.init();
       if(!text) return;
       if(form && form.__giCapture){
         form.__giCapture[String(fieldName)] = text;
+        if(opts && opts.fontSize) form.__giCapture["__fontSize__" + String(fieldName)] = Number(opts.fontSize);
         return;
       }
       const useVisual = !(opts && opts.visual === false);
       try {
         const field = form.getTextField(fieldName);
         const painted = (font && useVisual) ? this.visualHebrew(text) : text;
+        const size = Number(opts && opts.fontSize) > 0 ? Number(opts.fontSize) : this.FONT_SIZE;
+        if(opts && opts.multiline){
+          try { field.enableMultiline(); } catch(_ml) {}
+        }
         field.setText(painted);
-        try { field.setFontSize(this.FONT_SIZE); } catch(_e) {}
+        try { field.setFontSize(size); } catch(_e) {}
         if(font && /[\u0590-\u05FF]/.test(text) && !(opts && opts.align === false)){
           try {
             const PDFLib = window.PDFLib;
@@ -38935,8 +38940,8 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260826-followup-docs-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260826-followup-docs-v1";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-hach-quest-fill-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-hach-quest-fill-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -39572,7 +39577,7 @@ UsersGateUI.init();
   /* GI-PERF 2026-08-10 — CSS משני אחרי login בלבד (לא במסך הכניסה). */
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
-    "./gi-customers-import.css?v=20260827-clal-new-folder-v1",
+    "./gi-customers-import.css?v=20260828-hach-quest-fill-v1",
     "./theme-unify-flat.css?v=20260825-hmo-text-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
@@ -71753,7 +71758,7 @@ ${inner}
      ========================================================================== */
 
   const CUSTOMER_IMPORT_VERSION = "1.2";
-  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260827-clal-new-folder-v1";
+  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260828-hach-quest-fill-v1";
   const GI_PROD_FALLBACK_COMPANIES = Object.freeze([
     { id: "הכשרה", label: "הכשרה", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד." },
     { id: "הפניקס", label: "הפניקס", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },

@@ -1,13 +1,65 @@
-/* GI-FOLLOWUP-ZIP 20260826-followup-docs-v1
+/* GI-FOLLOWUP-ZIP 20260828-hach-quest-fill-v1
    שאלוני המשך ממולאים — מסמך נפרד לכל שאלון + ZIP זמני לנבחרים בלבד. */
 (function installGiFollowupZip(global){
   "use strict";
 
-  const TAG = "20260826-followup-docs-v1";
+  const TAG = "20260828-hach-quest-fill-v1";
   const DOC_TYPE = "followup_questionnaire";
   const DOC_TYPE_ZIP_LEGACY = "followup_questionnaires_zip";
   const HEB_TEXT_OPTS = { visual: false, align: false };
+  const HACH_CONTENT_FONT = 13;
+  const HACH_HEADER_FONT = 12;
+  const HACH_FOOTER_NAMES = /^(76456|er67777|Date|AgentName)$/i;
+  const HACH_FOOTER_DATE = /^(Date|Text19)$/i;
+  const HACH_FOOTER_TIME = /^(Text20|Text40)$/i;
+  const HACH_FOOTER_SKIP = /^(Text20|Text40|Text41)$/i;
+  const HACH_HEADER_ALIAS = /^(e56756|drt6yu56)$/i;
+  const HACH_HEADER_EXCLUDE = /^(AgentName|Date)$/i;
   const HEADER_FIELD_RE = /^(AgentName|AgentNumber|Date|FullName|FirstName|LastName|PID|Text1|Text2|dsddfddf|ghjhjhgjhg)$/i;
+  /* Wizard field order per questionnaire (matches getHachsharaFollowupSchemas). */
+  const HACH_FIELD_ORDER = {
+    "1": ["reason","date","duration","tests","treatment","ongoing","surgery","followup"],
+    "2": ["defect","status","diagnosisAge","treatment","docs"],
+    "3": ["eventDate","diagnosis","injury","hospitalized","hospitalDetails","hospitalTreatment","tests","surgery","surgeryDetails","current","disability","workCapacity"],
+    "4": ["used","reason","start","type","frequency","stopped","rehab"],
+    "5": ["drinkingSince","weeklyAmount","medicalIssues","notes"],
+    "6": ["type","diagnosisDate","pills","pillsDetails","diet","insulin","glucose","hba1c","complications"],
+    "7": ["hasIssue","diagnosisDate","medicated","cholesterol","triglycerides","notes"],
+    "8": ["diagnosisDate","values","medicated","meds","balanced","complications"],
+    "9": ["diagnosis","diagnosisDate","lastEvent","frequency","treatment","status"],
+    "10": ["diagnosis","diagnosisDate","treatment","function","docs"],
+    "11": ["diagnosis","eventDate","tests","treatment","status"],
+    "12": ["type","diagnosisDate","treatment","secondary","hb","followup"],
+    "13": ["diagnosis","diagnosisDate","treatment","hospitalized","status"],
+    "14": ["diagnosis","date","pregnant","treatment","status"],
+    "15": ["diagnosisDate","diagnosis","attacks","attacksDetails","treatment","followup","hospitalSurgery","tests"],
+    "16": ["diagnosis","diagnosisDate","treatment","surgeryAdvised","surgery","surgeryDetails","kidneyTestsNormal","damage"],
+    "17": ["diagnosis","diagnosisDate","treatment","tests","status"],
+    "18": ["diagnosis","diagnosisDate","treatment","attacks","status"],
+    "19": ["diagnosis","diagnosisDate","treatment","tests","status"],
+    "20": ["diagnosis","diagnosisDate","psa","treatment","status"],
+    "21": ["diagnosisDate","diagnosis","hospitalized","surgery","surgeryDetails","treatment","balanced"],
+    "22": ["diagnosis","eye","number","treatment","status"],
+    "23": ["diagnosis","date","treatment","tests","status"],
+    "24": ["location","diagnosis","date","treatment","status"],
+    "25": ["diagnosis","location","date","treatment","status"],
+    "26": ["finding","location","date","tests","treatment","status"],
+    "27": ["relative","disease","age","familyDetails"],
+    "28": ["reason","date","duration","procedure","outcome"],
+    "29": ["diagnosis","date","pregnant","treatment","status"]
+  };
+  /* 0-based content-slot index when PDF question order ≠ wizard order. */
+  const HACH_KEY_SLOT = {
+    "1": { date: 1, reason: 2, duration: 3, tests: 4, treatment: 5, ongoing: 6, surgery: 7, followup: 9 }
+  };
+  const HACH_MERGE_GROUPS = [
+    ["pills", "pillsDetails"],
+    ["surgery", "surgeryDetails"],
+    ["hospitalized", "hospitalDetails", "hospitalTreatment"],
+    ["attacks", "attacksDetails"],
+    ["glucose", "hba1c"],
+    ["medicated", "meds"]
+  ];
 
   function safeTrim(v){
     return String(v == null ? "" : v).trim();
@@ -231,15 +283,22 @@
     }
   }
 
-  function setHebText(helper, form, fieldName, text, font){
+  function setHebText(helper, form, fieldName, text, font, extraOpts){
     if(!safeTrim(text) || !fieldName) return;
-    if(helper?.setTextSafe) helper.setTextSafe(form, fieldName, text, font, HEB_TEXT_OPTS);
+    const opts = Object.assign({}, HEB_TEXT_OPTS, extraOpts || {});
+    if(helper?.setTextSafe) helper.setTextSafe(form, fieldName, text, font, opts);
   }
 
-  function listPageFieldNames(pdfDoc, pageIndex){
+  function listPageFieldMeta(pdfDoc, pageIndex){
     const PDFName = global.PDFLib?.PDFName;
     const out = [];
     const seen = new Set();
+    function numOf(v){
+      if(v == null) return 0;
+      if(typeof v === "number") return v;
+      if(typeof v.asNumber === "function") return v.asNumber();
+      return Number(v) || 0;
+    }
     try {
       const page = pdfDoc.getPages()[pageIndex];
       const annots = page?.node?.Annots?.();
@@ -249,24 +308,257 @@
         try {
           let node = pdfDoc.context.lookup(ref);
           const parts = [];
+          let rect = null;
+          let ft = "";
+          try {
+            const r = node.get(PDFName.of("Rect"));
+            if(r && typeof r.asArray === "function") rect = r.asArray().map(numOf);
+          } catch(_e) {}
           while(node){
             const t = node.get(PDFName.of("T"));
             if(t){
               const raw = typeof t.decodeText === "function" ? t.decodeText() : String(t);
               parts.unshift(raw);
             }
+            const ftNode = node.get(PDFName.of("FT"));
+            if(ftNode && !ft) ft = String(ftNode);
             const parent = node.get(PDFName.of("Parent"));
             node = parent ? pdfDoc.context.lookup(parent) : null;
           }
           const name = parts.filter(Boolean).join(".");
-          if(name && !seen.has(name)){
-            seen.add(name);
-            out.push(name);
-          }
+          if(!name || seen.has(name)) return;
+          seen.add(name);
+          const x1 = rect ? Math.min(rect[0], rect[2]) : 0;
+          const y1 = rect ? Math.min(rect[1], rect[3]) : 0;
+          const x2 = rect ? Math.max(rect[0], rect[2]) : 0;
+          const y2 = rect ? Math.max(rect[1], rect[3]) : 0;
+          const ftStr = String(ft || "");
+          const kind = /Sig/i.test(ftStr) || /^Signature/i.test(name) || /Must/i.test(name)
+            ? "sig"
+            : (/Btn/i.test(ftStr) || /Check/i.test(name) ? "btn" : "tx");
+          out.push({ name, x: x1, y: y2, w: x2 - x1, h: y2 - y1, kind });
         } catch(_e) {}
       });
     } catch(_e) {}
     return out;
+  }
+
+  function leafKey(key){
+    return String(key || "").replace(/^.*__/, "");
+  }
+  function leafNorm(key){
+    return leafKey(key).toLowerCase();
+  }
+
+  function isGenericNoteKey(key){
+    const raw = String(key || "");
+    if(/^base__/i.test(raw)) return true;
+    if(!/__/.test(raw)){
+      return /^(details|followup|notes|docs|status|result|infectiousdetails|liverdetails|herniadetails)$/.test(raw.toLowerCase());
+    }
+    return false;
+  }
+
+  function splitHachsharaRows(entry, cfg){
+    const qId = safeTrim(entry.questionnaireNum);
+    const labels = entry.followupLabels || {};
+    const data = entry.followupData || {};
+    const specific = [];
+    const notes = [];
+    Object.keys(data).forEach((key) => {
+      const val = safeTrim(data[key]);
+      if(!val) return;
+      const row = { key, leaf: leafKey(key), label: labels[key] || "", value: val };
+      if(keyMatchesQuestionnaire(key, qId, cfg)) specific.push(row);
+      else if(isGenericNoteKey(key)) notes.push(row);
+    });
+    return { specific: orderHachsharaRows(specific, qId), notes };
+  }
+
+  function orderHachsharaRows(rows, qId){
+    const order = HACH_FIELD_ORDER[String(qId)] || [];
+    const rank = {};
+    order.forEach((leaf, i) => { rank[leaf.toLowerCase()] = i; });
+    return rows.slice().sort((a, b) => {
+      const ra = Object.prototype.hasOwnProperty.call(rank, leafNorm(a.leaf)) ? rank[leafNorm(a.leaf)] : 1000;
+      const rb = Object.prototype.hasOwnProperty.call(rank, leafNorm(b.leaf)) ? rank[leafNorm(b.leaf)] : 1000;
+      if(ra !== rb) return ra - rb;
+      return String(a.key).localeCompare(String(b.key));
+    });
+  }
+
+  function coalesceHachsharaRows(rows){
+    const byLeaf = {};
+    rows.forEach((r) => { byLeaf[leafNorm(r.leaf)] = r; });
+    const drop = new Set();
+    HACH_MERGE_GROUPS.forEach((group) => {
+      const parts = group.map((leaf) => byLeaf[leaf.toLowerCase()]).filter(Boolean);
+      if(parts.length < 2) return;
+      const head = parts[0];
+      const extra = parts.slice(1).map((r) => r.value).filter(Boolean);
+      if(leafNorm(head.leaf) === "glucose" && byLeaf.hba1c){
+        head.value = "גלוקוז: " + head.value + " | HbA1C: " + byLeaf.hba1c.value;
+      } else {
+        head.value = [head.value].concat(extra).join(" · ");
+      }
+      parts.slice(1).forEach((r) => drop.add(r.key));
+    });
+    return rows.filter((r) => !drop.has(r.key));
+  }
+
+  function isHachsharaFooterField(m, headerNames){
+    if(!m || headerNames.has(m.name)) return false;
+    if(HACH_FOOTER_NAMES.test(m.name) || HACH_FOOTER_DATE.test(m.name) || HACH_FOOTER_TIME.test(m.name) || HACH_FOOTER_SKIP.test(m.name)) return true;
+    const y = Number(m.y) || 0;
+    const w = Number(m.w) || 0;
+    const h = Number(m.h) || 0;
+    if(w >= 180) return false;
+    if(y < 280 && w < 180) return true;
+    if(y < 360 && w < 130 && h <= 28) return true;
+    return false;
+  }
+
+  function classifyHachsharaFields(fieldMeta){
+    const text = (fieldMeta || []).filter((m) => m && m.kind === "tx");
+    const maxY = text.reduce((acc, m) => Math.max(acc, Number(m.y) || 0), 0);
+    const header = text.filter((m) => {
+      if(HACH_HEADER_EXCLUDE.test(m.name)) return false;
+      return (Number(m.y) || 0) >= maxY - 28 || HACH_HEADER_ALIAS.test(m.name);
+    }).sort((a, b) => (Number(b.x) || 0) - (Number(a.x) || 0));
+    const headerNames = new Set(header.map((m) => m.name));
+    const footer = text.filter((m) => isHachsharaFooterField(m, headerNames));
+    const footerNames = new Set(footer.map((m) => m.name));
+    const content = text.filter((m) => !headerNames.has(m.name) && !footerNames.has(m.name))
+      .sort((a, b) => {
+        const dy = (Number(b.y) || 0) - (Number(a.y) || 0);
+        if(Math.abs(dy) > 8) return dy;
+        return (Number(b.x) || 0) - (Number(a.x) || 0);
+      });
+    return { header, footer, content };
+  }
+
+  function writableHachsharaContent(content){
+    return (content || []).filter((m) => {
+      const h = Number(m.h) || 0;
+      const w = Number(m.w) || 0;
+      return h >= 16 || w >= 180;
+    });
+  }
+
+  function hachsharaFontOpts(slot){
+    const h = Number(slot && slot.h) || 0;
+    const w = Number(slot && slot.w) || 0;
+    const size = h >= 22 || w >= 180 ? HACH_CONTENT_FONT : (h >= 16 ? 11 : 9);
+    return { fontSize: size, multiline: h >= 20 || w >= 180 };
+  }
+
+  function readFieldText(form, name){
+    try { return safeTrim(form.getTextField(name).getText()); } catch(_e){ return ""; }
+  }
+
+  function writeContentSlot(helper, form, slot, text, font, used){
+    if(!slot || !safeTrim(text)) return;
+    used.add(slot.name);
+    setHebText(helper, form, slot.name, text, font, hachsharaFontOpts(slot));
+  }
+
+  function pickRemarksSlot(content, writable, used, followupSlot){
+    const unused = writable.filter((m) => !used.has(m.name));
+    const remarkish = unused.filter((m) => Number(m.w) >= 300 || Number(m.h) >= 36)
+      .sort((a, b) => (Number(b.w) * Number(b.h)) - (Number(a.w) * Number(a.h)));
+    if(remarkish[0]) return remarkish[0];
+    if(followupSlot) return followupSlot;
+    if(unused.length) return unused[unused.length - 1];
+    if(writable.length) return writable[writable.length - 1];
+    return content[content.length - 1] || null;
+  }
+
+  function applyHachsharaFill(form, entry, cfg, font, fieldMeta){
+    const helper = global.GI_OFFICIAL_FORM_FILL;
+    const head = { fontSize: HACH_HEADER_FONT };
+    const { header, footer, content } = classifyHachsharaFields(fieldMeta);
+    const writable = writableHachsharaContent(content);
+    const person = entry.insured?.data || entry.insured || {};
+    const fullName = safeTrim(person.fullName)
+      || safeTrim((person.firstName || "") + " " + (person.lastName || "")).trim()
+      || safeTrim(entry.insured?.label);
+    const idNumber = safeTrim(person.idNumber);
+    if(header[0] && fullName) setHebText(helper, form, header[0].name, fullName, font, head);
+    if(header[1] && idNumber) setHebText(helper, form, header[1].name, idNumber, font, head);
+    else if(header[1] && fullName) setHebText(helper, form, header[1].name, fullName, font, head);
+
+    const qId = safeTrim(entry.questionnaireNum);
+    const { specific, notes } = splitHachsharaRows(entry, cfg);
+    const rows = coalesceHachsharaRows(specific);
+    const slotMap = HACH_KEY_SLOT[qId] || {};
+    const mergeTails = {};
+    HACH_MERGE_GROUPS.forEach((g) => g.slice(1).forEach((leaf) => { mergeTails[leaf.toLowerCase()] = g[0]; }));
+    const schemaLeaves = (HACH_FIELD_ORDER[qId] || []).filter((leaf) => !mergeTails[leaf.toLowerCase()]);
+    const used = new Set();
+    const slotByLeaf = {};
+    const overflow = [];
+
+    function slotIndexFor(leaf){
+      const n = String(leaf || "").toLowerCase();
+      if(Object.prototype.hasOwnProperty.call(slotMap, n)) return slotMap[n];
+      if(Object.prototype.hasOwnProperty.call(slotMap, leaf)) return slotMap[leaf];
+      const canon = mergeTails[n] || leaf;
+      if(Object.prototype.hasOwnProperty.call(slotMap, String(canon).toLowerCase())) return slotMap[String(canon).toLowerCase()];
+      if(Object.prototype.hasOwnProperty.call(slotMap, canon)) return slotMap[canon];
+      const idx = schemaLeaves.findIndex((item) => String(item).toLowerCase() === String(canon).toLowerCase());
+      return idx >= 0 ? idx : -1;
+    }
+
+    rows.forEach((row) => {
+      const idx = slotIndexFor(row.leaf);
+      let slot = idx >= 0 ? (writable[idx] || content[idx] || null) : null;
+      if(slot && used.has(slot.name)) slot = null;
+      if(!slot){
+        slot = writable.find((m) => !used.has(m.name)) || content.find((m) => !used.has(m.name)) || null;
+      }
+      if(!slot){
+        overflow.push(row);
+        return;
+      }
+      writeContentSlot(helper, form, slot, row.value, font, used);
+      slotByLeaf[row.leaf] = slot;
+      slotByLeaf[leafNorm(row.leaf)] = slot;
+      const canon = mergeTails[leafNorm(row.leaf)] || row.leaf;
+      slotByLeaf[canon] = slot;
+      slotByLeaf[String(canon).toLowerCase()] = slot;
+    });
+
+    const noteTexts = notes.map((n) => (n.label ? (n.label + ": " + n.value) : n.value)).filter(Boolean);
+    overflow.forEach((row) => noteTexts.push(row.label ? (row.label + ": " + row.value) : row.value));
+    if(noteTexts.length){
+      const followupSlot = slotByLeaf.followup || slotByLeaf.notes || slotByLeaf.docs || slotByLeaf.status || slotByLeaf.complications || slotByLeaf.treatment || slotByLeaf.outcome || null;
+      const slot = pickRemarksSlot(content, writable, used, followupSlot);
+      if(slot){
+        let text = noteTexts.join("\n");
+        const prev = used.has(slot.name) ? readFieldText(form, slot.name) : "";
+        if(prev) text = prev + "\n" + text;
+        writeContentSlot(helper, form, slot, text, font, used);
+      }
+    }
+
+    const agent = safeTrim(global.Auth?.current?.name);
+    let dateStr = "";
+    try { dateStr = new Date().toLocaleDateString("he-IL"); } catch(_e) { dateStr = ""; }
+    const footName = footer.filter((m) => !HACH_FOOTER_SKIP.test(m.name) && !HACH_FOOTER_DATE.test(m.name) && !HACH_HEADER_EXCLUDE.test(m.name) && !/AgentName/i.test(m.name))
+      .sort((a, b) => (Number(b.x) || 0) - (Number(a.x) || 0));
+    footer.forEach((m) => {
+      if(HACH_FOOTER_SKIP.test(m.name)) return;
+      if(HACH_FOOTER_DATE.test(m.name) && dateStr) setHebText(helper, form, m.name, dateStr, font, head);
+      else if(/AgentName/i.test(m.name) && agent) setHebText(helper, form, m.name, agent, font, head);
+      else if(m.name === "er67777" && fullName) setHebText(helper, form, m.name, fullName, font, head);
+      else if(m.name === "76456" && idNumber) setHebText(helper, form, m.name, idNumber, font, head);
+    });
+    if(footName[0] && fullName && footName[0].name !== "er67777") setHebText(helper, form, footName[0].name, fullName, font, head);
+    if(footName[1] && idNumber && footName[1].name !== "76456") setHebText(helper, form, footName[1].name, idNumber, font, head);
+  }
+
+  function listPageFieldNames(pdfDoc, pageIndex){
+    return listPageFieldMeta(pdfDoc, pageIndex).map((m) => m.name);
   }
 
   function keepSinglePage(pdfDoc, pageIndex){
@@ -433,14 +725,19 @@
     const pdfDoc = await global.PDFLib.PDFDocument.load(templateBytes, { ignoreEncryption: true });
     const pageNum = cfg.pageForQuestionnaire(entry.questionnaireNum);
     const pageIndex = Math.max(0, Math.min((Number(pageNum) || 1) - 1, pdfDoc.getPageCount() - 1));
-    const pageFieldNames = listPageFieldNames(pdfDoc, pageIndex);
+    const pageFieldMeta = listPageFieldMeta(pdfDoc, pageIndex);
+    const pageFieldNames = pageFieldMeta.map((m) => m.name);
     keepSinglePage(pdfDoc, pageIndex);
     const form = pdfDoc.getForm();
     const font = await loadFont(pdfDoc);
-    applyInsuredHeader(form, entry, font);
-    if(cfg.fillMode === "clal_cq") applyClalCqFill(form, entry, cfg, font);
-    else if(cfg.fillMode === "phoenix") applyPhoenixFill(form, entry, cfg, font, pageFieldNames);
-    else applySequentialFill(form, entry, cfg, font, pageFieldNames);
+    if(cfg.fillMode === "hachshara"){
+      applyHachsharaFill(form, entry, cfg, font, pageFieldMeta);
+    } else {
+      applyInsuredHeader(form, entry, font);
+      if(cfg.fillMode === "clal_cq") applyClalCqFill(form, entry, cfg, font);
+      else if(cfg.fillMode === "phoenix") applyPhoenixFill(form, entry, cfg, font, pageFieldNames);
+      else applySequentialFill(form, entry, cfg, font, pageFieldNames);
+    }
     try { form.updateFieldAppearances(font || undefined); } catch(_e) {}
     return pdfDoc.save();
   }
@@ -591,6 +888,11 @@
       orderedSchemaValues,
       keepSinglePage,
       listPageFieldNames,
+      listPageFieldMeta,
+      classifyHachsharaFields,
+      splitHachsharaRows,
+      isGenericNoteKey,
+      applyHachsharaFill,
       collectHealthResponses,
       HEB_TEXT_OPTS
     },
