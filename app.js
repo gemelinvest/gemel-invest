@@ -37856,9 +37856,42 @@ UsersGateUI.init();
         const field = form.getField(fieldName);
         if(!field) return;
         const raw = String(exportValue);
+        const want = raw.replace(/^\//, "");
+        const off = /^(Off|off|false)$/i.test(want);
+        const PDFLib = (typeof window !== "undefined" && window.PDFLib)
+          ? window.PDFLib
+          : ((typeof globalThis !== "undefined" && globalThis.PDFLib) ? globalThis.PDFLib : null);
+        const widgets = (field.acroField && typeof field.acroField.getWidgets === "function")
+          ? (field.acroField.getWidgets() || [])
+          : [];
+        /* Menora (and similar) כן/לא are one checkbox with two widgets: /2=לא then /1=כן.
+           pdf-lib check() ticks the first on-state, which paints לא for a wizard כן. */
+        if(widgets.length && PDFLib?.PDFName?.of){
+          let matched = false;
+          const onStates = [];
+          widgets.forEach((w) => {
+            const keys = [];
+            try {
+              const n = w.dict.lookup(PDFLib.PDFName.of("AP"))?.lookup(PDFLib.PDFName.of("N"));
+              if(n && n.dict) n.dict.keys().forEach((k) => keys.push(String(k).replace(/^\//, "")));
+            } catch(_e) {}
+            const onKeys = keys.filter((k) => k && k !== "Off");
+            onKeys.forEach((k) => { if(onStates.indexOf(k) < 0) onStates.push(k); });
+            const hit = !off && onKeys.indexOf(want) >= 0;
+            if(hit) matched = true;
+            try { w.dict.set(PDFLib.PDFName.of("AS"), PDFLib.PDFName.of(hit ? want : "Off")); } catch(_e2) {}
+          });
+          if(matched || off){
+            try {
+              field.acroField.dict.set(PDFLib.PDFName.of("V"), PDFLib.PDFName.of(off ? "Off" : want));
+            } catch(_e3) {}
+            if(matched || off) return;
+          }
+          if(onStates.length > 1) return;
+        }
         if(typeof field.select === "function"){
           const opts = (typeof field.getOptions === "function") ? (field.getOptions() || []) : [];
-          const candidates = [raw, raw.replace(/^\//, ""), "/" + raw.replace(/^\//, "")];
+          const candidates = [raw, want, "/" + want];
           for(let i = 0; i < candidates.length; i++){
             const c = candidates[i];
             if(!opts.length || opts.indexOf(c) >= 0){
@@ -37868,13 +37901,10 @@ UsersGateUI.init();
           try { field.select(raw); return; } catch(_e2) {}
         }
         if(typeof field.check === "function"){
-          const off = raw === "Off" || raw === "off" || raw === "false";
-          if(off){ try { field.uncheck(); } catch(_e) {} }
-          else { try { field.check(); } catch(_e3) {} }
-          return;
+          if(off){ try { field.uncheck(); } catch(_e) {} return; }
+          try { field.check(); return; } catch(_e3) {}
         }
-        const PDFLib = window.PDFLib;
-        const name = PDFLib?.PDFName?.of ? PDFLib.PDFName.of(raw) : null;
+        const name = PDFLib?.PDFName?.of ? PDFLib.PDFName.of(off ? "Off" : raw) : null;
         if(!field || !name) return;
         field.acroField.dict.set(PDFLib.PDFName.of("V"), name);
         field.acroField.dict.set(PDFLib.PDFName.of("AS"), name);
@@ -37948,21 +37978,101 @@ UsersGateUI.init();
       if(/אין|ללא|^לא$|^no$/i.test(s)) return "2";
       return "1";
     },
+    /* Cross-company / renamed-suffix groups so Migdal (longest) health answers fill Menora PDFs. */
+    HEALTH_TOPIC_ALIASES: {
+      smoking: ["smoking", "smoking_now", "smoking_current"],
+      heart: ["heart"],
+      neuro: ["neuro", "epilepsy"],
+      tumors: ["tumors", "cancer", "malignant_tumors", "personal"],
+      lungs: ["lungs", "respiratory", "asthma"],
+      digestive: ["digestive", "liver_hepatitis", "liver"],
+      kidneys: ["kidneys", "kidneys_urinary"],
+      metabolic: ["metabolic", "endocrine", "diabetes"],
+      mental: ["mental"],
+      eyes: ["eyes", "vision"],
+      ent: ["ent", "hearing"],
+      ortho: ["ortho", "joints", "ortho_top", "musculoskeletal"],
+      rheum: ["rheum", "autoimmune", "musculoskeletal"],
+      infectious: ["infectious", "blood_immune", "blood", "aids"],
+      hospital: ["hospital", "hospitalization"],
+      surgery: ["surgery", "hospitalization"],
+      meds: ["meds", "medications", "treatment"],
+      inquiry: ["inquiry", "tests"],
+      family: ["family", "family_critical", "family_diseases", "family_history"],
+      hobby: ["hobby"],
+      alcohol: ["alcohol"],
+      drugs: ["drugs", "substances"],
+      aviation: ["aviation"],
+      female: ["female", "reproductive"],
+      adl: ["adl", "disability"]
+    },
+    healthAnswerAliasKeys(qKey, responses){
+      const key = String(qKey == null ? "" : qKey).trim();
+      if(!key) return [];
+      const out = [];
+      const seen = Object.create(null);
+      const add = (k) => {
+        const t = String(k == null ? "" : k).trim();
+        if(!t || seen[t]) return;
+        seen[t] = true;
+        out.push(t);
+      };
+      add(key);
+      const sep = key.indexOf("__");
+      const suffix = sep >= 0 ? key.slice(sep + 2) : key;
+      const groups = this.HEALTH_TOPIC_ALIASES || {};
+      const suffixes = [suffix];
+      Object.keys(groups).forEach((g) => {
+        const list = groups[g];
+        if(Array.isArray(list) && list.indexOf(suffix) >= 0){
+          list.forEach((s) => { if(suffixes.indexOf(s) < 0) suffixes.push(s); });
+        }
+      });
+      const bag = responses && typeof responses === "object" ? responses : {};
+      const stored = Object.keys(bag);
+      suffixes.forEach((s) => {
+        add(s);
+        stored.forEach((k) => {
+          if(k === s || k.endsWith("__" + s)) add(k);
+        });
+      });
+      return out;
+    },
     healthAnswer(responses, qKey, insId){
       if(!qKey || !insId) return "";
-      const row = responses?.[qKey]?.[insId];
-      const a = String(row?.answer == null ? "" : row.answer).trim().toLowerCase();
-      return (a === "yes" || a === "no") ? a : "";
+      const read = (key) => {
+        const row = responses?.[key]?.[insId];
+        const a = String(row?.answer == null ? "" : row.answer).trim().toLowerCase();
+        return (a === "yes" || a === "no") ? a : "";
+      };
+      const exact = read(qKey);
+      if(exact) return exact;
+      const aliases = this.healthAnswerAliasKeys(qKey, responses);
+      let sawNo = false;
+      for(let i = 0; i < aliases.length; i++){
+        if(aliases[i] === qKey) continue;
+        const a = read(aliases[i]);
+        if(a === "yes") return "yes";
+        if(a === "no") sawNo = true;
+      }
+      return sawNo ? "no" : "";
     },
     healthAnswerOrSolo(responses, qKey, insId){
       const direct = this.healthAnswer(responses, qKey, insId);
       if(direct) return direct;
       if(insId) return "";
-      const block = responses?.[qKey];
-      if(!block || typeof block !== "object") return "";
-      const ids = Object.keys(block);
-      if(ids.length !== 1) return "";
-      return this.healthAnswer(responses, qKey, ids[0]);
+      const keys = this.healthAnswerAliasKeys(qKey, responses);
+      let sawNo = false;
+      for(let i = 0; i < keys.length; i++){
+        const block = responses?.[keys[i]];
+        if(!block || typeof block !== "object") continue;
+        const ids = Object.keys(block);
+        if(ids.length !== 1) continue;
+        const a = this.healthAnswer(responses, keys[i], ids[0]);
+        if(a === "yes") return "yes";
+        if(a === "no") sawNo = true;
+      }
+      return sawNo ? "no" : "";
     },
     /** When insured ids in the file drifted from response keys, recover the solo id used in answers. */
     soloHealthInsuredId(responses){
@@ -38459,25 +38569,41 @@ UsersGateUI.init();
             { q: 19, keys: ["hachshara_mort_f__b13", "hachshara_risk_f__b13", "hachshara__autoimmune", "hachshara_crit__autoimmune"] },
             { q: 20, keys: ["hachshara_mort_f__b14", "hachshara_risk_f__b14", "hachshara__glands", "hachshara_crit__glands"] }
           ],
+          menora_mortgage: [
+            { smoke: true, keys: ["menora_mort__smoking", "menora_risk__smoking", "menora_crit__smoking", "menora_cancer__smoking"] },
+            { q: 1, keys: ["menora_mort__hospital", "menora_risk__hospital", "menora_crit__hospital"] },
+            { q: 2, keys: ["menora_mort__meds", "menora_risk__meds", "menora_crit__meds"] },
+            { q: 3, keys: ["menora_mort__inquiry", "menora_risk__inquiry", "menora_crit__inquiry", "menora_cancer__tests"] },
+            { q: 4, keys: ["menora_mort__heart", "menora_risk__heart", "menora_crit__heart"] },
+            { q: 5, keys: ["menora_mort__metabolic", "menora_risk__metabolic", "menora_crit__metabolic"] },
+            { q: 6, keys: ["menora_mort__tumors", "menora_risk__tumors", "menora_crit__tumors", "menora_cancer__personal"] },
+            { q: 7, keys: ["menora_mort__digestive", "menora_risk__digestive", "menora_crit__digestive", "menora_cancer__digestive"] },
+            { q: 8, keys: ["menora_mort__neuro", "menora_risk__neuro", "menora_crit__neuro"] },
+            { q: 10, keys: ["menora_mort__lungs", "menora_risk__lungs", "menora_crit__lungs"] },
+            { q: 11, keys: ["menora_mort__eyes", "menora_risk__eyes", "menora_crit__eyes"] },
+            { q: 12, keys: ["menora_mort__ent", "menora_risk__ent", "menora_crit__ent"] },
+            { q: 13, keys: ["menora_mort__rheum", "menora_risk__rheum"] },
+            { q: 14, keys: ["menora_mort__ortho", "menora_risk__ortho", "menora_crit__ortho_top", "menora_cancer__ortho"] }
+          ],
           menora_ci: [
-            { smoke: true, keys: ["menora_crit__smoking"] },
-            { q: 1, keys: ["menora_crit__alcohol"] },
-            { q: 2, keys: ["menora_crit__drugs"] },
-            { q: 3, keys: ["menora_crit__inquiry"] },
-            { q: 4, keys: ["menora_crit__family"] },
-            { q: 5, keys: ["menora_crit__neuro"] },
-            { q: 6, keys: ["menora_crit__heart"] },
-            { q: 7, keys: ["menora_crit__metabolic"] },
-            { q: 8, keys: ["menora_crit__tumors"] },
-            { q: 9, keys: ["menora_crit__digestive"] },
-            { q: 10, keys: ["menora_crit__lungs"] },
-            { q: 11, keys: ["menora_crit__infectious"] },
-            { q: 12, keys: ["menora_crit__kidneys"] },
-            { q: 13, keys: ["menora_crit__eyes"] },
-            { q: 14, keys: ["menora_crit__ent"] },
-            { q: 15, keys: ["menora_crit__surgery"] },
-            { q: 16, keys: ["menora_crit__hospital"] },
-            { q: 17, keys: ["menora_crit__meds"] },
+            { smoke: true, keys: ["menora_crit__smoking", "menora_risk__smoking", "menora_mort__smoking", "menora_cancer__smoking"] },
+            { q: 1, keys: ["menora_crit__alcohol", "menora_risk__alcohol", "menora_mort__alcohol"] },
+            { q: 2, keys: ["menora_crit__drugs", "menora_risk__drugs", "menora_mort__drugs"] },
+            { q: 3, keys: ["menora_crit__inquiry", "menora_risk__inquiry", "menora_mort__inquiry", "menora_cancer__tests"] },
+            { q: 4, keys: ["menora_crit__family", "menora_risk__family", "menora_mort__family", "menora_cancer__family"] },
+            { q: 5, keys: ["menora_crit__neuro", "menora_risk__neuro", "menora_mort__neuro"] },
+            { q: 6, keys: ["menora_crit__heart", "menora_risk__heart", "menora_mort__heart"] },
+            { q: 7, keys: ["menora_crit__metabolic", "menora_risk__metabolic", "menora_mort__metabolic"] },
+            { q: 8, keys: ["menora_crit__tumors", "menora_risk__tumors", "menora_mort__tumors", "menora_cancer__personal"] },
+            { q: 9, keys: ["menora_crit__digestive", "menora_risk__digestive", "menora_mort__digestive", "menora_cancer__digestive"] },
+            { q: 10, keys: ["menora_crit__lungs", "menora_risk__lungs", "menora_mort__lungs"] },
+            { q: 11, keys: ["menora_crit__infectious", "menora_risk__infectious", "menora_mort__infectious"] },
+            { q: 12, keys: ["menora_crit__kidneys", "menora_risk__kidneys", "menora_mort__kidneys"] },
+            { q: 13, keys: ["menora_crit__eyes", "menora_risk__eyes", "menora_mort__eyes"] },
+            { q: 14, keys: ["menora_crit__ent", "menora_risk__ent", "menora_mort__ent"] },
+            { q: 15, keys: ["menora_crit__surgery", "menora_risk__surgery", "menora_mort__surgery", "menora_cancer__surgery"] },
+            { q: 16, keys: ["menora_crit__hospital", "menora_risk__hospital", "menora_mort__hospital"] },
+            { q: 17, keys: ["menora_crit__meds", "menora_risk__meds", "menora_mort__meds"] },
             { q: 18, keys: ["menora_crit__infant_family"] },
             { q: 19, keys: ["menora_crit__infant_nicu"] },
             { q: 20, keys: ["menora_crit__infant_tests"] },
@@ -38931,9 +39057,9 @@ UsersGateUI.init();
   const GI_HACHSHARA_MORTGAGE_FORM_HREF = "./gi-hachshara-mortgage-form.js?v=20260826-hach-hmo-health-v1";
   const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260825-migdal-health-fill-v1";
   const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260825-migdal-health-fill-v1";
-  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-covers-sum-v1";
-  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-covers-sum-v1";
-  const GI_MENORA_RISK_FORM_HREF = "./gi-menora-risk-form.js?v=20260824-covers-sum-v1";
+  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260828-menora-health-decl-v1";
+  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260828-menora-health-decl-v1";
+  const GI_MENORA_RISK_FORM_HREF = "./gi-menora-risk-form.js?v=20260828-menora-health-decl-v1";
   const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-covers-sum-v1";
   const GI_AYALON_MORTGAGE_FORM_HREF = "./gi-ayalon-mortgage-form.js?v=20260824-covers-sum-v1";
   const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-covers-sum-v1";
@@ -39580,7 +39706,7 @@ UsersGateUI.init();
   /* GI-PERF 2026-08-10 — CSS משני אחרי login בלבד (לא במסך הכניסה). */
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
-    "./gi-customers-import.css?v=20260828-sales-mail-hide-v1",
+    "./gi-customers-import.css?v=20260828-menora-health-decl-v1",
     "./theme-unify-flat.css?v=20260825-hmo-text-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){

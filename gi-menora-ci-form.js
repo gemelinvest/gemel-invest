@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/menora-ci/",
     TEMPLATE_FILE: "menora-ci-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-menora-ayalon-mort-v1",
+    VERSION: "20260828-menora-health-decl-v1",
     DOC_ID: "doc_menora_ci_form",
     DOC_TYPE: "menora_ci_form",
 
@@ -253,6 +253,11 @@
       } catch(_e) {}
     },
     setExport(form, fieldName, exportValue){
+      const helper = global.GI_OFFICIAL_FORM_FILL;
+      if(helper && typeof helper.setExport === "function"){
+        helper.setExport(form, fieldName, exportValue);
+        return;
+      }
       if(!exportValue) return;
       try {
         const field = form.getField(fieldName);

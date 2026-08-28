@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/menora-risk/",
     TEMPLATE_FILE: "menora-risk-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-health-align-v1",
+    VERSION: "20260828-menora-health-decl-v1",
     DOC_ID: "doc_menora_risk_form",
     DOC_TYPE: "menora_risk_form",
 
@@ -199,9 +199,9 @@
         { field: "FlightLicense", spouseField: "SFlightLicense", sport: true, keys: ["menora_risk__aviation"] },
         { field: "MKQ1", keys: ["menora_risk__alcohol"] },
         { field: "MKQ2", keys: ["menora_risk__drugs"] },
-        { field: "MKQ3", keys: ["menora_risk__neuro"] },
-        { field: "MKQ4", keys: ["menora_risk__heart"] },
-        { field: "MKQ5", keys: ["menora_risk__heart"] },
+        { field: "MKQ3", keys: ["menora_risk__neuro", "menora_mort__neuro", "menora_crit__neuro"] },
+        { field: "MKQ4", keys: ["menora_risk__heart", "menora_mort__heart", "menora_crit__heart"] },
+        { field: "MKQ5", keys: ["menora_risk__heart", "menora_mort__heart", "menora_crit__heart"] },
         { field: "MKQ6", keys: ["menora_risk__metabolic"] },
         { field: "MKQ7", keys: ["menora_risk__mental"] },
         { field: "MKQ8", keys: ["menora_risk__metabolic"] },
@@ -223,9 +223,17 @@
     },
     healthDetail(responses, qKey, insId, detailKey){
       if(!qKey || !insId) return "";
-      const row = responses?.[qKey]?.[insId];
-      const bag = row?.details || row?.fields || row || {};
-      return safeTrim(bag[detailKey]);
+      const helper = global.GI_OFFICIAL_FORM_FILL;
+      const keys = helper && typeof helper.healthAnswerAliasKeys === "function"
+        ? helper.healthAnswerAliasKeys(qKey, responses)
+        : [qKey];
+      for(let i = 0; i < keys.length; i++){
+        const row = responses?.[keys[i]]?.[insId];
+        const bag = row?.details || row?.fields || row || {};
+        const v = safeTrim(bag[detailKey]);
+        if(v) return v;
+      }
+      return "";
     },
     mergedHealthAnswer(helper, responses, keys, insId){
       if(!helper || !Array.isArray(keys) || !keys.length) return "";
@@ -245,22 +253,33 @@
       const primaryId = safeTrim(draft.primaryId);
       const spouseId = safeTrim(draft.spouseId);
       const yesNo = (answer) => answer === "yes" ? "1" : (answer === "no" ? "2" : "");
+      const writeYn = (fieldName, answer) => {
+        const yn = yesNo(answer);
+        if(!yn || !fieldName) return;
+        if(fieldName === "MKQ6"){
+          if(yn === "1"){
+            this.setExport(form, "MKQ6", "1");
+            this.setExport(form, "MQ6", "Off");
+          } else {
+            this.setExport(form, "MQ6", "2");
+            this.setExport(form, "MKQ6", "Off");
+          }
+          return;
+        }
+        this.setExport(form, fieldName, yn);
+      };
       const rows = this.mkqHealthRows();
       rows.forEach((row) => {
         if(!row || !Array.isArray(row.keys) || !row.keys.length) return;
         const primaryA = this.mergedHealthAnswer(helper, responses, row.keys, primaryId);
         const spouseA = spouseId ? this.mergedHealthAnswer(helper, responses, row.keys, spouseId) : "";
         if(row.sport){
-          const p = yesNo(primaryA);
-          if(p) this.setExport(form, row.field, p);
-          const s = yesNo(spouseA);
-          if(s && row.spouseField) this.setExport(form, row.spouseField, s);
+          writeYn(row.field, primaryA);
+          if(row.spouseField) writeYn(row.spouseField, spouseA);
           return;
         }
-        const pYn = yesNo(primaryA);
-        if(pYn) this.setExport(form, row.field, pYn);
-        const sYn = yesNo(spouseA);
-        if(sYn) this.setExport(form, row.field + "S", sYn);
+        writeYn(row.field, primaryA);
+        if(spouseA) writeYn(row.field + "S", spouseA);
       });
     },
     applyMenoraHealthTextFields(form, draft, font){
@@ -270,9 +289,18 @@
       const primaryId = safeTrim(draft.primaryId);
       const detailOf = (qKey, parts) => {
         if(!qKey || !primaryId) return "";
-        const row = responses?.[qKey]?.[primaryId];
-        const bag = row?.details || row?.fields || row || {};
-        return parts.map((k) => safeTrim(bag[k])).filter(Boolean).join(" · ");
+        const keys = helper && typeof helper.healthAnswerAliasKeys === "function"
+          ? helper.healthAnswerAliasKeys(qKey, responses)
+          : [qKey];
+        for(let i = 0; i < keys.length; i++){
+          const row = responses?.[keys[i]]?.[primaryId];
+          const bag = row?.details || row?.fields || row || {};
+          const bits = parts.map((k) => safeTrim(bag[k])).filter(Boolean);
+          if(bits.length) return bits.join(" · ");
+          const extra = Object.keys(bag).filter((k) => !/^(answer|saved|editing)$/.test(k) && safeTrim(bag[k])).map((k) => safeTrim(bag[k]));
+          if(extra.length && (row?.answer === "yes" || bits.length)) return extra.join(" · ");
+        }
+        return "";
       };
       const medsText = detailOf("menora_risk__meds", ["name", "diagnosis", "since", "dose"]);
       if(medsText) this.setTextSafe(form, "Medication", medsText, font);
@@ -364,6 +392,11 @@
       } catch(_e) {}
     },
     setExport(form, fieldName, exportValue){
+      const helper = global.GI_OFFICIAL_FORM_FILL;
+      if(helper && typeof helper.setExport === "function"){
+        helper.setExport(form, fieldName, exportValue);
+        return;
+      }
       if(!exportValue) return;
       try {
         const field = form.getField(fieldName);

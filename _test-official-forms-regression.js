@@ -10,10 +10,11 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260826-live-fix-v1";
+const TAG = "20260828-menora-health-decl-v1";
 const FORM_TAG = "20260824-covers-sum-v1";
 const HACH_FORM_TAG = "20260826-hach-hmo-health-v1";
 const MIGDAL_FORM_TAG = "20260825-migdal-health-fill-v1";
+const MENORA_FORM_TAG = "20260828-menora-health-decl-v1";
 let failed = 0;
 let passed = 0;
 
@@ -117,7 +118,8 @@ assert(sw.includes("gi-v12-" + TAG), "SW tag");
   "gi-phoenix-health-form.js"
 ].forEach((file) => {
   const tag = file.indexOf("hachshara") >= 0 ? HACH_FORM_TAG
-    : (file.indexOf("migdal") >= 0 ? MIGDAL_FORM_TAG : FORM_TAG);
+    : (file.indexOf("migdal") >= 0 ? MIGDAL_FORM_TAG
+      : (file.indexOf("menora") >= 0 ? MENORA_FORM_TAG : FORM_TAG));
   assert(app.includes("./" + file + "?v=" + tag), "href " + file);
   const src = fs.readFileSync(path.join(ROOT, file), "utf8");
   assert(src.includes("Heebo-Bold.ttf"), file + " bold font");
@@ -128,7 +130,9 @@ assert(sw.includes("gi-v12-" + TAG), "SW tag");
       ? src.includes("applyMenoraMkqHealth")
       : (file === "gi-migdal-mortgage-form.js"
         ? src.includes('map: "migdal_mortgage"')
-        : src.includes("applyOfficialHealthAndNames")));
+        : (file === "gi-menora-mortgage-form.js"
+          ? src.includes('map: "menora_mortgage"')
+          : src.includes("applyOfficialHealthAndNames"))));
   assert(healthFill, file + " fills health yes/no");
 });
 assert(fs.existsSync(path.join(ROOT, "gi-phoenix-ci-form.js")), "phoenix CI form file");
