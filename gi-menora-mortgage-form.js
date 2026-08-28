@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/menora-mortgage/",
     TEMPLATE_FILE: "menora-mortgage-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-official-decl-pay-he-v1",
+    VERSION: "20260828-menora-health-decl-v1",
     DOC_ID: "doc_menora_mortgage_form",
     DOC_TYPE: "menora_mortgage_form",
     LOAN_SUM_FIELDS: ["Text38", "Text44", "Text51", "Text57"],
@@ -257,6 +257,11 @@
       } catch(_e) {}
     },
     setExport(form, fieldName, exportValue){
+      const helper = global.GI_OFFICIAL_FORM_FILL;
+      if(helper && typeof helper.setExport === "function"){
+        helper.setExport(form, fieldName, exportValue);
+        return;
+      }
       if(!exportValue) return;
       try {
         const field = form.getField(fieldName);
@@ -353,8 +358,15 @@
         this.setTextSafe(form, "EmailMeshalem", draft.payer.email, font);
       }
       global.GI_OFFICIAL_FORM_FILL?.applyOfficialHealthAndNames?.(form, draft, font, {
-        keys: "menora_mortgage",
+        skipHealth: true,
         visual: false
+      });
+      global.GI_OFFICIAL_FORM_FILL?.applyMappedHealthYesNo?.(form, {
+        map: "menora_mortgage",
+        responses: draft.healthResponses,
+        primaryId: draft.primaryId,
+        spouseId: draft.spouseId,
+        childIds: draft.childIds
       });
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
