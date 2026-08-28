@@ -1,4 +1,4 @@
-/* GI-FOLLOWUP-ZIP-CONFIG 20260826-followup-docs-v1
+/* GI-FOLLOWUP-ZIP-CONFIG 20260828-hach-quest-fill-v1
    ספריית PDF משולבת לכל חברה (מ-fw.zip, ללא הראל). */
 (function installFollowupZipConfig(global){
   "use strict";
@@ -105,7 +105,7 @@
       qKeyPrefixes: ["hachshara_", "hachshara_mort_", "hachshara_crit_", "hachshara_risk_"],
       combinedPdf: "./forms/followup-questionnaires/hachshara-followup-all.pdf",
       pageCount: 29,
-      fillMode: "sequential",
+      fillMode: "hachshara",
       fieldPrefix: (qNo) => String(qNo) + "__",
       pageForQuestionnaire(qNo){
         return pageOneBased(Number(qNo), this.pageCount);
@@ -149,7 +149,7 @@
   };
 
   global.GI_FOLLOWUP_ZIP_CONFIG = {
-    VERSION: "20260826-followup-docs-v1",
+    VERSION: "20260828-hach-quest-fill-v1",
     CLAL_LETTERS,
     COMPANIES,
     companyKeyFromQKey(qKey){
