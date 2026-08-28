@@ -1,4 +1,4 @@
-/* GI-FOLLOWUP-ZIP-CONFIG 20260828-hach-quest-fill-v1
+/* GI-FOLLOWUP-ZIP-CONFIG 20260828-sales-mail-hide-v1
    ספריית PDF משולבת לכל חברה (מ-fw.zip, ללא הראל). */
 (function installFollowupZipConfig(global){
   "use strict";
@@ -149,7 +149,7 @@
   };
 
   global.GI_FOLLOWUP_ZIP_CONFIG = {
-    VERSION: "20260828-hach-quest-fill-v1",
+    VERSION: "20260828-sales-mail-hide-v1",
     CLAL_LETTERS,
     COMPANIES,
     companyKeyFromQKey(qKey){

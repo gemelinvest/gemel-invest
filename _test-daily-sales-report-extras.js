@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260828-hach-quest-fill-v1";
+const APP_TAG = "20260828-sales-mail-hide-v1";
 const THEME_TAG = "20260826-live-fix-v1";
 let failed = 0;
 let passed = 0;
@@ -39,7 +39,7 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).statu
 assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
 assert(html.includes("theme.css?v=" + THEME_TAG), "index.html theme.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
-assert(html.includes("gi-daily-sales-mail.js?v=20260826-mail-layout-v2"), "index.html mail script cache");
+assert(html.includes("gi-daily-sales-mail.js?v=20260828-mail-flash-v1"), "index.html mail script cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-daily-sales-mail.js")]).status === 0, "node --check gi-daily-sales-mail.js");
 assert(mail.includes("function snapshotHasNewLayout"), "חסימת שליחת דוח ישן");
 assert(mail.includes("מכירות מודיעין"), "בודק תווית מודיעין בסנאפשוט");
@@ -47,7 +47,10 @@ assert(mail.includes("לידים שויכו"), "בודק תווית לידים �
 assert(mail.includes("פרמייה מהפקה"), "בודק תווית פרמייה מהפקה בסנאפשוט");
 assert(mail.includes("נטען דוח ישן מהמטמון"), "הודעת Ctrl+F5 אם נטען דוח ישן");
 assert(mail.includes("MIN_PDF_CHARS = 10000"), "לא שומרים HTML בלי PDF תקין");
-assert(mail.includes("buildSnapshot(!!force)"), "שליחה יזומה דורשת PDF");
+assert(mail.includes("const needPdf = !!force || nearSendSlot();"), "PDF רק בלחיצה או ליד שעת שליחה");
+assert(mail.includes("buildSnapshot(needPdf)"), "סנאפשוט PDF רק כשצריך");
+assert(mail.includes("if(!requirePdf)"), "heartbeat בלי PDF");
+assert(mail.includes("return buildEmailHtml();"), "heartbeat שומר HTML בלבד");
 assert(mail.includes('replace: !!force'), "save-snapshot מקבל replace בלחיצה");
 assert(mail.includes('api("send-now"'), "send-now עדיין קיים");
 assert(mail.includes("...(snap || {})"), "send-now שולח את ה-snapshot המלא ולא רק actor");
@@ -320,6 +323,12 @@ assert(shouldKeepExisting(stored, "x".repeat(12000), false) === false, "PDF חד
 assert(shouldKeepExisting(stored, "x".repeat(12000), true) === false, "שלח עכשיו מחליף");
 assert(shouldKeepExisting(null, "", false) === false, "אין שמור — לא keep");
 assert(shouldKeepExisting({ pdf_base64: "tiny" }, "", false) === false, "PDF שמור קטן לא נחשב");
+
+console.log("\n7) iframe PDF לא מכסה את מסך הלקוחות");
+assert(app.includes('iframe.style.cssText = "position:fixed;left:-14000px;top:0;'), "iframe PDF מחוץ למסך");
+assert(app.includes('mask.style.cssText = "position:fixed;left:-14000px;top:0;'), "מסכת PDF מחוץ למסך");
+assert(!app.includes("z-index:2147483000"), "אין z-index שמכסה את ה-CRM");
+assert(!app.includes('left:0;top:0;width:794px;height:1123px;border:0;background:#fff;opacity:1;pointer-events:none;z-index:2147483000'), "הוסר iframe גלוי ב-left:0");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);

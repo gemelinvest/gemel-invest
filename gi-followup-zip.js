@@ -1,9 +1,9 @@
-/* GI-FOLLOWUP-ZIP 20260828-hach-quest-fill-v1
+/* GI-FOLLOWUP-ZIP 20260828-sales-mail-hide-v1
    שאלוני המשך ממולאים — מסמך נפרד לכל שאלון + ZIP זמני לנבחרים בלבד. */
 (function installGiFollowupZip(global){
   "use strict";
 
-  const TAG = "20260828-hach-quest-fill-v1";
+  const TAG = "20260828-sales-mail-hide-v1";
   const DOC_TYPE = "followup_questionnaire";
   const DOC_TYPE_ZIP_LEGACY = "followup_questionnaires_zip";
   const HEB_TEXT_OPTS = { visual: false, align: false };

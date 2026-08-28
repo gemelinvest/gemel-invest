@@ -1,4 +1,4 @@
-/* GI-DAILY-SALES-MAIL 2026-08-17
+/* GI-DAILY-SALES-MAIL 20260828-mail-flash-v1
    Isolated Outlook daily-sales email. Calls existing DashboardUI report
    builders only. Does not change sales / PIN / MFA logic. */
 (() => {
@@ -257,12 +257,17 @@
   }
 
   async function buildSnapshot(requirePdf){
+    /* Heartbeat must not paint a PDF iframe over the CRM. HTML-only is
+       enough between send slots; PDF only when required. */
+    if(!requirePdf){
+      return buildEmailHtml();
+    }
     let lastErr = null;
     try {
       if(typeof window.__GI_DAILY_SALES_MAIL_PDF_HOOK__ === "function"){
         const snap = wrapSnap(await window.__GI_DAILY_SALES_MAIL_PDF_HOOK__());
-        if(snap && (!requirePdf || snapHasPdf(snap))) return snap;
-        if(snap && requirePdf) lastErr = new Error("PDF ריק");
+        if(snap && snapHasPdf(snap)) return snap;
+        if(snap) lastErr = new Error("PDF ריק");
       }
     } catch(err) {
       lastErr = err;
@@ -271,8 +276,8 @@
       const b = window.__GI_FACE_BRIDGE__;
       if(b && typeof b.buildDailySalesMailSnapshot === "function"){
         const snap = wrapSnap(await b.buildDailySalesMailSnapshot());
-        if(snap && (!requirePdf || snapHasPdf(snap))) return snap;
-        if(snap && requirePdf) lastErr = lastErr || new Error("PDF ריק");
+        if(snap && snapHasPdf(snap)) return snap;
+        lastErr = lastErr || new Error("PDF ריק");
       }
     } catch(err) {
       lastErr = lastErr || err;
@@ -281,21 +286,13 @@
     if(Dash && typeof Dash.buildDailySalesMailSnapshot === "function"){
       try {
         const snap = wrapSnap(await Dash.buildDailySalesMailSnapshot());
-        if(snap && (!requirePdf || snapHasPdf(snap))) return snap;
-        if(snap && requirePdf) lastErr = lastErr || new Error("PDF ריק");
+        if(snap && snapHasPdf(snap)) return snap;
+        lastErr = lastErr || new Error("PDF ריק");
       } catch(err) {
         lastErr = lastErr || err;
       }
     }
-    if(requirePdf){
-      throw lastErr || new Error("לא נוצר קובץ PDF. רעננו את העמוד ב־Ctrl+F5, פתחו את דוח המכירות, ואז לחצו שוב.");
-    }
-    try {
-      return buildEmailHtml();
-    } catch(err) {
-      if(lastErr) throw lastErr;
-      throw err;
-    }
+    throw lastErr || new Error("לא נוצר קובץ PDF. רעננו את העמוד ב־Ctrl+F5, פתחו את דוח המכירות, ואז לחצו שוב.");
   }
 
   function buildEmailHtml(){
@@ -389,10 +386,11 @@
   async function persistSnapshot(force){
     if(!isMailAdmin()) return { skipped: true };
     const now = Date.now();
+    const needPdf = !!force || nearSendSlot();
     const gap = (!force && nearSendSlot()) ? 60 * 1000 : SNAPSHOT_GAP_MS;
     if(!force && lastSnapshotAt && (now - lastSnapshotAt) < gap) return { skipped: true };
-    await waitForMailHook(force ? 4000 : 1500);
-    if(force){
+    await waitForMailHook(needPdf ? 4000 : 1500);
+    if(needPdf){
       try {
         if(typeof window.__GI_DAILY_SALES_MAIL_PREPARE_HOOK__ === "function"){
           await window.__GI_DAILY_SALES_MAIL_PREPARE_HOOK__();
@@ -413,11 +411,11 @@
       snapshotReady();
       if(!snapshotReady()) return { skipped: true, reason: "incomplete" };
     }
-    const snap = await buildSnapshot(!!force);
+    const snap = await buildSnapshot(needPdf);
     if(!snapshotHasNewLayout(snap)){
       throw new Error("נטען דוח ישן מהמטמון (בלי מודיעין / חיפה / לידים). רעננו את העמוד ב־Ctrl+F5, ואז לחצו שוב «שלח עכשיו לבדיקה».");
     }
-    if(force && !snapHasPdf(snap)){
+    if(needPdf && !snapHasPdf(snap)){
       throw new Error("לא נוצר קובץ PDF. רעננו את העמוד ב־Ctrl+F5, פתחו את דוח המכירות, ואז לחצו שוב.");
     }
     const save = await api("save-snapshot", {
