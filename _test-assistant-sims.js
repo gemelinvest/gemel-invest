@@ -9,7 +9,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-reopen-v1";
+const TAG = "20260829-assistant-fast-v1";
 let failed = 0;
 let passed = 0;
 
@@ -65,8 +65,9 @@ assert(!wizard.includes("GiAssistant") && !wizard.includes("quoteExistingSimulat
 console.log("\n3) server authorizes, client computes, writes need confirm");
 assert(edge.includes("SIM_CATALOG") && edge.includes("quote_simulator"), "server catalog + quote command");
 assert(edge.includes("handleGetPrice") && !/handleGetPrice[\s\S]{0,800}monthlyPremium/.test(edge), "get price does not invent a premium");
-assert(edge.includes('WRITE_TOOLS = new Set(["create_task", "update_task", "create_proposal"])'), "create_proposal is a write");
-assert(edge.includes("יצירת הצעה באשף") && edge.includes("open_wizard"), "proposal opens wizard after confirm");
+assert(edge.includes('WRITE_TOOLS = new Set(["create_task", "update_task"])'), "tasks stay write-gated");
+assert(edge.includes("create_proposal") && !/WRITE_TOOLS = new Set\(\["create_task", "update_task", "create_proposal"\]\)/.test(edge), "opening the wizard is immediate");
+assert(edge.includes("open_wizard") && edge.includes("handleCreateProposal"), "proposal opens the existing wizard");
 assert(realtime.includes("get_insurance_price") && realtime.includes("create_proposal"), "realtime tools registered");
 assert(realtime.includes("אל תחשב פרמיה בעצמך"), "model told not to invent prices");
 assert(asstTs.includes("applySimWraps") && asstTs.includes("quoteSimulator"), "client applies authorized quote");
