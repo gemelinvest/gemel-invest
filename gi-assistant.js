@@ -13,6 +13,16 @@
     const FALLBACK_SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
     const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
     const POLL_MS = 1600;
+    const UI_COMMANDS = /* @__PURE__ */ new Set([
+      "open_customer",
+      "go_view",
+      "open_simulator",
+      "open_proposal",
+      "open_wizard",
+      "refresh_reminders",
+      "upsert_reminder",
+      "mark_task_done"
+    ]);
     let bridge = {};
     let bound = false;
     let pairing = null;
@@ -29,6 +39,7 @@
     let pendingAction = null;
     let timelineItems = [];
     let lastIntent = "";
+    let commandPoll = 0;
     function trim(value) {
       return String(value == null ? "" : value).trim();
     }
@@ -61,6 +72,14 @@
     function isLoggedIn() {
       const auth = getAuth();
       return !!(auth && (trim(auth.id) || trim(auth.name)));
+    }
+    function isPhonePage() {
+      var _a;
+      try {
+        return ((_a = document.body) == null ? void 0 : _a.getAttribute("data-gi-asst-page")) === "phone";
+      } catch (_e) {
+        return false;
+      }
     }
     function supabaseConfig() {
       const active = readBridge();
@@ -169,8 +188,9 @@
         data = {};
       }
       if (!res.ok || data.ok === false) {
-        const err = new Error(String(data.error || "HTTP_" + res.status));
-        err.code = String(data.error || "");
+        const code = trim(data.error || data.code || "HTTP_" + res.status);
+        const err = new Error(code || "HTTP_" + res.status);
+        err.code = code || "HTTP_" + res.status;
         throw err;
       }
       return data;
@@ -215,6 +235,9 @@
       if (code === "AUTH_FAILED" || code === "MISSING_PIN") return "\u05E7\u05D5\u05D3 \u05D4\u05DB\u05E0\u05D9\u05E1\u05D4 \u05E9\u05D2\u05D5\u05D9.";
       if (code === "TOKEN_INVALID") return "\u05E7\u05D5\u05D3 \u05D4\u05E7\u05D9\u05E9\u05D5\u05E8 \u05DC\u05D0 \u05EA\u05E7\u05E3 \u05D0\u05D5 \u05E9\u05DB\u05D1\u05E8 \u05E0\u05D5\u05E6\u05DC.";
       if (code === "AGENT_MISMATCH") return "\u05D4\u05DE\u05E9\u05EA\u05DE\u05E9 \u05E9\u05D6\u05D5\u05D4\u05D4 \u05D0\u05D9\u05E0\u05D5 \u05DE\u05D9 \u05E9\u05D4\u05EA\u05D7\u05D9\u05DC \u05D0\u05EA \u05D4\u05E7\u05D9\u05E9\u05D5\u05E8.";
+      if (code === "NOT_FOUND" || code === "HTTP_404" || code.indexOf("HTTP_404") === 0) {
+        return "\u05E9\u05E8\u05EA \u05D4\u05E7\u05D9\u05E9\u05D5\u05E8 \u05E2\u05D3\u05D9\u05D9\u05DF \u05DC\u05D0 \u05E4\u05D5\u05E8\u05E1\u05DD. \u05E6\u05E8\u05D9\u05DA \u05DC\u05E4\u05E8\u05E1\u05DD \u05D1-Supabase \u05D0\u05EA gi-assistant-pairing.";
+      }
       if (code === "FAILED_TO_FETCH" || code === "TypeError") return "\u05D0\u05D9\u05DF \u05D7\u05D9\u05D1\u05D5\u05E8 \u05DC\u05E9\u05E8\u05EA \u05D4\u05E7\u05D9\u05E9\u05D5\u05E8. \u05D4\u05E8\u05D9\u05E6\u05D5 \u05D0\u05EA supabase-assistant-pairing.sql \u05D5\u05E4\u05E8\u05E1\u05D5 \u05D0\u05EA \u05D4\u05E4\u05D5\u05E0\u05E7\u05E6\u05D9\u05D4.";
       if (code === "MISSING_OPENAI_KEY") return "\u05D7\u05E1\u05E8 \u05DE\u05E4\u05EA\u05D7 OpenAI \u05D1\u05E9\u05E8\u05EA. \u05D9\u05E9 \u05DC\u05D4\u05D2\u05D3\u05D9\u05E8 \u05D0\u05EA \u05D4\u05E1\u05D5\u05D3 \u05D1-Edge secrets.";
       if (code === "OPENAI_ERROR") return "\u05E9\u05E8\u05EA \u05D4\u05E7\u05D5\u05DC \u05DC\u05D0 \u05D6\u05DE\u05D9\u05DF \u05DB\u05E8\u05D2\u05E2. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1 \u05D1\u05E2\u05D5\u05D3 \u05E8\u05D2\u05E2.";
@@ -687,6 +710,45 @@
       } else if (type === "mark_task_done") void ((_h = active.markTaskDone) == null ? void 0 : _h.call(active, trim(cmd.id || cmd.taskId)));
       else if (type === "refresh_reminders") void ((_i = active.refreshReminders) == null ? void 0 : _i.call(active));
     }
+    async function dispatchDesktopCommand(cmd) {
+      if (!isPhonePage()) return;
+      if (!UI_COMMANDS.has(trim(cmd.type))) return;
+      try {
+        await callEngine({ ...engineAuthPayload(), action: "dispatch", command: cmd });
+      } catch (_e) {
+      }
+    }
+    async function pullDesktopCommands() {
+      if (isPhonePage()) return;
+      const device = readDevice();
+      if (!device || !trim(device.deviceSecret)) return;
+      try {
+        const data = await callEngine({ ...engineAuthPayload(), action: "pull" });
+        const list = Array.isArray(data.commands) ? data.commands : [];
+        for (const row of list) {
+          const id = trim(row.id);
+          const cmd = row.command && typeof row.command === "object" ? row.command : null;
+          try {
+            executeClientCommand(cmd);
+            if (id) await callEngine({ ...engineAuthPayload(), action: "ack", commandId: id });
+          } catch (_e) {
+            if (id) await callEngine({ ...engineAuthPayload(), action: "ack", commandId: id, error: "EXEC" });
+          }
+        }
+      } catch (_e) {
+      }
+    }
+    function startCommandBus() {
+      if (isPhonePage() || commandPoll) return;
+      commandPoll = window.setInterval(() => {
+        void pullDesktopCommands();
+      }, POLL_MS);
+      void pullDesktopCommands();
+    }
+    function stopCommandBus() {
+      if (commandPoll) window.clearInterval(commandPoll);
+      commandPoll = 0;
+    }
     async function invokeTool(tool, args, pendingActionId) {
       delete args.user_id;
       delete args.userId;
@@ -705,7 +767,9 @@
       await applyCrmWraps(trim(tool), args, data);
       await applySimWraps(trim(tool), args, data);
       if (data.client_command && typeof data.client_command === "object") {
-        executeClientCommand(data.client_command);
+        const cmd = data.client_command;
+        if (isPhonePage()) void dispatchDesktopCommand(cmd);
+        else executeClientCommand(cmd);
       }
       return data;
     }
@@ -981,9 +1045,17 @@
         const status = trim(data.status);
         if (status === "paired") {
           const auth = getAuth();
-          writeLocalPairing(trim(auth == null ? void 0 : auth.id) || trim(auth == null ? void 0 : auth.name));
+          if (trim(data.devicePublicId) && trim(data.deviceSecret)) {
+            writeDevice({
+              devicePublicId: trim(data.devicePublicId),
+              deviceSecret: trim(data.deviceSecret),
+              agentId: trim(data.agentId) || trim(auth == null ? void 0 : auth.id)
+            });
+          }
+          writeLocalPairing(trim(auth == null ? void 0 : auth.id) || trim(data.agentId) || trim(auth == null ? void 0 : auth.name));
           stopPairingPoll();
           pairing = null;
+          startCommandBus();
           renderAssistantBody();
           return;
         }
@@ -1019,7 +1091,15 @@
           pin
         });
         if (data.alreadyPaired === true) {
+          if (trim(data.devicePublicId) && trim(data.deviceSecret)) {
+            writeDevice({
+              devicePublicId: trim(data.devicePublicId),
+              deviceSecret: trim(data.deviceSecret),
+              agentId: trim(data.agentId) || trim(auth == null ? void 0 : auth.id)
+            });
+          }
           writeLocalPairing(trim(auth == null ? void 0 : auth.id) || trim(data.agentId) || trim(auth == null ? void 0 : auth.name));
+          startCommandBus();
           renderAssistantBody();
           return;
         }
@@ -1193,19 +1273,24 @@
       bound = true;
       window.addEventListener("gi:app-login-ready", () => {
         syncButtonVisibility();
+        startCommandBus();
       });
       window.addEventListener("gi:app-logout", () => {
         void cancelPairing();
+        stopCommandBus();
         closeOverlay();
         syncButtonVisibility();
       });
+      if (isLoggedIn()) startCommandBus();
     }
     function onLogin() {
       syncButtonVisibility();
+      startCommandBus();
     }
     function onLogout() {
       void cancelPairing();
       void stopVoice();
+      stopCommandBus();
       closeOverlay();
       syncButtonVisibility();
     }
@@ -1231,6 +1316,9 @@
       applyCrmWraps,
       applySimWraps,
       paintHits,
+      dispatchDesktopCommand,
+      pullDesktopCommands,
+      startCommandBus,
       getPendingAction() {
         return pendingAction;
       },

@@ -9,7 +9,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-sims-v1";
+const TAG = "20260829-assistant-live-v1";
 let failed = 0;
 let passed = 0;
 
@@ -82,6 +82,7 @@ assert(asstTs.includes('action: "create"'), "desktop create");
 assert(asstTs.includes('action: "consume"'), "phone consume");
 assert(asstTs.includes('action: "status"'), "desktop poll");
 assert(asstTs.includes("renderActivateBody"), "PIN step before QR");
+assert(asstTs.includes("שרת הקישור עדיין לא פורסם"), "404 of pairing function is explained");
 
 console.log("\n5) phoneEntryUrl contract");
 function elStub(){
