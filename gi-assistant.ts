@@ -1201,7 +1201,10 @@
     if (tool === "open_customer" || tool === "find_customer_by_id" || tool === "search_customer") {
       const out: Record<string, unknown> = { type: "open_customer" };
       if (trim(a.customerId)) out.customerId = trim(a.customerId);
-      if (trim(a.query)) out.query = trim(a.query);
+      if (trim(a.query)) {
+        out.query = trim(a.query);
+        if (!out.customerId) out.customerId = trim(a.query);
+      }
       if (!out.customerId && !out.query) return null;
       return out;
     }
