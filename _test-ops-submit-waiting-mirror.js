@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260828-menora-health-decl-v1";
+const APP_TAG = "20260829-ops-dash-redesign-v1";
 let failed = 0;
 let passed = 0;
 
@@ -64,7 +64,7 @@ const dashStart = app.indexOf("const OpsDashboardUI = {");
 const dashEnd = app.indexOf("const TypingPacketUI = {");
 const dashBlock = dashStart > 0 && dashEnd > dashStart ? app.slice(dashStart, dashEnd) : app;
 assert(dashBlock.includes('const agentsHtml = (!listBucket && isManager)'), "וידג'טי אמצע רק למנהל תפעול");
-assert(dashBlock.includes("מעקב נציגים בשיחה"), "מעקב נציגים נשאר למנהל");
+assert(dashBlock.includes("נציגים מחוברים"), "מעקב נציגים נשאר למנהל");
 assert(dashBlock.includes("פילוח סטטוס"), "פילוח סטטוס נשאר למנהל");
 assert(dashBlock.includes('kpiCard("waiting_mirror", "ממתינים לשיקוף")'), "כרטיס ממתינים לשיקוף נשאר לשני התפקידים");
 assert(dashBlock.includes('kpiCard("waiting_typing", "ממתין להקלדה")'), "כרטיס ממתינים להקלדה לא נגע");

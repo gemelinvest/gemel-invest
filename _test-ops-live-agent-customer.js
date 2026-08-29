@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260828-menora-health-decl-v1";
+const APP_TAG = "20260829-ops-dash-redesign-v1";
 let failed = 0;
 let passed = 0;
 
@@ -56,12 +56,13 @@ console.log("\n2) תצוגה למנהל — עמודת שם לקוח");
 assert(!!dashBlock, "OpsDashboardUI נמצא");
 assert(dashBlock.includes("liveCustomerName(rec){"), "עוזר שם לקוח חי");
 assert(dashBlock.includes("this.liveCustomerName(liveRec)"), "collectLiveAgents משתמש בשם החי");
-assert(dashBlock.includes('opsDashAgent__whoLbl">לקוח בשיחה'), "תווית לקוח בשיחה בשורה");
+assert(dashBlock.includes('opsDashAgent__whoLbl">בשיחה עם'), "תווית בשיחה עם בשורה");
 assert(dashBlock.includes("opsDashAgent__whoName"), "שם הלקוח בעמודה נפרדת");
-assert(dashBlock.includes('opsDashPanel__sub">שידור חי · מחובר · זמן זמינות'), "כותרת המשנה מציינת מחובר וזמן זמינות");
+assert(dashBlock.includes("נציגים מחוברים"), "כותרת נציגים מחוברים");
+assert(dashBlock.includes("שידור חי · ${agentsConnected} מחוברים · ${agentsInCall} בשיחה"), "כותרת המשנה מציינת מחוברים ובשיחה");
 assert(dashBlock.includes('const agentsHtml = (!listBucket && isManager)'), "מעקב נציגים נשאר למנהל בלבד");
 assert(css.includes(".opsDashAgent__who"), "עיצוב עמודת הלקוח");
-assert(css.includes("grid-area:who"), "במובייל עמודת הלקוח מקבלת שורה");
+assert(css.includes(".opsDashAgent__aside"), "במובייל אזור הסטטוס מקבל שורה");
 
 console.log("\n3) אין נגיעה בלוגיקת שיחה / שיוך");
 assert(dashBlock.includes("agentMatchesCall(agent, rec, call){"), "התאמת נציג לשיחה לא הוסרה");
@@ -123,7 +124,7 @@ const liveHtml = api.renderAgentRows([{
   clock: "01:30"
 }]);
 assert(liveHtml.includes("ישראל ישראלי"), "שם הלקוח מוצג כשהנציג בשיחה");
-assert(liveHtml.includes("לקוח בשיחה"), "תווית לקוח בשיחה מוצגת");
+assert(liveHtml.includes("בשיחה עם"), "תווית בשיחה עם מוצגת");
 assert(liveHtml.includes("דנה כהן"), "שם הנציג נשאר");
 assert(liveHtml.includes('data-ops-dash-open="c1"'), "לחיצה עדיין פותחת את תיק הלקוח");
 
@@ -143,7 +144,7 @@ const idleHtml = api.renderAgentRows([{
 }]);
 assert(idleHtml.includes("יוסי לוי"), "נציג פנוי עדיין מוצג");
 assert(!idleHtml.includes("ישראל ישראלי"), "נציג פנוי לא מציג לקוח קודם");
-assert(idleHtml.includes("—"), "נציג פנוי מציג מקף בעמודת הלקוח");
+assert(idleHtml.includes("לא מחובר"), "נציג פנוי מסומן כלא מחובר");
 
 if(failed){
   console.error("\nFAILED " + failed + " / passed " + passed);

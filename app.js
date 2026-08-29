@@ -31957,9 +31957,9 @@ UsersGateUI.init();
       const safeTotal = Math.max(0, Number(total) || 0);
       if(!safeTotal) return "conic-gradient(#dbe4f3 0deg 360deg)";
       const colors = {
-        waiting_mirror: "#93c5fd",
-        waiting_typing: "#2563eb",
-        pending_signatures: "#1e3a8a"
+        waiting_mirror: "#17324d",
+        waiting_typing: "#0e6b6a",
+        pending_signatures: "#b45309"
       };
       let acc = 0;
       const parts = status.map((item) => {
@@ -31969,6 +31969,16 @@ UsersGateUI.init();
         return `${colors[item.key] || "#94a3b8"} ${start}deg ${end}deg`;
       });
       return `conic-gradient(${parts.join(", ")})`;
+    },
+
+    kpiIcon(key){
+      const icons = {
+        waiting_mirror: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.4 18.2a4.4 4.4 0 0 1-.25-8.75 5.4 5.4 0 0 1 10.45 1.55A3.7 3.7 0 0 1 18.2 18.2H7.4Z"/><path d="M12 14.6V9.4"/><path d="M9.85 11.2 12 9.05l2.15 2.15"/></svg>',
+        waiting_typing: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.4 5.6 18.4 10.6"/><path d="M5.2 18.8 6.5 14.2 15.7 5a1.55 1.55 0 0 1 2.2 0l1.1 1.1a1.55 1.55 0 0 1 0 2.2L9.8 17.5 5.2 18.8Z"/></svg>',
+        pending_signatures: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.8 5.4 18.6 10.2"/><path d="M5.4 18.6 6.9 14.1 15.5 5.5a1.45 1.45 0 0 1 2.05 0l1.05 1.05a1.45 1.45 0 0 1 0 2.05L10 17.25 5.4 18.6Z"/><path d="M4.6 20.4c1.55-.25 2.9.25 4.15.85 1.4.7 2.7 1 4.1.15"/></svg>',
+        issuance: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4.6h6.4L18 8.2v10.3A1.5 1.5 0 0 1 16.5 20h-8A1.5 1.5 0 0 1 7 18.5v-12A1.9 1.9 0 0 1 8 4.6Z"/><path d="M14.4 4.6V8H18"/><path d="M9.2 12.2h4.2"/><path d="M9.2 15h2.4"/><path d="M14.1 15.1 15.5 16.5 18 13.9"/></svg>'
+      };
+      return icons[key] || icons.waiting_mirror;
     },
 
     renderAgentRows(agents){
@@ -31982,27 +31992,26 @@ UsersGateUI.init();
           : "";
         const openAttr = agent.customerId ? ` data-ops-dash-open="${escapeHtml(agent.customerId)}"` : "";
         const rowClass = agent.live ? " is-live" : (agent.connected ? " is-connected" : " is-idle");
-        const roleTxt = agent.live ? "בשיחה כעת" : (agent.connected ? "מחובר" : "לא מחובר");
-        const badgeTxt = agent.live ? agent.stepLabel : (agent.connected ? "זמין" : "לא מחובר");
-        const liveTxt = agent.live ? "LIVE" : (agent.connected ? "מחובר" : "—");
+        const chipClass = agent.live ? "opsDashAgent__chip--live" : (agent.connected ? "opsDashAgent__chip--online" : "opsDashAgent__chip--off");
+        const chipTxt = agent.live ? "בשיחה" : (agent.connected ? "מחובר" : "לא מחובר");
+        const whoHtml = agent.live
+          ? `<span class="opsDashAgent__who is-live"><span class="opsDashAgent__whoLbl">בשיחה עם</span> <strong class="opsDashAgent__whoName">${escapeHtml(agent.customerName)}</strong></span>`
+          : (agent.connected
+            ? `<span class="opsDashAgent__who"><span class="opsDashAgent__whoName">זמין לקליטה</span></span>`
+            : `<span class="opsDashAgent__who"><span class="opsDashAgent__whoName">לא מחובר</span></span>`);
+        const clockHtml = (agent.live || agent.connected)
+          ? `<span class="opsDashAgent__clock" dir="ltr">${agent.connected && !agent.live ? "זמין " : ""}${escapeHtml(agent.clock)}</span>`
+          : "";
         return `
           <button class="opsDashAgent${rowClass}" type="button"${liveAttrs}${openAttr} ${agent.customerId ? "" : "disabled"}>
             <span class="opsDashAgent__avatar opsDashAgent__avatar--t${agent.tone}" aria-hidden="true">${escapeHtml(agent.initials)}</span>
             <span class="opsDashAgent__meta">
               <strong class="opsDashAgent__name">${escapeHtml(agent.name)}</strong>
-              <span class="opsDashAgent__role">${roleTxt}</span>
+              ${whoHtml}
             </span>
-            <span class="opsDashAgent__who${agent.live ? " is-live" : ""}">
-              <span class="opsDashAgent__whoLbl">לקוח בשיחה</span>
-              <strong class="opsDashAgent__whoName">${escapeHtml(agent.live ? agent.customerName : "—")}</strong>
-            </span>
-            ${agent.live
-              ? `<span class="opsDashAgent__step">${escapeHtml(agent.stepLabel)}</span>`
-              : `<span class="opsDashAgent__idleBadge">${escapeHtml(badgeTxt)}</span>`}
-            <span class="opsDashAgent__clock" dir="ltr">${escapeHtml(agent.clock)}</span>
-            <span class="opsDashAgent__live">
-              <span class="opsDashAgent__liveDot" aria-hidden="true"></span>
-              <span class="opsDashAgent__liveTxt">${liveTxt}</span>
+            <span class="opsDashAgent__aside">
+              <span class="opsDashAgent__chip ${chipClass}"><span class="opsDashAgent__chipDot" aria-hidden="true"></span>${chipTxt}</span>
+              ${clockHtml}
             </span>
           </button>`;
       }).join("");
@@ -32169,7 +32178,7 @@ UsersGateUI.init();
       const model = this.buildModel();
       const isManager = !!Auth.isOps();
       const name = safeTrim(Auth?.current?.name) || (isManager ? "מנהל תפעול" : "נציג תפעול");
-      const roleLabel = isManager ? "מנהל תפעול" : "נציג תפעול";
+      const helloText = `${getTimeGreeting()}, ${name}`;
       if(UI.els.pageTitle) UI.els.pageTitle.textContent = "דשבורד תפעול";
       const listBucket = safeTrim(this._listBucket);
 
@@ -32179,7 +32188,10 @@ UsersGateUI.init();
         return `
           <article class="opsDashKpi card${active}" data-ops-dash-bucket="${escapeHtml(key)}">
             <div class="opsDashKpi__label">${escapeHtml(title)}</div>
-            <div class="opsDashKpi__value">${escapeHtml(String(item.count))}</div>
+            <div class="opsDashKpi__row">
+              <span class="opsDashKpi__icon" aria-hidden="true">${this.kpiIcon(key)}</span>
+              <div class="opsDashKpi__value">${escapeHtml(String(item.count))}</div>
+            </div>
             <div class="opsDashKpi__premium">סה״כ פרמיה <strong>${escapeHtml(this.formatMoney(item.premium))}</strong></div>
           </article>`;
       };
@@ -32263,19 +32275,23 @@ UsersGateUI.init();
       const queueHtml = listBucket === "waiting_typing"
         ? typingListHtml
         : (listBucket === "waiting_mirror" ? waitingListHtml : "");
+      const agentsLive = model.agentsLive || [];
+      const agentsConnected = agentsLive.filter((a) => a.live || a.connected).length;
+      const agentsInCall = agentsLive.filter((a) => a.live).length;
       const agentsHtml = (!listBucket && isManager) ? `<div class="opsDash__mid opsDash__mid--agents">
             <article class="card opsDashPanel opsDashPanel--agents">
               <div class="opsDashPanel__head">
-                <div class="opsDashPanel__title">מעקב נציגים בשיחה</div>
-                <div class="opsDashPanel__sub">שידור חי · מחובר · זמן זמינות</div>
+                <div class="opsDashPanel__title">נציגים מחוברים</div>
+                <div class="opsDashPanel__sub">שידור חי · ${agentsConnected} מחוברים · ${agentsInCall} בשיחה</div>
               </div>
-              <div class="opsDashAgents">${this.renderAgentRows(model.agentsLive)}</div>
+              <div class="opsDashAgents">${this.renderAgentRows(agentsLive)}</div>
             </article>
             <article class="card opsDashPanel opsDashPanel--status">
               <div class="opsDashPanel__head">
                 <div class="opsDashPanel__title">פילוח סטטוס</div>
+                <div class="opsDashPanel__sub">סה״כ תיקים פעילים</div>
               </div>
-              <div class="opsDashStatus opsDashStatus--stack">
+              <div class="opsDashStatus opsDashStatus--row">
                 <div class="opsDashDonut" style="background:${this.donutStyle(model.status, statusTotal)}" aria-hidden="true">
                   <div class="opsDashDonut__hole">
                     <strong>${statusTotal}</strong>
@@ -32291,15 +32307,7 @@ UsersGateUI.init();
         <section class="opsDash${listBucket ? " opsDash--queueScreen" : " opsDash--home"}${listBucket === "waiting_mirror" ? " opsDash--waitingHead" : ""}" dir="rtl" aria-label="${listBucket ? "חוצץ תפעול" : "דשבורד תפעול"}">
           <header class="opsDash__head">
             <div>
-              <div class="opsDash__kicker">${escapeHtml(roleLabel)}</div>
-              ${listBucket === "waiting_mirror"
-                ? `<p class="opsDash__hello">${escapeHtml(getTimeGreeting() + " " + name)}</p>`
-                : `<h1 class="opsDash__title">${escapeHtml(getTimeGreeting() + " " + name)}</h1>
-              <p class="opsDash__sub">${listBucket
-                ? (listBucket === "waiting_typing" ? "מסך ממתינים להקלדה" : "")
-                : (isManager
-                  ? "מעקב חי אחרי נציגי התפעול בשיחת שיקוף"
-                  : "מוצגים רק הלקוחות ששויכו אליך לטיפול")}</p>`}
+              <h1 class="opsDash__hello">${escapeHtml(helloText)}</h1>
             </div>
             <div class="opsDash__actions">
               ${listBucket
