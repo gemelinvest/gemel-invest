@@ -156,7 +156,8 @@ async function handleCreate(sb: SupabaseClient, body: Json){
     return json({ ok: false, error: auth.error }, auth.status);
   }
   const agentId = trim(auth.agent.id);
-  if(await hasActiveDevice(sb, agentId)){
+  const freshPhone = body.freshPhone === true;
+  if(await hasActiveDevice(sb, agentId) && !freshPhone){
     const desktop = await issueDesktopDevice(sb, agentId);
     await audit(sb, { user_id: agentId, action: "pairing_create", authorization_result: "ok", execution_status: "already_paired", arguments_safe: { alreadyPaired: true } });
     return json({ ok: true, alreadyPaired: true, agentId, ...desktop });

@@ -118,6 +118,7 @@
   let commandPoll = 0;
   let utteranceBusy = false;
   let lastHeard = "";
+  let pairingFreshPhone = false;
 
   function trim(value: unknown): string {
     return String(value == null ? "" : value).trim();
@@ -223,6 +224,19 @@
     const url = new URL("assistant.html", window.location.href);
     url.searchParams.set("p", trim(publicToken));
     return url.href;
+  }
+
+  function phoneHomeUrl(): string {
+    return new URL("assistant.html", window.location.href).href;
+  }
+
+  function stripPhoneTokenFromUrl(): void {
+    try {
+      const url = new URL(window.location.href);
+      if (!url.searchParams.has("p")) return;
+      url.search = "";
+      window.history.replaceState({}, "", url.pathname + url.hash);
+    } catch (_e) {}
   }
 
   function qrImageUrl(text: string, provider: "qrserver" | "quickchart"): string {
@@ -407,7 +421,7 @@
 
   function pairingErrorText(code: string): string {
     if (code === "AUTH_FAILED" || code === "MISSING_PIN") return "קוד הכניסה שגוי.";
-    if (code === "TOKEN_INVALID") return "קוד הקישור לא תקף או שכבר נוצל.";
+    if (code === "TOKEN_INVALID") return "קוד הקישור החד־פעמי כבר נוצל. פתחו את הדף הקבוע של העוזר או בקשו קישור חדש מהמחשב.";
     if (code === "AGENT_MISMATCH") return "המשתמש שזוהה אינו מי שהתחיל את הקישור.";
     if (code === "NOT_FOUND" || code === "HTTP_404" || code.indexOf("HTTP_404") === 0) {
       return "שרת הקישור עדיין לא פורסם. צריך לפרסם ב-Supabase את gi-assistant-pairing.";
@@ -585,6 +599,7 @@
         <ol class="giAsst__timeline" id="giAsstTimeline" aria-live="polite"></ol>
         <div class="giAsst__hits" id="giAsstHits" hidden></div>
         <p class="giAsst__hint">הקול מקומי בדפדפן — בלי תשלום לספק חיצוני. כתיבה דורשת אישור. «כן» חל רק אם יש פעולה ממתינה.</p>
+        ${isPhonePage() ? "" : `<button class="giAsst__btn giAsst__btn--ghost" id="giAsstOpenPhone" type="button">פתח שוב בטלפון</button>`}
       </div>
     `;
   }
@@ -806,6 +821,9 @@
     ($("giAsstTalkForm") as HTMLFormElement | null)?.addEventListener("submit", (ev) => {
       ev.preventDefault();
       void submitTalkText();
+    });
+    root.querySelector("#giAsstOpenPhone")?.addEventListener("click", () => {
+      renderPhoneReturnBody();
     });
     bindHits(root);
     paintVoiceState();
@@ -1433,6 +1451,29 @@
     return "הקוד תקף עוד " + m + ":" + s;
   }
 
+  function renderPhoneReturnBody(): void {
+    const body = $("giAsstBody");
+    const title = $("giAsstTitle");
+    if (title) title.textContent = "חזרה לטלפון";
+    if (!body) return;
+    const href = phoneHomeUrl();
+    const parsed = new URL(href);
+    if (Array.from(parsed.searchParams.keys()).length) return;
+    body.innerHTML = `
+      <p class="giAsst__lead">הטלפון כבר מקושר. זה הדף הקבוע — לא חד־פעמי. פתחו אותו בטלפון שכבר קושר, או שמרו אותו במסך הבית.</p>
+      <div class="giAsst__qrSlot" id="giAsstQrSlot" aria-live="polite"></div>
+      <p class="giAsst__hint" id="giAsstPhoneHomeLink">${href}</p>
+      <div class="giAsst__voiceActions">
+        <button class="giAsst__btn" id="giAsstReturnTalk" type="button">התחל שיחה במחשב</button>
+        <button class="giAsst__btn giAsst__btn--ghost" id="giAsstFreshPhone" type="button">קשר טלפון נוסף</button>
+      </div>
+    `;
+    const slot = $("giAsstQrSlot");
+    if (slot) paintQr(slot, href);
+    $("giAsstReturnTalk")?.addEventListener("click", () => renderAssistantBody());
+    $("giAsstFreshPhone")?.addEventListener("click", () => renderActivateBody(true));
+  }
+
   function renderQrBody(href: string, expiresAt: string): void {
     const body = $("giAsstBody");
     const title = $("giAsstTitle");
@@ -1448,13 +1489,16 @@
     if (slot) paintQr(slot, href);
   }
 
-  function renderActivateBody(): void {
+  function renderActivateBody(freshPhone = false): void {
+    pairingFreshPhone = freshPhone === true;
     const body = $("giAsstBody");
     const title = $("giAsstTitle");
     if (title) title.textContent = "הפעלת העוזר האישי";
     if (!body) return;
     body.innerHTML = `
-      <p class="giAsst__lead">סרוק את קוד ה-QR באמצעות הטלפון כדי לחבר את העוזר האישי לחשבון שלך.</p>
+      <p class="giAsst__lead">${pairingFreshPhone
+        ? "הזינו את קוד הכניסה כדי ליצור QR חדש לטלפון נוסף. הקוד החדש חד־פעמי."
+        : "סרוק את קוד ה-QR באמצעות הטלפון כדי לחבר את העוזר האישי לחשבון שלך."}</p>
       <form class="giAsst__form" id="giAsstPinForm">
         <label class="giAsst__label" for="giAsstPin">קוד הכניסה לחשבון</label>
         <input class="giAsst__input" id="giAsstPin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="12" />
@@ -1490,7 +1534,7 @@
         stopPairingPoll();
         pairing = null;
         startCommandBus();
-        renderAssistantBody();
+        renderPhoneReturnBody();
         return;
       }
       if (status === "expired" || status === "cancelled" || status === "missing") {
@@ -1521,7 +1565,8 @@
         agentId: trim(auth?.id),
         agentName: trim(auth?.name),
         username: trim(auth?.username),
-        pin
+        pin,
+        freshPhone: pairingFreshPhone === true
       });
       if (data.alreadyPaired === true) {
         if (trim(data.devicePublicId) && trim(data.deviceSecret)) {
@@ -1533,7 +1578,7 @@
         }
         writeLocalPairing(trim(auth?.id) || trim(data.agentId) || trim(auth?.name));
         startCommandBus();
-        renderAssistantBody();
+        renderPhoneReturnBody();
         return;
       }
       const publicToken = trim(data.publicToken);
@@ -1653,9 +1698,14 @@
           agentId: trim(data.agentId)
         });
         writeLocalPairing(trim(data.agentId));
+        stripPhoneTokenFromUrl();
         renderPhoneAssistant();
       } catch (err) {
         const code = trim((err as Error & { code?: string })?.code || (err as Error)?.message);
+        if (code === "TOKEN_INVALID") {
+          renderPhoneUsedToken();
+          return;
+        }
         setPhoneStatus(pairingErrorText(code), "err");
       } finally {
         if (btn) btn.disabled = false;
@@ -1663,18 +1713,30 @@
     });
   }
 
+  function renderPhoneUsedToken(): void {
+    const root = $("giAsstPhone");
+    if (!root) return;
+    const href = phoneHomeUrl();
+    root.innerHTML = `
+      <header class="giAsstPhone__head">
+        <div class="giAsstPhone__kicker">GEMEL INVEST</div>
+        <h1 class="giAsstPhone__title">העוזר האישי שלי</h1>
+      </header>
+      <p class="giAsst__lead">הקוד שסרקתם כבר נוצל. זה תקין — קישור ה-QR הראשון הוא חד־פעמי.</p>
+      <p class="giAsst__hint">אם זה הטלפון שכבר קושר, פתחו את הדף הקבוע. אם זה טלפון אחר, בקשו במחשב «קשר טלפון נוסף».</p>
+      <a class="giAsst__btn" id="giAsstPhoneHomeBtn" href="${href}">פתח את דף העוזר הקבוע</a>
+    `;
+  }
+
   function bootPhone(): void {
     document.body.classList.add("giAsstPhonePage");
-    if (hasActiveDevicePairing() && !trim(new URLSearchParams(window.location.search).get("p"))) {
+    if (hasActiveDevicePairing()) {
+      stripPhoneTokenFromUrl();
       renderPhoneAssistant();
       return;
     }
     const publicToken = trim(new URLSearchParams(window.location.search).get("p"));
     if (!publicToken) {
-      if (hasActiveDevicePairing()) {
-        renderPhoneAssistant();
-        return;
-      }
       const root = $("giAsstPhone");
       if (root) {
         root.innerHTML = `
@@ -1682,13 +1744,9 @@
             <div class="giAsstPhone__kicker">GEMEL INVEST</div>
             <h1 class="giAsstPhone__title">העוזר האישי שלי</h1>
           </header>
-          <p class="giAsst__lead">יש לסרוק את קוד ה-QR ממסך המחשב כדי לקשר את המכשיר בפעם הראשונה.</p>
+          <p class="giAsst__lead">הטלפון הזה עדיין לא מקושר. סרקו מהמחשב QR חדש, או בקשו «קשר טלפון נוסף».</p>
         `;
       }
-      return;
-    }
-    if (hasActiveDevicePairing()) {
-      renderPhoneAssistant();
       return;
     }
     renderPhoneLogin(publicToken);
@@ -1738,6 +1796,7 @@
     hasActiveDevicePairing,
     openFromTopBar,
     phoneEntryUrl,
+    phoneHomeUrl,
     startVoice,
     stopVoice,
     getVoiceState(){ return voice.state; },

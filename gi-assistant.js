@@ -43,6 +43,7 @@
     let commandPoll = 0;
     let utteranceBusy = false;
     let lastHeard = "";
+    let pairingFreshPhone = false;
     function trim(value) {
       return String(value == null ? "" : value).trim();
     }
@@ -145,6 +146,18 @@
       const url = new URL("assistant.html", window.location.href);
       url.searchParams.set("p", trim(publicToken));
       return url.href;
+    }
+    function phoneHomeUrl() {
+      return new URL("assistant.html", window.location.href).href;
+    }
+    function stripPhoneTokenFromUrl() {
+      try {
+        const url = new URL(window.location.href);
+        if (!url.searchParams.has("p")) return;
+        url.search = "";
+        window.history.replaceState({}, "", url.pathname + url.hash);
+      } catch (_e) {
+      }
     }
     function qrImageUrl(text, provider) {
       const data = encodeURIComponent(text);
@@ -317,7 +330,7 @@
     }
     function pairingErrorText(code) {
       if (code === "AUTH_FAILED" || code === "MISSING_PIN") return "\u05E7\u05D5\u05D3 \u05D4\u05DB\u05E0\u05D9\u05E1\u05D4 \u05E9\u05D2\u05D5\u05D9.";
-      if (code === "TOKEN_INVALID") return "\u05E7\u05D5\u05D3 \u05D4\u05E7\u05D9\u05E9\u05D5\u05E8 \u05DC\u05D0 \u05EA\u05E7\u05E3 \u05D0\u05D5 \u05E9\u05DB\u05D1\u05E8 \u05E0\u05D5\u05E6\u05DC.";
+      if (code === "TOKEN_INVALID") return "\u05E7\u05D5\u05D3 \u05D4\u05E7\u05D9\u05E9\u05D5\u05E8 \u05D4\u05D7\u05D3\u05BE\u05E4\u05E2\u05DE\u05D9 \u05DB\u05D1\u05E8 \u05E0\u05D5\u05E6\u05DC. \u05E4\u05EA\u05D7\u05D5 \u05D0\u05EA \u05D4\u05D3\u05E3 \u05D4\u05E7\u05D1\u05D5\u05E2 \u05E9\u05DC \u05D4\u05E2\u05D5\u05D6\u05E8 \u05D0\u05D5 \u05D1\u05E7\u05E9\u05D5 \u05E7\u05D9\u05E9\u05D5\u05E8 \u05D7\u05D3\u05E9 \u05DE\u05D4\u05DE\u05D7\u05E9\u05D1.";
       if (code === "AGENT_MISMATCH") return "\u05D4\u05DE\u05E9\u05EA\u05DE\u05E9 \u05E9\u05D6\u05D5\u05D4\u05D4 \u05D0\u05D9\u05E0\u05D5 \u05DE\u05D9 \u05E9\u05D4\u05EA\u05D7\u05D9\u05DC \u05D0\u05EA \u05D4\u05E7\u05D9\u05E9\u05D5\u05E8.";
       if (code === "NOT_FOUND" || code === "HTTP_404" || code.indexOf("HTTP_404") === 0) {
         return "\u05E9\u05E8\u05EA \u05D4\u05E7\u05D9\u05E9\u05D5\u05E8 \u05E2\u05D3\u05D9\u05D9\u05DF \u05DC\u05D0 \u05E4\u05D5\u05E8\u05E1\u05DD. \u05E6\u05E8\u05D9\u05DA \u05DC\u05E4\u05E8\u05E1\u05DD \u05D1-Supabase \u05D0\u05EA gi-assistant-pairing.";
@@ -491,6 +504,7 @@
         <ol class="giAsst__timeline" id="giAsstTimeline" aria-live="polite"></ol>
         <div class="giAsst__hits" id="giAsstHits" hidden></div>
         <p class="giAsst__hint">\u05D4\u05E7\u05D5\u05DC \u05DE\u05E7\u05D5\u05DE\u05D9 \u05D1\u05D3\u05E4\u05D3\u05E4\u05DF \u2014 \u05D1\u05DC\u05D9 \u05EA\u05E9\u05DC\u05D5\u05DD \u05DC\u05E1\u05E4\u05E7 \u05D7\u05D9\u05E6\u05D5\u05E0\u05D9. \u05DB\u05EA\u05D9\u05D1\u05D4 \u05D3\u05D5\u05E8\u05E9\u05EA \u05D0\u05D9\u05E9\u05D5\u05E8. \xAB\u05DB\u05DF\xBB \u05D7\u05DC \u05E8\u05E7 \u05D0\u05DD \u05D9\u05E9 \u05E4\u05E2\u05D5\u05DC\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4.</p>
+        ${isPhonePage() ? "" : `<button class="giAsst__btn giAsst__btn--ghost" id="giAsstOpenPhone" type="button">\u05E4\u05EA\u05D7 \u05E9\u05D5\u05D1 \u05D1\u05D8\u05DC\u05E4\u05D5\u05DF</button>`}
       </div>
     `;
     }
@@ -683,7 +697,7 @@
       }
     }
     function bindVoiceControls(root) {
-      var _a, _b, _c, _d, _e, _f;
+      var _a, _b, _c, _d, _e, _f, _g;
       (_a = root.querySelector("#giAsstVoiceStart")) == null ? void 0 : _a.addEventListener("click", () => {
         void startVoice();
       });
@@ -703,6 +717,9 @@
       (_f = $("giAsstTalkForm")) == null ? void 0 : _f.addEventListener("submit", (ev) => {
         ev.preventDefault();
         void submitTalkText();
+      });
+      (_g = root.querySelector("#giAsstOpenPhone")) == null ? void 0 : _g.addEventListener("click", () => {
+        renderPhoneReturnBody();
       });
       bindHits(root);
       paintVoiceState();
@@ -1352,6 +1369,29 @@
       const s = String(sec % 60).padStart(2, "0");
       return "\u05D4\u05E7\u05D5\u05D3 \u05EA\u05E7\u05E3 \u05E2\u05D5\u05D3 " + m + ":" + s;
     }
+    function renderPhoneReturnBody() {
+      var _a, _b;
+      const body = $("giAsstBody");
+      const title = $("giAsstTitle");
+      if (title) title.textContent = "\u05D7\u05D6\u05E8\u05D4 \u05DC\u05D8\u05DC\u05E4\u05D5\u05DF";
+      if (!body) return;
+      const href = phoneHomeUrl();
+      const parsed = new URL(href);
+      if (Array.from(parsed.searchParams.keys()).length) return;
+      body.innerHTML = `
+      <p class="giAsst__lead">\u05D4\u05D8\u05DC\u05E4\u05D5\u05DF \u05DB\u05D1\u05E8 \u05DE\u05E7\u05D5\u05E9\u05E8. \u05D6\u05D4 \u05D4\u05D3\u05E3 \u05D4\u05E7\u05D1\u05D5\u05E2 \u2014 \u05DC\u05D0 \u05D7\u05D3\u05BE\u05E4\u05E2\u05DE\u05D9. \u05E4\u05EA\u05D7\u05D5 \u05D0\u05D5\u05EA\u05D5 \u05D1\u05D8\u05DC\u05E4\u05D5\u05DF \u05E9\u05DB\u05D1\u05E8 \u05E7\u05D5\u05E9\u05E8, \u05D0\u05D5 \u05E9\u05DE\u05E8\u05D5 \u05D0\u05D5\u05EA\u05D5 \u05D1\u05DE\u05E1\u05DA \u05D4\u05D1\u05D9\u05EA.</p>
+      <div class="giAsst__qrSlot" id="giAsstQrSlot" aria-live="polite"></div>
+      <p class="giAsst__hint" id="giAsstPhoneHomeLink">${href}</p>
+      <div class="giAsst__voiceActions">
+        <button class="giAsst__btn" id="giAsstReturnTalk" type="button">\u05D4\u05EA\u05D7\u05DC \u05E9\u05D9\u05D7\u05D4 \u05D1\u05DE\u05D7\u05E9\u05D1</button>
+        <button class="giAsst__btn giAsst__btn--ghost" id="giAsstFreshPhone" type="button">\u05E7\u05E9\u05E8 \u05D8\u05DC\u05E4\u05D5\u05DF \u05E0\u05D5\u05E1\u05E3</button>
+      </div>
+    `;
+      const slot = $("giAsstQrSlot");
+      if (slot) paintQr(slot, href);
+      (_a = $("giAsstReturnTalk")) == null ? void 0 : _a.addEventListener("click", () => renderAssistantBody());
+      (_b = $("giAsstFreshPhone")) == null ? void 0 : _b.addEventListener("click", () => renderActivateBody(true));
+    }
     function renderQrBody(href, expiresAt) {
       const body = $("giAsstBody");
       const title = $("giAsstTitle");
@@ -1366,13 +1406,14 @@
       const slot = $("giAsstQrSlot");
       if (slot) paintQr(slot, href);
     }
-    function renderActivateBody() {
+    function renderActivateBody(freshPhone = false) {
+      pairingFreshPhone = freshPhone === true;
       const body = $("giAsstBody");
       const title = $("giAsstTitle");
       if (title) title.textContent = "\u05D4\u05E4\u05E2\u05DC\u05EA \u05D4\u05E2\u05D5\u05D6\u05E8 \u05D4\u05D0\u05D9\u05E9\u05D9";
       if (!body) return;
       body.innerHTML = `
-      <p class="giAsst__lead">\u05E1\u05E8\u05D5\u05E7 \u05D0\u05EA \u05E7\u05D5\u05D3 \u05D4-QR \u05D1\u05D0\u05DE\u05E6\u05E2\u05D5\u05EA \u05D4\u05D8\u05DC\u05E4\u05D5\u05DF \u05DB\u05D3\u05D9 \u05DC\u05D7\u05D1\u05E8 \u05D0\u05EA \u05D4\u05E2\u05D5\u05D6\u05E8 \u05D4\u05D0\u05D9\u05E9\u05D9 \u05DC\u05D7\u05E9\u05D1\u05D5\u05DF \u05E9\u05DC\u05DA.</p>
+      <p class="giAsst__lead">${pairingFreshPhone ? "\u05D4\u05D6\u05D9\u05E0\u05D5 \u05D0\u05EA \u05E7\u05D5\u05D3 \u05D4\u05DB\u05E0\u05D9\u05E1\u05D4 \u05DB\u05D3\u05D9 \u05DC\u05D9\u05E6\u05D5\u05E8 QR \u05D7\u05D3\u05E9 \u05DC\u05D8\u05DC\u05E4\u05D5\u05DF \u05E0\u05D5\u05E1\u05E3. \u05D4\u05E7\u05D5\u05D3 \u05D4\u05D7\u05D3\u05E9 \u05D7\u05D3\u05BE\u05E4\u05E2\u05DE\u05D9." : "\u05E1\u05E8\u05D5\u05E7 \u05D0\u05EA \u05E7\u05D5\u05D3 \u05D4-QR \u05D1\u05D0\u05DE\u05E6\u05E2\u05D5\u05EA \u05D4\u05D8\u05DC\u05E4\u05D5\u05DF \u05DB\u05D3\u05D9 \u05DC\u05D7\u05D1\u05E8 \u05D0\u05EA \u05D4\u05E2\u05D5\u05D6\u05E8 \u05D4\u05D0\u05D9\u05E9\u05D9 \u05DC\u05D7\u05E9\u05D1\u05D5\u05DF \u05E9\u05DC\u05DA."}</p>
       <form class="giAsst__form" id="giAsstPinForm">
         <label class="giAsst__label" for="giAsstPin">\u05E7\u05D5\u05D3 \u05D4\u05DB\u05E0\u05D9\u05E1\u05D4 \u05DC\u05D7\u05E9\u05D1\u05D5\u05DF</label>
         <input class="giAsst__input" id="giAsstPin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="12" />
@@ -1410,7 +1451,7 @@
           stopPairingPoll();
           pairing = null;
           startCommandBus();
-          renderAssistantBody();
+          renderPhoneReturnBody();
           return;
         }
         if (status === "expired" || status === "cancelled" || status === "missing") {
@@ -1442,7 +1483,8 @@
           agentId: trim(auth == null ? void 0 : auth.id),
           agentName: trim(auth == null ? void 0 : auth.name),
           username: trim(auth == null ? void 0 : auth.username),
-          pin
+          pin,
+          freshPhone: pairingFreshPhone === true
         });
         if (data.alreadyPaired === true) {
           if (trim(data.devicePublicId) && trim(data.deviceSecret)) {
@@ -1454,7 +1496,7 @@
           }
           writeLocalPairing(trim(auth == null ? void 0 : auth.id) || trim(data.agentId) || trim(auth == null ? void 0 : auth.name));
           startCommandBus();
-          renderAssistantBody();
+          renderPhoneReturnBody();
           return;
         }
         const publicToken = trim(data.publicToken);
@@ -1574,27 +1616,43 @@
             agentId: trim(data.agentId)
           });
           writeLocalPairing(trim(data.agentId));
+          stripPhoneTokenFromUrl();
           renderPhoneAssistant();
         } catch (err) {
           const code = trim((err == null ? void 0 : err.code) || (err == null ? void 0 : err.message));
+          if (code === "TOKEN_INVALID") {
+            renderPhoneUsedToken();
+            return;
+          }
           setPhoneStatus(pairingErrorText(code), "err");
         } finally {
           if (btn) btn.disabled = false;
         }
       });
     }
+    function renderPhoneUsedToken() {
+      const root = $("giAsstPhone");
+      if (!root) return;
+      const href = phoneHomeUrl();
+      root.innerHTML = `
+      <header class="giAsstPhone__head">
+        <div class="giAsstPhone__kicker">GEMEL INVEST</div>
+        <h1 class="giAsstPhone__title">\u05D4\u05E2\u05D5\u05D6\u05E8 \u05D4\u05D0\u05D9\u05E9\u05D9 \u05E9\u05DC\u05D9</h1>
+      </header>
+      <p class="giAsst__lead">\u05D4\u05E7\u05D5\u05D3 \u05E9\u05E1\u05E8\u05E7\u05EA\u05DD \u05DB\u05D1\u05E8 \u05E0\u05D5\u05E6\u05DC. \u05D6\u05D4 \u05EA\u05E7\u05D9\u05DF \u2014 \u05E7\u05D9\u05E9\u05D5\u05E8 \u05D4-QR \u05D4\u05E8\u05D0\u05E9\u05D5\u05DF \u05D4\u05D5\u05D0 \u05D7\u05D3\u05BE\u05E4\u05E2\u05DE\u05D9.</p>
+      <p class="giAsst__hint">\u05D0\u05DD \u05D6\u05D4 \u05D4\u05D8\u05DC\u05E4\u05D5\u05DF \u05E9\u05DB\u05D1\u05E8 \u05E7\u05D5\u05E9\u05E8, \u05E4\u05EA\u05D7\u05D5 \u05D0\u05EA \u05D4\u05D3\u05E3 \u05D4\u05E7\u05D1\u05D5\u05E2. \u05D0\u05DD \u05D6\u05D4 \u05D8\u05DC\u05E4\u05D5\u05DF \u05D0\u05D7\u05E8, \u05D1\u05E7\u05E9\u05D5 \u05D1\u05DE\u05D7\u05E9\u05D1 \xAB\u05E7\u05E9\u05E8 \u05D8\u05DC\u05E4\u05D5\u05DF \u05E0\u05D5\u05E1\u05E3\xBB.</p>
+      <a class="giAsst__btn" id="giAsstPhoneHomeBtn" href="${href}">\u05E4\u05EA\u05D7 \u05D0\u05EA \u05D3\u05E3 \u05D4\u05E2\u05D5\u05D6\u05E8 \u05D4\u05E7\u05D1\u05D5\u05E2</a>
+    `;
+    }
     function bootPhone() {
       document.body.classList.add("giAsstPhonePage");
-      if (hasActiveDevicePairing() && !trim(new URLSearchParams(window.location.search).get("p"))) {
+      if (hasActiveDevicePairing()) {
+        stripPhoneTokenFromUrl();
         renderPhoneAssistant();
         return;
       }
       const publicToken = trim(new URLSearchParams(window.location.search).get("p"));
       if (!publicToken) {
-        if (hasActiveDevicePairing()) {
-          renderPhoneAssistant();
-          return;
-        }
         const root = $("giAsstPhone");
         if (root) {
           root.innerHTML = `
@@ -1602,13 +1660,9 @@
             <div class="giAsstPhone__kicker">GEMEL INVEST</div>
             <h1 class="giAsstPhone__title">\u05D4\u05E2\u05D5\u05D6\u05E8 \u05D4\u05D0\u05D9\u05E9\u05D9 \u05E9\u05DC\u05D9</h1>
           </header>
-          <p class="giAsst__lead">\u05D9\u05E9 \u05DC\u05E1\u05E8\u05D5\u05E7 \u05D0\u05EA \u05E7\u05D5\u05D3 \u05D4-QR \u05DE\u05DE\u05E1\u05DA \u05D4\u05DE\u05D7\u05E9\u05D1 \u05DB\u05D3\u05D9 \u05DC\u05E7\u05E9\u05E8 \u05D0\u05EA \u05D4\u05DE\u05DB\u05E9\u05D9\u05E8 \u05D1\u05E4\u05E2\u05DD \u05D4\u05E8\u05D0\u05E9\u05D5\u05E0\u05D4.</p>
+          <p class="giAsst__lead">\u05D4\u05D8\u05DC\u05E4\u05D5\u05DF \u05D4\u05D6\u05D4 \u05E2\u05D3\u05D9\u05D9\u05DF \u05DC\u05D0 \u05DE\u05E7\u05D5\u05E9\u05E8. \u05E1\u05E8\u05E7\u05D5 \u05DE\u05D4\u05DE\u05D7\u05E9\u05D1 QR \u05D7\u05D3\u05E9, \u05D0\u05D5 \u05D1\u05E7\u05E9\u05D5 \xAB\u05E7\u05E9\u05E8 \u05D8\u05DC\u05E4\u05D5\u05DF \u05E0\u05D5\u05E1\u05E3\xBB.</p>
         `;
         }
-        return;
-      }
-      if (hasActiveDevicePairing()) {
-        renderPhoneAssistant();
         return;
       }
       renderPhoneLogin(publicToken);
@@ -1655,6 +1709,7 @@
       hasActiveDevicePairing,
       openFromTopBar,
       phoneEntryUrl,
+      phoneHomeUrl,
       startVoice,
       stopVoice,
       getVoiceState() {
