@@ -54436,6 +54436,21 @@ const ClalRiskLifePdf = {
           return { ok:false, error:"HAR_STEP" };
         } catch(_e) { return { ok:false }; }
       },
+      dismissValidationModal(){
+        try {
+          const modal = document.getElementById("giStep1ValidationModal")
+            || document.querySelector(".giValModal.giValModal--visible")
+            || document.querySelector(".giValModal");
+          if(!modal) return { ok:false, error:"NO_MODAL" };
+          const btn = modal.querySelector(".giValModal__closeBtn");
+          if(btn){
+            btn.click();
+            return { ok:true };
+          }
+          try { modal.remove(); } catch(_eRm) {}
+          return { ok:true };
+        } catch(_e) { return { ok:false }; }
+      },
       clickTopbar(id){
         try {
           const allowed = {
@@ -54534,6 +54549,7 @@ const ClalRiskLifePdf = {
       fillWizard(fields){ return window.__GI_ASSISTANT_BRIDGE__.fillWizard(fields); },
       wizardNext(){ return window.__GI_ASSISTANT_BRIDGE__.wizardNext(); },
       openHarImport(){ return window.__GI_ASSISTANT_BRIDGE__.openHarImport(); },
+      dismissValidationModal(){ return window.__GI_ASSISTANT_BRIDGE__.dismissValidationModal(); },
       clickTopbar(id){ return window.__GI_ASSISTANT_BRIDGE__.clickTopbar(id); },
       openProposal(id){ return window.__GI_ASSISTANT_BRIDGE__.openProposal(id); },
       refreshReminders(){ return window.__GI_ASSISTANT_BRIDGE__.refreshReminders(); },
