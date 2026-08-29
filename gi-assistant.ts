@@ -1,4 +1,4 @@
-/* GI-ASSISTANT — top bar, pairing, and OpenAI Realtime voice (P3–P6).
+/* GI-ASSISTANT — pairing, Realtime voice, and engine (P3–P7).
    Compiled to gi-assistant.js. Do not edit the compiled file by hand. */
 (() => {
   "use strict";
@@ -8,6 +8,7 @@
   const ROOT_ID = "giAsstRoot";
   const FN_PAIRING_PATH = "/functions/v1/gi-assistant-pairing";
   const FN_REALTIME_PATH = "/functions/v1/gi-assistant-realtime";
+  const FN_ENGINE_PATH = "/functions/v1/gi-assistant-engine";
   const OPENAI_CALLS_URL = "https://api.openai.com/v1/realtime/calls";
   const FALLBACK_SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
   const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
@@ -39,6 +40,7 @@
   type VoiceRuntime = {
     state: VoiceState;
     sessionId: string;
+    pin: string;
     pc: RTCPeerConnection | null;
     dc: RTCDataChannel | null;
     stream: MediaStream | null;
@@ -46,18 +48,32 @@
     error: string;
   };
 
+  type TimelineItem = {
+    kind: string;
+    text: string;
+  };
+
+  type PendingAction = {
+    id: string;
+    label: string;
+  } | null;
+
   let bridge: AssistantBridge = {};
   let bound = false;
   let pairing: PairingSession | null = null;
   let voice: VoiceRuntime = {
     state: "idle",
     sessionId: "",
+    pin: "",
     pc: null,
     dc: null,
     stream: null,
     audio: null,
     error: ""
   };
+  let pendingAction: PendingAction = null;
+  let timelineItems: TimelineItem[] = [];
+  let lastIntent = "";
 
   function trim(value: unknown): string {
     return String(value == null ? "" : value).trim();
@@ -219,6 +235,37 @@
     return callEdge(FN_REALTIME_PATH, payload);
   }
 
+  function callEngine(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return callEdge(FN_ENGINE_PATH, payload);
+  }
+
+  function redactSafe(text: unknown): string {
+    return trim(text).replace(/\d{8,9}/g, "[מזהה]").slice(0, 280);
+  }
+
+  function classifyIntent(text: string): "confirm" | "cancel" | "other" {
+    const normalized = trim(text).replace(/[!.?,]/g, "");
+    if (/^(כן|בטח|אשרי?|תאשר|מאשר|יאללה|קדימה)$/.test(normalized)) return "confirm";
+    if (/^(לא|בטל|ביטול|אל תאשר|לא לאשר)$/.test(normalized)) return "cancel";
+    return "other";
+  }
+
+  function engineAuthPayload(): Record<string, unknown> {
+    const device = readDevice();
+    const auth = getAuth();
+    const payload: Record<string, unknown> = { sessionId: trim(voice.sessionId) };
+    if (device && trim(device.devicePublicId) && trim(device.deviceSecret)) {
+      payload.devicePublicId = trim(device.devicePublicId);
+      payload.deviceSecret = trim(device.deviceSecret);
+    } else {
+      payload.agentId = trim(auth?.id);
+      payload.agentName = trim(auth?.name);
+      payload.username = trim(auth?.username);
+      payload.pin = trim(voice.pin);
+    }
+    return payload;
+  }
+
   function pairingErrorText(code: string): string {
     if (code === "AUTH_FAILED" || code === "MISSING_PIN") return "קוד הכניסה שגוי.";
     if (code === "TOKEN_INVALID") return "קוד הקישור לא תקף או שכבר נוצל.";
@@ -374,9 +421,56 @@
           <button class="giAsst__btn" id="giAsstVoiceStart" type="button">התחל שיחה</button>
           <button class="giAsst__btn giAsst__btn--ghost" id="giAsstVoiceStop" type="button" hidden>סיים שיחה</button>
         </div>
-        <p class="giAsst__hint">המפתח הקבוע של OpenAI נשאר בשרת. הדפדפן מקבל רק טוקן זמני.</p>
+        <div class="giAsst__confirm is-hidden" id="giAsstConfirm" hidden>
+          <p class="giAsst__confirmText" id="giAsstConfirmText">ממתין לאישור פעולה.</p>
+          <div class="giAsst__confirmActions">
+            <button class="giAsst__btn" id="giAsstConfirmYes" type="button">כן</button>
+            <button class="giAsst__btn giAsst__btn--ghost" id="giAsstConfirmNo" type="button">לא</button>
+          </div>
+        </div>
+        <ol class="giAsst__timeline" id="giAsstTimeline" aria-live="polite"></ol>
+        <p class="giAsst__hint">פעולות כתיבה דורשות אישור. «כן» חל רק אם יש פעולה ממתינה.</p>
       </div>
     `;
+  }
+
+  function paintTimeline(): void {
+    const list = $("giAsstTimeline");
+    if (!list) return;
+    list.innerHTML = timelineItems.slice(-20).map((item) => {
+      const kind = trim(item.kind) || "info";
+      return `<li class="giAsst__tl giAsst__tl--${kind}"><span>${redactSafe(item.text)}</span></li>`;
+    }).join("");
+    list.scrollTop = list.scrollHeight;
+  }
+
+  function paintConfirm(): void {
+    const box = $("giAsstConfirm");
+    const text = $("giAsstConfirmText");
+    if (!box) return;
+    if (!pendingAction) {
+      box.classList.add("is-hidden");
+      box.setAttribute("hidden", "hidden");
+      return;
+    }
+    box.classList.remove("is-hidden");
+    box.removeAttribute("hidden");
+    if (text) text.textContent = "לאשר: " + redactSafe(pendingAction.label) + "?";
+  }
+
+  function pushTimeline(kind: string, text: string): void {
+    const safe = redactSafe(text);
+    if (!safe) return;
+    timelineItems.push({ kind, text: safe });
+    paintTimeline();
+  }
+
+  function resetEngineUi(): void {
+    pendingAction = null;
+    timelineItems = [];
+    lastIntent = "";
+    paintConfirm();
+    paintTimeline();
   }
 
   function bindVoiceControls(root: ParentNode): void {
@@ -386,13 +480,63 @@
       if (voice.state === "idle" || voice.state === "error") void startVoice();
       else void stopVoice();
     });
+    root.querySelector("#giAsstConfirmYes")?.addEventListener("click", () => { void confirmPending(); });
+    root.querySelector("#giAsstConfirmNo")?.addEventListener("click", () => { void cancelPending(); });
     paintVoiceState();
+    paintConfirm();
+    paintTimeline();
+  }
+
+  function extractTranscript(ev: Record<string, unknown>, kind: "user" | "assistant"): string {
+    const type = trim(ev.type);
+    if (kind === "user") {
+      if (type.indexOf("input_audio_transcription.completed") >= 0) return redactSafe(ev.transcript);
+    } else if (
+      type === "response.output_audio_transcript.done" ||
+      type === "response.audio_transcript.done" ||
+      type.indexOf("output_audio_transcript.done") >= 0
+    ) {
+      return redactSafe(ev.transcript);
+    }
+    return "";
+  }
+
+  async function onUserTranscript(text: string): Promise<void> {
+    pushTimeline("user", text);
+    lastIntent = classifyIntent(text);
+    if (!trim(voice.sessionId)) return;
+    try {
+      await callEngine({ ...engineAuthPayload(), action: "log", kind: "user", text });
+      if (lastIntent === "confirm" || lastIntent === "cancel") {
+        const data = await callEngine({ ...engineAuthPayload(), action: "intent", text });
+        if (data.confirmed === true) {
+          pendingAction = null;
+          pushTimeline("ok", "הפעולה אושרה. הביצוע יתווסף בשלב הכלים.");
+        } else if (data.cancelled === true) {
+          pendingAction = null;
+          pushTimeline("cancel", "הפעולה בוטלה.");
+        } else if (trim(data.error) === "NO_PENDING") {
+          pushTimeline("info", "אין פעולה ממתינה לאישור.");
+        }
+        paintConfirm();
+      }
+    } catch (_e) {}
+  }
+
+  async function onAssistantTranscript(text: string): Promise<void> {
+    pushTimeline("assistant", text);
+    if (!trim(voice.sessionId)) return;
+    try { await callEngine({ ...engineAuthPayload(), action: "log", kind: "assistant", text }); } catch (_e) {}
   }
 
   function handleRealtimeEvent(raw: string): void {
-    let ev: { type?: string } = {};
-    try { ev = JSON.parse(raw) as { type?: string }; } catch (_e) { return; }
+    let ev: Record<string, unknown> = {};
+    try { ev = JSON.parse(raw) as Record<string, unknown>; } catch (_e) { return; }
     const type = trim(ev.type);
+    const userText = extractTranscript(ev, "user");
+    const asstText = extractTranscript(ev, "assistant");
+    if (userText) void onUserTranscript(userText);
+    if (asstText) void onAssistantTranscript(asstText);
     if (type === "session.created" || type === "input_audio_buffer.speech_stopped" || type === "response.done") {
       if (voice.state !== "idle") setVoiceState("listening");
       return;
@@ -415,6 +559,56 @@
     }
   }
 
+  async function proposeWrite(input: { tool: string; label?: string; argumentsSafe?: Record<string, unknown> }): Promise<Record<string, unknown>> {
+    const data = await callEngine({
+      ...engineAuthPayload(),
+      action: "propose",
+      tool: trim(input.tool),
+      label: trim(input.label),
+      argumentsSafe: input.argumentsSafe || {}
+    });
+    pendingAction = { id: trim(data.pending_action_id), label: trim(data.label) || trim(input.label) || trim(input.tool) };
+    pushTimeline("confirm", "ממתין לאישור: " + (pendingAction.label || ""));
+    paintConfirm();
+    return data;
+  }
+
+  async function confirmPending(): Promise<Record<string, unknown> | null> {
+    if (!pendingAction) {
+      pushTimeline("info", "אין פעולה ממתינה לאישור.");
+      return { ok: false, error: "NO_PENDING", executed: false };
+    }
+    try {
+      const data = await callEngine({
+        ...engineAuthPayload(),
+        action: "confirm",
+        pendingActionId: pendingAction.id
+      });
+      pendingAction = null;
+      paintConfirm();
+      pushTimeline("ok", "הפעולה אושרה. הביצוע יתווסף בשלב הכלים.");
+      return data;
+    } catch (err) {
+      const code = trim((err as Error & { code?: string })?.code || (err as Error)?.message);
+      if (code === "NO_PENDING") pushTimeline("info", "אין פעולה ממתינה לאישור.");
+      return { ok: false, error: code, executed: false };
+    }
+  }
+
+  async function cancelPending(): Promise<void> {
+    if (!pendingAction) return;
+    try {
+      await callEngine({
+        ...engineAuthPayload(),
+        action: "cancel",
+        pendingActionId: pendingAction.id
+      });
+    } catch (_e) {}
+    pendingAction = null;
+    paintConfirm();
+    pushTimeline("cancel", "הפעולה בוטלה.");
+  }
+
   async function mintVoiceToken(): Promise<{ clientSecret: string; sessionId: string }> {
     const device = readDevice();
     const auth = getAuth();
@@ -431,6 +625,9 @@
       payload.username = trim(auth?.username);
       payload.pin = trim(($("giAsstVoicePin") as HTMLInputElement | null)?.value);
       if (!trim(payload.pin)) throw Object.assign(new Error("MISSING_PIN"), { code: "MISSING_PIN" });
+    }
+    if (!device || !trim(device.deviceSecret)) {
+      voice.pin = trim(payload.pin);
     }
     const data = await callRealtime(payload);
     const clientSecret = trim(data.clientSecret);
@@ -476,6 +673,8 @@
     try {
       const minted = await mintVoiceToken();
       voice.sessionId = minted.sessionId;
+      try { await callEngine({ ...engineAuthPayload(), action: "bootstrap" }); } catch (_e) {}
+      pushTimeline("system", "סשן עוזר נפתח.");
       await connectWebRtc(minted.clientSecret);
       setVoiceState("listening");
     } catch (err) {
@@ -502,10 +701,15 @@
     voice.stream = null;
     voice.audio = null;
     voice.sessionId = "";
+    voice.pin = "";
+    pendingAction = null;
     if (sessionId) {
       try { await callRealtime({ action: "end", sessionId }); } catch (_e5) {}
     }
-    if (updateUi) setVoiceState("idle");
+    if (updateUi) {
+      setVoiceState("idle");
+      paintConfirm();
+    }
   }
 
   function renderAssistantBody(): void {
@@ -514,6 +718,7 @@
     if (title) title.textContent = "העוזר האישי שלי";
     if (!body) return;
     void stopVoice();
+    resetEngineUi();
     const needPin = !(readDevice() && trim(readDevice()?.deviceSecret));
     body.innerHTML = voiceMarkup(needPin);
     bindVoiceControls(body);
@@ -679,6 +884,7 @@
     const root = $("giAsstPhone");
     if (!root) return;
     void stopVoice();
+    resetEngineUi();
     root.innerHTML = `
       <header class="giAsstPhone__head">
         <div class="giAsstPhone__kicker">GEMEL INVEST</div>
@@ -813,7 +1019,15 @@
     phoneEntryUrl,
     startVoice,
     stopVoice,
-    getVoiceState(){ return voice.state; }
+    getVoiceState(){ return voice.state; },
+    proposeWrite,
+    confirmPending,
+    cancelPending,
+    classifyIntent,
+    redactSafe,
+    getPendingAction(){ return pendingAction; },
+    getLastIntent(){ return lastIntent; },
+    getTimeline(){ return timelineItems.slice(); }
   };
 
   try {

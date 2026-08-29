@@ -7,6 +7,7 @@
     const ROOT_ID = "giAsstRoot";
     const FN_PAIRING_PATH = "/functions/v1/gi-assistant-pairing";
     const FN_REALTIME_PATH = "/functions/v1/gi-assistant-realtime";
+    const FN_ENGINE_PATH = "/functions/v1/gi-assistant-engine";
     const OPENAI_CALLS_URL = "https://api.openai.com/v1/realtime/calls";
     const FALLBACK_SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
     const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
@@ -17,12 +18,16 @@
     let voice = {
       state: "idle",
       sessionId: "",
+      pin: "",
       pc: null,
       dc: null,
       stream: null,
       audio: null,
       error: ""
     };
+    let pendingAction = null;
+    let timelineItems = [];
+    let lastIntent = "";
     function trim(value) {
       return String(value == null ? "" : value).trim();
     }
@@ -175,6 +180,33 @@
     function callRealtime(payload) {
       return callEdge(FN_REALTIME_PATH, payload);
     }
+    function callEngine(payload) {
+      return callEdge(FN_ENGINE_PATH, payload);
+    }
+    function redactSafe(text) {
+      return trim(text).replace(/\d{8,9}/g, "[\u05DE\u05D6\u05D4\u05D4]").slice(0, 280);
+    }
+    function classifyIntent(text) {
+      const normalized = trim(text).replace(/[!.?,]/g, "");
+      if (/^(כן|בטח|אשרי?|תאשר|מאשר|יאללה|קדימה)$/.test(normalized)) return "confirm";
+      if (/^(לא|בטל|ביטול|אל תאשר|לא לאשר)$/.test(normalized)) return "cancel";
+      return "other";
+    }
+    function engineAuthPayload() {
+      const device = readDevice();
+      const auth = getAuth();
+      const payload = { sessionId: trim(voice.sessionId) };
+      if (device && trim(device.devicePublicId) && trim(device.deviceSecret)) {
+        payload.devicePublicId = trim(device.devicePublicId);
+        payload.deviceSecret = trim(device.deviceSecret);
+      } else {
+        payload.agentId = trim(auth == null ? void 0 : auth.id);
+        payload.agentName = trim(auth == null ? void 0 : auth.name);
+        payload.username = trim(auth == null ? void 0 : auth.username);
+        payload.pin = trim(voice.pin);
+      }
+      return payload;
+    }
     function pairingErrorText(code) {
       if (code === "AUTH_FAILED" || code === "MISSING_PIN") return "\u05E7\u05D5\u05D3 \u05D4\u05DB\u05E0\u05D9\u05E1\u05D4 \u05E9\u05D2\u05D5\u05D9.";
       if (code === "TOKEN_INVALID") return "\u05E7\u05D5\u05D3 \u05D4\u05E7\u05D9\u05E9\u05D5\u05E8 \u05DC\u05D0 \u05EA\u05E7\u05E3 \u05D0\u05D5 \u05E9\u05DB\u05D1\u05E8 \u05E0\u05D5\u05E6\u05DC.";
@@ -326,12 +358,55 @@
           <button class="giAsst__btn" id="giAsstVoiceStart" type="button">\u05D4\u05EA\u05D7\u05DC \u05E9\u05D9\u05D7\u05D4</button>
           <button class="giAsst__btn giAsst__btn--ghost" id="giAsstVoiceStop" type="button" hidden>\u05E1\u05D9\u05D9\u05DD \u05E9\u05D9\u05D7\u05D4</button>
         </div>
-        <p class="giAsst__hint">\u05D4\u05DE\u05E4\u05EA\u05D7 \u05D4\u05E7\u05D1\u05D5\u05E2 \u05E9\u05DC OpenAI \u05E0\u05E9\u05D0\u05E8 \u05D1\u05E9\u05E8\u05EA. \u05D4\u05D3\u05E4\u05D3\u05E4\u05DF \u05DE\u05E7\u05D1\u05DC \u05E8\u05E7 \u05D8\u05D5\u05E7\u05DF \u05D6\u05DE\u05E0\u05D9.</p>
+        <div class="giAsst__confirm is-hidden" id="giAsstConfirm" hidden>
+          <p class="giAsst__confirmText" id="giAsstConfirmText">\u05DE\u05DE\u05EA\u05D9\u05DF \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8 \u05E4\u05E2\u05D5\u05DC\u05D4.</p>
+          <div class="giAsst__confirmActions">
+            <button class="giAsst__btn" id="giAsstConfirmYes" type="button">\u05DB\u05DF</button>
+            <button class="giAsst__btn giAsst__btn--ghost" id="giAsstConfirmNo" type="button">\u05DC\u05D0</button>
+          </div>
+        </div>
+        <ol class="giAsst__timeline" id="giAsstTimeline" aria-live="polite"></ol>
+        <p class="giAsst__hint">\u05E4\u05E2\u05D5\u05DC\u05D5\u05EA \u05DB\u05EA\u05D9\u05D1\u05D4 \u05D3\u05D5\u05E8\u05E9\u05D5\u05EA \u05D0\u05D9\u05E9\u05D5\u05E8. \xAB\u05DB\u05DF\xBB \u05D7\u05DC \u05E8\u05E7 \u05D0\u05DD \u05D9\u05E9 \u05E4\u05E2\u05D5\u05DC\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4.</p>
       </div>
     `;
     }
+    function paintTimeline() {
+      const list = $("giAsstTimeline");
+      if (!list) return;
+      list.innerHTML = timelineItems.slice(-20).map((item) => {
+        const kind = trim(item.kind) || "info";
+        return `<li class="giAsst__tl giAsst__tl--${kind}"><span>${redactSafe(item.text)}</span></li>`;
+      }).join("");
+      list.scrollTop = list.scrollHeight;
+    }
+    function paintConfirm() {
+      const box = $("giAsstConfirm");
+      const text = $("giAsstConfirmText");
+      if (!box) return;
+      if (!pendingAction) {
+        box.classList.add("is-hidden");
+        box.setAttribute("hidden", "hidden");
+        return;
+      }
+      box.classList.remove("is-hidden");
+      box.removeAttribute("hidden");
+      if (text) text.textContent = "\u05DC\u05D0\u05E9\u05E8: " + redactSafe(pendingAction.label) + "?";
+    }
+    function pushTimeline(kind, text) {
+      const safe = redactSafe(text);
+      if (!safe) return;
+      timelineItems.push({ kind, text: safe });
+      paintTimeline();
+    }
+    function resetEngineUi() {
+      pendingAction = null;
+      timelineItems = [];
+      lastIntent = "";
+      paintConfirm();
+      paintTimeline();
+    }
     function bindVoiceControls(root) {
-      var _a, _b, _c;
+      var _a, _b, _c, _d, _e;
       (_a = root.querySelector("#giAsstVoiceStart")) == null ? void 0 : _a.addEventListener("click", () => {
         void startVoice();
       });
@@ -342,7 +417,54 @@
         if (voice.state === "idle" || voice.state === "error") void startVoice();
         else void stopVoice();
       });
+      (_d = root.querySelector("#giAsstConfirmYes")) == null ? void 0 : _d.addEventListener("click", () => {
+        void confirmPending();
+      });
+      (_e = root.querySelector("#giAsstConfirmNo")) == null ? void 0 : _e.addEventListener("click", () => {
+        void cancelPending();
+      });
       paintVoiceState();
+      paintConfirm();
+      paintTimeline();
+    }
+    function extractTranscript(ev, kind) {
+      const type = trim(ev.type);
+      if (kind === "user") {
+        if (type.indexOf("input_audio_transcription.completed") >= 0) return redactSafe(ev.transcript);
+      } else if (type === "response.output_audio_transcript.done" || type === "response.audio_transcript.done" || type.indexOf("output_audio_transcript.done") >= 0) {
+        return redactSafe(ev.transcript);
+      }
+      return "";
+    }
+    async function onUserTranscript(text) {
+      pushTimeline("user", text);
+      lastIntent = classifyIntent(text);
+      if (!trim(voice.sessionId)) return;
+      try {
+        await callEngine({ ...engineAuthPayload(), action: "log", kind: "user", text });
+        if (lastIntent === "confirm" || lastIntent === "cancel") {
+          const data = await callEngine({ ...engineAuthPayload(), action: "intent", text });
+          if (data.confirmed === true) {
+            pendingAction = null;
+            pushTimeline("ok", "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D0\u05D5\u05E9\u05E8\u05D4. \u05D4\u05D1\u05D9\u05E6\u05D5\u05E2 \u05D9\u05EA\u05D5\u05D5\u05E1\u05E3 \u05D1\u05E9\u05DC\u05D1 \u05D4\u05DB\u05DC\u05D9\u05DD.");
+          } else if (data.cancelled === true) {
+            pendingAction = null;
+            pushTimeline("cancel", "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D1\u05D5\u05D8\u05DC\u05D4.");
+          } else if (trim(data.error) === "NO_PENDING") {
+            pushTimeline("info", "\u05D0\u05D9\u05DF \u05E4\u05E2\u05D5\u05DC\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8.");
+          }
+          paintConfirm();
+        }
+      } catch (_e) {
+      }
+    }
+    async function onAssistantTranscript(text) {
+      pushTimeline("assistant", text);
+      if (!trim(voice.sessionId)) return;
+      try {
+        await callEngine({ ...engineAuthPayload(), action: "log", kind: "assistant", text });
+      } catch (_e) {
+      }
     }
     function handleRealtimeEvent(raw) {
       let ev = {};
@@ -352,6 +474,10 @@
         return;
       }
       const type = trim(ev.type);
+      const userText = extractTranscript(ev, "user");
+      const asstText = extractTranscript(ev, "assistant");
+      if (userText) void onUserTranscript(userText);
+      if (asstText) void onAssistantTranscript(asstText);
       if (type === "session.created" || type === "input_audio_buffer.speech_stopped" || type === "response.done") {
         if (voice.state !== "idle") setVoiceState("listening");
         return;
@@ -367,6 +493,54 @@
       if (type === "error") {
         setVoiceState("error", "\u05D4\u05E9\u05D9\u05D7\u05D4 \u05E0\u05E7\u05D8\u05E2\u05D4. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1.");
       }
+    }
+    async function proposeWrite(input) {
+      const data = await callEngine({
+        ...engineAuthPayload(),
+        action: "propose",
+        tool: trim(input.tool),
+        label: trim(input.label),
+        argumentsSafe: input.argumentsSafe || {}
+      });
+      pendingAction = { id: trim(data.pending_action_id), label: trim(data.label) || trim(input.label) || trim(input.tool) };
+      pushTimeline("confirm", "\u05DE\u05DE\u05EA\u05D9\u05DF \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8: " + (pendingAction.label || ""));
+      paintConfirm();
+      return data;
+    }
+    async function confirmPending() {
+      if (!pendingAction) {
+        pushTimeline("info", "\u05D0\u05D9\u05DF \u05E4\u05E2\u05D5\u05DC\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8.");
+        return { ok: false, error: "NO_PENDING", executed: false };
+      }
+      try {
+        const data = await callEngine({
+          ...engineAuthPayload(),
+          action: "confirm",
+          pendingActionId: pendingAction.id
+        });
+        pendingAction = null;
+        paintConfirm();
+        pushTimeline("ok", "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D0\u05D5\u05E9\u05E8\u05D4. \u05D4\u05D1\u05D9\u05E6\u05D5\u05E2 \u05D9\u05EA\u05D5\u05D5\u05E1\u05E3 \u05D1\u05E9\u05DC\u05D1 \u05D4\u05DB\u05DC\u05D9\u05DD.");
+        return data;
+      } catch (err) {
+        const code = trim((err == null ? void 0 : err.code) || (err == null ? void 0 : err.message));
+        if (code === "NO_PENDING") pushTimeline("info", "\u05D0\u05D9\u05DF \u05E4\u05E2\u05D5\u05DC\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8.");
+        return { ok: false, error: code, executed: false };
+      }
+    }
+    async function cancelPending() {
+      if (!pendingAction) return;
+      try {
+        await callEngine({
+          ...engineAuthPayload(),
+          action: "cancel",
+          pendingActionId: pendingAction.id
+        });
+      } catch (_e) {
+      }
+      pendingAction = null;
+      paintConfirm();
+      pushTimeline("cancel", "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D1\u05D5\u05D8\u05DC\u05D4.");
     }
     async function mintVoiceToken() {
       var _a;
@@ -385,6 +559,9 @@
         payload.username = trim(auth == null ? void 0 : auth.username);
         payload.pin = trim((_a = $("giAsstVoicePin")) == null ? void 0 : _a.value);
         if (!trim(payload.pin)) throw Object.assign(new Error("MISSING_PIN"), { code: "MISSING_PIN" });
+      }
+      if (!device || !trim(device.deviceSecret)) {
+        voice.pin = trim(payload.pin);
       }
       const data = await callRealtime(payload);
       const clientSecret = trim(data.clientSecret);
@@ -429,6 +606,11 @@
       try {
         const minted = await mintVoiceToken();
         voice.sessionId = minted.sessionId;
+        try {
+          await callEngine({ ...engineAuthPayload(), action: "bootstrap" });
+        } catch (_e) {
+        }
+        pushTimeline("system", "\u05E1\u05E9\u05DF \u05E2\u05D5\u05D6\u05E8 \u05E0\u05E4\u05EA\u05D7.");
         await connectWebRtc(minted.clientSecret);
         setVoiceState("listening");
       } catch (err) {
@@ -466,13 +648,18 @@
       voice.stream = null;
       voice.audio = null;
       voice.sessionId = "";
+      voice.pin = "";
+      pendingAction = null;
       if (sessionId) {
         try {
           await callRealtime({ action: "end", sessionId });
         } catch (_e5) {
         }
       }
-      if (updateUi) setVoiceState("idle");
+      if (updateUi) {
+        setVoiceState("idle");
+        paintConfirm();
+      }
     }
     function renderAssistantBody() {
       var _a;
@@ -481,6 +668,7 @@
       if (title) title.textContent = "\u05D4\u05E2\u05D5\u05D6\u05E8 \u05D4\u05D0\u05D9\u05E9\u05D9 \u05E9\u05DC\u05D9";
       if (!body) return;
       void stopVoice();
+      resetEngineUi();
       const needPin = !(readDevice() && trim((_a = readDevice()) == null ? void 0 : _a.deviceSecret));
       body.innerHTML = voiceMarkup(needPin);
       bindVoiceControls(body);
@@ -645,6 +833,7 @@
       const root = $("giAsstPhone");
       if (!root) return;
       void stopVoice();
+      resetEngineUi();
       root.innerHTML = `
       <header class="giAsstPhone__head">
         <div class="giAsstPhone__kicker">GEMEL INVEST</div>
@@ -778,6 +967,20 @@
       stopVoice,
       getVoiceState() {
         return voice.state;
+      },
+      proposeWrite,
+      confirmPending,
+      cancelPending,
+      classifyIntent,
+      redactSafe,
+      getPendingAction() {
+        return pendingAction;
+      },
+      getLastIntent() {
+        return lastIntent;
+      },
+      getTimeline() {
+        return timelineItems.slice();
       }
     };
     try {
