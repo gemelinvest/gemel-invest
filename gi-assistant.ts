@@ -317,6 +317,9 @@
     }
     if (code === "FAILED_TO_FETCH" || code === "TypeError") return "אין חיבור לשרת הקישור. הריצו את supabase-assistant-pairing.sql ופרסו את הפונקציה.";
     if (code === "MISSING_OPENAI_KEY") return "חסר מפתח OpenAI בשרת. יש להגדיר את הסוד ב-Edge secrets.";
+    if (code === "OPENAI_INVALID_KEY") return "מפתח OpenAI שגוי. צרו מפתח חדש ב-platform.openai.com והחליפו ב-Secrets.";
+    if (code === "OPENAI_QUOTA") return "אין יתרה בחשבון OpenAI. הוסיפו אמצעי תשלום ב-platform.openai.com.";
+    if (code === "OPENAI_FORBIDDEN") return "החשבון לא מורשה למודל הקול. בדקו גישת Realtime ב-OpenAI.";
     if (code === "OPENAI_ERROR") return "שרת הקול לא זמין כרגע. נסו שוב בעוד רגע.";
     if (code === "MIC_DENIED" || code === "NotAllowedError") return "נדרשת הרשאת מיקרופון כדי לדבר עם העוזר.";
     if (code === "MIC_MISSING" || code === "NotFoundError") return "לא נמצא מיקרופון במכשיר.";

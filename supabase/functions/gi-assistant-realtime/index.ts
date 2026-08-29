@@ -10,7 +10,8 @@ const CORS = {
 };
 
 const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
-const DEFAULT_MODEL = "gpt-realtime";
+const DEFAULT_MODEL = "gpt-realtime-2.1";
+const FALLBACK_MODELS = ["gpt-realtime-2.1", "gpt-realtime"];
 const INSTRUCTIONS = [
   "אתה העוזר האישי הקולי של GEMEL INVEST.",
   "דבר עברית, קצר וברור.",
@@ -162,12 +163,33 @@ function extractClientSecret(data: Json){
   return "";
 }
 
-async function mintEphemeral(agentId: string){
-  const apiKey = trim(Deno.env.get("OPENAI_API_KEY"));
-  if(!apiKey) return { ok: false as const, error: "MISSING_OPENAI_KEY" };
-  const model = trim(Deno.env.get("OPENAI_REALTIME_MODEL")) || DEFAULT_MODEL;
-  const voice = trim(Deno.env.get("OPENAI_REALTIME_VOICE")) || "alloy";
-  const safety = (await sha256Hex("gi-asst:" + agentId)).slice(0, 32);
+function openaiErrorFrom(status: number, data: Json){
+  const err = data.error && typeof data.error === "object" ? data.error as Json : {};
+  const code = trim(err.code);
+  const type = trim(err.type);
+  if(status === 401 || code === "invalid_api_key") return "OPENAI_INVALID_KEY";
+  if(status === 429 || code === "insufficient_quota" || type === "insufficient_quota") return "OPENAI_QUOTA";
+  if(status === 403 || code === "model_not_found") return "OPENAI_FORBIDDEN";
+  return "OPENAI_ERROR";
+}
+
+function isLeakedStandardKey(secret: string, apiKey: string){
+  if(!secret) return true;
+  if(secret === apiKey) return true;
+  return secret.indexOf("sk-") === 0;
+}
+
+function mintModels(){
+  const preferred = trim(Deno.env.get("OPENAI_REALTIME_MODEL"));
+  const list: string[] = [];
+  if(preferred) list.push(preferred);
+  for(const model of FALLBACK_MODELS){
+    if(list.indexOf(model) < 0) list.push(model);
+  }
+  return list;
+}
+
+async function mintOnce(apiKey: string, model: string, voice: string, safety: string){
   const res = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
     method: "POST",
     headers: {
@@ -187,12 +209,22 @@ async function mintEphemeral(agentId: string){
   });
   let data: Json = {};
   try { data = await res.json() as Json; } catch(_e) { data = {}; }
+  const err = data.error && typeof data.error === "object" ? data.error as Json : {};
   if(!res.ok){
-    return { ok: false as const, error: "OPENAI_ERROR", status: res.status };
+    return {
+      ok: false as const,
+      error: openaiErrorFrom(res.status, data),
+      status: res.status,
+      openaiCode: trim(err.code) || trim(err.type),
+      model,
+    };
   }
   const clientSecret = extractClientSecret(data);
-  if(!clientSecret || clientSecret.indexOf("sk-") === 0){
-    return { ok: false as const, error: "OPENAI_ERROR" };
+  if(!clientSecret){
+    return { ok: false as const, error: "OPENAI_ERROR", openaiCode: "EMPTY_SECRET", model };
+  }
+  if(isLeakedStandardKey(clientSecret, apiKey)){
+    return { ok: false as const, error: "OPENAI_ERROR", openaiCode: "BAD_SECRET", model };
   }
   return {
     ok: true as const,
@@ -200,6 +232,21 @@ async function mintEphemeral(agentId: string){
     expiresAt: trim(data.expires_at) || new Date(Date.now() + 60 * 1000).toISOString(),
     model,
   };
+}
+
+async function mintEphemeral(agentId: string){
+  const apiKey = trim(Deno.env.get("OPENAI_API_KEY"));
+  if(!apiKey) return { ok: false as const, error: "MISSING_OPENAI_KEY" };
+  const voice = trim(Deno.env.get("OPENAI_REALTIME_VOICE")) || "alloy";
+  const safety = (await sha256Hex("gi-asst:" + agentId)).slice(0, 32);
+  let last: { ok: false; error: string; status?: number; openaiCode?: string; model?: string } = { ok: false, error: "OPENAI_ERROR" };
+  for(const model of mintModels()){
+    const minted = await mintOnce(apiKey, model, voice, safety);
+    if(minted.ok) return minted;
+    last = minted;
+    if(minted.error === "OPENAI_INVALID_KEY" || minted.error === "OPENAI_QUOTA") return minted;
+  }
+  return last;
 }
 
 async function handleToken(sb: SupabaseClient, body: Json){
@@ -216,6 +263,11 @@ async function handleToken(sb: SupabaseClient, body: Json){
       authorization_result: "ok",
       execution_status: "error",
       error: minted.error,
+      arguments_safe: {
+        openaiStatus: minted.status || 0,
+        openaiCode: minted.openaiCode || "",
+        model: minted.model || "",
+      },
     });
     return json({ ok: false, error: minted.error }, minted.error === "MISSING_OPENAI_KEY" ? 503 : 502);
   }
