@@ -54275,6 +54275,20 @@ const ClalRiskLifePdf = {
               return { ok:true };
             }
           }
+          const phoneDigits = normalizePhoneValue(q);
+          if(phoneDigits && phoneDigits.length >= 9){
+            const byPhone = (Array.isArray(State.data?.customers) ? State.data.customers : []).find((rec) => {
+              try {
+                if(!rec || !customerVisibleToCurrentUser(rec)) return false;
+                return normalizePhoneValue(rec.phone) === phoneDigits
+                  || normalizePhoneValue(rec.payload?.insureds?.[0]?.data?.phone) === phoneDigits;
+              } catch(_e){ return false; }
+            });
+            if(byPhone && byPhone.id){
+              CustomersUI.openByIdWithLoader(byPhone.id);
+              return { ok:true };
+            }
+          }
           const local = findVisibleCustomerBySpokenQuery(q);
           if(local && local.id){
             CustomersUI.openByIdWithLoader(local.id);
@@ -54463,6 +54477,21 @@ const ClalRiskLifePdf = {
           return toAssistantSafeCard(rec);
         } catch(_e) { return null; }
       },
+      findCustomerByPhone(phone){
+        try {
+          const want = normalizePhoneValue(phone);
+          if(!want || want.length < 9) return null;
+          const rec = (Array.isArray(State.data?.customers) ? State.data.customers : []).find((row) => {
+            try {
+              if(!row || !customerVisibleToCurrentUser(row)) return false;
+              return normalizePhoneValue(row.phone) === want
+                || normalizePhoneValue(row.payload?.insureds?.[0]?.data?.phone) === want;
+            } catch(_e){ return false; }
+          });
+          if(!rec) return null;
+          return toAssistantSafeCard(rec);
+        } catch(_e) { return null; }
+      },
       findCustomerById(id){
         try {
           if(typeof findCustomerRecordById !== "function") return null;
@@ -54510,6 +54539,7 @@ const ClalRiskLifePdf = {
       refreshReminders(){ return window.__GI_ASSISTANT_BRIDGE__.refreshReminders(); },
       searchCustomers(query){ return window.__GI_ASSISTANT_BRIDGE__.searchCustomers(query); },
       findCustomerByIdNumber(id){ return window.__GI_ASSISTANT_BRIDGE__.findCustomerByIdNumber(id); },
+      findCustomerByPhone(phone){ return window.__GI_ASSISTANT_BRIDGE__.findCustomerByPhone(phone); },
       findCustomerById(id){ return window.__GI_ASSISTANT_BRIDGE__.findCustomerById(id); },
       upsertReminder(row){ return window.__GI_ASSISTANT_BRIDGE__.upsertReminder(row); },
       markTaskDone(id){ return window.__GI_ASSISTANT_BRIDGE__.markTaskDone(id); },
