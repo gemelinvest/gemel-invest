@@ -370,6 +370,7 @@
           </div>
         </div>
         <ol class="giAsst__timeline" id="giAsstTimeline" aria-live="polite"></ol>
+        <div class="giAsst__hits" id="giAsstHits" hidden></div>
         <p class="giAsst__hint">\u05E4\u05E2\u05D5\u05DC\u05D5\u05EA \u05DB\u05EA\u05D9\u05D1\u05D4 \u05D3\u05D5\u05E8\u05E9\u05D5\u05EA \u05D0\u05D9\u05E9\u05D5\u05E8. \xAB\u05DB\u05DF\xBB \u05D7\u05DC \u05E8\u05E7 \u05D0\u05DD \u05D9\u05E9 \u05E4\u05E2\u05D5\u05DC\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4.</p>
       </div>
     `;
@@ -408,6 +409,116 @@
       lastIntent = "";
       paintConfirm();
       paintTimeline();
+      paintHits([]);
+    }
+    function paintHits(items) {
+      const box = $("giAsstHits");
+      if (!box) return;
+      const cards = (Array.isArray(items) ? items : []).filter((item) => item && trim(item.id));
+      if (!cards.length) {
+        box.innerHTML = "";
+        box.setAttribute("hidden", "hidden");
+        return;
+      }
+      box.removeAttribute("hidden");
+      box.innerHTML = cards.map((item) => {
+        const kind = item.kind === "task" ? "task" : "customer";
+        const title = redactSafe(item.full_name || item.customer_name || item.details || "\u05E4\u05E8\u05D9\u05D8");
+        const meta = kind === "task" ? redactSafe([item.type, item.details, item.remind_at].filter(Boolean).join(" \xB7 ")) : redactSafe([item.city, item.agent_name].filter(Boolean).join(" \xB7 "));
+        const openId = kind === "customer" ? trim(item.id) : "";
+        return `<button type="button" class="giAsst__hit giAsst__hit--${kind}"${openId ? ` data-customer-id="${openId}"` : ""}>
+        <strong>${title}</strong>${meta ? `<span>${meta}</span>` : ""}
+      </button>`;
+      }).join("");
+    }
+    function bindHits(root) {
+      const box = root.querySelector("#giAsstHits");
+      if (!box || box.getAttribute("data-gi-asst-hits-bound") === "1") return;
+      box.setAttribute("data-gi-asst-hits-bound", "1");
+      box.addEventListener("click", (ev) => {
+        var _a, _b, _c;
+        const target = ev.target;
+        const btn = (_a = target == null ? void 0 : target.closest) == null ? void 0 : _a.call(target, "[data-customer-id]");
+        const id = trim(btn == null ? void 0 : btn.getAttribute("data-customer-id"));
+        if (id) (_c = (_b = readBridge()).openCustomer) == null ? void 0 : _c.call(_b, id);
+      });
+    }
+    function asHitCards(list) {
+      if (!Array.isArray(list)) return [];
+      return list.filter((item) => item && typeof item === "object");
+    }
+    function sanitizeCustomerHit(row) {
+      const src = row && typeof row === "object" ? row : {};
+      return {
+        id: trim(src.id),
+        kind: "customer",
+        full_name: trim(src.full_name),
+        city: trim(src.city),
+        agent_name: trim(src.agent_name),
+        existing_policies_count: Number(src.existing_policies_count) || 0,
+        new_policies_count: Number(src.new_policies_count) || 0
+      };
+    }
+    function safeTaskHit(row) {
+      return {
+        id: trim(row.id),
+        kind: "task",
+        type: trim(row.type),
+        details: trim(row.details).slice(0, 160),
+        remind_at: trim(row.remind_at),
+        customer_name: trim(row.customer_name)
+      };
+    }
+    async function applyCrmWraps(tool, args, data) {
+      var _a;
+      const active = readBridge();
+      if (tool === "search_customer" && data.ok !== false) {
+        const serverList = asHitCards(data.customers);
+        if (typeof active.searchCustomers === "function") {
+          try {
+            const local = asHitCards(await active.searchCustomers(trim(args.query)));
+            if (local.length) {
+              const allowed = new Set(serverList.map((c) => trim(c.id)));
+              data.customers = local.filter((c) => allowed.has(trim(c.id))).map(sanitizeCustomerHit);
+            }
+          } catch (_e) {
+          }
+        }
+        const hits = asHitCards(data.customers).map(sanitizeCustomerHit);
+        data.customers = hits;
+        paintHits(hits);
+        if (hits.length) pushTimeline("ok", "\u05E0\u05DE\u05E6\u05D0\u05D5 " + hits.length + " \u05DC\u05E7\u05D5\u05D7\u05D5\u05EA.");
+      } else if ((tool === "find_customer_by_id" || tool === "get_customer") && data.ok !== false && data.customer && typeof data.customer === "object") {
+        const serverCard = data.customer;
+        try {
+          let local = null;
+          if (typeof active.findCustomerById === "function") local = active.findCustomerById(trim(serverCard.id));
+          if (!local && /^\d{8,9}$/.test(trim(args.query)) && typeof active.findCustomerByIdNumber === "function") {
+            local = active.findCustomerByIdNumber(trim(args.query));
+          }
+          if (local && trim(local.id) === trim(serverCard.id)) data.customer = local;
+        } catch (_e) {
+        }
+        const card = sanitizeCustomerHit(data.customer);
+        data.customer = card;
+        paintHits([card]);
+        if (trim(card.full_name)) pushTimeline("ok", "\u05E0\u05DE\u05E6\u05D0 \u05DC\u05E7\u05D5\u05D7: " + redactSafe(card.full_name));
+      } else if (tool === "get_tasks" && data.ok !== false) {
+        if (typeof active.listTasks === "function") {
+          try {
+            await ((_a = active.refreshReminders) == null ? void 0 : _a.call(active));
+            const local = active.listTasks();
+            if (Array.isArray(local) && local.length) {
+              const allowed = new Set(asHitCards(data.tasks).map((t) => trim(t.id)));
+              data.tasks = local.filter((row) => row && typeof row === "object" && allowed.has(trim(row.id))).map((row) => safeTaskHit(row));
+            }
+          } catch (_e) {
+          }
+        }
+        const hits = asHitCards(data.tasks).map((t) => safeTaskHit(t));
+        paintHits(hits);
+        if (hits.length) pushTimeline("ok", "\u05E0\u05DE\u05E6\u05D0\u05D5 " + hits.length + " \u05DE\u05E9\u05D9\u05DE\u05D5\u05EA.");
+      }
     }
     function bindVoiceControls(root) {
       var _a, _b, _c, _d, _e;
@@ -427,9 +538,11 @@
       (_e = root.querySelector("#giAsstConfirmNo")) == null ? void 0 : _e.addEventListener("click", () => {
         void cancelPending();
       });
+      bindHits(root);
       paintVoiceState();
       paintConfirm();
       paintTimeline();
+      paintHits([]);
     }
     function extractTranscript(ev, kind) {
       const type = trim(ev.type);
@@ -516,7 +629,7 @@
       }
     }
     function executeClientCommand(cmd) {
-      var _a, _b, _c, _d, _e;
+      var _a, _b, _c, _d, _e, _f, _g;
       if (!cmd || typeof cmd !== "object") return;
       const type = trim(cmd.type);
       const active = readBridge();
@@ -524,7 +637,10 @@
       else if (type === "go_view") (_b = active.goView) == null ? void 0 : _b.call(active, trim(cmd.view));
       else if (type === "open_simulator") (_c = active.openSimulator) == null ? void 0 : _c.call(active, trim(cmd.company), trim(cmd.product));
       else if (type === "open_proposal") (_d = active.openProposal) == null ? void 0 : _d.call(active, trim(cmd.proposalId));
-      else if (type === "refresh_reminders") (_e = active.refreshReminders) == null ? void 0 : _e.call(active);
+      else if (type === "upsert_reminder" && cmd.reminder && typeof cmd.reminder === "object") {
+        void ((_e = active.upsertReminder) == null ? void 0 : _e.call(active, cmd.reminder));
+      } else if (type === "mark_task_done") void ((_f = active.markTaskDone) == null ? void 0 : _f.call(active, trim(cmd.id || cmd.taskId)));
+      else if (type === "refresh_reminders") void ((_g = active.refreshReminders) == null ? void 0 : _g.call(active));
     }
     async function invokeTool(tool, args, pendingActionId) {
       delete args.user_id;
@@ -541,6 +657,7 @@
         pushTimeline("confirm", "\u05DE\u05DE\u05EA\u05D9\u05DF \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8: " + (pendingAction.label || ""));
         paintConfirm();
       }
+      await applyCrmWraps(trim(tool), args, data);
       if (data.client_command && typeof data.client_command === "object") {
         executeClientCommand(data.client_command);
       }
@@ -1065,6 +1182,8 @@
       redactSafe,
       invokeTool,
       executeClientCommand,
+      applyCrmWraps,
+      paintHits,
       getPendingAction() {
         return pendingAction;
       },

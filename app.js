@@ -54194,6 +54194,20 @@ const ClalRiskLifePdf = {
   NewCustomerEntryUI.init();
   HarHabituachTopbarUI.init();
   TravelInsuranceTopbarUI.init();
+  function toAssistantSafeCard(c){
+    if(!c) return null;
+    const id = safeTrim(c.id);
+    if(!id) return null;
+    return {
+      id,
+      full_name: safeTrim(c.fullName || c.full_name || c.name || c.payload?.name),
+      city: safeTrim(c.city),
+      agent_name: safeTrim(c.agentName || c.agent_name),
+      existing_policies_count: Number(c.existingPoliciesCount || c.existing_policies_count) || 0,
+      new_policies_count: Number(c.newPoliciesCount || c.new_policies_count) || 0
+    };
+  }
+
   try {
     window.__GI_ASSISTANT_BRIDGE__ = {
       getAuth(){ return Auth.current; },
@@ -54212,7 +54226,55 @@ const ClalRiskLifePdf = {
         try { RiskSimulators.getHandler(company, product)?.open?.({ source: "assistant" }); } catch(_e) {}
       },
       openProposal(id){ try { ProposalsUI.openById?.(id); } catch(_e) {} },
-      refreshReminders(){ try { ReminderUI.loadReminders?.(); } catch(_e) {} }
+      refreshReminders(){ try { return ReminderUI.loadReminders?.(); } catch(_e) {} },
+      async searchCustomers(query){
+        try {
+          if(typeof Storage === "undefined" || typeof Storage.searchCustomers !== "function") return [];
+          const res = await Storage.searchCustomers(query, 20);
+          const rows = Array.isArray(res?.data) ? res.data : [];
+          return rows
+            .filter((rec) => {
+              try { return !!customerVisibleToCurrentUser(rec); } catch(_e){ return false; }
+            })
+            .map(toAssistantSafeCard)
+            .filter((card) => card && card.id);
+        } catch(_e) { return []; }
+      },
+      findCustomerByIdNumber(id){
+        try {
+          if(typeof findCustomerByIdNumber !== "function") return null;
+          const rec = findCustomerByIdNumber(id);
+          if(!rec || !customerVisibleToCurrentUser(rec)) return null;
+          return toAssistantSafeCard(rec);
+        } catch(_e) { return null; }
+      },
+      findCustomerById(id){
+        try {
+          if(typeof findCustomerRecordById !== "function") return null;
+          const rec = findCustomerRecordById(id);
+          if(!rec || !customerVisibleToCurrentUser(rec)) return null;
+          return toAssistantSafeCard(rec);
+        } catch(_e) { return null; }
+      },
+      async upsertReminder(row){
+        try {
+          if(!row || !row.id || typeof ReminderUI === "undefined") return;
+          await ReminderUI.upsertReminder(row);
+          if(!Array.isArray(ReminderUI.reminders)) return;
+          const idx = ReminderUI.reminders.findIndex((r) => r && r.id === row.id);
+          if(idx >= 0) ReminderUI.reminders[idx] = row;
+          else ReminderUI.reminders.push(row);
+          ReminderUI.reminders.sort((a, b) => new Date(a.remind_at) - new Date(b.remind_at));
+          ReminderUI.updateBadge?.();
+          ReminderUI.renderList?.();
+        } catch(_e) {}
+      },
+      markTaskDone(id){
+        try { return ReminderUI.markDone?.(id); } catch(_e) {}
+      },
+      listTasks(){
+        try { return Array.isArray(ReminderUI.reminders) ? ReminderUI.reminders.slice() : []; } catch(_e) { return []; }
+      }
     };
     window.GiAssistant?.init?.({
       getAuth(){ return Auth.current; },
@@ -54223,7 +54285,13 @@ const ClalRiskLifePdf = {
       goView(view){ return window.__GI_ASSISTANT_BRIDGE__.goView(view); },
       openSimulator(company, product){ return window.__GI_ASSISTANT_BRIDGE__.openSimulator(company, product); },
       openProposal(id){ return window.__GI_ASSISTANT_BRIDGE__.openProposal(id); },
-      refreshReminders(){ return window.__GI_ASSISTANT_BRIDGE__.refreshReminders(); }
+      refreshReminders(){ return window.__GI_ASSISTANT_BRIDGE__.refreshReminders(); },
+      searchCustomers(query){ return window.__GI_ASSISTANT_BRIDGE__.searchCustomers(query); },
+      findCustomerByIdNumber(id){ return window.__GI_ASSISTANT_BRIDGE__.findCustomerByIdNumber(id); },
+      findCustomerById(id){ return window.__GI_ASSISTANT_BRIDGE__.findCustomerById(id); },
+      upsertReminder(row){ return window.__GI_ASSISTANT_BRIDGE__.upsertReminder(row); },
+      markTaskDone(id){ return window.__GI_ASSISTANT_BRIDGE__.markTaskDone(id); },
+      listTasks(){ return window.__GI_ASSISTANT_BRIDGE__.listTasks(); }
     });
   } catch(_e) {}
   CarInsuranceClickUI.init();

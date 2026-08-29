@@ -1,4 +1,4 @@
-/* GI-ASSISTANT — pairing, Realtime voice, and engine (P3–P7).
+/* GI-ASSISTANT — pairing, Realtime voice, engine, tools, and CRM wraps (P3–P10).
    Compiled to gi-assistant.js. Do not edit the compiled file by hand. */
 (() => {
   "use strict";
@@ -31,7 +31,27 @@
     goView?: (view: string) => void;
     openSimulator?: (company: string, product: string) => void;
     openProposal?: (id: string) => void;
-    refreshReminders?: () => void;
+    refreshReminders?: () => void | Promise<unknown>;
+    searchCustomers?: (query: string) => Promise<HitCard[] | unknown[]>;
+    findCustomerByIdNumber?: (id: string) => HitCard | null;
+    findCustomerById?: (id: string) => HitCard | null;
+    upsertReminder?: (row: Record<string, unknown>) => void | Promise<unknown>;
+    markTaskDone?: (id: string) => void | Promise<unknown>;
+    listTasks?: () => unknown[];
+  };
+
+  type HitCard = {
+    id?: string;
+    full_name?: string;
+    city?: string;
+    agent_name?: string;
+    existing_policies_count?: number;
+    new_policies_count?: number;
+    type?: string;
+    details?: string;
+    remind_at?: string;
+    customer_name?: string;
+    kind?: "customer" | "task";
   };
 
   type PairingSession = {
@@ -439,6 +459,7 @@
           </div>
         </div>
         <ol class="giAsst__timeline" id="giAsstTimeline" aria-live="polite"></ol>
+        <div class="giAsst__hits" id="giAsstHits" hidden></div>
         <p class="giAsst__hint">פעולות כתיבה דורשות אישור. «כן» חל רק אם יש פעולה ממתינה.</p>
       </div>
     `;
@@ -481,6 +502,121 @@
     lastIntent = "";
     paintConfirm();
     paintTimeline();
+    paintHits([]);
+  }
+
+  function paintHits(items: HitCard[]): void {
+    const box = $("giAsstHits");
+    if (!box) return;
+    const cards = (Array.isArray(items) ? items : []).filter((item) => item && trim(item.id));
+    if (!cards.length) {
+      box.innerHTML = "";
+      box.setAttribute("hidden", "hidden");
+      return;
+    }
+    box.removeAttribute("hidden");
+    box.innerHTML = cards.map((item) => {
+      const kind = item.kind === "task" ? "task" : "customer";
+      const title = redactSafe(item.full_name || item.customer_name || item.details || "פריט");
+      const meta = kind === "task"
+        ? redactSafe([item.type, item.details, item.remind_at].filter(Boolean).join(" · "))
+        : redactSafe([item.city, item.agent_name].filter(Boolean).join(" · "));
+      const openId = kind === "customer" ? trim(item.id) : "";
+      return `<button type="button" class="giAsst__hit giAsst__hit--${kind}"${openId ? ` data-customer-id="${openId}"` : ""}>
+        <strong>${title}</strong>${meta ? `<span>${meta}</span>` : ""}
+      </button>`;
+    }).join("");
+  }
+
+  function bindHits(root: ParentNode): void {
+    const box = root.querySelector("#giAsstHits") as HTMLElement | null;
+    if (!box || box.getAttribute("data-gi-asst-hits-bound") === "1") return;
+    box.setAttribute("data-gi-asst-hits-bound", "1");
+    box.addEventListener("click", (ev) => {
+      const target = ev.target as HTMLElement | null;
+      const btn = target?.closest?.("[data-customer-id]") as HTMLElement | null;
+      const id = trim(btn?.getAttribute("data-customer-id"));
+      if (id) readBridge().openCustomer?.(id);
+    });
+  }
+
+  function asHitCards(list: unknown): HitCard[] {
+    if (!Array.isArray(list)) return [];
+    return list.filter((item) => item && typeof item === "object") as HitCard[];
+  }
+
+  function sanitizeCustomerHit(row: HitCard | Record<string, unknown> | null | undefined): HitCard {
+    const src = row && typeof row === "object" ? row as Record<string, unknown> : {};
+    return {
+      id: trim(src.id),
+      kind: "customer",
+      full_name: trim(src.full_name),
+      city: trim(src.city),
+      agent_name: trim(src.agent_name),
+      existing_policies_count: Number(src.existing_policies_count) || 0,
+      new_policies_count: Number(src.new_policies_count) || 0
+    };
+  }
+
+  function safeTaskHit(row: Record<string, unknown>): HitCard {
+    return {
+      id: trim(row.id),
+      kind: "task",
+      type: trim(row.type),
+      details: trim(row.details).slice(0, 160),
+      remind_at: trim(row.remind_at),
+      customer_name: trim(row.customer_name)
+    };
+  }
+
+  async function applyCrmWraps(tool: string, args: Record<string, unknown>, data: Record<string, unknown>): Promise<void> {
+    const active = readBridge();
+    if (tool === "search_customer" && data.ok !== false) {
+      const serverList = asHitCards(data.customers);
+      if (typeof active.searchCustomers === "function") {
+        try {
+          const local = asHitCards(await active.searchCustomers(trim(args.query)));
+          if (local.length) {
+            const allowed = new Set(serverList.map((c) => trim(c.id)));
+            data.customers = local.filter((c) => allowed.has(trim(c.id))).map(sanitizeCustomerHit);
+          }
+        } catch (_e) {}
+      }
+      const hits = asHitCards(data.customers).map(sanitizeCustomerHit);
+      data.customers = hits;
+      paintHits(hits);
+      if (hits.length) pushTimeline("ok", "נמצאו " + hits.length + " לקוחות.");
+    } else if ((tool === "find_customer_by_id" || tool === "get_customer") && data.ok !== false && data.customer && typeof data.customer === "object") {
+      const serverCard = data.customer as HitCard;
+      try {
+        let local: HitCard | null = null;
+        if (typeof active.findCustomerById === "function") local = active.findCustomerById(trim(serverCard.id));
+        if (!local && /^\d{8,9}$/.test(trim(args.query)) && typeof active.findCustomerByIdNumber === "function") {
+          local = active.findCustomerByIdNumber(trim(args.query));
+        }
+        if (local && trim(local.id) === trim(serverCard.id)) data.customer = local;
+      } catch (_e) {}
+      const card = sanitizeCustomerHit(data.customer as HitCard);
+      data.customer = card;
+      paintHits([card]);
+      if (trim(card.full_name)) pushTimeline("ok", "נמצא לקוח: " + redactSafe(card.full_name));
+    } else if (tool === "get_tasks" && data.ok !== false) {
+      if (typeof active.listTasks === "function") {
+        try {
+          await active.refreshReminders?.();
+          const local = active.listTasks();
+          if (Array.isArray(local) && local.length) {
+            const allowed = new Set(asHitCards(data.tasks).map((t) => trim(t.id)));
+            data.tasks = local
+              .filter((row) => row && typeof row === "object" && allowed.has(trim((row as Record<string, unknown>).id)))
+              .map((row) => safeTaskHit(row as Record<string, unknown>));
+          }
+        } catch (_e) {}
+      }
+      const hits = asHitCards(data.tasks).map((t) => safeTaskHit(t as Record<string, unknown>));
+      paintHits(hits);
+      if (hits.length) pushTimeline("ok", "נמצאו " + hits.length + " משימות.");
+    }
   }
 
   function bindVoiceControls(root: ParentNode): void {
@@ -492,9 +628,11 @@
     });
     root.querySelector("#giAsstConfirmYes")?.addEventListener("click", () => { void confirmPending(); });
     root.querySelector("#giAsstConfirmNo")?.addEventListener("click", () => { void cancelPending(); });
+    bindHits(root);
     paintVoiceState();
     paintConfirm();
     paintTimeline();
+    paintHits([]);
   }
 
   function extractTranscript(ev: Record<string, unknown>, kind: "user" | "assistant"): string {
@@ -594,7 +732,11 @@
     else if (type === "go_view") active.goView?.(trim(cmd.view));
     else if (type === "open_simulator") active.openSimulator?.(trim(cmd.company), trim(cmd.product));
     else if (type === "open_proposal") active.openProposal?.(trim(cmd.proposalId));
-    else if (type === "refresh_reminders") active.refreshReminders?.();
+    else if (type === "upsert_reminder" && cmd.reminder && typeof cmd.reminder === "object") {
+      void active.upsertReminder?.(cmd.reminder as Record<string, unknown>);
+    }
+    else if (type === "mark_task_done") void active.markTaskDone?.(trim(cmd.id || cmd.taskId));
+    else if (type === "refresh_reminders") void active.refreshReminders?.();
   }
 
   async function invokeTool(tool: string, args: Record<string, unknown>, pendingActionId?: string): Promise<Record<string, unknown>> {
@@ -612,6 +754,7 @@
       pushTimeline("confirm", "ממתין לאישור: " + (pendingAction.label || ""));
       paintConfirm();
     }
+    await applyCrmWraps(trim(tool), args, data);
     if (data.client_command && typeof data.client_command === "object") {
       executeClientCommand(data.client_command as Record<string, unknown>);
     }
@@ -1119,6 +1262,8 @@
     redactSafe,
     invokeTool,
     executeClientCommand,
+    applyCrmWraps,
+    paintHits,
     getPendingAction(){ return pendingAction; },
     getLastIntent(){ return lastIntent; },
     getTimeline(){ return timelineItems.slice(); }

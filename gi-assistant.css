@@ -231,6 +231,48 @@
 .giAsst__tl--cancel,
 .giAsst__tl--error{ background: #fef2f2; }
 
+.giAsst__hits{
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+}
+
+.giAsst__hits[hidden]{
+  display: none !important;
+}
+
+.giAsst__hit{
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  text-align: right;
+  cursor: pointer;
+  font: inherit;
+}
+
+.giAsst__hit--task{
+  background: #f8fafc;
+  color: #334155;
+  cursor: default;
+}
+
+.giAsst__hit strong{
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.giAsst__hit span{
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
 .giAsst__mic{
   font-size: 48px;
   line-height: 1;

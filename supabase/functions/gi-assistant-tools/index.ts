@@ -383,7 +383,7 @@ async function handleCreateTask(sb: SupabaseClient, agent: AgentRow, args: Json)
   };
   const { error } = await sb.from("reminders").insert(row);
   if(error) throw new Error(error.message);
-  return { ok: true, taskId: row.id, client_command: { type: "refresh_reminders" } };
+  return { ok: true, taskId: row.id, reminder: row, client_command: { type: "upsert_reminder", reminder: row } };
 }
 
 async function handleUpdateTask(sb: SupabaseClient, agent: AgentRow, args: Json){
@@ -404,6 +404,9 @@ async function handleUpdateTask(sb: SupabaseClient, agent: AgentRow, args: Json)
   if(!Object.keys(patch).length) return { ok: false, error: "NO_PATCH" };
   const { error } = await sb.from("reminders").update(patch).eq("id", id);
   if(error) throw new Error(error.message);
+  if(patch.is_done === true){
+    return { ok: true, taskId: id, client_command: { type: "mark_task_done", id } };
+  }
   return { ok: true, taskId: id, client_command: { type: "refresh_reminders" } };
 }
 
