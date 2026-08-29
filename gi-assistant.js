@@ -1,5 +1,6 @@
 /* GI-ASSISTANT — generated from gi-assistant.ts. Do not edit by hand. */
 (() => {
+  // gi-assistant.ts
   (() => {
     "use strict";
     const PAIRING_STORAGE_KEY = "gi_assistant_device_paired_v1";
@@ -83,6 +84,16 @@
     function isLoggedIn() {
       const auth = getAuth();
       return !!(auth && (trim(auth.id) || trim(auth.name)));
+    }
+    function canAccessPersonalAssistant() {
+      try {
+        const active = readBridge();
+        if (typeof active.canAccessPersonalAssistant === "function") {
+          return !!active.canAccessPersonalAssistant();
+        }
+      } catch (_e) {
+      }
+      return false;
     }
     function isPhonePage() {
       var _a;
@@ -503,7 +514,7 @@
     function syncButtonVisibility() {
       const btn = $("btnPersonalAssistant");
       if (!btn) return;
-      const show = isLoggedIn();
+      const show = isLoggedIn() && canAccessPersonalAssistant();
       btn.classList.toggle("is-hidden", !show);
       btn.setAttribute("aria-hidden", show ? "false" : "true");
       if (show) btn.removeAttribute("hidden");
@@ -1862,12 +1873,24 @@
       }
     }
     function openFromTopBar() {
-      var _a;
+      var _a, _b;
       if (!isLoggedIn()) {
         try {
           (_a = window.showToast) == null ? void 0 : _a.call(window, {
             title: "\u05E0\u05D3\u05E8\u05E9\u05EA \u05D4\u05EA\u05D7\u05D1\u05E8\u05D5\u05EA",
             text: "\u05D9\u05E9 \u05DC\u05D4\u05EA\u05D7\u05D1\u05E8 \u05DC\u05DE\u05E2\u05E8\u05DB\u05EA \u05DC\u05E4\u05E0\u05D9 \u05E4\u05EA\u05D9\u05D7\u05EA \u05D4\u05E2\u05D5\u05D6\u05E8 \u05D4\u05D0\u05D9\u05E9\u05D9.",
+            variant: "warn",
+            durationMs: 4200
+          });
+        } catch (_e) {
+        }
+        return;
+      }
+      if (!canAccessPersonalAssistant()) {
+        try {
+          (_b = window.showToast) == null ? void 0 : _b.call(window, {
+            title: "\u05D0\u05D9\u05DF \u05D4\u05E8\u05E9\u05D0\u05D4",
+            text: "\u05D4\u05E2\u05D5\u05D6\u05E8 \u05D4\u05D0\u05D9\u05E9\u05D9 \u05D6\u05DE\u05D9\u05DF \u05DC\u05DE\u05E0\u05D4\u05DC \u05DE\u05E2\u05E8\u05DB\u05EA \u05D5\u05DE\u05E0\u05D4\u05DC \u05DE\u05D0\u05E9\u05E8 \u05D1\u05DC\u05D1\u05D3.",
             variant: "warn",
             durationMs: 4200
           });

@@ -30,6 +30,7 @@
 
   type AssistantBridge = {
     getAuth?: () => AgentAuth;
+    canAccessPersonalAssistant?: () => boolean;
     getCurrentAgent?: () => AgentAuth;
     supabaseUrl?: string;
     publishableKey?: string;
@@ -162,6 +163,16 @@
   function isLoggedIn(): boolean {
     const auth = getAuth();
     return !!(auth && (trim(auth.id) || trim(auth.name)));
+  }
+
+  function canAccessPersonalAssistant(): boolean {
+    try {
+      const active = readBridge();
+      if (typeof active.canAccessPersonalAssistant === "function") {
+        return !!active.canAccessPersonalAssistant();
+      }
+    } catch (_e) {}
+    return false;
   }
 
   function isPhonePage(): boolean {
@@ -601,7 +612,7 @@
   function syncButtonVisibility(): void {
     const btn = $("btnPersonalAssistant");
     if (!btn) return;
-    const show = isLoggedIn();
+    const show = isLoggedIn() && canAccessPersonalAssistant();
     btn.classList.toggle("is-hidden", !show);
     btn.setAttribute("aria-hidden", show ? "false" : "true");
     if (show) btn.removeAttribute("hidden");
@@ -1963,6 +1974,17 @@
         (window as Window & { showToast?: (opts: Record<string, unknown>) => void }).showToast?.({
           title: "נדרשת התחברות",
           text: "יש להתחבר למערכת לפני פתיחת העוזר האישי.",
+          variant: "warn",
+          durationMs: 4200
+        });
+      } catch (_e) {}
+      return;
+    }
+    if (!canAccessPersonalAssistant()) {
+      try {
+        (window as Window & { showToast?: (opts: Record<string, unknown>) => void }).showToast?.({
+          title: "אין הרשאה",
+          text: "העוזר האישי זמין למנהל מערכת ומנהל מאשר בלבד.",
           variant: "warn",
           durationMs: 4200
         });
