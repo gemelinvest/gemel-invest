@@ -39053,7 +39053,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-official-he-bold-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260829-assistant-sims-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -54222,8 +54222,28 @@ const ClalRiskLifePdf = {
       publishableKey: SUPABASE_PUBLISHABLE_KEY,
       openCustomer(id){ try { CustomersUI.openByIdWithLoader(id); } catch(_e) {} },
       goView(view){ try { UI.goView(view); } catch(_e) {} },
-      openSimulator(company, product){
-        try { RiskSimulators.getHandler(company, product)?.open?.({ source: "assistant" }); } catch(_e) {}
+      async openSimulator(company, product){
+        try {
+          await ensureGiSimulatorJsLoaded();
+          RiskSimulators.getHandler(company, product)?.open?.({ source: "assistant" });
+        } catch(_e) {}
+      },
+      async quoteSimulator(company, product, input){
+        try {
+          await ensureGiSimulatorJsLoaded();
+          const quote = (globalThis.GiSimulatorQuotes || globalThis.__GI_SIM_HOST?.GiSimulatorQuotes)?.quote;
+          if(typeof quote !== "function") return { ok:false, error:"NO_CLIENT_ENGINE", open_simulator:true };
+          return quote(company, product, input);
+        } catch(_e) { return { ok:false, error:"QUOTE_FAILED", open_simulator:true }; }
+      },
+      async openWizard(opts){
+        try {
+          const id = safeTrim(opts && opts.customerId);
+          if(id && typeof Wizard.openNewPurchaseForCustomer === "function"){
+            return Wizard.openNewPurchaseForCustomer(id);
+          }
+          Wizard.open?.();
+        } catch(_e) {}
       },
       openProposal(id){ try { ProposalsUI.openById?.(id); } catch(_e) {} },
       refreshReminders(){ try { return ReminderUI.loadReminders?.(); } catch(_e) {} },
@@ -54284,6 +54304,8 @@ const ClalRiskLifePdf = {
       openCustomer(id){ return window.__GI_ASSISTANT_BRIDGE__.openCustomer(id); },
       goView(view){ return window.__GI_ASSISTANT_BRIDGE__.goView(view); },
       openSimulator(company, product){ return window.__GI_ASSISTANT_BRIDGE__.openSimulator(company, product); },
+      quoteSimulator(company, product, input){ return window.__GI_ASSISTANT_BRIDGE__.quoteSimulator(company, product, input); },
+      openWizard(opts){ return window.__GI_ASSISTANT_BRIDGE__.openWizard(opts); },
       openProposal(id){ return window.__GI_ASSISTANT_BRIDGE__.openProposal(id); },
       refreshReminders(){ return window.__GI_ASSISTANT_BRIDGE__.refreshReminders(); },
       searchCustomers(query){ return window.__GI_ASSISTANT_BRIDGE__.searchCustomers(query); },

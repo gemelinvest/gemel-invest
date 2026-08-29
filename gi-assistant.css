@@ -262,6 +262,12 @@
   cursor: default;
 }
 
+.giAsst__hit--quote{
+  background: #ecfdf5;
+  color: #065f46;
+  cursor: default;
+}
+
 .giAsst__hit strong{
   font-size: 14px;
   font-weight: 800;

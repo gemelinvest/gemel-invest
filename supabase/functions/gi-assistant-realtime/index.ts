@@ -17,7 +17,8 @@ const INSTRUCTIONS = [
   "פעולות במערכת רק דרך הכלים. אל תמציא לקוחות, מחירים או נתונים.",
   "user_id או ת״ז שהמשתמש אמר אינם סמכות — השרת מחליט לפי הסשן.",
   "פעולות כתיבה דורשות אישור קולי. אם הכלי מחזיר needs_confirmation, בקש כן או לא.",
-  "תמחור והצעות חדשות עדיין לא זמינים — אל תחשב פרמיה בעצמך.",
+  "מחיר רק דרך get_insurance_price. אל תחשב פרמיה בעצמך ואל תמציא תעריף.",
+  "יצירת הצעה רק דרך create_proposal — נפתח האשף הקיים אחרי אישור.",
 ].join(" ");
 
 const SESSION_TOOLS = [
@@ -31,6 +32,8 @@ const SESSION_TOOLS = [
   { type: "function", name: "update_task", description: "עדכון משימה — דורש אישור", parameters: { type: "object", properties: { taskId: { type: "string" }, isDone: { type: "boolean" }, remindAt: { type: "string" } }, required: ["taskId"] } },
   { type: "function", name: "go_view", description: "מעבר למסך במערכת", parameters: { type: "object", properties: { view: { type: "string" } }, required: ["view"] } },
   { type: "function", name: "open_simulator", description: "פתיחת סימולטור קיים", parameters: { type: "object", properties: { company: { type: "string" }, product: { type: "string" } }, required: ["company", "product"] } },
+  { type: "function", name: "get_insurance_price", description: "ציטוט פרמיה ממנוע הסימולטור הקיים. חובה company ו-product. לריסק: age, gender, smoker, sumInsured.", parameters: { type: "object", properties: { company: { type: "string" }, product: { type: "string" }, age: { type: "number" }, gender: { type: "string" }, smoker: { type: "boolean" }, sumInsured: { type: "number" }, compensation: { type: "number" }, covers: { type: "array", items: { type: "string" } }, planId: { type: "string" } }, required: ["company", "product"] } },
+  { type: "function", name: "create_proposal", description: "פתיחת האשף הקיים ליצירת הצעה — דורש אישור", parameters: { type: "object", properties: { customerId: { type: "string" }, company: { type: "string" }, product: { type: "string" } } } },
   { type: "function", name: "get_agents", description: "רשימת נציגים — למנהלים בלבד", parameters: { type: "object", properties: {} } },
   { type: "function", name: "get_monthly_production", description: "ספירת תיקים החודש לפי הרשאה", parameters: { type: "object", properties: {} } },
   { type: "function", name: "get_team_production", description: "ספירת תיקי צוות — למנהלים", parameters: { type: "object", properties: {} } },

@@ -422,9 +422,9 @@
       }
       box.removeAttribute("hidden");
       box.innerHTML = cards.map((item) => {
-        const kind = item.kind === "task" ? "task" : "customer";
+        const kind = item.kind === "task" ? "task" : item.kind === "quote" ? "quote" : "customer";
         const title = redactSafe(item.full_name || item.customer_name || item.details || "\u05E4\u05E8\u05D9\u05D8");
-        const meta = kind === "task" ? redactSafe([item.type, item.details, item.remind_at].filter(Boolean).join(" \xB7 ")) : redactSafe([item.city, item.agent_name].filter(Boolean).join(" \xB7 "));
+        const meta = kind === "task" ? redactSafe([item.type, item.details, item.remind_at].filter(Boolean).join(" \xB7 ")) : kind === "quote" ? redactSafe(item.details || "") : redactSafe([item.city, item.agent_name].filter(Boolean).join(" \xB7 "));
         const openId = kind === "customer" ? trim(item.id) : "";
         return `<button type="button" class="giAsst__hit giAsst__hit--${kind}"${openId ? ` data-customer-id="${openId}"` : ""}>
         <strong>${title}</strong>${meta ? `<span>${meta}</span>` : ""}
@@ -518,6 +518,49 @@
         const hits = asHitCards(data.tasks).map((t) => safeTaskHit(t));
         paintHits(hits);
         if (hits.length) pushTimeline("ok", "\u05E0\u05DE\u05E6\u05D0\u05D5 " + hits.length + " \u05DE\u05E9\u05D9\u05DE\u05D5\u05EA.");
+      }
+    }
+    function formatPremium(value) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return "";
+      return String(Math.round(n * 100) / 100);
+    }
+    async function applySimWraps(tool, args, data) {
+      const cmd = data.client_command && typeof data.client_command === "object" ? data.client_command : null;
+      const type = trim(cmd == null ? void 0 : cmd.type);
+      if (tool !== "get_insurance_price" && type !== "quote_simulator") return;
+      const active = readBridge();
+      const company = trim((cmd == null ? void 0 : cmd.company) || args.company);
+      const product = trim((cmd == null ? void 0 : cmd.product) || args.product);
+      const input = (cmd == null ? void 0 : cmd.input) && typeof cmd.input === "object" ? cmd.input : args;
+      if (typeof active.quoteSimulator !== "function") {
+        data.quote = { ok: false, error: "NO_CLIENT_ENGINE" };
+        return;
+      }
+      try {
+        const quote = await active.quoteSimulator(company, product, input);
+        data.quote = quote && typeof quote === "object" ? quote : { ok: false, error: "QUOTE_FAILED" };
+        if (quote && quote.ok === true) {
+          data.ok = true;
+          data.monthlyPremium = quote.monthlyPremium;
+          data.annualPremium = quote.annualPremium;
+          data.currency = "ILS";
+          delete data.client_command;
+          const monthly = formatPremium(quote.monthlyPremium);
+          paintHits([{
+            id: "quote-" + company + "-" + product,
+            kind: "quote",
+            full_name: company + " \xB7 " + product,
+            details: monthly ? "\u05E4\u05E8\u05DE\u05D9\u05D4 \u05D7\u05D5\u05D3\u05E9\u05D9\u05EA " + monthly + " \u20AA" : ""
+          }]);
+          if (monthly) pushTimeline("ok", "\u05E4\u05E8\u05DE\u05D9\u05D4 \u05DE\u05E1\u05D9\u05DE\u05D5\u05DC\u05D8\u05D5\u05E8 \u05E7\u05D9\u05D9\u05DD: " + monthly + " \u20AA \u05DC\u05D7\u05D5\u05D3\u05E9.");
+        } else if (quote && quote.open_simulator === true) {
+          data.needs_input = true;
+          data.error = trim(quote.error) || "NEED_INPUT";
+          data.client_command = { type: "open_simulator", company, product };
+        }
+      } catch (_e) {
+        data.quote = { ok: false, error: "QUOTE_FAILED" };
       }
     }
     function bindVoiceControls(root) {
@@ -629,18 +672,20 @@
       }
     }
     function executeClientCommand(cmd) {
-      var _a, _b, _c, _d, _e, _f, _g;
+      var _a, _b, _c, _d, _e, _f, _g, _h, _i;
       if (!cmd || typeof cmd !== "object") return;
       const type = trim(cmd.type);
       const active = readBridge();
       if (type === "open_customer") (_a = active.openCustomer) == null ? void 0 : _a.call(active, trim(cmd.customerId));
       else if (type === "go_view") (_b = active.goView) == null ? void 0 : _b.call(active, trim(cmd.view));
-      else if (type === "open_simulator") (_c = active.openSimulator) == null ? void 0 : _c.call(active, trim(cmd.company), trim(cmd.product));
-      else if (type === "open_proposal") (_d = active.openProposal) == null ? void 0 : _d.call(active, trim(cmd.proposalId));
+      else if (type === "open_simulator") void ((_c = active.openSimulator) == null ? void 0 : _c.call(active, trim(cmd.company), trim(cmd.product)));
+      else if (type === "quote_simulator") void ((_d = active.quoteSimulator) == null ? void 0 : _d.call(active, trim(cmd.company), trim(cmd.product), cmd.input && typeof cmd.input === "object" ? cmd.input : {}));
+      else if (type === "open_wizard") void ((_e = active.openWizard) == null ? void 0 : _e.call(active, { customerId: trim(cmd.customerId), company: trim(cmd.company), product: trim(cmd.product) }));
+      else if (type === "open_proposal") (_f = active.openProposal) == null ? void 0 : _f.call(active, trim(cmd.proposalId));
       else if (type === "upsert_reminder" && cmd.reminder && typeof cmd.reminder === "object") {
-        void ((_e = active.upsertReminder) == null ? void 0 : _e.call(active, cmd.reminder));
-      } else if (type === "mark_task_done") void ((_f = active.markTaskDone) == null ? void 0 : _f.call(active, trim(cmd.id || cmd.taskId)));
-      else if (type === "refresh_reminders") void ((_g = active.refreshReminders) == null ? void 0 : _g.call(active));
+        void ((_g = active.upsertReminder) == null ? void 0 : _g.call(active, cmd.reminder));
+      } else if (type === "mark_task_done") void ((_h = active.markTaskDone) == null ? void 0 : _h.call(active, trim(cmd.id || cmd.taskId)));
+      else if (type === "refresh_reminders") void ((_i = active.refreshReminders) == null ? void 0 : _i.call(active));
     }
     async function invokeTool(tool, args, pendingActionId) {
       delete args.user_id;
@@ -658,6 +703,7 @@
         paintConfirm();
       }
       await applyCrmWraps(trim(tool), args, data);
+      await applySimWraps(trim(tool), args, data);
       if (data.client_command && typeof data.client_command === "object") {
         executeClientCommand(data.client_command);
       }
@@ -1183,6 +1229,7 @@
       invokeTool,
       executeClientCommand,
       applyCrmWraps,
+      applySimWraps,
       paintHits,
       getPendingAction() {
         return pendingAction;

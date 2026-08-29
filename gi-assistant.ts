@@ -1,4 +1,4 @@
-/* GI-ASSISTANT — pairing, Realtime voice, engine, tools, and CRM wraps (P3–P10).
+/* GI-ASSISTANT — pairing, Realtime voice, engine, tools, CRM, and simulator wraps (P3–P12).
    Compiled to gi-assistant.js. Do not edit the compiled file by hand. */
 (() => {
   "use strict";
@@ -29,7 +29,9 @@
     publishableKey?: string;
     openCustomer?: (id: string) => void;
     goView?: (view: string) => void;
-    openSimulator?: (company: string, product: string) => void;
+    openSimulator?: (company: string, product: string) => void | Promise<unknown>;
+    quoteSimulator?: (company: string, product: string, input?: Record<string, unknown>) => Promise<Record<string, unknown> | unknown>;
+    openWizard?: (opts?: Record<string, unknown>) => void | Promise<unknown>;
     openProposal?: (id: string) => void;
     refreshReminders?: () => void | Promise<unknown>;
     searchCustomers?: (query: string) => Promise<HitCard[] | unknown[]>;
@@ -51,7 +53,7 @@
     details?: string;
     remind_at?: string;
     customer_name?: string;
-    kind?: "customer" | "task";
+    kind?: "customer" | "task" | "quote";
   };
 
   type PairingSession = {
@@ -516,11 +518,13 @@
     }
     box.removeAttribute("hidden");
     box.innerHTML = cards.map((item) => {
-      const kind = item.kind === "task" ? "task" : "customer";
+      const kind = item.kind === "task" ? "task" : (item.kind === "quote" ? "quote" : "customer");
       const title = redactSafe(item.full_name || item.customer_name || item.details || "פריט");
       const meta = kind === "task"
         ? redactSafe([item.type, item.details, item.remind_at].filter(Boolean).join(" · "))
-        : redactSafe([item.city, item.agent_name].filter(Boolean).join(" · "));
+        : kind === "quote"
+          ? redactSafe(item.details || "")
+          : redactSafe([item.city, item.agent_name].filter(Boolean).join(" · "));
       const openId = kind === "customer" ? trim(item.id) : "";
       return `<button type="button" class="giAsst__hit giAsst__hit--${kind}"${openId ? ` data-customer-id="${openId}"` : ""}>
         <strong>${title}</strong>${meta ? `<span>${meta}</span>` : ""}
@@ -616,6 +620,55 @@
       const hits = asHitCards(data.tasks).map((t) => safeTaskHit(t as Record<string, unknown>));
       paintHits(hits);
       if (hits.length) pushTimeline("ok", "נמצאו " + hits.length + " משימות.");
+    }
+  }
+
+  function formatPremium(value: unknown): string {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "";
+    return String(Math.round(n * 100) / 100);
+  }
+
+  async function applySimWraps(tool: string, args: Record<string, unknown>, data: Record<string, unknown>): Promise<void> {
+    const cmd = (data.client_command && typeof data.client_command === "object")
+      ? data.client_command as Record<string, unknown>
+      : null;
+    const type = trim(cmd?.type);
+    if (tool !== "get_insurance_price" && type !== "quote_simulator") return;
+    const active = readBridge();
+    const company = trim(cmd?.company || args.company);
+    const product = trim(cmd?.product || args.product);
+    const input = (cmd?.input && typeof cmd.input === "object")
+      ? cmd.input as Record<string, unknown>
+      : args;
+    if (typeof active.quoteSimulator !== "function") {
+      data.quote = { ok: false, error: "NO_CLIENT_ENGINE" };
+      return;
+    }
+    try {
+      const quote = await active.quoteSimulator(company, product, input) as Record<string, unknown>;
+      data.quote = quote && typeof quote === "object" ? quote : { ok: false, error: "QUOTE_FAILED" };
+      if (quote && quote.ok === true) {
+        data.ok = true;
+        data.monthlyPremium = quote.monthlyPremium;
+        data.annualPremium = quote.annualPremium;
+        data.currency = "ILS";
+        delete data.client_command;
+        const monthly = formatPremium(quote.monthlyPremium);
+        paintHits([{
+          id: "quote-" + company + "-" + product,
+          kind: "quote",
+          full_name: company + " · " + product,
+          details: monthly ? ("פרמיה חודשית " + monthly + " ₪") : ""
+        }]);
+        if (monthly) pushTimeline("ok", "פרמיה מסימולטור קיים: " + monthly + " ₪ לחודש.");
+      } else if (quote && quote.open_simulator === true) {
+        data.needs_input = true;
+        data.error = trim(quote.error) || "NEED_INPUT";
+        data.client_command = { type: "open_simulator", company, product };
+      }
+    } catch (_e) {
+      data.quote = { ok: false, error: "QUOTE_FAILED" };
     }
   }
 
@@ -730,7 +783,9 @@
     const active = readBridge();
     if (type === "open_customer") active.openCustomer?.(trim(cmd.customerId));
     else if (type === "go_view") active.goView?.(trim(cmd.view));
-    else if (type === "open_simulator") active.openSimulator?.(trim(cmd.company), trim(cmd.product));
+    else if (type === "open_simulator") void active.openSimulator?.(trim(cmd.company), trim(cmd.product));
+    else if (type === "quote_simulator") void active.quoteSimulator?.(trim(cmd.company), trim(cmd.product), (cmd.input && typeof cmd.input === "object") ? cmd.input as Record<string, unknown> : {});
+    else if (type === "open_wizard") void active.openWizard?.({ customerId: trim(cmd.customerId), company: trim(cmd.company), product: trim(cmd.product) });
     else if (type === "open_proposal") active.openProposal?.(trim(cmd.proposalId));
     else if (type === "upsert_reminder" && cmd.reminder && typeof cmd.reminder === "object") {
       void active.upsertReminder?.(cmd.reminder as Record<string, unknown>);
@@ -755,6 +810,7 @@
       paintConfirm();
     }
     await applyCrmWraps(trim(tool), args, data);
+    await applySimWraps(trim(tool), args, data);
     if (data.client_command && typeof data.client_command === "object") {
       executeClientCommand(data.client_command as Record<string, unknown>);
     }
@@ -1263,6 +1319,7 @@
     invokeTool,
     executeClientCommand,
     applyCrmWraps,
+    applySimWraps,
     paintHits,
     getPendingAction(){ return pendingAction; },
     getLastIntent(){ return lastIntent; },

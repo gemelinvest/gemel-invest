@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-crm-v1";
+const TAG = "20260829-assistant-sims-v1";
 let failed = 0;
 let passed = 0;
 
@@ -51,9 +51,11 @@ assert(edge.includes("NOT_CONFIRMED") || edge.includes("pendingActionId"), "conf
 assert(edge.includes("canViewTeamReports") && edge.includes("FORBIDDEN"), "team tools forbidden for agents");
 assert(edge.includes("customerVisible"), "customer visibility mirrored");
 assert(edge.includes("safeCustomer") && !/safeCustomer[\s\S]{0,200}id_number/.test(edge), "safe customer omits ת״ז");
-assert(edge.includes("PHASE_11"), "no invented pricing");
-assert(!edge.includes("computeMenora"), "does not duplicate rate tables");
+assert(edge.includes("get_insurance_price") && edge.includes("quote_simulator"), "price tool authorizes then quotes on client");
+assert(!edge.includes("PHASE_11"), "P11 pricing is no longer stubbed");
+assert(!edge.includes("computeMenora") && !edge.includes("monthlyPremium ="), "edge does not compute or duplicate rates");
 assert(realtime.includes("SESSION_TOOLS") && realtime.includes("search_customer"), "realtime session registers tools");
+assert(realtime.includes("get_insurance_price") && realtime.includes("create_proposal"), "realtime registers price and proposal tools");
 
 console.log("\n3) existing functions wrapped, not replaced");
 assert(app.includes("CustomersUI.openByIdWithLoader"), "open customer uses existing UI");
