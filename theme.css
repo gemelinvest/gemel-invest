@@ -9433,34 +9433,109 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 }
 
 /* =====================================================================
-   Proposals list (#view-proposals): readable black row text
-   Same treatment as customers. CSS only — scoped to this view.
-   Leaves .lcProposalBadge / action buttons with their own colors.
+   Proposals list (#view-proposals): compact insurance-style rows
+   BUILD: 20260829-proposalsCompact-v1
+   CSS only — no logic changes. Hint removed in index.html.
    ===================================================================== */
 
-#view-proposals .tableWrap .table th:not(#\9):not(#\9){
-  font-size: 13px !important;
-  color: #0F172A !important;
+#view-proposals .lcCustomersCard > .card__head:not(#\9):not(#\9){
+  align-items: center !important;
+  padding: 14px 16px 10px !important;
+  gap: 12px !important;
+}
+
+#view-proposals .card__title:not(#\9):not(#\9){
+  margin: 0 !important;
+  font-size: 22px !important;
   font-weight: 800 !important;
+  color: #16324f !important;
+  letter-spacing: -.02em !important;
+  line-height: 1.2 !important;
+}
+
+#view-proposals .lcCustomers__toolbar:not(#\9):not(#\9){
+  padding: 10px 16px !important;
+  gap: 12px !important;
+  border-bottom: 1px solid #eef2f6 !important;
+  background: #fbfcfd !important;
+}
+
+#view-proposals .tableWrap .table th:not(#\9):not(#\9){
+  padding: 8px 12px !important;
+  font-size: 11.5px !important;
+  color: #667788 !important;
+  font-weight: 700 !important;
+  letter-spacing: .01em !important;
+  background: #f8fafc !important;
+  border-bottom: 1px solid #dce3eb !important;
 }
 
 #view-proposals .tableWrap .table td:not(#\9):not(#\9){
-  font-size: 15px !important;
-  color: #0F172A !important;
-  font-weight: 600 !important;
+  padding: 7px 12px !important;
+  font-size: 12.5px !important;
+  color: #334155 !important;
+  font-weight: 550 !important;
+  line-height: 1.25 !important;
+  border-bottom: 1px solid #eef2f6 !important;
+  vertical-align: middle !important;
+}
+
+#view-proposals .tableWrap .table tbody tr:nth-child(even):not(#\9):not(#\9){
+  background: #fafbfc !important;
+}
+
+#view-proposals .tableWrap .table tbody tr:hover:not(#\9):not(#\9){
+  background: #f4f8fc !important;
 }
 
 #view-proposals .lcProposalsName strong:not(#\9):not(#\9){
-  font-size: 15px !important;
-  font-weight: 800 !important;
-  color: #0F172A !important;
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: #122033 !important;
+  letter-spacing: -.01em !important;
+  line-height: 1.2 !important;
+}
+
+#view-proposals .lcProposalsCell--id:not(#\9):not(#\9),
+#view-proposals .lcProposalsCell--phone:not(#\9):not(#\9),
+#view-proposals .lcProposalsCell--updated:not(#\9):not(#\9){
+  font-variant-numeric: tabular-nums !important;
+  font-weight: 600 !important;
+  color: #3d4f63 !important;
+}
+
+#view-proposals .lcProposalBadge:not(#\9):not(#\9){
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 3px 8px !important;
+  border-radius: 999px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  white-space: nowrap !important;
 }
 
 #view-proposals .lcProposalsStatusSub.muted.small:not(#\9):not(#\9),
 #view-proposals .tableWrap .table td .muted.small:not(#\9):not(#\9){
-  font-size: 13px !important;
-  color: #1e293b !important;
-  font-weight: 600 !important;
+  margin-top: 3px !important;
+  font-size: 11px !important;
+  color: #667788 !important;
+  font-weight: 550 !important;
+  line-height: 1.25 !important;
+}
+
+#view-proposals .lcCustomers__rowActions--proposals:not(#\9):not(#\9){
+  gap: 5px !important;
+}
+
+#view-proposals .lcCustomers__rowActions--proposals .btn:not(#\9):not(#\9){
+  padding: 5px 9px !important;
+  border-radius: 6px !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  min-height: 0 !important;
+  height: auto !important;
 }
 
 /* ==========================================================================

@@ -35804,8 +35804,8 @@ body.lcHealthDetailModalOpen .lcHealthDetailModal{
 
 
 /* =========================================================
-   Proposals table alignment + clean customer-name display
-   20260502 — scoped only to proposals screen
+   Proposals table — compact insurance-style rows
+   BUILD: 20260829-proposalsCompact-v1
    ========================================================= */
 #view-proposals .table{
   table-layout: fixed;
@@ -35816,19 +35816,19 @@ body.lcHealthDetailModalOpen .lcHealthDetailModal{
   text-align: right;
 }
 #view-proposals .table th:nth-child(1),
-#view-proposals .table td:nth-child(1){ width: 20%; }
+#view-proposals .table td:nth-child(1){ width: 16%; }
 #view-proposals .table th:nth-child(2),
-#view-proposals .table td:nth-child(2){ width: 13%; }
+#view-proposals .table td:nth-child(2){ width: 11%; }
 #view-proposals .table th:nth-child(3),
-#view-proposals .table td:nth-child(3){ width: 13%; }
+#view-proposals .table td:nth-child(3){ width: 11%; }
 #view-proposals .table th:nth-child(4),
-#view-proposals .table td:nth-child(4){ width: 13%; }
+#view-proposals .table td:nth-child(4){ width: 12%; }
 #view-proposals .table th:nth-child(5),
-#view-proposals .table td:nth-child(5){ width: 14%; }
+#view-proposals .table td:nth-child(5){ width: 18%; }
 #view-proposals .table th:nth-child(6),
-#view-proposals .table td:nth-child(6){ width: 11%; }
+#view-proposals .table td:nth-child(6){ width: 9%; }
 #view-proposals .table th:nth-child(7),
-#view-proposals .table td:nth-child(7){ width: 16%; }
+#view-proposals .table td:nth-child(7){ width: 23%; }
 #view-proposals .lcProposalsName{
   display:block;
   min-width:0;
@@ -35838,7 +35838,7 @@ body.lcHealthDetailModalOpen .lcHealthDetailModal{
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
-  font-weight:950;
+  font-weight:700;
 }
 #view-proposals .lcProposalsCell{
   overflow:hidden;
@@ -35857,7 +35857,7 @@ body.lcHealthDetailModalOpen .lcHealthDetailModal{
   align-items:center;
   align-content:center;
   flex-wrap:wrap;
-  gap:8px;
+  gap:5px;
   max-width:100%;
 }
 #view-proposals .lcProposalsRow--referral .lcProposalsCell--actions{
