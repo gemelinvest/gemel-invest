@@ -17,6 +17,7 @@ const UI_COMMANDS = new Set([
   "open_customer", "go_view", "open_simulator", "open_proposal",
   "open_wizard", "refresh_reminders", "upsert_reminder", "mark_task_done",
   "fill_wizard", "wizard_next", "open_har_import", "click_topbar",
+  "dismiss_validation_modal",
 ]);
 const PII_KEY = /id_number|idNumber|tz_number|national_id|"ת\\"ז"|ת״ז/i;
 const PII_DIGITS = /\d{8,9}/g;

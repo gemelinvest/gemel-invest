@@ -519,6 +519,24 @@ a.giAsst__btn{
   color: #64748b;
 }
 
+.giAsstPhonePage .giAsst__talkForm{
+  position: sticky;
+  bottom: 0;
+  margin-top: 12px;
+  padding-top: 8px;
+  background: linear-gradient(180deg, rgba(238,243,251,0), #eef3fb 28%);
+}
+
+.giAsstPhonePage .giAsst__heard{
+  min-height: 1.4em;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.giAsstPhonePage .giAsst__hint{
+  font-size: 12px;
+}
+
 @media (max-width: 640px){
   .giAsst__overlay{
     padding: 0;

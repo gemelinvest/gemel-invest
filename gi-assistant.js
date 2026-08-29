@@ -26,7 +26,8 @@
     "fill_wizard",
     "wizard_next",
     "open_har_import",
-    "click_topbar"
+    "click_topbar",
+    "dismiss_validation_modal"
   ]);
   let bridge = {};
   let bound = false;
@@ -53,6 +54,9 @@
   let lastCustomerName = "";
   let conversationLive = false;
   let liveMenuOpen = false;
+  let lastUtteranceKey = "";
+  let lastUtteranceAt = 0;
+  let phoneVisibilityBound = false;
   function trim(value) {
     return String(value == null ? "" : value).trim();
   }
@@ -252,8 +256,84 @@
     return "other";
   }
   const LOCAL_VOICE_HELP = "\u05D0\u05E4\u05E9\u05E8 \u05DC\u05DE\u05DC\u05D0 \u05D0\u05EA \u05D4\u05D0\u05E9\u05E3 \u05DC\u05E4\u05D9 \u05EA\u05D5\u05D5\u05D9\u05EA. \u05DC\u05D3\u05D5\u05D2\u05DE\u05D4: \u05E9\u05DD \u05E4\u05E8\u05D8\u05D9 \u05D0\u05D5\u05E8\u05D9\u05D4, \u05E9\u05DD \u05DE\u05E9\u05E4\u05D7\u05D4 \u05E1\u05D5\u05DE\u05DA, \u05EA\u05D6, \u05D8\u05DC\u05E4\u05D5\u05DF, \u05DB\u05EA\u05D5\u05D1\u05EA, \u05E2\u05D9\u05E8, \u05D5\u05DE\u05D9\u05D9\u05DC. \u05DB\u05E9\u05D4\u05E9\u05DC\u05D1 \u05DE\u05DC\u05D0, \u05D0\u05DE\u05E8\u05D5 \u05EA\u05E2\u05D1\u05E8\u05D9 \u05DC\u05E9\u05DC\u05D1 \u05D4\u05D1\u05D0. \u05D1\u05E9\u05DC\u05D1 \u05D4\u05E4\u05D5\u05DC\u05D9\u05E1\u05D5\u05EA, \u05D0\u05DE\u05E8\u05D5 \u05EA\u05E4\u05EA\u05D7\u05D9 \u05D0\u05EA \u05D4\u05E4\u05E7 \u05D1\u05D9\u05D8\u05D5\u05D7\u05D9\u05DD \u05DE\u05D4\u05E8 \u05D4\u05D1\u05D9\u05D8\u05D5\u05D7.";
-  const PHONE_SHORT_HELP = "\u05D0\u05DE\u05E8\u05D5 \u05E4\u05E7\u05D5\u05D3\u05D4 \u05E7\u05E6\u05E8\u05D4, \u05DC\u05DE\u05E9\u05DC \u05E4\u05EA\u05D7 \u05EA\u05D9\u05E7 \u05D0\u05D5 \u05DC\u05E9\u05DC\u05D1 \u05D4\u05D1\u05D0.";
+  const PHONE_SHORT_HELP = "\u05D0\u05DE\u05E8\u05D5 \u05E4\u05E7\u05D5\u05D3\u05D4 \u05E7\u05E6\u05E8\u05D4, \u05DC\u05DE\u05E9\u05DC \u05E4\u05EA\u05D7 \u05EA\u05D9\u05E7, \u05DE\u05E1\u05E4\u05E8 \u05D1\u05D9\u05EA, \u05EA\u05D0\u05E8\u05D9\u05DA \u05DC\u05D9\u05D3\u05D4, \u05D0\u05D5 \u05DC\u05E9\u05DC\u05D1 \u05D4\u05D1\u05D0.";
   const PHONE_DONE_ACK = "\u05D1\u05D5\u05E6\u05E2.";
+  const HEBREW_MONTHS = [
+    { re: /ינואר|january/i, month: 1 },
+    { re: /פברואר|february/i, month: 2 },
+    { re: /מרץ|מרס|march/i, month: 3 },
+    { re: /אפריל|april/i, month: 4 },
+    { re: /מאי|may/i, month: 5 },
+    { re: /יוני|june/i, month: 6 },
+    { re: /יולי|july/i, month: 7 },
+    { re: /אוגוסט|august/i, month: 8 },
+    { re: /ספטמבר|september/i, month: 9 },
+    { re: /אוקטובר|october/i, month: 10 },
+    { re: /נובמבר|november/i, month: 11 },
+    { re: /דצמבר|december/i, month: 12 }
+  ];
+  function pad2(n) {
+    return String(n).padStart(2, "0");
+  }
+  function formatWizardDate(day, month, year) {
+    if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year)) return null;
+    if (year < 100) year += year >= 30 ? 1900 : 2e3;
+    if (year < 1900 || year > 2100) return null;
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    const dt = new Date(year, month - 1, day);
+    if (dt.getFullYear() !== year || dt.getMonth() !== month - 1 || dt.getDate() !== day) return null;
+    return pad2(day) + "/" + pad2(month) + "/" + String(year);
+  }
+  function normalizeWizardDate(raw) {
+    let s = trim(raw).replace(/\bטקסט\b/gi, " ").replace(/[!,?״"']/g, " ").replace(/\s+/g, " ").trim();
+    if (!s) return null;
+    s = s.replace(/^(?:ביום|ביום\s+ה|היום\s+ה|בתאריך|תאריך)\s+/u, "").replace(/\b(?:ביום|בתאריך|של|לשנת|לשנה)\b/g, " ").replace(/\s+/g, " ").trim();
+    let hit = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/.exec(s);
+    if (hit) return formatWizardDate(Number(hit[1]), Number(hit[2]), Number(hit[3]));
+    const digOnly = s.replace(/\D+/g, "");
+    if (digOnly.length === 8) {
+      return formatWizardDate(Number(digOnly.slice(0, 2)), Number(digOnly.slice(2, 4)), Number(digOnly.slice(4, 8)));
+    }
+    for (let i = 0; i < HEBREW_MONTHS.length; i += 1) {
+      const row = HEBREW_MONTHS[i];
+      if (!row.re.test(s)) continue;
+      const cleaned = s.replace(row.re, " ").replace(/\bב/g, " ").replace(/\s+/g, " ").trim();
+      const nums = cleaned.match(/\d{1,4}/g) || [];
+      if (nums.length >= 2) {
+        const day = Number(nums[0]);
+        const year = Number(nums[nums.length - 1]);
+        return formatWizardDate(day, row.month, year);
+      }
+    }
+    hit = /^(\d{1,2})\s+(?:ל|ב|\/|\-|\.)?\s*(\d{1,2})\s+(?:ל|ב|\/|\-|\.)?\s*(\d{2,4})$/.exec(s);
+    if (hit) return formatWizardDate(Number(hit[1]), Number(hit[2]), Number(hit[3]));
+    hit = /^(\d{1,2})\s+(\d{1,2})\s+(\d{2,4})$/.exec(s);
+    if (hit) return formatWizardDate(Number(hit[1]), Number(hit[2]), Number(hit[3]));
+    return null;
+  }
+  function extractSmokingType(raw) {
+    if (/סיגריה\s*אלקטרונית|סיגריות?\s*אלקטרונית|איגוד\s*אלקטרוני|וייפ|vape/i.test(raw)) return "\u05E1\u05D9\u05D2\u05E8\u05D9\u05D4 \u05D0\u05DC\u05E7\u05D8\u05E8\u05D5\u05E0\u05D9\u05EA";
+    if (/קנאביס|מריחואנה/.test(raw)) return "\u05E7\u05E0\u05D0\u05D1\u05D9\u05E1";
+    if (/נרגילה/.test(raw)) return "\u05E0\u05E8\u05D2\u05D9\u05DC\u05D4";
+    if (/טבק/.test(raw)) return "\u05D8\u05D1\u05E7";
+    if (/סיגריות|סיגריה(?!\s*אלקטרונית)/.test(raw)) return "\u05E1\u05D9\u05D2\u05E8\u05D9\u05D5\u05EA";
+    return "";
+  }
+  function extractSmokingAmount(raw) {
+    const patterns = [
+      /כמות(?:\s*ליום)?\s+(\d{1,3})/,
+      /(?:ליום|ביום)\s+(\d{1,3})/,
+      /(\d{1,3})\s*(?:סיגריות?\s*)?(?:ליום|ביום)/
+    ];
+    for (let i = 0; i < patterns.length; i += 1) {
+      const match = raw.match(patterns[i]);
+      if (match) return match[1];
+    }
+    return "";
+  }
+  function hasFillPayload(fields, raw) {
+    return !!(fields.firstName || fields.lastName || fields.idNumber || fields.street || fields.houseNumber || fields.apartment || fields.zip || fields.phone || fields.city || fields.email || fields.birthDate || fields.idIssueDate || fields.maritalStatus || fields.clinic || fields.occupation || fields.gender || fields.smokingType || fields.smokingAmount || fields.smoker === true || fields.smoker === false || fields.age != null || fields.shaban || /(מלא|רשום|עדכן|באשף|בהצעה|מעשן)/.test(raw) || extractCompany(raw) || extractProduct(raw));
+  }
   function extractCompany(text) {
     const companies = ["\u05D4\u05E4\u05E0\u05D9\u05E7\u05E1", "\u05DE\u05E0\u05D5\u05E8\u05D4", "\u05D4\u05DB\u05E9\u05E8\u05D4", "\u05DE\u05D2\u05D3\u05DC", "\u05D0\u05D9\u05D9\u05DC\u05D5\u05DF", "\u05DB\u05DC\u05DC"];
     for (let i = 0; i < companies.length; i += 1) {
@@ -332,7 +412,7 @@
       { key: "email", re: /מייל|אימייל|דואל/g },
       { key: "birthDate", re: /תאריך\s*לידה|נולד(?:ה)?/g },
       { key: "street", re: /כתובת(?:\s*מגורים)?|רחוב/g },
-      { key: "houseNumber", re: /מספר\s*בית/g },
+      { key: "houseNumber", re: /מס(?:פר|׳|'|’)?\s*(?:ה)?בית|בית\s*מס(?:פר|׳|'|’)?/g },
       { key: "apartment", re: /דירה/g },
       { key: "zip", re: /מיקוד/g },
       { key: "city", re: /עיר|יישוב/g },
@@ -364,12 +444,17 @@
       if (hit.key === "idNumber" || hit.key === "phone" || hit.key === "zip" || hit.key === "houseNumber") {
         value = value.replace(/\D/g, "");
       }
+      if (hit.key === "birthDate" || hit.key === "idIssueDate") {
+        const normalized = normalizeWizardDate(value);
+        if (normalized) value = normalized;
+        else value = value.replace(/\bטקסט\b/gi, " ").replace(/\s+/g, " ").trim();
+      }
       if (value) fields[hit.key] = value;
     });
     const ageMatch = raw.match(/גיל\s*(\d{1,2})/);
     if (ageMatch) fields.age = Number(ageMatch[1]);
-    if (/לא מעשן/.test(raw)) fields.smoker = false;
-    else if (/מעשן/.test(raw)) fields.smoker = true;
+    if (/(?:^|\s)(?:אני\s+)?לא\s+מעשן(?:ת)?(?:\s|$)/.test(raw) || /אינני\s+מעשן/.test(raw)) fields.smoker = false;
+    else if (/(?:^|\s)(?:כן(?:\s+אני)?\s+)?מעשן(?:ת)?(?:\s|$)/.test(raw) || /כן\s+מעשן/.test(raw)) fields.smoker = true;
     if (/אישה|נקבה/.test(raw)) fields.gender = "female";
     else if (/גבר|זכר/.test(raw)) fields.gender = "male";
     if (!fields.maritalStatus) {
@@ -386,15 +471,16 @@
       else if (/לאומית/.test(raw)) fields.clinic = "\u05DC\u05D0\u05D5\u05DE\u05D9\u05EA";
       else if (/צהל/.test(raw)) fields.clinic = "\u05E7\u05D5\u05E4\u05D4 \u05E6\u05D4\u05DC\u05D9\u05EA";
     }
-    if (fields.smoker === true && !fields.smokingType) {
-      if (/סיגריה אלקטרונית/.test(raw)) fields.smokingType = "\u05E1\u05D9\u05D2\u05E8\u05D9\u05D4 \u05D0\u05DC\u05E7\u05D8\u05E8\u05D5\u05E0\u05D9\u05EA";
-      else if (/קנאביס/.test(raw)) fields.smokingType = "\u05E7\u05E0\u05D0\u05D1\u05D9\u05E1";
-      else if (/נרגילה/.test(raw)) fields.smokingType = "\u05E0\u05E8\u05D2\u05D9\u05DC\u05D4";
-      else if (/טבק/.test(raw)) fields.smokingType = "\u05D8\u05D1\u05E7";
-      else if (/סיגריות/.test(raw)) fields.smokingType = "\u05E1\u05D9\u05D2\u05E8\u05D9\u05D5\u05EA";
+    const smokeType = extractSmokingType(raw);
+    if (smokeType) {
+      fields.smokingType = smokeType;
+      if (fields.smoker !== false) fields.smoker = true;
     }
-    const amountMatch = raw.match(/כמות(?:\s*ליום)?\s+(\d{1,3})/);
-    if (amountMatch) fields.smokingAmount = amountMatch[1];
+    const amount = extractSmokingAmount(raw);
+    if (amount) {
+      fields.smokingAmount = amount;
+      if (fields.smoker !== false) fields.smoker = true;
+    }
     const company = extractCompany(raw);
     if (company) fields.company = company;
     const product = extractProduct(raw);
@@ -409,6 +495,9 @@
     if (classifyIntent(raw) !== "other") return null;
     if (/^(עזרה|מה אתה יכול|מה אפשר)/.test(raw)) {
       return { kind: "help", say: isPhonePage() ? PHONE_SHORT_HELP : LOCAL_VOICE_HELP };
+    }
+    if (/(?:תחזור|חזור|אחזור|תחזרי|חזרי)\s+למילוי|(?:הבנתי[,\s]*)?(?:אחזור|תחזור|חזור)\s+למילוי|סגור(?:י)?\s+(?:את\s+)?(?:ה)?(?:הודע(?:ה|ת)\s+ה)?(?:חלון|מודל|הודעה)(?:\s+חסרים)?/.test(raw)) {
+      return { tool: "dismiss_validation_modal", args: {} };
     }
     if (/(חפש|תחפש|מצא|תמצא|חיפוש)/.test(raw)) {
       const query = raw.replace(/^(?:אפשר\s+)?(?:בבקשה\s+)?(?:חפש|תחפש|מצא|תמצא|חיפוש)\s+(?:לי\s+)?(?:את\s+)?(?:לקוח\s+)?(?:תיק\s+)?/, "");
@@ -477,7 +566,7 @@
       return { tool: "create_proposal", args };
     }
     const fill = extractFillFields(text);
-    if (fill && (fill.firstName || fill.lastName || fill.idNumber || fill.street || fill.phone || fill.city || fill.email || fill.birthDate || fill.maritalStatus || fill.clinic || fill.occupation || fill.age != null || /(מלא|רשום|עדכן|באשף|בהצעה|מעשן)/.test(raw) || extractCompany(raw) || extractProduct(raw))) {
+    if (fill && hasFillPayload(fill, raw)) {
       return { tool: "fill_wizard", args: fill };
     }
     if (/ייצור|תיקים החודש|הפקות/.test(raw)) {
@@ -755,7 +844,7 @@
         <form class="giAsst__talkForm" id="giAsstTalkForm">
           <label class="giAsst__label" for="giAsstTalkText">\u05D0\u05DD \u05D0\u05D9\u05DF \u05EA\u05D2\u05D5\u05D1\u05D4 \u05DC\u05E7\u05D5\u05DC \u2014 \u05DB\u05EA\u05D1\u05D5 \u05DB\u05D0\u05DF</label>
           <div class="giAsst__talkRow">
-            <input class="giAsst__input" id="giAsstTalkText" type="text" enterkeyhint="send" autocomplete="off" placeholder="\u05DC\u05DE\u05E9\u05DC: \u05D7\u05E4\u05E9 \u05D3\u05D5\u05D3 \u05DC\u05D5\u05D9" />
+            <input class="giAsst__input" id="giAsstTalkText" type="text" enterkeyhint="send" autocomplete="off" placeholder="${isPhonePage() ? "\u05DC\u05DE\u05E9\u05DC: \u05DE\u05E1\u05E4\u05E8 \u05D1\u05D9\u05EA 12 / \u05DC\u05D0 \u05DE\u05E2\u05E9\u05DF / \u05EA\u05D7\u05D6\u05D5\u05E8 \u05DC\u05DE\u05D9\u05DC\u05D5\u05D9" : "\u05DC\u05DE\u05E9\u05DC: \u05D7\u05E4\u05E9 \u05D3\u05D5\u05D3 \u05DC\u05D5\u05D9"}" />
             <button class="giAsst__btn giAsst__talkSend" id="giAsstTalkSend" type="submit">\u05E9\u05DC\u05D7</button>
           </div>
         </form>
@@ -1218,6 +1307,9 @@
     utter.volume = 1;
   }
   function speechHoldMs(text) {
+    if (isPhonePage()) {
+      return Math.min(9e3, Math.max(750, Math.round(text.length * 65 + 350)));
+    }
     return Math.min(22e3, Math.max(3600, Math.round(text.length * 90 + 1e3)));
   }
   function warmVoices() {
@@ -1279,6 +1371,12 @@
     try {
       rec.start();
     } catch (_e) {
+      if (isPhonePage()) {
+        try {
+          startLocalListening();
+        } catch (_e2) {
+        }
+      }
     }
   }
   function startLocalListening() {
@@ -1288,6 +1386,10 @@
     rec.lang = "he-IL";
     rec.continuous = !isMobileVoice();
     rec.interimResults = true;
+    try {
+      rec.maxAlternatives = 1;
+    } catch (_eAlt) {
+    }
     rec.onresult = (ev) => {
       if (utteranceBusy || voice.state === "speaking") return;
       const results = ev.results;
@@ -1302,6 +1404,13 @@
       }
       if (interim) setHeardStatus(interim);
       if (finalText) {
+        const key = finalText.replace(/\s+/g, " ").trim();
+        const now = Date.now();
+        if (isPhonePage() && key && key === lastUtteranceKey && now - lastUtteranceAt < 1200) {
+          return;
+        }
+        lastUtteranceKey = key;
+        lastUtteranceAt = now;
         setHeardStatus(finalText);
         void handleLocalUtterance(finalText);
       }
@@ -1319,12 +1428,37 @@
           try {
             rec.start();
           } catch (_e) {
+            if (isPhonePage()) {
+              try {
+                startLocalListening();
+              } catch (_e2) {
+              }
+            }
           }
         }
-      }, isPhonePage() ? 180 : 280);
+      }, isPhonePage() ? 90 : 280);
     };
     voice.recognition = rec;
-    rec.start();
+    try {
+      rec.start();
+    } catch (_eStart) {
+    }
+  }
+  function bindPhoneVisibility() {
+    if (!isPhonePage() || phoneVisibilityBound) return;
+    phoneVisibilityBound = true;
+    try {
+      document.addEventListener("visibilitychange", () => {
+        if (!isConversationLive()) return;
+        if (document.hidden) {
+          pauseLocalListening();
+          return;
+        }
+        unlockSpeech();
+        if (!utteranceBusy && voice.state !== "speaking") resumeLocalListening();
+      });
+    } catch (_e) {
+    }
   }
   function stopLocalListening() {
     var _a;
@@ -1380,16 +1514,19 @@
     if (data.ok === false) {
       if (tool === "open_har_import") return "\u05DC\u05D0 \u05DE\u05E6\u05D0\u05EA\u05D9 \u05D0\u05EA \u05DB\u05E4\u05EA\u05D5\u05E8 \u05D4\u05E8 \u05D4\u05D1\u05D9\u05D8\u05D5\u05D7.";
       if (tool === "wizard_next") return "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05E2\u05D1\u05D5\u05E8 \u05E9\u05DC\u05D1.";
+      if (tool === "dismiss_validation_modal") return "\u05D0\u05D9\u05DF \u05D7\u05DC\u05D5\u05DF \u05DC\u05E1\u05D2\u05D9\u05E8\u05D4.";
+      if (data.dispatchFailed) return "\u05DC\u05D0 \u05E0\u05E9\u05DC\u05D7 \u05DC\u05DE\u05D7\u05E9\u05D1. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1.";
       return "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9.";
     }
     if (tool === "open_har_import") return "\u05E4\u05EA\u05D7\u05EA\u05D9 \u05D1\u05D7\u05D9\u05E8\u05EA \u05E7\u05D5\u05D1\u05E5. \u05D1\u05D7\u05E8\u05D5 \u05DE\u05D4\u05DE\u05D7\u05E9\u05D1.";
+    if (tool === "dismiss_validation_modal") return "\u05D7\u05D5\u05D6\u05E8\u05D9\u05DD \u05DC\u05DE\u05D9\u05DC\u05D5\u05D9.";
     return PHONE_DONE_ACK;
   }
   function replyFromTool(tool, data) {
     if (isPhonePage() && !data.forceVerbose) {
       if (data.needs_confirmation === true) return "\u05DE\u05DE\u05EA\u05D9\u05E0\u05D9\u05DD \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8. \u05D0\u05DE\u05E8\u05D5 \u05DB\u05DF \u05D0\u05D5 \u05DC\u05D0.";
       if (trim(data.error) === "NEED_INPUT" || data.needs_input === true) return "\u05D7\u05E1\u05E8\u05D9\u05DD \u05E4\u05E8\u05D8\u05D9\u05DD.";
-      if (tool === "go_view" || tool === "click_topbar" || tool === "fill_wizard" || tool === "wizard_next" || tool === "open_har_import" || tool === "open_simulator" || tool === "create_proposal" || tool === "open_customer" || tool === "find_customer_by_id") {
+      if (tool === "go_view" || tool === "click_topbar" || tool === "fill_wizard" || tool === "wizard_next" || tool === "open_har_import" || tool === "open_simulator" || tool === "create_proposal" || tool === "open_customer" || tool === "find_customer_by_id" || tool === "dismiss_validation_modal") {
         return shortActionAck(tool, data);
       }
     }
@@ -1423,6 +1560,7 @@
     if (tool === "fill_wizard") return "\u05DE\u05D9\u05DC\u05D0\u05EA\u05D9 \u05D0\u05EA \u05D4\u05E9\u05D3\u05D5\u05EA \u05D1\u05D0\u05E9\u05E3.";
     if (tool === "wizard_next") return data.ok === false ? "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05E2\u05D1\u05D5\u05E8 \u05E9\u05DC\u05D1. \u05D1\u05D3\u05E7\u05D5 \u05E9\u05DB\u05DC \u05D4\u05E4\u05E8\u05D8\u05D9\u05DD \u05DE\u05DC\u05D0\u05D9\u05DD." : "\u05E2\u05D1\u05E8\u05EA\u05D9 \u05DC\u05E9\u05DC\u05D1 \u05D4\u05D1\u05D0.";
     if (tool === "open_har_import") return data.ok === false ? "\u05DC\u05D0 \u05DE\u05E6\u05D0\u05EA\u05D9 \u05D0\u05EA \u05DB\u05E4\u05EA\u05D5\u05E8 \u05D4\u05E8 \u05D4\u05D1\u05D9\u05D8\u05D5\u05D7. \u05E2\u05D1\u05E8\u05D5 \u05E7\u05D5\u05D3\u05DD \u05DC\u05E9\u05DC\u05D1 \u05D4\u05E4\u05D5\u05DC\u05D9\u05E1\u05D5\u05EA \u05D4\u05E7\u05D9\u05D9\u05DE\u05D5\u05EA." : "\u05E4\u05EA\u05D7\u05EA\u05D9 \u05D0\u05EA \u05D1\u05D7\u05D9\u05E8\u05EA \u05E7\u05D5\u05D1\u05E5 \u05D4\u05E8 \u05D4\u05D1\u05D9\u05D8\u05D5\u05D7. \u05D1\u05D7\u05E8\u05D5 \u05D0\u05EA \u05E7\u05D5\u05D1\u05E5 \u05D4\u05D0\u05E7\u05E1\u05DC \u05DE\u05D4\u05DE\u05D7\u05E9\u05D1.";
+    if (tool === "dismiss_validation_modal") return data.ok === false ? "\u05D0\u05D9\u05DF \u05D7\u05DC\u05D5\u05DF \u05D7\u05E1\u05E8\u05D9\u05DD \u05DC\u05E1\u05D2\u05D9\u05E8\u05D4." : "\u05E1\u05D2\u05E8\u05EA\u05D9 \u05D0\u05EA \u05D4\u05D7\u05DC\u05D5\u05DF. \u05D0\u05E4\u05E9\u05E8 \u05DC\u05D4\u05DE\u05E9\u05D9\u05DA \u05DC\u05DE\u05DC\u05D0.";
     if (tool === "get_monthly_production" || tool === "get_team_production") {
       const count = Number(data.count == null ? data.total : data.count);
       return Number.isFinite(count) ? "\u05D4\u05D7\u05D5\u05D3\u05E9 " + numberToHebrew(count, "m") + " \u05EA\u05D9\u05E7\u05D9\u05DD." : "\u05D4\u05D1\u05D0\u05EA\u05D9 \u05D0\u05EA \u05E0\u05EA\u05D5\u05E0\u05D9 \u05D4\u05D9\u05D9\u05E6\u05D5\u05E8.";
@@ -1436,6 +1574,7 @@
     if (tool === "fill_wizard") return { type: "fill_wizard", fields: a };
     if (tool === "wizard_next") return { type: "wizard_next" };
     if (tool === "open_har_import") return { type: "open_har_import" };
+    if (tool === "dismiss_validation_modal") return { type: "dismiss_validation_modal" };
     if (tool === "open_simulator" && trim(a.company)) return { type: "open_simulator", company: trim(a.company), product: trim(a.product) || "\u05E8\u05D9\u05E1\u05E7" };
     if (tool === "create_proposal") {
       const out = { type: "open_wizard" };
@@ -1507,14 +1646,26 @@
       const args = Object.assign({}, cmd.args || {});
       const instant = commandFromLocalTool(cmd.tool, args);
       if (instant) {
-        if (isPhonePage()) await dispatchDesktopCommand(instant);
-        else executeClientCommand(instant);
+        if (isPhonePage()) {
+          const sent = await dispatchDesktopCommand(instant);
+          if (!sent) {
+            await speak(shortActionAck(cmd.tool, { ok: false, dispatchFailed: true }));
+            return;
+          }
+          if (cmd.tool === "create_proposal") {
+            const extra = extractFillFields(text);
+            if (extra && (extra.firstName || extra.lastName || extra.company || extra.product || extra.age != null)) {
+              await dispatchDesktopCommand({ type: "fill_wizard", fields: extra });
+            }
+          }
+          await speak(replyFromTool(cmd.tool, { ok: true, instant: true }));
+          return;
+        }
+        executeClientCommand(instant);
         if (cmd.tool === "create_proposal") {
           const extra = extractFillFields(text);
           if (extra && (extra.firstName || extra.lastName || extra.company || extra.product || extra.age != null)) {
-            const fillCmd = { type: "fill_wizard", fields: extra };
-            if (isPhonePage()) await dispatchDesktopCommand(fillCmd);
-            else executeClientCommand(fillCmd);
+            executeClientCommand({ type: "fill_wizard", fields: extra });
           }
         }
         await speak(replyFromTool(cmd.tool, { ok: true, instant: true }));
@@ -1568,7 +1719,7 @@
     }
   }
   function executeClientCommand(cmd) {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n;
+    var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o;
     if (!cmd || typeof cmd !== "object") return;
     const type = trim(cmd.type);
     const active = readBridge();
@@ -1595,32 +1746,34 @@
       (_g = active.fillWizard) == null ? void 0 : _g.call(active, fields);
     } else if (type === "wizard_next") void ((_h = active.wizardNext) == null ? void 0 : _h.call(active));
     else if (type === "open_har_import") void ((_i = active.openHarImport) == null ? void 0 : _i.call(active));
-    else if (type === "click_topbar") (_j = active.clickTopbar) == null ? void 0 : _j.call(active, trim(cmd.id));
-    else if (type === "open_proposal") (_k = active.openProposal) == null ? void 0 : _k.call(active, trim(cmd.proposalId));
+    else if (type === "dismiss_validation_modal") void ((_j = active.dismissValidationModal) == null ? void 0 : _j.call(active));
+    else if (type === "click_topbar") (_k = active.clickTopbar) == null ? void 0 : _k.call(active, trim(cmd.id));
+    else if (type === "open_proposal") (_l = active.openProposal) == null ? void 0 : _l.call(active, trim(cmd.proposalId));
     else if (type === "upsert_reminder" && cmd.reminder && typeof cmd.reminder === "object") {
-      void ((_l = active.upsertReminder) == null ? void 0 : _l.call(active, cmd.reminder));
-    } else if (type === "mark_task_done") void ((_m = active.markTaskDone) == null ? void 0 : _m.call(active, trim(cmd.id || cmd.taskId)));
-    else if (type === "refresh_reminders") void ((_n = active.refreshReminders) == null ? void 0 : _n.call(active));
+      void ((_m = active.upsertReminder) == null ? void 0 : _m.call(active, cmd.reminder));
+    } else if (type === "mark_task_done") void ((_n = active.markTaskDone) == null ? void 0 : _n.call(active, trim(cmd.id || cmd.taskId)));
+    else if (type === "refresh_reminders") void ((_o = active.refreshReminders) == null ? void 0 : _o.call(active));
   }
   async function dispatchDesktopCommand(cmd) {
-    if (!isPhonePage()) return;
-    if (!UI_COMMANDS.has(trim(cmd.type))) return;
+    if (!isPhonePage()) return false;
+    if (!UI_COMMANDS.has(trim(cmd.type))) return false;
     let lastErr = null;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         const data = await callEngine({ ...engineAuthPayload(), action: "dispatch", command: cmd });
         if (data && data.ok === false) {
           lastErr = trim(data.error) || "DISPATCH";
-          await sleepMs(140 * (attempt + 1));
+          await sleepMs(160 * (attempt + 1));
           continue;
         }
-        return;
+        return true;
       } catch (err) {
         lastErr = err;
-        await sleepMs(140 * (attempt + 1));
+        await sleepMs(160 * (attempt + 1));
       }
     }
     if (lastErr) pushTimeline("error", "\u05E9\u05DC\u05D9\u05D7\u05EA \u05D4\u05E4\u05E7\u05D5\u05D3\u05D4 \u05DC\u05DE\u05D7\u05E9\u05D1 \u05E0\u05DB\u05E9\u05DC\u05D4. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1.");
+    return false;
   }
   async function pullDesktopCommands() {
     if (isPhonePage()) return;
@@ -1866,6 +2019,8 @@
       pushTimeline("system", "\u05E1\u05E9\u05DF \u05E2\u05D5\u05D6\u05E8 \u05DE\u05E7\u05D5\u05DE\u05D9 \u05E0\u05E4\u05EA\u05D7.");
       setHeardStatus("");
       conversationLive = true;
+      bindPhoneVisibility();
+      unlockSpeech();
       startLocalListening();
       startCommandBus();
       setVoiceState("listening");
@@ -1874,7 +2029,7 @@
       if (!speechRecognitionCtor()) {
         pushTimeline("info", "\u05D1\u05DE\u05DB\u05E9\u05D9\u05E8 \u05D4\u05D6\u05D4 \u05D0\u05D9\u05DF \u05D3\u05D9\u05D1\u05D5\u05E8 \u05DE\u05D5\u05D1\u05E0\u05D4. \u05DB\u05EA\u05D1\u05D5 \u05E4\u05E7\u05D5\u05D3\u05D4 \u05D1\u05EA\u05D9\u05D1\u05D4.");
       } else {
-        pushTimeline("info", "\u05DE\u05E7\u05E9\u05D9\u05D1. \u05D0\u05E4\u05E9\u05E8 \u05D2\u05DD \u05DC\u05DB\u05EA\u05D5\u05D1 \u05D1\u05EA\u05D9\u05D1\u05D4.");
+        pushTimeline("info", isPhonePage() ? "\u05DE\u05E7\u05E9\u05D9\u05D1 \u05D1\u05D8\u05DC\u05E4\u05D5\u05DF. \u05D0\u05E4\u05E9\u05E8 \u05D2\u05DD \u05DC\u05DB\u05EA\u05D5\u05D1 \u05D1\u05EA\u05D9\u05D1\u05D4." : "\u05DE\u05E7\u05E9\u05D9\u05D1. \u05D0\u05E4\u05E9\u05E8 \u05D2\u05DD \u05DC\u05DB\u05EA\u05D5\u05D1 \u05D1\u05EA\u05D9\u05D1\u05D4.");
       }
     } catch (err) {
       const code = trim((err == null ? void 0 : err.code) || (err == null ? void 0 : err.name) || (err == null ? void 0 : err.message));
@@ -2325,6 +2480,9 @@
     classifyIntent,
     parseLocalCommand,
     commandFromLocalTool,
+    extractFillFields,
+    normalizeWizardDate,
+    hasFillPayload,
     pickHebrewVoice,
     scoreHebrewVoice,
     preferredVoiceGender,
@@ -2333,6 +2491,7 @@
     numberToHebrew,
     replyFromTool,
     shortActionAck,
+    speechHoldMs,
     isSpokenQuestion,
     looksLikePhone,
     looksLikeIdNumber,
