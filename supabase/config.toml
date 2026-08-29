@@ -3,3 +3,6 @@ project_id = "vhvlkerectggovfihjgm"
 
 [functions.gi-daily-sales-mail]
 verify_jwt = false
+
+[functions.gi-assistant-pairing]
+verify_jwt = false
