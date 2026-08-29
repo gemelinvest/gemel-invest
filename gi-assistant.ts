@@ -37,7 +37,7 @@
     getCurrentAgent?: () => AgentAuth;
     supabaseUrl?: string;
     publishableKey?: string;
-    openCustomer?: (id: string) => void;
+    openCustomer?: (id: string) => void | { ok?: boolean; id?: string } | Promise<{ ok?: boolean; id?: string } | unknown>;
     goView?: (view: string) => void;
     openSimulator?: (company: string, product: string) => void | Promise<unknown>;
     quoteSimulator?: (company: string, product: string, input?: Record<string, unknown>) => Promise<Record<string, unknown> | unknown>;
@@ -56,7 +56,7 @@
     openCancellationsReport?: () => void | { ok?: boolean; error?: string };
     openDailySalesReport?: (dateIso?: string) => void | { ok?: boolean; error?: string; date?: string | null };
     clickTopbar?: (id: string) => void;
-    openCustomerByQuery?: (query: string) => void | Promise<unknown>;
+    openCustomerByQuery?: (query: string) => void | Promise<{ ok?: boolean; id?: string; name?: string } | unknown>;
     openProposal?: (id: string) => void;
     refreshReminders?: () => void | Promise<unknown>;
     searchCustomers?: (query: string) => Promise<HitCard[] | unknown[]>;
@@ -549,8 +549,35 @@
     if (/מכירות/.test(text)) return "dailySales";
     if (/אנשי\s*קשר|קשרים/.test(text)) return "contacts";
     if (/תהליכ/.test(text)) return "myProcesses";
-    if (/לקוח|תיק/.test(text)) return "customers";
+    if (/לקוחות|רשימת\s*ה?לקוחות|מסך\s*לקוחות/.test(text)) return "customers";
     return "";
+  }
+
+  function isOpenCustomerSpeech(text: string): boolean {
+    const raw = trim(text);
+    if (!raw) return false;
+    if (/לקוחות|רשימת\s*ה?לקוחות|מסך\s*לקוחות/.test(raw) && !/(?:תיק|לקוח)\s+של/.test(raw)) return false;
+    if (/^[\d\s\-()+]+$/.test(raw) && (looksLikeIdNumber(raw) || looksLikePhone(raw))) return true;
+    if (/(?:פתח|תפתח|תפתחי|כנס|תיכנסי?|היכנסי?|כנסי).{0,40}(?:תיק|לקוח)/.test(raw)) return true;
+    if (/(?:תיק|לקוח)\s+(?:של\s+|לפי\s+)/.test(raw)) return true;
+    return false;
+  }
+
+  function extractOpenCustomerQuery(text: string): string {
+    let q = trim(text)
+      .replace(/[!,?״"']/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    q = q.replace(/^(?:אפשר\s+)?(?:בבקשה\s+)?(?:תפתחי?|תפתחו|פתחי?|תיכנסי?|היכנסי?|כנסי|כנס|עבור|תעבור|עברי)\s+(?:לי\s+)?(?:בבקשה\s+)?/u, "");
+    q = q.replace(/^(?:את\s+)?(?:ה)?תיק(?:\s+(?:של|עבור|ל))?\s*/u, "");
+    q = q.replace(/^לתיק(?:\s+(?:של|עבור|ל))?\s*/u, "");
+    q = q.replace(/^(?:את\s+)?(?:ה)?לקוח(?!ות)(?:\s+(?:של|עבור|ל))?\s*/u, "");
+    q = q.replace(/^ללקוח(?:\s+(?:של|עבור|ל))?\s*/u, "");
+    q = q.replace(/^(?:לפי\s+)?(?:תעודת\s*זהות|תז|מספר\s*זהות|טלפון|נייד)\s+/u, "");
+    q = q.replace(/\s+(?:בבקשה|תודה)$/u, "").trim();
+    if (looksLikeIdNumber(q) || looksLikePhone(q)) q = q.replace(/\D/g, "");
+    if (/^(?:ה)?(?:תיק|לקוח|לקוחות|קובץ)$/u.test(q)) return "";
+    return q;
   }
 
   function looksLikeIdNumber(value: string): boolean {
@@ -744,16 +771,10 @@
       else if (lastCustomerId) args.customerId = lastCustomerId;
       return { tool: "create_proposal", args };
     }
-    if (/(?:פתח|תפתח|תפתחי)\s+(?:את\s+)?(?:ה)?(?:תיק|לקוח)(?!\S)/.test(raw)
-      || /(?:תיק|לקוח)\s+(?:לפי\s+)?(?:תעודת\s*זהות|תז|מספר\s*זהות|טלפון|נייד)/.test(raw)
-      || (/^[\d\s\-()+]+$/.test(raw) && (looksLikeIdNumber(raw) || looksLikePhone(raw)))) {
-      let query = raw
-        .replace(/^.*?(?:התיק|תיק|לקוח)\s+(?:של\s+|לפי\s+)?(?:תעודת\s*זהות\s+|תז\s+|מספר\s*זהות\s+|טלפון\s+|נייד\s+)?/, "")
-        .replace(/\s+(?:בבקשה|תודה)$/, "");
-      const digits = raw.replace(/\D/g, "");
-      if ((!query || query === raw) && digits && /^[\d\s\-()+]+$/.test(raw)) query = digits;
-      if (looksLikeIdNumber(query) || looksLikePhone(query)) query = query.replace(/\D/g, "");
-      return { tool: "find_customer_by_id", args: { query: query || raw } };
+    if (isOpenCustomerSpeech(raw)) {
+      const query = extractOpenCustomerQuery(raw);
+      if (!query) return { tool: "go_view", args: { view: "customers" } };
+      return { tool: "find_customer_by_id", args: { query } };
     }
     if (/תזכיר לי|(צור|הוסף|תפתח).*(משימה|תזכורת)/.test(raw)) {
       const details = raw.replace(/^.*?(?:משימה|תזכורת|תזכיר לי)\s*/, "") || raw;
@@ -1753,6 +1774,7 @@
       if (tool === "dismiss_validation_modal") return "אין חלון לסגירה.";
       if (tool === "chat_select_user") return "לא מצאתי את איש הקשר.";
       if (tool === "chat_send") return "לא נשלח.";
+      if (tool === "find_customer_by_id" || tool === "open_customer") return "לא מצאתי את התיק.";
       if (data.dispatchFailed) return "לא נשלח למחשב. נסו שוב.";
       return "לא הצלחתי.";
     }
@@ -1778,10 +1800,11 @@
     }
     if (data.needs_confirmation === true) return "פעולת כתיבה ממתינה לאישור. אמרו כן, או לא.";
     if (trim(data.error) === "NEED_INPUT" || data.needs_input === true) return "חסרים פרטים. פתחתי את הסימולטור הקיים.";
-    if (data.ok === false) return "לא הצלחתי לבצע את הבקשה.";
     if (data.instant === true && (tool === "find_customer_by_id" || tool === "open_customer")) {
+      if (data.ok === false) return "לא מצאתי את התיק.";
       return "פותחת את התיק.";
     }
+    if (data.ok === false) return "לא הצלחתי לבצע את הבקשה.";
     if (tool === "search_customer") {
       const n = asHitCards(data.customers).length;
       if (!n) return "לא מצאתי לקוחות.";
@@ -1868,7 +1891,7 @@
 
   function runInstantUi(cmd: Record<string, unknown>): void {
     if (isPhonePage()) void dispatchDesktopCommand(cmd);
-    else executeClientCommand(cmd);
+    else void executeClientCommand(cmd);
   }
 
   async function sleepMs(ms: number): Promise<void> {
@@ -1922,11 +1945,11 @@
           await speak(replyFromTool(cmd.tool, { ok: true, instant: true }));
           return;
         }
-        const execResult = executeClientCommand(instant);
+        const execResult = await executeClientCommand(instant);
         if (cmd.tool === "create_proposal") {
           const extra = extractFillFields(text);
           if (extra && (extra.firstName || extra.lastName || extra.company || extra.product || extra.age != null)) {
-            executeClientCommand({ type: "fill_wizard", fields: extra });
+            await executeClientCommand({ type: "fill_wizard", fields: extra });
           }
         }
         await speak(replyFromTool(cmd.tool, Object.assign({ instant: true }, execResult || { ok: true })));
@@ -1982,7 +2005,7 @@
     try { voice.dc?.send(JSON.stringify(event)); } catch (_e) {}
   }
 
-  function executeClientCommand(cmd: Record<string, unknown> | null | undefined): Record<string, unknown> {
+  async function executeClientCommand(cmd: Record<string, unknown> | null | undefined): Promise<Record<string, unknown>> {
     if (!cmd || typeof cmd !== "object") return { ok: false };
     const type = trim(cmd.type);
     const active = readBridge();
@@ -1992,12 +2015,27 @@
       const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
       if (uuid) {
         lastCustomerId = id;
-        active.openCustomer?.(id);
-      } else {
-        if (query) lastCustomerName = query;
-        void active.openCustomerByQuery?.(query || id);
+        const res = active.openCustomer?.(id) as unknown;
+        if (res && typeof res === "object" && typeof (res as { then?: unknown }).then === "function") {
+          const awaited = await (res as Promise<Record<string, unknown>>);
+          return (awaited && typeof awaited === "object") ? awaited : { ok: true, id };
+        }
+        return (res && typeof res === "object") ? res as Record<string, unknown> : { ok: true, id };
       }
-      return { ok: true };
+      const q = query || id;
+      if (q) lastCustomerName = q;
+      try {
+        const res = await active.openCustomerByQuery?.(q);
+        if (res && typeof res === "object") {
+          const row = res as Record<string, unknown>;
+          if (row.ok !== false && trim(row.id)) lastCustomerId = trim(row.id);
+          if (row.ok !== false && trim(row.name)) lastCustomerName = trim(row.name);
+          return row;
+        }
+        return { ok: false };
+      } catch (_eOpen) {
+        return { ok: false };
+      }
     }
     if (type === "go_view") {
       active.goView?.(trim(cmd.view));
@@ -2122,7 +2160,7 @@
         const id = trim(row.id);
         const cmd = (row.command && typeof row.command === "object") ? row.command as Record<string, unknown> : null;
         try {
-          executeClientCommand(cmd);
+          await executeClientCommand(cmd);
           if (id) await callEngine({ ...engineAuthPayload(), action: "ack", commandId: id });
         } catch (_e) {
           if (id) await callEngine({ ...engineAuthPayload(), action: "ack", commandId: id, error: "EXEC" });
@@ -2165,8 +2203,8 @@
     await applySimWraps(trim(tool), args, data);
     if (data.client_command && typeof data.client_command === "object") {
       const cmd = data.client_command as Record<string, unknown>;
-      if (isPhonePage()) void dispatchDesktopCommand(cmd);
-      else executeClientCommand(cmd);
+      if (isPhonePage()) await dispatchDesktopCommand(cmd);
+      else await executeClientCommand(cmd);
     }
     return data;
   }
@@ -2804,6 +2842,8 @@
     extractSpokenReportDate,
     extractChatComposeText,
     extractChatUserName,
+    extractOpenCustomerQuery,
+    isOpenCustomerSpeech,
     normalizeWizardDate,
     wizardDateToIso,
     hasFillPayload,

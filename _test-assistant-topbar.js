@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-hide-talk-ui-v1";
+const TAG = "20260829-assistant-open-file-fix-v1";
 let failed = 0;
 let passed = 0;
 

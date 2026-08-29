@@ -54258,11 +54258,12 @@ const ClalRiskLifePdf = {
       openCustomer(id){
         try {
           const v = safeTrim(id);
-          if(!v) return;
+          if(!v) return { ok:false };
           const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
           if(!uuid) return window.__GI_ASSISTANT_BRIDGE__.openCustomerByQuery(v);
           CustomersUI.openByIdWithLoader(v);
-        } catch(_e) {}
+          return { ok:true, id: v };
+        } catch(_e) { return { ok:false }; }
       },
       async openCustomerByQuery(query){
         try {
@@ -54272,7 +54273,7 @@ const ClalRiskLifePdf = {
             const rec = findCustomerByIdNumber(q);
             if(rec && customerVisibleToCurrentUser(rec) && rec.id){
               CustomersUI.openByIdWithLoader(rec.id);
-              return { ok:true };
+              return { ok:true, id: safeTrim(rec.id), name: safeTrim(rec.fullName || rec.full_name) };
             }
           }
           const phoneDigits = normalizePhoneValue(q);
@@ -54286,19 +54287,19 @@ const ClalRiskLifePdf = {
             });
             if(byPhone && byPhone.id){
               CustomersUI.openByIdWithLoader(byPhone.id);
-              return { ok:true };
+              return { ok:true, id: safeTrim(byPhone.id), name: safeTrim(byPhone.fullName || byPhone.full_name) };
             }
           }
           const local = findVisibleCustomerBySpokenQuery(q);
           if(local && local.id){
             CustomersUI.openByIdWithLoader(local.id);
-            return { ok:true };
+            return { ok:true, id: safeTrim(local.id), name: safeTrim(local.fullName || local.full_name) };
           }
           const hits = await window.__GI_ASSISTANT_BRIDGE__.searchCustomers(q);
           const id = safeTrim(Array.isArray(hits) && hits[0] ? hits[0].id : "");
           if(id){
             CustomersUI.openByIdWithLoader(id);
-            return { ok:true };
+            return { ok:true, id, name: safeTrim(hits[0]?.full_name || hits[0]?.fullName) };
           }
         } catch(_e) {}
         return { ok:false };
