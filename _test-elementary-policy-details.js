@@ -55,15 +55,15 @@ console.log("\nעיצוב + cache");
 assert(css.includes("customerPolicyRow__detailsBtn"), "CSS לכפתור פרטים");
 assert(css.includes("customerPolicyModal__elemDetails"), "CSS למודל אלמנטרי");
 assert(css.includes("customerPolicyModal__companyRow"), "CSS לשורות חברה");
-assert(indexHtml.includes("app.js?v=20260825-open-company-logo-v1"), "cache bust app.js");
-assert(indexHtml.includes("app.css?v=20260825-open-company-logo-v1"), "cache bust app.css");
-assert(sw.includes("20260825-open-company-logo-v1"), "service-worker version");
+assert(indexHtml.includes("app.js?v=20260829-policy-rows-compact-v1"), "cache bust app.js");
+assert(indexHtml.includes("app.css?v=20260829-policy-rows-compact-v1"), "cache bust app.css");
+assert(sw.includes("20260829-policy-rows-compact-v1"), "service-worker version");
 
 console.log("\nלוגו פתוח בתיק לקוח");
 assert(css.includes("#customerFull .customerPolicyRow__logoWrap .lcCompanyLogo"), "שורת ארנק: לוגו בלי מסגרת");
 assert(read("theme.css").includes(".cfNewPolicyCard__logo .lcCompanyLogo:not(#\\9):not(#\\9)"), "כרטיס פוליסה חדשה: override לוגו");
 assert(read("theme.css").includes("background: transparent !important"), "כרטיס: רקע שקוף ללוגו");
-assert(indexHtml.includes("theme.css?v=20260825-open-company-logo-v1"), "cache bust theme.css");
+assert(indexHtml.includes("theme.css?v=20260829-policy-rows-compact-v1"), "cache bust theme.css");
 
 console.log("\nלוגיקה טהורה — מודל נתונים");
 function safeTrim(v){ return String(v ?? "").trim(); }
