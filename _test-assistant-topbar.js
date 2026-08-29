@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-open-file-fix-v1";
+const TAG = "20260829-assistant-ops-access-v1";
 let failed = 0;
 let passed = 0;
 
@@ -86,13 +86,13 @@ assert(app.includes("GiAssistant?.onLogout"), "onLogout עם היציאה הקי
 assert(!app.includes("create table"), "אין שינוי סכימה ב-app.js");
 
 console.log("\n5) role gate — admin / manager only");
-assert(/canAccessPersonalAssistant\(\)\{\s*return this\.isAdmin\(\) \|\| this\.isManager\(\);/.test(app), "Auth.canAccessPersonalAssistant = admin|manager");
+assert(/canAccessPersonalAssistant\(\)\{\s*return this\.isAdmin\(\) \|\| this\.isManager\(\) \|\| this\.isOps\(\) \|\| this\.isOpsAgent\(\);/.test(app), "Auth.canAccessPersonalAssistant = admin|manager|ops|opsAgent");
 assert(app.includes("canAccessPersonalAssistant(){") && app.includes("__GI_ASSISTANT_BRIDGE__"), "helper ב-Auth");
 assert(app.includes("canAccessPersonalAssistant()") && /canAccessPersonalAssistant\(\)\{\s*try \{ return !!\(Auth\.canAccessPersonalAssistant/.test(app), "גשר חושף canAccessPersonalAssistant");
 assert(asstTs.includes("function canAccessPersonalAssistant"), "מודול קורא canAccessPersonalAssistant");
 assert(asstTs.includes("isLoggedIn() && canAccessPersonalAssistant()"), "syncButtonVisibility לפי הרשאה");
 assert(asstJs.includes("isLoggedIn() && canAccessPersonalAssistant()"), "compiled syncButtonVisibility לפי הרשאה");
-assert(asstTs.includes("העוזר האישי זמין למנהל מערכת ומנהל מאשר בלבד."), "toast אין הרשאה");
+assert(asstTs.includes("מנהלי תפעול"), "toast אין הרשאה כולל תפעול");
 assert(asstTs.includes("if (!canAccessPersonalAssistant())"), "openFromTopBar חוסם בלי הרשאה");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);

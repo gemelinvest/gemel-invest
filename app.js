@@ -16294,9 +16294,9 @@
       return this.isAdmin() || this.isManager();
     },
 
-    /** עוזר אישי בטופ-בר — מנהל מערכת / מנהל מאשר בלבד. */
+    /** עוזר אישי בטופ-בר — מנהל מערכת / מנהל מאשר / מנהל תפעול / נציג תפעול. */
     canAccessPersonalAssistant(){
-      return this.isAdmin() || this.isManager();
+      return this.isAdmin() || this.isManager() || this.isOps() || this.isOpsAgent();
     },
 
     logout(reason = "manual"){

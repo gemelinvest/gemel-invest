@@ -2632,7 +2632,7 @@
       try {
         (window as Window & { showToast?: (opts: Record<string, unknown>) => void }).showToast?.({
           title: "אין הרשאה",
-          text: "העוזר האישי זמין למנהל מערכת ומנהל מאשר בלבד.",
+          text: "העוזר האישי זמין למנהל מערכת, מנהל מאשר ומנהלי תפעול בלבד.",
           variant: "warn",
           durationMs: 4200
         });
