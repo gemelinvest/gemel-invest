@@ -16294,6 +16294,11 @@
       return this.isAdmin() || this.isManager();
     },
 
+    /** עוזר אישי בטופ-בר — מנהל מערכת / מנהל מאשר בלבד. */
+    canAccessPersonalAssistant(){
+      return this.isAdmin() || this.isManager();
+    },
+
     logout(reason = "manual"){
       const cur = this.current ? { ...this.current } : null;
       if(cur){
@@ -54238,6 +54243,9 @@ const ClalRiskLifePdf = {
   try {
     window.__GI_ASSISTANT_BRIDGE__ = {
       getAuth(){ return Auth.current; },
+      canAccessPersonalAssistant(){
+        try { return !!(Auth.canAccessPersonalAssistant?.()); } catch(_e){ return false; }
+      },
       getCurrentAgent(){
         try {
           const fromFace = window.__GI_FACE_BRIDGE__?.getCurrentAgent?.();
