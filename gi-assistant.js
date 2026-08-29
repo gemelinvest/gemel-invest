@@ -266,7 +266,7 @@
       if (/שיחת\s*שיקוף/.test(text)) return "mirrorCall";
       if (/מערכת\s*לידים/.test(text)) return "campaignLeads";
       if (/הלידים\s*שלי/.test(text)) return "campaignMyLeads";
-      if (/ניהול\s*משתמשים/.test(text)) return "users";
+      if (/ניהול\s*משתמשים|משתמשים/.test(text)) return "users";
       if (/הגדרות/.test(text)) return "settings";
       if (/הצוות|הצוות שלי/.test(text)) return "myTeam";
       if (/דוח|דוחות/.test(text)) return "reportsHub";
@@ -285,10 +285,11 @@
       if (/נסיעות/.test(text)) return "btnTravelInsuranceAbroad";
       if (/רכב\s*בקליק|ביטוח\s*רכב/.test(text)) return "btnCarInsuranceClick";
       if (/מרכז\s*הסימול/.test(text)) return "btnSimulatorsCenter";
+      if (/הקמת\s*הצעה|הצעה\s*חדשה/.test(text)) return "btnNewCustomerWizard";
       return "";
     }
     function isOpenNavSpeech(text) {
-      return /(?:עבור|תעבור|עברי|תעברי|לך|לכי|תיכנסי?|היכנסי?|כנסי|פתח|תפתח|תפתחי|תפתחו)/.test(text);
+      return /(?:עבור|תעבור|עברי|תעברי|לך|לכי|תיכנסי?|היכנסי?|כנסי|פתח|תפתח|תפתחי|תפתחו|תצפתחי)/.test(text);
     }
     function extractFillFields(text) {
       const raw = trim(text).replace(/[!,?״"']/g, " ").replace(/\s+/g, " ");

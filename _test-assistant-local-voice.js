@@ -98,6 +98,7 @@ assert(api.parseLocalCommand("משימות").tool === "get_tasks", "משימות
 assert(api.parseLocalCommand("עבור ללקוחות").args.view === "customers", "עבור ללקוחות");
 assert(api.parseLocalCommand("תפתחי את אנשי קשר").tool === "go_view", "תפתחי אנשי קשר");
 assert(api.parseLocalCommand("תפתחי את אנשי קשר").args.view === "contacts", "אנשי קשר view");
+assert(api.parseLocalCommand("תצפתחי את אנשי קשר").args.view === "contacts", "spoken typo תצפתחי still opens contacts");
 assert(api.parseLocalCommand("תיכנסי לצאט").tool === "click_topbar", "תיכנסי לצאט");
 assert(api.parseLocalCommand("תיכנסי לצאט").args.id === "giChatFab", "chat clicks existing fab");
 assert(api.parseLocalCommand("מחיר מנורה ריסק").tool === "get_insurance_price", "מחיר → quote wrap");
