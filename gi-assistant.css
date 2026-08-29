@@ -356,6 +356,15 @@
   cursor: pointer;
 }
 
+a.giAsst__btn{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  box-sizing: border-box;
+  padding: 0 14px;
+}
+
 .giAsst__btn:disabled{
   opacity: .55;
   cursor: default;

@@ -9,7 +9,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-phone-v1";
+const TAG = "20260829-assistant-reopen-v1";
 let failed = 0;
 let passed = 0;
 
@@ -132,6 +132,14 @@ if(api && typeof api.phoneEntryUrl === "function"){
   assert(url.searchParams.get("p") === "tok_abc", "QR param is the public token");
   assert([...url.searchParams.keys()].join(",") === "p", "QR has no other query keys");
 }
+assert(!!api && typeof api.phoneHomeUrl === "function", "compiled API exposes phoneHomeUrl");
+if(api && typeof api.phoneHomeUrl === "function"){
+  const home = new URL(api.phoneHomeUrl());
+  assert(home.pathname.endsWith("/assistant.html"), "return page is assistant.html");
+  assert([...home.searchParams.keys()].length === 0, "return page has no token");
+}
+assert(asstTs.includes("stripPhoneTokenFromUrl") && asstTs.includes("renderPhoneReturnBody"), "used QR is stripped; desktop shows return page");
+assert(edge.includes("freshPhone") && asstTs.includes("קשר טלפון נוסף"), "can issue a new phone QR after the first pair");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);
