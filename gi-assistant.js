@@ -5,13 +5,24 @@
     const PAIRING_STORAGE_KEY = "gi_assistant_device_paired_v1";
     const DEVICE_STORAGE_KEY = "gi_assistant_device_v1";
     const ROOT_ID = "giAsstRoot";
-    const FN_PATH = "/functions/v1/gi-assistant-pairing";
+    const FN_PAIRING_PATH = "/functions/v1/gi-assistant-pairing";
+    const FN_REALTIME_PATH = "/functions/v1/gi-assistant-realtime";
+    const OPENAI_CALLS_URL = "https://api.openai.com/v1/realtime/calls";
     const FALLBACK_SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
     const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
     const POLL_MS = 1600;
     let bridge = {};
     let bound = false;
     let pairing = null;
+    let voice = {
+      state: "idle",
+      sessionId: "",
+      pc: null,
+      dc: null,
+      stream: null,
+      audio: null,
+      error: ""
+    };
     function trim(value) {
       return String(value == null ? "" : value).trim();
     }
@@ -133,9 +144,9 @@
       link.textContent = "\u05E4\u05EA\u05D9\u05D7\u05D4 \u05D1\u05D8\u05DC\u05E4\u05D5\u05DF";
       host.appendChild(link);
     }
-    async function callPairing(payload) {
+    async function callEdge(fnPath, payload) {
       const cfg = supabaseConfig();
-      const res = await fetch(cfg.url.replace(/\/+$/, "") + FN_PATH, {
+      const res = await fetch(cfg.url.replace(/\/+$/, "") + fnPath, {
         method: "POST",
         cache: "no-store",
         headers: {
@@ -158,12 +169,29 @@
       }
       return data;
     }
+    function callPairing(payload) {
+      return callEdge(FN_PAIRING_PATH, payload);
+    }
+    function callRealtime(payload) {
+      return callEdge(FN_REALTIME_PATH, payload);
+    }
     function pairingErrorText(code) {
       if (code === "AUTH_FAILED" || code === "MISSING_PIN") return "\u05E7\u05D5\u05D3 \u05D4\u05DB\u05E0\u05D9\u05E1\u05D4 \u05E9\u05D2\u05D5\u05D9.";
       if (code === "TOKEN_INVALID") return "\u05E7\u05D5\u05D3 \u05D4\u05E7\u05D9\u05E9\u05D5\u05E8 \u05DC\u05D0 \u05EA\u05E7\u05E3 \u05D0\u05D5 \u05E9\u05DB\u05D1\u05E8 \u05E0\u05D5\u05E6\u05DC.";
       if (code === "AGENT_MISMATCH") return "\u05D4\u05DE\u05E9\u05EA\u05DE\u05E9 \u05E9\u05D6\u05D5\u05D4\u05D4 \u05D0\u05D9\u05E0\u05D5 \u05DE\u05D9 \u05E9\u05D4\u05EA\u05D7\u05D9\u05DC \u05D0\u05EA \u05D4\u05E7\u05D9\u05E9\u05D5\u05E8.";
       if (code === "FAILED_TO_FETCH" || code === "TypeError") return "\u05D0\u05D9\u05DF \u05D7\u05D9\u05D1\u05D5\u05E8 \u05DC\u05E9\u05E8\u05EA \u05D4\u05E7\u05D9\u05E9\u05D5\u05E8. \u05D4\u05E8\u05D9\u05E6\u05D5 \u05D0\u05EA supabase-assistant-pairing.sql \u05D5\u05E4\u05E8\u05E1\u05D5 \u05D0\u05EA \u05D4\u05E4\u05D5\u05E0\u05E7\u05E6\u05D9\u05D4.";
+      if (code === "MISSING_OPENAI_KEY") return "\u05D7\u05E1\u05E8 \u05DE\u05E4\u05EA\u05D7 OpenAI \u05D1\u05E9\u05E8\u05EA. \u05D9\u05E9 \u05DC\u05D4\u05D2\u05D3\u05D9\u05E8 \u05D0\u05EA \u05D4\u05E1\u05D5\u05D3 \u05D1-Edge secrets.";
+      if (code === "OPENAI_ERROR") return "\u05E9\u05E8\u05EA \u05D4\u05E7\u05D5\u05DC \u05DC\u05D0 \u05D6\u05DE\u05D9\u05DF \u05DB\u05E8\u05D2\u05E2. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1 \u05D1\u05E2\u05D5\u05D3 \u05E8\u05D2\u05E2.";
+      if (code === "MIC_DENIED" || code === "NotAllowedError") return "\u05E0\u05D3\u05E8\u05E9\u05EA \u05D4\u05E8\u05E9\u05D0\u05EA \u05DE\u05D9\u05E7\u05E8\u05D5\u05E4\u05D5\u05DF \u05DB\u05D3\u05D9 \u05DC\u05D3\u05D1\u05E8 \u05E2\u05DD \u05D4\u05E2\u05D5\u05D6\u05E8.";
+      if (code === "MIC_MISSING" || code === "NotFoundError") return "\u05DC\u05D0 \u05E0\u05DE\u05E6\u05D0 \u05DE\u05D9\u05E7\u05E8\u05D5\u05E4\u05D5\u05DF \u05D1\u05DE\u05DB\u05E9\u05D9\u05E8.";
       return "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D4\u05E9\u05DC\u05D9\u05DD \u05D0\u05EA \u05D4\u05E7\u05D9\u05E9\u05D5\u05E8. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1.";
+    }
+    function voiceStateLabel(state) {
+      if (state === "connecting") return "\u05DE\u05EA\u05D7\u05D1\u05E8\u2026";
+      if (state === "listening") return "\u05DE\u05E7\u05E9\u05D9\u05D1";
+      if (state === "speaking") return "\u05D4\u05E2\u05D5\u05D6\u05E8 \u05DE\u05D3\u05D1\u05E8";
+      if (state === "error") return voice.error || "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D4\u05EA\u05D7\u05D1\u05E8 \u05DC\u05E7\u05D5\u05DC.";
+      return "\u05D3\u05D1\u05E8 \u05E2\u05DD \u05D4\u05DE\u05E2\u05E8\u05DB\u05EA";
     }
     function stopPairingPoll() {
       if (pairing == null ? void 0 : pairing.pollTimer) {
@@ -227,6 +255,7 @@
     function closeOverlay() {
       var _a;
       void cancelPairing();
+      void stopVoice();
       const overlay = $("giAsstOverlay");
       if (!overlay) return;
       overlay.classList.add("is-hidden");
@@ -250,18 +279,211 @@
       const box = $("giAsstError");
       if (box) box.textContent = msg || "";
     }
+    function paintVoiceState() {
+      const root = document.querySelector(".giAsst__voice");
+      if (!root) return;
+      root.setAttribute("data-gi-asst-voice", voice.state);
+      root.classList.remove("is-idle", "is-connecting", "is-listening", "is-speaking", "is-error");
+      root.classList.add("is-" + voice.state);
+      const status = root.querySelector(".giAsst__voiceStatus");
+      if (status) {
+        status.textContent = voiceStateLabel(voice.state);
+        status.classList.toggle("is-err", voice.state === "error");
+      }
+      const startBtn = root.querySelector("#giAsstVoiceStart");
+      const stopBtn = root.querySelector("#giAsstVoiceStop");
+      const busy = voice.state === "connecting" || voice.state === "listening" || voice.state === "speaking";
+      if (startBtn) {
+        startBtn.hidden = busy;
+        startBtn.disabled = voice.state === "connecting";
+      }
+      if (stopBtn) {
+        stopBtn.hidden = !busy;
+        stopBtn.disabled = voice.state === "connecting";
+      }
+      const mic = root.querySelector(".giAsst__micBtn");
+      if (mic) {
+        mic.classList.toggle("is-listening", voice.state === "listening");
+        mic.classList.toggle("is-speaking", voice.state === "speaking");
+        mic.classList.toggle("is-connecting", voice.state === "connecting");
+      }
+    }
+    function setVoiceState(next, errorText) {
+      voice.state = next;
+      voice.error = next === "error" ? errorText || voice.error || "" : "";
+      paintVoiceState();
+    }
+    function voiceMarkup(includePin) {
+      return `
+      <div class="giAsst__voice is-idle" data-gi-asst-voice="idle">
+        <button class="giAsst__micBtn" id="giAsstMicBtn" type="button" aria-label="\u05D4\u05EA\u05D7\u05DC \u05E9\u05D9\u05D7\u05D4">\u{1F399}\uFE0F</button>
+        <p class="giAsst__lead giAsst__voiceStatus" id="giAsstVoiceStatus">\u05D3\u05D1\u05E8 \u05E2\u05DD \u05D4\u05DE\u05E2\u05E8\u05DB\u05EA</p>
+        ${includePin ? `
+          <label class="giAsst__label" for="giAsstVoicePin">\u05E7\u05D5\u05D3 \u05D4\u05DB\u05E0\u05D9\u05E1\u05D4 \u05DC\u05D7\u05E9\u05D1\u05D5\u05DF</label>
+          <input class="giAsst__input" id="giAsstVoicePin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="12" />
+        ` : ""}
+        <div class="giAsst__voiceActions">
+          <button class="giAsst__btn" id="giAsstVoiceStart" type="button">\u05D4\u05EA\u05D7\u05DC \u05E9\u05D9\u05D7\u05D4</button>
+          <button class="giAsst__btn giAsst__btn--ghost" id="giAsstVoiceStop" type="button" hidden>\u05E1\u05D9\u05D9\u05DD \u05E9\u05D9\u05D7\u05D4</button>
+        </div>
+        <p class="giAsst__hint">\u05D4\u05DE\u05E4\u05EA\u05D7 \u05D4\u05E7\u05D1\u05D5\u05E2 \u05E9\u05DC OpenAI \u05E0\u05E9\u05D0\u05E8 \u05D1\u05E9\u05E8\u05EA. \u05D4\u05D3\u05E4\u05D3\u05E4\u05DF \u05DE\u05E7\u05D1\u05DC \u05E8\u05E7 \u05D8\u05D5\u05E7\u05DF \u05D6\u05DE\u05E0\u05D9.</p>
+      </div>
+    `;
+    }
+    function bindVoiceControls(root) {
+      var _a, _b, _c;
+      (_a = root.querySelector("#giAsstVoiceStart")) == null ? void 0 : _a.addEventListener("click", () => {
+        void startVoice();
+      });
+      (_b = root.querySelector("#giAsstVoiceStop")) == null ? void 0 : _b.addEventListener("click", () => {
+        void stopVoice();
+      });
+      (_c = root.querySelector("#giAsstMicBtn")) == null ? void 0 : _c.addEventListener("click", () => {
+        if (voice.state === "idle" || voice.state === "error") void startVoice();
+        else void stopVoice();
+      });
+      paintVoiceState();
+    }
+    function handleRealtimeEvent(raw) {
+      let ev = {};
+      try {
+        ev = JSON.parse(raw);
+      } catch (_e) {
+        return;
+      }
+      const type = trim(ev.type);
+      if (type === "session.created" || type === "input_audio_buffer.speech_stopped" || type === "response.done") {
+        if (voice.state !== "idle") setVoiceState("listening");
+        return;
+      }
+      if (type === "input_audio_buffer.speech_started") {
+        setVoiceState("listening");
+        return;
+      }
+      if (type === "response.created" || type === "response.output_audio.delta" || type === "response.audio.delta" || type === "output_audio_buffer.started") {
+        setVoiceState("speaking");
+        return;
+      }
+      if (type === "error") {
+        setVoiceState("error", "\u05D4\u05E9\u05D9\u05D7\u05D4 \u05E0\u05E7\u05D8\u05E2\u05D4. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1.");
+      }
+    }
+    async function mintVoiceToken() {
+      var _a;
+      const device = readDevice();
+      const auth = getAuth();
+      const payload = {
+        action: "token",
+        source: device && trim(device.deviceSecret) ? "phone" : "desktop"
+      };
+      if (device && trim(device.devicePublicId) && trim(device.deviceSecret)) {
+        payload.devicePublicId = trim(device.devicePublicId);
+        payload.deviceSecret = trim(device.deviceSecret);
+      } else {
+        payload.agentId = trim(auth == null ? void 0 : auth.id);
+        payload.agentName = trim(auth == null ? void 0 : auth.name);
+        payload.username = trim(auth == null ? void 0 : auth.username);
+        payload.pin = trim((_a = $("giAsstVoicePin")) == null ? void 0 : _a.value);
+        if (!trim(payload.pin)) throw Object.assign(new Error("MISSING_PIN"), { code: "MISSING_PIN" });
+      }
+      const data = await callRealtime(payload);
+      const clientSecret = trim(data.clientSecret);
+      if (!clientSecret || clientSecret.indexOf("sk-") === 0) throw new Error("OPENAI_ERROR");
+      return { clientSecret, sessionId: trim(data.sessionId) };
+    }
+    async function connectWebRtc(clientSecret) {
+      const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+      voice.pc = pc;
+      const audio = document.createElement("audio");
+      audio.autoplay = true;
+      audio.setAttribute("playsinline", "true");
+      voice.audio = audio;
+      pc.ontrack = (ev) => {
+        audio.srcObject = ev.streams[0];
+        void audio.play().catch(() => {
+        });
+      };
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      voice.stream = stream;
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+      const dc = pc.createDataChannel("oai-events");
+      voice.dc = dc;
+      dc.addEventListener("message", (ev) => handleRealtimeEvent(String(ev.data || "")));
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      const sdpResponse = await fetch(OPENAI_CALLS_URL, {
+        method: "POST",
+        body: offer.sdp || "",
+        headers: {
+          Authorization: "Bearer " + clientSecret,
+          "Content-Type": "application/sdp"
+        }
+      });
+      if (!sdpResponse.ok) throw new Error("OPENAI_ERROR");
+      const answer = await sdpResponse.text();
+      await pc.setRemoteDescription({ type: "answer", sdp: answer });
+    }
+    async function startVoice() {
+      if (voice.state === "connecting" || voice.state === "listening" || voice.state === "speaking") return;
+      setVoiceState("connecting");
+      try {
+        const minted = await mintVoiceToken();
+        voice.sessionId = minted.sessionId;
+        await connectWebRtc(minted.clientSecret);
+        setVoiceState("listening");
+      } catch (err) {
+        const code = trim((err == null ? void 0 : err.code) || (err == null ? void 0 : err.name) || (err == null ? void 0 : err.message));
+        await stopVoice(false);
+        const mapped = pairingErrorText(code);
+        const text = code === "FAILED_TO_FETCH" || code === "TypeError" ? "\u05D0\u05D9\u05DF \u05D7\u05D9\u05D1\u05D5\u05E8 \u05DC\u05E9\u05E8\u05EA \u05D4\u05E7\u05D5\u05DC. \u05D4\u05E8\u05D9\u05E6\u05D5 \u05D0\u05EA supabase-assistant-sessions.sql, \u05E4\u05E8\u05E1\u05D5 \u05D0\u05EA gi-assistant-realtime, \u05D5\u05D4\u05D2\u05D3\u05D9\u05E8\u05D5 \u05D0\u05EA \u05E1\u05D5\u05D3 OpenAI \u05D1\u05E9\u05E8\u05EA." : mapped === "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D4\u05E9\u05DC\u05D9\u05DD \u05D0\u05EA \u05D4\u05E7\u05D9\u05E9\u05D5\u05E8. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1." ? "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D4\u05EA\u05D7\u05D9\u05DC \u05D0\u05EA \u05D4\u05E9\u05D9\u05D7\u05D4. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1." : mapped;
+        setVoiceState("error", text);
+      }
+    }
+    async function stopVoice(updateUi = true) {
+      var _a, _b, _c, _d;
+      const sessionId = trim(voice.sessionId);
+      try {
+        (_a = voice.dc) == null ? void 0 : _a.close();
+      } catch (_e) {
+      }
+      try {
+        (_b = voice.pc) == null ? void 0 : _b.getSenders().forEach((sender) => {
+          var _a2;
+          return (_a2 = sender.track) == null ? void 0 : _a2.stop();
+        });
+      } catch (_e2) {
+      }
+      try {
+        (_c = voice.pc) == null ? void 0 : _c.close();
+      } catch (_e3) {
+      }
+      try {
+        (_d = voice.stream) == null ? void 0 : _d.getTracks().forEach((track) => track.stop());
+      } catch (_e4) {
+      }
+      voice.dc = null;
+      voice.pc = null;
+      voice.stream = null;
+      voice.audio = null;
+      voice.sessionId = "";
+      if (sessionId) {
+        try {
+          await callRealtime({ action: "end", sessionId });
+        } catch (_e5) {
+        }
+      }
+      if (updateUi) setVoiceState("idle");
+    }
     function renderAssistantBody() {
+      var _a;
       const body = $("giAsstBody");
       const title = $("giAsstTitle");
       if (title) title.textContent = "\u05D4\u05E2\u05D5\u05D6\u05E8 \u05D4\u05D0\u05D9\u05E9\u05D9 \u05E9\u05DC\u05D9";
       if (!body) return;
-      body.innerHTML = `
-      <div class="giAsst__idle">
-        <div class="giAsst__mic" aria-hidden="true">\u{1F399}\uFE0F</div>
-        <p class="giAsst__lead">\u05D3\u05D1\u05E8 \u05E2\u05DD \u05D4\u05DE\u05E2\u05E8\u05DB\u05EA</p>
-        <p class="giAsst__hint">\u05D4\u05E9\u05D9\u05D7\u05D4 \u05D4\u05E7\u05D5\u05DC\u05D9\u05EA \u05EA\u05EA\u05D5\u05D5\u05E1\u05E3 \u05D1\u05E9\u05DC\u05D1 \u05D4\u05D1\u05D0. \u05D4\u05DE\u05DB\u05E9\u05D9\u05E8 \u05DB\u05D1\u05E8 \u05DE\u05E7\u05D5\u05E9\u05E8 \u05DC\u05D7\u05E9\u05D1\u05D5\u05DF.</p>
-      </div>
-    `;
+      void stopVoice();
+      const needPin = !(readDevice() && trim((_a = readDevice()) == null ? void 0 : _a.deviceSecret));
+      body.innerHTML = voiceMarkup(needPin);
+      bindVoiceControls(body);
     }
     function remainLabel(expiresAt) {
       const ms = Date.parse(expiresAt) - Date.now();
@@ -422,17 +644,15 @@
     function renderPhoneAssistant() {
       const root = $("giAsstPhone");
       if (!root) return;
+      void stopVoice();
       root.innerHTML = `
       <header class="giAsstPhone__head">
         <div class="giAsstPhone__kicker">GEMEL INVEST</div>
         <h1 class="giAsstPhone__title">\u05D4\u05E2\u05D5\u05D6\u05E8 \u05D4\u05D0\u05D9\u05E9\u05D9 \u05E9\u05DC\u05D9</h1>
       </header>
-      <div class="giAsst__idle">
-        <div class="giAsst__mic" aria-hidden="true">\u{1F399}\uFE0F</div>
-        <p class="giAsst__lead">\u05D3\u05D1\u05E8 \u05E2\u05DD \u05D4\u05DE\u05E2\u05E8\u05DB\u05EA</p>
-        <p class="giAsst__hint">\u05D4\u05DE\u05DB\u05E9\u05D9\u05E8 \u05DE\u05E7\u05D5\u05E9\u05E8. \u05D4\u05E9\u05D9\u05D7\u05D4 \u05D4\u05E7\u05D5\u05DC\u05D9\u05EA \u05EA\u05EA\u05D5\u05D5\u05E1\u05E3 \u05D1\u05E9\u05DC\u05D1 \u05D4\u05D1\u05D0.</p>
-      </div>
+      ${voiceMarkup(false)}
     `;
+      bindVoiceControls(root);
     }
     function renderPhoneLogin(publicToken) {
       var _a;
@@ -543,6 +763,7 @@
     }
     function onLogout() {
       void cancelPairing();
+      void stopVoice();
       closeOverlay();
       syncButtonVisibility();
     }
@@ -552,7 +773,12 @@
       onLogout,
       hasActiveDevicePairing,
       openFromTopBar,
-      phoneEntryUrl
+      phoneEntryUrl,
+      startVoice,
+      stopVoice,
+      getVoiceState() {
+        return voice.state;
+      }
     };
     try {
       window.GiAssistant = api;
