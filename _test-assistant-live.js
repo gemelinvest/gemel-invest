@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-chat-reports-v1";
+const TAG = "20260829-assistant-hide-talk-ui-v1";
 let failed = 0;
 let passed = 0;
 
@@ -81,7 +81,7 @@ assert(app.includes("ReminderUI.upsertReminder") && app.includes("ReminderUI.mar
 assert(app.includes("GiSimulatorQuotes") && edgeTools.includes("quote_simulator"), "9. price from existing compute");
 assert(app.includes("Wizard.openNewPurchaseForCustomer") && edgeTools.includes("open_wizard"), "10. proposal opens wizard");
 assert(asstTs.includes("dispatchDesktopCommand") && edgeEngine.includes("gi_assistant_commands"), "11. phone command reaches desktop");
-assert(asstTs.includes("parseLocalCommand") && asstTs.includes("giAsstTalkForm") && edgeEngine.includes("open_session") && !asstTs.includes("OPENAI_API_KEY"), "12. local browser voice + typed fallback, no vendor key in client");
+assert(asstTs.includes("parseLocalCommand") && !asstTs.includes("giAsstTalkForm") && edgeEngine.includes("open_session") && !asstTs.includes("OPENAI_API_KEY"), "12. local browser voice, no typed fallback bar, no vendor key in client");
 assert(asstTs.includes("COMMAND_POLL_MS = 120") && asstTs.includes("commandFromLocalTool") && asstTs.includes("runInstantUi"), "phone UI commands run immediately");
 assert(edgeEngine.includes("src.query") && app.includes("openCustomerByQuery"), "open customer by spoken query wraps existing search");
 assert(edgeTools.includes("wizard_next") && app.includes("Wizard.nextStep") && asstTs.includes("שם(?:פ)?\\s*משפחה"), "wizard next + labeled name fields");

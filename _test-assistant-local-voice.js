@@ -9,7 +9,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-chat-reports-v1";
+const TAG = "20260829-assistant-hide-talk-ui-v1";
 let failed = 0;
 let passed = 0;
 
@@ -46,7 +46,8 @@ assert(!theme.includes("giAsst__") && !css.includes("giAsst__hits"), "global CSS
 console.log("\n2) no vendor key required to start voice");
 assert(asstTs.includes("startLocalListening") && asstTs.includes("parseLocalCommand"), "local STT + router");
 assert(asstTs.includes("speechSynthesis"), "local TTS");
-assert(asstTs.includes("giAsstTalkForm") && asstTs.includes("submitTalkText"), "phone can type if speech is silent");
+assert(!asstTs.includes("giAsstTalkForm") && !asstTs.includes("אם אין תגובה לקול"), "no typed fallback search bar in assistant UI");
+assert(!asstTs.includes("הקול מקומי בדפדפן"), "no local-voice footer explanation");
 assert(asstTs.includes("setHeardStatus"), "shows heard text");
 assert(!/throw Object.assign\(new Error\(\"SPEECH_UNSUPPORTED\"\)/.test(asstTs.split("async function startVoice")[1].split("async function stopVoice")[0]), "startVoice works without SpeechRecognition");
 assert(!/mintVoiceToken\(\)/.test(asstTs.split("async function startVoice")[1].split("async function stopVoice")[0]), "startVoice does not mint OpenAI");

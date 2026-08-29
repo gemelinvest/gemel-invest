@@ -932,13 +932,6 @@
           <button class="giAsst__btn giAsst__btn--ghost" id="giAsstVoiceStop" type="button" hidden>\u05E1\u05D9\u05D9\u05DD \u05E9\u05D9\u05D7\u05D4</button>
         </div>
         <p class="giAsst__heard" id="giAsstHeard" aria-live="polite"></p>
-        <form class="giAsst__talkForm" id="giAsstTalkForm">
-          <label class="giAsst__label" for="giAsstTalkText">\u05D0\u05DD \u05D0\u05D9\u05DF \u05EA\u05D2\u05D5\u05D1\u05D4 \u05DC\u05E7\u05D5\u05DC \u2014 \u05DB\u05EA\u05D1\u05D5 \u05DB\u05D0\u05DF</label>
-          <div class="giAsst__talkRow">
-            <input class="giAsst__input" id="giAsstTalkText" type="text" enterkeyhint="send" autocomplete="off" placeholder="${isPhonePage() ? "\u05DC\u05DE\u05E9\u05DC: \u05DE\u05E1\u05E4\u05E8 \u05D1\u05D9\u05EA 12 / \u05DC\u05D0 \u05DE\u05E2\u05E9\u05DF / \u05EA\u05D7\u05D6\u05D5\u05E8 \u05DC\u05DE\u05D9\u05DC\u05D5\u05D9" : "\u05DC\u05DE\u05E9\u05DC: \u05D7\u05E4\u05E9 \u05D3\u05D5\u05D3 \u05DC\u05D5\u05D9"}" />
-            <button class="giAsst__btn giAsst__talkSend" id="giAsstTalkSend" type="submit">\u05E9\u05DC\u05D7</button>
-          </div>
-        </form>
         <div class="giAsst__confirm is-hidden" id="giAsstConfirm" hidden>
           <p class="giAsst__confirmText" id="giAsstConfirmText">\u05DE\u05DE\u05EA\u05D9\u05DF \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8 \u05E4\u05E2\u05D5\u05DC\u05D4.</p>
           <div class="giAsst__confirmActions">
@@ -948,7 +941,6 @@
         </div>
         <ol class="giAsst__timeline" id="giAsstTimeline" aria-live="polite"></ol>
         <div class="giAsst__hits" id="giAsstHits" hidden></div>
-        <p class="giAsst__hint">\u05D4\u05E7\u05D5\u05DC \u05DE\u05E7\u05D5\u05DE\u05D9 \u05D1\u05D3\u05E4\u05D3\u05E4\u05DF \u2014 \u05D1\u05DC\u05D9 \u05EA\u05E9\u05DC\u05D5\u05DD \u05DC\u05E1\u05E4\u05E7 \u05D7\u05D9\u05E6\u05D5\u05E0\u05D9. \u05DB\u05EA\u05D9\u05D1\u05D4 \u05D3\u05D5\u05E8\u05E9\u05EA \u05D0\u05D9\u05E9\u05D5\u05E8. \xAB\u05DB\u05DF\xBB \u05D7\u05DC \u05E8\u05E7 \u05D0\u05DD \u05D9\u05E9 \u05E4\u05E2\u05D5\u05DC\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4.</p>
         ${isPhonePage() ? "" : `<button class="giAsst__btn giAsst__btn--ghost" id="giAsstOpenPhone" type="button">\u05E4\u05EA\u05D7 \u05E9\u05D5\u05D1 \u05D1\u05D8\u05DC\u05E4\u05D5\u05DF</button>`}
       </div>
     `;
@@ -1147,7 +1139,7 @@
       }
     }
     function bindVoiceControls(root) {
-      var _a, _b, _c, _d, _e, _f, _g;
+      var _a, _b, _c, _d, _e, _f;
       (_a = root.querySelector("#giAsstVoiceStart")) == null ? void 0 : _a.addEventListener("click", () => {
         void startVoice();
       });
@@ -1164,11 +1156,7 @@
       (_e = root.querySelector("#giAsstConfirmNo")) == null ? void 0 : _e.addEventListener("click", () => {
         void cancelPending();
       });
-      (_f = $("giAsstTalkForm")) == null ? void 0 : _f.addEventListener("submit", (ev) => {
-        ev.preventDefault();
-        void submitTalkText();
-      });
-      (_g = root.querySelector("#giAsstOpenPhone")) == null ? void 0 : _g.addEventListener("click", () => {
+      (_f = root.querySelector("#giAsstOpenPhone")) == null ? void 0 : _f.addEventListener("click", () => {
         renderPhoneReturnBody();
       });
       bindHits(root);
@@ -1715,15 +1703,6 @@
     }
     async function sleepMs(ms) {
       await new Promise((resolve) => window.setTimeout(resolve, ms));
-    }
-    async function submitTalkText() {
-      const input = $("giAsstTalkText");
-      const text = trim(input == null ? void 0 : input.value);
-      if (!text) return;
-      if (input) input.value = "";
-      if (voice.state === "idle" || voice.state === "error") void startVoice();
-      setHeardStatus(text);
-      await handleLocalUtterance(text);
     }
     async function handleLocalUtterance(text) {
       var _a;

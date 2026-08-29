@@ -9,7 +9,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-chat-reports-v1";
+const TAG = "20260829-assistant-hide-talk-ui-v1";
 let failed = 0;
 let passed = 0;
 
@@ -139,7 +139,8 @@ assert(asstTs.includes("bindPhoneVisibility") && asstTs.includes("visibilitychan
 assert(asstTs.includes("lastUtteranceKey") && asstTs.includes("1200"), "phone dedupes duplicate finals");
 assert(asstTs.includes("dispatchFailed") && asstTs.includes("return true"), "dispatch returns success to caller");
 assert(asstTs.includes("attempt < 3") && asstTs.includes('action: "dispatch"'), "phone dispatch retries kept");
-assert(asstCss.includes("giAsstPhonePage .giAsst__talkForm"), "phone sticky typed fallback");
+assert(!asstTs.includes("giAsstTalkForm"), "typed talk form removed from assistant UI");
+assert(!asstTs.includes("הקול מקומי בדפדפן"), "footer voice explanation removed");
 assert(phone.parseLocalCommand("מספר בית 12").tool === "fill_wizard", "phone fill house still works");
 assert(phone.commandFromLocalTool("fill_wizard", { houseNumber: "12" }).type === "fill_wizard", "phone maps fill to bus");
 assert(phone.commandFromLocalTool("dismiss_validation_modal", {}).type === "dismiss_validation_modal", "phone maps dismiss to bus");
