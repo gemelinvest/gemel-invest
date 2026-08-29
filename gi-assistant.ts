@@ -116,6 +116,8 @@
   let timelineItems: TimelineItem[] = [];
   let lastIntent = "";
   let commandPoll = 0;
+  let utteranceBusy = false;
+  let lastHeard = "";
 
   function trim(value: unknown): string {
     return String(value == null ? "" : value).trim();
@@ -565,6 +567,14 @@
           <button class="giAsst__btn" id="giAsstVoiceStart" type="button">התחל שיחה</button>
           <button class="giAsst__btn giAsst__btn--ghost" id="giAsstVoiceStop" type="button" hidden>סיים שיחה</button>
         </div>
+        <p class="giAsst__heard" id="giAsstHeard" aria-live="polite"></p>
+        <form class="giAsst__talkForm" id="giAsstTalkForm">
+          <label class="giAsst__label" for="giAsstTalkText">אם אין תגובה לקול — כתבו כאן</label>
+          <div class="giAsst__talkRow">
+            <input class="giAsst__input" id="giAsstTalkText" type="text" enterkeyhint="send" autocomplete="off" placeholder="למשל: חפש דוד לוי" />
+            <button class="giAsst__btn giAsst__talkSend" id="giAsstTalkSend" type="submit">שלח</button>
+          </div>
+        </form>
         <div class="giAsst__confirm is-hidden" id="giAsstConfirm" hidden>
           <p class="giAsst__confirmText" id="giAsstConfirmText">ממתין לאישור פעולה.</p>
           <div class="giAsst__confirmActions">
@@ -793,6 +803,10 @@
     });
     root.querySelector("#giAsstConfirmYes")?.addEventListener("click", () => { void confirmPending(); });
     root.querySelector("#giAsstConfirmNo")?.addEventListener("click", () => { void cancelPending(); });
+    ($("giAsstTalkForm") as HTMLFormElement | null)?.addEventListener("submit", (ev) => {
+      ev.preventDefault();
+      void submitTalkText();
+    });
     bindHits(root);
     paintVoiceState();
     paintConfirm();
@@ -877,21 +891,48 @@
     return null;
   }
 
+  function isMobileVoice(): boolean {
+    if (isPhonePage()) return true;
+    try { return /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent || ""); } catch (_e) { return false; }
+  }
+
+  function setHeardStatus(text: string): void {
+    lastHeard = redactSafe(text);
+    const el = $("giAsstHeard");
+    if (el) el.textContent = lastHeard ? ("שמעתי: " + lastHeard) : "";
+  }
+
+  function unlockSpeech(): void {
+    try {
+      const utter = new SpeechSynthesisUtterance(" ");
+      utter.volume = 0;
+      window.speechSynthesis?.speak(utter);
+      window.speechSynthesis?.cancel();
+    } catch (_e) {}
+  }
+
   function startLocalListening(): void {
     const Ctor = speechRecognitionCtor();
-    if (!Ctor) throw Object.assign(new Error("SPEECH_UNSUPPORTED"), { code: "SPEECH_UNSUPPORTED" });
+    if (!Ctor) return;
     const rec = new Ctor();
     rec.lang = "he-IL";
-    rec.continuous = true;
-    rec.interimResults = false;
+    rec.continuous = !isMobileVoice();
+    rec.interimResults = true;
     rec.onresult = (ev) => {
       const results = ev.results;
+      let finalText = "";
+      let interim = "";
       for (let i = ev.resultIndex; i < results.length; i += 1) {
         const row = results[i];
-        if (row && row.isFinal) {
-          const spoken = trim(row[0]?.transcript);
-          if (spoken) void handleLocalUtterance(spoken);
-        }
+        const spoken = trim(row && row[0] ? row[0].transcript : "");
+        if (!spoken) continue;
+        if (row.isFinal) finalText = trim(finalText + " " + spoken);
+        else interim = spoken;
+      }
+      if (interim) setHeardStatus(interim);
+      if (finalText) {
+        setHeardStatus(finalText);
+        void handleLocalUtterance(finalText);
       }
     };
     rec.onerror = (ev) => {
@@ -899,9 +940,13 @@
       if (err === "not-allowed") setVoiceState("error", pairingErrorText("MIC_DENIED"));
     };
     rec.onend = () => {
-      if (voice.state === "listening" && voice.recognition) {
-        try { rec.start(); } catch (_e) {}
-      }
+      if (voice.recognition !== rec) return;
+      if (voice.state === "idle" || voice.state === "error") return;
+      window.setTimeout(() => {
+        if (voice.recognition === rec && voice.state !== "idle" && voice.state !== "error") {
+          try { rec.start(); } catch (_e) {}
+        }
+      }, 280);
     };
     voice.recognition = rec;
     rec.start();
@@ -921,21 +966,25 @@
     if (voice.state === "idle" || voice.state === "error") return;
     if (!window.speechSynthesis) return;
     setVoiceState("speaking");
-    try { voice.recognition?.stop(); } catch (_e) {}
     await new Promise<void>((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        window.clearTimeout(timer);
+        resolve();
+      };
+      const timer = window.setTimeout(finish, 2800);
       const utter = new SpeechSynthesisUtterance(clean);
       utter.lang = "he-IL";
       const chosen = pickHebrewVoice();
       if (chosen) utter.voice = chosen;
-      utter.onend = () => resolve();
-      utter.onerror = () => resolve();
+      utter.onend = () => finish();
+      utter.onerror = () => finish();
       try { window.speechSynthesis.cancel(); } catch (_e2) {}
-      window.speechSynthesis.speak(utter);
+      try { window.speechSynthesis.speak(utter); } catch (_e3) { finish(); }
     });
-    if (voice.state === "speaking") {
-      setVoiceState("listening");
-      try { voice.recognition?.start(); } catch (_e3) {}
-    }
+    if (voice.state === "speaking") setVoiceState("listening");
   }
 
   function replyFromTool(tool: string, data: Record<string, unknown>): string {
@@ -969,29 +1018,39 @@
     return "בוצע.";
   }
 
+  async function submitTalkText(): Promise<void> {
+    const input = $("giAsstTalkText") as HTMLInputElement | null;
+    const text = trim(input?.value);
+    if (!text) return;
+    if (input) input.value = "";
+    if (!trim(voice.sessionId) || voice.state === "idle" || voice.state === "error") {
+      await startVoice();
+    }
+    if (!trim(voice.sessionId)) return;
+    setHeardStatus(text);
+    await handleLocalUtterance(text);
+  }
+
   async function handleLocalUtterance(text: string): Promise<void> {
-    if (voice.state === "speaking") return;
-    const intent = classifyIntent(text);
-    const hadPending = !!pendingAction;
-    await onUserTranscript(text);
-    if (intent === "confirm") {
-      await speak(hadPending ? "הפעולה אושרה." : "אין פעולה ממתינה לאישור.");
-      return;
-    }
-    if (intent === "cancel") {
-      await speak(hadPending ? "הפעולה בוטלה." : "אין פעולה לביטול.");
-      return;
-    }
-    const cmd = parseLocalCommand(text);
-    if (!cmd) {
-      await speak(LOCAL_VOICE_HELP);
-      return;
-    }
-    if (cmd.kind === "help" || !cmd.tool) {
-      await speak(cmd.say || LOCAL_VOICE_HELP);
-      return;
-    }
+    if (utteranceBusy) return;
+    utteranceBusy = true;
     try {
+      const intent = classifyIntent(text);
+      const hadPending = !!pendingAction;
+      await onUserTranscript(text);
+      if (intent === "confirm") {
+        await speak(hadPending ? "הפעולה אושרה." : "אין פעולה ממתינה לאישור.");
+        return;
+      }
+      if (intent === "cancel") {
+        await speak(hadPending ? "הפעולה בוטלה." : "אין פעולה לביטול.");
+        return;
+      }
+      const cmd = parseLocalCommand(text);
+      if (!cmd || cmd.kind === "help" || !cmd.tool) {
+        await speak((cmd && cmd.say) || LOCAL_VOICE_HELP);
+        return;
+      }
       const data = await invokeTool(cmd.tool, cmd.args || {});
       if (cmd.tool === "search_customer") {
         const hits = asHitCards(data.customers);
@@ -1008,6 +1067,8 @@
       await speak(replyFromTool(cmd.tool, data));
     } catch (_e3) {
       await speak("לא הצלחתי לבצע את הבקשה.");
+    } finally {
+      utteranceBusy = false;
     }
   }
 
@@ -1277,17 +1338,24 @@
     if (voice.state === "connecting" || voice.state === "listening" || voice.state === "speaking") return;
     setVoiceState("connecting");
     try {
-      if (!speechRecognitionCtor()) {
-        throw Object.assign(new Error("SPEECH_UNSUPPORTED"), { code: "SPEECH_UNSUPPORTED" });
-      }
+      unlockSpeech();
       const device = readDevice();
       const pin = trim(($("giAsstVoicePin") as HTMLInputElement | null)?.value);
       if (!(device && trim(device.deviceSecret))) {
         if (!pin) throw Object.assign(new Error("MISSING_PIN"), { code: "MISSING_PIN" });
         voice.pin = pin;
       }
-      const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
-      try { mic.getTracks().forEach((track) => track.stop()); } catch (_e) {}
+      if (speechRecognitionCtor() && navigator.mediaDevices?.getUserMedia) {
+        try {
+          const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
+          try { mic.getTracks().forEach((track) => track.stop()); } catch (_e) {}
+        } catch (micErr) {
+          const name = trim((micErr as Error & { name?: string })?.name || (micErr as Error)?.message);
+          if (name === "NotAllowedError" || name === "MIC_DENIED") {
+            throw Object.assign(new Error("MIC_DENIED"), { code: "MIC_DENIED" });
+          }
+        }
+      }
       const opened = await callEngine({
         ...engineAuthPayload(),
         action: "open_session",
@@ -1297,9 +1365,14 @@
       if (!voice.sessionId) throw new Error("MISSING_SESSION");
       try { await callEngine({ ...engineAuthPayload(), action: "bootstrap" }); } catch (_e2) {}
       pushTimeline("system", "סשן עוזר מקומי נפתח.");
+      setHeardStatus("");
       startLocalListening();
       setVoiceState("listening");
-      await speak("אני מקשיב. " + LOCAL_VOICE_HELP);
+      if (!speechRecognitionCtor()) {
+        pushTimeline("info", "במכשיר הזה אין דיבור מובנה. כתבו פקודה בתיבה.");
+      } else {
+        pushTimeline("info", "מקשיב. אפשר גם לכתוב בתיבה.");
+      }
     } catch (err) {
       const code = trim((err as Error & { code?: string; name?: string })?.code
         || (err as Error & { name?: string })?.name
@@ -1328,6 +1401,8 @@
     voice.sessionId = "";
     voice.pin = "";
     pendingAction = null;
+    utteranceBusy = false;
+    lastHeard = "";
     if (sessionId) {
       try { await callEngine(endPayload); } catch (_e5) {}
     }

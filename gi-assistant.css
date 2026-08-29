@@ -173,6 +173,35 @@
   font-weight: 700;
 }
 
+.giAsst__heard{
+  min-height: 1.4em;
+  margin: 8px 0 0;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.giAsst__talkForm{
+  margin-top: 16px;
+  text-align: right;
+}
+
+.giAsst__talkRow{
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.giAsst__talkRow .giAsst__input{
+  flex: 1;
+}
+
+.giAsst__talkSend{
+  width: auto;
+  min-width: 72px;
+  padding: 0 14px;
+}
+
 @keyframes giAsstPulse{
   0%, 100%{ box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.35); }
   50%{ box-shadow: 0 0 0 14px rgba(37, 99, 235, 0); }

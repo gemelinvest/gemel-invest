@@ -41,6 +41,8 @@
     let timelineItems = [];
     let lastIntent = "";
     let commandPoll = 0;
+    let utteranceBusy = false;
+    let lastHeard = "";
     function trim(value) {
       return String(value == null ? "" : value).trim();
     }
@@ -471,6 +473,14 @@
           <button class="giAsst__btn" id="giAsstVoiceStart" type="button">\u05D4\u05EA\u05D7\u05DC \u05E9\u05D9\u05D7\u05D4</button>
           <button class="giAsst__btn giAsst__btn--ghost" id="giAsstVoiceStop" type="button" hidden>\u05E1\u05D9\u05D9\u05DD \u05E9\u05D9\u05D7\u05D4</button>
         </div>
+        <p class="giAsst__heard" id="giAsstHeard" aria-live="polite"></p>
+        <form class="giAsst__talkForm" id="giAsstTalkForm">
+          <label class="giAsst__label" for="giAsstTalkText">\u05D0\u05DD \u05D0\u05D9\u05DF \u05EA\u05D2\u05D5\u05D1\u05D4 \u05DC\u05E7\u05D5\u05DC \u2014 \u05DB\u05EA\u05D1\u05D5 \u05DB\u05D0\u05DF</label>
+          <div class="giAsst__talkRow">
+            <input class="giAsst__input" id="giAsstTalkText" type="text" enterkeyhint="send" autocomplete="off" placeholder="\u05DC\u05DE\u05E9\u05DC: \u05D7\u05E4\u05E9 \u05D3\u05D5\u05D3 \u05DC\u05D5\u05D9" />
+            <button class="giAsst__btn giAsst__talkSend" id="giAsstTalkSend" type="submit">\u05E9\u05DC\u05D7</button>
+          </div>
+        </form>
         <div class="giAsst__confirm is-hidden" id="giAsstConfirm" hidden>
           <p class="giAsst__confirmText" id="giAsstConfirmText">\u05DE\u05DE\u05EA\u05D9\u05DF \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8 \u05E4\u05E2\u05D5\u05DC\u05D4.</p>
           <div class="giAsst__confirmActions">
@@ -673,7 +683,7 @@
       }
     }
     function bindVoiceControls(root) {
-      var _a, _b, _c, _d, _e;
+      var _a, _b, _c, _d, _e, _f;
       (_a = root.querySelector("#giAsstVoiceStart")) == null ? void 0 : _a.addEventListener("click", () => {
         void startVoice();
       });
@@ -689,6 +699,10 @@
       });
       (_e = root.querySelector("#giAsstConfirmNo")) == null ? void 0 : _e.addEventListener("click", () => {
         void cancelPending();
+      });
+      (_f = $("giAsstTalkForm")) == null ? void 0 : _f.addEventListener("submit", (ev) => {
+        ev.preventDefault();
+        void submitTalkText();
       });
       bindHits(root);
       paintVoiceState();
@@ -758,22 +772,51 @@
       }
       return null;
     }
+    function isMobileVoice() {
+      if (isPhonePage()) return true;
+      try {
+        return /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent || "");
+      } catch (_e) {
+        return false;
+      }
+    }
+    function setHeardStatus(text) {
+      lastHeard = redactSafe(text);
+      const el = $("giAsstHeard");
+      if (el) el.textContent = lastHeard ? "\u05E9\u05DE\u05E2\u05EA\u05D9: " + lastHeard : "";
+    }
+    function unlockSpeech() {
+      var _a, _b;
+      try {
+        const utter = new SpeechSynthesisUtterance(" ");
+        utter.volume = 0;
+        (_a = window.speechSynthesis) == null ? void 0 : _a.speak(utter);
+        (_b = window.speechSynthesis) == null ? void 0 : _b.cancel();
+      } catch (_e) {
+      }
+    }
     function startLocalListening() {
       const Ctor = speechRecognitionCtor();
-      if (!Ctor) throw Object.assign(new Error("SPEECH_UNSUPPORTED"), { code: "SPEECH_UNSUPPORTED" });
+      if (!Ctor) return;
       const rec = new Ctor();
       rec.lang = "he-IL";
-      rec.continuous = true;
-      rec.interimResults = false;
+      rec.continuous = !isMobileVoice();
+      rec.interimResults = true;
       rec.onresult = (ev) => {
-        var _a;
         const results = ev.results;
+        let finalText = "";
+        let interim = "";
         for (let i = ev.resultIndex; i < results.length; i += 1) {
           const row = results[i];
-          if (row && row.isFinal) {
-            const spoken = trim((_a = row[0]) == null ? void 0 : _a.transcript);
-            if (spoken) void handleLocalUtterance(spoken);
-          }
+          const spoken = trim(row && row[0] ? row[0].transcript : "");
+          if (!spoken) continue;
+          if (row.isFinal) finalText = trim(finalText + " " + spoken);
+          else interim = spoken;
+        }
+        if (interim) setHeardStatus(interim);
+        if (finalText) {
+          setHeardStatus(finalText);
+          void handleLocalUtterance(finalText);
         }
       };
       rec.onerror = (ev) => {
@@ -781,12 +824,16 @@
         if (err === "not-allowed") setVoiceState("error", pairingErrorText("MIC_DENIED"));
       };
       rec.onend = () => {
-        if (voice.state === "listening" && voice.recognition) {
-          try {
-            rec.start();
-          } catch (_e) {
+        if (voice.recognition !== rec) return;
+        if (voice.state === "idle" || voice.state === "error") return;
+        window.setTimeout(() => {
+          if (voice.recognition === rec && voice.state !== "idle" && voice.state !== "error") {
+            try {
+              rec.start();
+            } catch (_e) {
+            }
           }
-        }
+        }, 280);
       };
       voice.recognition = rec;
       rec.start();
@@ -805,37 +852,38 @@
       }
     }
     async function speak(text) {
-      var _a, _b;
       const clean = redactSafe(text);
       if (!clean) return;
       await onAssistantTranscript(clean);
       if (voice.state === "idle" || voice.state === "error") return;
       if (!window.speechSynthesis) return;
       setVoiceState("speaking");
-      try {
-        (_a = voice.recognition) == null ? void 0 : _a.stop();
-      } catch (_e) {
-      }
       await new Promise((resolve) => {
+        let done = false;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          window.clearTimeout(timer);
+          resolve();
+        };
+        const timer = window.setTimeout(finish, 2800);
         const utter = new SpeechSynthesisUtterance(clean);
         utter.lang = "he-IL";
         const chosen = pickHebrewVoice();
         if (chosen) utter.voice = chosen;
-        utter.onend = () => resolve();
-        utter.onerror = () => resolve();
+        utter.onend = () => finish();
+        utter.onerror = () => finish();
         try {
           window.speechSynthesis.cancel();
         } catch (_e2) {
         }
-        window.speechSynthesis.speak(utter);
-      });
-      if (voice.state === "speaking") {
-        setVoiceState("listening");
         try {
-          (_b = voice.recognition) == null ? void 0 : _b.start();
+          window.speechSynthesis.speak(utter);
         } catch (_e3) {
+          finish();
         }
-      }
+      });
+      if (voice.state === "speaking") setVoiceState("listening");
     }
     function replyFromTool(tool, data) {
       if (data.needs_confirmation === true) return "\u05E4\u05E2\u05D5\u05DC\u05EA \u05DB\u05EA\u05D9\u05D1\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8. \u05D0\u05DE\u05E8\u05D5 \u05DB\u05DF \u05D0\u05D5 \u05DC\u05D0.";
@@ -867,29 +915,38 @@
       }
       return "\u05D1\u05D5\u05E6\u05E2.";
     }
+    async function submitTalkText() {
+      const input = $("giAsstTalkText");
+      const text = trim(input == null ? void 0 : input.value);
+      if (!text) return;
+      if (input) input.value = "";
+      if (!trim(voice.sessionId) || voice.state === "idle" || voice.state === "error") {
+        await startVoice();
+      }
+      if (!trim(voice.sessionId)) return;
+      setHeardStatus(text);
+      await handleLocalUtterance(text);
+    }
     async function handleLocalUtterance(text) {
-      if (voice.state === "speaking") return;
-      const intent = classifyIntent(text);
-      const hadPending = !!pendingAction;
-      await onUserTranscript(text);
-      if (intent === "confirm") {
-        await speak(hadPending ? "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D0\u05D5\u05E9\u05E8\u05D4." : "\u05D0\u05D9\u05DF \u05E4\u05E2\u05D5\u05DC\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8.");
-        return;
-      }
-      if (intent === "cancel") {
-        await speak(hadPending ? "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D1\u05D5\u05D8\u05DC\u05D4." : "\u05D0\u05D9\u05DF \u05E4\u05E2\u05D5\u05DC\u05D4 \u05DC\u05D1\u05D9\u05D8\u05D5\u05DC.");
-        return;
-      }
-      const cmd = parseLocalCommand(text);
-      if (!cmd) {
-        await speak(LOCAL_VOICE_HELP);
-        return;
-      }
-      if (cmd.kind === "help" || !cmd.tool) {
-        await speak(cmd.say || LOCAL_VOICE_HELP);
-        return;
-      }
+      if (utteranceBusy) return;
+      utteranceBusy = true;
       try {
+        const intent = classifyIntent(text);
+        const hadPending = !!pendingAction;
+        await onUserTranscript(text);
+        if (intent === "confirm") {
+          await speak(hadPending ? "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D0\u05D5\u05E9\u05E8\u05D4." : "\u05D0\u05D9\u05DF \u05E4\u05E2\u05D5\u05DC\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8.");
+          return;
+        }
+        if (intent === "cancel") {
+          await speak(hadPending ? "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D1\u05D5\u05D8\u05DC\u05D4." : "\u05D0\u05D9\u05DF \u05E4\u05E2\u05D5\u05DC\u05D4 \u05DC\u05D1\u05D9\u05D8\u05D5\u05DC.");
+          return;
+        }
+        const cmd = parseLocalCommand(text);
+        if (!cmd || cmd.kind === "help" || !cmd.tool) {
+          await speak(cmd && cmd.say || LOCAL_VOICE_HELP);
+          return;
+        }
         const data = await invokeTool(cmd.tool, cmd.args || {});
         if (cmd.tool === "search_customer") {
           const hits = asHitCards(data.customers);
@@ -912,6 +969,8 @@
         await speak(replyFromTool(cmd.tool, data));
       } catch (_e3) {
         await speak("\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D1\u05E6\u05E2 \u05D0\u05EA \u05D4\u05D1\u05E7\u05E9\u05D4.");
+      } finally {
+        utteranceBusy = false;
       }
     }
     function handleRealtimeEvent(raw) {
@@ -1176,23 +1235,30 @@
       await pc.setRemoteDescription({ type: "answer", sdp: answer });
     }
     async function startVoice() {
-      var _a;
+      var _a, _b;
       if (voice.state === "connecting" || voice.state === "listening" || voice.state === "speaking") return;
       setVoiceState("connecting");
       try {
-        if (!speechRecognitionCtor()) {
-          throw Object.assign(new Error("SPEECH_UNSUPPORTED"), { code: "SPEECH_UNSUPPORTED" });
-        }
+        unlockSpeech();
         const device = readDevice();
         const pin = trim((_a = $("giAsstVoicePin")) == null ? void 0 : _a.value);
         if (!(device && trim(device.deviceSecret))) {
           if (!pin) throw Object.assign(new Error("MISSING_PIN"), { code: "MISSING_PIN" });
           voice.pin = pin;
         }
-        const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
-        try {
-          mic.getTracks().forEach((track) => track.stop());
-        } catch (_e) {
+        if (speechRecognitionCtor() && ((_b = navigator.mediaDevices) == null ? void 0 : _b.getUserMedia)) {
+          try {
+            const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
+            try {
+              mic.getTracks().forEach((track) => track.stop());
+            } catch (_e) {
+            }
+          } catch (micErr) {
+            const name = trim((micErr == null ? void 0 : micErr.name) || (micErr == null ? void 0 : micErr.message));
+            if (name === "NotAllowedError" || name === "MIC_DENIED") {
+              throw Object.assign(new Error("MIC_DENIED"), { code: "MIC_DENIED" });
+            }
+          }
         }
         const opened = await callEngine({
           ...engineAuthPayload(),
@@ -1206,9 +1272,14 @@
         } catch (_e2) {
         }
         pushTimeline("system", "\u05E1\u05E9\u05DF \u05E2\u05D5\u05D6\u05E8 \u05DE\u05E7\u05D5\u05DE\u05D9 \u05E0\u05E4\u05EA\u05D7.");
+        setHeardStatus("");
         startLocalListening();
         setVoiceState("listening");
-        await speak("\u05D0\u05E0\u05D9 \u05DE\u05E7\u05E9\u05D9\u05D1. " + LOCAL_VOICE_HELP);
+        if (!speechRecognitionCtor()) {
+          pushTimeline("info", "\u05D1\u05DE\u05DB\u05E9\u05D9\u05E8 \u05D4\u05D6\u05D4 \u05D0\u05D9\u05DF \u05D3\u05D9\u05D1\u05D5\u05E8 \u05DE\u05D5\u05D1\u05E0\u05D4. \u05DB\u05EA\u05D1\u05D5 \u05E4\u05E7\u05D5\u05D3\u05D4 \u05D1\u05EA\u05D9\u05D1\u05D4.");
+        } else {
+          pushTimeline("info", "\u05DE\u05E7\u05E9\u05D9\u05D1. \u05D0\u05E4\u05E9\u05E8 \u05D2\u05DD \u05DC\u05DB\u05EA\u05D5\u05D1 \u05D1\u05EA\u05D9\u05D1\u05D4.");
+        }
       } catch (err) {
         const code = trim((err == null ? void 0 : err.code) || (err == null ? void 0 : err.name) || (err == null ? void 0 : err.message));
         await stopVoice(false);
@@ -1248,6 +1319,8 @@
       voice.sessionId = "";
       voice.pin = "";
       pendingAction = null;
+      utteranceBusy = false;
+      lastHeard = "";
       if (sessionId) {
         try {
           await callEngine(endPayload);
