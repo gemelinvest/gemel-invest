@@ -479,7 +479,7 @@
       return { tool: "search_customer", args: { query: query || raw } };
     }
     if (/(?:פתח|תפתח|תפתחי)\s+(?:את\s+)?(?:ה)?(?:תיק|לקוח)(?!\S)/.test(raw)) {
-      const query = raw.replace(/^.*?(?:התיק|תיק|לקוח)\s+(?:של\s+)?/, "");
+      const query = raw.replace(/^.*?(?:התיק|תיק|לקוח)\s+(?:של\s+)?/, "").replace(/\s+(?:בבקשה|תודה)$/, "");
       return { tool: "find_customer_by_id", args: { query: query || raw } };
     }
     if (/תזכיר לי|(צור|הוסף|תפתח).*(משימה|תזכורת)/.test(raw)) {
@@ -537,7 +537,6 @@
       return { tool: /צוות/.test(raw) ? "get_team_production" : "get_monthly_production", args: {} };
     }
     if (/^(היי|שלום|תודה|בוקר טוב|ערב טוב)$/.test(raw)) return { kind: "help", say: LOCAL_VOICE_HELP };
-    if (raw.length >= 2) return { tool: "search_customer", args: { query: raw } };
     return { kind: "help", say: LOCAL_VOICE_HELP };
   }
 
@@ -1307,7 +1306,7 @@
     if (data.needs_confirmation === true) return "פעולת כתיבה ממתינה לאישור. אמרו כן, או לא.";
     if (trim(data.error) === "NEED_INPUT" || data.needs_input === true) return "חסרים פרטים. פתחתי את הסימולטור הקיים.";
     if (data.ok === false) return "לא הצלחתי לבצע את הבקשה.";
-    if (data.instant === true && (tool === "search_customer" || tool === "find_customer_by_id" || tool === "open_customer")) {
+    if (data.instant === true && (tool === "find_customer_by_id" || tool === "open_customer")) {
       return "פותחת את התיק.";
     }
     if (tool === "search_customer") {
@@ -1360,13 +1359,12 @@
       if (trim(a.product)) out.product = trim(a.product);
       return out;
     }
-    if (tool === "open_customer" || tool === "find_customer_by_id" || tool === "search_customer") {
+    if (tool === "open_customer" || tool === "find_customer_by_id") {
       const out: Record<string, unknown> = { type: "open_customer" };
-      if (trim(a.customerId)) out.customerId = trim(a.customerId);
-      if (trim(a.query)) {
-        out.query = trim(a.query);
-        if (!out.customerId) out.customerId = trim(a.query);
-      }
+      const id = trim(a.customerId);
+      const query = trim(a.query);
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) out.customerId = id;
+      if (query) out.query = query;
       if (!out.customerId && !out.query) return null;
       return out;
     }
@@ -1389,7 +1387,9 @@
   }
 
   async function handleLocalUtterance(text: string): Promise<void> {
-    if (utteranceBusy) return;
+    utteranceBusy = false;
+    try { window.speechSynthesis?.cancel(); } catch (_eBusy) {}
+    if (voice.state === "speaking") setVoiceState("listening");
     utteranceBusy = true;
     try {
       const intent = classifyIntent(text);
@@ -1477,8 +1477,9 @@
     if (type === "open_customer") {
       const id = trim(cmd.customerId);
       const query = trim(cmd.query);
-      if (id) active.openCustomer?.(id);
-      else if (query) void active.openCustomerByQuery?.(query);
+      const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      if (uuid) active.openCustomer?.(id);
+      else void active.openCustomerByQuery?.(query || id);
     }
     else if (type === "go_view") active.goView?.(trim(cmd.view));
     else if (type === "open_simulator") void active.openSimulator?.(trim(cmd.company), trim(cmd.product));

@@ -56,7 +56,7 @@ assert(app.includes("ReminderUI.upsertReminder(row)"), "create task wraps Remind
 assert(app.includes("ReminderUI.markDone"), "done wraps ReminderUI.markDone");
 assert(app.includes("ReminderUI.reminders"), "list tasks reads ReminderUI.reminders");
 assert(app.includes("CustomersUI.openByIdWithLoader"), "open still uses existing customer file");
-assert(app.includes("openCustomerByQuery") && app.includes("Storage.searchCustomers(query, 20)"), "spoken open customer wraps existing search");
+assert(app.includes("openCustomerByQuery") && app.includes("findVisibleCustomerBySpokenQuery"), "spoken open customer finds a visible local record first");
 assert(!/create table/i.test(app), "app.js still has no schema change");
 assert(!edge.includes("computeMenora") && !asstTs.includes("computeMenora"), "no duplicated rate tables");
 
