@@ -418,8 +418,30 @@
       if (/מכירות/.test(text)) return "dailySales";
       if (/אנשי\s*קשר|קשרים/.test(text)) return "contacts";
       if (/תהליכ/.test(text)) return "myProcesses";
-      if (/לקוח|תיק/.test(text)) return "customers";
+      if (/לקוחות|רשימת\s*ה?לקוחות|מסך\s*לקוחות/.test(text)) return "customers";
       return "";
+    }
+    function isOpenCustomerSpeech(text) {
+      const raw = trim(text);
+      if (!raw) return false;
+      if (/לקוחות|רשימת\s*ה?לקוחות|מסך\s*לקוחות/.test(raw) && !/(?:תיק|לקוח)\s+של/.test(raw)) return false;
+      if (/^[\d\s\-()+]+$/.test(raw) && (looksLikeIdNumber(raw) || looksLikePhone(raw))) return true;
+      if (/(?:פתח|תפתח|תפתחי|כנס|תיכנסי?|היכנסי?|כנסי).{0,40}(?:תיק|לקוח)/.test(raw)) return true;
+      if (/(?:תיק|לקוח)\s+(?:של\s+|לפי\s+)/.test(raw)) return true;
+      return false;
+    }
+    function extractOpenCustomerQuery(text) {
+      let q = trim(text).replace(/[!,?״"']/g, " ").replace(/\s+/g, " ").trim();
+      q = q.replace(/^(?:אפשר\s+)?(?:בבקשה\s+)?(?:תפתחי?|תפתחו|פתחי?|תיכנסי?|היכנסי?|כנסי|כנס|עבור|תעבור|עברי)\s+(?:לי\s+)?(?:בבקשה\s+)?/u, "");
+      q = q.replace(/^(?:את\s+)?(?:ה)?תיק(?:\s+(?:של|עבור|ל))?\s*/u, "");
+      q = q.replace(/^לתיק(?:\s+(?:של|עבור|ל))?\s*/u, "");
+      q = q.replace(/^(?:את\s+)?(?:ה)?לקוח(?!ות)(?:\s+(?:של|עבור|ל))?\s*/u, "");
+      q = q.replace(/^ללקוח(?:\s+(?:של|עבור|ל))?\s*/u, "");
+      q = q.replace(/^(?:לפי\s+)?(?:תעודת\s*זהות|תז|מספר\s*זהות|טלפון|נייד)\s+/u, "");
+      q = q.replace(/\s+(?:בבקשה|תודה)$/u, "").trim();
+      if (looksLikeIdNumber(q) || looksLikePhone(q)) q = q.replace(/\D/g, "");
+      if (/^(?:ה)?(?:תיק|לקוח|לקוחות|קובץ)$/u.test(q)) return "";
+      return q;
     }
     function looksLikeIdNumber(value) {
       const digits = String(value || "").replace(/\D/g, "");
@@ -601,12 +623,10 @@
         else if (lastCustomerId) args.customerId = lastCustomerId;
         return { tool: "create_proposal", args };
       }
-      if (/(?:פתח|תפתח|תפתחי)\s+(?:את\s+)?(?:ה)?(?:תיק|לקוח)(?!\S)/.test(raw) || /(?:תיק|לקוח)\s+(?:לפי\s+)?(?:תעודת\s*זהות|תז|מספר\s*זהות|טלפון|נייד)/.test(raw) || /^[\d\s\-()+]+$/.test(raw) && (looksLikeIdNumber(raw) || looksLikePhone(raw))) {
-        let query = raw.replace(/^.*?(?:התיק|תיק|לקוח)\s+(?:של\s+|לפי\s+)?(?:תעודת\s*זהות\s+|תז\s+|מספר\s*זהות\s+|טלפון\s+|נייד\s+)?/, "").replace(/\s+(?:בבקשה|תודה)$/, "");
-        const digits = raw.replace(/\D/g, "");
-        if ((!query || query === raw) && digits && /^[\d\s\-()+]+$/.test(raw)) query = digits;
-        if (looksLikeIdNumber(query) || looksLikePhone(query)) query = query.replace(/\D/g, "");
-        return { tool: "find_customer_by_id", args: { query: query || raw } };
+      if (isOpenCustomerSpeech(raw)) {
+        const query = extractOpenCustomerQuery(raw);
+        if (!query) return { tool: "go_view", args: { view: "customers" } };
+        return { tool: "find_customer_by_id", args: { query } };
       }
       if (/תזכיר לי|(צור|הוסף|תפתח).*(משימה|תזכורת)/.test(raw)) {
         const details = raw.replace(/^.*?(?:משימה|תזכורת|תזכיר לי)\s*/, "") || raw;
@@ -1596,6 +1616,7 @@
         if (tool === "dismiss_validation_modal") return "\u05D0\u05D9\u05DF \u05D7\u05DC\u05D5\u05DF \u05DC\u05E1\u05D2\u05D9\u05E8\u05D4.";
         if (tool === "chat_select_user") return "\u05DC\u05D0 \u05DE\u05E6\u05D0\u05EA\u05D9 \u05D0\u05EA \u05D0\u05D9\u05E9 \u05D4\u05E7\u05E9\u05E8.";
         if (tool === "chat_send") return "\u05DC\u05D0 \u05E0\u05E9\u05DC\u05D7.";
+        if (tool === "find_customer_by_id" || tool === "open_customer") return "\u05DC\u05D0 \u05DE\u05E6\u05D0\u05EA\u05D9 \u05D0\u05EA \u05D4\u05EA\u05D9\u05E7.";
         if (data.dispatchFailed) return "\u05DC\u05D0 \u05E0\u05E9\u05DC\u05D7 \u05DC\u05DE\u05D7\u05E9\u05D1. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1.";
         return "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9.";
       }
@@ -1613,10 +1634,11 @@
       }
       if (data.needs_confirmation === true) return "\u05E4\u05E2\u05D5\u05DC\u05EA \u05DB\u05EA\u05D9\u05D1\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8. \u05D0\u05DE\u05E8\u05D5 \u05DB\u05DF, \u05D0\u05D5 \u05DC\u05D0.";
       if (trim(data.error) === "NEED_INPUT" || data.needs_input === true) return "\u05D7\u05E1\u05E8\u05D9\u05DD \u05E4\u05E8\u05D8\u05D9\u05DD. \u05E4\u05EA\u05D7\u05EA\u05D9 \u05D0\u05EA \u05D4\u05E1\u05D9\u05DE\u05D5\u05DC\u05D8\u05D5\u05E8 \u05D4\u05E7\u05D9\u05D9\u05DD.";
-      if (data.ok === false) return "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D1\u05E6\u05E2 \u05D0\u05EA \u05D4\u05D1\u05E7\u05E9\u05D4.";
       if (data.instant === true && (tool === "find_customer_by_id" || tool === "open_customer")) {
+        if (data.ok === false) return "\u05DC\u05D0 \u05DE\u05E6\u05D0\u05EA\u05D9 \u05D0\u05EA \u05D4\u05EA\u05D9\u05E7.";
         return "\u05E4\u05D5\u05EA\u05D7\u05EA \u05D0\u05EA \u05D4\u05EA\u05D9\u05E7.";
       }
+      if (data.ok === false) return "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D1\u05E6\u05E2 \u05D0\u05EA \u05D4\u05D1\u05E7\u05E9\u05D4.";
       if (tool === "search_customer") {
         const n = asHitCards(data.customers).length;
         if (!n) return "\u05DC\u05D0 \u05DE\u05E6\u05D0\u05EA\u05D9 \u05DC\u05E7\u05D5\u05D7\u05D5\u05EA.";
@@ -1699,7 +1721,7 @@
     }
     function runInstantUi(cmd) {
       if (isPhonePage()) void dispatchDesktopCommand(cmd);
-      else executeClientCommand(cmd);
+      else void executeClientCommand(cmd);
     }
     async function sleepMs(ms) {
       await new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -1753,11 +1775,11 @@
             await speak(replyFromTool(cmd.tool, { ok: true, instant: true }));
             return;
           }
-          const execResult = executeClientCommand(instant);
+          const execResult = await executeClientCommand(instant);
           if (cmd.tool === "create_proposal") {
             const extra = extractFillFields(text);
             if (extra && (extra.firstName || extra.lastName || extra.company || extra.product || extra.age != null)) {
-              executeClientCommand({ type: "fill_wizard", fields: extra });
+              await executeClientCommand({ type: "fill_wizard", fields: extra });
             }
           }
           await speak(replyFromTool(cmd.tool, Object.assign({ instant: true }, execResult || { ok: true })));
@@ -1810,7 +1832,7 @@
       } catch (_e) {
       }
     }
-    function executeClientCommand(cmd) {
+    async function executeClientCommand(cmd) {
       var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r, _s, _t, _u, _v, _w;
       if (!cmd || typeof cmd !== "object") return { ok: false };
       const type = trim(cmd.type);
@@ -1821,12 +1843,27 @@
         const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
         if (uuid) {
           lastCustomerId = id;
-          (_a = active.openCustomer) == null ? void 0 : _a.call(active, id);
-        } else {
-          if (query) lastCustomerName = query;
-          void ((_b = active.openCustomerByQuery) == null ? void 0 : _b.call(active, query || id));
+          const res = (_a = active.openCustomer) == null ? void 0 : _a.call(active, id);
+          if (res && typeof res === "object" && typeof res.then === "function") {
+            const awaited = await res;
+            return awaited && typeof awaited === "object" ? awaited : { ok: true, id };
+          }
+          return res && typeof res === "object" ? res : { ok: true, id };
         }
-        return { ok: true };
+        const q = query || id;
+        if (q) lastCustomerName = q;
+        try {
+          const res = await ((_b = active.openCustomerByQuery) == null ? void 0 : _b.call(active, q));
+          if (res && typeof res === "object") {
+            const row = res;
+            if (row.ok !== false && trim(row.id)) lastCustomerId = trim(row.id);
+            if (row.ok !== false && trim(row.name)) lastCustomerName = trim(row.name);
+            return row;
+          }
+          return { ok: false };
+        } catch (_eOpen) {
+          return { ok: false };
+        }
       }
       if (type === "go_view") {
         (_c = active.goView) == null ? void 0 : _c.call(active, trim(cmd.view));
@@ -1949,7 +1986,7 @@
           const id = trim(row.id);
           const cmd = row.command && typeof row.command === "object" ? row.command : null;
           try {
-            executeClientCommand(cmd);
+            await executeClientCommand(cmd);
             if (id) await callEngine({ ...engineAuthPayload(), action: "ack", commandId: id });
           } catch (_e) {
             if (id) await callEngine({ ...engineAuthPayload(), action: "ack", commandId: id, error: "EXEC" });
@@ -1992,8 +2029,8 @@
       await applySimWraps(trim(tool), args, data);
       if (data.client_command && typeof data.client_command === "object") {
         const cmd = data.client_command;
-        if (isPhonePage()) void dispatchDesktopCommand(cmd);
-        else executeClientCommand(cmd);
+        if (isPhonePage()) await dispatchDesktopCommand(cmd);
+        else await executeClientCommand(cmd);
       }
       return data;
     }
@@ -2647,6 +2684,8 @@
       extractSpokenReportDate,
       extractChatComposeText,
       extractChatUserName,
+      extractOpenCustomerQuery,
+      isOpenCustomerSpeech,
       normalizeWizardDate,
       wizardDateToIso,
       hasFillPayload,
