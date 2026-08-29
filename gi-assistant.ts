@@ -1875,15 +1875,6 @@
     await new Promise((resolve) => window.setTimeout(resolve, ms));
   }
 
-  async function submitTalkText(): Promise<void> {
-    const input = $("giAsstTalkText") as HTMLInputElement | null;
-    const text = trim(input?.value);
-    if (!text) return;
-    if (input) input.value = "";
-    if (voice.state === "idle" || voice.state === "error") void startVoice();
-    setHeardStatus(text);
-    await handleLocalUtterance(text);
-  }
 
   async function handleLocalUtterance(text: string): Promise<void> {
     if (utteranceBusy) return;

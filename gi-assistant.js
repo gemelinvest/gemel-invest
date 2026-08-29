@@ -1704,15 +1704,6 @@
     async function sleepMs(ms) {
       await new Promise((resolve) => window.setTimeout(resolve, ms));
     }
-    async function submitTalkText() {
-      const input = $("giAsstTalkText");
-      const text = trim(input == null ? void 0 : input.value);
-      if (!text) return;
-      if (input) input.value = "";
-      if (voice.state === "idle" || voice.state === "error") void startVoice();
-      setHeardStatus(text);
-      await handleLocalUtterance(text);
-    }
     async function handleLocalUtterance(text) {
       var _a;
       if (utteranceBusy) return;
