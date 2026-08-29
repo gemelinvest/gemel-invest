@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-local-v1";
+const TAG = "20260829-assistant-phone-v1";
 let failed = 0;
 let passed = 0;
 
@@ -80,7 +80,7 @@ assert(app.includes("ReminderUI.upsertReminder") && app.includes("ReminderUI.mar
 assert(app.includes("GiSimulatorQuotes") && edgeTools.includes("quote_simulator"), "9. price from existing compute");
 assert(app.includes("Wizard.openNewPurchaseForCustomer") && edgeTools.includes("open_wizard"), "10. proposal opens wizard");
 assert(asstTs.includes("dispatchDesktopCommand") && edgeEngine.includes("gi_assistant_commands"), "11. phone command reaches desktop");
-assert(asstTs.includes("parseLocalCommand") && asstTs.includes("webkitSpeechRecognition") && edgeEngine.includes("open_session") && !asstTs.includes("OPENAI_API_KEY"), "12. local browser voice, no vendor key in client");
+assert(asstTs.includes("parseLocalCommand") && asstTs.includes("giAsstTalkForm") && edgeEngine.includes("open_session") && !asstTs.includes("OPENAI_API_KEY"), "12. local browser voice + typed fallback, no vendor key in client");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);
