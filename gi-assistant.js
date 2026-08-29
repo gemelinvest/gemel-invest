@@ -23,7 +23,9 @@
       "refresh_reminders",
       "upsert_reminder",
       "mark_task_done",
-      "fill_wizard"
+      "fill_wizard",
+      "wizard_next",
+      "open_har_import"
     ]);
     let bridge = {};
     let bound = false;
@@ -236,7 +238,7 @@
       if (/^(לא|בטל|ביטול|אל תאשר|לא לאשר)$/.test(normalized)) return "cancel";
       return "other";
     }
-    const LOCAL_VOICE_HELP = "\u05D0\u05E4\u05E9\u05E8 \u05DC\u05D5\u05DE\u05E8: \u05E4\u05EA\u05D7 \u05EA\u05D9\u05E7 \u05D3\u05D5\u05D3, \u05D4\u05E7\u05DD \u05D4\u05E6\u05E2\u05D4 \u05DC\u05D3\u05D5\u05D3, \u05D2\u05D9\u05DC 35 \u05DC\u05D0 \u05DE\u05E2\u05E9\u05DF, \u05DE\u05E0\u05D5\u05E8\u05D4 \u05E8\u05D9\u05E1\u05E7, \u05E2\u05D1\u05D5\u05E8 \u05DC\u05DC\u05E7\u05D5\u05D7\u05D5\u05EA, \u05DE\u05E9\u05D9\u05DE\u05D5\u05EA.";
+    const LOCAL_VOICE_HELP = "\u05D0\u05D7\u05E8\u05D9 \u05D4\u05E6\u05E2\u05D4 \u05D7\u05D3\u05E9\u05D4 \u05DE\u05DE\u05DC\u05D0\u05D9\u05DD \u05D0\u05EA \u05D4\u05D0\u05E9\u05E3 \u05DC\u05E4\u05D9 \u05EA\u05D5\u05D5\u05D9\u05EA: \u05E9\u05DD \u05E4\u05E8\u05D8\u05D9 \u05D0\u05D5\u05E8\u05D9\u05D4, \u05E9\u05DD \u05DE\u05E9\u05E4\u05D7\u05D4 \u05E1\u05D5\u05DE\u05DA, \u05EA\u05D6, \u05D8\u05DC\u05E4\u05D5\u05DF, \u05DB\u05EA\u05D5\u05D1\u05EA, \u05E2\u05D9\u05E8, \u05DE\u05D9\u05D9\u05DC. \u05DB\u05E9\u05D4\u05E9\u05DC\u05D1 \u05DE\u05DC\u05D0 \u05D0\u05DE\u05E8\u05D5 \u05EA\u05E2\u05D1\u05E8\u05D9 \u05DC\u05E9\u05DC\u05D1 \u05D4\u05D1\u05D0. \u05D1\u05E9\u05DC\u05D1 \u05D4\u05E4\u05D5\u05DC\u05D9\u05E1\u05D5\u05EA \u05D0\u05DE\u05E8\u05D5 \u05EA\u05E4\u05EA\u05D7\u05D9 \u05D0\u05EA \u05D4\u05E4\u05E7 \u05D1\u05D9\u05D8\u05D5\u05D7\u05D9\u05DD \u05DE\u05D4\u05E8 \u05D4\u05D1\u05D9\u05D8\u05D5\u05D7.";
     function extractCompany(text) {
       const companies = ["\u05D4\u05E4\u05E0\u05D9\u05E7\u05E1", "\u05DE\u05E0\u05D5\u05E8\u05D4", "\u05D4\u05DB\u05E9\u05E8\u05D4", "\u05DE\u05D2\u05D3\u05DC", "\u05D0\u05D9\u05D9\u05DC\u05D5\u05DF", "\u05DB\u05DC\u05DC"];
       for (let i = 0; i < companies.length; i += 1) {
@@ -268,24 +270,85 @@
       return "";
     }
     function extractFillFields(text) {
+      const raw = trim(text).replace(/[!,?״"']/g, " ").replace(/\s+/g, " ");
+      if (!raw) return null;
+      const labels = [
+        { key: "firstName", re: /שם\s*פרטי/g },
+        { key: "lastName", re: /שם(?:פ)?\s*משפחה/g },
+        { key: "idIssueDate", re: /תאריך\s*הנפקה|הנפקת\s*תעודת זהות|הנפקת\s*תז/g },
+        { key: "idNumber", re: /תעודת זהות|(?:^|\s)תז(?=\s|$)/g },
+        { key: "phone", re: /טלפון|נייד|פלאפון/g },
+        { key: "email", re: /מייל|אימייל|דואל/g },
+        { key: "birthDate", re: /תאריך\s*לידה|נולד(?:ה)?/g },
+        { key: "street", re: /כתובת(?:\s*מגורים)?|רחוב/g },
+        { key: "houseNumber", re: /מספר\s*בית/g },
+        { key: "apartment", re: /דירה/g },
+        { key: "zip", re: /מיקוד/g },
+        { key: "city", re: /עיר|יישוב/g },
+        { key: "occupation", re: /עיסוק|מקצוע/g },
+        { key: "maritalStatus", re: /מצב\s*משפחתי/g },
+        { key: "clinic", re: /קופת\s*חולים/g },
+        { key: "shaban", re: /שבן/g },
+        { key: "smokingType", re: /סוג\s*עישון/g }
+      ];
+      const hits = [];
+      labels.forEach((row) => {
+        row.re.lastIndex = 0;
+        let match = row.re.exec(raw);
+        while (match) {
+          hits.push({ key: row.key, start: match.index, end: match.index + match[0].length });
+          match = row.re.exec(raw);
+        }
+      });
+      const filtered = hits.filter((hit) => {
+        if (hit.key !== "idNumber") return true;
+        return !hits.some((other) => other.key === "idIssueDate" && hit.start >= other.start && hit.start < other.end);
+      });
+      filtered.sort((a, b) => a.start - b.start);
       const fields = {};
-      const ageMatch = text.match(/גיל\s*(\d{1,2})/);
+      filtered.forEach((hit, i) => {
+        const stop = i + 1 < filtered.length ? filtered[i + 1].start : raw.length;
+        let value = trim(raw.slice(hit.end, stop));
+        if (!value) return;
+        if (hit.key === "idNumber" || hit.key === "phone" || hit.key === "zip" || hit.key === "houseNumber") {
+          value = value.replace(/\D/g, "");
+        }
+        if (value) fields[hit.key] = value;
+      });
+      const ageMatch = raw.match(/גיל\s*(\d{1,2})/);
       if (ageMatch) fields.age = Number(ageMatch[1]);
-      if (/לא מעשן/.test(text)) fields.smoker = false;
-      else if (/מעשן/.test(text)) fields.smoker = true;
-      const cityMatch = text.match(/עיר\s+([^\s]+(?:\s+[^\s]+)?)/);
-      if (cityMatch && !/גיל|מעשן/.test(cityMatch[1])) fields.city = trim(cityMatch[1]);
-      const firstMatch = text.match(/שם פרטי\s+(\S+)/);
-      if (firstMatch) fields.firstName = firstMatch[1];
-      const lastMatch = text.match(/שם משפחה\s+(\S+)/);
-      if (lastMatch) fields.lastName = lastMatch[1];
-      const company = extractCompany(text);
+      if (/לא מעשן/.test(raw)) fields.smoker = false;
+      else if (/מעשן/.test(raw)) fields.smoker = true;
+      if (/אישה|נקבה/.test(raw)) fields.gender = "female";
+      else if (/גבר|זכר/.test(raw)) fields.gender = "male";
+      if (!fields.maritalStatus) {
+        if (/ידוע(?:ה)?\s*בציבור/.test(raw)) fields.maritalStatus = "\u05D9\u05D3\u05D5\u05E2/\u05D4 \u05D1\u05E6\u05D9\u05D1\u05D5\u05E8";
+        else if (/אלמנ/.test(raw)) fields.maritalStatus = "\u05D0\u05DC\u05DE\u05DF/\u05D4";
+        else if (/גרוש/.test(raw)) fields.maritalStatus = "\u05D2\u05E8\u05D5\u05E9/\u05D4";
+        else if (/נשוי|נשואה/.test(raw)) fields.maritalStatus = "\u05E0\u05E9\u05D5\u05D9/\u05D0\u05D4";
+        else if (/רווק/.test(raw)) fields.maritalStatus = "\u05E8\u05D5\u05D5\u05E7/\u05D4";
+      }
+      if (!fields.clinic) {
+        if (/כללית/.test(raw)) fields.clinic = "\u05DB\u05DC\u05DC\u05D9\u05EA";
+        else if (/מכבי/.test(raw)) fields.clinic = "\u05DE\u05DB\u05D1\u05D9";
+        else if (/מאוחדת/.test(raw)) fields.clinic = "\u05DE\u05D0\u05D5\u05D7\u05D3\u05EA";
+        else if (/לאומית/.test(raw)) fields.clinic = "\u05DC\u05D0\u05D5\u05DE\u05D9\u05EA";
+        else if (/צהל/.test(raw)) fields.clinic = "\u05E7\u05D5\u05E4\u05D4 \u05E6\u05D4\u05DC\u05D9\u05EA";
+      }
+      if (fields.smoker === true && !fields.smokingType) {
+        if (/סיגריה אלקטרונית/.test(raw)) fields.smokingType = "\u05E1\u05D9\u05D2\u05E8\u05D9\u05D4 \u05D0\u05DC\u05E7\u05D8\u05E8\u05D5\u05E0\u05D9\u05EA";
+        else if (/קנאביס/.test(raw)) fields.smokingType = "\u05E7\u05E0\u05D0\u05D1\u05D9\u05E1";
+        else if (/נרגילה/.test(raw)) fields.smokingType = "\u05E0\u05E8\u05D2\u05D9\u05DC\u05D4";
+        else if (/טבק/.test(raw)) fields.smokingType = "\u05D8\u05D1\u05E7";
+        else if (/סיגריות/.test(raw)) fields.smokingType = "\u05E1\u05D9\u05D2\u05E8\u05D9\u05D5\u05EA";
+      }
+      const amountMatch = raw.match(/כמות(?:\s*ליום)?\s+(\d{1,3})/);
+      if (amountMatch) fields.smokingAmount = amountMatch[1];
+      const company = extractCompany(raw);
       if (company) fields.company = company;
-      const product = extractProduct(text);
+      const product = extractProduct(raw);
       if (product) fields.product = product;
-      if (/גבר|זכר/.test(text)) fields.gender = "male";
-      if (/אישה|נקבה/.test(text)) fields.gender = "female";
-      const sumMatch = text.match(/סכום\s+(\d[\d,]{3,})/);
+      const sumMatch = raw.match(/סכום\s+(\d[\d,]{3,})/);
       if (sumMatch) fields.sumInsured = Number(String(sumMatch[1]).replace(/,/g, ""));
       return Object.keys(fields).length ? fields : null;
     }
@@ -307,6 +370,12 @@
         return { tool: "create_task", args: { type: "\u05EA\u05D6\u05DB\u05D5\u05E8\u05EA", details } };
       }
       if (/משימות|תזכורות/.test(raw)) return { tool: "get_tasks", args: {} };
+      if (/(?:תעברי?|תעבור|עברי|עבור|לכי|לך|המשיכי|המשך)\s+(?:ל)?שלב\s+הבא|שלב הבא|לשלב הבא|הבא באשף/.test(raw)) {
+        return { tool: "wizard_next", args: {} };
+      }
+      if (/(?:תפתח|פתח|תפתחי|העלי|תעלה).*(?:הר הביטוח|הפק\s*ביטוח|הפק\s*פוליס)|הפק\s*(?:ביטוחים|פוליסות)\s*מהר/.test(raw)) {
+        return { tool: "open_har_import", args: {} };
+      }
       if (/(עבור|תעבור|לך אל|פתח מסך|מסך)/.test(raw)) {
         const view = extractView(raw);
         if (view) return { tool: "go_view", args: { view } };
@@ -341,8 +410,8 @@
         if (product) args.product = product;
         return { tool: "create_proposal", args };
       }
-      const fill = extractFillFields(raw);
-      if (fill && (/(מלא|רשום|עדכן|באשף|בהצעה|גיל|מעשן|עיר|שם פרטי|שם משפחה)/.test(raw) || extractCompany(raw) || extractProduct(raw))) {
+      const fill = extractFillFields(text);
+      if (fill && (fill.firstName || fill.lastName || fill.idNumber || fill.street || fill.phone || fill.city || fill.email || fill.birthDate || fill.maritalStatus || fill.clinic || fill.occupation || fill.age != null || /(מלא|רשום|עדכן|באשף|בהצעה|מעשן)/.test(raw) || extractCompany(raw) || extractProduct(raw))) {
         return { tool: "fill_wizard", args: fill };
       }
       if (/ייצור|תיקים החודש|הפקות/.test(raw)) {
@@ -965,7 +1034,9 @@
       if (tool === "open_simulator") return "\u05E4\u05EA\u05D7\u05EA\u05D9 \u05D0\u05EA \u05D4\u05E1\u05D9\u05DE\u05D5\u05DC\u05D8\u05D5\u05E8 \u05D4\u05E7\u05D9\u05D9\u05DD.";
       if (tool === "go_view") return "\u05E2\u05D1\u05E8\u05EA\u05D9 \u05DC\u05DE\u05E1\u05DA \u05D4\u05DE\u05D1\u05D5\u05E7\u05E9.";
       if (tool === "create_proposal") return "\u05E4\u05EA\u05D7\u05EA\u05D9 \u05D0\u05EA \u05D4\u05D0\u05E9\u05E3 \u05D4\u05E7\u05D9\u05D9\u05DD \u05DC\u05D4\u05E6\u05E2\u05D4.";
-      if (tool === "fill_wizard") return "\u05DE\u05D9\u05DC\u05D0\u05EA\u05D9 \u05D0\u05EA \u05D4\u05E0\u05EA\u05D5\u05E0\u05D9\u05DD \u05D1\u05D0\u05E9\u05E3.";
+      if (tool === "fill_wizard") return "\u05DE\u05D9\u05DC\u05D0\u05EA\u05D9 \u05D0\u05EA \u05D4\u05E9\u05D3\u05D5\u05EA \u05D1\u05D0\u05E9\u05E3.";
+      if (tool === "wizard_next") return data.ok === false ? "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05E2\u05D1\u05D5\u05E8 \u05E9\u05DC\u05D1. \u05D1\u05D3\u05E7\u05D5 \u05E9\u05DB\u05DC \u05D4\u05E4\u05E8\u05D8\u05D9\u05DD \u05DE\u05DC\u05D0\u05D9\u05DD." : "\u05E2\u05D1\u05E8\u05EA\u05D9 \u05DC\u05E9\u05DC\u05D1 \u05D4\u05D1\u05D0.";
+      if (tool === "open_har_import") return data.ok === false ? "\u05DC\u05D0 \u05DE\u05E6\u05D0\u05EA\u05D9 \u05D0\u05EA \u05DB\u05E4\u05EA\u05D5\u05E8 \u05D4\u05E8 \u05D4\u05D1\u05D9\u05D8\u05D5\u05D7. \u05E2\u05D1\u05E8\u05D5 \u05E7\u05D5\u05D3\u05DD \u05DC\u05E9\u05DC\u05D1 \u05D4\u05E4\u05D5\u05DC\u05D9\u05E1\u05D5\u05EA \u05D4\u05E7\u05D9\u05D9\u05DE\u05D5\u05EA." : "\u05E4\u05EA\u05D7\u05EA\u05D9 \u05D0\u05EA \u05D1\u05D7\u05D9\u05E8\u05EA \u05E7\u05D5\u05D1\u05E5 \u05D4\u05E8 \u05D4\u05D1\u05D9\u05D8\u05D5\u05D7. \u05D1\u05D7\u05E8\u05D5 \u05D0\u05EA \u05E7\u05D5\u05D1\u05E5 \u05D4\u05D0\u05E7\u05E1\u05DC \u05DE\u05D4\u05DE\u05D7\u05E9\u05D1.";
       if (tool === "get_monthly_production" || tool === "get_team_production") {
         const count = Number(data.count == null ? data.total : data.count);
         return Number.isFinite(count) ? "\u05D4\u05D7\u05D5\u05D3\u05E9 " + count + " \u05EA\u05D9\u05E7\u05D9\u05DD." : "\u05D4\u05D1\u05D0\u05EA\u05D9 \u05D0\u05EA \u05E0\u05EA\u05D5\u05E0\u05D9 \u05D4\u05D9\u05D9\u05E6\u05D5\u05E8.";
@@ -1095,7 +1166,7 @@
       }
     }
     function executeClientCommand(cmd) {
-      var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
+      var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
       if (!cmd || typeof cmd !== "object") return;
       const type = trim(cmd.type);
       const active = readBridge();
@@ -1107,11 +1178,13 @@
       else if (type === "fill_wizard") {
         const fields = cmd.fields && typeof cmd.fields === "object" ? cmd.fields : {};
         (_f = active.fillWizard) == null ? void 0 : _f.call(active, fields);
-      } else if (type === "open_proposal") (_g = active.openProposal) == null ? void 0 : _g.call(active, trim(cmd.proposalId));
+      } else if (type === "wizard_next") void ((_g = active.wizardNext) == null ? void 0 : _g.call(active));
+      else if (type === "open_har_import") void ((_h = active.openHarImport) == null ? void 0 : _h.call(active));
+      else if (type === "open_proposal") (_i = active.openProposal) == null ? void 0 : _i.call(active, trim(cmd.proposalId));
       else if (type === "upsert_reminder" && cmd.reminder && typeof cmd.reminder === "object") {
-        void ((_h = active.upsertReminder) == null ? void 0 : _h.call(active, cmd.reminder));
-      } else if (type === "mark_task_done") void ((_i = active.markTaskDone) == null ? void 0 : _i.call(active, trim(cmd.id || cmd.taskId)));
-      else if (type === "refresh_reminders") void ((_j = active.refreshReminders) == null ? void 0 : _j.call(active));
+        void ((_j = active.upsertReminder) == null ? void 0 : _j.call(active, cmd.reminder));
+      } else if (type === "mark_task_done") void ((_k = active.markTaskDone) == null ? void 0 : _k.call(active, trim(cmd.id || cmd.taskId)));
+      else if (type === "refresh_reminders") void ((_l = active.refreshReminders) == null ? void 0 : _l.call(active));
     }
     async function dispatchDesktopCommand(cmd) {
       if (!isPhonePage()) return;
@@ -1470,7 +1543,7 @@
       <p class="giAsst__lead">\u05E1\u05E8\u05D5\u05E7 \u05D0\u05EA \u05E7\u05D5\u05D3 \u05D4-QR \u05D1\u05D0\u05DE\u05E6\u05E2\u05D5\u05EA \u05D4\u05D8\u05DC\u05E4\u05D5\u05DF \u05DB\u05D3\u05D9 \u05DC\u05D7\u05D1\u05E8 \u05D0\u05EA \u05D4\u05E2\u05D5\u05D6\u05E8 \u05D4\u05D0\u05D9\u05E9\u05D9 \u05DC\u05D7\u05E9\u05D1\u05D5\u05DF \u05E9\u05DC\u05DA.</p>
       <div class="giAsst__qrSlot" id="giAsstQrSlot" aria-live="polite"></div>
       <p class="giAsst__timer" id="giAsstTimer">${remainLabel(expiresAt)}</p>
-      <p class="giAsst__hint">\u05D4\u05E7\u05D5\u05D3 \u05D7\u05D3\u05BE\u05E4\u05E2\u05DE\u05D9, \u05E7\u05E6\u05E8 \u05D1\u05D6\u05DE\u05DF, \u05D5\u05D0\u05D9\u05E0\u05D5 \u05DE\u05DB\u05D9\u05DC \u05EA\u05F4\u05D6, \u05E1\u05D9\u05E1\u05DE\u05D4 \u05D0\u05D5 \u05DE\u05D6\u05D4\u05D4 \u05DE\u05E9\u05EA\u05DE\u05E9.</p>
+      <p class="giAsst__hint">\u05D4\u05E7\u05D5\u05D3 \u05D7\u05D3\u05BE\u05E4\u05E2\u05DE\u05D9, \u05E7\u05E6\u05E8 \u05D1\u05D6\u05DE\u05DF, \u05D5\u05D0\u05D9\u05E0\u05D5 \u05DE\u05DB\u05D9\u05DC \u05EA\u05E2\u05D5\u05D3\u05EA \u05D6\u05D4\u05D5\u05EA, \u05E1\u05D9\u05E1\u05DE\u05D4 \u05D0\u05D5 \u05DE\u05D6\u05D4\u05D4 \u05DE\u05E9\u05EA\u05DE\u05E9.</p>
     `;
       const slot = $("giAsstQrSlot");
       if (slot) paintQr(slot, href);
@@ -1489,7 +1562,7 @@
         <button class="giAsst__btn" id="giAsstPinBtn" type="submit">\u05D4\u05E6\u05D2 QR \u05DE\u05D0\u05D5\u05D1\u05D8\u05D7</button>
       </form>
       <div class="giAsst__error" id="giAsstError" role="alert"></div>
-      <p class="giAsst__hint">\u05D4\u05E7\u05D5\u05D3 \u05D4\u05D7\u05D3\u05BE\u05E4\u05E2\u05DE\u05D9 \u05E0\u05D5\u05E6\u05E8 \u05D1\u05E9\u05E8\u05EA \u05E8\u05E7 \u05D0\u05D7\u05E8\u05D9 \u05D0\u05D9\u05DE\u05D5\u05EA. \u05D4\u05D5\u05D0 \u05D0\u05D9\u05E0\u05D5 \u05DE\u05DB\u05D9\u05DC \u05EA\u05F4\u05D6, \u05E1\u05D9\u05E1\u05DE\u05D4 \u05D0\u05D5 \u05DE\u05D6\u05D4\u05D4 \u05DE\u05E9\u05EA\u05DE\u05E9.</p>
+      <p class="giAsst__hint">\u05D4\u05E7\u05D5\u05D3 \u05D4\u05D7\u05D3\u05BE\u05E4\u05E2\u05DE\u05D9 \u05E0\u05D5\u05E6\u05E8 \u05D1\u05E9\u05E8\u05EA \u05E8\u05E7 \u05D0\u05D7\u05E8\u05D9 \u05D0\u05D9\u05DE\u05D5\u05EA. \u05D4\u05D5\u05D0 \u05D0\u05D9\u05E0\u05D5 \u05DE\u05DB\u05D9\u05DC \u05EA\u05E2\u05D5\u05D3\u05EA \u05D6\u05D4\u05D5\u05EA, \u05E1\u05D9\u05E1\u05DE\u05D4 \u05D0\u05D5 \u05DE\u05D6\u05D4\u05D4 \u05DE\u05E9\u05EA\u05DE\u05E9.</p>
     `;
       const form = $("giAsstPinForm");
       form == null ? void 0 : form.addEventListener("submit", (ev) => {

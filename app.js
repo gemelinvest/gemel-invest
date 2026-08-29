@@ -54253,9 +54253,58 @@ const ClalRiskLifePdf = {
             if(fields.firstName) ins.data.firstName = String(fields.firstName);
             if(fields.lastName) ins.data.lastName = String(fields.lastName);
             if(fields.city) ins.data.city = String(fields.city);
-            if(fields.gender) ins.data.gender = String(fields.gender);
+            if(fields.street) ins.data.street = String(fields.street);
+            if(fields.houseNumber) ins.data.houseNumber = String(fields.houseNumber);
+            if(fields.apartment) ins.data.apartment = String(fields.apartment);
+            if(fields.zip) ins.data.zip = String(fields.zip);
+            if(fields.email) ins.data.email = String(fields.email);
+            if(fields.phone) ins.data.phone = String(fields.phone);
+            if(fields.occupation) ins.data.occupation = String(fields.occupation);
+            if(fields.birthDate) ins.data.birthDate = String(fields.birthDate);
+            if(fields.idIssueDate) ins.data.idIssueDate = String(fields.idIssueDate);
+            if(fields.maritalStatus){
+              const marital = String(fields.maritalStatus);
+              if(/ידוע/.test(marital)) ins.data.maritalStatus = "ידוע/ה בציבור";
+              else if(/אלמנ/.test(marital)) ins.data.maritalStatus = "אלמן/ה";
+              else if(/גרוש/.test(marital)) ins.data.maritalStatus = "גרוש/ה";
+              else if(/נשוי|נשואה/.test(marital)) ins.data.maritalStatus = "נשוי/אה";
+              else if(/רווק/.test(marital)) ins.data.maritalStatus = "רווק/ה";
+              else ins.data.maritalStatus = marital;
+            }
+            if(fields.clinic){
+              const clinic = String(fields.clinic);
+              if(/כללית/.test(clinic)) ins.data.clinic = "כללית";
+              else if(/מכבי/.test(clinic)) ins.data.clinic = "מכבי";
+              else if(/מאוחדת/.test(clinic)) ins.data.clinic = "מאוחדת";
+              else if(/לאומית/.test(clinic)) ins.data.clinic = "לאומית";
+              else if(/צהל/.test(clinic)) ins.data.clinic = "קופה צהלית";
+              else ins.data.clinic = clinic;
+              try { Wizard.syncInsuredShabanForClinic?.(ins); } catch(_eClinic) {}
+            }
+            if(fields.shaban) ins.data.shaban = String(fields.shaban);
+            if(fields.gender){
+              const gender = String(fields.gender);
+              const female = /female|נקבה|אישה/.test(gender);
+              const male = /male|זכר|גבר/.test(gender);
+              const elem = typeof Wizard.isElementaryFlow === "function" && Wizard.isElementaryFlow();
+              if(female) ins.data.gender = elem ? "female" : "נקבה";
+              else if(male) ins.data.gender = elem ? "male" : "זכר";
+              else ins.data.gender = gender;
+            }
+            if(fields.idNumber){
+              const rawId = String(fields.idNumber).replace(/\D/g, "");
+              ins.data.idNumber = (typeof normalizeIdValue === "function") ? normalizeIdValue(rawId) : rawId;
+            }
             if(fields.age != null && fields.age !== "") ins.data.age = fields.age;
-            if(fields.smoker === true || fields.smoker === false) ins.data.smoker = fields.smoker;
+            if(fields.smoker === true){
+              ins.data.smoker = true;
+              ins.data.smokingStatus = "yes";
+            } else if(fields.smoker === false){
+              ins.data.smoker = false;
+              ins.data.smokingStatus = "no";
+            }
+            if(fields.smokingType) ins.data.smokingType = String(fields.smokingType);
+            if(fields.smokingAmount != null && fields.smokingAmount !== "") ins.data.smokingAmount = String(fields.smokingAmount);
           }
           if(fields.company || fields.product){
             if(!Array.isArray(Wizard.newPolicies)) Wizard.newPolicies = [];
@@ -54269,8 +54318,30 @@ const ClalRiskLifePdf = {
             }
           }
           if(Wizard.isOpen && typeof Wizard.render === "function") Wizard.render();
-          Wizard.setHint?.("העוזר מילא נתונים באשף הקיים.");
+          Wizard.setHint?.("העוזר מילא את השדות באשף. אם הכל מלא — אמרו «לשלב הבא».");
         } catch(_e) {}
+      },
+      wizardNext(){
+        try {
+          if(typeof Wizard === "undefined" || !Wizard.isOpen) return { ok:false, error:"WIZARD_CLOSED" };
+          if(typeof Wizard.nextStep === "function") return Wizard.nextStep();
+        } catch(_e) {}
+        return { ok:false };
+      },
+      openHarImport(){
+        try {
+          if(typeof Wizard === "undefined" || !Wizard.isOpen) return { ok:false, error:"WIZARD_CLOSED" };
+          const ins = Wizard.insureds && Wizard.insureds[0];
+          if(typeof Wizard.openHarBituachImport === "function"){
+            Wizard.openHarBituachImport(ins);
+            if(Wizard.els?.body?.querySelector?.("#lcHarBituachFile")){
+              Wizard.setHint?.("בחרו את קובץ האקסל של הר הביטוח מהמחשב.");
+              return { ok:true };
+            }
+          }
+          Wizard.setHint?.("עברו קודם לשלב הפוליסות הקיימות ואז אמרו שוב לפתוח את הר הביטוח.");
+          return { ok:false, error:"HAR_STEP" };
+        } catch(_e) { return { ok:false }; }
       },
       openProposal(id){ try { ProposalsUI.openById?.(id); } catch(_e) {} },
       refreshReminders(){ try { return ReminderUI.loadReminders?.(); } catch(_e) {} },
@@ -54334,6 +54405,8 @@ const ClalRiskLifePdf = {
       quoteSimulator(company, product, input){ return window.__GI_ASSISTANT_BRIDGE__.quoteSimulator(company, product, input); },
       openWizard(opts){ return window.__GI_ASSISTANT_BRIDGE__.openWizard(opts); },
       fillWizard(fields){ return window.__GI_ASSISTANT_BRIDGE__.fillWizard(fields); },
+      wizardNext(){ return window.__GI_ASSISTANT_BRIDGE__.wizardNext(); },
+      openHarImport(){ return window.__GI_ASSISTANT_BRIDGE__.openHarImport(); },
       openProposal(id){ return window.__GI_ASSISTANT_BRIDGE__.openProposal(id); },
       refreshReminders(){ return window.__GI_ASSISTANT_BRIDGE__.refreshReminders(); },
       searchCustomers(query){ return window.__GI_ASSISTANT_BRIDGE__.searchCustomers(query); },

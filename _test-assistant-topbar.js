@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-fast-v1";
+const TAG = "20260829-assistant-wizard-v1";
 let failed = 0;
 let passed = 0;
 
@@ -74,7 +74,9 @@ console.log("\n4) pairing gate + no secrets in QR path");
 assert(asstTs.includes("hasActiveDevicePairing"), "בדיקת pairing לפני פתיחה");
 assert(asstTs.includes("הפעלת העוזר האישי"), "מסך הפעלה בפעם הראשונה");
 assert(asstTs.includes("סרוק את קוד ה-QR"), "טקסט הסבר QR");
-assert(!asstTs.includes("id_number") && !asstTs.includes("idNumber"), "אין ת״ז במודול");
+assert(!asstTs.includes("id_number"), "אין id_number במודול");
+const pairFn = asstTs.slice(asstTs.indexOf("function phoneEntryUrl"), asstTs.indexOf("function phoneHomeUrl"));
+assert(pairFn.includes('url.searchParams.set("p"') && !pairFn.includes("idNumber"), "QR לא שם ת״ז");
     assert(!asstJs.includes('searchParams.set("password"') && !asstJs.includes('searchParams.set("pin"'), "QR לא שם PIN/סיסמה בפרמטר");
     assert(asstTs.includes('url.searchParams.set("p"'), "QR בנוי מפרמטר p בלבד");
     assert(asstJs.includes("assistant.html"), "QR מצביע ל-assistant.html");

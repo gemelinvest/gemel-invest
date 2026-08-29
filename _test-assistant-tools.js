@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-fast-v1";
+const TAG = "20260829-assistant-wizard-v1";
 let failed = 0;
 let passed = 0;
 
@@ -66,6 +66,8 @@ assert(!app.includes("create table"), "app.js still has no schema change");
 assert(!theme.includes("giAsst__"), "theme.css untouched");
 assert(asstTs.includes("invokeTool") && asstTs.includes("executeClientCommand"), "client dispatcher");
 assert(asstTs.includes("function_call_output"), "tool results return to the model");
+assert(edge.includes("fill_wizard") && edge.includes("wizard_next") && edge.includes("open_har_import"), "wizard fill/next/HAR tools");
+assert(app.includes("Wizard.nextStep") && app.includes("Wizard.openHarBituachImport"), "wizard wraps existing next + HAR picker");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);

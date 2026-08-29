@@ -9,7 +9,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-fast-v1";
+const TAG = "20260829-assistant-wizard-v1";
 let failed = 0;
 let passed = 0;
 
@@ -104,6 +104,21 @@ assert(api.parseLocalCommand("הקם הצעה לדוד לוי").tool === "create
 assert(String(api.parseLocalCommand("הקם הצעה לדוד לוי").args.query || "").indexOf("דוד") >= 0, "proposal keeps the customer name");
 assert(api.parseLocalCommand("גיל 35 לא מעשן").tool === "fill_wizard", "spoken data fills the open wizard");
 assert(api.parseLocalCommand("גיל 35 לא מעשן").args.age === 35, "fill keeps the age");
+const named = api.parseLocalCommand("שם פרטי אוריה שם משפחה סומך");
+assert(named.tool === "fill_wizard", "שם פרטי/משפחה maps to wizard fields");
+assert(named.args.firstName === "אוריה", "first name field");
+assert(named.args.lastName === "סומך", "last name field");
+assert(api.parseLocalCommand("תעברי לשלב הבא").tool === "wizard_next", "next wizard step");
+assert(api.parseLocalCommand("לשלב הבא").tool === "wizard_next", "לשלב הבא advances");
+assert(api.parseLocalCommand("תז 123456789").args.idNumber === "123456789", "labeled id fills idNumber");
+const addr = api.parseLocalCommand("טלפון 0501234567 כתובת מגורים אחד העם עיר תל אביב מייל test@ex.com");
+assert(addr.tool === "fill_wizard", "address/phone/email fill the wizard");
+assert(addr.args.phone === "0501234567", "phone field");
+assert(String(addr.args.street || "").indexOf("אחד העם") >= 0, "street from כתובת מגורים");
+assert(addr.args.city === "תל אביב", "city field");
+assert(addr.args.email === "test@ex.com", "email field");
+assert(api.parseLocalCommand("תפתח לי את הפק ביטוחים מהר הביטוח").tool === "open_har_import", "HAR picker wrap");
+assert(!asstTs.includes("ת״ז"), "client module has no geresh id label");
 assert(api.parseLocalCommand("עזרה").kind === "help", "עזרה is help");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
