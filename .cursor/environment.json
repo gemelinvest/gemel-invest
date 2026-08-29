@@ -1,0 +1,14 @@
+{
+  "name": "Gemel Invest CRM",
+  "install": "bash .cursor/install.sh",
+  "terminals": [
+    {
+      "name": "web",
+      "command": "python3 -m http.server 8000",
+      "description": "Serves the static Gemel Invest CRM (index.html) at http://localhost:8000"
+    }
+  ],
+  "ports": [
+    { "name": "web", "port": 8000 }
+  ]
+}
