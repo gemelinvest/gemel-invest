@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260828-menora-health-decl-v1";
+const APP_TAG = "20260829-ops-dash-redesign-v1";
 let failed = 0;
 let passed = 0;
 
@@ -59,9 +59,9 @@ console.log("\n2) תצוגה — מחובר + זמן זמינות");
 assert(!!dashBlock, "OpsDashboardUI נמצא");
 assert(dashBlock.includes("availableSinceIso(sessionStartedAt, lastFinishedAt){"), "עוזר זמן זמינות");
 assert(dashBlock.includes("presenceMap(){"), "קורא לנוכחות הצ׳אט");
-assert(dashBlock.includes('roleTxt = agent.live ? "בשיחה כעת" : (agent.connected ? "מחובר" : "לא מחובר")'), "סטטוס מחובר / לא מחובר");
-assert(dashBlock.includes('liveTxt = agent.live ? "LIVE" : (agent.connected ? "מחובר" : "—")'), "תווית מחובר כשלא בשיחה");
-assert(dashBlock.includes('opsDashPanel__sub">שידור חי · מחובר · זמן זמינות'), "כותרת המשנה");
+assert(dashBlock.includes('chipTxt = agent.live ? "בשיחה" : (agent.connected ? "מחובר" : "לא מחובר")'), "סטטוס מחובר / לא מחובר");
+assert(dashBlock.includes('opsDashAgent__chip--online'), "תג מחובר כשלא בשיחה");
+assert(dashBlock.includes("נציגים מחוברים"), "כותרת נציגים מחוברים");
 assert(dashBlock.includes("refreshAgentRows(){"), "ריענון שורות כשהנוכחות משתנה");
 assert(css.includes(".opsDashAgent.is-connected"), "עיצוב מחובר");
 assert(presenceBlock.includes("sessionStartedAt: extra.sessionStartedAt || this._sessionStartedAt"), "חותמת תחילת סשן בנוכחות");
@@ -163,11 +163,11 @@ const connectedHtml = api.renderAgentRows([{
   clock: "00:02:05"
 }]);
 assert(connectedHtml.includes("מחובר"), "נציג מחובר מוצג כמחובר");
-assert(connectedHtml.includes("זמין"), "תג זמין כשלא בשיחה");
+assert(connectedHtml.includes("זמין לקליטה"), "תג זמין כשלא בשיחה");
 assert(connectedHtml.includes("00:02:05"), "מונה זמן זמינות");
 assert(connectedHtml.includes("is-connected"), "מחלקת עיצוב מחובר");
-assert(!connectedHtml.includes("LIVE"), "אין LIVE כשלא בשיחה");
-assert(connectedHtml.includes("—"), "בלי לקוח כשלא בשיחה");
+assert(connectedHtml.includes("opsDashAgent__chip--online"), "תג מחובר כשלא בשיחה");
+assert(!connectedHtml.includes("בשיחה עם"), "בלי לקוח כשלא בשיחה");
 
 const liveHtml = api.renderAgentRows([{
   id: "a1",
@@ -185,8 +185,8 @@ const liveHtml = api.renderAgentRows([{
   clock: "00:01:30"
 }]);
 assert(liveHtml.includes("ישראל ישראלי"), "בשיחה נשאר שם הלקוח");
-assert(liveHtml.includes("בשיחה כעת"), "בשיחה נשאר הסטטוס הקודם");
-assert(liveHtml.includes("LIVE"), "בשיחה נשאר LIVE");
+assert(liveHtml.includes("בשיחה"), "בשיחה מוצג סטטוס בשיחה");
+assert(liveHtml.includes("opsDashAgent__chip--live"), "בשיחה מוצג תג חי");
 
 const offlineHtml = api.renderAgentRows([{
   id: "a2",
