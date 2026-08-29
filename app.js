@@ -54220,7 +54220,35 @@ const ClalRiskLifePdf = {
       },
       supabaseUrl: SUPABASE_URL,
       publishableKey: SUPABASE_PUBLISHABLE_KEY,
-      openCustomer(id){ try { CustomersUI.openByIdWithLoader(id); } catch(_e) {} },
+      openCustomer(id){
+        try {
+          const v = safeTrim(id);
+          if(!v) return;
+          const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+          if(!uuid) return window.__GI_ASSISTANT_BRIDGE__.openCustomerByQuery(v);
+          CustomersUI.openByIdWithLoader(v);
+        } catch(_e) {}
+      },
+      async openCustomerByQuery(query){
+        try {
+          const q = safeTrim(query);
+          if(!q) return { ok:false };
+          if(/^\d{8,9}$/.test(q) && typeof findCustomerByIdNumber === "function"){
+            const rec = findCustomerByIdNumber(q);
+            if(rec && customerVisibleToCurrentUser(rec) && rec.id){
+              CustomersUI.openByIdWithLoader(rec.id);
+              return { ok:true };
+            }
+          }
+          const hits = await window.__GI_ASSISTANT_BRIDGE__.searchCustomers(q);
+          const id = safeTrim(Array.isArray(hits) && hits[0] ? hits[0].id : "");
+          if(id){
+            CustomersUI.openByIdWithLoader(id);
+            return { ok:true };
+          }
+        } catch(_e) {}
+        return { ok:false };
+      },
       goView(view){ try { UI.goView(view); } catch(_e) {} },
       async openSimulator(company, product){
         try {
@@ -54238,7 +54266,18 @@ const ClalRiskLifePdf = {
       },
       async openWizard(opts){
         try {
-          const id = safeTrim(opts && opts.customerId);
+          let id = safeTrim(opts && opts.customerId);
+          const query = safeTrim(opts && opts.query);
+          if(!id && query){
+            if(/^\d{8,9}$/.test(query) && typeof findCustomerByIdNumber === "function"){
+              const rec = findCustomerByIdNumber(query);
+              if(rec && customerVisibleToCurrentUser(rec)) id = safeTrim(rec.id);
+            }
+            if(!id){
+              const hits = await window.__GI_ASSISTANT_BRIDGE__.searchCustomers(query);
+              id = safeTrim(Array.isArray(hits) && hits[0] ? hits[0].id : "");
+            }
+          }
           if(id && typeof Wizard.openNewPurchaseForCustomer === "function"){
             return Wizard.openNewPurchaseForCustomer(id);
           }
@@ -54418,6 +54457,7 @@ const ClalRiskLifePdf = {
       supabaseUrl: SUPABASE_URL,
       publishableKey: SUPABASE_PUBLISHABLE_KEY,
       openCustomer(id){ return window.__GI_ASSISTANT_BRIDGE__.openCustomer(id); },
+      openCustomerByQuery(query){ return window.__GI_ASSISTANT_BRIDGE__.openCustomerByQuery(query); },
       goView(view){ return window.__GI_ASSISTANT_BRIDGE__.goView(view); },
       openSimulator(company, product){ return window.__GI_ASSISTANT_BRIDGE__.openSimulator(company, product); },
       quoteSimulator(company, product, input){ return window.__GI_ASSISTANT_BRIDGE__.quoteSimulator(company, product, input); },

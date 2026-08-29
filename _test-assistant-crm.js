@@ -9,7 +9,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-wizard-v1";
+const TAG = "20260829-assistant-instant-v1";
 let failed = 0;
 let passed = 0;
 
@@ -56,6 +56,7 @@ assert(app.includes("ReminderUI.upsertReminder(row)"), "create task wraps Remind
 assert(app.includes("ReminderUI.markDone"), "done wraps ReminderUI.markDone");
 assert(app.includes("ReminderUI.reminders"), "list tasks reads ReminderUI.reminders");
 assert(app.includes("CustomersUI.openByIdWithLoader"), "open still uses existing customer file");
+assert(app.includes("openCustomerByQuery") && app.includes("Storage.searchCustomers(query, 20)"), "spoken open customer wraps existing search");
 assert(!/create table/i.test(app), "app.js still has no schema change");
 assert(!edge.includes("computeMenora") && !asstTs.includes("computeMenora"), "no duplicated rate tables");
 
