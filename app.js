@@ -54194,6 +54194,33 @@ const ClalRiskLifePdf = {
   NewCustomerEntryUI.init();
   HarHabituachTopbarUI.init();
   TravelInsuranceTopbarUI.init();
+  function findVisibleCustomerBySpokenQuery(query){
+    const q = safeTrim(query).toLowerCase().replace(/\s+/g, " ");
+    if(!q) return null;
+    const rows = Array.isArray(State.data?.customers) ? State.data.customers : [];
+    let best = null;
+    let bestScore = 0;
+    rows.forEach((rec) => {
+      if(!rec || !safeTrim(rec.id)) return;
+      try { if(!customerVisibleToCurrentUser(rec)) return; } catch(_e){ return; }
+      const name = safeTrim(rec.fullName || rec.full_name).toLowerCase();
+      const first = safeTrim(rec.firstName || rec.payload?.insureds?.[0]?.data?.firstName).toLowerCase();
+      const last = safeTrim(rec.lastName || rec.payload?.insureds?.[0]?.data?.lastName).toLowerCase();
+      const full = safeTrim((first + " " + last).trim());
+      const hay = [name, full, first, last].filter(Boolean).join(" ");
+      if(!hay) return;
+      let score = 0;
+      if(name === q || full === q) score = 3;
+      else if(name.indexOf(q) >= 0 || full.indexOf(q) >= 0) score = 2;
+      else if(q.split(" ").every((part) => part && hay.indexOf(part) >= 0)) score = 1;
+      if(score > bestScore){
+        bestScore = score;
+        best = rec;
+      }
+    });
+    return best;
+  }
+
   function toAssistantSafeCard(c){
     if(!c) return null;
     const id = safeTrim(c.id);
@@ -54239,6 +54266,11 @@ const ClalRiskLifePdf = {
               CustomersUI.openByIdWithLoader(rec.id);
               return { ok:true };
             }
+          }
+          const local = findVisibleCustomerBySpokenQuery(q);
+          if(local && local.id){
+            CustomersUI.openByIdWithLoader(local.id);
+            return { ok:true };
           }
           const hits = await window.__GI_ASSISTANT_BRIDGE__.searchCustomers(q);
           const id = safeTrim(Array.isArray(hits) && hits[0] ? hits[0].id : "");
