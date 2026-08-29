@@ -444,9 +444,10 @@ function sanitizeCommand(raw: unknown){
   const src = raw as Json;
   const type = trim(src.type);
   if(!UI_COMMANDS.has(type)) return null;
-  if(type !== "fill_wizard" && hasPii(src)) return null;
+  if(type !== "fill_wizard" && type !== "open_customer" && type !== "open_wizard" && hasPii(src)) return null;
   const cmd: Json = { type };
   if(trim(src.customerId)) cmd.customerId = trim(src.customerId);
+  if(trim(src.query)) cmd.query = trim(src.query).slice(0, 80);
   if(trim(src.view)) cmd.view = trim(src.view);
   if(trim(src.company)) cmd.company = trim(src.company);
   if(trim(src.product)) cmd.product = trim(src.product);

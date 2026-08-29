@@ -9,7 +9,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-wizard-v1";
+const TAG = "20260829-assistant-instant-v1";
 let failed = 0;
 let passed = 0;
 
@@ -125,6 +125,12 @@ assert(addr.args.email === "test@ex.com", "email field");
 assert(api.parseLocalCommand("תפתח לי את הפק ביטוחים מהר הביטוח").tool === "open_har_import", "HAR picker wrap");
 assert(!asstTs.includes("ת״ז"), "client module has no geresh id label");
 assert(api.parseLocalCommand("עזרה").kind === "help", "עזרה is help");
+assert(typeof api.commandFromLocalTool === "function", "instant UI mapper exported");
+const openNow = api.commandFromLocalTool("find_customer_by_id", { query: "רחל" });
+assert(openNow.type === "open_customer" && openNow.query === "רחל", "open customer does not wait for tools");
+assert(api.commandFromLocalTool("go_view", { view: "contacts" }).type === "go_view", "go_view is instant");
+assert(api.commandFromLocalTool("click_topbar", { id: "giChatFab" }).type === "click_topbar", "chat is instant");
+assert(asstTs.includes("COMMAND_POLL_MS = 120"), "desktop pulls commands every 120ms");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);

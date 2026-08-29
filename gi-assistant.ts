@@ -14,7 +14,7 @@
   const FALLBACK_SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
   const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
   const POLL_MS = 1600;
-  const COMMAND_POLL_MS = 400;
+  const COMMAND_POLL_MS = 120;
   const UI_COMMANDS = new Set([
     "open_customer", "go_view", "open_simulator", "open_proposal",
     "open_wizard", "refresh_reminders", "upsert_reminder", "mark_task_done",
@@ -42,6 +42,7 @@
     wizardNext?: () => void | Promise<unknown>;
     openHarImport?: () => void | { ok?: boolean; error?: string };
     clickTopbar?: (id: string) => void;
+    openCustomerByQuery?: (query: string) => void | Promise<unknown>;
     openProposal?: (id: string) => void;
     refreshReminders?: () => void | Promise<unknown>;
     searchCustomers?: (query: string) => Promise<HitCard[] | unknown[]>;
@@ -1146,6 +1147,9 @@
     if (data.needs_confirmation === true) return "פעולת כתיבה ממתינה לאישור. אמרו כן או לא.";
     if (trim(data.error) === "NEED_INPUT" || data.needs_input === true) return "חסרים פרטים. פתחתי את הסימולטור הקיים.";
     if (data.ok === false) return "לא הצלחתי לבצע את הבקשה.";
+    if (data.instant === true && (tool === "search_customer" || tool === "find_customer_by_id" || tool === "open_customer")) {
+      return "פותח את התיק.";
+    }
     if (tool === "search_customer") {
       const n = asHitCards(data.customers).length;
       if (!n) return "לא נמצאו לקוחות.";
@@ -1177,15 +1181,44 @@
     return "בוצע.";
   }
 
+  function commandFromLocalTool(tool: string, args: Record<string, unknown> | undefined): Record<string, unknown> | null {
+    const a = args && typeof args === "object" ? args : {};
+    if (tool === "go_view" && trim(a.view)) return { type: "go_view", view: trim(a.view) };
+    if (tool === "click_topbar" && trim(a.id)) return { type: "click_topbar", id: trim(a.id) };
+    if (tool === "fill_wizard") return { type: "fill_wizard", fields: a };
+    if (tool === "wizard_next") return { type: "wizard_next" };
+    if (tool === "open_har_import") return { type: "open_har_import" };
+    if (tool === "open_simulator" && trim(a.company)) return { type: "open_simulator", company: trim(a.company), product: trim(a.product) || "ריסק" };
+    if (tool === "create_proposal") {
+      const out: Record<string, unknown> = { type: "open_wizard" };
+      if (trim(a.customerId)) out.customerId = trim(a.customerId);
+      else if (trim(a.query)) out.query = trim(a.query);
+      else if (lastCustomerId) out.customerId = lastCustomerId;
+      if (trim(a.company)) out.company = trim(a.company);
+      if (trim(a.product)) out.product = trim(a.product);
+      return out;
+    }
+    if (tool === "open_customer" || tool === "find_customer_by_id" || tool === "search_customer") {
+      const out: Record<string, unknown> = { type: "open_customer" };
+      if (trim(a.customerId)) out.customerId = trim(a.customerId);
+      if (trim(a.query)) out.query = trim(a.query);
+      if (!out.customerId && !out.query) return null;
+      return out;
+    }
+    return null;
+  }
+
+  function runInstantUi(cmd: Record<string, unknown>): void {
+    if (isPhonePage()) void dispatchDesktopCommand(cmd);
+    else executeClientCommand(cmd);
+  }
+
   async function submitTalkText(): Promise<void> {
     const input = $("giAsstTalkText") as HTMLInputElement | null;
     const text = trim(input?.value);
     if (!text) return;
     if (input) input.value = "";
-    if (!trim(voice.sessionId) || voice.state === "idle" || voice.state === "error") {
-      await startVoice();
-    }
-    if (!trim(voice.sessionId)) return;
+    if (voice.state === "idle" || voice.state === "error") void startVoice();
     setHeardStatus(text);
     await handleLocalUtterance(text);
   }
@@ -1196,7 +1229,7 @@
     try {
       const intent = classifyIntent(text);
       const hadPending = !!pendingAction;
-      await onUserTranscript(text);
+      void onUserTranscript(text);
       if (intent === "confirm") {
         void speak(hadPending ? "הפעולה אושרה." : "אין פעולה ממתינה לאישור.");
         return;
@@ -1211,41 +1244,19 @@
         return;
       }
       const args = Object.assign({}, cmd.args || {});
-      if (cmd.tool === "create_proposal" && !trim(args.customerId)) {
-        const query = trim(args.query);
-        if (query) {
-          const found = await invokeTool("find_customer_by_id", { query });
-          const card = (found.customer && typeof found.customer === "object") ? found.customer as HitCard : null;
-          if (trim(card?.id)) args.customerId = trim(card?.id);
-        } else if (lastCustomerId) args.customerId = lastCustomerId;
+      const instant = commandFromLocalTool(cmd.tool, args);
+      if (instant) {
+        runInstantUi(instant);
+        if (cmd.tool === "create_proposal") {
+          const extra = extractFillFields(text);
+          if (extra && (extra.firstName || extra.lastName || extra.company || extra.product || extra.age != null)) {
+            runInstantUi({ type: "fill_wizard", fields: extra });
+          }
+        }
+        void speak(replyFromTool(cmd.tool, { ok: true, instant: true }));
+        return;
       }
       const data = await invokeTool(cmd.tool, args);
-      if (cmd.tool === "search_customer") {
-        const hits = asHitCards(data.customers);
-        if (hits.length === 1 && trim(hits[0].id)) {
-          lastCustomerId = trim(hits[0].id);
-          lastCustomerName = trim(hits[0].full_name);
-          try { await invokeTool("open_customer", { customerId: lastCustomerId }); } catch (_e) {}
-        }
-      }
-      if ((cmd.tool === "find_customer_by_id" || cmd.tool === "get_customer") && data.customer && typeof data.customer === "object") {
-        const card = data.customer as HitCard;
-        const id = trim(card.id);
-        if (id) {
-          lastCustomerId = id;
-          lastCustomerName = trim(card.full_name);
-          try { await invokeTool("open_customer", { customerId: id }); } catch (_e2) {}
-        }
-      }
-      if (trim(args.customerId)) {
-        lastCustomerId = trim(args.customerId);
-      }
-      if (cmd.tool === "create_proposal") {
-        const extra = extractFillFields(text);
-        if (extra && (extra.company || extra.product || extra.age || extra.firstName)) {
-          try { await invokeTool("fill_wizard", extra); } catch (_e4) {}
-        }
-      }
       void speak(replyFromTool(cmd.tool, data));
     } catch (_e3) {
       void speak("לא הצלחתי לבצע את הבקשה.");
@@ -1298,11 +1309,16 @@
     if (!cmd || typeof cmd !== "object") return;
     const type = trim(cmd.type);
     const active = readBridge();
-    if (type === "open_customer") active.openCustomer?.(trim(cmd.customerId));
+    if (type === "open_customer") {
+      const id = trim(cmd.customerId);
+      const query = trim(cmd.query);
+      if (id) active.openCustomer?.(id);
+      else if (query) void active.openCustomerByQuery?.(query);
+    }
     else if (type === "go_view") active.goView?.(trim(cmd.view));
     else if (type === "open_simulator") void active.openSimulator?.(trim(cmd.company), trim(cmd.product));
     else if (type === "quote_simulator") void active.quoteSimulator?.(trim(cmd.company), trim(cmd.product), (cmd.input && typeof cmd.input === "object") ? cmd.input as Record<string, unknown> : {});
-    else if (type === "open_wizard") void active.openWizard?.({ customerId: trim(cmd.customerId), company: trim(cmd.company), product: trim(cmd.product) });
+    else if (type === "open_wizard") void active.openWizard?.({ customerId: trim(cmd.customerId), query: trim(cmd.query), company: trim(cmd.company), product: trim(cmd.product) });
     else if (type === "fill_wizard") {
       const fields = (cmd.fields && typeof cmd.fields === "object") ? cmd.fields as Record<string, unknown> : {};
       active.fillWizard?.(fields);
@@ -1976,6 +1992,7 @@
     cancelPending,
     classifyIntent,
     parseLocalCommand,
+    commandFromLocalTool,
     redactSafe,
     invokeTool,
     executeClientCommand,

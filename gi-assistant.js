@@ -13,7 +13,7 @@
     const FALLBACK_SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
     const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
     const POLL_MS = 1600;
-    const COMMAND_POLL_MS = 400;
+    const COMMAND_POLL_MS = 120;
     const UI_COMMANDS = /* @__PURE__ */ new Set([
       "open_customer",
       "go_view",
@@ -1038,6 +1038,9 @@
       if (data.needs_confirmation === true) return "\u05E4\u05E2\u05D5\u05DC\u05EA \u05DB\u05EA\u05D9\u05D1\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8. \u05D0\u05DE\u05E8\u05D5 \u05DB\u05DF \u05D0\u05D5 \u05DC\u05D0.";
       if (trim(data.error) === "NEED_INPUT" || data.needs_input === true) return "\u05D7\u05E1\u05E8\u05D9\u05DD \u05E4\u05E8\u05D8\u05D9\u05DD. \u05E4\u05EA\u05D7\u05EA\u05D9 \u05D0\u05EA \u05D4\u05E1\u05D9\u05DE\u05D5\u05DC\u05D8\u05D5\u05E8 \u05D4\u05E7\u05D9\u05D9\u05DD.";
       if (data.ok === false) return "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D1\u05E6\u05E2 \u05D0\u05EA \u05D4\u05D1\u05E7\u05E9\u05D4.";
+      if (data.instant === true && (tool === "search_customer" || tool === "find_customer_by_id" || tool === "open_customer")) {
+        return "\u05E4\u05D5\u05EA\u05D7 \u05D0\u05EA \u05D4\u05EA\u05D9\u05E7.";
+      }
       if (tool === "search_customer") {
         const n = asHitCards(data.customers).length;
         if (!n) return "\u05DC\u05D0 \u05E0\u05DE\u05E6\u05D0\u05D5 \u05DC\u05E7\u05D5\u05D7\u05D5\u05EA.";
@@ -1068,15 +1071,42 @@
       }
       return "\u05D1\u05D5\u05E6\u05E2.";
     }
+    function commandFromLocalTool(tool, args) {
+      const a = args && typeof args === "object" ? args : {};
+      if (tool === "go_view" && trim(a.view)) return { type: "go_view", view: trim(a.view) };
+      if (tool === "click_topbar" && trim(a.id)) return { type: "click_topbar", id: trim(a.id) };
+      if (tool === "fill_wizard") return { type: "fill_wizard", fields: a };
+      if (tool === "wizard_next") return { type: "wizard_next" };
+      if (tool === "open_har_import") return { type: "open_har_import" };
+      if (tool === "open_simulator" && trim(a.company)) return { type: "open_simulator", company: trim(a.company), product: trim(a.product) || "\u05E8\u05D9\u05E1\u05E7" };
+      if (tool === "create_proposal") {
+        const out = { type: "open_wizard" };
+        if (trim(a.customerId)) out.customerId = trim(a.customerId);
+        else if (trim(a.query)) out.query = trim(a.query);
+        else if (lastCustomerId) out.customerId = lastCustomerId;
+        if (trim(a.company)) out.company = trim(a.company);
+        if (trim(a.product)) out.product = trim(a.product);
+        return out;
+      }
+      if (tool === "open_customer" || tool === "find_customer_by_id" || tool === "search_customer") {
+        const out = { type: "open_customer" };
+        if (trim(a.customerId)) out.customerId = trim(a.customerId);
+        if (trim(a.query)) out.query = trim(a.query);
+        if (!out.customerId && !out.query) return null;
+        return out;
+      }
+      return null;
+    }
+    function runInstantUi(cmd) {
+      if (isPhonePage()) void dispatchDesktopCommand(cmd);
+      else executeClientCommand(cmd);
+    }
     async function submitTalkText() {
       const input = $("giAsstTalkText");
       const text = trim(input == null ? void 0 : input.value);
       if (!text) return;
       if (input) input.value = "";
-      if (!trim(voice.sessionId) || voice.state === "idle" || voice.state === "error") {
-        await startVoice();
-      }
-      if (!trim(voice.sessionId)) return;
+      if (voice.state === "idle" || voice.state === "error") void startVoice();
       setHeardStatus(text);
       await handleLocalUtterance(text);
     }
@@ -1086,7 +1116,7 @@
       try {
         const intent = classifyIntent(text);
         const hadPending = !!pendingAction;
-        await onUserTranscript(text);
+        void onUserTranscript(text);
         if (intent === "confirm") {
           void speak(hadPending ? "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D0\u05D5\u05E9\u05E8\u05D4." : "\u05D0\u05D9\u05DF \u05E4\u05E2\u05D5\u05DC\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8.");
           return;
@@ -1101,50 +1131,19 @@
           return;
         }
         const args = Object.assign({}, cmd.args || {});
-        if (cmd.tool === "create_proposal" && !trim(args.customerId)) {
-          const query = trim(args.query);
-          if (query) {
-            const found = await invokeTool("find_customer_by_id", { query });
-            const card = found.customer && typeof found.customer === "object" ? found.customer : null;
-            if (trim(card == null ? void 0 : card.id)) args.customerId = trim(card == null ? void 0 : card.id);
-          } else if (lastCustomerId) args.customerId = lastCustomerId;
+        const instant = commandFromLocalTool(cmd.tool, args);
+        if (instant) {
+          runInstantUi(instant);
+          if (cmd.tool === "create_proposal") {
+            const extra = extractFillFields(text);
+            if (extra && (extra.firstName || extra.lastName || extra.company || extra.product || extra.age != null)) {
+              runInstantUi({ type: "fill_wizard", fields: extra });
+            }
+          }
+          void speak(replyFromTool(cmd.tool, { ok: true, instant: true }));
+          return;
         }
         const data = await invokeTool(cmd.tool, args);
-        if (cmd.tool === "search_customer") {
-          const hits = asHitCards(data.customers);
-          if (hits.length === 1 && trim(hits[0].id)) {
-            lastCustomerId = trim(hits[0].id);
-            lastCustomerName = trim(hits[0].full_name);
-            try {
-              await invokeTool("open_customer", { customerId: lastCustomerId });
-            } catch (_e) {
-            }
-          }
-        }
-        if ((cmd.tool === "find_customer_by_id" || cmd.tool === "get_customer") && data.customer && typeof data.customer === "object") {
-          const card = data.customer;
-          const id = trim(card.id);
-          if (id) {
-            lastCustomerId = id;
-            lastCustomerName = trim(card.full_name);
-            try {
-              await invokeTool("open_customer", { customerId: id });
-            } catch (_e2) {
-            }
-          }
-        }
-        if (trim(args.customerId)) {
-          lastCustomerId = trim(args.customerId);
-        }
-        if (cmd.tool === "create_proposal") {
-          const extra = extractFillFields(text);
-          if (extra && (extra.company || extra.product || extra.age || extra.firstName)) {
-            try {
-              await invokeTool("fill_wizard", extra);
-            } catch (_e4) {
-            }
-          }
-        }
         void speak(replyFromTool(cmd.tool, data));
       } catch (_e3) {
         void speak("\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D1\u05E6\u05E2 \u05D0\u05EA \u05D4\u05D1\u05E7\u05E9\u05D4.");
@@ -1191,26 +1190,30 @@
       }
     }
     function executeClientCommand(cmd) {
-      var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
+      var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n;
       if (!cmd || typeof cmd !== "object") return;
       const type = trim(cmd.type);
       const active = readBridge();
-      if (type === "open_customer") (_a = active.openCustomer) == null ? void 0 : _a.call(active, trim(cmd.customerId));
-      else if (type === "go_view") (_b = active.goView) == null ? void 0 : _b.call(active, trim(cmd.view));
-      else if (type === "open_simulator") void ((_c = active.openSimulator) == null ? void 0 : _c.call(active, trim(cmd.company), trim(cmd.product)));
-      else if (type === "quote_simulator") void ((_d = active.quoteSimulator) == null ? void 0 : _d.call(active, trim(cmd.company), trim(cmd.product), cmd.input && typeof cmd.input === "object" ? cmd.input : {}));
-      else if (type === "open_wizard") void ((_e = active.openWizard) == null ? void 0 : _e.call(active, { customerId: trim(cmd.customerId), company: trim(cmd.company), product: trim(cmd.product) }));
+      if (type === "open_customer") {
+        const id = trim(cmd.customerId);
+        const query = trim(cmd.query);
+        if (id) (_a = active.openCustomer) == null ? void 0 : _a.call(active, id);
+        else if (query) void ((_b = active.openCustomerByQuery) == null ? void 0 : _b.call(active, query));
+      } else if (type === "go_view") (_c = active.goView) == null ? void 0 : _c.call(active, trim(cmd.view));
+      else if (type === "open_simulator") void ((_d = active.openSimulator) == null ? void 0 : _d.call(active, trim(cmd.company), trim(cmd.product)));
+      else if (type === "quote_simulator") void ((_e = active.quoteSimulator) == null ? void 0 : _e.call(active, trim(cmd.company), trim(cmd.product), cmd.input && typeof cmd.input === "object" ? cmd.input : {}));
+      else if (type === "open_wizard") void ((_f = active.openWizard) == null ? void 0 : _f.call(active, { customerId: trim(cmd.customerId), query: trim(cmd.query), company: trim(cmd.company), product: trim(cmd.product) }));
       else if (type === "fill_wizard") {
         const fields = cmd.fields && typeof cmd.fields === "object" ? cmd.fields : {};
-        (_f = active.fillWizard) == null ? void 0 : _f.call(active, fields);
-      } else if (type === "wizard_next") void ((_g = active.wizardNext) == null ? void 0 : _g.call(active));
-      else if (type === "open_har_import") void ((_h = active.openHarImport) == null ? void 0 : _h.call(active));
-      else if (type === "click_topbar") (_i = active.clickTopbar) == null ? void 0 : _i.call(active, trim(cmd.id));
-      else if (type === "open_proposal") (_j = active.openProposal) == null ? void 0 : _j.call(active, trim(cmd.proposalId));
+        (_g = active.fillWizard) == null ? void 0 : _g.call(active, fields);
+      } else if (type === "wizard_next") void ((_h = active.wizardNext) == null ? void 0 : _h.call(active));
+      else if (type === "open_har_import") void ((_i = active.openHarImport) == null ? void 0 : _i.call(active));
+      else if (type === "click_topbar") (_j = active.clickTopbar) == null ? void 0 : _j.call(active, trim(cmd.id));
+      else if (type === "open_proposal") (_k = active.openProposal) == null ? void 0 : _k.call(active, trim(cmd.proposalId));
       else if (type === "upsert_reminder" && cmd.reminder && typeof cmd.reminder === "object") {
-        void ((_k = active.upsertReminder) == null ? void 0 : _k.call(active, cmd.reminder));
-      } else if (type === "mark_task_done") void ((_l = active.markTaskDone) == null ? void 0 : _l.call(active, trim(cmd.id || cmd.taskId)));
-      else if (type === "refresh_reminders") void ((_m = active.refreshReminders) == null ? void 0 : _m.call(active));
+        void ((_l = active.upsertReminder) == null ? void 0 : _l.call(active, cmd.reminder));
+      } else if (type === "mark_task_done") void ((_m = active.markTaskDone) == null ? void 0 : _m.call(active, trim(cmd.id || cmd.taskId)));
+      else if (type === "refresh_reminders") void ((_n = active.refreshReminders) == null ? void 0 : _n.call(active));
     }
     async function dispatchDesktopCommand(cmd) {
       if (!isPhonePage()) return;
@@ -1888,6 +1891,7 @@
       cancelPending,
       classifyIntent,
       parseLocalCommand,
+      commandFromLocalTool,
       redactSafe,
       invokeTool,
       executeClientCommand,
