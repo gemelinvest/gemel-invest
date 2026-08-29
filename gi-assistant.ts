@@ -48,6 +48,7 @@
     refreshReminders?: () => void | Promise<unknown>;
     searchCustomers?: (query: string) => Promise<HitCard[] | unknown[]>;
     findCustomerByIdNumber?: (id: string) => HitCard | null;
+    findCustomerByPhone?: (phone: string) => HitCard | null;
     findCustomerById?: (id: string) => HitCard | null;
     upsertReminder?: (row: Record<string, unknown>) => void | Promise<unknown>;
     markTaskDone?: (id: string) => void | Promise<unknown>;
@@ -129,6 +130,8 @@
   let pairingFreshPhone = false;
   let lastCustomerId = "";
   let lastCustomerName = "";
+  let conversationLive = false;
+  let liveMenuOpen = false;
 
   function trim(value: unknown): string {
     return String(value == null ? "" : value).trim();
@@ -338,6 +341,8 @@
   }
 
   const LOCAL_VOICE_HELP = "אפשר למלא את האשף לפי תווית. לדוגמה: שם פרטי אוריה, שם משפחה סומך, תז, טלפון, כתובת, עיר, ומייל. כשהשלב מלא, אמרו תעברי לשלב הבא. בשלב הפוליסות, אמרו תפתחי את הפק ביטוחים מהר הביטוח.";
+  const PHONE_SHORT_HELP = "אמרו פקודה קצרה, למשל פתח תיק או לשלב הבא.";
+  const PHONE_DONE_ACK = "בוצע.";
 
   function extractCompany(text: string): string {
     const companies = ["הפניקס", "מנורה", "הכשרה", "מגדל", "איילון", "כלל"];
@@ -371,7 +376,7 @@
     if (/הגדרות/.test(text)) return "settings";
     if (/הצוות|הצוות שלי/.test(text)) return "myTeam";
     if (/דוח|דוחות/.test(text)) return "reportsHub";
-    if (/הצעות/.test(text)) return "proposals";
+    if (/מסך\s*ההצעות|מסך\s*הצעות|להצעות|ההצעות|הצעות/.test(text)) return "proposals";
     if ((/סימול/.test(text) && !extractCompany(text)) || /כלים/.test(text)) return "myTools";
     if (/לוח|ראשי|דשבורד/.test(text)) return "dashboard";
     if (/מכירות/.test(text)) return "dailySales";
@@ -379,6 +384,24 @@
     if (/תהליכ/.test(text)) return "myProcesses";
     if (/לקוח|תיק/.test(text)) return "customers";
     return "";
+  }
+
+  function looksLikeIdNumber(value: string): boolean {
+    const digits = String(value || "").replace(/\D/g, "");
+    return /^\d{8,9}$/.test(digits);
+  }
+
+  function looksLikePhone(value: string): boolean {
+    const digits = String(value || "").replace(/\D/g, "");
+    if (/^972\d{8,9}$/.test(digits)) return true;
+    return /^0\d{8,9}$/.test(digits) || (/^\d{9,10}$/.test(digits) && !looksLikeIdNumber(digits));
+  }
+
+  function isSpokenQuestion(text: string): boolean {
+    const raw = trim(text);
+    if (!raw) return false;
+    if (/[?]/.test(raw)) return true;
+    return /^(?:מה|מי|כמה|איפה|מתי|למה|האם|אפשר\s+לשאול)|(?:מה\s+(?:חסר|נשאר|צריך|סטטוס)|חסר\s+(?:לי|כאן|בשלב)|מה\s+בשלב)/.test(raw);
   }
 
   function extractTopbar(text: string): string {
@@ -484,13 +507,32 @@
     const raw = trim(text).replace(/[!.?,״"']/g, " ").replace(/\s+/g, " ");
     if (!raw) return null;
     if (classifyIntent(raw) !== "other") return null;
-    if (/^(עזרה|מה אתה יכול|מה אפשר)/.test(raw)) return { kind: "help", say: LOCAL_VOICE_HELP };
+    if (/^(עזרה|מה אתה יכול|מה אפשר)/.test(raw)) {
+      return { kind: "help", say: isPhonePage() ? PHONE_SHORT_HELP : LOCAL_VOICE_HELP };
+    }
     if (/(חפש|תחפש|מצא|תמצא|חיפוש)/.test(raw)) {
       const query = raw.replace(/^(?:אפשר\s+)?(?:בבקשה\s+)?(?:חפש|תחפש|מצא|תמצא|חיפוש)\s+(?:לי\s+)?(?:את\s+)?(?:לקוח\s+)?(?:תיק\s+)?/, "");
       return { tool: "search_customer", args: { query: query || raw } };
     }
-    if (/(?:פתח|תפתח|תפתחי)\s+(?:את\s+)?(?:ה)?(?:תיק|לקוח)(?!\S)/.test(raw)) {
-      const query = raw.replace(/^.*?(?:התיק|תיק|לקוח)\s+(?:של\s+)?/, "").replace(/\s+(?:בבקשה|תודה)$/, "");
+    if (/המשך\s*עריכ/.test(raw)) {
+      const query = raw
+        .replace(/^.*?(?:המשך\s*עריכה?)\s*(?:של\s+|עבור\s+|ל)?/u, "")
+        .replace(/\s+(?:בבקשה|תודה)$/, "");
+      const args: Record<string, unknown> = {};
+      if (query && query !== raw) args.query = query;
+      else if (lastCustomerName) args.query = lastCustomerName;
+      else if (lastCustomerId) args.customerId = lastCustomerId;
+      return { tool: "create_proposal", args };
+    }
+    if (/(?:פתח|תפתח|תפתחי)\s+(?:את\s+)?(?:ה)?(?:תיק|לקוח)(?!\S)/.test(raw)
+      || /(?:תיק|לקוח)\s+(?:לפי\s+)?(?:תעודת\s*זהות|תז|מספר\s*זהות|טלפון|נייד)/.test(raw)
+      || (/^[\d\s\-()+]+$/.test(raw) && (looksLikeIdNumber(raw) || looksLikePhone(raw)))) {
+      let query = raw
+        .replace(/^.*?(?:התיק|תיק|לקוח)\s+(?:של\s+|לפי\s+)?(?:תעודת\s*זהות\s+|תז\s+|מספר\s*זהות\s+|טלפון\s+|נייד\s+)?/, "")
+        .replace(/\s+(?:בבקשה|תודה)$/, "");
+      const digits = raw.replace(/\D/g, "");
+      if ((!query || query === raw) && digits && /^[\d\s\-()+]+$/.test(raw)) query = digits;
+      if (looksLikeIdNumber(query) || looksLikePhone(query)) query = query.replace(/\D/g, "");
       return { tool: "find_customer_by_id", args: { query: query || raw } };
     }
     if (/תזכיר לי|(צור|הוסף|תפתח).*(משימה|תזכורת)/.test(raw)) {
@@ -501,7 +543,7 @@
     if (/(?:תעברי?|תעבור|עברי|עבור|לכי|לך|המשיכי|המשך)\s+(?:ל)?שלב\s+הבא|שלב הבא|לשלב הבא|הבא באשף/.test(raw)) {
       return { tool: "wizard_next", args: {} };
     }
-    if (/(?:תפתח|פתח|תפתחי|העלי|תעלה).*(?:הר הביטוח|הפק\s*ביטוח|הפק\s*פוליס)|הפק\s*(?:ביטוחים|פוליסות)\s*מהר/.test(raw)) {
+    if (/(?:תפתח|פתח|תפתחי|העלי|תעלה|תעלה\s+קובץ|העלה\s+קובץ).*(?:הר הביטוח|הפק\s*ביטוח|הפק\s*פוליס)|הפק\s*(?:ביטוחים|פוליסות)\s*מהר|קובץ\s+(?:הר|מהר)\s*הביטוח|מהמחשב.*(?:הר|הפק)/.test(raw)) {
       return { tool: "open_har_import", args: {} };
     }
     if (isOpenNavSpeech(raw)) {
@@ -547,7 +589,12 @@
     if (/ייצור|תיקים החודש|הפקות/.test(raw)) {
       return { tool: /צוות/.test(raw) ? "get_team_production" : "get_monthly_production", args: {} };
     }
-    if (/^(היי|שלום|תודה|בוקר טוב|ערב טוב)$/.test(raw)) return { kind: "help", say: LOCAL_VOICE_HELP };
+    if (/^(היי|שלום|תודה|בוקר טוב|ערב טוב)$/.test(raw)) {
+      return { kind: "help", say: isPhonePage() ? PHONE_SHORT_HELP : LOCAL_VOICE_HELP };
+    }
+    if (isPhonePage() && !isSpokenQuestion(raw)) {
+      return { kind: "help", say: PHONE_SHORT_HELP };
+    }
     return { kind: "help", say: LOCAL_VOICE_HELP };
   }
 
@@ -617,6 +664,89 @@
     btn.setAttribute("aria-hidden", show ? "false" : "true");
     if (show) btn.removeAttribute("hidden");
     else btn.setAttribute("hidden", "hidden");
+    syncTopbarLive();
+  }
+
+  function isConversationLive(): boolean {
+    return conversationLive === true
+      || voice.state === "connecting"
+      || voice.state === "listening"
+      || voice.state === "speaking";
+  }
+
+  function syncTopbarLive(): void {
+    const btn = $("btnPersonalAssistant");
+    if (!btn) return;
+    const live = isConversationLive();
+    btn.classList.toggle("is-live", live);
+    btn.classList.toggle("is-active", live);
+    btn.setAttribute("aria-pressed", live ? "true" : "false");
+    btn.setAttribute("title", live ? "שיחה פעילה עם העוזר — לחצו לסיום" : "העוזר האישי");
+    if (!live) hideLiveMenu();
+  }
+
+  function ensureLiveMenu(): HTMLElement {
+    let menu = $("giAsstLiveMenu");
+    if (menu) return menu;
+    menu = document.createElement("div");
+    menu.id = "giAsstLiveMenu";
+    menu.className = "giAsstLiveMenu is-hidden";
+    menu.setAttribute("hidden", "hidden");
+    menu.innerHTML = `
+      <button class="giAsstLiveMenu__btn" id="giAsstEndLive" type="button">סיים שיחה עם העוזר</button>
+    `;
+    document.body.appendChild(menu);
+    $("giAsstEndLive")?.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      hideLiveMenu();
+      void endLiveConversation();
+    });
+    document.addEventListener("click", (ev) => {
+      if (!liveMenuOpen) return;
+      const target = ev.target as Node | null;
+      if (menu?.contains(target) || $("btnPersonalAssistant")?.contains(target)) return;
+      hideLiveMenu();
+    });
+    return menu;
+  }
+
+  function hideLiveMenu(): void {
+    liveMenuOpen = false;
+    const menu = $("giAsstLiveMenu");
+    if (!menu) return;
+    menu.classList.add("is-hidden");
+    menu.setAttribute("hidden", "hidden");
+  }
+
+  function showLiveMenu(): void {
+    const btn = $("btnPersonalAssistant");
+    const menu = ensureLiveMenu();
+    if (!btn || !menu) return;
+    liveMenuOpen = true;
+    menu.classList.remove("is-hidden");
+    menu.removeAttribute("hidden");
+    try {
+      const rect = btn.getBoundingClientRect();
+      menu.style.top = Math.round(rect.bottom + 8) + "px";
+      menu.style.left = Math.round(Math.min(window.innerWidth - 220, Math.max(8, rect.left + rect.width / 2 - 100))) + "px";
+    } catch (_e) {}
+    window.setTimeout(() => $("giAsstEndLive")?.focus(), 30);
+  }
+
+  async function endLiveConversation(): Promise<void> {
+    hideLiveMenu();
+    conversationLive = false;
+    await stopVoice(true);
+    syncTopbarLive();
+    try {
+      (window as Window & { showToast?: (opts: Record<string, unknown>) => void }).showToast?.({
+        title: "העוזר האישי",
+        text: "השיחה עם העוזר הסתיימה.",
+        variant: "ok",
+        durationMs: 3200
+      });
+    } catch (_e) {}
   }
 
   function ensureRoot(): HTMLElement {
@@ -645,6 +775,7 @@
     root.querySelector("[data-gi-asst-close]")?.addEventListener("click", () => closeOverlay());
     document.addEventListener("keydown", (ev) => {
       if (ev.key === "Escape" && isOverlayOpen()) closeOverlay();
+      if (ev.key === "Escape" && liveMenuOpen) hideLiveMenu();
     });
     return root;
   }
@@ -654,14 +785,19 @@
     return !!(overlay && !overlay.classList.contains("is-hidden"));
   }
 
-  function closeOverlay(): void {
-    void cancelPairing();
-    void stopVoice();
+  function hideOverlay(): void {
     const overlay = $("giAsstOverlay");
     if (!overlay) return;
     overlay.classList.add("is-hidden");
     overlay.setAttribute("hidden", "hidden");
     overlay.setAttribute("aria-hidden", "true");
+  }
+
+  function closeOverlay(): void {
+    void cancelPairing();
+    // Keep an active voice session alive until the user explicitly ends it.
+    if (!isConversationLive()) void stopVoice();
+    hideOverlay();
     $("btnPersonalAssistant")?.focus();
   }
 
@@ -714,6 +850,7 @@
     voice.state = next;
     voice.error = next === "error" ? (errorText || voice.error || "") : "";
     paintVoiceState();
+    syncTopbarLive();
   }
 
   function voiceMarkup(includePin: boolean): string {
@@ -883,10 +1020,15 @@
         if (!local && /^\d{8,9}$/.test(trim(args.query)) && typeof active.findCustomerByIdNumber === "function") {
           local = active.findCustomerByIdNumber(trim(args.query));
         }
+        if (!local && looksLikePhone(trim(args.query)) && typeof active.findCustomerByPhone === "function") {
+          local = active.findCustomerByPhone(trim(args.query));
+        }
         if (local && trim(local.id) === trim(serverCard.id)) data.customer = local;
       } catch (_e) {}
       const card = sanitizeCustomerHit(data.customer as HitCard);
       data.customer = card;
+      if (trim(card.id)) lastCustomerId = trim(card.id);
+      if (trim(card.full_name)) lastCustomerName = trim(card.full_name);
       paintHits([card]);
       if (trim(card.full_name)) pushTimeline("ok", "נמצא לקוח: " + redactSafe(card.full_name));
     } else if (tool === "get_tasks" && data.ok !== false) {
@@ -1063,7 +1205,11 @@
 
   let voicesHooked = false;
 
-  function scoreHebrewVoice(voice: VoiceLike | null | undefined): number {
+  function preferredVoiceGender(): "female" | "male" {
+    return isPhonePage() ? "male" : "female";
+  }
+
+  function scoreHebrewVoice(voice: VoiceLike | null | undefined, prefer: "female" | "male" = preferredVoiceGender()): number {
     if (!voice) return -1000;
     const name = String(voice.name || "").toLowerCase();
     const lang = String(voice.lang || "").toLowerCase();
@@ -1073,29 +1219,39 @@
     if (!isHe) return -1000;
     let score = 50;
     if (lang === "he-il" || lang === "he") score += 30;
+    let female = false;
+    let male = false;
     for (let i = 0; i < FEMALE_VOICE_HINTS.length; i += 1) {
-      if (blob.indexOf(FEMALE_VOICE_HINTS[i]) >= 0) score += 40;
+      if (blob.indexOf(FEMALE_VOICE_HINTS[i]) >= 0) female = true;
+    }
+    for (let i = 0; i < MALE_VOICE_HINTS.length; i += 1) {
+      if (blob.indexOf(MALE_VOICE_HINTS[i]) >= 0) male = true;
+    }
+    if (prefer === "female") {
+      if (female) score += 40;
+      if (male) score -= 50;
+    } else {
+      if (male) score += 40;
+      if (female) score -= 50;
     }
     for (let i = 0; i < QUALITY_VOICE_HINTS.length; i += 1) {
       if (blob.indexOf(QUALITY_VOICE_HINTS[i]) >= 0) score += 18;
-    }
-    for (let i = 0; i < MALE_VOICE_HINTS.length; i += 1) {
-      if (blob.indexOf(MALE_VOICE_HINTS[i]) >= 0) score -= 50;
     }
     if (voice.localService) score += 6;
     if (voice.default) score += 4;
     return score;
   }
 
-  function pickHebrewVoice(voices?: VoiceLike[]): SpeechSynthesisVoice | VoiceLike | null {
+  function pickHebrewVoice(voices?: VoiceLike[], prefer?: "female" | "male"): SpeechSynthesisVoice | VoiceLike | null {
     try {
+      const gender = prefer || preferredVoiceGender();
       const list = (voices && voices.length)
         ? voices
         : ((window.speechSynthesis?.getVoices?.() || []) as VoiceLike[]);
       let best: VoiceLike | null = null;
       let bestScore = 0;
       for (let i = 0; i < list.length; i += 1) {
-        const score = scoreHebrewVoice(list[i]);
+        const score = scoreHebrewVoice(list[i], gender);
         if (score > bestScore) {
           bestScore = score;
           best = list[i];
@@ -1186,13 +1342,23 @@
     if (chosen) {
       try { utter.voice = chosen as SpeechSynthesisVoice; } catch (_e) {}
     }
+    const prefer = preferredVoiceGender();
     const name = String(chosen && chosen.name || "").toLowerCase();
     let female = false;
+    let male = false;
     for (let i = 0; i < FEMALE_VOICE_HINTS.length; i += 1) {
       if (name.indexOf(FEMALE_VOICE_HINTS[i]) >= 0) female = true;
     }
-    utter.rate = 0.9;
-    utter.pitch = female ? 1.12 : 1.2;
+    for (let i = 0; i < MALE_VOICE_HINTS.length; i += 1) {
+      if (name.indexOf(MALE_VOICE_HINTS[i]) >= 0) male = true;
+    }
+    utter.rate = prefer === "male" ? 0.92 : 0.9;
+    if (prefer === "male") {
+      // Keep masculine voices natural; nudge ambiguous OS voices slightly lower.
+      utter.pitch = male ? 0.95 : (female ? 0.9 : 0.92);
+    } else {
+      utter.pitch = female ? 1.12 : 1.2;
+    }
     utter.volume = 1;
   }
 
@@ -1236,6 +1402,21 @@
     } catch (_e) {}
   }
 
+  function pauseLocalListening(): void {
+    const rec = voice.recognition;
+    try { rec?.stop(); } catch (_e) {}
+  }
+
+  function resumeLocalListening(): void {
+    if (voice.state === "idle" || voice.state === "error") return;
+    const rec = voice.recognition;
+    if (!rec) {
+      startLocalListening();
+      return;
+    }
+    try { rec.start(); } catch (_e) {}
+  }
+
   function startLocalListening(): void {
     const Ctor = speechRecognitionCtor();
     if (!Ctor) return;
@@ -1244,6 +1425,7 @@
     rec.continuous = !isMobileVoice();
     rec.interimResults = true;
     rec.onresult = (ev) => {
+      if (utteranceBusy || voice.state === "speaking") return;
       const results = ev.results;
       let finalText = "";
       let interim = "";
@@ -1267,11 +1449,12 @@
     rec.onend = () => {
       if (voice.recognition !== rec) return;
       if (voice.state === "idle" || voice.state === "error") return;
+      if (utteranceBusy || voice.state === "speaking") return;
       window.setTimeout(() => {
-        if (voice.recognition === rec && voice.state !== "idle" && voice.state !== "error") {
+        if (voice.recognition === rec && voice.state !== "idle" && voice.state !== "error" && !utteranceBusy && voice.state !== "speaking") {
           try { rec.start(); } catch (_e) {}
         }
-      }, 280);
+      }, isPhonePage() ? 180 : 280);
     };
     voice.recognition = rec;
     rec.start();
@@ -1292,6 +1475,7 @@
     if (voice.state === "idle" || voice.state === "error") return;
     if (!window.speechSynthesis) return;
     warmVoices();
+    pauseLocalListening();
     setVoiceState("speaking");
     await new Promise<void>((resolve) => {
       let done = false;
@@ -1311,9 +1495,31 @@
       try { window.speechSynthesis.speak(utter); } catch (_e3) { finish(); }
     });
     if (voice.state === "speaking") setVoiceState("listening");
+    resumeLocalListening();
+  }
+
+  function shortActionAck(tool: string, data: Record<string, unknown>): string {
+    if (data.ok === false) {
+      if (tool === "open_har_import") return "לא מצאתי את כפתור הר הביטוח.";
+      if (tool === "wizard_next") return "לא הצלחתי לעבור שלב.";
+      return "לא הצלחתי.";
+    }
+    if (tool === "open_har_import") return "פתחתי בחירת קובץ. בחרו מהמחשב.";
+    return PHONE_DONE_ACK;
   }
 
   function replyFromTool(tool: string, data: Record<string, unknown>): string {
+    if (isPhonePage() && !data.forceVerbose) {
+      if (data.needs_confirmation === true) return "ממתינים לאישור. אמרו כן או לא.";
+      if (trim(data.error) === "NEED_INPUT" || data.needs_input === true) return "חסרים פרטים.";
+      if (
+        tool === "go_view" || tool === "click_topbar" || tool === "fill_wizard" || tool === "wizard_next"
+        || tool === "open_har_import" || tool === "open_simulator" || tool === "create_proposal"
+        || tool === "open_customer" || tool === "find_customer_by_id"
+      ) {
+        return shortActionAck(tool, data);
+      }
+    }
     if (data.needs_confirmation === true) return "פעולת כתיבה ממתינה לאישור. אמרו כן, או לא.";
     if (trim(data.error) === "NEED_INPUT" || data.needs_input === true) return "חסרים פרטים. פתחתי את הסימולטור הקיים.";
     if (data.ok === false) return "לא הצלחתי לבצע את הבקשה.";
@@ -1387,6 +1593,10 @@
     else executeClientCommand(cmd);
   }
 
+  async function sleepMs(ms: number): Promise<void> {
+    await new Promise((resolve) => window.setTimeout(resolve, ms));
+  }
+
   async function submitTalkText(): Promise<void> {
     const input = $("giAsstTalkText") as HTMLInputElement | null;
     const text = trim(input?.value);
@@ -1398,46 +1608,56 @@
   }
 
   async function handleLocalUtterance(text: string): Promise<void> {
-    utteranceBusy = false;
+    if (utteranceBusy) return;
     try { window.speechSynthesis?.cancel(); } catch (_eBusy) {}
     if (voice.state === "speaking") setVoiceState("listening");
     utteranceBusy = true;
+    pauseLocalListening();
     try {
       const intent = classifyIntent(text);
       const hadPending = !!pendingAction;
       void onUserTranscript(text);
       if (intent === "confirm") {
-        void speak(hadPending ? "אישרתי את הפעולה." : "אין פעולה שממתינה לאישור.");
+        await speak(hadPending ? (isPhonePage() ? "אושר." : "אישרתי את הפעולה.") : (isPhonePage() ? "אין פעולה ממתינה." : "אין פעולה שממתינה לאישור."));
         return;
       }
       if (intent === "cancel") {
-        void speak(hadPending ? "ביטלתי את הפעולה." : "אין פעולה לביטול.");
+        await speak(hadPending ? (isPhonePage() ? "בוטל." : "ביטלתי את הפעולה.") : (isPhonePage() ? "אין פעולה לביטול." : "אין פעולה לביטול."));
         return;
       }
       const cmd = parseLocalCommand(text);
       if (!cmd || cmd.kind === "help" || !cmd.tool) {
-        void speak((cmd && cmd.say) || LOCAL_VOICE_HELP);
+        if (isPhonePage() && !isSpokenQuestion(text)) {
+          await speak((cmd && cmd.say) || PHONE_SHORT_HELP);
+          return;
+        }
+        await speak((cmd && cmd.say) || (isPhonePage() ? PHONE_SHORT_HELP : LOCAL_VOICE_HELP));
         return;
       }
       const args = Object.assign({}, cmd.args || {});
       const instant = commandFromLocalTool(cmd.tool, args);
       if (instant) {
-        runInstantUi(instant);
+        // Phone → desktop command bus: await dispatch so the CRM actually jumps.
+        if (isPhonePage()) await dispatchDesktopCommand(instant);
+        else executeClientCommand(instant);
         if (cmd.tool === "create_proposal") {
           const extra = extractFillFields(text);
           if (extra && (extra.firstName || extra.lastName || extra.company || extra.product || extra.age != null)) {
-            runInstantUi({ type: "fill_wizard", fields: extra });
+            const fillCmd = { type: "fill_wizard", fields: extra };
+            if (isPhonePage()) await dispatchDesktopCommand(fillCmd);
+            else executeClientCommand(fillCmd);
           }
         }
-        void speak(replyFromTool(cmd.tool, { ok: true, instant: true }));
+        await speak(replyFromTool(cmd.tool, { ok: true, instant: true }));
         return;
       }
       const data = await invokeTool(cmd.tool, args);
-      void speak(replyFromTool(cmd.tool, data));
+      await speak(replyFromTool(cmd.tool, data));
     } catch (_e3) {
-      void speak("לא הצלחתי לבצע את הבקשה.");
+      await speak(isPhonePage() ? "לא הצלחתי." : "לא הצלחתי לבצע את הבקשה.");
     } finally {
       utteranceBusy = false;
+      if (voice.state === "listening" || voice.state === "connecting") resumeLocalListening();
     }
   }
 
@@ -1489,13 +1709,22 @@
       const id = trim(cmd.customerId);
       const query = trim(cmd.query);
       const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-      if (uuid) active.openCustomer?.(id);
-      else void active.openCustomerByQuery?.(query || id);
+      if (uuid) {
+        lastCustomerId = id;
+        active.openCustomer?.(id);
+      } else {
+        if (query) lastCustomerName = query;
+        void active.openCustomerByQuery?.(query || id);
+      }
     }
     else if (type === "go_view") active.goView?.(trim(cmd.view));
     else if (type === "open_simulator") void active.openSimulator?.(trim(cmd.company), trim(cmd.product));
     else if (type === "quote_simulator") void active.quoteSimulator?.(trim(cmd.company), trim(cmd.product), (cmd.input && typeof cmd.input === "object") ? cmd.input as Record<string, unknown> : {});
-    else if (type === "open_wizard") void active.openWizard?.({ customerId: trim(cmd.customerId), query: trim(cmd.query), company: trim(cmd.company), product: trim(cmd.product) });
+    else if (type === "open_wizard") {
+      if (trim(cmd.customerId)) lastCustomerId = trim(cmd.customerId);
+      if (trim(cmd.query)) lastCustomerName = trim(cmd.query);
+      void active.openWizard?.({ customerId: trim(cmd.customerId), query: trim(cmd.query), company: trim(cmd.company), product: trim(cmd.product) });
+    }
     else if (type === "fill_wizard") {
       const fields = (cmd.fields && typeof cmd.fields === "object") ? cmd.fields as Record<string, unknown> : {};
       active.fillWizard?.(fields);
@@ -1514,9 +1743,22 @@
   async function dispatchDesktopCommand(cmd: Record<string, unknown>): Promise<void> {
     if (!isPhonePage()) return;
     if (!UI_COMMANDS.has(trim(cmd.type))) return;
-    try {
-      await callEngine({ ...engineAuthPayload(), action: "dispatch", command: cmd });
-    } catch (_e) {}
+    let lastErr: unknown = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const data = await callEngine({ ...engineAuthPayload(), action: "dispatch", command: cmd });
+        if (data && data.ok === false) {
+          lastErr = trim(data.error) || "DISPATCH";
+          await sleepMs(140 * (attempt + 1));
+          continue;
+        }
+        return;
+      } catch (err) {
+        lastErr = err;
+        await sleepMs(140 * (attempt + 1));
+      }
+    }
+    if (lastErr) pushTimeline("error", "שליחת הפקודה למחשב נכשלה. נסו שוב.");
   }
 
   async function pullDesktopCommands(): Promise<void> {
@@ -1540,7 +1782,11 @@
   }
 
   function startCommandBus(): void {
-    if (isPhonePage() || commandPoll) return;
+    if (isPhonePage()) return;
+    if (commandPoll) {
+      void pullDesktopCommands();
+      return;
+    }
     commandPoll = window.setInterval(() => { void pullDesktopCommands(); }, COMMAND_POLL_MS);
     void pullDesktopCommands();
   }
@@ -1749,8 +1995,13 @@
       try { await callEngine({ ...engineAuthPayload(), action: "bootstrap" }); } catch (_e2) {}
       pushTimeline("system", "סשן עוזר מקומי נפתח.");
       setHeardStatus("");
+      conversationLive = true;
       startLocalListening();
+      startCommandBus();
       setVoiceState("listening");
+      syncTopbarLive();
+      // Desktop: close the overlay so CRM screens jumping are visible.
+      if (!isPhonePage()) hideOverlay();
       if (!speechRecognitionCtor()) {
         pushTimeline("info", "במכשיר הזה אין דיבור מובנה. כתבו פקודה בתיבה.");
       } else {
@@ -1760,12 +2011,14 @@
       const code = trim((err as Error & { code?: string; name?: string })?.code
         || (err as Error & { name?: string })?.name
         || (err as Error)?.message);
+      conversationLive = false;
       await stopVoice(false);
       const mapped = pairingErrorText(code);
       const text = (code === "FAILED_TO_FETCH" || code === "TypeError")
         ? "אין חיבור לשרת העוזר. בדקו שהפונקציות פורסמו."
         : (mapped === "לא הצלחתי להשלים את הקישור. נסו שוב." ? "לא הצלחתי להתחיל את השיחה. נסו שוב." : mapped);
       setVoiceState("error", text);
+      syncTopbarLive();
     }
   }
 
@@ -1786,6 +2039,8 @@
     pendingAction = null;
     utteranceBusy = false;
     lastHeard = "";
+    conversationLive = false;
+    hideLiveMenu();
     if (sessionId) {
       try { await callEngine(endPayload); } catch (_e5) {}
     }
@@ -1793,6 +2048,7 @@
       setVoiceState("idle");
       paintConfirm();
     }
+    syncTopbarLive();
   }
 
   function renderAssistantBody(): void {
@@ -1991,6 +2247,11 @@
       } catch (_e) {}
       return;
     }
+    if (isConversationLive()) {
+      if (liveMenuOpen) hideLiveMenu();
+      else showLiveMenu();
+      return;
+    }
     ensureRoot();
     if (hasActiveDevicePairing()) renderAssistantBody();
     else renderActivateBody();
@@ -2175,6 +2436,9 @@
     phoneHomeUrl,
     startVoice,
     stopVoice,
+    endLiveConversation,
+    hideOverlay,
+    isConversationLive,
     getVoiceState(){ return voice.state; },
     proposeWrite,
     confirmPending,
@@ -2184,10 +2448,15 @@
     commandFromLocalTool,
     pickHebrewVoice,
     scoreHebrewVoice,
+    preferredVoiceGender,
     prepareSpeechText,
     applyVoiceTone,
     numberToHebrew,
     replyFromTool,
+    shortActionAck,
+    isSpokenQuestion,
+    looksLikePhone,
+    looksLikeIdNumber,
     redactSafe,
     invokeTool,
     executeClientCommand,
