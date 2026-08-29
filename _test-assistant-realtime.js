@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-live-v1";
+const TAG = "20260829-assistant-local-v1";
 let failed = 0;
 let passed = 0;
 
@@ -54,6 +54,8 @@ assert(!asstJs.includes("OPENAI_API_KEY"), "compiled JS has no API key env name"
 assert(!/sk-[A-Za-z0-9]{10,}/.test(asstTs + asstJs), "no live sk- key material in client");
 assert(!edge.includes("sk-proj") && !edge.includes("sk-svc"), "edge does not hardcode a live key");
 assert(edge.includes("/v1/realtime/client_secrets"), "server mints via client_secrets");
+assert(edge.includes("gpt-realtime-2.1"), "current realtime model");
+assert(edge.includes("OPENAI_INVALID_KEY"), "maps invalid OpenAI key");
 assert(asstTs.includes("/v1/realtime/calls"), "browser connects with ephemeral token only");
 assert(asstTs.includes("clientSecret.indexOf(\"sk-\") === 0"), "client rejects a leaked standard key");
 
