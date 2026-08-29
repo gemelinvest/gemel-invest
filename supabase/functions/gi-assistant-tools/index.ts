@@ -12,7 +12,7 @@ const CORS = {
 
 const CUSTOMER_LIGHT = "id,status,full_name,id_number,phone,email,city,agent_name,agent_id,agent_role,existing_policies_count,new_policies_count,created_at";
 const PII_KEY = /id_number|idNumber|tz_number|national_id|ת״ז/i;
-const WRITE_TOOLS = new Set(["create_task", "update_task", "create_proposal"]);
+const WRITE_TOOLS = new Set(["create_task", "update_task"]);
 const SIM_CATALOG: Array<[string, string]> = [
   ["הפניקס", "ריסק"], ["הפניקס", "בריאות"], ["הפניקס", "מחלות קשות"], ["הפניקס", "סרטן"],
   ["הפניקס", "ריסק משכנתא"],
@@ -582,7 +582,24 @@ async function invoke(sb: SupabaseClient, agent: AgentRow, sessionId: string, bo
   }
   if(tool === "go_view") return await handleGoView(agent, rawArgs);
   if(tool === "open_simulator") return await handleOpenSimulator(rawArgs);
+  if(tool === "create_proposal") return await handleCreateProposal(sb, agent, rawArgs);
+  if(tool === "fill_wizard") return handleFillWizard(rawArgs);
   return { ok: false, error: "UNKNOWN_TOOL" };
+}
+
+function handleFillWizard(args: Json){
+  const fields: Json = {};
+  for(const key of ["firstName", "lastName", "city", "company", "product", "gender"]){
+    const value = trim(args[key]);
+    if(value && !/\d{8,9}/.test(value)) fields[key] = value.slice(0, 40);
+  }
+  const age = Number(args.age);
+  if(Number.isFinite(age) && age > 0 && age < 120) fields.age = age;
+  if(args.smoker === true || args.smoker === false) fields.smoker = args.smoker;
+  const sum = Number(args.sumInsured);
+  if(Number.isFinite(sum) && sum > 0) fields.sumInsured = sum;
+  if(!Object.keys(fields).length) return { ok: false, error: "NEED_INPUT" };
+  return { ok: true, client_command: { type: "fill_wizard", fields } };
 }
 
 Deno.serve(async (req) => {

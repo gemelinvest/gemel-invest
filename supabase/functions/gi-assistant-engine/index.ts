@@ -16,6 +16,7 @@ const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const UI_COMMANDS = new Set([
   "open_customer", "go_view", "open_simulator", "open_proposal",
   "open_wizard", "refresh_reminders", "upsert_reminder", "mark_task_done",
+  "fill_wizard",
 ]);
 const PII_KEY = /id_number|idNumber|tz_number|national_id|"ת\\"ז"|ת״ז/i;
 const PII_DIGITS = /\d{8,9}/g;
@@ -451,7 +452,25 @@ function sanitizeCommand(raw: unknown){
   if(trim(src.proposalId)) cmd.proposalId = trim(src.proposalId);
   if(trim(src.id || src.taskId)) cmd.id = trim(src.id || src.taskId);
   if(src.reminder && typeof src.reminder === "object") cmd.reminder = src.reminder;
+  if(type === "fill_wizard" && src.fields && typeof src.fields === "object"){
+    cmd.fields = sanitizeFillFields(src.fields);
+  }
   return cmd;
+}
+
+function sanitizeFillFields(raw: unknown){
+  const src = raw && typeof raw === "object" ? raw as Json : {};
+  const out: Json = {};
+  for(const key of ["firstName", "lastName", "city", "company", "product", "gender"]){
+    const value = trim(src[key]);
+    if(value && !/\d{8,9}/.test(value)) out[key] = value.slice(0, 40);
+  }
+  const age = Number(src.age);
+  if(Number.isFinite(age) && age > 0 && age < 120) out.age = age;
+  if(src.smoker === true || src.smoker === false) out.smoker = src.smoker;
+  const sum = Number(src.sumInsured);
+  if(Number.isFinite(sum) && sum > 0) out.sumInsured = sum;
+  return out;
 }
 
 async function handleDispatch(sb: SupabaseClient, body: Json, agent: AgentRow, sessionId: string){

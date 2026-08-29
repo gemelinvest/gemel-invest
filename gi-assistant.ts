@@ -14,9 +14,11 @@
   const FALLBACK_SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
   const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
   const POLL_MS = 1600;
+  const COMMAND_POLL_MS = 400;
   const UI_COMMANDS = new Set([
     "open_customer", "go_view", "open_simulator", "open_proposal",
-    "open_wizard", "refresh_reminders", "upsert_reminder", "mark_task_done"
+    "open_wizard", "refresh_reminders", "upsert_reminder", "mark_task_done",
+    "fill_wizard"
   ]);
 
   type AgentAuth = {
@@ -36,6 +38,7 @@
     openSimulator?: (company: string, product: string) => void | Promise<unknown>;
     quoteSimulator?: (company: string, product: string, input?: Record<string, unknown>) => Promise<Record<string, unknown> | unknown>;
     openWizard?: (opts?: Record<string, unknown>) => void | Promise<unknown>;
+    fillWizard?: (fields: Record<string, unknown>) => void;
     openProposal?: (id: string) => void;
     refreshReminders?: () => void | Promise<unknown>;
     searchCustomers?: (query: string) => Promise<HitCard[] | unknown[]>;
@@ -119,6 +122,8 @@
   let utteranceBusy = false;
   let lastHeard = "";
   let pairingFreshPhone = false;
+  let lastCustomerId = "";
+  let lastCustomerName = "";
 
   function trim(value: unknown): string {
     return String(value == null ? "" : value).trim();
@@ -317,7 +322,7 @@
     return "other";
   }
 
-  const LOCAL_VOICE_HELP = "אפשר לומר: חפש לקוח, פתח תיק, משימות, עבור ללקוחות, פתח סימולטור מנורה ריסק, מחיר מנורה ריסק, או צור הצעה.";
+  const LOCAL_VOICE_HELP = "אפשר לומר: פתח תיק דוד, הקם הצעה לדוד, גיל 35 לא מעשן, מנורה ריסק, עבור ללקוחות, משימות.";
 
   function extractCompany(text: string): string {
     const companies = ["הפניקס", "מנורה", "הכשרה", "מגדל", "איילון", "כלל"];
@@ -350,6 +355,29 @@
     if (/תהליכ/.test(text)) return "myProcesses";
     if (/לקוח|תיק/.test(text)) return "customers";
     return "";
+  }
+
+  function extractFillFields(text: string): Record<string, unknown> | null {
+    const fields: Record<string, unknown> = {};
+    const ageMatch = text.match(/גיל\s*(\d{1,2})/);
+    if (ageMatch) fields.age = Number(ageMatch[1]);
+    if (/לא מעשן/.test(text)) fields.smoker = false;
+    else if (/מעשן/.test(text)) fields.smoker = true;
+    const cityMatch = text.match(/עיר\s+([^\s]+(?:\s+[^\s]+)?)/);
+    if (cityMatch && !/גיל|מעשן/.test(cityMatch[1])) fields.city = trim(cityMatch[1]);
+    const firstMatch = text.match(/שם פרטי\s+(\S+)/);
+    if (firstMatch) fields.firstName = firstMatch[1];
+    const lastMatch = text.match(/שם משפחה\s+(\S+)/);
+    if (lastMatch) fields.lastName = lastMatch[1];
+    const company = extractCompany(text);
+    if (company) fields.company = company;
+    const product = extractProduct(text);
+    if (product) fields.product = product;
+    if (/גבר|זכר/.test(text)) fields.gender = "male";
+    if (/אישה|נקבה/.test(text)) fields.gender = "female";
+    const sumMatch = text.match(/סכום\s+(\d[\d,]{3,})/);
+    if (sumMatch) fields.sumInsured = Number(String(sumMatch[1]).replace(/,/g, ""));
+    return Object.keys(fields).length ? fields : null;
   }
 
   function parseLocalCommand(text: string): LocalCommand | null {
@@ -394,7 +422,20 @@
       const product = extractProduct(raw) || "ריסק";
       if (company) return { tool: "open_simulator", args: { company, product } };
     }
-    if (/(צור|תפתח).*(הצעה)|הצעה חדשה/.test(raw)) return { tool: "create_proposal", args: {} };
+    if (/(הקם|הקימי|צור|תפתח|תפתחי|פתח|בנה).*(הצעה)|הצעה חדשה|הצעה ל/.test(raw)) {
+      const query = raw.replace(/^.*?(?:הצעה(?:\s+חדשה)?)\s*(?:ל|עבור|של)?\s*/, "");
+      const args: Record<string, unknown> = {};
+      if (query && query !== raw) args.query = query;
+      const company = extractCompany(raw);
+      const product = extractProduct(raw);
+      if (company) args.company = company;
+      if (product) args.product = product;
+      return { tool: "create_proposal", args };
+    }
+    const fill = extractFillFields(raw);
+    if (fill && (/(מלא|רשום|עדכן|באשף|בהצעה|גיל|מעשן|עיר|שם פרטי|שם משפחה)/.test(raw) || extractCompany(raw) || extractProduct(raw))) {
+      return { tool: "fill_wizard", args: fill };
+    }
     if (/ייצור|תיקים החודש|הפקות/.test(raw)) {
       return { tool: /צוות/.test(raw) ? "get_team_production" : "get_monthly_production", args: {} };
     }
@@ -1028,7 +1069,8 @@
     }
     if (tool === "open_simulator") return "פתחתי את הסימולטור הקיים.";
     if (tool === "go_view") return "עברתי למסך המבוקש.";
-    if (tool === "create_proposal") return "ההצעה ממתינה לאישור ואז ייפתח האשף הקיים.";
+    if (tool === "create_proposal") return "פתחתי את האשף הקיים להצעה.";
+    if (tool === "fill_wizard") return "מילאתי את הנתונים באשף.";
     if (tool === "get_monthly_production" || tool === "get_team_production") {
       const count = Number(data.count == null ? data.total : data.count);
       return Number.isFinite(count) ? ("החודש " + count + " תיקים.") : "הבאתי את נתוני הייצור.";
@@ -1057,34 +1099,57 @@
       const hadPending = !!pendingAction;
       await onUserTranscript(text);
       if (intent === "confirm") {
-        await speak(hadPending ? "הפעולה אושרה." : "אין פעולה ממתינה לאישור.");
+        void speak(hadPending ? "הפעולה אושרה." : "אין פעולה ממתינה לאישור.");
         return;
       }
       if (intent === "cancel") {
-        await speak(hadPending ? "הפעולה בוטלה." : "אין פעולה לביטול.");
+        void speak(hadPending ? "הפעולה בוטלה." : "אין פעולה לביטול.");
         return;
       }
       const cmd = parseLocalCommand(text);
       if (!cmd || cmd.kind === "help" || !cmd.tool) {
-        await speak((cmd && cmd.say) || LOCAL_VOICE_HELP);
+        void speak((cmd && cmd.say) || LOCAL_VOICE_HELP);
         return;
       }
-      const data = await invokeTool(cmd.tool, cmd.args || {});
+      const args = Object.assign({}, cmd.args || {});
+      if (cmd.tool === "create_proposal" && !trim(args.customerId)) {
+        const query = trim(args.query);
+        if (query) {
+          const found = await invokeTool("find_customer_by_id", { query });
+          const card = (found.customer && typeof found.customer === "object") ? found.customer as HitCard : null;
+          if (trim(card?.id)) args.customerId = trim(card?.id);
+        } else if (lastCustomerId) args.customerId = lastCustomerId;
+      }
+      const data = await invokeTool(cmd.tool, args);
       if (cmd.tool === "search_customer") {
         const hits = asHitCards(data.customers);
         if (hits.length === 1 && trim(hits[0].id)) {
-          try { await invokeTool("open_customer", { customerId: trim(hits[0].id) }); } catch (_e) {}
+          lastCustomerId = trim(hits[0].id);
+          lastCustomerName = trim(hits[0].full_name);
+          try { await invokeTool("open_customer", { customerId: lastCustomerId }); } catch (_e) {}
         }
       }
       if ((cmd.tool === "find_customer_by_id" || cmd.tool === "get_customer") && data.customer && typeof data.customer === "object") {
-        const id = trim((data.customer as HitCard).id);
+        const card = data.customer as HitCard;
+        const id = trim(card.id);
         if (id) {
+          lastCustomerId = id;
+          lastCustomerName = trim(card.full_name);
           try { await invokeTool("open_customer", { customerId: id }); } catch (_e2) {}
         }
       }
-      await speak(replyFromTool(cmd.tool, data));
+      if (trim(args.customerId)) {
+        lastCustomerId = trim(args.customerId);
+      }
+      if (cmd.tool === "create_proposal") {
+        const extra = extractFillFields(text);
+        if (extra && (extra.company || extra.product || extra.age || extra.firstName)) {
+          try { await invokeTool("fill_wizard", extra); } catch (_e4) {}
+        }
+      }
+      void speak(replyFromTool(cmd.tool, data));
     } catch (_e3) {
-      await speak("לא הצלחתי לבצע את הבקשה.");
+      void speak("לא הצלחתי לבצע את הבקשה.");
     } finally {
       utteranceBusy = false;
     }
@@ -1139,6 +1204,10 @@
     else if (type === "open_simulator") void active.openSimulator?.(trim(cmd.company), trim(cmd.product));
     else if (type === "quote_simulator") void active.quoteSimulator?.(trim(cmd.company), trim(cmd.product), (cmd.input && typeof cmd.input === "object") ? cmd.input as Record<string, unknown> : {});
     else if (type === "open_wizard") void active.openWizard?.({ customerId: trim(cmd.customerId), company: trim(cmd.company), product: trim(cmd.product) });
+    else if (type === "fill_wizard") {
+      const fields = (cmd.fields && typeof cmd.fields === "object") ? cmd.fields as Record<string, unknown> : {};
+      active.fillWizard?.(fields);
+    }
     else if (type === "open_proposal") active.openProposal?.(trim(cmd.proposalId));
     else if (type === "upsert_reminder" && cmd.reminder && typeof cmd.reminder === "object") {
       void active.upsertReminder?.(cmd.reminder as Record<string, unknown>);
@@ -1177,7 +1246,7 @@
 
   function startCommandBus(): void {
     if (isPhonePage() || commandPoll) return;
-    commandPoll = window.setInterval(() => { void pullDesktopCommands(); }, POLL_MS);
+    commandPoll = window.setInterval(() => { void pullDesktopCommands(); }, COMMAND_POLL_MS);
     void pullDesktopCommands();
   }
 

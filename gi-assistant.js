@@ -13,6 +13,7 @@
     const FALLBACK_SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
     const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
     const POLL_MS = 1600;
+    const COMMAND_POLL_MS = 400;
     const UI_COMMANDS = /* @__PURE__ */ new Set([
       "open_customer",
       "go_view",
@@ -21,7 +22,8 @@
       "open_wizard",
       "refresh_reminders",
       "upsert_reminder",
-      "mark_task_done"
+      "mark_task_done",
+      "fill_wizard"
     ]);
     let bridge = {};
     let bound = false;
@@ -44,6 +46,8 @@
     let utteranceBusy = false;
     let lastHeard = "";
     let pairingFreshPhone = false;
+    let lastCustomerId = "";
+    let lastCustomerName = "";
     function trim(value) {
       return String(value == null ? "" : value).trim();
     }
@@ -232,7 +236,7 @@
       if (/^(לא|בטל|ביטול|אל תאשר|לא לאשר)$/.test(normalized)) return "cancel";
       return "other";
     }
-    const LOCAL_VOICE_HELP = "\u05D0\u05E4\u05E9\u05E8 \u05DC\u05D5\u05DE\u05E8: \u05D7\u05E4\u05E9 \u05DC\u05E7\u05D5\u05D7, \u05E4\u05EA\u05D7 \u05EA\u05D9\u05E7, \u05DE\u05E9\u05D9\u05DE\u05D5\u05EA, \u05E2\u05D1\u05D5\u05E8 \u05DC\u05DC\u05E7\u05D5\u05D7\u05D5\u05EA, \u05E4\u05EA\u05D7 \u05E1\u05D9\u05DE\u05D5\u05DC\u05D8\u05D5\u05E8 \u05DE\u05E0\u05D5\u05E8\u05D4 \u05E8\u05D9\u05E1\u05E7, \u05DE\u05D7\u05D9\u05E8 \u05DE\u05E0\u05D5\u05E8\u05D4 \u05E8\u05D9\u05E1\u05E7, \u05D0\u05D5 \u05E6\u05D5\u05E8 \u05D4\u05E6\u05E2\u05D4.";
+    const LOCAL_VOICE_HELP = "\u05D0\u05E4\u05E9\u05E8 \u05DC\u05D5\u05DE\u05E8: \u05E4\u05EA\u05D7 \u05EA\u05D9\u05E7 \u05D3\u05D5\u05D3, \u05D4\u05E7\u05DD \u05D4\u05E6\u05E2\u05D4 \u05DC\u05D3\u05D5\u05D3, \u05D2\u05D9\u05DC 35 \u05DC\u05D0 \u05DE\u05E2\u05E9\u05DF, \u05DE\u05E0\u05D5\u05E8\u05D4 \u05E8\u05D9\u05E1\u05E7, \u05E2\u05D1\u05D5\u05E8 \u05DC\u05DC\u05E7\u05D5\u05D7\u05D5\u05EA, \u05DE\u05E9\u05D9\u05DE\u05D5\u05EA.";
     function extractCompany(text) {
       const companies = ["\u05D4\u05E4\u05E0\u05D9\u05E7\u05E1", "\u05DE\u05E0\u05D5\u05E8\u05D4", "\u05D4\u05DB\u05E9\u05E8\u05D4", "\u05DE\u05D2\u05D3\u05DC", "\u05D0\u05D9\u05D9\u05DC\u05D5\u05DF", "\u05DB\u05DC\u05DC"];
       for (let i = 0; i < companies.length; i += 1) {
@@ -262,6 +266,28 @@
       if (/תהליכ/.test(text)) return "myProcesses";
       if (/לקוח|תיק/.test(text)) return "customers";
       return "";
+    }
+    function extractFillFields(text) {
+      const fields = {};
+      const ageMatch = text.match(/גיל\s*(\d{1,2})/);
+      if (ageMatch) fields.age = Number(ageMatch[1]);
+      if (/לא מעשן/.test(text)) fields.smoker = false;
+      else if (/מעשן/.test(text)) fields.smoker = true;
+      const cityMatch = text.match(/עיר\s+([^\s]+(?:\s+[^\s]+)?)/);
+      if (cityMatch && !/גיל|מעשן/.test(cityMatch[1])) fields.city = trim(cityMatch[1]);
+      const firstMatch = text.match(/שם פרטי\s+(\S+)/);
+      if (firstMatch) fields.firstName = firstMatch[1];
+      const lastMatch = text.match(/שם משפחה\s+(\S+)/);
+      if (lastMatch) fields.lastName = lastMatch[1];
+      const company = extractCompany(text);
+      if (company) fields.company = company;
+      const product = extractProduct(text);
+      if (product) fields.product = product;
+      if (/גבר|זכר/.test(text)) fields.gender = "male";
+      if (/אישה|נקבה/.test(text)) fields.gender = "female";
+      const sumMatch = text.match(/סכום\s+(\d[\d,]{3,})/);
+      if (sumMatch) fields.sumInsured = Number(String(sumMatch[1]).replace(/,/g, ""));
+      return Object.keys(fields).length ? fields : null;
     }
     function parseLocalCommand(text) {
       const raw = trim(text).replace(/[!.?,״"']/g, " ").replace(/\s+/g, " ");
@@ -305,7 +331,20 @@
         const product = extractProduct(raw) || "\u05E8\u05D9\u05E1\u05E7";
         if (company) return { tool: "open_simulator", args: { company, product } };
       }
-      if (/(צור|תפתח).*(הצעה)|הצעה חדשה/.test(raw)) return { tool: "create_proposal", args: {} };
+      if (/(הקם|הקימי|צור|תפתח|תפתחי|פתח|בנה).*(הצעה)|הצעה חדשה|הצעה ל/.test(raw)) {
+        const query = raw.replace(/^.*?(?:הצעה(?:\s+חדשה)?)\s*(?:ל|עבור|של)?\s*/, "");
+        const args = {};
+        if (query && query !== raw) args.query = query;
+        const company = extractCompany(raw);
+        const product = extractProduct(raw);
+        if (company) args.company = company;
+        if (product) args.product = product;
+        return { tool: "create_proposal", args };
+      }
+      const fill = extractFillFields(raw);
+      if (fill && (/(מלא|רשום|עדכן|באשף|בהצעה|גיל|מעשן|עיר|שם פרטי|שם משפחה)/.test(raw) || extractCompany(raw) || extractProduct(raw))) {
+        return { tool: "fill_wizard", args: fill };
+      }
       if (/ייצור|תיקים החודש|הפקות/.test(raw)) {
         return { tool: /צוות/.test(raw) ? "get_team_production" : "get_monthly_production", args: {} };
       }
@@ -925,7 +964,8 @@
       }
       if (tool === "open_simulator") return "\u05E4\u05EA\u05D7\u05EA\u05D9 \u05D0\u05EA \u05D4\u05E1\u05D9\u05DE\u05D5\u05DC\u05D8\u05D5\u05E8 \u05D4\u05E7\u05D9\u05D9\u05DD.";
       if (tool === "go_view") return "\u05E2\u05D1\u05E8\u05EA\u05D9 \u05DC\u05DE\u05E1\u05DA \u05D4\u05DE\u05D1\u05D5\u05E7\u05E9.";
-      if (tool === "create_proposal") return "\u05D4\u05D4\u05E6\u05E2\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8 \u05D5\u05D0\u05D6 \u05D9\u05D9\u05E4\u05EA\u05D7 \u05D4\u05D0\u05E9\u05E3 \u05D4\u05E7\u05D9\u05D9\u05DD.";
+      if (tool === "create_proposal") return "\u05E4\u05EA\u05D7\u05EA\u05D9 \u05D0\u05EA \u05D4\u05D0\u05E9\u05E3 \u05D4\u05E7\u05D9\u05D9\u05DD \u05DC\u05D4\u05E6\u05E2\u05D4.";
+      if (tool === "fill_wizard") return "\u05DE\u05D9\u05DC\u05D0\u05EA\u05D9 \u05D0\u05EA \u05D4\u05E0\u05EA\u05D5\u05E0\u05D9\u05DD \u05D1\u05D0\u05E9\u05E3.";
       if (tool === "get_monthly_production" || tool === "get_team_production") {
         const count = Number(data.count == null ? data.total : data.count);
         return Number.isFinite(count) ? "\u05D4\u05D7\u05D5\u05D3\u05E9 " + count + " \u05EA\u05D9\u05E7\u05D9\u05DD." : "\u05D4\u05D1\u05D0\u05EA\u05D9 \u05D0\u05EA \u05E0\u05EA\u05D5\u05E0\u05D9 \u05D4\u05D9\u05D9\u05E6\u05D5\u05E8.";
@@ -952,40 +992,66 @@
         const hadPending = !!pendingAction;
         await onUserTranscript(text);
         if (intent === "confirm") {
-          await speak(hadPending ? "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D0\u05D5\u05E9\u05E8\u05D4." : "\u05D0\u05D9\u05DF \u05E4\u05E2\u05D5\u05DC\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8.");
+          void speak(hadPending ? "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D0\u05D5\u05E9\u05E8\u05D4." : "\u05D0\u05D9\u05DF \u05E4\u05E2\u05D5\u05DC\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8.");
           return;
         }
         if (intent === "cancel") {
-          await speak(hadPending ? "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D1\u05D5\u05D8\u05DC\u05D4." : "\u05D0\u05D9\u05DF \u05E4\u05E2\u05D5\u05DC\u05D4 \u05DC\u05D1\u05D9\u05D8\u05D5\u05DC.");
+          void speak(hadPending ? "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D1\u05D5\u05D8\u05DC\u05D4." : "\u05D0\u05D9\u05DF \u05E4\u05E2\u05D5\u05DC\u05D4 \u05DC\u05D1\u05D9\u05D8\u05D5\u05DC.");
           return;
         }
         const cmd = parseLocalCommand(text);
         if (!cmd || cmd.kind === "help" || !cmd.tool) {
-          await speak(cmd && cmd.say || LOCAL_VOICE_HELP);
+          void speak(cmd && cmd.say || LOCAL_VOICE_HELP);
           return;
         }
-        const data = await invokeTool(cmd.tool, cmd.args || {});
+        const args = Object.assign({}, cmd.args || {});
+        if (cmd.tool === "create_proposal" && !trim(args.customerId)) {
+          const query = trim(args.query);
+          if (query) {
+            const found = await invokeTool("find_customer_by_id", { query });
+            const card = found.customer && typeof found.customer === "object" ? found.customer : null;
+            if (trim(card == null ? void 0 : card.id)) args.customerId = trim(card == null ? void 0 : card.id);
+          } else if (lastCustomerId) args.customerId = lastCustomerId;
+        }
+        const data = await invokeTool(cmd.tool, args);
         if (cmd.tool === "search_customer") {
           const hits = asHitCards(data.customers);
           if (hits.length === 1 && trim(hits[0].id)) {
+            lastCustomerId = trim(hits[0].id);
+            lastCustomerName = trim(hits[0].full_name);
             try {
-              await invokeTool("open_customer", { customerId: trim(hits[0].id) });
+              await invokeTool("open_customer", { customerId: lastCustomerId });
             } catch (_e) {
             }
           }
         }
         if ((cmd.tool === "find_customer_by_id" || cmd.tool === "get_customer") && data.customer && typeof data.customer === "object") {
-          const id = trim(data.customer.id);
+          const card = data.customer;
+          const id = trim(card.id);
           if (id) {
+            lastCustomerId = id;
+            lastCustomerName = trim(card.full_name);
             try {
               await invokeTool("open_customer", { customerId: id });
             } catch (_e2) {
             }
           }
         }
-        await speak(replyFromTool(cmd.tool, data));
+        if (trim(args.customerId)) {
+          lastCustomerId = trim(args.customerId);
+        }
+        if (cmd.tool === "create_proposal") {
+          const extra = extractFillFields(text);
+          if (extra && (extra.company || extra.product || extra.age || extra.firstName)) {
+            try {
+              await invokeTool("fill_wizard", extra);
+            } catch (_e4) {
+            }
+          }
+        }
+        void speak(replyFromTool(cmd.tool, data));
       } catch (_e3) {
-        await speak("\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D1\u05E6\u05E2 \u05D0\u05EA \u05D4\u05D1\u05E7\u05E9\u05D4.");
+        void speak("\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D1\u05E6\u05E2 \u05D0\u05EA \u05D4\u05D1\u05E7\u05E9\u05D4.");
       } finally {
         utteranceBusy = false;
       }
@@ -1029,7 +1095,7 @@
       }
     }
     function executeClientCommand(cmd) {
-      var _a, _b, _c, _d, _e, _f, _g, _h, _i;
+      var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j;
       if (!cmd || typeof cmd !== "object") return;
       const type = trim(cmd.type);
       const active = readBridge();
@@ -1038,11 +1104,14 @@
       else if (type === "open_simulator") void ((_c = active.openSimulator) == null ? void 0 : _c.call(active, trim(cmd.company), trim(cmd.product)));
       else if (type === "quote_simulator") void ((_d = active.quoteSimulator) == null ? void 0 : _d.call(active, trim(cmd.company), trim(cmd.product), cmd.input && typeof cmd.input === "object" ? cmd.input : {}));
       else if (type === "open_wizard") void ((_e = active.openWizard) == null ? void 0 : _e.call(active, { customerId: trim(cmd.customerId), company: trim(cmd.company), product: trim(cmd.product) }));
-      else if (type === "open_proposal") (_f = active.openProposal) == null ? void 0 : _f.call(active, trim(cmd.proposalId));
+      else if (type === "fill_wizard") {
+        const fields = cmd.fields && typeof cmd.fields === "object" ? cmd.fields : {};
+        (_f = active.fillWizard) == null ? void 0 : _f.call(active, fields);
+      } else if (type === "open_proposal") (_g = active.openProposal) == null ? void 0 : _g.call(active, trim(cmd.proposalId));
       else if (type === "upsert_reminder" && cmd.reminder && typeof cmd.reminder === "object") {
-        void ((_g = active.upsertReminder) == null ? void 0 : _g.call(active, cmd.reminder));
-      } else if (type === "mark_task_done") void ((_h = active.markTaskDone) == null ? void 0 : _h.call(active, trim(cmd.id || cmd.taskId)));
-      else if (type === "refresh_reminders") void ((_i = active.refreshReminders) == null ? void 0 : _i.call(active));
+        void ((_h = active.upsertReminder) == null ? void 0 : _h.call(active, cmd.reminder));
+      } else if (type === "mark_task_done") void ((_i = active.markTaskDone) == null ? void 0 : _i.call(active, trim(cmd.id || cmd.taskId)));
+      else if (type === "refresh_reminders") void ((_j = active.refreshReminders) == null ? void 0 : _j.call(active));
     }
     async function dispatchDesktopCommand(cmd) {
       if (!isPhonePage()) return;
@@ -1076,7 +1145,7 @@
       if (isPhonePage() || commandPoll) return;
       commandPoll = window.setInterval(() => {
         void pullDesktopCommands();
-      }, POLL_MS);
+      }, COMMAND_POLL_MS);
       void pullDesktopCommands();
     }
     function stopCommandBus() {

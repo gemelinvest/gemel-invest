@@ -54245,6 +54245,33 @@ const ClalRiskLifePdf = {
           Wizard.open?.();
         } catch(_e) {}
       },
+      fillWizard(fields){
+        try {
+          if(!fields || typeof fields !== "object" || typeof Wizard === "undefined") return;
+          const ins = Wizard.insureds && Wizard.insureds[0];
+          if(ins && ins.data){
+            if(fields.firstName) ins.data.firstName = String(fields.firstName);
+            if(fields.lastName) ins.data.lastName = String(fields.lastName);
+            if(fields.city) ins.data.city = String(fields.city);
+            if(fields.gender) ins.data.gender = String(fields.gender);
+            if(fields.age != null && fields.age !== "") ins.data.age = fields.age;
+            if(fields.smoker === true || fields.smoker === false) ins.data.smoker = fields.smoker;
+          }
+          if(fields.company || fields.product){
+            if(!Array.isArray(Wizard.newPolicies)) Wizard.newPolicies = [];
+            if(!Wizard.newPolicies.length && typeof Wizard.defaultNewPolicy === "function" && ins){
+              Wizard.newPolicies.push(Wizard.defaultNewPolicy(ins.id));
+            }
+            const pol = Wizard.newPolicies[0];
+            if(pol){
+              if(fields.company) pol.company = String(fields.company);
+              if(fields.product) pol.type = String(fields.product);
+            }
+          }
+          if(Wizard.isOpen && typeof Wizard.render === "function") Wizard.render();
+          Wizard.setHint?.("העוזר מילא נתונים באשף הקיים.");
+        } catch(_e) {}
+      },
       openProposal(id){ try { ProposalsUI.openById?.(id); } catch(_e) {} },
       refreshReminders(){ try { return ReminderUI.loadReminders?.(); } catch(_e) {} },
       async searchCustomers(query){
@@ -54306,6 +54333,7 @@ const ClalRiskLifePdf = {
       openSimulator(company, product){ return window.__GI_ASSISTANT_BRIDGE__.openSimulator(company, product); },
       quoteSimulator(company, product, input){ return window.__GI_ASSISTANT_BRIDGE__.quoteSimulator(company, product, input); },
       openWizard(opts){ return window.__GI_ASSISTANT_BRIDGE__.openWizard(opts); },
+      fillWizard(fields){ return window.__GI_ASSISTANT_BRIDGE__.fillWizard(fields); },
       openProposal(id){ return window.__GI_ASSISTANT_BRIDGE__.openProposal(id); },
       refreshReminders(){ return window.__GI_ASSISTANT_BRIDGE__.refreshReminders(); },
       searchCustomers(query){ return window.__GI_ASSISTANT_BRIDGE__.searchCustomers(query); },

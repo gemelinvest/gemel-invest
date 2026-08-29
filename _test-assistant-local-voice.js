@@ -9,7 +9,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-reopen-v1";
+const TAG = "20260829-assistant-fast-v1";
 let failed = 0;
 let passed = 0;
 
@@ -100,6 +100,10 @@ assert(api.parseLocalCommand("מחיר מנורה ריסק").tool === "get_insur
 assert(api.parseLocalCommand("מחיר מנורה ריסק").args.company === "מנורה", "quote company");
 assert(api.parseLocalCommand("פתח סימולטור מנורה ריסק").tool === "open_simulator", "open existing simulator");
 assert(api.parseLocalCommand("כן") === null, "כן stays confirm-only");
+assert(api.parseLocalCommand("הקם הצעה לדוד לוי").tool === "create_proposal", "הקם הצעה → wizard");
+assert(String(api.parseLocalCommand("הקם הצעה לדוד לוי").args.query || "").indexOf("דוד") >= 0, "proposal keeps the customer name");
+assert(api.parseLocalCommand("גיל 35 לא מעשן").tool === "fill_wizard", "spoken data fills the open wizard");
+assert(api.parseLocalCommand("גיל 35 לא מעשן").args.age === 35, "fill keeps the age");
 assert(api.parseLocalCommand("עזרה").kind === "help", "עזרה is help");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
