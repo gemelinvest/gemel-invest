@@ -9,3 +9,6 @@ verify_jwt = false
 
 [functions.gi-assistant-realtime]
 verify_jwt = false
+
+[functions.gi-assistant-engine]
+verify_jwt = false

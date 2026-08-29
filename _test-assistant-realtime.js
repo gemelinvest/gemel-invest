@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-realtime-v1";
+const TAG = "20260829-assistant-engine-v1";
 let failed = 0;
 let passed = 0;
 

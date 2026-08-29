@@ -178,6 +178,59 @@
   50%{ box-shadow: 0 0 0 14px rgba(37, 99, 235, 0); }
 }
 
+.giAsst__confirm{
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 14px;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  text-align: right;
+}
+
+.giAsst__confirm.is-hidden,
+.giAsst__confirm[hidden]{
+  display: none !important;
+}
+
+.giAsst__confirmText{
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #9a3412;
+}
+
+.giAsst__confirmActions{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.giAsst__timeline{
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  max-height: 180px;
+  overflow: auto;
+  text-align: right;
+}
+
+.giAsst__tl{
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f8fafc;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #334155;
+}
+
+.giAsst__tl--user{ background: #eff6ff; }
+.giAsst__tl--assistant{ background: #f0fdf4; }
+.giAsst__tl--confirm{ background: #fff7ed; }
+.giAsst__tl--ok{ background: #ecfdf5; }
+.giAsst__tl--cancel,
+.giAsst__tl--error{ background: #fef2f2; }
+
 .giAsst__mic{
   font-size: 48px;
   line-height: 1;
