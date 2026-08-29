@@ -18,7 +18,7 @@
   const UI_COMMANDS = new Set([
     "open_customer", "go_view", "open_simulator", "open_proposal",
     "open_wizard", "refresh_reminders", "upsert_reminder", "mark_task_done",
-    "fill_wizard", "wizard_next", "open_har_import"
+    "fill_wizard", "wizard_next", "open_har_import", "click_topbar"
   ]);
 
   type AgentAuth = {
@@ -41,6 +41,7 @@
     fillWizard?: (fields: Record<string, unknown>) => void;
     wizardNext?: () => void | Promise<unknown>;
     openHarImport?: () => void | { ok?: boolean; error?: string };
+    clickTopbar?: (id: string) => void;
     openProposal?: (id: string) => void;
     refreshReminders?: () => void | Promise<unknown>;
     searchCustomers?: (query: string) => Promise<HitCard[] | unknown[]>;
@@ -346,17 +347,39 @@
   }
 
   function extractView(text: string): string {
-    if (/דוח|דוחות/.test(text)) return "reportsHub";
-    if (/צוות/.test(text)) return "myTeam";
+    if (/ממתינים\s*לטיפול/.test(text)) return "elementaryPending";
+    if (/לקוחות\s*בטיפול|תפעול\s*וחיתום/.test(text)) return "agentElementaryTracking";
+    if (/הצעות\s*אלמנטרי/.test(text)) return "elementaryProposals";
+    if (/שיקוף\s*שיחה\s*אלמנטרי/.test(text)) return "elementaryMirror";
+    if (/שיוכי\s*שיקוף/.test(text)) return "mirrorAssignments";
+    if (/שיחת\s*שיקוף/.test(text)) return "mirrorCall";
+    if (/מערכת\s*לידים/.test(text)) return "campaignLeads";
+    if (/הלידים\s*שלי/.test(text)) return "campaignMyLeads";
+    if (/ניהול\s*משתמשים/.test(text)) return "users";
     if (/הגדרות/.test(text)) return "settings";
+    if (/הצוות|הצוות שלי/.test(text)) return "myTeam";
+    if (/דוח|דוחות/.test(text)) return "reportsHub";
     if (/הצעות/.test(text)) return "proposals";
-    if (/סימול/.test(text)) return "myTools";
+    if ((/סימול/.test(text) && !extractCompany(text)) || /כלים/.test(text)) return "myTools";
     if (/לוח|ראשי|דשבורד/.test(text)) return "dashboard";
     if (/מכירות/.test(text)) return "dailySales";
     if (/אנשי\s*קשר|קשרים/.test(text)) return "contacts";
     if (/תהליכ/.test(text)) return "myProcesses";
     if (/לקוח|תיק/.test(text)) return "customers";
     return "";
+  }
+
+  function extractTopbar(text: string): string {
+    if (/צאט|צ.אט/.test(text)) return "giChatFab";
+    if (/תזכורות/.test(text)) return "giReminderFab";
+    if (/נסיעות/.test(text)) return "btnTravelInsuranceAbroad";
+    if (/רכב\s*בקליק|ביטוח\s*רכב/.test(text)) return "btnCarInsuranceClick";
+    if (/מרכז\s*הסימול/.test(text)) return "btnSimulatorsCenter";
+    return "";
+  }
+
+  function isOpenNavSpeech(text: string): boolean {
+    return /(?:עבור|תעבור|עברי|תעברי|לך|לכי|תיכנסי?|היכנסי?|כנסי|פתח|תפתח|תפתחי|תפתחו)/.test(text);
   }
 
   function extractFillFields(text: string): Record<string, unknown> | null {
@@ -453,7 +476,7 @@
       const query = raw.replace(/^(?:אפשר\s+)?(?:בבקשה\s+)?(?:חפש|תחפש|מצא|תמצא|חיפוש)\s+(?:לי\s+)?(?:את\s+)?(?:לקוח\s+)?(?:תיק\s+)?/, "");
       return { tool: "search_customer", args: { query: query || raw } };
     }
-    if (/(פתח|תפתח).*(תיק|לקוח)/.test(raw)) {
+    if (/(?:פתח|תפתח|תפתחי)\s+(?:את\s+)?(?:ה)?(?:תיק|לקוח)(?!\S)/.test(raw)) {
       const query = raw.replace(/^.*?(?:התיק|תיק|לקוח)\s+(?:של\s+)?/, "");
       return { tool: "find_customer_by_id", args: { query: query || raw } };
     }
@@ -461,14 +484,16 @@
       const details = raw.replace(/^.*?(?:משימה|תזכורת|תזכיר לי)\s*/, "") || raw;
       return { tool: "create_task", args: { type: "תזכורת", details } };
     }
-    if (/משימות|תזכורות/.test(raw)) return { tool: "get_tasks", args: {} };
+    if (/משימות/.test(raw) || (/תזכורות/.test(raw) && !isOpenNavSpeech(raw))) return { tool: "get_tasks", args: {} };
     if (/(?:תעברי?|תעבור|עברי|עבור|לכי|לך|המשיכי|המשך)\s+(?:ל)?שלב\s+הבא|שלב הבא|לשלב הבא|הבא באשף/.test(raw)) {
       return { tool: "wizard_next", args: {} };
     }
     if (/(?:תפתח|פתח|תפתחי|העלי|תעלה).*(?:הר הביטוח|הפק\s*ביטוח|הפק\s*פוליס)|הפק\s*(?:ביטוחים|פוליסות)\s*מהר/.test(raw)) {
       return { tool: "open_har_import", args: {} };
     }
-    if (/(עבור|תעבור|לך אל|פתח מסך|מסך)/.test(raw)) {
+    if (isOpenNavSpeech(raw)) {
+      const topbar = extractTopbar(raw);
+      if (topbar) return { tool: "click_topbar", args: { id: topbar } };
       const view = extractView(raw);
       if (view) return { tool: "go_view", args: { view } };
     }
@@ -1139,6 +1164,7 @@
     }
     if (tool === "open_simulator") return "פתחתי את הסימולטור הקיים.";
     if (tool === "go_view") return "עברתי למסך המבוקש.";
+    if (tool === "click_topbar") return "פתחתי את הכפתור מהסרגל.";
     if (tool === "create_proposal") return "פתחתי את האשף הקיים להצעה.";
     if (tool === "fill_wizard") return "מילאתי את השדות באשף.";
     if (tool === "wizard_next") return data.ok === false ? "לא הצלחתי לעבור שלב. בדקו שכל הפרטים מלאים." : "עברתי לשלב הבא.";
@@ -1282,6 +1308,7 @@
     }
     else if (type === "wizard_next") void active.wizardNext?.();
     else if (type === "open_har_import") void active.openHarImport?.();
+    else if (type === "click_topbar") active.clickTopbar?.(trim(cmd.id));
     else if (type === "open_proposal") active.openProposal?.(trim(cmd.proposalId));
     else if (type === "upsert_reminder" && cmd.reminder && typeof cmd.reminder === "object") {
       void active.upsertReminder?.(cmd.reminder as Record<string, unknown>);

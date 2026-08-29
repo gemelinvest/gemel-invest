@@ -344,8 +344,9 @@ function viewAllowed(view: string, role: string){
     campaignLeads: ["admin", "owner", "manager", "referent"],
     mirrorCall: ["ops", "opsagent"],
     settings: ["admin", "owner", "manager"],
+    users: ["admin", "owner", "manager"],
   };
-  const open = ["dashboard", "customers", "proposals", "myTools", "contacts", "dailySales", "myProcesses", "campaignMyLeads"];
+  const open = ["dashboard", "customers", "proposals", "myTools", "contacts", "dailySales", "myProcesses", "campaignMyLeads", "elementaryPending", "agentElementaryTracking", "elementaryProposals", "elementaryMirror", "mirrorAssignments"];
   if(open.includes(view)) return true;
   return (restricted[view] || []).includes(role);
 }
@@ -586,6 +587,12 @@ async function invoke(sb: SupabaseClient, agent: AgentRow, sessionId: string, bo
   if(tool === "fill_wizard") return handleFillWizard(rawArgs);
   if(tool === "wizard_next") return { ok: true, client_command: { type: "wizard_next" } };
   if(tool === "open_har_import") return { ok: true, client_command: { type: "open_har_import" } };
+  if(tool === "click_topbar"){
+    const allowed = new Set(["giChatFab", "giReminderFab", "btnTravelInsuranceAbroad", "btnCarInsuranceClick", "btnSimulatorsCenter", "btnNewCustomerWizard"]);
+    const id = trim(rawArgs.id);
+    if(!allowed.has(id)) return { ok: false, error: "BAD_TOPBAR" };
+    return { ok: true, client_command: { type: "click_topbar", id } };
+  }
   return { ok: false, error: "UNKNOWN_TOOL" };
 }
 

@@ -85,6 +85,7 @@ assert(asstTs.includes("parseLocalCommand") && asstTs.includes("giAsstTalkForm")
 assert(asstTs.includes("COMMAND_POLL_MS = 400") && edgeTools.includes("fill_wizard") && edgeEngine.includes("fill_wizard"), "phone commands and wizard fill stay under 2s");
 assert(edgeTools.includes("wizard_next") && app.includes("Wizard.nextStep") && asstTs.includes("שם(?:פ)?\\s*משפחה"), "wizard next + labeled name fields");
 assert(edgeTools.includes("open_har_import") && app.includes("Wizard.openHarBituachImport"), "HAR import wraps existing picker");
+assert(edgeTools.includes("click_topbar") && app.includes("giChatFab") && asstTs.includes("extractTopbar"), "topbar/sidebar names wrap existing buttons");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);

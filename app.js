@@ -54343,6 +54343,24 @@ const ClalRiskLifePdf = {
           return { ok:false, error:"HAR_STEP" };
         } catch(_e) { return { ok:false }; }
       },
+      clickTopbar(id){
+        try {
+          const allowed = {
+            giChatFab: 1,
+            giReminderFab: 1,
+            btnTravelInsuranceAbroad: 1,
+            btnCarInsuranceClick: 1,
+            btnSimulatorsCenter: 1,
+            btnNewCustomerWizard: 1
+          };
+          const key = String(id || "");
+          if(!allowed[key]) return { ok:false, error:"BAD_TOPBAR" };
+          const el = document.getElementById(key);
+          if(!el) return { ok:false, error:"MISSING_BTN" };
+          el.click();
+          return { ok:true };
+        } catch(_e) { return { ok:false }; }
+      },
       openProposal(id){ try { ProposalsUI.openById?.(id); } catch(_e) {} },
       refreshReminders(){ try { return ReminderUI.loadReminders?.(); } catch(_e) {} },
       async searchCustomers(query){
@@ -54407,6 +54425,7 @@ const ClalRiskLifePdf = {
       fillWizard(fields){ return window.__GI_ASSISTANT_BRIDGE__.fillWizard(fields); },
       wizardNext(){ return window.__GI_ASSISTANT_BRIDGE__.wizardNext(); },
       openHarImport(){ return window.__GI_ASSISTANT_BRIDGE__.openHarImport(); },
+      clickTopbar(id){ return window.__GI_ASSISTANT_BRIDGE__.clickTopbar(id); },
       openProposal(id){ return window.__GI_ASSISTANT_BRIDGE__.openProposal(id); },
       refreshReminders(){ return window.__GI_ASSISTANT_BRIDGE__.refreshReminders(); },
       searchCustomers(query){ return window.__GI_ASSISTANT_BRIDGE__.searchCustomers(query); },

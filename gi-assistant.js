@@ -25,7 +25,8 @@
       "mark_task_done",
       "fill_wizard",
       "wizard_next",
-      "open_har_import"
+      "open_har_import",
+      "click_topbar"
     ]);
     let bridge = {};
     let bound = false;
@@ -257,17 +258,37 @@
       return "";
     }
     function extractView(text) {
-      if (/דוח|דוחות/.test(text)) return "reportsHub";
-      if (/צוות/.test(text)) return "myTeam";
+      if (/ממתינים\s*לטיפול/.test(text)) return "elementaryPending";
+      if (/לקוחות\s*בטיפול|תפעול\s*וחיתום/.test(text)) return "agentElementaryTracking";
+      if (/הצעות\s*אלמנטרי/.test(text)) return "elementaryProposals";
+      if (/שיקוף\s*שיחה\s*אלמנטרי/.test(text)) return "elementaryMirror";
+      if (/שיוכי\s*שיקוף/.test(text)) return "mirrorAssignments";
+      if (/שיחת\s*שיקוף/.test(text)) return "mirrorCall";
+      if (/מערכת\s*לידים/.test(text)) return "campaignLeads";
+      if (/הלידים\s*שלי/.test(text)) return "campaignMyLeads";
+      if (/ניהול\s*משתמשים/.test(text)) return "users";
       if (/הגדרות/.test(text)) return "settings";
+      if (/הצוות|הצוות שלי/.test(text)) return "myTeam";
+      if (/דוח|דוחות/.test(text)) return "reportsHub";
       if (/הצעות/.test(text)) return "proposals";
-      if (/סימול/.test(text)) return "myTools";
+      if (/סימול/.test(text) && !extractCompany(text) || /כלים/.test(text)) return "myTools";
       if (/לוח|ראשי|דשבורד/.test(text)) return "dashboard";
       if (/מכירות/.test(text)) return "dailySales";
       if (/אנשי\s*קשר|קשרים/.test(text)) return "contacts";
       if (/תהליכ/.test(text)) return "myProcesses";
       if (/לקוח|תיק/.test(text)) return "customers";
       return "";
+    }
+    function extractTopbar(text) {
+      if (/צאט|צ.אט/.test(text)) return "giChatFab";
+      if (/תזכורות/.test(text)) return "giReminderFab";
+      if (/נסיעות/.test(text)) return "btnTravelInsuranceAbroad";
+      if (/רכב\s*בקליק|ביטוח\s*רכב/.test(text)) return "btnCarInsuranceClick";
+      if (/מרכז\s*הסימול/.test(text)) return "btnSimulatorsCenter";
+      return "";
+    }
+    function isOpenNavSpeech(text) {
+      return /(?:עבור|תעבור|עברי|תעברי|לך|לכי|תיכנסי?|היכנסי?|כנסי|פתח|תפתח|תפתחי|תפתחו)/.test(text);
     }
     function extractFillFields(text) {
       const raw = trim(text).replace(/[!,?״"']/g, " ").replace(/\s+/g, " ");
@@ -361,7 +382,7 @@
         const query = raw.replace(/^(?:אפשר\s+)?(?:בבקשה\s+)?(?:חפש|תחפש|מצא|תמצא|חיפוש)\s+(?:לי\s+)?(?:את\s+)?(?:לקוח\s+)?(?:תיק\s+)?/, "");
         return { tool: "search_customer", args: { query: query || raw } };
       }
-      if (/(פתח|תפתח).*(תיק|לקוח)/.test(raw)) {
+      if (/(?:פתח|תפתח|תפתחי)\s+(?:את\s+)?(?:ה)?(?:תיק|לקוח)(?!\S)/.test(raw)) {
         const query = raw.replace(/^.*?(?:התיק|תיק|לקוח)\s+(?:של\s+)?/, "");
         return { tool: "find_customer_by_id", args: { query: query || raw } };
       }
@@ -369,14 +390,16 @@
         const details = raw.replace(/^.*?(?:משימה|תזכורת|תזכיר לי)\s*/, "") || raw;
         return { tool: "create_task", args: { type: "\u05EA\u05D6\u05DB\u05D5\u05E8\u05EA", details } };
       }
-      if (/משימות|תזכורות/.test(raw)) return { tool: "get_tasks", args: {} };
+      if (/משימות/.test(raw) || /תזכורות/.test(raw) && !isOpenNavSpeech(raw)) return { tool: "get_tasks", args: {} };
       if (/(?:תעברי?|תעבור|עברי|עבור|לכי|לך|המשיכי|המשך)\s+(?:ל)?שלב\s+הבא|שלב הבא|לשלב הבא|הבא באשף/.test(raw)) {
         return { tool: "wizard_next", args: {} };
       }
       if (/(?:תפתח|פתח|תפתחי|העלי|תעלה).*(?:הר הביטוח|הפק\s*ביטוח|הפק\s*פוליס)|הפק\s*(?:ביטוחים|פוליסות)\s*מהר/.test(raw)) {
         return { tool: "open_har_import", args: {} };
       }
-      if (/(עבור|תעבור|לך אל|פתח מסך|מסך)/.test(raw)) {
+      if (isOpenNavSpeech(raw)) {
+        const topbar = extractTopbar(raw);
+        if (topbar) return { tool: "click_topbar", args: { id: topbar } };
         const view = extractView(raw);
         if (view) return { tool: "go_view", args: { view } };
       }
@@ -1033,6 +1056,7 @@
       }
       if (tool === "open_simulator") return "\u05E4\u05EA\u05D7\u05EA\u05D9 \u05D0\u05EA \u05D4\u05E1\u05D9\u05DE\u05D5\u05DC\u05D8\u05D5\u05E8 \u05D4\u05E7\u05D9\u05D9\u05DD.";
       if (tool === "go_view") return "\u05E2\u05D1\u05E8\u05EA\u05D9 \u05DC\u05DE\u05E1\u05DA \u05D4\u05DE\u05D1\u05D5\u05E7\u05E9.";
+      if (tool === "click_topbar") return "\u05E4\u05EA\u05D7\u05EA\u05D9 \u05D0\u05EA \u05D4\u05DB\u05E4\u05EA\u05D5\u05E8 \u05DE\u05D4\u05E1\u05E8\u05D2\u05DC.";
       if (tool === "create_proposal") return "\u05E4\u05EA\u05D7\u05EA\u05D9 \u05D0\u05EA \u05D4\u05D0\u05E9\u05E3 \u05D4\u05E7\u05D9\u05D9\u05DD \u05DC\u05D4\u05E6\u05E2\u05D4.";
       if (tool === "fill_wizard") return "\u05DE\u05D9\u05DC\u05D0\u05EA\u05D9 \u05D0\u05EA \u05D4\u05E9\u05D3\u05D5\u05EA \u05D1\u05D0\u05E9\u05E3.";
       if (tool === "wizard_next") return data.ok === false ? "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05E2\u05D1\u05D5\u05E8 \u05E9\u05DC\u05D1. \u05D1\u05D3\u05E7\u05D5 \u05E9\u05DB\u05DC \u05D4\u05E4\u05E8\u05D8\u05D9\u05DD \u05DE\u05DC\u05D0\u05D9\u05DD." : "\u05E2\u05D1\u05E8\u05EA\u05D9 \u05DC\u05E9\u05DC\u05D1 \u05D4\u05D1\u05D0.";
@@ -1166,7 +1190,7 @@
       }
     }
     function executeClientCommand(cmd) {
-      var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l;
+      var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m;
       if (!cmd || typeof cmd !== "object") return;
       const type = trim(cmd.type);
       const active = readBridge();
@@ -1180,11 +1204,12 @@
         (_f = active.fillWizard) == null ? void 0 : _f.call(active, fields);
       } else if (type === "wizard_next") void ((_g = active.wizardNext) == null ? void 0 : _g.call(active));
       else if (type === "open_har_import") void ((_h = active.openHarImport) == null ? void 0 : _h.call(active));
-      else if (type === "open_proposal") (_i = active.openProposal) == null ? void 0 : _i.call(active, trim(cmd.proposalId));
+      else if (type === "click_topbar") (_i = active.clickTopbar) == null ? void 0 : _i.call(active, trim(cmd.id));
+      else if (type === "open_proposal") (_j = active.openProposal) == null ? void 0 : _j.call(active, trim(cmd.proposalId));
       else if (type === "upsert_reminder" && cmd.reminder && typeof cmd.reminder === "object") {
-        void ((_j = active.upsertReminder) == null ? void 0 : _j.call(active, cmd.reminder));
-      } else if (type === "mark_task_done") void ((_k = active.markTaskDone) == null ? void 0 : _k.call(active, trim(cmd.id || cmd.taskId)));
-      else if (type === "refresh_reminders") void ((_l = active.refreshReminders) == null ? void 0 : _l.call(active));
+        void ((_k = active.upsertReminder) == null ? void 0 : _k.call(active, cmd.reminder));
+      } else if (type === "mark_task_done") void ((_l = active.markTaskDone) == null ? void 0 : _l.call(active, trim(cmd.id || cmd.taskId)));
+      else if (type === "refresh_reminders") void ((_m = active.refreshReminders) == null ? void 0 : _m.call(active));
     }
     async function dispatchDesktopCommand(cmd) {
       if (!isPhonePage()) return;

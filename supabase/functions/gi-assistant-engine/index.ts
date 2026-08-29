@@ -16,7 +16,7 @@ const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const UI_COMMANDS = new Set([
   "open_customer", "go_view", "open_simulator", "open_proposal",
   "open_wizard", "refresh_reminders", "upsert_reminder", "mark_task_done",
-  "fill_wizard", "wizard_next", "open_har_import",
+  "fill_wizard", "wizard_next", "open_har_import", "click_topbar",
 ]);
 const PII_KEY = /id_number|idNumber|tz_number|national_id|"ת\\"ז"|ת״ז/i;
 const PII_DIGITS = /\d{8,9}/g;
@@ -455,6 +455,11 @@ function sanitizeCommand(raw: unknown){
   if(src.reminder && typeof src.reminder === "object") cmd.reminder = src.reminder;
   if(type === "fill_wizard" && src.fields && typeof src.fields === "object"){
     cmd.fields = sanitizeFillFields(src.fields);
+  }
+  if(type === "click_topbar"){
+    const allowed = new Set(["giChatFab", "giReminderFab", "btnTravelInsuranceAbroad", "btnCarInsuranceClick", "btnSimulatorsCenter", "btnNewCustomerWizard"]);
+    const id = trim(src.id);
+    if(allowed.has(id)) cmd.id = id;
   }
   return cmd;
 }

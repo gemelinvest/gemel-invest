@@ -96,6 +96,10 @@ assert(api.parseLocalCommand("חפש דוד לוי").args.query.indexOf("דוד"
 assert(api.parseLocalCommand("פתח תיק של רחל").tool === "find_customer_by_id", "פתח תיק → find");
 assert(api.parseLocalCommand("משימות").tool === "get_tasks", "משימות → tasks");
 assert(api.parseLocalCommand("עבור ללקוחות").args.view === "customers", "עבור ללקוחות");
+assert(api.parseLocalCommand("תפתחי את אנשי קשר").tool === "go_view", "תפתחי אנשי קשר");
+assert(api.parseLocalCommand("תפתחי את אנשי קשר").args.view === "contacts", "אנשי קשר view");
+assert(api.parseLocalCommand("תיכנסי לצאט").tool === "click_topbar", "תיכנסי לצאט");
+assert(api.parseLocalCommand("תיכנסי לצאט").args.id === "giChatFab", "chat clicks existing fab");
 assert(api.parseLocalCommand("מחיר מנורה ריסק").tool === "get_insurance_price", "מחיר → quote wrap");
 assert(api.parseLocalCommand("מחיר מנורה ריסק").args.company === "מנורה", "quote company");
 assert(api.parseLocalCommand("פתח סימולטור מנורה ריסק").tool === "open_simulator", "open existing simulator");
