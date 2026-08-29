@@ -1088,13 +1088,6 @@
           <button class="giAsst__btn giAsst__btn--ghost" id="giAsstVoiceStop" type="button" hidden>סיים שיחה</button>
         </div>
         <p class="giAsst__heard" id="giAsstHeard" aria-live="polite"></p>
-        <form class="giAsst__talkForm" id="giAsstTalkForm">
-          <label class="giAsst__label" for="giAsstTalkText">אם אין תגובה לקול — כתבו כאן</label>
-          <div class="giAsst__talkRow">
-            <input class="giAsst__input" id="giAsstTalkText" type="text" enterkeyhint="send" autocomplete="off" placeholder="${isPhonePage() ? "למשל: מספר בית 12 / לא מעשן / תחזור למילוי" : "למשל: חפש דוד לוי"}" />
-            <button class="giAsst__btn giAsst__talkSend" id="giAsstTalkSend" type="submit">שלח</button>
-          </div>
-        </form>
         <div class="giAsst__confirm is-hidden" id="giAsstConfirm" hidden>
           <p class="giAsst__confirmText" id="giAsstConfirmText">ממתין לאישור פעולה.</p>
           <div class="giAsst__confirmActions">
@@ -1104,7 +1097,6 @@
         </div>
         <ol class="giAsst__timeline" id="giAsstTimeline" aria-live="polite"></ol>
         <div class="giAsst__hits" id="giAsstHits" hidden></div>
-        <p class="giAsst__hint">הקול מקומי בדפדפן — בלי תשלום לספק חיצוני. כתיבה דורשת אישור. «כן» חל רק אם יש פעולה ממתינה.</p>
         ${isPhonePage() ? "" : `<button class="giAsst__btn giAsst__btn--ghost" id="giAsstOpenPhone" type="button">פתח שוב בטלפון</button>`}
       </div>
     `;
@@ -1329,10 +1321,6 @@
     });
     root.querySelector("#giAsstConfirmYes")?.addEventListener("click", () => { void confirmPending(); });
     root.querySelector("#giAsstConfirmNo")?.addEventListener("click", () => { void cancelPending(); });
-    ($("giAsstTalkForm") as HTMLFormElement | null)?.addEventListener("submit", (ev) => {
-      ev.preventDefault();
-      void submitTalkText();
-    });
     root.querySelector("#giAsstOpenPhone")?.addEventListener("click", () => {
       renderPhoneReturnBody();
     });
