@@ -119,6 +119,20 @@ async function hasActiveDevice(sb: SupabaseClient, agentId: string){
   return !!(data && data.length);
 }
 
+async function issueDesktopDevice(sb: SupabaseClient, agentId: string, req?: Request){
+  const devicePublicId = randomToken();
+  const deviceSecret = randomToken();
+  const deviceSecretHash = await sha256Hex(deviceSecret);
+  const { error } = await sb.from("gi_assistant_devices").insert({
+    agent_id: trim(agentId),
+    device_public_id: devicePublicId,
+    device_secret_hash: deviceSecretHash,
+    user_agent: trim(req?.headers.get("user-agent")).slice(0, 240) || "desktop",
+  });
+  if(error) throw new Error(error.message);
+  return { devicePublicId, deviceSecret, agentId: trim(agentId) };
+}
+
 async function createToken(sb: SupabaseClient, agent: AgentRow){
   const publicToken = randomToken();
   const desktopSecret = randomToken();
@@ -143,8 +157,9 @@ async function handleCreate(sb: SupabaseClient, body: Json){
   }
   const agentId = trim(auth.agent.id);
   if(await hasActiveDevice(sb, agentId)){
+    const desktop = await issueDesktopDevice(sb, agentId);
     await audit(sb, { user_id: agentId, action: "pairing_create", authorization_result: "ok", execution_status: "already_paired", arguments_safe: { alreadyPaired: true } });
-    return json({ ok: true, alreadyPaired: true, agentId });
+    return json({ ok: true, alreadyPaired: true, agentId, ...desktop });
   }
   const created = await createToken(sb, auth.agent);
   await audit(sb, { user_id: agentId, action: "pairing_create", authorization_result: "ok", execution_status: "ok", arguments_safe: { ttlSec: TOKEN_TTL_MS / 1000 } });
@@ -159,10 +174,18 @@ async function handleCreate(sb: SupabaseClient, body: Json){
 
 async function tokenByDesktopSecret(sb: SupabaseClient, secret: string){
   const hash = await sha256Hex(trim(secret));
-  const { data, error } = await sb.from("gi_assistant_pairing_tokens")
-    .select("id,agent_id,expires_at,used_at,cancelled_at")
+  let { data, error } = await sb.from("gi_assistant_pairing_tokens")
+    .select("id,agent_id,expires_at,used_at,cancelled_at,desktop_claimed_at")
     .eq("desktop_secret_hash", hash)
     .maybeSingle();
+  if(error && /desktop_claimed_at/.test(error.message || "")){
+    const fallback = await sb.from("gi_assistant_pairing_tokens")
+      .select("id,agent_id,expires_at,used_at,cancelled_at")
+      .eq("desktop_secret_hash", hash)
+      .maybeSingle();
+    if(fallback.error) throw new Error(fallback.error.message);
+    return fallback.data;
+  }
   if(error) throw new Error(error.message);
   return data;
 }
@@ -179,7 +202,16 @@ async function handleStatus(sb: SupabaseClient, body: Json){
   const secret = trim(body.desktopSecret);
   if(!secret) return json({ ok: false, error: "MISSING_SECRET" }, 400);
   const row = await tokenByDesktopSecret(sb, secret);
-  return json({ ok: true, status: tokenStatus(row) });
+  const status = tokenStatus(row);
+  if(status === "paired" && row && !row.desktop_claimed_at){
+    const desktop = await issueDesktopDevice(sb, trim(row.agent_id));
+    await sb.from("gi_assistant_pairing_tokens")
+      .update({ desktop_claimed_at: new Date().toISOString() })
+      .eq("id", row.id)
+      .is("desktop_claimed_at", null);
+    return json({ ok: true, status, ...desktop });
+  }
+  return json({ ok: true, status, agentId: row ? trim(row.agent_id) : "" });
 }
 
 async function handleCancel(sb: SupabaseClient, body: Json){

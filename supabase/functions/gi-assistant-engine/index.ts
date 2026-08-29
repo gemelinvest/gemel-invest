@@ -11,6 +11,11 @@ const CORS = {
 };
 
 const PENDING_TTL_MS = 2 * 60 * 1000;
+const COMMAND_TTL_MS = 2 * 60 * 1000;
+const UI_COMMANDS = new Set([
+  "open_customer", "go_view", "open_simulator", "open_proposal",
+  "open_wizard", "refresh_reminders", "upsert_reminder", "mark_task_done",
+]);
 const PII_KEY = /id_number|idNumber|tz_number|national_id|"ת\\"ז"|ת״ז/i;
 const PII_DIGITS = /\d{8,9}/g;
 
@@ -402,6 +407,78 @@ async function handleTimeline(sb: SupabaseClient, sessionId: string){
   return json({ ok: true, items: data || [] });
 }
 
+function sanitizeCommand(raw: unknown){
+  if(!raw || typeof raw !== "object") return null;
+  const src = raw as Json;
+  const type = trim(src.type);
+  if(!UI_COMMANDS.has(type) || hasPii(src)) return null;
+  const cmd: Json = { type };
+  if(trim(src.customerId)) cmd.customerId = trim(src.customerId);
+  if(trim(src.view)) cmd.view = trim(src.view);
+  if(trim(src.company)) cmd.company = trim(src.company);
+  if(trim(src.product)) cmd.product = trim(src.product);
+  if(trim(src.proposalId)) cmd.proposalId = trim(src.proposalId);
+  if(trim(src.id || src.taskId)) cmd.id = trim(src.id || src.taskId);
+  if(src.reminder && typeof src.reminder === "object") cmd.reminder = src.reminder;
+  return cmd;
+}
+
+async function handleDispatch(sb: SupabaseClient, body: Json, agent: AgentRow, sessionId: string){
+  const command = sanitizeCommand(body.command);
+  if(!command) return json({ ok: false, error: "BAD_COMMAND" }, 400);
+  const inserted = await sb.from("gi_assistant_commands").insert({
+    agent_id: trim(agent.id),
+    session_id: sessionId || null,
+    command,
+    status: "pending",
+  }).select("id").maybeSingle();
+  if(inserted.error) throw new Error(inserted.error.message);
+  await audit(sb, {
+    user_id: trim(agent.id),
+    session_id: sessionId,
+    action: "engine_dispatch",
+    authorization_result: "ok",
+    execution_status: "queued",
+    arguments_safe: { type: trim(command.type) },
+  });
+  return json({ ok: true, commandId: trim(inserted.data?.id), queued: true });
+}
+
+async function handlePull(sb: SupabaseClient, agent: AgentRow){
+  const since = new Date(Date.now() - COMMAND_TTL_MS).toISOString();
+  const { data, error } = await sb.from("gi_assistant_commands")
+    .select("id,command,created_at")
+    .eq("agent_id", trim(agent.id))
+    .eq("status", "pending")
+    .gte("created_at", since)
+    .order("created_at", { ascending: true })
+    .limit(10);
+  if(error) throw new Error(error.message);
+  return json({
+    ok: true,
+    commands: (data || []).map((row) => ({
+      id: trim((row as Json).id),
+      command: (row as Json).command,
+    })),
+  });
+}
+
+async function handleAck(sb: SupabaseClient, body: Json, agent: AgentRow){
+  const id = trim(body.commandId);
+  if(!id) return json({ ok: false, error: "MISSING_COMMAND" }, 400);
+  const patch: Json = {
+    status: trim(body.error) ? "failed" : "executed",
+    executed_at: new Date().toISOString(),
+  };
+  if(trim(body.error)) patch.error = trim(body.error).slice(0, 160);
+  const { error } = await sb.from("gi_assistant_commands")
+    .update(patch)
+    .eq("id", id)
+    .eq("agent_id", trim(agent.id));
+  if(error) throw new Error(error.message);
+  return json({ ok: true, commandId: id });
+}
+
 Deno.serve(async (req) => {
   if(req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if(req.method !== "POST") return json({ ok: false, error: "METHOD" }, 405);
@@ -412,16 +489,32 @@ Deno.serve(async (req) => {
   try {
     const auth = await authorize(sb, body);
     if(!auth.ok) return json({ ok: false, error: auth.error }, auth.status);
-    const session = await requireSession(sb, body, trim(auth.agent.id));
-    if(!session.ok) return json({ ok: false, error: session.error }, session.status);
-    if(action === "bootstrap") return await handleBootstrap(sb, body, auth.agent, session.sessionId);
-    if(action === "set_context") return await handleSetContext(sb, body, auth.agent, session.sessionId);
-    if(action === "log") return await handleLog(sb, body, auth.agent, session.sessionId);
-    if(action === "propose") return await handlePropose(sb, body, auth.agent, session.sessionId);
-    if(action === "confirm") return await handleConfirm(sb, body, auth.agent, session.sessionId);
-    if(action === "cancel") return await handleCancel(sb, body, auth.agent, session.sessionId);
-    if(action === "intent") return await handleIntent(sb, body, auth.agent, session.sessionId);
-    if(action === "timeline") return await handleTimeline(sb, session.sessionId);
+    const busAction = action === "dispatch" || action === "pull" || action === "ack";
+    let sessionId = "";
+    if(!busAction || trim(body.sessionId)){
+      const session = await requireSession(sb, body, trim(auth.agent.id));
+      if(!session.ok){
+        if(!busAction) return json({ ok: false, error: session.error }, session.status);
+      } else {
+        sessionId = session.sessionId;
+      }
+    }
+    if(action === "dispatch") return await handleDispatch(sb, body, auth.agent, sessionId);
+    if(action === "pull") return await handlePull(sb, auth.agent);
+    if(action === "ack") return await handleAck(sb, body, auth.agent);
+    if(!sessionId){
+      const session = await requireSession(sb, body, trim(auth.agent.id));
+      if(!session.ok) return json({ ok: false, error: session.error }, session.status);
+      sessionId = session.sessionId;
+    }
+    if(action === "bootstrap") return await handleBootstrap(sb, body, auth.agent, sessionId);
+    if(action === "set_context") return await handleSetContext(sb, body, auth.agent, sessionId);
+    if(action === "log") return await handleLog(sb, body, auth.agent, sessionId);
+    if(action === "propose") return await handlePropose(sb, body, auth.agent, sessionId);
+    if(action === "confirm") return await handleConfirm(sb, body, auth.agent, sessionId);
+    if(action === "cancel") return await handleCancel(sb, body, auth.agent, sessionId);
+    if(action === "intent") return await handleIntent(sb, body, auth.agent, sessionId);
+    if(action === "timeline") return await handleTimeline(sb, sessionId);
     return json({ ok: false, error: "UNKNOWN_ACTION" }, 400);
   } catch(err) {
     const message = err instanceof Error ? err.message : String(err);

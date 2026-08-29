@@ -14,6 +14,10 @@
   const FALLBACK_SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
   const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
   const POLL_MS = 1600;
+  const UI_COMMANDS = new Set([
+    "open_customer", "go_view", "open_simulator", "open_proposal",
+    "open_wizard", "refresh_reminders", "upsert_reminder", "mark_task_done"
+  ]);
 
   type AgentAuth = {
     id?: string;
@@ -102,6 +106,7 @@
   let pendingAction: PendingAction = null;
   let timelineItems: TimelineItem[] = [];
   let lastIntent = "";
+  let commandPoll = 0;
 
   function trim(value: unknown): string {
     return String(value == null ? "" : value).trim();
@@ -136,6 +141,10 @@
   function isLoggedIn(): boolean {
     const auth = getAuth();
     return !!(auth && (trim(auth.id) || trim(auth.name)));
+  }
+
+  function isPhonePage(): boolean {
+    try { return document.body?.getAttribute("data-gi-asst-page") === "phone"; } catch (_e) { return false; }
   }
 
   function supabaseConfig(){
@@ -794,6 +803,45 @@
     else if (type === "refresh_reminders") void active.refreshReminders?.();
   }
 
+  async function dispatchDesktopCommand(cmd: Record<string, unknown>): Promise<void> {
+    if (!isPhonePage()) return;
+    if (!UI_COMMANDS.has(trim(cmd.type))) return;
+    try {
+      await callEngine({ ...engineAuthPayload(), action: "dispatch", command: cmd });
+    } catch (_e) {}
+  }
+
+  async function pullDesktopCommands(): Promise<void> {
+    if (isPhonePage()) return;
+    const device = readDevice();
+    if (!device || !trim(device.deviceSecret)) return;
+    try {
+      const data = await callEngine({ ...engineAuthPayload(), action: "pull" });
+      const list = Array.isArray(data.commands) ? data.commands as Array<Record<string, unknown>> : [];
+      for (const row of list) {
+        const id = trim(row.id);
+        const cmd = (row.command && typeof row.command === "object") ? row.command as Record<string, unknown> : null;
+        try {
+          executeClientCommand(cmd);
+          if (id) await callEngine({ ...engineAuthPayload(), action: "ack", commandId: id });
+        } catch (_e) {
+          if (id) await callEngine({ ...engineAuthPayload(), action: "ack", commandId: id, error: "EXEC" });
+        }
+      }
+    } catch (_e) {}
+  }
+
+  function startCommandBus(): void {
+    if (isPhonePage() || commandPoll) return;
+    commandPoll = window.setInterval(() => { void pullDesktopCommands(); }, POLL_MS);
+    void pullDesktopCommands();
+  }
+
+  function stopCommandBus(): void {
+    if (commandPoll) window.clearInterval(commandPoll);
+    commandPoll = 0;
+  }
+
   async function invokeTool(tool: string, args: Record<string, unknown>, pendingActionId?: string): Promise<Record<string, unknown>> {
     delete args.user_id;
     delete args.userId;
@@ -812,7 +860,9 @@
     await applyCrmWraps(trim(tool), args, data);
     await applySimWraps(trim(tool), args, data);
     if (data.client_command && typeof data.client_command === "object") {
-      executeClientCommand(data.client_command as Record<string, unknown>);
+      const cmd = data.client_command as Record<string, unknown>;
+      if (isPhonePage()) void dispatchDesktopCommand(cmd);
+      else executeClientCommand(cmd);
     }
     return data;
   }
@@ -1070,9 +1120,17 @@
       const status = trim(data.status);
       if (status === "paired") {
         const auth = getAuth();
-        writeLocalPairing(trim(auth?.id) || trim(auth?.name));
+        if (trim(data.devicePublicId) && trim(data.deviceSecret)) {
+          writeDevice({
+            devicePublicId: trim(data.devicePublicId),
+            deviceSecret: trim(data.deviceSecret),
+            agentId: trim(data.agentId) || trim(auth?.id)
+          });
+        }
+        writeLocalPairing(trim(auth?.id) || trim(data.agentId) || trim(auth?.name));
         stopPairingPoll();
         pairing = null;
+        startCommandBus();
         renderAssistantBody();
         return;
       }
@@ -1107,7 +1165,15 @@
         pin
       });
       if (data.alreadyPaired === true) {
+        if (trim(data.devicePublicId) && trim(data.deviceSecret)) {
+          writeDevice({
+            devicePublicId: trim(data.devicePublicId),
+            deviceSecret: trim(data.deviceSecret),
+            agentId: trim(data.agentId) || trim(auth?.id)
+          });
+        }
         writeLocalPairing(trim(auth?.id) || trim(data.agentId) || trim(auth?.name));
+        startCommandBus();
         renderAssistantBody();
         return;
       }
@@ -1282,21 +1348,26 @@
     bound = true;
     window.addEventListener("gi:app-login-ready", () => {
       syncButtonVisibility();
+      startCommandBus();
     });
     window.addEventListener("gi:app-logout", () => {
       void cancelPairing();
+      stopCommandBus();
       closeOverlay();
       syncButtonVisibility();
     });
+    if (isLoggedIn()) startCommandBus();
   }
 
   function onLogin(): void {
     syncButtonVisibility();
+    startCommandBus();
   }
 
   function onLogout(): void {
     void cancelPairing();
     void stopVoice();
+    stopCommandBus();
     closeOverlay();
     syncButtonVisibility();
   }
@@ -1321,6 +1392,9 @@
     applyCrmWraps,
     applySimWraps,
     paintHits,
+    dispatchDesktopCommand,
+    pullDesktopCommands,
+    startCommandBus,
     getPendingAction(){ return pendingAction; },
     getLastIntent(){ return lastIntent; },
     getTimeline(){ return timelineItems.slice(); }

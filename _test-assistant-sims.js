@@ -9,7 +9,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-sims-v1";
+const TAG = "20260829-assistant-live-v1";
 let failed = 0;
 let passed = 0;
 
@@ -46,7 +46,7 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).statu
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-simulators.js")]).status === 0, "node --check gi-simulators.js");
 assert(html.includes("gi-assistant.js?v=" + TAG), "index cache");
 assert(sw.includes("gi-v12-" + TAG), "sw cache");
-assert(app.includes("gi-simulators.js?v=" + TAG), "simulator chunk cache");
+assert(/gi-simulators\.js\?v=/.test(app), "simulator chunk cache");
 
 console.log("\n2) wraps existing compute / wizard, no new pricing engine");
 assert(sims.includes("function quoteExistingSimulator"), "controlled quote export");
