@@ -12323,6 +12323,101 @@
   RiskSimulators.register("כלל", "ריסק", ClalRiskSimulator);
   // ===== סוף GI-CLL-RISK-SIM =======================================================
 
+  function giQuoteParseSmoker(v){
+    if(v === true || v === 1 || v === "1" || v === "true") return true;
+    if(v === false || v === 0 || v === "0" || v === "false") return false;
+    const s = safeTrim(v).toLowerCase();
+    if(s === "כן" || s === "מעשן" || s === "מעשנת" || s === "yes" || s === "smoker") return true;
+    if(s === "לא" || s === "לא מעשן" || s === "לא מעשנת" || s === "no" || s === "nonsmoker") return false;
+    return null;
+  }
+  function giQuoteParseGender(v){
+    const s = safeTrim(v);
+    if(s === "זכר" || s === "נקבה") return s;
+    const low = s.toLowerCase();
+    if(low === "male" || low === "m" || low === "ז") return "זכר";
+    if(low === "female" || low === "f" || low === "נ") return "נקבה";
+    return s;
+  }
+  function giQuoteRiskArgs(input){
+    const src = input && typeof input === "object" ? input : {};
+    const sumRaw = src.sumInsured != null ? src.sumInsured : src.sum_insured;
+    return {
+      age: Number(src.age),
+      gender: giQuoteParseGender(src.gender),
+      smoker: giQuoteParseSmoker(src.smoker),
+      sumInsured: Number(String(sumRaw == null ? "" : sumRaw).replace(/[^\d.-]/g, ""))
+    };
+  }
+  function giQuoteSafe(calc, company, product){
+    if(!calc || calc.ok !== true){
+      return { ok:false, error: (calc && calc.reason) || "QUOTE_FAILED", company, product, open_simulator: true };
+    }
+    const monthly = Number(calc.monthlyPremium);
+    const annual = Number(calc.annualPremium);
+    return {
+      ok: true,
+      company,
+      product,
+      monthlyPremium: Number.isFinite(monthly) ? monthly : null,
+      annualPremium: Number.isFinite(annual) ? annual : (Number.isFinite(monthly) ? monthly * 12 : null),
+      currency: "ILS"
+    };
+  }
+  /** ייצוא מבוקר של compute* הקיימות — בלי טבלאות חדשות ובלי חישוב מקביל. */
+  function quoteExistingSimulator(company, product, input){
+    const c = safeTrim(company);
+    const p = safeTrim(product);
+    const src = input && typeof input === "object" ? input : {};
+    const risk = giQuoteRiskArgs(src);
+    const covers = Array.isArray(src.covers) ? src.covers : (Array.isArray(src.coverIds) ? src.coverIds : []);
+    const planId = safeTrim(src.planId || src.plan);
+    const compensation = src.compensation != null ? src.compensation : src.sumInsured;
+    const programMode = safeTrim(src.programMode) || "base";
+    const ciArgs = { age: risk.age, gender: risk.gender, smoker: risk.smoker, compensation, programMode };
+
+    if(p === "ריסק"){
+      if(c === "מנורה") return giQuoteSafe(computeMenoraRiskPremium(risk), c, p);
+      if(c === "הפניקס") return giQuoteSafe(computePhoenixRiskPremium(risk), c, p);
+      if(c === "הכשרה") return giQuoteSafe(computeHachsharaRiskPremium(risk), c, p);
+      if(c === "מגדל") return giQuoteSafe(computeMigdalRiskPremium(risk), c, p);
+      if(c === "כלל") return giQuoteSafe(computeClalRiskPremium(risk), c, p);
+    }
+    if(p === "ריסק משכנתא"){
+      if(c === "מנורה") return giQuoteSafe(computeMenoraMortgageRiskPremium(risk), c, p);
+      if(c === "הפניקס") return giQuoteSafe(computePhoenixMortgageRiskPremium(risk), c, p);
+      if(c === "הכשרה") return giQuoteSafe(computeHachsharaMortRiskPremium(risk), c, p);
+      if(c === "מגדל") return giQuoteSafe(computeMigdalRiskPremium(risk), c, p);
+      if(c === "כלל") return giQuoteSafe(computeClalMortRiskPremium(risk), c, p);
+    }
+    if(p === "בריאות"){
+      if(!covers.length) return { ok:false, error:"NEED_COVERS", company:c, product:p, open_simulator:true };
+      if(c === "מנורה") return giQuoteSafe(computeMenoraHealthBundle(covers, risk.age, risk.gender), c, p);
+      if(c === "הפניקס") return giQuoteSafe(computePhoenixHealthBundle(covers, risk.age, risk.gender), c, p);
+      if(c === "איילון") return giQuoteSafe(computeAyalonHealthBundle(covers, risk.age, risk.gender), c, p);
+      if(c === "הכשרה") return giQuoteSafe(computeHachsharaHealthBundle(covers, risk.age, risk.gender), c, p);
+      if(c === "מגדל") return giQuoteSafe(computeMigdalHealthBundle(covers, risk.age, risk.gender), c, p);
+      if(c === "כלל") return giQuoteSafe(computeClalHealthBundle(covers, risk.age, risk.gender), c, p);
+    }
+    if(p === "מחלות קשות" || p === "סרטן"){
+      if(compensation == null || compensation === "") return { ok:false, error:"NEED_INPUT", company:c, product:p, open_simulator:true };
+      if(c === "מנורה") return giQuoteSafe(computeMenoraCiPremium(planId || (p === "סרטן" ? "kerenChaim" : "orTop"), ciArgs), c, p);
+      if(c === "הפניקס") return giQuoteSafe(computePhoenixCiPremium(planId || (p === "סרטן" ? "marpeCancer" : "marpe"), ciArgs), c, p);
+      if(c === "איילון") return giQuoteSafe(computeAyalonCiPremium(planId || (p === "סרטן" ? "hoshenCancer" : "hoshen"), { age: risk.age, gender: risk.gender, smoker: risk.smoker, compensation }), c, p);
+      if(c === "הכשרה") return giQuoteSafe(computeHachsharaCiPremium({ age: risk.age, gender: risk.gender, smoker: risk.smoker, compensation }), c, p);
+      if(c === "מגדל") return giQuoteSafe(computeMigdalCiPremium(planId || (p === "סרטן" ? "mazor_cancer" : "mazor_merchav"), { age: risk.age, gender: risk.gender, smoker: risk.smoker, compensation }), c, p);
+      if(c === "כלל") return giQuoteSafe(computeClalCiPremium(planId || (p === "סרטן" ? "mediclal_cancer" : "mediclal_critical"), { age: risk.age, gender: risk.gender, smoker: risk.smoker, compensation }), c, p);
+    }
+    if((p === "מוות מתאונה" || p === "נכות מתאונה") && c === "מגדל"){
+      return giQuoteSafe(computeMigdalAccPremium(planId || (p === "מוות מתאונה" ? "death" : "disability"), { age: risk.age, gender: risk.gender, sumInsured: risk.sumInsured }), c, p);
+    }
+    return { ok:false, error:"UNKNOWN_SIM", company:c, product:p, open_simulator:true };
+  }
+  try {
+    const api = { quote: quoteExistingSimulator };
+    host.GiSimulatorQuotes = api;
+    global.GiSimulatorQuotes = api;
+  } catch(_e) {}
 
   try { host.onSimulatorsInstalled?.(RiskSimulators); } catch(_e) {}
   try { global.__GI_SIMS_CHUNK_READY = true; } catch(_e) {}

@@ -12,8 +12,17 @@ const CORS = {
 
 const CUSTOMER_LIGHT = "id,status,full_name,id_number,phone,email,city,agent_name,agent_id,agent_role,existing_policies_count,new_policies_count,created_at";
 const PII_KEY = /id_number|idNumber|tz_number|national_id|ת״ז/i;
-const WRITE_TOOLS = new Set(["create_task", "update_task"]);
-const LATER_TOOLS = new Set(["get_insurance_price", "create_proposal"]);
+const WRITE_TOOLS = new Set(["create_task", "update_task", "create_proposal"]);
+const SIM_CATALOG: Array<[string, string]> = [
+  ["הפניקס", "ריסק"], ["הפניקס", "בריאות"], ["הפניקס", "מחלות קשות"], ["הפניקס", "סרטן"],
+  ["הפניקס", "ריסק משכנתא"],
+  ["מנורה", "ריסק"], ["מנורה", "ריסק משכנתא"], ["מנורה", "בריאות"], ["מנורה", "מחלות קשות"], ["מנורה", "סרטן"],
+  ["הכשרה", "ריסק"], ["הכשרה", "ריסק משכנתא"], ["הכשרה", "בריאות"], ["הכשרה", "מחלות קשות"],
+  ["מגדל", "בריאות"], ["מגדל", "מחלות קשות"], ["מגדל", "סרטן"], ["מגדל", "ריסק"], ["מגדל", "ריסק משכנתא"],
+  ["מגדל", "מוות מתאונה"], ["מגדל", "נכות מתאונה"],
+  ["איילון", "בריאות"], ["איילון", "מחלות קשות"], ["איילון", "סרטן"],
+  ["כלל", "בריאות"], ["כלל", "מחלות קשות"], ["כלל", "סרטן"], ["כלל", "ריסק משכנתא"], ["כלל", "ריסק"],
+];
 
 type Json = Record<string, unknown>;
 type AgentRow = {
@@ -356,13 +365,94 @@ async function handleGoView(agent: AgentRow, args: Json){
   return { ok: true, client_command: { type: "go_view", view } };
 }
 
+function simAllowed(company: string, product: string){
+  return SIM_CATALOG.some(([c, p]) => c === company && p === product);
+}
+
+function productFamily(product: string){
+  if(product === "ריסק" || product === "ריסק משכנתא") return "risk";
+  if(product === "בריאות") return "health";
+  if(product === "מחלות קשות" || product === "סרטן") return "ci";
+  if(product === "מוות מתאונה" || product === "נכות מתאונה") return "accident";
+  return "";
+}
+
+function quoteInput(args: Json, family: string){
+  const input: Json = {};
+  const age = Number(args.age);
+  if(Number.isFinite(age) && age > 0) input.age = age;
+  const gender = trim(args.gender);
+  if(gender) input.gender = gender;
+  if(args.smoker === true || args.smoker === false) input.smoker = args.smoker;
+  else if(trim(args.smoker)) input.smoker = trim(args.smoker);
+  const sum = Number(String(args.sumInsured == null ? args.sum_insured : args.sumInsured).replace(/[^\d.-]/g, ""));
+  if(Number.isFinite(sum) && sum > 0) input.sumInsured = sum;
+  const compensation = Number(String(args.compensation == null ? "" : args.compensation).replace(/[^\d.-]/g, ""));
+  if(Number.isFinite(compensation) && compensation > 0) input.compensation = compensation;
+  const covers = Array.isArray(args.covers) ? args.covers.map((x) => trim(x)).filter(Boolean) : [];
+  if(covers.length) input.covers = covers;
+  const planId = trim(args.planId || args.plan);
+  if(planId) input.planId = planId;
+  if(family === "health" && !covers.length) input._missing = "covers";
+  if(family === "risk" && (!input.age || !input.gender || input.smoker == null || !input.sumInsured)) input._missing = "risk";
+  if(family === "ci" && (!input.age || !input.gender || input.smoker == null || !input.compensation)) input._missing = "ci";
+  if(family === "accident" && (!input.age || !input.gender || !input.sumInsured)) input._missing = "accident";
+  return input;
+}
+
 async function handleOpenSimulator(args: Json){
   const company = trim(args.company);
   const product = trim(args.product);
   if(!company || !product) return { ok: false, error: "MISSING_SIM" };
+  if(!simAllowed(company, product)) return { ok: false, error: "UNKNOWN_SIM" };
   return {
     ok: true,
     client_command: { type: "open_simulator", company, product },
+  };
+}
+
+async function handleGetPrice(args: Json){
+  const company = trim(args.company);
+  const product = trim(args.product);
+  if(!company || !product) return { ok: false, error: "MISSING_SIM" };
+  if(!simAllowed(company, product)) return { ok: false, error: "UNKNOWN_SIM" };
+  const family = productFamily(product);
+  const input = quoteInput(args, family);
+  const missing = trim(input._missing);
+  delete input._missing;
+  if(missing){
+    return {
+      ok: true,
+      needs_input: true,
+      missing,
+      company,
+      product,
+      client_command: { type: "open_simulator", company, product },
+    };
+  }
+  return {
+    ok: true,
+    company,
+    product,
+    family,
+    client_command: { type: "quote_simulator", company, product, input },
+  };
+}
+
+async function handleCreateProposal(sb: SupabaseClient, agent: AgentRow, args: Json){
+  const customerId = trim(args.customerId);
+  if(customerId){
+    const row = await loadCustomer(sb, customerId);
+    if(!row || !(await customerVisible(sb, row, agent))) return { ok: false, error: "NOT_VISIBLE" };
+  }
+  return {
+    ok: true,
+    client_command: {
+      type: "open_wizard",
+      customerId,
+      company: trim(args.company),
+      product: trim(args.product),
+    },
   };
 }
 
@@ -412,7 +502,7 @@ async function handleUpdateTask(sb: SupabaseClient, agent: AgentRow, args: Json)
 
 async function proposeWrite(sb: SupabaseClient, agent: AgentRow, sessionId: string, tool: string, args: Json){
   const expiresAt = new Date(Date.now() + 2 * 60 * 1000).toISOString();
-  const label = tool === "create_task" ? "יצירת משימה" : "עדכון משימה";
+  const label = tool === "create_task" ? "יצירת משימה" : (tool === "create_proposal" ? "יצירת הצעה באשף" : "עדכון משימה");
   await sb.from("gi_assistant_pending_actions")
     .update({ status: "cancelled", cancelled_at: new Date().toISOString() })
     .eq("session_id", sessionId)
@@ -465,9 +555,6 @@ async function invoke(sb: SupabaseClient, agent: AgentRow, sessionId: string, bo
   if(PII_KEY.test(JSON.stringify(Object.keys(rawArgs))) && tool !== "find_customer_by_id"){
     return { ok: false, error: "PII_REJECTED" };
   }
-  if(LATER_TOOLS.has(tool)){
-    return { ok: false, error: "PHASE_11", message: "תמחור והצעות יתווספו בשלב הסימולטורים, בלי לחשב מחיר כאן." };
-  }
   if(WRITE_TOOLS.has(tool)){
     const pendingId = trim(body.pendingActionId);
     if(!pendingId) return await proposeWrite(sb, agent, sessionId, tool, rawArgs);
@@ -475,8 +562,10 @@ async function invoke(sb: SupabaseClient, agent: AgentRow, sessionId: string, bo
     if(!taken.ok) return { ok: false, error: taken.error, executed: false };
     const args = { ...taken.args, ...rawArgs };
     if(tool === "create_task") return await handleCreateTask(sb, agent, args);
+    if(tool === "create_proposal") return await handleCreateProposal(sb, agent, args);
     return await handleUpdateTask(sb, agent, args);
   }
+  if(tool === "get_insurance_price") return await handleGetPrice(rawArgs);
   if(tool === "search_customer") return await handleSearch(sb, agent, rawArgs);
   if(tool === "find_customer_by_id") return await handleFind(sb, agent, rawArgs);
   if(tool === "get_customer") return await handleGetCustomer(sb, agent, rawArgs);
