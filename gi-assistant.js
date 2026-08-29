@@ -34,7 +34,8 @@
       dc: null,
       stream: null,
       audio: null,
-      error: ""
+      error: "",
+      recognition: null
     };
     let pendingAction = null;
     let timelineItems = [];
@@ -216,6 +217,87 @@
       if (/^(לא|בטל|ביטול|אל תאשר|לא לאשר)$/.test(normalized)) return "cancel";
       return "other";
     }
+    const LOCAL_VOICE_HELP = "\u05D0\u05E4\u05E9\u05E8 \u05DC\u05D5\u05DE\u05E8: \u05D7\u05E4\u05E9 \u05DC\u05E7\u05D5\u05D7, \u05E4\u05EA\u05D7 \u05EA\u05D9\u05E7, \u05DE\u05E9\u05D9\u05DE\u05D5\u05EA, \u05E2\u05D1\u05D5\u05E8 \u05DC\u05DC\u05E7\u05D5\u05D7\u05D5\u05EA, \u05E4\u05EA\u05D7 \u05E1\u05D9\u05DE\u05D5\u05DC\u05D8\u05D5\u05E8 \u05DE\u05E0\u05D5\u05E8\u05D4 \u05E8\u05D9\u05E1\u05E7, \u05DE\u05D7\u05D9\u05E8 \u05DE\u05E0\u05D5\u05E8\u05D4 \u05E8\u05D9\u05E1\u05E7, \u05D0\u05D5 \u05E6\u05D5\u05E8 \u05D4\u05E6\u05E2\u05D4.";
+    function extractCompany(text) {
+      const companies = ["\u05D4\u05E4\u05E0\u05D9\u05E7\u05E1", "\u05DE\u05E0\u05D5\u05E8\u05D4", "\u05D4\u05DB\u05E9\u05E8\u05D4", "\u05DE\u05D2\u05D3\u05DC", "\u05D0\u05D9\u05D9\u05DC\u05D5\u05DF", "\u05DB\u05DC\u05DC"];
+      for (let i = 0; i < companies.length; i += 1) {
+        if (text.indexOf(companies[i]) >= 0) return companies[i];
+      }
+      return "";
+    }
+    function extractProduct(text) {
+      if (/ריסק\s*משכנתא/.test(text)) return "\u05E8\u05D9\u05E1\u05E7 \u05DE\u05E9\u05DB\u05E0\u05EA\u05D0";
+      if (/מחלות\s*קשות/.test(text)) return "\u05DE\u05D7\u05DC\u05D5\u05EA \u05E7\u05E9\u05D5\u05EA";
+      if (/מוות\s*מתאונה/.test(text)) return "\u05DE\u05D5\u05D5\u05EA \u05DE\u05EA\u05D0\u05D5\u05E0\u05D4";
+      if (/נכות\s*מתאונה/.test(text)) return "\u05E0\u05DB\u05D5\u05EA \u05DE\u05EA\u05D0\u05D5\u05E0\u05D4";
+      if (/סרטן/.test(text)) return "\u05E1\u05E8\u05D8\u05DF";
+      if (/בריאות/.test(text)) return "\u05D1\u05E8\u05D9\u05D0\u05D5\u05EA";
+      if (/ריסק/.test(text)) return "\u05E8\u05D9\u05E1\u05E7";
+      return "";
+    }
+    function extractView(text) {
+      if (/דוח|דוחות/.test(text)) return "reportsHub";
+      if (/צוות/.test(text)) return "myTeam";
+      if (/הגדרות/.test(text)) return "settings";
+      if (/הצעות/.test(text)) return "proposals";
+      if (/סימול/.test(text)) return "myTools";
+      if (/לוח|ראשי|דשבורד/.test(text)) return "dashboard";
+      if (/מכירות/.test(text)) return "dailySales";
+      if (/אנשי\s*קשר|קשרים/.test(text)) return "contacts";
+      if (/תהליכ/.test(text)) return "myProcesses";
+      if (/לקוח|תיק/.test(text)) return "customers";
+      return "";
+    }
+    function parseLocalCommand(text) {
+      const raw = trim(text).replace(/[!.?,״"']/g, " ").replace(/\s+/g, " ");
+      if (!raw) return null;
+      if (classifyIntent(raw) !== "other") return null;
+      if (/^(עזרה|מה אתה יכול|מה אפשר)/.test(raw)) return { kind: "help", say: LOCAL_VOICE_HELP };
+      if (/(חפש|תחפש|מצא|תמצא|חיפוש)/.test(raw)) {
+        const query = raw.replace(/^(?:אפשר\s+)?(?:בבקשה\s+)?(?:חפש|תחפש|מצא|תמצא|חיפוש)\s+(?:לי\s+)?(?:את\s+)?(?:לקוח\s+)?(?:תיק\s+)?/, "");
+        return { tool: "search_customer", args: { query: query || raw } };
+      }
+      if (/(פתח|תפתח).*(תיק|לקוח)/.test(raw)) {
+        const query = raw.replace(/^.*?(?:התיק|תיק|לקוח)\s+(?:של\s+)?/, "");
+        return { tool: "find_customer_by_id", args: { query: query || raw } };
+      }
+      if (/תזכיר לי|(צור|הוסף|תפתח).*(משימה|תזכורת)/.test(raw)) {
+        const details = raw.replace(/^.*?(?:משימה|תזכורת|תזכיר לי)\s*/, "") || raw;
+        return { tool: "create_task", args: { type: "\u05EA\u05D6\u05DB\u05D5\u05E8\u05EA", details } };
+      }
+      if (/משימות|תזכורות/.test(raw)) return { tool: "get_tasks", args: {} };
+      if (/(עבור|תעבור|לך אל|פתח מסך|מסך)/.test(raw)) {
+        const view = extractView(raw);
+        if (view) return { tool: "go_view", args: { view } };
+      }
+      if (/מחיר|ציטוט|פרמיה|כמה עולה/.test(raw)) {
+        const args = {
+          company: extractCompany(raw) || "\u05DE\u05E0\u05D5\u05E8\u05D4",
+          product: extractProduct(raw) || "\u05E8\u05D9\u05E1\u05E7"
+        };
+        const ageMatch = raw.match(/גיל\s*(\d{1,2})/);
+        if (ageMatch) args.age = Number(ageMatch[1]);
+        const sumMatch = raw.match(/(\d[\d,]{3,})/);
+        if (sumMatch) args.sumInsured = Number(String(sumMatch[1]).replace(/,/g, ""));
+        if (/לא מעשן/.test(raw)) args.smoker = false;
+        else if (/מעשן/.test(raw)) args.smoker = true;
+        if (/גבר|זכר/.test(raw)) args.gender = "male";
+        if (/אישה|נקבה/.test(raw)) args.gender = "female";
+        return { tool: "get_insurance_price", args };
+      }
+      if (/סימולטור/.test(raw) || extractCompany(raw) && extractProduct(raw) && /פתח/.test(raw)) {
+        const company = extractCompany(raw);
+        const product = extractProduct(raw) || "\u05E8\u05D9\u05E1\u05E7";
+        if (company) return { tool: "open_simulator", args: { company, product } };
+      }
+      if (/(צור|תפתח).*(הצעה)|הצעה חדשה/.test(raw)) return { tool: "create_proposal", args: {} };
+      if (/ייצור|תיקים החודש|הפקות/.test(raw)) {
+        return { tool: /צוות/.test(raw) ? "get_team_production" : "get_monthly_production", args: {} };
+      }
+      if (/^(היי|שלום|תודה|בוקר טוב|ערב טוב)$/.test(raw)) return { kind: "help", say: LOCAL_VOICE_HELP };
+      if (raw.length >= 2) return { tool: "search_customer", args: { query: raw } };
+      return { kind: "help", say: LOCAL_VOICE_HELP };
+    }
     function engineAuthPayload() {
       const device = readDevice();
       const auth = getAuth();
@@ -246,6 +328,7 @@
       if (code === "OPENAI_ERROR") return "\u05E9\u05E8\u05EA \u05D4\u05E7\u05D5\u05DC \u05DC\u05D0 \u05D6\u05DE\u05D9\u05DF \u05DB\u05E8\u05D2\u05E2. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1 \u05D1\u05E2\u05D5\u05D3 \u05E8\u05D2\u05E2.";
       if (code === "MIC_DENIED" || code === "NotAllowedError") return "\u05E0\u05D3\u05E8\u05E9\u05EA \u05D4\u05E8\u05E9\u05D0\u05EA \u05DE\u05D9\u05E7\u05E8\u05D5\u05E4\u05D5\u05DF \u05DB\u05D3\u05D9 \u05DC\u05D3\u05D1\u05E8 \u05E2\u05DD \u05D4\u05E2\u05D5\u05D6\u05E8.";
       if (code === "MIC_MISSING" || code === "NotFoundError") return "\u05DC\u05D0 \u05E0\u05DE\u05E6\u05D0 \u05DE\u05D9\u05E7\u05E8\u05D5\u05E4\u05D5\u05DF \u05D1\u05DE\u05DB\u05E9\u05D9\u05E8.";
+      if (code === "SPEECH_UNSUPPORTED") return "\u05D4\u05D3\u05E4\u05D3\u05E4\u05DF \u05DC\u05D0 \u05EA\u05D5\u05DE\u05DA \u05D1\u05D3\u05D9\u05D1\u05D5\u05E8 \u05DE\u05E7\u05D5\u05DE\u05D9. \u05E4\u05EA\u05D7\u05D5 \u05D0\u05EA \u05D4\u05DE\u05E2\u05E8\u05DB\u05EA \u05D1-Chrome.";
       return "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D4\u05E9\u05DC\u05D9\u05DD \u05D0\u05EA \u05D4\u05E7\u05D9\u05E9\u05D5\u05E8. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1.";
     }
     function voiceStateLabel(state) {
@@ -397,7 +480,7 @@
         </div>
         <ol class="giAsst__timeline" id="giAsstTimeline" aria-live="polite"></ol>
         <div class="giAsst__hits" id="giAsstHits" hidden></div>
-        <p class="giAsst__hint">\u05E4\u05E2\u05D5\u05DC\u05D5\u05EA \u05DB\u05EA\u05D9\u05D1\u05D4 \u05D3\u05D5\u05E8\u05E9\u05D5\u05EA \u05D0\u05D9\u05E9\u05D5\u05E8. \xAB\u05DB\u05DF\xBB \u05D7\u05DC \u05E8\u05E7 \u05D0\u05DD \u05D9\u05E9 \u05E4\u05E2\u05D5\u05DC\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4.</p>
+        <p class="giAsst__hint">\u05D4\u05E7\u05D5\u05DC \u05DE\u05E7\u05D5\u05DE\u05D9 \u05D1\u05D3\u05E4\u05D3\u05E4\u05DF \u2014 \u05D1\u05DC\u05D9 \u05EA\u05E9\u05DC\u05D5\u05DD \u05DC\u05E1\u05E4\u05E7 \u05D7\u05D9\u05E6\u05D5\u05E0\u05D9. \u05DB\u05EA\u05D9\u05D1\u05D4 \u05D3\u05D5\u05E8\u05E9\u05EA \u05D0\u05D9\u05E9\u05D5\u05E8. \xAB\u05DB\u05DF\xBB \u05D7\u05DC \u05E8\u05E7 \u05D0\u05DD \u05D9\u05E9 \u05E4\u05E2\u05D5\u05DC\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4.</p>
       </div>
     `;
     }
@@ -657,6 +740,178 @@
       try {
         await callEngine({ ...engineAuthPayload(), action: "log", kind: "assistant", text });
       } catch (_e) {
+      }
+    }
+    function speechRecognitionCtor() {
+      const w = window;
+      const ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
+      return ctor ? ctor : null;
+    }
+    function pickHebrewVoice() {
+      var _a, _b;
+      try {
+        const voices = ((_b = (_a = window.speechSynthesis) == null ? void 0 : _a.getVoices) == null ? void 0 : _b.call(_a)) || [];
+        for (let i = 0; i < voices.length; i += 1) {
+          if (String(voices[i].lang || "").toLowerCase().indexOf("he") === 0) return voices[i];
+        }
+      } catch (_e) {
+      }
+      return null;
+    }
+    function startLocalListening() {
+      const Ctor = speechRecognitionCtor();
+      if (!Ctor) throw Object.assign(new Error("SPEECH_UNSUPPORTED"), { code: "SPEECH_UNSUPPORTED" });
+      const rec = new Ctor();
+      rec.lang = "he-IL";
+      rec.continuous = true;
+      rec.interimResults = false;
+      rec.onresult = (ev) => {
+        var _a;
+        const results = ev.results;
+        for (let i = ev.resultIndex; i < results.length; i += 1) {
+          const row = results[i];
+          if (row && row.isFinal) {
+            const spoken = trim((_a = row[0]) == null ? void 0 : _a.transcript);
+            if (spoken) void handleLocalUtterance(spoken);
+          }
+        }
+      };
+      rec.onerror = (ev) => {
+        const err = trim(ev == null ? void 0 : ev.error);
+        if (err === "not-allowed") setVoiceState("error", pairingErrorText("MIC_DENIED"));
+      };
+      rec.onend = () => {
+        if (voice.state === "listening" && voice.recognition) {
+          try {
+            rec.start();
+          } catch (_e) {
+          }
+        }
+      };
+      voice.recognition = rec;
+      rec.start();
+    }
+    function stopLocalListening() {
+      var _a;
+      const rec = voice.recognition;
+      voice.recognition = null;
+      try {
+        rec == null ? void 0 : rec.stop();
+      } catch (_e) {
+      }
+      try {
+        (_a = window.speechSynthesis) == null ? void 0 : _a.cancel();
+      } catch (_e2) {
+      }
+    }
+    async function speak(text) {
+      var _a, _b;
+      const clean = redactSafe(text);
+      if (!clean) return;
+      await onAssistantTranscript(clean);
+      if (voice.state === "idle" || voice.state === "error") return;
+      if (!window.speechSynthesis) return;
+      setVoiceState("speaking");
+      try {
+        (_a = voice.recognition) == null ? void 0 : _a.stop();
+      } catch (_e) {
+      }
+      await new Promise((resolve) => {
+        const utter = new SpeechSynthesisUtterance(clean);
+        utter.lang = "he-IL";
+        const chosen = pickHebrewVoice();
+        if (chosen) utter.voice = chosen;
+        utter.onend = () => resolve();
+        utter.onerror = () => resolve();
+        try {
+          window.speechSynthesis.cancel();
+        } catch (_e2) {
+        }
+        window.speechSynthesis.speak(utter);
+      });
+      if (voice.state === "speaking") {
+        setVoiceState("listening");
+        try {
+          (_b = voice.recognition) == null ? void 0 : _b.start();
+        } catch (_e3) {
+        }
+      }
+    }
+    function replyFromTool(tool, data) {
+      if (data.needs_confirmation === true) return "\u05E4\u05E2\u05D5\u05DC\u05EA \u05DB\u05EA\u05D9\u05D1\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8. \u05D0\u05DE\u05E8\u05D5 \u05DB\u05DF \u05D0\u05D5 \u05DC\u05D0.";
+      if (trim(data.error) === "NEED_INPUT" || data.needs_input === true) return "\u05D7\u05E1\u05E8\u05D9\u05DD \u05E4\u05E8\u05D8\u05D9\u05DD. \u05E4\u05EA\u05D7\u05EA\u05D9 \u05D0\u05EA \u05D4\u05E1\u05D9\u05DE\u05D5\u05DC\u05D8\u05D5\u05E8 \u05D4\u05E7\u05D9\u05D9\u05DD.";
+      if (data.ok === false) return "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D1\u05E6\u05E2 \u05D0\u05EA \u05D4\u05D1\u05E7\u05E9\u05D4.";
+      if (tool === "search_customer") {
+        const n = asHitCards(data.customers).length;
+        if (!n) return "\u05DC\u05D0 \u05E0\u05DE\u05E6\u05D0\u05D5 \u05DC\u05E7\u05D5\u05D7\u05D5\u05EA.";
+        return n === 1 ? "\u05E0\u05DE\u05E6\u05D0 \u05DC\u05E7\u05D5\u05D7 \u05D0\u05D7\u05D3. \u05E4\u05D5\u05EA\u05D7 \u05D0\u05EA \u05D4\u05EA\u05D9\u05E7." : "\u05E0\u05DE\u05E6\u05D0\u05D5 " + n + " \u05DC\u05E7\u05D5\u05D7\u05D5\u05EA.";
+      }
+      if (tool === "find_customer_by_id" || tool === "get_customer") {
+        const name = trim(data.customer && typeof data.customer === "object" ? data.customer.full_name : "");
+        return name ? "\u05E0\u05DE\u05E6\u05D0 " + name : "\u05D4\u05DC\u05E7\u05D5\u05D7 \u05DC\u05D0 \u05E0\u05DE\u05E6\u05D0.";
+      }
+      if (tool === "get_tasks") {
+        const n = asHitCards(data.tasks).length;
+        return n ? "\u05D9\u05E9 " + n + " \u05DE\u05E9\u05D9\u05DE\u05D5\u05EA \u05E4\u05EA\u05D5\u05D7\u05D5\u05EA." : "\u05D0\u05D9\u05DF \u05DE\u05E9\u05D9\u05DE\u05D5\u05EA \u05E4\u05EA\u05D5\u05D7\u05D5\u05EA.";
+      }
+      if (tool === "get_insurance_price") {
+        const monthly = formatPremium(data.monthlyPremium);
+        return monthly ? "\u05D4\u05E4\u05E8\u05DE\u05D9\u05D4 \u05D4\u05D7\u05D5\u05D3\u05E9\u05D9\u05EA " + monthly + " \u05E9\u05E7\u05DC\u05D9\u05DD." : "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D7\u05E9\u05D1 \u05E4\u05E8\u05DE\u05D9\u05D4.";
+      }
+      if (tool === "open_simulator") return "\u05E4\u05EA\u05D7\u05EA\u05D9 \u05D0\u05EA \u05D4\u05E1\u05D9\u05DE\u05D5\u05DC\u05D8\u05D5\u05E8 \u05D4\u05E7\u05D9\u05D9\u05DD.";
+      if (tool === "go_view") return "\u05E2\u05D1\u05E8\u05EA\u05D9 \u05DC\u05DE\u05E1\u05DA \u05D4\u05DE\u05D1\u05D5\u05E7\u05E9.";
+      if (tool === "create_proposal") return "\u05D4\u05D4\u05E6\u05E2\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8 \u05D5\u05D0\u05D6 \u05D9\u05D9\u05E4\u05EA\u05D7 \u05D4\u05D0\u05E9\u05E3 \u05D4\u05E7\u05D9\u05D9\u05DD.";
+      if (tool === "get_monthly_production" || tool === "get_team_production") {
+        const count = Number(data.count == null ? data.total : data.count);
+        return Number.isFinite(count) ? "\u05D4\u05D7\u05D5\u05D3\u05E9 " + count + " \u05EA\u05D9\u05E7\u05D9\u05DD." : "\u05D4\u05D1\u05D0\u05EA\u05D9 \u05D0\u05EA \u05E0\u05EA\u05D5\u05E0\u05D9 \u05D4\u05D9\u05D9\u05E6\u05D5\u05E8.";
+      }
+      return "\u05D1\u05D5\u05E6\u05E2.";
+    }
+    async function handleLocalUtterance(text) {
+      if (voice.state === "speaking") return;
+      const intent = classifyIntent(text);
+      const hadPending = !!pendingAction;
+      await onUserTranscript(text);
+      if (intent === "confirm") {
+        await speak(hadPending ? "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D0\u05D5\u05E9\u05E8\u05D4." : "\u05D0\u05D9\u05DF \u05E4\u05E2\u05D5\u05DC\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8.");
+        return;
+      }
+      if (intent === "cancel") {
+        await speak(hadPending ? "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D1\u05D5\u05D8\u05DC\u05D4." : "\u05D0\u05D9\u05DF \u05E4\u05E2\u05D5\u05DC\u05D4 \u05DC\u05D1\u05D9\u05D8\u05D5\u05DC.");
+        return;
+      }
+      const cmd = parseLocalCommand(text);
+      if (!cmd) {
+        await speak(LOCAL_VOICE_HELP);
+        return;
+      }
+      if (cmd.kind === "help" || !cmd.tool) {
+        await speak(cmd.say || LOCAL_VOICE_HELP);
+        return;
+      }
+      try {
+        const data = await invokeTool(cmd.tool, cmd.args || {});
+        if (cmd.tool === "search_customer") {
+          const hits = asHitCards(data.customers);
+          if (hits.length === 1 && trim(hits[0].id)) {
+            try {
+              await invokeTool("open_customer", { customerId: trim(hits[0].id) });
+            } catch (_e) {
+            }
+          }
+        }
+        if ((cmd.tool === "find_customer_by_id" || cmd.tool === "get_customer") && data.customer && typeof data.customer === "object") {
+          const id = trim(data.customer.id);
+          if (id) {
+            try {
+              await invokeTool("open_customer", { customerId: id });
+            } catch (_e2) {
+            }
+          }
+        }
+        await speak(replyFromTool(cmd.tool, data));
+      } catch (_e3) {
+        await speak("\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D1\u05E6\u05E2 \u05D0\u05EA \u05D4\u05D1\u05E7\u05E9\u05D4.");
       }
     }
     function handleRealtimeEvent(raw) {
@@ -921,29 +1176,52 @@
       await pc.setRemoteDescription({ type: "answer", sdp: answer });
     }
     async function startVoice() {
+      var _a;
       if (voice.state === "connecting" || voice.state === "listening" || voice.state === "speaking") return;
       setVoiceState("connecting");
       try {
-        const minted = await mintVoiceToken();
-        voice.sessionId = minted.sessionId;
+        if (!speechRecognitionCtor()) {
+          throw Object.assign(new Error("SPEECH_UNSUPPORTED"), { code: "SPEECH_UNSUPPORTED" });
+        }
+        const device = readDevice();
+        const pin = trim((_a = $("giAsstVoicePin")) == null ? void 0 : _a.value);
+        if (!(device && trim(device.deviceSecret))) {
+          if (!pin) throw Object.assign(new Error("MISSING_PIN"), { code: "MISSING_PIN" });
+          voice.pin = pin;
+        }
+        const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
         try {
-          await callEngine({ ...engineAuthPayload(), action: "bootstrap" });
+          mic.getTracks().forEach((track) => track.stop());
         } catch (_e) {
         }
-        pushTimeline("system", "\u05E1\u05E9\u05DF \u05E2\u05D5\u05D6\u05E8 \u05E0\u05E4\u05EA\u05D7.");
-        await connectWebRtc(minted.clientSecret);
+        const opened = await callEngine({
+          ...engineAuthPayload(),
+          action: "open_session",
+          source: device && trim(device.deviceSecret) ? "phone" : "desktop"
+        });
+        voice.sessionId = trim(opened.sessionId);
+        if (!voice.sessionId) throw new Error("MISSING_SESSION");
+        try {
+          await callEngine({ ...engineAuthPayload(), action: "bootstrap" });
+        } catch (_e2) {
+        }
+        pushTimeline("system", "\u05E1\u05E9\u05DF \u05E2\u05D5\u05D6\u05E8 \u05DE\u05E7\u05D5\u05DE\u05D9 \u05E0\u05E4\u05EA\u05D7.");
+        startLocalListening();
         setVoiceState("listening");
+        await speak("\u05D0\u05E0\u05D9 \u05DE\u05E7\u05E9\u05D9\u05D1. " + LOCAL_VOICE_HELP);
       } catch (err) {
         const code = trim((err == null ? void 0 : err.code) || (err == null ? void 0 : err.name) || (err == null ? void 0 : err.message));
         await stopVoice(false);
         const mapped = pairingErrorText(code);
-        const text = code === "FAILED_TO_FETCH" || code === "TypeError" ? "\u05D0\u05D9\u05DF \u05D7\u05D9\u05D1\u05D5\u05E8 \u05DC\u05E9\u05E8\u05EA \u05D4\u05E7\u05D5\u05DC. \u05D4\u05E8\u05D9\u05E6\u05D5 \u05D0\u05EA supabase-assistant-sessions.sql, \u05E4\u05E8\u05E1\u05D5 \u05D0\u05EA gi-assistant-realtime, \u05D5\u05D4\u05D2\u05D3\u05D9\u05E8\u05D5 \u05D0\u05EA \u05E1\u05D5\u05D3 OpenAI \u05D1\u05E9\u05E8\u05EA." : mapped === "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D4\u05E9\u05DC\u05D9\u05DD \u05D0\u05EA \u05D4\u05E7\u05D9\u05E9\u05D5\u05E8. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1." ? "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D4\u05EA\u05D7\u05D9\u05DC \u05D0\u05EA \u05D4\u05E9\u05D9\u05D7\u05D4. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1." : mapped;
+        const text = code === "FAILED_TO_FETCH" || code === "TypeError" ? "\u05D0\u05D9\u05DF \u05D7\u05D9\u05D1\u05D5\u05E8 \u05DC\u05E9\u05E8\u05EA \u05D4\u05E2\u05D5\u05D6\u05E8. \u05D1\u05D3\u05E7\u05D5 \u05E9\u05D4\u05E4\u05D5\u05E0\u05E7\u05E6\u05D9\u05D5\u05EA \u05E4\u05D5\u05E8\u05E1\u05DE\u05D5." : mapped === "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D4\u05E9\u05DC\u05D9\u05DD \u05D0\u05EA \u05D4\u05E7\u05D9\u05E9\u05D5\u05E8. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1." ? "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D4\u05EA\u05D7\u05D9\u05DC \u05D0\u05EA \u05D4\u05E9\u05D9\u05D7\u05D4. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1." : mapped;
         setVoiceState("error", text);
       }
     }
     async function stopVoice(updateUi = true) {
       var _a, _b, _c, _d;
       const sessionId = trim(voice.sessionId);
+      const endPayload = { ...engineAuthPayload(), action: "end_session", sessionId };
+      stopLocalListening();
       try {
         (_a = voice.dc) == null ? void 0 : _a.close();
       } catch (_e) {
@@ -972,7 +1250,7 @@
       pendingAction = null;
       if (sessionId) {
         try {
-          await callRealtime({ action: "end", sessionId });
+          await callEngine(endPayload);
         } catch (_e5) {
         }
       }
@@ -1313,6 +1591,7 @@
       confirmPending,
       cancelPending,
       classifyIntent,
+      parseLocalCommand,
       redactSafe,
       invokeTool,
       executeClientCommand,

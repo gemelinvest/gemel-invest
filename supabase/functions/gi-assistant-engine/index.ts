@@ -12,6 +12,7 @@ const CORS = {
 
 const PENDING_TTL_MS = 2 * 60 * 1000;
 const COMMAND_TTL_MS = 2 * 60 * 1000;
+const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 const UI_COMMANDS = new Set([
   "open_customer", "go_view", "open_simulator", "open_proposal",
   "open_wizard", "refresh_reminders", "upsert_reminder", "mark_task_done",
@@ -195,6 +196,36 @@ async function upsertContext(sb: SupabaseClient, row: Json){
   };
   await sb.from("gi_assistant_context").upsert(payload, { onConflict: "session_id" });
   return payload;
+}
+
+async function handleOpenSession(sb: SupabaseClient, body: Json, agent: AgentRow){
+  const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
+  const source = trim(body.source) === "phone" ? "phone" : "desktop";
+  const inserted = await sb.from("gi_assistant_sessions").insert({
+    agent_id: trim(agent.id),
+    source,
+    model: "local-browser",
+    expires_at: expiresAt,
+  }).select("id").maybeSingle();
+  if(inserted.error) throw new Error(inserted.error.message);
+  const sessionId = trim(inserted.data?.id);
+  await audit(sb, {
+    user_id: trim(agent.id),
+    session_id: sessionId,
+    action: "engine_open_session",
+    authorization_result: "ok",
+    execution_status: "ok",
+    arguments_safe: { source, model: "local-browser" },
+  });
+  return json({ ok: true, sessionId, model: "local-browser", expiresAt });
+}
+
+async function handleEndSession(sb: SupabaseClient, sessionId: string){
+  await sb.from("gi_assistant_sessions")
+    .update({ ended_at: new Date().toISOString() })
+    .eq("id", sessionId)
+    .is("ended_at", null);
+  return json({ ok: true });
 }
 
 async function handleBootstrap(sb: SupabaseClient, body: Json, agent: AgentRow, sessionId: string){
@@ -489,6 +520,7 @@ Deno.serve(async (req) => {
   try {
     const auth = await authorize(sb, body);
     if(!auth.ok) return json({ ok: false, error: auth.error }, auth.status);
+    if(action === "open_session") return await handleOpenSession(sb, body, auth.agent);
     const busAction = action === "dispatch" || action === "pull" || action === "ack";
     let sessionId = "";
     if(!busAction || trim(body.sessionId)){
@@ -508,6 +540,7 @@ Deno.serve(async (req) => {
       sessionId = session.sessionId;
     }
     if(action === "bootstrap") return await handleBootstrap(sb, body, auth.agent, sessionId);
+    if(action === "end_session") return await handleEndSession(sb, sessionId);
     if(action === "set_context") return await handleSetContext(sb, body, auth.agent, sessionId);
     if(action === "log") return await handleLog(sb, body, auth.agent, sessionId);
     if(action === "propose") return await handlePropose(sb, body, auth.agent, sessionId);

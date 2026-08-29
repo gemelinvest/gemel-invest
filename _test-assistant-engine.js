@@ -9,7 +9,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-live-v1";
+const TAG = "20260829-assistant-local-v1";
 let failed = 0;
 let passed = 0;
 
@@ -64,6 +64,8 @@ assert(asstTs.includes("giAsst__timeline"), "timeline markup");
 assert(asstTs.includes("giAsstConfirmYes"), "confirm buttons");
 assert(asstCss.includes(".giAsst__timeline") && !theme.includes("giAsst__timeline"), "scoped timeline CSS");
 assert(asstTs.includes("classifyIntent") && asstTs.includes("proposeWrite"), "engine API exported");
+assert(edge.includes("open_session") && edge.includes("local-browser"), "local session without OpenAI");
+assert(asstTs.includes("parseLocalCommand") && asstTs.includes("webkitSpeechRecognition"), "browser speech path");
 
 console.log("\n4) compiled intent + confirm contract");
 function elStub(){
@@ -104,6 +106,9 @@ assert(!!api && typeof api.classifyIntent === "function", "compiled classifyInte
 assert(api.classifyIntent("כן") === "confirm", "כן is confirm");
 assert(api.classifyIntent("לא") === "cancel", "לא is cancel");
 assert(api.classifyIntent("פתח תיק") === "other", "other intent is not confirm");
+assert(typeof api.parseLocalCommand === "function", "compiled parseLocalCommand");
+assert(api.parseLocalCommand("חפש ישראל כהן").tool === "search_customer", "search maps to search_customer");
+assert(api.parseLocalCommand("כן") === null, "confirm is not a local tool");
 assert(api.redactSafe("לקוח 123456789") === "לקוח [מזהה]", "redact digits");
 assert(api.getPendingAction() === null, "no pending by default");
 

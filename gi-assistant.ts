@@ -78,6 +78,14 @@
     stream: MediaStream | null;
     audio: HTMLAudioElement | null;
     error: string;
+    recognition: { start: () => void; stop: () => void } | null;
+  };
+
+  type LocalCommand = {
+    tool?: string;
+    args?: Record<string, unknown>;
+    kind?: "help";
+    say?: string;
   };
 
   type TimelineItem = {
@@ -101,7 +109,8 @@
     dc: null,
     stream: null,
     audio: null,
-    error: ""
+    error: "",
+    recognition: null
   };
   let pendingAction: PendingAction = null;
   let timelineItems: TimelineItem[] = [];
@@ -292,6 +301,92 @@
     return "other";
   }
 
+  const LOCAL_VOICE_HELP = "אפשר לומר: חפש לקוח, פתח תיק, משימות, עבור ללקוחות, פתח סימולטור מנורה ריסק, מחיר מנורה ריסק, או צור הצעה.";
+
+  function extractCompany(text: string): string {
+    const companies = ["הפניקס", "מנורה", "הכשרה", "מגדל", "איילון", "כלל"];
+    for (let i = 0; i < companies.length; i += 1) {
+      if (text.indexOf(companies[i]) >= 0) return companies[i];
+    }
+    return "";
+  }
+
+  function extractProduct(text: string): string {
+    if (/ריסק\s*משכנתא/.test(text)) return "ריסק משכנתא";
+    if (/מחלות\s*קשות/.test(text)) return "מחלות קשות";
+    if (/מוות\s*מתאונה/.test(text)) return "מוות מתאונה";
+    if (/נכות\s*מתאונה/.test(text)) return "נכות מתאונה";
+    if (/סרטן/.test(text)) return "סרטן";
+    if (/בריאות/.test(text)) return "בריאות";
+    if (/ריסק/.test(text)) return "ריסק";
+    return "";
+  }
+
+  function extractView(text: string): string {
+    if (/דוח|דוחות/.test(text)) return "reportsHub";
+    if (/צוות/.test(text)) return "myTeam";
+    if (/הגדרות/.test(text)) return "settings";
+    if (/הצעות/.test(text)) return "proposals";
+    if (/סימול/.test(text)) return "myTools";
+    if (/לוח|ראשי|דשבורד/.test(text)) return "dashboard";
+    if (/מכירות/.test(text)) return "dailySales";
+    if (/אנשי\s*קשר|קשרים/.test(text)) return "contacts";
+    if (/תהליכ/.test(text)) return "myProcesses";
+    if (/לקוח|תיק/.test(text)) return "customers";
+    return "";
+  }
+
+  function parseLocalCommand(text: string): LocalCommand | null {
+    const raw = trim(text).replace(/[!.?,״"']/g, " ").replace(/\s+/g, " ");
+    if (!raw) return null;
+    if (classifyIntent(raw) !== "other") return null;
+    if (/^(עזרה|מה אתה יכול|מה אפשר)/.test(raw)) return { kind: "help", say: LOCAL_VOICE_HELP };
+    if (/(חפש|תחפש|מצא|תמצא|חיפוש)/.test(raw)) {
+      const query = raw.replace(/^(?:אפשר\s+)?(?:בבקשה\s+)?(?:חפש|תחפש|מצא|תמצא|חיפוש)\s+(?:לי\s+)?(?:את\s+)?(?:לקוח\s+)?(?:תיק\s+)?/, "");
+      return { tool: "search_customer", args: { query: query || raw } };
+    }
+    if (/(פתח|תפתח).*(תיק|לקוח)/.test(raw)) {
+      const query = raw.replace(/^.*?(?:התיק|תיק|לקוח)\s+(?:של\s+)?/, "");
+      return { tool: "find_customer_by_id", args: { query: query || raw } };
+    }
+    if (/תזכיר לי|(צור|הוסף|תפתח).*(משימה|תזכורת)/.test(raw)) {
+      const details = raw.replace(/^.*?(?:משימה|תזכורת|תזכיר לי)\s*/, "") || raw;
+      return { tool: "create_task", args: { type: "תזכורת", details } };
+    }
+    if (/משימות|תזכורות/.test(raw)) return { tool: "get_tasks", args: {} };
+    if (/(עבור|תעבור|לך אל|פתח מסך|מסך)/.test(raw)) {
+      const view = extractView(raw);
+      if (view) return { tool: "go_view", args: { view } };
+    }
+    if (/מחיר|ציטוט|פרמיה|כמה עולה/.test(raw)) {
+      const args: Record<string, unknown> = {
+        company: extractCompany(raw) || "מנורה",
+        product: extractProduct(raw) || "ריסק"
+      };
+      const ageMatch = raw.match(/גיל\s*(\d{1,2})/);
+      if (ageMatch) args.age = Number(ageMatch[1]);
+      const sumMatch = raw.match(/(\d[\d,]{3,})/);
+      if (sumMatch) args.sumInsured = Number(String(sumMatch[1]).replace(/,/g, ""));
+      if (/לא מעשן/.test(raw)) args.smoker = false;
+      else if (/מעשן/.test(raw)) args.smoker = true;
+      if (/גבר|זכר/.test(raw)) args.gender = "male";
+      if (/אישה|נקבה/.test(raw)) args.gender = "female";
+      return { tool: "get_insurance_price", args };
+    }
+    if (/סימולטור/.test(raw) || (extractCompany(raw) && extractProduct(raw) && /פתח/.test(raw))) {
+      const company = extractCompany(raw);
+      const product = extractProduct(raw) || "ריסק";
+      if (company) return { tool: "open_simulator", args: { company, product } };
+    }
+    if (/(צור|תפתח).*(הצעה)|הצעה חדשה/.test(raw)) return { tool: "create_proposal", args: {} };
+    if (/ייצור|תיקים החודש|הפקות/.test(raw)) {
+      return { tool: /צוות/.test(raw) ? "get_team_production" : "get_monthly_production", args: {} };
+    }
+    if (/^(היי|שלום|תודה|בוקר טוב|ערב טוב)$/.test(raw)) return { kind: "help", say: LOCAL_VOICE_HELP };
+    if (raw.length >= 2) return { tool: "search_customer", args: { query: raw } };
+    return { kind: "help", say: LOCAL_VOICE_HELP };
+  }
+
   function engineAuthPayload(): Record<string, unknown> {
     const device = readDevice();
     const auth = getAuth();
@@ -323,6 +418,7 @@
     if (code === "OPENAI_ERROR") return "שרת הקול לא זמין כרגע. נסו שוב בעוד רגע.";
     if (code === "MIC_DENIED" || code === "NotAllowedError") return "נדרשת הרשאת מיקרופון כדי לדבר עם העוזר.";
     if (code === "MIC_MISSING" || code === "NotFoundError") return "לא נמצא מיקרופון במכשיר.";
+    if (code === "SPEECH_UNSUPPORTED") return "הדפדפן לא תומך בדיבור מקומי. פתחו את המערכת ב-Chrome.";
     return "לא הצלחתי להשלים את הקישור. נסו שוב.";
   }
 
@@ -478,7 +574,7 @@
         </div>
         <ol class="giAsst__timeline" id="giAsstTimeline" aria-live="polite"></ol>
         <div class="giAsst__hits" id="giAsstHits" hidden></div>
-        <p class="giAsst__hint">פעולות כתיבה דורשות אישור. «כן» חל רק אם יש פעולה ממתינה.</p>
+        <p class="giAsst__hint">הקול מקומי בדפדפן — בלי תשלום לספק חיצוני. כתיבה דורשת אישור. «כן» חל רק אם יש פעולה ממתינה.</p>
       </div>
     `;
   }
@@ -753,6 +849,168 @@
     try { await callEngine({ ...engineAuthPayload(), action: "log", kind: "assistant", text }); } catch (_e) {}
   }
 
+  function speechRecognitionCtor(): (new () => {
+    lang: string;
+    continuous: boolean;
+    interimResults: boolean;
+    start: () => void;
+    stop: () => void;
+    onresult: ((ev: { resultIndex: number; results: ArrayLike<{ isFinal?: boolean; 0: { transcript: string } }> }) => void) | null;
+    onerror: ((ev: { error?: string }) => void) | null;
+    onend: (() => void) | null;
+  }) | null {
+    const w = window as Window & {
+      SpeechRecognition?: new () => unknown;
+      webkitSpeechRecognition?: new () => unknown;
+    };
+    const ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
+    return ctor ? ctor as ReturnType<typeof speechRecognitionCtor> : null;
+  }
+
+  function pickHebrewVoice(): SpeechSynthesisVoice | null {
+    try {
+      const voices = window.speechSynthesis?.getVoices?.() || [];
+      for (let i = 0; i < voices.length; i += 1) {
+        if (String(voices[i].lang || "").toLowerCase().indexOf("he") === 0) return voices[i];
+      }
+    } catch (_e) {}
+    return null;
+  }
+
+  function startLocalListening(): void {
+    const Ctor = speechRecognitionCtor();
+    if (!Ctor) throw Object.assign(new Error("SPEECH_UNSUPPORTED"), { code: "SPEECH_UNSUPPORTED" });
+    const rec = new Ctor();
+    rec.lang = "he-IL";
+    rec.continuous = true;
+    rec.interimResults = false;
+    rec.onresult = (ev) => {
+      const results = ev.results;
+      for (let i = ev.resultIndex; i < results.length; i += 1) {
+        const row = results[i];
+        if (row && row.isFinal) {
+          const spoken = trim(row[0]?.transcript);
+          if (spoken) void handleLocalUtterance(spoken);
+        }
+      }
+    };
+    rec.onerror = (ev) => {
+      const err = trim(ev?.error);
+      if (err === "not-allowed") setVoiceState("error", pairingErrorText("MIC_DENIED"));
+    };
+    rec.onend = () => {
+      if (voice.state === "listening" && voice.recognition) {
+        try { rec.start(); } catch (_e) {}
+      }
+    };
+    voice.recognition = rec;
+    rec.start();
+  }
+
+  function stopLocalListening(): void {
+    const rec = voice.recognition;
+    voice.recognition = null;
+    try { rec?.stop(); } catch (_e) {}
+    try { window.speechSynthesis?.cancel(); } catch (_e2) {}
+  }
+
+  async function speak(text: string): Promise<void> {
+    const clean = redactSafe(text);
+    if (!clean) return;
+    await onAssistantTranscript(clean);
+    if (voice.state === "idle" || voice.state === "error") return;
+    if (!window.speechSynthesis) return;
+    setVoiceState("speaking");
+    try { voice.recognition?.stop(); } catch (_e) {}
+    await new Promise<void>((resolve) => {
+      const utter = new SpeechSynthesisUtterance(clean);
+      utter.lang = "he-IL";
+      const chosen = pickHebrewVoice();
+      if (chosen) utter.voice = chosen;
+      utter.onend = () => resolve();
+      utter.onerror = () => resolve();
+      try { window.speechSynthesis.cancel(); } catch (_e2) {}
+      window.speechSynthesis.speak(utter);
+    });
+    if (voice.state === "speaking") {
+      setVoiceState("listening");
+      try { voice.recognition?.start(); } catch (_e3) {}
+    }
+  }
+
+  function replyFromTool(tool: string, data: Record<string, unknown>): string {
+    if (data.needs_confirmation === true) return "פעולת כתיבה ממתינה לאישור. אמרו כן או לא.";
+    if (trim(data.error) === "NEED_INPUT" || data.needs_input === true) return "חסרים פרטים. פתחתי את הסימולטור הקיים.";
+    if (data.ok === false) return "לא הצלחתי לבצע את הבקשה.";
+    if (tool === "search_customer") {
+      const n = asHitCards(data.customers).length;
+      if (!n) return "לא נמצאו לקוחות.";
+      return n === 1 ? "נמצא לקוח אחד. פותח את התיק." : "נמצאו " + n + " לקוחות.";
+    }
+    if (tool === "find_customer_by_id" || tool === "get_customer") {
+      const name = trim((data.customer && typeof data.customer === "object") ? (data.customer as HitCard).full_name : "");
+      return name ? ("נמצא " + name) : "הלקוח לא נמצא.";
+    }
+    if (tool === "get_tasks") {
+      const n = asHitCards(data.tasks).length;
+      return n ? ("יש " + n + " משימות פתוחות.") : "אין משימות פתוחות.";
+    }
+    if (tool === "get_insurance_price") {
+      const monthly = formatPremium(data.monthlyPremium);
+      return monthly ? ("הפרמיה החודשית " + monthly + " שקלים.") : "לא הצלחתי לחשב פרמיה.";
+    }
+    if (tool === "open_simulator") return "פתחתי את הסימולטור הקיים.";
+    if (tool === "go_view") return "עברתי למסך המבוקש.";
+    if (tool === "create_proposal") return "ההצעה ממתינה לאישור ואז ייפתח האשף הקיים.";
+    if (tool === "get_monthly_production" || tool === "get_team_production") {
+      const count = Number(data.count == null ? data.total : data.count);
+      return Number.isFinite(count) ? ("החודש " + count + " תיקים.") : "הבאתי את נתוני הייצור.";
+    }
+    return "בוצע.";
+  }
+
+  async function handleLocalUtterance(text: string): Promise<void> {
+    if (voice.state === "speaking") return;
+    const intent = classifyIntent(text);
+    const hadPending = !!pendingAction;
+    await onUserTranscript(text);
+    if (intent === "confirm") {
+      await speak(hadPending ? "הפעולה אושרה." : "אין פעולה ממתינה לאישור.");
+      return;
+    }
+    if (intent === "cancel") {
+      await speak(hadPending ? "הפעולה בוטלה." : "אין פעולה לביטול.");
+      return;
+    }
+    const cmd = parseLocalCommand(text);
+    if (!cmd) {
+      await speak(LOCAL_VOICE_HELP);
+      return;
+    }
+    if (cmd.kind === "help" || !cmd.tool) {
+      await speak(cmd.say || LOCAL_VOICE_HELP);
+      return;
+    }
+    try {
+      const data = await invokeTool(cmd.tool, cmd.args || {});
+      if (cmd.tool === "search_customer") {
+        const hits = asHitCards(data.customers);
+        if (hits.length === 1 && trim(hits[0].id)) {
+          try { await invokeTool("open_customer", { customerId: trim(hits[0].id) }); } catch (_e) {}
+        }
+      }
+      if ((cmd.tool === "find_customer_by_id" || cmd.tool === "get_customer") && data.customer && typeof data.customer === "object") {
+        const id = trim((data.customer as HitCard).id);
+        if (id) {
+          try { await invokeTool("open_customer", { customerId: id }); } catch (_e2) {}
+        }
+      }
+      await speak(replyFromTool(cmd.tool, data));
+    } catch (_e3) {
+      await speak("לא הצלחתי לבצע את הבקשה.");
+    }
+  }
+
   function handleRealtimeEvent(raw: string): void {
     let ev: Record<string, unknown> = {};
     try { ev = JSON.parse(raw) as Record<string, unknown>; } catch (_e) { return; }
@@ -1019,12 +1277,29 @@
     if (voice.state === "connecting" || voice.state === "listening" || voice.state === "speaking") return;
     setVoiceState("connecting");
     try {
-      const minted = await mintVoiceToken();
-      voice.sessionId = minted.sessionId;
-      try { await callEngine({ ...engineAuthPayload(), action: "bootstrap" }); } catch (_e) {}
-      pushTimeline("system", "סשן עוזר נפתח.");
-      await connectWebRtc(minted.clientSecret);
+      if (!speechRecognitionCtor()) {
+        throw Object.assign(new Error("SPEECH_UNSUPPORTED"), { code: "SPEECH_UNSUPPORTED" });
+      }
+      const device = readDevice();
+      const pin = trim(($("giAsstVoicePin") as HTMLInputElement | null)?.value);
+      if (!(device && trim(device.deviceSecret))) {
+        if (!pin) throw Object.assign(new Error("MISSING_PIN"), { code: "MISSING_PIN" });
+        voice.pin = pin;
+      }
+      const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
+      try { mic.getTracks().forEach((track) => track.stop()); } catch (_e) {}
+      const opened = await callEngine({
+        ...engineAuthPayload(),
+        action: "open_session",
+        source: device && trim(device.deviceSecret) ? "phone" : "desktop"
+      });
+      voice.sessionId = trim(opened.sessionId);
+      if (!voice.sessionId) throw new Error("MISSING_SESSION");
+      try { await callEngine({ ...engineAuthPayload(), action: "bootstrap" }); } catch (_e2) {}
+      pushTimeline("system", "סשן עוזר מקומי נפתח.");
+      startLocalListening();
       setVoiceState("listening");
+      await speak("אני מקשיב. " + LOCAL_VOICE_HELP);
     } catch (err) {
       const code = trim((err as Error & { code?: string; name?: string })?.code
         || (err as Error & { name?: string })?.name
@@ -1032,7 +1307,7 @@
       await stopVoice(false);
       const mapped = pairingErrorText(code);
       const text = (code === "FAILED_TO_FETCH" || code === "TypeError")
-        ? "אין חיבור לשרת הקול. הריצו את supabase-assistant-sessions.sql, פרסו את gi-assistant-realtime, והגדירו את סוד OpenAI בשרת."
+        ? "אין חיבור לשרת העוזר. בדקו שהפונקציות פורסמו."
         : (mapped === "לא הצלחתי להשלים את הקישור. נסו שוב." ? "לא הצלחתי להתחיל את השיחה. נסו שוב." : mapped);
       setVoiceState("error", text);
     }
@@ -1040,6 +1315,8 @@
 
   async function stopVoice(updateUi = true): Promise<void> {
     const sessionId = trim(voice.sessionId);
+    const endPayload = { ...engineAuthPayload(), action: "end_session", sessionId };
+    stopLocalListening();
     try { voice.dc?.close(); } catch (_e) {}
     try { voice.pc?.getSenders().forEach((sender) => sender.track?.stop()); } catch (_e2) {}
     try { voice.pc?.close(); } catch (_e3) {}
@@ -1052,7 +1329,7 @@
     voice.pin = "";
     pendingAction = null;
     if (sessionId) {
-      try { await callRealtime({ action: "end", sessionId }); } catch (_e5) {}
+      try { await callEngine(endPayload); } catch (_e5) {}
     }
     if (updateUi) {
       setVoiceState("idle");
@@ -1393,6 +1670,7 @@
     confirmPending,
     cancelPending,
     classifyIntent,
+    parseLocalCommand,
     redactSafe,
     invokeTool,
     executeClientCommand,
