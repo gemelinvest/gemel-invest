@@ -239,7 +239,7 @@
       if (/^(לא|בטל|ביטול|אל תאשר|לא לאשר)$/.test(normalized)) return "cancel";
       return "other";
     }
-    const LOCAL_VOICE_HELP = "\u05D0\u05D7\u05E8\u05D9 \u05D4\u05E6\u05E2\u05D4 \u05D7\u05D3\u05E9\u05D4 \u05DE\u05DE\u05DC\u05D0\u05D9\u05DD \u05D0\u05EA \u05D4\u05D0\u05E9\u05E3 \u05DC\u05E4\u05D9 \u05EA\u05D5\u05D5\u05D9\u05EA: \u05E9\u05DD \u05E4\u05E8\u05D8\u05D9 \u05D0\u05D5\u05E8\u05D9\u05D4, \u05E9\u05DD \u05DE\u05E9\u05E4\u05D7\u05D4 \u05E1\u05D5\u05DE\u05DA, \u05EA\u05D6, \u05D8\u05DC\u05E4\u05D5\u05DF, \u05DB\u05EA\u05D5\u05D1\u05EA, \u05E2\u05D9\u05E8, \u05DE\u05D9\u05D9\u05DC. \u05DB\u05E9\u05D4\u05E9\u05DC\u05D1 \u05DE\u05DC\u05D0 \u05D0\u05DE\u05E8\u05D5 \u05EA\u05E2\u05D1\u05E8\u05D9 \u05DC\u05E9\u05DC\u05D1 \u05D4\u05D1\u05D0. \u05D1\u05E9\u05DC\u05D1 \u05D4\u05E4\u05D5\u05DC\u05D9\u05E1\u05D5\u05EA \u05D0\u05DE\u05E8\u05D5 \u05EA\u05E4\u05EA\u05D7\u05D9 \u05D0\u05EA \u05D4\u05E4\u05E7 \u05D1\u05D9\u05D8\u05D5\u05D7\u05D9\u05DD \u05DE\u05D4\u05E8 \u05D4\u05D1\u05D9\u05D8\u05D5\u05D7.";
+    const LOCAL_VOICE_HELP = "\u05D0\u05E4\u05E9\u05E8 \u05DC\u05DE\u05DC\u05D0 \u05D0\u05EA \u05D4\u05D0\u05E9\u05E3 \u05DC\u05E4\u05D9 \u05EA\u05D5\u05D5\u05D9\u05EA. \u05DC\u05D3\u05D5\u05D2\u05DE\u05D4: \u05E9\u05DD \u05E4\u05E8\u05D8\u05D9 \u05D0\u05D5\u05E8\u05D9\u05D4, \u05E9\u05DD \u05DE\u05E9\u05E4\u05D7\u05D4 \u05E1\u05D5\u05DE\u05DA, \u05EA\u05D6, \u05D8\u05DC\u05E4\u05D5\u05DF, \u05DB\u05EA\u05D5\u05D1\u05EA, \u05E2\u05D9\u05E8, \u05D5\u05DE\u05D9\u05D9\u05DC. \u05DB\u05E9\u05D4\u05E9\u05DC\u05D1 \u05DE\u05DC\u05D0, \u05D0\u05DE\u05E8\u05D5 \u05EA\u05E2\u05D1\u05E8\u05D9 \u05DC\u05E9\u05DC\u05D1 \u05D4\u05D1\u05D0. \u05D1\u05E9\u05DC\u05D1 \u05D4\u05E4\u05D5\u05DC\u05D9\u05E1\u05D5\u05EA, \u05D0\u05DE\u05E8\u05D5 \u05EA\u05E4\u05EA\u05D7\u05D9 \u05D0\u05EA \u05D4\u05E4\u05E7 \u05D1\u05D9\u05D8\u05D5\u05D7\u05D9\u05DD \u05DE\u05D4\u05E8 \u05D4\u05D1\u05D9\u05D8\u05D5\u05D7.";
     function extractCompany(text) {
       const companies = ["\u05D4\u05E4\u05E0\u05D9\u05E7\u05E1", "\u05DE\u05E0\u05D5\u05E8\u05D4", "\u05D4\u05DB\u05E9\u05E8\u05D4", "\u05DE\u05D2\u05D3\u05DC", "\u05D0\u05D9\u05D9\u05DC\u05D5\u05DF", "\u05DB\u05DC\u05DC"];
       for (let i = 0; i < companies.length; i += 1) {
@@ -909,16 +909,173 @@
       const ctor = w.SpeechRecognition || w.webkitSpeechRecognition;
       return ctor ? ctor : null;
     }
-    function pickHebrewVoice() {
+    const FEMALE_VOICE_HINTS = [
+      "hila",
+      "carmit",
+      "heami",
+      "he-il-standard-a",
+      "he-il-wavenet-a",
+      "female",
+      "woman",
+      "girl",
+      "\u05E0\u05E9\u05D9\u05EA"
+    ];
+    const MALE_VOICE_HINTS = ["asaf", "male", "man-", " man", "david"];
+    const QUALITY_VOICE_HINTS = ["natural", "neural", "online", "premium", "enhanced", "wavenet", "studio"];
+    let voicesHooked = false;
+    function scoreHebrewVoice(voice2) {
+      if (!voice2) return -1e3;
+      const name = String(voice2.name || "").toLowerCase();
+      const lang = String(voice2.lang || "").toLowerCase();
+      const blob = name + " " + lang;
+      const isHe = lang === "he" || lang === "he-il" || lang.indexOf("he-") === 0 || /hebrew|עברית/.test(blob);
+      if (!isHe) return -1e3;
+      let score = 50;
+      if (lang === "he-il" || lang === "he") score += 30;
+      for (let i = 0; i < FEMALE_VOICE_HINTS.length; i += 1) {
+        if (blob.indexOf(FEMALE_VOICE_HINTS[i]) >= 0) score += 40;
+      }
+      for (let i = 0; i < QUALITY_VOICE_HINTS.length; i += 1) {
+        if (blob.indexOf(QUALITY_VOICE_HINTS[i]) >= 0) score += 18;
+      }
+      for (let i = 0; i < MALE_VOICE_HINTS.length; i += 1) {
+        if (blob.indexOf(MALE_VOICE_HINTS[i]) >= 0) score -= 50;
+      }
+      if (voice2.localService) score += 6;
+      if (voice2.default) score += 4;
+      return score;
+    }
+    function pickHebrewVoice(voices) {
       var _a, _b;
       try {
-        const voices = ((_b = (_a = window.speechSynthesis) == null ? void 0 : _a.getVoices) == null ? void 0 : _b.call(_a)) || [];
-        for (let i = 0; i < voices.length; i += 1) {
-          if (String(voices[i].lang || "").toLowerCase().indexOf("he") === 0) return voices[i];
+        const list = voices && voices.length ? voices : ((_b = (_a = window.speechSynthesis) == null ? void 0 : _a.getVoices) == null ? void 0 : _b.call(_a)) || [];
+        let best = null;
+        let bestScore = 0;
+        for (let i = 0; i < list.length; i += 1) {
+          const score = scoreHebrewVoice(list[i]);
+          if (score > bestScore) {
+            bestScore = score;
+            best = list[i];
+          }
         }
+        return best;
       } catch (_e) {
+        return null;
       }
-      return null;
+    }
+    function numberToHebrew(value, gender = "m") {
+      const n = Math.round(Number(value));
+      if (!Number.isFinite(n) || n < 0) return "";
+      if (n > 999999) return String(n);
+      const ones = gender === "f" ? ["", "\u05D0\u05D7\u05EA", "\u05E9\u05EA\u05D9\u05D9\u05DD", "\u05E9\u05DC\u05D5\u05E9", "\u05D0\u05E8\u05D1\u05E2", "\u05D7\u05DE\u05E9", "\u05E9\u05E9", "\u05E9\u05D1\u05E2", "\u05E9\u05DE\u05D5\u05E0\u05D4", "\u05EA\u05E9\u05E2"] : ["", "\u05D0\u05D7\u05D3", "\u05E9\u05E0\u05D9\u05D9\u05DD", "\u05E9\u05DC\u05D5\u05E9\u05D4", "\u05D0\u05E8\u05D1\u05E2\u05D4", "\u05D7\u05DE\u05D9\u05E9\u05D4", "\u05E9\u05D9\u05E9\u05D4", "\u05E9\u05D1\u05E2\u05D4", "\u05E9\u05DE\u05D5\u05E0\u05D4", "\u05EA\u05E9\u05E2\u05D4"];
+      const teens = gender === "f" ? ["\u05E2\u05E9\u05E8", "\u05D0\u05D7\u05EA \u05E2\u05E9\u05E8\u05D4", "\u05E9\u05EA\u05D9\u05DD \u05E2\u05E9\u05E8\u05D4", "\u05E9\u05DC\u05D5\u05E9 \u05E2\u05E9\u05E8\u05D4", "\u05D0\u05E8\u05D1\u05E2 \u05E2\u05E9\u05E8\u05D4", "\u05D7\u05DE\u05E9 \u05E2\u05E9\u05E8\u05D4", "\u05E9\u05E9 \u05E2\u05E9\u05E8\u05D4", "\u05E9\u05D1\u05E2 \u05E2\u05E9\u05E8\u05D4", "\u05E9\u05DE\u05D5\u05E0\u05D4 \u05E2\u05E9\u05E8\u05D4", "\u05EA\u05E9\u05E2 \u05E2\u05E9\u05E8\u05D4"] : ["\u05E2\u05E9\u05E8\u05D4", "\u05D0\u05D7\u05D3 \u05E2\u05E9\u05E8", "\u05E9\u05E0\u05D9\u05D9\u05DD \u05E2\u05E9\u05E8", "\u05E9\u05DC\u05D5\u05E9\u05D4 \u05E2\u05E9\u05E8", "\u05D0\u05E8\u05D1\u05E2\u05D4 \u05E2\u05E9\u05E8", "\u05D7\u05DE\u05D9\u05E9\u05D4 \u05E2\u05E9\u05E8", "\u05E9\u05D9\u05E9\u05D4 \u05E2\u05E9\u05E8", "\u05E9\u05D1\u05E2\u05D4 \u05E2\u05E9\u05E8", "\u05E9\u05DE\u05D5\u05E0\u05D4 \u05E2\u05E9\u05E8", "\u05EA\u05E9\u05E2\u05D4 \u05E2\u05E9\u05E8"];
+      const tens = ["", "", "\u05E2\u05E9\u05E8\u05D9\u05DD", "\u05E9\u05DC\u05D5\u05E9\u05D9\u05DD", "\u05D0\u05E8\u05D1\u05E2\u05D9\u05DD", "\u05D7\u05DE\u05D9\u05E9\u05D9\u05DD", "\u05E9\u05D9\u05E9\u05D9\u05DD", "\u05E9\u05D1\u05E2\u05D9\u05DD", "\u05E9\u05DE\u05D5\u05E0\u05D9\u05DD", "\u05EA\u05E9\u05E2\u05D9\u05DD"];
+      const thousandHeads = ["", "\u05D0\u05DC\u05E3", "\u05D0\u05DC\u05E4\u05D9\u05D9\u05DD", "\u05E9\u05DC\u05D5\u05E9\u05EA \u05D0\u05DC\u05E4\u05D9\u05DD", "\u05D0\u05E8\u05D1\u05E2\u05EA \u05D0\u05DC\u05E4\u05D9\u05DD", "\u05D7\u05DE\u05E9\u05EA \u05D0\u05DC\u05E4\u05D9\u05DD", "\u05E9\u05E9\u05EA \u05D0\u05DC\u05E4\u05D9\u05DD", "\u05E9\u05D1\u05E2\u05EA \u05D0\u05DC\u05E4\u05D9\u05DD", "\u05E9\u05DE\u05D5\u05E0\u05EA \u05D0\u05DC\u05E4\u05D9\u05DD", "\u05EA\u05E9\u05E2\u05EA \u05D0\u05DC\u05E4\u05D9\u05DD"];
+      const twoNoun = gender === "f" ? "\u05E9\u05EA\u05D9" : "\u05E9\u05E0\u05D9";
+      const under20 = (x, constructTwo) => {
+        if (x === 0) return "";
+        if (x === 2 && constructTwo) return twoNoun;
+        if (x < 10) return ones[x];
+        return teens[x - 10];
+      };
+      const under100 = (x, constructTwo) => {
+        if (x < 20) return under20(x, constructTwo);
+        const t = Math.floor(x / 10);
+        const o = x % 10;
+        if (!o) return tens[t];
+        const onesWord = o === 2 && gender === "m" ? "\u05E9\u05E0\u05D9\u05D9\u05DD" : ones[o];
+        return tens[t] + " \u05D5" + onesWord;
+      };
+      const under1000 = (x, constructTwo) => {
+        if (x < 100) return under100(x, constructTwo);
+        const h = Math.floor(x / 100);
+        const rest2 = x % 100;
+        const hundreds = h === 1 ? "\u05DE\u05D0\u05D4" : h === 2 ? "\u05DE\u05D0\u05EA\u05D9\u05D9\u05DD" : [
+          "",
+          "",
+          "",
+          "\u05E9\u05DC\u05D5\u05E9",
+          "\u05D0\u05E8\u05D1\u05E2",
+          "\u05D7\u05DE\u05E9",
+          "\u05E9\u05E9",
+          "\u05E9\u05D1\u05E2",
+          "\u05E9\u05DE\u05D5\u05E0\u05D4",
+          "\u05EA\u05E9\u05E2"
+        ][h] + " \u05DE\u05D0\u05D5\u05EA";
+        if (!rest2) return hundreds;
+        return hundreds + " \u05D5" + under100(rest2, false);
+      };
+      if (n < 1e3) return under1000(n, n === 2);
+      const thousands = Math.floor(n / 1e3);
+      const rest = n % 1e3;
+      const head = thousands < 10 ? thousandHeads[thousands] : under1000(thousands, false) + " \u05D0\u05DC\u05E3";
+      if (!rest) return head;
+      return head + " \u05D5" + under1000(rest, false);
+    }
+    function formatSpokenPremium(value) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return "";
+      const rounded = Math.round(n * 100) / 100;
+      const whole = Math.floor(rounded);
+      const agorot = Math.round((rounded - whole) * 100);
+      const shekels = whole === 1 ? "\u05E9\u05E7\u05DC \u05D0\u05D7\u05D3" : numberToHebrew(whole, "m") + " \u05E9\u05E7\u05DC\u05D9\u05DD";
+      if (!agorot) return shekels;
+      return shekels + " \u05D5" + numberToHebrew(agorot, "f") + " \u05D0\u05D2\u05D5\u05E8\u05D5\u05EA";
+    }
+    function prepareSpeechText(text) {
+      let spoken = trim(text);
+      if (!spoken) return "";
+      spoken = spoken.replace(/₪/g, " \u05E9\u05E7\u05DC\u05D9\u05DD ");
+      spoken = spoken.replace(/\[מזהה\]/g, "\u05DE\u05E1\u05E4\u05E8 \u05DE\u05D6\u05D4\u05D4");
+      spoken = spoken.replace(/(\d{1,6})[.,](\d{1,2})\b/g, (_m, whole, frac) => {
+        const head = numberToHebrew(Number(whole), "m");
+        const tail = numberToHebrew(Number(frac), "f");
+        return (head || whole) + " \u05E0\u05E7\u05D5\u05D3\u05D4 " + (tail || frac);
+      });
+      spoken = spoken.replace(/\b(\d{1,6})\b/g, (raw) => numberToHebrew(Number(raw), "m") || raw);
+      spoken = spoken.replace(/\s+/g, " ").trim();
+      spoken = spoken.replace(/\s+([,.:!?])/g, "$1");
+      spoken = spoken.replace(/([,.:!?])(?=\S)/g, "$1 ");
+      if (!/[.!?]$/.test(spoken)) spoken += ".";
+      return spoken;
+    }
+    function applyVoiceTone(utter, chosen) {
+      utter.lang = "he-IL";
+      if (chosen) {
+        try {
+          utter.voice = chosen;
+        } catch (_e) {
+        }
+      }
+      const name = String(chosen && chosen.name || "").toLowerCase();
+      let female = false;
+      for (let i = 0; i < FEMALE_VOICE_HINTS.length; i += 1) {
+        if (name.indexOf(FEMALE_VOICE_HINTS[i]) >= 0) female = true;
+      }
+      utter.rate = 0.9;
+      utter.pitch = female ? 1.12 : 1.2;
+      utter.volume = 1;
+    }
+    function speechHoldMs(text) {
+      return Math.min(22e3, Math.max(3600, Math.round(text.length * 90 + 1e3)));
+    }
+    function warmVoices() {
+      try {
+        const synth = window.speechSynthesis;
+        if (!synth) return;
+        synth.getVoices();
+        if (voicesHooked) return;
+        voicesHooked = true;
+        const refresh = () => {
+          try {
+            synth.getVoices();
+          } catch (_e) {
+          }
+        };
+        if (typeof synth.addEventListener === "function") synth.addEventListener("voiceschanged", refresh);
+        else synth.onvoiceschanged = refresh;
+      } catch (_e2) {
+      }
     }
     function isMobileVoice() {
       if (isPhonePage()) return true;
@@ -936,6 +1093,7 @@
     function unlockSpeech() {
       var _a, _b;
       try {
+        warmVoices();
         const utter = new SpeechSynthesisUtterance(" ");
         utter.volume = 0;
         (_a = window.speechSynthesis) == null ? void 0 : _a.speak(utter);
@@ -1002,9 +1160,11 @@
     async function speak(text) {
       const clean = redactSafe(text);
       if (!clean) return;
+      const spoken = prepareSpeechText(clean);
       await onAssistantTranscript(clean);
       if (voice.state === "idle" || voice.state === "error") return;
       if (!window.speechSynthesis) return;
+      warmVoices();
       setVoiceState("speaking");
       await new Promise((resolve) => {
         let done = false;
@@ -1014,11 +1174,10 @@
           window.clearTimeout(timer);
           resolve();
         };
-        const timer = window.setTimeout(finish, 2800);
-        const utter = new SpeechSynthesisUtterance(clean);
-        utter.lang = "he-IL";
+        const timer = window.setTimeout(finish, speechHoldMs(spoken));
+        const utter = new SpeechSynthesisUtterance(spoken);
         const chosen = pickHebrewVoice();
-        if (chosen) utter.voice = chosen;
+        applyVoiceTone(utter, chosen);
         utter.onend = () => finish();
         utter.onerror = () => finish();
         try {
@@ -1034,31 +1193,31 @@
       if (voice.state === "speaking") setVoiceState("listening");
     }
     function replyFromTool(tool, data) {
-      if (data.needs_confirmation === true) return "\u05E4\u05E2\u05D5\u05DC\u05EA \u05DB\u05EA\u05D9\u05D1\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8. \u05D0\u05DE\u05E8\u05D5 \u05DB\u05DF \u05D0\u05D5 \u05DC\u05D0.";
+      if (data.needs_confirmation === true) return "\u05E4\u05E2\u05D5\u05DC\u05EA \u05DB\u05EA\u05D9\u05D1\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8. \u05D0\u05DE\u05E8\u05D5 \u05DB\u05DF, \u05D0\u05D5 \u05DC\u05D0.";
       if (trim(data.error) === "NEED_INPUT" || data.needs_input === true) return "\u05D7\u05E1\u05E8\u05D9\u05DD \u05E4\u05E8\u05D8\u05D9\u05DD. \u05E4\u05EA\u05D7\u05EA\u05D9 \u05D0\u05EA \u05D4\u05E1\u05D9\u05DE\u05D5\u05DC\u05D8\u05D5\u05E8 \u05D4\u05E7\u05D9\u05D9\u05DD.";
       if (data.ok === false) return "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D1\u05E6\u05E2 \u05D0\u05EA \u05D4\u05D1\u05E7\u05E9\u05D4.";
       if (data.instant === true && (tool === "find_customer_by_id" || tool === "open_customer")) {
-        return "\u05E4\u05D5\u05EA\u05D7 \u05D0\u05EA \u05D4\u05EA\u05D9\u05E7.";
+        return "\u05E4\u05D5\u05EA\u05D7\u05EA \u05D0\u05EA \u05D4\u05EA\u05D9\u05E7.";
       }
       if (tool === "search_customer") {
         const n = asHitCards(data.customers).length;
-        if (!n) return "\u05DC\u05D0 \u05E0\u05DE\u05E6\u05D0\u05D5 \u05DC\u05E7\u05D5\u05D7\u05D5\u05EA.";
-        return n === 1 ? "\u05E0\u05DE\u05E6\u05D0 \u05DC\u05E7\u05D5\u05D7 \u05D0\u05D7\u05D3. \u05E4\u05D5\u05EA\u05D7 \u05D0\u05EA \u05D4\u05EA\u05D9\u05E7." : "\u05E0\u05DE\u05E6\u05D0\u05D5 " + n + " \u05DC\u05E7\u05D5\u05D7\u05D5\u05EA.";
+        if (!n) return "\u05DC\u05D0 \u05DE\u05E6\u05D0\u05EA\u05D9 \u05DC\u05E7\u05D5\u05D7\u05D5\u05EA.";
+        return n === 1 ? "\u05DE\u05E6\u05D0\u05EA\u05D9 \u05DC\u05E7\u05D5\u05D7 \u05D0\u05D7\u05D3. \u05E4\u05D5\u05EA\u05D7\u05EA \u05D0\u05EA \u05D4\u05EA\u05D9\u05E7." : "\u05DE\u05E6\u05D0\u05EA\u05D9 " + numberToHebrew(n, "m") + " \u05DC\u05E7\u05D5\u05D7\u05D5\u05EA.";
       }
       if (tool === "find_customer_by_id" || tool === "get_customer") {
         const name = trim(data.customer && typeof data.customer === "object" ? data.customer.full_name : "");
-        return name ? "\u05E0\u05DE\u05E6\u05D0 " + name : "\u05D4\u05DC\u05E7\u05D5\u05D7 \u05DC\u05D0 \u05E0\u05DE\u05E6\u05D0.";
+        return name ? "\u05DE\u05E6\u05D0\u05EA\u05D9 \u05D0\u05EA " + name + "." : "\u05DC\u05D0 \u05DE\u05E6\u05D0\u05EA\u05D9 \u05D0\u05EA \u05D4\u05DC\u05E7\u05D5\u05D7.";
       }
       if (tool === "get_tasks") {
         const n = asHitCards(data.tasks).length;
-        return n ? "\u05D9\u05E9 " + n + " \u05DE\u05E9\u05D9\u05DE\u05D5\u05EA \u05E4\u05EA\u05D5\u05D7\u05D5\u05EA." : "\u05D0\u05D9\u05DF \u05DE\u05E9\u05D9\u05DE\u05D5\u05EA \u05E4\u05EA\u05D5\u05D7\u05D5\u05EA.";
+        return n ? "\u05D9\u05E9 " + numberToHebrew(n, "f") + " \u05DE\u05E9\u05D9\u05DE\u05D5\u05EA \u05E4\u05EA\u05D5\u05D7\u05D5\u05EA." : "\u05D0\u05D9\u05DF \u05DE\u05E9\u05D9\u05DE\u05D5\u05EA \u05E4\u05EA\u05D5\u05D7\u05D5\u05EA.";
       }
       if (tool === "get_insurance_price") {
-        const monthly = formatPremium(data.monthlyPremium);
-        return monthly ? "\u05D4\u05E4\u05E8\u05DE\u05D9\u05D4 \u05D4\u05D7\u05D5\u05D3\u05E9\u05D9\u05EA " + monthly + " \u05E9\u05E7\u05DC\u05D9\u05DD." : "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D7\u05E9\u05D1 \u05E4\u05E8\u05DE\u05D9\u05D4.";
+        const monthly = formatSpokenPremium(data.monthlyPremium);
+        return monthly ? "\u05D4\u05E4\u05E8\u05DE\u05D9\u05D4 \u05D4\u05D7\u05D5\u05D3\u05E9\u05D9\u05EA \u05D4\u05D9\u05D0 " + monthly + "." : "\u05DC\u05D0 \u05D4\u05E6\u05DC\u05D7\u05EA\u05D9 \u05DC\u05D7\u05E9\u05D1 \u05E4\u05E8\u05DE\u05D9\u05D4.";
       }
       if (tool === "open_simulator") return "\u05E4\u05EA\u05D7\u05EA\u05D9 \u05D0\u05EA \u05D4\u05E1\u05D9\u05DE\u05D5\u05DC\u05D8\u05D5\u05E8 \u05D4\u05E7\u05D9\u05D9\u05DD.";
-      if (tool === "go_view") return "\u05E2\u05D1\u05E8\u05EA\u05D9 \u05DC\u05DE\u05E1\u05DA \u05D4\u05DE\u05D1\u05D5\u05E7\u05E9.";
+      if (tool === "go_view") return "\u05E2\u05D1\u05E8\u05EA\u05D9 \u05DC\u05DE\u05E1\u05DA \u05E9\u05D1\u05D9\u05E7\u05E9\u05EA.";
       if (tool === "click_topbar") return "\u05E4\u05EA\u05D7\u05EA\u05D9 \u05D0\u05EA \u05D4\u05DB\u05E4\u05EA\u05D5\u05E8 \u05DE\u05D4\u05E1\u05E8\u05D2\u05DC.";
       if (tool === "create_proposal") return "\u05E4\u05EA\u05D7\u05EA\u05D9 \u05D0\u05EA \u05D4\u05D0\u05E9\u05E3 \u05D4\u05E7\u05D9\u05D9\u05DD \u05DC\u05D4\u05E6\u05E2\u05D4.";
       if (tool === "fill_wizard") return "\u05DE\u05D9\u05DC\u05D0\u05EA\u05D9 \u05D0\u05EA \u05D4\u05E9\u05D3\u05D5\u05EA \u05D1\u05D0\u05E9\u05E3.";
@@ -1066,9 +1225,9 @@
       if (tool === "open_har_import") return data.ok === false ? "\u05DC\u05D0 \u05DE\u05E6\u05D0\u05EA\u05D9 \u05D0\u05EA \u05DB\u05E4\u05EA\u05D5\u05E8 \u05D4\u05E8 \u05D4\u05D1\u05D9\u05D8\u05D5\u05D7. \u05E2\u05D1\u05E8\u05D5 \u05E7\u05D5\u05D3\u05DD \u05DC\u05E9\u05DC\u05D1 \u05D4\u05E4\u05D5\u05DC\u05D9\u05E1\u05D5\u05EA \u05D4\u05E7\u05D9\u05D9\u05DE\u05D5\u05EA." : "\u05E4\u05EA\u05D7\u05EA\u05D9 \u05D0\u05EA \u05D1\u05D7\u05D9\u05E8\u05EA \u05E7\u05D5\u05D1\u05E5 \u05D4\u05E8 \u05D4\u05D1\u05D9\u05D8\u05D5\u05D7. \u05D1\u05D7\u05E8\u05D5 \u05D0\u05EA \u05E7\u05D5\u05D1\u05E5 \u05D4\u05D0\u05E7\u05E1\u05DC \u05DE\u05D4\u05DE\u05D7\u05E9\u05D1.";
       if (tool === "get_monthly_production" || tool === "get_team_production") {
         const count = Number(data.count == null ? data.total : data.count);
-        return Number.isFinite(count) ? "\u05D4\u05D7\u05D5\u05D3\u05E9 " + count + " \u05EA\u05D9\u05E7\u05D9\u05DD." : "\u05D4\u05D1\u05D0\u05EA\u05D9 \u05D0\u05EA \u05E0\u05EA\u05D5\u05E0\u05D9 \u05D4\u05D9\u05D9\u05E6\u05D5\u05E8.";
+        return Number.isFinite(count) ? "\u05D4\u05D7\u05D5\u05D3\u05E9 " + numberToHebrew(count, "m") + " \u05EA\u05D9\u05E7\u05D9\u05DD." : "\u05D4\u05D1\u05D0\u05EA\u05D9 \u05D0\u05EA \u05E0\u05EA\u05D5\u05E0\u05D9 \u05D4\u05D9\u05D9\u05E6\u05D5\u05E8.";
       }
-      return "\u05D1\u05D5\u05E6\u05E2.";
+      return "\u05D1\u05D9\u05E6\u05E2\u05EA\u05D9.";
     }
     function commandFromLocalTool(tool, args) {
       const a = args && typeof args === "object" ? args : {};
@@ -1125,11 +1284,11 @@
         const hadPending = !!pendingAction;
         void onUserTranscript(text);
         if (intent === "confirm") {
-          void speak(hadPending ? "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D0\u05D5\u05E9\u05E8\u05D4." : "\u05D0\u05D9\u05DF \u05E4\u05E2\u05D5\u05DC\u05D4 \u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8.");
+          void speak(hadPending ? "\u05D0\u05D9\u05E9\u05E8\u05EA\u05D9 \u05D0\u05EA \u05D4\u05E4\u05E2\u05D5\u05DC\u05D4." : "\u05D0\u05D9\u05DF \u05E4\u05E2\u05D5\u05DC\u05D4 \u05E9\u05DE\u05DE\u05EA\u05D9\u05E0\u05D4 \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8.");
           return;
         }
         if (intent === "cancel") {
-          void speak(hadPending ? "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D1\u05D5\u05D8\u05DC\u05D4." : "\u05D0\u05D9\u05DF \u05E4\u05E2\u05D5\u05DC\u05D4 \u05DC\u05D1\u05D9\u05D8\u05D5\u05DC.");
+          void speak(hadPending ? "\u05D1\u05D9\u05D8\u05DC\u05EA\u05D9 \u05D0\u05EA \u05D4\u05E4\u05E2\u05D5\u05DC\u05D4." : "\u05D0\u05D9\u05DF \u05E4\u05E2\u05D5\u05DC\u05D4 \u05DC\u05D1\u05D9\u05D8\u05D5\u05DC.");
           return;
         }
         const cmd = parseLocalCommand(text);
@@ -1436,6 +1595,7 @@
       setVoiceState("connecting");
       try {
         unlockSpeech();
+        warmVoices();
         const device = readDevice();
         const pin = trim((_a = $("giAsstVoicePin")) == null ? void 0 : _a.value);
         if (!(device && trim(device.deviceSecret))) {
@@ -1900,6 +2060,12 @@
       classifyIntent,
       parseLocalCommand,
       commandFromLocalTool,
+      pickHebrewVoice,
+      scoreHebrewVoice,
+      prepareSpeechText,
+      applyVoiceTone,
+      numberToHebrew,
+      replyFromTool,
       redactSafe,
       invokeTool,
       executeClientCommand,

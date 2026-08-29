@@ -326,7 +326,7 @@
     return "other";
   }
 
-  const LOCAL_VOICE_HELP = "אחרי הצעה חדשה ממלאים את האשף לפי תווית: שם פרטי אוריה, שם משפחה סומך, תז, טלפון, כתובת, עיר, מייל. כשהשלב מלא אמרו תעברי לשלב הבא. בשלב הפוליסות אמרו תפתחי את הפק ביטוחים מהר הביטוח.";
+  const LOCAL_VOICE_HELP = "אפשר למלא את האשף לפי תווית. לדוגמה: שם פרטי אוריה, שם משפחה סומך, תז, טלפון, כתובת, עיר, ומייל. כשהשלב מלא, אמרו תעברי לשלב הבא. בשלב הפוליסות, אמרו תפתחי את הפק ביטוחים מהר הביטוח.";
 
   function extractCompany(text: string): string {
     const companies = ["הפניקס", "מנורה", "הכשרה", "מגדל", "איילון", "כלל"];
@@ -1036,14 +1036,172 @@
     return ctor ? ctor as ReturnType<typeof speechRecognitionCtor> : null;
   }
 
-  function pickHebrewVoice(): SpeechSynthesisVoice | null {
+  type VoiceLike = {
+    name?: string;
+    lang?: string;
+    localService?: boolean;
+    default?: boolean;
+  };
+
+  const FEMALE_VOICE_HINTS = [
+    "hila", "carmit", "heami", "he-il-standard-a", "he-il-wavenet-a",
+    "female", "woman", "girl", "נשית"
+  ];
+  const MALE_VOICE_HINTS = ["asaf", "male", "man-", " man", "david"];
+  const QUALITY_VOICE_HINTS = ["natural", "neural", "online", "premium", "enhanced", "wavenet", "studio"];
+
+  let voicesHooked = false;
+
+  function scoreHebrewVoice(voice: VoiceLike | null | undefined): number {
+    if (!voice) return -1000;
+    const name = String(voice.name || "").toLowerCase();
+    const lang = String(voice.lang || "").toLowerCase();
+    const blob = name + " " + lang;
+    const isHe = lang === "he" || lang === "he-il" || lang.indexOf("he-") === 0
+      || /hebrew|עברית/.test(blob);
+    if (!isHe) return -1000;
+    let score = 50;
+    if (lang === "he-il" || lang === "he") score += 30;
+    for (let i = 0; i < FEMALE_VOICE_HINTS.length; i += 1) {
+      if (blob.indexOf(FEMALE_VOICE_HINTS[i]) >= 0) score += 40;
+    }
+    for (let i = 0; i < QUALITY_VOICE_HINTS.length; i += 1) {
+      if (blob.indexOf(QUALITY_VOICE_HINTS[i]) >= 0) score += 18;
+    }
+    for (let i = 0; i < MALE_VOICE_HINTS.length; i += 1) {
+      if (blob.indexOf(MALE_VOICE_HINTS[i]) >= 0) score -= 50;
+    }
+    if (voice.localService) score += 6;
+    if (voice.default) score += 4;
+    return score;
+  }
+
+  function pickHebrewVoice(voices?: VoiceLike[]): SpeechSynthesisVoice | VoiceLike | null {
     try {
-      const voices = window.speechSynthesis?.getVoices?.() || [];
-      for (let i = 0; i < voices.length; i += 1) {
-        if (String(voices[i].lang || "").toLowerCase().indexOf("he") === 0) return voices[i];
+      const list = (voices && voices.length)
+        ? voices
+        : ((window.speechSynthesis?.getVoices?.() || []) as VoiceLike[]);
+      let best: VoiceLike | null = null;
+      let bestScore = 0;
+      for (let i = 0; i < list.length; i += 1) {
+        const score = scoreHebrewVoice(list[i]);
+        if (score > bestScore) {
+          bestScore = score;
+          best = list[i];
+        }
       }
-    } catch (_e) {}
-    return null;
+      return best;
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  function numberToHebrew(value: unknown, gender: "m" | "f" = "m"): string {
+    const n = Math.round(Number(value));
+    if (!Number.isFinite(n) || n < 0) return "";
+    if (n > 999999) return String(n);
+    const ones = gender === "f"
+      ? ["", "אחת", "שתיים", "שלוש", "ארבע", "חמש", "שש", "שבע", "שמונה", "תשע"]
+      : ["", "אחד", "שניים", "שלושה", "ארבעה", "חמישה", "שישה", "שבעה", "שמונה", "תשעה"];
+    const teens = gender === "f"
+      ? ["עשר", "אחת עשרה", "שתים עשרה", "שלוש עשרה", "ארבע עשרה", "חמש עשרה", "שש עשרה", "שבע עשרה", "שמונה עשרה", "תשע עשרה"]
+      : ["עשרה", "אחד עשר", "שניים עשר", "שלושה עשר", "ארבעה עשר", "חמישה עשר", "שישה עשר", "שבעה עשר", "שמונה עשר", "תשעה עשר"];
+    const tens = ["", "", "עשרים", "שלושים", "ארבעים", "חמישים", "שישים", "שבעים", "שמונים", "תשעים"];
+    const thousandHeads = ["", "אלף", "אלפיים", "שלושת אלפים", "ארבעת אלפים", "חמשת אלפים", "ששת אלפים", "שבעת אלפים", "שמונת אלפים", "תשעת אלפים"];
+    const twoNoun = gender === "f" ? "שתי" : "שני";
+    const under20 = (x: number, constructTwo: boolean): string => {
+      if (x === 0) return "";
+      if (x === 2 && constructTwo) return twoNoun;
+      if (x < 10) return ones[x];
+      return teens[x - 10];
+    };
+    const under100 = (x: number, constructTwo: boolean): string => {
+      if (x < 20) return under20(x, constructTwo);
+      const t = Math.floor(x / 10);
+      const o = x % 10;
+      if (!o) return tens[t];
+      const onesWord = (o === 2 && gender === "m") ? "שניים" : ones[o];
+      return tens[t] + " ו" + onesWord;
+    };
+    const under1000 = (x: number, constructTwo: boolean): string => {
+      if (x < 100) return under100(x, constructTwo);
+      const h = Math.floor(x / 100);
+      const rest = x % 100;
+      const hundreds = h === 1 ? "מאה" : h === 2 ? "מאתיים" : ([
+        "", "", "", "שלוש", "ארבע", "חמש", "שש", "שבע", "שמונה", "תשע"
+      ][h] + " מאות");
+      if (!rest) return hundreds;
+      return hundreds + " ו" + under100(rest, false);
+    };
+    if (n < 1000) return under1000(n, n === 2);
+    const thousands = Math.floor(n / 1000);
+    const rest = n % 1000;
+    const head = thousands < 10 ? thousandHeads[thousands] : (under1000(thousands, false) + " אלף");
+    if (!rest) return head;
+    return head + " ו" + under1000(rest, false);
+  }
+
+  function formatSpokenPremium(value: unknown): string {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "";
+    const rounded = Math.round(n * 100) / 100;
+    const whole = Math.floor(rounded);
+    const agorot = Math.round((rounded - whole) * 100);
+    const shekels = whole === 1 ? "שקל אחד" : (numberToHebrew(whole, "m") + " שקלים");
+    if (!agorot) return shekels;
+    return shekels + " ו" + numberToHebrew(agorot, "f") + " אגורות";
+  }
+
+  function prepareSpeechText(text: string): string {
+    let spoken = trim(text);
+    if (!spoken) return "";
+    spoken = spoken.replace(/₪/g, " שקלים ");
+    spoken = spoken.replace(/\[מזהה\]/g, "מספר מזהה");
+    spoken = spoken.replace(/(\d{1,6})[.,](\d{1,2})\b/g, (_m, whole: string, frac: string) => {
+      const head = numberToHebrew(Number(whole), "m");
+      const tail = numberToHebrew(Number(frac), "f");
+      return (head || whole) + " נקודה " + (tail || frac);
+    });
+    spoken = spoken.replace(/\b(\d{1,6})\b/g, (raw) => numberToHebrew(Number(raw), "m") || raw);
+    spoken = spoken.replace(/\s+/g, " ").trim();
+    spoken = spoken.replace(/\s+([,.:!?])/g, "$1");
+    spoken = spoken.replace(/([,.:!?])(?=\S)/g, "$1 ");
+    if (!/[.!?]$/.test(spoken)) spoken += ".";
+    return spoken;
+  }
+
+  function applyVoiceTone(utter: SpeechSynthesisUtterance, chosen: VoiceLike | null): void {
+    utter.lang = "he-IL";
+    if (chosen) {
+      try { utter.voice = chosen as SpeechSynthesisVoice; } catch (_e) {}
+    }
+    const name = String(chosen && chosen.name || "").toLowerCase();
+    let female = false;
+    for (let i = 0; i < FEMALE_VOICE_HINTS.length; i += 1) {
+      if (name.indexOf(FEMALE_VOICE_HINTS[i]) >= 0) female = true;
+    }
+    utter.rate = 0.9;
+    utter.pitch = female ? 1.12 : 1.2;
+    utter.volume = 1;
+  }
+
+  function speechHoldMs(text: string): number {
+    return Math.min(22000, Math.max(3600, Math.round(text.length * 90 + 1000)));
+  }
+
+  function warmVoices(): void {
+    try {
+      const synth = window.speechSynthesis;
+      if (!synth) return;
+      synth.getVoices();
+      if (voicesHooked) return;
+      voicesHooked = true;
+      const refresh = () => {
+        try { synth.getVoices(); } catch (_e) {}
+      };
+      if (typeof synth.addEventListener === "function") synth.addEventListener("voiceschanged", refresh);
+      else synth.onvoiceschanged = refresh;
+    } catch (_e2) {}
   }
 
   function isMobileVoice(): boolean {
@@ -1059,6 +1217,7 @@
 
   function unlockSpeech(): void {
     try {
+      warmVoices();
       const utter = new SpeechSynthesisUtterance(" ");
       utter.volume = 0;
       window.speechSynthesis?.speak(utter);
@@ -1117,9 +1276,11 @@
   async function speak(text: string): Promise<void> {
     const clean = redactSafe(text);
     if (!clean) return;
+    const spoken = prepareSpeechText(clean);
     await onAssistantTranscript(clean);
     if (voice.state === "idle" || voice.state === "error") return;
     if (!window.speechSynthesis) return;
+    warmVoices();
     setVoiceState("speaking");
     await new Promise<void>((resolve) => {
       let done = false;
@@ -1129,11 +1290,10 @@
         window.clearTimeout(timer);
         resolve();
       };
-      const timer = window.setTimeout(finish, 2800);
-      const utter = new SpeechSynthesisUtterance(clean);
-      utter.lang = "he-IL";
+      const timer = window.setTimeout(finish, speechHoldMs(spoken));
+      const utter = new SpeechSynthesisUtterance(spoken);
       const chosen = pickHebrewVoice();
-      if (chosen) utter.voice = chosen;
+      applyVoiceTone(utter, chosen);
       utter.onend = () => finish();
       utter.onerror = () => finish();
       try { window.speechSynthesis.cancel(); } catch (_e2) {}
@@ -1143,31 +1303,33 @@
   }
 
   function replyFromTool(tool: string, data: Record<string, unknown>): string {
-    if (data.needs_confirmation === true) return "פעולת כתיבה ממתינה לאישור. אמרו כן או לא.";
+    if (data.needs_confirmation === true) return "פעולת כתיבה ממתינה לאישור. אמרו כן, או לא.";
     if (trim(data.error) === "NEED_INPUT" || data.needs_input === true) return "חסרים פרטים. פתחתי את הסימולטור הקיים.";
     if (data.ok === false) return "לא הצלחתי לבצע את הבקשה.";
     if (data.instant === true && (tool === "find_customer_by_id" || tool === "open_customer")) {
-      return "פותח את התיק.";
+      return "פותחת את התיק.";
     }
     if (tool === "search_customer") {
       const n = asHitCards(data.customers).length;
-      if (!n) return "לא נמצאו לקוחות.";
-      return n === 1 ? "נמצא לקוח אחד. פותח את התיק." : "נמצאו " + n + " לקוחות.";
+      if (!n) return "לא מצאתי לקוחות.";
+      return n === 1
+        ? "מצאתי לקוח אחד. פותחת את התיק."
+        : ("מצאתי " + numberToHebrew(n, "m") + " לקוחות.");
     }
     if (tool === "find_customer_by_id" || tool === "get_customer") {
       const name = trim((data.customer && typeof data.customer === "object") ? (data.customer as HitCard).full_name : "");
-      return name ? ("נמצא " + name) : "הלקוח לא נמצא.";
+      return name ? ("מצאתי את " + name + ".") : "לא מצאתי את הלקוח.";
     }
     if (tool === "get_tasks") {
       const n = asHitCards(data.tasks).length;
-      return n ? ("יש " + n + " משימות פתוחות.") : "אין משימות פתוחות.";
+      return n ? ("יש " + numberToHebrew(n, "f") + " משימות פתוחות.") : "אין משימות פתוחות.";
     }
     if (tool === "get_insurance_price") {
-      const monthly = formatPremium(data.monthlyPremium);
-      return monthly ? ("הפרמיה החודשית " + monthly + " שקלים.") : "לא הצלחתי לחשב פרמיה.";
+      const monthly = formatSpokenPremium(data.monthlyPremium);
+      return monthly ? ("הפרמיה החודשית היא " + monthly + ".") : "לא הצלחתי לחשב פרמיה.";
     }
     if (tool === "open_simulator") return "פתחתי את הסימולטור הקיים.";
-    if (tool === "go_view") return "עברתי למסך המבוקש.";
+    if (tool === "go_view") return "עברתי למסך שביקשת.";
     if (tool === "click_topbar") return "פתחתי את הכפתור מהסרגל.";
     if (tool === "create_proposal") return "פתחתי את האשף הקיים להצעה.";
     if (tool === "fill_wizard") return "מילאתי את השדות באשף.";
@@ -1175,9 +1337,9 @@
     if (tool === "open_har_import") return data.ok === false ? "לא מצאתי את כפתור הר הביטוח. עברו קודם לשלב הפוליסות הקיימות." : "פתחתי את בחירת קובץ הר הביטוח. בחרו את קובץ האקסל מהמחשב.";
     if (tool === "get_monthly_production" || tool === "get_team_production") {
       const count = Number(data.count == null ? data.total : data.count);
-      return Number.isFinite(count) ? ("החודש " + count + " תיקים.") : "הבאתי את נתוני הייצור.";
+      return Number.isFinite(count) ? ("החודש " + numberToHebrew(count, "m") + " תיקים.") : "הבאתי את נתוני הייצור.";
     }
-    return "בוצע.";
+    return "ביצעתי.";
   }
 
   function commandFromLocalTool(tool: string, args: Record<string, unknown> | undefined): Record<string, unknown> | null {
@@ -1234,11 +1396,11 @@
       const hadPending = !!pendingAction;
       void onUserTranscript(text);
       if (intent === "confirm") {
-        void speak(hadPending ? "הפעולה אושרה." : "אין פעולה ממתינה לאישור.");
+        void speak(hadPending ? "אישרתי את הפעולה." : "אין פעולה שממתינה לאישור.");
         return;
       }
       if (intent === "cancel") {
-        void speak(hadPending ? "הפעולה בוטלה." : "אין פעולה לביטול.");
+        void speak(hadPending ? "ביטלתי את הפעולה." : "אין פעולה לביטול.");
         return;
       }
       const cmd = parseLocalCommand(text);
@@ -1548,6 +1710,7 @@
     setVoiceState("connecting");
     try {
       unlockSpeech();
+      warmVoices();
       const device = readDevice();
       const pin = trim(($("giAsstVoicePin") as HTMLInputElement | null)?.value);
       if (!(device && trim(device.deviceSecret))) {
@@ -1997,6 +2160,12 @@
     classifyIntent,
     parseLocalCommand,
     commandFromLocalTool,
+    pickHebrewVoice,
+    scoreHebrewVoice,
+    prepareSpeechText,
+    applyVoiceTone,
+    numberToHebrew,
+    replyFromTool,
     redactSafe,
     invokeTool,
     executeClientCommand,
