@@ -16921,6 +16921,10 @@ UsersGateUI.init();
     },
 
     applyRoleUI(){
+      try {
+        if (Auth.current) window.GiAssistant?.onLogin?.();
+        else window.GiAssistant?.onLogout?.();
+      } catch(_e) {}
       const isAdmin = Auth.isAdmin();
       const isOps = Auth.isOps();
       const isOpsAgent = Auth.isOpsAgent();
@@ -50710,6 +50714,7 @@ const ClalRiskLifePdf = {
   const __chatOriginalLogout = Auth.logout.bind(Auth);
   Auth.logout = function(reason = "manual"){
     try { ChatUI.onLogout(); } catch(_e) {}
+    try { window.GiAssistant?.onLogout?.(); } catch(_e) {}
     return __chatOriginalLogout(reason);
   };
 
@@ -51105,6 +51110,7 @@ const ClalRiskLifePdf = {
       if (Auth.current) {
         try { ChatUI.onLogin(); } catch(_e) {}
         try { ReminderUI.onLogin(); } catch(_e) {}
+        try { window.GiAssistant?.onLogin?.(); } catch(_e) {}
         try { void ProposalAssignInbox.flushForCurrentUser(); } catch(_e) {}
         try { void CustomerAssignInbox.flushForCurrentUser(); } catch(_e) {}
         try { void CampaignLeadAssignInbox.flushForCurrentUser(); } catch(_e) {}
@@ -51861,6 +51867,7 @@ const ClalRiskLifePdf = {
           perfIdle(() => {
             try { ChatUI.onLogin(); } catch(_e) {}
             try { ReminderUI.onLogin(); } catch(_e) {}
+            try { window.GiAssistant?.onLogin?.(); } catch(_e) {}
             try { void ProposalAssignInbox.flushForCurrentUser(); } catch(_e) {}
             try { void CustomerAssignInbox.flushForCurrentUser(); } catch(_e) {}
             try { void CampaignLeadAssignInbox.flushForCurrentUser(); } catch(_e) {}
@@ -54187,6 +54194,12 @@ const ClalRiskLifePdf = {
   NewCustomerEntryUI.init();
   HarHabituachTopbarUI.init();
   TravelInsuranceTopbarUI.init();
+  try {
+    window.__GI_ASSISTANT_BRIDGE__ = {
+      getAuth(){ return Auth.current; }
+    };
+    window.GiAssistant?.init?.({ getAuth(){ return Auth.current; } });
+  } catch(_e) {}
   CarInsuranceClickUI.init();
   SimulatorsCenterUI.init();
   LeadShellUI.init();
