@@ -54451,6 +54451,103 @@ const ClalRiskLifePdf = {
           return { ok:true };
         } catch(_e) { return { ok:false }; }
       },
+      isChatOpen(){
+        try {
+          const win = document.getElementById("giChatWindow");
+          return !!(win && !win.classList.contains("is-hidden"));
+        } catch(_e){ return false; }
+      },
+      openChat(){
+        try {
+          if(typeof ChatUI === "undefined") return { ok:false, error:"NO_CHAT" };
+          ChatUI.openWindow?.();
+          return { ok:true };
+        } catch(_e){ return { ok:false }; }
+      },
+      closeChat(){
+        try {
+          if(typeof ChatUI === "undefined") return { ok:false, error:"NO_CHAT" };
+          ChatUI.closeWindow?.(false, true);
+          return { ok:true };
+        } catch(_e){ return { ok:false }; }
+      },
+      selectChatUserByName(name){
+        try {
+          if(typeof ChatUI === "undefined") return { ok:false, error:"NO_CHAT" };
+          const term = safeTrim(name).toLowerCase();
+          if(!term) return { ok:false, error:"NO_NAME" };
+          ChatUI.openWindow?.();
+          const users = typeof ChatUI.availableUsers === "function" ? ChatUI.availableUsers() : [];
+          let hit = users.find((u) => safeTrim(u?.name).toLowerCase() === term);
+          if(!hit){
+            hit = users.find((u) => {
+              const n = safeTrim(u?.name).toLowerCase();
+              return n && (n.includes(term) || term.includes(n));
+            });
+          }
+          if(!hit || !hit.id) return { ok:false, error:"NOT_FOUND" };
+          void ChatUI.selectUser?.(hit.id);
+          return { ok:true, name: safeTrim(hit.name), id: hit.id };
+        } catch(_e){ return { ok:false }; }
+      },
+      setChatDraft(text){
+        try {
+          if(typeof ChatUI === "undefined") return { ok:false, error:"NO_CHAT" };
+          const msg = safeTrim(text);
+          if(!msg) return { ok:false, error:"EMPTY" };
+          ChatUI.openWindow?.();
+          const input = ChatUI.els?.input || document.getElementById("giChatInput");
+          if(!input) return { ok:false, error:"NO_INPUT" };
+          input.value = msg;
+          try { ChatUI.refreshSendButtonState?.(); } catch(_eBtn) {}
+          try { ChatUI.autoGrowInput?.(); } catch(_eGrow) {}
+          return { ok:true };
+        } catch(_e){ return { ok:false }; }
+      },
+      sendChatMessage(){
+        try {
+          if(typeof ChatUI === "undefined") return { ok:false, error:"NO_CHAT" };
+          if(!ChatUI.selectedUser || !ChatUI.currentConversationId){
+            return { ok:false, error:"NO_CONVERSATION" };
+          }
+          const text = safeTrim(ChatUI.els?.input?.value || document.getElementById("giChatInput")?.value);
+          if(!text) return { ok:false, error:"EMPTY" };
+          void ChatUI.sendMessage?.();
+          return { ok:true };
+        } catch(_e){ return { ok:false }; }
+      },
+      openSalesReport(){
+        try {
+          if(typeof DailyReportUI !== "undefined" && typeof DailyReportUI.openFromHub === "function"){
+            DailyReportUI.openFromHub("daily");
+            return { ok:true };
+          }
+          UI.goView?.("dailyReport");
+          return { ok:true };
+        } catch(_e){ return { ok:false }; }
+      },
+      openCancellationsReport(){
+        try {
+          if(typeof DailyReportUI !== "undefined" && typeof DailyReportUI.openFromHub === "function"){
+            DailyReportUI.openFromHub("cancellations");
+            return { ok:true };
+          }
+          UI.goView?.("dailyReport");
+          return { ok:true };
+        } catch(_e){ return { ok:false }; }
+      },
+      openDailySalesReport(dateIso){
+        try {
+          const key = safeTrim(dateIso);
+          UI.goView?.("dailySales");
+          if(key && typeof DashboardUI !== "undefined" && typeof DashboardUI.setDailySalesReportDateKey === "function"){
+            DashboardUI.setDailySalesReportDateKey(key);
+          }
+          try { DashboardUI.renderDailySalesPage?.(); } catch(_eRender) {}
+          try { DashboardUI.renderDailySalesReportScreen?.(); } catch(_eScreen) {}
+          return { ok:true, date: key || null };
+        } catch(_e){ return { ok:false }; }
+      },
       clickTopbar(id){
         try {
           const allowed = {
@@ -54550,6 +54647,15 @@ const ClalRiskLifePdf = {
       wizardNext(){ return window.__GI_ASSISTANT_BRIDGE__.wizardNext(); },
       openHarImport(){ return window.__GI_ASSISTANT_BRIDGE__.openHarImport(); },
       dismissValidationModal(){ return window.__GI_ASSISTANT_BRIDGE__.dismissValidationModal(); },
+      isChatOpen(){ return window.__GI_ASSISTANT_BRIDGE__.isChatOpen(); },
+      openChat(){ return window.__GI_ASSISTANT_BRIDGE__.openChat(); },
+      closeChat(){ return window.__GI_ASSISTANT_BRIDGE__.closeChat(); },
+      selectChatUserByName(name){ return window.__GI_ASSISTANT_BRIDGE__.selectChatUserByName(name); },
+      setChatDraft(text){ return window.__GI_ASSISTANT_BRIDGE__.setChatDraft(text); },
+      sendChatMessage(){ return window.__GI_ASSISTANT_BRIDGE__.sendChatMessage(); },
+      openSalesReport(){ return window.__GI_ASSISTANT_BRIDGE__.openSalesReport(); },
+      openCancellationsReport(){ return window.__GI_ASSISTANT_BRIDGE__.openCancellationsReport(); },
+      openDailySalesReport(dateIso){ return window.__GI_ASSISTANT_BRIDGE__.openDailySalesReport(dateIso); },
       clickTopbar(id){ return window.__GI_ASSISTANT_BRIDGE__.clickTopbar(id); },
       openProposal(id){ return window.__GI_ASSISTANT_BRIDGE__.openProposal(id); },
       refreshReminders(){ return window.__GI_ASSISTANT_BRIDGE__.refreshReminders(); },
