@@ -82,6 +82,7 @@ assert(asstTs.includes('action: "create"'), "desktop create");
 assert(asstTs.includes('action: "consume"'), "phone consume");
 assert(asstTs.includes('action: "status"'), "desktop poll");
 assert(asstTs.includes("renderActivateBody"), "PIN step before QR");
+assert(asstTs.includes("שרת הקישור עדיין לא פורסם"), "404 of pairing function is explained");
 
 console.log("\n5) phoneEntryUrl contract");
 function elStub(){

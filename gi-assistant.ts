@@ -257,8 +257,9 @@
     let data: Record<string, unknown> = {};
     try { data = await res.json() as Record<string, unknown>; } catch (_e) { data = {}; }
     if (!res.ok || data.ok === false) {
-      const err = new Error(String(data.error || ("HTTP_" + res.status)));
-      (err as Error & { code?: string }).code = String(data.error || "");
+      const code = trim(data.error || data.code || ("HTTP_" + res.status));
+      const err = new Error(code || ("HTTP_" + res.status));
+      (err as Error & { code?: string }).code = code || ("HTTP_" + res.status);
       throw err;
     }
     return data;
@@ -311,6 +312,9 @@
     if (code === "AUTH_FAILED" || code === "MISSING_PIN") return "קוד הכניסה שגוי.";
     if (code === "TOKEN_INVALID") return "קוד הקישור לא תקף או שכבר נוצל.";
     if (code === "AGENT_MISMATCH") return "המשתמש שזוהה אינו מי שהתחיל את הקישור.";
+    if (code === "NOT_FOUND" || code === "HTTP_404" || code.indexOf("HTTP_404") === 0) {
+      return "שרת הקישור עדיין לא פורסם. צריך לפרסם ב-Supabase את gi-assistant-pairing.";
+    }
     if (code === "FAILED_TO_FETCH" || code === "TypeError") return "אין חיבור לשרת הקישור. הריצו את supabase-assistant-pairing.sql ופרסו את הפונקציה.";
     if (code === "MISSING_OPENAI_KEY") return "חסר מפתח OpenAI בשרת. יש להגדיר את הסוד ב-Edge secrets.";
     if (code === "OPENAI_ERROR") return "שרת הקול לא זמין כרגע. נסו שוב בעוד רגע.";
