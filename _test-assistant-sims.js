@@ -9,7 +9,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-fast-v1";
+const TAG = "20260829-assistant-wizard-v1";
 let failed = 0;
 let passed = 0;
 
@@ -56,6 +56,8 @@ assert(sims.includes("host.GiSimulatorQuotes") && sims.includes("global.GiSimula
 assert(app.includes("ensureGiSimulatorJsLoaded()"), "open/quote load the existing chunk");
 assert(app.includes("GiSimulatorQuotes") && app.includes("quoteSimulator"), "bridge quotes via export");
 assert(app.includes("Wizard.openNewPurchaseForCustomer"), "proposal opens existing wizard");
+assert(app.includes("fillWizard") && app.includes("wizardNext") && app.includes("openHarImport"), "assistant wraps fill / next / HAR");
+assert(edge.includes("fill_wizard") && edge.includes("wizard_next") && edge.includes("open_har_import"), "tools expose wizard fill next HAR");
 assert(app.includes("canAccessSimulators(){"), "canAccessSimulators still exists");
 assert(/canAccessSimulators\(\)\{\s*return this\.isAdmin\(\) \|\| this\.isManager\(\);/.test(app), "UI simulator gate unchanged");
 assert(!edge.includes("computeMenora") && !edge.includes("MENORA_RISK_RATE"), "edge has no rate tables");

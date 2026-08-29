@@ -9,7 +9,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-fast-v1";
+const TAG = "20260829-assistant-wizard-v1";
 let failed = 0;
 let passed = 0;
 

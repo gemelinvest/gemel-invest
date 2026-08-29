@@ -344,8 +344,9 @@ function viewAllowed(view: string, role: string){
     campaignLeads: ["admin", "owner", "manager", "referent"],
     mirrorCall: ["ops", "opsagent"],
     settings: ["admin", "owner", "manager"],
+    users: ["admin", "owner", "manager"],
   };
-  const open = ["dashboard", "customers", "proposals", "myTools", "contacts", "dailySales", "myProcesses", "campaignMyLeads"];
+  const open = ["dashboard", "customers", "proposals", "myTools", "contacts", "dailySales", "myProcesses", "campaignMyLeads", "elementaryPending", "agentElementaryTracking", "elementaryProposals", "elementaryMirror", "mirrorAssignments"];
   if(open.includes(view)) return true;
   return (restricted[view] || []).includes(role);
 }
@@ -552,7 +553,7 @@ async function invoke(sb: SupabaseClient, agent: AgentRow, sessionId: string, bo
   const rawArgs = (body.arguments && typeof body.arguments === "object") ? body.arguments as Json : {};
   delete rawArgs.user_id;
   delete rawArgs.userId;
-  if(PII_KEY.test(JSON.stringify(Object.keys(rawArgs))) && tool !== "find_customer_by_id"){
+  if(PII_KEY.test(JSON.stringify(Object.keys(rawArgs))) && tool !== "find_customer_by_id" && tool !== "fill_wizard"){
     return { ok: false, error: "PII_REJECTED" };
   }
   if(WRITE_TOOLS.has(tool)){
@@ -584,22 +585,39 @@ async function invoke(sb: SupabaseClient, agent: AgentRow, sessionId: string, bo
   if(tool === "open_simulator") return await handleOpenSimulator(rawArgs);
   if(tool === "create_proposal") return await handleCreateProposal(sb, agent, rawArgs);
   if(tool === "fill_wizard") return handleFillWizard(rawArgs);
+  if(tool === "wizard_next") return { ok: true, client_command: { type: "wizard_next" } };
+  if(tool === "open_har_import") return { ok: true, client_command: { type: "open_har_import" } };
+  if(tool === "click_topbar"){
+    const allowed = new Set(["giChatFab", "giReminderFab", "btnTravelInsuranceAbroad", "btnCarInsuranceClick", "btnSimulatorsCenter", "btnNewCustomerWizard"]);
+    const id = trim(rawArgs.id);
+    if(!allowed.has(id)) return { ok: false, error: "BAD_TOPBAR" };
+    return { ok: true, client_command: { type: "click_topbar", id } };
+  }
   return { ok: false, error: "UNKNOWN_TOOL" };
 }
 
 function handleFillWizard(args: Json){
+  const fields = pickWizardFields(args);
+  if(!Object.keys(fields).length) return { ok: false, error: "NEED_INPUT" };
+  return { ok: true, client_command: { type: "fill_wizard", fields } };
+}
+
+function pickWizardFields(args: Json){
   const fields: Json = {};
-  for(const key of ["firstName", "lastName", "city", "company", "product", "gender"]){
+  for(const key of ["firstName", "lastName", "city", "street", "houseNumber", "apartment", "zip", "email", "gender", "company", "product", "birthDate", "idIssueDate", "occupation", "maritalStatus", "clinic", "shaban", "smokingType", "smokingAmount"]){
     const value = trim(args[key]);
-    if(value && !/\d{8,9}/.test(value)) fields[key] = value.slice(0, 40);
+    if(value) fields[key] = value.slice(0, 80);
   }
+  const idNumber = trim(args.idNumber).replace(/\D/g, "");
+  if(idNumber.length >= 8 && idNumber.length <= 9) fields.idNumber = idNumber;
+  const phone = trim(args.phone).replace(/\D/g, "");
+  if(phone.length >= 9 && phone.length <= 10) fields.phone = phone;
   const age = Number(args.age);
   if(Number.isFinite(age) && age > 0 && age < 120) fields.age = age;
   if(args.smoker === true || args.smoker === false) fields.smoker = args.smoker;
   const sum = Number(args.sumInsured);
   if(Number.isFinite(sum) && sum > 0) fields.sumInsured = sum;
-  if(!Object.keys(fields).length) return { ok: false, error: "NEED_INPUT" };
-  return { ok: true, client_command: { type: "fill_wizard", fields } };
+  return fields;
 }
 
 Deno.serve(async (req) => {

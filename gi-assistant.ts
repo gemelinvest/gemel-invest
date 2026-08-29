@@ -18,7 +18,7 @@
   const UI_COMMANDS = new Set([
     "open_customer", "go_view", "open_simulator", "open_proposal",
     "open_wizard", "refresh_reminders", "upsert_reminder", "mark_task_done",
-    "fill_wizard"
+    "fill_wizard", "wizard_next", "open_har_import", "click_topbar"
   ]);
 
   type AgentAuth = {
@@ -39,6 +39,9 @@
     quoteSimulator?: (company: string, product: string, input?: Record<string, unknown>) => Promise<Record<string, unknown> | unknown>;
     openWizard?: (opts?: Record<string, unknown>) => void | Promise<unknown>;
     fillWizard?: (fields: Record<string, unknown>) => void;
+    wizardNext?: () => void | Promise<unknown>;
+    openHarImport?: () => void | { ok?: boolean; error?: string };
+    clickTopbar?: (id: string) => void;
     openProposal?: (id: string) => void;
     refreshReminders?: () => void | Promise<unknown>;
     searchCustomers?: (query: string) => Promise<HitCard[] | unknown[]>;
@@ -322,7 +325,7 @@
     return "other";
   }
 
-  const LOCAL_VOICE_HELP = "אפשר לומר: פתח תיק דוד, הקם הצעה לדוד, גיל 35 לא מעשן, מנורה ריסק, עבור ללקוחות, משימות.";
+  const LOCAL_VOICE_HELP = "אחרי הצעה חדשה ממלאים את האשף לפי תווית: שם פרטי אוריה, שם משפחה סומך, תז, טלפון, כתובת, עיר, מייל. כשהשלב מלא אמרו תעברי לשלב הבא. בשלב הפוליסות אמרו תפתחי את הפק ביטוחים מהר הביטוח.";
 
   function extractCompany(text: string): string {
     const companies = ["הפניקס", "מנורה", "הכשרה", "מגדל", "איילון", "כלל"];
@@ -344,11 +347,20 @@
   }
 
   function extractView(text: string): string {
-    if (/דוח|דוחות/.test(text)) return "reportsHub";
-    if (/צוות/.test(text)) return "myTeam";
+    if (/ממתינים\s*לטיפול/.test(text)) return "elementaryPending";
+    if (/לקוחות\s*בטיפול|תפעול\s*וחיתום/.test(text)) return "agentElementaryTracking";
+    if (/הצעות\s*אלמנטרי/.test(text)) return "elementaryProposals";
+    if (/שיקוף\s*שיחה\s*אלמנטרי/.test(text)) return "elementaryMirror";
+    if (/שיוכי\s*שיקוף/.test(text)) return "mirrorAssignments";
+    if (/שיחת\s*שיקוף/.test(text)) return "mirrorCall";
+    if (/מערכת\s*לידים/.test(text)) return "campaignLeads";
+    if (/הלידים\s*שלי/.test(text)) return "campaignMyLeads";
+    if (/ניהול\s*משתמשים|משתמשים/.test(text)) return "users";
     if (/הגדרות/.test(text)) return "settings";
+    if (/הצוות|הצוות שלי/.test(text)) return "myTeam";
+    if (/דוח|דוחות/.test(text)) return "reportsHub";
     if (/הצעות/.test(text)) return "proposals";
-    if (/סימול/.test(text)) return "myTools";
+    if ((/סימול/.test(text) && !extractCompany(text)) || /כלים/.test(text)) return "myTools";
     if (/לוח|ראשי|דשבורד/.test(text)) return "dashboard";
     if (/מכירות/.test(text)) return "dailySales";
     if (/אנשי\s*קשר|קשרים/.test(text)) return "contacts";
@@ -357,25 +369,101 @@
     return "";
   }
 
+  function extractTopbar(text: string): string {
+    if (/צאט|צ.אט/.test(text)) return "giChatFab";
+    if (/תזכורות/.test(text)) return "giReminderFab";
+    if (/נסיעות/.test(text)) return "btnTravelInsuranceAbroad";
+    if (/רכב\s*בקליק|ביטוח\s*רכב/.test(text)) return "btnCarInsuranceClick";
+    if (/מרכז\s*הסימול/.test(text)) return "btnSimulatorsCenter";
+    if (/הקמת\s*הצעה|הצעה\s*חדשה/.test(text)) return "btnNewCustomerWizard";
+    return "";
+  }
+
+  function isOpenNavSpeech(text: string): boolean {
+    return /(?:עבור|תעבור|עברי|תעברי|לך|לכי|תיכנסי?|היכנסי?|כנסי|פתח|תפתח|תפתחי|תפתחו|תצפתחי)/.test(text);
+  }
+
   function extractFillFields(text: string): Record<string, unknown> | null {
+    const raw = trim(text).replace(/[!,?״"']/g, " ").replace(/\s+/g, " ");
+    if (!raw) return null;
+    const labels: Array<{ key: string; re: RegExp }> = [
+      { key: "firstName", re: /שם\s*פרטי/g },
+      { key: "lastName", re: /שם(?:פ)?\s*משפחה/g },
+      { key: "idIssueDate", re: /תאריך\s*הנפקה|הנפקת\s*תעודת זהות|הנפקת\s*תז/g },
+      { key: "idNumber", re: /תעודת זהות|(?:^|\s)תז(?=\s|$)/g },
+      { key: "phone", re: /טלפון|נייד|פלאפון/g },
+      { key: "email", re: /מייל|אימייל|דואל/g },
+      { key: "birthDate", re: /תאריך\s*לידה|נולד(?:ה)?/g },
+      { key: "street", re: /כתובת(?:\s*מגורים)?|רחוב/g },
+      { key: "houseNumber", re: /מספר\s*בית/g },
+      { key: "apartment", re: /דירה/g },
+      { key: "zip", re: /מיקוד/g },
+      { key: "city", re: /עיר|יישוב/g },
+      { key: "occupation", re: /עיסוק|מקצוע/g },
+      { key: "maritalStatus", re: /מצב\s*משפחתי/g },
+      { key: "clinic", re: /קופת\s*חולים/g },
+      { key: "shaban", re: /שבן/g },
+      { key: "smokingType", re: /סוג\s*עישון/g }
+    ];
+    type Hit = { key: string; start: number; end: number };
+    const hits: Hit[] = [];
+    labels.forEach((row) => {
+      row.re.lastIndex = 0;
+      let match = row.re.exec(raw);
+      while (match) {
+        hits.push({ key: row.key, start: match.index, end: match.index + match[0].length });
+        match = row.re.exec(raw);
+      }
+    });
+    const filtered = hits.filter((hit) => {
+      if (hit.key !== "idNumber") return true;
+      return !hits.some((other) => other.key === "idIssueDate" && hit.start >= other.start && hit.start < other.end);
+    });
+    filtered.sort((a, b) => a.start - b.start);
     const fields: Record<string, unknown> = {};
-    const ageMatch = text.match(/גיל\s*(\d{1,2})/);
+    filtered.forEach((hit, i) => {
+      const stop = i + 1 < filtered.length ? filtered[i + 1].start : raw.length;
+      let value = trim(raw.slice(hit.end, stop));
+      if (!value) return;
+      if (hit.key === "idNumber" || hit.key === "phone" || hit.key === "zip" || hit.key === "houseNumber") {
+        value = value.replace(/\D/g, "");
+      }
+      if (value) fields[hit.key] = value;
+    });
+    const ageMatch = raw.match(/גיל\s*(\d{1,2})/);
     if (ageMatch) fields.age = Number(ageMatch[1]);
-    if (/לא מעשן/.test(text)) fields.smoker = false;
-    else if (/מעשן/.test(text)) fields.smoker = true;
-    const cityMatch = text.match(/עיר\s+([^\s]+(?:\s+[^\s]+)?)/);
-    if (cityMatch && !/גיל|מעשן/.test(cityMatch[1])) fields.city = trim(cityMatch[1]);
-    const firstMatch = text.match(/שם פרטי\s+(\S+)/);
-    if (firstMatch) fields.firstName = firstMatch[1];
-    const lastMatch = text.match(/שם משפחה\s+(\S+)/);
-    if (lastMatch) fields.lastName = lastMatch[1];
-    const company = extractCompany(text);
+    if (/לא מעשן/.test(raw)) fields.smoker = false;
+    else if (/מעשן/.test(raw)) fields.smoker = true;
+    if (/אישה|נקבה/.test(raw)) fields.gender = "female";
+    else if (/גבר|זכר/.test(raw)) fields.gender = "male";
+    if (!fields.maritalStatus) {
+      if (/ידוע(?:ה)?\s*בציבור/.test(raw)) fields.maritalStatus = "ידוע/ה בציבור";
+      else if (/אלמנ/.test(raw)) fields.maritalStatus = "אלמן/ה";
+      else if (/גרוש/.test(raw)) fields.maritalStatus = "גרוש/ה";
+      else if (/נשוי|נשואה/.test(raw)) fields.maritalStatus = "נשוי/אה";
+      else if (/רווק/.test(raw)) fields.maritalStatus = "רווק/ה";
+    }
+    if (!fields.clinic) {
+      if (/כללית/.test(raw)) fields.clinic = "כללית";
+      else if (/מכבי/.test(raw)) fields.clinic = "מכבי";
+      else if (/מאוחדת/.test(raw)) fields.clinic = "מאוחדת";
+      else if (/לאומית/.test(raw)) fields.clinic = "לאומית";
+      else if (/צהל/.test(raw)) fields.clinic = "קופה צהלית";
+    }
+    if (fields.smoker === true && !fields.smokingType) {
+      if (/סיגריה אלקטרונית/.test(raw)) fields.smokingType = "סיגריה אלקטרונית";
+      else if (/קנאביס/.test(raw)) fields.smokingType = "קנאביס";
+      else if (/נרגילה/.test(raw)) fields.smokingType = "נרגילה";
+      else if (/טבק/.test(raw)) fields.smokingType = "טבק";
+      else if (/סיגריות/.test(raw)) fields.smokingType = "סיגריות";
+    }
+    const amountMatch = raw.match(/כמות(?:\s*ליום)?\s+(\d{1,3})/);
+    if (amountMatch) fields.smokingAmount = amountMatch[1];
+    const company = extractCompany(raw);
     if (company) fields.company = company;
-    const product = extractProduct(text);
+    const product = extractProduct(raw);
     if (product) fields.product = product;
-    if (/גבר|זכר/.test(text)) fields.gender = "male";
-    if (/אישה|נקבה/.test(text)) fields.gender = "female";
-    const sumMatch = text.match(/סכום\s+(\d[\d,]{3,})/);
+    const sumMatch = raw.match(/סכום\s+(\d[\d,]{3,})/);
     if (sumMatch) fields.sumInsured = Number(String(sumMatch[1]).replace(/,/g, ""));
     return Object.keys(fields).length ? fields : null;
   }
@@ -389,7 +477,7 @@
       const query = raw.replace(/^(?:אפשר\s+)?(?:בבקשה\s+)?(?:חפש|תחפש|מצא|תמצא|חיפוש)\s+(?:לי\s+)?(?:את\s+)?(?:לקוח\s+)?(?:תיק\s+)?/, "");
       return { tool: "search_customer", args: { query: query || raw } };
     }
-    if (/(פתח|תפתח).*(תיק|לקוח)/.test(raw)) {
+    if (/(?:פתח|תפתח|תפתחי)\s+(?:את\s+)?(?:ה)?(?:תיק|לקוח)(?!\S)/.test(raw)) {
       const query = raw.replace(/^.*?(?:התיק|תיק|לקוח)\s+(?:של\s+)?/, "");
       return { tool: "find_customer_by_id", args: { query: query || raw } };
     }
@@ -397,8 +485,16 @@
       const details = raw.replace(/^.*?(?:משימה|תזכורת|תזכיר לי)\s*/, "") || raw;
       return { tool: "create_task", args: { type: "תזכורת", details } };
     }
-    if (/משימות|תזכורות/.test(raw)) return { tool: "get_tasks", args: {} };
-    if (/(עבור|תעבור|לך אל|פתח מסך|מסך)/.test(raw)) {
+    if (/משימות/.test(raw) || (/תזכורות/.test(raw) && !isOpenNavSpeech(raw))) return { tool: "get_tasks", args: {} };
+    if (/(?:תעברי?|תעבור|עברי|עבור|לכי|לך|המשיכי|המשך)\s+(?:ל)?שלב\s+הבא|שלב הבא|לשלב הבא|הבא באשף/.test(raw)) {
+      return { tool: "wizard_next", args: {} };
+    }
+    if (/(?:תפתח|פתח|תפתחי|העלי|תעלה).*(?:הר הביטוח|הפק\s*ביטוח|הפק\s*פוליס)|הפק\s*(?:ביטוחים|פוליסות)\s*מהר/.test(raw)) {
+      return { tool: "open_har_import", args: {} };
+    }
+    if (isOpenNavSpeech(raw)) {
+      const topbar = extractTopbar(raw);
+      if (topbar) return { tool: "click_topbar", args: { id: topbar } };
       const view = extractView(raw);
       if (view) return { tool: "go_view", args: { view } };
     }
@@ -432,8 +528,8 @@
       if (product) args.product = product;
       return { tool: "create_proposal", args };
     }
-    const fill = extractFillFields(raw);
-    if (fill && (/(מלא|רשום|עדכן|באשף|בהצעה|גיל|מעשן|עיר|שם פרטי|שם משפחה)/.test(raw) || extractCompany(raw) || extractProduct(raw))) {
+    const fill = extractFillFields(text);
+    if (fill && (fill.firstName || fill.lastName || fill.idNumber || fill.street || fill.phone || fill.city || fill.email || fill.birthDate || fill.maritalStatus || fill.clinic || fill.occupation || fill.age != null || /(מלא|רשום|עדכן|באשף|בהצעה|מעשן)/.test(raw) || extractCompany(raw) || extractProduct(raw))) {
       return { tool: "fill_wizard", args: fill };
     }
     if (/ייצור|תיקים החודש|הפקות/.test(raw)) {
@@ -1069,8 +1165,11 @@
     }
     if (tool === "open_simulator") return "פתחתי את הסימולטור הקיים.";
     if (tool === "go_view") return "עברתי למסך המבוקש.";
+    if (tool === "click_topbar") return "פתחתי את הכפתור מהסרגל.";
     if (tool === "create_proposal") return "פתחתי את האשף הקיים להצעה.";
-    if (tool === "fill_wizard") return "מילאתי את הנתונים באשף.";
+    if (tool === "fill_wizard") return "מילאתי את השדות באשף.";
+    if (tool === "wizard_next") return data.ok === false ? "לא הצלחתי לעבור שלב. בדקו שכל הפרטים מלאים." : "עברתי לשלב הבא.";
+    if (tool === "open_har_import") return data.ok === false ? "לא מצאתי את כפתור הר הביטוח. עברו קודם לשלב הפוליסות הקיימות." : "פתחתי את בחירת קובץ הר הביטוח. בחרו את קובץ האקסל מהמחשב.";
     if (tool === "get_monthly_production" || tool === "get_team_production") {
       const count = Number(data.count == null ? data.total : data.count);
       return Number.isFinite(count) ? ("החודש " + count + " תיקים.") : "הבאתי את נתוני הייצור.";
@@ -1208,6 +1307,9 @@
       const fields = (cmd.fields && typeof cmd.fields === "object") ? cmd.fields as Record<string, unknown> : {};
       active.fillWizard?.(fields);
     }
+    else if (type === "wizard_next") void active.wizardNext?.();
+    else if (type === "open_har_import") void active.openHarImport?.();
+    else if (type === "click_topbar") active.clickTopbar?.(trim(cmd.id));
     else if (type === "open_proposal") active.openProposal?.(trim(cmd.proposalId));
     else if (type === "upsert_reminder" && cmd.reminder && typeof cmd.reminder === "object") {
       void active.upsertReminder?.(cmd.reminder as Record<string, unknown>);
@@ -1552,7 +1654,7 @@
       <p class="giAsst__lead">סרוק את קוד ה-QR באמצעות הטלפון כדי לחבר את העוזר האישי לחשבון שלך.</p>
       <div class="giAsst__qrSlot" id="giAsstQrSlot" aria-live="polite"></div>
       <p class="giAsst__timer" id="giAsstTimer">${remainLabel(expiresAt)}</p>
-      <p class="giAsst__hint">הקוד חד־פעמי, קצר בזמן, ואינו מכיל ת״ז, סיסמה או מזהה משתמש.</p>
+      <p class="giAsst__hint">הקוד חד־פעמי, קצר בזמן, ואינו מכיל תעודת זהות, סיסמה או מזהה משתמש.</p>
     `;
     const slot = $("giAsstQrSlot");
     if (slot) paintQr(slot, href);
@@ -1574,7 +1676,7 @@
         <button class="giAsst__btn" id="giAsstPinBtn" type="submit">הצג QR מאובטח</button>
       </form>
       <div class="giAsst__error" id="giAsstError" role="alert"></div>
-      <p class="giAsst__hint">הקוד החד־פעמי נוצר בשרת רק אחרי אימות. הוא אינו מכיל ת״ז, סיסמה או מזהה משתמש.</p>
+      <p class="giAsst__hint">הקוד החד־פעמי נוצר בשרת רק אחרי אימות. הוא אינו מכיל תעודת זהות, סיסמה או מזהה משתמש.</p>
     `;
     const form = $("giAsstPinForm") as HTMLFormElement | null;
     form?.addEventListener("submit", (ev) => {

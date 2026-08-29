@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-fast-v1";
+const TAG = "20260829-assistant-wizard-v1";
 let failed = 0;
 let passed = 0;
 
@@ -70,7 +70,8 @@ assert(!edgeTools.includes("computeMenora") && !wizard.includes("GiAssistant"), 
 
 console.log("\n4) acceptance 1–12");
 assert(html.includes('id="btnPersonalAssistant"') && html.includes('aria-label="העוזר האישי"'), "1. top-bar button");
-assert(asstTs.includes('url.searchParams.set("p"') && !asstTs.includes("idNumber"), "2. QR only token p, no ת״ז");
+const pairFn = asstTs.slice(asstTs.indexOf("function phoneEntryUrl"), asstTs.indexOf("function phoneHomeUrl"));
+assert(pairFn.includes('url.searchParams.set("p"') && !pairFn.includes("idNumber") && !pairFn.includes("id_number"), "2. QR only token p, no ת״ז");
 assert(asstTs.includes("action: \"consume\"") && asstTs.includes("giAsstPhonePin"), "3. phone uses existing username+PIN");
 assert(asstTs.includes('"idle"') && asstTs.includes('"listening"') && asstTs.includes('"speaking"'), "4. voice states");
 assert(asstTs.includes("אין פעולה ממתינה לאישור"), "5. bare כן ignored");
@@ -82,6 +83,9 @@ assert(app.includes("Wizard.openNewPurchaseForCustomer") && edgeTools.includes("
 assert(asstTs.includes("dispatchDesktopCommand") && edgeEngine.includes("gi_assistant_commands"), "11. phone command reaches desktop");
 assert(asstTs.includes("parseLocalCommand") && asstTs.includes("giAsstTalkForm") && edgeEngine.includes("open_session") && !asstTs.includes("OPENAI_API_KEY"), "12. local browser voice + typed fallback, no vendor key in client");
 assert(asstTs.includes("COMMAND_POLL_MS = 400") && edgeTools.includes("fill_wizard") && edgeEngine.includes("fill_wizard"), "phone commands and wizard fill stay under 2s");
+assert(edgeTools.includes("wizard_next") && app.includes("Wizard.nextStep") && asstTs.includes("שם(?:פ)?\\s*משפחה"), "wizard next + labeled name fields");
+assert(edgeTools.includes("open_har_import") && app.includes("Wizard.openHarBituachImport"), "HAR import wraps existing picker");
+assert(edgeTools.includes("click_topbar") && app.includes("giChatFab") && asstTs.includes("extractTopbar"), "topbar/sidebar names wrap existing buttons");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);

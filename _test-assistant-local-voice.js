@@ -9,7 +9,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-fast-v1";
+const TAG = "20260829-assistant-wizard-v1";
 let failed = 0;
 let passed = 0;
 
@@ -96,6 +96,11 @@ assert(api.parseLocalCommand("חפש דוד לוי").args.query.indexOf("דוד"
 assert(api.parseLocalCommand("פתח תיק של רחל").tool === "find_customer_by_id", "פתח תיק → find");
 assert(api.parseLocalCommand("משימות").tool === "get_tasks", "משימות → tasks");
 assert(api.parseLocalCommand("עבור ללקוחות").args.view === "customers", "עבור ללקוחות");
+assert(api.parseLocalCommand("תפתחי את אנשי קשר").tool === "go_view", "תפתחי אנשי קשר");
+assert(api.parseLocalCommand("תפתחי את אנשי קשר").args.view === "contacts", "אנשי קשר view");
+assert(api.parseLocalCommand("תצפתחי את אנשי קשר").args.view === "contacts", "spoken typo תצפתחי still opens contacts");
+assert(api.parseLocalCommand("תיכנסי לצאט").tool === "click_topbar", "תיכנסי לצאט");
+assert(api.parseLocalCommand("תיכנסי לצאט").args.id === "giChatFab", "chat clicks existing fab");
 assert(api.parseLocalCommand("מחיר מנורה ריסק").tool === "get_insurance_price", "מחיר → quote wrap");
 assert(api.parseLocalCommand("מחיר מנורה ריסק").args.company === "מנורה", "quote company");
 assert(api.parseLocalCommand("פתח סימולטור מנורה ריסק").tool === "open_simulator", "open existing simulator");
@@ -104,6 +109,21 @@ assert(api.parseLocalCommand("הקם הצעה לדוד לוי").tool === "create
 assert(String(api.parseLocalCommand("הקם הצעה לדוד לוי").args.query || "").indexOf("דוד") >= 0, "proposal keeps the customer name");
 assert(api.parseLocalCommand("גיל 35 לא מעשן").tool === "fill_wizard", "spoken data fills the open wizard");
 assert(api.parseLocalCommand("גיל 35 לא מעשן").args.age === 35, "fill keeps the age");
+const named = api.parseLocalCommand("שם פרטי אוריה שם משפחה סומך");
+assert(named.tool === "fill_wizard", "שם פרטי/משפחה maps to wizard fields");
+assert(named.args.firstName === "אוריה", "first name field");
+assert(named.args.lastName === "סומך", "last name field");
+assert(api.parseLocalCommand("תעברי לשלב הבא").tool === "wizard_next", "next wizard step");
+assert(api.parseLocalCommand("לשלב הבא").tool === "wizard_next", "לשלב הבא advances");
+assert(api.parseLocalCommand("תז 123456789").args.idNumber === "123456789", "labeled id fills idNumber");
+const addr = api.parseLocalCommand("טלפון 0501234567 כתובת מגורים אחד העם עיר תל אביב מייל test@ex.com");
+assert(addr.tool === "fill_wizard", "address/phone/email fill the wizard");
+assert(addr.args.phone === "0501234567", "phone field");
+assert(String(addr.args.street || "").indexOf("אחד העם") >= 0, "street from כתובת מגורים");
+assert(addr.args.city === "תל אביב", "city field");
+assert(addr.args.email === "test@ex.com", "email field");
+assert(api.parseLocalCommand("תפתח לי את הפק ביטוחים מהר הביטוח").tool === "open_har_import", "HAR picker wrap");
+assert(!asstTs.includes("ת״ז"), "client module has no geresh id label");
 assert(api.parseLocalCommand("עזרה").kind === "help", "עזרה is help");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
