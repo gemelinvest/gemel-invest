@@ -14,9 +14,27 @@ const DEFAULT_MODEL = "gpt-realtime";
 const INSTRUCTIONS = [
   "אתה העוזר האישי הקולי של GEMEL INVEST.",
   "דבר עברית, קצר וברור.",
-  "בשלב זה אתה רק משוחח. אין לך הרשאה לבצע פעולות במערכת, לפתוח תיקים, לתמחר או לגשת לנתוני לקוחות.",
-  "אם מבקשים פעולה — אמור שזה יתווסף בהמשך, ואל תמציא נתונים, מחירים או שמות לקוחות.",
+  "פעולות במערכת רק דרך הכלים. אל תמציא לקוחות, מחירים או נתונים.",
+  "user_id או ת״ז שהמשתמש אמר אינם סמכות — השרת מחליט לפי הסשן.",
+  "פעולות כתיבה דורשות אישור קולי. אם הכלי מחזיר needs_confirmation, בקש כן או לא.",
+  "תמחור והצעות חדשות עדיין לא זמינים — אל תחשב פרמיה בעצמך.",
 ].join(" ");
+
+const SESSION_TOOLS = [
+  { type: "function", name: "search_customer", description: "חיפוש לקוחות מורשים לפי שם או עיר", parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } },
+  { type: "function", name: "find_customer_by_id", description: "איתור לקוח לפי מזהה פנימי או שאילתה", parameters: { type: "object", properties: { customerId: { type: "string" }, query: { type: "string" } } } },
+  { type: "function", name: "get_customer", description: "פרטי לקוח מורשים בלי ת״ז", parameters: { type: "object", properties: { customerId: { type: "string" } }, required: ["customerId"] } },
+  { type: "function", name: "get_customer_policies", description: "ספירת פוליסות של לקוח מורשה", parameters: { type: "object", properties: { customerId: { type: "string" } }, required: ["customerId"] } },
+  { type: "function", name: "open_customer", description: "פתיחת תיק לקוח במסך", parameters: { type: "object", properties: { customerId: { type: "string" } }, required: ["customerId"] } },
+  { type: "function", name: "get_tasks", description: "רשימת משימות פתוחות", parameters: { type: "object", properties: {} } },
+  { type: "function", name: "create_task", description: "יצירת משימה — דורש אישור", parameters: { type: "object", properties: { type: { type: "string" }, details: { type: "string" }, remindAt: { type: "string" }, customerId: { type: "string" }, customerName: { type: "string" } } } },
+  { type: "function", name: "update_task", description: "עדכון משימה — דורש אישור", parameters: { type: "object", properties: { taskId: { type: "string" }, isDone: { type: "boolean" }, remindAt: { type: "string" } }, required: ["taskId"] } },
+  { type: "function", name: "go_view", description: "מעבר למסך במערכת", parameters: { type: "object", properties: { view: { type: "string" } }, required: ["view"] } },
+  { type: "function", name: "open_simulator", description: "פתיחת סימולטור קיים", parameters: { type: "object", properties: { company: { type: "string" }, product: { type: "string" } }, required: ["company", "product"] } },
+  { type: "function", name: "get_agents", description: "רשימת נציגים — למנהלים בלבד", parameters: { type: "object", properties: {} } },
+  { type: "function", name: "get_monthly_production", description: "ספירת תיקים החודש לפי הרשאה", parameters: { type: "object", properties: {} } },
+  { type: "function", name: "get_team_production", description: "ספירת תיקי צוות — למנהלים", parameters: { type: "object", properties: {} } },
+];
 
 type Json = Record<string, unknown>;
 
@@ -159,6 +177,7 @@ async function mintEphemeral(agentId: string){
         type: "realtime",
         model,
         instructions: INSTRUCTIONS,
+        tools: SESSION_TOOLS,
         audio: { output: { voice } },
       },
     }),

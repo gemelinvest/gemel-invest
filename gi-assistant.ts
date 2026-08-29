@@ -9,6 +9,7 @@
   const FN_PAIRING_PATH = "/functions/v1/gi-assistant-pairing";
   const FN_REALTIME_PATH = "/functions/v1/gi-assistant-realtime";
   const FN_ENGINE_PATH = "/functions/v1/gi-assistant-engine";
+  const FN_TOOLS_PATH = "/functions/v1/gi-assistant-tools";
   const OPENAI_CALLS_URL = "https://api.openai.com/v1/realtime/calls";
   const FALLBACK_SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
   const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
@@ -26,6 +27,11 @@
     getCurrentAgent?: () => AgentAuth;
     supabaseUrl?: string;
     publishableKey?: string;
+    openCustomer?: (id: string) => void;
+    goView?: (view: string) => void;
+    openSimulator?: (company: string, product: string) => void;
+    openProposal?: (id: string) => void;
+    refreshReminders?: () => void;
   };
 
   type PairingSession = {
@@ -237,6 +243,10 @@
 
   function callEngine(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
     return callEdge(FN_ENGINE_PATH, payload);
+  }
+
+  function callTools(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return callEdge(FN_TOOLS_PATH, payload);
   }
 
   function redactSafe(text: unknown): string {
@@ -510,8 +520,15 @@
       if (lastIntent === "confirm" || lastIntent === "cancel") {
         const data = await callEngine({ ...engineAuthPayload(), action: "intent", text });
         if (data.confirmed === true) {
+          const tool = trim(data.tool);
           pendingAction = null;
-          pushTimeline("ok", "הפעולה אושרה. הביצוע יתווסף בשלב הכלים.");
+          paintConfirm();
+          if (tool) {
+            const ran = await invokeTool(tool, {}, trim(data.pending_action_id));
+            pushTimeline(ran.ok === false ? "error" : "ok", ran.ok === false ? "האישור התקבל אך הביצוע נכשל." : "הפעולה אושרה ובוצעה.");
+          } else {
+            pushTimeline("ok", "הפעולה אושרה.");
+          }
         } else if (data.cancelled === true) {
           pendingAction = null;
           pushTimeline("cancel", "הפעולה בוטלה.");
@@ -557,6 +574,75 @@
     if (type === "error") {
       setVoiceState("error", "השיחה נקטעה. נסו שוב.");
     }
+    if (
+      type === "response.function_call_arguments.done" ||
+      type === "response.output_item.done"
+    ) {
+      void handleToolCallEvent(ev);
+    }
+  }
+
+  function sendRealtime(event: Record<string, unknown>): void {
+    try { voice.dc?.send(JSON.stringify(event)); } catch (_e) {}
+  }
+
+  function executeClientCommand(cmd: Record<string, unknown> | null | undefined): void {
+    if (!cmd || typeof cmd !== "object") return;
+    const type = trim(cmd.type);
+    const active = readBridge();
+    if (type === "open_customer") active.openCustomer?.(trim(cmd.customerId));
+    else if (type === "go_view") active.goView?.(trim(cmd.view));
+    else if (type === "open_simulator") active.openSimulator?.(trim(cmd.company), trim(cmd.product));
+    else if (type === "open_proposal") active.openProposal?.(trim(cmd.proposalId));
+    else if (type === "refresh_reminders") active.refreshReminders?.();
+  }
+
+  async function invokeTool(tool: string, args: Record<string, unknown>, pendingActionId?: string): Promise<Record<string, unknown>> {
+    delete args.user_id;
+    delete args.userId;
+    const data = await callTools({
+      ...engineAuthPayload(),
+      action: "invoke",
+      tool: trim(tool),
+      arguments: args,
+      pendingActionId: trim(pendingActionId)
+    });
+    if (data.needs_confirmation === true) {
+      pendingAction = { id: trim(data.pending_action_id), label: trim(data.label) || trim(tool) };
+      pushTimeline("confirm", "ממתין לאישור: " + (pendingAction.label || ""));
+      paintConfirm();
+    }
+    if (data.client_command && typeof data.client_command === "object") {
+      executeClientCommand(data.client_command as Record<string, unknown>);
+    }
+    return data;
+  }
+
+  async function handleToolCallEvent(ev: Record<string, unknown>): Promise<void> {
+    const item = (ev.item && typeof ev.item === "object") ? ev.item as Record<string, unknown> : ev;
+    const name = trim(item.name || ev.name);
+    const callId = trim(item.call_id || ev.call_id);
+    let args: Record<string, unknown> = {};
+    const raw = item.arguments || ev.arguments;
+    if (typeof raw === "string") {
+      try { args = JSON.parse(raw) as Record<string, unknown>; } catch (_e) { args = {}; }
+    } else if (raw && typeof raw === "object") args = raw as Record<string, unknown>;
+    const itemType = trim(item.type);
+    if (itemType && itemType !== "function_call") return;
+    if (!name || !callId) return;
+    let output: Record<string, unknown> = { ok: false, error: "TOOL" };
+    try { output = await invokeTool(name, args); } catch (err) {
+      output = { ok: false, error: trim((err as Error)?.message) || "TOOL" };
+    }
+    sendRealtime({
+      type: "conversation.item.create",
+      item: {
+        type: "function_call_output",
+        call_id: callId,
+        output: JSON.stringify(output)
+      }
+    });
+    sendRealtime({ type: "response.create" });
   }
 
   async function proposeWrite(input: { tool: string; label?: string; argumentsSafe?: Record<string, unknown> }): Promise<Record<string, unknown>> {
@@ -584,9 +670,15 @@
         action: "confirm",
         pendingActionId: pendingAction.id
       });
+      const tool = trim(data.tool);
       pendingAction = null;
       paintConfirm();
-      pushTimeline("ok", "הפעולה אושרה. הביצוע יתווסף בשלב הכלים.");
+      if (tool) {
+        const ran = await invokeTool(tool, {}, trim(data.pending_action_id));
+        pushTimeline(ran.ok === false ? "error" : "ok", ran.ok === false ? "האישור התקבל אך הביצוע נכשל." : "הפעולה אושרה ובוצעה.");
+        return ran;
+      }
+      pushTimeline("ok", "הפעולה אושרה.");
       return data;
     } catch (err) {
       const code = trim((err as Error & { code?: string })?.code || (err as Error)?.message);
@@ -1025,6 +1117,8 @@
     cancelPending,
     classifyIntent,
     redactSafe,
+    invokeTool,
+    executeClientCommand,
     getPendingAction(){ return pendingAction; },
     getLastIntent(){ return lastIntent; },
     getTimeline(){ return timelineItems.slice(); }
