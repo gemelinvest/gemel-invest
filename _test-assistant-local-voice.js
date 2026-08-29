@@ -9,7 +9,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-phone-fields-v1";
+const TAG = "20260829-assistant-chat-reports-v1";
 let failed = 0;
 let passed = 0;
 
@@ -99,8 +99,8 @@ assert(api.parseLocalCommand("עבור ללקוחות").args.view === "customers
 assert(api.parseLocalCommand("תפתחי את אנשי קשר").tool === "go_view", "תפתחי אנשי קשר");
 assert(api.parseLocalCommand("תפתחי את אנשי קשר").args.view === "contacts", "אנשי קשר view");
 assert(api.parseLocalCommand("תצפתחי את אנשי קשר").args.view === "contacts", "spoken typo תצפתחי still opens contacts");
-assert(api.parseLocalCommand("תיכנסי לצאט").tool === "click_topbar", "תיכנסי לצאט");
-assert(api.parseLocalCommand("תיכנסי לצאט").args.id === "giChatFab", "chat clicks existing fab");
+assert(api.parseLocalCommand("תיכנסי לצאט").tool === "open_chat", "תיכנסי לצאט");
+assert(api.commandFromLocalTool("open_chat", {}).type === "open_chat", "chat opens via open_chat");
 assert(api.parseLocalCommand("מחיר מנורה ריסק").tool === "get_insurance_price", "מחיר → quote wrap");
 assert(api.parseLocalCommand("מחיר מנורה ריסק").args.company === "מנורה", "quote company");
 assert(api.parseLocalCommand("פתח סימולטור מנורה ריסק").tool === "open_simulator", "open existing simulator");

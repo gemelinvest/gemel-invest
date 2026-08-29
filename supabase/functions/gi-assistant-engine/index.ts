@@ -18,6 +18,8 @@ const UI_COMMANDS = new Set([
   "open_wizard", "refresh_reminders", "upsert_reminder", "mark_task_done",
   "fill_wizard", "wizard_next", "open_har_import", "click_topbar",
   "dismiss_validation_modal",
+  "open_chat", "close_chat", "chat_select_user", "chat_set_draft", "chat_send",
+  "open_sales_report", "open_cancellations_report", "open_daily_sales",
 ]);
 const PII_KEY = /id_number|idNumber|tz_number|national_id|"ת\\"ז"|ת״ז/i;
 const PII_DIGITS = /\d{8,9}/g;
@@ -445,7 +447,7 @@ function sanitizeCommand(raw: unknown){
   const src = raw as Json;
   const type = trim(src.type);
   if(!UI_COMMANDS.has(type)) return null;
-  if(type !== "fill_wizard" && type !== "open_customer" && type !== "open_wizard" && hasPii(src)) return null;
+  if(type !== "fill_wizard" && type !== "open_customer" && type !== "open_wizard" && type !== "chat_set_draft" && type !== "chat_select_user" && hasPii(src)) return null;
   const cmd: Json = { type };
   if(trim(src.customerId)) cmd.customerId = trim(src.customerId);
   if(trim(src.query)) cmd.query = trim(src.query).slice(0, 80);
@@ -463,6 +465,9 @@ function sanitizeCommand(raw: unknown){
     const id = trim(src.id);
     if(allowed.has(id)) cmd.id = id;
   }
+  if(type === "chat_select_user" && trim(src.name)) cmd.name = trim(src.name).slice(0, 80);
+  if(type === "chat_set_draft" && trim(src.text)) cmd.text = trim(src.text).slice(0, 500);
+  if(type === "open_daily_sales" && /^\d{4}-\d{2}-\d{2}$/.test(trim(src.date))) cmd.date = trim(src.date);
   return cmd;
 }
 

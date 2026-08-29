@@ -19,7 +19,9 @@
     "open_customer", "go_view", "open_simulator", "open_proposal",
     "open_wizard", "refresh_reminders", "upsert_reminder", "mark_task_done",
     "fill_wizard", "wizard_next", "open_har_import", "click_topbar",
-    "dismiss_validation_modal"
+    "dismiss_validation_modal",
+    "open_chat", "close_chat", "chat_select_user", "chat_set_draft", "chat_send",
+    "open_sales_report", "open_cancellations_report", "open_daily_sales"
   ]);
 
   type AgentAuth = {
@@ -44,6 +46,15 @@
     wizardNext?: () => void | Promise<unknown>;
     openHarImport?: () => void | { ok?: boolean; error?: string };
     dismissValidationModal?: () => void | { ok?: boolean; error?: string };
+    isChatOpen?: () => boolean;
+    openChat?: () => void | { ok?: boolean; error?: string };
+    closeChat?: () => void | { ok?: boolean; error?: string };
+    selectChatUserByName?: (name: string) => void | { ok?: boolean; error?: string; name?: string };
+    setChatDraft?: (text: string) => void | { ok?: boolean; error?: string };
+    sendChatMessage?: () => void | { ok?: boolean; error?: string };
+    openSalesReport?: () => void | { ok?: boolean; error?: string };
+    openCancellationsReport?: () => void | { ok?: boolean; error?: string };
+    openDailySalesReport?: (dateIso?: string) => void | { ok?: boolean; error?: string; date?: string | null };
     clickTopbar?: (id: string) => void;
     openCustomerByQuery?: (query: string) => void | Promise<unknown>;
     openProposal?: (id: string) => void;
@@ -407,12 +418,62 @@
         const year = Number(nums[nums.length - 1]);
         return formatWizardDate(day, row.month, year);
       }
+      if (nums.length === 1) {
+        const day = Number(nums[0]);
+        const year = new Date().getFullYear();
+        return formatWizardDate(day, row.month, year);
+      }
     }
     hit = /^(\d{1,2})\s+(?:ל|ב|\/|\-|\.)?\s*(\d{1,2})\s+(?:ל|ב|\/|\-|\.)?\s*(\d{2,4})$/.exec(s);
     if (hit) return formatWizardDate(Number(hit[1]), Number(hit[2]), Number(hit[3]));
     hit = /^(\d{1,2})\s+(\d{1,2})\s+(\d{2,4})$/.exec(s);
     if (hit) return formatWizardDate(Number(hit[1]), Number(hit[2]), Number(hit[3]));
     return null;
+  }
+
+  function wizardDateToIso(ddmmyyyy: string): string {
+    const hit = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(trim(ddmmyyyy));
+    if (!hit) return "";
+    return hit[3] + "-" + hit[2] + "-" + hit[1];
+  }
+
+  function extractSpokenReportDate(text: string): string {
+    const raw = trim(text);
+    if (!raw) return "";
+    const slice =
+      raw.match(/(?:של|בתאריך|לתאריך|מ)\s+(.+?)(?:\s+(?:ותראה|תראה|מה\s+נמכר|בבקשה|תודה)|$)/u)?.[1]
+      || raw.match(/(\d{1,2}\s*(?:ל)?(?:ינואר|פברואר|מרץ|מרס|אפריל|מאי|יוני|יולי|אוגוסט|ספטמבר|אוקטובר|נובמבר|דצמבר)(?:\s+\d{2,4})?)/u)?.[1]
+      || raw.match(/(\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4})/)?.[1]
+      || "";
+    const wizard = normalizeWizardDate(slice || raw);
+    return wizard ? wizardDateToIso(wizard) : "";
+  }
+
+  function isChatSpeech(text: string): boolean {
+    return /צאט|צ׳אט|צ'אט|chat/i.test(text);
+  }
+
+  function extractChatComposeText(text: string): string {
+    const raw = trim(text);
+    const hit = raw.match(/^(?:כתוב|תכתוב|תרשום|רשום|תקליד|הקלד|ההודעה(?:\s+היא)?)\s+(.+)$/u);
+    return trim(hit?.[1] || "");
+  }
+
+  function extractChatUserName(text: string): string {
+    const raw = trim(text);
+    let name = "";
+    const withHit = raw.match(/(?:שיחה|הודעה|צאט|צ׳אט|צ'אט)?\s*(?:עם|אל|ל)\s+(.+)$/u);
+    if (withHit) name = trim(withHit[1]);
+    else {
+      const openHit = raw.match(/(?:פתח|תפתח|תפתחי)\s+(?:את\s+)?(?:ה)?שיחה\s+(?:עם\s+)?(.+)$/u);
+      if (openHit) name = trim(openHit[1]);
+    }
+    name = name
+      .replace(/^(?:את\s+)?(?:ה)?(?:שיחה|הודעה|צאט)\s+/u, "")
+      .replace(/\s+(?:בבקשה|תודה)$/u, "")
+      .trim();
+    if (/^(?:צאט|צ׳אט|צ'אט|שיחה|הודעה)$/u.test(name)) return "";
+    return name;
   }
 
   function extractSmokingType(raw: string): string {
@@ -625,6 +686,50 @@
     if (/(?:תחזור|חזור|אחזור|תחזרי|חזרי)\s+למילוי|(?:הבנתי[,\s]*)?(?:אחזור|תחזור|חזור)\s+למילוי|סגור(?:י)?\s+(?:את\s+)?(?:ה)?(?:הודע(?:ה|ת)\s+ה)?(?:חלון|מודל|הודעה)(?:\s+חסרים)?/.test(raw)) {
       return { tool: "dismiss_validation_modal", args: {} };
     }
+    if (/(?:סגור|תסגור|תסגרי)\s+(?:את\s+)?(?:ה)?(?:צאט|צ׳אט|צ'אט|חלון\s+הצאט)/.test(raw)) {
+      return { tool: "close_chat", args: {} };
+    }
+    if (/(?:שלח|תשלח|תשלחי)\s+(?:את\s+)?(?:ה)?הודעה|(?:שלח|תשלח)\s+(?:עכשיו|בבקשה)?$/.test(raw)) {
+      return { tool: "chat_send", args: {} };
+    }
+    {
+      const draft = extractChatComposeText(raw);
+      if (draft) return { tool: "chat_set_draft", args: { text: draft } };
+    }
+    if (/(?:פתח|תפתח|תפתחי|תיכנסי?|היכנסי?|כנסי)\s+(?:את\s+)?(?:ה)?(?:צאט|צ׳אט|צ'אט)(?!\S)/.test(raw)
+      || /^(?:צאט|צ׳אט|צ'אט)$/.test(raw)) {
+      return { tool: "open_chat", args: {} };
+    }
+    {
+      const chatName = extractChatUserName(raw);
+      if (chatName && (isChatSpeech(raw) || /שיחה\s+עם|פתח\s+(?:את\s+)?(?:ה)?שיחה|הודעה\s+(?:עם|אל|ל)/.test(raw))) {
+        return { tool: "chat_select_user", args: { name: chatName } };
+      }
+      try {
+        if (chatName && readBridge().isChatOpen?.()) {
+          return { tool: "chat_select_user", args: { name: chatName } };
+        }
+        if (!isOpenNavSpeech(raw) && !extractFillFields(raw) && readBridge().isChatOpen?.()) {
+          const maybeName = raw.replace(/^(?:את\s+)/, "").trim();
+          if (maybeName && maybeName.length >= 2 && maybeName.length <= 40 && !/\d/.test(maybeName)
+            && !/(?:דוח|אשף|לקוח|תיק|שלב|מכיר|ביטול|סימול|הצעה)/.test(maybeName)) {
+            return { tool: "chat_select_user", args: { name: maybeName } };
+          }
+        }
+      } catch (_eChatOpen) {}
+    }
+    if (/(?:דוח|דוחות)\s*ביטול|(?:כנס|תיכנסי?|היכנסי?|כנסי|עבור|תעבור|עברי)\s+(?:ל)?דוח\s*ביטול/.test(raw)) {
+      return { tool: "open_cancellations_report", args: {} };
+    }
+    if (/(?:דוח\s*)?מכירות.+(?:של|בתאריך|לתאריך|\d)|(?:תראה|הראה|הציג).*(?:מה\s+נמכר|מכירות)|נמכר\s+ב(?:תאריך|יום)/.test(raw)
+      || (/(?:דוח\s*)?מכירות/.test(raw) && extractSpokenReportDate(raw))) {
+      const date = extractSpokenReportDate(raw);
+      return { tool: "open_daily_sales", args: date ? { date } : {} };
+    }
+    if (/(?:כנס|תיכנסי?|היכנסי?|כנסי|עבור|תעבור|עברי|פתח|תפתח)\s+(?:ל)?דוח\s*מכירות|(?:דוח\s*)מכירות(?!\s+של)/.test(raw)
+      && !extractSpokenReportDate(raw)) {
+      return { tool: "open_sales_report", args: {} };
+    }
     if (/(חפש|תחפש|מצא|תמצא|חיפוש)/.test(raw)) {
       const query = raw.replace(/^(?:אפשר\s+)?(?:בבקשה\s+)?(?:חפש|תחפש|מצא|תמצא|חיפוש)\s+(?:לי\s+)?(?:את\s+)?(?:לקוח\s+)?(?:תיק\s+)?/, "");
       return { tool: "search_customer", args: { query: query || raw } };
@@ -662,8 +767,9 @@
       return { tool: "open_har_import", args: {} };
     }
     if (isOpenNavSpeech(raw)) {
+      if (isChatSpeech(raw)) return { tool: "open_chat", args: {} };
       const topbar = extractTopbar(raw);
-      if (topbar) return { tool: "click_topbar", args: { id: topbar } };
+      if (topbar && topbar !== "giChatFab") return { tool: "click_topbar", args: { id: topbar } };
       const view = extractView(raw);
       if (view) return { tool: "go_view", args: { view } };
     }
@@ -1657,6 +1763,8 @@
       if (tool === "open_har_import") return "לא מצאתי את כפתור הר הביטוח.";
       if (tool === "wizard_next") return "לא הצלחתי לעבור שלב.";
       if (tool === "dismiss_validation_modal") return "אין חלון לסגירה.";
+      if (tool === "chat_select_user") return "לא מצאתי את איש הקשר.";
+      if (tool === "chat_send") return "לא נשלח.";
       if (data.dispatchFailed) return "לא נשלח למחשב. נסו שוב.";
       return "לא הצלחתי.";
     }
@@ -1673,6 +1781,9 @@
         tool === "go_view" || tool === "click_topbar" || tool === "fill_wizard" || tool === "wizard_next"
         || tool === "open_har_import" || tool === "open_simulator" || tool === "create_proposal"
         || tool === "open_customer" || tool === "find_customer_by_id" || tool === "dismiss_validation_modal"
+        || tool === "open_chat" || tool === "close_chat" || tool === "chat_select_user"
+        || tool === "chat_set_draft" || tool === "chat_send"
+        || tool === "open_sales_report" || tool === "open_cancellations_report" || tool === "open_daily_sales"
       ) {
         return shortActionAck(tool, data);
       }
@@ -1710,6 +1821,14 @@
     if (tool === "wizard_next") return data.ok === false ? "לא הצלחתי לעבור שלב. בדקו שכל הפרטים מלאים." : "עברתי לשלב הבא.";
     if (tool === "open_har_import") return data.ok === false ? "לא מצאתי את כפתור הר הביטוח. עברו קודם לשלב הפוליסות הקיימות." : "פתחתי את בחירת קובץ הר הביטוח. בחרו את קובץ האקסל מהמחשב.";
     if (tool === "dismiss_validation_modal") return data.ok === false ? "אין חלון חסרים לסגירה." : "סגרתי את החלון. אפשר להמשיך למלא.";
+    if (tool === "open_chat") return "פתחתי את הצ׳אט.";
+    if (tool === "close_chat") return "סגרתי את הצ׳אט.";
+    if (tool === "chat_select_user") return data.ok === false ? "לא מצאתי את איש הקשר בצ׳אט." : ("פתחתי את השיחה" + (trim(data.name) ? (" עם " + trim(data.name)) : "") + ".");
+    if (tool === "chat_set_draft") return data.ok === false ? "לא הצלחתי לרשום את ההודעה." : "רשמתי את ההודעה.";
+    if (tool === "chat_send") return data.ok === false ? "לא הצלחתי לשלוח. בדקו שנבחרה שיחה ויש טקסט." : "שלחתי את ההודעה.";
+    if (tool === "open_sales_report") return "פתחתי את דוח המכירות.";
+    if (tool === "open_cancellations_report") return "פתחתי את דוח הביטולים.";
+    if (tool === "open_daily_sales") return "פתחתי את דוח המכירות לתאריך שביקשת.";
     if (tool === "get_monthly_production" || tool === "get_team_production") {
       const count = Number(data.count == null ? data.total : data.count);
       return Number.isFinite(count) ? ("החודש " + numberToHebrew(count, "m") + " תיקים.") : "הבאתי את נתוני הייצור.";
@@ -1725,6 +1844,18 @@
     if (tool === "wizard_next") return { type: "wizard_next" };
     if (tool === "open_har_import") return { type: "open_har_import" };
     if (tool === "dismiss_validation_modal") return { type: "dismiss_validation_modal" };
+    if (tool === "open_chat") return { type: "open_chat" };
+    if (tool === "close_chat") return { type: "close_chat" };
+    if (tool === "chat_select_user" && trim(a.name)) return { type: "chat_select_user", name: trim(a.name) };
+    if (tool === "chat_set_draft" && trim(a.text)) return { type: "chat_set_draft", text: trim(a.text) };
+    if (tool === "chat_send") return { type: "chat_send" };
+    if (tool === "open_sales_report") return { type: "open_sales_report" };
+    if (tool === "open_cancellations_report") return { type: "open_cancellations_report" };
+    if (tool === "open_daily_sales") {
+      const out: Record<string, unknown> = { type: "open_daily_sales" };
+      if (trim(a.date)) out.date = trim(a.date);
+      return out;
+    }
     if (tool === "open_simulator" && trim(a.company)) return { type: "open_simulator", company: trim(a.company), product: trim(a.product) || "ריסק" };
     if (tool === "create_proposal") {
       const out: Record<string, unknown> = { type: "open_wizard" };
@@ -1812,14 +1943,14 @@
           await speak(replyFromTool(cmd.tool, { ok: true, instant: true }));
           return;
         }
-        executeClientCommand(instant);
+        const execResult = executeClientCommand(instant);
         if (cmd.tool === "create_proposal") {
           const extra = extractFillFields(text);
           if (extra && (extra.firstName || extra.lastName || extra.company || extra.product || extra.age != null)) {
             executeClientCommand({ type: "fill_wizard", fields: extra });
           }
         }
-        await speak(replyFromTool(cmd.tool, { ok: true, instant: true }));
+        await speak(replyFromTool(cmd.tool, Object.assign({ instant: true }, execResult || { ok: true })));
         return;
       }
       const data = await invokeTool(cmd.tool, args);
@@ -1872,8 +2003,8 @@
     try { voice.dc?.send(JSON.stringify(event)); } catch (_e) {}
   }
 
-  function executeClientCommand(cmd: Record<string, unknown> | null | undefined): void {
-    if (!cmd || typeof cmd !== "object") return;
+  function executeClientCommand(cmd: Record<string, unknown> | null | undefined): Record<string, unknown> {
+    if (!cmd || typeof cmd !== "object") return { ok: false };
     const type = trim(cmd.type);
     const active = readBridge();
     if (type === "open_customer") {
@@ -1887,29 +2018,96 @@
         if (query) lastCustomerName = query;
         void active.openCustomerByQuery?.(query || id);
       }
+      return { ok: true };
     }
-    else if (type === "go_view") active.goView?.(trim(cmd.view));
-    else if (type === "open_simulator") void active.openSimulator?.(trim(cmd.company), trim(cmd.product));
-    else if (type === "quote_simulator") void active.quoteSimulator?.(trim(cmd.company), trim(cmd.product), (cmd.input && typeof cmd.input === "object") ? cmd.input as Record<string, unknown> : {});
-    else if (type === "open_wizard") {
+    if (type === "go_view") {
+      active.goView?.(trim(cmd.view));
+      return { ok: true };
+    }
+    if (type === "open_simulator") {
+      void active.openSimulator?.(trim(cmd.company), trim(cmd.product));
+      return { ok: true };
+    }
+    if (type === "quote_simulator") {
+      void active.quoteSimulator?.(trim(cmd.company), trim(cmd.product), (cmd.input && typeof cmd.input === "object") ? cmd.input as Record<string, unknown> : {});
+      return { ok: true };
+    }
+    if (type === "open_wizard") {
       if (trim(cmd.customerId)) lastCustomerId = trim(cmd.customerId);
       if (trim(cmd.query)) lastCustomerName = trim(cmd.query);
       void active.openWizard?.({ customerId: trim(cmd.customerId), query: trim(cmd.query), company: trim(cmd.company), product: trim(cmd.product) });
+      return { ok: true };
     }
-    else if (type === "fill_wizard") {
+    if (type === "fill_wizard") {
       const fields = (cmd.fields && typeof cmd.fields === "object") ? cmd.fields as Record<string, unknown> : {};
       active.fillWizard?.(fields);
+      return { ok: true };
     }
-    else if (type === "wizard_next") void active.wizardNext?.();
-    else if (type === "open_har_import") void active.openHarImport?.();
-    else if (type === "dismiss_validation_modal") void active.dismissValidationModal?.();
-    else if (type === "click_topbar") active.clickTopbar?.(trim(cmd.id));
-    else if (type === "open_proposal") active.openProposal?.(trim(cmd.proposalId));
-    else if (type === "upsert_reminder" && cmd.reminder && typeof cmd.reminder === "object") {
+    if (type === "wizard_next") {
+      const res = active.wizardNext?.();
+      return (res && typeof res === "object") ? res as Record<string, unknown> : { ok: true };
+    }
+    if (type === "open_har_import") {
+      const res = active.openHarImport?.();
+      return (res && typeof res === "object") ? res as Record<string, unknown> : { ok: true };
+    }
+    if (type === "dismiss_validation_modal") {
+      const res = active.dismissValidationModal?.();
+      return (res && typeof res === "object") ? res as Record<string, unknown> : { ok: true };
+    }
+    if (type === "open_chat") {
+      const res = active.openChat?.();
+      return (res && typeof res === "object") ? res as Record<string, unknown> : { ok: true };
+    }
+    if (type === "close_chat") {
+      const res = active.closeChat?.();
+      return (res && typeof res === "object") ? res as Record<string, unknown> : { ok: true };
+    }
+    if (type === "chat_select_user") {
+      const res = active.selectChatUserByName?.(trim(cmd.name));
+      return (res && typeof res === "object") ? res as Record<string, unknown> : { ok: true };
+    }
+    if (type === "chat_set_draft") {
+      const res = active.setChatDraft?.(trim(cmd.text));
+      return (res && typeof res === "object") ? res as Record<string, unknown> : { ok: true };
+    }
+    if (type === "chat_send") {
+      const res = active.sendChatMessage?.();
+      return (res && typeof res === "object") ? res as Record<string, unknown> : { ok: true };
+    }
+    if (type === "open_sales_report") {
+      const res = active.openSalesReport?.();
+      return (res && typeof res === "object") ? res as Record<string, unknown> : { ok: true };
+    }
+    if (type === "open_cancellations_report") {
+      const res = active.openCancellationsReport?.();
+      return (res && typeof res === "object") ? res as Record<string, unknown> : { ok: true };
+    }
+    if (type === "open_daily_sales") {
+      const res = active.openDailySalesReport?.(trim(cmd.date));
+      return (res && typeof res === "object") ? res as Record<string, unknown> : { ok: true };
+    }
+    if (type === "click_topbar") {
+      active.clickTopbar?.(trim(cmd.id));
+      return { ok: true };
+    }
+    if (type === "open_proposal") {
+      active.openProposal?.(trim(cmd.proposalId));
+      return { ok: true };
+    }
+    if (type === "upsert_reminder" && cmd.reminder && typeof cmd.reminder === "object") {
       void active.upsertReminder?.(cmd.reminder as Record<string, unknown>);
+      return { ok: true };
     }
-    else if (type === "mark_task_done") void active.markTaskDone?.(trim(cmd.id || cmd.taskId));
-    else if (type === "refresh_reminders") void active.refreshReminders?.();
+    if (type === "mark_task_done") {
+      void active.markTaskDone?.(trim(cmd.id || cmd.taskId));
+      return { ok: true };
+    }
+    if (type === "refresh_reminders") {
+      void active.refreshReminders?.();
+      return { ok: true };
+    }
+    return { ok: false };
   }
 
   async function dispatchDesktopCommand(cmd: Record<string, unknown>): Promise<boolean> {
@@ -2624,7 +2822,11 @@
     parseLocalCommand,
     commandFromLocalTool,
     extractFillFields,
+    extractSpokenReportDate,
+    extractChatComposeText,
+    extractChatUserName,
     normalizeWizardDate,
+    wizardDateToIso,
     hasFillPayload,
     pickHebrewVoice,
     scoreHebrewVoice,
