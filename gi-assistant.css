@@ -125,9 +125,57 @@
   color: #64748b;
 }
 
-.giAsst__idle{
+.giAsst__idle,
+.giAsst__voice{
   text-align: center;
   padding: 28px 8px 12px;
+}
+
+.giAsst__voiceActions{
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.giAsst__btn--ghost{
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.giAsst__micBtn{
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 12px;
+  border: 0;
+  border-radius: 50%;
+  background: #2563eb;
+  color: #fff;
+  font-size: 36px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.giAsst__micBtn.is-connecting{
+  background: #64748b;
+}
+
+.giAsst__micBtn.is-listening{
+  background: #2563eb;
+  animation: giAsstPulse 1.2s ease-in-out infinite;
+}
+
+.giAsst__micBtn.is-speaking{
+  background: #0f766e;
+}
+
+.giAsst__voiceStatus.is-err{
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+@keyframes giAsstPulse{
+  0%, 100%{ box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.35); }
+  50%{ box-shadow: 0 0 0 14px rgba(37, 99, 235, 0); }
 }
 
 .giAsst__mic{

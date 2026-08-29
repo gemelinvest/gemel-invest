@@ -6,3 +6,6 @@ verify_jwt = false
 
 [functions.gi-assistant-pairing]
 verify_jwt = false
+
+[functions.gi-assistant-realtime]
+verify_jwt = false

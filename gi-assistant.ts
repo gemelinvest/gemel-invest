@@ -1,4 +1,4 @@
-/* GI-ASSISTANT — top bar + secure QR pairing (P3–P4).
+/* GI-ASSISTANT — top bar, pairing, and OpenAI Realtime voice (P3–P6).
    Compiled to gi-assistant.js. Do not edit the compiled file by hand. */
 (() => {
   "use strict";
@@ -6,7 +6,9 @@
   const PAIRING_STORAGE_KEY = "gi_assistant_device_paired_v1";
   const DEVICE_STORAGE_KEY = "gi_assistant_device_v1";
   const ROOT_ID = "giAsstRoot";
-  const FN_PATH = "/functions/v1/gi-assistant-pairing";
+  const FN_PAIRING_PATH = "/functions/v1/gi-assistant-pairing";
+  const FN_REALTIME_PATH = "/functions/v1/gi-assistant-realtime";
+  const OPENAI_CALLS_URL = "https://api.openai.com/v1/realtime/calls";
   const FALLBACK_SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
   const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
   const POLL_MS = 1600;
@@ -32,9 +34,30 @@
     pollTimer: number;
   };
 
+  type VoiceState = "idle" | "connecting" | "listening" | "speaking" | "error";
+
+  type VoiceRuntime = {
+    state: VoiceState;
+    sessionId: string;
+    pc: RTCPeerConnection | null;
+    dc: RTCDataChannel | null;
+    stream: MediaStream | null;
+    audio: HTMLAudioElement | null;
+    error: string;
+  };
+
   let bridge: AssistantBridge = {};
   let bound = false;
   let pairing: PairingSession | null = null;
+  let voice: VoiceRuntime = {
+    state: "idle",
+    sessionId: "",
+    pc: null,
+    dc: null,
+    stream: null,
+    audio: null,
+    error: ""
+  };
 
   function trim(value: unknown): string {
     return String(value == null ? "" : value).trim();
@@ -166,9 +189,9 @@
     host.appendChild(link);
   }
 
-  async function callPairing(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+  async function callEdge(fnPath: string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
     const cfg = supabaseConfig();
-    const res = await fetch(cfg.url.replace(/\/+$/, "") + FN_PATH, {
+    const res = await fetch(cfg.url.replace(/\/+$/, "") + fnPath, {
       method: "POST",
       cache: "no-store",
       headers: {
@@ -188,12 +211,32 @@
     return data;
   }
 
+  function callPairing(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return callEdge(FN_PAIRING_PATH, payload);
+  }
+
+  function callRealtime(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return callEdge(FN_REALTIME_PATH, payload);
+  }
+
   function pairingErrorText(code: string): string {
     if (code === "AUTH_FAILED" || code === "MISSING_PIN") return "קוד הכניסה שגוי.";
     if (code === "TOKEN_INVALID") return "קוד הקישור לא תקף או שכבר נוצל.";
     if (code === "AGENT_MISMATCH") return "המשתמש שזוהה אינו מי שהתחיל את הקישור.";
     if (code === "FAILED_TO_FETCH" || code === "TypeError") return "אין חיבור לשרת הקישור. הריצו את supabase-assistant-pairing.sql ופרסו את הפונקציה.";
+    if (code === "MISSING_OPENAI_KEY") return "חסר מפתח OpenAI בשרת. יש להגדיר את הסוד ב-Edge secrets.";
+    if (code === "OPENAI_ERROR") return "שרת הקול לא זמין כרגע. נסו שוב בעוד רגע.";
+    if (code === "MIC_DENIED" || code === "NotAllowedError") return "נדרשת הרשאת מיקרופון כדי לדבר עם העוזר.";
+    if (code === "MIC_MISSING" || code === "NotFoundError") return "לא נמצא מיקרופון במכשיר.";
     return "לא הצלחתי להשלים את הקישור. נסו שוב.";
+  }
+
+  function voiceStateLabel(state: VoiceState): string {
+    if (state === "connecting") return "מתחבר…";
+    if (state === "listening") return "מקשיב";
+    if (state === "speaking") return "העוזר מדבר";
+    if (state === "error") return voice.error || "לא הצלחתי להתחבר לקול.";
+    return "דבר עם המערכת";
   }
 
   function stopPairingPoll(): void {
@@ -258,6 +301,7 @@
 
   function closeOverlay(): void {
     void cancelPairing();
+    void stopVoice();
     const overlay = $("giAsstOverlay");
     if (!overlay) return;
     overlay.classList.add("is-hidden");
@@ -281,18 +325,198 @@
     if (box) box.textContent = msg || "";
   }
 
+  function paintVoiceState(): void {
+    const root = document.querySelector(".giAsst__voice");
+    if (!root) return;
+    root.setAttribute("data-gi-asst-voice", voice.state);
+    root.classList.remove("is-idle", "is-connecting", "is-listening", "is-speaking", "is-error");
+    root.classList.add("is-" + voice.state);
+    const status = root.querySelector(".giAsst__voiceStatus");
+    if (status) {
+      status.textContent = voiceStateLabel(voice.state);
+      status.classList.toggle("is-err", voice.state === "error");
+    }
+    const startBtn = root.querySelector("#giAsstVoiceStart") as HTMLButtonElement | null;
+    const stopBtn = root.querySelector("#giAsstVoiceStop") as HTMLButtonElement | null;
+    const busy = voice.state === "connecting" || voice.state === "listening" || voice.state === "speaking";
+    if (startBtn) {
+      startBtn.hidden = busy;
+      startBtn.disabled = voice.state === "connecting";
+    }
+    if (stopBtn) {
+      stopBtn.hidden = !busy;
+      stopBtn.disabled = voice.state === "connecting";
+    }
+    const mic = root.querySelector(".giAsst__micBtn");
+    if (mic) {
+      mic.classList.toggle("is-listening", voice.state === "listening");
+      mic.classList.toggle("is-speaking", voice.state === "speaking");
+      mic.classList.toggle("is-connecting", voice.state === "connecting");
+    }
+  }
+
+  function setVoiceState(next: VoiceState, errorText?: string): void {
+    voice.state = next;
+    voice.error = next === "error" ? (errorText || voice.error || "") : "";
+    paintVoiceState();
+  }
+
+  function voiceMarkup(includePin: boolean): string {
+    return `
+      <div class="giAsst__voice is-idle" data-gi-asst-voice="idle">
+        <button class="giAsst__micBtn" id="giAsstMicBtn" type="button" aria-label="התחל שיחה">🎙️</button>
+        <p class="giAsst__lead giAsst__voiceStatus" id="giAsstVoiceStatus">דבר עם המערכת</p>
+        ${includePin ? `
+          <label class="giAsst__label" for="giAsstVoicePin">קוד הכניסה לחשבון</label>
+          <input class="giAsst__input" id="giAsstVoicePin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="12" />
+        ` : ""}
+        <div class="giAsst__voiceActions">
+          <button class="giAsst__btn" id="giAsstVoiceStart" type="button">התחל שיחה</button>
+          <button class="giAsst__btn giAsst__btn--ghost" id="giAsstVoiceStop" type="button" hidden>סיים שיחה</button>
+        </div>
+        <p class="giAsst__hint">המפתח הקבוע של OpenAI נשאר בשרת. הדפדפן מקבל רק טוקן זמני.</p>
+      </div>
+    `;
+  }
+
+  function bindVoiceControls(root: ParentNode): void {
+    root.querySelector("#giAsstVoiceStart")?.addEventListener("click", () => { void startVoice(); });
+    root.querySelector("#giAsstVoiceStop")?.addEventListener("click", () => { void stopVoice(); });
+    root.querySelector("#giAsstMicBtn")?.addEventListener("click", () => {
+      if (voice.state === "idle" || voice.state === "error") void startVoice();
+      else void stopVoice();
+    });
+    paintVoiceState();
+  }
+
+  function handleRealtimeEvent(raw: string): void {
+    let ev: { type?: string } = {};
+    try { ev = JSON.parse(raw) as { type?: string }; } catch (_e) { return; }
+    const type = trim(ev.type);
+    if (type === "session.created" || type === "input_audio_buffer.speech_stopped" || type === "response.done") {
+      if (voice.state !== "idle") setVoiceState("listening");
+      return;
+    }
+    if (type === "input_audio_buffer.speech_started") {
+      setVoiceState("listening");
+      return;
+    }
+    if (
+      type === "response.created" ||
+      type === "response.output_audio.delta" ||
+      type === "response.audio.delta" ||
+      type === "output_audio_buffer.started"
+    ) {
+      setVoiceState("speaking");
+      return;
+    }
+    if (type === "error") {
+      setVoiceState("error", "השיחה נקטעה. נסו שוב.");
+    }
+  }
+
+  async function mintVoiceToken(): Promise<{ clientSecret: string; sessionId: string }> {
+    const device = readDevice();
+    const auth = getAuth();
+    const payload: Record<string, unknown> = {
+      action: "token",
+      source: device && trim(device.deviceSecret) ? "phone" : "desktop"
+    };
+    if (device && trim(device.devicePublicId) && trim(device.deviceSecret)) {
+      payload.devicePublicId = trim(device.devicePublicId);
+      payload.deviceSecret = trim(device.deviceSecret);
+    } else {
+      payload.agentId = trim(auth?.id);
+      payload.agentName = trim(auth?.name);
+      payload.username = trim(auth?.username);
+      payload.pin = trim(($("giAsstVoicePin") as HTMLInputElement | null)?.value);
+      if (!trim(payload.pin)) throw Object.assign(new Error("MISSING_PIN"), { code: "MISSING_PIN" });
+    }
+    const data = await callRealtime(payload);
+    const clientSecret = trim(data.clientSecret);
+    if (!clientSecret || clientSecret.indexOf("sk-") === 0) throw new Error("OPENAI_ERROR");
+    return { clientSecret, sessionId: trim(data.sessionId) };
+  }
+
+  async function connectWebRtc(clientSecret: string): Promise<void> {
+    const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+    voice.pc = pc;
+    const audio = document.createElement("audio");
+    audio.autoplay = true;
+    audio.setAttribute("playsinline", "true");
+    voice.audio = audio;
+    pc.ontrack = (ev) => {
+      audio.srcObject = ev.streams[0];
+      void audio.play().catch(() => {});
+    };
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    voice.stream = stream;
+    stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+    const dc = pc.createDataChannel("oai-events");
+    voice.dc = dc;
+    dc.addEventListener("message", (ev) => handleRealtimeEvent(String(ev.data || "")));
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    const sdpResponse = await fetch(OPENAI_CALLS_URL, {
+      method: "POST",
+      body: offer.sdp || "",
+      headers: {
+        Authorization: "Bearer " + clientSecret,
+        "Content-Type": "application/sdp"
+      }
+    });
+    if (!sdpResponse.ok) throw new Error("OPENAI_ERROR");
+    const answer = await sdpResponse.text();
+    await pc.setRemoteDescription({ type: "answer", sdp: answer });
+  }
+
+  async function startVoice(): Promise<void> {
+    if (voice.state === "connecting" || voice.state === "listening" || voice.state === "speaking") return;
+    setVoiceState("connecting");
+    try {
+      const minted = await mintVoiceToken();
+      voice.sessionId = minted.sessionId;
+      await connectWebRtc(minted.clientSecret);
+      setVoiceState("listening");
+    } catch (err) {
+      const code = trim((err as Error & { code?: string; name?: string })?.code
+        || (err as Error & { name?: string })?.name
+        || (err as Error)?.message);
+      await stopVoice(false);
+      const mapped = pairingErrorText(code);
+      const text = (code === "FAILED_TO_FETCH" || code === "TypeError")
+        ? "אין חיבור לשרת הקול. הריצו את supabase-assistant-sessions.sql, פרסו את gi-assistant-realtime, והגדירו את סוד OpenAI בשרת."
+        : (mapped === "לא הצלחתי להשלים את הקישור. נסו שוב." ? "לא הצלחתי להתחיל את השיחה. נסו שוב." : mapped);
+      setVoiceState("error", text);
+    }
+  }
+
+  async function stopVoice(updateUi = true): Promise<void> {
+    const sessionId = trim(voice.sessionId);
+    try { voice.dc?.close(); } catch (_e) {}
+    try { voice.pc?.getSenders().forEach((sender) => sender.track?.stop()); } catch (_e2) {}
+    try { voice.pc?.close(); } catch (_e3) {}
+    try { voice.stream?.getTracks().forEach((track) => track.stop()); } catch (_e4) {}
+    voice.dc = null;
+    voice.pc = null;
+    voice.stream = null;
+    voice.audio = null;
+    voice.sessionId = "";
+    if (sessionId) {
+      try { await callRealtime({ action: "end", sessionId }); } catch (_e5) {}
+    }
+    if (updateUi) setVoiceState("idle");
+  }
+
   function renderAssistantBody(): void {
     const body = $("giAsstBody");
     const title = $("giAsstTitle");
     if (title) title.textContent = "העוזר האישי שלי";
     if (!body) return;
-    body.innerHTML = `
-      <div class="giAsst__idle">
-        <div class="giAsst__mic" aria-hidden="true">🎙️</div>
-        <p class="giAsst__lead">דבר עם המערכת</p>
-        <p class="giAsst__hint">השיחה הקולית תתווסף בשלב הבא. המכשיר כבר מקושר לחשבון.</p>
-      </div>
-    `;
+    void stopVoice();
+    const needPin = !(readDevice() && trim(readDevice()?.deviceSecret));
+    body.innerHTML = voiceMarkup(needPin);
+    bindVoiceControls(body);
   }
 
   function remainLabel(expiresAt: string): string {
@@ -454,17 +678,15 @@
   function renderPhoneAssistant(): void {
     const root = $("giAsstPhone");
     if (!root) return;
+    void stopVoice();
     root.innerHTML = `
       <header class="giAsstPhone__head">
         <div class="giAsstPhone__kicker">GEMEL INVEST</div>
         <h1 class="giAsstPhone__title">העוזר האישי שלי</h1>
       </header>
-      <div class="giAsst__idle">
-        <div class="giAsst__mic" aria-hidden="true">🎙️</div>
-        <p class="giAsst__lead">דבר עם המערכת</p>
-        <p class="giAsst__hint">המכשיר מקושר. השיחה הקולית תתווסף בשלב הבא.</p>
-      </div>
+      ${voiceMarkup(false)}
     `;
+    bindVoiceControls(root);
   }
 
   function renderPhoneLogin(publicToken: string): void {
@@ -577,6 +799,7 @@
 
   function onLogout(): void {
     void cancelPairing();
+    void stopVoice();
     closeOverlay();
     syncButtonVisibility();
   }
@@ -587,7 +810,10 @@
     onLogout,
     hasActiveDevicePairing,
     openFromTopBar,
-    phoneEntryUrl
+    phoneEntryUrl,
+    startVoice,
+    stopVoice,
+    getVoiceState(){ return voice.state; }
   };
 
   try {
