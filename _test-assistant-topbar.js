@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-topbar-v1";
+const TAG = "20260829-assistant-pairing-v1";
 let failed = 0;
 let passed = 0;
 
@@ -75,7 +75,9 @@ assert(asstTs.includes("hasActiveDevicePairing"), "בדיקת pairing לפני �
 assert(asstTs.includes("הפעלת העוזר האישי"), "מסך הפעלה בפעם הראשונה");
 assert(asstTs.includes("סרוק את קוד ה-QR"), "טקסט הסבר QR");
 assert(!asstTs.includes("id_number") && !asstTs.includes("idNumber"), "אין ת״ז במודול");
-assert(!asstJs.includes("password") || asstJs.includes("סיסמה"), "אין סיסמה ב-QR");
+    assert(!asstJs.includes('searchParams.set("password"') && !asstJs.includes('searchParams.set("pin"'), "QR לא שם PIN/סיסמה בפרמטר");
+    assert(asstTs.includes('url.searchParams.set("p"'), "QR בנוי מפרמטר p בלבד");
+    assert(asstJs.includes("assistant.html"), "QR מצביע ל-assistant.html");
 assert(app.includes("__GI_ASSISTANT_BRIDGE__"), "גשר Auth מהמערכת הקיימת");
 assert(app.includes("GiAssistant?.onLogin"), "onLogin אחרי כניסה קיימת");
 assert(app.includes("GiAssistant?.onLogout"), "onLogout עם היציאה הקיימת");

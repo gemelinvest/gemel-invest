@@ -54196,9 +54196,23 @@ const ClalRiskLifePdf = {
   TravelInsuranceTopbarUI.init();
   try {
     window.__GI_ASSISTANT_BRIDGE__ = {
-      getAuth(){ return Auth.current; }
+      getAuth(){ return Auth.current; },
+      getCurrentAgent(){
+        try {
+          const fromFace = window.__GI_FACE_BRIDGE__?.getCurrentAgent?.();
+          if(fromFace && (fromFace.id || fromFace.name)) return fromFace;
+        } catch(_e) {}
+        return Auth.current;
+      },
+      supabaseUrl: SUPABASE_URL,
+      publishableKey: SUPABASE_PUBLISHABLE_KEY
     };
-    window.GiAssistant?.init?.({ getAuth(){ return Auth.current; } });
+    window.GiAssistant?.init?.({
+      getAuth(){ return Auth.current; },
+      getCurrentAgent(){ return window.__GI_ASSISTANT_BRIDGE__.getCurrentAgent(); },
+      supabaseUrl: SUPABASE_URL,
+      publishableKey: SUPABASE_PUBLISHABLE_KEY
+    });
   } catch(_e) {}
   CarInsuranceClickUI.init();
   SimulatorsCenterUI.init();
