@@ -9,7 +9,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260829-assistant-instant-v1";
+const TAG = "20260829-assistant-voice-v1";
 let failed = 0;
 let passed = 0;
 
@@ -131,6 +131,8 @@ assert(openNow.type === "open_customer" && openNow.query === "רחל" && openNow
 assert(api.commandFromLocalTool("go_view", { view: "contacts" }).type === "go_view", "go_view is instant");
 assert(api.commandFromLocalTool("click_topbar", { id: "giChatFab" }).type === "click_topbar", "chat is instant");
 assert(asstTs.includes("COMMAND_POLL_MS = 120"), "desktop pulls commands every 120ms");
+assert(typeof api.pickHebrewVoice === "function" && typeof api.prepareSpeechText === "function", "local female TTS helpers exported");
+assert(asstTs.includes("applyVoiceTone") && asstTs.includes("FEMALE_VOICE_HINTS"), "prefers a feminine Hebrew OS voice");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);
