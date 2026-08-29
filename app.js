@@ -23405,7 +23405,19 @@ UsersGateUI.init();
               meta: healthMeta, sum: this.formatMoneyValue(this.sumPremiumAfterDiscount(healthPolicies)), collapsible: false
             })}
           </header>
-          <div class="cfNewPolicyGrid">${healthCards.map(p => this.renderNewPolicyCard(p, rec, healthPolicies)).join('')}</div>
+          <div class="cfNewPolicyGrid">
+            <div class="cfNewPolicyGrid__head" aria-hidden="true">
+              <span class="cfNewPolicyGrid__hLogo"></span>
+              <span>מוצר / חברה</span>
+              <span>מס׳ פוליסה</span>
+              <span>תחילת ביטוח</span>
+              <span>סכום</span>
+              <span>מבוטחים</span>
+              <span>פרמיה</span>
+              <span class="cfNewPolicyGrid__hActs"></span>
+            </div>
+            ${healthCards.map(p => this.renderNewPolicyCard(p, rec, healthPolicies)).join('')}
+          </div>
         </section>`
         : '';
       const blocks = [
@@ -23592,7 +23604,7 @@ UsersGateUI.init();
       const coverRows = (isHealth || isLife) ? this.getHealthCoverRowsForDisplay(rec, policy) : [];
       const coverBtn = coverRows.length
         ? `<button class="cfNewPolicyCard__coversBtn" type="button" data-cf-covers-toggle="${escapeHtml(policy.id)}" aria-expanded="false">פירוט כיסויים</button>`
-        : `<span class="cfNewPolicyCard__coversBtn cfNewPolicyCard__coversBtn--empty" aria-hidden="true"></span>`;
+        : "";
       const coversList = coverRows.length
         ? `<div class="cfNewPolicyCard__covers" hidden>
           ${coverRows.map((row) => `<div class="cfNewPolicyCard__cover">
@@ -23606,7 +23618,16 @@ UsersGateUI.init();
       const periodLabel = paymentPeriod
         ? (/^\d+$/.test(paymentPeriod) ? (paymentPeriod + " חודשים") : paymentPeriod)
         : "";
-      const extraMeta = [agentNumber ? ("סוכן " + agentNumber) : "", periodLabel ? ("תקופה " + periodLabel) : ""].filter(Boolean).join(" · ");
+      const extraMeta = [
+        agentNumber ? ("סוכן " + agentNumber) : "",
+        periodLabel ? ("תקופה " + periodLabel) : "",
+        endDate ? ("תום " + endDate) : ""
+      ].filter(Boolean).join(" · ");
+      const amountText = (isLife && displaySum)
+        ? this.formatMoneyValue(this.asMoneyNumber(displaySum) || displaySum)
+        : ((isHealth && compensation && Number(compensation) >= 1000)
+          ? this.formatMoneyValue(this.asMoneyNumber(compensation) || compensation)
+          : "—");
       const cell = (label, value) =>
         `<div class="cfNewPolicyCard__cell"><span class="cfNewPolicyCard__lbl">${escapeHtml(label)}</span><strong class="cfNewPolicyCard__val">${escapeHtml(value)}</strong></div>`;
       const scan = rawPol.issuedPolicyScan && typeof rawPol.issuedPolicyScan === "object" ? rawPol.issuedPolicyScan : null;
@@ -23616,23 +23637,23 @@ UsersGateUI.init();
           <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--product">
             <span class="cfNewPolicyCard__product">${escapeHtml(policy.type || 'פוליסה')}</span>
             <span class="cfNewPolicyCard__company">${escapeHtml(policy.company || 'חברה')}</span>
-            ${extraMeta ? `<span class="cfNewPolicyCard__lbl">${escapeHtml(extraMeta)}</span>` : ""}
+            ${extraMeta ? `<span class="cfNewPolicyCard__meta">${escapeHtml(extraMeta)}</span>` : ""}
           </div>
           ${cell('מספר פוליסה', policyNumber)}
           ${cell('תחילת ביטוח', startDate)}
-          ${endDate ? cell('תום ביטוח', endDate) : ""}
-          ${isLife && displaySum ? cell('סכום ביטוח', this.formatMoneyValue(this.asMoneyNumber(displaySum) || displaySum)) : ""}
-          ${isHealth && compensation && Number(compensation) >= 1000 ? cell('סכום פיצוי', this.formatMoneyValue(this.asMoneyNumber(compensation) || compensation)) : ""}
+          ${cell('סכום', amountText)}
           ${cell('מבוטחים', insuredText)}
-          <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--action">${coverBtn}</div>
           <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--prem">
             <span class="cfNewPolicyCard__lbl">פרמיה חודשית</span>
             <strong class="cfNewPolicyCard__prem">${escapeHtml(displayPrem ? this.formatMoneyValue(displayPrem) : (isLife ? "—" : (policy.premiumAfterDiscount || policy.premiumText || "—")))}</strong>
             ${this.renderIssuedPolicyBadge(scan, policy)}
           </div>
+          <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--action">
+            ${coverBtn}
+            ${this.renderIssuedPolicyScanBar(policy, scan)}
+          </div>
         </div>
         ${coversList}
-        ${this.renderIssuedPolicyScanBar(policy, scan)}
       </article>`;
     },
 
@@ -23653,7 +23674,7 @@ UsersGateUI.init();
       const pid = escapeHtml(policy?.id || "");
       const status = safeTrim(scan?.status);
       const canUpload = this.canShowIssuedPolicyUpload();
-      const uploadLabel = status ? "החלף פוליסה" : "העלה פוליסה";
+      const uploadLabel = status ? "החלף פוליסה" : "בדיקת התאמת ביטוח";
       const showGaps = status === "gaps"
         ? `<button class="cfIssuedScan__show" type="button" data-issued-policy-gaps="${pid}">הצג</button>`
         : "";
@@ -23801,7 +23822,7 @@ UsersGateUI.init();
       } finally {
         if(triggerBtn){
           triggerBtn.disabled = false;
-          triggerBtn.textContent = prevLabel || "העלה פוליסה";
+          triggerBtn.textContent = prevLabel || "בדיקת התאמת ביטוח";
         }
       }
     },

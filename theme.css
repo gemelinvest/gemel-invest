@@ -9862,46 +9862,69 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 .cfNewPolicyGrid:not(#\9):not(#\9){
   display: flex !important;
   flex-direction: column !important;
-  gap: 8px !important;
+  gap: 0 !important;
   width: 100% !important;
-  padding: 10px 12px 12px !important;
-  background: var(--gi-surface-2) !important;
+  padding: 0 !important;
+  background: var(--gi-surface) !important;
+}
+
+.cfNewPolicyGrid__head:not(#\9):not(#\9){
+  display: grid !important;
+  grid-template-columns: 72px minmax(140px, 1.35fr) minmax(88px, .85fr) minmax(88px, .9fr) minmax(100px, 1fr) minmax(120px, 1.1fr) minmax(92px, .85fr) minmax(168px, auto) !important;
+  gap: 8px 12px !important;
+  align-items: center !important;
+  padding: 8px 14px 7px !important;
+  border-bottom: 1px solid var(--gi-border) !important;
+  background: #fbfcfd !important;
+  color: var(--gi-text-muted) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: .01em !important;
 }
 
 .cfNewPolicyCard:not(#\9):not(#\9){
   display: flex !important;
   flex-direction: column !important;
   align-items: stretch !important;
-  gap: 8px !important;
+  gap: 0 !important;
   width: 100% !important;
   box-sizing: border-box !important;
-  padding: 10px 12px !important;
-  background: var(--gi-surface) !important;
-  border: 1px solid var(--gi-border) !important;
-  border-radius: var(--gi-r-md) !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-bottom: 1px solid #eef2f6 !important;
+  border-radius: 0 !important;
   cursor: default !important;
   min-height: 0 !important;
+  box-shadow: none !important;
+}
+
+.cfNewPolicyCard:last-child:not(#\9):not(#\9){
+  border-bottom: 0 !important;
 }
 
 .cfNewPolicyCard:hover:not(#\9):not(#\9){
-  border-color: var(--gi-health) !important;
-  background: var(--gi-health-soft) !important;
+  border-color: #eef2f6 !important;
+  background: #f7fafc !important;
 }
 
 .cfNewPolicyCard__row:not(#\9):not(#\9){
   display: grid !important;
-  grid-template-columns: 48px minmax(120px, 1.4fr) minmax(90px, 1fr) minmax(90px, 1fr) minmax(90px, 1fr) minmax(118px, auto) minmax(96px, auto) !important;
+  grid-template-columns: 72px minmax(140px, 1.35fr) minmax(88px, .85fr) minmax(88px, .9fr) minmax(100px, 1fr) minmax(120px, 1.1fr) minmax(92px, .85fr) minmax(168px, auto) !important;
   align-items: center !important;
-  gap: 8px 14px !important;
+  gap: 8px 12px !important;
   width: 100% !important;
+  min-height: 46px !important;
+  padding: 7px 14px !important;
 }
 
 .cfNewPolicyCard__logo:not(#\9):not(#\9){
   flex: none !important;
-  width: 78px !important;
-  height: 48px !important;
-  display: grid !important;
-  place-items: center !important;
+  width: 72px !important;
+  height: 36px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
@@ -9926,8 +9949,18 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 .cfNewPolicyCard__logo .lcCompanyLogo__img:not(#\9):not(#\9){
   width: 100% !important;
   height: 100% !important;
+  max-width: 72px !important;
+  max-height: 36px !important;
   object-fit: contain !important;
   object-position: center !important;
+  display: block !important;
+}
+
+.cfNewPolicyCard__logo .cfFile__policyLogoFallback:not(#\9):not(#\9){
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  color: #16324f !important;
+  background: transparent !important;
 }
 
 .cfNewPolicyCard__cell:not(#\9):not(#\9){
@@ -9935,82 +9968,108 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   display: flex !important;
   flex-direction: column !important;
   align-items: flex-start !important;
-  gap: 2px !important;
+  gap: 0 !important;
 }
 .cfNewPolicyCard__cell--product:not(#\9):not(#\9){ gap: 1px !important; }
 .cfNewPolicyCard__cell--action:not(#\9):not(#\9){
-  align-items: stretch !important;
-  justify-content: center !important;
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 6px !important;
 }
 .cfNewPolicyCard__cell--prem:not(#\9):not(#\9){
-  align-items: flex-end !important;
-  text-align: left !important;
+  align-items: flex-start !important;
+  text-align: right !important;
+  gap: 3px !important;
 }
 .cfNewPolicyCard__lbl:not(#\9):not(#\9){
-  font-size: 11px !important;
-  font-weight: 600 !important;
-  color: var(--gi-text-muted) !important;
-  line-height: 1.2 !important;
+  display: none !important;
 }
 .cfNewPolicyCard__val:not(#\9):not(#\9){
-  font-size: 13px !important;
-  font-weight: 800 !important;
+  font-size: 12.5px !important;
+  font-weight: 700 !important;
   color: var(--gi-text) !important;
   line-height: 1.25 !important;
   white-space: nowrap !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   max-width: 100% !important;
+  font-variant-numeric: tabular-nums !important;
 }
 
 .cfNewPolicyCard__product:not(#\9):not(#\9){
-  font-size: 14px !important;
-  font-weight: 800 !important;
+  font-size: 13.5px !important;
+  font-weight: 750 !important;
   color: var(--gi-text) !important;
   letter-spacing: -.01em !important;
   line-height: 1.2 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  max-width: 100% !important;
 }
 
 .cfNewPolicyCard__company:not(#\9):not(#\9){
-  font-size: 12px !important;
-  font-weight: 600 !important;
+  font-size: 11.5px !important;
+  font-weight: 550 !important;
   color: var(--gi-text-muted) !important;
+  line-height: 1.2 !important;
+}
+.cfNewPolicyCard__meta:not(#\9):not(#\9){
+  font-size: 11px !important;
+  font-weight: 550 !important;
+  color: var(--gi-text-muted) !important;
+  line-height: 1.2 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  max-width: 100% !important;
 }
 .cfNewPolicyCard__prem:not(#\9):not(#\9){
   font-family: var(--gi-num) !important;
-  font-size: 16px !important;
+  font-size: 14.5px !important;
   font-weight: 800 !important;
-  color: var(--gi-health) !important;
-  line-height: 1.1 !important;
+  color: #16324f !important;
+  line-height: 1 !important;
+  font-variant-numeric: tabular-nums !important;
+}
+.cfNewPolicyCard__cell--prem .cfFile__statusBadge:not(#\9):not(#\9){
+  margin-top: 0 !important;
+  padding: 2px 7px !important;
+  font-size: 10.5px !important;
+  font-weight: 750 !important;
+  border-radius: 999px !important;
+  line-height: 1.2 !important;
 }
 .cfNewPolicyCard__coversBtn:not(#\9):not(#\9){
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
-  width: 100% !important;
-  padding: 6px 10px !important;
-  border-radius: var(--gi-r-pill) !important;
-  border: 1px solid var(--gi-health) !important;
-  background: var(--gi-health-soft) !important;
-  color: var(--gi-health) !important;
+  width: auto !important;
+  padding: 5px 6px !important;
+  border-radius: 6px !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  color: #1a5f8f !important;
   font-family: inherit !important;
-  font-size: 12px !important;
-  font-weight: 800 !important;
+  font-size: 11.5px !important;
+  font-weight: 700 !important;
   cursor: pointer !important;
   white-space: nowrap !important;
+  line-height: 1.2 !important;
+}
+.cfNewPolicyCard__coversBtn:hover:not(#\9):not(#\9){
+  background: #eef5fb !important;
 }
 .cfNewPolicyCard__coversBtn--empty:not(#\9):not(#\9){
-  display: block !important;
-  min-height: 28px !important;
-  padding: 0 !important;
-  border: none !important;
-  background: transparent !important;
-  pointer-events: none !important;
+  display: none !important;
 }
 .cfNewPolicyCard__covers:not(#\9):not(#\9){
   display: flex !important;
   flex-direction: column !important;
   gap: 6px !important;
+  padding: 0 14px 10px !important;
 }
 .cfNewPolicyCard__covers[hidden]:not(#\9):not(#\9){
   display: none !important;
@@ -10022,7 +10081,7 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   gap: 10px !important;
   padding: 7px 10px !important;
   border: 1px solid var(--gi-border) !important;
-  border-radius: var(--gi-r-ctl) !important;
+  border-radius: 8px !important;
   background: var(--gi-surface-2) !important;
 }
 .cfNewPolicyCard__coverName:not(#\9):not(#\9){
@@ -10038,35 +10097,68 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 }
 
 @media (max-width: 900px){
+  .cfNewPolicyGrid__head:not(#\9):not(#\9){ display: none !important; }
   .cfNewPolicyCard__row:not(#\9):not(#\9){
-    grid-template-columns: 48px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 8px 12px !important;
+    min-height: 0 !important;
+    padding: 10px 12px !important;
   }
-  .cfNewPolicyCard__cell--prem:not(#\9):not(#\9){ align-items: flex-start !important; text-align: right !important; }
+  .cfNewPolicyCard__logo:not(#\9):not(#\9){ flex: 0 0 72px !important; }
+  .cfNewPolicyCard__cell--product:not(#\9):not(#\9){ flex: 1 1 140px !important; min-width: 120px !important; }
+  .cfNewPolicyCard__cell--prem:not(#\9):not(#\9){
+    margin-inline-start: auto !important;
+    align-items: flex-end !important;
+    text-align: left !important;
+  }
+  .cfNewPolicyCard__cell--action:not(#\9):not(#\9){
+    flex: 1 1 100% !important;
+  }
+  .cfNewPolicyCard__cell:not(.cfNewPolicyCard__cell--product):not(.cfNewPolicyCard__cell--prem):not(.cfNewPolicyCard__cell--action):not(#\9):not(#\9){
+    flex: 1 1 40% !important;
+    min-width: 110px !important;
+  }
+  .cfNewPolicyCard__lbl:not(#\9):not(#\9){
+    display: block !important;
+    font-size: 10.5px !important;
+    font-weight: 600 !important;
+    color: var(--gi-text-muted) !important;
+    line-height: 1.2 !important;
+    margin-bottom: 1px !important;
+  }
 }
 
 .cfIssuedScan:not(#\9):not(#\9){
-  display: flex !important;
+  display: inline-flex !important;
   align-items: center !important;
-  gap: 8px !important;
+  gap: 6px !important;
   flex-wrap: wrap !important;
-  padding-top: 2px !important;
+  padding-top: 0 !important;
 }
 .cfIssuedScan__upload:not(#\9):not(#\9),
 .cfIssuedScan__show:not(#\9):not(#\9){
-  height: 30px !important;
-  padding: 0 12px !important;
-  border-radius: var(--gi-r-ctl) !important;
-  border: 1px solid var(--gi-border) !important;
-  background: var(--gi-surface) !important;
-  color: var(--gi-text) !important;
-  font-size: 12px !important;
+  height: auto !important;
+  min-height: 0 !important;
+  padding: 5px 9px !important;
+  border-radius: 6px !important;
+  border: 1px solid #c9d6e4 !important;
+  background: #fff !important;
+  color: #1f4568 !important;
+  font-size: 11.5px !important;
   font-weight: 700 !important;
   cursor: pointer !important;
+  line-height: 1.2 !important;
+  white-space: nowrap !important;
 }
 .cfIssuedScan__upload:not(#\9):not(#\9){
-  background: var(--gi-health-soft) !important;
-  border-color: rgba(26,66,168,.22) !important;
-  color: #1a42a8 !important;
+  background: #fff !important;
+  border-color: #c9d6e4 !important;
+  color: #1f4568 !important;
+}
+.cfIssuedScan__upload:hover:not(#\9):not(#\9){
+  border-color: #9eb4cb !important;
 }
 .cfIssuedScan__show:not(#\9):not(#\9){
   background: #fff7ed !important;
