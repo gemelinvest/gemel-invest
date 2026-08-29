@@ -8,6 +8,7 @@
     const FN_PAIRING_PATH = "/functions/v1/gi-assistant-pairing";
     const FN_REALTIME_PATH = "/functions/v1/gi-assistant-realtime";
     const FN_ENGINE_PATH = "/functions/v1/gi-assistant-engine";
+    const FN_TOOLS_PATH = "/functions/v1/gi-assistant-tools";
     const OPENAI_CALLS_URL = "https://api.openai.com/v1/realtime/calls";
     const FALLBACK_SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
     const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
@@ -182,6 +183,9 @@
     }
     function callEngine(payload) {
       return callEdge(FN_ENGINE_PATH, payload);
+    }
+    function callTools(payload) {
+      return callEdge(FN_TOOLS_PATH, payload);
     }
     function redactSafe(text) {
       return trim(text).replace(/\d{8,9}/g, "[\u05DE\u05D6\u05D4\u05D4]").slice(0, 280);
@@ -445,8 +449,15 @@
         if (lastIntent === "confirm" || lastIntent === "cancel") {
           const data = await callEngine({ ...engineAuthPayload(), action: "intent", text });
           if (data.confirmed === true) {
+            const tool = trim(data.tool);
             pendingAction = null;
-            pushTimeline("ok", "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D0\u05D5\u05E9\u05E8\u05D4. \u05D4\u05D1\u05D9\u05E6\u05D5\u05E2 \u05D9\u05EA\u05D5\u05D5\u05E1\u05E3 \u05D1\u05E9\u05DC\u05D1 \u05D4\u05DB\u05DC\u05D9\u05DD.");
+            paintConfirm();
+            if (tool) {
+              const ran = await invokeTool(tool, {}, trim(data.pending_action_id));
+              pushTimeline(ran.ok === false ? "error" : "ok", ran.ok === false ? "\u05D4\u05D0\u05D9\u05E9\u05D5\u05E8 \u05D4\u05EA\u05E7\u05D1\u05DC \u05D0\u05DA \u05D4\u05D1\u05D9\u05E6\u05D5\u05E2 \u05E0\u05DB\u05E9\u05DC." : "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D0\u05D5\u05E9\u05E8\u05D4 \u05D5\u05D1\u05D5\u05E6\u05E2\u05D4.");
+            } else {
+              pushTimeline("ok", "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D0\u05D5\u05E9\u05E8\u05D4.");
+            }
           } else if (data.cancelled === true) {
             pendingAction = null;
             pushTimeline("cancel", "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D1\u05D5\u05D8\u05DC\u05D4.");
@@ -493,6 +504,79 @@
       if (type === "error") {
         setVoiceState("error", "\u05D4\u05E9\u05D9\u05D7\u05D4 \u05E0\u05E7\u05D8\u05E2\u05D4. \u05E0\u05E1\u05D5 \u05E9\u05D5\u05D1.");
       }
+      if (type === "response.function_call_arguments.done" || type === "response.output_item.done") {
+        void handleToolCallEvent(ev);
+      }
+    }
+    function sendRealtime(event) {
+      var _a;
+      try {
+        (_a = voice.dc) == null ? void 0 : _a.send(JSON.stringify(event));
+      } catch (_e) {
+      }
+    }
+    function executeClientCommand(cmd) {
+      var _a, _b, _c, _d, _e;
+      if (!cmd || typeof cmd !== "object") return;
+      const type = trim(cmd.type);
+      const active = readBridge();
+      if (type === "open_customer") (_a = active.openCustomer) == null ? void 0 : _a.call(active, trim(cmd.customerId));
+      else if (type === "go_view") (_b = active.goView) == null ? void 0 : _b.call(active, trim(cmd.view));
+      else if (type === "open_simulator") (_c = active.openSimulator) == null ? void 0 : _c.call(active, trim(cmd.company), trim(cmd.product));
+      else if (type === "open_proposal") (_d = active.openProposal) == null ? void 0 : _d.call(active, trim(cmd.proposalId));
+      else if (type === "refresh_reminders") (_e = active.refreshReminders) == null ? void 0 : _e.call(active);
+    }
+    async function invokeTool(tool, args, pendingActionId) {
+      delete args.user_id;
+      delete args.userId;
+      const data = await callTools({
+        ...engineAuthPayload(),
+        action: "invoke",
+        tool: trim(tool),
+        arguments: args,
+        pendingActionId: trim(pendingActionId)
+      });
+      if (data.needs_confirmation === true) {
+        pendingAction = { id: trim(data.pending_action_id), label: trim(data.label) || trim(tool) };
+        pushTimeline("confirm", "\u05DE\u05DE\u05EA\u05D9\u05DF \u05DC\u05D0\u05D9\u05E9\u05D5\u05E8: " + (pendingAction.label || ""));
+        paintConfirm();
+      }
+      if (data.client_command && typeof data.client_command === "object") {
+        executeClientCommand(data.client_command);
+      }
+      return data;
+    }
+    async function handleToolCallEvent(ev) {
+      const item = ev.item && typeof ev.item === "object" ? ev.item : ev;
+      const name = trim(item.name || ev.name);
+      const callId = trim(item.call_id || ev.call_id);
+      let args = {};
+      const raw = item.arguments || ev.arguments;
+      if (typeof raw === "string") {
+        try {
+          args = JSON.parse(raw);
+        } catch (_e) {
+          args = {};
+        }
+      } else if (raw && typeof raw === "object") args = raw;
+      const itemType = trim(item.type);
+      if (itemType && itemType !== "function_call") return;
+      if (!name || !callId) return;
+      let output = { ok: false, error: "TOOL" };
+      try {
+        output = await invokeTool(name, args);
+      } catch (err) {
+        output = { ok: false, error: trim(err == null ? void 0 : err.message) || "TOOL" };
+      }
+      sendRealtime({
+        type: "conversation.item.create",
+        item: {
+          type: "function_call_output",
+          call_id: callId,
+          output: JSON.stringify(output)
+        }
+      });
+      sendRealtime({ type: "response.create" });
     }
     async function proposeWrite(input) {
       const data = await callEngine({
@@ -518,9 +602,15 @@
           action: "confirm",
           pendingActionId: pendingAction.id
         });
+        const tool = trim(data.tool);
         pendingAction = null;
         paintConfirm();
-        pushTimeline("ok", "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D0\u05D5\u05E9\u05E8\u05D4. \u05D4\u05D1\u05D9\u05E6\u05D5\u05E2 \u05D9\u05EA\u05D5\u05D5\u05E1\u05E3 \u05D1\u05E9\u05DC\u05D1 \u05D4\u05DB\u05DC\u05D9\u05DD.");
+        if (tool) {
+          const ran = await invokeTool(tool, {}, trim(data.pending_action_id));
+          pushTimeline(ran.ok === false ? "error" : "ok", ran.ok === false ? "\u05D4\u05D0\u05D9\u05E9\u05D5\u05E8 \u05D4\u05EA\u05E7\u05D1\u05DC \u05D0\u05DA \u05D4\u05D1\u05D9\u05E6\u05D5\u05E2 \u05E0\u05DB\u05E9\u05DC." : "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D0\u05D5\u05E9\u05E8\u05D4 \u05D5\u05D1\u05D5\u05E6\u05E2\u05D4.");
+          return ran;
+        }
+        pushTimeline("ok", "\u05D4\u05E4\u05E2\u05D5\u05DC\u05D4 \u05D0\u05D5\u05E9\u05E8\u05D4.");
         return data;
       } catch (err) {
         const code = trim((err == null ? void 0 : err.code) || (err == null ? void 0 : err.message));
@@ -973,6 +1063,8 @@
       cancelPending,
       classifyIntent,
       redactSafe,
+      invokeTool,
+      executeClientCommand,
       getPendingAction() {
         return pendingAction;
       },

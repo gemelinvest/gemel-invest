@@ -54205,13 +54205,25 @@ const ClalRiskLifePdf = {
         return Auth.current;
       },
       supabaseUrl: SUPABASE_URL,
-      publishableKey: SUPABASE_PUBLISHABLE_KEY
+      publishableKey: SUPABASE_PUBLISHABLE_KEY,
+      openCustomer(id){ try { CustomersUI.openByIdWithLoader(id); } catch(_e) {} },
+      goView(view){ try { UI.goView(view); } catch(_e) {} },
+      openSimulator(company, product){
+        try { RiskSimulators.getHandler(company, product)?.open?.({ source: "assistant" }); } catch(_e) {}
+      },
+      openProposal(id){ try { ProposalsUI.openById?.(id); } catch(_e) {} },
+      refreshReminders(){ try { ReminderUI.loadReminders?.(); } catch(_e) {} }
     };
     window.GiAssistant?.init?.({
       getAuth(){ return Auth.current; },
       getCurrentAgent(){ return window.__GI_ASSISTANT_BRIDGE__.getCurrentAgent(); },
       supabaseUrl: SUPABASE_URL,
-      publishableKey: SUPABASE_PUBLISHABLE_KEY
+      publishableKey: SUPABASE_PUBLISHABLE_KEY,
+      openCustomer(id){ return window.__GI_ASSISTANT_BRIDGE__.openCustomer(id); },
+      goView(view){ return window.__GI_ASSISTANT_BRIDGE__.goView(view); },
+      openSimulator(company, product){ return window.__GI_ASSISTANT_BRIDGE__.openSimulator(company, product); },
+      openProposal(id){ return window.__GI_ASSISTANT_BRIDGE__.openProposal(id); },
+      refreshReminders(){ return window.__GI_ASSISTANT_BRIDGE__.refreshReminders(); }
     });
   } catch(_e) {}
   CarInsuranceClickUI.init();
