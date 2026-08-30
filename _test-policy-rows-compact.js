@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260830-customer-open-perf-v1";
+const APP_TAG = "20260830-policy-actions-align-v1";
 let failed = 0;
 let passed = 0;
 function assert(cond, msg){
@@ -34,6 +34,9 @@ assert(!app.includes('"העלה פוליסה"'), "הוסר טקסט העלה פ�
 assert(app.includes("cfNewPolicyGrid__head"), "כותרות עמודות לטבלה הקומפקטית");
 assert(app.includes('cell(\'סכום\', amountText)'), "עמודת סכום קבועה");
 assert(theme.includes("min-height: 46px"), "גובה שורה קומפקטי");
+assert(theme.includes("96px 252px"), "פרמיה+פעולות ברוחב קבוע (לא auto)");
+assert(theme.includes("grid-template-columns: 72px minmax(120px, 1.25fr)"), "תבנית גריד משותפת לראש ולשורה");
+assert((theme.match(/96px 252px/g) || []).length >= 2, "כותרת ושורת כרטיס חולקים אותה תבנית");
 assert(theme.includes(".cfNewPolicyCard__logo .lcCompanyLogo:not(#\\9):not(#\\9)"), "override לוגו נשאר");
 assert(theme.includes("object-fit: contain"), "לוגו מלא ללא חיתוך");
 assert(theme.includes("background: transparent !important") && theme.includes(".cfNewPolicyCard__logo:not(#\\9):not(#\\9)"), "לוגו בלי קוביה");
@@ -45,6 +48,11 @@ assert(app.includes("canShowIssuedPolicyUpload()"), "שער הרשאות העל�
 assert(app.includes("buildIssuedScanSnapshot(rec, policy)"), "השוואת פוליסה להצעה לא נגעה");
 assert(app.includes("openIssuedPolicyGapsModal(rec, policyId)"), "מודל פערים לא נגע");
 assert(app.includes("getHealthCoverRowsForDisplay(rec, policy)"), "פירוט כיסויים לא נגע");
+assert(
+  /renderIssuedPolicyScanBar\(policy, scan\)\s*\$\{coverBtn\}/.test(app)
+    || app.includes("${this.renderIssuedPolicyScanBar(policy, scan)}\n            ${coverBtn}"),
+  "בדיקת התאמה לפני פירוט כיסויים — יישור קבוע"
+);
 
 if(failed){
   console.error("\nFAILED " + failed + " / passed " + passed);
