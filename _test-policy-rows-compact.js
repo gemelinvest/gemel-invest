@@ -48,6 +48,11 @@ assert(app.includes("canShowIssuedPolicyUpload()"), "שער הרשאות העל�
 assert(app.includes("buildIssuedScanSnapshot(rec, policy)"), "השוואת פוליסה להצעה לא נגעה");
 assert(app.includes("openIssuedPolicyGapsModal(rec, policyId)"), "מודל פערים לא נגע");
 assert(app.includes("getHealthCoverRowsForDisplay(rec, policy)"), "פירוט כיסויים לא נגע");
+assert(
+  /renderIssuedPolicyScanBar\(policy, scan\)\s*\$\{coverBtn\}/.test(app)
+    || app.includes("${this.renderIssuedPolicyScanBar(policy, scan)}\n            ${coverBtn}"),
+  "בדיקת התאמה לפני פירוט כיסויים — יישור קבוע"
+);
 
 if(failed){
   console.error("\nFAILED " + failed + " / passed " + passed);

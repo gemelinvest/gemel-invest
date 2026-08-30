@@ -23661,8 +23661,8 @@ UsersGateUI.init();
             ${this.renderIssuedPolicyBadge(scan, policy)}
           </div>
           <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--action">
-            ${coverBtn}
             ${this.renderIssuedPolicyScanBar(policy, scan)}
+            ${coverBtn}
           </div>
         </div>
         ${coversList}
