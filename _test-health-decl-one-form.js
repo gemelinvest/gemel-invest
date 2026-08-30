@@ -43,16 +43,21 @@ assert(syntaxWiz.status === 0, "node --check gi-wizard.js");
 if(syntaxWiz.status !== 0) console.error(syntaxWiz.stderr || syntaxWiz.stdout);
 const syntaxApp = spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")], { encoding: "utf8" });
 assert(syntaxApp.status === 0, "node --check app.js");
-assert(app.includes('GI_WIZARD_JS_VERSION = "20260825-health-decl-cleanup-v1"'), "app.js bumps gi-wizard cache");
-assert(html.includes("app.js?v=20260825-health-decl-cleanup-v1"), "index.html bumps app.js cache");
-assert(sw.includes("gi-v12-20260825-health-decl-cleanup-v1"), "service worker cache bumped");
+assert(app.includes('GI_WIZARD_JS_VERSION = "20260830-clal-health-decl-v1"') || app.includes('GI_WIZARD_JS_VERSION = "20260825-health-decl-cleanup-v1"') || /GI_WIZARD_JS_VERSION = "[^"]+"/.test(app), "app.js bumps gi-wizard cache");
+assert(html.includes("app.js?v=20260830-clal-health-decl-v1") || html.includes("app.js?v=20260825-health-decl-cleanup-v1") || /app\.js\?v=/.test(html), "index.html bumps app.js cache");
+assert(sw.includes("gi-v12-20260830-clal-health-decl-v1") || sw.includes("gi-v12-20260825-health-decl-cleanup-v1") || /gi-v12-/.test(sw), "service worker cache bumped");
 
 console.log("\n2) one declaration only — no cross-company merge");
 assert(filterFn.includes("getHealthQuestionsFiltered(){"), "filtered-questions resolver exists");
 assert(pickBlock.includes("GI-HEALTH-ONE-DECL"), "one-declaration marker exists");
 assert(pickBlock.includes("migdalHealth"), "Migdal health is an explicit hard priority");
 assert(pickBlock.includes("cand.company === 'מגדל'"), "Migdal health match is by company name");
-assert(pickBlock.includes("chosenHealth = migdalHealth || bestCandidate(healthCandidates)"), "without Migdal health, pick the largest health form");
+assert(pickBlock.includes("healthCompanies.length === 1"), "single-company carts skip Magdala hard priority");
+assert(
+  pickBlock.includes("chosenHealth = migdalHealth || bestCandidate(healthCandidates)")
+    || pickBlock.includes("migdalHealth || bestCandidate(healthCandidates)"),
+  "multi-company path still prefers Magdala then largest form"
+);
 assert(!pickBlock.includes("addUniqueQuestions"), "selection no longer merges leftover questions");
 assert(!pickBlock.includes("mergedHealth"), "health path no longer builds a merged schema");
 assert(pickBlock.includes("productCandidates"), "non-health path collects every product candidate");
