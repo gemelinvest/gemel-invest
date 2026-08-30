@@ -11,8 +11,8 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260828-menora-health-decl-v1";
-const WIZARD_TAG = "20260827-today-sales-refresh-v1";
+const APP_TAG = "20260830-clal-health-decl-v1";
+const WIZARD_TAG = "20260830-clal-health-decl-v1";
 let failed = 0;
 let passed = 0;
 

@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260827-today-sales-refresh-v1";
+  const GI_WIZARD_BUILD = "20260830-clal-health-decl-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -11122,7 +11122,11 @@ if(path === "birthDate"){
     },
 
     getHealthHeightWeightBlockingIssue(){
-      for(const ins of (this.insureds || [])){
+      // GI-FIX 2026-08-30: אותם מבוטחים כמו בשאלות ההצהרה — לא לדרוש גובה/משקל לילדים שלא בפוליסה
+      const insureds = (typeof this.getHealthStepRelevantInsureds === "function")
+        ? this.getHealthStepRelevantInsureds()
+        : (this.insureds || []);
+      for(const ins of (insureds || [])){
         const name = this.getInsuredDisplayName(ins);
         const d = ins?.data || {};
         if(!(Number(d.heightCm) > 0)) return { ok:false, msg:`${name}: חסר גובה` };
@@ -11132,7 +11136,10 @@ if(path === "birthDate"){
     },
 
     renderHealthHeightWeightSection(){
-      const cards = (this.insureds || []).map((ins) => {
+      const insureds = (typeof this.getHealthStepRelevantInsureds === "function")
+        ? this.getHealthStepRelevantInsureds()
+        : (this.insureds || []);
+      const cards = (insureds || []).map((ins) => {
         this.calcBmi(ins);
         const d = ins.data || {};
         const st = this.bmiStatus(d.bmi);
@@ -20508,6 +20515,7 @@ if(path === "birthDate"){
           key,
           text,
           questionnaireLetter: letterList.join(','),
+          questionnaireNos: letterList.slice(),
           questionnaireLabel: labels.join(' + '),
           questionnaireSource: labels.length ? `כלל · ${labels.join(' + ')}` : 'כלל · פירוט מתוך הצהרת ריסק',
           companies,
@@ -20666,39 +20674,41 @@ if(path === "birthDate"){
         'כג': 'שאלון כג׳ — נכות'
       };
 
-      const detailsFields = (letter, title, prompts = [], docs = '') => {
-        const fullTitle = letter ? (questionnaireMeta[letter] || `שאלון ${letter}`) : (title || 'פירוט רפואי לפי כלל');
-        const fields = [
-          { type:'section', label: fullTitle },
-          { key:'diagnosis', label:'אבחנה / הבעיה הרפואית המדויקת', type:'text' },
-          { key:'diagnosisDate', label:'מועד אבחון / מתי התחיל / לפני כמה חודשים או שנים', type:'text' },
-          { key:'currentStatus', label:'מצב נוכחי — האם עדיין קיים, חזר, או נותר נזק שארי', type:'textarea' },
-          { key:'treatment', label:'טיפול / תרופות / מעקב רפואי / בדיקות / אשפוזים', type:'textarea' }
-        ];
-        if(Array.isArray(prompts) && prompts.length){
-          fields.push({ type:'section', label:'סעיפי השאלון המקורי למילוי' });
-          prompts.forEach((label, idx) => fields.push({ key:`clal_${letter || 'general'}_${idx+1}`, label, type:'textarea' }));
-        }
-        fields.push({ key:'requiredDocs', label: docs || 'מסמכים נדרשים לפי כלל / מכתב רופא / תוצאות בדיקות — לפי הרלוונטיות', type:'textarea' });
-        fields.push({ key:'details', label:'פירוט חופשי לנציג / הערות חיתום', type:'textarea' });
-        return fields;
-      };
-
       const simpleFields = (title, prompts = []) => [
         { type:'section', label:title },
         ...prompts.map((label, idx) => ({ key:`general_${idx+1}`, label, type: idx === 0 ? 'text' : 'textarea' })),
         { key:'details', label:'פירוט חופשי לנציג / הערות חיתום', type:'textarea' }
       ];
 
-      const q = (key, letter, text, prompts = [], docs = '') => ({
-        key,
-        text,
-        questionnaireLetter: letter || '',
-        questionnaireLabel: letter ? (questionnaireMeta[letter] || `שאלון ${letter}`) : '',
-        questionnaireSource: letter ? 'שאלון ההמשך המקורי של כלל: ' + (questionnaireMeta[letter] || `שאלון ${letter}`) : 'פירוט מתוך הצהרת הבריאות הראשית של כלל',
-        companies,
-        fields: letter ? detailsFields(letter, text, prompts, docs) : simpleFields(text, prompts)
-      });
+      // GI-FIX 2026-08-30: כמו בריסק כלל — כל כן פותח שאלון המשך רשמי לפי אות (לא טופס גנרי / מגדל)
+      const q = (key, letter, text, prompts = [], docs = '') => {
+        const letterList = Array.isArray(letter) ? letter.filter(Boolean) : (letter ? [letter] : []);
+        const schemas = this.getClalFollowupSchemas();
+        const labels = letterList.map((l) => schemas[l]?.title || questionnaireMeta[l] || `שאלון ${l}`);
+        const extra = [];
+        if(docs){
+          extra.push({ key:'requiredDocs', label: docs, type:'textarea' });
+        }
+        let fields;
+        if(letterList.length){
+          fields = this.buildClalFollowupFields(letterList, extra);
+        } else {
+          fields = simpleFields(text, prompts);
+          if(docs) fields.push({ key:'requiredDocs', label: docs, type:'textarea' });
+        }
+        return {
+          key,
+          text,
+          questionnaireLetter: letterList.join(','),
+          questionnaireNos: letterList.slice(),
+          questionnaireLabel: labels.join(' + '),
+          questionnaireSource: labels.length
+            ? ('שאלון ההמשך המקורי של כלל: ' + labels.join(' + '))
+            : 'פירוט מתוך הצהרת הבריאות הראשית של כלל',
+          companies,
+          fields
+        };
+      };
 
       return [
         {
@@ -22413,18 +22423,22 @@ if(path === "birthDate"){
       if(cache.filteredQuestions) return cache.filteredQuestions;
 
         if(this.isCustomerPurchaseMode() && !this._internalHealthSchemaBuild){
-        const sessionPolicies = this.getWizardNewPolicies();
+        // GI-FIX 2026-08-30: אין למזג הצהרות מחברות שונות (מגדל baseline + כלל session).
+        // UI וולידציה חייבים אותו סט — עדיפות לסכמת הסשן (מה שנמכר עכשיו).
+        const sessionPolicies = (typeof this.getCustomerPurchaseSessionPolicies === "function")
+          ? this.getCustomerPurchaseSessionPolicies()
+          : this.getWizardNewPolicies();
         const baselinePolicies = this.getCustomerPurchaseBaselinePolicies();
         const sessionSchema = this._resolveHealthSchemaForPolicyList(sessionPolicies);
         cache._purchaseSessionSchema = sessionSchema;
-        if(!baselinePolicies.length){
+        const countQs = (schema) => (Array.isArray(schema) ? schema : [])
+          .reduce((sum, cat) => sum + ((cat.questions || []).length), 0);
+        if(countQs(sessionSchema) > 0 || !baselinePolicies.length){
           cache.filteredQuestions = this.sanitizeHealthSchemaQuestionTexts(sessionSchema);
           return cache.filteredQuestions;
         }
         const baselineSchema = this._resolveHealthSchemaForPolicyList(baselinePolicies);
-        cache.filteredQuestions = this.sanitizeHealthSchemaQuestionTexts(
-          this._mergeHealthQuestionSchemas(baselineSchema, sessionSchema)
-        );
+        cache.filteredQuestions = this.sanitizeHealthSchemaQuestionTexts(baselineSchema);
         return cache.filteredQuestions;
       }
 
@@ -22647,9 +22661,10 @@ if(path === "birthDate"){
       };
 
       // GI-HEALTH-ONE-DECL: נפתחת הצהרה אחת בלבד. אין מיזוג שאלות מחברות/מוצרים אחרים.
-      // 1) אם יש בריאות מגדל — תמיד מגדל בריאות.
-      // 2) אחרת אם יש בריאות — הצהרת הבריאות עם הכי הרבה שאלות.
-      // 3) אם אין בריאות — המוצר עם הכי הרבה שאלות.
+      // 1) חברה יחידה בסל — תמיד הצהרת אותה חברה (לא לדחוף מגדל על כלל).
+      // 2) כמה חברות + יש בריאות מגדל — מגדל בריאות.
+      // 3) אחרת — הצהרת הבריאות עם הכי הרבה שאלות.
+      // 4) אם אין בריאות — המוצר עם הכי הרבה שאלות.
       if(hasHealth){
         const healthCompanies = selectedCompaniesForType('בריאות');
         const healthCandidates = healthCompanies.map((company) => candidate(
@@ -22659,8 +22674,14 @@ if(path === "birthDate"){
           'הצהרת בריאות',
           'health'
         ));
-        const migdalHealth = healthCandidates.find((cand) => cand && cand.company === 'מגדל' && cand.questionCount > 0) || null;
-        const chosenHealth = migdalHealth || bestCandidate(healthCandidates);
+        let chosenHealth = null;
+        // GI-FIX 2026-08-30: בחברה יחידה (למשל כלל בלבד) — לא להעדיף מגדל
+        if(healthCompanies.length === 1){
+          chosenHealth = healthCandidates.find((cand) => cand && cand.company === healthCompanies[0] && cand.questionCount > 0) || null;
+        } else {
+          const migdalHealth = healthCandidates.find((cand) => cand && cand.company === 'מגדל' && cand.questionCount > 0) || null;
+          chosenHealth = migdalHealth || bestCandidate(healthCandidates);
+        }
         cache.filteredQuestions = chosenHealth
           ? this.sanitizeHealthSchemaQuestionTexts(cloneSchema(chosenHealth.schema))
           : [];
@@ -22812,6 +22833,27 @@ if(path === "birthDate"){
         add(suffix);
         ['short__' + suffix, 'extended__' + suffix, 'full__' + suffix].forEach(add);
         if(Array.isArray(aliases['short__' + suffix])) aliases['short__' + suffix].forEach(add);
+      }
+      // GI-FIX 2026-08-30: אל תערבב תשובות בין חברות (clal_* ↔ magdal_* דרך short__).
+      // מפתח של חברה מסוימת קורא רק aliases מאותה משפחה + מפתחות legacy (short/extended/full).
+      const familyOf = (k) => {
+        const t = safeTrim(k);
+        if(!t) return '';
+        if(t.startsWith('clal_') || t.startsWith('critical__') || t.startsWith('cancer__')) return 'clal';
+        if(t.startsWith('magdal_')) return 'migdal';
+        if(t.startsWith('menora_')) return 'menora';
+        if(t.startsWith('ayalon_')) return 'ayalon';
+        if(t.startsWith('phoenix_') || t.startsWith('cancer_short_')) return 'phoenix';
+        if(t.startsWith('hachshara_')) return 'hachshara';
+        if(t.startsWith('short__') || t.startsWith('extended__') || t.startsWith('full__')) return 'legacy';
+        return '';
+      };
+      const family = familyOf(key);
+      if(family && family !== 'legacy'){
+        return out.filter((k) => {
+          const f = familyOf(k);
+          return !f || f === family || f === 'legacy';
+        });
       }
       return out;
     },
