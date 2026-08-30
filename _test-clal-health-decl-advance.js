@@ -195,6 +195,118 @@ function pickHealthCompany(companies){
 assert(pickHealthCompany(["כלל"]) === "כלל", "Clal-only cart picks Clal");
 assert(pickHealthCompany(["כלל", "מגדל"]) === "מגדל", "multi-company still prefers Magdala");
 
+console.log("\n8) runtime VM — real Wizard methods prove the three bugs are fixed");
+const vm = require("vm");
+const host = new Proxy({
+  Wizard: {},
+  safeTrim,
+  escapeHtml: (s) => String(s == null ? "" : s),
+  on(){}, $(){ return null; }, $$(){ return []; },
+  nowISO: () => "2026-08-30T08:00:00.000Z"
+}, {
+  get(target, prop){
+    if(prop in target) return target[prop];
+    if(prop === "then") return undefined;
+    return () => {};
+  }
+});
+const sandbox = {
+  __GI_WIZARD_HOST: host,
+  globalThis: null,
+  window: { requestAnimationFrame(fn){ fn(); }, setTimeout(fn){ return fn(); }, clearTimeout(){}, showToast(){} },
+  document: {
+    getElementById(){ return null; },
+    createElement(){ return { style:{}, setAttribute(){}, appendChild(){}, querySelector(){ return null; }, querySelectorAll(){ return []; } }; },
+    body: { appendChild(){}, classList:{ add(){}, remove(){} } }
+  },
+  console
+};
+sandbox.globalThis = sandbox;
+try {
+  vm.runInNewContext(wiz, sandbox, { filename: "gi-wizard.js" });
+  assert(typeof host.Wizard.getClalHealthSchema === "function", "Wizard chunk loaded into VM");
+} catch(err){
+  assert(false, "load gi-wizard.js in VM: " + (err && err.message));
+}
+
+const W = host.Wizard;
+function wireWizard(policies, insureds){
+  W.insureds = insureds;
+  W.newPolicies = policies;
+  W.step = 7;
+  W._healthDerivedCache = null;
+  W.customerPurchaseMode = null;
+  W.isCustomerPurchaseMode = function(){ return false; };
+  W.getWizardNewPolicies = function(){ return this.newPolicies || []; };
+  W.getPoliciesForWizardValidation = function(){ return this.newPolicies || []; };
+  W.wizardRequiresHealthDeclarationStep = function(){ return true; };
+  W.getInsuredDisplayName = function(ins){ return ins.label || "מבוטח"; };
+  W.getPolicyInsuredIds = function(p){
+    return Array.isArray(p?.insuredIds) && p.insuredIds.length
+      ? p.insuredIds
+      : (p?.insuredId ? [p.insuredId] : []);
+  };
+}
+
+const primary = {
+  id: "p1", type: "primary", label: "ראשי",
+  data: { heightCm: 175, weightKg: 80, healthDeclaration: { responses: {}, ui: { currentIndex: 0, summary: false } } }
+};
+const child = { id: "c1", type: "child", label: "ילד", data: {} };
+
+wireWizard(
+  [{ id: "pol_h", company: "כלל", type: "בריאות", insuredId: "p1", insuredIds: ["p1"], insuredMode: "single" }],
+  [primary, child]
+);
+const healthKeys = [];
+(W.getHealthQuestionsFiltered() || []).forEach((cat) => (cat.questions || []).forEach((q) => healthKeys.push(q.key)));
+assert(healthKeys.length === 29, "runtime Clal health has 29 questions (got " + healthKeys.length + ")");
+assert(healthKeys.every((k) => String(k).startsWith("clal_")), "runtime Clal-only health has no foreign keys");
+assert(!healthKeys.some((k) => String(k).startsWith("magdal_")), "runtime Clal-only health has zero Magdala keys");
+
+const heart = (W.getClalHealthSchema() || []).flatMap((c) => c.questions || [])
+  .find((q) => q.key === "clal_heart_blood_vessels");
+assert(!!heart, "runtime Clal heart question exists");
+assert((heart.fields || []).some((f) => String(f.key || "").startsWith("clal_ז_")), "runtime Yes opens Clal letter-ז fields");
+assert(String(heart.questionnaireSource || "").includes("כלל"), "runtime heart follow-up branded כלל");
+assert(!(heart.fields || []).some((f) => /^q\d+_/.test(String(f.key || ""))), "runtime heart fields are not Magdala qN_*");
+
+const healthList = W.getHealthQuestionList();
+const healthStore = W.getHealthStore();
+healthStore.responses = {};
+healthList.forEach((item) => {
+  healthStore.responses[item.question.key] = {
+    p1: { answer: "no", fields: {}, saved: false, editing: false }
+  };
+});
+assert(W.getHealthStepRelevantInsureds().map((i) => i.id).join(",") === "p1", "runtime health step excludes child");
+assert(W.getHealthBlockingIssue().ok === true, "runtime health advance OK after all answers");
+assert(W.getHealthHeightWeightBlockingIssue().ok === true, "runtime BMI ignores unanswered child");
+
+const clalAliases = W.resolveHealthResponseAliasKeys("clal_smoking");
+assert(!clalAliases.includes("magdal_full__smoking_now"), "runtime alias does not dual-read Magdala");
+
+wireWizard(
+  [{ id: "pol_r", company: "כלל", type: "ריסק", insuredId: "p1", insuredIds: ["p1"], insuredMode: "single" }],
+  [{ ...primary, data: { ...primary.data, healthDeclaration: { responses: {}, ui: { currentIndex: 0, summary: false } } } }]
+);
+const riskKeys = [];
+(W.getHealthQuestionsFiltered() || []).forEach((cat) => (cat.questions || []).forEach((q) => riskKeys.push(q.key)));
+assert(riskKeys.length > 0 && riskKeys.every((k) => String(k).startsWith("clal_")), "runtime Clal risk-only has only clal_* keys");
+assert(!riskKeys.some((k) => String(k).startsWith("magdal_")), "runtime Clal risk-only has zero Magdala keys");
+const riskHeart = W.getHealthQuestionList().find((x) => x.question.key === "clal_risk_heart");
+assert(!!riskHeart, "runtime Clal risk heart question exists");
+assert(String(riskHeart.question.questionnaireSource || "").includes("כלל"), "runtime risk Yes opens כלל follow-up");
+assert((riskHeart.question.fields || []).some((f) => String(f.key || "").startsWith("clal_ז_")), "runtime risk heart uses letter-ז fields");
+const riskStore = W.getHealthStore();
+riskStore.responses = {};
+W.getHealthQuestionList().forEach((item) => {
+  riskStore.responses[item.question.key] = {
+    p1: { answer: "no", fields: {}, saved: false, editing: false }
+  };
+});
+assert(W.getHealthBlockingIssue().ok === true, "runtime risk advance OK after all answers");
+
 if(failed){
   console.error("\nFAILED  passed=" + passed + " failed=" + failed);
   process.exit(1);
