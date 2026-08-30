@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260830-customer-open-perf-v1";
+const TAG = "20260830-policy-actions-align-v1";
 let failed = 0;
 let passed = 0;
 
