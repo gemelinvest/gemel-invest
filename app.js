@@ -5710,9 +5710,14 @@
   // ownership "safety net" — so they appeared to vanish. Matching on agent_id as well keeps
   // those rows loading. This server filter is intentionally permissive (a superset); the
   // precise client-side ownership filter (customerVisibleToCurrentUser) remains the final gate.
+  //
+  // GI-FIX 2026-08-30: נציג תפעול לא מסונן לפי agent_id/agent_name של מכירות —
+  // השיוך שלו חי ב-payload.mirrorFlow.mirrorAssign. סינון מכירות גרם למנהל לראות
+  // שיוך מוצלח בזמן שהנציג לא קיבל את הלקוח בכלל (השרת לא החזיר את השורה).
   function getServerListAgentScopeFilter(){
     if(Storage?._skipServerAgentScope) return null;
     if(!Auth?.current || Auth.canViewAllCustomers()) return null;
+    try { if(Auth.isOpsAgent?.()) return null; } catch(_e) {}
     const names = new Set();
     const ids = new Set();
     const sessionAgent = findAgentRecordForSession();
@@ -5742,6 +5747,19 @@
     const idList = [...ids].filter(Boolean);
     if(!nameList.length && !idList.length) return null;
     return { names: nameList, ids: idList };
+  }
+
+  function getOpsAgentMirrorAssignScope(){
+    if(!Auth?.current || !Auth.isOpsAgent?.()) return null;
+    const meId = safeTrim(Auth.current.id);
+    const meName = safeTrim(Auth.current.name);
+    const sessionAgent = (typeof findAgentRecordForSession === "function") ? findAgentRecordForSession() : null;
+    const altName = safeTrim(sessionAgent?.name) || safeTrim(sessionAgent?.username);
+    const names = [];
+    if(meName) names.push(meName);
+    if(altName && altName !== meName) names.push(altName);
+    if(!meId && !names.length) return null;
+    return { id: meId, names };
   }
 
   // Wrap each value in double quotes (PostgREST-safe) for use inside or(...) / in.(...) filters,
@@ -12918,6 +12936,19 @@
     },
 
     mapCustomerRow(row, idx){
+      let payload = row?.payload || {};
+      if(typeof payload === "string"){
+        try { payload = JSON.parse(safeTrim(payload) || "{}") || {}; } catch(_e){ payload = {}; }
+      }
+      if(!payload || typeof payload !== "object") payload = {};
+      // Thin select may expose mirrorAssign as a promoted JSON column.
+      const thinAssign = row?.mirrorAssign || row?.mirror_assign;
+      if(thinAssign && typeof thinAssign === "object"){
+        const mf = (payload.mirrorFlow && typeof payload.mirrorFlow === "object") ? payload.mirrorFlow : {};
+        payload = Object.assign({}, payload, {
+          mirrorFlow: Object.assign({}, mf, { mirrorAssign: thinAssign })
+        });
+      }
       return normalizeCustomerRecord({
         id: row?.id,
         status: row?.status,
@@ -12935,7 +12966,7 @@
         createdAt: row?.created_at,
         updatedAt: row?.updated_at,
         listActivityAt: row?.list_activity_at || row?.listActivityAt,
-        payload: row?.payload || {}
+        payload
       }, idx);
     },
 
@@ -13271,6 +13302,71 @@
         return this._loadTableRowsMergedAgentScope(tableName, selectExpr);
       }
       return this._loadTableRowsUnscoped(tableName, selectExpr);
+    },
+
+    /* GI-FIX 2026-08-30: נציג תפעול — טעינה לפי שיוך שיקוף ב-payload, לא לפי
+       agent_id של מכירות. בלי זה המנהל רואה שיוך והנציג לא מקבל את הלקוח. */
+    _opsAgentMirrorAssignOrFilter(scope){
+      const parts = [];
+      const quote = (v) => '"' + String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+      if(safeTrim(scope?.id)){
+        parts.push(`payload->mirrorFlow->mirrorAssign->>agentId.eq.${quote(scope.id)}`);
+      }
+      (Array.isArray(scope?.names) ? scope.names : []).forEach((name) => {
+        const n = safeTrim(name);
+        if(n) parts.push(`payload->mirrorFlow->mirrorAssign->>agentName.eq.${quote(n)}`);
+      });
+      return parts.length ? parts.join(",") : "";
+    },
+
+    async loadOpsAgentAssignedCustomerRows(selectExpr = "*", options = {}){
+      const scope = getOpsAgentMirrorAssignScope();
+      if(!scope) return { ok:true, data: [] };
+      const orFilter = this._opsAgentMirrorAssignOrFilter(scope);
+      if(!orFilter) return { ok:true, data: [] };
+      let cols = safeTrim(selectExpr) || "*";
+      if(cols !== "*" && cols.indexOf("payload") < 0){
+        cols = cols + ",payload";
+      }
+      const since = safeTrim(options.sinceIso);
+      const take = Math.max(1, Math.min(2000, Number(options.limit) || 500));
+      const label = "טעינת לקוחות ששויכו לנציג תפעול";
+      const client = this.getClient();
+
+      const fetchViaClient = async () => {
+        let builder = client.from(SUPABASE_TABLES.customers).select(cols);
+        builder = builder.or(orFilter);
+        if(since) builder = builder.gte("updated_at", since);
+        builder = builder.order("updated_at", { ascending: false }).limit(take);
+        const { data, error } = await this.withRetry(() => builder, label);
+        if(error) throw error;
+        return Array.isArray(data) ? data : [];
+      };
+
+      const fetchViaRest = async () => {
+        let path = SUPABASE_TABLES.customers
+          + "?select=" + encodeURIComponent(cols)
+          + "&or=" + encodeURIComponent("(" + orFilter + ")");
+        if(since) path += "&updated_at=gte." + encodeURIComponent(since);
+        path += "&order=updated_at.desc&limit=" + take;
+        return await this.restRequest(path, { method: "GET" }) || [];
+      };
+
+      try {
+        const data = await fetchViaClient();
+        return { ok:true, data };
+      } catch(primaryErr) {
+        try {
+          const data = await fetchViaRest();
+          return { ok:true, data: Array.isArray(data) ? data : [] };
+        } catch(restErr) {
+          return {
+            ok:false,
+            error: String(restErr?.message || primaryErr?.message || restErr || primaryErr),
+            data: []
+          };
+        }
+      }
     },
 
     async probeCustomersCount(){
@@ -13812,16 +13908,20 @@
         const [metaRes, agentsRes, customersRes, proposalsRes] = await Promise.all([
           this.loadMetaRow(),
           this.loadTableRows(SUPABASE_TABLES.agents),
-          this.loadTableRowsSince(
-            SUPABASE_TABLES.customers,
-            querySince,
-            this.isTeamManagerLightSession() ? CUSTOMER_LIGHT_COLUMNS : "*"
-          ),
-          this.loadTableRowsSince(
-            SUPABASE_TABLES.proposals,
-            querySince,
-            this.isTeamManagerLightSession() ? PROPOSAL_LIGHT_COLUMNS : "*"
-          )
+          (Auth?.isOpsAgent?.()
+            ? this.loadOpsAgentAssignedCustomerRows("*")
+            : this.loadTableRowsSince(
+                SUPABASE_TABLES.customers,
+                querySince,
+                this.isTeamManagerLightSession() ? CUSTOMER_LIGHT_COLUMNS : "*"
+              )),
+          (Auth?.isOpsAgent?.()
+            ? Promise.resolve({ ok:true, data: [] })
+            : this.loadTableRowsSince(
+                SUPABASE_TABLES.proposals,
+                querySince,
+                this.isTeamManagerLightSession() ? PROPOSAL_LIGHT_COLUMNS : "*"
+              ))
         ]);
 
         if(!metaRes.ok){
@@ -13922,6 +14022,13 @@
         else console.warn("WAVE3_DELTA: customers delta skipped", customersRes.error);
         if(proposalsRes.ok) this.mergeProposalsDelta(proposalsRes.data || []);
         else console.warn("WAVE3_DELTA: proposals delta skipped", proposalsRes.error);
+
+        try {
+          if(Auth?.isOpsAgent?.()){
+            // Full assigned set was re-fetched — drop local rows that are no longer assigned.
+            State.data = filterSessionStateForCurrentUserScope(State.data);
+          }
+        } catch(_e) {}
 
         try {
           if(LARGE_SESSION_MODE_ENABLED){
@@ -14384,16 +14491,19 @@
 
         // GI-PERF 2026-08-10 — Large Session: ספירה זולה לפני משיכת כל הטבלה.
         // GI-PERF 2026-08-25c — מנהל צוות מעל 400: working-set (לא כל 2.1K).
+        // GI-FIX 2026-08-30 — נציג תפעול: לא Large Session ארגוני; רק לקוחות ששויכו אליו.
         let useLargeCustomers = false;
         let useTeamManagerWorkingSet = false;
+        let useOpsAgentAssignSet = false;
         let largeCustomersTotal = 0;
         let largeProbeUncertain = false;
         this.setLargeCustomersSession(false, 0);
+        try { useOpsAgentAssignSet = !!(Auth?.isOpsAgent?.()); } catch(_e) { useOpsAgentAssignSet = false; }
         let rosterProbe = { ok:false, count: 0 };
-        if(LARGE_SESSION_MODE_ENABLED || (TEAM_MANAGER_LIGHT_SESSION_ENABLED && Auth?.isTeamManager?.())){
+        if(!useOpsAgentAssignSet && (LARGE_SESSION_MODE_ENABLED || (TEAM_MANAGER_LIGHT_SESSION_ENABLED && Auth?.isTeamManager?.()))){
           rosterProbe = await this.probeCustomersCount();
         }
-        if(LARGE_SESSION_MODE_ENABLED){
+        if(!useOpsAgentAssignSet && LARGE_SESSION_MODE_ENABLED){
           if(rosterProbe.ok && rosterProbe.count >= LARGE_SESSION_CUSTOMER_THRESHOLD){
             useLargeCustomers = true;
             largeCustomersTotal = rosterProbe.count;
@@ -14405,7 +14515,8 @@
             try { console.warn("LARGE_SESSION_PROBE_FAILED_USING_WORKING_SET:", rosterProbe.error || ""); } catch(_e) {}
           }
         }
-        if(!useLargeCustomers
+        if(!useOpsAgentAssignSet
+          && !useLargeCustomers
           && TEAM_MANAGER_LIGHT_SESSION_ENABLED
           && Auth?.isTeamManager?.()
           && rosterProbe.ok
@@ -14422,13 +14533,20 @@
           } catch(_e) {}
         }
 
-        const customersFetch = useLargeCustomers
+        const opsAgentCustomerCols = (LIGHT_INITIAL_LOAD_ENABLED
+          ? (CUSTOMER_LIGHT_COLUMNS + ",payload")
+          : "*");
+        const customersFetch = useOpsAgentAssignSet
+          ? this.loadOpsAgentAssignedCustomerRows(opsAgentCustomerCols)
+          : useLargeCustomers
           ? this.loadRecentCustomerRows(LARGE_SESSION_CUSTOMER_WORKING_SET, initialCustomerColumns)
           : useTeamManagerWorkingSet
             ? this.loadRecentCustomerRows(TEAM_MANAGER_LIGHT_WORKING_SET, initialCustomerColumns)
             : this.loadTableRows(SUPABASE_TABLES.customers, initialCustomerColumns);
         // GI-PERF 2026-08-10: בסשן גדול גם הצעות רק working-set — אחרת מסך "הצעות" מקפיא.
-        const proposalsFetch = useLargeCustomers
+        const proposalsFetch = useOpsAgentAssignSet
+          ? Promise.resolve({ ok:true, data: [] })
+          : useLargeCustomers
           ? this.loadRecentProposalRows(LARGE_SESSION_PROPOSAL_WORKING_SET, initialProposalColumns)
           : useTeamManagerWorkingSet
             ? this.loadRecentProposalRows(TEAM_MANAGER_LIGHT_PROPOSAL_WORKING_SET, initialProposalColumns)
@@ -14450,7 +14568,18 @@
         if(!customersRes.ok || !proposalsRes.ok){
           try { console.warn("LIGHT_SELECT_FAILED_FALLBACK_TO_FULL:", safeTrim(customersRes.error) || safeTrim(proposalsRes.error)); } catch(_e) {}
           lightSelectUsed = false;
-          if(useLargeCustomers || useTeamManagerWorkingSet){
+          if(useOpsAgentAssignSet){
+            const [cOps, pOps] = await Promise.all([
+              customersRes.ok
+                ? Promise.resolve(customersRes)
+                : this.loadOpsAgentAssignedCustomerRows("*"),
+              proposalsRes.ok
+                ? Promise.resolve(proposalsRes)
+                : Promise.resolve({ ok:true, data: [] })
+            ]);
+            customersRes = cOps;
+            proposalsRes = pOps;
+          } else if(useLargeCustomers || useTeamManagerWorkingSet){
             const custCap = useLargeCustomers
               ? LARGE_SESSION_CUSTOMER_WORKING_SET
               : TEAM_MANAGER_LIGHT_WORKING_SET;
@@ -69091,7 +69220,28 @@ ${inner}
       setMirrorAssign(rec, agent, safeTrim(Auth?.current?.name));
       State.data.meta.updatedAt = nowISO();
       rec.updatedAt = nowISO();
-      await App.persist("שיוך לקוח לשיקוף לנציג תפעול").catch(()=>{});
+      // GI-FIX 2026-08-30: upsert ישיר לתיק — כדי שהשיוך ב-payload יגיע לשרת
+      // גם אם סנכרון bulk כבד נכשל/נדחה; אחרת המנהל רואה שיוך מקומי והנציג לא.
+      let directOk = false;
+      try{
+        const row = (typeof Storage.buildCustomerRows === "function")
+          ? (Storage.buildCustomerRows({ customers: [rec] }) || [])[0]
+          : null;
+        if(row && typeof Storage.upsertSingleRow === "function"){
+          const ur = await Storage.upsertSingleRow(SUPABASE_TABLES.customers, row);
+          directOk = !!(ur && ur.ok);
+          if(directOk){
+            try { Storage.rememberRows(SUPABASE_TABLES.customers, [row]); } catch(_e) {}
+          }
+        }
+      }catch(_e){ directOk = false; }
+      const persistRes = await App.persist("שיוך לקוח לשיקוף לנציג תפעול").catch(() => null);
+      const persistOk = !!(persistRes && persistRes.ok);
+      const customersWarn = safeTrim(persistRes?.customersSyncWarning);
+      if(!directOk && (!persistOk || customersWarn)){
+        alert("השיוך לא נשמר בשרת. נסו שוב.");
+        return;
+      }
       const cb = this._assignOnDone;
       this.closeAssignModal();
       if(cb) try{ cb(); }catch(_e){}
@@ -69106,7 +69256,26 @@ ${inner}
       clearMirrorAssign(rec);
       State.data.meta.updatedAt = nowISO();
       rec.updatedAt = nowISO();
-      await App.persist("הוסר שיוך שיקוף לנציג").catch(()=>{});
+      let directOk = false;
+      try{
+        const row = (typeof Storage.buildCustomerRows === "function")
+          ? (Storage.buildCustomerRows({ customers: [rec] }) || [])[0]
+          : null;
+        if(row && typeof Storage.upsertSingleRow === "function"){
+          const ur = await Storage.upsertSingleRow(SUPABASE_TABLES.customers, row);
+          directOk = !!(ur && ur.ok);
+          if(directOk){
+            try { Storage.rememberRows(SUPABASE_TABLES.customers, [row]); } catch(_e) {}
+          }
+        }
+      }catch(_e){ directOk = false; }
+      const persistRes = await App.persist("הוסר שיוך שיקוף לנציג").catch(() => null);
+      const persistOk = !!(persistRes && persistRes.ok);
+      const customersWarn = safeTrim(persistRes?.customersSyncWarning);
+      if(!directOk && (!persistOk || customersWarn)){
+        alert("הסרת השיוך לא נשמרה בשרת. נסו שוב.");
+        return;
+      }
       const cb = this._assignOnDone;
       this.closeAssignModal();
       if(cb) try{ cb(); }catch(_e){}
