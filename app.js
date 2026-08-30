@@ -22966,22 +22966,34 @@ UsersGateUI.init();
         .filter((d) => safeTrim(d?.type) === CustomerDocuments.TYPES.followupQuestionnaire)
         .map((d) => safeTrim(d.id))
         .join("|");
-      Promise.resolve(this.ensureFollowupDocuments(rec)).then(() => {
+      /* GI-PERF 2026-08-30: אותה לוגיקת sync — רק אחרי paint/idle, כדי לא
+         לטעון gi-wizard/followup על נתיב פתיחת התיק הסינכרוני. */
+      const run = () => {
         if(seq !== this._followupDocsSyncSeq) return;
-        if(this.currentId !== id) return;
-        const afterIds = (CustomerDocuments.listFromPayload(rec.payload) || [])
-          .filter((d) => safeTrim(d?.type) === CustomerDocuments.TYPES.followupQuestionnaire)
-          .map((d) => safeTrim(d.id))
-          .join("|");
-        if(beforeIds === afterIds) return;
-        const section = this.normalizeSection(this.currentSection);
-        if(section === "documents"){
-          this.renderFileView(rec, { bodyScrollTop: this.els.main?.scrollTop || 0, _skipFollowupSync: true });
-        } else if(this.els.tabs){
-          const policies = this.collectPolicies(rec);
-          this.els.tabs.innerHTML = this.renderTabBar(rec, policies);
+        Promise.resolve(this.ensureFollowupDocuments(rec)).then(() => {
+          if(seq !== this._followupDocsSyncSeq) return;
+          if(this.currentId !== id) return;
+          const afterIds = (CustomerDocuments.listFromPayload(rec.payload) || [])
+            .filter((d) => safeTrim(d?.type) === CustomerDocuments.TYPES.followupQuestionnaire)
+            .map((d) => safeTrim(d.id))
+            .join("|");
+          if(beforeIds === afterIds) return;
+          const section = this.normalizeSection(this.currentSection);
+          if(section === "documents"){
+            this.renderFileView(rec, { bodyScrollTop: this.els.main?.scrollTop || 0, _skipFollowupSync: true });
+          } else if(this.els.tabs){
+            const policies = this.collectPolicies(rec);
+            this.els.tabs.innerHTML = this.renderTabBar(rec, policies);
+          }
+        }).catch(() => {});
+      };
+      try {
+        if(typeof perfIdle === "function"){
+          perfIdle(() => { run(); }, 2200);
+          return;
         }
-      }).catch(() => {});
+      } catch(_e) {}
+      window.setTimeout(run, 0);
     },
     async buildFollowupZipBlob(rec){
       await ensureFollowupZipLoaded();
@@ -24710,18 +24722,49 @@ UsersGateUI.init();
       return !sameSession;
     },
 
+    /* GI-PERF 2026-08-30: watch של שיחת שיקוף צריך רק callSession + opsProcess חי.
+       נמדד מול שרת חי: ~0.5KB / ~0.2s במקום מאות KB של payload מלא בכל 2 שניות.
+       אותה פונקציית _applyOpenFileRemotePayload — בלי שינוי לוגיקת שיקוף/שמירה. */
+    _openFileCallSessionThinSelect:
+      "id,updated_at,callSession:payload->mirrorFlow->callSession,opsProcess:payload->opsProcess",
+
+    _payloadFromOpenFileCallRow(row){
+      if(!row || typeof row !== "object") return null;
+      if(Object.prototype.hasOwnProperty.call(row, "callSession")
+        || Object.prototype.hasOwnProperty.call(row, "opsProcess")){
+        const call = (row.callSession && typeof row.callSession === "object") ? row.callSession : null;
+        const ops = (row.opsProcess && typeof row.opsProcess === "object") ? row.opsProcess : null;
+        return {
+          mirrorFlow: { callSession: call },
+          opsProcess: ops
+        };
+      }
+      let payload = row.payload;
+      if(typeof payload === "string"){
+        try { payload = JSON.parse(safeTrim(payload) || "{}"); } catch(_e) { payload = null; }
+      }
+      return (payload && typeof payload === "object") ? payload : null;
+    },
+
     async _pullOpenFileCallSession(cid){
       const id = safeTrim(cid);
       if(!id || typeof Storage?.loadSingleRow !== "function") return;
       if(this._openFileCallPullBusy) return;
       this._openFileCallPullBusy = true;
       try{
-        const res = await Storage.loadSingleRow(SUPABASE_TABLES.customers, id, "id,payload,updated_at");
-        if(!res?.ok) return;
-        let payload = res.data?.payload;
-        if(typeof payload === "string"){
-          try { payload = JSON.parse(safeTrim(payload) || "{}"); } catch(_e) { payload = null; }
+        let res = await Storage.loadSingleRow(
+          SUPABASE_TABLES.customers,
+          id,
+          this._openFileCallSessionThinSelect
+        );
+        let payload = res?.ok ? this._payloadFromOpenFileCallRow(res.data) : null;
+        if(!res?.ok || !payload){
+          /* נפילה בטוחה לסלקט הישן — אם השרת דוחה JSON-path, ההתנהגות נשארת זהה. */
+          res = await Storage.loadSingleRow(SUPABASE_TABLES.customers, id, "id,payload,updated_at");
+          if(!res?.ok) return;
+          payload = this._payloadFromOpenFileCallRow(res.data);
         }
+        if(!payload) return;
         this._applyOpenFileRemotePayload(id, payload);
       }catch(_e){}
       finally{
@@ -24754,10 +24797,23 @@ UsersGateUI.init();
       }
     },
 
-    async _refreshOpenFileCallSession(id){
+    async _refreshOpenFileCallSession(id, opts={}){
       const cid = safeTrim(id);
       if(!cid) return;
-      await this._pullOpenFileCallSession(cid);
+      /* אחרי ensureRecordPayload כבר יש payload מלא מהשרת — אין צורך למשוך שוב מיד.
+         מתחילים watch בלבד, עם חתימה מקומית; המרווח הבא ימשוך דק. */
+      if(opts.skipImmediatePull === true){
+        try {
+          const rec = this.byId(cid);
+          const call = rec?.payload?.mirrorFlow?.callSession;
+          if(call && typeof call === "object"){
+            this._openFileCallSig = this._callSessionWatchSig(call);
+          }
+          if(rec) this.paintHeroLiveTimer(rec);
+        } catch(_e) {}
+      } else {
+        await this._pullOpenFileCallSession(cid);
+      }
       this.startOpenFileCallWatch();
     },
 
@@ -24769,13 +24825,13 @@ UsersGateUI.init();
       if(!rec || !this.els.wrap) return;
       // הקורא (openWithLoader) עוטף ב-try/catch סינכרוני, שלא תופס דחיית Promise —
       // לכן בולעים כאן ומדווחים ללוג, במקום unhandled rejection.
-      const afterOpen = () => {
-        try { void this._refreshOpenFileCallSession(id); } catch(_e) {}
+      const afterOpen = (refreshOpts) => {
+        try { void this._refreshOpenFileCallSession(id, refreshOpts); } catch(_e) {}
       };
       if(Storage.payloadIsEmpty(rec)){
         return Promise.resolve()
           .then(() => this._openByIdAfterPayload(id, opts))
-          .then(() => afterOpen())
+          .then(() => afterOpen({ skipImmediatePull: true }))
           .catch((err) => { try { console.error("CUSTOMER_OPEN_AFTER_PAYLOAD_FAILED", err, id); } catch(_e) {} });
       }
       const opened = this._openByIdResolved(rec, opts);
