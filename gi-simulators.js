@@ -1495,57 +1495,6 @@
     try { giSimDiscountInjectDom(sim); } catch(_e2) {}
   }
 
-  /** GI-WIZARD-SIM-FILL: מצמיד לתוצאת ההחלה פרמיה לפני/אחרי הנחה (כולל פירוק כיסויים).
-      לא משנה תעריף ולא דורס שדות קיימים — רק מוסיף מפתחות ל-onApply. */
-  function giSimAttachDiscountToResult(sim, insId, result){
-    if(!result || typeof result !== "object") return result;
-    const company = safeTrim(sim && sim._ctx && sim._ctx.company);
-    const product = safeTrim(sim && sim._ctx && sim._ctx.product);
-    const selMap = (sim && sim._giSimDiscountSel && typeof sim._giSimDiscountSel === "object") ? sim._giSimDiscountSel : {};
-    const selectedId = safeTrim(selMap[insId] || selMap[(sim && sim._activeInsuredId) || ""] || selMap._ || "");
-    const opt = selectedId ? giSimDiscountById(company, product, selectedId) : null;
-    const calcResult = Object.assign({ ok: true }, result);
-    const beforeNum = Number(result.monthlyPremium);
-    const before = Number.isFinite(beforeNum) ? beforeNum : null;
-    let after = null;
-    let coverRows = [];
-    if(opt){
-      after = giSimDiscountAfterMonthly(calcResult, opt);
-      const explained = giSimDiscountExplain(calcResult, opt, company, product);
-      if(explained && Array.isArray(explained.rows)) coverRows = explained.rows;
-    }
-    result.monthlyPremiumBeforeDiscount = before != null ? before : result.monthlyPremium;
-    result.monthlyPremiumAfterDiscount = (after != null && Number.isFinite(Number(after)))
-      ? Number(after)
-      : result.monthlyPremiumBeforeDiscount;
-    if(opt){
-      result.discountOptionId = opt.id || "";
-      result.discountPct = giSimDiscountYear1Pct(opt);
-    }
-    if(Array.isArray(result.covers) && result.covers.length){
-      const rowById = {};
-      coverRows.forEach((row) => {
-        if(!row) return;
-        const id = safeTrim(row.coverId || row.id);
-        if(id) rowById[id] = row;
-      });
-      result.covers = result.covers.map((c) => {
-        if(!c || typeof c !== "object") return c;
-        const row = rowById[safeTrim(c.id)] || rowById[safeTrim(c.wizardKey)] || null;
-        const coverBeforeNum = Number(c.monthlyPremium);
-        const coverBefore = Number.isFinite(coverBeforeNum) ? coverBeforeNum : c.monthlyPremium;
-        const coverAfter = (row && row.after != null && Number.isFinite(Number(row.after)))
-          ? Number(row.after)
-          : coverBefore;
-        return Object.assign({}, c, {
-          monthlyPremiumBeforeDiscount: coverBefore,
-          monthlyPremiumAfterDiscount: coverAfter
-        });
-      });
-    }
-    return result;
-  }
-
   function riskSimInstallShellEnhancer(handler){
     if(!handler || handler._giShellEnhanced) return handler;
     if(typeof handler.open === "function"){
@@ -1556,18 +1505,6 @@
         const restoreActive = safeTrim(next.restoreActiveId);
         delete next.restoreState;
         delete next.restoreActiveId;
-        if(typeof next.onApply === "function"){
-          const origApply = next.onApply;
-          next.onApply = function(resultsByInsuredId){
-            const src = resultsByInsuredId && typeof resultsByInsuredId === "object" ? resultsByInsuredId : {};
-            const enriched = {};
-            Object.keys(src).forEach((insId) => {
-              try { enriched[insId] = giSimAttachDiscountToResult(handler, insId, src[insId]); }
-              catch(_e){ enriched[insId] = src[insId]; }
-            });
-            return origApply(enriched);
-          };
-        }
         handler._giOpening = true;
         handler._giSimDiscountSel = {};
         let out;

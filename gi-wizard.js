@@ -13548,30 +13548,6 @@ if(path === "birthDate"){
       return Number.isFinite(n) ? n : 0;
     },
 
-    formatAppliedPremiumValue(v){
-      const n = this.asMoneyNumber(v);
-      if(!(n > 0) && safeTrim(v) === "") return "";
-      if(!Number.isFinite(Number(String(v ?? "").replace(/[^\d.-]/g, "")))) return safeTrim(v);
-      return n.toFixed(2);
-    },
-
-    toPolicyDraftIsoDate(raw){
-      const s = safeTrim(raw);
-      if(!s) return "";
-      if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-      const parsed = (typeof parseAnyDmyDate === "function") ? parseAnyDmyDate(s) : null;
-      if(!parsed || !parsed.year) return "";
-      return `${parsed.year}-${String(parsed.month).padStart(2, "0")}-${String(parsed.day).padStart(2, "0")}`;
-    },
-
-    getPolicyPremiumBeforeValue(policy){
-      const ids = this.getPolicyInsuredIds(policy);
-      const fromMap = ids.reduce((sum, iid) => sum + this.asMoneyNumber(policy?.premiumBeforePerInsured?.[iid]), 0);
-      if(fromMap > 0) return Math.round(fromMap * 100) / 100;
-      const direct = this.asMoneyNumber(policy?.premiumBefore);
-      return direct > 0 ? Math.round(direct * 100) / 100 : 0;
-    },
-
     getPolicyDiscountPct(policy){
       const n = Number(String(policy?.discountPct ?? "0").replace(/[^\d.-]/g, ""));
       return Number.isFinite(n) ? Math.max(0, n) : 0;
@@ -14353,12 +14329,6 @@ if(path === "birthDate"){
         if(!d.premiumPerInsured) d.premiumPerInsured = {};
         d.premiumPerInsured[iid] = el.value;
       });
-      this.els.body.querySelectorAll("[data-pdraft-per-insured-premium-before]").forEach(el => {
-        const iid = el.getAttribute("data-pdraft-per-insured-premium-before");
-        if(!iid) return;
-        if(!d.premiumBeforePerInsured) d.premiumBeforePerInsured = {};
-        d.premiumBeforePerInsured[iid] = el.value;
-      });
       this.els.body.querySelectorAll("[data-pdraft-addon-premium]").forEach(el => {
         const cover = el.getAttribute("data-pdraft-addon-premium") || "";
         const iid = el.getAttribute("data-pdraft-addon-insured") || "";
@@ -14366,16 +14336,6 @@ if(path === "birthDate"){
         if(!d.healthAddonPremiums) d.healthAddonPremiums = {};
         if(!d.healthAddonPremiums[cover]) d.healthAddonPremiums[cover] = {};
         d.healthAddonPremiums[cover][iid] = el.value;
-      });
-      this.els.body.querySelectorAll("[data-pdraft-cover-premium-before], [data-pdraft-cover-premium-after]").forEach(el => {
-        const isBefore = el.hasAttribute("data-pdraft-cover-premium-before");
-        const cover = el.getAttribute(isBefore ? "data-pdraft-cover-premium-before" : "data-pdraft-cover-premium-after") || "";
-        const iid = el.getAttribute("data-pdraft-cover-insured") || "";
-        if(!cover || !iid) return;
-        if(!d.healthCoverPremiums) d.healthCoverPremiums = {};
-        if(!d.healthCoverPremiums[cover]) d.healthCoverPremiums[cover] = {};
-        if(!d.healthCoverPremiums[cover][iid]) d.healthCoverPremiums[cover][iid] = { before: "", after: "" };
-        d.healthCoverPremiums[cover][iid][isBefore ? "before" : "after"] = el.value;
       });
       this.els.body.querySelectorAll("[data-pdraft-per-insured-sum]").forEach(el => {
         const iid = el.getAttribute("data-pdraft-per-insured-sum");
@@ -14530,35 +14490,6 @@ if(path === "birthDate"){
           this.policyDraft.premiumPerInsured[iid] = el.value;
           this.syncPolicyDraftPremiumFields(this.policyDraft);
         });
-      });
-      $$("[data-pdraft-per-insured-premium-before]", root).forEach((el) => {
-        const iid = el.getAttribute("data-pdraft-per-insured-premium-before");
-        if(!iid) return;
-        on(el, "input", () => {
-          this.ensurePolicyDraft();
-          if(!this.policyDraft.premiumBeforePerInsured) this.policyDraft.premiumBeforePerInsured = {};
-          this.policyDraft.premiumBeforePerInsured[iid] = el.value;
-        });
-        on(el, "change", () => {
-          this.ensurePolicyDraft();
-          if(!this.policyDraft.premiumBeforePerInsured) this.policyDraft.premiumBeforePerInsured = {};
-          this.policyDraft.premiumBeforePerInsured[iid] = el.value;
-        });
-      });
-      $$("[data-pdraft-cover-premium-before], [data-pdraft-cover-premium-after]", root).forEach((el) => {
-        const syncCover = () => {
-          this.ensurePolicyDraft();
-          const isBefore = el.hasAttribute("data-pdraft-cover-premium-before");
-          const cover = el.getAttribute(isBefore ? "data-pdraft-cover-premium-before" : "data-pdraft-cover-premium-after") || "";
-          const iid = el.getAttribute("data-pdraft-cover-insured") || "";
-          if(!cover || !iid) return;
-          if(!this.policyDraft.healthCoverPremiums) this.policyDraft.healthCoverPremiums = {};
-          if(!this.policyDraft.healthCoverPremiums[cover]) this.policyDraft.healthCoverPremiums[cover] = {};
-          if(!this.policyDraft.healthCoverPremiums[cover][iid]) this.policyDraft.healthCoverPremiums[cover][iid] = { before: "", after: "" };
-          this.policyDraft.healthCoverPremiums[cover][iid][isBefore ? "before" : "after"] = el.value;
-        };
-        on(el, "input", syncCover);
-        on(el, "change", syncCover);
       });
       $$("[data-pdraft-addon-premium]", root).forEach((el) => {
         const cover = el.getAttribute("data-pdraft-addon-premium") || "";
@@ -15064,38 +14995,6 @@ if(path === "birthDate"){
         if(compact) return compact;
       }
       return "";
-    },
-
-    collectHealthCoverPremiumReportRows(policy){
-      if(safeTrim(policy?.type) !== "בריאות") return [];
-      const ids = this.getPolicyInsuredIds(policy);
-      const covers = this.getPolicyCoverItems(policy).map((c) => safeTrim(c)).filter(Boolean);
-      if(!covers.length || !ids.length) return [];
-      const rows = [];
-      covers.forEach((cover) => {
-        ids.forEach((iid) => {
-          const stored = policy?.healthCoverPremiums?.[cover]?.[iid] || {};
-          const isAddon = this.isHealthAddonCover(cover);
-          const after = isAddon
-            ? this.asMoneyNumber(this.getHealthAddonPremiumValue(policy, cover, iid) || stored.after)
-            : this.asMoneyNumber(stored.after);
-          const before = this.asMoneyNumber(stored.before);
-          if(!(before > 0) && !(after > 0)) return;
-          const ins = (this.insureds || []).find((x) => x.id === iid);
-          rows.push({
-            insuredId: iid,
-            insuredLabel: safeTrim(ins?.label) || "מבוטח",
-            company: safeTrim(policy?.company) || "",
-            product: "בריאות",
-            cover,
-            before,
-            after,
-            beforeLabel: before > 0 ? this.formatMoneyValue(before) : "—",
-            afterLabel: after > 0 ? this.formatMoneyValue(after) : "—"
-          });
-        });
-      });
-      return rows;
     },
 
     buildHealthAddonReportRows(policy){
@@ -15678,10 +15577,8 @@ if(path === "birthDate"){
         sumInsuredPerInsured: {}, // insuredId -> sumInsured
         compensation: "",
         compensationPerInsured: {}, // insuredId -> compensation
-        premiumPerInsured: {}, // insuredId -> premiumMonthly after discount (required)
-        premiumBeforePerInsured: {}, // insuredId -> premium before discount (optional)
+        premiumPerInsured: {}, // insuredId -> premiumMonthly (base product only)
         healthAddonPremiums: {}, // coverKey -> insuredId -> premiumMonthly for critical/cancer add-ons
-        healthCoverPremiums: {}, // coverKey -> insuredId -> { before, after }
         umbrellaInsurance: false,
         umbrellaDisabilityAmount: "",
         umbrellaDeathAmount: "",
@@ -15703,10 +15600,10 @@ if(path === "birthDate"){
       }
     },
 
-    /** GI-RISK-SIM: פותח את הסימולטור הרשום ל-(חברה, מוצר) הנוכחיים בטיוטה.
-        אופציונלי לחלוטין — אם אין handler רשום, לא קורה כלום.
-        תוצאת הסימולטור ממלאת שדות קיימים בטיוטה (כולל תאריך תחילה ופרמיה לפני/אחרי הנחה)
-        ולא נשמרת בשום מקום עד שהנציג לוחץ על כפתור השמירה הקיים של הפוליסה. */
+    /** GI-RISK-SIM: פותח את הסימולטור הרשום ל-(חברה, מוצר) הנוכחיים בטיוטה
+        (כרגע: הפניקס+ריסק ומנורה+ריסק). אופציונלי לחלוטין — אם אין handler רשום,
+        לא קורה כלום. תוצאת הסימולטור ממלאת רק שדות קיימים בטיוטה, ולא נשמרת
+        בשום מקום עד שהנציג לוחץ על כפתור השמירה הקיים של הפוליסה. */
     async openRiskSimulator(){
       if(!Auth.canAccessSimulators?.()){
         try{
@@ -15743,56 +15640,19 @@ if(path === "birthDate"){
           const draft = this.policyDraft;
           draft.sumInsuredPerInsured = draft.sumInsuredPerInsured || {};
           draft.premiumPerInsured = draft.premiumPerInsured || {};
-          draft.premiumBeforePerInsured = draft.premiumBeforePerInsured || {};
-          draft.healthCoverPremiums = draft.healthCoverPremiums || {};
-          draft.healthAddonPremiums = draft.healthAddonPremiums || {};
           draft.riskSimQuotes = draft.riskSimQuotes || {};
-          Object.keys(resultsByInsuredId || {}).forEach((insId) => {
+          Object.keys(resultsByInsuredId).forEach((insId) => {
             const r = resultsByInsuredId[insId];
-            if(!r) return;
             if(r.sumInsured != null && safeTrim(r.sumInsured) !== ""){
               draft.sumInsuredPerInsured[insId] = safeTrim(r.sumInsured);
             }
-            const beforeRaw = r.monthlyPremiumBeforeDiscount != null ? r.monthlyPremiumBeforeDiscount : r.monthlyPremium;
-            const afterRaw = r.monthlyPremiumAfterDiscount != null ? r.monthlyPremiumAfterDiscount : r.monthlyPremium;
-            const beforeStr = this.formatAppliedPremiumValue(beforeRaw);
-            const afterStr = this.formatAppliedPremiumValue(afterRaw);
-            if(beforeStr) draft.premiumBeforePerInsured[insId] = beforeStr;
-            if(afterStr) draft.premiumPerInsured[insId] = afterStr;
-            else {
-              const monthlyNum = Number(r.monthlyPremium);
-              draft.premiumPerInsured[insId] = Number.isFinite(monthlyNum) ? monthlyNum.toFixed(2) : String(r.monthlyPremium);
-            }
+            const monthlyNum = Number(r.monthlyPremium);
+            draft.premiumPerInsured[insId] = Number.isFinite(monthlyNum) ? monthlyNum.toFixed(2) : String(r.monthlyPremium);
             // GI-MNR-HEALTH-SIM: אם הסימולטור החזיר רשימת כיסויים — מעדכנים את
             // healthCovers בטיוטה לפי wizardKey (מפתחות האשף), לא לפי שם ה-PDF.
             if(Array.isArray(r.covers) && r.covers.length){
               draft.healthCovers = r.covers.map((c) => safeTrim(c.wizardKey || c.label || c.id)).filter(Boolean);
-              let baseBefore = 0;
-              let baseAfter = 0;
-              r.covers.forEach((c) => {
-                const key = safeTrim(c && (c.wizardKey || c.label || c.id));
-                if(!key) return;
-                const coverBefore = this.formatAppliedPremiumValue(
-                  c.monthlyPremiumBeforeDiscount != null ? c.monthlyPremiumBeforeDiscount : c.monthlyPremium
-                );
-                const coverAfter = this.formatAppliedPremiumValue(
-                  c.monthlyPremiumAfterDiscount != null ? c.monthlyPremiumAfterDiscount : c.monthlyPremium
-                );
-                draft.healthCoverPremiums[key] = draft.healthCoverPremiums[key] || {};
-                draft.healthCoverPremiums[key][insId] = { before: coverBefore, after: coverAfter };
-                if(this.isHealthAddonCover(key)){
-                  draft.healthAddonPremiums[key] = draft.healthAddonPremiums[key] || {};
-                  if(coverAfter) draft.healthAddonPremiums[key][insId] = coverAfter;
-                } else {
-                  baseBefore += this.asMoneyNumber(coverBefore);
-                  baseAfter += this.asMoneyNumber(coverAfter);
-                }
-              });
-              if(baseBefore > 0) draft.premiumBeforePerInsured[insId] = baseBefore.toFixed(2);
-              if(baseAfter > 0) draft.premiumPerInsured[insId] = baseAfter.toFixed(2);
             }
-            const startIso = this.toPolicyDraftIsoDate(r.insuranceStartDate || r.startDate || "");
-            if(startIso) draft.startDate = startIso;
             // מחלות קשות / סרטן — סכום פיצוי (לא סכום ביטוח ריסק).
             if(r.compensation != null && safeTrim(r.compensation) !== ""){
               draft.compensationPerInsured = draft.compensationPerInsured || {};
@@ -15812,7 +15672,6 @@ if(path === "birthDate"){
           // שכבר לא רלוונטיים. הנציג יצטרך לאשר מחדש דרך "אישור סופי" בסימולטור.
           delete draft.riskSimApprovedAt;
           this.resetPremiumSanityState();
-          this.syncPolicyDraftPremiumFields(draft);
           this.render();
           window.showToast?.({ title: "הפרמיה עודכנה", text: "תוצאת הסימולטור הוחלה על הפוליסה — ניתן לבדוק ולהמשיך כרגיל.", variant: "success" });
         },
@@ -15845,9 +15704,7 @@ if(path === "birthDate"){
         compensation: (d.compensationPerInsured ? Object.values(d.compensationPerInsured)[0] : d.compensation) || "",
         compensationPerInsured: Object.assign({}, d.compensationPerInsured || {}),
         premiumPerInsured: Object.assign({}, d.premiumPerInsured || {}),
-        premiumBeforePerInsured: Object.assign({}, d.premiumBeforePerInsured || {}),
         healthAddonPremiums: JSON.parse(JSON.stringify(d.healthAddonPremiums || {})),
-        healthCoverPremiums: JSON.parse(JSON.stringify(d.healthCoverPremiums || {})),
         healthAddonDiscounts: JSON.parse(JSON.stringify(d.healthAddonDiscounts || {})),
         umbrellaInsurance: !this.isMedicareCompany(d.company) && d.type === "ריסק" ? !!d.umbrellaInsurance : false,
         umbrellaDisabilityAmount: !this.isMedicareCompany(d.company) && d.type === "ריסק" ? safeTrim(d.umbrellaDisabilityAmount || "") : "",
@@ -15907,10 +15764,7 @@ if(path === "birthDate"){
       this.policyDraft.umbrellaDisabilityAmount = "";
       this.policyDraft.umbrellaDeathAmount = "";
       this.policyDraft.premiumMonthly = "";
-      this.policyDraft.premiumPerInsured = {};
-      this.policyDraft.premiumBeforePerInsured = {};
       this.policyDraft.healthAddonPremiums = {};
-      this.policyDraft.healthCoverPremiums = {};
       this.policyDraft.healthAddonDiscounts = {};
       this.policyDraft.discountPct = "0";
       this.policyDraft.discountYears = "";
@@ -16064,9 +15918,7 @@ if(path === "birthDate"){
         compensation: p.compensation || "",
         compensationPerInsured: Object.assign({}, p.compensationPerInsured || {}),
         premiumPerInsured: Object.assign({}, p.premiumPerInsured || {}),
-        premiumBeforePerInsured: Object.assign({}, p.premiumBeforePerInsured || {}),
         healthAddonPremiums: JSON.parse(JSON.stringify(p.healthAddonPremiums || {})),
-        healthCoverPremiums: JSON.parse(JSON.stringify(p.healthCoverPremiums || {})),
         healthAddonDiscounts: JSON.parse(JSON.stringify(p.healthAddonDiscounts || {})),
         umbrellaInsurance: !!p.umbrellaInsurance,
         umbrellaDisabilityAmount: p.umbrellaDisabilityAmount || "",
@@ -16934,78 +16786,6 @@ if(path === "birthDate"){
       return { showPricingFields, healthCoversReady, healthAmountsReady, missingAmountCoverNames, selectedHealthAmountFields };
     },
 
-    renderNpInsuredPremiumPairHtml(d, iid){
-      const insIdx = this.insureds.findIndex(x => x.id === iid);
-      const ins = this.insureds.find(x => x.id === iid);
-      const afterVal = (d.premiumPerInsured && d.premiumPerInsured[iid]) || "";
-      const beforeVal = (d.premiumBeforePerInsured && d.premiumBeforePerInsured[iid]) || "";
-      const nameLabel = escapeHtml(this.getInsuredPremiumCardLabel(ins, insIdx));
-      return `<div class="lcNpPremiumPair">
-        ${this.renderNpPremiumMoneyFieldHtml({
-          meta: "אופציונלי",
-          label: "פרמיה לפני הנחה",
-          inputAttrs: `data-pdraft-per-insured-premium-before="${escapeHtml(iid)}"`,
-          value: beforeVal,
-          placeholder: "280",
-          extraClass: "lcNpDetailField--premiumBefore"
-        })}
-        ${this.renderNpPremiumMoneyFieldHtml({
-          meta: "פרמיה לאחר הנחה",
-          label: nameLabel,
-          inputAttrs: `data-pdraft-per-insured-premium="${escapeHtml(iid)}"`,
-          value: afterVal,
-          placeholder: "250"
-        })}
-      </div>`;
-    },
-
-    renderNpHealthPurchaseBlockHtml(d, insuredIds){
-      const covers = this.getHealthCoverList(d).map((c) => safeTrim(c)).filter(Boolean);
-      if(!covers.length || !insuredIds.length) return "";
-      const company = escapeHtml(safeTrim(d.company) || "—");
-      const cards = insuredIds.map((iid) => {
-        const ins = this.insureds.find((x) => x.id === iid);
-        const who = escapeHtml(ins?.label || "מבוטח");
-        const rows = covers.map((cover) => {
-          const isAddon = this.isHealthAddonCover(cover);
-          const stored = (d.healthCoverPremiums && d.healthCoverPremiums[cover] && d.healthCoverPremiums[cover][iid]) || {};
-          const before = safeTrim(stored.before || "");
-          const after = isAddon
-            ? safeTrim((d.healthAddonPremiums && d.healthAddonPremiums[cover] && d.healthAddonPremiums[cover][iid]) || stored.after || "")
-            : safeTrim(stored.after || "");
-          const afterAttrs = isAddon
-            ? `data-pdraft-addon-premium="${escapeHtml(cover)}" data-pdraft-addon-insured="${escapeHtml(iid)}"`
-            : `data-pdraft-cover-premium-after="${escapeHtml(cover)}" data-pdraft-cover-insured="${escapeHtml(iid)}"`;
-          return `<div class="lcNpCoverPremRow">
-            <div class="lcNpCoverPremRow__meta">
-              <span class="lcNpCoverPremRow__who">${who}</span>
-              <span class="lcNpCoverPremRow__sep">·</span>
-              <span>${company}</span>
-              <span class="lcNpCoverPremRow__sep">·</span>
-              <span>בריאות</span>
-              <span class="lcNpCoverPremRow__sep">·</span>
-              <span class="lcNpCoverPremRow__cover">${escapeHtml(cover)}</span>
-            </div>
-            <div class="lcNpCoverPremRow__fields">
-              <label class="lcNpCoverPremField">
-                <span>לפני הנחה <em>אופציונלי</em></span>
-                <input class="lcInput" type="text" inputmode="numeric" dir="ltr" data-pdraft-cover-premium-before="${escapeHtml(cover)}" data-pdraft-cover-insured="${escapeHtml(iid)}" value="${escapeHtml(before)}" placeholder="—" />
-              </label>
-              <label class="lcNpCoverPremField lcNpCoverPremField--after">
-                <span>${isAddon ? "לאחר הנחה" : "לאחר הנחה · אופציונלי לפי כיסוי"}</span>
-                <input class="lcInput" type="text" inputmode="numeric" dir="ltr" ${afterAttrs} value="${escapeHtml(after)}" placeholder="0" />
-              </label>
-            </div>
-          </div>`;
-        }).join("");
-        return `<div class="lcNpPurchaseCard">
-          <div class="lcNpPurchaseCard__head">מה נרכש עבור ${who}</div>
-          ${rows}
-        </div>`;
-      }).join("");
-      return `<div class="lcNpPurchaseBlock">${cards}</div>`;
-    },
-
     renderNpPremiumMoneyFieldHtml(opts = {}){
       const meta = escapeHtml(safeTrim(opts.meta) || "פרמיה");
       const label = opts.label || "";
@@ -17046,11 +16826,19 @@ if(path === "birthDate"){
               <input class="lcInput" type="date" data-pdraft="startDate" value="${escapeHtml(d.startDate || "")}" />
             </div>
           </div>
-          ${healthAddonOnlySelected ? '' : insuredIds.map(iid => this.renderNpInsuredPremiumPairHtml(d, iid)).join("")}
-          ${this.renderNpHealthPurchaseBlockHtml(d, insuredIds)}
+          ${healthAddonOnlySelected ? '' : insuredIds.map(iid => {
+            const insIdx = this.insureds.findIndex(x => x.id === iid);
+            const ins = this.insureds.find(x => x.id === iid);
+            const val = (d.premiumPerInsured && d.premiumPerInsured[iid]) || "";
+            return this.renderNpPremiumMoneyFieldHtml({
+              meta: "פרמיה לאחר הנחה",
+              label: escapeHtml(this.getInsuredPremiumCardLabel(ins, insIdx)),
+              inputAttrs: `data-pdraft-per-insured-premium="${escapeHtml(iid)}"`,
+              value: val,
+              placeholder: "250"
+            });
+          }).join("")}
           ${healthAddonCovers.length ? healthAddonCovers.map(cover => insuredIds.map(iid => {
-            const alreadyInPurchase = this.getHealthCoverList(d).some((c) => safeTrim(c) === cover);
-            if(alreadyInPurchase) return "";
             const insIdx = this.insureds.findIndex(x => x.id === iid);
             const ins = this.insureds.find(x => x.id === iid);
             const val = (d.healthAddonPremiums && d.healthAddonPremiums[cover] && d.healthAddonPremiums[cover][iid]) || "";
@@ -17257,8 +17045,8 @@ if(path === "birthDate"){
           }).join("");
 
       // GI-PHX-RISK-SIM: כפתור אופציונלי — מופיע רק כשיש handler רשום ל-(חברה, מוצר)
-      // וגם הרשאת מנהל/מנהל מערכת. לא מחליף את מילוי השדות הידני —
-      // ממלא פרמיה/סכום/תאריך תחילה כשמשתמשים בו.
+      // וגם הרשאת מנהל/מנהל מערכת. לא מחליף ולא משנה שום שדה קיים —
+      // רק מציע דרך נוספת ואופציונלית למלא את הפרמיה/הסכום הקיימים בשלב 4.
       /* GI-PERF: לפני טעינת ה-chunk משתמשים בקטלוג סטטי; אחרי הטעינה — ב-registry. */
       const riskSimHandler = (!isMedicare && Auth.canAccessSimulators?.())
         ? (RiskSimulators.hasCatalog?.(d.company, d.type) || RiskSimulators.getHandler(d.company, d.type))
@@ -17387,7 +17175,18 @@ if(path === "birthDate"){
               <input class="lcInput" type="date" data-pdraft="startDate" value="${escapeHtml(d.startDate || "")}" />
             </div>
           </div>
-          ${healthAddonOnlySelected ? '' : insuredIds.map(iid => this.renderNpInsuredPremiumPairHtml(d, iid)).join("")}
+          ${healthAddonOnlySelected ? '' : insuredIds.map(iid => {
+            const insIdx = this.insureds.findIndex(x => x.id === iid);
+            const ins = this.insureds.find(x => x.id === iid);
+            const val = (d.premiumPerInsured && d.premiumPerInsured[iid]) || "";
+            return this.renderNpPremiumMoneyFieldHtml({
+              meta: "פרמיה לאחר הנחה",
+              label: escapeHtml(this.getInsuredPremiumCardLabel(ins, insIdx)),
+              inputAttrs: `data-pdraft-per-insured-premium="${escapeHtml(iid)}"`,
+              value: val,
+              placeholder: "250"
+            });
+          }).join("")}
           ${healthAddonCovers.length ? healthAddonCovers.map(cover => insuredIds.map(iid => {
             const insIdx = this.insureds.findIndex(x => x.id === iid);
             const ins = this.insureds.find(x => x.id === iid);
@@ -17440,18 +17239,11 @@ if(path === "birthDate"){
               <div class="lcNpDetailField__hint">הזן את סכום הפיצוי שייכלל בפוליסה</div>
             </div>`;
           }).join("") : ''}
-          ${canPledge ? `<div class="lcNpPledgeSwitchWrap">
-            <div class="lcNpPledgeSwitch">
-              <div class="lcNpPledgeSwitch__text">
-                <div class="lcNpPledgeSwitch__title">שיעבוד</div>
-                <div class="lcNpPledgeSwitch__sub">מוטב בלתי חוזר</div>
-              </div>
-              <label class="lcNpSwitch">
-                <input type="checkbox" data-pdraft="pledge" ${d.pledge ? "checked":""} />
-                <span class="lcNpSwitch__track" aria-hidden="true"></span>
-                <span class="lcNpSwitch__label">${d.pledge ? "פעיל" : "כבוי"}</span>
-              </label>
-            </div>
+          ${canPledge ? `<div class="lcField lcNpPledgeField">
+            <label class="lcPolToggle">
+              <input type="checkbox" data-pdraft="pledge" ${d.pledge ? "checked":""} />
+              <span>שיעבוד (מוטב בלתי חוזר)</span>
+            </label>
           </div>` : ''}
         </div>` : ""}` : ""}
         ${isRegularRisk ? `<div class="lcRiskUmbrellaBox" style="margin-top:12px">
@@ -17539,7 +17331,9 @@ if(path === "birthDate"){
                 ${bens.length ? `<div class="lcRiskUmbrellaBox__sub">${bens.length} מוטב${bens.length>1?'ים':''} · סה"כ ${totalPct}%${!pctOk ? ' ⚠️ לא מסתכמים ל-100%' : ' ✓'}</div>` : ''}
                 ${benBase > 0 ? `<div class="lcBenBaseNote" data-ben-base-note="1">${benBaseIsRemainder ? 'יתרה לחלוקה בין היורשים החוקיים (אחרי השיעבוד)' : 'סכום לחלוקה בין המוטבים'}: <b>${escapeHtml(this.formatMoneyValue(benBase))}</b></div>` : (benBaseIsRemainder ? `<div class="lcBenBaseNote lcBenBaseNote--empty" data-ben-base-note="1">כל סכום הביטוח משועבד — לא נותרה יתרה ליורשים החוקיים</div>` : '')}
               </div>
-              <button class="lcNpAddBtn" type="button" id="lcBenAddBtn" aria-label="הוסף מוטב">+ הוסף מוטב</button>
+              <button class="lcRiskUmbrellaBox__toggle" type="button" id="lcBenAddBtn" aria-label="הוסף מוטב">
+                <span class="lcRiskUmbrellaBox__toggleText">+ הוסף מוטב</span>
+              </button>
             </div>
             ${bens.length ? `<div class="lcBeneficiariesList" style="margin-top:14px">${bensHtml}</div>` : ''}
           </div>`;
@@ -17586,7 +17380,7 @@ if(path === "birthDate"){
           return `<div class="lcWSection lcPledgeBox lcPledgeBox--reference" style="margin-top:12px">
             <div class="lcPledgeBox__head">
               <div class="lcWTitle">פרטי המוטב הבלתי חוזר</div>
-              ${canAdd ? `<button type="button" class="lcNpAddBtn" id="lcPledgeBankAddBtn">+ הוסף בנק שני</button>` : `<span class="lcPledgeMaxNote">הגעת למקסימום ${GI_MAX_PLEDGE_BANKS} בנקים</span>`}
+              ${canAdd ? `<button type="button" class="lcPledgeAddBtn" id="lcPledgeBankAddBtn">+ הוסף בנק שני</button>` : `<span class="lcPledgeMaxNote">הגעת למקסימום ${GI_MAX_PLEDGE_BANKS} בנקים</span>`}
             </div>
             <div class="lcPledgeBalance lcPledgeBalance--${status.tone}" id="lcPledgeBalanceStrip">
               <div class="lcPledgeBalance__cells">
@@ -19277,10 +19071,8 @@ if(path === "birthDate"){
               </article>`;
             }
 
-            const afterNum = this.getPolicyPremiumAfterDiscount(policy);
-            const beforeNum = this.getPolicyPremiumBeforeValue(policy);
-            const premiumAfter = this.formatMoneyValue(afterNum);
-            const premiumBefore = beforeNum > 0 ? this.formatMoneyValue(beforeNum) : "—";
+            const premiumAfter = this.formatMoneyValue(this.getPolicyPremiumAfterDiscount(policy));
+            const premiumBefore = this.formatMoneyValue(policy.premiumMonthly || policy.premiumBefore);
             const startDate = safeTrim(policy.startDate || '—');
             const policyType = safeTrim(policy.type || policy.product || '');
             const isSumComp = (policyType === 'מחלות קשות' || policyType === 'סרטן');
@@ -19302,10 +19094,6 @@ if(path === "birthDate"){
                     ? `<div class="lcOpPolicyRow__metric"><span>${escapeHtml(sumFieldLabel)}</span><strong>${escapeHtml(this.formatMoneyValue(singleSum))}</strong></div>`
                     : '';
                 })();
-            const coverPremRows = this.collectHealthCoverPremiumReportRows(policy);
-            const coverPremHtml = coverPremRows.length
-              ? `<div class="lcOpCoverPremList">${coverPremRows.map((row) => `<div class="lcOpCoverPremList__row"><span>${escapeHtml(row.insuredLabel)} · ${escapeHtml(row.company || policy.company || "")} · ${escapeHtml(row.product)} · ${escapeHtml(row.cover)}</span><strong>לפני ${escapeHtml(row.beforeLabel)} · אחרי ${escapeHtml(row.afterLabel)}</strong></div>`).join("")}</div>`
-              : "";
             return `<article class="lcOpPolicyRow lcOpPolicyRow--new" style="animation-delay:${(groupIdx * 60) + (idx * 45)}ms">
               <div class="lcOpPolicyRow__main">
                 <div class="lcOpPolicyRow__brand">${logo}<div class="lcOpPolicyRow__titles"><div class="lcOpPolicyRow__company">${escapeHtml(policy.company || 'GEMEL INVEST')}</div><div class="lcOpPolicyRow__meta">${escapeHtml(policy.type || 'פוליסה חדשה')}</div></div></div>
@@ -19317,7 +19105,6 @@ if(path === "birthDate"){
                 </div>
               </div>
               <div class="lcOpPolicyRow__side"><span class="lcOpPolicyBadge is-sold">נרכשה דרך GEMEL INVEST</span></div>
-              ${coverPremHtml}
             </article>`;
           }).join('');
 
@@ -23820,9 +23607,7 @@ if(path === "birthDate"){
           sumInsuredPerInsured: {},
           compensationPerInsured: {},
           premiumPerInsured: {},
-          premiumBeforePerInsured: {},
           healthAddonPremiums: {},
-          healthCoverPremiums: {},
           healthAddonDiscounts: {},
           discountPct: "0",
           discountYears: "",
@@ -26222,15 +26007,10 @@ if(path === "birthDate"){
           type,
           premiumFinal,
           premiumLabel: premiumFinal ? this.formatMoneyValue(premiumFinal) : '—',
-          premiumBeforeValue: this.getPolicyPremiumBeforeValue(policy),
-          premiumBeforeLabel: this.getPolicyPremiumBeforeValue(policy) > 0
-            ? this.formatMoneyValue(this.getPolicyPremiumBeforeValue(policy))
-            : '—',
           startDate: safeTrim(policy?.startDate) || '—',
           coverageDisplay,
           covers,
           healthAddonRows,
-          coverPremiumRows: this.collectHealthCoverPremiumReportRows(policy),
           discountLabelOnly,
           discountPackageNum: discountPkg,
           discountScheduleStr,
@@ -26826,14 +26606,6 @@ if(path === "birthDate"){
             ? `<div class="lcPdfNewPolicyDetailLine lcPdfNewPolicyDetailLine--stack"><span class="lcPdfNewPolicyDetailK">כיסוי / סכומים</span><div class="lcPdfNewPolicyDetailV">${coverageValueInner}</div></div>`
             : '';
           const healthAddonLine = buildPdfHealthAddonBlockHtml(row.healthAddonRows);
-          const coverPremRows = Array.isArray(row.coverPremiumRows) ? row.coverPremiumRows : [];
-          const coverPremLine = coverPremRows.length
-            ? `<div class="lcPdfNewPolicyDetailLine lcPdfNewPolicyDetailLine--stack"><span class="lcPdfNewPolicyDetailK">פירוט כיסויים · לפני / אחרי הנחה</span><div class="lcPdfNewPolicyDetailV"><div class="lcPdfCoverPremBlock">${coverPremRows.map((item) => `<div class="lcPdfCoverPremBlock__row"><span>${escapeHtml(item.insuredLabel)} · ${escapeHtml(item.company || row.company || "")} · ${escapeHtml(item.product)} · ${escapeHtml(item.cover)}</span><strong>לפני ${escapeHtml(item.beforeLabel)} · אחרי ${escapeHtml(item.afterLabel)}</strong></div>`).join("")}</div></div></div>`
-            : '';
-          const premiumBeforeLine = safeTrim(row.premiumBeforeLabel) && row.premiumBeforeLabel !== '—'
-            ? `<div class="lcPdfNewPolicyDetailLine"><span class="lcPdfNewPolicyDetailK">פרמיה לפני הנחה</span><span class="lcPdfNewPolicyDetailV">${escapeHtml(row.premiumBeforeLabel)}</span></div>`
-            : '';
-          const premiumAfterLine = `<div class="lcPdfNewPolicyDetailLine"><span class="lcPdfNewPolicyDetailK">פרמיה לאחר הנחה</span><span class="lcPdfNewPolicyDetailV">${escapeHtml(row.premiumLabel || '—')}</span></div>`;
           const coversOnlyParts = (!covMeaningful && row.covers && row.covers.length)
             ? row.covers.map((c) => safeTrim(c)).filter(Boolean)
             : [];
@@ -26880,9 +26652,6 @@ if(path === "birthDate"){
             : '';
           const detailPieces = [
             coverageLine,
-            premiumBeforeLine,
-            premiumAfterLine,
-            coverPremLine,
             healthAddonLine,
             coversLine,
             discountPrimaryHtml,
