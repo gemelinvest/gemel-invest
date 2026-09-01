@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260830-clal-health-decl-v1";
+  const GI_WIZARD_BUILD = "20260901-step4-desk-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -11243,6 +11243,26 @@ if(path === "birthDate"){
       return role;
     },
 
+    getNpDeskActiveInsuredId(){
+      const ids = (this.insureds || []).map((x) => x && x.id).filter(Boolean);
+      const cur = safeTrim(this._npDeskActiveInsuredId);
+      if(cur && ids.includes(cur)) return cur;
+      const selected = Array.isArray(this.policyDraft?.insuredIds) ? this.policyDraft.insuredIds[0] : "";
+      if(selected && ids.includes(selected)) return selected;
+      return ids[0] || "";
+    },
+
+    getInsuredSmokingLabel(ins){
+      const s = safeTrim(ins?.data?.smokingStatus);
+      if(s === "yes") return "מעשן";
+      if(s === "no") return "לא מעשן";
+      return "עישון לא צוין";
+    },
+
+    getProposalInsuredsForSimulator(){
+      return (this.insureds || []).filter((ins) => ins && ins.id);
+    },
+
     buildInsuredLiveLabel(ins, index){
       const base = this.getInsuredBaseLabel(ins, index);
       const first = safeTrim(ins?.data?.firstName);
@@ -15726,10 +15746,9 @@ if(path === "birthDate"){
       }
       const handler = RiskSimulators.getHandler(d.company, d.type);
       if(!handler) return;
-      const insuredIds = Array.isArray(d.insuredIds) && d.insuredIds.length ? d.insuredIds : (d.insuredId ? [d.insuredId] : []);
-      const insureds = insuredIds.map((id) => this.insureds.find((x) => x.id === id)).filter(Boolean);
+      const insureds = this.getProposalInsuredsForSimulator();
       if(!insureds.length){
-        window.showToast?.({ title: "יש לבחור מבוטח", text: "בחרו מבוטח/ים בשלב 3 לפני פתיחת הסימולטור.", variant: "warn" });
+        window.showToast?.({ title: "יש לבחור מבוטח", text: "אין מבוטחים בהצעה — הוסיפו מבוטח לפני פתיחת הסימולטור.", variant: "warn" });
         return;
       }
       handler.open({
@@ -15807,6 +15826,13 @@ if(path === "birthDate"){
             });
             delete draft.riskSimQuotes[insId].sumInsured;
           });
+          const appliedIds = Object.keys(resultsByInsuredId || {}).filter((insId) => resultsByInsuredId[insId]);
+          if(appliedIds.length){
+            const ids = Array.isArray(draft.insuredIds) ? draft.insuredIds.slice() : [];
+            appliedIds.forEach((insId) => { if(insId && !ids.includes(insId)) ids.push(insId); });
+            draft.insuredIds = ids;
+            draft.insuredId = ids[0] || draft.insuredId || "";
+          }
           // GI-RISK-SIM-OCCUPATION: כל שינוי בתוצאות הסימולטור (שמירה חדשה עבור
           // מבוטח כלשהו) מבטל אישור סופי קודם — כדי שלא יישאר "מאושר" מול נתונים
           // שכבר לא רלוונטיים. הנציג יצטרך לאשר מחדש דרך "אישור סופי" בסימולטור.
@@ -16940,7 +16966,9 @@ if(path === "birthDate"){
       const afterVal = (d.premiumPerInsured && d.premiumPerInsured[iid]) || "";
       const beforeVal = (d.premiumBeforePerInsured && d.premiumBeforePerInsured[iid]) || "";
       const nameLabel = escapeHtml(this.getInsuredPremiumCardLabel(ins, insIdx));
-      return `<div class="lcNpPremiumPair">
+      const activeId = this.getNpDeskActiveInsuredId();
+      return `<div class="lcNpDeskInsuredSlot${iid === activeId ? " is-on" : ""}" data-desk-ins-slot="${escapeHtml(iid)}">
+        <div class="lcNpPremiumPair">
         ${this.renderNpPremiumMoneyFieldHtml({
           meta: "אופציונלי",
           label: "פרמיה לפני הנחה",
@@ -16956,6 +16984,7 @@ if(path === "birthDate"){
           value: afterVal,
           placeholder: "250"
         })}
+      </div>
       </div>`;
     },
 
@@ -16963,6 +16992,7 @@ if(path === "birthDate"){
       const covers = this.getHealthCoverList(d).map((c) => safeTrim(c)).filter(Boolean);
       if(!covers.length || !insuredIds.length) return "";
       const company = escapeHtml(safeTrim(d.company) || "—");
+      const activeId = this.getNpDeskActiveInsuredId();
       const cards = insuredIds.map((iid) => {
         const ins = this.insureds.find((x) => x.id === iid);
         const who = escapeHtml(ins?.label || "מבוטח");
@@ -16976,31 +17006,41 @@ if(path === "birthDate"){
           const afterAttrs = isAddon
             ? `data-pdraft-addon-premium="${escapeHtml(cover)}" data-pdraft-addon-insured="${escapeHtml(iid)}"`
             : `data-pdraft-cover-premium-after="${escapeHtml(cover)}" data-pdraft-cover-insured="${escapeHtml(iid)}"`;
-          return `<div class="lcNpCoverPremRow">
-            <div class="lcNpCoverPremRow__meta">
-              <span class="lcNpCoverPremRow__who">${who}</span>
-              <span class="lcNpCoverPremRow__sep">·</span>
-              <span>${company}</span>
-              <span class="lcNpCoverPremRow__sep">·</span>
-              <span>בריאות</span>
-              <span class="lcNpCoverPremRow__sep">·</span>
-              <span class="lcNpCoverPremRow__cover">${escapeHtml(cover)}</span>
-            </div>
-            <div class="lcNpCoverPremRow__fields">
+          const beforeNum = this.asMoneyNumber(before);
+          const afterNum = this.asMoneyNumber(after);
+          const disc = (beforeNum > 0 && afterNum >= 0)
+            ? `${Math.round((1 - (afterNum / beforeNum)) * 100)}%`
+            : "—";
+          return `<tr class="lcNpCoverPremRow">
+            <td class="lcNpCoverSheet__cover">${escapeHtml(cover)}</td>
+            <td>
               <label class="lcNpCoverPremField">
-                <span>לפני הנחה <em>אופציונלי</em></span>
+                <span class="lcNpCoverSheet__sr">לפני הנחה אופציונלי</span>
                 <input class="lcInput" type="text" inputmode="numeric" dir="ltr" data-pdraft-cover-premium-before="${escapeHtml(cover)}" data-pdraft-cover-insured="${escapeHtml(iid)}" value="${escapeHtml(before)}" placeholder="—" />
               </label>
+            </td>
+            <td>
               <label class="lcNpCoverPremField lcNpCoverPremField--after">
-                <span>${isAddon ? "לאחר הנחה" : "לאחר הנחה · אופציונלי לפי כיסוי"}</span>
+                <span class="lcNpCoverSheet__sr">${isAddon ? "לאחר הנחה" : "לאחר הנחה"}</span>
                 <input class="lcInput" type="text" inputmode="numeric" dir="ltr" ${afterAttrs} value="${escapeHtml(after)}" placeholder="0" />
               </label>
-            </div>
-          </div>`;
+            </td>
+            <td class="lcNpCoverSheet__disc">${escapeHtml(disc)}</td>
+          </tr>`;
         }).join("");
-        return `<div class="lcNpPurchaseCard">
-          <div class="lcNpPurchaseCard__head">מה נרכש עבור ${who}</div>
-          ${rows}
+        return `<div class="lcNpPurchaseCard lcNpDeskInsuredSlot${iid === activeId ? " is-on" : ""}" data-desk-ins-slot="${escapeHtml(iid)}">
+          <div class="lcNpPurchaseCard__head">כיסויים בפרמיה · ${who} · ${company}</div>
+          <table class="lcNpCoverSheet">
+            <thead>
+              <tr>
+                <th>כיסוי</th>
+                <th>פרמיה לפני הנחה</th>
+                <th>פרמיה לאחר הנחה</th>
+                <th>הנחה</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
         </div>`;
       }).join("");
       return `<div class="lcNpPurchaseBlock">${cards}</div>`;
@@ -17275,7 +17315,7 @@ if(path === "birthDate"){
           <button type="button" class="lcPhxSimBanner__btn" data-open-risk-sim="1">פתח סימולטור ${escapeHtml(d.company)}</button>
         </div>` : "";
 
-      const body2 = `<div class="lcNpProductGrid">${productCards}</div>${riskSimBannerHtml}`;
+      const body2 = `<div class="lcNpProductGrid lcNpProductGrid--desk">${productCards}</div>`;
 
       // ── Section 3: Insured (multi-select) ──
       const selectedInsuredIds = new Set(insuredIds);
@@ -17416,7 +17456,8 @@ if(path === "birthDate"){
             const ins = this.insureds.find(x => x.id === iid);
             const label = ins ? escapeHtml(ins.label) : escapeHtml(iid);
             const val = escapeHtml((d.sumInsuredPerInsured && d.sumInsuredPerInsured[iid]) || "");
-            return `<div class="lcField lcNpDetailField lcNpDetailField--amount">
+            const activeId = this.getNpDeskActiveInsuredId();
+            return `<div class="lcNpDeskInsuredSlot${iid === activeId ? " is-on" : ""}" data-desk-ins-slot="${escapeHtml(iid)}"><div class="lcField lcNpDetailField lcNpDetailField--amount">
               <div class="lcNpDetailField__meta">כיסוי</div>
               <label class="lcLabel">סכום ביטוח${insuredIds.length > 1 ? ` — ${label}` : ''} (חובה)</label>
               <div class="lcNpDetailField__shell">
@@ -17424,13 +17465,14 @@ if(path === "birthDate"){
                 <input class="lcInput" type="text" inputmode="numeric" data-pdraft-per-insured-sum="${escapeHtml(iid)}" value="${val}" placeholder="לדוגמה: 1,000,000" />
               </div>
               <div class="lcNpDetailField__hint">הזן את סכום הכיסוי המאושר למבוטח</div>
-            </div>`;
+            </div></div>`;
           }).join("") : ''}
           ${needComp ? insuredIds.map(iid => {
             const ins = this.insureds.find(x => x.id === iid);
             const label = ins ? escapeHtml(ins.label) : escapeHtml(iid);
             const val = escapeHtml((d.compensationPerInsured && d.compensationPerInsured[iid]) || "");
-            return `<div class="lcField lcNpDetailField lcNpDetailField--compensation">
+            const activeId = this.getNpDeskActiveInsuredId();
+            return `<div class="lcNpDeskInsuredSlot${iid === activeId ? " is-on" : ""}" data-desk-ins-slot="${escapeHtml(iid)}"><div class="lcField lcNpDetailField lcNpDetailField--compensation">
               <div class="lcNpDetailField__meta">פיצוי</div>
               <label class="lcLabel">סכום פיצוי${insuredIds.length > 1 ? ` — ${label}` : ''} (חובה)</label>
               <div class="lcNpDetailField__shell">
@@ -17438,7 +17480,7 @@ if(path === "birthDate"){
                 <input class="lcInput" type="text" inputmode="numeric" data-pdraft-per-insured-comp="${escapeHtml(iid)}" value="${val}" placeholder="לדוגמה: 500,000" />
               </div>
               <div class="lcNpDetailField__hint">הזן את סכום הפיצוי שייכלל בפוליסה</div>
-            </div>`;
+            </div></div>`;
           }).join("") : ''}
           ${canPledge ? `<div class="lcNpPledgeSwitchWrap">
             <div class="lcNpPledgeSwitch">
@@ -17783,17 +17825,69 @@ if(path === "birthDate"){
       }).join("");
 
       const res = `
-        <div class="lcNpWrapper">
+        <div class="lcNpWrapper lcNpWrapper--desk">
           <div class="lcNpInlineHeroWrap">${pageHeaderInline}</div>
 
-          <div class="lcNpSections">
-            ${makeSection(1, iconCompany, "בחר חברה",      step1Done, true,       body1)}
-            ${makeSection(2, iconProduct, "בחר מוצר ביטוח", step2Done, step2Open, body2)}
-            ${makeSection(3, iconInsured, "בחר מבוטח/ים",  step3Done, step3Open, body3)}
-            ${makeSection(4, iconDetails, "פרטי הכיסוי",   false,     step4Open, body4)}
-          </div>
-
-          ${step4Open ? `${this.renderDuplicationAlertBanner()}<div class="lcNpAddBar">
+          <div class="lcNpDesk" id="lcNpDesk">
+            <div class="lcNpDesk__pageHead">
+              <div>
+                <div class="lcNpDesk__title">פוליסה חדשה — תחנת חיתום</div>
+                <p class="lcNpDesk__lead">המבוטחים כבר מההצעה. בחירת חברה ומוצר, חישוב, והחלה על ההצעה — בלי שינוי בלוגיקת השמירה.</p>
+              </div>
+              <div class="lcNpDesk__chips">
+                <span class="lcNpDesk__chip"><em>הצעה</em> ${escapeHtml(this.insureds.find(x => x.type === "primary")?.label || this.insureds[0]?.label || "—")}</span>
+                <span class="lcNpDesk__chip"><em>מבוטחים</em> ${(this.insureds || []).length}</span>
+              </div>
+            </div>
+            <div class="lcNpDesk__insBar lcNpInsuredGrid">
+              ${(this.insureds || []).map((ins) => {
+                const idx = this.insureds.findIndex(x => x.id === ins.id);
+                const on = ins.id === this.getNpDeskActiveInsuredId();
+                const selected = selectedInsuredIds.has(ins.id);
+                const age = this.calcAge(ins?.data?.birthDate);
+                const smoke = this.getInsuredSmokingLabel(ins);
+                const role = this.getInsuredShortRoleLabel(ins, idx);
+                return `<div class="lcNpDeskTabWrap">
+                  <button type="button" class="lcNpDeskTab${on ? " is-on" : ""}${selected ? " has-ok" : ""}" data-np-desk-tab="${escapeHtml(ins.id)}">
+                    <strong>${escapeHtml(ins.label || role)}</strong>
+                    <small>${escapeHtml(role)} · ${escapeHtml(smoke)}${age ? ` · גיל ${escapeHtml(String(age))}` : ""}</small>
+                  </button>
+                  <button type="button" class="lcNpInsuredCard lcNpDeskInclude${selected ? " lcNpInsuredCard--selected is-on" : ""}" data-np-insured="${escapeHtml(ins.id)}">${selected ? "בפוליסה" : "צירוף"}</button>
+                </div>`;
+              }).join("") || `<div class="lcNpDesk__empty">אין מבוטחים בהצעה</div>`}
+            </div>
+            <div class="lcNpDesk__grid">
+              <aside class="lcNpDesk__fact">
+                ${(() => {
+                  const ins = (this.insureds || []).find(x => x.id === this.getNpDeskActiveInsuredId()) || this.insureds[0];
+                  const d0 = ins?.data || {};
+                  const age = ins ? this.calcAge(d0.birthDate) : "";
+                  const smoke = ins ? this.getInsuredSmokingLabel(ins) : "—";
+                  const smokeOk = safeTrim(d0.smokingStatus) === "no";
+                  return `<div class="lcNpDesk__secTitle"><b>פרטי מבוטח</b> מההצעה — מלא אוטומטית</div>
+                    <div class="lcNpDesk__kv">
+                      <label>שם</label><div class="lcNpDesk__val">${escapeHtml(ins?.label || "—")}</div>
+                      <label>ת.ז.</label><div class="lcNpDesk__val">${escapeHtml(safeTrim(d0.idNumber) || "—")}</div>
+                      <label>ת. לידה</label><div class="lcNpDesk__val">${escapeHtml(safeTrim(d0.birthDate) || "—")}</div>
+                      <label>גיל ביטוחי</label><div class="lcNpDesk__val">${age ? escapeHtml(String(age)) : "—"}</div>
+                      <label>עישון</label><div class="lcNpDesk__val"><span class="lcNpDesk__pill${smokeOk ? " is-ok" : ""}">${escapeHtml(smoke)}</span></div>
+                    </div>`;
+                })()}
+                <div class="lcNpDesk__secTitle"><b>חברה ומוצר לפוליסה</b></div>
+                <div class="lcNpDesk__co">${body1}</div>
+                ${step1Done ? `<div class="lcNpDesk__products">${body2}</div>` : ""}
+              </aside>
+              <section class="lcNpDesk__work">
+                ${step2Done && riskSimBannerHtml ? `<div class="lcNpDesk__sim">${riskSimBannerHtml}</div>` : ""}
+                ${step4Open ? `<div class="lcNpDesk__details">${body4}</div>` : (step2Done ? `<div class="lcNpDesk__hint">סמנו מבוטח ב«צירוף» כדי לפתוח את שדות הפרמיה — הלוגיקה לא השתנתה.</div>` : `<div class="lcNpDesk__hint">בחרו חברה ומוצר כדי להמשיך.</div>`)}
+              </section>
+            </div>
+            ${step4Open ? `${this.renderDuplicationAlertBanner()}<div class="lcNpAddBar lcNpDesk__foot">
+              <div class="lcNpDesk__tot">
+                <div>סה״כ לפני הנחה<strong>${escapeHtml(this.getPolicyPremiumBeforeValue(d) > 0 ? this.formatMoneyValue(this.getPolicyPremiumBeforeValue(d)) : "—")}</strong></div>
+                <div>סה״כ לאחר הנחה<strong>${escapeHtml(this.formatMoneyValue(this.getPolicyPremiumAfterDiscount(d)))}</strong></div>
+              </div>
+              <div class="lcNpDesk__footBtns">
             ${this.editingPolicyId ? `<button type="button" class="lcBtn lcBtn--primary lcNpAddBtn" data-cancel-editpol="1">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               ביטול עריכה
@@ -17802,7 +17896,9 @@ if(path === "birthDate"){
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
               ${this.editingPolicyId ? "שמור שינויים" : "הוסף פוליסה להצעה"}
             </button>
+              </div>
           </div>` : ''}
+          </div>
 
           ${list.length ? `<div class="lcWSection" style="margin-top:24px"><div class="lcWTitle">${this.isCustomerPurchaseSwitchMode() ? "פוליסות בתיק / לשיחלוף" : "פוליסות שנוספו"}</div></div>${groupsHtml}` : ''}
         </div>`;
@@ -17939,6 +18035,15 @@ if(path === "birthDate"){
             }
             this.policyDraft.insuredIds = ids;
             this.policyDraft.insuredId = ids[0] || "";
+            this.render();
+          });
+        });
+
+        $$('[data-np-desk-tab]', this.els.body).forEach(btn => {
+          on(btn, 'click', () => {
+            const iid = btn.getAttribute('data-np-desk-tab') || "";
+            if(!iid) return;
+            this._npDeskActiveInsuredId = iid;
             this.render();
           });
         });
@@ -19304,7 +19409,7 @@ if(path === "birthDate"){
                 })();
             const coverPremRows = this.collectHealthCoverPremiumReportRows(policy);
             const coverPremHtml = coverPremRows.length
-              ? `<div class="lcOpCoverPremList">${coverPremRows.map((row) => `<div class="lcOpCoverPremList__row"><span>${escapeHtml(row.insuredLabel)} · ${escapeHtml(row.company || policy.company || "")} · ${escapeHtml(row.product)} · ${escapeHtml(row.cover)}</span><strong>לפני ${escapeHtml(row.beforeLabel)} · אחרי ${escapeHtml(row.afterLabel)}</strong></div>`).join("")}</div>`
+              ? `<div class="lcOpCoverPremList"><table class="lcOpCoverSheet"><thead><tr><th>מבוטח</th><th>כיסוי</th><th>לפני הנחה</th><th>אחרי הנחה</th></tr></thead><tbody>${coverPremRows.map((row) => `<tr><td>${escapeHtml(row.insuredLabel)}</td><td>${escapeHtml(row.cover)}</td><td class="lcOpCoverSheet__num">${escapeHtml(row.beforeLabel)}</td><td class="lcOpCoverSheet__num">${escapeHtml(row.afterLabel)}</td></tr>`).join("")}</tbody></table></div>`
               : "";
             return `<article class="lcOpPolicyRow lcOpPolicyRow--new" style="animation-delay:${(groupIdx * 60) + (idx * 45)}ms">
               <div class="lcOpPolicyRow__main">
