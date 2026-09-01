@@ -529,15 +529,19 @@
 
 /* ========================= שלב 4 — פרמיה / שיעבוד / מוטבים קומפקטי ========================= */
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcNpPremiumPair{
-  grid-column: span 8;
+  grid-column:1 / -1;
   display:grid;
   grid-template-columns:minmax(0,1fr) minmax(0,1fr);
-  gap:12px;
+  gap:16px;
   min-width:0;
+  width:100%;
+  align-items:stretch;
 }
-#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcNpPremiumPair .lcNpDetailField{
-  grid-column: auto;
+#lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcNpPremiumPair > .lcNpDetailField{
+  grid-column:auto !important;
+  overflow:visible;
   min-width:0;
+  width:100%;
 }
 #lcWizard .lcWizard__body:not([class*="--elemStep"]) .lcNpPledgeSwitchWrap{
   grid-column: span 4;

@@ -63,5 +63,13 @@ assert(wiz.includes('id="lcBenAddBtn"'), "add-beneficiary still bound by id");
 assert(theme.includes(".lcNpAddBtn"), "compact add button styles");
 assert(theme.includes("max-width:max-content"), "add button is not full-width");
 
+const appCss = fs.readFileSync(path.join(ROOT, "app.css"), "utf8");
+console.log("\n7) premium pair layout is in loaded app.css (not squeezed to 1 col)");
+assert(appCss.includes(".lcNpPremiumPair"), "app.css defines .lcNpPremiumPair");
+assert(/\.lcNpPremiumPair\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/.test(appCss), "pair spans full grid row");
+assert(/\.lcNpPremiumPair\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1fr\)/.test(appCss), "before/after sit side by side");
+assert(/\.lcNpPremiumPair\s*>\s*\.lcNpDetailField\s*\{[^}]*grid-column:\s*auto/.test(appCss), "inner cards do not inherit span 4");
+assert(/\.lcNpPremiumPair\s*>\s*\.lcNpDetailField\s*\{[^}]*overflow:\s*visible/.test(appCss), "inner cards are not clipped");
+
 console.log("\n" + (failed ? "FAILED: " + failed : "OK") + "  passed=" + passed);
 process.exit(failed ? 1 : 0);

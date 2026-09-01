@@ -26018,6 +26018,34 @@ body.lcAuthLock .lcLogin__mfaQrBox > canvas{width:min(100%,220px) !important;max
 .lcNpDetailField--money,
 .lcNpDetailField--amount,
 .lcNpDetailField--compensation{ grid-column: span 4; }
+
+/* Before/after premium: full-width row, two equal cards, never a 1-col squeeze. */
+.lcNpPremiumPair{
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+  width: 100%;
+  align-items: stretch;
+}
+.lcNpPremiumPair > .lcNpDetailField{
+  grid-column: auto;
+  overflow: visible;
+  min-width: 0;
+  width: 100%;
+}
+.lcNpPremiumPair .lcLabel,
+.lcNpPremiumPair .lcNpDetailField__meta,
+.lcNpPremiumPair .lcNpDetailField__hint{
+  overflow: visible;
+  max-width: 100%;
+}
+.lcNpPledgeSwitchWrap{
+  grid-column: span 4;
+  min-width: 0;
+  align-self: stretch;
+}
 .lcNpDetailField .lcLabel{
   margin: 0;
   font-size: 12px;
@@ -26213,12 +26241,15 @@ body.lcAuthLock .lcLogin__mfaQrBox > canvas{width:min(100%,220px) !important;max
 @media (max-width: 760px) {
   .lcNpDetailsGrid{ grid-template-columns: 1fr; }
   .lcNpDetailsGrid--healthPricing{ grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .lcNpPremiumPair{ grid-template-columns: 1fr; }
   .lcNpDetailField,
 .lcNpDetailField--date,
 .lcNpDetailField--money,
 .lcNpDetailField--amount,
 .lcNpDetailField--compensation,
-.lcNpPledgeField{ grid-column: 1 / -1; }
+.lcNpPledgeField,
+.lcNpPledgeSwitchWrap,
+.lcNpPremiumPair{ grid-column: 1 / -1; }
   .lcNpDetailsGrid--healthPricing .lcNpDetailField--compact,
 .lcNpDetailsGrid--healthPricing .lcNpDetailField--date{ grid-column: span 1; }
   .lcNpDetailField{ padding: 14px; border-radius: 20px; }
