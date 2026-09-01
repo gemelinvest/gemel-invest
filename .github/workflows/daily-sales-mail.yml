@@ -1,0 +1,88 @@
+# Restore the 12:30 / 15:00 / 20:00 Asia/Jerusalem daily-sales Outlook send.
+# Hosted Supabase Edge Functions do not support Deno.cron; this workflow is
+# the clock. It POSTs { action: "send-slot" } to gi-daily-sales-mail.
+#
+# GitHub cron is UTC-only. Israel is UTC+3 (IDT) or UTC+2 (IST), so we
+# register both offsets and skip unless local Israel time is a real slot.
+# Schedule jobs run only after this file is on the default branch.
+#
+# This does NOT deploy the Edge Function. After changing
+# supabase/functions/gi-daily-sales-mail, run:
+#   supabase functions deploy gi-daily-sales-mail --project-ref vhvlkerectggovfihjgm --no-verify-jwt
+
+name: Daily sales mail slots
+
+on:
+  schedule:
+    # 12:30 / 15:00 / 20:00 IDT (UTC+3)
+    - cron: "30 9 * * *"
+    - cron: "0 12 * * *"
+    - cron: "0 17 * * *"
+    # 12:30 / 15:00 / 20:00 IST (UTC+2)
+    - cron: "30 10 * * *"
+    - cron: "0 13 * * *"
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: gi-daily-sales-mail-slot
+  cancel-in-progress: false
+
+jobs:
+  send-slot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fire send-slot at Israel 12:30 / 15:00 / 20:00
+        env:
+          MAIL_FN_URL: https://vhvlkerectggovfihjgm.supabase.co/functions/v1/gi-daily-sales-mail
+          MAIL_FN_KEY: sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 - <<'PY'
+          from datetime import datetime
+          from zoneinfo import ZoneInfo
+          import json, os, sys, urllib.error, urllib.request
+
+          event = os.environ.get("GITHUB_EVENT_NAME") or ""
+          now = datetime.now(ZoneInfo("Asia/Jerusalem"))
+          minutes = now.hour * 60 + now.minute
+          slots = (12 * 60 + 30, 15 * 60, 20 * 60)
+          window = 35
+          on_slot = any(min(abs(minutes - slot), 24 * 60 - abs(minutes - slot)) <= window for slot in slots)
+          if event != "workflow_dispatch" and not on_slot:
+            print("skip: Israel {0} is not a send slot".format(now.strftime("%Y-%m-%d %H:%M %Z")))
+            sys.exit(0)
+
+          url = os.environ["MAIL_FN_URL"]
+          key = os.environ["MAIL_FN_KEY"]
+          body = json.dumps({"action": "send-slot", "scheduled": True}).encode("utf-8")
+          req = urllib.request.Request(
+            url,
+            data=body,
+            method="POST",
+            headers={
+              "Content-Type": "application/json",
+              "apikey": key,
+              "Authorization": "Bearer " + key,
+            },
+          )
+          try:
+            with urllib.request.urlopen(req, timeout=90) as res:
+              raw = res.read().decode("utf-8", "replace")
+              print("status", res.status)
+              print(raw)
+              data = json.loads(raw) if raw else {}
+          except urllib.error.HTTPError as err:
+            raw = err.read().decode("utf-8", "replace")
+            print("status", err.code)
+            print(raw)
+            sys.exit(1)
+
+          if data.get("ok") is False:
+            print("send-slot failed:", data.get("error"))
+            sys.exit(1)
+          if data.get("skipped"):
+            print("send-slot skipped:", data.get("error"))
+          else:
+            print("send-slot ok:", data.get("message") or "sent")
+          PY
