@@ -303,7 +303,7 @@ const CUSTOMER = "דוד כהן";
 const state = {
   view: "pick",
   company: "הפניקס",
-  product: "",
+  product: "בריאות",
   activeIns: "p",
   selectedIns: new Set(["p","s"]),
   covers: new Set(["ניתוחים בישראל","תרופות מחוץ לסל","השתלות"]),
@@ -353,6 +353,7 @@ function calcBundle(){
 
 function setView(v){
   state.view = v;
+  if(v === "sim" && !state.product) state.product = "בריאות";
   document.querySelectorAll(".reviewBar button").forEach(b => b.classList.toggle("is-on", b.dataset.view === v));
   render();
 }
@@ -565,7 +566,7 @@ document.getElementById("body").addEventListener("click", (e) => {
   const co = e.target.closest("[data-company]");
   if(co){ state.company = co.dataset.company; state.product = ""; state.calculated = false; render(); return; }
   const pr = e.target.closest("[data-product]");
-  if(pr){ state.product = pr.dataset.product; state.calculated = false; render(); return; }
+  if(pr){ state.product = pr.dataset.product; state.calculated = false; setView("sim"); return; }
   if(e.target.id === "openSim" && state.product){ setView("sim"); return; }
   if(e.target.id === "backPick" || e.target.id === "addAnother"){ setView("pick"); return; }
   if(e.target.id === "calcBtn"){ state.calculated = true; render(); return; }
