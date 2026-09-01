@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260901-step4-desk-v1";
+  const GI_WIZARD_BUILD = "20260901-step4-fields-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -11263,6 +11263,13 @@ if(path === "birthDate"){
       return (this.insureds || []).filter((ins) => ins && ins.id);
     },
 
+    getNpDeskSlotInsuredId(insuredIds){
+      const ids = Array.isArray(insuredIds) ? insuredIds.map((id) => safeTrim(id)).filter(Boolean) : [];
+      const active = this.getNpDeskActiveInsuredId();
+      if(active && ids.includes(active)) return active;
+      return ids[0] || "";
+    },
+
     buildInsuredLiveLabel(ins, index){
       const base = this.getInsuredBaseLabel(ins, index);
       const first = safeTrim(ins?.data?.firstName);
@@ -16966,8 +16973,8 @@ if(path === "birthDate"){
       const afterVal = (d.premiumPerInsured && d.premiumPerInsured[iid]) || "";
       const beforeVal = (d.premiumBeforePerInsured && d.premiumBeforePerInsured[iid]) || "";
       const nameLabel = escapeHtml(this.getInsuredPremiumCardLabel(ins, insIdx));
-      const activeId = this.getNpDeskActiveInsuredId();
-      return `<div class="lcNpDeskInsuredSlot${iid === activeId ? " is-on" : ""}" data-desk-ins-slot="${escapeHtml(iid)}">
+      const slotId = this.getNpDeskSlotInsuredId(d && d.insuredIds);
+      return `<div class="lcNpDeskInsuredSlot${iid === slotId ? " is-on" : ""}" data-desk-ins-slot="${escapeHtml(iid)}">
         <div class="lcNpPremiumPair">
         ${this.renderNpPremiumMoneyFieldHtml({
           meta: "אופציונלי",
@@ -16992,7 +16999,7 @@ if(path === "birthDate"){
       const covers = this.getHealthCoverList(d).map((c) => safeTrim(c)).filter(Boolean);
       if(!covers.length || !insuredIds.length) return "";
       const company = escapeHtml(safeTrim(d.company) || "—");
-      const activeId = this.getNpDeskActiveInsuredId();
+      const slotId = this.getNpDeskSlotInsuredId(insuredIds);
       const cards = insuredIds.map((iid) => {
         const ins = this.insureds.find((x) => x.id === iid);
         const who = escapeHtml(ins?.label || "מבוטח");
@@ -17028,7 +17035,7 @@ if(path === "birthDate"){
             <td class="lcNpCoverSheet__disc">${escapeHtml(disc)}</td>
           </tr>`;
         }).join("");
-        return `<div class="lcNpPurchaseCard lcNpDeskInsuredSlot${iid === activeId ? " is-on" : ""}" data-desk-ins-slot="${escapeHtml(iid)}">
+        return `<div class="lcNpPurchaseCard lcNpDeskInsuredSlot${iid === slotId ? " is-on" : ""}" data-desk-ins-slot="${escapeHtml(iid)}">
           <div class="lcNpPurchaseCard__head">כיסויים בפרמיה · ${who} · ${company}</div>
           <table class="lcNpCoverSheet">
             <thead>
@@ -17456,8 +17463,8 @@ if(path === "birthDate"){
             const ins = this.insureds.find(x => x.id === iid);
             const label = ins ? escapeHtml(ins.label) : escapeHtml(iid);
             const val = escapeHtml((d.sumInsuredPerInsured && d.sumInsuredPerInsured[iid]) || "");
-            const activeId = this.getNpDeskActiveInsuredId();
-            return `<div class="lcNpDeskInsuredSlot${iid === activeId ? " is-on" : ""}" data-desk-ins-slot="${escapeHtml(iid)}"><div class="lcField lcNpDetailField lcNpDetailField--amount">
+            const slotId = this.getNpDeskSlotInsuredId(insuredIds);
+            return `<div class="lcNpDeskInsuredSlot${iid === slotId ? " is-on" : ""}" data-desk-ins-slot="${escapeHtml(iid)}"><div class="lcField lcNpDetailField lcNpDetailField--amount">
               <div class="lcNpDetailField__meta">כיסוי</div>
               <label class="lcLabel">סכום ביטוח${insuredIds.length > 1 ? ` — ${label}` : ''} (חובה)</label>
               <div class="lcNpDetailField__shell">
@@ -17471,8 +17478,8 @@ if(path === "birthDate"){
             const ins = this.insureds.find(x => x.id === iid);
             const label = ins ? escapeHtml(ins.label) : escapeHtml(iid);
             const val = escapeHtml((d.compensationPerInsured && d.compensationPerInsured[iid]) || "");
-            const activeId = this.getNpDeskActiveInsuredId();
-            return `<div class="lcNpDeskInsuredSlot${iid === activeId ? " is-on" : ""}" data-desk-ins-slot="${escapeHtml(iid)}"><div class="lcField lcNpDetailField lcNpDetailField--compensation">
+            const slotId = this.getNpDeskSlotInsuredId(insuredIds);
+            return `<div class="lcNpDeskInsuredSlot${iid === slotId ? " is-on" : ""}" data-desk-ins-slot="${escapeHtml(iid)}"><div class="lcField lcNpDetailField lcNpDetailField--compensation">
               <div class="lcNpDetailField__meta">פיצוי</div>
               <label class="lcLabel">סכום פיצוי${insuredIds.length > 1 ? ` — ${label}` : ''} (חובה)</label>
               <div class="lcNpDetailField__shell">
@@ -17828,7 +17835,7 @@ if(path === "birthDate"){
         <div class="lcNpWrapper lcNpWrapper--desk">
           <div class="lcNpInlineHeroWrap">${pageHeaderInline}</div>
 
-          <div class="lcNpDesk" id="lcNpDesk">
+          <div class="lcNpDesk${step2Done ? " lcNpDesk--ready" : ""}${step4Open ? " lcNpDesk--fields" : ""}" id="lcNpDesk">
             <div class="lcNpDesk__pageHead">
               <div>
                 <div class="lcNpDesk__title">פוליסה חדשה — תחנת חיתום</div>
@@ -17879,7 +17886,7 @@ if(path === "birthDate"){
               </aside>
               <section class="lcNpDesk__work">
                 ${step2Done && riskSimBannerHtml ? `<div class="lcNpDesk__sim">${riskSimBannerHtml}</div>` : ""}
-                ${step4Open ? `<div class="lcNpDesk__details">${body4}</div>` : (step2Done ? `<div class="lcNpDesk__hint">סמנו מבוטח ב«צירוף» כדי לפתוח את שדות הפרמיה — הלוגיקה לא השתנתה.</div>` : `<div class="lcNpDesk__hint">בחרו חברה ומוצר כדי להמשיך.</div>`)}
+                ${step4Open ? `<div class="lcNpDesk__details" id="lcNpDeskDetails">${body4}</div>` : (step2Done ? `<div class="lcNpDesk__hint">סמנו מבוטח ב«צירוף» כדי לפתוח את שדות הפרמיה — הלוגיקה לא השתנתה.</div>` : `<div class="lcNpDesk__hint">בחרו חברה ומוצר כדי להמשיך.</div>`)}
               </section>
             </div>
             ${step4Open ? `${this.renderDuplicationAlertBanner()}<div class="lcNpAddBar lcNpDesk__foot">
@@ -18010,6 +18017,9 @@ if(path === "birthDate"){
             this.policyDraft.umbrellaDisabilityAmount = "";
             this.policyDraft.umbrellaDeathAmount = "";
             this.render();
+            try {
+              this.els.body?.querySelector?.("#lcNpDeskDetails")?.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+            } catch(_e) {}
           });
         });
 

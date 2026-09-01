@@ -11,9 +11,9 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260901-step4-desk-v1";
+const APP_TAG = "20260901-step4-fields-v1";
 const FORM_TAG = "20260826-phoenix-ci-3148-v1";
-const WIZARD_TAG = "20260901-step4-desk-v1";
+const WIZARD_TAG = "20260901-step4-fields-v1";
 let failed = 0;
 let passed = 0;
 

@@ -61,9 +61,12 @@ assert(wiz.includes('miss("חברת ביטוח"'), "company required");
 assert(wiz.includes('miss("מוצר ביטוח"'), "product required");
 
 console.log("\n6) css + cache");
-assert(css.includes(".lcNpDesk{") || css.includes(".lcNpDesk {") || css.includes(".lcNpDesk{\n") || css.includes(".lcNpDesk{\r") || css.includes(".lcNpDesk{"), "desk styles in app.css");
-assert(css.includes(".lcNpCoverSheet"), "cover sheet styles");
-assert(app.includes('GI_WIZARD_JS_VERSION = "20260901-step4-desk-v1"'), "wizard cache bump");
+assert(wiz.includes('lcNpDesk--ready'), "desk opens after company+product");
+assert(wiz.includes('id="lcNpDeskDetails"'), "details panel id after product");
+assert(wiz.includes("getNpDeskSlotInsuredId"), "visible slot follows selected insured");
+assert(css.includes(".lcNpDesk--ready"), "ready layout in css");
+assert(css.includes(".lcNpDesk--fields"), "open fields layout in css");
+assert(app.includes('GI_WIZARD_JS_VERSION = "20260901-step4-fields-v1"'), "wizard cache bump");
 
 console.log("\n" + (failed ? "FAILED: " + failed : "OK") + "  passed=" + passed);
 process.exit(failed ? 1 : 0);

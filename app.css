@@ -25702,7 +25702,7 @@ body.lcAuthLock .lcLogin__mfaQrBox > canvas{width:min(100%,220px) !important;max
   background:#fff;
   border:1px solid #d9e2ec;
   border-radius:10px;
-  overflow:hidden;
+  overflow:visible;
 }
 .lcNpDesk__pageHead{
   display:flex;
@@ -25738,9 +25738,34 @@ body.lcAuthLock .lcLogin__mfaQrBox > canvas{width:min(100%,220px) !important;max
   border:1px solid #d9e2ec;background:#fff;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;
 }
 .lcNpDeskInclude.is-on,.lcNpDeskInclude.lcNpInsuredCard--selected{background:#e8f0fe;border-color:#1d4ed8;color:#1d4ed8}
-.lcNpDesk__grid{display:grid;grid-template-columns:minmax(260px,320px) minmax(0,1fr);min-height:420px}
+.lcNpDesk__grid{display:grid;grid-template-columns:minmax(260px,320px) minmax(0,1fr);min-height:280px}
+.lcNpDesk--ready .lcNpDesk__grid{
+  grid-template-columns:1fr;
+  min-height:0;
+}
+.lcNpDesk--ready .lcNpDesk__fact{
+  border-inline-end:0;
+  border-bottom:1px solid #d9e2ec;
+  display:grid;
+  grid-template-columns:minmax(220px,280px) minmax(0,1fr);
+  gap:12px 20px;
+  align-items:start;
+}
 .lcNpDesk__fact{border-inline-end:1px solid #d9e2ec;background:#f8fafc;padding:14px 16px}
-.lcNpDesk__work{padding:14px 16px;background:#fff;min-width:0}
+.lcNpDesk__work{padding:14px 16px;background:#fff;min-width:0;width:100%;overflow:visible}
+.lcNpDesk--ready .lcNpDesk__work{
+  padding:18px 20px 24px;
+  min-height:320px;
+}
+.lcNpDesk__details{display:grid;gap:16px;width:100%;min-width:0}
+.lcNpDesk--fields .lcNpDesk__details .lcNpDetailsGrid{
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  width:100%;
+}
+.lcNpDesk--fields .lcNpDesk__details .lcNpPremiumPair,
+.lcNpDesk--fields .lcNpDesk__details .lcNpDetailField--date{
+  grid-column:1 / -1;
+}
 .lcNpDesk__secTitle{font-size:11px;font-weight:800;color:#8a97a6;margin:0 0 10px;letter-spacing:.04em}
 .lcNpDesk__secTitle b{color:#12263a;font-size:13px;letter-spacing:0}
 .lcNpDesk__kv{display:grid;grid-template-columns:92px minmax(0,1fr);gap:6px 10px;align-items:center;margin-bottom:14px}
@@ -25756,8 +25781,8 @@ body.lcAuthLock .lcLogin__mfaQrBox > canvas{width:min(100%,220px) !important;max
 .lcNpDesk__tot{display:flex;gap:18px;font-size:11.5px;color:#5b6b7c;font-weight:700}
 .lcNpDesk__tot strong{display:block;font-size:16px;color:#12263a;font-variant-numeric:tabular-nums}
 .lcNpDesk__footBtns{display:flex;gap:8px;flex-wrap:wrap}
-.lcNpDeskInsuredSlot{display:none}
-.lcNpDeskInsuredSlot.is-on{display:block}
+.lcNpDeskInsuredSlot{display:none;width:100%}
+.lcNpDeskInsuredSlot.is-on{display:block;width:100%}
 .lcNpProductGrid--desk{grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
 .lcNpProductGrid--desk .lcNpProductCard{padding:10px 8px;min-height:0}
 .lcNpProductGrid--desk .lcNpProductCard__sub{display:none}
