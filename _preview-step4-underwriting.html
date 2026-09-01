@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>מוקאפ שלב 4 — פוליסות חדשות · GEMEL INVEST</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root{
+    --navy:#12263a;
+    --navy-2:#1b334d;
+    --line:#d9e2ec;
+    --line-2:#e8eef4;
+    --bg:#eef2f6;
+    --surface:#fff;
+    --ink:#12263a;
+    --mute:#5b6b7c;
+    --faint:#8a97a6;
+    --accent:#1d4ed8;
+    --accent-soft:#e8f0fe;
+    --ok:#0f766e;
+    --ok-bg:#e7f6f3;
+    --warn:#b45309;
+    --row:#f7f9fb;
+    --ctl-h:36px;
+    --r:6px;
+    --font:Heebo, Arial, sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;line-height:1.45}
+  button,input,select{font:inherit}
+  button{cursor:pointer}
+  .app{max-width:1320px;margin:0 auto;padding:16px 16px 40px}
+
+  .mockNote{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    background:#12263a;color:#fff;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12.5px;
+  }
+  .mockNote strong{font-weight:800}
+  .mockNote span{opacity:.82}
+  .viewSwitch{display:flex;gap:6px}
+  .viewSwitch button{
+    height:30px;padding:0 12px;border:1px solid rgba(255,255,255,.22);background:transparent;color:#fff;
+    border-radius:5px;font-size:12px;font-weight:700;
+  }
+  .viewSwitch button.is-on{background:#fff;color:var(--navy);border-color:#fff}
+
+  /* wizard chrome */
+  .wiz{
+    background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden;
+    box-shadow:0 10px 30px rgba(18,38,58,.06);
+  }
+  .wizHead{
+    display:flex;align-items:center;justify-content:space-between;gap:16px;
+    padding:10px 16px;background:var(--navy);color:#fff;
+  }
+  .wizBrand{font-size:12px;font-weight:800;letter-spacing:.08em}
+  .wizSteps{display:flex;gap:4px;flex-wrap:wrap}
+  .wizSteps span{
+    font-size:11px;opacity:.55;padding:4px 8px;border-radius:4px;font-weight:600;
+  }
+  .wizSteps span.is-done{opacity:.9}
+  .wizSteps span.is-now{opacity:1;background:rgba(255,255,255,.14)}
+
+  .pageHead{
+    display:flex;align-items:flex-end;justify-content:space-between;gap:16px;
+    padding:14px 18px 12px;border-bottom:1px solid var(--line-2);background:#fbfcfd;
+  }
+  .pageHead h1{margin:0;font-size:18px;font-weight:800}
+  .pageHead p{margin:2px 0 0;color:var(--mute);font-size:12.5px}
+  .metaChips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px;
+    border:1px solid var(--line);border-radius:999px;background:#fff;font-size:12px;font-weight:700;color:var(--navy-2);
+  }
+  .chip em{font-style:normal;color:var(--faint);font-weight:600}
+
+  /* insured tabs — primary navigation */
+  .insBar{
+    display:flex;align-items:stretch;gap:0;padding:0 12px;
+    border-bottom:1px solid var(--line);background:#fff;
+  }
+  .insTab{
+    appearance:none;border:0;background:transparent;min-width:180px;
+    padding:12px 14px 10px;border-bottom:2px solid transparent;color:var(--mute);
+    text-align:right;
+  }
+  .insTab strong{display:block;font-size:13.5px;font-weight:800;color:inherit}
+  .insTab small{display:block;font-size:11px;margin-top:1px}
+  .insTab.is-on{border-bottom-color:var(--accent);color:var(--ink);background:linear-gradient(#fff,#f5f8ff)}
+  .insTab .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#cbd5e1;margin-inline-start:6px;vertical-align:middle}
+  .insTab.is-on .dot{background:var(--accent)}
+  .insTab.has-ok .dot{background:var(--ok)}
+
+  .desk{display:grid;grid-template-columns:minmax(280px,340px) minmax(0,1fr);min-height:520px}
+  .factPane{border-inline-end:1px solid var(--line);background:#f8fafc;padding:14px 16px 18px}
+  .workPane{padding:14px 16px 18px;background:#fff}
+
+  .secTitle{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    font-size:11px;font-weight:800;letter-spacing:.06em;color:var(--faint);
+    text-transform:uppercase;margin:0 0 10px;
+  }
+  .secTitle b{color:var(--navy);letter-spacing:0;font-size:13px;text-transform:none}
+
+  .kv{display:grid;grid-template-columns:92px minmax(0,1fr);gap:6px 10px;align-items:center;margin-bottom:12px}
+  .kv label{font-size:12px;font-weight:700;color:var(--mute)}
+  .kv .val{font-size:13.5px;font-weight:800}
+  .kv .ctl, .field .ctl{
+    width:100%;height:var(--ctl-h);border:1px solid var(--line);border-radius:var(--r);
+    padding:0 10px;background:#fff;color:var(--ink);font-weight:600;
+  }
+  .kv .ctl:focus, .field .ctl:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .pill{
+    display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:999px;
+    font-size:11px;font-weight:800;
+  }
+  .pill--ok{background:var(--ok-bg);color:var(--ok)}
+  .pill--no{background:#f1f5f9;color:var(--mute)}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .field{display:flex;flex-direction:column;gap:5px;min-width:0}
+  .field span{font-size:11.5px;font-weight:700;color:var(--mute)}
+  .money{
+    display:flex;align-items:center;gap:8px;height:var(--ctl-h);border:1px solid var(--line);
+    border-radius:var(--r);padding:0 8px 0 10px;background:#fff;
+  }
+  .money em{font-style:normal;font-size:12px;font-weight:800;color:var(--faint);min-width:14px}
+  .money input{border:0;outline:none;width:100%;font-weight:800;font-variant-numeric:tabular-nums;background:transparent}
+
+  .simStrip{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#f8fafc;margin-bottom:14px;
+  }
+  .simStrip p{margin:0;font-size:12.5px;color:var(--mute)}
+  .simStrip strong{display:block;color:var(--ink);font-size:13px;margin-bottom:1px}
+  .btn{
+    height:34px;padding:0 14px;border-radius:var(--r);border:1px solid var(--line);
+    background:#fff;color:var(--navy);font-weight:800;font-size:13px;white-space:nowrap;
+  }
+  .btn--primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .btn--navy{background:var(--navy);border-color:var(--navy);color:#fff}
+  .btn--ghost{background:transparent}
+
+  table.sheet{width:100%;border-collapse:separate;border-spacing:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  table.sheet th, table.sheet td{padding:8px 10px;text-align:right;border-bottom:1px solid var(--line-2);font-size:13px}
+  table.sheet th{background:#f3f6f9;font-size:11px;font-weight:800;color:var(--mute);letter-spacing:.04em}
+  table.sheet td{font-weight:600;background:#fff}
+  table.sheet tr:last-child td{border-bottom:0}
+  table.sheet .num{font-variant-numeric:tabular-nums;font-weight:800;direction:ltr;text-align:left}
+  table.sheet tfoot td{background:#f8fafc;font-weight:800}
+  table.sheet .cover{font-weight:800}
+
+  .premPair{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+  .premCard{
+    border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fff;min-width:0;
+  }
+  .premCard label{display:block;font-size:11.5px;font-weight:800;color:var(--mute);margin-bottom:6px}
+  .premCard .amt{display:flex;align-items:baseline;gap:6px}
+  .premCard .amt b{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .premCard .amt i{font-style:normal;color:var(--faint);font-weight:700}
+  .premCard.is-after{border-color:#bfdbfe;background:#f8fbff}
+
+  .subCard{border:1px solid var(--line);border-radius:8px;margin-top:12px;overflow:hidden}
+  .subCard__h{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    padding:8px 12px;background:#f8fafc;border-bottom:1px solid var(--line-2);font-size:13px;font-weight:800;
+  }
+  .subCard__b{padding:10px 12px}
+  .miniRow{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end}
+  .toggle{
+    display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;color:var(--mute);
+  }
+  .track{width:34px;height:18px;border-radius:99px;background:#cbd5e1;position:relative}
+  .track::after{content:"";position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:2px;inset-inline-start:2px;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+  .track.is-on{background:var(--accent)}
+  .track.is-on::after{inset-inline-start:18px}
+
+  .foot{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+    padding:10px 16px;border-top:1px solid var(--line);background:#fbfcfd;
+  }
+  .tot{display:flex;gap:18px}
+  .tot div{font-size:11.5px;color:var(--mute);font-weight:700}
+  .tot strong{display:block;font-size:16px;color:var(--ink);font-variant-numeric:tabular-nums}
+
+  /* ops report */
+  .ops{padding:16px 18px 20px}
+  .ops h2{margin:0 0 4px;font-size:16px}
+  .opsLead{margin:0 0 14px;color:var(--mute);font-size:12.5px}
+  .opRow{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}
+  .opMain{display:flex;justify-content:space-between;gap:16px;padding:12px 14px;background:#fff}
+  .opCo{font-size:11px;font-weight:800;color:var(--faint);letter-spacing:.06em}
+  .opCo b{display:block;font-size:15px;color:var(--ink);letter-spacing:0;margin-top:2px}
+  .opMetrics{display:flex;gap:18px}
+  .opMetrics span{display:block;font-size:11px;color:var(--mute);font-weight:700}
+  .opMetrics strong{font-size:14px}
+  .opCovers{border-top:1px solid var(--line-2)}
+  .opCovers table{border:0;border-radius:0}
+  .opCovers th{background:#f8fafc}
+
+  .hidden{display:none !important}
+  @media (max-width:900px){
+    .desk{grid-template-columns:1fr}
+    .factPane{border-inline-end:0;border-bottom:1px solid var(--line)}
+    .grid2,.premPair,.miniRow{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="mockNote">
+    <div><strong>מוקאפ לאישור · שלב 4 פוליסות חדשות</strong> <span>אם יאושר — ייושם אחד־לאחד. האשף החי לא משתנה עד האישור.</span></div>
+    <div class="viewSwitch" role="tablist" aria-label="מסכי מוקאפ">
+      <button type="button" class="is-on" data-view="risk">מסך ריסק</button>
+      <button type="button" data-view="health">מסך בריאות</button>
+      <button type="button" data-view="ops">מסך דוח תפעולי</button>
+    </div>
+  </div>
+
+  <div class="wiz" id="screenRisk">
+    <div class="wizHead">
+      <div class="wizBrand">GEMEL INVEST</div>
+      <div class="wizSteps">
+        <span class="is-done">1 פרטי לקוח</span>
+        <span class="is-done">2 פוליסות קיימות</span>
+        <span class="is-done">3 התאמת צרכים</span>
+        <span class="is-now">4 פוליסות חדשות</span>
+        <span>5 משלם</span>
+        <span>6 הצהרת בריאות</span>
+        <span>7 סיום</span>
+      </div>
+    </div>
+    <div class="pageHead">
+      <div>
+        <h1>פוליסה חדשה — תחנת חיתום</h1>
+        <p>המבוטחים כבר מההצעה. בחירת חברה ומוצר למבוטח הפעיל, חישוב, והחלה על כל ההצעה.</p>
+      </div>
+      <div class="metaChips">
+        <span class="chip"><em>הצעה</em> סומך אוריה</span>
+        <span class="chip"><em>מבוטחים</em> 2</span>
+        <span class="chip"><em>סטטוס</em> בחישוב</span>
+      </div>
+    </div>
+    <div class="insBar" data-ins-bar>
+      <button type="button" class="insTab is-on has-ok" data-ins="p1">
+        <strong>סומך אוריה <i class="dot"></i></strong>
+        <small>מבוטח ראשי · לא מעשן · גיל 38</small>
+      </button>
+      <button type="button" class="insTab" data-ins="p2">
+        <strong>סומך נועה <i class="dot"></i></strong>
+        <small>בת זוג · מעשנת · גיל 36</small>
+      </button>
+    </div>
+    <div class="desk">
+      <aside class="factPane">
+        <div class="secTitle"><b>פרטי מבוטח</b> מההצעה — מלא אוטומטית</div>
+        <div class="kv" data-fact>
+          <label>שם</label><div class="val" data-k="name">סומך אוריה</div>
+          <label>ת.ז.</label><div class="val" data-k="id">312445891</div>
+          <label>ת. לידה</label><div class="val" data-k="dob">01/03/1988</div>
+          <label>גיל ביטוחי</label><div class="val" data-k="age">38</div>
+          <label>עישון</label><div class="val" data-k="smoke"><span class="pill pill--ok">לא מעשן</span></div>
+        </div>
+        <div class="secTitle"><b>חיתום למבוטח זה</b></div>
+        <div class="kv">
+          <label>חברה</label>
+          <select class="ctl"><option selected>הפניקס</option><option>מנורה</option><option>כלל</option><option>מגדל</option></select>
+          <label>מוצר</label>
+          <select class="ctl"><option selected>ריסק</option><option>ריסק משכנתא</option></select>
+          <label>תחילת ביטוח</label>
+          <input class="ctl" type="text" value="01/09/2026" dir="ltr"/>
+        </div>
+      </aside>
+      <section class="workPane">
+        <div class="simStrip">
+          <div>
+            <strong>סימולטור תעריף — הפניקס ריסק</strong>
+            <p>הפרטים משמאל כבר בחישוב. לאחר אישור, כל המבוטחים יתמלאו לפי חברה, מוצר, הנחה ופרמיה.</p>
+          </div>
+          <button type="button" class="btn btn--navy">חשב פרמיה</button>
+        </div>
+        <div class="grid2" style="margin-bottom:12px">
+          <label class="field"><span>סכום ביטוח (חובה)</span>
+            <span class="money"><em>₪</em><input value="600,000" dir="ltr"/></span>
+          </label>
+          <label class="field"><span>הנחה</span>
+            <span class="money"><input value="15%" dir="ltr"/></span>
+          </label>
+        </div>
+        <div class="premPair">
+          <div class="premCard">
+            <label>פרמיה לפני הנחה · אופציונלי</label>
+            <div class="amt"><i>₪</i><b>187.00</b></div>
+          </div>
+          <div class="premCard is-after">
+            <label>פרמיה לאחר הנחה · חובה</label>
+            <div class="amt"><i>₪</i><b>159.00</b></div>
+          </div>
+        </div>
+        <div class="subCard">
+          <div class="subCard__h">שיעבוד ומוטבים
+            <span class="toggle">שיעבוד / מוטב בלתי חוזר <span class="track"></span> כבוי</span>
+          </div>
+          <div class="subCard__b">
+            <div class="miniRow">
+              <label class="field"><span>מוטב</span><input class="ctl" value="סומך נועה"/></label>
+              <label class="field"><span>קרבה</span><input class="ctl" value="בת זוג"/></label>
+              <button type="button" class="btn">+ הוסף מוטב</button>
+            </div>
+          </div>
+        </div>
+        <div class="subCard">
+          <div class="subCard__h">הרחבות לפוליסה <button type="button" class="btn btn--ghost">פתח</button></div>
+        </div>
+      </section>
+    </div>
+    <div class="foot">
+      <div class="tot">
+        <div>סה״כ לפני הנחה (כל המבוטחים)<strong>₪ 412.00</strong></div>
+        <div>סה״כ לאחר הנחה<strong>₪ 350.00</strong></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button type="button" class="btn">שמור טיוטה</button>
+        <button type="button" class="btn btn--primary">החל על ההצעה</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wiz hidden" id="screenHealth">
+    <div class="wizHead">
+      <div class="wizBrand">GEMEL INVEST</div>
+      <div class="wizSteps">
+        <span class="is-done">1 פרטי לקוח</span>
+        <span class="is-done">2 פוליסות קיימות</span>
+        <span class="is-done">3 התאמת צרכים</span>
+        <span class="is-now">4 פוליסות חדשות</span>
+        <span>5 משלם</span>
+        <span>6 הצהרת בריאות</span>
+        <span>7 סיום</span>
+      </div>
+    </div>
+    <div class="pageHead">
+      <div>
+        <h1>פוליסה חדשה — בריאות</h1>
+        <p>כל כיסוי שנבחר משתקף בהצעה עם פרמיה לפני הנחה ואחרי הנחה.</p>
+      </div>
+      <div class="metaChips">
+        <span class="chip"><em>חברה</em> מנורה</span>
+        <span class="chip"><em>מוצר</em> בריאות</span>
+      </div>
+    </div>
+    <div class="insBar">
+      <button type="button" class="insTab is-on has-ok">
+        <strong>סומך אוריה <i class="dot"></i></strong>
+        <small>מבוטח ראשי · לא מעשן · גיל 38</small>
+      </button>
+      <button type="button" class="insTab">
+        <strong>סומך נועה <i class="dot"></i></strong>
+        <small>בת זוג · מעשנת · גיל 36</small>
+      </button>
+    </div>
+    <div class="desk">
+      <aside class="factPane">
+        <div class="secTitle"><b>פרטי מבוטח</b></div>
+        <div class="kv">
+          <label>שם</label><div class="val">סומך אוריה</div>
+          <label>ת.ז.</label><div class="val">312445891</div>
+          <label>ת. לידה</label><div class="val">01/03/1988</div>
+          <label>עישון</label><div class="val"><span class="pill pill--ok">לא מעשן</span></div>
+        </div>
+        <div class="secTitle"><b>חיתום</b></div>
+        <div class="kv">
+          <label>חברה</label><select class="ctl"><option selected>מנורה</option></select>
+          <label>מוצר</label><select class="ctl"><option selected>בריאות</option></select>
+          <label>תחילת ביטוח</label><input class="ctl" value="01/09/2026" dir="ltr"/>
+        </div>
+      </aside>
+      <section class="workPane">
+        <div class="secTitle"><b>כיסויים בפרמיה</b> כמו שיופיע בהצעה ובדוח התפעולי</div>
+        <table class="sheet">
+          <thead>
+            <tr>
+              <th>כיסוי</th>
+              <th>פרמיה לפני הנחה</th>
+              <th>פרמיה לאחר הנחה</th>
+              <th>הנחה</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="cover">ניתוחים בחו״ל</td>
+              <td class="num">₪ 180.00</td>
+              <td class="num">₪ 154.00</td>
+              <td>14%</td>
+            </tr>
+            <tr>
+              <td class="cover">תרופות</td>
+              <td class="num">₪ 92.00</td>
+              <td class="num">₪ 78.00</td>
+              <td>15%</td>
+            </tr>
+            <tr>
+              <td class="cover">השתלות</td>
+              <td class="num">₪ 61.00</td>
+              <td class="num">₪ 52.00</td>
+              <td>15%</td>
+            </tr>
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>סה״כ מבוטח זה</td>
+              <td class="num">₪ 333.00</td>
+              <td class="num">₪ 284.00</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+        <p style="margin:10px 0 0;color:var(--mute);font-size:12px;font-weight:600">לפני הנחה אופציונלי. לאחר הנחה נשמר לכל כיסוי בהצעה.</p>
+      </section>
+    </div>
+    <div class="foot">
+      <div class="tot">
+        <div>סה״כ לפני הנחה (כל המבוטחים)<strong>₪ 666.00</strong></div>
+        <div>סה״כ לאחר הנחה<strong>₪ 568.00</strong></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button type="button" class="btn">שמור טיוטה</button>
+        <button type="button" class="btn btn--primary">החל על ההצעה</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wiz hidden" id="screenOps">
+    <div class="wizHead">
+      <div class="wizBrand">GEMEL INVEST · דוח תפעולי</div>
+      <div class="wizSteps"><span class="is-now">שלב 9 — דוח תפעולי</span></div>
+    </div>
+    <div class="ops">
+      <h2>פוליסות חדשות שנמכרו למבוטח</h2>
+      <p class="opsLead">אותה רשימת כיסויים כמו בהצעה: כיסוי, לפני הנחה, אחרי הנחה.</p>
+      <article class="opRow">
+        <div class="opMain">
+          <div class="opCo">מנורה<b>בריאות</b></div>
+          <div class="opMetrics">
+            <div><span>לפני הנחה</span><strong>₪ 333.00</strong></div>
+            <div><span>אחרי הנחה</span><strong>₪ 284.00</strong></div>
+            <div><span>תחילת ביטוח</span><strong>01/09/2026</strong></div>
+          </div>
+        </div>
+        <div class="opCovers">
+          <table class="sheet">
+            <thead>
+              <tr><th>מבוטח</th><th>כיסוי</th><th>לפני הנחה</th><th>אחרי הנחה</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>סומך אוריה</td><td class="cover">ניתוחים בחו״ל</td><td class="num">₪ 180.00</td><td class="num">₪ 154.00</td></tr>
+              <tr><td>סומך אוריה</td><td class="cover">תרופות</td><td class="num">₪ 92.00</td><td class="num">₪ 78.00</td></tr>
+              <tr><td>סומך אוריה</td><td class="cover">השתלות</td><td class="num">₪ 61.00</td><td class="num">₪ 52.00</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </div>
+  </div>
+</div>
+<script>
+  const facts = {
+    p1: { name:"סומך אוריה", id:"312445891", dob:"01/03/1988", age:"38", smoke:'<span class="pill pill--ok">לא מעשן</span>' },
+    p2: { name:"סומך נועה", id:"204778331", dob:"12/07/1990", age:"36", smoke:'<span class="pill pill--no">מעשנת</span>' }
+  };
+  document.querySelectorAll("[data-view]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("is-on", b === btn));
+      const v = btn.getAttribute("data-view");
+      document.getElementById("screenRisk").classList.toggle("hidden", v !== "risk");
+      document.getElementById("screenHealth").classList.toggle("hidden", v !== "health");
+      document.getElementById("screenOps").classList.toggle("hidden", v !== "ops");
+    });
+  });
+  document.querySelectorAll("[data-ins-bar] [data-ins]").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll("[data-ins-bar] [data-ins]").forEach((t) => t.classList.toggle("is-on", t === tab));
+      const f = facts[tab.getAttribute("data-ins")];
+      if(!f) return;
+      const box = document.querySelector("[data-fact]");
+      box.querySelector('[data-k="name"]').textContent = f.name;
+      box.querySelector('[data-k="id"]').textContent = f.id;
+      box.querySelector('[data-k="dob"]').textContent = f.dob;
+      box.querySelector('[data-k="age"]').textContent = f.age;
+      box.querySelector('[data-k="smoke"]').innerHTML = f.smoke;
+    });
+  });
+</script>
+</body>
+</html>
