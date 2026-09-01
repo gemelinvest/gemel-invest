@@ -212,16 +212,6 @@
   .chip--gift{background:#fff7e6;border-color:#f1d48a;color:#8a6408}
   .chip--pledge{background:#f1f5f9;border-color:#dbe3ee;color:#334155}
 
-  .ops{
-    margin-top:18px;border-radius:16px;overflow:hidden;border:1px solid var(--line);background:#fff;box-shadow:var(--shadow);
-  }
-  .ops__h{background:#102445;color:#fff;padding:12px 16px;font-weight:800;display:flex;justify-content:space-between}
-  .ops table{width:100%;border-collapse:collapse;font-size:13px}
-  .ops th,.ops td{padding:10px 12px;border-bottom:1px solid #eef2f7;text-align:right}
-  .ops th{font-size:11px;color:var(--muted);font-weight:800;background:#f8fafc}
-  .ops td.money{font-weight:800;color:var(--navy)}
-  .ops td.after{color:var(--ok)}
-
   @media (max-width: 1100px){
     .coGrid{grid-template-columns:repeat(3,minmax(0,1fr))}
     .prGrid,.workspace,.covers,.grid2{grid-template-columns:1fr}
@@ -235,7 +225,7 @@
     <div class="reviewBar__title">שלב פוליסות חדשות — אשף בריאות וסיכונים · GEMEL INVEST</div>
     <button type="button" data-view="pick" class="is-on">1. בחירת חברה ומוצר</button>
     <button type="button" data-view="sim">2. מרחב הסימולטור</button>
-    <button type="button" data-view="rows">3. שורות פוליסה + דוח תפעול</button>
+    <button type="button" data-view="rows">3. שורות פוליסה</button>
   </div>
 
   <div class="shell">
@@ -522,7 +512,7 @@ function renderRows(){
       { company:"מנורה", product:"ריסק", insureds:["דוד כהן"], detail:"סכום ביטוח ₪1,000,000", before:412, after:330, discount:"20%", schedule:"20/15/10/10/10/10", gift:"", pledge:"שיעבוד · בנק לאומי ₪400,000", bens:"מוטבים: יעל כהן 60% · נועם כהן 40%" }
     ];
   }
-  document.getElementById("hint").textContent = "לאחר «הוסף פוליסה להצעה» מתקבלות שורות סיכום. אותם נתונים — כולל לפני/אחרי ודירוג הנחה — נכנסים לדוח התפעולי.";
+  document.getElementById("hint").textContent = "לאחר «הוסף פוליסה להצעה» מופיעות כאן שורות הסיכום. אפשר להוסיף פוליסה נוספת או להמשיך לפרטי משלם.";
   document.getElementById("nextBtn").disabled = false;
   return `${ctxBar()}
     <div class="hero"><div>
@@ -535,21 +525,6 @@ function renderRows(){
       <h3>פוליסות שנרכשו להצעה</h3>
       <p class="sub">עיצוב קיים של כרטיס הפרימיום — בפריסת שורה במקום קובייה.</p>
       ${renderRowsList()}
-    </div>
-    <div class="ops">
-      <div class="ops__h"><span>דוח תפעולי · פוליסות חדשות</span><span style="opacity:.7;font-size:12px">כולל דירוג הנחה לפי שנים</span></div>
-      <table>
-        <thead><tr><th>מבוטח</th><th>חברה</th><th>מוצר</th><th>לפני הנחה</th><th>אחרי הנחה</th><th>דירוג הנחה</th><th>הטבה / שיעבוד / מוטבים</th></tr></thead>
-        <tbody>${state.policies.map(p => `<tr>
-          <td>${p.insureds.join(" · ")}</td>
-          <td>${p.company}</td>
-          <td>${p.product}</td>
-          <td class="money">${fmt(p.before)}</td>
-          <td class="money after">${fmt(p.after)}</td>
-          <td>${p.schedule}</td>
-          <td>${[p.gift,p.pledge,p.bens].filter(Boolean).join(" · ")}</td>
-        </tr>`).join("")}</tbody>
-      </table>
     </div>`;
 }
 
