@@ -19200,6 +19200,12 @@ inset 0 1px 0 rgba(255,
 .lcOpAgentRow{opacity:0;transform:translateY(16px);animation:lcOpReveal .55s ease forwards}
 .lcOpPolicyRow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 14px;border-radius:18px;background:linear-gradient(180deg, rgba(219,234,255,.36), rgba(255,255,255,.82));border:1px solid rgba(43,75,138,.12);box-shadow:0 12px 24px rgba(15,23,42,.05);backdrop-filter:blur(10px) saturate(120%);-webkit-backdrop-filter:blur(10px) saturate(120%)}
 .lcOpPolicyRow--new{background:linear-gradient(180deg, rgba(227,239,255,.62), rgba(255,255,255,.92))}
+.lcOpCoverPremList{grid-column:1 / -1;display:grid;gap:6px;margin-top:2px}
+.lcOpCoverPremList__row{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;font-size:12.5px;color:#334155;padding:6px 8px;border-radius:10px;background:rgba(255,255,255,.72);border:1px solid rgba(43,75,138,.10)}
+.lcOpCoverPremList__row strong{white-space:nowrap;color:#0f172a}
+.lcPdfCoverPremBlock{display:grid;gap:6px}
+.lcPdfCoverPremBlock__row{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px;padding:4px 0;border-bottom:1px solid #edf2f7}
+.lcPdfCoverPremBlock__row:last-child{border-bottom:0}
 .lcOpPolicyRow__main{display:flex;align-items:center;justify-content:space-between;gap:16px;min-width:0}
 .lcOpPolicyRow__brand{display:flex;align-items:center;gap:12px;min-width:0}
 .lcOpPolicyRow__logoImg{width:82%;height:82%;object-fit:contain;display:block}
