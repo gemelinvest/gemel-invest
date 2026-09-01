@@ -8,11 +8,16 @@
 <meta content="#f8fafc" name="theme-color"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20260901-clal-cancel-v1" rel="stylesheet"/>
-<link href="./theme.css?v=20260825-cust-search-border-v1" rel="stylesheet"/>
+<link href="./app.css?v=20260901-premium-pair-v1" rel="stylesheet"/>
+<link href="./theme.css?v=20260830-policy-actions-align-v1" rel="stylesheet"/>
+<style id="giCfSummaryKill">#customerFullSide,.cfFile__side,#customerFullDash,#customerFull.cfFile .customerFull__dash{display:none!important}#customerFull.cfFile .customerFull__body,.cfFile__layout{grid-template-columns:minmax(0,1fr)!important}</style>
+<script>
+(function(){function k(){try{["customerFullSide","customerFullDash"].forEach(function(id){var n=document.getElementById(id);if(n&&n.parentNode)n.parentNode.removeChild(n);});document.querySelectorAll(".cfFile__side").forEach(function(n){if(n&&n.parentNode)n.parentNode.removeChild(n);});}catch(e){}}k();if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",k);})();
+</script>
 <link href="./gi-daily-sales-mail.css?v=20260817-daily-sales-mail-v2" rel="stylesheet"/>
 <link href="./theme-p2.css?v=20260805-workdays-goal-v1" rel="stylesheet"/>
 <link href="./login-split.css?v=20260820-welcome-mfa-v4" rel="stylesheet"/>
+<link href="./gi-assistant.css?v=20260829-assistant-open-file-fix-v1" rel="stylesheet"/>
 <!-- GI-PERF 2026-08-10: CSS משני (mirror/import/unify) נטען אחרי כניסה מ-app.js —
      לא חוסם מסך login ולא מרעיש 404 לפני שהמשתמש התחבר. -->
 <!-- GI-PERF 2026-08-09: סימולטורים — CSS נטען לפי צורך מ-ensureGiSimulatorStylesLoaded ב-app.js -->
@@ -490,13 +495,12 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 </button>
 <button class="lcTopBtn lcCarInsuranceClickBtn" id="btnCarInsuranceClick" type="button" aria-label="ביטוח רכב בקליק" title="ביטוח רכב בקליק">
   <span class="lcCarInsuranceClickBtn__icon" aria-hidden="true">
-    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M5 17h14"></path>
-      <path d="M7 17 5.4 11.2A2 2 0 0 1 7.3 9.5h9.4a2 2 0 0 1 1.9 1.7L19 17"></path>
-      <circle cx="7.5" cy="17.5" r="1.5"></circle>
-      <circle cx="16.5" cy="17.5" r="1.5"></circle>
-      <path d="M5 12h14"></path>
-      <path d="M8 9V7.5A1.5 1.5 0 0 1 9.5 6h5A1.5 1.5 0 0 1 16 7.5V9"></path>
+    <!-- GI-CAR-ICON 20260826-car-icon-v1: sedan side-view, same stroke family as neighboring topbar SVGs -->
+    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" data-gi-car-icon="sedan">
+      <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"></path>
+      <circle cx="7" cy="17" r="2"></circle>
+      <path d="M9 17h6"></path>
+      <circle cx="17" cy="17" r="2"></circle>
     </svg>
   </span>
 </button>
@@ -536,13 +540,21 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
   </span>
   <span class="giChatFab__badge is-hidden" id="giChatFabBadge">0</span>
 </button>
-<button class="giOfferFab giOfferFab--topbar" id="giOfferFab" aria-label="שליחת הצעה" title="שליחת הצעה" type="button">
-  <span class="giOfferFab__icon" aria-hidden="true">
-    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z"></path>
-      <path d="M14 2v5h5"></path>
-      <path d="M8.5 13h7"></path>
-      <path d="M8.5 17h4.5"></path>
+<button class="lcTopBtn giAssistantBtn is-hidden" id="btnPersonalAssistant" type="button" hidden aria-hidden="true" aria-label="העוזר האישי" title="העוזר האישי">
+  <span class="giAssistantBtn__icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" data-gi-asst-icon="mic">
+      <rect x="9" y="3" width="6" height="11" rx="3"></rect>
+      <path d="M5.5 11a6.5 6.5 0 0 0 13 0"></path>
+      <path d="M12 17.5V21"></path>
+      <path d="M9 21h6"></path>
+    </svg>
+  </span>
+</button>
+<button class="lcTopBtn lcTravelInsuranceBtn" id="btnTravelInsuranceAbroad" type="button" aria-label="ביטוח נסיעות לחו״ל" title="ביטוח נסיעות לחו״ל">
+  <span class="lcTravelInsuranceBtn__icon" aria-hidden="true">
+    <!-- GI-TRAVEL-ICON: side-view airplane, same stroke family as neighboring topbar SVGs -->
+    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" data-gi-travel-icon="plane">
+      <path d="M21 16v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5Z"></path>
     </svg>
   </span>
 </button>
@@ -1197,7 +1209,6 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <div class="card__head">
 <div>
 <div class="card__title">הצעות</div>
-<div class="card__hint">טיוטות והצעות שהוגשו לחיתום — מעקב סטטוס מול האלמנטרי. מוצגות 15 האחרונות; חיפוש מציג את כולן.</div>
 </div>
 <div class="lcCustomers__headMeta">
 <span class="badge" id="proposalsCountBadge">0 הצעות</span>
@@ -1510,24 +1521,6 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
   <div class="mcWorkstation__mainRow" id="mcWorkstationMainRow">
   <aside class="mcReadyPanel" id="mcReadyPanel" hidden dir="rtl" aria-label="מוכנות להתחלת שיחת שיקוף">
     <div class="mcReadyPanel__inner">
-      <header class="mcReadyPanel__head">
-        <div class="mcReadyPanel__headMain">
-          <div class="mcReadyPanel__icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M4 14v-1a8 8 0 0 1 16 0v1"></path>
-              <path d="M18 14v3a2 2 0 0 1-2 2h-1"></path>
-              <path d="M6 14v3a2 2 0 0 0 2 2h1"></path>
-              <circle cx="12" cy="18" r="2"></circle>
-              <path d="M8 11a4 4 0 0 1 8 0"></path>
-            </svg>
-          </div>
-          <div class="mcReadyPanel__headText">
-            <h2 class="mcReadyPanel__title">מוכן להתחלת שיחה</h2>
-            <p class="mcReadyPanel__status">הצ׳קליסט הושלם · ניתן להתחיל הקלטה</p>
-          </div>
-        </div>
-      </header>
-
       <div class="mcReadyPanel__infoCard" role="group" aria-label="פרטי לקוח">
         <div class="mcReadyPanel__field">
           <span class="mcReadyPanel__label">שם לקוח</span>
@@ -1550,18 +1543,15 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 
       <section class="mcReadyLane" id="mcReadyLaneDoc" aria-label="תיעוד לחוצץ ממתינים לשיקוף">
         <div class="mcReadyLane__title">תיעוד לחוצץ ממתינים לשיקוף</div>
-        <p class="mcReadyLane__hint">הבחירה מעבירה את הלקוח לחוצץ המתנה בדשבורד התפעול. השיחה לא מתחילה.</p>
         <div class="mcReadyLane__btns" id="mcReadyLaneBtns"></div>
       </section>
 
       <section class="mcReadyPremium" id="mcReadyPremiumUploads" aria-label="העלאת קבצי פרמיות לפני התחלת שיחה" hidden>
         <div class="mcReadyPremium__head">
           <div class="mcReadyPremium__title">קבצי פרמיות וכיסויים</div>
-          <p class="mcReadyPremium__hint" id="mcReadyPremiumHint">חובה להעלות לכל מבוטח ומוצר שני קבצי Excel: לפני הנחה ואחרי הנחה. נלקחת רק שורת הנתונים הראשונה מכל קובץ.</p>
           <button class="btn mcReadyPremium__bypassBtn" id="mcReadyPremiumBypassBtn" type="button">סמן וי על הפרמיות (זמני)</button>
         </div>
         <div class="mcReadyPremium__list" id="mcReadyPremiumList"></div>
-        <p class="mcReadyPremium__alert" id="mcReadyPremiumAlert" hidden role="status">יש להשלים את כל העלאות הפרמיות לפני התחלת השיחה</p>
       </section>
       <input type="file" id="mcReadyPremiumFileInput" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" hidden />
     </div>
@@ -1622,7 +1612,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
       <div class="mcStepVerify__kicker" id="mcStepVerifyKicker">שלב 2 · פרטי מבוטח/ים</div>
       <p class="mcStepVerify__intro">לאחר ההקראה — עבור עם הלקוח על כל הפרטים ואמת שהם נכונים. אם יש כמה מבוטחים, בחר כרטיסייה.</p>
       <div class="mcStepVerify__scriptBox" role="region" aria-label="נוסח להקראה ללקוח">
-        <p class="mcStepVerify__script">ברשותך, אשאל אותך מספר שאלות: מהו שמך המלא? מספר ת.ז? תאריך לידה? מצב משפחתי? האם יש ילדים? במה אתה עוסק כיום? באיזו קופ״ח אתה מבוטח? האם קיים ביטוח משלים? איזה שב״ן? האם אתה מעשן או עישנת בשנתיים האחרונות? מהי הכתובת למשלוח הפוליסה? איך תרצה לקבל דיוורים בדואר או למייל?</p>
+        <p class="mcStepVerify__script">ברשותך אשאל אותך מספר שאלות.</p>
       </div>
       <div class="mcStepVerify__body" id="mcStepVerifyBody"></div>
       <div class="mcStepVerify__actions">
@@ -2412,6 +2402,20 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 </div>
 </div>
 </section>
+<section class="lcUserModal__section" id="lcUserAgencySection">
+<div class="lcUserModal__sectionTitle">שיוך לסוכנות</div>
+<div class="formGrid lcUserModal__grid lcUserModal__grid--basic">
+<div class="field lcUserModal__fieldWide">
+<label class="label" for="lcUserOfficeBranch">סוכנות</label>
+<select class="input" id="lcUserOfficeBranch">
+<option value="">— ללא שיוך —</option>
+<option value="חיפה">סוכנות חיפה</option>
+<option value="מודיעין">סוכנות מודיעין</option>
+</select>
+<div class="help">קובע איך המכירות של הנציג נספרות בדוח שנשלח במייל (מכירות חיפה / מכירות מודיעין). אם ריק — נלקח מאנשי קשר.</div>
+</div>
+</div>
+</section>
 <section class="lcUserModal__section" hidden id="lcUserTeamSection">
 <div class="lcUserModal__sectionTitle">שיוך צוות</div>
 <div class="formGrid lcUserModal__grid lcUserModal__grid--team">
@@ -2580,9 +2584,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
         <span class="cfFile__liveTimer" id="customerFullLiveTimer" hidden role="status" aria-live="polite"></span>
       </div>
     </header>
-    <div class="customerFull__dash cfFile__kpiBar" id="customerFullDash"></div>
     <div class="customerFull__body cfFile__layout" id="customerFullBody">
-      <aside class="cfFile__side card" id="customerFullSide"></aside>
       <div class="cfFile__mainWrap">
         <div class="cfFile__tabs" id="customerFullTabs"></div>
         <div class="cfFile__main card" id="customerFullMain"></div>
@@ -3433,55 +3435,6 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
   </div>
 </div>
 
-<!-- ===== OFFER COMPARE MODAL ===== -->
-<div aria-hidden="true" class="modal giOfferModal" id="giOfferModal">
-  <div class="modal__backdrop" id="giOfferBackdrop"></div>
-  <div aria-label="שליחת הצעה" aria-modal="true" class="modal__panel giOfferModal__panel" role="dialog">
-    <div class="modal__head giOfferModal__head">
-      <div>
-        <div class="modal__kicker">GEMEL INVEST</div>
-        <div class="modal__title">שליחת הצעה</div>
-      </div>
-      <button aria-label="סגור" class="iconBtn" id="giOfferClose" type="button">✕</button>
-    </div>
-    <div class="modal__body giOfferModal__body">
-      <div class="field">
-        <label class="label" for="giOfferCustomerName">שם לקוח</label>
-        <input class="input" id="giOfferCustomerName" type="text" placeholder="לדוגמה: ישראל ישראלי"/>
-      </div>
-
-      <div class="giOfferGrid">
-        <section class="giOfferCard">
-          <div class="giOfferCard__head">
-            <div class="giOfferCard__title">ביטוחים קיימים</div>
-            <button class="btn" id="giOfferAddExisting" type="button">+ הוסף שורה</button>
-          </div>
-          <div class="giOfferRows" id="giOfferExistingRows"></div>
-        </section>
-
-        <section class="giOfferCard">
-          <div class="giOfferCard__head">
-            <div class="giOfferCard__title">הצעה מאיתנו</div>
-            <button class="btn" id="giOfferAddOurs" type="button">+ הוסף שורה</button>
-          </div>
-          <div class="giOfferRows" id="giOfferOurRows"></div>
-        </section>
-      </div>
-
-      <div aria-live="polite" class="giOfferError" id="giOfferError"></div>
-      <div class="giOfferResult is-hidden" id="giOfferResult"></div>
-    </div>
-    <div class="modal__foot giOfferModal__foot">
-      <button class="btn" id="giOfferReset" type="button">נקה</button>
-      <button class="btn btn--primary" id="giOfferCompare" type="button">בצע השוואה</button>
-      <button class="btn" id="giOfferCopyText" type="button">העתק נוסח ללקוח</button>
-      <button class="btn" id="giOfferPrint" type="button">תצוגת הדפסה</button>
-      <button class="btn btn--primary" id="giOfferPdf" type="button">הורד PDF איכותי</button>
-    </div>
-  </div>
-</div>
-
-
 <div aria-hidden="true" class="modal usersGateModal" id="usersGateModal">
   <div class="modal__backdrop" data-close="1"></div>
   <div aria-label="קוד מורשה לניהול משתמשים" aria-modal="true" class="modal__panel usersGateModal__panel" role="dialog">
@@ -3902,10 +3855,11 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 
 <script src="./contacts-directory-seed.js?v=20260811-contacts-v1"></script>
 <script src="./gi-policy-scan.js?v=20260819-issued-scan-v3"></script>
-<script src="./gi-followup-zip-config.js?v=20260825-phoenix-fu-v1"></script>
-<script src="./app.js?v=20260901-clal-cancel-v1"></script>
+<script src="./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1"></script>
+<script src="./app.js?v=20260901-premium-pair-v1"></script>
+<script src="./gi-assistant.js?v=20260829-assistant-open-file-fix-v1"></script>
 <script src="./gi-face-auth.js?v=20260817-face-retry-v1"></script>
-<script src="./gi-daily-sales-mail.js?v=20260823-mail-pdf-always-v1"></script>
+<script src="./gi-daily-sales-mail.js?v=20260901-mail-cron-v1"></script>
 
 
 <div id="giPwaInstallBanner" class="giPwaInstallBanner" hidden>
