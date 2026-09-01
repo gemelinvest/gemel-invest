@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>מוקאפ 1:1 — פוליסות חדשות · אשף בריאות וסיכונים</title>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<style>
+  :root{
+    --navy:#1b365d;
+    --navy-2:#1e3a6b;
+    --blue:#2563eb;
+    --blue-2:#1d4ed8;
+    --gold:#c9a227;
+    --gold-soft:#f4e7b5;
+    --ok:#15803d;
+    --ok-bg:#ecfdf3;
+    --line:rgba(27,54,93,.12);
+    --muted:#64748b;
+    --paper:#f4f7fb;
+    --card:#ffffff;
+    --shadow:0 10px 28px rgba(27,54,93,.10);
+    --radius:16px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#dbe4f0;font-family:Rubik,Heebo,Arial,sans-serif;color:#0f172a}
+  button,input,select,textarea{font-family:inherit}
+  button{cursor:pointer}
+  img{display:block;max-width:100%}
+
+  .reviewBar{
+    position:sticky;top:0;z-index:40;
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    padding:8px 14px;background:#0f1f38;color:#fff;
+  }
+  .reviewBar__kicker{font-size:11px;font-weight:800;letter-spacing:.04em;opacity:.72}
+  .reviewBar__title{font-size:13px;font-weight:800;margin-inline-end:auto}
+  .reviewBar button{
+    border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);
+    color:#fff;border-radius:999px;padding:6px 12px;font-size:12px;font-weight:700;
+  }
+  .reviewBar button.is-on{background:#2563eb;border-color:#2563eb}
+
+  .shell{padding:14px}
+  .wizard{
+    height:calc(100vh - 56px);
+    background:rgba(255,255,255,.96);
+    border:1px solid rgba(15,23,42,.12);
+    border-radius:22px;
+    box-shadow:0 40px 90px rgba(15,23,42,.28);
+    display:flex;flex-direction:column;overflow:hidden;
+  }
+  .head{
+    display:flex;align-items:center;gap:14px;
+    padding:10px 18px;
+    background:linear-gradient(180deg, rgba(217,234,255,.7), rgba(255,255,255,.8));
+    border-bottom:1px solid var(--line);
+  }
+  .head img{height:36px;width:auto}
+  .head__text{display:flex;flex-direction:column;gap:1px}
+  .head__k{font-size:11px;font-weight:800;color:rgba(43,75,138,.78)}
+  .head__t{font-size:17px;font-weight:900;color:var(--navy)}
+  .head__close{
+    margin-inline-start:auto;width:40px;height:40px;border-radius:12px;
+    border:1px solid var(--line);background:#fff;font-size:18px;color:var(--navy);
+  }
+
+  .stepper{padding:12px 18px 10px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.7);flex-shrink:0}
+  .steps{display:flex;gap:6px;align-items:center;overflow:auto;padding-bottom:10px}
+  .step{
+    display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border-radius:999px;
+    border:1px solid rgba(15,23,42,.12);background:#fff;font-size:12px;font-weight:800;white-space:nowrap;color:#334155;
+  }
+  .step__n{width:22px;height:22px;border-radius:999px;display:grid;place-items:center;background:rgba(15,23,42,.08);font-weight:900;font-size:11px}
+  .step.is-done{background:#ecfdf3;border-color:rgba(34,197,94,.28);color:#166534}
+  .step.is-done .step__n{background:#22c55e;color:#fff}
+  .step.is-on{background:#dbeafe;border-color:rgba(37,99,235,.32);color:var(--navy-2)}
+  .step.is-on .step__n{background:var(--blue);color:#fff}
+  .bar{height:4px;border-radius:999px;background:rgba(15,23,42,.08);overflow:hidden}
+  .bar > span{display:block;height:100%;width:50%;background:linear-gradient(90deg,#1e3d7a,#2a5cf5)}
+
+  .body{flex:1;min-height:0;overflow:auto;background:var(--paper);padding:18px 20px 24px}
+  .foot{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+    padding:12px 18px;border-top:1px solid var(--line);background:rgba(255,255,255,.92);flex-shrink:0;
+  }
+  .hint{font-size:13px;color:var(--muted);font-weight:600}
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    min-height:42px;padding:0 16px;border-radius:12px;border:1px solid var(--line);
+    background:#fff;color:var(--navy);font-weight:800;font-size:14px;
+  }
+  .btn--primary{background:var(--blue);border-color:var(--blue);color:#fff}
+  .btn--primary:disabled{opacity:.45;cursor:not-allowed}
+  .btn--gold{background:linear-gradient(180deg,#f3d56a,#c9a227);border-color:#b8941b;color:#1b2a12}
+
+  .ctx{
+    display:flex;align-items:center;gap:16px;flex-wrap:wrap;
+    background:#fff;border:1px solid var(--line);border-radius:14px;
+    padding:12px 16px;margin-bottom:16px;box-shadow:var(--shadow);
+  }
+  .ctx__item{display:flex;flex-direction:column;gap:2px;min-width:140px}
+  .ctx__k{font-size:11px;font-weight:800;color:var(--muted)}
+  .ctx__v{font-size:14px;font-weight:800;color:var(--navy)}
+  .ctx__pills{display:flex;gap:6px;flex-wrap:wrap}
+  .pill{background:#eef4ff;color:var(--navy-2);border:1px solid #d7e4ff;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:700}
+
+  .hero{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:4px 0 16px}
+  .hero h2{margin:0;font-size:26px;font-weight:900;color:var(--navy);letter-spacing:-.02em}
+  .hero p{margin:6px 0 0;color:var(--muted);font-size:14px;font-weight:500;max-width:640px;line-height:1.55}
+
+  .section{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:18px;margin-bottom:16px;box-shadow:var(--shadow);
+  }
+  .section h3{margin:0 0 4px;font-size:15px;font-weight:900;color:var(--navy)}
+  .section .sub{margin:0 0 14px;font-size:13px;color:var(--muted);font-weight:500}
+
+  .coGrid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+  .co{
+    display:flex;flex-direction:column;align-items:center;gap:8px;
+    padding:14px 10px 12px;border-radius:14px;border:1.5px solid #e6edf6;
+    background:#fff;min-height:112px;transition:.15s ease;
+  }
+  .co:hover{border-color:#bfd0ee;transform:translateY(-1px)}
+  .co.is-on{border-color:var(--blue);background:#f4f8ff;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+  .co img,.coLogo{
+    width:92px;height:44px;object-fit:contain;background:#fff;
+    border:1px solid #e8eef6;border-radius:8px;padding:4px 6px;
+  }
+  .co span{font-size:12px;font-weight:800;color:var(--navy)}
+
+  .prGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+  .pr{
+    text-align:right;padding:14px;border-radius:14px;border:1.5px solid #e6edf6;background:#fff;
+    display:flex;flex-direction:column;gap:6px;min-height:108px;
+  }
+  .pr:hover{border-color:#bfd0ee}
+  .pr.is-on{border-color:var(--blue);background:#f4f8ff;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+  .pr__name{font-size:16px;font-weight:900;color:var(--navy)}
+  .pr__sub{font-size:12px;color:var(--muted);line-height:1.4;font-weight:500}
+  .pr.is-off{opacity:.38;pointer-events:none}
+
+  .workspace{
+    display:grid;grid-template-columns:minmax(280px,340px) minmax(0,1fr);gap:16px;align-items:start;
+  }
+  .wsHead{
+    grid-column:1 / -1;background:#fff;border:1px solid var(--line);border-radius:16px;
+    padding:14px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;box-shadow:var(--shadow);
+  }
+  .wsBrand{display:flex;align-items:center;gap:12px}
+  .wsBrand img{width:86px;height:42px;object-fit:contain;border:1px solid #e8eef6;border-radius:8px;padding:3px 6px;background:#fff}
+  .wsBrand strong{display:block;font-size:16px;color:var(--navy)}
+  .wsBrand span{font-size:12px;color:var(--muted);font-weight:600}
+  .wsSwitch{display:flex;gap:8px;flex-wrap:wrap;margin-inline-start:auto}
+  .field{display:flex;flex-direction:column;gap:4px}
+  .field label{font-size:11px;font-weight:800;color:var(--muted)}
+  .field select,.field input,.field textarea{
+    min-height:40px;border:1px solid #d7e0ec;border-radius:10px;padding:0 10px;background:#fff;font-weight:700;color:var(--navy);
+  }
+  .panel{background:#fff;border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:var(--shadow)}
+  .panel h3{margin:0 0 12px;font-size:14px;font-weight:900;color:var(--navy)}
+  .insList{display:flex;flex-direction:column;gap:8px}
+  .ins{
+    display:flex;align-items:flex-start;gap:10px;padding:10px;border:1px solid #e6edf6;border-radius:12px;background:#fbfcfe;
+  }
+  .ins.is-on{border-color:var(--blue);background:#f4f8ff}
+  .ins input{margin-top:3px;accent-color:var(--blue)}
+  .ins b{display:block;font-size:13px;color:var(--navy)}
+  .ins small{color:var(--muted);font-size:11px;font-weight:600}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .covers{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .cover{
+    display:flex;align-items:center;gap:8px;padding:10px;border:1px solid #e6edf6;border-radius:12px;background:#fff;font-size:13px;font-weight:700;
+  }
+  .cover.is-on{border-color:#93c5fd;background:#eff6ff}
+  .totals{
+    display:flex;align-items:stretch;gap:12px;flex-wrap:wrap;
+    background:linear-gradient(180deg,#102445,#1b365d);color:#fff;border-radius:16px;padding:14px 16px;margin-top:4px;
+  }
+  .tot{flex:1;min-width:150px}
+  .tot span{display:block;font-size:11px;font-weight:700;opacity:.75}
+  .tot strong{display:block;font-size:22px;font-weight:900;margin-top:2px}
+  .tot--sum strong{color:#f3d56a}
+  .totals .btn{margin-inline-start:auto;align-self:center}
+
+  .empty{
+    text-align:center;padding:28px 16px;color:var(--muted);border:1px dashed #cdd7e6;border-radius:16px;background:#fbfdff;
+  }
+  .empty b{display:block;color:var(--navy);font-size:15px;margin-bottom:4px}
+
+  .rows{display:flex;flex-direction:column;gap:12px}
+  .prow{
+    display:grid;grid-template-columns:118px minmax(0,1.4fr) minmax(280px,1fr) auto;
+    gap:14px;align-items:center;
+    background:#fff;border:1px solid var(--line);border-radius:16px;
+    padding:14px 16px;box-shadow:var(--shadow);position:relative;overflow:hidden;
+  }
+  .prow::before{content:"";position:absolute;inset-inline-start:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg,#f3d56a,#c9a227)}
+  .prow__logo{width:100px;height:52px;object-fit:contain;border:1px solid #e8eef6;border-radius:10px;padding:4px 8px;background:#fff}
+  .prow__title{font-size:15px;font-weight:900;color:var(--navy)}
+  .prow__meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;color:#475569;font-size:12px;font-weight:600}
+  .prow__meta b{color:var(--navy)}
+  .metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .metric{background:#f6f9fd;border:1px solid #e7eef7;border-radius:10px;padding:8px 10px}
+  .metric span{display:block;font-size:10px;font-weight:800;color:var(--muted)}
+  .metric strong{font-size:14px;color:var(--navy)}
+  .metric strong.after{color:var(--ok)}
+  .acts{display:flex;flex-direction:column;gap:6px}
+  .acts .btn{min-height:34px;font-size:12px;padding:0 10px}
+  .chip{display:inline-flex;align-items:center;border-radius:999px;padding:3px 8px;font-size:11px;font-weight:800;background:#eef4ff;color:var(--navy-2);border:1px solid #d7e4ff}
+  .chip--gift{background:#fff7e6;border-color:#f1d48a;color:#8a6408}
+  .chip--pledge{background:#f1f5f9;border-color:#dbe3ee;color:#334155}
+
+  .ops{
+    margin-top:18px;border-radius:16px;overflow:hidden;border:1px solid var(--line);background:#fff;box-shadow:var(--shadow);
+  }
+  .ops__h{background:#102445;color:#fff;padding:12px 16px;font-weight:800;display:flex;justify-content:space-between}
+  .ops table{width:100%;border-collapse:collapse;font-size:13px}
+  .ops th,.ops td{padding:10px 12px;border-bottom:1px solid #eef2f7;text-align:right}
+  .ops th{font-size:11px;color:var(--muted);font-weight:800;background:#f8fafc}
+  .ops td.money{font-weight:800;color:var(--navy)}
+  .ops td.after{color:var(--ok)}
+
+  @media (max-width: 1100px){
+    .coGrid{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .prGrid,.workspace,.covers,.grid2{grid-template-columns:1fr}
+    .prow{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+  <div class="reviewBar">
+    <div class="reviewBar__kicker">מוקאפ 1:1</div>
+    <div class="reviewBar__title">שלב פוליסות חדשות — אשף בריאות וסיכונים · GEMEL INVEST</div>
+    <button type="button" data-view="pick" class="is-on">1. בחירת חברה ומוצר</button>
+    <button type="button" data-view="sim">2. מרחב הסימולטור</button>
+    <button type="button" data-view="rows">3. שורות פוליסה + דוח תפעול</button>
+  </div>
+
+  <div class="shell">
+    <div class="wizard" id="wizard">
+      <div class="head">
+        <img src="../logo-login-clean.png" alt="GEMEL INVEST"/>
+        <div class="head__text">
+          <div class="head__k">הקמת לקוח · בריאות וסיכונים</div>
+          <div class="head__t">פוליסות חדשות להצעה</div>
+        </div>
+        <button class="head__close" type="button" aria-label="סגירה">×</button>
+      </div>
+
+      <div class="stepper">
+        <div class="steps">
+          <div class="step is-done"><span class="step__n">1</span>פרטי לקוח</div>
+          <div class="step is-done"><span class="step__n">2</span>פוליסות קיימות</div>
+          <div class="step is-done"><span class="step__n">3</span>התאמת צרכים</div>
+          <div class="step is-on"><span class="step__n">4</span>פוליסות חדשות</div>
+          <div class="step"><span class="step__n">5</span>פרטי משלם</div>
+          <div class="step"><span class="step__n">6</span>הצהרת בריאות</div>
+          <div class="step"><span class="step__n">7</span>סיום הקמה</div>
+        </div>
+        <div class="bar"><span></span></div>
+      </div>
+
+      <div class="body" id="body"></div>
+
+      <div class="foot">
+        <div class="hint" id="hint">בחרו חברה ומוצר — הסימולטור ייפתח עם נתוני כל המבוטחים בהצעה.</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn" type="button">חזרה</button>
+          <button class="btn btn--primary" id="nextBtn" type="button" disabled>המשך לפרטי משלם</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+const LOGOS = {
+  "הפניקס": "../assets/logos/afenix.jfif",
+  "כלל": "../assets/logos/clal.jfif",
+  "מגדל": "../assets/logos/megdl.jfif",
+  "מנורה": "../assets/logos/menora.jfif",
+  "איילון": "../assets/logos/ayalon.jfif",
+  "הכשרה": "../assets/logos/achshara.jfif"
+};
+const COMPANIES = Object.keys(LOGOS);
+const PRODUCTS = [
+  { key:"בריאות", sub:"כיסויים רפואיים לפי בחירה — ניתוחים, תרופות, השתלות ועוד" },
+  { key:"ריסק", sub:"כיסוי למקרה מוות. מזינים סכום ביטוח ומחשבים פרמיה" },
+  { key:"ריסק משכנתא", sub:"כיסוי להלוואת המשכנתא. כולל שיעבוד לבנק אם נדרש" },
+  { key:"מחלות קשות", sub:"פיצוי חד-פעמי במקרה אבחון. מזינים סכום פיצוי" },
+  { key:"סרטן", sub:"פיצוי במקרה אבחון סרטן. מזינים סכום פיצוי" },
+  { key:"אובדן כושר עבודה", sub:"פיצוי חודשי באובדן יכולת עבודה — הפניקס וכלל" }
+];
+const INSUREDS = [
+  { id:"p", name:"דוד כהן", role:"מבוטח ראשי", age:"42", gender:"זכר", smoker:"לא", occ:"מהנדס", birth:"12/03/1984" },
+  { id:"s", name:"יעל כהן", role:"בן/בת זוג", age:"39", gender:"נקבה", smoker:"לא", occ:"מורה", birth:"04/11/1986" },
+  { id:"c", name:"נועם כהן", role:"ילד", age:"12", gender:"זכר", smoker:"—", occ:"—", birth:"21/07/2014" }
+];
+const HEALTH_COVERS = ["ניתוחים בישראל","תרופות מחוץ לסל","השתלות","ניתוחים בחו״ל","אמבולטורי","ללא תקופת אכשרה"];
+const CUSTOMER = "דוד כהן";
+
+const state = {
+  view: "pick",
+  company: "הפניקס",
+  product: "",
+  activeIns: "p",
+  selectedIns: new Set(["p","s"]),
+  covers: new Set(["ניתוחים בישראל","תרופות מחוץ לסל","השתלות"]),
+  sumInsured: "1,000,000",
+  compensation: "150,000",
+  calculated: false,
+  policies: []
+};
+
+function fmt(n){ return "₪" + Number(n).toLocaleString("he-IL"); }
+function logo(c){ return LOGOS[c] || ""; }
+function isAkovOk(){ return state.company === "הפניקס" || state.company === "כלל"; }
+function productKind(){
+  if(state.product === "בריאות") return "health";
+  if(state.product === "ריסק" || state.product === "ריסק משכנתא") return "risk";
+  if(state.product === "מחלות קשות" || state.product === "סרטן") return "ci";
+  if(state.product === "אובדן כושר עבודה") return "akov";
+  return "";
+}
+function coverPremium(name, ins){
+  const base = { "ניתוחים בישראל": 186, "תרופות מחוץ לסל": 94, "השתלות": 71, "ניתוחים בחו״ל": 48, "אמבולטורי": 39, "ללא תקופת אכשרה": 22 };
+  const ageMul = ins.age >= 40 ? 1.18 : ins.age < 18 ? 0.42 : 1;
+  return Math.round((base[name] || 40) * ageMul);
+}
+function calcBundle(){
+  const kind = productKind();
+  const rows = INSUREDS.filter(i => state.selectedIns.has(i.id)).map(ins => {
+    let before = 0;
+    if(kind === "health"){
+      [...state.covers].forEach(c => { before += coverPremium(c, ins); });
+    } else if(kind === "risk"){
+      const sum = Number(String(state.sumInsured).replace(/[^\d]/g,"")) || 0;
+      before = Math.round((sum / 100000) * (ins.age * 0.85));
+    } else if(kind === "ci"){
+      const sum = Number(String(state.compensation).replace(/[^\d]/g,"")) || 0;
+      before = Math.round((sum / 50000) * (ins.age * 1.1) + 40);
+    } else {
+      before = 210;
+    }
+    const after = Math.round(before * 0.7);
+    return { ins, before, after };
+  });
+  const before = rows.reduce((s,r)=>s+r.before,0);
+  const after = rows.reduce((s,r)=>s+r.after,0);
+  return { rows, before, after, schedule:"30/25/20/15/10/5", discount:"30%", gift:"חודש חינם" };
+}
+
+function setView(v){
+  state.view = v;
+  document.querySelectorAll(".reviewBar button").forEach(b => b.classList.toggle("is-on", b.dataset.view === v));
+  render();
+}
+
+function ctxBar(){
+  return `<div class="ctx">
+    <div class="ctx__item"><span class="ctx__k">לקוח</span><span class="ctx__v">${CUSTOMER}</span></div>
+    <div class="ctx__item" style="flex:1"><span class="ctx__k">מבוטחים בהצעה — נשאבים לסימולטור</span>
+      <div class="ctx__pills">${INSUREDS.map(i=>`<span class="pill">${i.name} · ${i.role}</span>`).join("")}</div>
+    </div>
+    <div class="ctx__item"><span class="ctx__k">פוליסות שנוספו</span><span class="ctx__v">${state.policies.length}</span></div>
+  </div>`;
+}
+
+function renderPick(){
+  const products = PRODUCTS.map(p => {
+    const off = p.key === "אובדן כושר עבודה" && !isAkovOk();
+    return `<button type="button" class="pr${state.product===p.key?" is-on":""}${off?" is-off":""}" data-product="${p.key}">
+      <div class="pr__name">${p.key}</div>
+      <div class="pr__sub">${off ? "זמין בהפניקס ובכלל בלבד" : p.sub}</div>
+    </button>`;
+  }).join("");
+  const rows = state.policies.length ? renderRowsList() : `<div class="empty"><b>עדיין לא נוספו פוליסות להצעה</b>לאחר חישוב בסימולטור יופיעו כאן שורות סיכום — לא קוביות.</div>`;
+  document.getElementById("hint").textContent = state.company && state.product
+    ? "הסימולטור מוכן. לחצו «פתח סימולטור» או בחרו שוב מוצר."
+    : "בחרו חברה ומוצר. הסימולטור פתוח לכל הנציגים — לא רק למנהלים.";
+  document.getElementById("nextBtn").disabled = state.policies.length === 0;
+  return `${ctxBar()}
+    <div class="hero">
+      <div>
+        <h2>בחירת חברה ומוצר</h2>
+        <p>בחרו חברת ביטוח ומוצר. מיד ייפתח הסימולטור הרלוונטי עם נתוני כל המבוטחים בהצעה. משם תבחרו כיסויים או סכומים, תחשבו פרמיה, ותוסיפו שורת פוליסה להצעה.</p>
+      </div>
+    </div>
+    <div class="section">
+      <h3>1. חברת ביטוח</h3>
+      <p class="sub">לוגו רשמי · בחירה אחת</p>
+      <div class="coGrid">${COMPANIES.map(c=>`<button type="button" class="co${state.company===c?" is-on":""}" data-company="${c}">
+        <img src="${logo(c)}" alt="${c}"/><span>${c}</span>
+      </button>`).join("")}</div>
+    </div>
+    <div class="section">
+      <h3>2. מוצר ביטוח</h3>
+      <p class="sub">${state.company ? "לאחר הבחירה נפתח הסימולטור של " + state.company : "בחרו חברה כדי לראות מוצרים"}</p>
+      <div class="prGrid">${products}</div>
+      <div style="margin-top:14px;display:flex;justify-content:flex-end">
+        <button class="btn btn--primary" type="button" id="openSim" ${state.product?"":"disabled"}>פתח סימולטור</button>
+      </div>
+    </div>
+    <div class="section">
+      <h3>פוליסות שנוספו להצעה</h3>
+      <p class="sub">אותו עיצוב של היום — כשורות סיכום, לא כקוביות.</p>
+      ${rows}
+    </div>`;
+}
+
+function inputPanel(){
+  const kind = productKind();
+  const ins = INSUREDS.find(i => i.id === state.activeIns) || INSUREDS[0];
+  if(kind === "health"){
+    return `<div class="covers">${HEALTH_COVERS.map(c => `<label class="cover${state.covers.has(c)?" is-on":""}"><input type="checkbox" data-cover="${c}" ${state.covers.has(c)?"checked":""}/> ${c}</label>`).join("")}</div>`;
+  }
+  if(kind === "risk"){
+    return `<div class="field"><label>סכום ביטוח (₪)</label><input data-sum="1" value="${state.sumInsured}"/></div>
+      ${state.product==="ריסק משכנתא" ? `<p class="sub" style="margin-top:10px">לאחר ההוספה ניתן יהיה לציין שיעבוד לבנק ומוטבים בשורת הפוליסה.</p>` : ""}`;
+  }
+  if(kind === "ci"){
+    return `<div class="field"><label>סכום פיצוי (₪)</label><input data-comp="1" value="${state.compensation}"/></div>`;
+  }
+  return `<div class="field"><label>שכר חודשי לחישוב אכ״ע</label><input value="18,000"/></div>`;
+}
+
+function renderSim(){
+  const ins = INSUREDS.find(i => i.id === state.activeIns) || INSUREDS[0];
+  const bundle = state.calculated ? calcBundle() : null;
+  const activeRow = bundle?.rows.find(r => r.ins.id === ins.id);
+  document.getElementById("hint").textContent = "הסימולטור שואב את נתוני המבוטחים מההצעה. סמנו מבוטחים וכיסויים, לחצו חשב, ואז הוסיפו פוליסה.";
+  document.getElementById("nextBtn").disabled = state.policies.length === 0;
+  return `${ctxBar()}
+    <div class="workspace">
+      <div class="wsHead">
+        <div class="wsBrand">
+          <img src="${logo(state.company)}" alt=""/>
+          <div><strong>${state.company} · ${state.product || "בחרו מוצר"}</strong><span>מרחב עבודה · סימולטור פתוח לכל נציג</span></div>
+        </div>
+        <div class="wsSwitch">
+          <div class="field"><label>החלף חברה</label>
+            <select id="swCompany">${COMPANIES.map(c=>`<option ${c===state.company?"selected":""}>${c}</option>`).join("")}</select>
+          </div>
+          <div class="field"><label>החלף מוצר</label>
+            <select id="swProduct">${PRODUCTS.map(p=>`<option ${p.key===state.product?"selected":""} ${p.key==="אובדן כושר עבודה" && !isAkovOk()?"disabled":""}>${p.key}</option>`).join("")}</select>
+          </div>
+          <button class="btn" type="button" id="backPick">חזרה לבחירה</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>מבוטחים בהצעה זו</h3>
+        <div class="insList">${INSUREDS.map(i => `
+          <label class="ins${state.selectedIns.has(i.id)?" is-on":""}${state.activeIns===i.id?" is-on":""}">
+            <input type="checkbox" data-ins="${i.id}" ${state.selectedIns.has(i.id)?"checked":""}/>
+            <div style="flex:1">
+              <b>${i.name}</b>
+              <small>${i.role} · גיל ${i.age} · ${i.gender} · עישון: ${i.smoker}</small>
+            </div>
+            <button type="button" class="btn" data-activate="${i.id}" style="min-height:32px;font-size:12px">ערוך</button>
+          </label>`).join("")}
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>נתונים ל־${ins.name} · ${state.product || "מוצר"}</h3>
+        <div class="grid2" style="margin-bottom:12px">
+          <div class="field"><label>תאריך לידה</label><input value="${ins.birth}" readonly/></div>
+          <div class="field"><label>מגדר</label><input value="${ins.gender}" readonly/></div>
+          <div class="field"><label>עישון</label><input value="${ins.smoker}" readonly/></div>
+          <div class="field"><label>עיסוק</label><input value="${ins.occ}" readonly/></div>
+        </div>
+        <p class="sub">סמנו כיסויים או הזינו סכום — לפי המוצר שנבחר.</p>
+        ${inputPanel()}
+        <div class="totals" style="margin-top:16px">
+          <div class="tot"><span>פרמיה חודשית · ${ins.name}</span><strong>${bundle ? fmt(activeRow?.before || 0) : "—"}</strong></div>
+          <div class="tot tot--sum"><span>סה״כ לכל המבוטחים שסומנו</span><strong>${bundle ? fmt(bundle.before) : "לחצו «חשב פרמיה»"}</strong></div>
+          <button class="btn btn--gold" type="button" id="calcBtn">חשב פרמיה</button>
+          <button class="btn btn--primary" type="button" id="addBtn" ${bundle?"":"disabled"}>הוסף פוליסה להצעה</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderRowsList(){
+  return `<div class="rows">${state.policies.map((p, idx) => `
+    <article class="prow">
+      <img class="prow__logo" src="${logo(p.company)}" alt="${p.company}"/>
+      <div>
+        <div class="prow__title">${p.company} · ${p.product}</div>
+        <div class="prow__meta">
+          <span>לקוח: <b>${CUSTOMER}</b></span>
+          <span>מבוטחים: <b>${p.insureds.join(" · ")}</b></span>
+          <span>${p.detail}</span>
+        </div>
+        <div class="prow__meta" style="margin-top:8px">
+          <span class="chip">הנחה ${p.discount}</span>
+          <span class="chip">דירוג ${p.schedule}</span>
+          ${p.gift ? `<span class="chip chip--gift">${p.gift}</span>` : ""}
+          <span class="chip chip--pledge">${p.pledge || "ללא שיעבוד"}</span>
+          <span class="chip">${p.bens || "ללא מוטבים"}</span>
+        </div>
+      </div>
+      <div class="metrics">
+        <div class="metric"><span>פרמיה לפני הנחה</span><strong>${fmt(p.before)}</strong></div>
+        <div class="metric"><span>פרמיה אחרי הנחה</span><strong class="after">${fmt(p.after)}</strong></div>
+      </div>
+      <div class="acts">
+        <button class="btn" type="button">הנחה</button>
+        <button class="btn" type="button">עריכה</button>
+        <button class="btn" type="button" data-del="${idx}">הסר</button>
+      </div>
+    </article>`).join("")}</div>`;
+}
+
+function renderRows(){
+  if(!state.policies.length){
+    state.policies = [
+      { company:"הפניקס", product:"בריאות", insureds:["דוד כהן","יעל כהן"], detail:"כיסויים: ניתוחים בישראל · תרופות · השתלות", before:1240, after:868, discount:"30%", schedule:"30/25/20/15/10/5", gift:"חודש חינם", pledge:"ללא שיעבוד", bens:"ללא מוטבים" },
+      { company:"מנורה", product:"ריסק", insureds:["דוד כהן"], detail:"סכום ביטוח ₪1,000,000", before:412, after:330, discount:"20%", schedule:"20/15/10/10/10/10", gift:"", pledge:"שיעבוד · בנק לאומי ₪400,000", bens:"מוטבים: יעל כהן 60% · נועם כהן 40%" }
+    ];
+  }
+  document.getElementById("hint").textContent = "לאחר «הוסף פוליסה להצעה» מתקבלות שורות סיכום. אותם נתונים — כולל לפני/אחרי ודירוג הנחה — נכנסים לדוח התפעולי.";
+  document.getElementById("nextBtn").disabled = false;
+  return `${ctxBar()}
+    <div class="hero"><div>
+      <h2>סיכום הפוליסות בהצעה</h2>
+      <p>כל פוליסה בשורה מלאה: לוגו, שם לקוח, מבוטחים, נתונים שהוזנו, מחיר לפני ואחרי, הנחה, דירוג שנים, חודש חינם, שיעבוד ומוטבים.</p>
+    </div>
+    <button class="btn btn--primary" type="button" id="addAnother">+ הוסף פוליסה נוספת</button>
+    </div>
+    <div class="section">
+      <h3>פוליסות שנרכשו להצעה</h3>
+      <p class="sub">עיצוב קיים של כרטיס הפרימיום — בפריסת שורה במקום קובייה.</p>
+      ${renderRowsList()}
+    </div>
+    <div class="ops">
+      <div class="ops__h"><span>דוח תפעולי · פוליסות חדשות</span><span style="opacity:.7;font-size:12px">כולל דירוג הנחה לפי שנים</span></div>
+      <table>
+        <thead><tr><th>מבוטח</th><th>חברה</th><th>מוצר</th><th>לפני הנחה</th><th>אחרי הנחה</th><th>דירוג הנחה</th><th>הטבה / שיעבוד / מוטבים</th></tr></thead>
+        <tbody>${state.policies.map(p => `<tr>
+          <td>${p.insureds.join(" · ")}</td>
+          <td>${p.company}</td>
+          <td>${p.product}</td>
+          <td class="money">${fmt(p.before)}</td>
+          <td class="money after">${fmt(p.after)}</td>
+          <td>${p.schedule}</td>
+          <td>${[p.gift,p.pledge,p.bens].filter(Boolean).join(" · ")}</td>
+        </tr>`).join("")}</tbody>
+      </table>
+    </div>`;
+}
+
+function render(){
+  const body = document.getElementById("body");
+  if(state.view === "sim") body.innerHTML = renderSim();
+  else if(state.view === "rows") body.innerHTML = renderRows();
+  else body.innerHTML = renderPick();
+}
+
+document.querySelectorAll(".reviewBar button").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
+
+document.getElementById("body").addEventListener("click", (e) => {
+  const co = e.target.closest("[data-company]");
+  if(co){ state.company = co.dataset.company; state.product = ""; state.calculated = false; render(); return; }
+  const pr = e.target.closest("[data-product]");
+  if(pr){ state.product = pr.dataset.product; state.calculated = false; render(); return; }
+  if(e.target.id === "openSim" && state.product){ setView("sim"); return; }
+  if(e.target.id === "backPick" || e.target.id === "addAnother"){ setView("pick"); return; }
+  if(e.target.id === "calcBtn"){ state.calculated = true; render(); return; }
+  if(e.target.id === "addBtn"){
+    const b = calcBundle();
+    const names = INSUREDS.filter(i => state.selectedIns.has(i.id)).map(i => i.name);
+    const kind = productKind();
+    const detail = kind === "health"
+      ? ("כיסויים: " + [...state.covers].join(" · "))
+      : kind === "risk" ? ("סכום ביטוח ₪" + state.sumInsured)
+      : kind === "ci" ? ("סכום פיצוי ₪" + state.compensation)
+      : "אובדן כושר עבודה";
+    state.policies.push({
+      company: state.company, product: state.product, insureds: names, detail,
+      before: b.before, after: b.after, discount: b.discount, schedule: b.schedule, gift: b.gift,
+      pledge: state.product === "ריסק משכנתא" ? "שיעבוד יישמר בשורה" : "ללא שיעבוד",
+      bens: state.product === "ריסק" ? "מוטבים לפי ההצעה" : "ללא מוטבים"
+    });
+    state.calculated = false;
+    setView("rows");
+    return;
+  }
+  const del = e.target.closest("[data-del]");
+  if(del){ state.policies.splice(Number(del.dataset.del),1); render(); return; }
+  const act = e.target.closest("[data-activate]");
+  if(act){ state.activeIns = act.dataset.activate; state.selectedIns.add(state.activeIns); render(); return; }
+});
+
+document.getElementById("body").addEventListener("change", (e) => {
+  if(e.target.id === "swCompany"){ state.company = e.target.value; state.calculated = false; if(state.product==="אובדן כושר עבודה" && !isAkovOk()) state.product = "בריאות"; render(); return; }
+  if(e.target.id === "swProduct"){ state.product = e.target.value; state.calculated = false; render(); return; }
+  if(e.target.dataset.ins){
+    if(e.target.checked) state.selectedIns.add(e.target.dataset.ins);
+    else state.selectedIns.delete(e.target.dataset.ins);
+    if(!state.selectedIns.has(state.activeIns)) state.activeIns = [...state.selectedIns][0] || INSUREDS[0].id;
+    state.calculated = false; render(); return;
+  }
+  if(e.target.dataset.cover){
+    if(e.target.checked) state.covers.add(e.target.dataset.cover);
+    else state.covers.delete(e.target.dataset.cover);
+    state.calculated = false; render(); return;
+  }
+  if(e.target.dataset.sum){ state.sumInsured = e.target.value; state.calculated = false; }
+  if(e.target.dataset.comp){ state.compensation = e.target.value; state.calculated = false; }
+});
+
+render();
+</script>
+</body>
+</html>
