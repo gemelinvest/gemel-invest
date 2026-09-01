@@ -165,6 +165,17 @@
      היה טוען payload+מסמכים של כל הצוות. רשימה נשארת רזה; תיק מלא ב-ensureRecordPayload.
      מטמון ישן שמנ + payload מלא לא נצבע מחדש מעל הסף הזה. */
   const TEAM_MANAGER_FAT_CACHE_PAINT_CAP = 400;
+  /* GI-PERF 2026-08-25 — מצב light קבוע למנהל צוות מעל CAP.
+     משלים את תיקון 23.08: אותן הגנות כמו Large Session (delta רזה, בלי
+     LiveRefresh מלא, בלי realtime על כל הטבלה, LRU ל-payloads, בלי IDB שמן).
+     לכיבוי חירום: TEAM_MANAGER_LIGHT_SESSION_ENABLED = false + רענון. */
+  const TEAM_MANAGER_LIGHT_SESSION_ENABLED = true;
+  const TEAM_MANAGER_LIGHT_SESSION_THRESHOLD = TEAM_MANAGER_FAT_CACHE_PAINT_CAP;
+  const TEAM_MANAGER_PAYLOAD_LRU_CAP = 80;
+  /* GI-PERF 2026-08-25c: גם LIGHT של כל 2,100 תיקים מקפיא (normalize/backup/KPI).
+     מנהל צוות מעל הסף מקבל working-set כמו Large Session — לא את כל הרוסטר. */
+  const TEAM_MANAGER_LIGHT_WORKING_SET = LARGE_SESSION_CUSTOMER_WORKING_SET;
+  const TEAM_MANAGER_LIGHT_PROPOSAL_WORKING_SET = LARGE_SESSION_PROPOSAL_WORKING_SET;
 
   const DAILY_REPORT_ACTIVE_ID = "active";
   // ארכיון חודשי באותה טבלה: id = "m-YYYY-MM" (לא דורס את "active").
@@ -1103,6 +1114,58 @@
     } catch(_e) {
       return null;
     }
+  }
+
+  /** צלצול טלפון כפול-תדר למשך durationMs (ברירת מחדל 5 שניות). מחזיר stop(). */
+  function playGiPhoneRing(durationMs){
+    const ms = Math.max(400, Number(durationMs) || 5000);
+    const stoppers = [];
+    let stopped = false;
+    const stop = () => {
+      if(stopped) return;
+      stopped = true;
+      stoppers.forEach((fn) => { try { fn(); } catch(_e) {} });
+    };
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if(!Ctx) return stop;
+      if(!playGiNotifySound._ctx) playGiNotifySound._ctx = new Ctx();
+      const ctx = playGiNotifySound._ctx;
+      if(ctx.state === "suspended"){
+        try { void ctx.resume(); } catch(_e) {}
+      }
+      const master = ctx.createGain();
+      master.gain.value = 0.22;
+      master.connect(ctx.destination);
+      stoppers.push(() => {
+        try { master.gain.setValueAtTime(0.0001, ctx.currentTime); } catch(_e) {}
+        try { master.disconnect(); } catch(_e) {}
+      });
+      const endAt = ctx.currentTime + (ms / 1000);
+      let t = ctx.currentTime;
+      while(t < endAt){
+        const burst = Math.min(0.4, endAt - t);
+        [440, 480].forEach((freq) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, t);
+          gain.gain.setValueAtTime(0.0001, t);
+          gain.gain.exponentialRampToValueAtTime(0.9, t + 0.018);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t + burst);
+          osc.connect(gain);
+          gain.connect(master);
+          osc.start(t);
+          osc.stop(t + burst + 0.05);
+          stoppers.push(() => { try { osc.stop(); } catch(_e) {} });
+        });
+        t += 0.62;
+      }
+      window.setTimeout(stop, ms + 80);
+    } catch(_e) {
+      try { playGiNotifySound(); } catch(_e2) {}
+    }
+    return stop;
   }
 
   /**
@@ -2131,25 +2194,6 @@
   }
 
   /* GI-OPS-SUBMIT-MIRROR-START */
-  const OPS_WAITING_MIRROR_LAST_CREATED_LIMIT = 5;
-
-  function listCustomersByCreatedAtDesc(){
-    const customers = Array.isArray(State?.data?.customers) ? State.data.customers : [];
-    return customers.slice().sort((a, b) => {
-      const tb = Date.parse(safeTrim(b?.createdAt) || "") || 0;
-      const ta = Date.parse(safeTrim(a?.createdAt) || "") || 0;
-      if(tb !== ta) return tb - ta;
-      return String(safeTrim(b?.id)).localeCompare(String(safeTrim(a?.id)));
-    });
-  }
-
-  function isAmongLastCreatedCustomers(rec, limit){
-    const n = Math.max(1, Number(limit) || OPS_WAITING_MIRROR_LAST_CREATED_LIMIT);
-    const id = safeTrim(rec?.id);
-    if(!id) return false;
-    return listCustomersByCreatedAtDesc().slice(0, n).some((row) => safeTrim(row?.id) === id);
-  }
-
   function hasSubmittedHealthRisksToOps(rec){
     const ops = rec?.payload?.opsProcess && typeof rec.payload.opsProcess === "object"
       ? rec.payload.opsProcess
@@ -2157,10 +2201,10 @@
     return !!safeTrim(ops.submittedToOpsAt);
   }
 
-  /** ממתינים לשיקוף: רק 5 הלקוחות האחרונים שהוקמו, שעדיין לא בשיחה ולא בתוצאת שיקוף */
+  /** ממתינים לשיקוף: רק הצעות שהוגשו בלחיצה על «הגש לתפעול», שעדיין לא בשיחה ולא בתוצאת שיקוף */
   function isWaitingMirrorQueueCustomer(rec){
     if(!isHealthRisksWizardCompleted(rec)) return false;
-    if(!isAmongLastCreatedCustomers(rec, OPS_WAITING_MIRROR_LAST_CREATED_LIMIT)) return false;
+    if(!hasSubmittedHealthRisksToOps(rec)) return false;
     const call = getMirrorCallStore(rec);
     if(call?.active) return false;
     const ops = getOpsStatePresentation(rec);
@@ -2265,17 +2309,181 @@
       return [line, city].filter(Boolean).join(", ");
     },
 
-    _smokingText(d){
-      const status = safeTrim(d?.smokingStatus);
+    _smokingText(d, extra){
+      const extraAns = safeTrim(extra?.answer);
+      const status = extraAns || safeTrim(d?.smokingStatus);
       if(status !== "yes") return status === "no" ? "לא" : "";
-      const type = safeTrim(d?.smokingType);
-      const amount = safeTrim(d?.smokingAmount);
+      const products = Array.isArray(extra?.products)
+        ? extra.products.map((x) => safeTrim(x)).filter(Boolean).join(", ")
+        : "";
+      const type = products || safeTrim(d?.smokingType);
+      const amount = safeTrim(extra?.quantity) || safeTrim(d?.smokingAmount);
       return ["כן", type, amount].filter(Boolean).join(" · ");
     },
 
     _last4(value){
       const digits = safeTrim(value).replace(/\D/g, "");
       return digits ? digits.slice(-4) : "";
+    },
+
+    _paymentMethodLabel(v){
+      const s = safeTrim(v).toLowerCase();
+      if(s === "cc" || s === "card" || s === "credit") return "כרטיס אשראי";
+      if(s === "ho" || s === "bank" || s === "hova" || s === "standing") return "הוראת קבע";
+      return safeTrim(v);
+    },
+
+    _payerChoiceLabel(v){
+      const s = safeTrim(v).toLowerCase();
+      if(s === "insured") return "מבוטח קיים";
+      if(s === "external") return "משלם חריג";
+      return safeTrim(v);
+    },
+
+    _deliveryMethodLabel(v){
+      const s = safeTrim(v).toLowerCase();
+      if(s === "home" || s === "post" || s === "address") return "לבית";
+      if(s === "email" || s === "mail") return "למייל";
+      return safeTrim(v);
+    },
+
+    _yesNoLabel(v){
+      const s = safeTrim(v).toLowerCase();
+      if(s === "yes" || s === "true" || v === true) return "כן";
+      if(s === "no" || s === "false" || v === false) return "לא";
+      return safeTrim(v);
+    },
+
+    _cancelExecLabel(v){
+      const s = safeTrim(v);
+      if(s === "agent") return "באמצעות הנציג המטפל";
+      if(s === "company") return "באמצעות החברה המבטחת";
+      if(s === "client" || s === "customer") return "באמצעות הלקוח עצמו";
+      return s;
+    },
+
+    _policyTitle(p, fallback){
+      const company = safeTrim(p?.company);
+      const type = safeTrim(p?.type || p?.product);
+      return [company, type].filter(Boolean).join(" · ") || safeTrim(fallback) || "פוליסה";
+    },
+
+    _isRiskProduct(p){
+      const t = safeTrim(p?.type || p?.product);
+      return t === "ריסק" || t === "ריסק משכנתא";
+    },
+
+    _fmtBeneficiaries(list){
+      return (Array.isArray(list) ? list : []).map((b) => {
+        const name = `${safeTrim(b?.firstName)} ${safeTrim(b?.lastName)}`.trim()
+          || safeTrim(b?.fullName) || safeTrim(b?.name);
+        if(!name && !safeTrim(b?.idNumber) && !safeTrim(b?.sharePct) && !safeTrim(b?.percent)) return "";
+        const parts = [name];
+        const id = safeTrim(b?.idNumber || b?.id);
+        const rel = safeTrim(b?.relationship || b?.relation);
+        const pct = safeTrim(b?.sharePct ?? b?.percent);
+        const birth = safeTrim(b?.birthDate);
+        const phone = safeTrim(b?.phone);
+        if(id) parts.push(`ת.ז. ${id}`);
+        if(rel) parts.push(rel);
+        if(pct) parts.push(`${pct}%`);
+        if(birth) parts.push(`לידה ${birth}`);
+        if(phone) parts.push(phone);
+        return parts.filter(Boolean).join(" · ");
+      }).filter(Boolean).join(" | ");
+    },
+
+    _fmtPledgeBanks(policy){
+      const banks = Array.isArray(policy?.pledgeBanks) && policy.pledgeBanks.length
+        ? policy.pledgeBanks
+        : (policy?.pledgeBank && typeof policy.pledgeBank === "object" ? [policy.pledgeBank] : []);
+      return banks.map((b) => {
+        const name = safeTrim(b?.bankName || b?.name);
+        if(!name && !safeTrim(b?.bankNo) && !safeTrim(b?.amount) && !safeTrim(b?.branch)) return "";
+        const parts = [name];
+        if(safeTrim(b?.bankNo)) parts.push(`מס׳ בנק ${safeTrim(b.bankNo)}`);
+        if(safeTrim(b?.branch)) parts.push(`סניף ${safeTrim(b.branch)}`);
+        if(safeTrim(b?.amount)) parts.push(`סכום ${safeTrim(b.amount)}`);
+        if(safeTrim(b?.years)) parts.push(`${safeTrim(b.years)} שנים`);
+        if(safeTrim(b?.address)) parts.push(safeTrim(b.address));
+        return parts.filter(Boolean).join(" · ");
+      }).filter(Boolean).join(" | ");
+    },
+
+    _readVerify(rec){
+      const v = rec?.payload?.mirrorFlow?.verify;
+      return (v && typeof v === "object") ? v : {};
+    },
+
+    _emptySnap(){
+      return { personal: {}, contact: {}, payment: {}, health: {}, delivery: {}, beneficiaries: {}, cancel: { policies: {} } };
+    },
+
+    _deliverySnapshot(rec){
+      const v = this._readVerify(rec);
+      return {
+        method: this._deliveryMethodLabel(v.deliveryMethod),
+        email: safeTrim(v.deliveryEmail)
+      };
+    },
+
+    _beneficiariesSnapshot(rec){
+      const out = {};
+      const nps = Array.isArray(rec?.payload?.newPolicies) ? rec.payload.newPolicies : [];
+      const store = rec?.payload?.mirrorFlow?.beneficiariesStep?.policies || {};
+      nps.forEach((p, idx) => {
+        if(!this._isRiskProduct(p)) return;
+        const pid = safeTrim(p?.id) || `np_${idx}`;
+        const st = store[pid] && typeof store[pid] === "object" ? store[pid] : {};
+        const legalHeirs = st.legalHeirs === true || safeTrim(p?.beneficiariesMode) === "legalHeirs";
+        out[pid] = {
+          title: this._policyTitle(p),
+          legalHeirs: legalHeirs ? "כן" : "לא",
+          beneficiaries: legalHeirs ? "יורשים חוקיים" : this._fmtBeneficiaries(p?.beneficiaries),
+          pledgeBanks: this._fmtPledgeBanks(p)
+        };
+      });
+      return out;
+    },
+
+    _cancelSnapshot(rec){
+      const cq = rec?.payload?.mirrorFlow?.cancelQuestionnaire || {};
+      const polMap = (cq.policies && typeof cq.policies === "object") ? cq.policies : {};
+      const out = {
+        policies: {},
+        keepExisting: cq.keepExistingDespiteDuplicate === true ? "כן" : (cq.keepExistingDespiteDuplicate === false ? "לא" : ""),
+        approveAddition: this._yesNoLabel(cq.approveAddition)
+      };
+      const seen = new Set();
+      const addPolicy = (pid, title, st, insCanc) => {
+        if(!pid || seen.has(pid)) return;
+        seen.add(pid);
+        const row = st && typeof st === "object" ? st : {};
+        const method = safeTrim(row.executionMethod)
+          || safeTrim(insCanc?.executionMethod)
+          || safeTrim(insCanc?.cancellationExecutionMethod);
+        out.policies[pid] = {
+          title: title || pid,
+          confirmed: this._yesNoLabel(row.confirmed),
+          executionMethod: this._cancelExecLabel(method)
+        };
+      };
+      this._insureds(rec).forEach((ins, idx) => {
+        const nm = this._insuredFullName(ins) || this._insuredTitle(ins, idx);
+        (Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : []).forEach((p) => {
+          const pid = safeTrim(p?.id);
+          if(!pid) return;
+          const c = ins?.data?.cancellations?.[pid];
+          const status = safeTrim(c?.status);
+          const eligible = status === "full" || status === "partial" || status === "partial_health";
+          if(!eligible && !polMap[pid]) return;
+          addPolicy(pid, [nm, this._policyTitle(p)].filter(Boolean).join(" · "), polMap[pid], c);
+        });
+      });
+      Object.keys(polMap).forEach((pid) => {
+        addPolicy(pid, pid, polMap[pid], null);
+      });
+      return out;
     },
 
     _healthSource(rec){
@@ -2287,31 +2495,47 @@
       return [];
     },
 
-    _healthDetail(response){
+    _healthDetail(response, meta){
       const fields = response?.fields && typeof response.fields === "object" ? response.fields : {};
+      try{
+        if(typeof Wizard !== "undefined" && typeof Wizard.formatHealthFieldsForOperationalReport === "function"){
+          const labeled = safeTrim(Wizard.formatHealthFieldsForOperationalReport(meta || {}, fields));
+          if(labeled) return labeled.replace(/ • /g, " · ");
+        }
+      }catch(_e){}
       return Object.entries(fields)
         .filter(([, v]) => safeTrim(v))
         .map(([k, v]) => `${k}: ${safeTrim(v)}`)
         .join(" · ");
     },
 
-    _healthAnswerText(response){
+    _healthAnswerText(response, meta){
       const answer = safeTrim(response?.answer);
       if(!answer) return "";
       const base = answer === "yes" ? "כן" : answer === "no" ? "לא" : answer;
-      const detail = this._healthDetail(response);
+      const detail = this._healthDetail(response, meta);
       return detail ? `${base} · ${detail}` : base;
+    },
+
+    _healthInsuredReportLabel(ins, idx, fallback){
+      const title = this._insuredTitle(ins, idx);
+      const name = this._insuredFullName(ins);
+      if(title && name) return `${title}: ${name}`;
+      return name || title || safeTrim(fallback) || "מבוטח";
     },
 
     /** תצלום של כל השדות שהשיקוף עשוי לשנות, במבנה שטוח וניתן להשוואה. */
     buildSnapshot(rec){
-      const snap = { personal: {}, contact: {}, payment: {}, health: {} };
+      const snap = this._emptySnap();
       if(!rec) return snap;
 
       const insureds = this._insureds(rec);
+      const verify = this._readVerify(rec);
       insureds.forEach((ins, idx) => {
         const d = ins?.data || {};
-        snap.personal[this._insuredKey(ins, idx)] = {
+        const insKey = this._insuredKey(ins, idx);
+        const smokeExtra = (verify.perInsuredSmoking && verify.perInsuredSmoking[insKey]) || null;
+        snap.personal[insKey] = {
           title: this._insuredTitle(ins, idx),
           fullName: this._insuredFullName(ins),
           idNumber: safeTrim(d.idNumber),
@@ -2323,7 +2547,7 @@
           shaban: safeTrim(d.shaban || d.shabanLevel),
           address: this._addressText(d),
           zip: safeTrim(d.zip),
-          smoking: this._smokingText(d)
+          smoking: this._smokingText(d, smokeExtra)
         };
       });
 
@@ -2338,9 +2562,10 @@
       const cc = (p.cc && typeof p.cc === "object") ? p.cc : {};
       const ho = (p.ho && typeof p.ho === "object") ? p.ho : {};
       const payStep = rec?.payload?.mirrorFlow?.paymentStep || {};
+      const ex = (p.externalPayer && typeof p.externalPayer === "object") ? p.externalPayer : {};
       snap.payment = {
-        method: safeTrim(payStep.method) || safeTrim(p.paymentMethod) || "",
-        payerChoice: safeTrim(p.payerChoice),
+        method: this._paymentMethodLabel(safeTrim(payStep.method) || safeTrim(p.paymentMethod) || ""),
+        payerChoice: this._payerChoiceLabel(p.payerChoice),
         holderName: safeTrim(cc.holderName),
         holderId: safeTrim(cc.holderId),
         cardLast4: this._last4(cc.cardNumber),
@@ -2348,20 +2573,40 @@
         bankName: safeTrim(ho.bankName),
         bankNo: safeTrim(ho.bankNo),
         branch: safeTrim(ho.branch),
-        account: safeTrim(ho.account)
+        account: safeTrim(ho.account),
+        payerName: `${safeTrim(ex.firstName)} ${safeTrim(ex.lastName)}`.trim() || safeTrim(ex.fullName),
+        payerId: safeTrim(ex.idNumber),
+        payerBirth: safeTrim(ex.birthDate),
+        payerPhone: safeTrim(ex.phone),
+        payerRelation: safeTrim(ex.relation)
       };
 
       this._healthSource(rec).forEach((group) => {
-        const insuredLabel = safeTrim(group?.insured?.label) || "מבוטח";
+        const insId = safeTrim(group?.insured?.id);
+        const insIdx = insureds.findIndex((ins, idx) => this._insuredKey(ins, idx) === insId || safeTrim(ins?.id) === insId);
+        const ins = insIdx >= 0 ? insureds[insIdx] : null;
+        const insuredLabel = ins
+          ? this._healthInsuredReportLabel(ins, insIdx, group?.insured?.label)
+          : (safeTrim(group?.insured?.label) || "מבוטח");
         (group.items || []).forEach((item) => {
-          const key = `${safeTrim(item.qKey)}|${safeTrim(item.insId)}`;
+          const itemInsId = safeTrim(item.insId) || insId;
+          const itemIdx = insureds.findIndex((row, idx) => this._insuredKey(row, idx) === itemInsId || safeTrim(row?.id) === itemInsId);
+          const itemIns = itemIdx >= 0 ? insureds[itemIdx] : ins;
+          const itemLabel = itemIns
+            ? this._healthInsuredReportLabel(itemIns, itemIdx >= 0 ? itemIdx : insIdx, item.insLabel || group?.insured?.label)
+            : insuredLabel;
+          const key = `${safeTrim(item.qKey)}|${itemInsId}`;
           snap.health[key] = {
             label: safeTrim(item?.meta?.text) || safeTrim(item.qKey) || "שאלה רפואית",
-            insuredLabel,
-            value: this._healthAnswerText(item.response)
+            insuredLabel: itemLabel,
+            value: this._healthAnswerText(item.response, item.meta)
           };
         });
       });
+
+      snap.delivery = this._deliverySnapshot(rec);
+      snap.beneficiaries = this._beneficiariesSnapshot(rec);
+      snap.cancel = this._cancelSnapshot(rec);
 
       return snap;
     },
@@ -2414,6 +2659,7 @@
     ]),
 
     PAYMENT_FIELDS: Object.freeze([
+      ["method", "אמצעי תשלום"],
       ["holderName", "שם בעל הכרטיס"],
       ["holderId", "ת״ז בעל הכרטיס"],
       ["cardLast4", "4 ספרות אחרונות"],
@@ -2422,7 +2668,33 @@
       ["bankNo", "מספר בנק"],
       ["branch", "סניף"],
       ["account", "מספר חשבון"],
-      ["payerChoice", "זהות המשלם"]
+      ["payerChoice", "זהות המשלם"],
+      ["payerName", "שם משלם חריג"],
+      ["payerId", "ת.ז. משלם חריג"],
+      ["payerBirth", "תאריך לידה משלם חריג"],
+      ["payerPhone", "טלפון משלם חריג"],
+      ["payerRelation", "קרבה למבוטח (משלם חריג)"]
+    ]),
+
+    DELIVERY_FIELDS: Object.freeze([
+      ["method", "אופן קבלת דיוורים"],
+      ["email", "אימייל למשלוח דיוורים"]
+    ]),
+
+    CANCEL_POLICY_FIELDS: Object.freeze([
+      ["confirmed", "אישור ביטול"],
+      ["executionMethod", "אופן ביצוע ביטול"]
+    ]),
+
+    CANCEL_GLOBAL_FIELDS: Object.freeze([
+      ["keepExisting", "השארת כיסוי קיים"],
+      ["approveAddition", "אישור תוספת לכיסוי קיים"]
+    ]),
+
+    BENEFICIARY_FIELDS: Object.freeze([
+      ["legalHeirs", "יורשים חוקיים"],
+      ["beneficiaries", "מוטבים"],
+      ["pledgeBanks", "בנקים משעבדים"]
     ]),
 
     CONTACT_FIELDS: Object.freeze([
@@ -2435,17 +2707,22 @@
     /** משווה בסיס מול המצב הנוכחי ומחזיר את האזורים לפי סדר התצוגה בדוח. */
     collect(rec){
       const baseline = this.getBaseline(rec);
-      const before = baseline?.data || { personal: {}, contact: {}, payment: {}, health: {} };
+      const before = baseline?.data || this._emptySnap();
       const after = this.buildSnapshot(rec);
       const areas = [];
 
       const personalRows = [];
-      Object.keys(after.personal).forEach((key) => {
-        const now = after.personal[key] || {};
+      const personalKeys = new Set([
+        ...Object.keys(before.personal || {}),
+        ...Object.keys(after.personal || {})
+      ]);
+      personalKeys.forEach((key) => {
+        const now = after.personal?.[key] || {};
         const was = before.personal?.[key] || {};
-        const multi = Object.keys(after.personal).length > 1;
+        const multi = personalKeys.size > 1;
+        const title = now.title || was.title || "מבוטח";
         this.PERSONAL_FIELDS.forEach(([field, label]) => {
-          const row = this._row(multi ? `${now.title || "מבוטח"} · ${label}` : label, was[field], now[field]);
+          const row = this._row(multi ? `${title} · ${label}` : label, was[field], now[field]);
           if(row.changed) personalRows.push(row);
         });
       });
@@ -2455,12 +2732,49 @@
       });
       areas.push({ key: "personal", label: "פרטים אישיים", rows: personalRows });
 
-      const paymentRows = [];
-      this.PAYMENT_FIELDS.forEach(([field, label]) => {
-        const row = this._row(label, before.payment?.[field], after.payment?.[field]);
-        if(row.changed) paymentRows.push(row);
+      const deliveryRows = [];
+      this.DELIVERY_FIELDS.forEach(([field, label]) => {
+        const row = this._row(label, before.delivery?.[field], after.delivery?.[field]);
+        if(row.changed) deliveryRows.push(row);
       });
-      areas.push({ key: "payment", label: "אמצעי תשלום", rows: paymentRows });
+      areas.push({ key: "delivery", label: "אופן קבלת דיוורים", rows: deliveryRows });
+
+      const cancelRows = [];
+      const cancelBefore = before.cancel || { policies: {} };
+      const cancelAfter = after.cancel || { policies: {} };
+      const cancelKeys = new Set([
+        ...Object.keys(cancelBefore.policies || {}),
+        ...Object.keys(cancelAfter.policies || {})
+      ]);
+      cancelKeys.forEach((pid) => {
+        const now = cancelAfter.policies?.[pid] || {};
+        const was = cancelBefore.policies?.[pid] || {};
+        const title = now.title || was.title || "פוליסה";
+        this.CANCEL_POLICY_FIELDS.forEach(([field, label]) => {
+          const row = this._row(`${title} · ${label}`, was[field], now[field]);
+          if(row.changed) cancelRows.push(row);
+        });
+      });
+      this.CANCEL_GLOBAL_FIELDS.forEach(([field, label]) => {
+        const row = this._row(label, cancelBefore[field], cancelAfter[field]);
+        if(row.changed) cancelRows.push(row);
+      });
+      areas.push({ key: "cancel", label: "שאלון ביטול", rows: cancelRows });
+
+      const benefRows = [];
+      const bBefore = before.beneficiaries || {};
+      const bAfter = after.beneficiaries || {};
+      const bKeys = new Set([...Object.keys(bBefore), ...Object.keys(bAfter)]);
+      bKeys.forEach((pid) => {
+        const now = bAfter[pid] || {};
+        const was = bBefore[pid] || {};
+        const title = now.title || was.title || "פוליסה";
+        this.BENEFICIARY_FIELDS.forEach(([field, label]) => {
+          const row = this._row(`${title} · ${label}`, was[field], now[field]);
+          if(row.changed) benefRows.push(row);
+        });
+      });
+      areas.push({ key: "beneficiaries", label: "מוטבים ושעבוד", rows: benefRows });
 
       const healthRows = [];
       const healthKeys = new Set([...Object.keys(before.health || {}), ...Object.keys(after.health || {})]);
@@ -2469,11 +2783,17 @@
         const was = before.health?.[key];
         const label = safeTrim(now?.label) || safeTrim(was?.label) || "שאלה רפואית";
         const insuredLabel = safeTrim(now?.insuredLabel) || safeTrim(was?.insuredLabel);
-        const multi = new Set(Object.values(after.health || {}).map((x) => safeTrim(x?.insuredLabel))).size > 1;
-        const row = this._row(multi && insuredLabel ? `${insuredLabel} · ${label}` : label, was?.value, now?.value);
+        const row = this._row(insuredLabel ? `${insuredLabel} · ${label}` : label, was?.value, now?.value);
         if(row.changed) healthRows.push(row);
       });
       areas.push({ key: "health", label: "הצהרת בריאות", rows: healthRows });
+
+      const paymentRows = [];
+      this.PAYMENT_FIELDS.forEach(([field, label]) => {
+        const row = this._row(label, before.payment?.[field], after.payment?.[field]);
+        if(row.changed) paymentRows.push(row);
+      });
+      areas.push({ key: "payment", label: "אמצעי תשלום", rows: paymentRows });
 
       return {
         hasBaseline: !!baseline,
@@ -2871,6 +3191,8 @@
       teamManagerAssignmentsUpdatedAt: null,
       agentReportAliases: {},
       agentReportAliasesUpdatedAt: null,
+      agentBranches: {},
+      agentBranchesUpdatedAt: null,
       directoryContactExtras: [],
       directoryContactsUpdatedAt: null,
       agentSecurity: {},
@@ -2963,6 +3285,10 @@
     out.meta.agentReportAliases = normalizeAgentReportAliasesMap(out.meta.agentReportAliases);
     if(!safeTrim(out.meta.agentReportAliasesUpdatedAt) && Object.keys(out.meta.agentReportAliases || {}).length){
       out.meta.agentReportAliasesUpdatedAt = safeTrim(out.meta.updatedAt) || nowISO();
+    }
+    out.meta.agentBranches = normalizeAgentBranchesMap(out.meta.agentBranches);
+    if(!safeTrim(out.meta.agentBranchesUpdatedAt) && Object.keys(out.meta.agentBranches || {}).length){
+      out.meta.agentBranchesUpdatedAt = safeTrim(out.meta.updatedAt) || nowISO();
     }
     out.meta.directoryContactExtras = normalizeDirectoryContactsList(out.meta.directoryContactExtras);
     if(!safeTrim(out.meta.directoryContactsUpdatedAt) && out.meta.directoryContactExtras.length){
@@ -3218,6 +3544,14 @@
           remoteAt: safeTrim(server.agentReportAliasesUpdatedAt)
         }
       ),
+      agentBranches: mergeAgentBranchesMapsByRecency(
+        local.agentBranches,
+        server.agentBranches,
+        {
+          localAt: safeTrim(local.agentBranchesUpdatedAt),
+          remoteAt: safeTrim(server.agentBranchesUpdatedAt)
+        }
+      ),
       directoryContactExtras: mergeDirectoryContactsListsByRecency(
         local.directoryContactExtras,
         server.directoryContactExtras,
@@ -3231,6 +3565,14 @@
     merged.agentReportAliasesUpdatedAt = (() => {
       const localAt = safeTrim(local.agentReportAliasesUpdatedAt);
       const serverAt = safeTrim(server.agentReportAliasesUpdatedAt);
+      if(localAt && serverAt){
+        return compareIsoStamps(localAt, serverAt) >= 0 ? localAt : serverAt;
+      }
+      return localAt || serverAt || preferredUpdatedAt || nowISO();
+    })();
+    merged.agentBranchesUpdatedAt = (() => {
+      const localAt = safeTrim(local.agentBranchesUpdatedAt);
+      const serverAt = safeTrim(server.agentBranchesUpdatedAt);
       if(localAt && serverAt){
         return compareIsoStamps(localAt, serverAt) >= 0 ? localAt : serverAt;
       }
@@ -4045,8 +4387,9 @@
   }
 
   const AGENT_LABEL_TOKEN_ALIASES = {
-    "ודים": ["ואדים"],
-    "ואדים": ["ודים"]
+    "ודים": ["ואדים", "vadim"],
+    "ואדים": ["ודים", "vadim"],
+    "vadim": ["ואדים", "ודים"]
   };
 
   function agentLabelTokenMatches(candidate, token){
@@ -4259,6 +4602,86 @@
       .filter(Boolean);
   }
 
+  /* שיוך סניף (חיפה / מודיעין) — נשמר ב-meta כמו כינויי דוח,
+     בלי שינוי סכימת טבלת agents ובלי נגיעה בחישוב מכירות. */
+  function normalizeOfficeBranchLabel(value){
+    const raw = safeTrim(value).toLowerCase().replace(/[\s_-]+/g, "");
+    if(!raw) return "";
+    if(raw === "חיפה" || raw === "haifa") return "חיפה";
+    if(raw === "מודיעין" || raw === "modiin" || raw === "modi'in" || raw === "מודיעיןמכביםרעות") return "מודיעין";
+    return "";
+  }
+
+  function normalizeAgentNameKey(value){
+    return safeTrim(value).replace(/\s+/g, " ").toLowerCase();
+  }
+
+  /* שם בדוח המכירות הוא לפעמים כינוי קצר ("ואדים") מול שם מלא באנשי קשר
+     ("ואדים שאולוב"). התאמה רק כשכל מילות שם הדוח מופיעות בשם המלא. */
+  function salesAgentNameMatchesPersonName(salesName, personName){
+    const salesKey = normalizeAgentNameKey(salesName);
+    const personKey = normalizeAgentNameKey(personName);
+    if(salesKey && personKey && salesKey === personKey) return true;
+    const salesTokens = agentLabelTokens(salesName);
+    const personTokens = agentLabelTokens(personName);
+    if(!salesTokens.length || !personTokens.length) return false;
+    return agentLabelTokensSubset(personTokens, salesTokens);
+  }
+
+  function normalizeAgentBranchesMap(raw){
+    const out = {};
+    if(raw && typeof raw === "object"){
+      Object.keys(raw).forEach((k) => {
+        const id = safeTrim(k);
+        const branch = normalizeOfficeBranchLabel(raw[k]);
+        if(id && branch) out[id] = branch;
+      });
+    }
+    return out;
+  }
+
+  function getAgentOfficeBranch(agentId){
+    const id = safeTrim(agentId);
+    if(!id) return "";
+    State.data.meta = State.data.meta && typeof State.data.meta === "object" ? State.data.meta : {};
+    const map = normalizeAgentBranchesMap(State.data.meta.agentBranches);
+    if(map[id]) return map[id];
+    const lower = id.toLowerCase();
+    for(const k of Object.keys(map)){
+      if(k.toLowerCase() === lower) return map[k];
+    }
+    return "";
+  }
+
+  function setAgentOfficeBranch(agentId, branch){
+    const id = safeTrim(agentId);
+    if(!id) return;
+    State.data.meta = State.data.meta && typeof State.data.meta === "object" ? State.data.meta : {};
+    const map = normalizeAgentBranchesMap(State.data.meta.agentBranches);
+    Object.keys(map).forEach((k) => { if(k.toLowerCase() === id.toLowerCase()) delete map[k]; });
+    const clean = normalizeOfficeBranchLabel(branch);
+    if(clean) map[id] = clean;
+    State.data.meta.agentBranches = map;
+    State.data.meta.agentBranchesUpdatedAt = nowISO();
+    State.data.meta.updatedAt = nowISO();
+  }
+
+  function mergeAgentBranchesMapsByRecency(localMap, remoteMap, options = {}){
+    const loc = normalizeAgentBranchesMap(localMap);
+    const rem = normalizeAgentBranchesMap(remoteMap);
+    const localAt = safeTrim(options.localAt);
+    const remoteAt = safeTrim(options.remoteAt);
+    if(localAt && remoteAt){
+      const localNewer = compareIsoStamps(localAt, remoteAt) >= 0;
+      const winner = localNewer ? loc : rem;
+      const loser = localNewer ? rem : loc;
+      return normalizeAgentBranchesMap({ ...loser, ...winner });
+    }
+    if(localAt && Object.keys(loc).length) return loc;
+    if(remoteAt && Object.keys(rem).length) return rem;
+    return normalizeAgentBranchesMap({ ...rem, ...loc });
+  }
+
   function normalizeDirectoryContact(row, idx){
     if(!row || typeof row !== "object") return null;
     const fullName = safeTrim(row.fullName || row.full_name || row.name);
@@ -4345,6 +4768,74 @@
       map.set(key, c);
     });
     return [...map.values()].sort((a, b) => safeTrim(a.fullName).localeCompare(safeTrim(b.fullName), "he"));
+  }
+
+  function lookupOfficeBranchFromDirectory(agentOrName){
+    const isObj = agentOrName && typeof agentOrName === "object";
+    const displayName = isObj ? (agentOrName.name || agentOrName.username) : agentOrName;
+    const nameKey = normalizeAgentNameKey(displayName);
+    const email = isObj ? safeTrim(agentOrName.email).toLowerCase() : "";
+    if(!nameKey && !email) return "";
+    try {
+      const list = listDirectoryContacts();
+      for(let i = 0; i < list.length; i += 1){
+        const c = list[i];
+        const cEmail = safeTrim(c.email).toLowerCase();
+        if(email && cEmail && email === cEmail){
+          const fromEmail = normalizeOfficeBranchLabel(c.agency);
+          if(fromEmail) return fromEmail;
+        }
+      }
+      const branches = [];
+      for(let i = 0; i < list.length; i += 1){
+        const c = list[i];
+        if(!salesAgentNameMatchesPersonName(displayName, c.fullName)) continue;
+        const fromName = normalizeOfficeBranchLabel(c.agency);
+        if(fromName) branches.push(fromName);
+      }
+      const unique = [...new Set(branches)];
+      if(unique.length === 1) return unique[0];
+    } catch(_e) {}
+    return "";
+  }
+
+  function findAgentRecordBySalesName(agentName){
+    const key = normalizeAgentNameKey(agentName);
+    if(!key) return null;
+    const agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
+    const exact = [];
+    const fuzzy = [];
+    for(let i = 0; i < agents.length; i += 1){
+      const a = agents[i];
+      const names = [a?.name, a?.username];
+      try {
+        const aliases = getAgentReportAliases(a?.id);
+        if(Array.isArray(aliases)) names.push.apply(names, aliases);
+      } catch(_e) {}
+      if(names.some((n) => normalizeAgentNameKey(n) === key)) exact.push(a);
+      else if(names.some((n) => salesAgentNameMatchesPersonName(agentName, n))) fuzzy.push(a);
+    }
+    if(exact.length === 1) return exact[0];
+    if(exact.length > 1) return null;
+    if(fuzzy.length === 1) return fuzzy[0];
+    return null;
+  }
+
+  function resolveOfficeBranchForSalesAgentName(agentName){
+    const agent = findAgentRecordBySalesName(agentName);
+    if(agent){
+      const saved = getAgentOfficeBranch(agent.id);
+      if(saved) return saved;
+      const fromDir = lookupOfficeBranchFromDirectory(agent);
+      if(fromDir) return fromDir;
+    }
+    return lookupOfficeBranchFromDirectory(agentName);
+  }
+
+  function suggestOfficeBranchForAgent(user){
+    const saved = getAgentOfficeBranch(user?.id);
+    if(saved) return saved;
+    return lookupOfficeBranchFromDirectory(user) || "";
   }
 
   function canManageDirectoryContacts(){
@@ -5058,7 +5549,79 @@
       } catch(_e) {}
       return rec;
     });
-    return changed ? { ...next, customers: merged } : next;
+    const out = changed ? { ...next, customers: merged } : next;
+    return trimTeamManagerCustomerPayloadLru(out);
+  }
+
+  /* GI-PERF 2026-08-25: במנהל-צוות-light משאירים רק LRU של payloads מלאים
+     (+ תיק פתוח) כדי ש-delta/preserve לא יצבור שוב את כל הצוות בזיכרון. */
+  function getTeamManagerProtectedPayloadIds(){
+    const ids = new Set();
+    try {
+      if(CustomersUI?.currentId && CustomersUI?.els?.wrap?.classList?.contains?.("is-open")){
+        ids.add(String(CustomersUI.currentId));
+      }
+    } catch(_e) {}
+    try {
+      if(CustomerEditUI?.els?.wrap?.classList?.contains?.("is-open")){
+        const editId = safeTrim(CustomerEditUI?.currentId || CustomersUI?.currentId);
+        if(editId) ids.add(String(editId));
+      }
+    } catch(_e) {}
+    try {
+      if(MirrorCallUI?._callRunning && MirrorCallUI?.selectedCustomer?.id){
+        ids.add(String(MirrorCallUI.selectedCustomer.id));
+      }
+    } catch(_e) {}
+    try {
+      if(ElementaryMirrorUI?._callRunning){
+        const eid = safeTrim(ElementaryMirrorUI._customerId || ElementaryMirrorUI.selectedCustomer?.id);
+        if(eid) ids.add(String(eid));
+      }
+    } catch(_e) {}
+    return ids;
+  }
+
+  function trimTeamManagerCustomerPayloadLru(stateLike){
+    try {
+      if(!Storage?.isTeamManagerLightSession?.()) return stateLike;
+    } catch(_e) {
+      return stateLike;
+    }
+    const list = Array.isArray(stateLike?.customers) ? stateLike.customers : null;
+    if(!list || !list.length) return stateLike;
+    const protectedIds = getTeamManagerProtectedPayloadIds();
+    const fat = [];
+    for(let i = 0; i < list.length; i += 1){
+      const rec = list[i];
+      const id = String(rec?.id || "");
+      if(!id) continue;
+      if(protectedIds.has(id)) continue;
+      try {
+        if(Storage.payloadHasPolicyOrInsuredContent(rec?.payload)){
+          const stamp = Date.parse(safeTrim(rec?.updatedAt) || safeTrim(rec?.createdAt) || "") || 0;
+          fat.push({ idx: i, stamp });
+        }
+      } catch(_e) {}
+    }
+    if(fat.length <= TEAM_MANAGER_PAYLOAD_LRU_CAP) return stateLike;
+    fat.sort((a, b) => b.stamp - a.stamp);
+    const keepIdx = new Set(fat.slice(0, TEAM_MANAGER_PAYLOAD_LRU_CAP).map((x) => x.idx));
+    let stripped = 0;
+    const nextCustomers = list.map((rec, idx) => {
+      const id = String(rec?.id || "");
+      if(protectedIds.has(id) || keepIdx.has(idx)) return rec;
+      try {
+        if(!Storage.payloadHasPolicyOrInsuredContent(rec?.payload)) return rec;
+      } catch(_e) {
+        return rec;
+      }
+      stripped += 1;
+      return { ...rec, payload: {} };
+    });
+    if(!stripped) return stateLike;
+    try { console.warn("TEAM_MANAGER_PAYLOAD_LRU_TRIM:", stripped, "stripped,", TEAM_MANAGER_PAYLOAD_LRU_CAP, "kept"); } catch(_e) {}
+    return { ...stateLike, customers: nextCustomers };
   }
 
   function agentSessionDataLooksSuspiciouslyEmpty(){
@@ -5147,9 +5710,14 @@
   // ownership "safety net" — so they appeared to vanish. Matching on agent_id as well keeps
   // those rows loading. This server filter is intentionally permissive (a superset); the
   // precise client-side ownership filter (customerVisibleToCurrentUser) remains the final gate.
+  //
+  // GI-FIX 2026-08-30: נציג תפעול לא מסונן לפי agent_id/agent_name של מכירות —
+  // השיוך שלו חי ב-payload.mirrorFlow.mirrorAssign. סינון מכירות גרם למנהל לראות
+  // שיוך מוצלח בזמן שהנציג לא קיבל את הלקוח בכלל (השרת לא החזיר את השורה).
   function getServerListAgentScopeFilter(){
     if(Storage?._skipServerAgentScope) return null;
     if(!Auth?.current || Auth.canViewAllCustomers()) return null;
+    try { if(Auth.isOpsAgent?.()) return null; } catch(_e) {}
     const names = new Set();
     const ids = new Set();
     const sessionAgent = findAgentRecordForSession();
@@ -5179,6 +5747,19 @@
     const idList = [...ids].filter(Boolean);
     if(!nameList.length && !idList.length) return null;
     return { names: nameList, ids: idList };
+  }
+
+  function getOpsAgentMirrorAssignScope(){
+    if(!Auth?.current || !Auth.isOpsAgent?.()) return null;
+    const meId = safeTrim(Auth.current.id);
+    const meName = safeTrim(Auth.current.name);
+    const sessionAgent = (typeof findAgentRecordForSession === "function") ? findAgentRecordForSession() : null;
+    const altName = safeTrim(sessionAgent?.name) || safeTrim(sessionAgent?.username);
+    const names = [];
+    if(meName) names.push(meName);
+    if(altName && altName !== meName) names.push(altName);
+    if(!meId && !names.length) return null;
+    return { id: meId, names };
   }
 
   // Wrap each value in double quotes (PostgREST-safe) for use inside or(...) / in.(...) filters,
@@ -6656,6 +7237,7 @@
       agentApptForm: "agent_appointment_form",
       harBituach: "har_bituach_file",
       hachsharaCiForm: "hachshara_ci_form",
+      hachsharaHealthForm: "hachshara_health_form",
       hachsharaLifeForm: "hachshara_life_form",
       hachsharaLifeShortForm: "hachshara_life_short_form",
       hachsharaMortgageForm: "hachshara_mortgage_form",
@@ -6673,12 +7255,13 @@
       phoenixLifeShortForm: "phoenix_life_short_form",
       phoenixLifeFullForm: "phoenix_life_full_form",
       phoenixHealthForm: "phoenix_health_form",
+      phoenixCiForm: "phoenix_ci_form",
       followupQuestionnaire: "followup_questionnaire",
-      followupQuestionnairesZip: "followup_questionnaires_zip",
-      clalCancelForm: "clal_cancel_form"
+      followupQuestionnairesZip: "followup_questionnaires_zip"
     },
     OFFICIAL_JOIN_FORM_TYPES: [
       "hachshara_ci_form",
+      "hachshara_health_form",
       "hachshara_life_form",
       "hachshara_life_short_form",
       "hachshara_mortgage_form",
@@ -6695,7 +7278,8 @@
       "migdal_cancer_form",
       "phoenix_life_short_form",
       "phoenix_life_full_form",
-      "phoenix_health_form"
+      "phoenix_health_form",
+      "phoenix_ci_form"
     ],
     isOfficialJoinFormType(type){
       return this.OFFICIAL_JOIN_FORM_TYPES.indexOf(safeTrim(type)) >= 0;
@@ -6888,28 +7472,6 @@
         uploadedAt,
         uploadedBy: safeTrim(options.uploadedBy) || safeTrim(meta?.agent?.name) || safeTrim(Auth?.current?.name),
         payloadSnapshot: { agentAppointmentMeta: JSON.parse(JSON.stringify(meta || {})) }
-      };
-    },
-    createClalCancelFormDoc(meta, options = {}){
-      const uploadedAt = safeTrim(options.uploadedAt) || nowISO();
-      const pol = safeTrim(meta?.policyNumber) || "פוליסה";
-      const name = safeTrim(meta?.customer?.fullName) || "לקוח";
-      const fileName = safeTrim(options.fileName)
-        || (this.sanitizeFileNamePart("ביטול_כלל_" + name + "_" + pol) + ".pdf");
-      return {
-        id: this.newDocId("doc_clal_cancel_"),
-        type: this.TYPES.clalCancelForm,
-        name: "טופס ביטול · כלל · " + (pol !== "פוליסה" ? pol : name),
-        fileName,
-        mime: "application/pdf",
-        dataUrl: safeTrim(options.dataUrl),
-        policyId: safeTrim(meta?.policyId),
-        policyNumber: pol,
-        cancelMode: safeTrim(meta?.cancelMode),
-        metaSnapshot: JSON.parse(JSON.stringify(meta || {})),
-        source: "מערכת",
-        uploadedAt,
-        uploadedBy: safeTrim(options.uploadedBy) || safeTrim(Auth?.current?.name)
       };
     },
     sanitizeFileNamePart(value){
@@ -7178,6 +7740,7 @@
         if(this.qualifiesForHealthReport(reportPayload)){
           this.upsertHealthEditReportDoc(payload, reportPayload, options);
         }
+        this.syncFollowupDocsFromLiveDetect(payload, options);
         return payload;
       }
       if(kind === "health_wizard"){
@@ -7196,8 +7759,23 @@
             reportScope
           }));
         }
+        this.syncFollowupDocsFromLiveDetect(payload, options);
         return payload;
       }
+      return payload;
+    },
+    syncFollowupDocsFromLiveDetect(payload, options = {}){
+      const helper = (typeof window !== "undefined" && window.GiFollowupZip) ? window.GiFollowupZip : null;
+      if(!helper?.resolveForCustomer || !payload || typeof payload !== "object") return payload;
+      try {
+        const rec = { payload };
+        const mirror = (typeof MirrorsUI !== "undefined" && MirrorsUI) ? MirrorsUI : null;
+        const meta = (typeof mirror?.buildMirrorHealthMeta === "function")
+          ? mirror.buildMirrorHealthMeta(rec)
+          : { map: {}, insureds: [] };
+        const triggered = helper.resolveForCustomer(rec, meta, meta.insureds || []) || [];
+        if(triggered.length) this.syncFollowupQuestionnaireDocs(payload, triggered, options);
+      } catch(_e) {}
       return payload;
     },
     // Official join PDFs only from 23.8.2026 — not from 1 August.
@@ -7296,6 +7874,18 @@
         if(safeTrim(p?.company) !== "הכשרה") return false;
         const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
         return /מחלות\s*קשות/.test(blob);
+      });
+      return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
+    },
+    qualifiesForHachsharaHealthForm(payload, rec){
+      const list = this.listOfficialJoinFormPolicies(payload, rec);
+      const matched = list.filter((p) => {
+        if(safeTrim(p?.company) !== "הכשרה") return false;
+        const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
+        if(/משכנתא/.test(blob)) return false;
+        if(/מחלות\s*קשות/.test(blob) && !/בריאות/.test(blob)) return false;
+        if((/ריסק/.test(blob) || /ביטוח\s*חיים/.test(blob)) && !/בריאות/.test(blob)) return false;
+        return /בריאות/.test(blob) || safeTrim(p?.type) === "בריאות";
       });
       return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
     },
@@ -7505,6 +8095,22 @@
       });
       return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
     },
+    isPhoenixCiPolicy(policy){
+      if(!policy || typeof policy !== "object") return false;
+      if(safeTrim(policy.company) !== "הפניקס") return false;
+      if(this.isPhoenixRiskMortgagePolicy(policy)) return false;
+      const t = safeTrim(policy.type);
+      if(t === "מחלות קשות" || t === "סרטן") return true;
+      const blob = [policy.type, policy.productName, policy.planName, policy.label].map(safeTrim).join(" ");
+      if(/משכנתא/.test(blob) || (/ריסק/.test(blob) && !/מחלות\s*קשות/.test(blob) && !/מרפא/.test(blob))) return false;
+      if(/בריאות/.test(blob) && !/מחלות\s*קשות/.test(blob) && !/מרפא/.test(blob) && !/סרטן/.test(blob)) return false;
+      return /מחלות\s*קשות/.test(blob) || /מרפא/.test(blob) || /סרטן/.test(blob);
+    },
+    qualifiesForPhoenixCiForm(payload, rec){
+      const list = this.listOfficialJoinFormPolicies(payload, rec);
+      const matched = list.filter((p) => this.isPhoenixCiPolicy(p));
+      return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
+    },
     resolveListForCustomer(rec){
       const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
       const list = this.listFromPayload(payload);
@@ -7532,6 +8138,19 @@
           type: this.TYPES.hachsharaCiForm,
           isLegacy: true,
           name: "טופס מקורי — מחלות קשות · הכשרה",
+          source: "מערכת",
+          uploadedAt,
+          uploadedBy: safeTrim(rec?.agentName)
+        });
+      }
+      const hasHachHealth = list.some((d) => safeTrim(d?.type) === this.TYPES.hachsharaHealthForm);
+      if(!hasHachHealth && this.qualifiesForHachsharaHealthForm(payload, rec)){
+        const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
+        list.unshift({
+          id: "doc_hachshara_health_form",
+          type: this.TYPES.hachsharaHealthForm,
+          isLegacy: true,
+          name: "טופס מקורי — בריאות · הכשרה",
           source: "מערכת",
           uploadedAt,
           uploadedBy: safeTrim(rec?.agentName)
@@ -7610,6 +8229,19 @@
           type: this.TYPES.phoenixHealthForm,
           isLegacy: true,
           name: "טופס מקורי — בריאות · הפניקס",
+          source: "מערכת",
+          uploadedAt,
+          uploadedBy: safeTrim(rec?.agentName)
+        });
+      }
+      const hasPhxCi = list.some((d) => safeTrim(d?.type) === this.TYPES.phoenixCiForm);
+      if(!hasPhxCi && this.qualifiesForPhoenixCiForm(payload, rec)){
+        const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
+        list.unshift({
+          id: "doc_phoenix_ci_form",
+          type: this.TYPES.phoenixCiForm,
+          isLegacy: true,
+          name: "טופס מקורי — מחלות קשות / מרפא · הפניקס",
           source: "מערכת",
           uploadedAt,
           uploadedBy: safeTrim(rec?.agentName)
@@ -7770,16 +8402,19 @@
         const coLabel = safeTrim(meta?.companyLabel) || "חברה";
         list.unshift({ id: "doc_ops_agent_legacy", type: this.TYPES.agentApptOps, isLegacy: true, name: "דוח תפעולי — מינוי סוכן · " + coLabel, source: "מערכת", uploadedAt: safeTrim(meta?.savedAt) || safeTrim(rec?.updatedAt) || safeTrim(rec?.createdAt), uploadedBy: safeTrim(meta?.agent?.name) || safeTrim(rec?.agentName), payloadSnapshot: { agentAppointmentMeta: JSON.parse(JSON.stringify(meta)) } });
       }
+      this.injectTriggeredFollowupQuestionnaireDocs(list, rec, payload);
       return this.sortByDateDesc(list.filter((doc) => {
         if(!doc || typeof doc !== "object") return false;
         const type = safeTrim(doc.type);
         if(type === this.TYPES.hachsharaCiForm) return this.qualifiesForHachsharaCiForm(payload, rec);
+        if(type === this.TYPES.hachsharaHealthForm) return this.qualifiesForHachsharaHealthForm(payload, rec);
         if(type === this.TYPES.hachsharaLifeForm) return this.qualifiesForHachsharaLifeForm(payload, rec);
         if(type === this.TYPES.hachsharaLifeShortForm) return this.qualifiesForHachsharaLifeShortForm(payload, rec);
         if(type === this.TYPES.hachsharaMortgageForm) return this.qualifiesForHachsharaMortgageForm(payload, rec);
         if(type === this.TYPES.phoenixLifeShortForm) return this.qualifiesForPhoenixLifeShortForm(payload, rec);
         if(type === this.TYPES.phoenixLifeFullForm) return this.qualifiesForPhoenixLifeFullForm(payload, rec);
         if(type === this.TYPES.phoenixHealthForm) return this.qualifiesForPhoenixHealthForm(payload, rec);
+        if(type === this.TYPES.phoenixCiForm) return this.qualifiesForPhoenixCiForm(payload, rec);
         if(type === this.TYPES.migdalLifeForm) return this.qualifiesForMigdalLifeForm(payload, rec);
         if(type === this.TYPES.migdalMortgageForm) return this.qualifiesForMigdalMortgageForm(payload, rec);
         if(type === this.TYPES.menoraCiForm) return this.qualifiesForMenoraCiForm(payload, rec);
@@ -7801,6 +8436,35 @@
       const id = safeTrim(docId);
       if(!id) return null;
       return this.resolveListForCustomer(rec).find((doc) => String(doc?.id) === String(id)) || null;
+    },
+    injectTriggeredFollowupQuestionnaireDocs(list, rec, payload){
+      if(!Array.isArray(list)) return list;
+      const helper = (typeof window !== "undefined" && window.GiFollowupZip) ? window.GiFollowupZip : null;
+      if(!helper?.resolveForCustomer) return list;
+      try {
+        const mirror = (typeof MirrorsUI !== "undefined" && MirrorsUI) ? MirrorsUI : null;
+        const meta = (typeof mirror?.buildMirrorHealthMeta === "function")
+          ? mirror.buildMirrorHealthMeta(rec)
+          : { map: {}, insureds: [] };
+        const triggered = helper.resolveForCustomer(rec, meta, meta.insureds || []) || [];
+        if(!triggered.length) return list;
+        const existingIds = new Set(list
+          .filter((d) => safeTrim(d?.type) === this.TYPES.followupQuestionnaire)
+          .map((d) => safeTrim(d?.id)));
+        const uploadedAt = safeTrim(rec?.updatedAt) || safeTrim(rec?.updated_at) || safeTrim(rec?.createdAt) || nowISO();
+        triggered.slice().reverse().forEach((entry) => {
+          const doc = this.createFollowupQuestionnaireDoc(entry, {
+            uploadedAt,
+            uploadedBy: safeTrim(rec?.agentName),
+            payload
+          });
+          const docId = safeTrim(doc.id);
+          if(docId && existingIds.has(docId)) return;
+          list.unshift(doc);
+          if(docId) existingIds.add(docId);
+        });
+      } catch(_e) {}
+      return list;
     }
   };
 
@@ -10587,6 +11251,51 @@
       return LARGE_SESSION_MODE_ENABLED && this._largeCustomersSession === true;
     },
 
+    /* GI-PERF 2026-08-25: מנהל צוות עם רוסטר גדול (מתחת לסף 5k) —
+       אותן הגנות סשן כמו Large Session, בלי working-set של אדמין. */
+    _teamManagerLightLoginHint: false,
+    _teamManagerRosterEstimate: 0,
+
+    isTeamManagerLightSession(){
+      if(!TEAM_MANAGER_LIGHT_SESSION_ENABLED) return false;
+      try {
+        if(!Auth?.isTeamManager?.()) return false;
+      } catch(_e) {
+        return false;
+      }
+      if(this.isLargeCustomersSession()) return false;
+      if(this._teamManagerLightLoginHint) return true;
+      const n = Array.isArray(State.data?.customers) ? State.data.customers.length : 0;
+      if(n >= TEAM_MANAGER_LIGHT_SESSION_THRESHOLD) return true;
+      try {
+        const estimate = Math.max(
+          0,
+          Number(this._teamManagerRosterEstimate) || 0,
+          Number(this._largeCustomersTotalEstimate) || 0
+        );
+        if(estimate >= TEAM_MANAGER_LIGHT_SESSION_THRESHOLD) return true;
+      } catch(_e) {}
+      return false;
+    },
+
+    markTeamManagerLightRoster(estimate = 0){
+      this._teamManagerLightLoginHint = true;
+      this._teamManagerRosterEstimate = Math.max(
+        Number(this._teamManagerRosterEstimate) || 0,
+        Number(estimate) || 0
+      );
+      return this.isTeamManagerLightSession();
+    },
+
+    clearTeamManagerLightRoster(){
+      this._teamManagerLightLoginHint = false;
+      this._teamManagerRosterEstimate = 0;
+    },
+
+    isHeavyRosterSession(){
+      return this.isLargeCustomersSession() || this.isTeamManagerLightSession();
+    },
+
     setLargeCustomersSession(on, totalEstimate = 0){
       this._largeCustomersSession = !!on && LARGE_SESSION_MODE_ENABLED;
       this._largeCustomersTotalEstimate = this._largeCustomersSession
@@ -10759,12 +11468,13 @@
       if(!userKey) return false;
       const payload = st && typeof st === "object" ? st : null;
       if(!payload) return false;
-      // Large-session: אל תכתוב עשרות אלפי לקוחות ל-IDB (סערת shards + הקפאה).
-      if(this.isLargeCustomersSession()) return false;
+      // Large-session / team-manager light: אל תכתוב עשרות אלפי לקוחות ל-IDB (סערת shards + הקפאה).
+      if(this.isHeavyRosterSession()) return false;
       if(this.sessionPayloadLooksLight(payload)) return false;
       try {
         const n = Array.isArray(payload.customers) ? payload.customers.length : 0;
         if(LARGE_SESSION_MODE_ENABLED && n >= LARGE_SESSION_CUSTOMER_THRESHOLD) return false;
+        if(TEAM_MANAGER_LIGHT_SESSION_ENABLED && Auth?.isTeamManager?.() && n >= TEAM_MANAGER_FAT_CACHE_PAINT_CAP) return false;
       } catch(_e) {}
 
       if(this._idbWriteInFlight) { this._idbWriteQueued = true; return false; }
@@ -10841,7 +11551,7 @@
 
     scheduleFullIdbCacheSave(st){
       const payload = st && typeof st === "object" ? st : (State.data || null);
-      if(!payload || this.isLargeCustomersSession() || this.sessionPayloadLooksLight(payload)) return;
+      if(!payload || this.isHeavyRosterSession() || this.sessionPayloadLooksLight(payload)) return;
       try {
         const n = Array.isArray(payload.customers) ? payload.customers.length : 0;
         if(LARGE_SESSION_MODE_ENABLED && n >= LARGE_SESSION_CUSTOMER_THRESHOLD) return;
@@ -10891,6 +11601,14 @@
         if(!ageOk) return null;
 
         let payload = entry.payload;
+
+        // GI-PERF 2026-08-25: מנהל צוות עם מטמון מפוצל גדול — לא לטעון מנות.
+        // הקריאה עצמה (עשרות/מאות get) מקפיאה את הדף עוד לפני paint.
+        if(this.shouldSkipTeamManagerFatIdbLoad(payload)){
+          try { console.warn("TEAM_MANAGER_SKIP_FAT_IDB_READ"); } catch(_e) {}
+          try { void this.purgeCurrentUserFullIdbCache(); } catch(_e) {}
+          return null;
+        }
 
         // רשומה מפוצלת (GI-PERF שלב ט'): מחברים בחזרה את מנות הלקוחות.
         if(payload && payload[GI_FULL_IDB_SKELETON_FLAG] === true){
@@ -10966,6 +11684,62 @@
       } catch(_e) {
         return false;
       }
+    },
+
+    /* GI-PERF 2026-08-25: מוחק את מטמון ה-IDB השמן של המשתמש הנוכחי.
+       אצל ואדים (~2.1K תיקים מפוצלים ל־~140 מנות) הקריאה עצמה הקפיאה את הדף
+       עוד לפני דילוג הצביעה. */
+    async purgeCurrentUserFullIdbCache(){
+      const userKey = this.fullCacheUserKey();
+      if(!userKey) return false;
+      try {
+        const db = await this._openFullIdb();
+        if(!db) return false;
+        await new Promise((resolve) => {
+          try {
+            const tx = db.transaction(GI_FULL_IDB_STORE, "readwrite");
+            const store = tx.objectStore(GI_FULL_IDB_STORE);
+            const req = store.getAllKeys();
+            req.onsuccess = () => {
+              try {
+                (req.result || []).forEach((k) => {
+                  if(Storage._idbKeyBelongsToUser(k, userKey)) store.delete(k);
+                });
+              } catch(_e) {}
+            };
+            req.onerror = () => {};
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => resolve(false);
+            tx.onabort = () => resolve(false);
+          } catch(_e) {
+            resolve(false);
+          }
+        });
+        try {
+          if(this._memoryCache?.userKey === userKey) this._memoryCache = null;
+        } catch(_e) {}
+        try { console.warn("TEAM_MANAGER_PURGE_FAT_IDB:", userKey); } catch(_e) {}
+        return true;
+      } catch(_e) {
+        return false;
+      }
+    },
+
+    shouldSkipTeamManagerFatIdbLoad(entryPayload){
+      try {
+        if(!Auth?.isTeamManager?.()) return false;
+      } catch(_e) {
+        return false;
+      }
+      const p = entryPayload && typeof entryPayload === "object" ? entryPayload : null;
+      if(!p) return true;
+      if(p[GI_FULL_IDB_SKELETON_FLAG] === true){
+        const shardCount = Math.max(0, Number(p._giShardCount) || 0);
+        const estimated = shardCount * GI_FULL_IDB_SHARD_SIZE;
+        return estimated >= TEAM_MANAGER_FAT_CACHE_PAINT_CAP;
+      }
+      const n = Array.isArray(p.customers) ? p.customers.length : 0;
+      return n >= TEAM_MANAGER_FAT_CACHE_PAINT_CAP;
     },
 
     buildLightCachePayload(st){
@@ -11067,9 +11841,14 @@
 
     _scheduleServerCacheFlush(){
       if(this._serverCacheFlushHandle) return;
+      // GI-PERF 2026-08-25c: מנהל צוות / Large Session — לא לעשות JSON.stringify של הרוסטר ב־sessionStorage.
+      try {
+        if(this.isHeavyRosterSession()) return;
+      } catch(_e) {}
       const flush = () => {
         this._serverCacheFlushHandle = null;
         try {
+          if(this.isHeavyRosterSession()) return;
           const entry = this._memoryCache;
           if(!entry?.payload) return;
           const light = this.buildLightCachePayload(entry.payload);
@@ -11431,6 +12210,8 @@
           teamManagerAssignmentsUpdatedAt: safeTrim(state?.meta?.teamManagerAssignmentsUpdatedAt) || null,
           agentReportAliases: normalizeAgentReportAliasesMap(state?.meta?.agentReportAliases),
           agentReportAliasesUpdatedAt: safeTrim(state?.meta?.agentReportAliasesUpdatedAt) || null,
+          agentBranches: normalizeAgentBranchesMap(state?.meta?.agentBranches),
+          agentBranchesUpdatedAt: safeTrim(state?.meta?.agentBranchesUpdatedAt) || null,
           directoryContactExtras: normalizeDirectoryContactsList(state?.meta?.directoryContactExtras),
           directoryContactsUpdatedAt: safeTrim(state?.meta?.directoryContactsUpdatedAt) || null,
           // GI-FIX 2026-08-03c: agentSecurity/agentTargets חייבים ב-buildMetaRow עצמו,
@@ -12059,6 +12840,8 @@
         teamManagerAssignmentsUpdatedAt: safeTrim(payload?.teamManagerAssignmentsUpdatedAt) || null,
         agentReportAliases: normalizeAgentReportAliasesMap(payload?.agentReportAliases),
         agentReportAliasesUpdatedAt: safeTrim(payload?.agentReportAliasesUpdatedAt) || null,
+        agentBranches: normalizeAgentBranchesMap(payload?.agentBranches),
+        agentBranchesUpdatedAt: safeTrim(payload?.agentBranchesUpdatedAt) || null,
         directoryContactExtras: normalizeDirectoryContactsList(payload?.directoryContactExtras),
         directoryContactsUpdatedAt: safeTrim(payload?.directoryContactsUpdatedAt) || null,
         // GI-FIX 2026-08-03c: קריאת agentSecurity מ-payload ב-mapMeta עצמו (לא רק ב-wrapper).
@@ -12153,6 +12936,19 @@
     },
 
     mapCustomerRow(row, idx){
+      let payload = row?.payload || {};
+      if(typeof payload === "string"){
+        try { payload = JSON.parse(safeTrim(payload) || "{}") || {}; } catch(_e){ payload = {}; }
+      }
+      if(!payload || typeof payload !== "object") payload = {};
+      // Thin select may expose mirrorAssign as a promoted JSON column.
+      const thinAssign = row?.mirrorAssign || row?.mirror_assign;
+      if(thinAssign && typeof thinAssign === "object"){
+        const mf = (payload.mirrorFlow && typeof payload.mirrorFlow === "object") ? payload.mirrorFlow : {};
+        payload = Object.assign({}, payload, {
+          mirrorFlow: Object.assign({}, mf, { mirrorAssign: thinAssign })
+        });
+      }
       return normalizeCustomerRecord({
         id: row?.id,
         status: row?.status,
@@ -12170,7 +12966,7 @@
         createdAt: row?.created_at,
         updatedAt: row?.updated_at,
         listActivityAt: row?.list_activity_at || row?.listActivityAt,
-        payload: row?.payload || {}
+        payload
       }, idx);
     },
 
@@ -12506,6 +13302,71 @@
         return this._loadTableRowsMergedAgentScope(tableName, selectExpr);
       }
       return this._loadTableRowsUnscoped(tableName, selectExpr);
+    },
+
+    /* GI-FIX 2026-08-30: נציג תפעול — טעינה לפי שיוך שיקוף ב-payload, לא לפי
+       agent_id של מכירות. בלי זה המנהל רואה שיוך והנציג לא מקבל את הלקוח. */
+    _opsAgentMirrorAssignOrFilter(scope){
+      const parts = [];
+      const quote = (v) => '"' + String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+      if(safeTrim(scope?.id)){
+        parts.push(`payload->mirrorFlow->mirrorAssign->>agentId.eq.${quote(scope.id)}`);
+      }
+      (Array.isArray(scope?.names) ? scope.names : []).forEach((name) => {
+        const n = safeTrim(name);
+        if(n) parts.push(`payload->mirrorFlow->mirrorAssign->>agentName.eq.${quote(n)}`);
+      });
+      return parts.length ? parts.join(",") : "";
+    },
+
+    async loadOpsAgentAssignedCustomerRows(selectExpr = "*", options = {}){
+      const scope = getOpsAgentMirrorAssignScope();
+      if(!scope) return { ok:true, data: [] };
+      const orFilter = this._opsAgentMirrorAssignOrFilter(scope);
+      if(!orFilter) return { ok:true, data: [] };
+      let cols = safeTrim(selectExpr) || "*";
+      if(cols !== "*" && cols.indexOf("payload") < 0){
+        cols = cols + ",payload";
+      }
+      const since = safeTrim(options.sinceIso);
+      const take = Math.max(1, Math.min(2000, Number(options.limit) || 500));
+      const label = "טעינת לקוחות ששויכו לנציג תפעול";
+      const client = this.getClient();
+
+      const fetchViaClient = async () => {
+        let builder = client.from(SUPABASE_TABLES.customers).select(cols);
+        builder = builder.or(orFilter);
+        if(since) builder = builder.gte("updated_at", since);
+        builder = builder.order("updated_at", { ascending: false }).limit(take);
+        const { data, error } = await this.withRetry(() => builder, label);
+        if(error) throw error;
+        return Array.isArray(data) ? data : [];
+      };
+
+      const fetchViaRest = async () => {
+        let path = SUPABASE_TABLES.customers
+          + "?select=" + encodeURIComponent(cols)
+          + "&or=" + encodeURIComponent("(" + orFilter + ")");
+        if(since) path += "&updated_at=gte." + encodeURIComponent(since);
+        path += "&order=updated_at.desc&limit=" + take;
+        return await this.restRequest(path, { method: "GET" }) || [];
+      };
+
+      try {
+        const data = await fetchViaClient();
+        return { ok:true, data };
+      } catch(primaryErr) {
+        try {
+          const data = await fetchViaRest();
+          return { ok:true, data: Array.isArray(data) ? data : [] };
+        } catch(restErr) {
+          return {
+            ok:false,
+            error: String(restErr?.message || primaryErr?.message || restErr || primaryErr),
+            data: []
+          };
+        }
+      }
     },
 
     async probeCustomersCount(){
@@ -12861,6 +13722,13 @@
           archivedAdds
         );
       }
+      try {
+        if(this.isTeamManagerLightSession()){
+          const trimmed = trimTeamManagerCustomerPayloadLru({ customers: State.data.customers });
+          if(Array.isArray(trimmed?.customers)) State.data.customers = trimmed.customers;
+        }
+      } catch(_e) {}
+      try { OpsAssignArrivalAlert.inspect(); } catch(_e) {}
       return merged;
     },
 
@@ -12896,7 +13764,16 @@
       if(!serverRec) return localRec;
       const localAt = Date.parse(safeTrim(localRec?.updatedAt || localRec?.updated_at) || "") || 0;
       const serverAt = Date.parse(safeTrim(serverRec?.updatedAt || serverRec?.updated_at) || "") || 0;
-      return serverAt >= localAt ? serverRec : localRec;
+      const newer = serverAt >= localAt ? serverRec : localRec;
+      const older = newer === serverRec ? localRec : serverRec;
+      // GI-PERF 2026-08-25: מיזוג מול שורת LIGHT לא ימחק payload מלא שכבר בזיכרון.
+      try {
+        if(this.payloadHasPolicyOrInsuredContent(older?.payload)
+          && !this.payloadHasPolicyOrInsuredContent(newer?.payload)){
+          return { ...newer, payload: older.payload };
+        }
+      } catch(_e) {}
+      return newer;
     },
 
     async mergeConflictRemoteTablesIntoState(localState){
@@ -12909,10 +13786,46 @@
       const dirtyProposalIds = new Set(
         this.getChangedRows(SUPABASE_TABLES.proposals, proposalRows).map((row) => String(row?.id)).filter(Boolean)
       );
-      const [customersRes, proposalsRes] = await Promise.all([
-        this.loadTableRows(SUPABASE_TABLES.customers),
-        this.loadTableRows(SUPABASE_TABLES.proposals)
-      ]);
+      // GI-PERF 2026-08-25: במנהל-צוות-light לא למשוך select=* של כל הצוות (~22MB אצל ואדים).
+      // GI-PERF 2026-08-25c: גם LIGHT של כל הצוות מיותר — רק dirty / תיקים פתוחים.
+      const lightConflict = this.isTeamManagerLightSession();
+      let customersRes = { ok:true, data:[] };
+      let proposalsRes = { ok:true, data:[] };
+      if(lightConflict){
+        const custIds = [...dirtyCustomerIds];
+        try {
+          getTeamManagerProtectedPayloadIds().forEach((id) => {
+            if(id) custIds.push(String(id));
+          });
+        } catch(_e) {}
+        const propIds = [...dirtyProposalIds];
+        const uniq = (arr) => [...new Set(arr.map(String).filter(Boolean))];
+        const cIds = uniq(custIds);
+        const pIds = uniq(propIds);
+        const fetchByIds = async (table, ids, selectExpr) => {
+          if(!ids.length) return { ok:true, data:[] };
+          try {
+            const client = this.getClient();
+            const { data, error } = await this.withRetry(
+              () => client.from(table).select(selectExpr).in("id", ids),
+              "מיזוג קונפליקט לפי מזהים"
+            );
+            if(error) throw error;
+            return { ok:true, data: Array.isArray(data) ? data : [] };
+          } catch(err) {
+            return { ok:false, error: String(err?.message || err), data:[] };
+          }
+        };
+        [customersRes, proposalsRes] = await Promise.all([
+          fetchByIds(SUPABASE_TABLES.customers, cIds, CUSTOMER_LIGHT_COLUMNS + ",payload"),
+          fetchByIds(SUPABASE_TABLES.proposals, pIds, PROPOSAL_LIGHT_COLUMNS + ",payload")
+        ]);
+      } else {
+        [customersRes, proposalsRes] = await Promise.all([
+          this.loadTableRows(SUPABASE_TABLES.customers, "*"),
+          this.loadTableRows(SUPABASE_TABLES.proposals, "*")
+        ]);
+      }
       let merged = 0;
       if(customersRes?.ok){
         const map = new Map((state.customers || []).map((c) => [String(c?.id), c]));
@@ -12955,8 +13868,12 @@
         });
         state.proposals = Array.from(map.values());
       }
+      let outState = Auth?.current && !Auth.canViewAllCustomers()
+        ? filterSessionStateForCurrentUserScope(state)
+        : state;
+      try { outState = trimTeamManagerCustomerPayloadLru(outState); } catch(_e) {}
       return {
-        state: Auth?.current && !Auth.canViewAllCustomers() ? filterSessionStateForCurrentUserScope(state) : state,
+        state: outState,
         merged,
         warning: (!customersRes?.ok && !proposalsRes?.ok) ? "לא ניתן היה למזג נתונים מהשרת לפני השמירה" : ""
       };
@@ -12967,6 +13884,8 @@
       // GI-PERF 2026-08-10: בסשן ענק דלתא עלולה למשוך עשרות אלפי שורות מאז since —
       // חוזרים ל-loadSheets (working-set בלבד).
       if(this.isLargeCustomersSession()) return this.loadSheets(options);
+      // GI-PERF 2026-08-25c: מנהל צוות light — אותה הגנה; דלתא עלולה להשמין/להקפיא.
+      if(this.isTeamManagerLightSession()) return this.loadSheets(options);
       const localAt = safeTrim(options.sinceIso || getMetaSyncAt(State.data?.meta, "data") || State.data?.meta?.updatedAt);
       if(!localAt) return this.loadSheets(options);
       const useCachedFallback = options.useCachedFallback === true;
@@ -12989,8 +13908,20 @@
         const [metaRes, agentsRes, customersRes, proposalsRes] = await Promise.all([
           this.loadMetaRow(),
           this.loadTableRows(SUPABASE_TABLES.agents),
-          this.loadTableRowsSince(SUPABASE_TABLES.customers, querySince),
-          this.loadTableRowsSince(SUPABASE_TABLES.proposals, querySince)
+          (Auth?.isOpsAgent?.()
+            ? this.loadOpsAgentAssignedCustomerRows("*")
+            : this.loadTableRowsSince(
+                SUPABASE_TABLES.customers,
+                querySince,
+                this.isTeamManagerLightSession() ? CUSTOMER_LIGHT_COLUMNS : "*"
+              )),
+          (Auth?.isOpsAgent?.()
+            ? Promise.resolve({ ok:true, data: [] })
+            : this.loadTableRowsSince(
+                SUPABASE_TABLES.proposals,
+                querySince,
+                this.isTeamManagerLightSession() ? PROPOSAL_LIGHT_COLUMNS : "*"
+              ))
         ]);
 
         if(!metaRes.ok){
@@ -13047,6 +13978,22 @@
           }
           return localAt || remoteAt || safeTrim(mappedMeta.updatedAt) || nowISO();
         })();
+        mappedMeta.agentBranches = mergeAgentBranchesMapsByRecency(
+          prevMeta.agentBranches,
+          mappedMeta.agentBranches,
+          {
+            localAt: safeTrim(prevMeta.agentBranchesUpdatedAt),
+            remoteAt: safeTrim(mappedMeta.agentBranchesUpdatedAt)
+          }
+        );
+        mappedMeta.agentBranchesUpdatedAt = (() => {
+          const localAt = safeTrim(prevMeta.agentBranchesUpdatedAt);
+          const remoteAt = safeTrim(mappedMeta.agentBranchesUpdatedAt);
+          if(localAt && remoteAt){
+            return compareIsoStamps(localAt, remoteAt) >= 0 ? localAt : remoteAt;
+          }
+          return localAt || remoteAt || safeTrim(mappedMeta.updatedAt) || nowISO();
+        })();
         mappedMeta.directoryContactExtras = mergeDirectoryContactsListsByRecency(
           prevMeta.directoryContactExtras,
           mappedMeta.directoryContactExtras,
@@ -13075,6 +14022,13 @@
         else console.warn("WAVE3_DELTA: customers delta skipped", customersRes.error);
         if(proposalsRes.ok) this.mergeProposalsDelta(proposalsRes.data || []);
         else console.warn("WAVE3_DELTA: proposals delta skipped", proposalsRes.error);
+
+        try {
+          if(Auth?.isOpsAgent?.()){
+            // Full assigned set was re-fetched — drop local rows that are no longer assigned.
+            State.data = filterSessionStateForCurrentUserScope(State.data);
+          }
+        } catch(_e) {}
 
         try {
           if(LARGE_SESSION_MODE_ENABLED){
@@ -13536,31 +14490,67 @@
           ? PROPOSAL_LIGHT_COLUMNS : "*";
 
         // GI-PERF 2026-08-10 — Large Session: ספירה זולה לפני משיכת כל הטבלה.
+        // GI-PERF 2026-08-25c — מנהל צוות מעל 400: working-set (לא כל 2.1K).
+        // GI-FIX 2026-08-30 — נציג תפעול: לא Large Session ארגוני; רק לקוחות ששויכו אליו.
         let useLargeCustomers = false;
+        let useTeamManagerWorkingSet = false;
+        let useOpsAgentAssignSet = false;
         let largeCustomersTotal = 0;
         let largeProbeUncertain = false;
         this.setLargeCustomersSession(false, 0);
-        if(LARGE_SESSION_MODE_ENABLED){
-          const probe = await this.probeCustomersCount();
-          if(probe.ok && probe.count >= LARGE_SESSION_CUSTOMER_THRESHOLD){
+        try { useOpsAgentAssignSet = !!(Auth?.isOpsAgent?.()); } catch(_e) { useOpsAgentAssignSet = false; }
+        let rosterProbe = { ok:false, count: 0 };
+        if(!useOpsAgentAssignSet && (LARGE_SESSION_MODE_ENABLED || (TEAM_MANAGER_LIGHT_SESSION_ENABLED && Auth?.isTeamManager?.()))){
+          rosterProbe = await this.probeCustomersCount();
+        }
+        if(!useOpsAgentAssignSet && LARGE_SESSION_MODE_ENABLED){
+          if(rosterProbe.ok && rosterProbe.count >= LARGE_SESSION_CUSTOMER_THRESHOLD){
             useLargeCustomers = true;
-            largeCustomersTotal = probe.count;
-          } else if(!probe.ok){
+            largeCustomersTotal = rosterProbe.count;
+          } else if(!rosterProbe.ok && LARGE_SESSION_MODE_ENABLED){
             // ספירה נכשלה: מושכים working-set (לא 52K). אם חזר פחות מהתקרה — זה סשן רגיל.
             useLargeCustomers = true;
             largeProbeUncertain = true;
             largeCustomersTotal = 0;
-            try { console.warn("LARGE_SESSION_PROBE_FAILED_USING_WORKING_SET:", probe.error || ""); } catch(_e) {}
+            try { console.warn("LARGE_SESSION_PROBE_FAILED_USING_WORKING_SET:", rosterProbe.error || ""); } catch(_e) {}
           }
         }
+        if(!useOpsAgentAssignSet
+          && !useLargeCustomers
+          && TEAM_MANAGER_LIGHT_SESSION_ENABLED
+          && Auth?.isTeamManager?.()
+          && rosterProbe.ok
+          && rosterProbe.count >= TEAM_MANAGER_LIGHT_SESSION_THRESHOLD){
+          useTeamManagerWorkingSet = true;
+          this.markTeamManagerLightRoster(rosterProbe.count);
+          try {
+            console.warn(
+              "TEAM_MANAGER_WORKING_SET:",
+              rosterProbe.count,
+              "→",
+              TEAM_MANAGER_LIGHT_WORKING_SET
+            );
+          } catch(_e) {}
+        }
 
-        const customersFetch = useLargeCustomers
+        const opsAgentCustomerCols = (LIGHT_INITIAL_LOAD_ENABLED
+          ? (CUSTOMER_LIGHT_COLUMNS + ",payload")
+          : "*");
+        const customersFetch = useOpsAgentAssignSet
+          ? this.loadOpsAgentAssignedCustomerRows(opsAgentCustomerCols)
+          : useLargeCustomers
           ? this.loadRecentCustomerRows(LARGE_SESSION_CUSTOMER_WORKING_SET, initialCustomerColumns)
-          : this.loadTableRows(SUPABASE_TABLES.customers, initialCustomerColumns);
+          : useTeamManagerWorkingSet
+            ? this.loadRecentCustomerRows(TEAM_MANAGER_LIGHT_WORKING_SET, initialCustomerColumns)
+            : this.loadTableRows(SUPABASE_TABLES.customers, initialCustomerColumns);
         // GI-PERF 2026-08-10: בסשן גדול גם הצעות רק working-set — אחרת מסך "הצעות" מקפיא.
-        const proposalsFetch = useLargeCustomers
+        const proposalsFetch = useOpsAgentAssignSet
+          ? Promise.resolve({ ok:true, data: [] })
+          : useLargeCustomers
           ? this.loadRecentProposalRows(LARGE_SESSION_PROPOSAL_WORKING_SET, initialProposalColumns)
-          : this.loadTableRows(SUPABASE_TABLES.proposals, initialProposalColumns);
+          : useTeamManagerWorkingSet
+            ? this.loadRecentProposalRows(TEAM_MANAGER_LIGHT_PROPOSAL_WORKING_SET, initialProposalColumns)
+            : this.loadTableRows(SUPABASE_TABLES.proposals, initialProposalColumns);
 
         const [metaRes, agentsRes, customersLightRes, proposalsLightRes] = await Promise.all([
           this.loadMetaRow(),
@@ -13578,14 +14568,31 @@
         if(!customersRes.ok || !proposalsRes.ok){
           try { console.warn("LIGHT_SELECT_FAILED_FALLBACK_TO_FULL:", safeTrim(customersRes.error) || safeTrim(proposalsRes.error)); } catch(_e) {}
           lightSelectUsed = false;
-          if(useLargeCustomers){
+          if(useOpsAgentAssignSet){
+            const [cOps, pOps] = await Promise.all([
+              customersRes.ok
+                ? Promise.resolve(customersRes)
+                : this.loadOpsAgentAssignedCustomerRows("*"),
+              proposalsRes.ok
+                ? Promise.resolve(proposalsRes)
+                : Promise.resolve({ ok:true, data: [] })
+            ]);
+            customersRes = cOps;
+            proposalsRes = pOps;
+          } else if(useLargeCustomers || useTeamManagerWorkingSet){
+            const custCap = useLargeCustomers
+              ? LARGE_SESSION_CUSTOMER_WORKING_SET
+              : TEAM_MANAGER_LIGHT_WORKING_SET;
+            const propCap = useLargeCustomers
+              ? LARGE_SESSION_PROPOSAL_WORKING_SET
+              : TEAM_MANAGER_LIGHT_PROPOSAL_WORKING_SET;
             const [cRecent, pRecent] = await Promise.all([
               customersRes.ok
                 ? Promise.resolve(customersRes)
-                : this.loadRecentCustomerRows(LARGE_SESSION_CUSTOMER_WORKING_SET, "*"),
+                : this.loadRecentCustomerRows(custCap, "*"),
               proposalsRes.ok
                 ? Promise.resolve(proposalsRes)
-                : this.loadRecentProposalRows(LARGE_SESSION_PROPOSAL_WORKING_SET, "*")
+                : this.loadRecentProposalRows(propCap, "*")
             ]);
             customersRes = cRecent;
             proposalsRes = pRecent;
@@ -13608,6 +14615,11 @@
               ...customersRes,
               data: customersRes.data.slice(0, LARGE_SESSION_CUSTOMER_WORKING_SET)
             };
+          } else if(useTeamManagerWorkingSet && rawLen > TEAM_MANAGER_LIGHT_WORKING_SET){
+            customersRes = {
+              ...customersRes,
+              data: customersRes.data.slice(0, TEAM_MANAGER_LIGHT_WORKING_SET)
+            };
           }
           const propLen = Array.isArray(proposalsRes?.data) ? proposalsRes.data.length : 0;
           if(LARGE_SESSION_MODE_ENABLED && (useLargeCustomers || propLen >= LARGE_SESSION_CUSTOMER_THRESHOLD)
@@ -13617,8 +14629,18 @@
               ...proposalsRes,
               data: proposalsRes.data.slice(0, LARGE_SESSION_PROPOSAL_WORKING_SET)
             };
+          } else if(useTeamManagerWorkingSet && propLen > TEAM_MANAGER_LIGHT_PROPOSAL_WORKING_SET){
+            proposalsRes = {
+              ...proposalsRes,
+              data: proposalsRes.data.slice(0, TEAM_MANAGER_LIGHT_PROPOSAL_WORKING_SET)
+            };
           }
         } catch(_e) {}
+        if(useTeamManagerWorkingSet && !useLargeCustomers){
+          this.markTeamManagerLightRoster(
+            Math.max(rosterProbe.count || 0, Array.isArray(customersRes?.data) ? customersRes.data.length : 0)
+          );
+        }
         if(useLargeCustomers){
           const loadedN = Array.isArray(customersRes?.data) ? customersRes.data.length : 0;
           const loadedP = Array.isArray(proposalsRes?.data) ? proposalsRes.data.length : 0;
@@ -13772,6 +14794,22 @@
                 }
                 return localAt || remoteAt || safeTrim(mergedState.meta.updatedAt) || nowISO();
               })();
+              mergedState.meta.agentBranches = mergeAgentBranchesMapsByRecency(
+                mergedState.meta.agentBranches,
+                remoteMeta.agentBranches,
+                {
+                  localAt: safeTrim(mergedState.meta.agentBranchesUpdatedAt),
+                  remoteAt: safeTrim(remoteMeta.agentBranchesUpdatedAt)
+                }
+              );
+              mergedState.meta.agentBranchesUpdatedAt = (() => {
+                const localAt = safeTrim(mergedState.meta.agentBranchesUpdatedAt);
+                const remoteAt = safeTrim(remoteMeta.agentBranchesUpdatedAt);
+                if(localAt && remoteAt){
+                  return compareIsoStamps(localAt, remoteAt) >= 0 ? localAt : remoteAt;
+                }
+                return localAt || remoteAt || safeTrim(mergedState.meta.updatedAt) || nowISO();
+              })();
               mergedState.meta.directoryContactExtras = mergeDirectoryContactsListsByRecency(
                 mergedState.meta.directoryContactExtras,
                 remoteMeta.directoryContactExtras,
@@ -13902,6 +14940,22 @@
               return compareIsoStamps(localAt, serverAt) >= 0 ? localAt : serverAt;
             }
             return localAt || serverAt || safeTrim(localState.meta?.agentReportAliasesUpdatedAt) || null;
+          })();
+          localState.meta.agentBranches = mergeAgentBranchesMapsByRecency(
+            localState.meta?.agentBranches,
+            serverState.meta.agentBranches,
+            {
+              localAt: safeTrim(localState.meta?.agentBranchesUpdatedAt),
+              remoteAt: safeTrim(serverState.meta.agentBranchesUpdatedAt)
+            }
+          );
+          localState.meta.agentBranchesUpdatedAt = (() => {
+            const localAt = safeTrim(localState.meta?.agentBranchesUpdatedAt);
+            const serverAt = safeTrim(serverState.meta.agentBranchesUpdatedAt);
+            if(localAt && serverAt){
+              return compareIsoStamps(localAt, serverAt) >= 0 ? localAt : serverAt;
+            }
+            return localAt || serverAt || safeTrim(localState.meta?.agentBranchesUpdatedAt) || null;
           })();
           localState.meta.directoryContactExtras = mergeDirectoryContactsListsByRecency(
             localState.meta?.directoryContactExtras,
@@ -15369,6 +16423,11 @@
       return this.isAdmin() || this.isManager();
     },
 
+    /** עוזר אישי בטופ-בר — מנהל מערכת / מנהל מאשר בלבד. */
+    canAccessPersonalAssistant(){
+      return this.isAdmin() || this.isManager();
+    },
+
     logout(reason = "manual"){
       const cur = this.current ? { ...this.current } : null;
       if(cur){
@@ -15407,6 +16466,7 @@
       try { InactivityGuard.stop(); } catch(_e) {}
       try { CampaignAgentLeadWatcher.stop(); } catch(_e) {}
       try { MirrorCallAgentToastWatcher.stop(); } catch(_e) {}
+      try { OpsAssignArrivalAlert.stop(); } catch(_e) {}
       try { BackgroundTimers.stopAll(); } catch(_e) {}
       try { App.resetSessionDataForUserSwitch(reason === "browser" ? "browser_close" : "logout"); } catch(_e) {
         try { App._fullDataReady = false; } catch(_e2) {}
@@ -15995,6 +17055,10 @@ UsersGateUI.init();
     },
 
     applyRoleUI(){
+      try {
+        if (Auth.current) window.GiAssistant?.onLogin?.();
+        else window.GiAssistant?.onLogout?.();
+      } catch(_e) {}
       const isAdmin = Auth.isAdmin();
       const isOps = Auth.isOps();
       const isOpsAgent = Auth.isOpsAgent();
@@ -16004,7 +17068,7 @@ UsersGateUI.init();
       const canUsers = Auth.canManageUsers();
       const settingsBtn = document.querySelector('.nav__item[data-view="settings"]');
       const newCustomerBtn = document.getElementById("btnNewCustomerWizard");
-      const offerFab = document.getElementById("giOfferFab");
+      const travelInsuranceBtn = document.getElementById("btnTravelInsuranceAbroad");
       const carInsuranceBtn = document.getElementById("btnCarInsuranceClick");
       const myToolsNav = document.getElementById("navMyTools");
       const campaignLinesCard = document.getElementById("campaignLinesSettingsCard");
@@ -16026,7 +17090,7 @@ UsersGateUI.init();
           btn.style.display = (v === "campaignLeads" || v === "dashboard" || v === "contacts") ? "" : "none";
         });
         if (newCustomerBtn) newCustomerBtn.style.display = "none";
-        if (offerFab) offerFab.style.display = "none";
+        if (travelInsuranceBtn) travelInsuranceBtn.style.display = "";
         if (carInsuranceBtn) carInsuranceBtn.style.display = "none";
         try { SimulatorsCenterUI.syncVisibility?.(); } catch(_e) {}
         document.body.classList.add("is-referent-role");
@@ -16055,7 +17119,7 @@ UsersGateUI.init();
       try { ContactsUI.syncAddButton?.(); } catch(_e) {}
       // הקמת הצעה חדשה: זמין גם לאלמנטרי (כמו נציג רגיל); מוסתר לתפעול / נציג תפעול / סוקרת
       if (newCustomerBtn) newCustomerBtn.style.display = isOpsFamily ? "none" : "";
-      if (offerFab) offerFab.style.display = isElementary ? "none" : "";
+      if (travelInsuranceBtn) travelInsuranceBtn.style.display = "";
       if (carInsuranceBtn) carInsuranceBtn.style.display = (isOpsFamily || isElementary || isReferent) ? "none" : "";
       if (this.els.navArchivedCustomers) this.els.navArchivedCustomers.style.display = "none";
       if (this.els.navSystemUpdates) this.els.navSystemUpdates.style.display = "none";
@@ -17010,6 +18074,7 @@ UsersGateUI.init();
         teamAgentsCount: $("#lcUserTeamAgentsCount"),
         teamAgentsPick: $("#lcUserTeamAgentsPick"),
         reportAliases: $("#lcUserReportAliases"),
+        officeBranch: $("#lcUserOfficeBranch"),
       };
 
       const E = this._modalEls;
@@ -17155,6 +18220,7 @@ UsersGateUI.init();
         }
       }
       if(E.role) E.role.value = user ? (user.role || "agent") : "agent";
+      if(E.officeBranch) E.officeBranch.value = user ? suggestOfficeBranchForAgent(user) : "";
       if(E.active) E.active.checked = user ? (user.active !== false) : true;
       this._teamSearchTerm = "";
       if(E.teamAgentsSearch) E.teamAgentsSearch.value = "";
@@ -17476,6 +18542,9 @@ UsersGateUI.init();
         a.active = active;
         a.updatedAt = agentNow;
         a.updated_at = agentNow;
+        if(E.officeBranch){
+          setAgentOfficeBranch(a.id, E.officeBranch.value);
+        }
         if(prevName !== name || prevUsername !== username){
           rememberAgentNameHistory(a.id, [prevName, prevUsername].filter(Boolean));
         }
@@ -17557,6 +18626,9 @@ UsersGateUI.init();
         }
         if(E.reportAliases){
           setAgentReportAliases(newId, parseAgentReportAliasesInput(E.reportAliases.value));
+        }
+        if(E.officeBranch){
+          setAgentOfficeBranch(newId, E.officeBranch.value);
         }
         State.data.meta.updatedAt = nowISO();
         appendAuditLog({
@@ -18228,6 +19300,178 @@ UsersGateUI.init();
     }
   };
 
+  /* Arrival alerts for the ops-manager assignment queue (מסך שיוכי שיקוף).
+     New customers who just submitted the health-risks proposal to ops play a 5s
+     ringtone and a jumping toast with "שייך לנציג". Existing queue rows are
+     seeded on first scan / empty localStorage so a page reload does not ring. */
+  const OpsAssignArrivalAlert = {
+    _LS: "gi_ops_assign_arrival_seen_v1",
+    _started: false,
+    _seen: {},
+    _timer: 0,
+    _host: null,
+    _ringStop: null,
+
+    _load(){
+      try{
+        const j = JSON.parse(localStorage.getItem(this._LS) || "{}");
+        return (j && typeof j === "object" && !Array.isArray(j)) ? j : {};
+      }catch(_e){ return {}; }
+    },
+    _save(){
+      try{ localStorage.setItem(this._LS, JSON.stringify(this._seen || {})); }catch(_e){}
+    },
+    _isOpsManager(){
+      try{
+        if(typeof Auth === "undefined" || !Auth.current) return false;
+        if(typeof Auth.isOpsAgent === "function" && Auth.isOpsAgent()) return false;
+        if(typeof Auth.canMirrorAssign === "function" && Auth.canMirrorAssign()) return true;
+        return !!(typeof Auth.isOps === "function" && Auth.isOps());
+      }catch(_e){ return false; }
+    },
+    _assignmentQueueIds(){
+      const out = {};
+      try{
+        const list = (typeof State !== "undefined" && Array.isArray(State.data?.customers))
+          ? State.data.customers
+          : [];
+        list.forEach((c) => {
+          if(!c || !c.id) return;
+          const completed = (typeof isHealthRisksWizardCompleted === "function")
+            ? !!isHealthRisksWizardCompleted(c)
+            : false;
+          const submitted = (typeof hasSubmittedHealthRisksToOps === "function")
+            ? !!hasSubmittedHealthRisksToOps(c)
+            : false;
+          if(completed && submitted) out[String(c.id)] = true;
+        });
+      }catch(_e){}
+      return out;
+    },
+    _findCustomer(id){
+      const want = String(id || "");
+      try{
+        const list = (typeof State !== "undefined" && Array.isArray(State.data?.customers))
+          ? State.data.customers
+          : [];
+        return list.find((c) => String(c?.id || "") === want) || null;
+      }catch(_e){ return null; }
+    },
+    _customerName(id){
+      try{
+        const rec = this._findCustomer(id);
+        const n = rec && rec.fullName ? String(rec.fullName).trim() : "";
+        return n || "לקוח";
+      }catch(_e){ return "לקוח"; }
+    },
+    _ensureHost(){
+      if(this._host && this._host.isConnected) return this._host;
+      let host = document.getElementById("giOpsAssignArrivalHost");
+      if(!host){
+        host = document.createElement("div");
+        host.id = "giOpsAssignArrivalHost";
+        host.className = "opsAssignArrivalHost";
+        host.setAttribute("aria-live", "polite");
+        (document.body || document.documentElement).appendChild(host);
+      }
+      this._host = host;
+      return host;
+    },
+    _assignCustomer(id){
+      try{
+        const rec = this._findCustomer(id);
+        if(!rec) return;
+        if(typeof MirrorCallUI !== "undefined" && typeof MirrorCallUI.openAssignModalForCustomer === "function"){
+          MirrorCallUI.openAssignModalForCustomer(rec, () => {
+            try { MirrorAssignmentsUI.render(); } catch(_e) {}
+          });
+        }
+      }catch(_e){}
+    },
+    _showToast(id){
+      const host = this._ensureHost();
+      const toast = document.createElement("div");
+      toast.className = "opsAssignArrivalToast";
+      toast.setAttribute("data-customer-id", String(id));
+      const title = document.createElement("div");
+      title.className = "opsAssignArrivalToast__title";
+      title.textContent = "התקבלה הצעה חדשה";
+      const who = document.createElement("div");
+      who.className = "opsAssignArrivalToast__who";
+      who.textContent = this._customerName(id);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "opsAssignArrivalToast__btn";
+      btn.textContent = "שייך לנציג";
+      const self = this;
+      btn.addEventListener("click", (ev) => {
+        try{ ev.preventDefault(); ev.stopPropagation(); }catch(_e){}
+        self._assignCustomer(id);
+        try{ toast.remove(); }catch(_e){}
+      });
+      toast.appendChild(title);
+      toast.appendChild(who);
+      toast.appendChild(btn);
+      host.appendChild(toast);
+      window.setTimeout(() => {
+        try{ toast.remove(); }catch(_e){}
+      }, 20000);
+    },
+    _playRing(){
+      try{ if(this._ringStop) this._ringStop(); }catch(_e){}
+      this._ringStop = null;
+      try{
+        if(typeof playGiPhoneRing === "function"){
+          this._ringStop = playGiPhoneRing(5000);
+        }
+      }catch(_e){ this._ringStop = null; }
+    },
+    inspect(){
+      if(!this._started) return { seeded: false, announced: [] };
+      if(!this._isOpsManager()) return { seeded: false, announced: [] };
+      const now = this._assignmentQueueIds();
+      const keys = Object.keys(now);
+      const seenKeys = Object.keys(this._seen || {});
+      if(!seenKeys.length){
+        this._seen = now;
+        this._save();
+        return { seeded: true, announced: [] };
+      }
+      const announced = [];
+      keys.forEach((id) => {
+        if(this._seen[id]) return;
+        this._seen[id] = true;
+        announced.push(id);
+      });
+      if(announced.length){
+        this._playRing();
+        announced.forEach((id) => this._showToast(id));
+      }
+      this._save();
+      return { seeded: false, announced };
+    },
+    start(){
+      if(this._started) return;
+      if(!this._isOpsManager()) return;
+      this._started = true;
+      this._seen = this._load();
+      this.inspect();
+      const self = this;
+      if(this._timer) window.clearInterval(this._timer);
+      this._timer = window.setInterval(() => { self.inspect(); }, 4000);
+    },
+    stop(){
+      this._started = false;
+      if(this._timer){
+        try{ window.clearInterval(this._timer); }catch(_e){}
+        this._timer = 0;
+      }
+      try{ if(this._ringStop) this._ringStop(); }catch(_e){}
+      this._ringStop = null;
+      try{ if(this._host) this._host.innerHTML = ""; }catch(_e){}
+    }
+  };
+
   // ---------- Customers UI ----------
   const CUSTOMERS_DEFAULT_VISIBLE = 10;
   // PERF: same idea as customers — avoid painting hundreds of proposal rows for admin/manager
@@ -18257,6 +19501,7 @@ UsersGateUI.init();
   const CustomersUI = {
     currentId: null,
     _previewDocId: "",
+    _insuredsTabSelectedId: "",
     _selectedDocIds: null,
     getSelectedDocIds(){
       if(!(this._selectedDocIds instanceof Set)) this._selectedDocIds = new Set();
@@ -18431,9 +19676,7 @@ UsersGateUI.init();
       this.els.liveTimer = $("#customerFullLiveTimer");
       this.els.meta = $("#customerFullMeta");
       this.els.avatar = $("#customerFullAvatar");
-      this.els.dash = $("#customerFullDash");
       this.els.body = $("#customerFullBody");
-      this.els.side = $("#customerFullSide");
       this.els.tabs = $("#customerFullTabs");
       this.els.main = $("#customerFullMain");
       this.els.editBtn = $("#customerFullEditBtn");
@@ -18448,6 +19691,7 @@ UsersGateUI.init();
       this.policyModal.title = $("#customerPolicyModalTitle");
       this.policyModal.body = $("#customerPolicyModalBody");
       this.els.loader = $("#customerLoader");
+      this.stripLegacyFileSummary();
 
       on(UI.els.customersTbody, "click", (ev) => {
         const openBtn = ev.target?.closest?.("[data-open-customer]");
@@ -18522,6 +19766,13 @@ UsersGateUI.init();
           ev.preventDefault();
           const rec = this.current();
           if(rec) void this.openHachsharaCiForm(rec);
+          return;
+        }
+        const openHachHealth = ev.target?.closest?.("[data-open-hachshara-health-doc], [data-hachhealth-open]");
+        if(openHachHealth){
+          ev.preventDefault();
+          const rec = this.current();
+          if(rec) void this.openHachsharaHealthForm(rec);
           return;
         }
         const openHachLifeShort = ev.target?.closest?.("[data-open-hachshara-life-short-doc], [data-hachlifeshort-open]");
@@ -18606,6 +19857,13 @@ UsersGateUI.init();
           ev.preventDefault();
           const rec = this.current();
           if(rec) void this.openPhoenixHealthForm(rec);
+          return;
+        }
+        const openPhxCi = ev.target?.closest?.("[data-open-phoenix-ci-doc], [data-phxci-open]");
+        if(openPhxCi){
+          ev.preventDefault();
+          const rec = this.current();
+          if(rec) void this.openPhoenixCiForm(rec);
           return;
         }
         const openAyalMort = ev.target?.closest?.("[data-open-ayalon-mortgage-doc], [data-ayalmort-open]");
@@ -20133,6 +21391,144 @@ UsersGateUI.init();
       return this.collectElementaryProducts(rec).length > 0;
     },
 
+    /** מקור נתוני רכב/נהגים מהתיק (או מהפניה) — לצפייה בנתוני פוליסה. */
+    resolveElementaryInsuredData(rec){
+      const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+      const candidates = [];
+      const push = (d) => {
+        if(d && typeof d === "object") candidates.push(d);
+      };
+      const ins0 = Array.isArray(payload.insureds) ? payload.insureds[0] : null;
+      push(ins0?.data);
+      push(payload.primary);
+      push(payload.operational?.primary);
+      (Array.isArray(payload.operational?.insureds) ? payload.operational.insureds : []).forEach((ins) => push(ins?.data));
+
+      const scoreData = (d) => {
+        let s = 0;
+        if(Array.isArray(d.namedDrivers) && d.namedDrivers.length) s += 10;
+        if(safeTrim(d.insuranceEndDate)) s += 5;
+        if(safeTrim(d.driverMinAge)) s += 5;
+        if(safeTrim(d.driverPolicyMode) || safeTrim(d.driverAnyEnabled)) s += 2;
+        if(Array.isArray(d.elementaryProductPricing) && d.elementaryProductPricing.length) s += 3;
+        if(safeTrim(d.insuranceStartDate)) s += 1;
+        return s;
+      };
+
+      let best = null;
+      let bestScore = -1;
+      candidates.forEach((d) => {
+        const s = scoreData(d);
+        if(s > bestScore){
+          bestScore = s;
+          best = d;
+        }
+      });
+
+      if(bestScore < 5){
+        try {
+          const ref = (typeof pickBestElementaryReferralForCustomerFile === "function"
+            ? pickBestElementaryReferralForCustomerFile(
+              findElementaryReferralsForCustomerOrIdNumber(rec?.id, rec?.idNumber)
+            )
+            : null)
+            || (typeof findElementaryReferralByCustomerId === "function" ? findElementaryReferralByCustomerId(rec?.id) : null)
+            || (typeof findPendingElementaryReferralByIdNumber === "function" ? findPendingElementaryReferralByIdNumber(rec?.idNumber) : null);
+          const refPayload = ref?.payload && typeof ref.payload === "object" ? ref.payload : {};
+          const refIns = Array.isArray(refPayload.insureds) ? refPayload.insureds[0] : null;
+          [refIns?.data, refPayload.primary].forEach((d) => {
+            if(!d || typeof d !== "object") return;
+            const s = scoreData(d);
+            if(s > bestScore){
+              bestScore = s;
+              best = d;
+            }
+          });
+        } catch(_e) {}
+      }
+      return best && typeof best === "object" ? best : {};
+    },
+
+    getElementaryDriverAgeValidityLabel(data){
+      const d = data && typeof data === "object" ? data : {};
+      let mode = "";
+      try {
+        if(typeof Wizard !== "undefined" && typeof Wizard.getElementaryDriverPolicyMode === "function"){
+          mode = Wizard.getElementaryDriverPolicyMode(d) || "";
+        }
+      } catch(_e) {}
+      if(!mode){
+        if(Array.isArray(d.namedDrivers) && d.namedDrivers.length) mode = "named";
+        else if(safeTrim(d.driverMinAge) || d.driverAnyEnabled) mode = "any";
+      }
+      if(mode === "any"){
+        const age = safeTrim(d.driverMinAge) || "—";
+        const exp = safeTrim(d.driverMinExperienceYears);
+        return exp
+          ? `כל נהג מעל גיל ${age} · ותק ${exp} שנים`
+          : `מעל גיל ${age}`;
+      }
+      if(mode === "named"){
+        return "נהגים נקובים בלבד";
+      }
+      if(safeTrim(d.driverMinAge)){
+        return `מעל גיל ${safeTrim(d.driverMinAge)}`;
+      }
+      return "—";
+    },
+
+    getElementaryNamedDriverNames(data){
+      const named = Array.isArray(data?.namedDrivers) ? data.namedDrivers : [];
+      return named.map((drv, idx) => {
+        const nm = [safeTrim(drv?.firstName), safeTrim(drv?.lastName)].filter(Boolean).join(" ");
+        return nm || (`נהג ${idx + 1}`);
+      });
+    },
+
+    getElementaryProductCompanyRows(rec, data){
+      const products = this.collectElementaryProducts(rec);
+      const fromPolicies = products.map((p) => ({
+        id: safeTrim(p?.id),
+        label: safeTrim(p?.type) || safeTrim(p?.label) || "מוצר",
+        company: safeTrim(p?.company) || "—"
+      }));
+      const pricing = Array.isArray(data?.elementaryProductPricing) ? data.elementaryProductPricing : [];
+      if(pricing.length){
+        return pricing.map((row) => {
+          const key = safeTrim(row?.productKey);
+          const match = fromPolicies.find((p) => {
+            const pid = safeTrim(p.id);
+            return pid === (`elementary_${key}`) || pid === key;
+          });
+          return {
+            id: match?.id || (key ? `elementary_${key}` : ""),
+            label: safeTrim(row?.label) || key || match?.label || "מוצר",
+            company: safeTrim(row?.company) || safeTrim(match?.company) || "—"
+          };
+        });
+      }
+      return fromPolicies;
+    },
+
+    buildElementaryPolicyDetailsModel(rec, policy){
+      const data = this.resolveElementaryInsuredData(rec);
+      const driverNames = this.getElementaryNamedDriverNames(data);
+      const companyRows = this.getElementaryProductCompanyRows(rec, data);
+      return {
+        data,
+        ageLabel: this.getElementaryDriverAgeValidityLabel(data),
+        endDate: safeTrim(data.insuranceEndDate) || "—",
+        startDate: safeTrim(data.insuranceStartDate) || safeTrim(policy?.startDate) || "",
+        driverNames,
+        driversText: driverNames.length ? driverNames.join(" · ") : "—",
+        companyRows,
+        currentProduct: safeTrim(policy?.type) || safeTrim(policy?.label) || "מוצר אלמנטרי",
+        currentCompany: safeTrim(policy?.company) || "—",
+        plate: safeTrim(policy?.licensePlate) || safeTrim(data.licensePlate) || "",
+        vehicleDesc: safeTrim(policy?.vehicleDesc) || ""
+      };
+    },
+
     customerNeedsHealthPoliciesRecovery(rec){
       if(!rec?.id) return false;
       const policies = this.collectPolicies(rec);
@@ -20794,7 +22190,7 @@ UsersGateUI.init();
       ].filter(Boolean).slice(0, 3);
       const policyFiles = Array.isArray(policy.policyFiles) ? policy.policyFiles : [];
       const menuActions = [
-        `<button class="customerPolicyRow__menuItem" type="button" data-policy-open="${escapeHtml(policy.id)}">${isElementary ? 'פרטי מוצר' : 'פרטי פוליסה'}</button>`
+        `<button class="customerPolicyRow__menuItem" type="button" data-elem-policy-details="${escapeHtml(policy.id)}" data-policy-open="${escapeHtml(policy.id)}">${isElementary ? 'הצג נתוני פוליסה' : 'פרטי פוליסה'}</button>`
       ];
       if(isElementary && policyFiles.length){
         policyFiles.forEach((file, fIdx) => {
@@ -20803,6 +22199,9 @@ UsersGateUI.init();
           menuActions.push(`<button class="customerPolicyRow__menuItem" type="button" data-policy-download="${escapeHtml(policy.id)}" data-policy-file-idx="${fIdx}">${dlLabel}</button>`);
         });
       }
+      const detailsBtnHtml = isElementary
+        ? `<button class="customerPolicyRow__detailsBtn" type="button" data-elem-policy-details="${escapeHtml(policy.id)}" title="הצג נתוני פוליסה">הצג נתוני פוליסה</button>`
+        : '';
       const downloadBtnHtml = (isElementary && policyFiles.length)
         ? `<button class="customerPolicyRow__downloadBtn" type="button" data-policy-download="${escapeHtml(policy.id)}" data-policy-file-idx="0" title="הורד העתק פוליסה">הורד העתק פוליסה</button>`
         : '';
@@ -20837,6 +22236,7 @@ UsersGateUI.init();
           <div class="customerPolicyRow__numbers">
             ${priceNumbersHtml}
             <div class="customerPolicyRow__actions">
+              ${detailsBtnHtml}
               ${downloadBtnHtml}
               <button class="customerPolicyRow__menuBtn" type="button" aria-label="פעולות" aria-haspopup="menu" aria-expanded="false" data-policy-menu="${escapeHtml(policy.id)}"><span class="customerPolicyRow__menuIcon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg></span></button>
               <div class="customerPolicyRow__menu" role="menu">
@@ -21008,18 +22408,32 @@ UsersGateUI.init();
         this.els.main.innerHTML = this.renderSectionContent(rec, policies);
         this.bindSectionActions(rec, policies);
       }
+      this.queueFollowupDocumentsSync(rec);
+    },
+
+    stripLegacyFileSummary(){
+      try {
+        const root = this.els?.wrap || document;
+        root.querySelectorAll("#customerFullSide, .cfFile__side, #customerFullDash").forEach((el) => {
+          try { el.remove(); } catch(_e) {}
+        });
+        if(document.getElementById("giCfSummaryKill")) return;
+        const style = document.createElement("style");
+        style.id = "giCfSummaryKill";
+        style.textContent = "#customerFullSide,.cfFile__side,#customerFullDash,#customerFull.cfFile .customerFull__dash{display:none!important}#customerFull.cfFile .customerFull__body,.cfFile__layout{grid-template-columns:minmax(0,1fr)!important}";
+        document.head.appendChild(style);
+      } catch(_e) {}
     },
 
     renderFileView(rec, opts={}){
       if(!rec) return;
       try { stripIssuedPolicyBlobsInPlace(rec?.payload); } catch(_e) {}
+      this.stripLegacyFileSummary();
       const policies = this.collectPolicies(rec);
       if(this.els.name) this.els.name.textContent = rec.fullName || "תיק לקוח";
       if(this.els.avatar) this.els.avatar.setAttribute("data-customer-name", safeTrim(rec.fullName || "תיק לקוח"));
       this.paintHeroLiveTimer(rec);
       if(this.els.meta) this.els.meta.innerHTML = this.renderHeroMeta(rec);
-      if(this.els.dash) this.els.dash.innerHTML = "";
-      if(this.els.side) this.els.side.innerHTML = this.renderSidebar(rec, policies);
       if(this.els.tabs) this.els.tabs.innerHTML = this.renderTabBar(rec, policies);
       if(this.els.main){
         this.els.main.innerHTML = this.renderSectionContent(rec, policies);
@@ -21030,113 +22444,7 @@ UsersGateUI.init();
         });
       }
       this.startOpsCardLoop();
-    },
-
-    renderKpiBar(rec, policies){
-      const healthPolicies = this.getNewPoliciesOnly(policies);
-      const elementaryProducts = this.collectElementaryProducts(rec);
-      const agentApptPolicies = this.collectAgentAppointmentPolicies(rec);
-      const premiumAfter = this.sumPremiumAfterDiscount(healthPolicies);
-      const agentApptSum = this.sumAgentAppointmentPremium(agentApptPolicies);
-      const elemSum = this.sumElementaryPremium(elementaryProducts);
-      const totalDisplay = premiumAfter + elemSum + agentApptSum;
-      const uniqueCompanies = Array.from(new Set(
-        [...healthPolicies, ...elementaryProducts, ...agentApptPolicies].map(p => safeTrim(p.company)).filter(Boolean)
-      ));
-      const activeCount = healthPolicies.length + elementaryProducts.length + agentApptPolicies.length;
-      const ops = getOpsStatePresentation(rec);
-      const updatedOps = safeTrim(ops?.updatedText) ? ProcessesUI.formatDate(ops.updatedText) : '—';
-      const premiumIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>`;
-      const buildingIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>`;
-      const docIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>`;
-      const pulseIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>`;
-      return `<div class="cfFile__kpiBar">
-        <div class="cfFile__kpi">
-          <div class="cfFile__kpiIcon cfFile__kpiIcon--green">${premiumIcon}</div>
-          <div>
-            <div class="cfFile__kpiVal cfFile__kpiVal--green" data-animate-key="premium-after-${escapeHtml(rec.id || '')}" data-animate-number="${escapeHtml(String(totalDisplay))}">${escapeHtml(this.formatMoneyValue(totalDisplay))}</div>
-            <div class="cfFile__kpiLabel">סה״כ פרמיה בתיק</div>
-            <div class="cfFile__kpiSub">${activeCount ? `${activeCount} מוצר${activeCount === 1 ? '' : 'ים'} בתיק` : 'טרם נוספו מוצרים'}</div>
-          </div>
-        </div>
-        <div class="cfFile__kpi">
-          <div class="cfFile__kpiIcon cfFile__kpiIcon--blue">${buildingIcon}</div>
-          <div>
-            <div class="cfFile__kpiVal">${escapeHtml(String(uniqueCompanies.length || 0))}</div>
-            <div class="cfFile__kpiLabel">חברות ביטוח</div>
-            <div class="cfFile__kpiSub">${escapeHtml(uniqueCompanies.length ? uniqueCompanies.join(' · ') : 'טרם נוספו')}</div>
-          </div>
-        </div>
-        <div class="cfFile__kpi">
-          <div class="cfFile__kpiIcon">${docIcon}</div>
-          <div>
-            <div class="cfFile__kpiVal">${escapeHtml(String(activeCount || 0))}</div>
-            <div class="cfFile__kpiLabel">פוליסות פעילות</div>
-            <div class="cfFile__kpiSub">${healthPolicies.length && elementaryProducts.length ? 'בריאות + אלמנטרי' : (elementaryProducts.length ? 'אלמנטרי' : 'בריאות וסיכונים')}</div>
-          </div>
-        </div>
-        <div class="cfFile__kpi" id="customerFullKpiOps">
-          <div class="cfFile__kpiIcon cfFile__kpiIcon--amber">${pulseIcon}</div>
-          <div>
-            <span class="cfFile__opsBadge">${escapeHtml(typeof getCustomerFileOpsBadge === "function" ? getCustomerFileOpsBadge(ops) : (ops?.liveLabel || 'ממתין לשיקוף'))}</span>
-            <div class="cfFile__kpiLabel" style="margin-top:6px">סטטוס תפעולי</div>
-            <div class="cfFile__kpiSub">עודכן ${escapeHtml(updatedOps)}</div>
-          </div>
-        </div>
-      </div>`;
-    },
-
-    renderSidebar(rec, policies){
-      const healthPolicies = this.getNewPoliciesOnly(policies);
-      const elementaryProducts = this.collectElementaryProducts(rec);
-      const agentApptPolicies = this.collectAgentAppointmentPolicies(rec);
-      const healthSum = this.sumPremiumAfterDiscount(healthPolicies);
-      const agentApptSum = this.sumAgentAppointmentPremium(agentApptPolicies);
-      const elemSum = this.sumElementaryPremium(elementaryProducts);
-      const total = healthSum + elemSum + agentApptSum;
-      const insuredCount = Number(rec?.insuredCount || rec?.payload?.insureds?.length || 0) || 0;
-      const fmtShort = (val) => {
-        if(!val) return '—';
-        try {
-          const d = new Date(val);
-          if(Number.isNaN(d.getTime())) return '—';
-          return d.toLocaleDateString('he-IL');
-        } catch(_e){ return '—'; }
-      };
-      /* GI-CF-HIER 2026-08-04 — נקודת צבע לכל נושא, זהה לצבע הסקשן בטבלה. */
-      const oldSum = this.sumPremiumAfterDiscount(this.getExistingOldPoliciesOnly(policies));
-      const idNumber = safeTrim(rec?.idNumber);
-      const phone = safeTrim(rec?.phone || rec?.payload?.primary?.phone);
-      const email = safeTrim(rec?.email || rec?.payload?.primary?.email);
-      const agentName = safeTrim(rec?.agentName || rec?.payload?.agentName);
-      const isArchived = rec?.isArchived === true || rec?.is_archived === true || safeTrim(rec?.status) === "גנוז";
-      const statusLabel = isArchived ? "גנוז" : "פעיל";
-      const statusCls = isArchived ? "is-archived" : "is-active";
-      const dotRow = (dot, label, val) =>
-        `<div class="cfFile__sideRow"><span><i class="cfFile__sideDot cfFile__sideDot--${dot}"></i>${escapeHtml(label)}</span><strong>${escapeHtml(val ? this.formatMoneyValue(val) : '—')}</strong></div>`;
-      const infoRow = (label, valHtml, extraCls="") =>
-        `<div class="cfFile__sideRow${extraCls ? ` ${extraCls}` : ""}"><span>${escapeHtml(label)}</span><strong>${valHtml}</strong></div>`;
-      return `<div class="cfFile__sideHead">סיכום תיק</div>
-        <div class="cfFile__sideBody">
-          <div class="cfFile__sideTotal">
-            <div class="cfFile__sideTotalVal">${escapeHtml(total ? this.formatMoneyValue(total) : '—')}</div>
-            <div class="cfFile__sideTotalLbl">פרמיה חודשית לתשלום</div>
-          </div>
-          <div class="cfFile__sideGroup">פילוח לפי נושא</div>
-          ${dotRow('health', 'בריאות וסיכונים', healthSum)}
-          ${dotRow('appt', 'מינוי סוכן', agentApptSum)}
-          ${dotRow('elem', 'אלמנטרי', elemSum)}
-          ${dotRow('legacy', 'פוליסות ישנות', oldSum)}
-          <div class="cfFile__sideDivide"></div>
-          <div class="cfFile__sideGroup">פרטי תיק</div>
-          ${infoRow('מספר תיק', escapeHtml(idNumber || rec?.id || '—'))}
-          ${infoRow('תאריך פתיחה', escapeHtml(fmtShort(rec.createdAt || rec.created_at)))}
-          ${infoRow('סטטוס', `<span class="cfFile__sideStatus ${statusCls}">${escapeHtml(statusLabel)}</span>`)}
-          ${infoRow('נציג מטפל', escapeHtml(agentName || '—'))}
-          ${infoRow('מבוטחים', escapeHtml(String(insuredCount || '—')))}
-          ${infoRow('טלפון', escapeHtml(phone || '—'))}
-          ${infoRow('דוא״ל', escapeHtml(email || '—'), 'cfFile__sideRow--wrap')}
-        </div>`;
+      this.queueFollowupDocumentsSync(rec, opts);
     },
 
     renderTabBar(rec, policies){
@@ -21242,6 +22550,12 @@ UsersGateUI.init();
             return `<div class="cfFile__documentsPreviewDoc">${window.HachsharaCiForm.renderPreviewHtml(draft)}</div>`;
           } catch(_e) {}
         }
+        if(type === CustomerDocuments.TYPES.hachsharaHealthForm && window.HachsharaHealthForm){
+          try {
+            const draft = window.HachsharaHealthForm.buildDraft(rec);
+            return `<div class="cfFile__documentsPreviewDoc">${window.HachsharaHealthForm.renderPreviewHtml(draft)}</div>`;
+          } catch(_e) {}
+        }
         if(type === CustomerDocuments.TYPES.hachsharaLifeForm && window.HachsharaLifeForm){
           try {
             const draft = window.HachsharaLifeForm.buildDraft(rec);
@@ -21312,6 +22626,12 @@ UsersGateUI.init();
           try {
             const draft = window.PhoenixHealthForm.buildDraft(rec);
             return `<div class="cfFile__documentsPreviewDoc">${window.PhoenixHealthForm.renderPreviewHtml(draft)}</div>`;
+          } catch(_e) {}
+        }
+        if(type === CustomerDocuments.TYPES.phoenixCiForm && window.PhoenixCiForm){
+          try {
+            const draft = window.PhoenixCiForm.buildDraft(rec);
+            return `<div class="cfFile__documentsPreviewDoc">${window.PhoenixCiForm.renderPreviewHtml(draft)}</div>`;
           } catch(_e) {}
         }
         if(type === CustomerDocuments.TYPES.ayalonMortgageForm && window.AyalonMortgageForm){
@@ -21410,6 +22730,13 @@ UsersGateUI.init();
         } catch(_e) {}
         return;
       }
+      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.hachsharaHealthForm && !window.HachsharaHealthForm){
+        try {
+          await ensureHachsharaHealthFormLoaded();
+          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
+        } catch(_e) {}
+        return;
+      }
       if(safeTrim(doc?.type) === CustomerDocuments.TYPES.hachsharaLifeForm && !window.HachsharaLifeForm){
         try {
           await ensureHachsharaLifeFormLoaded();
@@ -21487,6 +22814,13 @@ UsersGateUI.init();
         } catch(_e) {}
         return;
       }
+      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.phoenixCiForm && !window.PhoenixCiForm){
+        try {
+          await ensurePhoenixCiFormLoaded();
+          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
+        } catch(_e) {}
+        return;
+      }
       if(safeTrim(doc?.type) === CustomerDocuments.TYPES.ayalonMortgageForm && !window.AyalonMortgageForm){
         try {
           await ensureAyalonMortgageFormLoaded();
@@ -21552,6 +22886,17 @@ UsersGateUI.init();
         window.HachsharaCiForm.open(rec);
       } catch(err){
         try { console.error("HACHSHARA_CI_FORM_OPEN_FAILED", err); } catch(_e) {}
+        try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
+      }
+    },
+    async openHachsharaHealthForm(rec){
+      if(this.denyOfficialJoinFormDownload()) return;
+      try {
+        await ensureHachsharaHealthFormLoaded();
+        if(!window.HachsharaHealthForm) throw new Error("HachsharaHealthForm missing");
+        window.HachsharaHealthForm.open(rec);
+      } catch(err){
+        try { console.error("HACHSHARA_HEALTH_FORM_OPEN_FAILED", err); } catch(_e) {}
         try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
       }
     },
@@ -21687,15 +23032,27 @@ UsersGateUI.init();
         try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
       }
     },
+    async openPhoenixCiForm(rec){
+      if(this.denyOfficialJoinFormDownload()) return;
+      try {
+        await ensurePhoenixCiFormLoaded();
+        if(!window.PhoenixCiForm) throw new Error("PhoenixCiForm missing");
+        window.PhoenixCiForm.open(rec);
+      } catch(err){
+        try { console.error("PHOENIX_CI_FORM_OPEN_FAILED", err); } catch(_e) {}
+        try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
+      }
+    },
     getFollowupZipMeta(rec){
       const mirror = (typeof MirrorsUI !== "undefined" && MirrorsUI) ? MirrorsUI : null;
       const meta = (typeof mirror?.buildMirrorHealthMeta === "function")
         ? mirror.buildMirrorHealthMeta(rec)
         : { map: {}, insureds: this.getInsureds?.(rec) || [] };
       const insureds = meta.insureds || this.getInsureds?.(rec) || [];
-      const health = (typeof mirror?.getHealthDeclarationSource === "function")
-        ? mirror.getHealthDeclarationSource(rec)
-        : (rec?.payload?.primary?.healthDeclaration || { responses: {} });
+      const health = window.GiFollowupZip?._test?.collectHealthResponses?.(rec)
+        || ((typeof mirror?.getHealthDeclarationSource === "function")
+          ? mirror.getHealthDeclarationSource(rec)
+          : (rec?.payload?.primary?.healthDeclaration || { responses: {} }));
       const triggered = window.GiFollowupZip?.resolveForCustomer?.(rec, meta, insureds)
         || window.GiFollowupZip?.detectTriggeredFollowups?.(health, meta, insureds)
         || [];
@@ -21714,13 +23071,58 @@ UsersGateUI.init();
       if(!rec?.payload || typeof rec.payload !== "object") return false;
       try {
         await ensureFollowupZipLoaded();
+        try {
+          if(typeof ensureGiWizardJsLoaded === "function"){
+            await ensureGiWizardJsLoaded();
+          }
+        } catch(_e) {}
         const pack = this.getFollowupZipMeta(rec);
+        const hasMap = !!(pack.meta && pack.meta.map && Object.keys(pack.meta.map).length);
+        if(!pack.triggered.length && !hasMap) return false;
         CustomerDocuments.syncFollowupQuestionnaireDocs(rec.payload, pack.triggered, options);
         return pack.triggered.length > 0;
       } catch(err){
         try { console.warn("FOLLOWUP_DOCS_ENSURE_SKIPPED", err); } catch(_e) {}
         return false;
       }
+    },
+    queueFollowupDocumentsSync(rec, opts){
+      if(!rec || opts?._skipFollowupSync) return;
+      this._followupDocsSyncSeq = (this._followupDocsSyncSeq || 0) + 1;
+      const seq = this._followupDocsSyncSeq;
+      const id = rec.id;
+      const beforeIds = (CustomerDocuments.listFromPayload(rec.payload) || [])
+        .filter((d) => safeTrim(d?.type) === CustomerDocuments.TYPES.followupQuestionnaire)
+        .map((d) => safeTrim(d.id))
+        .join("|");
+      /* GI-PERF 2026-08-30: אותה לוגיקת sync — רק אחרי paint/idle, כדי לא
+         לטעון gi-wizard/followup על נתיב פתיחת התיק הסינכרוני. */
+      const run = () => {
+        if(seq !== this._followupDocsSyncSeq) return;
+        Promise.resolve(this.ensureFollowupDocuments(rec)).then(() => {
+          if(seq !== this._followupDocsSyncSeq) return;
+          if(this.currentId !== id) return;
+          const afterIds = (CustomerDocuments.listFromPayload(rec.payload) || [])
+            .filter((d) => safeTrim(d?.type) === CustomerDocuments.TYPES.followupQuestionnaire)
+            .map((d) => safeTrim(d.id))
+            .join("|");
+          if(beforeIds === afterIds) return;
+          const section = this.normalizeSection(this.currentSection);
+          if(section === "documents"){
+            this.renderFileView(rec, { bodyScrollTop: this.els.main?.scrollTop || 0, _skipFollowupSync: true });
+          } else if(this.els.tabs){
+            const policies = this.collectPolicies(rec);
+            this.els.tabs.innerHTML = this.renderTabBar(rec, policies);
+          }
+        }).catch(() => {});
+      };
+      try {
+        if(typeof perfIdle === "function"){
+          perfIdle(() => { run(); }, 2200);
+          return;
+        }
+      } catch(_e) {}
+      window.setTimeout(run, 0);
     },
     async buildFollowupZipBlob(rec){
       await ensureFollowupZipLoaded();
@@ -21943,6 +23345,8 @@ UsersGateUI.init();
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-agent-appt-doc="${escapeHtml(docId)}">הורדה</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.hachsharaCiForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-hachshara-ci-doc="${escapeHtml(docId)}">פתח טופס</button>`;
+        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.hachsharaHealthForm){
+          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-hachshara-health-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.hachsharaLifeForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-hachshara-life-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.hachsharaLifeShortForm){
@@ -21967,6 +23371,8 @@ UsersGateUI.init();
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-ayalon-health-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.phoenixHealthForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-phoenix-health-doc="${escapeHtml(docId)}">פתח טופס</button>`;
+        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.phoenixCiForm){
+          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-phoenix-ci-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.ayalonMortgageForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-ayalon-mortgage-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.menoraCiForm){
@@ -22040,6 +23446,7 @@ UsersGateUI.init();
     bindSectionActions(rec, policies){
       const section = this.normalizeSection(this.currentSection);
       if(section === 'policies') this.bindPolicyTableActions(rec, this.getWalletDisplayPolicies(rec, policies));
+      if(section === "personal") this.bindInsuredsTabActions(rec);
       if(section === "medical") this.bindMedicalTabActions();
       if(section === "documents" && this._previewDocId){
         void this.showCustomerDocumentPreview(this._previewDocId);
@@ -22139,7 +23546,19 @@ UsersGateUI.init();
               meta: healthMeta, sum: this.formatMoneyValue(this.sumPremiumAfterDiscount(healthPolicies)), collapsible: false
             })}
           </header>
-          <div class="cfNewPolicyGrid">${healthCards.map(p => this.renderNewPolicyCard(p, rec, healthPolicies)).join('')}</div>
+          <div class="cfNewPolicyGrid">
+            <div class="cfNewPolicyGrid__head" aria-hidden="true">
+              <span class="cfNewPolicyGrid__hLogo"></span>
+              <span>מוצר / חברה</span>
+              <span>מס׳ פוליסה</span>
+              <span>תחילת ביטוח</span>
+              <span>סכום</span>
+              <span>מבוטחים</span>
+              <span>פרמיה</span>
+              <span class="cfNewPolicyGrid__hActs"></span>
+            </div>
+            ${healthCards.map(p => this.renderNewPolicyCard(p, rec, healthPolicies)).join('')}
+          </div>
         </section>`
         : '';
       const blocks = [
@@ -22326,7 +23745,7 @@ UsersGateUI.init();
       const coverRows = (isHealth || isLife) ? this.getHealthCoverRowsForDisplay(rec, policy) : [];
       const coverBtn = coverRows.length
         ? `<button class="cfNewPolicyCard__coversBtn" type="button" data-cf-covers-toggle="${escapeHtml(policy.id)}" aria-expanded="false">פירוט כיסויים</button>`
-        : `<span class="cfNewPolicyCard__coversBtn cfNewPolicyCard__coversBtn--empty" aria-hidden="true"></span>`;
+        : "";
       const coversList = coverRows.length
         ? `<div class="cfNewPolicyCard__covers" hidden>
           ${coverRows.map((row) => `<div class="cfNewPolicyCard__cover">
@@ -22340,7 +23759,16 @@ UsersGateUI.init();
       const periodLabel = paymentPeriod
         ? (/^\d+$/.test(paymentPeriod) ? (paymentPeriod + " חודשים") : paymentPeriod)
         : "";
-      const extraMeta = [agentNumber ? ("סוכן " + agentNumber) : "", periodLabel ? ("תקופה " + periodLabel) : ""].filter(Boolean).join(" · ");
+      const extraMeta = [
+        agentNumber ? ("סוכן " + agentNumber) : "",
+        periodLabel ? ("תקופה " + periodLabel) : "",
+        endDate ? ("תום " + endDate) : ""
+      ].filter(Boolean).join(" · ");
+      const amountText = (isLife && displaySum)
+        ? this.formatMoneyValue(this.asMoneyNumber(displaySum) || displaySum)
+        : ((isHealth && compensation && Number(compensation) >= 1000)
+          ? this.formatMoneyValue(this.asMoneyNumber(compensation) || compensation)
+          : "—");
       const cell = (label, value) =>
         `<div class="cfNewPolicyCard__cell"><span class="cfNewPolicyCard__lbl">${escapeHtml(label)}</span><strong class="cfNewPolicyCard__val">${escapeHtml(value)}</strong></div>`;
       const scan = rawPol.issuedPolicyScan && typeof rawPol.issuedPolicyScan === "object" ? rawPol.issuedPolicyScan : null;
@@ -22350,23 +23778,23 @@ UsersGateUI.init();
           <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--product">
             <span class="cfNewPolicyCard__product">${escapeHtml(policy.type || 'פוליסה')}</span>
             <span class="cfNewPolicyCard__company">${escapeHtml(policy.company || 'חברה')}</span>
-            ${extraMeta ? `<span class="cfNewPolicyCard__lbl">${escapeHtml(extraMeta)}</span>` : ""}
+            ${extraMeta ? `<span class="cfNewPolicyCard__meta">${escapeHtml(extraMeta)}</span>` : ""}
           </div>
           ${cell('מספר פוליסה', policyNumber)}
           ${cell('תחילת ביטוח', startDate)}
-          ${endDate ? cell('תום ביטוח', endDate) : ""}
-          ${isLife && displaySum ? cell('סכום ביטוח', this.formatMoneyValue(this.asMoneyNumber(displaySum) || displaySum)) : ""}
-          ${isHealth && compensation && Number(compensation) >= 1000 ? cell('סכום פיצוי', this.formatMoneyValue(this.asMoneyNumber(compensation) || compensation)) : ""}
+          ${cell('סכום', amountText)}
           ${cell('מבוטחים', insuredText)}
-          <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--action">${coverBtn}</div>
           <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--prem">
             <span class="cfNewPolicyCard__lbl">פרמיה חודשית</span>
             <strong class="cfNewPolicyCard__prem">${escapeHtml(displayPrem ? this.formatMoneyValue(displayPrem) : (isLife ? "—" : (policy.premiumAfterDiscount || policy.premiumText || "—")))}</strong>
             ${this.renderIssuedPolicyBadge(scan, policy)}
           </div>
+          <div class="cfNewPolicyCard__cell cfNewPolicyCard__cell--action">
+            ${this.renderIssuedPolicyScanBar(policy, scan)}
+            ${coverBtn}
+          </div>
         </div>
         ${coversList}
-        ${this.renderIssuedPolicyScanBar(policy, scan)}
       </article>`;
     },
 
@@ -22387,7 +23815,7 @@ UsersGateUI.init();
       const pid = escapeHtml(policy?.id || "");
       const status = safeTrim(scan?.status);
       const canUpload = this.canShowIssuedPolicyUpload();
-      const uploadLabel = status ? "החלף פוליסה" : "העלה פוליסה";
+      const uploadLabel = status ? "החלף פוליסה" : "בדיקת התאמת ביטוח";
       const showGaps = status === "gaps"
         ? `<button class="cfIssuedScan__show" type="button" data-issued-policy-gaps="${pid}">הצג</button>`
         : "";
@@ -22535,7 +23963,7 @@ UsersGateUI.init();
       } finally {
         if(triggerBtn){
           triggerBtn.disabled = false;
-          triggerBtn.textContent = prevLabel || "העלה פוליסה";
+          triggerBtn.textContent = prevLabel || "בדיקת התאמת ביטוח";
         }
       }
     },
@@ -22610,7 +24038,7 @@ UsersGateUI.init();
       const startDate = safeTrim(policy.startDate);
       const policyFiles = Array.isArray(policy.policyFiles) ? policy.policyFiles : [];
       const menuActions = [
-        `<button class="cfFile__menuItem" type="button" data-policy-open="${escapeHtml(policy.id)}">${isElementary ? 'פרטי מוצר' : 'פרטי פוליסה'}</button>`
+        `<button class="cfFile__menuItem" type="button" data-elem-policy-details="${escapeHtml(policy.id)}" data-policy-open="${escapeHtml(policy.id)}">${isElementary ? 'הצג נתוני פוליסה' : 'פרטי פוליסה'}</button>`
       ];
       if(isElementary && policyFiles.length){
         policyFiles.forEach((file, fIdx) => {
@@ -22619,6 +24047,9 @@ UsersGateUI.init();
           menuActions.push(`<button class="cfFile__menuItem" type="button" data-policy-download="${escapeHtml(policy.id)}" data-policy-file-idx="${fIdx}">${dlLabel}</button>`);
         });
       }
+      const detailsBtnHtml = isElementary
+        ? `<button class="cfFile__detailsBtn" type="button" data-elem-policy-details="${escapeHtml(policy.id)}" title="הצג נתוני פוליסה">הצג נתוני פוליסה</button>`
+        : "";
       const companyCls = isElementary ? 'is-elementary' : this.companyClass(policy.company);
       const logoMark = logoHtml
         ? `<div class="cfFile__policyLogoMark">${logoHtml}</div>`
@@ -22637,29 +24068,16 @@ UsersGateUI.init();
         <td><span class="cfFile__premium">${escapeHtml(afterPremium)}</span></td>
         <td><span class="cfFile__statusBadge ${escapeHtml(policy.badgeClass || '')}">${escapeHtml(policy.badgeText || 'חדש')}</span></td>
         <td class="cfFile__menuCell">
-          <button class="cfFile__menuBtn" type="button" aria-label="פעולות" data-policy-menu="${escapeHtml(policy.id)}">⋮</button>
-          <div class="cfFile__menu" role="menu">${menuActions.join('')}</div>
+          <div class="cfFile__menuCellActions">
+            ${detailsBtnHtml}
+            <button class="cfFile__menuBtn" type="button" aria-label="פעולות" data-policy-menu="${escapeHtml(policy.id)}">⋮</button>
+            <div class="cfFile__menu" role="menu">${menuActions.join('')}</div>
+          </div>
         </td>
       </tr>`;
     },
 
     /* GI-CF-STATUS 2026-08-04 — שורת פוליסה ישנה: סטטוס הטיפול שהנציג בחר + סיבת הביטול. */
-    canSendPolicyCancel(){
-      try { return !!(Auth.isManager() || Auth.isOps()); } catch(_e){ return false; }
-    },
-    isPolicyCancelSendEligible(policy){
-      const raw = this.normalizeExistingPolicyStatus(policy?.existingStatus || policy?.status || "");
-      return raw === "full" || raw === "partial" || raw === "partialhealth";
-    },
-    isClalInsuranceCompany(company){
-      return /כלל/.test(safeTrim(company));
-    },
-    renderPolicySendCancelBtn(policy){
-      if(!this.canSendPolicyCancel()) return "";
-      if(!this.isPolicyCancelSendEligible(policy)) return "";
-      if(!this.isClalInsuranceCompany(policy?.company)) return "";
-      return `<button class="btn btn--small cfFile__sendCancelBtn" type="button" data-policy-send-cancel="${escapeHtml(policy.id)}">שליחת ביטול</button>`;
-    },
     renderOldPolicyTableRow(policy){
       const logoHtml = renderCompanyLogoHtmlForCompany(policy.company, "card");
       const logoMark = logoHtml
@@ -22685,8 +24103,7 @@ UsersGateUI.init();
         <td><span class="cfFile__premium">${escapeHtml(premiumText)}</span></td>
         <td><span class="cfFile__statusBadge ${escapeHtml(status.cls)}">${escapeHtml(status.label)}</span></td>
         <td><span class="cfFile__cancelReason${reason ? '' : ' is-empty'}">${escapeHtml(reason || '—')}</span></td>
-        <td class="cfFile__menuCell cfFile__menuCell--legacy">
-          ${this.renderPolicySendCancelBtn(policy)}
+        <td class="cfFile__menuCell">
           <button class="cfFile__menuBtn" type="button" aria-label="פעולות" data-policy-menu="${escapeHtml(policy.id)}">⋮</button>
           <div class="cfFile__menu" role="menu"><button class="cfFile__menuItem" type="button" data-policy-open="${escapeHtml(policy.id)}">פרטי פוליסה</button></div>
         </td>
@@ -22749,65 +24166,6 @@ UsersGateUI.init();
       this.openPolicyModal(rec, policy);
     },
 
-    async handlePolicySendCancel(rec, policyId, btn){
-      if(!rec || !policyId) return;
-      if(!this.canSendPolicyCancel()){
-        try { window.showToast?.({ title: "אין הרשאה", text: "רק מנהל או מנהל תפעול יכולים לשלוח ביטול.", variant: "warn", durationMs: 4800 }); } catch(_e){}
-        return;
-      }
-      const policies = this.getWalletDisplayPolicies(rec, this.collectPolicies(rec));
-      const policy = policies.find((x) => String(x?.id) === String(policyId));
-      if(!policy){
-        try { window.showToast?.({ title: "לא נמצאה פוליסה", text: "לא ניתן לזהות את הפוליסה לביטול.", variant: "warn", durationMs: 4800 }); } catch(_e){}
-        return;
-      }
-      if(!this.isPolicyCancelSendEligible(policy) || !this.isClalInsuranceCompany(policy?.company)){
-        try { window.showToast?.({ title: "לא ניתן לשלוח", text: "טופס ביטול כלל זמין רק לפוליסות ישנות של כלל בסטטוס ביטול מלא/חלקי.", variant: "warn", durationMs: 5200 }); } catch(_e){}
-        return;
-      }
-      const prevLabel = btn ? btn.textContent : "";
-      if(btn){
-        btn.disabled = true;
-        btn.textContent = "מייצר…";
-      }
-      try {
-        await ensureClalCancelFormLoaded();
-        if(!window.ClalCancelForm?.fillPdf) throw new Error("ClalCancelForm missing");
-        const filled = await window.ClalCancelForm.fillPdf(rec, policy);
-        const dataUrl = "data:application/pdf;base64," + arrayBufferToBase64(filled.bytes);
-        const live = this.byId(rec.id) || rec;
-        const payload = live.payload && typeof live.payload === "object" ? live.payload : {};
-        const doc = CustomerDocuments.createClalCancelFormDoc(filled.meta, {
-          uploadedAt: nowISO(),
-          uploadedBy: safeTrim(Auth?.current?.name),
-          dataUrl,
-          fileName: filled.fileName
-        });
-        CustomerDocuments.append(payload, doc);
-        await persistCustomerPayloadRecord(rec.id, payload, "נוצר טופס ביטול כלל");
-        this.currentSection = "documents";
-        this._previewDocId = doc.id;
-        const next = this.byId(rec.id);
-        if(next && this.els.wrap?.classList.contains("is-open")){
-          this._openRefreshSig = "";
-          this.renderFileView(next, { bodyScrollTop: this.els.main?.scrollTop || 0 });
-        }
-        try {
-          window.showToast?.({ title: "טופס ביטול נוצר", text: "המסמך נוסף למסמכי הלקוח.", variant: "ok", durationMs: 4200 });
-        } catch(_e){}
-      } catch(err){
-        try { console.error("CLAL_CANCEL_SEND_FAILED", err); } catch(_e2){}
-        try {
-          window.showToast?.({ title: "לא ניתן ליצור טופס", text: safeTrim(err?.message) || "נסו שוב.", variant: "warn", durationMs: 5200 });
-        } catch(_e3){}
-      } finally {
-        if(btn){
-          btn.disabled = false;
-          btn.textContent = prevLabel || "שליחת ביטול";
-        }
-      }
-    },
-
     bindPolicyTableActions(rec, policies){
       const root = this.els.main;
       if(!root) return;
@@ -22838,7 +24196,16 @@ UsersGateUI.init();
         on(btn, 'click', (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
-          const id = btn.getAttribute('data-policy-open');
+          const id = btn.getAttribute('data-policy-open') || btn.getAttribute('data-elem-policy-details');
+          this.openDisplayPolicy(rec, policies, id, btn);
+        });
+      });
+      root.querySelectorAll('[data-elem-policy-details]').forEach(btn => {
+        if(btn.hasAttribute('data-policy-open')) return;
+        on(btn, 'click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const id = btn.getAttribute('data-elem-policy-details');
           this.openDisplayPolicy(rec, policies, id, btn);
         });
       });
@@ -22847,14 +24214,6 @@ UsersGateUI.init();
           ev.preventDefault();
           ev.stopPropagation();
           this.togglePolicyRowMenu(btn);
-        });
-      });
-      root.querySelectorAll("[data-policy-send-cancel]").forEach((btn) => {
-        on(btn, "click", (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          const pid = btn.getAttribute("data-policy-send-cancel");
-          void this.handlePolicySendCancel(rec, pid, btn);
         });
       });
       root.querySelectorAll('[data-cf-group-toggle]').forEach(btn => {
@@ -22931,75 +24290,178 @@ UsersGateUI.init();
       this.bindPolicyRowMenuGlobalHandlers();
     },
 
+    /* GI-CF-INSUREDS-DOSSIER 2026-08-26
+       תצוגת פרטים אישיים בלשונית מבוטחים בתיק.
+       קריאה בלבד מתוך ins.data / payload.primary — בלי כתיבה לתיק, בלי אשף, בלי פוליסות. */
+    _pickInsuredDisplayValue(layers, keys){
+      const list = Array.isArray(layers) ? layers : [];
+      const names = Array.isArray(keys) ? keys : [];
+      for(let i = 0; i < list.length; i++){
+        const src = list[i];
+        if(!src || typeof src !== "object") continue;
+        for(let k = 0; k < names.length; k++){
+          const v = safeTrim(src[names[k]]);
+          if(v) return v;
+        }
+      }
+      return "";
+    },
+
+    _insuredDossierRole(ins, idx){
+      const roleKey = safeTrim(ins?.type) || (idx === 0 ? "primary" : "adult");
+      const roleLabels = { primary:"מבוטח ראשי", spouse:"בת/בן זוג", secondary:"בת/בן זוג", child:"ילד/ה", adult:"מבוטח נוסף" };
+      return roleLabels[roleKey] || roleKey;
+    },
+
+    _insuredDossierFullName(ins){
+      const d = ins?.data && typeof ins.data === "object" ? ins.data : {};
+      const joined = `${safeTrim(d.firstName)} ${safeTrim(d.lastName)}`.trim();
+      return joined || safeTrim(ins?.label) || "";
+    },
+
+    buildInsuredDossierView(ins, rec, idx){
+      const d = ins?.data && typeof ins.data === "object" ? ins.data : {};
+      const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+      const primary = (idx === 0 && payload.primary && typeof payload.primary === "object") ? payload.primary : {};
+      const layers = idx === 0 ? [d, primary, rec] : [d];
+      const pick = (keys) => this._pickInsuredDisplayValue(layers, keys);
+      const genderRaw = pick(["gender"]);
+      const genderMap = { male:"זכר", female:"נקבה", m:"זכר", f:"נקבה" };
+      const smokeRaw = pick(["smokingStatus", "smoker"]);
+      const smokeType = pick(["smokingType"]);
+      const smokeAmount = pick(["smokingAmount"]);
+      let smoking = "";
+      if(smokeRaw === "yes" || smokeRaw === "כן"){
+        smoking = ["כן", smokeType, smokeAmount ? `${smokeAmount} ליום` : ""].filter(Boolean).join(" · ");
+      } else if(smokeRaw === "no" || smokeRaw === "לא"){
+        smoking = "לא";
+      } else {
+        smoking = smokeRaw;
+      }
+      const house = pick(["houseNumber"]);
+      const apt = pick(["apartment", "aptNumber", "apt"]);
+      const houseApt = [house, apt].filter(Boolean).join(" / ");
+      const fullName = this._insuredDossierFullName(ins) || pick(["fullName"]);
+      return {
+        id: safeTrim(ins?.id) || `idx_${idx}`,
+        fullName,
+        role: this._insuredDossierRole(ins, idx),
+        clinic: pick(["clinic", "hmo", "kupatHolim"]),
+        smoking,
+        smokingYes: smokeRaw === "yes" || smokeRaw === "כן",
+        fields: {
+          identity: [
+            ["שם מלא", fullName],
+            ["תעודת זהות", pick(["idNumber", "id_number"])],
+            ["תאריך לידה", pick(["birthDate"])],
+            ["מין", genderMap[genderRaw] || genderRaw],
+            ["מצב משפחתי", pick(["maritalStatus", "familyStatus"])],
+            ["עיסוק", pick(["occupation", "profession", "job"])],
+            ["תאריך הנפקת ת״ז", pick(["idIssueDate"])]
+          ],
+          contact: [
+            ["עיר", pick(["city"])],
+            ["רחוב", pick(["street"])],
+            ["בית / דירה", houseApt],
+            ["מיקוד", pick(["zip", "zipCode"])],
+            ["טלפון נייד", pick(["phone", "cellPhone", "mobile"])],
+            ["דוא״ל", pick(["email"])]
+          ],
+          health: [
+            ["קופת חולים", pick(["clinic", "hmo", "kupatHolim"])],
+            ["שב״ן", pick(["shaban", "shabanLevel"])],
+            ["עישון", smoking],
+            ["גובה", (() => { const v = pick(["heightCm", "height"]); return v ? (/\D/.test(v) ? v : `${v} ס״מ`) : ""; })()],
+            ["משקל", (() => { const v = pick(["weightKg", "weight"]); return v ? (/\D/.test(v) ? v : `${v} ק״ג`) : ""; })()],
+            ["ילדים", pick(["childrenCount", "children", "hasChildren"])]
+          ]
+        }
+      };
+    },
+
+    _renderDossierFields(rows){
+      return rows.map(([lab, val]) => {
+        const shown = safeTrim(val) || "—";
+        return `<div class="cfInsDossier__field"><div class="cfInsDossier__lab">${escapeHtml(lab)}</div><div class="cfInsDossier__val">${escapeHtml(shown)}</div></div>`;
+      }).join("");
+    },
+
     renderInsuredsTab(rec){
-      const payload = rec?.payload && typeof rec.payload === 'object' ? rec.payload : {};
+      const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
       const insureds = Array.isArray(payload.insureds) && payload.insureds.length ? payload.insureds : [];
-      const newPolicies = Array.isArray(payload.newPolicies) ? payload.newPolicies : [];
 
       if(!insureds.length){
         return `<div class="emptyState" style="padding:32px 16px"><div class="emptyState__title">אין מבוטחים בתיק</div></div>`;
       }
 
-      const avatarColors = ['av--blue','av--teal','av--pink','av--amber'];
-      const roleLabels = { primary:'מבוטח ראשי', spouse:'בת/בן זוג', child:'ילד/ה', adult:'מבוטח נוסף' };
+      const avatarColors = ["av--blue", "av--teal", "av--pink", "av--amber"];
+      let selectedIdx = insureds.findIndex((ins) => safeTrim(ins?.id) === safeTrim(this._insuredsTabSelectedId));
+      if(selectedIdx < 0) selectedIdx = 0;
+      const selected = this.buildInsuredDossierView(insureds[selectedIdx], rec, selectedIdx);
 
-      const insuredsHtml = insureds.map((ins, idx) => {
-        const label = safeTrim(ins?.label) || `מבוטח ${idx+1}`;
-        const initials = label.trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('');
+      const peopleHtml = insureds.map((ins, idx) => {
+        const view = this.buildInsuredDossierView(ins, rec, idx);
+        const name = view.fullName || `מבוטח ${idx + 1}`;
+        const initials = name.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("");
         const avClass = avatarColors[idx % avatarColors.length];
-        const roleKey = safeTrim(ins?.type) || (idx === 0 ? 'primary' : 'adult');
-        const roleText = roleLabels[roleKey] || roleKey;
-        const insId = safeTrim(ins?.id);
+        const on = idx === selectedIdx ? " is-on" : "";
+        const pickId = view.id;
+        return `<button class="cfInsDossier__person${on}" type="button" data-cf-ins-pick="${escapeHtml(pickId)}">
+            <div class="cfInsDossier__av ${avClass}">${escapeHtml(initials)}</div>
+            <div class="cfInsDossier__personTxt">
+              <div class="cfInsDossier__personName">${escapeHtml(name)}</div>
+              <div class="cfInsDossier__personRole">${escapeHtml(view.role)}</div>
+            </div>
+          </button>`;
+      }).join("");
 
-        const myNewPolicies = newPolicies.filter(p => this.policyCoversInsuredForDisplay(p, ins, idx));
-        const myExisting = Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : [];
+      const chips = [
+        `<span class="cfInsDossier__chip cfInsDossier__chip--role">${escapeHtml(selected.role)}</span>`
+      ];
+      if(selected.clinic) chips.push(`<span class="cfInsDossier__chip cfInsDossier__chip--ok">${escapeHtml(selected.clinic)}</span>`);
+      if(selected.smokingYes) chips.push(`<span class="cfInsDossier__chip cfInsDossier__chip--warn">מעשן</span>`);
+      else if(selected.smoking === "לא") chips.push(`<span class="cfInsDossier__chip">לא מעשן</span>`);
 
-        const rows = [];
-        myNewPolicies.forEach((p) => {
-          const name = safeTrim(p?.product || p?.type || 'פוליסה');
-          const company = safeTrim(p?.company || '');
-          const shareVal = this.getInsuredDisplayPremium(p, insId);
-          const premiumDisplay = shareVal > 0 ? this.formatMoneyValue(shareVal) : '—';
-          const policyNumber = safeTrim(p?.policyNumber || '');
-          const meta = [company, policyNumber ? `פוליסה ${policyNumber}` : 'פוליסה חדשה'].filter(Boolean).join(' · ');
-          rows.push({ name, meta, premiumDisplay, premiumVal: shareVal });
-        });
-        myExisting.forEach((p) => {
-          const name = safeTrim(p?.type || p?.product || 'פוליסה קיימת');
-          const company = safeTrim(p?.company || '');
-          const premVal = this.getPolicyPremiumAfterDiscount(p);
-          const premiumDisplay = premVal > 0 ? this.formatMoneyValue(premVal) : (safeTrim(p?.monthlyPremium || p?.premiumMonthly || p?.premium) ? this.formatMoney(p.monthlyPremium || p.premiumMonthly || p.premium) : '—');
-          const policyNumber = safeTrim(p?.policyNumber || '');
-          const meta = [company, policyNumber ? `פוליסה ${policyNumber}` : 'פוליסה קיימת'].filter(Boolean).join(' · ');
-          rows.push({ name, meta, premiumDisplay, premiumVal: premVal });
-        });
-
-        const totalVal = rows.reduce((sum, row) => sum + (Number(row.premiumVal) || 0), 0);
-        const totalDisplay = totalVal > 0 ? this.formatMoneyValue(totalVal) : '—';
-        const policiesHtml = rows.length
-          ? `${rows.map((row) => `<div class="cfInsuredTab__policyRow">
-                <div class="cfInsuredTab__policyName">${escapeHtml(row.name)}</div>
-                ${row.meta ? `<div class="cfInsuredTab__policyMeta">${escapeHtml(row.meta)}</div>` : ''}
-                <div class="cfInsuredTab__policyPremium">${escapeHtml(row.premiumDisplay)}</div>
-              </div>`).join('')}
-              <div class="cfInsuredTab__total"><span>סה״כ פרמיה למבוטח</span><strong>${escapeHtml(totalDisplay)}</strong></div>`
-          : `<div class="cfInsuredTab__policyEmpty">אין פוליסות למבוטח זה</div>`;
-
-        return `<div class="cfInsuredTab__card" data-insured-idx="${idx}">
-          <button class="cfInsuredTab__header" type="button" onclick="(function(btn){const card=btn.closest('.cfInsuredTab__card');const body=card.querySelector('.cfInsuredTab__body');const chev=card.querySelector('.cfInsuredTab__chev');const open=body.classList.toggle('is-open');chev.classList.toggle('is-open',open);})(this)">
-            <div class="cfInsuredTab__avatar ${avClass}">${escapeHtml(initials)}</div>
-            <div class="cfInsuredTab__name">${escapeHtml(label)}</div>
-            <span class="cfInsuredTab__role">${escapeHtml(roleText)}</span>
-            <span class="cfInsuredTab__premSum">${escapeHtml(totalDisplay)}</span>
-            <span class="cfInsuredTab__chev">▾</span>
-          </button>
-          <div class="cfInsuredTab__body">
-            ${policiesHtml}
+      return `<div class="cfInsDossier">
+        <aside class="cfInsDossier__rail">
+          <div class="cfInsDossier__railHead">בחירת מבוטח</div>
+          <div class="cfInsDossier__people">${peopleHtml}</div>
+        </aside>
+        <section class="cfInsDossier__sheet">
+          <div class="cfInsDossier__hero">
+            <h2 class="cfInsDossier__title">${escapeHtml(selected.fullName || "מבוטח")}</h2>
+            <div class="cfInsDossier__chips">${chips.join("")}</div>
           </div>
-        </div>`;
-      }).join('');
+          <div class="cfInsDossier__sec">
+            <h3 class="cfInsDossier__secTitle">זהות</h3>
+            <div class="cfInsDossier__fields">${this._renderDossierFields(selected.fields.identity)}</div>
+          </div>
+          <div class="cfInsDossier__sec">
+            <h3 class="cfInsDossier__secTitle">מגורים ויצירת קשר</h3>
+            <div class="cfInsDossier__fields">${this._renderDossierFields(selected.fields.contact)}</div>
+          </div>
+          <div class="cfInsDossier__sec">
+            <h3 class="cfInsDossier__secTitle">קופת חולים, עישון ומדדים</h3>
+            <div class="cfInsDossier__fields">${this._renderDossierFields(selected.fields.health)}</div>
+          </div>
+        </section>
+      </div>`;
+    },
 
-      return `<div class="cfInsuredTab">${insuredsHtml}</div>`;
+    bindInsuredsTabActions(rec){
+      const root = this.els.main;
+      if(!root) return;
+      root.querySelectorAll("[data-cf-ins-pick]").forEach((btn) => {
+        on(btn, "click", (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          this._insuredsTabSelectedId = safeTrim(btn.getAttribute("data-cf-ins-pick"));
+          if(this.els.main){
+            this.els.main.innerHTML = this.renderInsuredsTab(rec);
+            this.bindInsuredsTabActions(rec);
+          }
+        });
+      });
     },
 
     renderOpsSection(rec){
@@ -23106,7 +24568,16 @@ UsersGateUI.init();
         on(btn, 'click', (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
-          const id = btn.getAttribute('data-policy-open');
+          const id = btn.getAttribute('data-policy-open') || btn.getAttribute('data-elem-policy-details');
+          this.openDisplayPolicy(rec, policies, id, btn);
+        });
+      });
+      root.querySelectorAll('[data-elem-policy-details]').forEach(btn => {
+        if(btn.hasAttribute('data-policy-open')) return;
+        on(btn, 'click', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          const id = btn.getAttribute('data-elem-policy-details');
           this.openDisplayPolicy(rec, policies, id, btn);
         });
       });
@@ -23380,18 +24851,49 @@ UsersGateUI.init();
       return !sameSession;
     },
 
+    /* GI-PERF 2026-08-30: watch של שיחת שיקוף צריך רק callSession + opsProcess חי.
+       נמדד מול שרת חי: ~0.5KB / ~0.2s במקום מאות KB של payload מלא בכל 2 שניות.
+       אותה פונקציית _applyOpenFileRemotePayload — בלי שינוי לוגיקת שיקוף/שמירה. */
+    _openFileCallSessionThinSelect:
+      "id,updated_at,callSession:payload->mirrorFlow->callSession,opsProcess:payload->opsProcess",
+
+    _payloadFromOpenFileCallRow(row){
+      if(!row || typeof row !== "object") return null;
+      if(Object.prototype.hasOwnProperty.call(row, "callSession")
+        || Object.prototype.hasOwnProperty.call(row, "opsProcess")){
+        const call = (row.callSession && typeof row.callSession === "object") ? row.callSession : null;
+        const ops = (row.opsProcess && typeof row.opsProcess === "object") ? row.opsProcess : null;
+        return {
+          mirrorFlow: { callSession: call },
+          opsProcess: ops
+        };
+      }
+      let payload = row.payload;
+      if(typeof payload === "string"){
+        try { payload = JSON.parse(safeTrim(payload) || "{}"); } catch(_e) { payload = null; }
+      }
+      return (payload && typeof payload === "object") ? payload : null;
+    },
+
     async _pullOpenFileCallSession(cid){
       const id = safeTrim(cid);
       if(!id || typeof Storage?.loadSingleRow !== "function") return;
       if(this._openFileCallPullBusy) return;
       this._openFileCallPullBusy = true;
       try{
-        const res = await Storage.loadSingleRow(SUPABASE_TABLES.customers, id, "id,payload,updated_at");
-        if(!res?.ok) return;
-        let payload = res.data?.payload;
-        if(typeof payload === "string"){
-          try { payload = JSON.parse(safeTrim(payload) || "{}"); } catch(_e) { payload = null; }
+        let res = await Storage.loadSingleRow(
+          SUPABASE_TABLES.customers,
+          id,
+          this._openFileCallSessionThinSelect
+        );
+        let payload = res?.ok ? this._payloadFromOpenFileCallRow(res.data) : null;
+        if(!res?.ok || !payload){
+          /* נפילה בטוחה לסלקט הישן — אם השרת דוחה JSON-path, ההתנהגות נשארת זהה. */
+          res = await Storage.loadSingleRow(SUPABASE_TABLES.customers, id, "id,payload,updated_at");
+          if(!res?.ok) return;
+          payload = this._payloadFromOpenFileCallRow(res.data);
         }
+        if(!payload) return;
         this._applyOpenFileRemotePayload(id, payload);
       }catch(_e){}
       finally{
@@ -23424,10 +24926,23 @@ UsersGateUI.init();
       }
     },
 
-    async _refreshOpenFileCallSession(id){
+    async _refreshOpenFileCallSession(id, opts={}){
       const cid = safeTrim(id);
       if(!cid) return;
-      await this._pullOpenFileCallSession(cid);
+      /* אחרי ensureRecordPayload כבר יש payload מלא מהשרת — אין צורך למשוך שוב מיד.
+         מתחילים watch בלבד, עם חתימה מקומית; המרווח הבא ימשוך דק. */
+      if(opts.skipImmediatePull === true){
+        try {
+          const rec = this.byId(cid);
+          const call = rec?.payload?.mirrorFlow?.callSession;
+          if(call && typeof call === "object"){
+            this._openFileCallSig = this._callSessionWatchSig(call);
+          }
+          if(rec) this.paintHeroLiveTimer(rec);
+        } catch(_e) {}
+      } else {
+        await this._pullOpenFileCallSession(cid);
+      }
       this.startOpenFileCallWatch();
     },
 
@@ -23439,13 +24954,13 @@ UsersGateUI.init();
       if(!rec || !this.els.wrap) return;
       // הקורא (openWithLoader) עוטף ב-try/catch סינכרוני, שלא תופס דחיית Promise —
       // לכן בולעים כאן ומדווחים ללוג, במקום unhandled rejection.
-      const afterOpen = () => {
-        try { void this._refreshOpenFileCallSession(id); } catch(_e) {}
+      const afterOpen = (refreshOpts) => {
+        try { void this._refreshOpenFileCallSession(id, refreshOpts); } catch(_e) {}
       };
       if(Storage.payloadIsEmpty(rec)){
         return Promise.resolve()
           .then(() => this._openByIdAfterPayload(id, opts))
-          .then(() => afterOpen())
+          .then(() => afterOpen({ skipImmediatePull: true }))
           .catch((err) => { try { console.error("CUSTOMER_OPEN_AFTER_PAYLOAD_FAILED", err, id); } catch(_e) {} });
       }
       const opened = this._openByIdResolved(rec, opts);
@@ -23458,8 +24973,7 @@ UsersGateUI.init();
       if(this.els.name) this.els.name.textContent = safeTrim(rec?.fullName) || "תיק לקוח";
       this.paintHeroLiveTimer(rec);
       if(this.els.meta) this.els.meta.innerHTML = "";
-      if(this.els.dash) this.els.dash.innerHTML = "";
-      if(this.els.side) this.els.side.innerHTML = "";
+      this.stripLegacyFileSummary();
       if(this.els.tabs) this.els.tabs.innerHTML = "";
       if(this.els.main){
         this.els.main.innerHTML = `<div class="muted" style="padding:32px;text-align:center;">טוען פרטי תיק…</div>`;
@@ -23550,8 +25064,7 @@ UsersGateUI.init();
         if(this.els.name) this.els.name.textContent = rec.fullName || "תיק לקוח";
         if(this.els.avatar) this.els.avatar.setAttribute("data-customer-name", safeTrim(rec.fullName || "תיק לקוח"));
         if(this.els.meta) this.els.meta.innerHTML = this.renderHeroMeta(rec);
-        if(this.els.dash) this.els.dash.innerHTML = "";
-        if(this.els.side) this.els.side.innerHTML = "";
+        this.stripLegacyFileSummary();
         if(this.els.tabs) this.els.tabs.innerHTML = "";
         if(this.els.main){
           this.els.main.innerHTML = `<div class="emptyState" style="padding:32px 16px"><div class="emptyState__icon">🗂️</div><div class="emptyState__title">התיק נפתח במצב בטוח</div><div class="emptyState__text">נמצאה תקלה בהצגת חלק מהנתונים, אבל התיק עצמו כן נפתח.</div></div>`;
@@ -23746,6 +25259,17 @@ UsersGateUI.init();
       const corr = (opsStore.correspondence && typeof opsStore.correspondence === "object") ? opsStore.correspondence : {};
       const threadItems = Array.isArray(corr.items) ? corr.items : [];
       const statusLog = Array.isArray(opsStore.statusLog) ? opsStore.statusLog : [];
+      const fmtOpsClock = (raw) => {
+        const value = safeTrim(raw);
+        if(!value) return "";
+        const d = new Date(value);
+        if(Number.isNaN(d.getTime())) return value;
+        try {
+          return d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+        } catch(_e) {
+          return value;
+        }
+      };
       const fmtOpsStamp = (raw) => {
         const value = safeTrim(raw);
         if(!value) return "";
@@ -23753,7 +25277,12 @@ UsersGateUI.init();
       };
       const statusRowsHtml = statusLog.length ? `<div class="customerOpsStatusLog">${statusLog.map((row) => {
         const item = row && typeof row === "object" ? row : {};
-        const meta = [safeTrim(item.by), fmtOpsStamp(item.at)].filter(Boolean).join(" · ");
+        const agent = safeTrim(item.by);
+        const clock = fmtOpsClock(item.at);
+        const meta = [
+          agent ? ("נציג משקף: " + agent) : "",
+          clock ? ("שעה: " + clock) : ""
+        ].filter(Boolean).join(" · ");
         return `<div class="customerOpsStatusRow" data-ops-status-key="${escapeHtml(item.key || "")}">
           <span class="customerOpsStatusRow__label">${escapeHtml(item.label || "")}</span>
           ${meta ? `<span class="customerOpsStatusRow__meta">${escapeHtml(meta)}</span>` : ""}
@@ -23812,16 +25341,6 @@ UsersGateUI.init();
       const call = (mirrorFlow.callSession && typeof mirrorFlow.callSession === "object")
         ? mirrorFlow.callSession
         : ((mirrorFlow.call && typeof mirrorFlow.call === "object") ? mirrorFlow.call : {});
-      const updatedOps = safeTrim(ops?.updatedText) ? ProcessesUI.formatDate(ops.updatedText) : '—';
-      const kpi = this.els?.dash?.querySelector?.('#customerFullKpiOps');
-      if(kpi){
-        kpi.innerHTML = `<div class="cfFile__kpiIcon cfFile__kpiIcon--amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
-          <div>
-            <span class="cfFile__opsBadge">${escapeHtml(typeof getCustomerFileOpsBadge === "function" ? getCustomerFileOpsBadge(ops) : (ops?.liveLabel || 'ממתין לשיקוף'))}</span>
-            <div class="cfFile__kpiLabel" style="margin-top:6px">סטטוס תפעולי</div>
-            <div class="cfFile__kpiSub">עודכן ${escapeHtml(updatedOps)}</div>
-          </div>`;
-      }
       if(call?.active && !this._opsResultSaveBusy){
         const liveCard = this.els?.main?.querySelector?.('#customerOpsReflectionCard');
         if(liveCard && liveCard.querySelector('.customerOpsResultBtn.is-saving, .customerOpsResultBtn[disabled]')){
@@ -23976,6 +25495,11 @@ UsersGateUI.init();
       if(!this.policyModal.wrap || !this.policyModal.body) return;
       this._openPolicyId = safeTrim(policy?.id || "");
       this.policyModal.wrap.dataset.policyId = this._openPolicyId;
+      const isElementary = policy?.origin === "elementary" || policy?.domain === "elementary";
+      if(isElementary){
+        this.renderElementaryPolicyDetailsModal(rec, policy);
+        return;
+      }
       if(this.policyModal.title){
         this.policyModal.title.textContent = `${policy.company || "חברה"} · ${policy.type || "פוליסה"}`;
       }
@@ -24005,6 +25529,57 @@ UsersGateUI.init();
           <div class="customerPolicyModal__heroSub">${escapeHtml(rec.fullName || "לקוח")} · ${escapeHtml(policy.insuredLabel || "מבוטח")}</div>
         </div>
         <div class="customerPolicyModal__grid">${detailRows}</div>
+      `;
+      this.policyModal.wrap.classList.add("is-open");
+      this.policyModal.wrap.setAttribute("aria-hidden", "false");
+    },
+
+    renderElementaryPolicyDetailsModal(rec, policy){
+      const model = this.buildElementaryPolicyDetailsModel(rec, policy);
+      if(this.policyModal.title){
+        this.policyModal.title.textContent = `נתוני פוליסה · ${model.currentProduct}`;
+      }
+      const companyRowsHtml = model.companyRows.length
+        ? model.companyRows.map((row) => {
+          const isCurrent = safeTrim(row.id) && safeTrim(row.id) === safeTrim(policy?.id);
+          return `<div class="customerPolicyModal__companyRow${isCurrent ? " is-current" : ""}">
+            <div class="customerPolicyModal__companyProduct">${escapeHtml(row.label)}</div>
+            <div class="customerPolicyModal__companyName">${escapeHtml(row.company || "—")}</div>
+          </div>`;
+        }).join("")
+        : `<div class="customerPolicyModal__emptyHint">לא נמצאו מוצרי רכב עם חברה בתיק.</div>`;
+      const driversHtml = model.driverNames.length
+        ? `<ul class="customerPolicyModal__driversList">${model.driverNames.map((nm) => `<li>${escapeHtml(nm)}</li>`).join("")}</ul>`
+        : `<div class="customerPolicyModal__emptyHint">לא נרשמו נהגים נקובים</div>`;
+      const metaBits = [model.plate ? `רכב ${model.plate}` : "", model.vehicleDesc].filter(Boolean);
+      this.policyModal.body.innerHTML = `
+        <div class="customerPolicyModal__hero is-elementary">
+          <div class="customerPolicyModal__heroTop">
+            <div class="customerPolicyModal__heroBadge ${escapeHtml(policy.badgeClass || "is-elementary")}">${escapeHtml(policy.badgeText || "אלמנטרי")}</div>
+            <div class="customerPolicyModal__heroPremium">${escapeHtml(policy.premiumText || "—")}</div>
+          </div>
+          <div class="customerPolicyModal__heroCompany">${escapeHtml(model.currentCompany)}</div>
+          <div class="customerPolicyModal__heroType">${escapeHtml(model.currentProduct)}</div>
+          <div class="customerPolicyModal__heroSub">${escapeHtml(rec?.fullName || "לקוח")}${metaBits.length ? ` · ${escapeHtml(metaBits.join(" · "))}` : ""}</div>
+        </div>
+        <div class="customerPolicyModal__elemDetails" data-elem-policy-details-panel="1">
+          <div class="customerPolicyModal__row">
+            <div class="customerPolicyModal__k">מאיזה גיל הביטוח תקף</div>
+            <div class="customerPolicyModal__v">${escapeHtml(model.ageLabel)}</div>
+          </div>
+          <div class="customerPolicyModal__row">
+            <div class="customerPolicyModal__k">תאריך סיום ביטוח</div>
+            <div class="customerPolicyModal__v" dir="ltr">${escapeHtml(model.endDate)}</div>
+          </div>
+          <div class="customerPolicyModal__block">
+            <div class="customerPolicyModal__blockTitle">שמות הנהגים המנוקבים</div>
+            ${driversHtml}
+          </div>
+          <div class="customerPolicyModal__block">
+            <div class="customerPolicyModal__blockTitle">חברה לפי מוצר</div>
+            <div class="customerPolicyModal__companyList">${companyRowsHtml}</div>
+          </div>
+        </div>
       `;
       this.policyModal.wrap.classList.add("is-open");
       this.policyModal.wrap.setAttribute("aria-hidden", "false");
@@ -24093,8 +25668,10 @@ UsersGateUI.init();
       return d.toLocaleString("he-IL");
     }
   };
+  const CustomerFileUI = CustomersUI;
   try{
     if(typeof globalThis !== "undefined") globalThis.__GI_CustomersUI = CustomersUI;
+    if(typeof globalThis !== "undefined") globalThis.CustomerFileUI = CustomersUI;
     // GI-PERF 2026-07-31 (שלב ו'): giPerfReport() בקונסול מדפיס טבלת מדידות אמיתית.
     if(typeof globalThis !== "undefined"){
       globalThis.giPerfReport = () => GiPerf.report();
@@ -24724,7 +26301,27 @@ UsersGateUI.init();
         return next;
       });
       if(!safeTrim(primary.selectedPayerId) && insureds[0]?.id) primary.selectedPayerId = insureds[0].id;
-      return { payload, primary, insureds, newPolicies };
+
+      /* GI-FEAT 2026-08-25: טיוטת מוצרי אלמנטרי/רכב לעריכת פרמיות בעדכון נתונים.
+         לא משנה לוגיקת בריאות/סיכונים — רק מוסיף מערך נפרד לטיוטה. */
+      let elementaryPolicies = Array.isArray(payload.elementaryPolicies)
+        ? this.deepClone(payload.elementaryPolicies)
+        : [];
+      elementaryPolicies = elementaryPolicies
+        .filter((pol) => pol && typeof pol === "object")
+        .map((pol, idx) => {
+          const next = Object.assign({}, pol);
+          next.id = safeTrim(next.id) || (`elementary_${idx}`);
+          const prem = this.asEditMoneyNumber(
+            next.premiumAfterDiscountValue ?? next.premiumValue ?? next.premium ?? next.premiumText
+          );
+          if(prem > 0){
+            if(!safeTrim(next.premiumValue)) next.premiumValue = String(Math.round(prem * 100) / 100);
+          }
+          return next;
+        });
+
+      return { payload, primary, insureds, newPolicies, elementaryPolicies };
     },
 
     /* GI-FIX 2026-08-01 (תוכניות 1+3): buildDraft קורא rec.payload סינכרונית,
@@ -25438,6 +27035,50 @@ UsersGateUI.init();
       return null;
     },
 
+    /** מוצרי אלמנטרי/רכב — מוצג רק כשיש פוליסות בתיק; עריכת פרמיה שנתית + תשלומים. */
+    renderElementaryPoliciesSection(){
+      const list = Array.isArray(this.draft?.elementaryPolicies) ? this.draft.elementaryPolicies : [];
+      if(!list.length) return "";
+      return `
+        <section class="customerEditSection customerEditSection--elementary" data-ce-elementary-section="1">
+          <div class="customerEditSection__head">
+            <div>
+              <div class="customerEditSection__title">ביטוח אלמנטרי / רכב</div>
+              <div class="customerEditSection__sub">עריכה ותיקון של פרמיות שנתיות למוצרי האלמנטרי בתיק הלקוח.</div>
+            </div>
+          </div>
+          <div class="customerEditList">
+            ${list.map((policy, idx) => {
+              const prefix = `elementaryPolicies.${idx}`;
+              const premNum = this.asEditMoneyNumber(
+                policy?.premiumValue ?? policy?.premiumAfterDiscountValue ?? policy?.premium
+              );
+              const premVal = safeTrim(policy?.premiumValue)
+                || (premNum > 0 ? String(Math.round(premNum * 100) / 100) : "");
+              const title = safeTrim(policy?.type) || safeTrim(policy?.label) || `מוצר אלמנטרי ${idx + 1}`;
+              const metaBits = [
+                safeTrim(policy?.company),
+                safeTrim(policy?.licensePlate) ? (`רכב ${safeTrim(policy.licensePlate)}`) : "",
+                safeTrim(policy?.vehicleDesc),
+                safeTrim(policy?.coverageTypeHe) || safeTrim(policy?.coverageValue)
+              ].filter(Boolean);
+              return `<article class="customerEditPolicyCard" data-ce-elementary-card="${this.esc(String(idx))}">
+                <div class="customerEditPolicyCard__head">
+                  <div>
+                    <div class="customerEditPolicyCard__title">${this.esc(title)}</div>
+                    ${metaBits.length ? `<div class="customerEditSection__sub">${this.esc(metaBits.join(" · "))}</div>` : ""}
+                  </div>
+                </div>
+                <div class="customerEditGrid customerEditGrid--policy">
+                  ${this.renderInput("פרמיה שנתית (₪)", `${prefix}.premiumValue`, premVal, { dir:"ltr", inputmode:"decimal" })}
+                  ${this.renderInput("מספר תשלומים", `${prefix}.installments`, safeTrim(policy?.installments) || "", { dir:"ltr", inputmode:"numeric" })}
+                </div>
+              </article>`;
+            }).join("")}
+          </div>
+        </section>`;
+    },
+
     renderPaymentSection(){
       const payerOptions = (this.draft.insureds || []).map(ins => `<option value="${this.esc(ins.id)}">${this.esc(ins.label || ins.data?.firstName || "מבוטח")}</option>`).join("");
       const isCc = safeTrim(this.field("primary.paymentMethod", "cc")) !== "ho";
@@ -25488,6 +27129,7 @@ UsersGateUI.init();
             </div>
           </section>
           ${this.renderNewPoliciesSection()}
+          ${this.renderElementaryPoliciesSection()}
           ${this.renderHealthEditSection()}
           ${this.renderPaymentSection()}
         </div>`;
@@ -25812,6 +27454,120 @@ UsersGateUI.init();
       }
     },
 
+    /** מעדכן שדות פרמיה/תשלומים על מוצר אלמנטרי לפי ערכי הטיוטה. */
+    applyElementaryPremiumFields(policy, draftPolicy){
+      if(!policy) return false;
+      const src = draftPolicy || policy;
+      const rawPrem = safeTrim(src?.premiumValue ?? src?.premiumAfterDiscountValue ?? src?.premium ?? "");
+      const prem = this.asEditMoneyNumber(rawPrem);
+      if(prem <= 0) return false;
+
+      const rounded = Math.round(prem * 100) / 100;
+      const premStr = String(rounded);
+      let inst = "";
+      try {
+        if(typeof Wizard !== "undefined" && typeof Wizard.normalizeElementaryInstallmentsInput === "function"){
+          inst = Wizard.normalizeElementaryInstallmentsInput(src?.installments || policy?.installments || "");
+        } else {
+          const n = parseInt(String(src?.installments || policy?.installments || "").replace(/\D/g, ""), 10);
+          inst = Number.isFinite(n) && n >= 1 ? String(Math.min(120, n)) : "";
+        }
+      } catch(_e) {
+        inst = safeTrim(src?.installments || policy?.installments || "");
+      }
+
+      let premText = "";
+      try {
+        if(typeof Wizard !== "undefined" && typeof Wizard.formatElementaryMoneyShekel === "function"){
+          premText = Wizard.formatElementaryMoneyShekel(rounded);
+        }
+      } catch(_e) {}
+      if(!safeTrim(premText)){
+        premText = this.formatEditPremiumMoney(rounded) || (`${premStr} ₪`);
+      }
+
+      const instN = inst ? parseInt(inst, 10) : NaN;
+      let perStr = "";
+      if(Number.isFinite(instN) && instN >= 1){
+        const per = Math.round((rounded / instN) * 100) / 100;
+        try {
+          if(typeof Wizard !== "undefined" && typeof Wizard.formatElementaryMoneyShekel === "function"){
+            perStr = Wizard.formatElementaryMoneyShekel(per);
+          }
+        } catch(_e) {}
+        if(!safeTrim(perStr)) perStr = this.formatEditPremiumMoney(per) || String(per);
+      }
+
+      policy.premiumValue = premStr;
+      policy.premiumAfterDiscountValue = rounded;
+      policy.premiumAfterDiscount = premText;
+      policy.premiumText = premText;
+      policy.installments = inst;
+      policy.perPayment = perStr;
+      return true;
+    },
+
+    /** מסנכרן פרמיות מ-elementaryPolicies חזרה ל-elementaryProductPricing בנתוני המבוטח (אם קיים). */
+    syncElementaryPricingFromPolicies(payload, policies){
+      if(!payload || !Array.isArray(policies) || !policies.length) return;
+      const applyToData = (data) => {
+        if(!data || typeof data !== "object") return;
+        const pricing = Array.isArray(data.elementaryProductPricing) ? data.elementaryProductPricing : null;
+        if(!pricing || !pricing.length) return;
+        let sum = 0;
+        let touched = false;
+        pricing.forEach((row) => {
+          if(!row || typeof row !== "object") return;
+          const key = safeTrim(row.productKey);
+          if(!key) return;
+          const match = policies.find((p) => {
+            const pid = safeTrim(p?.id);
+            return pid === (`elementary_${key}`) || pid === key;
+          });
+          if(!match) return;
+          const prem = this.asEditMoneyNumber(match.premiumValue ?? match.premiumAfterDiscountValue);
+          if(prem > 0){
+            row.premium = String(Math.round(prem * 100) / 100);
+            sum += prem;
+            touched = true;
+          }
+          if(safeTrim(match.installments)){
+            row.installments = safeTrim(match.installments);
+            touched = true;
+          }
+        });
+        if(touched && sum > 0){
+          data.elementaryPremium = String(Math.round(sum * 100) / 100);
+        }
+      };
+      applyToData(payload.primary);
+      (Array.isArray(payload.insureds) ? payload.insureds : []).forEach((ins) => applyToData(ins?.data));
+      if(payload.operational && typeof payload.operational === "object"){
+        applyToData(payload.operational.primary);
+        (Array.isArray(payload.operational.insureds) ? payload.operational.insureds : []).forEach((ins) => applyToData(ins?.data));
+      }
+    },
+
+    /** כותב פרמיות אלמנטרי מהטיוטה ל-payload בשמירה — בלי לגעת בפוליסות בריאות/סיכונים. */
+    applyElementaryPoliciesFromDraft(payload){
+      if(!payload || !this.draft) return;
+      const draftList = Array.isArray(this.draft.elementaryPolicies) ? this.draft.elementaryPolicies : [];
+      if(!draftList.length) return;
+      const origList = Array.isArray(payload.elementaryPolicies) ? payload.elementaryPolicies : [];
+      const nextList = draftList.map((draftPol, idx) => {
+        const id = safeTrim(draftPol?.id);
+        const origPol = id
+          ? (origList.find((p) => safeTrim(p?.id) === id) || null)
+          : (origList[idx] || null);
+        const next = Object.assign({}, this.deepClone(origPol || {}), this.deepClone(draftPol || {}));
+        next.id = safeTrim(next.id) || id || (`elementary_${idx}`);
+        this.applyElementaryPremiumFields(next, draftPol);
+        return next;
+      });
+      payload.elementaryPolicies = nextList;
+      this.syncElementaryPricingFromPolicies(payload, nextList);
+    },
+
     normalizeDraftForSave(rec){
       const payload = this.deepClone(rec?.payload || {});
       const primary = Object.assign(this.defaultPrimary(), this.deepClone(this.draft.primary || {}));
@@ -25890,6 +27646,9 @@ UsersGateUI.init();
         primary: operationalPrimary,
         mirrorSchedule: this.deepClone(mirrorSchedule)
       };
+      /* GI-FEAT 2026-08-25: שמירת פרמיות אלמנטרי/רכב מהטיוטה — אחרי בניית insureds/newPolicies
+         כדי לא להפריע ללוגיקת בריאות/סיכונים הקיימת. */
+      this.applyElementaryPoliciesFromDraft(payload);
       return payload;
     },
 
@@ -25934,6 +27693,11 @@ UsersGateUI.init();
           kind: "health_edit",
           uploadedBy: safeTrim(Auth?.current?.name) || safeTrim(rec?.agentName)
         });
+        try {
+          if(typeof CustomersUI?.ensureFollowupDocuments === "function"){
+            await CustomersUI.ensureFollowupDocuments({ payload });
+          }
+        } catch(_e) {}
         const primary = payload.primary || {};
         const updatedAt = nowISO();
         const record = normalizeCustomerRecord({
@@ -28505,8 +30269,8 @@ UsersGateUI.init();
           if(eid) ids.add(eid);
         }
       } catch(_e) {}
-      // GI-PERF 2026-08-10: לא לבנות את כל שורות הלקוחות בכל flush — יקר בסשן גדול.
-      if(!Storage.isLargeCustomersSession?.()){
+      // GI-PERF 2026-08-10 / 08-25: בסשן ענק או מנהל-צוות-light לא לבנות את כל שורות הלקוחות בכל flush.
+      if(!Storage.isHeavyRosterSession?.()){
         try {
           const rows = Storage.buildCustomerRows(State.data);
           Storage.getChangedRows(SUPABASE_TABLES.customers, rows).forEach((r) => {
@@ -28644,6 +30408,7 @@ UsersGateUI.init();
         const customerIds = cust.ids || [];
         const proposalIds = prop.ids || [];
         try { MirrorCallAgentToastWatcher.inspectIds(customerIds); } catch(_e) {}
+        try { OpsAssignArrivalAlert.inspect(); } catch(_e) {}
         HeavySyncGate.scheduleUi(() => {
           if(LiveRefresh?.hasBlockingFlow?.()) return;
           try {
@@ -28697,9 +30462,9 @@ UsersGateUI.init();
     },
 
     startCustomers(){
-      // GI-PERF 2026-08-10: בסשן גדול realtime על כל טבלת customers מציף את ה-UI (52K).
+      // GI-PERF 2026-08-10 / 08-25: בסשן גדול או מנהל-צוות-light realtime על כל הטבלה מציף את ה-UI.
       // מסך הלקוחות מסתנכרן ב-pull קל (10 אחרונים / חיפוש).
-      if(Storage.isLargeCustomersSession?.()) return;
+      if(Storage.isHeavyRosterSession?.()) return;
       if(this._customersChannel) return;
       try {
         const client = Storage.getClient();
@@ -28731,6 +30496,8 @@ UsersGateUI.init();
     },
 
     startProposals(){
+      // GI-PERF 2026-08-25: כמו customers — בלי realtime שמן במנהל-צוות-light / Large Session.
+      if(Storage.isHeavyRosterSession?.()) return;
       if(this._proposalsChannel) return;
       try {
         const client = Storage.getClient();
@@ -28907,6 +30674,10 @@ UsersGateUI.init();
       if(view !== "dashboard" || Auth.isElementary()) return false;
       // PERF: admin/manager already hold the full org dataset — periodic force pull causes freezes
       try { if(Auth?.canViewAllCustomers?.()) return false; } catch(_e) {}
+      // GI-PERF 2026-08-25: מנהל צוות עם רוסטר גדול — אותו פטור; force pull מחזיר delta שמן ומקפיא.
+      try {
+        if(Auth?.isTeamManager?.() && Storage?.isTeamManagerLightSession?.()) return false;
+      } catch(_e) {}
       if(!DashboardUI.shouldShowPerformanceBoard?.()) return false;
       const last = Number(this._lastDashboardPullAt) || 0;
       return !last || (Date.now() - last) >= this.DASHBOARD_FORCE_PULL_MS;
@@ -28921,6 +30692,7 @@ UsersGateUI.init();
         const forceDashboardPull = this.shouldForceDashboardPull();
         const localDataAt = getMetaSyncAt(State.data?.meta, "data");
         const largeSession = !!Storage.isLargeCustomersSession?.();
+        const teamMgrLight = !!Storage.isTeamManagerLightSession?.();
         if(!forceDashboardPull){
           const metaRes = await Storage.loadMetaRowCached();
           if(!metaRes?.ok) return;
@@ -28934,9 +30706,8 @@ UsersGateUI.init();
           if(remoteDataAt && localDataAt && compareIsoStamps(remoteDataAt, localDataAt) <= 0) return;
         }
         if(this.hasBlockingFlow()) return;
-        // GI-PERF 2026-08-10: בסשן גדול לא מושכים שוב working-set מלא בטיימר —
-        // זה מה שנתקע במעבר ללקוחות. רשימת הלקוחות מתעדכנת ב-syncListFromServer.
-        if(largeSession){
+        // GI-PERF 2026-08-10 / 08-25: בסשן גדול או מנהל-צוות-light לא מושכים שוב roster מלא בטיימר.
+        if(largeSession || teamMgrLight){
           const view = this.getCurrentView();
           if(view === "customers"){
             HeavySyncGate.scheduleUi(() => {
@@ -29067,6 +30838,7 @@ UsersGateUI.init();
       ReferralQuietRefresh.start();
       try { MirrorCallAgentToastWatcher.start(); } catch(_e) {}
       try { OpsAgentStatusToastWatcher.start(); } catch(_e) {}
+      try { OpsAssignArrivalAlert.start(); } catch(_e) {}
     },
     stopAll(){
       if(this._graceTimer){
@@ -29080,6 +30852,7 @@ UsersGateUI.init();
       LiveRefresh.stop();
       ReferralQuietRefresh.stop();
       try { MirrorCallAgentToastWatcher.stop(); } catch(_e) {}
+      try { OpsAssignArrivalAlert.stop(); } catch(_e) {}
       try { DashboardUI.stopLiveRefresh(); } catch(_e) {}
       try { ListRecordRealtime.stopAll(); } catch(_e) {}
       this._pollingStarted = false;
@@ -30046,6 +31819,68 @@ UsersGateUI.init();
       return this.FLOW_STEPS[0];
     },
 
+    liveCustomerName(rec){
+      const full = safeTrim(rec?.fullName);
+      if(full && full !== "לקוח ללא שם") return full;
+      const p = rec?.payload?.primary && typeof rec.payload.primary === "object" ? rec.payload.primary : {};
+      const fromPrimary = `${safeTrim(p.firstName)} ${safeTrim(p.lastName)}`.trim();
+      if(fromPrimary) return fromPrimary;
+      const ins0 = rec?.payload?.insureds?.[0]?.data && typeof rec.payload.insureds[0].data === "object"
+        ? rec.payload.insureds[0].data
+        : {};
+      const fromIns = `${safeTrim(ins0.firstName)} ${safeTrim(ins0.lastName)}`.trim();
+      return fromIns || "לקוח";
+    },
+
+    presenceMap(){
+      try{
+        if(typeof ChatUI !== "undefined" && ChatUI && typeof ChatUI.getPresenceMap === "function"){
+          return ChatUI.getPresenceMap() || new Map();
+        }
+      }catch(_e){}
+      return new Map();
+    },
+
+    presenceUserId(agent){
+      try{
+        if(typeof ChatUI !== "undefined" && ChatUI && typeof ChatUI.userIdFromAgent === "function"){
+          return safeTrim(ChatUI.userIdFromAgent(agent));
+        }
+      }catch(_e){}
+      return "";
+    },
+
+    latestFinishedCallAt(agent, customers){
+      let bestIso = "";
+      let bestMs = 0;
+      (Array.isArray(customers) ? customers : []).forEach((rec) => {
+        const call = this.getCallStore(rec);
+        if(!call || call.active) return;
+        const finished = safeTrim(call.finishedAt);
+        if(!finished) return;
+        if(!this.agentMatchesCall(agent, rec, call)) return;
+        const ms = new Date(finished).getTime();
+        if(!Number.isNaN(ms) && ms > bestMs){
+          bestMs = ms;
+          bestIso = finished;
+        }
+      });
+      return bestIso;
+    },
+
+    availableSinceIso(sessionStartedAt, lastFinishedAt){
+      const a = safeTrim(sessionStartedAt);
+      const b = safeTrim(lastFinishedAt);
+      const am = a ? new Date(a).getTime() : 0;
+      const bm = b ? new Date(b).getTime() : 0;
+      const aOk = !!(am && !Number.isNaN(am));
+      const bOk = !!(bm && !Number.isNaN(bm));
+      if(!aOk && !bOk) return "";
+      if(!aOk) return b;
+      if(!bOk) return a;
+      return bm > am ? b : a;
+    },
+
     agentMatchesCall(agent, rec, call){
       const assign = getMirrorAssign(rec);
       const agentId = safeTrim(agent?.id);
@@ -30079,12 +31914,23 @@ UsersGateUI.init();
         const call = this.getCallStore(rec);
         return !!(call?.active && safeTrim(call?.startedAt));
       });
+      const presence = this.presenceMap();
 
       return agents.map((agent, idx) => {
         const liveRec = liveCalls.find((rec) => this.agentMatchesCall(agent, rec, this.getCallStore(rec))) || null;
         const call = liveRec ? this.getCallStore(liveRec) : null;
         const live = !!(liveRec && call?.active && safeTrim(call?.startedAt));
         const paused = !!(live && call?.paused);
+        const pid = this.presenceUserId(agent);
+        const pres = pid ? (presence.get(pid) || null) : null;
+        const connected = !!pres;
+        const sessionStartedAt = connected
+          ? (safeTrim(pres.sessionStartedAt) || safeTrim(pres.onlineAt) || "")
+          : "";
+        const lastFinishedAt = (!live && connected) ? this.latestFinishedCallAt(agent, customers) : "";
+        const availableSince = (!live && connected)
+          ? this.availableSinceIso(sessionStartedAt, lastFinishedAt)
+          : "";
         let seconds = 0;
         if(live){
           if(paused){
@@ -30092,24 +31938,31 @@ UsersGateUI.init();
           } else {
             seconds = Math.max(0, Math.floor((Date.now() - new Date(call.startedAt).getTime()) / 1000));
           }
+        } else if(connected && availableSince){
+          const startMs = new Date(availableSince).getTime();
+          if(!Number.isNaN(startMs)){
+            seconds = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
+          }
         }
         const step = live ? this.resolveLiveStep(liveRec, call) : null;
+        const startedAt = live ? safeTrim(call.startedAt) : (connected ? availableSince : "");
         return {
           id: safeTrim(agent.id) || `ops-agent-${idx}`,
           name: safeTrim(agent.name || agent.username) || "נציג תפעול",
           initials: this.initials(safeTrim(agent.name || agent.username)),
           tone: idx % 4,
           live,
+          connected,
           paused,
           customerId: live ? safeTrim(liveRec.id) : "",
-          customerName: live ? (safeTrim(liveRec.fullName) || "לקוח") : "",
+          customerName: live ? this.liveCustomerName(liveRec) : "",
           stepNo: step?.n || 0,
-          stepLabel: step ? `שלב ${step.n} · ${step.label}` : "לא בשיחה",
-          startedAt: live ? safeTrim(call.startedAt) : "",
+          stepLabel: step ? `שלב ${step.n} · ${step.label}` : (connected ? "זמין" : "לא מחובר"),
+          startedAt,
           seconds,
-          clock: live ? this.formatCallClock(seconds) : "—"
+          clock: (live || (connected && startedAt)) ? this.formatCallClock(seconds) : "—"
         };
-      }).sort((a, b) => Number(b.live) - Number(a.live) || a.name.localeCompare(b.name, "he"));
+      }).sort((a, b) => Number(b.live) - Number(a.live) || Number(b.connected) - Number(a.connected) || a.name.localeCompare(b.name, "he"));
     },
 
     collectRows(){
@@ -30123,6 +31976,26 @@ UsersGateUI.init();
           const premium = this.getPremium(rec);
           const arrival = this.queueArrivalStamp(rec);
           const stamp = arrival || safeTrim(ops.updatedText) || safeTrim(rec.updatedAt) || safeTrim(rec.createdAt);
+          const opsStore = rec?.payload?.opsProcess && typeof rec.payload.opsProcess === "object"
+            ? rec.payload.opsProcess
+            : {};
+          const laneKey = safeTrim(opsStore.waitingMirrorLane);
+          const statusLog = Array.isArray(opsStore.statusLog) ? opsStore.statusLog : [];
+          let laneDoc = null;
+          for(let i = statusLog.length - 1; i >= 0; i--){
+            if(!laneKey || safeTrim(statusLog[i]?.key) === laneKey){
+              laneDoc = statusLog[i];
+              break;
+            }
+          }
+          let laneClock = "";
+          if(laneDoc?.at){
+            const d = new Date(laneDoc.at);
+            if(!Number.isNaN(d.getTime())){
+              try { laneClock = d.toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" }); }
+              catch(_e){ laneClock = safeTrim(laneDoc.at); }
+            }
+          }
           return {
             id: safeTrim(rec.id),
             rec,
@@ -30135,7 +32008,13 @@ UsersGateUI.init();
             waitLabel: formatRelativeTimeHe(stamp) || "—",
             statusLabel: this.bucketLabel(bucket),
             agentName: safeTrim(assign?.agentName) || "לא משויך",
-            salesAgentName: safeTrim(rec.agentName) || "—"
+            salesAgentName: safeTrim(rec.agentName) || "—",
+            laneKey,
+            laneLabel: (typeof OpsThreadLane !== "undefined" && OpsThreadLane.getLabel)
+              ? (OpsThreadLane.getLabel(laneKey) || "")
+              : "",
+            laneBy: safeTrim(laneDoc?.by),
+            laneClock
           };
         })
         .sort((a, b) => new Date(a.arrival || a.stamp || 0) - new Date(b.arrival || b.stamp || 0));
@@ -30188,12 +32067,11 @@ UsersGateUI.init();
 
     filterWaitingMirrorRowsByLane(rows){
       const list = Array.isArray(rows) ? rows : [];
-      const scheduledIds = this.scheduledMirrorCustomerIds();
       const lane = safeTrim(this._waitingMirrorLane) || "no_answer_1";
       const counts = {};
       this.WAITING_MIRROR_LANES.forEach((item) => { counts[item.key] = 0; });
       const tagged = list.map((row) => {
-        const key = this.waitingMirrorLaneOf(row, scheduledIds);
+        const key = safeTrim(row.laneKey) || "no_answer_1";
         counts[key] = (counts[key] || 0) + 1;
         return { row, key };
       });
@@ -30285,9 +32163,9 @@ UsersGateUI.init();
       const safeTotal = Math.max(0, Number(total) || 0);
       if(!safeTotal) return "conic-gradient(#dbe4f3 0deg 360deg)";
       const colors = {
-        waiting_mirror: "#93c5fd",
-        waiting_typing: "#2563eb",
-        pending_signatures: "#1e3a8a"
+        waiting_mirror: "#17324d",
+        waiting_typing: "#0e6b6a",
+        pending_signatures: "#b45309"
       };
       let acc = 0;
       const parts = status.map((item) => {
@@ -30299,32 +32177,69 @@ UsersGateUI.init();
       return `conic-gradient(${parts.join(", ")})`;
     },
 
+    kpiIcon(key){
+      const icons = {
+        waiting_mirror: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.4 18.2a4.4 4.4 0 0 1-.25-8.75 5.4 5.4 0 0 1 10.45 1.55A3.7 3.7 0 0 1 18.2 18.2H7.4Z"/><path d="M12 14.6V9.4"/><path d="M9.85 11.2 12 9.05l2.15 2.15"/></svg>',
+        waiting_typing: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.4 5.6 18.4 10.6"/><path d="M5.2 18.8 6.5 14.2 15.7 5a1.55 1.55 0 0 1 2.2 0l1.1 1.1a1.55 1.55 0 0 1 0 2.2L9.8 17.5 5.2 18.8Z"/></svg>',
+        pending_signatures: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.8 5.4 18.6 10.2"/><path d="M5.4 18.6 6.9 14.1 15.5 5.5a1.45 1.45 0 0 1 2.05 0l1.05 1.05a1.45 1.45 0 0 1 0 2.05L10 17.25 5.4 18.6Z"/><path d="M4.6 20.4c1.55-.25 2.9.25 4.15.85 1.4.7 2.7 1 4.1.15"/></svg>',
+        issuance: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4.6h6.4L18 8.2v10.3A1.5 1.5 0 0 1 16.5 20h-8A1.5 1.5 0 0 1 7 18.5v-12A1.9 1.9 0 0 1 8 4.6Z"/><path d="M14.4 4.6V8H18"/><path d="M9.2 12.2h4.2"/><path d="M9.2 15h2.4"/><path d="M14.1 15.1 15.5 16.5 18 13.9"/></svg>'
+      };
+      return icons[key] || icons.waiting_mirror;
+    },
+
     renderAgentRows(agents){
       if(!agents.length){
         return `<div class="opsDashEmpty opsDashEmpty--agents">אין עדיין נציגי תפעול במערכת — ברגע שיתווספו, המעקב החי יופיע כאן</div>`;
       }
       return agents.map((agent) => {
-        const liveAttrs = agent.live
-          ? ` data-ops-agent-started="${escapeHtml(agent.startedAt)}" data-ops-agent-paused="${agent.paused ? "1" : "0"}" data-ops-agent-paused-sec="${escapeHtml(String(agent.seconds))}"`
+        const ticking = !!(agent.startedAt && (agent.live || agent.connected));
+        const liveAttrs = ticking
+          ? ` data-ops-agent-started="${escapeHtml(agent.startedAt)}" data-ops-agent-paused="${agent.live && agent.paused ? "1" : "0"}" data-ops-agent-paused-sec="${escapeHtml(String(agent.live && agent.paused ? agent.seconds : 0))}"`
           : "";
         const openAttr = agent.customerId ? ` data-ops-dash-open="${escapeHtml(agent.customerId)}"` : "";
+        const rowClass = agent.live ? " is-live" : (agent.connected ? " is-connected" : " is-idle");
+        const chipClass = agent.live ? "opsDashAgent__chip--live" : (agent.connected ? "opsDashAgent__chip--online" : "opsDashAgent__chip--off");
+        const chipTxt = agent.live ? "בשיחה" : (agent.connected ? "מחובר" : "לא מחובר");
+        const whoHtml = agent.live
+          ? `<span class="opsDashAgent__who is-live"><span class="opsDashAgent__whoLbl">בשיחה עם</span> <strong class="opsDashAgent__whoName">${escapeHtml(agent.customerName)}</strong></span>`
+          : (agent.connected
+            ? `<span class="opsDashAgent__who"><span class="opsDashAgent__whoName">זמין לקליטה</span></span>`
+            : `<span class="opsDashAgent__who"><span class="opsDashAgent__whoName">לא מחובר</span></span>`);
+        const clockHtml = (agent.live || agent.connected)
+          ? `<span class="opsDashAgent__clock" dir="ltr">${agent.connected && !agent.live ? "זמין " : ""}${escapeHtml(agent.clock)}</span>`
+          : "";
         return `
-          <button class="opsDashAgent${agent.live ? " is-live" : " is-idle"}" type="button"${liveAttrs}${openAttr} ${agent.customerId ? "" : "disabled"}>
+          <button class="opsDashAgent${rowClass}" type="button"${liveAttrs}${openAttr} ${agent.customerId ? "" : "disabled"}>
             <span class="opsDashAgent__avatar opsDashAgent__avatar--t${agent.tone}" aria-hidden="true">${escapeHtml(agent.initials)}</span>
             <span class="opsDashAgent__meta">
               <strong class="opsDashAgent__name">${escapeHtml(agent.name)}</strong>
-              <span class="opsDashAgent__customer">${agent.live ? `לקוח: ${escapeHtml(agent.customerName)}` : "פנוי"}</span>
+              ${whoHtml}
             </span>
-            ${agent.live
-              ? `<span class="opsDashAgent__step">${escapeHtml(agent.stepLabel)}</span>`
-              : `<span class="opsDashAgent__idleBadge">לא בשיחה</span>`}
-            <span class="opsDashAgent__clock" dir="ltr">${escapeHtml(agent.clock)}</span>
-            <span class="opsDashAgent__live">
-              <span class="opsDashAgent__liveDot" aria-hidden="true"></span>
-              <span class="opsDashAgent__liveTxt">${agent.live ? "LIVE" : "—"}</span>
+            <span class="opsDashAgent__aside">
+              <span class="opsDashAgent__chip ${chipClass}"><span class="opsDashAgent__chipDot" aria-hidden="true"></span>${chipTxt}</span>
+              ${clockHtml}
             </span>
           </button>`;
       }).join("");
+    },
+
+    refreshAgentRows(){
+      try{
+        if(typeof Auth === "undefined" || !Auth.isOps || !Auth.isOps()) return false;
+      }catch(_e){ return false; }
+      const mount = this.root();
+      const wrap = mount?.querySelector(".opsDashAgents");
+      if(!wrap) return false;
+      wrap.innerHTML = this.renderAgentRows(this.collectLiveAgents());
+      wrap.querySelectorAll("[data-ops-dash-open]").forEach((btn) => {
+        on(btn, "click", () => {
+          const id = safeTrim(btn.getAttribute("data-ops-dash-open"));
+          if(!id) return;
+          try { CustomersUI.openByIdWithLoader(id, 900); } catch(_e){}
+        });
+      });
+      this.startTimerLoop(mount);
+      return true;
     },
 
     renderWaitingMirrorList(rows, isManager, emptyText){
@@ -30344,6 +32259,8 @@ UsersGateUI.init();
                     <span>ת״ז ${escapeHtml(safeTrim(row.rec.idNumber) || "—")}</span>
                     <span>טל׳ ${escapeHtml(safeTrim(row.rec.phone) || "—")}</span>
                     <span>נציג מכירות: ${escapeHtml(row.salesAgentName)}</span>
+                    ${row.laneLabel ? `<span>סטטוס: ${escapeHtml(row.laneLabel)}</span>` : ""}
+                    ${row.laneBy ? `<span>שיקף: ${escapeHtml(row.laneBy)}${row.laneClock ? " · " + escapeHtml(row.laneClock) : ""}</span>` : ""}
                   </div>
                 </div>
                 <div class="opsDashQueueRow__side">
@@ -30467,7 +32384,7 @@ UsersGateUI.init();
       const model = this.buildModel();
       const isManager = !!Auth.isOps();
       const name = safeTrim(Auth?.current?.name) || (isManager ? "מנהל תפעול" : "נציג תפעול");
-      const roleLabel = isManager ? "מנהל תפעול" : "נציג תפעול";
+      const helloText = `${getTimeGreeting()}, ${name}`;
       if(UI.els.pageTitle) UI.els.pageTitle.textContent = "דשבורד תפעול";
       const listBucket = safeTrim(this._listBucket);
 
@@ -30477,7 +32394,10 @@ UsersGateUI.init();
         return `
           <article class="opsDashKpi card${active}" data-ops-dash-bucket="${escapeHtml(key)}">
             <div class="opsDashKpi__label">${escapeHtml(title)}</div>
-            <div class="opsDashKpi__value">${escapeHtml(String(item.count))}</div>
+            <div class="opsDashKpi__row">
+              <span class="opsDashKpi__icon" aria-hidden="true">${this.kpiIcon(key)}</span>
+              <div class="opsDashKpi__value">${escapeHtml(String(item.count))}</div>
+            </div>
             <div class="opsDashKpi__premium">סה״כ פרמיה <strong>${escapeHtml(this.formatMoney(item.premium))}</strong></div>
           </article>`;
       };
@@ -30498,10 +32418,6 @@ UsersGateUI.init();
             <strong class="opsDashLegend__count">${statusTotal} <span class="opsDashLegend__pct">(${statusTotal ? 100 : 0}%)</span></strong>
           </div>`;
 
-      const iconPhone = `<svg class="opsDashActIcon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7v2.2c0 .5-.2 1-.5 1.4L3.2 15A1.5 1.5 0 0 0 4.5 17.3h15a1.5 1.5 0 0 0 1.3-2.3l-1.3-2.4c-.3-.4-.5-.9-.5-1.4V9a7 7 0 0 0-7-7Zm0 18a3.2 3.2 0 0 0 3-2H9a3.2 3.2 0 0 0 3 2Z"/></svg>`;
-      const iconUsers = `<svg class="opsDashActIcon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M9 11a3.5 3.5 0 1 0-3.5-3.5A3.5 3.5 0 0 0 9 11Zm6 0a3 3 0 1 0-3-3 3 3 0 0 0 3 3ZM3.8 18.6A5.7 5.7 0 0 1 9 15.5a5.7 5.7 0 0 1 5.2 3.1 1 1 0 0 1-.9 1.4H4.7a1 1 0 0 1-.9-1.4Zm10.5-.1A7.4 7.4 0 0 1 15 15.5a4.8 4.8 0 0 1 4.5 2.8 1 1 0 0 1-.9 1.5h-3.4a2.2 2.2 0 0 1-.9-.3Z"/></svg>`;
-      const iconDoc = `<svg class="opsDashActIcon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 2h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm7 1.5V8h4.5L14 3.5ZM8 12h8v1.6H8V12Zm0 3.4h8V17H8v-1.6Zm0-6.8h5V10H8V8.6Z"/></svg>`;
-
       const waitingLane = listBucket === "waiting_mirror"
         ? this.filterWaitingMirrorRowsByLane(model.waitingMirrorRows)
         : null;
@@ -30511,8 +32427,8 @@ UsersGateUI.init();
               <div>
                 <div class="opsDashPanel__title">ממתינים לשיקוף</div>
                 <div class="opsDashPanel__sub">${isManager
-                  ? "לקוחות שנסגרו באשף בריאות וסיכונים · לפי סדר כניסה לתור"
-                  : "לקוחות ששויכו אליך וממתינים לשיחת שיקוף"}</div>
+                  ? "הצעות שהוגשו לתפעול · לפי סדר כניסה לתור"
+                  : "הצעות ששויכו אליך וממתינות לשיחת שיקוף"}</div>
               </div>
               <div class="opsDashPanel__headActions">
                 <span class="opsDashPanel__sub">${model.waitingMirrorRows.length} לקוחות</span>
@@ -30565,19 +32481,23 @@ UsersGateUI.init();
       const queueHtml = listBucket === "waiting_typing"
         ? typingListHtml
         : (listBucket === "waiting_mirror" ? waitingListHtml : "");
-      const agentsHtml = listBucket ? "" : `<div class="opsDash__mid opsDash__mid--agents">
+      const agentsLive = model.agentsLive || [];
+      const agentsConnected = agentsLive.filter((a) => a.live || a.connected).length;
+      const agentsInCall = agentsLive.filter((a) => a.live).length;
+      const agentsHtml = (!listBucket && isManager) ? `<div class="opsDash__mid opsDash__mid--agents">
             <article class="card opsDashPanel opsDashPanel--agents">
               <div class="opsDashPanel__head">
-                <div class="opsDashPanel__title">מעקב נציגים בשיחה</div>
-                <div class="opsDashPanel__sub">שידור חי · מונה שיחה</div>
+                <div class="opsDashPanel__title">נציגים מחוברים</div>
+                <div class="opsDashPanel__sub">שידור חי · ${agentsConnected} מחוברים · ${agentsInCall} בשיחה</div>
               </div>
-              <div class="opsDashAgents">${this.renderAgentRows(model.agentsLive)}</div>
+              <div class="opsDashAgents">${this.renderAgentRows(agentsLive)}</div>
             </article>
             <article class="card opsDashPanel opsDashPanel--status">
               <div class="opsDashPanel__head">
                 <div class="opsDashPanel__title">פילוח סטטוס</div>
+                <div class="opsDashPanel__sub">סה״כ תיקים פעילים</div>
               </div>
-              <div class="opsDashStatus opsDashStatus--stack">
+              <div class="opsDashStatus opsDashStatus--row">
                 <div class="opsDashDonut" style="background:${this.donutStyle(model.status, statusTotal)}" aria-hidden="true">
                   <div class="opsDashDonut__hole">
                     <strong>${statusTotal}</strong>
@@ -30587,26 +32507,18 @@ UsersGateUI.init();
                 <div class="opsDashLegend">${legendHtml}</div>
               </div>
             </article>
-          </div>`;
+          </div>` : "";
 
       mount.innerHTML = `
-        <section class="opsDash${listBucket ? " opsDash--queueScreen" : " opsDash--home"}" dir="rtl" aria-label="${listBucket ? "חוצץ תפעול" : "דשבורד תפעול"}">
+        <section class="opsDash${listBucket ? " opsDash--queueScreen" : " opsDash--home"}${listBucket === "waiting_mirror" ? " opsDash--waitingHead" : ""}" dir="rtl" aria-label="${listBucket ? "חוצץ תפעול" : "דשבורד תפעול"}">
           <header class="opsDash__head">
             <div>
-              <div class="opsDash__kicker">${escapeHtml(roleLabel)}</div>
-              <h1 class="opsDash__title">${escapeHtml(getTimeGreeting() + " " + name)}</h1>
-              <p class="opsDash__sub">${listBucket
-                ? (listBucket === "waiting_typing" ? "מסך ממתינים להקלדה" : "מסך ממתינים לשיקוף")
-                : (isManager
-                  ? "מעקב חי אחרי נציגי התפעול בשיחת שיקוף"
-                  : "מוצגים רק הלקוחות ששויכו אליך לטיפול")}</p>
+              <h1 class="opsDash__hello">${escapeHtml(helloText)}</h1>
             </div>
             <div class="opsDash__actions">
               ${listBucket
                 ? `<button class="btn opsDashAct" type="button" data-ops-dash-back>חזרה לדשבורד</button>`
-                : `<button class="btn btn--primary opsDashAct" type="button" data-ops-dash-go="mirrorCall">${iconPhone}<span>שיחת שיקוף</span></button>
-              ${isManager ? `<button class="btn opsDashAct" type="button" data-ops-dash-go="mirrorAssignments">${iconUsers}<span>שיוכי שיקוף</span></button>
-              <button class="btn opsDashAct" type="button" data-ops-dash-go="myProcesses">${iconDoc}<span>התהליכים שלי</span></button>` : ""}`}
+                : ""}
             </div>
           </header>
 
@@ -30856,10 +32768,15 @@ UsersGateUI.init();
         this.field("טלפון נייד", snap.contact.phone, chg("personal", "טלפון נייד")) +
         this.field("דוא״ל", snap.contact.email, chg("personal", "דוא״ל")) +
         this.field("כתובת", snap.contact.address || primary.address, chg("personal", "כתובת") || chg("personal", pLabel("כתובת"))) +
-        this.field("מיקוד", snap.contact.zip || primary.zip, chg("personal", "מיקוד") || chg("personal", pLabel("מיקוד")));
+        this.field("מיקוד", snap.contact.zip || primary.zip, chg("personal", "מיקוד") || chg("personal", pLabel("מיקוד"))) +
+        this.field("אופן קבלת דיוורים", snap.delivery?.method, chg("delivery", "אופן קבלת דיוורים")) +
+        this.field("אימייל למשלוח דיוורים", snap.delivery?.email, chg("delivery", "אימייל למשלוח דיוורים"));
 
-      const isBank = safeTrim(snap.payment.method) === "ho" || safeTrim(snap.payment.method) === "bank";
-      const payFields = isBank
+      const isBank = safeTrim(snap.payment.method) === "הוראת קבע" || safeTrim(snap.payment.method) === "ho" || safeTrim(snap.payment.method) === "bank";
+      const payFields =
+        this.field("אמצעי תשלום", snap.payment.method, chg("payment", "אמצעי תשלום")) +
+        this.field("זהות המשלם", snap.payment.payerChoice, chg("payment", "זהות המשלם")) +
+        (isBank
         ? this.field("שם הבנק", snap.payment.bankName, chg("payment", "שם הבנק")) +
           this.field("מספר בנק", snap.payment.bankNo, chg("payment", "מספר בנק")) +
           this.field("סניף", snap.payment.branch, chg("payment", "סניף")) +
@@ -30867,7 +32784,7 @@ UsersGateUI.init();
         : this.field("שם בעל הכרטיס", snap.payment.holderName, chg("payment", "שם בעל הכרטיס")) +
           this.field("ת״ז בעל הכרטיס", snap.payment.holderId, chg("payment", "ת״ז בעל הכרטיס")) +
           this.field("4 ספרות אחרונות", snap.payment.cardLast4, chg("payment", "4 ספרות אחרונות")) +
-          this.field("תוקף", snap.payment.exp, chg("payment", "תוקף כרטיס"));
+          this.field("תוקף", snap.payment.exp, chg("payment", "תוקף כרטיס")));
 
       const healthEntries = Object.values(snap.health || {});
       const multiIns = new Set(healthEntries.map((x) => safeTrim(x.insuredLabel))).size > 1;
@@ -30877,6 +32794,27 @@ UsersGateUI.init();
             return this.field(label, item.value, chg("health", label));
           }).join("")
         : "";
+
+      const benefEntries = Object.values(snap.beneficiaries || {});
+      const benefFields = benefEntries.map((item) => {
+        const title = item.title || "פוליסה";
+        return this.field(`${title} · יורשים חוקיים`, item.legalHeirs, chg("beneficiaries", `${title} · יורשים חוקיים`)) +
+          this.field(`${title} · מוטבים`, item.beneficiaries, chg("beneficiaries", `${title} · מוטבים`)) +
+          this.field(`${title} · בנקים משעבדים`, item.pledgeBanks, chg("beneficiaries", `${title} · בנקים משעבדים`));
+      }).join("");
+
+      const cancelEntries = Object.values(snap.cancel?.policies || {});
+      const cancelFields = cancelEntries.map((item) => {
+        const title = item.title || "פוליסה";
+        return this.field(`${title} · אישור ביטול`, item.confirmed, chg("cancel", `${title} · אישור ביטול`)) +
+          this.field(`${title} · אופן ביצוע ביטול`, item.executionMethod, chg("cancel", `${title} · אופן ביצוע ביטול`));
+      }).join("") +
+        this.field("השארת כיסוי קיים", snap.cancel?.keepExisting, chg("cancel", "השארת כיסוי קיים")) +
+        this.field("אישור תוספת לכיסוי קיים", snap.cancel?.approveAddition, chg("cancel", "אישור תוספת לכיסוי קיים"));
+      const cancelHasRows = !!(report.areas.find((a) => a.key === "cancel")?.rows.length
+        || cancelEntries.length
+        || safeTrim(snap.cancel?.keepExisting)
+        || safeTrim(snap.cancel?.approveAddition));
 
       let policies = [];
       try{ policies = (getCustomerRawNewPolicies(rec) || []).filter((p) => String(p?.origin || "") !== "existing"); }catch(_e){ policies = []; }
@@ -30894,8 +32832,8 @@ UsersGateUI.init();
       const changeTableHtml = changeRows.length ? `
           <div class="mtqSectionBlock mtqPanel" id="mtqPktChanges">
             <div class="mtqPanel__head">
-              <h2 class="mtqPanel__title">סיכום שינויי שיקוף</h2>
-              <span class="mtqPanel__hint">למעקב מהיר של מקליד</span>
+              <h2 class="mtqPanel__title">דוח תיקוני הצעה</h2>
+              <span class="mtqPanel__hint">כל השינויים שבוצעו בשיחת השיקוף</span>
             </div>
             <div class="mtqPanel__body" style="padding-top:0;padding-bottom:12px">
               <table class="mtqChgTable" style="margin-top:12px">
@@ -30920,7 +32858,9 @@ UsersGateUI.init();
         ["mtqPktContact", "יצירת קשר וכתובת"],
         ["mtqPktPay", "אמצעי תשלום"],
         healthFields ? ["mtqPktHealth", "הצהרת בריאות"] : null,
-        changeTableHtml ? ["mtqPktChanges", "סיכום שינויי שיקוף"] : null,
+        benefFields ? ["mtqPktBenef", "מוטבים ושעבוד"] : null,
+        cancelHasRows ? ["mtqPktCancel", "שאלון ביטול"] : null,
+        changeTableHtml ? ["mtqPktChanges", "דוח תיקוני הצעה"] : null,
         productFields ? ["mtqPktProduct", "פוליסות / מוצר"] : null
       ].filter(Boolean);
 
@@ -30954,9 +32894,11 @@ UsersGateUI.init();
 
           <div>
             ${this.section("mtqPktId", "פרטי לקוח", `<span class="mtqPanel__hint">מזהים בסיסיים</span>`, idFields)}
-            ${this.section("mtqPktContact", "יצירת קשר וכתובת", sectionHasChange(["טלפון נייד", "דוא״ל", "כתובת", "מיקוד"], "personal") ? changedBadge : `<span class="mtqPanel__hint">פרטי התקשרות</span>`, contactFields)}
+            ${this.section("mtqPktContact", "יצירת קשר וכתובת", (sectionHasChange(["טלפון נייד", "דוא״ל", "כתובת", "מיקוד"], "personal") || report.areas.find((a) => a.key === "delivery")?.rows.length) ? changedBadge : `<span class="mtqPanel__hint">פרטי התקשרות</span>`, contactFields)}
             ${this.section("mtqPktPay", "אמצעי תשלום", report.areas.find((a) => a.key === "payment")?.rows.length ? changedBadge : `<span class="mtqPanel__hint">${isBank ? "הוראת קבע" : "כרטיס אשראי"}</span>`, payFields)}
             ${healthFields ? this.section("mtqPktHealth", "הצהרת בריאות — סיכום לשיקוף", report.areas.find((a) => a.key === "health")?.rows.length ? changedBadge : `<span class="mtqPanel__hint">כפי שנשמר בתיק</span>`, healthFields) : ""}
+            ${benefFields ? this.section("mtqPktBenef", "מוטבים ושעבוד", report.areas.find((a) => a.key === "beneficiaries")?.rows.length ? changedBadge : `<span class="mtqPanel__hint">כפי שנשמר בתיק</span>`, benefFields) : ""}
+            ${cancelHasRows ? this.section("mtqPktCancel", "שאלון ביטול", report.areas.find((a) => a.key === "cancel")?.rows.length ? changedBadge : `<span class="mtqPanel__hint">כפי שנשמר בתיק</span>`, cancelFields) : ""}
             ${changeTableHtml}
             ${productFields ? this.section("mtqPktProduct", "מוצר להקלדה", `<span class="mtqPanel__hint">${policies.length} פוליסות</span>`, productFields) : ""}
           </div>
@@ -31213,6 +33155,8 @@ UsersGateUI.init();
     _shouldDeferLocalMetricsToServer(){
       try {
         if(typeof Storage !== "undefined" && Storage.isLargeCustomersSession?.()) return true;
+        if(typeof Storage !== "undefined" && Storage.isTeamManagerLightSession?.()) return true;
+        if(typeof Storage !== "undefined" && Storage.isHeavyRosterSession?.()) return true;
         if(this._countMissingCustomerPayloadsSafe() > 0) return true;
         const n = Array.isArray(State.data?.customers) ? State.data.customers.length : 0;
         if(n === 0 && !App?._fullDataReady) return true;
@@ -31935,8 +33879,104 @@ UsersGateUI.init();
       return { start, end };
     },
 
+    /** אחרי מכירה חדשה: שוברים מטמון «נמכר היום» + מטמון RPC של 45ש, בלי לגעת בחישוב פרמיה. */
+    invalidateTodaySalesLive(){
+      try {
+        this._todaySalesCacheKey = "";
+        this._todaySalesCache = null;
+        this._lastKpiPaintFp = "";
+        // לא מוחקים את המספר האחרון מה-overlay — רק מפקיעים את מטמון ה-45ש כדי לא לקפוץ ל־₪0.
+        if(this._todaySalesServerOverlay && typeof this._todaySalesServerOverlay === "object"){
+          this._todaySalesServerOverlay.at = 0;
+        }
+      } catch(_e) {}
+      const now = Date.now();
+      const lastForce = Number(this._todaySalesForceAt) || 0;
+      if(!lastForce || (now - lastForce) > 400){
+        this._todaySalesForceAt = now;
+        try { this.ensureTodaySalesServerOverlay({ force: true }); } catch(_e) {}
+        try { this._scheduleTodaySalesOverlayRetry(); } catch(_e) {}
+        try {
+          this._metricsCacheKey = "";
+          this._localMetricsAttemptedKey = "";
+          this.compareServerKpis?.(this._metricsCache);
+        } catch(_e) {}
+      }
+      try {
+        if(typeof LiveRefresh !== "undefined" && LiveRefresh.getCurrentView?.() === "dashboard"){
+          this.scheduleRefreshKpis();
+        }
+      } catch(_e) {}
+    },
+
+    _scheduleTodaySalesOverlayRetry(){
+      const delays = [900, 2800];
+      if(Array.isArray(this._todaySalesRetryTimers)){
+        this._todaySalesRetryTimers.forEach((id) => { try { window.clearTimeout(id); } catch(_e) {} });
+      }
+      this._todaySalesRetryTimers = delays.map((ms) => window.setTimeout(() => {
+        try { this.ensureTodaySalesServerOverlay({ force: true }); } catch(_e) {}
+        try { this.compareServerKpis?.(this._metricsCache); } catch(_e) {}
+        try { this.scheduleRefreshKpis(); } catch(_e) {}
+      }, ms));
+    },
+
+    /** מיזוג overlay יומי: לא מחליפים סכום מקומי גבוה יותר ב-RPC ישן. חישוב פרמיה לא משתנה. */
+    _resolveTodaySalesOverlayMerge(localResult, serverOverlay, missingPayloads){
+      if(!localResult || !serverOverlay?.ok) return localResult;
+      const localPrem = Number(localResult.totalPremium) || 0;
+      const localPol = Number(localResult.totalPolicies) || 0;
+      const localEmpty = !(localPrem > 0 || localPol > 0);
+      const serverPrem = Number(serverOverlay.totalPremium) || 0;
+      const serverPol = Number(serverOverlay.totalPolicies) || 0;
+      const serverHigher = serverPrem > localPrem || (serverPrem === localPrem && serverPol > localPol);
+      const serverBreakdown = Array.isArray(serverOverlay.breakdown) ? serverOverlay.breakdown : [];
+      const localBreakdown = Array.isArray(localResult.breakdown) ? localResult.breakdown : [];
+      const resolvedBreakdown = this._mergeTodayCompanyBreakdown(localBreakdown, serverBreakdown);
+      if(localEmpty || ((Number(missingPayloads) || 0) > 0 && serverHigher)){
+        return {
+          totalPremium: serverPrem,
+          totalPolicies: serverPol,
+          newClients: Number(serverOverlay.newClients) || 0,
+          breakdown: resolvedBreakdown,
+          _loading: false,
+          _fromServer: true
+        };
+      }
+      if(serverBreakdown.length){
+        return { ...localResult, breakdown: resolvedBreakdown };
+      }
+      return localResult;
+    },
+
+    _shouldPaintTodayOverlayValue(overlayPrem, localPrem){
+      return !(Number(localPrem) > Number(overlayPrem));
+    },
+
+    /**
+     * האם למלא «פרמיה חודשית נטו» מ-RPC.
+     * לא משנה policyNetPremium / שיוך / טווח חודש — רק איזה מקור מוצג.
+     * חוסר: אל תדרוס סכום מקומי גבוה ב-RPC נמוך.
+     * עודף: כשהחישוב המקומי מוכן, אל תעבור ל-RPC רק כי הוא גדול יותר.
+     */
+    _shouldApplyServerNetOverlay(opts){
+      opts = opts && typeof opts === "object" ? opts : {};
+      const localNet = Number(opts.localNet) || 0;
+      const serverNet = Number(opts.serverNet) || 0;
+      const missingCustomers = Number(opts.missingCustomers) || 0;
+      const localReady = opts.localReady === true;
+      const localHasNet = opts.localHasNet === true || localNet > 0;
+      if(!(serverNet > 0) && localNet > 0) return false;
+      if(serverNet > 0 && serverNet < localNet) return false;
+      const hydrating = missingCustomers > 0 || localReady !== true;
+      if(!hydrating && localHasNet) return false;
+      if(serverNet > localNet) return true;
+      if(!(localNet > 0) && serverNet > 0) return true;
+      return false;
+    },
+
     /** GI-FIX: מנהל/טעינה רזה — «נמכר היום» מ-RPC (gi_dashboard_net_premium בטווח היום = בריאות/סיכונים בלבד). */
-    ensureTodaySalesServerOverlay(){
+    ensureTodaySalesServerOverlay(options = {}){
       if(this._todaySalesServerBusy) return;
       if(typeof Storage === "undefined" || typeof Storage.loadServerKpis !== "function") return;
       const todayRange = this.getTodayRange();
@@ -31948,11 +33988,12 @@ UsersGateUI.init();
       if(this._todaySalesServerOverlay?.dayKey && this._todaySalesServerOverlay.dayKey !== dayKey){
         this._todaySalesPreReadyRetries = 0;
       }
+      const force = options && options.force === true;
       // GI-FACE-FREEZE: ₪0 לפני שהסשן מוכן — ניסיון נוסף אחד, בלי לולאה כל 2.5ש.
-      if(cachedOk && (cachedHasMoney || App?._fullDataReady)){
+      if(!force && cachedOk && (cachedHasMoney || App?._fullDataReady)){
         return;
       }
-      if(cachedOk && !cachedHasMoney && !App?._fullDataReady){
+      if(!force && cachedOk && !cachedHasMoney && !App?._fullDataReady){
         if(ageMs < 4000 || (Number(this._todaySalesPreReadyRetries) || 0) >= 1){
           return;
         }
@@ -32106,24 +34147,10 @@ UsersGateUI.init();
 
       // מנהל בטעינה רזה: עדיפות ל-RPC יומי לסכומים;
       // פירוט לפי חברה — איחוד מקומי + RPC, כדי שלא תיעלם חברה (למשל כלל) אם אחד המקורות חלקי.
+      // GI-TODAY-LIVE: overlay ישן (מטמון 45ש) לא דורס סכום מקומי גבוה יותר אחרי מכירה חדשה.
       const serverOverlay = this._todaySalesServerOverlay;
       if(serverOverlay?.ok && serverOverlay.dayKey === dayKey){
-        const localEmpty = !(result.totalPremium > 0 || result.totalPolicies > 0);
-        const serverBreakdown = Array.isArray(serverOverlay.breakdown) ? serverOverlay.breakdown : [];
-        const resolvedBreakdown = this._mergeTodayCompanyBreakdown(breakdown, serverBreakdown);
-        // בזמן hydration — תמיד RPC לסכומים (גם אם יש סכום מקומי חלקי) כדי למנוע קפיצות
-        if(missingPayloads > 0 || localEmpty){
-          result = {
-            totalPremium: Number(serverOverlay.totalPremium) || 0,
-            totalPolicies: Number(serverOverlay.totalPolicies) || 0,
-            newClients: Number(serverOverlay.newClients) || 0,
-            breakdown: resolvedBreakdown,
-            _loading: false,
-            _fromServer: true
-          };
-        } else if(serverBreakdown.length){
-          result = { ...result, breakdown: resolvedBreakdown };
-        }
+        result = this._resolveTodaySalesOverlayMerge(result, serverOverlay, missingPayloads) || result;
       } else if(deferToServer && !(result.totalPremium > 0)){
         // עדיין מחכים ל-RPC — לא לנעול מטמון על אפס
         try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
@@ -33105,6 +35132,118 @@ UsersGateUI.init();
       return !!(tab && (tab.printView || tab.key === "all"));
     },
 
+    /* קריאה בלבד: אותו נתון כמו כרטיס «פרמייה מהפקה» בדשבורד. לא משנה חישוב. */
+    dailySalesIssuedPremiumTotal(){
+      try {
+        if(typeof DailyReportStore !== "undefined" && DailyReportStore.getIssuedPremiumMetrics){
+          const issued = DailyReportStore.getIssuedPremiumMetrics();
+          return {
+            total: Number(issued?.totalPremium) || 0,
+            policyCount: Number(issued?.policyCount) || 0,
+            hasReport: !!issued?.hasReport
+          };
+        }
+      } catch(_e) {}
+      return { total: 0, policyCount: 0, hasReport: false };
+    },
+
+    /* קריאה בלבד: כמה לידים שויכו ביום הדוח — אותו סינון יום כמו מערכת הלידים. */
+    dailySalesAssignedLeadsCount(dateKey){
+      const day = safeTrim(dateKey);
+      if(!day) return 0;
+      try {
+        const raw = (typeof CampaignLeadsStore !== "undefined" && Array.isArray(CampaignLeadsStore.leads))
+          ? CampaignLeadsStore.leads
+          : [];
+        const scoped = typeof scopeElderlyCampaignLeads === "function"
+          ? scopeElderlyCampaignLeads(raw)
+          : raw;
+        const forDay = scoped.filter((l) => {
+          try {
+            return typeof campaignLeadMatchesDateIL === "function"
+              ? campaignLeadMatchesDateIL(l, day)
+              : false;
+          } catch(_e) { return false; }
+        });
+        return forDay.filter((l) => {
+          const id = safeTrim(l?.assignedAgentId);
+          const name = safeTrim(l?.assignedAgentName);
+          if(id) return true;
+          return !!(name && name !== "—" && name !== "לא שויך");
+        }).length;
+      } catch(_e) { return 0; }
+    },
+
+    /* קריאה בלבד: ה-KPI «לידים שויכו» קורא מ-CampaignLeadsStore.leads.
+       המערך מתמלא ב-fetchAll / hydrateFromCacheIfEmpty — בדרך כלל רק כשנפתחה
+       מערכת לידים. כאן קוראים לאותן מתודות קיימות, בלי לשנות שיוך או fetch. */
+    ensureDailySalesAssignedLeadsLoaded(options = {}){
+      try {
+        if(typeof CampaignLeadsStore !== "undefined" && typeof CampaignLeadsStore.hydrateFromCacheIfEmpty === "function"){
+          CampaignLeadsStore.hydrateFromCacheIfEmpty();
+        }
+      } catch(_e) {}
+      if(!options.force && this._dailySalesLeadsFetchPromise) return this._dailySalesLeadsFetchPromise;
+      const store = (typeof CampaignLeadsStore !== "undefined") ? CampaignLeadsStore : null;
+      if(!store || typeof store.fetchAll !== "function"){
+        return Promise.resolve({ ok: false, skipped: true });
+      }
+      const p = Promise.resolve()
+        .then(() => store.fetchAll())
+        .then((r) => r || { ok: false })
+        .catch((err) => ({ ok: false, error: String((err && err.message) || err || "") }));
+      this._dailySalesLeadsFetchPromise = p;
+      return p;
+    },
+
+    _kickDailySalesAssignedLeadsLoad(){
+      if(this._dailySalesLeadsKickStarted) return;
+      this._dailySalesLeadsKickStarted = true;
+      void this.ensureDailySalesAssignedLeadsLoaded().then(() => {
+        this._paintDailySalesAssignedLeadsKpis();
+      });
+    },
+
+    _paintDailySalesAssignedLeadsKpis(){
+      try {
+        const kpisEl = document.getElementById("dailySalesKpis");
+        if(!kpisEl || kpisEl.hidden) return;
+        const report = this.buildDailyAgentSalesReport();
+        const model = this.buildDailySalesPrintModel(report);
+        kpisEl.innerHTML = this.renderDailySalesPrintKpisHtml(model);
+      } catch(_e) {}
+    },
+
+    /* אותו סל כמו KPI «פרמיה חודשית · בריאות + פרט» — בלי פנסיה/אלמנטרי. */
+    dailySalesOfficeBranchPremium(row){
+      return (Number(row?.health) || 0) + (Number(row?.prat) || 0) + (Number(row?.other) || 0);
+    },
+
+    /* נגזר משורות הדוח שכבר חושבו — בלי מעבר נוסף על לקוחות. */
+    dailySalesOfficeBranchTotals(rows){
+      const out = {
+        haifa: { premium: 0, agents: 0 },
+        modiin: { premium: 0, agents: 0 }
+      };
+      const seen = { haifa: new Set(), modiin: new Set() };
+      (Array.isArray(rows) ? rows : []).forEach((r) => {
+        const branch = typeof resolveOfficeBranchForSalesAgentName === "function"
+          ? resolveOfficeBranchForSalesAgentName(r?.agentName)
+          : "";
+        const bucket = branch === "חיפה" ? "haifa" : (branch === "מודיעין" ? "modiin" : "");
+        if(!bucket) return;
+        out[bucket].premium += this.dailySalesOfficeBranchPremium(r);
+        const name = safeTrim(r?.agentName);
+        if(name && !seen[bucket].has(name)){
+          seen[bucket].add(name);
+          out[bucket].agents += 1;
+        }
+      });
+      out.haifa.premium = Math.round(out.haifa.premium * 100) / 100;
+      out.modiin.premium = Math.round(out.modiin.premium * 100) / 100;
+      return out;
+    },
+
     /* תצוגה בלבד: אותו מודל כמו כפתור הדפסה / PDF / מייל. לא משנה חישוב פרמיה. */
     buildDailySalesPrintModel(forDate){
       const report = (forDate && typeof forDate === "object" && Array.isArray(forDate.groups))
@@ -33128,6 +35267,9 @@ UsersGateUI.init();
           weekday: "long", day: "numeric", month: "long", year: "numeric"
         }) + " · ישראל";
       } catch(_e) {}
+      const issuedPremium = this.dailySalesIssuedPremiumTotal();
+      const officeBranches = this.dailySalesOfficeBranchTotals(rows);
+      const assignedLeads = this.dailySalesAssignedLeadsCount(report.dateKey);
       return {
         report,
         rows,
@@ -33136,6 +35278,9 @@ UsersGateUI.init();
         agentCount,
         showPension,
         dateLine,
+        issuedPremium,
+        officeBranches,
+        assignedLeads,
         fileStem: this.dailySalesPrintFileStem(report.dateKey),
         issued: (() => {
           try {
@@ -33215,20 +35360,31 @@ UsersGateUI.init();
 
     renderDailySalesPrintKpisHtml(model){
       const money = (v) => this.dailySalesPrintMoney(v);
+      const issued = model.issuedPremium || { total: 0 };
+      const branches = model.officeBranches || { haifa: { premium: 0 }, modiin: { premium: 0 } };
       const cards = [
-        { value: String(model.agentCount), label: "נציגים שמכרו היום" },
-        { value: String(model.healthSlice.deals || 0), label: "פוליסות בריאות + פרט" },
+        { value: money(branches.modiin.premium), label: "מכירות מודיעין" },
+        { value: money(branches.haifa.premium), label: "מכירות חיפה" },
         { value: money(model.healthSlice.premium), label: "פרמיה חודשית · בריאות + פרט", hero: true },
-        { value: money(model.totals.elementary), label: "פרמיה שנתית · אלמנטרי", elem: true }
+        { value: money(issued.total), label: "פרמייה מהפקה", elem: true }
       ];
       if(model.showPension){
         cards.push({ value: money(model.totals.pension), label: "פרמיה חודשית · פנסיה" });
       }
-      return cards.map((c) => `
+      const main = cards.map((c) => `
         <article class="giDailySalesPage__kpi${c.hero ? " giDailySalesPage__kpi--hero" : ""}${c.elem ? " giDailySalesPage__kpi--elem" : ""}">
           <div class="giDailySalesPage__kpiLabel">${escapeHtml(c.label)}</div>
           <div class="giDailySalesPage__kpiValue">${escapeHtml(c.value)}</div>
         </article>`).join("");
+      const extra = [
+        { value: String(Number(model.assignedLeads) || 0), label: "לידים שויכו" }
+      ].map((c) => `
+        <article class="giDailySalesPage__kpi">
+          <div class="giDailySalesPage__kpiLabel">${escapeHtml(c.label)}</div>
+          <div class="giDailySalesPage__kpiValue">${escapeHtml(c.value)}</div>
+        </article>`).join("");
+      return `<div class="giDailySalesPage__kpiRow${model.showPension ? " is-five" : ""}">${main}</div>
+        <div class="giDailySalesPage__kpiRow giDailySalesPage__kpiRow--extra">${extra}</div>`;
     },
 
     buildDailySalesEmailHtml(forDate){
@@ -33261,18 +35417,23 @@ UsersGateUI.init();
       const pensionStat = model.showPension
         ? `<td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(model.totals.pension))}</b><span style="font-size:11px;color:#5b6b7c">פרמיה חודשית · פנסיה</span></td>`
         : "";
+      const issued = model.issuedPremium || { total: 0 };
+      const branches = model.officeBranches || { haifa: { premium: 0 }, modiin: { premium: 0 } };
       const html = `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>
       <body dir="rtl" style="margin:0;padding:24px;background:#fff;color:#122033;font-family:'Segoe UI','Arial Hebrew',Arial,sans-serif;direction:rtl;text-align:right;unicode-bidi:embed">
         <table dir="rtl" align="right" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:920px;margin:0 auto;direction:rtl;text-align:right"><tr><td dir="rtl" align="right" style="direction:rtl;text-align:right">
           <p style="margin:0 0 4px;font-size:11px;letter-spacing:.08em;color:#5b6b7c;font-weight:600;direction:rtl;text-align:right">GEMEL INVEST · דוח מכירות</p>
           <h1 style="margin:0;font-size:22px;color:#0b2a4a;direction:rtl;text-align:right">מכירות היום</h1>
           <p style="margin:4px 0 18px;font-size:13px;color:#3d4d5e;direction:rtl;text-align:right">${escapeHtml(model.dateLine)}</p>
-          <table dir="rtl" align="right" style="width:100%;border-collapse:collapse;margin:0 0 18px;direction:rtl;text-align:right"><tr>
-            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(String(model.agentCount))}</b><span style="font-size:11px;color:#5b6b7c">נציגים שמכרו היום</span></td>
-            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(String(model.healthSlice.deals || 0))}</b><span style="font-size:11px;color:#5b6b7c">פוליסות בריאות + פרט</span></td>
+          <table dir="rtl" align="right" style="width:100%;border-collapse:collapse;margin:0 0 10px;direction:rtl;text-align:right"><tr>
+            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(branches.modiin.premium))}</b><span style="font-size:11px;color:#5b6b7c">מכירות מודיעין</span></td>
+            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(branches.haifa.premium))}</b><span style="font-size:11px;color:#5b6b7c">מכירות חיפה</span></td>
             <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(model.healthSlice.premium))}</b><span style="font-size:11px;color:#5b6b7c">פרמיה חודשית · בריאות + פרט</span></td>
-            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(model.totals.elementary))}</b><span style="font-size:11px;color:#5b6b7c">פרמיה שנתית · אלמנטרי</span></td>
+            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(issued.total))}</b><span style="font-size:11px;color:#5b6b7c">פרמייה מהפקה</span></td>
             ${pensionStat}
+          </tr></table>
+          <table dir="rtl" align="right" style="width:auto;min-width:220px;border-collapse:collapse;margin:0 0 18px;direction:rtl;text-align:right"><tr>
+            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(String(Number(model.assignedLeads) || 0))}</b><span style="font-size:11px;color:#5b6b7c">לידים שויכו</span></td>
           </tr></table>
           <table dir="rtl" align="right" style="width:100%;border-collapse:collapse;font-size:12.5px;direction:rtl;text-align:right">
             <thead><tr>
@@ -33295,7 +35456,6 @@ UsersGateUI.init();
               <td style="background:#0b2a4a;color:#fff;font-weight:700;padding:10px;text-align:right">${escapeHtml(money(model.sums.monthly))}</td>
             </tr></tfoot>
           </table>
-          <p style="margin-top:14px;font-size:11px;color:#5b6b7c;line-height:1.5;direction:rtl;text-align:right">מוצגים רק נציגים עם מכירה ביום הנבחר. «פרט» הוא ענף הסיכונים במערכת. פרמיית בריאות, פרט ופנסיה היא חודשית. פרמיית אלמנטרי מוצגת שנתית ואינה נכנסת לסה״כ החודשי.</p>
         </td></tr></table>
       </body></html>`;
       return {
@@ -33306,7 +35466,10 @@ UsersGateUI.init();
           agentCount: model.agentCount,
           healthDeals: Number(model.healthSlice.deals) || 0,
           healthPremium: Number(model.healthSlice.premium) || 0,
-          elementary: Number(model.totals.elementary) || 0,
+          issuedPremium: Number(issued.total) || 0,
+          modiin: Number(branches.modiin.premium) || 0,
+          haifa: Number(branches.haifa.premium) || 0,
+          assignedLeads: Number(model.assignedLeads) || 0,
           pension: Number(model.totals.pension) || 0
         }
       };
@@ -33553,7 +35716,9 @@ UsersGateUI.init();
       }
       try {
         try { UI.renderSyncStatus?.("מרענן נתוני מכירות…", "warn"); } catch(_e) {}
+        const leadsP = this.ensureDailySalesAssignedLeadsLoaded({ force: true });
         const r = await Storage.loadSheets({ useCachedFallback: false });
+        try { await leadsP; } catch(_e) {}
         if(r?.ok){
           App.applyLoadResult(r, "נתוני מכירות עודכנו", { skipNavigation: true, skipLoginSideEffects: true });
           try { Storage.scheduleFullIdbCacheSave(State.data); } catch(_e) {}
@@ -33585,6 +35750,7 @@ UsersGateUI.init();
       this._ensureDailySalesPageBound();
       try { this._scheduleMidnightReset(); } catch(_e) {}
       try { this.ensureDailySalesServerOverlay(); } catch(_e) {}
+      try { this._kickDailySalesAssignedLeadsLoad(); } catch(_e) {}
       const report = this.buildDailyAgentSalesReport();
       const tab = this.getDailySalesSelectedSectorTab();
       const printView = this.dailySalesIsPrintViewTab(tab);
@@ -33641,7 +35807,7 @@ UsersGateUI.init();
         kpisEl.innerHTML = this.renderDailySalesPrintKpisHtml(model);
         kpisEl.hidden = false;
         kpisEl.setAttribute("aria-hidden", "false");
-        kpisEl.classList.toggle("is-five", !!model.showPension);
+        kpisEl.classList.remove("is-five");
       }
       if(sectorsEl) sectorsEl.innerHTML = this.renderDailySalesSectorTabsHtml(report);
       if(heroEl){
@@ -33684,11 +35850,14 @@ UsersGateUI.init();
       const tableEl = tbody?.closest?.("table");
       if(tableEl) tableEl.classList.toggle("giDailySalesPage__table--print", printView);
       if(noteEl){
-        noteEl.hidden = printView ? false : !tab.annual;
         if(printView){
-          noteEl.innerHTML = "מוצגים רק נציגים עם מכירה ביום הנבחר. «פרט» הוא ענף הסיכונים במערכת. פרמיית אלמנטרי מוצגת שנתית ואינה נכנסת לסה״כ החודשי.";
-        } else if(tab.annual){
-          noteEl.innerHTML = "אלמנטרי: הפרמיה המוצגת היא <b>פרמיה שנתית</b>.";
+          noteEl.hidden = true;
+          noteEl.innerHTML = "";
+        } else {
+          noteEl.hidden = !tab.annual;
+          if(tab.annual){
+            noteEl.innerHTML = "אלמנטרי: הפרמיה המוצגת היא <b>פרמיה שנתית</b>.";
+          }
         }
       }
       paintDateChrome();
@@ -34513,7 +36682,8 @@ UsersGateUI.init();
   .kicker { margin: 0 0 4px; font-size: 11px; letter-spacing: 0.08em; color: #5b6b7c; font-weight: 600; }
   h1 { margin: 0; font-size: 22px; line-height: 1.2; color: #0b2a4a; }
   .date { margin: 4px 0 0; font-size: 13px; color: #3d4d5e; }
-  .stats { display: grid; grid-template-columns: repeat(${statCount}, 1fr); gap: 10px; margin: 0 0 18px; }
+  .stats { display: grid; grid-template-columns: repeat(${statCount}, 1fr); gap: 10px; margin: 0 0 10px; }
+  .stats--extra { grid-template-columns: minmax(0, 1fr); max-width: 240px; margin: 0 0 18px; }
   .stat { border: 1px solid #d7dee6; padding: 10px 12px; }
   .stat b { display: block; font-size: 18px; color: #0b2a4a; margin-bottom: 2px; }
   .stat span { font-size: 11px; color: #5b6b7c; }
@@ -34541,6 +36711,8 @@ UsersGateUI.init();
       const pensionStat = model.showPension
         ? `<div class="stat"><b>${escapeHtml(money(model.totals.pension))}</b><span>פרמיה חודשית · פנסיה</span></div>`
         : "";
+      const issued = model.issuedPremium || { total: 0 };
+      const branches = model.officeBranches || { haifa: { premium: 0 }, modiin: { premium: 0 } };
       return `<div class="page">
   <header>
     <img class="logo" src="${escapeHtml(this.dailySalesPrintLogoSrc())}" alt="גמל INVEST"/>
@@ -34551,21 +36723,20 @@ UsersGateUI.init();
     </div>
   </header>
   <div class="stats">
-    <div class="stat"><b>${escapeHtml(String(model.agentCount))}</b><span>נציגים שמכרו היום</span></div>
-    <div class="stat"><b>${escapeHtml(String(model.healthSlice.deals || 0))}</b><span>פוליסות בריאות + פרט</span></div>
+    <div class="stat"><b>${escapeHtml(money(branches.modiin.premium))}</b><span>מכירות מודיעין</span></div>
+    <div class="stat"><b>${escapeHtml(money(branches.haifa.premium))}</b><span>מכירות חיפה</span></div>
     <div class="stat"><b>${escapeHtml(money(model.healthSlice.premium))}</b><span>פרמיה חודשית · בריאות + פרט</span></div>
-    <div class="stat"><b>${escapeHtml(money(model.totals.elementary))}</b><span>פרמיה שנתית · אלמנטרי</span></div>
+    <div class="stat"><b>${escapeHtml(money(issued.total))}</b><span>פרמייה מהפקה</span></div>
     ${pensionStat}
+  </div>
+  <div class="stats stats--extra">
+    <div class="stat"><b>${escapeHtml(String(Number(model.assignedLeads) || 0))}</b><span>לידים שויכו</span></div>
   </div>
   <table>
     <thead>${this.renderDailySalesPrintTheadHtml(model)}</thead>
     <tbody>${this.renderDailySalesPrintRowsHtml(model)}</tbody>
     <tfoot>${this.renderDailySalesPrintFootHtml(model)}</tfoot>
   </table>
-  <p class="note">
-    מוצגים רק נציגים עם מכירה ביום הנבחר. «פרט» הוא ענף הסיכונים במערכת.
-    פרמיית בריאות, פרט ופנסיה היא חודשית. פרמיית אלמנטרי מוצגת שנתית ואינה נכנסת לסה״כ החודשי.
-  </p>
   <div class="foot">
     <span>גמל INVEST</span>
     <span>הופק ב־${escapeHtml(model.issued)}</span>
@@ -34595,13 +36766,16 @@ UsersGateUI.init();
       if(typeof window.html2canvas !== "function" || typeof JsPDF !== "function"){
         throw new Error("לא נטען מנוע PDF");
       }
+      /* Off-screen: on-screen iframe+mask at left:0 covered the RTL
+         customer pane for 1–2s while html2canvas ran. Capture still uses
+         idoc.body, so the iframe does not need to be visible. */
       const iframe = document.createElement("iframe");
       iframe.setAttribute("aria-hidden", "true");
       iframe.setAttribute("title", " ");
-      iframe.style.cssText = "position:fixed;left:0;top:0;width:794px;height:1123px;border:0;background:#fff;opacity:1;pointer-events:none;z-index:2147483000;";
+      iframe.style.cssText = "position:fixed;left:-14000px;top:0;width:794px;height:1123px;border:0;background:#fff;opacity:1;pointer-events:none;z-index:0;";
       const mask = document.createElement("div");
       mask.setAttribute("aria-hidden", "true");
-      mask.style.cssText = "position:fixed;left:0;top:0;width:794px;height:1123px;background:#fff;z-index:2147483001;pointer-events:none;";
+      mask.style.cssText = "position:fixed;left:-14000px;top:0;width:794px;height:1123px;background:#fff;z-index:0;pointer-events:none;";
       document.body.appendChild(iframe);
       document.body.appendChild(mask);
       try {
@@ -34695,7 +36869,11 @@ UsersGateUI.init();
 
     async prepareDailySalesMailSnapshot(){
       try { this.ensureDailySalesServerOverlay(); } catch(_e) {}
-      return this._waitDailySalesOverlayForMail(12000);
+      const [overlayOk] = await Promise.all([
+        this._waitDailySalesOverlayForMail(12000),
+        this._waitDailySalesAssignedLeadsForMail(12000)
+      ]);
+      return overlayOk;
     },
 
     async _waitDailySalesOverlayForMail(ms){
@@ -34713,8 +36891,19 @@ UsersGateUI.init();
       return !!(overlay?.ok && overlay.dateKey === dateKey);
     },
 
+    _waitDailySalesAssignedLeadsForMail(ms){
+      const budget = Math.max(0, Number(ms) || 0);
+      return Promise.race([
+        this.ensureDailySalesAssignedLeadsLoaded().catch(() => false),
+        new Promise((resolve) => setTimeout(() => resolve(false), budget))
+      ]);
+    },
+
     async buildDailySalesMailSnapshot(forDate){
-      await this._waitDailySalesOverlayForMail(4000);
+      await Promise.all([
+        this._waitDailySalesOverlayForMail(4000),
+        this._waitDailySalesAssignedLeadsForMail(12000)
+      ]);
       const email = this.buildDailySalesEmailHtml(forDate);
       const doc = this.buildDailySalesPrintDocumentHtml(forDate);
       const pdfBase64 = await this._renderDailySalesPdfBase64(doc);
@@ -35109,7 +37298,11 @@ UsersGateUI.init();
       const today = this._todaySalesServerOverlay;
       if(today?.ok && (Number(today.totalPremium) > 0 || Number(today.totalPolicies) > 0)){
         const todayEl = root.querySelector("#bankKpiTodayCard .bankKpi__value");
-        if(todayEl) todayEl.textContent = this.formatMoney(Number(today.totalPremium) || 0);
+        const overlayPrem = Number(today.totalPremium) || 0;
+        const localPrem = Number(this._todaySalesCache?.totalPremium) || 0;
+        if(todayEl && this._shouldPaintTodayOverlayValue(overlayPrem, localPrem)){
+          todayEl.textContent = this.formatMoney(overlayPrem);
+        }
       }
     },
 
@@ -35854,14 +38047,19 @@ UsersGateUI.init();
       if(!text) return;
       if(form && form.__giCapture){
         form.__giCapture[String(fieldName)] = text;
+        if(opts && opts.fontSize) form.__giCapture["__fontSize__" + String(fieldName)] = Number(opts.fontSize);
         return;
       }
       const useVisual = !(opts && opts.visual === false);
       try {
         const field = form.getTextField(fieldName);
         const painted = (font && useVisual) ? this.visualHebrew(text) : text;
+        const size = Number(opts && opts.fontSize) > 0 ? Number(opts.fontSize) : this.FONT_SIZE;
+        if(opts && opts.multiline){
+          try { field.enableMultiline(); } catch(_ml) {}
+        }
         field.setText(painted);
-        try { field.setFontSize(this.FONT_SIZE); } catch(_e) {}
+        try { field.setFontSize(size); } catch(_e) {}
         if(font && /[\u0590-\u05FF]/.test(text) && !(opts && opts.align === false)){
           try {
             const PDFLib = window.PDFLib;
@@ -35881,9 +38079,42 @@ UsersGateUI.init();
         const field = form.getField(fieldName);
         if(!field) return;
         const raw = String(exportValue);
+        const want = raw.replace(/^\//, "");
+        const off = /^(Off|off|false)$/i.test(want);
+        const PDFLib = (typeof window !== "undefined" && window.PDFLib)
+          ? window.PDFLib
+          : ((typeof globalThis !== "undefined" && globalThis.PDFLib) ? globalThis.PDFLib : null);
+        const widgets = (field.acroField && typeof field.acroField.getWidgets === "function")
+          ? (field.acroField.getWidgets() || [])
+          : [];
+        /* Menora (and similar) כן/לא are one checkbox with two widgets: /2=לא then /1=כן.
+           pdf-lib check() ticks the first on-state, which paints לא for a wizard כן. */
+        if(widgets.length && PDFLib?.PDFName?.of){
+          let matched = false;
+          const onStates = [];
+          widgets.forEach((w) => {
+            const keys = [];
+            try {
+              const n = w.dict.lookup(PDFLib.PDFName.of("AP"))?.lookup(PDFLib.PDFName.of("N"));
+              if(n && n.dict) n.dict.keys().forEach((k) => keys.push(String(k).replace(/^\//, "")));
+            } catch(_e) {}
+            const onKeys = keys.filter((k) => k && k !== "Off");
+            onKeys.forEach((k) => { if(onStates.indexOf(k) < 0) onStates.push(k); });
+            const hit = !off && onKeys.indexOf(want) >= 0;
+            if(hit) matched = true;
+            try { w.dict.set(PDFLib.PDFName.of("AS"), PDFLib.PDFName.of(hit ? want : "Off")); } catch(_e2) {}
+          });
+          if(matched || off){
+            try {
+              field.acroField.dict.set(PDFLib.PDFName.of("V"), PDFLib.PDFName.of(off ? "Off" : want));
+            } catch(_e3) {}
+            if(matched || off) return;
+          }
+          if(onStates.length > 1) return;
+        }
         if(typeof field.select === "function"){
           const opts = (typeof field.getOptions === "function") ? (field.getOptions() || []) : [];
-          const candidates = [raw, raw.replace(/^\//, ""), "/" + raw.replace(/^\//, "")];
+          const candidates = [raw, want, "/" + want];
           for(let i = 0; i < candidates.length; i++){
             const c = candidates[i];
             if(!opts.length || opts.indexOf(c) >= 0){
@@ -35893,13 +38124,10 @@ UsersGateUI.init();
           try { field.select(raw); return; } catch(_e2) {}
         }
         if(typeof field.check === "function"){
-          const off = raw === "Off" || raw === "off" || raw === "false";
-          if(off){ try { field.uncheck(); } catch(_e) {} }
-          else { try { field.check(); } catch(_e3) {} }
-          return;
+          if(off){ try { field.uncheck(); } catch(_e) {} return; }
+          try { field.check(); return; } catch(_e3) {}
         }
-        const PDFLib = window.PDFLib;
-        const name = PDFLib?.PDFName?.of ? PDFLib.PDFName.of(raw) : null;
+        const name = PDFLib?.PDFName?.of ? PDFLib.PDFName.of(off ? "Off" : raw) : null;
         if(!field || !name) return;
         field.acroField.dict.set(PDFLib.PDFName.of("V"), name);
         field.acroField.dict.set(PDFLib.PDFName.of("AS"), name);
@@ -35910,6 +38138,7 @@ UsersGateUI.init();
       ayalon_health: ["ayalon__alcohol","ayalon__drugs","ayalon__smoking","ayalon__medications","ayalon__hospitalization","ayalon__tests","ayalon__disability","ayalon__family_history","ayalon__neuro","ayalon__mental","ayalon__cancer","ayalon__respiratory","ayalon__eyes","ayalon__ent","ayalon__heart","ayalon__digestive","ayalon__kidneys","ayalon__endocrine","ayalon__musculoskeletal","ayalon__skin","ayalon__infectious","ayalon__female"],
       ayalon_mortgage: ["ayalon_mort__smoking_current","ayalon_mort__smoking_past","ayalon_mort__drugs","ayalon_mort__alcohol","ayalon_mort__tests","ayalon_mort__disability","ayalon_mort__hospitalization","ayalon_mort__insurance_rejection","ayalon_mort__medications","ayalon_mort__neuro","ayalon_mort__blood","ayalon_mort__heart","ayalon_mort__mental","ayalon_mort__respiratory","ayalon_mort__digestive","ayalon_mort__kidneys","ayalon_mort__endocrine","ayalon_mort__skin","ayalon_mort__joints","ayalon_mort__cancer","ayalon_mort__infectious","ayalon_mort__female"],
       hachshara_ci: ["hachshara_crit__smoking","hachshara_crit__hospitalization","hachshara_crit__tests_5y","hachshara_crit__treatment_5y","hachshara_crit__chronic","hachshara_crit__memory","hachshara_crit__disability","hachshara_crit__mental","hachshara_crit__substances","hachshara_crit__neuro","hachshara_crit__respiratory","hachshara_crit__heart","hachshara_crit__blood","hachshara_crit__liver","hachshara_crit__digestive","hachshara_crit__kidneys","hachshara_crit__glands","hachshara_crit__skin","hachshara_crit__aids","hachshara_crit__musculoskeletal","hachshara_crit__cancer","hachshara_crit__autoimmune","hachshara_crit__eyes","hachshara_crit__ent","hachshara_crit__hernia","hachshara_crit__female","hachshara_crit__child_dev","hachshara_crit__family_critical","hachshara_crit__infant_1","hachshara_crit__infant_2"],
+      hachshara_health: ["hachshara__hospitalization","hachshara__tests_5y","hachshara__treatment_5y","hachshara__chronic","hachshara__breath_chest","hachshara__disability","hachshara__mental","hachshara__substances","hachshara__neuro","hachshara__respiratory","hachshara__heart","hachshara__blood","hachshara__liver","hachshara__digestive","hachshara__kidneys","hachshara__glands","hachshara__skin","hachshara__aids","hachshara__musculoskeletal","hachshara__cancer","hachshara__autoimmune","hachshara__eyes","hachshara__ent","hachshara__hernia","hachshara__female","hachshara__child_dev","hachshara__family_critical","hachshara__infant_1","hachshara__infant_2"],
       hachshara_life: ["hachshara_risk_s__smoking","hachshara_risk_s__q1","hachshara_risk_s__q2","hachshara_risk_s__q3","hachshara_risk_s__q4a","hachshara_risk_s__q4b","hachshara_risk_s__q4c","hachshara_risk_s__q4d","hachshara_risk_s__q4e","hachshara_risk_s__q4f","hachshara_risk_s__q4g","hachshara_risk_s__q4h","hachshara_risk_s__q4i"],
       hachshara_life_short_decl: ["hachshara_risk_s__q1","hachshara_risk_s__q2","hachshara_risk_s__q3","hachshara_risk_s__q4a","hachshara_risk_s__q4b","hachshara_risk_s__q4c","hachshara_risk_s__q4d","hachshara_risk_s__q4e","hachshara_risk_s__q4f","hachshara_risk_s__q4g","hachshara_risk_s__q4h","hachshara_risk_s__q4i"],
       hachshara_life_full: ["hachshara_risk_f__smoking","hachshara_risk_f__a1","hachshara_risk_f__a2","hachshara_risk_f__a3","hachshara_risk_f__a4","hachshara_risk_f__a5","hachshara_risk_f__a6","hachshara_risk_f__b1","hachshara_risk_f__b2","hachshara_risk_f__b3","hachshara_risk_f__b4","hachshara_risk_f__b5","hachshara_risk_f__b6","hachshara_risk_f__b7","hachshara_risk_f__b8","hachshara_risk_f__b9","hachshara_risk_f__b10","hachshara_risk_f__b11","hachshara_risk_f__b12","hachshara_risk_f__b13","hachshara_risk_f__b14","hachshara_risk_f__b15","hachshara_risk_f__b16","hachshara_risk_f__b17","hachshara_risk_f__b18","hachshara_risk_f__b19"],
@@ -35921,7 +38150,8 @@ UsersGateUI.init();
       migdal_mortgage: ["magdal_mort__smoking","magdal_mort__cancer","magdal_mort__neuro","magdal_mort__mental","magdal_mort__respiratory","magdal_mort__heart","magdal_mort__kidneys","magdal_mort__digestive","magdal_mort__diabetes","magdal_mort__immune","magdal_mort__disability","magdal_mort__hospital","magdal_mort__tests","magdal_mort__hobby","magdal_mort__accident_eyes","magdal_mort__accident_msk"],
       migdal_cancer: ["magdal_cancer__tests","magdal_cancer__smoking","magdal_cancer__tumors","magdal_cancer__digestive","magdal_cancer__diabetes","magdal_cancer__family"],
       clal_couple: ["clal_couple_neuro","clal_couple_mental","clal_couple_respiratory","clal_couple_skin","clal_couple_heart","clal_couple_digestive","clal_couple_liver","clal_couple_kidney","clal_couple_metabolic","clal_couple_blood","clal_couple_infectious","clal_couple_tumors","clal_couple_musculoskeletal","clal_couple_vision","clal_couple_ent","clal_couple_reproductive","clal_couple_rheumatic","clal_couple_alcohol","clal_couple_drugs"],
-      phoenix_health: ["phoenix_full__smoking","phoenix_full__family","phoenix_full__drugs","phoenix_full__alcohol","phoenix_full__heart","phoenix_full__neuro","phoenix_full__digestive","phoenix_full__endocrine","phoenix_full__eyes","phoenix_full__ent","phoenix_full__musculoskeletal","phoenix_full__respiratory","phoenix_full__kidneys","phoenix_full__cancer","phoenix_full__blood","phoenix_full__skin","phoenix_full__immune","phoenix_full__hernia","phoenix_full__mental","phoenix_full__child_premature","phoenix_full__child_growth","phoenix_full__child_undescended","phoenix_full__male","phoenix_full__female","phoenix_full__tests","phoenix_full__hospitalization","phoenix_full__medications","phoenix_full__disability"]
+      phoenix_health: ["phoenix_full__smoking","phoenix_full__family","phoenix_full__drugs","phoenix_full__alcohol","phoenix_full__heart","phoenix_full__neuro","phoenix_full__digestive","phoenix_full__endocrine","phoenix_full__eyes","phoenix_full__ent","phoenix_full__musculoskeletal","phoenix_full__respiratory","phoenix_full__kidneys","phoenix_full__cancer","phoenix_full__blood","phoenix_full__skin","phoenix_full__immune","phoenix_full__hernia","phoenix_full__mental","phoenix_full__child_premature","phoenix_full__child_growth","phoenix_full__child_undescended","phoenix_full__male","phoenix_full__female","phoenix_full__tests","phoenix_full__hospitalization","phoenix_full__medications","phoenix_full__disability"],
+      phoenix_ci: ["phoenix_critical_illness__ci_smoking","phoenix_critical_illness__ci_tests","phoenix_critical_illness__ci_heart","phoenix_critical_illness__ci_neuro","phoenix_critical_illness__ci_cancer","phoenix_critical_illness__ci_kidney","phoenix_critical_illness__ci_digestive","phoenix_critical_illness__ci_lungs","phoenix_critical_illness__ci_diabetes","phoenix_critical_illness__ci_ortho","phoenix_critical_illness__ci_mental","phoenix_critical_illness__ci_senses","phoenix_critical_illness__ci_family"]
     },
     healthResponses(payload){
       const raw = (obj) => {
@@ -35929,28 +38159,170 @@ UsersGateUI.init();
           ? obj.healthDeclaration.responses : null;
         return (r && typeof r === "object") ? r : null;
       };
-      const nonempty = (r) => (r && Object.keys(r).length) ? r : null;
+      const merge = (target, src) => {
+        if(!src || typeof src !== "object") return target;
+        Object.keys(src).forEach((qKey) => {
+          const block = src[qKey];
+          if(!block || typeof block !== "object") return;
+          if(!target[qKey] || typeof target[qKey] !== "object") target[qKey] = {};
+          Object.keys(block).forEach((insId) => {
+            const incoming = block[insId];
+            if(!incoming || typeof incoming !== "object") return;
+            const prev = target[qKey][insId] && typeof target[qKey][insId] === "object" ? target[qKey][insId] : {};
+            target[qKey][insId] = Object.assign({}, prev, incoming, {
+              fields: Object.assign({}, prev.fields || {}, incoming.fields || {})
+            });
+          });
+        });
+        return target;
+      };
+      const out = {};
       const primary = payload?.primary && typeof payload.primary === "object" ? payload.primary : {};
-      const ins0 = Array.isArray(payload?.insureds) ? payload.insureds[0] : null;
-      const fromPrimary = raw(primary);
-      const fromIns = raw(ins0 && ins0.data);
-      return nonempty(fromPrimary) || nonempty(fromIns) || fromPrimary || fromIns || {};
+      merge(out, raw(primary));
+      merge(out, raw(payload?.operational && payload.operational.primary));
+      (Array.isArray(payload?.insureds) ? payload.insureds : []).forEach((ins) => merge(out, raw(ins && ins.data)));
+      merge(out, raw(payload));
+      return out;
+    },
+    /* Hachshara CI 2554: HMORadio widgets on page 1, right→left:
+       כללית=/2, מאוחדת=/3, מכבי=/1, לאומית=/4. HMOName is the סניף text box — not the fund. */
+    mapHmoExport(clinicRaw){
+      const s = String(clinicRaw == null ? "" : clinicRaw).trim().replace(/\s+/g, "");
+      if(!s) return "";
+      if(/כללית|clalit/i.test(s)) return "2";
+      if(/מאוחדת|meuhedet/i.test(s)) return "3";
+      if(/מכבי|maccabi/i.test(s)) return "1";
+      if(/לאומית|leumit/i.test(s)) return "4";
+      return "";
+    },
+    mapShabanExport(shabanRaw){
+      const s = String(shabanRaw == null ? "" : shabanRaw).trim();
+      if(!s) return "";
+      if(/אין|ללא|^לא$|^no$/i.test(s)) return "2";
+      return "1";
+    },
+    /* Cross-company / renamed-suffix groups so Migdal (longest) health answers fill Menora PDFs. */
+    HEALTH_TOPIC_ALIASES: {
+      smoking: ["smoking", "smoking_now", "smoking_current"],
+      heart: ["heart"],
+      neuro: ["neuro", "epilepsy"],
+      tumors: ["tumors", "cancer", "malignant_tumors", "personal"],
+      lungs: ["lungs", "respiratory", "asthma"],
+      digestive: ["digestive", "liver_hepatitis", "liver"],
+      kidneys: ["kidneys", "kidneys_urinary"],
+      metabolic: ["metabolic", "endocrine", "diabetes"],
+      mental: ["mental"],
+      eyes: ["eyes", "vision"],
+      ent: ["ent", "hearing"],
+      ortho: ["ortho", "joints", "ortho_top", "musculoskeletal"],
+      rheum: ["rheum", "autoimmune", "musculoskeletal"],
+      infectious: ["infectious", "blood_immune", "blood", "aids"],
+      hospital: ["hospital", "hospitalization"],
+      surgery: ["surgery", "hospitalization"],
+      meds: ["meds", "medications", "treatment"],
+      inquiry: ["inquiry", "tests"],
+      family: ["family", "family_critical", "family_diseases", "family_history"],
+      hobby: ["hobby"],
+      alcohol: ["alcohol"],
+      drugs: ["drugs", "substances"],
+      aviation: ["aviation"],
+      female: ["female", "reproductive"],
+      adl: ["adl", "disability"]
+    },
+    healthAnswerAliasKeys(qKey, responses){
+      const key = String(qKey == null ? "" : qKey).trim();
+      if(!key) return [];
+      const out = [];
+      const seen = Object.create(null);
+      const add = (k) => {
+        const t = String(k == null ? "" : k).trim();
+        if(!t || seen[t]) return;
+        seen[t] = true;
+        out.push(t);
+      };
+      add(key);
+      const sep = key.indexOf("__");
+      const suffix = sep >= 0 ? key.slice(sep + 2) : key;
+      const groups = this.HEALTH_TOPIC_ALIASES || {};
+      const suffixes = [suffix];
+      Object.keys(groups).forEach((g) => {
+        const list = groups[g];
+        if(Array.isArray(list) && list.indexOf(suffix) >= 0){
+          list.forEach((s) => { if(suffixes.indexOf(s) < 0) suffixes.push(s); });
+        }
+      });
+      const bag = responses && typeof responses === "object" ? responses : {};
+      const stored = Object.keys(bag);
+      suffixes.forEach((s) => {
+        add(s);
+        stored.forEach((k) => {
+          if(k === s || k.endsWith("__" + s)) add(k);
+        });
+      });
+      return out;
     },
     healthAnswer(responses, qKey, insId){
       if(!qKey || !insId) return "";
-      const row = responses?.[qKey]?.[insId];
-      const a = String(row?.answer == null ? "" : row.answer).trim().toLowerCase();
-      return (a === "yes" || a === "no") ? a : "";
+      const read = (key) => {
+        const row = responses?.[key]?.[insId];
+        const a = String(row?.answer == null ? "" : row.answer).trim().toLowerCase();
+        return (a === "yes" || a === "no") ? a : "";
+      };
+      const exact = read(qKey);
+      if(exact) return exact;
+      const aliases = this.healthAnswerAliasKeys(qKey, responses);
+      let sawNo = false;
+      for(let i = 0; i < aliases.length; i++){
+        if(aliases[i] === qKey) continue;
+        const a = read(aliases[i]);
+        if(a === "yes") return "yes";
+        if(a === "no") sawNo = true;
+      }
+      return sawNo ? "no" : "";
     },
     healthAnswerOrSolo(responses, qKey, insId){
       const direct = this.healthAnswer(responses, qKey, insId);
       if(direct) return direct;
       if(insId) return "";
-      const block = responses?.[qKey];
-      if(!block || typeof block !== "object") return "";
-      const ids = Object.keys(block);
-      if(ids.length !== 1) return "";
-      return this.healthAnswer(responses, qKey, ids[0]);
+      const keys = this.healthAnswerAliasKeys(qKey, responses);
+      let sawNo = false;
+      for(let i = 0; i < keys.length; i++){
+        const block = responses?.[keys[i]];
+        if(!block || typeof block !== "object") continue;
+        const ids = Object.keys(block);
+        if(ids.length !== 1) continue;
+        const a = this.healthAnswer(responses, keys[i], ids[0]);
+        if(a === "yes") return "yes";
+        if(a === "no") sawNo = true;
+      }
+      return sawNo ? "no" : "";
+    },
+    /** When insured ids in the file drifted from response keys, recover the solo id used in answers. */
+    soloHealthInsuredId(responses){
+      const bag = responses && typeof responses === "object" ? responses : {};
+      const seen = Object.create(null);
+      Object.keys(bag).forEach((qKey) => {
+        const block = bag[qKey];
+        if(!block || typeof block !== "object") return;
+        Object.keys(block).forEach((id) => {
+          const a = String(block[id]?.answer == null ? "" : block[id].answer).trim().toLowerCase();
+          if(a === "yes" || a === "no") seen[id] = true;
+        });
+      });
+      const ids = Object.keys(seen);
+      return ids.length === 1 ? ids[0] : "";
+    },
+    resolveHealthPrimaryId(responses, primaryId){
+      const wanted = String(primaryId == null ? "" : primaryId).trim();
+      if(wanted){
+        const bag = responses && typeof responses === "object" ? responses : {};
+        const hit = Object.keys(bag).some((qKey) => {
+          const a = String(bag[qKey]?.[wanted]?.answer == null ? "" : bag[qKey][wanted].answer).trim().toLowerCase();
+          return a === "yes" || a === "no";
+        });
+        if(hit) return wanted;
+      }
+      return this.soloHealthInsuredId(responses) || wanted;
     },
     hasPdfField(form, fieldName){
       if(form && form.__giCapture) return !!fieldName;
@@ -35994,9 +38366,10 @@ UsersGateUI.init();
     },
     attachDraftHealth(payload, primary, spouse, children){
       const idOf = (x) => String(x && x.id != null ? x.id : "").trim();
+      const responses = this.healthResponses(payload);
       return {
-        healthResponses: this.healthResponses(payload),
-        primaryId: idOf(primary),
+        healthResponses: responses,
+        primaryId: this.resolveHealthPrimaryId(responses, idOf(primary)),
         spouseId: idOf(spouse),
         childIds: (children || []).map(idOf).filter(Boolean)
       };
@@ -36289,123 +38662,171 @@ UsersGateUI.init();
         // rows use keys[] so legacy aliases / health-master fallbacks still fill the PDF.
         this._hachHealthRows = {
           ci: [
-            { smoke: true, keys: ["hachshara_crit__smoking", "hachshara__smoking"] },
-            { q: 1, keys: ["hachshara_crit__hospitalization", "hachshara__hospitalization"] },
-            { q: 2, keys: ["hachshara_crit__tests_5y", "hachshara__tests_5y"] },
-            { q: 3, keys: ["hachshara_crit__treatment_5y", "hachshara__treatment_5y"] },
-            { q: 4, keys: ["hachshara_crit__chronic", "hachshara__chronic"] },
-            { q: 5, keys: ["hachshara_crit__memory", "hachshara__memory"] },
-            { q: 6, keys: ["hachshara_crit__disability", "hachshara__disability"] },
-            { q: 7, keys: ["hachshara_crit__mental", "hachshara__mental"] },
-            { q: 8, keys: ["hachshara_crit__substances", "hachshara__substances"] },
-            { q: 9, keys: ["hachshara_crit__neuro", "hachshara__neuro"] },
-            { q: 10, keys: ["hachshara_crit__respiratory", "hachshara__respiratory", "hachshara__breath_chest"] },
-            { q: 11, keys: ["hachshara_crit__heart", "hachshara_crit__heart_disease", "hachshara_crit__heart_vessels", "hachshara__heart"] },
+            { smoke: true, keys: ["hachshara_crit__smoking", "hachshara__smoking", "hachshara_risk_s__smoking", "hachshara_risk_f__smoking", "hachshara_mort_s__smoking", "hachshara_mort_f__smoking"] },
+            { q: 1, keys: ["hachshara_crit__hospitalization", "hachshara__hospitalization", "hachshara_risk_s__q2", "hachshara_risk_f__a2", "hachshara_mort_s__q2", "hachshara_mort_f__a2"] },
+            { q: 2, keys: ["hachshara_crit__tests_5y", "hachshara__tests_5y", "hachshara_risk_s__q3", "hachshara_risk_f__a3", "hachshara_mort_s__q3", "hachshara_mort_f__a3"] },
+            { q: 3, keys: ["hachshara_crit__treatment_5y", "hachshara__treatment_5y", "hachshara_risk_f__a4", "hachshara_mort_f__a4"] },
+            { q: 4, keys: ["hachshara_crit__chronic", "hachshara__chronic", "hachshara_risk_s__q4b", "hachshara_risk_f__b1", "hachshara_mort_s__q4b", "hachshara_mort_f__b1"] },
+            { q: 5, keys: ["hachshara_crit__memory", "hachshara__memory", "hachshara_risk_f__b3", "hachshara_mort_f__b3"] },
+            { q: 6, keys: ["hachshara_crit__disability", "hachshara__disability", "hachshara_risk_f__a5", "hachshara_mort_f__a5"] },
+            { q: 7, keys: ["hachshara_crit__mental", "hachshara__mental", "hachshara_risk_s__q4g", "hachshara_risk_f__b6", "hachshara_mort_s__q4g"] },
+            { q: 8, keys: ["hachshara_crit__substances", "hachshara__substances", "hachshara_risk_s__q1", "hachshara_risk_f__a6", "hachshara_mort_s__q1", "hachshara_mort_f__a6"] },
+            { q: 9, keys: ["hachshara_crit__neuro", "hachshara__neuro", "hachshara_risk_s__q4e", "hachshara_risk_f__b2", "hachshara_mort_s__q4e"] },
+            { q: 10, keys: ["hachshara_crit__respiratory", "hachshara__respiratory", "hachshara__breath_chest", "hachshara_risk_s__q4f", "hachshara_risk_f__b4", "hachshara_mort_s__q4f"] },
+            { q: 11, keys: ["hachshara_crit__heart", "hachshara_crit__heart_disease", "hachshara_crit__heart_vessels", "hachshara__heart", "hachshara_risk_s__q4a", "hachshara_risk_f__b5", "hachshara_mort_s__q4a"] },
             { q: 12, keys: ["hachshara_crit__blood", "hachshara__blood"] },
-            { q: 13, keys: ["hachshara_crit__liver", "hachshara__liver"] },
-            { q: 14, keys: ["hachshara_crit__digestive", "hachshara__digestive"] },
-            { q: 15, keys: ["hachshara_crit__kidneys", "hachshara__kidneys"] },
-            { q: 16, keys: ["hachshara_crit__glands", "hachshara__glands"] },
+            { q: 13, keys: ["hachshara_crit__liver", "hachshara__liver", "hachshara_risk_f__b7"] },
+            { q: 14, keys: ["hachshara_crit__digestive", "hachshara__digestive", "hachshara_risk_s__q4d", "hachshara_risk_f__b8", "hachshara_mort_s__q4d"] },
+            { q: 15, keys: ["hachshara_crit__kidneys", "hachshara__kidneys", "hachshara_risk_s__q4h", "hachshara_risk_f__b9", "hachshara_mort_s__q4h"] },
+            { q: 16, keys: ["hachshara_crit__glands", "hachshara__glands", "hachshara_risk_f__b14"] },
             { q: 17, keys: ["hachshara_crit__skin", "hachshara__skin"] },
-            { q: 18, keys: ["hachshara_crit__aids", "hachshara__aids"] },
-            { q: 19, keys: ["hachshara_crit__musculoskeletal", "hachshara__musculoskeletal"] },
-            { q: 20, keys: ["hachshara_crit__cancer", "hachshara__cancer"] },
-            { q: 21, keys: ["hachshara_crit__autoimmune", "hachshara__autoimmune"] },
-            { q: 22, keys: ["hachshara_crit__eyes", "hachshara__eyes"] },
-            { q: 23, keys: ["hachshara_crit__ent", "hachshara__ent"] },
+            { q: 18, keys: ["hachshara_crit__aids", "hachshara__aids", "hachshara_risk_f__b10"] },
+            { q: 19, keys: ["hachshara_crit__musculoskeletal", "hachshara__musculoskeletal", "hachshara_risk_f__b11"] },
+            { q: 20, keys: ["hachshara_crit__cancer", "hachshara__cancer", "hachshara_risk_s__q4c", "hachshara_risk_f__b12", "hachshara_mort_s__q4c"] },
+            { q: 21, keys: ["hachshara_crit__autoimmune", "hachshara__autoimmune", "hachshara_risk_s__q4i", "hachshara_risk_f__b13", "hachshara_mort_s__q4i"] },
+            { q: 22, keys: ["hachshara_crit__eyes", "hachshara__eyes", "hachshara_risk_f__b15"] },
+            { q: 23, keys: ["hachshara_crit__ent", "hachshara__ent", "hachshara_risk_f__b16"] },
             { q: 24, keys: ["hachshara_crit__hernia", "hachshara__hernia"] },
-            { q: 25, keys: ["hachshara_crit__female", "hachshara__female"] },
-            { q: 26, keys: ["hachshara_crit__child_dev", "hachshara__child_dev"] },
-            { q: 27, keys: ["hachshara_crit__family_critical", "hachshara__family_critical"] },
-            { q: 28, keys: ["hachshara_crit__infant_1"] },
-            { q: 29, keys: ["hachshara_crit__infant_2"] }
+            { q: 25, keys: ["hachshara_crit__female", "hachshara__female", "hachshara_risk_f__b18"] },
+            { q: 26, keys: ["hachshara_crit__child_dev", "hachshara__child_dev", "hachshara_risk_f__b19"] },
+            { q: 27, keys: ["hachshara_crit__family_critical", "hachshara__family_critical", "hachshara_risk_f__a1"] },
+            { q: 28, keys: ["hachshara_crit__infant_1", "hachshara__infant_1"] },
+            { q: 29, keys: ["hachshara_crit__infant_2", "hachshara__infant_2"] }
+          ],
+          health: [
+            { smoke: true, keys: ["hachshara__smoking", "hachshara_crit__smoking"] },
+            { q: 1, keys: ["hachshara__hospitalization", "hachshara_crit__hospitalization"] },
+            { q: 2, keys: ["hachshara__tests_5y", "hachshara_crit__tests_5y"] },
+            { q: 3, keys: ["hachshara__treatment_5y", "hachshara_crit__treatment_5y"] },
+            { q: 4, keys: ["hachshara__chronic", "hachshara_crit__chronic"] },
+            { q: 5, keys: ["hachshara__breath_chest"] },
+            { q: 6, keys: ["hachshara__disability", "hachshara_crit__disability"] },
+            { q: 7, keys: ["hachshara__mental", "hachshara_crit__mental"] },
+            { q: 8, keys: ["hachshara__substances", "hachshara_crit__substances"] },
+            { q: 9, keys: ["hachshara__neuro", "hachshara_crit__neuro"] },
+            { q: 10, keys: ["hachshara__respiratory", "hachshara_crit__respiratory"] },
+            { q: 11, keys: ["hachshara__heart", "hachshara_crit__heart"] },
+            { q: 12, keys: ["hachshara__blood", "hachshara_crit__blood"] },
+            { q: 13, keys: ["hachshara__liver", "hachshara_crit__liver"] },
+            { q: 14, keys: ["hachshara__digestive", "hachshara_crit__digestive"] },
+            { q: 15, keys: ["hachshara__kidneys", "hachshara_crit__kidneys"] },
+            { q: 16, keys: ["hachshara__glands", "hachshara_crit__glands"] },
+            { q: 17, keys: ["hachshara__skin", "hachshara_crit__skin"] },
+            { q: 18, keys: ["hachshara__aids", "hachshara_crit__aids"] },
+            { q: 19, keys: ["hachshara__musculoskeletal", "hachshara_crit__musculoskeletal"] },
+            { q: 20, keys: ["hachshara__cancer", "hachshara_crit__cancer"] },
+            { q: 21, keys: ["hachshara__autoimmune", "hachshara_crit__autoimmune"] },
+            { q: 22, keys: ["hachshara__eyes", "hachshara_crit__eyes"] },
+            { q: 23, keys: ["hachshara__ent", "hachshara_crit__ent"] },
+            { q: 24, keys: ["hachshara__hernia", "hachshara_crit__hernia"] },
+            { q: 25, keys: ["hachshara__female", "hachshara_crit__female"] },
+            { q: 26, keys: ["hachshara__child_dev", "hachshara_crit__child_dev"] },
+            { q: 27, keys: ["hachshara__family_critical", "hachshara_crit__family_critical"] },
+            { q: 28, keys: ["hachshara__infant_1", "hachshara_crit__infant_1"] },
+            { q: 29, keys: ["hachshara__infant_2", "hachshara_crit__infant_2"] }
           ],
           life_full: [
-            { smoke: true, keys: ["hachshara_risk_f__smoking"] },
+            { smoke: true, keys: ["hachshara_risk_f__smoking", "hachshara_crit__smoking", "hachshara__smoking"] },
             // Current schema a1–a6; legacy files stored q1–q8 for section א
-            { q: 1, keys: ["hachshara_risk_f__a1", "hachshara_risk_f__q1", "hachshara_risk_f__c1"] },
-            { q: 2, keys: ["hachshara_risk_f__a2", "hachshara_risk_f__q2"] },
-            { q: 3, keys: ["hachshara_risk_f__a3", "hachshara_risk_f__q3"] },
-            { q: 4, keys: ["hachshara_risk_f__a4", "hachshara_risk_f__q4"] },
-            { q: 5, keys: ["hachshara_risk_f__a5", "hachshara_risk_f__q5"] },
-            { q: 6, keys: ["hachshara_risk_f__a6", "hachshara_risk_f__q6"] },
-            { q: 7, keys: ["hachshara_risk_f__b1", "hachshara_risk_f__q7"] },
-            { q: 8, keys: ["hachshara_risk_f__b2", "hachshara_risk_f__q8"] },
-            { q: 9, keys: ["hachshara_risk_f__b3"] },
-            { q: 10, keys: ["hachshara_risk_f__b4"] },
-            { q: 11, keys: ["hachshara_risk_f__b5"] },
-            { q: 12, keys: ["hachshara_risk_f__b6"] },
-            { q: 13, keys: ["hachshara_risk_f__b7"] },
-            { q: 14, keys: ["hachshara_risk_f__b8"] },
-            { q: 15, keys: ["hachshara_risk_f__b9"] },
-            { q: 16, keys: ["hachshara_risk_f__b10"] },
-            { q: 17, keys: ["hachshara_risk_f__b11"] },
-            { q: 18, keys: ["hachshara_risk_f__b12"] },
-            { q: 19, keys: ["hachshara_risk_f__b13"] },
-            { q: 20, keys: ["hachshara_risk_f__b14"] },
-            { q: 21, keys: ["hachshara_risk_f__b15"] },
-            { q: 22, keys: ["hachshara_risk_f__b16"] },
+            { q: 1, keys: ["hachshara_risk_f__a1", "hachshara_risk_f__q1", "hachshara_risk_f__c1", "hachshara__family_critical", "hachshara_crit__family_critical"] },
+            { q: 2, keys: ["hachshara_risk_f__a2", "hachshara_risk_f__q2", "hachshara__hospitalization", "hachshara_crit__hospitalization"] },
+            { q: 3, keys: ["hachshara_risk_f__a3", "hachshara_risk_f__q3", "hachshara__tests_5y", "hachshara_crit__tests_5y"] },
+            { q: 4, keys: ["hachshara_risk_f__a4", "hachshara_risk_f__q4", "hachshara__treatment_5y", "hachshara_crit__treatment_5y"] },
+            { q: 5, keys: ["hachshara_risk_f__a5", "hachshara_risk_f__q5", "hachshara__disability", "hachshara_crit__disability"] },
+            { q: 6, keys: ["hachshara_risk_f__a6", "hachshara_risk_f__q6", "hachshara__substances", "hachshara_crit__substances"] },
+            { q: 7, keys: ["hachshara_risk_f__b1", "hachshara_risk_f__q7", "hachshara__chronic", "hachshara_crit__chronic"] },
+            { q: 8, keys: ["hachshara_risk_f__b2", "hachshara_risk_f__q8", "hachshara__neuro", "hachshara_crit__neuro"] },
+            { q: 9, keys: ["hachshara_risk_f__b3", "hachshara__memory", "hachshara_crit__memory"] },
+            { q: 10, keys: ["hachshara_risk_f__b4", "hachshara__respiratory", "hachshara__breath_chest", "hachshara_crit__respiratory"] },
+            { q: 11, keys: ["hachshara_risk_f__b5", "hachshara__heart", "hachshara_crit__heart"] },
+            { q: 12, keys: ["hachshara_risk_f__b6", "hachshara__mental", "hachshara_crit__mental"] },
+            { q: 13, keys: ["hachshara_risk_f__b7", "hachshara__liver", "hachshara_crit__liver"] },
+            { q: 14, keys: ["hachshara_risk_f__b8", "hachshara__digestive", "hachshara_crit__digestive"] },
+            { q: 15, keys: ["hachshara_risk_f__b9", "hachshara__kidneys", "hachshara_crit__kidneys"] },
+            { q: 16, keys: ["hachshara_risk_f__b10", "hachshara__aids", "hachshara_crit__aids"] },
+            { q: 17, keys: ["hachshara_risk_f__b11", "hachshara__musculoskeletal", "hachshara_crit__musculoskeletal"] },
+            { q: 18, keys: ["hachshara_risk_f__b12", "hachshara__cancer", "hachshara_crit__cancer"] },
+            { q: 19, keys: ["hachshara_risk_f__b13", "hachshara__autoimmune", "hachshara_crit__autoimmune"] },
+            { q: 20, keys: ["hachshara_risk_f__b14", "hachshara__glands", "hachshara_crit__glands"] },
+            { q: 21, keys: ["hachshara_risk_f__b15", "hachshara__eyes", "hachshara_crit__eyes"] },
+            { q: 22, keys: ["hachshara_risk_f__b16", "hachshara__ent", "hachshara_crit__ent"] },
             { q: 23, keys: ["hachshara_risk_f__b17"] },
-            { q: 24, keys: ["hachshara_risk_f__b18"] },
-            { q: 25, keys: ["hachshara_risk_f__b19"] }
+            { q: 24, keys: ["hachshara_risk_f__b18", "hachshara__female", "hachshara_crit__female"] },
+            { q: 25, keys: ["hachshara_risk_f__b19", "hachshara__child_dev", "hachshara_crit__child_dev"] }
           ],
           life_short: [
-            { smoke: true, keys: ["hachshara_risk_s__smoking", "hachshara_mort_s__smoking"] },
-            { q: 1, keys: ["hachshara_risk_s__q1", "hachshara_mort_s__q1"] },
-            { q: 2, keys: ["hachshara_risk_s__q2", "hachshara_mort_s__q2"] },
-            { q: 3, keys: ["hachshara_risk_s__q3", "hachshara_mort_s__q3"] },
-            { q: 4, keys: ["hachshara_risk_s__q4a", "hachshara_mort_s__q4a"] },
-            { q: 5, keys: ["hachshara_risk_s__q4b", "hachshara_mort_s__q4b"] },
-            { q: 6, keys: ["hachshara_risk_s__q4c", "hachshara_mort_s__q4c"] },
-            { q: 7, keys: ["hachshara_risk_s__q4d", "hachshara_mort_s__q4d"] },
-            { q: 8, keys: ["hachshara_risk_s__q4e", "hachshara_mort_s__q4e"] },
-            { q: 9, keys: ["hachshara_risk_s__q4f", "hachshara_mort_s__q4f"] },
-            { q: 10, keys: ["hachshara_risk_s__q4g", "hachshara_mort_s__q4g"] },
-            { q: 11, keys: ["hachshara_risk_s__q4h", "hachshara_mort_s__q4h"] },
-            { q: 12, keys: ["hachshara_risk_s__q4i", "hachshara_mort_s__q4i"] }
+            { smoke: true, keys: ["hachshara_risk_s__smoking", "hachshara_mort_s__smoking", "hachshara_crit__smoking", "hachshara__smoking"] },
+            { q: 1, keys: ["hachshara_risk_s__q1", "hachshara_mort_s__q1", "hachshara__substances", "hachshara_crit__substances"] },
+            { q: 2, keys: ["hachshara_risk_s__q2", "hachshara_mort_s__q2", "hachshara__hospitalization", "hachshara_crit__hospitalization"] },
+            { q: 3, keys: ["hachshara_risk_s__q3", "hachshara_mort_s__q3", "hachshara__tests_5y", "hachshara_crit__tests_5y"] },
+            { q: 4, keys: ["hachshara_risk_s__q4a", "hachshara_mort_s__q4a", "hachshara__heart", "hachshara_crit__heart"] },
+            { q: 5, keys: ["hachshara_risk_s__q4b", "hachshara_mort_s__q4b", "hachshara__chronic", "hachshara_crit__chronic"] },
+            { q: 6, keys: ["hachshara_risk_s__q4c", "hachshara_mort_s__q4c", "hachshara__cancer", "hachshara_crit__cancer"] },
+            { q: 7, keys: ["hachshara_risk_s__q4d", "hachshara_mort_s__q4d", "hachshara__digestive", "hachshara__liver", "hachshara_crit__digestive", "hachshara_crit__liver"] },
+            { q: 8, keys: ["hachshara_risk_s__q4e", "hachshara_mort_s__q4e", "hachshara__neuro", "hachshara_crit__neuro"] },
+            { q: 9, keys: ["hachshara_risk_s__q4f", "hachshara_mort_s__q4f", "hachshara__respiratory", "hachshara_crit__respiratory"] },
+            { q: 10, keys: ["hachshara_risk_s__q4g", "hachshara_mort_s__q4g", "hachshara__mental", "hachshara_crit__mental"] },
+            { q: 11, keys: ["hachshara_risk_s__q4h", "hachshara_mort_s__q4h", "hachshara__kidneys", "hachshara_crit__kidneys"] },
+            { q: 12, keys: ["hachshara_risk_s__q4i", "hachshara_mort_s__q4i", "hachshara__autoimmune", "hachshara__aids", "hachshara_crit__autoimmune", "hachshara_crit__aids"] }
           ],
           mortgage_full: [
-            { smoke: true, keys: ["hachshara_mort_f__smoking"] },
-            { q: 1, keys: ["hachshara_mort_f__a1"] },
-            { q: 2, keys: ["hachshara_mort_f__a2"] },
-            { q: 3, keys: ["hachshara_mort_f__a3"] },
-            { q: 4, keys: ["hachshara_mort_f__a4"] },
-            { q: 5, keys: ["hachshara_mort_f__a5"] },
-            { q: 6, keys: ["hachshara_mort_f__a6"] },
-            { q: 7, keys: ["hachshara_mort_f__b1"] },
-            { q: 8, keys: ["hachshara_mort_f__b2"] },
-            { q: 9, keys: ["hachshara_mort_f__b3"] },
-            { q: 10, keys: ["hachshara_mort_f__b4"] },
-            { q: 11, keys: ["hachshara_mort_f__b5"] },
-            { q: 12, keys: ["hachshara_mort_f__b6"] },
-            { q: 13, keys: ["hachshara_mort_f__b7"] },
-            { q: 14, keys: ["hachshara_mort_f__b8"] },
-            { q: 15, keys: ["hachshara_mort_f__b9"] },
-            { q: 16, keys: ["hachshara_mort_f__b10"] },
-            { q: 17, keys: ["hachshara_mort_f__b11"] },
-            { q: 18, keys: ["hachshara_mort_f__b12"] },
-            { q: 19, keys: ["hachshara_mort_f__b13"] },
-            { q: 20, keys: ["hachshara_mort_f__b14"] }
+            { smoke: true, keys: ["hachshara_mort_f__smoking", "hachshara_risk_f__smoking", "hachshara_crit__smoking"] },
+            { q: 1, keys: ["hachshara_mort_f__a1", "hachshara_risk_f__a1", "hachshara__family_critical"] },
+            { q: 2, keys: ["hachshara_mort_f__a2", "hachshara_risk_f__a2", "hachshara__hospitalization", "hachshara_crit__hospitalization"] },
+            { q: 3, keys: ["hachshara_mort_f__a3", "hachshara_risk_f__a3", "hachshara__tests_5y", "hachshara_crit__tests_5y"] },
+            { q: 4, keys: ["hachshara_mort_f__a4", "hachshara_risk_f__a4", "hachshara__treatment_5y", "hachshara_crit__treatment_5y"] },
+            { q: 5, keys: ["hachshara_mort_f__a5", "hachshara_risk_f__a5", "hachshara__disability", "hachshara_crit__disability"] },
+            { q: 6, keys: ["hachshara_mort_f__a6", "hachshara_risk_f__a6", "hachshara__substances", "hachshara_crit__substances"] },
+            { q: 7, keys: ["hachshara_mort_f__b1", "hachshara_risk_f__b1", "hachshara__chronic", "hachshara_crit__chronic"] },
+            { q: 8, keys: ["hachshara_mort_f__b2", "hachshara_risk_f__b2", "hachshara__neuro", "hachshara_crit__neuro"] },
+            { q: 9, keys: ["hachshara_mort_f__b3", "hachshara_risk_f__b3", "hachshara__memory", "hachshara_crit__memory"] },
+            { q: 10, keys: ["hachshara_mort_f__b4", "hachshara_risk_f__b4", "hachshara__respiratory", "hachshara_crit__respiratory"] },
+            { q: 11, keys: ["hachshara_mort_f__b5", "hachshara_risk_f__b5", "hachshara__heart", "hachshara_crit__heart"] },
+            { q: 12, keys: ["hachshara_mort_f__b6", "hachshara_risk_f__b6", "hachshara__mental", "hachshara_crit__mental"] },
+            { q: 13, keys: ["hachshara_mort_f__b7", "hachshara_risk_f__b7", "hachshara__liver", "hachshara_crit__liver"] },
+            { q: 14, keys: ["hachshara_mort_f__b8", "hachshara_risk_f__b8", "hachshara__digestive", "hachshara_crit__digestive"] },
+            { q: 15, keys: ["hachshara_mort_f__b9", "hachshara_risk_f__b9", "hachshara__kidneys", "hachshara_crit__kidneys"] },
+            { q: 16, keys: ["hachshara_mort_f__b10", "hachshara_risk_f__b10", "hachshara__aids", "hachshara_crit__aids"] },
+            { q: 17, keys: ["hachshara_mort_f__b11", "hachshara_risk_f__b11", "hachshara__musculoskeletal", "hachshara_crit__musculoskeletal"] },
+            { q: 18, keys: ["hachshara_mort_f__b12", "hachshara_risk_f__b12", "hachshara__cancer", "hachshara_crit__cancer"] },
+            { q: 19, keys: ["hachshara_mort_f__b13", "hachshara_risk_f__b13", "hachshara__autoimmune", "hachshara_crit__autoimmune"] },
+            { q: 20, keys: ["hachshara_mort_f__b14", "hachshara_risk_f__b14", "hachshara__glands", "hachshara_crit__glands"] }
+          ],
+          menora_mortgage: [
+            { smoke: true, keys: ["menora_mort__smoking", "menora_risk__smoking", "menora_crit__smoking", "menora_cancer__smoking"] },
+            { q: 1, keys: ["menora_mort__hospital", "menora_risk__hospital", "menora_crit__hospital"] },
+            { q: 2, keys: ["menora_mort__meds", "menora_risk__meds", "menora_crit__meds"] },
+            { q: 3, keys: ["menora_mort__inquiry", "menora_risk__inquiry", "menora_crit__inquiry", "menora_cancer__tests"] },
+            { q: 4, keys: ["menora_mort__heart", "menora_risk__heart", "menora_crit__heart"] },
+            { q: 5, keys: ["menora_mort__metabolic", "menora_risk__metabolic", "menora_crit__metabolic"] },
+            { q: 6, keys: ["menora_mort__tumors", "menora_risk__tumors", "menora_crit__tumors", "menora_cancer__personal"] },
+            { q: 7, keys: ["menora_mort__digestive", "menora_risk__digestive", "menora_crit__digestive", "menora_cancer__digestive"] },
+            { q: 8, keys: ["menora_mort__neuro", "menora_risk__neuro", "menora_crit__neuro"] },
+            { q: 10, keys: ["menora_mort__lungs", "menora_risk__lungs", "menora_crit__lungs"] },
+            { q: 11, keys: ["menora_mort__eyes", "menora_risk__eyes", "menora_crit__eyes"] },
+            { q: 12, keys: ["menora_mort__ent", "menora_risk__ent", "menora_crit__ent"] },
+            { q: 13, keys: ["menora_mort__rheum", "menora_risk__rheum"] },
+            { q: 14, keys: ["menora_mort__ortho", "menora_risk__ortho", "menora_crit__ortho_top", "menora_cancer__ortho"] }
           ],
           menora_ci: [
-            { smoke: true, keys: ["menora_crit__smoking"] },
-            { q: 1, keys: ["menora_crit__alcohol"] },
-            { q: 2, keys: ["menora_crit__drugs"] },
-            { q: 3, keys: ["menora_crit__inquiry"] },
-            { q: 4, keys: ["menora_crit__family"] },
-            { q: 5, keys: ["menora_crit__neuro"] },
-            { q: 6, keys: ["menora_crit__heart"] },
-            { q: 7, keys: ["menora_crit__metabolic"] },
-            { q: 8, keys: ["menora_crit__tumors"] },
-            { q: 9, keys: ["menora_crit__digestive"] },
-            { q: 10, keys: ["menora_crit__lungs"] },
-            { q: 11, keys: ["menora_crit__infectious"] },
-            { q: 12, keys: ["menora_crit__kidneys"] },
-            { q: 13, keys: ["menora_crit__eyes"] },
-            { q: 14, keys: ["menora_crit__ent"] },
-            { q: 15, keys: ["menora_crit__surgery"] },
-            { q: 16, keys: ["menora_crit__hospital"] },
-            { q: 17, keys: ["menora_crit__meds"] },
+            { smoke: true, keys: ["menora_crit__smoking", "menora_risk__smoking", "menora_mort__smoking", "menora_cancer__smoking"] },
+            { q: 1, keys: ["menora_crit__alcohol", "menora_risk__alcohol", "menora_mort__alcohol"] },
+            { q: 2, keys: ["menora_crit__drugs", "menora_risk__drugs", "menora_mort__drugs"] },
+            { q: 3, keys: ["menora_crit__inquiry", "menora_risk__inquiry", "menora_mort__inquiry", "menora_cancer__tests"] },
+            { q: 4, keys: ["menora_crit__family", "menora_risk__family", "menora_mort__family", "menora_cancer__family"] },
+            { q: 5, keys: ["menora_crit__neuro", "menora_risk__neuro", "menora_mort__neuro"] },
+            { q: 6, keys: ["menora_crit__heart", "menora_risk__heart", "menora_mort__heart"] },
+            { q: 7, keys: ["menora_crit__metabolic", "menora_risk__metabolic", "menora_mort__metabolic"] },
+            { q: 8, keys: ["menora_crit__tumors", "menora_risk__tumors", "menora_mort__tumors", "menora_cancer__personal"] },
+            { q: 9, keys: ["menora_crit__digestive", "menora_risk__digestive", "menora_mort__digestive", "menora_cancer__digestive"] },
+            { q: 10, keys: ["menora_crit__lungs", "menora_risk__lungs", "menora_mort__lungs"] },
+            { q: 11, keys: ["menora_crit__infectious", "menora_risk__infectious", "menora_mort__infectious"] },
+            { q: 12, keys: ["menora_crit__kidneys", "menora_risk__kidneys", "menora_mort__kidneys"] },
+            { q: 13, keys: ["menora_crit__eyes", "menora_risk__eyes", "menora_mort__eyes"] },
+            { q: 14, keys: ["menora_crit__ent", "menora_risk__ent", "menora_mort__ent"] },
+            { q: 15, keys: ["menora_crit__surgery", "menora_risk__surgery", "menora_mort__surgery", "menora_cancer__surgery"] },
+            { q: 16, keys: ["menora_crit__hospital", "menora_risk__hospital", "menora_mort__hospital"] },
+            { q: 17, keys: ["menora_crit__meds", "menora_risk__meds", "menora_mort__meds"] },
             { q: 18, keys: ["menora_crit__infant_family"] },
             { q: 19, keys: ["menora_crit__infant_nicu"] },
             { q: 20, keys: ["menora_crit__infant_tests"] },
@@ -36475,16 +38896,39 @@ UsersGateUI.init();
     },
     migdalCancerHealthRows(){
       if(this._migdalCancerHealthRows) return this._migdalCancerHealthRows;
-      // PDF HealthDec Q2–Q6; smoking uses IsSmoking (not zipped onto HealthDec).
+      // PDF has HealthDecMainQ2–Q5 only (+ IsSmoking). Family (wizard Q6) has no radio —
+      // yes/no details are painted onto Text1 when answered.
       this._migdalCancerHealthRows = [
         { q: 2, keys: ["magdal_cancer__tests"] },
         { smoke: true, keys: ["magdal_cancer__smoking"] },
         { q: 3, keys: ["magdal_cancer__tumors"] },
         { q: 4, keys: ["magdal_cancer__digestive"] },
         { q: 5, keys: ["magdal_cancer__diabetes"] },
-        { q: 6, keys: ["magdal_cancer__family"] }
+        { detailField: "Text1", keys: ["magdal_cancer__family"] }
       ];
       return this._migdalCancerHealthRows;
+    },
+    migdalMortgageHealthRows(){
+      if(this._migdalMortgageHealthRows) return this._migdalMortgageHealthRows;
+      // PDF radios: HealthDecMainQ1–12,14,15 (no Q13). Smoking → IsSmoking.
+      this._migdalMortgageHealthRows = [
+        { smoke: true, keys: ["magdal_mort__smoking"] },
+        { q: 1, keys: ["magdal_mort__cancer"] },
+        { q: 2, keys: ["magdal_mort__neuro"] },
+        { q: 3, keys: ["magdal_mort__mental"] },
+        { q: 4, keys: ["magdal_mort__respiratory"] },
+        { q: 5, keys: ["magdal_mort__heart"] },
+        { q: 6, keys: ["magdal_mort__kidneys"] },
+        { q: 7, keys: ["magdal_mort__digestive"] },
+        { q: 8, keys: ["magdal_mort__diabetes"] },
+        { q: 9, keys: ["magdal_mort__immune"] },
+        { q: 10, keys: ["magdal_mort__disability"] },
+        { q: 11, keys: ["magdal_mort__hospital"] },
+        { q: 12, keys: ["magdal_mort__tests"] },
+        { q: 14, keys: ["magdal_mort__hobby"] },
+        { q: 15, keys: ["magdal_mort__accident_eyes", "magdal_mort__accident_msk"] }
+      ];
+      return this._migdalMortgageHealthRows;
     },
     phoenixHealthRows(){
       if(!this._phoenixHealthRows){
@@ -36527,9 +38971,10 @@ UsersGateUI.init();
       const rows = Array.isArray(cfg.rows) ? cfg.rows
         : (cfg.map === "migdal_life" ? this.migdalLifeHealthRows()
           : (cfg.map === "migdal_cancer" ? this.migdalCancerHealthRows()
-            : (cfg.map === "phoenix_health" ? this.phoenixHealthRows() : this.hachsharaHealthRows(cfg.map))));
+            : (cfg.map === "migdal_mortgage" ? this.migdalMortgageHealthRows()
+              : (cfg.map === "phoenix_health" ? this.phoenixHealthRows() : this.hachsharaHealthRows(cfg.map)))));
       const responses = cfg.responses && typeof cfg.responses === "object" ? cfg.responses : {};
-      const primaryId = String(cfg.primaryId == null ? "" : cfg.primaryId).trim();
+      const primaryId = this.resolveHealthPrimaryId(responses, cfg.primaryId);
       const spouseId = String(cfg.spouseId == null ? "" : cfg.spouseId).trim();
       const childIds = Array.isArray(cfg.childIds) ? cfg.childIds.map((id) => String(id == null ? "" : id).trim()).filter(Boolean) : [];
       const yesNo = (answer) => answer === "yes" ? "1" : (answer === "no" ? "2" : "");
@@ -36543,11 +38988,32 @@ UsersGateUI.init();
         let sawNo = false;
         for(let i = 0; i < keys.length; i++){
           let a = this.healthAnswer(responses, keys[i], insId);
-          if(!a && insId && insId === primaryId) a = this.healthAnswerOrSolo(responses, keys[i], "");
+          // Primary (or missing id): also accept a solo response keyed under another id.
+          if(!a && (!insId || insId === primaryId)) a = this.healthAnswerOrSolo(responses, keys[i], "");
           if(a === "yes") return "yes";
           if(a === "no") sawNo = true;
         }
         return sawNo ? "no" : "";
+      };
+      const detailText = (keys, insId) => {
+        for(let i = 0; i < keys.length; i++){
+          const block = responses?.[keys[i]];
+          const row = (insId && block?.[insId]) || null;
+          const soloId = !row ? this.soloHealthInsuredId({ [keys[i]]: block || {} }) : "";
+          const use = row || (soloId && block?.[soloId]) || null;
+          if(!use) continue;
+          const answer = String(use.answer == null ? "" : use.answer).trim().toLowerCase();
+          const fields = use.fields && typeof use.fields === "object" ? use.fields : {};
+          const bits = [];
+          if(answer === "yes") bits.push("כן");
+          if(answer === "no") bits.push("לא");
+          Object.keys(fields).forEach((fk) => {
+            const v = String(fields[fk] == null ? "" : fields[fk]).trim();
+            if(v) bits.push(v);
+          });
+          if(bits.length) return bits.join(" · ");
+        }
+        return "";
       };
       const primaryFieldOf = (row) => {
         if(row.field) return row.field;
@@ -36579,6 +39045,11 @@ UsersGateUI.init();
             const cSmoke = smokeVal(ans(keys, cid));
             if(cSmoke) this.setExport(form, (cfg.childSmokingField || "IsSmokingChild") + (idx + 1), cSmoke);
           });
+          return;
+        }
+        if(row.detailField){
+          const text = detailText(keys, primaryId);
+          if(text) this.setTextSafe(form, row.detailField, text, cfg.font || null, { visual: false });
           return;
         }
         const pField = primaryFieldOf(row);
@@ -36667,7 +39138,9 @@ UsersGateUI.init();
         IsSmoking: "מעשן", IsSmokingBzug: "בן/בת זוג מעשן", Hight: "גובה", Weight: "משקל",
         InsuranceBegin: "תחילת ביטוח", Date: "תאריך", GiluiTotalRisk: "סכום ביטוח",
         GiluiTotalRiskSpouse: "סכום ביטוח משני", MaximumAmount: "סכום פיצוי",
-        FamilyStatus: "מצב משפחתי", HMOName: "קופת חולים", HMO: "קופת חולים"
+        FamilyStatus: "מצב משפחתי", HMOName: "סניף קופת חולים", HMO: "קופת חולים",
+        HMORadio: "קופת חולים", HMOSpouse: "בן/בת זוג — קופת חולים",
+        ShabanR: "שב״ן", ShabanSpouse: "בן/בת זוג — שב״ן"
       };
       if(map[n]) return map[n];
       const hq = n.match(/^HealthDecMainQ(\d+)$/);
@@ -36708,6 +39181,16 @@ UsersGateUI.init();
       if(o === "Married") return "נשוי/אה";
       if(o === "Divorced") return "גרוש/ה";
       if(o === "Widow") return "אלמן/ה";
+      if(/HMORadio|^HMOSpouse$/.test(fieldName)){
+        if(o === "1") return "מכבי";
+        if(o === "2") return "כללית";
+        if(o === "3") return "מאוחדת";
+        if(o === "4") return "לאומית";
+      }
+      if(/^Shaban/.test(fieldName)){
+        if(o === "1") return "כן";
+        if(o === "2") return "לא";
+      }
       return o;
     },
     renderPdfFieldEditor(fields, values, dataAttr){
@@ -36733,6 +39216,8 @@ UsersGateUI.init();
             let choices = Array.isArray(f.options) ? f.options.slice() : [];
             if(!choices.length){
               if(/HealthDec/.test(f.name)) choices = ["1", "2"];
+              else if(/HMORadio|^HMOSpouse$/.test(f.name)) choices = ["2", "3", "1", "4"];
+              else if(/^Shaban/.test(f.name)) choices = ["1", "2"];
               else if(/IsSmoking|Gender/.test(f.name)) choices = ["True", "False"];
               else if(f.name === "CollectionMethod") choices = ["Hok", "Credit"];
               else if(f.name === "FamilyStatus" || f.name === "FamilyStatusSpouse") choices = ["Single", "Married", "Divorced", "Widow"];
@@ -36787,27 +39272,28 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260824-official-he-bold-v1";
-  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260824-covers-sum-v1";
-  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260824-covers-sum-v1";
-  const GI_HACHSHARA_LIFE_SHORT_FORM_HREF = "./gi-hachshara-life-short-form.js?v=20260824-covers-sum-v1";
-  const GI_HACHSHARA_MORTGAGE_FORM_HREF = "./gi-hachshara-mortgage-form.js?v=20260824-hach-mort-v1";
-  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260824-covers-sum-v1";
-  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260824-covers-sum-v1";
-  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260824-covers-sum-v1";
-  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260824-covers-sum-v1";
-  const GI_MENORA_RISK_FORM_HREF = "./gi-menora-risk-form.js?v=20260824-covers-sum-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260829-assistant-sims-v1";
+  const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
+  const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
+  const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
+  const GI_HACHSHARA_LIFE_SHORT_FORM_HREF = "./gi-hachshara-life-short-form.js?v=20260826-hach-hmo-health-v1";
+  const GI_HACHSHARA_MORTGAGE_FORM_HREF = "./gi-hachshara-mortgage-form.js?v=20260826-hach-hmo-health-v1";
+  const GI_MIGDAL_LIFE_FORM_HREF = "./gi-migdal-life-form.js?v=20260825-migdal-health-fill-v1";
+  const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260825-migdal-health-fill-v1";
+  const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260828-menora-health-decl-v1";
+  const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260828-menora-health-decl-v1";
+  const GI_MENORA_RISK_FORM_HREF = "./gi-menora-risk-form.js?v=20260828-menora-health-decl-v1";
   const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-covers-sum-v1";
   const GI_AYALON_MORTGAGE_FORM_HREF = "./gi-ayalon-mortgage-form.js?v=20260824-covers-sum-v1";
   const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-covers-sum-v1";
   const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-covers-sum-v1";
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260824-covers-sum-v1";
-  const GI_CLAL_CANCEL_FORM_HREF = "./gi-clal-cancel-form.js?v=20260901-clal-cancel-v1";
-  const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260824-covers-sum-v1";
+  const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260825-migdal-health-fill-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
-  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260825-phoenix-fu-v1";
-  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260825-phoenix-fu-v1";
+  const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
+  const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
+  const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
 
   function ensureHachsharaCiFormLoaded(){
@@ -36836,6 +39322,33 @@ UsersGateUI.init();
       throw err;
     });
     return ensureHachsharaCiFormLoaded._p;
+  }
+  function ensureHachsharaHealthFormLoaded(){
+    if(window.HachsharaHealthForm) return Promise.resolve(window.HachsharaHealthForm);
+    if(ensureHachsharaHealthFormLoaded._p) return ensureHachsharaHealthFormLoaded._p;
+    ensureHachsharaHealthFormLoaded._p = new Promise((resolve, reject) => {
+      const existing = document.getElementById("gi-hachshara-health-form-js");
+      const done = () => {
+        if(window.HachsharaHealthForm) resolve(window.HachsharaHealthForm);
+        else reject(new Error("gi-hachshara-health-form.js loaded without HachsharaHealthForm"));
+      };
+      if(existing){
+        existing.addEventListener("load", done, { once: true });
+        existing.addEventListener("error", () => reject(new Error("gi-hachshara-health-form.js failed")), { once: true });
+        return;
+      }
+      const s = document.createElement("script");
+      s.id = "gi-hachshara-health-form-js";
+      s.src = GI_HACHSHARA_HEALTH_FORM_HREF;
+      s.async = true;
+      s.onload = done;
+      s.onerror = () => reject(new Error("gi-hachshara-health-form.js failed to load"));
+      document.head.appendChild(s);
+    }).catch((err) => {
+      ensureHachsharaHealthFormLoaded._p = null;
+      throw err;
+    });
+    return ensureHachsharaHealthFormLoaded._p;
   }
   function ensureHachsharaLifeFormLoaded(){
     if(window.HachsharaLifeForm) return Promise.resolve(window.HachsharaLifeForm);
@@ -37080,33 +39593,6 @@ UsersGateUI.init();
     });
     return ensureClalMortgageFormLoaded._p;
   }
-  function ensureClalCancelFormLoaded(){
-    if(window.ClalCancelForm) return Promise.resolve(window.ClalCancelForm);
-    if(ensureClalCancelFormLoaded._p) return ensureClalCancelFormLoaded._p;
-    ensureClalCancelFormLoaded._p = new Promise((resolve, reject) => {
-      const existing = document.getElementById("gi-clal-cancel-form-js");
-      const done = () => {
-        if(window.ClalCancelForm) resolve(window.ClalCancelForm);
-        else reject(new Error("gi-clal-cancel-form.js loaded without ClalCancelForm"));
-      };
-      if(existing){
-        existing.addEventListener("load", done, { once: true });
-        existing.addEventListener("error", () => reject(new Error("gi-clal-cancel-form.js failed")), { once: true });
-        return;
-      }
-      const s = document.createElement("script");
-      s.id = "gi-clal-cancel-form-js";
-      s.src = GI_CLAL_CANCEL_FORM_HREF;
-      s.async = true;
-      s.onload = done;
-      s.onerror = () => reject(new Error("gi-clal-cancel-form.js failed to load"));
-      document.head.appendChild(s);
-    }).catch((err) => {
-      ensureClalCancelFormLoaded._p = null;
-      throw err;
-    });
-    return ensureClalCancelFormLoaded._p;
-  }
   function ensureAyalonHealthFormLoaded(){
     if(window.AyalonHealthForm) return Promise.resolve(window.AyalonHealthForm);
     if(ensureAyalonHealthFormLoaded._p) return ensureAyalonHealthFormLoaded._p;
@@ -37296,6 +39782,33 @@ UsersGateUI.init();
     });
     return ensurePhoenixHealthFormLoaded._p;
   }
+  function ensurePhoenixCiFormLoaded(){
+    if(window.PhoenixCiForm) return Promise.resolve(window.PhoenixCiForm);
+    if(ensurePhoenixCiFormLoaded._p) return ensurePhoenixCiFormLoaded._p;
+    ensurePhoenixCiFormLoaded._p = new Promise((resolve, reject) => {
+      const existing = document.getElementById("gi-phoenix-ci-form-js");
+      const done = () => {
+        if(window.PhoenixCiForm) resolve(window.PhoenixCiForm);
+        else reject(new Error("gi-phoenix-ci-form.js loaded without PhoenixCiForm"));
+      };
+      if(existing){
+        existing.addEventListener("load", done, { once: true });
+        existing.addEventListener("error", () => reject(new Error("gi-phoenix-ci-form.js failed")), { once: true });
+        return;
+      }
+      const s = document.createElement("script");
+      s.id = "gi-phoenix-ci-form-js";
+      s.src = GI_PHOENIX_CI_FORM_HREF;
+      s.async = true;
+      s.onload = done;
+      s.onerror = () => reject(new Error("gi-phoenix-ci-form.js failed to load"));
+      document.head.appendChild(s);
+    }).catch((err) => {
+      ensurePhoenixCiFormLoaded._p = null;
+      throw err;
+    });
+    return ensurePhoenixCiFormLoaded._p;
+  }
   function ensureFollowupZipLoaded(){
     if(window.GiFollowupZip && window.GI_FOLLOWUP_ZIP_CONFIG) return Promise.resolve(window.GiFollowupZip);
     if(ensureFollowupZipLoaded._p) return ensureFollowupZipLoaded._p;
@@ -37416,7 +39929,7 @@ UsersGateUI.init();
   /* GI-PERF 2026-08-10 — CSS משני אחרי login בלבד (לא במסך הכניסה). */
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
-    "./gi-customers-import.css?v=20260813-cq-v1",
+    "./gi-customers-import.css?v=20260828-menora-health-decl-v1",
     "./theme-unify-flat.css?v=20260825-hmo-text-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
@@ -38751,7 +41264,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260825-hmo-text-v1";
+  const GI_WIZARD_JS_VERSION = "20260830-clal-health-decl-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -39387,14 +41900,54 @@ UsersGateUI.init();
 
   // ---------- Mirrors UI (Ops only) ----------
 const MIRROR_DISCLOSURE_LIBRARY = {
-  "הכשרה": {
+    "הכשרה": {
+    "meds": {
+      "label": "תרופות מחוץ לסל",
+      "text": "פוליסת \"תרופות מחוץ לסל שירותי הבריאות\" מעניקה שיפוי עבור תרופות שאינן כלולות בסל הבריאות, תרופות בהתוויה שאינה מאושרת (OFF LABEL), תרופות יתום ותרופות מיוחדות, בהתאם לתנאי הפוליסה. בנוסף, הפוליסה כוללת כיסוי לבדיקה גנטית להתאמת טיפול תרופתי למחלת הסרטן ולשירותים רפואיים הנדרשים לצורך מתן התרופה. גבול האחריות בגין תרופות הינו עד 3,000,000 ₪ לתקופת הביטוח, ובגין תרופות מיוחדות עד 1,000,000 ₪, ולא יותר מ־200,000 ₪ לחודש, בהתאם לתנאי הפוליסה. הפוליסה הינה לכל החיים ומתחדשת אחת לשנתיים. הפרמיה משתנה בהתאם לגיל המבוטח. בכיסוי זה קיימת תקופת אכשרה של 90 יום (למעט במקרה ביטוח עקב תאונה), וכן השתתפות עצמית, חריגים והגבלות בהתאם לתנאי הפוליסה. כיסוי זה הינו כיסוי בסיס."
+    },
+    "transplants": {
+      "label": "השתלות וטיפולים מיוחדים בחו\"ל",
+      "text": "פוליסת \"השתלות וטיפולים מיוחדים מחוץ לישראל\" מעניקה כיסוי להשתלות איברים ולטיפולים רפואיים מיוחדים בחו\"ל, בהתאם לתנאי הפוליסה. הכיסוי כולל הוצאות רפואיות ונלוות הקשורות לביצוע ההשתלה או הטיפול, לרבות איתור תורם, קצירת האיבר, שימורו והעברתו, הטסה רפואית, הוצאות שהייה ושירותים רפואיים נוספים בהתאם לתנאי הפוליסה. השתלות באמצעות נותן שירות שבהסכם מכוסות ללא תקרה, והשתלות שלא באמצעות נותן שירות שבהסכם מכוסות עד 5,000,000 ₪ להשתלת איבר מתורם ועד 3,000,000 ₪ להשתלת איבר מבעל חיים, בהתאם לתנאי הפוליסה. הפוליסה מתחדשת כל שנתיים ותקפה לכל החיים. הפרמיה החודשית משתנה בהתאם לגיל המבוטח. בכיסוי זה קיימת תקופת אכשרה של 90 יום, למעט במקרה ביטוח שנגרם עקב תאונה, וכן חריגים, הגבלות לסכומי ביטוח והשתתפות עצמית, בהתאם לתנאי הפוליסה. כיסוי זה הינו כיסוי בסיס."
+    },
+    "surgeries_abroad": {
+      "label": "ניתוחים וטיפולים מחליפי ניתוח בחו\"ל",
+      "text": "פוליסת \"ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל\" מעניקה כיסוי להוצאות רפואיות הקשורות לניתוחים ולטיפולים מחליפי ניתוח המבוצעים מחוץ לישראל, בהתאם לתנאי הפוליסה. הכיסוי כולל שכר מנתח, הוצאות רפואיות לביצוע הניתוח או הטיפול, הטסה רפואית, הוצאות נלוות, התייעצויות עם רופאים מומחים בישראל ובחו\"ל ושירותים נוספים בהתאם לתנאי הפוליסה. הפוליסה מתחדשת כל שנתיים ותקפה לכל החיים. הפרמיה החודשית משתנה בהתאם לגיל המבוטח. בכיסוי זה קיימת תקופת אכשרה של 90 יום, למעט במקרה ביטוח שנגרם עקב תאונה, וכן חריגים, הגבלות לסכומי ביטוח והשתתפות עצמית בהתאם לתנאי הפוליסה. כיסוי זה הינו כיסוי בסיס."
+    },
+    "surgeries_israel_5000": {
+      "label": "ניתוחים בישראל — משלים שב\"ן עם 5,000 ₪",
+      "text": "אני מבקש לציין בפניך כי פוליסת הבריאות הבסיסית אינה כוללת כיסוי ביטוחי בגין ביצוע ניתוחים פרטיים בישראל, בין היתר, מכיוון שכיסוי לניתוחים בישראל ניתן במסגרת השב\"ן.\n\nפוליסת \"ניתוחים, טיפולים מחליפי ניתוח בישראל – משלים שב\"ן עם השתתפות עצמית\" מעניקה כיסוי לניתוחים, טיפולים מחליפי ניתוח והתייעצויות עם רופא מומחה בישראל, מעבר לזכויות הניתנות במסגרת השב\"ן של קופת החולים ובהתאם לתנאי הפוליסה. הכיסוי כולל עד 3 התייעצויות עם רופא מומחה בכל שנת ביטוח, שכר מנתח, הוצאות ניתוח בבית חולים פרטי או במרפאה כירורגית פרטית וטיפול מחליף ניתוח. ניתן לבחור מנתח שבהסדר או מנתח שאינו בהסדר, כאשר במקרה של בחירת מנתח שאינו בהסדר השיפוי יהיה בהתאם לתקרות הקבועות בפוליסה. למימוש הכיסוי יש לפנות תחילה לקופת החולים למימוש הזכויות במסגרת השב\"ן. ההשתתפות העצמית בגין ניתוח או טיפול מחליף ניתוח הינה 5,000 ₪, בהתאם לתנאי הפוליסה. הפוליסה מתחדשת כל שנתיים ותקפה לכל החיים. הפרמיה החודשית משתנה בהתאם לגיל המבוטח. בכיסוי זה קיימת תקופת אכשרה של 90 יום, ולניתוחים, טיפולים מחליפי ניתוח או התייעצויות הקשורים להריון או לידה – 12 חודשים, למעט במקרה ביטוח שנגרם עקב תאונה. בנוסף, קיימים חריגים, הגבלות לסכומי ביטוח והשתתפות עצמית בהתאם לתנאי הפוליסה. כיסוי זה הינו כיסוי משלים שב\"ן."
+    },
+    "surgeries_israel_none": {
+      "label": "ניתוחים בישראל — משלים שב\"ן ללא השתתפות",
+      "text": "אני מבקש לציין בפניך כי פוליסת הבריאות הבסיסית אינה כוללת כיסוי ביטוחי בגין ביצוע ניתוחים פרטיים בישראל, בין היתר, מכיוון שכיסוי לניתוחים בישראל ניתן במסגרת השב\"ן.\n\nפוליסת \"ניתוחים, טיפולים מחליפי ניתוח והתייעצויות בישראל – משלים שב\"ן ללא השתתפות עצמית\" מעניקה כיסוי לניתוחים, טיפולים מחליפי ניתוח והתייעצויות עם רופא מומחה בישראל, מעבר לזכויות הניתנות במסגרת השב\"ן של קופת החולים ובהתאם לתנאי הפוליסה. הכיסוי כולל עד 3 התייעצויות עם רופא מומחה בכל שנת ביטוח, שכר מנתח, הוצאות ניתוח בבית חולים פרטי או במרפאה כירורגית פרטית וטיפול מחליף ניתוח, ללא השתתפות עצמית. ניתן לבחור מנתח שבהסדר או מנתח שאינו בהסדר, כאשר במקרה של בחירת מנתח שאינו בהסדר השיפוי יהיה בהתאם לתקרות הקבועות בפוליסה. למימוש הכיסוי יש לפנות תחילה לקופת החולים למימוש הזכויות במסגרת השב\"ן. הפוליסה מתחדשת כל שנתיים ותקפה לכל החיים. הפרמיה החודשית משתנה בהתאם לגיל המבוטח. בכיסוי זה קיימת תקופת אכשרה של 90 יום, ולניתוחים, טיפולים מחליפי ניתוח או התייעצויות הקשורים להריון או לידה – 12 חודשים, למעט במקרה ביטוח שנגרם עקב תאונה. בנוסף, קיימים חריגים והגבלות לסכומי ביטוח בהתאם לתנאי הפוליסה. כיסוי זה הינו כיסוי משלים שב\"ן."
+    },
+    "surgeries_israel_first": {
+      "label": "ניתוחים בישראל — מהשקל הראשון",
+      "text": "אני מבקש לציין בפניך כי פוליסת הבריאות הבסיסית אינה כוללת כיסוי ביטוחי בגין ביצוע ניתוחים פרטיים בישראל, בין היתר, מכיוון שכיסוי לניתוחים בישראל ניתן במסגרת השב\"ן.\n\nפוליסת \"ניתוחים, טיפולים מחליפי ניתוח בישראל – מהשקל הראשון\" מעניקה כיסוי לניתוחים, טיפולים מחליפי ניתוח והתייעצויות עם רופא מומחה בישראל, בהתאם לתנאי הפוליסה, ללא צורך במיצוי זכויות במסגרת השב\"ן. הכיסוי כולל עד 3 התייעצויות עם רופא מומחה בכל שנת ביטוח, שכר מנתח, הוצאות ניתוח בבית חולים פרטי או במרפאה כירורגית פרטית וטיפול מחליף ניתוח. ניתן לבחור מנתח שבהסדר או מנתח שאינו בהסדר, בהתאם לתנאי הפוליסה ולגבולות השיפוי. הפוליסה מתחדשת כל שנתיים ותקפה לכל החיים. הפרמיה החודשית משתנה בהתאם לגיל המבוטח. בכיסוי זה קיימת תקופת אכשרה של 90 יום, ולניתוחים, טיפולים מחליפי ניתוח או התייעצויות הקשורים להריון או לידה – 12 חודשים, למעט במקרה ביטוח שנגרם עקב תאונה. בנוסף, קיימים חריגים והגבלות לסכומי ביטוח בהתאם לתנאי הפוליסה. כיסוי זה הינו כיסוי בסיס."
+    },
+    "amb_consult": {
+      "label": "אמבולטורי — ייעוץ ובדיקות",
+      "text": "פוליסת \"ייעוץ ובדיקות\" מעניקה כיסוי למגוון שירותים רפואיים אמבולטוריים, בהתאם לתנאי הפוליסה. הכיסוי כולל עד 5 התייעצויות עם רופא מומחה בכל שנת ביטוח, בדיקות רפואיות אבחנתיות, בדיקות הריון, בדיקות סקר לגילוי מחלת הסרטן, בדיקות סקר מנהלים ושירות חקר רפואי לאיתור וניתוח מידע רפואי. חלק מהכיסויים ניתנים באמצעות נותני שירות שבהסכם וחלקם באמצעות החזר הוצאות, בהתאם לתנאי הפוליסה. הפוליסה מתחדשת כל שנתיים ותקפה לכל החיים. הפרמיה החודשית משתנה בהתאם לגיל המבוטח. בכיסוי זה קיימת תקופת אכשרה של 90 יום להתייעצויות, בדיקות אבחנתיות ובדיקות סקר לגילוי סרטן, 180 יום לשירות חקר רפואי ו-365 יום לבדיקות הריון ולבדיקות סקר מנהלים. בנוסף, קיימים חריגים, השתתפויות עצמיות והגבלות לסכומי ביטוח בהתאם לתנאי הפוליסה."
+    },
+    "premium_child": {
+      "label": "כתב שירות פרימיום לילד",
+      "text": "כתב שירות \"שירותים פרימיום לילד\" מעניק מגוון שירותים רפואיים והתפתחותיים לילדים עד גיל 25, בהתאם לתנאי כתב השירות. השירות כולל ייעוץ רפואי מקוון עם רופא ילדים או רופא מומחה, ייעוץ בנושאי גדילה ואלרגיה, אבחונים דידקטיים ופסיכודידקטיים, אבחוני קשב וריכוז, אבחון וייעוץ בבעיות שינה, פיתוח מיומנויות למידה וכישורים התפתחותיים, ריפוי בעיסוק, טיפול רגשי, תזונת ילדים, בדיקות שמיעה ושירות חקר רפואי. כתב השירות מתחדש כל שנתיים כל עוד הוא משווק על ידי החברה. הפרמיה החודשית משתנה בהתאם לתנאי החברה. בכיסוי זה חלק מהשירותים ניתנים ללא תקופת אכשרה, וליתר השירותים קיימות תקופות אכשרה של 3 חודשים, 6 חודשים או 12 חודשים, בהתאם לסוג השירות. בנוסף, קיימים חריגים, השתתפויות עצמיות והגבלות בהתאם לתנאי כתב השירות."
+    },
     "critical_illness": {
-      "label": "מגן מחלות קשות",
-      "text": "פוליסת ביטוח מחלות קשות מסוג \"מגן מחלות קשות\" אותה אנו ממליצים לך לרכוש כוללת את הכיסויים הבאים:\nבמסגרת הכיסוי תקבל פיצוי חד פעמי מלא בסכום של ____ ₪ בעת גילוי מחלה קשה מתוך רשימה אחת מבין 49 מחלות שונות המחולקות ל-4 קבוצות.\nתוקף הביטוח הינו עד גיל 75. הפוליסה מתחדשת כל שנתיים.\nהחל מגיל 65 יוקטן סכום הביטוח מדי שנה בשיעור של 5% מסכום הביטוח המקורי.\nהפרמיה משתנה עפ\"י קבוצת גיל כל 5 שנים.\nתקופת אכשרה, תקופה אשר תחילתה מיום תחילת תקופת הביטוח או מיום קרות מקרה הביטוח הראשון, לפי העניין, וסיומה בתום 90 ימים מיום תחילת הביטוח (לגבי מקרה ביטוח ראשון) או 180 ימים מיום מקרה ביטוח ראשון (לגבי מקרה ביטוח שני). מקרה ביטוח שאירע בתקופה זו אינו מכוסה בפוליסה.\nחשוב לי להבהיר כי גם במידה ויש לך כבר ביטוח כזה, סכומי הביטוח מצטברים וביטוח אחד אינו גורע מהאחר. כיסוי זה הינו כיסוי בסיס."
+      "label": "מגן למחלות קשות",
+      "text": "פוליסת \"מגן למחלות קשות\" מעניקה פיצוי כספי חד־פעמי בסך ____ ₪ במקרה של גילוי מחלה קשה או אירוע רפואי חמור מתוך 49 מחלות קשות, המחולקות ל־4 קבוצות, בהתאם לתנאי הפוליסה. הפוליסה מאפשרת קבלת פיצוי בגין עד שני מקרי ביטוח, בהתאם לתנאי הפוליסה. בהגיע המבוטח לגיל 65 יופחת סכום הביטוח מדי שנה בשיעור של 5% מסכום הביטוח המקורי. הביטוח תקף עד גיל 75 ומתחדש אחת לשנתיים. הפרמיה החודשית משתנה בהתאם לגיל המבוטח. בכיסוי זה קיימת תקופת אכשרה של 90 יום למקרה ביטוח ראשון ו-180 יום למקרה ביטוח שני. בנוסף, קיימים חריגים והגבלות בהתאם לתנאי הפוליסה. כיסוי זה הינו כיסוי בסיס."
     },
     "cancer": {
-      "label": "מגן מחלות קשות",
-      "text": "פוליסת ביטוח מחלות קשות מסוג \"מגן מחלות קשות\" אותה אנו ממליצים לך לרכוש כוללת את הכיסויים הבאים:\nבמסגרת הכיסוי תקבל פיצוי חד פעמי מלא בסכום של ____ ₪ בעת גילוי מחלה קשה מתוך רשימה אחת מבין 49 מחלות שונות המחולקות ל-4 קבוצות.\nתוקף הביטוח הינו עד גיל 75. הפוליסה מתחדשת כל שנתיים.\nהחל מגיל 65 יוקטן סכום הביטוח מדי שנה בשיעור של 5% מסכום הביטוח המקורי.\nהפרמיה משתנה עפ\"י קבוצת גיל כל 5 שנים.\nתקופת אכשרה, תקופה אשר תחילתה מיום תחילת תקופת הביטוח או מיום קרות מקרה הביטוח הראשון, לפי העניין, וסיומה בתום 90 ימים מיום תחילת הביטוח (לגבי מקרה ביטוח ראשון) או 180 ימים מיום מקרה ביטוח ראשון (לגבי מקרה ביטוח שני). מקרה ביטוח שאירע בתקופה זו אינו מכוסה בפוליסה.\nחשוב לי להבהיר כי גם במידה ויש לך כבר ביטוח כזה, סכומי הביטוח מצטברים וביטוח אחד אינו גורע מהאחר. כיסוי זה הינו כיסוי בסיס."
+      "label": "מגן למחלות קשות",
+      "text": "פוליסת \"מגן למחלות קשות\" מעניקה פיצוי כספי חד־פעמי בסך ____ ₪ במקרה של גילוי מחלה קשה או אירוע רפואי חמור מתוך 49 מחלות קשות, המחולקות ל־4 קבוצות, בהתאם לתנאי הפוליסה. הפוליסה מאפשרת קבלת פיצוי בגין עד שני מקרי ביטוח, בהתאם לתנאי הפוליסה. בהגיע המבוטח לגיל 65 יופחת סכום הביטוח מדי שנה בשיעור של 5% מסכום הביטוח המקורי. הביטוח תקף עד גיל 75 ומתחדש אחת לשנתיים. הפרמיה החודשית משתנה בהתאם לגיל המבוטח. בכיסוי זה קיימת תקופת אכשרה של 90 יום למקרה ביטוח ראשון ו-180 יום למקרה ביטוח שני. בנוסף, קיימים חריגים והגבלות בהתאם לתנאי הפוליסה. כיסוי זה הינו כיסוי בסיס."
+    },
+    "risk": {
+      "label": "מגן 1",
+      "text": "פוליסת ביטוח חיים שאותה אנו ממליצים לך לרכוש מסוג \"מגן 1\" מעניקה פיצוי חד־פעמי למוטבים במקרה פטירת המבוטח, מכל סיבה שהיא, במהלך תקופת הביטוח ובהתאם לתנאי הפוליסה. סכום הביטוח הוא בסך ____ ₪, נקבע בעת ההצטרפות, צמוד למדד ומשולם ללא קשר לפיצויים או ביטוחים אחרים. הפוליסה אינה כוללת מרכיב חיסכון או ערך פדיון. הפרמיה משתנה מדי שנה בהתאם לגיל המבוטח, סכום הביטוח ומאפייני החיתום. קיים חריג למקרה התאבדות במהלך השנה הראשונה מתחילת הביטוח או ממועד חידוש הפוליסה לאחר שבוטלה. בנוסף, קיימים חריגים והגבלות בהתאם לתנאי הפוליסה."
+    },
+    "mortgage": {
+      "label": "מגן למשכנתא",
+      "text": "פוליסת ביטוח חיים למשכנתא \"מגן למשכנתא\" מעניקה כיסוי למקרה פטירת המבוטח במהלך תקופת הביטוח. במקרה ביטוח, תשולם יתרת המשכנתא המעודכנת למוטב הבלתי חוזר (הבנק), וכל סכום עודף, ככל שקיים, ישולם למוטבים שנקבעו בפוליסה. הביטוח תקף עד סיום תקופת ההלוואה או עד גיל 85, לפי המוקדם מביניהם. הפרמיה משתנה מדי שנה בהתאם לנתוני המבוטח וליתרת סכום הביטוח. קיים חריג למקרה התאבדות במהלך השנה הראשונה מתחילת הביטוח או ממועד חידוש הפוליסה לאחר שבוטלה. בנוסף, קיימים חריגים והגבלות בהתאם לתנאי הפוליסה. המוטב הבלתי חוזר הוא בנק ____ סניף מספר ____ כתובת הסניף ____. יתרת ההלוואה היא ____ ₪ לתקופה של ____ שנים עם ריבית קבועה/משתנה של ____%."
     }
   },
   "הפניקס": {
@@ -39451,58 +42004,90 @@ const MIRROR_DISCLOSURE_LIBRARY = {
       "text": "בפוליסת אובדן כושר עבודה במעמד עצמאי אותה אנו ממליצים לך לרכוש,אתה מצהיר כי:\nאובדן כושר עבודה -ההכנסה מעבודה שאתה צפוי להרוויח תעמוד על סך של ______ ₪לחודש.ידוע לך כי בקרות מקרה הביטוח יוגבלו תגמולי הפיצוי אובדן כושר\nפיצוי ושחרור בלבד החודשי להם תהיה זכאי לגובה שלא יעלה על 75%מהכנסתך מעבודה בפועל ב 12-החודשים שקדמו למועד קרות מקרה הביטוח,או עבודה\nבתקופה ממועד תחילת הביטוח ועד מועד קרות מקרה הביטוח,אם חלפו פחות מ 12-חודשים."
     }
   },
-  "איילון": {
+    "איילון": {
     "meds": {
       "label": "תרופות מחוץ לסל",
-      "text": "חשוב שתדע שאתה יכול לרכוש כל אחד מהכיסויים בנפרד,אך מומלץ לרכוש את כל החבילה.הכיסויים העיקריים הם:\nכיסוי לתרופות שאינן בסל הבריאות לרבות:תרופות המאושרות בסל אך להתוויה שונה,תרופות, off labelתרופות יתום,\nתרופות מיוחדות.סכום השיפוי המרבי 3מיליון - ₪מתמלא כל 24חודשים.\nהשתתפות עצמית של ₪ 300לתרופה לחודש.ו ₪ 500לתקופה מיוחדת.\nלתרופות מיוחדות -תקרה של, ₪ 1,000,000מתחדש כל 24חודשים.תקרה חודשית של.₪ 200,000 תרופות שלא בסל\nהביטוח מתחדש כל שנתיים בכפוף לתנאי הפוליסה,ותקף לכל החיים.הכיסוי כולל תקופת אכשרה בת 90ימים.\nהפרמיה משתנה לפי קבוצת גיל ומתקבעת בגיל.66כיסוי זה הינו כיסוי בסיס."
+      "text": "פוליסת \"תרופות שאינן כלולות בסל הבריאות\" מעניקה כיסוי לתרופות שאינן כלולות בסל שירותי הבריאות, לתרופות מיוחדות, לבדיקה גנטית להתאמת טיפול במחלת הסרטן ולטיפול רפואי הנלווה למתן התרופה, בהתאם לתנאי הפוליסה. הפוליסה מתחדשת אחת לשנתיים והפרמיה החודשית משתנה בהתאם לגיל המבוטח. בכיסוי זה קיימת תקופת אכשרה של 90 יום. ההשתתפות העצמית הינה 300 ₪ למרשם חודשי לתרופה, 500 ₪ למרשם לתרופה מיוחדת (למעט תרופה שעלותה החודשית עולה על 5,000 ₪) ו-20% מעלות בדיקה גנטית. בנוסף, קיימים חריגים והגבלות בהתאם לתנאי הפוליסה. כיסוי זה הינו כיסוי בסיס."
     },
     "transplants": {
       "label": "השתלות וטיפולים מיוחדים בחו\"ל",
-      "text": "כיסוי הוצאות עבור השתלה ו/או טיפול /ניתוח מיוחד בחו\"ל.עיקרי הכיסוי:\nשיפוי בגין הוצאות מוכרות הקשורות להשתלה ו/או ניתוח/טיפול מיוחד בחו\"ל כמפורט בנספח לרבות הוצאות לביצוע\nהפעילות הרפואית הנדרשת לקציר האיבר המושתל,הוצאות אשפוז בבית חולים,תשלום לצוות הרפואי,הוצאות עבור בריאות\nהשתלות וטיפולים מיוחדים\nכרטיסי טיסה ושהייה בחו\"ל,הטסה רפואית,הטסת גופה,הוצאות בשל מיסים היטלים והמרות.טיפולי המשך,הבאת מוצרי\nבחו\"ל\nמומחה רפואי לישראל,קצבה חודשית למועמד להשתלה,גמלה חודשית לאחר ביצוע השתלה. בסיס\nהביטוח מתחדש כל שנתיים בכפוף לתנאי הפוליסה,ותקף לכל החיים.הכיסוי כולל תקופת אכשרה בת 90ימים."
+      "text": "פוליסת \"השתלות וטיפולים מיוחדים מחוץ לישראל\" מעניקה כיסוי להוצאות רפואיות הקשורות להשתלות ולטיפולים מיוחדים בחו\"ל, בהתאם לתנאי הפוליסה. הכיסוי כולל, בין היתר, הוצאות לביצוע ההשתלה, קצירת האיבר, אשפוז, שכר הצוות הרפואי, כרטיסי טיסה ושהייה בחו\"ל, הטסה רפואית, הטסת גופה, טיפולי המשך, הבאת מומחה רפואי לישראל, קצבה חודשית למועמד להשתלה וגמלה חודשית לאחר ביצוע השתלה, בהתאם לתנאי הפוליסה. הפוליסה מתחדשת אחת לשנתיים והפרמיה החודשית משתנה בהתאם לגיל המבוטח. בכיסוי זה קיימת תקופת אכשרה של 90 יום, וכן ייתכנו החרגות חיתומיות, חריגים והגבלות בהתאם לתנאי הפוליסה. כיסוי זה הינו כיסוי בסיס."
     },
     "surgeries_abroad": {
       "label": "ניתוחים וטיפולים מחליפי ניתוח בחו\"ל",
-      "text": "הפרמיה משתנה לפי קבוצת גיל ומתקבעת בגיל.66כיסוי זה הינו כיסוי בסיס.\nכיסוי להוצאות הכרוכות בניתוחים מחוץ לישראל או בטיפולים מחליפי ניתוח מחוץ לישראל בהתאם לסוגי ההוצאות\nהמפורטים בפוליסה.הוצאות הטסה רפואית,הוצאות שהייה,אחות פרטית,הוצאות החלמה,המשך מעקב רפואי בחו\"ל,\nהוצאות שיקום. ניתוחים וטיפולים\nהביטוח מתחדש כל שנתיים בכפוף לתנאי הפוליסה,ותקף לכל החיים. מחליפי ניתוח בחו\"ל"
+      "text": "פוליסת \"ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל\" מעניקה כיסוי להוצאות הכרוכות בביצוע ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל, בהתאם לתנאי הפוליסה. הכיסוי כולל את ההוצאות הרפואיות הנדרשות לביצוע הניתוח או הטיפול מחליף הניתוח, בהתאם לסוגי ההוצאות המפורטים בפוליסה. הפוליסה מתחדשת אחת לשנתיים והפרמיה החודשית משתנה בהתאם לגיל המבוטח. בכיסוי זה קיימת תקופת אכשרה של 90 יום, וכן קיימים חריגים והגבלות בהתאם לתנאי הפוליסה. כיסוי זה הינו כיסוי בסיס."
     },
-    "surgeries_israel": {
-      "label": "ניתוחים בארץ",
-      "text": "אני מבקש לציין בפניך כי פוליסת הבריאות הבסיסית אינה כוללת כיסוי ביטוחי בגין ביצוע ניתוחים פרטיים\nלאחר צירוף לפוליסה בריאות בסיסית יש\nבישראל,בין היתר,מכיוון שכיסוי לניתוחים בישראל ניתן במסגרת השב\"ן\".\nלהבהיר למועמד:\nניתוחים וטיפולים מחליפי ניתוח בארץ -משלים שב''ן עם השתתפות עצמית ע\"ס 5000ש\"ח עבור הוצאות שכר מנתח וביצוע\nניתוחים וטיפולים מחליפי ניתוח עלויות הניתוח 3.התייעצויות עם רופא מומחה אגב הניתוח או הטיפול מחליף הניתוח.שכר מנתח.ניתוח בבית חולים פרטי\nבישראל משלים שב\"ן עם או במרפאה כירורגית פרטית.טיפולים מחליפי ניתוח.\nהשתתפות עצמית בסך 5000הביטוח מתחדש כל שנתיים בכפוף לתנאי הפוליסה,ותקף לכל החיים\nהכיסוי כולל תקופת אכשרה בת 90ימים,בעת מקרה ביטוח הנוגע להריון או לידה,תהיה תקופת האכשרה 12חודשים. ש\"ח\nהפרמיה משתנה לפי קבוצת גיל ומתקבעת בגיל.66\nתכנית ביטוח לניתוחים ומחליפי ניתוח פרטיים בארץ לבעלי שב\"ן – לאחר מיצוי השב\"ן.עיקרי הכיסוי:\nמשלים שב\"ן\nשלוש התייעצויות עם רופא מומחה אגב הניתוח או הטיפול מחליף הניתוח.שכר מנתח.ניתוח בבית חולים פרטי או במרפאה\nלניתוחים ומחליפי\nכירורגית פרטית.טיפולים מחליפי ניתוח.הביטוח מתחדש כל שנתיים בכפוף לתנאי הפוליסה,ותקף לכל החיים.\nניתוח בישראל ללא השתתפות\nהכיסוי כולל תקופת אכשרה בת 90ימים,בעת מקרה ביטוח הנוגע להריון או לידה,תהיה תקופת האכשרה 12חודשים.\nעצמית\nהפרמיה משתנה לפי קבוצת גיל ומתקבעת בגיל.66\nתכנית ביטוח לניתוחים ומחליפי ניתוח פרטיים בארץ.עיקרי הכיסוי:\nשלוש התייעצויות עם רופא מומחה אגב הניתוח או הטיפול מחליף הניתוח.שכר מנתח.ניתוח בבית חולים פרטי או במרפאה\nכירורגית פרטית.טיפולים מחליפי ניתוח.כיסוי מלא עד תקרת ספקים שבהסדר.הביטוח מתחדש כל שנתיים בכפוף לתנאי ניתוחים ומחליפי\nהפוליסה,ותקף לכל החיים.הכיסוי כולל תקופת אכשרה בת 90ימים בעת מקרה ביטוח הנוגע להריון או לידה,תהיה ניתוח בישראל"
+    "surgeries_israel_5000": {
+      "label": "ניתוחים בישראל — משלים שב\"ן עם 5,000 ₪",
+      "text": "אני מבקש לציין בפניך כי פוליסת הבריאות הבסיסית אינה כוללת כיסוי ביטוחי בגין ביצוע ניתוחים פרטיים בישראל, בין היתר, מכיוון שכיסוי לניתוחים בישראל ניתן במסגרת השב\"ן.\n\nפוליסת \"ניתוחים וטיפולים מחליפי ניתוח בישראל – משלים שב\"ן עם השתתפות עצמית\" מעניקה כיסוי לניתוחים, טיפולים מחליפי ניתוח והתייעצויות עם רופא מומחה בישראל, מעבר לזכויות הניתנות במסגרת השב\"ן ובהתאם לתנאי הפוליסה. הכיסוי כולל שכר מנתח, הוצאות הניתוח, טיפולים מחליפי ניתוח והתייעצויות עם רופא מומחה. למימוש הכיסוי יש לפנות תחילה לקופת החולים למיצוי הזכויות במסגרת השב\"ן, וההשתתפות העצמית הינה 5,000 ₪. בניגוד לרוב חברות הביטוח, ניתן לבחור גם מנתח שאינו נמצא בהסדר עם החברה, בכפוף לתנאי הפוליסה. הפוליסה מתחדשת אחת לשנתיים. בכיסוי זה קיימת תקופת אכשרה של 90 יום, ולניתוחים או טיפולים הקשורים להריון או לידה – 12 חודשים, למעט במקרה ביטוח שנגרם עקב תאונה. בנוסף, קיימים חריגים והגבלות בהתאם לתנאי הפוליסה. כיסוי זה הינו כיסוי משלים שב\"ן."
     },
-    "ambulatory": {
-      "label": "אמבולטורי / ייעוץ ובדיקות",
-      "text": "שירותים אמבולטוריים להתייעצות ובדיקות,רפואת מומחים והתייעצויות,בדיקות אבחנתיות וטכנולוגיות מתקדמות,הראיית\nאיברים פנימיים במערכת העיכול באמצעות קפסולה,הריון ולידה,מחלת הסרטן -אבחון,בדיקה ומניעה,בדיקת סקר\nתקופתית,בדיקת,COLONFLAGשירות מחקר אישי ממוקד,שירות מומחה עולמי. אמבולטורי ייעוץ ובדיקות\nהביטוח מתחדש כל שנתיים בכפוף לתנאי הפוליסה,ותקף לכל החיים.הפרמיה משתנה לפי קבוצת גיל ומתקבעת בגיל.66\nבריאות\nהכיסוי כולל תקופת אכשרה בת 90ימים,הריון ולידה 270ימים,סקר לגילוי סרטן 3שנים,סקר תקופתי 24חודשים.\nנספח לשירותים אמבולטוריים לטיפולים,טיפולים פארא-רפואיים עד 12טיפולים לתקופה של 12חודשים,טיפולי\nפיזיותרפיה והידרותרפיה,מרפאות כאב בבית חולים פרטי.השתלה תוך גופית של כדורים רדיואקטיביים לטיפולים במחלת\nסרטן. אמבולטורי לטיפולים"
+    "surgeries_israel_none": {
+      "label": "ניתוחים בישראל — משלים שב\"ן ללא השתתפות",
+      "text": "אני מבקש לציין בפניך כי פוליסת הבריאות הבסיסית אינה כוללת כיסוי ביטוחי בגין ביצוע ניתוחים פרטיים בישראל, בין היתר, מכיוון שכיסוי לניתוחים בישראל ניתן במסגרת השב\"ן.\n\nפוליסת \"ניתוחים וטיפולים מחליפי ניתוח בישראל – משלים שב\"ן ללא השתתפות עצמית\" מעניקה כיסוי לניתוחים, טיפולים מחליפי ניתוח והתייעצויות עם רופא מומחה בישראל, מעבר לזכויות הניתנות במסגרת השב\"ן ובהתאם לתנאי הפוליסה. הכיסוי כולל שכר מנתח, הוצאות הניתוח, טיפולים מחליפי ניתוח והתייעצויות עם רופא מומחה, ללא השתתפות עצמית. בניגוד לרוב חברות הביטוח, ניתן לבחור גם מנתח שאינו נמצא בהסדר עם החברה, בכפוף לתנאי הפוליסה. הפוליסה מתחדשת אחת לשנתיים. בכיסוי זה קיימת תקופת אכשרה של 90 יום, ולניתוחים או טיפולים הקשורים להריון או לידה – 12 חודשים, למעט במקרה ביטוח שנגרם עקב תאונה. בנוסף, קיימים חריגים והגבלות בהתאם לתנאי הפוליסה. כיסוי זה הינו כיסוי משלים שב\"ן."
+    },
+    "surgeries_israel_first": {
+      "label": "ניתוחים בישראל — מהשקל הראשון",
+      "text": "אני מבקש לציין בפניך כי פוליסת הבריאות הבסיסית אינה כוללת כיסוי ביטוחי בגין ביצוע ניתוחים פרטיים בישראל, בין היתר, מכיוון שכיסוי לניתוחים בישראל ניתן במסגרת השב\"ן.\n\nפוליסת \"ניתוחים וטיפולים מחליפי ניתוח בישראל – מהשקל הראשון\" מעניקה כיסוי לניתוחים, טיפולים מחליפי ניתוח והתייעצויות עם רופא מומחה בישראל, בהתאם לתנאי הפוליסה, ללא צורך במיצוי זכויות במסגרת השב\"ן של קופת החולים. הכיסוי כולל עד 3 התייעצויות עם רופא מומחה אגב הניתוח או הטיפול מחליף הניתוח, שכר מנתח, ניתוח בבית חולים פרטי או במרפאה כירורגית פרטית וטיפולים מחליפי ניתוח. הפוליסה מתחדשת אחת לשנתיים והפרמיה החודשית משתנה בהתאם לגיל המבוטח. בכיסוי זה קיימת תקופת אכשרה של 90 יום, למעט במקרה ביטוח שנגרם עקב תאונה, ובמקרה ביטוח הקשור להריון או לידה – 12 חודשים (365 ימים). בנוסף, קיימים חריגים והגבלות בהתאם לתנאי הפוליסה. כיסוי זה הינו כיסוי בסיס."
+    },
+    "amb_consult": {
+      "label": "אמבולטורי — ייעוץ ובדיקות",
+      "text": "פוליסת \"שירותים אמבולטוריים – ייעוצים ובדיקות\" מעניקה כיסוי למגוון שירותים רפואיים שאינם כרוכים באשפוז, בהתאם לתנאי הפוליסה. הכיסוי כולל התייעצויות עם רופאים מומחים, בדיקות אבחנתיות וטכנולוגיות מתקדמות, בדיקות במהלך היריון ולידה, שירותי אבחון, בדיקה ומניעה למחלת הסרטן, בדיקות סקר תקופתיות, בדיקת COLONFLAG, שירות מחקר אישי ממוקד ושירות מומחה עולמי. תקרת הכיסוי השנתית הינה עד 11,000 ₪ לכלל הכיסויים בפוליסה. הפוליסה מתחדשת אחת לשנתיים והפרמיה החודשית משתנה בהתאם לגיל המבוטח. בכיסוי זה קיימת תקופת אכשרה של 90 יום לרוב השירותים, 270 יום לכיסויי היריון ולידה, 3 שנים לבדיקות סקר לגילוי סרטן ו-24 חודשים לבדיקת סקר תקופתית. בנוסף, קיימות השתתפויות עצמיות, חריגים והגבלות בהתאם לתנאי הפוליסה. כיסוי זה הינו כיסוי אמבולטורי."
+    },
+    "amb_extended": {
+      "label": "אמבולטורי — ייעוץ ובדיקות מורחב",
+      "text": "פוליסת \"שירותים אמבולטוריים – ייעוצים ובדיקות מורחב\" מעניקה כיסוי למגוון שירותים רפואיים שאינם כרוכים באשפוז, בהתאם לתנאי הפוליסה. הכיסוי כולל התייעצויות עם רופאים מומחים, בדיקות אבחנתיות וטכנולוגיות מתקדמות, בדיקות במהלך היריון ולידה, טיפולי פריון ושירותי פונדקאות בישראל, שירותי אבחון, בדיקה ומניעה למחלת הסרטן, בדיקות סקר תקופתיות, בדיקת COLONFLAG, שירות מחקר אישי ממוקד ושירות מומחה עולמי. תקרת הכיסוי השנתית הינה עד 21,983 ₪ לכלל הכיסויים בפוליסה. הפוליסה מתחדשת אחת לשנתיים והפרמיה החודשית משתנה בהתאם לגיל המבוטח. בכיסוי זה קיימת תקופת אכשרה של 90 יום לרוב השירותים, 270 יום לכיסויי היריון ולידה, 730 יום לטיפולי פריון ושירותי פונדקאות, 3 שנים לבדיקות סקר לגילוי סרטן ו-24 חודשים לבדיקת סקר תקופתית. בנוסף, קיימות השתתפויות עצמיות, חריגים והגבלות בהתאם לתנאי הפוליסה."
+    },
+    "amb_treatments": {
+      "label": "אמבולטורי — טיפולים",
+      "text": "פוליסת \"שירותים אמבולטוריים – טיפולים\" מעניקה כיסוי למגוון טיפולים רפואיים שאינם מחייבים אשפוז, בהתאם לתנאי הפוליסה. הכיסוי כולל טיפולים פרא־רפואיים, טיפולים ברפואה משלימה, טיפולי פוריות והפריה חוץ־גופית, מלונית לאחר לידה ושירותים רפואיים נוספים, בהתאם לתנאי הפוליסה. הפוליסה מתחדשת אחת לשנתיים והפרמיה החודשית משתנה בהתאם לגיל המבוטח. בכיסוי זה קיימת תקופת אכשרה של 90 יום לרוב השירותים ו-270 יום למלונית לאחר לידה ולהפריה חוץ־גופית. בנוסף, קיימות השתתפויות עצמיות, חריגים והגבלות בהתאם לתנאי הפוליסה."
     },
     "alt_medicine": {
       "label": "רפואה משלימה",
-      "text": "כתב שירות לשירותי רפאה משלימה (אלטרנטיבית),השירותים יסופקו על ידי ספק השירותים ( Targetcareטארגט-קר).\nרשימת השירותים:עיסוי רפואי עקב אשפוזה כתוצאה מתאונה,רפלקסולוגיה,שיאצו,אקופונקטורה,סוגו'ק,פלדנקאייז,\nאוסטיאופתיה,שיטת אלכסנדר,ביו פידבק,הומיאופתיה,כירופרקטיקה,נטורופתיה,פרחי באך,חדרי מלח.\nרפואה משלימה"
+      "text": "כתב שירות \"רפואה משלימה\" מעניק כיסוי למגוון טיפולים מתחום הרפואה המשלימה, כגון דיקור סיני, שיאצו, רפלקסולוגיה, כירופרקטיקה, אוסטיאופתיה, נטורופתיה, הומאופתיה, פרחי באך וטיפולים נוספים, בהתאם לתנאי כתב השירות. מבוטח שקיבל הפניה בכתב מרופא בשל מצבו הרפואי זכאי לעד 20 טיפולים בכל שנת ביטוח. השירות ניתן באמצעות ספק השירות שבהסדר בלבד. במקרה שבו לא קיים ספק הסדר בטווח של 30 ק\"מ ממקום מגורי המבוטח, ניתן לקבל טיפול אצל נותן שירות אחר ולקבל החזר של 50% מעלות הטיפול ועד 100 ₪ לטיפול, בהתאם לתנאי כתב השירות. בכיסוי זה קיימת תקופת אכשרה של 90 יום. ההשתתפות העצמית הינה 60 ₪ לטיפול במרפאת ספק ההסדר או 75 ₪ לטיפול בבית המבוטח (בשירותים המתאימים לכך). בנוסף, קיימים חריגים והגבלות בהתאם לתנאי כתב השירות."
     },
-    "service": {
-      "label": "כתב שירות / שירותים נלווים",
-      "text": "שירות זה מאפשר למנוי שאירעה לו תאונה שהיא \"מקרה מזכה\" לקבל את השירותים הבאים:החזר הוצאות פינוי באמצעות\nאמבולנס,ייעוץ עם רופא מומחה האורתופדיה /רדיולוגיה,טיפולי פיזיותרפיה /הידרותרפיה,מפגשי טיפול עם רופא מומחה\nאיילון ספורטיבי\nברפואת כאב,הקפאת מנוי בחדר כושר.הכיסוי כולל תקופת אכשרה בת 90ימים.הפרמיה קבועה לילד עד גיל,20מגיל 21\nפרמיה קבועה למבוגר.הביטוח מתחדש כל שנתיים בכפוף לתנאי הפוליסה ותקף עד גיל.69\nשירות זה מאפשר למבוטח בשעות הפעילות,לקבל שירות רופא עד הבית,לקבל ייעוץ מקוון עם רופא משפחה או ילדים\nולבצע בדיקות מעבדה בבית כגון לקיחת דמים,על פי המפורט בנספח השירות.השירות ניתן באמצעות נותן שירות בהסכם\nאיילון עד הבית\nעם המבטח בלבד.הפרמיה קבועה לילד עד גיל,20מגיל 21פרמיה קבועה למבוגר.הביטוח מתחדש כל שנתיים בכפוף\nלתנאי הפוליסה ותקף עד גיל.69\nיוני 2024\nכיסויים – חברת איילון ()2/2\nייעוץ רפואי ראשוני ובדיקות אבחנתיות נוספות.פגישת ייעוץ רפואי ראשוני עם רופא מטעם הספק.בכיסוי הנ\"ל קיימת\nנספח לשירותי אבחון מהיר השתתפות עצמית.הביטוח מתחדש כל שנתיים בכפוף לתנאי הפוליסה,ותקף לכל החיים.\nהכיסוי כולל תקופת אכשרה בת 45ימים.הפרמיה קבועה לילד עד גיל,20מגיל 21פרמיה קבועה למבוגר.\nכתב שירות חמל בר גפן -ניהול משבר רפואי,ליווי וסיוע במימוש זכויות במקרים של מחלה קשה.\nהכיסוי כולל תקופת אכשרה בת 90ימים.הפרמיה משתנה מדי שנה בהתאם לגיל המבוטח ומתקבעת בגיל.71 ניהול משברים בר גפן\nהביטוח מתחדש כל שנתיים בכפוף לתנאי הפוליסה ותקף עד גיל.85\nכתב שירות לשירותי רפואה אונליין -ייעוץ רפואי מקוון באמצעות טלפון חכם,טבלט או מחשב,הכולל ייעוצים עם רופאים\nכתב שירות ייעוץ בריאות\nמומחים,איסוף מידע לקראת ייעוץ,ייעוץ בתחומי רפואת משפחה וילדים.הביטוח מתחדש כל שנתיים בכפוף לתנאי\nרפואי אונליין"
+    "sport": {
+      "label": "איילון ספורטיבי",
+      "text": "כתב שירות \"איילון ספורטיבי\" מעניק מגוון שירותים במקרה של תאונה המהווה \"מקרה מזכה\", בהתאם לתנאי כתב השירות. הכיסוי כולל החזר הוצאות פינוי באמבולנס, עד 3 ייעוצים עם רופא מומחה בתחום האורתופדיה או הקרדיולוגיה, עד 10 טיפולי פיזיותרפיה או הידרותרפיה בשנה, עד 3 מפגשי טיפול עם רופא מומחה ברפואת כאב והחזר בגין הקפאת מנוי בחדר כושר. כתב השירות תקף בהתאם לתקופת פוליסת הביטוח אליה הוא מצורף. בכיסוי זה קיימת תקופת אכשרה של 90 יום, למעט הוצאות פינוי באמבולנס. בנוסף, קיימות השתתפויות עצמיות, חריגים והגבלות בהתאם לתנאי כתב השירות."
+    },
+    "home": {
+      "label": "איילון עד הבית",
+      "text": "כתב שירות \"איילון עד הבית\" מעניק שירותי רפואה בבית ובאמצעים מקוונים, בהתאם לתנאי כתב השירות. הכיסוי כולל ביקור רופא בבית המבוטח או במקום הימצאו, ייעוץ רפואי מקוון עם רופא משפחה או רופא ילדים ושירותי מעבדה בבית, כגון בדיקות דם ושתן. השירותים ניתנים באמצעות נותן שירות שבהסכם בלבד. במקרה שלא ניתן לשלוח רופא מטעם ספק השירות, ובאישור מראש, ניתן לפנות לרופא שאינו בהסדר ולקבל החזר בהתאם לתנאי כתב השירות. כתב השירות תקף בהתאם לתקופת פוליסת הביטוח אליה הוא מצורף. לא קיימת תקופת אכשרה. ההשתתפות העצמית הינה 25 ₪ לביקור רופא בבית ו-40 ₪ לביקור לצורך ביצוע שירותי מעבדה בבית, בעוד שהייעוץ הרפואי המקוון ניתן ללא השתתפות עצמית. בנוסף, קיימים חריגים והגבלות בהתאם לתנאי כתב השירות."
+    },
+    "diagnosis_fast": {
+      "label": "אבחון רפואי מהיר",
+      "text": "נספח לשירותי אבחון מהיר: ייעוץ רפואי ראשוני ובדיקות אבחנתיות נוספות. פגישת ייעוץ רפואי ראשוני עם רופא מטעם הספק. בכיסוי זה קיימת השתתפות עצמית. הביטוח מתחדש כל שנתיים בכפוף לתנאי הפוליסה, ותקף לכל החיים. הכיסוי כולל תקופת אכשרה בת 45 ימים. הפרמיה קבועה לילד עד גיל 20, ומגיל 21 פרמיה קבועה למבוגר."
+    },
+    "bargafen": {
+      "label": "ניהול משברים בר גפן",
+      "text": "כתב שירות חמל בר גפן — ניהול משבר רפואי, ליווי וסיוע במימוש זכויות במקרים של מחלה קשה. הכיסוי כולל תקופת אכשרה בת 90 ימים. הפרמיה משתנה מדי שנה בהתאם לגיל המבוטח ומתקבעת בגיל 71. הביטוח מתחדש כל שנתיים בכפוף לתנאי הפוליסה ותקף עד גיל 85."
+    },
+    "online": {
+      "label": "ייעוץ רפואי אונליין",
+      "text": "כתב שירות לשירותי רפואה אונליין — ייעוץ רפואי מקוון באמצעות טלפון חכם, טבלט או מחשב, הכולל ייעוצים עם רופאים מומחים, איסוף מידע לקראת ייעוץ, וייעוץ בתחומי רפואת משפחה וילדים. הביטוח מתחדש כל שנתיים בכפוף לתנאי הפוליסה."
     },
     "critical_illness": {
-      "label": "מחלות קשות",
-      "text": "פוליסת ביטוח מחלות קשות מסוג \"בשביל החוסן\" אותה אנו ממליצים לך לרכוש,כוללת את הכיסויים הבאים:\nבעת גילוי מחלה אחת מתוך 35המחלות הקשות או האירועים הרפואיים הקשים הנכללים בכיסוי,תקבל פיצוי חד פעמי של\n_________. ₪ניתן לראות את ריכוז המחלות בתנאי הפוליסה.\nייחודי לאיילון – פיצוי בעת מצב רפואי חמור ובלתי הפיך וכן פיצוי במקרה צנתור לב כלילי.\nפיצוי בעת תביעה ראשונה –, 100%פיצוי בעת תביעה שנייה –.50%\nפיצוי בעת פטירה בתוך 30יום מיום גילוי המחלה. בשביל החוסן\nפרמיה משתנה מדיי שנה.\n– 65סכום הפיצוי יקטן ב.50%-גיל כניסה – עד גיל, 65גיל תום ביטוח. 75:מגיל 70\nישנה תקופת אכשרה בת 90ימים.למקרה ביטוח שני,קיימת תקופת אכשרה של 365ימים מיום המקרה הביטוחי הראשון,\nכיסוי זה הינו כיסוי בסיס."
+      "label": "בשביל החוסן",
+      "text": "פוליסת ביטוח מחלות קשות מסוג \"בשביל החוסן\" אותה אנו ממליצים לך לרכוש, כוללת את הכיסויים הבאים:\nבעת גילוי מחלה אחת מתוך 38 המחלות הקשות או האירועים הרפואיים הקשים הנכללים בכיסוי, תקבל פיצוי חד פעמי של ____ ₪. ניתן לראות את ריכוז המחלות בתנאי הפוליסה.\nייחודי לאיילון – פיצוי בעת מצב רפואי חמור ובלתי הפיך וכן פיצוי במקרה צנתור לב כלילי. פיצוי בעת תביעה ראשונה – 100%, פיצוי בעת תביעה שנייה – 50%.\nפיצוי בעת פטירה בתוך 30 יום מיום גילוי המחלה. פרמיה משתנה מדיי שנה.\nגיל כניסה – עד גיל 65, גיל תום ביטוח: 75. מגיל 70 – סכום הפיצוי יקטן ב-50%.\nישנה תקופת אכשרה בת 90 ימים. למקרה ביטוח שני, קיימת תקופת אכשרה של 365 ימים מיום המקרה הביטוחי הראשון. כיסוי זה הינו כיסוי בסיס."
     },
     "cancer": {
-      "label": "סרטן",
-      "text": "פוליסת ביטוח מחלות קשות מסוג \"בשביל החוסן סרטן\" אותה אנו ממליצים לך לרכוש,כוללת את הכיסויים הבאים: קשות\nבעת גילוי מחלת הסרטן חלילה,תקבל פיצוי חד פעמי בסך ______.₪\nעיקרי הכיסויים:\nפיצוי בעת תביעה ראשונה, 100% -פיצוי בעת הישנות המחלה 100% -נדרשת תקופת אכשרה של 5שנים בין התביעות.\nכיסוי של 20%מסך גובה הפיצוי שנרכש למקרה של טרום סרטן:\nCARCINOMA IN SITU.1בשד. בשביל החוסן (סרטן)\n.2דיספלזיה קשה של צוואר הרחם בדרגה CIN3\n.3ניתוח לטיפול בגידול ממאיר בערמונית.\nפרמיה משתנה מדי שנה.\nישנה תקופת אכשרה בת 90ימים,כיסוי זה הינו כיסוי בסיס."
+      "label": "בשביל החוסן סרטן",
+      "text": "פוליסת ביטוח מחלות קשות מסוג \"בשביל החוסן סרטן\" אותה אנו ממליצים לך לרכוש, כוללת את הכיסויים הבאים:\nבעת גילוי מחלת הסרטן חלילה, תקבל פיצוי חד פעמי בסך ____ ₪. עיקרי הכיסויים:\nפיצוי בעת תביעה ראשונה – 100%, פיצוי בעת הישנות המחלה – 100%. נדרשת תקופת אכשרה של 5 שנים בין התביעות. כיסוי של 20% מסך גובה הפיצוי שנרכש למקרה של טרום סרטן:\n1. CARCINOMA IN SITU בשד\n2. דיספלזיה קשה של צוואר הרחם בדרגה CIN3\n3. ניתוח לטיפול בגידול ממאיר בערמונית.\nפרמיה משתנה מדי שנה.\nישנה תקופת אכשרה בת 90 ימים, כיסוי זה הינו כיסוי בסיס."
     },
     "risk": {
-      "label": "ריסק",
-      "text": "פוליסת ביטוח החיים אותה אנו ממליצים לך לרכוש הינה מסוג דרור.1\nבהתאם למאפייניך האישיים:גילך,עיסוקך ומצבך המשפחתי,ראינו כי סכום הביטוח המתאים עבורך למקרה מוות הינו\nביטוח חיים -\n____________.₪הפוליסה הינה עד גיל.85\nדרור 1\nישנו סייג אחד בפוליסה והוא לגבי התאבדות בשנה הראשונה.הפרמיה משתנה מדי שנה בהתאם לגיל המבוטח.\nחשוב לי להבהיר כי גם במידה ויש לך כבר ביטוח כזה,סכומי הביטוח הם מצטברים וביטוח אחד אינו גורע מהאחר."
+      "label": "דרור 1",
+      "text": "פוליסת ביטוח החיים אותה אנו ממליצים לך לרכוש הינה מסוג דרור 1.\nבהתאם למאפייניך האישיים: גילך, עיסוקך ומצבך המשפחתי, ראינו כי סכום הביטוח המתאים עבורך למקרה מוות הינו ____ ₪. הפוליסה הינה עד גיל 85.\nישנו סייג אחד בפוליסה והוא לגבי התאבדות בשנה הראשונה. הפרמיה משתנה מדי שנה בהתאם לגיל המבוטח. חשוב לי להבהיר כי גם במידה ויש לך כבר ביטוח כזה, סכומי הביטוח הם מצטברים וביטוח אחד אינו גורע מהאחר."
     },
     "mortgage": {
       "label": "משכנתא",
-      "text": "פוליסת ביטוח משכנתא אותה אנו ממליצים לך לרכוש כוללת ביטוח חיים,הנותן מענה במקרים בהם הלווים יצטרכו\nלהפסיק את תשלומי המשכנתא.במקרה של מוות חלילה,חברת הביטוח תדאג לשלם את יתרת ההלוואה לבנק,ובכך\nתפטור את הלווה הנותר מהמשך תשלומי המשכנתא לבנק ותקטין את הנטל הכלכלי מהמשפחה. משכנתא\nע\"פ הנתונים שבידינו:המוטב הבלתי חוזר הוא בנק _____ סניף מספר _____ כתובת הסניף ___________.\nיתרת ההלוואה היא __________ ₪לתקופה של _______ שנים עם ריבית קבועה/משתנה של _______.% חיים"
+      "text": "פוליסת ביטוח משכנתא אותה אנו ממליצים לך לרכוש כוללת ביטוח חיים, הנותן מענה במקרים בהם הלווים יצטרכו להפסיק את תשלומי המשכנתא. במקרה של מוות חלילה, חברת הביטוח תדאג לשלם את יתרת ההלוואה לבנק, ובכך תפטור את הלווה הנותר מהמשך תשלומי המשכנתא לבנק ותקטין את הנטל הכלכלי מהמשפחה.\nע\"פ הנתונים שבידינו: המוטב הבלתי חוזר הוא בנק ____ סניף מספר ____ כתובת הסניף ____. יתרת ההלוואה היא ____ ₪ לתקופה של ____ שנים עם ריבית קבועה/משתנה של ____%."
     },
     "umbrella": {
-      "label": "הרחבות לפוליסה",
-      "text": "פוליסת הביטוח מטריה ביטוחית מעניקה לך,בהתאם לבחירתך ובכפוף לאישור החברה:כיסוי למקרה של אובדן כושר\nעבודה,על-פי הגדרת עיסוק ספציפי – מאושר רק לעיסוקים שהוגדרו על-ידי החברה.\nכיסוי לתקופת אכשרה – תשלום פיצוי במקרה של דחיית התביעה על-ידי קרן הפנסיה בשל העובדה שמדובר במקרה\nביטוח שהתרחש בתקופת האכשרה בקרן הפנסיה.\nכיסוי לביטול קיזוז ביטוח לאומי על-ידי קרן הפנסיה – כיסוי משלים לקרן הפנסיה,במקרה של זכאות לתשלום על-ידי מטריה ביטוחית\nהמוסד לביטוח לאומי,עקב תאונת עבודה או מחלה.\nשחרור מההפקדות לקרן הפנסיה (בכיסויים לתקופת אכשרה ולהגדרת עיסוק ספציפי) ושחרור מתשלום הפרמיה​.\nתוקף הביטוח עד גיל פרישה.\nהפרמיה צמודה למדד ומשתנה מדי שנה בהתאם לגיל המבוטח."
+      "label": "מטריה ביטוחית",
+      "text": "פוליסת הביטוח מטריה ביטוחית מעניקה לך, בהתאם לבחירתך ובכפוף לאישור החברה: כיסוי למקרה של אובדן כושר עבודה, על-פי הגדרת עיסוק ספציפי – מאושר רק לעיסוקים שהוגדרו על-ידי החברה.\nכיסוי לתקופת אכשרה – תשלום פיצוי במקרה של דחיית התביעה על-ידי קרן הפנסיה בשל העובדה שמדובר במקרה ביטוח שהתרחש בתקופת האכשרה בקרן הפנסיה.\nכיסוי לביטול קיזוז ביטוח לאומי על-ידי קרן הפנסיה – כיסוי משלים לקרן הפנסיה, במקרה של זכאות לתשלום על-ידי המוסד לביטוח לאומי, עקב תאונת עבודה או מחלה.\nשחרור מההפקדות לקרן הפנסיה (בכיסויים לתקופת אכשרה ולהגדרת עיסוק ספציפי) ושחרור מתשלום הפרמיה. תוקף הביטוח עד גיל פרישה.\nהפרמיה צמודה למדד ומשתנה מדי שנה בהתאם לגיל המבוטח."
     },
     "disability_income": {
       "label": "אובדן כושר עבודה",
-      "text": "בפוליסת אובדן כושר עבודה במעמד עצמאי אותה אנו ממליצים לך לרכוש,אתה מצהיר כי:\nההכנסה מעבודה שאתה צפוי להרוויח תעמוד על סך של ______ ₪לחודש.ידוע לך כי בקרות מקרה הביטוח יוגבלו\nתגמולי הפיצוי החודשי להם תהיה זכאי לגובה שלא יעלה על 75%מהכנסתך מעבודה בפועל ב 12-החודשים שקדמו אובדן כושר עבודה\nלמועד קרות מקרה הביטוח,או בתקופה ממועד תחילת הביטוח ועד מועד קרות מקרה הביטוח,אם חלפו פחות מ12-\nאובדן כושר"
+      "text": "בפוליסת אובדן כושר עבודה במעמד עצמאי אותה אנו ממליצים לך לרכוש, אתה מצהיר כי:\nההכנסה מעבודה שאתה צפוי להרוויח תעמוד על סך של ____ ₪ לחודש. ידוע לך כי בקרות מקרה הביטוח יוגבלו תגמולי הפיצוי החודשי להם תהיה זכאי לגובה שלא יעלה על 75% מהכנסתך מעבודה בפועל ב-12 החודשים שקדמו למועד קרות מקרה הביטוח, או בתקופה ממועד תחילת הביטוח ועד מועד קרות מקרה הביטוח, אם חלפו פחות מ-12 חודשים. ישנה תקופת אכשרה בת 90 ימים.\nכל עוד משולם פיצוי חודשי, תשוחרר הפוליסה מתשלום הפרמיה. הפרמיה שתשוחרר תהיה באופן יחסי לגובה הפיצוי החודשי שישולם.\nסכום הפיצוי החודשי, כולל חברות הביטוח וכל מקור אחר, לא יעלה על 75% מההשתכרות."
     }
   },
   "כלל": {
@@ -40957,6 +43542,8 @@ const MIRROR_DISCLOSURE_LIBRARY = {
         getClalHealthSchema: Wizard.getClalHealthSchema,
         getClalRiskHealthSchema: Wizard.getClalRiskHealthSchema,
         getClalCriticalCancerHealthSchema: Wizard.getClalCriticalCancerHealthSchema,
+        getClalFollowupSchemas: Wizard.getClalFollowupSchemas,
+        buildClalFollowupFields: Wizard.buildClalFollowupFields,
         getCarrierCancerHealthSchema: Wizard.getCarrierCancerHealthSchema,
         buildPhoenixQuestionnaireCatalog: Wizard.buildPhoenixQuestionnaireCatalog,
         buildPhoenixFollowupFields: Wizard.buildPhoenixFollowupFields,
@@ -41029,6 +43616,7 @@ const MIRROR_DISCLOSURE_LIBRARY = {
               ? q.questionnaireNos.map(String)
               : (Array.isArray(q.questionnaireNumbers) ? q.questionnaireNumbers.map(String) : []),
             questionnaireNumbers: Array.isArray(q.questionnaireNumbers) ? q.questionnaireNumbers.map(String) : [],
+            questionnaireLetter: safeTrim(q.questionnaireLetter),
             // GI-HEALTH-DECL: ייחוס שאלה שהתווספה מהצהרה של חברה אחרת
             addedFromOtherDecl: q._addedFromOtherDecl === true,
             addedFromCompany: safeTrim(q._addedFromCompany),
@@ -42796,34 +45384,46 @@ const MIRROR_DISCLOSURE_LIBRARY = {
       if(
         v.includes('משלים') ||
         v.includes('שקל ראשון') ||
+        v.includes('שקל הראשון') ||
+        v.includes('מהשקל') ||
         v.includes('שבן') ||
         ((v.includes('ניתוח') || v.includes('ניתוחים')) && (v.includes('ישראל') || v.includes('בארץ')))
-      ) return ['surgeries_israel'];
+      ){
+        if(v.includes('5000') || v.includes('5,000') || v.includes('5 000')){
+          return ['surgeries_israel_5000', 'surgeries_israel'];
+        }
+        if(v.includes('ללא השתתפות') || (v.includes('ללא') && v.includes('השתתפות'))){
+          return ['surgeries_israel_none', 'surgeries_israel'];
+        }
+        if(v.includes('שקל ראשון') || v.includes('שקל הראשון') || v.includes('מהשקל')){
+          return ['surgeries_israel_first', 'surgeries_israel'];
+        }
+        if(v.includes('משלים') || v.includes('שבן')) return ['surgeries_israel_none', 'surgeries_israel'];
+        return ['surgeries_israel'];
+      }
+      if(v.includes('אמבולטור') && v.includes('מורחב')) return ['amb_extended', 'ambulatory'];
+      if(v.includes('טיפולים אמבולטור')) return ['amb_treatments', 'ambulatory'];
       if(
-        v.includes('אמבולטור') ||
         v.includes('ייעוץ ובדיק') ||
-        v.includes('ייעוצים ובדיק') ||
-        v.includes('טכנולוגי') ||
-        v.includes('טיפולים אמבולטור')
-      ) return ['ambulatory'];
+        v.includes('ייעוצים ובדיק')
+      ) return ['amb_consult', 'ambulatory'];
+      if(v.includes('אמבולטור')) return ['amb_consult', 'ambulatory'];
       if(v.includes('רפואה משלימה')) return ['alt_medicine'];
+      if(v.includes('ספורטיבי')) return ['sport', 'service'];
+      if(v.includes('עד הבית')) return ['home', 'service'];
+      if(v.includes('פרימיום לילד') || v.includes('שירותים פרימיום')) return ['premium_child', 'service'];
+      if(v.includes('בר גפן') || v.includes('חמל')) return ['bargafen', 'service'];
+      if(v.includes('אונליין') || v.includes('און ליין') || v.includes('מומחה בקליק')) return ['online', 'service'];
+      if(v.includes('התפתחות')) return ['child_dev', 'service'];
+      if(v.includes('אבחון מהיר') || v.includes('אבחון רפואי מהיר')) return ['diagnosis_fast', 'service'];
       if(
         v.includes('אבחון') ||
         v.includes('כתב שירות') ||
         v.includes('רופא') ||
-        v.includes('אונליין') ||
-        v.includes('און ליין') ||
-        v.includes('עד הבית') ||
-        v.includes('התפתחות') ||
         v.includes('ליווי') ||
-        v.includes('ילד') ||
         v.includes('smart') ||
-        v.includes('ספורטיבי') ||
-        v.includes('בר גפן') ||
-        v.includes('חמל') ||
         v.includes('מניעתית') ||
-        v.includes('שירותים לילד') ||
-        v.includes('אבחון מהיר')
+        v.includes('שירותים לילד')
       ) return ['service'];
       return [];
     },
@@ -42874,7 +45474,8 @@ const MIRROR_DISCLOSURE_LIBRARY = {
 
     findDisclosureKeysByCoverLabel(companyLib, cover){
       const mapped = this.mapHealthCoverToDisclosureKeys(cover);
-      if(mapped.length) return mapped;
+      const existing = mapped.filter((key) => companyLib && companyLib[key] && safeTrim(companyLib[key].text));
+      if(existing.length) return [existing[0]];
       const nv = this.normalizeDisclosureKey(cover);
       if(!nv || !companyLib) return [];
       const hits = [];
@@ -42913,30 +45514,56 @@ const MIRROR_DISCLOSURE_LIBRARY = {
       return [];
     },
 
-    /** הכשרה: מחלות קשות → ספריית הכשרה; ריסק/משכנתא → איילון; בריאות → כלל */
-    resolveDisclosureCompany(company, policy){
+    /** ספריית הגילוי לפי שם החברה בפוליסה — בלי הפניה לחברה אחרת */
+    resolveDisclosureCompany(company, _policy){
       const c = safeTrim(company);
-      if(c !== "הכשרה") return this.resolveDisclosureLibraryCompany(c) || c;
-      const type = safeTrim(policy?.type || policy?.product);
-      const raw = this.normalizeDisclosureKey([policy?.type, policy?.product, policy?.name].filter(Boolean).join(" "));
-      if(type === "מחלות קשות" || raw.includes("מחלות קשות")) return "הכשרה";
-      if(type === "בריאות" || raw.includes("בריאות")) return "כלל";
-      if(type === "ריסק משכנתא" || raw.includes("משכנתא") || type === "ריסק" || raw.includes("ריסק")) return "איילון";
-      if(type === "סרטן" || raw.includes("סרטן")) return "הכשרה";
-      return "איילון";
+      return this.resolveDisclosureLibraryCompany(c) || c;
     },
 
     /** סכום פיצוי/ביטוח מפוליסה מוצעת — למילוי מקומות ריקים בנוסח גילוי נאות */
     getPolicyDisclosureAmount(policy){
       if(!policy || typeof policy !== "object") return "";
       const type = safeTrim(policy?.type || policy?.product);
-      const isComp = type === "מחלות קשות" || type === "סרטן";
-      return isComp
-        ? safeTrim(policy?.compensation || policy?.sumInsured || policy?.coverage || "")
-        : safeTrim(policy?.sumInsured || policy?.compensation || policy?.coverage || "");
+      const isComp = type === "מחלות קשות" || type === "סרטן" || /מחלות קשות|סרטן/.test(type);
+      const pick = (...keys) => {
+        for(const k of keys){
+          const v = safeTrim(policy?.[k]);
+          if(v) return v;
+        }
+        return "";
+      };
+      const direct = isComp
+        ? pick("compensation", "sumInsured", "coverageAmount", "coverage", "sum")
+        : pick("sumInsured", "compensation", "coverageAmount", "coverage", "sum");
+      if(direct) return direct;
+      const per = (isComp ? policy.compensationPerInsured : null)
+        || policy.sumInsuredPerInsured
+        || policy.compensationPerInsured;
+      if(per && typeof per === "object"){
+        const vals = Object.values(per).map((v) => safeTrim(v)).filter(Boolean);
+        if(!vals.length) return "";
+        if(vals.length === 1) return vals[0];
+        let total = 0;
+        let allNum = true;
+        vals.forEach((v) => {
+          let n = NaN;
+          try {
+            if(typeof CustomersUI !== "undefined" && CustomersUI && typeof CustomersUI.asMoneyNumber === "function"){
+              n = CustomersUI.asMoneyNumber(v);
+            } else {
+              n = Number(String(v).replace(/[^\d.\-]/g, ""));
+            }
+          } catch(_e) {}
+          if(Number.isFinite(n) && n > 0) total += n;
+          else allNum = false;
+        });
+        if(allNum && total > 0) return String(total);
+        return vals[0];
+      }
+      return "";
     },
 
-    /** מחליף קווים ריקים של סכום (____ ₪ / ____ ש"ח) בסכום שהוזן בפוליסה המוצעת */
+    /** מחליף מקום ריק של סכום (____ ₪ / רווחים + ₪) בסכום שהוזן בפוליסה המוצעת */
     fillDisclosureAmountBlanks(text, amountRaw){
       const src = safeTrim(text);
       const amount = safeTrim(amountRaw);
@@ -42954,7 +45581,7 @@ const MIRROR_DISCLOSURE_LIBRARY = {
         }
       }catch(_e){}
       // רק מקומות ריקים שצמודים למטבע — לא נוגעים בקווים של בנק/סניף/אחוזים
-      return src.replace(/_{3,}\s*\.?\s*(₪|ש["״']?ח\.?)/g, `${formatted} $1`);
+      return src.replace(/(?:_{2,}|\s{2,})\s*\.?\s*(₪|ש["״']?ח\.?)/g, (_, cur) => `${formatted} ${cur}`);
     },
 
     getDisclosureEntries(rec){
@@ -43176,6 +45803,8 @@ const MIRROR_DISCLOSURE_LIBRARY = {
         getClalHealthSchema: Wizard.getClalHealthSchema,
         getClalRiskHealthSchema: Wizard.getClalRiskHealthSchema,
         getClalCriticalCancerHealthSchema: Wizard.getClalCriticalCancerHealthSchema,
+        getClalFollowupSchemas: Wizard.getClalFollowupSchemas,
+        buildClalFollowupFields: Wizard.buildClalFollowupFields,
         getCarrierCancerHealthSchema: Wizard.getCarrierCancerHealthSchema,
         buildPhoenixQuestionnaireCatalog: Wizard.buildPhoenixQuestionnaireCatalog,
         buildPhoenixFollowupFields: Wizard.buildPhoenixFollowupFields,
@@ -43253,6 +45882,7 @@ const MIRROR_DISCLOSURE_LIBRARY = {
               ? q.questionnaireNos.map(String)
               : (Array.isArray(q.questionnaireNumbers) ? q.questionnaireNumbers.map(String) : []),
             questionnaireNumbers: Array.isArray(q.questionnaireNumbers) ? q.questionnaireNumbers.map(String) : [],
+            questionnaireLetter: safeTrim(q.questionnaireLetter),
             // GI-HEALTH-DECL: ייחוס שאלה שהתווספה מהצהרה של חברה אחרת
             addedFromOtherDecl: q._addedFromOtherDecl === true,
             addedFromCompany: safeTrim(q._addedFromCompany),
@@ -43923,6 +46553,7 @@ const MIRROR_DISCLOSURE_LIBRARY = {
 
 
   const HAR_BITUACH_SITE_URL = "https://harb.cma.gov.il/";
+  const TRAVEL_INSURANCE_ABROAD_URL = "https://buy.passportcard.co.il/?AffiliateId=vINm9OCbeh0%2BTAjGxvVjjQ%3D%3D";
 
   const HarHabituachTopbarUI = {
     init(){
@@ -43948,6 +46579,45 @@ const MIRROR_DISCLOSURE_LIBRARY = {
             window.showToast?.({
               title: "לא נפתח חלון",
               text: "אפשר חלונות קופצים בדפדפן כדי לפתוח את אתר הר הביטוח.",
+              variant: "warn",
+              durationMs: 4600
+            });
+          }catch(_e){}
+        }
+      });
+    }
+  };
+
+  const TravelInsuranceTopbarUI = {
+    init(){
+      const btn = document.getElementById("btnTravelInsuranceAbroad");
+      if(!btn) return;
+      on(btn, "click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if(!Auth.current){
+          try{
+            window.showToast?.({
+              title: "נדרשת התחברות",
+              text: "יש להתחבר למערכת לפני פתיחת ביטוח נסיעות לחו״ל.",
+              variant: "warn",
+              durationMs: 4200
+            });
+          }catch(_e){}
+          return;
+        }
+        const opened = window.open(
+          TRAVEL_INSURANCE_ABROAD_URL,
+          "giTravelInsuranceAbroad",
+          "width=1200,height=860,scrollbars=yes,resizable=yes"
+        );
+        if(opened){
+          try { opened.opener = null; } catch(_e) {}
+        } else {
+          try{
+            window.showToast?.({
+              title: "לא נפתח חלון",
+              text: "אפשר חלונות קופצים בדפדפן כדי לפתוח את ביטוח הנסיעות לחו״ל.",
               variant: "warn",
               durationMs: 4600
             });
@@ -47024,6 +49694,11 @@ const ClalRiskLifePdf = {
           this.renderUsers();
           this.renderPeerMeta(true);
           this.renderTypingIndicator();
+          try {
+            if(typeof OpsDashboardUI !== "undefined" && OpsDashboardUI.refreshAgentRows){
+              OpsDashboardUI.refreshAgentRows();
+            }
+          } catch(_e) {}
         }, 280);
       }
       this._presenceUiDebounced();
@@ -47531,6 +50206,7 @@ const ClalRiskLifePdf = {
     },
 
     buildPresencePayload(extra={}){
+      if(!this._sessionStartedAt) this._sessionStartedAt = nowISO();
       return {
         userId: this.userKey,
         name: this.currentUser?.name || 'נציג',
@@ -47539,6 +50215,7 @@ const ClalRiskLifePdf = {
         avatar: this.avatarUrlForUser(this.currentUser || {}),
         avatarUpdatedAt: this.currentUser?.avatarUpdatedAt || safeTrim(getChatAvatarEntry(this.userKey)?.updatedAt || ''),
         onlineAt: nowISO(),
+        sessionStartedAt: extra.sessionStartedAt || this._sessionStartedAt,
         updatedAt: Date.now(),
         typingTo: '',
         typingUntil: 0,
@@ -48220,6 +50897,7 @@ const ClalRiskLifePdf = {
       this.refreshCurrentUser();
       const currentKey = safeTrim(this.userKey);
       if(prevUserKey && currentKey && prevUserKey !== currentKey){
+        this._sessionStartedAt = "";
         this.teardownRealtime(true);
         this.initStarted = false;
       }
@@ -48231,6 +50909,7 @@ const ClalRiskLifePdf = {
     },
 
     onLogout(){
+      this._sessionStartedAt = "";
       this.teardownRealtime(true);
       this.hideFab();
       this.closeWindow(false, true);
@@ -48260,6 +50939,7 @@ const ClalRiskLifePdf = {
   const __chatOriginalLogout = Auth.logout.bind(Auth);
   Auth.logout = function(reason = "manual"){
     try { ChatUI.onLogout(); } catch(_e) {}
+    try { window.GiAssistant?.onLogout?.(); } catch(_e) {}
     return __chatOriginalLogout(reason);
   };
 
@@ -48377,6 +51057,7 @@ const ClalRiskLifePdf = {
       }
       this._loginReady = Array.isArray(State.data?.agents) && State.data.agents.length > 0;
       try { Storage._memoryCache = null; } catch(_e) {}
+      try { Storage.clearTeamManagerLightRoster?.(); } catch(_e) {}
       try { sessionStorage.removeItem(GI_SERVER_CACHE_KEY); } catch(_e) {}
       try { DashboardUI.invalidateMetricsCache?.({ force: true, userSwitch: true }); } catch(_e) {}
       if(reason){
@@ -48654,12 +51335,14 @@ const ClalRiskLifePdf = {
       if (Auth.current) {
         try { ChatUI.onLogin(); } catch(_e) {}
         try { ReminderUI.onLogin(); } catch(_e) {}
+        try { window.GiAssistant?.onLogin?.(); } catch(_e) {}
         try { void ProposalAssignInbox.flushForCurrentUser(); } catch(_e) {}
         try { void CustomerAssignInbox.flushForCurrentUser(); } catch(_e) {}
         try { void CampaignLeadAssignInbox.flushForCurrentUser(); } catch(_e) {}
         try { CampaignAgentLeadWatcher.start(); } catch(_e) {}
         try { MirrorCallAgentToastWatcher.start(); } catch(_e) {}
         try { OpsAgentStatusToastWatcher.start(); } catch(_e) {}
+        try { OpsAssignArrivalAlert.start(); } catch(_e) {}
         const alreadyOnApp = !!document.querySelector(".view.is-visible");
         if(options.skipNavigation || alreadyOnApp){
           try { LiveRefresh.renderActiveView(); } catch(_e) {}
@@ -48889,6 +51572,9 @@ const ClalRiskLifePdf = {
         try { void CustomerAssignInbox.flushForCurrentUser(); } catch(_) {}
         try { void CampaignLeadAssignInbox.flushForCurrentUser(); } catch(_) {}
         try {
+          if(DashboardUI.shouldShowPerformanceBoard?.()){
+            DashboardUI.invalidateTodaySalesLive?.();
+          }
           if(DashboardUI.els?.root?.querySelector(".bankDash__kpis")) DashboardUI.scheduleRefreshKpis();
           else if(LiveRefresh.getCurrentView() === "dashboard") DashboardUI.render();
         } catch(_e){}
@@ -49004,10 +51690,9 @@ const ClalRiskLifePdf = {
         } catch(_e) {}
         return;
       }
-      // GI-PERF 2026-08-23: מנהל צוות טוען את כל הצוות. בלי hydration המוני
-      // (אותו רעיון כמו Large Session). נציג רגיל לא נכנס לכאן.
+      // GI-PERF 2026-08-23 / 08-25: מנהל צוות — בלי hydration המוני (אותו רעיון כמו Large Session).
       try {
-        if(Auth?.isTeamManager?.()){
+        if(Auth?.isTeamManager?.() || Storage.isTeamManagerLightSession?.()){
           try { console.warn("TEAM_MANAGER_SKIP_MASS_HYDRATION"); } catch(_e) {}
           try {
             UI.renderSyncStatus(
@@ -49098,6 +51783,18 @@ const ClalRiskLifePdf = {
         ? { skipNavigation: true, skipLoginSideEffects: true, skipNormalize: true }
         : {};
 
+      // GI-PERF 2026-08-25: מנהל צוות — אל תטען/תאמץ IDB שמן בכניסה.
+      // גם כש-paint מדלג, עצם קריאת המנות הקפיאה את ואדים מיד אחרי לוגין.
+      let skipFatFullCache = false;
+      try {
+        if(Auth?.isTeamManager?.()){
+          skipFatFullCache = true;
+          Storage.markTeamManagerLightRoster?.(0);
+          try { void Storage.purgeCurrentUserFullIdbCache(); } catch(_e2) {}
+          try { console.warn("TEAM_MANAGER_LOGIN_SKIP_FAT_CACHE"); } catch(_e2) {}
+        }
+      } catch(_e) {}
+
       const paintFromLocalCache = (payload, label) => {
         if(!stillSameSession()) return false;
         if(!payload || typeof payload !== "object") return false;
@@ -49149,12 +51846,14 @@ const ClalRiskLifePdf = {
 
       // PERF: paint instantly from memory/IDB full cache, then sync quietly from server
       let paintedFromFullCache = false;
-      try {
-        const memPayload = Storage.loadMemoryCacheForCurrentUser(GI_FULL_IDB_TTL_MS);
-        if(memPayload){
-          paintedFromFullCache = paintFromLocalCache(memPayload, "נטען ממטמון · מסנכרן מהשרת…");
-        }
-      } catch(_e) {}
+      if(!skipFatFullCache){
+        try {
+          const memPayload = Storage.loadMemoryCacheForCurrentUser(GI_FULL_IDB_TTL_MS);
+          if(memPayload){
+            paintedFromFullCache = paintFromLocalCache(memPayload, "נטען ממטמון · מסנכרן מהשרת…");
+          }
+        } catch(_e) {}
+      }
       // GI-PERF 2026-07-31 (שלב א'): אם קריאת ה-IDB חורגת מהתקציב, לא מוותרים עליה —
       // ממשיכים לחכות לה ברקע, וצובעים כשהיא מגיעה כל עוד השרת עוד לא ענה.
       // קודם: ה-race החזיר null, הצביעה בוטלה, והמשתמש נשאר מול מסך ריק עד סוף הטעינה המלאה.
@@ -49170,7 +51869,7 @@ const ClalRiskLifePdf = {
         } catch(_e) {}
         return true;
       };
-      if(!paintedFromFullCache){
+      if(!skipFatFullCache && !paintedFromFullCache){
         try {
           const idbPromise = Storage.loadFullIdbCache(GI_FULL_IDB_TTL_MS);
           const idbEntry = await Promise.race([
@@ -49179,7 +51878,8 @@ const ClalRiskLifePdf = {
           ]);
           if(idbEntry?.payload){
             paintedFromFullCache = paintFromLocalCache(idbEntry.payload, "נטען ממטמון · מסנכרן מהשרת…");
-            adoptIdbEntry(idbEntry);
+            // רק אם באמת צבענו — אחרת אימוץ לזיכרון משאיר 20MB+ ומקפיא בהמשך.
+            if(paintedFromFullCache) adoptIdbEntry(idbEntry);
           } else {
             // חריגה מהתקציב — צביעה מאוחרת, רק אם השרת טרם החזיר תשובה.
             idbPromise.then((late) => {
@@ -49187,7 +51887,7 @@ const ClalRiskLifePdf = {
               if(serverSyncApplied || paintedFromFullCache) return;
               if(!late?.payload) return;
               paintedFromFullCache = paintFromLocalCache(late.payload, "נטען ממטמון · מסנכרן מהשרת…");
-              adoptIdbEntry(late);
+              if(paintedFromFullCache) adoptIdbEntry(late);
             }).catch(() => {});
           }
         } catch(_e) {}
@@ -49392,6 +52092,7 @@ const ClalRiskLifePdf = {
           perfIdle(() => {
             try { ChatUI.onLogin(); } catch(_e) {}
             try { ReminderUI.onLogin(); } catch(_e) {}
+            try { window.GiAssistant?.onLogin?.(); } catch(_e) {}
             try { void ProposalAssignInbox.flushForCurrentUser(); } catch(_e) {}
             try { void CustomerAssignInbox.flushForCurrentUser(); } catch(_e) {}
             try { void CampaignLeadAssignInbox.flushForCurrentUser(); } catch(_e) {}
@@ -50019,6 +52720,8 @@ const ClalRiskLifePdf = {
     row.payload.agentTargets = normalizeAgentTargetMap(state?.meta?.agentTargets);
     row.payload.agentReportAliases = normalizeAgentReportAliasesMap(state?.meta?.agentReportAliases);
     row.payload.agentReportAliasesUpdatedAt = safeTrim(state?.meta?.agentReportAliasesUpdatedAt) || null;
+    row.payload.agentBranches = normalizeAgentBranchesMap(state?.meta?.agentBranches);
+    row.payload.agentBranchesUpdatedAt = safeTrim(state?.meta?.agentBranchesUpdatedAt) || null;
     row.payload.directoryContactExtras = normalizeDirectoryContactsList(state?.meta?.directoryContactExtras);
     row.payload.directoryContactsUpdatedAt = safeTrim(state?.meta?.directoryContactsUpdatedAt) || null;
     row.payload.usersManagementAccess = normalizeUsersManagementAccess(state?.meta?.usersManagementAccess);
@@ -50226,12 +52929,22 @@ const ClalRiskLifePdf = {
         const localReady = !!(this._metricsCache && this._metricsCache._localBuildReady === true);
         const localHasMoney = (Number(this._metricsCache?.netPremium) > 0)
           || (Number(this._metricsCache?.agentAppointmentPremium) > 0);
-        const serverHasMore = (Number(res.netPremium) || 0) > (Number(this._metricsCache?.netPremium) || 0)
-          || (Number(res.apptPremium) || 0) > (Number(this._metricsCache?.agentAppointmentPremium) || 0);
+        const localNet = Number(this._metricsCache?.netPremium) || 0;
+        const serverNet = Number(res.netPremium) || 0;
+        const applyServerNet = this._shouldApplyServerNetOverlay({
+          localNet,
+          serverNet,
+          missingCustomers,
+          localReady,
+          localHasNet: localNet > 0
+        });
+        const serverHasMoreAppt = (Number(res.apptPremium) || 0) > (Number(this._metricsCache?.agentAppointmentPremium) || 0);
         /* GI-FIX 2026-08-09b: ממלאים מ-RPC כל עוד אין חישוב מקומי מוכן —
            לא רק בזמן missing payloads (אחרת אחרי hydration המסך קופץ ל־0).
-           GI-FACE-KPI 2026-08-14: גם אם סומן localReady על ₪0 (כניסת פנים מוקדמת). */
-        if(missingCustomers > 0 || !localReady || !localHasMoney || serverHasMore){
+           GI-FACE-KPI 2026-08-14: גם אם סומן localReady על ₪0 (כניסת פנים מוקדמת).
+           GI-NET-LIVE 2026-08-27: נטו — לא דורסים סכום מקומי גבוה, ולא עוברים ל-RPC
+           גדול יותר אחרי שהחישוב המקומי מוכן. מינוי סוכן נשאר במסלול הקיים. */
+        if(applyServerNet || missingCustomers > 0 || !localReady || !localHasMoney || serverHasMoreAppt){
           const m = (this._metricsCache && typeof this._metricsCache === "object")
             ? this._metricsCache
             : (metrics && typeof metrics === "object" ? metrics : this._metricsLoadingShell());
@@ -50244,25 +52957,35 @@ const ClalRiskLifePdf = {
             Number(m.agentAppointments) || 0,
             Number(m.newClients) || 0
           ].join("|");
-          const netPremium = Number(res.netPremium) || 0;
+          const netPremium = serverNet;
           const apptPremium = Number(res.apptPremium) || 0;
           const apptPolicies = Number(res.apptPolicies) || 0;
-          // אל תדרוס מספרים טובים באפסים אם ה-RPC החזיר ריק זמנית
-          if(netPremium > 0 || !(Number(m.netPremium) > 0)){
+          if(applyServerNet){
             m.netPremium = netPremium;
             m.soldPolicies = Number(res.soldPolicies) || 0;
             m.newClients = Number(res.newClients) || 0;
+            if(res.productTotals && typeof res.productTotals === "object"
+              && Object.keys(res.productTotals).length){
+              m.netProductTotals = res.productTotals;
+            }
+            try { this.applyTargetFieldsToMetrics(m, Number(m.netPremium) || 0); } catch(_e) {}
+            m.avgPremium = m.customersMonth?.length ? ((Number(m.netPremium) || 0) / m.customersMonth.length) : 0;
+            if(!localReady || missingCustomers > 0){
+              m._serverKpiOverlay = true;
+              m._localBuildReady = false;
+            }
+            m._loading = false;
+          } else if(netPremium > 0 && !(Number(m.netPremium) > 0)){
+            m.netPremium = netPremium;
+            m.soldPolicies = Number(res.soldPolicies) || 0;
+            m.newClients = Number(res.newClients) || 0;
+            m._loading = false;
           }
           if(res.apptFetched === true && apptPremium > 0){
             try { this._applyAppointmentKpi(apptPremium, apptPolicies, null, "server"); } catch(_e) {
               m.agentAppointmentPremium = apptPremium;
               m.agentAppointments = apptPolicies;
             }
-          }
-          /* פירוט מוצרים מ-RPC — בלי payloads בזיכרון אין מאיפה לבנות «הצג פירוט». */
-          if(res.productTotals && typeof res.productTotals === "object"
-            && Object.keys(res.productTotals).length){
-            m.netProductTotals = res.productTotals;
           }
           /* אין RPC לפי לקוח למינוי סוכן — מציגים סיכום שרת עד שה-hydration ממלא פירוט מלא. */
           if((apptPolicies > 0 || apptPremium > 0) && !Array.isArray(m.agentApptItems)){
@@ -50272,12 +52995,10 @@ const ClalRiskLifePdf = {
               latestStamp: Date.now()
             }];
           }
-          /* GI-FIX 2026-08-09 — יעד לפי היקף (כל הנציגים/צוות/אישי), לא רק יעד אישי של המנהל. */
-          try { this.applyTargetFieldsToMetrics(m, Number(m.netPremium) || 0); } catch(_e) {}
-          m.avgPremium = m.customersMonth?.length ? ((Number(m.netPremium) || 0) / m.customersMonth.length) : 0;
-          m._serverKpiOverlay = true;
-          m._localBuildReady = false;
-          m._loading = false;
+          if(!applyServerNet && !localReady){
+            m._serverKpiOverlay = true;
+            m._loading = false;
+          }
           const nextFp = [
             Number(m.netPremium) || 0,
             Number(m.soldPolicies) || 0,
@@ -50514,6 +53235,10 @@ const ClalRiskLifePdf = {
     out.agentReportAliases = normalizeAgentReportAliasesMap(metaRow?.payload?.agentReportAliases || out.agentReportAliases);
     out.agentReportAliasesUpdatedAt = safeTrim(metaRow?.payload?.agentReportAliasesUpdatedAt)
       || safeTrim(out.agentReportAliasesUpdatedAt)
+      || null;
+    out.agentBranches = normalizeAgentBranchesMap(metaRow?.payload?.agentBranches || out.agentBranches);
+    out.agentBranchesUpdatedAt = safeTrim(metaRow?.payload?.agentBranchesUpdatedAt)
+      || safeTrim(out.agentBranchesUpdatedAt)
       || null;
     out.directoryContactExtras = normalizeDirectoryContactsList(
       Array.isArray(metaRow?.payload?.directoryContactExtras) ? metaRow.payload.directoryContactExtras : (out.directoryContactExtras || [])
@@ -50801,6 +53526,7 @@ const ClalRiskLifePdf = {
     els.authEmail = $('#lcUserAuthEmail');
     els.monthlyTarget = $('#lcUserMonthlyTarget');
     els.reportAliases = $('#lcUserReportAliases');
+    els.officeBranch = $('#lcUserOfficeBranch');
     return els;
   };
   const _openModal = UsersUI.openModal.bind(UsersUI);
@@ -50838,6 +53564,9 @@ const ClalRiskLifePdf = {
       }
       if(E.reportAliases){
         E.reportAliases.value = user ? getAgentReportAliases(user.id).join(', ') : '';
+      }
+      if(E.officeBranch){
+        E.officeBranch.value = user ? suggestOfficeBranchForAgent(user) : '';
       }
     };
     fillExtra();
@@ -50939,6 +53668,9 @@ const ClalRiskLifePdf = {
       // Only write aliases if the field was actually present in the DOM.
       if(reportAliasesRaw !== null){
         setAgentReportAliases(agentId, reportAliasesRaw);
+      }
+      if(!!E.officeBranch){
+        setAgentOfficeBranch(agentId, E.officeBranch.value);
       }
       if(agentRow){
         agentRow.email = authEmailToSave;
@@ -51686,6 +54418,477 @@ const ClalRiskLifePdf = {
   AgentAppointmentWizard.init();
   NewCustomerEntryUI.init();
   HarHabituachTopbarUI.init();
+  TravelInsuranceTopbarUI.init();
+  function findVisibleCustomerBySpokenQuery(query){
+    const q = safeTrim(query).toLowerCase().replace(/\s+/g, " ");
+    if(!q) return null;
+    const rows = Array.isArray(State.data?.customers) ? State.data.customers : [];
+    let best = null;
+    let bestScore = 0;
+    rows.forEach((rec) => {
+      if(!rec || !safeTrim(rec.id)) return;
+      try { if(!customerVisibleToCurrentUser(rec)) return; } catch(_e){ return; }
+      const name = safeTrim(rec.fullName || rec.full_name).toLowerCase();
+      const first = safeTrim(rec.firstName || rec.payload?.insureds?.[0]?.data?.firstName).toLowerCase();
+      const last = safeTrim(rec.lastName || rec.payload?.insureds?.[0]?.data?.lastName).toLowerCase();
+      const full = safeTrim((first + " " + last).trim());
+      const hay = [name, full, first, last].filter(Boolean).join(" ");
+      if(!hay) return;
+      let score = 0;
+      if(name === q || full === q) score = 3;
+      else if(name.indexOf(q) >= 0 || full.indexOf(q) >= 0) score = 2;
+      else if(q.split(" ").every((part) => part && hay.indexOf(part) >= 0)) score = 1;
+      if(score > bestScore){
+        bestScore = score;
+        best = rec;
+      }
+    });
+    return best;
+  }
+
+  function toAssistantSafeCard(c){
+    if(!c) return null;
+    const id = safeTrim(c.id);
+    if(!id) return null;
+    return {
+      id,
+      full_name: safeTrim(c.fullName || c.full_name || c.name || c.payload?.name),
+      city: safeTrim(c.city),
+      agent_name: safeTrim(c.agentName || c.agent_name),
+      existing_policies_count: Number(c.existingPoliciesCount || c.existing_policies_count) || 0,
+      new_policies_count: Number(c.newPoliciesCount || c.new_policies_count) || 0
+    };
+  }
+
+  try {
+    window.__GI_ASSISTANT_BRIDGE__ = {
+      getAuth(){ return Auth.current; },
+      canAccessPersonalAssistant(){
+        try { return !!(Auth.canAccessPersonalAssistant?.()); } catch(_e){ return false; }
+      },
+      getCurrentAgent(){
+        try {
+          const fromFace = window.__GI_FACE_BRIDGE__?.getCurrentAgent?.();
+          if(fromFace && (fromFace.id || fromFace.name)) return fromFace;
+        } catch(_e) {}
+        return Auth.current;
+      },
+      supabaseUrl: SUPABASE_URL,
+      publishableKey: SUPABASE_PUBLISHABLE_KEY,
+      openCustomer(id){
+        try {
+          const v = safeTrim(id);
+          if(!v) return { ok:false };
+          const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+          if(!uuid) return window.__GI_ASSISTANT_BRIDGE__.openCustomerByQuery(v);
+          CustomersUI.openByIdWithLoader(v);
+          return { ok:true, id: v };
+        } catch(_e) { return { ok:false }; }
+      },
+      async openCustomerByQuery(query){
+        try {
+          const q = safeTrim(query);
+          if(!q) return { ok:false };
+          if(/^\d{8,9}$/.test(q) && typeof findCustomerByIdNumber === "function"){
+            const rec = findCustomerByIdNumber(q);
+            if(rec && customerVisibleToCurrentUser(rec) && rec.id){
+              CustomersUI.openByIdWithLoader(rec.id);
+              return { ok:true, id: safeTrim(rec.id), name: safeTrim(rec.fullName || rec.full_name) };
+            }
+          }
+          const phoneDigits = normalizePhoneValue(q);
+          if(phoneDigits && phoneDigits.length >= 9){
+            const byPhone = (Array.isArray(State.data?.customers) ? State.data.customers : []).find((rec) => {
+              try {
+                if(!rec || !customerVisibleToCurrentUser(rec)) return false;
+                return normalizePhoneValue(rec.phone) === phoneDigits
+                  || normalizePhoneValue(rec.payload?.insureds?.[0]?.data?.phone) === phoneDigits;
+              } catch(_e){ return false; }
+            });
+            if(byPhone && byPhone.id){
+              CustomersUI.openByIdWithLoader(byPhone.id);
+              return { ok:true, id: safeTrim(byPhone.id), name: safeTrim(byPhone.fullName || byPhone.full_name) };
+            }
+          }
+          const local = findVisibleCustomerBySpokenQuery(q);
+          if(local && local.id){
+            CustomersUI.openByIdWithLoader(local.id);
+            return { ok:true, id: safeTrim(local.id), name: safeTrim(local.fullName || local.full_name) };
+          }
+          const hits = await window.__GI_ASSISTANT_BRIDGE__.searchCustomers(q);
+          const id = safeTrim(Array.isArray(hits) && hits[0] ? hits[0].id : "");
+          if(id){
+            CustomersUI.openByIdWithLoader(id);
+            return { ok:true, id, name: safeTrim(hits[0]?.full_name || hits[0]?.fullName) };
+          }
+        } catch(_e) {}
+        return { ok:false };
+      },
+      goView(view){ try { UI.goView(view); } catch(_e) {} },
+      async openSimulator(company, product){
+        try {
+          await ensureGiSimulatorJsLoaded();
+          RiskSimulators.getHandler(company, product)?.open?.({ source: "assistant" });
+        } catch(_e) {}
+      },
+      async quoteSimulator(company, product, input){
+        try {
+          await ensureGiSimulatorJsLoaded();
+          const quote = (globalThis.GiSimulatorQuotes || globalThis.__GI_SIM_HOST?.GiSimulatorQuotes)?.quote;
+          if(typeof quote !== "function") return { ok:false, error:"NO_CLIENT_ENGINE", open_simulator:true };
+          return quote(company, product, input);
+        } catch(_e) { return { ok:false, error:"QUOTE_FAILED", open_simulator:true }; }
+      },
+      async openWizard(opts){
+        try {
+          let id = safeTrim(opts && opts.customerId);
+          const query = safeTrim(opts && opts.query);
+          if(!id && query){
+            if(/^\d{8,9}$/.test(query) && typeof findCustomerByIdNumber === "function"){
+              const rec = findCustomerByIdNumber(query);
+              if(rec && customerVisibleToCurrentUser(rec)) id = safeTrim(rec.id);
+            }
+            if(!id){
+              const hits = await window.__GI_ASSISTANT_BRIDGE__.searchCustomers(query);
+              id = safeTrim(Array.isArray(hits) && hits[0] ? hits[0].id : "");
+            }
+          }
+          if(id && typeof Wizard.openNewPurchaseForCustomer === "function"){
+            return Wizard.openNewPurchaseForCustomer(id);
+          }
+          Wizard.open?.();
+        } catch(_e) {}
+      },
+      fillWizard(fields){
+        try {
+          if(!fields || typeof fields !== "object" || typeof Wizard === "undefined") return;
+          const ins = Wizard.insureds && Wizard.insureds[0];
+          if(ins && ins.data){
+            if(fields.firstName) ins.data.firstName = String(fields.firstName);
+            if(fields.lastName) ins.data.lastName = String(fields.lastName);
+            if(fields.city) ins.data.city = String(fields.city);
+            if(fields.street) ins.data.street = String(fields.street);
+            if(fields.houseNumber) ins.data.houseNumber = String(fields.houseNumber);
+            if(fields.apartment) ins.data.apartment = String(fields.apartment);
+            if(fields.zip) ins.data.zip = String(fields.zip);
+            if(fields.email) ins.data.email = String(fields.email);
+            if(fields.phone) ins.data.phone = String(fields.phone);
+            if(fields.occupation) ins.data.occupation = String(fields.occupation);
+            if(fields.birthDate) ins.data.birthDate = String(fields.birthDate);
+            if(fields.idIssueDate) ins.data.idIssueDate = String(fields.idIssueDate);
+            if(fields.maritalStatus){
+              const marital = String(fields.maritalStatus);
+              if(/ידוע/.test(marital)) ins.data.maritalStatus = "ידוע/ה בציבור";
+              else if(/אלמנ/.test(marital)) ins.data.maritalStatus = "אלמן/ה";
+              else if(/גרוש/.test(marital)) ins.data.maritalStatus = "גרוש/ה";
+              else if(/נשוי|נשואה/.test(marital)) ins.data.maritalStatus = "נשוי/אה";
+              else if(/רווק/.test(marital)) ins.data.maritalStatus = "רווק/ה";
+              else ins.data.maritalStatus = marital;
+            }
+            if(fields.clinic){
+              const clinic = String(fields.clinic);
+              if(/כללית/.test(clinic)) ins.data.clinic = "כללית";
+              else if(/מכבי/.test(clinic)) ins.data.clinic = "מכבי";
+              else if(/מאוחדת/.test(clinic)) ins.data.clinic = "מאוחדת";
+              else if(/לאומית/.test(clinic)) ins.data.clinic = "לאומית";
+              else if(/צהל/.test(clinic)) ins.data.clinic = "קופה צהלית";
+              else ins.data.clinic = clinic;
+              try { Wizard.syncInsuredShabanForClinic?.(ins); } catch(_eClinic) {}
+            }
+            if(fields.shaban) ins.data.shaban = String(fields.shaban);
+            if(fields.gender){
+              const gender = String(fields.gender);
+              const female = /female|נקבה|אישה/.test(gender);
+              const male = /male|זכר|גבר/.test(gender);
+              const elem = typeof Wizard.isElementaryFlow === "function" && Wizard.isElementaryFlow();
+              if(female) ins.data.gender = elem ? "female" : "נקבה";
+              else if(male) ins.data.gender = elem ? "male" : "זכר";
+              else ins.data.gender = gender;
+            }
+            if(fields.idNumber){
+              const rawId = String(fields.idNumber).replace(/\D/g, "");
+              ins.data.idNumber = (typeof normalizeIdValue === "function") ? normalizeIdValue(rawId) : rawId;
+            }
+            if(fields.age != null && fields.age !== "") ins.data.age = fields.age;
+            if(fields.smoker === true){
+              ins.data.smoker = true;
+              ins.data.smokingStatus = "yes";
+            } else if(fields.smoker === false){
+              ins.data.smoker = false;
+              ins.data.smokingStatus = "no";
+            }
+            if(fields.smokingType) ins.data.smokingType = String(fields.smokingType);
+            if(fields.smokingAmount != null && fields.smokingAmount !== "") ins.data.smokingAmount = String(fields.smokingAmount);
+          }
+          if(fields.company || fields.product){
+            if(!Array.isArray(Wizard.newPolicies)) Wizard.newPolicies = [];
+            if(!Wizard.newPolicies.length && typeof Wizard.defaultNewPolicy === "function" && ins){
+              Wizard.newPolicies.push(Wizard.defaultNewPolicy(ins.id));
+            }
+            const pol = Wizard.newPolicies[0];
+            if(pol){
+              if(fields.company) pol.company = String(fields.company);
+              if(fields.product) pol.type = String(fields.product);
+            }
+          }
+          if(Wizard.isOpen && typeof Wizard.render === "function") Wizard.render();
+          Wizard.setHint?.("העוזר מילא את השדות באשף. אם הכל מלא — אמרו «לשלב הבא».");
+        } catch(_e) {}
+      },
+      wizardNext(){
+        try {
+          if(typeof Wizard === "undefined" || !Wizard.isOpen) return { ok:false, error:"WIZARD_CLOSED" };
+          if(typeof Wizard.nextStep === "function") return Wizard.nextStep();
+        } catch(_e) {}
+        return { ok:false };
+      },
+      openHarImport(){
+        try {
+          if(typeof Wizard === "undefined" || !Wizard.isOpen) return { ok:false, error:"WIZARD_CLOSED" };
+          const ins = Wizard.insureds && Wizard.insureds[0];
+          if(typeof Wizard.openHarBituachImport === "function"){
+            Wizard.openHarBituachImport(ins);
+            if(Wizard.els?.body?.querySelector?.("#lcHarBituachFile")){
+              Wizard.setHint?.("בחרו את קובץ האקסל של הר הביטוח מהמחשב.");
+              return { ok:true };
+            }
+          }
+          Wizard.setHint?.("עברו קודם לשלב הפוליסות הקיימות ואז אמרו שוב לפתוח את הר הביטוח.");
+          return { ok:false, error:"HAR_STEP" };
+        } catch(_e) { return { ok:false }; }
+      },
+      dismissValidationModal(){
+        try {
+          const modal = document.getElementById("giStep1ValidationModal")
+            || document.querySelector(".giValModal.giValModal--visible")
+            || document.querySelector(".giValModal");
+          if(!modal) return { ok:false, error:"NO_MODAL" };
+          const btn = modal.querySelector(".giValModal__closeBtn");
+          if(btn){
+            btn.click();
+            return { ok:true };
+          }
+          try { modal.remove(); } catch(_eRm) {}
+          return { ok:true };
+        } catch(_e) { return { ok:false }; }
+      },
+      isChatOpen(){
+        try {
+          const win = document.getElementById("giChatWindow");
+          return !!(win && !win.classList.contains("is-hidden"));
+        } catch(_e){ return false; }
+      },
+      openChat(){
+        try {
+          if(typeof ChatUI === "undefined") return { ok:false, error:"NO_CHAT" };
+          ChatUI.openWindow?.();
+          return { ok:true };
+        } catch(_e){ return { ok:false }; }
+      },
+      closeChat(){
+        try {
+          if(typeof ChatUI === "undefined") return { ok:false, error:"NO_CHAT" };
+          ChatUI.closeWindow?.(false, true);
+          return { ok:true };
+        } catch(_e){ return { ok:false }; }
+      },
+      selectChatUserByName(name){
+        try {
+          if(typeof ChatUI === "undefined") return { ok:false, error:"NO_CHAT" };
+          const term = safeTrim(name).toLowerCase();
+          if(!term) return { ok:false, error:"NO_NAME" };
+          ChatUI.openWindow?.();
+          const users = typeof ChatUI.availableUsers === "function" ? ChatUI.availableUsers() : [];
+          let hit = users.find((u) => safeTrim(u?.name).toLowerCase() === term);
+          if(!hit){
+            hit = users.find((u) => {
+              const n = safeTrim(u?.name).toLowerCase();
+              return n && (n.includes(term) || term.includes(n));
+            });
+          }
+          if(!hit || !hit.id) return { ok:false, error:"NOT_FOUND" };
+          void ChatUI.selectUser?.(hit.id);
+          return { ok:true, name: safeTrim(hit.name), id: hit.id };
+        } catch(_e){ return { ok:false }; }
+      },
+      setChatDraft(text){
+        try {
+          if(typeof ChatUI === "undefined") return { ok:false, error:"NO_CHAT" };
+          const msg = safeTrim(text);
+          if(!msg) return { ok:false, error:"EMPTY" };
+          ChatUI.openWindow?.();
+          const input = ChatUI.els?.input || document.getElementById("giChatInput");
+          if(!input) return { ok:false, error:"NO_INPUT" };
+          input.value = msg;
+          try { ChatUI.refreshSendButtonState?.(); } catch(_eBtn) {}
+          try { ChatUI.autoGrowInput?.(); } catch(_eGrow) {}
+          return { ok:true };
+        } catch(_e){ return { ok:false }; }
+      },
+      sendChatMessage(){
+        try {
+          if(typeof ChatUI === "undefined") return { ok:false, error:"NO_CHAT" };
+          if(!ChatUI.selectedUser || !ChatUI.currentConversationId){
+            return { ok:false, error:"NO_CONVERSATION" };
+          }
+          const text = safeTrim(ChatUI.els?.input?.value || document.getElementById("giChatInput")?.value);
+          if(!text) return { ok:false, error:"EMPTY" };
+          void ChatUI.sendMessage?.();
+          return { ok:true };
+        } catch(_e){ return { ok:false }; }
+      },
+      openSalesReport(){
+        try {
+          if(typeof DailyReportUI !== "undefined" && typeof DailyReportUI.openFromHub === "function"){
+            DailyReportUI.openFromHub("daily");
+            return { ok:true };
+          }
+          UI.goView?.("dailyReport");
+          return { ok:true };
+        } catch(_e){ return { ok:false }; }
+      },
+      openCancellationsReport(){
+        try {
+          if(typeof DailyReportUI !== "undefined" && typeof DailyReportUI.openFromHub === "function"){
+            DailyReportUI.openFromHub("cancellations");
+            return { ok:true };
+          }
+          UI.goView?.("dailyReport");
+          return { ok:true };
+        } catch(_e){ return { ok:false }; }
+      },
+      openDailySalesReport(dateIso){
+        try {
+          const key = safeTrim(dateIso);
+          UI.goView?.("dailySales");
+          if(key && typeof DashboardUI !== "undefined" && typeof DashboardUI.setDailySalesReportDateKey === "function"){
+            DashboardUI.setDailySalesReportDateKey(key);
+          }
+          try { DashboardUI.renderDailySalesPage?.(); } catch(_eRender) {}
+          try { DashboardUI.renderDailySalesReportScreen?.(); } catch(_eScreen) {}
+          return { ok:true, date: key || null };
+        } catch(_e){ return { ok:false }; }
+      },
+      clickTopbar(id){
+        try {
+          const allowed = {
+            giChatFab: 1,
+            giReminderFab: 1,
+            btnTravelInsuranceAbroad: 1,
+            btnCarInsuranceClick: 1,
+            btnSimulatorsCenter: 1,
+            btnNewCustomerWizard: 1
+          };
+          const key = String(id || "");
+          if(!allowed[key]) return { ok:false, error:"BAD_TOPBAR" };
+          const el = document.getElementById(key);
+          if(!el) return { ok:false, error:"MISSING_BTN" };
+          el.click();
+          return { ok:true };
+        } catch(_e) { return { ok:false }; }
+      },
+      openProposal(id){ try { ProposalsUI.openById?.(id); } catch(_e) {} },
+      refreshReminders(){ try { return ReminderUI.loadReminders?.(); } catch(_e) {} },
+      async searchCustomers(query){
+        try {
+          if(typeof Storage === "undefined" || typeof Storage.searchCustomers !== "function") return [];
+          const res = await Storage.searchCustomers(query, 20);
+          const rows = Array.isArray(res?.data) ? res.data : [];
+          return rows
+            .filter((rec) => {
+              try { return !!customerVisibleToCurrentUser(rec); } catch(_e){ return false; }
+            })
+            .map(toAssistantSafeCard)
+            .filter((card) => card && card.id);
+        } catch(_e) { return []; }
+      },
+      findCustomerByIdNumber(id){
+        try {
+          if(typeof findCustomerByIdNumber !== "function") return null;
+          const rec = findCustomerByIdNumber(id);
+          if(!rec || !customerVisibleToCurrentUser(rec)) return null;
+          return toAssistantSafeCard(rec);
+        } catch(_e) { return null; }
+      },
+      findCustomerByPhone(phone){
+        try {
+          const want = normalizePhoneValue(phone);
+          if(!want || want.length < 9) return null;
+          const rec = (Array.isArray(State.data?.customers) ? State.data.customers : []).find((row) => {
+            try {
+              if(!row || !customerVisibleToCurrentUser(row)) return false;
+              return normalizePhoneValue(row.phone) === want
+                || normalizePhoneValue(row.payload?.insureds?.[0]?.data?.phone) === want;
+            } catch(_e){ return false; }
+          });
+          if(!rec) return null;
+          return toAssistantSafeCard(rec);
+        } catch(_e) { return null; }
+      },
+      findCustomerById(id){
+        try {
+          if(typeof findCustomerRecordById !== "function") return null;
+          const rec = findCustomerRecordById(id);
+          if(!rec || !customerVisibleToCurrentUser(rec)) return null;
+          return toAssistantSafeCard(rec);
+        } catch(_e) { return null; }
+      },
+      async upsertReminder(row){
+        try {
+          if(!row || !row.id || typeof ReminderUI === "undefined") return;
+          await ReminderUI.upsertReminder(row);
+          if(!Array.isArray(ReminderUI.reminders)) return;
+          const idx = ReminderUI.reminders.findIndex((r) => r && r.id === row.id);
+          if(idx >= 0) ReminderUI.reminders[idx] = row;
+          else ReminderUI.reminders.push(row);
+          ReminderUI.reminders.sort((a, b) => new Date(a.remind_at) - new Date(b.remind_at));
+          ReminderUI.updateBadge?.();
+          ReminderUI.renderList?.();
+        } catch(_e) {}
+      },
+      markTaskDone(id){
+        try { return ReminderUI.markDone?.(id); } catch(_e) {}
+      },
+      listTasks(){
+        try { return Array.isArray(ReminderUI.reminders) ? ReminderUI.reminders.slice() : []; } catch(_e) { return []; }
+      }
+    };
+    window.GiAssistant?.init?.({
+      getAuth(){ return Auth.current; },
+      getCurrentAgent(){ return window.__GI_ASSISTANT_BRIDGE__.getCurrentAgent(); },
+      supabaseUrl: SUPABASE_URL,
+      publishableKey: SUPABASE_PUBLISHABLE_KEY,
+      openCustomer(id){ return window.__GI_ASSISTANT_BRIDGE__.openCustomer(id); },
+      openCustomerByQuery(query){ return window.__GI_ASSISTANT_BRIDGE__.openCustomerByQuery(query); },
+      goView(view){ return window.__GI_ASSISTANT_BRIDGE__.goView(view); },
+      openSimulator(company, product){ return window.__GI_ASSISTANT_BRIDGE__.openSimulator(company, product); },
+      quoteSimulator(company, product, input){ return window.__GI_ASSISTANT_BRIDGE__.quoteSimulator(company, product, input); },
+      openWizard(opts){ return window.__GI_ASSISTANT_BRIDGE__.openWizard(opts); },
+      fillWizard(fields){ return window.__GI_ASSISTANT_BRIDGE__.fillWizard(fields); },
+      wizardNext(){ return window.__GI_ASSISTANT_BRIDGE__.wizardNext(); },
+      openHarImport(){ return window.__GI_ASSISTANT_BRIDGE__.openHarImport(); },
+      dismissValidationModal(){ return window.__GI_ASSISTANT_BRIDGE__.dismissValidationModal(); },
+      isChatOpen(){ return window.__GI_ASSISTANT_BRIDGE__.isChatOpen(); },
+      openChat(){ return window.__GI_ASSISTANT_BRIDGE__.openChat(); },
+      closeChat(){ return window.__GI_ASSISTANT_BRIDGE__.closeChat(); },
+      selectChatUserByName(name){ return window.__GI_ASSISTANT_BRIDGE__.selectChatUserByName(name); },
+      setChatDraft(text){ return window.__GI_ASSISTANT_BRIDGE__.setChatDraft(text); },
+      sendChatMessage(){ return window.__GI_ASSISTANT_BRIDGE__.sendChatMessage(); },
+      openSalesReport(){ return window.__GI_ASSISTANT_BRIDGE__.openSalesReport(); },
+      openCancellationsReport(){ return window.__GI_ASSISTANT_BRIDGE__.openCancellationsReport(); },
+      openDailySalesReport(dateIso){ return window.__GI_ASSISTANT_BRIDGE__.openDailySalesReport(dateIso); },
+      clickTopbar(id){ return window.__GI_ASSISTANT_BRIDGE__.clickTopbar(id); },
+      openProposal(id){ return window.__GI_ASSISTANT_BRIDGE__.openProposal(id); },
+      refreshReminders(){ return window.__GI_ASSISTANT_BRIDGE__.refreshReminders(); },
+      searchCustomers(query){ return window.__GI_ASSISTANT_BRIDGE__.searchCustomers(query); },
+      findCustomerByIdNumber(id){ return window.__GI_ASSISTANT_BRIDGE__.findCustomerByIdNumber(id); },
+      findCustomerByPhone(phone){ return window.__GI_ASSISTANT_BRIDGE__.findCustomerByPhone(phone); },
+      findCustomerById(id){ return window.__GI_ASSISTANT_BRIDGE__.findCustomerById(id); },
+      upsertReminder(row){ return window.__GI_ASSISTANT_BRIDGE__.upsertReminder(row); },
+      markTaskDone(id){ return window.__GI_ASSISTANT_BRIDGE__.markTaskDone(id); },
+      listTasks(){ return window.__GI_ASSISTANT_BRIDGE__.listTasks(); }
+    });
+  } catch(_e) {}
   CarInsuranceClickUI.init();
   SimulatorsCenterUI.init();
   LeadShellUI.init();
@@ -52204,430 +55407,6 @@ const ClalRiskLifePdf = {
         });
       } catch(_){}
     },
-  };
-
-  const OfferCompareUI = {
-    els: {},
-    state: {
-      customerName: "",
-      letterText: "",
-      letterHtml: "",
-      hasResult: false
-    },
-
-    init(){
-      this.els = {
-        fab: $("#giOfferFab"),
-        modal: $("#giOfferModal"),
-        backdrop: $("#giOfferBackdrop"),
-        close: $("#giOfferClose"),
-        reset: $("#giOfferReset"),
-        compare: $("#giOfferCompare"),
-        customerName: $("#giOfferCustomerName"),
-        addExisting: $("#giOfferAddExisting"),
-        addOurs: $("#giOfferAddOurs"),
-        existingRows: $("#giOfferExistingRows"),
-        ourRows: $("#giOfferOurRows"),
-        error: $("#giOfferError"),
-        result: $("#giOfferResult"),
-        copyText: $("#giOfferCopyText"),
-        print: $("#giOfferPrint"),
-        pdf: $("#giOfferPdf")
-      };
-      if(!this.els.fab || !this.els.modal) return;
-
-      on(this.els.fab, "click", () => this.open());
-      on(this.els.close, "click", () => this.close());
-      on(this.els.backdrop, "click", () => this.close());
-      on(this.els.reset, "click", () => this.reset());
-      on(this.els.compare, "click", () => this.compareRows());
-      on(this.els.addExisting, "click", () => this.addRow("existing"));
-      on(this.els.addOurs, "click", () => this.addRow("ours"));
-      on(this.els.existingRows, "click", (ev) => this.handleRemoveRow(ev));
-      on(this.els.ourRows, "click", (ev) => this.handleRemoveRow(ev));
-      on(this.els.copyText, "click", () => this.copyClientText());
-      on(this.els.print, "click", () => this.printOffer());
-      on(this.els.pdf, "click", () => this.exportPdf());
-    },
-
-    open(){
-      this.reset();
-      this.els.modal.setAttribute("aria-hidden", "false");
-      this.els.modal.classList.add("is-open");
-    },
-
-    close(){
-      this.els.modal.setAttribute("aria-hidden", "true");
-      this.els.modal.classList.remove("is-open");
-    },
-
-    reset(){
-      this.state = { customerName: "", letterText: "", letterHtml: "", hasResult: false };
-      if(this.els.customerName) this.els.customerName.value = "";
-      if(this.els.error) this.els.error.textContent = "";
-      if(this.els.result){
-        this.els.result.classList.add("is-hidden");
-        this.els.result.innerHTML = "";
-      }
-      if(this.els.existingRows) this.els.existingRows.innerHTML = "";
-      if(this.els.ourRows) this.els.ourRows.innerHTML = "";
-      this.addRow("existing");
-      this.addRow("ours");
-    },
-
-    getCompanyOptions(kind){
-      const fromWizard = (kind === "existing"
-        ? (Array.isArray(Wizard?.existingCompanies) ? Wizard.existingCompanies : [])
-        : (Array.isArray(Wizard?.companies) ? Wizard.companies : [])
-      ).map((v) => safeTrim(v)).filter(Boolean);
-      const fallback = kind === "existing"
-        ? ["איילון","הראל","כלל","מגדל","מנורה","הפניקס","הכשרה","AIG","ביטוח ישיר","9 מיליון"]
-        : ["איילון","כלל","מגדל","מנורה","הפניקס","הכשרה","מדיקר"];
-      const values = Array.from(new Set([...(fromWizard.length ? fromWizard : fallback), "אחר"]));
-      return values.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("");
-    },
-
-    getProductOptions(){
-      const fromWizard = (Array.isArray(Wizard?.insTypes) ? Wizard.insTypes : []).map((v) => safeTrim(v)).filter(Boolean);
-      const fallback = ["בריאות","מחלות קשות","סרטן","אובדן כושר עבודה","ריסק","ריסק משכנתא"];
-      const values = Array.from(new Set([...(fromWizard.length ? fromWizard : fallback), "אחר"]));
-      return values.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("");
-    },
-
-    addRow(kind){
-      const host = kind === "existing" ? this.els.existingRows : this.els.ourRows;
-      if(!host) return;
-      const row = document.createElement("div");
-      row.className = "giOfferRow";
-      const companyOptions = this.getCompanyOptions(kind);
-      const productOptions = this.getProductOptions();
-      row.innerHTML = [
-        `<select class="input" data-field="company"><option value="">בחר חברה</option>${companyOptions}</select>`,
-        `<select class="input" data-field="product"><option value="">בחר מוצר</option>${productOptions}</select>`,
-        "<input class=\"input\" data-field=\"price\" type=\"number\" min=\"0\" step=\"0.01\" placeholder=\"מחיר חודשי\"/>",
-        "<button class=\"btn giOfferRow__remove\" data-remove-offer-row type=\"button\" aria-label=\"הסר שורה\">✕</button>"
-      ].join("");
-      host.appendChild(row);
-    },
-
-    handleRemoveRow(ev){
-      const btn = ev.target.closest("[data-remove-offer-row]");
-      if(!btn) return;
-      const row = btn.closest(".giOfferRow");
-      const parent = row?.parentElement;
-      if(!row || !parent) return;
-      if(parent.children.length <= 1) return;
-      row.remove();
-    },
-
-    readRows(kind){
-      const host = kind === "existing" ? this.els.existingRows : this.els.ourRows;
-      if(!host) return [];
-      return $$(".giOfferRow", host).map((row) => {
-        const company = safeTrim($("[data-field=\"company\"]", row)?.value);
-        const product = safeTrim($("[data-field=\"product\"]", row)?.value);
-        const priceRaw = safeTrim($("[data-field=\"price\"]", row)?.value).replace(",", ".");
-        const price = Number(priceRaw);
-        return { company, product, price: Number.isFinite(price) ? price : NaN };
-      }).filter((item) => item.company || item.product || Number.isFinite(item.price));
-    },
-
-    compareRows(){
-      if(this.els.error) this.els.error.textContent = "";
-      if(this.els.result){
-        this.els.result.classList.add("is-hidden");
-        this.els.result.innerHTML = "";
-      }
-
-      const customerName = safeTrim(this.els.customerName?.value);
-      const existing = this.readRows("existing");
-      const ours = this.readRows("ours");
-
-      if(!customerName){
-        if(this.els.error) this.els.error.textContent = "יש להזין שם לקוח לפני ביצוע השוואה.";
-        return;
-      }
-      if(!existing.length || !ours.length){
-        if(this.els.error) this.els.error.textContent = "יש להזין לפחות שורה אחת בכל צד (קיים ומוצע).";
-        return;
-      }
-      if(existing.some((row) => !Number.isFinite(row.price)) || ours.some((row) => !Number.isFinite(row.price))){
-        if(this.els.error) this.els.error.textContent = "יש להזין מחיר תקין בכל שורה שהוזנה.";
-        return;
-      }
-
-      const maxLen = Math.max(existing.length, ours.length);
-      const rows = [];
-      let totalExisting = 0;
-      let totalOurs = 0;
-      for(let i = 0; i < maxLen; i += 1){
-        const oldRow = existing[i] || { company:"—", product:"—", price:0 };
-        const newRow = ours[i] || { company:"—", product:"—", price:0 };
-        const delta = oldRow.price - newRow.price;
-        totalExisting += Number(oldRow.price || 0);
-        totalOurs += Number(newRow.price || 0);
-        rows.push({ oldRow, newRow, delta });
-      }
-
-      const monthlyDelta = totalExisting - totalOurs;
-      const yearlyDelta = monthlyDelta * 12;
-      const savingsLabel = monthlyDelta >= 0 ? "חיסכון" : "תוספת";
-      const formatMoney = (value) => "₪" + Number(value || 0).toLocaleString("he-IL", { maximumFractionDigits: 2 });
-      const deltaClass = monthlyDelta > 0 ? "giOfferResult__delta--good" : monthlyDelta < 0 ? "giOfferResult__delta--bad" : "giOfferResult__delta--same";
-      const deltaWord = monthlyDelta > 0 ? "חיסכון" : monthlyDelta < 0 ? "תוספת" : "איזון";
-
-      const detailRows = rows.map((entry, idx) => {
-        const rowDelta = Number(entry.delta || 0);
-        const rowDeltaClass = rowDelta > 0 ? "giOfferResult__delta--good" : rowDelta < 0 ? "giOfferResult__delta--bad" : "giOfferResult__delta--same";
-        const rowDeltaText = (rowDelta > 0 ? "-" : rowDelta < 0 ? "+" : "") + formatMoney(Math.abs(rowDelta));
-        return [
-          "<tr>",
-          `<td>${idx + 1}</td>`,
-          `<td>${entry.oldRow.company} / ${entry.oldRow.product}</td>`,
-          `<td>${formatMoney(entry.oldRow.price)}</td>`,
-          `<td>${entry.newRow.company} / ${entry.newRow.product}</td>`,
-          `<td>${formatMoney(entry.newRow.price)}</td>`,
-          `<td class="${rowDeltaClass}">${rowDeltaText}</td>`,
-          "</tr>"
-        ].join("");
-      }).join("");
-
-      const letterText = [
-        `לכבוד ${customerName},`,
-        "",
-        "להלן השוואת הצעה לביטוח:",
-        `סה\"כ עלות ביטוחים קיימים: ${formatMoney(totalExisting)} לחודש`,
-        `סה\"כ עלות בהצעה החדשה: ${formatMoney(totalOurs)} לחודש`,
-        `${deltaWord} חודשי: ${formatMoney(Math.abs(monthlyDelta))}`,
-        `${deltaWord} שנתי: ${formatMoney(Math.abs(yearlyDelta))}`,
-        "",
-        "נשמח להתקדם יחד ולעזור לך להשלים את התהליך."
-      ].join("\n");
-
-      const letterHtml = [
-        `<div class="giOfferClientLetter__title">לכבוד ${escapeHtml(customerName)}</div>`,
-        "<div class=\"giOfferClientLetter__body\">",
-        "להלן השוואת הצעה לביטוח:<br>",
-        `סה&quot;כ עלות ביטוחים קיימים: <strong>${formatMoney(totalExisting)}</strong> לחודש<br>`,
-        `סה&quot;כ עלות בהצעה החדשה: <strong>${formatMoney(totalOurs)}</strong> לחודש<br>`,
-        `${deltaWord} חודשי: <strong>${formatMoney(Math.abs(monthlyDelta))}</strong><br>`,
-        `${deltaWord} שנתי: <strong>${formatMoney(Math.abs(yearlyDelta))}</strong><br><br>`,
-        "נשמח להתקדם יחד ולעזור לך להשלים את התהליך.",
-        "</div>"
-      ].join("");
-
-      this.state.customerName = customerName;
-      this.state.letterText = letterText;
-      this.state.letterHtml = letterHtml;
-      this.state.hasResult = true;
-
-      if(this.els.result){
-        this.els.result.innerHTML = [
-          "<div class=\"giOfferResult__totals\">",
-          `<span class=\"giOfferResult__pill\">לקוח: ${customerName}</span>`,
-          `<span class=\"giOfferResult__pill\">סה\"כ קיים: ${formatMoney(totalExisting)}</span>`,
-          `<span class=\"giOfferResult__pill\">סה\"כ מוצע: ${formatMoney(totalOurs)}</span>`,
-          `<span class=\"giOfferResult__pill ${deltaClass}\">${savingsLabel} חודשי: ${formatMoney(Math.abs(monthlyDelta))}</span>`,
-          `<span class=\"giOfferResult__pill ${deltaClass}\">${savingsLabel} שנתי: ${formatMoney(Math.abs(yearlyDelta))}</span>`,
-          "</div>",
-          `<div class="giOfferClientLetter">${letterHtml}</div>`,
-          "<table class=\"giOfferResult__table\">",
-          "<thead><tr><th>#</th><th>קיים</th><th>מחיר קיים</th><th>מוצע</th><th>מחיר מוצע</th><th>פער</th></tr></thead>",
-          `<tbody>${detailRows}</tbody>`,
-          "</table>"
-        ].join("");
-        this.els.result.classList.remove("is-hidden");
-      }
-    },
-
-    async copyClientText(){
-      if(!this.state.hasResult || !this.state.letterText){
-        if(this.els.error) this.els.error.textContent = "צריך לבצע השוואה לפני העתקת נוסח ללקוח.";
-        return;
-      }
-      if(this.els.error) this.els.error.textContent = "";
-      try {
-        await navigator.clipboard.writeText(this.state.letterText);
-        if(typeof toast === "function") toast("נוסח ההצעה הועתק", "אפשר להדביק ולשלוח ללקוח");
-      } catch(_e){
-        if(this.els.error) this.els.error.textContent = "לא הצלחתי להעתיק אוטומטית. אפשר לסמן ולהעתיק ידנית.";
-      }
-    },
-
-    printOffer(){
-      if(!this.state.hasResult || !this.els.result || this.els.result.classList.contains("is-hidden")){
-        if(this.els.error) this.els.error.textContent = "צריך לבצע השוואה לפני הפקת הצעה.";
-        return;
-      }
-      if(this.els.error) this.els.error.textContent = "";
-      const win = window.open("", "_blank", "width=1040,height=820");
-      if(!win) return;
-      const docHtml = this.buildDocumentHtml({ mode: "print" });
-      win.document.write(`<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><title>הצעה ללקוח</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
-<style>
-  body{margin:0;font-family:Rubik,Arial,sans-serif;background:#fff;color:#0b1f4a}
-  .wrap{padding:22px}
-  ${this._getOfferDocPrintCss()}
-</style></head><body><div class="wrap">${docHtml}</div></body></html>`);
-      win.document.close();
-      setTimeout(() => {
-        try { win.focus(); win.print(); } catch(_e) {}
-      }, 120);
-    },
-
-    _getOfferDocPrintCss(){
-      return `
-        .giOfferDoc{background:#fff}
-        .giOfferDoc__head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding-bottom:12px;border-bottom:1px solid rgba(15,23,42,.10);margin-bottom:12px}
-        .giOfferDoc__brand{display:flex;align-items:center;gap:10px}
-        .giOfferDoc__logo{width:46px;height:46px;border-radius:12px;border:1px solid rgba(15,23,42,.10);object-fit:contain;background:#fff}
-        .giOfferDoc__brandName{font-weight:900}
-        .giOfferDoc__brandSub{font-size:12px;color:rgba(15,23,42,.70);font-weight:700}
-        .giOfferDoc__meta{text-align:left;font-size:12px;color:rgba(15,23,42,.70);font-weight:700;line-height:1.5}
-        .giOfferDoc__title{font-size:18px;font-weight:900;margin:2px 0 8px}
-        .giOfferDoc__to{font-size:14px;font-weight:900;margin:0 0 10px}
-        .giOfferDoc__note{font-size:13px;color:rgba(15,23,42,.76);line-height:1.6;margin-bottom:12px}
-        .giOfferDoc__summary{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 12px}
-        .giOfferDoc__pill{background:#f7faff;border:1px solid rgba(42,92,245,.20);border-radius:999px;padding:7px 10px;font-size:12px;font-weight:800}
-        .giOfferDoc__pill--good{border-color:rgba(15,157,109,.28);color:#0f9d6d;background:rgba(15,157,109,.06)}
-        .giOfferDoc__pill--bad{border-color:rgba(215,32,74,.26);color:#d7204a;background:rgba(215,32,74,.05)}
-        .giOfferDoc__table{width:100%;border-collapse:collapse;border:1px solid rgba(15,23,42,.10);border-radius:12px;overflow:hidden}
-        .giOfferDoc__table th,.giOfferDoc__table td{padding:10px 8px;border-bottom:1px solid rgba(15,23,42,.08);font-size:13px;text-align:right}
-        .giOfferDoc__table th{background:linear-gradient(180deg, rgba(235,242,255,.90), rgba(255,255,255,.86));font-size:12px;color:rgba(15,23,42,.76);font-weight:900}
-        /* fallback if replacement didn't hit */
-        .giOfferResult__table{width:100%;border-collapse:collapse;border:1px solid rgba(15,23,42,.10);border-radius:12px;overflow:hidden}
-        .giOfferResult__table th,.giOfferResult__table td{padding:10px 8px;border-bottom:1px solid rgba(15,23,42,.08);font-size:13px;text-align:right}
-        .giOfferResult__table th{background:linear-gradient(180deg, rgba(235,242,255,.90), rgba(255,255,255,.86));font-size:12px;color:rgba(15,23,42,.76);font-weight:900}
-        .giOfferDoc__foot{margin-top:12px;padding-top:10px;border-top:1px solid rgba(15,23,42,.10);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12px;color:rgba(15,23,42,.70);font-weight:700}
-        @page { size: A4; margin: 14mm; }
-      `;
-    },
-
-    buildDocumentHtml(options = {}){
-      const customerName = safeTrim(this.state.customerName);
-      const generatedAt = new Date().toLocaleString("he-IL");
-      const agentName = safeTrim(Auth?.current?.name) || "";
-      const agentRole = safeTrim(Auth?.current?.roleLabel || "");
-      const mode = safeTrim(options.mode) || "pdf";
-
-      const resultRoot = this.els.result;
-      const pills = resultRoot ? Array.from(resultRoot.querySelectorAll(".giOfferResult__pill")).map((el) => safeTrim(el.textContent)).filter(Boolean) : [];
-      const tableHtml = resultRoot ? (resultRoot.querySelector("table")?.outerHTML || "") : "";
-
-      const logoSrc = "./logo-login-clean.png";
-      const title = "הצעה לביטוח";
-
-      const deltaMonthly = pills.find(t => t.includes("חודשי")) || "";
-      const deltaCls = deltaMonthly.includes("חיסכון") ? "giOfferDoc__pill--good" : (deltaMonthly.includes("תוספת") ? "giOfferDoc__pill--bad" : "");
-
-      const summaryHtml = pills.map((t) => {
-        const cls = t.includes("חודשי") || t.includes("שנתי") ? deltaCls : "";
-        return `<span class="giOfferDoc__pill ${cls}">${escapeHtml(t)}</span>`;
-      }).join("");
-
-      const note = (mode === "pdf")
-        ? "מסמך זה הופק אוטומטית מתוך מערכת GEMEL INVEST."
-        : "מסמך זה הופק אוטומטית מתוך מערכת GEMEL INVEST (תצוגת הדפסה).";
-
-      return [
-        `<section class="giOfferDoc">`,
-          `<div class="giOfferDoc__head">`,
-            `<div class="giOfferDoc__brand">`,
-              `<img class="giOfferDoc__logo" src="${escapeHtml(logoSrc)}" alt="GEMEL INVEST">`,
-              `<div class="giOfferDoc__brandText">`,
-                `<div class="giOfferDoc__brandName">GEMEL INVEST</div>`,
-                `<div class="giOfferDoc__brandSub">הצעה והשוואת מחירים</div>`,
-              `</div>`,
-            `</div>`,
-            `<div class="giOfferDoc__meta">`,
-              `<div>תאריך: ${escapeHtml(generatedAt)}</div>`,
-              `${agentName ? `<div>נציג: ${escapeHtml(agentName)}${agentRole ? ` (${escapeHtml(agentRole)})` : ""}</div>` : ``}`,
-            `</div>`,
-          `</div>`,
-          `<div class="giOfferDoc__title">${escapeHtml(title)}</div>`,
-          `<div class="giOfferDoc__to">לכבוד ${escapeHtml(customerName || "הלקוח")}</div>`,
-          `<div class="giOfferDoc__note">${escapeHtml(note)}</div>`,
-          `<div class="giOfferDoc__summary">${summaryHtml}</div>`,
-          tableHtml ? tableHtml.replace("giOfferResult__table", "giOfferDoc__table") : "",
-          `<div class="giOfferDoc__foot">`,
-            `<div>לכל שאלה נשמח לסייע.</div>`,
-            `<div>GEMEL INVEST • CRM</div>`,
-          `</div>`,
-        `</section>`
-      ].join("");
-    },
-
-    async exportPdf(){
-      if(!this.state.hasResult || !this.els.result || this.els.result.classList.contains("is-hidden")){
-        if(this.els.error) this.els.error.textContent = "צריך לבצע השוואה לפני הורדת PDF.";
-        return;
-      }
-      if(typeof window.html2pdf !== "function"){
-        if(this.els.error) this.els.error.textContent = "html2pdf לא נטען. בדוק שהספרייה קיימת בעמוד.";
-        return;
-      }
-      if(this.els.error) this.els.error.textContent = "";
-
-      const container = document.createElement("div");
-      container.setAttribute("dir", "rtl");
-      container.setAttribute("lang", "he");
-      container.style.position = "fixed";
-      // חשוב: לא להשתמש ב-opacity:0 / z-index:-1, כי זה גורם ל-html2canvas
-      // לעיתים להפיק דף ריק.
-      container.style.left = "-20000px";
-      container.style.top = "0";
-      container.style.width = "794px"; // ~A4 at 96dpi
-      container.style.background = "#fff";
-      container.style.opacity = "1";
-      container.style.pointerEvents = "none";
-      container.style.zIndex = "0";
-      container.style.display = "block";
-      container.innerHTML = [
-        "<style>",
-        "  body{margin:0;font-family:Rubik,Arial,sans-serif;background:#fff;color:#0b1f4a}",
-        this._getOfferDocPrintCss(),
-        "</style>",
-        this.buildDocumentHtml({ mode: "pdf" })
-      ].join("\n");
-      document.body.appendChild(container);
-
-      const customerName = safeTrim(this.state.customerName) || "הצעה";
-      const safeName = customerName.replace(/[\\/:*?\"<>|]+/g, "-").slice(0, 80);
-      const filename = `${safeName}.pdf`;
-
-      try {
-        // Ensure fonts/images are ready before capture (prevents blank PDFs)
-        try { await document.fonts?.ready; } catch(_e) {}
-        await new Promise((r) => requestAnimationFrame(() => r()));
-        await new Promise((r) => requestAnimationFrame(() => r()));
-        const imgs = Array.from(container.querySelectorAll("img"));
-        if(imgs.length){
-          await Promise.all(imgs.map((img) => new Promise((resolve) => {
-            if(img.complete) return resolve();
-            img.onload = () => resolve();
-            img.onerror = () => resolve();
-          })));
-        }
-
-        const opts = {
-          margin:       [10, 10, 10, 10],
-          filename,
-          image:        { type: "jpeg", quality: 0.98 },
-          html2canvas:  { scale: 3, useCORS: true, backgroundColor: "#ffffff", logging: false },
-          jsPDF:        { unit: "mm", format: "a4", orientation: "portrait" },
-          pagebreak:    { mode: ["avoid-all", "css", "legacy"] }
-        };
-        await window.html2pdf().set(opts).from(container).save();
-        if(typeof toast === "function") toast("PDF הופק בהצלחה", filename);
-      } catch(err){
-        console.error("OFFER_PDF_EXPORT_FAILED", err);
-        if(this.els.error) this.els.error.textContent = "לא הצלחתי להפיק PDF. נסה שוב או השתמש בתצוגת הדפסה.";
-      } finally {
-        try { container.remove(); } catch(_e) {}
-      }
-    }
   };
 
 const CampaignLeadsStore = {
@@ -53539,6 +56318,13 @@ const CampaignLeadsStore = {
         || safeTrim(rec?.payload?.updatedAt);
       const stampMs = Date.parse(stamp);
       if(Number.isFinite(stampMs) && stampMs > lastStampMs) lastStampMs = stampMs;
+      // GI-PERF 2026-08-25: לא סורקים collectPolicies על payloads ריקים.
+      // במצב light (ואדים) רוב התיקים רזים — דילג; רק LRU/תיקים שנפתחו נסרקים.
+      try {
+        if(Storage.payloadIsEmpty?.(rec) || !Storage.payloadHasPolicyOrInsuredContent?.(rec?.payload)){
+          return;
+        }
+      } catch(_e) {}
       const policies = CustomersUI.collectPolicies(rec).filter((p) => String(p?.origin || "") === "new");
       policies.forEach((p) => {
         const premium = DashboardUI.policyNetPremium(p);
@@ -59575,6 +62361,7 @@ ${inner}
     if(Auth.current && Auth.canAccessCampaignMyLeads()) CampaignAgentLeadWatcher.start();
     if(Auth.current) MirrorCallAgentToastWatcher.start();
     if(Auth.current) OpsAgentStatusToastWatcher.start();
+    if(Auth.current) OpsAssignArrivalAlert.start();
   } catch(_e) {}
   CampaignLinesSettingsUI.init();
   LandingLeadIngestSettingsUI.init();
@@ -59582,7 +62369,6 @@ ${inner}
     try { ChatUI.init(); } catch(_e) {}
     try { ReminderUI.init(); } catch(_e) {}
   }, 1200);
-  OfferCompareUI.init();
   AssignProposalModal.init();
   AssignCustomerModal.init();
   DeleteProposalModal.init();
@@ -59889,16 +62675,14 @@ ${inner}
     },
 
     PREFLIGHT_STEPS: Object.freeze([
-      { key: "intro", n: 1, label: "הצגה עצמית" },
-      { key: "personal", n: 2, label: "פרטי מבוטח/ים" },
-      { key: "needs", n: 3, label: "בירור והתאמת צרכים" },
-      { key: "disclosure", n: 4, label: "גילוי נאות" },
-      { key: "cancel", n: 5, label: "שאלון ביטול" },
-      { key: "beneficiaries", n: 6, label: "פרטי מוטבים" },
-      { key: "health", n: 7, label: "הצהרת בריאות" },
-      { key: "future", n: 8, label: "שינוי או ביטול בעתיד" },
-      { key: "payment", n: 9, label: "פרטי אמצעי תשלום" },
-      { key: "summary", n: 10, label: "סיכום והצהרות" }
+      { key: "personal", label: "פרטי מבוטח/ים" },
+      { key: "needs", label: "בירור והתאמת צרכים" },
+      { key: "disclosure", label: "גילוי נאות" },
+      { key: "cancel", label: "שאלון ביטול" },
+      { key: "beneficiaries", label: "פרטי מוטבים" },
+      { key: "health", label: "הצהרת בריאות" },
+      { key: "payment", label: "פרטי אמצעי תשלום" },
+      { key: "summary", label: "סיכום והצהרות" }
     ]),
 
     _preFlightReviewedSet(){
@@ -60082,6 +62866,32 @@ ${inner}
       `</div>`;
     },
 
+    _mcDiscCardHtml(item){
+      const insureds = Array.isArray(item?.insuredNames) ? item.insuredNames.map((n) => safeTrim(n)).filter(Boolean) : [];
+      const covers = Array.isArray(item?.coverLabels) ? item.coverLabels.map((n) => safeTrim(n)).filter(Boolean) : [];
+      const title = escapeHtml(safeTrim(item?.title) || "גילוי נאות");
+      const coverLine = covers.length
+        ? `<div class="mcDiscCard__covers">${escapeHtml(covers.join(" · "))}</div>`
+        : "";
+      const chips = (insureds.length ? insureds : ["מבוטח"]).map((n) =>
+        `<span class="mcDiscChip">${escapeHtml(n)}</span>`
+      ).join("");
+      const textHtml = escapeHtml(safeTrim(item?.text) || "").replace(/\n/g, "<br>");
+      return `<details class="mcDiscCard" role="listitem">` +
+        `<summary class="mcDiscCard__summary">` +
+          `<div class="mcDiscCard__summaryMain">` +
+            `<div class="mcDiscCard__head">` +
+              `<div class="mcDiscCard__title">${title}</div>` +
+              coverLine +
+            `</div>` +
+            `<div class="mcDiscCard__insureds" aria-label="מבוטחים בכיסוי">${chips}</div>` +
+          `</div>` +
+          `<span class="mcDiscCard__chev" aria-hidden="true"></span>` +
+        `</summary>` +
+        `<div class="mcDiscCard__text" tabindex="0">${textHtml || "—"}</div>` +
+      `</details>`;
+    },
+
     _preFlightDisclosureHtml(rec){
       let groups = [];
       try{
@@ -60091,21 +62901,7 @@ ${inner}
       }catch(_e){ groups = []; }
       if(groups.length){
         return groups.map((group) => {
-          const itemsHtml = (group.items || []).map((item) => {
-            const insureds = Array.isArray(item.insuredNames) ? item.insuredNames.filter(Boolean) : [];
-            const covers = Array.isArray(item.coverLabels) ? item.coverLabels.filter(Boolean) : [];
-            const textHtml = escapeHtml(safeTrim(item.text) || "").replace(/\n/g, "<br>");
-            return `<article class="mcDiscCard" role="listitem">` +
-              `<div class="mcDiscCard__head">` +
-                `<div class="mcDiscCard__title">${escapeHtml(safeTrim(item.title) || "גילוי נאות")}</div>` +
-                (covers.length ? `<div class="mcDiscCard__covers">${escapeHtml(covers.join(" · "))}</div>` : "") +
-              `</div>` +
-              `<div class="mcDiscCard__insureds">${(insureds.length ? insureds : ["מבוטח"]).map((n) =>
-                `<span class="mcDiscChip">${escapeHtml(n)}</span>`
-              ).join("")}</div>` +
-              `<div class="mcDiscCard__text">${textHtml || "—"}</div>` +
-            `</article>`;
-          }).join("");
+          const itemsHtml = (group.items || []).map((item) => this._mcDiscCardHtml(item)).join("");
           return `<section class="mcDiscCompany">` +
             `<div class="mcDiscCompany__head"><span class="mcDiscCompany__name">${escapeHtml(group.company)}</span></div>` +
             `<div class="mcDiscCompany__list">${itemsHtml}</div>` +
@@ -60240,6 +63036,7 @@ ${inner}
             (existingCards.length ? existingCards.join("") : `<p class="mcPreFlightDetailP">אין פוליסות קיימות בתיק.</p>`);
         }
         if(key === "beneficiaries"){
+          try{ this._seedBeneficiariesStepFromProposal(rec); }catch(_e){}
           const risk = policies.filter((p) => this._isRiskOrMortgageRiskType(p?.type || p?.product));
           if(!risk.length) return `<p class="mcPreFlightDetailP">אין פוליסות סיכונים למוטבים / שיעבוד בתיק.</p>`;
           return risk.map((p) => {
@@ -60247,7 +63044,7 @@ ${inner}
               ? p.pledgeBanks
               : [(p?.pledgeBank && typeof p.pledgeBank === "object") ? p.pledgeBank : {}];
             const bank = banks[0] || {};
-            const pledged = !!(p?.pledge || p?.hasPledge);
+            const pledged = this._policyHasFilledPledge ? this._policyHasFilledPledge(p) : !!(p?.pledge || p?.hasPledge);
             const bens = Array.isArray(p?.beneficiaries) ? p.beneficiaries : [];
             const bensHtml = bens.length
               ? bens.map((b, i) => {
@@ -60349,7 +63146,6 @@ ${inner}
         const open = openKey === step.key;
         return `<li class="mcPreFlightItem${done ? " is-done" : ""}${open ? " is-open" : ""}" data-mc-prestep="${escapeHtml(step.key)}">` +
           `<button type="button" class="mcPreFlightItem__btn" data-mc-prestep-open="${escapeHtml(step.key)}">` +
-            `<span class="mcPreFlightItem__n">${step.n}</span>` +
             `<span class="mcPreFlightItem__body">` +
               `<span class="mcPreFlightItem__title">${escapeHtml(step.label)}</span>` +
               `<span class="mcPreFlightItem__sum">${escapeHtml(this._preFlightStepSummary(rec, step.key))}</span>` +
@@ -63592,15 +66388,252 @@ ${inner}
       return rec.payload.mirrorFlow.healthDeclaration;
     },
 
+    _benefRowHasData(b){
+      if(!b || typeof b !== "object") return false;
+      return !!(
+        safeTrim(b.firstName) || safeTrim(b.lastName) || safeTrim(b.fullName) || safeTrim(b.name) ||
+        safeTrim(b.idNumber) || safeTrim(b.id) ||
+        safeTrim(b.sharePct ?? b.percent) ||
+        safeTrim(b.relationship || b.relation) ||
+        safeTrim(b.phone) || safeTrim(b.birthDate)
+      );
+    },
+
+    _normalizeBenefRow(b){
+      const src = (b && typeof b === "object") ? b : {};
+      const full = safeTrim(src.fullName || src.name);
+      let first = safeTrim(src.firstName);
+      let last = safeTrim(src.lastName);
+      if((!first || !last) && full){
+        const parts = full.split(/\s+/).filter(Boolean);
+        if(!first && parts.length) first = parts.shift() || "";
+        if(!last && parts.length) last = parts.join(" ");
+      }
+      const share = (src.sharePct != null && String(src.sharePct) !== "")
+        ? src.sharePct
+        : (src.percent != null && String(src.percent) !== "" ? src.percent : "");
+      return {
+        firstName: first,
+        lastName: last,
+        idNumber: safeTrim(src.idNumber || src.id),
+        birthDate: safeTrim(src.birthDate),
+        phone: safeTrim(src.phone),
+        relationship: safeTrim(src.relationship || src.relation),
+        sharePct: share
+      };
+    },
+
+    _emptyPledgeBankRow(){
+      return { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" };
+    },
+
+    _pledgeBankHasData(b){
+      if(!b || typeof b !== "object") return false;
+      return !!(
+        safeTrim(b.bankName || b.name) || safeTrim(b.bankNo) ||
+        safeTrim(b.branch || b.branchNo) || safeTrim(b.amount) ||
+        safeTrim(b.years) || safeTrim(b.address)
+      );
+    },
+
+    _copyMissingPledgeBankFields(target, source){
+      if(!target || typeof target !== "object") return target;
+      const src = (source && typeof source === "object") ? source : {};
+      const take = (key, aliases) => {
+        if(safeTrim(target[key])) return;
+        for(const alias of aliases){
+          const v = src[alias];
+          if(v != null && safeTrim(v) !== ""){
+            target[key] = v;
+            return;
+          }
+        }
+      };
+      take("bankName", ["bankName", "name"]);
+      take("bankNo", ["bankNo"]);
+      take("branch", ["branch", "branchNo"]);
+      take("amount", ["amount"]);
+      take("years", ["years"]);
+      take("address", ["address"]);
+      return target;
+    },
+
+    _pledgeBanksFromPolicy(policy){
+      if(!policy || typeof policy !== "object") return [];
+      let list = Array.isArray(policy.pledgeBanks) ? policy.pledgeBanks.filter((b) => b && typeof b === "object") : [];
+      if(!list.length && policy.pledgeBank && typeof policy.pledgeBank === "object") list = [policy.pledgeBank];
+      if(!list.length && this._policyHasFilledPledge(policy)) list = [this._emptyPledgeBankRow()];
+      return list.map((b) => {
+        const next = Object.assign(this._emptyPledgeBankRow(), b);
+        this._copyMissingPledgeBankFields(next, b);
+        if(!safeTrim(next.bankName) && safeTrim(policy.pledgeBankName)) next.bankName = safeTrim(policy.pledgeBankName);
+        if(!safeTrim(next.amount) && safeTrim(policy.mortgageAmount)) next.amount = policy.mortgageAmount;
+        if(!safeTrim(next.years) && safeTrim(policy.mortgageYears)) next.years = policy.mortgageYears;
+        if(!safeTrim(next.address) && safeTrim(policy.mortgageAddress)) next.address = policy.mortgageAddress;
+        return next;
+      }).filter((b) => this._pledgeBankHasData(b));
+    },
+
+    _policyHasFilledPledge(policy){
+      if(!policy || typeof policy !== "object") return false;
+      if(policy.pledge === true || policy.hasPledge === true) return true;
+      if(safeTrim(policy.pledgeBankName)) return true;
+      if(this._pledgeBankHasData(policy.pledgeBank)) return true;
+      if(Array.isArray(policy.pledgeBanks) && policy.pledgeBanks.some((b) => this._pledgeBankHasData(b))) return true;
+      if(safeTrim(policy.mortgageAmount) || safeTrim(policy.mortgageYears) || safeTrim(policy.mortgageAddress)) return true;
+      return false;
+    },
+
     _policyHasPledge(policy){
-      return !!(policy?.pledge || policy?.hasPledge);
+      return this._policyHasFilledPledge(policy);
+    },
+
+    _fillEmptyPledgeBankFields(policy){
+      if(!policy || typeof policy !== "object") return [];
+      let banks = Array.isArray(policy.pledgeBanks) ? policy.pledgeBanks.filter((b) => b && typeof b === "object") : [];
+      if(!banks.length){
+        banks = [policy.pledgeBank && typeof policy.pledgeBank === "object"
+          ? policy.pledgeBank
+          : this._emptyPledgeBankRow()];
+        policy.pledgeBanks = banks;
+      }
+      const first = banks[0];
+      if(first && typeof first === "object"){
+        if(!safeTrim(first.bankName) && safeTrim(policy.pledgeBankName)) first.bankName = safeTrim(policy.pledgeBankName);
+        if(!safeTrim(first.amount) && safeTrim(policy.mortgageAmount)) first.amount = policy.mortgageAmount;
+        if(!safeTrim(first.years) && safeTrim(policy.mortgageYears)) first.years = policy.mortgageYears;
+        if(!safeTrim(first.address) && safeTrim(policy.mortgageAddress)) first.address = policy.mortgageAddress;
+      }
+      policy.pledgeBank = banks[0];
+      return banks;
+    },
+
+    _policiesMatchForBenefSeed(a, b){
+      if(!a || !b) return false;
+      const idA = safeTrim(a.id), idB = safeTrim(b.id);
+      if(idA && idB && idA === idB) return true;
+      const coA = safeTrim(a.company), coB = safeTrim(b.company);
+      const tyA = safeTrim(a.type || a.product), tyB = safeTrim(b.type || b.product);
+      if(!coA || !tyA || coA !== coB || tyA !== tyB) return false;
+      const insA = safeTrim(a.insuredId || (Array.isArray(a.insuredIds) ? a.insuredIds[0] : ""));
+      const insB = safeTrim(b.insuredId || (Array.isArray(b.insuredIds) ? b.insuredIds[0] : ""));
+      return !insA || !insB || insA === insB;
+    },
+
+    _proposalPolicyBenefScore(p){
+      if(!p || typeof p !== "object") return 0;
+      let s = 0;
+      const bens = Array.isArray(p.beneficiaries) ? p.beneficiaries : [];
+      if(bens.some((b) => this._benefRowHasData(b))) s += 10;
+      if(this._policyHasFilledPledge(p)) s += 10;
+      if(safeTrim(p.beneficiariesMode) === "legalHeirs") s += 5;
+      return s;
+    },
+
+    _collectProposalPolicySourceLists(rec){
+      const lists = [];
+      const pl = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+      if(Array.isArray(pl.newPolicies) && pl.newPolicies.length) lists.push(pl.newPolicies);
+      if(Array.isArray(pl.operational?.newPolicies) && pl.operational.newPolicies.length) lists.push(pl.operational.newPolicies);
+      try{
+        const props = (typeof findProposalsLinkedToCustomer === "function")
+          ? (findProposalsLinkedToCustomer(rec) || [])
+          : [];
+        props.forEach((prop) => {
+          const ppl = prop?.payload && typeof prop.payload === "object" ? prop.payload : {};
+          if(Array.isArray(ppl.newPolicies) && ppl.newPolicies.length) lists.push(ppl.newPolicies);
+          if(Array.isArray(ppl.operational?.newPolicies) && ppl.operational.newPolicies.length) lists.push(ppl.operational.newPolicies);
+        });
+      }catch(_e){}
+      return lists;
+    },
+
+    _findBestProposalPolicySource(policy, lists){
+      let best = null;
+      let bestScore = 0;
+      (Array.isArray(lists) ? lists : []).forEach((list) => {
+        (Array.isArray(list) ? list : []).forEach((src) => {
+          if(!src || src === policy) return;
+          if(!this._policiesMatchForBenefSeed(policy, src)) return;
+          const score = this._proposalPolicyBenefScore(src);
+          if(score > bestScore){
+            best = src;
+            bestScore = score;
+          }
+        });
+      });
+      return bestScore > 0 ? best : null;
+    },
+
+    _seedPolicyBeneficiariesFromSource(policy, source){
+      if(!policy || typeof policy !== "object" || !source || typeof source !== "object") return policy;
+      if(!safeTrim(policy.beneficiariesMode) && safeTrim(source.beneficiariesMode)){
+        policy.beneficiariesMode = source.beneficiariesMode;
+      }
+      const liveBens = Array.isArray(policy.beneficiaries) ? policy.beneficiaries : [];
+      const liveHas = liveBens.some((b) => this._benefRowHasData(b));
+      if(!liveHas){
+        const srcBens = Array.isArray(source.beneficiaries) ? source.beneficiaries : [];
+        const copied = srcBens.map((b) => this._normalizeBenefRow(b)).filter((b) => this._benefRowHasData(b));
+        if(copied.length) policy.beneficiaries = copied;
+      } else {
+        liveBens.forEach((b) => {
+          if(!b || typeof b !== "object") return;
+          const n = this._normalizeBenefRow(b);
+          if(!safeTrim(b.firstName) && n.firstName) b.firstName = n.firstName;
+          if(!safeTrim(b.lastName) && n.lastName) b.lastName = n.lastName;
+          if(!safeTrim(b.idNumber) && n.idNumber) b.idNumber = n.idNumber;
+          if(!safeTrim(b.relationship) && n.relationship) b.relationship = n.relationship;
+          if((b.sharePct == null || String(b.sharePct) === "") && n.sharePct !== "") b.sharePct = n.sharePct;
+          if(!safeTrim(b.phone) && n.phone) b.phone = n.phone;
+          if(!safeTrim(b.birthDate) && n.birthDate) b.birthDate = n.birthDate;
+        });
+      }
+      if(!policy.pledge && !policy.hasPledge && this._policyHasFilledPledge(source)){
+        policy.pledge = true;
+      }
+      this._fillEmptyPledgeBankFields(policy);
+      if(source !== policy){
+        const srcBanks = this._pledgeBanksFromPolicy(source);
+        const liveBanks = this._ensurePledgeBanks(policy);
+        const liveHasBanks = liveBanks.some((b) => this._pledgeBankHasData(b));
+        if(!liveHasBanks && srcBanks.length){
+          const cloned = srcBanks.slice(0, GI_MAX_PLEDGE_BANKS).map((b) => Object.assign(this._emptyPledgeBankRow(), b));
+          if(cloned.length){
+            policy.pledgeBanks = cloned;
+            policy.pledgeBank = cloned[0];
+          }
+        } else {
+          srcBanks.forEach((sb, i) => {
+            if(!liveBanks[i]) return;
+            this._copyMissingPledgeBankFields(liveBanks[i], sb);
+          });
+        }
+      }
+      return policy;
+    },
+
+    /** מושך מוטבים / בנק משעבד מההצעה לכרטיס שלב 6 — בלי לדרוס מה שכבר מולא, בלי חישוב פרמיה/שיעבוד. */
+    _seedBeneficiariesStepFromProposal(rec){
+      if(!rec || typeof rec !== "object") return;
+      this._mirrorCoerceCustomerPayloadInPlace(rec);
+      const live = this._mirrorGetNewPoliciesRaw(rec);
+      const lists = this._collectProposalPolicySourceLists(rec);
+      live.forEach((policy) => {
+        if(!this._isRiskOrMortgageRiskType(policy?.type || policy?.product)) return;
+        this._fillEmptyPledgeBankFields(policy);
+        const src = this._findBestProposalPolicySource(policy, lists) || policy;
+        this._seedPolicyBeneficiariesFromSource(policy, src);
+      });
     },
 
     // GI-PLEDGE-MULTI — מחזיר את מערך הבנקים המשעבדים (עם מיגרציה מהמבנה הישן)
     _ensurePledgeBanks(policy){
-      if(!policy || typeof policy !== "object") return [{ bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" }];
+      if(!policy || typeof policy !== "object") return [this._emptyPledgeBankRow()];
       if(typeof Wizard !== "undefined" && typeof Wizard.normalizePledgeBanks === "function"){
-        return Wizard.normalizePledgeBanks(policy);
+        const banks = Wizard.normalizePledgeBanks(policy);
+        this._fillEmptyPledgeBankFields(policy);
+        return Array.isArray(policy.pledgeBanks) && policy.pledgeBanks.length ? policy.pledgeBanks : banks;
       }
       if(!Array.isArray(policy.pledgeBanks) || !policy.pledgeBanks.length){
         policy.pledgeBanks = [policy.pledgeBank && typeof policy.pledgeBank === "object"
@@ -63608,6 +66641,7 @@ ${inner}
           : { bankName: safeTrim(policy.pledgeBankName) || "", bankNo:"", branch:"", amount:"", years:"", address:"" }];
       }
       policy.pledgeBank = policy.pledgeBanks[0];
+      this._fillEmptyPledgeBankFields(policy);
       return policy.pledgeBanks;
     },
 
@@ -63633,6 +66667,7 @@ ${inner}
     },
 
     _collectRiskBeneficiaryPolicies(rec){
+      try{ this._seedBeneficiariesStepFromProposal(rec); }catch(_e){}
       const pl = rec?.payload || {};
       const insureds = this._mirrorGetInsureds(rec);
       const rawList = this._mirrorGetNewPoliciesRaw(rec);
@@ -63678,6 +66713,7 @@ ${inner}
 
     _enterBeneficiariesOrSkip(rec, direction){
       const dir = safeTrim(direction) || "forward";
+      try{ this._seedBeneficiariesStepFromProposal(rec); }catch(_e){}
       if(this._hasBeneficiariesStepPolicies(rec)){
         this._mirrorUiPhase = "beneficiaries";
         this._renderBeneficiariesBody(rec);
@@ -64068,11 +67104,16 @@ ${inner}
       const addBtnHtml = pledgeBanks.length < GI_MAX_PLEDGE_BANKS
         ? `<button type="button" class="btn mcPledgeAddBtn" data-mc-pledge-add>+ הוסף בנק שני</button>`
         : `<span class="mcPledgeMaxNote">מקסימום ${GI_MAX_PLEDGE_BANKS} בנקים</span>`;
+      const fromProposal = pledgeBanks.some((b) => this._pledgeBankHasData(b));
+      const hintHtml = fromProposal
+        ? `<div class="mcBenefCard__hint">פרטי הבנק המשעבד מההצעה — אמת מול הלקוח ועדכן אם צריך.</div>`
+        : `<div class="mcBenefCard__hint">לא הוזן בנק משעבד בהצעה — יש למלא מול הלקוח.</div>`;
       return `<div class="mcPledgeBox" aria-label="פרטי הבנק המשעבד">` +
         `<div class="mcPledgeBox__head">` +
           `<div class="mcPledgeBox__title">פרטי הבנק${multi ? "ים" : ""} המשעבד${multi ? "ים" : ""} (מוטב בלתי חוזר)</div>` +
           addBtnHtml +
         `</div>` +
+        hintHtml +
         balanceHtml +
         cards +
       `</div>`;
@@ -64085,6 +67126,7 @@ ${inner}
         return;
       }
       this._mirrorCoerceCustomerPayloadInPlace(rec);
+      try{ this._seedBeneficiariesStepFromProposal(rec); }catch(_e){}
       const items = this._collectRiskBeneficiaryPolicies(rec);
       const store = this._mirrorGetBenefStore(rec);
       store.openedAt = store.openedAt || nowISO();
@@ -64107,7 +67149,7 @@ ${inner}
           if(!item.policy.beneficiaries.length) item.policy.beneficiaries.push(this._benefEmptyRow());
         }
         const bens = Array.isArray(item.policy.beneficiaries) ? item.policy.beneficiaries : [];
-        const hasBens = bens.some((b) => safeTrim(b?.firstName) || safeTrim(b?.lastName) || safeTrim(b?.idNumber));
+        const hasBens = bens.some((b) => this._benefRowHasData(b));
         const total = bens.reduce((s, b) => s + (Number(b?.sharePct) || 0), 0);
         // GI-PLEDGE-MULTI — בסיס החלוקה: יתרה אחרי שיעבוד (ריסק רגיל) או מלוא הסכום
         const benBase = this._mcBenefBaseAmount(item.policy);
@@ -64223,17 +67265,29 @@ ${inner}
     },
 
     async _persistHealthDeclarationIntro(rec){
+      return this._persistHealthDeclarationStep(rec);
+    },
+
+    async _persistHealthDeclarationStep(rec){
       if(!rec) return;
       const store = this._mirrorGetHealthDeclStore(rec);
-      store.introSavedAt = nowISO();
-      store.introSavedBy = safeTrim(Auth?.current?.name);
+      const stamp = nowISO();
+      store.introSavedAt = store.introSavedAt || stamp;
+      store.introSavedBy = store.introSavedBy || safeTrim(Auth?.current?.name);
+      store.savedAt = stamp;
+      store.savedBy = safeTrim(Auth?.current?.name);
       store.hasChildrenNote = this._mirrorHasChildrenForHealthDecl(rec);
       try{
-        if(typeof State !== "undefined" && State?.data?.meta) State.data.meta.updatedAt = store.introSavedAt;
-        rec.updatedAt = store.introSavedAt;
+        if(typeof MirrorsUI !== "undefined" && typeof MirrorsUI.getHealthDeclarationSource === "function"){
+          this._mcSyncHealthDeclarationCopies(rec, MirrorsUI.getHealthDeclarationSource(rec));
+        }
       }catch(_e){}
       try{
-        await App.persist("פתיחת הצהרת בריאות בשיחת שיקוף נשמרה", {
+        if(typeof State !== "undefined" && State?.data?.meta) State.data.meta.updatedAt = stamp;
+        rec.updatedAt = stamp;
+      }catch(_e){}
+      try{
+        await App.persist("הצהרת בריאות בשיחת שיקוף נשמרה", {
           silent: true,
           yieldUi: true,
           skipNormalize: true,
@@ -64287,7 +67341,6 @@ ${inner}
           });
         };
         let qKeys = [];
-        const answeredByIns = new Map();
         if(fromFileOnly){
           const seenAlias = new Set();
           const seenText = new Set();
@@ -64309,7 +67362,6 @@ ${inner}
             if(text && seenText.has(text)) return;
             seenAlias.add(alias);
             if(text) seenText.add(text);
-            answeredByIns.set(key, new Set(ids));
             qKeys.push(key);
           });
         }
@@ -64363,26 +67415,23 @@ ${inner}
         const giInsLabel = (ins, idx) => {
           const role = giInsRole(ins, idx);
           const name = giInsName(ins, idx);
-          if(role && name) return role + " \u00b7 " + name;
+          if(role && name) return role + ": " + name;
           return name || role || this._mirrorInsuredTitle(ins, idx);
         };
         // האינדקס המקורי נשמר כדי שתפקיד המבוטח (ילד 1 / ילד 2) לא יזוז בסינון
         const indexedInsureds = insureds.map((ins, idx) => ({ ins, idx }));
         const giRelevantInsureds = (qMeta, qKey) => {
-          // רק מבוטחים שיש להם תשובה שמורה בתיק עבור השאלה הזו
-          const answered = answeredByIns.get(qKey);
-          if(answered && answered.size){
+          // GI-OPS-HEALTH-DECL: כן/לא לכל מבוטח בהצעה (ראשי, בן/בת זוג, ילד).
+          // שאלות שהתווספו ממבוטח ספציפי נשארות מיוחסות אליו בלבד.
+          const added = Array.isArray(qMeta?.addedForInsureds) ? qMeta.addedForInsureds : [];
+          if(qMeta?.addedFromOtherDecl && added.length){
+            const ids = new Set(added.map((x) => safeTrim(x?.id)).filter(Boolean));
+            const names = new Set(added.map((x) => safeTrim(x?.name)).filter(Boolean));
             const hit = indexedInsureds.filter(({ ins, idx }) =>
-              answered.has(safeTrim(ins?.id) || `ins_${idx}`));
+              ids.has(safeTrim(ins?.id)) || names.has(giInsLabel(ins, idx)) || names.has(giInsName(ins, idx)));
             if(hit.length) return hit;
           }
-          const added = Array.isArray(qMeta?.addedForInsureds) ? qMeta.addedForInsureds : [];
-          if(!qMeta?.addedFromOtherDecl || !added.length) return indexedInsureds;
-          const ids = new Set(added.map((x) => safeTrim(x?.id)).filter(Boolean));
-          const names = new Set(added.map((x) => safeTrim(x?.name)).filter(Boolean));
-          const hit = indexedInsureds.filter(({ ins, idx }) =>
-            ids.has(safeTrim(ins?.id)) || names.has(giInsLabel(ins, idx)));
-          return hit.length ? hit : indexedInsureds;
+          return indexedInsureds;
         };
         const giGroups = qKeys.map((qKey) => {
           const qMeta = map[qKey] || { key: qKey, text: qKey, title: "", fields: [] };
@@ -64422,6 +67471,74 @@ ${inner}
       }
     },
 
+    _mcSyncHealthDeclarationCopies(rec, source){
+      if(!rec || !source || typeof source !== "object") return;
+      if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+      const attach = (host) => {
+        if(!host || typeof host !== "object") return;
+        host.healthDeclaration = source;
+      };
+      if(!rec.payload.primary || typeof rec.payload.primary !== "object") rec.payload.primary = {};
+      attach(rec.payload.primary);
+      if(rec.payload.operational && typeof rec.payload.operational === "object"){
+        if(!rec.payload.operational.primary || typeof rec.payload.operational.primary !== "object"){
+          rec.payload.operational.primary = {};
+        }
+        attach(rec.payload.operational.primary);
+      }
+      rec.payload.healthDeclaration = source;
+      try{
+        (this._mirrorGetInsureds(rec) || []).forEach((ins) => {
+          if(!ins.data || typeof ins.data !== "object") ins.data = {};
+          attach(ins.data);
+        });
+      }catch(_e){}
+    },
+
+    _mcHealthQuestionnaireTitle(meta){
+      const src = safeTrim(meta?.questionnaireSource);
+      if(src) return src;
+      const label = safeTrim(meta?.questionnaireLabel);
+      if(label) return label;
+      const nos = Array.isArray(meta?.questionnaireNos) ? meta.questionnaireNos.map(String).filter(Boolean) : [];
+      const nums = Array.isArray(meta?.questionnaireNumbers) ? meta.questionnaireNumbers.map(String).filter(Boolean) : [];
+      const all = nos.length ? nos : nums;
+      return all.length ? ("שאלון " + all.join(", ")) : "שאלון המשך";
+    },
+
+    _mcHealthFollowupFields(item){
+      const schema = Array.isArray(item?.meta?.fields)
+        ? item.meta.fields.filter((f) => f && f.type !== "section")
+        : [];
+      const seen = new Set(schema.map((f) => safeTrim(f?.key)).filter(Boolean));
+      const extra = [];
+      const stored = item?.response?.fields && typeof item.response.fields === "object" ? item.response.fields : {};
+      Object.keys(stored).forEach((k) => {
+        const key = safeTrim(k);
+        if(!key || seen.has(key)) return;
+        if(!safeTrim(stored[k])) return;
+        let label = key;
+        try{
+          if(typeof Wizard !== "undefined" && typeof Wizard.resolveHealthFieldLabel === "function"){
+            label = safeTrim(Wizard.resolveHealthFieldLabel(item.meta || {}, key)) || key;
+          }
+        }catch(_e){}
+        extra.push({ key, label, type: "text" });
+      });
+      return schema.concat(extra);
+    },
+
+    _mcHealthFieldInputHtml(item, field){
+      const val = safeTrim(item.response?.fields?.[field.key] || "");
+      const q = escapeHtml(item.qKey);
+      const ins = escapeHtml(item.insId);
+      const fk = escapeHtml(field.key);
+      if(field.type === "textarea"){
+        return `<label class="mcStepVerify__field mcStepVerify__field--wide"><span class="mcStepVerify__label">${escapeHtml(field.label || field.key)}</span><textarea class="mcStepVerify__input" rows="2" data-mc-health-q="${q}" data-mc-health-ins="${ins}" data-mc-health-field="${fk}">${escapeHtml(val)}</textarea></label>`;
+      }
+      return `<label class="mcStepVerify__field"><span class="mcStepVerify__label">${escapeHtml(field.label || field.key)}</span><input class="mcStepVerify__input" type="text" data-mc-health-q="${q}" data-mc-health-ins="${ins}" data-mc-health-field="${fk}" value="${escapeHtml(val)}"/></label>`;
+    },
+
     _onMcHealthAnswerClick(btn){
       const rec = this._getFreshCustomerRecord();
       if(!rec || !btn) return;
@@ -64441,19 +67558,7 @@ ${inner}
           saved: answer === "yes",
           editing: false
         };
-        // סנכרון לעותקי insureds / primary
-        try{
-          const insureds = this._mirrorGetInsureds(rec);
-          const ins = insureds.find((x) => safeTrim(x?.id) === insId);
-          if(ins?.data){
-            if(!ins.data.healthDeclaration) ins.data.healthDeclaration = source;
-            else ins.data.healthDeclaration.responses = source.responses;
-          }
-          if(rec.payload?.primary){
-            if(!rec.payload.primary.healthDeclaration) rec.payload.primary.healthDeclaration = source;
-            else rec.payload.primary.healthDeclaration.responses = source.responses;
-          }
-        }catch(_e){}
+        this._mcSyncHealthDeclarationCopies(rec, source);
       }catch(_e){}
       this._renderHealthDeclarationBody(rec);
     },
@@ -64474,17 +67579,23 @@ ${inner}
           ...prev,
           fields: { ...(prev.fields || {}), [field]: el.value }
         };
+        this._mcSyncHealthDeclarationCopies(rec, source);
       }catch(_e){}
     },
 
     _validateHealthDeclarationStep(rec){
       const groups = this._mirrorBuildHealthGroups(rec);
       if(!groups.length) return { ok: true };
+      const anyAnswered = groups.some((group) => (group.items || []).some((item) => {
+        const a = safeTrim(item.response?.answer);
+        return a === "yes" || a === "no";
+      }));
       for(const group of groups){
         for(const item of group.items || []){
           const giWho = safeTrim(item.insLabel) || safeTrim(group.insured?.label);
           const answer = safeTrim(item.response?.answer);
           if(answer !== "yes" && answer !== "no"){
+            if(anyAnswered) continue;
             return { ok: false, message: `יש לסמן כן/לא עבור ${giWho}: ${item.meta?.text || item.qKey}` };
           }
           if(answer === "yes" && typeof MirrorsUI !== "undefined" && typeof MirrorsUI.validateMirrorHealthItem === "function"){
@@ -64516,24 +67627,12 @@ ${inner}
           const answer = safeTrim(item.response?.answer);
           const yesSelected = answer === "yes";
           const noSelected = answer === "no";
-          const fields = Array.isArray(item.meta?.fields) ? item.meta.fields.filter((f) => f && f.type !== "section") : [];
           const wizardBadge = answer ? `<span class="mcHealthQ__badge ${yesSelected ? "is-yes" : "is-no"}">מהאשף: ${yesSelected ? "כן" : "לא"}</span>` : `<span class="mcHealthQ__badge is-empty">טרם סומן באשף</span>`;
-          const fieldsHtml = yesSelected && fields.length
-            ? `<div class="mcHealthQ__fields">${fields.map((field) => {
-                const val = safeTrim(item.response?.fields?.[field.key] || "");
-                if(field.type === "textarea"){
-                  return `<label class="mcStepVerify__field mcStepVerify__field--wide"><span class="mcStepVerify__label">${escapeHtml(field.label || field.key)}</span><textarea class="mcStepVerify__input" rows="2" data-mc-health-q="${escapeHtml(item.qKey)}" data-mc-health-ins="${escapeHtml(item.insId)}" data-mc-health-field="${escapeHtml(field.key)}">${escapeHtml(val)}</textarea></label>`;
-                }
-                return `<label class="mcStepVerify__field"><span class="mcStepVerify__label">${escapeHtml(field.label || field.key)}</span><input class="mcStepVerify__input" type="text" data-mc-health-q="${escapeHtml(item.qKey)}" data-mc-health-ins="${escapeHtml(item.insId)}" data-mc-health-field="${escapeHtml(field.key)}" value="${escapeHtml(val)}"/></label>`;
-              }).join("")}</div>`
-            : "";
           return `<article class="mcHealthQ${item.meta?.addedFromOtherDecl ? " mcHealthQ--added" : ""}" data-mc-health-item="${escapeHtml(item.qKey)}|${escapeHtml(item.insId)}">` +
             `<div class="mcHealthQ__head">` +
-              `<div class="mcHealthQ__text">${escapeHtml(item.insRole || item.insLabel || item.qKey)}</div>` +
-              (safeTrim(item.insName) ? `<div class="mcHealthQ__who">${escapeHtml(item.insName)}</div>` : "") +
+              `<div class="mcHealthQ__text">${escapeHtml(item.insLabel || item.insRole || item.qKey)}</div>` +
               wizardBadge +
             `</div>` +
-            (safeTrim(item.meta?.title) ? `<div class="mcHealthQ__cat">${escapeHtml(item.meta.title)}</div>` : "") +
             (item.meta?.addedFromOtherDecl
               ? `<div class="mcHealthQ__added" role="note">${escapeHtml(giHealthAddedNoteText(item.meta))}</div>`
               : "") +
@@ -64541,13 +67640,30 @@ ${inner}
               `<button type="button" class="mcHealthQ__choice${yesSelected ? " is-selected" : ""}" data-mc-health-q="${escapeHtml(item.qKey)}" data-mc-health-ins="${escapeHtml(item.insId)}" data-mc-health-answer="yes">כן</button>` +
               `<button type="button" class="mcHealthQ__choice${noSelected ? " is-selected" : ""}" data-mc-health-q="${escapeHtml(item.qKey)}" data-mc-health-ins="${escapeHtml(item.insId)}" data-mc-health-answer="no">לא</button>` +
             `</div>` +
-            fieldsHtml +
           `</article>`;
         }).join("");
-        return `<section class="mcHealthGroup">` +
+        const quests = (group.items || []).map((item) => {
+          if(safeTrim(item.response?.answer) !== "yes") return "";
+          const fields = this._mcHealthFollowupFields(item);
+          const who = escapeHtml(item.insLabel || item.insRole || "מבוטח");
+          const src = this._mcHealthQuestionnaireTitle(item.meta);
+          if(!fields.length){
+            return `<div class="mcHealthQuest mcHealthQuest--empty" data-mc-health-quest="${escapeHtml(item.qKey)}|${escapeHtml(item.insId)}">` +
+              `<div class="mcHealthQuest__head">שאלון המשך · ${who}</div>` +
+              `<div class="mcHealthQuest__empty">סומן כן · אין שאלון המשך מובנה לשאלה זו</div>` +
+            `</div>`;
+          }
+          return `<div class="mcHealthQuest" data-mc-health-quest="${escapeHtml(item.qKey)}|${escapeHtml(item.insId)}">` +
+            `<div class="mcHealthQuest__head">שאלון שנפתח · ${who}</div>` +
+            (src ? `<div class="mcHealthQuest__src">${escapeHtml(src)}</div>` : "") +
+            `<div class="mcHealthQ__fields">${fields.map((field) => this._mcHealthFieldInputHtml(item, field)).join("")}</div>` +
+          `</div>`;
+        }).join("");
+        return `<section class="mcHealthGroup${quests ? " mcHealthGroup--hasQuest" : ""}">` +
           `<div class="mcHealthGroup__name">${escapeHtml(group.question?.text || group.insured?.label || "")}</div>` +
           (safeTrim(group.question?.title) ? `<div class="mcHealthGroup__cat">${escapeHtml(group.question.title)}</div>` : "") +
           `<div class="mcHealthGroup__list">${cards}</div>` +
+          quests +
         `</section>`;
       }).join("") : `<div class="mcAgentHint" role="note"><div class="mcAgentHint__title">אין שאלות להצגה</div><div class="mcAgentHint__text">לא נמצאו שאלות הצהרת בריאות תואמות לפוליסות בתיק. ניתן להמשיך אחרי הקראת נוסח הפתיחה.</div></div>`;
 
@@ -64987,27 +68103,7 @@ ${inner}
       let companiesHtml = "";
       if(groups.length){
         companiesHtml = groups.map((group) => {
-            const itemsHtml = (group.items || []).map((item) => {
-              const insureds = Array.isArray(item.insuredNames) ? item.insuredNames.filter(Boolean) : [];
-              const covers = Array.isArray(item.coverLabels) ? item.coverLabels.filter(Boolean) : [];
-              const insuredChips = insureds.length
-                ? `<div class="mcDiscCard__insureds" aria-label="מבוטחים בכיסוי">${insureds.map((n) =>
-                    `<span class="mcDiscChip">${escapeHtml(n)}</span>`
-                  ).join("")}</div>`
-                : `<div class="mcDiscCard__insureds"><span class="mcDiscChip">מבוטח</span></div>`;
-              const coverLine = covers.length
-                ? `<div class="mcDiscCard__covers">${escapeHtml(covers.join(" · "))}</div>`
-                : "";
-              const textHtml = escapeHtml(safeTrim(item.text) || "").replace(/\n/g, "<br>");
-              return `<article class="mcDiscCard" role="listitem">` +
-                `<div class="mcDiscCard__head">` +
-                  `<div class="mcDiscCard__title">${escapeHtml(safeTrim(item.title) || "גילוי נאות")}</div>` +
-                  coverLine +
-                `</div>` +
-                insuredChips +
-                `<div class="mcDiscCard__text" tabindex="0">${textHtml || "—"}</div>` +
-              `</article>`;
-            }).join("");
+            const itemsHtml = (group.items || []).map((item) => this._mcDiscCardHtml(item)).join("");
             return `<section class="mcDiscCompany" aria-label="${escapeHtml(group.company)}">` +
               `<div class="mcDiscCompany__head"><span class="mcDiscCompany__name">${escapeHtml(group.company)}</span></div>` +
               `<div class="mcDiscCompany__list" role="list">${itemsHtml}</div>` +
@@ -65042,11 +68138,11 @@ ${inner}
                   const filledText = typeof MirrorsUI.fillDisclosureAmountBlanks === "function"
                     ? MirrorsUI.fillDisclosureAmountBlanks(safeTrim(block.text), amountRaw)
                     : safeTrim(block.text);
-                  manualCards += `<article class="mcDiscCard" role="listitem">` +
-                    `<div class="mcDiscCard__head"><div class="mcDiscCard__title">${escapeHtml(safeTrim(block.label) || key)}</div>` +
-                    `<div class="mcDiscCard__covers">${escapeHtml(company)} · ${escapeHtml(safeTrim(p?.type || p?.product) || "")}</div></div>` +
-                    `<div class="mcDiscCard__text" tabindex="0">${escapeHtml(filledText).replace(/\n/g, "<br>")}</div>` +
-                  `</article>`;
+                  manualCards += this._mcDiscCardHtml({
+                    title: safeTrim(block.label) || key,
+                    coverLabels: [company, safeTrim(p?.type || p?.product)].filter(Boolean),
+                    text: filledText
+                  });
                 });
               });
             }
@@ -65085,6 +68181,7 @@ ${inner}
         `<div class="mcNeedsScreen">` +
           `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח לפתיחת גילוי נאות">` +
             `<p class="mcNeedsScript__p mcNeedsScript__p--ask">כעת אקריא לך את גילוי הנאות לפי החברה והכיסויים שנרכשו:</p>` +
+            `<p class="mcNeedsScript__p">פתח רק את הכיסויים שנבחרו במוצרים והקרא ללקוח.</p>` +
           `</div>` +
           `<div class="mcDiscScroll">${companiesHtml}</div>` +
           this._mcNeedsNav("disclosure-done", nextLabel, "disclosure-back", "חזרה") +
@@ -65716,10 +68813,10 @@ ${inner}
           this._mirrorUiPhase = "paymentDetails";
           this._renderPaymentBody(rec);
           this._showStepPayPanel();
-          void this._persistHealthDeclarationIntro(rec);
+          void this._persistHealthDeclarationStep(rec);
           return;
         }
-        void this._persistHealthDeclarationIntro(rec);
+        void this._persistHealthDeclarationStep(rec);
         this.onNewPoliciesMirrorDone();
         return;
       }
@@ -65813,9 +68910,9 @@ ${inner}
       this._handleNeedsAct("needs-to-offer");
     },
 
-    /* ===== GI-MIRROR-DIFF · מסך סיכום תיקוני השיקוף =========================
-       נפתח בלחיצה על «סיים שיקוף» ולפני שהלקוח עובר להקלדה. הנציג רואה מה
-       תוקן בשיחה לפי אזור, מאשר שעבר על הכל, ורק אז הלקוח נכנס לתור ההקלדה. */
+    /* ===== GI-MIRROR-DIFF · דוח תיקוני הצעה =================================
+       נפתח בלחיצה על «סיים שיקוף» ולפני שהלקוח עובר להקלדה. הנציג רואה כל
+       שינוי שבוצע בכל מסך בשיחה, מאשר שעבר על הכל, ורק אז הלקוח נכנס לתור. */
 
     _mirrorSummaryCallMeta(rec){
       const call = getMirrorCallStore(rec);
@@ -65838,7 +68935,7 @@ ${inner}
               <div class="mtqChgSection">
                 <div class="mtqChgSection__head">
                   <div class="mtqChgSection__name">${escapeHtml(area.label)} <span class="mtqBadge mtqBadge--chg">${area.rows.length}</span></div>
-                  ${area.key === "personal" ? `<div class="mtqChgSection__count">לעומת נתוני האשף לפני השיקוף</div>` : ""}
+                  ${`<div class="mtqChgSection__count">לעומת נתוני האשף לפני השיקוף</div>`}
                 </div>
                 <table class="mtqChgTable">
                   <thead>
@@ -65867,11 +68964,11 @@ ${inner}
               <div class="mtqUnchangedNote" style="margin-bottom:18px">לא נלכד תצלום נתונים בתחילת השיחה, ולכן לא ניתן להציג השוואת «לפני / אחרי» עבור שיחה זו. ניתן להמשיך ולאשר את העברת הלקוח להקלדה.</div>`;
 
       this.els.mirrorSummaryBody.innerHTML = `
-        <div class="mtqCrumb">שיחת שיקוף <span>›</span> שלב אחרון <span>›</span> <span>דוח שינויים לפני העברה להקלדה</span></div>
+        <div class="mtqCrumb">שיחת שיקוף <span>›</span> שלב אחרון <span>›</span> <span>דוח תיקוני הצעה</span></div>
         <div class="mtqPageHead">
           <div>
-            <div class="mtqPageHead__title">סיכום תיקונים בשיחת השיקוף</div>
-            <p class="mtqPageHead__sub">סקירה לפני אישור העברת הלקוח לתור «ממתין להקלדה»</p>
+            <div class="mtqPageHead__title">דוח תיקוני הצעה</div>
+            <p class="mtqPageHead__sub">כל שינוי שבוצע בכל מסך בשיחת השיקוף — סקירה לפני אישור העברה לתור «ממתין להקלדה»</p>
           </div>
           <div class="mtqBtnRow">
             <button class="mtqBtn mtqBtn--ghost" type="button" data-mc-summary-act="back">חזרה לשיחה</button>
@@ -66123,7 +69220,28 @@ ${inner}
       setMirrorAssign(rec, agent, safeTrim(Auth?.current?.name));
       State.data.meta.updatedAt = nowISO();
       rec.updatedAt = nowISO();
-      await App.persist("שיוך לקוח לשיקוף לנציג תפעול").catch(()=>{});
+      // GI-FIX 2026-08-30: upsert ישיר לתיק — כדי שהשיוך ב-payload יגיע לשרת
+      // גם אם סנכרון bulk כבד נכשל/נדחה; אחרת המנהל רואה שיוך מקומי והנציג לא.
+      let directOk = false;
+      try{
+        const row = (typeof Storage.buildCustomerRows === "function")
+          ? (Storage.buildCustomerRows({ customers: [rec] }) || [])[0]
+          : null;
+        if(row && typeof Storage.upsertSingleRow === "function"){
+          const ur = await Storage.upsertSingleRow(SUPABASE_TABLES.customers, row);
+          directOk = !!(ur && ur.ok);
+          if(directOk){
+            try { Storage.rememberRows(SUPABASE_TABLES.customers, [row]); } catch(_e) {}
+          }
+        }
+      }catch(_e){ directOk = false; }
+      const persistRes = await App.persist("שיוך לקוח לשיקוף לנציג תפעול").catch(() => null);
+      const persistOk = !!(persistRes && persistRes.ok);
+      const customersWarn = safeTrim(persistRes?.customersSyncWarning);
+      if(!directOk && (!persistOk || customersWarn)){
+        alert("השיוך לא נשמר בשרת. נסו שוב.");
+        return;
+      }
       const cb = this._assignOnDone;
       this.closeAssignModal();
       if(cb) try{ cb(); }catch(_e){}
@@ -66138,7 +69256,26 @@ ${inner}
       clearMirrorAssign(rec);
       State.data.meta.updatedAt = nowISO();
       rec.updatedAt = nowISO();
-      await App.persist("הוסר שיוך שיקוף לנציג").catch(()=>{});
+      let directOk = false;
+      try{
+        const row = (typeof Storage.buildCustomerRows === "function")
+          ? (Storage.buildCustomerRows({ customers: [rec] }) || [])[0]
+          : null;
+        if(row && typeof Storage.upsertSingleRow === "function"){
+          const ur = await Storage.upsertSingleRow(SUPABASE_TABLES.customers, row);
+          directOk = !!(ur && ur.ok);
+          if(directOk){
+            try { Storage.rememberRows(SUPABASE_TABLES.customers, [row]); } catch(_e) {}
+          }
+        }
+      }catch(_e){ directOk = false; }
+      const persistRes = await App.persist("הוסר שיוך שיקוף לנציג").catch(() => null);
+      const persistOk = !!(persistRes && persistRes.ok);
+      const customersWarn = safeTrim(persistRes?.customersSyncWarning);
+      if(!directOk && (!persistOk || customersWarn)){
+        alert("הסרת השיוך לא נשמרה בשרת. נסו שוב.");
+        return;
+      }
       const cb = this._assignOnDone;
       this.closeAssignModal();
       if(cb) try{ cb(); }catch(_e){}
@@ -66171,6 +69308,8 @@ ${inner}
       const q = safeTrim(this.els.search?.value || "").toLowerCase();
       const customers = State.data?.customers || [];
       const list = customers.filter(c => {
+        if(typeof isHealthRisksWizardCompleted === "function" && !isHealthRisksWizardCompleted(c)) return false;
+        if(typeof hasSubmittedHealthRisksToOps === "function" && !hasSubmittedHealthRisksToOps(c)) return false;
         const name = safeTrim(c.fullName).toLowerCase();
         const idNum = safeTrim(c.idNumber);
         const phone = safeTrim(c.phone);
@@ -66178,7 +69317,7 @@ ${inner}
         const assignLabel = safeTrim(as?.agentName).toLowerCase();
         if(q && !name.includes(q) && !idNum.includes(q) && !phone.includes(q) && !assignLabel.includes(q)) return false;
         return true;
-      }).slice(0, 400);
+      });
       if(this.els.badge) this.els.badge.textContent = list.length + " לקוחות";
       this.els.tbody.innerHTML = list.map(c => {
         const as = getMirrorAssign(c);
@@ -66199,6 +69338,7 @@ ${inner}
           <td><button type="button" class="btn btn--primary" data-mc-ma-action="assign" data-mc-ma-id="${cid}">שיוך לנציג תפעול</button></td>
         </tr>`;
       }).join("");
+      try { OpsAssignArrivalAlert.inspect(); } catch(_e) {}
     },
     _openAssign(customerId){
       const rec = (State.data?.customers || []).find(x => safeTrim(x.id) === safeTrim(customerId));
@@ -69489,19 +72629,21 @@ ${inner}
      ========================================================================== */
 
   const CUSTOMER_IMPORT_VERSION = "1.2";
-  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260823-prod-nosale-v1";
+  const GI_PRODUCTION_JS_HREF = "./gi-production-import.js?v=20260828-sales-mail-hide-v1";
   const GI_PROD_FALLBACK_COMPANIES = Object.freeze([
     { id: "הכשרה", label: "הכשרה", ready: true, hint: "קבצי RB, RP, SB, SP (בלי סיומת)", dropHint: "הכשרה: RB (כיסויי בריאות), RP (מבוטחי בריאות), SB (כיסויי חיים), SP (מבוטחי חיים). אפשר כמה יחד." },
     { id: "הפניקס", label: "הפניקס", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
     { id: "מגדל", label: "מגדל", ready: true, hint: "קבצי LIFEHLTH, LIFE, COVRLIFE, PERSON (.MBT)", dropHint: "מגדל: LIFEHLTH (בריאות), LIFE (חיים), COVRLIFE (כיסויים), PERSON (מבוטחים). אפשר גם AGENTS / COMPANY." },
-    { id: "מנורה", label: "מנורה", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
-    { id: "כלל", label: "כלל", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" },
+    { id: "מנורה", label: "מנורה", ready: true, hint: "קבצי M, N, G, P + TRFR (ZIP פרט / מבוטלות)", dropHint: "מנורה: ZIP של פרט (MP) או מבוטלות (MM), או קבצי ‎*M.TXT / *N.TXT / *G.TXT / *P.TXT ו־TRFR.ALL." },
+    { id: "כלל", label: "כלל", ready: true, hint: "תיבת EXE / ZIP של אפקס (POL, MEV, TAR, SGB)", dropHint: "כלל: תיבת EXE או ZIP של אפקס חיים / אפקס בריאות, או קבצי POL, MEV, TAR, SGB. ממשק אחזקות לא נטען כאן." },
     { id: "איילון", label: "איילון", ready: false, hint: "יחובר כשיהיו קבצי פרודוקציה" }
   ]);
   function giProductionEngineIsCurrent(eng){
     if(!eng || typeof eng.parseFileBuffer !== "function") return false;
     const migdal = (eng.COMPANIES || []).find((c) => c && c.id === "מגדל");
-    return !!(migdal && migdal.ready === true);
+    const menora = (eng.COMPANIES || []).find((c) => c && c.id === "מנורה");
+    const clal = (eng.COMPANIES || []).find((c) => c && c.id === "כלל");
+    return !!(migdal && migdal.ready === true && menora && menora.ready === true && clal && clal.ready === true);
   }
   function productionCompanyList(){
     const fromEngine = Array.isArray(window.GI_PRODUCTION?.COMPANIES) ? window.GI_PRODUCTION.COMPANIES : [];
@@ -69510,7 +72652,7 @@ ${inner}
       const id = safeTrim(c?.id);
       if(!id) return;
       const prev = byId.get(id) || {};
-      const forceReady = (id === "הכשרה" || id === "מגדל");
+      const forceReady = (id === "הכשרה" || id === "מגדל" || id === "מנורה" || id === "כלל");
       byId.set(id, Object.assign({}, prev, c, {
         ready: forceReady ? true : !!c.ready,
         hint: forceReady ? (prev.hint || c.hint) : (c.hint || prev.hint),
@@ -69518,6 +72660,84 @@ ${inner}
       }));
     });
     return GI_PROD_FALLBACK_COMPANIES.map((c) => byId.get(c.id)).filter(Boolean);
+  }
+  function productionPathLooksCancelled(name){
+    const s = String(name || "");
+    if(/מבוטל/.test(s)) return true;
+    if(/(^|[^A-Za-z0-9])MM\d{8,}/i.test(s)) return true;
+    return false;
+  }
+  function isProductionLookupFile(name){
+    const s = String(name || "");
+    const base = s.split(/[/\\]/).pop().toUpperCase();
+    if(/^(BANKIM|SNIFIM|MIQZOA|MADAD|TRFN|SEFERBNK)\.ALL$/.test(base)) return true;
+    if(/HOLDNGINP/i.test(s) || /אחזקות/.test(s)) return true;
+    if(/\.(TRF|SGP|MAS|HLV|MV2)$/i.test(base)) return true;
+    return false;
+  }
+  function isProductionArchiveName(name){
+    return /\.(zip|exe)$/i.test(String(name || ""));
+  }
+  /* תיבת כלל היא SFX: טבלת ה-ZIP מצביעה מתחילת ה-EXE, לא אחרי ה-stub.
+     חיתוך ב-PK שובר את JSZip («missing 155639 bytes»). קודם הקובץ המלא. */
+  async function loadProductionArchive(arrayBuffer, fileName){
+    try {
+      return await window.JSZip.loadAsync(arrayBuffer);
+    } catch (err) {
+      const msg = String(err && err.message || "");
+      const miss = msg.match(/missing\s+(\d+)\s+bytes/i);
+      let off = miss ? Number(miss[1]) : -1;
+      if(!(off > 0) && typeof window.GI_PRODUCTION?.findEmbeddedZipOffset === "function"){
+        off = window.GI_PRODUCTION.findEmbeddedZipOffset(new Uint8Array(arrayBuffer));
+      }
+      if(!(off > 0) || off >= (arrayBuffer.byteLength || 0)) throw err;
+      return await window.JSZip.loadAsync(arrayBuffer.slice(off));
+    }
+  }
+  function readDirectoryEntries(dirEntry){
+    const reader = dirEntry.createReader();
+    const all = [];
+    function next(){
+      return new Promise((resolve, reject) => {
+        reader.readEntries((batch) => {
+          if(!batch || !batch.length) return resolve(all);
+          all.push.apply(all, batch);
+          resolve(next());
+        }, reject);
+      });
+    }
+    return next();
+  }
+  async function walkFsEntry(entry, out){
+    if(!entry) return;
+    if(entry.isFile){
+      const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+      if(file) out.push(file);
+      return;
+    }
+    if(entry.isDirectory){
+      const kids = await readDirectoryEntries(entry);
+      for(let i = 0; i < kids.length; i++) await walkFsEntry(kids[i], out);
+    }
+  }
+  async function filesFromDataTransfer(dt){
+    const out = [];
+    const items = dt && dt.items;
+    if(items && items.length){
+      const walks = [];
+      for(let i = 0; i < items.length; i++){
+        const it = items[i];
+        const entry = (it.webkitGetAsEntry && it.webkitGetAsEntry()) || null;
+        if(entry) walks.push(walkFsEntry(entry, out));
+        else {
+          const f = it.getAsFile ? it.getAsFile() : null;
+          if(f) out.push(f);
+        }
+      }
+      if(walks.length) await Promise.all(walks);
+      if(out.length) return out;
+    }
+    return Array.from((dt && dt.files) || []);
   }
   function ensureGiProductionJsLoaded(){
     return new Promise((resolve, reject) => {
@@ -69549,6 +72769,8 @@ ${inner}
   const CI_PREVIEW_PAGE_SIZE = 100;
   /** מרווח עדכון מונה התקדמות בזמן בדיקת כפילויות מול השרת */
   const CI_DUP_FETCH_CHUNK = 80;
+  /** מנת payload מלא לתיקים שזוהו בפרודוקציה — בלי זה שאילתת אלפי ת״ז עם payload מקריסה את השיוך */
+  const CI_PROD_PAYLOAD_CHUNK = 25;
 
   function ciYieldToUi(){
     return new Promise((resolve) => {
@@ -70652,8 +73874,10 @@ ${inner}
       this.els.body.innerHTML = `
         <div class="ciHub">${cards}</div>
         <ul class="ciNotes">
-          <li>כל טעינה היא של <strong>חברה אחת</strong>. קבצי הכשרה ומגדל לא מעורבבים באותו סבב.</li>
-          <li>קודם תיק במערכת (דוח לקוחות), ואחר כך הפרודוקציה — השיוך לפי ת״ז.</li>
+          <li>כל טעינה היא של <strong>חברה אחת</strong>. קבצי הכשרה, מגדל, מנורה וכלל לא מעורבבים באותו סבב.</li>
+          <li>השיוך לתיקים שכבר במערכת (גם כאלה שנשמרו לפני שבועות) לפי ת״ז, טלפון או שם מתוך דוח הפרודוקציה. אין צורך להעלות שוב דוח לקוחות. פוליסה עם זיהוי בלי תיק קיים — ייפתח תיק חדש.</li>
+          <li>מנורה: ZIP של פרט (MP) נכנס לתיק; ZIP של מבוטלות (MM) מסומן «לא פעיל» ולא נשמר.</li>
+          <li>כלל: תיבת EXE או ZIP של אפקס. ממשק אחזקות (HOLDNGINP) לא נטען כאן.</li>
         </ul>`;
       this.els.foot.innerHTML = `<button class="btn" type="button" id="ciBackToHub">חזור</button>`;
       on(this.els.foot.querySelector("#ciBackToHub"), "click", () => this.renderHubStep());
@@ -70682,7 +73906,9 @@ ${inner}
         <ul class="ciNotes">
           <li>פוליסה שכבר קיימת בתיק כפוליסה חדשה פעילה — תתעדכן (מספר, פרמיה, כיסויים).</li>
           <li>תיק בלי מוצר — תיווצר שורת פוליסה חדשה.</li>
-          <li>ת״ז בלי תיק תישאר ברשימת «לא נמצא תיק» ולא תיזרק על לקוח אחר.</li>
+          <li>ת״ז, טלפון או שם בלי תיק קיים — ייפתח תיק חדש. בלי זיהוי — יישאר ב«אין תיק». «לבדיקה» לא נשמר אוטומטית.</li>
+          ${company === "מנורה" ? "<li>אפשר לגרור ZIP שלם. קבצי מבוטלות (MM) מסומנים «לא פעיל» ולא נכנסים לתיק.</li>" : ""}
+          ${company === "כלל" ? "<li>גוררים את קובץ ה-EXE עצמו, או את תיקיית «אפקס חיים» / «אפקס חיים - בריאות» אחרי חילוץ. לא ממשק אחזקות.</li>" : ""}
         </ul>`;
       this.els.foot.innerHTML = `<button class="btn" type="button" id="ciProdBackCo">חזרה לחברה</button>`;
       on(this.els.foot.querySelector("#ciProdBackCo"), "click", () => this.renderProductionCompanyStep());
@@ -70702,8 +73928,12 @@ ${inner}
         ev.preventDefault(); drop.classList.remove("is-over");
       }));
       on(drop, "drop", (ev) => {
-        const list = ev.dataTransfer?.files;
-        if(list && list.length) void this.handleProductionFiles(list);
+        ev.preventDefault();
+        drop.classList.remove("is-over");
+        void (async () => {
+          const list = await filesFromDataTransfer(ev.dataTransfer);
+          if(list && list.length) void this.handleProductionFiles(list);
+        })();
       });
     },
 
@@ -70719,7 +73949,43 @@ ${inner}
         startedAt: overallStart
       });
       const parsed = [];
+      const needZip = files.some((f) => isProductionArchiveName(f.name));
+      if(needZip){
+        try {
+          if(window.GI_LOAD_LIBS?.jszip) await window.GI_LOAD_LIBS.jszip();
+        } catch(_e) {}
+        if(!window.JSZip){
+          this.renderError("לפתיחת ZIP או תיבת EXE נדרש JSZip. בדקו את החיבור לאינטרנט ורעננו את הדף.");
+          return;
+        }
+      }
       try {
+        const pushParsed = (name, buf, cancelled) => {
+          const base = String(name || "").split(/[/\\]/).pop();
+          if(!base || base.charAt(0) === ".") return;
+          if(isProductionLookupFile(name) || isProductionLookupFile(base)) return;
+          parsed.push(P.parseFileBuffer(base, buf, { cancelled: !!cancelled }));
+        };
+        const expandArchive = async (arrayBuffer, archiveName, cancelledOuter, depth) => {
+          const zip = await loadProductionArchive(arrayBuffer, archiveName);
+          const names = Object.keys(zip.files || {});
+          for(let j = 0; j < names.length; j++){
+            const name = names[j];
+            const entry = zip.files[name];
+            if(!entry || entry.dir) continue;
+            const base = String(name).split(/[/\\]/).pop();
+            if(!base || base.charAt(0) === ".") continue;
+            if(isProductionLookupFile(name) || isProductionLookupFile(base)) continue;
+            const innerCancelled = cancelledOuter || productionPathLooksCancelled(name);
+            if(depth < 2 && isProductionArchiveName(base)){
+              const innerBuf = await entry.async("arraybuffer");
+              await expandArchive(innerBuf, base, innerCancelled, depth + 1);
+              continue;
+            }
+            const buf = await entry.async("arraybuffer");
+            pushParsed(name, buf, innerCancelled);
+          }
+        };
         for(let i = 0; i < files.length; i++){
           const file = files[i];
           this.updateProgress({
@@ -70728,50 +73994,86 @@ ${inner}
             done: i,
             total: files.length
           });
-          const buf = await file.arrayBuffer();
-          parsed.push(P.parseFileBuffer(file.name, buf));
+          const cancelledOuter = productionPathLooksCancelled(file.name);
+          if(isProductionArchiveName(file.name)){
+            await expandArchive(await file.arrayBuffer(), file.name, cancelledOuter, 0);
+          } else {
+            const buf = await file.arrayBuffer();
+            pushParsed(file.name, buf, cancelledOuter);
+          }
           await ciYieldToUi();
         }
       } catch(err){
-        this.renderError("פענוח הקבצים נכשל: " + (safeTrim(err?.message) || "שגיאה לא ידועה"));
+        const raw = safeTrim(err?.message) || "שגיאה לא ידועה";
+        this.renderError(
+          /missing\s+\d+\s+bytes|Corrupted zip/i.test(raw)
+            ? "תיבת כלל לא נפתחה. גררו את קובץ ה-EXE עצמו (תיבה_16396 חיים או תיבה_16398 בריאות), לא תיקייה מחולצת ולא ממשק אחזקות."
+            : "פענוח הקבצים נכשל: " + raw
+        );
         return;
       }
 
       const usable = parsed.filter((f) => f.kind && f.kind !== "RM" && (f.rows || []).length);
       if(!usable.length){
-        const migdal = safeTrim(this._prod?.company) === "מגדל";
-        this.renderError(migdal
-          ? "לא זוהו רשומות פרודוקציה בקבצים. למגדל נדרשים LIFEHLTH / LIFE / COVRLIFE / PERSON."
-          : "לא זוהו רשומות פרודוקציה בקבצים. להכשרה נדרשים RB / RP / SB / SP.");
+        const company = safeTrim(this._prod?.company);
+        this.renderError(
+          company === "מגדל"
+            ? "לא זוהו רשומות פרודוקציה בקבצים. למגדל נדרשים LIFEHLTH / LIFE / COVRLIFE / PERSON."
+            : company === "מנורה"
+              ? "לא זוהו רשומות פרודוקציה בקבצים. למנורה נדרשים ZIP של פרט (MP) או מבוטלות (MM), או קבצי *M.TXT / *N.TXT / *G.TXT / *P.TXT ו־TRFR.ALL."
+              : company === "כלל"
+                ? "לא זוהו רשומות פרודוקציה בקבצים. לכלל נדרשת תיבת EXE/ZIP של אפקס, או קבצי POL / MEV / TAR / SGB. ממשק אחזקות לא נטען."
+                : "לא זוהו רשומות פרודוקציה בקבצים. להכשרה נדרשים RB / RP / SB / SP."
+        );
         return;
       }
 
       const policies = P.buildPolicies(usable, this._prod?.company);
       if(!policies.length){
-        const migdal = safeTrim(this._prod?.company) === "מגדל";
-        this.renderError(migdal
-          ? "הקבצים נקראו, אך לא נבנו פוליסות. ודאו שיש LIFEHLTH או LIFE יחד עם COVRLIFE."
-          : "הקבצים נקראו, אך לא נבנו פוליסות.");
+        const company = safeTrim(this._prod?.company);
+        this.renderError(
+          company === "מגדל"
+            ? "הקבצים נקראו, אך לא נבנו פוליסות. ודאו שיש LIFEHLTH או LIFE יחד עם COVRLIFE."
+            : company === "מנורה"
+              ? "הקבצים נקראו, אך לא נבנו פוליסות. ודאו שיש M/N יחד עם TRFR.ALL."
+              : company === "כלל"
+                ? "הקבצים נקראו, אך לא נבנו פוליסות. ודאו שיש POL או MEV של אפקס (לא אחזקות)."
+                : "הקבצים נקראו, אך לא נבנו פוליסות."
+        );
         return;
       }
       const idSet = new Set();
-      policies.forEach((p) => (p.ids || []).forEach((id) => { if(id) idSet.add(id); }));
+      const phoneSet = new Set();
+      const nameList = [];
+      policies.forEach((p) => {
+        (p.ids || []).forEach((id) => { if(id) idSet.add(id); });
+        (p.phones || []).forEach((ph) => {
+          const n = P.normPhone ? P.normPhone(ph) : "";
+          if(n) phoneSet.add(n);
+        });
+        (p.people || []).forEach((person) => {
+          const n = P.normPhone ? P.normPhone(person.phone) : "";
+          if(n) phoneSet.add(n);
+          if(person.fullName) nameList.push(person.fullName);
+        });
+      });
       const ids = Array.from(idSet);
+      const phones = Array.from(phoneSet);
 
       this.renderProgress({
-        title: "מאתר תיקי לקוח לפי ת״ז…",
+        title: "מאתר תיקי לקוח לפי ת״ז, טלפון ושם…",
         done: 0,
-        total: Math.max(ids.length, 1),
+        total: Math.max(ids.length + phones.length + nameList.length, 1),
         startedAt: Date.now()
       });
 
       const customersById = await this.fetchProductionCustomers(ids, (prog) => {
         this.updateProgress({
-          title: "מאתר תיקי לקוח לפי ת״ז…",
+          title: "מאתר תיקי לקוח לפי ת״ז, טלפון ושם…",
           done: prog.done,
           total: prog.total
         });
-      });
+      }, phones, nameList);
 
       const items = P.classifyPolicies(policies, customersById);
       this._prod.files = usable.map((f) => ({ name: f.fileName, kind: f.kind, rows: (f.rows || []).length }));
@@ -70779,14 +74081,123 @@ ${inner}
       this.renderProductionPreview();
     },
 
-    async fetchProductionCustomers(ids, onProgress){
+    async fetchProductionCustomers(ids, onProgress, phones, names){
       const P = window.GI_PRODUCTION;
       const found = new Map();
-      const list = (ids || []).filter(Boolean);
-      const total = list.length;
-      const select = "id,full_name,id_number,phone,city,status,agent_id,agent_name,payload,new_policies_count";
-      for(let i = 0; i < list.length; i += CI_DUP_FETCH_CHUNK){
-        const chunk = list.slice(i, i + CI_DUP_FETCH_CHUNK);
+      const byUuid = new Map();
+      const want = [];
+      const wantSet = new Set();
+      const wantPhones = [];
+      const wantPhoneSet = new Set();
+      (ids || []).forEach((id) => {
+        const padded = P.normId(id);
+        if(padded && !wantSet.has(padded)){
+          wantSet.add(padded);
+          want.push(padded);
+        }
+      });
+      (phones || []).forEach((ph) => {
+        const n = P.normPhone ? P.normPhone(ph) : String(ph || "").replace(/\D/g, "");
+        const k = n ? ("tel:" + n) : "";
+        if(k && !wantPhoneSet.has(k)){
+          wantPhoneSet.add(k);
+          wantPhones.push(n);
+        }
+      });
+      const wantNames = [];
+      const wantNameSet = new Set();
+      (names || []).forEach((nm) => {
+        const keys = P.personNameKeys ? P.personNameKeys(nm) : [];
+        keys.forEach((k) => {
+          if(k && !wantNameSet.has(k)){
+            wantNameSet.add(k);
+            wantNames.push(k);
+          }
+        });
+      });
+
+      const indexRec = (rec) => {
+        if(!rec || !safeTrim(rec.id)) return;
+        const prev = byUuid.get(String(rec.id));
+        const hasPay = rec.payload && typeof rec.payload === "object"
+          && (Array.isArray(rec.payload.newPolicies) || Array.isArray(rec.payload.insureds) || rec.payload.operational);
+        if(!prev || hasPay) byUuid.set(String(rec.id), rec);
+        const live = byUuid.get(String(rec.id));
+        const keys = new Set();
+        const addKey = (v) => {
+          const n = P.normId(v);
+          if(!n) return;
+          keys.add(n);
+          const stripped = String(n).replace(/^0+/, "");
+          if(stripped) keys.add(stripped);
+        };
+        const addPhone = (v) => {
+          const n = P.normPhone ? P.normPhone(v) : "";
+          if(n) keys.add("tel:" + n);
+        };
+        const addName = (v) => {
+          const list = P.personNameKeys ? P.personNameKeys(v) : [];
+          list.forEach((k) => { if(k) keys.add("name:" + k); });
+        };
+        addKey(live.idNumber);
+        addPhone(live.phone);
+        addName(live.fullName);
+        const payload = live.payload && typeof live.payload === "object" ? live.payload : {};
+        (Array.isArray(payload.insureds) ? payload.insureds : []).forEach((ins) => {
+          addKey(ins?.data?.idNumber || ins?.idNumber);
+          addPhone(ins?.data?.phone || ins?.phone);
+          addName(ins?.data?.fullName || ((ins?.data?.firstName || "") + " " + (ins?.data?.lastName || "")));
+        });
+        keys.forEach((k) => {
+          if(String(k).indexOf("tel:") === 0){
+            if(wantPhoneSet.has(k)) found.set(k, live);
+            return;
+          }
+          if(String(k).indexOf("name:") === 0){
+            if(!wantNameSet.has(String(k).slice(5))) return;
+            const prev = found.get(k);
+            if(prev && prev.id && String(prev.id) !== String(live.id)){
+              found.set(k, { id: "ambiguous:" + k, fullName: "", ambiguous: true });
+              return;
+            }
+            found.set(k, live);
+            return;
+          }
+          const padded = P.normId(k);
+          if(wantSet.has(k) || (padded && wantSet.has(padded))){
+            found.set(k, live);
+            if(padded) found.set(padded, live);
+          }
+        });
+      };
+
+      const recFromRow = (row, payload) => normalizeCustomerRecord({
+        id: row.id,
+        status: row.status,
+        fullName: row.full_name || row.fullName,
+        idNumber: row.id_number || row.idNumber,
+        phone: row.phone,
+        city: row.city,
+        agentId: row.agent_id || row.agentId,
+        agentName: row.agent_name || row.agentName,
+        newPoliciesCount: row.new_policies_count || row.newPoliciesCount,
+        payload: payload !== undefined ? payload : row.payload
+      });
+
+      const local = []
+        .concat(Array.isArray(State.data?.customers) ? State.data.customers : [])
+        .concat(Array.isArray(State.data?.meta?.customersShadow) ? State.data.meta.customersShadow : []);
+      local.forEach((rec) => indexRec(rec));
+
+      const missing = want.filter((id) => {
+        const stripped = String(id).replace(/^0+/, "");
+        return !found.has(id) && !(stripped && found.has(stripped));
+      });
+
+      const lightSelect = "id,full_name,id_number,phone,city,status,agent_id,agent_name,new_policies_count";
+      const lightTotal = Math.max(missing.length, 1);
+      for(let i = 0; i < missing.length; i += CI_DUP_FETCH_CHUNK){
+        const chunk = missing.slice(i, i + CI_DUP_FETCH_CHUNK);
         const queryIds = [];
         chunk.forEach((id) => {
           queryIds.push(id);
@@ -70797,7 +74208,7 @@ ${inner}
         try {
           const client = Storage.getClient();
           if(client){
-            const res = await client.from(SUPABASE_TABLES.customers).select(select).in("id_number", queryIds);
+            const res = await client.from(SUPABASE_TABLES.customers).select(lightSelect).in("id_number", queryIds);
             if(!res?.error) rows = res?.data || [];
           }
         } catch(_e) {}
@@ -70805,32 +74216,157 @@ ${inner}
           try {
             const inList = "(" + queryIds.map((v) => '"' + String(v).replace(/"/g, "") + '"').join(",") + ")";
             rows = await Storage.restRequest(
-              SUPABASE_TABLES.customers + "?id_number=in." + encodeURIComponent(inList) + "&select=" + encodeURIComponent(select),
+              SUPABASE_TABLES.customers + "?id_number=in." + encodeURIComponent(inList) + "&select=" + encodeURIComponent(lightSelect),
               { method: "GET" }
             ) || [];
           } catch(_e) { rows = []; }
         }
-        (rows || []).forEach((row) => {
-          const rec = normalizeCustomerRecord({
-            id: row.id,
-            status: row.status,
-            fullName: row.full_name,
-            idNumber: row.id_number,
-            phone: row.phone,
-            city: row.city,
-            agentId: row.agent_id,
-            agentName: row.agent_name,
-            newPoliciesCount: row.new_policies_count,
-            payload: row.payload
-          });
-          const key = P.normId(rec.idNumber);
-          if(key && !found.has(key)) found.set(key, rec);
-        });
+        (rows || []).forEach((row) => indexRec(recFromRow(row)));
         if(typeof onProgress === "function"){
-          try { onProgress({ done: Math.min(i + chunk.length, total), total }); } catch(_e) {}
+          try { onProgress({ done: Math.min(i + chunk.length, missing.length), total: lightTotal }); } catch(_e) {}
         }
         await ciYieldToUi();
       }
+
+      const missingPhones = [];
+      const seenPhoneQ = new Set();
+      wantPhones.forEach((p) => {
+        if(found.has("tel:" + p) || seenPhoneQ.has(p)) return;
+        seenPhoneQ.add(p);
+        missingPhones.push(p);
+        const stripped = String(p).replace(/^0/, "");
+        if(stripped && stripped !== p && !seenPhoneQ.has(stripped)){
+          seenPhoneQ.add(stripped);
+          missingPhones.push(stripped);
+        }
+      });
+      for(let i = 0; i < missingPhones.length; i += CI_DUP_FETCH_CHUNK){
+        const chunk = missingPhones.slice(i, i + CI_DUP_FETCH_CHUNK);
+        let rows = null;
+        try {
+          const client = Storage.getClient();
+          if(client){
+            const res = await client.from(SUPABASE_TABLES.customers).select(lightSelect).in("phone", chunk);
+            if(!res?.error) rows = res?.data || [];
+          }
+        } catch(_e) {}
+        if(!rows){
+          try {
+            const inList = "(" + chunk.map((v) => '"' + String(v).replace(/"/g, "") + '"').join(",") + ")";
+            rows = await Storage.restRequest(
+              SUPABASE_TABLES.customers + "?phone=in." + encodeURIComponent(inList) + "&select=" + encodeURIComponent(lightSelect),
+              { method: "GET" }
+            ) || [];
+          } catch(_e) { rows = []; }
+        }
+        (rows || []).forEach((row) => indexRec(recFromRow(row)));
+        if(typeof onProgress === "function"){
+          try {
+            onProgress({
+              done: missing.length + Math.min(i + chunk.length, missingPhones.length),
+              total: Math.max(missing.length + missingPhones.length, 1)
+            });
+          } catch(_e) {}
+        }
+        await ciYieldToUi();
+      }
+
+      if(wantNames.length){
+        const PAGE = 400;
+        let from = 0;
+        const client = Storage.getClient();
+        for(let page = 0; page < 200; page++){
+          let rows = null;
+          try {
+            if(client){
+              const res = await client.from(SUPABASE_TABLES.customers).select(lightSelect).range(from, from + PAGE - 1);
+              if(!res?.error) rows = res?.data || [];
+            }
+          } catch(_e) {}
+          if(!rows){
+            try {
+              rows = await Storage.restRequest(
+                SUPABASE_TABLES.customers
+                  + "?select=" + encodeURIComponent(lightSelect)
+                  + "&offset=" + from
+                  + "&limit=" + PAGE,
+                { method: "GET" }
+              ) || [];
+            } catch(_e) { rows = []; }
+          }
+          (rows || []).forEach((row) => indexRec(recFromRow(row)));
+          if(typeof onProgress === "function"){
+            try {
+              onProgress({
+                done: missing.length + missingPhones.length + from + (rows || []).length,
+                total: Math.max(missing.length + missingPhones.length + from + PAGE, 1)
+              });
+            } catch(_e) {}
+          }
+          if(!(rows || []).length || (rows || []).length < PAGE) break;
+          from += PAGE;
+          await ciYieldToUi();
+        }
+      }
+
+      const matchedUuids = [];
+      const seenUuid = new Set();
+      const considerHydrate = (rec) => {
+        if(!rec || rec.ambiguous || String(rec.id || "").indexOf("ambiguous:") === 0) return;
+        if(seenUuid.has(String(rec.id))) return;
+        seenUuid.add(String(rec.id));
+        const p = rec.payload;
+        const hasPay = p && typeof p === "object"
+          && (Array.isArray(p.newPolicies) || Array.isArray(p.insureds) || p.operational);
+        if(!hasPay) matchedUuids.push(String(rec.id));
+      };
+      want.forEach((id) => {
+        const stripped = String(id).replace(/^0+/, "");
+        considerHydrate(found.get(id) || (stripped ? found.get(stripped) : null) || byUuid.get(id));
+      });
+      wantPhones.forEach((n) => considerHydrate(found.get("tel:" + n)));
+      wantNames.forEach((k) => considerHydrate(found.get("name:" + k)));
+
+      const hydrateSelect = "id,full_name,id_number,phone,city,status,agent_id,agent_name,payload,new_policies_count";
+      for(let i = 0; i < matchedUuids.length; i += CI_PROD_PAYLOAD_CHUNK){
+        const chunk = matchedUuids.slice(i, i + CI_PROD_PAYLOAD_CHUNK);
+        let rows = null;
+        try {
+          const client = Storage.getClient();
+          if(client){
+            const res = await client.from(SUPABASE_TABLES.customers).select(hydrateSelect).in("id", chunk);
+            if(!res?.error) rows = res?.data || [];
+          }
+        } catch(_e) {}
+        if(!rows){
+          try {
+            const inList = "(" + chunk.map((v) => '"' + String(v).replace(/"/g, "") + '"').join(",") + ")";
+            rows = await Storage.restRequest(
+              SUPABASE_TABLES.customers + "?id=in." + encodeURIComponent(inList) + "&select=" + encodeURIComponent(hydrateSelect),
+              { method: "GET" }
+            ) || [];
+          } catch(_e) { rows = []; }
+        }
+        (rows || []).forEach((row) => indexRec(recFromRow(row, row.payload)));
+        if(typeof onProgress === "function"){
+          try {
+            onProgress({
+              done: want.length,
+              total: Math.max(want.length, 1)
+            });
+          } catch(_e) {}
+        }
+        await ciYieldToUi();
+      }
+
+      want.forEach((id) => {
+        const stripped = String(id).replace(/^0+/, "");
+        const rec = found.get(id) || (stripped ? found.get(stripped) : null);
+        if(rec){
+          found.set(id, rec);
+          if(stripped) found.set(stripped, rec);
+        }
+      });
       return found;
     },
 
@@ -70840,60 +74376,127 @@ ${inner}
       const company = safeTrim(this._prod?.company);
       const counts = { update: 0, create: 0, review: 0, unmatched: 0, inactive: 0 };
       items.forEach((it) => { if(counts[it.category] != null) counts[it.category]++; });
+      const noIdCount = items.filter((it) => it.category === "unmatched" && /אין ת״ז|אין ת״ז או טלפון/.test(String(it.reason || ""))).length;
       this.els.subtitle.textContent = "דוח פרודוקציה · " + company + " — תצוגה מקדימה";
       const fileLine = files.map((f) => escapeHtml(f.kind) + " " + f.rows).join(" · ");
-      const rowsHtml = items.map((it, idx) => {
+      const newFolderCount = items.filter((it) => it.category === "create" && it.newFolder).length;
+      const newRowCount = Math.max(0, counts.create - newFolderCount);
+      const canCommit = (counts.update + counts.create) > 0;
+      this._prodFilter = "all";
+      this._prodPage = 0;
+
+      this.els.body.innerHTML = `
+        <div class="ciChips">
+          <button class="ciChip is-active" type="button" data-prod-filter="all">הכל <span>${items.length}</span></button>
+          <button class="ciChip ciChip--ok" type="button" data-prod-filter="update">עדכון <span>${counts.update}</span></button>
+          <button class="ciChip ciChip--ok" type="button" data-prod-filter="create">יצירה <span>${counts.create}</span></button>
+          <button class="ciChip ciChip--warn" type="button" data-prod-filter="review">לבדיקה <span>${counts.review}</span></button>
+          <button class="ciChip ciChip--err" type="button" data-prod-filter="unmatched">אין תיק <span>${counts.unmatched}</span></button>
+          <button class="ciChip ciChip--dup" type="button" data-prod-filter="inactive">לא פעיל <span>${counts.inactive}</span></button>
+        </div>
+        <div class="ciBanner">קבצים: ${fileLine || "—"} · פרמיה מחושבת מסכומי הכיסוי (2 ספרות אחרי הנקודה). פוליסה עם ת״ז/טלפון/שם בלי תיק קיים תיצור תיק חדש. פוליסות «לבדיקה» לא יישמרו עד שתבחרו ידנית בסבב הבא.</div>
+        ${canCommit ? "" : `<div class="ciError" role="status"><div class="ciError__icon">!</div><div>לא נמצאו שורות לשיוך — הלחצן כבוי. ${noIdCount ? noIdCount + " פוליסות בלי ת״ז/טלפון/שם לזיהוי בדוח. " : ""}אין צורך להעלות שוב דוח לקוחות. פוליסות «לבדיקה» לא נשמרות בסבב הזה.</div></div>`}
+        <div class="ciTableWrap">
+          <table class="ciTable">
+            <thead><tr><th>#</th><th>פוליסה</th><th>מוצר</th><th>תיק / מבוטחים</th><th>פרמיה</th><th>פעולה</th></tr></thead>
+            <tbody id="ciProdRows"></tbody>
+          </table>
+        </div>
+        <div class="ciPager" id="ciProdPager"></div>`;
+      this.els.foot.innerHTML = `
+        <div class="ciFoot__summary">${counts.update} עדכונים · ${newRowCount} יצירות שורה · ${newFolderCount} יצירות תיק · ${counts.unmatched + counts.review + counts.inactive} דלג</div>
+        <div class="ciFoot__actions">
+          <button class="btn" type="button" id="ciProdBackFiles">חזרה לקבצים</button>
+          <button class="btn btn--primary" type="button" id="ciProdCommit"${canCommit ? "" : " disabled"} title="${canCommit ? "שמירה לתיקים קיימים ויצירת תיקים חדשים לפי ת״ז, טלפון או שם" : "אין שורות לעדכון או יצירה — אין תיק תואם ואין זיהוי ליצירת תיק"}">אשר ושייך לתיקים</button>
+        </div>`;
+      this.paintProductionPreviewRows();
+      if(!this._prodPreviewClickBound){
+        this._prodPreviewClickBound = true;
+        on(this.els.body, "click", (ev) => {
+          if(!this.els.body?.querySelector("#ciProdRows")) return;
+          const chip = ev.target?.closest?.("[data-prod-filter]");
+          if(chip){
+            this._prodFilter = chip.getAttribute("data-prod-filter") || "all";
+            this._prodPage = 0;
+            this.els.body.querySelectorAll("[data-prod-filter]").forEach((el) => el.classList.toggle("is-active", el === chip));
+            this.paintProductionPreviewRows();
+            return;
+          }
+          const pageBtn = ev.target?.closest?.("[data-prod-page]");
+          if(pageBtn){
+            const dir = pageBtn.getAttribute("data-prod-page");
+            if(dir === "prev") this._prodPage = Math.max(0, (this._prodPage || 0) - 1);
+            else if(dir === "next") this._prodPage = (this._prodPage || 0) + 1;
+            else if(dir === "first") this._prodPage = 0;
+            else if(dir === "last") this._prodPage = Number(pageBtn.getAttribute("data-prod-last") || 0);
+            this.paintProductionPreviewRows();
+          }
+        });
+      }
+      on(this.els.foot.querySelector("#ciProdBackFiles"), "click", () => this.renderProductionPickStep());
+      const commit = this.els.foot.querySelector("#ciProdCommit");
+      if(commit && canCommit) on(commit, "click", () => void this.commitProduction());
+    },
+
+    paintProductionPreviewRows(){
+      const tbody = this.els.body?.querySelector("#ciProdRows");
+      const pager = this.els.body?.querySelector("#ciProdPager");
+      if(!tbody) return;
+      const filter = this._prodFilter || "all";
+      const items = this._prod?.items || [];
+      const rows = filter === "all" ? items : items.filter((it) => it.category === filter);
+      const pageSize = CI_PREVIEW_PAGE_SIZE;
+      const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+      let page = Number(this._prodPage) || 0;
+      if(page >= totalPages) page = totalPages - 1;
+      if(page < 0) page = 0;
+      this._prodPage = page;
+      const from = page * pageSize;
+      const pageRows = rows.slice(from, from + pageSize);
+      const catLabel = {
+        update: "עדכון פוליסה",
+        create: "יצירת שורה",
+        review: "לבדיקה",
+        unmatched: "אין תיק",
+        inactive: "לא פעיל"
+      };
+      const badge = {
+        update: "ok",
+        create: "ok",
+        review: "warn",
+        unmatched: "err",
+        inactive: "dup"
+      };
+      tbody.innerHTML = pageRows.length ? pageRows.map((it) => {
+        const idx = items.indexOf(it);
         const custName = it.customer ? escapeHtml(it.customer.fullName) : "—";
-        const catLabel = ({
-          update: "עדכון פוליסה",
-          create: "יצירת שורה",
-          review: "לבדיקה",
-          unmatched: "אין תיק",
-          inactive: "לא פעיל"
-        })[it.category] || it.category;
-        const badge = ({
-          update: "ok",
-          create: "ok",
-          review: "warn",
-          unmatched: "err",
-          inactive: "dup"
-        })[it.category] || "dup";
         const people = (it.people || []).map((p) => escapeHtml(p.fullName || p.idNumber)).filter(Boolean).slice(0, 3).join(" · ");
-        return `<tr class="ciRow--${escapeHtml(it.category)}">
+        const actionLabel = (it.category === "create" && it.newFolder) ? "יצירת תיק" : (catLabel[it.category] || it.category);
+        return `<tr class="ciRow ciRow--${escapeHtml(it.category)}">
           <td class="ciMono">${idx + 1}</td>
           <td class="ciMono">${escapeHtml(it.policyNumber || "")}</td>
           <td>${escapeHtml(it.type || "")}</td>
           <td>${custName}<div class="ciIssues">${people}</div></td>
           <td class="ciMono">${escapeHtml(it.premiumMonthly || "—")}</td>
-          <td><span class="ciBadge ciBadge--${badge}">${catLabel}</span><div class="ciIssues">${escapeHtml(it.reason || "")}</div></td>
+          <td><span class="ciBadge ciBadge--${badge[it.category] || "dup"}">${actionLabel}</span><div class="ciIssues">${escapeHtml(it.reason || "")}</div></td>
         </tr>`;
-      }).join("");
-
-      this.els.body.innerHTML = `
-        <div class="ciChips">
-          <span class="ciChip ciChip--ok is-active">עדכון <span>${counts.update}</span></span>
-          <span class="ciChip ciChip--ok">יצירה <span>${counts.create}</span></span>
-          <span class="ciChip ciChip--warn">לבדיקה <span>${counts.review}</span></span>
-          <span class="ciChip ciChip--err">אין תיק <span>${counts.unmatched}</span></span>
-          <span class="ciChip ciChip--dup">לא פעיל <span>${counts.inactive}</span></span>
-        </div>
-        <div class="ciBanner">קבצים: ${fileLine || "—"} · פרמיה מחושבת מסכומי הכיסוי (2 ספרות אחרי הנקודה). פוליסות «לבדיקה» לא יישמרו עד שתבחרו ידנית בסבב הבא.</div>
-        <div class="ciTableWrap">
-          <table class="ciTable">
-            <thead><tr><th>#</th><th>פוליסה</th><th>מוצר</th><th>תיק / מבוטחים</th><th>פרמיה</th><th>פעולה</th></tr></thead>
-            <tbody>${rowsHtml || `<tr><td colspan="6">אין רשומות</td></tr>`}</tbody>
-          </table>
-        </div>`;
-      const canCommit = (counts.update + counts.create) > 0;
-      this.els.foot.innerHTML = `
-        <div class="ciFoot__summary">${counts.update} עדכונים · ${counts.create} יצירות · ${counts.unmatched + counts.review + counts.inactive} דלג</div>
-        <div class="ciFoot__actions">
-          <button class="btn" type="button" id="ciProdBackFiles">חזרה לקבצים</button>
-          <button class="btn btn--primary" type="button" id="ciProdCommit"${canCommit ? "" : " disabled"}>אשר ושייך לתיקים</button>
-        </div>`;
-      on(this.els.foot.querySelector("#ciProdBackFiles"), "click", () => this.renderProductionPickStep());
-      const commit = this.els.foot.querySelector("#ciProdCommit");
-      if(commit && canCommit) on(commit, "click", () => void this.commitProduction());
+      }).join("") : `<tr><td colspan="6" class="muted" style="text-align:center;padding:24px">אין רשומות בקטגוריה הזו</td></tr>`;
+      if(pager){
+        const showingFrom = rows.length ? (from + 1) : 0;
+        const showingTo = Math.min(from + pageSize, rows.length);
+        pager.innerHTML = `
+          <div class="ciPager__info">
+            מציג ${showingFrom.toLocaleString("he-IL")}–${showingTo.toLocaleString("he-IL")}
+            מתוך ${rows.length.toLocaleString("he-IL")} שורות
+            · עמוד ${page + 1}/${totalPages}
+          </div>
+          <div class="ciPager__actions">
+            <button type="button" class="btn btn--tiny" data-prod-page="first" ${page <= 0 ? "disabled" : ""}>ראשון</button>
+            <button type="button" class="btn btn--tiny" data-prod-page="prev" ${page <= 0 ? "disabled" : ""}>הקודם</button>
+            <button type="button" class="btn btn--tiny" data-prod-page="next" ${page >= totalPages - 1 ? "disabled" : ""}>הבא</button>
+            <button type="button" class="btn btn--tiny" data-prod-page="last" data-prod-last="${totalPages - 1}" ${page >= totalPages - 1 ? "disabled" : ""}>אחרון</button>
+          </div>`;
+      }
     },
 
     async commitProduction(){
@@ -70916,52 +74519,86 @@ ${inner}
       });
       let okCount = 0;
       let failCount = 0;
+      let createdFolderCount = 0;
       const touchedIds = [];
       for(let i = 0; i < custIds.length; i++){
         const custId = custIds[i];
         try {
+          const batch = byCust.get(custId) || [];
+          const isNewFolder = batch.some((it) => it.newFolder || it.customer?.isNewFolder)
+            || String(custId).indexOf("cust_prod_") === 0;
           const resLoad = await Storage.loadSingleRow(SUPABASE_TABLES.customers, custId, "*");
           const existingFull = (resLoad?.ok && resLoad.data) ? resLoad.data : null;
-          /* בלי שורה מלאה מהשרת אסור לבנות payload חדש — זה דורס את התיק. */
-          if(!existingFull){
+          /* בלי שורה מלאה מהשרת אסור לבנות payload חדש על תיק קיים — זה דורס את התיק.
+             תיק חדש מהפרודוקציה (cust_prod_) כן נבנה כאן. */
+          if(!existingFull && !isNewFolder){
             failCount++;
             continue;
           }
-          const rec = normalizeCustomerRecord({
-            id: existingFull.id || custId,
-            status: existingFull.status,
-            fullName: existingFull.full_name,
-            idNumber: existingFull.id_number,
-            phone: existingFull.phone,
-            email: existingFull.email,
-            city: existingFull.city,
-            agentId: existingFull.agent_id,
-            agentName: existingFull.agent_name,
-            agentRole: existingFull.agent_role,
-            createdAt: existingFull.created_at,
-            payload: existingFull.payload
-          });
-          const expectedContent = (
-            Number(existingFull.insured_count || rec.insuredCount || 0) +
-            Number(existingFull.new_policies_count || rec.newPoliciesCount || 0) +
-            Number(existingFull.existing_policies_count || rec.existingPoliciesCount || 0)
-          ) > 0;
-          if(expectedContent && Storage.payloadIsEmpty?.(rec)){
-            failCount++;
-            continue;
+          let rec;
+          if(existingFull){
+            rec = normalizeCustomerRecord({
+              id: existingFull.id || custId,
+              status: existingFull.status,
+              fullName: existingFull.full_name,
+              idNumber: existingFull.id_number,
+              phone: existingFull.phone,
+              email: existingFull.email,
+              city: existingFull.city,
+              agentId: existingFull.agent_id,
+              agentName: existingFull.agent_name,
+              agentRole: existingFull.agent_role,
+              createdAt: existingFull.created_at,
+              payload: existingFull.payload
+            });
+            const expectedContent = (
+              Number(existingFull.insured_count || rec.insuredCount || 0) +
+              Number(existingFull.new_policies_count || rec.newPoliciesCount || 0) +
+              Number(existingFull.existing_policies_count || rec.existingPoliciesCount || 0)
+            ) > 0;
+            if(expectedContent && Storage.payloadIsEmpty?.(rec)){
+              failCount++;
+              continue;
+            }
+          } else {
+            const stub = batch[0]?.customer || {};
+            const now = nowISO();
+            rec = normalizeCustomerRecord({
+              id: custId,
+              status: "חדש",
+              fullName: stub.fullName,
+              idNumber: stub.idNumber,
+              phone: stub.phone,
+              city: stub.city,
+              createdAt: now,
+              updatedAt: now,
+              payload: {
+                insureds: [],
+                newPolicies: [],
+                importSource: {
+                  kind: "production-new-folder",
+                  company: this._prod?.company,
+                  importedAt: now,
+                  importedBy: safeTrim(Auth?.current?.name)
+                }
+              }
+            });
+            stampRecordAgentOwnership(rec, { force: true });
           }
           let payload = rec.payload && typeof rec.payload === "object" ? rec.payload : {};
-          byCust.get(custId).forEach((it) => {
+          batch.forEach((it) => {
             it.insuredIds = P.insuredIdsForCustomer(rec, it.people || []);
             payload = P.applyToPayload(payload, it);
           });
           rec.payload = payload;
           rec.newPoliciesCount = Array.isArray(payload.newPolicies) ? payload.newPolicies.length : rec.newPoliciesCount;
+          rec.insuredCount = Array.isArray(payload.insureds) ? payload.insureds.length : rec.insuredCount;
           rec.updatedAt = nowISO();
           const row = Storage.buildCustomerRows({ customers: [rec] })[0];
           const saved = await Storage.upsertSingleRow(SUPABASE_TABLES.customers, row);
           if(saved?.ok){
             okCount++;
+            if(!existingFull) createdFolderCount++;
             touchedIds.push(custId);
             try { Storage.rememberRows(SUPABASE_TABLES.customers, [row]); } catch(_e) {}
             try { ensureCustomerInActiveList(rec, { skipShadowRefresh: true }); } catch(_e) {}
@@ -70991,6 +74628,7 @@ ${inner}
             company: this._prod?.company,
             files: this._prod?.files,
             updatedCustomers: okCount,
+            createdFolders: createdFolderCount,
             failed: failCount,
             policies: items.length,
             customerIds: touchedIds
@@ -71017,8 +74655,8 @@ ${inner}
         <div class="ciDone">
           <div class="ciDone__icon">✅</div>
           <div class="ciDone__stats">
-            <div><strong>${okCount}</strong> תיקים עודכנו</div>
-            <div>${items.length} פוליסות שויכו</div>
+            <div><strong>${okCount}</strong> תיקים עודכנו או נוצרו</div>
+            <div>${createdFolderCount ? createdFolderCount + " תיקים חדשים · " : ""}${items.length} פוליסות שויכו</div>
             ${failCount ? `<div class="ciDone__err"><strong>${failCount}</strong> נכשלו</div>` : ""}
           </div>
         </div>`;
@@ -72503,6 +76141,14 @@ ${inner}
     if(!("serviceWorker" in navigator)) return;
     try {
       await navigator.serviceWorker.register("./service-worker.js", { updateViaCache: "none" });
+      if(!window.__GI_SW_RELOAD_BOUND){
+        window.__GI_SW_RELOAD_BOUND = true;
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          if(window.__GI_SW_RELOADED) return;
+          window.__GI_SW_RELOADED = true;
+          window.location.reload();
+        });
+      }
     } catch(err){
       console.error("PWA service worker registration failed:", err);
     }
