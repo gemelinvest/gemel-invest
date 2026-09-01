@@ -1,12 +1,17 @@
-// GI-DAILY-SALES-MAIL — reconstructed 2026-08-26
+// GI-DAILY-SALES-MAIL — reconstructed 2026-08-26, scheduler restored 2026-09-01
 // Original function was not in the git repo. This rewrite keeps the live
-// contract (status / save-snapshot / send-now / save-azure / oauth-start /
-// disconnect + GET OAuth callback) and fixes the bug that kept the first
-// PDF of the Israel day forever, so extras never reached Outlook.
+// contract (status / save-snapshot / send-now / send-slot / save-azure /
+// oauth-start / disconnect + GET OAuth callback) and fixes the bug that
+// kept the first PDF of the Israel day forever, so extras never reached Outlook.
 //
 // Keep rule (fixed): skip overwrite only when a PDF is already stored AND
 // the incoming body has no valid PDF. User refresh / send-now with a real
 // PDF always replaces. send-now prefers the request snapshot when present.
+//
+// Scheduler: send-slot at 12:30 / 15:00 / 20:00 Asia/Jerusalem. Hosted
+// Supabase does not support Deno.cron; register it anyway if the runtime
+// has it, and rely on .github/workflows/daily-sales-mail.yml (UTC 09:30,
+// 12:00, 17:00 plus winter-offset times, gated on Israel local time).
 
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 
@@ -157,6 +162,17 @@ function snapshotHasNewLayout(html: unknown){
 }
 
 const OLD_LAYOUT_ERROR = "הדוח השמור הוא תבנית ישנה (בלי מכירות חיפה / מודיעין / לידים). רעננו את ה-CRM ב־Ctrl+F5 ולחצו «רענן דוח להיום».";
+const NO_SNAPSHOT_ERROR = "אין דוח שמור להיום. לחצו «רענן דוח להיום».";
+const NO_OUTLOOK_ERROR = "מייל Outlook לא מחובר";
+const NO_RECIPIENTS_ERROR = "לא נמצאו מיילים שמורים למנהל / מנהל מערכת.";
+const ALREADY_SENT_ERROR = "הדוח כבר נשלח בחלון השעה הזו.";
+const SENT_WITHOUT_PDF = "נשלח בלי קובץ PDF — אין PDF שמור להיום.";
+const SLOT_DEDUP_MS = 90 * 60 * 1000;
+const SLOT_CRONS: readonly [string, string][] = [
+  ["gi-daily-sales-mail-1230", "30 9 * * *"],
+  ["gi-daily-sales-mail-1500", "0 12 * * *"],
+  ["gi-daily-sales-mail-2000", "0 17 * * *"],
+];
 
 async function listRecipients(sb: SupabaseClient){
   const [{ data: agents, error: agentsErr }, { data: metaRows, error: metaErr }] = await Promise.all([
@@ -258,13 +274,32 @@ async function sendGraph(account: Json, snap: Json, recipients: { name: string; 
 }
 
 async function logSend(sb: SupabaseClient, dateKey: string, status: string, error: string | null, toEmails: string[]){
-  await sb.from("gi_daily_sales_mail_log").insert({
-    date_key: dateKey,
-    status,
-    error,
-    sent_at: new Date().toISOString(),
-    to_emails: toEmails,
-  });
+  try {
+    const { error: insertErr } = await sb.from("gi_daily_sales_mail_log").insert({
+      date_key: dateKey,
+      status,
+      error,
+      sent_at: new Date().toISOString(),
+      to_emails: toEmails,
+    });
+    if(insertErr) console.error("gi-daily-sales-mail logSend", insertErr.message);
+  } catch(err) {
+    console.error("gi-daily-sales-mail logSend", err);
+  }
+}
+
+async function recentSlotSend(sb: SupabaseClient, dateKey: string){
+  const { data } = await sb.from("gi_daily_sales_mail_log")
+    .select("status, sent_at")
+    .eq("date_key", dateKey)
+    .eq("status", "sent")
+    .order("sent_at", { ascending: false })
+    .limit(1);
+  const row = data && data[0];
+  if(!row?.sent_at) return false;
+  const at = Date.parse(String(row.sent_at));
+  if(!Number.isFinite(at)) return false;
+  return (Date.now() - at) < SLOT_DEDUP_MS;
 }
 
 async function lastSend(sb: SupabaseClient){
@@ -341,19 +376,31 @@ async function handleSaveSnapshot(sb: SupabaseClient, body: Json){
   });
 }
 
-async function handleSendNow(sb: SupabaseClient, body: Json){
+async function handleSendNow(sb: SupabaseClient, body: Json, opts: { scheduled?: boolean } = {}){
+  const scheduled = opts.scheduled === true;
   const today = israelDateKey();
-  const fromBody = snapshotFromBody(body, today);
+  const fromBody = scheduled ? null : snapshotFromBody(body, today);
   const stored = await loadSnapshot(sb, (fromBody && fromBody.date_key) || today);
-  const useRequest = !!(fromBody && (fromBody.html || pdfOk(fromBody.pdf_base64)));
-  let snap = useRequest ? fromBody : stored;
+  const useRequest = !!(!scheduled && fromBody && (fromBody.html || pdfOk(fromBody.pdf_base64)));
+  const snap = useRequest ? fromBody : stored;
+  const dateKey = trim(snap?.date_key) || today;
+
+  const finishSkip = async (msg: string, emails: string[] = []) => {
+    await logSend(sb, dateKey, "skipped", msg, emails);
+    if(scheduled) return json({ ok: true, skipped: true, error: msg, dateKey });
+    return json({ ok: false, error: msg }, 400);
+  };
+
   if(!snap || (!snap.html && !pdfOk(snap.pdf_base64))){
-    return json({ ok: false, error: "אין דוח שמור להיום. לחצו «רענן דוח להיום»." }, 400);
+    return await finishSkip(NO_SNAPSHOT_ERROR);
   }
   if(!snapshotHasNewLayout(snap.html)){
-    return json({ ok: false, error: OLD_LAYOUT_ERROR }, 400);
+    return await finishSkip(OLD_LAYOUT_ERROR);
   }
-  if(useRequest && pdfOk(fromBody?.pdf_base64)){
+  if(scheduled && await recentSlotSend(sb, dateKey)){
+    return await finishSkip(ALREADY_SENT_ERROR);
+  }
+  if(useRequest && fromBody && pdfOk(fromBody.pdf_base64)){
     await sb.from("gi_daily_sales_mail_snapshots").upsert({
       ...fromBody,
       updated_at: new Date().toISOString(),
@@ -361,12 +408,13 @@ async function handleSendNow(sb: SupabaseClient, body: Json){
   }
   const account = await loadAccount(sb);
   if(!account || !trim(account.connected_email)){
-    return json({ ok: false, error: "מייל Outlook לא מחובר" }, 400);
+    return await finishSkip(NO_OUTLOOK_ERROR);
   }
   const recipients = await listRecipients(sb);
   if(!recipients.length){
-    return json({ ok: false, error: "לא נמצאו מיילים שמורים למנהל / מנהל מערכת." }, 400);
+    return await finishSkip(NO_RECIPIENTS_ERROR);
   }
+  const emails = recipients.map((r) => r.email);
   try {
     const sent = await sendGraph(account, snap, recipients);
     if(sent.tokenData.refresh_token || sent.access){
@@ -375,17 +423,53 @@ async function handleSendNow(sb: SupabaseClient, body: Json){
         refresh_token: trim(sent.tokenData.refresh_token) || account.refresh_token,
       });
     }
-    await logSend(sb, trim(snap.date_key) || today, "sent", null, recipients.map((r) => r.email));
+    const missingPdf = !pdfOk(snap.pdf_base64);
+    await logSend(sb, dateKey, "sent", missingPdf ? SENT_WITHOUT_PDF : null, emails);
     return json({
       ok: true,
-      message: "הדוח נשלח.",
+      message: missingPdf ? "הדוח נשלח בלי קובץ PDF." : "הדוח נשלח.",
       usedRequestSnapshot: useRequest,
       replaced: useRequest && pdfOk(fromBody?.pdf_base64),
+      hasPdf: !missingPdf,
+      scheduled,
     });
   } catch(err) {
     const msg = err instanceof Error ? err.message : "שליחה נכשלה";
-    await logSend(sb, trim(snap.date_key) || today, "error", msg, recipients.map((r) => r.email));
+    await logSend(sb, dateKey, "error", msg, emails);
     return json({ ok: false, error: msg }, 400);
+  }
+}
+
+async function runScheduledSlot(){
+  const sb = sbAdmin();
+  try {
+    const res = await handleSendNow(sb, { action: "send-slot" }, { scheduled: true });
+    const text = await res.text();
+    console.log("gi-daily-sales-mail send-slot", res.status, text);
+    return res;
+  } catch(err) {
+    const msg = err instanceof Error ? err.message : "שגיאת שרת";
+    console.error("gi-daily-sales-mail send-slot", msg);
+    await logSend(sb, israelDateKey(), "error", msg, []);
+    return json({ ok: false, error: msg }, 400);
+  }
+}
+
+function registerSlotCrons(){
+  const cron = (Deno as { cron?: (name: string, schedule: string, handler: () => Promise<void> | void) => void }).cron;
+  if(typeof cron !== "function"){
+    console.log("gi-daily-sales-mail: Deno.cron not available; GitHub Actions daily-sales-mail.yml is the clock");
+    return;
+  }
+  for(const [name, schedule] of SLOT_CRONS){
+    try {
+      cron(name, schedule, async () => {
+        await runScheduledSlot();
+      });
+      console.log("gi-daily-sales-mail Deno.cron registered", name, schedule);
+    } catch(err) {
+      console.error("gi-daily-sales-mail Deno.cron failed", name, err);
+    }
   }
 }
 
@@ -474,6 +558,8 @@ async function handleOauthCallback(sb: SupabaseClient, url: URL){
     <script>setTimeout(function(){ window.close(); }, 600);</script>`);
 }
 
+registerSlotCrons();
+
 Deno.serve(async (req) => {
   if(req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   const sb = sbAdmin();
@@ -486,13 +572,15 @@ Deno.serve(async (req) => {
     const action = trim(body.action);
     if(action === "status") return await handleStatus(sb);
     if(action === "save-snapshot") return await handleSaveSnapshot(sb, body);
-    if(action === "send-now" || action === "send-slot") return await handleSendNow(sb, body);
+    if(action === "send-now") return await handleSendNow(sb, body, { scheduled: false });
+    if(action === "send-slot") return await handleSendNow(sb, body, { scheduled: true });
     if(action === "save-azure") return await handleSaveAzure(sb, body);
     if(action === "oauth-start") return await handleOauthStart(sb);
     if(action === "disconnect") return await handleDisconnect(sb);
     return json({ ok: false, error: "UNKNOWN_ACTION" }, 400);
   } catch(err) {
     const msg = err instanceof Error ? err.message : "שגיאת שרת";
+    try { await logSend(sb, israelDateKey(), "error", msg, []); } catch(_e) {}
     return json({ ok: false, error: msg }, 400);
   }
 });

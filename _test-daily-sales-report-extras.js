@@ -39,7 +39,7 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).statu
 assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
 assert(html.includes("theme.css?v=" + THEME_TAG), "index.html theme.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
-assert(html.includes("gi-daily-sales-mail.js?v=20260828-mail-flash-v1"), "index.html mail script cache");
+assert(html.includes("gi-daily-sales-mail.js?v=20260901-mail-cron-v1"), "index.html mail script cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-daily-sales-mail.js")]).status === 0, "node --check gi-daily-sales-mail.js");
 assert(mail.includes("function snapshotHasNewLayout"), "חסימת שליחת דוח ישן");
 assert(mail.includes("מכירות מודיעין"), "בודק תווית מודיעין בסנאפשוט");
@@ -301,11 +301,34 @@ assert(fn.includes("if(force && pdfOk(incomingPdf)) return false"), "force+PDF �
 assert(fn.includes("if(pdfOk(incomingPdf)) return false"), "PDF תקין מחליף גם בלי force (heartbeat)");
 assert(fn.includes("usedRequestSnapshot"), "send-now מדווח אם השתמש בדוח מהבקשה");
 assert(fn.includes("action === \"send-now\""), "send-now נשאר");
-assert(fn.includes("send-slot"), "שורת השליחה האוטומטית נשארת");
+assert(fn.includes("action === \"send-slot\""), "שורת השליחה האוטומטית נשארת");
+assert(fn.includes("scheduled: true"), "send-slot רץ כשליחה מתוזמנת");
+assert(fn.includes("function registerSlotCrons"), "Deno.cron נרשם אם זמין");
+assert(fn.includes("30 9 * * *"), "קרון 12:30 IDT = 09:30 UTC");
+assert(fn.includes("0 12 * * *"), "קרון 15:00 IDT = 12:00 UTC");
+assert(fn.includes("0 17 * * *"), "קרון 20:00 IDT = 17:00 UTC");
+assert(fn.includes('logSend(sb, dateKey, "skipped"'), "דילוג נכתב ל-gi_daily_sales_mail_log");
+assert(fn.includes('logSend(sb, dateKey, "error"'), "כשל נכתב ללוג");
+assert(fn.includes("NO_SNAPSHOT_ERROR"), "דילוג בלי סנאפשוט");
+assert(fn.includes("NO_OUTLOOK_ERROR"), "דילוג בלי Outlook");
+assert(fn.includes("NO_RECIPIENTS_ERROR"), "דילוג בלי נמענים");
+assert(fn.includes("ALREADY_SENT_ERROR"), "מניעת שליחה כפולה באותו חלון");
 assert(fn.includes("function snapshotHasNewLayout"), "השרת בודק תבנית חדשה");
 assert(fn.includes("OLD_LAYOUT_ERROR"), "שגיאה אם מנסים לשלוח תבנית ישנה");
 assert(fn.includes("if(!snapshotHasNewLayout(snap.html))"), "send-now/send-slot מסרבים לדוח ישן");
 assert(fn.includes("if(incoming.html && !snapshotHasNewLayout(incoming.html))"), "save-snapshot מסרב לשמור תבנית ישנה");
+assert(fn.includes("SENT_WITHOUT_PDF"), "שליחה בלי PDF מסומנת בלוג");
+assert(!fn.includes("return json({ ok: false, error: NO_SNAPSHOT_ERROR }, 400);") || fn.includes("finishSkip(NO_SNAPSHOT_ERROR)"), "אין חזרה שקטה בלי לוג על חסר סנאפשוט");
+
+const wf = read(".github/workflows/daily-sales-mail.yml");
+assert(wf.includes('cron: "30 9 * * *"'), "Actions 09:30 UTC");
+assert(wf.includes('cron: "0 12 * * *"'), "Actions 12:00 UTC");
+assert(wf.includes('cron: "0 17 * * *"'), "Actions 17:00 UTC");
+assert(wf.includes('cron: "30 10 * * *"'), "Actions חורף 10:30 UTC");
+assert(wf.includes('action": "send-slot"') || wf.includes('"action": "send-slot"'), "Actions קורא send-slot");
+assert(wf.includes("Asia/Jerusalem"), "Actions בודק שעון ישראל");
+assert(wf.includes("vhvlkerectggovfihjgm"), "Actions פונה לפרויקט החי");
+assert(mail.includes("data.lastSend.error"), "מסך ההגדרות מציג שגיאת שליחה אחרונה");
 
 function pdfOk(raw){
   return String(raw || "").replace(/\s+/g, "").length >= 10000;

@@ -1,4 +1,4 @@
-/* GI-DAILY-SALES-MAIL 20260828-mail-flash-v1
+/* GI-DAILY-SALES-MAIL 20260901-mail-cron-v1
    Isolated Outlook daily-sales email. Calls existing DashboardUI report
    builders only. Does not change sales / PIN / MFA logic. */
 (() => {
@@ -457,7 +457,9 @@
       }
     }
     if(data.lastSend){
-      lines.push("שליחה אחרונה: " + trim(data.lastSend.status) + (data.lastSend.at ? (" · " + data.lastSend.at) : ""));
+      let last = "שליחה אחרונה: " + trim(data.lastSend.status) + (data.lastSend.at ? (" · " + data.lastSend.at) : "");
+      if(trim(data.lastSend.error)) last += " · " + trim(data.lastSend.error);
+      lines.push(last);
     }
     if(data.redirectUri){
       const redir = els().redirect;
