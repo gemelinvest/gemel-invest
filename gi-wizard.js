@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260903-np-workspace-v4";
+  const GI_WIZARD_BUILD = "20260903-np-workspace-v5";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -4587,6 +4587,8 @@ init(){
 
     render(){
       if(!this.els.wrap) return;
+      /* הסימולטור המשובץ יושב בתוך els.body — מוציאים אותו לפני שה-innerHTML מתחלף. */
+      try { this.undockNpOpenSimulator(); } catch(_eUndock) {}
       if(this.isCustomerPurchaseMode()) this.sanitizeCustomerPurchaseWizardPolicies();
       if(!this.isElementaryFlow() && Number(this.step) === 41) this.step = 3;
       if(this.isElementaryFlow()){
@@ -11348,6 +11350,69 @@ if(path === "birthDate"){
       return role;
     },
 
+    getWizardContextInsuredName(ins){
+      const first = safeTrim(ins?.data?.firstName);
+      const last = safeTrim(ins?.data?.lastName);
+      const fullName = safeTrim((first + " " + last).trim());
+      if(fullName) return fullName;
+      const raw = safeTrim(ins?.label || "");
+      const stripped = raw
+        .replace(/^מבוטח\s*(ראשי|משני(?:\s*בגיר|\s*ילד|\s*בן\s*\/\s*בת\s*זוג)?)\s*[-–—]\s*/u, "")
+        .trim();
+      return stripped || raw || "מבוטח";
+    },
+
+    getWizardContextRole(ins, index){
+      const idx = Number.isFinite(Number(index)) ? Number(index) : this.insureds.findIndex(x => x?.id === ins?.id);
+      const type = safeTrim(ins?.type);
+      if(type === "primary" || idx <= 0) return "מבוטח ראשי";
+      if(type === "child") return "ילד";
+      if(type === "spouse") return "בן / בת זוג";
+      return "מבוטח משני";
+    },
+
+    /** פס ההקשר של שלב פוליסות חדשות: לקוח, כדוריות מבוטחים ומונה פוליסות. */
+    renderNewPolicyContextBar(){
+      const list = this.insureds || [];
+      const primary = list.find((x) => safeTrim(x?.type) === "primary") || list[0];
+      const custName = this.getWizardContextInsuredName(primary);
+      const count = (this.getWizardNewPolicies() || []).length;
+      const pills = list.map((ins, idx) => {
+        const name = this.getWizardContextInsuredName(ins);
+        const role = this.getWizardContextRole(ins, idx);
+        return `<span class="lcNpCtx__pill">${escapeHtml(name)} · ${escapeHtml(role)}</span>`;
+      }).join("");
+      return `<div class="lcNpCtx">
+        <div class="lcNpCtx__cust"><span>לקוח</span><b>${escapeHtml(custName || "לקוח")}</b></div>
+        <div class="lcNpCtx__ins">
+          <span>מבוטחים בהצעה — נשאבים לסימולטור</span>
+          <div class="lcNpCtx__pills">${pills || `<span class="lcNpCtx__pill">אין מבוטחים</span>`}</div>
+        </div>
+        <div class="lcNpCtx__count"><span>פוליסות שנוספו</span><b>${count}</b></div>
+      </div>`;
+    },
+
+    /** מוציא את מודל הסימולטור מגוף האשף לפני render, כדי שה-innerHTML לא ימחק אותו. */
+    undockNpOpenSimulator(){
+      const modal = this._npOpenSimHandler?._modal;
+      if(!modal || !modal.parentElement) return;
+      if(modal.parentElement === document.body) return;
+      document.body.appendChild(modal);
+    },
+
+    /** משבץ את מודל הסימולטור בתוך אזור העבודה של השלב — במקום חלון צף. */
+    dockNpOpenSimulator(){
+      const modal = this._npOpenSimHandler?._modal;
+      const dock = this.els.body?.querySelector("#lcNpSimDock");
+      if(!modal) return;
+      if(!dock){
+        this.undockNpOpenSimulator();
+        return;
+      }
+      modal.classList.add("giSimShellModal", "giSimShellModal--docked");
+      if(modal.parentElement !== dock) dock.appendChild(modal);
+    },
+
     getWizardSimulatorCatalog(){
       const companies = (this.companies || []).filter((c) => {
         const name = safeTrim(c);
@@ -15912,10 +15977,29 @@ if(path === "birthDate"){
       return String(parsed.year) + "-" + String(parsed.month).padStart(2, "0") + "-" + String(parsed.day).padStart(2, "0");
     },
 
+    /* סגירה שיוזם האשף — לא מחזירה את השלב לבחירה, כי הקורא כבר קובע את המצב. */
     closeNpOpenSimulator(){
       const handler = this._npOpenSimHandler;
       this._npOpenSimHandler = null;
+      this._npSimKeepWorkspace = true;
       try { handler?.close?.(); } catch(_e) {}
+      this._npSimKeepWorkspace = false;
+    },
+
+    /** סגירת הסימולטור המשובץ מחזירה את השלב לבחירת חברה ומוצר (או לסיכום). */
+    handleWizardSimulatorClose(){
+      if(this._npSimKeepWorkspace) return;
+      if(this._npSimSkipCloseCleanup){
+        this._npSimSkipCloseCleanup = false;
+        return;
+      }
+      this._npOpenSimHandler = null;
+      this.ensurePolicyDraft();
+      this.policyDraft.company = "";
+      this.policyDraft.type = "";
+      this.resetNpSimAutoOpenKey();
+      this._npShowPick = !(this.getWizardNewPolicies() || []).length;
+      if(this.isOpen && Number(this.step) === 5) this.render();
     },
 
     resetNpSimAutoOpenKey(){
@@ -16010,6 +16094,9 @@ if(path === "birthDate"){
       }
       const addedCompany = safeTrim(draft.company);
       const addedType = safeTrim(draft.type);
+      /* אחרי ההוספה הסימולטור נסגר, ולכן אין להחזיר את השלב לבחירה — מציגים סיכום. */
+      this._npSimSkipCloseCleanup = true;
+      this._npShowPick = false;
       const pid = this.addDraftPolicy();
       const ins = (this.insureds || []).find((x) => x.id === id);
       window.showToast?.({
@@ -16107,8 +16194,10 @@ if(path === "birthDate"){
           draft.riskSimApprovedAt = nowISO();
           this.render();
           window.showToast?.({ title: "ההצעה אושרה", text: "הסימולטור אושר סופית לכל המבוטחים הרלוונטיים.", variant: "success" });
-        }
+        },
+        onWizardClose: () => this.handleWizardSimulatorClose()
       });
+      try { this.dockNpOpenSimulator(); } catch(_eDock) {}
     },
 
     addDraftPolicy(opts){
@@ -18034,7 +18123,10 @@ if(path === "birthDate"){
         ? `<div class="lcNpRows">${rowItems.map(p => renderPolicyCard(p, false)).join("")}</div>`
         : `<div class="lcNpEmpty"><b>עדיין לא נוספו פוליסות להצעה</b>לאחר חישוב בסימולטור יופיעו כאן שורות סיכום — לא קוביות.</div>`;
 
+      const hasRows = rowItems.length > 0;
       const workspaceOpen = step2Done;
+      /* שלושה מצבים במסך לפי המוקאפ: בחירת חברה ומוצר → סימולטור משובץ → שורות סיכום. */
+      const npStage = workspaceOpen ? "sim" : ((hasRows && this._npShowPick !== true) ? "summary" : "pick");
       const productDdItems = isMedicare
         ? ""
         : filteredProductDefs.map(p => {
@@ -18070,7 +18162,7 @@ if(path === "birthDate"){
         <div class="lcNpPick" id="lcNpPick">
           <div class="lcNpPickCard">
             <h3 class="lcNpPickCard__title">חברה ומוצר</h3>
-            <p class="lcNpPickCard__sub">שתי רשימות סגורות — בחירת חברה מציגה גם את הלוגו. אחרי הבחירה ייפתח הסימולטור עם כל המבוטחים בהצעה.</p>
+            <p class="lcNpPickCard__sub">שתי רשימות סגורות — בחירת חברה מציגה גם את הלוגו.</p>
             <div class="lcNpPickGrid">
               <div data-np-sec="1">${body1}</div>
               <div data-np-sec="2">${productDdHtml}</div>
@@ -18079,10 +18171,10 @@ if(path === "birthDate"){
         </div>`;
 
       const simWorkspaceHint = riskSimHandler ? `
-          <div class="lcNpWsHint">
+          <div class="lcNpWsHint" data-np-sim-fallback="1">
             <div class="lcNpWsHint__text">
-              <strong>הסימולטור נפתח עם כל המבוטחים בהצעה</strong>
-              <span>בחרו מבוטח בתוך הסימולטור, סמנו כיסויים, חשבו פרמיה והוסיפו להצעה. בריסק אפשר למלא שיעבוד ומוטבים שם — בבריאות אין שיעבוד.</span>
+              <strong>הסימולטור סגור</strong>
+              <span>אפשר לפתוח אותו מחדש עם נתוני כל המבוטחים בהצעה, סימון כיסויים או סכום ביטוח, חישוב פרמיה והוספה להצעה.</span>
             </div>
             <button type="button" class="lcPhxSimBanner__btn" data-open-risk-sim="1">פתח סימולטור מחדש</button>
           </div>` : "";
@@ -18090,13 +18182,17 @@ if(path === "birthDate"){
         <div class="lcNpWorkspace" id="lcNpWorkspace">
           <div class="lcNpWsHead">
             <div class="lcNpWsBrand">${this.renderCompanyLogoHtml(d.company, "dd")}<div><strong>${escapeHtml(d.company)} · ${escapeHtml(isMedicare ? "מדיקר" : (d.type || "מוצר"))}</strong><span>${riskSimHandler ? "הסימולטור האמיתי נפתח אוטומטית" : "מילוי ידני — אין סימולטור למוצר זה"}</span></div></div>
-            <div class="lcNpWsSwitch">
+            ${riskSimHandler ? `<div class="lcNpWsSwitch">
+              <span class="lcNpWsSwitch__note">החלפת חברה ומוצר לכל מבוטח מתבצעת בתוך הסימולטור</span>
+              <button class="lcBtn" type="button" data-np-back-pick="1">חזרה לבחירה</button>
+            </div>` : `<div class="lcNpWsSwitch">
               <label class="lcField"><span class="lcLabel">החלף חברה</span><select class="lcInput" id="lcNpWsCompany" data-np-ws-company>${wsCompanyOpts}</select></label>
               <label class="lcField"><span class="lcLabel">החלף מוצר</span><select class="lcInput" id="lcNpWsProduct" data-np-ws-product ${isMedicare ? "disabled" : ""}>${isMedicare ? `<option>מדיקר</option>` : wsProductOpts}</select></label>
               <button class="lcBtn" type="button" data-np-back-pick="1">חזרה לבחירה</button>
-            </div>
+            </div>`}
           </div>
-          ${riskSimHandler ? simWorkspaceHint : riskSimBannerHtml}
+          ${riskSimHandler ? `<div class="lcNpSimDock" id="lcNpSimDock"></div>
+          ${simWorkspaceHint}` : riskSimBannerHtml}
           ${riskSimHandler ? "" : `<div class="lcNpWsGrid">
             <div class="lcNpWsPanel" data-np-sec="3">
               <h3>מבוטחים בהצעה זו</h3>
@@ -18121,15 +18217,31 @@ if(path === "birthDate"){
             </button>
           </div>` : '';
 
-      const res = `
-        <div class="lcNpWrapper">
-          <div class="lcNpInlineHeroWrap">${pageHeaderInline}</div>
-          ${workspaceOpen ? workspaceHtml : pickHtml}
-          ${workspaceOpen ? addBarHtml : ""}
-          <div class="lcWSection" style="margin-top:24px"><div class="lcWTitle">${this.isCustomerPurchaseSwitchMode() ? "פוליסות בתיק / לשיחלוף" : "פוליסות שנרכשו להצעה"}</div>
-            <p class="lcNpRowsSub">כל פוליסה בשורת סיכום: לוגו, לקוח, מבוטחים, נתונים, לפני ואחרי הנחה, דירוג, חודש חינם, שיעבוד ומוטבים.</p>
+      const iconPlus = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`;
+      const stageHeadHtml = npStage === "pick" ? `
+        <div class="lcNpStageHead">
+          <div class="lcNpStageHead__title">בחירת חברה ומוצר</div>
+          <p class="lcNpStageHead__sub">בחרו חברה ומוצר מהרשימות. אחרי הבחירה נפתח הסימולטור עם נתוני כל המבוטחים בהצעה — שם מזינים כיסויים או סכום ביטוח ומחשבים פרמיה.</p>
+        </div>` : "";
+      const showSummaryBlock = hasRows || npStage !== "sim";
+      const summaryBlockHtml = showSummaryBlock ? `
+        <div class="lcNpSumHead">
+          <div class="lcNpSumHead__text">
+            <div class="lcNpSumHead__title">${this.isCustomerPurchaseSwitchMode() ? "פוליסות בתיק / לשיחלוף" : "סיכום הפוליסות בהצעה"}</div>
+            <p class="lcNpSumHead__sub">כל פוליסה בשורת סיכום: לוגו, לקוח, מבוטחים, כיסויים או סכום, לפני ואחרי הנחה, דירוג, חודש חינם, שיעבוד ומוטבים.</p>
           </div>
-          ${groupsHtml}
+          ${(hasRows && npStage !== "pick") ? `<button type="button" class="lcBtn lcBtn--primary lcNpAddMore" data-np-add-more="1">${iconPlus}הוסף פוליסה נוספת</button>` : ""}
+        </div>
+        ${groupsHtml}` : "";
+
+      const res = `
+        <div class="lcNpWrapper lcNpWrapper--${npStage}">
+          <div class="lcNpInlineHeroWrap">${pageHeaderInline}</div>
+          ${this.renderNewPolicyContextBar()}
+          ${stageHeadHtml}
+          ${npStage === "sim" ? workspaceHtml : (npStage === "pick" ? pickHtml : "")}
+          ${npStage === "sim" ? addBarHtml : ""}
+          ${summaryBlockHtml}
         </div>`;
 
       // ── Bind handlers ──
@@ -18331,8 +18443,23 @@ if(path === "birthDate"){
         if(backPick){
           on(backPick, 'click', () => {
             this.ensurePolicyDraft();
+            this.policyDraft.company = "";
             this.policyDraft.type = "";
             this._npCalcShown = false;
+            this._npShowPick = true;
+            this.resetNpSimAutoOpenKey();
+            this.closeNpOpenSimulator();
+            this.render();
+          });
+        }
+        const addMoreBtn = this.els.body.querySelector('[data-np-add-more]');
+        if(addMoreBtn){
+          on(addMoreBtn, 'click', () => {
+            this.ensurePolicyDraft();
+            this.policyDraft.company = "";
+            this.policyDraft.type = "";
+            this._npCalcShown = false;
+            this._npShowPick = true;
             this.resetNpSimAutoOpenKey();
             this.closeNpOpenSimulator();
             this.render();
@@ -18401,10 +18528,13 @@ if(path === "birthDate"){
         }
         if(workspaceOpen && riskSimHandler && !isMedicare){
           const autoKey = String(d.company || "") + "::" + String(d.type || "");
-          const simVisible = !!document.querySelector(".giValModal");
+          const simVisible = !!this._npOpenSimHandler?._modal;
           if(this._npSimAutoOpenedKey !== autoKey && !simVisible){
             this._npSimAutoOpenedKey = autoKey;
             void this.openRiskSimulator();
+          } else if(simVisible){
+            /* רנדר חוזר של השלב — מחזירים את הסימולטור שהוצא מהגוף לפני ה-innerHTML. */
+            try { this.dockNpOpenSimulator(); } catch(_eReDock) {}
           }
         }
 

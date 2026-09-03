@@ -2059,12 +2059,19 @@
         /* כל עוד שאלת השמירה על המסך — מקש Escape ולחיצות רקע של הסימולטור
            שמתחתיה לא רשאים לסגור אותו מאחורי גבה. */
         if(handler._giSavePromptOpen) return undefined;
+        /* _ctx מתאפס בתוך origClose, ולכן ה-callback נשמר לפניו. */
+        const wizardClose = typeof handler._ctx?.onWizardClose === "function" ? handler._ctx.onWizardClose : null;
+        const closeAndNotify = () => {
+          const out = origClose();
+          if(wizardClose){ try { wizardClose(); } catch(_eWiz) {} }
+          return out;
+        };
         /* חזרה לבחירת חברה/מוצר — ניווט בתוך המרכז, לא יציאה. בלי שאלת שמירה. */
         if(handler._giSkipSavePrompt){
           handler._giSkipSavePrompt = false;
-          return origClose();
+          return closeAndNotify();
         }
-        if(!riskSimShouldPromptSave(handler)) return origClose();
+        if(!riskSimShouldPromptSave(handler)) return closeAndNotify();
         /* close() מאפס את _ctx ואת _state, ולכן הצילום נלקח לפניו. */
         const snapshot = riskSimBuildSaveSnapshot(handler);
         handler._giSavePromptOpen = true;
@@ -2073,14 +2080,14 @@
           if(settled) return;
           settled = true;
           handler._giSavePromptOpen = false;
-          if(shouldClose) origClose();
+          if(shouldClose) closeAndNotify();
         };
         try {
           window.GI_SIM_SAVE_PROMPT(snapshot, done);
         } catch(err) {
           try { console.error("SIM_SAVE_PROMPT_FAILED", err); } catch(_e) {}
           handler._giSavePromptOpen = false;
-          return origClose();
+          return closeAndNotify();
         }
         return undefined;
       };

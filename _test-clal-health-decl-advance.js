@@ -14,7 +14,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260903-np-workspace-v4";
+const TAG = "20260903-np-workspace-v5";
 let failed = 0;
 let passed = 0;
 
