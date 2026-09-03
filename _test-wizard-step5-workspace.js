@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260903-np-workspace-v1";
+const TAG = "20260903-np-workspace-v2";
 let failed = 0;
 let passed = 0;
 
@@ -68,8 +68,16 @@ assert(renderFn.includes("data-np-manual-disc"), "manual discount chip on health
 assert(renderFn.includes("data-cover-pct"), "per-cover percent inputs");
 assert(renderFn.includes("חשב פרמיה"), "calc button in workspace");
 assert(renderFn.includes("הוסף פוליסה להצעה"), "add to proposal CTA");
+assert(renderFn.includes("lcNpPickGrid"), "pick view is two equal dropdowns");
+assert(renderFn.includes("lcNpWsGrid"), "workspace is two-column simulator layout");
+assert(!renderFn.includes("lcNpPickHint"), "old accordion hint copy removed");
+assert(!renderFn.includes("בחר את הכיסויים הרצויים"), "old catalog cover title removed");
+assert(renderFn.includes(">בחירת כיסויים<"), "simulator-style cover title");
 assert(css.includes(".lcNpProw"), "row styles in app.css");
 assert(css.includes(".lcNpManualBox"), "manual discount panel styles");
+assert(css.includes(".lcNpPickGrid"), "pick grid styles");
+assert(css.includes(".lcNpWsGrid"), "workspace grid styles");
+assert(css.includes(".lcNpManualActions"), "manual discount save-row styles");
 
 console.log("\n3) simulators: wizard open to all agents, center unchanged");
 assert(wiz.includes("canOpenWizardPolicySimulator(){"), "wizard simulator gate exists");
@@ -83,8 +91,26 @@ assert(wiz.includes("getHealthCoverManualDiscountRows(policy){"), "manual discou
 assert(wiz.includes("isHealthCoverInGeneralDiscount(cover){"), "general vs addon cover split");
 assert(wiz.includes("coverDiscounts:"), "optional coverDiscounts saved on add");
 assert(wiz.includes("getPolicyPremiumAfterDiscount"), "existing after-discount reader untouched");
+assert(/getPolicyPremiumAfterDiscount\(policy\)\{\s*\/\/ 20260502-vFinalPremiumNoDiscountCalc:/.test(wiz), "global after-discount engine comment remains");
+assert(wiz.includes("return this.getPolicyPremiumBeforeDiscount(policy);"), "global engine still does not multiply by discount pct");
+assert(renderFn.includes("data-np-apply-cover-disc"), "save-discounts button on the row");
+assert(renderFn.includes("שמור הנחות"), "save-discounts label");
+assert(wiz.includes("applyHealthCoverManualDiscounts(policy){"), "apply helper writes after-discount from per-cover pct");
+assert(wiz.includes("getHealthRowPremiumAfterDiscount(policy){"), "row display uses cover-discount total");
+assert(wiz.includes("premiumAfterCoverDiscounts"), "applied total stored on the health policy");
 
-console.log("\n5) regression — health declaration routing not touched");
+console.log("\n5) simulator covers only — compensation plans stay out of health picker");
+assert(wiz.includes("HEALTH_SIMULATOR_COVER_KEYS"), "simulator cover catalog in wizard");
+assert(wiz.includes("getNewPolicyHealthCoverGroups("), "step 5 filters groups to simulator keys");
+const keysStart = wiz.indexOf("HEALTH_SIMULATOR_COVER_KEYS");
+const menoraKeys = wiz.slice(wiz.indexOf('"מנורה":', keysStart), wiz.indexOf('"הפניקס":', keysStart));
+assert(menoraKeys.includes("TOP רפואה משלימה"), "Menora simulator includes TOP complementary");
+assert(!menoraKeys.includes("TOP קרן מחלות קשות"), "Menora simulator excludes critical-illness fund");
+assert(!menoraKeys.includes("קרן פיצוי לגילוי מחלת הסרטן"), "Menora simulator excludes cancer fund");
+assert(renderFn.includes("getNewPolicyHealthCoverGroups(d.company)"), "cover checkboxes use filtered groups");
+assert(renderFn.includes("pruneDraftHealthCoversToSimulator"), "draft covers pruned to simulator keys");
+
+console.log("\n6) regression — health declaration routing not touched");
 assert(pickBlock.includes("GI-HEALTH-ONE-DECL"), "one-declaration marker remains");
 assert(pickBlock.includes("migdalHealth"), "Migdal health hard priority remains");
 assert(pickBlock.includes("cand.company === 'מגדל'"), "Migdal match by company remains");
@@ -93,6 +119,35 @@ assert(pickBlock.includes("bestCandidate(healthCandidates)"), "health still pick
 assert(pickBlock.includes("bestCandidate(productCandidates)"), "non-health still picks most questions");
 assert(!pickBlock.includes("addUniqueQuestions"), "still no cross-form question merge");
 assert(!renderFn.includes("getHealthQuestionsFiltered"), "step 5 render does not call declaration routing");
+
+console.log("\n7) manual discount math — per-cover % updates after price");
+function round2(n){ return Math.round((Number(n) + Number.EPSILON) * 100) / 100; }
+function applyManual(total, rows, bases){
+  const breakdownSum = Object.keys(bases || {}).reduce((s, k) => s + (bases[k] || 0), 0);
+  let after = 0;
+  if(breakdownSum > 0){
+    const named = new Set(rows.map((r) => r.name));
+    rows.forEach((row) => { after += (bases[row.name] || 0) * (1 - row.pct / 100); });
+    Object.keys(bases).forEach((name) => { if(!named.has(name)) after += bases[name] || 0; });
+  } else if(rows.length){
+    const share = total / rows.length;
+    rows.forEach((row) => { after += share * (1 - row.pct / 100); });
+  } else {
+    after = total;
+  }
+  return round2(after);
+}
+const shotRows = [
+  { name:"השתלות", pct:20 },
+  { name:"ניתוחים בחו״ל", pct:20 },
+  { name:"אבחון מהיר", pct:10 },
+  { name:"TOP משלימה", pct:20 }
+];
+assert(applyManual(80.26, shotRows, {}) === 66.21, "without per-cover quotes, 80.26 with 20/20/10/20 becomes 66.21");
+assert(applyManual(80.26, shotRows, {
+  "השתלות": 30, "ניתוחים בחו״ל": 20, "אבחון מהיר": 10, "TOP משלימה": 20.26
+}) === 65.21, "with simulator per-cover quotes the after-price is weighted");
+assert(wiz.includes("coverDiscountsApplied = true"), "save sets applied flag so the row price refreshes");
 
 if(failed){
   console.error("\nFAILED  passed=" + passed + " failed=" + failed);

@@ -3,7 +3,105 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260903-np-workspace-v1";
+  const GI_WIZARD_BUILD = "20260903-np-workspace-v2";
+  /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
+  const HEALTH_SIMULATOR_COVER_KEYS = {
+    "מנורה": [
+      "השתלות וטיפולים מיוחדים מחוץ לישראל",
+      "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל",
+      "תרופות מחוץ לסל הבריאות",
+      "ניתוחים בישראל מהשקל הראשון",
+      "משלים שב\"ן ללא השתתפות עצמית",
+      "משלים שב\"ן עם השתתפות עצמית",
+      "ייעוץ ובדיקות",
+      "אבחון רפואי מהיר",
+      "טיפולים בטכנולוגיות מתקדמות",
+      "Smart DR — ייעוץ רפואי וניווק עד הבית",
+      "TOP רפואה משלימה",
+      "טיפול ואבחון לילד",
+      "TOP מניעתית — בריאות חיים ובדיקות מניעה"
+    ],
+    "הפניקס": [
+      "השתלות וטיפולים מיוחדים מחוץ לישראל",
+      "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל",
+      "תרופות מחוץ לסל שירותי הבריאות",
+      "ניתוחים בישראל מהשקל הראשון",
+      "משלים שב\"ן ללא השתתפות עצמית",
+      "משלים שב\"ן עם השתתפות עצמית 5,000 ₪",
+      "ייעוץ ובדיקות",
+      "אבחון רפואי מהיר",
+      "ייעוץ ובדיקות ואבחון רפואי מהיר",
+      "ליווי רפואי וטיפולים אגב אירוע רפואי",
+      "רפואה משלימה",
+      "כתב שירות התפתחות הילד",
+      "רופא מומחה בקליק"
+    ],
+    "איילון": [
+      "השתלות וטיפולים מיוחדים בחו\"ל",
+      "תרופות מחוץ לסל הבריאות",
+      "ניתוחים וטיפולים מחליפי ניתוח בחו\"ל",
+      "ניתוחים בישראל מהשקל הראשון",
+      "משלים שב\"ן",
+      "משלים שב\"ן עם השתתפות עצמית 5,000 ₪",
+      "אמבולטורי מורחב",
+      "ייעוץ ובדיקות",
+      "טיפולים אמבולטוריים",
+      "אבחון רפואי מהיר",
+      "טכנולוגיות מתקדמות ואביזרים רפואיים",
+      "טיפולים ואבחונים בהתפתחות הילד",
+      "רפואה משלימה",
+      "ייעוץ אונליין — רופא מומחה בקליק",
+      "איילון עד הבית",
+      "איילון ספורטיבי",
+      "ניהול משברים בר גפן"
+    ],
+    "הכשרה": [
+      "תרופות מחוץ לסל שירותי הבריאות",
+      "השתלות וטיפולים מיוחדים מחוץ לישראל",
+      "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל",
+      "משלים שב\"ן עם השתתפות עצמית 5,000 ₪",
+      "משלים שב\"ן ללא השתתפות עצמית",
+      "ניתוחים בישראל מהשקל הראשון",
+      "ייעוץ ובדיקות",
+      "שירות פרימיום לילד"
+    ],
+    "מגדל": [
+      "תרופות מחוץ לסל",
+      "השתלות וטיפולים מיוחדים מחוץ לישראל",
+      "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל",
+      "משלים שב\"ן עם השתתפות עצמית 5,000 ₪",
+      "משלים שב\"ן",
+      "ניתוחים בישראל מהשקל הראשון",
+      "ייעוץ ובדיקות",
+      "ייעוץ ובדיקות אבחנתיות — מורחב",
+      "ליווי רפואי וטיפולים אגב אירוע",
+      "טיפולים בטכנולוגיות מתקדמות ואביזרים רפואיים",
+      "אבחון מהיר",
+      "טיפולים רפואיים — פרק א׳",
+      "טיפולים להתפתחות הילד",
+      "רפואה משלימה",
+      "ייעוץ אונליין",
+      "רופא עד הבית"
+    ],
+    "כלל": [
+      "ניתוחים ומחליפי ניתוח בחו\"ל",
+      "השתלות וטיפולים מיוחדים בחו\"ל",
+      "תרופות",
+      "משלים שב\"ן עם השתתפות עצמית 5,000 ₪",
+      "משלים שב\"ן לניתוחים ומחליפי ניתוח בישראל",
+      "ניתוחים ומחליפי ניתוח בישראל",
+      "חמ\"ל בר גפן",
+      "ייעוצים ובדיקות",
+      "אבחון רפואי מהיר",
+      "ייעוץ, בדיקות ואבחון רפואי מהיר",
+      "טיפולים בטכנולוגיות מתקדמות ואביזרים רפואיים",
+      "ליווי אישי פלוס",
+      "שירותים לילד",
+      "ביקור רופא און-ליין",
+      "ביקור רופא און-ליין אקסטרה",
+      "רפואה משלימה"
+    ]
+  };
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -14650,7 +14748,7 @@ if(path === "birthDate"){
         } else {
           const selected = new Set(covers.map(x => String(x || "")));
           const amountData = d.healthCoversAmounts || {};
-          const companyGroups = this.healthCoversByCompany?.[safeTrim(d.company || "")];
+          const companyGroups = this.getNewPolicyHealthCoverGroups(d.company);
           if(companyGroups && companyGroups.length){
             companyGroups.forEach(group => (group.items || []).forEach(item => {
               if(!item?.amountField || !selected.has(String(item.k || ""))) return;
@@ -14871,7 +14969,8 @@ if(path === "birthDate"){
       });
 
       sectionNums.forEach((num) => {
-        const sec = body.querySelectorAll(".lcNpSection")?.[Number(num) - 1];
+        const sec = body.querySelector(`[data-np-sec="${num}"]`)
+          || body.querySelectorAll(".lcNpSection")?.[Number(num) - 1];
         if(sec) sec.classList.add("lcNpSection--validationMiss");
       });
     },
@@ -15096,6 +15195,29 @@ if(path === "birthDate"){
       return true;
     },
 
+    getHealthSimulatorCoverKeySet(company){
+      const keys = HEALTH_SIMULATOR_COVER_KEYS[safeTrim(company)];
+      return (keys && keys.length) ? new Set(keys) : null;
+    },
+
+    getNewPolicyHealthCoverGroups(company){
+      const groups = this.healthCoversByCompany?.[safeTrim(company)] || [];
+      const allowed = this.getHealthSimulatorCoverKeySet(company);
+      if(!allowed) return groups;
+      return groups.map((group) => ({
+        groupLabel: group.groupLabel,
+        radio: group.radio,
+        items: (group.items || []).filter((item) => allowed.has(String(item.k || "")))
+      })).filter((group) => (group.items || []).length);
+    },
+
+    pruneDraftHealthCoversToSimulator(draft){
+      if(!draft || safeTrim(draft.type) !== "בריאות") return;
+      const allowed = this.getHealthSimulatorCoverKeySet(draft.company);
+      if(!allowed || !Array.isArray(draft.healthCovers)) return;
+      draft.healthCovers = draft.healthCovers.filter((k) => allowed.has(safeTrim(k)));
+    },
+
     isHealthCoverInGeneralDiscount(cover){
       return !this.isHealthAddonCover(cover);
     },
@@ -15120,6 +15242,71 @@ if(path === "birthDate"){
         else if(included && general > 0) pct = general;
         return { name, included, pct };
       });
+    },
+
+    parseCoverDiscountPct(raw){
+      const n = Number(String(raw ?? "").replace(/[^\d.]/g, ""));
+      if(!Number.isFinite(n) || n < 0) return 0;
+      return Math.min(100, n);
+    },
+
+    getHealthCoverBasePremiumsByName(policy){
+      const byName = {};
+      const quotes = policy?.riskSimQuotes && typeof policy.riskSimQuotes === "object" ? policy.riskSimQuotes : {};
+      Object.keys(quotes).forEach((insId) => {
+        const covers = Array.isArray(quotes[insId]?.covers) ? quotes[insId].covers : [];
+        covers.forEach((c) => {
+          const name = safeTrim(c?.wizardKey || c?.label || c?.id);
+          if(!name) return;
+          const prem = this.asMoneyNumber(c.monthlyPremium);
+          if(prem > 0) byName[name] = (byName[name] || 0) + prem;
+        });
+      });
+      return byName;
+    },
+
+    applyHealthCoverManualDiscounts(policy){
+      if(!policy || safeTrim(policy.type) !== "בריאות") return { ok:false, reason:"not_health" };
+      const rows = this.getHealthCoverManualDiscountRows(policy).map((row) => ({
+        name: row.name,
+        included: !!row.included,
+        pct: String(this.parseCoverDiscountPct(row.pct))
+      }));
+      policy.coverDiscounts = rows;
+      const bases = this.getHealthCoverBasePremiumsByName(policy);
+      const totalBefore = this.asMoneyNumber(this.getPolicyPremiumBeforeDiscount(policy));
+      const breakdownSum = Object.keys(bases).reduce((s, k) => s + (bases[k] || 0), 0);
+      let after = 0;
+      if(breakdownSum > 0){
+        const named = new Set(rows.map((r) => r.name));
+        rows.forEach((row) => {
+          const base = bases[row.name] || 0;
+          const pct = this.parseCoverDiscountPct(row.pct);
+          after += base * (1 - pct / 100);
+        });
+        Object.keys(bases).forEach((name) => {
+          if(!named.has(name)) after += bases[name] || 0;
+        });
+      } else if(rows.length){
+        const share = totalBefore / rows.length;
+        rows.forEach((row) => {
+          after += share * (1 - this.parseCoverDiscountPct(row.pct) / 100);
+        });
+      } else {
+        after = totalBefore;
+      }
+      after = Math.round((after + Number.EPSILON) * 100) / 100;
+      policy.coverDiscountsApplied = true;
+      policy.premiumAfterCoverDiscounts = after;
+      return { ok:true, after, before: totalBefore, rows };
+    },
+
+    getHealthRowPremiumAfterDiscount(policy){
+      if(policy && safeTrim(policy.type) === "בריאות" && policy.coverDiscountsApplied){
+        const n = this.asMoneyNumber(policy.premiumAfterCoverDiscounts);
+        if(n > 0 || policy.premiumAfterCoverDiscounts === 0 || policy.premiumAfterCoverDiscounts === "0") return n;
+      }
+      return this.getPolicyPremiumAfterDiscount(policy);
     },
 
     applyAllProposalInsuredsToDraft(){
@@ -15692,6 +15879,7 @@ if(path === "birthDate"){
             // healthCovers בטיוטה לפי wizardKey (מפתחות האשף), לא לפי שם ה-PDF.
             if(Array.isArray(r.covers) && r.covers.length){
               draft.healthCovers = r.covers.map((c) => safeTrim(c.wizardKey || c.label || c.id)).filter(Boolean);
+              this.pruneDraftHealthCoversToSimulator(draft);
             }
             // מחלות קשות / סרטן — סכום פיצוי (לא סכום ביטוח ריסק).
             if(r.compensation != null && safeTrim(r.compensation) !== ""){
@@ -15712,6 +15900,7 @@ if(path === "birthDate"){
           // שכבר לא רלוונטיים. הנציג יצטרך לאשר מחדש דרך "אישור סופי" בסימולטור.
           delete draft.riskSimApprovedAt;
           this.resetPremiumSanityState();
+          this._npCalcShown = true;
           this.render();
           window.showToast?.({ title: "הפרמיה עודכנה", text: "תוצאת הסימולטור הוחלה על הפוליסה — ניתן לבדוק ולהמשיך כרגיל.", variant: "success" });
         },
@@ -15774,11 +15963,17 @@ if(path === "birthDate"){
           healthCovers: Array.isArray(d.healthCovers) ? d.healthCovers.filter(Boolean) : [],
           discountPct: String(d.discountPct ?? "0"),
           coverDiscounts: Array.isArray(d.coverDiscounts) ? d.coverDiscounts : []
-        }) : undefined
+        }) : undefined,
+        coverDiscountsApplied: safeTrim(d.type) === "בריאות" ? !!d.coverDiscountsApplied : undefined,
+        premiumAfterCoverDiscounts: safeTrim(d.type) === "בריאות" && d.coverDiscountsApplied
+          ? d.premiumAfterCoverDiscounts
+          : undefined
       };
       if(!p.riskSimQuotes) delete p.riskSimQuotes;
       if(!p.riskSimApprovedAt) delete p.riskSimApprovedAt;
       if(!p.coverDiscounts || !p.coverDiscounts.length) delete p.coverDiscounts;
+      if(!p.coverDiscountsApplied) delete p.coverDiscountsApplied;
+      if(p.premiumAfterCoverDiscounts == null || p.premiumAfterCoverDiscounts === "") delete p.premiumAfterCoverDiscounts;
       this.normalizePledgeBanks(p);
       if(this.isCustomerPurchaseMode()) p._purchaseSession = true;
       this.normalizeHealthPolicyPremiums(p);
@@ -15980,7 +16175,11 @@ if(path === "birthDate"){
         pledge: !!p.pledge,
         pledgeBanks: this.normalizePledgeBanks(p).map(b => Object.assign(this.emptyPledgeBank(), b)),
         beneficiaries: Array.isArray(p.beneficiaries) ? JSON.parse(JSON.stringify(p.beneficiaries)) : [],
-        coverDiscounts: Array.isArray(p.coverDiscounts) ? JSON.parse(JSON.stringify(p.coverDiscounts)) : []
+        coverDiscounts: Array.isArray(p.coverDiscounts) ? JSON.parse(JSON.stringify(p.coverDiscounts)) : [],
+        coverDiscountsApplied: !!p.coverDiscountsApplied,
+        premiumAfterCoverDiscounts: p.premiumAfterCoverDiscounts,
+        riskSimQuotes: (p.riskSimQuotes && typeof p.riskSimQuotes === "object")
+          ? JSON.parse(JSON.stringify(p.riskSimQuotes)) : undefined
       };
       this.normalizePledgeBanks(this.policyDraft);
       this.setHint("מצב עריכה הופעל עבור הפוליסה שנבחרה");
@@ -16809,7 +17008,7 @@ if(path === "birthDate"){
     getNewPolicyHealthPricingMeta(d){
       const coverItems = this.getHealthCoverList(d);
       const amountData = d.healthCoversAmounts || {};
-      const companyGroups = this.healthCoversByCompany?.[safeTrim(d.company || "")];
+      const companyGroups = this.getNewPolicyHealthCoverGroups(d.company);
       const selectedCoversSet = new Set(coverItems);
       const selectedHealthAmountFields = [];
       if(companyGroups && companyGroups.length){
@@ -17128,11 +17327,12 @@ if(path === "birthDate"){
         <div class="lcNpInsuredGrid">${insuredCards}</div>`;
 
       // ── Section 4: Details ──
+      this.pruneDraftHealthCoversToSimulator(d);
       const coverItems = this.getHealthCoverList(d);
       const healthAddonCovers = (!isMedicare && d.type === "בריאות") ? this.getHealthAddonCovers(d) : [];
       const selectedCoversSet = new Set(coverItems);
       const amountData = d.healthCoversAmounts || {};
-      const companyGroups = this.healthCoversByCompany?.[safeTrim(d.company || "")];
+      const companyGroups = this.getNewPolicyHealthCoverGroups(d.company);
 
       let coverCheckboxes = "";
       if(companyGroups && companyGroups.length){
@@ -17192,7 +17392,7 @@ if(path === "birthDate"){
       const healthAddonOnlySelected = isHealthProduct && this.isHealthAddonOnlyPolicy(d);
       const showPricingFields = !isHealthProduct || (healthCoversReady && healthAmountsReady);
       const healthCoversSectionHtml = (!isMedicare && d.type === "בריאות") ? `<div class="lcNpCoversSection lcNpCoversSection--beforePricing">
-          <div class="lcNpCoversSection__head"><span class="lcNpCoversSection__title">בחר את הכיסויים הרצויים:</span></div>
+          <div class="lcNpCoversSection__head"><span class="lcNpCoversSection__title">בחירת כיסויים</span></div>
           <div class="lcNpCoversGrid">${coverCheckboxes}</div>
         </div>` : '';
       // מציאת שמות הכיסויים שדורשים סכום ועדיין ריקים — לתצוגה ברורה בהודעת ה-gate
@@ -17527,7 +17727,7 @@ if(path === "birthDate"){
         const polCovers = this.getHealthCoverList(p);
         const coverSummary = this.summarizeHealthCovers(polCovers, { max: 4, emptyLabel: "טרם נבחרו כיסויים" });
         const fmtMoney = (v) => { const raw = String(v || '').replace(/[₪,\s]/g,''); if(!raw) return '—'; const n = Number(raw); return Number.isFinite(n) ? `₪${n.toLocaleString('he-IL')}` : `₪${escapeHtml(String(v))}`; };
-        const afterPrem = this.getPolicyPremiumAfterDiscount(p);
+        const afterPrem = this.getHealthRowPremiumAfterDiscount(p);
         const beforePrem = this.getPolicyPremiumBeforeDiscount(p) || afterPrem;
         const introBenefitText = this.getPolicyIntroBenefitText(p);
         const discountCompact = this.getPolicyDiscountCompactSummary(p) || (Number(p.discountPct) > 0 ? `${p.discountPct}%` : "");
@@ -17550,9 +17750,13 @@ if(path === "birthDate"){
         const manualOpen = isHealth && safeTrim(this._npManualDiscId) === safeTrim(p.id);
         const coverRows = isHealth ? this.getHealthCoverManualDiscountRows(p) : [];
         const generalPctLabel = discountCompact || `${safeTrim(p.discountPct) || "0"}%`;
+        const appliedManual = isHealth && !!p.coverDiscountsApplied;
+        const discChipLabel = appliedManual
+          ? "הנחה ידנית"
+          : (discountCompact ? `הנחה ${discountCompact}` : "ללא הנחה");
         const manualTable = (isHealth && manualOpen) ? `<div class="lcNpManualBox">
           <h4>הנחה ידנית לפי כיסוי · בריאות</h4>
-          <p>ההנחה הכללית חלה רק על חלק מהכיסויים. כיסויי תוספת (סרטן / מחלות קשות) לא נכנסים להנחה הכללית — הנציג מזין לכל כיסוי כמה אחוז הנחה קיבל הלקוח.</p>
+          <p>ההנחה הכללית חלה רק על חלק מהכיסויים. כיסויי תוספת (סרטן / מחלות קשות) לא נכנסים להנחה הכללית — הנציג מזין לכל כיסוי כמה אחוז הנחה קיבל הלקוח, ואז לוחץ «שמור הנחות».</p>
           <table class="lcNpManualTable">
             <thead><tr><th>כיסוי</th><th>הנחה כללית</th><th>אחוז הנחה שקיבל הלקוח</th></tr></thead>
             <tbody>${coverRows.map((row, i) => `<tr>
@@ -17561,6 +17765,9 @@ if(path === "birthDate"){
               <td><label class="lcNpManualPct"><input data-cover-pct="${escapeHtml(p.id)}:${i}" inputmode="numeric" value="${row.pct === "" || row.pct == null ? "" : escapeHtml(String(row.pct))}" placeholder="הזן אחוז" aria-label="אחוז הנחה ל${escapeHtml(row.name)}"/> %</label></td>
             </tr>`).join("")}</tbody>
           </table>
+          <div class="lcNpManualActions">
+            <button class="lcBtn lcBtn--gold" type="button" data-np-apply-cover-disc="${escapeHtml(p.id)}">שמור הנחות</button>
+          </div>
         </div>` : "";
         return `<article class="lcNpProw${isBaselineSwitch ? " lcNpProw--baseline" : ""}" data-pol="${p.id}">
           ${logo}
@@ -17574,7 +17781,7 @@ if(path === "birthDate"){
             </div>
             <div class="lcNpProw__disc">
               <span class="lcNpProw__discK">הנחה</span>
-              <span class="lcNpChip lcNpChip--disc">${discountCompact ? `הנחה ${escapeHtml(discountCompact)}` : "ללא הנחה"}</span>
+              <span class="lcNpChip lcNpChip--disc">${escapeHtml(discChipLabel)}</span>
               ${isHealth && !isBaselineSwitch ? `<button class="lcNpChip lcNpChip--manual${manualOpen ? " is-on" : ""}" type="button" data-np-manual-disc="${escapeHtml(p.id)}">${manualOpen ? "סגור הנחה ידנית" : "+ הנחה ידנית"}</button>` : ""}
             </div>
             <div class="lcNpProw__meta">
@@ -17653,10 +17860,14 @@ if(path === "birthDate"){
 
       const pickHtml = `
         <div class="lcNpPick" id="lcNpPick">
-          ${makeSection(1, iconCompany, "בחר חברה", step1Done, true, body1)}
-          ${makeSection(2, iconProduct, "בחר מוצר ביטוח", step2Done, true, `${productDdHtml}<p class="lcNpPickHint">הסימולטור פתוח לכל הנציגים — לא רק למנהלים. אחרי בחירת חברה ומוצר ייפתח מרחב הסימולטור עם כל המבוטחים בהצעה.</p>`)}
-          ${makeSection(3, iconInsured, "בחר מבוטח/ים", false, false, "")}
-          ${makeSection(4, iconDetails, "פרטי הכיסוי", false, false, "")}
+          <div class="lcNpPickCard">
+            <h3 class="lcNpPickCard__title">חברה ומוצר</h3>
+            <p class="lcNpPickCard__sub">שתי רשימות סגורות — בחירת חברה מציגה גם את הלוגו. אחרי הבחירה ייפתח הסימולטור עם כל המבוטחים בהצעה.</p>
+            <div class="lcNpPickGrid">
+              <div data-np-sec="1">${body1}</div>
+              <div data-np-sec="2">${productDdHtml}</div>
+            </div>
+          </div>
         </div>`;
 
       const workspaceHtml = `
@@ -17670,12 +17881,17 @@ if(path === "birthDate"){
             </div>
           </div>
           ${riskSimBannerHtml}
-          <div class="lcNpSections lcNpSections--workspace">
-            ${makeSection(1, iconCompany, "בחר חברה", step1Done, false, "")}
-            ${makeSection(2, iconProduct, "בחר מוצר ביטוח", step2Done, false, `<div class="lcNpProductGrid lcNpProductGrid--hidden" aria-hidden="true">${productCards}</div>`)}
-            ${makeSection(3, iconInsured, "מבוטחים בהצעה זו", step3Done, true, body3)}
-            ${makeSection(4, iconDetails, "נתונים לסימולטור", false, true, `${body4}${calcBox}`)}
+          <div class="lcNpWsGrid">
+            <div class="lcNpWsPanel" data-np-sec="3">
+              <h3>מבוטחים בהצעה זו</h3>
+              ${body3}
+            </div>
+            <div class="lcNpWsPanel" data-np-sec="4">
+              <h3>נתונים לסימולטור</h3>
+              ${body4}${calcBox}
+            </div>
           </div>
+          <div class="lcNpProductGrid lcNpProductGrid--hidden" aria-hidden="true">${productCards}</div>
         </div>`;
 
       const addBarHtml = step4Open ? `${this.renderDuplicationAlertBanner()}<div class="lcNpAddBar">
@@ -17900,6 +18116,12 @@ if(path === "birthDate"){
         if(calcBtn){
           on(calcBtn, 'click', () => {
             this._npCalcShown = true;
+            const hasSim = !isMedicare && this.canOpenWizardPolicySimulator?.()
+              && (RiskSimulators.hasCatalog?.(d.company, d.type) || RiskSimulators.getHandler(d.company, d.type));
+            if(hasSim){
+              this.openRiskSimulator();
+              return;
+            }
             this.render();
           });
         }
@@ -17914,6 +18136,22 @@ if(path === "birthDate"){
             this.render();
           });
         });
+        $$('[data-np-apply-cover-disc]', this.els.body).forEach((btn) => {
+          on(btn, 'click', () => {
+            const pid = safeTrim(btn.getAttribute('data-np-apply-cover-disc') || "");
+            const pol = (this.newPolicies || []).find((item) => String(item.id) === String(pid));
+            if(!pol || pol.type !== "בריאות") return;
+            const result = this.applyHealthCoverManualDiscounts(pol);
+            this.render();
+            if(result?.ok){
+              window.showToast?.({
+                title: "ההנחות נשמרו",
+                text: "פרמיה אחרי הנחה עודכנה לפי האחוזים שהוזנו לכל כיסוי.",
+                variant: "success"
+              });
+            }
+          });
+        });
         $$('[data-cover-pct]', this.els.body).forEach((inp) => {
           on(inp, 'input', () => {
             const [pid, row] = String(inp.getAttribute('data-cover-pct') || "").split(":");
@@ -17924,6 +18162,7 @@ if(path === "birthDate"){
             }
             const idx = Number(row);
             if(pol.coverDiscounts[idx]) pol.coverDiscounts[idx].pct = String(inp.value || "").replace(/[^\d]/g, "");
+            pol.coverDiscountsApplied = false;
           });
         });
 
