@@ -1,4 +1,5 @@
-/* GI-MAIL 2026-09-01 — restore 12:30 / 15:00 / 20:00 Israel daily-sales send.
+/* GI-MAIL 2026-09-03 — 12:30 / 15:00 / 20:00 Israel daily-sales send,
+   with a 10-minute poll so GitHub delay cannot drop a slot.
    הרצה: node _test-daily-sales-mail-cron.js
 */
 "use strict";
@@ -42,6 +43,11 @@ assert(fn.includes("if(action === \"send-slot\") return await handleSendNow(sb, 
 assert(fn.includes("if(action === \"send-now\") return await handleSendNow(sb, body, { scheduled: false })"), "HTTP send-now ידני");
 assert(fn.includes("async function runScheduledSlot"), "קרון קורא לאותו send-slot");
 assert(fn.includes('fromBody = scheduled ? null : snapshotFromBody'), "שליחה מתוזמנת משתמשת בסנאפשוט השמור");
+assert(fn.includes("refreshSnapshotFromLiveSales"), "send-slot מרענן נציגים מהשרת");
+assert(fn.includes('rpc("gi_daily_sales_by_agent"'), "RPC חי של מכירות לפי נציג");
+assert(fn.includes("mergeLiveAgentsIntoHtml"), "ממזגים נציגים חיים ל-HTML השמור");
+assert(fn.includes("kept: false"), "save-snapshot לא קופא על PDF ישן");
+assert(fn.includes("html: incoming.html || existing?.html || \"\""), "HTML מתעדכן גם בלי PDF חדש");
 assert(!assistantWf.includes("gi-daily-sales-mail"), "deploy-assistant לא מפרסם את פונקציית המייל");
 
 console.log("\n2) skip/fail נרשמים בלוג");
@@ -64,6 +70,7 @@ assert(!fn.includes("if(!pdfOk") || !fn.includes("finishSkip") || fn.indexOf("SE
 
 console.log("\n4) GitHub Actions הוא השעון בפועל");
 assert(wf.includes("name: Daily sales mail slots"), "שם ה-workflow");
+assert(wf.includes('cron: "*/10 * * * *"'), "סקר כל 10 דקות");
 assert(wf.includes('cron: "30 9 * * *"'), "09:30 UTC");
 assert(wf.includes('cron: "0 12 * * *"'), "12:00 UTC");
 assert(wf.includes('cron: "0 17 * * *"'), "17:00 UTC");
@@ -71,15 +78,18 @@ assert(wf.includes('cron: "30 10 * * *"'), "חורף 10:30 UTC");
 assert(wf.includes('cron: "0 13 * * *"'), "חורף 13:00 UTC");
 assert(wf.includes('cron: "0 18 * * *"'), "חורף 18:00 UTC");
 assert(wf.includes('ZoneInfo("Asia/Jerusalem")'), "סינון לפי שעון ישראל");
+assert(wf.includes("def due_slot(minutes):"), "חלון לפי חלון ישראל, לא לפי איחור GitHub");
+assert(!wf.includes("window = 35"), "הוסר שער 35 הדקות שפספס 12:30/15:00");
 assert(wf.includes('"action": "send-slot"'), "POST send-slot");
+assert(wf.includes('"slot": slot'), "מעבירים את חלון השעה לשרת");
 assert(wf.includes("vhvlkerectggovfihjgm.supabase.co/functions/v1/gi-daily-sales-mail"), "URL הפונקציה החיה");
-assert(wf.includes("window = 35"), "חלון איחור של Actions עד 35 דקות");
+assert(wf.includes("send-slot missed a due Israel slot"), "דילוג אמיתי בחלון יעד נכשל ולא יוצא כהצלחה");
 assert(wf.includes("workflow_dispatch"), "אפשר להריץ ידנית אחרי מיזוג");
 assert(cfg.includes("supabase functions deploy gi-daily-sales-mail --project-ref vhvlkerectggovfihjgm"), "הוראת דיפלוי ב-config.toml");
 
 console.log("\n5) UI + cache");
-assert(html.includes("gi-daily-sales-mail.js?v=20260901-mail-cron-v1"), "cache bust לסקריפט המייל");
-assert(mail.includes("20260901-mail-cron-v1"), "כותרת הסקריפט");
+assert(html.includes("gi-daily-sales-mail.js?v=20260903-sales-mail-v1"), "cache bust לסקריפט המייל");
+assert(mail.includes("20260903-sales-mail-v1"), "כותרת הסקריפט");
 assert(mail.includes("data.lastSend.error"), "סטטוס מציג סיבת דילוג/כשל");
 assert(mail.includes("12:30, 15:00 ו־20:00 שעון ישראל"), "שעות ישראל לא השתנו");
 assert(mail.includes('api("send-now"'), "שלח עכשיו נשאר ידני");
@@ -97,6 +107,39 @@ const windowMs = 90 * 60 * 1000;
 const now = Date.parse("2026-09-01T12:00:00+03:00");
 assert(recentSlotSend("2026-09-01T09:35:00.000Z", now, windowMs) === true, "20 דקות אחרי 12:30 — עדיין אותו חלון");
 assert(recentSlotSend("2026-09-01T09:30:00.000Z", Date.parse("2026-09-01T15:00:00+03:00"), windowMs) === false, "12:30 לא חוסם את 15:00");
+
+function dueSlot(minutes){
+  const slots = [
+    ["12:30", 12 * 60 + 30, 15 * 60],
+    ["15:00", 15 * 60, 20 * 60],
+    ["20:00", 20 * 60, 24 * 60]
+  ];
+  for(const [name, start, end] of slots){
+    if(minutes >= start && minutes < end) return name;
+  }
+  return null;
+}
+assert(dueSlot(12 * 60 + 29) === null, "12:29 עדיין לא חלון");
+assert(dueSlot(12 * 60 + 30) === "12:30", "12:30 הוא חלון 12:30");
+assert(dueSlot(14 * 60 + 39) === "12:30", "14:39 עדיין חלון 12:30 (איחור GitHub)");
+assert(dueSlot(15 * 60) === "15:00", "15:00 עובר לחלון הבא");
+assert(dueSlot(17 * 60 + 39) === "15:00", "17:39 עדיין חלון 15:00");
+assert(dueSlot(20 * 60) === "20:00", "20:00 הוא חלון 20:00");
+assert(dueSlot(23 * 60) === "20:00", "23:00 עדיין חלון 20:00");
+
+function htmlHasAgent(html, name){
+  return html.indexOf(">" + name + "<") >= 0;
+}
+function mergeLiveAgentsIntoHtml(html, extraRow){
+  if(htmlHasAgent(html, extraRow)) return html;
+  const extra = "<tr><td>" + extraRow + "</td></tr>";
+  const tbodyClose = html.lastIndexOf("</tbody>");
+  if(tbodyClose < 0) return html;
+  return html.slice(0, tbodyClose) + extra + html.slice(tbodyClose);
+}
+const storedHtml = "<tbody><tr><td>דנה</td></tr></tbody>";
+assert(htmlHasAgent(mergeLiveAgentsIntoHtml(storedHtml, "יוסי"), "יוסי"), "נציג מהשרת נכנס ל-HTML השמור");
+assert(mergeLiveAgentsIntoHtml(storedHtml, "דנה") === storedHtml, "נציג שכבר בדוח לא משוכפל");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);

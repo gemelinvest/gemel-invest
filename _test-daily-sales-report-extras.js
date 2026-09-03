@@ -9,8 +9,8 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260828-menora-health-decl-v1";
-const THEME_TAG = "20260826-live-fix-v1";
+const APP_TAG = "20260903-sales-mail-v1";
+const THEME_TAG = "20260830-policy-actions-align-v1";
 let failed = 0;
 let passed = 0;
 
@@ -39,7 +39,7 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).statu
 assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
 assert(html.includes("theme.css?v=" + THEME_TAG), "index.html theme.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
-assert(html.includes("gi-daily-sales-mail.js?v=20260901-mail-cron-v1"), "index.html mail script cache");
+assert(html.includes("gi-daily-sales-mail.js?v=20260903-sales-mail-v1"), "index.html mail script cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-daily-sales-mail.js")]).status === 0, "node --check gi-daily-sales-mail.js");
 assert(mail.includes("function snapshotHasNewLayout"), "חסימת שליחת דוח ישן");
 assert(mail.includes("מכירות מודיעין"), "בודק תווית מודיעין בסנאפשוט");
@@ -121,6 +121,11 @@ assert(snap.includes("_waitDailySalesAssignedLeadsForMail") || snap.includes("en
 
 console.log("\n4) רגרסיה — לוגיקת ליבה לא ננגעה");
 assert(app.includes("buildDailyAgentSalesReport"), "בניית דוח מכירות נשארה");
+assert(app.includes("_seedDailySalesGroup"), "מיזוג overlay לא מוחק קבוצות מקומיות");
+assert(app.includes("const names = new Set([...localHealthByAgent.keys(), ...serverByAgent.keys()])"), "מיזוג לפי נציג — מקומי ושרת");
+assert(app.includes("toIsraelDateKey"), "תאריך דוח המכירות לפי שעון ישראל");
+assert(app.includes("getIsraelDayRange"), "טווח היום של הדוח לפי חצות ישראל");
+assert(!app.includes("return this._finalizeDailySalesGroups(map).concat(kept);"), "הוסרה החלפת כל נציגי הבריאות ב-RPC");
 assert(app.includes("dailySalesBranchTotals(report)"), "סיכום ענפים (בריאות/אלמנטרי) נשאר");
 assert(app.includes('else if(sector === "אלמנטרי") buckets.elementary += prem'), "חישוב אלמנטרי בטבלה נשאר");
 assert(app.includes("אלמנטרי (שנתי)"), "עמודת אלמנטרי בטבלת הנציגים נשארה");
@@ -292,6 +297,31 @@ assert(countAssignedLeads([
   { assignedAgentId: "", assignedAgentName: "יוסי" }
 ]) === 2, "נספרים רק לידים ששויכו");
 
+function toIsraelDateKey(d){
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(d);
+}
+function israelDayBoundIso(dateKey){
+  for(const off of ["+03:00", "+02:00"]){
+    const d = new Date(dateKey + "T00:00:00" + off);
+    if(Number.isNaN(d.getTime())) continue;
+    const atKey = toIsraelDateKey(d);
+    const prevKey = toIsraelDateKey(new Date(d.getTime() - 1));
+    if(atKey === dateKey && prevKey !== dateKey) return d.toISOString();
+  }
+  return new Date(dateKey + "T00:00:00+03:00").toISOString();
+}
+assert(toIsraelDateKey(new Date("2026-09-03T21:30:00.000Z")) === "2026-09-04", "21:30 UTC בקיץ הוא כבר 00:30 בישראל");
+assert(israelDayBoundIso("2026-09-03") === new Date("2026-09-03T00:00:00+03:00").toISOString(), "תחילת 3 בספטמבר IDT");
+assert(israelDayBoundIso("2026-01-15") === new Date("2026-01-15T00:00:00+02:00").toISOString(), "תחילת 15 בינואר IST");
+function mergeHealthAgents(localAgents, serverRows){
+  const local = new Set(localAgents);
+  const extra = [];
+  serverRows.forEach((name) => { if(!local.has(name)) extra.push(name); });
+  return localAgents.concat(extra);
+}
+assert(mergeHealthAgents(["דנה"], ["דנה", "יוסי"]).join(",") === "דנה,יוסי", "נציג רק בשרת נוסף לדוח");
+assert(mergeHealthAgents(["דנה", "משה"], ["דנה"]).join(",") === "דנה,משה", "נציג רק מקומי נשאר בדוח");
+
 console.log("\n6) edge function — החלפת PDF באותו יום");
 const fnPath = path.join(ROOT, "supabase", "functions", "gi-daily-sales-mail", "index.ts");
 assert(fs.existsSync(fnPath), "supabase/functions/gi-daily-sales-mail/index.ts");
@@ -317,11 +347,15 @@ assert(fn.includes("function snapshotHasNewLayout"), "השרת בודק תבני
 assert(fn.includes("OLD_LAYOUT_ERROR"), "שגיאה אם מנסים לשלוח תבנית ישנה");
 assert(fn.includes("if(!snapshotHasNewLayout(snap.html))"), "send-now/send-slot מסרבים לדוח ישן");
 assert(fn.includes("if(incoming.html && !snapshotHasNewLayout(incoming.html))"), "save-snapshot מסרב לשמור תבנית ישנה");
-assert(fn.includes("SENT_WITHOUT_PDF"), "שליחה בלי PDF מסומנת בלוג");
+assert(fn.includes("refreshSnapshotFromLiveSales"), "send-slot מרענן מכירות חיות");
+assert(fn.includes("html: incoming.html || existing?.html || \"\""), "HTML מתעדכן גם כשיש PDF שמור");
+assert(fn.includes("const keepPdf = shouldKeepExisting(existing, incoming.pdf_base64, force);"), "keep חל רק על PDF");
 assert(!fn.includes("return json({ ok: false, error: NO_SNAPSHOT_ERROR }, 400);") || fn.includes("finishSkip(NO_SNAPSHOT_ERROR)"), "אין חזרה שקטה בלי לוג על חסר סנאפשוט");
 
 const wf = read(".github/workflows/daily-sales-mail.yml");
+assert(wf.includes('cron: "*/10 * * * *"'), "Actions סקר כל 10 דקות");
 assert(wf.includes('cron: "30 9 * * *"'), "Actions 09:30 UTC");
+assert(!wf.includes("window = 35"), "Actions בלי שער 35 דקות");
 assert(wf.includes('cron: "0 12 * * *"'), "Actions 12:00 UTC");
 assert(wf.includes('cron: "0 17 * * *"'), "Actions 17:00 UTC");
 assert(wf.includes('cron: "30 10 * * *"'), "Actions חורף 10:30 UTC");
