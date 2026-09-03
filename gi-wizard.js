@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260903-np-workspace-v3";
+  const GI_WIZARD_BUILD = "20260903-np-workspace-v4";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -11325,6 +11325,67 @@ if(path === "birthDate"){
       return "מבוטח משני";
     },
 
+    getSimulatorTabRole(ins, index){
+      const idx = Number.isFinite(Number(index)) ? Number(index) : this.insureds.findIndex(x => x?.id === ins?.id);
+      const type = safeTrim(ins?.type);
+      if(type === "primary" || idx <= 0) return "ראשי";
+      if(type === "child") return "ילד";
+      return "משני";
+    },
+
+    getSimulatorTabLabel(ins, index){
+      const role = this.getSimulatorTabRole(ins, index);
+      const first = safeTrim(ins?.data?.firstName);
+      const last = safeTrim(ins?.data?.lastName);
+      const fullName = safeTrim((first + " " + last).trim());
+      if(fullName) return role + " - " + fullName;
+      const raw = safeTrim(ins?.label || "");
+      const stripped = raw
+        .replace(/^מבוטח\s*(ראשי|משני(?:\s*בגיר|\s*ילד|\s*בן\s*\/\s*בת\s*זוג)?)\s*[-–—]\s*/u, "")
+        .trim();
+      if(stripped && stripped !== raw) return role + " - " + stripped;
+      if(raw) return role + " - " + raw;
+      return role;
+    },
+
+    getWizardSimulatorCatalog(){
+      const companies = (this.companies || []).filter((c) => {
+        const name = safeTrim(c);
+        return name && name !== "הראל" && name !== "מדיקר";
+      });
+      const products = ["ריסק","ריסק משכנתא","בריאות","סרטן","מחלות קשות","מוות מתאונה","נכות מתאונה"];
+      const items = [];
+      companies.forEach((company) => {
+        products.forEach((product) => {
+          if(RiskSimulators.hasCatalog?.(company, product) || RiskSimulators.getHandler(company, product)){
+            items.push({ company, product });
+          }
+        });
+      });
+      return items;
+    },
+
+    switchSimulatorInsuredPick(insId, company, product, snapshot){
+      const id = safeTrim(insId);
+      const co = safeTrim(company);
+      const pr = safeTrim(product);
+      if(!id || !co || !pr) return;
+      if(!(RiskSimulators.hasCatalog?.(co, pr) || RiskSimulators.getHandler(co, pr))){
+        window.showToast?.({ title: "אין סימולטור", text: "לשילוב חברה/מוצר זה אין סימולטור.", variant: "warn" });
+        return;
+      }
+      if(snapshot && snapshot.wizardLegalByInsured) this._npSimLegalByInsured = snapshot.wizardLegalByInsured;
+      if(snapshot && snapshot.wizardPickByInsured) this._npSimPickByInsured = snapshot.wizardPickByInsured;
+      this._npSimPickByInsured = this._npSimPickByInsured || {};
+      this._npSimPickByInsured[id] = { company: co, product: pr };
+      this.ensurePolicyDraft();
+      this.policyDraft.company = co;
+      this.policyDraft.type = pr;
+      this._npSimAutoOpenedKey = co + "::" + pr;
+      this.closeNpOpenSimulator();
+      void this.openRiskSimulator({ restoreActiveId: id });
+    },
+
     getInsuredPremiumCardLabel(ins, index){
       const role = this.getInsuredShortRoleLabel(ins, index);
       const first = safeTrim(ins?.data?.firstName);
@@ -15859,6 +15920,8 @@ if(path === "birthDate"){
 
     resetNpSimAutoOpenKey(){
       this._npSimAutoOpenedKey = "";
+      this._npSimPickByInsured = {};
+      this._npSimLegalByInsured = null;
     },
 
     seedWizardLegalFromDraft(){
@@ -15945,11 +16008,13 @@ if(path === "birthDate"){
         this.normalizePledgeBanks(draft);
         if(!isRisk) draft.beneficiaries = [];
       }
-      const pid = this.addDraftPolicy({ keepSimulatorWorkspace: true });
+      const addedCompany = safeTrim(draft.company);
+      const addedType = safeTrim(draft.type);
+      const pid = this.addDraftPolicy();
       const ins = (this.insureds || []).find((x) => x.id === id);
       window.showToast?.({
         title: "נוסף להצעה",
-        text: (ins?.label ? ins.label : "המבוטח") + " נוסף לפוליסת " + safeTrim(this.policyDraft?.company || "") + " · " + safeTrim(this.policyDraft?.type || "") + ".",
+        text: (ins?.label ? ins.label : "המבוטח") + " נוסף לפוליסת " + addedCompany + " · " + addedType + ".",
         variant: "success"
       });
       return pid;
@@ -15974,11 +16039,11 @@ if(path === "birthDate"){
         } catch(_e2) {}
         return;
       }
-      const handler = RiskSimulators.getHandler(d.company, d.type);
-      if(!handler) return;
+      const opts = arguments.length ? (arguments[0] || {}) : {};
+      const restoreActiveId = safeTrim(opts.restoreActiveId);
       const insureds = (this.insureds || []).map((ins, idx) => ({
         id: ins.id,
-        label: safeTrim(ins.label) || ("מבוטח " + (idx + 1)),
+        label: this.getSimulatorTabLabel(ins, idx),
         type: ins.type,
         data: Object.assign({}, ins.data || {})
       })).filter((ins) => ins.id);
@@ -15986,29 +16051,55 @@ if(path === "birthDate"){
         window.showToast?.({ title: "יש לבחור מבוטח", text: "אין מבוטחים בהצעה — הוסיפו מבוטח בשלב הראשון.", variant: "warn" });
         return;
       }
+      this._npSimPickByInsured = this._npSimPickByInsured || {};
+      insureds.forEach((ins) => {
+        if(!this._npSimPickByInsured[ins.id]){
+          this._npSimPickByInsured[ins.id] = { company: d.company, product: d.type };
+        }
+      });
+      const activeId = restoreActiveId || insureds[0].id;
+      const pick = this._npSimPickByInsured[activeId] || { company: d.company, product: d.type };
+      const company = safeTrim(pick.company || d.company);
+      const product = safeTrim(pick.product || d.type);
+      d.company = company;
+      d.type = product;
+      const handler = RiskSimulators.getHandler(company, product);
+      if(!handler) return;
       const startDmy = this.toSimulatorDmyDate(d.insuranceStartDate || d.startDate || "");
       if(this._npOpenSimHandler && this._npOpenSimHandler !== handler){
         try { this._npOpenSimHandler.close?.(); } catch(_e3) {}
       }
       this._npOpenSimHandler = handler;
-      const wizardLegalByInsured = {};
       const seed = this.seedWizardLegalFromDraft();
-      insureds.forEach((ins) => { wizardLegalByInsured[ins.id] = JSON.parse(JSON.stringify(seed)); });
+      if(!this._npSimLegalByInsured || typeof this._npSimLegalByInsured !== "object"){
+        this._npSimLegalByInsured = {};
+        insureds.forEach((ins) => { this._npSimLegalByInsured[ins.id] = JSON.parse(JSON.stringify(seed)); });
+      } else {
+        insureds.forEach((ins) => {
+          if(!this._npSimLegalByInsured[ins.id]) this._npSimLegalByInsured[ins.id] = JSON.parse(JSON.stringify(seed));
+        });
+      }
       handler.open({
-        company: d.company,
-        product: d.type,
+        company,
+        product,
         wizardWorkspace: true,
+        restoreActiveId: activeId,
         insuranceStartDate: startDmy,
         startDate: startDmy,
         bankNames: Array.isArray(this.bankNames) ? this.bankNames.slice() : [],
+        simulatorCatalog: this.getWizardSimulatorCatalog(),
         wizardLegalSeed: seed,
-        wizardLegalByInsured,
+        wizardLegalByInsured: this._npSimLegalByInsured,
+        wizardPickByInsured: this._npSimPickByInsured,
         insureds,
         onApply: (resultsByInsuredId, meta) => {
           this.applyRiskSimResultsToDraft(resultsByInsuredId, meta);
         },
         onPurchaseInsured: (insId, result, legal) => {
           this.purchaseSimulatorInsured(insId, result, legal);
+        },
+        onSwitchInsuredPick: (insId, co, pr, snapshot) => {
+          this.switchSimulatorInsuredPick(insId, co, pr, snapshot);
         },
         onFinalConfirm: () => {
           this.ensurePolicyDraft();
@@ -18277,6 +18368,7 @@ if(path === "birthDate"){
             const pol = (this.newPolicies || []).find((item) => String(item.id) === String(pid));
             if(!pol || pol.type !== "בריאות") return;
             const result = this.applyHealthCoverManualDiscounts(pol);
+            if(result?.ok) this._npManualDiscId = "";
             this.render();
             if(result?.ok){
               window.showToast?.({

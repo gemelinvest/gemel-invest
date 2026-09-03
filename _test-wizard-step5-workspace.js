@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260903-np-workspace-v3";
+const TAG = "20260903-np-workspace-v4";
 let failed = 0;
 let passed = 0;
 
@@ -163,14 +163,17 @@ assert(!openFn.includes("standalone: true"), "wizard open does not set standalon
 assert(openFn.includes("(this.insureds || []).map"), "simulator receives every proposal insured");
 assert(!openFn.includes("insuredIds.map((id) => this.insureds.find"), "no longer limited to draft.insuredIds");
 assert(openFn.includes("onPurchaseInsured"), "purchase-one-insured hook");
-assert(wiz.includes("keepSimulatorWorkspace"), "add keeps company/product so another insured can be bought");
+assert(openFn.includes("onSwitchInsuredPick"), "per-insured company/product switch hook");
+assert(openFn.includes("getSimulatorTabLabel"), "simulator tabs use short role labels");
+assert(openFn.includes("simulatorCatalog"), "wizard catalog is passed into the simulator");
 assert(wiz.includes("purchaseSimulatorInsured("), "purchase helper writes one insured onto the proposal");
 assert(renderFn.includes("_npSimAutoOpenedKey"), "step 5 auto-opens the simulator after company+product");
 assert(renderFn.includes("data-open-risk-sim"), "reopen control remains if the agent closed the modal");
 assert(renderFn.includes("lcNpWsHint"), "workspace behind the modal is a thin hint, not duplicate fields");
 assert(sims.includes("function riskSimUsesShell(sim)"), "shell chrome also wraps wizardWorkspace");
 assert(sims.includes("פוליסות חדשות › "), "wizard crumb is פוליסות חדשות, not the center");
-assert(sims.includes("הוסף מבוטח זה להצעה"), "wizard footer buys the active insured");
+assert(sims.includes(">הוסף להצעה<"), "wizard footer label is הוסף להצעה");
+assert(!sims.includes("הוסף מבוטח זה להצעה"), "old long purchase label removed");
 assert(sims.includes("function riskSimIsRiskOrMortgageProduct(product)"), "pledge/beneficiaries gated to risk products");
 assert(sims.includes("riskSimMountLegalPanel"), "legal panel lives in simulator chrome");
 assert(sims.includes("if(!sim._ctx?.wizardWorkspace || !riskSimIsRiskOrMortgageProduct(sim._ctx.product))"), "health does not mount pledge/beneficiaries");
@@ -182,6 +185,54 @@ assert(shellCss.includes(".giSimShell__panel--legal"), "legal panel styles");
 assert(css.includes(".lcNpWsHint"), "workspace hint styles");
 assert(/canAccessSimulators\(\)\{\s*return this\.isAdmin\(\) \|\| this\.isManager\(\);/.test(app), "Simulators Center gate still admin/manager");
 assert(pickBlock.includes("GI-HEALTH-ONE-DECL"), "declaration routing still untouched in this follow-up");
+
+console.log("\n9) approved UI follow-up — discount close, tabs, pledge dock, pick switch");
+const buyStart = wiz.indexOf("purchaseSimulatorInsured(insId, result, legal){");
+const buyEnd = wiz.indexOf("async openRiskSimulator(){", buyStart);
+const buyFn = (buyStart >= 0 && buyEnd > buyStart) ? wiz.slice(buyStart, buyEnd) : "";
+assert(buyFn.includes("purchaseSimulatorInsured("), "purchase helper extracted");
+assert(!buyFn.includes("keepSimulatorWorkspace"), "adding to proposal closes the simulator workspace");
+assert(buyFn.includes("this.addDraftPolicy()"), "purchase still writes a proposal row");
+
+const discApply = wiz.slice(wiz.indexOf("$$('[data-np-apply-cover-disc]'"), wiz.indexOf("$$('[data-cover-pct]'"));
+assert(discApply.includes('this._npManualDiscId = ""'), "שמור הנחות closes the percent panel");
+assert(discApply.includes("this.render()"), "שמור הנחות re-renders after close");
+
+assert(wiz.includes("getSimulatorTabRole(ins, index){"), "short simulator role helper");
+assert(wiz.includes('if(type === "primary" || idx <= 0) return "ראשי";'), "simulator tab: ראשי");
+assert(wiz.includes('if(type === "child") return "ילד";'), "simulator tab: ילד");
+assert(wiz.includes('return "משני";'), "simulator tab: משני");
+assert(wiz.includes("getSimulatorTabLabel(ins, index){"), "simulator tab label helper");
+const baseLabel = wiz.slice(wiz.indexOf("getInsuredBaseLabel(ins, index){"), wiz.indexOf("getInsuredShortRoleLabel(ins, index){"));
+assert(baseLabel.includes('return "מבוטח ראשי"'), "global insured labels unchanged");
+assert(baseLabel.includes("בן / בת זוג"), "spouse base label unchanged outside the simulator");
+
+assert(sims.includes("function riskSimEnsureBankIndex(){"), "simulator loads bank-branch index");
+assert(sims.includes("./gi-bank-branches.json?v=20260813-ho-v1"), "same branch file as the wizard");
+assert(sims.includes("function riskSimLookupBranch(bankNo, branch){"), "branch lookup helper");
+assert(sims.includes("riskSimApplyBranchLookupToCard"), "branch lookup fills bank address");
+assert(sims.includes("<strong>מס סניף תקין</strong>"), "valid branch copy matches the wizard");
+assert(sims.includes("data-gishell-legal-confirm"), "pledge confirm button");
+assert(sims.includes(">אשר</button>"), "pledge confirm label is אשר");
+assert(sims.includes("data-gishell-legal-pledge"), "pledge starts as a checkbox");
+assert(sims.includes("const showForm = !!legal.pledge && !legal.pledgeConfirmed"), "form opens only after checkbox");
+assert(sims.includes("legal.pledgeConfirmed = true"), "אשר collapses pledge into a summary");
+assert(sims.includes("card.insertBefore(panel, foot)"), "pledge dock is below the form, not over occupation");
+assert(sims.includes("function riskSimPickHtml(sim){"), "per-insured company/product pickers");
+assert(sims.includes("data-gishell-pick-company"), "company picker on the insured bar");
+assert(sims.includes("data-gishell-pick-product"), "product picker on the insured bar");
+assert(sims.includes("function riskSimRequestPickSwitch("), "pick switch reopens the matching simulator");
+assert(sims.includes("riskSimRequestPickSwitch(sim, id, pick.company, pick.product)"), "tab click switches product when needed");
+const purchaseSim = sims.slice(sims.indexOf("function riskSimPurchaseActiveInsured(sim){"), sims.indexOf("function riskSimAugmentStandaloneChrome(sim){"));
+assert(purchaseSim.includes("sim.close()"), "הוסף להצעה closes the simulator");
+assert(wiz.includes("switchSimulatorInsuredPick(insId, company, product, snapshot){"), "wizard handles per-insured pick");
+assert(wiz.includes("restoreActiveId: id"), "switching pick restores the same insured tab");
+assert(wiz.includes("wizardPickByInsured"), "per-insured pick map is persisted");
+assert(shellCss.includes(".giSimShell__pick"), "company/product pick styles");
+assert(shellCss.includes(".giSimShell__branchStatus"), "branch status styles");
+assert(shellCss.includes(".giSimShell__legalSummary"), "pledge summary styles");
+assert(shellCss.includes("gap:12px 18px") || shellCss.includes("gap:12px 20px"), "insured tabs are spaced");
+assert(shellCss.includes("z-index:1") && shellCss.includes(".giSimShell__panel--legal"), "legal dock stays under the form");
 
 if(failed){
   console.error("\nFAILED  passed=" + passed + " failed=" + failed);
