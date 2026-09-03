@@ -698,18 +698,80 @@
     return { firstName:"", lastName:"", idNumber:"", birthDate:"", phone:"", relationship:"", sharePct:"" };
   }
   function riskSimDefaultLegal(){
-    return { pledge:false, pledgeBanks:[riskSimEmptyPledgeBank()], beneficiaries:[] };
+    return { pledge:false, pledgeConfirmed:false, pledgeBanks:[riskSimEmptyPledgeBank()], beneficiaries:[] };
   }
   function riskSimCloneLegal(raw){
     const base = riskSimDefaultLegal();
     if(!raw || typeof raw !== "object") return base;
     base.pledge = !!raw.pledge;
+    base.pledgeConfirmed = !!raw.pledgeConfirmed;
     const banks = Array.isArray(raw.pledgeBanks) ? raw.pledgeBanks : [];
     base.pledgeBanks = (banks.length ? banks : [riskSimEmptyPledgeBank()]).slice(0, 2).map((b) => Object.assign(riskSimEmptyPledgeBank(), b || {}));
     if(!base.pledgeBanks.length) base.pledgeBanks = [riskSimEmptyPledgeBank()];
     const bens = Array.isArray(raw.beneficiaries) ? raw.beneficiaries : [];
     base.beneficiaries = bens.map((b) => Object.assign(riskSimEmptyBeneficiary(), b || {}));
     return base;
+  }
+  let _giSimBankIndex = null;
+  let _giSimBankPromise = null;
+  function riskSimNormBankCode(value){
+    const n = Number(String(value || "").replace(/\D/g, ""));
+    return Number.isFinite(n) && n > 0 ? String(n) : "";
+  }
+  function riskSimEnsureBankIndex(){
+    if(_giSimBankIndex && typeof _giSimBankIndex === "object") return Promise.resolve(_giSimBankIndex);
+    if(_giSimBankPromise) return _giSimBankPromise;
+    _giSimBankPromise = fetch("./gi-bank-branches.json?v=20260813-ho-v1")
+      .then((res) => {
+        if(!res || !res.ok) throw new Error("bank-branches");
+        return res.json();
+      })
+      .then((data) => {
+        _giSimBankIndex = data && typeof data === "object" ? data : {};
+        return _giSimBankIndex;
+      })
+      .catch(() => {
+        _giSimBankIndex = {};
+        return _giSimBankIndex;
+      });
+    return _giSimBankPromise;
+  }
+  function riskSimLookupBranch(bankNo, branch){
+    const bank = riskSimNormBankCode(bankNo);
+    const br = riskSimNormBankCode(branch);
+    if(!bank) return { state: "need-bank" };
+    if(!br) return { state: "idle" };
+    const index = _giSimBankIndex;
+    if(!index) return { state: "loading" };
+    const row = index[bank] && index[bank][br];
+    if(!row) return { state: "bad", bank, branch: br };
+    return { state: "ok", bank, branch: br, name: safeTrim(row.n), address: safeTrim(row.a) };
+  }
+  function riskSimBranchStatusHtml(found){
+    const state = found?.state || "idle";
+    if(state === "idle") return "";
+    if(state === "loading") return `<div class="giSimShell__branchStatus is-loading">בודק את מספר הסניף…</div>`;
+    if(state === "need-bank") return `<div class="giSimShell__branchStatus is-need">יש לבחור בנק לפני אימות הסניף.</div>`;
+    if(state === "ok") return `<div class="giSimShell__branchStatus is-ok"><strong>מס סניף תקין</strong></div>`;
+    return `<div class="giSimShell__branchStatus is-bad">מס בנק לא תקין</div>`;
+  }
+  function riskSimApplyBranchLookupToCard(sim, card){
+    if(!card) return;
+    const bankName = safeTrim(card.querySelector('[data-gishell-legal-bank-field="bankName"]')?.value || "");
+    const bankNoEl = card.querySelector('[data-gishell-legal-bank-field="bankNo"]');
+    const branchEl = card.querySelector('[data-gishell-legal-bank-field="branch"]');
+    const addrEl = card.querySelector('[data-gishell-legal-bank-field="address"]');
+    const statusEl = card.querySelector("[data-gishell-legal-branch-status]");
+    const code = RISK_SIM_WIZARD_BANK_CODES[bankName] || safeTrim(bankNoEl?.value || "");
+    if(bankNoEl && code) bankNoEl.value = code;
+    const found = riskSimLookupBranch(code, branchEl?.value || "");
+    if(statusEl) statusEl.innerHTML = riskSimBranchStatusHtml(found);
+    if(found.state === "ok"){
+      if(addrEl) addrEl.value = found.address || "";
+    } else if(found.state === "bad" || found.state === "idle"){
+      if(addrEl && found.state === "bad") addrEl.value = "";
+    }
+    try { riskSimCaptureLegalFromDom(sim); } catch(_e) {}
   }
   function riskSimEnsureLegalMap(sim){
     const ctx = sim && sim._ctx;
@@ -728,6 +790,23 @@
     const fromCtx = sim && sim._ctx && Array.isArray(sim._ctx.bankNames) ? sim._ctx.bankNames.filter(Boolean) : [];
     return fromCtx.length ? fromCtx : RISK_SIM_WIZARD_BANK_NAMES.slice();
   }
+  function riskSimEnsurePickMap(sim){
+    const ctx = sim && sim._ctx;
+    if(!ctx) return {};
+    if(!ctx.wizardPickByInsured || typeof ctx.wizardPickByInsured !== "object") ctx.wizardPickByInsured = {};
+    return ctx.wizardPickByInsured;
+  }
+  function riskSimGetPick(sim, insId){
+    const map = riskSimEnsurePickMap(sim);
+    const id = safeTrim(insId || sim?._activeInsuredId);
+    const cur = map[id];
+    if(cur && cur.company) return cur;
+    return { company: safeTrim(sim?._ctx?.company), product: safeTrim(sim?._ctx?.product) };
+  }
+  function riskSimCatalog(sim){
+    const fromCtx = sim && sim._ctx && Array.isArray(sim._ctx.simulatorCatalog) ? sim._ctx.simulatorCatalog : [];
+    return fromCtx.filter((x) => x && x.company && x.product);
+  }
   function riskSimCaptureLegalFromDom(sim){
     const modal = sim && sim._modal;
     if(!modal || !sim._ctx?.wizardWorkspace) return;
@@ -736,7 +815,7 @@
     if(!id) return;
     const legal = riskSimGetLegal(sim, id);
     const pledgeEl = modal.querySelector("[data-gishell-legal-pledge]");
-    legal.pledge = !!(pledgeEl && pledgeEl.checked);
+    if(pledgeEl) legal.pledge = !!pledgeEl.checked;
     const banks = [];
     modal.querySelectorAll("[data-gishell-legal-bank]").forEach((card) => {
       const idx = Number(card.getAttribute("data-gishell-legal-bank") || "0") || 0;
@@ -750,7 +829,7 @@
         address: read("address")
       });
     });
-    legal.pledgeBanks = (banks.filter(Boolean).length ? banks.filter(Boolean) : [riskSimEmptyPledgeBank()]).slice(0, 2);
+    if(banks.filter(Boolean).length) legal.pledgeBanks = banks.filter(Boolean).slice(0, 2);
     const bens = [];
     modal.querySelectorAll("[data-gishell-legal-ben]").forEach((row) => {
       const idx = Number(row.getAttribute("data-gishell-legal-ben") || "0") || 0;
@@ -777,7 +856,9 @@
     const relOpts = (selected) => `<option value="">קרבה…</option>` + RISK_SIM_WIZARD_RELATIONS.map((r) =>
       `<option value="${escapeHtml(r)}"${safeTrim(selected) === r ? " selected" : ""}>${escapeHtml(r)}</option>`
     ).join("");
-    const bankCards = (legal.pledge ? legal.pledgeBanks : []).map((b, i) => `
+    const showForm = !!legal.pledge && !legal.pledgeConfirmed;
+    const showSummary = !!legal.pledge && !!legal.pledgeConfirmed;
+    const bankCards = (showForm ? legal.pledgeBanks : []).map((b, i) => `
       <div class="giSimShell__legalBank" data-gishell-legal-bank="${i}">
         <div class="giSimShell__legalBankHead">
           <span>בנק משעבד ${i + 1}</span>
@@ -786,12 +867,22 @@
         <div class="giSimShell__legalGrid">
           <label class="giSimShell__legalField"><span>שם הבנק</span><select data-gishell-legal-bank-field="bankName">${bankOpts(b.bankName)}</select></label>
           <label class="giSimShell__legalField"><span>מספר בנק</span><input type="text" inputmode="numeric" data-gishell-legal-bank-field="bankNo" value="${escapeHtml(b.bankNo || "")}" readonly /></label>
-          <label class="giSimShell__legalField"><span>מספר סניף</span><input type="text" inputmode="numeric" data-gishell-legal-bank-field="branch" value="${escapeHtml(b.branch || "")}" /></label>
+          <label class="giSimShell__legalField"><span>מספר סניף</span><input type="text" inputmode="numeric" data-gishell-legal-bank-field="branch" value="${escapeHtml(b.branch || "")}" /><div data-gishell-legal-branch-status></div></label>
           <label class="giSimShell__legalField"><span>סכום לשיעבוד</span><input type="text" inputmode="numeric" data-gishell-legal-bank-field="amount" value="${escapeHtml(b.amount || "")}" /></label>
           <label class="giSimShell__legalField"><span>לכמה שנים</span><input type="text" inputmode="numeric" data-gishell-legal-bank-field="years" value="${escapeHtml(b.years || "")}" /></label>
           <label class="giSimShell__legalField giSimShell__legalField--wide"><span>כתובת הבנק</span><input type="text" data-gishell-legal-bank-field="address" value="${escapeHtml(b.address || "")}" /></label>
         </div>
       </div>`).join("");
+    const summaryBanks = (legal.pledgeBanks || []).map((b, i) => {
+      const amount = [b.amount ? ("₪" + b.amount) : "", b.years ? (b.years + " שנים") : ""].filter(Boolean).join(" · ");
+      return `<div class="giSimShell__legalSummaryItem">
+        <span>בנק ${i + 1}</span>
+        <strong>${escapeHtml(b.bankName || "—")}</strong>
+        <span>${escapeHtml(b.branch ? ("סניף " + b.branch) : "")}</span>
+        <span>${escapeHtml(b.address || "")}</span>
+        <span>${escapeHtml(amount)}</span>
+      </div>`;
+    }).join("");
     const bens = legal.beneficiaries || [];
     const totalPct = bens.reduce((s, b) => s + (Number(b.sharePct) || 0), 0);
     const pctOk = bens.length === 0 || totalPct === 100;
@@ -805,26 +896,36 @@
         <button type="button" class="giSimShell__legalIconBtn" data-gishell-legal-ben-remove="${i}" aria-label="הסר מוטב">✕</button>
       </div>`).join("");
     return `
-      <div class="giSimShell__panelTitle">שיעבוד ומוטבים · למבוטח זה בלבד</div>
-      <label class="giSimShell__legalToggle">
-        <input type="checkbox" data-gishell-legal-pledge="1"${legal.pledge ? " checked" : ""} />
-        <span>שיעבוד (מוטב בלתי חוזר)</span>
-      </label>
-      ${legal.pledge ? `
-        <div class="giSimShell__legalBanks">${bankCards}</div>
-        ${legal.pledgeBanks.length < 2 ? `<button type="button" class="btn giSimShell__legalAddBtn" data-gishell-legal-bank-add="1">+ הוסף בנק שני</button>` : `<div class="giSimShell__legalNote">עד שני בנקים משעבדים</div>`}
-      ` : `<div class="giSimShell__legalNote">סמנו שיעבוד כדי למלא פרטי בנק משעבד. מוטבים ניתן להוסיף תמיד, למבוטח זה בלבד.</div>`}
-      <div class="giSimShell__legalBensHead">
-        <strong>מוטבים</strong>
-        <span>${bens.length ? (bens.length + " מוטבים · סה״כ " + totalPct + "%" + (pctOk ? " ✓" : " — לא מסתכמים ל-100%")) : "לא נוספו מוטבים"}</span>
-        <button type="button" class="btn giSimShell__legalAddBtn" data-gishell-legal-ben-add="1">+ הוסף מוטב</button>
-      </div>
-      ${benRows}`;
+      <div class="giSimShell__legalDock">
+        <label class="giSimShell__legalToggle">
+          <input type="checkbox" data-gishell-legal-pledge="1"${legal.pledge ? " checked" : ""} />
+          <span>שיעבוד (מוטב בלתי חוזר)</span>
+        </label>
+        ${showForm ? `
+          <div class="giSimShell__legalBanks">${bankCards}</div>
+          ${legal.pledgeBanks.length < 2 ? `<button type="button" class="btn giSimShell__legalAddBtn" data-gishell-legal-bank-add="1">+ הוסף בנק שני</button>` : `<div class="giSimShell__legalNote">עד שני בנקים משעבדים</div>`}
+          <button type="button" class="btn btn--primary giSimShell__legalConfirmBtn" data-gishell-legal-confirm="1">אשר</button>
+        ` : ""}
+        ${showSummary ? `
+          <div class="giSimShell__legalSummary">
+            <div class="giSimShell__legalSummaryTitle">שיעבוד אושר</div>
+            <div class="giSimShell__legalSummaryGrid">${summaryBanks || "<div class=\"giSimShell__legalSummaryItem\"><strong>שיעבוד</strong></div>"}</div>
+            <button type="button" class="btn giSimShell__legalAddBtn" data-gishell-legal-edit="1">ערוך</button>
+          </div>
+        ` : ""}
+        <div class="giSimShell__legalBensHead">
+          <strong>מוטבים</strong>
+          <span>${bens.length ? (bens.length + " מוטבים · סה״כ " + totalPct + "%" + (pctOk ? " ✓" : " — לא מסתכמים ל-100%")) : ""}</span>
+          <button type="button" class="btn giSimShell__legalAddBtn" data-gishell-legal-ben-add="1">+ הוסף מוטב</button>
+        </div>
+        ${benRows}
+      </div>`;
   }
   function riskSimMountLegalPanel(sim){
-    const body = sim && sim._modal && sim._modal.querySelector(".giValModal__body");
-    if(!body) return;
-    let panel = body.querySelector(".giSimShell__panel--legal");
+    const modal = sim && sim._modal;
+    const card = modal && (modal.querySelector(".giSimShell__card") || modal.querySelector(".giValModal__card"));
+    if(!card) return;
+    let panel = card.querySelector(".giSimShell__panel--legal");
     if(!sim._ctx?.wizardWorkspace || !riskSimIsRiskOrMortgageProduct(sim._ctx.product)){
       if(panel) panel.remove();
       return;
@@ -832,10 +933,11 @@
     if(!panel){
       panel = document.createElement("section");
       panel.className = "giSimShell__panel giSimShell__panel--legal";
-      const layout = body.querySelector(".giSimShell__layout");
-      if(layout && layout.nextSibling) body.insertBefore(panel, layout.nextSibling);
-      else if(layout) body.appendChild(panel);
-      else body.appendChild(panel);
+    }
+    const foot = card.querySelector(".giValModal__foot") || card.querySelector(".giSimShell__foot");
+    if(panel.parentNode !== card || (foot && panel.nextElementSibling !== foot)){
+      if(foot) card.insertBefore(panel, foot);
+      else card.appendChild(panel);
     }
     panel.innerHTML = riskSimLegalInnerHtml(sim);
   }
@@ -848,24 +950,66 @@
     if(!modal || !sim._ctx?.wizardWorkspace) return;
     if(!riskSimIsRiskOrMortgageProduct(sim._ctx.product)) return;
     const persist = () => { try { riskSimCaptureLegalFromDom(sim); } catch(_e) {} };
-    modal.querySelectorAll("[data-gishell-legal-pledge], [data-gishell-legal-bank-field], [data-gishell-legal-ben-field]").forEach((el) => {
+    modal.querySelectorAll("[data-gishell-legal-pledge]").forEach((el) => {
+      if(el._giLegalBound) return;
+      el._giLegalBound = true;
+      on(el, "change", () => {
+        persist();
+        const legal = riskSimGetLegal(sim, sim._activeInsuredId);
+        legal.pledge = !!el.checked;
+        if(!legal.pledge) legal.pledgeConfirmed = false;
+        riskSimRefreshLegalPanel(sim);
+      });
+    });
+    modal.querySelectorAll("[data-gishell-legal-bank-field], [data-gishell-legal-ben-field]").forEach((el) => {
       if(el._giLegalBound) return;
       el._giLegalBound = true;
       on(el, "input", persist);
       on(el, "change", () => {
         persist();
-        if(el.getAttribute("data-gishell-legal-pledge") || el.getAttribute("data-gishell-legal-bank-field") === "bankName"){
-          if(el.getAttribute("data-gishell-legal-bank-field") === "bankName"){
-            const card = el.closest("[data-gishell-legal-bank]");
-            const noEl = card && card.querySelector('[data-gishell-legal-bank-field="bankNo"]');
-            const code = RISK_SIM_WIZARD_BANK_CODES[safeTrim(el.value)] || "";
-            if(noEl) noEl.value = code;
-            persist();
-          }
-          riskSimRefreshLegalPanel(sim);
+        const field = el.getAttribute("data-gishell-legal-bank-field");
+        if(field === "bankName" || field === "branch"){
+          const card = el.closest("[data-gishell-legal-bank]");
+          void riskSimEnsureBankIndex().then(() => riskSimApplyBranchLookupToCard(sim, card));
         }
       });
     });
+    modal.querySelectorAll("[data-gishell-legal-bank-field=\"branch\"]").forEach((el) => {
+      if(el._giBranchTimerBound) return;
+      el._giBranchTimerBound = true;
+      on(el, "input", () => {
+        persist();
+        const card = el.closest("[data-gishell-legal-bank]");
+        window.clearTimeout(el._giBranchTimer);
+        el._giBranchTimer = window.setTimeout(() => {
+          void riskSimEnsureBankIndex().then(() => riskSimApplyBranchLookupToCard(sim, card));
+        }, 180);
+      });
+    });
+    modal.querySelectorAll("[data-gishell-legal-bank]").forEach((card) => {
+      void riskSimEnsureBankIndex().then(() => riskSimApplyBranchLookupToCard(sim, card));
+    });
+    const confirmBtn = modal.querySelector("[data-gishell-legal-confirm]");
+    if(confirmBtn && !confirmBtn._giLegalBound){
+      confirmBtn._giLegalBound = true;
+      on(confirmBtn, "click", (ev) => {
+        ev.preventDefault();
+        persist();
+        const legal = riskSimGetLegal(sim, sim._activeInsuredId);
+        legal.pledgeConfirmed = true;
+        riskSimRefreshLegalPanel(sim);
+      });
+    }
+    const editBtn = modal.querySelector("[data-gishell-legal-edit]");
+    if(editBtn && !editBtn._giLegalBound){
+      editBtn._giLegalBound = true;
+      on(editBtn, "click", (ev) => {
+        ev.preventDefault();
+        const legal = riskSimGetLegal(sim, sim._activeInsuredId);
+        legal.pledgeConfirmed = false;
+        riskSimRefreshLegalPanel(sim);
+      });
+    }
     const addBank = modal.querySelector("[data-gishell-legal-bank-add]");
     if(addBank && !addBank._giLegalBound){
       addBank._giLegalBound = true;
@@ -917,6 +1061,41 @@
       });
     });
   }
+  function riskSimPickHtml(sim){
+    if(!sim?._ctx?.wizardWorkspace) return "";
+    const catalog = riskSimCatalog(sim);
+    if(!catalog.length) return "";
+    const pick = riskSimGetPick(sim, sim._activeInsuredId);
+    const companies = [];
+    const seen = new Set();
+    catalog.forEach((x) => {
+      if(seen.has(x.company)) return;
+      seen.add(x.company);
+      companies.push(x.company);
+    });
+    const products = catalog.filter((x) => x.company === pick.company).map((x) => x.product);
+    const coOpts = companies.map((c) => `<option value="${escapeHtml(c)}"${c === pick.company ? " selected" : ""}>${escapeHtml(c)}</option>`).join("");
+    const prOpts = products.map((p) => `<option value="${escapeHtml(p)}"${p === pick.product ? " selected" : ""}>${escapeHtml(p)}</option>`).join("");
+    return `<div class="giSimShell__pick">
+      <label class="giSimShell__pickField"><span>חברה</span><select data-gishell-pick-company>${coOpts}</select></label>
+      <label class="giSimShell__pickField"><span>מוצר</span><select data-gishell-pick-product>${prOpts}</select></label>
+    </div>`;
+  }
+  function riskSimRequestPickSwitch(sim, insId, company, product){
+    const id = safeTrim(insId || sim?._activeInsuredId);
+    const co = safeTrim(company);
+    const pr = safeTrim(product);
+    if(!id || !co || !pr) return;
+    const map = riskSimEnsurePickMap(sim);
+    map[id] = { company: co, product: pr };
+    try { riskSimCaptureLegalFromDom(sim); } catch(_e) {}
+    if(typeof sim._ctx?.onSwitchInsuredPick === "function"){
+      sim._ctx.onSwitchInsuredPick(id, co, pr, {
+        wizardLegalByInsured: sim._ctx.wizardLegalByInsured,
+        wizardPickByInsured: map
+      });
+    }
+  }
   function riskSimCollectResultForInsured(sim, insId){
     if(!sim || !insId) return null;
     try {
@@ -962,7 +1141,7 @@
       st.savedAt = nowISO();
       st.dirtySinceSave = false;
     }
-    try { if(typeof sim._render === "function") sim._render(); } catch(_e4) {}
+    try { sim.close(); } catch(_e4) {}
   }
 
   function riskSimAugmentStandaloneChrome(sim){
@@ -1056,7 +1235,8 @@
       const addInsHtml = sim._ctx.standalone
         ? `<button type="button" class="giSimShell__addIns" data-gishell-add-ins="1">+ הוסף מבוטח</button>`
         : "";
-      bar.innerHTML = tabs + addInsHtml;
+      const pickHtml = sim._ctx.wizardWorkspace ? riskSimPickHtml(sim) : "";
+      bar.innerHTML = tabs + addInsHtml + pickHtml;
       body.insertBefore(bar, body.firstChild);
       try { riskSimLayoutStandaloneBody(body, sim); } catch(_e) {}
       try { riskSimHideNativeBodyCalc(card); } catch(_e2) {}
@@ -1074,7 +1254,7 @@
         ? `<button type="button" class="btn giSimShell__backBtn" data-gishell-back-picker="1">חזרה לבחירה</button>`
         : "";
       const buyBtnHtml = wizardFoot
-        ? `<button type="button" class="btn btn--primary giSimShell__buyBtn" data-gishell-buy-insured="1">הוסף מבוטח זה להצעה</button>`
+        ? `<button type="button" class="btn btn--primary giSimShell__buyBtn" data-gishell-buy-insured="1">הוסף להצעה</button>`
         : "";
       foot.innerHTML = `
         <div class="giSimShell__premBlock">
@@ -1108,6 +1288,13 @@
         const id = btn.getAttribute("data-gishell-tab");
         if(!id) return;
         try { riskSimCaptureLegalFromDom(sim); } catch(_e0) {}
+        const pick = riskSimGetPick(sim, id);
+        const curCo = safeTrim(sim._ctx?.company);
+        const curPr = safeTrim(sim._ctx?.product);
+        if(sim._ctx?.wizardWorkspace && pick.company && pick.product && (pick.company !== curCo || pick.product !== curPr)){
+          riskSimRequestPickSwitch(sim, id, pick.company, pick.product);
+          return;
+        }
         if(typeof sim._switchInsured === "function") sim._switchInsured(id);
         else { sim._activeInsuredId = id; try { sim._render(); } catch(_e) {} }
       });
@@ -1161,6 +1348,28 @@
         ev.preventDefault();
         ev.stopPropagation();
         riskSimReturnToPicker(sim);
+      });
+    }
+
+    const pickCo = modal.querySelector("[data-gishell-pick-company]");
+    if(pickCo && !pickCo._giShellBound){
+      pickCo._giShellBound = true;
+      on(pickCo, "change", () => {
+        const insId = sim._activeInsuredId;
+        const company = safeTrim(pickCo.value);
+        const catalog = riskSimCatalog(sim);
+        const products = catalog.filter((x) => x.company === company).map((x) => x.product);
+        const product = products.includes(safeTrim(sim._ctx?.product)) ? safeTrim(sim._ctx.product) : (products[0] || "");
+        riskSimRequestPickSwitch(sim, insId, company, product);
+      });
+    }
+    const pickPr = modal.querySelector("[data-gishell-pick-product]");
+    if(pickPr && !pickPr._giShellBound){
+      pickPr._giShellBound = true;
+      on(pickPr, "change", () => {
+        const insId = sim._activeInsuredId;
+        const pick = riskSimGetPick(sim, insId);
+        riskSimRequestPickSwitch(sim, insId, pick.company || sim._ctx?.company, safeTrim(pickPr.value));
       });
     }
 
@@ -1837,6 +2046,9 @@
         finally { handler._giOpening = false; }
         if(restore){
           try { riskSimApplyRestoredState(handler, restore, restoreActive); } catch(_e) {}
+        } else if(restoreActive && handler._state && handler._state[restoreActive]){
+          handler._activeInsuredId = restoreActive;
+          try { if(typeof handler._render === "function") handler._render(); } catch(_e2) {}
         }
         return out;
       };
