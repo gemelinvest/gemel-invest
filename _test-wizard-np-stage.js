@@ -87,6 +87,16 @@ assert(wiz.includes("try { this.dockNpOpenSimulator(); } catch(_eReDock) {}"), "
 assert(shellCss.includes(".giValModal.giSimShellModal--docked{"), "docked simulator styles");
 assert(shellCss.includes("position:relative !important"), "docked simulator is not a fixed overlay");
 assert(/giSimShellModal--docked \.giValModal__backdrop\{\s*display:none/.test(shellCss), "docked simulator hides the backdrop");
+const dockedCard = shellCss.slice(
+  shellCss.indexOf(".giValModal.giSimShellModal--docked .giValModal__card,"),
+  shellCss.indexOf(".giValModal.giSimShellModal--docked .giValModal__body{")
+);
+assert(dockedCard.includes("display:block !important"), "docked card drops the flex column so the body is not shrunk");
+assert(dockedCard.includes("height:auto !important"), "docked card grows with its content");
+assert(dockedCard.includes("overflow:visible !important"), "docked card does not clip a tall product (health covers list)");
+assert(/giSimShellModal--docked \.giValModal__body\{[^}]*flex:0 0 auto !important/.test(shellCss), "docked body keeps its natural height");
+assert(/giSimShellModal--docked \.giSimShell__layout\{[^}]*flex:0 0 auto !important/.test(shellCss), "docked two-column layout keeps its natural height");
+assert(/giSimShellModal--docked \.giSimShell__brandLogo\{[^}]*left:16px !important/.test(shellCss), "docked gmail logo moves off the company title");
 assert(css.includes(".lcNpSimDock:not(:empty) + .lcNpWsHint{display:none}"), "reopen hint hidden while docked");
 assert(wiz.includes("החלפת חברה ומוצר לכל מבוטח מתבצעת בתוך הסימולטור"), "outer switch is not duplicated when the simulator is docked");
 

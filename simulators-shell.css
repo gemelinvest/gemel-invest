@@ -969,6 +969,14 @@
 .giSimShell__legalDock{
   display:grid;
   gap:8px;
+  justify-items:start;
+}
+.giSimShell__legalDock > .giSimShell__legalBanks,
+.giSimShell__legalDock > .giSimShell__legalBensHead,
+.giSimShell__legalDock > .giSimShell__benRow,
+.giSimShell__legalDock > .giSimShell__legalSummary{
+  justify-self:stretch;
+  width:100%;
 }
 .giSimShell__legalToggle input{
   width:18px;
@@ -1041,19 +1049,32 @@
 .giValModal.giSimShellModal--docked .giValModal__backdrop{
   display:none !important;
 }
+/* בשיבוץ הכרטיס גדל לפי התוכן: בלי flex-column שמכווץ את הגוף ובלי חיתוך,
+   אחרת מוצר עם רשימת כיסויים ארוכה (בריאות) נחתך והפוטר נדחק. */
 .giValModal.giSimShellModal--docked .giValModal__card,
 .giValModal.giSimShellModal--docked .giSimShell__card{
+  display:block !important;
   width:100% !important;
   max-width:100% !important;
+  height:auto !important;
+  min-height:0 !important;
   max-height:none !important;
+  overflow:visible !important;
   transform:none !important;
   opacity:1 !important;
   border-radius:16px !important;
   box-shadow:0 10px 28px rgba(27,54,93,.08) !important;
 }
 .giValModal.giSimShellModal--docked .giValModal__body{
+  flex:0 0 auto !important;
+  height:auto !important;
   max-height:none !important;
   overflow:visible !important;
+}
+.giValModal.giSimShellModal--docked .giSimShell__layout{
+  flex:0 0 auto !important;
+  min-height:0 !important;
+  align-items:start !important;
 }
 .giValModal.giSimShellModal--docked .giSimShell__panel--legal{
   max-height:none !important;
@@ -1062,4 +1083,12 @@
 /* בשיבוץ הסגירה חוזרת לבחירת חברה ומוצר — הכפתור בפוטר מספיק */
 .giValModal.giSimShellModal--docked [class*="__closeX"]{
   display:none !important;
+}
+/* בשיבוץ ה-X מוסתר, ולכן לוגו גמל עובר לקצה הפנוי ולא יושב על שם החברה */
+.giValModal.giSimShellModal--docked .giSimShell__brandLogo{
+  right:auto !important;
+  left:16px !important;
+}
+.giValModal.giSimShellModal--docked .giValModal__head{
+  padding-top:14px !important;
 }
