@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260901-restore-11am-v1";
+const APP_TAG = "20260903-sales-mail-v1";
 let failed = 0;
 let passed = 0;
 

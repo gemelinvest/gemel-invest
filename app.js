@@ -34399,6 +34399,43 @@ UsersGateUI.init();
       return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
     },
 
+    toIsraelDateKey(d = new Date()){
+      const dt = d instanceof Date ? d : new Date();
+      if(Number.isNaN(dt.getTime())) return this.toLocalDateKey(new Date());
+      try {
+        return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jerusalem" }).format(dt);
+      } catch(_e) {
+        return this.toLocalDateKey(dt);
+      }
+    },
+
+    _nextCalendarDateKey(dateKey){
+      const m = safeTrim(dateKey).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if(!m) return this.toIsraelDateKey();
+      const dt = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + 1));
+      return dt.toISOString().slice(0, 10);
+    },
+
+    _israelDayBoundIso(dateKey){
+      const key = safeTrim(dateKey);
+      for(const off of ["+03:00", "+02:00"]){
+        const d = new Date(key + "T00:00:00" + off);
+        if(Number.isNaN(d.getTime())) continue;
+        const atKey = this.toIsraelDateKey(d);
+        const prevKey = this.toIsraelDateKey(new Date(d.getTime() - 1));
+        if(atKey === key && prevKey !== key) return d.toISOString();
+      }
+      return new Date(key + "T00:00:00+03:00").toISOString();
+    },
+
+    getIsraelDayRange(dateKey){
+      const key = /^\d{4}-\d{2}-\d{2}$/.test(safeTrim(dateKey)) ? safeTrim(dateKey) : this.toIsraelDateKey();
+      return {
+        start: new Date(this._israelDayBoundIso(key)),
+        end: new Date(this._israelDayBoundIso(this._nextCalendarDateKey(key)))
+      };
+    },
+
     parseLocalDateKey(key){
       const m = safeTrim(key).match(/^(\d{4})-(\d{2})-(\d{2})$/);
       if(!m) return new Date();
@@ -34407,7 +34444,7 @@ UsersGateUI.init();
 
     getDailySalesReportDateKey(){
       this._snapDailySalesDateToNewDay();
-      const todayKey = this.toLocalDateKey(new Date());
+      const todayKey = this.toIsraelDateKey(new Date());
       const key = safeTrim(this._dailySalesReportDateKey);
       if(!/^\d{4}-\d{2}-\d{2}$/.test(key)){
         this._dailySalesReportDateKey = todayKey;
@@ -34416,9 +34453,9 @@ UsersGateUI.init();
       return key;
     },
 
-    /* תצוגה בלבד: אם עבר חצות (גם אחרי שינה של הלשונית) חוזרים להיום החדש. */
+    /* תצוגה בלבד: אם עבר חצות שעון ישראל (גם אחרי שינה של הלשונית) חוזרים להיום החדש. */
     _snapDailySalesDateToNewDay(){
-      const todayKey = this.toLocalDateKey(new Date());
+      const todayKey = this.toIsraelDateKey(new Date());
       const lastToday = safeTrim(this._dailySalesLastSeenTodayKey);
       this._dailySalesLastSeenTodayKey = todayKey;
       if(lastToday && lastToday !== todayKey){
@@ -34429,7 +34466,7 @@ UsersGateUI.init();
     },
 
     setDailySalesReportDateKey(key){
-      const todayKey = this.toLocalDateKey(new Date());
+      const todayKey = this.toIsraelDateKey(new Date());
       let next = safeTrim(key);
       if(!/^\d{4}-\d{2}-\d{2}$/.test(next)) next = todayKey;
       if(next > todayKey) next = todayKey;
@@ -34760,7 +34797,7 @@ UsersGateUI.init();
       if(this._dailySalesByAgentBusy) return;
       if(typeof Storage === "undefined" || typeof Storage.loadDailySalesByAgent !== "function") return;
       const dateKey = this.getDailySalesReportDateKey();
-      const range = this.getTodayRange(this.parseLocalDateKey(dateKey));
+      const range = this.getIsraelDayRange(dateKey);
       const ageMs = Date.now() - (Number(this._dailySalesByAgentOverlay?.at) || 0);
       const cachedOk = this._dailySalesByAgentOverlay?.ok && this._dailySalesByAgentOverlay?.dateKey === dateKey && ageMs < 45000;
       const cachedHasRows = Array.isArray(this._dailySalesByAgentOverlay?.rows) && this._dailySalesByAgentOverlay.rows.length > 0;
@@ -34794,39 +34831,81 @@ UsersGateUI.init();
       })();
     },
 
+    _seedDailySalesGroup(map, g){
+      const products = Array.isArray(g?.products) && g.products.length
+        ? g.products
+        : [{ name: "פוליסה", count: Number(g?.deals) || 1 }];
+      const companies = Array.isArray(g?.companies) ? g.companies : [];
+      const totalCount = products.reduce((sum, p) => {
+        const count = typeof p === "string" ? 1 : (Number(p?.count) || 1);
+        return sum + count;
+      }, 0) || 1;
+      products.forEach((p, i) => {
+        const pname = typeof p === "string" ? p : (safeTrim(p?.name) || "פוליסה");
+        const count = typeof p === "string" ? 1 : (Number(p?.count) || 1);
+        const company = safeTrim(typeof companies[i] === "string" ? companies[i] : (companies[0] || ""));
+        const prem = (Number(g?.premium) || 0) * (count / totalCount);
+        this._bumpDailySalesGroup(map, g?.agentName, g?.sector, pname, company, prem, count);
+      });
+    },
+
     _applyDailySalesServerHealthPrat(groups, dateKey){
       const overlay = this._dailySalesByAgentOverlay;
       const rows = (overlay?.ok && overlay.dateKey === dateKey && Array.isArray(overlay.rows)) ? overlay.rows : [];
-      if(!rows.length) return Array.isArray(groups) ? groups : [];
-      const healthSet = this._dailySalesHealthSectorSet();
       const list = Array.isArray(groups) ? groups : [];
-      const localHealth = list.filter((g) => healthSet.has(safeTrim(g?.sector)));
-      const localDeals = localHealth.reduce((sum, g) => sum + (Number(g.deals) || 0), 0);
-      const localPrem = localHealth.reduce((sum, g) => sum + (Number(g.premium) || 0), 0);
-      const serverDeals = rows.reduce((sum, r) => sum + (Number(r.policies) || 0), 0);
-      const serverPrem = rows.reduce((sum, r) => sum + (Number(r.premium) || 0), 0);
-      if(!(serverDeals > localDeals || ((serverPrem - localPrem) > 0.009))) return list;
-      const kept = list.filter((g) => !healthSet.has(safeTrim(g?.sector)));
+      if(!rows.length) return list;
+      const healthSet = this._dailySalesHealthSectorSet();
       const map = Object.create(null);
-      rows.forEach((row) => {
-        const product = safeTrim(row?.product) || "פוליסה";
-        this._bumpDailySalesGroup(
-          map,
-          row?.agent_name,
-          this.resolveDailySalesSector(product, "אחר"),
-          product,
-          row?.company,
-          row?.premium,
-          row?.policies
-        );
+      const localHealthByAgent = new Map();
+      list.forEach((g) => {
+        if(healthSet.has(safeTrim(g?.sector))){
+          const name = safeTrim(g?.agentName) || "נציג";
+          if(!localHealthByAgent.has(name)) localHealthByAgent.set(name, []);
+          localHealthByAgent.get(name).push(g);
+        } else {
+          this._seedDailySalesGroup(map, g);
+        }
       });
-      return this._finalizeDailySalesGroups(map).concat(kept);
+      const serverByAgent = new Map();
+      rows.forEach((row) => {
+        const name = safeTrim(row?.agent_name) || "נציג";
+        if(!serverByAgent.has(name)) serverByAgent.set(name, []);
+        serverByAgent.get(name).push(row);
+      });
+      const names = new Set([...localHealthByAgent.keys(), ...serverByAgent.keys()]);
+      names.forEach((name) => {
+        const localGroups = localHealthByAgent.get(name) || [];
+        const serverRows = serverByAgent.get(name) || [];
+        const localDeals = localGroups.reduce((sum, g) => sum + (Number(g.deals) || 0), 0);
+        const localPrem = localGroups.reduce((sum, g) => sum + (Number(g.premium) || 0), 0);
+        const serverDeals = serverRows.reduce((sum, r) => sum + (Number(r.policies) || 0), 0);
+        const serverPrem = serverRows.reduce((sum, r) => sum + (Number(r.premium) || 0), 0);
+        const useServer = serverRows.length && (serverDeals > localDeals || ((serverPrem - localPrem) > 0.009) || !localGroups.length);
+        if(useServer){
+          serverRows.forEach((row) => {
+            const product = safeTrim(row?.product) || "פוליסה";
+            this._bumpDailySalesGroup(
+              map,
+              name,
+              this.resolveDailySalesSector(product, "אחר"),
+              product,
+              row?.company,
+              row?.premium,
+              row?.policies
+            );
+          });
+        } else {
+          localGroups.forEach((g) => this._seedDailySalesGroup(map, g));
+        }
+      });
+      return this._finalizeDailySalesGroups(map);
     },
 
     buildDailyAgentSalesReport(forDate){
-      const ref = forDate instanceof Date ? forDate : this.parseLocalDateKey(this.getDailySalesReportDateKey());
-      const dateKey = this.toLocalDateKey(ref);
-      const dayRange = this.getTodayRange(ref);
+      const dateKey = forDate instanceof Date
+        ? this.toIsraelDateKey(forDate)
+        : this.getDailySalesReportDateKey();
+      const dayRange = this.getIsraelDayRange(dateKey);
       const customers = this.getVisibleCustomers();
       const missingPayloads = this._countMissingCustomerPayloadsSafe();
       try { this.ensureDailySalesServerOverlay(); } catch(_e) {}
@@ -34908,7 +34987,7 @@ UsersGateUI.init();
         || safeTrim(a.product).localeCompare(safeTrim(b.product), "he")
       );
       const totalPremium = Math.round(agents.reduce((sum, row) => sum + row.premium, 0) * 100) / 100;
-      const todayKey = this.toLocalDateKey(new Date());
+      const todayKey = this.toIsraelDateKey(new Date());
       const result = {
         agents,
         lines,
@@ -35645,7 +35724,7 @@ UsersGateUI.init();
 
       if(todayBtn){
         on(todayBtn, "click", () => {
-          this.setDailySalesReportDateKey(this.toLocalDateKey(new Date()));
+          this.setDailySalesReportDateKey(this.toIsraelDateKey(new Date()));
           this.renderDailySalesPage();
           try { this.refreshDailySalesReportPanel?.(); } catch(_e) {}
         });
@@ -35774,7 +35853,7 @@ UsersGateUI.init();
       const paintDateChrome = () => {
         if(dateInput){
           dateInput.value = report.dateKey;
-          dateInput.max = this.toLocalDateKey(new Date());
+          dateInput.max = this.toIsraelDateKey(new Date());
         }
         if(dateText) dateText.textContent = report.dateLabel || "—";
         if(todayBtn){
@@ -36582,7 +36661,7 @@ UsersGateUI.init();
               <button class="giDailySales__todayBtn${report.isToday ? " is-active" : ""}" type="button" data-daily-sales-nav="today"${report.isToday ? " disabled" : ""}>היום</button>
               <label class="giDailySales__dateWrap">
                 <span class="giDailySales__dateText">${escapeHtml(report.dateLabel)}</span>
-                <input class="giDailySales__dateInput" id="giDailySalesOverlayDateInput" type="date" value="${escapeHtml(report.dateKey)}" max="${escapeHtml(this.toLocalDateKey(new Date()))}" aria-label="בחר תאריך"/>
+                <input class="giDailySales__dateInput" id="giDailySalesOverlayDateInput" type="date" value="${escapeHtml(report.dateKey)}" max="${escapeHtml(this.toIsraelDateKey(new Date()))}" aria-label="בחר תאריך"/>
               </label>
               <button class="giDailySales__printBtn" type="button" data-daily-sales-nav="print">הדפסה</button>
               <button class="giDailySales__closeBtn" type="button" data-daily-sales-nav="close" aria-label="סגור">סגור</button>
@@ -36982,7 +37061,7 @@ UsersGateUI.init();
         ev.preventDefault();
         const action = safeTrim(btn.getAttribute("data-daily-sales-nav"));
         if(action === "today"){
-          this.setDailySalesReportDateKey(this.toLocalDateKey(new Date()));
+          this.setDailySalesReportDateKey(this.toIsraelDateKey(new Date()));
           this.refreshDailySalesReportPanel();
           return;
         }
@@ -37019,7 +37098,7 @@ UsersGateUI.init();
           return;
         }
         if(action === "today"){
-          this.setDailySalesReportDateKey(this.toLocalDateKey(new Date()));
+          this.setDailySalesReportDateKey(this.toIsraelDateKey(new Date()));
           this.refreshDailySalesReportPanel();
         }
       });
@@ -37919,7 +37998,7 @@ UsersGateUI.init();
         this._midnightTimer = null;
         try {
           // יום חדש — דוח המעקב חוזר להיום
-          const todayKey = this.toLocalDateKey(new Date());
+          const todayKey = this.toIsraelDateKey(new Date());
           this._dailySalesReportDateKey = todayKey;
           this._dailySalesLastSeenTodayKey = todayKey;
           this._dailyAgentsCacheKey = "";

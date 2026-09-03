@@ -1,9 +1,14 @@
-# Restore the 12:30 / 15:00 / 20:00 Asia/Jerusalem daily-sales Outlook send.
+# Daily-sales Outlook send at 12:30 / 15:00 / 20:00 Asia/Jerusalem.
 # Hosted Supabase Edge Functions do not support Deno.cron; this workflow is
-# the clock. It POSTs { action: "send-slot" } to gi-daily-sales-mail.
+# the clock. It POSTs { action: "send-slot", slot } to gi-daily-sales-mail.
 #
-# GitHub cron is UTC-only. Israel is UTC+3 (IDT) or UTC+2 (IST), so we
-# register both offsets and skip unless local Israel time is a real slot.
+# GitHub cron is UTC-only and often runs hours late. A 35-minute Israel-time
+# gate therefore dropped the 12:30 and 15:00 sends. The clock is now:
+#   1) poll every 10 minutes
+#   2) send the due Israel slot (12:30 until 15:00, 15:00 until 20:00,
+#      20:00 until midnight) even if this particular cron fired late
+#   3) keep the six explicit UTC slot crons as extra insurance
+# The edge function still de-duplicates the same slot (and a 90-minute window).
 # Schedule jobs run only after this file is on the default branch.
 #
 # This does NOT deploy the Edge Function. After changing
@@ -14,6 +19,8 @@ name: Daily sales mail slots
 
 on:
   schedule:
+    # Catch GitHub delay: a run in the current slot still sends that slot.
+    - cron: "*/10 * * * *"
     # 12:30 / 15:00 / 20:00 IDT (UTC+3)
     - cron: "30 9 * * *"
     - cron: "0 12 * * *"
@@ -43,46 +50,68 @@ jobs:
           from zoneinfo import ZoneInfo
           import json, os, sys, urllib.error, urllib.request
 
+          SLOTS = (
+              ("12:30", 12 * 60 + 30, 15 * 60),
+              ("15:00", 15 * 60, 20 * 60),
+              ("20:00", 20 * 60, 24 * 60),
+          )
+
+          def due_slot(minutes):
+              for name, start, end in SLOTS:
+                  if start <= minutes < end:
+                      return name
+              return None
+
           event = os.environ.get("GITHUB_EVENT_NAME") or ""
           now = datetime.now(ZoneInfo("Asia/Jerusalem"))
           minutes = now.hour * 60 + now.minute
-          slots = (12 * 60 + 30, 15 * 60, 20 * 60)
-          window = 35
-          on_slot = any(min(abs(minutes - slot), 24 * 60 - abs(minutes - slot)) <= window for slot in slots)
-          if event != "workflow_dispatch" and not on_slot:
-            print("skip: Israel {0} is not a send slot".format(now.strftime("%Y-%m-%d %H:%M %Z")))
-            sys.exit(0)
+          slot = due_slot(minutes)
+          if event != "workflow_dispatch" and not slot:
+              print("skip: Israel {0} is before 12:30".format(now.strftime("%Y-%m-%d %H:%M %Z")))
+              sys.exit(0)
+          if not slot:
+              slot = "manual"
 
           url = os.environ["MAIL_FN_URL"]
           key = os.environ["MAIL_FN_KEY"]
-          body = json.dumps({"action": "send-slot", "scheduled": True}).encode("utf-8")
+          body = json.dumps({
+              "action": "send-slot",
+              "scheduled": True,
+              "slot": slot,
+              "refreshLive": True,
+          }).encode("utf-8")
           req = urllib.request.Request(
-            url,
-            data=body,
-            method="POST",
-            headers={
-              "Content-Type": "application/json",
-              "apikey": key,
-              "Authorization": "Bearer " + key,
-            },
+              url,
+              data=body,
+              method="POST",
+              headers={
+                  "Content-Type": "application/json",
+                  "apikey": key,
+                  "Authorization": "Bearer " + key,
+              },
           )
           try:
-            with urllib.request.urlopen(req, timeout=90) as res:
-              raw = res.read().decode("utf-8", "replace")
-              print("status", res.status)
-              print(raw)
-              data = json.loads(raw) if raw else {}
+              with urllib.request.urlopen(req, timeout=90) as res:
+                  raw = res.read().decode("utf-8", "replace")
+                  print("status", res.status)
+                  print(raw)
+                  data = json.loads(raw) if raw else {}
           except urllib.error.HTTPError as err:
-            raw = err.read().decode("utf-8", "replace")
-            print("status", err.code)
-            print(raw)
-            sys.exit(1)
+              raw = err.read().decode("utf-8", "replace")
+              print("status", err.code)
+              print(raw)
+              sys.exit(1)
 
           if data.get("ok") is False:
-            print("send-slot failed:", data.get("error"))
-            sys.exit(1)
+              print("send-slot failed:", data.get("error"))
+              sys.exit(1)
           if data.get("skipped"):
-            print("send-slot skipped:", data.get("error"))
-          else:
-            print("send-slot ok:", data.get("message") or "sent")
+              reason = data.get("error") or ""
+              print("send-slot skipped:", reason)
+              # Same-slot / 90-minute dedup is expected on the 10-minute poll.
+              if "כבר נשלח" in reason:
+                  sys.exit(0)
+              print("send-slot missed a due Israel slot")
+              sys.exit(1)
+          print("send-slot ok:", data.get("message") or "sent", "slot", slot)
           PY

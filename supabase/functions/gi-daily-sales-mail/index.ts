@@ -1,17 +1,20 @@
-// GI-DAILY-SALES-MAIL — reconstructed 2026-08-26, scheduler restored 2026-09-01
+// GI-DAILY-SALES-MAIL — reconstructed 2026-08-26, scheduler restored 2026-09-01,
+// clock + live-agent refresh 2026-09-03.
 // Original function was not in the git repo. This rewrite keeps the live
 // contract (status / save-snapshot / send-now / send-slot / save-azure /
-// oauth-start / disconnect + GET OAuth callback) and fixes the bug that
-// kept the first PDF of the Israel day forever, so extras never reached Outlook.
+// oauth-start / disconnect + GET OAuth callback).
 //
-// Keep rule (fixed): skip overwrite only when a PDF is already stored AND
-// the incoming body has no valid PDF. User refresh / send-now with a real
-// PDF always replaces. send-now prefers the request snapshot when present.
+// Keep rule: HTML from the client always overwrites. A stored PDF is kept
+// only when the incoming body has no valid PDF. User refresh / send-now
+// with a real PDF always replaces the PDF too. send-now prefers the
+// request snapshot when present. send-slot refreshes agent rows from
+// gi_daily_sales_by_agent so late sales are not dropped.
 //
 // Scheduler: send-slot at 12:30 / 15:00 / 20:00 Asia/Jerusalem. Hosted
 // Supabase does not support Deno.cron; register it anyway if the runtime
-// has it, and rely on .github/workflows/daily-sales-mail.yml (UTC 09:30,
-// 12:00, 17:00 plus winter-offset times, gated on Israel local time).
+// has it, and rely on .github/workflows/daily-sales-mail.yml (10-minute
+// poll plus UTC slot times). Due slot is whatever Israel window we are in,
+// not a 35-minute gate around the cron fire time.
 
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 
@@ -142,11 +145,215 @@ function snapshotFromBody(body: Json, fallbackDateKey: string){
 }
 
 function shouldKeepExisting(existing: { pdf_base64?: string } | null, incomingPdf: string, force: boolean){
+  // PDF bytes only. HTML is always written in handleSaveSnapshot.
   const haveStoredPdf = trim(existing?.pdf_base64).length >= MIN_PDF_CHARS;
   if(!haveStoredPdf) return false;
   if(force && pdfOk(incomingPdf)) return false;
   if(pdfOk(incomingPdf)) return false;
   return true;
+}
+
+function nextCalendarDateKey(dateKey: string){
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trim(dateKey));
+  if(!m) return dateKey;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + 1));
+  return d.toISOString().slice(0, 10);
+}
+
+function israelDayStart(dateKey: string){
+  for(const off of ["+03:00", "+02:00"]){
+    const d = new Date(dateKey + "T00:00:00" + off);
+    if(Number.isNaN(d.getTime())) continue;
+    if(israelDateKey(d) === dateKey && israelDateKey(new Date(d.getTime() - 1)) !== dateKey){
+      return d;
+    }
+  }
+  return new Date(dateKey + "T00:00:00+03:00");
+}
+
+function israelMinutesAt(d: Date){
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Jerusalem",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    hourCycle: "h23",
+  }).formatToParts(d);
+  const hour = Number(parts.find((p) => p.type === "hour")?.value);
+  const minute = Number(parts.find((p) => p.type === "minute")?.value);
+  if(!Number.isFinite(hour) || !Number.isFinite(minute)) return -1;
+  return hour * 60 + minute;
+}
+
+function slotForMinutes(minutes: number){
+  if(minutes >= 20 * 60) return "20:00";
+  if(minutes >= 15 * 60) return "15:00";
+  if(minutes >= 12 * 60 + 30) return "12:30";
+  return "";
+}
+
+function escapeHtmlText(value: unknown){
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function moneyHe(value: unknown){
+  const n = Number(value) || 0;
+  if(!(n > 0)) return "—";
+  return "₪" + n.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+type LiveRow = {
+  agent_name?: unknown;
+  product?: unknown;
+  company?: unknown;
+  premium?: unknown;
+  policies?: unknown;
+};
+
+function liveSectorBucket(product: string){
+  if(/גמל|השתלמות|קרן|פיצוי|תגמול/i.test(product)) return "pension" as const;
+  if(/מקיף|חובה|צד\s*ג|רכוש|עסק|נסיע|תכולה|מבנה/i.test(product)) return "elementary" as const;
+  if(/סיכון|חיים|אכ.?ע|נכות|פרט/i.test(product)) return "prat" as const;
+  return "health" as const;
+}
+
+function pivotLiveAgentRows(rows: LiveRow[]){
+  const map: Record<string, {
+    agentName: string;
+    health: number;
+    prat: number;
+    elementary: number;
+    pension: number;
+    monthly: number;
+    sectors: string[];
+  }> = {};
+  for(const row of rows){
+    const name = trim(row.agent_name) || "נציג";
+    if(!map[name]){
+      map[name] = { agentName: name, health: 0, prat: 0, elementary: 0, pension: 0, monthly: 0, sectors: [] };
+    }
+    const prem = Number(row.premium) || 0;
+    const bucket = liveSectorBucket(trim(row.product));
+    map[name][bucket] += prem;
+    if(bucket !== "elementary") map[name].monthly += prem;
+    const label = bucket === "health" ? "בריאות"
+      : bucket === "prat" ? "פרט"
+      : bucket === "elementary" ? "אלמנטרי"
+      : "פנסיה";
+    if(map[name].sectors.indexOf(label) < 0) map[name].sectors.push(label);
+  }
+  return Object.values(map).sort((a, b) =>
+    (b.monthly - a.monthly) || a.agentName.localeCompare(b.agentName, "he")
+  );
+}
+
+function liveAgentRowHtml(agent: ReturnType<typeof pivotLiveAgentRows>[number], showPension: boolean){
+  const cell = (v: number) => (v > 0
+    ? escapeHtmlText(moneyHe(v))
+    : `<span style="color:#9aa6b2">—</span>`);
+  const pensionTd = showPension
+    ? `<td style="padding:8px 10px;border-bottom:1px solid #e4e9ee;text-align:right">${cell(agent.pension)}</td>`
+    : "";
+  return `<tr>
+              <td style="padding:8px 10px;border-bottom:1px solid #e4e9ee;font-weight:700;color:#0b2a4a;text-align:right">${escapeHtmlText(agent.agentName)}</td>
+              <td style="padding:8px 10px;border-bottom:1px solid #e4e9ee;color:#3d4d5e;text-align:right">${escapeHtmlText(agent.sectors.join(", ") || "—")}</td>
+              <td style="padding:8px 10px;border-bottom:1px solid #e4e9ee;text-align:right">${cell(agent.health)}</td>
+              <td style="padding:8px 10px;border-bottom:1px solid #e4e9ee;text-align:right">${cell(agent.prat)}</td>
+              <td style="padding:8px 10px;border-bottom:1px solid #e4e9ee;text-align:right">${cell(agent.elementary)}</td>
+              ${pensionTd}
+              <td style="padding:8px 10px;border-bottom:1px solid #e4e9ee;text-align:right">${cell(agent.monthly)}</td>
+            </tr>`;
+}
+
+function buildLiveEmailHtml(dateKey: string, rows: LiveRow[]){
+  const agents = pivotLiveAgentRows(rows);
+  const showPension = agents.some((a) => a.pension > 0);
+  const colCount = showPension ? 7 : 6;
+  const sum = (key: "health" | "prat" | "elementary" | "pension" | "monthly") =>
+    Math.round(agents.reduce((n, a) => n + a[key], 0) * 100) / 100;
+  const dateLabel = (() => {
+    try {
+      return new Date(dateKey + "T12:00:00+03:00").toLocaleDateString("he-IL", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        timeZone: "Asia/Jerusalem",
+      }) + " · ישראל";
+    } catch(_e) {
+      return dateKeyLabel(dateKey) + " · ישראל";
+    }
+  })();
+  const body = agents.length
+    ? agents.map((a) => liveAgentRowHtml(a, showPension)).join("")
+    : `<tr><td colspan="${colCount}" style="text-align:right;padding:28px;color:#5b6b7c">אין מכירות ביום זה</td></tr>`;
+  const pensionTh = showPension
+    ? `<th style="background:#0b2a4a;color:#fff;text-align:right;padding:9px 10px">פנסיה</th>`
+    : "";
+  const pensionFoot = showPension
+    ? `<td style="background:#0b2a4a;color:#fff;font-weight:700;padding:10px;text-align:right">${escapeHtmlText(moneyHe(sum("pension")))}</td>`
+    : "";
+  const healthPrat = Math.round((sum("health") + sum("prat")) * 100) / 100;
+  return `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>
+      <body dir="rtl" style="margin:0;padding:24px;background:#fff;color:#122033;font-family:'Segoe UI','Arial Hebrew',Arial,sans-serif;direction:rtl;text-align:right;unicode-bidi:embed">
+        <table dir="rtl" align="right" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:920px;margin:0 auto;direction:rtl;text-align:right"><tr><td dir="rtl" align="right" style="direction:rtl;text-align:right">
+          <p style="margin:0 0 4px;font-size:11px;letter-spacing:.08em;color:#5b6b7c;font-weight:600;direction:rtl;text-align:right">GEMEL INVEST · דוח מכירות</p>
+          <h1 style="margin:0;font-size:22px;color:#0b2a4a;direction:rtl;text-align:right">מכירות היום</h1>
+          <p style="margin:4px 0 18px;font-size:13px;color:#3d4d5e;direction:rtl;text-align:right">${escapeHtmlText(dateLabel)}</p>
+          <table dir="rtl" align="right" style="width:100%;border-collapse:collapse;margin:0 0 10px;direction:rtl;text-align:right"><tr>
+            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">—</b><span style="font-size:11px;color:#5b6b7c">מכירות מודיעין</span></td>
+            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">—</b><span style="font-size:11px;color:#5b6b7c">מכירות חיפה</span></td>
+            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtmlText(moneyHe(healthPrat))}</b><span style="font-size:11px;color:#5b6b7c">פרמיה חודשית · בריאות + פרט</span></td>
+            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">—</b><span style="font-size:11px;color:#5b6b7c">פרמייה מהפקה</span></td>
+          </tr></table>
+          <table dir="rtl" align="right" style="width:auto;min-width:220px;border-collapse:collapse;margin:0 0 18px;direction:rtl;text-align:right"><tr>
+            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">0</b><span style="font-size:11px;color:#5b6b7c">לידים שויכו</span></td>
+          </tr></table>
+          <table dir="rtl" align="right" style="width:100%;border-collapse:collapse;font-size:12.5px;direction:rtl;text-align:right">
+            <thead><tr>
+              <th style="background:#0b2a4a;color:#fff;text-align:right;padding:9px 10px">שם הנציג</th>
+              <th style="background:#0b2a4a;color:#fff;text-align:right;padding:9px 10px">ענפים</th>
+              <th style="background:#0b2a4a;color:#fff;text-align:right;padding:9px 10px">בריאות</th>
+              <th style="background:#0b2a4a;color:#fff;text-align:right;padding:9px 10px">פרט</th>
+              <th style="background:#0b2a4a;color:#fff;text-align:right;padding:9px 10px">אלמנטרי (שנתי)</th>
+              ${pensionTh}
+              <th style="background:#0b2a4a;color:#fff;text-align:right;padding:9px 10px">סה״כ חודשי</th>
+            </tr></thead>
+            <tbody>${body}</tbody>
+            <tfoot><tr>
+              <td style="background:#0b2a4a;color:#fff;font-weight:700;padding:10px;text-align:right">סה״כ</td>
+              <td style="background:#0b2a4a;color:#fff;font-weight:700;padding:10px;text-align:right">${escapeHtmlText(agents.length === 1 ? "נציג אחד" : (agents.length + " נציגים"))}</td>
+              <td style="background:#0b2a4a;color:#fff;font-weight:700;padding:10px;text-align:right">${escapeHtmlText(moneyHe(sum("health")))}</td>
+              <td style="background:#0b2a4a;color:#fff;font-weight:700;padding:10px;text-align:right">${escapeHtmlText(moneyHe(sum("prat")))}</td>
+              <td style="background:#0b2a4a;color:#fff;font-weight:700;padding:10px;text-align:right">${escapeHtmlText(moneyHe(sum("elementary")))}</td>
+              ${pensionFoot}
+              <td style="background:#0b2a4a;color:#fff;font-weight:700;padding:10px;text-align:right">${escapeHtmlText(moneyHe(sum("monthly")))}</td>
+            </tr></tfoot>
+          </table>
+        </td></tr></table>
+      </body></html>`;
+}
+
+function htmlHasAgent(html: string, name: string){
+  const n = trim(name);
+  if(!n) return false;
+  return html.indexOf(">" + n + "<") >= 0 || html.indexOf(escapeHtmlText(n)) >= 0;
+}
+
+function mergeLiveAgentsIntoHtml(html: string, rows: LiveRow[]){
+  const agents = pivotLiveAgentRows(rows);
+  if(!agents.length) return html;
+  const missing = agents.filter((a) => !htmlHasAgent(html, a.agentName));
+  if(!missing.length) return html;
+  const showPension = html.indexOf(">פנסיה<") >= 0 || agents.some((a) => a.pension > 0);
+  const extra = missing.map((a) => liveAgentRowHtml(a, showPension)).join("");
+  const tbodyClose = html.lastIndexOf("</tbody>");
+  if(tbodyClose < 0) return html;
+  return html.slice(0, tbodyClose) + extra + html.slice(tbodyClose);
 }
 
 function snapshotHasNewLayout(html: unknown){
@@ -173,6 +380,59 @@ const SLOT_CRONS: readonly [string, string][] = [
   ["gi-daily-sales-mail-1500", "0 12 * * *"],
   ["gi-daily-sales-mail-2000", "0 17 * * *"],
 ];
+
+async function loadLiveAgentRows(sb: SupabaseClient, dateKey: string){
+  const start = israelDayStart(dateKey);
+  const end = israelDayStart(nextCalendarDateKey(dateKey));
+  try {
+    const { data, error } = await sb.rpc("gi_daily_sales_by_agent", {
+      p_start: start.toISOString(),
+      p_end: end.toISOString(),
+      p_agent_ids: null,
+      p_agent_names: null,
+    });
+    if(error){
+      console.error("gi-daily-sales-mail gi_daily_sales_by_agent", error.message);
+      return [] as LiveRow[];
+    }
+    return (Array.isArray(data) ? data : []) as LiveRow[];
+  } catch(err) {
+    console.error("gi-daily-sales-mail gi_daily_sales_by_agent", err);
+    return [] as LiveRow[];
+  }
+}
+
+async function refreshSnapshotFromLiveSales(
+  sb: SupabaseClient,
+  stored: Json | null,
+  dateKey: string,
+){
+  const rows = await loadLiveAgentRows(sb, dateKey);
+  let htmlBody = String(stored?.html || "");
+  if(!htmlBody || !snapshotHasNewLayout(htmlBody)){
+    if(!rows.length && (!stored || (!stored.html && !pdfOk(stored.pdf_base64)))){
+      return stored;
+    }
+    htmlBody = buildLiveEmailHtml(dateKey, rows);
+  } else if(rows.length){
+    htmlBody = mergeLiveAgentsIntoHtml(htmlBody, rows);
+  }
+  if(!htmlBody) return stored;
+  const next = {
+    date_key: dateKey,
+    date_label: trim(stored?.date_label) || dateKeyLabel(dateKey),
+    html: htmlBody,
+    summary: (stored && stored.summary && typeof stored.summary === "object") ? stored.summary : {},
+    pdf_base64: stored?.pdf_base64 || "",
+    pdf_name: trim(stored?.pdf_name) || `מכירות-היום-${dateKey}.pdf`,
+    updated_at: new Date().toISOString(),
+  };
+  if(htmlBody !== String(stored?.html || "")){
+    const { error } = await sb.from("gi_daily_sales_mail_snapshots").upsert(next);
+    if(error) console.error("gi-daily-sales-mail refresh snapshot", error.message);
+  }
+  return next;
+}
 
 async function listRecipients(sb: SupabaseClient){
   const [{ data: agents, error: agentsErr }, { data: metaRows, error: metaErr }] = await Promise.all([
@@ -288,18 +548,25 @@ async function logSend(sb: SupabaseClient, dateKey: string, status: string, erro
   }
 }
 
-async function recentSlotSend(sb: SupabaseClient, dateKey: string){
+async function recentSlotSend(sb: SupabaseClient, dateKey: string, slot = ""){
   const { data } = await sb.from("gi_daily_sales_mail_log")
     .select("status, sent_at")
     .eq("date_key", dateKey)
     .eq("status", "sent")
     .order("sent_at", { ascending: false })
-    .limit(1);
-  const row = data && data[0];
-  if(!row?.sent_at) return false;
-  const at = Date.parse(String(row.sent_at));
-  if(!Number.isFinite(at)) return false;
-  return (Date.now() - at) < SLOT_DEDUP_MS;
+    .limit(20);
+  const rows = Array.isArray(data) ? data : [];
+  const now = Date.now();
+  for(const row of rows){
+    const at = Date.parse(String(row?.sent_at || ""));
+    if(!Number.isFinite(at)) continue;
+    if((now - at) < SLOT_DEDUP_MS) return true;
+    if(slot){
+      const sentSlot = slotForMinutes(israelMinutesAt(new Date(at)));
+      if(sentSlot && sentSlot === slot) return true;
+    }
+  }
+  return false;
 }
 
 async function lastSend(sb: SupabaseClient){
@@ -346,21 +613,13 @@ async function handleSaveSnapshot(sb: SupabaseClient, body: Json){
   const dateKey = incoming.date_key || today;
   const existing = await loadSnapshot(sb, dateKey);
   const force = body.force === true || body.replace === true;
-  if(shouldKeepExisting(existing, incoming.pdf_base64, force)){
-    return json({
-      ok: true,
-      dateKey,
-      kept: true,
-      hasPdf: pdfOk(existing?.pdf_base64),
-      replaced: false,
-    });
-  }
+  const keepPdf = shouldKeepExisting(existing, incoming.pdf_base64, force);
   const row = {
     date_key: dateKey,
     date_label: incoming.date_label,
     html: incoming.html || existing?.html || "",
     summary: incoming.summary || existing?.summary || {},
-    pdf_base64: pdfOk(incoming.pdf_base64) ? incoming.pdf_base64 : (existing?.pdf_base64 || ""),
+    pdf_base64: keepPdf ? (existing?.pdf_base64 || "") : (pdfOk(incoming.pdf_base64) ? incoming.pdf_base64 : (existing?.pdf_base64 || "")),
     pdf_name: incoming.pdf_name || existing?.pdf_name || "",
     updated_at: new Date().toISOString(),
   };
@@ -370,6 +629,7 @@ async function handleSaveSnapshot(sb: SupabaseClient, body: Json){
     ok: true,
     dateKey,
     kept: false,
+    pdfKept: keepPdf,
     hasPdf: pdfOk(row.pdf_base64),
     replaced: true,
     snapshotAt: row.updated_at,
@@ -382,12 +642,17 @@ async function handleSendNow(sb: SupabaseClient, body: Json, opts: { scheduled?:
   const fromBody = scheduled ? null : snapshotFromBody(body, today);
   const stored = await loadSnapshot(sb, (fromBody && fromBody.date_key) || today);
   const useRequest = !!(!scheduled && fromBody && (fromBody.html || pdfOk(fromBody.pdf_base64)));
-  const snap = useRequest ? fromBody : stored;
+  let snap = useRequest ? fromBody : stored;
   const dateKey = trim(snap?.date_key) || today;
+  const slot = trim(body.slot) || slotForMinutes(israelMinutesAt(new Date()));
+
+  if(scheduled){
+    snap = await refreshSnapshotFromLiveSales(sb, (snap || stored || null) as Json | null, dateKey);
+  }
 
   const finishSkip = async (msg: string, emails: string[] = []) => {
     await logSend(sb, dateKey, "skipped", msg, emails);
-    if(scheduled) return json({ ok: true, skipped: true, error: msg, dateKey });
+    if(scheduled) return json({ ok: true, skipped: true, error: msg, dateKey, slot });
     return json({ ok: false, error: msg }, 400);
   };
 
@@ -397,7 +662,7 @@ async function handleSendNow(sb: SupabaseClient, body: Json, opts: { scheduled?:
   if(!snapshotHasNewLayout(snap.html)){
     return await finishSkip(OLD_LAYOUT_ERROR);
   }
-  if(scheduled && await recentSlotSend(sb, dateKey)){
+  if(scheduled && await recentSlotSend(sb, dateKey, slot)){
     return await finishSkip(ALREADY_SENT_ERROR);
   }
   if(useRequest && fromBody && pdfOk(fromBody.pdf_base64)){
@@ -432,6 +697,7 @@ async function handleSendNow(sb: SupabaseClient, body: Json, opts: { scheduled?:
       replaced: useRequest && pdfOk(fromBody?.pdf_base64),
       hasPdf: !missingPdf,
       scheduled,
+      slot,
     });
   } catch(err) {
     const msg = err instanceof Error ? err.message : "שליחה נכשלה";
