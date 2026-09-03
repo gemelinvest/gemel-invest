@@ -1101,7 +1101,17 @@
     try {
       if(typeof sim._buildResultForInsured === "function"){
         const built = sim._buildResultForInsured(insId);
-        if(built) return built;
+        if(built){
+          /* סימולטורי ריסק (כלל/מגדל/פניקס) מחזירים monthlyPremium בלי ok —
+             מנוע ההנחה דורש result.ok, ולכן משלימים אותו כאן. */
+          if(built.ok !== true && built.ok !== false){
+            const monthly = Number(built.monthlyPremium);
+            if(Number.isFinite(monthly) || (Array.isArray(built.covers) && built.covers.length)){
+              built.ok = true;
+            }
+          }
+          return built;
+        }
       }
     } catch(_e) {}
     const st = sim._state && sim._state[insId];
@@ -1127,15 +1137,28 @@
     const product = safeTrim(sim?._ctx?.product);
     const opt = giSimDiscountById(company, product, giSimDiscountSelectedId(sim));
     if(!opt) return null;
+    /* אם התוצאה הגיעה בלי ok (סימולטורי ריסק) — משלימים כדי שמנוע ההנחה יחשב. */
+    const calcResult = (result && typeof result === "object" && result.ok !== true)
+      ? Object.assign({}, result, { ok: true })
+      : result;
     let after = null;
     try {
-      const explained = giSimDiscountExplain(result, opt, company, product);
+      const explained = giSimDiscountExplain(calcResult, opt, company, product);
       after = explained && explained.after != null ? explained.after : null;
     } catch(_e) {}
     if(after == null){
-      try { after = giSimDiscountAfterMonthly(result, opt); } catch(_e2) {}
+      try { after = giSimDiscountAfterMonthly(calcResult, opt); } catch(_e2) {}
     }
-    const afterNum = Number(after);
+    /* גיבוי לריסק בלי כיסויים: אחוז שנה-1 × פרמיה חודשית. */
+    if(after == null){
+      const monthly = Number(calcResult && calcResult.monthlyPremium);
+      const pct = giSimDiscountYear1Pct(opt);
+      if(Number.isFinite(monthly) && pct >= 0){
+        try { after = giSimMoneyAfterPct(monthly, pct); } catch(_e3) {}
+      }
+    }
+    /* חשוב: Number(null) === 0 — אסור להפוך «אין חישוב» ל־₪0 בשורת הסיכום. */
+    const afterNum = (after == null || after === "") ? NaN : Number(after);
     const schedule = Array.isArray(opt.schedule) ? opt.schedule.map((n) => Number(n) || 0) : [];
     return {
       optionId: safeTrim(opt.id),

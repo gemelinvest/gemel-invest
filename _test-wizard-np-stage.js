@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260903-np-workspace-v7";
+const TAG = "20260903-np-workspace-v8";
 let failed = 0;
 let passed = 0;
 
@@ -144,6 +144,11 @@ assert(sims.includes("schedule: Array.isArray(opt.schedule)") || sims.includes("
 assert(/giSimDiscountYear1Pct\(opt\)\{[\s\S]{0,200}opt\.schedule\[0\]/.test(sims) || /function giSimDiscountYear1Pct\(opt\)\{[\s\S]{0,220}schedule\[0\]/.test(sims), "year-1 percent is the first year of the schedule");
 assert(sims.includes("const payload = discount ? Object.assign({}, result, { simDiscount: discount }) : Object.assign({}, result);"), "purchase sends the discount alongside the result");
 assert(sims.includes("sim._ctx.onPurchaseInsured?.(insId, payload, legal)"), "purchase hook receives the enriched payload");
+assert(sims.includes("Number(null) === 0") || sims.includes("Number(null)==="), "null-to-zero guard documented");
+assert(sims.includes('(after == null || after === "") ? NaN : Number(after)'), "null after-discount is not coerced to 0");
+assert(sims.includes("built.ok = true"), "risk results without ok get ok:true before discount calc");
+assert(sims.includes("Object.assign({}, result, { ok: true })"), "discount payload forces ok for risk results");
+assert(sims.includes("giSimMoneyAfterPct(monthly, pct)"), "risk without covers falls back to year-1 percent math");
 assert(wiz.includes("simDiscountPerInsured"), "wizard stores the per-insured after-discount price");
 assert(wiz.includes("getPolicySimDiscountAfterTotal(policy){"), "row total helper exists");
 assert(wiz.includes("syncDraftDiscountFromSimulator(draft){"), "discount percent/schedule mirrored for the row chips");
@@ -336,6 +341,45 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
   assert(W.policyDraft.simDiscountPerInsured?.i1?.monthlyAfterDiscount === 100, "applying a simulator result stores the discounted price");
   assert(W.policyDraft.discountPct === "50", "applying a simulator result mirrors the discount percent");
   assert(safeTrim(W.policyDraft.premiumPerInsured?.i1) === "200.00", "the gross premium is still what the engine reads");
+
+  // ── bug: Number(null)===0 used to store ₪0 after-discount for Clal/Migdal risk ──
+  W.applyRiskSimResultsToDraft({
+    i1: {
+      ok: true, monthlyPremium: 61.32, sumInsured: "600000",
+      simDiscount: { optionId:"cll-r-5001", year1Pct:65, years:6, schedule:[65,65,60,60,50,40], monthlyAfterDiscount: null }
+    }
+  }, { skipRender: true, skipToast: true });
+  assert(!W.policyDraft.simDiscountPerInsured?.i1, "null after-discount is not stored as 0");
+  assert(W.getPolicySimDiscountAfterTotal(W.policyDraft) == null, "null after-discount does not override the row total");
+
+  W.applyRiskSimResultsToDraft({
+    i1: {
+      monthlyPremium: 61.32, sumInsured: "600000",
+      simDiscount: { optionId:"cll-r-5001", year1Pct:65, years:6, schedule:[65,65,60,60,50,40], monthlyAfterDiscount: 21.46 }
+    }
+  }, { skipRender: true, skipToast: true });
+  assert(W.policyDraft.simDiscountPerInsured?.i1?.monthlyAfterDiscount === 21.46, "Clal-style 65% after-discount is stored");
+  assert(W.getHealthRowPremiumAfterDiscount({
+    type: "ריסק",
+    insuredIds: ["i1"],
+    premiumPerInsured: { i1: 61.32 },
+    premiumMonthly: 61.32,
+    simDiscountPerInsured: W.policyDraft.simDiscountPerInsured
+  }) === 21.46, "row shows 21.46 after discount, not 0");
+
+  W.applyRiskSimResultsToDraft({
+    i1: {
+      monthlyPremium: 16.92, sumInsured: "400000",
+      simDiscount: { optionId:"mgd-r-50", year1Pct:50, years:6, schedule:[50,50,50,50,50,50], monthlyAfterDiscount: 8.46 }
+    }
+  }, { skipRender: true, skipToast: true });
+  assert(W.getHealthRowPremiumAfterDiscount({
+    type: "ריסק",
+    insuredIds: ["i1"],
+    premiumPerInsured: { i1: 16.92 },
+    premiumMonthly: 16.92,
+    simDiscountPerInsured: W.policyDraft.simDiscountPerInsured
+  }) === 8.46, "Migdal-style 50% after-discount reaches the row");
 
   W.applyRiskSimResultsToDraft({ i1: { ok: true, monthlyPremium: 200 } }, { skipRender: true, skipToast: true });
   assert(!W.policyDraft.simDiscountPerInsured?.i1, "recalculating without a discount clears the stored one");

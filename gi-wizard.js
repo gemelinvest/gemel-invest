@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260903-np-workspace-v7";
+  const GI_WIZARD_BUILD = "20260903-np-workspace-v8";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -16007,10 +16007,14 @@ if(path === "birthDate"){
         const startIso = this.toIsoDateFromAny(r.insuranceStartDate || r.startDate || "");
         if(startIso) draft.startDate = startIso;
         /* GI-NP-SIM-DISCOUNT: הסימולטור כבר חישב את המחיר אחרי הנחה — מעבירים אותו
-           כמו שהוא. אין כאן הכפלה באחוז; מודל ההנחה הגלובלי לא משתנה. */
-        if(r.simDiscount && Number.isFinite(Number(r.simDiscount.monthlyAfterDiscount))){
+           כמו שהוא. אין כאן הכפלה באחוז; מודל ההנחה הגלובלי לא משתנה.
+           monthlyAfterDiscount == null לא נשמר (Number(null)===0 היה באג ₪0). */
+        const simAfterRaw = r.simDiscount ? r.simDiscount.monthlyAfterDiscount : null;
+        const simAfterNum = (simAfterRaw == null || simAfterRaw === "") ? NaN : Number(simAfterRaw);
+        if(r.simDiscount && Number.isFinite(simAfterNum)){
           draft.simDiscountPerInsured = draft.simDiscountPerInsured || {};
           draft.simDiscountPerInsured[insId] = JSON.parse(JSON.stringify(r.simDiscount));
+          draft.simDiscountPerInsured[insId].monthlyAfterDiscount = simAfterNum;
         } else if(draft.simDiscountPerInsured){
           delete draft.simDiscountPerInsured[insId];
         }
@@ -16062,7 +16066,8 @@ if(path === "birthDate"){
       let total = 0;
       let found = false;
       ids.forEach((iid) => {
-        const n = Number(map[iid]?.monthlyAfterDiscount);
+        const raw = map[iid]?.monthlyAfterDiscount;
+        const n = (raw == null || raw === "") ? NaN : Number(raw);
         if(Number.isFinite(n)){
           total += n;
           found = true;
