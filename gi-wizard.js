@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260903-np-workspace-v5";
+  const GI_WIZARD_BUILD = "20260903-np-workspace-v6";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -11350,48 +11350,6 @@ if(path === "birthDate"){
       return role;
     },
 
-    getWizardContextInsuredName(ins){
-      const first = safeTrim(ins?.data?.firstName);
-      const last = safeTrim(ins?.data?.lastName);
-      const fullName = safeTrim((first + " " + last).trim());
-      if(fullName) return fullName;
-      const raw = safeTrim(ins?.label || "");
-      const stripped = raw
-        .replace(/^מבוטח\s*(ראשי|משני(?:\s*בגיר|\s*ילד|\s*בן\s*\/\s*בת\s*זוג)?)\s*[-–—]\s*/u, "")
-        .trim();
-      return stripped || raw || "מבוטח";
-    },
-
-    getWizardContextRole(ins, index){
-      const idx = Number.isFinite(Number(index)) ? Number(index) : this.insureds.findIndex(x => x?.id === ins?.id);
-      const type = safeTrim(ins?.type);
-      if(type === "primary" || idx <= 0) return "מבוטח ראשי";
-      if(type === "child") return "ילד";
-      if(type === "spouse") return "בן / בת זוג";
-      return "מבוטח משני";
-    },
-
-    /** פס ההקשר של שלב פוליסות חדשות: לקוח, כדוריות מבוטחים ומונה פוליסות. */
-    renderNewPolicyContextBar(){
-      const list = this.insureds || [];
-      const primary = list.find((x) => safeTrim(x?.type) === "primary") || list[0];
-      const custName = this.getWizardContextInsuredName(primary);
-      const count = (this.getWizardNewPolicies() || []).length;
-      const pills = list.map((ins, idx) => {
-        const name = this.getWizardContextInsuredName(ins);
-        const role = this.getWizardContextRole(ins, idx);
-        return `<span class="lcNpCtx__pill">${escapeHtml(name)} · ${escapeHtml(role)}</span>`;
-      }).join("");
-      return `<div class="lcNpCtx">
-        <div class="lcNpCtx__cust"><span>לקוח</span><b>${escapeHtml(custName || "לקוח")}</b></div>
-        <div class="lcNpCtx__ins">
-          <span>מבוטחים בהצעה — נשאבים לסימולטור</span>
-          <div class="lcNpCtx__pills">${pills || `<span class="lcNpCtx__pill">אין מבוטחים</span>`}</div>
-        </div>
-        <div class="lcNpCtx__count"><span>פוליסות שנוספו</span><b>${count}</b></div>
-      </div>`;
-    },
-
     /** מוציא את מודל הסימולטור מגוף האשף לפני render, כדי שה-innerHTML לא ימחק אותו. */
     undockNpOpenSimulator(){
       const modal = this._npOpenSimHandler?._modal;
@@ -15432,6 +15390,10 @@ if(path === "birthDate"){
         const n = this.asMoneyNumber(policy.premiumAfterCoverDiscounts);
         if(n > 0 || policy.premiumAfterCoverDiscounts === 0 || policy.premiumAfterCoverDiscounts === "0") return n;
       }
+      /* GI-NP-SIM-DISCOUNT: הנחה שנבחרה בסימולטור — הסכום כבר חושב שם.
+         בלוח רב-שנתי זה מחיר שנה ראשונה; הלוח המלא נשאר בצ׳יפ «דירוג». */
+      const simAfter = this.getPolicySimDiscountAfterTotal(policy);
+      if(simAfter != null) return simAfter;
       return this.getPolicyPremiumAfterDiscount(policy);
     },
 
@@ -16044,11 +16006,20 @@ if(path === "birthDate"){
         }
         const startIso = this.toIsoDateFromAny(r.insuranceStartDate || r.startDate || "");
         if(startIso) draft.startDate = startIso;
+        /* GI-NP-SIM-DISCOUNT: הסימולטור כבר חישב את המחיר אחרי הנחה — מעבירים אותו
+           כמו שהוא. אין כאן הכפלה באחוז; מודל ההנחה הגלובלי לא משתנה. */
+        if(r.simDiscount && Number.isFinite(Number(r.simDiscount.monthlyAfterDiscount))){
+          draft.simDiscountPerInsured = draft.simDiscountPerInsured || {};
+          draft.simDiscountPerInsured[insId] = JSON.parse(JSON.stringify(r.simDiscount));
+        } else if(draft.simDiscountPerInsured){
+          delete draft.simDiscountPerInsured[insId];
+        }
         draft.riskSimQuotes[insId] = Object.assign({}, r, {
           company: draft.company, product: draft.type, computedAt: nowISO()
         });
         delete draft.riskSimQuotes[insId].sumInsured;
       });
+      this.syncDraftDiscountFromSimulator(draft);
       delete draft.riskSimApprovedAt;
       this.resetPremiumSanityState();
       this._npCalcShown = true;
@@ -16056,6 +16027,44 @@ if(path === "birthDate"){
       if(!(opts && (opts.skipToast || opts.skipRender))){
         window.showToast?.({ title: "הפרמיה עודכנה", text: "תוצאת הסימולטור הוחלה על הפוליסה — ניתן לבדוק ולהמשיך כרגיל.", variant: "success" });
       }
+    },
+
+    /** מסנכרן את אחוז/לוח ההנחה של הטיוטה מהבחירה בסימולטור, לצורך הצ׳יפים בשורה.
+        תיעוד בלבד — הסכום עצמו מגיע מ-simDiscountPerInsured. */
+    syncDraftDiscountFromSimulator(draft){
+      const map = draft?.simDiscountPerInsured;
+      if(!map || typeof map !== "object") return;
+      const entry = Object.keys(map).map((k) => map[k]).find((e) => e && Number(e.year1Pct) > 0);
+      if(!entry) return;
+      draft.discountPct = String(entry.year1Pct);
+      if(Array.isArray(entry.schedule) && entry.schedule.length){
+        draft.discountSchedule = entry.schedule.map((pct, idx) => ({ year: idx + 1, pct: Number(pct) || 0 }));
+        draft.discountYears = String(entry.schedule.length);
+      } else if(Number(entry.years) > 0){
+        draft.discountSchedule = [];
+        draft.discountYears = String(entry.years);
+      }
+    },
+
+    /** סכום הפרמיה אחרי ההנחה שנבחרה בסימולטור, לכל המבוטחים בפוליסה. */
+    getPolicySimDiscountAfterTotal(policy){
+      const map = policy?.simDiscountPerInsured;
+      if(!map || typeof map !== "object") return null;
+      const ids = this.getPolicyInsuredIds(policy);
+      if(!ids.length) return null;
+      let total = 0;
+      let found = false;
+      ids.forEach((iid) => {
+        const n = Number(map[iid]?.monthlyAfterDiscount);
+        if(Number.isFinite(n)){
+          total += n;
+          found = true;
+        } else {
+          total += this.asMoneyNumber(policy?.premiumPerInsured?.[iid]);
+        }
+      });
+      if(!found) return null;
+      return Math.round(total * 100) / 100;
     },
 
     purchaseSimulatorInsured(insId, result, legal){
@@ -16076,6 +16085,10 @@ if(path === "birthDate"){
       draft.sumInsuredPerInsured = keepMap(draft.sumInsuredPerInsured);
       if(draft.compensationPerInsured) draft.compensationPerInsured = keepMap(draft.compensationPerInsured);
       if(draft.riskSimQuotes) draft.riskSimQuotes = keepMap(draft.riskSimQuotes);
+      if(draft.simDiscountPerInsured){
+        draft.simDiscountPerInsured = keepMap(draft.simDiscountPerInsured);
+        this.syncDraftDiscountFromSimulator(draft);
+      }
       const isRisk = !this.isMedicareCompany(draft.company) && (safeTrim(draft.type) === "ריסק" || safeTrim(draft.type) === "ריסק משכנתא");
       if(isRisk && legal){
         draft.pledge = !!legal.pledge;
@@ -16243,6 +16256,10 @@ if(path === "birthDate"){
         // לא נוגע, לא דורס ולא משנה שום שדה קיים בפוליסה.
         riskSimQuotes: (d.riskSimQuotes && typeof d.riskSimQuotes === "object")
           ? JSON.parse(JSON.stringify(d.riskSimQuotes)) : undefined,
+        // GI-NP-SIM-DISCOUNT: המחיר אחרי ההנחה שנבחרה בסימולטור, לכל מבוטח.
+        // תיעוד + מקור לתצוגת «פרמיה אחרי הנחה» בשורה. לא משנה מנוע פרמיה.
+        simDiscountPerInsured: (d.simDiscountPerInsured && typeof d.simDiscountPerInsured === "object")
+          ? JSON.parse(JSON.stringify(d.simDiscountPerInsured)) : undefined,
         // GI-RISK-SIM-OCCUPATION: מתי הנציג לחץ "אישור סופי" בסימולטור עבור כל
         // המבוטחים הרלוונטיים בהצעה זו. אופציונלי בלבד — פוליסות בלי סימולטור
         // (או שנשמרו לפני הפיצ'ר הזה) פשוט לא יכללו שדה זה כלל.
@@ -16476,7 +16493,9 @@ if(path === "birthDate"){
         coverDiscountsApplied: !!p.coverDiscountsApplied,
         premiumAfterCoverDiscounts: p.premiumAfterCoverDiscounts,
         riskSimQuotes: (p.riskSimQuotes && typeof p.riskSimQuotes === "object")
-          ? JSON.parse(JSON.stringify(p.riskSimQuotes)) : undefined
+          ? JSON.parse(JSON.stringify(p.riskSimQuotes)) : undefined,
+        simDiscountPerInsured: (p.simDiscountPerInsured && typeof p.simDiscountPerInsured === "object")
+          ? JSON.parse(JSON.stringify(p.simDiscountPerInsured)) : undefined
       };
       this.normalizePledgeBanks(this.policyDraft);
       this.setHint("מצב עריכה הופעל עבור הפוליסה שנבחרה");
@@ -18237,7 +18256,6 @@ if(path === "birthDate"){
       const res = `
         <div class="lcNpWrapper lcNpWrapper--${npStage}">
           <div class="lcNpInlineHeroWrap">${pageHeaderInline}</div>
-          ${this.renderNewPolicyContextBar()}
           ${stageHeadHtml}
           ${npStage === "sim" ? workspaceHtml : (npStage === "pick" ? pickHtml : "")}
           ${npStage === "sim" ? addBarHtml : ""}

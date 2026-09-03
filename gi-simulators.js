@@ -1120,6 +1120,35 @@
     }
     return null;
   }
+  /** ההנחה שנבחרה בסימולטור, כולל המחיר החודשי אחרי הנחה (שנה ראשונה בלוח רב-שנתי).
+      בלי זה האשף מקבל רק את הפרמיה לפני הנחה, והשורה מציגה לפני=אחרי. */
+  function riskSimSelectedDiscountPayload(sim, result){
+    const company = safeTrim(sim?._ctx?.company);
+    const product = safeTrim(sim?._ctx?.product);
+    const opt = giSimDiscountById(company, product, giSimDiscountSelectedId(sim));
+    if(!opt) return null;
+    let after = null;
+    try {
+      const explained = giSimDiscountExplain(result, opt, company, product);
+      after = explained && explained.after != null ? explained.after : null;
+    } catch(_e) {}
+    if(after == null){
+      try { after = giSimDiscountAfterMonthly(result, opt); } catch(_e2) {}
+    }
+    const afterNum = Number(after);
+    const schedule = Array.isArray(opt.schedule) ? opt.schedule.map((n) => Number(n) || 0) : [];
+    return {
+      optionId: safeTrim(opt.id),
+      label: safeTrim(opt.label),
+      year1Pct: giSimDiscountYear1Pct(opt),
+      years: schedule.length || (Number(opt.years) || 0),
+      schedule,
+      monthlyAfterDiscount: Number.isFinite(afterNum) ? afterNum : null,
+      company,
+      product
+    };
+  }
+
   function riskSimPurchaseActiveInsured(sim){
     if(!sim || !sim._ctx?.wizardWorkspace) return;
     try { riskSimCaptureLegalFromDom(sim); } catch(_e) {}
@@ -1134,8 +1163,10 @@
       return;
     }
     const legal = riskSimIsRiskOrMortgageProduct(sim._ctx.product) ? riskSimCloneLegal(riskSimGetLegal(sim, insId)) : null;
-    try { sim._ctx.onApply?.({ [insId]: result }, { skipRender: true, skipToast: true }); } catch(_e2) {}
-    try { sim._ctx.onPurchaseInsured?.(insId, result, legal); } catch(_e3) {}
+    const discount = riskSimSelectedDiscountPayload(sim, result);
+    const payload = discount ? Object.assign({}, result, { simDiscount: discount }) : result;
+    try { sim._ctx.onApply?.({ [insId]: payload }, { skipRender: true, skipToast: true }); } catch(_e2) {}
+    try { sim._ctx.onPurchaseInsured?.(insId, payload, legal); } catch(_e3) {}
     const st = sim._state && sim._state[insId];
     if(st){
       st.savedAt = nowISO();

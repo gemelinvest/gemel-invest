@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260903-np-workspace-v5";
+const TAG = "20260903-np-workspace-v6";
 let failed = 0;
 let passed = 0;
 
@@ -53,15 +53,13 @@ assert(html.includes("app.js?v=" + TAG), "index.html app.js cache bumped");
 assert(html.includes("app.css?v=" + TAG), "index.html app.css cache bumped");
 assert(sw.includes("gi-v12-" + TAG), "service worker cache bumped");
 
-console.log("\n2) context bar — customer / insured pills / policy counter");
-assert(wiz.includes("renderNewPolicyContextBar(){"), "context bar renderer exists");
-assert(wiz.includes('class="lcNpCtx"'), "context bar markup");
-assert(wiz.includes("מבוטחים בהצעה — נשאבים לסימולטור"), "context bar labels the insured pills");
-assert(wiz.includes(">פוליסות שנוספו<"), "context bar shows the added-policies counter");
-assert(wiz.includes("getWizardContextRole(ins, index){"), "context role helper");
-assert(wiz.includes('if(type === "spouse") return "בן / בת זוג";'), "context bar keeps the mockup spouse label");
-assert(css.includes(".lcNpCtx{"), "context bar styles");
-assert(css.includes(".lcNpCtx__pill{"), "context pill styles");
+console.log("\n2) the context bar above the picker is gone");
+assert(!wiz.includes("renderNewPolicyContextBar"), "context bar renderer removed");
+assert(!wiz.includes("getWizardContextRole"), "context role helper removed");
+assert(!wiz.includes("getWizardContextInsuredName"), "context name helper removed");
+assert(!wiz.includes("lcNpCtx"), "no context bar markup left in the wizard");
+assert(!wiz.includes("מבוטחים בהצעה — נשאבים לסימולטור"), "context bar copy removed");
+assert(!css.includes(".lcNpCtx"), "context bar styles removed");
 
 console.log("\n3) three stages — pick / docked simulator / summary");
 assert(wiz.includes('const npStage = workspaceOpen ? "sim"'), "stage resolver exists");
@@ -107,6 +105,33 @@ assert(wiz.includes("handleWizardSimulatorClose(){"), "wizard close handler");
 assert(wiz.includes("onWizardClose: () => this.handleWizardSimulatorClose()"), "handler wired into the simulator ctx");
 assert(/closeNpOpenSimulator\(\)\{[\s\S]*?_npSimKeepWorkspace = true;[\s\S]*?handler\?\.close\?\.\(\);[\s\S]*?_npSimKeepWorkspace = false;/.test(wiz), "wizard-initiated close does not bounce back to pick");
 assert(wiz.includes("this._npSimSkipCloseCleanup = true;"), "adding to the proposal skips the pick bounce");
+
+console.log("\n5b) simulator discount reaches the summary row");
+assert(sims.includes("function riskSimSelectedDiscountPayload(sim, result){"), "simulator builds a discount payload for the wizard");
+assert(sims.includes("monthlyAfterDiscount:"), "payload carries the already-computed after-discount price");
+assert(sims.includes("year1Pct: giSimDiscountYear1Pct(opt)"), "payload carries the year-1 percent");
+assert(sims.includes("schedule: Array.isArray(opt.schedule)") || sims.includes("const schedule = Array.isArray(opt.schedule)"), "payload carries the multi-year schedule");
+assert(/giSimDiscountYear1Pct\(opt\)\{[\s\S]{0,200}opt\.schedule\[0\]/.test(sims) || /function giSimDiscountYear1Pct\(opt\)\{[\s\S]{0,220}schedule\[0\]/.test(sims), "year-1 percent is the first year of the schedule");
+assert(sims.includes("const payload = discount ? Object.assign({}, result, { simDiscount: discount }) : result;"), "purchase sends the discount alongside the result");
+assert(sims.includes("sim._ctx.onPurchaseInsured?.(insId, payload, legal)"), "purchase hook receives the enriched payload");
+assert(wiz.includes("simDiscountPerInsured"), "wizard stores the per-insured after-discount price");
+assert(wiz.includes("getPolicySimDiscountAfterTotal(policy){"), "row total helper exists");
+assert(wiz.includes("syncDraftDiscountFromSimulator(draft){"), "discount percent/schedule mirrored for the row chips");
+const rowAfter = wiz.slice(wiz.indexOf("getHealthRowPremiumAfterDiscount(policy){"), wiz.indexOf("applyAllProposalInsuredsToDraft(){"));
+assert(rowAfter.includes("getPolicySimDiscountAfterTotal(policy)"), "row after-discount consults the simulator discount");
+assert(rowAfter.includes("return this.getPolicyPremiumAfterDiscount(policy);"), "row still falls back to the existing engine");
+assert(/getPolicyPremiumAfterDiscount\(policy\)\{[\s\S]{0,320}return this\.getPolicyPremiumBeforeDiscount\(policy\);/.test(wiz), "global after-discount engine itself is unchanged");
+assert(wiz.includes("simDiscountPerInsured: (d.simDiscountPerInsured"), "discount is copied from the draft onto the policy");
+assert(wiz.includes("simDiscountPerInsured: (p.simDiscountPerInsured"), "discount survives editing an added policy");
+
+console.log("\n5c) company logo in the summary row has no frame");
+const rowLogo = css.slice(css.indexOf(".lcNpProw .lcCompanyLogo,.lcNpProw img{"), css.indexOf(".lcNpProw__title{"));
+assert(rowLogo.includes("border:0"), "row logo has no border");
+assert(rowLogo.includes("background:transparent"), "row logo has no white plate");
+assert(rowLogo.includes("padding:0"), "row logo has no inner padding");
+assert(rowLogo.includes("box-shadow:none"), "row logo has no shadow");
+assert(/width:128px;height:70px/.test(rowLogo), "row logo is bigger so it reads clearly");
+assert(rowLogo.includes("object-fit:contain"), "row logo is never cropped");
 
 console.log("\n6) untouched — declaration routing, premium engine, simulators center");
 assert(/canAccessSimulators\(\)\{\s*return this\.isAdmin\(\) \|\| this\.isManager\(\);/.test(app), "Simulators Center gate still admin/manager");
@@ -189,12 +214,12 @@ let W = null;
 try {
   vm.runInNewContext(wiz, sandbox, { filename: "gi-wizard.js" });
   W = host.Wizard;
-  assert(typeof W.renderNewPolicyContextBar === "function", "Wizard chunk loaded into VM");
+  assert(typeof W.dockNpOpenSimulator === "function", "Wizard chunk loaded into VM");
 } catch(err){
   assert(false, "Wizard chunk loaded into VM (" + err.message + ")");
 }
 
-if(W && typeof W.renderNewPolicyContextBar === "function"){
+if(W && typeof W.dockNpOpenSimulator === "function"){
   const insureds = [
     { id:"i1", type:"primary", label:"מבוטח ראשי - דוד כהן", data:{ firstName:"דוד", lastName:"כהן" } },
     { id:"i2", type:"spouse", label:"מבוטח משני בן / בת זוג - יעל כהן", data:{ firstName:"יעל", lastName:"כהן" } },
@@ -204,16 +229,86 @@ if(W && typeof W.renderNewPolicyContextBar === "function"){
   let policies = [];
   W.getWizardNewPolicies = () => policies;
 
-  const barEmpty = W.renderNewPolicyContextBar();
-  assert(barEmpty.includes("דוד כהן"), "context bar shows the primary customer name");
-  assert(barEmpty.includes("דוד כהן · מבוטח ראשי"), "primary pill uses the mockup role");
-  assert(barEmpty.includes("יעל כהן · בן / בת זוג"), "spouse pill uses the mockup role");
-  assert(barEmpty.includes("נועם כהן · ילד"), "child pill uses the mockup role");
-  assert(/פוליסות שנוספו<\/span><b>0<\/b>/.test(barEmpty), "counter is 0 before any policy");
+  // ── simulator discount lands on the row ──
+  const riskPolicy = {
+    id:"pR", company:"הפניקס", type:"ריסק",
+    insuredIds:["i1"], insuredId:"i1",
+    premiumPerInsured:{ i1:"200" },
+    simDiscountPerInsured:{ i1:{ optionId:"phx-r-100-50", label:"50/50/40/30/20/15", year1Pct:50, years:6, schedule:[50,50,40,30,20,15], monthlyAfterDiscount:100 } }
+  };
+  assert(W.getPolicyPremiumBeforeDiscount(riskPolicy) === 200, "before-discount stays the simulator gross price");
+  assert(W.getPolicySimDiscountAfterTotal(riskPolicy) === 100, "after-discount total comes from the simulator");
+  assert(W.getHealthRowPremiumAfterDiscount(riskPolicy) === 100, "risk row shows the discounted price, not the gross one");
+  assert(W.getPolicyPremiumAfterDiscount(riskPolicy) === 200, "the global engine itself is untouched");
 
-  policies = [{ id:"p1", company:"הפניקס", type:"בריאות" }];
-  const barOne = W.renderNewPolicyContextBar();
-  assert(/פוליסות שנוספו<\/span><b>1<\/b>/.test(barOne), "counter follows the added policies");
+  const twoInsured = {
+    id:"pM", company:"הפניקס", type:"ריסק",
+    insuredIds:["i1","i2"], insuredId:"i1",
+    premiumPerInsured:{ i1:"200", i2:"150" },
+    simDiscountPerInsured:{
+      i1:{ year1Pct:50, monthlyAfterDiscount:100 },
+      i2:{ year1Pct:40, monthlyAfterDiscount:90 }
+    }
+  };
+  assert(W.getPolicySimDiscountAfterTotal(twoInsured) === 190, "multi-insured row sums each insured's discounted price");
+
+  const partial = {
+    id:"pP", company:"הפניקס", type:"ריסק",
+    insuredIds:["i1","i2"], insuredId:"i1",
+    premiumPerInsured:{ i1:"200", i2:"150" },
+    simDiscountPerInsured:{ i1:{ year1Pct:50, monthlyAfterDiscount:100 } }
+  };
+  assert(W.getPolicySimDiscountAfterTotal(partial) === 250, "insured without a discount keeps their gross price");
+
+  const noDiscount = {
+    id:"pN", company:"הפניקס", type:"ריסק",
+    insuredIds:["i1"], insuredId:"i1",
+    premiumPerInsured:{ i1:"200" }
+  };
+  assert(W.getPolicySimDiscountAfterTotal(noDiscount) === null, "no simulator discount -> no override");
+  assert(W.getHealthRowPremiumAfterDiscount(noDiscount) === 200, "without a discount the row keeps before == after");
+
+  const healthManual = {
+    id:"pH", company:"הפניקס", type:"בריאות",
+    insuredIds:["i1"], insuredId:"i1",
+    premiumPerInsured:{ i1:"870" },
+    coverDiscountsApplied:true, premiumAfterCoverDiscounts:609,
+    simDiscountPerInsured:{ i1:{ year1Pct:10, monthlyAfterDiscount:783 } }
+  };
+  assert(W.getHealthRowPremiumAfterDiscount(healthManual) === 609, "saved manual per-cover discount still wins over the simulator one");
+
+  // percent + schedule mirrored so the row chips read right
+  const draft = { simDiscountPerInsured:{ i1:{ year1Pct:50, years:6, schedule:[50,50,40,30,20,15] } } };
+  W.syncDraftDiscountFromSimulator(draft);
+  assert(draft.discountPct === "50", "draft discount percent mirrors year 1");
+  assert(draft.discountYears === "6", "draft discount years mirrors the schedule length");
+  assert(Array.isArray(draft.discountSchedule) && draft.discountSchedule.length === 6, "draft keeps the six-year schedule");
+  assert(draft.discountSchedule[0].year === 1 && draft.discountSchedule[0].pct === 50, "schedule year 1 is the first percent");
+  assert(draft.discountSchedule[5].pct === 15, "schedule year 6 is the last percent");
+  assert(W.getPolicyDiscountCompactSummary({ discountPct:"50", discountSchedule: draft.discountSchedule }).length > 0, "discount chip has text to show");
+
+  const flat = { simDiscountPerInsured:{ i1:{ year1Pct:20, years:10, schedule:[] } } };
+  W.syncDraftDiscountFromSimulator(flat);
+  assert(flat.discountPct === "20" && flat.discountYears === "10", "single-percent discounts mirror percent and years");
+
+  // ── end-to-end: what the simulator sends -> what the draft stores ──
+  W.render = () => {};
+  W.policyDraft = null;
+  W.ensurePolicyDraft();
+  W.policyDraft.company = "הפניקס";
+  W.policyDraft.type = "ריסק";
+  W.applyRiskSimResultsToDraft({
+    i1: {
+      ok: true, monthlyPremium: 200, sumInsured: "1000000",
+      simDiscount: { optionId:"phx-r-100-50", label:"50/50/40/30/20/15", year1Pct:50, years:6, schedule:[50,50,40,30,20,15], monthlyAfterDiscount:100 }
+    }
+  }, { skipRender: true, skipToast: true });
+  assert(W.policyDraft.simDiscountPerInsured?.i1?.monthlyAfterDiscount === 100, "applying a simulator result stores the discounted price");
+  assert(W.policyDraft.discountPct === "50", "applying a simulator result mirrors the discount percent");
+  assert(safeTrim(W.policyDraft.premiumPerInsured?.i1) === "200.00", "the gross premium is still what the engine reads");
+
+  W.applyRiskSimResultsToDraft({ i1: { ok: true, monthlyPremium: 200 } }, { skipRender: true, skipToast: true });
+  assert(!W.policyDraft.simDiscountPerInsured?.i1, "recalculating without a discount clears the stored one");
 
   // ── stage transitions on close ──
   let renders = 0;
