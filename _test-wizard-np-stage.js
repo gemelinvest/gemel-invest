@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260903-np-workspace-v6";
+const TAG = "20260903-np-workspace-v7";
 let failed = 0;
 let passed = 0;
 
@@ -65,14 +65,44 @@ console.log("\n3) three stages — pick / docked simulator / summary");
 assert(wiz.includes('const npStage = workspaceOpen ? "sim"'), "stage resolver exists");
 assert(wiz.includes('(hasRows && this._npShowPick !== true) ? "summary" : "pick"'), "summary stage when rows exist and pick not forced");
 assert(wiz.includes('class="lcNpWrapper lcNpWrapper--${npStage}"'), "stage class on the wrapper");
-assert(wiz.includes('class="lcNpStageHead__title">בחירת חברה ומוצר<'), "pick stage title matches the mockup");
-assert(wiz.includes("סיכום הפוליסות בהצעה"), "summary title matches the mockup");
+assert(wiz.includes("סיכום הפוליסות בהצעה"), "summary title kept");
+assert(!wiz.includes('class="lcNpStageHead__title">בחירת חברה ומוצר<'), "pick stage head title removed");
+assert(!wiz.includes("בחרו חברה ומוצר מהרשימות"), "pick stage head explanation removed");
+assert(!wiz.includes("כל פוליסה בשורת סיכום: לוגו"), "summary explanation removed");
+assert(!wiz.includes("lcNpInlineHero"), "new-policies hero header removed");
+assert(!wiz.includes("הוספת פוליסה חדשה להצעה"), "new-policies hero subtitle removed");
+assert(!wiz.includes('class="lcNpPickCard__title">חברה ומוצר<'), "pick card title removed");
 assert(wiz.includes("data-np-add-more"), "add-another-policy control");
 assert(wiz.includes("הוסף פוליסה נוספת</button>"), "add-another-policy label");
 assert(!wiz.includes("פוליסות שנרכשו להצעה"), "old summary heading replaced");
-assert(css.includes(".lcNpStageHead{"), "pick stage head styles");
+assert(!css.includes(".lcNpStageHead{"), "pick stage head styles removed");
 assert(css.includes(".lcNpSumHead{"), "summary head styles");
 assert(css.includes(".lcNpAddMore{"), "add-another-policy styles");
+
+console.log("\n3b) health row shows covers behind a button, not a dense line");
+assert(wiz.includes("הצג כיסוי בפוליסה"), "show-covers button label");
+assert(wiz.includes('data-np-show-covers='), "show-covers button wiring");
+assert(wiz.includes("_npCoversOpenId"), "covers panel open state");
+assert(!/detailText = \(p\.type === \"בריאות\"\)\s*\?\s*\(`כיסויים: \$\{coverSummary\}`\)/.test(wiz), "dense covers line removed from health rows");
+assert(css.includes(".lcNpProw__coversBtn"), "covers button styles");
+assert(css.includes(".lcNpProw__coversList"), "covers list styles");
+
+console.log("\n3c) sum-insured field has no example placeholder");
+assert(!sims.includes('placeholder="לדוגמה: 1,000,000"'), "simulator no longer shows 1,000,000 example");
+assert(!sims.includes('placeholder="1,000,000"'), "simulator no longer shows bare 1,000,000 placeholder");
+assert(!wiz.includes('placeholder="לדוגמה: 1,000,000"'), "wizard draft sum field has no example");
+
+console.log("\n3d) edit reopens the simulator with the saved data");
+assert(wiz.includes("buildSimulatorRestoreState(draft){"), "restore-state builder exists");
+assert(wiz.includes("buildSimulatorRestoreDiscount(draft){"), "restore-discount builder exists");
+assert(wiz.includes("simStateByInsured"), "policy stores a simulator state snapshot");
+assert(wiz.includes("restoreState: restoreState || undefined"), "open passes restoreState into the simulator");
+assert(wiz.includes("restoreDiscountByInsured: restoreDiscountByInsured || undefined"), "open passes the selected discount back");
+assert(sims.includes("payload.simStateSnapshot = riskSimJsonClone(stSnap)"), "purchase snapshots the active insured state");
+assert(sims.includes("restoreDiscountByInsured"), "simulator shell accepts restoreDiscountByInsured");
+assert(/startEditNewPolicy\(pid\)\{[\s\S]*?simStateByInsured: \(p\.simStateByInsured/.test(wiz), "edit copies the snapshot onto the draft");
+assert(/startEditNewPolicy\(pid\)\{[\s\S]*?this\._npShowPick = false;/.test(wiz), "edit stays in the simulator/summary workspace");
+assert(/startEditNewPolicy\(pid\)\{[\s\S]*?closeNpOpenSimulator\(\)/.test(wiz), "edit closes any open simulator before reopening");
 
 console.log("\n4) the real simulator is docked into the step, not floating");
 assert(wiz.includes('id="lcNpSimDock"'), "dock container in the workspace");
@@ -112,7 +142,7 @@ assert(sims.includes("monthlyAfterDiscount:"), "payload carries the already-comp
 assert(sims.includes("year1Pct: giSimDiscountYear1Pct(opt)"), "payload carries the year-1 percent");
 assert(sims.includes("schedule: Array.isArray(opt.schedule)") || sims.includes("const schedule = Array.isArray(opt.schedule)"), "payload carries the multi-year schedule");
 assert(/giSimDiscountYear1Pct\(opt\)\{[\s\S]{0,200}opt\.schedule\[0\]/.test(sims) || /function giSimDiscountYear1Pct\(opt\)\{[\s\S]{0,220}schedule\[0\]/.test(sims), "year-1 percent is the first year of the schedule");
-assert(sims.includes("const payload = discount ? Object.assign({}, result, { simDiscount: discount }) : result;"), "purchase sends the discount alongside the result");
+assert(sims.includes("const payload = discount ? Object.assign({}, result, { simDiscount: discount }) : Object.assign({}, result);"), "purchase sends the discount alongside the result");
 assert(sims.includes("sim._ctx.onPurchaseInsured?.(insId, payload, legal)"), "purchase hook receives the enriched payload");
 assert(wiz.includes("simDiscountPerInsured"), "wizard stores the per-insured after-discount price");
 assert(wiz.includes("getPolicySimDiscountAfterTotal(policy){"), "row total helper exists");
@@ -309,6 +339,29 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
 
   W.applyRiskSimResultsToDraft({ i1: { ok: true, monthlyPremium: 200 } }, { skipRender: true, skipToast: true });
   assert(!W.policyDraft.simDiscountPerInsured?.i1, "recalculating without a discount clears the stored one");
+
+  // ── edit restore: snapshot + fallback from quotes/sum ──
+  W.applyRiskSimResultsToDraft({
+    i1: {
+      ok: true, monthlyPremium: 180.55, sumInsured: "1000000",
+      covers: [{ id:"drugs", label:"תרופות", wizardKey:"תרופות" }],
+      simDiscount: { optionId:"phx-h-10", year1Pct:10, monthlyAfterDiscount:162.5 },
+      simStateSnapshot: { sumInsured:"1,000,000", selected:{ drugs:true }, result:{ ok:true, monthlyPremium:180.55 }, savedAt:"t1" }
+    }
+  }, { skipRender: true, skipToast: true });
+  assert(W.policyDraft.simStateByInsured?.i1?.selected?.drugs === true, "applying a result stores the simulator snapshot");
+  const restore = W.buildSimulatorRestoreState(W.policyDraft);
+  assert(restore?.i1?.sumInsured === "1,000,000", "restore state keeps the saved sum insured");
+  assert(restore?.i1?.selected?.drugs === true, "restore state keeps the selected covers");
+  const restoreDisc = W.buildSimulatorRestoreDiscount(W.policyDraft);
+  assert(restoreDisc?.i1 === "phx-h-10", "restore discount maps the option id by insured");
+  const fallback = W.buildSimulatorRestoreState({
+    sumInsuredPerInsured:{ i2:"750000" },
+    premiumPerInsured:{ i2:"99.00" },
+    riskSimQuotes:{ i2:{ ok:true, monthlyPremium:99, covers:[{ id:"transplant", label:"השתלות" }] } }
+  });
+  assert(fallback?.i2?.sumInsured === "750000", "without a snapshot, restore rebuilds sum from the policy");
+  assert(fallback?.i2?.selected?.transplant === true, "without a snapshot, restore rebuilds selected covers from quotes");
 
   // ── stage transitions on close ──
   let renders = 0;

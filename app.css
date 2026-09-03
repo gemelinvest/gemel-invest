@@ -25731,10 +25731,24 @@ body.lcAuthLock .lcLogin__mfaQrBox > canvas{width:min(100%,220px) !important;max
 .lcNpManualNeed{color:#9a3412;font-size:11px;font-weight:800}
 .lcNpManualActions{display:flex;justify-content:flex-start;margin-top:12px}
 
+/* כיסויי בריאות בשורת סיכום — כפתור במקום רשימה דחוסה */
+.lcNpProw__covers{margin-top:10px}
+.lcNpProw__coversBtn{
+  min-height:34px;padding:0 14px;font-size:13px;font-weight:800;
+  border:1px solid rgba(27,54,93,.18);background:#f8fafc;color:#1b365d;
+}
+.lcNpProw__coversBtn.is-on{background:#e8eef8;border-color:rgba(27,54,93,.28)}
+.lcNpProw__coversPanel{
+  margin-top:8px;padding:12px 14px;border-radius:12px;
+  background:#f8fafc;border:1px solid rgba(27,54,93,.10);
+}
+.lcNpProw__coversList{
+  margin:0;padding:0 18px 0 0;list-style:disc;
+  display:grid;gap:6px;color:#1b365d;font-size:13px;font-weight:700;line-height:1.45;
+}
+.lcNpProw__coversEmpty{font-size:13px;font-weight:700;color:#64748b}
+
 /* GI-NP-STAGE 2026-09-03 — כותרות מצב וסיכום לפי המוקאפ */
-.lcNpStageHead{margin:0 0 14px}
-.lcNpStageHead__title{font-size:19px;font-weight:900;color:#1b365d}
-.lcNpStageHead__sub{margin:4px 0 0;font-size:13px;font-weight:600;color:#64748b;line-height:1.5;max-width:820px}
 .lcNpSumHead{
   display:flex;flex-wrap:wrap;gap:12px 16px;
   align-items:flex-start;justify-content:space-between;
@@ -25742,7 +25756,6 @@ body.lcAuthLock .lcLogin__mfaQrBox > canvas{width:min(100%,220px) !important;max
 }
 .lcNpSumHead__text{min-width:0}
 .lcNpSumHead__title{font-size:19px;font-weight:900;color:#1b365d}
-.lcNpSumHead__sub{margin:4px 0 0;font-size:13px;font-weight:600;color:#64748b;line-height:1.5;max-width:820px}
 .lcNpAddMore{display:inline-flex;align-items:center;gap:8px;min-height:42px;padding:0 18px;flex:0 0 auto}
 .lcNpWsSwitch__note{font-size:12px;font-weight:700;color:#64748b;max-width:280px;line-height:1.4}
 .lcNpSimDock{display:block}
