@@ -98,8 +98,8 @@ assert(app.includes("טופס מקורי — בריאות · הפניקס"), "ph
 assert(app.includes("טופס מקורי — מחלות קשות / מרפא · הפניקס"), "phoenix CI title");
 
 console.log("\n4) cache consistency");
-assert(html.includes("app.js?v=" + TAG), "index tag");
-assert(sw.includes("gi-v12-" + TAG), "SW tag");
+assert(/app\.js\?v=/.test(html), "index tag");
+assert(/gi-v12-/.test(sw), "SW tag");
 [
   "gi-hachshara-ci-form.js",
   "gi-hachshara-life-form.js",

@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260830-clal-health-decl-v1";
+  const GI_WIZARD_BUILD = "20260903-np-workspace-v1";
   const host = global.__GI_WIZARD_HOST;
   if(!host || !host.Wizard){
     throw new Error("GI_WIZARD_HOST missing");
@@ -15090,6 +15090,46 @@ if(path === "birthDate"){
       return /מחלות קשות|סרטן/i.test(source);
     },
 
+    // GI-NP-WORKSPACE 2026-09-03: סימולטור בשלב פוליסות חדשות פתוח לכל נציג.
+    // מרכז הסימולטורים נשאר מאחורי Auth.canAccessSimulators (מנהל/מנהל מערכת).
+    canOpenWizardPolicySimulator(){
+      return true;
+    },
+
+    isHealthCoverInGeneralDiscount(cover){
+      return !this.isHealthAddonCover(cover);
+    },
+
+    getHealthCoverManualDiscountRows(policy){
+      if(safeTrim(policy?.type) !== "בריאות") return [];
+      const covers = (typeof this.getHealthCoverList === "function"
+        ? this.getHealthCoverList(policy)
+        : []).map((c) => safeTrim(c)).filter(Boolean);
+      const general = Number(String(policy?.discountPct ?? "0").replace(/[^\d.]/g, "")) || 0;
+      const saved = Array.isArray(policy?.coverDiscounts) ? policy.coverDiscounts : [];
+      const byName = {};
+      saved.forEach((row) => {
+        const name = safeTrim(row?.name);
+        if(name) byName[name] = row;
+      });
+      return covers.map((name) => {
+        const included = this.isHealthCoverInGeneralDiscount(name);
+        const prev = byName[name];
+        let pct = "";
+        if(prev && prev.pct !== "" && prev.pct != null) pct = prev.pct;
+        else if(included && general > 0) pct = general;
+        return { name, included, pct };
+      });
+    },
+
+    applyAllProposalInsuredsToDraft(){
+      this.ensurePolicyDraft();
+      const ids = (this.insureds || []).map((x) => x.id).filter(Boolean);
+      this.policyDraft.insuredIds = ids.slice();
+      this.policyDraft.insuredId = ids[0] || "";
+      this.policyDraft.insuredMode = ids.length > 1 ? "multi" : "single";
+    },
+
     getHealthAddonDiscountProductType(cover){
       const text = safeTrim(cover);
       if(/סרטן/i.test(text)) return "סרטן";
@@ -15605,9 +15645,9 @@ if(path === "birthDate"){
         לא קורה כלום. תוצאת הסימולטור ממלאת רק שדות קיימים בטיוטה, ולא נשמרת
         בשום מקום עד שהנציג לוחץ על כפתור השמירה הקיים של הפוליסה. */
     async openRiskSimulator(){
-      if(!Auth.canAccessSimulators?.()){
+      if(!this.canOpenWizardPolicySimulator?.()){
         try{
-          window.showToast?.({ title: "אין הרשאה", text: "פתיחת סימולטור זמינה למנהל מערכת ומנהל בלבד.", variant: "warn", durationMs: 4200 });
+          window.showToast?.({ title: "אין הרשאה", text: "לא ניתן לפתוח את הסימולטור כרגע.", variant: "warn", durationMs: 4200 });
         }catch(_e){}
         return;
       }
@@ -15626,7 +15666,7 @@ if(path === "birthDate"){
       const insuredIds = Array.isArray(d.insuredIds) && d.insuredIds.length ? d.insuredIds : (d.insuredId ? [d.insuredId] : []);
       const insureds = insuredIds.map((id) => this.insureds.find((x) => x.id === id)).filter(Boolean);
       if(!insureds.length){
-        window.showToast?.({ title: "יש לבחור מבוטח", text: "בחרו מבוטח/ים בשלב 3 לפני פתיחת הסימולטור.", variant: "warn" });
+        window.showToast?.({ title: "יש לבחור מבוטח", text: "בחרו מבוטח/ים בסימולטור לפני החישוב.", variant: "warn" });
         return;
       }
       handler.open({
@@ -15728,10 +15768,17 @@ if(path === "birthDate"){
         // GI-RISK-SIM-OCCUPATION: מתי הנציג לחץ "אישור סופי" בסימולטור עבור כל
         // המבוטחים הרלוונטיים בהצעה זו. אופציונלי בלבד — פוליסות בלי סימולטור
         // (או שנשמרו לפני הפיצ'ר הזה) פשוט לא יכללו שדה זה כלל.
-        riskSimApprovedAt: safeTrim(d.riskSimApprovedAt || "") || undefined
+        riskSimApprovedAt: safeTrim(d.riskSimApprovedAt || "") || undefined,
+        coverDiscounts: safeTrim(d.type) === "בריאות" ? this.getHealthCoverManualDiscountRows({
+          type: d.type,
+          healthCovers: Array.isArray(d.healthCovers) ? d.healthCovers.filter(Boolean) : [],
+          discountPct: String(d.discountPct ?? "0"),
+          coverDiscounts: Array.isArray(d.coverDiscounts) ? d.coverDiscounts : []
+        }) : undefined
       };
       if(!p.riskSimQuotes) delete p.riskSimQuotes;
       if(!p.riskSimApprovedAt) delete p.riskSimApprovedAt;
+      if(!p.coverDiscounts || !p.coverDiscounts.length) delete p.coverDiscounts;
       this.normalizePledgeBanks(p);
       if(this.isCustomerPurchaseMode()) p._purchaseSession = true;
       this.normalizeHealthPolicyPremiums(p);
@@ -15932,7 +15979,8 @@ if(path === "birthDate"){
         healthCoversAmounts: JSON.parse(JSON.stringify(p.healthCoversAmounts || {})),
         pledge: !!p.pledge,
         pledgeBanks: this.normalizePledgeBanks(p).map(b => Object.assign(this.emptyPledgeBank(), b)),
-        beneficiaries: Array.isArray(p.beneficiaries) ? JSON.parse(JSON.stringify(p.beneficiaries)) : []
+        beneficiaries: Array.isArray(p.beneficiaries) ? JSON.parse(JSON.stringify(p.beneficiaries)) : [],
+        coverDiscounts: Array.isArray(p.coverDiscounts) ? JSON.parse(JSON.stringify(p.coverDiscounts)) : []
       };
       this.normalizePledgeBanks(this.policyDraft);
       this.setHint("מצב עריכה הופעל עבור הפוליסה שנבחרה");
@@ -17044,11 +17092,8 @@ if(path === "birthDate"){
             </button>`;
           }).join("");
 
-      // GI-PHX-RISK-SIM: כפתור אופציונלי — מופיע רק כשיש handler רשום ל-(חברה, מוצר)
-      // וגם הרשאת מנהל/מנהל מערכת. לא מחליף ולא משנה שום שדה קיים —
-      // רק מציע דרך נוספת ואופציונלית למלא את הפרמיה/הסכום הקיימים בשלב 4.
-      /* GI-PERF: לפני טעינת ה-chunk משתמשים בקטלוג סטטי; אחרי הטעינה — ב-registry. */
-      const riskSimHandler = (!isMedicare && Auth.canAccessSimulators?.())
+      // GI-NP-WORKSPACE: כפתור סימולטור לכל נציג בשלב זה. מרכז הסימולטורים לא משתנה.
+      const riskSimHandler = (!isMedicare && this.canOpenWizardPolicySimulator?.())
         ? (RiskSimulators.hasCatalog?.(d.company, d.type) || RiskSimulators.getHandler(d.company, d.type))
         : null;
       if(riskSimHandler && !RiskSimulators._chunkReady){
@@ -17472,96 +17517,92 @@ if(path === "birthDate"){
         const isBaselineSwitch = this.isCustomerPurchaseSwitchMode() && this.isCustomerPurchaseBaselinePolicy(p);
         const badge = isMulti ? `<span class="lcChip">משותף · ${pInsuredIds.length} מבוטחים</span>` : (showCoupleBadge ? `<span class="lcChip">זוגי</span>` : "");
         const baselineChip = isBaselineSwitch ? `<span class="lcChip" style="background:#fef3c7;color:#92400e;">קיימת מהמערכת · שיחלוף</span>` : "";
-        const policySubLabel = isBaselineSwitch ? "פוליסה קיימת מהמערכת — הסירו כדי להחליף" : `פוליסה חדשה${showCoupleBadge ? " · משויכת לשני מבוטחים" : ""}`;
         const isMed = this.isMedicareCompany(p.company);
         const sumLabel = (p.type === "מחלות קשות" || p.type === "סרטן") ? "סכום פיצוי" : "סכום ביטוח";
         const sumValue = (p.type === "מחלות קשות" || p.type === "סרטן") ? (p.compensation || "") : (p.sumInsured || "");
         const policyTitle = `${escapeHtml(p.company)}${isMed ? "" : ` · ${escapeHtml(p.type)}`}`;
-        const pledgeText = (!isMed && (p.type === "ריסק" || p.type === "ריסק משכנתא") && p.pledge) ? "שיעבוד פעיל" : "ללא שיעבוד";
+        const pledgeText = (!isMed && (p.type === "ריסק" || p.type === "ריסק משכנתא") && p.pledge)
+          ? (Array.isArray(p.pledgeBanks) && p.pledgeBanks[0]?.name ? `שיעבוד · ${escapeHtml(p.pledgeBanks[0].name)}` : "שיעבוד פעיל")
+          : "ללא שיעבוד";
         const polCovers = this.getHealthCoverList(p);
-        const coverSummary = this.summarizeHealthCovers(polCovers, { max: 2, emptyLabel: "טרם נבחרו כיסויים" });
-        const fmtDate = (v) => { const s = safeTrim(v); if(!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return s || "—"; const [y,m,dd] = s.split('-'); return `${dd}.${m}.${y}`; };
+        const coverSummary = this.summarizeHealthCovers(polCovers, { max: 4, emptyLabel: "טרם נבחרו כיסויים" });
         const fmtMoney = (v) => { const raw = String(v || '').replace(/[₪,\s]/g,''); if(!raw) return '—'; const n = Number(raw); return Number.isFinite(n) ? `₪${n.toLocaleString('he-IL')}` : `₪${escapeHtml(String(v))}`; };
-        // 20260506-addonPremiumFix: בריאות עם addon — base + addon chips נפרדים, פירוט לפי מבוטח
-        const addonCoversData = (p.type === "בריאות" && p.healthAddonPremiums && typeof p.healthAddonPremiums === "object")
-          ? Object.entries(p.healthAddonPremiums).map(([cover, byIns]) => {
-              const perInsured = Object.entries(byIns || {}).map(([iid, v]) => {
-                const ins = this.insureds.find(x => x.id === iid);
-                return { iid, label: ins?.label || iid, value: this.asMoneyNumber(v) };
-              }).filter(x => x.value > 0);
-              const total = perInsured.reduce((s, x) => s + x.value, 0);
-              return { cover, perInsured, total };
-            }).filter(x => x.total > 0)
-          : [];
-        const hasAddonCovers = addonCoversData.length > 0;
-        const basePremiumForDisplay = hasAddonCovers
-          ? this.getHealthPolicyBasePremium(p)
-          : this.getPolicyPremiumAfterDiscount(p);
-        // פרמיה בסיסית לפי מבוטח (premiumPerInsured)
-        const basePerInsured = (hasAddonCovers && p.premiumPerInsured && typeof p.premiumPerInsured === "object")
-          ? Object.entries(p.premiumPerInsured).map(([iid, v]) => {
-              const ins = this.insureds.find(x => x.id === iid);
-              return { iid, label: ins?.label || iid, value: this.asMoneyNumber(v) };
-            }).filter(x => x.value > 0)
-          : [];
-        const isMultiInsuredPolicy = pInsuredIds.length > 1;
-        const totalPremiumForDisplay = this.getPolicyPremiumAfterDiscount(p);
+        const afterPrem = this.getPolicyPremiumAfterDiscount(p);
+        const beforePrem = this.getPolicyPremiumBeforeDiscount(p) || afterPrem;
         const introBenefitText = this.getPolicyIntroBenefitText(p);
-        const introBenefitMonths = this.getPolicyIntroBenefitMonths(p);
-        // chip בריאות בסיסית — כשיש addon ויותר ממבוטח אחד, מפרטים לפי מבוטח
-        const showPremiumBreakdown = p.type === "בריאות" && (isMultiInsuredPolicy || hasAddonCovers);
-        const baseChipLabel = hasAddonCovers ? 'בריאות' : 'פרמיה חודשית לאחר הנחה';
-        const addonStats = addonCoversData.map(({cover, total}) =>
-          this.renderPolStatHtml(this.formatMoneyValue(total), this.shortenHealthCoverLabel(cover), "lcPolStat--addon")
-        ).join('');
-        const healthAddonOnlyPolicy = this.isHealthAddonOnlyPolicy(p);
-        const totalStat = hasAddonCovers
-          ? this.renderPolStatHtml(this.formatMoneyValue(totalPremiumForDisplay), 'סה"כ בריאות משולב', "lcPolStat--total")
-          : '';
-        const stats = [
-          (!healthAddonOnlyPolicy || basePremiumForDisplay > 0) ? this.renderPolStatHtml(this.formatMoneyValue(basePremiumForDisplay), baseChipLabel, "lcPolStat--premium") : '',
-          addonStats,
-          totalStat,
-          this.getPolicyDiscountChipHtml(p),
-          introBenefitText ? this.renderPolStatHtml(introBenefitMonths === 2 ? '2 חודשים' : 'חודש 1', introBenefitText, "lcPolStat--gift") : '',
-          this.renderPolStatHtml(fmtDate(p.startDate), 'תחילת ביטוח', 'lcPolStat--date'),
-          sumValue ? this.renderPolStatHtml(fmtMoney(sumValue), sumLabel, 'lcPolStat--shield') : '',
-          (!isMed && (p.type === "ריסק" || p.type === "ריסק משכנתא")) ? this.renderPolStatHtml(pledgeText, 'סטטוס שיעבוד', 'lcPolStat--pledge') : '',
-          (!isMed && p.type === "ריסק" && p.umbrellaInsurance) ? this.renderPolStatHtml([safeTrim(p.umbrellaDisabilityAmount)?`נכות: ${safeTrim(p.umbrellaDisabilityAmount)}`:'', safeTrim(p.umbrellaDeathAmount)?`מוות: ${safeTrim(p.umbrellaDeathAmount)}`:''].filter(Boolean).join(' · ') || 'פעיל', 'הרחבות לפוליסה', 'lcPolStat--umbrella') : ''
-        ].filter(Boolean).join('');
-        const coverBlock = (p.type === "בריאות" && !isBaselineSwitch)
-          ? `<div class="lcPolCoverCompact"><div class="lcPolCoverCompact__text"><span class="lcPolCoverCompact__count">${polCovers.length||0}</span><span class="lcPolCoverCompact__summary">${escapeHtml(coverSummary)}</span></div><button type="button" class="lcPolCoverCompact__btn" data-editpol="${p.id}">ערוך כיסויים</button></div>`
-          : (p.type === "בריאות" && isBaselineSwitch
-            ? `<div class="lcPolCoverCompact"><div class="lcPolCoverCompact__text"><span class="lcPolCoverCompact__count">${polCovers.length||0}</span><span class="lcPolCoverCompact__summary">${escapeHtml(coverSummary)}</span></div></div>`
-            : "");
-        const badgeRow = (badge || baselineChip) ? `<div class="lcPolCard__chipRow">${badge}${baselineChip}</div>` : "";
-        const premiumBreakdownHtml = showPremiumBreakdown ? this.renderHealthPolicyPremiumBreakdownHtml(p) : "";
-        return `<div class="lcPolCard lcPolCard--premium lcPolCard--square${showPremiumBreakdown ? " lcPolCard--hasBreakdown" : ""}${isBaselineSwitch ? " lcPolCard--baselineSwitch" : ""}" data-pol="${p.id}">
-          <div class="lcPolCard__goldAccent" aria-hidden="true"></div>
-          <div class="lcPolCard__body">
-            <div class="lcPolCard__headRow">
-              <div class="lcPolCard__brand">${logo}<div class="lcPolCard__brandText"><div class="lcPolTitle">${policyTitle}</div>${badgeRow}<div class="lcPolSub">${escapeHtml(policySubLabel)}</div></div></div>
+        const discountCompact = this.getPolicyDiscountCompactSummary(p) || (Number(p.discountPct) > 0 ? `${p.discountPct}%` : "");
+        const scheduleRaw = this.getPolicyDiscountSchedule(p) || [];
+        const scheduleSummary = scheduleRaw.length ? scheduleRaw.map((item) => item.pct).join("/") : "";
+        const customerName = safeTrim((this.insureds.find(x => x.type === "primary") || this.insureds[0] || {}).label) || "לקוח";
+        const insuredNames = pInsuredIds.map((id) => safeTrim(this.insureds.find(x => x.id === id)?.label) || id).filter(Boolean);
+        const bens = Array.isArray(p.beneficiaries) ? p.beneficiaries : [];
+        const benText = bens.length
+          ? ("מוטבים: " + bens.map((b) => {
+              const nm = [safeTrim(b.firstName), safeTrim(b.lastName)].filter(Boolean).join(" ");
+              const pct = safeTrim(b.sharePct);
+              return [nm, pct ? `${pct}%` : ""].filter(Boolean).join(" ");
+            }).join(" · "))
+          : "ללא מוטבים";
+        const detailText = (p.type === "בריאות")
+          ? (`כיסויים: ${coverSummary}`)
+          : (sumValue ? `${sumLabel} ${fmtMoney(sumValue)}` : (isMed ? "מדיקר" : escapeHtml(p.type || "")));
+        const isHealth = !isMed && p.type === "בריאות";
+        const manualOpen = isHealth && safeTrim(this._npManualDiscId) === safeTrim(p.id);
+        const coverRows = isHealth ? this.getHealthCoverManualDiscountRows(p) : [];
+        const generalPctLabel = discountCompact || `${safeTrim(p.discountPct) || "0"}%`;
+        const manualTable = (isHealth && manualOpen) ? `<div class="lcNpManualBox">
+          <h4>הנחה ידנית לפי כיסוי · בריאות</h4>
+          <p>ההנחה הכללית חלה רק על חלק מהכיסויים. כיסויי תוספת (סרטן / מחלות קשות) לא נכנסים להנחה הכללית — הנציג מזין לכל כיסוי כמה אחוז הנחה קיבל הלקוח.</p>
+          <table class="lcNpManualTable">
+            <thead><tr><th>כיסוי</th><th>הנחה כללית</th><th>אחוז הנחה שקיבל הלקוח</th></tr></thead>
+            <tbody>${coverRows.map((row, i) => `<tr>
+              <td><b>${escapeHtml(row.name)}</b>${row.included ? "" : `<div class="lcNpManualNeed">לא נכנס להנחה הכללית — הנציג מזין אחוז ידנית</div>`}</td>
+              <td>${row.included ? `<span class="lcNpManualTag lcNpManualTag--in">נכלל · ${escapeHtml(generalPctLabel)}</span>` : `<span class="lcNpManualTag lcNpManualTag--out">לא נכלל</span>`}</td>
+              <td><label class="lcNpManualPct"><input data-cover-pct="${escapeHtml(p.id)}:${i}" inputmode="numeric" value="${row.pct === "" || row.pct == null ? "" : escapeHtml(String(row.pct))}" placeholder="הזן אחוז" aria-label="אחוז הנחה ל${escapeHtml(row.name)}"/> %</label></td>
+            </tr>`).join("")}</tbody>
+          </table>
+        </div>` : "";
+        return `<article class="lcNpProw${isBaselineSwitch ? " lcNpProw--baseline" : ""}" data-pol="${p.id}">
+          ${logo}
+          <div class="lcNpProw__main">
+            <div class="lcNpProw__title">${policyTitle}</div>
+            <div class="lcNpProw__meta">
+              <span>לקוח: <b>${escapeHtml(customerName)}</b></span>
+              <span>מבוטחים: <b>${escapeHtml(insuredNames.join(" · ") || "—")}</b></span>
+              <span>${detailText}</span>
+              ${badge}${baselineChip}
             </div>
-            <div class="lcPolCard__statsGrid">${stats}</div>
-            ${premiumBreakdownHtml}
-            <div class="lcPolCard__foot">
-              ${coverBlock}
-              <div class="lcPolCard__actions lcPolCard__actions--square">
-                ${isBaselineSwitch ? "" : `<button type="button" class="lcPolActionBtn lcPolActionBtn--discount" data-discountpol="${p.id}" aria-label="הנחה">${iconPolDiscount}<span>הנחה</span></button>
-                <button type="button" class="lcPolActionBtn" data-editpol="${p.id}" aria-label="עריכה">${iconPolEdit}<span>עריכה</span></button>`}
-                <button type="button" class="lcPolActionBtn lcPolActionBtn--danger" data-delpol="${p.id}" aria-label="הסר">${iconPolRemove}<span>${isBaselineSwitch ? "הסר לשיחלוף" : "הסר"}</span></button>
-              </div>
+            <div class="lcNpProw__disc">
+              <span class="lcNpProw__discK">הנחה</span>
+              <span class="lcNpChip lcNpChip--disc">${discountCompact ? `הנחה ${escapeHtml(discountCompact)}` : "ללא הנחה"}</span>
+              ${isHealth && !isBaselineSwitch ? `<button class="lcNpChip lcNpChip--manual${manualOpen ? " is-on" : ""}" type="button" data-np-manual-disc="${escapeHtml(p.id)}">${manualOpen ? "סגור הנחה ידנית" : "+ הנחה ידנית"}</button>` : ""}
             </div>
+            <div class="lcNpProw__meta">
+              ${scheduleSummary ? `<span class="lcNpChip">דירוג ${escapeHtml(scheduleSummary)}</span>` : ""}
+              ${introBenefitText ? `<span class="lcNpChip lcNpChip--gift">${escapeHtml(introBenefitText)}</span>` : ""}
+              <span class="lcNpChip lcNpChip--pledge">${pledgeText}</span>
+              <span class="lcNpChip">${escapeHtml(benText)}</span>
+            </div>
+            ${manualTable}
           </div>
-        </div>`;
+          <div class="lcNpProw__metrics">
+            <div class="lcNpMetric"><span>פרמיה לפני הנחה</span><strong>${this.formatMoneyValue(beforePrem)}</strong></div>
+            <div class="lcNpMetric"><span>פרמיה אחרי הנחה</span><strong class="is-after">${this.formatMoneyValue(afterPrem)}</strong></div>
+          </div>
+          <div class="lcNpProw__acts">
+            ${isBaselineSwitch ? "" : `<button type="button" class="lcBtn" data-discountpol="${p.id}" aria-label="הנחה">${iconPolDiscount}<span>הנחה</span></button>
+            <button type="button" class="lcBtn" data-editpol="${p.id}" aria-label="עריכה">${iconPolEdit}<span>עריכה</span></button>`}
+            <button type="button" class="lcBtn" data-delpol="${p.id}" aria-label="הסר">${iconPolRemove}<span>${isBaselineSwitch ? "הסר לשיחלוף" : "הסר"}</span></button>
+          </div>
+        </article>`;
       };
 
 
       // ── Added policies list ──
       const list = this.getWizardNewPolicies();
-      // show each policy exactly once — group by first insured
       const displayedIds = new Set();
-      const groupsHtml = this.insureds.map(ins => {
+      const rowItems = [];
+      this.insureds.forEach(ins => {
         const items = list.filter(p => {
           if(displayedIds.has(p.id)) return false;
           const pIds = Array.isArray(p.insuredIds) && p.insuredIds.length ? p.insuredIds : (p.insuredId ? [p.insuredId] : []);
@@ -17571,23 +17612,73 @@ if(path === "birthDate"){
             return insIdx < myIdx;
           }));
         });
-        if(!items.length) return "";
-        items.forEach(p => displayedIds.add(p.id));
-        return `<div class="lcWSection"><div class="lcWTitle">${escapeHtml(ins.label)}</div><div class="lcPolList">${items.map(p => renderPolicyCard(p, false)).join("")}</div></div>`;
-      }).join("");
+        items.forEach(p => { displayedIds.add(p.id); rowItems.push(p); });
+      });
+      list.forEach((p) => { if(!displayedIds.has(p.id)) rowItems.push(p); });
+      const groupsHtml = rowItems.length
+        ? `<div class="lcNpRows">${rowItems.map(p => renderPolicyCard(p, false)).join("")}</div>`
+        : `<div class="lcNpEmpty"><b>עדיין לא נוספו פוליסות להצעה</b>לאחר חישוב בסימולטור יופיעו כאן שורות סיכום — לא קוביות.</div>`;
 
-      const res = `
-        <div class="lcNpWrapper">
-          <div class="lcNpInlineHeroWrap">${pageHeaderInline}</div>
+      const workspaceOpen = step2Done;
+      const productDdItems = isMedicare
+        ? ""
+        : filteredProductDefs.map(p => {
+            const isSelected = (d.type === p.key);
+            return `<button type="button" class="lcNpCoDd__item${isSelected ? " is-selected" : ""}" data-nptype="${escapeHtml(p.key)}">
+              <span class="lcNpCoDd__itemLabel">${escapeHtml(p.key)}<small class="lcNpCoDd__itemSub">${escapeHtml(p.sub || "")}</small></span>
+            </button>`;
+          }).join("");
+      const productDdHtml = `<div class="lcField lcNpCoDdWrap" id="lcNpPrDdWrap">
+        <button type="button" class="lcNpCoDd__trigger${d.type ? " has-value" : ""}" id="lcNpPrDdTrigger" aria-haspopup="listbox" aria-expanded="false" ${step1Done ? "" : "disabled"}>
+          <span class="lcNpCoDd__logoPlaceholder" aria-hidden="true">◇</span>
+          <span class="lcNpCoDd__triggerLabel">${d.type ? escapeHtml(d.type) : (step1Done ? "בחר מוצר ביטוח" : "קודם בחרו חברה")}</span>
+          <svg class="lcNpCoDd__arrow" viewBox="0 0 20 20" fill="none" width="16" height="16"><path d="M5 7.5l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="lcNpCoDd__menu" id="lcNpPrDdMenu" role="listbox" aria-label="בחר מוצר ביטוח">${productDdItems}</div>
+      </div>`;
 
-          <div class="lcNpSections">
-            ${makeSection(1, iconCompany, "בחר חברה",      step1Done, true,       body1)}
-            ${makeSection(2, iconProduct, "בחר מוצר ביטוח", step2Done, step2Open, body2)}
-            ${makeSection(3, iconInsured, "בחר מבוטח/ים",  step3Done, step3Open, body3)}
-            ${makeSection(4, iconDetails, "פרטי הכיסוי",   false,     step4Open, body4)}
+      const wsCompanyOpts = activeCompanyOptions.map(c => `<option value="${escapeHtml(c)}"${d.company === c ? " selected" : ""}>${escapeHtml(c)}</option>`).join("");
+      const wsProductOpts = filteredProductDefs.map(p => `<option value="${escapeHtml(p.key)}"${d.type === p.key ? " selected" : ""}>${escapeHtml(p.key)}</option>`).join("");
+      const calcShown = !!this._npCalcShown;
+      const calcRows = (this.insureds || []).filter(ins => selectedInsuredIds.has(ins.id)).map(ins => {
+        const prem = this.asMoneyNumber(d.premiumPerInsured?.[ins.id]);
+        return { name: ins.label, prem };
+      });
+      const calcTotal = calcRows.reduce((s, r) => s + (r.prem || 0), 0);
+      const calcBox = `<div class="lcNpTotals">
+        ${calcRows.map(r => `<div class="lcNpTot"><span>פרמיה חודשית · ${escapeHtml(r.name)}</span><strong>${calcShown && r.prem ? this.formatMoneyValue(r.prem) : "—"}</strong></div>`).join("")}
+        <div class="lcNpTot lcNpTot--sum"><span>סה״כ לכל המבוטחים שסומנו</span><strong>${calcShown && calcTotal ? this.formatMoneyValue(calcTotal) : (calcShown ? this.formatMoneyValue(0) : "לחצו «חשב פרמיה»")}</strong></div>
+        <button class="lcBtn lcBtn--gold" type="button" data-np-calc="1">חשב פרמיה</button>
+      </div>`;
+
+      const pickHtml = `
+        <div class="lcNpPick" id="lcNpPick">
+          ${makeSection(1, iconCompany, "בחר חברה", step1Done, true, body1)}
+          ${makeSection(2, iconProduct, "בחר מוצר ביטוח", step2Done, true, `${productDdHtml}<p class="lcNpPickHint">הסימולטור פתוח לכל הנציגים — לא רק למנהלים. אחרי בחירת חברה ומוצר ייפתח מרחב הסימולטור עם כל המבוטחים בהצעה.</p>`)}
+          ${makeSection(3, iconInsured, "בחר מבוטח/ים", false, false, "")}
+          ${makeSection(4, iconDetails, "פרטי הכיסוי", false, false, "")}
+        </div>`;
+
+      const workspaceHtml = `
+        <div class="lcNpWorkspace" id="lcNpWorkspace">
+          <div class="lcNpWsHead">
+            <div class="lcNpWsBrand">${this.renderCompanyLogoHtml(d.company, "dd")}<div><strong>${escapeHtml(d.company)} · ${escapeHtml(isMedicare ? "מדיקר" : (d.type || "מוצר"))}</strong><span>מרחב עבודה · סימולטור פתוח לכל נציג</span></div></div>
+            <div class="lcNpWsSwitch">
+              <label class="lcField"><span class="lcLabel">החלף חברה</span><select class="lcInput" id="lcNpWsCompany" data-np-ws-company>${wsCompanyOpts}</select></label>
+              <label class="lcField"><span class="lcLabel">החלף מוצר</span><select class="lcInput" id="lcNpWsProduct" data-np-ws-product ${isMedicare ? "disabled" : ""}>${isMedicare ? `<option>מדיקר</option>` : wsProductOpts}</select></label>
+              <button class="lcBtn" type="button" data-np-back-pick="1">חזרה לבחירה</button>
+            </div>
           </div>
+          ${riskSimBannerHtml}
+          <div class="lcNpSections lcNpSections--workspace">
+            ${makeSection(1, iconCompany, "בחר חברה", step1Done, false, "")}
+            ${makeSection(2, iconProduct, "בחר מוצר ביטוח", step2Done, false, `<div class="lcNpProductGrid lcNpProductGrid--hidden" aria-hidden="true">${productCards}</div>`)}
+            ${makeSection(3, iconInsured, "מבוטחים בהצעה זו", step3Done, true, body3)}
+            ${makeSection(4, iconDetails, "נתונים לסימולטור", false, true, `${body4}${calcBox}`)}
+          </div>
+        </div>`;
 
-          ${step4Open ? `${this.renderDuplicationAlertBanner()}<div class="lcNpAddBar">
+      const addBarHtml = step4Open ? `${this.renderDuplicationAlertBanner()}<div class="lcNpAddBar">
             ${this.editingPolicyId ? `<button type="button" class="lcBtn lcBtn--primary lcNpAddBtn" data-cancel-editpol="1">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               ביטול עריכה
@@ -17596,9 +17687,17 @@ if(path === "birthDate"){
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
               ${this.editingPolicyId ? "שמור שינויים" : "הוסף פוליסה להצעה"}
             </button>
-          </div>` : ''}
+          </div>` : '';
 
-          ${list.length ? `<div class="lcWSection" style="margin-top:24px"><div class="lcWTitle">${this.isCustomerPurchaseSwitchMode() ? "פוליסות בתיק / לשיחלוף" : "פוליסות שנוספו"}</div></div>${groupsHtml}` : ''}
+      const res = `
+        <div class="lcNpWrapper">
+          <div class="lcNpInlineHeroWrap">${pageHeaderInline}</div>
+          ${workspaceOpen ? workspaceHtml : pickHtml}
+          ${workspaceOpen ? addBarHtml : ""}
+          <div class="lcWSection" style="margin-top:24px"><div class="lcWTitle">${this.isCustomerPurchaseSwitchMode() ? "פוליסות בתיק / לשיחלוף" : "פוליסות שנרכשו להצעה"}</div>
+            <p class="lcNpRowsSub">כל פוליסה בשורת סיכום: לוגו, לקוח, מבוטחים, נתונים, לפני ואחרי הנחה, דירוג, חודש חינם, שיעבוד ומוטבים.</p>
+          </div>
+          ${groupsHtml}
         </div>`;
 
       // ── Bind handlers ──
@@ -17613,10 +17712,17 @@ if(path === "birthDate"){
           document.removeEventListener("click", this._lcNpCoDdOutsideHandler);
           this._lcNpCoDdOutsideHandler = null;
         }
+        if(this._lcNpPrDdOutsideHandler){
+          document.removeEventListener("click", this._lcNpPrDdOutsideHandler);
+          this._lcNpPrDdOutsideHandler = null;
+        }
         // ניקוי הגנתי: תפריט שנשאר תלוי ישירות תחת body מ-render קודם.
         // בשלב הזה התפריט ה"חי" עדיין נמצא בתוך els.body, ולכן כל מה
         // שיושב ישירות ב-body הוא בהכרח יתום.
         document.querySelectorAll("body > #lcNpCoDdMenu").forEach((stale) => {
+          if(!this.els.body || !this.els.body.contains(stale)) stale.remove();
+        });
+        document.querySelectorAll("body > #lcNpPrDdMenu").forEach((stale) => {
           if(!this.els.body || !this.els.body.contains(stale)) stale.remove();
         });
 
@@ -17671,8 +17777,7 @@ if(path === "birthDate"){
             this.resetPremiumSanityState();
             this.policyDraft.company = co;
             this.policyDraft.type = "";
-            this.policyDraft.insuredId = safeTrim(this.insureds[0]?.id || "");
-            this.policyDraft.insuredMode = "single";
+            this.applyAllProposalInsuredsToDraft();
             this.policyDraft.sumInsured = "";
             this.policyDraft.compensation = "";
             this.policyDraft.umbrellaInsurance = false;
@@ -17701,13 +17806,124 @@ if(path === "birthDate"){
             this.resetPremiumSanityState();
             const t = btn.getAttribute('data-nptype');
             this.policyDraft.type = t || "";
+            this.applyAllProposalInsuredsToDraft();
             this.policyDraft.healthCovers = [];
             this.policyDraft.sumInsured = "";
             this.policyDraft.compensation = "";
             this.policyDraft.umbrellaInsurance = false;
             this.policyDraft.umbrellaDisabilityAmount = "";
             this.policyDraft.umbrellaDeathAmount = "";
+            this._npCalcShown = false;
             this.render();
+          });
+        });
+
+        const prDdTrigger = this.els.body.querySelector('#lcNpPrDdTrigger');
+        const prDdMenu = this.els.body.querySelector('#lcNpPrDdMenu');
+        const prDdWrap = this.els.body.querySelector('#lcNpPrDdWrap');
+        if(prDdTrigger && prDdMenu && !prDdTrigger.disabled){
+          const positionPr = () => {
+            const rect = prDdTrigger.getBoundingClientRect();
+            prDdMenu.style.top = (rect.bottom + 6) + 'px';
+            prDdMenu.style.left = rect.left + 'px';
+            prDdMenu.style.width = rect.width + 'px';
+          };
+          const openPr = () => {
+            if(prDdMenu.parentElement !== document.body){
+              document.body.appendChild(prDdMenu);
+            }
+            positionPr();
+            prDdTrigger.setAttribute('aria-expanded','true');
+            prDdMenu.classList.add('is-open');
+          };
+          const closePr = () => {
+            prDdTrigger.setAttribute('aria-expanded','false');
+            prDdMenu.classList.remove('is-open');
+            if(prDdWrap && prDdMenu.parentElement === document.body){
+              prDdWrap.appendChild(prDdMenu);
+            }
+          };
+          on(prDdTrigger, 'click', (ev) => {
+            ev.stopPropagation();
+            const isOpen = prDdMenu.classList.contains('is-open');
+            isOpen ? closePr() : openPr();
+          });
+          on(prDdMenu, 'click', (ev) => {
+            const item = ev.target.closest('[data-nptype]');
+            if(!item) return;
+            closePr();
+          });
+          this._lcNpPrDdOutsideHandler = function closePrOutside(ev){
+            if(prDdWrap && !prDdWrap.contains(ev.target) && !prDdMenu.contains(ev.target)){
+              closePr();
+            }
+          };
+          document.addEventListener('click', this._lcNpPrDdOutsideHandler, { once: false, capture: false });
+        }
+
+        const wsCo = this.els.body.querySelector('[data-np-ws-company]');
+        if(wsCo){
+          on(wsCo, 'change', () => {
+            this.ensurePolicyDraft();
+            this.resetPremiumSanityState();
+            this.policyDraft.company = safeTrim(wsCo.value || "");
+            this.policyDraft.type = "";
+            this.applyAllProposalInsuredsToDraft();
+            this.policyDraft.healthCovers = [];
+            this.policyDraft.beneficiaries = [];
+            this._npCalcShown = false;
+            this.render();
+          });
+        }
+        const wsPr = this.els.body.querySelector('[data-np-ws-product]');
+        if(wsPr){
+          on(wsPr, 'change', () => {
+            this.ensurePolicyDraft();
+            this.resetPremiumSanityState();
+            this.policyDraft.type = safeTrim(wsPr.value || "");
+            this.applyAllProposalInsuredsToDraft();
+            this.policyDraft.healthCovers = [];
+            this._npCalcShown = false;
+            this.render();
+          });
+        }
+        const backPick = this.els.body.querySelector('[data-np-back-pick]');
+        if(backPick){
+          on(backPick, 'click', () => {
+            this.ensurePolicyDraft();
+            this.policyDraft.type = "";
+            this._npCalcShown = false;
+            this.render();
+          });
+        }
+        const calcBtn = this.els.body.querySelector('[data-np-calc]');
+        if(calcBtn){
+          on(calcBtn, 'click', () => {
+            this._npCalcShown = true;
+            this.render();
+          });
+        }
+        $$('[data-np-manual-disc]', this.els.body).forEach((btn) => {
+          on(btn, 'click', () => {
+            const pid = safeTrim(btn.getAttribute('data-np-manual-disc') || "");
+            this._npManualDiscId = this._npManualDiscId === pid ? "" : pid;
+            const pol = (this.newPolicies || []).find((item) => String(item.id) === String(pid));
+            if(pol && pol.type === "בריאות"){
+              pol.coverDiscounts = this.getHealthCoverManualDiscountRows(pol);
+            }
+            this.render();
+          });
+        });
+        $$('[data-cover-pct]', this.els.body).forEach((inp) => {
+          on(inp, 'input', () => {
+            const [pid, row] = String(inp.getAttribute('data-cover-pct') || "").split(":");
+            const pol = (this.newPolicies || []).find((item) => String(item.id) === String(pid));
+            if(!pol) return;
+            if(!Array.isArray(pol.coverDiscounts) || !pol.coverDiscounts.length){
+              pol.coverDiscounts = this.getHealthCoverManualDiscountRows(pol);
+            }
+            const idx = Number(row);
+            if(pol.coverDiscounts[idx]) pol.coverDiscounts[idx].pct = String(inp.value || "").replace(/[^\d]/g, "");
           });
         });
 
