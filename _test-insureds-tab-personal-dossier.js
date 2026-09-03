@@ -10,8 +10,8 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260903-np-workspace-v6";
-const WIZARD_TAG = "20260903-np-workspace-v6";
+const APP_TAG = "20260903-np-workspace-v7";
+const WIZARD_TAG = "20260903-np-workspace-v7";
 let failed = 0;
 let passed = 0;
 
