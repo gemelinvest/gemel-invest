@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260903-np-workspace-v2";
+const TAG = "20260903-np-workspace-v3";
 let failed = 0;
 let passed = 0;
 
@@ -33,6 +33,12 @@ const app = read("app.js");
 const html = read("index.html");
 const css = read("app.css");
 const sw = read("service-worker.js");
+const sims = read("gi-simulators.js");
+const shellCss = read("simulators-shell.css");
+
+const openStart = wiz.indexOf("async openRiskSimulator(){");
+const openEnd = wiz.indexOf("addDraftPolicy(opts){", openStart);
+const openFn = (openStart >= 0 && openEnd > openStart) ? wiz.slice(openStart, openEnd) : "";
 
 const renderStart = wiz.indexOf("renderStep5(){");
 const renderEnd = wiz.indexOf("renderStep6(ins){", renderStart);
@@ -47,6 +53,7 @@ const pickBlock = pickStart >= 0 ? filterFn.slice(pickStart) : "";
 console.log("1) syntax + cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-wizard.js")]).status === 0, "node --check gi-wizard.js");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
+assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-simulators.js")]).status === 0, "node --check gi-simulators.js");
 assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "gi-wizard build tag");
 assert(app.includes('GI_WIZARD_JS_VERSION = "' + TAG + '"'), "app.js wizard version");
 assert(html.includes("app.js?v=" + TAG), "index.html app.js cache");
@@ -148,6 +155,33 @@ assert(applyManual(80.26, shotRows, {
   "השתלות": 30, "ניתוחים בחו״ל": 20, "אבחון מהיר": 10, "TOP משלימה": 20.26
 }) === 65.21, "with simulator per-cover quotes the after-price is weighted");
 assert(wiz.includes("coverDiscountsApplied = true"), "save sets applied flag so the row price refreshes");
+
+console.log("\n8) auto-open real simulator with all insureds — wizard chrome only");
+assert(openFn.includes("async openRiskSimulator(){"), "openRiskSimulator exists");
+assert(openFn.includes("wizardWorkspace: true"), "wizard opens with wizardWorkspace, not standalone");
+assert(!openFn.includes("standalone: true"), "wizard open does not set standalone");
+assert(openFn.includes("(this.insureds || []).map"), "simulator receives every proposal insured");
+assert(!openFn.includes("insuredIds.map((id) => this.insureds.find"), "no longer limited to draft.insuredIds");
+assert(openFn.includes("onPurchaseInsured"), "purchase-one-insured hook");
+assert(wiz.includes("keepSimulatorWorkspace"), "add keeps company/product so another insured can be bought");
+assert(wiz.includes("purchaseSimulatorInsured("), "purchase helper writes one insured onto the proposal");
+assert(renderFn.includes("_npSimAutoOpenedKey"), "step 5 auto-opens the simulator after company+product");
+assert(renderFn.includes("data-open-risk-sim"), "reopen control remains if the agent closed the modal");
+assert(renderFn.includes("lcNpWsHint"), "workspace behind the modal is a thin hint, not duplicate fields");
+assert(sims.includes("function riskSimUsesShell(sim)"), "shell chrome also wraps wizardWorkspace");
+assert(sims.includes("פוליסות חדשות › "), "wizard crumb is פוליסות חדשות, not the center");
+assert(sims.includes("הוסף מבוטח זה להצעה"), "wizard footer buys the active insured");
+assert(sims.includes("function riskSimIsRiskOrMortgageProduct(product)"), "pledge/beneficiaries gated to risk products");
+assert(sims.includes("riskSimMountLegalPanel"), "legal panel lives in simulator chrome");
+assert(sims.includes("if(!sim._ctx?.wizardWorkspace || !riskSimIsRiskOrMortgageProduct(sim._ctx.product))"), "health does not mount pledge/beneficiaries");
+assert(sims.includes("const addInsHtml = sim._ctx.standalone"), "add-insured button still standalone-only");
+assert(/if\(!sim\._ctx \|\| !sim\._ctx\.standalone\) return false;/.test(sims), "save-prompt still requires standalone center");
+assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=' + TAG + '"'), "simulator chunk cache bumped");
+assert(app.includes('simulators-shell.css?v=' + TAG), "shell css cache bumped");
+assert(shellCss.includes(".giSimShell__panel--legal"), "legal panel styles");
+assert(css.includes(".lcNpWsHint"), "workspace hint styles");
+assert(/canAccessSimulators\(\)\{\s*return this\.isAdmin\(\) \|\| this\.isManager\(\);/.test(app), "Simulators Center gate still admin/manager");
+assert(pickBlock.includes("GI-HEALTH-ONE-DECL"), "declaration routing still untouched in this follow-up");
 
 if(failed){
   console.error("\nFAILED  passed=" + passed + " failed=" + failed);

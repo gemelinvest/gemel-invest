@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260903-np-workspace-v2";
+  const GI_WIZARD_BUILD = "20260903-np-workspace-v3";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -15827,10 +15827,136 @@ if(path === "birthDate"){
       }
     },
 
-    /** GI-RISK-SIM: פותח את הסימולטור הרשום ל-(חברה, מוצר) הנוכחיים בטיוטה
-        (כרגע: הפניקס+ריסק ומנורה+ריסק). אופציונלי לחלוטין — אם אין handler רשום,
-        לא קורה כלום. תוצאת הסימולטור ממלאת רק שדות קיימים בטיוטה, ולא נשמרת
-        בשום מקום עד שהנציג לוחץ על כפתור השמירה הקיים של הפוליסה. */
+    toSimulatorDmyDate(raw){
+      const s = safeTrim(raw);
+      if(!s) return "";
+      if(/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;
+      const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+      if(iso && typeof formatDmyFromParts === "function"){
+        return formatDmyFromParts(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+      }
+      const parsed = typeof parseBirthDateValue === "function" ? parseBirthDateValue(s) : null;
+      if(parsed && typeof formatDmyFromParts === "function"){
+        return formatDmyFromParts(parsed.year, parsed.month, parsed.day);
+      }
+      return s;
+    },
+
+    toIsoDateFromAny(raw){
+      const s = safeTrim(raw);
+      if(!s) return "";
+      if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      const parsed = typeof parseBirthDateValue === "function" ? parseBirthDateValue(s) : null;
+      if(!parsed) return "";
+      return String(parsed.year) + "-" + String(parsed.month).padStart(2, "0") + "-" + String(parsed.day).padStart(2, "0");
+    },
+
+    closeNpOpenSimulator(){
+      const handler = this._npOpenSimHandler;
+      this._npOpenSimHandler = null;
+      try { handler?.close?.(); } catch(_e) {}
+    },
+
+    resetNpSimAutoOpenKey(){
+      this._npSimAutoOpenedKey = "";
+    },
+
+    seedWizardLegalFromDraft(){
+      this.ensurePolicyDraft();
+      const d = this.policyDraft;
+      return {
+        pledge: !!d.pledge,
+        pledgeBanks: this.normalizePledgeBanks(d).map((b) => Object.assign(this.emptyPledgeBank(), b)),
+        beneficiaries: Array.isArray(d.beneficiaries) ? JSON.parse(JSON.stringify(d.beneficiaries)) : []
+      };
+    },
+
+    applyRiskSimResultsToDraft(resultsByInsuredId, opts){
+      this.ensurePolicyDraft();
+      const draft = this.policyDraft;
+      draft.sumInsuredPerInsured = draft.sumInsuredPerInsured || {};
+      draft.premiumPerInsured = draft.premiumPerInsured || {};
+      draft.riskSimQuotes = draft.riskSimQuotes || {};
+      const map = resultsByInsuredId && typeof resultsByInsuredId === "object" ? resultsByInsuredId : {};
+      Object.keys(map).forEach((insId) => {
+        const r = map[insId];
+        if(!r) return;
+        if(r.sumInsured != null && safeTrim(r.sumInsured) !== ""){
+          draft.sumInsuredPerInsured[insId] = safeTrim(r.sumInsured);
+        }
+        const monthlyNum = Number(r.monthlyPremium);
+        draft.premiumPerInsured[insId] = Number.isFinite(monthlyNum) ? monthlyNum.toFixed(2) : String(r.monthlyPremium);
+        if(Array.isArray(r.covers) && r.covers.length){
+          draft.healthCovers = r.covers.map((c) => safeTrim(c.wizardKey || c.label || c.id)).filter(Boolean);
+          this.pruneDraftHealthCoversToSimulator(draft);
+        }
+        if(r.compensation != null && safeTrim(r.compensation) !== ""){
+          draft.compensationPerInsured = draft.compensationPerInsured || {};
+          draft.compensationPerInsured[insId] = safeTrim(r.compensation);
+          draft.compensation = draft.compensationPerInsured[insId];
+        }
+        const startIso = this.toIsoDateFromAny(r.insuranceStartDate || r.startDate || "");
+        if(startIso) draft.startDate = startIso;
+        draft.riskSimQuotes[insId] = Object.assign({}, r, {
+          company: draft.company, product: draft.type, computedAt: nowISO()
+        });
+        delete draft.riskSimQuotes[insId].sumInsured;
+      });
+      delete draft.riskSimApprovedAt;
+      this.resetPremiumSanityState();
+      this._npCalcShown = true;
+      if(!(opts && opts.skipRender)) this.render();
+      if(!(opts && (opts.skipToast || opts.skipRender))){
+        window.showToast?.({ title: "הפרמיה עודכנה", text: "תוצאת הסימולטור הוחלה על הפוליסה — ניתן לבדוק ולהמשיך כרגיל.", variant: "success" });
+      }
+    },
+
+    purchaseSimulatorInsured(insId, result, legal){
+      const id = safeTrim(insId);
+      if(!id) return;
+      this.applyRiskSimResultsToDraft({ [id]: result || {} }, { skipRender: true, skipToast: true });
+      this.ensurePolicyDraft();
+      const draft = this.policyDraft;
+      draft.insuredIds = [id];
+      draft.insuredId = id;
+      draft.insuredMode = "single";
+      const keepMap = (obj) => {
+        const next = {};
+        if(obj && Object.prototype.hasOwnProperty.call(obj, id)) next[id] = obj[id];
+        return next;
+      };
+      draft.premiumPerInsured = keepMap(draft.premiumPerInsured);
+      draft.sumInsuredPerInsured = keepMap(draft.sumInsuredPerInsured);
+      if(draft.compensationPerInsured) draft.compensationPerInsured = keepMap(draft.compensationPerInsured);
+      if(draft.riskSimQuotes) draft.riskSimQuotes = keepMap(draft.riskSimQuotes);
+      const isRisk = !this.isMedicareCompany(draft.company) && (safeTrim(draft.type) === "ריסק" || safeTrim(draft.type) === "ריסק משכנתא");
+      if(isRisk && legal){
+        draft.pledge = !!legal.pledge;
+        draft.pledgeBanks = Array.isArray(legal.pledgeBanks) && legal.pledgeBanks.length
+          ? legal.pledgeBanks.map((b) => Object.assign(this.emptyPledgeBank(), b))
+          : [this.emptyPledgeBank()];
+        this.normalizePledgeBanks(draft);
+        draft.beneficiaries = Array.isArray(legal.beneficiaries)
+          ? JSON.parse(JSON.stringify(legal.beneficiaries))
+          : [];
+      } else {
+        draft.pledge = false;
+        draft.pledgeBanks = [this.emptyPledgeBank()];
+        this.normalizePledgeBanks(draft);
+        if(!isRisk) draft.beneficiaries = [];
+      }
+      const pid = this.addDraftPolicy({ keepSimulatorWorkspace: true });
+      const ins = (this.insureds || []).find((x) => x.id === id);
+      window.showToast?.({
+        title: "נוסף להצעה",
+        text: (ins?.label ? ins.label : "המבוטח") + " נוסף לפוליסת " + safeTrim(this.policyDraft?.company || "") + " · " + safeTrim(this.policyDraft?.type || "") + ".",
+        variant: "success"
+      });
+      return pid;
+    },
+
+    /** GI-RISK-SIM: פותח את הסימולטור הרשום ל-(חברה, מוצר) הנוכחיים בטיוטה.
+        מפוליסות חדשות: כל המבוטחים בהצעה, בלי standalone (מרכז הסימולטורים לא משתנה). */
     async openRiskSimulator(){
       if(!this.canOpenWizardPolicySimulator?.()){
         try{
@@ -15850,59 +15976,39 @@ if(path === "birthDate"){
       }
       const handler = RiskSimulators.getHandler(d.company, d.type);
       if(!handler) return;
-      const insuredIds = Array.isArray(d.insuredIds) && d.insuredIds.length ? d.insuredIds : (d.insuredId ? [d.insuredId] : []);
-      const insureds = insuredIds.map((id) => this.insureds.find((x) => x.id === id)).filter(Boolean);
+      const insureds = (this.insureds || []).map((ins, idx) => ({
+        id: ins.id,
+        label: safeTrim(ins.label) || ("מבוטח " + (idx + 1)),
+        type: ins.type,
+        data: Object.assign({}, ins.data || {})
+      })).filter((ins) => ins.id);
       if(!insureds.length){
-        window.showToast?.({ title: "יש לבחור מבוטח", text: "בחרו מבוטח/ים בסימולטור לפני החישוב.", variant: "warn" });
+        window.showToast?.({ title: "יש לבחור מבוטח", text: "אין מבוטחים בהצעה — הוסיפו מבוטח בשלב הראשון.", variant: "warn" });
         return;
       }
+      const startDmy = this.toSimulatorDmyDate(d.insuranceStartDate || d.startDate || "");
+      if(this._npOpenSimHandler && this._npOpenSimHandler !== handler){
+        try { this._npOpenSimHandler.close?.(); } catch(_e3) {}
+      }
+      this._npOpenSimHandler = handler;
+      const wizardLegalByInsured = {};
+      const seed = this.seedWizardLegalFromDraft();
+      insureds.forEach((ins) => { wizardLegalByInsured[ins.id] = JSON.parse(JSON.stringify(seed)); });
       handler.open({
         company: d.company,
         product: d.type,
-        insuranceStartDate: safeTrim(d.insuranceStartDate || d.startDate || ""),
-        startDate: safeTrim(d.insuranceStartDate || d.startDate || ""),
+        wizardWorkspace: true,
+        insuranceStartDate: startDmy,
+        startDate: startDmy,
+        bankNames: Array.isArray(this.bankNames) ? this.bankNames.slice() : [],
+        wizardLegalSeed: seed,
+        wizardLegalByInsured,
         insureds,
-        onApply: (resultsByInsuredId) => {
-          this.ensurePolicyDraft();
-          const draft = this.policyDraft;
-          draft.sumInsuredPerInsured = draft.sumInsuredPerInsured || {};
-          draft.premiumPerInsured = draft.premiumPerInsured || {};
-          draft.riskSimQuotes = draft.riskSimQuotes || {};
-          Object.keys(resultsByInsuredId).forEach((insId) => {
-            const r = resultsByInsuredId[insId];
-            if(r.sumInsured != null && safeTrim(r.sumInsured) !== ""){
-              draft.sumInsuredPerInsured[insId] = safeTrim(r.sumInsured);
-            }
-            const monthlyNum = Number(r.monthlyPremium);
-            draft.premiumPerInsured[insId] = Number.isFinite(monthlyNum) ? monthlyNum.toFixed(2) : String(r.monthlyPremium);
-            // GI-MNR-HEALTH-SIM: אם הסימולטור החזיר רשימת כיסויים — מעדכנים את
-            // healthCovers בטיוטה לפי wizardKey (מפתחות האשף), לא לפי שם ה-PDF.
-            if(Array.isArray(r.covers) && r.covers.length){
-              draft.healthCovers = r.covers.map((c) => safeTrim(c.wizardKey || c.label || c.id)).filter(Boolean);
-              this.pruneDraftHealthCoversToSimulator(draft);
-            }
-            // מחלות קשות / סרטן — סכום פיצוי (לא סכום ביטוח ריסק).
-            if(r.compensation != null && safeTrim(r.compensation) !== ""){
-              draft.compensationPerInsured = draft.compensationPerInsured || {};
-              draft.compensationPerInsured[insId] = safeTrim(r.compensation);
-              draft.compensation = draft.compensationPerInsured[insId];
-            }
-            // שדה מטא-דאטה גנרי — שומר את כל פלט הסימולטור (כל שדות התעריף
-            // הייחודיים לחברה, כגון ratePerMille להפניקס או ratePerHundredThousand
-            // ו-bracket למנורה / covers לבריאות) בלי לקודד שם שדות ספציפיים לחברה.
-            draft.riskSimQuotes[insId] = Object.assign({}, r, {
-              company: d.company, product: d.type, computedAt: nowISO()
-            });
-            delete draft.riskSimQuotes[insId].sumInsured;
-          });
-          // GI-RISK-SIM-OCCUPATION: כל שינוי בתוצאות הסימולטור (שמירה חדשה עבור
-          // מבוטח כלשהו) מבטל אישור סופי קודם — כדי שלא יישאר "מאושר" מול נתונים
-          // שכבר לא רלוונטיים. הנציג יצטרך לאשר מחדש דרך "אישור סופי" בסימולטור.
-          delete draft.riskSimApprovedAt;
-          this.resetPremiumSanityState();
-          this._npCalcShown = true;
-          this.render();
-          window.showToast?.({ title: "הפרמיה עודכנה", text: "תוצאת הסימולטור הוחלה על הפוליסה — ניתן לבדוק ולהמשיך כרגיל.", variant: "success" });
+        onApply: (resultsByInsuredId, meta) => {
+          this.applyRiskSimResultsToDraft(resultsByInsuredId, meta);
+        },
+        onPurchaseInsured: (insId, result, legal) => {
+          this.purchaseSimulatorInsured(insId, result, legal);
         },
         onFinalConfirm: () => {
           this.ensurePolicyDraft();
@@ -15914,9 +16020,12 @@ if(path === "birthDate"){
       });
     },
 
-    addDraftPolicy(){
+    addDraftPolicy(opts){
       this.ensurePolicyDraft();
       const d = this.policyDraft;
+      const keepSimulatorWorkspace = !!(opts && opts.keepSimulatorWorkspace);
+      const keepCompany = keepSimulatorWorkspace ? safeTrim(d.company) : "";
+      const keepType = keepSimulatorWorkspace ? safeTrim(d.type) : "";
       const createdPolicyId = this.editingPolicyId || ("npol_" + Math.random().toString(16).slice(2));
 
       // build normalized policy
@@ -16018,6 +16127,14 @@ if(path === "birthDate"){
       this.policyDraft.pledgeBanks = [this.emptyPledgeBank()];
       this.normalizePledgeBanks(this.policyDraft);
       this.policyDraft.beneficiaries = [];
+
+      if(keepSimulatorWorkspace && keepCompany){
+        this.policyDraft.company = keepCompany;
+        this.policyDraft.type = keepType;
+        this.applyAllProposalInsuredsToDraft();
+      } else {
+        this.resetNpSimAutoOpenKey();
+      }
 
       this.resetPremiumSanityState();
       this.render();
@@ -17870,18 +17987,26 @@ if(path === "birthDate"){
           </div>
         </div>`;
 
+      const simWorkspaceHint = riskSimHandler ? `
+          <div class="lcNpWsHint">
+            <div class="lcNpWsHint__text">
+              <strong>הסימולטור נפתח עם כל המבוטחים בהצעה</strong>
+              <span>בחרו מבוטח בתוך הסימולטור, סמנו כיסויים, חשבו פרמיה והוסיפו להצעה. בריסק אפשר למלא שיעבוד ומוטבים שם — בבריאות אין שיעבוד.</span>
+            </div>
+            <button type="button" class="lcPhxSimBanner__btn" data-open-risk-sim="1">פתח סימולטור מחדש</button>
+          </div>` : "";
       const workspaceHtml = `
         <div class="lcNpWorkspace" id="lcNpWorkspace">
           <div class="lcNpWsHead">
-            <div class="lcNpWsBrand">${this.renderCompanyLogoHtml(d.company, "dd")}<div><strong>${escapeHtml(d.company)} · ${escapeHtml(isMedicare ? "מדיקר" : (d.type || "מוצר"))}</strong><span>מרחב עבודה · סימולטור פתוח לכל נציג</span></div></div>
+            <div class="lcNpWsBrand">${this.renderCompanyLogoHtml(d.company, "dd")}<div><strong>${escapeHtml(d.company)} · ${escapeHtml(isMedicare ? "מדיקר" : (d.type || "מוצר"))}</strong><span>${riskSimHandler ? "הסימולטור האמיתי נפתח אוטומטית" : "מילוי ידני — אין סימולטור למוצר זה"}</span></div></div>
             <div class="lcNpWsSwitch">
               <label class="lcField"><span class="lcLabel">החלף חברה</span><select class="lcInput" id="lcNpWsCompany" data-np-ws-company>${wsCompanyOpts}</select></label>
               <label class="lcField"><span class="lcLabel">החלף מוצר</span><select class="lcInput" id="lcNpWsProduct" data-np-ws-product ${isMedicare ? "disabled" : ""}>${isMedicare ? `<option>מדיקר</option>` : wsProductOpts}</select></label>
               <button class="lcBtn" type="button" data-np-back-pick="1">חזרה לבחירה</button>
             </div>
           </div>
-          ${riskSimBannerHtml}
-          <div class="lcNpWsGrid">
+          ${riskSimHandler ? simWorkspaceHint : riskSimBannerHtml}
+          ${riskSimHandler ? "" : `<div class="lcNpWsGrid">
             <div class="lcNpWsPanel" data-np-sec="3">
               <h3>מבוטחים בהצעה זו</h3>
               ${body3}
@@ -17890,11 +18015,11 @@ if(path === "birthDate"){
               <h3>נתונים לסימולטור</h3>
               ${body4}${calcBox}
             </div>
-          </div>
+          </div>`}
           <div class="lcNpProductGrid lcNpProductGrid--hidden" aria-hidden="true">${productCards}</div>
         </div>`;
 
-      const addBarHtml = step4Open ? `${this.renderDuplicationAlertBanner()}<div class="lcNpAddBar">
+      const addBarHtml = (step4Open && !riskSimHandler) ? `${this.renderDuplicationAlertBanner()}<div class="lcNpAddBar">
             ${this.editingPolicyId ? `<button type="button" class="lcBtn lcBtn--primary lcNpAddBtn" data-cancel-editpol="1">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               ביטול עריכה
@@ -18005,6 +18130,8 @@ if(path === "birthDate"){
             // GI-FIX 2026-08-04: החלפת חברה איפסה שיעבוד אך לא מוטבים,
             // כך שמוטבים נגררו מפוליסה קודמת לפוליסה החדשה.
             this.policyDraft.beneficiaries = [];
+            this.resetNpSimAutoOpenKey();
+            this.closeNpOpenSimulator();
             this.render();
           });
           this._lcNpCoDdOutsideHandler = function closeDdOutside(ev){
@@ -18030,6 +18157,8 @@ if(path === "birthDate"){
             this.policyDraft.umbrellaDisabilityAmount = "";
             this.policyDraft.umbrellaDeathAmount = "";
             this._npCalcShown = false;
+            this.resetNpSimAutoOpenKey();
+            this.closeNpOpenSimulator();
             this.render();
           });
         });
@@ -18088,6 +18217,8 @@ if(path === "birthDate"){
             this.policyDraft.healthCovers = [];
             this.policyDraft.beneficiaries = [];
             this._npCalcShown = false;
+            this.resetNpSimAutoOpenKey();
+            this.closeNpOpenSimulator();
             this.render();
           });
         }
@@ -18100,6 +18231,8 @@ if(path === "birthDate"){
             this.applyAllProposalInsuredsToDraft();
             this.policyDraft.healthCovers = [];
             this._npCalcShown = false;
+            this.resetNpSimAutoOpenKey();
+            this.closeNpOpenSimulator();
             this.render();
           });
         }
@@ -18109,6 +18242,8 @@ if(path === "birthDate"){
             this.ensurePolicyDraft();
             this.policyDraft.type = "";
             this._npCalcShown = false;
+            this.resetNpSimAutoOpenKey();
+            this.closeNpOpenSimulator();
             this.render();
           });
         }
@@ -18171,6 +18306,14 @@ if(path === "birthDate"){
         const riskSimBtn = this.els.body.querySelector('[data-open-risk-sim]');
         if(riskSimBtn){
           on(riskSimBtn, 'click', () => this.openRiskSimulator());
+        }
+        if(workspaceOpen && riskSimHandler && !isMedicare){
+          const autoKey = String(d.company || "") + "::" + String(d.type || "");
+          const simVisible = !!document.querySelector(".giValModal");
+          if(this._npSimAutoOpenedKey !== autoKey && !simVisible){
+            this._npSimAutoOpenedKey = autoKey;
+            void this.openRiskSimulator();
+          }
         }
 
         // insured cards — multi-select toggle

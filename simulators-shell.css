@@ -833,3 +833,105 @@
   border-radius:0 !important;
   box-shadow:none !important;
 }
+
+
+/* GI-NP-WORKSPACE 2026-09-03 — שיעבוד+מוטבים באשף בלבד, לא במרכז הסימולטורים */
+.giSimShell__panel--legal{
+  margin-top:12px !important;
+  padding:14px 16px 16px !important;
+  background:#f8fafc !important;
+  border:1px solid #e5eaf3 !important;
+  border-radius:14px !important;
+}
+.giSimShell__panel--legal .giSimShell__panelTitle{
+  margin-bottom:10px !important;
+}
+.giSimShell__legalToggle{
+  display:flex !important;
+  align-items:center !important;
+  gap:8px !important;
+  font-weight:700 !important;
+  color:#1e3a5f !important;
+  margin:0 0 10px !important;
+}
+.giSimShell__legalGrid{
+  display:grid !important;
+  grid-template-columns:1fr 1fr !important;
+  gap:8px 12px !important;
+}
+.giSimShell__legalField{
+  display:flex !important;
+  flex-direction:column !important;
+  gap:4px !important;
+  font-size:12px !important;
+  font-weight:700 !important;
+  color:#5c6b7a !important;
+}
+.giSimShell__legalField input,
+.giSimShell__legalField select{
+  min-height:34px !important;
+  border:1px solid #d8dee6 !important;
+  border-radius:8px !important;
+  padding:0 8px !important;
+  font-size:13px !important;
+  color:#1e3a5f !important;
+  background:#fff !important;
+}
+.giSimShell__legalField--wide{grid-column:1 / -1 !important}
+.giSimShell__legalBank{
+  background:#fff !important;
+  border:1px solid #e5eaf3 !important;
+  border-radius:10px !important;
+  padding:10px !important;
+  margin-bottom:8px !important;
+}
+.giSimShell__legalBankHead{
+  display:flex !important;
+  justify-content:space-between !important;
+  align-items:center !important;
+  font-weight:800 !important;
+  color:#1e3a5f !important;
+  margin-bottom:8px !important;
+  font-size:13px !important;
+}
+.giSimShell__legalBensHead{
+  display:flex !important;
+  flex-wrap:wrap !important;
+  align-items:center !important;
+  gap:8px !important;
+  margin:12px 0 8px !important;
+}
+.giSimShell__legalBensHead strong{color:#1e3a5f !important}
+.giSimShell__legalBensHead span{font-size:12px !important;color:#64748b !important;font-weight:600 !important}
+.giSimShell__benRow{
+  display:grid !important;
+  grid-template-columns:1fr 1fr 1fr minmax(110px,0.8fr) 70px 32px !important;
+  gap:8px !important;
+  align-items:end !important;
+  margin-bottom:8px !important;
+}
+.giSimShell__legalIconBtn{
+  border:0 !important;
+  background:transparent !important;
+  color:#64748b !important;
+  cursor:pointer !important;
+  font-size:16px !important;
+  min-height:32px !important;
+}
+.giSimShell__legalAddBtn{
+  min-height:32px !important;
+  font-size:12px !important;
+}
+.giSimShell__legalNote{
+  font-size:12px !important;
+  color:#64748b !important;
+  font-weight:600 !important;
+  margin:0 0 8px !important;
+}
+.giSimShell__buyBtn{
+  white-space:nowrap !important;
+}
+@media (max-width: 860px){
+  .giSimShell__benRow,
+  .giSimShell__legalGrid{grid-template-columns:1fr 1fr !important}
+}
