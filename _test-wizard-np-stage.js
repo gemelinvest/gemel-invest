@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260903-np-workspace-v8";
+const TAG = "20260903-np-workspace-v9";
 let failed = 0;
 let passed = 0;
 
@@ -168,6 +168,20 @@ assert(rowLogo.includes("box-shadow:none"), "row logo has no shadow");
 assert(/width:128px;height:70px/.test(rowLogo), "row logo is bigger so it reads clearly");
 assert(rowLogo.includes("object-fit:contain"), "row logo is never cropped");
 
+console.log("\n5d) operational report shows before/after simulator discount");
+assert(wiz.includes("GI-NP-OPS-DISCOUNT"), "ops-report discount marker present");
+assert(wiz.includes("getNewPolicyPremiumBeforeSafe = (policy) =>"), "ops before-premium helper");
+assert(wiz.includes("Number(this.getHealthRowPremiumAfterDiscount(policy || {}))"), "ops final premium uses row after-discount");
+assert(wiz.includes('const COL_COUNT = 6;'), "ops PDF compact table has 6 columns");
+assert(wiz.includes("<th>לפני הנחה</th><th>אחרי הנחה</th>"), "ops PDF shows before and after premium columns");
+assert(wiz.includes("premiumBeforeLabel: premiumBefore ? this.formatMoneyValue(premiumBefore) : '—'"), "ops PDF rows carry before-premium labels");
+assert(wiz.includes("sum + getNewPolicyPremiumSafe(policy)"), "ops grand total uses after-discount helper");
+assert(!/totalPremiumAfterDiscount = newPolicies\.reduce\(\(sum, policy\) => sum \+ this\.getPolicyPremiumAfterDiscount\(policy\)/.test(wiz), "ops grand total no longer uses the legacy before-as-after helper");
+assert(wiz.includes("['פרמיה לפני הנחה', premiumBeforeVal ? this.formatMoneyValue(premiumBeforeVal) : '']"), "ops detail blocks list before premium");
+assert(wiz.includes("['פרמיה אחרי הנחה', premiumAfterVal ? this.formatMoneyValue(premiumAfterVal) : '']"), "ops detail blocks list after premium");
+assert(wiz.includes("policy?.simDiscountPerInsured?.[iid]?.monthlyAfterDiscount"), "ops per-insured premium prefers simulator after-discount");
+assert(/getPolicyInsuredLabelSafe = \(policy\) => \{[\s\S]{0,900}pIds\.length > 1/.test(wiz), "ops insured label joins multiple insuredIds");
+
 console.log("\n6) untouched — declaration routing, premium engine, simulators center");
 assert(/canAccessSimulators\(\)\{\s*return this\.isAdmin\(\) \|\| this\.isManager\(\);/.test(app), "Simulators Center gate still admin/manager");
 assert(/canOpenWizardPolicySimulator\(\)\{\s*return true;/.test(wiz), "wizard simulator still open to every agent");
@@ -241,7 +255,8 @@ const sandbox = {
     addEventListener(){}, removeEventListener(){},
     body: fakeBody
   },
-  console
+  console,
+  Auth: { current: { name: "נציג בדיקה" } }
 };
 sandbox.globalThis = sandbox;
 
@@ -455,6 +470,61 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
   W.handleWizardSimulatorClose();
   assert(W.policyDraft.company === "הפניקס", "close right after adding to the proposal does not reset the draft");
   assert(W._npSimSkipCloseCleanup === false, "skip flag is consumed once");
+
+  // ── operational PDF: before/after discount surfaces ──
+  {
+    const opsPayload = {
+      createdAt: "2026-09-03T10:00:00.000Z",
+      agentName: "נציג בדיקה",
+      primary: { firstName: "דוד", lastName: "כהן" },
+      insureds,
+      newPolicies: [
+        {
+          id: "opsClal", company: "כלל", type: "ריסק",
+          insuredIds: ["i1"], insuredId: "i1",
+          premiumMonthly: 61.32, premiumPerInsured: { i1: "61.32" },
+          sumInsured: "600000", sumInsuredPerInsured: { i1: "600000" },
+          startDate: "2026-11-01", discountPct: "65",
+          simDiscountPerInsured: { i1: { year1Pct: 65, monthlyAfterDiscount: 21.46 } }
+        },
+        {
+          id: "opsMulti", company: "מגדל", type: "ריסק",
+          insuredIds: ["i1", "i2"], insuredId: "i1", insuredMode: "multi",
+          premiumMonthly: 400, premiumPerInsured: { i1: "200", i2: "200" },
+          sumInsuredPerInsured: { i1: "500000", i2: "500000" },
+          startDate: "2026-12-01", discountPct: "50",
+          simDiscountPerInsured: {
+            i1: { year1Pct: 50, monthlyAfterDiscount: 100 },
+            i2: { year1Pct: 50, monthlyAfterDiscount: 100 }
+          }
+        },
+        {
+          id: "opsHealth", company: "הפניקס", type: "בריאות",
+          insuredIds: ["i1"], insuredId: "i1",
+          premiumMonthly: 870, premiumPerInsured: { i1: "870" },
+          healthCovers: ["תרופות מחוץ לסל הבריאות", "ניתוחים בישראל מהשקל הראשון"],
+          startDate: "2026-10-15", discountPct: "10",
+          simDiscountPerInsured: { i1: { year1Pct: 10, monthlyAfterDiscount: 783 } }
+        }
+      ],
+      mirrorSchedule: {}
+    };
+    let opsHtml = "";
+    try {
+      const pack = W.buildOperationalPdfMarkup(opsPayload, { forPreview: true });
+      opsHtml = String(pack && pack.html || "");
+    } catch (err) {
+      assert(false, "buildOperationalPdfMarkup runs (" + (err && err.message) + ")");
+    }
+    assert(opsHtml.includes("<th>לפני הנחה</th>") && opsHtml.includes("<th>אחרי הנחה</th>"), "ops PDF table headers include before/after");
+    assert(/₪\s*61[.,]32/.test(opsHtml) && /₪\s*21[.,]46/.test(opsHtml), "ops PDF shows Clal before 61.32 and after 21.46");
+    assert(opsHtml.includes("כלל") && opsHtml.includes("מגדל") && opsHtml.includes("הפניקס"), "ops PDF lists each company");
+    assert(opsHtml.includes("בריאות") && (opsHtml.includes("תרופות") || opsHtml.includes("ניתוחים")), "ops PDF lists health product and covers");
+    assert(opsHtml.includes("דוד כהן") && opsHtml.includes("יעל כהן"), "ops PDF names multi-insured people");
+    assert(/₪\s*1[,.]?004[.,]46/.test(opsHtml) || opsHtml.includes("1,004.46") || opsHtml.includes("1004.46"), "ops PDF grand total uses after-discount (21.46+200+783)");
+    assert(W.getPolicyPremiumAfterDiscount(opsPayload.newPolicies[0]) === 61.32, "legacy after-discount helper still returns before for Clal");
+    assert(W.getHealthRowPremiumAfterDiscount(opsPayload.newPolicies[0]) === 21.46, "row after-discount helper still returns simulator net for Clal");
+  }
 
   // ── docking ──
   const wizardBody = makeNode("wizardBody");
