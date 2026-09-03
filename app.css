@@ -25652,6 +25652,16 @@ body.lcAuthLock .lcLogin__mfaQrBox > canvas{width:min(100%,220px) !important;max
 .lcNpWsBrand strong{display:block;color:#1b365d;font-size:16px}
 .lcNpWsBrand span{display:block;color:#64748b;font-size:12px;font-weight:600}
 .lcNpWsSwitch{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+
+.lcNpWsHint{
+  display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center;
+  background:#f4f8ff;border:1px solid #d7e4f7;border-radius:16px;
+  padding:14px 16px;margin-bottom:14px;
+}
+.lcNpWsHint__text{display:flex;flex-direction:column;gap:4px;max-width:720px}
+.lcNpWsHint__text strong{color:#1b365d;font-size:14px}
+.lcNpWsHint__text span{color:#64748b;font-size:13px;font-weight:600}
+
 .lcNpWsSwitch .lcField{margin:0;min-width:160px}
 .lcNpSections--workspace > .lcNpSection:nth-child(1),
 .lcNpSections--workspace > .lcNpSection:nth-child(2){
