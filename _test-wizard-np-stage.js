@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260905-np-per-insured-v1";
+const TAG = "20260905-np-per-insured-v2";
 let failed = 0;
 let passed = 0;
 
@@ -137,13 +137,14 @@ assert(/closeNpOpenSimulator\(\)\{[\s\S]*?captureOpenSimulatorSession\(\);[\s\S]
 assert(wiz.includes("this._npSimSkipCloseCleanup = true;"), "adding to the proposal skips the pick bounce");
 
 console.log("\n5b) simulator discount reaches the summary row");
-assert(sims.includes("function riskSimSelectedDiscountPayload(sim, result){"), "simulator builds a discount payload for the wizard");
+assert(sims.includes("function riskSimSelectedDiscountPayload(sim, result, insId){"), "simulator builds a discount payload for the wizard");
 assert(sims.includes("monthlyAfterDiscount:"), "payload carries the already-computed after-discount price");
 assert(sims.includes("year1Pct: giSimDiscountYear1Pct(opt)"), "payload carries the year-1 percent");
 assert(sims.includes("schedule: Array.isArray(opt.schedule)") || sims.includes("const schedule = Array.isArray(opt.schedule)"), "payload carries the multi-year schedule");
 assert(/giSimDiscountYear1Pct\(opt\)\{[\s\S]{0,200}opt\.schedule\[0\]/.test(sims) || /function giSimDiscountYear1Pct\(opt\)\{[\s\S]{0,220}schedule\[0\]/.test(sims), "year-1 percent is the first year of the schedule");
 assert(sims.includes("const payload = discount ? Object.assign({}, result, { simDiscount: discount }) : Object.assign({}, result);"), "purchase sends the discount alongside the result");
-assert(sims.includes("sim._ctx.onPurchaseInsured?.(insId, payload, legal)"), "purchase hook receives the enriched payload");
+assert(sims.includes("sim._ctx.onPurchaseInsured?.(active.insId, active.payload, active.legal)"), "purchase hook receives the enriched payload");
+assert(sims.includes("onPurchaseAllInsureds"), "הוסף להצעה can add a row per insured pick");
 assert(sims.includes("Number(null) === 0") || sims.includes("Number(null)==="), "null-to-zero guard documented");
 assert(sims.includes('(after == null || after === "") ? NaN : Number(after)'), "null after-discount is not coerced to 0");
 assert(sims.includes("built.ok = true"), "risk results without ok get ok:true before discount calc");
@@ -167,7 +168,17 @@ assert(wiz.includes("mergeNpSimSessionSnapshot(snapshot){"), "wizard merges per-
 assert(wiz.includes("buildNpSimRestoreState(company, product, fallback){"), "restore is filtered by company/product");
 assert(wiz.includes("buildNpSimRestoreDiscount(company, product, fallback){"), "discount restore is filtered by company/product");
 assert(wiz.includes("onWizardSessionCapture: (session) =>"), "open wires session capture");
-assert(!/switchSimulatorInsuredPick\(insId, company, product, snapshot\)\{[\s\S]{0,900}this\.policyDraft\.company = co;/.test(wiz), "pick switch does not stamp the new company onto the shared draft before reopen");
+assert(wiz.includes("this._npSimReopening = true"), "pick switch marks a reopen so auto-open/close cannot wipe picks");
+assert(wiz.includes("if(this._npSimReopening) return;"), "wizard close is ignored while a pick switch is reopening");
+assert(sims.includes("if(handler._giOpening) return origClose();"), "open()'s inner close does not notify the wizard");
+assert(sims.includes("חברה למבוטח זה"), "company dropdown is labeled for this insured");
+assert(sims.includes("מוצר למבוטח זה"), "product dropdown is labeled for this insured");
+assert(sims.includes('base + " · " + prod'), "tabs show each insured's chosen product");
+assert(sims.includes("riskSimPurchaseWizardInsureds(sim)"), "add-to-proposal walks every insured pick");
+assert(wiz.includes("purchaseAllSimulatorInsureds(entries){"), "wizard adds one proposal row per calculated pick");
+assert(wiz.includes("keepSessionPicks: keepPicks"), "adding several rows does not reset the per-insured picks");
+assert(wiz.includes("onPurchaseAllInsureds: (entries) =>"), "open wires the add-all hook");
+assert(!/switchSimulatorInsuredPick\(insId, company, product, snapshot\)\{[\s\S]{0,1200}this\.policyDraft\.company = co;/.test(wiz), "pick switch does not stamp the new company onto the shared draft before reopen");
 
 console.log("\n5b3) compact summary row + hidden inner insured list");
 assert(css.includes("grid-template-columns:72px minmax(0,1.6fr) auto auto"), "summary row is a tight 4-column grid");
@@ -537,6 +548,73 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
     const hachDisc = W.buildNpSimRestoreDiscount("הכשרה", "ריסק", null);
     assert(hachDisc && hachDisc.i1 === "hach-r-30", "הכשרה discount restore returns the primary option");
     assert(opened.length === 1 && opened[0].restoreActiveId === "i2", "reopen targets the insured whose pick changed");
+  }
+
+  // ── כלל ריסק לראשי + כלל סרטן למשני: picks stay split, add creates two rows ──
+  {
+    const added = [];
+    W._npSimReopening = false;
+    W._npSimKeepWorkspace = false;
+    W.handleWizardSimulatorClose();
+    W._npSimPickByInsured = {
+      i1: { company:"כלל", product:"ריסק" },
+      i2: { company:"כלל", product:"סרטן" }
+    };
+    W._npSimStateBag = {
+      i1: { "כלל::ריסק": { sumInsured:"800000", result:{ ok:true, monthlyPremium:61.32 } } },
+      i2: { "כלל::סרטן": { sumInsured:"", compensation:"100000", result:{ ok:true, monthlyPremium:22.5 } } }
+    };
+    W._npSimDiscountBag = {
+      i1: { "כלל::ריסק": { optionId:"cll-r-5001", year1Pct:65, monthlyAfterDiscount:21.46 } }
+    };
+    W.policyDraft = { company:"כלל", type:"סרטן", insuredIds:["i1","i2"], insuredId:"i2" };
+    W._npShowPick = false;
+    W.newPolicies = [];
+    W.addDraftPolicy = function(opts){
+      const d = this.policyDraft;
+      const row = {
+        id: "npol_" + d.company + "_" + d.type + "_" + d.insuredId,
+        company: d.company,
+        type: d.type,
+        insuredIds: (d.insuredIds || []).slice(),
+        keepSessionPicks: !!(opts && opts.keepSessionPicks),
+        skipRender: !!(opts && opts.skipRender)
+      };
+      added.push(row);
+      this.newPolicies = (this.newPolicies || []).concat([row]);
+      this.policyDraft = { company:"", type:"", insuredIds:["i1","i2"], insuredId:"i1" };
+      return row.id;
+    };
+    W.emptyPledgeBank = function(){ return { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" }; };
+    W.normalizePledgeBanks = function(){ return []; };
+    W.isMedicareCompany = function(){ return false; };
+    const fromBag = W.buildPurchasePayloadFromSessionBag("i1", "כלל", "ריסק");
+    assert(fromBag && fromBag.monthlyPremium === 61.32, "bag rebuilds the primary כלל · ריסק result");
+    assert(fromBag.simDiscount && fromBag.simDiscount.monthlyAfterDiscount === 21.46, "bag keeps the primary discount payload");
+    const pids = W.purchaseAllSimulatorInsureds([
+      { insId:"i1", company:"כלל", product:"ריסק", payload:null, label:"ראשי - דוד כהן" },
+      { insId:"i2", company:"כלל", product:"סרטן", payload:{ ok:true, monthlyPremium:22.5, compensation:"100000" }, label:"משני - יעל כהן" }
+    ]);
+    assert(added.length === 2, "הוסף להצעה writes one summary row per insured pick");
+    assert(added[0].company === "כלל" && added[0].type === "ריסק" && added[0].insuredIds[0] === "i1", "first row is primary כלל · ריסק");
+    assert(added[1].company === "כלל" && added[1].type === "סרטן" && added[1].insuredIds[0] === "i2", "second row is secondary כלל · סרטן");
+    assert(added.every((row) => row.keepSessionPicks === true), "batch add keeps per-insured picks between rows");
+    assert(pids.length === 2, "purchase-all returns both policy ids");
+    assert(W._npSimPickByInsured && Object.keys(W._npSimPickByInsured).length === 0, "picks reset only after both rows were added");
+    assert(W._npShowPick === false, "after adding both rows the step stays on the summary");
+  }
+
+  // ── reopen/close guards do not wipe picks ──
+  {
+    W._npSimPickByInsured = { i1:{ company:"כלל", product:"ריסק" }, i2:{ company:"כלל", product:"סרטן" } };
+    W._npSimReopening = true;
+    W._npSimKeepWorkspace = false;
+    W._npSimSkipCloseCleanup = false;
+    W.policyDraft = { company:"כלל", type:"ריסק", insuredIds:["i1"] };
+    W.handleWizardSimulatorClose();
+    assert(W._npSimPickByInsured.i1.product === "ריסק" && W._npSimPickByInsured.i2.product === "סרטן", "close during reopen does not wipe per-insured picks");
+    assert(W.policyDraft.company === "כלל", "close during reopen does not clear the draft company");
+    W._npSimReopening = false;
   }
 
   // ── operational PDF: before/after discount surfaces ──

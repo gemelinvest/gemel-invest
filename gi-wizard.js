@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260905-np-per-insured-v1";
+  const GI_WIZARD_BUILD = "20260905-np-per-insured-v2";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -11406,9 +11406,16 @@ if(path === "birthDate"){
       this._npSimPickByInsured = this._npSimPickByInsured || {};
       this._npSimPickByInsured[id] = { company: co, product: pr };
       this.ensurePolicyDraft();
-      this._npSimAutoOpenedKey = co + "::" + pr;
+      this._npSimReopening = true;
       this.closeNpOpenSimulator();
-      void this.openRiskSimulator({ restoreActiveId: id });
+      const done = () => { this._npSimReopening = false; };
+      try {
+        const opened = this.openRiskSimulator({ restoreActiveId: id });
+        if(opened && typeof opened.then === "function") opened.then(done, done);
+        else done();
+      } catch(_e) {
+        done();
+      }
     },
 
     mergeNpSimSessionSnapshot(snapshot){
@@ -11425,10 +11432,15 @@ if(path === "birthDate"){
       });
       const discs = snapshot.discountByInsured && typeof snapshot.discountByInsured === "object" ? snapshot.discountByInsured : {};
       Object.keys(discs).forEach((id) => {
-        const opt = safeTrim(discs[id]);
-        if(!opt) return;
+        const raw = discs[id];
+        if(raw == null || raw === "") return;
         this._npSimDiscountBag[id] = this._npSimDiscountBag[id] || {};
-        this._npSimDiscountBag[id][key] = opt;
+        if(raw && typeof raw === "object"){
+          try { this._npSimDiscountBag[id][key] = JSON.parse(JSON.stringify(raw)); } catch(_e) {}
+        } else {
+          const opt = safeTrim(raw);
+          if(opt) this._npSimDiscountBag[id][key] = opt;
+        }
       });
     },
 
@@ -11484,7 +11496,8 @@ if(path === "birthDate"){
       const out = {};
       const bag = this._npSimDiscountBag && typeof this._npSimDiscountBag === "object" ? this._npSimDiscountBag : {};
       Object.keys(bag).forEach((id) => {
-        const opt = safeTrim(bag[id] && bag[id][key]);
+        const stored = bag[id] && bag[id][key];
+        const opt = stored && typeof stored === "object" ? safeTrim(stored.optionId) : safeTrim(stored);
         if(opt) out[id] = opt;
       });
       const fb = fallback && typeof fallback === "object" ? fallback : {};
@@ -16042,6 +16055,7 @@ if(path === "birthDate"){
     /** סגירת הסימולטור המשובץ מחזירה את השלב לבחירת חברה ומוצר (או לסיכום). */
     handleWizardSimulatorClose(){
       if(this._npSimKeepWorkspace) return;
+      if(this._npSimReopening) return;
       if(this._npSimSkipCloseCleanup){
         this._npSimSkipCloseCleanup = false;
         return;
@@ -16170,9 +16184,12 @@ if(path === "birthDate"){
       return Math.round(total * 100) / 100;
     },
 
-    purchaseSimulatorInsured(insId, result, legal){
+    purchaseSimulatorInsured(insId, result, legal, opts){
       const id = safeTrim(insId);
       if(!id) return;
+      const skipToast = !!(opts && opts.skipToast);
+      const keepPicks = !!(opts && opts.keepPicks);
+      const skipRender = !!(opts && opts.skipRender);
       this.applyRiskSimResultsToDraft({ [id]: result || {} }, { skipRender: true, skipToast: true });
       this.ensurePolicyDraft();
       const draft = this.policyDraft;
@@ -16214,14 +16231,105 @@ if(path === "birthDate"){
       /* אחרי ההוספה הסימולטור נסגר, ולכן אין להחזיר את השלב לבחירה — מציגים סיכום. */
       this._npSimSkipCloseCleanup = true;
       this._npShowPick = false;
-      const pid = this.addDraftPolicy();
-      const ins = (this.insureds || []).find((x) => x.id === id);
-      window.showToast?.({
-        title: "נוסף להצעה",
-        text: (ins?.label ? ins.label : "המבוטח") + " נוסף לפוליסת " + addedCompany + " · " + addedType + ".",
-        variant: "success"
-      });
+      const pid = this.addDraftPolicy({ keepSessionPicks: keepPicks, skipRender: skipRender });
+      if(!skipToast){
+        const ins = (this.insureds || []).find((x) => x.id === id);
+        window.showToast?.({
+          title: "נוסף להצעה",
+          text: (ins?.label ? ins.label : "המבוטח") + " נוסף לפוליסת " + addedCompany + " · " + addedType + ".",
+          variant: "success"
+        });
+      }
       return pid;
+    },
+
+    buildPurchasePayloadFromSessionBag(insId, company, product){
+      const id = safeTrim(insId);
+      const key = safeTrim(company) + "::" + safeTrim(product);
+      const st = this._npSimStateBag && this._npSimStateBag[id] && this._npSimStateBag[id][key];
+      if(!id || !st || typeof st !== "object") return null;
+      let result = null;
+      if(st.result && (st.result.ok === true || Number.isFinite(Number(st.result.monthlyPremium)))){
+        result = Object.assign({}, st.result, {
+          ok: true,
+          sumInsured: st.sumInsured,
+          monthlyPremium: st.result.monthlyPremium,
+          annualPremium: st.result.annualPremium,
+          birthDate: st.birthDate || "",
+          insuranceStartDate: st.insuranceStartDate || "",
+          gender: st.gender,
+          smoker: st.smoker,
+          occupation: st.occupation || "",
+          covers: Array.isArray(st.result.covers) ? st.result.covers : undefined
+        });
+      }
+      if(!result) return null;
+      const disc = this._npSimDiscountBag && this._npSimDiscountBag[id] && this._npSimDiscountBag[id][key];
+      if(disc && typeof disc === "object" && (disc.optionId || disc.monthlyAfterDiscount != null)){
+        result = Object.assign({}, result, { simDiscount: JSON.parse(JSON.stringify(disc)) });
+      }
+      try { result.simStateSnapshot = JSON.parse(JSON.stringify(st)); } catch(_eSnap) {}
+      return result;
+    },
+
+    purchaseAllSimulatorInsureds(entries){
+      this.captureOpenSimulatorSession();
+      const list = Array.isArray(entries) ? entries : [];
+      const ready = [];
+      const skipped = [];
+      list.forEach((e) => {
+        if(!e || !e.insId) return;
+        let payload = e.payload;
+        if(!payload) payload = this.buildPurchasePayloadFromSessionBag(e.insId, e.company, e.product);
+        if(!payload){
+          skipped.push(safeTrim(e.label) || "מבוטח");
+          return;
+        }
+        const legal = e.legal || (this._npSimLegalByInsured && this._npSimLegalByInsured[e.insId]) || null;
+        ready.push({
+          insId: e.insId,
+          company: safeTrim(e.company),
+          product: safeTrim(e.product),
+          payload,
+          legal,
+          label: safeTrim(e.label) || "מבוטח"
+        });
+      });
+      if(!ready.length){
+        window.showToast?.({
+          title: "יש לחשב פרמיה",
+          text: skipped.length
+            ? ("לא חושבה פרמיה עבור: " + skipped.join(", ") + ".")
+            : "חשבו פרמיה לכל מבוטח לפני ההוספה להצעה.",
+          variant: "warn"
+        });
+        return [];
+      }
+      const pids = [];
+      ready.forEach((e) => {
+        this.ensurePolicyDraft();
+        this.policyDraft.company = e.company;
+        this.policyDraft.type = e.product;
+        const pid = this.purchaseSimulatorInsured(e.insId, e.payload, e.legal, {
+          skipToast: true,
+          keepPicks: true,
+          skipRender: true
+        });
+        if(pid) pids.push({ pid, label: e.label, company: e.company, product: e.product });
+      });
+      const names = pids.map((x) => x.label + " · " + x.company + " · " + x.product);
+      window.showToast?.({
+        title: pids.length === 1 ? "נוסף להצעה" : ("נוספו " + pids.length + " פוליסות להצעה"),
+        text: names.join(" | ") + (skipped.length ? (" · דולג (אין חישוב): " + skipped.join(", ")) : ""),
+        variant: skipped.length ? "warn" : "success"
+      });
+      this._npSimSkipCloseCleanup = true;
+      this._npShowPick = false;
+      this.closeNpOpenSimulator();
+      this.resetNpSimAutoOpenKey();
+      this._npShowPick = false;
+      if(this.isOpen && Number(this.step) === 5) this.render();
+      return pids;
     },
 
     /** בונה מפת מצב לסימולטור מעריכת פוליסה — צילום שמור, או שחזור מ-quotes/סכומים. */
@@ -16335,7 +16443,7 @@ if(path === "birthDate"){
       if(!handler) return;
       const startDmy = this.toSimulatorDmyDate(d.insuranceStartDate || d.startDate || "");
       if(this._npOpenSimHandler && this._npOpenSimHandler !== handler){
-        try { this._npOpenSimHandler.close?.(); } catch(_e3) {}
+        this.closeNpOpenSimulator();
       }
       this._npOpenSimHandler = handler;
       const seed = this.seedWizardLegalFromDraft();
@@ -16375,6 +16483,9 @@ if(path === "birthDate"){
         onPurchaseInsured: (insId, result, legal) => {
           this.purchaseSimulatorInsured(insId, result, legal);
         },
+        onPurchaseAllInsureds: (entries) => {
+          this.purchaseAllSimulatorInsureds(entries);
+        },
         onSwitchInsuredPick: (insId, co, pr, snapshot) => {
           this.switchSimulatorInsuredPick(insId, co, pr, snapshot);
         },
@@ -16390,6 +16501,7 @@ if(path === "birthDate"){
         },
         onWizardClose: () => this.handleWizardSimulatorClose()
       });
+      this._npSimAutoOpenedKey = company + "::" + product;
       try { this.dockNpOpenSimulator(); } catch(_eDock) {}
     },
 
@@ -16397,6 +16509,8 @@ if(path === "birthDate"){
       this.ensurePolicyDraft();
       const d = this.policyDraft;
       const keepSimulatorWorkspace = !!(opts && opts.keepSimulatorWorkspace);
+      const keepSessionPicks = !!(opts && opts.keepSessionPicks);
+      const skipRender = !!(opts && opts.skipRender);
       const keepCompany = keepSimulatorWorkspace ? safeTrim(d.company) : "";
       const keepType = keepSimulatorWorkspace ? safeTrim(d.type) : "";
       const createdPolicyId = this.editingPolicyId || ("npol_" + Math.random().toString(16).slice(2));
@@ -16513,12 +16627,12 @@ if(path === "birthDate"){
         this.policyDraft.company = keepCompany;
         this.policyDraft.type = keepType;
         this.applyAllProposalInsuredsToDraft();
-      } else {
+      } else if(!keepSessionPicks){
         this.resetNpSimAutoOpenKey();
       }
 
       this.resetPremiumSanityState();
-      this.render();
+      if(!skipRender) this.render();
       return p.id;
     },
 
@@ -18729,7 +18843,7 @@ if(path === "birthDate"){
         if(riskSimBtn){
           on(riskSimBtn, 'click', () => this.openRiskSimulator());
         }
-        if(workspaceOpen && riskSimHandler && !isMedicare){
+        if(workspaceOpen && riskSimHandler && !isMedicare && !this._npSimReopening){
           const autoKey = String(d.company || "") + "::" + String(d.type || "");
           const simVisible = !!this._npOpenSimHandler?._modal;
           if(this._npSimAutoOpenedKey !== autoKey && !simVisible){
