@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260905-sim-ui-disc-v1";
+  const GI_WIZARD_BUILD = "20260905-sim-text-date-v1";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -16193,7 +16193,8 @@ if(path === "birthDate"){
       const s = safeTrim(raw);
       if(!s) return "";
       if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-      const parsed = typeof parseBirthDateValue === "function" ? parseBirthDateValue(s) : null;
+      /* תחילת ביטוח היא לעיתים תאריך עתידי. parseBirthDateValue דוחה עתיד (תאריך לידה). */
+      const parsed = typeof parseAnyDmyDate === "function" ? parseAnyDmyDate(s) : null;
       if(!parsed) return "";
       return String(parsed.year) + "-" + String(parsed.month).padStart(2, "0") + "-" + String(parsed.day).padStart(2, "0");
     },
@@ -18817,7 +18818,7 @@ if(path === "birthDate"){
       list.forEach((p) => { if(!displayedIds.has(p.id)) rowItems.push(p); });
       const groupsHtml = rowItems.length
         ? `<div class="lcNpRows">${rowItems.map(p => renderPolicyCard(p, false)).join("")}</div>`
-        : `<div class="lcNpEmpty"><b>עדיין לא נוספו פוליסות להצעה</b>לאחר חישוב בסימולטור יופיעו כאן שורות סיכום — לא קוביות.</div>`;
+        : "";
 
       const hasRows = rowItems.length > 0;
       const workspaceOpen = step2Done;
@@ -18912,7 +18913,7 @@ if(path === "birthDate"){
           </div>` : '';
 
       const iconPlus = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`;
-      const showSummaryBlock = hasRows || npStage !== "sim";
+      const showSummaryBlock = hasRows;
       const summaryBlockHtml = showSummaryBlock ? `
         <div class="lcNpSumHead">
           <div class="lcNpSumHead__text">

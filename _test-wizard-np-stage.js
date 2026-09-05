@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260905-sim-ui-disc-v1";
+const TAG = "20260905-sim-text-date-v1";
 let failed = 0;
 let passed = 0;
 
@@ -66,6 +66,13 @@ assert(wiz.includes('const npStage = workspaceOpen ? "sim"'), "stage resolver ex
 assert(wiz.includes('(hasRows && this._npShowPick !== true) ? "summary" : "pick"'), "summary stage when rows exist and pick not forced");
 assert(wiz.includes('class="lcNpWrapper lcNpWrapper--${npStage}"'), "stage class on the wrapper");
 assert(wiz.includes("סיכום הפוליסות בהצעה"), "summary title kept");
+assert(wiz.includes("const showSummaryBlock = hasRows;"), "summary area only when at least one policy exists");
+assert(!wiz.includes('hasRows || npStage !== "sim"'), "empty pick stage does not force the summary area");
+assert(!wiz.includes("lcNpEmpty"), "empty summary placeholder markup removed");
+assert(!wiz.includes("עדיין לא נוספו פוליסות להצעה"), "empty summary copy removed");
+assert(!wiz.includes("לאחר חישוב בסימולטור יופיעו כאן שורות סיכום"), "empty summary explanation removed");
+assert(/toIsoDateFromAny\(raw\)\{[\s\S]{0,280}parseAnyDmyDate\(s\)/.test(wiz), "start-date ISO conversion allows future dates");
+assert(!/toIsoDateFromAny\(raw\)\{[\s\S]{0,400}parseBirthDateValue\(s\)/.test(wiz), "start-date conversion no longer uses birth-date parser");
 assert(!wiz.includes('class="lcNpStageHead__title">בחירת חברה ומוצר<'), "pick stage head title removed");
 assert(!wiz.includes("בחרו חברה ומוצר מהרשימות"), "pick stage head explanation removed");
 assert(!wiz.includes("כל פוליסה בשורת סיכום: לוגו"), "summary explanation removed");
@@ -291,9 +298,34 @@ assert(sims.includes(">הוסף להצעה<"), "approved purchase label kept");
 assert(sims.includes("data-gishell-legal-confirm"), "approved pledge confirm kept");
 
 console.log("\n7) runtime — stage transitions and docking on real Wizard methods");
+function parseAnyDmyDate(value){
+  const s = safeTrim(value);
+  if(!s) return null;
+  let y = null, m = null, d = null;
+  let hit = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if(hit){
+    y = Number(hit[1]); m = Number(hit[2]); d = Number(hit[3]);
+  } else {
+    hit = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s);
+    if(hit){ d = Number(hit[1]); m = Number(hit[2]); y = Number(hit[3]); }
+  }
+  if(!y || !m || !d) return null;
+  const dt = new Date(y, m - 1, d);
+  if(Number.isNaN(dt.getTime()) || dt.getFullYear() !== y || dt.getMonth() !== (m - 1) || dt.getDate() !== d) return null;
+  return { year:y, month:m, day:d, date:dt };
+}
+function parseBirthDateValue(value){
+  const p = parseAnyDmyDate(value);
+  if(!p) return null;
+  if(p.date > new Date()) return null;
+  return p;
+}
+
 const host = new Proxy({
   Wizard: {},
   safeTrim,
+  parseAnyDmyDate,
+  parseBirthDateValue,
   escapeHtml: (s) => String(s == null ? "" : s),
   on(){}, $(){ return null; }, $$(){ return []; },
   nowISO: () => "2026-09-03T10:00:00.000Z",
@@ -459,6 +491,27 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
   assert(W.policyDraft.simDiscountPerInsured?.i1?.monthlyAfterDiscount === 100, "applying a simulator result stores the discounted price");
   assert(W.policyDraft.discountPct === "50", "applying a simulator result mirrors the discount percent");
   assert(safeTrim(W.policyDraft.premiumPerInsured?.i1) === "200.00", "the gross premium is still what the engine reads");
+
+  assert(!parseBirthDateValue("01/10/2026"), "birth-date parser rejects a future insurance start date");
+  assert(parseAnyDmyDate("01/10/2026") && parseAnyDmyDate("01/10/2026").year === 2026, "any-date parser keeps 01/10/2026");
+  W.applyRiskSimResultsToDraft({
+    i1: {
+      ok: true, monthlyPremium: 64.4, sumInsured: "560000",
+      insuranceStartDate: "01/10/2026"
+    }
+  }, { skipRender: true, skipToast: true });
+  assert(W.policyDraft.startDate === "2026-10-01", "future simulator start date is copied onto the policy as ISO");
+  const missingStart = W.collectNewPolicyValidationIssues({
+    company: "כלל", type: "ריסק", insuredIds: ["i1"], insuredId: "i1",
+    premiumPerInsured: { i1: "64.4" }, sumInsuredPerInsured: { i1: "560000" }
+  }, { policyIndex: 0, checkKnownInsureds: false });
+  assert(missingStart.some((row) => String(row.message || "").includes("תאריך תחילת ביטוח")), "empty start date still blocks next");
+  const filledStart = W.collectNewPolicyValidationIssues({
+    company: "כלל", type: "ריסק", insuredIds: ["i1"], insuredId: "i1",
+    premiumPerInsured: { i1: "64.4" }, sumInsuredPerInsured: { i1: "560000" },
+    startDate: W.policyDraft.startDate
+  }, { policyIndex: 0, checkKnownInsureds: false });
+  assert(!filledStart.some((row) => String(row.message || "").includes("תאריך תחילת ביטוח")), "copied future start date is enough to continue");
 
   // ── bug: Number(null)===0 used to store ₪0 after-discount for Clal/Migdal risk ──
   W.applyRiskSimResultsToDraft({

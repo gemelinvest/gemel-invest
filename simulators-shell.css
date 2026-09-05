@@ -1149,3 +1149,45 @@
 .giValModal.giSimShellModal--docked .giValModal__head{
   padding-top:14px !important;
 }
+
+/* GI-SIM-TEXT 2026-09-05 — readable type; last so it wins over the 12-13px look */
+.giSimShellModal .giValModal__title,
+.giSimQuiet .giValModal__title{
+  font-size:20px !important;
+}
+.giSimShell__panelTitle{
+  font-size:15px !important;
+}
+.giSimShellModal [class*="__label"],
+.giSimQuiet [class*="__label"]{
+  font-size:17px !important;
+}
+.giSimShellModal [class*="__input"],
+.giSimShellModal input[type="text"],
+.giSimShellModal input[type="number"],
+.giSimShellModal select,
+.giSimQuiet [class*="__input"],
+.giSimQuiet input[type="text"],
+.giSimQuiet input[type="number"],
+.giSimQuiet select{
+  min-height:40px !important;
+  font-size:18px !important;
+}
+.giSimShellModal [class*="__segBtn"],
+.giSimQuiet [class*="__segBtn"]{
+  min-height:40px !important;
+  font-size:17px !important;
+}
+.giSimShell__ageBadgeLabel{
+  font-size:14px !important;
+}
+.giSimDisc__picked,
+.giSimDisc__opt{
+  font-size:16px !important;
+}
+.giSimShellModal [class*="__result--ok"],
+.giSimShellModal [class*="__result--empty"],
+.giSimQuiet [class*="__result--ok"],
+.giSimQuiet [class*="__result--empty"]{
+  font-size:16px !important;
+}

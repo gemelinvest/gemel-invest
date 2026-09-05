@@ -12,7 +12,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260905-sim-ui-disc-v1";
+const TAG = "20260905-sim-text-date-v1";
 let failed = 0;
 let passed = 0;
 
@@ -50,10 +50,14 @@ assert(app.includes("simulators-center.css?v=" + TAG), "center css cache");
 assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "wizard build tag");
 
 console.log("\n2) larger simulator text");
-assert(/giSimShellModal \[class\*="__label"\]\{[\s\S]{0,80}font-size:15px/.test(shell), "shell labels 15px");
-assert(/giSimShellModal \[class\*="__input"\][\s\S]{0,220}font-size:16px/.test(shell), "shell inputs 16px");
+assert(shell.includes("GI-SIM-TEXT 2026-09-05"), "last-wins readable type block");
+const textBlock = shell.slice(shell.lastIndexOf("GI-SIM-TEXT 2026-09-05"));
+assert(textBlock.includes("font-size:17px !important"), "labels 17px last");
+assert(textBlock.includes("font-size:18px !important"), "inputs 18px last");
+assert(textBlock.includes("giSimDisc__picked"), "chosen discount line bumped");
+assert(textBlock.includes("__result--ok"), "green result box bumped");
+assert(textBlock.includes("giSimShell__ageBadgeLabel"), "age line bumped");
 assert(shell.includes('font-size:14px !important') && shell.includes("__coverLabel"), "cover labels bumped");
-assert(shell.includes("font-size:24px !important"), "simulator title bumped");
 
 console.log("\n3) fill fields empty except personal details");
 assert(/function resolveInsuranceStartDate\([\s\S]{0,80}return "";/.test(sims), "start date is not auto-filled");
