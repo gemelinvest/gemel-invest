@@ -971,6 +971,7 @@
   function riskSimRefreshLegalPanel(sim){
     riskSimMountLegalPanel(sim);
     try { riskSimBindLegalPanel(sim); } catch(_e) {}
+    try { riskSimBindCoupleCoverSync(sim); } catch(_eCov) {}
   }
   function riskSimBindLegalPanel(sim){
     const modal = sim && sim._modal;
@@ -1151,6 +1152,174 @@
       try { sim._ctx.onCouplePolicyChange(!!sim._giCoupleOn, Object.assign({}, sim._giCoupleIds || {})); } catch(_e) {}
     }
   }
+
+  const RISK_SIM_HEALTH_COVER_ATTRS = ["data-mnrh-cover","data-phxh-cover","data-aylh-cover","data-hachh-cover","data-mgdh-cover","data-clalh-cover"];
+  function riskSimIsHealthProduct(product){
+    return safeTrim(product) === "בריאות";
+  }
+  function riskSimCoupleSeedInsuredId(sim){
+    const ids = riskSimCoupleSelectedIds(sim);
+    if(!ids.length) return "";
+    const insureds = Array.isArray(sim && sim._ctx && sim._ctx.insureds) ? sim._ctx.insureds : [];
+    const primary = insureds.find((ins) => ins && ids.indexOf(ins.id) >= 0 && ins.type === "primary");
+    if(primary) return safeTrim(primary.id);
+    return ids[0];
+  }
+  function riskSimInsuredShortName(sim, insId){
+    const ins = (Array.isArray(sim && sim._ctx && sim._ctx.insureds) ? sim._ctx.insureds : []).find((x) => safeTrim(x && x.id) === safeTrim(insId));
+    if(!ins) return safeTrim(insId);
+    const d = ins.data || {};
+    const nm = [safeTrim(d.firstName), safeTrim(d.lastName)].filter(Boolean).join(" ");
+    return nm || safeTrim(ins.label) || safeTrim(insId);
+  }
+  function riskSimHealthCoverMeta(sim, coverId){
+    const id = safeTrim(coverId);
+    const modal = sim && sim._modal;
+    if(!modal || !id) return { id, label: id };
+    for(let i = 0; i < RISK_SIM_HEALTH_COVER_ATTRS.length; i++){
+      const attr = RISK_SIM_HEALTH_COVER_ATTRS[i];
+      const el = modal.querySelector("[" + attr + "=\"" + id + "\"]");
+      if(!el) continue;
+      const lab = el.closest("label");
+      const span = lab && lab.querySelector("[class*='coverLabel']");
+      const text = safeTrim((span && span.textContent) || (lab && lab.textContent) || "");
+      return { id, label: text || id };
+    }
+    return { id, label: id };
+  }
+  function riskSimCoverNiceLabel(meta){
+    return safeTrim(meta && meta.label).replace(/\s*\(עד גיל\s*\d+\)\s*/g, " ").replace(/\s*\(לפי מין\)\s*/g, " ").replace(/\s+/g, " ").trim() || safeTrim(meta && meta.id);
+  }
+  function riskSimCoverMaxAge(meta){
+    const m = String((meta && meta.label) || "").match(/עד גיל\s*(\d+)/);
+    return m ? Number(m[1]) : null;
+  }
+  function riskSimIsChildRestrictedCover(coverId, meta){
+    const id = safeTrim(coverId);
+    const label = safeTrim(meta && meta.label) || id;
+    if(/^child[_-]/i.test(id) || /_child/i.test(id)) return true;
+    if(/ילד/.test(id) || /ילד/.test(label)) return true;
+    return false;
+  }
+  function riskSimInsuredCanTakeChildCover(sim, insId, meta){
+    const ins = (Array.isArray(sim && sim._ctx && sim._ctx.insureds) ? sim._ctx.insureds : []).find((x) => safeTrim(x && x.id) === safeTrim(insId));
+    if(!ins) return false;
+    const maxAge = riskSimCoverMaxAge(meta);
+    const st = sim && sim._state && sim._state[insId];
+    const age = Number(st && st.age);
+    if(Number.isFinite(age) && maxAge != null && age > maxAge) return false;
+    return ins.type === "child";
+  }
+  function riskSimRecalcCoupleHealthStates(sim){
+    if(!sim || typeof sim._recalcState !== "function") return;
+    riskSimCoupleSelectedIds(sim).forEach((id) => {
+      const st = sim._state && sim._state[id];
+      if(!st) return;
+      try { sim._recalcState(st); } catch(_e) {}
+    });
+  }
+  function riskSimCopyCoupleHealthCoversFromSeed(sim){
+    if(!sim || !sim._giCoupleOn || !riskSimIsHealthProduct(sim._ctx && sim._ctx.product)) return;
+    const seedId = riskSimCoupleSeedInsuredId(sim);
+    const seedSt = seedId && sim._state && sim._state[seedId];
+    if(!seedSt) return;
+    if(!seedSt.selected || typeof seedSt.selected !== "object") seedSt.selected = {};
+    const intent = sim._giCoupleChildIntent && typeof sim._giCoupleChildIntent === "object" ? sim._giCoupleChildIntent : {};
+    const customized = sim._giCoupleCoverCustomized && typeof sim._giCoupleCoverCustomized === "object" ? sim._giCoupleCoverCustomized : {};
+    riskSimCoupleSelectedIds(sim).forEach((id) => {
+      if(id === seedId || customized[id]) return;
+      const st = sim._state && sim._state[id];
+      if(!st) return;
+      st.selected = st.selected && typeof st.selected === "object" ? st.selected : {};
+      Object.keys(seedSt.selected).forEach((cid) => {
+        const meta = riskSimHealthCoverMeta(sim, cid);
+        if(riskSimIsChildRestrictedCover(cid, meta)) return;
+        st.selected[cid] = !!seedSt.selected[cid];
+      });
+      Object.keys(intent).forEach((cid2) => {
+        const meta2 = riskSimHealthCoverMeta(sim, cid2);
+        st.selected[cid2] = !!intent[cid2] && riskSimInsuredCanTakeChildCover(sim, id, meta2);
+      });
+      st.dirtySinceSave = true;
+    });
+    Object.keys(intent).forEach((cid3) => {
+      const meta3 = riskSimHealthCoverMeta(sim, cid3);
+      if(riskSimInsuredCanTakeChildCover(sim, seedId, meta3)){
+        seedSt.selected[cid3] = !!intent[cid3];
+      } else {
+        seedSt.selected[cid3] = false;
+      }
+    });
+  }
+  function riskSimSyncCoupleHealthCovers(sim, coverId, turnedOn){
+    if(!sim || !sim._ctx || !sim._ctx.wizardWorkspace) return;
+    if(!sim._giCoupleOn || !riskSimIsHealthProduct(sim._ctx.product)) return;
+    riskSimEnsureCoupleState(sim);
+    const seedId = riskSimCoupleSeedInsuredId(sim);
+    if(!seedId) return;
+    const activeId = safeTrim(sim._activeInsuredId);
+    const cid = safeTrim(coverId);
+    const meta = cid ? riskSimHealthCoverMeta(sim, cid) : null;
+    const childCover = !!(cid && riskSimIsChildRestrictedCover(cid, meta));
+    if(activeId && activeId !== seedId){
+      sim._giCoupleCoverCustomized = sim._giCoupleCoverCustomized || {};
+      sim._giCoupleCoverCustomized[activeId] = true;
+      if(childCover && turnedOn){
+        const st = sim._state && sim._state[activeId];
+        if(st && st.selected && !riskSimInsuredCanTakeChildCover(sim, activeId, meta)){
+          st.selected[cid] = false;
+          const names = riskSimCoupleSelectedIds(sim)
+            .filter((id) => riskSimInsuredCanTakeChildCover(sim, id, meta))
+            .map((id) => riskSimInsuredShortName(sim, id));
+          window.showToast?.({
+            title: "כיסוי לילד",
+            text: names.length
+              ? ("הכיסוי «" + riskSimCoverNiceLabel(meta) + "» יחול רק על " + names.join(" · ") + ".")
+              : "הכיסוי הזה מיועד לילד ואין מבוטח מתאים בין המסומנים לפוליסה הזוגית.",
+            variant: "warn"
+          });
+        }
+      }
+      try { riskSimRecalcCoupleHealthStates(sim); } catch(_eRec) {}
+      return;
+    }
+    sim._giCoupleChildIntent = sim._giCoupleChildIntent || {};
+    if(childCover){
+      sim._giCoupleChildIntent[cid] = !!turnedOn;
+      if(turnedOn){
+        const names = riskSimCoupleSelectedIds(sim)
+          .filter((id) => riskSimInsuredCanTakeChildCover(sim, id, meta))
+          .map((id) => riskSimInsuredShortName(sim, id));
+        window.showToast?.({
+          title: "כיסוי לילד",
+          text: names.length
+            ? ("הכיסוי «" + riskSimCoverNiceLabel(meta) + "» יחול רק על " + names.join(" · ") + ".")
+            : "הכיסוי הזה מיועד לילד ואין מבוטח מתאים בין המסומנים לפוליסה הזוגית.",
+          variant: "warn"
+        });
+      }
+    }
+    try { riskSimCopyCoupleHealthCoversFromSeed(sim); } catch(_eCopy) {}
+    try { riskSimRecalcCoupleHealthStates(sim); } catch(_eRec2) {}
+  }
+  function riskSimBindCoupleCoverSync(sim){
+    const modal = sim && sim._modal;
+    if(!modal || !sim._ctx || !sim._ctx.wizardWorkspace) return;
+    if(!riskSimIsHealthProduct(sim._ctx.product)) return;
+    RISK_SIM_HEALTH_COVER_ATTRS.forEach((attr) => {
+      modal.querySelectorAll("[" + attr + "]").forEach((el) => {
+        if(el._giCoupleCoverBound) return;
+        el._giCoupleCoverBound = true;
+        on(el, "change", () => {
+          try { riskSimSyncCoupleHealthCovers(sim, el.getAttribute(attr), !!el.checked); } catch(_e) {}
+          if(sim._giCoupleOn){
+            try { riskSimRenderPreservingCoverScroll(sim); } catch(_e2) {}
+          }
+        });
+      });
+    });
+  }
+
 
   /* צילום מצב כל המבוטחים בסימולטור הפתוח — לפי חברה/מוצר הנוכחיים.
      מעבר למבוטח עם חברה אחרת לא דורס את הצילום של השילוב הקודם. */
@@ -1523,6 +1692,12 @@
           riskSimRequestPickSwitch(sim, id, pick.company, pick.product);
           return;
         }
+        if(sim._ctx?.wizardWorkspace && sim._giCoupleOn){
+          sim._confirmSwitch = null;
+          sim._activeInsuredId = id;
+          try { if(typeof sim._render === "function") sim._render(); } catch(_eTab) {}
+          return;
+        }
         if(typeof sim._switchInsured === "function") sim._switchInsured(id);
         else { sim._activeInsuredId = id; try { sim._render(); } catch(_e) {} }
       });
@@ -1588,7 +1763,10 @@
         sim._giCoupleOn = !!coupleMaster.checked;
         if(sim._giCoupleOn){
           sim._giCoupleIds = {};
+          sim._giCoupleCoverCustomized = {};
+          sim._giCoupleChildIntent = {};
           riskSimSeedCoupleIdsIfEmpty(sim);
+          try { riskSimSyncCoupleHealthCovers(sim); } catch(_eSync) {}
         }
         riskSimNotifyCoupleChange(sim);
         try { if(typeof sim._render === "function") sim._render(); } catch(_e) {}
@@ -1605,8 +1783,10 @@
         riskSimEnsureCoupleState(sim);
         sim._giCoupleIds = sim._giCoupleIds || {};
         sim._giCoupleIds[id] = !!chk.checked;
+        if(!chk.checked && sim._giCoupleCoverCustomized) delete sim._giCoupleCoverCustomized[id];
         riskSimNotifyCoupleChange(sim);
         if(chk.checked){
+          try { riskSimSyncCoupleHealthCovers(sim); } catch(_eSyncIns) {}
           const pick = riskSimGetPick(sim, id);
           const curCo = safeTrim(sim._ctx?.company);
           const curPr = safeTrim(sim._ctx?.product);
@@ -1648,6 +1828,7 @@
       });
     }
     try { riskSimBindLegalPanel(sim); } catch(_eLegal) {}
+    try { riskSimBindCoupleCoverSync(sim); } catch(_eCov) {}
   }
 
   function riskSimCollectCenterDetails(sim){

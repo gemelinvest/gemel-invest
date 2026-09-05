@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260905-pledge-bens-v1";
+const TAG = "20260905-couple-covers-v1";
 let failed = 0;
 let passed = 0;
 
@@ -86,7 +86,7 @@ assert(wiz.includes("_npCoversOpenId"), "covers panel open state");
 assert(!/detailText = \(p\.type === \"בריאות\"\)\s*\?\s*\(`כיסויים: \$\{coverSummary\}`\)/.test(wiz), "dense covers line removed from health rows");
 assert(css.includes(".lcNpChip--covers"), "covers toggle uses a quiet chip in the compact row");
 assert(css.includes(".lcNpProw__coversList"), "covers list styles");
-assert(wiz.includes("const coversToggle = isHealth"), "covers toggle is split from the expanding panel");
+assert(wiz.includes("const coversToggle = isMulti"), "covers toggle is split from the expanding panel");
 assert(/lcNpProw__disc[\s\S]{0,900}\$\{coversToggle\}/.test(wiz), "covers toggle is interpolated into the compact chip row");
 assert(!/class="lcNpProw__covers"[\s\S]{0,180}data-np-show-covers=/.test(wiz), "covers toggle is not a full-width block under the row");
 
@@ -236,6 +236,27 @@ assert(wiz.includes("p.pledgeBanks[0].bankName"), "summary chip reads bankName")
 assert(!wiz.includes("p.pledgeBanks[0]?.name"), "summary chip no longer reads the wrong name field");
 assert(wiz.includes("שיעבוד · ${escapeHtml(pledgeBankName)}"), "filled pledge chip shows the bank");
 assert(wiz.includes('("מוטבים: " + bens.map'), "filled beneficiaries chip lists names");
+
+console.log("\n5b6) couple health covers copy from primary, then per-insured detail");
+assert(sims.includes("function riskSimSyncCoupleHealthCovers(sim, coverId, turnedOn)"), "couple cover sync helper exists");
+assert(sims.includes("function riskSimCopyCoupleHealthCoversFromSeed(sim)"), "primary covers copy onto selected members");
+assert(sims.includes("_giCoupleCoverCustomized"), "later per-insured edits stop the copy");
+assert(sims.includes("_giCoupleChildIntent"), "child-only covers are tracked separately from the primary");
+assert(sims.includes("function riskSimIsChildRestrictedCover(coverId, meta)"), "child-only covers are detected by id/label");
+assert(sims.includes('return ins.type === "child"'), "child-only covers apply to type=child");
+assert(sims.includes('title: "כיסוי לילד"'), "agent sees a child-cover notice");
+assert(sims.includes("יחול רק על"), "notice names the eligible insured");
+assert(sims.includes("function riskSimBindCoupleCoverSync(sim)"), "cover checkboxes are hooked in the shell");
+assert(sims.includes("try { riskSimBindCoupleCoverSync(sim); } catch(_eCov) {}"), "shell bind installs couple cover sync");
+assert(wiz.includes("getPolicyInsuredCoverLabels(policy, insId)"), "row can read covers per insured");
+assert(wiz.includes("healthCoversPerInsured"), "policy stores covers per insured");
+assert(wiz.includes("הצג פירוט"), "multi-insured row has a details button");
+assert(wiz.includes("הסתר פירוט"), "details button can collapse");
+assert(wiz.includes("lcNpProw__person"), "details panel has a block per insured");
+assert(wiz.includes("לפני הנחה ${this.formatMoneyValue(pair.before)}"), "details show before-premium per insured");
+assert(wiz.includes("אחרי הנחה ${this.formatMoneyValue(pair.after)}"), "details show after-premium per insured");
+assert(css.includes(".lcNpProw__person{"), "per-insured detail styles");
+assert(wiz.includes("הצג כיסוי בפוליסה"), "single health row still has the covers chip");
 
 console.log("\n5c) company logo in the summary row has no frame");
 const rowLogo = css.slice(css.indexOf(".lcNpProw .lcCompanyLogo,.lcNpProw img{"), css.indexOf(".lcNpProw__title{"));
@@ -763,6 +784,36 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
     assert(split1.before === 61.32 && split1.after === 21.46, "primary before/after stay 61.32 / 21.46");
     assert(split2.before === 40 && split2.after === 20, "secondary before/after stay 40 / 20");
     assert(pids.length === 1, "couple add returns one policy id");
+  }
+
+  // ── couple health: covers stay per insured on the summary row ──
+  {
+    W.policyDraft = null;
+    W.ensurePolicyDraft();
+    W.policyDraft.company = "כלל";
+    W.policyDraft.type = "בריאות";
+    W.applyRiskSimResultsToDraft({
+      i1: {
+        ok: true, monthlyPremium: 80,
+        covers: [{ id:"drugs", label:"תרופות", wizardKey:"תרופות" }, { id:"transplant", label:"השתלות", wizardKey:"השתלות" }],
+        simDiscount: { year1Pct:10, monthlyAfterDiscount:72 }
+      },
+      i3: {
+        ok: true, monthlyPremium: 40,
+        covers: [{ id:"drugs", label:"תרופות", wizardKey:"תרופות" }, { id:"child_services", label:"שירותים לילד", wizardKey:"שירותים לילד" }],
+        simDiscount: { year1Pct:10, monthlyAfterDiscount:36 }
+      }
+    }, { skipRender: true, skipToast: true });
+    assert(W.policyDraft.healthCoversPerInsured.i1.indexOf("תרופות") >= 0, "primary health covers stored per insured");
+    assert(W.policyDraft.healthCoversPerInsured.i3.indexOf("שירותים לילד") >= 0, "child health covers stored per insured");
+    assert(W.policyDraft.healthCoversPerInsured.i1.indexOf("שירותים לילד") < 0, "child-only cover is not on the primary list");
+    assert(W.getPolicyInsuredCoverLabels(W.policyDraft, "i3").join(",").indexOf("שירותים לילד") >= 0, "detail reader returns the child's covers");
+    assert(W.getPolicyInsuredShortName("i1") === "דוד כהן", "row names use first+last name");
+    const splitC = W.getPolicyInsuredPremiumSplit({
+      premiumPerInsured: W.policyDraft.premiumPerInsured,
+      simDiscountPerInsured: W.policyDraft.simDiscountPerInsured
+    }, "i3");
+    assert(splitC.before === 40 && splitC.after === 36, "child before/after stay 40 / 36");
   }
 
   // ── reopen/close guards do not wipe picks ──
