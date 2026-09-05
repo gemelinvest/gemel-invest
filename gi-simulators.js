@@ -575,7 +575,12 @@
     Array.from(body.children).forEach((child) => {
       if(child === bar || child === layout) return;
       if(child.classList && (child.classList.contains("giSimShell__insuredBar") || child.classList.contains("giSimShell__layout"))) return;
-      if(statusList && child === statusList) return;
+      if(statusList && child === statusList){
+        statusList.hidden = true;
+        statusList.setAttribute("aria-hidden", "true");
+        statusList.classList.add("giSimShell__hintHidden");
+        return;
+      }
       if(child.className && String(child.className).indexOf("overlay") >= 0) return;
       if(child.className && String(child.className).indexOf("insuredLabel") >= 0){
         child.classList.add("giSimShell__hintHidden");
@@ -1081,6 +1086,36 @@
       <label class="giSimShell__pickField"><span>מוצר</span><select data-gishell-pick-product>${prOpts}</select></label>
     </div>`;
   }
+  function riskSimPickKey(company, product){
+    return safeTrim(company) + "::" + safeTrim(product);
+  }
+
+  /* צילום מצב כל המבוטחים בסימולטור הפתוח — לפי חברה/מוצר הנוכחיים.
+     מעבר למבוטח עם חברה אחרת לא דורס את הצילום של השילוב הקודם. */
+  function riskSimSnapshotSession(sim){
+    const company = safeTrim(sim?._ctx?.company);
+    const product = safeTrim(sim?._ctx?.product);
+    const stateByInsured = {};
+    const map = sim && sim._state && typeof sim._state === "object" ? sim._state : {};
+    Object.keys(map).forEach((id) => {
+      const clone = riskSimJsonClone(map[id]);
+      if(clone) stateByInsured[id] = clone;
+    });
+    const discountByInsured = {};
+    const disc = sim && sim._giSimDiscountSel && typeof sim._giSimDiscountSel === "object" ? sim._giSimDiscountSel : {};
+    Object.keys(disc).forEach((id) => {
+      const v = safeTrim(disc[id]);
+      if(v) discountByInsured[id] = v;
+    });
+    return {
+      company,
+      product,
+      pickKey: riskSimPickKey(company, product),
+      stateByInsured,
+      discountByInsured
+    };
+  }
+
   function riskSimRequestPickSwitch(sim, insId, company, product){
     const id = safeTrim(insId || sim?._activeInsuredId);
     const co = safeTrim(company);
@@ -1089,10 +1124,12 @@
     const map = riskSimEnsurePickMap(sim);
     map[id] = { company: co, product: pr };
     try { riskSimCaptureLegalFromDom(sim); } catch(_e) {}
+    const simSession = riskSimSnapshotSession(sim);
     if(typeof sim._ctx?.onSwitchInsuredPick === "function"){
       sim._ctx.onSwitchInsuredPick(id, co, pr, {
         wizardLegalByInsured: sim._ctx.wizardLegalByInsured,
-        wizardPickByInsured: map
+        wizardPickByInsured: map,
+        simSession
       });
     }
   }
@@ -2127,9 +2164,13 @@
         /* כל עוד שאלת השמירה על המסך — מקש Escape ולחיצות רקע של הסימולטור
            שמתחתיה לא רשאים לסגור אותו מאחורי גבה. */
         if(handler._giSavePromptOpen) return undefined;
-        /* _ctx מתאפס בתוך origClose, ולכן ה-callback נשמר לפניו. */
+        /* _ctx מתאפס בתוך origClose, ולכן ה-callback והצילום נשמרים לפניו. */
         const wizardClose = typeof handler._ctx?.onWizardClose === "function" ? handler._ctx.onWizardClose : null;
+        const wizardCapture = typeof handler._ctx?.onWizardSessionCapture === "function" ? handler._ctx.onWizardSessionCapture : null;
         const closeAndNotify = () => {
+          if(wizardCapture && handler._ctx?.wizardWorkspace){
+            try { wizardCapture(riskSimSnapshotSession(handler)); } catch(_eCap) {}
+          }
           const out = origClose();
           if(wizardClose){ try { wizardClose(); } catch(_eWiz) {} }
           return out;

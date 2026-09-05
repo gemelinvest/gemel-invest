@@ -262,6 +262,8 @@
   letter-spacing:-0.02em;
 }
 .giSimShell__hintHidden{ display:none !important; }
+/* רשימת «מבוטחים בהצעה» בגוף הסימולטור כפולה ללשוניות למעלה */
+.giSimShellModal [class*="__statusList"]{ display:none !important; }
 
 /* שדות גדולים */
 .giSimShellModal [class*="__label"]{

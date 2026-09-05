@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260903-np-workspace-v9";
+const TAG = "20260905-np-per-insured-v1";
 let failed = 0;
 let passed = 0;
 
@@ -133,7 +133,7 @@ assert(sims.includes("onWizardClose"), "simulator exposes a wizard-close hook");
 assert(sims.includes("const closeAndNotify = () => {"), "close hook fires after the real close");
 assert(wiz.includes("handleWizardSimulatorClose(){"), "wizard close handler");
 assert(wiz.includes("onWizardClose: () => this.handleWizardSimulatorClose()"), "handler wired into the simulator ctx");
-assert(/closeNpOpenSimulator\(\)\{[\s\S]*?_npSimKeepWorkspace = true;[\s\S]*?handler\?\.close\?\.\(\);[\s\S]*?_npSimKeepWorkspace = false;/.test(wiz), "wizard-initiated close does not bounce back to pick");
+assert(/closeNpOpenSimulator\(\)\{[\s\S]*?captureOpenSimulatorSession\(\);[\s\S]*?_npSimKeepWorkspace = true;[\s\S]*?handler\?\.close\?\.\(\);[\s\S]*?_npSimKeepWorkspace = false;/.test(wiz), "wizard-initiated close snapshots then does not bounce back to pick");
 assert(wiz.includes("this._npSimSkipCloseCleanup = true;"), "adding to the proposal skips the pick bounce");
 
 console.log("\n5b) simulator discount reaches the summary row");
@@ -159,13 +159,33 @@ assert(/getPolicyPremiumAfterDiscount\(policy\)\{[\s\S]{0,320}return this\.getPo
 assert(wiz.includes("simDiscountPerInsured: (d.simDiscountPerInsured"), "discount is copied from the draft onto the policy");
 assert(wiz.includes("simDiscountPerInsured: (p.simDiscountPerInsured"), "discount survives editing an added policy");
 
+console.log("\n5b2) per-insured company/product session survives a switch");
+assert(sims.includes("function riskSimSnapshotSession(sim){"), "simulator snapshots session state before a pick switch");
+assert(sims.includes("simSession"), "pick-switch payload carries simSession");
+assert(sims.includes("onWizardSessionCapture"), "close wrapper can capture wizard session");
+assert(wiz.includes("mergeNpSimSessionSnapshot(snapshot){"), "wizard merges per-insured session bags");
+assert(wiz.includes("buildNpSimRestoreState(company, product, fallback){"), "restore is filtered by company/product");
+assert(wiz.includes("buildNpSimRestoreDiscount(company, product, fallback){"), "discount restore is filtered by company/product");
+assert(wiz.includes("onWizardSessionCapture: (session) =>"), "open wires session capture");
+assert(!/switchSimulatorInsuredPick\(insId, company, product, snapshot\)\{[\s\S]{0,900}this\.policyDraft\.company = co;/.test(wiz), "pick switch does not stamp the new company onto the shared draft before reopen");
+
+console.log("\n5b3) compact summary row + hidden inner insured list");
+assert(css.includes("grid-template-columns:72px minmax(0,1.6fr) auto auto"), "summary row is a tight 4-column grid");
+assert(/\.lcNpProw__metrics\{display:flex;flex-direction:row/.test(css), "premiums sit in a horizontal pair");
+assert(/\.lcNpProw__acts\{display:flex;flex-direction:row/.test(css), "row actions are horizontal");
+assert(css.includes(".lcNpProw__disc{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;padding:0;border:0;background:transparent}"), "discount chips are not in a dashed card");
+assert(css.includes(".lcNpProw__covers{margin-top:0;grid-column:1 / -1}"), "covers panel spans under the compact row");
+assert(css.includes(".lcNpManualBox") && css.includes("grid-column:1 / -1"), "manual discount panel spans under the compact row");
+assert(shellCss.includes('.giSimShellModal [class*="__statusList"]{ display:none !important; }') || shellCss.includes('.giSimShellModal [class*="__statusList"]{display:none !important;}'), "shell hides the inner insured status list");
+assert(sims.includes('statusList.classList.add("giSimShell__hintHidden")'), "layout also hides the inner insured list");
+
 console.log("\n5c) company logo in the summary row has no frame");
 const rowLogo = css.slice(css.indexOf(".lcNpProw .lcCompanyLogo,.lcNpProw img{"), css.indexOf(".lcNpProw__title{"));
 assert(rowLogo.includes("border:0"), "row logo has no border");
 assert(rowLogo.includes("background:transparent"), "row logo has no white plate");
 assert(rowLogo.includes("padding:0"), "row logo has no inner padding");
 assert(rowLogo.includes("box-shadow:none"), "row logo has no shadow");
-assert(/width:128px;height:70px/.test(rowLogo), "row logo is bigger so it reads clearly");
+assert(/width:72px;height:36px/.test(rowLogo), "row logo is compact in the summary row");
 assert(rowLogo.includes("object-fit:contain"), "row logo is never cropped");
 
 console.log("\n5d) operational report shows before/after simulator discount");
@@ -197,7 +217,11 @@ const host = new Proxy({
   safeTrim,
   escapeHtml: (s) => String(s == null ? "" : s),
   on(){}, $(){ return null; }, $$(){ return []; },
-  nowISO: () => "2026-09-03T10:00:00.000Z"
+  nowISO: () => "2026-09-03T10:00:00.000Z",
+  RiskSimulators: {
+    hasCatalog(){ return true; },
+    getHandler(){ return { open(){}, close(){} }; }
+  }
 }, {
   get(target, prop){
     if(prop in target) return target[prop];
@@ -470,6 +494,50 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
   W.handleWizardSimulatorClose();
   assert(W.policyDraft.company === "הפניקס", "close right after adding to the proposal does not reset the draft");
   assert(W._npSimSkipCloseCleanup === false, "skip flag is consumed once");
+
+  // ── per-insured pick switch does not clobber the other insured ──
+  {
+    sandbox.RiskSimulators = host.RiskSimulators;
+    const opened = [];
+    W.openRiskSimulator = function(opts){ opened.push(opts || {}); };
+    W.policyDraft = { company:"הכשרה", type:"ריסק", insuredIds:["i1"] };
+    W.ensurePolicyDraft = function(){ if(!this.policyDraft) this.policyDraft = { company:"", type:"" }; return this.policyDraft; };
+    W._npSimPickByInsured = {
+      i1: { company:"הכשרה", product:"ריסק" },
+      i2: { company:"הכשרה", product:"ריסק" }
+    };
+    W._npSimStateBag = {};
+    W._npSimDiscountBag = {};
+    W._npOpenSimHandler = {
+      _ctx: { company:"הכשרה", product:"ריסק", wizardWorkspace:true },
+      _state: { i1:{ sumInsured:"700000", result:{ ok:true, monthlyPremium:50 } }, i2:{ sumInsured:"" } },
+      close(){}
+    };
+    W.switchSimulatorInsuredPick("i2", "כלל", "ריסק", {
+      wizardPickByInsured: {
+        i1: { company:"הכשרה", product:"ריסק" },
+        i2: { company:"כלל", product:"ריסק" }
+      },
+      simSession: {
+        company:"הכשרה", product:"ריסק", pickKey:"הכשרה::ריסק",
+        stateByInsured: { i1:{ sumInsured:"700000", result:{ ok:true, monthlyPremium:50 } } },
+        discountByInsured: { i1:"hach-r-30" }
+      }
+    });
+    assert(W._npSimPickByInsured.i1.company === "הכשרה" && W._npSimPickByInsured.i1.product === "ריסק", "primary pick stays הכשרה · ריסק");
+    assert(W._npSimPickByInsured.i2.company === "כלל" && W._npSimPickByInsured.i2.product === "ריסק", "secondary pick becomes כלל · ריסק");
+    assert(W.policyDraft.company === "הכשרה", "shared draft company is not rewritten to כלל before reopen");
+    assert(W._npSimStateBag.i1["הכשרה::ריסק"].sumInsured === "700000", "primary הכשרה state is stored in the session bag");
+    const clalRestore = W.buildNpSimRestoreState("כלל", "ריסק", { i1:{ sumInsured:"SHOULD_NOT" } });
+    assert(!clalRestore || !clalRestore.i1, "כלל restore does not include the primary הכשרה snapshot");
+    const hachRestore = W.buildNpSimRestoreState("הכשרה", "ריסק", null);
+    assert(hachRestore && hachRestore.i1 && hachRestore.i1.sumInsured === "700000", "returning to הכשרה restores the primary snapshot");
+    const clalDisc = W.buildNpSimRestoreDiscount("כלל", "ריסק", { i1:"SHOULD_NOT" });
+    assert(!clalDisc || !clalDisc.i1, "כלל discount restore does not leak the primary option");
+    const hachDisc = W.buildNpSimRestoreDiscount("הכשרה", "ריסק", null);
+    assert(hachDisc && hachDisc.i1 === "hach-r-30", "הכשרה discount restore returns the primary option");
+    assert(opened.length === 1 && opened[0].restoreActiveId === "i2", "reopen targets the insured whose pick changed");
+  }
 
   // ── operational PDF: before/after discount surfaces ──
   {

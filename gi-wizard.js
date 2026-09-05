@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260903-np-workspace-v9";
+  const GI_WIZARD_BUILD = "20260905-np-per-insured-v1";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -11397,16 +11397,106 @@ if(path === "birthDate"){
         window.showToast?.({ title: "אין סימולטור", text: "לשילוב חברה/מוצר זה אין סימולטור.", variant: "warn" });
         return;
       }
+      if(snapshot && snapshot.simSession) this.mergeNpSimSessionSnapshot(snapshot.simSession);
+      else this.captureOpenSimulatorSession();
       if(snapshot && snapshot.wizardLegalByInsured) this._npSimLegalByInsured = snapshot.wizardLegalByInsured;
-      if(snapshot && snapshot.wizardPickByInsured) this._npSimPickByInsured = snapshot.wizardPickByInsured;
+      if(snapshot && snapshot.wizardPickByInsured){
+        this._npSimPickByInsured = Object.assign({}, this._npSimPickByInsured || {}, snapshot.wizardPickByInsured);
+      }
       this._npSimPickByInsured = this._npSimPickByInsured || {};
       this._npSimPickByInsured[id] = { company: co, product: pr };
       this.ensurePolicyDraft();
-      this.policyDraft.company = co;
-      this.policyDraft.type = pr;
       this._npSimAutoOpenedKey = co + "::" + pr;
       this.closeNpOpenSimulator();
       void this.openRiskSimulator({ restoreActiveId: id });
+    },
+
+    mergeNpSimSessionSnapshot(snapshot){
+      if(!snapshot || typeof snapshot !== "object") return;
+      const key = safeTrim(snapshot.pickKey) || (safeTrim(snapshot.company) + "::" + safeTrim(snapshot.product));
+      if(!key || key === "::") return;
+      this._npSimStateBag = this._npSimStateBag || {};
+      this._npSimDiscountBag = this._npSimDiscountBag || {};
+      const states = snapshot.stateByInsured && typeof snapshot.stateByInsured === "object" ? snapshot.stateByInsured : {};
+      Object.keys(states).forEach((id) => {
+        if(!states[id] || typeof states[id] !== "object") return;
+        this._npSimStateBag[id] = this._npSimStateBag[id] || {};
+        try { this._npSimStateBag[id][key] = JSON.parse(JSON.stringify(states[id])); } catch(_e) {}
+      });
+      const discs = snapshot.discountByInsured && typeof snapshot.discountByInsured === "object" ? snapshot.discountByInsured : {};
+      Object.keys(discs).forEach((id) => {
+        const opt = safeTrim(discs[id]);
+        if(!opt) return;
+        this._npSimDiscountBag[id] = this._npSimDiscountBag[id] || {};
+        this._npSimDiscountBag[id][key] = opt;
+      });
+    },
+
+    captureOpenSimulatorSession(){
+      const sim = this._npOpenSimHandler;
+      if(!sim) return;
+      const company = safeTrim(sim._ctx?.company);
+      const product = safeTrim(sim._ctx?.product);
+      const key = company + "::" + product;
+      const stateByInsured = {};
+      const map = sim._state && typeof sim._state === "object" ? sim._state : {};
+      Object.keys(map).forEach((id) => {
+        try { if(map[id]) stateByInsured[id] = JSON.parse(JSON.stringify(map[id])); } catch(_e) {}
+      });
+      const discountByInsured = {};
+      const disc = sim._giSimDiscountSel && typeof sim._giSimDiscountSel === "object" ? sim._giSimDiscountSel : {};
+      Object.keys(disc).forEach((id) => {
+        const v = safeTrim(disc[id]);
+        if(v) discountByInsured[id] = v;
+      });
+      this.mergeNpSimSessionSnapshot({ company, product, pickKey: key, stateByInsured, discountByInsured });
+    },
+
+    npSimPickMatches(insId, company, product){
+      const pick = this._npSimPickByInsured && this._npSimPickByInsured[insId];
+      if(!pick) return false;
+      return safeTrim(pick.company) === safeTrim(company) && safeTrim(pick.product) === safeTrim(product);
+    },
+
+    buildNpSimRestoreState(company, product, fallback){
+      const key = safeTrim(company) + "::" + safeTrim(product);
+      const out = {};
+      const bag = this._npSimStateBag && typeof this._npSimStateBag === "object" ? this._npSimStateBag : {};
+      Object.keys(bag).forEach((id) => {
+        const st = bag[id] && bag[id][key];
+        if(st && typeof st === "object"){
+          try { out[id] = JSON.parse(JSON.stringify(st)); } catch(_e) {}
+        }
+      });
+      const fb = fallback && typeof fallback === "object" ? fallback : {};
+      Object.keys(fb).forEach((id) => {
+        if(out[id] || !fb[id]) return;
+        const pick = this._npSimPickByInsured && this._npSimPickByInsured[id];
+        const matches = pick ? this.npSimPickMatches(id, company, product) : true;
+        if(!matches) return;
+        try { out[id] = JSON.parse(JSON.stringify(fb[id])); } catch(_e2) {}
+      });
+      return Object.keys(out).length ? out : null;
+    },
+
+    buildNpSimRestoreDiscount(company, product, fallback){
+      const key = safeTrim(company) + "::" + safeTrim(product);
+      const out = {};
+      const bag = this._npSimDiscountBag && typeof this._npSimDiscountBag === "object" ? this._npSimDiscountBag : {};
+      Object.keys(bag).forEach((id) => {
+        const opt = safeTrim(bag[id] && bag[id][key]);
+        if(opt) out[id] = opt;
+      });
+      const fb = fallback && typeof fallback === "object" ? fallback : {};
+      Object.keys(fb).forEach((id) => {
+        if(out[id]) return;
+        const pick = this._npSimPickByInsured && this._npSimPickByInsured[id];
+        const matches = pick ? this.npSimPickMatches(id, company, product) : true;
+        if(!matches) return;
+        const opt = safeTrim(fb[id]);
+        if(opt) out[id] = opt;
+      });
+      return Object.keys(out).length ? out : null;
     },
 
     getInsuredPremiumCardLabel(ins, index){
@@ -15941,6 +16031,7 @@ if(path === "birthDate"){
 
     /* סגירה שיוזם האשף — לא מחזירה את השלב לבחירה, כי הקורא כבר קובע את המצב. */
     closeNpOpenSimulator(){
+      this.captureOpenSimulatorSession();
       const handler = this._npOpenSimHandler;
       this._npOpenSimHandler = null;
       this._npSimKeepWorkspace = true;
@@ -16216,8 +16307,6 @@ if(path === "birthDate"){
       const restoreActiveId = safeTrim(opts.restoreActiveId)
         || (Array.isArray(d.insuredIds) && d.insuredIds[0] ? safeTrim(d.insuredIds[0]) : "")
         || safeTrim(d.insuredId);
-      const restoreState = opts.restoreState || this.buildSimulatorRestoreState(d);
-      const restoreDiscountByInsured = opts.restoreDiscountByInsured || this.buildSimulatorRestoreDiscount(d);
       const insureds = (this.insureds || []).map((ins, idx) => ({
         id: ins.id,
         label: this.getSimulatorTabLabel(ins, idx),
@@ -16240,6 +16329,8 @@ if(path === "birthDate"){
       const product = safeTrim(pick.product || d.type);
       d.company = company;
       d.type = product;
+      const restoreState = this.buildNpSimRestoreState(company, product, opts.restoreState || this.buildSimulatorRestoreState(d));
+      const restoreDiscountByInsured = this.buildNpSimRestoreDiscount(company, product, opts.restoreDiscountByInsured || this.buildSimulatorRestoreDiscount(d));
       const handler = RiskSimulators.getHandler(company, product);
       if(!handler) return;
       const startDmy = this.toSimulatorDmyDate(d.insuranceStartDate || d.startDate || "");
@@ -16286,6 +16377,9 @@ if(path === "birthDate"){
         },
         onSwitchInsuredPick: (insId, co, pr, snapshot) => {
           this.switchSimulatorInsuredPick(insId, co, pr, snapshot);
+        },
+        onWizardSessionCapture: (session) => {
+          this.mergeNpSimSessionSnapshot(session);
         },
         onFinalConfirm: () => {
           this.ensurePolicyDraft();
@@ -18112,7 +18206,7 @@ if(path === "birthDate"){
       const iconPolRemove = `<svg class="lcPolAction__svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>`;
 
       const renderPolicyCard = (p, showCoupleBadge=false) => {
-        const logo = this.renderCompanyLogoHtml(p.company, "card");
+        const logo = this.renderCompanyLogoHtml(p.company, "mini");
         const pInsuredIds = Array.isArray(p.insuredIds) && p.insuredIds.length ? p.insuredIds : (p.insuredId ? [p.insuredId] : []);
         const isMulti = pInsuredIds.length > 1;
         const isBaselineSwitch = this.isCustomerPurchaseSwitchMode() && this.isCustomerPurchaseBaselinePolicy(p);
@@ -18191,29 +18285,26 @@ if(path === "birthDate"){
               ${detailText ? `<span>${detailText}</span>` : ""}
               ${badge}${baselineChip}
             </div>
-            ${coversPanel}
             <div class="lcNpProw__disc">
-              <span class="lcNpProw__discK">הנחה</span>
               <span class="lcNpChip lcNpChip--disc">${escapeHtml(discChipLabel)}</span>
-              ${isHealth && !isBaselineSwitch ? `<button class="lcNpChip lcNpChip--manual${manualOpen ? " is-on" : ""}" type="button" data-np-manual-disc="${escapeHtml(p.id)}">${manualOpen ? "סגור הנחה ידנית" : "+ הנחה ידנית"}</button>` : ""}
-            </div>
-            <div class="lcNpProw__meta">
               ${scheduleSummary ? `<span class="lcNpChip">דירוג ${escapeHtml(scheduleSummary)}</span>` : ""}
               ${introBenefitText ? `<span class="lcNpChip lcNpChip--gift">${escapeHtml(introBenefitText)}</span>` : ""}
               <span class="lcNpChip lcNpChip--pledge">${pledgeText}</span>
               <span class="lcNpChip">${escapeHtml(benText)}</span>
+              ${isHealth && !isBaselineSwitch ? `<button class="lcNpChip lcNpChip--manual${manualOpen ? " is-on" : ""}" type="button" data-np-manual-disc="${escapeHtml(p.id)}">${manualOpen ? "סגור הנחה ידנית" : "+ הנחה ידנית"}</button>` : ""}
             </div>
-            ${manualTable}
           </div>
           <div class="lcNpProw__metrics">
-            <div class="lcNpMetric"><span>פרמיה לפני הנחה</span><strong>${this.formatMoneyValue(beforePrem)}</strong></div>
-            <div class="lcNpMetric"><span>פרמיה אחרי הנחה</span><strong class="is-after">${this.formatMoneyValue(afterPrem)}</strong></div>
+            <div class="lcNpMetric"><span>לפני הנחה</span><strong>${this.formatMoneyValue(beforePrem)}</strong></div>
+            <div class="lcNpMetric"><span>אחרי הנחה</span><strong class="is-after">${this.formatMoneyValue(afterPrem)}</strong></div>
           </div>
           <div class="lcNpProw__acts">
             ${isBaselineSwitch ? "" : `<button type="button" class="lcBtn" data-discountpol="${p.id}" aria-label="הנחה">${iconPolDiscount}<span>הנחה</span></button>
             <button type="button" class="lcBtn" data-editpol="${p.id}" aria-label="עריכה">${iconPolEdit}<span>עריכה</span></button>`}
             <button type="button" class="lcBtn" data-delpol="${p.id}" aria-label="הסר">${iconPolRemove}<span>${isBaselineSwitch ? "הסר לשיחלוף" : "הסר"}</span></button>
           </div>
+          ${coversPanel}
+          ${manualTable}
         </article>`;
       };
 
