@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260905-np-prow-actions-v1";
+const TAG = "20260905-health-covers-grid-v1";
 let failed = 0;
 let passed = 0;
 
@@ -208,6 +208,15 @@ assert(css.includes(".lcNpProw__covers{margin-top:0;grid-column:1 / -1}"), "cove
 assert(css.includes(".lcNpManualBox") && css.includes("grid-column:1 / -1"), "manual discount panel spans under the compact row");
 assert(shellCss.includes('.giSimShellModal [class*="__statusList"]{ display:none !important; }') || shellCss.includes('.giSimShellModal [class*="__statusList"]{display:none !important;}'), "shell hides the inner insured status list");
 assert(sims.includes('statusList.classList.add("giSimShell__hintHidden")'), "layout also hides the inner insured list");
+
+console.log("\n5b4) health simulator covers use a compact two-column list");
+assert(sims.includes('layout.classList.add("giSimShell__layout--healthCovers")'), "health layout class is applied when a cover list exists");
+assert(shellCss.includes(".giSimShell__layout--healthCovers{"), "health layout gives more width to covers");
+assert(shellCss.includes(".giSimShell__panel--covers [class*=\"__coverList\"]{") || shellCss.includes(".giSimShell__panel--covers [class*='__coverList']{") || shellCss.includes('.giSimShell__panel--covers [class*="__coverList"]{'), "cover list selector in the shell");
+assert(shellCss.includes("grid-template-columns:repeat(2, minmax(0, 1fr))"), "cover rows sit in two columns");
+assert(/padding:6px 8px !important/.test(shellCss), "cover rows are shorter");
+assert(/covers\.appendChild\(coversWrap\);\s*if\(occBox\) details\.appendChild\(occBox\)/.test(sims), "occupation/underwriting sits in the details column");
+assert(!/covers\.appendChild\(coversWrap\);\s*if\(occBox\) covers\.appendChild\(occBox\)/.test(sims), "occupation is no longer under the long cover list");
 
 console.log("\n5c) company logo in the summary row has no frame");
 const rowLogo = css.slice(css.indexOf(".lcNpProw .lcCompanyLogo,.lcNpProw img{"), css.indexOf(".lcNpProw__title{"));
