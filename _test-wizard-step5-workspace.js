@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260905-pledge-bens-v1";
+const TAG = "20260905-couple-covers-v1";
 let failed = 0;
 let passed = 0;
 
@@ -247,7 +247,15 @@ assert(shellCss.includes(".giSimShell__legalSummary"), "pledge summary styles");
 assert(shellCss.includes("gap:12px 18px") || shellCss.includes("gap:12px 20px"), "insured tabs are spaced");
 assert(shellCss.includes("z-index:1") && shellCss.includes(".giSimShell__panel--legal"), "legal dock stays under the form");
 
-console.log("\n10) pledge/beneficiaries persist onto the summary row");
+console.log("\n10) couple health covers copy + per-insured details");
+assert(sims.includes("function riskSimSyncCoupleHealthCovers(sim, coverId, turnedOn)"), "couple cover sync helper");
+assert(sims.includes('title: "כיסוי לילד"'), "child-cover notice to the agent");
+assert(wiz.includes("הצג פירוט"), "summary row has הצג פירוט");
+assert(wiz.includes("healthCoversPerInsured"), "covers stored per insured");
+assert(wiz.includes("getPolicyInsuredCoverLabels(policy, insId)"), "details read covers per insured");
+assert(css.includes(".lcNpProw__personHead"), "per-insured detail head styles");
+
+console.log("\n11) pledge/beneficiaries persist onto the summary row");
 assert(wiz.includes("applySimulatorLegalToDraft(draft, legal)"), "purchase copies simulator legal onto the draft");
 assert(wiz.includes("p.pledgeBanks[0].bankName"), "row chip reads bankName");
 assert(!wiz.includes("p.pledgeBanks[0]?.name"), "row chip does not read the wrong name field");

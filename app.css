@@ -25761,6 +25761,13 @@ body.lcAuthLock .lcLogin__mfaQrBox > canvas{width:min(100%,220px) !important;max
   display:grid;gap:6px;color:#1b365d;font-size:13px;font-weight:700;line-height:1.45;
 }
 .lcNpProw__coversEmpty{font-size:13px;font-weight:700;color:#64748b}
+.lcNpProw__person{padding:10px 0;border-bottom:1px solid rgba(27,54,93,.08)}
+.lcNpProw__person:last-child{border-bottom:0;padding-bottom:0}
+.lcNpProw__person:first-child{padding-top:0}
+.lcNpProw__personHead{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;margin-bottom:6px}
+.lcNpProw__personHead strong{font-size:13px;font-weight:800;color:#1b365d}
+.lcNpProw__personHead span{font-size:12px;font-weight:700;color:#475569}
+.lcNpProw__personHead .is-after{color:#15803d}
 
 /* GI-NP-STAGE 2026-09-03 — כותרות מצב וסיכום לפי המוקאפ */
 .lcNpSumHead{
