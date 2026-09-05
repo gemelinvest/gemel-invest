@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260905-np-couple-v1";
+const TAG = "20260905-np-prow-actions-v1";
 let failed = 0;
 let passed = 0;
 
@@ -71,6 +71,8 @@ assert(renderFn.includes("data-nptype"), "product picker kept");
 assert(renderFn.includes("data-np-insured"), "insured multi-select kept");
 assert(renderFn.includes("data-discountpol"), "existing discount modal still on the row");
 assert(renderFn.includes("data-editpol") && renderFn.includes("data-delpol"), "edit/remove kept");
+assert(renderFn.includes("lcNpProw__act"), "row actions use quiet prow buttons");
+assert(renderFn.includes("lcNpChip--covers"), "health covers toggle sits in the compact chip row");
 assert(renderFn.includes("data-np-manual-disc"), "manual discount chip on health rows");
 assert(renderFn.includes("data-cover-pct"), "per-cover percent inputs");
 assert(renderFn.includes("חשב פרמיה"), "calc button in workspace");

@@ -14,7 +14,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260905-np-couple-v1";
+const TAG = "20260905-np-prow-actions-v1";
 let failed = 0;
 let passed = 0;
 

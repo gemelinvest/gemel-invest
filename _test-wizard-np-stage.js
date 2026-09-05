@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260905-np-couple-v1";
+const TAG = "20260905-np-prow-actions-v1";
 let failed = 0;
 let passed = 0;
 
@@ -84,8 +84,11 @@ assert(wiz.includes("הצג כיסוי בפוליסה"), "show-covers button lab
 assert(wiz.includes('data-np-show-covers='), "show-covers button wiring");
 assert(wiz.includes("_npCoversOpenId"), "covers panel open state");
 assert(!/detailText = \(p\.type === \"בריאות\"\)\s*\?\s*\(`כיסויים: \$\{coverSummary\}`\)/.test(wiz), "dense covers line removed from health rows");
-assert(css.includes(".lcNpProw__coversBtn"), "covers button styles");
+assert(css.includes(".lcNpChip--covers"), "covers toggle uses a quiet chip in the compact row");
 assert(css.includes(".lcNpProw__coversList"), "covers list styles");
+assert(wiz.includes("const coversToggle = isHealth"), "covers toggle is split from the expanding panel");
+assert(/lcNpProw__disc[\s\S]{0,900}\$\{coversToggle\}/.test(wiz), "covers toggle is interpolated into the compact chip row");
+assert(!/class="lcNpProw__covers"[\s\S]{0,180}data-np-show-covers=/.test(wiz), "covers toggle is not a full-width block under the row");
 
 console.log("\n3c) sum-insured field has no example placeholder");
 assert(!sims.includes('placeholder="לדוגמה: 1,000,000"'), "simulator no longer shows 1,000,000 example");
@@ -193,6 +196,13 @@ console.log("\n5b3) compact summary row + hidden inner insured list");
 assert(css.includes("grid-template-columns:72px minmax(0,1.6fr) auto auto"), "summary row is a tight 4-column grid");
 assert(/\.lcNpProw__metrics\{display:flex;flex-direction:row/.test(css), "premiums sit in a horizontal pair");
 assert(/\.lcNpProw__acts\{display:flex;flex-direction:row/.test(css), "row actions are horizontal");
+assert(css.includes(".lcNpProw__act{"), "quiet compact-row action button styles");
+assert(css.includes(".lcNpProw__act--disc{"), "discount action is a quiet gold-tint chip");
+assert(css.includes(".lcNpProw__act--del{"), "remove action is a quiet muted chip");
+assert(wiz.includes('class="lcNpProw__act lcNpProw__act--disc"'), "discount button uses quiet prow act class");
+assert(wiz.includes('class="lcNpProw__act" data-editpol='), "edit button uses quiet prow act class");
+assert(wiz.includes('class="lcNpProw__act lcNpProw__act--del"'), "remove button uses quiet prow act class");
+assert(wiz.includes("data-discountpol=") && wiz.includes("data-editpol=") && wiz.includes("data-delpol="), "row action wiring is unchanged");
 assert(css.includes(".lcNpProw__disc{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;padding:0;border:0;background:transparent}"), "discount chips are not in a dashed card");
 assert(css.includes(".lcNpProw__covers{margin-top:0;grid-column:1 / -1}"), "covers panel spans under the compact row");
 assert(css.includes(".lcNpManualBox") && css.includes("grid-column:1 / -1"), "manual discount panel spans under the compact row");
