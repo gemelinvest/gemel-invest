@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260905-sim-center-all-v1";
+  const GI_WIZARD_BUILD = "20260905-sim-ui-disc-v1";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -14250,6 +14250,147 @@ if(path === "birthDate"){
       return Array.isArray(defaults) ? defaults.slice() : [];
     },
 
+    getSimulatorDiscountApi(){
+      try { return (typeof window !== "undefined" && window.GiSimulatorDiscounts) || null; } catch(_e){ return null; }
+    },
+    adaptSimulatorDiscountOption(opt){
+      if(!opt) return null;
+      const scheduleArr = Array.isArray(opt.schedule) ? opt.schedule.slice() : [];
+      return {
+        id: safeTrim(opt.id),
+        label: safeTrim(opt.label),
+        pct: Number(opt.pct) || 0,
+        years: Number(opt.years) || scheduleArr.length || 0,
+        schedule: scheduleArr.length ? scheduleArr.join("/") : (typeof opt.schedule === "string" ? opt.schedule : ""),
+        pctByCover: opt.pctByCover,
+        fullPriceIds: opt.fullPriceIds,
+        isException: !!opt.isException,
+        packageNum: opt.packageNum || "",
+        _simRaw: opt
+      };
+    },
+    getPolicyRowDiscountOptions(policy, productType){
+      const company = safeTrim(policy && policy.company);
+      const type = safeTrim(productType || (policy && policy.type));
+      const api = this.getSimulatorDiscountApi();
+      if(api && typeof api.list === "function"){
+        const rows = api.list(company, type);
+        if(Array.isArray(rows) && rows.length){
+          return rows.map((o) => this.adaptSimulatorDiscountOption(o)).filter((r) => r && r.label);
+        }
+      }
+      return this.getCompanyDiscountOptions(company, type);
+    },
+    _stashPolicyDiscountInsuredSelection(){
+      const id = safeTrim(this._npDiscInsuredId);
+      if(!id) return;
+      this._npDiscSelByInsured = this._npDiscSelByInsured || {};
+      const idx = this._discountCurrentIdx;
+      this._npDiscSelByInsured[id] = (idx == null ? -1 : idx);
+    },
+    _paintPolicyDiscountInsureds(policy, discountOpts){
+      const bar = document.getElementById("lcPolicyDiscountInsureds");
+      const ids = this.getPolicyInsuredIds(policy);
+      this._npDiscInsuredIds = ids.slice();
+      this._npDiscSelByInsured = this._npDiscSelByInsured || {};
+      ids.forEach((iid) => {
+        if(this._npDiscSelByInsured[iid] != null) return;
+        const saved = policy.simDiscountPerInsured && policy.simDiscountPerInsured[iid];
+        let idx = -1;
+        if(saved && saved.optionId){
+          idx = (discountOpts || []).findIndex((o) => o && o.id === saved.optionId);
+        } else if(policy.discountOption && policy.discountOption.label){
+          idx = (discountOpts || []).findIndex((o) => o && o.label === policy.discountOption.label);
+        }
+        this._npDiscSelByInsured[iid] = idx;
+      });
+      this._npDiscInsuredId = this._npDiscInsuredId && ids.indexOf(this._npDiscInsuredId) >= 0 ? this._npDiscInsuredId : (ids[0] || "");
+      if(!bar) return;
+      if(ids.length <= 1){
+        bar.hidden = true;
+        bar.innerHTML = "";
+        return;
+      }
+      bar.hidden = false;
+      bar.innerHTML = ids.map((iid) => {
+        const on = iid === this._npDiscInsuredId ? " is-on" : "";
+        return `<button type="button" class="lcPolicyDiscountModal__insBtn${on}" data-np-disc-ins="${escapeHtml(iid)}">${escapeHtml(this.getPolicyInsuredShortName(iid))}</button>`;
+      }).join("");
+      bar.querySelectorAll("[data-np-disc-ins]").forEach((btn) => {
+        btn.onclick = () => {
+          const next = btn.getAttribute("data-np-disc-ins");
+          if(!next || next === this._npDiscInsuredId) return;
+          this._stashPolicyDiscountInsuredSelection();
+          this._npDiscInsuredId = next;
+          const idx = this._npDiscSelByInsured[next];
+          this._discountCurrentIdx = (idx == null ? -1 : idx);
+          this._renderDiscountCustomDropdown(this._discountOpts || [], this._discountCurrentIdx, this.els.policyDiscountPct, true);
+          this.syncDiscountScheduleDraftFromUi();
+          this.updatePolicyDiscountPreview();
+          this._paintPolicyDiscountInsureds(policy, this._discountOpts || []);
+        };
+      });
+    },
+    _applySimulatorDiscountAfter(policy, insId, wizardOpt){
+      if(!policy || !insId) return;
+      if(!wizardOpt){
+        if(policy.simDiscountPerInsured) delete policy.simDiscountPerInsured[insId];
+        return;
+      }
+      const api = this.getSimulatorDiscountApi();
+      const raw = wizardOpt._simRaw || (api && api.byId ? api.byId(policy.company, policy.type, wizardOpt.id) : null);
+      if(!api || !raw || typeof api.afterMonthly !== "function") return;
+      const quote = policy.riskSimQuotes && policy.riskSimQuotes[insId];
+      const result = quote ? Object.assign({ ok: true }, quote) : {
+        ok: true,
+        monthlyPremium: this.asMoneyNumber(policy.premiumPerInsured && policy.premiumPerInsured[insId])
+      };
+      let after = null;
+      try { after = api.afterMonthly(result, raw); } catch(_e) {}
+      policy.simDiscountPerInsured = policy.simDiscountPerInsured || {};
+      const schedule = Array.isArray(raw.schedule) ? raw.schedule.slice() : [];
+      const year1 = typeof api.year1Pct === "function" ? api.year1Pct(raw) : (Number(raw.pct) || 0);
+      policy.simDiscountPerInsured[insId] = {
+        optionId: raw.id,
+        optionLabel: raw.label,
+        year1Pct: year1,
+        years: raw.years || schedule.length,
+        schedule,
+        monthlyAfterDiscount: after
+      };
+    },
+    _applyPolicyRowDiscountsPerInsured(policy, sharedPayload){
+      const ids = this._npDiscInsuredIds || this.getPolicyInsuredIds(policy);
+      const opts = this._discountOpts || [];
+      ids.forEach((iid) => {
+        const idx = this._npDiscSelByInsured && this._npDiscSelByInsured[iid];
+        const opt = (idx != null && idx >= 0) ? opts[idx] : null;
+        let payload = sharedPayload;
+        if(opt){
+          let finalSchedule = [];
+          let finalPct = 0;
+          if(opt.schedule){
+            finalSchedule = this.buildScheduleFromString(opt.schedule, opt.years);
+            finalPct = finalSchedule.length ? finalSchedule[0].pct : (opt.pct || 0);
+          } else {
+            finalPct = opt.pct || 0;
+            finalSchedule = opt.years ? this.buildUniformDiscountSchedule(opt.years, finalPct) : [];
+          }
+          payload = Object.assign({}, sharedPayload, {
+            discountPct: String(finalPct),
+            discountSchedule: finalSchedule,
+            discountYears: finalSchedule.length ? String(finalSchedule.length) : (opt.years ? String(opt.years) : ""),
+            discountOption: opt,
+            discountPackageNum: opt.packageNum || ""
+          });
+        }
+        if(!policy.discountPerInsured) policy.discountPerInsured = {};
+        policy.discountPerInsured[iid] = JSON.parse(JSON.stringify(payload));
+        this._applySimulatorDiscountAfter(policy, iid, opt);
+      });
+      this.syncDraftDiscountFromSimulator(policy);
+    },
+
     buildScheduleFromString(scheduleStr, years){
       if(!scheduleStr) return [];
       const parts = String(scheduleStr).split('/').map(s => Number(String(s).replace(/[^\d]/g,''))).filter(n => !isNaN(n) && n > 0);
@@ -17051,12 +17192,18 @@ if(path === "birthDate"){
         ? (this.getHealthAddonDiscountProductType(target.cover) || target.productLabel || policy.type || "")
         : (target?.productLabel || policy.type || "");
       const company = policy.company || '';
-      const discountOpts = this.getCompanyDiscountOptions(company, productType);
+      const discountOpts = this.getPolicyRowDiscountOptions(policy, productType);
       const hiddenInput = this.els.policyDiscountPct;
       const savedOpt = (targetEntry || policy).discountOption;
-      const savedIdx = savedOpt ? discountOpts.findIndex(o => o.label === savedOpt.label) : -1;
-      this._discountCurrentIdx = savedIdx;
       this._discountOpts = discountOpts;
+      this._npDiscInsuredId = "";
+      this._npDiscSelByInsured = {};
+      this._paintPolicyDiscountInsureds(policy, discountOpts);
+      const activeId = this._npDiscInsuredId;
+      const savedIdx = (activeId && this._npDiscSelByInsured && this._npDiscSelByInsured[activeId] != null)
+        ? this._npDiscSelByInsured[activeId]
+        : (savedOpt ? discountOpts.findIndex(o => o.label === savedOpt.label) : -1);
+      this._discountCurrentIdx = savedIdx;
       this._renderDiscountCustomDropdown(discountOpts, savedIdx, hiddenInput);
       this._updateDiscountExceptionVisibility(discountOpts, savedIdx);
 
@@ -17105,6 +17252,7 @@ if(path === "birthDate"){
       this.updatePolicyDiscountPreview();
       this.els.policyDiscountModal.classList.add("is-open");
       this.els.policyDiscountModal.setAttribute("aria-hidden", "false");
+      this.els.policyDiscountModal.classList.add("lcPolicyDiscountModal--fit");
       this._startDiscountCatalogPoll();
       setTimeout(() => $('#lcDiscountSelectTrigger')?.focus?.(), 30);
     },
@@ -17145,6 +17293,7 @@ if(path === "birthDate"){
       noneItem.innerHTML = `<div class="lcDiscountSelect__item__label">${escapeHtml(DISCOUNT_SELECT_PLACEHOLDER)}</div>`;
       noneItem.onclick = () => {
         this._discountCurrentIdx = -1;
+        this._stashPolicyDiscountInsuredSelection();
         setLabel(-1);
         this._highlightDiscountItem(list, -1, opts.length);
         this._updateDiscountExceptionVisibility(opts, -1);
@@ -17166,6 +17315,7 @@ if(path === "birthDate"){
           (pkgText ? `<div class="lcDiscountSelect__item__pkg">${escapeHtml(pkgText)}</div>` : '');
         item.onclick = () => {
           this._discountCurrentIdx = i;
+          this._stashPolicyDiscountInsuredSelection();
           setLabel(i);
           this._highlightDiscountItem(list, i, opts.length);
           this._updateDiscountExceptionVisibility(opts, i);
@@ -17217,6 +17367,9 @@ if(path === "birthDate"){
       this._discountScheduleDraft = [];
       this._discountCurrentIdx = -1;
       this._discountOpts = [];
+      this._npDiscInsuredIds = null;
+      this._npDiscInsuredId = "";
+      this._npDiscSelByInsured = {};
       if(!options.preserveQueue){
         this._multiDiscountTargets = null;
         this._multiDiscountPolicyId = null;
@@ -17282,7 +17435,7 @@ if(path === "birthDate"){
           const target = this._discountTarget || null;
           const productType = target?.productLabel || policy.type || "";
           const company = policy.company || "";
-          const discountOpts = this.getCompanyDiscountOptions(company, productType);
+          const discountOpts = this.getPolicyRowDiscountOptions(policy, productType);
           const hiddenInput = this.els.policyDiscountPct;
           const prevIdx = this._discountCurrentIdx;
           const prevLabel = (prevIdx >= 0 && this._discountOpts && this._discountOpts[prevIdx]) ? safeTrim(this._discountOpts[prevIdx].label) : "";
@@ -17392,8 +17545,20 @@ if(path === "birthDate"){
       const policy = (this.newPolicies || []).find(item => item.id === pid);
       if(!policy || !this.els.policyDiscountPreview) return;
       const base = this._discountPremiumBase != null ? this._discountPremiumBase : this.asMoneyNumber(policy.premiumMonthly);
-      // ההנחה מתועדת בלבד — הפרמיה שהוזנה היא כבר הפרמיה הסופית לאחר הנחה.
-      const after = Math.max(0, Math.round(base * 100) / 100);
+      let after = Math.max(0, Math.round(base * 100) / 100);
+      const api = this.getSimulatorDiscountApi();
+      const curId = this._npDiscInsuredId || (this.getPolicyInsuredIds(policy)[0] || "");
+      const curIdx = this._discountCurrentIdx;
+      const curOpt = (curIdx != null && curIdx >= 0 && this._discountOpts) ? this._discountOpts[curIdx] : null;
+      const raw = curOpt && curOpt._simRaw;
+      if(api && raw && typeof api.afterMonthly === "function" && curId){
+        const quote = policy.riskSimQuotes && policy.riskSimQuotes[curId];
+        const result = quote ? Object.assign({ ok: true }, quote) : { ok: true, monthlyPremium: this.asMoneyNumber(policy.premiumPerInsured && policy.premiumPerInsured[curId]) };
+        try {
+          const simAfter = api.afterMonthly(result, raw);
+          if(simAfter != null && Number.isFinite(Number(simAfter))) after = Number(simAfter);
+        } catch(_ePrev) {}
+      }
       const scheduleSummary = (this._discountScheduleDraft || []).length ? this.getPolicyDiscountScheduleSummary({ discountSchedule: this._discountScheduleDraft }) : '';
       const scheduleText = scheduleSummary
         ? `<div class="lcPolicyDiscountModal__previewSub">דירוג בשנים: ${escapeHtml(scheduleSummary)}</div>`
@@ -17501,11 +17666,18 @@ if(path === "birthDate"){
 
       const discountTarget = this._discountTarget || null;
 
+      this._stashPolicyDiscountInsuredSelection();
       if(discountTarget?.kind === "healthAddon" && discountTarget.cover){
         this.applyAddonDiscountToAllInsured(policy, discountTarget.cover, discountPayload);
+      } else if(Array.isArray(this._npDiscInsuredIds) && this._npDiscInsuredIds.length > 1){
+        Object.assign(policy, discountPayload);
+        this._applyPolicyRowDiscountsPerInsured(policy, discountPayload);
       } else {
         Object.assign(policy, discountPayload);
         this.applyDiscountPayloadToAllInsured(policy, discountPayload);
+        const oneId = (this._npDiscInsuredIds && this._npDiscInsuredIds[0]) || this.getPolicyInsuredIds(policy)[0];
+        this._applySimulatorDiscountAfter(policy, oneId, selectedOpt);
+        this.syncDraftDiscountFromSimulator(policy);
       }
       // שומר סכום סופי כולל (בריאות + addon) לתצוגות fallback בלבד; לא מחושב מאחוזי ההנחה.
       policy.premiumMonthly = String(this.getPolicyPremiumAfterDiscount(policy) || "");
