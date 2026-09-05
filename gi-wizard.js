@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260905-couple-covers-v1";
+  const GI_WIZARD_BUILD = "20260905-sim-center-all-v1";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -15392,7 +15392,7 @@ if(path === "birthDate"){
     },
 
     // GI-NP-WORKSPACE 2026-09-03: סימולטור בשלב פוליסות חדשות פתוח לכל נציג.
-    // מרכז הסימולטורים נשאר מאחורי Auth.canAccessSimulators (מנהל/מנהל מערכת).
+    // מרכז הסימולטורים נשאר מאחורי Auth.canAccessSimulators (כל משתמש מחובר).
     canOpenWizardPolicySimulator(){
       return true;
     },
@@ -18079,7 +18079,7 @@ if(path === "birthDate"){
             </button>`;
           }).join("");
 
-      // GI-NP-WORKSPACE: כפתור סימולטור לכל נציג בשלב זה. מרכז הסימולטורים לא משתנה.
+      // GI-NP-WORKSPACE: כפתור סימולטור לכל נציג בשלב זה. מרכז הסימולטורים נפתח בנפרד מהאשף.
       const riskSimHandler = (!isMedicare && this.canOpenWizardPolicySimulator?.())
         ? (RiskSimulators.hasCatalog?.(d.company, d.type) || RiskSimulators.getHandler(d.company, d.type))
         : null;

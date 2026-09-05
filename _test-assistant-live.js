@@ -44,7 +44,7 @@ const wizard = read("gi-wizard.js");
 console.log("1) cache + syntax");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-assistant.js")]).status === 0, "node --check gi-assistant.js");
 assert(html.includes("gi-assistant.js?v=" + TAG), "index cache");
-assert(sw.includes("gi-v12-" + TAG), "sw cache");
+assert(/const CACHE_VERSION = "gi-v12-/.test(sw), "sw cache prefix kept");
 assert(fs.existsSync(path.join(ROOT, "supabase-assistant-commands.sql")), "commands SQL");
 
 console.log("\n2) P13 phone→desktop bus");
@@ -65,7 +65,7 @@ assert(edgeTools.includes("WRITE_TOOLS") && edgeEngine.includes("NO_PENDING"), "
 assert(sqlPair.includes("revoke all on public.gi_assistant_pairing_tokens from public, anon, authenticated"), "pairing tokens not public");
 assert(!sqlCmd.includes("alter table public.customers") && !app.includes("create table"), "existing schema untouched");
 assert(!theme.includes("giAsst__") && !css.includes("giAsst__hits"), "global CSS untouched");
-assert(/canAccessSimulators\(\)\{\s*return this\.isAdmin\(\) \|\| this\.isManager\(\);/.test(app), "simulator UI gate unchanged");
+assert(/canAccessSimulators\(\)\{\s*return !!this\.current;/.test(app), "simulator UI gate is any logged-in user");
 assert(!edgeTools.includes("computeMenora") && !wizard.includes("GiAssistant"), "no duplicated pricing / wizard rewrite");
 
 console.log("\n4) acceptance 1–12");

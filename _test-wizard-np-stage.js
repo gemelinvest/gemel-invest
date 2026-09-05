@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260905-couple-covers-v1";
+const TAG = "20260905-sim-center-all-v1";
 let failed = 0;
 let passed = 0;
 
@@ -281,8 +281,8 @@ assert(wiz.includes("['פרמיה אחרי הנחה', premiumAfterVal ? this.for
 assert(wiz.includes("policy?.simDiscountPerInsured?.[iid]?.monthlyAfterDiscount"), "ops per-insured premium prefers simulator after-discount");
 assert(/getPolicyInsuredLabelSafe = \(policy\) => \{[\s\S]{0,900}pIds\.length > 1/.test(wiz), "ops insured label joins multiple insuredIds");
 
-console.log("\n6) untouched — declaration routing, premium engine, simulators center");
-assert(/canAccessSimulators\(\)\{\s*return this\.isAdmin\(\) \|\| this\.isManager\(\);/.test(app), "Simulators Center gate still admin/manager");
+console.log("\n6) untouched — declaration routing, premium engine; center open to logged-in users");
+assert(/canAccessSimulators\(\)\{\s*return !!this\.current;/.test(app), "Simulators Center gate is any logged-in user");
 assert(/canOpenWizardPolicySimulator\(\)\{\s*return true;/.test(wiz), "wizard simulator still open to every agent");
 assert(wiz.includes("return this.getPolicyPremiumBeforeDiscount(policy);"), "global after-discount engine untouched");
 assert(wiz.includes("GI-HEALTH-ONE-DECL"), "one-declaration routing marker still present");
