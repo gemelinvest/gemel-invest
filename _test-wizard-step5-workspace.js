@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260905-couple-covers-v1";
+const TAG = "20260905-sim-center-all-v1";
 let failed = 0;
 let passed = 0;
 
@@ -88,10 +88,10 @@ assert(css.includes(".lcNpPickGrid"), "pick grid styles");
 assert(css.includes(".lcNpWsGrid"), "workspace grid styles");
 assert(css.includes(".lcNpManualActions"), "manual discount save-row styles");
 
-console.log("\n3) simulators: wizard open to all agents, center unchanged");
+console.log("\n3) simulators: wizard open to all agents, center open to logged-in users");
 assert(wiz.includes("canOpenWizardPolicySimulator(){"), "wizard simulator gate exists");
 assert(/canOpenWizardPolicySimulator\(\)\{\s*return true;/.test(wiz), "wizard simulator is open to every agent");
-assert(/canAccessSimulators\(\)\{\s*return this\.isAdmin\(\) \|\| this\.isManager\(\);/.test(app), "Simulators Center gate unchanged");
+assert(/canAccessSimulators\(\)\{\s*return !!this\.current;/.test(app), "Simulators Center gate is any logged-in user");
 assert(renderFn.includes("canOpenWizardPolicySimulator"), "step 5 uses wizard gate, not manager-only center gate");
 assert(!renderFn.includes("Auth.canAccessSimulators"), "step 5 no longer gates the banner on manager/admin");
 
@@ -186,7 +186,7 @@ assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=' + TAG + '"')
 assert(app.includes('simulators-shell.css?v=' + TAG), "shell css cache bumped");
 assert(shellCss.includes(".giSimShell__panel--legal"), "legal panel styles");
 assert(css.includes(".lcNpWsHint"), "workspace hint styles");
-assert(/canAccessSimulators\(\)\{\s*return this\.isAdmin\(\) \|\| this\.isManager\(\);/.test(app), "Simulators Center gate still admin/manager");
+assert(/canAccessSimulators\(\)\{\s*return !!this\.current;/.test(app), "Simulators Center gate is any logged-in user");
 assert(pickBlock.includes("GI-HEALTH-ONE-DECL"), "declaration routing still untouched in this follow-up");
 
 console.log("\n9) approved UI follow-up — discount close, tabs, pledge dock, pick switch");

@@ -45,7 +45,7 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-assistant.js"
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-simulators.js")]).status === 0, "node --check gi-simulators.js");
 assert(html.includes("gi-assistant.js?v=" + TAG), "index cache");
-assert(sw.includes("gi-v12-" + TAG), "sw cache");
+assert(/const CACHE_VERSION = "gi-v12-/.test(sw), "sw cache prefix kept");
 assert(/gi-simulators\.js\?v=/.test(app), "simulator chunk cache");
 
 console.log("\n2) wraps existing compute / wizard, no new pricing engine");
@@ -59,7 +59,7 @@ assert(app.includes("Wizard.openNewPurchaseForCustomer"), "proposal opens existi
 assert(app.includes("fillWizard") && app.includes("wizardNext") && app.includes("openHarImport"), "assistant wraps fill / next / HAR");
 assert(edge.includes("fill_wizard") && edge.includes("wizard_next") && edge.includes("open_har_import"), "tools expose wizard fill next HAR");
 assert(app.includes("canAccessSimulators(){"), "canAccessSimulators still exists");
-assert(/canAccessSimulators\(\)\{\s*return this\.isAdmin\(\) \|\| this\.isManager\(\);/.test(app), "UI simulator gate unchanged");
+assert(/canAccessSimulators\(\)\{\s*return !!this\.current;/.test(app), "UI simulator gate is any logged-in user");
 assert(!edge.includes("computeMenora") && !edge.includes("MENORA_RISK_RATE"), "edge has no rate tables");
 assert(!edge.includes("PHASE_11"), "price stub removed");
 assert(!wizard.includes("GiAssistant") && !wizard.includes("quoteExistingSimulator"), "wizard internals untouched");

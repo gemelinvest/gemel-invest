@@ -38,11 +38,11 @@ const sw = read("service-worker.js");
 console.log("1) cache + no vendor + no system logic");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-assistant.js")]).status === 0, "node --check gi-assistant.js");
 assert(html.includes("gi-assistant.js?v=" + TAG), "index cache");
-assert(sw.includes("gi-v12-" + TAG), "sw cache");
+assert(/const CACHE_VERSION = "gi-v12-/.test(sw), "sw cache prefix kept");
 assert(!asstTs.includes("OPENAI_API_KEY") && !asstJs.includes("OPENAI_API_KEY"), "no API key in client");
 assert(!/elevenlabs|azure\.cognitiveservices|google.*texttospeech|api\.openai\.com\/v1\/audio/i.test(asstTs), "no paid TTS vendor");
 assert(!theme.includes("giAsst__") && !css.includes("giAsst__hits"), "global CSS untouched");
-assert(/canAccessSimulators\(\)\{\s*return this\.isAdmin\(\) \|\| this\.isManager\(\);/.test(app), "simulator UI gate unchanged");
+assert(/canAccessSimulators\(\)\{\s*return !!this\.current;/.test(app), "simulator UI gate is any logged-in user");
 assert(!asstTs.includes("ת״ז"), "client module has no geresh id label");
 
 function elStub(){

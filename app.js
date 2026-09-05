@@ -16418,9 +16418,9 @@
       return this.isAdmin() || this.isManager();
     },
 
-    /** מרכז סימולטורים + פתיחת סימולטור באשף — מנהל מערכת / מנהל בלבד. */
+    /** מרכז סימולטורים בטופ-בר — כל משתמש מחובר. הסימולטור באשף נשאר מאחורי canOpenWizardPolicySimulator. */
     canAccessSimulators(){
-      return this.isAdmin() || this.isManager();
+      return !!this.current;
     },
 
     /** עוזר אישי בטופ-בר — מנהל מערכת / מנהל מאשר בלבד. */
@@ -39351,7 +39351,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260905-couple-covers-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260905-sim-center-all-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -39980,7 +39980,7 @@ UsersGateUI.init();
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
     "./simulators-center.css?v=20260818-sim-no-steps-v2",
-    "./simulators-shell.css?v=20260905-couple-covers-v1"
+    "./simulators-shell.css?v=20260905-sim-center-all-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -41343,7 +41343,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260905-couple-covers-v1";
+  const GI_WIZARD_JS_VERSION = "20260905-sim-center-all-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;

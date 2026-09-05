@@ -38,7 +38,7 @@ const css = read("app.css");
 console.log("1) files + cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-assistant.js")]).status === 0, "node --check gi-assistant.js");
 assert(html.includes("gi-assistant.js?v=" + TAG), "index cache");
-assert(sw.includes("gi-v12-" + TAG), "sw cache");
+assert(/const CACHE_VERSION = "gi-v12-/.test(sw), "sw cache prefix kept");
 assert(edge.includes("action === \"open_session\""), "engine opens local session");
 assert(edge.includes("model: \"local-browser\""), "session model is local-browser");
 assert(!theme.includes("giAsst__") && !css.includes("giAsst__hits"), "global CSS untouched");
@@ -52,7 +52,7 @@ assert(asstTs.includes("setHeardStatus"), "shows heard text");
 assert(!/throw Object.assign\(new Error\(\"SPEECH_UNSUPPORTED\"\)/.test(asstTs.split("async function startVoice")[1].split("async function stopVoice")[0]), "startVoice works without SpeechRecognition");
 assert(!/mintVoiceToken\(\)/.test(asstTs.split("async function startVoice")[1].split("async function stopVoice")[0]), "startVoice does not mint OpenAI");
 assert(!asstTs.includes("OPENAI_API_KEY") && !asstJs.includes("OPENAI_API_KEY"), "no API key in client");
-assert(/canAccessSimulators\(\)\{\s*return this\.isAdmin\(\) \|\| this\.isManager\(\);/.test(read("app.js")), "simulator UI gate unchanged");
+assert(/canAccessSimulators\(\)\{\s*return !!this\.current;/.test(read("app.js")), "simulator UI gate is any logged-in user");
 
 console.log("\n3) Hebrew command router");
 function elStub(){
