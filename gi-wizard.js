@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260905-np-per-insured-v2";
+  const GI_WIZARD_BUILD = "20260905-np-couple-v1";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -16073,6 +16073,8 @@ if(path === "birthDate"){
       this._npSimAutoOpenedKey = "";
       this._npSimPickByInsured = {};
       this._npSimLegalByInsured = null;
+      this._npSimCoupleOn = false;
+      this._npSimCoupleIds = {};
     },
 
     seedWizardLegalFromDraft(){
@@ -16163,6 +16165,15 @@ if(path === "birthDate"){
     },
 
     /** סכום הפרמיה אחרי ההנחה שנבחרה בסימולטור, לכל המבוטחים בפוליסה. */
+    getPolicyInsuredPremiumSplit(policy, insId){
+      const id = safeTrim(insId);
+      const before = this.asMoneyNumber(policy?.premiumPerInsured?.[id]);
+      const raw = policy?.simDiscountPerInsured?.[id]?.monthlyAfterDiscount;
+      const afterNum = (raw == null || raw === "") ? NaN : Number(raw);
+      const after = Number.isFinite(afterNum) ? afterNum : before;
+      return { before, after };
+    },
+
     getPolicySimDiscountAfterTotal(policy){
       const map = policy?.simDiscountPerInsured;
       if(!map || typeof map !== "object") return null;
@@ -16272,7 +16283,96 @@ if(path === "birthDate"){
       return result;
     },
 
-    purchaseAllSimulatorInsureds(entries){
+    purchaseSimulatorCoupleGroup(ready, skipped, coupleIds){
+      const want = [];
+      const seen = new Set();
+      (Array.isArray(coupleIds) ? coupleIds : []).forEach((id) => {
+        const sid = safeTrim(id);
+        if(!sid || seen.has(sid)) return;
+        seen.add(sid);
+        want.push(sid);
+      });
+      if(want.length < 2){
+        window.showToast?.({
+          title: "פוליסה זוגית",
+          text: "יש לבחור לפחות שני מבוטחים לפוליסה זוגית.",
+          variant: "warn"
+        });
+        return [];
+      }
+      const byId = {};
+      (Array.isArray(ready) ? ready : []).forEach((e) => { if(e && e.insId) byId[e.insId] = e; });
+      const missing = want.filter((id) => !byId[id] || !byId[id].payload);
+      if(missing.length){
+        const labels = missing.map((id) => {
+          const hit = (this.insureds || []).find((x) => x.id === id);
+          return safeTrim(hit?.label) || id;
+        });
+        window.showToast?.({
+          title: "יש לחשב פרמיה",
+          text: "חשבו פרמיה לכל המבוטחים בפוליסה הזוגית: " + labels.join(", ") + ".",
+          variant: "warn"
+        });
+        return [];
+      }
+      const selected = want.map((id) => byId[id]);
+      const company = safeTrim(selected[0].company);
+      const product = safeTrim(selected[0].product);
+      if(selected.some((e) => safeTrim(e.company) !== company || safeTrim(e.product) !== product)){
+        window.showToast?.({
+          title: "פוליסה זוגית",
+          text: "כל המבוטחים בפוליסה הזוגית צריכים להיות על אותה חברה ואותו מוצר.",
+          variant: "warn"
+        });
+        return [];
+      }
+      this.ensurePolicyDraft();
+      this.policyDraft.company = company;
+      this.policyDraft.type = product;
+      const results = {};
+      selected.forEach((e) => { results[e.insId] = e.payload; });
+      this.applyRiskSimResultsToDraft(results, { skipRender: true, skipToast: true });
+      const draft = this.policyDraft;
+      const ids = selected.map((e) => e.insId);
+      draft.insuredIds = ids.slice();
+      draft.insuredId = ids[0] || "";
+      draft.insuredMode = "couple";
+      const legal = selected.map((e) => e.legal).find(Boolean) || (this._npSimLegalByInsured && this._npSimLegalByInsured[ids[0]]) || null;
+      const isRisk = !this.isMedicareCompany(draft.company) && (safeTrim(draft.type) === "ריסק" || safeTrim(draft.type) === "ריסק משכנתא");
+      if(isRisk && legal){
+        draft.pledge = !!legal.pledge;
+        draft.pledgeBanks = Array.isArray(legal.pledgeBanks) && legal.pledgeBanks.length
+          ? legal.pledgeBanks.map((b) => Object.assign(this.emptyPledgeBank(), b))
+          : [this.emptyPledgeBank()];
+        this.normalizePledgeBanks(draft);
+        draft.beneficiaries = Array.isArray(legal.beneficiaries)
+          ? JSON.parse(JSON.stringify(legal.beneficiaries))
+          : [];
+      } else {
+        draft.pledge = false;
+        draft.pledgeBanks = [this.emptyPledgeBank()];
+        this.normalizePledgeBanks(draft);
+        if(!isRisk) draft.beneficiaries = [];
+      }
+      this._npSimSkipCloseCleanup = true;
+      this._npShowPick = false;
+      const pid = this.addDraftPolicy({ keepSessionPicks: true, skipRender: true });
+      const names = selected.map((e) => e.label).join(" · ");
+      window.showToast?.({
+        title: "נוספה פוליסה זוגית",
+        text: names + " · " + company + " · " + product + (skipped && skipped.length ? (" · דולג: " + skipped.join(", ")) : ""),
+        variant: skipped && skipped.length ? "warn" : "success"
+      });
+      this._npSimSkipCloseCleanup = true;
+      this._npShowPick = false;
+      this.closeNpOpenSimulator();
+      this.resetNpSimAutoOpenKey();
+      this._npShowPick = false;
+      if(this.isOpen && Number(this.step) === 5) this.render();
+      return pid ? [{ pid, label: names, company, product }] : [];
+    },
+
+    purchaseAllSimulatorInsureds(entries, meta){
       this.captureOpenSimulatorSession();
       const list = Array.isArray(entries) ? entries : [];
       const ready = [];
@@ -16295,6 +16395,9 @@ if(path === "birthDate"){
           label: safeTrim(e.label) || "מבוטח"
         });
       });
+      if(meta && meta.couple){
+        return this.purchaseSimulatorCoupleGroup(ready, skipped, meta.coupleIds);
+      }
       if(!ready.length){
         window.showToast?.({
           title: "יש לחשב פרמיה",
@@ -16476,6 +16579,8 @@ if(path === "birthDate"){
         wizardLegalSeed: seed,
         wizardLegalByInsured: this._npSimLegalByInsured,
         wizardPickByInsured: this._npSimPickByInsured,
+        wizardCoupleOn: !!this._npSimCoupleOn,
+        wizardCoupleIds: this._npSimCoupleIds && typeof this._npSimCoupleIds === "object" ? this._npSimCoupleIds : {},
         insureds,
         onApply: (resultsByInsuredId, meta) => {
           this.applyRiskSimResultsToDraft(resultsByInsuredId, meta);
@@ -16483,8 +16588,12 @@ if(path === "birthDate"){
         onPurchaseInsured: (insId, result, legal) => {
           this.purchaseSimulatorInsured(insId, result, legal);
         },
-        onPurchaseAllInsureds: (entries) => {
-          this.purchaseAllSimulatorInsureds(entries);
+        onPurchaseAllInsureds: (entries, meta) => {
+          this.purchaseAllSimulatorInsureds(entries, meta);
+        },
+        onCouplePolicyChange: (on, ids) => {
+          this._npSimCoupleOn = !!on;
+          this._npSimCoupleIds = ids && typeof ids === "object" ? Object.assign({}, ids) : {};
         },
         onSwitchInsuredPick: (insId, co, pr, snapshot) => {
           this.switchSimulatorInsuredPick(insId, co, pr, snapshot);
@@ -16519,7 +16628,7 @@ if(path === "birthDate"){
       const dInsuredIds = Array.isArray(d.insuredIds) && d.insuredIds.length ? d.insuredIds : (d.insuredId ? [d.insuredId] : []);
       const p = {
         id: createdPolicyId,
-        insuredMode: dInsuredIds.length > 1 ? "multi" : "single",
+        insuredMode: (d.insuredMode === "couple" && dInsuredIds.length > 1) ? "couple" : (dInsuredIds.length > 1 ? "multi" : "single"),
         insuredIds: dInsuredIds.slice(),
         insuredId: dInsuredIds[0] || "",
         company: d.company || "",
@@ -18324,7 +18433,7 @@ if(path === "birthDate"){
         const pInsuredIds = Array.isArray(p.insuredIds) && p.insuredIds.length ? p.insuredIds : (p.insuredId ? [p.insuredId] : []);
         const isMulti = pInsuredIds.length > 1;
         const isBaselineSwitch = this.isCustomerPurchaseSwitchMode() && this.isCustomerPurchaseBaselinePolicy(p);
-        const badge = isMulti ? `<span class="lcChip">משותף · ${pInsuredIds.length} מבוטחים</span>` : (showCoupleBadge ? `<span class="lcChip">זוגי</span>` : "");
+        const badge = isMulti ? `<span class="lcChip">${safeTrim(p.insuredMode) === "couple" ? "פוליסה זוגית" : "משותף"} · ${pInsuredIds.length} מבוטחים</span>` : (showCoupleBadge ? `<span class="lcChip">זוגי</span>` : "");
         const baselineChip = isBaselineSwitch ? `<span class="lcChip" style="background:#fef3c7;color:#92400e;">קיימת מהמערכת · שיחלוף</span>` : "";
         const isMed = this.isMedicareCompany(p.company);
         const sumLabel = (p.type === "מחלות קשות" || p.type === "סרטן") ? "סכום פיצוי" : "סכום ביטוח";
@@ -18408,9 +18517,13 @@ if(path === "birthDate"){
               ${isHealth && !isBaselineSwitch ? `<button class="lcNpChip lcNpChip--manual${manualOpen ? " is-on" : ""}" type="button" data-np-manual-disc="${escapeHtml(p.id)}">${manualOpen ? "סגור הנחה ידנית" : "+ הנחה ידנית"}</button>` : ""}
             </div>
           </div>
-          <div class="lcNpProw__metrics">
-            <div class="lcNpMetric"><span>לפני הנחה</span><strong>${this.formatMoneyValue(beforePrem)}</strong></div>
-            <div class="lcNpMetric"><span>אחרי הנחה</span><strong class="is-after">${this.formatMoneyValue(afterPrem)}</strong></div>
+          <div class="lcNpProw__metrics${isMulti ? " lcNpProw__metrics--split" : ""}">
+            ${isMulti ? `<div class="lcNpProw__splitHead"><span>מבוטח</span><span>לפני הנחה</span><span>אחרי הנחה</span></div>` + pInsuredIds.map((iid) => {
+              const pair = this.getPolicyInsuredPremiumSplit(p, iid);
+              const nm = safeTrim((this.insureds || []).find((x) => x.id === iid)?.label) || iid;
+              return `<div class="lcNpProw__splitRow"><span>${escapeHtml(nm)}</span><span>${this.formatMoneyValue(pair.before)}</span><strong class="is-after">${this.formatMoneyValue(pair.after)}</strong></div>`;
+            }).join("") + `<div class="lcNpProw__splitRow lcNpProw__splitRow--total"><span>סה״כ</span><strong>${this.formatMoneyValue(beforePrem)}</strong><strong class="is-after">${this.formatMoneyValue(afterPrem)}</strong></div>` : `<div class="lcNpMetric"><span>לפני הנחה</span><strong>${this.formatMoneyValue(beforePrem)}</strong></div>
+            <div class="lcNpMetric"><span>אחרי הנחה</span><strong class="is-after">${this.formatMoneyValue(afterPrem)}</strong></div>`}
           </div>
           <div class="lcNpProw__acts">
             ${isBaselineSwitch ? "" : `<button type="button" class="lcBtn" data-discountpol="${p.id}" aria-label="הנחה">${iconPolDiscount}<span>הנחה</span></button>

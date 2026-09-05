@@ -867,6 +867,35 @@
   color:#1e3a5f;
   background:#fff;
 }
+.giSimShell__couple{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  margin-inline-start:8px;
+  font-size:12px;
+  font-weight:800;
+  color:#1e3a5f;
+  white-space:nowrap;
+}
+.giSimShell__couple input{
+  width:16px;
+  height:16px;
+  accent-color:#1b365d;
+}
+.giSimShell__tabCouple{
+  display:inline-flex;
+  align-items:center;
+  margin-inline-end:4px;
+}
+.giSimShell__tabCouple input{
+  width:15px;
+  height:15px;
+  accent-color:#1b365d;
+}
+.giSimShell__tab.is-couple{
+  border-color:#c9a227;
+  background:#fffdf6;
+}
 .giSimShell__panel--legal{
   flex:0 0 auto !important;
   position:relative !important;
