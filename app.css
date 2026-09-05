@@ -25703,10 +25703,12 @@ body.lcAuthLock .lcLogin__mfaQrBox > canvas{width:min(100%,220px) !important;max
 .lcNpProw__meta b{color:#1b365d}
 .lcNpProw__disc{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;padding:0;border:0;background:transparent}
 .lcNpProw__discK{font-size:11px;font-weight:800;color:#8a6408}
-.lcNpChip{display:inline-flex;align-items:center;border-radius:999px;padding:2px 7px;font-size:10.5px;font-weight:800;background:#eef4ff;color:#1e3a6b;border:1px solid #d7e4ff}
+.lcNpChip{display:inline-flex;align-items:center;border-radius:999px;padding:2px 7px;font-size:10.5px;font-weight:800;background:#eef4ff;color:#1e3a6b;border:1px solid #d7e4ff;font-family:inherit;appearance:none;-webkit-appearance:none}
 .lcNpChip--disc{background:linear-gradient(180deg,#f8e7a8,#e4c35a);border-color:#c9a227;color:#5c4708}
 .lcNpChip--manual{background:#fff;border-color:#c9a227;color:#8a6408;cursor:pointer}
 .lcNpChip--manual.is-on{background:#fff8e1;border-color:#b8941b;color:#5c4708}
+.lcNpChip--covers{cursor:pointer;background:#f4f7fb;border-color:#d7e4ff;color:#1b365d}
+.lcNpChip--covers.is-on{background:#e8eef8;border-color:#c9d7ea}
 .lcNpChip--gift{background:#fff7e6;border-color:#f1d48a;color:#8a6408}
 .lcNpChip--pledge{background:#f1f5f9;border-color:#dbe3ee;color:#334155}
 .lcNpProw__metrics{display:flex;flex-direction:row;align-items:baseline;gap:14px;white-space:nowrap}
@@ -25720,8 +25722,19 @@ body.lcAuthLock .lcLogin__mfaQrBox > canvas{width:min(100%,220px) !important;max
 .lcNpMetric span{display:block;font-size:10px;font-weight:800;color:#64748b;letter-spacing:.01em}
 .lcNpMetric strong{font-size:13px;color:#1b365d;font-weight:800}
 .lcNpMetric strong.is-after{color:#15803d}
-.lcNpProw__acts{display:flex;flex-direction:row;gap:4px;align-items:center}
-.lcNpProw__acts .lcBtn{min-height:28px;font-size:11px;padding:0 8px;display:inline-flex;align-items:center;gap:4px}
+.lcNpProw__acts{display:flex;flex-direction:row;gap:6px;align-items:center;flex-shrink:0}
+.lcNpProw__act{
+  display:inline-flex;align-items:center;gap:4px;min-height:28px;padding:0 10px;
+  border-radius:999px;border:1px solid rgba(27,54,93,.12);background:#f4f7fb;color:#1b365d;
+  font-size:11px;font-weight:800;line-height:1;cursor:pointer;box-shadow:none;white-space:nowrap;
+  font-family:inherit;appearance:none;-webkit-appearance:none;
+}
+.lcNpProw__act:hover{background:#eef4ff;border-color:rgba(27,54,93,.22)}
+.lcNpProw__act--disc{background:#fffaf0;border-color:rgba(201,162,39,.28);color:#8a6408}
+.lcNpProw__act--disc:hover{background:#fff6de;border-color:rgba(201,162,39,.42)}
+.lcNpProw__act--del{background:#faf7f7;border-color:rgba(148,80,80,.14);color:#7a4a4a}
+.lcNpProw__act--del:hover{background:#f8eeee;border-color:rgba(148,80,80,.26)}
+.lcNpProw__act .lcPolAction__svg{width:13px;height:13px;flex-shrink:0}
 .lcNpManualBox{margin-top:0;padding:10px 12px;border:1px solid #ead9a0;border-radius:8px;background:#fffdf6;grid-column:1 / -1}
 .lcNpManualBox h4{margin:0 0 4px;font-size:13px;color:#1b365d}
 .lcNpManualBox p{margin:0 0 10px;font-size:12px;color:#64748b;font-weight:600;line-height:1.45}
@@ -25737,13 +25750,8 @@ body.lcAuthLock .lcLogin__mfaQrBox > canvas{width:min(100%,220px) !important;max
 .lcNpManualNeed{color:#9a3412;font-size:11px;font-weight:800}
 .lcNpManualActions{display:flex;justify-content:flex-start;margin-top:12px}
 
-/* כיסויי בריאות בשורת סיכום — כפתור במקום רשימה דחוסה */
+/* כיסויי בריאות בשורת סיכום — כפתור בתוך השורה, רשימה נפתחת מתחת */
 .lcNpProw__covers{margin-top:0;grid-column:1 / -1}
-.lcNpProw__coversBtn{
-  min-height:28px;padding:0 12px;font-size:12px;font-weight:800;
-  border:1px solid rgba(27,54,93,.18);background:#f8fafc;color:#1b365d;
-}
-.lcNpProw__coversBtn.is-on{background:#e8eef8;border-color:rgba(27,54,93,.28)}
 .lcNpProw__coversPanel{
   margin-top:8px;padding:12px 14px;border-radius:12px;
   background:#f8fafc;border:1px solid rgba(27,54,93,.10);

@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260905-np-couple-v1";
+  const GI_WIZARD_BUILD = "20260905-np-prow-actions-v1";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -18472,10 +18472,8 @@ if(path === "birthDate"){
           }
           return `<ul class="lcNpProw__coversList">${covers.map((c) => `<li>${escapeHtml(String(c))}</li>`).join("")}</ul>`;
         })() : "";
-        const coversPanel = isHealth ? `<div class="lcNpProw__covers">
-          <button type="button" class="lcBtn lcNpProw__coversBtn${coversOpen ? " is-on" : ""}" data-np-show-covers="${escapeHtml(p.id)}">${coversOpen ? "הסתר כיסויים" : "הצג כיסוי בפוליסה"}</button>
-          ${coversOpen ? `<div class="lcNpProw__coversPanel">${coversListHtml}</div>` : ""}
-        </div>` : "";
+        const coversToggle = isHealth ? `<button type="button" class="lcNpChip lcNpChip--covers${coversOpen ? " is-on" : ""}" data-np-show-covers="${escapeHtml(p.id)}">${coversOpen ? "הסתר כיסויים" : "הצג כיסוי בפוליסה"}</button>` : "";
+        const coversPanel = (isHealth && coversOpen) ? `<div class="lcNpProw__covers"><div class="lcNpProw__coversPanel">${coversListHtml}</div></div>` : "";
         const manualOpen = isHealth && safeTrim(this._npManualDiscId) === safeTrim(p.id);
         const coverRows = isHealth ? this.getHealthCoverManualDiscountRows(p) : [];
         const generalPctLabel = discountCompact || `${safeTrim(p.discountPct) || "0"}%`;
@@ -18514,6 +18512,7 @@ if(path === "birthDate"){
               ${introBenefitText ? `<span class="lcNpChip lcNpChip--gift">${escapeHtml(introBenefitText)}</span>` : ""}
               <span class="lcNpChip lcNpChip--pledge">${pledgeText}</span>
               <span class="lcNpChip">${escapeHtml(benText)}</span>
+              ${coversToggle}
               ${isHealth && !isBaselineSwitch ? `<button class="lcNpChip lcNpChip--manual${manualOpen ? " is-on" : ""}" type="button" data-np-manual-disc="${escapeHtml(p.id)}">${manualOpen ? "סגור הנחה ידנית" : "+ הנחה ידנית"}</button>` : ""}
             </div>
           </div>
@@ -18526,9 +18525,9 @@ if(path === "birthDate"){
             <div class="lcNpMetric"><span>אחרי הנחה</span><strong class="is-after">${this.formatMoneyValue(afterPrem)}</strong></div>`}
           </div>
           <div class="lcNpProw__acts">
-            ${isBaselineSwitch ? "" : `<button type="button" class="lcBtn" data-discountpol="${p.id}" aria-label="הנחה">${iconPolDiscount}<span>הנחה</span></button>
-            <button type="button" class="lcBtn" data-editpol="${p.id}" aria-label="עריכה">${iconPolEdit}<span>עריכה</span></button>`}
-            <button type="button" class="lcBtn" data-delpol="${p.id}" aria-label="הסר">${iconPolRemove}<span>${isBaselineSwitch ? "הסר לשיחלוף" : "הסר"}</span></button>
+            ${isBaselineSwitch ? "" : `<button type="button" class="lcNpProw__act lcNpProw__act--disc" data-discountpol="${p.id}" aria-label="הנחה">${iconPolDiscount}<span>הנחה</span></button>
+            <button type="button" class="lcNpProw__act" data-editpol="${p.id}" aria-label="עריכה">${iconPolEdit}<span>עריכה</span></button>`}
+            <button type="button" class="lcNpProw__act lcNpProw__act--del" data-delpol="${p.id}" aria-label="הסר">${iconPolRemove}<span>${isBaselineSwitch ? "הסר לשיחלוף" : "הסר"}</span></button>
           </div>
           ${coversPanel}
           ${manualTable}
