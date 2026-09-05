@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260905-sim-text-date-v1";
+const TAG = "20260905-ops-insured-tabs-v1";
 let failed = 0;
 let passed = 0;
 
@@ -73,6 +73,8 @@ assert(!wiz.includes("עדיין לא נוספו פוליסות להצעה"), "e
 assert(!wiz.includes("לאחר חישוב בסימולטור יופיעו כאן שורות סיכום"), "empty summary explanation removed");
 assert(/toIsoDateFromAny\(raw\)\{[\s\S]{0,280}parseAnyDmyDate\(s\)/.test(wiz), "start-date ISO conversion allows future dates");
 assert(!/toIsoDateFromAny\(raw\)\{[\s\S]{0,400}parseBirthDateValue\(s\)/.test(wiz), "start-date conversion no longer uses birth-date parser");
+assert(/toSimulatorDmyDate\(raw\)\{[\s\S]{0,500}parseAnyDmyDate\(s\)/.test(wiz), "ops PDF start date formats future ISO as DD/MM/YYYY");
+assert(!/toSimulatorDmyDate\(raw\)\{[\s\S]{0,700}parseBirthDateValue\(/.test(wiz), "ops PDF start date no longer uses birth-date parser");
 assert(!wiz.includes('class="lcNpStageHead__title">בחירת חברה ומוצר<'), "pick stage head title removed");
 assert(!wiz.includes("בחרו חברה ומוצר מהרשימות"), "pick stage head explanation removed");
 assert(!wiz.includes("כל פוליסה בשורת סיכום: לוגו"), "summary explanation removed");
@@ -197,6 +199,12 @@ assert(wiz.includes("getPolicyInsuredPremiumSplit(policy, insId){"), "before/aft
 assert(wiz.includes('insuredMode: (d.insuredMode === "couple" && dInsuredIds.length > 1) ? "couple"'), "addDraftPolicy preserves couple mode");
 assert(css.includes("lcNpProw__metrics--split"), "summary row can show per-insured before/after");
 assert(shellCss.includes(".giSimShell__couple{"), "couple checkbox styles");
+assert(shellCss.includes("GI-SIM-INSURED-TABS 2026-09-05"), "insured name chips have a last-wins style block");
+const tabBlock = shellCss.slice(shellCss.lastIndexOf("GI-SIM-INSURED-TABS 2026-09-05"));
+assert(tabBlock.includes("font-size:17px !important"), "insured tab names are 17px");
+assert(tabBlock.includes("min-height:44px !important"), "insured tabs are tall enough to read");
+assert(tabBlock.includes(".giSimShell__tab:hover{"), "hover highlights the chip you are on");
+assert(tabBlock.includes("border-radius:12px !important"), "each insured name is a boxed chip");
 assert(!/switchSimulatorInsuredPick\(insId, company, product, snapshot\)\{[\s\S]{0,1200}this\.policyDraft\.company = co;/.test(wiz), "pick switch does not stamp the new company onto the shared draft before reopen");
 
 console.log("\n5b3) compact summary row + hidden inner insured list");
@@ -287,6 +295,12 @@ assert(wiz.includes("['פרמיה לפני הנחה', premiumBeforeVal ? this.fo
 assert(wiz.includes("['פרמיה אחרי הנחה', premiumAfterVal ? this.formatMoneyValue(premiumAfterVal) : '']"), "ops detail blocks list after premium");
 assert(wiz.includes("policy?.simDiscountPerInsured?.[iid]?.monthlyAfterDiscount"), "ops per-insured premium prefers simulator after-discount");
 assert(/getPolicyInsuredLabelSafe = \(policy\) => \{[\s\S]{0,900}pIds\.length > 1/.test(wiz), "ops insured label joins multiple insuredIds");
+assert(wiz.includes("GI-NP-OPS-SIM-DATA"), "ops PDF always lists before/after per insured from the simulator");
+assert(wiz.includes("beneficiaryRows: getPolicyBeneficiaryRowsSafe(policy)"), "compact ops rows carry beneficiaries");
+assert(wiz.includes('lcPdfNewPolicyDetailK">מוטבים<'), "compact ops renderer prints a beneficiaries line");
+assert(wiz.includes('lcPdfNewPolicyDetailK">כיסויים לפי מבוטח<'), "compact ops renderer prints per-insured health covers");
+assert(wiz.includes("perInsuredCoverRows:"), "compact ops rows carry covers per insured");
+assert(wiz.includes("this.toSimulatorDmyDate(policy?.startDate)"), "compact ops rows format start date as DD/MM/YYYY");
 
 console.log("\n6) untouched — declaration routing, premium engine; center open to logged-in users");
 assert(/canAccessSimulators\(\)\{\s*return !!this\.current;/.test(app), "Simulators Center gate is any logged-in user");
@@ -326,6 +340,9 @@ const host = new Proxy({
   safeTrim,
   parseAnyDmyDate,
   parseBirthDateValue,
+  formatDmyFromParts(y, m, d){
+    return String(d).padStart(2, "0") + "/" + String(m).padStart(2, "0") + "/" + String(y).padStart(4, "0");
+  },
   escapeHtml: (s) => String(s == null ? "" : s),
   on(){}, $(){ return null; }, $$(){ return []; },
   nowISO: () => "2026-09-03T10:00:00.000Z",
@@ -768,6 +785,9 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
       this.policyDraft = { company:"", type:"", insuredIds:["i1","i2"], insuredId:"i1" };
       return row.id;
     };
+    const prevEmptyPledgeBank = W.emptyPledgeBank;
+    const prevNormalizePledgeBanks = W.normalizePledgeBanks;
+    const prevIsMedicareCompany = W.isMedicareCompany;
     W.emptyPledgeBank = function(){ return { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" }; };
     W.normalizePledgeBanks = function(){ return []; };
     W.isMedicareCompany = function(){ return false; };
@@ -785,6 +805,9 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
     assert(pids.length === 2, "purchase-all returns both policy ids");
     assert(W._npSimPickByInsured && Object.keys(W._npSimPickByInsured).length === 0, "picks reset only after both rows were added");
     assert(W._npShowPick === false, "after adding both rows the step stays on the summary");
+    W.emptyPledgeBank = prevEmptyPledgeBank;
+    W.normalizePledgeBanks = prevNormalizePledgeBanks;
+    W.isMedicareCompany = prevIsMedicareCompany;
   }
 
   // ── פוליסה זוגית: one row, per-insured before/after, no extra discount math ──
@@ -896,7 +919,10 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
           premiumMonthly: 61.32, premiumPerInsured: { i1: "61.32" },
           sumInsured: "600000", sumInsuredPerInsured: { i1: "600000" },
           startDate: "2026-11-01", discountPct: "65",
-          simDiscountPerInsured: { i1: { year1Pct: 65, monthlyAfterDiscount: 21.46 } }
+          pledge: true,
+          pledgeBanks: [{ bankName:"בנק לאומי", bankNo:"10", branch:"123", amount:"200000", years:"20", address:"רחוב הבנק 1" }],
+          beneficiaries: [{ firstName:"דן", lastName:"כהן", idNumber:"123456789", relationship:"בן", sharePct:"50" }],
+          simDiscountPerInsured: { i1: { year1Pct: 65, monthlyAfterDiscount: 21.46, label: "65%" } }
         },
         {
           id: "opsMulti", company: "מגדל", type: "ריסק",
@@ -916,6 +942,21 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
           healthCovers: ["תרופות מחוץ לסל הבריאות", "ניתוחים בישראל מהשקל הראשון"],
           startDate: "2026-10-15", discountPct: "10",
           simDiscountPerInsured: { i1: { year1Pct: 10, monthlyAfterDiscount: 783 } }
+        },
+        {
+          id: "opsCoupleHealth", company: "מנורה", type: "בריאות",
+          insuredIds: ["i1", "i2"], insuredId: "i1", insuredMode: "couple",
+          premiumMonthly: 400, premiumPerInsured: { i1: "220", i2: "180" },
+          healthCovers: ["תרופות מחוץ לסל הבריאות", "ניתוחים בישראל מהשקל הראשון"],
+          healthCoversPerInsured: {
+            i1: ["תרופות מחוץ לסל הבריאות", "ניתוחים בישראל מהשקל הראשון"],
+            i2: ["תרופות מחוץ לסל הבריאות"]
+          },
+          startDate: "01/10/2026", discountPct: "20",
+          simDiscountPerInsured: {
+            i1: { year1Pct: 20, monthlyAfterDiscount: 176, label: "20%" },
+            i2: { year1Pct: 20, monthlyAfterDiscount: 144, label: "20%" }
+          }
         }
       ],
       mirrorSchedule: {}
@@ -929,10 +970,17 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
     }
     assert(opsHtml.includes("<th>לפני הנחה</th>") && opsHtml.includes("<th>אחרי הנחה</th>"), "ops PDF table headers include before/after");
     assert(/₪\s*61[.,]32/.test(opsHtml) && /₪\s*21[.,]46/.test(opsHtml), "ops PDF shows Clal before 61.32 and after 21.46");
-    assert(opsHtml.includes("כלל") && opsHtml.includes("מגדל") && opsHtml.includes("הפניקס"), "ops PDF lists each company");
+    assert(opsHtml.includes("כלל") && opsHtml.includes("מגדל") && opsHtml.includes("הפניקס") && opsHtml.includes("מנורה"), "ops PDF lists each company");
     assert(opsHtml.includes("בריאות") && (opsHtml.includes("תרופות") || opsHtml.includes("ניתוחים")), "ops PDF lists health product and covers");
     assert(opsHtml.includes("דוד כהן") && opsHtml.includes("יעל כהן"), "ops PDF names multi-insured people");
-    assert(/₪\s*1[,.]?004[.,]46/.test(opsHtml) || opsHtml.includes("1,004.46") || opsHtml.includes("1004.46"), "ops PDF grand total uses after-discount (21.46+200+783)");
+    assert(opsHtml.includes("01/11/2026") && !opsHtml.includes(">2026-11-01<"), "ops PDF prints Clal start date as DD/MM/YYYY");
+    assert(opsHtml.includes("15/10/2026"), "ops PDF prints Phoenix start date as DD/MM/YYYY");
+    assert(opsHtml.includes("שיעבוד") && opsHtml.includes("בנק לאומי"), "ops PDF compact row includes the pledge bank");
+    assert(opsHtml.includes("מוטבים") && opsHtml.includes("דן כהן"), "ops PDF compact row includes beneficiary names");
+    assert(opsHtml.includes("פרמיה לפי מבוטח") && opsHtml.includes("לפני") && opsHtml.includes("אחרי"), "ops PDF lists before/after premium per insured");
+    assert(opsHtml.includes("כיסויים לפי מבוטח"), "ops PDF lists health covers per insured on the couple policy");
+    assert(/₪\s*1[,.]?324[.,]46/.test(opsHtml) || opsHtml.includes("1,324.46") || opsHtml.includes("1324.46"), "ops PDF grand total uses after-discount (21.46+200+783+176+144)");
+    assert(W.toSimulatorDmyDate("2026-11-01") === "01/11/2026", "future ISO start date converts to DD/MM/YYYY");
     assert(W.getPolicyPremiumAfterDiscount(opsPayload.newPolicies[0]) === 61.32, "legacy after-discount helper still returns before for Clal");
     assert(W.getHealthRowPremiumAfterDiscount(opsPayload.newPolicies[0]) === 21.46, "row after-discount helper still returns simulator net for Clal");
   }

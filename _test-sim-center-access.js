@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260905-sim-text-date-v1";
+const TAG = "20260905-ops-insured-tabs-v1";
 let failed = 0;
 let passed = 0;
 
