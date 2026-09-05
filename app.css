@@ -25710,6 +25710,12 @@ body.lcAuthLock .lcLogin__mfaQrBox > canvas{width:min(100%,220px) !important;max
 .lcNpChip--gift{background:#fff7e6;border-color:#f1d48a;color:#8a6408}
 .lcNpChip--pledge{background:#f1f5f9;border-color:#dbe3ee;color:#334155}
 .lcNpProw__metrics{display:flex;flex-direction:row;align-items:baseline;gap:14px;white-space:nowrap}
+.lcNpProw__metrics--split{display:grid;grid-template-columns:minmax(0,1.4fr) auto auto;gap:2px 12px;align-items:baseline;white-space:nowrap;min-width:220px}
+.lcNpProw__splitHead,.lcNpProw__splitRow{display:contents}
+.lcNpProw__splitHead span{font-size:10px;font-weight:800;color:#64748b}
+.lcNpProw__splitRow span,.lcNpProw__splitRow strong{font-size:12px;font-weight:700;color:#1b365d}
+.lcNpProw__splitRow--total span,.lcNpProw__splitRow--total strong{font-weight:800;border-top:1px solid #e2e8f0;padding-top:4px;margin-top:2px}
+.lcNpProw__splitRow .is-after,.lcNpProw__splitRow--total .is-after{color:#15803d}
 .lcNpMetric{background:transparent;border:0;border-radius:0;padding:0}
 .lcNpMetric span{display:block;font-size:10px;font-weight:800;color:#64748b;letter-spacing:.01em}
 .lcNpMetric strong{font-size:13px;color:#1b365d;font-weight:800}

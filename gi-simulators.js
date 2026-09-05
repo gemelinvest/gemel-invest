@@ -1104,6 +1104,46 @@
     return safeTrim(company) + "::" + safeTrim(product);
   }
 
+  function riskSimAllowsCouplePolicy(product){
+    const p = safeTrim(product);
+    return p === "ריסק" || p === "ריסק משכנתא" || p === "מחלות קשות" || p === "סרטן" || p === "בריאות";
+  }
+
+  function riskSimEnsureCoupleState(sim){
+    if(!sim || !sim._ctx?.wizardWorkspace) return;
+    if(sim._giCoupleOn == null) sim._giCoupleOn = !!sim._ctx.wizardCoupleOn;
+    if(!sim._giCoupleIds || typeof sim._giCoupleIds !== "object"){
+      const fromCtx = sim._ctx.wizardCoupleIds && typeof sim._ctx.wizardCoupleIds === "object" ? sim._ctx.wizardCoupleIds : {};
+      sim._giCoupleIds = Object.assign({}, fromCtx);
+    }
+  }
+
+  function riskSimCoupleSelectedIds(sim){
+    const map = sim && sim._giCoupleIds && typeof sim._giCoupleIds === "object" ? sim._giCoupleIds : {};
+    return Object.keys(map).filter((id) => !!map[id]);
+  }
+
+  function riskSimSeedCoupleIdsIfEmpty(sim){
+    if(!sim || !sim._giCoupleOn) return;
+    if(riskSimCoupleSelectedIds(sim).length) return;
+    const curCo = safeTrim(sim._ctx?.company);
+    const curPr = safeTrim(sim._ctx?.product);
+    const insureds = Array.isArray(sim._ctx?.insureds) ? sim._ctx.insureds : [];
+    sim._giCoupleIds = {};
+    insureds.forEach((ins) => {
+      const id = safeTrim(ins.id);
+      if(!id) return;
+      const pick = riskSimGetPick(sim, id);
+      if(safeTrim(pick.company) === curCo && safeTrim(pick.product) === curPr) sim._giCoupleIds[id] = true;
+    });
+  }
+
+  function riskSimNotifyCoupleChange(sim){
+    if(typeof sim?._ctx?.onCouplePolicyChange === "function"){
+      try { sim._ctx.onCouplePolicyChange(!!sim._giCoupleOn, Object.assign({}, sim._giCoupleIds || {})); } catch(_e) {}
+    }
+  }
+
   /* צילום מצב כל המבוטחים בסימולטור הפתוח — לפי חברה/מוצר הנוכחיים.
      מעבר למבוטח עם חברה אחרת לא דורס את הצילום של השילוב הקודם. */
   function riskSimSnapshotSession(sim){
@@ -1285,8 +1325,10 @@
         label: safeTrim(ins.label) || "מבוטח"
       });
     });
+    const coupleOn = !!sim._giCoupleOn && riskSimAllowsCouplePolicy(curPr);
+    const coupleIds = coupleOn ? riskSimCoupleSelectedIds(sim) : [];
     if(typeof sim._ctx.onPurchaseAllInsureds === "function"){
-      try { sim._ctx.onPurchaseAllInsureds(entries); } catch(_eAll) {}
+      try { sim._ctx.onPurchaseAllInsureds(entries, { couple: coupleOn, coupleIds }); } catch(_eAll) {}
       return;
     }
     const active = entries.find((e) => e.insId === safeTrim(sim._activeInsuredId)) || entries[0];
@@ -1383,6 +1425,11 @@
       if(bar) bar.remove();
       bar = document.createElement("div");
       bar.className = "giSimShell__insuredBar";
+      try { riskSimEnsureCoupleState(sim); } catch(_eCouple) {}
+      const coupleAllowed = !!sim._ctx.wizardWorkspace && riskSimAllowsCouplePolicy(product) && insureds.length >= 2;
+      if(coupleAllowed && sim._giCoupleOn){
+        try { riskSimSeedCoupleIdsIfEmpty(sim); } catch(_eSeed) {}
+      }
       const tabs = insureds.map((ins) => {
         const s = sim._state?.[ins.id];
         const pick = riskSimGetPick(sim, ins.id);
@@ -1392,15 +1439,22 @@
         const cls = [
           "giSimShell__tab",
           ins.id === activeId ? "is-active" : "",
-          s?.result?.ok ? "has-result" : ""
+          s?.result?.ok ? "has-result" : "",
+          (coupleAllowed && sim._giCoupleOn && sim._giCoupleIds && sim._giCoupleIds[ins.id]) ? "is-couple" : ""
         ].filter(Boolean).join(" ");
-        return `<button type="button" class="${cls}" data-gishell-tab="${escapeHtml(String(ins.id || ""))}">${escapeHtml(tabName)}</button>`;
+        const coupleChk = (coupleAllowed && sim._giCoupleOn)
+          ? `<span class="giSimShell__tabCouple"><input type="checkbox" data-gishell-couple-ins="${escapeHtml(String(ins.id || ""))}"${sim._giCoupleIds && sim._giCoupleIds[ins.id] ? " checked" : ""} /></span>`
+          : "";
+        return `<button type="button" class="${cls}" data-gishell-tab="${escapeHtml(String(ins.id || ""))}">${coupleChk}${escapeHtml(tabName)}</button>`;
       }).join("");
       const addInsHtml = sim._ctx.standalone
         ? `<button type="button" class="giSimShell__addIns" data-gishell-add-ins="1">+ הוסף מבוטח</button>`
         : "";
+      const coupleHtml = coupleAllowed
+        ? `<label class="giSimShell__couple"><input type="checkbox" data-gishell-couple="1"${sim._giCoupleOn ? " checked" : ""} /><span>פוליסה זוגית</span></label>`
+        : "";
       const pickHtml = sim._ctx.wizardWorkspace ? riskSimPickHtml(sim) : "";
-      bar.innerHTML = tabs + addInsHtml + pickHtml;
+      bar.innerHTML = tabs + addInsHtml + coupleHtml + pickHtml;
       body.insertBefore(bar, body.firstChild);
       try { riskSimLayoutStandaloneBody(body, sim); } catch(_e) {}
       try { riskSimHideNativeBodyCalc(card); } catch(_e2) {}
@@ -1514,6 +1568,43 @@
         riskSimReturnToPicker(sim);
       });
     }
+
+    const coupleMaster = modal.querySelector("[data-gishell-couple]");
+    if(coupleMaster && !coupleMaster._giShellBound){
+      coupleMaster._giShellBound = true;
+      on(coupleMaster, "change", () => {
+        riskSimEnsureCoupleState(sim);
+        sim._giCoupleOn = !!coupleMaster.checked;
+        if(sim._giCoupleOn){
+          sim._giCoupleIds = {};
+          riskSimSeedCoupleIdsIfEmpty(sim);
+        }
+        riskSimNotifyCoupleChange(sim);
+        try { if(typeof sim._render === "function") sim._render(); } catch(_e) {}
+      });
+    }
+    $$("[data-gishell-couple-ins]", modal).forEach((chk) => {
+      if(chk._giShellBound) return;
+      chk._giShellBound = true;
+      on(chk, "click", (ev) => { ev.stopPropagation(); });
+      on(chk, "change", (ev) => {
+        ev.stopPropagation();
+        const id = safeTrim(chk.getAttribute("data-gishell-couple-ins"));
+        if(!id) return;
+        riskSimEnsureCoupleState(sim);
+        sim._giCoupleIds = sim._giCoupleIds || {};
+        sim._giCoupleIds[id] = !!chk.checked;
+        riskSimNotifyCoupleChange(sim);
+        if(chk.checked){
+          const pick = riskSimGetPick(sim, id);
+          const curCo = safeTrim(sim._ctx?.company);
+          const curPr = safeTrim(sim._ctx?.product);
+          if(safeTrim(pick.company) !== curCo || safeTrim(pick.product) !== curPr){
+            riskSimRequestPickSwitch(sim, id, curCo, curPr);
+          }
+        }
+      });
+    });
 
     const pickCo = modal.querySelector("[data-gishell-pick-company]");
     if(pickCo && !pickCo._giShellBound){

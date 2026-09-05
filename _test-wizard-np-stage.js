@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260905-np-per-insured-v2";
+const TAG = "20260905-np-couple-v1";
 let failed = 0;
 let passed = 0;
 
@@ -175,9 +175,18 @@ assert(sims.includes("חברה למבוטח זה"), "company dropdown is labeled
 assert(sims.includes("מוצר למבוטח זה"), "product dropdown is labeled for this insured");
 assert(sims.includes('base + " · " + prod'), "tabs show each insured's chosen product");
 assert(sims.includes("riskSimPurchaseWizardInsureds(sim)"), "add-to-proposal walks every insured pick");
-assert(wiz.includes("purchaseAllSimulatorInsureds(entries){"), "wizard adds one proposal row per calculated pick");
+assert(wiz.includes("purchaseAllSimulatorInsureds(entries, meta){"), "wizard adds one proposal row per calculated pick");
 assert(wiz.includes("keepSessionPicks: keepPicks"), "adding several rows does not reset the per-insured picks");
-assert(wiz.includes("onPurchaseAllInsureds: (entries) =>"), "open wires the add-all hook");
+assert(wiz.includes("onPurchaseAllInsureds: (entries, meta) =>"), "open wires the add-all hook");
+assert(sims.includes("function riskSimAllowsCouplePolicy(product){"), "couple checkbox is gated to risk/ci/cancer/health");
+assert(sims.includes(">פוליסה זוגית<"), "couple checkbox label in the simulator");
+assert(sims.includes("data-gishell-couple="), "couple master checkbox");
+assert(sims.includes("data-gishell-couple-ins="), "per-insured couple include checkboxes");
+assert(wiz.includes("purchaseSimulatorCoupleGroup("), "couple add writes one shared policy");
+assert(wiz.includes("getPolicyInsuredPremiumSplit(policy, insId){"), "before/after premium is read per insured without new discount math");
+assert(wiz.includes('insuredMode: (d.insuredMode === "couple" && dInsuredIds.length > 1) ? "couple"'), "addDraftPolicy preserves couple mode");
+assert(css.includes("lcNpProw__metrics--split"), "summary row can show per-insured before/after");
+assert(shellCss.includes(".giSimShell__couple{"), "couple checkbox styles");
 assert(!/switchSimulatorInsuredPick\(insId, company, product, snapshot\)\{[\s\S]{0,1200}this\.policyDraft\.company = co;/.test(wiz), "pick switch does not stamp the new company onto the shared draft before reopen");
 
 console.log("\n5b3) compact summary row + hidden inner insured list");
@@ -602,6 +611,58 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
     assert(pids.length === 2, "purchase-all returns both policy ids");
     assert(W._npSimPickByInsured && Object.keys(W._npSimPickByInsured).length === 0, "picks reset only after both rows were added");
     assert(W._npShowPick === false, "after adding both rows the step stays on the summary");
+  }
+
+  // ── פוליסה זוגית: one row, per-insured before/after, no extra discount math ──
+  {
+    const added = [];
+    W._npSimPickByInsured = {
+      i1: { company:"כלל", product:"ריסק" },
+      i2: { company:"כלל", product:"ריסק" }
+    };
+    W.policyDraft = { company:"כלל", type:"ריסק", insuredIds:["i1"], insuredId:"i1" };
+    W._npShowPick = false;
+    W.newPolicies = [];
+    W.addDraftPolicy = function(opts){
+      const d = this.policyDraft;
+      const row = {
+        id: "npol_couple",
+        company: d.company,
+        type: d.type,
+        insuredMode: d.insuredMode,
+        insuredIds: (d.insuredIds || []).slice(),
+        premiumPerInsured: Object.assign({}, d.premiumPerInsured || {}),
+        simDiscountPerInsured: JSON.parse(JSON.stringify(d.simDiscountPerInsured || {}))
+      };
+      added.push(row);
+      this.newPolicies = [row];
+      this.policyDraft = { company:"", type:"", insuredIds:["i1","i2"], insuredId:"i1" };
+      return row.id;
+    };
+    const none = W.purchaseAllSimulatorInsureds([
+      { insId:"i1", company:"כלל", product:"ריסק", payload:{ ok:true, monthlyPremium:61.32, sumInsured:"800000" }, label:"ראשי" }
+    ], { couple:true, coupleIds:["i1"] });
+    assert(added.length === 0 && (!none || none.length === 0), "couple with one insured does not write a policy");
+    const pids = W.purchaseAllSimulatorInsureds([
+      {
+        insId:"i1", company:"כלל", product:"ריסק", label:"ראשי - דוד כהן",
+        payload:{ ok:true, monthlyPremium:61.32, sumInsured:"800000", simDiscount:{ optionId:"cll-r-5001", year1Pct:65, monthlyAfterDiscount:21.46 } }
+      },
+      {
+        insId:"i2", company:"כלל", product:"ריסק", label:"משני - יעל כהן",
+        payload:{ ok:true, monthlyPremium:40, sumInsured:"500000", simDiscount:{ optionId:"cll-r-50", year1Pct:50, monthlyAfterDiscount:20 } }
+      }
+    ], { couple:true, coupleIds:["i1","i2"] });
+    assert(added.length === 1, "couple add writes a single summary row");
+    assert(added[0].insuredMode === "couple" && added[0].insuredIds.join(",") === "i1,i2", "couple row keeps both insured ids");
+    assert(added[0].company === "כלל" && added[0].type === "ריסק", "couple row stays on the shared product");
+    assert(String(added[0].premiumPerInsured.i1).indexOf("61.32") === 0, "primary gross premium is stored on the shared row");
+    assert(String(added[0].premiumPerInsured.i2).indexOf("40") === 0, "secondary gross premium is stored on the shared row");
+    const split1 = W.getPolicyInsuredPremiumSplit(added[0], "i1");
+    const split2 = W.getPolicyInsuredPremiumSplit(added[0], "i2");
+    assert(split1.before === 61.32 && split1.after === 21.46, "primary before/after stay 61.32 / 21.46");
+    assert(split2.before === 40 && split2.after === 20, "secondary before/after stay 40 / 20");
+    assert(pids.length === 1, "couple add returns one policy id");
   }
 
   // ── reopen/close guards do not wipe picks ──
