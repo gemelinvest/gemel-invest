@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260905-sim-text-date-v1";
+const TAG = "20260905-ops-insured-tabs-v1";
 let failed = 0;
 let passed = 0;
 
@@ -244,7 +244,8 @@ assert(wiz.includes("wizardPickByInsured"), "per-insured pick map is persisted")
 assert(shellCss.includes(".giSimShell__pick"), "company/product pick styles");
 assert(shellCss.includes(".giSimShell__branchStatus"), "branch status styles");
 assert(shellCss.includes(".giSimShell__legalSummary"), "pledge summary styles");
-assert(shellCss.includes("gap:12px 18px") || shellCss.includes("gap:12px 20px"), "insured tabs are spaced");
+assert(shellCss.includes("GI-SIM-INSURED-TABS 2026-09-05"), "insured name chips last-wins block");
+assert(shellCss.includes("gap:12px 18px") || shellCss.includes("gap:12px 20px") || shellCss.includes("gap:8px 10px"), "insured tabs are spaced");
 assert(shellCss.includes("z-index:1") && shellCss.includes(".giSimShell__panel--legal"), "legal dock stays under the form");
 
 console.log("\n10) couple health covers copy + per-insured details");

@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260905-sim-text-date-v1";
+  const GI_WIZARD_BUILD = "20260905-ops-insured-tabs-v1";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -16178,13 +16178,13 @@ if(path === "birthDate"){
       const s = safeTrim(raw);
       if(!s) return "";
       if(/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;
+      const pad = (n) => String(n).padStart(2, "0");
       const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
-      if(iso && typeof formatDmyFromParts === "function"){
-        return formatDmyFromParts(Number(iso[1]), Number(iso[2]), Number(iso[3]));
-      }
-      const parsed = typeof parseBirthDateValue === "function" ? parseBirthDateValue(s) : null;
-      if(parsed && typeof formatDmyFromParts === "function"){
-        return formatDmyFromParts(parsed.year, parsed.month, parsed.day);
+      if(iso) return iso[3] + "/" + iso[2] + "/" + iso[1];
+      /* תחילת ביטוח יכולה להיות עתידית, אז לא דוחים אותה כמו תאריך לידה. */
+      const parsed = typeof parseAnyDmyDate === "function" ? parseAnyDmyDate(s) : null;
+      if(parsed && parsed.year && parsed.month && parsed.day){
+        return pad(parsed.day) + "/" + pad(parsed.month) + "/" + String(parsed.year);
       }
       return s;
     },
@@ -27425,11 +27425,12 @@ if(path === "birthDate"){
           ? policy.insuredIds.map((iid) => safeTrim(iid)).filter(Boolean)
           : (policy?.insuredId ? [safeTrim(policy.insuredId)].filter(Boolean) : []);
         if(!pIds.length) return [];
-        const isSharedPolicy = pIds.length > 1 || ['multi','couple'].includes(safeTrim(policy?.insuredMode));
         const hasAddonCovers = this.getHealthAddonCovers(policy || {}).length > 0;
-        // מציג פירוט לפי מבוטח רק אם: (א) פוליסה משותפת, או (ב) יש addon בבריאות
-        if(!isSharedPolicy && !hasAddonCovers) return [];
+        /* GI-NP-OPS-SIM-DATA: תמיד מציגים לפני/אחרי לכל מבוטח מהסימולטור, לא רק בפוליסה משותפת. */
         return pIds.map((iid) => {
+          const pair = (typeof this.getPolicyInsuredPremiumSplit === 'function')
+            ? this.getPolicyInsuredPremiumSplit(policy, iid)
+            : { before: 0, after: 0 };
           const baseRaw = policy?.premiumPerInsured && Object.prototype.hasOwnProperty.call(policy.premiumPerInsured, iid)
             ? policy.premiumPerInsured[iid]
             : '';
@@ -27438,14 +27439,13 @@ if(path === "birthDate"){
             const raw = this.getHealthAddonPremiumValue(policy || {}, cover, iid);
             return sum + (safeTrim(raw) ? this.asMoneyNumber(raw) : 0);
           }, 0);
-          /* GI-NP-OPS-DISCOUNT: אם יש מחיר אחרי הנחה מהסימולטור — הוא גובר על ברוטו+תוספות. */
           const simAfterRaw = policy?.simDiscountPerInsured?.[iid]?.monthlyAfterDiscount;
           const simAfterNum = (simAfterRaw == null || simAfterRaw === '') ? NaN : Number(simAfterRaw);
-          const total = Number.isFinite(simAfterNum)
+          const before = Number(pair && pair.before) > 0 ? Number(pair.before) : baseValue;
+          const after = Number.isFinite(simAfterNum)
             ? Math.max(0, Math.round(simAfterNum * 100) / 100)
-            : Math.max(0, Math.round((baseValue + addonValue) * 100) / 100);
-          const hasExplicitPremium = Number.isFinite(simAfterNum) || safeTrim(baseRaw) || addonValue > 0;
-          // אם addon — פרט גם base וגם addon בנפרד (רק כשאין סיכום סימולטור מוכן)
+            : (Number(pair && pair.after) > 0 ? Number(pair.after) : Math.max(0, Math.round((before + addonValue) * 100) / 100));
+          const hasExplicitPremium = Number.isFinite(simAfterNum) || before > 0 || addonValue > 0;
           const detailStr = (!Number.isFinite(simAfterNum) && hasAddonCovers && (baseValue > 0 || addonValue > 0))
             ? ` (בריאות: ${this.formatMoneyValue(baseValue)}${
                 this.getHealthAddonCovers(policy || {}).map(cover => {
@@ -27455,11 +27455,20 @@ if(path === "birthDate"){
                 }).join('')
               })`
             : '';
+          const beforeLabel = before > 0 ? this.formatMoneyValue(before) : '';
+          const afterLabel = after > 0 ? this.formatMoneyValue(after) : '';
+          const pairText = hasExplicitPremium
+            ? (`לפני ${beforeLabel || '—'} · אחרי ${afterLabel || '—'}${detailStr}`)
+            : 'לא הוזן';
           return {
             insuredId: iid,
             label: getInsuredLabelByIdSafe(iid),
-            total,
-            totalLabel: hasExplicitPremium ? `${this.formatMoneyValue(total)}${detailStr}` : 'לא הוזן'
+            before,
+            after,
+            beforeLabel: beforeLabel || 'לא הוזן',
+            afterLabel: afterLabel || 'לא הוזן',
+            total: after,
+            totalLabel: pairText
           };
         });
       };
@@ -27557,11 +27566,19 @@ if(path === "birthDate"){
           premiumBeforeLabel: premiumBefore ? this.formatMoneyValue(premiumBefore) : '—',
           premiumFinal,
           premiumLabel: premiumFinal ? this.formatMoneyValue(premiumFinal) : '—',
-          startDate: safeTrim(policy?.startDate) || '—',
+          startDate: (typeof this.toSimulatorDmyDate === 'function'
+            ? (this.toSimulatorDmyDate(policy?.startDate) || safeTrim(policy?.startDate) || '—')
+            : (safeTrim(policy?.startDate) || '—')),
           coverageDisplay,
           covers,
           healthAddonRows,
-          discountLabelOnly,
+          discountLabelOnly: discountLabelOnly || (() => {
+            const map = policy?.simDiscountPerInsured;
+            if(!map || typeof map !== 'object') return '';
+            const hit = Object.keys(map).map((k) => map[k]).find((e) => e && (safeTrim(e.label) || Number(e.year1Pct) > 0));
+            if(!hit) return '';
+            return safeTrim(hit.label) || (Number(hit.year1Pct) > 0 ? (String(hit.year1Pct) + '%') : '');
+          })(),
           discountPackageNum: discountPkg,
           discountScheduleStr,
           discountIsException: discountIsExc,
@@ -27574,6 +27591,12 @@ if(path === "birthDate"){
           extraBits: '',
           insuredMode: safeTrim(policy?.insuredMode) || 'single',
           perInsuredPremiumRows: getNewPolicyPerInsuredPremiumRowsSafe(policy),
+          perInsuredCoverRows: (safeTrim(policy?.type) === 'בריאות' && typeof this.getPolicyInsuredCoverLabels === 'function')
+            ? ((Array.isArray(policy?.insuredIds) && policy.insuredIds.length ? policy.insuredIds : (policy?.insuredId ? [policy.insuredId] : []))
+              .map((iid) => ({ label: getInsuredLabelByIdSafe(iid), covers: this.getPolicyInsuredCoverLabels(policy, iid) || [] }))
+              .filter((item) => item.covers && item.covers.length))
+            : [],
+          beneficiaryRows: getPolicyBeneficiaryRowsSafe(policy),
           perInsuredSumRows,
           spouseLabel: (() => {
             if(policy?.insuredMode !== 'multi') return '';
@@ -28209,16 +28232,28 @@ if(path === "birthDate"){
           const sumBreakdownLine = perInsuredSumHtml
             ? `<div class="lcPdfNewPolicyDetailLine"><span class="lcPdfNewPolicyDetailK">סכומים לפי מבוטח</span><div class="lcPdfNewPolicyDetailV">${perInsuredSumHtml}</div></div>`
             : '';
+          const perInsuredCoverHtml = Array.isArray(row.perInsuredCoverRows) && row.perInsuredCoverRows.length
+            ? `<div class="lcPdfCouplePremiums">${row.perInsuredCoverRows.map((item) => `<div class="lcPdfCouplePremiums__row"><span class="lcPdfCouplePremiums__name">${escapeHtml(item.label)}</span><span class="lcPdfCouplePremiums__value">${escapeHtml((item.covers || []).join(' · '))}</span></div>`).join('')}</div>`
+            : '';
+          const coversByInsuredLine = perInsuredCoverHtml
+            ? `<div class="lcPdfNewPolicyDetailLine"><span class="lcPdfNewPolicyDetailK">כיסויים לפי מבוטח</span><div class="lcPdfNewPolicyDetailV">${perInsuredCoverHtml}</div></div>`
+            : '';
+          const benRows = Array.isArray(row.beneficiaryRows) ? row.beneficiaryRows : [];
+          const benLine = benRows.length
+            ? `<div class="lcPdfNewPolicyDetailLine lcPdfNewPolicyDetailLine--stack"><span class="lcPdfNewPolicyDetailK">מוטבים</span><div class="lcPdfNewPolicyDetailV">${benRows.map((pair) => `<div>${escapeHtml(safeTrim(pair && pair[0]))}: ${escapeHtml(safeTrim(pair && pair[1]))}</div>`).join('')}</div></div>`
+            : '';
           const detailPieces = [
             coverageLine,
             healthAddonLine,
             coversLine,
+            coversByInsuredLine,
             discountPrimaryHtml,
             discountScheduleHtml,
             introLine,
             payLine,
             riskLine,
             pledgeLine,
+            benLine,
             premiumBreakdownLine,
             sumBreakdownLine
           ].filter(Boolean);

@@ -12,7 +12,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260905-sim-text-date-v1";
+const TAG = "20260905-ops-insured-tabs-v1";
 let failed = 0;
 let passed = 0;
 
@@ -58,6 +58,11 @@ assert(textBlock.includes("giSimDisc__picked"), "chosen discount line bumped");
 assert(textBlock.includes("__result--ok"), "green result box bumped");
 assert(textBlock.includes("giSimShell__ageBadgeLabel"), "age line bumped");
 assert(shell.includes('font-size:14px !important') && shell.includes("__coverLabel"), "cover labels bumped");
+assert(shell.includes("GI-SIM-INSURED-TABS 2026-09-05"), "insured name chips last-wins block");
+const tabBlock = shell.slice(shell.lastIndexOf("GI-SIM-INSURED-TABS 2026-09-05"));
+assert(tabBlock.includes("font-size:17px !important"), "insured tab names 17px last");
+assert(tabBlock.includes(".giSimShell__tab:hover{"), "insured tab hover bound");
+assert(tabBlock.includes("border-radius:12px !important"), "insured tab is a boxed chip");
 
 console.log("\n3) fill fields empty except personal details");
 assert(/function resolveInsuranceStartDate\([\s\S]{0,80}return "";/.test(sims), "start date is not auto-filled");
