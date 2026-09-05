@@ -459,6 +459,20 @@
     return Math.round(sum * 100) / 100;
   }
 
+  function riskSimTotalMonthlyPremiumsMatchingPick(sim){
+    const company = safeTrim(sim?._ctx?.company);
+    const product = safeTrim(sim?._ctx?.product);
+    let sum = 0;
+    const map = sim && sim._state && typeof sim._state === "object" ? sim._state : {};
+    Object.keys(map).forEach((id) => {
+      const pick = riskSimGetPick(sim, id);
+      if(safeTrim(pick.company) !== company || safeTrim(pick.product) !== product) return;
+      const m = Number(map[id]?.result?.monthlyPremium);
+      if(Number.isFinite(m)) sum += m;
+    });
+    return Math.round(sum * 100) / 100;
+  }
+
   function riskSimAddStandaloneInsured(sim){
     if(!sim || !sim._ctx) return;
     if(!Array.isArray(sim._ctx.insureds)) sim._ctx.insureds = [];
@@ -1082,8 +1096,8 @@
     const coOpts = companies.map((c) => `<option value="${escapeHtml(c)}"${c === pick.company ? " selected" : ""}>${escapeHtml(c)}</option>`).join("");
     const prOpts = products.map((p) => `<option value="${escapeHtml(p)}"${p === pick.product ? " selected" : ""}>${escapeHtml(p)}</option>`).join("");
     return `<div class="giSimShell__pick">
-      <label class="giSimShell__pickField"><span>חברה</span><select data-gishell-pick-company>${coOpts}</select></label>
-      <label class="giSimShell__pickField"><span>מוצר</span><select data-gishell-pick-product>${prOpts}</select></label>
+      <label class="giSimShell__pickField"><span>חברה למבוטח זה</span><select data-gishell-pick-company>${coOpts}</select></label>
+      <label class="giSimShell__pickField"><span>מוצר למבוטח זה</span><select data-gishell-pick-product>${prOpts}</select></label>
     </div>`;
   }
   function riskSimPickKey(company, product){
@@ -1103,9 +1117,19 @@
     });
     const discountByInsured = {};
     const disc = sim && sim._giSimDiscountSel && typeof sim._giSimDiscountSel === "object" ? sim._giSimDiscountSel : {};
+    Object.keys(map).forEach((id) => {
+      const result = riskSimCollectResultForInsured(sim, id);
+      const payload = result ? riskSimSelectedDiscountPayload(sim, result, id) : null;
+      if(payload) discountByInsured[id] = payload;
+      else {
+        const optId = safeTrim(disc[id]);
+        if(optId) discountByInsured[id] = optId;
+      }
+    });
     Object.keys(disc).forEach((id) => {
-      const v = safeTrim(disc[id]);
-      if(v) discountByInsured[id] = v;
+      if(discountByInsured[id]) return;
+      const optId = safeTrim(disc[id]);
+      if(optId) discountByInsured[id] = optId;
     });
     return {
       company,
@@ -1124,7 +1148,8 @@
     const map = riskSimEnsurePickMap(sim);
     map[id] = { company: co, product: pr };
     try { riskSimCaptureLegalFromDom(sim); } catch(_e) {}
-    const simSession = riskSimSnapshotSession(sim);
+    let simSession = null;
+    try { simSession = riskSimSnapshotSession(sim); } catch(_eSess) {}
     if(typeof sim._ctx?.onSwitchInsuredPick === "function"){
       sim._ctx.onSwitchInsuredPick(id, co, pr, {
         wizardLegalByInsured: sim._ctx.wizardLegalByInsured,
@@ -1169,10 +1194,13 @@
   }
   /** ההנחה שנבחרה בסימולטור, כולל המחיר החודשי אחרי הנחה (שנה ראשונה בלוח רב-שנתי).
       בלי זה האשף מקבל רק את הפרמיה לפני הנחה, והשורה מציגה לפני=אחרי. */
-  function riskSimSelectedDiscountPayload(sim, result){
+  function riskSimSelectedDiscountPayload(sim, result, insId){
     const company = safeTrim(sim?._ctx?.company);
     const product = safeTrim(sim?._ctx?.product);
-    const opt = giSimDiscountById(company, product, giSimDiscountSelectedId(sim));
+    const optId = insId
+      ? safeTrim(sim && sim._giSimDiscountSel && sim._giSimDiscountSel[insId])
+      : giSimDiscountSelectedId(sim);
+    const opt = giSimDiscountById(company, product, optId);
     if(!opt) return null;
     /* אם התוצאה הגיעה בלי ok (סימולטורי ריסק) — משלימים כדי שמנוע ההנחה יחשב. */
     const calcResult = (result && typeof result === "object" && result.ok !== true)
@@ -1209,37 +1237,71 @@
     };
   }
 
-  function riskSimPurchaseActiveInsured(sim){
-    if(!sim || !sim._ctx?.wizardWorkspace) return;
-    try { riskSimCaptureLegalFromDom(sim); } catch(_e) {}
-    const insId = safeTrim(sim._activeInsuredId);
-    if(!insId){
-      window.showToast?.({ title: "יש לבחור מבוטח", text: "בחרו מבוטח בסימולטור ואז הוסיפו להצעה.", variant: "warn" });
-      return;
-    }
+  function riskSimBuildLivePurchasePayload(sim, insId){
     const result = riskSimCollectResultForInsured(sim, insId);
-    if(!result){
-      window.showToast?.({ title: "יש לחשב פרמיה", text: "חשבו פרמיה למבוטח זה לפני ההוספה להצעה.", variant: "warn" });
-      return;
-    }
-    const legal = riskSimIsRiskOrMortgageProduct(sim._ctx.product) ? riskSimCloneLegal(riskSimGetLegal(sim, insId)) : null;
-    const discount = riskSimSelectedDiscountPayload(sim, result);
+    if(!result) return null;
+    const discount = riskSimSelectedDiscountPayload(sim, result, insId);
     const payload = discount ? Object.assign({}, result, { simDiscount: discount }) : Object.assign({}, result);
-    /* GI-NP-EDIT-RESTORE: צילום מלא של מצב המבוטח בסימולטור — כדי שעריכה תפתח עם אותם נתונים. */
     try {
       const stSnap = sim._state && sim._state[insId];
       if(stSnap && typeof stSnap === "object"){
         payload.simStateSnapshot = riskSimJsonClone(stSnap);
       }
     } catch(_eSnap) {}
-    try { sim._ctx.onApply?.({ [insId]: payload }, { skipRender: true, skipToast: true }); } catch(_e2) {}
-    try { sim._ctx.onPurchaseInsured?.(insId, payload, legal); } catch(_e3) {}
-    const st = sim._state && sim._state[insId];
-    if(st){
-      st.savedAt = nowISO();
-      st.dirtySinceSave = false;
+    return payload;
+  }
+
+  function riskSimPurchaseWizardInsureds(sim){
+    if(!sim || !sim._ctx?.wizardWorkspace) return;
+    try { riskSimCaptureLegalFromDom(sim); } catch(_e) {}
+    try {
+      if(typeof sim._ctx.onWizardSessionCapture === "function"){
+        sim._ctx.onWizardSessionCapture(riskSimSnapshotSession(sim));
+      }
+    } catch(_eCap) {}
+    const insureds = Array.isArray(sim._ctx.insureds) ? sim._ctx.insureds : [];
+    if(!insureds.length){
+      window.showToast?.({ title: "יש לבחור מבוטח", text: "בחרו מבוטח בסימולטור ואז הוסיפו להצעה.", variant: "warn" });
+      return;
     }
+    const curCo = safeTrim(sim._ctx.company);
+    const curPr = safeTrim(sim._ctx.product);
+    const pickMap = riskSimEnsurePickMap(sim);
+    const entries = [];
+    insureds.forEach((ins) => {
+      const id = safeTrim(ins.id);
+      if(!id) return;
+      const pick = pickMap[id] || { company: curCo, product: curPr };
+      const co = safeTrim(pick.company || curCo);
+      const pr = safeTrim(pick.product || curPr);
+      const matches = co === curCo && pr === curPr;
+      const legal = riskSimIsRiskOrMortgageProduct(pr) ? riskSimCloneLegal(riskSimGetLegal(sim, id)) : null;
+      entries.push({
+        insId: id,
+        company: co,
+        product: pr,
+        payload: matches ? riskSimBuildLivePurchasePayload(sim, id) : null,
+        legal,
+        label: safeTrim(ins.label) || "מבוטח"
+      });
+    });
+    if(typeof sim._ctx.onPurchaseAllInsureds === "function"){
+      try { sim._ctx.onPurchaseAllInsureds(entries); } catch(_eAll) {}
+      return;
+    }
+    const active = entries.find((e) => e.insId === safeTrim(sim._activeInsuredId)) || entries[0];
+    if(!active || !active.payload){
+      window.showToast?.({ title: "יש לחשב פרמיה", text: "חשבו פרמיה למבוטח זה לפני ההוספה להצעה.", variant: "warn" });
+      return;
+    }
+    try { sim._ctx.onApply?.({ [active.insId]: active.payload }, { skipRender: true, skipToast: true }); } catch(_e2) {}
+    try { sim._ctx.onPurchaseInsured?.(active.insId, active.payload, active.legal); } catch(_e3) {}
     try { sim.close(); } catch(_e4) {}
+  }
+
+  function riskSimPurchaseActiveInsured(sim){
+    if(!sim || !sim._ctx?.wizardWorkspace) return;
+    riskSimPurchaseWizardInsureds(sim);
   }
 
   function riskSimAugmentStandaloneChrome(sim){
@@ -1323,12 +1385,16 @@
       bar.className = "giSimShell__insuredBar";
       const tabs = insureds.map((ins) => {
         const s = sim._state?.[ins.id];
+        const pick = riskSimGetPick(sim, ins.id);
+        const prod = safeTrim(pick.product);
+        const base = safeTrim(ins.label) || "מבוטח";
+        const tabName = prod ? (base + " · " + prod) : base;
         const cls = [
           "giSimShell__tab",
           ins.id === activeId ? "is-active" : "",
           s?.result?.ok ? "has-result" : ""
         ].filter(Boolean).join(" ");
-        return `<button type="button" class="${cls}" data-gishell-tab="${escapeHtml(String(ins.id || ""))}">${escapeHtml(safeTrim(ins.label) || "מבוטח")}</button>`;
+        return `<button type="button" class="${cls}" data-gishell-tab="${escapeHtml(String(ins.id || ""))}">${escapeHtml(tabName)}</button>`;
       }).join("");
       const addInsHtml = sim._ctx.standalone
         ? `<button type="button" class="giSimShell__addIns" data-gishell-add-ins="1">+ הוסף מבוטח</button>`
@@ -1346,8 +1412,8 @@
       foot.classList.add("giSimShell__foot");
       const active = sim._state?.[activeId];
       const monthly = Number(active?.result?.monthlyPremium) || 0;
-      const total = riskSimTotalMonthlyPremiums(sim._state);
       const wizardFoot = !!sim._ctx.wizardWorkspace;
+      const total = wizardFoot ? riskSimTotalMonthlyPremiumsMatchingPick(sim) : riskSimTotalMonthlyPremiums(sim._state);
       const backBtnHtml = (!wizardFoot && typeof window !== "undefined" && typeof window.GI_SIM_BACK_TO_PICKER === "function")
         ? `<button type="button" class="btn giSimShell__backBtn" data-gishell-back-picker="1">חזרה לבחירה</button>`
         : "";
@@ -1360,7 +1426,7 @@
           <strong class="giSimShell__premValue">₪${escapeHtml(riskSimFormatMoneyShekels(monthly))}</strong>
         </div>
         <div class="giSimShell__premBlock">
-          <span class="giSimShell__premLabel">סה״כ לכל המבוטחים</span>
+          <span class="giSimShell__premLabel">${wizardFoot ? "סה״כ למוצר זה" : "סה״כ לכל המבוטחים"}</span>
           <strong class="giSimShell__premValue giSimShell__premValue--total">₪${escapeHtml(riskSimFormatMoneyShekels(total))}</strong>
         </div>
         <div class="giSimShell__footActions">
@@ -2164,6 +2230,8 @@
         /* כל עוד שאלת השמירה על המסך — מקש Escape ולחיצות רקע של הסימולטור
            שמתחתיה לא רשאים לסגור אותו מאחורי גבה. */
         if(handler._giSavePromptOpen) return undefined;
+        /* open() קורא ל-close() בתחילתו — בלי להודיע לאשף, כדי שלא יימחקו בחירות פר-מבוטח. */
+        if(handler._giOpening) return origClose();
         /* _ctx מתאפס בתוך origClose, ולכן ה-callback והצילום נשמרים לפניו. */
         const wizardClose = typeof handler._ctx?.onWizardClose === "function" ? handler._ctx.onWizardClose : null;
         const wizardCapture = typeof handler._ctx?.onWizardSessionCapture === "function" ? handler._ctx.onWizardSessionCapture : null;

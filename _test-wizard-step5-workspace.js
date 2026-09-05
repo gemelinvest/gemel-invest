@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260905-np-per-insured-v1";
+const TAG = "20260905-np-per-insured-v2";
 let failed = 0;
 let passed = 0;
 
@@ -163,6 +163,7 @@ assert(!openFn.includes("standalone: true"), "wizard open does not set standalon
 assert(openFn.includes("(this.insureds || []).map"), "simulator receives every proposal insured");
 assert(!openFn.includes("insuredIds.map((id) => this.insureds.find"), "no longer limited to draft.insuredIds");
 assert(openFn.includes("onPurchaseInsured"), "purchase-one-insured hook");
+assert(openFn.includes("onPurchaseAllInsureds"), "purchase-all-insureds hook");
 assert(openFn.includes("onSwitchInsuredPick"), "per-insured company/product switch hook");
 assert(openFn.includes("getSimulatorTabLabel"), "simulator tabs use short role labels");
 assert(openFn.includes("simulatorCatalog"), "wizard catalog is passed into the simulator");
@@ -187,12 +188,14 @@ assert(/canAccessSimulators\(\)\{\s*return this\.isAdmin\(\) \|\| this\.isManage
 assert(pickBlock.includes("GI-HEALTH-ONE-DECL"), "declaration routing still untouched in this follow-up");
 
 console.log("\n9) approved UI follow-up — discount close, tabs, pledge dock, pick switch");
-const buyStart = wiz.indexOf("purchaseSimulatorInsured(insId, result, legal){");
+const buyStart = wiz.indexOf("purchaseSimulatorInsured(insId, result, legal");
 const buyEnd = wiz.indexOf("async openRiskSimulator(){", buyStart);
 const buyFn = (buyStart >= 0 && buyEnd > buyStart) ? wiz.slice(buyStart, buyEnd) : "";
 assert(buyFn.includes("purchaseSimulatorInsured("), "purchase helper extracted");
+assert(buyFn.includes("purchaseAllSimulatorInsureds("), "batch purchase helper extracted");
 assert(!buyFn.includes("keepSimulatorWorkspace"), "adding to proposal closes the simulator workspace");
-assert(buyFn.includes("this.addDraftPolicy()"), "purchase still writes a proposal row");
+assert(buyFn.includes("this.addDraftPolicy("), "purchase still writes a proposal row");
+assert(buyFn.includes("keepSessionPicks"), "batch add can keep per-insured picks");
 
 const discApply = wiz.slice(wiz.indexOf("$$('[data-np-apply-cover-disc]'"), wiz.indexOf("$$('[data-cover-pct]'"));
 assert(discApply.includes('this._npManualDiscId = ""'), "שמור הנחות closes the percent panel");
@@ -221,10 +224,15 @@ assert(sims.includes("card.insertBefore(panel, foot)"), "pledge dock is below th
 assert(sims.includes("function riskSimPickHtml(sim){"), "per-insured company/product pickers");
 assert(sims.includes("data-gishell-pick-company"), "company picker on the insured bar");
 assert(sims.includes("data-gishell-pick-product"), "product picker on the insured bar");
+assert(sims.includes("חברה למבוטח זה"), "company picker labeled for this insured");
+assert(sims.includes("מוצר למבוטח זה"), "product picker labeled for this insured");
 assert(sims.includes("function riskSimRequestPickSwitch("), "pick switch reopens the matching simulator");
 assert(sims.includes("riskSimRequestPickSwitch(sim, id, pick.company, pick.product)"), "tab click switches product when needed");
-const purchaseSim = sims.slice(sims.indexOf("function riskSimPurchaseActiveInsured(sim){"), sims.indexOf("function riskSimAugmentStandaloneChrome(sim){"));
-assert(purchaseSim.includes("sim.close()"), "הוסף להצעה closes the simulator");
+assert(sims.includes('base + " · " + prod'), "tabs include the insured's product");
+assert(sims.includes("if(handler._giOpening) return origClose();"), "open()'s inner close does not wipe wizard picks");
+const purchaseSim = sims.slice(sims.indexOf("function riskSimPurchaseWizardInsureds(sim){"), sims.indexOf("function riskSimAugmentStandaloneChrome(sim){"));
+assert(purchaseSim.includes("onPurchaseAllInsureds"), "הוסף להצעה sends every insured pick");
+assert(purchaseSim.includes("sim.close()"), "fallback still closes when the batch hook is missing");
 assert(wiz.includes("switchSimulatorInsuredPick(insId, company, product, snapshot){"), "wizard handles per-insured pick");
 assert(wiz.includes("restoreActiveId: id"), "switching pick restores the same insured tab");
 assert(wiz.includes("wizardPickByInsured"), "per-insured pick map is persisted");
