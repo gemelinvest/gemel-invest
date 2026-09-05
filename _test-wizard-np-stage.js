@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260905-health-covers-grid-v1";
+const TAG = "20260905-pledge-bens-v1";
 let failed = 0;
 let passed = 0;
 
@@ -217,6 +217,25 @@ assert(shellCss.includes("grid-template-columns:repeat(2, minmax(0, 1fr))"), "co
 assert(/padding:6px 8px !important/.test(shellCss), "cover rows are shorter");
 assert(/covers\.appendChild\(coversWrap\);\s*if\(occBox\) details\.appendChild\(occBox\)/.test(sims), "occupation/underwriting sits in the details column");
 assert(!/covers\.appendChild\(coversWrap\);\s*if\(occBox\) covers\.appendChild\(occBox\)/.test(sims), "occupation is no longer under the long cover list");
+
+console.log("\n5b5) pledge/beneficiaries persist from the docked simulator onto the row");
+assert(wiz.includes("applySimulatorLegalToDraft(draft, legal)"), "wizard copies simulator legal onto the draft");
+assert(wiz.includes("resolveSimulatorLegal(legal, insuredId)"), "empty legal falls back to the per-insured map");
+assert(wiz.includes("simulatorLegalHasContent(legal)"), "filled pledge/beneficiaries are detected before overwrite");
+assert(wiz.includes("legalByInsured"), "session snapshot carries legalByInsured");
+assert(wiz.includes("try { sim._giCaptureLegal?.(); } catch(_eCap) {}"), "session capture reads live legal fields first");
+assert(sims.includes("handler._giCaptureLegal = function(){"), "simulator exposes a legal capture hook");
+assert(sims.includes("legalByInsured: riskSimJsonClone(sim && sim._ctx && sim._ctx.wizardLegalByInsured)"), "simulator session includes legal");
+const capFn = sims.slice(sims.indexOf("function riskSimCaptureLegalFromDom(sim){"), sims.indexOf("function riskSimLegalInnerHtml(sim){"));
+assert(capFn.includes("function riskSimCaptureLegalFromDom(sim){"), "legal capture helper extracted");
+assert(capFn.includes("if(!dock) return;"), "missing legal dock does not wipe stored values");
+assert(capFn.includes("if(benRows.length)"), "beneficiaries are overwritten only when rows exist");
+assert(!/if\(!dock\)[\s\S]{0,80}legal\.beneficiaries\s*=/.test(capFn), "absent dock does not assign beneficiaries");
+assert(/riskSimMountLegalPanel\(sim\)\{\s*try \{ riskSimCaptureLegalFromDom\(sim\);/.test(sims), "remount captures live DOM before rewriting HTML");
+assert(wiz.includes("p.pledgeBanks[0].bankName"), "summary chip reads bankName");
+assert(!wiz.includes("p.pledgeBanks[0]?.name"), "summary chip no longer reads the wrong name field");
+assert(wiz.includes("שיעבוד · ${escapeHtml(pledgeBankName)}"), "filled pledge chip shows the bank");
+assert(wiz.includes('("מוטבים: " + bens.map'), "filled beneficiaries chip lists names");
 
 console.log("\n5c) company logo in the summary row has no frame");
 const rowLogo = css.slice(css.indexOf(".lcNpProw .lcCompanyLogo,.lcNpProw img{"), css.indexOf(".lcNpProw__title{"));
@@ -461,6 +480,68 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
 
   W.applyRiskSimResultsToDraft({ i1: { ok: true, monthlyPremium: 200 } }, { skipRender: true, skipToast: true });
   assert(!W.policyDraft.simDiscountPerInsured?.i1, "recalculating without a discount clears the stored one");
+
+  // ── pledge / beneficiaries from the simulator land on the compact row ──
+  {
+    W.render = () => {};
+    W.isOpen = false;
+    W.newPolicies = [];
+    W.editingPolicyId = null;
+    W._npSimLegalByInsured = null;
+    W.policyDraft = null;
+    W.ensurePolicyDraft();
+    W.policyDraft.company = "כלל";
+    W.policyDraft.type = "ריסק";
+    const legalFilled = {
+      pledge: true,
+      pledgeConfirmed: true,
+      pledgeBanks: [{ bankName:"בנק לאומי", bankNo:"10", branch:"123", amount:"500000", years:"20", address:"רחוב הבנק 1" }],
+      beneficiaries: [{ firstName:"דן", lastName:"כהן", idNumber:"123456789", relationship:"בן", sharePct:"100" }]
+    };
+    W.applySimulatorLegalToDraft(W.policyDraft, legalFilled);
+    assert(W.policyDraft.pledge === true, "כלל ריסק draft keeps the pledge flag");
+    assert(W.policyDraft.pledgeBanks[0].bankName === "בנק לאומי", "draft stores bankName, not name");
+    assert(W.policyDraft.beneficiaries[0].firstName === "דן" && W.policyDraft.beneficiaries[0].lastName === "כהן", "draft stores the beneficiary name");
+    const emptyLegal = { pledge:false, pledgeConfirmed:false, pledgeBanks:[{ bankName:"" }], beneficiaries:[] };
+    W._npSimLegalByInsured = { i1: legalFilled };
+    const resolved = W.resolveSimulatorLegal(emptyLegal, "i1");
+    assert(resolved && resolved.pledgeBanks[0].bankName === "בנק לאומי", "empty legal object falls back to the stored map");
+    W.policyDraft.company = "כלל";
+    W.policyDraft.type = "בריאות";
+    W.policyDraft.pledge = true;
+    W.policyDraft.beneficiaries = [{ firstName:"דן" }];
+    W.applySimulatorLegalToDraft(W.policyDraft, legalFilled);
+    assert(W.policyDraft.pledge === false && W.policyDraft.beneficiaries.length === 0, "health draft still clears pledge/beneficiaries");
+    W.policyDraft = null;
+    W.ensurePolicyDraft();
+    W.policyDraft.company = "כלל";
+    W.policyDraft.type = "ריסק";
+    const pid = W.purchaseSimulatorInsured("i1", {
+      ok: true, monthlyPremium: 61.32, sumInsured: "600000"
+    }, legalFilled, { skipToast: true, skipRender: true, keepPicks: true });
+    const row = (W.newPolicies || []).find((p) => p.id === pid);
+    assert(!!row, "purchase writes a proposal row");
+    assert(row && row.pledge === true && row.pledgeBanks[0].bankName === "בנק לאומי", "added row keeps the pledge bank");
+    assert(row && row.beneficiaries[0].firstName === "דן" && row.beneficiaries[0].lastName === "כהן", "added row keeps the beneficiary");
+    const pledgeBankName = row ? (safeTrim(row.pledgeBanks[0].bankName) || safeTrim(row.pledgeBanks[0].name)) : "";
+    const pledgeText = (row && row.pledge) ? (pledgeBankName ? ("שיעבוד · " + pledgeBankName) : "שיעבוד פעיל") : "ללא שיעבוד";
+    const bens = (row && Array.isArray(row.beneficiaries) ? row.beneficiaries : []).filter((b) => !!(safeTrim(b && b.firstName) || safeTrim(b && b.lastName) || safeTrim(b && b.idNumber)));
+    const benText = bens.length
+      ? ("מוטבים: " + bens.map((b) => [safeTrim(b.firstName), safeTrim(b.lastName)].filter(Boolean).join(" ")).join(" · "))
+      : "ללא מוטבים";
+    assert(pledgeText === "שיעבוד · בנק לאומי", "compact row chip shows שיעבוד · בנק לאומי");
+    assert(benText === "מוטבים: דן כהן", "compact row chip shows מוטבים: דן כהן");
+    W.policyDraft = null;
+    W.ensurePolicyDraft();
+    W.policyDraft.company = "כלל";
+    W.policyDraft.type = "ריסק";
+    W._npSimLegalByInsured = { i1: legalFilled };
+    const pid2 = W.purchaseSimulatorInsured("i1", {
+      ok: true, monthlyPremium: 61.32, sumInsured: "600000"
+    }, emptyLegal, { skipToast: true, skipRender: true, keepPicks: true });
+    const row2 = (W.newPolicies || []).find((p) => p.id === pid2);
+    assert(row2 && row2.pledgeBanks[0].bankName === "בנק לאומי", "purchase uses the map when the passed legal is empty");
+  }
 
   // ── edit restore: snapshot + fallback from quotes/sum ──
   W.applyRiskSimResultsToDraft({

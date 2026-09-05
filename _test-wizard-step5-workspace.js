@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260905-health-covers-grid-v1";
+const TAG = "20260905-pledge-bens-v1";
 let failed = 0;
 let passed = 0;
 
@@ -246,6 +246,14 @@ assert(shellCss.includes(".giSimShell__branchStatus"), "branch status styles");
 assert(shellCss.includes(".giSimShell__legalSummary"), "pledge summary styles");
 assert(shellCss.includes("gap:12px 18px") || shellCss.includes("gap:12px 20px"), "insured tabs are spaced");
 assert(shellCss.includes("z-index:1") && shellCss.includes(".giSimShell__panel--legal"), "legal dock stays under the form");
+
+console.log("\n10) pledge/beneficiaries persist onto the summary row");
+assert(wiz.includes("applySimulatorLegalToDraft(draft, legal)"), "purchase copies simulator legal onto the draft");
+assert(wiz.includes("p.pledgeBanks[0].bankName"), "row chip reads bankName");
+assert(!wiz.includes("p.pledgeBanks[0]?.name"), "row chip does not read the wrong name field");
+assert(sims.includes("if(!dock) return;"), "missing legal dock does not wipe stored pledge/beneficiaries");
+assert(sims.includes("handler._giCaptureLegal"), "simulator can capture legal on demand");
+assert(wiz.includes("legalByInsured"), "wizard session snapshot stores legal");
 
 if(failed){
   console.error("\nFAILED  passed=" + passed + " failed=" + failed);
