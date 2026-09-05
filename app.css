@@ -47073,3 +47073,82 @@ body.lcAuthLock .lcLogin__footBtn{
 @media (max-width: 720px){
   .opsAssignArrivalHost{top:14px;width:calc(100vw - 24px)}
 }
+
+/* GI-NP-DISC-COMPACT 2026-09-05 */
+.lcPolicyDiscountModal__panel{
+  width:min(980px, calc(100vw - 28px));
+  max-height:min(86vh, 680px);
+}
+.lcPolicyDiscountModal .modal__body{
+  overflow:hidden;
+  flex:1 1 auto;
+  min-height:0;
+}
+.lcPolicyDiscountModal__body{
+  padding:12px 14px 8px;
+  gap:10px;
+  display:grid;
+  grid-template-columns:minmax(0,1.15fr) minmax(0,0.85fr);
+  align-content:start;
+}
+.lcPolicyDiscountModal__hero{
+  grid-column:1 / -1;
+  padding:10px 12px;
+  border-radius:14px;
+}
+.lcPolicyDiscountModal__name{ font-size:17px; }
+.lcPolicyDiscountModal__meta{ margin-top:2px; font-size:12.5px; }
+.lcPolicyDiscountModal__insureds{
+  grid-column:1 / -1;
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:center;
+}
+.lcPolicyDiscountModal__insureds[hidden]{ display:none !important; }
+.lcPolicyDiscountModal__insBtn{
+  border:1.5px solid #dbe4f3;
+  background:#fff;
+  color:#1b365d;
+  font-weight:800;
+  font-size:13px;
+  border-radius:999px;
+  padding:7px 12px;
+  cursor:pointer;
+}
+.lcPolicyDiscountModal__insBtn.is-on{
+  background:#2563EB;
+  border-color:#2563EB;
+  color:#fff;
+}
+.lcPolicyDiscountModal__section{ margin-bottom:0; }
+.lcPolicyDiscountModal__exceptionWrap{ margin-top:0; }
+.lcPolicyDiscountModal__exceptionToggle{ padding:7px 12px; }
+.lcPolicyDiscountModal__benefitWrap{
+  padding:10px 12px;
+  gap:8px;
+  border-radius:14px;
+}
+.lcPolicyDiscountModal__benefitWrap .help{ display:none; }
+.lcPolicyDiscountModal__benefitSegment{ gap:6px; }
+.lcPolicyDiscountModal__benefitOption span{ padding:8px 10px; font-size:12.5px; }
+.lcPolicyDiscountModal__scheduleSummary{
+  padding:10px 12px;
+  gap:8px;
+  border-radius:14px;
+}
+.lcPolicyDiscountModal__scheduleSummaryTitle{ font-size:14px; }
+.lcPolicyDiscountModal__scheduleEmpty{ padding:8px 10px; font-size:12.5px; }
+.lcPolicyDiscountModal__preview{
+  grid-column:1 / -1;
+  padding:10px 12px;
+  border-radius:14px;
+  font-size:14px;
+}
+.lcPolicyDiscountModal__previewSub{ margin-top:4px; }
+.lcPolicyDiscountModal__error{ grid-column:1 / -1; min-height:0; }
+.lcDiscountSelect__dropdown{ max-height:220px; }
+@media (max-width: 720px){
+  .lcPolicyDiscountModal__body{ grid-template-columns:1fr; }
+  .lcPolicyDiscountModal .modal__body{ overflow-y:auto; }
+}

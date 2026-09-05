@@ -352,20 +352,9 @@
   }
 
 
-  /** תאריך תחילת ביטוח מהקשר/מבוטח, אחרת היום (dd/mm/yyyy). */
+  /** תאריך תחילת ביטוח לא ממולא אוטומטית — הנציג מזין בשדה. גיל מול היום אם השדה ריק. */
   function resolveInsuranceStartDate(ctx, ins){
-    const fromCtx = safeTrim(ctx?.insuranceStartDate || ctx?.startDate || ctx?.policyStartDate || "");
-    if(fromCtx) return fromCtx;
-    const d = ins?.data || {};
-    const fromIns = safeTrim(d.insuranceStartDate || d.startDate || d.policyStartDate || "");
-    if(fromIns) return fromIns;
-    const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : [];
-    for(let i = 0; i < insureds.length; i++){
-      const meta = insureds[i]?.data || {};
-      const v = safeTrim(meta.insuranceStartDate || meta.startDate || meta.policyStartDate || "");
-      if(v) return v;
-    }
-    return riskSimTodayDmy();
+    return "";
   }
 
   function riskSimIsoDateDaysAgo(daysAgo){
@@ -3026,7 +3015,7 @@
         onCommit: (val) => {
           const st = this._state[this._activeInsuredId];
           if(!st) return;
-          st.insuranceStartDate = val || riskSimTodayDmy();
+          st.insuranceStartDate = val;
           st.insuranceStartDateSource = "manual";
           const sync = riskSimSyncAgeFromBirthDate(st, { minAge: PHOENIX_RISK_MIN_AGE, maxAge: PHOENIX_RISK_MAX_AGE, asOfDate: st.insuranceStartDate || "" });
           if(!sync.ok){ st.age = ""; }
@@ -3626,7 +3615,7 @@
         onCommit: (val) => {
           const st = this._state[this._activeInsuredId];
           if(!st) return;
-          st.insuranceStartDate = val || riskSimTodayDmy();
+          st.insuranceStartDate = val;
           st.insuranceStartDateSource = "manual";
           const sync = riskSimSyncAgeFromBirthDate(st, { minAge: MENORA_RISK_MIN_AGE, maxAge: MENORA_RISK_MAX_AGE, asOfDate: st.insuranceStartDate || "" });
           if(!sync.ok){ st.age = ""; }
@@ -3886,7 +3875,7 @@
       const birthDate = safeTrim(d.birthDate || "");
       const occupation = safeTrim(d.occupation || "");
       const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
-      const sumInsured = formatRiskSimSumInsuredDigits(safeTrim(d.sumInsured || ""));
+      const sumInsured = "";
       const st = {
         birthDate,
         birthDateSource: birthDate ? "step1" : "",
@@ -4193,7 +4182,7 @@
         onCommit: (val) => {
           const st = this._state[this._activeInsuredId];
           if(!st) return;
-          st.insuranceStartDate = val || riskSimTodayDmy();
+          st.insuranceStartDate = val;
           st.insuranceStartDateSource = "manual";
           const sync = this._syncAge(st);
           if(!sync.ok){ st.age = ""; }
@@ -4797,7 +4786,7 @@
         onCommit: (val) => {
           const st = this._state[this._activeInsuredId];
           if(!st) return;
-          st.insuranceStartDate = val || riskSimTodayDmy();
+          st.insuranceStartDate = val;
           st.insuranceStartDateSource = "manual";
           const sync = riskSimSyncAgeFromBirthDate(st, { minAge: HACHSHARA_RISK_MIN_AGE, maxAge: HACHSHARA_RISK_MAX_AGE, asOfDate: st.insuranceStartDate || "" });
           if(!sync.ok){ st.age = ""; }
@@ -5345,7 +5334,7 @@
         onCommit: (val) => {
           const st = this._state[this._activeInsuredId];
           if(!st) return;
-          st.insuranceStartDate = val || riskSimTodayDmy();
+          st.insuranceStartDate = val;
           st.insuranceStartDateSource = "manual";
           const sync = riskSimSyncAgeFromBirthDate(st, { minAge: HACHSHARA_MORT_RISK_MIN_AGE, maxAge: HACHSHARA_MORT_RISK_MAX_AGE, asOfDate: st.insuranceStartDate || "" });
           if(!sync.ok){ st.age = ""; }
@@ -5903,7 +5892,7 @@
         onCommit: (val) => {
           const st = this._state[this._activeInsuredId];
           if(!st) return;
-          st.insuranceStartDate = val || riskSimTodayDmy();
+          st.insuranceStartDate = val;
           st.insuranceStartDateSource = "manual";
           const sync = riskSimSyncAgeFromBirthDate(st, { minAge: PHOENIX_MORTGAGE_RISK_MIN_AGE, maxAge: PHOENIX_MORTGAGE_RISK_MAX_AGE, asOfDate: st.insuranceStartDate || "" });
           if(!sync.ok){ st.age = ""; }
@@ -7012,7 +7001,7 @@
         onCommit: (val) => {
           const st = this._state[this._activeInsuredId];
           if(!st) return;
-          st.insuranceStartDate = val || riskSimTodayDmy();
+          st.insuranceStartDate = val;
           st.insuranceStartDateSource = "manual";
           st.dirtySinceSave = true;
           this._syncAge(st);
@@ -7745,7 +7734,7 @@
         onCommit: (val) => {
           const st = this._state[this._activeInsuredId];
           if(!st) return;
-          st.insuranceStartDate = val || riskSimTodayDmy();
+          st.insuranceStartDate = val;
           st.insuranceStartDateSource = "manual";
           st.dirtySinceSave = true;
           this._syncAge(st);
@@ -8630,7 +8619,7 @@
         onCommit: (val) => {
           const st = this._state[this._activeInsuredId];
           if(!st) return;
-          st.insuranceStartDate = val || riskSimTodayDmy();
+          st.insuranceStartDate = val;
           st.insuranceStartDateSource = "manual";
           st.dirtySinceSave = true;
           this._syncAge(st);
@@ -9178,7 +9167,7 @@
                 </div>
                 <div class="${P}__field">
                   <label class="${P}__label">סכום פיצוי (₪${formatRiskSimSumInsuredDigits(sumLimits.minSum)}–₪${formatRiskSimSumInsuredDigits(sumLimits.maxSum)})</label>
-                  <input class="${P}__input" type="text" inputmode="numeric" data-mnrci-field="compensation" value="${escapeHtml(st.compensation || "")}" placeholder="לדוגמה: 100,000" />
+                  <input class="${P}__input" type="text" inputmode="numeric" data-mnrci-field="compensation" value="${escapeHtml(st.compensation || "")}" placeholder="" />
                 </div>
                 ${programModeHtml}
                 <div class="${P}__field ${P}__field--wide">
@@ -9266,7 +9255,7 @@
           onCommit: (val) => {
             const st = this._state[this._activeInsuredId];
             if(!st) return;
-            st.insuranceStartDate = val || riskSimTodayDmy();
+            st.insuranceStartDate = val;
             st.insuranceStartDateSource = "manual";
             st.result = null; st.error = null; st.dirtySinceSave = true;
             this._syncAge(st);
@@ -9797,7 +9786,7 @@
                 </div>
                 <div class="${P}__field">
                   <label class="${P}__label">סכום פיצוי (₪${formatRiskSimSumInsuredDigits(sumLimits.minSum)}–₪${formatRiskSimSumInsuredDigits(sumLimits.maxSum)})</label>
-                  <input class="${P}__input" type="text" inputmode="numeric" data-phxci-field="compensation" value="${escapeHtml(st.compensation || "")}" placeholder="לדוגמה: 100,000" />
+                  <input class="${P}__input" type="text" inputmode="numeric" data-phxci-field="compensation" value="${escapeHtml(st.compensation || "")}" placeholder="" />
                 </div>
                 ${programModeHtml}
                 <div class="${P}__field ${P}__field--wide">
@@ -9885,7 +9874,7 @@
           onCommit: (val) => {
             const st = this._state[this._activeInsuredId];
             if(!st) return;
-            st.insuranceStartDate = val || riskSimTodayDmy();
+            st.insuranceStartDate = val;
             st.insuranceStartDateSource = "manual";
             st.result = null; st.error = null; st.dirtySinceSave = true;
             this._syncAge(st);
@@ -10421,7 +10410,7 @@
                 </div>
                 <div class="${P}__field">
                   <label class="${P}__label">סכום פיצוי (מ-₪${formatRiskSimSumInsuredDigits(sumLimits.minSum)}, ללא תקרה)</label>
-                  <input class="${P}__input" type="text" inputmode="numeric" data-aylci-field="compensation" value="${escapeHtml(st.compensation || "")}" placeholder="לדוגמה: 100,000" />
+                  <input class="${P}__input" type="text" inputmode="numeric" data-aylci-field="compensation" value="${escapeHtml(st.compensation || "")}" placeholder="" />
                   ${declareHintHtml}
                 </div>
                 <div class="${P}__field ${P}__field--wide">
@@ -10509,7 +10498,7 @@
           onCommit: (val) => {
             const st = this._state[this._activeInsuredId];
             if(!st) return;
-            st.insuranceStartDate = val || riskSimTodayDmy();
+            st.insuranceStartDate = val;
             st.insuranceStartDateSource = "manual";
             st.result = null; st.error = null; st.dirtySinceSave = true;
             this._syncAge(st);
@@ -11167,7 +11156,7 @@
         onCommit: (val) => {
           const st = this._state[this._activeInsuredId];
           if(!st) return;
-          st.insuranceStartDate = val || riskSimTodayDmy();
+          st.insuranceStartDate = val;
           st.insuranceStartDateSource = "manual";
           st.dirtySinceSave = true;
           this._syncAge(st);
@@ -11373,7 +11362,7 @@
       const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
       const birthDate = safeTrim(d.birthDate || "");
       const smoker = (d.smoker === true || d.smoker === false) ? d.smoker : null;
-      const compensation = safeTrim(d.hachsharaCriticalAmount || d.compensation || "") || "100000";
+      const compensation = "";
       const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
       const st = {
         birthDate, birthDateSource: birthDate ? "step1" : "",
@@ -11381,7 +11370,7 @@
         age: "", ageSource: birthDate ? "step1" : "", ageRaw: null, entryDays: null,
         gender, genderSource: gender ? "step1" : "",
         smoker, smokerSource: smoker != null ? "step1" : "",
-        compensation, compensationSource: "default",
+        compensation, compensationSource: "",
         result: null, error: null, savedAt: null, dirtySinceSave: false
       };
       riskSimSyncAgeFromBirthDate(st, {
@@ -11596,7 +11585,7 @@
         onCommit: (val) => {
           const st = this._state[this._activeInsuredId];
           if(!st) return;
-          st.insuranceStartDate = val || riskSimTodayDmy();
+          st.insuranceStartDate = val;
           st.insuranceStartDateSource = "manual";
           this._syncAge(st);
           st.dirtySinceSave = true;
@@ -11875,7 +11864,7 @@
       });
       bindRiskSimDmyField(modal, '[data-mgdh-field="insuranceStartDate"]', {
         onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; },
-        onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val || riskSimTodayDmy(); st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; this._syncAge(st); this._render(); }
+        onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; this._syncAge(st); this._render(); }
       });
       const occInput = modal.querySelector('[data-mgdh-field="occupation"]');
       if(occInput){
@@ -11971,7 +11960,7 @@
         const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : ((d.smoker === true || d.smoker === false) ? d.smoker : null));
         const birthDate = safeTrim(d.birthDate || ""); const occupation = safeTrim(d.occupation || "");
         const insuranceStartDate = resolveMigdalInsuranceStartDate(this._ctx, ins);
-        const compensation = safeTrim(d[plan.amountField] || d.compensation || "") || "100000";
+        const compensation = "";
         const st = { birthDate, birthDateSource: birthDate ? "step1" : "", insuranceStartDate, insuranceStartDateSource: insuranceStartDate ? "ctx" : "", age:"", ageSource: birthDate ? "step1" : "", ageRaw:null, entryDays:null, gender, genderSource: gender ? "step1" : "", smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "", occupation, occupationSource: occupation ? "step1" : "", compensation, result:null, error:null, savedAt:null, dirtySinceSave:false };
         this._syncAge(st); return st;
       },
@@ -12022,7 +12011,7 @@
         $$(`[data-${FP}-tab]`, modal).forEach((el) => on(el, "click", () => this._switchInsured(el.getAttribute(`data-${FP}-tab`))));
         $$(`[data-${FP}-switch]`, modal).forEach((el) => on(el, "click", () => { const action = el.getAttribute(`data-${FP}-switch`); const target = this._confirmSwitch?.targetId; this._confirmSwitch = null; if(action === "save"){ this._saveActive(); if(target) this._activeInsuredId = target; this._render(); } else if(action === "discard"){ if(target) this._activeInsuredId = target; this._render(); } else this._render(); }));
         bindRiskSimDmyField(modal, `[data-${FP}-field="birthDate"]`, { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.ageSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
-        bindRiskSimDmyField(modal, `[data-${FP}-field="insuranceStartDate"]`, { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val || riskSimTodayDmy(); st.insuranceStartDateSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
+        bindRiskSimDmyField(modal, `[data-${FP}-field="insuranceStartDate"]`, { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
         const sumInput = modal.querySelector(`[data-${FP}-field="compensation"]`);
         if(sumInput) on(sumInput, "input", () => { const st = this._state[this._activeInsuredId]; if(!st) return; const formatted = formatRiskSimSumInsuredDigits(sumInput.value); sumInput.value = formatted; try{ sumInput.setSelectionRange(formatted.length, formatted.length); }catch(_e){} st.compensation = formatted; st.result = null; st.error = null; st.dirtySinceSave = true; });
         const occInput = modal.querySelector(`[data-${FP}-field="occupation"]`);
@@ -12151,7 +12140,7 @@
       $$(`[data-${FP}-tab]`, modal).forEach((el) => on(el, "click", () => this._switchInsured(el.getAttribute(`data-${FP}-tab`))));
       $$(`[data-${FP}-switch]`, modal).forEach((el) => on(el, "click", () => { const action = el.getAttribute(`data-${FP}-switch`); const target = this._confirmSwitch?.targetId; this._confirmSwitch = null; if(action === "save"){ this._saveActive(); if(target) this._activeInsuredId = target; this._render(); } else if(action === "discard"){ if(target) this._activeInsuredId = target; this._render(); } else this._render(); }));
       bindRiskSimDmyField(modal, `[data-${FP}-field="birthDate"]`, { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.ageSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
-      bindRiskSimDmyField(modal, `[data-${FP}-field="insuranceStartDate"]`, { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val || riskSimTodayDmy(); st.insuranceStartDateSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
+      bindRiskSimDmyField(modal, `[data-${FP}-field="insuranceStartDate"]`, { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
       const sumInput = modal.querySelector(`[data-${FP}-field="sumInsured"]`);
       if(sumInput) on(sumInput, "input", () => { const st = this._state[this._activeInsuredId]; if(!st) return; const formatted = formatRiskSimSumInsuredDigits(sumInput.value); sumInput.value = formatted; try{ sumInput.setSelectionRange(formatted.length, formatted.length); }catch(_e){} st.sumInsured = formatted; st.result = null; st.error = null; st.dirtySinceSave = true; });
       const occInput = modal.querySelector(`[data-${FP}-field="occupation"]`);
@@ -12251,7 +12240,7 @@
         const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
         const birthDate = safeTrim(d.birthDate || ""); const occupation = safeTrim(d.occupation || "");
         const insuranceStartDate = resolveMigdalInsuranceStartDate(this._ctx, ins);
-        const sumInsured = formatRiskSimSumInsuredDigits(safeTrim(d[plan.amountField] || d.sumInsured || ""));
+        const sumInsured = "";
         const st = { birthDate, birthDateSource: birthDate ? "step1" : "", insuranceStartDate, insuranceStartDateSource: insuranceStartDate ? "ctx" : "", age:"", ageSource: birthDate ? "step1" : "", ageRaw:null, entryDays:null, gender, genderSource: gender ? "step1" : "", occupation, occupationSource: occupation ? "step1" : "", sumInsured, result:null, error:null, savedAt:null, dirtySinceSave:false };
         this._syncAge(st); return st;
       },
@@ -12300,7 +12289,7 @@
         $$(`[data-${FP}-tab]`, modal).forEach((el) => on(el, "click", () => this._switchInsured(el.getAttribute(`data-${FP}-tab`))));
         $$(`[data-${FP}-switch]`, modal).forEach((el) => on(el, "click", () => { const action = el.getAttribute(`data-${FP}-switch`); const target = this._confirmSwitch?.targetId; this._confirmSwitch = null; if(action === "save"){ this._saveActive(); if(target) this._activeInsuredId = target; this._render(); } else if(action === "discard"){ if(target) this._activeInsuredId = target; this._render(); } else this._render(); }));
         bindRiskSimDmyField(modal, `[data-${FP}-field="birthDate"]`, { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.ageSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
-        bindRiskSimDmyField(modal, `[data-${FP}-field="insuranceStartDate"]`, { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val || riskSimTodayDmy(); st.insuranceStartDateSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
+        bindRiskSimDmyField(modal, `[data-${FP}-field="insuranceStartDate"]`, { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
         const sumInput = modal.querySelector(`[data-${FP}-field="sumInsured"]`);
         if(sumInput) on(sumInput, "input", () => { const st = this._state[this._activeInsuredId]; if(!st) return; const formatted = formatRiskSimSumInsuredDigits(sumInput.value); sumInput.value = formatted; try{ sumInput.setSelectionRange(formatted.length, formatted.length); }catch(_e){} st.sumInsured = formatted; st.result = null; st.error = null; st.dirtySinceSave = true; });
         const occInput = modal.querySelector(`[data-${FP}-field="occupation"]`);
@@ -12572,7 +12561,7 @@
       });
       bindRiskSimDmyField(modal, '[data-clalh-field="insuranceStartDate"]', {
         onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; },
-        onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val || riskSimTodayDmy(); st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; this._syncAge(st); this._render(); }
+        onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; this._syncAge(st); this._render(); }
       });
       const occInput = modal.querySelector('[data-clalh-field="occupation"]');
       if(occInput){
@@ -12747,7 +12736,7 @@
         const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : ((d.smoker === true || d.smoker === false) ? d.smoker : null));
         const birthDate = safeTrim(d.birthDate || ""); const occupation = safeTrim(d.occupation || "");
         const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
-        const compensation = safeTrim(d[plan.amountField] || d.compensation || "") || "100000";
+        const compensation = "";
         const st = { birthDate, birthDateSource: birthDate ? "step1" : "", insuranceStartDate, insuranceStartDateSource: insuranceStartDate ? "ctx" : "", age:"", ageSource: birthDate ? "step1" : "", ageRaw:null, entryDays:null, gender, genderSource: gender ? "step1" : "", smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "", occupation, occupationSource: occupation ? "step1" : "", compensation, result:null, error:null, savedAt:null, dirtySinceSave:false };
         this._syncAge(st); return st;
       },
@@ -12798,7 +12787,7 @@
         $$(`[data-${FP}-tab]`, modal).forEach((el) => on(el, "click", () => this._switchInsured(el.getAttribute(`data-${FP}-tab`))));
         $$(`[data-${FP}-switch]`, modal).forEach((el) => on(el, "click", () => { const action = el.getAttribute(`data-${FP}-switch`); const target = this._confirmSwitch?.targetId; this._confirmSwitch = null; if(action === "save"){ this._saveActive(); if(target) this._activeInsuredId = target; this._render(); } else if(action === "discard"){ if(target) this._activeInsuredId = target; this._render(); } else this._render(); }));
         bindRiskSimDmyField(modal, `[data-${FP}-field="birthDate"]`, { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.ageSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
-        bindRiskSimDmyField(modal, `[data-${FP}-field="insuranceStartDate"]`, { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val || riskSimTodayDmy(); st.insuranceStartDateSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
+        bindRiskSimDmyField(modal, `[data-${FP}-field="insuranceStartDate"]`, { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
         const sumInput = modal.querySelector(`[data-${FP}-field="compensation"]`);
         if(sumInput) on(sumInput, "input", () => { const st = this._state[this._activeInsuredId]; if(!st) return; const formatted = formatRiskSimSumInsuredDigits(sumInput.value); sumInput.value = formatted; try{ sumInput.setSelectionRange(formatted.length, formatted.length); }catch(_e){} st.compensation = formatted; st.result = null; st.error = null; st.dirtySinceSave = true; });
         const occInput = modal.querySelector(`[data-${FP}-field="occupation"]`);
@@ -12930,7 +12919,7 @@
       const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : ((d.smoker === true || d.smoker === false) ? d.smoker : null));
       const birthDate = safeTrim(d.birthDate || ""); const occupation = safeTrim(d.occupation || "");
       const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
-      const sumInsured = formatRiskSimSumInsuredDigits(safeTrim(d.sumInsured || ""));
+      const sumInsured = "";
       const st = { birthDate, birthDateSource: birthDate ? "step1" : "", insuranceStartDate, insuranceStartDateSource: insuranceStartDate ? "ctx" : "", age:"", ageSource: birthDate ? "step1" : "", ageRaw:null, entryDays:null, gender, genderSource: gender ? "step1" : "", smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "", occupation, occupationSource: occupation ? "step1" : "", sumInsured, result:null, error:null, savedAt:null, dirtySinceSave:false };
       this._syncAge(st); return st;
     },
@@ -12983,7 +12972,7 @@
       $$("[data-clalmort-tab]", modal).forEach((el) => on(el, "click", () => this._switchInsured(el.getAttribute("data-clalmort-tab"))));
       $$("[data-clalmort-switch]", modal).forEach((el) => on(el, "click", () => { const action = el.getAttribute("data-clalmort-switch"); const target = this._confirmSwitch?.targetId; this._confirmSwitch = null; if(action === "save"){ this._saveActive(); if(target) this._activeInsuredId = target; this._render(); } else if(action === "discard"){ if(target) this._activeInsuredId = target; this._render(); } else this._render(); }));
       bindRiskSimDmyField(modal, '[data-clalmort-field="birthDate"]', { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.ageSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
-      bindRiskSimDmyField(modal, '[data-clalmort-field="insuranceStartDate"]', { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val || riskSimTodayDmy(); st.insuranceStartDateSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
+      bindRiskSimDmyField(modal, '[data-clalmort-field="insuranceStartDate"]', { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
       const sumInput = modal.querySelector('[data-clalmort-field="sumInsured"]');
       if(sumInput) on(sumInput, "input", () => { const st = this._state[this._activeInsuredId]; if(!st) return; const formatted = formatRiskSimSumInsuredDigits(sumInput.value); sumInput.value = formatted; try{ sumInput.setSelectionRange(formatted.length, formatted.length); }catch(_e){} st.sumInsured = formatted; st.result = null; st.error = null; st.dirtySinceSave = true; });
       const occInput = modal.querySelector('[data-clalmort-field="occupation"]');
@@ -13239,7 +13228,7 @@
       const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : ((d.smoker === true || d.smoker === false) ? d.smoker : null));
       const birthDate = safeTrim(d.birthDate || ""); const occupation = safeTrim(d.occupation || "");
       const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
-      const sumInsured = formatRiskSimSumInsuredDigits(safeTrim(d.sumInsured || ""));
+      const sumInsured = "";
       const st = { birthDate, birthDateSource: birthDate ? "step1" : "", insuranceStartDate, insuranceStartDateSource: insuranceStartDate ? "ctx" : "", age:"", ageSource: birthDate ? "step1" : "", ageRaw:null, entryDays:null, gender, genderSource: gender ? "step1" : "", smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "", occupation, occupationSource: occupation ? "step1" : "", sumInsured, result:null, error:null, savedAt:null, dirtySinceSave:false, showProjection:false };
       this._syncAge(st); return st;
     },
@@ -13298,7 +13287,7 @@
       $$("[data-clalrisk-tab]", modal).forEach((el) => on(el, "click", () => this._switchInsured(el.getAttribute("data-clalrisk-tab"))));
       $$("[data-clalrisk-switch]", modal).forEach((el) => on(el, "click", () => { const action = el.getAttribute("data-clalrisk-switch"); const target = this._confirmSwitch?.targetId; this._confirmSwitch = null; if(action === "save"){ this._saveActive(); if(target) this._activeInsuredId = target; this._render(); } else if(action === "discard"){ if(target) this._activeInsuredId = target; this._render(); } else this._render(); }));
       bindRiskSimDmyField(modal, '[data-clalrisk-field="birthDate"]', { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.birthDate = val; st.birthDateSource = "manual"; st.ageSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
-      bindRiskSimDmyField(modal, '[data-clalrisk-field="insuranceStartDate"]', { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val || riskSimTodayDmy(); st.insuranceStartDateSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
+      bindRiskSimDmyField(modal, '[data-clalrisk-field="insuranceStartDate"]', { onInput: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.dirtySinceSave = true; }, onCommit: (val) => { const st = this._state[this._activeInsuredId]; if(!st) return; st.insuranceStartDate = val; st.insuranceStartDateSource = "manual"; st.result = null; st.error = null; st.dirtySinceSave = true; this._syncAge(st); this._render(); } });
       const sumInput = modal.querySelector('[data-clalrisk-field="sumInsured"]');
       if(sumInput) on(sumInput, "input", () => { const st = this._state[this._activeInsuredId]; if(!st) return; const formatted = formatRiskSimSumInsuredDigits(sumInput.value); sumInput.value = formatted; try{ sumInput.setSelectionRange(formatted.length, formatted.length); }catch(_e){} st.sumInsured = formatted; st.result = null; st.error = null; st.dirtySinceSave = true; });
       // הלהקה נגזרת מהסכום, ולכן הרמז מתחת לשדה מתרענן רק כשעוזבים אותו.
@@ -13424,6 +13413,9 @@
     const api = { quote: quoteExistingSimulator };
     host.GiSimulatorQuotes = api;
     global.GiSimulatorQuotes = api;
+    const discApi = { list: giSimDiscountList, byId: giSimDiscountById, year1Pct: giSimDiscountYear1Pct, afterMonthly: giSimDiscountAfterMonthly };
+    host.GiSimulatorDiscounts = discApi;
+    global.GiSimulatorDiscounts = discApi;
   } catch(_e) {}
 
   try { host.onSimulatorsInstalled?.(RiskSimulators); } catch(_e) {}
