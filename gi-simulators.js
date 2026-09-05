@@ -530,6 +530,7 @@
     const age = riskSimExtractAgeFromHint(body);
     const layout = document.createElement("div");
     layout.className = "giSimShell__layout";
+    if(coversWrap) layout.classList.add("giSimShell__layout--healthCovers");
 
     const details = riskSimBuildShellPanel("פרטי מבוטח", "giSimShell__panel--details");
     details.appendChild(grid);
@@ -569,7 +570,7 @@
     } else {
       if(coversTitle) covers.appendChild(coversTitle);
       covers.appendChild(coversWrap);
-      if(occBox) covers.appendChild(occBox);
+      if(occBox) details.appendChild(occBox);
       if(result) covers.appendChild(result);
     }
 
