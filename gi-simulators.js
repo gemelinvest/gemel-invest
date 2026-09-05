@@ -833,11 +833,14 @@
     if(!riskSimIsRiskOrMortgageProduct(sim._ctx.product)) return;
     const id = safeTrim(sim._activeInsuredId);
     if(!id) return;
+    /* בלי הדק המשפטי במסך — לא מוחקים מילוי שכבר נשמר במפה. */
+    const dock = modal.querySelector(".giSimShell__legalDock");
+    if(!dock) return;
     const legal = riskSimGetLegal(sim, id);
-    const pledgeEl = modal.querySelector("[data-gishell-legal-pledge]");
+    const pledgeEl = dock.querySelector("[data-gishell-legal-pledge]") || modal.querySelector("[data-gishell-legal-pledge]");
     if(pledgeEl) legal.pledge = !!pledgeEl.checked;
     const banks = [];
-    modal.querySelectorAll("[data-gishell-legal-bank]").forEach((card) => {
+    dock.querySelectorAll("[data-gishell-legal-bank]").forEach((card) => {
       const idx = Number(card.getAttribute("data-gishell-legal-bank") || "0") || 0;
       const read = (field) => safeTrim(card.querySelector(`[data-gishell-legal-bank-field="${field}"]`)?.value || "");
       banks[idx] = Object.assign(riskSimEmptyPledgeBank(), {
@@ -850,20 +853,23 @@
       });
     });
     if(banks.filter(Boolean).length) legal.pledgeBanks = banks.filter(Boolean).slice(0, 2);
-    const bens = [];
-    modal.querySelectorAll("[data-gishell-legal-ben]").forEach((row) => {
-      const idx = Number(row.getAttribute("data-gishell-legal-ben") || "0") || 0;
-      const read = (field) => safeTrim(row.querySelector(`[data-gishell-legal-ben-field="${field}"]`)?.value || "");
-      bens[idx] = Object.assign(riskSimEmptyBeneficiary(), {
-        firstName: read("firstName"),
-        lastName: read("lastName"),
-        idNumber: read("idNumber"),
-        phone: read("phone"),
-        relationship: read("relationship"),
-        sharePct: read("sharePct")
+    const benRows = dock.querySelectorAll("[data-gishell-legal-ben]");
+    if(benRows.length){
+      const bens = [];
+      benRows.forEach((row) => {
+        const idx = Number(row.getAttribute("data-gishell-legal-ben") || "0") || 0;
+        const read = (field) => safeTrim(row.querySelector(`[data-gishell-legal-ben-field="${field}"]`)?.value || "");
+        bens[idx] = Object.assign(riskSimEmptyBeneficiary(), {
+          firstName: read("firstName"),
+          lastName: read("lastName"),
+          idNumber: read("idNumber"),
+          phone: read("phone"),
+          relationship: read("relationship"),
+          sharePct: read("sharePct")
+        });
       });
-    });
-    legal.beneficiaries = bens.filter(Boolean);
+      legal.beneficiaries = bens.filter(Boolean);
+    }
     const map = riskSimEnsureLegalMap(sim);
     map[id] = legal;
   }
@@ -942,6 +948,7 @@
       </div>`;
   }
   function riskSimMountLegalPanel(sim){
+    try { riskSimCaptureLegalFromDom(sim); } catch(_eCap) {}
     const modal = sim && sim._modal;
     const card = modal && (modal.querySelector(".giSimShell__card") || modal.querySelector(".giValModal__card"));
     if(!card) return;
@@ -1172,12 +1179,14 @@
       const optId = safeTrim(disc[id]);
       if(optId) discountByInsured[id] = optId;
     });
+    try { riskSimCaptureLegalFromDom(sim); } catch(_eLeg) {}
     return {
       company,
       product,
       pickKey: riskSimPickKey(company, product),
       stateByInsured,
-      discountByInsured
+      discountByInsured,
+      legalByInsured: riskSimJsonClone(sim && sim._ctx && sim._ctx.wizardLegalByInsured) || {}
     };
   }
 
@@ -1533,6 +1542,7 @@
       calcBtn._giShellBound = true;
       on(calcBtn, "click", (ev) => {
         ev.preventDefault();
+        try { riskSimCaptureLegalFromDom(sim); } catch(_eCap) {}
         const id = sim._activeInsuredId;
         try {
           if(typeof sim._calc === "function"){
@@ -2373,6 +2383,9 @@
         } catch(_e4) {}
       };
     }
+    handler._giCaptureLegal = function(){
+      try { riskSimCaptureLegalFromDom(handler); } catch(_eCap) {}
+    };
     handler._giShellEnhanced = true;
     return handler;
   }

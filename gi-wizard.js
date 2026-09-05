@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260905-health-covers-grid-v1";
+  const GI_WIZARD_BUILD = "20260905-pledge-bens-v1";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -11442,11 +11442,23 @@ if(path === "birthDate"){
           if(opt) this._npSimDiscountBag[id][key] = opt;
         }
       });
+      const legalMap = snapshot.legalByInsured && typeof snapshot.legalByInsured === "object" ? snapshot.legalByInsured : null;
+      if(legalMap){
+        this._npSimLegalByInsured = this._npSimLegalByInsured && typeof this._npSimLegalByInsured === "object" ? this._npSimLegalByInsured : {};
+        Object.keys(legalMap).forEach((id) => {
+          if(!legalMap[id] || typeof legalMap[id] !== "object") return;
+          try { this._npSimLegalByInsured[id] = JSON.parse(JSON.stringify(legalMap[id])); } catch(_eLeg) {}
+        });
+      }
     },
 
     captureOpenSimulatorSession(){
       const sim = this._npOpenSimHandler;
       if(!sim) return;
+      try { sim._giCaptureLegal?.(); } catch(_eCap) {}
+      if(sim._ctx && sim._ctx.wizardLegalByInsured && typeof sim._ctx.wizardLegalByInsured === "object"){
+        try { this._npSimLegalByInsured = sim._ctx.wizardLegalByInsured; } catch(_eMap) {}
+      }
       const company = safeTrim(sim._ctx?.company);
       const product = safeTrim(sim._ctx?.product);
       const key = company + "::" + product;
@@ -11461,7 +11473,10 @@ if(path === "birthDate"){
         const v = safeTrim(disc[id]);
         if(v) discountByInsured[id] = v;
       });
-      this.mergeNpSimSessionSnapshot({ company, product, pickKey: key, stateByInsured, discountByInsured });
+      this.mergeNpSimSessionSnapshot({
+        company, product, pickKey: key, stateByInsured, discountByInsured,
+        legalByInsured: (sim._ctx && sim._ctx.wizardLegalByInsured) || this._npSimLegalByInsured || {}
+      });
     },
 
     npSimPickMatches(insId, company, product){
@@ -16082,9 +16097,47 @@ if(path === "birthDate"){
       const d = this.policyDraft;
       return {
         pledge: !!d.pledge,
+        pledgeConfirmed: !!d.pledge,
         pledgeBanks: this.normalizePledgeBanks(d).map((b) => Object.assign(this.emptyPledgeBank(), b)),
         beneficiaries: Array.isArray(d.beneficiaries) ? JSON.parse(JSON.stringify(d.beneficiaries)) : []
       };
+    },
+
+    simulatorLegalHasContent(legal){
+      if(!legal || typeof legal !== "object") return false;
+      if(legal.pledge || legal.pledgeConfirmed) return true;
+      const banks = Array.isArray(legal.pledgeBanks) ? legal.pledgeBanks : [];
+      if(banks.some((b) => !!(safeTrim(b && (b.bankName || b.name)) || safeTrim(b && b.branch) || safeTrim(b && b.amount)))) return true;
+      const bens = Array.isArray(legal.beneficiaries) ? legal.beneficiaries : [];
+      if(bens.some((b) => !!(safeTrim(b && b.firstName) || safeTrim(b && b.lastName) || safeTrim(b && b.idNumber)))) return true;
+      return false;
+    },
+    resolveSimulatorLegal(legal, insuredId){
+      if(this.simulatorLegalHasContent(legal)) return legal;
+      const fromMap = this._npSimLegalByInsured && this._npSimLegalByInsured[safeTrim(insuredId)];
+      if(this.simulatorLegalHasContent(fromMap)) return fromMap;
+      return legal || fromMap || null;
+    },
+    applySimulatorLegalToDraft(draft, legal){
+      if(!draft) return;
+      const isRisk = !this.isMedicareCompany(draft.company) && (safeTrim(draft.type) === "ריסק" || safeTrim(draft.type) === "ריסק משכנתא");
+      if(!isRisk){
+        draft.pledge = false;
+        draft.pledgeBanks = [this.emptyPledgeBank()];
+        this.normalizePledgeBanks(draft);
+        draft.beneficiaries = [];
+        return;
+      }
+      const src = legal && typeof legal === "object" ? legal : null;
+      if(!src) return;
+      draft.pledge = !!src.pledge;
+      draft.pledgeBanks = Array.isArray(src.pledgeBanks) && src.pledgeBanks.length
+        ? src.pledgeBanks.map((b) => Object.assign(this.emptyPledgeBank(), b))
+        : [this.emptyPledgeBank()];
+      this.normalizePledgeBanks(draft);
+      draft.beneficiaries = Array.isArray(src.beneficiaries)
+        ? JSON.parse(JSON.stringify(src.beneficiaries))
+        : [];
     },
 
     applyRiskSimResultsToDraft(resultsByInsuredId, opts){
@@ -16221,22 +16274,8 @@ if(path === "birthDate"){
         draft.simDiscountPerInsured = keepMap(draft.simDiscountPerInsured);
         this.syncDraftDiscountFromSimulator(draft);
       }
-      const isRisk = !this.isMedicareCompany(draft.company) && (safeTrim(draft.type) === "ריסק" || safeTrim(draft.type) === "ריסק משכנתא");
-      if(isRisk && legal){
-        draft.pledge = !!legal.pledge;
-        draft.pledgeBanks = Array.isArray(legal.pledgeBanks) && legal.pledgeBanks.length
-          ? legal.pledgeBanks.map((b) => Object.assign(this.emptyPledgeBank(), b))
-          : [this.emptyPledgeBank()];
-        this.normalizePledgeBanks(draft);
-        draft.beneficiaries = Array.isArray(legal.beneficiaries)
-          ? JSON.parse(JSON.stringify(legal.beneficiaries))
-          : [];
-      } else {
-        draft.pledge = false;
-        draft.pledgeBanks = [this.emptyPledgeBank()];
-        this.normalizePledgeBanks(draft);
-        if(!isRisk) draft.beneficiaries = [];
-      }
+      const legalSrc = this.resolveSimulatorLegal(legal, id);
+      this.applySimulatorLegalToDraft(draft, legalSrc);
       const addedCompany = safeTrim(draft.company);
       const addedType = safeTrim(draft.type);
       /* אחרי ההוספה הסימולטור נסגר, ולכן אין להחזיר את השלב לבחירה — מציגים סיכום. */
@@ -16337,23 +16376,11 @@ if(path === "birthDate"){
       draft.insuredIds = ids.slice();
       draft.insuredId = ids[0] || "";
       draft.insuredMode = "couple";
-      const legal = selected.map((e) => e.legal).find(Boolean) || (this._npSimLegalByInsured && this._npSimLegalByInsured[ids[0]]) || null;
-      const isRisk = !this.isMedicareCompany(draft.company) && (safeTrim(draft.type) === "ריסק" || safeTrim(draft.type) === "ריסק משכנתא");
-      if(isRisk && legal){
-        draft.pledge = !!legal.pledge;
-        draft.pledgeBanks = Array.isArray(legal.pledgeBanks) && legal.pledgeBanks.length
-          ? legal.pledgeBanks.map((b) => Object.assign(this.emptyPledgeBank(), b))
-          : [this.emptyPledgeBank()];
-        this.normalizePledgeBanks(draft);
-        draft.beneficiaries = Array.isArray(legal.beneficiaries)
-          ? JSON.parse(JSON.stringify(legal.beneficiaries))
-          : [];
-      } else {
-        draft.pledge = false;
-        draft.pledgeBanks = [this.emptyPledgeBank()];
-        this.normalizePledgeBanks(draft);
-        if(!isRisk) draft.beneficiaries = [];
-      }
+      const legal = this.resolveSimulatorLegal(
+        selected.map((e) => e.legal).find((x) => this.simulatorLegalHasContent(x)) || selected.map((e) => e.legal).find(Boolean),
+        ids[0]
+      );
+      this.applySimulatorLegalToDraft(draft, legal);
       this._npSimSkipCloseCleanup = true;
       this._npShowPick = false;
       const pid = this.addDraftPolicy({ keepSessionPicks: true, skipRender: true });
@@ -16385,7 +16412,7 @@ if(path === "birthDate"){
           skipped.push(safeTrim(e.label) || "מבוטח");
           return;
         }
-        const legal = e.legal || (this._npSimLegalByInsured && this._npSimLegalByInsured[e.insId]) || null;
+        const legal = this.resolveSimulatorLegal(e.legal, e.insId);
         ready.push({
           insId: e.insId,
           company: safeTrim(e.company),
@@ -18439,8 +18466,11 @@ if(path === "birthDate"){
         const sumLabel = (p.type === "מחלות קשות" || p.type === "סרטן") ? "סכום פיצוי" : "סכום ביטוח";
         const sumValue = (p.type === "מחלות קשות" || p.type === "סרטן") ? (p.compensation || "") : (p.sumInsured || "");
         const policyTitle = `${escapeHtml(p.company)}${isMed ? "" : ` · ${escapeHtml(p.type)}`}`;
+        const pledgeBankName = Array.isArray(p.pledgeBanks) && p.pledgeBanks[0]
+          ? (safeTrim(p.pledgeBanks[0].bankName) || safeTrim(p.pledgeBanks[0].name))
+          : "";
         const pledgeText = (!isMed && (p.type === "ריסק" || p.type === "ריסק משכנתא") && p.pledge)
-          ? (Array.isArray(p.pledgeBanks) && p.pledgeBanks[0]?.name ? `שיעבוד · ${escapeHtml(p.pledgeBanks[0].name)}` : "שיעבוד פעיל")
+          ? (pledgeBankName ? `שיעבוד · ${escapeHtml(pledgeBankName)}` : "שיעבוד פעיל")
           : "ללא שיעבוד";
         const polCovers = this.getHealthCoverList(p);
         const fmtMoney = (v) => { const raw = String(v || '').replace(/[₪,\s]/g,''); if(!raw) return '—'; const n = Number(raw); return Number.isFinite(n) ? `₪${n.toLocaleString('he-IL')}` : `₪${escapeHtml(String(v))}`; };
@@ -18452,7 +18482,9 @@ if(path === "birthDate"){
         const scheduleSummary = scheduleRaw.length ? scheduleRaw.map((item) => item.pct).join("/") : "";
         const customerName = safeTrim((this.insureds.find(x => x.type === "primary") || this.insureds[0] || {}).label) || "לקוח";
         const insuredNames = pInsuredIds.map((id) => safeTrim(this.insureds.find(x => x.id === id)?.label) || id).filter(Boolean);
-        const bens = Array.isArray(p.beneficiaries) ? p.beneficiaries : [];
+        const bens = (Array.isArray(p.beneficiaries) ? p.beneficiaries : []).filter((b) => {
+          return !!(safeTrim(b && b.firstName) || safeTrim(b && b.lastName) || safeTrim(b && b.idNumber));
+        });
         const benText = bens.length
           ? ("מוטבים: " + bens.map((b) => {
               const nm = [safeTrim(b.firstName), safeTrim(b.lastName)].filter(Boolean).join(" ");
