@@ -39889,7 +39889,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-mirror-script-premiums-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-mirror-script-premiums-v2";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -39909,7 +39909,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-mirror-script-premiums-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-mirror-script-premiums-v2";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -40545,8 +40545,8 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260906-mirror-script-premiums-v1",
-    "./simulators-shell.css?v=20260906-mirror-script-premiums-v1"
+    "./simulators-center.css?v=20260906-mirror-script-premiums-v2",
+    "./simulators-shell.css?v=20260906-mirror-script-premiums-v2"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -41908,7 +41908,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260906-mirror-script-premiums-v1";
+  const GI_WIZARD_JS_VERSION = "20260906-mirror-script-premiums-v2";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -66271,7 +66271,7 @@ ${inner}
       return `<span class="mcStartDate">${escapeHtml(t)}</span>`;
     },
 
-    _mcNewPolicyPremiumDiscountRows(p){
+    _mcNewPolicyPremiumDiscountRows(p, opts = {}){
       const before = this._fmtMcMoney(this._mcPremiumBefore(p));
       const after = this._fmtMcMoney(this._mcPremiumAfter(p));
       const schedule = this._mcDiscountScheduleText(p);
@@ -66279,24 +66279,125 @@ ${inner}
         { k: "פרמיה לפני הנחה", v: this._mcMoneyChip(before), kind: "premium" },
         { k: "פרמיה לאחר הנחה", v: this._mcMoneyChip(after), kind: "premium" }
       ];
-      if(schedule){
+      /* כשמוצג משפט ההנחה המלא מתחת לכרטיס — לא כופלים את אותה שורה למעלה. */
+      if(schedule && !opts.omitScheduleRow){
         rows.push({ k: "הנחה שניתנה", v: escapeHtml(schedule), kind: "discount", wide: true });
       }
       return { rows, schedule };
     },
 
-    _mcPremiumBefore(p){
-      return safeTrim(p?.premiumBefore || p?.premiumMonthly || p?.monthlyPremium || p?.premium || "");
+    _mcWizardApi(){
+      try{
+        if(typeof Wizard !== "undefined" && Wizard) return Wizard;
+      }catch(_e){}
+      return null;
     },
 
-    _mcPremiumAfter(p){
+    _mcAsMoneyNumber(v){
       try{
-        if(typeof CustomersUI !== "undefined" && CustomersUI && typeof CustomersUI.getPolicyPremiumAfterDiscount === "function"){
-          const n = CustomersUI.getPolicyPremiumAfterDiscount(p);
-          if(Number.isFinite(n) && n > 0) return String(n);
+        if(typeof CustomersUI !== "undefined" && CustomersUI && typeof CustomersUI.asMoneyNumber === "function"){
+          const n = Number(CustomersUI.asMoneyNumber(v));
+          if(Number.isFinite(n)) return n;
         }
       }catch(_e){}
-      return safeTrim(p?.premiumAfterDiscount || p?.premiumAfterDiscountValue || p?.premiumMonthly || p?.monthlyPremium || "");
+      try{
+        const W = this._mcWizardApi();
+        if(W && typeof W.asMoneyNumber === "function"){
+          const n = Number(W.asMoneyNumber(v));
+          if(Number.isFinite(n)) return n;
+        }
+      }catch(_e2){}
+      const n = Number(String(v == null ? "" : v).replace(/[^\d.\-]/g, ""));
+      return Number.isFinite(n) ? n : 0;
+    },
+
+    _mcPolicyInsuredIds(p){
+      if(Array.isArray(p?.insuredIds) && p.insuredIds.length){
+        return p.insuredIds.map((x) => safeTrim(x)).filter(Boolean);
+      }
+      const one = safeTrim(p?.insuredId);
+      if(one) return [one];
+      const keys = [];
+      const pushKeys = (obj) => {
+        if(!obj || typeof obj !== "object") return;
+        Object.keys(obj).forEach((k) => {
+          const id = safeTrim(k);
+          if(id && !keys.includes(id)) keys.push(id);
+        });
+      };
+      pushKeys(p?.simDiscountPerInsured);
+      pushKeys(p?.premiumPerInsured);
+      return keys;
+    },
+
+    /* סכום אחרי הנחה שהסימולטור שמר לכל מבוטח (simDiscountPerInsured.monthlyAfterDiscount). */
+    _mcSimAfterTotal(p){
+      const W = this._mcWizardApi();
+      if(W && typeof W.getPolicySimDiscountAfterTotal === "function"){
+        try{
+          const n = W.getPolicySimDiscountAfterTotal(p);
+          if(n != null && Number.isFinite(Number(n))) return Number(n);
+        }catch(_e){}
+      }
+      const map = p?.simDiscountPerInsured;
+      if(!map || typeof map !== "object") return null;
+      const ids = this._mcPolicyInsuredIds(p);
+      if(!ids.length) return null;
+      let total = 0;
+      let found = false;
+      ids.forEach((iid) => {
+        const raw = map[iid]?.monthlyAfterDiscount;
+        const n = (raw == null || raw === "") ? NaN : Number(raw);
+        if(Number.isFinite(n)){
+          total += n;
+          found = true;
+        } else {
+          total += this._mcAsMoneyNumber(p?.premiumPerInsured?.[iid]);
+        }
+      });
+      if(!found) return null;
+      return Math.round(total * 100) / 100;
+    },
+
+    /* GI-NP-OPS-DISCOUNT: לפני = ברוטו מהסימולטור/אשף (getPolicyPremiumBeforeDiscount).
+       לא premiumMonthly לבד — אחרי נרמול הוא עלול להיות זהה לערך שהוזן. */
+    _mcPremiumBefore(p){
+      const W = this._mcWizardApi();
+      if(W && typeof W.getPolicyPremiumBeforeDiscount === "function"){
+        try{
+          const n = Number(W.getPolicyPremiumBeforeDiscount(p));
+          if(Number.isFinite(n) && n > 0) return String(n);
+        }catch(_e){}
+      }
+      const ids = this._mcPolicyInsuredIds(p);
+      let perSum = 0;
+      ids.forEach((iid) => { perSum += this._mcAsMoneyNumber(p?.premiumPerInsured?.[iid]); });
+      if(perSum > 0) return String(Math.round(perSum * 100) / 100);
+      const n = this._mcAsMoneyNumber(p?.premiumBefore || p?.premiumMonthly || p?.monthlyPremium || p?.premium);
+      return n > 0 ? String(n) : "";
+    },
+
+    /* GI-NP-OPS-DISCOUNT: אחרי = getHealthRowPremiumAfterDiscount (כיסויי בריאות / monthlyAfterDiscount).
+       getPolicyPremiumAfterDiscount באשף מחזיר בכוונה את «לפני» — אסור להשתמש בו כאן. */
+    _mcPremiumAfter(p){
+      const W = this._mcWizardApi();
+      if(W && typeof W.getHealthRowPremiumAfterDiscount === "function"){
+        try{
+          const n = Number(W.getHealthRowPremiumAfterDiscount(p));
+          if(Number.isFinite(n) && n > 0) return String(n);
+        }catch(_e){}
+      }
+      if(safeTrim(p?.type) === "בריאות" && p?.coverDiscountsApplied){
+        const coverAfter = this._mcAsMoneyNumber(p.premiumAfterCoverDiscounts);
+        if(coverAfter > 0 || p.premiumAfterCoverDiscounts === 0 || p.premiumAfterCoverDiscounts === "0"){
+          return String(coverAfter);
+        }
+      }
+      const simAfter = this._mcSimAfterTotal(p);
+      if(simAfter != null && Number.isFinite(simAfter) && simAfter > 0) return String(simAfter);
+      const direct = this._mcAsMoneyNumber(p?.premiumAfterDiscount);
+      if(direct > 0) return String(direct);
+      return this._mcPremiumBefore(p);
     },
 
     _mcNeedsNav(primaryAct, primaryLabel, secondaryAct, secondaryLabel){
@@ -68245,7 +68346,7 @@ ${inner}
       return rawList.map((p) => {
         const company = safeTrim(p?.company) || "—";
         const product = safeTrim(p?.type || p?.product) || "—";
-        const prem = this._mcNewPolicyPremiumDiscountRows(p);
+        const prem = this._mcNewPolicyPremiumDiscountRows(p, { omitScheduleRow: !!opts.showRankScript });
         const rows = [
           { k: "שם חברה", v: escapeHtml(company) },
           { k: "שם מוצר", v: escapeHtml(product) }
