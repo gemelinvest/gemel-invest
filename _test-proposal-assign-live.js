@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260906-hach-excel-tariffs-v1";
+const TAG = "20260906-proposal-assign-live-v2";
 let failed = 0;
 let passed = 0;
 
@@ -81,6 +81,11 @@ assert(inboxBlock.includes("void this.flushForCurrentUser()"), "arrival hook flu
 assert(inboxBlock.includes("ProposalsUI.render"), "list re-renders after ingest");
 assert(inboxBlock.includes("keep.push(ev)"), "failed pulls stay in the inbox for retry");
 assert(inboxBlock.includes("ready.push(ev)"), "successful pulls are notified");
+assert(inboxBlock.includes("scheduleRetry(){"), "failed pull schedules a retry");
+assert(inboxBlock.includes("handleRealtimeProposal(payload){"), "proposal row realtime ingest");
+assert(inboxBlock.includes("const ProposalAssignWatcher = {"), "dedicated assign watcher exists");
+assert(inboxBlock.includes("gi-proposal-assign-"), "watcher channel is independent of campaign leads");
+assert(!/const ProposalAssignWatcher = \{[\s\S]*canAccessCampaignMyLeads/.test(inboxBlock), "assign watcher is not gated on campaign access");
 
 console.log("\n3) הודעה מיידית לנציג");
 assert(inboxBlock.includes('title: "שויכה לך הצעה"'), "toast title");
@@ -94,8 +99,15 @@ assert(!inboxBlock.includes('title: "התקבלה הצעה חדשה"'), "old del
 
 console.log("\n4) מסירה חיה — לא מחכים לכניסה מחדש");
 assert(applyInbox.includes("ProposalAssignInbox.handleInboxMetaArrival()"), "meta realtime copies inbox then pulls immediately");
+assert(applyInbox.includes("incomingMine"), "inbox is merged even when local meta clock is newer");
+assert(assignConfirm.includes("metaOnly: true"), "manager persist is meta-only so the click does not freeze");
+assert(assignConfirm.includes('metaSyncScopes: ["proposalInbox"]'), "manager persist scopes the inbox clock");
+assert(assignConfirm.includes("skipNormalize: true"), "manager persist skips full normalize");
+assert(assignConfirm.includes("this._busy = true"), "assign click is locked against double submit");
+assert(assignConfirm.includes("משיוך…"), "confirm button shows in-progress label");
 assert(watcherTick.includes("ProposalAssignInbox.flushForCurrentUser()"), "15s meta watcher also flushes proposal inbox");
 assert(app.includes("try { void ProposalAssignInbox.flushForCurrentUser(); } catch(_e) {}"), "LiveRefresh still flushes");
+assert(app.includes("ProposalAssignWatcher.start()"), "assign watcher starts with the logged-in session");
 assert(assignConfirm.includes("הנציג יראה אותה מיד"), "manager success toast says immediately");
 assert(!assignConfirm.includes("אחרי רענון/כניסה"), "manager toast no longer asks for re-login");
 assert(html.includes("שויכה לך הצעה"), "assign modal hint names the agent toast");
@@ -131,16 +143,27 @@ const sandbox = {
       return { ok: true, record: rec };
     },
     loadSingleRow: async () => ({ ok: false }),
-    mergeProposalsDelta(){}
+    mergeProposalsDelta(rows){
+      (rows || []).forEach((row) => {
+        const rec = {
+          id: row.id,
+          fullName: row.full_name || row.fullName || "",
+          agentId: row.agent_id || row.agentId || "",
+          agentName: row.agent_name || row.agentName || ""
+        };
+        sandbox.State.data.proposals = sandbox.State.data.proposals.filter((p) => p.id !== rec.id).concat([rec]);
+      });
+    }
   },
   SUPABASE_TABLES: { proposals: "proposals" },
   PROPOSAL_LIGHT_COLUMNS: "id,agent_id",
   App: { persist: async () => { sandbox._persisted = true; return { ok: true }; } },
   ProposalsUI: { render(){ sandbox._rendered = true; }, openById(){ sandbox._opened = true; } },
   UI: { goView(v){ sandbox._view = v; } },
-  window: { showToast(opts){ sandbox._toasts.push(opts); }, setTimeout(fn){ fn(); } },
+  window: { showToast(opts){ sandbox._toasts.push(opts); }, setTimeout(fn, ms){ sandbox._timeouts.push(Number(ms) || 0); } },
   DesktopNotifications: { notify(){ sandbox._desktop = true; } },
   findAgentRecordForSession: () => ({ id: "agent-1", name: "דני נציג" }),
+  customerOwnedByCurrentAgent: (rec) => sandbox.safeTrim(rec?.agentId) === "agent-1",
   bumpMetaSyncClock(meta){ return meta; },
   safeTrim,
   nowISO,
@@ -157,7 +180,8 @@ const sandbox = {
   _opened: false,
   _view: "",
   _toasts: [],
-  _desktop: false
+  _desktop: false,
+  _timeouts: []
 };
 sandbox.window = sandbox.window;
 vm.runInNewContext(
@@ -193,6 +217,17 @@ vm.runInNewContext(
   assert(sandbox.State.data.meta.proposalAssignInbox.some((e) => e.proposalId === "prop-missing"), "failed pull is kept for retry");
   assert(sandbox._toasts.length === 0, "no toast when the proposal was not loaded");
   assert(sandbox._persisted === false, "inbox is not cleared when the pull failed");
+  assert(sandbox._timeouts.some((ms) => ms >= 1000), "failed pull schedules a delayed retry");
+
+  sandbox._toasts = [];
+  sandbox._rendered = false;
+  G.handleRealtimeProposal({
+    new: { id: "prop-live", agent_id: "agent-1", full_name: "ליאור כהן", agent_name: "דני נציג" },
+    old: { id: "prop-live", agent_id: "other-agent" }
+  });
+  assert(sandbox.State.data.proposals.some((p) => p.id === "prop-live"), "realtime row is merged into the agent list");
+  assert(sandbox._toasts.some((t) => t.title === "שויכה לך הצעה" && String(t.text).includes("ליאור כהן")), "realtime assign toasts without waiting for inbox");
+  assert(sandbox._rendered === true, "realtime assign re-renders the proposals list");
 
   console.log(failed ? ("\nFAIL  passed=" + passed + " failed=" + failed) : ("\nOK  passed=" + passed + " failed=0"));
   process.exit(failed ? 1 : 0);
