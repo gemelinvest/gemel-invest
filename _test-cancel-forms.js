@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260906-cancel-forms-v7";
+const TAG = "20260906-hachshara-ci-start-v1";
 let failed = 0;
 let passed = 0;
 
