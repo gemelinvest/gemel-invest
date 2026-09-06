@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260906-team-mgr-self-sales-v1";
+const APP_TAG = "20260906-mirror-ops-ux-v1";
 let failed = 0;
 let passed = 0;
 
@@ -80,10 +80,10 @@ assert(!html.includes("הצ׳קליסט הושלם · ניתן להתחיל הק
 assert(!html.includes("הבחירה מעבירה את הלקוח לחוצץ המתנה בדשבורד התפעול"), "הוסר משפט החוצץ");
 assert(!html.includes("יש להשלים את כל העלאות הפרמיות לפני התחלת השיחה"), "הוסר באנר העלאות הפרמיות");
 assert(!html.includes("חובה להעלות לכל מבוטח ומוצר שני קבצי Excel"), "הוסר משפט חובת האקסל");
-assert(html.includes("קבצי פרמיות וכיסויים"), "כותרת קבצי פרמיות נשארה");
+assert(!html.includes("קבצי פרמיות וכיסויים"), "הוסרה כותרת קבצי פרמיות");
 assert(html.includes('id="mcReadyCustomerName"'), "כרטיס שם לקוח נשאר");
 assert(html.includes('id="mcReadyLaneBtns"'), "לחצני סטטוס נשארו");
-assert(html.includes('id="mcReadyPremiumUploads"'), "אזור העלאת פרמיות נשאר");
+assert(!html.includes('id="mcReadyPremiumUploads"'), "אזור העלאת פרמיות הוסר");
 
 console.log("\n4) היפוך עיצוב כרטיס לקוח");
 const labelCss = sliceBetween(css, ".mcReadyPanel__label{", "}");
@@ -143,8 +143,8 @@ assert(html.includes('id="mcCallStartBtn"'), "לחצן התחלת שיחה נש�
 assert(html.includes('id="lcSendToOps"'), "הגש לתפעול במסך סיום לא נגע");
 assert(app.includes("if(!hasSubmittedHealthRisksToOps(rec)) return false;"), "שער ממתינים לשיקוף מהגשה נשאר");
 assert(dashBlock.includes('const agentsHtml = (!listBucket && isManager)'), "וידג'טי מנהל עדיין מוסתרים מנציג");
-assert(app.includes("_collectMirrorPremiumUploadSlots"), "לוגיקת העלאת פרמיות לא הוסרה");
-assert(html.includes("סמן וי על הפרמיות (זמני)"), "לחצן סימון פרמיות נשאר");
+assert(!app.includes("_collectMirrorPremiumUploadSlots"), "לוגיקת העלאת פרמיות הוסרה");
+assert(!html.includes("סמן וי על הפרמיות (זמני)"), "לחצן סימון פרמיות הוסר");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));
