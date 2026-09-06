@@ -137,11 +137,11 @@
         C("houseNumber", 245.9, 260.1, 349.6, 278.1),
         C("zip", 141.6, 260.1, 245.4, 278.1),
         C("email", 37.4, 278.1, 350.2, 295.1),
-        C("policyNumber", 384.9, 379.6, 558.1, 405, { when: "full" }),
-        C("today", 37.4, 379.6, 210.7, 405, { when: "full" }),
-        C("policyNumber", 384.9, 492.2, 558.1, 518, { when: "partial" }),
-        C("partialCovers", 211.1, 492.2, 384.4, 518, { when: "partial", size: 8 }),
-        C("today", 37.4, 492.2, 210.7, 518, { when: "partial" }),
+        C("policyNumber", 384.9, 379.6, 558.1, 405, { when: "full", rows: 3, rowH: 25 }),
+        C("today", 37.4, 379.6, 210.7, 405, { when: "full", rows: 3, rowH: 25 }),
+        C("policyNumber", 384.9, 492.2, 558.1, 518, { when: "partial", rows: 3, rowH: 25 }),
+        C("partialCovers", 211.1, 492.2, 384.4, 518, { when: "partial", size: 8, rows: 3, rowH: 25 }),
+        C("today", 37.4, 492.2, 210.7, 518, { when: "partial", rows: 3, rowH: 25 }),
         C("fullName", 416.7, 615.7, 531.5, 638),
         C("idNumber", 301.6, 615.7, 416.2, 638),
         C("today", 186.4, 615.7, 301.0, 638)
@@ -160,12 +160,12 @@
         C("houseNumber", 241.8, 148, 361.7, 168),
         C("zip", 127.2, 148, 241.8, 168),
         C("email", 22.2, 184, 572.1, 204),
-        C("policyNumber", 434.6, 283, 572.1, 305, { when: "full" }),
-        C("productLabel", 297.1, 283, 434.6, 305, { when: "full" }),
-        C("today", 22.2, 283, 159.7, 305, { when: "full" }),
-        C("policyNumber", 388.8, 394, 572.1, 416, { when: "partial" }),
-        C("partialCovers", 205.5, 394, 388.8, 416, { when: "partial", size: 8 }),
-        C("today", 22.2, 394, 205.5, 416, { when: "partial" }),
+        C("policyNumber", 434.6, 283, 572.1, 305, { when: "full", rows: 3, rowH: 22 }),
+        C("productLabel", 297.1, 283, 434.6, 305, { when: "full", rows: 3, rowH: 22 }),
+        C("today", 22.2, 283, 159.7, 305, { when: "full", rows: 3, rowH: 22 }),
+        C("policyNumber", 388.8, 394, 572.1, 416, { when: "partial", rows: 2, rowH: 22 }),
+        C("partialCovers", 205.5, 394, 388.8, 416, { when: "partial", size: 8, rows: 2, rowH: 22 }),
+        C("today", 22.2, 394, 205.5, 416, { when: "partial", rows: 2, rowH: 22 }),
         C("fullName", 416.2, 557.6, 572.1, 575),
         C("idNumber", 281.0, 557.6, 416.2, 575),
         C("today", 160.8, 557.6, 281.0, 575)
@@ -182,12 +182,12 @@
         C("address", 362.3, 259.0, 572.1, 278),
         C("phone", 241.1, 259.0, 362.3, 278),
         C("email", 22.2, 259.0, 241.1, 278, { size: 8 }),
-        C("policyNumber", 388.8, 343.9, 572.1, 360.9, { when: "full" }),
-        C("productLabel", 205.5, 343.9, 388.8, 360.9, { when: "full" }),
-        C("today", 22.2, 343.9, 205.5, 360.9, { when: "full" }),
-        C("policyNumber", 388.8, 434.2, 572.1, 451.2, { when: "partial" }),
-        C("partialCovers", 205.5, 434.2, 388.8, 451.2, { when: "partial", size: 8 }),
-        C("today", 22.2, 434.2, 205.5, 451.2, { when: "partial" })
+        C("policyNumber", 388.8, 343.9, 572.1, 360.9, { when: "full", rows: 3, rowH: 17 }),
+        C("productLabel", 205.5, 343.9, 388.8, 360.9, { when: "full", rows: 3, rowH: 17 }),
+        C("today", 22.2, 343.9, 205.5, 360.9, { when: "full", rows: 3, rowH: 17 }),
+        C("policyNumber", 388.8, 434.2, 572.1, 451.2, { when: "partial", rows: 3, rowH: 17 }),
+        C("partialCovers", 205.5, 434.2, 388.8, 451.2, { when: "partial", size: 8, rows: 3, rowH: 17 }),
+        C("today", 22.2, 434.2, 205.5, 451.2, { when: "partial", rows: 3, rowH: 17 })
       ]
     },
     ayalon: {
@@ -203,13 +203,13 @@
         C("houseNumber", 261.7, 161.8, 359.9, 190.2),
         C("zip", 147.8, 161.8, 261.7, 190.2),
         C("email", 33.2, 190.2, 450.1, 218.5),
-        C("policyNumber", 466.0, 337.4, 556.5, 358.1, { when: "full" }),
-        C("productLabel", 285.7, 337.4, 466.0, 358.1, { when: "full" }),
-        C("today", 33.5, 337.4, 162.7, 358.1, { when: "full" }),
-        C("policyNumber", 466.0, 532.7, 556.5, 553.4, { when: "partial" }),
-        C("productLabel", 285.7, 532.7, 466.0, 553.4, { when: "partial" }),
-        C("partialCovers", 162.7, 532.7, 285.7, 553.4, { when: "partial", size: 8 }),
-        C("today", 33.5, 532.7, 162.7, 553.4, { when: "partial" }),
+        C("policyNumber", 466.0, 337.4, 556.5, 358.1, { when: "full", rows: 3, rowH: 20.7 }),
+        C("productLabel", 285.7, 337.4, 466.0, 358.1, { when: "full", rows: 3, rowH: 20.7 }),
+        C("today", 33.5, 337.4, 162.7, 358.1, { when: "full", rows: 3, rowH: 20.7 }),
+        C("policyNumber", 466.0, 532.7, 556.5, 553.4, { when: "partial", rows: 3, rowH: 20.7 }),
+        C("productLabel", 285.7, 532.7, 466.0, 553.4, { when: "partial", rows: 3, rowH: 20.7 }),
+        C("partialCovers", 162.7, 532.7, 285.7, 553.4, { when: "partial", size: 8, rows: 3, rowH: 20.7 }),
+        C("today", 33.5, 532.7, 162.7, 553.4, { when: "partial", rows: 3, rowH: 20.7 }),
         C("fullName", 376.4, 657.3, 490.7, 685.7),
         C("idNumber", 262.1, 657.3, 376.4, 685.7),
         C("today", 147.8, 657.3, 262.1, 685.7)
@@ -243,11 +243,11 @@
         C("houseNumber", 208.8, 232.6, 272.3, 253.0),
         C("zip", 130.9, 232.6, 208.4, 253.0),
         C("email", 39.7, 253.3, 428.5, 276.4),
-        C("policyNumber", 391.7, 361.1, 556.4, 380.3, { when: "full" }),
-        C("today", 44.2, 361.1, 228.2, 380.3, { when: "full" }),
-        C("policyNumber", 390.1, 487.0, 552.7, 506.3, { when: "partial" }),
-        C("partialCovers", 227.0, 487.0, 389.8, 506.3, { when: "partial", size: 8 }),
-        C("today", 42.7, 487.0, 226.7, 506.3, { when: "partial" }),
+        C("policyNumber", 391.7, 361.1, 556.4, 380.3, { when: "full", rows: 4, rowH: 19.2 }),
+        C("today", 44.2, 361.1, 228.2, 380.3, { when: "full", rows: 4, rowH: 19.2 }),
+        C("policyNumber", 390.1, 487.0, 552.7, 506.3, { when: "partial", rows: 3, rowH: 19.3 }),
+        C("partialCovers", 227.0, 487.0, 389.8, 506.3, { when: "partial", size: 8, rows: 3, rowH: 19.3 }),
+        C("today", 42.7, 487.0, 226.7, 506.3, { when: "partial", rows: 3, rowH: 19.3 }),
         C("fullName", 396.8, 622.8, 547.0, 644),
         C("idNumber", 280.8, 622.8, 396.5, 644),
         C("today", 164.6, 622.8, 280.3, 644)
@@ -266,11 +266,11 @@
         C("houseNumber", 220.0, 223.0, 283.2, 243.3),
         C("zip", 142.0, 223.0, 219.5, 243.3),
         C("email", 44.3, 243.8, 404.4, 262.5),
-        C("policyNumber", 391.8, 332.3, 556.4, 351.4, { when: "full" }),
-        C("today", 44.3, 332.3, 228.2, 351.4, { when: "full" }),
-        C("policyNumber", 390.2, 462.9, 552.7, 482.1, { when: "partial" }),
-        C("partialCovers", 227.1, 462.9, 389.7, 482.1, { when: "partial", size: 8 }),
-        C("today", 42.7, 462.9, 226.6, 482.1, { when: "partial" }),
+        C("policyNumber", 391.8, 332.3, 556.4, 351.4, { when: "full", rows: 4, rowH: 19.1 }),
+        C("today", 44.3, 332.3, 228.2, 351.4, { when: "full", rows: 4, rowH: 19.1 }),
+        C("policyNumber", 390.2, 462.9, 552.7, 482.1, { when: "partial", rows: 3, rowH: 19.2 }),
+        C("partialCovers", 227.1, 462.9, 389.7, 482.1, { when: "partial", size: 8, rows: 3, rowH: 19.2 }),
+        C("today", 42.7, 462.9, 226.6, 482.1, { when: "partial", rows: 3, rowH: 19.2 }),
         C("fullName", 396.9, 618.3, 547.0, 640),
         C("idNumber", 280.9, 618.3, 396.4, 640),
         C("today", 164.7, 618.3, 280.2, 640)
@@ -293,11 +293,11 @@
         C("phoneHome", 342.2, 292, 485.3, 314),
         C("phone", 169.7, 292, 342.2, 314),
         C("email", 33, 318, 481, 340, { size: 8 }),
-        C("policyNumber", 291.0, 383.3, 553.9, 406.0, { when: "full" }),
-        C("today", 28.2, 383.3, 291.0, 406.0, { when: "full" }),
-        C("policyNumber", 378.6, 484.4, 553.8, 507.1, { when: "partial" }),
-        C("partialCovers", 203.4, 484.4, 378.6, 507.1, { when: "partial", size: 8 }),
-        C("today", 28.2, 484.4, 203.4, 507.1, { when: "partial" }),
+        C("policyNumber", 291.0, 383.3, 553.9, 406.0, { when: "full", rows: 3, rowH: 22.7 }),
+        C("today", 28.2, 383.3, 291.0, 406.0, { when: "full", rows: 3, rowH: 22.7 }),
+        C("policyNumber", 378.6, 484.4, 553.8, 507.1, { when: "partial", rows: 3, rowH: 22.7 }),
+        C("partialCovers", 203.4, 484.4, 378.6, 507.1, { when: "partial", size: 8, rows: 3, rowH: 22.7 }),
+        C("today", 28.2, 484.4, 203.4, 507.1, { when: "partial", rows: 3, rowH: 22.7 }),
         C("today", 418.7, 594.4, 495.3, 617.1, { align: "ltr", size: 8 }),
         C("fullName", 281.9, 594.4, 418.7, 617.1),
         C("idNumber", 128.9, 594.4, 281.9, 617.1)
@@ -317,11 +317,11 @@
         C("city", 203.7, 239.2, 309.0, 264.7),
         C("zip", 116.1, 239.2, 203.7, 264.7),
         C("email", 28.2, 266, 415.7, 286, { size: 8 }),
-        C("policyNumber", 291.3, 352.8, 554.0, 378.3, { when: "full" }),
-        C("today", 28.5, 352.8, 291.3, 378.3, { when: "full" }),
-        C("policyNumber", 378.9, 447.6, 554.0, 467.4, { when: "partial" }),
-        C("partialCovers", 203.7, 447.6, 378.9, 467.4, { when: "partial", size: 8 }),
-        C("today", 28.5, 447.6, 203.7, 467.4, { when: "partial" }),
+        C("policyNumber", 291.3, 352.8, 554.0, 378.3, { when: "full", rows: 2, rowH: 25.5 }),
+        C("today", 28.5, 352.8, 291.3, 378.3, { when: "full", rows: 2, rowH: 25.5 }),
+        C("policyNumber", 378.9, 447.6, 554.0, 467.4, { when: "partial", rows: 5, rowH: 19.8 }),
+        C("partialCovers", 203.7, 447.6, 378.9, 467.4, { when: "partial", size: 8, rows: 5, rowH: 19.8 }),
+        C("today", 28.5, 447.6, 203.7, 467.4, { when: "partial", rows: 5, rowH: 19.8 }),
         C("fullName", 379.1, 599.6, 501.7, 625.1),
         C("idNumber", 238.1, 599.6, 379.1, 625.1),
         C("today", 138.9, 599.6, 238.1, 625.1, { align: "ltr", size: 8 })
@@ -340,12 +340,12 @@
         C("houseNumber", 184.6, 256.6, 262.0, 282),
         C("zip", 99.5, 256.6, 184.1, 282),
         C("email", 23.2, 285.8, 425.6, 313.8),
-        C("policyNumber", 310.2, 396.3, 567.1, 412.4, { when: "full" }),
-        C("today", 26.6, 396.3, 299.5, 412.4, { when: "full" }),
-        C("policyNumber", 466.2, 561.7, 567.1, 582, { when: "partial" }),
-        C("partialCovers", 345.7, 561.7, 455.4, 582, { when: "partial", size: 8 }),
-        C("idNumber", 225.2, 561.7, 334.9, 582, { when: "partial" }),
-        C("today", 28.3, 561.7, 214.4, 582, { when: "partial" }),
+        C("policyNumber", 310.2, 396.3, 567.1, 412.4, { when: "full", rows: 3, rowH: 16.2 }),
+        C("today", 26.6, 396.3, 299.5, 412.4, { when: "full", rows: 3, rowH: 16.2 }),
+        C("policyNumber", 466.2, 561.7, 567.1, 582, { when: "partial", rows: 3, rowH: 16.2 }),
+        C("partialCovers", 345.7, 561.7, 455.4, 582, { when: "partial", size: 8, rows: 3, rowH: 16.2 }),
+        C("idNumber", 225.2, 561.7, 334.9, 582, { when: "partial", rows: 3, rowH: 16.2 }),
+        C("today", 28.3, 561.7, 214.4, 582, { when: "partial", rows: 3, rowH: 16.2 }),
         C("fullName", 425.6, 717.6, 572.2, 740),
         C("idNumber", 276.8, 717.6, 425.1, 740),
         C("today", 160.6, 717.6, 276.3, 740)
@@ -384,11 +384,11 @@
         C("houseNumber", 311.9, 194.2, 354.4, 208.3),
         C("zip", 255.1, 194.2, 311.9, 208.3),
         C("email", 28.3, 194.2, 198.5, 208.3, { size: 8 }),
-        C("policyNumber", 354.4, 263.3, 567.0, 280.8, { when: "full" }),
-        C("today", 28.3, 263.3, 141.7, 280.8, { when: "full" }),
-        C("policyNumber", 453.6, 467.6, 567.0, 485.3, { when: "partial" }),
-        C("partialCovers", 141.7, 467.6, 453.6, 485.3, { when: "partial", size: 8 }),
-        C("today", 28.3, 467.6, 141.7, 485.3, { when: "partial" }),
+        C("policyNumber", 354.4, 263.3, 567.0, 280.8, { when: "full", rows: 8, rowH: 17.5 }),
+        C("today", 28.3, 263.3, 141.7, 280.8, { when: "full", rows: 8, rowH: 17.5 }),
+        C("policyNumber", 453.6, 467.6, 567.0, 485.3, { when: "partial", rows: 3, rowH: 17.6 }),
+        C("partialCovers", 141.7, 467.6, 453.6, 485.3, { when: "partial", size: 8, rows: 3, rowH: 17.6 }),
+        C("today", 28.3, 467.6, 141.7, 485.3, { when: "partial", rows: 3, rowH: 17.6 }),
         C("today", 459.0, 565.3, 544.1, 593.6, { align: "ltr", size: 8 }),
         C("fullName", 333.0, 565.3, 422.8, 593.6),
         C("idNumber", 215.6, 565.3, 304.3, 593.6)
@@ -399,7 +399,7 @@
   const GiCancelForms = {
     TEMPLATE_BASE: "./forms/cancel/",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260906-cancel-forms-v2",
+    VERSION: "20260906-cancel-forms-v3",
     DOC_TYPE: "company_cancel_form",
     TEMPLATES,
 
@@ -482,15 +482,128 @@
     hasTemplateForPolicy(policy){
       return !!this.pickTemplateId(policy);
     },
-    formatDocName(policy, cancel){
-      const company = this.canonicalCompany(policy?.company) || "חברה";
-      const product = this.productLabel(policy);
-      const kind = this.cancelStatusLabel(cancel?.status);
-      const num = safeTrim(policy?.policyNumber);
-      return "טופס ביטול מקורי — " + product + " · " + company + " · " + kind + (num ? (" · " + num) : "");
+    uniqueList(values){
+      const out = [];
+      (Array.isArray(values) ? values : [values]).forEach((v) => {
+        const s = safeTrim(v);
+        if(s && out.indexOf(s) < 0) out.push(s);
+      });
+      return out;
     },
-    docIdFor(insuredId, policyId){
+    groupStatus(policies){
+      const rows = Array.isArray(policies) ? policies : [];
+      const anyPartial = rows.some((row) => this.isPartialStatus(row?.status || row?.cancel?.status));
+      const anyFull = rows.some((row) => !this.isPartialStatus(row?.status || row?.cancel?.status));
+      if(anyFull && anyPartial) return "mixed";
+      if(anyPartial) return "partial";
+      return "full";
+    },
+    groupStatusLabel(status){
+      if(status === "mixed") return "ביטול מלא וחלקי";
+      return this.cancelStatusLabel(status);
+    },
+    policyNumbersOf(policies){
+      return this.uniqueList((Array.isArray(policies) ? policies : []).map((row) => row?.policyNumber || row?.policy?.policyNumber));
+    },
+    productLabelsOf(policies){
+      return this.uniqueList((Array.isArray(policies) ? policies : []).map((row) => row?.productLabel || this.productLabel(row?.policy)));
+    },
+    asPolicyGroup(entry){
+      if(entry && Array.isArray(entry.policies) && entry.policies.length) return entry;
+      if(entry && (entry.policy || entry.policyId || entry.templateId)){
+        return {
+          insuredId: safeTrim(entry.insuredId),
+          templateId: safeTrim(entry.templateId) || this.pickTemplateId(entry.policy),
+          insured: entry.insured,
+          company: entry.company || this.canonicalCompany(entry.policy?.company),
+          policies: [entry]
+        };
+      }
+      if(entry && typeof entry === "object" && (entry.company || entry.policyNumber || entry.type)){
+        return {
+          insuredId: "",
+          templateId: this.pickTemplateId(entry),
+          company: this.canonicalCompany(entry.company),
+          policies: [{
+            policy: entry,
+            policyNumber: entry.policyNumber,
+            status: "",
+            productLabel: this.productLabel(entry)
+          }]
+        };
+      }
+      return { insuredId: "", templateId: "", policies: [] };
+    },
+    formatGroupDocName(group){
+      const policies = Array.isArray(group?.policies) ? group.policies : [];
+      const first = policies[0] || {};
+      const company = this.canonicalCompany(first.policy?.company || group?.company) || "חברה";
+      const products = this.productLabelsOf(policies);
+      const kind = this.groupStatusLabel(this.groupStatus(policies));
+      const nums = this.policyNumbersOf(policies);
+      const numPart = nums.length > 3 ? (nums.length + " פוליסות") : nums.join(" · ");
+      return "טופס ביטול מקורי — " + (products.join("/") || "פוליסה") + " · " + company + " · " + kind + (numPart ? (" · " + numPart) : "");
+    },
+    formatDocName(policyOrGroup, cancel){
+      if(policyOrGroup && Array.isArray(policyOrGroup.policies)) return this.formatGroupDocName(policyOrGroup);
+      if(policyOrGroup && policyOrGroup.policy) return this.formatGroupDocName(this.asPolicyGroup(policyOrGroup));
+      return this.formatGroupDocName({
+        company: this.canonicalCompany(policyOrGroup?.company),
+        policies: [{
+          policy: policyOrGroup,
+          cancel: cancel || {},
+          status: cancel?.status,
+          policyNumber: policyOrGroup?.policyNumber,
+          productLabel: this.productLabel(policyOrGroup)
+        }]
+      });
+    },
+    docIdFor(insuredId, templateId){
+      return "doc_cancel_" + safeTrim(insuredId || "ins") + "_" + safeTrim(templateId || "form");
+    },
+    legacyDocIdFor(insuredId, policyId){
       return "doc_cancel_" + safeTrim(insuredId || "ins") + "_" + safeTrim(policyId || "pol");
+    },
+    groupCancelledPolicies(payloadOrList){
+      const list = Array.isArray(payloadOrList) ? payloadOrList : this.listCancelledPolicies(payloadOrList);
+      const map = new Map();
+      const order = [];
+      list.forEach((row) => {
+        if(!row) return;
+        const key = safeTrim(row.insuredId) + "|" + safeTrim(row.templateId);
+        if(!map.has(key)){
+          map.set(key, {
+            insuredId: safeTrim(row.insuredId),
+            templateId: safeTrim(row.templateId),
+            insured: row.insured,
+            company: row.company,
+            policies: []
+          });
+          order.push(key);
+        }
+        map.get(key).policies.push(row);
+      });
+      return order.map((key) => map.get(key));
+    },
+    isCancelFormDoc(doc){
+      return safeTrim(doc?.type) === this.DOC_TYPE;
+    },
+    stripCancelFormDocs(arr){
+      if(!Array.isArray(arr)) return 0;
+      let n = 0;
+      for(let i = arr.length - 1; i >= 0; i--){
+        if(this.isCancelFormDoc(arr[i])){
+          arr.splice(i, 1);
+          n += 1;
+        }
+      }
+      return n;
+    },
+    isLiveGroupedDoc(doc, payload){
+      if(!this.isCancelFormDoc(doc)) return false;
+      const id = safeTrim(doc?.id);
+      if(!id) return false;
+      return this.groupCancelledPolicies(payload).some((group) => this.docIdFor(group.insuredId, group.templateId) === id);
     },
     listCancelledPolicies(payload){
       const out = [];
@@ -522,70 +635,134 @@
       return out;
     },
     createDoc(entry, options){
-      const policy = entry?.policy || {};
-      const cancel = entry?.cancel || {};
+      const group = this.asPolicyGroup(entry);
+      const policies = Array.isArray(group.policies) ? group.policies : [];
+      const first = policies[0] || {};
+      const policy = first.policy || {};
       const uploadedAt = safeTrim(options?.uploadedAt) || nowISO();
+      const numbers = this.policyNumbersOf(policies);
+      const products = this.productLabelsOf(policies);
+      const status = this.groupStatus(policies);
       return {
-        id: this.docIdFor(entry?.insuredId, entry?.policyId),
+        id: this.docIdFor(group.insuredId || first.insuredId, group.templateId || first.templateId || this.pickTemplateId(policy)),
         type: this.DOC_TYPE,
-        templateId: safeTrim(entry?.templateId) || this.pickTemplateId(policy),
-        name: this.formatDocName(policy, cancel),
-        company: this.canonicalCompany(policy.company),
-        productFamily: this.productFamily(policy),
-        productLabel: this.productLabel(policy),
-        policyId: safeTrim(entry?.policyId || policy.id),
-        insuredId: safeTrim(entry?.insuredId),
-        policyNumber: safeTrim(entry?.policyNumber || policy.policyNumber),
-        cancelStatus: safeTrim(cancel.status),
+        templateId: safeTrim(group.templateId || first.templateId) || this.pickTemplateId(policy),
+        name: this.formatGroupDocName(group),
+        company: this.canonicalCompany(policy.company || group.company),
+        productFamily: first.productFamily || this.productFamily(policy),
+        productLabel: products.join("/") || this.productLabel(policy),
+        policyId: safeTrim(first.policyId || policy.id),
+        policyIds: policies.map((row) => safeTrim(row.policyId || row.policy?.id)).filter(Boolean),
+        insuredId: safeTrim(group.insuredId || first.insuredId),
+        policyNumber: numbers.join(" · "),
+        policyNumbers: numbers,
+        cancelStatus: status,
         isLegacy: true,
         source: "מערכת",
         uploadedAt,
         uploadedBy: safeTrim(options?.uploadedBy)
       };
     },
+    injectDocs(list, payload, options){
+      const target = Array.isArray(list) ? list : [];
+      const groups = this.groupCancelledPolicies(payload);
+      const payloadList = payload && Array.isArray(payload.customerDocuments) ? payload.customerDocuments : null;
+      const reuseSource = payloadList || target;
+      const reuse = {};
+      reuseSource.forEach((doc) => {
+        if(doc && doc.id) reuse[safeTrim(doc.id)] = doc;
+      });
+      const docs = groups.map((group) => {
+        const fresh = this.createDoc(group, options);
+        const prev = reuse[fresh.id];
+        if(prev && this.isCancelFormDoc(prev) && safeTrim(prev.uploadedAt)){
+          fresh.uploadedAt = prev.uploadedAt;
+        }
+        return fresh;
+      });
+      const wantedIds = docs.map((doc) => safeTrim(doc.id));
+      const existing = reuseSource.filter((doc) => this.isCancelFormDoc(doc));
+      const existingIds = existing.map((doc) => safeTrim(doc.id));
+      const removedExtra = existingIds.some((id) => wantedIds.indexOf(id) < 0) || existingIds.length > wantedIds.length;
+
+      this.stripCancelFormDocs(target);
+      for(let i = docs.length - 1; i >= 0; i--) target.unshift(docs[i]);
+
+      if(removedExtra && payloadList && target !== payloadList){
+        this.stripCancelFormDocs(payloadList);
+        for(let i = docs.length - 1; i >= 0; i--) payloadList.unshift(docs[i]);
+      }
+      return { list: target, removedExtra, docs };
+    },
 
     findEntry(rec, doc){
       const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : rec;
-      const list = this.listCancelledPolicies(payload);
+      const groups = this.groupCancelledPolicies(payload);
       const docId = safeTrim(doc?.id);
+      const templateId = safeTrim(doc?.templateId);
       const policyId = safeTrim(doc?.policyId);
       const insuredId = safeTrim(doc?.insuredId);
-      return list.find((row) => {
-        if(docId && this.docIdFor(row.insuredId, row.policyId) === docId) return true;
-        return row.policyId === policyId && (!insuredId || row.insuredId === insuredId);
-      }) || list[0] || null;
+      const byGroupId = groups.find((group) => docId && this.docIdFor(group.insuredId, group.templateId) === docId);
+      if(byGroupId) return byGroupId;
+      const byTemplate = groups.find((group) => templateId && group.templateId === templateId && (!insuredId || group.insuredId === insuredId));
+      if(byTemplate) return byTemplate;
+      const byLegacyId = groups.find((group) => docId && group.policies.some((row) => this.legacyDocIdFor(row.insuredId, row.policyId) === docId));
+      if(byLegacyId) return byLegacyId;
+      const byPolicy = groups.find((group) => policyId && group.policies.some((row) => row.policyId === policyId && (!insuredId || row.insuredId === insuredId)));
+      if(byPolicy) return byPolicy;
+      return groups[0] || null;
+    },
+    coversFromCancel(cancel){
+      const c = cancel && typeof cancel === "object" ? cancel : {};
+      const covers = Array.isArray(c.partialCovers) ? c.partialCovers.map(safeTrim).filter(Boolean) : [];
+      const extra = safeTrim(c.reason) || safeTrim(c.partialDetails) || safeTrim(c.partialText) || safeTrim(c.annexText);
+      if(extra && covers.indexOf(extra) < 0) covers.push(extra);
+      return covers;
     },
     buildDraft(rec, doc){
       const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
-      const entry = this.findEntry(rec, doc) || {};
-      const policy = entry.policy || {};
-      const cancel = entry.cancel || {};
-      const insured = entry.insured || null;
-      const templateId = safeTrim(doc?.templateId) || safeTrim(entry.templateId) || this.pickTemplateId(policy);
+      const group = this.asPolicyGroup(this.findEntry(rec, doc) || {});
+      const policies = Array.isArray(group.policies) ? group.policies : [];
+      const first = policies[0] || {};
+      const policy = first.policy || {};
+      const cancel = first.cancel || {};
+      const insured = group.insured || first.insured || null;
+      const templateId = safeTrim(doc?.templateId) || safeTrim(group.templateId) || safeTrim(first.templateId) || this.pickTemplateId(policy);
       const template = TEMPLATES[templateId] || null;
-      const policyNumber = safeTrim(doc?.policyNumber) || safeTrim(entry.policyNumber) || safeTrim(policy.policyNumber);
+      const numbers = this.policyNumbersOf(policies);
+      const policyNumber = numbers.join(" · ") || safeTrim(doc?.policyNumber);
       const person = pickPerson(insured, [payload.primary, payload, rec]);
       const email = safeTrim(person.email);
       const at = email.indexOf("@");
-      const covers = Array.isArray(cancel.partialCovers) ? cancel.partialCovers.map(safeTrim).filter(Boolean) : [];
-      const reason = safeTrim(cancel.reason) || safeTrim(cancel.partialDetails) || safeTrim(cancel.partialText) || safeTrim(cancel.annexText);
+      const covers = [];
+      policies.forEach((row) => {
+        this.coversFromCancel(row.cancel).forEach((item) => {
+          if(covers.indexOf(item) < 0) covers.push(item);
+        });
+      });
+      const reason = covers.join(" · ");
       const addressParts = [person.street, person.houseNumber, person.city, person.zip].map(safeTrim).filter(Boolean);
+      const status = this.groupStatus(policies);
+      const products = this.productLabelsOf(policies);
       return {
         rec,
         doc,
         payload,
-        entry,
+        entry: group,
+        policies,
         policy,
         cancel,
         person,
         templateId,
         template,
         policyNumber,
-        company: this.canonicalCompany(policy.company) || safeTrim(doc?.company),
-        productLabel: this.productLabel(policy) || safeTrim(doc?.productLabel),
-        status: safeTrim(cancel.status) || safeTrim(doc?.cancelStatus),
-        statusLabel: this.cancelStatusLabel(cancel.status || doc?.cancelStatus),
-        isPartial: this.isPartialStatus(cancel.status || doc?.cancelStatus),
+        policyNumbers: numbers,
+        company: this.canonicalCompany(policy.company || group.company) || safeTrim(doc?.company),
+        productLabel: products.join(" / ") || this.productLabel(policy) || safeTrim(doc?.productLabel),
+        status,
+        statusLabel: this.groupStatusLabel(status),
+        isPartial: status === "partial",
+        isMixed: status === "mixed",
         today: todayIL(),
         birthDate: formatDateIL(person.birthDate),
         reason,
@@ -631,28 +808,47 @@
       };
       return safeTrim(map[key]);
     },
+    valueForRow(draft, field, rows){
+      const key = field?.key;
+      const list = Array.isArray(rows) ? rows : [];
+      if(key === "policyNumber" || key === "policy"){
+        return this.policyNumbersOf(list).join(" · ");
+      }
+      if(key === "productLabel"){
+        return this.productLabelsOf(list).join(" / ");
+      }
+      if(key === "partialCovers" || key === "reason"){
+        const covers = [];
+        list.forEach((row) => {
+          this.coversFromCancel(row?.cancel).forEach((item) => {
+            if(covers.indexOf(item) < 0) covers.push(item);
+          });
+        });
+        return covers.join(" · ");
+      }
+      return this.valueFor(draft, key);
+    },
     overlayPlan(draft){
       const template = draft?.template;
       const fields = Array.isArray(template?.fields) ? template.fields : [];
       if(!template || !fields.length) return [];
+      const policies = Array.isArray(draft?.policies) && draft.policies.length
+        ? draft.policies
+        : [draft];
       const out = [];
-      fields.forEach((field) => {
-        const when = safeTrim(field.when);
-        if(when === "full" && draft.isPartial) return;
-        if(when === "partial" && !draft.isPartial) return;
-        const text = this.valueFor(draft, field.key);
+      const emit = (field, text, dy, index) => {
         if(!text) return;
         const x0 = Number(field.x0);
-        const y0 = Number(field.y0);
+        const y0 = Number(field.y0) + dy;
         const x1 = Number(field.x1);
-        const y1 = Number(field.y1);
+        const y1 = Number(field.y1) + dy;
         const size = Number(field.size) > 0 ? Number(field.size) : (field.kind === "mark" ? 11 : 9);
         const align = field.align === "ltr" ? "ltr" : "rtl";
         const h = Math.max(8, y1 - y0);
         const baselineMupdf = y0 + Math.min(h * 0.72, h - 2.5);
         out.push({
           page: 0,
-          key: field.key,
+          key: field.key + (index ? ("#" + index) : ""),
           kind: field.kind || "text",
           x: align === "ltr" ? (x0 + PAD) : (x1 - PAD),
           y: PAGE_H - baselineMupdf - 2,
@@ -661,6 +857,28 @@
           align,
           maxW: Math.max(8, (x1 - x0) - PAD * 2)
         });
+      };
+      fields.forEach((field) => {
+        const when = safeTrim(field.when);
+        const matching = policies.filter((row) => {
+          if(!when) return true;
+          const partial = this.isPartialStatus(row?.status || row?.cancel?.status);
+          if(when === "full") return !partial;
+          if(when === "partial") return partial;
+          return true;
+        });
+        if(when && !matching.length) return;
+        const rows = Number(field.rows) > 1 ? Number(field.rows) : 0;
+        const rowH = Number(field.rowH) || 0;
+        if(rows && rowH){
+          matching.forEach((row, i) => {
+            if(i >= rows) return;
+            const slice = (i === rows - 1 && matching.length > rows) ? matching.slice(i) : [row];
+            emit(field, this.valueForRow(draft, field, slice), i * rowH, i);
+          });
+          return;
+        }
+        emit(field, this.valueForRow(draft, field, matching.length ? matching : policies), 0, 0);
       });
       return out;
     },

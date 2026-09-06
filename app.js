@@ -7367,35 +7367,85 @@
       });
       return out;
     },
-    cancelFormDocId(insuredId, policyId){
-      return "doc_cancel_" + safeTrim(insuredId || "ins") + "_" + safeTrim(policyId || "pol");
+    groupCancelledPolicies(payload){
+      const helper = (typeof window !== "undefined" && window.GiCancelForms) ? window.GiCancelForms : null;
+      if(helper?.groupCancelledPolicies) return helper.groupCancelledPolicies(payload);
+      const live = this.listCancelledExistingPolicies(payload);
+      const map = new Map();
+      const order = [];
+      live.forEach((row) => {
+        const key = safeTrim(row.insuredId) + "|" + safeTrim(row.templateId);
+        if(!map.has(key)){
+          map.set(key, {
+            insuredId: safeTrim(row.insuredId),
+            templateId: safeTrim(row.templateId),
+            insured: row.insured,
+            company: row.company,
+            productFamily: row.productFamily,
+            productLabel: row.productLabel,
+            policies: []
+          });
+          order.push(key);
+        }
+        map.get(key).policies.push(row);
+      });
+      return order.map((key) => map.get(key));
+    },
+    cancelFormDocId(insuredId, templateId){
+      const helper = (typeof window !== "undefined" && window.GiCancelForms) ? window.GiCancelForms : null;
+      if(helper?.docIdFor) return helper.docIdFor(insuredId, templateId);
+      return "doc_cancel_" + safeTrim(insuredId || "ins") + "_" + safeTrim(templateId || "form");
     },
     formatCancelFormDocName(entry){
       const helper = (typeof window !== "undefined" && window.GiCancelForms) ? window.GiCancelForms : null;
-      if(helper?.formatDocName) return helper.formatDocName(entry?.policy, entry?.cancel);
-      const company = safeTrim(entry?.company) || "חברה";
-      const product = safeTrim(entry?.productLabel) || "פוליסה";
-      const kind = this.isCancelFormStatus(entry?.status) && /partial/.test(String(entry?.status || "").toLowerCase())
-        ? "ביטול חלקי" : "ביטול מלא";
-      const num = safeTrim(entry?.policyNumber);
-      return "טופס ביטול מקורי — " + product + " · " + company + " · " + kind + (num ? (" · " + num) : "");
+      if(helper?.formatDocName) return helper.formatDocName(entry, entry?.cancel);
+      const policies = Array.isArray(entry?.policies) ? entry.policies : (entry ? [entry] : []);
+      const first = policies[0] || {};
+      const company = safeTrim(first.company || entry?.company) || "חברה";
+      const products = [];
+      policies.forEach((row) => {
+        const label = safeTrim(row.productLabel) || "פוליסה";
+        if(products.indexOf(label) < 0) products.push(label);
+      });
+      const anyPartial = policies.some((row) => /partial/.test(String(row.status || row.cancel?.status || "").toLowerCase()));
+      const anyFull = policies.some((row) => !/partial/.test(String(row.status || row.cancel?.status || "").toLowerCase()));
+      const kind = anyFull && anyPartial ? "ביטול מלא וחלקי" : (anyPartial ? "ביטול חלקי" : "ביטול מלא");
+      const nums = [];
+      policies.forEach((row) => {
+        const num = safeTrim(row.policyNumber);
+        if(num && nums.indexOf(num) < 0) nums.push(num);
+      });
+      const numPart = nums.length > 3 ? (nums.length + " פוליסות") : nums.join(" · ");
+      return "טופס ביטול מקורי — " + (products.join("/") || "פוליסה") + " · " + company + " · " + kind + (numPart ? (" · " + numPart) : "");
     },
     createCancelFormDoc(entry, options = {}){
       const helper = (typeof window !== "undefined" && window.GiCancelForms) ? window.GiCancelForms : null;
       if(helper?.createDoc) return helper.createDoc(entry, options);
+      const policies = Array.isArray(entry?.policies) ? entry.policies : (entry ? [entry] : []);
+      const first = policies[0] || {};
       const uploadedAt = safeTrim(options.uploadedAt) || nowISO();
+      const numbers = [];
+      policies.forEach((row) => {
+        const num = safeTrim(row.policyNumber);
+        if(num && numbers.indexOf(num) < 0) numbers.push(num);
+      });
+      const anyPartial = policies.some((row) => /partial/.test(String(row.status || "").toLowerCase()));
+      const anyFull = policies.some((row) => !/partial/.test(String(row.status || "").toLowerCase()));
+      const cancelStatus = anyFull && anyPartial ? "mixed" : (anyPartial ? "partial" : "full");
       return {
-        id: this.cancelFormDocId(entry?.insuredId, entry?.policyId),
+        id: this.cancelFormDocId(entry?.insuredId || first.insuredId, entry?.templateId || first.templateId),
         type: this.TYPES.companyCancelForm,
-        templateId: safeTrim(entry?.templateId),
+        templateId: safeTrim(entry?.templateId || first.templateId),
         name: this.formatCancelFormDocName(entry),
-        company: safeTrim(entry?.company),
-        productFamily: safeTrim(entry?.productFamily),
-        productLabel: safeTrim(entry?.productLabel),
-        policyId: safeTrim(entry?.policyId),
-        insuredId: safeTrim(entry?.insuredId),
-        policyNumber: safeTrim(entry?.policyNumber),
-        cancelStatus: safeTrim(entry?.status),
+        company: safeTrim(entry?.company || first.company),
+        productFamily: safeTrim(entry?.productFamily || first.productFamily),
+        productLabel: safeTrim(entry?.productLabel || first.productLabel),
+        policyId: safeTrim(first.policyId),
+        policyIds: policies.map((row) => safeTrim(row.policyId)).filter(Boolean),
+        insuredId: safeTrim(entry?.insuredId || first.insuredId),
+        policyNumber: numbers.join(" · "),
+        policyNumbers: numbers,
+        cancelStatus,
         isLegacy: true,
         source: "מערכת",
         uploadedAt,
@@ -7404,37 +7454,59 @@
     },
     isLiveCancelFormDoc(doc, payload){
       if(safeTrim(doc?.type) !== this.TYPES.companyCancelForm) return false;
-      const live = this.listCancelledExistingPolicies(payload);
+      const helper = (typeof window !== "undefined" && window.GiCancelForms) ? window.GiCancelForms : null;
+      if(helper?.isLiveGroupedDoc) return helper.isLiveGroupedDoc(doc, payload);
       const id = safeTrim(doc?.id);
-      const policyId = safeTrim(doc?.policyId);
-      const insuredId = safeTrim(doc?.insuredId);
-      return live.some((row) => {
-        if(id && this.cancelFormDocId(row.insuredId, row.policyId) === id) return true;
-        return row.policyId === policyId && (!insuredId || row.insuredId === insuredId);
-      });
+      return this.groupCancelledPolicies(payload).some((group) => this.cancelFormDocId(group.insuredId, group.templateId) === id);
+    },
+    persistCancelFormCleanup(rec, payload){
+      const cid = safeTrim(rec?.id);
+      if(!cid || !payload) return;
+      this._cancelCleanupOnce = this._cancelCleanupOnce || Object.create(null);
+      if(this._cancelCleanupOnce[cid]) return;
+      this._cancelCleanupOnce[cid] = true;
+      try {
+        if(typeof persistCustomerPayloadRecord === "function"){
+          void persistCustomerPayloadRecord(cid, payload, "ניקוי טפסי ביטול כפולים");
+        }
+      } catch(_e) {}
     },
     injectCancelFormDocs(list, rec, payload, options = {}){
       if(!Array.isArray(list)) return list;
-      const live = this.listCancelledExistingPolicies(payload);
-      if(!live.length) return list;
-      const existingIds = new Set(list
-        .filter((d) => safeTrim(d?.type) === this.TYPES.companyCancelForm)
-        .map((d) => safeTrim(d?.id)));
       const uploadedAt = safeTrim(options.uploadedAt)
         || safeTrim(rec?.updatedAt)
         || safeTrim(rec?.updated_at)
         || safeTrim(rec?.createdAt)
         || nowISO();
-      live.slice().reverse().forEach((entry) => {
-        const doc = this.createCancelFormDoc(entry, {
-          uploadedAt,
-          uploadedBy: safeTrim(options.uploadedBy) || safeTrim(rec?.agentName)
-        });
-        const docId = safeTrim(doc.id);
-        if(docId && existingIds.has(docId)) return;
-        list.unshift(doc);
-        if(docId) existingIds.add(docId);
-      });
+      const injectOptions = {
+        uploadedAt,
+        uploadedBy: safeTrim(options.uploadedBy) || safeTrim(rec?.agentName)
+      };
+      const helper = (typeof window !== "undefined" && window.GiCancelForms) ? window.GiCancelForms : null;
+      let removedExtra = false;
+      if(helper?.injectDocs){
+        const result = helper.injectDocs(list, payload, injectOptions);
+        removedExtra = !!result?.removedExtra;
+      } else {
+        const groups = this.groupCancelledPolicies(payload);
+        const payloadList = payload && Array.isArray(payload.customerDocuments) ? payload.customerDocuments : null;
+        const wanted = groups.map((group) => this.createCancelFormDoc(group, injectOptions));
+        const wantedIds = wanted.map((doc) => safeTrim(doc.id));
+        const existing = (payloadList || list).filter((doc) => safeTrim(doc?.type) === this.TYPES.companyCancelForm);
+        const existingIds = existing.map((doc) => safeTrim(doc.id));
+        removedExtra = existingIds.some((id) => wantedIds.indexOf(id) < 0) || existingIds.length > wantedIds.length;
+        for(let i = list.length - 1; i >= 0; i--){
+          if(safeTrim(list[i]?.type) === this.TYPES.companyCancelForm) list.splice(i, 1);
+        }
+        for(let j = wanted.length - 1; j >= 0; j--) list.unshift(wanted[j]);
+        if(removedExtra && payloadList && list !== payloadList){
+          for(let k = payloadList.length - 1; k >= 0; k--){
+            if(safeTrim(payloadList[k]?.type) === this.TYPES.companyCancelForm) payloadList.splice(k, 1);
+          }
+          for(let n = wanted.length - 1; n >= 0; n--) payloadList.unshift(wanted[n]);
+        }
+      }
+      if(removedExtra) this.persistCancelFormCleanup(rec, payload);
       return list;
     },
     canDownloadOfficialJoinForm(){
@@ -39554,7 +39626,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-cancel-forms-v2";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-cancel-forms-v3";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -39574,7 +39646,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-cancel-forms-v2";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-cancel-forms-v3";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -40210,8 +40282,8 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260906-cancel-forms-v2",
-    "./simulators-shell.css?v=20260906-cancel-forms-v2"
+    "./simulators-center.css?v=20260906-cancel-forms-v3",
+    "./simulators-shell.css?v=20260906-cancel-forms-v3"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -41573,7 +41645,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260906-cancel-forms-v2";
+  const GI_WIZARD_JS_VERSION = "20260906-cancel-forms-v3";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
