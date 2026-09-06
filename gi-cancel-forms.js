@@ -418,7 +418,7 @@
   const GiCancelForms = {
     TEMPLATE_BASE: "./forms/cancel/",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260906-mirror-script-premiums-v3",
+    VERSION: "20260906-existing-locked-status-v1",
     DOC_TYPE: "company_cancel_form",
     TEMPLATES,
 

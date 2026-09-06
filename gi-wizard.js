@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260906-mirror-script-premiums-v3";
+  const GI_WIZARD_BUILD = "20260906-existing-locked-status-v1";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -12742,6 +12742,8 @@ if(path === "birthDate"){
         const isRisk = (p.type === "ריסק" || p.type === "ריסק משכנתא" || p.type === "אובדן כושר עבודה");
         const isCI = (p.type === "מחלות קשות" || p.type === "סרטן");
         const isHealth = (p.type === "בריאות");
+        const lockedReadOnly = this.isExistingPolicyLockedReadOnly(p);
+        const nursingReadOnly = this.isExistingPolicyNursingReadOnly(p);
         const bankOpts = this.bankNames.map(b => `<option value="${escapeHtml(b)}"${safeTrim(p.pledgeBankName)===b?" selected":""}>${escapeHtml(b)}</option>`).join("");
         const agencies = this.bankAgencies.filter(a => !safeTrim(p.pledgeBankName) || String(a).includes(p.pledgeBankName));
         const agencyOpts = agencies.map(a => `<option value="${escapeHtml(a)}"${safeTrim(p.bankAgencyName)===a?" selected":""}>${escapeHtml(a)}</option>`).join("");
@@ -12763,11 +12765,11 @@ if(path === "birthDate"){
         const premiumBreakdownHtml = premiumBreakdown.length
           ? `<div class="lcPolImportedBreakdown">${premiumBreakdown.map((item) => `<div class="lcPolImportedBreakdown__item"><span class="lcPolImportedBreakdown__label">${escapeHtml(safeTrim(item.label) || 'כיסוי')}</span><span class="lcPolImportedBreakdown__value">${escapeHtml(safeTrim(item.monthlyPremium) || '0.00')} ₪</span></div>`).join('')}</div>`
           : '';
-        const collectiveBadge = p.isCollectiveReadOnly ? `<span class="lcPolImportedRow__tag lcPolImportedRow__tag--readonly">קבוצתי / קולקטיבי · נעול לעריכה</span>` : '';
+        const collectiveBadge = lockedReadOnly ? `<span class="lcPolImportedRow__tag lcPolImportedRow__tag--readonly">${nursingReadOnly ? "סיעודי · לא ניתן לגעת" : "קבוצתי / קולקטיבי · לא ניתן לגעת"}</span>` : '';
         const classificationBadge = classificationLabel ? `<span class="lcPolImportedRow__tag">${escapeHtml(classificationLabel)}</span>` : '';
         const importedInfoBadges = [classificationBadge, collectiveBadge, importedBadge, elementaryLinkWarn].filter(Boolean).join('');
-        const cancellationBox = p.isCollectiveReadOnly
-          ? `<div class="lcPolicyActionBox lcPolicyActionBox--compact lcPolicyActionBox--readonly"><div class="lcPolicyActionBox__top"><div><div class="lcPolicyActionBox__title">פוליסה קבוצתית / קולקטיבית</div><div class="lcPolicyActionBox__sub">הפוליסה נוספה לרשימה לתצוגה בלבד, ללא אפשרות עריכה או טיפול.</div></div></div></div>`
+        const cancellationBox = lockedReadOnly
+          ? this.renderExistingPolicyLockedActionBox(p)
           : this.renderExistingPolicyCancellationControls(p, d.cancellations?.[p.id] || {}, { compact: true, insured: ins });
 
         if(p.importedFromHarBituach){
@@ -12777,7 +12779,7 @@ if(path === "birthDate"){
             insuredIdNumber ? `ת״ז ${escapeHtml(insuredIdNumber)}` : null,
             safeTrim(p.classification) ? escapeHtml(safeTrim(p.classification)) : null
           ].filter(Boolean).map((item, i) => i === 0 ? `<span class="lcPolCard__insuredName">${item}</span>` : `<span class="lcPolCard__dot" aria-hidden="true"></span><span>${item}</span>`).join('');
-          const collBadge = p.isCollectiveReadOnly ? `<span class="lcPolCard__badge lcPolCard__badge--muted">קבוצתי</span>` : '';
+          const collBadge = lockedReadOnly ? `<span class="lcPolCard__badge lcPolCard__badge--muted">${nursingReadOnly ? "סיעודי" : "קבוצתי"}</span>` : '';
           const linkedHomeWarning = this.policyHasLinkedElementary(p)
             ? `<div class="lcPolCard__warn">${escapeHtml(this.formatLinkedElementaryWarningText(p))}</div>`
             : '';
@@ -12792,7 +12794,7 @@ if(path === "birthDate"){
               ? `<span class="lcHarCompactCover" title="${escapeHtml(includedList.join(' • '))}">${escapeHtml(includedSummary)}</span>`
               : `<span class="muted small">—</span>`);
           const coverCell = (needsSum || needsComp)
-            ? (p.isCollectiveReadOnly
+            ? (lockedReadOnly
               ? (safeTrim(p[sumField] || "")
                 ? `<span class="lcHarCompactCover">${needsComp ? "סכום פיצוי" : "סכום ביטוח"} <span>${escapeHtml(this.formatMoneyValue(p[sumField]))}</span></span>`
                 : `<span class="lcHarCompactCover lcHarCompactCover--missing">—</span>`)
@@ -12806,10 +12808,10 @@ if(path === "birthDate"){
                     <span class="lcHarCompactSumSym">₪</span>
                   </div>`)
             : coverPills;
-          const chipsBox = p.isCollectiveReadOnly
+          const chipsBox = lockedReadOnly
             ? cancellationBox
             : this.renderExistingPolicyCancellationControls(p, d.cancellations?.[p.id] || {}, { compact: true, insured: ins, part: "chips" });
-          const expandedBox = p.isCollectiveReadOnly
+          const expandedBox = lockedReadOnly
             ? ""
             : this.renderExistingPolicyCancellationControls(p, d.cancellations?.[p.id] || {}, { compact: true, insured: ins, part: "expanded" });
           return `
@@ -20440,12 +20442,26 @@ if(path === "birthDate"){
         agentappoint: "מינוי סוכן",
         appoint_agent: "מינוי סוכן",
         nochange: "ללא שינוי",
-        none: "ללא שינוי"
+        none: "ללא שינוי",
+        partial: "ביטול חלקי",
+        locked_nursing: "לא ניתן לגעת",
+        locked_collective: "קולקטיבית / קבוצתית · לא ניתן לגעת"
       };
       return map[key] || key || "טרם נבחר";
     },
 
     getExistingPolicyStatusMeta(policy, insuredData){
+      const lockedLabel = this.getExistingPolicyLockedStatusLabel(policy);
+      if(lockedLabel){
+        const nursing = this.isExistingPolicyNursingReadOnly(policy);
+        return {
+          raw: nursing ? "locked_nursing" : "locked_collective",
+          label: lockedLabel,
+          tone: "neutral",
+          reason: "",
+          partialDetails: ""
+        };
+      }
       const data = insuredData && typeof insuredData === 'object' ? insuredData : {};
       const cancellations = data?.cancellations && typeof data.cancellations === 'object' ? data.cancellations : {};
       const cancel = cancellations?.[policy?.id] && typeof cancellations[policy.id] === 'object' ? cancellations[policy.id] : {};
@@ -20458,7 +20474,7 @@ if(path === "birthDate"){
       if(manualPartialText) partialDetails.push(manualPartialText);
       let tone = 'neutral';
       if(raw === 'full' || raw === 'cancel') tone = 'danger';
-      else if(raw === 'partial_health' || raw === 'replace') tone = 'warn';
+      else if(raw === 'partial_health' || raw === 'partial' || raw === 'replace') tone = 'warn';
       else if(raw === 'agent_appoint' || raw === 'agentappoint' || raw === 'appoint_agent' || raw === 'keep' || raw === 'nochange_client' || raw === 'nochange_collective' || raw === 'nochange' || raw === 'none') tone = 'success';
       return {
         raw,
@@ -20493,7 +20509,7 @@ if(path === "birthDate"){
       if(p.isCollectiveReadOnly) return true;
       const classification = safeTrim(p.classification).toLowerCase();
       const status = safeTrim(p.status).toLowerCase();
-      const type = safeTrim(p.type).toLowerCase();
+      const type = safeTrim(p.type || p.product).toLowerCase();
       return classification.includes('קולקטיב')
         || classification.includes('קבוצתי')
         || status === 'nochange_collective'
@@ -20501,15 +20517,38 @@ if(path === "birthDate"){
         || type.includes('קבוצתי');
     },
 
+    isExistingPolicyNursingReadOnly(policy = {}){
+      const p = policy && typeof policy === 'object' ? policy : {};
+      const type = safeTrim(p.type || p.product);
+      const classification = safeTrim(p.classification);
+      return /סיעוד/i.test(type) || /סיעוד/i.test(classification);
+    },
+
+    isExistingPolicyLockedReadOnly(policy = {}){
+      return this.isExistingPolicyCollectiveReadOnly(policy) || this.isExistingPolicyNursingReadOnly(policy);
+    },
+
+    getExistingPolicyLockedStatusLabel(policy = {}){
+      if(this.isExistingPolicyNursingReadOnly(policy)) return "לא ניתן לגעת";
+      if(this.isExistingPolicyCollectiveReadOnly(policy)) return "קולקטיבית / קבוצתית · לא ניתן לגעת";
+      return "";
+    },
+
+    renderExistingPolicyLockedActionBox(policy = {}){
+      const nursing = this.isExistingPolicyNursingReadOnly(policy);
+      const title = nursing ? "פוליסה סיעודית" : "פוליסה קבוצתית / קולקטיבית";
+      return `<div class="lcPolicyActionBox lcPolicyActionBox--compact lcPolicyActionBox--readonly"><div class="lcPolicyActionBox__top"><div><div class="lcPolicyActionBox__title">${escapeHtml(title)}</div><div class="lcPolicyActionBox__sub">לא ניתן לגעת</div></div></div></div>`;
+    },
+
     getStep3ActionablePolicies(insured = null){
       const ins = insured || this.getActive();
       const list = Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : [];
-      return list.filter((policy) => !this.isExistingPolicyCollectiveReadOnly(policy));
+      return list.filter((policy) => !this.isExistingPolicyLockedReadOnly(policy));
     },
 
     shouldValidateStep3PolicyPremium(policy = {}){
       const p = policy && typeof policy === 'object' ? policy : {};
-      if(this.isExistingPolicyCollectiveReadOnly(p)) return false;
+      if(this.isExistingPolicyLockedReadOnly(p)) return false;
       if(p.importedFromHarBituach) return false;
       return true;
     },
@@ -27521,9 +27560,7 @@ if(path === "birthDate"){
         const insuredLabel = safeTrim(ins?.label) || `מבוטח ${index + 1}`;
         const policies = Array.isArray(d?.existingPolicies) ? d.existingPolicies : [];
         policies.forEach((policy) => {
-          const statusMeta = policy?.isCollectiveReadOnly
-            ? { label: 'ללא שינוי – קולקטיב', raw: 'nochange_collective', tone: 'success', reason: '', partialDetails: '' }
-            : (typeof this.getExistingPolicyStatusMeta === 'function')
+          const statusMeta = (typeof this.getExistingPolicyStatusMeta === 'function')
             ? this.getExistingPolicyStatusMeta(policy, d)
             : { label: safeTrim(policy?.status || policy?.policyStatus || policy?.actionStatus || policy?.action) || '—', tone:'neutral' };
           const premiumValue = safeTrim(policy?.monthlyPremium || policy?.premium);
