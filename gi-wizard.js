@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260905-ops-insured-tabs-v1";
+  const GI_WIZARD_BUILD = "20260906-cover-prem-v1";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -16390,6 +16390,102 @@ if(path === "birthDate"){
       }
       return [];
     },
+    /* GI-NP-COVER-PREM: לפני/אחרי לכל כיסוי מהציטוט שכבר נשמר בסימולטור. בלי מנוע חדש. */
+    getPolicyInsuredCoverPremiumRows(policy, insId){
+      const id = safeTrim(insId);
+      if(!policy || !id) return [];
+      const quotes = policy.riskSimQuotes && policy.riskSimQuotes[id];
+      const quoteCovers = Array.isArray(quotes && quotes.covers) ? quotes.covers : [];
+      const labels = (typeof this.getPolicyInsuredCoverLabels === "function")
+        ? this.getPolicyInsuredCoverLabels(policy, id) : [];
+      const byName = {};
+      quoteCovers.forEach((c) => {
+        if(!c) return;
+        const name = safeTrim(c.wizardKey || c.label || c.id);
+        if(!name) return;
+        byName[name] = c;
+      });
+      const names = labels.length
+        ? labels
+        : quoteCovers.map((c) => safeTrim(c && (c.wizardKey || c.label || c.id))).filter(Boolean);
+      const saved = policy.simDiscountPerInsured && policy.simDiscountPerInsured[id];
+      const api = (typeof this.getSimulatorDiscountApi === "function") ? this.getSimulatorDiscountApi() : null;
+      let rawOpt = null;
+      if(api && saved && saved.optionId){
+        try {
+          if(typeof api.byId === "function") rawOpt = api.byId(policy.company, policy.type, saved.optionId);
+        } catch(_e) {}
+        if(!rawOpt && typeof this.getPolicyRowDiscountOptions === "function"){
+          const opts = this.getPolicyRowDiscountOptions(policy, policy.type) || [];
+          const hit = opts.find((o) => o && (o.id === saved.optionId || (o._simRaw && o._simRaw.id === saved.optionId)));
+          rawOpt = hit && hit._simRaw ? hit._simRaw : hit;
+        }
+      }
+      const manualMap = {};
+      if(policy.coverDiscountsApplied && Array.isArray(policy.coverDiscounts)){
+        policy.coverDiscounts.forEach((row) => {
+          const n = safeTrim(row && row.name);
+          if(n) manualMap[n] = this.parseCoverDiscountPct(row.pct);
+        });
+      }
+      const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+      return names.map((name) => {
+        const c = byName[name] || {};
+        let before = this.asMoneyNumber(c.monthlyPremium);
+        if(!(before > 0) && typeof this.isHealthAddonCover === "function" && this.isHealthAddonCover(name)
+          && typeof this.getHealthAddonPremiumValue === "function"){
+          before = this.asMoneyNumber(this.getHealthAddonPremiumValue(policy, name, id));
+        }
+        let after = before;
+        if(Object.prototype.hasOwnProperty.call(manualMap, name)){
+          after = round2(before * (1 - (manualMap[name] || 0) / 100));
+        } else if(api && rawOpt && typeof api.afterMonthly === "function" && before > 0){
+          try {
+            const one = api.afterMonthly({
+              ok: true,
+              monthlyPremium: before,
+              covers: [{
+                id: c.id || "",
+                label: name,
+                wizardKey: name,
+                monthlyPremium: before,
+                monthlyAgorot: c.monthlyAgorot
+              }]
+            }, rawOpt);
+            const n = (one == null || one === "") ? NaN : Number(one);
+            if(Number.isFinite(n)) after = round2(n);
+          } catch(_e2) {}
+        } else {
+          const yr = Number(saved && saved.year1Pct);
+          const general = (Number.isFinite(yr) && yr > 0) ? yr : this.parseCoverDiscountPct(policy && policy.discountPct);
+          if(general > 0 && this.isHealthCoverInGeneralDiscount(name)){
+            after = round2(before * (1 - general / 100));
+          }
+        }
+        const beforeLabel = before > 0 ? this.formatMoneyValue(before) : "—";
+        const afterLabel = (before > 0 || after > 0) ? this.formatMoneyValue(after) : "—";
+        return {
+          label: name,
+          before,
+          after,
+          beforeLabel,
+          afterLabel,
+          pairText: "לפני " + beforeLabel + " · אחרי " + afterLabel
+        };
+      });
+    },
+    renderPolicyCoverPremiumListHtml(policy, insId, emptyText){
+      const rows = this.getPolicyInsuredCoverPremiumRows(policy, insId);
+      if(!rows.length){
+        return `<div class="lcNpProw__coversEmpty">${escapeHtml(safeTrim(emptyText) || "ללא כיסויים")}</div>`;
+      }
+      return `<ul class="lcNpProw__coversList">${rows.map((c) => {
+        const pay = (Number(c.before) > 0 || Number(c.after) > 0)
+          ? `<span class="lcNpProw__coverPay"><span>לפני הנחה ${escapeHtml(c.beforeLabel)}</span><strong class="is-after">אחרי הנחה ${escapeHtml(c.afterLabel)}</strong></span>`
+          : "";
+        return `<li><span class="lcNpProw__coverName">${escapeHtml(c.label)}</span>${pay}</li>`;
+      }).join("")}</ul>`;
+    },
     getPolicyInsuredShortName(insId){
       const ins = (this.insureds || []).find((x) => safeTrim(x && x.id) === safeTrim(insId));
       if(!ins) return safeTrim(insId);
@@ -18713,20 +18809,13 @@ if(path === "birthDate"){
         const detailText = isHealth
           ? ""
           : (sumValue ? `${sumLabel} ${fmtMoney(sumValue)}` : (isMed ? "מדיקר" : escapeHtml(p.type || "")));
-        const coversListHtml = isHealth ? (() => {
-          const covers = Array.isArray(polCovers) ? polCovers.filter(Boolean) : [];
-          if(!covers.length){
-            return `<div class="lcNpProw__coversEmpty">טרם נבחרו כיסויים</div>`;
-          }
-          return `<ul class="lcNpProw__coversList">${covers.map((c) => `<li>${escapeHtml(String(c))}</li>`).join("")}</ul>`;
-        })() : "";
+        const coversListHtml = isHealth
+          ? this.renderPolicyCoverPremiumListHtml(p, pInsuredIds[0] || p.insuredId, "טרם נבחרו כיסויים")
+          : "";
         const personDetailHtml = isMulti ? pInsuredIds.map((iid) => {
           const pair = this.getPolicyInsuredPremiumSplit(p, iid);
           const nm = this.getPolicyInsuredShortName(iid);
-          const covers = isHealth ? this.getPolicyInsuredCoverLabels(p, iid) : [];
-          const coverHtml = !isHealth ? "" : (covers.length
-            ? `<ul class="lcNpProw__coversList">${covers.map((c) => `<li>${escapeHtml(String(c))}</li>`).join("")}</ul>`
-            : `<div class="lcNpProw__coversEmpty">ללא כיסויים</div>`);
+          const coverHtml = !isHealth ? "" : this.renderPolicyCoverPremiumListHtml(p, iid, "ללא כיסויים");
           return `<div class="lcNpProw__person">
             <div class="lcNpProw__personHead">
               <strong>${escapeHtml(nm)}</strong>
@@ -27591,10 +27680,14 @@ if(path === "birthDate"){
           extraBits: '',
           insuredMode: safeTrim(policy?.insuredMode) || 'single',
           perInsuredPremiumRows: getNewPolicyPerInsuredPremiumRowsSafe(policy),
-          perInsuredCoverRows: (safeTrim(policy?.type) === 'בריאות' && typeof this.getPolicyInsuredCoverLabels === 'function')
+          perInsuredCoverRows: (safeTrim(policy?.type) === 'בריאות' && typeof this.getPolicyInsuredCoverPremiumRows === 'function')
             ? ((Array.isArray(policy?.insuredIds) && policy.insuredIds.length ? policy.insuredIds : (policy?.insuredId ? [policy.insuredId] : []))
-              .map((iid) => ({ label: getInsuredLabelByIdSafe(iid), covers: this.getPolicyInsuredCoverLabels(policy, iid) || [] }))
-              .filter((item) => item.covers && item.covers.length))
+              .map((iid) => ({
+                label: getInsuredLabelByIdSafe(iid),
+                covers: (typeof this.getPolicyInsuredCoverLabels === 'function' ? this.getPolicyInsuredCoverLabels(policy, iid) : []) || [],
+                coverPremiums: this.getPolicyInsuredCoverPremiumRows(policy, iid) || []
+              }))
+              .filter((item) => (item.coverPremiums && item.coverPremiums.length) || (item.covers && item.covers.length)))
             : [],
           beneficiaryRows: getPolicyBeneficiaryRowsSafe(policy),
           perInsuredSumRows,
@@ -28049,6 +28142,8 @@ if(path === "birthDate"){
         .lcPdfCouplePremiums__value{flex:0 1 auto;max-width:58%;direction:ltr;text-align:left;color:#123b72;font-weight:850;line-height:1.45;white-space:normal;overflow-wrap:anywhere;word-break:break-word}
         .lcPdfCouplePremiums--sums .lcPdfCouplePremiums__row{background:rgba(240,255,245,.9);border-color:rgba(22,120,70,.18);color:#1a3d28}
         .lcPdfCouplePremiums--sums .lcPdfCouplePremiums__value{color:#0d5c30}
+        .lcPdfCouplePremiums--covers .lcPdfCouplePremiums__row--ins{background:transparent;border:0;padding:4px 8px 0;font-weight:850;color:#1b365d}
+        .lcPdfCouplePremiums--covers .lcPdfCouplePremiums__value{max-width:62%;color:#0d5c30}
         .lcPdfPolicyCard{border:1px solid #dbe3ed;border-radius:14px;padding:12px 12px 10px;background:#fff;break-inside:auto;page-break-inside:auto}
         .lcPdfPolicyCard__head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:8px}
         .lcPdfPolicyCard__title{font-size:15px;font-weight:800;color:#1b3555}
@@ -28233,7 +28328,14 @@ if(path === "birthDate"){
             ? `<div class="lcPdfNewPolicyDetailLine"><span class="lcPdfNewPolicyDetailK">סכומים לפי מבוטח</span><div class="lcPdfNewPolicyDetailV">${perInsuredSumHtml}</div></div>`
             : '';
           const perInsuredCoverHtml = Array.isArray(row.perInsuredCoverRows) && row.perInsuredCoverRows.length
-            ? `<div class="lcPdfCouplePremiums">${row.perInsuredCoverRows.map((item) => `<div class="lcPdfCouplePremiums__row"><span class="lcPdfCouplePremiums__name">${escapeHtml(item.label)}</span><span class="lcPdfCouplePremiums__value">${escapeHtml((item.covers || []).join(' · '))}</span></div>`).join('')}</div>`
+            ? `<div class="lcPdfCouplePremiums lcPdfCouplePremiums--covers">${row.perInsuredCoverRows.map((item) => {
+              const priced = Array.isArray(item.coverPremiums) ? item.coverPremiums.filter((c) => c && safeTrim(c.label)) : [];
+              const head = `<div class="lcPdfCouplePremiums__row lcPdfCouplePremiums__row--ins"><span class="lcPdfCouplePremiums__name">${escapeHtml(item.label)}</span><span class="lcPdfCouplePremiums__value"></span></div>`;
+              const body = priced.length
+                ? priced.map((c) => `<div class="lcPdfCouplePremiums__row"><span class="lcPdfCouplePremiums__name">${escapeHtml(c.label)}</span><span class="lcPdfCouplePremiums__value">${escapeHtml(c.pairText || ("לפני " + (c.beforeLabel || "—") + " · אחרי " + (c.afterLabel || "—")))}</span></div>`).join('')
+                : `<div class="lcPdfCouplePremiums__row"><span class="lcPdfCouplePremiums__name">${escapeHtml((item.covers || []).join(' · ') || '—')}</span><span class="lcPdfCouplePremiums__value"></span></div>`;
+              return head + body;
+            }).join('')}</div>`
             : '';
           const coversByInsuredLine = perInsuredCoverHtml
             ? `<div class="lcPdfNewPolicyDetailLine"><span class="lcPdfNewPolicyDetailK">כיסויים לפי מבוטח</span><div class="lcPdfNewPolicyDetailV">${perInsuredCoverHtml}</div></div>`

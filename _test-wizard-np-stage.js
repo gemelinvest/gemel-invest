@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260905-ops-insured-tabs-v1";
+const TAG = "20260906-cover-prem-v1";
 let failed = 0;
 let passed = 0;
 
@@ -272,6 +272,12 @@ assert(wiz.includes("לפני הנחה ${this.formatMoneyValue(pair.before)}"), 
 assert(wiz.includes("אחרי הנחה ${this.formatMoneyValue(pair.after)}"), "details show after-premium per insured");
 assert(css.includes(".lcNpProw__person{"), "per-insured detail styles");
 assert(wiz.includes("הצג כיסוי בפוליסה"), "single health row still has the covers chip");
+assert(wiz.includes("GI-NP-COVER-PREM"), "per-cover before/after helper marker");
+assert(wiz.includes("getPolicyInsuredCoverPremiumRows(policy, insId)"), "details can read before/after per cover");
+assert(wiz.includes("renderPolicyCoverPremiumListHtml(policy, insId, emptyText)"), "details render per-cover before/after on the left");
+assert(wiz.includes("lcNpProw__coverPay"), "cover row has a left-side premium pair");
+assert(css.includes(".lcNpProw__coverPay{"), "cover premium pair styles");
+assert(css.includes("justify-content:space-between"), "cover name stays right, premiums stay left");
 
 console.log("\n5c) company logo in the summary row has no frame");
 const rowLogo = css.slice(css.indexOf(".lcNpProw .lcCompanyLogo,.lcNpProw img{"), css.indexOf(".lcNpProw__title{"));
@@ -301,6 +307,8 @@ assert(wiz.includes('lcPdfNewPolicyDetailK">מוטבים<'), "compact ops render
 assert(wiz.includes('lcPdfNewPolicyDetailK">כיסויים לפי מבוטח<'), "compact ops renderer prints per-insured health covers");
 assert(wiz.includes("perInsuredCoverRows:"), "compact ops rows carry covers per insured");
 assert(wiz.includes("this.toSimulatorDmyDate(policy?.startDate)"), "compact ops rows format start date as DD/MM/YYYY");
+assert(wiz.includes("coverPremiums: this.getPolicyInsuredCoverPremiumRows(policy, iid)"), "ops compact rows carry per-cover before/after");
+assert(wiz.includes("lcPdfCouplePremiums--covers"), "ops PDF styles the per-cover premium list");
 
 console.log("\n6) untouched — declaration routing, premium engine; center open to logged-in users");
 assert(/canAccessSimulators\(\)\{\s*return !!this\.current;/.test(app), "Simulators Center gate is any logged-in user");
@@ -892,6 +900,34 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
     assert(splitC.before === 40 && splitC.after === 36, "child before/after stay 40 / 36");
   }
 
+  // ── הצג פירוט: before/after per health cover from stored simulator quotes ──
+  {
+    const coverPol = {
+      type: "בריאות", company: "כלל",
+      insuredIds: ["i1"], insuredId: "i1",
+      premiumPerInsured: { i1: "118.48" },
+      healthCoversPerInsured: { i1: ["ניתוחים", "השתלות"] },
+      riskSimQuotes: { i1: { covers: [
+        { id: "surg", wizardKey: "ניתוחים", monthlyPremium: 70 },
+        { id: "trans", wizardKey: "השתלות", monthlyPremium: 48.48 }
+      ]}},
+      simDiscountPerInsured: { i1: { year1Pct: 15, monthlyAfterDiscount: 100.71 } }
+    };
+    const coverRows = W.getPolicyInsuredCoverPremiumRows(coverPol, "i1");
+    assert(coverRows.length === 2, "detail helper returns a row per cover");
+    assert(coverRows[0].label === "ניתוחים" && coverRows[0].before === 70 && coverRows[0].after === 59.5, "cover before/after uses stored quote + year-1 percent");
+    assert(coverRows[1].label === "השתלות" && coverRows[1].before === 48.48 && Math.abs(coverRows[1].after - 41.21) < 0.011, "second cover after-discount is 15% off 48.48");
+    const coverHtml = W.renderPolicyCoverPremiumListHtml(coverPol, "i1", "ללא כיסויים");
+    assert(coverHtml.includes("lcNpProw__coverPay") && coverHtml.includes("לפני הנחה") && coverHtml.includes("אחרי הנחה"), "detail list puts before/after on the cover line");
+    const manualPol = Object.assign({}, coverPol, {
+      coverDiscountsApplied: true,
+      coverDiscounts: [{ name: "ניתוחים", pct: "10" }, { name: "השתלות", pct: "0" }]
+    });
+    const manualRows = W.getPolicyInsuredCoverPremiumRows(manualPol, "i1");
+    assert(manualRows[0].after === 63, "manual 10% discount is used when already applied");
+    assert(manualRows[1].after === 48.48, "manual 0% keeps the cover at the simulator before-price");
+  }
+
   // ── reopen/close guards do not wipe picks ──
   {
     W._npSimPickByInsured = { i1:{ company:"כלל", product:"ריסק" }, i2:{ company:"כלל", product:"סרטן" } };
@@ -952,6 +988,15 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
             i1: ["תרופות מחוץ לסל הבריאות", "ניתוחים בישראל מהשקל הראשון"],
             i2: ["תרופות מחוץ לסל הבריאות"]
           },
+          riskSimQuotes: {
+            i1: { covers: [
+              { id: "meds", wizardKey: "תרופות מחוץ לסל הבריאות", monthlyPremium: 100 },
+              { id: "surg", wizardKey: "ניתוחים בישראל מהשקל הראשון", monthlyPremium: 120 }
+            ]},
+            i2: { covers: [
+              { id: "meds", wizardKey: "תרופות מחוץ לסל הבריאות", monthlyPremium: 180 }
+            ]}
+          },
           startDate: "01/10/2026", discountPct: "20",
           simDiscountPerInsured: {
             i1: { year1Pct: 20, monthlyAfterDiscount: 176, label: "20%" },
@@ -979,6 +1024,9 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
     assert(opsHtml.includes("מוטבים") && opsHtml.includes("דן כהן"), "ops PDF compact row includes beneficiary names");
     assert(opsHtml.includes("פרמיה לפי מבוטח") && opsHtml.includes("לפני") && opsHtml.includes("אחרי"), "ops PDF lists before/after premium per insured");
     assert(opsHtml.includes("כיסויים לפי מבוטח"), "ops PDF lists health covers per insured on the couple policy");
+    assert(opsHtml.includes("לפני ₪100") && opsHtml.includes("אחרי ₪80"), "ops PDF shows drugs cover before/after for the primary");
+    assert(opsHtml.includes("לפני ₪120") && opsHtml.includes("אחרי ₪96"), "ops PDF shows surgeries cover before/after for the primary");
+    assert(opsHtml.includes("לפני ₪180") && opsHtml.includes("אחרי ₪144"), "ops PDF shows drugs cover before/after for the spouse");
     assert(/₪\s*1[,.]?324[.,]46/.test(opsHtml) || opsHtml.includes("1,324.46") || opsHtml.includes("1324.46"), "ops PDF grand total uses after-discount (21.46+200+783+176+144)");
     assert(W.toSimulatorDmyDate("2026-11-01") === "01/11/2026", "future ISO start date converts to DD/MM/YYYY");
     assert(W.getPolicyPremiumAfterDiscount(opsPayload.newPolicies[0]) === 61.32, "legacy after-discount helper still returns before for Clal");

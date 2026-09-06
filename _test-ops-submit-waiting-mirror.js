@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260905-ops-insured-tabs-v1";
+const APP_TAG = "20260906-cover-prem-v1";
 let failed = 0;
 let passed = 0;
 
