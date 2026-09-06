@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260906-insureds-label-v1";
+const TAG = "20260906-rows-advance-v1";
 let failed = 0;
 let passed = 0;
 
@@ -273,6 +273,9 @@ assert(wiz.includes("אחרי הנחה ${this.formatMoneyValue(pair.after)}"), "
 assert(css.includes(".lcNpProw__person{"), "per-insured detail styles");
 assert(wiz.includes("הצג כיסוי בפוליסה"), "single health row still has the covers chip");
 assert(wiz.includes("GI-NP-INSURED-LABEL"), "summary-row insured label marker");
+assert(wiz.includes("GI-NP-ROWS-ADVANCE"), "summary rows let Next skip an incomplete add-draft");
+assert(wiz.includes("isPolicyDraftDirty() && rows.length < 1"), "dirty add-draft is ignored when summary rows exist");
+assert(wiz.includes("if(rows.length < 1 && !issueRows.length)"), "empty summary still requires at least one added policy");
 assert(wiz.includes("מבוטחים בפוליסה:"), "summary row uses מבוטחים בפוליסה");
 assert(!wiz.includes('<span>לקוח: <b>${escapeHtml(customerName)}</b></span>'), "summary row no longer shows לקוח from the primary label");
 assert(!wiz.includes('<span>מבוטחים: <b>${escapeHtml(insuredNames.join(" · ") || "—")}</b></span>'), "old מבוטחים: label removed from the summary row");
@@ -1051,6 +1054,57 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
     assert(W.toSimulatorDmyDate("2026-11-01") === "01/11/2026", "future ISO start date converts to DD/MM/YYYY");
     assert(W.getPolicyPremiumAfterDiscount(opsPayload.newPolicies[0]) === 61.32, "legacy after-discount helper still returns before for Clal");
     assert(W.getHealthRowPremiumAfterDiscount(opsPayload.newPolicies[0]) === 21.46, "row after-discount helper still returns simulator net for Clal");
+  }
+
+  // ── GI-NP-ROWS-ADVANCE: leftover add-form does not block Next when rows exist ──
+  {
+    const prevGet = W.getWizardNewPolicies;
+    const prevNew = W.newPolicies;
+    const prevDraft = W.policyDraft;
+    const prevPurchase = W.isCustomerPurchaseMode;
+    W.isCustomerPurchaseMode = () => false;
+    const row = {
+      id: "pAdvance",
+      company: "הכשרה",
+      type: "ריסק",
+      insuredIds: ["i1"],
+      insuredId: "i1",
+      premiumPerInsured: { i1: "200" },
+      startDate: "01/10/2026",
+      sumInsured: "500000",
+      sumInsuredPerInsured: { i1: "500000" }
+    };
+    W.newPolicies = [row];
+    W.getWizardNewPolicies = () => W.newPolicies;
+    W.policyDraft = {
+      company: "",
+      type: "",
+      healthCovers: ["ניתוחים"],
+      startDate: "01/10/2026",
+      premiumPerInsured: { i1: "100" },
+      insuredIds: ["i1"],
+      insuredId: "i1"
+    };
+    assert(W.isPolicyDraftDirty() === true, "leftover add-another draft is still dirty");
+    const withRows = W.validateStep5();
+    assert(withRows.ok === true, "Next is allowed when summary rows already exist");
+    assert(!(withRows.items || []).some((m) => String(m).indexOf("שטרם נוספה") >= 0), "incomplete add-draft does not block when rows exist");
+    assert(!(withRows.items || []).some((m) => String(m).indexOf("חברת ביטוח") >= 0), "empty company on the add-form does not block when rows exist");
+
+    W.newPolicies = [];
+    const noRowsDirty = W.validateStep5();
+    assert(noRowsDirty.ok === false, "empty summary still blocks when the add-draft is incomplete");
+    assert((noRowsDirty.items || []).some((m) => String(m).indexOf("שטרם נוספה") >= 0 || String(m).indexOf("חברת ביטוח") >= 0), "empty summary names the incomplete add-draft");
+
+    W.policyDraft = { company: "", type: "", healthCovers: [], startDate: "", premiumPerInsured: {}, insuredIds: ["i1"] };
+    const noRowsClean = W.validateStep5();
+    assert(noRowsClean.ok === false, "empty summary still requires at least one added policy");
+    assert((noRowsClean.items || []).some((m) => String(m).indexOf("לפחות פוליסה") >= 0), "empty summary asks for at least one policy");
+
+    W.getWizardNewPolicies = prevGet;
+    W.newPolicies = prevNew;
+    W.policyDraft = prevDraft;
+    W.isCustomerPurchaseMode = prevPurchase;
   }
 
   // ── docking ──
