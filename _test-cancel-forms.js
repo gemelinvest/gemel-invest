@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260906-cancel-forms-v3";
+const TAG = "20260906-cancel-forms-v4";
 let failed = 0;
 let passed = 0;
 
@@ -301,7 +301,49 @@ assert(staleInject.removedExtra === true, "inject strips cancel docs when no liv
 assert(!staleList.some((d) => d.type === "company_cancel_form"), "no cancel docs left after revert");
 assert(staleList.some((d) => d.id === "keep-doc"), "other docs survive empty-live cleanup");
 
-console.log("\n6) fill engine shape");
+console.log("\n6) ID and date digits sit in comb boxes");
+const boxPayload = {
+  insureds: [{
+    id: "ins1",
+    data: {
+      firstName: "ישראל",
+      lastName: "ישראלי",
+      idNumber: "123456782",
+      birthDate: "1980-05-12",
+      city: "תל אביב",
+      street: "דיזנגוף",
+      existingPolicies: [
+        { id: "p1", company: "הראל", type: "בריאות", policyNumber: "555111" },
+        { id: "p2", company: "מגדל", type: "ריסק", policyNumber: "777" }
+      ],
+      cancellations: { p1: { status: "full" }, p2: { status: "full" } }
+    }
+  }]
+};
+function digitOps(plan, key){
+  return plan.filter((op) => String(op.key).indexOf(key + "#b") === 0).sort((a, b) => a.x - b.x);
+}
+const harelBoxDraft = G.buildDraft({ payload: boxPayload }, G.createDoc(G.groupCancelledPolicies(boxPayload).find((g) => g.templateId === "harel_health")));
+const harelBoxPlan = G.overlayPlan(harelBoxDraft);
+const harelId = digitOps(harelBoxPlan, "idNumber");
+assert(harelId.length === 18, "Harel health header+signature ID fill 9+9 digit boxes (got " + harelId.length + ")");
+const harelHeaderId = harelId.filter((op) => op.y > 650);
+assert(harelHeaderId.length === 9, "header ID uses 9 boxes");
+assert(harelHeaderId.map((op) => op.text).join("") === "123456782", "header ID digits keep order 123456782");
+assert(harelHeaderId.every((op, i) => i === 0 || op.x > harelHeaderId[i - 1].x), "ID digits go left-to-right across boxes");
+assert(harelHeaderId.every((op) => op.align === "center"), "each ID digit is centered in its box");
+assert(harelHeaderId[0].x > 342 && harelHeaderId[8].x < 486, "header ID stays inside the 9-box strip");
+const harelBirth = digitOps(harelBoxPlan, "birthDate");
+assert(harelBirth.length === 6, "Harel birth date uses 6 digit boxes");
+assert(harelBirth.map((op) => op.text).join("") === "120580", "birth date boxes are DDMMYY");
+const migdalBoxDraft = G.buildDraft({ payload: boxPayload }, G.createDoc(G.groupCancelledPolicies(boxPayload).find((g) => g.templateId === "migdal")));
+const migdalId = digitOps(G.overlayPlan(migdalBoxDraft), "idNumber");
+assert(migdalId.length === 9, "Migdal ID uses 9 digit boxes");
+assert(migdalId.map((op) => op.text).join("") === "123456782", "Migdal ID digits keep order");
+assert(form.includes("boxes: 9"), "templates mark comb ID fields");
+assert(form.includes("charsForBoxes"), "splits numbers into comb boxes");
+
+console.log("\n7) fill engine shape");
 assert(form.includes("fillOriginalTemplate"), "PDF fill exists");
 assert(form.includes("forms/cancel/"), "loads original templates from forms/cancel");
 assert(form.includes("overlayPlan"), "overlay plan exists");

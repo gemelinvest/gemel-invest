@@ -280,10 +280,10 @@
       id: "harel_health",
       file: "harel-health-cancel.pdf",
       fields: [
-        C("idNumber", 342.2, 129.6, 468.3, 152.3, { size: 8 }),
+        C("idNumber", 342.19, 129.6, 485.29, 152.3, { size: 9, boxes: 9, align: "ltr" }),
         C("lastName", 255.9, 129.6, 342.2, 152.3),
         C("firstName", 169.7, 129.6, 255.9, 152.3),
-        C("birthDate", 93.2, 129.6, 169.7, 152.3, { size: 8, align: "ltr" }),
+        C("birthDate", 93.16, 129.6, 169.7, 152.3, { size: 8, boxes: 6, align: "ltr" }),
         X("genderMale", 62, 136),
         X("genderFemale", 30, 136),
         C("street", 342.2, 272, 485.3, 290),
@@ -298,16 +298,16 @@
         C("policyNumber", 378.6, 484.4, 553.8, 507.1, { when: "partial", rows: 3, rowH: 22.7 }),
         C("partialCovers", 203.4, 484.4, 378.6, 507.1, { when: "partial", size: 8, rows: 3, rowH: 22.7 }),
         C("today", 28.2, 484.4, 203.4, 507.1, { when: "partial", rows: 3, rowH: 22.7 }),
-        C("today", 418.7, 594.4, 495.3, 617.1, { align: "ltr", size: 8 }),
+        C("today", 418.72, 594.4, 495.26, 617.1, { align: "ltr", size: 8, boxes: 6 }),
         C("fullName", 281.9, 594.4, 418.7, 617.1),
-        C("idNumber", 128.9, 594.4, 281.9, 617.1)
+        C("idNumber", 128.86, 594.4, 281.93, 617.1, { boxes: 9, align: "ltr" })
       ]
     },
     harel_life: {
       id: "harel_life",
       file: "harel-life-cancel.pdf",
       fields: [
-        C("idNumber", 415.7, 213.7, 554.0, 239.2, { size: 8 }),
+        C("idNumber", 415.75, 213.7, 554.05, 239.2, { size: 9, boxes: 9, align: "ltr" }),
         C("lastName", 309.0, 213.7, 378.9, 239.2),
         C("firstName", 203.7, 213.7, 309.0, 239.2),
         C("phoneHome", 116.1, 213.7, 203.7, 239.2, { size: 8 }),
@@ -323,7 +323,7 @@
         C("partialCovers", 203.7, 447.6, 378.9, 467.4, { when: "partial", size: 8, rows: 5, rowH: 19.8 }),
         C("today", 28.5, 447.6, 203.7, 467.4, { when: "partial", rows: 5, rowH: 19.8 }),
         C("fullName", 379.1, 599.6, 501.7, 625.1),
-        C("idNumber", 238.1, 599.6, 379.1, 625.1),
+        C("idNumber", 238.11, 599.6, 379.13, 625.1, { boxes: 9, align: "ltr" }),
         C("today", 138.9, 599.6, 238.1, 625.1, { align: "ltr", size: 8 })
       ]
     },
@@ -374,7 +374,7 @@
       id: "migdal",
       file: "migdal-cancel.pdf",
       fields: [
-        C("idNumber", 472.8, 168.7, 566.4, 182.9, { size: 8 }),
+        C("idNumber", 472.8, 168.7, 566.4, 182.9, { size: 8, boxes: 9, align: "ltr" }),
         C("lastName", 387.8, 168.7, 472.8, 182.9),
         C("firstName", 302.8, 168.7, 387.8, 182.9),
         C("phoneHome", 129.2, 168.7, 221.0, 182.9, { size: 8 }),
@@ -399,7 +399,7 @@
   const GiCancelForms = {
     TEMPLATE_BASE: "./forms/cancel/",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260906-cancel-forms-v3",
+    VERSION: "20260906-cancel-forms-v4",
     DOC_TYPE: "company_cancel_form",
     TEMPLATES,
 
@@ -828,6 +828,23 @@
       }
       return this.valueFor(draft, key);
     },
+    charsForBoxes(field, text, n){
+      const key = safeTrim(field?.key);
+      let digits = String(text == null ? "" : text).replace(/\D/g, "");
+      if(!digits || n < 2) return null;
+      if((key === "birthDate" || key === "today") && n === 6 && digits.length >= 8){
+        digits = digits.slice(0, 4) + digits.slice(6, 8);
+      }
+      if(key === "idNumber"){
+        if(digits.length > n) digits = digits.slice(-n);
+        else while(digits.length < n) digits = "0" + digits;
+      } else if(digits.length > n){
+        digits = digits.slice(0, n);
+      }
+      const out = digits.split("");
+      while(out.length < n) out.push("");
+      return out;
+    },
     overlayPlan(draft){
       const template = draft?.template;
       const fields = Array.isArray(template?.fields) ? template.fields : [];
@@ -838,20 +855,45 @@
       const out = [];
       const emit = (field, text, dy, index) => {
         if(!text) return;
+        const boxes = Number(field.boxes) > 1 ? Number(field.boxes) : 0;
         const x0 = Number(field.x0);
         const y0 = Number(field.y0) + dy;
         const x1 = Number(field.x1);
         const y1 = Number(field.y1) + dy;
-        const size = Number(field.size) > 0 ? Number(field.size) : (field.kind === "mark" ? 11 : 9);
-        const align = field.align === "ltr" ? "ltr" : "rtl";
         const h = Math.max(8, y1 - y0);
         const baselineMupdf = y0 + Math.min(h * 0.72, h - 2.5);
+        const y = PAGE_H - baselineMupdf - 2;
+        if(boxes){
+          const chars = this.charsForBoxes(field, text, boxes);
+          if(!chars) return;
+          const span = (x1 - x0) / boxes;
+          const boxSize = Math.max(6, Math.min(Number(field.size) > 0 ? Number(field.size) : 9, span * 0.78, h * 0.72));
+          chars.forEach((ch, i) => {
+            if(!ch) return;
+            const bx0 = x0 + i * span;
+            const bx1 = bx0 + span;
+            out.push({
+              page: 0,
+              key: field.key + "#b" + i,
+              kind: "text",
+              x: (bx0 + bx1) / 2,
+              y,
+              text: ch,
+              size: boxSize,
+              align: "center",
+              maxW: Math.max(4, span - 1)
+            });
+          });
+          return;
+        }
+        const size = Number(field.size) > 0 ? Number(field.size) : (field.kind === "mark" ? 11 : 9);
+        const align = field.align === "ltr" ? "ltr" : "rtl";
         out.push({
           page: 0,
           key: field.key + (index ? ("#" + index) : ""),
           kind: field.kind || "text",
           x: align === "ltr" ? (x0 + PAD) : (x1 - PAD),
-          y: PAGE_H - baselineMupdf - 2,
+          y,
           text,
           size,
           align,
@@ -920,7 +962,7 @@
     drawOp(page, font, rgb, op){
       const raw = safeTrim(op.text);
       if(!raw) return;
-      const painted = visualHebrew(raw);
+      const painted = /[\u0590-\u05FF]/.test(raw) ? raw : visualHebrew(raw);
       let size = Number(op.size) > 0 ? Number(op.size) : 9;
       let width = 0;
       try { width = font ? font.widthOfTextAtSize(painted, size) : painted.length * size * 0.5; } catch(_e){ width = painted.length * size * 0.5; }
@@ -930,7 +972,8 @@
         try { width = font ? font.widthOfTextAtSize(painted, size) : width; } catch(_e2) {}
       }
       let x = Number(op.x) || 0;
-      if(op.align !== "ltr") x = x - width;
+      if(op.align === "center") x = x - (width / 2);
+      else if(op.align !== "ltr") x = x - width;
       try {
         page.drawText(painted, {
           x,
