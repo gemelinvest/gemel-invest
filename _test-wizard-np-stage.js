@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260906-cancel-forms-v7";
+const TAG = "20260906-hachshara-ci-start-v1";
 let failed = 0;
 let passed = 0;
 
@@ -110,7 +110,20 @@ assert(wiz.includes("buildSimulatorRestoreDiscount(draft){"), "restore-discount 
 assert(wiz.includes("simStateByInsured"), "policy stores a simulator state snapshot");
 assert(wiz.includes("restoreState: restoreState || undefined"), "open passes restoreState into the simulator");
 assert(wiz.includes("restoreDiscountByInsured: restoreDiscountByInsured || undefined"), "open passes the selected discount back");
-assert(sims.includes("payload.simStateSnapshot = riskSimJsonClone(stSnap)"), "purchase snapshots the active insured state");
+assert(sims.includes("const HachsharaCriticalIllnessSimulator"), "Hachshara CI simulator exists");
+{
+  const start = sims.indexOf("const HachsharaCriticalIllnessSimulator");
+  const end = sims.indexOf('RiskSimulators.register("הכשרה", "מחלות קשות"');
+  const chunk = start >= 0 && end > start ? sims.slice(start, end) : "";
+  const buildAt = chunk.indexOf("_buildResultForInsured");
+  const renderAt = chunk.indexOf("_render()", buildAt);
+  const built = buildAt >= 0 ? chunk.slice(buildAt, renderAt > buildAt ? renderAt : undefined) : "";
+  const retAt = built.indexOf("return {");
+  const inputsAt = built.indexOf("inputs:");
+  assert(retAt >= 0 && inputsAt > retAt, "Hachshara CI result still keeps the inputs bag");
+  assert(built.slice(retAt, inputsAt).includes("insuranceStartDate: st.insuranceStartDate"), "Hachshara CI result puts start date at top level");
+}
+assert(wiz.includes("r.inputs && r.inputs.insuranceStartDate"), "wizard copies nested simulator start dates onto the policy");
 assert(sims.includes("restoreDiscountByInsured"), "simulator shell accepts restoreDiscountByInsured");
 assert(/startEditNewPolicy\(pid\)\{[\s\S]*?simStateByInsured: \(p\.simStateByInsured/.test(wiz), "edit copies the snapshot onto the draft");
 assert(/startEditNewPolicy\(pid\)\{[\s\S]*?this\._npShowPick = false;/.test(wiz), "edit stays in the simulator/summary workspace");
@@ -548,6 +561,36 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
     startDate: W.policyDraft.startDate
   }, { policyIndex: 0, checkKnownInsureds: false });
   assert(!filledStart.some((row) => String(row.message || "").includes("תאריך תחילת ביטוח")), "copied future start date is enough to continue");
+
+  W.policyDraft = null;
+  W.ensurePolicyDraft();
+  W.policyDraft.company = "הכשרה";
+  W.policyDraft.type = "מחלות קשות";
+  W.applyRiskSimResultsToDraft({
+    i1: {
+      ok: true, monthlyPremium: 38.03, compensation: "100000",
+      inputs: { insuranceStartDate: "01/10/2026" }
+    }
+  }, { skipRender: true, skipToast: true });
+  assert(W.policyDraft.startDate === "2026-10-01", "nested Hachshara CI start date is copied onto the policy");
+  const hachNestedIssues = W.collectNewPolicyValidationIssues({
+    company: "הכשרה", type: "מחלות קשות", insuredIds: ["i1"], insuredId: "i1",
+    premiumPerInsured: { i1: "38.03" }, compensationPerInsured: { i1: "100000" },
+    startDate: W.policyDraft.startDate
+  }, { policyIndex: 0, checkKnownInsureds: false });
+  assert(!hachNestedIssues.some((row) => String(row.message || "").includes("תאריך תחילת ביטוח")), "Hachshara CI with nested start date can continue");
+  W.applyRiskSimResultsToDraft({
+    i1: {
+      ok: true, monthlyPremium: 38.03, compensation: "100000",
+      insuranceStartDate: "01/10/2026"
+    }
+  }, { skipRender: true, skipToast: true });
+  assert(W.policyDraft.startDate === "2026-10-01", "top-level Hachshara CI start date is copied onto the policy");
+  const hachMissingStart = W.collectNewPolicyValidationIssues({
+    company: "הכשרה", type: "מחלות קשות", insuredIds: ["i1"], insuredId: "i1",
+    premiumPerInsured: { i1: "38.03" }, compensationPerInsured: { i1: "100000" }
+  }, { policyIndex: 0, checkKnownInsureds: false });
+  assert(hachMissingStart.some((row) => String(row.message || "").includes("תאריך תחילת ביטוח")), "empty Hachshara CI start date still blocks next");
 
   // ── bug: Number(null)===0 used to store ₪0 after-discount for Clal/Migdal risk ──
   W.applyRiskSimResultsToDraft({

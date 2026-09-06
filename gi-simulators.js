@@ -11435,6 +11435,11 @@
         compensation: st.result.compensation,
         ratePerHundredThousand: st.result.ratePerHundredThousand,
         wizardCoverKey: HACHSHARA_CI_WIZARD_KEY,
+        birthDate: st.birthDate || "",
+        insuranceStartDate: st.insuranceStartDate || "",
+        age: st.age,
+        gender: st.gender,
+        smoker: st.smoker,
         inputs: {
           birthDate: st.birthDate, insuranceStartDate: st.insuranceStartDate || "",
           age: st.age, gender: st.gender,

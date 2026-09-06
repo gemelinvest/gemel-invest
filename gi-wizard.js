@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260906-cancel-forms-v7";
+  const GI_WIZARD_BUILD = "20260906-hachshara-ci-start-v1";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -16379,7 +16379,9 @@ if(path === "birthDate"){
           draft.compensationPerInsured[insId] = safeTrim(r.compensation);
           draft.compensation = draft.compensationPerInsured[insId];
         }
-        const startIso = this.toIsoDateFromAny(r.insuranceStartDate || r.startDate || "");
+        const startIso = this.toIsoDateFromAny(
+          r.insuranceStartDate || r.startDate || (r.inputs && r.inputs.insuranceStartDate) || ""
+        );
         if(startIso) draft.startDate = startIso;
         /* GI-NP-SIM-DISCOUNT: הסימולטור כבר חישב את המחיר אחרי הנחה — מעבירים אותו
            כמו שהוא. אין כאן הכפלה באחוז; מודל ההנחה הגלובלי לא משתנה.
