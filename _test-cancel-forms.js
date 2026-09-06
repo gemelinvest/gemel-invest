@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260906-cancel-forms-v5";
+const TAG = "20260906-cancel-forms-v6";
 let failed = 0;
 let passed = 0;
 
@@ -381,6 +381,68 @@ assert(form.includes("overlayPlan"), "overlay plan exists");
 assert(form.includes("policyNumber"), "fills policy number");
 assert(form.includes("pickPerson"), "fills person from customer file");
 assert(!form.includes("applyOfficialHealthAndNames"), "does not fill join-form health fields");
+
+console.log("\n8) Hebrew overlay is logical on every company cancel form");
+assert(!form.includes("visualHebrew"), "cancel forms do not reverse Hebrew before drawing");
+assert(form.includes("const painted = raw"), "drawOp paints customer text as-is");
+const HEBREW_POLICIES = [
+  { id: "hachshara", company: "הכשרה", type: "בריאות" },
+  { id: "phoenix", company: "הפניקס", type: "ריסק" },
+  { id: "phoenix_health", company: "הפניקס", type: "בריאות" },
+  { id: "ayalon", company: "איילון", type: "בריאות" },
+  { id: "ayalon_life", company: "איילון", type: "ריסק" },
+  { id: "clal", company: "כלל", type: "ריסק" },
+  { id: "clal_couple", company: "כלל", type: "ריסק", insuredMode: "couple" },
+  { id: "harel_health", company: "הראל", type: "בריאות" },
+  { id: "harel_life", company: "הראל", type: "ריסק" },
+  { id: "menora", company: "מנורה", type: "בריאות" },
+  { id: "menora_mortgage", company: "מנורה", type: "ריסק משכנתא" },
+  { id: "migdal", company: "מגדל", type: "ריסק" }
+];
+const hebrewPayload = {
+  insureds: [{
+    id: "ins1",
+    data: {
+      firstName: "ישראל",
+      lastName: "ישראלי",
+      idNumber: "123456782",
+      city: "תל אביב",
+      street: "דיזנגוף",
+      houseNumber: "50",
+      existingPolicies: HEBREW_POLICIES.map((p) => ({
+        id: p.id,
+        company: p.company,
+        type: p.type,
+        insuredMode: p.insuredMode,
+        policyNumber: "555111"
+      })),
+      cancellations: HEBREW_POLICIES.reduce((acc, p) => {
+        acc[p.id] = { status: "full" };
+        return acc;
+      }, {})
+    }
+  }]
+};
+const hebrewGroups = G.groupCancelledPolicies(hebrewPayload);
+assert(hebrewGroups.length === HEBREW_POLICIES.length, "all 12 company templates are scanned (got " + hebrewGroups.length + ")");
+HEBREW_POLICIES.forEach((p) => {
+  const group = hebrewGroups.find((g) => g.templateId === p.id);
+  assert(!!group, p.id + " has a live cancel form");
+  const plan = G.overlayPlan(G.buildDraft({ payload: hebrewPayload }, G.createDoc(group)));
+  const heb = plan.filter((op) => /[\u0590-\u05FF]/.test(op.text));
+  assert(heb.length > 0, p.id + " fills Hebrew fields");
+  heb.forEach((op) => {
+    assert(op.text.indexOf("ילארשי") < 0, p.id + " " + op.key + " is not character-reversed (got " + op.text + ")");
+    if(/^city/.test(op.key)) assert(op.text === "תל אביב", p.id + " city stays logical");
+    if(/^street/.test(op.key)) assert(op.text === "דיזנגוף", p.id + " street stays logical");
+  });
+  const nameOp = heb.find((op) => /^(fullName|lastName|firstName)/.test(op.key));
+  assert(!!nameOp, p.id + " has a name field");
+  assert(
+    nameOp.text === "ישראל ישראלי" || nameOp.text === "ישראל" || nameOp.text === "ישראלי",
+    p.id + " name stays logical (got " + nameOp.text + ")"
+  );
+});
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);

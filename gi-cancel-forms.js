@@ -14,17 +14,6 @@
   function nowISO(){
     try { return new Date().toISOString(); } catch(_e){ return ""; }
   }
-  function visualHebrew(value){
-    const helper = global.GI_OFFICIAL_FORM_FILL;
-    if(helper && typeof helper.visualHebrew === "function") return helper.visualHebrew(value);
-    const s = String(value == null ? "" : value);
-    if(!/[\u0590-\u05FF]/.test(s)) return s;
-    const parts = s.match(/[\u0590-\u05FF]+|[^\u0590-\u05FF]+/g) || [s];
-    return parts.reverse().map((part) => {
-      if(/[\u0590-\u05FF]/.test(part)) return part.split("").reverse().join("");
-      return part;
-    }).join("");
-  }
   function formatDateIL(value){
     const s = safeTrim(value);
     if(!s) return "";
@@ -399,7 +388,7 @@
   const GiCancelForms = {
     TEMPLATE_BASE: "./forms/cancel/",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260906-cancel-forms-v5",
+    VERSION: "20260906-cancel-forms-v6",
     DOC_TYPE: "company_cancel_form",
     TEMPLATES,
 
@@ -968,7 +957,7 @@
     drawOp(page, font, rgb, op){
       const raw = safeTrim(op.text);
       if(!raw) return;
-      const painted = /[\u0590-\u05FF]/.test(raw) ? raw : visualHebrew(raw);
+      const painted = raw;
       let size = Number(op.size) > 0 ? Number(op.size) : 9;
       let width = 0;
       try { width = font ? font.widthOfTextAtSize(painted, size) : painted.length * size * 0.5; } catch(_e){ width = painted.length * size * 0.5; }
