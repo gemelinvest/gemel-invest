@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260906-cancel-forms-v4";
+const APP_TAG = "20260906-cancel-forms-v5";
 let failed = 0;
 let passed = 0;
 

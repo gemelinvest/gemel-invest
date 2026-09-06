@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260906-cancel-forms-v4";
+const TAG = "20260906-cancel-forms-v5";
 let failed = 0;
 let passed = 0;
 
@@ -314,16 +314,29 @@ const boxPayload = {
       street: "דיזנגוף",
       existingPolicies: [
         { id: "p1", company: "הראל", type: "בריאות", policyNumber: "555111" },
-        { id: "p2", company: "מגדל", type: "ריסק", policyNumber: "777" }
+        { id: "p2", company: "מגדל", type: "ריסק", policyNumber: "777" },
+        { id: "p3", company: "הראל", type: "ריסק", policyNumber: "888" },
+        { id: "p4", company: "הפניקס", type: "ריסק", policyNumber: "444" },
+        { id: "p5", company: "כלל", type: "ריסק", policyNumber: "111" }
       ],
-      cancellations: { p1: { status: "full" }, p2: { status: "full" } }
+      cancellations: { p1: { status: "full" }, p2: { status: "full" }, p3: { status: "full" }, p4: { status: "full" }, p5: { status: "full" } }
     }
   }]
 };
 function digitOps(plan, key){
   return plan.filter((op) => String(op.key).indexOf(key + "#b") === 0).sort((a, b) => a.x - b.x);
 }
-const harelBoxDraft = G.buildDraft({ payload: boxPayload }, G.createDoc(G.groupCancelledPolicies(boxPayload).find((g) => g.templateId === "harel_health")));
+function assertWallMids(ops, walls, label){
+  assert(ops.length === walls.length - 1, label + " has one digit per comb box (got " + ops.length + ")");
+  ops.forEach((op, i) => {
+    const mid = (walls[i] + walls[i + 1]) / 2;
+    assert(Math.abs(op.x - mid) < 0.05, label + " digit " + i + " sits on wall midpoint");
+  });
+}
+function draftFor(templateId){
+  return G.buildDraft({ payload: boxPayload }, G.createDoc(G.groupCancelledPolicies(boxPayload).find((g) => g.templateId === templateId)));
+}
+const harelBoxDraft = draftFor("harel_health");
 const harelBoxPlan = G.overlayPlan(harelBoxDraft);
 const harelId = digitOps(harelBoxPlan, "idNumber");
 assert(harelId.length === 18, "Harel health header+signature ID fill 9+9 digit boxes (got " + harelId.length + ")");
@@ -332,15 +345,33 @@ assert(harelHeaderId.length === 9, "header ID uses 9 boxes");
 assert(harelHeaderId.map((op) => op.text).join("") === "123456782", "header ID digits keep order 123456782");
 assert(harelHeaderId.every((op, i) => i === 0 || op.x > harelHeaderId[i - 1].x), "ID digits go left-to-right across boxes");
 assert(harelHeaderId.every((op) => op.align === "center"), "each ID digit is centered in its box");
-assert(harelHeaderId[0].x > 342 && harelHeaderId[8].x < 486, "header ID stays inside the 9-box strip");
+assertWallMids(harelHeaderId, [342.19, 358.09, 373.99, 389.89, 405.79, 421.69, 437.59, 453.49, 468.28, 485.29], "Harel health header ID");
 const harelBirth = digitOps(harelBoxPlan, "birthDate");
-assert(harelBirth.length === 6, "Harel birth date uses 6 digit boxes");
 assert(harelBirth.map((op) => op.text).join("") === "120580", "birth date boxes are DDMMYY");
-const migdalBoxDraft = G.buildDraft({ payload: boxPayload }, G.createDoc(G.groupCancelledPolicies(boxPayload).find((g) => g.templateId === "migdal")));
-const migdalId = digitOps(G.overlayPlan(migdalBoxDraft), "idNumber");
-assert(migdalId.length === 9, "Migdal ID uses 9 digit boxes");
+assertWallMids(harelBirth, [93.16, 105.92, 118.67, 131.43, 144.19, 156.94, 169.7], "Harel health birth date");
+const harelSigId = harelId.filter((op) => op.y < 280);
+assertWallMids(harelSigId, [128.86, 145.87, 162.87, 179.88, 196.89, 213.9, 230.91, 247.91, 264.92, 281.93], "Harel health signature ID");
+const migdalId = digitOps(G.overlayPlan(draftFor("migdal")), "idNumber");
 assert(migdalId.map((op) => op.text).join("") === "123456782", "Migdal ID digits keep order");
+assertWallMids(migdalId, [472.8, 483.24, 493.68, 504.0, 514.44, 524.76, 535.2, 545.64, 555.96, 566.28], "Migdal header ID");
+const harelLifePlan = G.overlayPlan(draftFor("harel_life"));
+const harelLifeId = digitOps(harelLifePlan, "idNumber");
+assert(harelLifeId.length === 18, "Harel life header+signature ID fill 9+9 digit boxes");
+assertWallMids(harelLifeId.filter((op) => op.y > 580), [415.75, 430.95, 446.31, 461.68, 477.05, 492.41, 507.78, 523.15, 538.51, 554.05], "Harel life header ID");
+assertWallMids(harelLifeId.filter((op) => op.y < 280), [238.11, 253.68, 269.34, 285.01, 300.67, 316.33, 331.99, 347.65, 363.31, 379.13], "Harel life signature ID");
+const phoenixPlan = G.overlayPlan(draftFor("phoenix"));
+const phoenixId = digitOps(phoenixPlan, "idNumber");
+assert(phoenixId.map((op) => op.text).join("") === "123456782", "Phoenix signature ID digits keep order");
+assertWallMids(phoenixId, [280.98, 296.0, 311.03, 326.05, 341.07, 356.1, 371.12, 386.15, 401.17, 416.19], "Phoenix signature ID");
+assert(phoenixId.every((op) => op.y > 290 && op.y < 330), "Phoenix signature ID sits in the input row, not the labels");
+const phoenixDate = digitOps(phoenixPlan, "today");
+assert(phoenixDate.length === 8, "Phoenix signature date uses 8 digit boxes DDMMYYYY");
+assert(phoenixDate.map((op) => op.text).join("").length === 8, "Phoenix date fills DDMMYYYY");
+assertWallMids(phoenixDate, [160.79, 175.81, 190.84, 205.86, 220.89, 235.91, 250.93, 265.96, 280.98], "Phoenix signature date");
+const clalId = digitOps(G.overlayPlan(draftFor("clal")), "idNumber");
+assert(clalId.length === 0, "Clal ID stays a single open cell, not comb boxes");
 assert(form.includes("boxes: 9"), "templates mark comb ID fields");
+assert(form.includes("boxXs"), "comb fields pin measured tick walls");
 assert(form.includes("charsForBoxes"), "splits numbers into comb boxes");
 
 console.log("\n7) fill engine shape");
