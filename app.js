@@ -21496,8 +21496,54 @@ UsersGateUI.init();
       return map[raw] || raw;
     },
 
+    isExistingPolicyNursingReadOnly(policy){
+      try{
+        if(typeof Wizard !== "undefined" && Wizard && typeof Wizard.isExistingPolicyNursingReadOnly === "function"){
+          return !!Wizard.isExistingPolicyNursingReadOnly(policy);
+        }
+      }catch(_e){}
+      const type = safeTrim(policy?.type || policy?.product);
+      const classification = safeTrim(policy?.classification);
+      return /סיעוד/i.test(type) || /סיעוד/i.test(classification);
+    },
+
+    isExistingPolicyCollectiveReadOnly(policy){
+      try{
+        if(typeof Wizard !== "undefined" && Wizard && typeof Wizard.isExistingPolicyCollectiveReadOnly === "function"){
+          return !!Wizard.isExistingPolicyCollectiveReadOnly(policy);
+        }
+      }catch(_e){}
+      const p = policy && typeof policy === "object" ? policy : {};
+      if(p.isCollectiveReadOnly) return true;
+      const classification = safeTrim(p.classification).toLowerCase();
+      const type = safeTrim(p.type || p.product).toLowerCase();
+      const status = safeTrim(p.status || p.existingStatus).toLowerCase();
+      return classification.includes("קולקטיב")
+        || classification.includes("קבוצתי")
+        || type.includes("קולקטיב")
+        || type.includes("קבוצתי")
+        || status === "nochange_collective"
+        || status === "locked_collective";
+    },
+
+    getExistingPolicyLockedStatusLabel(policy){
+      try{
+        if(typeof Wizard !== "undefined" && Wizard && typeof Wizard.getExistingPolicyLockedStatusLabel === "function"){
+          const s = safeTrim(Wizard.getExistingPolicyLockedStatusLabel(policy));
+          if(s) return s;
+        }
+      }catch(_e){}
+      if(this.isExistingPolicyNursingReadOnly(policy)) return "לא ניתן לגעת";
+      if(this.isExistingPolicyCollectiveReadOnly(policy)) return "קולקטיבית / קבוצתית · לא ניתן לגעת";
+      return "";
+    },
+
     /* GI-CF-STATUS 2026-08-04 — מיפוי סטטוס הטיפול של פוליסה ישנה לתווית + מחלקת צבע. */
     getExistingStatusPresentation(policy){
+      const locked = this.getExistingPolicyLockedStatusLabel(policy);
+      if(locked){
+        return { label: locked, cls: this.isExistingPolicyNursingReadOnly(policy) ? "is-locked" : "is-nochangeCollective" };
+      }
       const raw = this.normalizeExistingPolicyStatus(policy?.existingStatus || policy?.status || "");
       const map = {
         full:                { label: "ביטול מלא",               cls: "is-cancelFull" },
@@ -21505,7 +21551,9 @@ UsersGateUI.init();
         partial:             { label: "ביטול חלקי",              cls: "is-cancelPartial" },
         agentappoint:        { label: "מינוי סוכן",              cls: "is-appoint" },
         nochangeclient:      { label: "ללא שינוי – לבקשת הלקוח", cls: "is-nochangeClient" },
-        nochangecollective:  { label: "ללא שינוי – קולקטיב",     cls: "is-nochangeCollective" }
+        nochangecollective:  { label: "ללא שינוי – קולקטיב",     cls: "is-nochangeCollective" },
+        lockednursing:       { label: "לא ניתן לגעת",            cls: "is-locked" },
+        lockedcollective:    { label: "קולקטיבית / קבוצתית · לא ניתן לגעת", cls: "is-nochangeCollective" }
       };
       return map[raw] || { label: safeTrim(policy?.existingStatus) || "טרם הוזן", cls: "is-pending" };
     },
@@ -22340,7 +22388,15 @@ UsersGateUI.init();
             subtitle: safeTrim(p?.policyNumber) ? `פוליסה ${p.policyNumber}` : insuredLabel,
             badgeText: isAgentAppt ? "מינוי סוכן" : "הגיעה עם הלקוח",
             badgeClass: isAgentAppt ? "is-appoint" : "is-existing",
-            existingStatus: isAgentAppt ? "agent_appoint" : this.resolveExistingPolicyStatus(ins, p),
+            existingStatus: isAgentAppt
+              ? "agent_appoint"
+              : (this.isExistingPolicyNursingReadOnly(p)
+                ? "locked_nursing"
+                : (this.isExistingPolicyCollectiveReadOnly(p)
+                  ? "locked_collective"
+                  : this.resolveExistingPolicyStatus(ins, p))),
+            isCollectiveReadOnly: !!p?.isCollectiveReadOnly,
+            classification: safeTrim(p?.classification),
             /* GI-CF-STATUS 2026-08-04 — סטטוס הטיפול וסיבת הביטול שהנציג בחר בשלב הפוליסות הקיימות,
                כדי שיוצגו בתיק הלקוח בטבלת "פוליסות ישנות" במקום תגית גנרית. */
             cancelReason: isAgentAppt ? "" : safeTrim(
@@ -22348,7 +22404,12 @@ UsersGateUI.init();
             ),
             ctaText: "פרטי פוליסה",
             details: {
-              "סטטוס": isAgentAppt ? "מינוי סוכן" : "פוליסה קיימת",
+              "סטטוס": isAgentAppt
+                ? "מינוי סוכן"
+                : (this.getExistingPolicyLockedStatusLabel(p) || this.getExistingStatusPresentation({
+                    ...p,
+                    existingStatus: this.resolveExistingPolicyStatus(ins, p)
+                  }).label || "פוליסה קיימת"),
               ...(isAgentAppt ? {
                 "מבוטחים בפוליסה": String(insuredCount || 1),
                 "שמות מבוטחים": policyInsuredNames || insuredLabel
@@ -39889,7 +39950,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-mirror-script-premiums-v3";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-existing-locked-status-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -39909,7 +39970,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-mirror-script-premiums-v3";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-existing-locked-status-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -40545,8 +40606,8 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260906-mirror-script-premiums-v3",
-    "./simulators-shell.css?v=20260906-mirror-script-premiums-v3"
+    "./simulators-center.css?v=20260906-existing-locked-status-v1",
+    "./simulators-shell.css?v=20260906-existing-locked-status-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -41908,7 +41969,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260906-mirror-script-premiums-v3";
+  const GI_WIZARD_JS_VERSION = "20260906-existing-locked-status-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -45610,13 +45671,19 @@ const MIRROR_DISCLOSURE_LIBRARY = {
     },
 
     getPolicyStatusValue(policy, cancellation){
-      const raw = safeTrim(cancellation?.status || policy?.status || policy?.policyStatus || policy?.state || '');
+      const locked = this.getExistingPolicyLockedStatusLabel(policy);
+      if(locked) return locked;
+      const raw = safeTrim(cancellation?.status || policy?.status || policy?.policyStatus || policy?.existingStatus || policy?.state || '');
       const map = {
         full: 'ביטול מלא',
+        partial: 'ביטול חלקי',
         partial_health: 'ביטול חלקי',
         agent_appoint: 'מינוי סוכן',
+        agentappoint: 'מינוי סוכן',
         nochange_client: 'ללא שינוי – לבקשת הלקוח',
-        nochange_collective: 'ללא שינוי – קולקטיב'
+        nochange_collective: 'ללא שינוי – קולקטיב',
+        locked_nursing: 'לא ניתן לגעת',
+        locked_collective: 'קולקטיבית / קבוצתית · לא ניתן לגעת'
       };
       return map[raw] || raw || 'טרם הוזן';
     },
@@ -47135,7 +47202,7 @@ const MIRROR_DISCLOSURE_LIBRARY = {
       const p = row.policy || {};
       const company = safeTrim(p.company) || 'חברה לא מוגדרת';
       const type = safeTrim(p.type) || 'מוצר לא מוגדר';
-      const status = this.getPolicyStatusValue(p);
+      const status = this.getPolicyStatusValue(p, row.cancellation);
       const premium = safeTrim(p.monthlyPremium || p.premiumMonthly || p.premium || '');
       const amountLabel = this.getPolicyAmountLabel(p);
       const amountValue = this.getPolicyAmountValue(p);
@@ -66196,10 +66263,23 @@ ${inner}
     },
 
     _mcExistingPolicyStatusMeta(ins, policy){
+      const wrapLocked = (label, nursing) => ({
+        raw: nursing ? "locked_nursing" : "locked_collective",
+        label,
+        tone: "neutral",
+        reason: ""
+      });
       try{
-        if(typeof LifeCreateUI !== "undefined" && LifeCreateUI && typeof LifeCreateUI.getExistingPolicyStatusMeta === "function"){
-          const meta = LifeCreateUI.getExistingPolicyStatusMeta(policy, ins?.data);
-          if(meta && typeof meta === "object"){
+        const api = (typeof Wizard !== "undefined" && Wizard)
+          || (typeof LifeCreateUI !== "undefined" && LifeCreateUI)
+          || null;
+        if(api && typeof api.getExistingPolicyLockedStatusLabel === "function"){
+          const locked = safeTrim(api.getExistingPolicyLockedStatusLabel(policy));
+          if(locked) return wrapLocked(locked, !!(api.isExistingPolicyNursingReadOnly && api.isExistingPolicyNursingReadOnly(policy)));
+        }
+        if(api && typeof api.getExistingPolicyStatusMeta === "function"){
+          const meta = api.getExistingPolicyStatusMeta(policy, ins?.data);
+          if(meta && typeof meta === "object" && safeTrim(meta.raw)){
             const cancellations = ins?.data?.cancellations && typeof ins.data.cancellations === "object" ? ins.data.cancellations : {};
             const c = cancellations[policy?.id] || {};
             return {
@@ -66211,6 +66291,12 @@ ${inner}
           }
         }
       }catch(_e){}
+      try{
+        if(typeof CustomersUI !== "undefined" && CustomersUI && typeof CustomersUI.getExistingPolicyLockedStatusLabel === "function"){
+          const locked = safeTrim(CustomersUI.getExistingPolicyLockedStatusLabel(policy));
+          if(locked) return wrapLocked(locked, !!CustomersUI.isExistingPolicyNursingReadOnly?.(policy));
+        }
+      }catch(_e2){}
       const cancellations = ins?.data?.cancellations && typeof ins.data.cancellations === "object" ? ins.data.cancellations : {};
       const c = cancellations[policy?.id] || {};
       const raw = safeTrim(c.status) || safeTrim(policy?.status) || safeTrim(policy?.treatmentStatus) || safeTrim(policy?.cancelStatus) || "";
@@ -66227,7 +66313,9 @@ ${inner}
         agentappoint: "מינוי סוכן",
         appoint_agent: "מינוי סוכן",
         nochange: "ללא שינוי",
-        none: "ללא שינוי"
+        none: "ללא שינוי",
+        locked_nursing: "לא ניתן לגעת",
+        locked_collective: "קולקטיבית / קבוצתית · לא ניתן לגעת"
       };
       let tone = "neutral";
       if(raw === "full" || raw === "cancel") tone = "danger";

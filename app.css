@@ -42258,6 +42258,15 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   background: rgba(34,197,94,.12);
   color: #15803d;
 }
+.cfFile__statusBadge.is-pending{
+  background: rgba(148,163,184,.16);
+  color: #475569;
+}
+.cfFile__statusBadge.is-locked,
+.cfFile__statusBadge.is-nochangeCollective{
+  background: rgba(100,116,139,.16);
+  color: #334155;
+}
 .cfFile__coverage{
   max-width: 280px;
   font-size: 12px;

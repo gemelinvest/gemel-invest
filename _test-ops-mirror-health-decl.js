@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260906-mirror-script-premiums-v3";
+const APP_TAG = "20260906-existing-locked-status-v1";
 let failed = 0;
 let passed = 0;
 
