@@ -12,7 +12,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260906-hachshara-ci-start-v1";
+const TAG = "20260906-proposal-assign-live-v1";
 let failed = 0;
 let passed = 0;
 

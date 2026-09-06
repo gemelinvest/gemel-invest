@@ -5832,6 +5832,7 @@
       State.data.meta.proposalAssignInbox = normalizeProposalAssignInboxList(remoteMeta.proposalAssignInbox || []);
       State.data.meta.proposalInboxUpdatedAt = getMetaSyncAt(remoteMeta, "proposalInbox");
       changed = true;
+      try { ProposalAssignInbox.handleInboxMetaArrival(); } catch(_e) {}
     }
     if(metaSyncIsNewer(remoteMeta, State.data.meta, "customerInbox")){
       State.data.meta.customerAssignInbox = normalizeCustomerAssignInboxList(remoteMeta.customerAssignInbox || []);
@@ -10021,6 +10022,12 @@
     const list = normalizeProposalAssignInboxList(State.data.meta.proposalAssignInbox || []);
     const next = normalizeProposalAssignInboxEntry(entry);
     if(!safeTrim(next.targetAgentId) || !safeTrim(next.proposalId)) return false;
+    const exists = list.some((row) =>
+      safeTrim(row.targetAgentId) === safeTrim(next.targetAgentId)
+      && safeTrim(row.proposalId) === safeTrim(next.proposalId)
+      && Math.abs(Date.parse(row.at || "") - Date.parse(next.at || "")) < 120000
+    );
+    if(exists) return false;
     list.push(next);
     State.data.meta.proposalAssignInbox = normalizeProposalAssignInboxList(list);
     bumpMetaSyncClock(State.data.meta, "proposalInbox");
@@ -10029,16 +10036,56 @@
 
   function proposalAssignInboxMatchesCurrentUser(entry){
     if(!entry || !Auth.current) return false;
-    const myId = safeTrim(Auth.current.id);
     const tid = safeTrim(entry.targetAgentId);
+    const myId = safeTrim(Auth.current.id);
     if(myId && tid && myId === tid) return true;
-    const myName = safeTrim(Auth.current.name);
+    const sessionAgent = (typeof findAgentRecordForSession === "function") ? findAgentRecordForSession() : null;
+    const sessionId = safeTrim(sessionAgent?.id);
+    if(sessionId && tid && sessionId === tid) return true;
     const tname = safeTrim(entry.targetAgentName);
-    return !!(myName && tname && myName === tname);
+    const myName = safeTrim(Auth.current.name);
+    if(myName && tname && myName === tname) return true;
+    const agentName = safeTrim(sessionAgent?.name) || safeTrim(sessionAgent?.username);
+    return !!(agentName && tname && agentName === tname);
   }
 
   const ProposalAssignInbox = {
     _flushBusy: false,
+    openProposal(proposalId){
+      const id = safeTrim(proposalId);
+      if(!id) return;
+      try { UI.goView("proposals"); } catch(_e) {}
+      try {
+        window.setTimeout(() => {
+          try { ProposalsUI.openById?.(id); } catch(_e2) {}
+        }, 80);
+      } catch(_e) {}
+    },
+    async pullIntoSession(proposalId){
+      const id = safeTrim(proposalId);
+      if(!id) return null;
+      const existing = (Array.isArray(State.data?.proposals) ? State.data.proposals : [])
+        .find((row) => String(row?.id) === String(id));
+      if(existing) return existing;
+      try {
+        const res = await Storage.ensureRecordPayload("proposals", id);
+        if(res?.ok && res.record) return res.record;
+      } catch(_e) {}
+      try {
+        const cols = (typeof PROPOSAL_LIGHT_COLUMNS === "string" ? PROPOSAL_LIGHT_COLUMNS : "id,agent_id,agent_name,full_name,updated_at") + ",payload";
+        const rowRes = await Storage.loadSingleRow(SUPABASE_TABLES.proposals, id, cols);
+        if(rowRes?.ok && rowRes.data){
+          try { Storage.mergeProposalsDelta([rowRes.data]); } catch(_eMerge) {}
+          return (Array.isArray(State.data?.proposals) ? State.data.proposals : [])
+            .find((row) => String(row?.id) === String(id)) || null;
+        }
+      } catch(_e) {}
+      return null;
+    },
+    handleInboxMetaArrival(){
+      if(!Auth.current) return;
+      void this.flushForCurrentUser();
+    },
     async flushForCurrentUser(){
       if(this._flushBusy || !Auth.current) return;
       State.data.meta = State.data.meta && typeof State.data.meta === "object" ? State.data.meta : {};
@@ -10048,26 +10095,47 @@
       this._flushBusy = true;
       try {
         const rest = inbox.filter((e) => !proposalAssignInboxMatchesCurrentUser(e));
-        State.data.meta.proposalAssignInbox = normalizeProposalAssignInboxList(rest);
+        const ready = [];
+        const keep = [];
+        for(let i = 0; i < mine.length; i += 1){
+          const ev = mine[i];
+          const rec = await this.pullIntoSession(ev.proposalId);
+          if(rec) ready.push(ev);
+          else keep.push(ev);
+        }
+        State.data.meta.proposalAssignInbox = normalizeProposalAssignInboxList(rest.concat(keep));
         bumpMetaSyncClock(State.data.meta, "proposalInbox");
-        mine.forEach((ev) => {
-          const from = safeTrim(ev.fromName) || "נציג";
+        if(ready.length){
+          try { ProposalsUI.render?.(); } catch(_e) {}
+        }
+        ready.forEach((ev) => {
+          const from = safeTrim(ev.fromName) || "מנהל";
           const label = safeTrim(ev.proposalLabel) || "הצעה";
+          const proposalId = safeTrim(ev.proposalId);
+          const tag = `gi-proposal-assign-${safeTrim(ev.id) || proposalId}`;
           try {
             window.showToast?.({
-              title: "התקבלה הצעה חדשה",
-              text: `מאת: ${from} · ${label}`,
+              title: "שויכה לך הצעה",
+              text: `${label} · מאת: ${from}`,
               variant: "info",
-              durationMs: 7200
+              durationMs: 8000,
+              singletonKey: tag,
+              actions: proposalId ? [{ label: "פתח הצעה", onClick: () => this.openProposal(proposalId) }] : []
             });
           } catch(_e){}
           try {
-            void DesktopNotifications?.notify?.("התקבלה הצעה חדשה", { body: `מאת: ${from} · ${label}`, tag: `gi-proposal-assign-${safeTrim(ev.id)}` });
+            void DesktopNotifications?.notify?.("שויכה לך הצעה", {
+              body: `${label} · מאת: ${from}`,
+              tag,
+              onClick: () => this.openProposal(proposalId)
+            });
           } catch(_e){}
         });
-        try {
-          await App.persist("נקה התראות שיוך הצעה", { skipProposalsSync: true, metaOnly: true, metaSyncScopes: ["proposalInbox"], silent: true });
-        } catch(_e){}
+        if(ready.length && !keep.length){
+          try {
+            await App.persist("נקה התראות שיוך הצעה", { skipProposalsSync: true, metaOnly: true, metaSyncScopes: ["proposalInbox"], silent: true });
+          } catch(_e){}
+        }
       } finally {
         this._flushBusy = false;
       }
@@ -30123,7 +30191,7 @@ UsersGateUI.init();
       if(!r?.ok && !rowOk){
         try { window.showToast?.({ title: "שמירה חלקית", text: safeTrim(r?.error) || "השינוי נשמר מקומית; ייתכן שסנכרון לשרת נכשל.", variant: "warn", durationMs: 5600 }); } catch(_e) {}
       } else {
-        try { window.showToast?.({ title: "שויך בהצלחה", text: `ההצעה שויכה ל־${targetName}. הנציג יראה אותה בהצעות שלו אחרי רענון/כניסה.`, variant: "ok", durationMs: 4800 }); } catch(_e) {}
+        try { window.showToast?.({ title: "שויך בהצלחה", text: `ההצעה שויכה ל־${targetName}. הנציג יראה אותה מיד, עם הודעה.`, variant: "ok", durationMs: 4800 }); } catch(_e) {}
       }
     },
     init(){
@@ -39631,7 +39699,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-hachshara-ci-start-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-proposal-assign-live-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -39651,7 +39719,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-hachshara-ci-start-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-proposal-assign-live-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -40287,8 +40355,8 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260906-hachshara-ci-start-v1",
-    "./simulators-shell.css?v=20260906-hachshara-ci-start-v1"
+    "./simulators-center.css?v=20260906-proposal-assign-live-v1",
+    "./simulators-shell.css?v=20260906-proposal-assign-live-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -41650,7 +41718,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260906-hachshara-ci-start-v1";
+  const GI_WIZARD_JS_VERSION = "20260906-proposal-assign-live-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -60924,6 +60992,7 @@ const CampaignLeadsStore = {
       this.lightBusy = true;
       try {
         try { await CampaignLeadAssignInbox.flushForCurrentUser(); } catch(_e) {}
+        try { await ProposalAssignInbox.flushForCurrentUser(); } catch(_e) {}
         const probe = await Storage.probeMetaUpdatedAt();
         if(!probe?.ok) return;
         const stamp = safeTrim(probe.updatedAt);
@@ -60944,6 +61013,7 @@ const CampaignLeadsStore = {
       // עכשיו מדלגים רק על החלק היקר (רשת), אבל עדיין מנקזים את התור המקומי.
       if(LiveRefresh?.hasBlockingFlow?.() || HeavySyncGate.isBusy()){
         try { await CampaignLeadAssignInbox.flushForCurrentUser(); } catch(_e) {}
+        try { await ProposalAssignInbox.flushForCurrentUser(); } catch(_e) {}
         return;
       }
       this.busy = true;
@@ -60959,6 +61029,7 @@ const CampaignLeadsStore = {
           try { CampaignMyLeadsUI.renderList(); } catch(_e) {}
         }
         await CampaignLeadAssignInbox.flushForCurrentUser();
+        await ProposalAssignInbox.flushForCurrentUser();
       } finally {
         this.busy = false;
       }
