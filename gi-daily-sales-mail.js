@@ -1,4 +1,4 @@
-/* GI-DAILY-SALES-MAIL 20260906-sales-mail-root-v2
+/* GI-DAILY-SALES-MAIL 20260906-haifa-modiin-v1
    Isolated Outlook daily-sales email. Calls existing DashboardUI report
    builders only (buildDailySalesPrintModel). Does not change sales / PIN / MFA. */
 (() => {
