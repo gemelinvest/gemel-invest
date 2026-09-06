@@ -5402,9 +5402,6 @@
   function customerVisibleToCurrentUser(rec){
     if(!rec || !Auth?.current) return false;
     if(Auth.canViewAllCustomers()) return true;
-    if(Auth.isOpsAgent()){
-      try { return currentUserMatchesMirrorAssign(getMirrorAssign(rec)); } catch(_e){ return false; }
-    }
     // מאגר אלמנטרי משותף: כל נציגי האלמנטרי רואים לקוחות אלמנטרי (לא רק את של עצמם)
     if(Auth.isElementary()){
       if(isElementaryPoolCustomerRecord(rec)) return true;
@@ -5711,9 +5708,8 @@
   // those rows loading. This server filter is intentionally permissive (a superset); the
   // precise client-side ownership filter (customerVisibleToCurrentUser) remains the final gate.
   //
-  // GI-FIX 2026-08-30: נציג תפעול לא מסונן לפי agent_id/agent_name של מכירות —
-  // השיוך שלו חי ב-payload.mirrorFlow.mirrorAssign. סינון מכירות גרם למנהל לראות
-  // שיוך מוצלח בזמן שהנציג לא קיבל את הלקוח בכלל (השרת לא החזיר את השורה).
+  // GI-FIX 2026-09-06: נציג תפעול רואה את כל הלקוחות (canViewAllCustomers),
+  // בלי סינון agent_id/agent_name של מכירות. שיוך שיקוף נשאר כלי עבודה של מנהל תפעול.
   function getServerListAgentScopeFilter(){
     if(Storage?._skipServerAgentScope) return null;
     if(!Auth?.current || Auth.canViewAllCustomers()) return null;
@@ -13610,8 +13606,8 @@
       return this._loadTableRowsUnscoped(tableName, selectExpr);
     },
 
-    /* GI-FIX 2026-08-30: נציג תפעול — טעינה לפי שיוך שיקוף ב-payload, לא לפי
-       agent_id של מכירות. בלי זה המנהל רואה שיוך והנציג לא מקבל את הלקוח. */
+    /* GI-FIX 2026-08-30 / 2026-09-06: סינון JSON לפי שיוך שיקוף — נשאר לסינון
+       «רק משויכים אליי». טעינת הסשן של נציג תפעול היא ארגונית כמו מנהל תפעול. */
     _opsAgentMirrorAssignOrFilter(scope){
       const parts = [];
       const quote = (v) => '"' + String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
@@ -14214,13 +14210,11 @@
         const [metaRes, agentsRes, customersRes, proposalsRes] = await Promise.all([
           this.loadMetaRow(),
           this.loadTableRows(SUPABASE_TABLES.agents),
-          (Auth?.isOpsAgent?.()
-            ? this.loadOpsAgentAssignedCustomerRows("*")
-            : this.loadTableRowsSince(
-                SUPABASE_TABLES.customers,
-                querySince,
-                this.isTeamManagerLightSession() ? CUSTOMER_LIGHT_COLUMNS : "*"
-              )),
+          this.loadTableRowsSince(
+            SUPABASE_TABLES.customers,
+            querySince,
+            this.isTeamManagerLightSession() ? CUSTOMER_LIGHT_COLUMNS : "*"
+          ),
           (Auth?.isOpsAgent?.()
             ? Promise.resolve({ ok:true, data: [] })
             : this.loadTableRowsSince(
@@ -14328,13 +14322,6 @@
         else console.warn("WAVE3_DELTA: customers delta skipped", customersRes.error);
         if(proposalsRes.ok) this.mergeProposalsDelta(proposalsRes.data || []);
         else console.warn("WAVE3_DELTA: proposals delta skipped", proposalsRes.error);
-
-        try {
-          if(Auth?.isOpsAgent?.()){
-            // Full assigned set was re-fetched — drop local rows that are no longer assigned.
-            State.data = filterSessionStateForCurrentUserScope(State.data);
-          }
-        } catch(_e) {}
 
         try {
           if(LARGE_SESSION_MODE_ENABLED){
@@ -14797,19 +14784,17 @@
 
         // GI-PERF 2026-08-10 — Large Session: ספירה זולה לפני משיכת כל הטבלה.
         // GI-PERF 2026-08-25c — מנהל צוות מעל 400: working-set (לא כל 2.1K).
-        // GI-FIX 2026-08-30 — נציג תפעול: לא Large Session ארגוני; רק לקוחות ששויכו אליו.
+        // GI-FIX 2026-09-06 — נציג תפעול טוען לקוחות כמו מנהל תפעול (לא רק שיוך שיקוף).
         let useLargeCustomers = false;
         let useTeamManagerWorkingSet = false;
-        let useOpsAgentAssignSet = false;
         let largeCustomersTotal = 0;
         let largeProbeUncertain = false;
         this.setLargeCustomersSession(false, 0);
-        try { useOpsAgentAssignSet = !!(Auth?.isOpsAgent?.()); } catch(_e) { useOpsAgentAssignSet = false; }
         let rosterProbe = { ok:false, count: 0 };
-        if(!useOpsAgentAssignSet && (LARGE_SESSION_MODE_ENABLED || (TEAM_MANAGER_LIGHT_SESSION_ENABLED && Auth?.isTeamManager?.()))){
+        if(LARGE_SESSION_MODE_ENABLED || (TEAM_MANAGER_LIGHT_SESSION_ENABLED && Auth?.isTeamManager?.())){
           rosterProbe = await this.probeCustomersCount();
         }
-        if(!useOpsAgentAssignSet && LARGE_SESSION_MODE_ENABLED){
+        if(LARGE_SESSION_MODE_ENABLED){
           if(rosterProbe.ok && rosterProbe.count >= LARGE_SESSION_CUSTOMER_THRESHOLD){
             useLargeCustomers = true;
             largeCustomersTotal = rosterProbe.count;
@@ -14821,8 +14806,7 @@
             try { console.warn("LARGE_SESSION_PROBE_FAILED_USING_WORKING_SET:", rosterProbe.error || ""); } catch(_e) {}
           }
         }
-        if(!useOpsAgentAssignSet
-          && !useLargeCustomers
+        if(!useLargeCustomers
           && TEAM_MANAGER_LIGHT_SESSION_ENABLED
           && Auth?.isTeamManager?.()
           && rosterProbe.ok
@@ -14839,18 +14823,14 @@
           } catch(_e) {}
         }
 
-        const opsAgentCustomerCols = (LIGHT_INITIAL_LOAD_ENABLED
-          ? (CUSTOMER_LIGHT_COLUMNS + ",payload")
-          : "*");
-        const customersFetch = useOpsAgentAssignSet
-          ? this.loadOpsAgentAssignedCustomerRows(opsAgentCustomerCols)
-          : useLargeCustomers
+        const customersFetch = useLargeCustomers
           ? this.loadRecentCustomerRows(LARGE_SESSION_CUSTOMER_WORKING_SET, initialCustomerColumns)
           : useTeamManagerWorkingSet
             ? this.loadRecentCustomerRows(TEAM_MANAGER_LIGHT_WORKING_SET, initialCustomerColumns)
             : this.loadTableRows(SUPABASE_TABLES.customers, initialCustomerColumns);
         // GI-PERF 2026-08-10: בסשן גדול גם הצעות רק working-set — אחרת מסך "הצעות" מקפיא.
-        const proposalsFetch = useOpsAgentAssignSet
+        // נציג תפעול בלי מסך הצעות — לא מושכים working-set של הצעות.
+        const proposalsFetch = (Auth?.isOpsAgent?.())
           ? Promise.resolve({ ok:true, data: [] })
           : useLargeCustomers
           ? this.loadRecentProposalRows(LARGE_SESSION_PROPOSAL_WORKING_SET, initialProposalColumns)
@@ -14874,18 +14854,7 @@
         if(!customersRes.ok || !proposalsRes.ok){
           try { console.warn("LIGHT_SELECT_FAILED_FALLBACK_TO_FULL:", safeTrim(customersRes.error) || safeTrim(proposalsRes.error)); } catch(_e) {}
           lightSelectUsed = false;
-          if(useOpsAgentAssignSet){
-            const [cOps, pOps] = await Promise.all([
-              customersRes.ok
-                ? Promise.resolve(customersRes)
-                : this.loadOpsAgentAssignedCustomerRows("*"),
-              proposalsRes.ok
-                ? Promise.resolve(proposalsRes)
-                : Promise.resolve({ ok:true, data: [] })
-            ]);
-            customersRes = cOps;
-            proposalsRes = pOps;
-          } else if(useLargeCustomers || useTeamManagerWorkingSet){
+          if(useLargeCustomers || useTeamManagerWorkingSet){
             const custCap = useLargeCustomers
               ? LARGE_SESSION_CUSTOMER_WORKING_SET
               : TEAM_MANAGER_LIGHT_WORKING_SET;
@@ -14905,7 +14874,9 @@
           } else {
             const [cFull, pFull] = await Promise.all([
               this.loadTableRows(SUPABASE_TABLES.customers),
-              this.loadTableRows(SUPABASE_TABLES.proposals)
+              (Auth?.isOpsAgent?.())
+                ? Promise.resolve({ ok:true, data: [] })
+                : this.loadTableRows(SUPABASE_TABLES.proposals)
             ]);
             customersRes = cFull;
             proposalsRes = pFull;
@@ -16693,7 +16664,7 @@
     },
 
     canViewAllCustomers(){
-      return this.isAdmin() || this.isManager() || this.isOps();
+      return this.isAdmin() || this.isManager() || this.isOps() || this.isOpsAgent();
     },
 
     canViewElementaryCustomersPool(){
@@ -32070,13 +32041,7 @@ UsersGateUI.init();
 
     isRelevantCustomer(rec){
       if(!rec) return false;
-      if(Auth.isOpsAgent()){
-        try{
-          if(!currentUserMatchesMirrorAssign(getMirrorAssign(rec))) return false;
-        }catch(_e){ return false; }
-      } else if(!Auth.isOps()){
-        return false;
-      }
+      if(!(Auth.isOps() || Auth.isOpsAgent())) return false;
       return !!(
         isHealthRisksWizardCompleted(rec) ||
         isWaitingMirrorQueueCustomer(rec) ||
@@ -32685,14 +32650,6 @@ UsersGateUI.init();
         try{
           const customer = (State.data?.customers || []).find((c) => safeTrim(c.id) === cid);
           if(!customer || typeof MirrorCallUI === "undefined" || !MirrorCallUI) return;
-          if(Auth.isOpsAgent()){
-            try{
-              if(!currentUserMatchesMirrorAssign(getMirrorAssign(customer))){
-                alert("הלקוח לא משויך אליך.");
-                return;
-              }
-            }catch(_e){ return; }
-          }
           MirrorCallUI.pickCustomer(cid);
           const ops = ensureOpsProcess(customer);
           if(!ops.resultStatus && !this.getCallStore(customer)?.active){
@@ -32774,9 +32731,7 @@ UsersGateUI.init();
             <div class="opsDashPanel__head">
               <div>
                 <div class="opsDashPanel__title">ממתינים לשיקוף</div>
-                <div class="opsDashPanel__sub">${isManager
-                  ? "הצעות שהוגשו לתפעול · לפי סדר כניסה לתור"
-                  : "הצעות ששויכו אליך וממתינות לשיחת שיקוף"}</div>
+                <div class="opsDashPanel__sub">הצעות שהוגשו לתפעול · לפי סדר כניסה לתור</div>
               </div>
               <div class="opsDashPanel__headActions">
                 <span class="opsDashPanel__sub">${model.waitingMirrorRows.length} לקוחות</span>
@@ -39699,7 +39654,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-proposal-assign-live-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-ops-agent-all-cust-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -39719,7 +39674,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-proposal-assign-live-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-ops-agent-all-cust-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -40355,8 +40310,8 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260906-proposal-assign-live-v1",
-    "./simulators-shell.css?v=20260906-proposal-assign-live-v1"
+    "./simulators-center.css?v=20260906-ops-agent-all-cust-v1",
+    "./simulators-shell.css?v=20260906-ops-agent-all-cust-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -41718,7 +41673,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260906-proposal-assign-live-v1";
+  const GI_WIZARD_JS_VERSION = "20260906-ops-agent-all-cust-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -64185,18 +64140,14 @@ ${inner}
     },
 
     _syncOpsAgentSearchScope(){
-      const agentOnly = !!Auth.isOpsAgent?.();
-      const activeFilter = agentOnly ? "assignedToMe" : "all";
-      this.filter = activeFilter;
+      this.filter = "all";
       if(this.els.filters){
         this.els.filters.querySelectorAll(".mcSearch__chip").forEach((c) => {
-          const key = safeTrim(c.getAttribute("data-mc-filter"));
-          const hide = agentOnly && key !== "assignedToMe";
-          c.hidden = hide;
-          c.classList.toggle("is-active", key === activeFilter);
+          c.hidden = false;
+          c.classList.toggle("is-active", safeTrim(c.getAttribute("data-mc-filter")) === "all");
         });
       }
-      if(this.els.assignScopeHint) this.els.assignScopeHint.hidden = !agentOnly;
+      this._syncAssignHint();
     },
 
     showScreen(name){
@@ -64257,8 +64208,7 @@ ${inner}
     search(){
       const q = safeTrim(this.els.searchInput?.value || "");
       const customers = State.data?.customers || [];
-      const agentOnly = !!Auth.isOpsAgent?.();
-      if(agentOnly && this.filter !== "assignedToMe") this.filter = "assignedToMe";
+      const assignedOnly = this.filter === "assignedToMe";
       const results = customers.filter(c => {
         if(!this._mcCustomerHasHealthRiskPolicies(c)) return false;
         const name  = safeTrim(c.fullName).toLowerCase();
@@ -64267,10 +64217,9 @@ ${inner}
         const qLow  = q.toLowerCase();
         const matches = !q || name.includes(qLow) || idNum.includes(q) || phone.includes(q);
         if(!matches) return false;
-        if(agentOnly || this.filter === "assignedToMe"){
+        if(assignedOnly){
           const as = getMirrorAssign(c);
           if(!currentUserMatchesMirrorAssign(as)) return false;
-          if(agentOnly) return true;
         }
         if(this.filter === "hasProposal"){
           const proposals = State.data?.proposals || [];
@@ -69601,8 +69550,7 @@ ${inner}
 
     _syncAssignHint(){
       if(!this.els.assignScopeHint) return;
-      const on = !!Auth.isOpsAgent?.() || this.filter === "assignedToMe";
-      this.els.assignScopeHint.hidden = !on;
+      this.els.assignScopeHint.hidden = this.filter !== "assignedToMe";
     },
 
     _syncMgrRow(){
