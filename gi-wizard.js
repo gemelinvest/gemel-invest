@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260906-cover-prem-v1";
+  const GI_WIZARD_BUILD = "20260906-ops-dedupe-v1";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -14521,6 +14521,79 @@ if(path === "birthDate"){
       return label + packageText + scheduleText + exceptionText;
     },
 
+    extractDiscountPackageNumFromText(text){
+      const s = safeTrim(text);
+      if(!s) return "";
+      const m = s.match(/מס['\u05f3]?\s*חבילה[:\s]+([^\s|]+)/)
+        || s.match(/קוד\s+(\d+)/)
+        || s.match(/חבילה\s+(\d+)/);
+      return m ? safeTrim(m[1]) : "";
+    },
+
+    /* GI-NP-OPS-DEDUPE: תצוגת הנחה מלאה לדוח — תווית הסימולטור + מס׳ חבילה. */
+    getOperationalDiscountDisplayText(policy){
+      if(!policy || typeof policy !== "object") return "";
+      const simMap = policy.simDiscountPerInsured;
+      let sim = null;
+      if(simMap && typeof simMap === "object"){
+        const ids = (typeof this.getPolicyInsuredIds === "function") ? this.getPolicyInsuredIds(policy) : [];
+        const order = ids.length ? ids : Object.keys(simMap);
+        for(let i = 0; i < order.length; i++){
+          const e = simMap[order[i]];
+          if(e && (e.optionId || e.label || Number(e.year1Pct) > 0)){ sim = e; break; }
+        }
+      }
+      let catalog = null;
+      const api = (typeof this.getSimulatorDiscountApi === "function") ? this.getSimulatorDiscountApi() : null;
+      if(sim && sim.optionId && api && typeof api.byId === "function"){
+        try { catalog = api.byId(policy.company, policy.type, sim.optionId); } catch(_e) {}
+      }
+      if(!catalog && typeof this.getPolicyRowDiscountOptions === "function"){
+        const opts = this.getPolicyRowDiscountOptions(policy, policy.type) || [];
+        catalog = opts.find((o) => o && (
+          (sim && sim.optionId && (o.id === sim.optionId || (o._simRaw && o._simRaw.id === sim.optionId)))
+          || (sim && sim.label && safeTrim(o.label) === safeTrim(sim.label))
+        )) || null;
+      }
+      const labelGuess = safeTrim((catalog && catalog.label) || (sim && (sim.label || sim.optionLabel)) || (policy.discountOption && policy.discountOption.label));
+      const pct = Number(sim && sim.year1Pct) || (typeof this.getPolicyDiscountPct === "function" ? this.getPolicyDiscountPct(policy) : 0);
+      const wizardOpts = (typeof this.getCompanyDiscountOptions === "function")
+        ? (this.getCompanyDiscountOptions(policy.company, policy.type) || []) : [];
+      const wizardHit = wizardOpts.find((o) => {
+        if(!o) return false;
+        if(labelGuess && safeTrim(o.label) === labelGuess) return true;
+        const oPkg = safeTrim(o.packageNum);
+        if(oPkg && labelGuess && labelGuess.indexOf(oPkg) >= 0 && Number(o.pct) === Number(pct)) return true;
+        return false;
+      }) || null;
+      const pkg = safeTrim(
+        (policy.discountOption && policy.discountOption.packageNum)
+        || policy.discountPackageNum
+        || (catalog && catalog.packageNum)
+        || (wizardHit && wizardHit.packageNum)
+        || this.extractDiscountPackageNumFromText(labelGuess)
+        || this.extractDiscountPackageNumFromText(sim && sim.label)
+      );
+      const catalogSchedule = catalog && catalog.schedule;
+      const scheduleStr = Array.isArray(catalogSchedule)
+        ? catalogSchedule.join("/")
+        : (typeof catalogSchedule === "string" ? catalogSchedule : ((policy.discountOption && policy.discountOption.schedule) || ""));
+      const synthetic = Object.assign({}, policy, {
+        discountOption: Object.assign({}, policy.discountOption || catalog || {}, {
+          label: labelGuess || (policy.discountOption && policy.discountOption.label) || "",
+          packageNum: pkg || (policy.discountOption && policy.discountOption.packageNum) || "",
+          schedule: scheduleStr,
+          isException: !!(catalog && catalog.isException) || !!(policy.discountOption && policy.discountOption.isException) || !!policy.discountIsException
+        }),
+        discountPackageNum: pkg || policy.discountPackageNum || ""
+      });
+      let text = safeTrim(this.getDiscountFullDisplayText(synthetic));
+      if(pkg && text && text.indexOf("מס'") < 0 && text.indexOf("מס׳") < 0){
+        text = text + " | מס' חבילה: " + pkg;
+      }
+      return text;
+    },
+
     getPolicyDiscountCompactSummary(policy){
       if(this.isManualExceptionDiscount(policy)){
         return this.getManualExceptionDisplayText(policy);
@@ -27629,7 +27702,11 @@ if(path === "birthDate"){
         const hasDiscountSchedule = Array.isArray(discountSchedule) && discountSchedule.length > 0;
         const discountScheduleStr = safeTrim(optDiscount?.schedule || (hasDiscountSchedule ? discountSchedule.map(s => s.pct + '%').join('/') : ''));
         const discountPkg = safeTrim(optDiscount?.packageNum || policy?.discountPackageNum || '');
-        const discountLabelOnly = safeTrim(this.getDiscountFullDisplayText(policy || {}));
+        const discountLabelOnly = safeTrim(
+          (typeof this.getOperationalDiscountDisplayText === 'function'
+            ? this.getOperationalDiscountDisplayText(policy || {})
+            : this.getDiscountFullDisplayText(policy || {}))
+        );
         const discountIsExc = !!(optDiscount?.isException || policy?.discountIsException);
         const pledgeSummaryText = pledgeRows.length
           ? pledgeRows.map(([k, v]) => {
@@ -28279,11 +28356,12 @@ if(path === "birthDate"){
             : (coveragePartsResolved.length
               ? buildPdfNumberedCoverageHtml(coveragePartsResolved)
               : escapeHtml(covRaw));
-          const coverageLine = covMeaningful
+          const hasCoverByInsured = Array.isArray(row.perInsuredCoverRows) && row.perInsuredCoverRows.length > 0;
+          const coverageLine = (!hasCoverByInsured && covMeaningful)
             ? `<div class="lcPdfNewPolicyDetailLine lcPdfNewPolicyDetailLine--stack"><span class="lcPdfNewPolicyDetailK">כיסוי / סכומים</span><div class="lcPdfNewPolicyDetailV">${coverageValueInner}</div></div>`
             : '';
           const healthAddonLine = buildPdfHealthAddonBlockHtml(row.healthAddonRows);
-          const coversOnlyParts = (!covMeaningful && row.covers && row.covers.length)
+          const coversOnlyParts = (!hasCoverByInsured && !covMeaningful && row.covers && row.covers.length)
             ? row.covers.map((c) => safeTrim(c)).filter(Boolean)
             : [];
           const coversLine = coversOnlyParts.length
@@ -28300,7 +28378,7 @@ if(path === "birthDate"){
             ? `<div class="lcPdfNewPolicyDetailLine"><span class="lcPdfNewPolicyDetailK">הנחה</span><span class="lcPdfNewPolicyDetailV"><span class="lcPdfNewPolicyDiscount">${escapeHtml(discountPrimaryParts.join(' · '))}</span></span></div>`
             : '';
           const scheduleStr = safeTrim(row.discountScheduleStr || '');
-          const discountScheduleHtml = scheduleStr
+          const discountScheduleHtml = (scheduleStr && (!discountFullText || discountFullText.indexOf(scheduleStr) < 0))
             ? `<div class="lcPdfNewPolicyDetailLine"><span class="lcPdfNewPolicyDetailK">דירוג הנחה</span><span class="lcPdfNewPolicyDetailV">${escapeHtml(scheduleStr)}</span></div>`
             : '';
           const introLine = safeTrim(row.introBenefitText)
