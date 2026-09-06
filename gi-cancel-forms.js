@@ -14,17 +14,6 @@
   function nowISO(){
     try { return new Date().toISOString(); } catch(_e){ return ""; }
   }
-  function visualHebrew(value){
-    const helper = global.GI_OFFICIAL_FORM_FILL;
-    if(helper && typeof helper.visualHebrew === "function") return helper.visualHebrew(value);
-    const s = String(value == null ? "" : value);
-    if(!/[\u0590-\u05FF]/.test(s)) return s;
-    const parts = s.match(/[\u0590-\u05FF]+|[^\u0590-\u05FF]+/g) || [s];
-    return parts.reverse().map((part) => {
-      if(/[\u0590-\u05FF]/.test(part)) return part.split("").reverse().join("");
-      return part;
-    }).join("");
-  }
   function formatDateIL(value){
     const s = safeTrim(value);
     if(!s) return "";
@@ -166,9 +155,9 @@
         C("policyNumber", 388.8, 394, 572.1, 416, { when: "partial", rows: 2, rowH: 22 }),
         C("partialCovers", 205.5, 394, 388.8, 416, { when: "partial", size: 8, rows: 2, rowH: 22 }),
         C("today", 22.2, 394, 205.5, 416, { when: "partial", rows: 2, rowH: 22 }),
-        C("fullName", 416.2, 557.6, 572.1, 575),
-        C("idNumber", 281.0, 557.6, 416.2, 575),
-        C("today", 160.8, 557.6, 281.0, 575)
+        C("fullName", 416.19, 516.0, 572.1, 544.5),
+        C("idNumber", 280.98, 516.0, 416.19, 544.5, { size: 8, boxes: 9, align: "ltr", boxXs: [280.98, 296.0, 311.03, 326.05, 341.07, 356.1, 371.12, 386.15, 401.17, 416.19] }),
+        C("today", 160.79, 516.0, 280.98, 544.5, { size: 8, boxes: 8, align: "ltr", boxXs: [160.79, 175.81, 190.84, 205.86, 220.89, 235.91, 250.93, 265.96, 280.98] })
       ]
     },
     phoenix_health: {
@@ -280,10 +269,10 @@
       id: "harel_health",
       file: "harel-health-cancel.pdf",
       fields: [
-        C("idNumber", 342.2, 129.6, 468.3, 152.3, { size: 8 }),
+        C("idNumber", 342.19, 129.6, 485.29, 152.3, { size: 9, boxes: 9, align: "ltr", boxXs: [342.19, 358.09, 373.99, 389.89, 405.79, 421.69, 437.59, 453.49, 468.28, 485.29] }),
         C("lastName", 255.9, 129.6, 342.2, 152.3),
         C("firstName", 169.7, 129.6, 255.9, 152.3),
-        C("birthDate", 93.2, 129.6, 169.7, 152.3, { size: 8, align: "ltr" }),
+        C("birthDate", 93.16, 129.6, 169.7, 152.3, { size: 8, boxes: 6, align: "ltr", boxXs: [93.16, 105.92, 118.67, 131.43, 144.19, 156.94, 169.7] }),
         X("genderMale", 62, 136),
         X("genderFemale", 30, 136),
         C("street", 342.2, 272, 485.3, 290),
@@ -298,16 +287,16 @@
         C("policyNumber", 378.6, 484.4, 553.8, 507.1, { when: "partial", rows: 3, rowH: 22.7 }),
         C("partialCovers", 203.4, 484.4, 378.6, 507.1, { when: "partial", size: 8, rows: 3, rowH: 22.7 }),
         C("today", 28.2, 484.4, 203.4, 507.1, { when: "partial", rows: 3, rowH: 22.7 }),
-        C("today", 418.7, 594.4, 495.3, 617.1, { align: "ltr", size: 8 }),
+        C("today", 418.72, 594.4, 495.26, 617.1, { align: "ltr", size: 8, boxes: 6, boxXs: [418.72, 431.48, 444.23, 456.99, 469.75, 482.5, 495.26] }),
         C("fullName", 281.9, 594.4, 418.7, 617.1),
-        C("idNumber", 128.9, 594.4, 281.9, 617.1)
+        C("idNumber", 128.86, 594.4, 281.93, 617.1, { boxes: 9, align: "ltr", boxXs: [128.86, 145.87, 162.87, 179.88, 196.89, 213.9, 230.91, 247.91, 264.92, 281.93] })
       ]
     },
     harel_life: {
       id: "harel_life",
       file: "harel-life-cancel.pdf",
       fields: [
-        C("idNumber", 415.7, 213.7, 554.0, 239.2, { size: 8 }),
+        C("idNumber", 415.75, 213.7, 554.05, 239.2, { size: 9, boxes: 9, align: "ltr", boxXs: [415.75, 430.95, 446.31, 461.68, 477.05, 492.41, 507.78, 523.15, 538.51, 554.05] }),
         C("lastName", 309.0, 213.7, 378.9, 239.2),
         C("firstName", 203.7, 213.7, 309.0, 239.2),
         C("phoneHome", 116.1, 213.7, 203.7, 239.2, { size: 8 }),
@@ -323,7 +312,7 @@
         C("partialCovers", 203.7, 447.6, 378.9, 467.4, { when: "partial", size: 8, rows: 5, rowH: 19.8 }),
         C("today", 28.5, 447.6, 203.7, 467.4, { when: "partial", rows: 5, rowH: 19.8 }),
         C("fullName", 379.1, 599.6, 501.7, 625.1),
-        C("idNumber", 238.1, 599.6, 379.1, 625.1),
+        C("idNumber", 238.11, 599.6, 379.13, 625.1, { boxes: 9, align: "ltr", boxXs: [238.11, 253.68, 269.34, 285.01, 300.67, 316.33, 331.99, 347.65, 363.31, 379.13] }),
         C("today", 138.9, 599.6, 238.1, 625.1, { align: "ltr", size: 8 })
       ]
     },
@@ -374,7 +363,7 @@
       id: "migdal",
       file: "migdal-cancel.pdf",
       fields: [
-        C("idNumber", 472.8, 168.7, 566.4, 182.9, { size: 8 }),
+        C("idNumber", 472.8, 168.7, 566.4, 182.9, { size: 8, boxes: 9, align: "ltr", boxXs: [472.8, 483.24, 493.68, 504.0, 514.44, 524.76, 535.2, 545.64, 555.96, 566.28] }),
         C("lastName", 387.8, 168.7, 472.8, 182.9),
         C("firstName", 302.8, 168.7, 387.8, 182.9),
         C("phoneHome", 129.2, 168.7, 221.0, 182.9, { size: 8 }),
@@ -399,7 +388,7 @@
   const GiCancelForms = {
     TEMPLATE_BASE: "./forms/cancel/",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260906-cancel-forms-v3",
+    VERSION: "20260906-cancel-forms-v6",
     DOC_TYPE: "company_cancel_form",
     TEMPLATES,
 
@@ -828,6 +817,25 @@
       }
       return this.valueFor(draft, key);
     },
+    charsForBoxes(field, text, n){
+      const key = safeTrim(field?.key);
+      let digits = String(text == null ? "" : text).replace(/\D/g, "");
+      if(!digits || n < 2) return null;
+      if((key === "birthDate" || key === "today") && n === 6 && digits.length >= 8){
+        digits = digits.slice(0, 4) + digits.slice(6, 8);
+      } else if((key === "birthDate" || key === "today") && n === 8 && digits.length >= 8){
+        digits = digits.slice(0, 8);
+      }
+      if(key === "idNumber"){
+        if(digits.length > n) digits = digits.slice(-n);
+        else while(digits.length < n) digits = "0" + digits;
+      } else if(digits.length > n){
+        digits = digits.slice(0, n);
+      }
+      const out = digits.split("");
+      while(out.length < n) out.push("");
+      return out;
+    },
     overlayPlan(draft){
       const template = draft?.template;
       const fields = Array.isArray(template?.fields) ? template.fields : [];
@@ -838,20 +846,49 @@
       const out = [];
       const emit = (field, text, dy, index) => {
         if(!text) return;
+        const boxes = Number(field.boxes) > 1 ? Number(field.boxes) : 0;
         const x0 = Number(field.x0);
         const y0 = Number(field.y0) + dy;
         const x1 = Number(field.x1);
         const y1 = Number(field.y1) + dy;
-        const size = Number(field.size) > 0 ? Number(field.size) : (field.kind === "mark" ? 11 : 9);
-        const align = field.align === "ltr" ? "ltr" : "rtl";
         const h = Math.max(8, y1 - y0);
         const baselineMupdf = y0 + Math.min(h * 0.72, h - 2.5);
+        const y = PAGE_H - baselineMupdf - 2;
+        if(boxes){
+          const chars = this.charsForBoxes(field, text, boxes);
+          if(!chars) return;
+          const walls = Array.isArray(field.boxXs) && field.boxXs.length === boxes + 1
+            ? field.boxXs.map(Number)
+            : null;
+          const spanEq = (x1 - x0) / boxes;
+          const preferred = Number(field.size) > 0 ? Number(field.size) : 9;
+          chars.forEach((ch, i) => {
+            if(!ch) return;
+            const bx0 = walls ? walls[i] : (x0 + i * spanEq);
+            const bx1 = walls ? walls[i + 1] : (bx0 + spanEq);
+            const span = bx1 - bx0;
+            out.push({
+              page: 0,
+              key: field.key + "#b" + i,
+              kind: "text",
+              x: (bx0 + bx1) / 2,
+              y,
+              text: ch,
+              size: Math.max(6, Math.min(preferred, span * 0.78, h * 0.72)),
+              align: "center",
+              maxW: Math.max(4, span - 1)
+            });
+          });
+          return;
+        }
+        const size = Number(field.size) > 0 ? Number(field.size) : (field.kind === "mark" ? 11 : 9);
+        const align = field.align === "ltr" ? "ltr" : "rtl";
         out.push({
           page: 0,
           key: field.key + (index ? ("#" + index) : ""),
           kind: field.kind || "text",
           x: align === "ltr" ? (x0 + PAD) : (x1 - PAD),
-          y: PAGE_H - baselineMupdf - 2,
+          y,
           text,
           size,
           align,
@@ -920,7 +957,7 @@
     drawOp(page, font, rgb, op){
       const raw = safeTrim(op.text);
       if(!raw) return;
-      const painted = visualHebrew(raw);
+      const painted = raw;
       let size = Number(op.size) > 0 ? Number(op.size) : 9;
       let width = 0;
       try { width = font ? font.widthOfTextAtSize(painted, size) : painted.length * size * 0.5; } catch(_e){ width = painted.length * size * 0.5; }
@@ -930,7 +967,8 @@
         try { width = font ? font.widthOfTextAtSize(painted, size) : width; } catch(_e2) {}
       }
       let x = Number(op.x) || 0;
-      if(op.align !== "ltr") x = x - width;
+      if(op.align === "center") x = x - (width / 2);
+      else if(op.align !== "ltr") x = x - width;
       try {
         page.drawText(painted, {
           x,

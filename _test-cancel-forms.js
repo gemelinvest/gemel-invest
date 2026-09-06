@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260906-cancel-forms-v3";
+const TAG = "20260906-cancel-forms-v6";
 let failed = 0;
 let passed = 0;
 
@@ -301,13 +301,148 @@ assert(staleInject.removedExtra === true, "inject strips cancel docs when no liv
 assert(!staleList.some((d) => d.type === "company_cancel_form"), "no cancel docs left after revert");
 assert(staleList.some((d) => d.id === "keep-doc"), "other docs survive empty-live cleanup");
 
-console.log("\n6) fill engine shape");
+console.log("\n6) ID and date digits sit in comb boxes");
+const boxPayload = {
+  insureds: [{
+    id: "ins1",
+    data: {
+      firstName: "ישראל",
+      lastName: "ישראלי",
+      idNumber: "123456782",
+      birthDate: "1980-05-12",
+      city: "תל אביב",
+      street: "דיזנגוף",
+      existingPolicies: [
+        { id: "p1", company: "הראל", type: "בריאות", policyNumber: "555111" },
+        { id: "p2", company: "מגדל", type: "ריסק", policyNumber: "777" },
+        { id: "p3", company: "הראל", type: "ריסק", policyNumber: "888" },
+        { id: "p4", company: "הפניקס", type: "ריסק", policyNumber: "444" },
+        { id: "p5", company: "כלל", type: "ריסק", policyNumber: "111" }
+      ],
+      cancellations: { p1: { status: "full" }, p2: { status: "full" }, p3: { status: "full" }, p4: { status: "full" }, p5: { status: "full" } }
+    }
+  }]
+};
+function digitOps(plan, key){
+  return plan.filter((op) => String(op.key).indexOf(key + "#b") === 0).sort((a, b) => a.x - b.x);
+}
+function assertWallMids(ops, walls, label){
+  assert(ops.length === walls.length - 1, label + " has one digit per comb box (got " + ops.length + ")");
+  ops.forEach((op, i) => {
+    const mid = (walls[i] + walls[i + 1]) / 2;
+    assert(Math.abs(op.x - mid) < 0.05, label + " digit " + i + " sits on wall midpoint");
+  });
+}
+function draftFor(templateId){
+  return G.buildDraft({ payload: boxPayload }, G.createDoc(G.groupCancelledPolicies(boxPayload).find((g) => g.templateId === templateId)));
+}
+const harelBoxDraft = draftFor("harel_health");
+const harelBoxPlan = G.overlayPlan(harelBoxDraft);
+const harelId = digitOps(harelBoxPlan, "idNumber");
+assert(harelId.length === 18, "Harel health header+signature ID fill 9+9 digit boxes (got " + harelId.length + ")");
+const harelHeaderId = harelId.filter((op) => op.y > 650);
+assert(harelHeaderId.length === 9, "header ID uses 9 boxes");
+assert(harelHeaderId.map((op) => op.text).join("") === "123456782", "header ID digits keep order 123456782");
+assert(harelHeaderId.every((op, i) => i === 0 || op.x > harelHeaderId[i - 1].x), "ID digits go left-to-right across boxes");
+assert(harelHeaderId.every((op) => op.align === "center"), "each ID digit is centered in its box");
+assertWallMids(harelHeaderId, [342.19, 358.09, 373.99, 389.89, 405.79, 421.69, 437.59, 453.49, 468.28, 485.29], "Harel health header ID");
+const harelBirth = digitOps(harelBoxPlan, "birthDate");
+assert(harelBirth.map((op) => op.text).join("") === "120580", "birth date boxes are DDMMYY");
+assertWallMids(harelBirth, [93.16, 105.92, 118.67, 131.43, 144.19, 156.94, 169.7], "Harel health birth date");
+const harelSigId = harelId.filter((op) => op.y < 280);
+assertWallMids(harelSigId, [128.86, 145.87, 162.87, 179.88, 196.89, 213.9, 230.91, 247.91, 264.92, 281.93], "Harel health signature ID");
+const migdalId = digitOps(G.overlayPlan(draftFor("migdal")), "idNumber");
+assert(migdalId.map((op) => op.text).join("") === "123456782", "Migdal ID digits keep order");
+assertWallMids(migdalId, [472.8, 483.24, 493.68, 504.0, 514.44, 524.76, 535.2, 545.64, 555.96, 566.28], "Migdal header ID");
+const harelLifePlan = G.overlayPlan(draftFor("harel_life"));
+const harelLifeId = digitOps(harelLifePlan, "idNumber");
+assert(harelLifeId.length === 18, "Harel life header+signature ID fill 9+9 digit boxes");
+assertWallMids(harelLifeId.filter((op) => op.y > 580), [415.75, 430.95, 446.31, 461.68, 477.05, 492.41, 507.78, 523.15, 538.51, 554.05], "Harel life header ID");
+assertWallMids(harelLifeId.filter((op) => op.y < 280), [238.11, 253.68, 269.34, 285.01, 300.67, 316.33, 331.99, 347.65, 363.31, 379.13], "Harel life signature ID");
+const phoenixPlan = G.overlayPlan(draftFor("phoenix"));
+const phoenixId = digitOps(phoenixPlan, "idNumber");
+assert(phoenixId.map((op) => op.text).join("") === "123456782", "Phoenix signature ID digits keep order");
+assertWallMids(phoenixId, [280.98, 296.0, 311.03, 326.05, 341.07, 356.1, 371.12, 386.15, 401.17, 416.19], "Phoenix signature ID");
+assert(phoenixId.every((op) => op.y > 290 && op.y < 330), "Phoenix signature ID sits in the input row, not the labels");
+const phoenixDate = digitOps(phoenixPlan, "today");
+assert(phoenixDate.length === 8, "Phoenix signature date uses 8 digit boxes DDMMYYYY");
+assert(phoenixDate.map((op) => op.text).join("").length === 8, "Phoenix date fills DDMMYYYY");
+assertWallMids(phoenixDate, [160.79, 175.81, 190.84, 205.86, 220.89, 235.91, 250.93, 265.96, 280.98], "Phoenix signature date");
+const clalId = digitOps(G.overlayPlan(draftFor("clal")), "idNumber");
+assert(clalId.length === 0, "Clal ID stays a single open cell, not comb boxes");
+assert(form.includes("boxes: 9"), "templates mark comb ID fields");
+assert(form.includes("boxXs"), "comb fields pin measured tick walls");
+assert(form.includes("charsForBoxes"), "splits numbers into comb boxes");
+
+console.log("\n7) fill engine shape");
 assert(form.includes("fillOriginalTemplate"), "PDF fill exists");
 assert(form.includes("forms/cancel/"), "loads original templates from forms/cancel");
 assert(form.includes("overlayPlan"), "overlay plan exists");
 assert(form.includes("policyNumber"), "fills policy number");
 assert(form.includes("pickPerson"), "fills person from customer file");
 assert(!form.includes("applyOfficialHealthAndNames"), "does not fill join-form health fields");
+
+console.log("\n8) Hebrew overlay is logical on every company cancel form");
+assert(!form.includes("visualHebrew"), "cancel forms do not reverse Hebrew before drawing");
+assert(form.includes("const painted = raw"), "drawOp paints customer text as-is");
+const HEBREW_POLICIES = [
+  { id: "hachshara", company: "הכשרה", type: "בריאות" },
+  { id: "phoenix", company: "הפניקס", type: "ריסק" },
+  { id: "phoenix_health", company: "הפניקס", type: "בריאות" },
+  { id: "ayalon", company: "איילון", type: "בריאות" },
+  { id: "ayalon_life", company: "איילון", type: "ריסק" },
+  { id: "clal", company: "כלל", type: "ריסק" },
+  { id: "clal_couple", company: "כלל", type: "ריסק", insuredMode: "couple" },
+  { id: "harel_health", company: "הראל", type: "בריאות" },
+  { id: "harel_life", company: "הראל", type: "ריסק" },
+  { id: "menora", company: "מנורה", type: "בריאות" },
+  { id: "menora_mortgage", company: "מנורה", type: "ריסק משכנתא" },
+  { id: "migdal", company: "מגדל", type: "ריסק" }
+];
+const hebrewPayload = {
+  insureds: [{
+    id: "ins1",
+    data: {
+      firstName: "ישראל",
+      lastName: "ישראלי",
+      idNumber: "123456782",
+      city: "תל אביב",
+      street: "דיזנגוף",
+      houseNumber: "50",
+      existingPolicies: HEBREW_POLICIES.map((p) => ({
+        id: p.id,
+        company: p.company,
+        type: p.type,
+        insuredMode: p.insuredMode,
+        policyNumber: "555111"
+      })),
+      cancellations: HEBREW_POLICIES.reduce((acc, p) => {
+        acc[p.id] = { status: "full" };
+        return acc;
+      }, {})
+    }
+  }]
+};
+const hebrewGroups = G.groupCancelledPolicies(hebrewPayload);
+assert(hebrewGroups.length === HEBREW_POLICIES.length, "all 12 company templates are scanned (got " + hebrewGroups.length + ")");
+HEBREW_POLICIES.forEach((p) => {
+  const group = hebrewGroups.find((g) => g.templateId === p.id);
+  assert(!!group, p.id + " has a live cancel form");
+  const plan = G.overlayPlan(G.buildDraft({ payload: hebrewPayload }, G.createDoc(group)));
+  const heb = plan.filter((op) => /[\u0590-\u05FF]/.test(op.text));
+  assert(heb.length > 0, p.id + " fills Hebrew fields");
+  heb.forEach((op) => {
+    assert(op.text.indexOf("ילארשי") < 0, p.id + " " + op.key + " is not character-reversed (got " + op.text + ")");
+    if(/^city/.test(op.key)) assert(op.text === "תל אביב", p.id + " city stays logical");
+    if(/^street/.test(op.key)) assert(op.text === "דיזנגוף", p.id + " street stays logical");
+  });
+  const nameOp = heb.find((op) => /^(fullName|lastName|firstName)/.test(op.key));
+  assert(!!nameOp, p.id + " has a name field");
+  assert(
+    nameOp.text === "ישראל ישראלי" || nameOp.text === "ישראל" || nameOp.text === "ישראלי",
+    p.id + " name stays logical (got " + nameOp.text + ")"
+  );
+});
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);
