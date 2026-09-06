@@ -39889,7 +39889,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-mirror-script-premiums-v2";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-mirror-script-premiums-v3";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -39909,7 +39909,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-mirror-script-premiums-v2";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-mirror-script-premiums-v3";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -40545,8 +40545,8 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260906-mirror-script-premiums-v2",
-    "./simulators-shell.css?v=20260906-mirror-script-premiums-v2"
+    "./simulators-center.css?v=20260906-mirror-script-premiums-v3",
+    "./simulators-shell.css?v=20260906-mirror-script-premiums-v3"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -41908,7 +41908,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260906-mirror-script-premiums-v2";
+  const GI_WIZARD_JS_VERSION = "20260906-mirror-script-premiums-v3";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -68878,15 +68878,6 @@ ${inner}
       });
     },
 
-    _mirrorPoliciesForStart(rec){
-      const list = Array.isArray(rec?.payload?.newPolicies) ? rec.payload.newPolicies : [];
-      return list.map((p) => ({
-        company: safeTrim(p?.company),
-        type: safeTrim(p?.type),
-        startDate: this._mcFmtDateHe(p?.startDate)
-      })).filter((x) => x.company || x.type);
-    },
-
     // ===== GI-SUMMARY-BLOCKS ==================================================
     // שלב 10 — "סיכום והצהרות". מאגד ארבעה בלוקים מהתסריט:
     //   13 · תחילת ביטוח            (פוליסה אחר פוליסה, startDate מהתיק)
@@ -68917,11 +68908,34 @@ ${inner}
 
     _mirrorPoliciesForStart(rec){
       const list = Array.isArray(rec?.payload?.newPolicies) ? rec.payload.newPolicies : [];
-      return list.map((p) => ({
-        company: safeTrim(p?.company),
-        type: safeTrim(p?.type),
-        startDate: this._mcFmtDateHe(p?.startDate)
-      })).filter((x) => x.company || x.type);
+      const rows = [];
+      const seen = new Set();
+      list.forEach((p) => {
+        const company = safeTrim(p?.company);
+        const type = safeTrim(p?.type);
+        if(!company && !type) return;
+        const startDate = this._mcFmtDateHe(p?.startDate);
+        const key = [company, type, startDate].join("\t");
+        if(seen.has(key)) return;
+        seen.add(key);
+        rows.push({ company, type, startDate });
+      });
+      return rows;
+    },
+
+    /* נוסח מלא לכל פוליסה: תוקף + SMS. בלי בלוק קצר נפרד מעליו. */
+    _mcInsStartPolicyHtml(p){
+      const who = [p?.company, p?.type].filter(Boolean).join(" · ");
+      const dt = p?.startDate
+        ? `<span class="mcStartDate">${escapeHtml(p.startDate)}</span>`
+        : `<span class="mcStartDate is-empty">לא הוזן תאריך תחילה</span>`;
+      return `<li class="mcStartItem">` +
+        (who ? `<span class="mcStartItem__pol">${escapeHtml(who)}</span>` : "") +
+        `<p class="mcPaySay">הפוליסה תיכנס לתוקף החל מתאריך ${dt}, או מועד הפקת הפוליסה על ידי החברה, ` +
+        `לפי המאוחר מביניהם, ובכפוף לאמצעי תשלום תקין.</p>` +
+        `<p class="mcPaySay">בעת הפקת הפוליסה וכניסתה לתוקף תישלח אליך הודעת SMS מחברת הביטוח. ` +
+        `יש לעקוב אחר קבלת ההודעה.</p>` +
+        `</li>`;
     },
 
     _mcSumToggle(key, on, label){
@@ -68943,15 +68957,7 @@ ${inner}
       // --- 13 · תחילת ביטוח ---
       const pols = this._mirrorPoliciesForStart(rec);
       const startLines = pols.length
-        ? pols.map((p) => {
-            const who = [p.company, p.type].filter(Boolean).join(" · ");
-            const dt = p.startDate
-              ? `<span class="mcStartDate">${escapeHtml(p.startDate)}</span>`
-              : `<span class="mcStartDate is-empty">לא הוזן תאריך תחילה</span>`;
-            return `<li class="mcStartItem"><span class="mcStartItem__pol">${escapeHtml(who)}</span>` +
-              `<p class="mcPaySay">הפוליסה תיכנס לתוקף החל מתאריך ${dt}, או מועד הפקת הפוליסה על ידי החברה, ` +
-              `לפי המאוחר מביניהם, ובכפוף לאמצעי תשלום תקין.</p></li>`;
-          }).join("")
+        ? pols.map((p) => this._mcInsStartPolicyHtml(p)).join("")
         : `<li class="mcStartItem"><p class="mcPaySay">לא נמצאו פוליסות חדשות בתיק.</p></li>`;
 
       const block13 =
@@ -68959,8 +68965,6 @@ ${inner}
           `<div class="mcSumTag">13 · תחילת ביטוח</div>` +
           `<div class="mcPaySec__eyebrow mcPaySec__eyebrow--say">קרא ללקוח — פוליסה אחר פוליסה</div>` +
           `<ul class="mcStartList">${startLines}</ul>` +
-          `<p class="mcPaySay">בעת הפקת הפוליסה וכניסתה לתוקף תישלח אליך הודעת SMS מחברת הביטוח. ` +
-          `יש לעקוב אחר קבלת ההודעה.</p>` +
         `</div>`;
 
       // --- 14 · הקראת הצהרות למועמד ---

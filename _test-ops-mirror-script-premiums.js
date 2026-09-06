@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260906-mirror-script-premiums-v2";
+const APP_TAG = "20260906-mirror-script-premiums-v3";
 let failed = 0;
 let passed = 0;
 
@@ -171,7 +171,59 @@ assert(calls.before >= 1 && calls.after >= 1, "הכרטיס באמת קורא ל
 assert(calls.identity === 0, "לא קורא ל-getPolicyPremiumAfterDiscount של האשף");
 assert(calls.cui === 0, "לא קורא ל-CustomersUI.getPolicyPremiumAfterDiscount");
 
-console.log("\n5) רגרסיה — פוליסות קיימות וכניסה");
+console.log("\n5) תחילת ביטוח — נוסח מלא פעם אחת, בלי כפל");
+assert(app.includes("_mcInsStartPolicyHtml(p){"), "עזר נוסח תחילת ביטוח לכל פוליסה");
+const insStartFn = sliceBetween(app, "_mcInsStartPolicyHtml(p){", "_mcSumToggle(key, on, label){");
+assert(insStartFn.includes("הפוליסה תיכנס לתוקף החל מתאריך"), "משפט התוקף בתוך בלוק הפוליסה");
+assert(insStartFn.includes("תישלח אליך הודעת SMS מחברת הביטוח"), "משפט ה-SMS בתוך אותו בלוק");
+assert(insStartFn.includes("יש לעקוב אחר קבלת ההודעה"), "סיום משפט ה-SMS נשאר");
+const block13 = sliceBetween(app, "// --- 13 · תחילת ביטוח ---", "// --- 14 · הקראת הצהרות למועמד ---");
+assert(block13.includes("_mcInsStartPolicyHtml(p)"), "בלוק 13 משתמש בנוסח המלא לכל פוליסה");
+assert((block13.match(/תישלח אליך הודעת SMS/g) || []).length === 0, "בלוק 13 לא כופל את משפט ה-SMS מחוץ לפוליסה");
+assert((app.split("_mirrorPoliciesForStart(rec){").length - 1) === 1, "אין כפילות של פונקציית רשימת הפוליסות");
+
+const startSandbox = {};
+vm.runInNewContext(`
+  function safeTrim(v){ return String(v == null ? "" : v).trim(); }
+  function escapeHtml(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c])); }
+  const ui = {
+    _mcFmtDateHe(v){
+      const t = safeTrim(v);
+      if(!t) return "";
+      const iso = /^(\\d{4})-(\\d{2})-(\\d{2})/.exec(t);
+      if(iso) return iso[3] + "/" + iso[2] + "/" + iso[1];
+      return t;
+    },
+    ${app.slice(app.indexOf("_mirrorPoliciesForStart(rec){"), app.indexOf("_mcSumToggle(key, on, label){"))}
+  };
+  this.ui = ui;
+`, startSandbox);
+
+const htmlOne = startSandbox.ui._mcInsStartPolicyHtml({
+  company: "הפניקס",
+  type: "מחלות קשות",
+  startDate: "01/10/2026"
+});
+assert((htmlOne.match(/mcStartItem__pol/g) || []).length === 1, "כותרת פוליסה פעם אחת");
+assert((htmlOne.match(/הפוליסה תיכנס לתוקף/g) || []).length === 1, "משפט התוקף פעם אחת");
+assert((htmlOne.match(/הודעת SMS/g) || []).length === 1, "משפט SMS פעם אחת באותו בלוק");
+assert(htmlOne.includes("01/10/2026"), "תאריך התחלה מוצג בנוסח המלא");
+assert(htmlOne.indexOf("הפוליסה תיכנס לתוקף") < htmlOne.indexOf("הודעת SMS"), "קודם תוקף ואז SMS");
+
+const rec = {
+  payload: {
+    newPolicies: [
+      { company: "הפניקס", type: "מחלות קשות", startDate: "2026-10-01" },
+      { company: "הפניקס", type: "מחלות קשות", startDate: "2026-10-01" }
+    ]
+  }
+};
+const pols = startSandbox.ui._mirrorPoliciesForStart(rec);
+assert(pols.length === 1, "אותה פוליסה לא מוצגת פעמיים");
+const joined = pols.map((p) => startSandbox.ui._mcInsStartPolicyHtml(p)).join("");
+assert((joined.match(/הפניקס/g) || []).length === 1, "שם החברה פעם אחת אחרי איחוד כפילויות");
+
+console.log("\n6) רגרסיה — פוליסות קיימות וכניסה");
 assert(app.includes('k: "פרמיה חודשית על סך"'), "פוליסות קיימות נשארות עם פרמיה אחת");
 assert(app.includes("function findAgentForLogin(username, agents = []){"), "findAgentForLogin לא נגע");
 assert(app.includes("Auth._submit = async function(){"), "Auth._submit לא נגע");
