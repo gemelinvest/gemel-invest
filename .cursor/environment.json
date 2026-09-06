@@ -1,0 +1,17 @@
+{
+  "name": "GEMEL INVEST CRM",
+  "install": "node --version && python3 --version",
+  "terminals": [
+    {
+      "name": "web",
+      "command": "python3 -m http.server 8000",
+      "description": "Static file server for the GEMEL INVEST CRM. Open http://localhost:8000/ to load the login screen. The app is served as plain HTML/CSS/JS (no build step) and talks to the hosted Supabase backend baked into app.js. Run the Node test scripts with e.g. `node _test-assistant-tools.js`."
+    }
+  ],
+  "ports": [
+    {
+      "name": "web",
+      "port": 8000
+    }
+  ]
+}
