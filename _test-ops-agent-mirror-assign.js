@@ -1,6 +1,6 @@
-/* GI-OPS 2026-08-30 — שיוך מנהל תפעול → נציג תפעול באמת מגיע לנציג:
-   טעינה לפי payload.mirrorFlow.mirrorAssign (לא agent_id של מכירות),
-   upsert ישיר בשמירת השיוך, וסינון סשן לנציג לפי השיוך.
+/* GI-OPS 2026-08-30 — שיוך מנהל תפעול → נציג תפעול נשמר ב-payload;
+   upsert ישיר בשמירת השיוך. נציג תפעול רואה את כל הלקוחות (2026-09-06),
+   והשיוך נשאר כלי עבודה של מנהל תפעול + סינון «רק משויכים אליי».
    הרצה: node _test-ops-agent-mirror-assign.js
 */
 "use strict";
@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260906-proposal-assign-live-v1";
+const APP_TAG = "20260906-ops-agent-all-cust-v1";
 let failed = 0;
 let passed = 0;
 
@@ -38,7 +38,7 @@ const scopeBlock = scopeStart > 0 && scopeEnd > scopeStart ? app.slice(scopeStar
 const opsScopeStart = app.indexOf("function getOpsAgentMirrorAssignScope(){");
 const opsScopeEnd = app.indexOf("function buildAgentScopeInValues(values){", opsScopeStart);
 const opsScopeBlock = opsScopeStart > 0 && opsScopeEnd > opsScopeStart ? app.slice(opsScopeStart, opsScopeEnd) : "";
-const loadStart = app.indexOf("/* GI-FIX 2026-08-30: נציג תפעול — טעינה לפי שיוך שיקוף");
+const loadStart = app.indexOf("_opsAgentMirrorAssignOrFilter(scope){");
 const loadEnd = app.indexOf("async probeCustomersCount(){", loadStart);
 const loadBlock = loadStart > 0 && loadEnd > loadStart ? app.slice(loadStart, loadEnd) : "";
 const saveStart = app.indexOf("async saveAssignModal(){");
@@ -68,15 +68,15 @@ assert(scopeBlock.includes("return null"), "scope מחזיר null לנציג ת�
 assert(!!opsScopeBlock, "getOpsAgentMirrorAssignScope נמצא");
 assert(opsScopeBlock.includes("Auth.isOpsAgent"), "סקופ שיוך רק לנציג תפעול");
 
-console.log("\n3) טעינה לפי mirrorAssign ב-payload");
-assert(!!loadBlock, "loadOpsAgentAssignedCustomerRows נמצא");
+console.log("\n3) סינון JSON לפי mirrorAssign נשמר ל«רק משויכים אליי»");
+assert(!!loadBlock && loadBlock.includes("async loadOpsAgentAssignedCustomerRows"), "loadOpsAgentAssignedCustomerRows נמצא");
 assert(loadBlock.includes("payload->mirrorFlow->mirrorAssign->>agentId"), "סינון JSON לפי agentId");
 assert(loadBlock.includes("payload->mirrorFlow->mirrorAssign->>agentName"), "סינון JSON לפי agentName");
 assert(loadBlock.includes('cols + ",payload"') || loadBlock.includes("cols + \",payload\""), "payload נכלל בסלקט");
-assert(sheetsBlock.includes("useOpsAgentAssignSet"), "loadSheets משתמש בסט שיוך לנציג");
-assert(sheetsBlock.includes("loadOpsAgentAssignedCustomerRows"), "loadSheets קורא לטעינת שיוך");
-assert(deltaBlock.includes("loadOpsAgentAssignedCustomerRows"), "דלתא גם טוענת לפי שיוך");
-assert(deltaBlock.includes("filterSessionStateForCurrentUserScope(State.data)"), "אחרי דלתא מסננים שורות שלא משויכות");
+assert(!sheetsBlock.includes("useOpsAgentAssignSet"), "loadSheets לא טוען רק סט שיוך");
+assert(!sheetsBlock.includes("loadOpsAgentAssignedCustomerRows"), "loadSheets לא קורא לטעינת שיוך כסשן");
+assert(!deltaBlock.includes("loadOpsAgentAssignedCustomerRows"), "דלתא לא טוענת לפי שיוך");
+assert(app.includes("this.isOpsAgent()"), "canViewAllCustomers כולל נציג תפעול");
 
 console.log("\n4) שמירת שיוך — upsert ישיר + כשלון לא מציג הצלחה");
 assert(!!saveBlock, "saveAssignModal נמצא");
@@ -86,9 +86,10 @@ assert(saveBlock.includes("setMirrorAssign(rec, agent"), "עדיין כותב mi
 assert(app.includes("function setMirrorAssign(rec, agent, byName)"), "לוגיקת mirrorAssign לא הוסרה");
 assert(app.includes("function currentUserMatchesMirrorAssign(assign)"), "התאמת שיוך לנציג לא הוסרה");
 
-console.log("\n5) רגרסיה — נציג רואה רק מה ששויך אליו");
-assert(visibleBlock.includes("Auth.isOpsAgent()"), "customerVisibleToCurrentUser מטפל בנציג תפעול");
-assert(visibleBlock.includes("currentUserMatchesMirrorAssign(getMirrorAssign(rec))"), "נראות לפי mirrorAssign");
+console.log("\n5) רגרסיה — שיוך נשמר, נציג רואה את כל הלקוחות");
+assert(visibleBlock.includes("Auth.canViewAllCustomers()"), "customerVisibleToCurrentUser לפי canViewAllCustomers");
+assert(!visibleBlock.includes("currentUserMatchesMirrorAssign(getMirrorAssign(rec))"), "אין הגבלת נראות לפי mirrorAssign");
+assert(app.includes("canMirrorAssign(){\n      return this.isOps();"), "שיוך שיקוף נשאר אצל מנהל תפעול");
 assert(app.includes("data-ops-dash-assign"), "לחצן שיוך בדשבורד מנהל נשאר");
 assert(html.includes('id="view-mirrorAssignments"'), "מסך שיוכי שיקוף לא הוסר");
 assert(html.includes('id="lcSendToOps"'), "הגש לתפעול לא נגע");

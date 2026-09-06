@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260906-proposal-assign-live-v1";
+const APP_TAG = "20260906-ops-agent-all-cust-v1";
 let failed = 0;
 let passed = 0;
 
@@ -41,6 +41,10 @@ const assignBlock = assignStart > 0 && assignEnd > assignStart ? app.slice(assig
 const filterStart = dashBlock.indexOf("filterWaitingMirrorRowsByLane(rows){");
 const filterEnd = dashBlock.indexOf("collectWaitingTypingRows(){");
 const filterBlock = filterStart >= 0 && filterEnd > filterStart ? dashBlock.slice(filterStart, filterEnd) : "";
+const relevantStart = dashBlock.indexOf("isRelevantCustomer(rec){");
+const relevantEnd = dashBlock.indexOf("getPremium(rec){");
+const relevantBlock = relevantStart >= 0 && relevantEnd > relevantStart
+  ? dashBlock.slice(relevantStart, relevantEnd) : "";
 
 console.log("1) syntax + cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
@@ -50,11 +54,12 @@ assert(html.includes("app.css?v=" + APP_TAG), "index.html app.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
 
 console.log("\n2) ממתינים לשיקוף — שיוך + חוצצי סטטוס");
-assert(dashBlock.includes("currentUserMatchesMirrorAssign(getMirrorAssign(rec))"), "נציג רואה רק לקוחות ששויכו אליו");
+assert(relevantBlock.includes("Auth.isOps()") && relevantBlock.includes("Auth.isOpsAgent()"), "נציג ומנהל רואים את תור התפעול");
+assert(!dashBlock.includes("currentUserMatchesMirrorAssign(getMirrorAssign(rec))"), "נציג לא מסונן לפי שיוך בתור");
 assert(filterBlock.includes('safeTrim(row.laneKey) || "no_answer_1"'), "חוצץ מסנן לפי סטטוס מתועד");
 assert(!filterBlock.includes("waitingMirrorLaneOf(row, scheduledIds)"), "אין דריסה של סטטוס מתועד ע״י overlay");
 assert(dashBlock.includes('data-ops-mirror-lane='), "לחצני חוצץ ללא מענה נשארו");
-assert(dashBlock.includes("לקוחות ששויכו אליך וממתינות לשיחת שיקוף") || dashBlock.includes("הצעות ששויכו אליך וממתינות לשיחת שיקוף"), "כותרת משנה לנציג נשארה בפאנל התור");
+assert(dashBlock.includes("הצעות שהוגשו לתפעול · לפי סדר כניסה לתור"), "כותרת משנה לתור כמו מנהל תפעול");
 
 console.log("\n3) כותרת מסך ממתינים");
 assert(dashBlock.includes("opsDash__hello"), "ברכת היום + שם בטקסט רגיל");

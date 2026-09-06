@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260906-proposal-assign-live-v1";
+const APP_TAG = "20260906-ops-agent-all-cust-v1";
 let failed = 0;
 let passed = 0;
 
@@ -80,7 +80,8 @@ assert(dashBlock.includes("row.salesAgentName"), "שם נציג המכירות �
 assert(dashBlock.includes("this.formatMoney(row.premium)"), "פרמיה עדיין בשורת התור");
 assert(dashBlock.includes('UI.goView("mirrorCall")'), "לחצן שיקוף עדיין פותח את מסך השיקוף");
 assert(dashBlock.includes("MirrorCallUI.pickCustomer(cid)"), "בחירת לקוח במסך השיקוף לא נגעה");
-assert(dashBlock.includes("currentUserMatchesMirrorAssign(getMirrorAssign(rec))"), "נציג רואה רק מה ששויך אליו");
+assert(!dashBlock.includes("currentUserMatchesMirrorAssign(getMirrorAssign(rec))"), "תור הנציג לא מסונן לפי שיוך");
+assert(dashBlock.includes("Auth.isOpsAgent()"), "נציג תפעול עדיין רואה את תור התפעול");
 assert(app.includes("const MirrorAssignmentsUI"), "מסך שיוכי שיקוף לא הוסר");
 assert(html.includes('id="view-mirrorAssignments"'), "HTML של שיוכי שיקוף לא נגע");
 assert(html.includes('id="view-mirrorCall"'), "HTML של מסך השיקוף לא נגע");
