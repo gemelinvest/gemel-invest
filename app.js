@@ -5824,11 +5824,34 @@
     if(!remoteMeta || typeof remoteMeta !== "object") return false;
     State.data.meta = State.data.meta && typeof State.data.meta === "object" ? State.data.meta : {};
     let changed = false;
-    if(metaSyncIsNewer(remoteMeta, State.data.meta, "proposalInbox")){
-      State.data.meta.proposalAssignInbox = normalizeProposalAssignInboxList(remoteMeta.proposalAssignInbox || []);
-      State.data.meta.proposalInboxUpdatedAt = getMetaSyncAt(remoteMeta, "proposalInbox");
-      changed = true;
-      try { ProposalAssignInbox.handleInboxMetaArrival(); } catch(_e) {}
+    {
+      // לא רק לפי שעון: אם המטא המקומי חדש יותר (הנציג שמר משהו אחרי השיוך)
+      // עדיין חייבים לקלוט רשומות inbox חדשות — אחרת השיוך מגיע רק אחרי כניסה מחדש.
+      const remoteList = normalizeProposalAssignInboxList(remoteMeta.proposalAssignInbox || []);
+      const localList = normalizeProposalAssignInboxList(State.data.meta.proposalAssignInbox || []);
+      const localIds = new Set(localList.map((e) => safeTrim(e.id)));
+      const incomingMine = remoteList.filter((e) => {
+        if(!proposalAssignInboxMatchesCurrentUser(e)) return false;
+        if(localIds.has(safeTrim(e.id))) return false;
+        try { if(ProposalAssignInbox.wasDelivered?.(e)) return false; } catch(_e) {}
+        return true;
+      });
+      const clockNewer = metaSyncIsNewer(remoteMeta, State.data.meta, "proposalInbox");
+      if(clockNewer || incomingMine.length){
+        const map = new Map();
+        [...localList, ...remoteList].forEach((row, idx) => {
+          const key = safeTrim(row.id) || ("pbinv_apply_" + idx);
+          try { if(ProposalAssignInbox.wasDelivered?.(row)) return; } catch(_e) {}
+          const existing = map.get(key);
+          if(!existing || compareIsoStamps(row.at, existing.at) >= 0) map.set(key, row);
+        });
+        State.data.meta.proposalAssignInbox = normalizeProposalAssignInboxList(Array.from(map.values()));
+        if(clockNewer){
+          State.data.meta.proposalInboxUpdatedAt = getMetaSyncAt(remoteMeta, "proposalInbox");
+        }
+        changed = true;
+        try { ProposalAssignInbox.handleInboxMetaArrival(); } catch(_e) {}
+      }
     }
     if(metaSyncIsNewer(remoteMeta, State.data.meta, "customerInbox")){
       State.data.meta.customerAssignInbox = normalizeCustomerAssignInboxList(remoteMeta.customerAssignInbox || []);
@@ -10047,6 +10070,101 @@
 
   const ProposalAssignInbox = {
     _flushBusy: false,
+    _deliveredIds: new Set(),
+    _deliveredProposalKeys: new Set(),
+    _retryTimer: null,
+    _retryAttempt: 0,
+    deliveryKey(ev){
+      return `${safeTrim(ev?.targetAgentId)}::${safeTrim(ev?.proposalId)}`;
+    },
+    wasDelivered(ev){
+      if(!ev) return false;
+      const id = safeTrim(ev.id);
+      const key = this.deliveryKey(ev);
+      if(id && this._deliveredIds.has(id)) return true;
+      return !!(key && key !== "::" && this._deliveredProposalKeys.has(key));
+    },
+    markDelivered(ev){
+      if(!ev) return;
+      const id = safeTrim(ev.id);
+      const key = this.deliveryKey(ev);
+      if(id) this._deliveredIds.add(id);
+      if(key && key !== "::") this._deliveredProposalKeys.add(key);
+      if(this._deliveredIds.size > 200){
+        this._deliveredIds = new Set(Array.from(this._deliveredIds).slice(-100));
+      }
+      if(this._deliveredProposalKeys.size > 200){
+        this._deliveredProposalKeys = new Set(Array.from(this._deliveredProposalKeys).slice(-100));
+      }
+    },
+    scheduleRetry(){
+      if(this._retryTimer || !Auth.current) return;
+      this._retryAttempt = Math.min((Number(this._retryAttempt) || 0) + 1, 8);
+      const delay = Math.min(1200 * this._retryAttempt, 10000);
+      this._retryTimer = window.setTimeout(() => {
+        this._retryTimer = null;
+        void this.flushForCurrentUser();
+      }, delay);
+    },
+    notifyAssigned(ev){
+      if(this.wasDelivered(ev)) return false;
+      this.markDelivered(ev);
+      const from = safeTrim(ev.fromName) || "מנהל";
+      const label = safeTrim(ev.proposalLabel) || "הצעה";
+      const proposalId = safeTrim(ev.proposalId);
+      const tag = `gi-proposal-assign-${safeTrim(ev.id) || proposalId}`;
+      try {
+        window.showToast?.({
+          title: "שויכה לך הצעה",
+          text: `${label} · מאת: ${from}`,
+          variant: "info",
+          durationMs: 8000,
+          singletonKey: tag,
+          actions: proposalId ? [{ label: "פתח הצעה", onClick: () => this.openProposal(proposalId) }] : []
+        });
+      } catch(_e){}
+      try {
+        void DesktopNotifications?.notify?.("שויכה לך הצעה", {
+          body: `${label} · מאת: ${from}`,
+          tag,
+          onClick: () => this.openProposal(proposalId)
+        });
+      } catch(_e){}
+      return true;
+    },
+    handleRealtimeProposal(payload){
+      if(!Auth.current) return;
+      const row = payload?.new;
+      const id = safeTrim(row?.id);
+      if(!id) return;
+      const newAgentId = safeTrim(row.agent_id || row.agentId);
+      const oldAgentId = safeTrim(payload?.old?.agent_id || payload?.old?.agentId);
+      const existed = (Array.isArray(State.data?.proposals) ? State.data.proposals : [])
+        .some((p) => String(p?.id) === String(id));
+      try { Storage.mergeProposalsDelta([row]); } catch(_e) {}
+      const rec = (Array.isArray(State.data?.proposals) ? State.data.proposals : [])
+        .find((p) => String(p?.id) === String(id));
+      if(!rec) return;
+      let mine = false;
+      try { mine = !!customerOwnedByCurrentAgent(rec); } catch(_e) {}
+      if(!mine){
+        mine = proposalAssignInboxMatchesCurrentUser({
+          targetAgentId: newAgentId || safeTrim(rec.agentId),
+          targetAgentName: safeTrim(rec.agentName)
+        });
+      }
+      if(!mine) return;
+      const assignedNow = (!existed && mine) || (!!oldAgentId && !!newAgentId && oldAgentId !== newAgentId);
+      if(!assignedNow) return;
+      this.notifyAssigned({
+        id: "rt_" + id + "_" + (newAgentId || "me"),
+        targetAgentId: newAgentId || safeTrim(rec.agentId),
+        proposalId: id,
+        proposalLabel: safeTrim(rec.fullName) || "הצעה",
+        fromName: "מנהל"
+      });
+      try { ProposalsUI.render?.(); } catch(_e) {}
+    },
     openProposal(proposalId){
       const id = safeTrim(proposalId);
       if(!id) return;
@@ -10083,11 +10201,18 @@
       void this.flushForCurrentUser();
     },
     async flushForCurrentUser(){
-      if(this._flushBusy || !Auth.current) return;
+      if(!Auth.current) return;
+      if(this._flushBusy){
+        this.scheduleRetry();
+        return;
+      }
       State.data.meta = State.data.meta && typeof State.data.meta === "object" ? State.data.meta : {};
       const inbox = normalizeProposalAssignInboxList(State.data.meta.proposalAssignInbox || []);
-      const mine = inbox.filter((e) => proposalAssignInboxMatchesCurrentUser(e));
-      if(!mine.length) return;
+      const mine = inbox.filter((e) => proposalAssignInboxMatchesCurrentUser(e) && !this.wasDelivered(e));
+      if(!mine.length){
+        this._retryAttempt = 0;
+        return;
+      }
       this._flushBusy = true;
       try {
         const rest = inbox.filter((e) => !proposalAssignInboxMatchesCurrentUser(e));
@@ -10104,29 +10229,9 @@
         if(ready.length){
           try { ProposalsUI.render?.(); } catch(_e) {}
         }
-        ready.forEach((ev) => {
-          const from = safeTrim(ev.fromName) || "מנהל";
-          const label = safeTrim(ev.proposalLabel) || "הצעה";
-          const proposalId = safeTrim(ev.proposalId);
-          const tag = `gi-proposal-assign-${safeTrim(ev.id) || proposalId}`;
-          try {
-            window.showToast?.({
-              title: "שויכה לך הצעה",
-              text: `${label} · מאת: ${from}`,
-              variant: "info",
-              durationMs: 8000,
-              singletonKey: tag,
-              actions: proposalId ? [{ label: "פתח הצעה", onClick: () => this.openProposal(proposalId) }] : []
-            });
-          } catch(_e){}
-          try {
-            void DesktopNotifications?.notify?.("שויכה לך הצעה", {
-              body: `${label} · מאת: ${from}`,
-              tag,
-              onClick: () => this.openProposal(proposalId)
-            });
-          } catch(_e){}
-        });
+        ready.forEach((ev) => { this.notifyAssigned(ev); });
+        if(keep.length) this.scheduleRetry();
+        else this._retryAttempt = 0;
         if(ready.length && !keep.length){
           try {
             await App.persist("נקה התראות שיוך הצעה", { skipProposalsSync: true, metaOnly: true, metaSyncScopes: ["proposalInbox"], silent: true });
@@ -10134,6 +10239,109 @@
         }
       } finally {
         this._flushBusy = false;
+      }
+    }
+  };
+
+  const ProposalAssignWatcher = {
+    lightIntervalMs: 15000,
+    _channel: null,
+    lightTimer: null,
+    lightBusy: false,
+    _retry: 0,
+    _retryTimer: null,
+    start(){
+      this.stop();
+      if(!Auth.current) return;
+      this._retry = 0;
+      this.startRealtime();
+      this.lightTimer = window.setInterval(() => { void this.lightTick(); }, this.lightIntervalMs);
+      void this.lightTick();
+    },
+    stop(){
+      this.stopRealtime();
+      if(this._retryTimer){
+        window.clearTimeout(this._retryTimer);
+        this._retryTimer = null;
+      }
+      if(this.lightTimer){
+        window.clearInterval(this.lightTimer);
+        this.lightTimer = null;
+      }
+    },
+    stopRealtime(){
+      if(this._retryTimer){
+        window.clearTimeout(this._retryTimer);
+        this._retryTimer = null;
+      }
+      if(!this._channel) return;
+      try { Storage.getClient()?.removeChannel(this._channel); } catch(_e) {}
+      this._channel = null;
+    },
+    scheduleReconnect(){
+      if(this._retryTimer || !Auth.current) return;
+      const attempt = Math.min(this._retry++, 4);
+      const delay = Math.min(2000 * Math.pow(2, attempt), 30000);
+      this._retryTimer = window.setTimeout(() => {
+        this._retryTimer = null;
+        if(!Auth.current) return;
+        this.startRealtime();
+      }, delay);
+    },
+    startRealtime(){
+      this.stopRealtime();
+      if(!Auth.current) return;
+      try {
+        const client = Storage.getClient();
+        if(!client?.channel) return;
+        const channelName = `gi-proposal-assign-${safeTrim(Auth.current?.id) || "user"}-${APP_SESSION_ID.slice(-6)}`;
+        this._channel = client
+          .channel(channelName)
+          .on("postgres_changes", {
+            event: "UPDATE",
+            schema: "public",
+            table: SUPABASE_TABLES.meta,
+            filter: "key=eq.global"
+          }, (payload) => {
+            try {
+              const row = payload?.new;
+              if(!row || safeTrim(row.key) !== "global") return;
+              applyRemoteMetaInboxScopes(Storage.mapMeta(row));
+            } catch(_e) {}
+          })
+          .on("postgres_changes", {
+            event: "*",
+            schema: "public",
+            table: SUPABASE_TABLES.proposals
+          }, (payload) => {
+            try { ProposalAssignInbox.handleRealtimeProposal(payload); } catch(_e) {}
+          })
+          .subscribe((status) => {
+            if(status === "SUBSCRIBED"){
+              this._retry = 0;
+              void this.lightTick();
+              return;
+            }
+            if(status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED"){
+              this.scheduleReconnect();
+            }
+          });
+      } catch(err) {
+        console.warn("PROPOSAL_ASSIGN_REALTIME_FAILED:", err);
+        this.scheduleReconnect();
+      }
+    },
+    async lightTick(){
+      if(this.lightBusy || !Auth.current) return;
+      this.lightBusy = true;
+      try {
+        try { await ProposalAssignInbox.flushForCurrentUser(); } catch(_e) {}
+        const metaRes = await Storage.loadMetaRowCached?.();
+        if(!metaRes?.ok) return;
+        applyRemoteMetaInboxScopes(Storage.mapMeta(metaRes.data || {}));
+      } catch(_e) {
+      } finally {
+        this.lightBusy = false;
       }
     }
   };
@@ -16742,6 +16950,7 @@
       try { AttendanceClock.onLoggedOut(); } catch(_e) {}
       try { InactivityGuard.stop(); } catch(_e) {}
       try { CampaignAgentLeadWatcher.stop(); } catch(_e) {}
+      try { ProposalAssignWatcher.stop(); } catch(_e) {}
       try { MirrorCallAgentToastWatcher.stop(); } catch(_e) {}
       try { OpsAssignArrivalAlert.stop(); } catch(_e) {}
       try { BackgroundTimers.stopAll(); } catch(_e) {}
@@ -30038,6 +30247,7 @@ UsersGateUI.init();
   // ---------- Assign Proposal Modal (admin / manager) ----------
   const AssignProposalModal = {
     _proposalId: null,
+    _busy: false,
     open(proposalId){
       if(!(Auth.isAdmin() || Auth.isManager())){
         try { window.showToast?.({ title: "אין הרשאה", text: "שיוך הצעה לנציג זמין למנהל מערכת או למנהל בלבד.", variant: "warn", durationMs: 4800 }); } catch(_e) {}
@@ -30081,6 +30291,7 @@ UsersGateUI.init();
       this._proposalId = null;
     },
     async confirm(){
+      if(this._busy) return;
       if(!(Auth.isAdmin() || Auth.isManager())) return;
       const proposalId = safeTrim(this._proposalId);
       const sel = document.getElementById("assignProposalAgentSelect");
@@ -30112,57 +30323,78 @@ UsersGateUI.init();
         : target.role === "elementary" ? "אלמנטרי"
         : "";
 
-      // בעלות מלאה לנציג היעד — אחרת סינון הצעות אצל הנציג חוסם לפי agentId ישן
-      rec.agentId = targetId;
-      rec.agentName = targetName;
-      rec.agentRole = roleLabel;
-      rec.createdBy = targetName;
-      rec.updatedAt = nowISO();
-      rec.payload = rec.payload && typeof rec.payload === "object" ? { ...rec.payload } : {};
-      rec.payload.agentId = targetId;
-      rec.payload.agentName = targetName;
-      rec.payload.createdBy = targetName;
-      rec.payload.createdByKey = targetKey;
-
-      const idx = (State.data.proposals || []).findIndex((x) => String(x?.id) === String(rec.id));
-      if(idx >= 0) State.data.proposals[idx] = rec;
-
-      pushProposalAssignInboxEntry({
-        targetAgentId: targetId,
-        targetAgentName: targetName,
-        fromName,
-        proposalId: safeTrim(rec.id),
-        proposalLabel
-      });
-      appendAuditLog({
-        type: "proposal_assigned",
-        entity: "proposal",
-        entityId: safeTrim(rec.id),
-        label: "הצעה שויכה לנציג",
-        actorName: safeTrim(Auth?.current?.name),
-        details: { toAgentId: targetId, toAgentName: targetName, fromName, fromAgentId: prevAgentId, proposalLabel }
-      });
-      this.close();
-      try { refreshStateShadows({ skipNormalize: true, lightShadows: true }); } catch(_e) {}
-      ProposalsUI.render();
-
-      let rowOk = false;
-      try {
-        const row = Storage.buildProposalRows({ proposals: [rec] })[0];
-        const rowRes = await Storage.upsertSingleRow(SUPABASE_TABLES.proposals, row);
-        rowOk = !!rowRes?.ok;
-        if(rowOk){
-          try { Storage.rememberRows(SUPABASE_TABLES.proposals, [row]); } catch(_e) {}
-        }
-      } catch(rowErr) {
-        console.warn("ASSIGN_PROPOSAL_ROW_WARN", rowErr);
+      this._busy = true;
+      const confirmBtn = document.getElementById("assignProposalConfirm");
+      const prevBtnText = confirmBtn ? confirmBtn.textContent : "";
+      if(confirmBtn){
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = "משיוך…";
       }
+      try {
+        rec.agentId = targetId;
+        rec.agentName = targetName;
+        rec.agentRole = roleLabel;
+        rec.createdBy = targetName;
+        rec.updatedAt = nowISO();
+        rec.payload = rec.payload && typeof rec.payload === "object" ? { ...rec.payload } : {};
+        rec.payload.agentId = targetId;
+        rec.payload.agentName = targetName;
+        rec.payload.createdBy = targetName;
+        rec.payload.createdByKey = targetKey;
 
-      const r = await App.persist("שויכה הצעה לנציג");
-      if(!r?.ok && !rowOk){
-        try { window.showToast?.({ title: "שמירה חלקית", text: safeTrim(r?.error) || "השינוי נשמר מקומית; ייתכן שסנכרון לשרת נכשל.", variant: "warn", durationMs: 5600 }); } catch(_e) {}
-      } else {
-        try { window.showToast?.({ title: "שויך בהצלחה", text: `ההצעה שויכה ל־${targetName}. הנציג יראה אותה מיד, עם הודעה.`, variant: "ok", durationMs: 4800 }); } catch(_e) {}
+        const idx = (State.data.proposals || []).findIndex((x) => String(x?.id) === String(rec.id));
+        if(idx >= 0) State.data.proposals[idx] = rec;
+
+        pushProposalAssignInboxEntry({
+          targetAgentId: targetId,
+          targetAgentName: targetName,
+          fromName,
+          proposalId: safeTrim(rec.id),
+          proposalLabel
+        });
+        appendAuditLog({
+          type: "proposal_assigned",
+          entity: "proposal",
+          entityId: safeTrim(rec.id),
+          label: "הצעה שויכה לנציג",
+          actorName: safeTrim(Auth?.current?.name),
+          details: { toAgentId: targetId, toAgentName: targetName, fromName, fromAgentId: prevAgentId, proposalLabel }
+        });
+
+        let rowOk = false;
+        try {
+          const row = Storage.buildProposalRows({ proposals: [rec] })[0];
+          const rowRes = await Storage.upsertSingleRow(SUPABASE_TABLES.proposals, row);
+          rowOk = !!rowRes?.ok;
+          if(rowOk){
+            try { Storage.rememberRows(SUPABASE_TABLES.proposals, [row]); } catch(_e) {}
+          }
+        } catch(rowErr) {
+          console.warn("ASSIGN_PROPOSAL_ROW_WARN", rowErr);
+        }
+
+        const r = await App.persist("שויכה הצעה לנציג", {
+          metaOnly: true,
+          metaSyncScopes: ["proposalInbox"],
+          skipNormalize: true,
+          skipHeavy: true,
+          skipProposalsSync: true,
+          yieldUi: true
+        });
+        this.close();
+        try { refreshStateShadows({ skipNormalize: true, lightShadows: true }); } catch(_e) {}
+        ProposalsUI.render();
+        if(!r?.ok && !rowOk){
+          try { window.showToast?.({ title: "שמירה חלקית", text: safeTrim(r?.error) || "השינוי נשמר מקומית; ייתכן שסנכרון לשרת נכשל.", variant: "warn", durationMs: 5600 }); } catch(_e) {}
+        } else {
+          try { window.showToast?.({ title: "שויך בהצלחה", text: `ההצעה שויכה ל־${targetName}. הנציג יראה אותה מיד, עם הודעה.`, variant: "ok", durationMs: 4800 }); } catch(_e) {}
+        }
+      } finally {
+        this._busy = false;
+        if(confirmBtn){
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = prevBtnText || "שייך";
+        }
       }
     },
     init(){
@@ -31156,6 +31388,7 @@ UsersGateUI.init();
       LiveRefresh.start();
       ReferralQuietRefresh.start();
       try { MirrorCallAgentToastWatcher.start(); } catch(_e) {}
+      try { ProposalAssignWatcher.start(); } catch(_e) {}
       try { OpsAgentStatusToastWatcher.start(); } catch(_e) {}
       try { OpsAssignArrivalAlert.start(); } catch(_e) {}
     },
@@ -31171,6 +31404,7 @@ UsersGateUI.init();
       LiveRefresh.stop();
       ReferralQuietRefresh.stop();
       try { MirrorCallAgentToastWatcher.stop(); } catch(_e) {}
+      try { ProposalAssignWatcher.stop(); } catch(_e) {}
       try { OpsAssignArrivalAlert.stop(); } catch(_e) {}
       try { DashboardUI.stopLiveRefresh(); } catch(_e) {}
       try { ListRecordRealtime.stopAll(); } catch(_e) {}
@@ -39654,7 +39888,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-hach-excel-tariffs-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-proposal-assign-live-v2";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -39674,7 +39908,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-hach-excel-tariffs-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-proposal-assign-live-v2";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -40310,8 +40544,8 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260906-hach-excel-tariffs-v1",
-    "./simulators-shell.css?v=20260906-hach-excel-tariffs-v1"
+    "./simulators-center.css?v=20260906-proposal-assign-live-v2",
+    "./simulators-shell.css?v=20260906-proposal-assign-live-v2"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -41673,7 +41907,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260906-hach-excel-tariffs-v1";
+  const GI_WIZARD_JS_VERSION = "20260906-proposal-assign-live-v2";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -51748,8 +51982,9 @@ const ClalRiskLifePdf = {
         try { void ProposalAssignInbox.flushForCurrentUser(); } catch(_e) {}
         try { void CustomerAssignInbox.flushForCurrentUser(); } catch(_e) {}
         try { void CampaignLeadAssignInbox.flushForCurrentUser(); } catch(_e) {}
-        try { CampaignAgentLeadWatcher.start(); } catch(_e) {}
-        try { MirrorCallAgentToastWatcher.start(); } catch(_e) {}
+      try { CampaignAgentLeadWatcher.start(); } catch(_e) {}
+      try { ProposalAssignWatcher.start(); } catch(_e) {}
+      try { MirrorCallAgentToastWatcher.start(); } catch(_e) {}
         try { OpsAgentStatusToastWatcher.start(); } catch(_e) {}
         try { OpsAssignArrivalAlert.start(); } catch(_e) {}
         const alreadyOnApp = !!document.querySelector(".view.is-visible");
@@ -52493,6 +52728,9 @@ const ClalRiskLifePdf = {
               try { CampaignAgentLeadWatcher.start(); } catch(_e) {}
             }, POST_LOGIN_AUX_DEFER_MS);
           }
+          perfIdle(() => {
+            try { ProposalAssignWatcher.start(); } catch(_e) {}
+          }, POST_LOGIN_AUX_DEFER_MS);
 
           this._warmViewAfterLogin = false;
           try { window.dispatchEvent(new CustomEvent("gi:app-login-ready", { detail:{ source:"mfa-login" } })); } catch(_e) {}
@@ -62771,6 +63009,7 @@ ${inner}
   CampaignMyLeadsUI.init();
   try {
     if(Auth.current && Auth.canAccessCampaignMyLeads()) CampaignAgentLeadWatcher.start();
+    if(Auth.current) ProposalAssignWatcher.start();
     if(Auth.current) MirrorCallAgentToastWatcher.start();
     if(Auth.current) OpsAgentStatusToastWatcher.start();
     if(Auth.current) OpsAssignArrivalAlert.start();
