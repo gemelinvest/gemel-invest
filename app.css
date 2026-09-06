@@ -33181,14 +33181,16 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   overflow-y:auto;
   -webkit-overflow-scrolling:touch;
   padding:clamp(12px, 1.4vw, 18px) clamp(18px, 2.2vw, 28px) clamp(14px, 1.6vw, 20px);
-  font-size:clamp(20px, 2.15vw, 26px);
-  line-height:1.62;
+  font-size:clamp(18px, 1.7vw, 21px);
+  line-height:1.68;
   font-weight:600;
+  color:#0a1638;
 }
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcCallScript__p{margin:0 0 12px;}
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcCallScript__ask{
-  font-size:clamp(21px, 2.25vw, 27px);
-  line-height:1.55;
+  font-size:clamp(18px, 1.7vw, 21px);
+  line-height:1.68;
+  font-weight:800;
 }
 /* אישור שלב 1 — פס תחתון קומפקטי, כפתורים בימין */
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcOpeningConsent:not([hidden]){
@@ -33296,8 +33298,8 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   overflow:auto;
   -webkit-overflow-scrolling:touch;
   padding-top:0;
-  font-size:clamp(16px, 1.55vw, 19px);
-  line-height:1.55;
+  font-size:clamp(18px, 1.7vw, 21px);
+  line-height:1.68;
 }
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStep4:not([hidden]){
   flex:1 1 auto;
@@ -33311,8 +33313,8 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   min-height:0;
   overflow:auto;
   -webkit-overflow-scrolling:touch;
-  font-size:clamp(16px, 1.55vw, 19px);
-  line-height:1.55;
+  font-size:clamp(18px, 1.7vw, 21px);
+  line-height:1.68;
 }
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStepCancelQ:not([hidden]){
   flex:1 1 auto;
@@ -33326,8 +33328,8 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   min-height:0;
   overflow:auto;
   -webkit-overflow-scrolling:touch;
-  font-size:clamp(16px, 1.55vw, 19px);
-  line-height:1.55;
+  font-size:clamp(18px, 1.7vw, 21px);
+  line-height:1.68;
 }
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStepBenef:not([hidden]),
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStepHealthDecl:not([hidden]),
@@ -33347,8 +33349,8 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   min-height:0;
   overflow:auto;
   -webkit-overflow-scrolling:touch;
-  font-size:clamp(16px, 1.55vw, 19px);
-  line-height:1.55;
+  font-size:clamp(18px, 1.7vw, 21px);
+  line-height:1.68;
 }
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStep5:not([hidden]){
   flex:1 1 auto;
@@ -33362,8 +33364,8 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   min-height:0;
   overflow:auto;
   -webkit-overflow-scrolling:touch;
-  font-size:clamp(16px, 1.55vw, 19px);
-  line-height:1.55;
+  font-size:clamp(18px, 1.7vw, 21px);
+  line-height:1.68;
 }
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStep6:not([hidden]){
   flex:1 1 auto;
@@ -33379,8 +33381,8 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   -webkit-overflow-scrolling:touch;
   display:flex;
   flex-direction:column;
-  font-size:clamp(16px, 1.55vw, 19px);
-  line-height:1.55;
+  font-size:clamp(18px, 1.7vw, 21px);
+  line-height:1.68;
 }
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStep6:not([hidden]) .mcNeedsScreen{
   flex:1 1 auto;
@@ -33416,9 +33418,9 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   gap:8px;
 }
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStepVerify:not([hidden]) .mcStepVerify__script{
-  font-size:clamp(16px, 1.7vw, 20px);
-  line-height:1.55;
-  font-weight:800;
+  font-size:clamp(18px, 1.7vw, 21px);
+  line-height:1.68;
+  font-weight:600;
   color:#0a1638;
   letter-spacing:0;
   white-space:normal;
@@ -34254,14 +34256,14 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 }
 .mcCallScript__body{
   padding:clamp(20px, 2.6vw, 34px) clamp(24px, 3vw, 40px) clamp(24px, 3vw, 36px);
-  font-size:clamp(22px, 2.35vw, 28px);
-  line-height:1.78;
+  font-size:clamp(18px, 1.7vw, 21px);
+  line-height:1.68;
   font-weight:600;
-  color:#0f1f4a;
+  color:#0a1638;
 }
 .mcCallScript__p{margin:0 0 18px;}
 .mcCallScript__p:last-child{margin-bottom:0;}
-.mcCallScript__ask{font-weight:800;color:#0c1d4d;font-size:clamp(24px, 2.55vw, 30px);line-height:1.7;}
+.mcCallScript__ask{font-weight:800;color:#0a1638;font-size:clamp(18px, 1.7vw, 21px);line-height:1.68;}
 .mcCallScript__missing{
   display:inline-block;
   font-family:'Rubik',ui-monospace,monospace;
@@ -34317,9 +34319,9 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   min-height:0;
   overflow:hidden;
   padding:clamp(14px, 1.8vw, 22px) clamp(18px, 2.4vw, 32px) clamp(16px, 2vw, 24px);
-  font-size:clamp(16px, 1.55vw, 19px);
-  line-height:1.55;
-  color:#0f1f4a;
+  font-size:clamp(18px, 1.7vw, 21px);
+  line-height:1.68;
+  color:#0a1638;
   font-weight:600;
 }
 .mcStep2__actions{display:none !important;}
@@ -34358,10 +34360,10 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 }
 .mcNeedsScript__p{
   margin:0 0 12px;
-  font-size:clamp(16px, 1.55vw, 19px);
-  line-height:1.65;
+  font-size:clamp(18px, 1.7vw, 21px);
+  line-height:1.68;
   font-weight:600;
-  color:#0f1f4a;
+  color:#0a1638;
 }
 .mcNeedsScript__p:last-child{margin-bottom:0;}
 .mcNeedsScript__p--ask{font-weight:800;color:#0a1638;}
@@ -34376,11 +34378,12 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcNeedsScript--readAloud .mcNeedsScript__p,
 .mcNeedsScript--readAloud .mcNeedsScript__p--ask{
   margin:0;
-  font-size:clamp(18px, 2vw, 22px);
-  line-height:1.45;
-  font-weight:800;
+  font-size:clamp(18px, 1.7vw, 21px);
+  line-height:1.68;
+  font-weight:600;
   color:#0a1638;
 }
+.mcNeedsScript--readAloud .mcNeedsScript__p--ask{font-weight:800;}
 .mcAgentHint{
   flex:0 0 auto;
   padding:12px 14px;
@@ -34547,6 +34550,32 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 }
 .mcPolCard__k{font-size:11px;font-weight:700;color:rgba(30,58,122,.48);}
 .mcPolCard__v{font-size:14px;font-weight:800;color:#0a1638;line-height:1.35;word-break:break-word;}
+.mcPolCard__row--premium .mcPolCard__k{
+  font-size:12px;
+  font-weight:800;
+  color:#1e3a7a;
+}
+.mcPolCard__row--premium .mcPolCard__v{
+  font-size:16px;
+  font-weight:800;
+}
+.mcPolCard__row--discount{
+  padding:10px 12px;
+  border-radius:12px;
+  background:rgba(29,78,216,.05);
+  border:1px solid rgba(29,78,216,.12);
+}
+.mcPolCard__row--discount .mcPolCard__k{
+  font-size:12px;
+  font-weight:800;
+  color:#1d4ed8;
+}
+.mcPolCard__row--discount .mcPolCard__v{
+  font-size:15px;
+  font-weight:700;
+  line-height:1.55;
+  color:#0a1638;
+}
 @media (max-width:720px){
   .mcPolCard--withStatus{
     flex-direction:column;
@@ -34704,14 +34733,14 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   min-height:0;
   overflow:hidden;
   padding:clamp(14px, 1.8vw, 22px) clamp(18px, 2.4vw, 32px) clamp(16px, 2vw, 24px);
-  font-size:clamp(16px, 1.55vw, 19px);
-  line-height:1.55;
-  color:#0f1f4a;
+  font-size:clamp(18px, 1.7vw, 21px);
+  line-height:1.68;
+  color:#0a1638;
   font-weight:600;
 }
 .mcStep4__actions{display:none !important;}
-.mcStep4__p{margin:0 0 16px;font-size:clamp(16px, 1.55vw, 19px);line-height:1.55;}
-.mcStep4__p--lead{font-weight:800;color:#0a1638;font-size:clamp(17px, 1.7vw, 20px);}
+.mcStep4__p{margin:0 0 16px;font-size:clamp(18px, 1.7vw, 21px);line-height:1.68;}
+.mcStep4__p--lead{font-weight:800;color:#0a1638;font-size:clamp(18px, 1.7vw, 21px);}
 .mcStepCancelQ{
   margin-top:0;
   width:100%;
@@ -34736,9 +34765,9 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   min-height:0;
   overflow:auto;
   padding:clamp(14px, 1.8vw, 22px) clamp(18px, 2.4vw, 32px) clamp(16px, 2vw, 24px);
-  font-size:clamp(16px, 1.55vw, 19px);
-  line-height:1.55;
-  color:#0f1f4a;
+  font-size:clamp(18px, 1.7vw, 21px);
+  line-height:1.68;
+  color:#0a1638;
   font-weight:600;
   -webkit-overflow-scrolling:touch;
 }
@@ -34857,9 +34886,9 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   min-height:0;
   overflow:auto;
   padding:clamp(14px, 1.8vw, 22px) clamp(18px, 2.4vw, 32px) clamp(16px, 2vw, 24px);
-  font-size:clamp(16px, 1.55vw, 19px);
-  line-height:1.55;
-  color:#0f1f4a;
+  font-size:clamp(18px, 1.7vw, 21px);
+  line-height:1.68;
+  color:#0a1638;
   font-weight:600;
   -webkit-overflow-scrolling:touch;
 }
@@ -35048,9 +35077,9 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   min-height:0;
   overflow:hidden;
   padding:clamp(14px, 1.8vw, 22px) clamp(18px, 2.4vw, 32px) clamp(16px, 2vw, 24px);
-  font-size:clamp(16px, 1.55vw, 19px);
-  line-height:1.55;
-  color:#0f1f4a;
+  font-size:clamp(18px, 1.7vw, 21px);
+  line-height:1.68;
+  color:#0a1638;
   font-weight:600;
 }
 .mcStep6{
@@ -35079,9 +35108,9 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   display:flex;
   flex-direction:column;
   padding:clamp(14px, 1.8vw, 22px) clamp(18px, 2.4vw, 32px) clamp(16px, 2vw, 24px);
-  font-size:clamp(16px, 1.55vw, 19px);
-  line-height:1.55;
-  color:#0f1f4a;
+  font-size:clamp(18px, 1.7vw, 21px);
+  line-height:1.68;
+  color:#0a1638;
   font-weight:600;
 }
 .mcDiscScroll{
@@ -35201,10 +35230,10 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   border-radius:12px;
   background:rgba(248,250,255,.92);
   border:1px solid rgba(15,32,96,.06);
-  font-size:clamp(15px, 1.45vw, 17px);
+  font-size:clamp(18px, 1.65vw, 20px);
   font-weight:600;
-  line-height:1.65;
-  color:#12224f;
+  line-height:1.68;
+  color:#0a1638;
   -webkit-overflow-scrolling:touch;
 }
 .mcStep4NewList{display:flex;flex-direction:column;gap:10px;margin:12px 0 8px;}
@@ -35322,9 +35351,9 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcStepVerify__scriptLabel{display:none;}
 .mcStepVerify__script{
   margin:0;
-  font-size:clamp(16px, 1.85vw, 21px);
-  font-weight:800;
-  line-height:1.55;
+  font-size:clamp(18px, 1.7vw, 21px);
+  font-weight:600;
+  line-height:1.68;
   color:#0a1638;
   letter-spacing:0;
   white-space:normal;
@@ -45586,10 +45615,11 @@ body.view-elementaryMirror-active .pageTitle{ /* keep default */ }
 
 /* מה שהנציג אומר — גדול, לקריאה בקול */
 .mcPaySay{
-  font-size: 16.5px;
-  line-height: 1.7;
+  font-size: 18.5px;
+  line-height: 1.68;
   color: var(--payInk);
   margin: 0 0 8px;
+  font-weight: 600;
   text-wrap: pretty;
 }
 .mcPaySay:last-child{ margin-bottom: 0; }
@@ -45792,7 +45822,7 @@ body.view-elementaryMirror-active .pageTitle{ /* keep default */ }
 }
 
 @media (max-width: 720px){
-  .mcPaySay{ font-size: 15.5px; }
+  .mcPaySay{ font-size: 17.5px; }
   .mcPayGrid{ grid-template-columns: minmax(0, 1fr); }
   .mcPayNav{ justify-content: stretch; }
   .mcPayNav .mcBtn{ flex: 1; }

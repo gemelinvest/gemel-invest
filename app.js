@@ -39889,7 +39889,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-mirror-ops-ux-v2";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-mirror-script-premiums-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -39909,7 +39909,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-mirror-ops-ux-v2";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-mirror-script-premiums-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -40545,8 +40545,8 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260906-mirror-ops-ux-v2",
-    "./simulators-shell.css?v=20260906-mirror-ops-ux-v2"
+    "./simulators-center.css?v=20260906-mirror-script-premiums-v1",
+    "./simulators-shell.css?v=20260906-mirror-script-premiums-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -41908,7 +41908,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260906-mirror-ops-ux-v2";
+  const GI_WIZARD_JS_VERSION = "20260906-mirror-script-premiums-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -66244,15 +66244,45 @@ ${inner}
     _mcDiscountScheduleText(p){
       try{
         if(typeof CustomersUI !== "undefined" && CustomersUI && typeof CustomersUI.getPolicyDiscountScheduleSummary === "function"){
-          return safeTrim(CustomersUI.getPolicyDiscountScheduleSummary(p));
+          const s = safeTrim(CustomersUI.getPolicyDiscountScheduleSummary(p));
+          if(s) return s;
         }
       }catch(_e){}
+      if(Array.isArray(p?.discountSchedule) && p.discountSchedule.length){
+        const bits = p.discountSchedule.map((item, idx) => {
+          const year = Math.max(1, Number(item?.year || (idx + 1)) || (idx + 1));
+          const pctItem = Number(String(item?.pct ?? item?.discountPct ?? "").replace(/[^\d.\-]/g, ""));
+          if(!Number.isFinite(pctItem) || pctItem <= 0) return "";
+          return `שנה ${year}: ${pctItem}%`;
+        }).filter(Boolean);
+        if(bits.length) return bits.join(" · ");
+      }
       const pct = Number(String(p?.discountPct ?? p?.discountPercent ?? "").replace(/[^\d.\-]/g, ""));
       const years = safeTrim(p?.discountYears);
       if(Number.isFinite(pct) && pct > 0){
         return years ? `${pct}% ל־${years} שנים` : `${pct}%`;
       }
       return "";
+    },
+
+    _mcMoneyChip(formatted){
+      const t = safeTrim(formatted);
+      if(!t || t === "—") return "—";
+      return `<span class="mcStartDate">${escapeHtml(t)}</span>`;
+    },
+
+    _mcNewPolicyPremiumDiscountRows(p){
+      const before = this._fmtMcMoney(this._mcPremiumBefore(p));
+      const after = this._fmtMcMoney(this._mcPremiumAfter(p));
+      const schedule = this._mcDiscountScheduleText(p);
+      const rows = [
+        { k: "פרמיה לפני הנחה", v: this._mcMoneyChip(before), kind: "premium" },
+        { k: "פרמיה לאחר הנחה", v: this._mcMoneyChip(after), kind: "premium" }
+      ];
+      if(schedule){
+        rows.push({ k: "הנחה שניתנה", v: escapeHtml(schedule), kind: "discount", wide: true });
+      }
+      return { rows, schedule };
     },
 
     _mcPremiumBefore(p){
@@ -66283,11 +66313,14 @@ ${inner}
       const rows = Array.isArray(opts.rows) ? opts.rows : [];
       const rowsHtml = rows.map((r) => {
         const kind = safeTrim(r.kind);
-        const wide = !!r.wide || kind === "cover" || kind === "total" || /כיסוי|סכום|לפני הנחה|אחרי הנחה|סה״כ|סה"כ/i.test(safeTrim(r.k) + " " + String(r.v || "").replace(/<[^>]+>/g, " "));
+        const wide = !!r.wide || kind === "cover" || kind === "total" || kind === "discount"
+          || /כיסוי|סכום|סה״כ|סה"כ/i.test(safeTrim(r.k) + " " + String(r.v || "").replace(/<[^>]+>/g, " "));
         const mods = ["mcPolCard__row"];
         if(wide) mods.push("mcPolCard__row--wide");
         if(kind === "cover") mods.push("mcPolCard__row--cover");
         if(kind === "total") mods.push("mcPolCard__row--total");
+        if(kind === "premium") mods.push("mcPolCard__row--premium");
+        if(kind === "discount") mods.push("mcPolCard__row--discount");
         return `<div class="${mods.join(" ")}"><span class="mcPolCard__k">${escapeHtml(r.k)}</span><strong class="mcPolCard__v">${r.v}</strong></div>`;
       }).join("");
       const body =
@@ -68198,8 +68231,6 @@ ${inner}
     },
 
     _collectNewPolicyCards(rec, opts = {}){
-      const withDiscount = opts.withDiscount !== false;
-      const premiumMode = opts.premiumMode || "after";
       const pl = rec?.payload || {};
       const insureds = this._mirrorGetInsureds(rec);
       const rawList = this._mirrorGetNewPoliciesRaw(rec);
@@ -68214,41 +68245,20 @@ ${inner}
       return rawList.map((p) => {
         const company = safeTrim(p?.company) || "—";
         const product = safeTrim(p?.type || p?.product) || "—";
-        const before = this._fmtMcMoney(this._mcPremiumBefore(p));
-        const after = this._fmtMcMoney(this._mcPremiumAfter(p));
-        const schedule = this._mcDiscountScheduleText(p);
-        if(opts.simple){
-          const rows = [
-            { k: "שם חברה", v: escapeHtml(company) },
-            { k: "שם מוצר", v: escapeHtml(product) }
-          ];
-          this._mcNewPolicyFileParityRows(rec, p).forEach((r) => rows.push(r));
-          rows.push({ k: "פרמיה חודשית על סך", v: escapeHtml(after) });
-          return this._mcPolicyCardHtml({
-            badge: getInsuredLabel(p),
-            title: "פוליסה מוצעת",
-            rows
-          });
-        }
+        const prem = this._mcNewPolicyPremiumDiscountRows(p);
         const rows = [
           { k: "שם חברה", v: escapeHtml(company) },
           { k: "שם מוצר", v: escapeHtml(product) }
         ];
-        if(premiumMode === "before"){
-          rows.push({ k: "פרמיה לפני הנחה", v: escapeHtml(before) });
+        if(opts.simple){
+          this._mcNewPolicyFileParityRows(rec, p).forEach((r) => rows.push(r));
         } else {
-          rows.push({ k: "פרמיה חודשית על סך", v: escapeHtml(after) });
-          if(withDiscount && before !== "—" && before !== after){
-            rows.push({ k: "פרמיה לפני הנחה", v: escapeHtml(before) });
-          }
+          this._mcCoverageBits(p).forEach((b) => rows.push({ k: b.label, v: escapeHtml(b.value) }));
         }
-        this._mcCoverageBits(p).forEach((b) => rows.push({ k: b.label, v: escapeHtml(b.value) }));
-        if(withDiscount && schedule){
-          rows.push({ k: "הנחה שניתנה", v: escapeHtml(schedule) });
-        }
+        prem.rows.forEach((r) => rows.push(r));
         let extra = "";
-        if(opts.showRankScript && schedule){
-          extra = `<div class="mcPolCard__rankScript">ניתנה הנחה מדורגת של: <strong>${escapeHtml(schedule)}</strong></div>`;
+        if(opts.showRankScript && prem.schedule){
+          extra = `<div class="mcPolCard__rankScript">ניתנה הנחה מדורגת של: <strong>${escapeHtml(prem.schedule)}</strong></div>`;
         }
         return this._mcPolicyCardHtml({
           badge: getInsuredLabel(p),
@@ -68495,11 +68505,13 @@ ${inner}
                     covers = (MirrorsUI.getHealthCoverList(p) || []).map((x) => safeTrim(x)).filter(Boolean);
                   }
                 }catch(_e2){}
+                const prem = this._mcNewPolicyPremiumDiscountRows(p);
                 const rows = [
                   { k: "שם חברה", v: escapeHtml(company) },
                   { k: "שם מוצר", v: escapeHtml(product) }
                 ];
                 if(covers.length) rows.push({ k: "כיסויים", v: escapeHtml(covers.join(" · ")) });
+                prem.rows.forEach((r) => rows.push(r));
                 return this._mcPolicyCardHtml({ title: "פוליסה מוצעת", rows });
               }).join("") +
               `</div>`;

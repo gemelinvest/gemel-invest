@@ -14,7 +14,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260906-mirror-ops-ux-v2";
+const TAG = "20260906-mirror-script-premiums-v1";
 let failed = 0;
 let passed = 0;
 
