@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260906-sales-mail-root-v1";
+const APP_TAG = "20260906-sales-mail-root-v2";
 const THEME_TAG = "20260830-policy-actions-align-v1";
 let failed = 0;
 let passed = 0;
@@ -39,7 +39,7 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).statu
 assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
 assert(html.includes("theme.css?v=" + THEME_TAG), "index.html theme.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
-assert(html.includes("gi-daily-sales-mail.js?v=20260906-sales-mail-root-v1"), "index.html mail script cache");
+assert(html.includes("gi-daily-sales-mail.js?v=20260906-sales-mail-root-v2"), "index.html mail script cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-daily-sales-mail.js")]).status === 0, "node --check gi-daily-sales-mail.js");
 assert(mail.includes("function snapshotHasNewLayout"), "חסימת שליחת דוח ישן");
 assert(mail.includes("מכירות מודיעין"), "בודק תווית מודיעין בסנאפשוט");
@@ -93,6 +93,13 @@ assert(app.includes("DailyReportStore.getIssuedPremiumMetrics"), "מקור הפ�
 assert(app.includes("dailySalesAssignedLeadsCount"), "ספירת לידים שויכו לפי יום הדוח");
 assert(app.includes("campaignLeadMatchesDateIL"), "סינון לידים לפי אותו יום כמו מערכת הלידים");
 assert(app.includes("dailySalesOfficeBranchTotals"), "סיכום סניפים משורות הדוח הקיימות");
+assert(app.includes("function resolveOfficeBranchForAgentId"), "שיוך סניף לפי מזהה נציג");
+assert(app.includes("function resolveOfficeBranchForSalesAgent"), "שיוך סניף לפי מזהה ואז שם");
+assert(app.includes("function salesRecordAgentId"), "חילוץ מזהה נציג מהמכירה");
+assert(app.includes("salesRecordAgentId(rec)"), "מכירות מקומיות נספרות לפי מזהה נציג");
+assert(app.includes("resolveOfficeBranchForSalesAgent(r?.agentName, r?.agentIds)"), "KPI סניף קורא למזהה מהשורה");
+assert(app.includes("officeBranchByAgentIdV1"), "מטמון דוח מתבטל אחרי שיוך לפי מזהה");
+assert(app.includes('"id:" + uniqueId.toLowerCase()'), "פיבוט נציגים לא ממזג שני אביאל");
 assert(theme.includes("giDailySalesPage__kpiRow--extra"), "CSS לשורת KPI נוספת");
 assert(app.includes("ensureDailySalesAssignedLeadsLoaded"), "טעינת לידים ל-KPI אם מערכת הלידים לא נפתחה");
 assert(app.includes("_kickDailySalesAssignedLeadsLoad"), "רינדור הדוח מפעיל טעינה חד-פעמית");
@@ -180,13 +187,15 @@ function dailySalesOfficeBranchTotals(rows, resolveBranch){
   const out = { haifa: { premium: 0, agents: 0 }, modiin: { premium: 0, agents: 0 } };
   const seen = { haifa: new Set(), modiin: new Set() };
   (Array.isArray(rows) ? rows : []).forEach((r) => {
-    const branch = resolveBranch(r?.agentName);
+    const branch = resolveBranch(r);
     const bucket = branch === "חיפה" ? "haifa" : (branch === "מודיעין" ? "modiin" : "");
     if(!bucket) return;
     out[bucket].premium += dailySalesOfficeBranchPremium(r);
     const name = safeTrim(r?.agentName);
-    if(name && !seen[bucket].has(name)){
-      seen[bucket].add(name);
+    const ids = Array.isArray(r?.agentIds) ? r.agentIds.map(safeTrim).filter(Boolean) : [];
+    const agentKey = ids.length === 1 ? ("id:" + ids[0].toLowerCase()) : ("name:" + name);
+    if(agentKey !== "name:" && !seen[bucket].has(agentKey)){
+      seen[bucket].add(agentKey);
       out[bucket].agents += 1;
     }
   });
@@ -194,13 +203,28 @@ function dailySalesOfficeBranchTotals(rows, resolveBranch){
   out.modiin.premium = Math.round(out.modiin.premium * 100) / 100;
   return out;
 }
+function resolveOfficeBranchForSalesAgent(agentName, agentIds, branchById, branchByName){
+  const ids = [];
+  const seen = new Set();
+  (Array.isArray(agentIds) ? agentIds : []).forEach((raw) => {
+    const id = safeTrim(raw);
+    const key = id.toLowerCase();
+    if(!id || seen.has(key)) return;
+    seen.add(key);
+    ids.push(id);
+  });
+  const fromIds = [...new Set(ids.map((id) => branchById[id]).filter(Boolean))];
+  if(fromIds.length === 1) return fromIds[0];
+  if(fromIds.length > 1) return "";
+  return branchByName[agentName] || "";
+}
 const branchMap = { "דנה": "מודיעין", "יוסי": "חיפה" };
 const totals = dailySalesOfficeBranchTotals([
   { agentName: "דנה", health: 80.555, prat: 20, monthly: 100.555 },
   { agentName: "יוסי", health: 50, prat: 0, monthly: 50 },
   { agentName: "דנה", health: 20, prat: 0, monthly: 20 },
   { agentName: "ללא סניף", health: 999, prat: 0, monthly: 999 }
-], (name) => branchMap[name] || "");
+], (r) => branchMap[r.agentName] || "");
 assert(totals.modiin.premium === 120.56, "סיכום מודיעין מעוגל משורות קיימות");
 assert(totals.haifa.premium === 50, "סיכום חיפה");
 assert(totals.modiin.agents === 1, "נציגה אחת במודיעין גם אם שתי שורות");
@@ -280,12 +304,79 @@ const resolved = {
   "ואדים": lookupOfficeBranchFromDirectory("ואדים", contacts),
   "מודיעין 1": "מודיעין"
 };
-const office = dailySalesOfficeBranchTotals(reportRows, (name) => resolved[name] || "");
+const office = dailySalesOfficeBranchTotals(reportRows, (r) => resolved[r.agentName] || "");
 const healthPratTotal = reportRows.reduce((n, r) => n + dailySalesOfficeBranchPremium(r), 0);
 assert(office.haifa.premium === 985, "חיפה כוללת את ואדים (555+430)");
 assert(office.modiin.premium === 84, "מודיעין נשאר 84");
 assert(Math.round((office.haifa.premium + office.modiin.premium) * 100) / 100 === healthPratTotal,
   "חיפה+מודיעין שווה לסה״כ בריאות+פרט");
+
+const gapRows = [
+  { agentName: "יוסי בורג", health: 2618.17, prat: 0, agentIds: ["yossi"] },
+  { agentName: "אביב", health: 2489.30, prat: 0, agentIds: ["aviv"] },
+  { agentName: "אביאל", health: 321.19, prat: 0, agentIds: ["aviel-modiin"] }
+];
+const branchById = { yossi: "חיפה", aviv: "מודיעין", "aviel-modiin": "מודיעין" };
+const branchByName = {
+  "יוסי בורג": "חיפה",
+  "אביב": "מודיעין",
+  "אביאל": lookupOfficeBranchFromDirectory("אביאל", contacts)
+};
+assert(branchByName["אביאל"] === "", "אביאל בלי מזהה נשאר דו-משמעי");
+const officeNameOnly = dailySalesOfficeBranchTotals(gapRows, (r) => branchByName[r.agentName] || "");
+assert(officeNameOnly.haifa.premium === 2618.17, "לפי שם בלבד חיפה נשארת 2618.17");
+assert(officeNameOnly.modiin.premium === 2489.30, "לפי שם בלבד אביאל נבלע ולא נספר במודיעין");
+assert(Math.round((officeNameOnly.haifa.premium + officeNameOnly.modiin.premium) * 100) / 100 === 5107.47,
+  "לפי שם בלבד חיפה+מודיעין חסרים 321.19 מהטוטאל");
+const officeWithIds = dailySalesOfficeBranchTotals(gapRows, (r) =>
+  resolveOfficeBranchForSalesAgent(r.agentName, r.agentIds, branchById, branchByName)
+);
+const gapTotal = Math.round(gapRows.reduce((n, r) => n + dailySalesOfficeBranchPremium(r), 0) * 100) / 100;
+assert(officeWithIds.haifa.premium === 2618.17, "עם מזהה חיפה נשארת 2618.17");
+assert(officeWithIds.modiin.premium === 2810.49, "עם מזהה אביאל נספר במודיעין (2489.30+321.19)");
+assert(Math.round((officeWithIds.haifa.premium + officeWithIds.modiin.premium) * 100) / 100 === gapTotal,
+  "עם מזהה חיפה+מודיעין שווה לטוטאל בריאות+פרט כולל 321.19");
+assert(officeWithIds.modiin.agents === 2, "מודיעין סופרת אביב ואביאל כשני נציגים");
+
+function dailySalesPresentPivotByAgent(groups){
+  const map = new Map();
+  (Array.isArray(groups) ? groups : []).forEach((g) => {
+    const name = safeTrim(g?.agentName) || "נציג";
+    const ids = [...new Set((Array.isArray(g?.agentIds) ? g.agentIds : []).map(safeTrim).filter(Boolean))];
+    const uniqueId = ids.length === 1 ? ids[0] : "";
+    const key = uniqueId ? ("id:" + uniqueId.toLowerCase()) : ("name:" + name);
+    if(!map.has(key)){
+      map.set(key, { agentName: name, agentIds: new Set(), health: 0, prat: 0, other: 0 });
+    }
+    const row = map.get(key);
+    ids.forEach((id) => row.agentIds.add(id));
+    const sector = safeTrim(g?.sector);
+    const prem = Number(g?.premium) || 0;
+    if(sector === "בריאות") row.health += prem;
+    else if(sector === "סיכונים") row.prat += prem;
+    else row.other += prem;
+  });
+  return Array.from(map.values()).map((row) => ({
+    agentName: row.agentName,
+    agentIds: Array.from(row.agentIds || []),
+    health: Math.round(row.health * 100) / 100,
+    prat: Math.round(row.prat * 100) / 100,
+    other: Math.round(row.other * 100) / 100
+  }));
+}
+const pivoted = dailySalesPresentPivotByAgent([
+  { agentName: "אביאל", agentIds: ["aviel-haifa"], sector: "בריאות", premium: 200 },
+  { agentName: "אביאל", agentIds: ["aviel-modiin"], sector: "בריאות", premium: 321.19 }
+]);
+assert(pivoted.length === 2, "שני אביאל עם מזהים שונים לא מתמזגים בפיבוט");
+const pivotedOffice = dailySalesOfficeBranchTotals(pivoted, (r) =>
+  resolveOfficeBranchForSalesAgent(r.agentName, r.agentIds, {
+    "aviel-haifa": "חיפה",
+    "aviel-modiin": "מודיעין"
+  }, { "אביאל": "" })
+);
+assert(pivotedOffice.haifa.premium === 200, "אביאל חיפה נשאר בחיפה אחרי פיבוט");
+assert(pivotedOffice.modiin.premium === 321.19, "אביאל מודיעין לא נבלע אחרי פיבוט");
 
 function countAssignedLeads(list){
   return (list || []).filter((l) => {

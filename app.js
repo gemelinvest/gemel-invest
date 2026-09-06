@@ -4828,6 +4828,47 @@
     return null;
   }
 
+  function resolveOfficeBranchForAgentId(agentId){
+    const id = safeTrim(agentId);
+    if(!id) return "";
+    const saved = getAgentOfficeBranch(id);
+    if(saved) return saved;
+    const agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
+    const lower = id.toLowerCase();
+    const agent = agents.find((a) => safeTrim(a?.id).toLowerCase() === lower);
+    if(!agent) return "";
+    return lookupOfficeBranchFromDirectory(agent) || "";
+  }
+
+  function resolveOfficeBranchForSalesAgent(agentName, agentIds){
+    const ids = [];
+    const seen = new Set();
+    (Array.isArray(agentIds) ? agentIds : []).forEach((raw) => {
+      const id = safeTrim(raw);
+      const key = id.toLowerCase();
+      if(!id || seen.has(key)) return;
+      seen.add(key);
+      ids.push(id);
+    });
+    const fromIds = [];
+    ids.forEach((id) => {
+      const branch = resolveOfficeBranchForAgentId(id);
+      if(branch) fromIds.push(branch);
+    });
+    const unique = [...new Set(fromIds)];
+    if(unique.length === 1) return unique[0];
+    if(unique.length > 1) return "";
+    return resolveOfficeBranchForSalesAgentName(agentName);
+  }
+
+  function salesRecordAgentId(rec){
+    const direct = safeTrim(rec?.agentId) || safeTrim(rec?.agent_id) || safeTrim(rec?.payload?.agentId);
+    if(direct) return direct;
+    const key = safeTrim(rec?.payload?.createdByKey) || safeTrim(rec?.createdByKey);
+    if(!key.includes("__")) return "";
+    return safeTrim(key.split("__")[0]);
+  }
+
   function resolveOfficeBranchForSalesAgentName(agentName){
     const agent = findAgentRecordBySalesName(agentName);
     if(agent){
@@ -35348,15 +35389,17 @@ UsersGateUI.init();
       } catch(_e) { return []; }
     },
 
-    _bumpDailySalesGroup(map, agentName, sector, product, company, premium, deals = 1){
+    _bumpDailySalesGroup(map, agentName, sector, product, company, premium, deals = 1, agentId = ""){
       const agent = safeTrim(agentName) || "נציג";
+      const id = safeTrim(agentId);
       const sec = safeTrim(sector) || "אחר";
-      const key = agent + "\u0000" + sec;
+      const key = (id || agent) + "\u0000" + sec;
       const dealCount = Number(deals);
       const addDeals = Number.isFinite(dealCount) && dealCount > 0 ? dealCount : 1;
       if(!map[key]){
         map[key] = {
           agentName: agent,
+          agentIds: new Set(),
           sector: sec,
           products: new Map(),
           companies: new Map(),
@@ -35365,6 +35408,7 @@ UsersGateUI.init();
         };
       }
       const g = map[key];
+      if(id) g.agentIds.add(id);
       g.premium += Number(premium) || 0;
       g.deals += addDeals;
       const prodName = safeTrim(product) || "—";
@@ -35377,6 +35421,7 @@ UsersGateUI.init();
       return Object.values(groupMap)
         .map((g) => ({
           agentName: g.agentName,
+          agentIds: Array.from(g.agentIds || []).filter(Boolean),
           sector: g.sector,
           sectorSlug: this.dailySalesSectorSlug(g.sector),
           products: Array.from(g.products.entries())
@@ -35446,13 +35491,21 @@ UsersGateUI.init();
         const count = typeof p === "string" ? 1 : (Number(p?.count) || 1);
         return sum + count;
       }, 0) || 1;
+      const ids = Array.isArray(g?.agentIds) ? g.agentIds.map(safeTrim).filter(Boolean) : [];
+      const ownerId = ids.length === 1 ? ids[0] : "";
       products.forEach((p, i) => {
         const pname = typeof p === "string" ? p : (safeTrim(p?.name) || "פוליסה");
         const count = typeof p === "string" ? 1 : (Number(p?.count) || 1);
         const company = safeTrim(typeof companies[i] === "string" ? companies[i] : (companies[0] || ""));
         const prem = (Number(g?.premium) || 0) * (count / totalCount);
-        this._bumpDailySalesGroup(map, g?.agentName, g?.sector, pname, company, prem, count);
+        this._bumpDailySalesGroup(map, g?.agentName, g?.sector, pname, company, prem, count, ownerId);
       });
+      if(ids.length > 1){
+        const sec = safeTrim(g?.sector) || "אחר";
+        const key = (safeTrim(g?.agentName) || "נציג") + "\u0000" + sec;
+        const row = map[key];
+        if(row && row.agentIds) ids.forEach((id) => row.agentIds.add(id));
+      }
     },
 
     _applyDailySalesServerHealthPrat(groups, dateKey){
@@ -35486,8 +35539,13 @@ UsersGateUI.init();
         const localPrem = localGroups.reduce((sum, g) => sum + (Number(g.premium) || 0), 0);
         const serverDeals = serverRows.reduce((sum, r) => sum + (Number(r.policies) || 0), 0);
         const serverPrem = serverRows.reduce((sum, r) => sum + (Number(r.premium) || 0), 0);
+        const localIds = [...new Set(localGroups.flatMap((g) =>
+          Array.isArray(g?.agentIds) ? g.agentIds : []
+        ).map(safeTrim).filter(Boolean))];
         const useServer = serverRows.length && (serverDeals > localDeals || ((serverPrem - localPrem) > 0.009) || !localGroups.length);
-        if(useServer){
+        if(useServer && localIds.length > 1){
+          localGroups.forEach((g) => this._seedDailySalesGroup(map, g));
+        } else if(useServer){
           serverRows.forEach((row) => {
             const product = safeTrim(row?.product) || "פוליסה";
             this._bumpDailySalesGroup(
@@ -35497,7 +35555,8 @@ UsersGateUI.init();
               product,
               row?.company,
               row?.premium,
-              row?.policies
+              row?.policies,
+              safeTrim(row?.agent_id) || localIds[0] || ""
             );
           });
         } else {
@@ -35526,6 +35585,7 @@ UsersGateUI.init();
         "groupedSectorsV3",
         "agentRpc1",
         "noPartialCache",
+        "officeBranchByAgentIdV1",
         dateKey,
         String(customers.length),
         String(missingPayloads),
@@ -35552,6 +35612,7 @@ UsersGateUI.init();
         // (שסורקת את מערך הסוכנים) עבור לקוחות בלי מכירה באותו יום
         if(!newPolicies.length && !elementarySales.length) return;
         const agentName = safeTrim(rec?.agentName) || safeTrim(rec?.createdBy) || "נציג";
+        const agentId = salesRecordAgentId(rec);
         const department = this.resolveSalesDepartmentLabel(rec);
         const customerName = safeTrim(rec?.fullName) || "—";
         newPolicies.forEach((p) => {
@@ -35567,10 +35628,10 @@ UsersGateUI.init();
             premium,
             customerName
           });
-          this._bumpDailySalesGroup(groupMap, agentName, this.resolveDailySalesSector(product), product, company, premium);
+          this._bumpDailySalesGroup(groupMap, agentName, this.resolveDailySalesSector(product), product, company, premium, 1, agentId);
         });
         elementarySales.forEach((row) => {
-          this._bumpDailySalesGroup(groupMap, agentName, "אלמנטרי", row.product, row.company, row.premium);
+          this._bumpDailySalesGroup(groupMap, agentName, "אלמנטרי", row.product, row.company, row.premium, 1, agentId);
         });
       });
 
@@ -35725,9 +35786,13 @@ UsersGateUI.init();
       const map = new Map();
       (Array.isArray(groups) ? groups : []).forEach((g) => {
         const name = safeTrim(g?.agentName) || "נציג";
-        if(!map.has(name)){
-          map.set(name, {
+        const ids = [...new Set((Array.isArray(g?.agentIds) ? g.agentIds : []).map(safeTrim).filter(Boolean))];
+        const uniqueId = ids.length === 1 ? ids[0] : "";
+        const key = uniqueId ? ("id:" + uniqueId.toLowerCase()) : ("name:" + name);
+        if(!map.has(key)){
+          map.set(key, {
             agentName: name,
+            agentIds: new Set(),
             sectors: [],
             products: new Map(),
             companies: new Map(),
@@ -35740,7 +35805,8 @@ UsersGateUI.init();
             premium: 0
           });
         }
-        const row = map.get(name);
+        const row = map.get(key);
+        ids.forEach((id) => row.agentIds.add(id));
         const sector = safeTrim(g?.sector);
         const prem = Number(g?.premium) || 0;
         row.deals += Number(g?.deals) || 0;
@@ -35765,6 +35831,7 @@ UsersGateUI.init();
       });
       return Array.from(map.values()).map((row) => ({
         agentName: row.agentName,
+        agentIds: Array.from(row.agentIds || []),
         sectors: row.sectors,
         products: Array.from(row.products.entries())
           .map(([name, count]) => ({ name, count }))
@@ -35912,15 +35979,19 @@ UsersGateUI.init();
       };
       const seen = { haifa: new Set(), modiin: new Set() };
       (Array.isArray(rows) ? rows : []).forEach((r) => {
-        const branch = typeof resolveOfficeBranchForSalesAgentName === "function"
-          ? resolveOfficeBranchForSalesAgentName(r?.agentName)
-          : "";
+        const branch = typeof resolveOfficeBranchForSalesAgent === "function"
+          ? resolveOfficeBranchForSalesAgent(r?.agentName, r?.agentIds)
+          : (typeof resolveOfficeBranchForSalesAgentName === "function"
+            ? resolveOfficeBranchForSalesAgentName(r?.agentName)
+            : "");
         const bucket = branch === "חיפה" ? "haifa" : (branch === "מודיעין" ? "modiin" : "");
         if(!bucket) return;
         out[bucket].premium += this.dailySalesOfficeBranchPremium(r);
         const name = safeTrim(r?.agentName);
-        if(name && !seen[bucket].has(name)){
-          seen[bucket].add(name);
+        const ids = Array.isArray(r?.agentIds) ? r.agentIds.map(safeTrim).filter(Boolean) : [];
+        const agentKey = ids.length === 1 ? ("id:" + ids[0].toLowerCase()) : ("name:" + name);
+        if(agentKey !== "name:" && !seen[bucket].has(agentKey)){
+          seen[bucket].add(agentKey);
           out[bucket].agents += 1;
         }
       });
@@ -39957,7 +40028,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-sales-mail-root-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-sales-mail-root-v2";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -39977,7 +40048,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-sales-mail-root-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-sales-mail-root-v2";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -40613,8 +40684,8 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260906-sales-mail-root-v1",
-    "./simulators-shell.css?v=20260906-sales-mail-root-v1"
+    "./simulators-center.css?v=20260906-sales-mail-root-v2",
+    "./simulators-shell.css?v=20260906-sales-mail-root-v2"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -41976,7 +42047,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260906-sales-mail-root-v1";
+  const GI_WIZARD_JS_VERSION = "20260906-sales-mail-root-v2";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
