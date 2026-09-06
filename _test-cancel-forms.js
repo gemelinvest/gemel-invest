@@ -1,6 +1,6 @@
 /* GI-CANCEL-FORMS 2026-09-06
    Original company cancellation forms in customer documents for full/partial cancel.
-   Health & life only. Stage 1 fills policy number.
+   Health & life only. Fills completed customer-file fields on the original PDF.
    Run: node _test-cancel-forms.js
 */
 "use strict";
@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260906-cancel-forms-v1";
+const TAG = "20260906-cancel-forms-v2";
 let failed = 0;
 let passed = 0;
 
@@ -104,6 +104,13 @@ const payload = {
     data: {
       firstName: "ישראל",
       lastName: "ישראלי",
+      idNumber: "123456782",
+      phone: "0501234567",
+      email: "israel@example.com",
+      city: "תל אביב",
+      street: "דיזנגוף",
+      houseNumber: "50",
+      zip: "6433201",
       existingPolicies: [
         { id: "pol_full", company: "כלל", type: "ריסק", policyNumber: "123456789" },
         { id: "pol_part", company: "הראל", type: "בריאות", policyNumber: "555111" },
@@ -134,20 +141,45 @@ assert(clalDoc.policyNumber === "123456789", "doc stores policy number");
 
 const draft = G.buildDraft({ payload }, clalDoc);
 assert(draft.policyNumber === "123456789", "draft has policy number");
+assert(draft.person.fullName === "ישראל ישראלי", "draft picks person name");
+assert(draft.person.idNumber === "123456782", "draft picks person id");
 const plan = G.overlayPlan(draft);
-assert(plan.length === 1 && plan[0].text === "123456789", "overlay fills only the policy number");
-assert(plan[0].x > 0 && plan[0].y > 0, "overlay has coordinates on the original form");
+const texts = plan.map((op) => op.text);
+assert(texts.includes("123456789"), "overlay fills policy number");
+assert(texts.includes("ישראל ישראלי"), "overlay fills full name");
+assert(texts.includes("123456782"), "overlay fills id number");
+assert(texts.includes("israel@example.com"), "overlay fills email when present");
+assert(plan.every((op) => op.x > 0 && op.y > 0 && op.maxW > 0), "every overlay sits in a cell");
+assert(plan.some((op) => op.key === "policyNumber" && op.y > 400), "full cancel policy number uses the full-cancel table");
+
+const emptyPayload = {
+  insureds: [{
+    id: "ins1",
+    data: {
+      existingPolicies: [{ id: "pol_full", company: "כלל", type: "ריסק", policyNumber: "123456789" }],
+      cancellations: { pol_full: { status: "full" } }
+    }
+  }]
+};
+const emptyDraft = G.buildDraft({ payload: emptyPayload }, G.createDoc(G.listCancelledPolicies(emptyPayload)[0]));
+const emptyPlan = G.overlayPlan(emptyDraft);
+assert(emptyPlan.every((op) => String(op.text || "").trim()), "empty customer fields are skipped");
+assert(emptyPlan.some((op) => op.text === "123456789"), "policy number still fills when that value exists");
+assert(!emptyPlan.some((op) => op.key === "fullName" || op.key === "idNumber" || op.key === "email"), "does not invent name/id/email");
 
 const partialDraft = G.buildDraft({ payload }, G.createDoc(listed.find((row) => row.policyNumber === "555111")));
 assert(partialDraft.isPartial === true, "partial cancel uses partial slot");
-assert(G.overlayPlan(partialDraft)[0].text === "555111", "partial overlay still fills policy number");
+const partialPlan = G.overlayPlan(partialDraft);
+assert(partialPlan.some((op) => op.text === "555111"), "partial overlay still fills policy number");
+assert(partialPlan.some((op) => op.key === "policyNumber" && op.y < 400), "partial policy number uses the nespachim table");
 
 console.log("\n5) fill engine shape");
 assert(form.includes("fillOriginalTemplate"), "PDF fill exists");
 assert(form.includes("forms/cancel/"), "loads original templates from forms/cancel");
 assert(form.includes("overlayPlan"), "overlay plan exists");
 assert(form.includes("policyNumber"), "fills policy number");
-assert(!form.includes("applyOfficialHealthAndNames"), "stage 1 does not fill join-form health fields");
+assert(form.includes("pickPerson"), "fills person from customer file");
+assert(!form.includes("applyOfficialHealthAndNames"), "does not fill join-form health fields");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);
