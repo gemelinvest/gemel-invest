@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260906-mirror-script-premiums-v1";
+const APP_TAG = "20260906-mirror-script-premiums-v2";
 let failed = 0;
 let passed = 0;
 
@@ -58,38 +58,51 @@ assert(css.includes(".mcNeedsScript__p--ask{font-weight:800"), "שאלות בי�
 assert(css.includes(".mcStartDate{"), "שבב ערך כחול (תאריך/סכום) נשאר");
 
 console.log("\n3) פוליסות מוצעות — לפני הנחה, לאחר הנחה, הנחה במלואה");
-assert(app.includes("_mcNewPolicyPremiumDiscountRows(p){"), "עזר פרמיה+הנחה קיים");
+assert(app.includes("_mcNewPolicyPremiumDiscountRows(p, opts = {}){"), "עזר פרמיה+הנחה קיים");
 assert(app.includes('k: "פרמיה לפני הנחה"'), "שורה לפרמיה לפני הנחה");
 assert(app.includes('k: "פרמיה לאחר הנחה"'), "שורה לפרמיה לאחר הנחה");
 assert(app.includes('k: "הנחה שניתנה"'), "שורה לפירוט הנחה");
 assert(app.includes("שנה ${year}: ${pctItem}%"), "פירוט הנחה לפי שנים");
+assert(app.includes("getPolicyPremiumBeforeDiscount"), "לפני הנחה מגיע מהאשף");
+assert(app.includes("getHealthRowPremiumAfterDiscount"), "אחרי הנחה מגיע מהסימולטור באשף");
+const afterFn = sliceBetween(app, "_mcPremiumAfter(p){", "_mcNeedsNav(primaryAct, primaryLabel, secondaryAct, secondaryLabel){");
+assert(!!afterFn, "פונקציית פרמיה לאחר הנחה נמצאה");
+assert(afterFn.includes("getHealthRowPremiumAfterDiscount"), "אחרי הנחה קורא ל-getHealthRowPremiumAfterDiscount");
+assert(!afterFn.includes("getPolicyPremiumAfterDiscount"), "לא משתמש בפונקציית הזהות שמחזירה «לפני»");
+assert(afterFn.includes("simDiscountPerInsured") || app.includes("_mcSimAfterTotal(p){"), "נשען על simDiscountPerInsured מהסימולטור");
 const collect = sliceBetween(app, "_collectNewPolicyCards(rec, opts = {}){", "_renderNeedsOffer(rec){");
 assert(!!collect, "איסוף כרטיסי פוליסה מוצעת נמצא");
-assert(collect.includes("_mcNewPolicyPremiumDiscountRows(p)"), "כרטיס מוצע תמיד מושך פרמיה+הנחה");
+assert(collect.includes("_mcNewPolicyPremiumDiscountRows(p"), "כרטיס מוצע תמיד מושך פרמיה+הנחה");
+assert(collect.includes("omitScheduleRow: !!opts.showRankScript"), "בשלב פרמיה לא כופלים את שורת ההנחה מעל המשפט המלא");
 assert(!collect.includes('k: "פרמיה חודשית על סך"'), "הוסרה שורת פרמיה יחידה בכרטיס מוצע");
 assert(css.includes(".mcPolCard__row--premium"), "עיצוב שורות פרמיה");
 assert(css.includes(".mcPolCard__row--discount"), "עיצוב פירוט הנחה");
 
-console.log("\n4) חישוב הנחה ופרמיות");
+console.log("\n4) חישוב הנחה ופרמיות מהסימולטור");
 const discStart = app.indexOf("_mcDiscountScheduleText(p){");
-const discEnd = app.indexOf("_mcPremiumBefore(p){", discStart);
+const discEnd = app.indexOf("_mcNeedsNav(primaryAct, primaryLabel, secondaryAct, secondaryLabel){", discStart);
 assert(discStart > 0 && discEnd > discStart, "פונקציות פרמיה/הנחה נמצאו");
-const sandbox = {};
-vm.runInNewContext(`
-  function safeTrim(v){ return String(v == null ? "" : v).trim(); }
-  function escapeHtml(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c])); }
-  const ui = {
-    _fmtMcMoney(raw){
-      const t = safeTrim(raw);
-      return t ? (t.indexOf("₪") >= 0 ? t : t + "₪") : "—";
-    },
-    _mcPremiumBefore(p){ return safeTrim(p?.premiumBefore || p?.premiumMonthly || ""); },
-    _mcPremiumAfter(p){ return safeTrim(p?.premiumAfterDiscount || p?.premiumMonthly || ""); },
-    ${app.slice(discStart, discEnd)}
-  };
-  this.ui = ui;
-`, sandbox);
 
+function makePremiumSandbox(globals){
+  const sandbox = Object.assign({ Wizard: undefined, CustomersUI: undefined }, globals || {});
+  vm.runInNewContext(`
+    function safeTrim(v){ return String(v == null ? "" : v).trim(); }
+    function escapeHtml(s){ return String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;"}[c])); }
+    var Wizard = this.Wizard;
+    var CustomersUI = this.CustomersUI;
+    const ui = {
+      _fmtMcMoney(raw){
+        const t = safeTrim(raw);
+        return t ? (t.indexOf("₪") >= 0 ? t : t + "₪") : "—";
+      },
+      ${app.slice(discStart, discEnd)}
+    };
+    this.ui = ui;
+  `, sandbox);
+  return sandbox;
+}
+
+const sandbox = makePremiumSandbox();
 const full = sandbox.ui._mcDiscountScheduleText({
   discountSchedule: [
     { year: 1, pct: 20 },
@@ -101,16 +114,62 @@ assert(full === "שנה 1: 20% · שנה 2: 15% · שנה 3: 10%", "הנחה מ�
 assert(sandbox.ui._mcDiscountScheduleText({ discountPct: 12, discountYears: "5" }) === "12% ל־5 שנים", "הנחה אחידה כשאין לוח שנים");
 assert(sandbox.ui._mcDiscountScheduleText({}) === "", "בלי הנחה אין שורה");
 
-const prem = sandbox.ui._mcNewPolicyPremiumDiscountRows({
-  premiumBefore: "250",
-  premiumAfterDiscount: "200",
-  discountSchedule: [{ year: 1, pct: 20 }, { year: 2, pct: 10 }]
-});
+const phoenixCi = {
+  company: "הפניקס",
+  type: "מחלות קשות",
+  insuredIds: ["i1"],
+  insuredId: "i1",
+  premiumPerInsured: { i1: "149" },
+  premiumMonthly: "149",
+  premiumAfterDiscountValue: "149",
+  discountPct: "25",
+  discountYears: "10",
+  simDiscountPerInsured: {
+    i1: { year1Pct: 25, years: 10, monthlyAfterDiscount: 111.75 }
+  }
+};
+assert(sandbox.ui._mcPremiumBefore(phoenixCi) === "149", "בלי אשף: לפני הנחה = ברוטו מהסימולטור");
+assert(sandbox.ui._mcPremiumAfter(phoenixCi) === "111.75", "בלי אשף: אחרי הנחה = monthlyAfterDiscount ולא 149");
+assert(sandbox.ui._mcPremiumAfter(phoenixCi) !== sandbox.ui._mcPremiumBefore(phoenixCi), "לפני ואחרי לא זהים כשיש הנחה בסימולטור");
+
+const prem = sandbox.ui._mcNewPolicyPremiumDiscountRows(phoenixCi);
 assert(prem.rows.length === 3, "שלוש שורות: לפני, אחרי, הנחה");
-assert(prem.rows[0].k === "פרמיה לפני הנחה" && prem.rows[0].v.includes("250"), "פרמיה לפני הנחה");
-assert(prem.rows[1].k === "פרמיה לאחר הנחה" && prem.rows[1].v.includes("200"), "פרמיה לאחר הנחה");
-assert(prem.rows[2].k === "הנחה שניתנה" && prem.rows[2].v.includes("שנה 1: 20%"), "הנחה במלואה בכרטיס");
+assert(prem.rows[0].k === "פרמיה לפני הנחה" && prem.rows[0].v.includes("149"), "פרמיה לפני הנחה בכרטיס");
+assert(prem.rows[1].k === "פרמיה לאחר הנחה" && prem.rows[1].v.includes("111.75"), "פרמיה לאחר הנחה בכרטיס שונה מהלפני");
+assert(prem.rows[2].k === "הנחה שניתנה" && prem.rows[2].v.includes("25%"), "הנחה במלואה בכרטיס");
 assert(prem.rows[0].v.includes("mcStartDate"), "סכום פרמיה בשבב כחול");
+
+const omitted = sandbox.ui._mcNewPolicyPremiumDiscountRows(phoenixCi, { omitScheduleRow: true });
+assert(omitted.rows.length === 2, "עם משפט הנחה מלא אין שורת הנחה כפולה");
+assert(!!omitted.schedule && omitted.schedule.indexOf("25%") >= 0, "המשפט המלא עדיין זמין לכרטיס");
+
+const health = {
+  type: "בריאות",
+  insuredIds: ["i1"],
+  premiumPerInsured: { i1: "220" },
+  premiumMonthly: "220",
+  coverDiscountsApplied: true,
+  premiumAfterCoverDiscounts: 180
+};
+assert(sandbox.ui._mcPremiumBefore(health) === "220", "בריאות: לפני הנחה מכיסוי בסיס");
+assert(sandbox.ui._mcPremiumAfter(health) === "180", "בריאות: אחרי הנחה מ-premiumAfterCoverDiscounts");
+
+const calls = { before: 0, after: 0, identity: 0, cui: 0 };
+const wizardBox = makePremiumSandbox({
+  Wizard: {
+    getPolicyPremiumBeforeDiscount(){ calls.before += 1; return 149; },
+    getHealthRowPremiumAfterDiscount(){ calls.after += 1; return 111.75; },
+    getPolicyPremiumAfterDiscount(){ calls.identity += 1; return 149; }
+  },
+  CustomersUI: {
+    getPolicyPremiumAfterDiscount(){ calls.cui += 1; return 149; }
+  }
+});
+assert(wizardBox.ui._mcPremiumBefore(phoenixCi) === "149", "עם אשף: לפני הנחה מ-getPolicyPremiumBeforeDiscount");
+assert(wizardBox.ui._mcPremiumAfter(phoenixCi) === "111.75", "עם אשף: אחרי הנחה מ-getHealthRowPremiumAfterDiscount");
+assert(calls.before >= 1 && calls.after >= 1, "הכרטיס באמת קורא לפונקציות האשף");
+assert(calls.identity === 0, "לא קורא ל-getPolicyPremiumAfterDiscount של האשף");
+assert(calls.cui === 0, "לא קורא ל-CustomersUI.getPolicyPremiumAfterDiscount");
 
 console.log("\n5) רגרסיה — פוליסות קיימות וכניסה");
 assert(app.includes('k: "פרמיה חודשית על סך"'), "פוליסות קיימות נשארות עם פרמיה אחת");
