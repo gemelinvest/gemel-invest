@@ -6070,7 +6070,7 @@
       hachshara_health: {
         company: "הכשרה",
         product: "בריאות",
-        // PDF הכשרה: מדד בסיס 13,317 נק׳ ב־15/12/2022 → 133.17 בסולם הנקודות המודרני
+        // לא בשימוש במנוע בריאות הכשרה (תעריפי האקסל נחשבים עדכניים, בלי הצמדה)
         baseIndexPoints: 133.17,
         baseKnownDate: "2022-12-15"
       },
@@ -10638,7 +10638,8 @@
 
 
   // ===== GI-HACH-HEALTH-SIM 2026-08-10 · סימולטור בריאות הכשרה ==================
-  // מקור אמת: תעריפי בריאות הכשרה.pdf — בסיס מדד 133.17 (13,317 נק׳) מ־15/12/2022.
+  // מקור אמת: גיליון «בריאות» ב־תעריפים סיכונים.xlsx. פרמיה חודשית כפי שבאקסל, בלי הצמדת מדד.
+  // כיסויים שלא בגיליון (משלים שב״ן 5,000 / ייעוץ ובדיקות / שירות פרימיום לילד) נשארים בתעריף הקיים.
   // מחלות קשות — סימולטור נפרד. אין שדה עישון בבריאות.
 
   const HACHSHARA_HEALTH_MIN_AGE = 0;
@@ -10672,28 +10673,26 @@
   }
 
   /**
-   * קטלוג כיסויים — שמות label מדויקים מה-PDF (עמודים 1–2).
+   * קטלוג כיסויים — שמות label מהאשף.
    * wizardKey = המפתח ב-Wizard.healthCoversByCompany["הכשרה"] להחלה על הפוליסה.
    * מחלות קשות — סימולטור נפרד. אין שדה עישון בבריאות.
-   * תעריפים באגורות, מדויקים 1:1 מול ה-PDF.
+   * תעריפים באגורות: כיסויים שבגיליון «בריאות» 1:1 מהאקסל (שקלים×100). בלי מדד.
    */
   const HACHSHARA_HEALTH_COVERS = [
-    { id: "drugs", label: "תרופות מחוץ לסל שירותי הבריאות", wizardKey: "תרופות מחוץ לסל שירותי הבריאות", group: "השתלות, תרופות וניתוחים בחו״ל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 1150 }, { min: 21, max: 30, agorot: 1774 }, { min: 31, max: 40, agorot: 2382 }, { min: 41, max: 50, agorot: 3915 }, { min: 51, max: 55, agorot: 5500 }, { min: 56, max: 60, agorot: 7300 }, { min: 61, max: 65, agorot: 10000 }, { min: 66, max: 120, agorot: 13200 }] },
-    { id: "transplant", label: "השתלות וטיפולים מיוחדים מחוץ לישראל", wizardKey: "השתלות וטיפולים מיוחדים מחוץ לישראל", group: "השתלות, תרופות וניתוחים בחו״ל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 971 }, { min: 21, max: 30, agorot: 1568 }, { min: 31, max: 40, agorot: 1703 }, { min: 41, max: 50, agorot: 2107 }, { min: 51, max: 55, agorot: 2347 }, { min: 56, max: 60, agorot: 2659 }, { min: 61, max: 65, agorot: 3072 }, { min: 66, max: 120, agorot: 3254 }] },
-    { id: "abroad_surgery", label: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל", wizardKey: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל", group: "השתלות, תרופות וניתוחים בחו״ל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 623 }, { min: 21, max: 30, agorot: 866 }, { min: 31, max: 40, agorot: 991 }, { min: 41, max: 50, agorot: 1202 }, { min: 51, max: 55, agorot: 1900 }, { min: 56, max: 60, agorot: 2400 }, { min: 61, max: 65, agorot: 2800 }, { min: 66, max: 120, agorot: 2900 }] },
+    { id: "drugs", label: "תרופות מחוץ לסל שירותי הבריאות", wizardKey: "תרופות מחוץ לסל שירותי הבריאות", group: "השתלות, תרופות וניתוחים בחו״ל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 310 }, { min: 21, max: 30, agorot: 814 }, { min: 31, max: 40, agorot: 1002 }, { min: 41, max: 50, agorot: 1776 }, { min: 51, max: 55, agorot: 2667 }, { min: 56, max: 60, agorot: 3406 }, { min: 61, max: 65, agorot: 3742 }, { min: 66, max: 120, agorot: 4400 }] },
+    { id: "transplant", label: "השתלות וטיפולים מיוחדים מחוץ לישראל", wizardKey: "השתלות וטיפולים מיוחדים מחוץ לישראל", group: "השתלות, תרופות וניתוחים בחו״ל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 446 }, { min: 21, max: 30, agorot: 1054 }, { min: 31, max: 40, agorot: 1226 }, { min: 41, max: 50, agorot: 1636 }, { min: 51, max: 55, agorot: 1743 }, { min: 56, max: 60, agorot: 1743 }, { min: 61, max: 65, agorot: 1706 }, { min: 66, max: 120, agorot: 1508 }] },
+    { id: "abroad_surgery", label: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל", wizardKey: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל", group: "השתלות, תרופות וניתוחים בחו״ל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 131 }, { min: 21, max: 30, agorot: 286 }, { min: 31, max: 40, agorot: 386 }, { min: 41, max: 50, agorot: 628 }, { min: 51, max: 55, agorot: 941 }, { min: 56, max: 60, agorot: 1225 }, { min: 61, max: 65, agorot: 1472 }, { min: 66, max: 120, agorot: 1570 }] },
     { id: "surgery_shaban_5000", label: "ניתוחים בישראל — משלים שב״ן עם השתתפות עצמית 5,000 ₪", wizardKey: "משלים שב\"ן עם השתתפות עצמית 5,000 ₪", group: "ניתוחים וטיפולים מחליפי ניתוח בישראל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 1409 }, { min: 21, max: 30, agorot: 2652 }, { min: 31, max: 40, agorot: 4643 }, { min: 41, max: 50, agorot: 6435 }, { min: 51, max: 55, agorot: 10277 }, { min: 56, max: 60, agorot: 12517 }, { min: 61, max: 65, agorot: 16877 }, { min: 66, max: 120, agorot: 21680 }] },
-    { id: "surgery_shaban", label: "ניתוחים בישראל — משלים שב״ן ללא השתתפות עצמית", wizardKey: "משלים שב\"ן ללא השתתפות עצמית", group: "ניתוחים וטיפולים מחליפי ניתוח בישראל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 1783 }, { min: 21, max: 30, agorot: 3357 }, { min: 31, max: 40, agorot: 5877 }, { min: 41, max: 50, agorot: 8146 }, { min: 51, max: 55, agorot: 13009 }, { min: 56, max: 60, agorot: 15844 }, { min: 61, max: 65, agorot: 21363 }, { min: 66, max: 120, agorot: 27443 }] },
-    { id: "surgery_first_shekel", label: "ניתוחים בישראל מהשקל הראשון", wizardKey: "ניתוחים בישראל מהשקל הראשון", group: "ניתוחים וטיפולים מחליפי ניתוח בישראל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 3104 }, { min: 21, max: 30, agorot: 8415 }, { min: 31, max: 40, agorot: 10670 }, { min: 41, max: 50, agorot: 16281 }, { min: 51, max: 55, agorot: 24777 }, { min: 56, max: 60, agorot: 32157 }, { min: 61, max: 65, agorot: 38643 }, { min: 66, max: 120, agorot: 50938 }] },
+    { id: "surgery_shaban", label: "ניתוחים בישראל — משלים שב״ן ללא השתתפות עצמית", wizardKey: "משלים שב\"ן ללא השתתפות עצמית", group: "ניתוחים וטיפולים מחליפי ניתוח בישראל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 1392 }, { min: 21, max: 30, agorot: 3952 }, { min: 31, max: 40, agorot: 4848 }, { min: 41, max: 50, agorot: 7116 }, { min: 51, max: 55, agorot: 10729 }, { min: 56, max: 60, agorot: 13897 }, { min: 61, max: 65, agorot: 16435 }, { min: 66, max: 120, agorot: 21113 }] },
+    { id: "surgery_first_shekel", label: "ניתוחים בישראל מהשקל הראשון", wizardKey: "ניתוחים בישראל מהשקל הראשון", group: "ניתוחים וטיפולים מחליפי ניתוח בישראל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 2195 }, { min: 21, max: 30, agorot: 5951 }, { min: 31, max: 40, agorot: 7546 }, { min: 41, max: 50, agorot: 11514 }, { min: 51, max: 55, agorot: 17522 }, { min: 56, max: 60, agorot: 22741 }, { min: 61, max: 65, agorot: 17328 }, { min: 66, max: 120, agorot: 36023 }] },
     { id: "ambulatory_consults", label: "אמבולטורי — ייעוץ ובדיקות", wizardKey: "ייעוץ ובדיקות", group: "שירותים אמבולטוריים", needsGender: false, bands: [{ min: 0, max: 20, agorot: 1044 }, { min: 21, max: 30, agorot: 4000 }, { min: 31, max: 40, agorot: 4000 }, { min: 41, max: 50, agorot: 4000 }, { min: 51, max: 55, agorot: 4000 }, { min: 56, max: 60, agorot: 4575 }, { min: 61, max: 65, agorot: 4575 }, { min: 66, max: 120, agorot: 5175 }] },
     { id: "child_premium", label: "שירות פרימיום לילד", wizardKey: "שירות פרימיום לילד", group: "כיסוי לילד", needsGender: false, maxAge: 25, bands: [{ min: 0, max: 25, agorot: 3050 }] }
   ];
 
   const HACHSHARA_HEALTH_COVER_BY_ID = HACHSHARA_HEALTH_COVERS.reduce((acc, c) => { acc[c.id] = c; return acc; }, {});
 
-  const HACHSHARA_HEALTH_CPI_KEY = "hachshara_health";
-
   /** מחשב פרמיה חודשית לכיסוי בודד. מחזיר {ok, monthlyPremium, monthlyAgorot, reason?}
-      monthlyPremium/monthlyAgorot = אחרי הצמדה למדד; base* = תעריפון PDF לפני הצמדה. */
+      הפרמיה היא התעריף מהאקסל — בלי הצמדת מדד. */
   function computeHachsharaHealthCoverPremium(coverId, age, gender){
     const cover = HACHSHARA_HEALTH_COVER_BY_ID[coverId];
     if(!cover) return { ok:false, reason:"cover_missing" };
@@ -10711,21 +10710,20 @@
       agorot = band.agorot;
     }
     if(!Number.isInteger(agorot)) return { ok:false, reason:"rate_missing" };
-    const indexed = HealthCpi.indexAgorot(agorot, HACHSHARA_HEALTH_CPI_KEY);
     return {
       ok: true,
       coverId: cover.id,
       label: cover.label,
-      baseMonthlyAgorot: indexed.baseAgorot,
-      baseMonthlyPremium: hachsharaHealthAgorotToShekels(indexed.baseAgorot),
-      monthlyAgorot: indexed.indexedAgorot,
-      monthlyPremium: hachsharaHealthAgorotToShekels(indexed.indexedAgorot),
-      indexFactor: indexed.factor,
-      indexInfo: indexed.indexInfo
+      baseMonthlyAgorot: agorot,
+      baseMonthlyPremium: hachsharaHealthAgorotToShekels(agorot),
+      monthlyAgorot: agorot,
+      monthlyPremium: hachsharaHealthAgorotToShekels(agorot),
+      indexFactor: 1,
+      indexInfo: null
     };
   }
 
-  /** מחשב סל כיסויים נבחרים — סכום אגורות מדויק (אחרי הצמדה) */
+  /** מחשב סל כיסויים נבחרים — סכום אגורות מדויק מהתעריפון */
   function computeHachsharaHealthBundle(selectedIds, age, gender){
     const ids = Array.isArray(selectedIds) ? selectedIds : [];
     if(!ids.length) return { ok:false, reason:"covers_missing", covers:[], monthlyAgorot:0, monthlyPremium:0, annualPremium:0 };
@@ -10763,20 +10761,6 @@
     };
   }
 
-  function formatHachsharaHealthIndexMetaHtml(indexInfo){
-    if(!indexInfo) return "";
-    if(!indexInfo.ok){
-      return `<div class="lcHachHealth__indexMeta lcHachHealth__indexMeta--pending">ממתין למדד למ״ס — מוצגת כרגע פרמיית בסיס מהתעריפון</div>`;
-    }
-    const factorTxt = (Math.round(indexInfo.factor * 10000) / 10000).toFixed(4);
-    return `<div class="lcHachHealth__indexMeta">
-      הצמדה למדד: בסיס ${escapeHtml(String(indexInfo.baseIndexPoints))}
-      (${escapeHtml(indexInfo.baseKnownDate || "")})
-      → נוכחי ≈ ${escapeHtml(String(indexInfo.currentIndexPoints))}
-      (${escapeHtml(safeTrim(indexInfo.currentMonthLabel))})
-      · מקדם ×${escapeHtml(factorTxt)}
-    </div>`;
-  }
 
   const HACHSHARA_HEALTH_SIM_MESSAGES = {
     birth_missing: "יש לבחור תאריך לידה לפני חישוב הפרמיה.",
@@ -10798,7 +10782,6 @@
     _escHandler: null,
     _confirmSwitch: null,
     _showFinalSummary: false,
-    _cpiUnsub: null,
 
     open(ctx){
       this.close();
@@ -10811,8 +10794,6 @@
       this._showFinalSummary = false;
       this._mount();
       this._render();
-      this._cpiUnsub = HealthCpi.onChange(() => { if(this._modal) this._render(); });
-      HealthCpi.ensure().then(() => { if(this._modal) this._render(); }).catch(() => {});
     },
 
     _prefillFromInsured(ins){
@@ -10851,7 +10832,6 @@
     _isInsuredRelevant(_ins){ return true; },
 
     close(){
-      if(this._cpiUnsub){ try { this._cpiUnsub(); } catch(_e){} this._cpiUnsub = null; }
       if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; }
       if(this._modal){
         const m = this._modal;
@@ -10988,19 +10968,13 @@
         `<div class="lcHachHealth__selRow"><span>${escapeHtml(c.label)}</span><strong>₪${escapeHtml(formatHachsharaHealthExactAmount(c.monthlyPremium))}</strong></div>`
       ).join("");
 
-      const indexMetaHtml = formatHachsharaHealthIndexMetaHtml(st.result?.indexInfo || HealthCpi.getIndexInfo(HACHSHARA_HEALTH_CPI_KEY));
-      const baseTotalHtml = (st.result?.ok && st.result.baseMonthlyPremium != null && Math.abs(st.result.baseMonthlyPremium - st.result.monthlyPremium) > 0.0001)
-        ? `<div class="lcHachHealth__resultRow"><span>פרמיית בסיס (לפני מדד)</span><strong>₪${escapeHtml(formatHachsharaHealthExactAmount(st.result.baseMonthlyPremium))}</strong></div>`
-        : "";
       const resultHtml = st.error
         ? `<div class="lcHachHealth__result lcHachHealth__result--error">${escapeHtml(st.error)}</div>`
         : (st.result ? `<div class="lcHachHealth__result lcHachHealth__result--ok">
             <div class="lcHachHealth__selTitle">כיסויים שנבחרו</div>
             ${selectedRows}
-            ${baseTotalHtml}
-            <div class="lcHachHealth__resultRow lcHachHealth__resultRow--main"><span>סה״כ פרמיה חודשית (צמודה למדד)</span><strong>₪${escapeHtml(formatHachsharaHealthExactAmount(st.result.monthlyPremium))}</strong></div>
+            <div class="lcHachHealth__resultRow lcHachHealth__resultRow--main"><span>סה״כ פרמיה חודשית</span><strong>₪${escapeHtml(formatHachsharaHealthExactAmount(st.result.monthlyPremium))}</strong></div>
             <div class="lcHachHealth__resultRow"><span>סה״כ פרמיה שנתית</span><strong>₪${escapeHtml(formatHachsharaHealthExactAmount(st.result.annualPremium))}</strong></div>
-            ${indexMetaHtml}
           </div>` : `<div class="lcHachHealth__result lcHachHealth__result--empty">סמנו כיסויים כדי לראות פרמיה</div>`);
 
       const occAssessment = assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product);
@@ -11272,7 +11246,9 @@
 
 
   // ===== GI-HACH-CI-SIM 2026-08-10 · מחלות קשות הכשרה ============================
-  const HACHSHARA_CI_RATE_MAP = {"0":{"mNS":889,"fNS":889,"mS":889,"fS":889},"1":{"mNS":889,"fNS":889,"mS":889,"fS":889},"2":{"mNS":889,"fNS":889,"mS":889,"fS":889},"3":{"mNS":889,"fNS":889,"mS":889,"fS":889},"4":{"mNS":889,"fNS":889,"mS":889,"fS":889},"5":{"mNS":889,"fNS":889,"mS":889,"fS":889},"6":{"mNS":889,"fNS":889,"mS":889,"fS":889},"7":{"mNS":889,"fNS":889,"mS":889,"fS":889},"8":{"mNS":889,"fNS":889,"mS":889,"fS":889},"9":{"mNS":889,"fNS":889,"mS":889,"fS":889},"10":{"mNS":889,"fNS":889,"mS":889,"fS":889},"11":{"mNS":889,"fNS":889,"mS":889,"fS":889},"12":{"mNS":889,"fNS":889,"mS":889,"fS":889},"13":{"mNS":889,"fNS":889,"mS":889,"fS":889},"14":{"mNS":889,"fNS":889,"mS":889,"fS":889},"15":{"mNS":889,"fNS":889,"mS":889,"fS":889},"16":{"mNS":889,"fNS":889,"mS":889,"fS":889},"17":{"mNS":889,"fNS":889,"mS":889,"fS":889},"18":{"mNS":1211,"fNS":1407,"mS":1569,"fS":1688},"19":{"mNS":1333,"fNS":1607,"mS":1816,"fS":1983},"20":{"mNS":1457,"fNS":1826,"mS":2066,"fS":2301},"21":{"mNS":1482,"fNS":1894,"mS":2097,"fS":2375},"22":{"mNS":1512,"fNS":1986,"mS":2137,"fS":2476},"23":{"mNS":1558,"fNS":2122,"mS":2197,"fS":2625},"24":{"mNS":1598,"fNS":2288,"mS":2247,"fS":2804},"25":{"mNS":1655,"fNS":2497,"mS":2321,"fS":3028},"26":{"mNS":1727,"fNS":2758,"mS":2419,"fS":3310},"27":{"mNS":1805,"fNS":3061,"mS":2538,"fS":3635},"28":{"mNS":1897,"fNS":3408,"mS":2686,"fS":4015},"29":{"mNS":2013,"fNS":3803,"mS":2882,"fS":4447},"30":{"mNS":1910,"fNS":4246,"mS":2778,"fS":4936},"31":{"mNS":2056,"fNS":4740,"mS":3047,"fS":5482},"32":{"mNS":2237,"fNS":5270,"mS":3383,"fS":6077},"33":{"mNS":2471,"fNS":5767,"mS":3826,"fS":6641},"34":{"mNS":2760,"fNS":6181,"mS":4382,"fS":7134},"35":{"mNS":3108,"fNS":6503,"mS":5064,"fS":7542},"36":{"mNS":3510,"fNS":6733,"mS":5872,"fS":7867},"37":{"mNS":4023,"fNS":6942,"mS":6876,"fS":8182},"38":{"mNS":4628,"fNS":7226,"mS":8046,"fS":8593},"39":{"mNS":5336,"fNS":7668,"mS":9393,"fS":9171},"40":{"mNS":6464,"fNS":8462,"mS":11474,"fS":10152},"41":{"mNS":7443,"fNS":9243,"mS":13295,"fS":11100},"42":{"mNS":8426,"fNS":10120,"mS":15154,"fS":12156},"43":{"mNS":10208,"fNS":11009,"mS":16955,"fS":13225},"44":{"mNS":10208,"fNS":11807,"mS":18608,"fS":14216},"45":{"mNS":10954,"fNS":12511,"mS":20082,"fS":15122},"46":{"mNS":11510,"fNS":12950,"mS":21687,"fS":16286},"47":{"mNS":12069,"fNS":13396,"mS":23288,"fS":17504},"48":{"mNS":12758,"fNS":13888,"mS":25126,"fS":18821},"49":{"mNS":13745,"fNS":14546,"mS":27560,"fS":20376},"50":{"mNS":16222,"fNS":16064,"mS":32997,"fS":23163},"51":{"mNS":18315,"fNS":17334,"mS":37089,"fS":24997},"52":{"mNS":20933,"fNS":18697,"mS":42198,"fS":26966},"53":{"mNS":24116,"fNS":20160,"mS":48378,"fS":29076},"54":{"mNS":27838,"fNS":21722,"mS":55528,"fS":31323},"55":{"mNS":32089,"fNS":23397,"mS":63604,"fS":37738},"56":{"mNS":36849,"fNS":25209,"mS":72539,"fS":36449},"57":{"mNS":41749,"fNS":27054,"mS":81699,"fS":39029},"58":{"mNS":46599,"fNS":28937,"mS":90715,"fS":41795},"59":{"mNS":51006,"fNS":30663,"mS":98733,"fS":44495},"60":{"mNS":54618,"fNS":32178,"mS":105183,"fS":46822},"61":{"mNS":57729,"fNS":34456,"mS":110583,"fS":48937},"62":{"mNS":60496,"fNS":34608,"mS":115163,"fS":50918},"63":{"mNS":62970,"fNS":35642,"mS":119069,"fS":52789},"64":{"mNS":65430,"fNS":36711,"mS":122983,"fS":54789},"65":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"66":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"67":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"68":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"69":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"70":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"71":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"72":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"73":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"74":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"75":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633}};
+  // מקור אמת: גיליון «מחלות קשות» ב־תעריפים סיכונים.xlsx — חודשי ל־₪100,000, אגורות מעוגלות. בלי מדד.
+  // גילאי 0–16 מועתקים מגיל 17; גיל 75 מועתק מגיל 74.
+  const HACHSHARA_CI_RATE_MAP = {"0":{"mNS":889,"fNS":889,"mS":889,"fS":889},"1":{"mNS":889,"fNS":889,"mS":889,"fS":889},"2":{"mNS":889,"fNS":889,"mS":889,"fS":889},"3":{"mNS":889,"fNS":889,"mS":889,"fS":889},"4":{"mNS":889,"fNS":889,"mS":889,"fS":889},"5":{"mNS":889,"fNS":889,"mS":889,"fS":889},"6":{"mNS":889,"fNS":889,"mS":889,"fS":889},"7":{"mNS":889,"fNS":889,"mS":889,"fS":889},"8":{"mNS":889,"fNS":889,"mS":889,"fS":889},"9":{"mNS":889,"fNS":889,"mS":889,"fS":889},"10":{"mNS":889,"fNS":889,"mS":889,"fS":889},"11":{"mNS":889,"fNS":889,"mS":889,"fS":889},"12":{"mNS":889,"fNS":889,"mS":889,"fS":889},"13":{"mNS":889,"fNS":889,"mS":889,"fS":889},"14":{"mNS":889,"fNS":889,"mS":889,"fS":889},"15":{"mNS":889,"fNS":889,"mS":889,"fS":889},"16":{"mNS":889,"fNS":889,"mS":889,"fS":889},"17":{"mNS":889,"fNS":889,"mS":889,"fS":889},"18":{"mNS":1211,"fNS":1407,"mS":1569,"fS":1688},"19":{"mNS":1333,"fNS":1607,"mS":1816,"fS":1983},"20":{"mNS":1457,"fNS":1826,"mS":2066,"fS":2301},"21":{"mNS":1482,"fNS":1894,"mS":2097,"fS":2375},"22":{"mNS":1512,"fNS":1986,"mS":2137,"fS":2476},"23":{"mNS":1558,"fNS":2122,"mS":2197,"fS":2625},"24":{"mNS":1598,"fNS":2288,"mS":2247,"fS":2804},"25":{"mNS":1655,"fNS":2497,"mS":2321,"fS":3028},"26":{"mNS":1727,"fNS":2758,"mS":2419,"fS":3310},"27":{"mNS":1805,"fNS":3061,"mS":2538,"fS":3635},"28":{"mNS":1897,"fNS":3408,"mS":2686,"fS":4015},"29":{"mNS":2013,"fNS":3803,"mS":2882,"fS":4447},"30":{"mNS":1910,"fNS":4246,"mS":2778,"fS":4936},"31":{"mNS":2056,"fNS":4740,"mS":3047,"fS":5482},"32":{"mNS":2237,"fNS":5270,"mS":3383,"fS":6077},"33":{"mNS":2471,"fNS":5767,"mS":3826,"fS":6641},"34":{"mNS":2760,"fNS":6181,"mS":4382,"fS":7134},"35":{"mNS":3108,"fNS":6503,"mS":5064,"fS":7542},"36":{"mNS":3510,"fNS":6733,"mS":5872,"fS":7867},"37":{"mNS":4023,"fNS":6942,"mS":6876,"fS":8182},"38":{"mNS":4628,"fNS":7226,"mS":8046,"fS":8593},"39":{"mNS":5336,"fNS":7668,"mS":9393,"fS":9171},"40":{"mNS":6464,"fNS":8462,"mS":11474,"fS":10152},"41":{"mNS":7443,"fNS":9243,"mS":13295,"fS":11100},"42":{"mNS":8426,"fNS":10120,"mS":15154,"fS":12156},"43":{"mNS":9360,"fNS":11009,"mS":16955,"fS":13225},"44":{"mNS":10208,"fNS":11807,"mS":18608,"fS":14216},"45":{"mNS":10954,"fNS":12511,"mS":20082,"fS":15122},"46":{"mNS":11510,"fNS":12950,"mS":21687,"fS":16286},"47":{"mNS":12069,"fNS":13396,"mS":23288,"fS":17504},"48":{"mNS":12758,"fNS":13888,"mS":25126,"fS":18821},"49":{"mNS":13745,"fNS":14546,"mS":27560,"fS":20376},"50":{"mNS":16222,"fNS":16064,"mS":32997,"fS":23163},"51":{"mNS":18315,"fNS":17334,"mS":37089,"fS":24997},"52":{"mNS":20933,"fNS":18697,"mS":42198,"fS":26966},"53":{"mNS":24116,"fNS":20160,"mS":48378,"fS":29076},"54":{"mNS":27838,"fNS":21722,"mS":55528,"fS":31323},"55":{"mNS":32089,"fNS":23397,"mS":63604,"fS":33738},"56":{"mNS":36849,"fNS":25209,"mS":72539,"fS":36349},"57":{"mNS":41749,"fNS":27054,"mS":81699,"fS":39029},"58":{"mNS":46599,"fNS":28937,"mS":90715,"fS":41795},"59":{"mNS":51006,"fNS":30663,"mS":98733,"fS":44427},"60":{"mNS":54618,"fNS":32178,"mS":105198,"fS":46822},"61":{"mNS":57729,"fNS":33456,"mS":110583,"fS":48937},"62":{"mNS":60496,"fNS":34608,"mS":115163,"fS":50918},"63":{"mNS":62970,"fNS":35642,"mS":119069,"fS":52789},"64":{"mNS":65430,"fNS":36711,"mS":122983,"fS":54734},"65":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"66":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"67":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"68":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"69":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"70":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"71":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"72":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"73":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"74":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"75":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633}};
   const HACHSHARA_CI_MIN_AGE = 0;
   const HACHSHARA_CI_MAX_ENTRY_AGE = 75;
   const HACHSHARA_CI_MIN_ENTRY_DAYS = 15;
