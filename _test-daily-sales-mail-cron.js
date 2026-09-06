@@ -95,8 +95,8 @@ assert(wf.includes("github.event_name != 'push'"), "שליחה לא רצה על 
 assert(cfg.includes("supabase functions deploy gi-daily-sales-mail --project-ref vhvlkerectggovfihjgm"), "הוראת דיפלוי ב-config.toml");
 
 console.log("\n5) UI + cache");
-assert(html.includes("gi-daily-sales-mail.js?v=20260906-haifa-modiin-v1"), "cache bust לסקריפט המייל");
-assert(mail.includes("20260906-haifa-modiin-v1"), "כותרת הסקריפט");
+assert(html.includes("gi-daily-sales-mail.js?v=20260906-sales-sync-v1"), "cache bust לסקריפט המייל");
+assert(mail.includes("20260906-sales-sync-v1"), "כותרת הסקריפט");
 assert(mail.includes("data.lastSend.error"), "סטטוס מציג סיבת דילוג/כשל");
 assert(mail.includes("12:30, 15:00 ו־20:00 שעון ישראל"), "שעות ישראל לא השתנו");
 assert(mail.includes('api("send-now"'), "שלח עכשיו נשאר ידני");
