@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260906-ops-dedupe-v1";
+const TAG = "20260906-insureds-label-v1";
 let failed = 0;
 let passed = 0;
 
@@ -252,6 +252,9 @@ console.log("\n10) couple health covers copy + per-insured details");
 assert(sims.includes("function riskSimSyncCoupleHealthCovers(sim, coverId, turnedOn)"), "couple cover sync helper");
 assert(sims.includes('title: "כיסוי לילד"'), "child-cover notice to the agent");
 assert(wiz.includes("הצג פירוט"), "summary row has הצג פירוט");
+assert(renderFn.includes("מבוטחים בפוליסה:"), "summary row label is מבוטחים בפוליסה");
+assert(!renderFn.includes("<span>לקוח:"), "summary row no longer has a לקוח label");
+assert(wiz.includes("GI-NP-INSURED-LABEL"), "insured-label marker in wizard");
 assert(wiz.includes("healthCoversPerInsured"), "covers stored per insured");
 assert(wiz.includes("getPolicyInsuredCoverLabels(policy, insId)"), "details read covers per insured");
 assert(wiz.includes("getPolicyInsuredCoverPremiumRows(policy, insId)"), "details read before/after per cover");

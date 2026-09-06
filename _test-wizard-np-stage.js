@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260906-ops-dedupe-v1";
+const TAG = "20260906-insureds-label-v1";
 let failed = 0;
 let passed = 0;
 
@@ -272,6 +272,11 @@ assert(wiz.includes("לפני הנחה ${this.formatMoneyValue(pair.before)}"), 
 assert(wiz.includes("אחרי הנחה ${this.formatMoneyValue(pair.after)}"), "details show after-premium per insured");
 assert(css.includes(".lcNpProw__person{"), "per-insured detail styles");
 assert(wiz.includes("הצג כיסוי בפוליסה"), "single health row still has the covers chip");
+assert(wiz.includes("GI-NP-INSURED-LABEL"), "summary-row insured label marker");
+assert(wiz.includes("מבוטחים בפוליסה:"), "summary row uses מבוטחים בפוליסה");
+assert(!wiz.includes('<span>לקוח: <b>${escapeHtml(customerName)}</b></span>'), "summary row no longer shows לקוח from the primary label");
+assert(!wiz.includes('<span>מבוטחים: <b>${escapeHtml(insuredNames.join(" · ") || "—")}</b></span>'), "old מבוטחים: label removed from the summary row");
+assert(!/const customerName = safeTrim\(\(this\.insureds\.find/.test(wiz), "primary insured label is not copied onto the summary row");
 assert(wiz.includes("GI-NP-COVER-PREM"), "per-cover before/after helper marker");
 assert(wiz.includes("getPolicyInsuredCoverPremiumRows(policy, insId)"), "details can read before/after per cover");
 assert(wiz.includes("renderPolicyCoverPremiumListHtml(policy, insId, emptyText)"), "details render per-cover before/after on the left");
@@ -896,6 +901,9 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
     assert(W.policyDraft.healthCoversPerInsured.i1.indexOf("שירותים לילד") < 0, "child-only cover is not on the primary list");
     assert(W.getPolicyInsuredCoverLabels(W.policyDraft, "i3").join(",").indexOf("שירותים לילד") >= 0, "detail reader returns the child's covers");
     assert(W.getPolicyInsuredShortName("i1") === "דוד כהן", "row names use first+last name");
+    assert(W.getPolicyInsuredShortName("i1").indexOf("מבוטח ראשי") < 0, "short name does not include מבוטח ראשי");
+    assert(W.getPolicyInsuredShortName("i2") === "יעל כהן", "spouse short name is first+last only");
+    assert(["i1","i2"].map((id) => W.getPolicyInsuredShortName(id)).join(" · ") === "דוד כהן · יעל כהן", "couple row names join without role prefixes");
     const splitC = W.getPolicyInsuredPremiumSplit({
       premiumPerInsured: W.policyDraft.premiumPerInsured,
       simDiscountPerInsured: W.policyDraft.simDiscountPerInsured

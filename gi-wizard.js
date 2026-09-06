@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260906-ops-dedupe-v1";
+  const GI_WIZARD_BUILD = "20260906-insureds-label-v1";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -18865,7 +18865,7 @@ if(path === "birthDate"){
         const discountCompact = this.getPolicyDiscountCompactSummary(p) || (Number(p.discountPct) > 0 ? `${p.discountPct}%` : "");
         const scheduleRaw = this.getPolicyDiscountSchedule(p) || [];
         const scheduleSummary = scheduleRaw.length ? scheduleRaw.map((item) => item.pct).join("/") : "";
-        const customerName = safeTrim((this.insureds.find(x => x.type === "primary") || this.insureds[0] || {}).label) || "לקוח";
+        /* GI-NP-INSURED-LABEL: בשורת הסיכום רק «מבוטחים בפוליסה» + שמות, בלי לקוח/מבוטח ראשי. */
         const insuredNames = pInsuredIds.map((id) => this.getPolicyInsuredShortName(id)).filter(Boolean);
         const bens = (Array.isArray(p.beneficiaries) ? p.beneficiaries : []).filter((b) => {
           return !!(safeTrim(b && b.firstName) || safeTrim(b && b.lastName) || safeTrim(b && b.idNumber));
@@ -18931,8 +18931,7 @@ if(path === "birthDate"){
           <div class="lcNpProw__main">
             <div class="lcNpProw__title">${policyTitle}</div>
             <div class="lcNpProw__meta">
-              <span>לקוח: <b>${escapeHtml(customerName)}</b></span>
-              <span>מבוטחים: <b>${escapeHtml(insuredNames.join(" · ") || "—")}</b></span>
+              <span>מבוטחים בפוליסה: <b>${escapeHtml(insuredNames.join(" · ") || "—")}</b></span>
               ${detailText ? `<span>${detailText}</span>` : ""}
               ${badge}${baselineChip}
             </div>
