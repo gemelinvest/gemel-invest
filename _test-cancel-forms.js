@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260906-cancel-forms-v6";
+const TAG = "20260906-cancel-forms-v7";
 let failed = 0;
 let passed = 0;
 
@@ -443,6 +443,143 @@ HEBREW_POLICIES.forEach((p) => {
     p.id + " name stays logical (got " + nameOp.text + ")"
   );
 });
+
+console.log("\n9) extra insureds fill extra person slots, empty rows stay blank");
+function extraPerson(id, type, fields, policy, cancelExtra){
+  return {
+    id,
+    type,
+    label: String((fields.firstName || "") + " " + (fields.lastName || "")).trim(),
+    data: Object.assign({}, fields, {
+      existingPolicies: policy ? [policy] : [],
+      cancellations: policy ? Object.assign({ [policy.id]: Object.assign({ status: "full" }, cancelExtra || {}) }, {}) : {}
+    })
+  };
+}
+const harelSharedPayload = {
+  insureds: [
+    extraPerson("ins_p", "primary", { firstName: "ישראל", lastName: "ישראלי", idNumber: "123456782", gender: "male", birthDate: "1980-05-12" }, { id: "pol_h", company: "הראל", type: "בריאות", policyNumber: "555111" }),
+    extraPerson("ins_s", "spouse", { firstName: "שרה", lastName: "כהן", idNumber: "987654321", gender: "female", birthDate: "1982-08-20" }, { id: "pol_hs", company: "הראל", type: "בריאות", policyNumber: "555111" }),
+    extraPerson("ins_c", "child", { firstName: "נועם", lastName: "ישראלי", idNumber: "111222333", gender: "male", birthDate: "2010-01-03" }, { id: "pol_hc", company: "הראל", type: "בריאות", policyNumber: "555111" })
+  ]
+};
+const harelSharedGroups = G.groupCancelledPolicies(harelSharedPayload);
+assert(harelSharedGroups.length === 1, "shared Harel health policy is one form (got " + harelSharedGroups.length + ")");
+assert(harelSharedGroups[0].peopleIds.join(",") === "ins_p,ins_s,ins_c", "people order is primary, spouse, child");
+const harelSharedDoc = G.createDoc(harelSharedGroups[0]);
+assert(harelSharedDoc.id === "doc_cancel_ins_p_ins_s_ins_c_harel_health", "grouped doc id includes every person (got " + harelSharedDoc.id + ")");
+const harelSharedPlan = G.overlayPlan(G.buildDraft({ payload: harelSharedPayload }, harelSharedDoc));
+const harelFirst = harelSharedPlan.filter((op) => /^firstName/.test(op.key)).map((op) => op.text);
+assert(harelFirst.includes("ישראל"), "primary first name stays in the main row");
+assert(harelFirst.includes("שרה"), "spouse first name fills the spouse row");
+assert(harelFirst.includes("נועם"), "child first name fills child row 1");
+assert(harelFirst.filter((t) => t === "ישראל").length === 1, "primary name is not copied into empty extra rows");
+assert(harelFirst.length === 3, "unused child rows 2-4 stay empty (got " + harelFirst.length + " first names)");
+assert(harelSharedPlan.some((op) => op.text === "כהן"), "spouse last name is in its own cell");
+const spouseIdDigits = digitOps(harelSharedPlan, "idNumber").filter((op) => op.y < 690 && op.y > 655).map((op) => op.text).join("");
+assert(spouseIdDigits.indexOf("987654321") >= 0 || harelSharedPlan.some((op) => String(op.text).indexOf("987654321") >= 0) || digitOps(harelSharedPlan, "idNumber").map((op) => op.text).join("").indexOf("987654321") >= 0, "spouse ID digits are filled");
+assert(harelSharedPlan.some((op) => op.key === "genderFemale" || String(op.key).indexOf("genderFemale") === 0), "spouse gender mark uses the spouse row");
+
+const clalNoSlotPayload = {
+  insureds: [
+    extraPerson("ins_p", "primary", { firstName: "ישראל", lastName: "ישראלי", idNumber: "123456782" }, { id: "pol_c", company: "כלל", type: "ריסק", policyNumber: "111111111" }),
+    extraPerson("ins_s", "spouse", { firstName: "שרה", lastName: "כהן", idNumber: "987654321" }, { id: "pol_cs", company: "כלל", type: "ריסק", policyNumber: "111111111" })
+  ]
+};
+const clalNoSlotGroups = G.groupCancelledPolicies(clalNoSlotPayload);
+assert(clalNoSlotGroups.length === 1, "Clal regular still one form when two people share the policy");
+assert(clalNoSlotGroups[0].templateId === "clal", "shared Clal risk uses the regular Clal form");
+const clalNoSlotPlan = G.overlayPlan(G.buildDraft({ payload: clalNoSlotPayload }, G.createDoc(clalNoSlotGroups[0])));
+assert(clalNoSlotPlan.some((op) => op.text === "ישראל ישראלי"), "Clal form keeps the lead person");
+assert(!clalNoSlotPlan.some((op) => op.text === "שרה" || op.text === "שרה כהן" || op.text === "כהן"), "Clal regular has no extra person row so spouse is not dumped into the primary cell");
+
+const couplePayload = {
+  insureds: [
+    extraPerson("ins_p", "primary", { firstName: "ישראל", lastName: "ישראלי", idNumber: "123456782", phone: "0501111111" }, { id: "pol_cp", company: "כלל", type: "ריסק", insuredMode: "couple", policyNumber: "CLAL-C" }),
+    extraPerson("ins_s", "spouse", { firstName: "שרה", lastName: "כהן", idNumber: "987654321", phone: "0502222222" }, { id: "pol_cps", company: "כלל", type: "ריסק", insuredMode: "couple", policyNumber: "CLAL-C" })
+  ]
+};
+const coupleGroups = G.groupCancelledPolicies(couplePayload);
+assert(coupleGroups.length === 1 && coupleGroups[0].templateId === "clal_couple", "Clal couple form is used for couple risk");
+const couplePlan = G.overlayPlan(G.buildDraft({ payload: couplePayload }, G.createDoc(coupleGroups[0])));
+const coupleNames = couplePlan.filter((op) => /^fullName/.test(op.key));
+assert(coupleNames.some((op) => op.text === "ישראל ישראלי"), "couple form primary name");
+assert(coupleNames.some((op) => op.text === "שרה כהן"), "couple form secondary name");
+const coupleNameYs = coupleNames.map((op) => op.y).sort((a, b) => b - a);
+assert(coupleNameYs.length >= 2 && coupleNameYs[0] !== coupleNameYs[1], "secondary person sits on the extra header row");
+assert(couplePlan.some((op) => op.text === "987654321"), "secondary ID fills its own cell");
+
+const phoenixFam = {
+  insureds: [
+    extraPerson("ins_p", "primary", { firstName: "ישראל", lastName: "ישראלי", idNumber: "123456782" }, { id: "pol_px", company: "הפניקס", type: "בריאות", policyNumber: "PX1" }),
+    extraPerson("ins_s", "spouse", { firstName: "שרה", lastName: "כהן", idNumber: "987654321" }, { id: "pol_pxs", company: "הפניקס", type: "בריאות", policyNumber: "PX1" })
+  ]
+};
+const phoenixFamPlan = G.overlayPlan(G.buildDraft({ payload: phoenixFam }, G.createDoc(G.groupCancelledPolicies(phoenixFam)[0])));
+assert(phoenixFamPlan.some((op) => op.text === "ישראל ישראלי"), "Phoenix health primary name");
+assert(phoenixFamPlan.some((op) => op.text === "שרה כהן"), "Phoenix health spouse name on extra row");
+const phoenixMarks = phoenixFamPlan.filter((op) => String(op.key).indexOf("markPrimary") === 0);
+assert(phoenixMarks.length === 2, "Phoenix health marks X on each filled person row (got " + phoenixMarks.length + ")");
+assert(phoenixMarks[0].y !== phoenixMarks[1].y, "Phoenix extra X is not on the primary row");
+
+const menoraTwo = {
+  insureds: [
+    extraPerson("ins_p", "primary", { firstName: "ישראל", lastName: "ישראלי", idNumber: "123456782", phone: "0501111111" }, { id: "pol_mm", company: "מנורה", type: "ריסק משכנתא", policyNumber: "MM1" }),
+    extraPerson("ins_s", "spouse", { firstName: "שרה", lastName: "כהן", idNumber: "987654321", phone: "0502222222" }, { id: "pol_mms", company: "מנורה", type: "ריסק משכנתא", policyNumber: "MM1" })
+  ]
+};
+const menoraTwoPlan = G.overlayPlan(G.buildDraft({ payload: menoraTwo }, G.createDoc(G.groupCancelledPolicies(menoraTwo)[0])));
+assert(menoraTwoPlan.some((op) => op.text === "שרה" && /^firstName/.test(op.key)), "Menora mortgage second-person first name");
+assert(menoraTwoPlan.some((op) => op.text === "כהן" && /^lastName/.test(op.key)), "Menora mortgage second-person last name");
+
+const sharedOnlyPayload = {
+  insureds: [
+    extraPerson("ins_p", "primary", { firstName: "ישראל", lastName: "ישראלי", idNumber: "123456782" }, { id: "pol_sh", company: "הראל", type: "בריאות", policyNumber: "SH-1" }, { sharedInsuredIds: ["ins_s"] }),
+    { id: "ins_s", type: "spouse", label: "שרה כהן", data: { firstName: "שרה", lastName: "כהן", idNumber: "987654321", existingPolicies: [], cancellations: {} } }
+  ]
+};
+const sharedOnlyGroups = G.groupCancelledPolicies(sharedOnlyPayload);
+assert(sharedOnlyGroups.length === 1 && sharedOnlyGroups[0].peopleIds.indexOf("ins_s") >= 0, "sharedInsuredIds pull a co-insured who has no own policy row");
+const sharedOnlyPlan = G.overlayPlan(G.buildDraft({ payload: sharedOnlyPayload }, G.createDoc(sharedOnlyGroups[0])));
+assert(sharedOnlyPlan.some((op) => op.text === "שרה"), "sharedInsuredIds spouse still fills the extra slot");
+
+const twoPoliciesPayload = {
+  insureds: [
+    extraPerson("ins_p", "primary", { firstName: "ישראל", lastName: "ישראלי", idNumber: "123456782" }, { id: "pol_a", company: "הראל", type: "בריאות", policyNumber: "A-1" }),
+    extraPerson("ins_s", "spouse", { firstName: "שרה", lastName: "כהן", idNumber: "987654321" }, { id: "pol_b", company: "הראל", type: "בריאות", policyNumber: "B-9" })
+  ]
+};
+assert(G.groupCancelledPolicies(twoPoliciesPayload).length === 2, "different policy numbers stay two forms even on the same template");
+
+const samePeopleTwoPols = {
+  insureds: [
+    {
+      id: "ins_p", type: "primary", data: {
+        firstName: "ישראל", lastName: "ישראלי", idNumber: "123456782",
+        existingPolicies: [
+          { id: "p1", company: "הראל", type: "בריאות", policyNumber: "A-1" },
+          { id: "p2", company: "הראל", type: "בריאות", policyNumber: "A-2" }
+        ],
+        cancellations: { p1: { status: "full" }, p2: { status: "full" } }
+      }
+    },
+    {
+      id: "ins_s", type: "spouse", data: {
+        firstName: "שרה", lastName: "כהן", idNumber: "987654321",
+        existingPolicies: [
+          { id: "s1", company: "הראל", type: "בריאות", policyNumber: "A-1" },
+          { id: "s2", company: "הראל", type: "בריאות", policyNumber: "A-2" }
+        ],
+        cancellations: { s1: { status: "full" }, s2: { status: "full" } }
+      }
+    }
+  ]
+};
+const samePeopleGroups = G.groupCancelledPolicies(samePeopleTwoPols);
+assert(samePeopleGroups.length === 1, "same people + same template merge two policy numbers onto one form");
+assert(samePeopleGroups[0].policies.length === 2, "merged form keeps both policy numbers");
+assert(form.includes("whoSlots"), "templates declare extra person slots");
+assert(form.includes("peopleForCancelledRow"), "resolves co-insureds on a cancelled policy");
 
 console.log("\n" + (failed ? "FAILED " + failed : "OK") + "  passed=" + passed + " failed=" + failed);
 process.exit(failed ? 1 : 0);

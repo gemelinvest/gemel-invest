@@ -101,9 +101,36 @@
       gender: pickFrom(layers, ["gender"])
     };
   }
+  function personFromInsured(ins, fallbacks){
+    const bag = pickPerson(ins, fallbacks) || {};
+    bag._type = safeTrim(ins && ins.type);
+    bag._id = ins && ins.id;
+    return bag;
+  }
+  function personHasIdentity(person){
+    const p = person || {};
+    return !!(safeTrim(p.fullName) || safeTrim(p.idNumber) || safeTrim(p.firstName) || safeTrim(p.lastName));
+  }
+  function insuredRoleRank(ins){
+    const t = safeTrim(ins && ins.type);
+    if(t === "primary") return 0;
+    if(t === "spouse" || t === "secondary") return 1;
+    if(t === "adult") return 2;
+    if(t === "child") return 3;
+    return 4;
+  }
+  function compareInsuredRole(a, b){
+    const ra = insuredRoleRank(a);
+    const rb = insuredRoleRank(b);
+    if(ra !== rb) return ra - rb;
+    return String((a && a.id) || "").localeCompare(String((b && b.id) || ""));
+  }
 
   const PAGE_H = 841.89;
   const PAD = 4;
+  const WHO_FAMILY6 = ["self", "spouse", "child:0", "child:1", "child:2", "child:3"];
+  const WHO_TWO = ["self", "second"];
+  const WHO_KIDS4 = ["child:0", "child:1", "child:2", "child:3"];
 
   function C(key, x0, y0, x1, y1, extra){
     return Object.assign({ key, x0, y0, x1, y1 }, extra || {});
@@ -164,10 +191,10 @@
       id: "phoenix_health",
       file: "phoenix-health-cancel.pdf",
       fields: [
-        X("markPrimary", 556, 147),
-        C("idNumber", 362.3, 142.3, 456.0, 159.3),
-        C("fullName", 241.1, 142.3, 362.3, 159.3),
-        C("today", 168.5, 142.3, 241.1, 159.3, { size: 8 }),
+        X("markPrimary", 556, 147, { whoSlots: WHO_FAMILY6, personRowH: 17 }),
+        C("idNumber", 362.3, 142.3, 456.0, 159.3, { whoSlots: WHO_FAMILY6, personRowH: 17 }),
+        C("fullName", 241.1, 142.3, 362.3, 159.3, { whoSlots: WHO_FAMILY6, personRowH: 17 }),
+        C("today", 168.5, 142.3, 241.1, 159.3, { size: 8, whoSlots: WHO_FAMILY6, personRowH: 17 }),
         C("address", 362.3, 259.0, 572.1, 278),
         C("phone", 241.1, 259.0, 362.3, 278),
         C("email", 22.2, 259.0, 241.1, 278, { size: 8 }),
@@ -199,9 +226,9 @@
         C("productLabel", 285.7, 532.7, 466.0, 553.4, { when: "partial", rows: 3, rowH: 20.7 }),
         C("partialCovers", 162.7, 532.7, 285.7, 553.4, { when: "partial", size: 8, rows: 3, rowH: 20.7 }),
         C("today", 33.5, 532.7, 162.7, 553.4, { when: "partial", rows: 3, rowH: 20.7 }),
-        C("fullName", 376.4, 657.3, 490.7, 685.7),
-        C("idNumber", 262.1, 657.3, 376.4, 685.7),
-        C("today", 147.8, 657.3, 262.1, 685.7)
+        C("fullName", 376.4, 657.3, 490.7, 685.7, { whoSlots: WHO_TWO, personRowH: 28.35 }),
+        C("idNumber", 262.1, 657.3, 376.4, 685.7, { whoSlots: WHO_TWO, personRowH: 28.35 }),
+        C("today", 147.8, 657.3, 262.1, 685.7, { whoSlots: WHO_TWO, personRowH: 28.35 })
       ]
     },
     ayalon_life: {
@@ -210,6 +237,9 @@
       fields: [
         C("fullName", 332, 338, 538, 352),
         C("idNumber", 42, 338, 215, 352, { align: "ltr" }),
+        C("firstName", 372.12, 407.67, 540.05, 430.91, { whoSlots: WHO_KIDS4, personRowH: 23.24 }),
+        C("lastName", 204.18, 407.67, 372.12, 430.91, { whoSlots: WHO_KIDS4, personRowH: 23.24 }),
+        C("idNumber", 36.0, 407.67, 204.18, 430.91, { align: "ltr", whoSlots: WHO_KIDS4, personRowH: 23.24 }),
         C("policyNumber", 251, 518, 385, 534, { align: "ltr" }),
         C("productLabel", 117, 518, 225, 534),
         C("today", 426, 538, 515, 552, { align: "ltr" }),
@@ -246,10 +276,10 @@
       id: "clal_couple",
       file: "clal-life-couple-cancel.pdf",
       fields: [
-        C("idNumber", 404.4, 156.5, 491.7, 176.8),
-        C("fullName", 220.0, 156.5, 403.9, 176.8),
-        C("phoneHome", 142.0, 156.5, 219.5, 176.8),
-        C("phone", 44.3, 156.5, 141.5, 176.8),
+        C("idNumber", 404.4, 156.5, 491.7, 176.8, { whoSlots: WHO_TWO, personRowH: 20.76 }),
+        C("fullName", 220.0, 156.5, 403.9, 176.8, { whoSlots: WHO_TWO, personRowH: 20.76 }),
+        C("phoneHome", 142.0, 156.5, 219.5, 176.8, { whoSlots: WHO_TWO, personRowH: 20.76 }),
+        C("phone", 44.3, 156.5, 141.5, 176.8, { whoSlots: WHO_TWO, personRowH: 20.76 }),
         C("city", 404.4, 223.0, 551.2, 243.3),
         C("street", 283.9, 223.0, 403.9, 243.3),
         C("houseNumber", 220.0, 223.0, 283.2, 243.3),
@@ -269,12 +299,12 @@
       id: "harel_health",
       file: "harel-health-cancel.pdf",
       fields: [
-        C("idNumber", 342.19, 129.6, 485.29, 152.3, { size: 9, boxes: 9, align: "ltr", boxXs: [342.19, 358.09, 373.99, 389.89, 405.79, 421.69, 437.59, 453.49, 468.28, 485.29] }),
-        C("lastName", 255.9, 129.6, 342.2, 152.3),
-        C("firstName", 169.7, 129.6, 255.9, 152.3),
-        C("birthDate", 93.16, 129.6, 169.7, 152.3, { size: 8, boxes: 6, align: "ltr", boxXs: [93.16, 105.92, 118.67, 131.43, 144.19, 156.94, 169.7] }),
-        X("genderMale", 62, 136),
-        X("genderFemale", 30, 136),
+        C("idNumber", 342.19, 129.6, 485.29, 152.3, { size: 9, boxes: 9, align: "ltr", boxXs: [342.19, 358.09, 373.99, 389.89, 405.79, 421.69, 437.59, 453.49, 468.28, 485.29], whoSlots: WHO_FAMILY6, personRowH: 22.7 }),
+        C("lastName", 255.9, 129.6, 342.2, 152.3, { whoSlots: WHO_FAMILY6, personRowH: 22.7 }),
+        C("firstName", 169.7, 129.6, 255.9, 152.3, { whoSlots: WHO_FAMILY6, personRowH: 22.7 }),
+        C("birthDate", 93.16, 129.6, 169.7, 152.3, { size: 8, boxes: 6, align: "ltr", boxXs: [93.16, 105.92, 118.67, 131.43, 144.19, 156.94, 169.7], whoSlots: WHO_FAMILY6, personRowH: 22.7 }),
+        X("genderMale", 62, 136, { whoSlots: WHO_FAMILY6, personRowH: 22.7 }),
+        X("genderFemale", 30, 136, { whoSlots: WHO_FAMILY6, personRowH: 22.7 }),
         C("street", 342.2, 272, 485.3, 290),
         C("houseNumber", 299.1, 272, 342.2, 290),
         C("city", 212.8, 272, 299.1, 290),
@@ -287,9 +317,9 @@
         C("policyNumber", 378.6, 484.4, 553.8, 507.1, { when: "partial", rows: 3, rowH: 22.7 }),
         C("partialCovers", 203.4, 484.4, 378.6, 507.1, { when: "partial", size: 8, rows: 3, rowH: 22.7 }),
         C("today", 28.2, 484.4, 203.4, 507.1, { when: "partial", rows: 3, rowH: 22.7 }),
-        C("today", 418.72, 594.4, 495.26, 617.1, { align: "ltr", size: 8, boxes: 6, boxXs: [418.72, 431.48, 444.23, 456.99, 469.75, 482.5, 495.26] }),
-        C("fullName", 281.9, 594.4, 418.7, 617.1),
-        C("idNumber", 128.86, 594.4, 281.93, 617.1, { boxes: 9, align: "ltr", boxXs: [128.86, 145.87, 162.87, 179.88, 196.89, 213.9, 230.91, 247.91, 264.92, 281.93] })
+        C("today", 418.72, 594.4, 495.26, 617.1, { align: "ltr", size: 8, boxes: 6, boxXs: [418.72, 431.48, 444.23, 456.99, 469.75, 482.5, 495.26], whoSlots: WHO_FAMILY6, personRowH: 22.7 }),
+        C("fullName", 281.9, 594.4, 418.7, 617.1, { whoSlots: WHO_FAMILY6, personRowH: 22.7 }),
+        C("idNumber", 128.86, 594.4, 281.93, 617.1, { boxes: 9, align: "ltr", boxXs: [128.86, 145.87, 162.87, 179.88, 196.89, 213.9, 230.91, 247.91, 264.92, 281.93], whoSlots: WHO_FAMILY6, personRowH: 22.7 })
       ]
     },
     harel_life: {
@@ -311,9 +341,9 @@
         C("policyNumber", 378.9, 447.6, 554.0, 467.4, { when: "partial", rows: 5, rowH: 19.8 }),
         C("partialCovers", 203.7, 447.6, 378.9, 467.4, { when: "partial", size: 8, rows: 5, rowH: 19.8 }),
         C("today", 28.5, 447.6, 203.7, 467.4, { when: "partial", rows: 5, rowH: 19.8 }),
-        C("fullName", 379.1, 599.6, 501.7, 625.1),
-        C("idNumber", 238.11, 599.6, 379.13, 625.1, { boxes: 9, align: "ltr", boxXs: [238.11, 253.68, 269.34, 285.01, 300.67, 316.33, 331.99, 347.65, 363.31, 379.13] }),
-        C("today", 138.9, 599.6, 238.1, 625.1, { align: "ltr", size: 8 })
+        C("fullName", 379.1, 599.6, 501.7, 625.1, { whoSlots: WHO_TWO, personRowH: 25.51 }),
+        C("idNumber", 238.11, 599.6, 379.13, 625.1, { boxes: 9, align: "ltr", boxXs: [238.11, 253.68, 269.34, 285.01, 300.67, 316.33, 331.99, 347.65, 363.31, 379.13], whoSlots: WHO_TWO, personRowH: 25.51 }),
+        C("today", 138.9, 599.6, 238.1, 625.1, { align: "ltr", size: 8, whoSlots: WHO_TWO, personRowH: 25.51 })
       ]
     },
     menora: {
@@ -346,17 +376,17 @@
       fields: [
         C("policyNumber", 245, 132, 338, 148, { align: "ltr" }),
         C("today", 48, 132, 160, 148, { align: "ltr" }),
-        C("lastName", 428.0, 266, 518.4, 286),
-        C("firstName", 389.4, 266, 428.0, 286),
-        C("idNumber", 277.9, 266, 389.4, 286),
-        C("phone", 186.0, 266, 277.9, 286, { size: 8 }),
-        C("email", 28.1, 266, 186.0, 286, { size: 8 }),
+        C("lastName", 428.0, 266, 518.4, 286, { whoSlots: WHO_TWO, personRowH: 38 }),
+        C("firstName", 389.4, 266, 428.0, 286, { whoSlots: WHO_TWO, personRowH: 38 }),
+        C("idNumber", 277.9, 266, 389.4, 286, { whoSlots: WHO_TWO, personRowH: 38 }),
+        C("phone", 186.0, 266, 277.9, 286, { size: 8, whoSlots: WHO_TWO, personRowH: 38 }),
+        C("email", 28.1, 266, 186.0, 286, { size: 8, whoSlots: WHO_TWO, personRowH: 38 }),
         X("markFullPolicy", 534.9, 481.3, { when: "full" }),
         X("markLifeOnly", 534.9, 368.4, { when: "partial" }),
         X("markPrimaryOnly", 518, 378, { when: "partial" }),
-        C("today", 428.0, 538, 518.4, 564, { align: "ltr", size: 8 }),
-        C("fullName", 297.6, 538, 428.0, 564),
-        C("idNumber", 186.0, 538, 297.6, 564)
+        C("today", 428.0, 538, 518.4, 564, { align: "ltr", size: 8, whoSlots: WHO_TWO, personRowH: 32.7 }),
+        C("fullName", 297.6, 538, 428.0, 564, { whoSlots: WHO_TWO, personRowH: 32.7 }),
+        C("idNumber", 186.0, 538, 297.6, 564, { whoSlots: WHO_TWO, personRowH: 32.7 })
       ]
     },
     migdal: {
@@ -388,7 +418,7 @@
   const GiCancelForms = {
     TEMPLATE_BASE: "./forms/cancel/",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260906-cancel-forms-v6",
+    VERSION: "20260906-cancel-forms-v7",
     DOC_TYPE: "company_cancel_form",
     TEMPLATES,
 
@@ -500,10 +530,13 @@
     asPolicyGroup(entry){
       if(entry && Array.isArray(entry.policies) && entry.policies.length) return entry;
       if(entry && (entry.policy || entry.policyId || entry.templateId)){
+        const people = Array.isArray(entry.people) ? entry.people : (entry.insured ? [entry.insured] : []);
         return {
           insuredId: safeTrim(entry.insuredId),
           templateId: safeTrim(entry.templateId) || this.pickTemplateId(entry.policy),
-          insured: entry.insured,
+          insured: people[0] || entry.insured,
+          people,
+          peopleIds: people.map((ins) => safeTrim(ins && ins.id)).filter(Boolean),
           company: entry.company || this.canonicalCompany(entry.policy?.company),
           policies: [entry]
         };
@@ -513,6 +546,8 @@
           insuredId: "",
           templateId: this.pickTemplateId(entry),
           company: this.canonicalCompany(entry.company),
+          people: [],
+          peopleIds: [],
           policies: [{
             policy: entry,
             policyNumber: entry.policyNumber,
@@ -521,7 +556,7 @@
           }]
         };
       }
-      return { insuredId: "", templateId: "", policies: [] };
+      return { insuredId: "", templateId: "", people: [], peopleIds: [], policies: [] };
     },
     formatGroupDocName(group){
       const policies = Array.isArray(group?.policies) ? group.policies : [];
@@ -547,32 +582,103 @@
         }]
       });
     },
-    docIdFor(insuredId, templateId){
-      return "doc_cancel_" + safeTrim(insuredId || "ins") + "_" + safeTrim(templateId || "form");
+    docIdFor(insuredId, templateId, peopleIds){
+      const fromPeople = (Array.isArray(peopleIds) ? peopleIds : []).map(safeTrim).filter(Boolean);
+      const ids = [];
+      (fromPeople.length ? fromPeople : [safeTrim(insuredId || "ins")]).forEach((id) => {
+        if(id && ids.indexOf(id) < 0) ids.push(id);
+      });
+      return "doc_cancel_" + (ids.join("_") || "ins") + "_" + safeTrim(templateId || "form");
     },
-    legacyDocIdFor(insuredId, policyId){
-      return "doc_cancel_" + safeTrim(insuredId || "ins") + "_" + safeTrim(policyId || "pol");
+    policyMatchKey(policy){
+      const num = safeTrim(policy?.policyNumber).replace(/\s+/g, "");
+      if(!num) return "";
+      const templateId = this.pickTemplateId(policy);
+      if(!templateId) return "";
+      return this.canonicalCompany(policy?.company) + "|" + num + "|" + templateId;
+    },
+    peopleForCancelledRow(row, insureds){
+      const list = Array.isArray(insureds) ? insureds : [];
+      const byId = {};
+      list.forEach((ins) => {
+        const id = safeTrim(ins && ins.id);
+        if(id) byId[id] = ins;
+      });
+      const ids = [];
+      const add = (id) => {
+        const s = safeTrim(id);
+        if(s && byId[s] && ids.indexOf(s) < 0) ids.push(s);
+      };
+      add(row && row.insuredId);
+      const key = this.policyMatchKey(row && (row.policy || row));
+      const sharedFrom = (ins, policyId) => {
+        const rec = ins && ins.data && ins.data.cancellations && ins.data.cancellations[policyId];
+        return (rec && Array.isArray(rec.sharedInsuredIds)) ? rec.sharedInsuredIds : [];
+      };
+      if(key){
+        list.forEach((ins) => {
+          const pols = (ins && ins.data && Array.isArray(ins.data.existingPolicies)) ? ins.data.existingPolicies : [];
+          if(pols.some((ep) => this.policyMatchKey(ep) === key)) add(ins && ins.id);
+        });
+      }
+      sharedFrom(row && row.insured, row && row.policyId).forEach(add);
+      ids.slice().forEach((id) => {
+        const ins = byId[id];
+        const pols = (ins && ins.data && Array.isArray(ins.data.existingPolicies)) ? ins.data.existingPolicies : [];
+        pols.forEach((ep) => {
+          if(key && this.policyMatchKey(ep) === key) sharedFrom(ins, ep && ep.id).forEach(add);
+        });
+      });
+      return ids.map((id) => byId[id]).filter(Boolean).sort(compareInsuredRole);
+    },
+    groupKeyForPeople(templateId, people){
+      const ids = (Array.isArray(people) ? people : []).map((ins) => safeTrim(ins && ins.id)).filter(Boolean);
+      return safeTrim(templateId) + "|" + ids.join(",");
+    },
+    policyDedupeKey(row){
+      const num = safeTrim(row && row.policyNumber).replace(/\s+/g, "");
+      if(num) return "n:" + num;
+      return "id:" + safeTrim(row && (row.policyId || (row.policy && row.policy.id)));
     },
     groupCancelledPolicies(payloadOrList){
-      const list = Array.isArray(payloadOrList) ? payloadOrList : this.listCancelledPolicies(payloadOrList);
+      const fromPayload = !Array.isArray(payloadOrList);
+      const list = fromPayload ? this.listCancelledPolicies(payloadOrList) : payloadOrList;
+      const insureds = fromPayload && Array.isArray(payloadOrList?.insureds)
+        ? payloadOrList.insureds.slice()
+        : [];
+      if(!insureds.length){
+        list.forEach((row) => {
+          if(row && row.insured && insureds.indexOf(row.insured) < 0) insureds.push(row.insured);
+        });
+      }
       const map = new Map();
       const order = [];
       list.forEach((row) => {
         if(!row) return;
-        const key = safeTrim(row.insuredId) + "|" + safeTrim(row.templateId);
+        const people = Array.isArray(row.people) && row.people.length
+          ? row.people.slice()
+          : this.peopleForCancelledRow(row, insureds);
+        const key = this.groupKeyForPeople(row.templateId, people);
         if(!map.has(key)){
           map.set(key, {
-            insuredId: safeTrim(row.insuredId),
+            insuredId: safeTrim((people[0] && people[0].id) || row.insuredId),
             templateId: safeTrim(row.templateId),
-            insured: row.insured,
+            insured: people[0] || row.insured,
+            people,
+            peopleIds: people.map((ins) => safeTrim(ins && ins.id)).filter(Boolean),
             company: row.company,
             policies: []
           });
           order.push(key);
         }
-        map.get(key).policies.push(row);
+        const group = map.get(key);
+        const seen = group.policies.some((prev) => this.policyDedupeKey(prev) === this.policyDedupeKey(row));
+        if(!seen) group.policies.push(row);
       });
       return order.map((key) => map.get(key));
+    },
+    legacyDocIdFor(insuredId, policyId){
+      return "doc_cancel_" + safeTrim(insuredId || "ins") + "_" + safeTrim(policyId || "pol");
     },
     isCancelFormDoc(doc){
       return safeTrim(doc?.type) === this.DOC_TYPE;
@@ -592,7 +698,7 @@
       if(!this.isCancelFormDoc(doc)) return false;
       const id = safeTrim(doc?.id);
       if(!id) return false;
-      return this.groupCancelledPolicies(payload).some((group) => this.docIdFor(group.insuredId, group.templateId) === id);
+      return this.groupCancelledPolicies(payload).some((group) => this.docIdFor(group.insuredId, group.templateId, group.peopleIds) === id);
     },
     listCancelledPolicies(payload){
       const out = [];
@@ -621,6 +727,9 @@
           });
         });
       });
+      out.forEach((row) => {
+        row.people = this.peopleForCancelledRow(row, insureds);
+      });
       return out;
     },
     createDoc(entry, options){
@@ -633,7 +742,11 @@
       const products = this.productLabelsOf(policies);
       const status = this.groupStatus(policies);
       return {
-        id: this.docIdFor(group.insuredId || first.insuredId, group.templateId || first.templateId || this.pickTemplateId(policy)),
+        id: this.docIdFor(
+          group.insuredId || first.insuredId,
+          group.templateId || first.templateId || this.pickTemplateId(policy),
+          group.peopleIds
+        ),
         type: this.DOC_TYPE,
         templateId: safeTrim(group.templateId || first.templateId) || this.pickTemplateId(policy),
         name: this.formatGroupDocName(group),
@@ -643,6 +756,7 @@
         policyId: safeTrim(first.policyId || policy.id),
         policyIds: policies.map((row) => safeTrim(row.policyId || row.policy?.id)).filter(Boolean),
         insuredId: safeTrim(group.insuredId || first.insuredId),
+        peopleIds: Array.isArray(group.peopleIds) ? group.peopleIds.slice() : [],
         policyNumber: numbers.join(" · "),
         policyNumbers: numbers,
         cancelStatus: status,
@@ -691,7 +805,7 @@
       const templateId = safeTrim(doc?.templateId);
       const policyId = safeTrim(doc?.policyId);
       const insuredId = safeTrim(doc?.insuredId);
-      const byGroupId = groups.find((group) => docId && this.docIdFor(group.insuredId, group.templateId) === docId);
+      const byGroupId = groups.find((group) => docId && this.docIdFor(group.insuredId, group.templateId, group.peopleIds) === docId);
       if(byGroupId) return byGroupId;
       const byTemplate = groups.find((group) => templateId && group.templateId === templateId && (!insuredId || group.insuredId === insuredId));
       if(byTemplate) return byTemplate;
@@ -716,11 +830,15 @@
       const policy = first.policy || {};
       const cancel = first.cancel || {};
       const insured = group.insured || first.insured || null;
+      const peopleIns = Array.isArray(group.people) && group.people.length
+        ? group.people
+        : (insured ? [insured] : []);
       const templateId = safeTrim(doc?.templateId) || safeTrim(group.templateId) || safeTrim(first.templateId) || this.pickTemplateId(policy);
       const template = TEMPLATES[templateId] || null;
       const numbers = this.policyNumbersOf(policies);
       const policyNumber = numbers.join(" · ") || safeTrim(doc?.policyNumber);
-      const person = pickPerson(insured, [payload.primary, payload, rec]);
+      const people = peopleIns.map((ins, i) => personFromInsured(ins, i === 0 ? [payload.primary, payload, rec] : []));
+      const person = people[0] || personFromInsured(insured, [payload.primary, payload, rec]);
       const email = safeTrim(person.email);
       const at = email.indexOf("@");
       const covers = [];
@@ -742,6 +860,7 @@
         policy,
         cancel,
         person,
+        people,
         templateId,
         template,
         policyNumber,
@@ -761,10 +880,38 @@
         emailDomain: at > 0 ? email.slice(at + 1) : ""
       };
     },
-    valueFor(draft, key){
-      const p = draft?.person || {};
+    personForWho(draft, who){
+      const people = Array.isArray(draft?.people) && draft.people.length
+        ? draft.people
+        : (draft?.person ? [draft.person] : []);
+      const lead = people[0] || draft?.person || null;
+      const w = safeTrim(who) || "self";
+      const sameAsLead = (p) => p && lead && p._id && lead._id && p._id === lead._id;
+      if(w === "self" || w === "primary") return lead;
+      if(w === "spouse"){
+        const hit = people.find((p) => p && (p._type === "spouse" || p._type === "secondary"));
+        return (hit && !sameAsLead(hit)) ? hit : null;
+      }
+      if(w === "second"){
+        const hit = people.find((p) => p && (p._type === "spouse" || p._type === "secondary"))
+          || people.find((p) => p && p._type === "adult")
+          || people.find((p) => p && p._type !== "child" && !sameAsLead(p))
+          || people.find((p) => p && !sameAsLead(p));
+        return (hit && !sameAsLead(hit)) ? hit : null;
+      }
+      if(w.indexOf("child:") === 0){
+        const i = parseInt(w.slice(6), 10);
+        const kids = people.filter((p) => p && p._type === "child");
+        return kids[i] || null;
+      }
+      return lead;
+    },
+    valueFor(draft, key, who){
+      const extra = !!(who && who !== "self" && who !== "primary");
+      const p = extra ? (this.personForWho(draft, who) || {}) : (this.personForWho(draft, who) || draft?.person || {});
+      if(extra && !personHasIdentity(p)) return "";
       const gender = safeTrim(p.gender).toLowerCase();
-      const hasPerson = !!(safeTrim(p.fullName) || safeTrim(p.idNumber) || safeTrim(p.firstName));
+      const hasPerson = personHasIdentity(p);
       const male = gender === "male" || gender === "m" || gender === "זכר" || gender === "man";
       const female = gender === "female" || gender === "f" || gender === "נקבה" || gender === "woman";
       const map = {
@@ -779,19 +926,19 @@
         street: p.street,
         houseNumber: p.houseNumber,
         zip: p.zip,
-        birthDate: draft.birthDate,
-        today: draft.today,
-        policyNumber: draft.policyNumber,
-        productLabel: draft.productLabel,
-        partialCovers: draft.partialCovers,
-        reason: draft.reason,
-        address: draft.address,
-        emailLocal: draft.emailLocal,
-        emailDomain: draft.emailDomain,
+        birthDate: extra ? formatDateIL(p.birthDate) : (draft && draft.birthDate),
+        today: draft && draft.today,
+        policyNumber: draft && draft.policyNumber,
+        productLabel: draft && draft.productLabel,
+        partialCovers: draft && draft.partialCovers,
+        reason: draft && draft.reason,
+        address: extra ? "" : (draft && draft.address),
+        emailLocal: extra ? "" : (draft && draft.emailLocal),
+        emailDomain: extra ? "" : (draft && draft.emailDomain),
         markPrimary: hasPerson ? "X" : "",
-        markFullPolicy: "X",
-        markLifeOnly: "X",
-        markPrimaryOnly: "X",
+        markFullPolicy: extra ? "" : "X",
+        markLifeOnly: extra ? "" : "X",
+        markPrimaryOnly: extra ? "" : "X",
         genderMale: male ? "X" : "",
         genderFemale: female ? "X" : ""
       };
@@ -815,7 +962,7 @@
         });
         return covers.join(" · ");
       }
-      return this.valueFor(draft, key);
+      return this.valueFor(draft, key, field && field.who);
     },
     charsForBoxes(field, text, n){
       const key = safeTrim(field?.key);
@@ -905,6 +1052,15 @@
           return true;
         });
         if(when && !matching.length) return;
+        const whoSlots = Array.isArray(field.whoSlots) ? field.whoSlots : [];
+        const personRowH = Number(field.personRowH) || 0;
+        if(whoSlots.length){
+          whoSlots.forEach((slot, pi) => {
+            const slotted = Object.assign({}, field, { who: slot });
+            emit(slotted, this.valueFor(draft, field.key, slot), pi * personRowH, pi);
+          });
+          return;
+        }
         const rows = Number(field.rows) > 1 ? Number(field.rows) : 0;
         const rowH = Number(field.rowH) || 0;
         if(rows && rowH){

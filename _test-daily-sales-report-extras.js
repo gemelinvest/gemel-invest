@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260906-cancel-forms-v6";
+const APP_TAG = "20260906-cancel-forms-v7";
 const THEME_TAG = "20260830-policy-actions-align-v1";
 let failed = 0;
 let passed = 0;

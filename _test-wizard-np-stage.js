@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260906-cancel-forms-v6";
+const TAG = "20260906-cancel-forms-v7";
 let failed = 0;
 let passed = 0;
 
