@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260906-mirror-ops-ux-v1";
+const APP_TAG = "20260906-mirror-ops-ux-v2";
 let failed = 0;
 let passed = 0;
 
@@ -78,7 +78,11 @@ assert(needsDetails.includes("פוליסות מוצעות"), "כותרת פול�
 
 console.log("\n4) עיצוב צ׳קליסט מסך מלא");
 assert(css.includes("body.view-mirrorCall-active.mc-mirror-immersive .topbar"), "טופבר מוסתר במצב immersive");
-assert(css.includes("body.view-mirrorCall-active.mc-mirror-immersive .sidebar"), "סיידבר מוסתר במצב immersive");
+assert(!/body\.view-mirrorCall-active\.mc-mirror-immersive \.sidebar/.test(css), "תפריט הצד לא מוסתר בשיקוף");
+assert(!css.includes("body.view-mirrorCall-active.mc-mirror-immersive .app{"), "גריד האפליקציה לא מתכווץ לעמודה אחת");
+const immersiveFixed = sliceBetween(css, "body.view-mirrorCall-active.mc-mirror-immersive #view-mirrorCall.is-visible{", "}");
+assert(!immersiveFixed.includes("position:fixed"), "מסך השיקוף לא מכסה את תפריט הצד ב-fixed");
+assert(/\n\.mcPreFlightModal\{\s*position:absolute;/.test(css), "צ׳קליסט יושב בתוך אזור השיקוף");
 assert(css.includes(".mcPreFlightModal__sheet"), "גיליון צ׳קליסט קיים");
 assert(css.includes("height:100%"), "גיליון צ׳קליסט בגובה מלא");
 assert(css.includes("font-size:clamp(28px, 3.2vw, 32px)"), "כותרת צ׳קליסט גדולה");
