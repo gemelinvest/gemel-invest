@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260905-ops-insured-tabs-v1";
+const TAG = "20260906-cover-prem-v1";
 let failed = 0;
 let passed = 0;
 
@@ -254,7 +254,9 @@ assert(sims.includes('title: "כיסוי לילד"'), "child-cover notice to the
 assert(wiz.includes("הצג פירוט"), "summary row has הצג פירוט");
 assert(wiz.includes("healthCoversPerInsured"), "covers stored per insured");
 assert(wiz.includes("getPolicyInsuredCoverLabels(policy, insId)"), "details read covers per insured");
+assert(wiz.includes("getPolicyInsuredCoverPremiumRows(policy, insId)"), "details read before/after per cover");
 assert(css.includes(".lcNpProw__personHead"), "per-insured detail head styles");
+assert(css.includes(".lcNpProw__coverPay{"), "cover line has a left-side before/after pair");
 
 console.log("\n11) pledge/beneficiaries persist onto the summary row");
 assert(wiz.includes("applySimulatorLegalToDraft(draft, legal)"), "purchase copies simulator legal onto the draft");

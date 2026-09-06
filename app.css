@@ -25758,8 +25758,17 @@ body.lcAuthLock .lcLogin__mfaQrBox > canvas{width:min(100%,220px) !important;max
 }
 .lcNpProw__coversList{
   margin:0;padding:0 18px 0 0;list-style:disc;
-  display:grid;gap:6px;color:#1b365d;font-size:13px;font-weight:700;line-height:1.45;
+  display:grid;gap:8px;color:#1b365d;font-size:13px;font-weight:700;line-height:1.45;
 }
+.lcNpProw__coversList li{
+  display:flex;align-items:baseline;justify-content:space-between;gap:12px;
+}
+.lcNpProw__coverName{min-width:0;flex:1 1 auto}
+.lcNpProw__coverPay{
+  display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;
+  flex:0 0 auto;font-size:12px;font-weight:700;color:#475569;white-space:nowrap;
+}
+.lcNpProw__coverPay .is-after{color:#15803d;font-weight:800}
 .lcNpProw__coversEmpty{font-size:13px;font-weight:700;color:#64748b}
 .lcNpProw__person{padding:10px 0;border-bottom:1px solid rgba(27,54,93,.08)}
 .lcNpProw__person:last-child{border-bottom:0;padding-bottom:0}
