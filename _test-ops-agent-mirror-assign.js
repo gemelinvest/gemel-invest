@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260906-sales-mail-root-v2";
+const APP_TAG = "20260906-haifa-modiin-v1";
 let failed = 0;
 let passed = 0;
 
