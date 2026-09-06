@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260906-cover-prem-v1";
+const TAG = "20260906-ops-dedupe-v1";
 let failed = 0;
 let passed = 0;
 
@@ -309,6 +309,9 @@ assert(wiz.includes("perInsuredCoverRows:"), "compact ops rows carry covers per 
 assert(wiz.includes("this.toSimulatorDmyDate(policy?.startDate)"), "compact ops rows format start date as DD/MM/YYYY");
 assert(wiz.includes("coverPremiums: this.getPolicyInsuredCoverPremiumRows(policy, iid)"), "ops compact rows carry per-cover before/after");
 assert(wiz.includes("lcPdfCouplePremiums--covers"), "ops PDF styles the per-cover premium list");
+assert(wiz.includes("GI-NP-OPS-DEDUPE"), "ops PDF hides the unpriced cover list when priced covers exist");
+assert(wiz.includes("getOperationalDiscountDisplayText(policy)"), "ops discount line uses the full discount display");
+assert(wiz.includes("!hasCoverByInsured && covMeaningful"), "priced per-insured covers skip כיסוי / סכומים");
 
 console.log("\n6) untouched — declaration routing, premium engine; center open to logged-in users");
 assert(/canAccessSimulators\(\)\{\s*return !!this\.current;/.test(app), "Simulators Center gate is any logged-in user");
@@ -998,9 +1001,10 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
             ]}
           },
           startDate: "01/10/2026", discountPct: "20",
+          discountOption: { label: "20% ל-10 שנים — ניתוחים שקל ראשון + ייעוץ ובדיקות", packageNum: "101527", pct: 20, years: 10 },
           simDiscountPerInsured: {
-            i1: { year1Pct: 20, monthlyAfterDiscount: 176, label: "20%" },
-            i2: { year1Pct: 20, monthlyAfterDiscount: 144, label: "20%" }
+            i1: { year1Pct: 20, monthlyAfterDiscount: 176, label: "20% ל-10 שנים — ניתוחים שקל ראשון + ייעוץ ובדיקות", optionId: "mnr-h-20" },
+            i2: { year1Pct: 20, monthlyAfterDiscount: 144, label: "20% ל-10 שנים — ניתוחים שקל ראשון + ייעוץ ובדיקות", optionId: "mnr-h-20" }
           }
         }
       ],
@@ -1027,6 +1031,14 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
     assert(opsHtml.includes("לפני ₪100") && opsHtml.includes("אחרי ₪80"), "ops PDF shows drugs cover before/after for the primary");
     assert(opsHtml.includes("לפני ₪120") && opsHtml.includes("אחרי ₪96"), "ops PDF shows surgeries cover before/after for the primary");
     assert(opsHtml.includes("לפני ₪180") && opsHtml.includes("אחרי ₪144"), "ops PDF shows drugs cover before/after for the spouse");
+    assert((opsHtml.split("ניתוחים בישראל מהשקל הראשון").length - 1) === 2, "ops PDF does not repeat unpriced health covers above the priced list");
+    assert(opsHtml.includes("101527") && (opsHtml.includes("מס'") || opsHtml.includes("מס׳") || opsHtml.includes("חבילה")), "ops PDF discount line includes package number");
+    assert(opsHtml.includes("ניתוחים שקל ראשון") || opsHtml.includes("20% ל-10 שנים"), "ops PDF discount line uses the full discount label");
+    const clalDisc = W.getOperationalDiscountDisplayText({
+      company: "כלל", type: "בריאות", discountPct: "20",
+      simDiscountPerInsured: { i1: { year1Pct: 20, label: "20% על הכול מלבד סרטן — קוד 3494", optionId: "cll-h-20-exca" } }
+    });
+    assert(clalDisc.includes("קוד 3494") && clalDisc.includes("3494") && /מס['׳]?\s*חבילה/.test(clalDisc), "ops discount helper keeps the full simulator label and package number");
     assert(/₪\s*1[,.]?324[.,]46/.test(opsHtml) || opsHtml.includes("1,324.46") || opsHtml.includes("1324.46"), "ops PDF grand total uses after-discount (21.46+200+783+176+144)");
     assert(W.toSimulatorDmyDate("2026-11-01") === "01/11/2026", "future ISO start date converts to DD/MM/YYYY");
     assert(W.getPolicyPremiumAfterDiscount(opsPayload.newPolicies[0]) === 61.32, "legacy after-discount helper still returns before for Clal");
