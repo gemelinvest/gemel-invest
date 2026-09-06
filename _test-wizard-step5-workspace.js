@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260906-insureds-label-v1";
+const TAG = "20260906-rows-advance-v1";
 let failed = 0;
 let passed = 0;
 
@@ -255,6 +255,8 @@ assert(wiz.includes("הצג פירוט"), "summary row has הצג פירוט");
 assert(renderFn.includes("מבוטחים בפוליסה:"), "summary row label is מבוטחים בפוליסה");
 assert(!renderFn.includes("<span>לקוח:"), "summary row no longer has a לקוח label");
 assert(wiz.includes("GI-NP-INSURED-LABEL"), "insured-label marker in wizard");
+assert(wiz.includes("GI-NP-ROWS-ADVANCE"), "Next is allowed when summary rows already exist");
+assert(renderFn.includes("isPolicyDraftDirty() && rows.length < 1") || wiz.includes("isPolicyDraftDirty() && rows.length < 1"), "incomplete add form does not block when rows exist");
 assert(wiz.includes("healthCoversPerInsured"), "covers stored per insured");
 assert(wiz.includes("getPolicyInsuredCoverLabels(policy, insId)"), "details read covers per insured");
 assert(wiz.includes("getPolicyInsuredCoverPremiumRows(policy, insId)"), "details read before/after per cover");

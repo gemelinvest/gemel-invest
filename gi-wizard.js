@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260906-insureds-label-v1";
+  const GI_WIZARD_BUILD = "20260906-rows-advance-v1";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -17936,10 +17936,13 @@ if(path === "birthDate"){
     },
 
     validateStep5(){
-      const list = this.getPoliciesForWizardValidation();
+      const list = this.getPoliciesForWizardValidation() || [];
+      const summaryRows = (typeof this.getWizardNewPolicies === "function" ? this.getWizardNewPolicies() : null);
+      const rows = Array.isArray(summaryRows) ? summaryRows : list;
       const issueRows = [];
 
-      if(this.isPolicyDraftDirty()){
+      /* GI-NP-ROWS-ADVANCE: כל עוד יש שורות סיכום — טיוטת ההוספה לא חוסמת המשך. */
+      if(this.isPolicyDraftDirty() && rows.length < 1){
         const draftIssues = this.collectNewPolicyValidationIssues(this.policyDraft, {
           policyLabel: "פוליסה בתהליך הוספה"
         });
@@ -17955,7 +17958,7 @@ if(path === "birthDate"){
         }
       }
 
-      if(list.length < 1 && !issueRows.length){
+      if(rows.length < 1 && !issueRows.length){
         const emptyIssues = [{
           message: this.isCustomerPurchaseMode()
             ? "שכחת למלא: הוסף לפחות פוליסה חדשה אחת לפני המשך"
