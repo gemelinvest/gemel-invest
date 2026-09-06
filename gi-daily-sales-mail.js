@@ -1,6 +1,6 @@
-/* GI-DAILY-SALES-MAIL 20260903-sales-mail-v1
+/* GI-DAILY-SALES-MAIL 20260906-sales-mail-root-v1
    Isolated Outlook daily-sales email. Calls existing DashboardUI report
-   builders only. Does not change sales / PIN / MFA logic. */
+   builders only (buildDailySalesPrintModel). Does not change sales / PIN / MFA. */
 (() => {
   "use strict";
 
@@ -380,7 +380,9 @@
   function nearSendSlot(){
     const now = israelMinutesNow();
     if(now < 0) return false;
-    return [12 * 60 + 30, 15 * 60, 20 * 60].some((slot) => now >= (slot - 8) && now < slot);
+    /* 12 minutes before through 40 minutes after each slot so a late GitHub
+       fire still gets a PDF built from the sales screen, not an old file. */
+    return [12 * 60 + 30, 15 * 60, 20 * 60].some((slot) => now >= (slot - 12) && now < (slot + 40));
   }
 
   async function persistSnapshot(force){

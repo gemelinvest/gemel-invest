@@ -1,9 +1,8 @@
 # Minimal config so the reconstructed daily-sales mail function can be deployed.
 # gi-daily-sales-mail is NOT deployed by .github/workflows/deploy-assistant.yml.
-# After changing supabase/functions/gi-daily-sales-mail:
+# .github/workflows/daily-sales-mail.yml deploys it on push to main, and is
+# also the 12:30 / 15:00 / 20:00 Israel clock. Manual deploy:
 #   supabase functions deploy gi-daily-sales-mail --project-ref vhvlkerectggovfihjgm --no-verify-jwt
-# The 12:30 / 15:00 / 20:00 Israel clock is .github/workflows/daily-sales-mail.yml
-# (10-minute poll; deploy the Edge Function separately after changing it).
 project_id = "vhvlkerectggovfihjgm"
 
 [functions.gi-daily-sales-mail]

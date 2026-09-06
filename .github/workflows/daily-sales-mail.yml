@@ -2,27 +2,47 @@
 # Hosted Supabase Edge Functions do not support Deno.cron; this workflow is
 # the clock. It POSTs { action: "send-slot", slot } to gi-daily-sales-mail.
 #
-# GitHub cron is UTC-only and often runs hours late. A 35-minute Israel-time
-# gate therefore dropped the 12:30 and 15:00 sends. The clock is now:
-#   1) poll every 10 minutes
-#   2) send the due Israel slot (12:30 until 15:00, 15:00 until 20:00,
-#      20:00 until midnight) even if this particular cron fired late
-#   3) keep the six explicit UTC slot crons as extra insurance
-# The edge function still de-duplicates the same slot (and a 90-minute window).
-# Schedule jobs run only after this file is on the default branch.
+# GitHub cron is UTC-only and often hours late. A 35-minute Israel-time gate
+# dropped 12:30 entirely. A wide window without live-function dedup then
+# sent the 15:00 report four times the same afternoon.
 #
-# This does NOT deploy the Edge Function. After changing
-# supabase/functions/gi-daily-sales-mail, run:
-#   supabase functions deploy gi-daily-sales-mail --project-ref vhvlkerectggovfihjgm --no-verify-jwt
+# Clock:
+#   1) poll every 10 minutes
+#   2) extra crons inside the 12:30 Israel window (GitHub skipped 09:30 UTC
+#      for a week)
+#   3) send the current Israel slot (12:30 until 15:00, 15:00 until 20:00,
+#      20:00 until midnight)
+# The live Edge Function must send that snapshot ONCE per slot per day.
+# A 90-minute window is not used: it expired while GitHub was still in the
+# same slot and sent again.
+#
+# On push to main this workflow also deploys gi-daily-sales-mail. Changing
+# only the git file does not update the function that Outlook actually hits.
 
 name: Daily sales mail slots
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/functions/gi-daily-sales-mail/**"
+      - "supabase/config.toml"
+      - ".github/workflows/daily-sales-mail.yml"
   schedule:
-    # Catch GitHub delay: a run in the current slot still sends that slot.
     - cron: "*/10 * * * *"
-    # 12:30 / 15:00 / 20:00 IDT (UTC+3)
+    # 12:30 IDT window (UTC+3): 09:30–11:50
     - cron: "30 9 * * *"
+    - cron: "40 9 * * *"
+    - cron: "50 9 * * *"
+    - cron: "10 10 * * *"
+    - cron: "20 10 * * *"
+    - cron: "40 10 * * *"
+    - cron: "50 10 * * *"
+    - cron: "10 11 * * *"
+    - cron: "20 11 * * *"
+    - cron: "40 11 * * *"
+    - cron: "50 11 * * *"
+    # 15:00 / 20:00 IDT
     - cron: "0 12 * * *"
     - cron: "0 17 * * *"
     # 12:30 / 15:00 / 20:00 IST (UTC+2)
@@ -32,11 +52,25 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: gi-daily-sales-mail-slot
+  group: gi-daily-sales-mail-${{ github.event_name == 'push' && 'deploy' || 'slot' }}
   cancel-in-progress: false
 
 jobs:
+  deploy:
+    if: ${{ github.event_name == 'push' && secrets.SUPABASE_ACCESS_TOKEN != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Deploy gi-daily-sales-mail
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: supabase functions deploy gi-daily-sales-mail --project-ref vhvlkerectggovfihjgm --no-verify-jwt
+
   send-slot:
+    if: ${{ github.event_name != 'push' }}
     runs-on: ubuntu-latest
     steps:
       - name: Fire send-slot at Israel 12:30 / 15:00 / 20:00
@@ -78,7 +112,6 @@ jobs:
               "action": "send-slot",
               "scheduled": True,
               "slot": slot,
-              "refreshLive": True,
           }).encode("utf-8")
           req = urllib.request.Request(
               url,
@@ -108,7 +141,7 @@ jobs:
           if data.get("skipped"):
               reason = data.get("error") or ""
               print("send-slot skipped:", reason)
-              # Same-slot / 90-minute dedup is expected on the 10-minute poll.
+              # Once-per-Israel-slot dedup is expected on extra cron fires.
               if "כבר נשלח" in reason:
                   sys.exit(0)
               print("send-slot missed a due Israel slot")

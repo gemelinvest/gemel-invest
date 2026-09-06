@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260906-existing-locked-status-v1";
+const APP_TAG = "20260906-sales-mail-root-v1";
 const THEME_TAG = "20260830-policy-actions-align-v1";
 let failed = 0;
 let passed = 0;
@@ -39,7 +39,7 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).statu
 assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
 assert(html.includes("theme.css?v=" + THEME_TAG), "index.html theme.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
-assert(html.includes("gi-daily-sales-mail.js?v=20260903-sales-mail-v1"), "index.html mail script cache");
+assert(html.includes("gi-daily-sales-mail.js?v=20260906-sales-mail-root-v1"), "index.html mail script cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-daily-sales-mail.js")]).status === 0, "node --check gi-daily-sales-mail.js");
 assert(mail.includes("function snapshotHasNewLayout"), "חסימת שליחת דוח ישן");
 assert(mail.includes("מכירות מודיעין"), "בודק תווית מודיעין בסנאפשוט");
@@ -229,10 +229,9 @@ function agentLabelTokenMatches(candidate, token){
   const reverse = AGENT_LABEL_TOKEN_ALIASES[candidate];
   return !!(reverse && reverse.includes(token));
 }
-function agentLabelTokensSubset(allTokens, partTokens){
-  return partTokens.length > 0 && partTokens.every((token) =>
-    allTokens.some((candidate) => agentLabelTokenMatches(candidate, token))
-  );
+function agentLabelTokensPrefix(allTokens, partTokens){
+  if(!partTokens.length || partTokens.length > allTokens.length) return false;
+  return partTokens.every((token, i) => agentLabelTokenMatches(allTokens[i], token));
 }
 function salesAgentNameMatchesPersonName(salesName, personName){
   const salesKey = safeTrim(salesName).replace(/\s+/g, " ").toLowerCase();
@@ -241,7 +240,7 @@ function salesAgentNameMatchesPersonName(salesName, personName){
   const salesTokens = agentLabelTokens(salesName);
   const personTokens = agentLabelTokens(personName);
   if(!salesTokens.length || !personTokens.length) return false;
-  return agentLabelTokensSubset(personTokens, salesTokens);
+  return agentLabelTokensPrefix(personTokens, salesTokens);
 }
 function lookupOfficeBranchFromDirectory(salesName, contacts){
   const branches = [];
@@ -257,13 +256,19 @@ const contacts = [
   { fullName: "ואדים שאולוב", agency: "חיפה" },
   { fullName: "אביאל אלקיים", agency: "חיפה" },
   { fullName: "אביאל דהאן", agency: "מודיעין" },
-  { fullName: "יוסי בורג", agency: "חיפה" }
+  { fullName: "יוסי בורג", agency: "חיפה" },
+  { fullName: "אביב עמאש", agency: "מודיעין" },
+  { fullName: "נתי אביב", agency: "חיפה" }
 ];
 assert(salesAgentNameMatchesPersonName("ואדים", "ואדים שאולוב"), "ואדים מתאים לואדים שאולוב");
 assert(salesAgentNameMatchesPersonName("Vadim", "ואדים שאולוב"), "Vadim מתאים לואדים שאולוב");
 assert(lookupOfficeBranchFromDirectory("ואדים", contacts) === "חיפה", "ואדים משויך לחיפה מאנשי קשר");
 assert(lookupOfficeBranchFromDirectory("Vadim", contacts) === "חיפה", "Vadim משויך לחיפה מאנשי קשר");
 assert(lookupOfficeBranchFromDirectory("אביאל", contacts) === "", "אביאל דו-משמעי לא משויך אוטומטית");
+assert(lookupOfficeBranchFromDirectory("אביב", contacts) === "מודיעין", "אביב משויך לעמאש במודיעין ולא לנתי אביב");
+assert(salesAgentNameMatchesPersonName("אביב", "נתי אביב") === false, "אביב אינו קידומת של נתי אביב");
+assert(app.includes("function agentLabelTokensPrefix"), "קידומת שם ב-app.js");
+assert(app.includes("return agentLabelTokensPrefix(personTokens, salesTokens)"), "שיוך סניף לפי קידומת");
 
 const reportRows = [
   { agentName: "יוסי בורג", health: 384, prat: 171 },
@@ -347,7 +352,8 @@ assert(fn.includes("function snapshotHasNewLayout"), "השרת בודק תבני
 assert(fn.includes("OLD_LAYOUT_ERROR"), "שגיאה אם מנסים לשלוח תבנית ישנה");
 assert(fn.includes("if(!snapshotHasNewLayout(snap.html))"), "send-now/send-slot מסרבים לדוח ישן");
 assert(fn.includes("if(incoming.html && !snapshotHasNewLayout(incoming.html))"), "save-snapshot מסרב לשמור תבנית ישנה");
-assert(fn.includes("refreshSnapshotFromLiveSales"), "send-slot מרענן מכירות חיות");
+assert(!fn.includes("refreshSnapshotFromLiveSales"), "send-slot לא מרענן מכירות מ-RPC");
+assert(!fn.includes('rpc("gi_daily_sales_by_agent"'), "אין RPC שמשכתב את HTML המייל");
 assert(fn.includes("html: incoming.html || existing?.html || \"\""), "HTML מתעדכן גם כשיש PDF שמור");
 assert(fn.includes("const keepPdf = shouldKeepExisting(existing, incoming.pdf_base64, force);"), "keep חל רק על PDF");
 assert(!fn.includes("return json({ ok: false, error: NO_SNAPSHOT_ERROR }, 400);") || fn.includes("finishSkip(NO_SNAPSHOT_ERROR)"), "אין חזרה שקטה בלי לוג על חסר סנאפשוט");
