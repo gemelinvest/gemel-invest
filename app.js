@@ -7257,7 +7257,8 @@
       phoenixHealthForm: "phoenix_health_form",
       phoenixCiForm: "phoenix_ci_form",
       followupQuestionnaire: "followup_questionnaire",
-      followupQuestionnairesZip: "followup_questionnaires_zip"
+      followupQuestionnairesZip: "followup_questionnaires_zip",
+      companyCancelForm: "company_cancel_form"
     },
     OFFICIAL_JOIN_FORM_TYPES: [
       "hachshara_ci_form",
@@ -7283,6 +7284,158 @@
     ],
     isOfficialJoinFormType(type){
       return this.OFFICIAL_JOIN_FORM_TYPES.indexOf(safeTrim(type)) >= 0;
+    },
+    isOfficialCancelFormType(type){
+      return safeTrim(type) === this.TYPES.companyCancelForm;
+    },
+    isCancelFormStatus(status){
+      const helper = (typeof window !== "undefined" && window.GiCancelForms) ? window.GiCancelForms : null;
+      if(helper?.isCancelStatus) return helper.isCancelStatus(status);
+      const v = safeTrim(status).toLowerCase().replace(/[\s-]+/g, "_");
+      return v === "full" || v === "partial_health" || v === "partial" || v === "partialhealth";
+    },
+    canonicalCancelCompany(raw){
+      const helper = (typeof window !== "undefined" && window.GiCancelForms) ? window.GiCancelForms : null;
+      if(helper?.canonicalCompany) return helper.canonicalCompany(raw);
+      const s = safeTrim(raw);
+      if(/מנורה/.test(s)) return "מנורה";
+      if(/מגדל/.test(s)) return "מגדל";
+      if(/הראל/.test(s)) return "הראל";
+      if(/הפניקס|פניקס/.test(s)) return "הפניקס";
+      if(/הכשרה/.test(s)) return "הכשרה";
+      if(/איילון/.test(s)) return "איילון";
+      if(/כלל/.test(s)) return "כלל";
+      return s;
+    },
+    cancelProductFamily(policy){
+      const helper = (typeof window !== "undefined" && window.GiCancelForms) ? window.GiCancelForms : null;
+      if(helper?.productFamily) return helper.productFamily(policy);
+      const t = safeTrim(policy?.type);
+      const blob = [policy?.type, policy?.productName, policy?.planName, policy?.label].map(safeTrim).join(" ");
+      if(t === "ריסק משכנתא" || /משכנתא/.test(blob)) return "mortgage";
+      if(t === "מחלות קשות" || t === "סרטן" || /מחלות\s*קשות/.test(blob) || /סרטן/.test(blob)) return "ci";
+      if(t === "בריאות" || /בריאות/.test(blob)) return "health";
+      if(t === "ריסק" || /ריסק/.test(blob) || /ביטוח\s*חיים/.test(blob)) return "life";
+      return "other";
+    },
+    pickCancelTemplateId(policy){
+      const helper = (typeof window !== "undefined" && window.GiCancelForms) ? window.GiCancelForms : null;
+      if(helper?.pickTemplateId) return helper.pickTemplateId(policy);
+      const company = this.canonicalCancelCompany(policy?.company);
+      const family = this.cancelProductFamily(policy);
+      if(company === "הראל") return (family === "life" || family === "mortgage") ? "harel_life" : "harel_health";
+      if(company === "איילון") return (family === "life" || family === "mortgage") ? "ayalon_life" : "ayalon";
+      if(company === "כלל"){
+        const blob = [policy?.type, policy?.productName, policy?.planName, policy?.label].map(safeTrim).join(" ");
+        if(family === "life" && (safeTrim(policy?.insuredMode) === "couple" || /זוגי/.test(blob))) return "clal_couple";
+        return "clal";
+      }
+      if(company === "הפניקס") return family === "health" ? "phoenix_health" : "phoenix";
+      if(company === "הכשרה") return "hachshara";
+      if(company === "מגדל") return "migdal";
+      if(company === "מנורה") return family === "mortgage" ? "menora_mortgage" : "menora";
+      return "";
+    },
+    listCancelledExistingPolicies(payload){
+      const helper = (typeof window !== "undefined" && window.GiCancelForms) ? window.GiCancelForms : null;
+      if(helper?.listCancelledPolicies) return helper.listCancelledPolicies(payload);
+      const out = [];
+      const insureds = Array.isArray(payload?.insureds) ? payload.insureds : [];
+      insureds.forEach((ins) => {
+        const d = (ins && ins.data && typeof ins.data === "object") ? ins.data : {};
+        const policies = Array.isArray(d.existingPolicies) ? d.existingPolicies : [];
+        const cancellations = (d.cancellations && typeof d.cancellations === "object") ? d.cancellations : {};
+        policies.forEach((policy) => {
+          if(!policy || typeof policy !== "object") return;
+          const cancel = cancellations[policy.id] || {};
+          if(!this.isCancelFormStatus(cancel.status)) return;
+          if(!this.pickCancelTemplateId(policy)) return;
+          out.push({
+            insured: ins,
+            insuredId: safeTrim(ins?.id),
+            policy,
+            policyId: safeTrim(policy.id),
+            policyNumber: safeTrim(policy.policyNumber),
+            cancel,
+            status: safeTrim(cancel.status),
+            company: this.canonicalCancelCompany(policy.company),
+            productFamily: this.cancelProductFamily(policy),
+            productLabel: safeTrim(policy.type) || "פוליסה",
+            templateId: this.pickCancelTemplateId(policy)
+          });
+        });
+      });
+      return out;
+    },
+    cancelFormDocId(insuredId, policyId){
+      return "doc_cancel_" + safeTrim(insuredId || "ins") + "_" + safeTrim(policyId || "pol");
+    },
+    formatCancelFormDocName(entry){
+      const helper = (typeof window !== "undefined" && window.GiCancelForms) ? window.GiCancelForms : null;
+      if(helper?.formatDocName) return helper.formatDocName(entry?.policy, entry?.cancel);
+      const company = safeTrim(entry?.company) || "חברה";
+      const product = safeTrim(entry?.productLabel) || "פוליסה";
+      const kind = this.isCancelFormStatus(entry?.status) && /partial/.test(String(entry?.status || "").toLowerCase())
+        ? "ביטול חלקי" : "ביטול מלא";
+      const num = safeTrim(entry?.policyNumber);
+      return "טופס ביטול מקורי — " + product + " · " + company + " · " + kind + (num ? (" · " + num) : "");
+    },
+    createCancelFormDoc(entry, options = {}){
+      const helper = (typeof window !== "undefined" && window.GiCancelForms) ? window.GiCancelForms : null;
+      if(helper?.createDoc) return helper.createDoc(entry, options);
+      const uploadedAt = safeTrim(options.uploadedAt) || nowISO();
+      return {
+        id: this.cancelFormDocId(entry?.insuredId, entry?.policyId),
+        type: this.TYPES.companyCancelForm,
+        templateId: safeTrim(entry?.templateId),
+        name: this.formatCancelFormDocName(entry),
+        company: safeTrim(entry?.company),
+        productFamily: safeTrim(entry?.productFamily),
+        productLabel: safeTrim(entry?.productLabel),
+        policyId: safeTrim(entry?.policyId),
+        insuredId: safeTrim(entry?.insuredId),
+        policyNumber: safeTrim(entry?.policyNumber),
+        cancelStatus: safeTrim(entry?.status),
+        isLegacy: true,
+        source: "מערכת",
+        uploadedAt,
+        uploadedBy: safeTrim(options.uploadedBy)
+      };
+    },
+    isLiveCancelFormDoc(doc, payload){
+      if(safeTrim(doc?.type) !== this.TYPES.companyCancelForm) return false;
+      const live = this.listCancelledExistingPolicies(payload);
+      const id = safeTrim(doc?.id);
+      const policyId = safeTrim(doc?.policyId);
+      const insuredId = safeTrim(doc?.insuredId);
+      return live.some((row) => {
+        if(id && this.cancelFormDocId(row.insuredId, row.policyId) === id) return true;
+        return row.policyId === policyId && (!insuredId || row.insuredId === insuredId);
+      });
+    },
+    injectCancelFormDocs(list, rec, payload, options = {}){
+      if(!Array.isArray(list)) return list;
+      const live = this.listCancelledExistingPolicies(payload);
+      if(!live.length) return list;
+      const existingIds = new Set(list
+        .filter((d) => safeTrim(d?.type) === this.TYPES.companyCancelForm)
+        .map((d) => safeTrim(d?.id)));
+      const uploadedAt = safeTrim(options.uploadedAt)
+        || safeTrim(rec?.updatedAt)
+        || safeTrim(rec?.updated_at)
+        || safeTrim(rec?.createdAt)
+        || nowISO();
+      live.slice().reverse().forEach((entry) => {
+        const doc = this.createCancelFormDoc(entry, {
+          uploadedAt,
+          uploadedBy: safeTrim(options.uploadedBy) || safeTrim(rec?.agentName)
+        });
+        const docId = safeTrim(doc.id);
+        if(docId && existingIds.has(docId)) return;
+        list.unshift(doc);
+        if(docId) existingIds.add(docId);
+      });
+      return list;
     },
     canDownloadOfficialJoinForm(){
       try { return !!(Auth.isAdmin() || Auth.isManager()); } catch(_e){ return false; }
@@ -7760,6 +7913,12 @@
           }));
         }
         this.syncFollowupDocsFromLiveDetect(payload, options);
+        const cancelList = this.listFromPayload(payload);
+        this.injectCancelFormDocs(cancelList, { payload, agentName: options.uploadedBy }, payload, options);
+        payload.customerDocuments = cancelList.filter((doc) => {
+          if(safeTrim(doc?.type) !== this.TYPES.companyCancelForm) return true;
+          return this.isLiveCancelFormDoc(doc, payload);
+        });
         return payload;
       }
       return payload;
@@ -8403,6 +8562,7 @@
         list.unshift({ id: "doc_ops_agent_legacy", type: this.TYPES.agentApptOps, isLegacy: true, name: "דוח תפעולי — מינוי סוכן · " + coLabel, source: "מערכת", uploadedAt: safeTrim(meta?.savedAt) || safeTrim(rec?.updatedAt) || safeTrim(rec?.createdAt), uploadedBy: safeTrim(meta?.agent?.name) || safeTrim(rec?.agentName), payloadSnapshot: { agentAppointmentMeta: JSON.parse(JSON.stringify(meta)) } });
       }
       this.injectTriggeredFollowupQuestionnaireDocs(list, rec, payload);
+      this.injectCancelFormDocs(list, rec, payload);
       return this.sortByDateDesc(list.filter((doc) => {
         if(!doc || typeof doc !== "object") return false;
         const type = safeTrim(doc.type);
@@ -8428,6 +8588,7 @@
         if(type === this.TYPES.migdalCancerForm) return this.qualifiesForMigdalCancerForm(payload, rec);
         if(type === this.TYPES.healthOps || type === this.TYPES.agentApptOps || type === this.TYPES.agentApptForm || type === this.TYPES.harBituach) return true;
         if(type === this.TYPES.followupQuestionnaire) return true;
+        if(type === this.TYPES.companyCancelForm) return this.isLiveCancelFormDoc(doc, payload);
         if(type === this.TYPES.followupQuestionnairesZip) return false;
         return !!(safeTrim(doc.name) || safeTrim(doc.url) || safeTrim(doc.dataUrl) || safeTrim(doc.fileName));
       }));
@@ -19901,6 +20062,14 @@ UsersGateUI.init();
           if(rec) void this.openClalMortgageForm(rec);
           return;
         }
+        const openCancelForm = ev.target?.closest?.("[data-open-cancel-form-doc], [data-cancel-form-open]");
+        if(openCancelForm){
+          ev.preventDefault();
+          const rec = this.current();
+          const docId = safeTrim(openCancelForm.getAttribute("data-open-cancel-form-doc")) || safeTrim(this._previewDocId);
+          if(rec) void this.openCompanyCancelForm(rec, docId);
+          return;
+        }
         const dlAppt = ev.target?.closest?.("[data-download-agent-appt-doc]");
         if(dlAppt){
           ev.preventDefault();
@@ -22664,6 +22833,12 @@ UsersGateUI.init();
             return `<div class="cfFile__documentsPreviewDoc">${window.ClalMortgageForm.renderPreviewHtml(draft)}</div>`;
           } catch(_e) {}
         }
+        if(type === CustomerDocuments.TYPES.companyCancelForm && window.GiCancelForms){
+          try {
+            const draft = window.GiCancelForms.buildDraft(rec, doc);
+            return `<div class="cfFile__documentsPreviewDoc">${window.GiCancelForms.renderPreviewHtml(draft)}</div>`;
+          } catch(_e) {}
+        }
         if((type === CustomerDocuments.TYPES.agentApptOps || type === CustomerDocuments.TYPES.agentApptForm)
           && typeof AgentAppointmentPdf?.buildOperationalReportHtml === "function"){
           const meta = doc?.payloadSnapshot?.agentAppointmentMeta
@@ -22852,6 +23027,13 @@ UsersGateUI.init();
       if(safeTrim(doc?.type) === CustomerDocuments.TYPES.clalMortgageForm && !window.ClalMortgageForm){
         try {
           await ensureClalMortgageFormLoaded();
+          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
+        } catch(_e) {}
+        return;
+      }
+      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.companyCancelForm && !window.GiCancelForms){
+        try {
+          await ensureGiCancelFormsLoaded();
           if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
         } catch(_e) {}
         return;
@@ -23163,6 +23345,14 @@ UsersGateUI.init();
       if(!doc || typeof doc !== "object") return null;
       const type = safeTrim(doc.type);
       const fileName = safeTrim(doc.fileName) || safeTrim(doc.name) || "document";
+      if(type === CustomerDocuments.TYPES.companyCancelForm){
+        await ensureGiCancelFormsLoaded();
+        if(!window.GiCancelForms?.fillOriginalTemplate) return null;
+        const draft = window.GiCancelForms.buildDraft(rec, doc);
+        const bytes = await window.GiCancelForms.fillOriginalTemplate(draft);
+        const outName = window.GiCancelForms.fileName(draft);
+        return { fileName: outName || (/\.pdf$/i.test(fileName) ? fileName : (fileName + ".pdf")), bytes };
+      }
       if(type === CustomerDocuments.TYPES.followupQuestionnaire){
         await ensureFollowupZipLoaded();
         let entry = doc.followupEntry && typeof doc.followupEntry === "object" ? doc.followupEntry : null;
@@ -23310,6 +23500,17 @@ UsersGateUI.init();
         try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
       }
     },
+    async openCompanyCancelForm(rec, docId){
+      try {
+        await ensureGiCancelFormsLoaded();
+        if(!window.GiCancelForms) throw new Error("GiCancelForms missing");
+        const doc = docId ? this.findCustomerDocument(rec, docId) : null;
+        window.GiCancelForms.open(rec, doc);
+      } catch(err){
+        try { console.error("CANCEL_FORM_OPEN_FAILED", err); } catch(_e) {}
+        try { window.showToast?.({ title: "לא ניתן לפתוח את טופס הביטול", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
+      }
+    },
 
     renderDocumentsSection(rec){
       const docs = this.getCustomerDocuments(rec);
@@ -23383,6 +23584,8 @@ UsersGateUI.init();
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-menora-risk-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.clalMortgageForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-clal-mortgage-doc="${escapeHtml(docId)}">פתח טופס</button>`;
+        }else if(docType === CustomerDocuments.TYPES.companyCancelForm){
+          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-cancel-form-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(docType === CustomerDocuments.TYPES.followupQuestionnaire){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-followup-doc="${escapeHtml(docId)}">הורדה</button>`;
         }else if(docType === CustomerDocuments.TYPES.followupQuestionnairesZip || (safeTrim(doc.mime) === "application/zip" && safeTrim(doc.dataUrl))){
@@ -39351,7 +39554,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-rows-advance-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-cancel-forms-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -39371,6 +39574,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-cancel-forms-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -39888,6 +40092,33 @@ UsersGateUI.init();
     });
     return ensurePhoenixCiFormLoaded._p;
   }
+  function ensureGiCancelFormsLoaded(){
+    if(window.GiCancelForms) return Promise.resolve(window.GiCancelForms);
+    if(ensureGiCancelFormsLoaded._p) return ensureGiCancelFormsLoaded._p;
+    ensureGiCancelFormsLoaded._p = new Promise((resolve, reject) => {
+      const existing = document.getElementById("gi-cancel-forms-js");
+      const done = () => {
+        if(window.GiCancelForms) resolve(window.GiCancelForms);
+        else reject(new Error("gi-cancel-forms.js loaded without GiCancelForms"));
+      };
+      if(existing){
+        existing.addEventListener("load", done, { once: true });
+        existing.addEventListener("error", () => reject(new Error("gi-cancel-forms.js failed")), { once: true });
+        return;
+      }
+      const s = document.createElement("script");
+      s.id = "gi-cancel-forms-js";
+      s.src = GI_CANCEL_FORMS_HREF;
+      s.async = true;
+      s.onload = done;
+      s.onerror = () => reject(new Error("gi-cancel-forms.js failed to load"));
+      document.head.appendChild(s);
+    }).catch((err) => {
+      ensureGiCancelFormsLoaded._p = null;
+      throw err;
+    });
+    return ensureGiCancelFormsLoaded._p;
+  }
   function ensureFollowupZipLoaded(){
     if(window.GiFollowupZip && window.GI_FOLLOWUP_ZIP_CONFIG) return Promise.resolve(window.GiFollowupZip);
     if(ensureFollowupZipLoaded._p) return ensureFollowupZipLoaded._p;
@@ -39979,8 +40210,8 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260906-rows-advance-v1",
-    "./simulators-shell.css?v=20260906-rows-advance-v1"
+    "./simulators-center.css?v=20260906-cancel-forms-v1",
+    "./simulators-shell.css?v=20260906-cancel-forms-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -41342,7 +41573,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260906-rows-advance-v1";
+  const GI_WIZARD_JS_VERSION = "20260906-cancel-forms-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
