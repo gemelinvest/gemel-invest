@@ -39888,7 +39888,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-proposal-assign-live-v2";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-team-mgr-self-sales-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -39908,7 +39908,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-proposal-assign-live-v2";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-team-mgr-self-sales-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -40544,8 +40544,8 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260906-proposal-assign-live-v2",
-    "./simulators-shell.css?v=20260906-proposal-assign-live-v2"
+    "./simulators-center.css?v=20260906-team-mgr-self-sales-v1",
+    "./simulators-shell.css?v=20260906-team-mgr-self-sales-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -41907,7 +41907,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260906-proposal-assign-live-v2";
+  const GI_WIZARD_JS_VERSION = "20260906-team-mgr-self-sales-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -56923,6 +56923,76 @@ const CampaignLeadsStore = {
     return dailyReportRowVisibleToSession(row);
   }
 
+  function collectDailyReportAgentFilterKeysFromPerson(rec){
+    const keys = [];
+    const n = normalizeDailyReportAgentKey(rec?.name);
+    const u = normalizeDailyReportAgentKey(rec?.username);
+    if(n) keys.push(n);
+    if(u) keys.push(u);
+    return keys;
+  }
+
+  function getTeamManagerSelfDailyReportAgentFilterKeys(){
+    const keys = new Set();
+    collectDailyReportAgentFilterKeysFromPerson(findAgentRecordForSession()).forEach((k) => keys.add(k));
+    collectDailyReportAgentFilterKeysFromPerson(Auth?.current).forEach((k) => keys.add(k));
+    return keys;
+  }
+
+  function teamManagerDailyReportAgentFilterIsSelf(filterName){
+    if(!Auth.isTeamManager()) return false;
+    const fKey = normalizeDailyReportAgentKey(filterName);
+    if(!fKey) return false;
+    if(getTeamManagerSelfDailyReportAgentFilterKeys().has(fKey)) return true;
+    try {
+      const dummy = { agent: fKey };
+      if(!dailyReportRowMatchesOwnershipProfile(dummy, getCurrentAgentOwnershipProfile())) return false;
+      const managed = getManagedAgentOwnershipProfiles();
+      if((managed || []).some((p) => dailyReportRowMatchesOwnershipProfile(dummy, p))) return false;
+      return true;
+    } catch(_e) {
+      return false;
+    }
+  }
+
+  function filterDailyReportRowsBySelectedAgent(rows, filterAgent){
+    const fAgent = safeTrim(filterAgent);
+    if(!fAgent) return Array.isArray(rows) ? rows : [];
+    const fKey = normalizeDailyReportAgentKey(fAgent);
+    if(teamManagerDailyReportAgentFilterIsSelf(fKey)){
+      const profile = getCurrentAgentOwnershipProfile();
+      return (rows || []).filter((row) => dailyReportRowMatchesOwnershipProfile(row, profile));
+    }
+    return (rows || []).filter((row) => normalizeDailyReportAgentKey(row.agent) === fKey);
+  }
+
+  function buildTeamManagerDailyReportAgentFilterNames(reportAgentNames, visibleRows){
+    const allowed = new Set();
+    const managerId = safeTrim(Auth?.current?.id) || safeTrim(findAgentRecordForSession()?.id);
+    getManagedAgentRecordsForTeamManager(managerId).forEach((a) => {
+      collectDailyReportAgentFilterKeysFromPerson(a).forEach((k) => allowed.add(k));
+    });
+    getTeamManagerSelfDailyReportAgentFilterKeys().forEach((k) => allowed.add(k));
+    const names = (reportAgentNames || []).filter((name) => allowed.has(normalizeDailyReportAgentKey(name)));
+    const seen = new Set(names.map((n) => normalizeDailyReportAgentKey(n)));
+    (visibleRows || []).forEach((row) => {
+      if(!dailyReportRowMatchesOwnershipProfile(row, getCurrentAgentOwnershipProfile())) return;
+      const name = normalizeDailyReportAgentKey(row?.agent);
+      if(!name || name === "— ללא נציג" || seen.has(name)) return;
+      names.push(name);
+      seen.add(name);
+    });
+    const selfLabel = normalizeDailyReportAgentKey(findAgentRecordForSession()?.name)
+      || normalizeDailyReportAgentKey(Auth?.current?.name)
+      || normalizeDailyReportAgentKey(findAgentRecordForSession()?.username)
+      || normalizeDailyReportAgentKey(Auth?.current?.username);
+    if(selfLabel && !seen.has(selfLabel)){
+      names.push(selfLabel);
+    }
+    names.sort((a, b) => a.localeCompare(b, "he"));
+    return names;
+  }
+
   function isWithinDateRange(value, range){
     const stamp = Date.parse(value || "");
     if(!Number.isFinite(stamp) || !range) return false;
@@ -58391,7 +58461,7 @@ const CampaignLeadsStore = {
         const colCount = headers.length;
         const rows = (Auth.isAdmin() || Auth.isManager())
           ? (Array.isArray(report.dataRows) ? report.dataRows : [])
-          : DailyReportStore.getVisibleRowsFor(report);
+          : this.getFilteredRows();
         if(!rows.length){
           this.showAlert("אין שורות לייצוא", "warn");
           return;
@@ -58510,18 +58580,7 @@ const CampaignLeadsStore = {
         if(canPickAgent){
           let agents = DailyReportStore.getAgentSummaryFor(viewReport).map(([name]) => name).filter((n) => n && n !== "— ללא נציג");
           if(Auth.isTeamManager()){
-            const allowed = new Set(
-              getManagedAgentRecordsForTeamManager(safeTrim(Auth?.current?.id))
-                .flatMap((a) => {
-                  const keys = [];
-                  const n = normalizeDailyReportAgentKey(a?.name);
-                  const u = normalizeDailyReportAgentKey(a?.username);
-                  if(n) keys.push(n);
-                  if(u) keys.push(u);
-                  return keys;
-                })
-            );
-            agents = agents.filter((name) => allowed.has(normalizeDailyReportAgentKey(name)));
+            agents = buildTeamManagerDailyReportAgentFilterNames(agents, baseRows);
           }
           fillSelect(this.els.filterAgent, "נציג — הכל", agents, this.filterAgent);
         }
@@ -58788,7 +58847,7 @@ const CampaignLeadsStore = {
       const fPlan = safeTrim(this.filterPlan);
       let rows = DailyReportStore.getVisibleRowsFor(report);
       if(fAgent){
-        rows = rows.filter((row) => normalizeDailyReportAgentKey(row.agent) === fAgent);
+        rows = filterDailyReportRowsBySelectedAgent(rows, fAgent);
       }
       if(fStatus && cols.status >= 0){
         rows = rows.filter((row) => getDailyReportCell(row, cols.status) === fStatus);
@@ -59086,9 +59145,12 @@ const CampaignLeadsStore = {
           const headers = (Array.isArray(sheet.headerRow) ? sheet.headerRow : []).map((h) => safeTrim(h) || "—");
           const colCount = headers.length;
           if(!colCount) return;
-          const rows = isFull
+          let rows = isFull
             ? (Array.isArray(sheet.dataRows) ? sheet.dataRows : [])
             : CancellationsStore.getVisibleRowsForSheet(sheet);
+          if(!isFull && Auth.isTeamManager() && safeTrim(this.filterAgent)){
+            rows = withDailyReportContext(sheet, () => filterDailyReportRowsBySelectedAgent(rows, this.filterAgent));
+          }
           const dataRows = rows.map((row) => {
             const cells = Array.isArray(row.cells) ? row.cells : [];
             const out = [];
@@ -59173,7 +59235,7 @@ const CampaignLeadsStore = {
       const fStatus = safeTrim(this.filterStatus);
       let rows = CancellationsStore.getVisibleRowsForSheet(sheet);
       if(fAgent){
-        rows = rows.filter((row) => normalizeDailyReportAgentKey(row.agent) === fAgent);
+        rows = withDailyReportContext(sheet, () => filterDailyReportRowsBySelectedAgent(rows, fAgent));
       }
       if(fTeam && cols.team >= 0){
         rows = rows.filter((row) => getDailyReportCell(row, cols.team) === fTeam);
@@ -59227,18 +59289,7 @@ const CampaignLeadsStore = {
         if(canPickAgent){
           let agents = CancellationsStore.getAgentSummaryForSheet(sheet).map(([name]) => name).filter((n) => n && n !== "— ללא נציג");
           if(Auth.isTeamManager()){
-            const allowed = new Set(
-              getManagedAgentRecordsForTeamManager(safeTrim(Auth?.current?.id))
-                .flatMap((a) => {
-                  const keys = [];
-                  const n = normalizeDailyReportAgentKey(a?.name);
-                  const u = normalizeDailyReportAgentKey(a?.username);
-                  if(n) keys.push(n);
-                  if(u) keys.push(u);
-                  return keys;
-                })
-            );
-            agents = agents.filter((name) => allowed.has(normalizeDailyReportAgentKey(name)));
+            agents = withDailyReportContext(sheet, () => buildTeamManagerDailyReportAgentFilterNames(agents, baseRows));
           }
           fillSelect(this.els.filterAgent, "נציג — הכל", agents, this.filterAgent);
         }
