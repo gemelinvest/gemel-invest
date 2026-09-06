@@ -32723,15 +32723,43 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
   overflow:hidden;
 }
 
-/* מודאל צ׳קליסט לפני שיחה — כיסוי מסך מלא */
+/* שיחת שיקוף פעילה (צ׳קליסט / מוכנות / שיחה חיה) — בלי טופבר ובלי סיידבר */
+body.view-mirrorCall-active.mc-mirror-immersive .topbar,
+body.view-mirrorCall-active.mc-mirror-immersive .sidebar{
+  display:none !important;
+}
+body.view-mirrorCall-active.mc-mirror-immersive .app{
+  grid-template-columns: minmax(0,1fr);
+}
+body.view-mirrorCall-active.mc-mirror-immersive .main{
+  padding:0;
+  overflow:hidden;
+}
+body.view-mirrorCall-active.mc-mirror-immersive .content{
+  padding:0;
+  overflow:hidden;
+}
+body.view-mirrorCall-active.mc-mirror-immersive #view-mirrorCall.is-visible{
+  display:flex !important;
+  flex-direction:column;
+  position:fixed;
+  inset:0;
+  z-index:200;
+  background:var(--bg, #f3f4f7);
+  padding:0;
+  overflow:hidden;
+  min-height:0;
+}
+
+/* מודאל צ׳קליסט לפני שיחה — כיסוי מסך מלא, בלי כרטיס ממורכז */
 .mcPreFlightModal{
   position:fixed;
   inset:0;
-  z-index:140;
+  z-index:240;
   display:none;
-  align-items:center;
-  justify-content:center;
-  padding:clamp(12px, 2.8vw, 28px);
+  align-items:stretch;
+  justify-content:stretch;
+  padding:0;
   box-sizing:border-box;
 }
 .mcWorkstation--callPhase:not(.mcWorkstation--callLive):not(.mcWorkstation--mirrorDecline):not(.mcWorkstation--preFlightComplete) .mcPreFlightModal{
@@ -32740,22 +32768,25 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
 .mcPreFlightModal__backdrop{
   position:absolute;
   inset:0;
-  background:rgba(7, 12, 28, .48);
-  backdrop-filter:blur(8px);
-  -webkit-backdrop-filter:blur(8px);
+  background:#f6f8fc;
 }
 .mcPreFlightModal__sheet{
   position:relative;
   z-index:1;
-  width:min(1040px, 100%);
-  max-height:min(92dvh, 900px);
+  width:100%;
+  max-width:none;
+  height:100%;
+  max-height:none;
   box-sizing:border-box;
-  padding:clamp(22px, 3vw, 36px) clamp(22px, 3.5vw, 44px);
-  border-radius:clamp(20px, 2.2vw, 26px);
-  border:1px solid rgba(255,255,255,.95);
-  background:rgba(255,255,255,.97);
-  box-shadow:0 24px 70px rgba(15,30,70,.18), 0 1px 0 rgba(255,255,255,.98) inset;
+  padding:clamp(28px, 4vw, 52px) clamp(28px, 5vw, 72px) clamp(24px, 3vw, 40px);
+  border-radius:0;
+  border:none;
+  background:#fbfcff;
+  box-shadow:none;
   overflow:hidden;
+  display:flex;
+  flex-direction:column;
+  min-height:0;
 }
 @media (max-height: 540px){
   .mcPreFlightModal__sheet{
@@ -32771,14 +32802,23 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
   box-shadow:none !important;
   max-height:none;
   overflow:visible;
+  flex:1 1 auto;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
 }
 .mcPreFlightModal__preFlight .mcCall__preFlightTitle{
-  font-size:clamp(18px, 2vw, 22px);
-  margin-bottom:8px;
+  font-size:clamp(28px, 3.2vw, 32px);
+  font-weight:800;
+  line-height:1.25;
+  margin-bottom:10px;
+  color:#0c1d4d;
 }
 .mcPreFlightModal__preFlight .mcCall__preFlightSub{
-  font-size:clamp(13px, 1.35vw, 15px);
-  margin-bottom:clamp(16px, 2vw, 22px);
+  font-size:clamp(15px, 1.6vw, 17px);
+  line-height:1.5;
+  margin-bottom:clamp(18px, 2.2vw, 26px);
+  color:rgba(30,58,122,.62);
 }
 .mcPreFlightModal.is-confirming .mcCall__preFlight{
   display:none;
@@ -32789,8 +32829,10 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
   padding:0;
   display:flex;
   flex-direction:column;
-  gap:8px;
-  max-height:min(64dvh, 640px);
+  gap:10px;
+  flex:1 1 auto;
+  min-height:0;
+  max-height:none;
   overflow-y:auto;
   -webkit-overflow-scrolling:touch;
 }
@@ -32809,13 +32851,13 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
   width:100%;
   display:flex;
   align-items:flex-start;
-  gap:12px;
+  gap:14px;
   text-align:right;
   cursor:pointer;
   border:1px solid rgba(42,92,245,.14);
   background:#fff;
-  border-radius:14px;
-  padding:12px 14px;
+  border-radius:16px;
+  padding:16px 18px;
   font-family:inherit;
   color:#152a5c;
 }
@@ -32848,14 +32890,14 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
   gap:3px;
 }
 .mcPreFlightItem__title{
-  font-size:14px;
-  font-weight:700;
+  font-size:clamp(18px, 1.7vw, 20px);
+  font-weight:800;
   line-height:1.35;
 }
 .mcPreFlightItem__sum{
-  font-size:12px;
-  line-height:1.45;
-  color:rgba(30,58,122,.58);
+  font-size:clamp(15px, 1.35vw, 16px);
+  line-height:1.5;
+  color:rgba(30,58,122,.62);
 }
 .mcPreFlightItem__mark{
   flex:0 0 auto;
@@ -32881,14 +32923,14 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
   padding:8px 0 0;
 }
 .mcPreFlightConfirm__title{
-  font-size:clamp(18px, 2vw, 22px);
+  font-size:clamp(26px, 3vw, 32px);
   font-weight:800;
   color:#0c1d4d;
   line-height:1.3;
 }
 .mcPreFlightConfirm__text{
   margin:0;
-  font-size:15px;
+  font-size:clamp(16px, 1.6vw, 18px);
   line-height:1.55;
   color:#152a5c;
 }
@@ -33058,11 +33100,55 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
   letter-spacing:.04em;
   line-height:1;
 }
+.mcCall__liveActions{
+  width:100%;
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:10px;
+}
+.mcRescheduleBtn--live{display:none;}
+.mcRescheduleBar{display:none !important;}
+.mcWorkstation--callLive > .mcSessionPanel .mcCall__liveActions,
+.mcWorkstation--callPhase.mcWorkstation--dockOpen > .mcSessionPanel .mcCall__liveActions{
+  width:auto;
+  flex-direction:row;
+  flex-wrap:wrap;
+  align-items:stretch;
+  justify-content:flex-start;
+  margin-inline-start:auto;
+  gap:10px;
+  flex:0 0 auto;
+}
+.mcWorkstation--callLive .mcRescheduleBtn--live{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  min-height:40px;
+  height:auto;
+  padding:10px 16px;
+  border-radius:12px;
+  font-size:13px;
+  font-weight:800;
+  line-height:1;
+  white-space:nowrap;
+  background:#eaf2ff;
+  color:#1e3a7a;
+  border:1px solid rgba(42,92,245,.32);
+  box-shadow:none;
+}
+.mcWorkstation--callLive .mcRescheduleBtn--live:hover{
+  background:#dce8ff;
+  border-color:#2a5cf5;
+  color:#071540;
+}
+.mcRescheduleBtn__icon{flex:0 0 auto;}
 .mcWorkstation--callLive > .mcSessionPanel .mcCall__btn,
 .mcWorkstation--callPhase.mcWorkstation--dockOpen > .mcSessionPanel .mcCall__btn{
   width:auto !important;
   min-width:148px;
-  margin-inline-start:auto;
+  margin-inline-start:0;
   padding:10px 16px;
   border-radius:12px;
   font-size:13px;
@@ -34061,6 +34147,7 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
 .mcCall__orb--2{width:280px;height:280px;background:radial-gradient(circle,rgba(180,210,255,.16) 0%,transparent 72%);bottom:-70px;left:-50px;}
 .mcCall__orb--3{width:200px;height:200px;background:radial-gradient(circle,rgba(200,220,255,.18) 0%,transparent 72%);top:42%;left:6%;}
 .mcCall__customerPill{background:rgba(255,255,255,.82);border:1px solid rgba(42,92,245,.14);border-radius:999px;padding:10px 22px;font-size:13px;color:#152a5c;margin-bottom:clamp(18px, 2vw, 26px);display:flex;align-items:center;gap:10px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 4px 16px rgba(42,92,245,.07);position:relative;z-index:2;}
+.mcCall__card > .mcCall__customerPill{margin-bottom:0;}
 .mcCall__pillDot{width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.2);display:inline-block;}
 .mcCall__preFlight{
   width:100%;
@@ -35567,9 +35654,14 @@ body.view-mirrorAssignments-active .content{
   .mcWorkstation--callLive > .mcSessionPanel .mcSessionPanel__inner{
     flex-wrap:wrap;
   }
-  .mcWorkstation--callLive > .mcSessionPanel .mcCall__btn{
+  .mcWorkstation--callLive > .mcSessionPanel .mcCall__liveActions{
     margin-inline-start:0;
     width:100%;
+  }
+  .mcWorkstation--callLive > .mcSessionPanel .mcCall__btn{
+    margin-inline-start:0;
+    width:auto;
+    flex:1 1 auto;
   }
   .mcWorkstation--callLive > .mcSessionPanel .mcCall__customerPill{
     max-width:100%;

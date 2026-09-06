@@ -8,7 +8,7 @@
 <meta content="#f8fafc" name="theme-color"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20260906-team-mgr-self-sales-v1" rel="stylesheet"/>
+<link href="./app.css?v=20260906-mirror-ops-ux-v1" rel="stylesheet"/>
 <link href="./theme.css?v=20260830-policy-actions-align-v1" rel="stylesheet"/>
 <style id="giCfSummaryKill">#customerFullSide,.cfFile__side,#customerFullDash,#customerFull.cfFile .customerFull__dash{display:none!important}#customerFull.cfFile .customerFull__body,.cfFile__layout{grid-template-columns:minmax(0,1fr)!important}</style>
 <script>
@@ -1474,11 +1474,11 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
       <div class="mcCall__orb mcCall__orb--3"></div>
     </div>
     <div class="mcSessionPanel__inner">
-      <div class="mcCall__customerPill" id="mcCallCustomerPill">
-        <span class="mcCall__pillDot"></span>
-        <span id="mcCallCustomerName">—</span>
-      </div>
       <div class="mcCall__card" id="mcCallCard">
+        <div class="mcCall__customerPill" id="mcCallCustomerPill">
+          <span class="mcCall__pillDot"></span>
+          <span id="mcCallCustomerName">—</span>
+        </div>
         <div class="mcCall__phoneWrap">
           <div class="mcCall__ring mcCall__ring--1"></div>
           <div class="mcCall__ring mcCall__ring--2"></div>
@@ -1503,7 +1503,6 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
           <div class="mcCall__bar"></div>
         </div>
         <div class="mcCall__divider"></div>
-        <button class="mcCall__btn" id="mcCallStartBtn" type="button">התחל שיחת שיקוף</button>
         <div class="mcCall__statusRow">
           <div class="mcCall__statusDot" id="mcCallStatusDot"></div>
           <span id="mcCallStatusTxt">ממתין להתחלת שיחה</span>
@@ -1512,6 +1511,16 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
           <button class="mcCall__navBtn" id="mcCallPrevBtn" type="button">הקודם</button>
           <button class="mcCall__navBtn mcCall__navBtn--pause" id="mcCallPauseBtn" type="button">השהה</button>
           <button class="mcCall__navBtn mcCall__navBtn--next" id="mcCallNextBtn" type="button">הבא</button>
+        </div>
+        <div class="mcCall__liveActions">
+          <button class="mcRescheduleBtn mcRescheduleBtn--live" id="mcRescheduleMirrorDockBtn" type="button" data-mc-reschedule-mirror="1">
+            <svg class="mcRescheduleBtn__icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="5" width="18" height="16" rx="2"></rect>
+              <path d="M16 3v4M8 3v4M3 11h18"></path>
+            </svg>
+            <span>תזמון חדש לשיקוף</span>
+          </button>
+          <button class="mcCall__btn" id="mcCallStartBtn" type="button">התחל שיחת שיקוף</button>
         </div>
         <button class="mcCall__backBtn" id="mcCallBackBtn" type="button">← בחר לקוח אחר</button>
       </div>
@@ -1545,15 +1554,6 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
         <div class="mcReadyLane__title">תיעוד לחוצץ ממתינים לשיקוף</div>
         <div class="mcReadyLane__btns" id="mcReadyLaneBtns"></div>
       </section>
-
-      <section class="mcReadyPremium" id="mcReadyPremiumUploads" aria-label="העלאת קבצי פרמיות לפני התחלת שיחה" hidden>
-        <div class="mcReadyPremium__head">
-          <div class="mcReadyPremium__title">קבצי פרמיות וכיסויים</div>
-          <button class="btn mcReadyPremium__bypassBtn" id="mcReadyPremiumBypassBtn" type="button">סמן וי על הפרמיות (זמני)</button>
-        </div>
-        <div class="mcReadyPremium__list" id="mcReadyPremiumList"></div>
-      </section>
-      <input type="file" id="mcReadyPremiumFileInput" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" hidden />
     </div>
   </aside>
 
@@ -1592,9 +1592,6 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
   </div>
 
   <div class="mcFlowDock" id="mcFlowDock" hidden dir="rtl" aria-label="נוסחים ושלבי שיחה">
-    <div class="mcRescheduleBar" id="mcRescheduleBar">
-      <button class="mcRescheduleBtn mcRescheduleBtn--dock" id="mcRescheduleMirrorDockBtn" type="button" data-mc-reschedule-mirror="1">תזמון חדש לשיקוף</button>
-    </div>
     <section class="mcCallScript" id="mcCallScriptWrap" hidden tabindex="-1" aria-label="הצגה עצמית להקראה בשיחה מוקלטת">
       <div class="mcCallScript__ribbon" aria-hidden="true"></div>
       <div class="mcCallScript__kicker" id="mcCallScriptKicker">שלב 1 · הצגה עצמית</div>
@@ -3857,7 +3854,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <script src="./contacts-directory-seed.js?v=20260811-contacts-v1"></script>
 <script src="./gi-policy-scan.js?v=20260819-issued-scan-v3"></script>
 <script src="./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1"></script>
-<script src="./app.js?v=20260906-team-mgr-self-sales-v1"></script>
+<script src="./app.js?v=20260906-mirror-ops-ux-v1"></script>
 <script src="./gi-assistant.js?v=20260829-assistant-open-file-fix-v1"></script>
 <script src="./gi-face-auth.js?v=20260817-face-retry-v1"></script>
 <script src="./gi-daily-sales-mail.js?v=20260903-sales-mail-v1"></script>

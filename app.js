@@ -17715,6 +17715,7 @@ UsersGateUI.init();
         document.body.classList.remove("view-users-active","view-dashboard-active","view-settings-active","view-myTools-active","view-contacts-active","view-customers-active","view-archivedCustomers-active","view-proposals-active","view-elementaryProposals-active","view-elementaryPending-active","view-agentElementaryTracking-active","view-myProcesses-active","view-mirrorCall-active","view-elementaryMirror-active","view-mirrorAssignments-active","view-typingPacket-active","view-systemUpdates-active","view-campaignLeads-active","view-campaignMyLeads-active","view-reportsHub-active","view-dailyReport-active","view-dailySales-active","view-myTeam-active","view-activityLog-active","view-attendanceReport-active");
         document.body.classList.add("view-" + safe + "-active");
       }
+      try { MirrorCallUI._syncMirrorImmersiveChrome(); } catch(_e) {}
       if(safe !== "settings"){
         ["connection","version","campaigns","landing","security","systemUpdates","activityLog","attendanceReport","archivedCustomers"].forEach((name) => {
           document.body.classList.remove("lcSettingsRubric-" + name);
@@ -39888,7 +39889,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-team-mgr-self-sales-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-mirror-ops-ux-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -39908,7 +39909,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-team-mgr-self-sales-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-mirror-ops-ux-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -40544,8 +40545,8 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260906-team-mgr-self-sales-v1",
-    "./simulators-shell.css?v=20260906-team-mgr-self-sales-v1"
+    "./simulators-center.css?v=20260906-mirror-ops-ux-v1",
+    "./simulators-shell.css?v=20260906-mirror-ops-ux-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -41907,7 +41908,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260906-team-mgr-self-sales-v1";
+  const GI_WIZARD_JS_VERSION = "20260906-mirror-ops-ux-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -63287,15 +63288,8 @@ ${inner}
       this.els.readyCustomerId = document.getElementById("mcReadyCustomerId");
       this.els.readyCustomerPhone = document.getElementById("mcReadyCustomerPhone");
       this.els.readyLaneBtns = document.getElementById("mcReadyLaneBtns");
-      this.els.readyPremiumWrap = document.getElementById("mcReadyPremiumUploads");
-      this.els.readyPremiumList = document.getElementById("mcReadyPremiumList");
-      this.els.readyPremiumHint = document.getElementById("mcReadyPremiumHint");
-      this.els.readyPremiumAlert = document.getElementById("mcReadyPremiumAlert");
-      this.els.readyPremiumBypassBtn = document.getElementById("mcReadyPremiumBypassBtn");
-      this.els.readyPremiumFileInput = document.getElementById("mcReadyPremiumFileInput");
       this.els.readyStatus = document.querySelector("#mcReadyPanel .mcReadyPanel__status");
-      this._premiumUploadTarget = null;
-      this._premiumUploadsBypassed = false;
+      this.els.rescheduleBtn = document.getElementById("mcRescheduleMirrorDockBtn");
 
       if(this.els.searchBtn)  on(this.els.searchBtn,  "click",   () => this.search());
       if(this.els.searchInput) on(this.els.searchInput, "keydown", (ev) => { if(ev.key === "Enter"){ ev.preventDefault(); this.search(); } });
@@ -63354,26 +63348,9 @@ ${inner}
         if(!btn) return;
         void this._documentReadyMirrorLane(btn.getAttribute("data-mc-ready-lane"));
       });
-      if(this.els.readyPremiumList){
-        on(this.els.readyPremiumList, "click", (ev) => {
-          const btn = ev.target?.closest?.("[data-mc-premium-upload]");
-          if(!btn) return;
-          const slotKey = safeTrim(btn.getAttribute("data-mc-premium-slot"));
-          const phase = safeTrim(btn.getAttribute("data-mc-premium-phase"));
-          if(!slotKey || (phase !== "before" && phase !== "after")) return;
-          this._openMirrorPremiumFilePicker(slotKey, phase);
-        });
-      }
-      if(this.els.readyPremiumFileInput){
-        on(this.els.readyPremiumFileInput, "change", (ev) => {
-          const file = ev?.target?.files?.[0];
-          try{ ev.target.value = ""; }catch(_e){}
-          if(file) void this._handleMirrorPremiumFile(file);
-        });
-      }
-      if(this.els.readyPremiumBypassBtn){
-        on(this.els.readyPremiumBypassBtn, "click", () => this._markMirrorPremiumUploadsBypassed());
-      }
+      if(this.els.rescheduleBtn) on(this.els.rescheduleBtn, "click", (ev) => {
+        ev.preventDefault();
+      });
     },
 
     PREFLIGHT_STEPS: Object.freeze([
@@ -63431,7 +63408,6 @@ ${inner}
     _resetPreFlightChecks(){
       this._preFlightReviewed = new Set();
       this._preFlightConfirmed = false;
-      this._premiumUploadsBypassed = false;
       this._preFlightOpenKey = "";
       this._showPreFlightConfirm(false);
       if(this.els.preFlightAlert) this.els.preFlightAlert.hidden = true;
@@ -63490,12 +63466,25 @@ ${inner}
         return insureds.map((ins, idx) => this._preFlightInsuredLabel(ins, idx)).join(" · ");
       }
       if(key === "needs"){
-        if(!policies.length) return "לא הוזנו פוליסות חדשות בתיק";
-        return policies.map((p) => {
+        const existBits = [];
+        insureds.forEach((ins) => {
+          (Array.isArray(ins?.data?.existingPolicies) ? ins.data.existingPolicies : []).forEach((p) => {
+            const co = safeTrim(p?.company) || "חברה";
+            const type = safeTrim(p?.type || p?.product) || "מוצר";
+            existBits.push(`${co} · ${type}`);
+          });
+        });
+        const newBits = policies.map((p) => {
           const co = safeTrim(p?.company) || "חברה";
           const type = safeTrim(p?.type || p?.product) || "מוצר";
           return `${co} · ${type}`;
-        }).slice(0, 4).join(" | ") + (policies.length > 4 ? ` +${policies.length - 4}` : "");
+        });
+        if(!existBits.length && !newBits.length) return "אין פוליסות ישנות או חדשות בתיק";
+        const clip = (arr) => arr.slice(0, 3).join(" | ") + (arr.length > 3 ? ` +${arr.length - 3}` : "");
+        const parts = [];
+        if(existBits.length) parts.push("קיימות: " + clip(existBits));
+        if(newBits.length) parts.push("חדשות: " + clip(newBits));
+        return parts.join(" · ");
       }
       if(key === "disclosure") return "נוסח גילוי נאות להקראה";
       if(key === "cancel"){
@@ -63553,7 +63542,7 @@ ${inner}
 
     _preFlightOpeningHtml(rec){
       const c = rec || this.selectedCustomer;
-      const customerName = safeTrim(c?.fullName) || "לא הוזן";
+      const greetName = this._mirrorAdultInsuredGreetingNames(c) || "לא הוזן";
       const repName = safeTrim(Auth?.current?.name) || "לא הוזן";
       const proposals = State.data?.proposals || [];
       const pr = proposals.find((p) => safeTrim(p.customerId) === safeTrim(c?.id));
@@ -63561,7 +63550,7 @@ ${inner}
       const company = safeTrim(this._mirrorOpeningCompanyName(c, pr)) || "לא הוזן";
       return `<div class="mcPreFlightDetailCard">` +
         `<div class="mcPreFlightDetailCard__title">נוסח פתיחה מהתיק</div>` +
-        `<p class="mcPreFlightDetailP">שלום, אני מדבר/ת עם ${escapeHtml(customerName)} ?</p>` +
+        `<p class="mcPreFlightDetailP">שלום, אני מדבר/ת עם ${escapeHtml(greetName)} ?</p>` +
         `<p class="mcPreFlightDetailP">מדבר/ת ${escapeHtml(repName)} ואני נציג/ת מכירות מטעם סוכן גרגורי יז'מסקי משווק ביטוחים של חברת ${escapeHtml(company)} , מה שלומך?</p>` +
         `<p class="mcPreFlightDetailP">אני יוצר/ת איתך קשר בהמשך לפנייתך ולשיחתך עם ${escapeHtml(priorContact)} מטרת השיחה היא בחינת צרכיך הביטוחיים והצעת מוצרי ביטוח</p>` +
         `<p class="mcPreFlightDetailP">מתאימים, וחשוב לי להדגיש בפניך שזוהי שיחת מכירה מוקלטת. האם אפשר להמשיך בשיחה?</p>` +
@@ -63925,9 +63914,15 @@ ${inner}
     },
 
     _canStartMirrorCall(){
-      if(!this._allPreCheckComplete()) return false;
-      const rec = this._getFreshCustomerRecord?.() || this.selectedCustomer;
-      return this._isMirrorPremiumGatePassed(rec);
+      return this._allPreCheckComplete();
+    },
+
+    _syncMirrorImmersiveChrome(){
+      const onMirror = !!(typeof LiveRefresh !== "undefined" && LiveRefresh.getCurrentView?.() === "mirrorCall")
+        || !!(document.body && document.body.classList.contains("view-mirrorCall-active"));
+      const callPhase = !!(this.els.workstation && this.els.workstation.classList.contains("mcWorkstation--callPhase"));
+      const immersive = onMirror && callPhase;
+      try { document.body.classList.toggle("mc-mirror-immersive", immersive); } catch(_e){}
     },
 
     _syncPreFlightGate(inCallPhase){
@@ -63976,7 +63971,6 @@ ${inner}
       if(this.els.readyCustomerName) this.els.readyCustomerName.textContent = name;
       if(this.els.readyCustomerId) this.els.readyCustomerId.textContent = idNum;
       if(this.els.readyCustomerPhone) this.els.readyCustomerPhone.textContent = phone;
-      this._renderReadyPremiumUploads();
       this._paintReadyLaneButtons();
       panel.removeAttribute("hidden");
       panel.hidden = false;
@@ -64012,373 +64006,6 @@ ${inner}
         this._opsLaneSaveBusy = false;
         this._paintReadyLaneButtons();
       }
-    },
-
-    _mirrorPremiumProductKey(typeRaw){
-      const t = safeTrim(typeRaw);
-      if(!t) return "";
-      if(/בריאות/i.test(t)) return "health";
-      if(/ריסק\s*משכנתא|משכנתא/i.test(t)) return "mortgage_risk";
-      if(/ריסק/i.test(t)) return "risk";
-      if(/מחלות\s*קשות/i.test(t)) return "critical_illness";
-      if(/סרטן/i.test(t)) return "cancer";
-      if(/אובדן\s*כושר/i.test(t)) return "disability";
-      return t;
-    },
-
-    _mirrorPremiumProductLabel(key){
-      const map = {
-        health: "בריאות",
-        risk: "ריסק",
-        mortgage_risk: "ריסק משכנתא",
-        critical_illness: "מחלות קשות",
-        cancer: "סרטן",
-        disability: "אובדן כושר עבודה"
-      };
-      return map[safeTrim(key)] || safeTrim(key) || "מוצר";
-    },
-
-    _mirrorPolicyInsuredRefs(policy, insureds){
-      const list = Array.isArray(insureds) ? insureds : [];
-      const out = [];
-      const pushIns = (ins) => {
-        if(!ins) return;
-        const id = safeTrim(ins.id);
-        if(!id) return;
-        if(out.some((x) => x.id === id)) return;
-        out.push({ id, label: safeTrim(ins.label) || safeTrim(ins.fullName) || "מבוטח" });
-      };
-      if(safeTrim(policy?.insuredMode) === "couple"){
-        pushIns(list.find((x) => safeTrim(x?.type) === "primary") || list[0]);
-        pushIns(list.find((x) => safeTrim(x?.type) === "spouse"));
-        if(out.length) return out;
-      }
-      const ids = Array.isArray(policy?.insuredIds) ? policy.insuredIds.map((x) => safeTrim(x)).filter(Boolean) : [];
-      if(ids.length){
-        ids.forEach((id) => pushIns(list.find((x) => safeTrim(x?.id) === id) || { id, label: "מבוטח" }));
-        if(out.length) return out;
-      }
-      const oneId = safeTrim(policy?.insuredId);
-      if(oneId){
-        pushIns(list.find((x) => safeTrim(x?.id) === oneId) || { id: oneId, label: "מבוטח" });
-        if(out.length) return out;
-      }
-      pushIns(list[0] || { id: "primary", label: "מבוטח ראשי" });
-      return out;
-    },
-
-    _collectMirrorPremiumUploadSlots(rec){
-      const policies = this._mirrorGetNewPoliciesRaw(rec);
-      const insureds = this._mirrorGetInsureds(rec);
-      const slots = [];
-      const seen = new Set();
-      policies.forEach((p) => {
-        const productKey = this._mirrorPremiumProductKey(p?.type || p?.product);
-        if(!productKey) return;
-        this._mirrorPolicyInsuredRefs(p, insureds).forEach((ins) => {
-          const key = `${ins.id}::${productKey}`;
-          if(seen.has(key)) return;
-          seen.add(key);
-          slots.push({
-            key,
-            insuredId: ins.id,
-            insuredLabel: ins.label,
-            productKey,
-            productLabel: this._mirrorPremiumProductLabel(productKey),
-            policyId: safeTrim(p?.id)
-          });
-        });
-      });
-      return slots;
-    },
-
-    _mirrorGetPremiumUploadStore(rec){
-      if(!rec || typeof rec !== "object") return { slots: {} };
-      if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
-      if(!rec.payload.mirrorFlow || typeof rec.payload.mirrorFlow !== "object") rec.payload.mirrorFlow = {};
-      if(!rec.payload.mirrorFlow.premiumUploads || typeof rec.payload.mirrorFlow.premiumUploads !== "object"){
-        rec.payload.mirrorFlow.premiumUploads = { slots: {} };
-      }
-      const store = rec.payload.mirrorFlow.premiumUploads;
-      if(!store.slots || typeof store.slots !== "object") store.slots = {};
-      return store;
-    },
-
-    _isMirrorPremiumUploadsComplete(rec){
-      const slots = this._collectMirrorPremiumUploadSlots(rec);
-      if(!slots.length) return true;
-      const store = this._mirrorGetPremiumUploadStore(rec);
-      return slots.every((slot) => {
-        const row = store.slots?.[slot.key] || {};
-        const beforeOk = Array.isArray(row?.before?.covers) && row.before.covers.length > 0;
-        const afterOk = Array.isArray(row?.after?.covers) && row.after.covers.length > 0;
-        return beforeOk && afterOk;
-      });
-    },
-
-    _isMirrorPremiumGatePassed(rec){
-      return !!this._premiumUploadsBypassed || this._isMirrorPremiumUploadsComplete(rec);
-    },
-
-    _markMirrorPremiumUploadsBypassed(){
-      if(this._premiumUploadsBypassed) return;
-      this._premiumUploadsBypassed = true;
-      if(this.els.readyPremiumAlert) this.els.readyPremiumAlert.hidden = true;
-      this._renderReadyPremiumUploads();
-      this._syncMcCallStartButton();
-    },
-
-    _parseMirrorPremiumMoney(raw){
-      if(raw == null || raw === "") return "";
-      if(typeof raw === "number" && Number.isFinite(raw)) return String(Math.round(raw));
-      const s = String(raw).replace(/[₪,\s]/g, "").replace(/[^\d.-]/g, "");
-      if(!s) return "";
-      const n = Number(s);
-      return Number.isFinite(n) ? String(Math.round(n)) : "";
-    },
-
-    _isMirrorPremiumSkipHeader(h){
-      const t = safeTrim(h);
-      if(!t) return true;
-      return /^(גיל|age)/i.test(t) || /סה["״']?\s*כ/i.test(t) || /^total$/i.test(t);
-    },
-
-    async _parseMirrorPremiumCashflowFile(file){
-      if(!isExcelUploadFile(file)){
-        throw new Error("יש להעלות קובץ Excel (.xlsx / .xls / .csv)");
-      }
-      if(window.GI_LOAD_LIBS?.xlsx) await window.GI_LOAD_LIBS.xlsx();
-      if(!window.XLSX) throw new Error("ספריית הקריאה לקובצי Excel לא נטענה");
-      const buffer = await file.arrayBuffer();
-      const wb = window.XLSX.read(buffer, { type: "array" });
-      const sheetName = wb.SheetNames?.[0];
-      if(!sheetName) throw new Error("הקובץ ריק");
-      const sheet = wb.Sheets[sheetName];
-      const rows = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: false });
-      let headerIdx = -1;
-      for(let i = 0; i < Math.min(rows.length, 8); i++){
-        const row = Array.isArray(rows[i]) ? rows[i] : [];
-        const nonEmpty = row.map((c) => safeTrim(c)).filter(Boolean);
-        if(nonEmpty.length >= 2){ headerIdx = i; break; }
-      }
-      if(headerIdx < 0) throw new Error("לא נמצאה שורת כותרות בקובץ");
-      const headers = Array.isArray(rows[headerIdx]) ? rows[headerIdx] : [];
-      let dataIdx = -1;
-      for(let i = headerIdx + 1; i < rows.length; i++){
-        const row = Array.isArray(rows[i]) ? rows[i] : [];
-        const hasPremium = row.some((cell, col) => {
-          if(this._isMirrorPremiumSkipHeader(headers[col])) return false;
-          return !!this._parseMirrorPremiumMoney(cell);
-        });
-        if(hasPremium){ dataIdx = i; break; }
-      }
-      if(dataIdx < 0) throw new Error("לא נמצאה שורת נתונים ראשונה עם פרמיות");
-      const dataRow = Array.isArray(rows[dataIdx]) ? rows[dataIdx] : [];
-      const covers = [];
-      headers.forEach((h, col) => {
-        if(this._isMirrorPremiumSkipHeader(h)) return;
-        const premium = this._parseMirrorPremiumMoney(dataRow[col]);
-        if(!premium) return;
-        covers.push({ name: safeTrim(h), premium });
-      });
-      if(!covers.length) throw new Error("לא נמצאו כיסויים עם פרמיה בשורה הראשונה");
-      // ===== GI-CASHFLOW-FULL =====================================================
-      // התסריט דורש גם "פרמיה מקסימלית ובאיזה גיל" (מגדל) וגם "פרמיה אחרונה
-      // לכל כיסוי" (הראל/הפניקס). הפרסור המקורי עצר בשורת הגיל הראשונה,
-      // ולכן שני הנתונים לא היו זמינים למרות שהם קיימים בקובץ.
-      // המבנה גנרי: גיל = עמודה ראשונה, "סה"כ" = אחרונה, שמות הכיסויים
-      // באמצע משתנים בין חברות ולא מפריעים.
-      // ⚠️ שורת הסיכום בתחתית הגליון (עמודת הגיל אינה מספר) מסוננת —
-      // בלעדיה הקוד היה מקריא ללקוח סכום מצטבר כפרמיה חודשית.
-      const giAgeOf = (row) => {
-        const raw = safeTrim(Array.isArray(row) ? row[0] : "");
-        if(!raw) return null;
-        const n = Number(raw.replace(/[^\d.]/g, ""));
-        return (Number.isFinite(n) && n > 0 && n < 130) ? Math.round(n) : null;
-      };
-      const giTotalCol = (() => {
-        for(let c = headers.length - 1; c >= 0; c--){
-          if(this._isMirrorPremiumSkipHeader(headers[c])
-             && !/^(\u05d2\u05d9\u05dc|age)/i.test(safeTrim(headers[c]))) return c;
-        }
-        return -1;
-      })();
-      const giCoversAt = (row) => {
-        const out = [];
-        headers.forEach((h, col) => {
-          if(this._isMirrorPremiumSkipHeader(h)) return;
-          const p = this._parseMirrorPremiumMoney(Array.isArray(row) ? row[col] : "");
-          if(p) out.push({ name: safeTrim(h), premium: p });
-        });
-        return out;
-      };
-      const giAgeRows = [];
-      for(let i = headerIdx + 1; i < rows.length; i++){
-        const row = Array.isArray(rows[i]) ? rows[i] : [];
-        const age = giAgeOf(row);
-        if(age === null) continue;                       // מסנן את שורת הסיכום
-        const total = giTotalCol >= 0
-          ? this._parseMirrorPremiumMoney(row[giTotalCol])
-          : giCoversAt(row).reduce((s, c) => s + (Number(c.premium) || 0), 0);
-        giAgeRows.push({ age, total: Number(total) || 0, row });
-      }
-      let giCashflow = null;
-      if(giAgeRows.length){
-        const first = giAgeRows[0];
-        const last  = giAgeRows[giAgeRows.length - 1];
-        let peak = first;
-        giAgeRows.forEach((r) => { if(r.total > peak.total) peak = r; });
-        giCashflow = {
-          ageFrom: first.age,
-          ageTo: last.age,
-          rowCount: giAgeRows.length,
-          currentTotal: first.total,
-          maxTotal: peak.total,
-          maxAtAge: peak.age,                            // הגיל הראשון שבו מגיעים למקסימום
-          lastAge: last.age,
-          lastTotal: last.total,
-          coversLast: giCoversAt(last.row),
-          totals: giAgeRows.map((r) => ({ age: r.age, total: r.total }))
-        };
-      }
-
-      return {
-        fileName: safeTrim(file?.name) || "premium.xlsx",
-        uploadedAt: nowISO(),
-        uploadedBy: safeTrim(Auth?.current?.name),
-        covers,
-        cashflow: giCashflow
-      };
-    },
-
-    _openMirrorPremiumFilePicker(slotKey, phase){
-      this._premiumUploadTarget = { slotKey, phase };
-      const input = this.els.readyPremiumFileInput;
-      if(!input) return;
-      try{ input.value = ""; }catch(_e){}
-      input.click();
-    },
-
-    async _handleMirrorPremiumFile(file){
-      const target = this._premiumUploadTarget;
-      this._premiumUploadTarget = null;
-      if(!target?.slotKey || (target.phase !== "before" && target.phase !== "after")) return;
-      const rec = this._getFreshCustomerRecord();
-      if(!rec){
-        this._mcToast?.("העלאה", "לא נמצא תיק לקוח", "warn");
-        return;
-      }
-      try{
-        const parsed = await this._parseMirrorPremiumCashflowFile(file);
-        const store = this._mirrorGetPremiumUploadStore(rec);
-        if(!store.slots[target.slotKey] || typeof store.slots[target.slotKey] !== "object"){
-          store.slots[target.slotKey] = {};
-        }
-        store.slots[target.slotKey][target.phase] = parsed;
-        store.updatedAt = nowISO();
-        this._renderReadyPremiumUploads();
-        this._syncMcCallStartButton();
-        void this._persistMirrorCall("קבצי פרמיות לשיחת שיקוף הועלו");
-        this._mcToast?.("הועלה", `${target.phase === "before" ? "לפני הנחה" : "אחרי הנחה"} · ${parsed.covers.length} כיסויים`, "success");
-      }catch(err){
-        this._mcToast?.("שגיאה בקובץ", safeTrim(err?.message) || "לא ניתן לקרוא את הקובץ", "warn");
-      }
-    },
-
-    _renderReadyPremiumUploads(){
-      const wrap = this.els.readyPremiumWrap;
-      const list = this.els.readyPremiumList;
-      if(!wrap || !list) return;
-      const rec = this._getFreshCustomerRecord() || this.selectedCustomer;
-      const slots = this._collectMirrorPremiumUploadSlots(rec);
-      const store = this._mirrorGetPremiumUploadStore(rec);
-      if(!slots.length){
-        wrap.hidden = true;
-        wrap.setAttribute("hidden", "");
-        list.innerHTML = "";
-        if(this.els.readyStatus){
-          this.els.readyStatus.textContent = "הצ׳קליסט הושלם · ניתן להתחיל הקלטה";
-          this.els.readyStatus.classList.remove("is-warn");
-        }
-        if(this.els.readyPremiumAlert) this.els.readyPremiumAlert.hidden = true;
-        return;
-      }
-      wrap.removeAttribute("hidden");
-      wrap.hidden = false;
-      const allDone = this._isMirrorPremiumUploadsComplete(rec);
-      const bypassed = !!this._premiumUploadsBypassed;
-      if(this.els.readyStatus){
-        this.els.readyStatus.textContent = bypassed
-          ? "בוצע סימון זמני לפרמיות · ניתן להתחיל הקלטה"
-          : (allDone
-            ? "הצ׳קליסט והעלאות הפרמיות הושלמו · ניתן להתחיל הקלטה"
-            : "יש להעלות את כל קבצי הפרמיות לפני התחלת השיחה");
-        this.els.readyStatus.classList.toggle("is-warn", !(allDone || bypassed));
-      }
-      if(this.els.readyPremiumAlert) this.els.readyPremiumAlert.hidden = allDone || bypassed;
-      if(this.els.readyPremiumBypassBtn){
-        this.els.readyPremiumBypassBtn.disabled = bypassed;
-        this.els.readyPremiumBypassBtn.textContent = bypassed
-          ? "✓ סומן וי זמני לפרמיות"
-          : "סמן וי על הפרמיות (זמני)";
-      }
-      list.innerHTML = slots.map((slot) => {
-        const row = store.slots?.[slot.key] || {};
-        const before = row.before;
-        const after = row.after;
-        const beforeOk = Array.isArray(before?.covers) && before.covers.length > 0;
-        const afterOk = Array.isArray(after?.covers) && after.covers.length > 0;
-        const cardDone = beforeOk && afterOk;
-        const beforeFile = beforeOk
-          ? `<div class="mcReadyPremium__slotFile">הועלה: <strong>${escapeHtml(before.fileName || "קובץ")}</strong> · ${before.covers.length} כיסויים</div>`
-          : `<div class="mcReadyPremium__slotFile">טרם הועלה</div>`;
-        const afterFile = afterOk
-          ? `<div class="mcReadyPremium__slotFile">הועלה: <strong>${escapeHtml(after.fileName || "קובץ")}</strong> · ${after.covers.length} כיסויים</div>`
-          : `<div class="mcReadyPremium__slotFile">טרם הועלה</div>`;
-        return `<article class="mcReadyPremium__card${cardDone ? " is-complete" : ""}" data-mc-premium-card="${escapeHtml(slot.key)}">` +
-          `<div class="mcReadyPremium__cardHead">` +
-            `<div class="mcReadyPremium__cardTitle">${escapeHtml(slot.insuredLabel)} · ${escapeHtml(slot.productLabel)}</div>` +
-            `<div class="mcReadyPremium__cardMeta">${cardDone ? "הושלם" : "ממתין להעלאה"}</div>` +
-          `</div>` +
-          `<div class="mcReadyPremium__slots">` +
-            `<div class="mcReadyPremium__slot${beforeOk ? " is-done" : ""}">` +
-              `<div class="mcReadyPremium__slotLabel">קובץ לפני הנחה</div>` +
-              beforeFile +
-              `<button type="button" class="mcReadyPremium__slotBtn" data-mc-premium-upload data-mc-premium-slot="${escapeHtml(slot.key)}" data-mc-premium-phase="before">${beforeOk ? "החלף קובץ" : "העלה קובץ"}</button>` +
-            `</div>` +
-            `<div class="mcReadyPremium__slot${afterOk ? " is-done" : ""}">` +
-              `<div class="mcReadyPremium__slotLabel">קובץ אחרי הנחה</div>` +
-              afterFile +
-              `<button type="button" class="mcReadyPremium__slotBtn" data-mc-premium-upload data-mc-premium-slot="${escapeHtml(slot.key)}" data-mc-premium-phase="after">${afterOk ? "החלף קובץ" : "העלה קובץ"}</button>` +
-            `</div>` +
-          `</div>` +
-        `</article>`;
-      }).join("");
-    },
-
-    _getMirrorPremiumCoversForPolicy(rec, policy){
-      const productKey = this._mirrorPremiumProductKey(policy?.type || policy?.product);
-      if(!productKey) return null;
-      const insureds = this._mirrorGetInsureds(rec);
-      const refs = this._mirrorPolicyInsuredRefs(policy, insureds);
-      const store = this._mirrorGetPremiumUploadStore(rec);
-      // לזוגי: מאחדים כיסויים ממבוטחים; ליחיד: לוקחים את הסלוט שלו
-      const merged = new Map();
-      refs.forEach((ins) => {
-        const row = store.slots?.[`${ins.id}::${productKey}`] || {};
-        const beforeMap = new Map((row.before?.covers || []).map((c) => [safeTrim(c.name), safeTrim(c.premium)]));
-        const afterMap = new Map((row.after?.covers || []).map((c) => [safeTrim(c.name), safeTrim(c.premium)]));
-        const names = new Set([...beforeMap.keys(), ...afterMap.keys()]);
-        names.forEach((name) => {
-          if(!name) return;
-          if(!merged.has(name)) merged.set(name, { name, before: "", after: "" });
-          const item = merged.get(name);
-          if(!item.before && beforeMap.get(name)) item.before = beforeMap.get(name);
-          if(!item.after && afterMap.get(name)) item.after = afterMap.get(name);
-        });
-      });
-      const list = Array.from(merged.values());
-      return list.length ? list : null;
     },
 
     // GI-MIRROR-COALESCE: מאחד שמירות רצופות בשיקוף לכתיבה אחת.
@@ -64456,6 +64083,7 @@ ${inner}
       if(this.els.discoveryPanel) this.els.discoveryPanel.hidden = !isSearch;
       if(this.els.sessionPanel) this.els.sessionPanel.hidden = isSearch;
       if(this.els.workstation) this.els.workstation.classList.toggle("mcWorkstation--callPhase", !isSearch);
+      this._syncMirrorImmersiveChrome();
       this._syncPreFlightGate(!isSearch);
       this._syncFlowChrome();
       if(!isSearch){
@@ -64642,14 +64270,6 @@ ${inner}
         return;
       }
       const recGate = this._getFreshCustomerRecord() || this.selectedCustomer;
-      if(!this._isMirrorPremiumGatePassed(recGate)){
-        this._renderReadyPremiumUploads();
-        if(this.els.readyPremiumAlert) this.els.readyPremiumAlert.hidden = false;
-        try{ this.els.readyPremiumWrap?.scrollIntoView?.({ block: "nearest", behavior: "smooth" }); }catch(_e){}
-        this._mcToast("חסרים קבצים", "יש להעלות את כל קבצי הפרמיות (לפני ואחרי הנחה) או לסמן וי זמני לפני התחלת השיחה.", "warn");
-        this._syncMcCallStartButton();
-        return;
-      }
       /* GI-PERF 2026-08-08 — בטעינה רזה חובה payload מלא לפני mutate+persist. */
       const ensureId = safeTrim(this.selectedCustomer?.id || recGate?.id);
       this._fileTimerArmedId = ensureId;
@@ -64675,7 +64295,6 @@ ${inner}
         }
       }
       if(this.els.preFlightAlert) this.els.preFlightAlert.hidden = true;
-      if(this.els.readyPremiumAlert) this.els.readyPremiumAlert.hidden = true;
       this._callRunning = true;
       this._callPaused = false;
       this._callSeconds = 0;
@@ -64685,6 +64304,7 @@ ${inner}
         this.els.workstation.classList.add("mcWorkstation--callLive");
         this.els.workstation.classList.remove("mcWorkstation--callPaused");
       }
+      this._syncMirrorImmersiveChrome();
       this._syncLiveNav();
       this._syncMcCallStartButton();
       const rec = (State.data?.customers || []).find(c => safeTrim(c.id) === safeTrim(this.selectedCustomer?.id));
@@ -64795,6 +64415,7 @@ ${inner}
         this.els.workstation.classList.remove("mcWorkstation--callPaused");
         this.els.workstation.classList.remove("mcWorkstation--mirrorDecline");
       }
+      this._syncMirrorImmersiveChrome();
       this._syncLiveNav();
       this._hideMirrorFlowPanels();
       this._mirrorUiPhase = "idle";
@@ -65065,6 +64686,7 @@ ${inner}
         this.els.workstation.classList.remove("mcWorkstation--callLive");
         this.els.workstation.classList.remove("mcWorkstation--callPaused");
       }
+      this._syncMirrorImmersiveChrome();
       this._syncLiveNav();
       this._resetMirrorFlowUi();
       this._preFlightLoading = false;
@@ -65075,6 +64697,34 @@ ${inner}
     _scriptVal(v){
       const t = safeTrim(v);
       return t ? escapeHtml(t) : '<span class="mcCallScript__missing" aria-label="חסר במערכת">__________</span>';
+    },
+
+    _mirrorJoinHebrewNames(names){
+      const list = (names || []).map((n) => safeTrim(n)).filter(Boolean);
+      if(!list.length) return "";
+      if(list.length === 1) return list[0];
+      if(list.length === 2) return list[0] + " ו" + list[1];
+      return list.slice(0, -1).join(", ") + " ו" + list[list.length - 1];
+    },
+
+    _mirrorAdultInsuredGreetingNames(rec){
+      const insureds = this._mirrorGetInsureds(rec) || [];
+      const names = [];
+      const seen = new Set();
+      insureds.forEach((ins, idx) => {
+        const t = safeTrim(ins?.type).toLowerCase();
+        if(t === "child") return;
+        const name = this._mirrorFullNameFromIns(rec, ins, idx);
+        const key = name.replace(/\s+/g, " ").trim();
+        if(!key || seen.has(key)) return;
+        seen.add(key);
+        names.push(name);
+      });
+      if(!names.length){
+        const fallback = safeTrim(rec?.fullName);
+        if(fallback) names.push(fallback);
+      }
+      return this._mirrorJoinHebrewNames(names);
     },
 
     _mirrorOpeningCompanyName(rec, pr){
@@ -65091,12 +64741,11 @@ ${inner}
     _renderOpeningScript(){
       if(!this.els.scriptBody) return;
       const c = this.selectedCustomer;
-      const customerName = safeTrim(c?.fullName);
       const repName = safeTrim(Auth?.current?.name);
       const proposals = State.data?.proposals || [];
       const pr = proposals.find(p => safeTrim(p.customerId) === safeTrim(c?.id));
       const priorContact = safeTrim(c?.agentName) || safeTrim(pr?.agentName);
-      const p1 = this._scriptVal(customerName);
+      const p1 = this._scriptVal(this._mirrorAdultInsuredGreetingNames(c));
       const p2 = this._scriptVal(repName);
       const pAgent = this._scriptVal("גרגורי יז'מסקי");
       const pCompany = this._scriptVal(this._mirrorOpeningCompanyName(c, pr));
@@ -66345,6 +65994,7 @@ ${inner}
       this._callRunning = false;
       if(this.els.callCard) this.els.callCard.classList.remove("mcCall__card--callLive");
       if(this.els.workstation) this.els.workstation.classList.remove("mcWorkstation--callLive");
+      this._syncMirrorImmersiveChrome();
       if(this.els.callStartBtn){
         this.els.callStartBtn.textContent = "התחל שיחת שיקוף";
         this.els.callStartBtn.classList.remove("is-end");
@@ -68580,32 +68230,19 @@ ${inner}
             rows
           });
         }
-        const uploadedCovers = this._getMirrorPremiumCoversForPolicy(rec, p);
         const rows = [
           { k: "שם חברה", v: escapeHtml(company) },
           { k: "שם מוצר", v: escapeHtml(product) }
         ];
-        if(uploadedCovers && uploadedCovers.length){
-          uploadedCovers.forEach((c) => {
-            const beforePrem = this._fmtMcMoney(c.before);
-            const afterPrem = this._fmtMcMoney(c.after);
-            rows.push({
-              k: safeTrim(c.name) || "כיסוי",
-              v: `לפני הנחה: <strong>${escapeHtml(beforePrem)}</strong> · אחרי הנחה: <strong>${escapeHtml(afterPrem)}</strong>`,
-              wide: true
-            });
-          });
+        if(premiumMode === "before"){
+          rows.push({ k: "פרמיה לפני הנחה", v: escapeHtml(before) });
         } else {
-          if(premiumMode === "before"){
+          rows.push({ k: "פרמיה חודשית על סך", v: escapeHtml(after) });
+          if(withDiscount && before !== "—" && before !== after){
             rows.push({ k: "פרמיה לפני הנחה", v: escapeHtml(before) });
-          } else {
-            rows.push({ k: "פרמיה חודשית על סך", v: escapeHtml(after) });
-            if(withDiscount && before !== "—" && before !== after){
-              rows.push({ k: "פרמיה לפני הנחה", v: escapeHtml(before) });
-            }
           }
-          this._mcCoverageBits(p).forEach((b) => rows.push({ k: b.label, v: escapeHtml(b.value) }));
         }
+        this._mcCoverageBits(p).forEach((b) => rows.push({ k: b.label, v: escapeHtml(b.value) }));
         if(withDiscount && schedule){
           rows.push({ k: "הנחה שניתנה", v: escapeHtml(schedule) });
         }
