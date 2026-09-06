@@ -32723,13 +32723,9 @@ body.view-mirrorCall-active #view-mirrorCall.is-visible{
   overflow:hidden;
 }
 
-/* שיחת שיקוף פעילה (צ׳קליסט / מוכנות / שיחה חיה) — בלי טופבר ובלי סיידבר */
-body.view-mirrorCall-active.mc-mirror-immersive .topbar,
-body.view-mirrorCall-active.mc-mirror-immersive .sidebar{
+/* שיחת שיקוף פעילה (צ׳קליסט / מוכנות / שיחה חיה) — בלי טופבר, תפריט הצד נשאר */
+body.view-mirrorCall-active.mc-mirror-immersive .topbar{
   display:none !important;
-}
-body.view-mirrorCall-active.mc-mirror-immersive .app{
-  grid-template-columns: minmax(0,1fr);
 }
 body.view-mirrorCall-active.mc-mirror-immersive .main{
   padding:0;
@@ -32739,23 +32735,12 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   padding:0;
   overflow:hidden;
 }
-body.view-mirrorCall-active.mc-mirror-immersive #view-mirrorCall.is-visible{
-  display:flex !important;
-  flex-direction:column;
-  position:fixed;
-  inset:0;
-  z-index:200;
-  background:var(--bg, #f3f4f7);
-  padding:0;
-  overflow:hidden;
-  min-height:0;
-}
 
-/* מודאל צ׳קליסט לפני שיחה — כיסוי מסך מלא, בלי כרטיס ממורכז */
+/* מודאל צ׳קליסט לפני שיחה — ממלא את אזור השיקוף, בלי לכסות את תפריט הצד */
 .mcPreFlightModal{
-  position:fixed;
+  position:absolute;
   inset:0;
-  z-index:240;
+  z-index:40;
   display:none;
   align-items:stretch;
   justify-content:stretch;
