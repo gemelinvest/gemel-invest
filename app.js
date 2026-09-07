@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260907-couple-shared-discount-v1";
+  const BUILD = "20260907-arrival-docs-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -7433,7 +7433,10 @@
       phoenixCiForm: "phoenix_ci_form",
       followupQuestionnaire: "followup_questionnaire",
       followupQuestionnairesZip: "followup_questionnaires_zip",
-      companyCancelForm: "company_cancel_form"
+      companyCancelForm: "company_cancel_form",
+      suitabilityDoc: "suitability_document",
+      premiumDevelopment: "premium_development_report",
+      nispahHarAuth: "nispah_he_har_auth"
     },
     OFFICIAL_JOIN_FORM_TYPES: [
       "hachshara_ci_form",
@@ -8171,6 +8174,7 @@
           if(safeTrim(doc?.type) !== this.TYPES.companyCancelForm) return true;
           return this.isLiveCancelFormDoc(doc, payload);
         });
+        this.injectArrivalDocs(payload.customerDocuments, { payload, agentName: options.uploadedBy }, payload, options);
         return payload;
       }
       return payload;
@@ -8815,6 +8819,7 @@
       }
       this.injectTriggeredFollowupQuestionnaireDocs(list, rec, payload);
       this.injectCancelFormDocs(list, rec, payload);
+      this.injectArrivalDocs(list, rec, payload);
       return this.sortByDateDesc(list.filter((doc) => {
         if(!doc || typeof doc !== "object") return false;
         const type = safeTrim(doc.type);
@@ -8842,6 +8847,9 @@
         if(type === this.TYPES.followupQuestionnaire) return true;
         if(type === this.TYPES.companyCancelForm) return this.isLiveCancelFormDoc(doc, payload);
         if(type === this.TYPES.followupQuestionnairesZip) return false;
+        if(type === this.TYPES.suitabilityDoc || type === this.TYPES.premiumDevelopment || type === this.TYPES.nispahHarAuth){
+          return !!(window.GiArrivalDocs?.qualifies ? window.GiArrivalDocs.qualifies(payload, rec) : this.qualifiesForArrivalDocs(payload, rec));
+        }
         return !!(safeTrim(doc.name) || safeTrim(doc.url) || safeTrim(doc.dataUrl) || safeTrim(doc.fileName));
       }));
     },
@@ -8849,6 +8857,42 @@
       const id = safeTrim(docId);
       if(!id) return null;
       return this.resolveListForCustomer(rec).find((doc) => String(doc?.id) === String(id)) || null;
+    },
+    qualifiesForArrivalDocs(payload, rec){
+      if(typeof window !== "undefined" && window.GiArrivalDocs?.qualifies) return window.GiArrivalDocs.qualifies(payload, rec);
+      if(!payload || typeof payload !== "object") return false;
+      const flow = safeTrim(payload.flowType).toLowerCase();
+      if(flow === "elementary") return false;
+      if(flow === "agent_appointment") return false;
+      const insureds = Array.isArray(payload.insureds) ? payload.insureds : [];
+      return !!(payload.primary || insureds.length || this.qualifiesForHealthReport(payload));
+    },
+    injectArrivalDocs(list, rec, payload, options = {}){
+      if(!Array.isArray(list)) return list;
+      if(typeof window !== "undefined" && window.GiArrivalDocs?.injectDocs){
+        return window.GiArrivalDocs.injectDocs(list, rec, payload, options);
+      }
+      if(!this.qualifiesForArrivalDocs(payload, rec)) return list;
+      const uploadedAt = safeTrim(options.uploadedAt) || safeTrim(rec?.updatedAt) || nowISO();
+      const uploadedBy = safeTrim(options.uploadedBy) || safeTrim(rec?.agentName);
+      const wanted = [
+        { type: this.TYPES.suitabilityDoc, id: "doc_arrival_hatama", name: "מסמך התאמה" },
+        { type: this.TYPES.premiumDevelopment, id: "doc_arrival_premia", name: "דוח התפתחות פרמיה" },
+        { type: this.TYPES.nispahHarAuth, id: "doc_arrival_nispah", name: "נספח ה׳ · הרשאת הר הביטוח" }
+      ];
+      wanted.reverse().forEach((row) => {
+        if(list.some((doc) => safeTrim(doc?.type) === row.type)) return;
+        list.unshift({
+          id: row.id,
+          type: row.type,
+          name: row.name,
+          isLegacy: true,
+          source: "מערכת",
+          uploadedAt,
+          uploadedBy
+        });
+      });
+      return list;
     },
     injectTriggeredFollowupQuestionnaireDocs(list, rec, payload){
       if(!Array.isArray(list)) return list;
@@ -20579,6 +20623,27 @@ UsersGateUI.init();
           void Wizard.exportOperationalPdfPageByPage(snapshot, dlHealthOps);
           return;
         }
+        const dlHatama = ev.target?.closest?.("[data-download-arrival-hatama-doc]");
+        if(dlHatama){
+          ev.preventDefault();
+          const rec = this.current();
+          if(rec) void this.downloadArrivalDoc(rec, "hatama", dlHatama);
+          return;
+        }
+        const dlPremia = ev.target?.closest?.("[data-download-arrival-premia-doc]");
+        if(dlPremia){
+          ev.preventDefault();
+          const rec = this.current();
+          if(rec) void this.downloadArrivalDoc(rec, "premia", dlPremia);
+          return;
+        }
+        const dlNispah = ev.target?.closest?.("[data-download-arrival-nispah-doc]");
+        if(dlNispah){
+          ev.preventDefault();
+          const rec = this.current();
+          if(rec) void this.downloadArrivalDoc(rec, "nispah", dlNispah);
+          return;
+        }
         const dlAgentOps = ev.target?.closest?.("[data-download-ops-agent-doc]");
         if(dlAgentOps){
           ev.preventDefault();
@@ -23260,9 +23325,11 @@ UsersGateUI.init();
       if(type === CustomerDocuments.TYPES.healthOps) return false;
       if(type === CustomerDocuments.TYPES.agentApptOps || type === CustomerDocuments.TYPES.agentApptForm) return false;
       if(type === CustomerDocuments.TYPES.harBituach) return false;
+      if(type === CustomerDocuments.TYPES.suitabilityDoc || type === CustomerDocuments.TYPES.premiumDevelopment) return false;
       if(this.isArchiveCustomerDoc(doc)) return false;
       if(type === CustomerDocuments.TYPES.followupQuestionnaire) return true;
       if(type === CustomerDocuments.TYPES.companyCancelForm) return true;
+      if(type === CustomerDocuments.TYPES.nispahHarAuth) return true;
       return CustomerDocuments.isOfficialJoinFormType(type);
     },
 
@@ -23341,6 +23408,11 @@ UsersGateUI.init();
       }
       if(type === CustomerDocuments.TYPES.followupQuestionnaire || type === CustomerDocuments.TYPES.followupQuestionnairesZip){
         await ensureFollowupZipLoaded();
+        return;
+      }
+      if(type === CustomerDocuments.TYPES.suitabilityDoc || type === CustomerDocuments.TYPES.premiumDevelopment || type === CustomerDocuments.TYPES.nispahHarAuth){
+        await ensureGiArrivalDocsLoaded();
+        try { await ensureGiSimulatorJsLoaded(); } catch(_e) {}
       }
     },
 
@@ -23354,6 +23426,9 @@ UsersGateUI.init();
         if(!mod?.fillOriginalTemplate || typeof mod.buildDraft !== "function") return "";
         const draft = spec.mode ? mod.buildDraft(rec, spec.mode) : mod.buildDraft(rec);
         bytes = await mod.fillOriginalTemplate(draft);
+      } else if(safeTrim(doc?.type) === "nispah_he_har_auth" && window.GiArrivalDocs?.fillNispahPdf){
+        const draft = window.GiArrivalDocs.buildDraft(rec);
+        bytes = await window.GiArrivalDocs.fillNispahPdf(draft);
       } else {
         const resolved = await this.resolveDocumentBytes(rec, doc);
         bytes = resolved?.bytes || null;
@@ -23436,6 +23511,13 @@ UsersGateUI.init();
             ? (doc?.payloadSnapshot || rec?.payload)
             : rec?.payload;
           return `<div class="cfFile__documentsPreviewDoc">${Wizard.renderOperationalReport(snapshot)}</div>`;
+        }
+        if((type === CustomerDocuments.TYPES.suitabilityDoc || type === CustomerDocuments.TYPES.premiumDevelopment || type === CustomerDocuments.TYPES.nispahHarAuth) && window.GiArrivalDocs){
+          try {
+            const draft = window.GiArrivalDocs.buildDraft(rec);
+            const kind = type === CustomerDocuments.TYPES.premiumDevelopment ? "premia" : (type === CustomerDocuments.TYPES.nispahHarAuth ? "nispah" : "hatama");
+            return `<div class="cfFile__documentsPreviewDoc">${window.GiArrivalDocs.renderPreviewHtml(draft, kind)}</div>`;
+          } catch(_e) {}
         }
         if(type === CustomerDocuments.TYPES.hachsharaCiForm && window.HachsharaCiForm){
           try {
@@ -23687,6 +23769,19 @@ UsersGateUI.init();
         });
       } catch(_e) {}
       return true;
+    },
+    async downloadArrivalDoc(rec, kind, sourceBtn){
+      try {
+        await ensureGiArrivalDocsLoaded();
+        try { await ensureGiSimulatorJsLoaded(); } catch(_e) {}
+        if(!window.GiArrivalDocs) throw new Error("GiArrivalDocs missing");
+        if(kind === "premia") return window.GiArrivalDocs.downloadPremia(rec, sourceBtn);
+        if(kind === "nispah") return window.GiArrivalDocs.downloadNispah(rec, sourceBtn);
+        return window.GiArrivalDocs.downloadHatama(rec, sourceBtn);
+      } catch(err){
+        try { console.error("ARRIVAL_DOC_DOWNLOAD_FAILED", err); } catch(_e) {}
+        try { window.showToast?.({ title: "לא ניתן להוריד את המסמך", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
+      }
     },
     async openHachsharaCiForm(rec){
       if(this.denyOfficialJoinFormDownload()) return;
@@ -23996,6 +24091,20 @@ UsersGateUI.init();
         const bytes = await window.GiFollowupZip.fillFollowupPdf(entry);
         return { fileName: /\.pdf$/i.test(fileName) ? fileName : (fileName + ".pdf"), bytes };
       }
+      if(type === CustomerDocuments.TYPES.suitabilityDoc || type === CustomerDocuments.TYPES.premiumDevelopment || type === CustomerDocuments.TYPES.nispahHarAuth){
+        await ensureGiArrivalDocsLoaded();
+        try { await ensureGiSimulatorJsLoaded(); } catch(_e) {}
+        if(!window.GiArrivalDocs) return null;
+        const draft = window.GiArrivalDocs.buildDraft(rec);
+        if(type === CustomerDocuments.TYPES.nispahHarAuth){
+          const bytes = await window.GiArrivalDocs.fillNispahPdf(draft);
+          return { fileName: window.GiArrivalDocs.fileName("nispah", draft), bytes };
+        }
+        const kind = type === CustomerDocuments.TYPES.premiumDevelopment ? "premia" : "hatama";
+        const html = kind === "premia" ? window.GiArrivalDocs.renderPremiaHtml(draft) : window.GiArrivalDocs.renderHatamaHtml(draft);
+        const bytes = new TextEncoder().encode(html);
+        return { fileName: window.GiArrivalDocs.fileName(kind, draft).replace(/\.pdf$/i, ".html"), bytes };
+      }
       const dataUrl = safeTrim(doc.dataUrl) || safeTrim(doc.url);
       if(dataUrl){
         if(dataUrl.startsWith("data:")){
@@ -24220,6 +24329,12 @@ UsersGateUI.init();
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-customer-file-doc="${escapeHtml(docId)}">הורד ZIP</button>`;
         }else if(docType === CustomerDocuments.TYPES.healthOps){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-ops-health-doc="${escapeHtml(docId)}">הורדה</button>`;
+        }else if(docType === CustomerDocuments.TYPES.suitabilityDoc){
+          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-arrival-hatama-doc="${escapeHtml(docId)}">הורדה</button>`;
+        }else if(docType === CustomerDocuments.TYPES.premiumDevelopment){
+          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-arrival-premia-doc="${escapeHtml(docId)}">הורדה</button>`;
+        }else if(docType === CustomerDocuments.TYPES.nispahHarAuth){
+          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-arrival-nispah-doc="${escapeHtml(docId)}">הורדה</button>`;
         }else if(docType === CustomerDocuments.TYPES.agentApptOps){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-ops-agent-doc="${escapeHtml(docId)}">הורדה</button>`;
         }else if(docType === CustomerDocuments.TYPES.harBituach || safeTrim(doc.dataUrl) || safeTrim(doc.url)){
@@ -40221,7 +40336,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260907-couple-shared-discount-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260907-arrival-docs-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -40241,7 +40356,8 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260907-couple-shared-discount-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260907-arrival-docs-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260907-arrival-docs-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -40786,6 +40902,33 @@ UsersGateUI.init();
     });
     return ensureGiCancelFormsLoaded._p;
   }
+  function ensureGiArrivalDocsLoaded(){
+    if(window.GiArrivalDocs) return Promise.resolve(window.GiArrivalDocs);
+    if(ensureGiArrivalDocsLoaded._p) return ensureGiArrivalDocsLoaded._p;
+    ensureGiArrivalDocsLoaded._p = new Promise((resolve, reject) => {
+      const existing = document.getElementById("gi-arrival-docs-js");
+      const done = () => {
+        if(window.GiArrivalDocs) resolve(window.GiArrivalDocs);
+        else reject(new Error("gi-arrival-docs.js loaded without GiArrivalDocs"));
+      };
+      if(existing){
+        existing.addEventListener("load", done, { once: true });
+        existing.addEventListener("error", () => reject(new Error("gi-arrival-docs.js failed")), { once: true });
+        return;
+      }
+      const s = document.createElement("script");
+      s.id = "gi-arrival-docs-js";
+      s.src = GI_ARRIVAL_DOCS_HREF;
+      s.async = true;
+      s.onload = done;
+      s.onerror = () => reject(new Error("gi-arrival-docs.js failed to load"));
+      document.head.appendChild(s);
+    }).catch((err) => {
+      ensureGiArrivalDocsLoaded._p = null;
+      throw err;
+    });
+    return ensureGiArrivalDocsLoaded._p;
+  }
   function ensureFollowupZipLoaded(){
     if(window.GiFollowupZip && window.GI_FOLLOWUP_ZIP_CONFIG) return Promise.resolve(window.GiFollowupZip);
     if(ensureFollowupZipLoaded._p) return ensureFollowupZipLoaded._p;
@@ -40877,8 +41020,8 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260907-couple-shared-discount-v1",
-    "./simulators-shell.css?v=20260907-couple-shared-discount-v1"
+    "./simulators-center.css?v=20260907-arrival-docs-v1",
+    "./simulators-shell.css?v=20260907-arrival-docs-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -42240,7 +42383,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260907-couple-shared-discount-v1";
+  const GI_WIZARD_JS_VERSION = "20260907-arrival-docs-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
