@@ -481,7 +481,10 @@
 
   function personFromInsured(ins, payload, rec){
     const helper = global.GI_OFFICIAL_FORM_FILL;
-    const fallbacks = helper?.fileFallbacks ? helper.fileFallbacks(rec, payload) : [payload?.primary, rec];
+    const role = safeTrim(ins?.type) || "primary";
+    const fallbacks = (role === "primary")
+      ? (helper?.fileFallbacks ? helper.fileFallbacks(rec, payload) : [payload?.primary, rec])
+      : [];
     const bag = pickPerson(ins, fallbacks) || {};
     bag.id = safeTrim(ins?.id);
     bag.role = safeTrim(ins?.type) || "primary";
