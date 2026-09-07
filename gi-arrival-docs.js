@@ -5,7 +5,7 @@
 (function installGiArrivalDocs(global){
   "use strict";
 
-  const VERSION = "20260907-combined-arrival-v2";
+  const VERSION = "20260907-hach-health-cpi-v1";
   const NAVY = "#3870ED";
   const AGENCY = "GEMEL INVEST";
   const COVER_ART = "./assets/gi-doc-cover-3d.png";

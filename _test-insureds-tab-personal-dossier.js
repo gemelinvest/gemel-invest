@@ -10,8 +10,8 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260907-combined-arrival-v2";
-const WIZARD_TAG = "20260907-combined-arrival-v2";
+const APP_TAG = "20260907-hach-health-cpi-v1";
+const WIZARD_TAG = "20260907-hach-health-cpi-v1";
 let failed = 0;
 let passed = 0;
 
