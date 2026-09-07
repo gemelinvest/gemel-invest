@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260907-lead-color-picker-fit-v1";
+  const BUILD = "20260907-ops-mirror-compact-ux-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -40135,7 +40135,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260907-lead-color-picker-fit-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260907-ops-mirror-compact-ux-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -40155,7 +40155,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260907-lead-color-picker-fit-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260907-ops-mirror-compact-ux-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -40791,8 +40791,8 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260907-lead-color-picker-fit-v1",
-    "./simulators-shell.css?v=20260907-lead-color-picker-fit-v1"
+    "./simulators-center.css?v=20260907-ops-mirror-compact-ux-v1",
+    "./simulators-shell.css?v=20260907-ops-mirror-compact-ux-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -40821,7 +40821,7 @@ UsersGateUI.init();
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
     "./gi-customers-import.css?v=20260828-menora-health-decl-v1",
-    "./theme-unify-flat.css?v=20260907-lead-color-picker-fit-v1"
+    "./theme-unify-flat.css?v=20260907-ops-mirror-compact-ux-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
     if(document.documentElement.dataset.giSecondaryCss === "1") return;
@@ -42154,7 +42154,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260907-lead-color-picker-fit-v1";
+  const GI_WIZARD_JS_VERSION = "20260907-ops-mirror-compact-ux-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -66531,16 +66531,23 @@ ${inner}
     _fmtMcMoney(raw){
       const v = safeTrim(raw);
       if(!v) return "—";
+      const n = Number(String(v).replace(/[^\d.\-]/g, ""));
+      if(Number.isFinite(n) && n <= 0) return "—";
       try{
         if(typeof CustomersUI !== "undefined" && CustomersUI){
-          if(typeof CustomersUI.formatMoney === "function") return CustomersUI.formatMoney(v);
-          if(typeof CustomersUI.formatMoneyValue === "function"){
-            const n = CustomersUI.asMoneyNumber ? CustomersUI.asMoneyNumber(v) : Number(String(v).replace(/[^\d.\-]/g, ""));
-            if(Number.isFinite(n) && n > 0) return CustomersUI.formatMoneyValue(n);
+          if(Number.isFinite(n) && n > 0 && typeof CustomersUI.formatMoneyValue === "function"){
+            return CustomersUI.formatMoneyValue(n);
+          }
+          if(typeof CustomersUI.formatMoney === "function"){
+            const formatted = CustomersUI.formatMoney(v);
+            if(formatted && formatted !== "₪0") return formatted;
           }
         }
       }catch(_e){}
-      return `${v}₪`;
+      if(Number.isFinite(n) && n > 0){
+        try{ return n.toLocaleString("he-IL") + "₪"; }catch(_e2){ return n + "₪"; }
+      }
+      return v.indexOf("₪") >= 0 ? v : `${v}₪`;
     },
 
     _mcCoverageBits(p){
@@ -66905,9 +66912,9 @@ ${inner}
       this.els.step2Body.innerHTML =
         `<div class="mcNeedsScreen">` +
           `<div class="mcNeedsScript" aria-label="נוסח הקראה">` +
-            `<p class="mcNeedsScript__p">חשוב לי לעדכן אותך כי בשוק ישנן <strong>8</strong> חברות המשווקות את המוצר בבריאות ו־<strong>9</strong> בחיים.</p>` +
-            `<p class="mcNeedsScript__p">חברות הביטוח העיקריות שאנו עובדים איתן בתחום ביטוחי הבריאות הינן <strong>כלל</strong> ו<strong>איילון</strong>, ובתחום ביטוחי החיים הינן <strong>כלל</strong> ו<strong>מגדל</strong>.</p>` +
-            `<p class="mcNeedsScript__p mcNeedsScript__p--ask">אז לאחר שקיבלנו את פנייתך — האם אתה מאשר לנו להיכנס עבורך לממשק <strong>הר הביטוח</strong> ולבצע עבורך בדיקה על מנת להתאים עבורך ביטוח העונה על צרכיך?</p>` +
+            `<p class="mcNeedsScript__p">חשוב לי לעדכן אותך כי בשוק ישנן 8 חברות המשווקות את המוצר בבריאות ו-9 בחיים.</p>` +
+            `<p class="mcNeedsScript__p">חברות הביטוח העיקריות שאנו עובדים איתן בתחום ביטוחי הבריאות הינן <strong>כלל ואיילון</strong>, ובתחום ביטוחי החיים הינן <strong>כלל ומגדל</strong>.</p>` +
+            `<p class="mcNeedsScript__p mcNeedsScript__p--ask">אז לאחר שקיבלנו את פנייתך – האם אתה מאשר לנו להיכנס עבורך לממשק הר הביטוח ולבצע עבורך בדיקה על מנת להתאים עבורך ביטוח העונה על צרכיך?</p>` +
           `</div>` +
           `<div class="mcNeedsNav mcNeedsNav--split">` +
             `<button type="button" class="btn btn--primary" data-mc-needs-act="har-yes">מאשר</button>` +
@@ -68609,6 +68616,19 @@ ${inner}
       return type === "בריאות" || type === "פוליסה משולבת" || /בריאות/i.test(type);
     },
 
+    _mcCoverMonthlyPremiumRaw(item){
+      if(item == null || typeof item !== "object") return "";
+      const monthlyRaw = item.monthlyPremium ?? item.premium ?? item.premiumMonthly ?? item.premiumValue ?? "";
+      const monthlyN = Number(String(monthlyRaw).replace(/[^\d.\-]/g, ""));
+      if(Number.isFinite(monthlyN) && monthlyN > 0) return String(monthlyRaw);
+      const annualRaw = item.annualPremium ?? item.premiumAnnual ?? "";
+      const annualN = Number(String(annualRaw).replace(/[^\d.\-]/g, ""));
+      if(Number.isFinite(annualN) && annualN > 0){
+        return String(Math.round((annualN / 12) * 100) / 100);
+      }
+      return "";
+    },
+
     _mcExistingHealthCoverPremiumRows(p){
       const rows = [];
       const seen = new Set();
@@ -68623,9 +68643,9 @@ ${inner}
       const breakdown = Array.isArray(p?.premiumBreakdown) ? p.premiumBreakdown : [];
       breakdown.forEach((item) => {
         if(!item) return;
-        if(safeTrim(item.label) || safeTrim(item.monthlyPremium) || safeTrim(item.premium)){
-          push(item.label || "כיסוי", item.monthlyPremium || item.premium || "");
-        }
+        const label = safeTrim(item.label) || safeTrim(item.name) || safeTrim(item.cover) || "";
+        const prem = this._mcCoverMonthlyPremiumRaw(item);
+        if(label || prem) push(label || "כיסוי", prem);
       });
       if(rows.length) return rows;
       const names = [];
@@ -68657,9 +68677,18 @@ ${inner}
         policies.forEach((p) => {
           const company = safeTrim(p?.company) || "—";
           const product = safeTrim(p?.type || p?.product) || "—";
-          const prem = this._fmtMcMoney(p?.monthlyPremium || p?.premiumMonthly || p?.premium || p?.premiumBefore || "");
           const isHealth = this._mcIsExistingHealthProduct(p);
           const coverRows = isHealth ? this._mcExistingHealthCoverPremiumRows(p) : [];
+          let premRaw = p?.monthlyPremium || p?.premiumMonthly || p?.premium || p?.premiumBefore || "";
+          if(isHealth && coverRows.length){
+            const coverSum = coverRows.reduce((sum, c) => {
+              const n = Number(String(c.premium || "").replace(/[^\d.\-]/g, ""));
+              return sum + (Number.isFinite(n) && n > 0 ? n : 0);
+            }, 0);
+            const policyN = Number(String(premRaw).replace(/[^\d.\-]/g, ""));
+            if((!Number.isFinite(policyN) || policyN <= 0) && coverSum > 0) premRaw = coverSum;
+          }
+          const prem = this._fmtMcMoney(premRaw);
           const rows = [
             { k: "שם חברה", v: escapeHtml(company) },
             { k: "שם מוצר", v: escapeHtml(product) }
