@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260907-ops-mirror-compact-ux-v1";
+const TAG = "20260907-couple-shared-fields-v1";
 let failed = 0;
 let passed = 0;
 
@@ -276,6 +276,11 @@ assert(sims.includes('title: "כיסוי לילד"'), "agent sees a child-cover 
 assert(sims.includes("יחול רק על"), "notice names the eligible insured");
 assert(sims.includes("function riskSimBindCoupleCoverSync(sim)"), "cover checkboxes are hooked in the shell");
 assert(sims.includes("try { riskSimBindCoupleCoverSync(sim); } catch(_eCov) {}"), "shell bind installs couple cover sync");
+assert(sims.includes("function riskSimCopyCoupleSharedFieldsFromSeed(sim)"), "couple copies sum/date from the primary");
+assert(sims.includes("function riskSimEnsureCoupleSharedResults(sim)"), "couple add recalcs members after copying shared fields");
+assert(sims.includes("try { riskSimBindCoupleSharedFieldSync(sim); } catch(_eShare) {}"), "shell bind installs couple sum/date sync");
+assert(wiz.includes("fillCoupleSharedPolicyFields(policy)"), "wizard fills missing couple sums from the primary");
+assert(wiz.includes("coupleSharedAmount(policy, perInsuredMap, fallback)"), "couple validation can share one sum/date");
 assert(wiz.includes("getPolicyInsuredCoverLabels(policy, insId)"), "row can read covers per insured");
 assert(wiz.includes("healthCoversPerInsured"), "policy stores covers per insured");
 assert(wiz.includes("הצג פירוט"), "multi-insured row has a details button");

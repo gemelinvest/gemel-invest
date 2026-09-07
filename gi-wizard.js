@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260907-ops-mirror-compact-ux-v1";
+  const GI_WIZARD_BUILD = "20260907-couple-shared-fields-v1";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -15226,7 +15226,8 @@ if(path === "birthDate"){
       }
 
       if(!isMedicare && (d.type === "סרטן" || d.type === "מחלות קשות")){
-        const missingComp = vInsuredIds.find(iid => !safeTrim((d.compensationPerInsured || {})[iid]));
+        const sharedComp = this.coupleSharedAmount(d, d.compensationPerInsured, d.compensation);
+        const missingComp = vInsuredIds.find(iid => !safeTrim((d.compensationPerInsured || {})[iid]) && !sharedComp);
         if(missingComp){
           const ins = this.insureds.find(x => x.id === missingComp);
           miss(`סכום פיצוי — ${ins?.label || "מבוטח"}`, {
@@ -15237,7 +15238,8 @@ if(path === "birthDate"){
       }
 
       if(!isMedicare && (d.type === "ריסק" || d.type === "ריסק משכנתא")){
-        const missingSum = vInsuredIds.find(iid => !safeTrim((d.sumInsuredPerInsured || {})[iid]) && !safeTrim(d.sumInsured));
+        const sharedSum = this.coupleSharedAmount(d, d.sumInsuredPerInsured, d.sumInsured);
+        const missingSum = vInsuredIds.find(iid => !safeTrim((d.sumInsuredPerInsured || {})[iid]) && !sharedSum);
         if(missingSum){
           const ins = this.insureds.find(x => x.id === missingSum);
           miss(`סכום ביטוח — ${ins?.label || "מבוטח"}`, {
@@ -15953,6 +15955,50 @@ if(path === "birthDate"){
 
     getPolicyInsuredIds(policy){
       return Array.isArray(policy?.insuredIds) && policy.insuredIds.length ? policy.insuredIds.slice() : (policy?.insuredId ? [policy.insuredId] : []);
+    },
+
+    /* GI-COUPLE-SHARED-FIELDS 2026-09-07 — משלים סכום/פיצוי חסר למשני מתוך הראשי.
+       לא דורס ערך שכבר הוזן, ולא נוגע בפרמיה. */
+    fillCoupleSharedPolicyFields(policy){
+      if(!policy || policy.insuredMode !== "couple") return policy;
+      const ids = this.getPolicyInsuredIds(policy);
+      if(ids.length < 2) return policy;
+      const firstFilled = (map, fallback) => {
+        for(let i = 0; i < ids.length; i++){
+          const v = safeTrim(map && map[ids[i]]);
+          if(v) return v;
+        }
+        return safeTrim(fallback);
+      };
+      const seedSum = firstFilled(policy.sumInsuredPerInsured, policy.sumInsured);
+      const seedComp = firstFilled(policy.compensationPerInsured, policy.compensation);
+      if(seedSum){
+        policy.sumInsuredPerInsured = policy.sumInsuredPerInsured && typeof policy.sumInsuredPerInsured === "object"
+          ? policy.sumInsuredPerInsured : {};
+        ids.forEach((id) => {
+          if(!safeTrim(policy.sumInsuredPerInsured[id])) policy.sumInsuredPerInsured[id] = seedSum;
+        });
+        if(!safeTrim(policy.sumInsured)) policy.sumInsured = seedSum;
+      }
+      if(seedComp){
+        policy.compensationPerInsured = policy.compensationPerInsured && typeof policy.compensationPerInsured === "object"
+          ? policy.compensationPerInsured : {};
+        ids.forEach((id) => {
+          if(!safeTrim(policy.compensationPerInsured[id])) policy.compensationPerInsured[id] = seedComp;
+        });
+        if(!safeTrim(policy.compensation)) policy.compensation = seedComp;
+      }
+      return policy;
+    },
+
+    coupleSharedAmount(policy, perInsuredMap, fallback){
+      if(!policy || policy.insuredMode !== "couple") return safeTrim(fallback);
+      const ids = this.getPolicyInsuredIds(policy);
+      for(let i = 0; i < ids.length; i++){
+        const v = safeTrim(perInsuredMap && perInsuredMap[ids[i]]);
+        if(v) return v;
+      }
+      return safeTrim(fallback);
     },
 
     getHealthAddonPremiumValue(policy, cover, insuredId){
@@ -16729,6 +16775,7 @@ if(path === "birthDate"){
       draft.insuredIds = ids.slice();
       draft.insuredId = ids[0] || "";
       draft.insuredMode = "couple";
+      this.fillCoupleSharedPolicyFields(draft);
       const legal = this.resolveSimulatorLegal(
         selected.map((e) => e.legal).find((x) => this.simulatorLegalHasContent(x)) || selected.map((e) => e.legal).find(Boolean),
         ids[0]
@@ -17063,6 +17110,7 @@ if(path === "birthDate"){
           ? d.premiumAfterCoverDiscounts
           : undefined
       };
+      this.fillCoupleSharedPolicyFields(p);
       if(!p.riskSimQuotes) delete p.riskSimQuotes;
       if(!p.healthCoversPerInsured || !Object.keys(p.healthCoversPerInsured).length) delete p.healthCoversPerInsured;
       if(!p.simStateByInsured || !Object.keys(p.simStateByInsured).length) delete p.simStateByInsured;

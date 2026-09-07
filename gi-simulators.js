@@ -961,6 +961,7 @@
     riskSimMountLegalPanel(sim);
     try { riskSimBindLegalPanel(sim); } catch(_e) {}
     try { riskSimBindCoupleCoverSync(sim); } catch(_eCov) {}
+    try { riskSimBindCoupleSharedFieldSync(sim); } catch(_eShare) {}
   }
   function riskSimBindLegalPanel(sim){
     const modal = sim && sim._modal;
@@ -1205,6 +1206,111 @@
       const st = sim._state && sim._state[id];
       if(!st) return;
       try { sim._recalcState(st); } catch(_e) {}
+    });
+  }
+
+  /* GI-COUPLE-SHARED-FIELDS 2026-09-07
+     פוליסה זוגית: סכום ביטוח / סכום פיצוי / תאריך תחילה הם שדות משותפים.
+     הפרמיה נשארת לכל מבוטח (גיל/מין/עישון). אין שינוי במנועי תעריף. */
+  const RISK_SIM_COUPLE_SHARED_FIELDS = ["sumInsured", "compensation", "insuranceStartDate"];
+  function riskSimCopyCoupleSharedFieldsFromId(sim, sourceId){
+    if(!sim || !sim._giCoupleOn || !sim._ctx || !sim._ctx.wizardWorkspace) return;
+    if(!riskSimAllowsCouplePolicy(sim._ctx.product)) return;
+    const srcId = safeTrim(sourceId);
+    const src = srcId && sim._state && sim._state[srcId];
+    if(!src) return;
+    const sum = safeTrim(src.sumInsured);
+    const comp = safeTrim(src.compensation);
+    const start = safeTrim(src.insuranceStartDate);
+    if(!sum && !comp && !start) return;
+    riskSimCoupleSelectedIds(sim).forEach((id) => {
+      if(id === srcId) return;
+      const st = sim._state && sim._state[id];
+      if(!st) return;
+      let changed = false;
+      if(sum && safeTrim(st.sumInsured) !== sum){
+        st.sumInsured = src.sumInsured;
+        changed = true;
+      }
+      if(comp && safeTrim(st.compensation) !== comp){
+        st.compensation = src.compensation;
+        changed = true;
+      }
+      if(start && safeTrim(st.insuranceStartDate) !== start){
+        st.insuranceStartDate = src.insuranceStartDate;
+        st.insuranceStartDateSource = src.insuranceStartDateSource || "couple";
+        if(typeof sim._syncAge === "function"){
+          try { sim._syncAge(st); } catch(_eAge) {}
+        }
+        changed = true;
+      }
+      if(!changed) return;
+      st.result = null;
+      st.error = null;
+      st.dirtySinceSave = true;
+    });
+  }
+  function riskSimCopyCoupleSharedFieldsFromSeed(sim){
+    riskSimCopyCoupleSharedFieldsFromId(sim, riskSimCoupleSeedInsuredId(sim));
+  }
+  function riskSimCalcOtherCoupleMembers(sim, skipId){
+    if(!sim || !sim._giCoupleOn || sim._giCoupleCalcLock) return;
+    sim._giCoupleCalcLock = true;
+    try {
+      const skip = safeTrim(skipId);
+      riskSimCoupleSelectedIds(sim).forEach((id) => {
+        if(id === skip) return;
+        try {
+          if(typeof sim._calc === "function") sim._calc(id);
+          else if(typeof sim._recalcState === "function"){
+            const st = sim._state && sim._state[id];
+            if(st) sim._recalcState(st);
+          }
+        } catch(_eCalc) {}
+      });
+    } finally {
+      sim._giCoupleCalcLock = false;
+    }
+  }
+  function riskSimEnsureCoupleSharedResults(sim){
+    if(!sim || !sim._giCoupleOn || !sim._ctx || !sim._ctx.wizardWorkspace) return;
+    if(!riskSimAllowsCouplePolicy(sim._ctx.product)) return;
+    try { riskSimCopyCoupleSharedFieldsFromSeed(sim); } catch(_eCopy) {}
+    riskSimCoupleSelectedIds(sim).forEach((id) => {
+      if(riskSimCollectResultForInsured(sim, id)) return;
+      try {
+        if(typeof sim._calc === "function") sim._calc(id);
+        else if(typeof sim._recalcState === "function"){
+          const st = sim._state && sim._state[id];
+          if(st) sim._recalcState(st);
+        }
+      } catch(_eCalc) {}
+    });
+  }
+  function riskSimCoupleSharedFieldName(el){
+    if(!el || !el.attributes) return "";
+    const attrs = el.attributes;
+    for(let i = 0; i < attrs.length; i++){
+      const name = attrs[i].name || "";
+      const val = attrs[i].value || "";
+      if(name.slice(-6) === "-field" && RISK_SIM_COUPLE_SHARED_FIELDS.indexOf(val) >= 0) return val;
+    }
+    return "";
+  }
+  function riskSimBindCoupleSharedFieldSync(sim){
+    const modal = sim && sim._modal;
+    if(!modal || !sim._ctx || !sim._ctx.wizardWorkspace) return;
+    if(!riskSimAllowsCouplePolicy(sim._ctx.product)) return;
+    modal.querySelectorAll("input").forEach((el) => {
+      if(!riskSimCoupleSharedFieldName(el) || el._giCoupleSharedBound) return;
+      el._giCoupleSharedBound = true;
+      const run = () => {
+        if(!sim._giCoupleOn) return;
+        const active = safeTrim(sim._activeInsuredId) || riskSimCoupleSeedInsuredId(sim);
+        try { riskSimCopyCoupleSharedFieldsFromId(sim, active); } catch(_e) {}
+      };
+      on(el, "input", run);
+      on(el, "change", run);
     });
   }
   function riskSimCopyCoupleHealthCoversFromSeed(sim){
@@ -1462,6 +1568,7 @@
   function riskSimPurchaseWizardInsureds(sim){
     if(!sim || !sim._ctx?.wizardWorkspace) return;
     try { riskSimCaptureLegalFromDom(sim); } catch(_e) {}
+    try { riskSimEnsureCoupleSharedResults(sim); } catch(_eCouple) {}
     try {
       if(typeof sim._ctx.onWizardSessionCapture === "function"){
         sim._ctx.onWizardSessionCapture(riskSimSnapshotSession(sim));
@@ -1719,6 +1826,10 @@
             if(native) native.click();
             else if(typeof sim._render === "function") sim._render();
           }
+          if(sim._giCoupleOn){
+            try { riskSimCopyCoupleSharedFieldsFromId(sim, id); } catch(_eShare) {}
+            try { riskSimCalcOtherCoupleMembers(sim, id); } catch(_eOth) {}
+          }
         } catch(_e) {
           try { if(typeof sim._render === "function") sim._render(); } catch(_e2) {}
         }
@@ -1755,6 +1866,7 @@
           sim._giCoupleCoverCustomized = {};
           sim._giCoupleChildIntent = {};
           riskSimSeedCoupleIdsIfEmpty(sim);
+          try { riskSimCopyCoupleSharedFieldsFromSeed(sim); } catch(_eShare) {}
           try { riskSimSyncCoupleHealthCovers(sim); } catch(_eSync) {}
         }
         riskSimNotifyCoupleChange(sim);
@@ -1775,6 +1887,7 @@
         if(!chk.checked && sim._giCoupleCoverCustomized) delete sim._giCoupleCoverCustomized[id];
         riskSimNotifyCoupleChange(sim);
         if(chk.checked){
+          try { riskSimCopyCoupleSharedFieldsFromSeed(sim); } catch(_eShareIns) {}
           try { riskSimSyncCoupleHealthCovers(sim); } catch(_eSyncIns) {}
           const pick = riskSimGetPick(sim, id);
           const curCo = safeTrim(sim._ctx?.company);
@@ -1818,6 +1931,7 @@
     }
     try { riskSimBindLegalPanel(sim); } catch(_eLegal) {}
     try { riskSimBindCoupleCoverSync(sim); } catch(_eCov) {}
+    try { riskSimBindCoupleSharedFieldSync(sim); } catch(_eShare) {}
   }
 
   function riskSimCollectCenterDetails(sim){
