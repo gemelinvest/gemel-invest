@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260907-my-leads-assign-visible-v1";
+  const BUILD = "20260907-lead-color-picker-fit-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -40135,7 +40135,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260907-my-leads-assign-visible-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260907-lead-color-picker-fit-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -40155,7 +40155,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260907-my-leads-assign-visible-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260907-lead-color-picker-fit-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -40791,8 +40791,8 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260907-my-leads-assign-visible-v1",
-    "./simulators-shell.css?v=20260907-my-leads-assign-visible-v1"
+    "./simulators-center.css?v=20260907-lead-color-picker-fit-v1",
+    "./simulators-shell.css?v=20260907-lead-color-picker-fit-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -40821,7 +40821,7 @@ UsersGateUI.init();
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
     "./gi-customers-import.css?v=20260828-menora-health-decl-v1",
-    "./theme-unify-flat.css?v=20260907-my-leads-assign-visible-v1"
+    "./theme-unify-flat.css?v=20260907-lead-color-picker-fit-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
     if(document.documentElement.dataset.giSecondaryCss === "1") return;
@@ -42154,7 +42154,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260907-my-leads-assign-visible-v1";
+  const GI_WIZARD_JS_VERSION = "20260907-lead-color-picker-fit-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -62601,9 +62601,57 @@ const CampaignLeadsStore = {
   };
 
   // ===== בוחר צבע לשורת ליד =====
+  function campaignLeadColorPickerPlacement(anchorRect, panelSize, viewSize, pad){
+    const gap = 6;
+    const margin = Math.max(4, Number(pad) || 12);
+    const vw = Math.max(0, Number(viewSize?.width) || 0);
+    const vh = Math.max(0, Number(viewSize?.height) || 0);
+    const rawW = Math.max(0, Number(panelSize?.width) || 0);
+    const rawH = Math.max(0, Number(panelSize?.height) || 0);
+    const maxW = Math.max(0, vw - margin * 2);
+    const panelW = maxW > 0 ? Math.min(rawW || maxW, maxW) : rawW;
+    const aLeft = Number(anchorRect?.left) || 0;
+    const aRight = Number(anchorRect?.right) || 0;
+    const aTop = Number(anchorRect?.top) || 0;
+    const aBottom = Number(anchorRect?.bottom) || 0;
+
+    /* אופק: נפתחים לתוך הטבלה (ימינה מכפתור הפעולות שבשמאל), לא אל מחוץ למסך. */
+    let left = aLeft;
+    if(left + panelW > vw - margin){
+      left = aRight - panelW;
+    }
+    if(left < margin) left = margin;
+    if(left + panelW > vw - margin) left = Math.max(margin, vw - panelW - margin);
+
+    const spaceBelow = vh - margin - (aBottom + gap);
+    const spaceAbove = aTop - margin - gap;
+    let top = aBottom + gap;
+    let maxHeight = 0;
+    const minScrollH = 120;
+    if(rawH <= spaceBelow){
+      top = aBottom + gap;
+    } else if(rawH <= spaceAbove){
+      top = aTop - gap - rawH;
+    } else if(spaceBelow >= spaceAbove){
+      maxHeight = Math.max(minScrollH, spaceBelow);
+      top = aBottom + gap;
+    } else {
+      maxHeight = Math.max(minScrollH, spaceAbove);
+      top = aTop - gap - Math.min(rawH, maxHeight);
+    }
+    const usedH = maxHeight || rawH;
+    if(top < margin) top = margin;
+    if(top + usedH > vh - margin){
+      top = Math.max(margin, vh - margin - usedH);
+    }
+    return { left, top, maxHeight, width: panelW };
+  }
+
   const CampaignLeadColorPicker = {
     _overlay: null,
     _lead: null,
+    _anchorBtn: null,
+    _onReposition: null,
 
     COLORS: [
       { value: "#dbeafe", label: "כחול בהיר" },
@@ -62669,32 +62717,13 @@ const CampaignLeadsStore = {
 
       document.body.appendChild(overlay);
       this._overlay = overlay;
-
-      // מיקום ליד הכפתור שנלחץ — עם בדיקת גבולות מסך
+      this._anchorBtn = anchorBtn || null;
+      this._bindColorPickerReposition();
       if(anchorBtn){
-        try{
-          const rect = anchorBtn.getBoundingClientRect();
-          const panel = overlay.querySelector(".lcColorPicker__panel");
-          panel.style.position = "fixed";
-          panel.style.top = (rect.bottom + 6) + "px";
-          panel.style.right = "";
-          panel.style.left = "";
-          // חישוב אחרי שהפאנל ב-DOM כדי לדעת את רוחבו
-          requestAnimationFrame(() => {
-            try {
-              const panelW = panel.offsetWidth || 280;
-              const viewW = window.innerWidth;
-              // מנסים ליישר לימין הכפתור (כמו קודם)
-              let desiredRight = viewW - rect.right;
-              // אם זה גורם לחריגה משמאל — מזיזים
-              let desiredLeft = rect.right - panelW;
-              if(desiredLeft < 8){ desiredLeft = 8; }
-              if(desiredLeft + panelW > viewW - 8){ desiredLeft = viewW - panelW - 8; }
-              panel.style.left = desiredLeft + "px";
-              panel.style.right = "";
-            } catch(_e2){}
-          });
-        }catch(_e){}
+        try {
+          this._placePanel();
+          requestAnimationFrame(() => { try { this._placePanel(); } catch(_e2){} });
+        } catch(_e){}
       }
 
       overlay.querySelector(".lcColorPicker__closeBtn").addEventListener("click", () => this.close());
@@ -62730,9 +62759,50 @@ const CampaignLeadsStore = {
       await CampaignMyLeadsUI.refresh(false);
     },
 
+    _bindColorPickerReposition(){
+      if(!this._onReposition){
+        this._onReposition = () => { try { this._placePanel(); } catch(_e){} };
+      }
+      window.removeEventListener("resize", this._onReposition);
+      window.removeEventListener("scroll", this._onReposition, true);
+      window.addEventListener("resize", this._onReposition);
+      window.addEventListener("scroll", this._onReposition, true);
+    },
+
+    _placePanel(){
+      const overlay = this._overlay;
+      const anchorBtn = this._anchorBtn;
+      if(!overlay || !anchorBtn) return;
+      const panel = overlay.querySelector(".lcColorPicker__panel");
+      if(!panel) return;
+      const rect = anchorBtn.getBoundingClientRect();
+      panel.style.position = "fixed";
+      panel.style.right = "auto";
+      const place = campaignLeadColorPickerPlacement(
+        rect,
+        { width: panel.offsetWidth || 280, height: panel.offsetHeight || 320 },
+        { width: window.innerWidth, height: window.innerHeight },
+        12
+      );
+      panel.style.left = Math.round(place.left) + "px";
+      panel.style.top = Math.round(place.top) + "px";
+      if(place.maxHeight){
+        panel.style.maxHeight = Math.round(place.maxHeight) + "px";
+        panel.style.overflowY = "auto";
+      } else {
+        panel.style.maxHeight = "";
+        panel.style.overflowY = "";
+      }
+    },
+
     close(){
+      if(this._onReposition){
+        window.removeEventListener("resize", this._onReposition);
+        window.removeEventListener("scroll", this._onReposition, true);
+      }
       if(this._overlay){ this._overlay.remove(); this._overlay = null; }
       this._lead = null;
+      this._anchorBtn = null;
     }
   };
   // ===== סוף בוחר צבע =====
