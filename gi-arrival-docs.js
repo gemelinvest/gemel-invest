@@ -5,7 +5,7 @@
 (function installGiArrivalDocs(global){
   "use strict";
 
-  const VERSION = "20260907-combined-arrival-v1";
+  const VERSION = "20260907-combined-arrival-v2";
   const NAVY = "#3870ED";
   const AGENCY = "GEMEL INVEST";
   const COVER_ART = "./assets/gi-doc-cover-3d.png";
@@ -29,6 +29,32 @@
   }
   function nowISO(){
     try { return new Date().toISOString(); } catch(_e){ return ""; }
+  }
+  function uint8ToBase64(bytes){
+    const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+    if(typeof Buffer !== "undefined" && typeof Buffer.from === "function"){
+      return Buffer.from(u8).toString("base64");
+    }
+    if(typeof btoa === "function"){
+      let bin = "";
+      const chunk = 0x8000;
+      for(let i = 0; i < u8.length; i += chunk){
+        bin += String.fromCharCode.apply(null, u8.subarray(i, i + chunk));
+      }
+      return btoa(bin);
+    }
+    const table = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let out = "";
+    for(let i = 0; i < u8.length; i += 3){
+      const a = u8[i];
+      const b = i + 1 < u8.length ? u8[i + 1] : 0;
+      const c = i + 2 < u8.length ? u8[i + 2] : 0;
+      out += table[a >> 2];
+      out += table[((a & 3) << 4) | (b >> 4)];
+      out += (i + 1 < u8.length) ? table[((b & 15) << 2) | (c >> 6)] : "=";
+      out += (i + 2 < u8.length) ? table[c & 63] : "=";
+    }
+    return out;
   }
   function todayIL(){
     try {
@@ -1155,6 +1181,14 @@
       const d = draft || this.buildDraft({});
       return this.wrapHtml("מסמך התאמה · התפתחות פרמיה · נספח ה׳", this.renderHatamaPages(d) + this.renderPremiaPages(d));
     },
+    embedNispahInHtml(html, nispahBytes){
+      const src = String(html || "");
+      if(!nispahBytes || !nispahBytes.length) return src;
+      const b64 = uint8ToBase64(nispahBytes);
+      const block = `<section class="giArrivalNispahEmbed"><h2>נספח ה׳ · הרשאת הר הביטוח</h2><iframe title="נספח ה׳" src="data:application/pdf;base64,${b64}" style="width:100%;min-height:1100px;border:0"></iframe></section>`;
+      if(src.indexOf("</body>") >= 0) return src.replace("</body>", block + "</body>");
+      return src + block;
+    },
 
     renderPreviewHtml(draft, kind){
       if(kind === "premia") return this.renderPremiaHtml(draft);
@@ -1328,8 +1362,22 @@
       } catch(err){
         try { console.warn("GI_ARRIVAL_PACK_PDF_FAILED", err); } catch(_e) {}
         const draft = this.buildDraft(rec);
-        const html = this.renderCombinedHtml(draft);
-        return this.exportHtmlToPdf(html, this.fileName("pack", draft), null);
+        let html = this.renderCombinedHtml(draft);
+        try {
+          const nispahBytes = await this.fillNispahPdf(draft);
+          html = this.embedNispahInHtml(html, nispahBytes);
+        } catch(_e2) {}
+        const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = String(this.fileName("pack", draft) || "document").replace(/\.pdf$/i, "") + ".html";
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        return false;
       } finally {
         if(triggerBtn){
           triggerBtn.disabled = false;

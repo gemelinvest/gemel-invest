@@ -1,4 +1,4 @@
-/* GI-ARRIVAL-DOCS 20260907-combined-arrival-v1
+/* GI-ARRIVAL-DOCS 20260907-combined-arrival-v2
    מסמך התאמה + התפתחות פרמיה + נספח ה׳ — אחד-לאחד מול המסמכים שנשלחו.
    Run: node _test-arrival-docs.js
 */
@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260907-combined-arrival-v1";
+const TAG = "20260907-combined-arrival-v2";
 let failed = 0;
 let passed = 0;
 
@@ -22,6 +22,13 @@ function assert(cond, msg){
     failed += 1;
     console.error("  FAIL  " + msg);
   }
+}
+
+function sliceBetween(src, startToken, endToken){
+  const start = src.indexOf(startToken);
+  const end = src.indexOf(endToken, start + startToken.length);
+  if(start < 0 || end < 0) return "";
+  return src.slice(start, end);
 }
 
 function loadModule(extra){
@@ -61,12 +68,17 @@ assert(app.includes('premiumDevelopment: "premium_development_report"'), "premia
 assert(app.includes('nispahHarAuth: "nispah_he_har_auth"'), "nispah type kept for strip");
 assert(app.includes('arrivalPack: "customer_arrival_pack"'), "combined pack type");
 assert(app.includes("injectArrivalDocs"), "inject helper");
+const enrichSrc = sliceBetween(app, "enrichPayloadWithSaveDocuments(payload, context = {}){", "syncFollowupDocsFromLiveDetect(payload, options = {}){");
+assert(enrichSrc.includes('kind === "health_wizard"') && enrichSrc.includes("injectArrivalDocs(payload.customerDocuments"), "wizard save persists pack");
+assert(enrichSrc.includes('kind === "health_edit"') && /health_edit[\s\S]*injectArrivalDocs/.test(enrichSrc), "edit save persists pack");
 assert(app.includes("downloadArrivalDoc"), "download helper");
 assert(app.includes("data-download-arrival-pack-doc"), "combined download button");
 assert(app.includes("GiArrivalDocs.buildDraft"), "preview uses draft");
 assert(app.includes("fillNispahPdf"), "nispah PDF fill wired");
 assert(app.includes("appendArrivalNispahPreview"), "combined preview appends nispah");
 assert(app.includes("renderCombinedHtml") || modSrc.includes("renderCombinedHtml"), "combined HTML");
+assert(modSrc.includes("embedNispahInHtml"), "html fallback embeds nispah");
+assert(modSrc.includes("giArrivalNispahEmbed"), "fallback keeps nispah in the same file");
 assert(!modSrc.includes("Hashlama") && !modSrc.includes("גריגורי"), "no Hashlama branding in generator");
 assert(fs.existsSync(path.join(ROOT, "forms/har-authorization/nispah-he.pdf")), "official nispah PDF stored");
 assert(fs.existsSync(path.join(ROOT, "assets/gi-doc-cover-3d.png")), "GEMEL 3D cover asset");
@@ -189,11 +201,19 @@ assert(premia.includes("40") && premia.includes("42"), "includes ages that the t
 assert(!/>43</.test(premia) && !/>44</.test(premia), "stops when tariff fails — no invented ages");
 
 const combined = api.renderCombinedHtml(draft);
-const iHatama = combined.indexOf("מסמך התאמה");
-const iPremia = combined.indexOf("דוח התפתחות פרמיה");
-assert(iHatama >= 0 && iPremia > iHatama, "combined HTML is hatama then premia");
-assert(combined.includes("חלק ב' - הכיסויים הביטוחיים המומלצים"), "combined keeps hatama part B");
+const bodyStart = combined.indexOf("giArrivalRoot");
+const iCover = combined.indexOf("התאמת הביטוח לצורכי המועמד לביטוח", bodyStart);
+const iPartB = combined.indexOf("חלק ב' - הכיסויים הביטוחיים המומלצים", bodyStart);
+const iYear1 = combined.indexOf("כיסויים ועלויות חודשיות שנה א", bodyStart);
+const iPremiaHeading = combined.indexOf("דוח התפתחות פרמיה", bodyStart);
+assert(bodyStart >= 0 && iCover > bodyStart, "hatama cover is in the document body");
+assert(iPartB > iCover, "hatama part B comes after the cover");
+assert(iYear1 > iPartB && iPremiaHeading > iPartB, "premia report comes after hatama pages");
 assert(combined.includes("אישור המועמד לביטוח"), "combined keeps premia approval");
+assert(typeof api.embedNispahInHtml === "function", "html fallback can embed nispah");
+const withNispah = api.embedNispahInHtml(combined, new Uint8Array([37, 80, 68, 70]));
+assert(withNispah.indexOf("giArrivalNispahEmbed") > iYear1, "embedded nispah comes after premia");
+assert(withNispah.includes("data:application/pdf;base64,"), "nispah is embedded as PDF data");
 
 console.log("\n5) no invented age table without tariff");
 const noEngine = loadModule({});
@@ -275,6 +295,36 @@ const nispahApi = loadModule({
   const merged = await mergeApi.mergePdfBytes([new Uint8Array([1]), new Uint8Array([2])]);
   assert(merged && merged.length === 2, "merge returns bytes");
   assert(pages.join(",") === "body:0,body:1,nispah:0", "body pages then nispah");
+
+  console.log("\n9) persist pack on save payload");
+  function persistLikeSave(payload){
+    if(!Array.isArray(payload.customerDocuments)) payload.customerDocuments = [];
+    api.injectDocs(payload.customerDocuments, { payload, agentName: "סוכן בדיקה" }, payload, { uploadedBy: "סוכן בדיקה" });
+    return payload;
+  }
+  const savePayload = {
+    flowType: "health",
+    primary: sample.payload.primary,
+    insureds: sample.payload.insureds,
+    newPolicies: sample.payload.newPolicies,
+    customerDocuments: [
+      { id: "ops1", type: "health_ops", name: "דוח תפעולי" },
+      { id: "old1", type: "suitability_document", name: "התאמה" },
+      { id: "old2", type: "premium_development_report", name: "פרמיה" },
+      { id: "old3", type: "nispah_he_har_auth", name: "נספח" }
+    ]
+  };
+  const afterWizard = persistLikeSave(JSON.parse(JSON.stringify(savePayload)));
+  const wizardTypes = (afterWizard.customerDocuments || []).map((d) => d.type);
+  assert(wizardTypes.filter((t) => t === "customer_arrival_pack").length === 1, "wizard save writes one pack");
+  assert(wizardTypes.includes("health_ops"), "wizard save keeps other docs");
+  assert(!wizardTypes.includes("suitability_document") && !wizardTypes.includes("premium_development_report") && !wizardTypes.includes("nispah_he_har_auth"), "wizard save strips the old three");
+
+  const afterEdit = persistLikeSave(JSON.parse(JSON.stringify(savePayload)));
+  const editTypes = (afterEdit.customerDocuments || []).map((d) => d.type);
+  assert(editTypes.filter((t) => t === "customer_arrival_pack").length === 1, "edit save writes one pack");
+  assert(editTypes.includes("health_ops"), "edit save keeps other docs");
+  assert(!editTypes.includes("suitability_document") && !editTypes.includes("premium_development_report") && !editTypes.includes("nispah_he_har_auth"), "edit save strips the old three");
 
   console.log("\n" + passed + " passed, " + failed + " failed");
   process.exit(failed ? 1 : 0);
