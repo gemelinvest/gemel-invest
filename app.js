@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260906-sales-sync-v1";
+  const BUILD = "20260907-lead-inbox-color-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -6053,6 +6053,13 @@
     { value: "irrelevant", label: "לא רלוונטי" }
   ];
 
+  /* GI-LEAD-PEER-REASSIGN 2026-09-07
+     יוזרים ממחלקה אחרת שנציג רגיל יכול לשייך אליהם ליד מ«הלידים שלי».
+     התאמה לפי id / username / name (בלי תלות ברישיות).
+     אם הרשימה ריקה — נופלים לנציגי תפעול פעילים (opsAgent). */
+  const CAMPAIGN_LEAD_AGENT_PEER_REASSIGN_KEYS = [
+  ];
+
   // GI-GOLD-LEAD — tracking helpers
   const GOLD_LEAD_UNTOUCHED_MS = 60 * 60 * 1000;   // 1 hour
 
@@ -7056,6 +7063,45 @@
         if(aRank !== bRank) return aRank - bRank;
         return safeTrim(a.name).localeCompare(safeTrim(b.name), "he");
       });
+  }
+
+  function campaignLeadPeerReassignKeySet(){
+    return new Set(
+      (CAMPAIGN_LEAD_AGENT_PEER_REASSIGN_KEYS || [])
+        .map((k) => safeTrim(k).toLowerCase())
+        .filter(Boolean)
+    );
+  }
+
+  function campaignLeadAgentMatchesPeerReassignKey(agent, keys){
+    if(!agent || !keys || !keys.size) return false;
+    const id = safeTrim(agent.id).toLowerCase();
+    const name = safeTrim(agent.name).toLowerCase();
+    const user = safeTrim(agent.username).toLowerCase();
+    return !!(id && keys.has(id)) || !!(name && keys.has(name)) || !!(user && keys.has(user));
+  }
+
+  function getCampaignLeadPeerReassignAgents(){
+    const list = Array.isArray(State.data?.agents) ? State.data.agents : [];
+    const keys = campaignLeadPeerReassignKeySet();
+    const sessionIds = getCampaignLeadSessionAgentIds();
+    let agents = list.filter((a) => a && a.active !== false && safeTrim(a.name));
+    if(keys.size){
+      agents = agents.filter((a) => campaignLeadAgentMatchesPeerReassignKey(a, keys));
+    } else {
+      agents = agents.filter((a) => safeTrim(a.role) === "opsAgent");
+    }
+    return agents
+      .filter((a) => !sessionIds.has(String(a.id)))
+      .sort((a, b) => safeTrim(a.name).localeCompare(safeTrim(b.name), "he"));
+  }
+
+  function canCampaignLeadPeerReassign(){
+    try {
+      return !!(Auth?.canAccessCampaignMyLeads?.() && !Auth?.canAccessCampaignLeadsInbox?.());
+    } catch(_e) {
+      return false;
+    }
   }
 
   function normalizeCustomerRecord(c, idx=0){
@@ -40028,7 +40074,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260906-sales-sync-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260907-lead-inbox-color-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -40048,7 +40094,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260906-sales-sync-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260907-lead-inbox-color-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -40684,8 +40730,8 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260906-sales-sync-v1",
-    "./simulators-shell.css?v=20260906-sales-sync-v1"
+    "./simulators-center.css?v=20260907-lead-inbox-color-v1",
+    "./simulators-shell.css?v=20260907-lead-inbox-color-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -40714,7 +40760,7 @@ UsersGateUI.init();
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
     "./gi-customers-import.css?v=20260828-menora-health-decl-v1",
-    "./theme-unify-flat.css?v=20260825-hmo-text-v1"
+    "./theme-unify-flat.css?v=20260907-lead-inbox-color-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
     if(document.documentElement.dataset.giSecondaryCss === "1") return;
@@ -42047,7 +42093,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260906-sales-sync-v1";
+  const GI_WIZARD_JS_VERSION = "20260907-lead-inbox-color-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -59879,10 +59925,32 @@ const CampaignLeadsStore = {
   };
 
   const CAMPAIGN_LEAD_NOTE_BTN_ICON = '<svg class="lcTrackNoteBtn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/><path d="M9 13h6"/><path d="M9 17h4"/></svg>';
+  const CAMPAIGN_LEAD_COLOR_BTN_ICON = '<svg class="lcMyLeadIconBtn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22a10 10 0 0 0 10-10c0-5-4-8-8-8a6 6 0 0 0-6 6c0 3 2 4 2 6a2 2 0 0 0 2 2Z"/><circle cx="13.5" cy="7.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="17.2" cy="10.2" r="1.1" fill="currentColor" stroke="none"/><circle cx="9.2" cy="9.8" r="1.1" fill="currentColor" stroke="none"/></svg>';
 
-  function campaignLeadReassignBtnHtml(leadId){
+  function campaignLeadRowColorClass(lead){
+    return safeTrim(lead?.rowColor) ? " lcLeadRow--custom-color" : "";
+  }
+
+  function campaignLeadRowColorStyle(lead){
+    const customColor = safeTrim(lead?.rowColor);
+    return customColor ? ` style="--lead-custom-color:${escapeHtml(customColor)}"` : "";
+  }
+
+  function campaignLeadColorBtnHtml(lead){
+    const id = safeTrim(lead?.id);
+    if(!id) return "";
+    return `<button class="lcMyLeadIconBtn lcLeadColorBtn" type="button" data-cl-color-id="${escapeHtml(id)}" title="צבע שורה" aria-label="בחר צבע לשורה">${CAMPAIGN_LEAD_COLOR_BTN_ICON}</button>`;
+  }
+
+  function campaignLeadReassignBtnHtml(leadId, mode){
+    const id = escapeHtml(String(leadId || ""));
+    if(!id) return "";
+    if(mode === "peer"){
+      if(!canCampaignLeadPeerReassign()) return "";
+      return `<button class="btn btn--small btn--outline lcLeadReassignBtn" type="button" data-cl-reassign-id="${id}" data-cl-reassign-mode="peer" title="שיוך לנציג ממחלקה אחרת">שיוך לנציג</button>`;
+    }
     if(!Auth.canAccessCampaignLeadsInbox()) return "";
-    return `<button class="btn btn--small btn--outline lcLeadReassignBtn" type="button" data-cl-reassign-id="${escapeHtml(String(leadId))}" title="שיוך לנציג נוסף">שיוך לנציג נוסף</button>`;
+    return `<button class="btn btn--small btn--outline lcLeadReassignBtn" type="button" data-cl-reassign-id="${id}" data-cl-reassign-mode="inbox" title="שיוך לנציג נוסף">שיוך לנציג נוסף</button>`;
   }
 
   function campaignLeadAgentNoteBtnHtml(lead){
@@ -59903,8 +59971,16 @@ const CampaignLeadsStore = {
   function handleCampaignLeadReassignBtn(reassignBtn){
     if(!reassignBtn) return;
     const id = reassignBtn.getAttribute("data-cl-reassign-id");
+    const mode = safeTrim(reassignBtn.getAttribute("data-cl-reassign-mode")) || "inbox";
     const lead = CampaignLeadsStore.leads.find((l) => String(l.id) === String(id));
-    if(lead) CampaignLeadReassignAgent.open(lead);
+    if(lead) CampaignLeadReassignAgent.open(lead, { mode });
+  }
+
+  function handleCampaignLeadColorBtn(colorBtn){
+    if(!colorBtn) return;
+    const id = colorBtn.getAttribute("data-cl-color-id");
+    const lead = CampaignLeadsStore.leads.find((l) => String(l.id) === String(id));
+    if(lead) CampaignLeadColorPicker.open(lead, colorBtn);
   }
 
   function handleCampaignLeadAgentNoteBtn(noteBtn){
@@ -60584,6 +60660,13 @@ const CampaignLeadsStore = {
         this.renderSplitLeads();
       }, 250));
       if(this.els.splitList) on(this.els.splitList, "click", (ev) => {
+        const colorBtn = ev.target.closest("[data-cl-color-id]");
+        if(colorBtn){
+          ev.stopPropagation();
+          ev.preventDefault();
+          handleCampaignLeadColorBtn(colorBtn);
+          return;
+        }
         const reassignBtn = ev.target.closest("[data-cl-reassign-id]");
         if(reassignBtn){
           ev.stopPropagation();
@@ -60670,6 +60753,12 @@ const CampaignLeadsStore = {
         this.renderList();
       });
       if(this.els.tbody) on(this.els.tbody, "click", (ev) => {
+        const colorBtn = ev.target.closest("[data-cl-color-id]");
+        if(colorBtn){
+          ev.stopPropagation();
+          handleCampaignLeadColorBtn(colorBtn);
+          return;
+        }
         const reassignBtn = ev.target.closest("[data-cl-reassign-id]");
         if(reassignBtn){
           ev.stopPropagation();
@@ -60808,7 +60897,7 @@ const CampaignLeadsStore = {
       let key = String(list.length);
       for(let i = 0; i < list.length; i += 1){
         const l = list[i];
-        key += "|" + (l.id || "") + ":" + (l.updatedAt || "") + ":" + (l.status || "") + ":" + (l.assignedAgentId || "");
+        key += "|" + (l.id || "") + ":" + (l.updatedAt || "") + ":" + (l.status || "") + ":" + (l.assignedAgentId || "") + ":" + (l.rowColor || "");
       }
       return key;
     },
@@ -60912,10 +61001,15 @@ const CampaignLeadsStore = {
         const agentHtml = agentName && agentName !== "—"
           ? `<span class="lcSplitCard__val lcSplitCard__agent">${escapeHtml(agentName)}</span>`
           : `<span class="lcSplitCard__val lcSplitCard__agentUnassigned">לא שויך נציג</span>`;
-        return `<div class="lcSplitCard${isActive ? " is-active" : ""}" data-split-cl-id="${escapeHtml(String(lead.id))}" data-status="${escapeHtml(statusKey)}" role="button" tabindex="0">
+        const rowColorClass = campaignLeadRowColorClass(lead);
+        const rowStyle = campaignLeadRowColorStyle(lead);
+        return `<div class="lcSplitCard${isActive ? " is-active" : ""}${rowColorClass}" data-split-cl-id="${escapeHtml(String(lead.id))}" data-status="${escapeHtml(statusKey)}" role="button" tabindex="0"${rowStyle}>
   <div class="lcSplitCard__top">
     <div class="lcSplitCard__name">${name}${campaignLeadGoldBadgeHtml(lead)}</div>
-    <span class="lcSplitCard__statusPill lcSplitCard__statusPill--${escapeHtml(statusKey)}">${escapeHtml(statusLabel)}</span>
+    <div class="lcSplitCard__topTools">
+      ${campaignLeadColorBtnHtml(lead)}
+      <span class="lcSplitCard__statusPill lcSplitCard__statusPill--${escapeHtml(statusKey)}">${escapeHtml(statusLabel)}</span>
+    </div>
   </div>
   <div class="lcSplitCard__rows">
     <div class="lcSplitCard__row">
@@ -60953,7 +61047,6 @@ const CampaignLeadsStore = {
         } else {
           const agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
           this.els.tbody.innerHTML = rows.map((lead) => {
-            const active = String(lead.id) === String(this.selectedId) ? ' class="is-selected"' : "";
             const timeRaw = safeTrim(lead.createdAt);
             let time = "";
             try {
@@ -60985,7 +61078,11 @@ const CampaignLeadsStore = {
               } catch(_e){}
             }
             statusDisplay += campaignLeadAgentNoteBtnHtml(lead);
-            return `<tr data-cl-id="${escapeHtml(lead.id)}"${active}>
+            const rowColorClass = campaignLeadRowColorClass(lead);
+            const rowStyle = campaignLeadRowColorStyle(lead);
+            const statusRowClass = " lcLeadRow--" + escapeHtml(lead.status || "new");
+            const selectedClass = String(lead.id) === String(this.selectedId) ? " is-selected" : "";
+            return `<tr data-cl-id="${escapeHtml(lead.id)}" class="${statusRowClass}${rowColorClass}${selectedClass}"${rowStyle}>
               <td>${escapeHtml(leadName)}</td>
               <td dir="ltr">${escapeHtml(lead.phone)}</td>
           <td class="lcCampaign__agentCell">${escapeHtml(agentName)}</td>
@@ -60994,7 +61091,7 @@ const CampaignLeadsStore = {
           <td>${statusDisplay}</td>
               <td>${escapeHtml(time)}</td>
               <td>${escapeHtml(lastMod)}</td>
-              <td class="lcCampaign__actions">${campaignLeadReassignBtnHtml(lead.id)}</td>
+              <td class="lcCampaign__actions">${campaignLeadColorBtnHtml(lead)}${campaignLeadReassignBtnHtml(lead.id)}</td>
             </tr>`;
           }).join("");
         }
@@ -62015,6 +62112,12 @@ const CampaignLeadsStore = {
           if(lead) Wizard.openHealthWizardFromCampaignLead(lead);
           return;
         }
+        const reassignBtn = ev.target.closest("[data-cl-reassign-id]");
+        if(reassignBtn){
+          ev.stopPropagation();
+          handleCampaignLeadReassignBtn(reassignBtn);
+          return;
+        }
         const colorBtn = ev.target.closest("[data-cl-color-id]");
         if(colorBtn){
           ev.stopPropagation();
@@ -62155,6 +62258,7 @@ const CampaignLeadsStore = {
           <div class="lcMyLeadCard__side">
             <span class="lcTrackBadge lcTrackBadge--${statusTone} lcMyLeadCopy" data-copy-field="status" data-copy-label="סטטוס" title="דאבל-קליק להעתקה">${escapeHtml(campaignLeadStatusLabel(lead.status))}</span>
             ${this.renderMyLeadStatusSelect(lead)}
+            ${campaignLeadReassignBtnHtml(lead.id, "peer")}
           </div>
         </article>`;
       }).join("");
@@ -62239,12 +62343,17 @@ const CampaignLeadsStore = {
     _overlay: null,
     _lead: null,
     _busy: false,
+    _mode: "inbox",
 
-    open(lead){
-      if(!Auth.canAccessCampaignLeadsInbox() || !lead) return;
+    open(lead, options = {}){
+      const mode = safeTrim(options.mode) === "peer" ? "peer" : "inbox";
+      if(mode === "inbox" && !Auth.canAccessCampaignLeadsInbox()) return;
+      if(mode === "peer" && !canCampaignLeadPeerReassign()) return;
+      if(!lead) return;
       this.close();
       this._lead = lead;
-      const agents = getCampaignLeadReassignAgents();
+      this._mode = mode;
+      const agents = mode === "peer" ? getCampaignLeadPeerReassignAgents() : getCampaignLeadReassignAgents();
       const currentId = safeTrim(lead.assignedAgentId);
       const items = agents.map((a) => {
         const isPrimary = String(a.id) === String(currentId);
@@ -62265,23 +62374,31 @@ const CampaignLeadsStore = {
       const extraNames = normalizeCampaignLeadAdditionalAgents(lead.additionalAgents)
         .map((a) => safeTrim(a.name) || safeTrim(agents.find((x) => String(x.id) === String(a.id))?.name))
         .filter(Boolean);
-      const assignHint = extraNames.length
-        ? `נציג ראשי: ${primaryName !== "—" ? primaryName : "—"} · שיוכים נוספים: ${extraNames.join(", ")}`
-        : (primaryName !== "—" ? `נציג ראשי: ${primaryName}` : "טרם שויך נציג — הבחירה תהיה שיוך ראשון");
+      const assignHint = mode === "peer"
+        ? (primaryName !== "—"
+          ? `שיוך למחלקה אחרת · הנציג הראשי יישאר ${primaryName}`
+          : "שיוך למחלקה אחרת")
+        : (extraNames.length
+          ? `נציג ראשי: ${primaryName !== "—" ? primaryName : "—"} · שיוכים נוספים: ${extraNames.join(", ")}`
+          : (primaryName !== "—" ? `נציג ראשי: ${primaryName}` : "טרם שויך נציג — הבחירה תהיה שיוך ראשון"));
       const overlay = document.createElement("div");
       overlay.className = "lcLeadReassign__overlay";
+      const dialogTitle = mode === "peer" ? "שיוך לנציג" : "שיוך לנציג נוסף";
+      const emptyText = mode === "peer"
+        ? "אין יוזרים מוגדרים לשיוך למחלקה אחרת"
+        : "אין נציגים במערכת";
       overlay.innerHTML = `
-        <div class="lcLeadReassign__panel" role="dialog" aria-modal="true" aria-label="שיוך לנציג נוסף" dir="rtl">
+        <div class="lcLeadReassign__panel" role="dialog" aria-modal="true" aria-label="${escapeHtml(dialogTitle)}" dir="rtl">
           <div class="lcLeadReassign__head">
             <div>
-              <div class="lcLeadReassign__title">שיוך לנציג נוסף</div>
+              <div class="lcLeadReassign__title">${escapeHtml(dialogTitle)}</div>
               <div class="lcLeadReassign__sub">${escapeHtml(lead.customerName || "ליד")} · <span dir="ltr">${escapeHtml(lead.phone || "—")}</span></div>
               <div class="lcLeadReassign__sub muted small">${escapeHtml(assignHint)}</div>
             </div>
             <button type="button" class="iconBtn lcLeadReassign__close" aria-label="סגור">✕</button>
           </div>
           <div class="lcLeadReassign__list" role="listbox" aria-label="בחר נציג">
-            ${items || '<div class="muted small lcLeadReassign__empty">אין נציגים במערכת</div>'}
+            ${items || `<div class="muted small lcLeadReassign__empty">${escapeHtml(emptyText)}</div>`}
           </div>
         </div>`;
       document.body.appendChild(overlay);
@@ -62300,7 +62417,8 @@ const CampaignLeadsStore = {
       if(this._busy) return;
       const lead = this._lead;
       if(!lead) return;
-      const agent = getCampaignLeadReassignAgents().find((a) => String(a.id) === String(agentId));
+      const agentPool = this._mode === "peer" ? getCampaignLeadPeerReassignAgents() : getCampaignLeadReassignAgents();
+      const agent = agentPool.find((a) => String(a.id) === String(agentId));
       if(!agent) return;
       const targetAgent = resolveCampaignLeadTargetAgent(agent);
       const hasPrimary = !!safeTrim(lead.assignedAgentId);
@@ -62314,6 +62432,7 @@ const CampaignLeadsStore = {
         return;
       }
       this._busy = true;
+      const actorName = safeTrim(Auth?.current?.name) || (this._mode === "peer" ? "נציג" : "סוקרת");
       const previousLead = { ...lead };
       const stamp = nowISO();
       // שיוך של ליד "לא רלוונטי" לנציג נוסף/אחר → איפוס לליד חדש כדי שהנציג לא יקבל סטטוס ישן
@@ -62332,11 +62451,11 @@ const CampaignLeadsStore = {
           assignedAgentName: targetAgent.name,
           updatedAt: stamp,
           lastModifiedAt: stamp,
-          updatedByName: safeTrim(Auth?.current?.name) || ""
+          updatedByName: actorName
         });
         detailText = resetIrrelevantForNewAgent
-          ? `שויך כליד חדש (אחרי לא רלוונטי) ל${targetAgent.name} על ידי ${safeTrim(Auth?.current?.name) || "סוקרת"}`
-          : `שויך ל${targetAgent.name} על ידי ${safeTrim(Auth?.current?.name) || "סוקרת"}`;
+          ? `שויך כליד חדש (אחרי לא רלוונטי) ל${targetAgent.name} על ידי ${actorName}`
+          : `שויך ל${targetAgent.name} על ידי ${actorName}`;
         toastText = resetIrrelevantForNewAgent
           ? `שויך כליד חדש ל${targetAgent.name}`
           : `שויך ל${targetAgent.name}`;
@@ -62349,11 +62468,11 @@ const CampaignLeadsStore = {
           additionalAgents: additional,
           updatedAt: stamp,
           lastModifiedAt: stamp,
-          updatedByName: safeTrim(Auth?.current?.name) || ""
+          updatedByName: actorName
         });
         detailText = resetIrrelevantForNewAgent
-          ? `שויך נוסף כליד חדש (אחרי לא רלוונטי) ל${targetAgent.name} על ידי ${safeTrim(Auth?.current?.name) || "סוקרת"}`
-          : `שויך נוסף ל${targetAgent.name} (נציג ראשי נשאר ${campaignLeadResolveAgentName(lead, getCampaignLeadReassignAgents())}) על ידי ${safeTrim(Auth?.current?.name) || "סוקרת"}`;
+          ? `שויך נוסף כליד חדש (אחרי לא רלוונטי) ל${targetAgent.name} על ידי ${actorName}`
+          : `שויך נוסף ל${targetAgent.name} (נציג ראשי נשאר ${campaignLeadResolveAgentName(lead, getCampaignLeadReassignAgents())}) על ידי ${actorName}`;
         toastText = resetIrrelevantForNewAgent
           ? `נוסף שיוך כליד חדש ל${targetAgent.name}`
           : `נוסף שיוך ל${targetAgent.name}`;
@@ -62402,6 +62521,7 @@ const CampaignLeadsStore = {
         this._overlay = null;
       }
       this._lead = null;
+      this._mode = "inbox";
     }
   };
 
@@ -62530,6 +62650,8 @@ const CampaignLeadsStore = {
       }
       const label = color ? (this.COLORS.find(c => c.value === color)?.label || "צבע") : "ברירת מחדל";
       showCampaignLeadToast("הצבע עודכן", color ? `השורה צוּבּעה: ${label}` : "הצבע הוסר מהשורה", "ok");
+      try { CampaignLeadsUI.scheduleListRender(); } catch(_e) {}
+      try { TrackingReportUI.renderList(); } catch(_e) {}
       await CampaignMyLeadsUI.refresh(false);
     },
 

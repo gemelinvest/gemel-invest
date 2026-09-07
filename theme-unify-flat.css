@@ -988,6 +988,11 @@
 #view-campaignLeads .lcSplitCard__statusPill--irrelevant:not(#\9):not(#\9){ background: var(--uf-danger-bg) !important; color: var(--uf-danger) !important; border-color: var(--uf-danger-line) !important; }
 #view-campaignLeads .lcSplitCard__statusPill--no_answer:not(#\9):not(#\9){ background: var(--uf-chg-bg) !important; color: var(--uf-chg) !important; border-color: var(--uf-chg-line) !important; }
 #view-campaignLeads .lcSplitCard__statusPill--agent_appointment:not(#\9):not(#\9){ background: var(--uf-accent-soft) !important; color: var(--uf-accent) !important; border-color: var(--uf-line) !important; }
+#view-campaignLeads .lcSplitCard.lcLeadRow--custom-color:not(#\9):not(#\9),
+#view-campaignLeads .lcSplitCard.lcLeadRow--custom-color:hover:not(#\9):not(#\9),
+#view-campaignLeads .lcSplitCard.lcLeadRow--custom-color.is-active:not(#\9):not(#\9){
+  background: var(--lead-custom-color) !important;
+}
 
 #view-campaignLeads .lcCampaignTable tr.lcLeadRow--new td:not(#\9):not(#\9){ background: var(--uf-info-bg) !important; }
 #view-campaignLeads .lcCampaignTable tr.lcLeadRow--closed td:not(#\9):not(#\9){ background: var(--uf-ok-bg) !important; }
