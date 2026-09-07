@@ -1272,10 +1272,29 @@
       sim._giCoupleCalcLock = false;
     }
   }
+  /* GI-COUPLE-SHARED-DISCOUNT 2026-09-07
+     פוליסה זוגית: אותה אפשרות הנחה לכל המבוטחים בפוליסה.
+     הפרמיה אחרי הנחה מחושבת לכל מבוטח על הפרמיה שלו, באותו מנוע. */
+  function riskSimCopyCoupleDiscountFromId(sim, sourceId){
+    if(!sim || !sim._giCoupleOn || !sim._ctx || !sim._ctx.wizardWorkspace) return;
+    if(!riskSimAllowsCouplePolicy(sim._ctx.product)) return;
+    const srcId = safeTrim(sourceId || sim._activeInsuredId || riskSimCoupleSeedInsuredId(sim));
+    if(!srcId) return;
+    if(!sim._giSimDiscountSel || typeof sim._giSimDiscountSel !== "object") sim._giSimDiscountSel = {};
+    const optId = safeTrim(sim._giSimDiscountSel[srcId]);
+    riskSimCoupleSelectedIds(sim).forEach((id) => {
+      sim._giSimDiscountSel[id] = optId;
+    });
+  }
+  function riskSimCopyCoupleDiscountFromSeed(sim){
+    riskSimCopyCoupleDiscountFromId(sim, riskSimCoupleSeedInsuredId(sim) || sim._activeInsuredId);
+  }
+
   function riskSimEnsureCoupleSharedResults(sim){
     if(!sim || !sim._giCoupleOn || !sim._ctx || !sim._ctx.wizardWorkspace) return;
     if(!riskSimAllowsCouplePolicy(sim._ctx.product)) return;
     try { riskSimCopyCoupleSharedFieldsFromSeed(sim); } catch(_eCopy) {}
+    try { riskSimCopyCoupleDiscountFromSeed(sim); } catch(_eDisc) {}
     riskSimCoupleSelectedIds(sim).forEach((id) => {
       if(riskSimCollectResultForInsured(sim, id)) return;
       try {
@@ -1867,6 +1886,7 @@
           sim._giCoupleChildIntent = {};
           riskSimSeedCoupleIdsIfEmpty(sim);
           try { riskSimCopyCoupleSharedFieldsFromSeed(sim); } catch(_eShare) {}
+          try { riskSimCopyCoupleDiscountFromSeed(sim); } catch(_eDiscOn) {}
           try { riskSimSyncCoupleHealthCovers(sim); } catch(_eSync) {}
         }
         riskSimNotifyCoupleChange(sim);
@@ -1888,6 +1908,7 @@
         riskSimNotifyCoupleChange(sim);
         if(chk.checked){
           try { riskSimCopyCoupleSharedFieldsFromSeed(sim); } catch(_eShareIns) {}
+          try { riskSimCopyCoupleDiscountFromSeed(sim); } catch(_eDiscIns) {}
           try { riskSimSyncCoupleHealthCovers(sim); } catch(_eSyncIns) {}
           const pick = riskSimGetPick(sim, id);
           const curCo = safeTrim(sim._ctx?.company);
@@ -2466,7 +2487,9 @@
   }
   function giSimDiscountSetSelected(sim, optionId){
     if(!sim._giSimDiscountSel || typeof sim._giSimDiscountSel !== "object") sim._giSimDiscountSel = {};
-    sim._giSimDiscountSel[sim._activeInsuredId || "_"] = safeTrim(optionId);
+    const active = sim._activeInsuredId || "_";
+    sim._giSimDiscountSel[active] = safeTrim(optionId);
+    try { riskSimCopyCoupleDiscountFromId(sim, active); } catch(_eCoupleDisc) {}
   }
   function giSimDiscountCloseMenu(modal){
     const menu = modal && modal.querySelector("[data-gisim-disc-menu]");
@@ -2598,6 +2621,7 @@
         finally { handler._giOpening = false; }
         if(restoreDiscount && typeof restoreDiscount === "object"){
           try { handler._giSimDiscountSel = Object.assign({}, restoreDiscount); } catch(_eDisc) {}
+          try { riskSimCopyCoupleDiscountFromId(handler, restoreActive || handler._activeInsuredId); } catch(_eCoupleDisc) {}
         }
         if(restore){
           try { riskSimApplyRestoredState(handler, restore, restoreActive); } catch(_e) {}
