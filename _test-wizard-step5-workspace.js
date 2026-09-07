@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260907-ops-mirror-compact-ux-v1";
+const TAG = "20260907-couple-shared-fields-v1";
 let failed = 0;
 let passed = 0;
 
@@ -250,6 +250,8 @@ assert(shellCss.includes("z-index:1") && shellCss.includes(".giSimShell__panel--
 
 console.log("\n10) couple health covers copy + per-insured details");
 assert(sims.includes("function riskSimSyncCoupleHealthCovers(sim, coverId, turnedOn)"), "couple cover sync helper");
+assert(sims.includes("function riskSimCopyCoupleSharedFieldsFromSeed(sim)"), "couple copies shared sum/date");
+assert(wiz.includes("fillCoupleSharedPolicyFields(policy)"), "wizard fills missing couple sums");
 assert(sims.includes('title: "כיסוי לילד"'), "child-cover notice to the agent");
 assert(wiz.includes("הצג פירוט"), "summary row has הצג פירוט");
 assert(renderFn.includes("מבוטחים בפוליסה:"), "summary row label is מבוטחים בפוליסה");
