@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260907-sim-ui-v1";
+const TAG = "20260907-health-disc-v1";
 let failed = 0;
 let passed = 0;
 
@@ -157,6 +157,11 @@ assert(applyManual(80.26, shotRows, {
   "השתלות": 30, "ניתוחים בחו״ל": 20, "אבחון מהיר": 10, "TOP משלימה": 20.26
 }) === 65.21, "with simulator per-cover quotes the after-price is weighted");
 assert(wiz.includes("coverDiscountsApplied = true"), "save sets applied flag so the row price refreshes");
+assert(wiz.includes("GI-NP-HEALTH-MANUAL-GROSS"), "manual discount marker: apply % to before-discount gross");
+assert(wiz.includes("getHealthPolicyGrossPremium(policy){"), "gross premium helper for manual cover %");
+assert(wiz.includes("getHealthCoverGrossPremiumsByName(policy){"), "per-cover gross helper");
+assert(wiz.includes("this.getHealthPolicyGrossPremium(policy)"), "apply uses gross total, not sim after");
+assert(!/applyHealthCoverManualDiscounts\(policy\)\{[\s\S]{0,500}getPolicySimDiscountAfterTotal/.test(wiz), "apply does not take the simulator after-price as the base");
 
 console.log("\n8) auto-open real simulator with all insureds — wizard chrome only");
 assert(openFn.includes("async openRiskSimulator(){"), "openRiskSimulator exists");

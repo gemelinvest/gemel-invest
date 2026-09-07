@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260907-sim-ui-v1";
+  const GI_WIZARD_BUILD = "20260907-health-disc-v1";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -15692,6 +15692,112 @@ if(path === "birthDate"){
       return byName;
     },
 
+    _roundHealthMoney(n){
+      return Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+    },
+
+    _healthMoneyClose(a, b, eps){
+      return Math.abs(this.asMoneyNumber(a) - this.asMoneyNumber(b)) <= (eps == null ? 0.05 : eps);
+    },
+
+    _sumHealthMoneyMap(map){
+      return Object.keys(map || {}).reduce((s, k) => s + (this.asMoneyNumber(map[k]) || 0), 0);
+    },
+
+    _invertHealthSimAfterToGross(policy, afterAmount){
+      const after = this.asMoneyNumber(afterAmount);
+      if(!(after > 0)) return 0;
+      const map = policy?.simDiscountPerInsured;
+      let pct = 0;
+      if(map && typeof map === "object"){
+        const entry = Object.keys(map).map((k) => map[k]).find((e) => e && Number(e.year1Pct) > 0);
+        pct = Number(entry && entry.year1Pct) || 0;
+      }
+      if(!(pct > 0)){
+        pct = Number(String(policy?.discountPct ?? "0").replace(/[^\d.]/g, "")) || 0;
+      }
+      if(pct > 0 && pct < 100) return this._roundHealthMoney(after / (1 - pct / 100));
+      return after;
+    },
+
+    /* GI-NP-HEALTH-MANUAL-GROSS: בסיס להנחה ידנית = «לפני הנחה» (תעריף),
+       לא «אחרי הנחה» של הסימולטור ולא premiumAfterCoverDiscounts. */
+    getHealthPolicyGrossPremium(policy){
+      const perInsured = this.sumPolicyPerInsuredPremiums(policy);
+      const quotes = policy?.riskSimQuotes && typeof policy.riskSimQuotes === "object" ? policy.riskSimQuotes : {};
+      let quoteTotal = 0;
+      Object.keys(quotes).forEach((insId) => {
+        quoteTotal += this.asMoneyNumber(quotes[insId]?.monthlyPremium);
+      });
+      quoteTotal = this._roundHealthMoney(quoteTotal);
+      const coverSum = this._roundHealthMoney(this._sumHealthMoneyMap(this.getHealthCoverBasePremiumsByName(policy)));
+      const entered = this.asMoneyNumber(this.getPolicyPremiumBeforeDiscount(policy));
+      const simAfter = this.getPolicySimDiscountAfterTotal(policy);
+      const afterCover = this.asMoneyNumber(policy?.premiumAfterCoverDiscounts);
+      const candidates = [perInsured, quoteTotal, coverSum, entered].filter((n) => n > 0);
+      if(simAfter != null && simAfter > 0){
+        const grossLike = candidates.filter((n) => n > simAfter + 0.009 && !this._healthMoneyClose(n, afterCover));
+        if(grossLike.length) return Math.max.apply(null, grossLike);
+        const inverted = this._invertHealthSimAfterToGross(policy, simAfter);
+        if(inverted > simAfter + 0.009) return inverted;
+      }
+      if(perInsured > 0 && !this._healthMoneyClose(perInsured, afterCover)) return perInsured;
+      if(quoteTotal > 0 && !this._healthMoneyClose(quoteTotal, afterCover)) return quoteTotal;
+      if(coverSum > 0 && !this._healthMoneyClose(coverSum, afterCover)) return coverSum;
+      if(entered > 0 && !this._healthMoneyClose(entered, afterCover)) return entered;
+      if(perInsured > 0) return perInsured;
+      if(quoteTotal > 0) return quoteTotal;
+      if(coverSum > 0) return coverSum;
+      return entered;
+    },
+
+    getHealthCoverGrossPremiumsByName(policy){
+      const bases = this.getHealthCoverBasePremiumsByName(policy);
+      const breakdownSum = this._sumHealthMoneyMap(bases);
+      const grossTotal = this.getHealthPolicyGrossPremium(policy);
+      const simAfter = this.getPolicySimDiscountAfterTotal(policy);
+      const afterCover = this.asMoneyNumber(policy?.premiumAfterCoverDiscounts);
+      if(breakdownSum > 0 && grossTotal > 0){
+        const looksSimAfter = simAfter != null && simAfter > 0
+          && this._healthMoneyClose(breakdownSum, simAfter)
+          && !this._healthMoneyClose(breakdownSum, grossTotal)
+          && grossTotal > simAfter + 0.009;
+        const looksManualAfter = afterCover > 0
+          && this._healthMoneyClose(breakdownSum, afterCover)
+          && !this._healthMoneyClose(breakdownSum, grossTotal)
+          && grossTotal > afterCover + 0.009;
+        if(looksSimAfter || looksManualAfter){
+          const scale = grossTotal / breakdownSum;
+          Object.keys(bases).forEach((k) => {
+            bases[k] = this._roundHealthMoney(bases[k] * scale);
+          });
+        }
+      }
+      return bases;
+    },
+
+    getHealthCoverGrossScaleForInsured(policy, insId){
+      const id = safeTrim(insId);
+      if(!policy || !id) return 1;
+      const quotes = policy.riskSimQuotes && policy.riskSimQuotes[id];
+      const covers = Array.isArray(quotes && quotes.covers) ? quotes.covers : [];
+      let coverSum = 0;
+      covers.forEach((c) => {
+        const n = this.asMoneyNumber(c && c.monthlyPremium);
+        if(n > 0) coverSum += n;
+      });
+      const gross = this.asMoneyNumber(policy?.premiumPerInsured?.[id]) || this.asMoneyNumber(quotes && quotes.monthlyPremium);
+      const rawAfter = policy?.simDiscountPerInsured?.[id]?.monthlyAfterDiscount;
+      const simAfter = (rawAfter == null || rawAfter === "") ? NaN : Number(rawAfter);
+      if(coverSum > 0 && gross > 0 && Number.isFinite(simAfter) && simAfter > 0
+        && gross > simAfter + 0.009
+        && this._healthMoneyClose(coverSum, simAfter)
+        && !this._healthMoneyClose(coverSum, gross)){
+        return gross / coverSum;
+      }
+      return 1;
+    },
+
     applyHealthCoverManualDiscounts(policy){
       if(!policy || safeTrim(policy.type) !== "בריאות") return { ok:false, reason:"not_health" };
       const rows = this.getHealthCoverManualDiscountRows(policy).map((row) => ({
@@ -15700,9 +15806,9 @@ if(path === "birthDate"){
         pct: String(this.parseCoverDiscountPct(row.pct))
       }));
       policy.coverDiscounts = rows;
-      const bases = this.getHealthCoverBasePremiumsByName(policy);
-      const totalBefore = this.asMoneyNumber(this.getPolicyPremiumBeforeDiscount(policy));
-      const breakdownSum = Object.keys(bases).reduce((s, k) => s + (bases[k] || 0), 0);
+      const bases = this.getHealthCoverGrossPremiumsByName(policy);
+      const totalBefore = this.asMoneyNumber(this.getHealthPolicyGrossPremium(policy));
+      const breakdownSum = this._sumHealthMoneyMap(bases);
       let after = 0;
       if(breakdownSum > 0){
         const named = new Set(rows.map((r) => r.name));
@@ -15722,7 +15828,7 @@ if(path === "birthDate"){
       } else {
         after = totalBefore;
       }
-      after = Math.round((after + Number.EPSILON) * 100) / 100;
+      after = this._roundHealthMoney(after);
       policy.coverDiscountsApplied = true;
       policy.premiumAfterCoverDiscounts = after;
       return { ok:true, after, before: totalBefore, rows };
@@ -16630,9 +16736,11 @@ if(path === "birthDate"){
         });
       }
       const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+      const coverScale = this.getHealthCoverGrossScaleForInsured(policy, id);
       return names.map((name) => {
         const c = byName[name] || {};
         let before = this.asMoneyNumber(c.monthlyPremium);
+        if(before > 0 && coverScale !== 1) before = round2(before * coverScale);
         if(!(before > 0) && typeof this.isHealthAddonCover === "function" && this.isHealthAddonCover(name)
           && typeof this.getHealthAddonPremiumValue === "function"){
           before = this.asMoneyNumber(this.getHealthAddonPremiumValue(policy, name, id));
