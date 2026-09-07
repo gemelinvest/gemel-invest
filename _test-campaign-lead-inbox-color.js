@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260907-lead-inbox-color-v1";
+const APP_TAG = "20260907-lead-peer-handoff-v1";
 let failed = 0;
 let passed = 0;
 
@@ -65,18 +65,32 @@ assert(themeP2.includes(".lcSplitCard.lcLeadRow--custom-color"), "theme-p2 לא 
 assert(unify.includes("#view-campaignLeads .lcSplitCard.lcLeadRow--custom-color"), "unify-flat שומר צבע מותאם");
 
 console.log("\n3) נציג — לחצן שיוך בסטטוס ליד");
-assert(app.includes("CAMPAIGN_LEAD_AGENT_PEER_REASSIGN_KEYS"), "רשימת יוזרים לשיוך ממחלקה אחרת");
+assert(app.includes("CAMPAIGN_LEAD_AGENT_PEER_REASSIGN_TARGETS"), "רשימת יוזרים לשיוך ממחלקה אחרת");
+assert(app.includes('{ name: "קורן פרנקל", dept: "פנסיה" }'), "קורן פרנקל — פנסיה");
+assert(app.includes('{ name: "שמחה אזרד", dept: "פנסיה" }'), "שמחה אזרד — פנסיה");
+assert(app.includes('{ name: "עדן ביטון", dept: "אלמנטרי רכב ודירה" }'), "עדן ביטון — אלמנטרי רכב ודירה");
 assert(app.includes("function getCampaignLeadPeerReassignAgents()"), "getCampaignLeadPeerReassignAgents");
-assert(app.includes('safeTrim(a.role) === "opsAgent"'), "נפילה לנציגי תפעול כשאין רשימה");
+assert(!app.includes('agents = agents.filter((a) => safeTrim(a.role) === "opsAgent")'), "אין נפילה לכל נציגי התפעול");
 assert(app.includes("function canCampaignLeadPeerReassign()"), "canCampaignLeadPeerReassign");
 assert(app.includes('campaignLeadReassignBtnHtml(lead.id, "peer")'), "לחצן שיוך לנציג בכרטיס הלידים שלי");
 assert(app.includes('data-cl-reassign-mode="peer"'), "מצב peer על לחצן הנציג");
 assert(app.includes('title="שיוך לנציג ממחלקה אחרת">שיוך לנציג</button>'), "תווית לחצן שיוך לנציג");
+assert(app.includes("peerDisplayName"), "שם עם מחלקה בבחירת השיוך");
 const reassignOpen = sliceBetween(app, "const CampaignLeadReassignAgent = {", "// ===== בוחר צבע לשורת ליד =====");
 assert(reassignOpen.includes('const mode = safeTrim(options.mode) === "peer" ? "peer" : "inbox"'), "מודל שיוך מקבל mode peer");
 assert(reassignOpen.includes("getCampaignLeadPeerReassignAgents()"), "מודל שיוך נציג משתמש ברשימת peer");
 assert(reassignOpen.includes("שיוך למחלקה אחרת"), "כותרת עזר למחלקה אחרת");
 assert(css.includes(".lcMyLeadCard__side .lcLeadReassignBtn"), "לחצן שיוך מיושר בעמודת הסטטוס");
+
+console.log("\n4) סוקרת — מעבר ליד על השורה בלי שינוי לוגיקת שיוך");
+assert(app.includes("function campaignLeadTransferTrailText(lead, agents)"), "campaignLeadTransferTrailText");
+assert(app.includes("מעבר ליד: "), "טקסט מעבר ליד");
+assert(app.includes('lcSplitCard__row--transfer'), "שורת מעבר בקוביית מערכת לידים");
+assert(app.includes("lcLeadHandoff"), "מעבר ליד בתא הנציג בטבלה");
+assert(app.includes("function campaignLeadAgentAccess(lead, agentRec)"), "campaignLeadAgentAccess לא הוסר");
+assert(app.includes("function campaignLeadAllAgentNames(lead, agents)"), "campaignLeadAllAgentNames לא הוסר");
+assert(css.includes(".lcSplitCard__transfer"), "CSS למעבר ליד בקובייה");
+assert(css.includes(".lcLeadHandoff"), "CSS למעבר ליד בטבלה");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));
