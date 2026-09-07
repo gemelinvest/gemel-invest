@@ -115,7 +115,8 @@ assert(!resolveFn.includes("isOfficialJoinFormType"), "official join download pa
 assert(cancel.includes("async fillOriginalTemplate(draft)"), "cancel fillOriginalTemplate kept");
 assert(followup.includes("async function fillFollowupPdf(entry)"), "followup fillFollowupPdf kept");
 assert(app.includes("canDownloadOfficialJoinForm(){"), "official download gate kept");
-assert(/canDownloadOfficialJoinForm\(\)\{\s*try \{ return !!\(Auth\.isAdmin\(\) \|\| Auth\.isManager\(\);/.test(app), "gate is still admin or manager only");
+assert(/canDownloadOfficialJoinForm\(\)\{\s*try \{ return !!\(Auth\.isAdmin\(\) \|\| Auth\.isManager\(\)\);/.test(app), "gate is still admin or manager only");
+assert(!/canDownloadOfficialJoinForm\(\)\{[\s\S]{0,220}isTeamManager/.test(app), "team manager is still excluded from official PDF download");
 assert(app.includes("denyOfficialJoinFormDownload(){"), "official open still denied for agents");
 assert(app.includes("window.GiCancelForms.open(rec, doc)"), "cancel open still uses GiCancelForms.open");
 assert(app.includes("window.HachsharaHealthForm.open(rec)"), "hachshara health open unchanged");
@@ -131,5 +132,94 @@ assert(!showFn.includes("triggerDataUrlDownload"), "preview show does not downlo
 assert(css.includes("cfFile__documentsPreviewNote"), "archive note CSS");
 assert(css.includes("min(68vh, 780px)") || css.includes("min(72vh, 820px)"), "preview pane is tall like a document");
 
-console.log("\n" + passed + " passed, " + failed + " failed");
-process.exit(failed ? 1 : 0);
+console.log("\n7) runtime: preview fill uses blob URL and never downloads");
+(async () => {
+  const vm = require("vm");
+  const calls = [];
+  function safeTrim(v){ return String(v == null ? "" : v).trim(); }
+  class Blob {
+    constructor(parts, opts){
+      this.parts = parts;
+      this.type = opts && opts.type;
+    }
+  }
+  const windowObj = {
+    HachsharaHealthForm: {
+      buildDraft(rec){ calls.push("draft"); return { id: rec && rec.id }; },
+      fillOriginalTemplate: async () => { calls.push("fill"); return new Uint8Array([1, 2, 3]); },
+      downloadBytes(){ calls.push("download"); },
+      open(){ calls.push("open"); }
+    },
+    GiCancelForms: {
+      open(){ calls.push("cancel-open"); }
+    }
+  };
+  const URLObj = {
+    createObjectURL(blob){
+      calls.push("blob:" + ((blob && blob.type) || ""));
+      return "blob:preview-1";
+    },
+    revokeObjectURL(){ calls.push("revoke"); }
+  };
+  let fnSrc = sliceBetween(app, "    async fillCustomerDocumentPreviewPdf(rec, doc){", "\n    customerDocPreviewKind(doc){");
+  fnSrc = fnSrc.replace(/,\s*$/, "").replace(/^    async fillCustomerDocumentPreviewPdf/, "async function fillCustomerDocumentPreviewPdf");
+  const ctx = {
+    window: windowObj,
+    URL: URLObj,
+    Blob,
+    console,
+    calls,
+    result: "",
+    safeTrim,
+    Uint8Array
+  };
+  vm.createContext(ctx);
+  vm.runInContext(`
+    const ui = {
+      cachedCustomerDocPreviewUrl(){ return ""; },
+      officialJoinFormPreviewSpec(type){
+        return type === "hachshara_health_form" ? { globalName: "HachsharaHealthForm" } : null;
+      },
+      rememberCustomerDocPreviewUrl(key, url){ calls.push("remember:" + url); },
+      customerDocPreviewCacheKey(){ return "k1"; },
+      async resolveDocumentBytes(){ calls.push("resolve"); return { bytes: new Uint8Array([9]) }; },
+      fillCustomerDocumentPreviewPdf: ${fnSrc.replace(/^async function fillCustomerDocumentPreviewPdf/, "async function")}
+    };
+    result = ui.fillCustomerDocumentPreviewPdf({ id: "c1" }, { id: "d1", type: "hachshara_health_form" });
+  `, ctx);
+  const url = await ctx.result;
+  assert(url === "blob:preview-1", "preview returns object URL");
+  assert(calls.indexOf("draft") >= 0, "preview builds draft");
+  assert(calls.indexOf("fill") >= 0, "preview calls fillOriginalTemplate");
+  assert(calls.indexOf("blob:application/pdf") >= 0, "preview creates PDF blob URL");
+  assert(calls.indexOf("remember:blob:preview-1") >= 0, "preview caches the blob URL");
+  assert(calls.indexOf("download") < 0, "runtime preview does not downloadBytes");
+  assert(calls.indexOf("open") < 0, "runtime preview does not open the form modal");
+  assert(calls.indexOf("cancel-open") < 0, "runtime preview does not open cancel modal");
+  assert(calls.indexOf("resolve") < 0, "official join preview does not use resolveDocumentBytes");
+
+  calls.length = 0;
+  vm.runInContext(`
+    const uiCancel = {
+      cachedCustomerDocPreviewUrl(){ return ""; },
+      officialJoinFormPreviewSpec(){ return null; },
+      rememberCustomerDocPreviewUrl(key, url){ calls.push("remember:" + url); },
+      customerDocPreviewCacheKey(){ return "k2"; },
+      async resolveDocumentBytes(){ calls.push("resolve"); return { bytes: new Uint8Array([7, 7]) }; },
+      fillCustomerDocumentPreviewPdf: ${fnSrc.replace(/^async function fillCustomerDocumentPreviewPdf/, "async function")}
+    };
+    result = uiCancel.fillCustomerDocumentPreviewPdf({ id: "c2" }, { id: "d2", type: "company_cancel_form" });
+  `, ctx);
+  const cancelUrl = await ctx.result;
+  assert(cancelUrl === "blob:preview-1", "cancel preview returns object URL");
+  assert(calls.indexOf("resolve") >= 0, "cancel preview reuses resolveDocumentBytes");
+  assert(calls.indexOf("fill") < 0, "cancel preview does not call official fill directly");
+  assert(calls.indexOf("download") < 0, "cancel preview does not download");
+
+  console.log("\n" + passed + " passed, " + failed + " failed");
+  process.exit(failed ? 1 : 0);
+})().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
+
