@@ -1,4 +1,4 @@
-/* GI-CUSTOMER-DOCS-PREVIEW 20260907-couple-shared-discount-v1
+/* GI-CUSTOMER-DOCS-PREVIEW 20260907-arrival-docs-v1
    On-screen preview for every customer-file document (ops-report style),
    without changing fill / download / open logic.
    Run: node _test-customer-docs-preview.js
@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260907-couple-shared-discount-v1";
+const TAG = "20260907-arrival-docs-v1";
 let failed = 0;
 let passed = 0;
 
@@ -59,6 +59,8 @@ const opsPreview = sliceBetween(app, "renderGeneratedDocumentPreview(rec, doc){"
 assert(opsPreview.includes("Wizard?.renderOperationalReport"), "ops report still rendered as HTML");
 assert(opsPreview.includes("CustomerDocuments.TYPES.healthOps"), "health ops type uses HTML report");
 assert(opsPreview.includes("AgentAppointmentPdf?.buildOperationalReportHtml"), "agent appointment report still HTML");
+assert(opsPreview.includes("GiArrivalDocs"), "arrival docs preview uses GiArrivalDocs");
+assert(opsPreview.includes("suitabilityDoc"), "hatama preview is HTML");
 assert(wiz.includes("renderOperationalReport"), "wizard ops renderer unchanged name");
 
 console.log("\n3) filled PDF preview for cancel, followup, official join");
@@ -72,6 +74,8 @@ assert(wantsFn.includes("followupQuestionnaire"), "followup questionnaires want 
 assert(wantsFn.includes("companyCancelForm"), "cancel letters want PDF preview");
 assert(wantsFn.includes("isOfficialJoinFormType"), "official join forms want PDF preview");
 assert(wantsFn.includes("healthOps") && wantsFn.includes("return false"), "ops report is not forced through PDF fill");
+assert(wantsFn.includes("suitabilityDoc") && wantsFn.includes("premiumDevelopment"), "hatama/premia stay HTML preview");
+assert(wantsFn.includes("nispahHarAuth"), "nispah uses filled official PDF preview");
 assert(wantsFn.includes("followupQuestionnairesZip") || app.includes("isArchiveCustomerDoc"), "zip is not treated as a fake PDF");
 
 const fillFn = sliceBetween(app, "async fillCustomerDocumentPreviewPdf(rec, doc){", "customerDocPreviewKind(doc){");

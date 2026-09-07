@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260907-couple-shared-discount-v1";
+const APP_TAG = "20260907-arrival-docs-v1";
 let failed = 0;
 let passed = 0;
 
@@ -45,10 +45,10 @@ console.log("1) syntax + cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
 assert(html.includes("app.css?v=" + APP_TAG), "index.html app.css cache");
-assert(html.includes("theme-p2.css?v=" + APP_TAG), "index.html theme-p2 cache");
+assert(html.includes("theme-p2.css?v=20260907-couple-shared-discount-v1"), "index.html theme-p2 cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
 assert(app.includes('const BUILD = "' + APP_TAG + '"'), "app.js BUILD tag");
-assert(app.includes("theme-unify-flat.css?v=" + APP_TAG), "unify-flat cache");
+assert(app.includes("theme-unify-flat.css?v=20260907-couple-shared-discount-v1"), "unify-flat cache");
 
 console.log("\n2) מערכת לידים — פלטת צבעים בקובייה ובשורה");
 assert(app.includes("function campaignLeadColorBtnHtml(lead)"), "campaignLeadColorBtnHtml");
