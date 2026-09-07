@@ -1,4 +1,4 @@
-/* GI-DAILY-SALES-MAIL 20260907-lead-color-picker-fit-v1
+/* GI-DAILY-SALES-MAIL 20260907-ops-mirror-compact-ux-v1
    Isolated Outlook daily-sales email. Calls existing DashboardUI report
    builders only (buildDailySalesPrintModel). Does not change sales / PIN / MFA. */
 (() => {

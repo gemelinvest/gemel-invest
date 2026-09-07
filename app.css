@@ -32999,7 +32999,7 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   max-height:none !important;
   margin-inline:0 !important;
   overflow:visible !important;
-  border-radius:16px;
+  border-radius:10px;
 }
 .mcWorkstation--callLive .mcWorkstation__mainRow,
 .mcWorkstation--callPhase.mcWorkstation--dockOpen .mcWorkstation__mainRow{
@@ -33018,11 +33018,12 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   width:100% !important;
   max-width:none !important;
   margin:0 !important;
-  padding:8px 12px !important;
+  padding:4px 8px !important;
   flex-direction:row !important;
+  flex-wrap:nowrap !important;
   align-items:center !important;
   justify-content:stretch !important;
-  gap:10px !important;
+  gap:6px !important;
 }
 .mcWorkstation--callLive > .mcSessionPanel .mcCall__bg,
 .mcWorkstation--callLive > .mcSessionPanel .mcCall__phoneWrap,
@@ -33040,9 +33041,9 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcWorkstation--callPhase.mcWorkstation--dockOpen > .mcSessionPanel .mcCall__customerPill{
   margin:0;
   flex:0 1 auto;
-  max-width:min(280px, 34vw);
-  padding:7px 12px;
-  font-size:12px;
+  max-width:min(220px, 28vw);
+  padding:3px 8px;
+  font-size:11px;
   font-weight:700;
   white-space:nowrap;
   overflow:hidden;
@@ -33055,13 +33056,13 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   width:auto !important;
   min-width:0 !important;
   margin:0 !important;
-  padding:8px 10px !important;
-  border-radius:14px !important;
+  padding:3px 8px !important;
+  border-radius:10px !important;
   flex-direction:row !important;
-  flex-wrap:wrap !important;
+  flex-wrap:nowrap !important;
   align-items:center !important;
   justify-content:flex-start !important;
-  gap:10px 14px !important;
+  gap:6px 10px !important;
   box-shadow:0 4px 16px rgba(42,92,245,.06),0 1px 0 rgba(255,255,255,.98) inset;
 }
 .mcWorkstation--callLive > .mcSessionPanel .mcCall__timerBlock,
@@ -33069,19 +33070,19 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   display:flex !important;
   flex-direction:row !important;
   align-items:baseline !important;
-  gap:8px;
+  gap:6px;
   text-align:right;
   flex:0 0 auto;
 }
 .mcWorkstation--callLive > .mcSessionPanel .mcCall__timerLabel,
 .mcWorkstation--callPhase.mcWorkstation--dockOpen > .mcSessionPanel .mcCall__timerLabel{
   margin:0;
-  font-size:10px;
-  letter-spacing:.08em;
+  font-size:9px;
+  letter-spacing:.06em;
 }
 .mcWorkstation--callLive > .mcSessionPanel .mcCall__timer,
 .mcWorkstation--callPhase.mcWorkstation--dockOpen > .mcSessionPanel .mcCall__timer{
-  font-size:clamp(22px, 2.4vw, 28px);
+  font-size:clamp(16px, 1.6vw, 20px);
   letter-spacing:.04em;
   line-height:1;
 }
@@ -33098,23 +33099,23 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcWorkstation--callPhase.mcWorkstation--dockOpen > .mcSessionPanel .mcCall__liveActions{
   width:auto;
   flex-direction:row;
-  flex-wrap:wrap;
-  align-items:stretch;
+  flex-wrap:nowrap;
+  align-items:center;
   justify-content:flex-start;
   margin-inline-start:auto;
-  gap:10px;
+  gap:6px;
   flex:0 0 auto;
 }
 .mcWorkstation--callLive .mcRescheduleBtn--live{
   display:inline-flex;
   align-items:center;
   justify-content:center;
-  gap:8px;
-  min-height:40px;
+  gap:6px;
+  min-height:28px;
   height:auto;
-  padding:10px 16px;
-  border-radius:12px;
-  font-size:13px;
+  padding:5px 10px;
+  border-radius:8px;
+  font-size:12px;
   font-weight:800;
   line-height:1;
   white-space:nowrap;
@@ -33132,18 +33133,21 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcWorkstation--callLive > .mcSessionPanel .mcCall__btn,
 .mcWorkstation--callPhase.mcWorkstation--dockOpen > .mcSessionPanel .mcCall__btn{
   width:auto !important;
-  min-width:148px;
+  min-width:0;
   margin-inline-start:0;
-  padding:10px 16px;
-  border-radius:12px;
-  font-size:13px;
+  padding:5px 12px;
+  border-radius:8px;
+  font-size:12px;
+  min-height:28px;
+  line-height:1;
 }
 .mcWorkstation--callLive > .mcSessionPanel .mcCall__statusRow,
 .mcWorkstation--callPhase.mcWorkstation--dockOpen > .mcSessionPanel .mcCall__statusRow{
   margin:0;
-  font-size:12px;
-  gap:6px;
+  font-size:11px;
+  gap:5px;
   flex:0 1 auto;
+  white-space:nowrap;
 }
 .mcWorkstation--callLive .mcFlowDock,
 .mcWorkstation--callPhase.mcWorkstation--dockOpen .mcFlowDock{
@@ -33254,15 +33258,13 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStepVerify__ribbon{display:none;}
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStepVerify__kicker{
   flex:0 0 auto;
-  padding:0 4px 4px;
-  font-size:clamp(20px, 2vw, 26px);
-}
-.mcWorkstation--callLive.mcWorkstation--dockOpen .mcStepVerify__intro{
-  flex:0 0 auto;
-  padding:0 4px 8px;
-  margin:0;
+  padding:0 4px 6px;
   font-size:13px;
-  line-height:1.4;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:rgba(30,58,122,.48);
+  line-height:1.25;
 }
 .mcWorkstation--callLive.mcWorkstation--dockOpen .mcStepVerify__scriptBox{
   flex:0 0 auto;
@@ -34963,11 +34965,12 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcStepVerify__field--wide{grid-column:1 / -1;}
 .mcCall__liveNav{
   display:none;
-  width:100%;
-  flex-wrap:wrap;
-  gap:8px;
+  width:auto;
+  flex-wrap:nowrap;
+  gap:6px;
   align-items:center;
   justify-content:flex-start;
+  flex:0 0 auto;
 }
 .mcWorkstation--callLive .mcCall__liveNav{
   display:flex;
@@ -34980,11 +34983,12 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   border:1px solid rgba(42,92,245,.22);
   background:rgba(255,255,255,.92);
   color:#0f1f4a;
-  border-radius:10px;
-  padding:8px 12px;
-  font-size:12px;
+  border-radius:8px;
+  padding:4px 8px;
+  font-size:11px;
   font-weight:700;
   cursor:pointer;
+  white-space:nowrap;
 }
 .mcCall__navBtn--pause{border-color:rgba(217,119,6,.35);background:rgba(255,247,237,.95);color:#9a3412;}
 .mcCall__navBtn--next{border-color:rgba(42,92,245,.35);background:rgba(42,92,245,.1);color:#1e3a8a;}
@@ -35331,15 +35335,14 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 }
 .mcStepVerify__ribbon{height:5px;background:linear-gradient(90deg,#34d399,#2a5cf5,#a78bfa);}
 .mcStepVerify__kicker{
-  padding:8px 8px 0;
-  font-size:clamp(22px, 2.2vw, 28px);
-  font-weight:900;
-  letter-spacing:0;
-  text-transform:none;
-  color:#0a1638;
+  padding:14px 28px 0;
+  font-size:13px;
+  font-weight:700;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:rgba(30,58,122,.48);
   line-height:1.25;
 }
-.mcStepVerify__intro{margin:0;padding:4px 8px 10px;font-size:14px;line-height:1.45;color:rgba(30,58,122,.58);}
 .mcStepVerify__scriptBox{
   margin:0 8px 14px;
   padding:16px 18px;
