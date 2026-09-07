@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260907-lead-inbox-color-v1";
+  const BUILD = "20260907-lead-peer-handoff-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -6054,10 +6054,12 @@
   ];
 
   /* GI-LEAD-PEER-REASSIGN 2026-09-07
-     יוזרים ממחלקה אחרת שנציג רגיל יכול לשייך אליהם ליד מ«הלידים שלי».
-     התאמה לפי id / username / name (בלי תלות ברישיות).
-     אם הרשימה ריקה — נופלים לנציגי תפעול פעילים (opsAgent). */
-  const CAMPAIGN_LEAD_AGENT_PEER_REASSIGN_KEYS = [
+     יוזרים שנציג רגיל יכול לשייך אליהם ליד מ«הלידים שלי».
+     התאמה לפי name / username (רווחים מנורמלים, בלי תלות ברישיות). */
+  const CAMPAIGN_LEAD_AGENT_PEER_REASSIGN_TARGETS = [
+    { name: "קורן פרנקל", dept: "פנסיה" },
+    { name: "שמחה אזרד", dept: "פנסיה" },
+    { name: "עדן ביטון", dept: "אלמנטרי רכב ודירה" }
   ];
 
   // GI-GOLD-LEAD — tracking helpers
@@ -6875,6 +6877,47 @@
     return names.length ? names.join(" · ") : "—";
   }
 
+  function campaignLeadPeerNameKey(value){
+    return safeTrim(value).replace(/\s+/g, " ").toLowerCase();
+  }
+
+  function campaignLeadPeerDeptForName(name){
+    const key = campaignLeadPeerNameKey(name);
+    if(!key) return "";
+    const hit = CAMPAIGN_LEAD_AGENT_PEER_REASSIGN_TARGETS.find((t) => campaignLeadPeerNameKey(t.name) === key);
+    return hit ? safeTrim(hit.dept) : "";
+  }
+
+  function campaignLeadFormatAgentWithDept(name){
+    const n = safeTrim(name);
+    if(!n) return "";
+    const dept = campaignLeadPeerDeptForName(n);
+    return dept ? (n + " — " + dept) : n;
+  }
+
+  function campaignLeadTransferReceiverNames(lead, agents){
+    const list = Array.isArray(agents) ? agents : [];
+    const names = [];
+    normalizeCampaignLeadAdditionalAgents(lead?.additionalAgents).forEach((a) => {
+      let n = safeTrim(a.name);
+      if(!n && a.id){
+        const ag = list.find((x) => String(x?.id) === String(a.id));
+        n = safeTrim(ag?.name);
+      }
+      if(n && !names.includes(n)) names.push(n);
+    });
+    return names;
+  }
+
+  function campaignLeadTransferTrailText(lead, agents){
+    const receivers = campaignLeadTransferReceiverNames(lead, agents);
+    if(!receivers.length) return "";
+    const from = campaignLeadResolveAgentName(lead, agents);
+    const fromLabel = from && from !== "—" ? from : "נציג";
+    const toLabel = receivers.map(campaignLeadFormatAgentWithDept).join(" · ");
+    return "מעבר ליד: " + fromLabel + " → " + toLabel;
+  }
+
   function campaignLeadIsOpenInInbox(statusKey){
     return safeTrim(statusKey) !== "closed";
   }
@@ -7067,33 +7110,49 @@
 
   function campaignLeadPeerReassignKeySet(){
     return new Set(
-      (CAMPAIGN_LEAD_AGENT_PEER_REASSIGN_KEYS || [])
-        .map((k) => safeTrim(k).toLowerCase())
+      CAMPAIGN_LEAD_AGENT_PEER_REASSIGN_TARGETS
+        .map((t) => campaignLeadPeerNameKey(t.name))
         .filter(Boolean)
     );
   }
 
   function campaignLeadAgentMatchesPeerReassignKey(agent, keys){
     if(!agent || !keys || !keys.size) return false;
-    const id = safeTrim(agent.id).toLowerCase();
-    const name = safeTrim(agent.name).toLowerCase();
-    const user = safeTrim(agent.username).toLowerCase();
+    const id = campaignLeadPeerNameKey(agent.id);
+    const name = campaignLeadPeerNameKey(agent.name);
+    const user = campaignLeadPeerNameKey(agent.username);
     return !!(id && keys.has(id)) || !!(name && keys.has(name)) || !!(user && keys.has(user));
   }
 
   function getCampaignLeadPeerReassignAgents(){
     const list = Array.isArray(State.data?.agents) ? State.data.agents : [];
-    const keys = campaignLeadPeerReassignKeySet();
     const sessionIds = getCampaignLeadSessionAgentIds();
-    let agents = list.filter((a) => a && a.active !== false && safeTrim(a.name));
-    if(keys.size){
-      agents = agents.filter((a) => campaignLeadAgentMatchesPeerReassignKey(a, keys));
-    } else {
-      agents = agents.filter((a) => safeTrim(a.role) === "opsAgent");
-    }
-    return agents
-      .filter((a) => !sessionIds.has(String(a.id)))
-      .sort((a, b) => safeTrim(a.name).localeCompare(safeTrim(b.name), "he"));
+    const out = [];
+    const seen = new Set();
+    CAMPAIGN_LEAD_AGENT_PEER_REASSIGN_TARGETS.forEach((target) => {
+      const key = campaignLeadPeerNameKey(target.name);
+      if(!key) return;
+      const agent = list.find((a) => {
+        if(!a) return false;
+        return campaignLeadPeerNameKey(a.name) === key
+          || campaignLeadPeerNameKey(a.username) === key;
+      });
+      if(!agent || !safeTrim(agent.id)) return;
+      if(sessionIds.has(String(agent.id))) return;
+      if(seen.has(String(agent.id))) return;
+      seen.add(String(agent.id));
+      const displayName = safeTrim(agent.name) || safeTrim(target.name);
+      out.push({
+        id: agent.id,
+        name: displayName,
+        username: agent.username,
+        active: agent.active,
+        role: agent.role,
+        peerDept: safeTrim(target.dept),
+        peerDisplayName: campaignLeadFormatAgentWithDept(displayName)
+      });
+    });
+    return out;
   }
 
   function canCampaignLeadPeerReassign(){
@@ -40074,7 +40133,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260907-lead-inbox-color-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260907-lead-peer-handoff-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -40094,7 +40153,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260907-lead-inbox-color-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260907-lead-peer-handoff-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -40730,8 +40789,8 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260907-lead-inbox-color-v1",
-    "./simulators-shell.css?v=20260907-lead-inbox-color-v1"
+    "./simulators-center.css?v=20260907-lead-peer-handoff-v1",
+    "./simulators-shell.css?v=20260907-lead-peer-handoff-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -40760,7 +40819,7 @@ UsersGateUI.init();
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
     "./gi-customers-import.css?v=20260828-menora-health-decl-v1",
-    "./theme-unify-flat.css?v=20260907-lead-inbox-color-v1"
+    "./theme-unify-flat.css?v=20260907-lead-peer-handoff-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
     if(document.documentElement.dataset.giSecondaryCss === "1") return;
@@ -42093,7 +42152,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260907-lead-inbox-color-v1";
+  const GI_WIZARD_JS_VERSION = "20260907-lead-peer-handoff-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -60983,7 +61042,18 @@ const CampaignLeadsStore = {
         const isActive = String(lead.id) === String(this.selectedId);
         const statusKey = lead.status || "new";
         const statusLabel = campaignLeadStatusLabel(statusKey);
-        const agentName = campaignLeadAgentsDisplay(lead, agents);
+        const transferText = campaignLeadTransferTrailText(lead, agents);
+        const primaryAgentName = campaignLeadResolveAgentName(lead, agents);
+        const agentHtml = primaryAgentName && primaryAgentName !== "—"
+          ? `<span class="lcSplitCard__val lcSplitCard__agent">${escapeHtml(primaryAgentName)}</span>`
+          : `<span class="lcSplitCard__val lcSplitCard__agentUnassigned">לא שויך נציג</span>`;
+        const transferTrail = transferText.replace(/^מעבר ליד:\s*/, "");
+        const transferRow = transferTrail
+          ? `<div class="lcSplitCard__row lcSplitCard__row--transfer">
+      <span class="lcSplitCard__rowLabel">מעבר ליד</span>
+      <span class="lcSplitCard__val lcSplitCard__transfer">${escapeHtml(transferTrail)}</span>
+    </div>`
+          : "";
         let dateStr = "";
         try {
           const d = new Date(lead.createdAt);
@@ -60998,9 +61068,6 @@ const CampaignLeadsStore = {
         const tzIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
         const agentIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
         const calIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" width="12" height="12"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>';
-        const agentHtml = agentName && agentName !== "—"
-          ? `<span class="lcSplitCard__val lcSplitCard__agent">${escapeHtml(agentName)}</span>`
-          : `<span class="lcSplitCard__val lcSplitCard__agentUnassigned">לא שויך נציג</span>`;
         const rowColorClass = campaignLeadRowColorClass(lead);
         const rowStyle = campaignLeadRowColorStyle(lead);
         return `<div class="lcSplitCard${isActive ? " is-active" : ""}${rowColorClass}" data-split-cl-id="${escapeHtml(String(lead.id))}" data-status="${escapeHtml(statusKey)}" role="button" tabindex="0"${rowStyle}>
@@ -61027,6 +61094,7 @@ const CampaignLeadsStore = {
       <span class="lcSplitCard__rowLabel">נציג</span>
       ${agentHtml}
     </div>
+    ${transferRow}
     <div class="lcSplitCard__row">
       ${calIcon}
       <span class="lcSplitCard__rowLabel">תאריך</span>
@@ -61066,7 +61134,11 @@ const CampaignLeadsStore = {
             const srcBadge = lead.source === "landing_page"
               ? '<span class="lcCampaign__srcBadge">דף נחיתה</span>'
               : (lead.source === "call" ? '<span class="lcCampaign__srcBadge lcCampaign__srcBadge--call">שיחה</span>' : "");
-            let agentName = campaignLeadAgentsDisplay(lead, agents);
+            let agentName = campaignLeadResolveAgentName(lead, agents);
+            const transferText = campaignLeadTransferTrailText(lead, agents);
+            const agentCell = transferText
+              ? `${escapeHtml(agentName && agentName !== "—" ? agentName : "—")}<div class="lcLeadHandoff">${escapeHtml(transferText)}</div>`
+              : escapeHtml(agentName);
             const leadName = safeTrim(lead.customerName) || "—";
             let statusDisplay = escapeHtml(campaignLeadStatusLabel(lead.status));
             if(lead.status === "closed" && safeTrim(lead.closedAt)){
@@ -61085,7 +61157,7 @@ const CampaignLeadsStore = {
             return `<tr data-cl-id="${escapeHtml(lead.id)}" class="${statusRowClass}${rowColorClass}${selectedClass}"${rowStyle}>
               <td>${escapeHtml(leadName)}</td>
               <td dir="ltr">${escapeHtml(lead.phone)}</td>
-          <td class="lcCampaign__agentCell">${escapeHtml(agentName)}</td>
+          <td class="lcCampaign__agentCell">${agentCell}</td>
           <td>${escapeHtml(lead.campaignLabel)}${srcBadge}</td>
           <td>${escapeHtml(safeTrim(lead.insuranceCompany) || "—")}</td>
           <td>${statusDisplay}</td>
@@ -62360,13 +62432,14 @@ const CampaignLeadsStore = {
         const isAdditional = campaignLeadHasAdditionalAgentId(lead, a.id);
         const isAssigned = isPrimary || isAdditional;
         const isInactive = a.active === false;
+        const shownName = safeTrim(a.peerDisplayName) || safeTrim(a.name);
         const tag = isPrimary
           ? '<span class="lcLeadReassign__itemTag">נציג ראשי</span>'
           : (isAdditional
             ? '<span class="lcLeadReassign__itemTag">שיוך נוסף</span>'
             : (isInactive ? '<span class="lcLeadReassign__itemTag lcLeadReassign__itemTag--inactive">לא פעיל</span>' : ""));
         return `<button type="button" class="lcLeadReassign__item${isAssigned ? " is-current" : ""}${isInactive ? " is-inactive" : ""}" data-reassign-agent-id="${escapeHtml(a.id)}"${isAssigned ? " disabled" : ""}>
-          <span class="lcLeadReassign__itemName">${escapeHtml(a.name)}</span>
+          <span class="lcLeadReassign__itemName">${escapeHtml(shownName)}</span>
           ${tag}
         </button>`;
       }).join("");
@@ -62385,7 +62458,7 @@ const CampaignLeadsStore = {
       overlay.className = "lcLeadReassign__overlay";
       const dialogTitle = mode === "peer" ? "שיוך לנציג" : "שיוך לנציג נוסף";
       const emptyText = mode === "peer"
-        ? "אין יוזרים מוגדרים לשיוך למחלקה אחרת"
+        ? "אין יוזרים תואמים לשיוך (קורן פרנקל, שמחה אזרד, עדן ביטון)"
         : "אין נציגים במערכת";
       overlay.innerHTML = `
         <div class="lcLeadReassign__panel" role="dialog" aria-modal="true" aria-label="${escapeHtml(dialogTitle)}" dir="rtl">

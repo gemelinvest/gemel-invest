@@ -39249,6 +39249,24 @@ body.view-settings-active.lcSettingsRubric-systemUpdates .main{ overflow-y: auto
   color:rgba(239,68,68,.85);
   font-weight:600;
 }
+.lcSplitCard__row--transfer .lcSplitCard__rowLabel{
+  color:var(--brandA);
+  font-weight:700;
+}
+.lcSplitCard__transfer{
+  color:var(--brandA);
+  font-weight:700;
+  white-space:normal;
+  line-height:1.35;
+}
+.lcLeadHandoff{
+  margin-top:4px;
+  font-size:12px;
+  font-weight:700;
+  color:var(--brandA);
+  line-height:1.35;
+  white-space:normal;
+}
 .lcSplitCard__date{ color:var(--muted); font-weight:500; }
 
 /* Lead Transfer Animation Overlay */

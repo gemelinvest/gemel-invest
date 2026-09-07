@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260907-lead-inbox-color-v1";
+const TAG = "20260907-lead-peer-handoff-v1";
 let failed = 0;
 let passed = 0;
 
