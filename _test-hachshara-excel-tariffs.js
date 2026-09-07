@@ -8,6 +8,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
@@ -136,6 +137,85 @@ assert(sims.includes("const HACHSHARA_RISK_RATE_TABLE_LE500K"), "risk ≤500k ta
 assert(sims.includes("const HACHSHARA_MORT_RISK_RATE_TABLE"), "mortgage table exists");
 assert(sims.includes("[18, 0.99, 1.41, 0.72, 0.93]"), "risk age 18 low-bracket matches Excel ריסק");
 assert(sims.includes("[18, 0.75, 1.11, 0.51, 0.7]"), "mortgage age 18 matches Excel משכנתא");
+
+console.log("\n5) runtime quote uses 2023 base then CBS factor");
+const sandbox = {
+  console,
+  Date,
+  Math,
+  Number,
+  String,
+  Array,
+  Object,
+  JSON,
+  parseInt,
+  isNaN,
+  Infinity,
+  window: {
+    localStorage: { getItem(){ return null; }, setItem(){} },
+    addEventListener(){},
+    document: {
+      createElement(){ return { style: {}, setAttribute(){}, addEventListener(){} }; },
+      getElementById(){ return null; },
+      querySelector(){ return null; },
+      querySelectorAll(){ return []; },
+      body: { appendChild(){} }
+    }
+  }
+};
+sandbox.global = sandbox;
+sandbox.globalThis = sandbox;
+sandbox.window.window = sandbox.window;
+sandbox.__GI_SIM_HOST = {
+  safeTrim(v){ return String(v == null ? "" : v).trim(); },
+  escapeHtml(s){ return String(s == null ? "" : s); },
+  on(){},
+  $(){ return null; },
+  $$(){ return []; },
+  nowISO(){ return new Date().toISOString(); },
+  parseBirthDateValue(){ return null; },
+  parseAnyDmyDate(){ return null; },
+  formatDmyFromParts(){ return ""; },
+  applyDmyAutoFormat(){ return ""; },
+  renderCompanyLogoHtmlForCompany(){ return ""; },
+  ensureGiSimulatorStylesLoaded(){},
+  RiskSimulators: { register(){}, getHandler(){ return null; }, registry: {} },
+  onSimulatorsInstalled(){}
+};
+vm.runInNewContext(sims, sandbox);
+const quote = sandbox.GiSimulatorQuotes && sandbox.GiSimulatorQuotes.quote;
+assert(typeof quote === "function", "GiSimulatorQuotes.quote exported");
+const cpi = sandbox.window.HealthCpi;
+assert(!!cpi && typeof cpi.indexAgorot === "function", "HealthCpi exported");
+assert(cpi.TARIFFS.hachshara_health.baseIndexPoints === 133.17, "runtime baseIndexPoints is 133.17");
+
+const before = quote("הכשרה", "בריאות", { age: 10, covers: ["drugs"] });
+assert(!!before && before.ok === true, "health quote ok before CBS mem");
+assert(before.monthlyPremium === 11.5, "without CBS cache, drugs 0–20 stays at book ₪11.50");
+
+cpi._mem = {
+  fetchedAt: "2026-09-07T13:00:00.000Z",
+  targetPeriod: "07-2026",
+  current: { year: 2026, month: 7, monthDesc: "יולי", linked: 112.8774 },
+  anchor: { year: 2023, month: 7, monthDesc: "יולי", linked: 104.5 },
+  source: "cbs"
+};
+assert(cpi.getCurrentIndexPoints() === 147.81, "CBS July 2026 converts to 147.81 tariff points");
+const indexed = cpi.indexAgorot(1150, "hachshara_health");
+assert(indexed.indexedAgorot === 1276, "indexAgorot(1150) → 1276 agorot");
+assert(Math.abs(indexed.factor - (147.81 / 133.17)) < 1e-12, "factor is current/base");
+
+const after = quote("הכשרה", "בריאות", { age: 10, covers: ["drugs"] });
+assert(!!after && after.ok === true, "health quote ok after CBS mem");
+assert(after.monthlyPremium === 12.76, "drugs 0–20 indexed to ₪12.76");
+assert(after.annualPremium === 153.12, "annual is indexed monthly × 12");
+
+const first = quote("הכשרה", "בריאות", { age: 10, covers: ["surgery_first_shekel"] });
+assert(!!first && first.ok === true && first.monthlyPremium === 34.45, "first-shekel 0–20 indexed to ₪34.45");
+
+const ciQuote = quote("הכשרה", "מחלות קשות", { age: 43, gender: "זכר", smoker: false, compensation: 100000 });
+assert(!!ciQuote && ciQuote.ok === true, "CI quote still works");
+assert(ciQuote.monthlyPremium === 93.60, "CI is not CPI-indexed (₪93.60 from Excel)");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));
