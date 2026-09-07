@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260907-hach-life-cpi-v1";
+  const BUILD = "20260907-docs-dl-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -20194,6 +20194,91 @@ UsersGateUI.init();
     "מינוי סוכן": "agentAppt"
   };
 
+  function yieldGiDocDownloadPaint(){
+    return new Promise((resolve) => {
+      const raf = typeof requestAnimationFrame === "function"
+        ? requestAnimationFrame
+        : (fn) => setTimeout(fn, 0);
+      raf(() => raf(() => resolve()));
+    });
+  }
+  function ensureGiDocDownloadOverlayEl(){
+    let el = document.getElementById("cfDocDownloadOverlay");
+    if(el) return el;
+    el = document.createElement("div");
+    el.id = "cfDocDownloadOverlay";
+    el.className = "cfDocDownloadOverlay";
+    el.setAttribute("aria-live", "polite");
+    el.setAttribute("role", "status");
+    el.setAttribute("aria-hidden", "true");
+    el.innerHTML = '<div class="cfDocDownloadOverlay__card">'
+      + '<div class="cfDocDownloadOverlay__spin" aria-hidden="true"></div>'
+      + '<div class="cfDocDownloadOverlay__title" data-doc-dl-title>מפיק PDF…</div>'
+      + '<div class="cfDocDownloadOverlay__remain" data-doc-dl-remain></div>'
+      + '<div class="cfDocDownloadOverlay__eta" data-doc-dl-eta hidden></div>'
+      + '<div class="cfDocDownloadOverlay__detail" data-doc-dl-detail></div>'
+      + '<div class="cfDocDownloadOverlay__bar" aria-hidden="true"><div class="cfDocDownloadOverlay__barFill" data-doc-dl-fill></div></div>'
+      + "</div>";
+    document.body.appendChild(el);
+    return el;
+  }
+  function hideGiDocDownloadOverlay(){
+    try {
+      const el = document.getElementById("cfDocDownloadOverlay");
+      if(!el) return;
+      el.classList.remove("is-on");
+      el.setAttribute("aria-hidden", "true");
+    } catch(_e) {}
+  }
+  function showGiDocDownloadOverlay(info){
+    try {
+      const el = ensureGiDocDownloadOverlayEl();
+      el.classList.add("is-on");
+      el.setAttribute("aria-hidden", "false");
+      paintGiDocDownloadOverlay(info || {});
+    } catch(_e) {}
+  }
+  function paintGiDocDownloadOverlay(info){
+    const root = document.getElementById("cfDocDownloadOverlay");
+    if(!root) return;
+    const data = info || {};
+    const done = Math.max(0, Number(data.done) || 0);
+    const total = Math.max(1, Number(data.total) || 1);
+    const remaining = Math.max(0, total - done);
+    const titleEl = root.querySelector("[data-doc-dl-title]");
+    const remainEl = root.querySelector("[data-doc-dl-remain]");
+    const etaEl = root.querySelector("[data-doc-dl-eta]");
+    const detailEl = root.querySelector("[data-doc-dl-detail]");
+    const fillEl = root.querySelector("[data-doc-dl-fill]");
+    if(titleEl) titleEl.textContent = safeTrim(data.title) || "מפיק PDF…";
+    if(remainEl) remainEl.textContent = "נשארו " + remaining + " מתוך " + total;
+    const eta = ciEtaMs(done, total, data.startedAt);
+    if(etaEl){
+      etaEl.textContent = eta != null ? ("כ-" + ciFormatDuration(eta)) : "";
+      etaEl.hidden = eta == null;
+    }
+    if(detailEl){
+      const detail = safeTrim(data.detail);
+      detailEl.textContent = detail;
+      detailEl.hidden = !detail;
+    }
+    if(fillEl) fillEl.style.width = Math.min(100, Math.round((done / total) * 100)) + "%";
+  }
+  function updateGiDocDownloadOverlay(info){
+    try {
+      const data = info || {};
+      if(!data.complete){
+        const el = document.getElementById("cfDocDownloadOverlay");
+        if(!el || !el.classList.contains("is-on")) showGiDocDownloadOverlay(data);
+        else paintGiDocDownloadOverlay(data);
+      } else {
+        paintGiDocDownloadOverlay(data);
+        hideGiDocDownloadOverlay();
+      }
+    } catch(_e) {}
+  }
+  try { window.GiDocDownloadProgress = updateGiDocDownloadOverlay; } catch(_e) {}
+
   const CustomersUI = {
     currentId: null,
     _previewDocId: "",
@@ -23409,7 +23494,6 @@ UsersGateUI.init();
       }
       if(type === CustomerDocuments.TYPES.suitabilityDoc || type === CustomerDocuments.TYPES.premiumDevelopment || type === CustomerDocuments.TYPES.nispahHarAuth || type === CustomerDocuments.TYPES.arrivalPack){
         await ensureGiArrivalDocsLoaded();
-        try { await ensureGiSimulatorJsLoaded(); } catch(_e) {}
       }
     },
 
@@ -23773,14 +23857,34 @@ UsersGateUI.init();
       return true;
     },
     async downloadArrivalDoc(rec, kind, sourceBtn){
+      const startedAt = Date.now();
+      const triggerBtn = sourceBtn || null;
+      const originalText = triggerBtn ? triggerBtn.textContent : "";
+      if(triggerBtn) triggerBtn.disabled = true;
+      showGiDocDownloadOverlay({
+        done: 0,
+        total: 1,
+        title: "מפיק PDF…",
+        detail: "מתחיל…",
+        startedAt
+      });
       try {
-        await ensureGiArrivalDocsLoaded();
-        try { await ensureGiSimulatorJsLoaded(); } catch(_e) {}
+        await yieldGiDocDownloadPaint();
+        const pdfExport = (typeof window.GI_LOAD_LIBS?.pdfExport === "function")
+          ? window.GI_LOAD_LIBS.pdfExport()
+          : Promise.resolve();
+        await Promise.all([ensureGiArrivalDocsLoaded(), pdfExport]);
         if(!window.GiArrivalDocs) throw new Error("GiArrivalDocs missing");
-        return window.GiArrivalDocs.downloadPack(rec, sourceBtn);
+        return await window.GiArrivalDocs.downloadPack(rec, triggerBtn, { startedAt });
       } catch(err){
         try { console.error("ARRIVAL_DOC_DOWNLOAD_FAILED", err); } catch(_e) {}
         try { window.showToast?.({ title: "לא ניתן להוריד את המסמך", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
+      } finally {
+        hideGiDocDownloadOverlay();
+        if(triggerBtn){
+          triggerBtn.disabled = false;
+          if(originalText) triggerBtn.textContent = originalText;
+        }
       }
     },
     async appendArrivalNispahPreview(rec, pane, seq, docId){
@@ -24110,7 +24214,6 @@ UsersGateUI.init();
       }
       if(type === CustomerDocuments.TYPES.suitabilityDoc || type === CustomerDocuments.TYPES.premiumDevelopment || type === CustomerDocuments.TYPES.nispahHarAuth || type === CustomerDocuments.TYPES.arrivalPack){
         await ensureGiArrivalDocsLoaded();
-        try { await ensureGiSimulatorJsLoaded(); } catch(_e) {}
         if(!window.GiArrivalDocs) return null;
         const draft = window.GiArrivalDocs.buildDraft(rec);
         if(type === CustomerDocuments.TYPES.nispahHarAuth){
@@ -24119,7 +24222,7 @@ UsersGateUI.init();
         }
         if(type === CustomerDocuments.TYPES.arrivalPack && typeof window.GiArrivalDocs.buildPackPdf === "function"){
           try {
-            const bytes = await window.GiArrivalDocs.buildPackPdf(draft);
+            const bytes = await window.GiArrivalDocs.buildPackPdf(draft, { includeDownloadStep: false });
             return { fileName: window.GiArrivalDocs.fileName("pack", draft), bytes };
           } catch(_e) {}
         }
@@ -24161,12 +24264,27 @@ UsersGateUI.init();
         try { window.showToast?.({ title: "לא נבחרו מסמכים", text: "סמנו מסמכים ואז לחצו «הורד נבחרים».", variant: "warn", durationMs: 4200 }); } catch(_e) {}
         return;
       }
+      const startedAt = Date.now();
+      const total = ids.length + 1;
+      showGiDocDownloadOverlay({
+        done: 0,
+        total,
+        title: "מוריד מסמכים…",
+        detail: "מתחיל…",
+        startedAt
+      });
       try {
-        await ensureFollowupZipLoaded();
-        if(!window.JSZip) throw new Error("JSZip missing");
+        await yieldGiDocDownloadPaint();
         const files = [];
         let skipped = 0;
         for(let i = 0; i < ids.length; i++){
+          updateGiDocDownloadOverlay({
+            done: i,
+            total,
+            title: "מוריד מסמכים…",
+            detail: "קובץ " + (i + 1) + " מתוך " + ids.length,
+            startedAt
+          });
           const doc = this.findCustomerDocument(rec, ids[i]);
           if(!doc){ skipped += 1; continue; }
           const resolved = await this.resolveDocumentBytes(rec, doc);
@@ -24177,16 +24295,47 @@ UsersGateUI.init();
           try { window.showToast?.({ title: "אין קבצים להורדה", text: "המסמכים שנבחרו אינם ניתנים לאריזה כרגע (למשל טפסים דיגיטליים בלבד).", variant: "warn", durationMs: 5200 }); } catch(_e) {}
           return;
         }
-        const blob = await window.GiFollowupZip.packFilesIntoZip(files);
-        const insured = CustomerDocuments.getPrimaryInsuredLabel(rec?.payload) || "מבוטח";
-        const fileName = "מסמכים-נבחרים-" + CustomerDocuments.sanitizeFileNamePart(insured) + "-" + files.length + ".zip";
-        const url = URL.createObjectURL(blob);
+        updateGiDocDownloadOverlay({
+          done: ids.length,
+          total,
+          title: "מוריד מסמכים…",
+          detail: files.length === 1 ? "מתחיל הורדה…" : "אורז ZIP…",
+          startedAt
+        });
+        let url = "";
+        let fileName = "";
+        if(files.length === 1){
+          const one = files[0];
+          const name = safeTrim(one.fileName) || "document";
+          const lower = name.toLowerCase();
+          const mime = /\.pdf$/i.test(lower) ? "application/pdf"
+            : (/\.html?$/i.test(lower) ? "text/html;charset=utf-8"
+              : (/\.zip$/i.test(lower) ? "application/zip" : "application/octet-stream"));
+          const blob = new Blob([one.bytes], { type: mime });
+          url = URL.createObjectURL(blob);
+          fileName = name;
+        } else {
+          await ensureFollowupZipLoaded();
+          if(!window.JSZip) throw new Error("JSZip missing");
+          const blob = await window.GiFollowupZip.packFilesIntoZip(files);
+          const insured = CustomerDocuments.getPrimaryInsuredLabel(rec?.payload) || "מבוטח";
+          fileName = "מסמכים-נבחרים-" + CustomerDocuments.sanitizeFileNamePart(insured) + "-" + files.length + ".zip";
+          url = URL.createObjectURL(blob);
+        }
         CustomerDocuments.triggerDataUrlDownload(url, fileName);
         setTimeout(() => { try { URL.revokeObjectURL(url); } catch(_e){} }, 60000);
+        updateGiDocDownloadOverlay({
+          done: total,
+          total,
+          title: "מוריד מסמכים…",
+          detail: "הקובץ יורד",
+          startedAt,
+          complete: true
+        });
         try {
           window.showToast?.({
             title: "הורדת מסמכים נבחרים",
-            text: files.length + " קבצים בארכיון" + (skipped ? (" · " + skipped + " דולגו") : ""),
+            text: files.length + " קבצים" + (files.length > 1 ? " בארכיון" : "") + (skipped ? (" · " + skipped + " דולגו") : ""),
             variant: "ok",
             durationMs: 4200
           });
@@ -24194,6 +24343,8 @@ UsersGateUI.init();
       } catch(err){
         try { console.error("SELECTED_DOCS_ZIP_FAILED", err); } catch(_e) {}
         alert(safeTrim(err?.message) || "לא ניתן להוריד את המסמכים שנבחרו.");
+      } finally {
+        hideGiDocDownloadOverlay();
       }
     },
     async downloadFollowupQuestionnairesZip(rec){
@@ -40364,7 +40515,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260907-hach-life-cpi-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260907-docs-dl-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -40384,8 +40535,8 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260907-hach-life-cpi-v1";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260907-hach-life-cpi-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260907-docs-dl-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260907-docs-dl-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -41038,18 +41189,18 @@ UsersGateUI.init();
     "./ayalon-health-sim.css?v=20260810-sim-mockup-v2",
     "./ayalon-ci-sim.css?v=20260811-ayl-ci-v1",
     "./hachshara-health-sim.css?v=20260810-sim-mockup-v2",
-    "./hachshara-risk-sim.css?v=20260907-hach-life-cpi-v1",
-    "./hachshara-mortgage-risk-sim.css?v=20260907-hach-life-cpi-v1",
+    "./hachshara-risk-sim.css?v=20260907-docs-dl-v1",
+    "./hachshara-mortgage-risk-sim.css?v=20260907-docs-dl-v1",
     "./migdal-health-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
-    "./menora-ci-sim.css?v=20260907-hach-life-cpi-v1",
+    "./menora-ci-sim.css?v=20260907-docs-dl-v1",
     "./clal-health-sim.css?v=20260812-cll-health-v1",
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260907-hach-life-cpi-v1",
-    "./simulators-shell.css?v=20260907-hach-life-cpi-v1"
+    "./simulators-center.css?v=20260907-docs-dl-v1",
+    "./simulators-shell.css?v=20260907-docs-dl-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -42411,7 +42562,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260907-hach-life-cpi-v1";
+  const GI_WIZARD_JS_VERSION = "20260907-docs-dl-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;

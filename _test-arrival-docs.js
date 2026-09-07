@@ -1,4 +1,4 @@
-/* GI-ARRIVAL-DOCS 20260907-hach-life-cpi-v1
+/* GI-ARRIVAL-DOCS 20260907-docs-dl-v1
    מסמך התאמה + התפתחות פרמיה + נספח ה׳ — אחד-לאחד מול המסמכים שנשלחו.
    Run: node _test-arrival-docs.js
 */
@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260907-hach-life-cpi-v1";
+const TAG = "20260907-docs-dl-v1";
 let failed = 0;
 let passed = 0;
 
@@ -215,12 +215,19 @@ const withNispah = api.embedNispahInHtml(combined, new Uint8Array([37, 80, 68, 7
 assert(withNispah.indexOf("giArrivalNispahEmbed") > iYear1, "embedded nispah comes after premia");
 assert(withNispah.includes("data:application/pdf;base64,"), "nispah is embedded as PDF data");
 
-console.log("\n5) no invented age table without tariff");
+console.log("\n5) stored projection without tariff engine");
 const noEngine = loadModule({});
 const draft2 = noEngine.buildDraft(sample);
 const premia2 = noEngine.renderPremiaHtml(draft2);
 assert(premia2.includes("כיסויים ועלויות חודשיות שנה א"), "year-1 still shown from proposal");
-assert(!/גיל בשנים/.test(premia2) || draft2.tables.every((t) => t.coverRows.every((c) => !c.projection?.ok)), "no guessed age rows without engine");
+const storedOk = (draft2.tables || []).some((t) => (t.coverRows || []).some((c) => c.projection && c.projection.ok && c.projection.source === "stored"));
+assert(storedOk, "uses stored year-1 + discount schedule when engine is absent");
+assert(/גיל בשנים/.test(premia2), "age table from sold premiums, not invented tariffs");
+const lifeProj = (draft2.tables || []).find((t) => t.family === "life" || t.family === "mortgage")?.coverRows?.[0]?.projection;
+assert(lifeProj && lifeProj.rows.length === 6, "risk stored rows match discount schedule length");
+const ciProj = (draft2.tables || []).find((t) => t.family === "ci" || t.family === "cancer")?.coverRows?.[0]?.projection;
+assert(ciProj && ciProj.rows.length === 10, "CI stored rows match 10-year schedule");
+assert(!(draft2.tables || []).some((t) => (t.coverRows || []).some((c) => (c.projection?.rows || []).some((r) => r.age >= 50))), "does not invent ages beyond the discount schedule");
 
 console.log("\n6) nispah fill uses official fields only");
 const captured = {};
@@ -325,6 +332,55 @@ const nispahApi = loadModule({
   assert(editTypes.filter((t) => t === "customer_arrival_pack").length === 1, "edit save writes one pack");
   assert(editTypes.includes("health_ops"), "edit save keeps other docs");
   assert(!editTypes.includes("suitability_document") && !editTypes.includes("premium_development_report") && !editTypes.includes("nispah_he_har_auth"), "edit save strips the old three");
+
+  console.log("\n10) faster download: cache, progress, no simulator chunk");
+  const fetchSrc = sliceBetween(modSrc, "const FETCH_MEM", "function reportDocDownloadProgress");
+  assert(fetchSrc.includes("FETCH_MEM"), "memory-caches nispah/font bytes");
+  assert(!fetchSrc.includes('cache: "reload"') && !fetchSrc.includes("cache:\"reload\""), "does not bypass HTTP cache on nispah/font");
+  assert(modSrc.includes("reportDocDownloadProgress"), "progress hook from arrival docs");
+  assert(modSrc.includes("logging: false"), "html2canvas logging off");
+  assert(modSrc.includes('"FAST"'), "jsPDF FAST image write");
+  assert(modSrc.includes("scale: 2"), "keeps html2canvas scale 2");
+  assert(modSrc.includes("0.92"), "keeps jpeg quality");
+  assert(modSrc.includes("Promise.all([htmlPromise, nispahPromise])"), "html PDF and nispah run in parallel");
+  const dlSrc = sliceBetween(app, "async downloadArrivalDoc(rec, kind, sourceBtn){", "async appendArrivalNispahPreview");
+  assert(dlSrc.includes("showGiDocDownloadOverlay"), "download shows overlay immediately");
+  assert(dlSrc.indexOf("showGiDocDownloadOverlay") < dlSrc.indexOf("await "), "overlay before first await");
+  assert(!dlSrc.includes("ensureGiSimulatorJsLoaded"), "arrival download does not load simulators");
+  assert(dlSrc.includes("pdfExport"), "preloads pdf export libs only");
+  const prevMod = sliceBetween(app, "async ensureCustomerDocumentPreviewModule(doc){", "async fillCustomerDocumentPreviewPdf");
+  assert(!prevMod.includes("ensureGiSimulatorJsLoaded"), "arrival preview does not load simulators");
+  const resolveFn = sliceBetween(app, "async resolveDocumentBytes(rec, doc){", "async downloadSelectedCustomerDocuments(rec){");
+  assert(!resolveFn.includes("ensureGiSimulatorJsLoaded"), "resolveDocumentBytes does not load simulators");
+  const multiFn = sliceBetween(app, "async downloadSelectedCustomerDocuments(rec){", "async downloadFollowupQuestionnairesZip(rec){");
+  assert(multiFn.includes("showGiDocDownloadOverlay"), "selected download shows overlay");
+  const zipIdx = multiFn.indexOf("await ensureFollowupZipLoaded()");
+  const loopIdx = multiFn.indexOf("for(let i = 0");
+  assert(zipIdx < 0 || zipIdx > loopIdx, "followup/JSZip loaded only when a zip is needed");
+  assert(multiFn.includes("files.length === 1"), "single selected file downloads without zip");
+  assert(app.includes("GiDocDownloadProgress"), "global progress updater");
+  assert(app.includes("נשארו "), "remaining X of Y copy");
+  assert(css.includes(".cfDocDownloadOverlay"), "overlay CSS");
+  assert(css.includes(".cfDocDownloadOverlay__spin"), "wait spinner CSS");
+
+  const progressCalls = [];
+  const progApi = loadModule({
+    GiDocDownloadProgress(info){ progressCalls.push(info); }
+  });
+  progApi.htmlToPdfBytes = async function(_html, options){
+    if(options && options.onPage) await options.onPage(1, 2);
+    if(options && options.onPage) await options.onPage(2, 2);
+    return new Uint8Array([1]);
+  };
+  progApi.fillNispahPdf = async function(){ return new Uint8Array([2]); };
+  progApi.mergePdfBytes = async function(){ return new Uint8Array([9, 9]); };
+  const progDraft = progApi.buildDraft(sample);
+  await progApi.buildPackPdf(progDraft, { startedAt: Date.now() - 1200, includeDownloadStep: true });
+  assert(progressCalls.length > 0, "buildPackPdf reports progress");
+  assert(progressCalls.some((c) => /עמוד/.test(String(c.detail || ""))), "reports per-page progress");
+  assert(progressCalls.some((c) => /נספח/.test(String(c.detail || ""))), "reports nispah step");
+  const lastProg = progressCalls[progressCalls.length - 1];
+  assert(lastProg && lastProg.done < lastProg.total, "does not mark complete before the actual download click");
 
   console.log("\n" + passed + " passed, " + failed + " failed");
   process.exit(failed ? 1 : 0);

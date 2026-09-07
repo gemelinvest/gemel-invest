@@ -1,4 +1,4 @@
-/* GI-CUSTOMER-DOCS-PREVIEW 20260907-hach-life-cpi-v1
+/* GI-CUSTOMER-DOCS-PREVIEW 20260907-docs-dl-v1
    On-screen preview for every customer-file document (ops-report style),
    without changing fill / download / open logic.
    Run: node _test-customer-docs-preview.js
@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260907-hach-life-cpi-v1";
+const TAG = "20260907-docs-dl-v1";
 let failed = 0;
 let passed = 0;
 
@@ -128,11 +128,13 @@ assert(app.includes("CustomerDocuments.triggerDataUrlDownload"), "download helpe
 
 console.log("\n6) showCustomerDocumentPreview hydrates PDF after module load");
 const showFn = sliceBetween(app, "async showCustomerDocumentPreview(docId){", "denyOfficialJoinFormDownload(){");
+const prevModLoad = sliceBetween(app, "async ensureCustomerDocumentPreviewModule(doc){", "async fillCustomerDocumentPreviewPdf");
 assert(showFn.includes("ensureCustomerDocumentPreviewModule"), "lazy-loads the form module before fill");
 assert(showFn.includes("fillCustomerDocumentPreviewPdf"), "fills PDF for the pane");
 assert(showFn.includes("pdfUrl"), "passes blob URL into the pane");
 assert(showFn.includes("_previewFillSeq"), "cancels stale preview fills when switching docs");
 assert(!showFn.includes("triggerDataUrlDownload"), "preview show does not download");
+assert(!prevModLoad.includes("ensureGiSimulatorJsLoaded"), "arrival preview does not load simulators");
 assert(css.includes("cfFile__documentsPreviewNote"), "archive note CSS");
 assert(css.includes("min(68vh, 780px)") || css.includes("min(72vh, 820px)"), "preview pane is tall like a document");
 
