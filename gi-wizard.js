@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260907-docs-dl-v1";
+  const GI_WIZARD_BUILD = "20260907-sim-ui-v1";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -19198,17 +19198,14 @@ if(path === "birthDate"){
           </div>` : "";
       const workspaceHtml = `
         <div class="lcNpWorkspace" id="lcNpWorkspace">
-          <div class="lcNpWsHead">
-            <div class="lcNpWsBrand">${this.renderCompanyLogoHtml(d.company, "dd")}<div><strong>${escapeHtml(d.company)} · ${escapeHtml(isMedicare ? "מדיקר" : (d.type || "מוצר"))}</strong><span>${riskSimHandler ? "הסימולטור האמיתי נפתח אוטומטית" : "מילוי ידני — אין סימולטור למוצר זה"}</span></div></div>
-            ${riskSimHandler ? `<div class="lcNpWsSwitch">
-              <span class="lcNpWsSwitch__note">החלפת חברה ומוצר לכל מבוטח מתבצעת בתוך הסימולטור</span>
-              <button class="lcBtn" type="button" data-np-back-pick="1">חזרה לבחירה</button>
-            </div>` : `<div class="lcNpWsSwitch">
+          ${riskSimHandler ? "" : `<div class="lcNpWsHead">
+            <div class="lcNpWsBrand">${this.renderCompanyLogoHtml(d.company, "dd")}<div><strong>${escapeHtml(d.company)} · ${escapeHtml(isMedicare ? "מדיקר" : (d.type || "מוצר"))}</strong><span>מילוי ידני — אין סימולטור למוצר זה</span></div></div>
+            <div class="lcNpWsSwitch">
               <label class="lcField"><span class="lcLabel">החלף חברה</span><select class="lcInput" id="lcNpWsCompany" data-np-ws-company>${wsCompanyOpts}</select></label>
               <label class="lcField"><span class="lcLabel">החלף מוצר</span><select class="lcInput" id="lcNpWsProduct" data-np-ws-product ${isMedicare ? "disabled" : ""}>${isMedicare ? `<option>מדיקר</option>` : wsProductOpts}</select></label>
               <button class="lcBtn" type="button" data-np-back-pick="1">חזרה לבחירה</button>
-            </div>`}
-          </div>
+            </div>
+          </div>`}
           ${riskSimHandler ? `<div class="lcNpSimDock" id="lcNpSimDock"></div>
           ${simWorkspaceHint}` : riskSimBannerHtml}
           ${riskSimHandler ? "" : `<div class="lcNpWsGrid">

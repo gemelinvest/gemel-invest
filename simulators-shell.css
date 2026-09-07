@@ -56,27 +56,46 @@
   opacity:1 !important;
   visibility:visible !important;
 }
-.giSimShellModal .giValModal__headIcon{
-  width:48px !important;
-  height:48px !important;
-  border-radius:14px !important;
-  background:#EFF6FF !important;
-  border:1px solid #DBEAFE !important;
+.giSimShellModal .giValModal__headIcon,
+.giSimQuiet .giValModal__headIcon{
+  width:auto !important;
+  height:auto !important;
+  min-width:0 !important;
+  padding:0 !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
+  overflow:visible !important;
   display:flex !important;
   align-items:center !important;
   justify-content:center !important;
-  overflow:hidden !important;
   flex:0 0 auto !important;
-  box-shadow:none !important;
 }
 .giSimShellModal .giValModal__headIcon img,
 .giSimShellModal .giValModal__headIcon svg,
 .giSimShellModal .giValModal__headIcon .lcCompanyLogo,
-.giSimShellModal .giValModal__headIcon .lcCompanyLogo--mini{
-  max-width:30px !important;
-  max-height:30px !important;
-  width:30px !important;
-  height:30px !important;
+.giSimShellModal .giValModal__headIcon .lcCompanyLogo--mini,
+.giSimQuiet .giValModal__headIcon img,
+.giSimQuiet .giValModal__headIcon svg,
+.giSimQuiet .giValModal__headIcon .lcCompanyLogo,
+.giSimQuiet .giValModal__headIcon .lcCompanyLogo--mini{
+  width:auto !important;
+  height:52px !important;
+  max-width:180px !important;
+  max-height:56px !important;
+  padding:0 !important;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
+  object-fit:contain !important;
+}
+.giSimShellModal .giValModal__headIcon .lcCompanyLogo__img,
+.giSimQuiet .giValModal__headIcon .lcCompanyLogo__img{
+  width:auto !important;
+  height:52px !important;
+  max-width:180px !important;
   object-fit:contain !important;
 }
 .giSimShellModal .giValModal__title{
@@ -600,11 +619,12 @@
 }
 .giSimShellModal .giValModal__headIcon,
 .giSimQuiet .giValModal__headIcon{
-  width:36px !important;
-  height:36px !important;
+  width:auto !important;
+  height:auto !important;
   border-radius:0 !important;
-  background:#fff !important;
-  border:1px solid #d8dee6 !important;
+  background:transparent !important;
+  border:0 !important;
+  box-shadow:none !important;
 }
 .giSimShellModal .giValModal__body,
 .giSimQuiet .giValModal__body{
@@ -947,7 +967,16 @@
   gap:8px !important;
   font-weight:700 !important;
   color:#1e3a5f !important;
-  margin:0 0 10px !important;
+  margin:0 !important;
+}
+.giSimShell__legalTop{
+  display:flex !important;
+  flex-direction:row !important;
+  flex-wrap:wrap !important;
+  align-items:center !important;
+  justify-content:flex-start !important;
+  gap:10px 18px !important;
+  width:100% !important;
 }
 .giSimShell__legalGrid{
   display:grid !important;
@@ -994,7 +1023,7 @@
   flex-wrap:wrap !important;
   align-items:center !important;
   gap:8px !important;
-  margin:12px 0 8px !important;
+  margin:0 !important;
 }
 .giSimShell__legalBensHead strong{color:#1e3a5f !important}
 .giSimShell__legalBensHead span{font-size:12px !important;color:#64748b !important;font-weight:600 !important}
@@ -1029,7 +1058,7 @@
   justify-items:start;
 }
 .giSimShell__legalDock > .giSimShell__legalBanks,
-.giSimShell__legalDock > .giSimShell__legalBensHead,
+.giSimShell__legalDock > .giSimShell__legalTop,
 .giSimShell__legalDock > .giSimShell__benRow,
 .giSimShell__legalDock > .giSimShell__legalSummary{
   justify-self:stretch;
