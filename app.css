@@ -42695,6 +42695,15 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   margin: 0 auto 16px;
   box-shadow: 0 10px 28px rgba(15,23,42,.12);
 }
+.cfFile__documentsPreviewNispah{
+  margin: 16px 12px 12px;
+}
+.cfFile__documentsPreviewNispahTitle{
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--blueDeep, #3870ED);
+  margin: 0 0 8px;
+}
 .cfFile__documentsPreviewNote{
   font-size: 13px;
   line-height: 1.5;
