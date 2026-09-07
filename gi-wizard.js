@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260907-customer-doc-preview-v1";
+  const GI_WIZARD_BUILD = "20260907-couple-shared-discount-v1";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -14295,6 +14295,7 @@ if(path === "birthDate"){
       const ids = this.getPolicyInsuredIds(policy);
       this._npDiscInsuredIds = ids.slice();
       this._npDiscSelByInsured = this._npDiscSelByInsured || {};
+      const coupleShared = safeTrim(policy?.insuredMode) === "couple" && ids.length > 1;
       ids.forEach((iid) => {
         if(this._npDiscSelByInsured[iid] != null) return;
         const saved = policy.simDiscountPerInsured && policy.simDiscountPerInsured[iid];
@@ -14306,9 +14307,15 @@ if(path === "birthDate"){
         }
         this._npDiscSelByInsured[iid] = idx;
       });
+      if(coupleShared){
+        const seedIdx = ids.map((iid) => this._npDiscSelByInsured[iid]).find((idx) => idx != null && idx >= 0);
+        if(seedIdx != null){
+          ids.forEach((iid) => { this._npDiscSelByInsured[iid] = seedIdx; });
+        }
+      }
       this._npDiscInsuredId = this._npDiscInsuredId && ids.indexOf(this._npDiscInsuredId) >= 0 ? this._npDiscInsuredId : (ids[0] || "");
       if(!bar) return;
-      if(ids.length <= 1){
+      if(ids.length <= 1 || coupleShared){
         bar.hidden = true;
         bar.innerHTML = "";
         return;
@@ -16001,6 +16008,77 @@ if(path === "birthDate"){
       return safeTrim(fallback);
     },
 
+    /* GI-COUPLE-SHARED-DISCOUNT 2026-09-07
+       אותה אפשרות הנחה לכל המבוטחים בפוליסה זוגית.
+       הסכום אחרי הנחה מחושב לכל מבוטח במנוע הקיים, לפי הפרמיה שלו. */
+    applyCoupleSharedSimulatorDiscount(policy){
+      if(!policy || policy.insuredMode !== "couple") return policy;
+      const ids = this.getPolicyInsuredIds(policy);
+      if(ids.length < 2) return policy;
+      const map = (policy.simDiscountPerInsured && typeof policy.simDiscountPerInsured === "object")
+        ? policy.simDiscountPerInsured : {};
+      let seed = null;
+      for(let i = 0; i < ids.length; i++){
+        const entry = map[ids[i]];
+        if(entry && (safeTrim(entry.optionId) || Number(entry.year1Pct) > 0)){
+          seed = entry;
+          break;
+        }
+      }
+      if(!seed){
+        if(policy.simDiscountPerInsured){
+          ids.forEach((id) => { delete policy.simDiscountPerInsured[id]; });
+        }
+        return policy;
+      }
+      const api = (typeof this.getSimulatorDiscountApi === "function") ? this.getSimulatorDiscountApi() : null;
+      let wizardOpt = null;
+      if(api && typeof api.byId === "function" && safeTrim(seed.optionId)){
+        try { wizardOpt = this.adaptSimulatorDiscountOption(api.byId(policy.company, policy.type, seed.optionId)); } catch(_e) {}
+      }
+      if(!wizardOpt && seed){
+        wizardOpt = this.adaptSimulatorDiscountOption({
+          id: seed.optionId,
+          label: seed.label || seed.optionLabel,
+          pct: seed.year1Pct,
+          years: seed.years,
+          schedule: Array.isArray(seed.schedule) ? seed.schedule : seed.schedule,
+          pctByCover: seed.pctByCover,
+          fullPriceIds: seed.fullPriceIds
+        });
+      }
+      policy.simDiscountPerInsured = policy.simDiscountPerInsured || {};
+      const seedOptId = safeTrim(seed.optionId);
+      ids.forEach((id) => {
+        const existing = policy.simDiscountPerInsured[id];
+        const sameOpt = existing && safeTrim(existing.optionId) === seedOptId;
+        const hasAfter = existing && Number.isFinite(Number(existing.monthlyAfterDiscount));
+        if(sameOpt && hasAfter) return;
+        this._applySimulatorDiscountAfter(policy, id, wizardOpt);
+        const written = policy.simDiscountPerInsured[id];
+        const writtenOk = written
+          && safeTrim(written.optionId) === seedOptId
+          && Number.isFinite(Number(written.monthlyAfterDiscount));
+        if(writtenOk) return;
+        const gross = this.asMoneyNumber(policy.premiumPerInsured && policy.premiumPerInsured[id]);
+        const pct = Number(seed.year1Pct) || Number(wizardOpt && wizardOpt.pct) || 0;
+        const fallback = (gross > 0 && pct >= 0)
+          ? Math.round(gross * (1 - pct / 100) * 100) / 100
+          : NaN;
+        policy.simDiscountPerInsured[id] = {
+          optionId: seedOptId,
+          optionLabel: safeTrim(seed.label || seed.optionLabel || (wizardOpt && wizardOpt.label)),
+          label: safeTrim(seed.label || seed.optionLabel || (wizardOpt && wizardOpt.label)),
+          year1Pct: pct,
+          years: seed.years || (wizardOpt && wizardOpt.years),
+          schedule: Array.isArray(seed.schedule) ? seed.schedule.slice() : [],
+          monthlyAfterDiscount: Number.isFinite(fallback) ? fallback : null
+        };
+      });
+      this.syncDraftDiscountFromSimulator(policy);
+      return policy;
+    },
+
     getHealthAddonPremiumValue(policy, cover, insuredId){
       return safeTrim(policy?.healthAddonPremiums?.[cover]?.[insuredId]);
     },
@@ -16776,6 +16854,7 @@ if(path === "birthDate"){
       draft.insuredId = ids[0] || "";
       draft.insuredMode = "couple";
       this.fillCoupleSharedPolicyFields(draft);
+      this.applyCoupleSharedSimulatorDiscount(draft);
       const legal = this.resolveSimulatorLegal(
         selected.map((e) => e.legal).find((x) => this.simulatorLegalHasContent(x)) || selected.map((e) => e.legal).find(Boolean),
         ids[0]
@@ -17111,6 +17190,7 @@ if(path === "birthDate"){
           : undefined
       };
       this.fillCoupleSharedPolicyFields(p);
+      this.applyCoupleSharedSimulatorDiscount(p);
       if(!p.riskSimQuotes) delete p.riskSimQuotes;
       if(!p.healthCoversPerInsured || !Object.keys(p.healthCoversPerInsured).length) delete p.healthCoversPerInsured;
       if(!p.simStateByInsured || !Object.keys(p.simStateByInsured).length) delete p.simStateByInsured;
@@ -17891,6 +17971,33 @@ if(path === "birthDate"){
       this._stashPolicyDiscountInsuredSelection();
       if(discountTarget?.kind === "healthAddon" && discountTarget.cover){
         this.applyAddonDiscountToAllInsured(policy, discountTarget.cover, discountPayload);
+      } else if(safeTrim(policy.insuredMode) === "couple" && Array.isArray(this._npDiscInsuredIds) && this._npDiscInsuredIds.length > 1){
+        const sharedIdx = this._discountCurrentIdx;
+        this._npDiscInsuredIds.forEach((iid) => {
+          this._npDiscSelByInsured[iid] = (sharedIdx == null ? -1 : sharedIdx);
+        });
+        Object.assign(policy, discountPayload);
+        this._applyPolicyRowDiscountsPerInsured(policy, discountPayload);
+        if(selectedOpt){
+          policy.simDiscountPerInsured = policy.simDiscountPerInsured || {};
+          const hasSelected = this._npDiscInsuredIds.some((iid) => {
+            const e = policy.simDiscountPerInsured[iid];
+            return e && safeTrim(e.optionId) === safeTrim(selectedOpt.id);
+          });
+          if(!hasSelected){
+            const seedId = this._npDiscInsuredIds[0];
+            policy.simDiscountPerInsured[seedId] = {
+              optionId: safeTrim(selectedOpt.id),
+              optionLabel: safeTrim(selectedOpt.label),
+              label: safeTrim(selectedOpt.label),
+              year1Pct: Number(selectedOpt.pct) || 0,
+              years: selectedOpt.years,
+              schedule: selectedOpt.schedule,
+              monthlyAfterDiscount: null
+            };
+          }
+          this.applyCoupleSharedSimulatorDiscount(policy);
+        }
       } else if(Array.isArray(this._npDiscInsuredIds) && this._npDiscInsuredIds.length > 1){
         Object.assign(policy, discountPayload);
         this._applyPolicyRowDiscountsPerInsured(policy, discountPayload);

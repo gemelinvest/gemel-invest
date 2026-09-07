@@ -1,4 +1,4 @@
-/* GI-DAILY-SALES-MAIL 20260907-customer-doc-preview-v1
+/* GI-DAILY-SALES-MAIL 20260907-couple-shared-discount-v1
    Isolated Outlook daily-sales email. Calls existing DashboardUI report
    builders only (buildDailySalesPrintModel). Does not change sales / PIN / MFA. */
 (() => {

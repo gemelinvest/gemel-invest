@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260907-customer-doc-preview-v1";
+const TAG = "20260907-couple-shared-discount-v1";
 let failed = 0;
 let passed = 0;
 
@@ -925,7 +925,9 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
     const split1 = W.getPolicyInsuredPremiumSplit(added[0], "i1");
     const split2 = W.getPolicyInsuredPremiumSplit(added[0], "i2");
     assert(split1.before === 61.32 && split1.after === 21.46, "primary before/after stay 61.32 / 21.46");
-    assert(split2.before === 40 && split2.after === 20, "secondary before/after stay 40 / 20");
+    assert(added[0].simDiscountPerInsured.i2.optionId === "cll-r-5001", "couple copies the primary discount option onto the secondary");
+    assert(split2.before === 40 && split2.after === 14, "secondary after-discount is 65% off its own 40 premium");
+    assert(W.getPolicySimDiscountAfterTotal(added[0]) === 35.46, "couple row after-total is 21.46 + 14");
     assert(pids.length === 1, "couple add returns one policy id");
   }
 
