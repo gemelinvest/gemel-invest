@@ -39,6 +39,8 @@ assert(app.includes("data-download-selected-docs"), "download selected button");
 assert(app.includes("הורד נבחרים"), "Hebrew download-selected label");
 assert(app.includes("בחר הכל"), "select-all label");
 assert(app.includes("downloadSelectedCustomerDocuments"), "downloadSelectedCustomerDocuments method");
+assert(app.includes("showGiDocDownloadOverlay"), "selected download shows wait overlay");
+assert(app.includes("files.length === 1"), "single selected file downloads without zip");
 assert(app.includes("resolveDocumentBytes"), "resolveDocumentBytes method");
 assert(app.includes("_selectedDocIds"), "in-memory selected set");
 assert(css.includes("cfFile__documentsToolbar"), "toolbar CSS");

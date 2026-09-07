@@ -5,7 +5,7 @@
 (function installGiArrivalDocs(global){
   "use strict";
 
-  const VERSION = "20260907-hach-life-cpi-v1";
+  const VERSION = "20260907-docs-dl-v1";
   const NAVY = "#3870ED";
   const AGENCY = "GEMEL INVEST";
   const COVER_ART = "./assets/gi-doc-cover-3d.png";
@@ -473,16 +473,67 @@
     push("./" + folder + file + q);
     return out;
   }
+  const FETCH_MEM = Object.create(null);
   async function fetchFirstOk(urls, label){
+    const cacheKey = safeTrim(label) || String((urls && urls[0]) || "");
+    if(FETCH_MEM[cacheKey]) return FETCH_MEM[cacheKey];
     let last = "";
     for(let i = 0; i < urls.length; i++){
       try {
-        const res = await fetch(urls[i], { cache: "reload" });
-        if(res && res.ok) return await res.arrayBuffer();
+        const res = await fetch(urls[i]);
+        if(res && res.ok){
+          const buf = await res.arrayBuffer();
+          FETCH_MEM[cacheKey] = buf;
+          return buf;
+        }
         last = String(res?.status || "");
       } catch(err){ last = String(err?.message || err); }
     }
     throw new Error(label + (last ? " (" + last + ")" : ""));
+  }
+
+  function reportDocDownloadProgress(info){
+    try {
+      const fn = global.GiDocDownloadProgress;
+      if(typeof fn === "function") fn(info);
+    } catch(_e) {}
+  }
+
+  function countArrivalPages(html){
+    const m = String(html || "").match(/class="giArrivalPage"/g);
+    return m ? m.length : 0;
+  }
+
+  function yieldDocUi(){
+    return new Promise((resolve) => {
+      if(typeof global.requestAnimationFrame === "function"){
+        global.requestAnimationFrame(() => resolve());
+      } else {
+        setTimeout(resolve, 0);
+      }
+    });
+  }
+
+  async function waitArrivalHostReady(host){
+    const fonts = global.document && global.document.fonts;
+    const fontsAlready = !fonts || fonts.status === "loaded";
+    if(fonts && fonts.ready && !fontsAlready){
+      try { await fonts.ready; } catch(_e) {}
+    }
+    const imgs = host && host.querySelectorAll ? Array.from(host.querySelectorAll("img")) : [];
+    if(imgs.length){
+      await Promise.all(imgs.map((img) => {
+        if(img.complete) return Promise.resolve();
+        return new Promise((resolve) => {
+          const done = () => resolve();
+          img.addEventListener("load", done, { once: true });
+          img.addEventListener("error", done, { once: true });
+        });
+      }));
+    }
+    if(!fontsAlready){
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    }
   }
 
   function buildAgent(rec){
@@ -556,40 +607,69 @@
     return moneyNumber(map[person?.id] || map[Object.keys(map)[0]] || policy?.sumInsured || policy?.compensation);
   }
 
-  function buildProjectionForCover(args){
-    const { company, family, person, sum, covers, planId, schedule, year1 } = args;
-    const product = quoteProduct(family);
-    if(!product || person?.age == null) return { ok: false, rows: [], reason: "no_tariff" };
-    const start = Number(person.age);
-    const cap = maxAgeFor(family);
-    const rows = [];
-    let okCount = 0;
-    for(let age = start; age <= cap; age++){
-      const q = quoteOnce({
-        company,
-        product,
-        age,
-        gender: person.gender,
-        smoker: person.smoker,
-        sumInsured: sum,
-        compensation: sum,
-        covers: covers || [],
-        planId: planId || "",
-        programMode: "base"
-      });
-      if(!q || q.ok !== true || !Number.isFinite(Number(q.monthlyPremium))){
-        if(age === start) return { ok: false, rows: [], reason: q?.error || "no_tariff" };
-        break;
-      }
-      const yearIndex = age - start;
-      let monthly = applyDiscount(Number(q.monthlyPremium), schedule, yearIndex);
-      if(age === start && Number(year1) > 0) monthly = Number(year1);
-      rows.push({ age, monthly: Math.round(monthly) });
-      okCount += 1;
+  function inferGrossFromYear1(year1, schedule){
+    const y1 = Number(year1);
+    if(!(y1 > 0)) return 0;
+    const pct0 = Array.isArray(schedule) && schedule.length ? Number(schedule[0]) || 0 : 0;
+    if(pct0 > 0 && pct0 < 100){
+      const factor = (100 - pct0) / 100;
+      if(factor > 0) return y1 / factor;
     }
-    if(!okCount) return { ok: false, rows: [], reason: "no_tariff" };
+    return y1;
+  }
+
+  function buildStoredPremiumProjection(person, schedule, year1, gross){
+    const start = Number(person?.age);
+    const y1 = Number(year1);
+    if(!Number.isInteger(start) || start < 0 || !(y1 > 0)) return { ok: false, rows: [], reason: "no_stored" };
+    const list = Array.isArray(schedule) && schedule.length ? schedule.slice() : [0];
+    const g = Number(gross) > 0 ? Number(gross) : inferGrossFromYear1(y1, list);
+    const rows = list.map((_pct, yearIndex) => {
+      const monthly = yearIndex === 0 ? y1 : applyDiscount(g, list, yearIndex);
+      return { age: start + yearIndex, monthly: Math.round(Number(monthly) || 0) };
+    });
     const total = rows.reduce((acc, row) => acc + (row.monthly * 12), 0);
-    return { ok: true, rows, total };
+    return { ok: true, rows, total, source: "stored" };
+  }
+
+  function buildProjectionForCover(args){
+    const { company, family, person, sum, covers, planId, schedule, year1, gross } = args;
+    const product = quoteProduct(family);
+    const api = quoteApi();
+    if(api && typeof api.quote === "function" && product && person?.age != null){
+      const start = Number(person.age);
+      const cap = maxAgeFor(family);
+      const rows = [];
+      let okCount = 0;
+      for(let age = start; age <= cap; age++){
+        const q = quoteOnce({
+          company,
+          product,
+          age,
+          gender: person.gender,
+          smoker: person.smoker,
+          sumInsured: sum,
+          compensation: sum,
+          covers: covers || [],
+          planId: planId || "",
+          programMode: "base"
+        });
+        if(!q || q.ok !== true || !Number.isFinite(Number(q.monthlyPremium))){
+          if(age === start) break;
+          break;
+        }
+        const yearIndex = age - start;
+        let monthly = applyDiscount(Number(q.monthlyPremium), schedule, yearIndex);
+        if(age === start && Number(year1) > 0) monthly = Number(year1);
+        rows.push({ age, monthly: Math.round(monthly) });
+        okCount += 1;
+      }
+      if(okCount){
+        const total = rows.reduce((acc, row) => acc + (row.monthly * 12), 0);
+        return { ok: true, rows, total, source: "engine" };
+      }
+    }
+    return buildStoredPremiumProjection(person, schedule, year1, gross);
   }
 
   function buildPeopleTables(draft){
@@ -609,7 +689,7 @@
           covers.forEach((cover) => {
             const addon = moneyNumber(policy?.healthAddonPremiums?.[cover.label]?.[person.id] || policy?.healthAddonPremiums?.[cover.id]?.[person.id]);
             const proj = buildProjectionForCover({
-              company, family, person, sum: 0, covers: [cover.id], planId: "", schedule: disc.schedule, year1: addon || 0
+              company, family, person, sum: 0, covers: [cover.id], planId: "", schedule: disc.schedule, year1: addon || 0, gross: 0
             });
             coverRows.push({
               label: cover.label,
@@ -624,7 +704,7 @@
             ? ("מחלות קשות - " + ciPlanLabel(company, family, policy))
             : coverTypeLabel(family, policy);
           const proj = buildProjectionForCover({
-            company, family, person, sum, covers: covers.map((c) => c.id), planId, schedule: disc.schedule, year1: y1.used
+            company, family, person, sum, covers: covers.map((c) => c.id), planId, schedule: disc.schedule, year1: y1.used, gross: y1.gross
           });
           coverRows.push({
             label,
@@ -1248,33 +1328,43 @@
       return "מסמכי_הגעה_" + clean + "_" + day + ".pdf";
     },
 
-    async htmlToPdfBytes(html){
+    async htmlToPdfBytes(html, options = {}){
       if(global.GI_LOAD_LIBS?.pdfExport) await global.GI_LOAD_LIBS.pdfExport();
       const JsPdfCtor = global.jspdf?.jsPDF || global.jsPDF;
       const html2canvas = global.html2canvas;
       if(!JsPdfCtor || typeof html2canvas !== "function") throw new Error("pdf engine missing");
+      const onPage = typeof options.onPage === "function" ? options.onPage : null;
       const host = document.createElement("div");
       host.setAttribute("dir", "rtl");
       host.style.cssText = "position:fixed;left:-20000px;top:0;width:794px;background:#fff;z-index:-1;";
       host.innerHTML = html;
       document.body.appendChild(host);
-      if(document.fonts?.ready){
-        try { await document.fonts.ready; } catch(_e) {}
+      try {
+        await waitArrivalHostReady(host);
+        const pages = Array.from(host.querySelectorAll(".giArrivalPage"));
+        const pdf = new JsPdfCtor({ unit: "pt", format: "a4", orientation: "portrait", compress: true });
+        const pw = pdf.internal.pageSize.getWidth();
+        const ph = pdf.internal.pageSize.getHeight();
+        for(let i = 0; i < pages.length; i++){
+          const canvas = await html2canvas(pages[i], {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: "#ffffff",
+            logging: false
+          });
+          const img = canvas.toDataURL("image/jpeg", 0.92);
+          if(i) pdf.addPage();
+          pdf.addImage(img, "JPEG", 0, 0, pw, ph, undefined, "FAST");
+          if(onPage){
+            try { await onPage(i + 1, pages.length); } catch(_e) {}
+          }
+          await yieldDocUi();
+        }
+        const ab = pdf.output("arraybuffer");
+        return new Uint8Array(ab);
+      } finally {
+        try { host.remove(); } catch(_e2) {}
       }
-      await new Promise((resolve) => setTimeout(resolve, 80));
-      const pages = Array.from(host.querySelectorAll(".giArrivalPage"));
-      const pdf = new JsPdfCtor({ unit: "pt", format: "a4", orientation: "portrait", compress: true });
-      const pw = pdf.internal.pageSize.getWidth();
-      const ph = pdf.internal.pageSize.getHeight();
-      for(let i = 0; i < pages.length; i++){
-        const canvas = await html2canvas(pages[i], { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
-        const img = canvas.toDataURL("image/jpeg", 0.92);
-        if(i) pdf.addPage();
-        pdf.addImage(img, "JPEG", 0, 0, pw, ph);
-      }
-      host.remove();
-      const ab = pdf.output("arraybuffer");
-      return new Uint8Array(ab);
     },
     async mergePdfBytes(parts){
       if(global.GI_LOAD_LIBS?.pdfLib) await global.GI_LOAD_LIBS.pdfLib();
@@ -1292,21 +1382,68 @@
       }
       return out.save();
     },
-    async buildPackPdf(draft){
+    async buildPackPdf(draft, options = {}){
+      const startedAt = Number(options.startedAt) || Date.now();
+      const includeDownload = options.includeDownloadStep !== false;
       const html = this.renderCombinedHtml(draft);
-      const bodyBytes = await this.htmlToPdfBytes(html);
-      const nispahBytes = await this.fillNispahPdf(draft);
-      return this.mergePdfBytes([bodyBytes, nispahBytes]);
+      const pageCount = countArrivalPages(html);
+      const extra = includeDownload ? 3 : 2;
+      const total = Math.max(1, pageCount + extra);
+      let pagesDone = 0;
+      let nispahDone = false;
+      const title = "מפיק PDF…";
+      const report = (detail, doneOverride) => {
+        const done = doneOverride != null ? doneOverride : (pagesDone + (nispahDone ? 1 : 0));
+        reportDocDownloadProgress({ done, total, title, detail, startedAt });
+        if(options.progress){
+          options.progress.done = done;
+          options.progress.total = total;
+          options.progress.startedAt = startedAt;
+        }
+      };
+      report("מכין עמודים…", 0);
+      const htmlPromise = this.htmlToPdfBytes(html, {
+        onPage: async (i, n) => {
+          pagesDone = i;
+          report("עמוד " + i + " מתוך " + n);
+        }
+      }).then((bytes) => {
+        pagesDone = Math.max(pagesDone, pageCount);
+        return bytes;
+      });
+      const nispahPromise = this.fillNispahPdf(draft).then((bytes) => {
+        nispahDone = true;
+        report("נספח ה׳ מוכן");
+        return bytes;
+      });
+      const [bodyBytes, nispahBytes] = await Promise.all([htmlPromise, nispahPromise]);
+      pagesDone = Math.max(pagesDone, pageCount);
+      nispahDone = true;
+      report("מאחד קבצים…", pageCount + 1);
+      const merged = await this.mergePdfBytes([bodyBytes, nispahBytes]);
+      report("מתחיל הורדה…", pageCount + 2);
+      return merged;
     },
     async exportHtmlToPdf(html, filename, sourceBtn){
       const triggerBtn = sourceBtn || null;
       const originalText = triggerBtn ? triggerBtn.textContent : "";
-      if(triggerBtn){
-        triggerBtn.disabled = true;
-        triggerBtn.textContent = "מייצא PDF…";
-      }
+      if(triggerBtn) triggerBtn.disabled = true;
+      const startedAt = Date.now();
+      const pageCount = countArrivalPages(html);
+      const total = Math.max(1, pageCount + 1);
+      reportDocDownloadProgress({ done: 0, total, title: "מייצא PDF…", detail: "מתחיל…", startedAt });
       try {
-        const bytes = await this.htmlToPdfBytes(html);
+        const bytes = await this.htmlToPdfBytes(html, {
+          onPage: async (i, n) => {
+            reportDocDownloadProgress({
+              done: i,
+              total,
+              title: "מייצא PDF…",
+              detail: "עמוד " + i + " מתוך " + n,
+              startedAt
+            });
+          }
+        });
         const blob = new Blob([bytes], { type: "application/pdf" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -1317,6 +1454,7 @@
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 4000);
+        reportDocDownloadProgress({ done: total, total, title: "מייצא PDF…", detail: "הקובץ יורד", startedAt, complete: true });
         return true;
       } catch(err){
         try { console.warn("GI_ARRIVAL_PDF_EXPORT_FAILED", err); } catch(_e) {}
@@ -1338,16 +1476,16 @@
       }
     },
 
-    async downloadPack(rec, sourceBtn){
+    async downloadPack(rec, sourceBtn, options = {}){
       const triggerBtn = sourceBtn || null;
       const originalText = triggerBtn ? triggerBtn.textContent : "";
-      if(triggerBtn){
-        triggerBtn.disabled = true;
-        triggerBtn.textContent = "מפיק PDF…";
-      }
+      if(triggerBtn) triggerBtn.disabled = true;
+      const startedAt = Number(options.startedAt) || Date.now();
+      const progress = { done: 0, total: 1, startedAt };
+      reportDocDownloadProgress({ done: 0, total: 1, title: "מפיק PDF…", detail: "מתחיל…", startedAt });
       try {
         const draft = this.buildDraft(rec);
-        const bytes = await this.buildPackPdf(draft);
+        const bytes = await this.buildPackPdf(draft, { startedAt, progress, includeDownloadStep: true });
         const blob = new Blob([bytes], { type: "application/pdf" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
@@ -1358,6 +1496,14 @@
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 4000);
+        reportDocDownloadProgress({
+          done: progress.total || 1,
+          total: progress.total || 1,
+          title: "מפיק PDF…",
+          detail: "הקובץ יורד",
+          startedAt,
+          complete: true
+        });
         return true;
       } catch(err){
         try { console.warn("GI_ARRIVAL_PACK_PDF_FAILED", err); } catch(_e) {}
@@ -1377,6 +1523,7 @@
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 2000);
+        reportDocDownloadProgress({ done: 1, total: 1, title: "מפיק PDF…", detail: "הקובץ יורד", startedAt, complete: true });
         return false;
       } finally {
         if(triggerBtn){
@@ -1385,14 +1532,14 @@
         }
       }
     },
-    async downloadHatama(rec, sourceBtn){
-      return this.downloadPack(rec, sourceBtn);
+    async downloadHatama(rec, sourceBtn, options){
+      return this.downloadPack(rec, sourceBtn, options);
     },
-    async downloadPremia(rec, sourceBtn){
-      return this.downloadPack(rec, sourceBtn);
+    async downloadPremia(rec, sourceBtn, options){
+      return this.downloadPack(rec, sourceBtn, options);
     },
-    async downloadNispah(rec, sourceBtn){
-      return this.downloadPack(rec, sourceBtn);
+    async downloadNispah(rec, sourceBtn, options){
+      return this.downloadPack(rec, sourceBtn, options);
     },
 
     formatDocName(kind, payload, uploadedAt){
