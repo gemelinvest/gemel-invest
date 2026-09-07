@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260907-docs-dl-v1";
+const TAG = "20260907-sim-ui-v1";
 let failed = 0;
 let passed = 0;
 
@@ -151,7 +151,10 @@ assert(/giSimShellModal--docked \.giValModal__body\{[^}]*flex:0 0 auto !importan
 assert(/giSimShellModal--docked \.giSimShell__layout\{[^}]*flex:0 0 auto !important/.test(shellCss), "docked two-column layout keeps its natural height");
 assert(/giSimShellModal--docked \.giSimShell__brandLogo\{[^}]*left:16px !important/.test(shellCss), "docked gmail logo moves off the company title");
 assert(css.includes(".lcNpSimDock:not(:empty) + .lcNpWsHint{display:none}"), "reopen hint hidden while docked");
-assert(wiz.includes("החלפת חברה ומוצר לכל מבוטח מתבצעת בתוך הסימולטור"), "outer switch is not duplicated when the simulator is docked");
+assert(!wiz.includes("החלפת חברה ומוצר לכל מבוטח מתבצעת בתוך הסימולטור"), "redundant outer company/product bar removed when simulator is docked");
+assert(!wiz.includes("הסימולטור האמיתי נפתח אוטומטית"), "auto-open workspace banner copy removed");
+assert(wiz.includes('riskSimHandler ? "" : `<div class="lcNpWsHead">'), "manual-fill workspace still has company/product switch");
+assert(sims.includes("function riskSimPickHtml(sim){"), "in-simulator company/product pickers remain");
 
 console.log("\n5) closing the simulator returns the step to pick / summary");
 assert(sims.includes("onWizardClose"), "simulator exposes a wizard-close hook");
@@ -243,8 +246,15 @@ assert(shellCss.includes(".giSimShell__layout--healthCovers{"), "health layout g
 assert(shellCss.includes(".giSimShell__panel--covers [class*=\"__coverList\"]{") || shellCss.includes(".giSimShell__panel--covers [class*='__coverList']{") || shellCss.includes('.giSimShell__panel--covers [class*="__coverList"]{'), "cover list selector in the shell");
 assert(shellCss.includes("grid-template-columns:repeat(2, minmax(0, 1fr))"), "cover rows sit in two columns");
 assert(/padding:6px 8px !important/.test(shellCss), "cover rows are shorter");
-assert(/covers\.appendChild\(coversWrap\);\s*if\(occBox\) details\.appendChild\(occBox\)/.test(sims), "occupation/underwriting sits in the details column");
+assert(/function renderOccupationRiskBlockHtml\([^)]*\)\{\s*return "";/.test(sims), "occupation/underwriting box is not rendered");
+assert(!sims.includes('__occHead">פרטי מקצוע וחיתום'), "occupation heading markup is gone");
+assert(sims.includes("function assessOccupationRisk("), "occupation assessment helper is unchanged");
+assert(/covers\.appendChild\(coversWrap\);\s*if\(occBox\) details\.appendChild\(occBox\)/.test(sims), "layout still knows the details column if the box returns");
 assert(!/covers\.appendChild\(coversWrap\);\s*if\(occBox\) covers\.appendChild\(occBox\)/.test(sims), "occupation is no longer under the long cover list");
+assert(sims.includes("giSimShell__legalTop"), "pledge and beneficiaries share one header row");
+assert(shellCss.includes(".giSimShell__legalTop{"), "legal header row CSS");
+assert(/giValModal__headIcon,[\s\S]{0,220}border:0 !important/.test(shellCss), "company logo has no header frame");
+assert(shellCss.includes("height:52px !important") && shellCss.includes("max-width:180px !important"), "company logo is shown large without a squeeze box");
 
 console.log("\n5b5) pledge/beneficiaries persist from the docked simulator onto the row");
 assert(wiz.includes("applySimulatorLegalToDraft(draft, legal)"), "wizard copies simulator legal onto the draft");

@@ -912,10 +912,17 @@
       </div>`).join("");
     return `
       <div class="giSimShell__legalDock">
-        <label class="giSimShell__legalToggle">
-          <input type="checkbox" data-gishell-legal-pledge="1"${legal.pledge ? " checked" : ""} />
-          <span>שיעבוד (מוטב בלתי חוזר)</span>
-        </label>
+        <div class="giSimShell__legalTop">
+          <label class="giSimShell__legalToggle">
+            <input type="checkbox" data-gishell-legal-pledge="1"${legal.pledge ? " checked" : ""} />
+            <span>שיעבוד (מוטב בלתי חוזר)</span>
+          </label>
+          <div class="giSimShell__legalBensHead">
+            <strong>מוטבים</strong>
+            <span>${bens.length ? (bens.length + " מוטבים · סה״כ " + totalPct + "%" + (pctOk ? " ✓" : " — לא מסתכמים ל-100%")) : ""}</span>
+            <button type="button" class="btn giSimShell__legalAddBtn" data-gishell-legal-ben-add="1">+ הוסף מוטב</button>
+          </div>
+        </div>
         ${showForm ? `
           <div class="giSimShell__legalBanks">${bankCards}</div>
           ${legal.pledgeBanks.length < 2 ? `<button type="button" class="btn giSimShell__legalAddBtn" data-gishell-legal-bank-add="1">+ הוסף בנק שני</button>` : `<div class="giSimShell__legalNote">עד שני בנקים משעבדים</div>`}
@@ -928,11 +935,6 @@
             <button type="button" class="btn giSimShell__legalAddBtn" data-gishell-legal-edit="1">ערוך</button>
           </div>
         ` : ""}
-        <div class="giSimShell__legalBensHead">
-          <strong>מוטבים</strong>
-          <span>${bens.length ? (bens.length + " מוטבים · סה״כ " + totalPct + "%" + (pctOk ? " ✓" : " — לא מסתכמים ל-100%")) : ""}</span>
-          <button type="button" class="btn giSimShell__legalAddBtn" data-gishell-legal-ben-add="1">+ הוסף מוטב</button>
-        </div>
         ${benRows}
       </div>`;
   }
@@ -2784,33 +2786,9 @@
     };
   }
 
-  /** מרנדר את בלוק "פרטי מקצוע וחיתום" בתוך סימולטור ריסק. prefix = קידומת ה-CSS
-      המסוגננת של הסימולטור הקורא ("lcPhxSim" או "lcMnrSim"), כדי שהעיצוב יישאר
-      מבודד לחלוטין לכל סימולטור ולא ישפיע על מסכים אחרים. */
-  function renderOccupationRiskBlockHtml(assessment, prefix){
-    const a = assessment || {};
-    const badge = a.state === "none" ? { emoji: "🟢", cls: "none", title: "סיכון מקצועי: לא" }
-      : a.state === "risk" ? { emoji: "🟠", cls: "risk", title: "סיכון מקצועי: כן" }
-      : a.state === "needsUnderwriting" ? { emoji: "🔴", cls: "needsUnderwriting", title: "נדרש חיתום" }
-      : { emoji: "🔵", cls: "unclear", title: "נדרש בירור" };
-
-    const rows = [];
-    if(a.occupation) rows.push(`<div class="${prefix}__occRow"><span>מקצוע המבוטח</span><strong>${escapeHtml(a.occupation)}</strong></div>`);
-    if(a.state === "risk" || a.state === "needsUnderwriting"){
-      if(a.level) rows.push(`<div class="${prefix}__occRow"><span>רמת סיכון</span><strong>${escapeHtml(a.level)}</strong></div>`);
-    }
-    if(a.state === "risk"){
-      if(a.loadingText) rows.push(`<div class="${prefix}__occRow"><span>השפעה על הפרמיה / תוספת מקצועית</span><strong>${escapeHtml(a.loadingText)}</strong></div>`);
-      if(a.exclusionText) rows.push(`<div class="${prefix}__occRow"><span>החרגה</span><strong>${escapeHtml(a.exclusionText)}</strong></div>`);
-    }
-    if(a.fallbackText) rows.push(`<div class="${prefix}__occNote">${escapeHtml(a.fallbackText)}</div>`);
-
-    return `
-      <div class="${prefix}__occBox">
-        <div class="${prefix}__occHead">פרטי מקצוע וחיתום</div>
-        <div class="${prefix}__occBadge ${prefix}__occBadge--${badge.cls}"><span>${badge.emoji}</span><span>${escapeHtml(badge.title)}</span></div>
-        ${rows.join("")}
-      </div>`;
+  /** בלוק "פרטי מקצוע וחיתום" הוסר מהמסך — שדה עיסוק והערכת הסיכון נשארים בקוד. */
+  function renderOccupationRiskBlockHtml(_assessment, _prefix){
+    return "";
   }
 
   /** קומפוננטת סימולטור ריסק הפניקס — מודאל עצמאי, לא תלוי במבנה הפנימי של
