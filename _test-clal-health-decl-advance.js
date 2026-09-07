@@ -14,7 +14,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260907-my-leads-assign-visible-v1";
+const TAG = "20260907-lead-color-picker-fit-v1";
 let failed = 0;
 let passed = 0;
 
