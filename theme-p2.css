@@ -1073,6 +1073,13 @@
   background-image: none !important;
 }
 
+.lcSplitCard.lcLeadRow--custom-color:not(#\9):not(#\9),
+.lcSplitCard.lcLeadRow--custom-color:hover:not(#\9):not(#\9),
+.lcSplitCard.lcLeadRow--custom-color.is-active:not(#\9):not(#\9){
+  background: var(--lead-custom-color) !important;
+  background-image: none !important;
+}
+
 .lcCoCard:not(#\9):not(#\9),
 .lcCoGrid--reference:not(#\9):not(#\9) .lcCoCard{
   border-radius: var(--gi-r-md) !important;

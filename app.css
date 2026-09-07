@@ -39120,6 +39120,15 @@ body.view-settings-active.lcSettingsRubric-systemUpdates .main{ overflow-y: auto
 .lcSplitCard[data-status="irrelevant"]{ --lcSplitCard-accent: rgba(239,68,68,.55); }
 .lcSplitCard[data-status="no_answer"]{ --lcSplitCard-accent: rgba(249,115,22,.65); }
 .lcSplitCard[data-status="agent_appointment"]{ --lcSplitCard-accent: rgba(147,51,234,.60); }
+.lcSplitCard.lcLeadRow--custom-color{
+  background: var(--lead-custom-color) !important;
+}
+.lcSplitCard.lcLeadRow--custom-color:hover{
+  background: var(--lead-custom-color) !important;
+}
+.lcSplitCard.lcLeadRow--custom-color.is-active{
+  background: var(--lead-custom-color) !important;
+}
 .lcSplitCard__top{
   display:flex;
   align-items:center;
@@ -39128,6 +39137,16 @@ body.view-settings-active.lcSettingsRubric-systemUpdates .main{ overflow-y: auto
   margin-bottom:10px;
   padding-bottom:9px;
   border-bottom:1px solid rgba(15,25,45,.07);
+}
+.lcSplitCard__topTools{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex-shrink:0;
+}
+.lcSplitCard__topTools .lcLeadColorBtn{
+  width:28px;
+  height:28px;
 }
 .lcSplitCard__name{
   font-size:14px;
@@ -40438,6 +40457,11 @@ body.view-dailyReport-active .content{
   width:100%;
 }
 .lcTrackCard__side .lcLeadReassignBtn{
+  width:100%;
+  justify-content:center;
+  white-space:nowrap;
+}
+.lcMyLeadCard__side .lcLeadReassignBtn{
   width:100%;
   justify-content:center;
   white-space:nowrap;
