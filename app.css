@@ -40480,9 +40480,11 @@ body.view-dailyReport-active .content{
   white-space:nowrap;
 }
 .lcMyLeadCard__side .lcLeadReassignBtn{
+  display:inline-flex !important;
   width:100%;
   justify-content:center;
   white-space:nowrap;
+  flex-shrink:0;
 }
 #campaignLeadsTrackingPanel .lcCampaignTable td.lcCampaign__actions,
 #campaignLeadsTrackingPanel .lcCampaignTable td.lcCampaign__agentCell{

@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260907-lead-peer-handoff-v1";
+  const BUILD = "20260907-my-leads-assign-visible-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -7157,7 +7157,9 @@
 
   function canCampaignLeadPeerReassign(){
     try {
-      return !!(Auth?.canAccessCampaignMyLeads?.() && !Auth?.canAccessCampaignLeadsInbox?.());
+      /* «הלידים שלי» פתוח גם למנהל שבודק את מסך הנציג.
+         הלחצן חייב להופיע שם — לא רק כשאין גישה למערכת לידים. */
+      return !!Auth?.canAccessCampaignMyLeads?.();
     } catch(_e) {
       return false;
     }
@@ -40133,7 +40135,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260907-lead-peer-handoff-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260907-my-leads-assign-visible-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -40153,7 +40155,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260907-lead-peer-handoff-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260907-my-leads-assign-visible-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -40789,8 +40791,8 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260907-lead-peer-handoff-v1",
-    "./simulators-shell.css?v=20260907-lead-peer-handoff-v1"
+    "./simulators-center.css?v=20260907-my-leads-assign-visible-v1",
+    "./simulators-shell.css?v=20260907-my-leads-assign-visible-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -40819,7 +40821,7 @@ UsersGateUI.init();
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
     "./gi-customers-import.css?v=20260828-menora-health-decl-v1",
-    "./theme-unify-flat.css?v=20260907-lead-peer-handoff-v1"
+    "./theme-unify-flat.css?v=20260907-my-leads-assign-visible-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
     if(document.documentElement.dataset.giSecondaryCss === "1") return;
@@ -42152,7 +42154,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260907-lead-peer-handoff-v1";
+  const GI_WIZARD_JS_VERSION = "20260907-my-leads-assign-visible-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -60006,7 +60008,7 @@ const CampaignLeadsStore = {
     if(!id) return "";
     if(mode === "peer"){
       if(!canCampaignLeadPeerReassign()) return "";
-      return `<button class="btn btn--small btn--outline lcLeadReassignBtn" type="button" data-cl-reassign-id="${id}" data-cl-reassign-mode="peer" title="שיוך לנציג ממחלקה אחרת">שיוך לנציג</button>`;
+      return `<button class="btn btn--small btn--primary lcLeadReassignBtn" type="button" data-cl-reassign-id="${id}" data-cl-reassign-mode="peer" title="שיוך לנציג ממחלקה אחרת">שיוך לנציג</button>`;
     }
     if(!Auth.canAccessCampaignLeadsInbox()) return "";
     return `<button class="btn btn--small btn--outline lcLeadReassignBtn" type="button" data-cl-reassign-id="${id}" data-cl-reassign-mode="inbox" title="שיוך לנציג נוסף">שיוך לנציג נוסף</button>`;

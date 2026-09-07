@@ -418,7 +418,7 @@
   const GiCancelForms = {
     TEMPLATE_BASE: "./forms/cancel/",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260907-lead-peer-handoff-v1",
+    VERSION: "20260907-my-leads-assign-visible-v1",
     DOC_TYPE: "company_cancel_form",
     TEMPLATES,
 

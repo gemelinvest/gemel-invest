@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260907-lead-peer-handoff-v1";
+const APP_TAG = "20260907-my-leads-assign-visible-v1";
 let failed = 0;
 let passed = 0;
 
@@ -72,8 +72,11 @@ assert(app.includes('{ name: "עדן ביטון", dept: "אלמנטרי רכב �
 assert(app.includes("function getCampaignLeadPeerReassignAgents()"), "getCampaignLeadPeerReassignAgents");
 assert(!app.includes('agents = agents.filter((a) => safeTrim(a.role) === "opsAgent")'), "אין נפילה לכל נציגי התפעול");
 assert(app.includes("function canCampaignLeadPeerReassign()"), "canCampaignLeadPeerReassign");
+assert(!app.includes("canAccessCampaignMyLeads?.() && !Auth?.canAccessCampaignLeadsInbox"), "לחצן שיוך לא מוסתר למנהל ב«הלידים שלי»");
+assert(app.includes("return !!Auth?.canAccessCampaignMyLeads?.();"), "שיוך peer פתוח לכל מי שנכנס ל«הלידים שלי»");
 assert(app.includes('campaignLeadReassignBtnHtml(lead.id, "peer")'), "לחצן שיוך לנציג בכרטיס הלידים שלי");
 assert(app.includes('data-cl-reassign-mode="peer"'), "מצב peer על לחצן הנציג");
+assert(app.includes('btn--primary lcLeadReassignBtn'), "לחצן שיוך בולט בעמודת הסטטוס");
 assert(app.includes('title="שיוך לנציג ממחלקה אחרת">שיוך לנציג</button>'), "תווית לחצן שיוך לנציג");
 assert(app.includes("peerDisplayName"), "שם עם מחלקה בבחירת השיוך");
 const reassignOpen = sliceBetween(app, "const CampaignLeadReassignAgent = {", "// ===== בוחר צבע לשורת ליד =====");
