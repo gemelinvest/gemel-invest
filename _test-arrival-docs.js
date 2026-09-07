@@ -1,4 +1,4 @@
-/* GI-ARRIVAL-DOCS 20260907-arrival-docs-v1
+/* GI-ARRIVAL-DOCS 20260907-combined-arrival-v1
    מסמך התאמה + התפתחות פרמיה + נספח ה׳ — אחד-לאחד מול המסמכים שנשלחו.
    Run: node _test-arrival-docs.js
 */
@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260907-arrival-docs-v1";
+const TAG = "20260907-combined-arrival-v1";
 let failed = 0;
 let passed = 0;
 
@@ -56,17 +56,17 @@ assert(app.includes("ensureGiArrivalDocsLoaded"), "lazy loader exists");
 assert(cancel.includes('VERSION: "' + TAG + '"'), "cancel forms VERSION bumped with app");
 
 console.log("\n2) wiring in customer documents");
-assert(app.includes('suitabilityDoc: "suitability_document"'), "hatama type");
-assert(app.includes('premiumDevelopment: "premium_development_report"'), "premia type");
-assert(app.includes('nispahHarAuth: "nispah_he_har_auth"'), "nispah type");
+assert(app.includes('suitabilityDoc: "suitability_document"'), "hatama type kept for strip");
+assert(app.includes('premiumDevelopment: "premium_development_report"'), "premia type kept for strip");
+assert(app.includes('nispahHarAuth: "nispah_he_har_auth"'), "nispah type kept for strip");
+assert(app.includes('arrivalPack: "customer_arrival_pack"'), "combined pack type");
 assert(app.includes("injectArrivalDocs"), "inject helper");
 assert(app.includes("downloadArrivalDoc"), "download helper");
-assert(app.includes("data-download-arrival-hatama-doc"), "hatama download button");
-assert(app.includes("data-download-arrival-premia-doc"), "premia download button");
-assert(app.includes("data-download-arrival-nispah-doc"), "nispah download button");
+assert(app.includes("data-download-arrival-pack-doc"), "combined download button");
 assert(app.includes("GiArrivalDocs.buildDraft"), "preview uses draft");
 assert(app.includes("fillNispahPdf"), "nispah PDF fill wired");
-assert(app.includes("TYPES.nispahHarAuth) return true") || app.includes("TYPES.nispahHarAuth"), "nispah wants PDF preview");
+assert(app.includes("appendArrivalNispahPreview"), "combined preview appends nispah");
+assert(app.includes("renderCombinedHtml") || modSrc.includes("renderCombinedHtml"), "combined HTML");
 assert(!modSrc.includes("Hashlama") && !modSrc.includes("גריגורי"), "no Hashlama branding in generator");
 assert(fs.existsSync(path.join(ROOT, "forms/har-authorization/nispah-he.pdf")), "official nispah PDF stored");
 assert(fs.existsSync(path.join(ROOT, "assets/gi-doc-cover-3d.png")), "GEMEL 3D cover asset");
@@ -188,6 +188,13 @@ assert(quotes.length > 0, "age table uses simulator quote engine");
 assert(premia.includes("40") && premia.includes("42"), "includes ages that the tariff returned");
 assert(!/>43</.test(premia) && !/>44</.test(premia), "stops when tariff fails — no invented ages");
 
+const combined = api.renderCombinedHtml(draft);
+const iHatama = combined.indexOf("מסמך התאמה");
+const iPremia = combined.indexOf("דוח התפתחות פרמיה");
+assert(iHatama >= 0 && iPremia > iHatama, "combined HTML is hatama then premia");
+assert(combined.includes("חלק ב' - הכיסויים הביטוחיים המומלצים"), "combined keeps hatama part B");
+assert(combined.includes("אישור המועמד לביטוח"), "combined keeps premia approval");
+
 console.log("\n5) no invented age table without tariff");
 const noEngine = loadModule({});
 const draft2 = noEngine.buildDraft(sample);
@@ -229,17 +236,45 @@ const nispahApi = loadModule({
     assert(false, "nispah fill: " + err.message);
   }
 
-  console.log("\n7) inject three docs");
+  console.log("\n7) inject one combined pack");
   const list = [];
   api.injectDocs(list, sample, sample.payload, { uploadedBy: "סוכן בדיקה" });
   const types = list.map((d) => d.type);
-  assert(types[0] === "suitability_document", "hatama first in documents tab");
-  assert(types.indexOf("suitability_document") >= 0, "injects hatama");
-  assert(types.indexOf("premium_development_report") >= 0, "injects premia");
-  assert(types.indexOf("nispah_he_har_auth") >= 0, "injects nispah");
+  assert(list.length === 1, "one document in the customer file");
+  assert(types[0] === "customer_arrival_pack", "pack type");
+  assert(list[0].name.indexOf("מסמך התאמה") >= 0 && list[0].name.indexOf("התפתחות פרמיה") >= 0 && list[0].name.indexOf("נספח ה") >= 0, "combined name");
+  list.push({ id: "old1", type: "suitability_document" }, { id: "old2", type: "premium_development_report" }, { id: "old3", type: "nispah_he_har_auth" });
+  api.injectDocs(list, sample, sample.payload, {});
+  assert(list.length === 1, "strips the previous three separate docs");
+  assert(list[0].type === "customer_arrival_pack", "keeps the pack");
   const before = list.length;
   api.injectDocs(list, sample, sample.payload, {});
   assert(list.length === before, "does not duplicate");
+
+  console.log("\n8) merge pdf concatenates hatama/premia then nispah");
+  const pages = [];
+  const mergeApi = loadModule({
+    PDFLib: {
+      PDFDocument: {
+        async create(){
+          return {
+            async copyPages(src, idxs){ return idxs.map((i) => src.id + ":" + i); },
+            addPage(p){ pages.push(p); },
+            save: async () => new Uint8Array([9, 9])
+          };
+        },
+        async load(bytes){
+          return {
+            id: bytes && bytes[0] === 1 ? "body" : "nispah",
+            getPageIndices(){ return bytes && bytes[0] === 1 ? [0, 1] : [0]; }
+          };
+        }
+      }
+    }
+  });
+  const merged = await mergeApi.mergePdfBytes([new Uint8Array([1]), new Uint8Array([2])]);
+  assert(merged && merged.length === 2, "merge returns bytes");
+  assert(pages.join(",") === "body:0,body:1,nispah:0", "body pages then nispah");
 
   console.log("\n" + passed + " passed, " + failed + " failed");
   process.exit(failed ? 1 : 0);

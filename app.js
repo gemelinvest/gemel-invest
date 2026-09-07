@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260907-arrival-docs-v1";
+  const BUILD = "20260907-combined-arrival-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -7436,7 +7436,8 @@
       companyCancelForm: "company_cancel_form",
       suitabilityDoc: "suitability_document",
       premiumDevelopment: "premium_development_report",
-      nispahHarAuth: "nispah_he_har_auth"
+      nispahHarAuth: "nispah_he_har_auth",
+      arrivalPack: "customer_arrival_pack"
     },
     OFFICIAL_JOIN_FORM_TYPES: [
       "hachshara_ci_form",
@@ -8848,6 +8849,9 @@
         if(type === this.TYPES.companyCancelForm) return this.isLiveCancelFormDoc(doc, payload);
         if(type === this.TYPES.followupQuestionnairesZip) return false;
         if(type === this.TYPES.suitabilityDoc || type === this.TYPES.premiumDevelopment || type === this.TYPES.nispahHarAuth){
+          return false;
+        }
+        if(type === this.TYPES.arrivalPack){
           return !!(window.GiArrivalDocs?.qualifies ? window.GiArrivalDocs.qualifies(payload, rec) : this.qualifiesForArrivalDocs(payload, rec));
         }
         return !!(safeTrim(doc.name) || safeTrim(doc.url) || safeTrim(doc.dataUrl) || safeTrim(doc.fileName));
@@ -8872,25 +8876,29 @@
       if(typeof window !== "undefined" && window.GiArrivalDocs?.injectDocs){
         return window.GiArrivalDocs.injectDocs(list, rec, payload, options);
       }
-      if(!this.qualifiesForArrivalDocs(payload, rec)) return list;
+      for(let i = list.length - 1; i >= 0; i--){
+        const t = safeTrim(list[i]?.type);
+        if(t === this.TYPES.suitabilityDoc || t === this.TYPES.premiumDevelopment || t === this.TYPES.nispahHarAuth){
+          list.splice(i, 1);
+        }
+      }
+      if(!this.qualifiesForArrivalDocs(payload, rec)){
+        for(let i = list.length - 1; i >= 0; i--){
+          if(safeTrim(list[i]?.type) === this.TYPES.arrivalPack) list.splice(i, 1);
+        }
+        return list;
+      }
       const uploadedAt = safeTrim(options.uploadedAt) || safeTrim(rec?.updatedAt) || nowISO();
       const uploadedBy = safeTrim(options.uploadedBy) || safeTrim(rec?.agentName);
-      const wanted = [
-        { type: this.TYPES.suitabilityDoc, id: "doc_arrival_hatama", name: "מסמך התאמה" },
-        { type: this.TYPES.premiumDevelopment, id: "doc_arrival_premia", name: "דוח התפתחות פרמיה" },
-        { type: this.TYPES.nispahHarAuth, id: "doc_arrival_nispah", name: "נספח ה׳ · הרשאת הר הביטוח" }
-      ];
-      wanted.reverse().forEach((row) => {
-        if(list.some((doc) => safeTrim(doc?.type) === row.type)) return;
-        list.unshift({
-          id: row.id,
-          type: row.type,
-          name: row.name,
-          isLegacy: true,
-          source: "מערכת",
-          uploadedAt,
-          uploadedBy
-        });
+      if(list.some((doc) => safeTrim(doc?.type) === this.TYPES.arrivalPack)) return list;
+      list.unshift({
+        id: "doc_arrival_pack",
+        type: this.TYPES.arrivalPack,
+        name: "מסמך התאמה · התפתחות פרמיה · נספח ה׳",
+        isLegacy: true,
+        source: "מערכת",
+        uploadedAt,
+        uploadedBy
       });
       return list;
     },
@@ -20623,25 +20631,11 @@ UsersGateUI.init();
           void Wizard.exportOperationalPdfPageByPage(snapshot, dlHealthOps);
           return;
         }
-        const dlHatama = ev.target?.closest?.("[data-download-arrival-hatama-doc]");
-        if(dlHatama){
+        const dlArrivalPack = ev.target?.closest?.("[data-download-arrival-pack-doc], [data-download-arrival-hatama-doc], [data-download-arrival-premia-doc], [data-download-arrival-nispah-doc]");
+        if(dlArrivalPack){
           ev.preventDefault();
           const rec = this.current();
-          if(rec) void this.downloadArrivalDoc(rec, "hatama", dlHatama);
-          return;
-        }
-        const dlPremia = ev.target?.closest?.("[data-download-arrival-premia-doc]");
-        if(dlPremia){
-          ev.preventDefault();
-          const rec = this.current();
-          if(rec) void this.downloadArrivalDoc(rec, "premia", dlPremia);
-          return;
-        }
-        const dlNispah = ev.target?.closest?.("[data-download-arrival-nispah-doc]");
-        if(dlNispah){
-          ev.preventDefault();
-          const rec = this.current();
-          if(rec) void this.downloadArrivalDoc(rec, "nispah", dlNispah);
+          if(rec) void this.downloadArrivalDoc(rec, "pack", dlArrivalPack);
           return;
         }
         const dlAgentOps = ev.target?.closest?.("[data-download-ops-agent-doc]");
@@ -23326,6 +23320,7 @@ UsersGateUI.init();
       if(type === CustomerDocuments.TYPES.agentApptOps || type === CustomerDocuments.TYPES.agentApptForm) return false;
       if(type === CustomerDocuments.TYPES.harBituach) return false;
       if(type === CustomerDocuments.TYPES.suitabilityDoc || type === CustomerDocuments.TYPES.premiumDevelopment) return false;
+      if(type === CustomerDocuments.TYPES.arrivalPack) return false;
       if(this.isArchiveCustomerDoc(doc)) return false;
       if(type === CustomerDocuments.TYPES.followupQuestionnaire) return true;
       if(type === CustomerDocuments.TYPES.companyCancelForm) return true;
@@ -23410,7 +23405,7 @@ UsersGateUI.init();
         await ensureFollowupZipLoaded();
         return;
       }
-      if(type === CustomerDocuments.TYPES.suitabilityDoc || type === CustomerDocuments.TYPES.premiumDevelopment || type === CustomerDocuments.TYPES.nispahHarAuth){
+      if(type === CustomerDocuments.TYPES.suitabilityDoc || type === CustomerDocuments.TYPES.premiumDevelopment || type === CustomerDocuments.TYPES.nispahHarAuth || type === CustomerDocuments.TYPES.arrivalPack){
         await ensureGiArrivalDocsLoaded();
         try { await ensureGiSimulatorJsLoaded(); } catch(_e) {}
       }
@@ -23512,10 +23507,12 @@ UsersGateUI.init();
             : rec?.payload;
           return `<div class="cfFile__documentsPreviewDoc">${Wizard.renderOperationalReport(snapshot)}</div>`;
         }
-        if((type === CustomerDocuments.TYPES.suitabilityDoc || type === CustomerDocuments.TYPES.premiumDevelopment || type === CustomerDocuments.TYPES.nispahHarAuth) && window.GiArrivalDocs){
+        if((type === CustomerDocuments.TYPES.arrivalPack || type === CustomerDocuments.TYPES.suitabilityDoc || type === CustomerDocuments.TYPES.premiumDevelopment || type === CustomerDocuments.TYPES.nispahHarAuth) && window.GiArrivalDocs){
           try {
             const draft = window.GiArrivalDocs.buildDraft(rec);
-            const kind = type === CustomerDocuments.TYPES.premiumDevelopment ? "premia" : (type === CustomerDocuments.TYPES.nispahHarAuth ? "nispah" : "hatama");
+            const kind = type === CustomerDocuments.TYPES.premiumDevelopment ? "premia"
+              : (type === CustomerDocuments.TYPES.nispahHarAuth ? "nispah"
+                : (type === CustomerDocuments.TYPES.suitabilityDoc ? "hatama" : "pack"));
             return `<div class="cfFile__documentsPreviewDoc">${window.GiArrivalDocs.renderPreviewHtml(draft, kind)}</div>`;
           } catch(_e) {}
         }
@@ -23740,6 +23737,9 @@ UsersGateUI.init();
       }
       if(storedPreview || this.isArchiveCustomerDoc(doc) || !needsPdf){
         pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
+        if(safeTrim(doc?.type) === CustomerDocuments.TYPES.arrivalPack){
+          await this.appendArrivalNispahPreview(rec, pane, seq, id);
+        }
         return;
       }
       if(cachedPdf){
@@ -23775,13 +23775,28 @@ UsersGateUI.init();
         await ensureGiArrivalDocsLoaded();
         try { await ensureGiSimulatorJsLoaded(); } catch(_e) {}
         if(!window.GiArrivalDocs) throw new Error("GiArrivalDocs missing");
-        if(kind === "premia") return window.GiArrivalDocs.downloadPremia(rec, sourceBtn);
-        if(kind === "nispah") return window.GiArrivalDocs.downloadNispah(rec, sourceBtn);
-        return window.GiArrivalDocs.downloadHatama(rec, sourceBtn);
+        return window.GiArrivalDocs.downloadPack(rec, sourceBtn);
       } catch(err){
         try { console.error("ARRIVAL_DOC_DOWNLOAD_FAILED", err); } catch(_e) {}
         try { window.showToast?.({ title: "לא ניתן להוריד את המסמך", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
       }
+    },
+    async appendArrivalNispahPreview(rec, pane, seq, docId){
+      try {
+        if(!window.GiArrivalDocs?.fillNispahPdf) return;
+        const draft = window.GiArrivalDocs.buildDraft(rec);
+        const bytes = await window.GiArrivalDocs.fillNispahPdf(draft);
+        if(this._previewDocId !== docId || seq !== this._previewFillSeq) return;
+        const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+        this.rememberCustomerDocPreviewUrl(this.customerDocPreviewCacheKey(rec, { id: docId, type: CustomerDocuments.TYPES.nispahHarAuth }), url);
+        const body = pane?.querySelector?.(".cfFile__documentsPreviewBody");
+        if(!body) return;
+        const holder = document.createElement("div");
+        holder.className = "cfFile__documentsPreviewNispah";
+        holder.innerHTML = '<div class="cfFile__documentsPreviewNispahTitle">נספח ה׳ · הרשאת הר הביטוח</div>'
+          + this.renderPdfPreviewFrame("נספח ה׳ · הרשאת הר הביטוח", url, { hideToolbar: true });
+        body.appendChild(holder);
+      } catch(_e) {}
     },
     async openHachsharaCiForm(rec){
       if(this.denyOfficialJoinFormDownload()) return;
@@ -24091,7 +24106,7 @@ UsersGateUI.init();
         const bytes = await window.GiFollowupZip.fillFollowupPdf(entry);
         return { fileName: /\.pdf$/i.test(fileName) ? fileName : (fileName + ".pdf"), bytes };
       }
-      if(type === CustomerDocuments.TYPES.suitabilityDoc || type === CustomerDocuments.TYPES.premiumDevelopment || type === CustomerDocuments.TYPES.nispahHarAuth){
+      if(type === CustomerDocuments.TYPES.suitabilityDoc || type === CustomerDocuments.TYPES.premiumDevelopment || type === CustomerDocuments.TYPES.nispahHarAuth || type === CustomerDocuments.TYPES.arrivalPack){
         await ensureGiArrivalDocsLoaded();
         try { await ensureGiSimulatorJsLoaded(); } catch(_e) {}
         if(!window.GiArrivalDocs) return null;
@@ -24100,10 +24115,19 @@ UsersGateUI.init();
           const bytes = await window.GiArrivalDocs.fillNispahPdf(draft);
           return { fileName: window.GiArrivalDocs.fileName("nispah", draft), bytes };
         }
-        const kind = type === CustomerDocuments.TYPES.premiumDevelopment ? "premia" : "hatama";
-        const html = kind === "premia" ? window.GiArrivalDocs.renderPremiaHtml(draft) : window.GiArrivalDocs.renderHatamaHtml(draft);
+        if(type === CustomerDocuments.TYPES.arrivalPack && typeof window.GiArrivalDocs.buildPackPdf === "function"){
+          try {
+            const bytes = await window.GiArrivalDocs.buildPackPdf(draft);
+            return { fileName: window.GiArrivalDocs.fileName("pack", draft), bytes };
+          } catch(_e) {}
+        }
+        const html = type === CustomerDocuments.TYPES.premiumDevelopment
+          ? window.GiArrivalDocs.renderPremiaHtml(draft)
+          : (type === CustomerDocuments.TYPES.suitabilityDoc
+            ? window.GiArrivalDocs.renderHatamaHtml(draft)
+            : window.GiArrivalDocs.renderCombinedHtml(draft));
         const bytes = new TextEncoder().encode(html);
-        return { fileName: window.GiArrivalDocs.fileName(kind, draft).replace(/\.pdf$/i, ".html"), bytes };
+        return { fileName: window.GiArrivalDocs.fileName(type === CustomerDocuments.TYPES.premiumDevelopment ? "premia" : (type === CustomerDocuments.TYPES.suitabilityDoc ? "hatama" : "pack"), draft).replace(/\.pdf$/i, ".html"), bytes };
       }
       const dataUrl = safeTrim(doc.dataUrl) || safeTrim(doc.url);
       if(dataUrl){
@@ -24329,12 +24353,8 @@ UsersGateUI.init();
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-customer-file-doc="${escapeHtml(docId)}">הורד ZIP</button>`;
         }else if(docType === CustomerDocuments.TYPES.healthOps){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-ops-health-doc="${escapeHtml(docId)}">הורדה</button>`;
-        }else if(docType === CustomerDocuments.TYPES.suitabilityDoc){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-arrival-hatama-doc="${escapeHtml(docId)}">הורדה</button>`;
-        }else if(docType === CustomerDocuments.TYPES.premiumDevelopment){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-arrival-premia-doc="${escapeHtml(docId)}">הורדה</button>`;
-        }else if(docType === CustomerDocuments.TYPES.nispahHarAuth){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-arrival-nispah-doc="${escapeHtml(docId)}">הורדה</button>`;
+        }else if(docType === CustomerDocuments.TYPES.arrivalPack || docType === CustomerDocuments.TYPES.suitabilityDoc || docType === CustomerDocuments.TYPES.premiumDevelopment || docType === CustomerDocuments.TYPES.nispahHarAuth){
+          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-arrival-pack-doc="${escapeHtml(docId)}">הורדה</button>`;
         }else if(docType === CustomerDocuments.TYPES.agentApptOps){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-ops-agent-doc="${escapeHtml(docId)}">הורדה</button>`;
         }else if(docType === CustomerDocuments.TYPES.harBituach || safeTrim(doc.dataUrl) || safeTrim(doc.url)){
@@ -40336,7 +40356,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260907-arrival-docs-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260907-combined-arrival-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -40356,8 +40376,8 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260907-arrival-docs-v1";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260907-arrival-docs-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260907-combined-arrival-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260907-combined-arrival-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -41020,8 +41040,8 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260907-arrival-docs-v1",
-    "./simulators-shell.css?v=20260907-arrival-docs-v1"
+    "./simulators-center.css?v=20260907-combined-arrival-v1",
+    "./simulators-shell.css?v=20260907-combined-arrival-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -42383,7 +42403,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260907-arrival-docs-v1";
+  const GI_WIZARD_JS_VERSION = "20260907-combined-arrival-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;

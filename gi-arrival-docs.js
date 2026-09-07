@@ -5,7 +5,7 @@
 (function installGiArrivalDocs(global){
   "use strict";
 
-  const VERSION = "20260907-arrival-docs-v1";
+  const VERSION = "20260907-combined-arrival-v1";
   const NAVY = "#3870ED";
   const AGENCY = "GEMEL INVEST";
   const COVER_ART = "./assets/gi-doc-cover-3d.png";
@@ -14,8 +14,10 @@
   const TYPES = {
     hatama: "suitability_document",
     premia: "premium_development_report",
-    nispah: "nispah_he_har_auth"
+    nispah: "nispah_he_har_auth",
+    pack: "customer_arrival_pack"
   };
+  const SPLIT_TYPES = [TYPES.hatama, TYPES.premia, TYPES.nispah];
 
   function safeTrim(v){
     return String(v == null ? "" : v).trim();
@@ -1149,15 +1151,20 @@
       const d = draft || this.buildDraft({});
       return this.wrapHtml("דוח התפתחות פרמיה", this.renderPremiaPages(d));
     },
+    renderCombinedHtml(draft){
+      const d = draft || this.buildDraft({});
+      return this.wrapHtml("מסמך התאמה · התפתחות פרמיה · נספח ה׳", this.renderHatamaPages(d) + this.renderPremiaPages(d));
+    },
 
     renderPreviewHtml(draft, kind){
       if(kind === "premia") return this.renderPremiaHtml(draft);
+      if(kind === "hatama") return this.renderHatamaHtml(draft);
       if(kind === "nispah"){
         const p = draft?.primary || {};
         const a = draft?.agent || {};
         return `<div class="giArrivalPreviewNispah">נספח ה׳ הרשמי · ${escapeHtml(p.fullName || "")} ת.ז ${escapeHtml(p.idNumber || "")} · סוכן ${escapeHtml(a.name || AGENCY)}</div>`;
       }
-      return this.renderHatamaHtml(draft);
+      return this.renderCombinedHtml(draft);
     },
 
     async fillNispahPdf(draft){
@@ -1203,9 +1210,60 @@
       const day = (draft?.date || todayIL()).replace(/\//g, "-");
       if(kind === "premia") return "התפתחות_פרמיה_" + clean + "_" + day + ".pdf";
       if(kind === "nispah") return "נספח_ה_הר_הביטוח_" + clean + "_" + day + ".pdf";
-      return "מסמך_התאמה_" + clean + "_" + day + ".pdf";
+      if(kind === "hatama") return "מסמך_התאמה_" + clean + "_" + day + ".pdf";
+      return "מסמכי_הגעה_" + clean + "_" + day + ".pdf";
     },
 
+    async htmlToPdfBytes(html){
+      if(global.GI_LOAD_LIBS?.pdfExport) await global.GI_LOAD_LIBS.pdfExport();
+      const JsPdfCtor = global.jspdf?.jsPDF || global.jsPDF;
+      const html2canvas = global.html2canvas;
+      if(!JsPdfCtor || typeof html2canvas !== "function") throw new Error("pdf engine missing");
+      const host = document.createElement("div");
+      host.setAttribute("dir", "rtl");
+      host.style.cssText = "position:fixed;left:-20000px;top:0;width:794px;background:#fff;z-index:-1;";
+      host.innerHTML = html;
+      document.body.appendChild(host);
+      if(document.fonts?.ready){
+        try { await document.fonts.ready; } catch(_e) {}
+      }
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      const pages = Array.from(host.querySelectorAll(".giArrivalPage"));
+      const pdf = new JsPdfCtor({ unit: "pt", format: "a4", orientation: "portrait", compress: true });
+      const pw = pdf.internal.pageSize.getWidth();
+      const ph = pdf.internal.pageSize.getHeight();
+      for(let i = 0; i < pages.length; i++){
+        const canvas = await html2canvas(pages[i], { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
+        const img = canvas.toDataURL("image/jpeg", 0.92);
+        if(i) pdf.addPage();
+        pdf.addImage(img, "JPEG", 0, 0, pw, ph);
+      }
+      host.remove();
+      const ab = pdf.output("arraybuffer");
+      return new Uint8Array(ab);
+    },
+    async mergePdfBytes(parts){
+      if(global.GI_LOAD_LIBS?.pdfLib) await global.GI_LOAD_LIBS.pdfLib();
+      const PDFLib = global.PDFLib;
+      if(!PDFLib?.PDFDocument) throw new Error("PDFLib missing");
+      const out = await PDFLib.PDFDocument.create();
+      const list = Array.isArray(parts) ? parts : [];
+      for(let i = 0; i < list.length; i++){
+        const part = list[i];
+        if(!part || !part.length) continue;
+        const src = await PDFLib.PDFDocument.load(part);
+        const idxs = typeof src.getPageIndices === "function" ? src.getPageIndices() : [];
+        const copied = idxs.length ? await out.copyPages(src, idxs) : [];
+        copied.forEach((page) => out.addPage(page));
+      }
+      return out.save();
+    },
+    async buildPackPdf(draft){
+      const html = this.renderCombinedHtml(draft);
+      const bodyBytes = await this.htmlToPdfBytes(html);
+      const nispahBytes = await this.fillNispahPdf(draft);
+      return this.mergePdfBytes([bodyBytes, nispahBytes]);
+    },
     async exportHtmlToPdf(html, filename, sourceBtn){
       const triggerBtn = sourceBtn || null;
       const originalText = triggerBtn ? triggerBtn.textContent : "";
@@ -1214,31 +1272,17 @@
         triggerBtn.textContent = "מייצא PDF…";
       }
       try {
-        if(global.GI_LOAD_LIBS?.pdfExport) await global.GI_LOAD_LIBS.pdfExport();
-        const JsPdfCtor = global.jspdf?.jsPDF || global.jsPDF;
-        const html2canvas = global.html2canvas;
-        if(!JsPdfCtor || typeof html2canvas !== "function") throw new Error("pdf engine missing");
-        const host = document.createElement("div");
-        host.setAttribute("dir", "rtl");
-        host.style.cssText = "position:fixed;left:-20000px;top:0;width:794px;background:#fff;z-index:-1;";
-        host.innerHTML = html;
-        document.body.appendChild(host);
-        if(document.fonts?.ready){
-          try { await document.fonts.ready; } catch(_e) {}
-        }
-        await new Promise((resolve) => setTimeout(resolve, 80));
-        const pages = Array.from(host.querySelectorAll(".giArrivalPage"));
-        const pdf = new JsPdfCtor({ unit: "pt", format: "a4", orientation: "portrait", compress: true });
-        const pw = pdf.internal.pageSize.getWidth();
-        const ph = pdf.internal.pageSize.getHeight();
-        for(let i = 0; i < pages.length; i++){
-          const canvas = await html2canvas(pages[i], { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
-          const img = canvas.toDataURL("image/jpeg", 0.92);
-          if(i) pdf.addPage();
-          pdf.addImage(img, "JPEG", 0, 0, pw, ph);
-        }
-        host.remove();
-        pdf.save(filename);
+        const bytes = await this.htmlToPdfBytes(html);
+        const blob = new Blob([bytes], { type: "application/pdf" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
         return true;
       } catch(err){
         try { console.warn("GI_ARRIVAL_PDF_EXPORT_FAILED", err); } catch(_e) {}
@@ -1260,17 +1304,7 @@
       }
     },
 
-    async downloadHatama(rec, sourceBtn){
-      const draft = this.buildDraft(rec);
-      const html = this.renderHatamaHtml(draft);
-      return this.exportHtmlToPdf(html, this.fileName("hatama", draft), sourceBtn);
-    },
-    async downloadPremia(rec, sourceBtn){
-      const draft = this.buildDraft(rec);
-      const html = this.renderPremiaHtml(draft);
-      return this.exportHtmlToPdf(html, this.fileName("premia", draft), sourceBtn);
-    },
-    async downloadNispah(rec, sourceBtn){
+    async downloadPack(rec, sourceBtn){
       const triggerBtn = sourceBtn || null;
       const originalText = triggerBtn ? triggerBtn.textContent : "";
       if(triggerBtn){
@@ -1279,18 +1313,23 @@
       }
       try {
         const draft = this.buildDraft(rec);
-        const bytes = await this.fillNispahPdf(draft);
+        const bytes = await this.buildPackPdf(draft);
         const blob = new Blob([bytes], { type: "application/pdf" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = this.fileName("nispah", draft);
+        a.download = this.fileName("pack", draft);
         a.rel = "noopener";
         document.body.appendChild(a);
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 4000);
         return true;
+      } catch(err){
+        try { console.warn("GI_ARRIVAL_PACK_PDF_FAILED", err); } catch(_e) {}
+        const draft = this.buildDraft(rec);
+        const html = this.renderCombinedHtml(draft);
+        return this.exportHtmlToPdf(html, this.fileName("pack", draft), null);
       } finally {
         if(triggerBtn){
           triggerBtn.disabled = false;
@@ -1298,41 +1337,62 @@
         }
       }
     },
+    async downloadHatama(rec, sourceBtn){
+      return this.downloadPack(rec, sourceBtn);
+    },
+    async downloadPremia(rec, sourceBtn){
+      return this.downloadPack(rec, sourceBtn);
+    },
+    async downloadNispah(rec, sourceBtn){
+      return this.downloadPack(rec, sourceBtn);
+    },
 
     formatDocName(kind, payload, uploadedAt){
       const helper = global.CustomerDocuments;
       const insured = helper?.getPrimaryInsuredLabel?.(payload) || "מבוטח";
       if(kind === "premia") return "דוח התפתחות פרמיה · " + insured;
       if(kind === "nispah") return "נספח ה׳ · הרשאת הר הביטוח · " + insured;
-      return "מסמך התאמה · " + insured;
+      if(kind === "hatama") return "מסמך התאמה · " + insured;
+      return "מסמך התאמה · התפתחות פרמיה · נספח ה׳ · " + insured;
     },
     createDoc(kind, payload, options = {}){
       const uploadedAt = safeTrim(options.uploadedAt) || nowISO();
-      const idPrefix = kind === "premia" ? "doc_arrival_premia_" : (kind === "nispah" ? "doc_arrival_nispah_" : "doc_arrival_hatama_");
+      const key = kind || "pack";
+      const idPrefix = key === "premia" ? "doc_arrival_premia_"
+        : (key === "nispah" ? "doc_arrival_nispah_"
+          : (key === "hatama" ? "doc_arrival_hatama_" : "doc_arrival_pack_"));
       const helper = global.CustomerDocuments;
       return {
         id: helper?.newDocId?.(idPrefix) || (idPrefix + Date.now().toString(16)),
-        type: TYPES[kind] || TYPES.hatama,
-        name: this.formatDocName(kind, payload, uploadedAt),
+        type: TYPES[key] || TYPES.pack,
+        name: this.formatDocName(key, payload, uploadedAt),
         source: "מערכת",
         uploadedAt,
         uploadedBy: safeTrim(options.uploadedBy)
       };
     },
+    stripSplitDocs(list){
+      if(!Array.isArray(list)) return list;
+      for(let i = list.length - 1; i >= 0; i--){
+        const t = safeTrim(list[i]?.type);
+        if(SPLIT_TYPES.indexOf(t) >= 0) list.splice(i, 1);
+      }
+      return list;
+    },
     injectDocs(list, rec, payload, options = {}){
       if(!Array.isArray(list)) return list;
-      if(!this.qualifies(payload, rec)) return list;
+      this.stripSplitDocs(list);
+      if(!this.qualifies(payload, rec)){
+        for(let i = list.length - 1; i >= 0; i--){
+          if(safeTrim(list[i]?.type) === TYPES.pack) list.splice(i, 1);
+        }
+        return list;
+      }
       const uploadedAt = safeTrim(options.uploadedAt) || safeTrim(rec?.updatedAt) || nowISO();
       const uploadedBy = safeTrim(options.uploadedBy) || safeTrim(rec?.agentName);
-      const wanted = [
-        this.createDoc("hatama", payload, { uploadedAt, uploadedBy }),
-        this.createDoc("premia", payload, { uploadedAt, uploadedBy }),
-        this.createDoc("nispah", payload, { uploadedAt, uploadedBy })
-      ];
-      wanted.slice().reverse().forEach((doc) => {
-        const exists = list.some((row) => safeTrim(row?.type) === doc.type);
-        if(!exists) list.unshift(doc);
-      });
+      if(!list.some((row) => safeTrim(row?.type) === TYPES.pack)){
+        list.unshift(this.createDoc("pack", payload, { uploadedAt, uploadedBy }));
+      }
       return list;
     }
   };

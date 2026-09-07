@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260907-arrival-docs-v1";
+const APP_TAG = "20260907-combined-arrival-v1";
 let failed = 0;
 let passed = 0;
 

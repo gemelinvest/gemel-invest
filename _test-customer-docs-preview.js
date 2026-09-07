@@ -1,4 +1,4 @@
-/* GI-CUSTOMER-DOCS-PREVIEW 20260907-arrival-docs-v1
+/* GI-CUSTOMER-DOCS-PREVIEW 20260907-combined-arrival-v1
    On-screen preview for every customer-file document (ops-report style),
    without changing fill / download / open logic.
    Run: node _test-customer-docs-preview.js
@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260907-arrival-docs-v1";
+const TAG = "20260907-combined-arrival-v1";
 let failed = 0;
 let passed = 0;
 
@@ -60,7 +60,7 @@ assert(opsPreview.includes("Wizard?.renderOperationalReport"), "ops report still
 assert(opsPreview.includes("CustomerDocuments.TYPES.healthOps"), "health ops type uses HTML report");
 assert(opsPreview.includes("AgentAppointmentPdf?.buildOperationalReportHtml"), "agent appointment report still HTML");
 assert(opsPreview.includes("GiArrivalDocs"), "arrival docs preview uses GiArrivalDocs");
-assert(opsPreview.includes("suitabilityDoc"), "hatama preview is HTML");
+assert(opsPreview.includes("arrivalPack") || opsPreview.includes("customer_arrival_pack") || app.includes("arrivalPack"), "combined pack preview");
 assert(wiz.includes("renderOperationalReport"), "wizard ops renderer unchanged name");
 
 console.log("\n3) filled PDF preview for cancel, followup, official join");
@@ -75,7 +75,7 @@ assert(wantsFn.includes("companyCancelForm"), "cancel letters want PDF preview")
 assert(wantsFn.includes("isOfficialJoinFormType"), "official join forms want PDF preview");
 assert(wantsFn.includes("healthOps") && wantsFn.includes("return false"), "ops report is not forced through PDF fill");
 assert(wantsFn.includes("suitabilityDoc") && wantsFn.includes("premiumDevelopment"), "hatama/premia stay HTML preview");
-assert(wantsFn.includes("nispahHarAuth"), "nispah uses filled official PDF preview");
+assert(wantsFn.includes("arrivalPack"), "combined pack stays HTML plus nispah frame");
 assert(wantsFn.includes("followupQuestionnairesZip") || app.includes("isArchiveCustomerDoc"), "zip is not treated as a fake PDF");
 
 const fillFn = sliceBetween(app, "async fillCustomerDocumentPreviewPdf(rec, doc){", "customerDocPreviewKind(doc){");
