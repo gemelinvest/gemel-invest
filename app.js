@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260907-couple-shared-fields-v1";
+  const BUILD = "20260907-customer-doc-preview-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -20143,6 +20143,9 @@ UsersGateUI.init();
   const CustomersUI = {
     currentId: null,
     _previewDocId: "",
+    _previewFillSeq: 0,
+    _previewBlobUrls: null,
+    _previewBlobOrder: null,
     _insuredsTabSelectedId: "",
     _selectedDocIds: null,
     getSelectedDocIds(){
@@ -23182,13 +23185,161 @@ UsersGateUI.init();
       return "";
     },
 
+    officialJoinFormPreviewSpec(type){
+      const t = safeTrim(type);
+      if(!this._officialJoinPreviewSpecs){
+        this._officialJoinPreviewSpecs = {
+          [CustomerDocuments.TYPES.hachsharaCiForm]: { globalName: "HachsharaCiForm", ensure: ensureHachsharaCiFormLoaded },
+          [CustomerDocuments.TYPES.hachsharaHealthForm]: { globalName: "HachsharaHealthForm", ensure: ensureHachsharaHealthFormLoaded },
+          [CustomerDocuments.TYPES.hachsharaLifeForm]: { globalName: "HachsharaLifeForm", ensure: ensureHachsharaLifeFormLoaded },
+          [CustomerDocuments.TYPES.hachsharaLifeShortForm]: { globalName: "HachsharaLifeShortForm", ensure: ensureHachsharaLifeShortFormLoaded },
+          [CustomerDocuments.TYPES.hachsharaMortgageForm]: { globalName: "HachsharaMortgageForm", ensure: ensureHachsharaMortgageFormLoaded },
+          [CustomerDocuments.TYPES.migdalLifeForm]: { globalName: "MigdalLifeForm", ensure: ensureMigdalLifeFormLoaded },
+          [CustomerDocuments.TYPES.migdalMortgageForm]: { globalName: "MigdalMortgageForm", ensure: ensureMigdalMortgageFormLoaded },
+          [CustomerDocuments.TYPES.menoraCiForm]: { globalName: "MenoraCiForm", ensure: ensureMenoraCiFormLoaded },
+          [CustomerDocuments.TYPES.menoraMortgageForm]: { globalName: "MenoraMortgageForm", ensure: ensureMenoraMortgageFormLoaded },
+          [CustomerDocuments.TYPES.menoraRiskForm]: { globalName: "MenoraRiskForm", ensure: ensureMenoraRiskFormLoaded },
+          [CustomerDocuments.TYPES.ayalonHealthForm]: { globalName: "AyalonHealthForm", ensure: ensureAyalonHealthFormLoaded },
+          [CustomerDocuments.TYPES.ayalonMortgageForm]: { globalName: "AyalonMortgageForm", ensure: ensureAyalonMortgageFormLoaded },
+          [CustomerDocuments.TYPES.clalHealthForm]: { globalName: "ClalHealthForm", ensure: ensureClalHealthFormLoaded },
+          [CustomerDocuments.TYPES.clalLifeCoupleForm]: { globalName: "ClalLifeCoupleForm", ensure: ensureClalLifeCoupleFormLoaded },
+          [CustomerDocuments.TYPES.clalMortgageForm]: { globalName: "ClalMortgageForm", ensure: ensureClalMortgageFormLoaded },
+          [CustomerDocuments.TYPES.migdalCancerForm]: { globalName: "MigdalCancerForm", ensure: ensureMigdalCancerFormLoaded },
+          [CustomerDocuments.TYPES.phoenixLifeShortForm]: { globalName: "PhoenixLifeForm", ensure: ensurePhoenixLifeFormLoaded, mode: "short" },
+          [CustomerDocuments.TYPES.phoenixLifeFullForm]: { globalName: "PhoenixLifeForm", ensure: ensurePhoenixLifeFormLoaded, mode: "full" },
+          [CustomerDocuments.TYPES.phoenixHealthForm]: { globalName: "PhoenixHealthForm", ensure: ensurePhoenixHealthFormLoaded },
+          [CustomerDocuments.TYPES.phoenixCiForm]: { globalName: "PhoenixCiForm", ensure: ensurePhoenixCiFormLoaded }
+        };
+      }
+      return this._officialJoinPreviewSpecs[t] || null;
+    },
+
+    isArchiveCustomerDoc(doc){
+      const type = safeTrim(doc?.type);
+      const mime = safeTrim(doc?.mime);
+      const name = safeTrim(doc?.fileName) || safeTrim(doc?.name);
+      return type === CustomerDocuments.TYPES.followupQuestionnairesZip
+        || mime === "application/zip"
+        || /\.zip$/i.test(name);
+    },
+
+    wantsFilledPdfPreview(doc){
+      const type = safeTrim(doc?.type);
+      if(!type) return false;
+      if(type === CustomerDocuments.TYPES.healthOps) return false;
+      if(type === CustomerDocuments.TYPES.agentApptOps || type === CustomerDocuments.TYPES.agentApptForm) return false;
+      if(type === CustomerDocuments.TYPES.harBituach) return false;
+      if(this.isArchiveCustomerDoc(doc)) return false;
+      if(type === CustomerDocuments.TYPES.followupQuestionnaire) return true;
+      if(type === CustomerDocuments.TYPES.companyCancelForm) return true;
+      return CustomerDocuments.isOfficialJoinFormType(type);
+    },
+
+    customerDocPreviewCacheKey(rec, doc){
+      return [
+        safeTrim(rec?.id),
+        safeTrim(doc?.id),
+        safeTrim(doc?.type),
+        safeTrim(rec?.updatedAt || rec?.updated_at)
+      ].join("|");
+    },
+
+    rememberCustomerDocPreviewUrl(key, url){
+      if(!this._previewBlobUrls || typeof this._previewBlobUrls !== "object") this._previewBlobUrls = {};
+      if(!Array.isArray(this._previewBlobOrder)) this._previewBlobOrder = [];
+      const prev = this._previewBlobUrls[key];
+      if(prev && prev !== url){
+        try { URL.revokeObjectURL(prev); } catch(_e) {}
+      }
+      this._previewBlobUrls[key] = url;
+      this._previewBlobOrder = this._previewBlobOrder.filter((row) => row !== key);
+      this._previewBlobOrder.push(key);
+      while(this._previewBlobOrder.length > 4){
+        const old = this._previewBlobOrder.shift();
+        if(!old || old === key) continue;
+        try { URL.revokeObjectURL(this._previewBlobUrls[old]); } catch(_e) {}
+        delete this._previewBlobUrls[old];
+      }
+    },
+
+    cachedCustomerDocPreviewUrl(rec, doc){
+      const key = this.customerDocPreviewCacheKey(rec, doc);
+      const url = this._previewBlobUrls && this._previewBlobUrls[key];
+      return safeTrim(url);
+    },
+
+    renderArchiveDocumentPreview(rec, doc){
+      let items = [];
+      try {
+        const pack = this.getFollowupZipMeta?.(rec);
+        items = Array.isArray(pack?.triggered) ? pack.triggered : [];
+      } catch(_e) {}
+      const helper = (typeof window !== "undefined" && window.GiFollowupZip) ? window.GiFollowupZip : null;
+      const list = items.length
+        ? `<ul class="cfFile__documentsPreviewList">${items.map((row) => {
+            const label = helper?.buildDocTitle?.(row)
+              || [row?.company, row?.questionnaireNum, row?.insured?.label || row?.insuredLabel].filter(Boolean).join(" · ")
+              || "שאלון המשך";
+            return `<li>${escapeHtml(label)}</li>`;
+          }).join("")}</ul>`
+        : `<p>${escapeHtml(safeTrim(doc?.name) || "ארכיון ZIP")}</p>`;
+      return `<div class="cfFile__documentsPreviewDoc">
+        <div class="cfFile__documentsPreviewNote">תצוגה מקדימה של תוכן הארכיון. ההורדה נשארת מהכפתור ברשימה.</div>
+        ${list}
+      </div>`;
+    },
+
+    renderPdfPreviewFrame(title, url, options = {}){
+      const src = safeTrim(url);
+      if(!src) return "";
+      const hideChrome = options.hideToolbar === true;
+      const framed = hideChrome ? (src + (src.indexOf("#") >= 0 ? "" : "#toolbar=0&navpanes=0")) : src;
+      return `<iframe class="cfFile__documentsPreviewFrame" title="${escapeHtml(title || "תצוגת מסמך")}" src="${escapeHtml(framed)}"></iframe>`;
+    },
+
+    async ensureCustomerDocumentPreviewModule(doc){
+      const type = safeTrim(doc?.type);
+      const spec = this.officialJoinFormPreviewSpec(type);
+      if(spec && typeof spec.ensure === "function"){
+        await spec.ensure();
+        return;
+      }
+      if(type === CustomerDocuments.TYPES.companyCancelForm){
+        await ensureGiCancelFormsLoaded();
+        return;
+      }
+      if(type === CustomerDocuments.TYPES.followupQuestionnaire || type === CustomerDocuments.TYPES.followupQuestionnairesZip){
+        await ensureFollowupZipLoaded();
+      }
+    },
+
+    async fillCustomerDocumentPreviewPdf(rec, doc){
+      const cached = this.cachedCustomerDocPreviewUrl(rec, doc);
+      if(cached) return cached;
+      let bytes = null;
+      const spec = this.officialJoinFormPreviewSpec(safeTrim(doc?.type));
+      if(spec){
+        const mod = window[spec.globalName];
+        if(!mod?.fillOriginalTemplate || typeof mod.buildDraft !== "function") return "";
+        const draft = spec.mode ? mod.buildDraft(rec, spec.mode) : mod.buildDraft(rec);
+        bytes = await mod.fillOriginalTemplate(draft);
+      } else {
+        const resolved = await this.resolveDocumentBytes(rec, doc);
+        bytes = resolved?.bytes || null;
+      }
+      if(!bytes) return "";
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      this.rememberCustomerDocPreviewUrl(this.customerDocPreviewCacheKey(rec, doc), url);
+      return url;
+    },
+
     customerDocPreviewKind(doc){
       const url = safeTrim(doc?.dataUrl) || safeTrim(doc?.url);
       const name = (safeTrim(doc?.fileName) || safeTrim(doc?.originalFileName) || safeTrim(doc?.name) || "").toLowerCase();
       const mime = url.startsWith("data:") ? url.slice(5, Math.max(5, url.indexOf(";"))).toLowerCase() : "";
       const hint = mime + " " + name;
-      if(/image\/|\.(png|jpe?g|gif|webp|bmp)$/i.test(hint)) return { kind: "image", url };
-      if(/pdf|\.pdf/i.test(hint)) return { kind: "pdf", url };
+      if(url && /image\/|\.(png|jpe?g|gif|webp|bmp)$/i.test(hint)) return { kind: "image", url };
+      if(url && /pdf|\.pdf/i.test(hint)) return { kind: "pdf", url };
       if(/spreadsheet|\.xlsx?|\.csv/i.test(hint) || safeTrim(doc?.type) === CustomerDocuments.TYPES.harBituach) return { kind: "sheet", url };
       if(url) return { kind: "file", url };
       return { kind: "none", url: "" };
@@ -23400,26 +23551,38 @@ UsersGateUI.init();
       const display = CustomerDocuments.getDocumentDisplay(doc);
       const src = this.customerDocPreviewKind(doc);
       const sheetHtml = safeTrim(options.sheetHtml);
+      const pdfUrl = safeTrim(options.pdfUrl);
       let body = "";
       if(src.kind === "image" && src.url){
         body = `<img class="cfFile__documentsPreviewImg" alt="${escapeHtml(display.title)}" src="${escapeHtml(src.url)}" />`;
+      }else if(pdfUrl){
+        body = this.renderPdfPreviewFrame(display.title, pdfUrl, { hideToolbar: true });
       }else if(src.kind === "pdf" && src.url){
-        body = `<iframe class="cfFile__documentsPreviewFrame" title="${escapeHtml(display.title)}" src="${escapeHtml(src.url)}"></iframe>`;
+        body = this.renderPdfPreviewFrame(display.title, src.url);
+      }else if(this.isArchiveCustomerDoc(doc)){
+        body = this.renderArchiveDocumentPreview(rec, doc);
       }else if(src.kind === "sheet"){
         body = sheetHtml
           ? `<div class="cfFile__documentsPreviewDoc">${sheetHtml}</div>`
           : `<div class="cfFile__documentsPreviewEmpty">טוען תצוגה מקדימה…</div>`;
+      }else if(options.pdfLoading){
+        body = `<div class="cfFile__documentsPreviewEmpty">מכין תצוגת מסמך…</div>`;
       }else{
         body = this.renderGeneratedDocumentPreview(rec, doc);
         if(!body && src.url){
-          body = `<iframe class="cfFile__documentsPreviewFrame" title="${escapeHtml(display.title)}" src="${escapeHtml(src.url)}"></iframe>`;
+          body = this.renderPdfPreviewFrame(display.title, src.url);
         }
       }
       if(!body){
-        body = this.renderGeneratedDocumentPreview(rec, doc)
-          || (src.url
-            ? `<iframe class="cfFile__documentsPreviewFrame" title="${escapeHtml(display.title)}" src="${escapeHtml(src.url)}"></iframe>`
-            : `<div class="cfFile__documentsPreviewEmpty">טוען תצוגה מקדימה…</div>`);
+        if(options.pdfError){
+          body = this.renderGeneratedDocumentPreview(rec, doc)
+            || `<div class="cfFile__documentsPreviewEmpty">לא ניתן להציג את המסמך. ההורדה נשארת מהכפתור ברשימה.</div>`;
+        }else{
+          body = this.renderGeneratedDocumentPreview(rec, doc)
+            || (src.url
+              ? this.renderPdfPreviewFrame(display.title, src.url)
+              : `<div class="cfFile__documentsPreviewEmpty">טוען תצוגה מקדימה…</div>`);
+        }
       }
       return `<div class="cfFile__documentsPreviewHead">${escapeHtml(display.title)}</div>
         <div class="cfFile__documentsPreviewBody">${body}</div>`;
@@ -23430,6 +23593,8 @@ UsersGateUI.init();
       const id = safeTrim(docId);
       if(!rec || !id) return;
       this._previewDocId = id;
+      this._previewFillSeq = (this._previewFillSeq || 0) + 1;
+      const seq = this._previewFillSeq;
       const root = this.els.main || this.els.body;
       if(!root) return;
       root.querySelectorAll("[data-cf-doc-preview]").forEach((row) => {
@@ -23439,155 +23604,45 @@ UsersGateUI.init();
       if(!pane) return;
       const doc = this.findCustomerDocument(rec, id);
       const src = this.customerDocPreviewKind(doc);
-      pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
-      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.hachsharaCiForm && !window.HachsharaCiForm){
-        try {
-          await ensureHachsharaCiFormLoaded();
-          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
-        } catch(_e) {}
-        return;
-      }
-      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.hachsharaHealthForm && !window.HachsharaHealthForm){
-        try {
-          await ensureHachsharaHealthFormLoaded();
-          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
-        } catch(_e) {}
-        return;
-      }
-      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.hachsharaLifeForm && !window.HachsharaLifeForm){
-        try {
-          await ensureHachsharaLifeFormLoaded();
-          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
-        } catch(_e) {}
-        return;
-      }
-      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.hachsharaLifeShortForm && !window.HachsharaLifeShortForm){
-        try {
-          await ensureHachsharaLifeShortFormLoaded();
-          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
-        } catch(_e) {}
-        return;
-      }
-      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.hachsharaMortgageForm && !window.HachsharaMortgageForm){
-        try {
-          await ensureHachsharaMortgageFormLoaded();
-          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
-        } catch(_e) {}
-        return;
-      }
-      if((safeTrim(doc?.type) === CustomerDocuments.TYPES.phoenixLifeShortForm || safeTrim(doc?.type) === CustomerDocuments.TYPES.phoenixLifeFullForm) && !window.PhoenixLifeForm){
-        try {
-          await ensurePhoenixLifeFormLoaded();
-          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
-        } catch(_e) {}
-        return;
-      }
-      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.migdalLifeForm && !window.MigdalLifeForm){
-        try {
-          await ensureMigdalLifeFormLoaded();
-          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
-        } catch(_e) {}
-        return;
-      }
-      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.migdalMortgageForm && !window.MigdalMortgageForm){
-        try {
-          await ensureMigdalMortgageFormLoaded();
-          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
-        } catch(_e) {}
-        return;
-      }
-      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.clalHealthForm && !window.ClalHealthForm){
-        try {
-          await ensureClalHealthFormLoaded();
-          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
-        } catch(_e) {}
-        return;
-      }
-      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.clalLifeCoupleForm && !window.ClalLifeCoupleForm){
-        try {
-          await ensureClalLifeCoupleFormLoaded();
-          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
-        } catch(_e) {}
-        return;
-      }
-      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.migdalCancerForm && !window.MigdalCancerForm){
-        try {
-          await ensureMigdalCancerFormLoaded();
-          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
-        } catch(_e) {}
-        return;
-      }
-      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.ayalonHealthForm && !window.AyalonHealthForm){
-        try {
-          await ensureAyalonHealthFormLoaded();
-          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
-        } catch(_e) {}
-        return;
-      }
-      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.phoenixHealthForm && !window.PhoenixHealthForm){
-        try {
-          await ensurePhoenixHealthFormLoaded();
-          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
-        } catch(_e) {}
-        return;
-      }
-      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.phoenixCiForm && !window.PhoenixCiForm){
-        try {
-          await ensurePhoenixCiFormLoaded();
-          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
-        } catch(_e) {}
-        return;
-      }
-      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.ayalonMortgageForm && !window.AyalonMortgageForm){
-        try {
-          await ensureAyalonMortgageFormLoaded();
-          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
-        } catch(_e) {}
-        return;
-      }
-      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.menoraCiForm && !window.MenoraCiForm){
-        try {
-          await ensureMenoraCiFormLoaded();
-          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
-        } catch(_e) {}
-        return;
-      }
-      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.menoraMortgageForm && !window.MenoraMortgageForm){
-        try {
-          await ensureMenoraMortgageFormLoaded();
-          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
-        } catch(_e) {}
-        return;
-      }
-      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.menoraRiskForm && !window.MenoraRiskForm){
-        try {
-          await ensureMenoraRiskFormLoaded();
-          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
-        } catch(_e) {}
-        return;
-      }
-      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.clalMortgageForm && !window.ClalMortgageForm){
-        try {
-          await ensureClalMortgageFormLoaded();
-          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
-        } catch(_e) {}
-        return;
-      }
-      if(safeTrim(doc?.type) === CustomerDocuments.TYPES.companyCancelForm && !window.GiCancelForms){
-        try {
-          await ensureGiCancelFormsLoaded();
-          if(this._previewDocId === id) pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
-        } catch(_e) {}
-        return;
-      }
-      if(src.kind !== "sheet") return;
-      const sheetHtml = await this.renderSheetPreviewHtml(doc);
-      if(this._previewDocId !== id) return;
+      const storedPreview = (src.kind === "image" && src.url) || (src.kind === "pdf" && src.url);
+      const needsPdf = !storedPreview && this.wantsFilledPdfPreview(doc);
+      const cachedPdf = needsPdf ? this.cachedCustomerDocPreviewUrl(rec, doc) : "";
       pane.innerHTML = this.renderDocumentPreviewInner(rec, id, {
-        sheetHtml: sheetHtml || (src.url
-          ? `<iframe class="cfFile__documentsPreviewFrame" title="preview" src="${escapeHtml(src.url)}"></iframe>`
-          : this.renderGeneratedDocumentPreview(rec, doc))
+        pdfUrl: cachedPdf,
+        pdfLoading: needsPdf && !cachedPdf
       });
+      try {
+        await this.ensureCustomerDocumentPreviewModule(doc);
+      } catch(_e) {}
+      if(this._previewDocId !== id || seq !== this._previewFillSeq) return;
+      if(src.kind === "sheet"){
+        const sheetHtml = await this.renderSheetPreviewHtml(doc);
+        if(this._previewDocId !== id || seq !== this._previewFillSeq) return;
+        pane.innerHTML = this.renderDocumentPreviewInner(rec, id, {
+          sheetHtml: sheetHtml || (src.url
+            ? this.renderPdfPreviewFrame("preview", src.url)
+            : this.renderGeneratedDocumentPreview(rec, doc))
+        });
+        return;
+      }
+      if(storedPreview || this.isArchiveCustomerDoc(doc) || !needsPdf){
+        pane.innerHTML = this.renderDocumentPreviewInner(rec, id);
+        return;
+      }
+      if(cachedPdf){
+        pane.innerHTML = this.renderDocumentPreviewInner(rec, id, { pdfUrl: cachedPdf });
+        return;
+      }
+      try {
+        const url = await this.fillCustomerDocumentPreviewPdf(rec, doc);
+        if(this._previewDocId !== id || seq !== this._previewFillSeq) return;
+        if(url){
+          pane.innerHTML = this.renderDocumentPreviewInner(rec, id, { pdfUrl: url });
+          return;
+        }
+      } catch(_e) {}
+      if(this._previewDocId !== id || seq !== this._previewFillSeq) return;
+      pane.innerHTML = this.renderDocumentPreviewInner(rec, id, { pdfError: true });
     },
 
     denyOfficialJoinFormDownload(){
@@ -40135,7 +40190,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260907-couple-shared-fields-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260907-customer-doc-preview-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -40155,7 +40210,7 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260907-couple-shared-fields-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260907-customer-doc-preview-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -40791,8 +40846,8 @@ UsersGateUI.init();
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260907-couple-shared-fields-v1",
-    "./simulators-shell.css?v=20260907-couple-shared-fields-v1"
+    "./simulators-center.css?v=20260907-customer-doc-preview-v1",
+    "./simulators-shell.css?v=20260907-customer-doc-preview-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -40821,7 +40876,7 @@ UsersGateUI.init();
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
     "./gi-customers-import.css?v=20260828-menora-health-decl-v1",
-    "./theme-unify-flat.css?v=20260907-couple-shared-fields-v1"
+    "./theme-unify-flat.css?v=20260907-customer-doc-preview-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
     if(document.documentElement.dataset.giSecondaryCss === "1") return;
@@ -42154,7 +42209,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260907-couple-shared-fields-v1";
+  const GI_WIZARD_JS_VERSION = "20260907-customer-doc-preview-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
