@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260907-sim-ui-v1";
+const TAG = "20260907-health-disc-v1";
 let failed = 0;
 let passed = 0;
 
@@ -1000,6 +1000,76 @@ if(W && typeof W.dockNpOpenSimulator === "function"){
     const manualRows = W.getPolicyInsuredCoverPremiumRows(manualPol, "i1");
     assert(manualRows[0].after === 63, "manual 10% discount is used when already applied");
     assert(manualRows[1].after === 48.48, "manual 0% keeps the cover at the simulator before-price");
+  }
+
+  // ── הנחה ידנית לפי כיסוי: האחוז על «לפני הנחה», לא על אחרי הנחת הסימולטור ──
+  {
+    const grossCovers = [
+      { wizardKey: "השתלות", monthlyPremium: 60 },
+      { wizardKey: "ניתוחים", monthlyPremium: 40 }
+    ];
+    const afterCovers = [
+      { wizardKey: "השתלות", monthlyPremium: 48 },
+      { wizardKey: "ניתוחים", monthlyPremium: 32 }
+    ];
+    const makeHealth = (extra) => Object.assign({
+      type: "בריאות", company: "הפניקס",
+      insuredIds: ["i1"], insuredId: "i1",
+      healthCovers: ["השתלות", "ניתוחים"],
+      discountPct: "20",
+      coverDiscounts: [{ name: "השתלות", pct: "20" }, { name: "ניתוחים", pct: "20" }]
+    }, extra);
+
+    const fromGross = makeHealth({
+      premiumPerInsured: { i1: "100" },
+      premiumMonthly: "100",
+      riskSimQuotes: { i1: { ok: true, monthlyPremium: 100, covers: grossCovers } },
+      simDiscountPerInsured: { i1: { optionId: "phx-h-20", year1Pct: 20, monthlyAfterDiscount: 80 } }
+    });
+    const rGross = W.applyHealthCoverManualDiscounts(fromGross);
+    assert(rGross.ok === true && rGross.before === 100, "manual % base is the original 100 before discount");
+    assert(rGross.after === 80, "20% of 100 is 80 — not 64 from stacking on the simulator after-price");
+    assert(fromGross.premiumAfterCoverDiscounts === 80, "stored after-cover total is 80");
+
+    const fromBaked = makeHealth({
+      premiumPerInsured: { i1: "100" },
+      premiumMonthly: "100",
+      riskSimQuotes: { i1: { ok: true, monthlyPremium: 100, covers: afterCovers } },
+      simDiscountPerInsured: { i1: { optionId: "phx-h-20", year1Pct: 20, monthlyAfterDiscount: 80 } }
+    });
+    const rBaked = W.applyHealthCoverManualDiscounts(fromBaked);
+    assert(rBaked.before === 100, "even if cover lines already hold the after-price, the base is still 100");
+    assert(rBaked.after === 80, "20% on baked-after cover lines still yields 80, not 64");
+
+    const fromFallback = makeHealth({
+      premiumPerInsured: { i1: "80" },
+      premiumMonthly: "80",
+      riskSimQuotes: { i1: { ok: true, monthlyPremium: 100 } },
+      simDiscountPerInsured: { i1: { optionId: "phx-h-20", year1Pct: 20, monthlyAfterDiscount: 80 } }
+    });
+    const rFb = W.applyHealthCoverManualDiscounts(fromFallback);
+    assert(rFb.before === 100, "without per-cover quotes, quote monthlyPremium 100 is preferred over the after 80");
+    assert(rFb.after === 80, "equal-share 20% of 100 is 80, not 64");
+
+    const second = makeHealth({
+      premiumPerInsured: { i1: "100" },
+      premiumMonthly: "100",
+      riskSimQuotes: { i1: { ok: true, monthlyPremium: 100, covers: grossCovers } },
+      simDiscountPerInsured: { i1: { optionId: "phx-h-20", year1Pct: 20, monthlyAfterDiscount: 80 } },
+      coverDiscountsApplied: true,
+      premiumAfterCoverDiscounts: 80
+    });
+    const r2 = W.applyHealthCoverManualDiscounts(second);
+    assert(r2.after === 80, "saving the same 20% twice does not stack on premiumAfterCoverDiscounts");
+
+    const scaledRows = W.getPolicyInsuredCoverPremiumRows(fromBaked, "i1");
+    assert(scaledRows[0].before === 60 && scaledRows[1].before === 40, "cover detail before-price is scaled back to gross");
+    const bakedManual = Object.assign({}, fromBaked, {
+      coverDiscountsApplied: true,
+      coverDiscounts: [{ name: "השתלות", pct: "20" }, { name: "ניתוחים", pct: "20" }]
+    });
+    const bakedManualRows = W.getPolicyInsuredCoverPremiumRows(bakedManual, "i1");
+    assert(bakedManualRows[0].after === 48 && bakedManualRows[1].after === 32, "manual 20% of scaled gross is 48 / 32, not a second cut on 48 / 32");
   }
 
   // ── reopen/close guards do not wipe picks ──
