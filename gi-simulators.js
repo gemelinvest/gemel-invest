@@ -6208,7 +6208,7 @@
       hachshara_health: {
         company: "הכשרה",
         product: "בריאות",
-        // לא בשימוש במנוע בריאות הכשרה (תעריפי האקסל נחשבים עדכניים, בלי הצמדה)
+        // תעריפי בריאות 2023.xlsx — כותרת כל גיליון: «הכשרה מדד 13317» (= 133.17)
         baseIndexPoints: 133.17,
         baseKnownDate: "2022-12-15"
       },
@@ -10776,9 +10776,10 @@
 
 
   // ===== GI-HACH-HEALTH-SIM 2026-08-10 · סימולטור בריאות הכשרה ==================
-  // מקור אמת: גיליון «בריאות» ב־תעריפים סיכונים.xlsx. פרמיה חודשית כפי שבאקסל, בלי הצמדת מדד.
-  // כיסויים שלא בגיליון (משלים שב״ן 5,000 / ייעוץ ובדיקות / שירות פרימיום לילד) נשארים בתעריף הקיים.
-  // מחלות קשות — סימולטור נפרד. אין שדה עישון בבריאות.
+  // מקור אמת: תעריפי בריאות 2023.xlsx — כל הכיסויים עם מדד בסיס 13,317 (= 133.17).
+  // פרמיה מוצגת צמודה למדד למ״ס: תעריף × (מדד_ידוע_אחרון ÷ 133.17).
+  // מחלות קשות / ריסק / משכנתא — סימולטורים נפרדים, בלי הצמדה (אין בסיס מדד בספרים).
+  // אין שדה עישון בבריאות.
 
   const HACHSHARA_HEALTH_MIN_AGE = 0;
   const HACHSHARA_HEALTH_MAX_AGE = 75;
@@ -10814,23 +10815,25 @@
    * קטלוג כיסויים — שמות label מהאשף.
    * wizardKey = המפתח ב-Wizard.healthCoversByCompany["הכשרה"] להחלה על הפוליסה.
    * מחלות קשות — סימולטור נפרד. אין שדה עישון בבריאות.
-   * תעריפים באגורות: כיסויים שבגיליון «בריאות» 1:1 מהאקסל (שקלים×100). בלי מדד.
+   * תעריפים באגורות 1:1 מול תעריפי בריאות 2023.xlsx (שקלים×100). הצמדה למדד במנוע.
    */
   const HACHSHARA_HEALTH_COVERS = [
-    { id: "drugs", label: "תרופות מחוץ לסל שירותי הבריאות", wizardKey: "תרופות מחוץ לסל שירותי הבריאות", group: "השתלות, תרופות וניתוחים בחו״ל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 310 }, { min: 21, max: 30, agorot: 814 }, { min: 31, max: 40, agorot: 1002 }, { min: 41, max: 50, agorot: 1776 }, { min: 51, max: 55, agorot: 2667 }, { min: 56, max: 60, agorot: 3406 }, { min: 61, max: 65, agorot: 3742 }, { min: 66, max: 120, agorot: 4400 }] },
-    { id: "transplant", label: "השתלות וטיפולים מיוחדים מחוץ לישראל", wizardKey: "השתלות וטיפולים מיוחדים מחוץ לישראל", group: "השתלות, תרופות וניתוחים בחו״ל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 446 }, { min: 21, max: 30, agorot: 1054 }, { min: 31, max: 40, agorot: 1226 }, { min: 41, max: 50, agorot: 1636 }, { min: 51, max: 55, agorot: 1743 }, { min: 56, max: 60, agorot: 1743 }, { min: 61, max: 65, agorot: 1706 }, { min: 66, max: 120, agorot: 1508 }] },
-    { id: "abroad_surgery", label: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל", wizardKey: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל", group: "השתלות, תרופות וניתוחים בחו״ל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 131 }, { min: 21, max: 30, agorot: 286 }, { min: 31, max: 40, agorot: 386 }, { min: 41, max: 50, agorot: 628 }, { min: 51, max: 55, agorot: 941 }, { min: 56, max: 60, agorot: 1225 }, { min: 61, max: 65, agorot: 1472 }, { min: 66, max: 120, agorot: 1570 }] },
+    { id: "drugs", label: "תרופות מחוץ לסל שירותי הבריאות", wizardKey: "תרופות מחוץ לסל שירותי הבריאות", group: "השתלות, תרופות וניתוחים בחו״ל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 1150 }, { min: 21, max: 30, agorot: 1774 }, { min: 31, max: 40, agorot: 2382 }, { min: 41, max: 50, agorot: 3915 }, { min: 51, max: 55, agorot: 5500 }, { min: 56, max: 60, agorot: 7300 }, { min: 61, max: 65, agorot: 10000 }, { min: 66, max: 120, agorot: 13200 }] },
+    { id: "transplant", label: "השתלות וטיפולים מיוחדים מחוץ לישראל", wizardKey: "השתלות וטיפולים מיוחדים מחוץ לישראל", group: "השתלות, תרופות וניתוחים בחו״ל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 971 }, { min: 21, max: 30, agorot: 1568 }, { min: 31, max: 40, agorot: 1703 }, { min: 41, max: 50, agorot: 2107 }, { min: 51, max: 55, agorot: 2347 }, { min: 56, max: 60, agorot: 2659 }, { min: 61, max: 65, agorot: 3072 }, { min: 66, max: 120, agorot: 3254 }] },
+    { id: "abroad_surgery", label: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל", wizardKey: "ניתוחים וטיפולים מחליפי ניתוח מחוץ לישראל", group: "השתלות, תרופות וניתוחים בחו״ל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 623 }, { min: 21, max: 30, agorot: 866 }, { min: 31, max: 40, agorot: 991 }, { min: 41, max: 50, agorot: 1202 }, { min: 51, max: 55, agorot: 1900 }, { min: 56, max: 60, agorot: 2400 }, { min: 61, max: 65, agorot: 2800 }, { min: 66, max: 120, agorot: 2900 }] },
     { id: "surgery_shaban_5000", label: "ניתוחים בישראל — משלים שב״ן עם השתתפות עצמית 5,000 ₪", wizardKey: "משלים שב\"ן עם השתתפות עצמית 5,000 ₪", group: "ניתוחים וטיפולים מחליפי ניתוח בישראל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 1409 }, { min: 21, max: 30, agorot: 2652 }, { min: 31, max: 40, agorot: 4643 }, { min: 41, max: 50, agorot: 6435 }, { min: 51, max: 55, agorot: 10277 }, { min: 56, max: 60, agorot: 12517 }, { min: 61, max: 65, agorot: 16877 }, { min: 66, max: 120, agorot: 21680 }] },
-    { id: "surgery_shaban", label: "ניתוחים בישראל — משלים שב״ן ללא השתתפות עצמית", wizardKey: "משלים שב\"ן ללא השתתפות עצמית", group: "ניתוחים וטיפולים מחליפי ניתוח בישראל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 1392 }, { min: 21, max: 30, agorot: 3952 }, { min: 31, max: 40, agorot: 4848 }, { min: 41, max: 50, agorot: 7116 }, { min: 51, max: 55, agorot: 10729 }, { min: 56, max: 60, agorot: 13897 }, { min: 61, max: 65, agorot: 16435 }, { min: 66, max: 120, agorot: 21113 }] },
-    { id: "surgery_first_shekel", label: "ניתוחים בישראל מהשקל הראשון", wizardKey: "ניתוחים בישראל מהשקל הראשון", group: "ניתוחים וטיפולים מחליפי ניתוח בישראל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 2195 }, { min: 21, max: 30, agorot: 5951 }, { min: 31, max: 40, agorot: 7546 }, { min: 41, max: 50, agorot: 11514 }, { min: 51, max: 55, agorot: 17522 }, { min: 56, max: 60, agorot: 22741 }, { min: 61, max: 65, agorot: 17328 }, { min: 66, max: 120, agorot: 36023 }] },
+    { id: "surgery_shaban", label: "ניתוחים בישראל — משלים שב״ן ללא השתתפות עצמית", wizardKey: "משלים שב\"ן ללא השתתפות עצמית", group: "ניתוחים וטיפולים מחליפי ניתוח בישראל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 1783 }, { min: 21, max: 30, agorot: 3357 }, { min: 31, max: 40, agorot: 5877 }, { min: 41, max: 50, agorot: 8146 }, { min: 51, max: 55, agorot: 13009 }, { min: 56, max: 60, agorot: 15844 }, { min: 61, max: 65, agorot: 21363 }, { min: 66, max: 120, agorot: 27443 }] },
+    { id: "surgery_first_shekel", label: "ניתוחים בישראל מהשקל הראשון", wizardKey: "ניתוחים בישראל מהשקל הראשון", group: "ניתוחים וטיפולים מחליפי ניתוח בישראל", needsGender: false, bands: [{ min: 0, max: 20, agorot: 3104 }, { min: 21, max: 30, agorot: 8415 }, { min: 31, max: 40, agorot: 10670 }, { min: 41, max: 50, agorot: 16281 }, { min: 51, max: 55, agorot: 24777 }, { min: 56, max: 60, agorot: 32157 }, { min: 61, max: 65, agorot: 38643 }, { min: 66, max: 120, agorot: 50938 }] },
     { id: "ambulatory_consults", label: "אמבולטורי — ייעוץ ובדיקות", wizardKey: "ייעוץ ובדיקות", group: "שירותים אמבולטוריים", needsGender: false, bands: [{ min: 0, max: 20, agorot: 1044 }, { min: 21, max: 30, agorot: 4000 }, { min: 31, max: 40, agorot: 4000 }, { min: 41, max: 50, agorot: 4000 }, { min: 51, max: 55, agorot: 4000 }, { min: 56, max: 60, agorot: 4575 }, { min: 61, max: 65, agorot: 4575 }, { min: 66, max: 120, agorot: 5175 }] },
     { id: "child_premium", label: "שירות פרימיום לילד", wizardKey: "שירות פרימיום לילד", group: "כיסוי לילד", needsGender: false, maxAge: 25, bands: [{ min: 0, max: 25, agorot: 3050 }] }
   ];
 
   const HACHSHARA_HEALTH_COVER_BY_ID = HACHSHARA_HEALTH_COVERS.reduce((acc, c) => { acc[c.id] = c; return acc; }, {});
 
+  const HACHSHARA_HEALTH_CPI_KEY = "hachshara_health";
+
   /** מחשב פרמיה חודשית לכיסוי בודד. מחזיר {ok, monthlyPremium, monthlyAgorot, reason?}
-      הפרמיה היא התעריף מהאקסל — בלי הצמדת מדד. */
+      monthlyPremium/monthlyAgorot = אחרי הצמדה למדד; base* = תעריפון 2023 לפני הצמדה. */
   function computeHachsharaHealthCoverPremium(coverId, age, gender){
     const cover = HACHSHARA_HEALTH_COVER_BY_ID[coverId];
     if(!cover) return { ok:false, reason:"cover_missing" };
@@ -10848,20 +10851,21 @@
       agorot = band.agorot;
     }
     if(!Number.isInteger(agorot)) return { ok:false, reason:"rate_missing" };
+    const indexed = HealthCpi.indexAgorot(agorot, HACHSHARA_HEALTH_CPI_KEY);
     return {
       ok: true,
       coverId: cover.id,
       label: cover.label,
-      baseMonthlyAgorot: agorot,
-      baseMonthlyPremium: hachsharaHealthAgorotToShekels(agorot),
-      monthlyAgorot: agorot,
-      monthlyPremium: hachsharaHealthAgorotToShekels(agorot),
-      indexFactor: 1,
-      indexInfo: null
+      baseMonthlyAgorot: indexed.baseAgorot,
+      baseMonthlyPremium: hachsharaHealthAgorotToShekels(indexed.baseAgorot),
+      monthlyAgorot: indexed.indexedAgorot,
+      monthlyPremium: hachsharaHealthAgorotToShekels(indexed.indexedAgorot),
+      indexFactor: indexed.factor,
+      indexInfo: indexed.indexInfo
     };
   }
 
-  /** מחשב סל כיסויים נבחרים — סכום אגורות מדויק מהתעריפון */
+  /** מחשב סל כיסויים נבחרים — סכום אגורות מדויק (אחרי הצמדה) */
   function computeHachsharaHealthBundle(selectedIds, age, gender){
     const ids = Array.isArray(selectedIds) ? selectedIds : [];
     if(!ids.length) return { ok:false, reason:"covers_missing", covers:[], monthlyAgorot:0, monthlyPremium:0, annualPremium:0 };
@@ -10899,6 +10903,20 @@
     };
   }
 
+  function formatHachsharaHealthIndexMetaHtml(indexInfo){
+    if(!indexInfo) return "";
+    if(!indexInfo.ok){
+      return `<div class="lcHachHealth__indexMeta lcHachHealth__indexMeta--pending">ממתין למדד למ״ס — מוצגת כרגע פרמיית בסיס מהתעריפון</div>`;
+    }
+    const factorTxt = (Math.round(indexInfo.factor * 10000) / 10000).toFixed(4);
+    return `<div class="lcHachHealth__indexMeta">
+      הצמדה למדד: בסיס ${escapeHtml(String(indexInfo.baseIndexPoints))}
+      (${escapeHtml(indexInfo.baseKnownDate || "")})
+      → נוכחי ≈ ${escapeHtml(String(indexInfo.currentIndexPoints))}
+      (${escapeHtml(safeTrim(indexInfo.currentMonthLabel))})
+      · מקדם ×${escapeHtml(factorTxt)}
+    </div>`;
+  }
 
   const HACHSHARA_HEALTH_SIM_MESSAGES = {
     birth_missing: "יש לבחור תאריך לידה לפני חישוב הפרמיה.",
@@ -10920,6 +10938,7 @@
     _escHandler: null,
     _confirmSwitch: null,
     _showFinalSummary: false,
+    _cpiUnsub: null,
 
     open(ctx){
       this.close();
@@ -10932,6 +10951,8 @@
       this._showFinalSummary = false;
       this._mount();
       this._render();
+      this._cpiUnsub = HealthCpi.onChange(() => { if(this._modal) this._render(); });
+      HealthCpi.ensure().then(() => { if(this._modal) this._render(); }).catch(() => {});
     },
 
     _prefillFromInsured(ins){
@@ -10970,6 +10991,7 @@
     _isInsuredRelevant(_ins){ return true; },
 
     close(){
+      if(this._cpiUnsub){ try { this._cpiUnsub(); } catch(_e){} this._cpiUnsub = null; }
       if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; }
       if(this._modal){
         const m = this._modal;
@@ -11106,13 +11128,19 @@
         `<div class="lcHachHealth__selRow"><span>${escapeHtml(c.label)}</span><strong>₪${escapeHtml(formatHachsharaHealthExactAmount(c.monthlyPremium))}</strong></div>`
       ).join("");
 
+      const indexMetaHtml = formatHachsharaHealthIndexMetaHtml(st.result?.indexInfo || HealthCpi.getIndexInfo(HACHSHARA_HEALTH_CPI_KEY));
+      const baseTotalHtml = (st.result?.ok && st.result.baseMonthlyPremium != null && Math.abs(st.result.baseMonthlyPremium - st.result.monthlyPremium) > 0.0001)
+        ? `<div class="lcHachHealth__resultRow"><span>פרמיית בסיס (לפני מדד)</span><strong>₪${escapeHtml(formatHachsharaHealthExactAmount(st.result.baseMonthlyPremium))}</strong></div>`
+        : "";
       const resultHtml = st.error
         ? `<div class="lcHachHealth__result lcHachHealth__result--error">${escapeHtml(st.error)}</div>`
         : (st.result ? `<div class="lcHachHealth__result lcHachHealth__result--ok">
             <div class="lcHachHealth__selTitle">כיסויים שנבחרו</div>
             ${selectedRows}
-            <div class="lcHachHealth__resultRow lcHachHealth__resultRow--main"><span>סה״כ פרמיה חודשית</span><strong>₪${escapeHtml(formatHachsharaHealthExactAmount(st.result.monthlyPremium))}</strong></div>
+            ${baseTotalHtml}
+            <div class="lcHachHealth__resultRow lcHachHealth__resultRow--main"><span>סה״כ פרמיה חודשית (צמודה למדד)</span><strong>₪${escapeHtml(formatHachsharaHealthExactAmount(st.result.monthlyPremium))}</strong></div>
             <div class="lcHachHealth__resultRow"><span>סה״כ פרמיה שנתית</span><strong>₪${escapeHtml(formatHachsharaHealthExactAmount(st.result.annualPremium))}</strong></div>
+            ${indexMetaHtml}
           </div>` : `<div class="lcHachHealth__result lcHachHealth__result--empty">סמנו כיסויים כדי לראות פרמיה</div>`);
 
       const occAssessment = assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product);
