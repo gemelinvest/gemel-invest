@@ -4478,6 +4478,7 @@
   // התעריף בכל טבלה הוא פרמיה **שנתית** לכל 1,000 ₪ סכום ביטוח (כמו פניקס),
   // לפי גיל כניסה (18–85), מין ומעשן/לא מעשן. חודשית = שנתית / 12.
   // גיל 34 במדרגה הגבוהה תוקן מאינטרפולציה (תא משובש במקור).
+  // הצמדה: אותו מדד בריאות הכשרה (HealthCpi · hachshara_health · בסיס 133.17).
   //
   // [age, maleNonSmoker, maleSmoker, femaleNonSmoker, femaleSmoker] — פרמיה שנתית ל-1,000 ₪
   const HACHSHARA_RISK_RATE_TABLE_LE500K = [
@@ -4569,12 +4570,17 @@
     const rateCenti = Math.round(lookup.ratePerMille * 100);
     const annualPremium = (rateCenti * sum) / 100000;
     const monthlyPremium = annualPremium / 12;
+    const cpi = applyHachsharaSharedCpiToMonthlyShekels(monthlyPremium);
     return {
       ok:true,
       ratePerMille: lookup.ratePerMille,
       bracket: lookup.bracket,
-      monthlyPremium,
-      annualPremium
+      baseMonthlyPremium: cpi.baseMonthlyPremium,
+      baseAnnualPremium: annualPremium,
+      monthlyPremium: cpi.monthlyPremium,
+      annualPremium: cpi.annualPremium,
+      indexFactor: cpi.indexFactor,
+      indexInfo: cpi.indexInfo
     };
   }
 
@@ -4602,6 +4608,7 @@
     _escHandler: null,
     _confirmSwitch: null,
     _showFinalSummary: false,
+    _cpiUnsub: null,
 
     open(ctx){
       this.close();
@@ -4614,6 +4621,7 @@
       this._showFinalSummary = false;
       this._mount();
       this._render();
+      bindHachsharaSharedCpiLifecycle(this);
     },
 
     _prefillFromInsured(ins){
@@ -4651,6 +4659,7 @@
     },
 
     close(){
+      unbindHachsharaSharedCpiLifecycle(this);
       if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; }
       if(this._modal){
         const m = this._modal;
@@ -4737,12 +4746,23 @@
       const occAssessment = assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product);
       const occBlockHtml = renderOccupationRiskBlockHtml(occAssessment, "lcHachRisk");
 
+      if(st.result?.ok){
+        const sumNum = Number(String(st.sumInsured || "").replace(/[^\d.]/g, ""));
+        const calc = computeHachsharaRiskPremium({ age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: sumNum });
+        if(calc.ok){ st.result = calc; st.error = null; }
+      }
+      const indexMetaHtml = formatHachsharaSharedCpiMetaHtml(st.result?.indexInfo || HealthCpi.getIndexInfo(HACHSHARA_SHARED_CPI_KEY), "lcHachRisk");
+      const baseTotalHtml = (st.result?.ok && st.result.baseMonthlyPremium != null && Math.abs(st.result.baseMonthlyPremium - st.result.monthlyPremium) > 0.0001)
+        ? `<div class="lcHachRisk__resultRow"><span>פרמיית בסיס (לפני מדד)</span><strong>₪${escapeHtml(formatHachsharaRiskExactAmount(st.result.baseMonthlyPremium))}</strong></div>`
+        : "";
       const resultHtml = st.error
         ? `<div class="lcHachRisk__result lcHachRisk__result--error">${escapeHtml(st.error)}</div>`
         : (st.result ? `<div class="lcHachRisk__result lcHachRisk__result--ok">
             <div class="lcHachRisk__resultRow"><span>מדרגת סכום ביטוח</span><strong>${escapeHtml(HACHSHARA_RISK_BRACKET_LABELS[st.result.bracket] || "")}</strong></div>
-            <div class="lcHachRisk__resultRow lcHachRisk__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatHachsharaRiskExactAmount(st.result.monthlyPremium))}</strong></div>
+            ${baseTotalHtml}
+            <div class="lcHachRisk__resultRow lcHachRisk__resultRow--main"><span>פרמיה חודשית (צמודה למדד)</span><strong>₪${escapeHtml(formatHachsharaRiskExactAmount(st.result.monthlyPremium))}</strong></div>
             <div class="lcHachRisk__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatHachsharaRiskExactAmount(st.result.annualPremium))}</strong></div>
+            ${indexMetaHtml}
           </div>` : "");
 
       const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
@@ -5016,6 +5036,8 @@
         sumInsured: st.sumInsured,
         monthlyPremium: st.result.monthlyPremium,
         annualPremium: st.result.annualPremium,
+        baseMonthlyPremium: st.result.baseMonthlyPremium,
+        indexFactor: st.result.indexFactor,
         ratePerMille: st.result.ratePerMille,
         bracket: st.result.bracket,
         birthDate: st.birthDate || "",
@@ -5064,6 +5086,7 @@
   // פרמיה **שנתית** לכל 1,000 ₪ סכום ביטוח (העמודה השמאלית בגליון).
   // העמודה הימנית (חודשית לכל 100,000 ₪) היא המרה: שנתי/1,000 × 100 / 12.
   // אין מדרגות סכום. גיל כניסה 18–85, מין ומעשן/לא מעשן. חודשית = שנתית / 12.
+  // הצמדה: אותו מדד בריאות הכשרה (HealthCpi · hachshara_health · בסיס 133.17).
   // אין להמציא, לקרב או להשלים ערך שאינו רשום כאן במפורש.
   //
   // [age, maleNonSmoker, maleSmoker, femaleNonSmoker, femaleSmoker] — פרמיה שנתית ל-1,000 ₪
@@ -5122,11 +5145,16 @@
     const rateCenti = Math.round(lookup.ratePerMille * 100);
     const annualPremium = (rateCenti * sum) / 100000;
     const monthlyPremium = annualPremium / 12;
+    const cpi = applyHachsharaSharedCpiToMonthlyShekels(monthlyPremium);
     return {
       ok:true,
       ratePerMille: lookup.ratePerMille,
-      monthlyPremium,
-      annualPremium,
+      baseMonthlyPremium: cpi.baseMonthlyPremium,
+      baseAnnualPremium: annualPremium,
+      monthlyPremium: cpi.monthlyPremium,
+      annualPremium: cpi.annualPremium,
+      indexFactor: cpi.indexFactor,
+      indexInfo: cpi.indexInfo,
       sumInsured: sum
     };
   }
@@ -5150,6 +5178,7 @@
     _escHandler: null,
     _confirmSwitch: null,
     _showFinalSummary: false,
+    _cpiUnsub: null,
 
     open(ctx){
       this.close();
@@ -5162,6 +5191,7 @@
       this._showFinalSummary = false;
       this._mount();
       this._render();
+      bindHachsharaSharedCpiLifecycle(this);
     },
 
     _prefillFromInsured(ins){
@@ -5199,6 +5229,7 @@
     },
 
     close(){
+      unbindHachsharaSharedCpiLifecycle(this);
       if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; }
       if(this._modal){
         const m = this._modal;
@@ -5285,11 +5316,22 @@
       const occAssessment = assessOccupationRisk(st.occupation, this._ctx?.company, this._ctx?.product);
       const occBlockHtml = renderOccupationRiskBlockHtml(occAssessment, "lcHachMort");
 
+      if(st.result?.ok){
+        const sumNum = Number(String(st.sumInsured || "").replace(/[^\d.]/g, ""));
+        const calc = computeHachsharaMortRiskPremium({ age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: sumNum });
+        if(calc.ok){ st.result = calc; st.error = null; }
+      }
+      const indexMetaHtml = formatHachsharaSharedCpiMetaHtml(st.result?.indexInfo || HealthCpi.getIndexInfo(HACHSHARA_SHARED_CPI_KEY), "lcHachMort");
+      const baseTotalHtml = (st.result?.ok && st.result.baseMonthlyPremium != null && Math.abs(st.result.baseMonthlyPremium - st.result.monthlyPremium) > 0.0001)
+        ? `<div class="lcHachMort__resultRow"><span>פרמיית בסיס (לפני מדד)</span><strong>₪${escapeHtml(formatHachsharaMortRiskExactAmount(st.result.baseMonthlyPremium))}</strong></div>`
+        : "";
       const resultHtml = st.error
         ? `<div class="lcHachMort__result lcHachMort__result--error">${escapeHtml(st.error)}</div>`
         : (st.result ? `<div class="lcHachMort__result lcHachMort__result--ok">
-            <div class="lcHachMort__resultRow lcHachMort__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatHachsharaMortRiskExactAmount(st.result.monthlyPremium))}</strong></div>
+            ${baseTotalHtml}
+            <div class="lcHachMort__resultRow lcHachMort__resultRow--main"><span>פרמיה חודשית (צמודה למדד)</span><strong>₪${escapeHtml(formatHachsharaMortRiskExactAmount(st.result.monthlyPremium))}</strong></div>
             <div class="lcHachMort__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatHachsharaMortRiskExactAmount(st.result.annualPremium))}</strong></div>
+            ${indexMetaHtml}
           </div>` : "");
 
       const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
@@ -5564,6 +5606,8 @@
         sumInsured: st.sumInsured,
         monthlyPremium: st.result.monthlyPremium,
         annualPremium: st.result.annualPremium,
+        baseMonthlyPremium: st.result.baseMonthlyPremium,
+        indexFactor: st.result.indexFactor,
         ratePerMille: st.result.ratePerMille,
         birthDate: st.birthDate || "",
         insuranceStartDate: st.insuranceStartDate || "",
@@ -6209,6 +6253,7 @@
         company: "הכשרה",
         product: "בריאות",
         // תעריפי בריאות 2023.xlsx — כותרת כל גיליון: «הכשרה מדד 13317» (= 133.17)
+        // מחלות קשות / ריסק / ריסק משכנתא משתמשים באותו בסיס (אין מדד טבלה נפרד).
         baseIndexPoints: 133.17,
         baseKnownDate: "2022-12-15"
       },
@@ -6465,6 +6510,55 @@
     }
   };
   try { window.HealthCpi = HealthCpi; } catch(_e){}
+
+  /** אותו מדד בריאות הכשרה (133.17) — למוצרים בלי מדד טבלה משלהם. */
+  const HACHSHARA_SHARED_CPI_KEY = "hachshara_health";
+
+  function applyHachsharaSharedCpiToAgorot(baseMonthlyAgorot){
+    const indexed = HealthCpi.indexAgorot(baseMonthlyAgorot, HACHSHARA_SHARED_CPI_KEY);
+    return {
+      baseMonthlyAgorot: indexed.baseAgorot,
+      baseMonthlyPremium: indexed.baseAgorot / 100,
+      monthlyAgorot: indexed.indexedAgorot,
+      monthlyPremium: indexed.indexedAgorot / 100,
+      annualPremium: (indexed.indexedAgorot * 12) / 100,
+      indexFactor: indexed.factor,
+      indexInfo: indexed.indexInfo
+    };
+  }
+
+  function applyHachsharaSharedCpiToMonthlyShekels(monthlyShekels){
+    const baseAgorot = Math.round(Number(monthlyShekels) * 100);
+    return applyHachsharaSharedCpiToAgorot(baseAgorot);
+  }
+
+  function formatHachsharaSharedCpiMetaHtml(indexInfo, cssPrefix){
+    const P = cssPrefix || "lcHachHealth";
+    if(!indexInfo) return "";
+    if(!indexInfo.ok){
+      return `<div class="${P}__indexMeta ${P}__indexMeta--pending">ממתין למדד למ״ס — מוצגת כרגע פרמיית בסיס מהתעריפון</div>`;
+    }
+    const factorTxt = (Math.round(indexInfo.factor * 10000) / 10000).toFixed(4);
+    return `<div class="${P}__indexMeta">
+      הצמדה למדד: בסיס ${escapeHtml(String(indexInfo.baseIndexPoints))}
+      (${escapeHtml(indexInfo.baseKnownDate || "")})
+      → נוכחי ≈ ${escapeHtml(String(indexInfo.currentIndexPoints))}
+      (${escapeHtml(safeTrim(indexInfo.currentMonthLabel))})
+      · מקדם ×${escapeHtml(factorTxt)}
+    </div>`;
+  }
+
+  function bindHachsharaSharedCpiLifecycle(sim){
+    if(!sim) return;
+    sim._cpiUnsub = HealthCpi.onChange(() => { if(sim._modal) sim._render(); });
+    HealthCpi.ensure().then(() => { if(sim._modal) sim._render(); }).catch(() => {});
+  }
+
+  function unbindHachsharaSharedCpiLifecycle(sim){
+    if(!sim?._cpiUnsub) return;
+    try { sim._cpiUnsub(); } catch(_e){}
+    sim._cpiUnsub = null;
+  }
 
   // ===== GI-MNR-HEALTH-SIM 2026-08-09 · סימולטור בריאות מנורה ==================
   // מקור אמת: תעריפי בריאות מנורה (תכניות בסיס/ניתוחים + אמבולטורי/כתבי שירות).
@@ -10904,18 +10998,7 @@
   }
 
   function formatHachsharaHealthIndexMetaHtml(indexInfo){
-    if(!indexInfo) return "";
-    if(!indexInfo.ok){
-      return `<div class="lcHachHealth__indexMeta lcHachHealth__indexMeta--pending">ממתין למדד למ״ס — מוצגת כרגע פרמיית בסיס מהתעריפון</div>`;
-    }
-    const factorTxt = (Math.round(indexInfo.factor * 10000) / 10000).toFixed(4);
-    return `<div class="lcHachHealth__indexMeta">
-      הצמדה למדד: בסיס ${escapeHtml(String(indexInfo.baseIndexPoints))}
-      (${escapeHtml(indexInfo.baseKnownDate || "")})
-      → נוכחי ≈ ${escapeHtml(String(indexInfo.currentIndexPoints))}
-      (${escapeHtml(safeTrim(indexInfo.currentMonthLabel))})
-      · מקדם ×${escapeHtml(factorTxt)}
-    </div>`;
+    return formatHachsharaSharedCpiMetaHtml(indexInfo, "lcHachHealth");
   }
 
   const HACHSHARA_HEALTH_SIM_MESSAGES = {
@@ -11412,7 +11495,8 @@
 
 
   // ===== GI-HACH-CI-SIM 2026-08-10 · מחלות קשות הכשרה ============================
-  // מקור אמת: גיליון «מחלות קשות» ב־תעריפים סיכונים.xlsx — חודשי ל־₪100,000, אגורות מעוגלות. בלי מדד.
+  // מקור אמת: גיליון «מחלות קשות» ב־תעריפים סיכונים.xlsx — חודשי ל־₪100,000, אגורות מעוגלות.
+  // הצמדה: אותו מדד בריאות הכשרה (HealthCpi · hachshara_health · בסיס 133.17).
   // גילאי 0–16 מועתקים מגיל 17; גיל 75 מועתק מגיל 74.
   const HACHSHARA_CI_RATE_MAP = {"0":{"mNS":889,"fNS":889,"mS":889,"fS":889},"1":{"mNS":889,"fNS":889,"mS":889,"fS":889},"2":{"mNS":889,"fNS":889,"mS":889,"fS":889},"3":{"mNS":889,"fNS":889,"mS":889,"fS":889},"4":{"mNS":889,"fNS":889,"mS":889,"fS":889},"5":{"mNS":889,"fNS":889,"mS":889,"fS":889},"6":{"mNS":889,"fNS":889,"mS":889,"fS":889},"7":{"mNS":889,"fNS":889,"mS":889,"fS":889},"8":{"mNS":889,"fNS":889,"mS":889,"fS":889},"9":{"mNS":889,"fNS":889,"mS":889,"fS":889},"10":{"mNS":889,"fNS":889,"mS":889,"fS":889},"11":{"mNS":889,"fNS":889,"mS":889,"fS":889},"12":{"mNS":889,"fNS":889,"mS":889,"fS":889},"13":{"mNS":889,"fNS":889,"mS":889,"fS":889},"14":{"mNS":889,"fNS":889,"mS":889,"fS":889},"15":{"mNS":889,"fNS":889,"mS":889,"fS":889},"16":{"mNS":889,"fNS":889,"mS":889,"fS":889},"17":{"mNS":889,"fNS":889,"mS":889,"fS":889},"18":{"mNS":1211,"fNS":1407,"mS":1569,"fS":1688},"19":{"mNS":1333,"fNS":1607,"mS":1816,"fS":1983},"20":{"mNS":1457,"fNS":1826,"mS":2066,"fS":2301},"21":{"mNS":1482,"fNS":1894,"mS":2097,"fS":2375},"22":{"mNS":1512,"fNS":1986,"mS":2137,"fS":2476},"23":{"mNS":1558,"fNS":2122,"mS":2197,"fS":2625},"24":{"mNS":1598,"fNS":2288,"mS":2247,"fS":2804},"25":{"mNS":1655,"fNS":2497,"mS":2321,"fS":3028},"26":{"mNS":1727,"fNS":2758,"mS":2419,"fS":3310},"27":{"mNS":1805,"fNS":3061,"mS":2538,"fS":3635},"28":{"mNS":1897,"fNS":3408,"mS":2686,"fS":4015},"29":{"mNS":2013,"fNS":3803,"mS":2882,"fS":4447},"30":{"mNS":1910,"fNS":4246,"mS":2778,"fS":4936},"31":{"mNS":2056,"fNS":4740,"mS":3047,"fS":5482},"32":{"mNS":2237,"fNS":5270,"mS":3383,"fS":6077},"33":{"mNS":2471,"fNS":5767,"mS":3826,"fS":6641},"34":{"mNS":2760,"fNS":6181,"mS":4382,"fS":7134},"35":{"mNS":3108,"fNS":6503,"mS":5064,"fS":7542},"36":{"mNS":3510,"fNS":6733,"mS":5872,"fS":7867},"37":{"mNS":4023,"fNS":6942,"mS":6876,"fS":8182},"38":{"mNS":4628,"fNS":7226,"mS":8046,"fS":8593},"39":{"mNS":5336,"fNS":7668,"mS":9393,"fS":9171},"40":{"mNS":6464,"fNS":8462,"mS":11474,"fS":10152},"41":{"mNS":7443,"fNS":9243,"mS":13295,"fS":11100},"42":{"mNS":8426,"fNS":10120,"mS":15154,"fS":12156},"43":{"mNS":9360,"fNS":11009,"mS":16955,"fS":13225},"44":{"mNS":10208,"fNS":11807,"mS":18608,"fS":14216},"45":{"mNS":10954,"fNS":12511,"mS":20082,"fS":15122},"46":{"mNS":11510,"fNS":12950,"mS":21687,"fS":16286},"47":{"mNS":12069,"fNS":13396,"mS":23288,"fS":17504},"48":{"mNS":12758,"fNS":13888,"mS":25126,"fS":18821},"49":{"mNS":13745,"fNS":14546,"mS":27560,"fS":20376},"50":{"mNS":16222,"fNS":16064,"mS":32997,"fS":23163},"51":{"mNS":18315,"fNS":17334,"mS":37089,"fS":24997},"52":{"mNS":20933,"fNS":18697,"mS":42198,"fS":26966},"53":{"mNS":24116,"fNS":20160,"mS":48378,"fS":29076},"54":{"mNS":27838,"fNS":21722,"mS":55528,"fS":31323},"55":{"mNS":32089,"fNS":23397,"mS":63604,"fS":33738},"56":{"mNS":36849,"fNS":25209,"mS":72539,"fS":36349},"57":{"mNS":41749,"fNS":27054,"mS":81699,"fS":39029},"58":{"mNS":46599,"fNS":28937,"mS":90715,"fS":41795},"59":{"mNS":51006,"fNS":30663,"mS":98733,"fS":44427},"60":{"mNS":54618,"fNS":32178,"mS":105198,"fS":46822},"61":{"mNS":57729,"fNS":33456,"mS":110583,"fS":48937},"62":{"mNS":60496,"fNS":34608,"mS":115163,"fS":50918},"63":{"mNS":62970,"fNS":35642,"mS":119069,"fS":52789},"64":{"mNS":65430,"fNS":36711,"mS":122983,"fS":54734},"65":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"66":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"67":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"68":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"69":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"70":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"71":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"72":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"73":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"74":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"75":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633}};
   const HACHSHARA_CI_MIN_AGE = 0;
@@ -11451,11 +11535,16 @@
     const rate = lookupHachsharaCiRate({ age, gender, smoker });
     if(!rate.ok) return rate;
     const monthlyAgorot = Math.round(rate.rateAgorot * (sum / 100000));
+    const cpi = applyHachsharaSharedCpiToAgorot(monthlyAgorot);
     return {
       ok: true,
-      monthlyAgorot,
-      monthlyPremium: hachsharaCiAgorotToShekels(monthlyAgorot),
-      annualPremium: hachsharaCiAgorotToShekels(monthlyAgorot * 12),
+      monthlyAgorot: cpi.monthlyAgorot,
+      monthlyPremium: cpi.monthlyPremium,
+      annualPremium: cpi.annualPremium,
+      baseMonthlyAgorot: cpi.baseMonthlyAgorot,
+      baseMonthlyPremium: cpi.baseMonthlyPremium,
+      indexFactor: cpi.indexFactor,
+      indexInfo: cpi.indexInfo,
       ratePerHundredThousand: rate.ratePerHundredThousand,
       compensation: sum,
       wizardCoverKey: HACHSHARA_CI_WIZARD_KEY
@@ -11476,7 +11565,7 @@
 
   const HachsharaCriticalIllnessSimulator = {
     _modal: null, _ctx: null, _state: {}, _activeInsuredId: null, _escHandler: null,
-    _confirmSwitch: null, _showFinalSummary: false,
+    _confirmSwitch: null, _showFinalSummary: false, _cpiUnsub: null,
     open(ctx){
       this.close();
       this._ctx = ctx || {};
@@ -11488,8 +11577,10 @@
       this._showFinalSummary = false;
       this._mount();
       this._render();
+      bindHachsharaSharedCpiLifecycle(this);
     },
     close(){
+      unbindHachsharaSharedCpiLifecycle(this);
       if(this._escHandler){ document.removeEventListener("keydown", this._escHandler); this._escHandler = null; }
       if(this._modal){
         const m = this._modal;
@@ -11574,6 +11665,8 @@
         company: "הכשרה",
         monthlyPremium: st.result.monthlyPremium,
         annualPremium: st.result.annualPremium,
+        baseMonthlyPremium: st.result.baseMonthlyPremium,
+        indexFactor: st.result.indexFactor,
         compensation: st.result.compensation,
         ratePerHundredThousand: st.result.ratePerHundredThousand,
         wizardCoverKey: HACHSHARA_CI_WIZARD_KEY,
@@ -11604,12 +11697,18 @@
       const ageDisplay = ageSync.ok ? String(ageSync.age) : "—";
       const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company)
         ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini") : "✚";
+      const indexMetaHtml = formatHachsharaSharedCpiMetaHtml(st.result?.indexInfo || HealthCpi.getIndexInfo(HACHSHARA_SHARED_CPI_KEY), "lcMnrCi");
+      const baseTotalHtml = (st.result?.ok && st.result.baseMonthlyPremium != null && Math.abs(st.result.baseMonthlyPremium - st.result.monthlyPremium) > 0.0001)
+        ? `<div class="lcMnrCi__resultRow"><span>פרמיית בסיס (לפני מדד)</span><strong>₪${escapeHtml(formatHachsharaCiExactAmount(st.result.baseMonthlyPremium))}</strong></div>`
+        : "";
       const resultHtml = st.error
         ? `<div class="lcMnrCi__result lcMnrCi__result--error">${escapeHtml(st.error)}</div>`
         : (st.result ? `<div class="lcMnrCi__result lcMnrCi__result--ok">
-            <div class="lcMnrCi__resultRow lcMnrCi__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatHachsharaCiExactAmount(st.result.monthlyPremium))}</strong></div>
+            ${baseTotalHtml}
+            <div class="lcMnrCi__resultRow lcMnrCi__resultRow--main"><span>פרמיה חודשית (צמודה למדד)</span><strong>₪${escapeHtml(formatHachsharaCiExactAmount(st.result.monthlyPremium))}</strong></div>
             <div class="lcMnrCi__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatHachsharaCiExactAmount(st.result.annualPremium))}</strong></div>
             <div class="lcMnrCi__resultRow"><span>תעריף לכל ₪100,000</span><strong>₪${escapeHtml(formatHachsharaCiExactAmount(st.result.ratePerHundredThousand))}</strong></div>
+            ${indexMetaHtml}
           </div>` : `<div class="lcMnrCi__result lcMnrCi__result--empty">מלאו את השדות לחישוב</div>`);
       const tabsHtml = isMulti ? `<div class="lcMnrCi__tabs">${insureds.map((ins) => {
         const s = this._state[ins.id];

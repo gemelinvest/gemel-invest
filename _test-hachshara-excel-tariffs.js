@@ -1,7 +1,8 @@
-/* GI-HACH-HEALTH-CPI 2026-09-07
+/* GI-HACH-LIFE-CPI 2026-09-07
    בריאות הכשרה: תעריפי בריאות 2023.xlsx (מדד בסיס 13317 = 133.17)
    + הצמדה במנוע HealthCpi כמו שאר חברות הבריאות.
-   מחלות קשות / ריסק / משכנתא נשארים מתעריפים סיכונים.xlsx בלי מדד.
+   מחלות קשות / ריסק / משכנתא נשארים על תעריפים סיכונים.xlsx
+   אבל מצורפים לאותו מדד בריאות (133.17).
    הרצה: node _test-hachshara-excel-tariffs.js
 */
 "use strict";
@@ -12,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260907-hach-health-cpi-v1";
+const TAG = "20260907-hach-life-cpi-v1";
 let failed = 0;
 let passed = 0;
 
@@ -119,9 +120,14 @@ assert(indexAgorot(3104, CURRENT_JUL_2026) === 3445, "first-shekel 0–20: ₪31
 assert(indexAgorot(3050, CURRENT_JUL_2026) === 3385, "child premium: ₪30.50 → ₪33.85");
 assert(Math.abs((CURRENT_JUL_2026 / BASE_POINTS) - 1.109935) < 0.00001, "factor ≈ 1.109935");
 
-console.log("\n4) CI / risk / mortgage stay on Excel סיכונים, no CPI");
+console.log("\n4) CI / risk / mortgage keep Excel סיכונים tables, share health CPI 133.17");
 assert(ciBlock.includes("תעריפים סיכונים.xlsx") || sims.includes("גיליון «מחלות קשות»"), "CI block cites the xlsx");
-assert(!ciBlock.includes("HealthCpi.indexAgorot"), "CI engine does not call HealthCpi");
+assert(sims.includes("HACHSHARA_SHARED_CPI_KEY"), "shared CPI key for life products");
+assert(sims.includes('const HACHSHARA_SHARED_CPI_KEY = "hachshara_health"'), "life products reuse hachshara_health");
+assert(ciBlock.includes("applyHachsharaSharedCpiToAgorot"), "CI engine indexes via shared health CPI");
+assert(sims.includes("applyHachsharaSharedCpiToMonthlyShekels"), "risk/mortgage index monthly shekels via shared CPI");
+assert(ciBlock.includes("צמודה למדד"), "CI UI says CPI-indexed");
+assert(sims.includes("פרמיית בסיס (לפני מדד)"), "life UIs show base before CPI");
 const ciMatch = sims.match(/const HACHSHARA_CI_RATE_MAP = (\{.*?\});/);
 assert(!!ciMatch, "HACHSHARA_CI_RATE_MAP extractable");
 let ciMap = null;
@@ -215,7 +221,16 @@ assert(!!first && first.ok === true && first.monthlyPremium === 34.45, "first-sh
 
 const ciQuote = quote("הכשרה", "מחלות קשות", { age: 43, gender: "זכר", smoker: false, compensation: 100000 });
 assert(!!ciQuote && ciQuote.ok === true, "CI quote still works");
-assert(ciQuote.monthlyPremium === 93.60, "CI is not CPI-indexed (₪93.60 from Excel)");
+assert(ciQuote.monthlyPremium === 103.89, "CI age 43 male NS ₪100k indexed ₪93.60 → ₪103.89");
+assert(ciQuote.annualPremium === 1246.68, "CI annual is indexed monthly × 12");
+
+const riskQuote = quote("הכשרה", "ריסק", { age: 40, gender: "זכר", smoker: false, sumInsured: 1000000 });
+assert(!!riskQuote && riskQuote.ok === true, "risk quote ok");
+assert(riskQuote.monthlyPremium === 96.20, "risk age 40 male NS ₪1M indexed ₪86.67 → ₪96.20");
+
+const mortQuote = quote("הכשרה", "ריסק משכנתא", { age: 40, gender: "זכר", smoker: false, sumInsured: 1000000 });
+assert(!!mortQuote && mortQuote.ok === true, "mortgage quote ok");
+assert(mortQuote.monthlyPremium === 88.79, "mortgage age 40 male NS ₪1M indexed ₪80.00 → ₪88.79");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));
