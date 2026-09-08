@@ -1,5 +1,5 @@
-/* GI-HACH-LIFE-CPI 2026-09-07
-   בריאות הכשרה: תעריפי בריאות 2023.xlsx (מדד בסיס 13317 = 133.17)
+/* GI-HACH-LIFE-CPI 2026-09-08
+   בריאות הכשרה: תעריפי בריאות 2023 (2).xlsx (מדד בסיס 13317 = 133.17)
    + הצמדה במנוע HealthCpi כמו שאר חברות הבריאות.
    מחלות קשות / ריסק / משכנתא נשארים על תעריפים סיכונים.xlsx
    אבל מצורפים לאותו מדד בריאות (133.17).
@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260908-chat-live-notify-v1";
+const TAG = "20260908-hach-cpi-v1";
 let failed = 0;
 let passed = 0;
 
@@ -231,6 +231,15 @@ assert(riskQuote.monthlyPremium === 96.20, "risk age 40 male NS ₪1M indexed �
 const mortQuote = quote("הכשרה", "ריסק משכנתא", { age: 40, gender: "זכר", smoker: false, sumInsured: 1000000 });
 assert(!!mortQuote && mortQuote.ok === true, "mortgage quote ok");
 assert(mortQuote.monthlyPremium === 88.79, "mortgage age 40 male NS ₪1M indexed ₪80.00 → ₪88.79");
+
+assert(after.indexFactor === indexed.factor, "health quote exposes the shared health CPI factor");
+assert(riskQuote.indexFactor === after.indexFactor, "risk uses the same CPI factor as health");
+assert(mortQuote.indexFactor === after.indexFactor, "mortgage uses the same CPI factor as health");
+assert(ciQuote.indexFactor === after.indexFactor, "CI uses the same CPI factor as health");
+assert(after.baseMonthlyPremium === 11.5, "health quote keeps book base before CPI");
+assert(riskQuote.baseMonthlyPremium === 86.67, "risk quote keeps book base before CPI");
+assert(mortQuote.baseMonthlyPremium === 80, "mortgage quote keeps book base before CPI");
+assert(ciQuote.baseMonthlyPremium === 93.6, "CI quote keeps book base before CPI");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));
