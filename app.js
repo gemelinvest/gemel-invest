@@ -21293,9 +21293,9 @@ UsersGateUI.init();
       }
     },
 
-    /* פרמיה לתצוגה בטבלת לקוחות בלבד.
+    /* פרמיה לתצוגה בטבלת לקוחות וב«לקוחות אחרונים» בדשבורד.
        עדיפות לפוליסות חדשות (בריאות/סיכונים); פרמיית מינוי סוכן רק כשאין פוליסות חדשות.
-       לא מחליף את sumNewPolicyPremiumsShallow (משמש מדדים/דשבורד). */
+       הסכום מגיע מ-sumNewPolicyPremiumsShallow — אחרי הנחה, כמו בתיק. */
     sumCustomerListPremium(rec){
       if(!rec) return 0;
       const rawNew = getCustomerRawNewPolicies(rec);
@@ -21419,6 +21419,9 @@ UsersGateUI.init();
       return out;
     },
 
+    /* GI-LIST-AFTER-DISC 2026-09-08
+       דשבורד «לקוחות אחרונים» + טבלת לקוחות: אותו סכום כמו בתיק.
+       לא קוראים ל-getPolicyPremiumAfterDiscount — באשף זה בכוונה «לפני הנחה». */
     sumNewPolicyPremiumsShallow(rec){
       if(!rec) return 0;
       const newPolicies = getCustomerRawNewPolicies(rec);
@@ -21426,7 +21429,11 @@ UsersGateUI.init();
       let sum = 0;
       for(const raw of newPolicies){
         if(String(raw?.origin || "") === "existing") continue;
-        sum += this.getPolicyPremiumAfterDiscount(clonePolicyForMetrics(raw));
+        const p = clonePolicyForMetrics(raw);
+        const after = (typeof this.getNewPolicyFilePremiumAfterDiscount === "function")
+          ? this.getNewPolicyFilePremiumAfterDiscount(p)
+          : this.getPolicyPremiumAfterDiscount(p);
+        sum += Number(after) || 0;
       }
       return Math.round(sum * 100) / 100;
     },
@@ -37239,6 +37246,7 @@ UsersGateUI.init();
         if(typeof Storage !== "undefined" && Storage.payloadIsEmpty?.(rec)){
           return '<span class="muted small">—</span>';
         }
+        /* אותה פרמיה כמו בעמודת טבלת הלקוחות / תיק: אחרי הנחה כשיש הנחה. */
         const parts = (CustomersUI && typeof CustomersUI.customerListPremiumParts === "function")
           ? CustomersUI.customerListPremiumParts(rec)
           : { monthly: 0, annual: 0 };
