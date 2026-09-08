@@ -12,7 +12,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260908-daily-sales-v2";
+const TAG = "20260908-daily-sales-v3";
 let failed = 0;
 let passed = 0;
 

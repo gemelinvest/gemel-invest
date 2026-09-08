@@ -108,6 +108,11 @@ assert(app.includes("dailySalesScaleOfficeBranchTotals"), "סניפים מנור
 assert(app.includes("dailySalesOfficeBranchTotalsFromAgentSales"), "פיצול סניף לפי נציג אחרי הנחה");
 assert(app.includes("_dailySalesOverlayPersonAlreadyLocal"), "overlay לא מוסיף את אותו נציג פעמיים");
 assert(app.includes("officeBranchTodaySplitV1"), "מטמון דוח מתבטל אחרי פיצול סניפים להיום");
+assert(app.includes("monthlyTodayOnlyV1"), "מטמון דוח מתבטל אחרי סה״כ חודשי להיום בלבד");
+assert(app.includes("const skipServerOnly = localHealthPremium > 0"), "היום לא ממלאים overlay כשיש מכירות מקומיות");
+assert(app.includes("monthly: Math.round((row.health + row.prat) * 100) / 100"), "סה״כ חודשי = בריאות+פרט בלבד");
+assert(!app.includes("row.health + row.prat + row.pension + row.other"), "סה״כ חודשי לא כולל פנסיה/אחר");
+assert(app.includes("const monthly = Math.round((health + prat) * 100) / 100"), "בריאות+פרט בלי other בעמודת סה״כ חודשי");
 assert(!app.includes("officeBranchFullNameV1"), "מפתח מטמון ישן הוחלף");
 assert(app.includes("dailySalesAgentMergeKey(name, ids)"), "פיבוט נציגים לפי מזהה או שם מלא");
 assert(!app.includes("try { this._kickDailySalesAssignedLeadsLoad(); } catch(_e) {}"), "רינדור לא טוען לידים");
@@ -451,6 +456,20 @@ assert(dailySalesOverlayPersonAlreadyLocal(
   "אביאל אלקיים",
   "aviel-haifa"
 ) === false, "אביאל אחר עדיין נוסף");
+
+function dailySalesMonthlyTotal(row){
+  return Math.round(((Number(row?.health) || 0) + (Number(row?.prat) || 0)) * 100) / 100;
+}
+assert(dailySalesMonthlyTotal({ health: 1122.14, prat: 0, other: 480, pension: 90 }) === 1122.14,
+  "סה״כ חודשי לא סופר פוליסות אחרות/פנסיה מהתיק");
+assert(dailySalesMonthlyTotal({ health: 5058.29, prat: 0, other: 1545.71 }) === 5058.29,
+  "סה״כ חודשי נשאר 5058 גם אם בתיק יש עוד 1546 מימים קודמים");
+function skipOverlayWhenLocalToday(localHealthPremium, isToday){
+  return localHealthPremium > 0 && isToday;
+}
+assert(skipOverlayWhenLocalToday(5058.29, true) === true, "היום עם מכירות מקומיות — בלי overlay");
+assert(skipOverlayWhenLocalToday(0, true) === false, "טעינה רזה בלי מקומי — overlay עדיין ממלא");
+assert(skipOverlayWhenLocalToday(5058.29, false) === false, "יום אחר — overlay לא נחסם");
 
 function dailySalesPresentPivotByAgent(groups){
   const map = new Map();
