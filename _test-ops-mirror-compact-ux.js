@@ -56,7 +56,7 @@ assert(!consent.includes("<strong>9</strong>"), "המספר 9 לא מודגש");
 assert(consent.includes("<strong>כלל ואיילון</strong>"), "כלל ואיילון כזוג מודגש");
 assert(consent.includes("<strong>כלל ומגדל</strong>"), "כלל ומגדל כזוג מודגש");
 assert(!consent.includes("<strong>כלל</strong> ו<strong>איילון</strong>"), "לא מפצלים כלל / איילון");
-assert(consent.includes("mcNeedsScript__p--ask\">אז לאחר שקיבלנו את פנייתך – האם אתה מאשר לנו להיכנס עבורך לממשק הר הביטוח ולבצע עבורך בדיקה על מנת להתאים עבורך ביטוח העונה על צרכיך?"), "משפט 3 כולו בשאלת הקראה");
+assert(consent.includes("mcNeedsScript__p--ask\">אז לאחר שקיבלנו את פנייתך, האם אתה מאשר כי אתה מאשר לנו להיכנס עבורך לממשק הר הביטוח ולבצע עבורך בדיקה על מנת להתאים עבורך ביטוח העונה על צרכיך?"), "משפט 3 כולו בשאלת הקראה");
 assert(!consent.includes("לממשק <strong>הר הביטוח</strong>"), "אין הדגשה נפרדת ל«הר הביטוח»");
 assert(consent.includes("data-mc-needs-act=\"har-yes\""), "לחצן מאשר נשאר");
 assert(consent.includes("data-mc-needs-act=\"har-no\""), "לחצן לא מאשר נשאר");

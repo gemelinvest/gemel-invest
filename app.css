@@ -34697,6 +34697,124 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   padding:2px 2px 6px;
   -webkit-overflow-scrolling:touch;
 }
+.mcPolicyRowList{
+  gap:4px;
+  font-size:13px;
+  line-height:1.35;
+  font-weight:600;
+}
+.mcPolicyRow{
+  flex:0 0 auto;
+  border:1px solid rgba(15,32,96,.12);
+  background:#fff;
+  border-radius:6px;
+  overflow:hidden;
+}
+.mcPolicyRow--head{
+  display:grid;
+  grid-template-columns:minmax(110px,.9fr) minmax(70px,.7fr) minmax(70px,.7fr) minmax(90px,.7fr) minmax(90px,.7fr) minmax(92px,.6fr);
+  gap:6px 10px;
+  padding:6px 10px;
+  background:#f3f6fb;
+  border-color:rgba(15,32,96,.1);
+  color:rgba(15,32,96,.55);
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.02em;
+}
+.mcPolicyRow__main{
+  display:grid;
+  grid-template-columns:minmax(110px,.9fr) minmax(70px,.7fr) minmax(70px,.7fr) minmax(90px,.7fr) minmax(90px,.7fr) minmax(92px,.6fr);
+  gap:6px 10px;
+  align-items:center;
+  padding:8px 10px;
+}
+.mcPolicyRow__cell{
+  min-width:0;
+  color:#0a1638;
+  font-weight:700;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.mcPolicyRow__cell--money{
+  direction:ltr;
+  text-align:left;
+  font-variant-numeric:tabular-nums;
+}
+.mcPolicyRow__insured{
+  display:inline-flex;
+  max-width:100%;
+  padding:2px 8px;
+  border-radius:999px;
+  background:rgba(42,92,245,.1);
+  color:#1e3a7a;
+  font-size:11px;
+  font-weight:800;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.mcPolicyRow__status{
+  justify-self:stretch;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:3px 8px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:800;
+  background:rgba(241,246,255,.96);
+  color:#1e3a7a;
+  border:1px solid rgba(42,92,245,.18);
+  white-space:nowrap;
+}
+.mcPolicyRow__status--danger{background:#fef2f2;border-color:rgba(220,38,38,.22);color:#b91c1c;}
+.mcPolicyRow__status--warn{background:#fff7ed;border-color:rgba(217,119,6,.24);color:#9a3412;}
+.mcPolicyRow__status--success{background:#ecfdf5;border-color:rgba(16,185,129,.24);color:#047857;}
+.mcPolicyRow__status--neutral{background:#f1f6ff;border-color:rgba(42,92,245,.18);color:#1e3a7a;}
+.mcPolicyRow__subs{
+  display:flex;
+  flex-wrap:wrap;
+  gap:4px 12px;
+  padding:0 10px 8px;
+  border-top:1px dashed rgba(30,58,122,.12);
+}
+.mcPolicyRow__sub{
+  display:flex;
+  gap:6px;
+  font-size:12px;
+  color:#334155;
+}
+.mcPolicyRow__sub span{color:rgba(30,58,122,.5);font-weight:700;}
+.mcPolicyRow__reason{
+  display:flex;
+  gap:8px;
+  align-items:baseline;
+  padding:4px 10px 8px;
+  font-size:12px;
+}
+.mcPolicyRow__reasonLabel{
+  flex:0 0 auto;
+  font-size:11px;
+  font-weight:800;
+  color:rgba(30,58,122,.48);
+}
+.mcPolicyRow__reasonText{font-weight:700;color:#0f1f4a;}
+.mcPolicyRow__reason--empty .mcPolicyRow__reasonText{color:#9a3412;}
+@media (max-width:860px){
+  .mcPolicyRow--head{display:none;}
+  .mcPolicyRow__main{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .mcPolicyRow__cell:before{
+    content:attr(data-mc-row-k) ": ";
+    color:rgba(30,58,122,.45);
+    font-size:10px;
+    font-weight:800;
+  }
+}
+
 .mcPolCard{
   flex:0 0 auto;
   padding:12px 14px;
@@ -35181,6 +35299,83 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   height:auto;
   max-height:none;
 }
+.mcStepHealthDecl .mcNeedsScreen.mcHealthDeclSplit{
+  height:100%;
+  max-height:100%;
+}
+.mcHealthDeclSplit{
+  display:flex;
+  flex-direction:row;
+  align-items:stretch;
+  gap:12px;
+  height:100%;
+  max-height:100%;
+  min-height:0;
+}
+.mcHealthDeclSplit__main{
+  flex:1 1 auto;
+  min-width:0;
+  min-height:0;
+  overflow:auto;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+.mcHealthFormsRail{
+  flex:0 0 280px;
+  width:280px;
+  max-width:36%;
+  min-height:0;
+  overflow:auto;
+  border:1px solid rgba(15,32,96,.12);
+  background:#f8fafc;
+  border-radius:12px;
+  padding:10px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.mcHealthFormsRail__head{
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  color:rgba(30,58,122,.55);
+}
+.mcHealthFormsRail__secTitle{
+  font-size:11px;
+  font-weight:800;
+  color:#1e3a7a;
+  margin:8px 0 4px;
+}
+.mcHealthFormsRail__item{
+  display:block;
+  width:100%;
+  text-align:right;
+  border:1px solid rgba(42,92,245,.16);
+  background:#fff;
+  border-radius:10px;
+  padding:8px 10px;
+  margin:0 0 6px;
+  cursor:pointer;
+  font-family:inherit;
+}
+.mcHealthFormsRail__item:hover{border-color:#2a5cf5;box-shadow:0 2px 8px rgba(42,92,245,.12);}
+.mcHealthFormsRail__item.is-off{cursor:default;opacity:.7;background:#f8fafc;}
+.mcHealthFormsRail__name{font-size:13px;font-weight:800;color:#0a1638;line-height:1.35;}
+.mcHealthFormsRail__meta{font-size:11px;font-weight:600;color:rgba(30,58,122,.55);margin-top:2px;}
+.mcHealthFormsRail__empty{font-size:12px;color:rgba(30,58,122,.5);font-weight:600;}
+.giValModal.mcFormModalFull .giValModal__card{
+  max-width:min(1180px,96vw);
+  width:100%;
+  height:min(94vh,980px);
+  max-height:min(94vh,980px);
+}
+@media (max-width:980px){
+  .mcHealthDeclSplit{flex-direction:column;}
+  .mcHealthFormsRail{flex:0 0 auto;width:auto;max-width:none;max-height:220px;}
+}
+
 .mcBenefCards{display:flex;flex-direction:column;gap:12px;margin:0 0 14px;}
 .mcBenefCard{
   padding:14px;
