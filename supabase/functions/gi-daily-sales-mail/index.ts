@@ -183,10 +183,10 @@ function snapshotHasNewLayout(html: unknown){
   if(s.indexOf("מוצגים רק נציגים עם מכירה") >= 0) return false;
   if(s.indexOf("נציגים שמכרו היום") >= 0) return false;
   if(s.indexOf("פוליסות בריאות + פרט") >= 0) return false;
+  if(s.indexOf(">לידים שויכו<") >= 0) return false;
   return s.indexOf("מכירות מודיעין") >= 0
     && s.indexOf("מכירות חיפה") >= 0
-    && s.indexOf("פרמייה מהפקה") >= 0
-    && s.indexOf("לידים שויכו") < 0;
+    && s.indexOf("פרמייה מהפקה") >= 0;
 }
 
 const OLD_LAYOUT_ERROR = "הדוח השמור הוא תבנית ישנה (בלי מכירות חיפה / מודיעין). רעננו את ה-CRM ב־Ctrl+F5 ולחצו «רענן דוח להיום».";

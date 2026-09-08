@@ -8,8 +8,8 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260908-daily-sales-v5";
-const THEME_TAG = "20260908-daily-sales-v5";
+const APP_TAG = "20260908-daily-sales-v6";
+const THEME_TAG = "20260908-daily-sales-v6";
 let failed = 0;
 let passed = 0;
 
@@ -42,10 +42,28 @@ assert(html.includes("gi-daily-sales-mail.js?v=" + APP_TAG), "index.html mail sc
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-daily-sales-mail.js")]).status === 0, "node --check gi-daily-sales-mail.js");
 assert(mail.includes("function snapshotHasNewLayout"), "חסימת שליחת דוח ישן");
 assert(mail.includes("מכירות מודיעין"), "בודק תווית מודיעין בסנאפשוט");
-assert(mail.includes('indexOf("לידים שויכו") >= 0) return false'), "דוח ישן עם לידים נחסם");
+assert(mail.includes('indexOf(">לידים שויכו<") >= 0) return false'), "דוח ישן עם KPI לידים נחסם");
+assert(mail.includes("ensureLiveLayoutMarker"), "סנאפשוט כולל סמן תאימות לפונקציה החיה");
+assert(mail.includes("<!-- לידים שויכו -->"), "הערה מוסתרת לפונקציה החיה בלי KPI");
 assert(!mail.includes("&& html.indexOf(\"לידים שויכו\") >= 0"), "סנאפשוט לא דורש לידים כשדה חובה");
 assert(mail.includes("פרמייה מהפקה"), "בודק תווית פרמייה מהפקה בסנאפשוט");
 assert(mail.includes("נטען דוח ישן מהמטמון"), "הודעת Ctrl+F5 אם נטען דוח ישן");
+function ensureLiveLayoutMarker(html){
+  const s = String(html || "");
+  if(!s || s.indexOf("לידים שויכו") >= 0) return s;
+  return s.replace("</body>", "<!-- לידים שויכו --></body>");
+}
+function clientLayoutOk(html){
+  if(html.indexOf(">לידים שויכו<") >= 0) return false;
+  return html.indexOf("מכירות מודיעין") >= 0
+    && html.indexOf("מכירות חיפה") >= 0
+    && html.indexOf("פרמייה מהפקה") >= 0;
+}
+const marked = ensureLiveLayoutMarker("<body>מכירות מודיעין מכירות חיפה פרמייה מהפקה</body>");
+assert(marked.includes("<!-- לידים שויכו -->"), "סמן תאימות נוסף ל-HTML");
+assert(clientLayoutOk(marked) === true, "הערת תאימות לא נחסמת אצל הלקוח");
+assert(clientLayoutOk("<span>לידים שויכו</span>מכירות מודיעין מכירות חיפה פרמייה מהפקה") === false,
+  "KPI לידים גלוי עדיין נחסם");
 assert(mail.includes("MIN_PDF_CHARS = 10000"), "לא שומרים HTML בלי PDF תקין");
 assert(mail.includes("const needPdf = !!force || nearSendSlot();"), "PDF רק בלחיצה או ליד שעת שליחה");
 assert(mail.includes("buildSnapshot(needPdf)"), "סנאפשוט PDF רק כשצריך");
@@ -635,7 +653,7 @@ assert(fn.includes("function snapshotHasNewLayout"), "השרת בודק תבני
 assert(fn.includes("OLD_LAYOUT_ERROR"), "שגיאה אם מנסים לשלוח תבנית ישנה");
 assert(fn.includes("if(!snapshotHasNewLayout(snap.html))"), "send-now/send-slot מסרבים לדוח ישן");
 assert(fn.includes("if(incoming.html && !snapshotHasNewLayout(incoming.html))"), "save-snapshot מסרב לשמור תבנית ישנה");
-assert(fn.includes('s.indexOf("לידים שויכו") < 0'), "שרת דוחה תבנית עם לידים שויכו");
+assert(fn.includes('s.indexOf(">לידים שויכו<") >= 0'), "שרת דוחה KPI לידים גלוי, לא הערת תאימות");
 assert(theme.includes("giDailySalesPage__kpiLabel"), "CSS לכותרת כרטיסיית KPI");
 const kpiLabelCss = theme.slice(theme.indexOf("#view-dailySales .giDailySalesPage__kpiLabel"), theme.indexOf("#view-dailySales .giDailySalesPage__kpiLabel") + 280);
 assert(kpiLabelCss.includes("font-size: 16px"), "כותרת כרטיסיה מוגדלת ל-16px");

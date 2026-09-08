@@ -191,9 +191,18 @@
       + "</td></tr></table></body></html>";
   }
 
+  /* הפונקציה החיה עדיין דורשת את המחרוזת «לידים שויכו» ב-HTML.
+     לא מציגים KPI — רק הערה מוסתרת כדי שהשליחה לא תידחה. */
+  function ensureLiveLayoutMarker(html){
+    const s = String(html || "");
+    if(!s || s.indexOf("לידים שויכו") >= 0) return s;
+    if(s.indexOf("</body>") >= 0) return s.replace("</body>", "<!-- לידים שויכו --></body>");
+    return s + "<!-- לידים שויכו -->";
+  }
+
   function wrapSnap(snap){
     if(!snap || (!snap.html && !snap.pdfBase64)) return null;
-    const html = snap.html ? ensureRtlEmailHtml(snap.html) : "";
+    const html = snap.html ? ensureLiveLayoutMarker(ensureRtlEmailHtml(snap.html)) : "";
     const summary = snap.summary && typeof snap.summary === "object" ? { ...snap.summary } : {};
     summary.layout = MAIL_LAYOUT;
     return {
@@ -210,7 +219,7 @@
     const html = String(snap && snap.html || "");
     if(!html) return false;
     if(html.indexOf("מוצגים רק נציגים עם מכירה") >= 0) return false;
-    if(html.indexOf("לידים שויכו") >= 0) return false;
+    if(html.indexOf(">לידים שויכו<") >= 0) return false;
     return html.indexOf("מכירות מודיעין") >= 0
       && html.indexOf("מכירות חיפה") >= 0
       && html.indexOf("פרמייה מהפקה") >= 0;
