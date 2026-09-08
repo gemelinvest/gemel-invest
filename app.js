@@ -21404,7 +21404,9 @@ UsersGateUI.init();
         const stamp = safeTrim(raw?._addedAt) || (resolveCustomerMonthStamp ? resolveCustomerMonthStamp(rec) : "");
         if(range && isWithinRange && (!stamp || !isWithinRange(stamp, range))) return;
         const p = clonePolicyForMetrics(raw);
-        const premiumAfterDiscountValue = this.getPolicyPremiumAfterDiscount(p);
+        const premiumAfterDiscountValue = (typeof this.getNewPolicyFilePremiumAfterDiscount === "function")
+          ? this.getNewPolicyFilePremiumAfterDiscount(p)
+          : this.getPolicyPremiumAfterDiscount(p);
         out.push({
           id: safeTrim(raw?.id),
           origin: "new",
@@ -35050,15 +35052,18 @@ UsersGateUI.init();
       return { start, end };
     },
 
-    /** פרמיה נטו לפוליסה — אותה לוגיקה בכרטיס, בפירוט ובגרף. */
+    /** פרמיה נטו לדשבורד («נמכר היום» / «פרמיה חודשית נטו») — אחרי הנחה בלבד.
+        לא משתמשים ב-getPolicyPremiumAfterDiscount: באשף זה בכוונה מחזיר את הסכום לפני הנחה. */
     policyNetPremium(p){
-      if(typeof CustomersUI.getPolicyPremiumAfterDiscount === "function"){
-        const viaCalc = CustomersUI.getPolicyPremiumAfterDiscount(p);
-        if(Number(viaCalc) > 0) return Math.round(Number(viaCalc) * 100) / 100;
-      }
-      const direct = Number(p?.premiumAfterDiscountValue);
-      if(Number.isFinite(direct) && direct > 0) return Math.round(direct * 100) / 100;
-      const fallback = CustomersUI.asMoneyNumber(p?.premiumValue);
+      const stored = Number(p?.premiumAfterDiscountValue);
+      if(Number.isFinite(stored) && stored > 0) return Math.round(stored * 100) / 100;
+      try {
+        if(typeof CustomersUI.getNewPolicyFilePremiumAfterDiscount === "function"){
+          const viaFile = Number(CustomersUI.getNewPolicyFilePremiumAfterDiscount(p)) || 0;
+          if(viaFile > 0) return Math.round(viaFile * 100) / 100;
+        }
+      } catch(_e) {}
+      const fallback = CustomersUI.asMoneyNumber(p?.premiumValue ?? p?.premiumMonthly);
       return fallback > 0 ? Math.round(fallback * 100) / 100 : 0;
     },
 
