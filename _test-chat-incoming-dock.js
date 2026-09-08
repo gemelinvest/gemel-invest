@@ -1,4 +1,4 @@
-/* GI-CHAT 20260908-hach-disc-v1 — הודעת צ׳אט נכנסת בצד שמאל למטה,
+/* GI-CHAT 20260908-daily-sales-v1 — הודעת צ׳אט נכנסת בצד שמאל למטה,
    נשארת פתוחה עם שם השולח ולחצן «השב». Realtime עם recipient_id=eq ולא or=.
    הרצה: node _test-chat-incoming-dock.js
 */
@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260908-hach-disc-v1";
+const APP_TAG = "20260908-daily-sales-v1";
 let failed = 0;
 let passed = 0;
 

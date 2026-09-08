@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260908-hach-disc-v1";
+  const BUILD = "20260908-daily-sales-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -4968,16 +4968,32 @@
     return safeTrim(value).replace(/\s+/g, " ").toLowerCase();
   }
 
-  /* שם בדוח המכירות הוא לפעמים כינוי קצר ("ואדים") מול שם מלא באנשי קשר
-     ("ואדים שאולוב"). התאמה רק כששם הדוח הוא קידומת של השם המלא. */
+  /* התאמת נציג לפי שם פרטי + שם משפחה. שם פרטי בלבד ("אביאל" / "אביב")
+     לא ממזג שני אנשים שונים. */
   function salesAgentNameMatchesPersonName(salesName, personName){
     const salesKey = normalizeAgentNameKey(salesName);
     const personKey = normalizeAgentNameKey(personName);
     if(salesKey && personKey && salesKey === personKey) return true;
     const salesTokens = agentLabelTokens(salesName);
     const personTokens = agentLabelTokens(personName);
-    if(!salesTokens.length || !personTokens.length) return false;
+    if(salesTokens.length < 2 || personTokens.length < 2) return false;
+    if(salesTokens.length > personTokens.length) return false;
     return agentLabelTokensPrefix(personTokens, salesTokens);
+  }
+
+  function dailySalesAgentMergeKey(agentName, agentIds){
+    const ids = [];
+    const seen = new Set();
+    (Array.isArray(agentIds) ? agentIds : (agentIds ? [agentIds] : [])).forEach((raw) => {
+      const id = safeTrim(raw);
+      const key = id.toLowerCase();
+      if(!id || seen.has(key)) return;
+      seen.add(key);
+      ids.push(id);
+    });
+    if(ids.length === 1) return "id:" + ids[0].toLowerCase();
+    const tokens = agentLabelTokens(agentName);
+    return "name:" + (tokens.length ? tokens.join(" ") : normalizeAgentNameKey(agentName));
   }
 
   function normalizeAgentBranchesMap(raw){
@@ -36253,7 +36269,7 @@ UsersGateUI.init();
     dailySalesSectorTabs(){
       return [
         { key: "all", label: "הכל היום", printView: true },
-        { key: "healthPrat", source: "בריאות", sources: ["בריאות", "סיכונים", "אחר"], label: "בריאות + פרט", combined: true },
+        { key: "healthPrat", source: "בריאות", sources: ["בריאות", "סיכונים"], label: "בריאות + פרט", combined: true, reportStyle: true },
         { key: "elem", source: "אלמנטרי", sources: ["אלמנטרי"], label: "אלמנטרי", annual: true },
         { key: "pensia", source: "פנסיה", sources: ["פנסיה"], label: "פנסיה" }
       ];
@@ -36323,9 +36339,12 @@ UsersGateUI.init();
       const map = new Map();
       (Array.isArray(groups) ? groups : []).forEach((g) => {
         const name = safeTrim(g?.agentName) || "נציג";
-        if(!map.has(name)){
-          map.set(name, {
+        const ids = Array.isArray(g?.agentIds) ? g.agentIds : [];
+        const key = dailySalesAgentMergeKey(name, ids);
+        if(!map.has(key)){
+          map.set(key, {
             agentName: name,
+            agentIds: new Set(),
             sector: safeTrim(g?.sector),
             sectors: [safeTrim(g?.sector)].filter(Boolean),
             sectorSlug: g?.sectorSlug || this.dailySalesSectorSlug(g?.sector),
@@ -36335,7 +36354,8 @@ UsersGateUI.init();
             deals: 0
           });
         }
-        const row = map.get(name);
+        const row = map.get(key);
+        ids.forEach((id) => { const v = safeTrim(id); if(v) row.agentIds.add(v); });
         const sector = safeTrim(g?.sector);
         if(sector && !row.sectors.includes(sector)) row.sectors.push(sector);
         row.premium += Number(g?.premium) || 0;
@@ -36354,6 +36374,7 @@ UsersGateUI.init();
       });
       return Array.from(map.values()).map((row) => ({
         agentName: row.agentName,
+        agentIds: Array.from(row.agentIds || []).filter(Boolean),
         sector: row.sectors.length === 1 ? row.sectors[0] : row.sectors.join(" + "),
         sectors: row.sectors,
         sectorSlug: row.sectors.length === 1 ? this.dailySalesSectorSlug(row.sectors[0]) : "mixed",
@@ -36556,50 +36577,47 @@ UsersGateUI.init();
       const localHealthByAgent = new Map();
       list.forEach((g) => {
         if(healthSet.has(safeTrim(g?.sector))){
-          const name = safeTrim(g?.agentName) || "נציג";
-          if(!localHealthByAgent.has(name)) localHealthByAgent.set(name, []);
-          localHealthByAgent.get(name).push(g);
+          const key = dailySalesAgentMergeKey(g?.agentName, g?.agentIds);
+          if(!localHealthByAgent.has(key)) localHealthByAgent.set(key, []);
+          localHealthByAgent.get(key).push(g);
         } else {
           this._seedDailySalesGroup(map, g);
         }
       });
       const serverByAgent = new Map();
       rows.forEach((row) => {
-        const name = safeTrim(row?.agent_name) || "נציג";
-        if(!serverByAgent.has(name)) serverByAgent.set(name, []);
-        serverByAgent.get(name).push(row);
+        const key = dailySalesAgentMergeKey(row?.agent_name, row?.agent_id);
+        if(!serverByAgent.has(key)) serverByAgent.set(key, []);
+        serverByAgent.get(key).push(row);
       });
-      const names = new Set([...localHealthByAgent.keys(), ...serverByAgent.keys()]);
-      names.forEach((name) => {
-        const localGroups = localHealthByAgent.get(name) || [];
-        const serverRows = serverByAgent.get(name) || [];
-        const localDeals = localGroups.reduce((sum, g) => sum + (Number(g.deals) || 0), 0);
-        const localPrem = localGroups.reduce((sum, g) => sum + (Number(g.premium) || 0), 0);
-        const serverDeals = serverRows.reduce((sum, r) => sum + (Number(r.policies) || 0), 0);
-        const serverPrem = serverRows.reduce((sum, r) => sum + (Number(r.premium) || 0), 0);
+      const keys = new Set([...localHealthByAgent.keys(), ...serverByAgent.keys()]);
+      keys.forEach((key) => {
+        const localGroups = localHealthByAgent.get(key) || [];
+        const serverRows = serverByAgent.get(key) || [];
         const localIds = [...new Set(localGroups.flatMap((g) =>
           Array.isArray(g?.agentIds) ? g.agentIds : []
         ).map(safeTrim).filter(Boolean))];
-        const useServer = serverRows.length && (serverDeals > localDeals || ((serverPrem - localPrem) > 0.009) || !localGroups.length);
-        if(useServer && localIds.length > 1){
+        /* לא מחליפים פרמיה מקומית אחרי-הנחה ב-RPC ברוטו. overlay רק ממלא חור. */
+        if(localGroups.length){
           localGroups.forEach((g) => this._seedDailySalesGroup(map, g));
-        } else if(useServer){
-          serverRows.forEach((row) => {
-            const product = safeTrim(row?.product) || "פוליסה";
-            this._bumpDailySalesGroup(
-              map,
-              name,
-              this.resolveDailySalesSector(product, "אחר"),
-              product,
-              row?.company,
-              row?.premium,
-              row?.policies,
-              safeTrim(row?.agent_id) || localIds[0] || ""
-            );
-          });
-        } else {
-          localGroups.forEach((g) => this._seedDailySalesGroup(map, g));
+          return;
         }
+        serverRows.forEach((row) => {
+          const product = safeTrim(row?.product) || "פוליסה";
+          const name = safeTrim(row?.agent_name) || "נציג";
+          const sid = safeTrim(row?.agent_id);
+          if(!sid && agentLabelTokens(name).length < 2) return;
+          this._bumpDailySalesGroup(
+            map,
+            name,
+            this.resolveDailySalesSector(product, "אחר"),
+            product,
+            row?.company,
+            row?.premium,
+            row?.policies,
+            safeTrim(row?.agent_id) || localIds[0] || ""
+          );
+        });
       });
       return this._finalizeDailySalesGroups(map);
     },
@@ -36621,9 +36639,9 @@ UsersGateUI.init();
         "dailyAgents",
         "alignTodayKpi",
         "groupedSectorsV3",
-        "agentRpc1",
+        "agentRpcNoGrossV1",
         "noPartialCache",
-        "officeBranchByAgentIdV1",
+        "officeBranchFullNameV1",
         dateKey,
         String(customers.length),
         String(missingPayloads),
@@ -36825,8 +36843,7 @@ UsersGateUI.init();
       (Array.isArray(groups) ? groups : []).forEach((g) => {
         const name = safeTrim(g?.agentName) || "נציג";
         const ids = [...new Set((Array.isArray(g?.agentIds) ? g.agentIds : []).map(safeTrim).filter(Boolean))];
-        const uniqueId = ids.length === 1 ? ids[0] : "";
-        const key = uniqueId ? ("id:" + uniqueId.toLowerCase()) : ("name:" + name);
+        const key = dailySalesAgentMergeKey(name, ids);
         if(!map.has(key)){
           map.set(key, {
             agentName: name,
@@ -36903,6 +36920,7 @@ UsersGateUI.init();
 
     dailySalesTableColCount(tab, model){
       if(this.dailySalesIsPrintViewTab(tab)) return (model && model.colCount) || 6;
+      if(this.dailySalesIsReportStyleTab(tab)) return 5;
       return tab?.combined ? 8 : 6;
     },
 
@@ -36920,6 +36938,10 @@ UsersGateUI.init();
 
     dailySalesIsPrintViewTab(tab){
       return !!(tab && (tab.printView || tab.key === "all"));
+    },
+
+    dailySalesIsReportStyleTab(tab){
+      return this.dailySalesIsPrintViewTab(tab) || !!(tab && (tab.reportStyle || tab.combined || tab.key === "healthPrat"));
     },
 
     /* קריאה בלבד: אותו נתון כמו כרטיס «פרמייה מהפקה» בדשבורד. לא משנה חישוב. */
@@ -37049,7 +37071,17 @@ UsersGateUI.init();
         || safeTrim(a.agentName).localeCompare(safeTrim(b.agentName), "he")
       );
       const healthTab = this.dailySalesSectorTabs().find((t) => t.key === "healthPrat");
-      const healthSlice = this.dailySalesTabSlice(report, healthTab);
+      let healthSlice = this.dailySalesTabSlice(report, healthTab);
+      if(report.isToday){
+        try {
+          this.ensureTodaySalesServerOverlay?.();
+          const today = this.buildTodaySalesMetrics();
+          healthSlice = {
+            ...healthSlice,
+            premium: Math.round((Number(today?.totalPremium) || 0) * 100) / 100
+          };
+        } catch(_e) {}
+      }
       const totals = this.dailySalesBranchTotals(report);
       const agentCount = new Set((Array.isArray(report.groups) ? report.groups : []).map((g) => g.agentName)).size;
       const showPension = (Number(totals.pension) || 0) > 0
@@ -37063,7 +37095,6 @@ UsersGateUI.init();
       } catch(_e) {}
       const issuedPremium = this.dailySalesIssuedPremiumTotal();
       const officeBranches = this.dailySalesOfficeBranchTotals(rows);
-      const assignedLeads = this.dailySalesAssignedLeadsCount(report.dateKey);
       return {
         report,
         rows,
@@ -37074,7 +37105,6 @@ UsersGateUI.init();
         dateLine,
         issuedPremium,
         officeBranches,
-        assignedLeads,
         fileStem: this.dailySalesPrintFileStem(report.dateKey),
         issued: (() => {
           try {
@@ -37100,22 +37130,61 @@ UsersGateUI.init();
       };
     },
 
-    renderDailySalesPrintTheadHtml(model){
-      const pensionTh = model.showPension ? `<th class="num">פנסיה</th>` : "";
+    renderDailySalesPrintTheadHtml(model, options = {}){
+      const hideElementary = !!options.hideElementary;
+      const pensionTh = (!hideElementary && model.showPension) ? `<th class="num">פנסיה</th>` : "";
+      const elemTh = hideElementary ? "" : `<th class="num">אלמנטרי (שנתי)</th>`;
       return `<tr>
         <th>שם הנציג</th>
         <th>ענפים</th>
         <th class="num">בריאות</th>
         <th class="num">פרט</th>
-        <th class="num">אלמנטרי (שנתי)</th>
+        ${elemTh}
         ${pensionTh}
         <th class="num">סה״כ חודשי</th>
       </tr>`;
     },
 
+    dailySalesHealthPratPrintModel(model){
+      const src = model && typeof model === "object" ? model : this.buildDailySalesPrintModel();
+      const rows = (Array.isArray(src.rows) ? src.rows : []).map((r) => {
+        const health = Number(r?.health) || 0;
+        const prat = Number(r?.prat) || 0;
+        const other = Number(r?.other) || 0;
+        const monthly = Math.round((health + prat + other) * 100) / 100;
+        const sectors = (Array.isArray(r?.sectors) ? r.sectors : []).filter((s) => {
+          const v = safeTrim(s);
+          return v === "בריאות" || v === "סיכונים" || v === "אחר";
+        });
+        return {
+          ...r,
+          sectors,
+          elementary: 0,
+          pension: 0,
+          monthly
+        };
+      }).filter((r) => (Number(r.health) || 0) > 0 || (Number(r.prat) || 0) > 0 || (Number(r.other) || 0) > 0);
+      const sum = (key) => Math.round(rows.reduce((n, r) => n + (Number(r[key]) || 0), 0) * 100) / 100;
+      return {
+        ...src,
+        rows,
+        showPension: false,
+        colCount: 5,
+        agentCount: rows.length,
+        sums: {
+          health: sum("health"),
+          prat: sum("prat"),
+          elementary: 0,
+          pension: 0,
+          monthly: sum("monthly")
+        }
+      };
+    },
+
     renderDailySalesPrintRowsHtml(model, options = {}){
       const money = (v) => this.dailySalesPrintMoney(v);
       const emptyCls = options.emptyClass || "empty";
+      const hideElementary = !!options.hideElementary;
       const cell = (v) => (Number(v) > 0
         ? escapeHtml(money(v))
         : `<span class="${emptyCls}">—</span>`);
@@ -37125,28 +37194,31 @@ UsersGateUI.init();
       }
       return model.rows.map((r) => {
         const sectors = (r.sectors || []).map((s) => this.dailySalesDisplaySectorLabel(s)).join(", ");
-        const pensionTd = model.showPension ? `<td class="num">${cell(r.pension)}</td>` : "";
+        const pensionTd = (!hideElementary && model.showPension) ? `<td class="num">${cell(r.pension)}</td>` : "";
+        const elemTd = hideElementary ? "" : `<td class="num">${cell(r.elementary)}</td>`;
         return `<tr class="giDailySalesPage__row">
           <td class="name">${escapeHtml(r.agentName)}</td>
           <td class="sectors">${escapeHtml(sectors || "—")}</td>
           <td class="num">${cell(r.health)}</td>
           <td class="num">${cell(r.prat)}</td>
-          <td class="num">${cell(r.elementary)}</td>
+          ${elemTd}
           ${pensionTd}
           <td class="num">${cell(r.monthly)}</td>
         </tr>`;
       }).join("");
     },
 
-    renderDailySalesPrintFootHtml(model){
+    renderDailySalesPrintFootHtml(model, options = {}){
       const money = (v) => this.dailySalesPrintMoney(v);
-      const pensionTd = model.showPension ? `<td class="num">${escapeHtml(money(model.sums.pension))}</td>` : "";
+      const hideElementary = !!options.hideElementary;
+      const pensionTd = (!hideElementary && model.showPension) ? `<td class="num">${escapeHtml(money(model.sums.pension))}</td>` : "";
+      const elemTd = hideElementary ? "" : `<td class="num">${escapeHtml(money(model.sums.elementary))}</td>`;
       return `<tr>
         <td>סה״כ</td>
         <td>${escapeHtml(this.dailySalesAgentsWord(model.agentCount))}</td>
         <td class="num">${escapeHtml(money(model.sums.health))}</td>
         <td class="num">${escapeHtml(money(model.sums.prat))}</td>
-        <td class="num">${escapeHtml(money(model.sums.elementary))}</td>
+        ${elemTd}
         ${pensionTd}
         <td class="num">${escapeHtml(money(model.sums.monthly))}</td>
       </tr>`;
@@ -37165,20 +37237,11 @@ UsersGateUI.init();
       if(model.showPension){
         cards.push({ value: money(model.totals.pension), label: "פרמיה חודשית · פנסיה" });
       }
-      const main = cards.map((c) => `
+      return `<div class="giDailySalesPage__kpiRow${model.showPension ? " is-five" : ""}">` + cards.map((c) => `
         <article class="giDailySalesPage__kpi${c.hero ? " giDailySalesPage__kpi--hero" : ""}${c.elem ? " giDailySalesPage__kpi--elem" : ""}">
           <div class="giDailySalesPage__kpiLabel">${escapeHtml(c.label)}</div>
           <div class="giDailySalesPage__kpiValue">${escapeHtml(c.value)}</div>
-        </article>`).join("");
-      const extra = [
-        { value: String(Number(model.assignedLeads) || 0), label: "לידים שויכו" }
-      ].map((c) => `
-        <article class="giDailySalesPage__kpi">
-          <div class="giDailySalesPage__kpiLabel">${escapeHtml(c.label)}</div>
-          <div class="giDailySalesPage__kpiValue">${escapeHtml(c.value)}</div>
-        </article>`).join("");
-      return `<div class="giDailySalesPage__kpiRow${model.showPension ? " is-five" : ""}">${main}</div>
-        <div class="giDailySalesPage__kpiRow giDailySalesPage__kpiRow--extra">${extra}</div>`;
+        </article>`).join("") + `</div>`;
     },
 
     buildDailySalesEmailHtml(forDate){
@@ -37219,15 +37282,12 @@ UsersGateUI.init();
           <p style="margin:0 0 4px;font-size:11px;letter-spacing:.08em;color:#5b6b7c;font-weight:600;direction:rtl;text-align:right">GEMEL INVEST · דוח מכירות</p>
           <h1 style="margin:0;font-size:22px;color:#0b2a4a;direction:rtl;text-align:right">מכירות היום</h1>
           <p style="margin:4px 0 18px;font-size:13px;color:#3d4d5e;direction:rtl;text-align:right">${escapeHtml(model.dateLine)}</p>
-          <table dir="rtl" align="right" style="width:100%;border-collapse:collapse;margin:0 0 10px;direction:rtl;text-align:right"><tr>
+          <table dir="rtl" align="right" style="width:100%;border-collapse:collapse;margin:0 0 18px;direction:rtl;text-align:right"><tr>
             <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(branches.modiin.premium))}</b><span style="font-size:11px;color:#5b6b7c">מכירות מודיעין</span></td>
             <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(branches.haifa.premium))}</b><span style="font-size:11px;color:#5b6b7c">מכירות חיפה</span></td>
             <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(model.healthSlice.premium))}</b><span style="font-size:11px;color:#5b6b7c">פרמיה חודשית · בריאות + פרט</span></td>
             <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(money(issued.total))}</b><span style="font-size:11px;color:#5b6b7c">פרמייה מהפקה</span></td>
             ${pensionStat}
-          </tr></table>
-          <table dir="rtl" align="right" style="width:auto;min-width:220px;border-collapse:collapse;margin:0 0 18px;direction:rtl;text-align:right"><tr>
-            <td dir="rtl" align="right" style="border:1px solid #d7dee6;padding:10px 12px;direction:rtl;text-align:right"><b style="display:block;font-size:18px;color:#0b2a4a">${escapeHtml(String(Number(model.assignedLeads) || 0))}</b><span style="font-size:11px;color:#5b6b7c">לידים שויכו</span></td>
           </tr></table>
           <table dir="rtl" align="right" style="width:100%;border-collapse:collapse;font-size:12.5px;direction:rtl;text-align:right">
             <thead><tr>
@@ -37263,7 +37323,6 @@ UsersGateUI.init();
           issuedPremium: Number(issued.total) || 0,
           modiin: Number(branches.modiin.premium) || 0,
           haifa: Number(branches.haifa.premium) || 0,
-          assignedLeads: Number(model.assignedLeads) || 0,
           pension: Number(model.totals.pension) || 0
         }
       };
@@ -37316,9 +37375,11 @@ UsersGateUI.init();
       if(this.dailySalesIsPrintViewTab(tab)){
         return this.renderDailySalesPrintTheadHtml(model || this.buildDailySalesPrintModel());
       }
-      const cols = tab?.combined
-        ? ["#", "נציג", "עסקאות", "בריאות", "פרט", "מוצרים", "חברות", "סה״כ"]
-        : ["#", "נציג", "עסקאות", "מוצרים", "חברות", "סה״כ"];
+      if(this.dailySalesIsReportStyleTab(tab)){
+        const sliced = this.dailySalesHealthPratPrintModel(model || this.buildDailySalesPrintModel());
+        return this.renderDailySalesPrintTheadHtml(sliced, { hideElementary: true });
+      }
+      const cols = ["#", "נציג", "עסקאות", "מוצרים", "חברות", "סה״כ"];
       return `<tr>${cols.map((c) => `<th>${escapeHtml(c)}</th>`).join("")}</tr>`;
     },
 
@@ -37326,6 +37387,10 @@ UsersGateUI.init();
       if(this.dailySalesIsPrintViewTab(tab)){
         const model = options.model || this.buildDailySalesPrintModel(report);
         return this.renderDailySalesPrintRowsHtml(model, options);
+      }
+      if(this.dailySalesIsReportStyleTab(tab)){
+        const sliced = this.dailySalesHealthPratPrintModel(options.model || this.buildDailySalesPrintModel(report));
+        return this.renderDailySalesPrintRowsHtml(sliced, { ...options, hideElementary: true });
       }
       const raw = this.filterDailySalesGroupsBySource(report, tab?.sources || tab?.source || "");
       const rows = this.dailySalesPresentPivotByAgent(raw);
@@ -37510,9 +37575,7 @@ UsersGateUI.init();
       }
       try {
         try { UI.renderSyncStatus?.("מרענן נתוני מכירות…", "warn"); } catch(_e) {}
-        const leadsP = this.ensureDailySalesAssignedLeadsLoaded({ force: true });
         const r = await Storage.loadSheets({ useCachedFallback: false });
-        try { await leadsP; } catch(_e) {}
         if(r?.ok){
           App.applyLoadResult(r, "נתוני מכירות עודכנו", { skipNavigation: true, skipLoginSideEffects: true });
           try { Storage.scheduleFullIdbCacheSave(State.data); } catch(_e) {}
@@ -37544,14 +37607,20 @@ UsersGateUI.init();
       this._ensureDailySalesPageBound();
       try { this._scheduleMidnightReset(); } catch(_e) {}
       try { this.ensureDailySalesServerOverlay(); } catch(_e) {}
-      try { this._kickDailySalesAssignedLeadsLoad(); } catch(_e) {}
+      try { this.ensureTodaySalesServerOverlay(); } catch(_e) {}
       const report = this.buildDailyAgentSalesReport();
       const tab = this.getDailySalesSelectedSectorTab();
       const printView = this.dailySalesIsPrintViewTab(tab);
+      const reportStyle = this.dailySalesIsReportStyleTab(tab);
       const model = this.buildDailySalesPrintModel(report);
       const slice = printView
         ? { groups: model.rows, premium: model.sums.monthly, deals: model.healthSlice.deals, agents: model.agentCount }
-        : this.dailySalesTabSlice(report, tab);
+        : (reportStyle
+          ? (() => {
+              const sliced = this.dailySalesHealthPratPrintModel(model);
+              return { groups: sliced.rows, premium: sliced.sums.monthly, deals: model.healthSlice.deals, agents: sliced.agentCount };
+            })()
+          : this.dailySalesTabSlice(report, tab));
       const kpisEl = document.getElementById("dailySalesKpis");
       const sectorsEl = document.getElementById("dailySalesSectors");
       const heroEl = document.getElementById("dailySalesHero");
@@ -37591,7 +37660,7 @@ UsersGateUI.init();
           if(sectorsEl) sectorsEl.innerHTML = this.renderDailySalesSkeletonTabsHtml();
           if(heroEl){ heroEl.hidden = true; heroEl.innerHTML = ""; }
           if(splitEl){ splitEl.hidden = true; splitEl.innerHTML = ""; }
-          if(tableTitle) tableTitle.textContent = printView ? "מכירות היום" : `דירוג נציגים · ${tab.label}`;
+          if(tableTitle) tableTitle.textContent = printView ? "מכירות היום" : (reportStyle ? tab.label : `דירוג נציגים · ${tab.label}`);
           if(tableHint) tableHint.textContent = "טוען נתונים…";
           if(tbody) tbody.innerHTML = this.renderDailySalesSkeletonRowsHtml();
           return;
@@ -37605,7 +37674,7 @@ UsersGateUI.init();
       }
       if(sectorsEl) sectorsEl.innerHTML = this.renderDailySalesSectorTabsHtml(report);
       if(heroEl){
-        if(printView){
+        if(printView || reportStyle){
           heroEl.hidden = true;
           heroEl.innerHTML = "";
         } else {
@@ -37614,7 +37683,7 @@ UsersGateUI.init();
         }
       }
       if(splitEl){
-        if(printView){
+        if(printView || reportStyle){
           splitEl.innerHTML = "";
           splitEl.hidden = true;
         } else {
@@ -37623,28 +37692,28 @@ UsersGateUI.init();
           splitEl.hidden = !splitHtml;
         }
       }
-      if(summary) summary.innerHTML = printView
+      if(summary) summary.innerHTML = (printView || reportStyle)
         ? ""
         : this.renderDailySalesGroupSummaryHtml(report, { tab, slice });
-      if(tableTitle) tableTitle.textContent = printView ? "מכירות היום" : `דירוג נציגים · ${tab.label}`;
+      if(tableTitle) tableTitle.textContent = printView ? "מכירות היום" : (reportStyle ? tab.label : `דירוג נציגים · ${tab.label}`);
       if(tableHint){
         tableHint.textContent = printView
           ? "אותו מבט כמו בהדפסה · כל הנציגים שמכרו היום"
-          : (tab.combined
-            ? "ממוין לפי פרמיה · בריאות ופרט בעמודות נפרדות"
+          : (reportStyle
+            ? "אותו סגנון כמו הכל היום · בריאות ופרט בעמודות נפרדות"
             : (tab.annual ? "ממוין לפי פרמיה · פרמיה שנתית" : "ממוין לפי פרמיה"));
       }
       if(thead) thead.innerHTML = this.renderDailySalesTheadHtml(tab, model);
       if(tbody){
         tbody.innerHTML = this.renderDailySalesPresentRowsHtml(report, tab, {
           model,
-          emptyMessage: printView ? "אין מכירות ביום זה" : `אין מכירות בענף ${tab.label} ביום זה`
+          emptyMessage: (printView || reportStyle) ? "אין מכירות ביום זה" : `אין מכירות בענף ${tab.label} ביום זה`
         });
       }
       const tableEl = tbody?.closest?.("table");
-      if(tableEl) tableEl.classList.toggle("giDailySalesPage__table--print", printView);
+      if(tableEl) tableEl.classList.toggle("giDailySalesPage__table--print", printView || reportStyle);
       if(noteEl){
-        if(printView){
+        if(printView || reportStyle){
           noteEl.hidden = true;
           noteEl.innerHTML = "";
         } else {
@@ -38477,8 +38546,7 @@ UsersGateUI.init();
   .kicker { margin: 0 0 4px; font-size: 11px; letter-spacing: 0.08em; color: #5b6b7c; font-weight: 600; }
   h1 { margin: 0; font-size: 22px; line-height: 1.2; color: #0b2a4a; }
   .date { margin: 4px 0 0; font-size: 13px; color: #3d4d5e; }
-  .stats { display: grid; grid-template-columns: repeat(${statCount}, 1fr); gap: 10px; margin: 0 0 10px; }
-  .stats--extra { grid-template-columns: minmax(0, 1fr); max-width: 240px; margin: 0 0 18px; }
+  .stats { display: grid; grid-template-columns: repeat(${statCount}, 1fr); gap: 10px; margin: 0 0 18px; }
   .stat { border: 1px solid #d7dee6; padding: 10px 12px; }
   .stat b { display: block; font-size: 18px; color: #0b2a4a; margin-bottom: 2px; }
   .stat span { font-size: 11px; color: #5b6b7c; }
@@ -38523,9 +38591,6 @@ UsersGateUI.init();
     <div class="stat"><b>${escapeHtml(money(model.healthSlice.premium))}</b><span>פרמיה חודשית · בריאות + פרט</span></div>
     <div class="stat"><b>${escapeHtml(money(issued.total))}</b><span>פרמייה מהפקה</span></div>
     ${pensionStat}
-  </div>
-  <div class="stats stats--extra">
-    <div class="stat"><b>${escapeHtml(String(Number(model.assignedLeads) || 0))}</b><span>לידים שויכו</span></div>
   </div>
   <table>
     <thead>${this.renderDailySalesPrintTheadHtml(model)}</thead>
@@ -38664,11 +38729,7 @@ UsersGateUI.init();
 
     async prepareDailySalesMailSnapshot(){
       try { this.ensureDailySalesServerOverlay(); } catch(_e) {}
-      const [overlayOk] = await Promise.all([
-        this._waitDailySalesOverlayForMail(12000),
-        this._waitDailySalesAssignedLeadsForMail(12000)
-      ]);
-      return overlayOk;
+      return this._waitDailySalesOverlayForMail(12000);
     },
 
     async _waitDailySalesOverlayForMail(ms){
@@ -38695,10 +38756,7 @@ UsersGateUI.init();
     },
 
     async buildDailySalesMailSnapshot(forDate){
-      await Promise.all([
-        this._waitDailySalesOverlayForMail(4000),
-        this._waitDailySalesAssignedLeadsForMail(12000)
-      ]);
+      await this._waitDailySalesOverlayForMail(4000);
       const email = this.buildDailySalesEmailHtml(forDate);
       const doc = this.buildDailySalesPrintDocumentHtml(forDate);
       const pdfBase64 = await this._renderDailySalesPdfBase64(doc);
@@ -41067,7 +41125,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260908-hach-disc-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260908-daily-sales-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -41087,8 +41145,8 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260908-hach-disc-v1";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260908-hach-disc-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260908-daily-sales-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260908-daily-sales-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -41741,18 +41799,18 @@ UsersGateUI.init();
     "./ayalon-health-sim.css?v=20260810-sim-mockup-v2",
     "./ayalon-ci-sim.css?v=20260811-ayl-ci-v1",
     "./hachshara-health-sim.css?v=20260810-sim-mockup-v2",
-    "./hachshara-risk-sim.css?v=20260908-hach-disc-v1",
-    "./hachshara-mortgage-risk-sim.css?v=20260908-hach-disc-v1",
+    "./hachshara-risk-sim.css?v=20260908-daily-sales-v1",
+    "./hachshara-mortgage-risk-sim.css?v=20260908-daily-sales-v1",
     "./migdal-health-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
-    "./menora-ci-sim.css?v=20260908-hach-disc-v1",
+    "./menora-ci-sim.css?v=20260908-daily-sales-v1",
     "./clal-health-sim.css?v=20260812-cll-health-v1",
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260908-hach-disc-v1",
-    "./simulators-shell.css?v=20260908-hach-disc-v1"
+    "./simulators-center.css?v=20260908-daily-sales-v1",
+    "./simulators-shell.css?v=20260908-daily-sales-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -43114,7 +43172,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260908-hach-disc-v1";
+  const GI_WIZARD_JS_VERSION = "20260908-daily-sales-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;

@@ -185,11 +185,11 @@ function snapshotHasNewLayout(html: unknown){
   if(s.indexOf("פוליסות בריאות + פרט") >= 0) return false;
   return s.indexOf("מכירות מודיעין") >= 0
     && s.indexOf("מכירות חיפה") >= 0
-    && s.indexOf("לידים שויכו") >= 0
-    && s.indexOf("פרמייה מהפקה") >= 0;
+    && s.indexOf("פרמייה מהפקה") >= 0
+    && s.indexOf("לידים שויכו") < 0;
 }
 
-const OLD_LAYOUT_ERROR = "הדוח השמור הוא תבנית ישנה (בלי מכירות חיפה / מודיעין / לידים). רעננו את ה-CRM ב־Ctrl+F5 ולחצו «רענן דוח להיום».";
+const OLD_LAYOUT_ERROR = "הדוח השמור הוא תבנית ישנה (בלי מכירות חיפה / מודיעין). רעננו את ה-CRM ב־Ctrl+F5 ולחצו «רענן דוח להיום».";
 const NO_SNAPSHOT_ERROR = "אין דוח שמור להיום. לחצו «רענן דוח להיום».";
 const NO_OUTLOOK_ERROR = "מייל Outlook לא מחובר";
 const NO_RECIPIENTS_ERROR = "לא נמצאו מיילים שמורים למנהל / מנהל מערכת.";

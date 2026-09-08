@@ -1,7 +1,7 @@
-/* GI-FEAT 2026-08-26 — דוח מכירות: פרמייה מהפקה, סניפים, לידים שויכו.
+/* GI-FEAT 2026-09-08 — דוח מכירות: פרמיה אחרי הנחה כמו הדשבורד, סניפים לפי שם מלא, בלי לידים שויכו.
    הרצה: node _test-daily-sales-report-extras.js
-   בודק תוספת תצוגה בלבד — בלי שינוי חישוב מכירות / אימות / לידים.
 */
+"use strict";
 "use strict";
 
 const fs = require("fs");
@@ -9,8 +9,8 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260908-hach-disc-v1";
-const THEME_TAG = "20260908-hach-disc-v1";
+const APP_TAG = "20260908-daily-sales-v1";
+const THEME_TAG = "20260908-daily-sales-v1";
 let failed = 0;
 let passed = 0;
 
@@ -39,11 +39,12 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).statu
 assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
 assert(html.includes("theme.css?v=" + THEME_TAG), "index.html theme.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
-assert(html.includes("gi-daily-sales-mail.js?v=20260907-couple-shared-discount-v1"), "index.html mail script cache");
+assert(html.includes("gi-daily-sales-mail.js?v=20260908-daily-sales-v1"), "index.html mail script cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-daily-sales-mail.js")]).status === 0, "node --check gi-daily-sales-mail.js");
 assert(mail.includes("function snapshotHasNewLayout"), "חסימת שליחת דוח ישן");
 assert(mail.includes("מכירות מודיעין"), "בודק תווית מודיעין בסנאפשוט");
-assert(mail.includes("לידים שויכו"), "בודק תווית לידים בסנאפשוט");
+assert(mail.includes('indexOf("לידים שויכו") >= 0) return false'), "דוח ישן עם לידים נחסם");
+assert(!mail.includes("&& html.indexOf(\"לידים שויכו\") >= 0"), "סנאפשוט לא דורש לידים כשדה חובה");
 assert(mail.includes("פרמייה מהפקה"), "בודק תווית פרמייה מהפקה בסנאפשוט");
 assert(mail.includes("נטען דוח ישן מהמטמון"), "הודעת Ctrl+F5 אם נטען דוח ישן");
 assert(mail.includes("MIN_PDF_CHARS = 10000"), "לא שומרים HTML בלי PDF תקין");
@@ -80,56 +81,47 @@ assert(app.includes(">פרמייה מהפקה<"), "תווית פרמייה מה�
 assert(!app.includes("פרמיה שנתית · אלמנטרי"), "הוסרה פרמיה שנתית אלמנטרי מה-KPI");
 assert(app.includes('label: "מכירות מודיעין"'), "KPI מכירות מודיעין");
 assert(app.includes('label: "מכירות חיפה"'), "KPI מכירות חיפה");
-assert(app.includes('label: "לידים שויכו"'), "KPI לידים שויכו");
+assert(!app.includes('label: "לידים שויכו"'), "הוסר KPI לידים שויכו");
+assert(!app.includes(">לידים שויכו<"), "הוסר לידים שויכו מהמייל/הדפסה");
 assert(!app.includes('label: "נציגים שמכרו היום"'), "הוסר KPI נציגים שמכרו היום");
 assert(!app.includes('label: "פוליסות בריאות + פרט"'), "הוסר KPI פוליסות בריאות + פרט");
 assert(!app.includes(">נציגים שמכרו היום<"), "הוסר נציגים מהמייל/הדפסה");
 assert(!app.includes(">פוליסות בריאות + פרט<"), "הוסר פוליסות מהמייל/הדפסה");
-assert(app.includes("function salesAgentNameMatchesPersonName"), "התאמת שם קצר לשם מלא בסניפים");
+assert(app.includes("function salesAgentNameMatchesPersonName"), "התאמת שם פרטי+משפחה");
+assert(app.includes("function dailySalesAgentMergeKey"), "מפתח מיזוג לפי מזהה או שם מלא");
 assert(app.includes("dailySalesOfficeBranchPremium"), "סיכום סניף לפי בריאות+פרט");
 assert(!app.includes("מוצגים רק נציגים עם מכירה ביום הנבחר"), "הוסר טקסט ההסבר בתחתית הדוח");
 assert(app.includes("dailySalesIssuedPremiumTotal"), "קריאה לנתון הפקה קיים");
 assert(app.includes("DailyReportStore.getIssuedPremiumMetrics"), "מקור הפרמייה מהפקה הוא הדשבורד");
-assert(app.includes("dailySalesAssignedLeadsCount"), "ספירת לידים שויכו לפי יום הדוח");
-assert(app.includes("campaignLeadMatchesDateIL"), "סינון לידים לפי אותו יום כמו מערכת הלידים");
+assert(app.includes("this.buildTodaySalesMetrics()"), "KPI היום נלקח מכרטיס נמכר היום");
+assert(app.includes("dailySalesIsReportStyleTab"), "חוצץ בריאות+פרט בסגנון הכל היום");
+assert(app.includes("dailySalesHealthPratPrintModel"), "מודל תצוגה לבריאות+פרט כמו הכל היום");
 assert(app.includes("dailySalesOfficeBranchTotals"), "סיכום סניפים משורות הדוח הקיימות");
 assert(app.includes("function resolveOfficeBranchForAgentId"), "שיוך סניף לפי מזהה נציג");
 assert(app.includes("function resolveOfficeBranchForSalesAgent"), "שיוך סניף לפי מזהה ואז שם");
 assert(app.includes("function salesRecordAgentId"), "חילוץ מזהה נציג מהמכירה");
 assert(app.includes("salesRecordAgentId(rec)"), "מכירות מקומיות נספרות לפי מזהה נציג");
 assert(app.includes("resolveOfficeBranchForSalesAgent(r?.agentName, r?.agentIds)"), "KPI סניף קורא למזהה מהשורה");
-assert(app.includes("officeBranchByAgentIdV1"), "מטמון דוח מתבטל אחרי שיוך לפי מזהה");
-assert(app.includes('"id:" + uniqueId.toLowerCase()'), "פיבוט נציגים לא ממזג שני אביאל");
-assert(theme.includes("giDailySalesPage__kpiRow--extra"), "CSS לשורת KPI נוספת");
-assert(app.includes("ensureDailySalesAssignedLeadsLoaded"), "טעינת לידים ל-KPI אם מערכת הלידים לא נפתחה");
-assert(app.includes("_kickDailySalesAssignedLeadsLoad"), "רינדור הדוח מפעיל טעינה חד-פעמית");
-assert(app.includes("_paintDailySalesAssignedLeadsKpis"), "צביעת KPI אחרי שהלידים נטענו");
-assert(app.includes("try { this._kickDailySalesAssignedLeadsLoad(); } catch(_e) {}"), "renderDailySalesPage קורא לטעינה");
-assert(app.includes("ensureDailySalesAssignedLeadsLoaded({ force: true })"), "רענון דוח מרענן גם לידים");
-
-const ensStart = app.indexOf("ensureDailySalesAssignedLeadsLoaded(options = {}){");
-const ens = ensStart > 0 ? app.slice(ensStart, ensStart + 1400) : "";
-assert(ens.includes("hydrateFromCacheIfEmpty"), "hydrate מהמטמון לפני fetch");
-assert(ens.includes("store.fetchAll()"), "קורא ל-fetchAll הקיים — בלי מימוש חדש");
-assert(!ens.includes("assignedAgentId ="), "ensure לא משנה שיוך ליד");
-
-const kickStart = app.indexOf("_kickDailySalesAssignedLeadsLoad(){");
-const kick = kickStart > 0 ? app.slice(kickStart, kickStart + 400) : "";
-assert(kick.includes("if(this._dailySalesLeadsKickStarted) return"), "לא טוען מחדש בכל רינדור");
+assert(app.includes("officeBranchFullNameV1"), "מטמון דוח מתבטל אחרי שיוך לפי שם מלא");
+assert(app.includes("dailySalesAgentMergeKey(name, ids)"), "פיבוט נציגים לפי מזהה או שם מלא");
+assert(!app.includes("try { this._kickDailySalesAssignedLeadsLoad(); } catch(_e) {}"), "רינדור לא טוען לידים");
+assert(!app.includes("ensureDailySalesAssignedLeadsLoaded({ force: true })"), "רענון לא טוען לידים");
 
 const prepStart = app.indexOf("async prepareDailySalesMailSnapshot(){");
-const prep = prepStart > 0 ? app.slice(prepStart, prepStart + 700) : "";
-assert(prep.includes("ensureDailySalesAssignedLeadsLoaded") || prep.includes("_waitDailySalesAssignedLeadsForMail"), "prepare של המייל ממתין ללידים");
-assert(app.includes("_waitDailySalesAssignedLeadsForMail"), "המתנת מייל ללידים עם תקרת זמן");
+const prep = prepStart > 0 ? app.slice(prepStart, prepStart + 500) : "";
+assert(prep.includes("_waitDailySalesOverlayForMail"), "prepare של המייל ממתין ל-overlay");
+assert(!prep.includes("AssignedLeads"), "prepare לא ממתין ללידים");
 
 const snapStart = app.indexOf("async buildDailySalesMailSnapshot(forDate){");
-const snap = snapStart > 0 ? app.slice(snapStart, snapStart + 500) : "";
-assert(snap.includes("_waitDailySalesAssignedLeadsForMail") || snap.includes("ensureDailySalesAssignedLeadsLoaded"), "בניית snapshot למייל ממתינה ללידים");
+const snap = snapStart > 0 ? app.slice(snapStart, snapStart + 400) : "";
+assert(snap.includes("_waitDailySalesOverlayForMail"), "בניית snapshot ממתינה ל-overlay");
+assert(!snap.includes("AssignedLeads"), "בניית snapshot לא ממתינה ללידים");
 
 console.log("\n4) רגרסיה — לוגיקת ליבה לא ננגעה");
 assert(app.includes("buildDailyAgentSalesReport"), "בניית דוח מכירות נשארה");
 assert(app.includes("_seedDailySalesGroup"), "מיזוג overlay לא מוחק קבוצות מקומיות");
-assert(app.includes("const names = new Set([...localHealthByAgent.keys(), ...serverByAgent.keys()])"), "מיזוג לפי נציג — מקומי ושרת");
+assert(app.includes("const keys = new Set([...localHealthByAgent.keys(), ...serverByAgent.keys()])"), "מיזוג לפי מפתח נציג — מקומי ושרת");
+assert(app.includes("/* לא מחליפים פרמיה מקומית אחרי-הנחה ב-RPC ברוטו. overlay רק ממלא חור. */"), "overlay לא דורס אחרי-הנחה");
 assert(app.includes("toIsraelDateKey"), "תאריך דוח המכירות לפי שעון ישראל");
 assert(app.includes("getIsraelDayRange"), "טווח היום של הדוח לפי חצות ישראל");
 assert(!app.includes("return this._finalizeDailySalesGroups(map).concat(kept);"), "הוסרה החלפת כל נציגי הבריאות ב-RPC");
@@ -263,8 +255,23 @@ function salesAgentNameMatchesPersonName(salesName, personName){
   if(salesKey && personKey && salesKey === personKey) return true;
   const salesTokens = agentLabelTokens(salesName);
   const personTokens = agentLabelTokens(personName);
-  if(!salesTokens.length || !personTokens.length) return false;
+  if(salesTokens.length < 2 || personTokens.length < 2) return false;
+  if(salesTokens.length > personTokens.length) return false;
   return agentLabelTokensPrefix(personTokens, salesTokens);
+}
+function dailySalesAgentMergeKey(agentName, agentIds){
+  const ids = [];
+  const seen = new Set();
+  (Array.isArray(agentIds) ? agentIds : (agentIds ? [agentIds] : [])).forEach((raw) => {
+    const id = safeTrim(raw);
+    const key = id.toLowerCase();
+    if(!id || seen.has(key)) return;
+    seen.add(key);
+    ids.push(id);
+  });
+  if(ids.length === 1) return "id:" + ids[0].toLowerCase();
+  const tokens = agentLabelTokens(agentName);
+  return "name:" + (tokens.length ? tokens.join(" ") : safeTrim(agentName).replace(/\s+/g, " ").toLowerCase());
 }
 function lookupOfficeBranchFromDirectory(salesName, contacts){
   const branches = [];
@@ -284,29 +291,37 @@ const contacts = [
   { fullName: "אביב עמאש", agency: "מודיעין" },
   { fullName: "נתי אביב", agency: "חיפה" }
 ];
-assert(salesAgentNameMatchesPersonName("ואדים", "ואדים שאולוב"), "ואדים מתאים לואדים שאולוב");
-assert(salesAgentNameMatchesPersonName("Vadim", "ואדים שאולוב"), "Vadim מתאים לואדים שאולוב");
-assert(lookupOfficeBranchFromDirectory("ואדים", contacts) === "חיפה", "ואדים משויך לחיפה מאנשי קשר");
-assert(lookupOfficeBranchFromDirectory("Vadim", contacts) === "חיפה", "Vadim משויך לחיפה מאנשי קשר");
+assert(salesAgentNameMatchesPersonName("ואדים שאולוב", "ואדים שאולוב"), "שם מלא תואם");
+assert(salesAgentNameMatchesPersonName("ואדים", "ואדים שאולוב") === false, "שם פרטי בלבד לא מספיק");
+assert(salesAgentNameMatchesPersonName("Vadim Shaulov", "ואדים שאולוב") === false, "תרגום חופשי בלי כינוי מלא לא נדרש כאן");
+assert(lookupOfficeBranchFromDirectory("ואדים שאולוב", contacts) === "חיפה", "ואדים שאולוב משויך לחיפה מאנשי קשר");
+assert(lookupOfficeBranchFromDirectory("ואדים", contacts) === "", "ואדים בלי משפחה לא משויך");
 assert(lookupOfficeBranchFromDirectory("אביאל", contacts) === "", "אביאל דו-משמעי לא משויך אוטומטית");
-assert(lookupOfficeBranchFromDirectory("אביב", contacts) === "מודיעין", "אביב משויך לעמאש במודיעין ולא לנתי אביב");
+assert(lookupOfficeBranchFromDirectory("אביאל דהאן", contacts) === "מודיעין", "אביאל דהאן במודיעין");
+assert(lookupOfficeBranchFromDirectory("אביאל אלקיים", contacts) === "חיפה", "אביאל אלקיים בחיפה");
+assert(lookupOfficeBranchFromDirectory("אביב", contacts) === "", "אביב בלי משפחה לא משויך");
+assert(lookupOfficeBranchFromDirectory("אביב עמאש", contacts) === "מודיעין", "אביב עמאש במודיעין");
 assert(salesAgentNameMatchesPersonName("אביב", "נתי אביב") === false, "אביב אינו קידומת של נתי אביב");
+assert(salesAgentNameMatchesPersonName("אביב עמאש", "נתי אביב") === false, "אביב עמאש לא מתאים לנתי אביב");
 assert(app.includes("function agentLabelTokensPrefix"), "קידומת שם ב-app.js");
-assert(app.includes("return agentLabelTokensPrefix(personTokens, salesTokens)"), "שיוך סניף לפי קידומת");
+assert(app.includes("if(salesTokens.length < 2 || personTokens.length < 2) return false"), "נדרשים שם פרטי ושם משפחה");
+assert(dailySalesAgentMergeKey("אביאל דהאן", ["aviel-modiin"]) === "id:aviel-modiin", "מזהה גובר על שם");
+assert(dailySalesAgentMergeKey("אביאל דהאן", []) !== dailySalesAgentMergeKey("אביאל אלקיים", []), "שני אביאל עם משפחה שונה לא מתמזגים");
+assert(dailySalesAgentMergeKey("אביב", []) !== dailySalesAgentMergeKey("אביב עמאש", []), "אביב לבד לא מתמזג עם אביב עמאש");
 
 const reportRows = [
   { agentName: "יוסי בורג", health: 384, prat: 171 },
-  { agentName: "ואדים", health: 309, prat: 121 },
+  { agentName: "ואדים שאולוב", health: 309, prat: 121 },
   { agentName: "מודיעין 1", health: 84, prat: 0 }
 ];
 const resolved = {
   "יוסי בורג": "חיפה",
-  "ואדים": lookupOfficeBranchFromDirectory("ואדים", contacts),
+  "ואדים שאולוב": lookupOfficeBranchFromDirectory("ואדים שאולוב", contacts),
   "מודיעין 1": "מודיעין"
 };
 const office = dailySalesOfficeBranchTotals(reportRows, (r) => resolved[r.agentName] || "");
 const healthPratTotal = reportRows.reduce((n, r) => n + dailySalesOfficeBranchPremium(r), 0);
-assert(office.haifa.premium === 985, "חיפה כוללת את ואדים (555+430)");
+assert(office.haifa.premium === 985, "חיפה כוללת את ואדים שאולוב (555+430)");
 assert(office.modiin.premium === 84, "מודיעין נשאר 84");
 assert(Math.round((office.haifa.premium + office.modiin.premium) * 100) / 100 === healthPratTotal,
   "חיפה+מודיעין שווה לסה״כ בריאות+פרט");
@@ -443,6 +458,11 @@ assert(fn.includes("function snapshotHasNewLayout"), "השרת בודק תבני
 assert(fn.includes("OLD_LAYOUT_ERROR"), "שגיאה אם מנסים לשלוח תבנית ישנה");
 assert(fn.includes("if(!snapshotHasNewLayout(snap.html))"), "send-now/send-slot מסרבים לדוח ישן");
 assert(fn.includes("if(incoming.html && !snapshotHasNewLayout(incoming.html))"), "save-snapshot מסרב לשמור תבנית ישנה");
+assert(fn.includes('s.indexOf("לידים שויכו") < 0'), "שרת דוחה תבנית עם לידים שויכו");
+assert(theme.includes("giDailySalesPage__kpiLabel"), "CSS לכותרת כרטיסיית KPI");
+const kpiLabelCss = theme.slice(theme.indexOf("#view-dailySales .giDailySalesPage__kpiLabel"), theme.indexOf("#view-dailySales .giDailySalesPage__kpiLabel") + 280);
+assert(kpiLabelCss.includes("font-size: 16px"), "כותרת כרטיסיה מוגדלת ל-16px");
+assert(kpiLabelCss.includes("font-weight: 800"), "כותרת כרטיסיה במשקל מודגש");
 assert(!fn.includes("refreshSnapshotFromLiveSales"), "send-slot לא מרענן מכירות מ-RPC");
 assert(!fn.includes('rpc("gi_daily_sales_by_agent"'), "אין RPC שמשכתב את HTML המייל");
 assert(fn.includes("html: incoming.html || existing?.html || \"\""), "HTML מתעדכן גם כשיש PDF שמור");
