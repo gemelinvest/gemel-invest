@@ -3147,6 +3147,294 @@
     });
   }
 
+  /* GI-CUSTOMER-FILES-STORAGE 20260908
+     Metadata stays on the customer payload. Uploaded bytes (הר הביטוח,
+     elementary policy copies) move to Storage bucket gi-customer-files and
+     are fetched only when that file is previewed or downloaded.
+     Generated docs (ops report, arrival pack, official forms, cancel,
+     followup) never need a stored blob — preview/download already rebuild
+     them. Do not batch-migrate 51k rows; slim one customer on save/open. */
+  const GI_CUSTOMER_FILES_BUCKET = "gi-customer-files";
+  const GI_GENERATED_CUSTOMER_DOC_TYPES = {
+    operational_report_health: true,
+    operational_report_agent_appointment: true,
+    agent_appointment_form: true,
+    followup_questionnaire: true,
+    followup_questionnaires_zip: true,
+    company_cancel_form: true,
+    suitability_document: true,
+    premium_development_report: true,
+    nispah_he_har_auth: true,
+    customer_arrival_pack: true,
+    hachshara_ci_form: true,
+    hachshara_health_form: true,
+    hachshara_life_form: true,
+    hachshara_life_short_form: true,
+    hachshara_mortgage_form: true,
+    migdal_life_form: true,
+    migdal_mortgage_form: true,
+    menora_ci_form: true,
+    menora_mortgage_form: true,
+    menora_risk_form: true,
+    ayalon_health_form: true,
+    ayalon_mortgage_form: true,
+    clal_health_form: true,
+    clal_life_couple_form: true,
+    clal_mortgage_form: true,
+    migdal_cancer_form: true,
+    phoenix_life_short_form: true,
+    phoenix_life_full_form: true,
+    phoenix_health_form: true,
+    phoenix_ci_form: true
+  };
+
+  const GiCustomerFileStore = {
+    BUCKET: GI_CUSTOMER_FILES_BUCKET,
+    isGeneratedType(type){
+      const t = safeTrim(type);
+      if(!t) return false;
+      if(GI_GENERATED_CUSTOMER_DOC_TYPES[t]) return true;
+      try {
+        if(typeof CustomerDocuments !== "undefined" && CustomerDocuments.isOfficialJoinFormType?.(t)) return true;
+      } catch(_e) {}
+      return false;
+    },
+    inlineDataUrl(file){
+      if(!file || typeof file !== "object") return "";
+      const raw = safeTrim(file.dataUrl) || safeTrim(file.data) || safeTrim(file.base64) || "";
+      if(raw.startsWith("data:")) return raw;
+      const url = safeTrim(file.url);
+      if(url.startsWith("data:")) return url;
+      return "";
+    },
+    storagePathOf(file){
+      return safeTrim(file?.storagePath) || safeTrim(file?.storage_path);
+    },
+    previewUrl(file){
+      return this.inlineDataUrl(file) || safeTrim(file?._giHydratedDataUrl) || "";
+    },
+    fileLooksPresent(file){
+      if(!file || typeof file !== "object") return false;
+      if(this.inlineDataUrl(file)) return true;
+      if(this.storagePathOf(file)) return true;
+      if(file.hasFile === true) return true;
+      const url = safeTrim(file.url);
+      return !!(url && !url.startsWith("data:"));
+    },
+    needsHydrate(file){
+      if(!file || typeof file !== "object") return false;
+      if(this.previewUrl(file)) return false;
+      return !!this.storagePathOf(file);
+    },
+    stripInlineBlobFields(file){
+      if(!file || typeof file !== "object") return false;
+      let changed = false;
+      ["dataUrl", "data", "base64"].forEach((key) => {
+        if(Object.prototype.hasOwnProperty.call(file, key)){
+          delete file[key];
+          changed = true;
+        }
+      });
+      if(safeTrim(file.url).startsWith("data:")){
+        delete file.url;
+        changed = true;
+      }
+      return changed;
+    },
+    stripGeneratedBlobs(payload){
+      if(!payload || typeof payload !== "object") return false;
+      let changed = false;
+      const docs = Array.isArray(payload.customerDocuments) ? payload.customerDocuments : [];
+      docs.forEach((doc) => {
+        if(!doc || typeof doc !== "object") return;
+        if(!this.isGeneratedType(doc.type)) return;
+        if(this.stripInlineBlobFields(doc)) changed = true;
+      });
+      return changed;
+    },
+    mimeFromDataUrl(dataUrl){
+      const raw = safeTrim(dataUrl);
+      const match = raw.match(/^data:([^;,]+)/i);
+      return match ? match[1] : "application/octet-stream";
+    },
+    fileExt(file){
+      const name = safeTrim(file?.fileName) || safeTrim(file?.name) || safeTrim(file?.originalFileName);
+      try {
+        if(typeof CustomerDocuments !== "undefined" && CustomerDocuments.fileExtensionFromName){
+          return CustomerDocuments.fileExtensionFromName(name);
+        }
+      } catch(_e) {}
+      const idx = name.lastIndexOf(".");
+      if(idx <= 0 || idx === name.length - 1) return "";
+      const ext = name.slice(idx).toLowerCase();
+      return /^\.[a-z0-9]{1,8}$/.test(ext) ? ext : "";
+    },
+    sanitizePathPart(value){
+      return safeTrim(value).replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 80) || "file";
+    },
+    buildStoragePath(customerId, kind, file){
+      const cid = this.sanitizePathPart(customerId) || "customer";
+      const kid = this.sanitizePathPart(kind) || "doc";
+      const fid = this.sanitizePathPart(file?.id || file?.originToken || ("f_" + Date.now().toString(16)));
+      return cid + "/" + kid + "/" + fid + this.fileExt(file);
+    },
+    dataUrlToBlob(dataUrl){
+      const buf = dataUrlToArrayBuffer(dataUrl);
+      if(!buf) return null;
+      try {
+        return new Blob([buf], { type: this.mimeFromDataUrl(dataUrl) });
+      } catch(_e) {
+        return null;
+      }
+    },
+    bytesToDataUrl(bytes, mime){
+      if(bytes == null) return "";
+      try {
+        const b64 = arrayBufferToBase64(bytes);
+        if(!b64) return "";
+        return "data:" + (safeTrim(mime) || "application/octet-stream") + ";base64," + b64;
+      } catch(_e) {
+        return "";
+      }
+    },
+    rememberHydrated(file, dataUrl){
+      const url = safeTrim(dataUrl);
+      if(!file || typeof file !== "object" || !url) return url;
+      try {
+        Object.defineProperty(file, "_giHydratedDataUrl", {
+          value: url,
+          writable: true,
+          enumerable: false,
+          configurable: true
+        });
+      } catch(_e) {
+        file._giHydratedDataUrl = url;
+      }
+      return url;
+    },
+    getStorageApi(){
+      try {
+        const client = (typeof Storage !== "undefined" && Storage.getClient) ? Storage.getClient() : null;
+        const from = client?.storage?.from;
+        if(typeof from === "function") return client.storage;
+      } catch(_e) {}
+      return null;
+    },
+    async uploadBlob(customerId, kind, file){
+      const dataUrl = this.inlineDataUrl(file);
+      if(!dataUrl) return { ok: false, skipped: true };
+      const existingPath = this.storagePathOf(file);
+      if(existingPath){
+        this.stripInlineBlobFields(file);
+        file.hasFile = true;
+        file.storagePath = existingPath;
+        file.storageBucket = safeTrim(file.storageBucket) || GI_CUSTOMER_FILES_BUCKET;
+        return { ok: true, storagePath: existingPath, reused: true };
+      }
+      const api = this.getStorageApi();
+      if(!api) return { ok: false, error: "NO_STORAGE" };
+      const blob = this.dataUrlToBlob(dataUrl);
+      if(!blob) return { ok: false, error: "BAD_BLOB" };
+      const path = this.buildStoragePath(customerId, kind, file);
+      const mime = safeTrim(file.mime) || this.mimeFromDataUrl(dataUrl);
+      try {
+        const { error } = await api.from(GI_CUSTOMER_FILES_BUCKET).upload(path, blob, {
+          contentType: mime,
+          upsert: true
+        });
+        if(error) return { ok: false, error: String(error.message || error) };
+        file.storagePath = path;
+        file.storageBucket = GI_CUSTOMER_FILES_BUCKET;
+        file.mime = mime;
+        file.size = Number(file.size) || Number(blob.size) || 0;
+        file.hasFile = true;
+        this.stripInlineBlobFields(file);
+        return { ok: true, storagePath: path };
+      } catch(err) {
+        return { ok: false, error: String(err?.message || err) };
+      }
+    },
+    async hydrate(file){
+      if(!file || typeof file !== "object") return "";
+      const cached = this.previewUrl(file);
+      if(cached) return cached;
+      const path = this.storagePathOf(file);
+      if(!path) return "";
+      const api = this.getStorageApi();
+      if(!api) return "";
+      try {
+        const bucket = safeTrim(file.storageBucket) || GI_CUSTOMER_FILES_BUCKET;
+        const { data, error } = await api.from(bucket).download(path);
+        if(error || !data) return "";
+        const buf = typeof data.arrayBuffer === "function" ? await data.arrayBuffer() : data;
+        const mime = safeTrim(file.mime) || safeTrim(data.type) || "application/octet-stream";
+        const dataUrl = this.bytesToDataUrl(buf, mime);
+        return this.rememberHydrated(file, dataUrl);
+      } catch(_e) {
+        return "";
+      }
+    },
+    walkUploadedFiles(payload, visit, options = {}){
+      if(!payload || typeof payload !== "object" || typeof visit !== "function") return;
+      const assignIds = options.assignIds === true;
+      const docs = Array.isArray(payload.customerDocuments) ? payload.customerDocuments : [];
+      docs.forEach((doc) => {
+        if(!doc || typeof doc !== "object") return;
+        if(this.isGeneratedType(doc.type)) return;
+        visit(doc, safeTrim(doc.type) || "doc");
+      });
+      const elem = Array.isArray(payload.elementaryPolicyFiles) ? payload.elementaryPolicyFiles : [];
+      elem.forEach((file, idx) => {
+        if(!file || typeof file !== "object") return;
+        if(assignIds && !safeTrim(file.id)) file.id = "elem_file_" + idx;
+        visit(file, "elementary");
+      });
+      const policies = Array.isArray(payload.elementaryPolicies) ? payload.elementaryPolicies : [];
+      policies.forEach((policy) => {
+        const files = Array.isArray(policy?.policyFiles) ? policy.policyFiles : [];
+        files.forEach((file, idx) => {
+          if(!file || typeof file !== "object") return;
+          if(assignIds && !safeTrim(file.id)) file.id = safeTrim(policy?.id) + "_f_" + idx;
+          visit(file, "policy");
+        });
+      });
+    },
+    payloadNeedsPersistSlim(payload){
+      if(!payload || typeof payload !== "object") return false;
+      let needs = false;
+      const docs = Array.isArray(payload.customerDocuments) ? payload.customerDocuments : [];
+      docs.forEach((doc) => {
+        if(!doc || typeof doc !== "object") return;
+        if(this.isGeneratedType(doc.type)){
+          if(this.inlineDataUrl(doc)) needs = true;
+          return;
+        }
+        if(this.inlineDataUrl(doc)) needs = true;
+      });
+      if(needs) return true;
+      this.walkUploadedFiles(payload, (file) => {
+        if(this.inlineDataUrl(file)) needs = true;
+      });
+      return needs;
+    },
+    async preparePayloadForPersist(customerId, payload){
+      if(!payload || typeof payload !== "object") return false;
+      let changed = this.stripGeneratedBlobs(payload);
+      const jobs = [];
+      this.walkUploadedFiles(payload, (file, kind) => {
+        if(!this.inlineDataUrl(file)) return;
+        jobs.push({ file, kind });
+      }, { assignIds: true });
+      for(let i = 0; i < jobs.length; i += 1){
+        const job = jobs[i];
+        const res = await this.uploadBlob(customerId, job.kind, job.file);
+        if(res?.ok) changed = true;
+      }
+      return changed;
+    }
+  };
+  try { window.GiCustomerFileStore = GiCustomerFileStore; } catch(_e) {}
+
 
   function isWave3IncrementalEnabled(){
     try {
@@ -7997,8 +8285,15 @@
       payload.customerDocuments = list;
       return payload;
     },
-    downloadFileDoc(doc){
-      const url = safeTrim(doc?.dataUrl) || safeTrim(doc?.url);
+    async downloadFileDoc(doc){
+      let url = safeTrim(doc?.dataUrl) || safeTrim(doc?.url);
+      if(!url || !url.startsWith("data:")){
+        try {
+          if(typeof GiCustomerFileStore !== "undefined"){
+            url = (await GiCustomerFileStore.hydrate(doc)) || url;
+          }
+        } catch(_e) {}
+      }
       if(!url) return false;
       const a = document.createElement("a");
       a.href = url;
@@ -8022,7 +8317,14 @@
       return true;
     },
     async downloadHarBituachFileDoc(doc){
-      const url = safeTrim(doc?.dataUrl) || safeTrim(doc?.url);
+      let url = safeTrim(doc?.dataUrl) || safeTrim(doc?.url);
+      if(!url || !url.startsWith("data:")){
+        try {
+          if(typeof GiCustomerFileStore !== "undefined"){
+            url = (await GiCustomerFileStore.hydrate(doc)) || url;
+          }
+        } catch(_e) {}
+      }
       if(!url) return false;
       const fileName = safeTrim(doc?.fileName) || safeTrim(doc?.name) || "הר ביטוח.xlsx";
       const token = safeTrim(doc?.originToken) || safeTrim(doc?.id);
@@ -8915,7 +9217,7 @@
         if(type === this.TYPES.arrivalPack){
           return !!(window.GiArrivalDocs?.qualifies ? window.GiArrivalDocs.qualifies(payload, rec) : this.qualifiesForArrivalDocs(payload, rec));
         }
-        return !!(safeTrim(doc.name) || safeTrim(doc.url) || safeTrim(doc.dataUrl) || safeTrim(doc.fileName));
+        return !!(safeTrim(doc.name) || safeTrim(doc.url) || safeTrim(doc.dataUrl) || safeTrim(doc.fileName) || safeTrim(doc.storagePath) || safeTrim(doc.storage_path) || doc.hasFile === true);
       }));
     },
     findDoc(rec, docId){
@@ -11704,7 +12006,7 @@
     return { ok: !!ok };
   }
 
-  async function persistCustomerPayloadRecord(customerId, payload, label){
+  async function persistCustomerPayloadRecord(customerId, payload, label, options = {}){
     const cid = safeTrim(customerId);
     if(!cid || !payload) return false;
     State.data.customers = Array.isArray(State.data.customers) ? State.data.customers : [];
@@ -11736,6 +12038,15 @@
         );
       }
     } catch(_e) {}
+    let slimmed = false;
+    try {
+      if(typeof GiCustomerFileStore !== "undefined"){
+        slimmed = !!(await GiCustomerFileStore.preparePayloadForPersist(cid, nextPayload));
+      }
+    } catch(_e) {}
+    if(options && options.skipAppPersist === true && !slimmed){
+      return true;
+    }
     const nextInsuredCount = Array.isArray(nextPayload.insureds) ? nextPayload.insureds.length : (Number(prev.insuredCount || 0) || 0);
     const nextNewCount = Array.isArray(nextPayload.newPolicies) ? nextPayload.newPolicies.length : (Number(prev.newPoliciesCount || 0) || 0);
     State.data.customers[idx] = {
@@ -11750,7 +12061,9 @@
       const directRow = Storage.buildCustomerRows({ customers: [State.data.customers[idx]] })[0];
       await Storage.upsertSingleRow(SUPABASE_TABLES.customers, directRow);
     } catch(_e){}
-    try { await App.persist(label || "עודכן תיק לקוח"); } catch(_e){}
+    if(!(options && options.skipAppPersist === true)){
+      try { await App.persist(label || "עודכן תיק לקוח"); } catch(_e){}
+    }
     return true;
   }
 
@@ -11760,6 +12073,7 @@
     State.data.customers = Array.isArray(State.data.customers) ? State.data.customers : [];
     const idx = State.data.customers.findIndex((row) => String(row?.id) === String(cid));
     if(idx < 0) return { ok: false, error: "CUSTOMER_NOT_FOUND" };
+    try { GiCustomerFileStore.stripGeneratedBlobs(rec?.payload); } catch(_e) {}
     State.data.customers[idx] = rec;
     if(State.data.meta && typeof State.data.meta === "object"){
       State.data.meta.updatedAt = safeTrim(rec.updatedAt) || nowISO();
@@ -20803,7 +21117,7 @@ UsersGateUI.init();
           const doc = docId ? CustomerDocuments.findDoc(rec, docId) : null;
           const downloaded = (safeTrim(doc?.type) === CustomerDocuments.TYPES.harBituach)
             ? await CustomerDocuments.downloadHarBituachFileDoc(doc)
-            : CustomerDocuments.downloadFileDoc(doc);
+            : await CustomerDocuments.downloadFileDoc(doc);
           if(!downloaded){
             try { window.showToast?.({ title: "אין קובץ", text: "לא נמצא עותק להורדה.", variant: "warn", durationMs: 4200 }); } catch(_e){}
           }
@@ -22185,15 +22499,21 @@ UsersGateUI.init();
 
     getElementarySharedPolicyFiles(rec){
       const payload = rec?.payload && typeof rec.payload === 'object' ? rec.payload : {};
+      const filePresent = (f) => {
+        try {
+          if(typeof GiCustomerFileStore !== "undefined") return GiCustomerFileStore.fileLooksPresent(f);
+        } catch(_e) {}
+        return !!safeTrim(f?.dataUrl);
+      };
       const fromPayload = Array.isArray(payload.elementaryPolicyFiles)
-        ? payload.elementaryPolicyFiles.filter((f) => safeTrim(f?.dataUrl))
+        ? payload.elementaryPolicyFiles.filter(filePresent)
         : [];
       if(fromPayload.length) return fromPayload;
       const ref = pickBestElementaryReferralForCustomerFile(
         findElementaryReferralsForCustomerOrIdNumber(rec?.id, rec?.idNumber)
       ) || findElementaryReferralByCustomerId(rec?.id) || findPendingElementaryReferralByIdNumber(rec?.idNumber);
       const fromRef = Array.isArray(ref?.elementaryPolicyFiles)
-        ? ref.elementaryPolicyFiles.filter((f) => safeTrim(f?.dataUrl))
+        ? ref.elementaryPolicyFiles.filter(filePresent)
         : [];
       return fromRef;
     },
@@ -22231,7 +22551,12 @@ UsersGateUI.init();
       const refPayload = ref?.payload && typeof ref.payload === 'object' ? ref.payload : null;
       if(refPayload){
         const refShared = Array.isArray(ref?.elementaryPolicyFiles)
-          ? ref.elementaryPolicyFiles.filter((f) => safeTrim(f?.dataUrl))
+          ? ref.elementaryPolicyFiles.filter((f) => {
+              try {
+                if(typeof GiCustomerFileStore !== "undefined") return GiCustomerFileStore.fileLooksPresent(f);
+              } catch(_e) {}
+              return !!safeTrim(f?.dataUrl);
+            })
           : sharedPolicyFiles;
         const refSnap = Array.isArray(refPayload.elementaryPolicies) ? refPayload.elementaryPolicies : [];
         if(refSnap.length){
@@ -22261,7 +22586,12 @@ UsersGateUI.init();
       const premVal = Number(row.premiumAfterDiscountValue);
       const premNum = Number.isFinite(premVal) && premVal > 0 ? premVal : this.asMoneyNumber(row.premiumValue);
       const premStr = safeTrim(row.premiumAfterDiscount || row.premiumText) || (premNum > 0 ? this.formatMoneyValue(premNum) : '—');
-      const rowFiles = Array.isArray(row.policyFiles) ? row.policyFiles.filter((f) => safeTrim(f?.dataUrl)) : [];
+      const rowFiles = Array.isArray(row.policyFiles) ? row.policyFiles.filter((f) => {
+        try {
+          if(typeof GiCustomerFileStore !== "undefined") return GiCustomerFileStore.fileLooksPresent(f);
+        } catch(_e) {}
+        return !!safeTrim(f?.dataUrl);
+      }) : [];
       const sharedFiles = Array.isArray(options.sharedPolicyFiles) ? options.sharedPolicyFiles : [];
       const productCount = Number(options.elementaryProductCount || 0) || 0;
       const policyFiles = rowFiles.length ? rowFiles : ((productCount === 1 && sharedFiles.length) ? sharedFiles : []);
@@ -23402,6 +23732,30 @@ UsersGateUI.init();
       }
       this.startOpsCardLoop();
       this.queueFollowupDocumentsSync(rec, opts);
+      this.queueCustomerFileBlobOffload(rec);
+    },
+
+    queueCustomerFileBlobOffload(rec){
+      const cid = safeTrim(rec?.id);
+      if(!cid) return;
+      if(this._fileOffloadQueued && this._fileOffloadQueued[cid]) return;
+      let needs = false;
+      try {
+        needs = typeof GiCustomerFileStore !== "undefined" && GiCustomerFileStore.payloadNeedsPersistSlim(rec?.payload);
+      } catch(_e) {}
+      if(!needs) return;
+      this._fileOffloadQueued = this._fileOffloadQueued || Object.create(null);
+      this._fileOffloadQueued[cid] = true;
+      window.setTimeout(() => {
+        void (async () => {
+          try {
+            const live = this.byId?.(cid) || rec;
+            await persistCustomerPayloadRecord(cid, live?.payload, "ארכוב קבצי תיק לאחסון", { skipAppPersist: true });
+          } catch(_e) {
+            try { delete this._fileOffloadQueued[cid]; } catch(_e2) {}
+          }
+        })();
+      }, 1800);
     },
 
     renderTabBar(rec, policies){
@@ -23566,7 +23920,8 @@ UsersGateUI.init();
     async fillCustomerDocumentPreviewPdf(rec, doc){
       const cached = this.cachedCustomerDocPreviewUrl(rec, doc);
       if(cached) return cached;
-      const stored = safeTrim(doc?.dataUrl);
+      const stored = safeTrim(doc?.dataUrl)
+        || (typeof GiCustomerFileStore !== "undefined" ? GiCustomerFileStore.previewUrl(doc) : "");
       if(/^data:application\/pdf/i.test(stored)) return stored;
       let bytes = null;
       const spec = this.officialJoinFormPreviewSpec(safeTrim(doc?.type));
@@ -23589,14 +23944,18 @@ UsersGateUI.init();
     },
 
     customerDocPreviewKind(doc){
-      const url = safeTrim(doc?.dataUrl) || safeTrim(doc?.url);
+      const url = (typeof GiCustomerFileStore !== "undefined" && GiCustomerFileStore.previewUrl)
+        ? (GiCustomerFileStore.previewUrl(doc) || safeTrim(doc?.url))
+        : (safeTrim(doc?.dataUrl) || safeTrim(doc?.url));
       const name = (safeTrim(doc?.fileName) || safeTrim(doc?.originalFileName) || safeTrim(doc?.name) || "").toLowerCase();
-      const mime = url.startsWith("data:") ? url.slice(5, Math.max(5, url.indexOf(";"))).toLowerCase() : "";
+      const mimeFromUrl = url.startsWith("data:") ? url.slice(5, Math.max(5, url.indexOf(";"))).toLowerCase() : "";
+      const mime = mimeFromUrl || safeTrim(doc?.mime).toLowerCase();
       const hint = mime + " " + name;
-      if(url && /image\/|\.(png|jpe?g|gif|webp|bmp)$/i.test(hint)) return { kind: "image", url };
-      if(url && /pdf|\.pdf/i.test(hint)) return { kind: "pdf", url };
+      const stored = !!(url || (typeof GiCustomerFileStore !== "undefined" && GiCustomerFileStore.storagePathOf?.(doc)));
+      if(stored && /image\/|\.(png|jpe?g|gif|webp|bmp)$/i.test(hint)) return { kind: "image", url };
+      if(stored && /pdf|\.pdf/i.test(hint)) return { kind: "pdf", url };
       if(/spreadsheet|\.xlsx?|\.csv/i.test(hint) || safeTrim(doc?.type) === CustomerDocuments.TYPES.harBituach) return { kind: "sheet", url };
-      if(url) return { kind: "file", url };
+      if(stored) return { kind: "file", url };
       return { kind: "none", url: "" };
     },
 
@@ -23630,7 +23989,13 @@ UsersGateUI.init();
     },
 
     async renderSheetPreviewHtml(doc){
-      const url = safeTrim(doc?.dataUrl) || safeTrim(doc?.url);
+      let url = safeTrim(doc?.dataUrl) || safeTrim(doc?.url);
+      if(!url){
+        try {
+          if(typeof GiCustomerFileStore !== "undefined") url = await GiCustomerFileStore.hydrate(doc);
+        } catch(_e) {}
+      }
+      if(!url) url = (typeof GiCustomerFileStore !== "undefined" && GiCustomerFileStore.previewUrl) ? GiCustomerFileStore.previewUrl(doc) : "";
       if(!url) return "";
       try{
         if(window.GI_LOAD_LIBS?.xlsx) await window.GI_LOAD_LIBS.xlsx();
@@ -23867,6 +24232,11 @@ UsersGateUI.init();
       const pane = root.querySelector("[data-cf-doc-preview-pane]");
       if(!pane) return;
       const doc = this.findCustomerDocument(rec, id);
+      if(doc && typeof GiCustomerFileStore !== "undefined" && GiCustomerFileStore.needsHydrate?.(doc)){
+        pane.innerHTML = this.renderDocumentPreviewInner(rec, id, { pdfLoading: true });
+        try { await GiCustomerFileStore.hydrate(doc); } catch(_e) {}
+        if(this._previewDocId !== id || seq !== this._previewFillSeq) return;
+      }
       const src = this.customerDocPreviewKind(doc);
       const storedPreview = (src.kind === "image" && src.url) || (src.kind === "pdf" && src.url);
       const needsPdf = !storedPreview && this.wantsFilledPdfPreview(doc);
@@ -24308,7 +24678,19 @@ UsersGateUI.init();
         const bytes = new TextEncoder().encode(html);
         return { fileName: window.GiArrivalDocs.fileName(type === CustomerDocuments.TYPES.premiumDevelopment ? "premia" : (type === CustomerDocuments.TYPES.suitabilityDoc ? "hatama" : "pack"), draft).replace(/\.pdf$/i, ".html"), bytes };
       }
-      const dataUrl = safeTrim(doc.dataUrl) || safeTrim(doc.url);
+      let dataUrl = safeTrim(doc.dataUrl) || safeTrim(doc.url);
+      if(!dataUrl){
+        try {
+          if(typeof GiCustomerFileStore !== "undefined") dataUrl = GiCustomerFileStore.previewUrl(doc);
+        } catch(_e) {}
+      }
+      if(!dataUrl || (!dataUrl.startsWith("data:") && !/^https?:/i.test(dataUrl))){
+        try {
+          if(typeof GiCustomerFileStore !== "undefined"){
+            dataUrl = (await GiCustomerFileStore.hydrate(doc)) || dataUrl;
+          }
+        } catch(_e) {}
+      }
       if(dataUrl){
         if(dataUrl.startsWith("data:")){
           const buf = dataUrlToArrayBuffer(dataUrl);
@@ -25371,18 +25753,25 @@ UsersGateUI.init();
           const fIdx = Number(btn.getAttribute("data-policy-file-idx") || 0) || 0;
           const policy = policies.find((x) => String(x.id) === String(pid));
           const file = Array.isArray(policy?.policyFiles) ? policy.policyFiles[fIdx] : null;
-          const url = safeTrim(file?.dataUrl);
-          if(!url){
-            try { window.showToast?.({ title: "אין קובץ", text: "לא נמצא עותק פוליסה להורדה.", variant: "warn", durationMs: 4200 }); } catch(_e){}
-            return;
-          }
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = safeTrim(file?.name) || "policy.pdf";
-          a.rel = "noopener";
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
+          void (async () => {
+            let url = safeTrim(file?.dataUrl);
+            if(!url){
+              try {
+                if(typeof GiCustomerFileStore !== "undefined") url = await GiCustomerFileStore.hydrate(file);
+              } catch(_e) {}
+            }
+            if(!url){
+              try { window.showToast?.({ title: "אין קובץ", text: "לא נמצא עותק פוליסה להורדה.", variant: "warn", durationMs: 4200 }); } catch(_e){}
+              return;
+            }
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = safeTrim(file?.name) || "policy.pdf";
+            a.rel = "noopener";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+          })();
         });
       });
       root.querySelectorAll('[data-policy-open]').forEach(btn => {
@@ -25743,18 +26132,25 @@ UsersGateUI.init();
           const fIdx = Number(btn.getAttribute("data-policy-file-idx") || 0) || 0;
           const policy = policies.find((x) => String(x.id) === String(pid));
           const file = Array.isArray(policy?.policyFiles) ? policy.policyFiles[fIdx] : null;
-          const url = safeTrim(file?.dataUrl);
-          if(!url){
-            try { window.showToast?.({ title: "אין קובץ", text: "לא נמצא עותק פוליסה להורדה.", variant: "warn", durationMs: 4200 }); } catch(_e){}
-            return;
-          }
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = safeTrim(file?.name) || "policy.pdf";
-          a.rel = "noopener";
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
+          void (async () => {
+            let url = safeTrim(file?.dataUrl);
+            if(!url){
+              try {
+                if(typeof GiCustomerFileStore !== "undefined") url = await GiCustomerFileStore.hydrate(file);
+              } catch(_e) {}
+            }
+            if(!url){
+              try { window.showToast?.({ title: "אין קובץ", text: "לא נמצא עותק פוליסה להורדה.", variant: "warn", durationMs: 4200 }); } catch(_e){}
+              return;
+            }
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = safeTrim(file?.name) || "policy.pdf";
+            a.rel = "noopener";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+          })();
         });
       });
       root.querySelectorAll('[data-policy-open]').forEach(btn => {
