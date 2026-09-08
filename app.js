@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260907-chat-dock-v1";
+  const BUILD = "20260908-chat-live-notify-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -1085,7 +1085,64 @@
     } catch(_e) {}
   }
 
+  /** צליל הודעה נכנסת בסגנון וואטסאפ: שתי טיפות קצרות, בלי קובץ חיצוני. */
+  function playGiChatWhatsAppTone(){
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if(!Ctx) return false;
+      if(!playGiNotifySound._ctx) playGiNotifySound._ctx = new Ctx();
+      const ctx = playGiNotifySound._ctx;
+      if(ctx.state === "suspended"){
+        try { void ctx.resume(); } catch(_e) {}
+      }
+      const t0 = ctx.currentTime;
+      const master = ctx.createGain();
+      master.gain.setValueAtTime(0.72, t0);
+      master.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.4);
+      master.connect(ctx.destination);
+      const drip = (when, freq, amp) => {
+        const osc = ctx.createOscillator();
+        const click = ctx.createOscillator();
+        const g = ctx.createGain();
+        const cg = ctx.createGain();
+        const bp = ctx.createBiquadFilter();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, when);
+        osc.frequency.exponentialRampToValueAtTime(Math.max(160, freq * 0.42), when + 0.12);
+        click.type = "sine";
+        click.frequency.setValueAtTime(freq * 2.12, when);
+        click.frequency.exponentialRampToValueAtTime(freq * 0.82, when + 0.028);
+        bp.type = "bandpass";
+        bp.frequency.setValueAtTime(freq * 1.18, when);
+        bp.Q.value = 5.4;
+        g.gain.setValueAtTime(0.0001, when);
+        g.gain.exponentialRampToValueAtTime(amp, when + 0.006);
+        g.gain.exponentialRampToValueAtTime(0.0001, when + 0.15);
+        cg.gain.setValueAtTime(0.0001, when);
+        cg.gain.exponentialRampToValueAtTime(amp * 0.32, when + 0.002);
+        cg.gain.exponentialRampToValueAtTime(0.0001, when + 0.03);
+        osc.connect(bp);
+        bp.connect(g);
+        g.connect(master);
+        click.connect(cg);
+        cg.connect(master);
+        osc.start(when);
+        osc.stop(when + 0.18);
+        click.start(when);
+        click.stop(when + 0.05);
+      };
+      drip(t0, 1174.66, 0.44);
+      drip(t0 + 0.09, 1567.98, 0.36);
+      return true;
+    } catch(_e) {
+      return false;
+    }
+  }
+
   function playGiChatMessageSound(){
+    try {
+      if(playGiChatWhatsAppTone()) return;
+    } catch(_e) {}
     try {
       if(!playGiChatMessageSound._audio){
         playGiChatMessageSound._audio = new Audio("assets/audio/chat-message-chime-from-recording.mp3");
@@ -1096,11 +1153,11 @@
       const playPromise = audio.play();
       if(playPromise && typeof playPromise.catch === "function"){
         playPromise.catch(() => {
-          try { playGiNotifySound(); } catch(_e2) {}
+          try { playGiChatWhatsAppTone(); } catch(_e2) {}
         });
       }
     } catch(_e) {
-      try { playGiNotifySound(); } catch(_e2) {}
+      try { playGiChatWhatsAppTone(); } catch(_e2) {}
     }
   }
 
@@ -40515,7 +40572,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260907-chat-dock-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260908-chat-live-notify-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -40535,8 +40592,8 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260907-chat-dock-v1";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260907-chat-dock-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260908-chat-live-notify-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260908-chat-live-notify-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -41189,18 +41246,18 @@ UsersGateUI.init();
     "./ayalon-health-sim.css?v=20260810-sim-mockup-v2",
     "./ayalon-ci-sim.css?v=20260811-ayl-ci-v1",
     "./hachshara-health-sim.css?v=20260810-sim-mockup-v2",
-    "./hachshara-risk-sim.css?v=20260907-chat-dock-v1",
-    "./hachshara-mortgage-risk-sim.css?v=20260907-chat-dock-v1",
+    "./hachshara-risk-sim.css?v=20260908-chat-live-notify-v1",
+    "./hachshara-mortgage-risk-sim.css?v=20260908-chat-live-notify-v1",
     "./migdal-health-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
-    "./menora-ci-sim.css?v=20260907-chat-dock-v1",
+    "./menora-ci-sim.css?v=20260908-chat-live-notify-v1",
     "./clal-health-sim.css?v=20260812-cll-health-v1",
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260907-chat-dock-v1",
-    "./simulators-shell.css?v=20260907-chat-dock-v1"
+    "./simulators-center.css?v=20260908-chat-live-notify-v1",
+    "./simulators-shell.css?v=20260908-chat-live-notify-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -42562,7 +42619,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260907-chat-dock-v1";
+  const GI_WIZARD_JS_VERSION = "20260908-chat-live-notify-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -51114,9 +51171,14 @@ const ClalRiskLifePdf = {
       this.initDrag();
       this.initFabDrag();
       this.syncVisibility('global');
+      if(Auth.current) this.ensureStarted();
     },
 
     async ensureStarted(force=false){
+      this.refreshCurrentUser();
+      if(this._subscribedUserKey && this.userKey && this._subscribedUserKey !== this.userKey){
+        force = true;
+      }
       if(this._startingPromise && !force) return this._startingPromise;
       if(this.ready && this.presenceChannel && this.messagesChannel && !force) return;
       if(this.initStarted && !this.ready && !force){
@@ -51144,7 +51206,9 @@ const ClalRiskLifePdf = {
           this.teardownRealtime(true);
           await this.connectPresence();
           this.listenMessages();
+          this._subscribedUserKey = this.userKey;
           this.startCleanupLoop();
+          this.startIncomingPoll();
           this.ready = true;
           this.enabled = true;
           this.els.setupHint?.classList.add("is-hidden");
@@ -51690,14 +51754,22 @@ const ClalRiskLifePdf = {
 
     listenMessages(){
       if(!this.client || !this.userKey) return;
-      const userFilter = encodeURIComponent(this.userKey);
+      const userId = this.userKey;
+      // Realtime postgres_changes does not support PostgREST or= filters.
+      // Only column=eq.value (AND if multiple). Incoming alerts need recipient_id.
       this.messagesChannel = this.client
-        .channel('invest-chat-db-' + this.userKey)
+        .channel('invest-chat-db-' + userId)
         .on('postgres_changes', {
           event: 'INSERT',
           schema: 'public',
           table: SUPABASE_CHAT.messagesTable,
-          filter: `or=(sender_id.eq.${userFilter},recipient_id.eq.${userFilter})`
+          filter: `recipient_id=eq.${userId}`
+        }, (payload) => this.handleIncomingDbInsert(payload?.new))
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: SUPABASE_CHAT.messagesTable,
+          filter: `sender_id=eq.${userId}`
         }, (payload) => this.handleIncomingDbInsert(payload?.new))
         .subscribe((status) => {
           if(status === 'SUBSCRIBED') this.setConnectionStatus('צ׳אט לייב מחובר', 'ok');
@@ -51709,6 +51781,16 @@ const ClalRiskLifePdf = {
       const msg = this.normalizeMessage(row);
       if(!msg || msg.expiresAt <= Date.now()) return;
       if(msg.fromId !== this.userKey && msg.toId !== this.userKey) return;
+      const seenId = String(msg.id || '');
+      if(seenId){
+        if(!this.seenIncomingIds) this.seenIncomingIds = new Set();
+        if(this.seenIncomingIds.has(seenId)) return;
+        this.seenIncomingIds.add(seenId);
+        if(this.seenIncomingIds.size > 400){
+          const first = this.seenIncomingIds.values().next().value;
+          if(first != null) this.seenIncomingIds.delete(first);
+        }
+      }
       const convoId = msg.conversationId;
       this.lastMessageByConversation.set(convoId, { text: msg.text, at: msg.createdAt, fromId: msg.fromId });
       if(this.currentConversationId === convoId){
@@ -52223,6 +52305,7 @@ const ClalRiskLifePdf = {
         </div>
         <div class="giChatDockCard__actions">
           <button class="giChatDockCard__reply" type="button" data-chat-dock-reply="1">השב</button>
+          <button class="giChatDockCard__ignore" type="button" data-chat-dock-dismiss="1">התעלם</button>
         </div>
         <form class="giChatDockCard__composer" data-chat-dock-composer="1">
           <label class="giChatDockCard__srOnly" for="giChatDockReply-${this.escapeAttr(this.normalizeKey(fromId))}">תשובה אל ${this.escapeHtml(fromName)}</label>
@@ -52341,11 +52424,43 @@ const ClalRiskLifePdf = {
       run();
     },
 
+    startIncomingPoll(){
+      clearInterval(this.incomingPollTimer);
+      this._pollSinceMs = Date.now() - 15000;
+      const run = () => { void this.pollIncomingMessages(); };
+      this.incomingPollTimer = setInterval(run, 4000);
+      run();
+    },
+
+    async pollIncomingMessages(){
+      if(!this.client || !this.userKey || !SUPABASE_CHAT.enabled) return;
+      const sinceIso = new Date(Math.max(0, Number(this._pollSinceMs || 0) - 3000)).toISOString();
+      try {
+        const { data, error } = await this.client
+          .from(SUPABASE_CHAT.messagesTable)
+          .select('id,conversation_id,sender_id,sender_name,recipient_id,recipient_name,body,created_at,expires_at')
+          .eq('recipient_id', this.userKey)
+          .gt('created_at', sinceIso)
+          .gt('expires_at', nowISO())
+          .order('created_at', { ascending: true })
+          .limit(40);
+        if(error) throw error;
+        const rows = Array.isArray(data) ? data : [];
+        rows.forEach((row) => this.handleIncomingDbInsert(row));
+        const last = rows[rows.length - 1];
+        const lastTs = last ? (Date.parse(last.created_at) || 0) : 0;
+        this._pollSinceMs = Math.max(Number(this._pollSinceMs || 0), lastTs || Date.now());
+      } catch(_e) {}
+    },
+
     teardownRealtime(isSilent=false){
       clearTimeout(this.typingTimer);
       clearInterval(this.cleanupTimer);
       this.cleanupTimer = null;
+      clearInterval(this.incomingPollTimer);
+      this.incomingPollTimer = null;
       this.ready = false;
+      this._subscribedUserKey = "";
       if(this.presenceChannel){
         try { this.presenceChannel.untrack(); } catch(_e) {}
         try { this.client?.removeChannel(this.presenceChannel); } catch(_e) {}
@@ -53560,9 +53675,9 @@ const ClalRiskLifePdf = {
           this._warmViewAfterLogin = false;
           try { window.dispatchEvent(new CustomEvent("gi:app-login-ready", { detail:{ source:"mfa-login" } })); } catch(_e) {}
           try { unlockGiNotifyAudio(); } catch(_e) {}
+          try { ChatUI.onLogin(); } catch(_e) {}
 
           perfIdle(() => {
-            try { ChatUI.onLogin(); } catch(_e) {}
             try { ReminderUI.onLogin(); } catch(_e) {}
             try { window.GiAssistant?.onLogin?.(); } catch(_e) {}
             try { void ProposalAssignInbox.flushForCurrentUser(); } catch(_e) {}
@@ -64052,8 +64167,8 @@ ${inner}
   } catch(_e) {}
   CampaignLinesSettingsUI.init();
   LandingLeadIngestSettingsUI.init();
+  try { ChatUI.init(); } catch(_e) {}
   perfIdle(() => {
-    try { ChatUI.init(); } catch(_e) {}
     try { ReminderUI.init(); } catch(_e) {}
   }, 1200);
   AssignProposalModal.init();

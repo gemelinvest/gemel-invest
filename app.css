@@ -9607,7 +9607,7 @@ body.lcLeadShellOpen .lcLeadShell__panel{
 .giChatDock{
   position:fixed;
   left:16px;
-  top:76px;
+  bottom:22px;
   display:flex;
   flex-direction:column;
   align-items:flex-start;
@@ -9696,11 +9696,14 @@ body.lcLeadShellOpen .lcLeadShell__panel{
 }
 .giChatDockCard__actions{
   display:flex;
-  justify-content:flex-end;
+  justify-content:flex-start;
+  flex-wrap:wrap;
+  gap:8px;
   margin-top:8px;
 }
-.giChatDockCard.is-replying .giChatDockCard__actions{ display:none; }
+.giChatDockCard.is-replying .giChatDockCard__reply{ display:none; }
 .giChatDockCard__reply,
+.giChatDockCard__ignore,
 .giChatDockCard__send{
   border:0;
   border-radius:999px;
@@ -9713,8 +9716,14 @@ body.lcLeadShellOpen .lcLeadShell__panel{
   border:1px solid rgba(255,255,255,.5);
 }
 .giChatDockCard__reply:hover,
+.giChatDockCard__ignore:hover,
 .giChatDockCard__send:hover{
   background:rgba(255,255,255,.62);
+}
+.giChatDockCard__ignore{
+  background:transparent;
+  color:rgba(15,23,42,.56);
+  border-color:rgba(15,23,42,.14);
 }
 .giChatDockCard__send{
   background:rgba(62,207,142,.28);
@@ -9768,7 +9777,7 @@ body.lcLeadShellOpen .lcLeadShell__panel{
   .giChatWindow{ width:calc(100vw - 12px); left:6px; right:6px; bottom:76px; height:78vh; }
   .giChatWindow__body{ grid-template-columns: 146px 1fr; }
   .giChatFab{ left:10px; bottom:12px; }
-  .giChatDock{ left:10px; top:64px; right:auto; }
+  .giChatDock{ left:10px; bottom:16px; right:auto; }
 }
 
 
@@ -16463,7 +16472,7 @@ body.lcLeadShellOpen .lcLeadShell__panel{
 .giChatDock{
   position:fixed;
   left:16px;
-  top:76px;
+  bottom:22px;
   display:flex;
   flex-direction:column;
   align-items:flex-start;
@@ -16552,11 +16561,14 @@ body.lcLeadShellOpen .lcLeadShell__panel{
 }
 .giChatDockCard__actions{
   display:flex;
-  justify-content:flex-end;
+  justify-content:flex-start;
+  flex-wrap:wrap;
+  gap:8px;
   margin-top:8px;
 }
-.giChatDockCard.is-replying .giChatDockCard__actions{ display:none; }
+.giChatDockCard.is-replying .giChatDockCard__reply{ display:none; }
 .giChatDockCard__reply,
+.giChatDockCard__ignore,
 .giChatDockCard__send{
   border:0;
   border-radius:999px;
@@ -16569,8 +16581,14 @@ body.lcLeadShellOpen .lcLeadShell__panel{
   border:1px solid rgba(255,255,255,.5);
 }
 .giChatDockCard__reply:hover,
+.giChatDockCard__ignore:hover,
 .giChatDockCard__send:hover{
   background:rgba(255,255,255,.62);
+}
+.giChatDockCard__ignore{
+  background:transparent;
+  color:rgba(15,23,42,.56);
+  border-color:rgba(15,23,42,.14);
 }
 .giChatDockCard__send{
   background:rgba(62,207,142,.28);
@@ -16624,7 +16642,7 @@ body.lcLeadShellOpen .lcLeadShell__panel{
   .giChatWindow{ width:calc(100vw - 12px); left:6px; right:6px; bottom:76px; height:78vh; }
   .giChatWindow__body{ grid-template-columns: 146px 1fr; }
   .giChatFab{ left:10px; bottom:12px; }
-  .giChatDock{ left:10px; top:64px; right:auto; }
+  .giChatDock{ left:10px; bottom:16px; right:auto; }
 }
 
 
