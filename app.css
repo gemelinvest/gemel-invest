@@ -42678,6 +42678,11 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   overflow: auto;
   align-self: stretch;
 }
+.cfFile__main:has(.cfFile__documentsSplit){
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
 
 .cfFile__sideHead{
   padding: 14px 16px;
@@ -42738,6 +42743,7 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   color: var(--blueDeep);
   background: rgba(200,222,255,.25);
   border-bottom: 1px solid var(--line);
+  flex: none;
 }
 .cfFile__tableWrap{ overflow: auto; }
 .cfFile__table{
@@ -43144,11 +43150,16 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   grid-template-columns: minmax(280px, 38%) minmax(0, 1fr);
   gap: 12px;
   align-items: stretch;
-  min-height: min(72vh, 820px);
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
 }
 .cfFile__documentsPreview{
   min-width: 0;
-  min-height: min(72vh, 820px);
+  min-height: 0;
+  height: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: #fff;
@@ -43173,6 +43184,7 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   flex: 1;
   min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   background: #f6f8fc;
 }
 .cfFile__documentsPreviewEmpty{
@@ -43254,6 +43266,13 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   font-weight: 900;
   font-size: 18px;
   color: var(--blueDeep, #1e3a8a);
+}
+.cfDocDownloadOverlay__clock{
+  margin-top: 8px;
+  font-weight: 800;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  color: #1e3d7a;
 }
 .cfDocDownloadOverlay__remain{
   margin-top: 8px;
@@ -43340,20 +43359,14 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
 .cfFile__documentsToolbar{
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   padding: 0 16px 8px;
   flex-wrap: wrap;
+  flex: none;
 }
 .cfFile__documentsSelectAll{
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 700;
-  color: rgba(43,75,138,.88);
-  cursor: pointer;
-  user-select: none;
+  display: none;
 }
 .cfFile__documentCheck{
   display: inline-flex;
@@ -43379,10 +43392,19 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   background: rgba(200,222,255,.18);
 }
 @media (max-width: 900px){
-  .cfFile__documentsSplit{ grid-template-columns: 1fr; }
-  .cfFile__documentsPreview{ order: -1; min-height: 280px; }
+  .cfFile__documentsSplit{
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(240px, 1fr) minmax(180px, 1fr);
+  }
+  .cfFile__documentsPreview{ order: -1; min-height: 240px; }
 }
-.cfFile__documentsPanel{ min-height: 220px; }
+.cfFile__documentsPanel{
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
 .cfFile__documentsEmpty{
   padding: 36px 20px 40px;
   max-width: 520px;
@@ -43393,12 +43415,17 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   display: grid;
   gap: 10px;
   padding: 14px 16px 18px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
 .cfFile__documentsFooter{
   padding: 0 16px 14px;
   font-size: 12px;
   color: rgba(43,75,138,.72);
   line-height: 1.5;
+  flex: none;
 }
 .cfFile__documentRow{
   border: 1px solid var(--line);

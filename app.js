@@ -20587,6 +20587,7 @@ UsersGateUI.init();
     el.innerHTML = '<div class="cfDocDownloadOverlay__card">'
       + '<div class="cfDocDownloadOverlay__spin" aria-hidden="true"></div>'
       + '<div class="cfDocDownloadOverlay__title" data-doc-dl-title>מפיק PDF…</div>'
+      + '<div class="cfDocDownloadOverlay__clock" data-doc-dl-clock></div>'
       + '<div class="cfDocDownloadOverlay__remain" data-doc-dl-remain></div>'
       + '<div class="cfDocDownloadOverlay__eta" data-doc-dl-eta hidden></div>'
       + '<div class="cfDocDownloadOverlay__detail" data-doc-dl-detail></div>'
@@ -20595,8 +20596,40 @@ UsersGateUI.init();
     document.body.appendChild(el);
     return el;
   }
+  let _giDocDlClockTimer = null;
+  let _giDocDlClockStartedAt = 0;
+  function stopGiDocDownloadElapsedClock(){
+    if(_giDocDlClockTimer){
+      try { clearInterval(_giDocDlClockTimer); } catch(_e) {}
+      _giDocDlClockTimer = null;
+    }
+  }
+  function paintGiDocDownloadElapsedClock(){
+    const root = document.getElementById("cfDocDownloadOverlay");
+    if(!root || !root.classList.contains("is-on")){
+      stopGiDocDownloadElapsedClock();
+      return;
+    }
+    const clockEl = root.querySelector("[data-doc-dl-clock]");
+    if(!clockEl) return;
+    const startedAt = Number(_giDocDlClockStartedAt) || Date.now();
+    clockEl.textContent = "עברו " + ciFormatDuration(Date.now() - startedAt);
+    clockEl.hidden = false;
+  }
+  function startGiDocDownloadElapsedClock(startedAt){
+    const start = Number(startedAt) || Date.now();
+    if(_giDocDlClockTimer && _giDocDlClockStartedAt === start){
+      paintGiDocDownloadElapsedClock();
+      return;
+    }
+    stopGiDocDownloadElapsedClock();
+    _giDocDlClockStartedAt = start;
+    paintGiDocDownloadElapsedClock();
+    _giDocDlClockTimer = setInterval(paintGiDocDownloadElapsedClock, 250);
+  }
   function hideGiDocDownloadOverlay(){
     try {
+      stopGiDocDownloadElapsedClock();
       const el = document.getElementById("cfDocDownloadOverlay");
       if(!el) return;
       el.classList.remove("is-on");
@@ -20605,10 +20638,12 @@ UsersGateUI.init();
   }
   function showGiDocDownloadOverlay(info){
     try {
+      const data = info || {};
       const el = ensureGiDocDownloadOverlayEl();
       el.classList.add("is-on");
       el.setAttribute("aria-hidden", "false");
-      paintGiDocDownloadOverlay(info || {});
+      paintGiDocDownloadOverlay(data);
+      startGiDocDownloadElapsedClock(data.startedAt || Date.now());
     } catch(_e) {}
   }
   function paintGiDocDownloadOverlay(info){
@@ -20636,6 +20671,23 @@ UsersGateUI.init();
       detailEl.hidden = !detail;
     }
     if(fillEl) fillEl.style.width = Math.min(100, Math.round((done / total) * 100)) + "%";
+    if(data.startedAt) paintGiDocDownloadElapsedClock();
+  }
+  async function runWithGiDocDownloadClock(title, work, options = {}){
+    const startedAt = Number(options.startedAt) || Date.now();
+    showGiDocDownloadOverlay({
+      done: Number(options.done) || 0,
+      total: Number(options.total) || 1,
+      title: safeTrim(title) || "מוריד מסמך…",
+      detail: safeTrim(options.detail) || "מתחיל…",
+      startedAt
+    });
+    try {
+      await yieldGiDocDownloadPaint();
+      return await work({ startedAt });
+    } finally {
+      hideGiDocDownloadOverlay();
+    }
   }
   function updateGiDocDownloadOverlay(info){
     try {
@@ -21073,7 +21125,7 @@ UsersGateUI.init();
           if(rec){
             const docId = safeTrim(dlAppt.getAttribute("data-download-agent-appt-doc"));
             const doc = docId ? CustomerDocuments.findDoc(rec, docId) : null;
-            void AgentAppointmentPdf.downloadForCustomer(rec, dlAppt, doc);
+            void runWithGiDocDownloadClock("מפיק PDF…", () => AgentAppointmentPdf.downloadForCustomer(rec, dlAppt, doc));
           }
           return;
         }
@@ -21088,7 +21140,7 @@ UsersGateUI.init();
           const snapshot = isPurchaseReport
             ? (doc?.payloadSnapshot || rec.payload)
             : rec.payload;
-          void Wizard.exportOperationalPdfPageByPage(snapshot, dlHealthOps);
+          void runWithGiDocDownloadClock("מפיק PDF…", () => Wizard.exportOperationalPdfPageByPage(snapshot, dlHealthOps));
           return;
         }
         const dlArrivalPack = ev.target?.closest?.("[data-download-arrival-pack-doc], [data-download-arrival-hatama-doc], [data-download-arrival-premia-doc], [data-download-arrival-nispah-doc]");
@@ -21105,7 +21157,7 @@ UsersGateUI.init();
           if(!rec) return;
           const docId = safeTrim(dlAgentOps.getAttribute("data-download-ops-agent-doc"));
           const doc = docId ? CustomerDocuments.findDoc(rec, docId) : null;
-          void AgentAppointmentPdf.exportOperationalReport(doc, rec, dlAgentOps);
+          void runWithGiDocDownloadClock("מפיק PDF…", () => AgentAppointmentPdf.exportOperationalReport(doc, rec, dlAgentOps));
           return;
         }
         const dlCustomerFile = ev.target?.closest?.("[data-download-customer-file-doc]");
@@ -21115,9 +21167,11 @@ UsersGateUI.init();
           if(!rec) return;
           const docId = safeTrim(dlCustomerFile.getAttribute("data-download-customer-file-doc"));
           const doc = docId ? CustomerDocuments.findDoc(rec, docId) : null;
-          const downloaded = (safeTrim(doc?.type) === CustomerDocuments.TYPES.harBituach)
-            ? await CustomerDocuments.downloadHarBituachFileDoc(doc)
-            : await CustomerDocuments.downloadFileDoc(doc);
+          const downloaded = await runWithGiDocDownloadClock("מוריד מסמך…", async () => {
+            return (safeTrim(doc?.type) === CustomerDocuments.TYPES.harBituach)
+              ? await CustomerDocuments.downloadHarBituachFileDoc(doc)
+              : await CustomerDocuments.downloadFileDoc(doc);
+          });
           if(!downloaded){
             try { window.showToast?.({ title: "אין קובץ", text: "לא נמצא עותק להורדה.", variant: "warn", durationMs: 4200 }); } catch(_e){}
           }
@@ -21130,7 +21184,7 @@ UsersGateUI.init();
           if(!rec) return;
           const docId = safeTrim(dlFollowupDoc.getAttribute("data-download-followup-doc"));
           const doc = docId ? this.findCustomerDocument(rec, docId) : null;
-          if(doc) void this.downloadFollowupQuestionnaireDoc(rec, doc);
+          if(doc) void runWithGiDocDownloadClock("מפיק PDF…", () => this.downloadFollowupQuestionnaireDoc(rec, doc));
           return;
         }
         const dlSelected = ev.target?.closest?.("[data-download-selected-docs]");
@@ -21140,7 +21194,7 @@ UsersGateUI.init();
           if(rec) void this.downloadSelectedCustomerDocuments(rec);
           return;
         }
-        const selectWrap = ev.target?.closest?.("[data-doc-select-wrap], [data-doc-select], [data-doc-select-all]");
+        const selectWrap = ev.target?.closest?.("[data-doc-select-wrap], [data-doc-select]");
         if(selectWrap){
           ev.stopPropagation();
           return;
@@ -21159,22 +21213,6 @@ UsersGateUI.init();
       });
 
       on(this.els.main, "change", (ev) => {
-        const selectAll = ev.target?.closest?.("[data-doc-select-all]");
-        if(selectAll){
-          const rec = this.current();
-          if(!rec) return;
-          const docs = this.getCustomerDocuments(rec);
-          const set = this.getSelectedDocIds();
-          set.clear();
-          if(selectAll.checked){
-            docs.forEach((doc, idx) => {
-              const id = safeTrim(doc?.id) || String(idx);
-              if(id) set.add(id);
-            });
-          }
-          this.render();
-          return;
-        }
         const selectOne = ev.target?.closest?.("[data-doc-select]");
         if(selectOne){
           const id = safeTrim(selectOne.getAttribute("data-doc-select"));
@@ -21187,11 +21225,6 @@ UsersGateUI.init();
             btn.textContent = "הורד נבחרים (" + set.size + ")";
             if(set.size) btn.removeAttribute("disabled");
             else btn.setAttribute("disabled", "");
-          }
-          const all = this.els.main?.querySelector?.("[data-doc-select-all]");
-          const boxes = this.els.main?.querySelectorAll?.("[data-doc-select]") || [];
-          if(all && boxes.length){
-            all.checked = [...boxes].every((el) => el.checked);
           }
           return;
         }
@@ -24798,6 +24831,7 @@ UsersGateUI.init();
       }
     },
     async downloadFollowupQuestionnairesZip(rec){
+      return runWithGiDocDownloadClock("מוריד שאלונים…", async () => {
       try {
         const built = await this.buildFollowupZipBlob(rec);
         const url = URL.createObjectURL(built.blob);
@@ -24810,6 +24844,7 @@ UsersGateUI.init();
         try { console.error("FOLLOWUP_ZIP_DOWNLOAD_FAILED", err); } catch(_e) {}
         alert(safeTrim(err?.message) || "לא ניתן להוריד את שאלוני ההמשך.");
       }
+      });
     },
     async syncFollowupQuestionnairesZipDoc(rec, options = {}){
       /* Back-compat alias — now creates per-questionnaire docs instead of one ZIP. */
@@ -24988,12 +25023,7 @@ UsersGateUI.init();
       const footerHtml = (footerAgent || footerUpdated !== "—")
         ? `<div class="cfFile__documentsFooter muted small">${footerAgent ? `נציג מטפל: ${escapeHtml(footerAgent)}` : ""}${footerAgent && footerUpdated !== "—" ? " · " : ""}${footerUpdated !== "—" ? `עודכן: ${escapeHtml(footerUpdated)}` : ""}</div>`
         : "";
-      const allChecked = selectedCount > 0 && selectedCount === docs.length;
       const toolbar = `<div class="cfFile__documentsToolbar">
-          <label class="cfFile__documentsSelectAll">
-            <input type="checkbox" data-doc-select-all${allChecked ? " checked" : ""} aria-label="בחר הכל"/>
-            <span>בחר הכל</span>
-          </label>
           <button class="btn btn--ghost btn--small" type="button" data-download-selected-docs${selectedCount ? "" : " disabled"}>הורד נבחרים (${selectedCount})</button>
         </div>`;
       return `<div class="cfFile__documentsSplit">
