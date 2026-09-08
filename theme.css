@@ -10368,8 +10368,8 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 }
 .lcWelcomeLoader__mark:not(#\9):not(#\9){
   position: relative !important;
-  width: 360px !important;
-  height: 360px !important;
+  width: min(640px, 86vw, 62vh) !important;
+  height: min(640px, 86vw, 62vh) !important;
   margin: 0 auto 22px !important;
   display: grid !important;
   place-items: center !important;
@@ -10407,30 +10407,33 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   transform: none !important;
 }
 .lcWelcomeLoader__logoPlate:not(#\9):not(#\9){
-  width: 268px !important;
-  height: 268px !important;
-  border-radius: 50% !important;
-  background: #ffffff !important;
+  width: 84% !important;
+  height: 84% !important;
+  border-radius: 0 !important;
+  background: transparent !important;
   display: grid !important;
   place-items: center !important;
-  box-shadow: 0 16px 36px rgba(28, 92, 110, .16) !important;
+  box-shadow: none !important;
   filter: none !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   z-index: 1 !important;
-  overflow: hidden !important;
-  padding: 28px !important;
+  overflow: visible !important;
+  padding: 0 !important;
   box-sizing: border-box !important;
 }
 .lcWelcomeLoader__logo:not(#\9):not(#\9){
-  width: 210px !important;
-  max-width: 210px !important;
+  width: 100% !important;
+  max-width: 100% !important;
   height: auto !important;
+  max-height: 100% !important;
+  object-fit: contain !important;
   margin: 0 !important;
   filter: none !important;
   animation: none !important;
   opacity: 1 !important;
   display: block !important;
+  background: transparent !important;
 }
 .lcWelcomeLoader__greeting:not(#\9):not(#\9),
 .lcWelcomeLoader__name:not(#\9):not(#\9),

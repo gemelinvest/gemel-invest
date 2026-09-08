@@ -17649,7 +17649,7 @@
       if(this.el) return this.el;
       const root = document.createElement("div");
       root.id = "lcWelcomeLoader";
-      root.className = "lcWelcomeLoader";
+      root.className = "lcWelcomeLoader lcWelcomeLoader--shanaTova";
       root.setAttribute("aria-hidden", "true");
       root.innerHTML = `
         <div class="lcWelcomeLoader__backdrop"></div>
@@ -17659,7 +17659,7 @@
               <div class="lcWelcomeLoader__ringTrack"></div>
               <div class="lcWelcomeLoader__ringFill" id="lcWelcomeRingFill"></div>
               <div class="lcWelcomeLoader__logoPlate">
-                <img class="lcWelcomeLoader__logo" src="./logo-login-clean.png" alt="GEMEL INVEST" />
+                <img class="lcWelcomeLoader__logo" src="./assets/gi-welcome-shana-tova.png" alt="שנה טובה ממערכת GEMEL INVEST" />
               </div>
             </div>
             <div class="lcWelcomeLoader__greeting" id="lcWelcomeGreeting"></div>
