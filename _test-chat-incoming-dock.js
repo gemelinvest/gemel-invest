@@ -1,5 +1,5 @@
-/* GI-CHAT 20260907-chat-ignore-v1 — הודעת צ׳אט נכנסת בצד שמאל במקום טוסט,
-   נשארת פתוחה עם שם השולח ולחצן «השב» שפותח תשובה ישירה לנציג.
+/* GI-CHAT 20260908-chat-live-notify-v1 — הודעת צ׳אט נכנסת בצד שמאל למטה,
+   נשארת פתוחה עם שם השולח ולחצן «השב». Realtime עם recipient_id=eq ולא or=.
    הרצה: node _test-chat-incoming-dock.js
 */
 "use strict";
@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260907-chat-ignore-v1";
+const APP_TAG = "20260908-chat-live-notify-v1";
 let failed = 0;
 let passed = 0;
 
@@ -204,9 +204,24 @@ assert(app.includes("this.dismissDockCard(user.id)"), "בחירת נציג מו�
 assert(app.includes("this.clearIncomingDock()"), "התנתקות מנקה את הדוק");
 assert(!sliceMethodBlock(app, "pushIncomingDock(message){", "renderDockCard(card,").includes("setTimeout"), "הכרטיס לא נעלם לבד");
 
+console.log("\n2b) Realtime — פילטר תקין + גיבוי polling");
+const listenBlock = sliceMethodBlock(app, "listenMessages(){", "handleIncomingDbInsert(row){");
+assert(!!listenBlock, "listenMessages נמצא");
+assert(!listenBlock.includes("filter: `or="), "Realtime לא משתמש ב-or= של PostgREST");
+assert(!listenBlock.includes("encodeURIComponent"), "לא מקודדים את מזהה המשתמש בפילטר Realtime");
+assert(listenBlock.includes("filter: `recipient_id=eq.${userId}`"), "פילטר recipient_id=eq");
+assert(listenBlock.includes("filter: `sender_id=eq.${userId}`"), "פילטר sender_id=eq");
+assert(app.includes("startIncomingPoll(){"), "גיבוי polling קיים");
+assert(app.includes("async pollIncomingMessages(){"), "שאילתת REST להודעות נכנסות");
+assert(app.includes(".eq('recipient_id', this.userKey)"), "polling לפי נמען");
+assert(app.includes("this.startIncomingPoll();"), "polling מופעל אחרי חיבור");
+assert(app.includes("if(Auth.current) this.ensureStarted();"), "צ׳אט עולה מיד ב-init");
+assert(app.includes("if(this._subscribedUserKey && this.userKey && this._subscribedUserKey !== this.userKey){"), "חיבור מחדש אם מזהה המשתמש משתנה");
+
 console.log("\n3) עיצוב שקוף בצד שמאל");
 assert(css.includes(".giChatDock{"), "בלוק CSS לדוק");
-assert(css.includes("left:16px") && css.includes("top:76px"), "מיקום בצד שמאל");
+assert(css.includes("left:16px") && css.includes("bottom:22px"), "מיקום בצד שמאל למטה");
+assert(!css.includes("top:76px"), "הדוק כבר לא למעלה");
 assert(css.includes("background:rgba(255,255,255,.28)"), "רקע שקוף");
 assert(css.includes("backdrop-filter:blur(16px)"), "זכוכית עדינה");
 assert(css.includes(".giChatDockCard.is-replying .giChatDockCard__composer{ display:flex; }"), "השב פותח את תיבת התשובה");
@@ -380,6 +395,73 @@ assert(card.querySelector("[data-chat-dock-input]").value === "קיבלתי, ת�
   assert(!!ignoreBtn && String(ignoreBtn.getAttribute("data-chat-dock-dismiss")) === "1", "לחצן התעלם נמצא בכרטיס");
   click(ignoreBtn, dismissRun.dock);
   assert(dismissRun.dock.children.length === 0, "התעלם סוגר את ההודעה");
+
+  console.log("\n5) runtime — INSERT נכנס מפעיל התראה פעם אחת");
+  const listenSrc = sliceMethodBlock(app, "listenMessages(){", "handleIncomingDbInsert(row){");
+  const handleSrc = sliceMethodBlock(app, "handleIncomingDbInsert(row){", "normalizeMessage(row){");
+  const normSrc = sliceMethodBlock(app, "normalizeMessage(row){", "renderMessages(){");
+  const liveSandbox = {
+    Map,
+    Set,
+    String,
+    Number,
+    Date,
+    console,
+    SUPABASE_CHAT: { messagesTable: "invest_chat_messages" },
+    safeTrim(v){ return String(v ?? "").trim(); },
+    nowISO(){ return new Date().toISOString(); }
+  };
+  vm.runInNewContext(
+    `"use strict";
+     const ChatLive = {
+       ${listenSrc}
+       ${handleSrc}
+       ${normSrc}
+       conversationId(other){ return [this.userKey, other].sort().join("__"); },
+       schedulePresenceUiRefresh(){ this._presence = true; },
+       renderMessages(){ this._rendered = true; },
+       resetUnreadForSelected(){},
+       notifyIncoming(msg){ this._notified.push(msg); },
+       setConnectionStatus(){}
+     };
+     this.ChatLive = ChatLive;`,
+    liveSandbox,
+    { filename: "chat-live-listen.js" }
+  );
+  const live = liveSandbox.ChatLive;
+  const captured = [];
+  const channel = {
+    on(_evt, cfg, cb){ captured.push({ cfg, cb }); return channel; },
+    subscribe(cb){ if(typeof cb === "function") cb("SUBSCRIBED"); return channel; }
+  };
+  live.client = { channel(name){ live._channelName = name; return channel; } };
+  live.userKey = "u-me";
+  live.currentConversationId = "";
+  live.currentMessages = [];
+  live.lastMessageByConversation = new Map();
+  live.els = { window: { classList: { contains(){ return true; } } } };
+  live._notified = [];
+  live.listenMessages();
+  assert(captured.length === 2, "שני מאזיני INSERT על הערוץ");
+  assert(captured[0].cfg.filter === "recipient_id=eq.u-me", "מאזין ראשון לפי נמען");
+  assert(captured[1].cfg.filter === "sender_id=eq.u-me", "מאזין שני לפי שולח");
+  assert(captured.every((item) => !String(item.cfg.filter || "").includes("or=")), "אין or= בפילטרים בזמן ריצה");
+  const future = new Date(Date.now() + 3600000).toISOString();
+  const row = {
+    id: "m-live-1",
+    conversation_id: "u-dana__u-me",
+    sender_id: "u-dana",
+    sender_name: "דנה לוי",
+    recipient_id: "u-me",
+    recipient_name: "אני",
+    body: "בדיקת לייב",
+    created_at: new Date().toISOString(),
+    expires_at: future
+  };
+  captured[0].cb({ new: row });
+  assert(live._notified.length === 1 && live._notified[0].text === "בדיקת לייב", "INSERT לנמען מפעיל התראה");
+  captured[0].cb({ new: row });
+  assert(live._notified.length === 1, "אותו מזהה הודעה לא מתריע פעמיים");
 
   if(failed){
     console.error("\nFAILED " + failed + " / " + (passed + failed));
