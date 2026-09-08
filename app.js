@@ -35076,16 +35076,22 @@ UsersGateUI.init();
     },
 
     /** פרמיה נטו לדשבורד («נמכר היום» / «פרמיה חודשית נטו») — אחרי הנחה בלבד.
-        לא משתמשים ב-getPolicyPremiumAfterDiscount: באשף זה בכוונה מחזיר את הסכום לפני הנחה. */
+        לא משתמשים ב-getPolicyPremiumAfterDiscount: באשף זה בכוונה מחזיר את הסכום לפני הנחה.
+        premiumAfterDiscountValue בתיק לעיתים נשמר כברוטו (זהה ל-premiumMonthly);
+        אם חישוב התיק (סימולטור) נמוך יותר — זה הסכום אחרי הנחה. */
     policyNetPremium(p){
-      const stored = Number(p?.premiumAfterDiscountValue);
-      if(Number.isFinite(stored) && stored > 0) return Math.round(stored * 100) / 100;
+      const storedRaw = Number(p?.premiumAfterDiscountValue);
+      const stored = (Number.isFinite(storedRaw) && storedRaw > 0) ? Math.round(storedRaw * 100) / 100 : 0;
+      let viaFile = 0;
       try {
         if(typeof CustomersUI.getNewPolicyFilePremiumAfterDiscount === "function"){
-          const viaFile = Number(CustomersUI.getNewPolicyFilePremiumAfterDiscount(p)) || 0;
-          if(viaFile > 0) return Math.round(viaFile * 100) / 100;
+          const n = Number(CustomersUI.getNewPolicyFilePremiumAfterDiscount(p)) || 0;
+          if(n > 0) viaFile = Math.round(n * 100) / 100;
         }
       } catch(_e) {}
+      if(viaFile > 0 && stored > 0 && viaFile < stored) return viaFile;
+      if(stored > 0) return stored;
+      if(viaFile > 0) return viaFile;
       const fallback = CustomersUI.asMoneyNumber(p?.premiumValue ?? p?.premiumMonthly);
       return fallback > 0 ? Math.round(fallback * 100) / 100 : 0;
     },
@@ -35150,7 +35156,8 @@ UsersGateUI.init();
       }, ms));
     },
 
-    /** מיזוג overlay יומי: לא מחליפים סכום מקומי גבוה יותר ב-RPC ישן. חישוב פרמיה לא משתנה. */
+    /** מיזוג overlay יומי: לא מחליפים סכום מקומי אחרי-הנחה ב-RPC ברוטו.
+        Overlay עם afterDiscount=true (שליפה ממוקדת) עדיין ממלא חוסר בטעינה רזה. */
     _resolveTodaySalesOverlayMerge(localResult, serverOverlay, missingPayloads){
       if(!localResult || !serverOverlay?.ok) return localResult;
       const localPrem = Number(localResult.totalPremium) || 0;
@@ -35159,27 +35166,31 @@ UsersGateUI.init();
       const serverPrem = Number(serverOverlay.totalPremium) || 0;
       const serverPol = Number(serverOverlay.totalPolicies) || 0;
       const serverHigher = serverPrem > localPrem || (serverPrem === localPrem && serverPol > localPol);
+      const overlayIsAfter = serverOverlay.afterDiscount === true;
       const serverBreakdown = Array.isArray(serverOverlay.breakdown) ? serverOverlay.breakdown : [];
       const localBreakdown = Array.isArray(localResult.breakdown) ? localResult.breakdown : [];
-      const resolvedBreakdown = this._mergeTodayCompanyBreakdown(localBreakdown, serverBreakdown);
-      if(localEmpty || ((Number(missingPayloads) || 0) > 0 && serverHigher)){
+      const useServer = localEmpty || (overlayIsAfter && (Number(missingPayloads) || 0) > 0 && serverHigher);
+      if(useServer){
         return {
           totalPremium: serverPrem,
           totalPolicies: serverPol,
           newClients: Number(serverOverlay.newClients) || 0,
-          breakdown: resolvedBreakdown,
+          breakdown: overlayIsAfter
+            ? this._mergeTodayCompanyBreakdown(localBreakdown, serverBreakdown)
+            : (serverBreakdown.length ? serverBreakdown.slice() : localBreakdown.slice()),
           _loading: false,
           _fromServer: true
         };
       }
-      if(serverBreakdown.length){
-        return { ...localResult, breakdown: resolvedBreakdown };
-      }
       return localResult;
     },
 
-    _shouldPaintTodayOverlayValue(overlayPrem, localPrem){
-      return !(Number(localPrem) > Number(overlayPrem));
+    _shouldPaintTodayOverlayValue(overlayPrem, localPrem, overlay){
+      const local = Number(localPrem) || 0;
+      const over = Number(overlayPrem) || 0;
+      if(local > over) return false;
+      if(local > 0 && !(overlay && overlay.afterDiscount === true)) return false;
+      return over > 0;
     },
 
     /**
@@ -35204,10 +35215,11 @@ UsersGateUI.init();
       return false;
     },
 
-    /** GI-FIX: מנהל/טעינה רזה — «נמכר היום» מ-RPC (gi_dashboard_net_premium בטווח היום = בריאות/סיכונים בלבד). */
+    /** GI-FIX: מנהל/טעינה רזה — «נמכר היום» אחרי הנחה משליפה ממוקדת; RPC ברוטו רק כנפילה. */
     ensureTodaySalesServerOverlay(options = {}){
       if(this._todaySalesServerBusy) return;
-      if(typeof Storage === "undefined" || typeof Storage.loadServerKpis !== "function") return;
+      if(typeof Storage === "undefined") return;
+      if(typeof Storage.loadTodaySalesAfterDiscount !== "function" && typeof Storage.loadServerKpis !== "function") return;
       const todayPack = this.getDashboardTodayRange();
       const todayRange = todayPack.range;
       const dayKey = todayPack.dayKey;
@@ -35232,7 +35244,20 @@ UsersGateUI.init();
       this._todaySalesServerBusy = true;
       void (async () => {
         try {
-          const res = await Storage.loadServerKpis(todayRange);
+          let res = null;
+          let fromAfter = false;
+          if(typeof Storage.loadTodaySalesAfterDiscount === "function"){
+            try {
+              res = await Storage.loadTodaySalesAfterDiscount(todayRange);
+              if(res?.ok) fromAfter = true;
+            } catch(_e) {
+              res = null;
+            }
+          }
+          if(!res?.ok && typeof Storage.loadServerKpis === "function"){
+            res = await Storage.loadServerKpis(todayRange);
+            fromAfter = false;
+          }
           if(!res?.ok){
             try { console.warn("[GI-TODAY-KPI] לא זמין:", res?.error); } catch(_e) {}
             return;
@@ -35244,10 +35269,11 @@ UsersGateUI.init();
             ok: true,
             dayKey,
             at: Date.now(),
+            afterDiscount: fromAfter === true,
             totalPremium: Math.round((Number(res.netPremium) || 0) * 100) / 100,
             totalPolicies: Number(res.soldPolicies) || 0,
             newClients: Number(res.newClients) || 0,
-            // פירוט כרטיס היום לפי חברה (RPC) — משמש כשאין payloads מקומיים מלאים.
+            // פירוט כרטיס היום לפי חברה — אחרי הנחה כשהמקור הוא loadTodaySalesAfterDiscount.
             breakdown: companyBreakdown
           };
           const prev = this._todaySalesServerOverlay;
@@ -35257,7 +35283,8 @@ UsersGateUI.init();
             || Number(prev.totalPremium) !== Number(next.totalPremium)
             || Number(prev.totalPolicies) !== Number(next.totalPolicies)
             || Number(prev.newClients) !== Number(next.newClients)
-            || prevBd !== nextBd;
+            || prevBd !== nextBd
+            || !!prev.afterDiscount !== !!next.afterDiscount;
           this._todaySalesServerOverlay = next;
           if(!changed) return;
           this._todaySalesCacheKey = "";
@@ -35298,12 +35325,55 @@ UsersGateUI.init();
       return Object.values(map).sort((a, b) => b.premium - a.premium);
     },
 
+    /** סכום בריאות/סיכונים לטווח: אחרי הנחה (policyNetPremium), בלי overlay. */
+    _accumulateTodayHealthRiskSales(customers, range){
+      const byCompany = {};
+      let totalPremium = 0;
+      let totalPolicies = 0;
+      const countedCustomers = new Set();
+      const bump = (label, premium) => {
+        const raw = safeTrim(label);
+        const key = (typeof resolveCompanyLogoKey === "function" && resolveCompanyLogoKey(raw)) || raw || "ללא חברה";
+        if(!byCompany[key]) byCompany[key] = { count: 0, premium: 0 };
+        byCompany[key].count += 1;
+        byCompany[key].premium += premium;
+        totalPremium += premium;
+        totalPolicies += 1;
+      };
+      (Array.isArray(customers) ? customers : []).forEach((rec) => {
+        try {
+          if(typeof Storage !== "undefined" && Storage.payloadIsEmpty?.(rec)) return;
+        } catch(_e) {}
+        if(typeof CustomersUI === "undefined" || typeof CustomersUI.collectNewPoliciesForMetrics !== "function") return;
+        const newPolicies = CustomersUI.collectNewPoliciesForMetrics(rec, {
+          range,
+          resolveCustomerMonthStamp: (row) => this.resolveCustomerMonthStamp(row),
+          isWithinRange: (stamp, monthRange) => this.isWithinRange(stamp, monthRange)
+        });
+        if(!newPolicies.length) return;
+        countedCustomers.add(rec.id);
+        newPolicies.forEach((p) => {
+          const premium = this.policyNetPremium(p);
+          bump(safeTrim(p?.company) || "ללא חברה", premium);
+        });
+      });
+      const breakdown = Object.entries(byCompany)
+        .map(([label, data]) => ({ label, count: data.count, premium: Math.round(data.premium * 100) / 100 }))
+        .sort((a, b) => b.premium - a.premium);
+      return {
+        totalPremium: Math.round(totalPremium * 100) / 100,
+        totalPolicies,
+        newClients: countedCustomers.size,
+        breakdown
+      };
+    },
+
     buildTodaySalesMetrics(){
       const todayPack = this.getDashboardTodayRange();
       const todayRange = todayPack.range;
       const dayKey = todayPack.dayKey;
       // GI-FIX 2026-08-09c: כרטיס היום = בריאות וסיכונים בלבד (ללא אלמנטרי)
-      const cacheKey = this.getMetricsCacheKey() + "|today|" + dayKey + "|healthRiskOnly|rpc1|byCompany3";
+      const cacheKey = this.getMetricsCacheKey() + "|today|" + dayKey + "|healthRiskOnly|rpc1|byCompany3|afterDisc1";
       if(this._todaySalesCacheKey === cacheKey && this._todaySalesCache){
         return this._todaySalesCache;
       }
@@ -35324,54 +35394,13 @@ UsersGateUI.init();
       }
 
       // פירוט כרטיס «נמכר היום»: קיבוץ לפי חברה (לא לפי סוג מוצר).
-      // סכום כולל / פוליסות / לקוחות נשארים זהים — רק תווית הפירוט משתנה.
-      const byCompany = {};  // { label: { count, premium } }
-      let totalPremium = 0;
-      let totalPolicies = 0;
-      const countedCustomers = new Set();
-
-      const bump = (label, premium) => {
-        const raw = safeTrim(label);
-        const key = (typeof resolveCompanyLogoKey === "function" && resolveCompanyLogoKey(raw)) || raw || "ללא חברה";
-        if(!byCompany[key]) byCompany[key] = { count: 0, premium: 0 };
-        byCompany[key].count += 1;
-        byCompany[key].premium += premium;
-        totalPremium += premium;
-        totalPolicies += 1;
-      };
-
-      customersAll.forEach((rec) => {
-        // GI-FIX: לא נועלים את כל הכרטיס על ₪0 בגלל לקוח אחד בלי payload —
-        // מחשבים ממה שכבר מלא, ומסמנים _loading אם עדיין יש חסרים.
-        try {
-          if(typeof Storage !== "undefined" && Storage.payloadIsEmpty?.(rec)) return;
-        } catch(_e) {}
-
-        const newPolicies = CustomersUI.collectNewPoliciesForMetrics(rec, {
-          range: todayRange,
-          resolveCustomerMonthStamp: (row) => this.resolveCustomerMonthStamp(row),
-          isWithinRange: (stamp, monthRange) => this.isWithinRange(stamp, monthRange)
-        });
-        // כלל עסקי: כרטיס «נמכר היום» / «כמה מכרתי היום» = בריאות וסיכונים בלבד.
-        // אלמנטרי נשאר בדוח מכירות יומי / דשבורד אלמנטרי — לא כאן.
-        if(!newPolicies.length) return;
-        countedCustomers.add(rec.id);
-        newPolicies.forEach((p) => {
-          const premium = this.policyNetPremium(p);
-          bump(safeTrim(p?.company) || "ללא חברה", premium);
-        });
-      });
-
-      // מיין לפי פרמיה יורדת
-      const breakdown = Object.entries(byCompany)
-        .map(([label, data]) => ({ label, count: data.count, premium: Math.round(data.premium * 100) / 100 }))
-        .sort((a, b) => b.premium - a.premium);
-
+      // כלל עסקי: בריאות וסיכונים בלבד — אלמנטרי לא כאן.
+      const summed = this._accumulateTodayHealthRiskSales(customersAll, todayRange);
       let result = {
-        totalPremium: Math.round(totalPremium * 100) / 100,
-        totalPolicies,
-        newClients: countedCustomers.size,
-        breakdown,
+        totalPremium: summed.totalPremium,
+        totalPolicies: summed.totalPolicies,
+        newClients: summed.newClients,
+        breakdown: summed.breakdown,
         _loading: deferToServer,
         _fromServer: false
       };
@@ -38640,7 +38669,7 @@ UsersGateUI.init();
         const todayEl = root.querySelector("#bankKpiTodayCard .bankKpi__value");
         const overlayPrem = Number(today.totalPremium) || 0;
         const localPrem = Number(this._todaySalesCache?.totalPremium) || 0;
-        if(todayEl && this._shouldPaintTodayOverlayValue(overlayPrem, localPrem)){
+        if(todayEl && this._shouldPaintTodayOverlayValue(overlayPrem, localPrem, today)){
           todayEl.textContent = this.formatMoney(overlayPrem);
         }
       }
@@ -54477,6 +54506,65 @@ const ClalRiskLifePdf = {
         productTotals,
         productBreakdown,
         companyBreakdown
+      };
+    } catch(err) {
+      return { ok:false, error: String(err?.message || err) };
+    }
+  };
+
+  /* GI-TODAY-AFTER 2026-09-08 — כרטיס «נמכר היום» למנהל/טעינה רזה:
+     RPC gi_dashboard_net_premium קורא premiumAfterDiscountValue השמור כברוטו.
+     כאן שולפים תיקים שעודכנו סביב היום ומחשבים אחרי הנחה כמו הדשבורד המקומי. */
+  Storage.loadTodaySalesAfterDiscount = async function(range){
+    if(!range?.start || !range?.end) return { ok:false, error:"BAD_RANGE" };
+    if(typeof DashboardUI === "undefined" || typeof DashboardUI._accumulateTodayHealthRiskSales !== "function"){
+      return { ok:false, error:"NO_UI" };
+    }
+    const lookbackMs = new Date(range.start).getTime() - (48 * 3600 * 1000);
+    const lookbackIso = new Date(lookbackMs).toISOString().replace(/\.\d{3}Z$/, "Z");
+    const selectExpr = "id,status,full_name,agent_name,agent_id,agent_role,is_archived,new_policies_count,created_at,updated_at,payload";
+    const tableName = SUPABASE_TABLES.customers;
+    const client = this.getClient();
+    const orFilter = `updated_at.gte."${lookbackIso}",created_at.gte."${lookbackIso}"`;
+    const buildQuery = (from, to, wantCount) => {
+      let builder = wantCount
+        ? client.from(tableName).select(selectExpr, { count: "exact" })
+        : client.from(tableName).select(selectExpr);
+      builder = builder.eq("is_archived", false)
+        .gt("new_policies_count", 0)
+        .or(orFilter);
+      return builder.order("id", { ascending: true }).range(from, to);
+    };
+    const buildRestPath = (offset, limit) => {
+      return tableName
+        + "?select=" + encodeURIComponent(selectExpr)
+        + "&is_archived=eq.false"
+        + "&new_policies_count=gt.0"
+        + "&or=(" + orFilter + ")"
+        + "&order=id.asc&offset=" + offset
+        + "&limit=" + limit;
+    };
+    try {
+      const rows = await this._fetchAllPages("נמכר היום אחרי הנחה", buildQuery, buildRestPath);
+      const scope = (typeof getServerListAgentScopeFilter === "function")
+        ? getServerListAgentScopeFilter() : null;
+      const scoped = (Array.isArray(rows) ? rows : []).filter((row) => {
+        if(!scope) return true;
+        const agentId = safeTrim(row?.agent_id);
+        const agentName = safeTrim(row?.agent_name);
+        if(agentId && Array.isArray(scope.ids) && scope.ids.indexOf(agentId) >= 0) return true;
+        if(agentName && Array.isArray(scope.names) && scope.names.indexOf(agentName) >= 0) return true;
+        return false;
+      });
+      const customers = scoped.map((row, idx) => this.mapCustomerRow(row, idx));
+      const summed = DashboardUI._accumulateTodayHealthRiskSales(customers, range);
+      return {
+        ok: true,
+        afterDiscount: true,
+        netPremium: Number(summed.totalPremium) || 0,
+        soldPolicies: Number(summed.totalPolicies) || 0,
+        newClients: Number(summed.newClients) || 0,
+        companyBreakdown: Array.isArray(summed.breakdown) ? summed.breakdown : []
       };
     } catch(err) {
       return { ok:false, error: String(err?.message || err) };
