@@ -217,7 +217,7 @@ const hoNoCc = H.pickPayment(
 assert(hoNoCc.cc.cardNumber === "", "HO does not dump stored card number");
 assert(app.includes("canDownloadOfficialJoinForm"), "download gate exists");
 assert(app.includes("denyOfficialJoinFormDownload"), "deny helper exists");
-assert(/canDownloadOfficialJoinForm\(\)\{\s*try \{ return !!\(Auth\.isAdmin\(\) \|\| Auth\.isManager\(\)\);/.test(app), "gate is admin or manager only");
+assert(/canDownloadOfficialJoinForm\(\)\{\s*try \{\s*return !!\(Auth\.isAdmin\(\) \|\| Auth\.isManager\(\) \|\| Auth\.isOps\(\) \|\| Auth\.isOpsAgent\(\)\);/.test(app), "gate includes ops and opsAgent");
 assert(!/canDownloadOfficialJoinForm\(\)\{[\s\S]{0,220}isTeamManager/.test(app), "team manager is excluded from official PDF download");
 
 console.log("\n7) health yes/no + logical Hebrew");

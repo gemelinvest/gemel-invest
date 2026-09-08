@@ -60,14 +60,18 @@ assert(healthGroups.includes("answeredInsuredIds"), "רק שאלות עם תשו
 assert(healthGroups.includes("return indexedInsureds"), "כן/לא לכל מבוטח בהצעה");
 assert(!healthGroups.includes("answered.has("), "אין סינון מבוטחים רק לפי תשובה שמורה");
 assert(healthGroups.includes('role + ": " + name'), "תווית מבוטח ראשי: שם");
-assert(healthRender.includes("item.insLabel"), "התווית המלאה מוצגת בשיקוף");
+assert(app.includes("_mcHealthYesSummaryHtml(rec){"), "אזור תיעוד הצהרות כן");
+assert(app.includes("הקראתי ללקוח והמשך"), "לחצן לאחר הקראה");
+assert(healthRender.includes("health-script-ack"), "אישור הקראה לפני הטפסים");
+assert(healthRender.includes("_mcHealthYesSummaryHtml(rec)"), "סיכום כן אחרי ההקראה");
+assert(!healthRender.includes("data-mc-health-answer"), "אין כרטיסי כן/לא של האשף בשיקוף");
 assert(html.includes('id="mcStepHealthDeclBody"'), "גוף שלב הצהרת הבריאות לא הוסר");
 
-console.log("\n3) שאלוני המשך אחרי כן");
-assert(healthRender.includes("שאלון שנפתח"), "כותרת שאלון שנפתח");
-assert(healthRender.includes("_mcHealthFollowupFields"), "שדות שאלון המשך נשלפים");
-assert(healthRender.includes("_mcHealthQuestionnaireTitle"), "שם השאלון מהאשף מוצג");
+console.log("\n3) תיעוד כן + שאלוני המשך נשארים במקור");
+assert(app.includes("_mcHealthYesSummaryHtml(rec){"), "בונה סיכום כן");
+assert(app.includes("על מה הלקוח הצהיר כן"), "כותרת אזור הכן");
 assert(app.includes("_mcHealthFollowupFields(item){"), "עוזר שדות שאלון קיים");
+assert(css.includes(".mcHealthYesBox"), "עיצוב אזור הכן");
 assert(css.includes(".mcHealthQuest"), "עיצוב שאלון ברוחב מלא");
 assert(css.includes("grid-column: 1 / -1"), "השאלון פורץ מחוץ לעמודת כן/לא");
 

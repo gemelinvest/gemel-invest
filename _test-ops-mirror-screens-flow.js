@@ -90,13 +90,21 @@ assert(app.includes("טפסי הצעה") && app.includes("שאלוני המשך"
 assert(app.includes("_mcBindFormEditPersistence(rec, key){"), "עריכה נשמרת תוך כדי");
 assert(app.includes("payload.mirrorFlow.formEdits"), "overlay ב-mirrorFlow");
 assert(app.includes("_mcMaterializeEditedForms(rec){"), "הפקת טפסים מוכנים בסוף");
-assert(app.includes("doc_mirror_filled_"), "מסמך מוכן נכנס לתיק");
+assert(app.includes("_mcCanonicalJoinDocId(type){"), "מזהה טופס קנוני בתיק");
+assert(!app.includes("doc_mirror_filled_"), "אין מסמך כפול משיחת שיקוף");
 assert(app.includes("mcFormModalFull"), "טופס נפתח במלואו");
 assert(css.includes(".giValModal.mcFormModalFull .giValModal__card"), "חלון טופס גדול");
 assert(app.includes("data-mc-open-form"), "לחיצה מהמסילה");
+assert(app.includes("_mcJoinFormTypeForPolicy(p, rec){"), "צימוד טופס לכל פוליסה מוצעת");
+assert(app.includes("הקראתי ללקוח והמשך"), "לחצן הקראה לפני טפסים");
+assert(app.includes("על מה הלקוח הצהיר כן"), "אזור תיעוד כן");
+assert(app.includes("Auth.isOps() || Auth.isOpsAgent()"), "תפעול יכול לפתוח טפסי הצעה");
+assert(app.includes("_mcFilterCurrentOfferPolicies(rec, list){"), "סינון פוליסות מוצעות להצעה הנוכחית");
 const healthRender = sliceBetween(app, "_renderHealthDeclarationBody(rec){", "_mcIsExistingHealthProduct(p){");
-assert(healthRender.includes("_mcHealthFormsRailHtml(rec)"), "המסילה מצוירת בשלב ההצהרה");
+assert(healthRender.includes("_mcHealthFormsRailHtml(rec)"), "המסילה מצוירת אחרי ההקראה");
 assert(healthRender.includes("כעת נעבור להצהרת הבריאות"), "נוסח הקראה לא הוסר");
+assert(healthRender.includes("health-script-ack"), "שער הקראה");
+assert(!healthRender.includes("data-mc-health-answer"), "אין כרטיסי אשף בשלב השיקוף");
 
 console.log("\n6) רגרסיה — לוגיקת ליבה לא הוחלפה");
 assert(app.includes("_mcSyncHealthDeclarationCopies(rec, source){"), "סנכרון הצהרה נשאר");
