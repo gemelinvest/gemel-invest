@@ -8,8 +8,8 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260908-daily-sales-v7";
-const THEME_TAG = "20260908-daily-sales-v7";
+const APP_TAG = "20260908-daily-sales-v8";
+const THEME_TAG = "20260908-daily-sales-v8";
 let failed = 0;
 let passed = 0;
 
@@ -129,13 +129,16 @@ assert(app.includes("dailySalesScaleOfficeBranchTotals"), "סניפים מנור
 assert(app.includes("dailySalesOfficeBranchTotalsFromAgentSales"), "פיצול סניף לפי נציג אחרי הנחה");
 assert(app.includes("_dailySalesOverlayPersonAlreadyLocal"), "overlay לא מוסיף את אותו נציג פעמיים");
 assert(app.includes("officeBranchTodaySplitV1"), "מטמון דוח מתבטל אחרי פיצול סניפים להיום");
-assert(app.includes("monthlyKpiAlignV1"), "מטמון דוח מתבטל אחרי יישור טבלה לכרטיס נמכר היום");
-assert(!app.includes("monthlySoldDayV1"), "מפתח מטמון ישן של יישור יום מכירה הוחלף");
+assert(app.includes("monthlyKpiAlignV2"), "מטמון דוח מתבטל אחרי יישור טבלה לפי byAgent של נמכר היום");
+assert(!app.includes("monthlyKpiAlignV1"), "מפתח מטמון יישור קודם הוחלף");
 assert(app.includes("dailySalesApplySoldDayHealthPrat"), "עמודות בריאות/פרט/חודשי מיושרות לנמכר ביום");
 assert(!app.includes("monthlyTodayOnlyV1"), "מפתח מטמון ישן של סה״כ חודשי הוחלף");
+assert(!app.includes("monthlySoldDayV1"), "מפתח מטמון ישן של יישור יום מכירה הוחלף");
 assert(app.includes('layout: "20260908-today-net"'), "סיכום המייל נושא תג תבנית אמיתי");
-assert(app.includes("let skipServerOnly = localHealthPremium > 0"), "היום לא ממלאים overlay כשהמקומי מכסה את נמכר היום");
-assert(app.includes("if(kpi > localHealthPremium + 0.05) skipServerOnly = false"), "מקומי חלקי לא חוסם overlay");
+assert(app.includes("const skipServerOnly = localHealthPremium > 0"), "לא ממלאים RPC ברוטו כשיש מכירות מקומיות");
+assert(app.includes("dailySalesTodaySoldAgentsForTable"), "טבלה בוחרת byAgent שתואם לכרטיס נמכר היום");
+assert(app.includes("byAgent: Array.isArray(summed.byAgent) ? summed.byAgent : []"), "שליפת נמכר היום שומרת פירוט נציגים");
+assert(app.includes("byAgent: Array.isArray(res.byAgent) ? res.byAgent : []"), "overlay יומי נושא byAgent");
 assert(app.includes("dailySalesSoldDayMatchesKpi"), "טבלת מייל לא מוחלפת בחישוב חלקי");
 assert(app.includes("dailySalesSoldMonthlyFromAgents"), "סכום נציגי נמכר היום לטבלה");
 assert(app.includes("_coerceDailySalesMailDate"), "מייל תמיד להיום שעון ישראל");
@@ -156,9 +159,11 @@ assert(!ready.includes("_dailySalesByAgentOverlay"), "מוכנות מייל לא
 
 const prepStart = app.indexOf("async prepareDailySalesMailSnapshot(){");
 const prepEnd = app.indexOf("async _waitDailySalesOverlayForMail", prepStart);
-const prep = prepStart > 0 ? app.slice(prepStart, prepEnd > 0 ? prepEnd : prepStart + 500) : "";
+const prep = prepStart > 0 ? app.slice(prepStart, prepEnd > 0 ? prepEnd : prepStart + 900) : "";
 assert(prep.includes("dailySalesMailSnapshotReady"), "prepare ממתין לנתונים מקומיים");
-assert(!prep.includes("_waitDailySalesOverlayForMail"), "prepare של המייל לא ממתין ל-overlay");
+assert(prep.includes("ensureTodaySalesServerOverlay"), "prepare מפעיל שליפת נמכר היום אחרי הנחה");
+assert(prep.includes("overlay.byAgent"), "prepare ממתין לפירוט נציגים אחרי הנחה");
+assert(!prep.includes("_waitDailySalesOverlayForMail"), "prepare לא ממתין ל-RPC ברוטו לפי נציג");
 assert(!prep.includes("AssignedLeads"), "prepare לא ממתין ללידים");
 
 const snapStart = app.indexOf("async buildDailySalesMailSnapshot(forDate){");
@@ -549,16 +554,14 @@ assert(!overlayOnly.some((r) => r.agentName === "נציג RPC"), "נציג רק 
 function skipOverlayWhenLocal(localHealthPremium){
   return localHealthPremium > 0;
 }
-assert(skipOverlayWhenLocal(5058.29) === true, "עם מכירות מקומיות — בלי overlay");
+assert(skipOverlayWhenLocal(5058.29) === true, "עם מכירות מקומיות — בלי overlay ברוטו");
 assert(skipOverlayWhenLocal(0) === false, "טעינה רזה בלי מקומי — overlay עדיין ממלא");
-function skipServerOnlyForToday(localHealthPremium, kpiPremium){
-  let skip = localHealthPremium > 0;
-  if(kpiPremium > localHealthPremium + 0.05) skip = false;
-  return skip;
+function skipServerOnlyForToday(localHealthPremium){
+  return localHealthPremium > 0;
 }
-assert(skipServerOnlyForToday(5058.29, 5058.29) === true, "מקומי מלא כמו הכרטיס — בלי overlay");
-assert(skipServerOnlyForToday(2377.17, 5058.29) === false, "מקומי 2377 מול כרטיס 5058 — overlay משלים");
-assert(skipServerOnlyForToday(0, 5058.29) === false, "טעינה רזה — overlay ממלא");
+assert(skipServerOnlyForToday(5058.29) === true, "מקומי מלא — בלי RPC ברוטו");
+assert(skipServerOnlyForToday(2377.17) === true, "מקומי חלקי — עדיין בלי RPC ברוטו");
+assert(skipServerOnlyForToday(0) === false, "טעינה רזה — overlay ממלא");
 function shouldApplySoldDayToTable(soldMonthly, kpiPremium){
   const sold = Math.round((Number(soldMonthly) || 0) * 100) / 100;
   const kpi = Math.round((Number(kpiPremium) || 0) * 100) / 100;
@@ -568,7 +571,42 @@ function shouldApplySoldDayToTable(soldMonthly, kpiPremium){
 }
 assert(shouldApplySoldDayToTable(5058.29, 5058.29) === true, "כשהחישוב המקומי תואם לכרטיס מיישרים את הטבלה");
 assert(shouldApplySoldDayToTable(2377.17, 5058.29) === false, "לא מחליפים טבלה חלקית כשהאריחים 5058");
-assert(shouldApplySoldDayToTable(0, 5058.29) === false, "בלי פירוט מקומי לא מוחקים את שורות המסך");
+assert(shouldApplySoldDayToTable(5294.92, 5058.29) === false, "לא מיישרים לטבלה מנופחת 5294");
+function pickSoldAgentsForTable(localAgents, kpi, overlayAgents, overlayTotal){
+  const sumAgents = (list) => Math.round((list || []).reduce((n, a) => n + (Number(a.health) || 0) + (Number(a.prat) || 0), 0) * 100) / 100;
+  const match = (sold, target) => {
+    const s = Math.round((Number(sold) || 0) * 100) / 100;
+    const k = Math.round((Number(target) || 0) * 100) / 100;
+    return s > 0 && k > 0 && Math.abs(s - k) <= 0.05;
+  };
+  if(match(sumAgents(localAgents), kpi)) return localAgents;
+  if(match(sumAgents(overlayAgents), overlayTotal || kpi)) return overlayAgents;
+  return localAgents;
+}
+const overlaySold = [
+  { agentName: "עומר שמולביץ", health: 1253.39, prat: 183.59 },
+  { agentName: "אביב עמאש", health: 0, prat: 1122.14 },
+  { agentName: "רותם קדוש", health: 1054.01, prat: 0 },
+  { agentName: "דנה זגני", health: 512.53, prat: 518.96 },
+  { agentName: "ליאור קוסמינסקי", health: 222.00, prat: 191.67 }
+];
+const inflatedLocal = inflatedTable.map((r) => ({ agentName: r.agentName, health: r.health, prat: r.prat }));
+const pickedFromInflated = pickSoldAgentsForTable(inflatedLocal, 5058.29, overlaySold, 5058.29);
+const pickedAligned = dailySalesApplySoldDayHealthPrat(inflatedTable, pickedFromInflated);
+assert(Math.round(pickedAligned.reduce((n, r) => n + r.monthly, 0) * 100) / 100 === 5058.29,
+  "צילום סה״כ חודשי 1673.61… יורד ל-5058.29 כמו נמכר היום");
+assert(pickedAligned.find((r) => r.agentName === "עומר שמולביץ").monthly === 1436.98,
+  "שורה 1673.61 של עומר יורדת ל-1436.98");
+assert(pickedAligned.find((r) => r.agentName === "אביב עמאש").monthly === 1122.14, "אביב נשאר 1122.14");
+assert(pickedAligned.find((r) => r.agentName === "רותם קדוש").monthly === 1054.01, "רותם נשאר 1054.01");
+assert(pickedAligned.find((r) => r.agentName === "דנה זגני").monthly === 1031.49, "דנה נשארת 1031.49");
+assert(pickedAligned.find((r) => r.agentName === "ליאור קוסמינסקי").monthly === 413.67, "ליאור נשאר 413.67");
+const incompleteLocal = [
+  { agentName: "עומר שמולביץ", health: 544.86, prat: 171.78 }
+];
+const pickedFromIncomplete = pickSoldAgentsForTable(incompleteLocal, 5058.29, overlaySold, 5058.29);
+assert(Math.round(pickedFromIncomplete.reduce((n, a) => n + a.health + a.prat, 0) * 100) / 100 === 5058.29,
+  "מקומי 2377 מוחלף ב-byAgent של נמכר היום 5058");
 
 function dailySalesPresentPivotByAgent(groups){
   const map = new Map();

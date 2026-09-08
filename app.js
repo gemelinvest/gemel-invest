@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260908-daily-sales-v7";
+  const BUILD = "20260908-daily-sales-v8";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -35611,6 +35611,14 @@ UsersGateUI.init();
       const overlayIsAfter = serverOverlay.afterDiscount === true;
       const serverBreakdown = Array.isArray(serverOverlay.breakdown) ? serverOverlay.breakdown : [];
       const localBreakdown = Array.isArray(localResult.breakdown) ? localResult.breakdown : [];
+      const overlayAgents = Array.isArray(serverOverlay.byAgent) ? serverOverlay.byAgent : [];
+      const overlayAgentsSum = Math.round(overlayAgents.reduce((n, a) => {
+        return n + (Number(a?.health) || 0) + (Number(a?.prat) || 0);
+      }, 0) * 100) / 100;
+      const overlayAgentsMatch = overlayIsAfter
+        && overlayAgents.length
+        && overlayAgentsSum > 0
+        && Math.abs(overlayAgentsSum - serverPrem) <= 0.05;
       const useServer = localEmpty || (overlayIsAfter && (Number(missingPayloads) || 0) > 0 && serverHigher);
       if(useServer){
         return {
@@ -35620,7 +35628,7 @@ UsersGateUI.init();
           breakdown: overlayIsAfter
             ? this._mergeTodayCompanyBreakdown(localBreakdown, serverBreakdown)
             : (serverBreakdown.length ? serverBreakdown.slice() : localBreakdown.slice()),
-          byAgent: Array.isArray(localResult.byAgent) ? localResult.byAgent : [],
+          byAgent: overlayAgentsMatch ? overlayAgents : (Array.isArray(localResult.byAgent) ? localResult.byAgent : []),
           _loading: false,
           _fromServer: true
         };
@@ -35717,7 +35725,8 @@ UsersGateUI.init();
             totalPolicies: Number(res.soldPolicies) || 0,
             newClients: Number(res.newClients) || 0,
             // פירוט כרטיס היום לפי חברה — אחרי הנחה כשהמקור הוא loadTodaySalesAfterDiscount.
-            breakdown: companyBreakdown
+            breakdown: companyBreakdown,
+            byAgent: Array.isArray(res.byAgent) ? res.byAgent : []
           };
           const prev = this._todaySalesServerOverlay;
           const prevBd = Array.isArray(prev?.breakdown) ? prev.breakdown.length : 0;
@@ -35843,7 +35852,7 @@ UsersGateUI.init();
       const todayRange = todayPack.range;
       const dayKey = todayPack.dayKey;
       // GI-FIX 2026-08-09c: כרטיס היום = בריאות וסיכונים בלבד (ללא אלמנטרי)
-      const cacheKey = this.getMetricsCacheKey() + "|today|" + dayKey + "|healthRiskOnly|rpc1|byCompany3|afterDisc1|byAgent1";
+      const cacheKey = this.getMetricsCacheKey() + "|today|" + dayKey + "|healthRiskOnly|rpc1|byCompany3|afterDisc1|byAgent2";
       if(this._todaySalesCacheKey === cacheKey && this._todaySalesCache){
         return this._todaySalesCache;
       }
@@ -36634,17 +36643,8 @@ UsersGateUI.init();
           this._seedDailySalesGroup(map, g);
         }
       });
-      /* לא למלא חורים מ-RPC כשהמקומי כבר מכסה את «נמכר היום».
-         אם המקומי חלקי (למשל 2377 מול כרטיס 5058) — overlay כן משלים,
-         אחרת המייל מציג אריחים נכונים וטבלה קטועה. */
-      let skipServerOnly = localHealthPremium > 0;
-      try {
-        const todayKey = this.toIsraelDateKey(new Date());
-        if(safeTrim(dateKey) === todayKey){
-          const kpi = Number(this.buildTodaySalesMetrics()?.totalPremium) || 0;
-          if(kpi > localHealthPremium + 0.05) skipServerOnly = false;
-        }
-      } catch(_e) {}
+      /* לא למלא חורים מ-RPC ברוטו. פירוט נציגים אחרי-הנחה מגיע מ-byAgent של נמכר היום. */
+      const skipServerOnly = localHealthPremium > 0;
       const serverByAgent = new Map();
       rows.forEach((row) => {
         const key = dailySalesAgentMergeKey(row?.agent_name, row?.agent_id);
@@ -36707,7 +36707,7 @@ UsersGateUI.init();
         "agentRpcNoGrossV1",
         "noPartialCache",
         "officeBranchTodaySplitV1",
-        "monthlyKpiAlignV1",
+        "monthlyKpiAlignV2",
         dateKey,
         String(customers.length),
         String(missingPayloads),
@@ -36987,6 +36987,28 @@ UsersGateUI.init();
       if(!(sold > 0)) return false;
       if(!(kpi > 0)) return true;
       return Math.abs(sold - kpi) <= 0.05;
+    },
+
+    /* פירוט נציגים לטבלה: אותו מקור אחרי-הנחה כמו כרטיס «נמכר היום».
+       אם החישוב המקומי מנופח (5294 מול 5058) או חלקי (2377) — byAgent של ה-overlay. */
+    dailySalesTodaySoldAgentsForTable(kpiPremium, localAgents){
+      const kpi = Number(kpiPremium) || 0;
+      const local = Array.isArray(localAgents) ? localAgents : [];
+      if(this.dailySalesSoldDayMatchesKpi(this.dailySalesSoldMonthlyFromAgents(local), kpi)){
+        return { agents: local, premium: kpi };
+      }
+      try {
+        const overlay = this._todaySalesServerOverlay;
+        const todayKey = this.toIsraelDateKey(new Date());
+        if(overlay?.ok && overlay.afterDiscount === true && safeTrim(overlay.dayKey) === todayKey){
+          const ob = Array.isArray(overlay.byAgent) ? overlay.byAgent : [];
+          const overlayKpi = Number(overlay.totalPremium) || 0;
+          if(this.dailySalesSoldDayMatchesKpi(this.dailySalesSoldMonthlyFromAgents(ob), overlayKpi)){
+            return { agents: ob, premium: overlayKpi };
+          }
+        }
+      } catch(_e) {}
+      return { agents: local, premium: kpi };
     },
 
     /* בריאות / פרט / סה״כ חודשי = פוליסות עם _addedAt ביום הנבחר בלבד,
@@ -37352,11 +37374,15 @@ UsersGateUI.init();
       }
       try {
         if(report.isToday && todayMetrics){
-          const soldAgents = Array.isArray(todayMetrics.byAgent) ? todayMetrics.byAgent : [];
-          const soldMonthly = this.dailySalesSoldMonthlyFromAgents(soldAgents);
-          const kpi = Number(todayMetrics.totalPremium) || 0;
-          if(this.dailySalesSoldDayMatchesKpi(soldMonthly, kpi)){
+          const picked = this.dailySalesTodaySoldAgentsForTable(
+            Number(todayMetrics.totalPremium) || 0,
+            Array.isArray(todayMetrics.byAgent) ? todayMetrics.byAgent : []
+          );
+          const soldAgents = Array.isArray(picked?.agents) ? picked.agents : [];
+          const kpi = Number(picked?.premium) || 0;
+          if(this.dailySalesSoldDayMatchesKpi(this.dailySalesSoldMonthlyFromAgents(soldAgents), kpi)){
             rows = this.dailySalesApplySoldDayHealthPrat(rows, report.dateKey, soldAgents);
+            todayMetrics = { ...todayMetrics, totalPremium: kpi, byAgent: soldAgents };
           }
         } else {
           rows = this.dailySalesApplySoldDayHealthPrat(rows, report.dateKey);
@@ -39035,10 +39061,21 @@ UsersGateUI.init();
     },
 
     async prepareDailySalesMailSnapshot(){
-      /* מייל = אותו מודל מקומי כמו נמכר היום. לא ממתינים ל-RPC overlay. */
+      /* מייל = נמכר היום אחרי הנחה. ממתין ל-byAgent של השליפה הממוקדת, לא ל-RPC ברוטו. */
+      try { this.ensureTodaySalesServerOverlay?.(); } catch(_e) {}
       const started = Date.now();
       while((Date.now() - started) < 8000){
-        if(this.dailySalesMailSnapshotReady()) return true;
+        if(this.dailySalesMailSnapshotReady()){
+          try {
+            const overlay = this._todaySalesServerOverlay;
+            const todayKey = this.toIsraelDateKey(new Date());
+            if(overlay?.ok && overlay.afterDiscount === true && overlay.dayKey === todayKey
+              && Array.isArray(overlay.byAgent) && overlay.byAgent.length){
+              return true;
+            }
+          } catch(_e) {}
+          if(App?._fullDataReady && (Date.now() - started) > 2500) return true;
+        }
         await new Promise((r) => setTimeout(r, 200));
       }
       return this.dailySalesMailSnapshotReady();
@@ -41437,7 +41474,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260908-daily-sales-v7";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260908-daily-sales-v8";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -41457,8 +41494,8 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260908-daily-sales-v7";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260908-daily-sales-v7";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260908-daily-sales-v8";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260908-daily-sales-v8";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -42111,18 +42148,18 @@ UsersGateUI.init();
     "./ayalon-health-sim.css?v=20260810-sim-mockup-v2",
     "./ayalon-ci-sim.css?v=20260811-ayl-ci-v1",
     "./hachshara-health-sim.css?v=20260810-sim-mockup-v2",
-    "./hachshara-risk-sim.css?v=20260908-daily-sales-v7",
-    "./hachshara-mortgage-risk-sim.css?v=20260908-daily-sales-v7",
+    "./hachshara-risk-sim.css?v=20260908-daily-sales-v8",
+    "./hachshara-mortgage-risk-sim.css?v=20260908-daily-sales-v8",
     "./migdal-health-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
-    "./menora-ci-sim.css?v=20260908-daily-sales-v7",
+    "./menora-ci-sim.css?v=20260908-daily-sales-v8",
     "./clal-health-sim.css?v=20260812-cll-health-v1",
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260908-daily-sales-v7",
-    "./simulators-shell.css?v=20260908-daily-sales-v7"
+    "./simulators-center.css?v=20260908-daily-sales-v8",
+    "./simulators-shell.css?v=20260908-daily-sales-v8"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -43484,7 +43521,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260908-daily-sales-v7";
+  const GI_WIZARD_JS_VERSION = "20260908-daily-sales-v8";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -55360,7 +55397,8 @@ const ClalRiskLifePdf = {
         netPremium: Number(summed.totalPremium) || 0,
         soldPolicies: Number(summed.totalPolicies) || 0,
         newClients: Number(summed.newClients) || 0,
-        companyBreakdown: Array.isArray(summed.breakdown) ? summed.breakdown : []
+        companyBreakdown: Array.isArray(summed.breakdown) ? summed.breakdown : [],
+        byAgent: Array.isArray(summed.byAgent) ? summed.byAgent : []
       };
     } catch(err) {
       return { ok:false, error: String(err?.message || err) };
