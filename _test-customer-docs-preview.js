@@ -119,7 +119,7 @@ assert(!resolveFn.includes("isOfficialJoinFormType"), "official join download pa
 assert(cancel.includes("async fillOriginalTemplate(draft)"), "cancel fillOriginalTemplate kept");
 assert(followup.includes("async function fillFollowupPdf(entry)"), "followup fillFollowupPdf kept");
 assert(app.includes("canDownloadOfficialJoinForm(){"), "official download gate kept");
-assert(/canDownloadOfficialJoinForm\(\)\{\s*try \{ return !!\(Auth\.isAdmin\(\) \|\| Auth\.isManager\(\)\);/.test(app), "gate is still admin or manager only");
+assert(/canDownloadOfficialJoinForm\(\)\{\s*try \{\s*return !!\(Auth\.isAdmin\(\) \|\| Auth\.isManager\(\) \|\| Auth\.isOps\(\) \|\| Auth\.isOpsAgent\(\)\);/.test(app), "gate includes ops and opsAgent");
 assert(!/canDownloadOfficialJoinForm\(\)\{[\s\S]{0,220}isTeamManager/.test(app), "team manager is still excluded from official PDF download");
 assert(app.includes("denyOfficialJoinFormDownload(){"), "official open still denied for agents");
 assert(app.includes("window.GiCancelForms.open(rec, doc)"), "cancel open still uses GiCancelForms.open");

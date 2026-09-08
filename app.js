@@ -7751,7 +7751,9 @@
       return list;
     },
     canDownloadOfficialJoinForm(){
-      try { return !!(Auth.isAdmin() || Auth.isManager()); } catch(_e){ return false; }
+      try {
+        return !!(Auth.isAdmin() || Auth.isManager() || Auth.isOps() || Auth.isOpsAgent());
+      } catch(_e){ return false; }
     },
     REPORT_SCOPES: {
       proposal: "health_proposal",
@@ -23557,6 +23559,8 @@ UsersGateUI.init();
     async fillCustomerDocumentPreviewPdf(rec, doc){
       const cached = this.cachedCustomerDocPreviewUrl(rec, doc);
       if(cached) return cached;
+      const stored = safeTrim(doc?.dataUrl);
+      if(/^data:application\/pdf/i.test(stored)) return stored;
       let bytes = null;
       const spec = this.officialJoinFormPreviewSpec(safeTrim(doc?.type));
       if(spec){
@@ -23906,7 +23910,7 @@ UsersGateUI.init();
       try {
         window.showToast?.({
           title: "אין הרשאה",
-          text: "הורדת טופס הצעה רשמי זמינה למנהל ולמנהל מערכת בלבד.",
+          text: "הורדת טופס הצעה רשמי זמינה למנהל, מנהל מערכת, מנהל תפעול ונציג תפעול.",
           variant: "warn",
           durationMs: 5200
         });
@@ -69236,26 +69240,9 @@ ${inner}
     },
 
     _validateHealthDeclarationStep(rec){
-      const groups = this._mirrorBuildHealthGroups(rec);
-      if(!groups.length) return { ok: true };
-      const anyAnswered = groups.some((group) => (group.items || []).some((item) => {
-        const a = safeTrim(item.response?.answer);
-        return a === "yes" || a === "no";
-      }));
-      for(const group of groups){
-        for(const item of group.items || []){
-          const giWho = safeTrim(item.insLabel) || safeTrim(group.insured?.label);
-          const answer = safeTrim(item.response?.answer);
-          if(answer !== "yes" && answer !== "no"){
-            if(anyAnswered) continue;
-            return { ok: false, message: `יש לסמן כן/לא עבור ${giWho}: ${item.meta?.text || item.qKey}` };
-          }
-          if(answer === "yes" && typeof MirrorsUI !== "undefined" && typeof MirrorsUI.validateMirrorHealthItem === "function"){
-            if(!MirrorsUI.validateMirrorHealthItem(item)){
-              return { ok: false, message: `יש להשלים פירוט המשך עבור ${giWho}: ${item.meta?.text || item.qKey}` };
-            }
-          }
-        }
+      const store = this._mirrorGetHealthDeclStore(rec);
+      if(!safeTrim(store.scriptAckedAt)){
+        return { ok: false, message: "יש לאשר שהקראת את נוסח הצהרת הבריאות ללקוח." };
       }
       return { ok: true };
     },
@@ -69294,20 +69281,102 @@ ${inner}
       };
     },
 
+    _mcJoinFormTitle(type){
+      const map = {
+        hachshara_ci_form: "טופס מקורי — מחלות קשות · הכשרה",
+        hachshara_health_form: "טופס מקורי — בריאות · הכשרה",
+        hachshara_life_form: "טופס מקורי — ריסק חיים · הכשרה",
+        hachshara_life_short_form: "טופס מקורי — ריסק חיים מקוצר · הכשרה",
+        hachshara_mortgage_form: "טופס מקורי — ריסק משכנתא · הכשרה",
+        migdal_life_form: "טופס מקורי — ריסק חיים · מגדל",
+        migdal_mortgage_form: "טופס מקורי — ריסק משכנתא · מגדל",
+        migdal_cancer_form: "טופס מקורי — סרטן · מגדל",
+        menora_ci_form: "טופס מקורי — מחלות קשות · מנורה",
+        menora_mortgage_form: "טופס מקורי — ריסק משכנתא · מנורה",
+        menora_risk_form: "טופס מקורי — ריסק חיים · מנורה",
+        ayalon_health_form: "טופס מקורי — בריאות · איילון",
+        ayalon_mortgage_form: "טופס מקורי — ריסק משכנתא · איילון",
+        clal_health_form: "טופס מקורי — בריאות · כלל",
+        clal_life_couple_form: "טופס מקורי — ריסק חיים זוגי · כלל",
+        clal_mortgage_form: "טופס מקורי — ריסק משכנתא · כלל",
+        phoenix_life_short_form: "טופס מקורי — ריסק חיים מקוצר · הפניקס",
+        phoenix_life_full_form: "טופס מקורי — ריסק חיים מורחב · הפניקס",
+        phoenix_health_form: "טופס מקורי — בריאות · הפניקס",
+        phoenix_ci_form: "טופס מקורי — מחלות קשות · הפניקס"
+      };
+      return map[safeTrim(type)] || safeTrim(type);
+    },
+
+    _mcJoinFormTypeForPolicy(p, rec){
+      if(!p || typeof CustomerDocuments === "undefined") return "";
+      const payload = {
+        newPolicies: [p],
+        createdAt: rec?.createdAt || rec?.payload?.createdAt || (typeof nowISO === "function" ? nowISO() : new Date().toISOString()),
+        primary: rec?.payload?.primary
+      };
+      const CD = CustomerDocuments;
+      const checks = [
+        [CD.TYPES.hachsharaMortgageForm, "qualifiesForHachsharaMortgageForm"],
+        [CD.TYPES.hachsharaCiForm, "qualifiesForHachsharaCiForm"],
+        [CD.TYPES.hachsharaHealthForm, "qualifiesForHachsharaHealthForm"],
+        [CD.TYPES.hachsharaLifeShortForm, "qualifiesForHachsharaLifeShortForm"],
+        [CD.TYPES.hachsharaLifeForm, "qualifiesForHachsharaLifeForm"],
+        [CD.TYPES.migdalMortgageForm, "qualifiesForMigdalMortgageForm"],
+        [CD.TYPES.migdalCancerForm, "qualifiesForMigdalCancerForm"],
+        [CD.TYPES.migdalLifeForm, "qualifiesForMigdalLifeForm"],
+        [CD.TYPES.menoraMortgageForm, "qualifiesForMenoraMortgageForm"],
+        [CD.TYPES.menoraCiForm, "qualifiesForMenoraCiForm"],
+        [CD.TYPES.menoraRiskForm, "qualifiesForMenoraRiskForm"],
+        [CD.TYPES.ayalonMortgageForm, "qualifiesForAyalonMortgageForm"],
+        [CD.TYPES.ayalonHealthForm, "qualifiesForAyalonHealthForm"],
+        [CD.TYPES.clalMortgageForm, "qualifiesForClalMortgageForm"],
+        [CD.TYPES.clalHealthForm, "qualifiesForClalHealthForm"],
+        [CD.TYPES.clalLifeCoupleForm, "qualifiesForClalLifeCoupleForm"],
+        [CD.TYPES.phoenixLifeFullForm, "qualifiesForPhoenixLifeFullForm"],
+        [CD.TYPES.phoenixLifeShortForm, "qualifiesForPhoenixLifeShortForm"],
+        [CD.TYPES.phoenixHealthForm, "qualifiesForPhoenixHealthForm"],
+        [CD.TYPES.phoenixCiForm, "qualifiesForPhoenixCiForm"]
+      ];
+      for(let i = 0; i < checks.length; i++){
+        const type = checks[i][0];
+        const fn = CD[checks[i][1]];
+        try{
+          if(typeof fn === "function" && fn.call(CD, payload, null)) return type;
+        }catch(_e){}
+      }
+      return "";
+    },
+
     _mcCollectHealthFormRail(rec){
       const join = [];
       const follow = [];
       const missing = [];
+      const seenJoin = new Set();
       try{
-        const docs = (typeof CustomerDocuments !== "undefined" && CustomerDocuments.resolveListForCustomer)
-          ? (CustomerDocuments.resolveListForCustomer(rec) || [])
-          : [];
-        docs.filter((d) => CustomerDocuments.isOfficialJoinFormType(d?.type)).forEach((d) => {
-          join.push({
-            kind: "join",
-            type: safeTrim(d.type),
-            name: safeTrim(d.name) || safeTrim(d.type),
-            available: true
+        this._mirrorGetNewPoliciesRaw(rec).forEach((p) => {
+          const company = safeTrim(p?.company);
+          const product = safeTrim(p?.type || p?.product);
+          const type = this._mcJoinFormTypeForPolicy(p, rec);
+          if(type){
+            if(seenJoin.has(type)) return;
+            seenJoin.add(type);
+            join.push({
+              kind: "join",
+              type,
+              name: this._mcJoinFormTitle(type),
+              available: true,
+              company,
+              product
+            });
+            return;
+          }
+          const key = [company, product].filter(Boolean).join(" · ") || "פוליסה";
+          if(missing.some((m) => m.name === key)) return;
+          missing.push({
+            kind: "missing",
+            type: "",
+            name: key,
+            available: false
           });
         });
       }catch(_e){}
@@ -69329,24 +69398,6 @@ ${inner}
           });
         });
       }catch(_e2){}
-      try{
-        const coveredCompanies = new Set(join.map((j) => safeTrim(j.name)));
-        this._mirrorGetNewPoliciesRaw(rec).forEach((p) => {
-          const company = safeTrim(p?.company);
-          const product = safeTrim(p?.type || p?.product);
-          if(!company && !product) return;
-          const hit = join.some((j) => j.name.indexOf(company) >= 0 || j.name.indexOf(product) >= 0);
-          if(hit) return;
-          const key = company + " · " + product;
-          if(missing.some((m) => m.name === key) || coveredCompanies.has(key)) return;
-          missing.push({
-            kind: "missing",
-            type: "",
-            name: key,
-            available: false
-          });
-        });
-      }catch(_e3){}
       return { join, follow, missing };
     },
 
@@ -69550,26 +69601,37 @@ ${inner}
       return "data:application/pdf;base64," + btoa(bin);
     },
 
+    _mcCanonicalJoinDocId(type){
+      return "doc_" + String(type || "").replace(/[^a-z0-9_:-]+/gi, "_");
+    },
+
     _mcUpsertFilledFormDoc(rec, type, dataUrl, fileName, name, idSuffix){
       if(!rec?.payload) return;
       const list = (typeof CustomerDocuments !== "undefined" && CustomerDocuments.listFromPayload)
         ? CustomerDocuments.listFromPayload(rec.payload)
         : (Array.isArray(rec.payload.customerDocuments) ? rec.payload.customerDocuments : []);
-      const id = "doc_mirror_filled_" + String(idSuffix || type).replace(/[^a-z0-9_:-]+/gi, "_");
-      const row = {
-        id,
+      const isFollowup = safeTrim(type) === "followup_questionnaire";
+      const canonicalId = isFollowup
+        ? (safeTrim(idSuffix) || this._mcCanonicalJoinDocId(type))
+        : this._mcCanonicalJoinDocId(type);
+      const idx = list.findIndex((d) => {
+        if(isFollowup) return safeTrim(d?.id) === canonicalId;
+        return safeTrim(d?.type) === safeTrim(type) || safeTrim(d?.id) === canonicalId;
+      });
+      const prev = idx >= 0 ? list[idx] : null;
+      const row = Object.assign({}, prev || {}, {
+        id: safeTrim(prev?.id) || canonicalId,
         type,
-        name: name || fileName || type,
-        fileName: fileName || (String(type) + ".pdf"),
+        name: name || prev?.name || fileName || type,
+        fileName: fileName || prev?.fileName || (String(type) + ".pdf"),
         mime: "application/pdf",
         dataUrl,
-        source: "שיחת שיקוף",
+        source: prev?.source || "מערכת",
         uploadedAt: nowISO(),
         uploadedBy: safeTrim(Auth?.current?.name)
-      };
-      const idx = list.findIndex((d) => safeTrim(d?.id) === id);
-      if(idx >= 0) list[idx] = Object.assign({}, list[idx], row);
-      else list.unshift(row);
+      });
+      if(idx >= 0) list[idx] = row;
+      else if(!isFollowup) list.unshift(row);
       rec.payload.customerDocuments = list;
     },
 
@@ -69596,7 +69658,7 @@ ${inner}
             : await mod.fillOriginalTemplate(draft);
           if(!bytes) continue;
           const fileName = (typeof mod.fileName === "function") ? mod.fileName(draft) : (type + ".pdf");
-          this._mcUpsertFilledFormDoc(rec, type, this._mcBytesToPdfDataUrl(bytes), fileName, spec.globalName);
+          this._mcUpsertFilledFormDoc(rec, type, this._mcBytesToPdfDataUrl(bytes), fileName, this._mcJoinFormTitle(type));
         }catch(_e){}
       }
       try{
@@ -69610,18 +69672,51 @@ ${inner}
               const bytes = await helper.fillFollowupPdf(entry);
               if(!bytes) continue;
               const title = helper.buildDocTitle?.(entry) || ("שאלון-" + entry.questionnaireNum);
+              const stableId = helper.stableDocId?.(entry) || ["doc_followup", entry.companyKey, entry.insuredId, entry.questionnaireNum].join("_");
               this._mcUpsertFilledFormDoc(
                 rec,
                 "followup_questionnaire",
                 this._mcBytesToPdfDataUrl(bytes),
                 title + ".pdf",
                 title,
-                ["followup", entry.companyKey, entry.insuredId, entry.questionnaireNum].join("_")
+                stableId
               );
             }catch(_e2){}
           }
         }
       }catch(_e3){}
+    },
+
+    _mcHealthYesSummaryHtml(rec){
+      const groups = this._mirrorBuildHealthGroups(rec);
+      const yesItems = [];
+      (Array.isArray(groups) ? groups : []).forEach((group) => {
+        (group.items || []).forEach((item) => {
+          if(safeTrim(item.response?.answer) !== "yes") return;
+          const fields = this._mcHealthFollowupFields(item).map((field) => {
+            const val = safeTrim(item.response?.fields?.[field.key]);
+            if(!val) return "";
+            return `<div class="mcHealthYesBox__field"><span>${escapeHtml(field.label || field.key)}</span><strong>${escapeHtml(val)}</strong></div>`;
+          }).filter(Boolean).join("");
+          yesItems.push(
+            `<article class="mcHealthYesBox__item">` +
+              `<div class="mcHealthYesBox__q">${escapeHtml(group.question?.text || item.meta?.text || item.qKey)}</div>` +
+              `<div class="mcHealthYesBox__who">${escapeHtml(item.insLabel || item.insRole || "מבוטח")}</div>` +
+              (fields ? `<div class="mcHealthYesBox__fields">${fields}</div>` : "") +
+            `</article>`
+          );
+        });
+      });
+      if(!yesItems.length){
+        return `<section class="mcHealthYesBox mcHealthYesBox--empty" aria-label="על מה הלקוח הצהיר כן">` +
+          `<div class="mcHealthYesBox__head">על מה הלקוח הצהיר כן</div>` +
+          `<p class="mcHealthYesBox__empty">לא סומן כן באשף בריאות וסיכונים — אין ממצאים חיוביים לתיעוד.</p>` +
+        `</section>`;
+      }
+      return `<section class="mcHealthYesBox" aria-label="על מה הלקוח הצהיר כן">` +
+        `<div class="mcHealthYesBox__head">על מה הלקוח הצהיר כן</div>` +
+        `<div class="mcHealthYesBox__list">${yesItems.join("")}</div>` +
+      `</section>`;
     },
 
     _renderHealthDeclarationBody(rec){
@@ -69634,77 +69729,42 @@ ${inner}
       const store = this._mirrorGetHealthDeclStore(rec);
       store.openedAt = store.openedAt || nowISO();
       const hasChildren = this._mirrorHasChildrenForHealthDecl(rec);
-      const groups = this._mirrorBuildHealthGroups(rec);
+      const acked = !!safeTrim(store.scriptAckedAt);
       const err = safeTrim(this._healthDeclError || "");
       this._healthDeclError = "";
-
-      const groupsHtml = groups.length ? groups.map((group) => {
-        const cards = (group.items || []).map((item) => {
-          const answer = safeTrim(item.response?.answer);
-          const yesSelected = answer === "yes";
-          const noSelected = answer === "no";
-          const wizardBadge = answer ? `<span class="mcHealthQ__badge ${yesSelected ? "is-yes" : "is-no"}">מהאשף: ${yesSelected ? "כן" : "לא"}</span>` : `<span class="mcHealthQ__badge is-empty">טרם סומן באשף</span>`;
-          return `<article class="mcHealthQ${item.meta?.addedFromOtherDecl ? " mcHealthQ--added" : ""}" data-mc-health-item="${escapeHtml(item.qKey)}|${escapeHtml(item.insId)}">` +
-            `<div class="mcHealthQ__head">` +
-              `<div class="mcHealthQ__text">${escapeHtml(item.insLabel || item.insRole || item.qKey)}</div>` +
-              wizardBadge +
-            `</div>` +
-            (item.meta?.addedFromOtherDecl
-              ? `<div class="mcHealthQ__added" role="note">${escapeHtml(giHealthAddedNoteText(item.meta))}</div>`
-              : "") +
-            `<div class="mcHealthQ__choices">` +
-              `<button type="button" class="mcHealthQ__choice${yesSelected ? " is-selected" : ""}" data-mc-health-q="${escapeHtml(item.qKey)}" data-mc-health-ins="${escapeHtml(item.insId)}" data-mc-health-answer="yes">כן</button>` +
-              `<button type="button" class="mcHealthQ__choice${noSelected ? " is-selected" : ""}" data-mc-health-q="${escapeHtml(item.qKey)}" data-mc-health-ins="${escapeHtml(item.insId)}" data-mc-health-answer="no">לא</button>` +
-            `</div>` +
-          `</article>`;
-        }).join("");
-        const quests = (group.items || []).map((item) => {
-          if(safeTrim(item.response?.answer) !== "yes") return "";
-          const fields = this._mcHealthFollowupFields(item);
-          const who = escapeHtml(item.insLabel || item.insRole || "מבוטח");
-          const src = this._mcHealthQuestionnaireTitle(item.meta);
-          if(!fields.length){
-            return `<div class="mcHealthQuest mcHealthQuest--empty" data-mc-health-quest="${escapeHtml(item.qKey)}|${escapeHtml(item.insId)}">` +
-              `<div class="mcHealthQuest__head">שאלון המשך · ${who}</div>` +
-              `<div class="mcHealthQuest__empty">סומן כן · אין שאלון המשך מובנה לשאלה זו</div>` +
-            `</div>`;
-          }
-          return `<div class="mcHealthQuest" data-mc-health-quest="${escapeHtml(item.qKey)}|${escapeHtml(item.insId)}">` +
-            `<div class="mcHealthQuest__head">שאלון שנפתח · ${who}</div>` +
-            (src ? `<div class="mcHealthQuest__src">${escapeHtml(src)}</div>` : "") +
-            `<div class="mcHealthQ__fields">${fields.map((field) => this._mcHealthFieldInputHtml(item, field)).join("")}</div>` +
+      const scriptHtml =
+        `<div class="mcNeedsScript" aria-label="נוסח הקראה — הצהרת בריאות">` +
+          `<p class="mcNeedsScript__p">כעת נעבור להצהרת הבריאות. אני אעבור איתך על מספר שאלות. חשוב לתת בעניינים אלו תשובה מלאה וכנה, אחרת תהיה לכך השפעה על תגמולי הביטוח.</p>` +
+          `<p class="mcNeedsScript__p">התשובות שלך לשאלות הצהרת הבריאות שיוקראו לך כעת הן הבסיס לפוליסה, וחשוב מאוד שתענה עליהן בצורה מלאה, נכונה וכנה.</p>` +
+          `<p class="mcNeedsScript__p mcHealthDeclWarn">לשומת ליבך: מענה שאינו מלא, נכון וכנה יכול לפגוע בך במעמד התביעה ואף עלול להוביל לביטול הפוליסה.</p>` +
+        `</div>` +
+        (hasChildren
+          ? `<div class="mcHealthDeclChildren" role="note">` +
+              `<div class="mcHealthDeclChildren__label">הדגשה לנציג · יש ילדים בתיק</div>` +
+              `<p class="mcHealthDeclChildren__text">השאלות שאשאל הן גם בנוגע לילדים. במידה ואחת השאלות חיוביות — יש לציין זאת. בסדר?</p>` +
+            `</div>`
+          : "");
+      if(!acked){
+        this.els.stepHealthDeclBody.innerHTML =
+          `<div class="mcNeedsScreen mcHealthDeclIntro">` +
+            scriptHtml +
+            (err ? `<div class="mcCancelQError" role="alert">${escapeHtml(err)}</div>` : "") +
+            this._mcNeedsNav("health-script-ack", "הקראתי ללקוח והמשך", "health-back", "חזרה") +
           `</div>`;
-        }).join("");
-        return `<section class="mcHealthGroup${quests ? " mcHealthGroup--hasQuest" : ""}">` +
-          `<div class="mcHealthGroup__name">${escapeHtml(group.question?.text || group.insured?.label || "")}</div>` +
-          (safeTrim(group.question?.title) ? `<div class="mcHealthGroup__cat">${escapeHtml(group.question.title)}</div>` : "") +
-          `<div class="mcHealthGroup__list">${cards}</div>` +
-          quests +
-        `</section>`;
-      }).join("") : `<div class="mcAgentHint" role="note"><div class="mcAgentHint__title">אין שאלות להצגה</div><div class="mcAgentHint__text">לא נמצאו שאלות הצהרת בריאות תואמות לפוליסות בתיק. ניתן להמשיך אחרי הקראת נוסח הפתיחה.</div></div>`;
-
+        return;
+      }
       this.els.stepHealthDeclBody.innerHTML =
         `<div class="mcNeedsScreen mcHealthDeclSplit">` +
           `<div class="mcHealthDeclSplit__main">` +
-          `<div class="mcNeedsScript" aria-label="נוסח הקראה — הצהרת בריאות">` +
-            `<p class="mcNeedsScript__p">כעת נעבור להצהרת הבריאות. אני אעבור איתך על מספר שאלות. חשוב לתת בעניינים אלו תשובה מלאה וכנה, אחרת תהיה לכך השפעה על תגמולי הביטוח.</p>` +
-            `<p class="mcNeedsScript__p">התשובות שלך לשאלות הצהרת הבריאות שיוקראו לך כעת הן הבסיס לפוליסה, וחשוב מאוד שתענה עליהן בצורה מלאה, נכונה וכנה.</p>` +
-            `<p class="mcNeedsScript__p mcHealthDeclWarn">לשומת ליבך: מענה שאינו מלא, נכון וכנה יכול לפגוע בך במעמד התביעה ואף עלול להוביל לביטול הפוליסה.</p>` +
-          `</div>` +
-          (hasChildren
-            ? `<div class="mcHealthDeclChildren" role="note">` +
-                `<div class="mcHealthDeclChildren__label">הדגשה לנציג · יש ילדים בתיק</div>` +
-                `<p class="mcHealthDeclChildren__text">השאלות שאשאל הן גם בנוגע לילדים. במידה ואחת השאלות חיוביות — יש לציין זאת. בסדר?</p>` +
-              `</div>`
-            : "") +
-          `<div class="mcHealthGroups">${groupsHtml}</div>` +
-          (err ? `<div class="mcCancelQError" role="alert">${escapeHtml(err)}</div>` : "") +
-          this._mcNeedsNav(
-            "health-to-future",
-            this._mcPayStepEnabled() ? "המשך · פרטי אמצעי תשלום" : "סיימתי · סיום שלבי השיקוף",
-            "health-back",
-            "חזרה"
-          ) +
+            scriptHtml +
+            this._mcHealthYesSummaryHtml(rec) +
+            (err ? `<div class="mcCancelQError" role="alert">${escapeHtml(err)}</div>` : "") +
+            this._mcNeedsNav(
+              "health-to-future",
+              this._mcPayStepEnabled() ? "המשך · פרטי אמצעי תשלום" : "סיימתי · סיום שלבי השיקוף",
+              "health-back",
+              "חזרה"
+            ) +
           `</div>` +
           this._mcHealthFormsRailHtml(rec) +
         `</div>`;
@@ -70084,7 +70144,51 @@ ${inner}
       const list = Array.isArray(pl.newPolicies) && pl.newPolicies.length
         ? pl.newPolicies
         : (Array.isArray(pl?.operational?.newPolicies) ? pl.operational.newPolicies : []);
-      return Array.isArray(list) ? list.filter(p => p) : [];
+      const rows = Array.isArray(list) ? list.filter((p) => p) : [];
+      return this._mcFilterCurrentOfferPolicies(rec, rows);
+    },
+
+    /** פוליסות מוצעות בשיקוף = רק מה שהנציג הוסיף בהצעה הנוכחית, לא היסטוריית התיק. */
+    _mcFilterCurrentOfferPolicies(rec, list){
+      const rows = (Array.isArray(list) ? list : []).filter((p) => {
+        if(!p) return false;
+        const origin = String(p.origin || "");
+        if(origin === "existing" || origin === "elementary" || origin === "agent_appointment") return false;
+        return true;
+      });
+      if(!rows.length) return rows;
+      const session = rows.filter((p) => p._purchaseSession);
+      if(session.length) return session;
+      try{
+        const props = (typeof findProposalsLinkedToCustomer === "function")
+          ? (findProposalsLinkedToCustomer(rec) || [])
+          : [];
+        if(props.length){
+          const newest = props.slice().sort((a, b) => {
+            const tb = Date.parse(safeTrim(b?.updatedAt || b?.createdAt) || 0) || 0;
+            const ta = Date.parse(safeTrim(a?.updatedAt || a?.createdAt) || 0) || 0;
+            return tb - ta;
+          })[0];
+          const fromProp = (typeof getNewPoliciesFromCustomerPayload === "function")
+            ? getNewPoliciesFromCustomerPayload(newest?.payload)
+            : (Array.isArray(newest?.payload?.newPolicies) ? newest.payload.newPolicies : []);
+          const offer = (Array.isArray(fromProp) ? fromProp : []).filter((p) => p);
+          if(offer.length){
+            const ids = new Set(offer.map((p) => safeTrim(p.id)).filter(Boolean));
+            const matched = rows.filter((p) => ids.has(safeTrim(p.id)));
+            return matched.length ? matched : offer;
+          }
+        }
+      }catch(_e){}
+      const stamped = rows.filter((p) => safeTrim(p._addedAt));
+      if(stamped.length && stamped.length < rows.length) return stamped;
+      if(stamped.length > 1){
+        const times = stamped.map((p) => Date.parse(p._addedAt) || 0);
+        const max = Math.max.apply(null, times);
+        const clustered = stamped.filter((p) => (max - (Date.parse(p._addedAt) || 0)) <= (36 * 3600 * 1000));
+        if(clustered.length && clustered.length < rows.length) return clustered;
+      }
+      return rows;
     },
 
     _renderStep4PremiumCostBody(rec){
@@ -70860,6 +70964,13 @@ ${inner}
         this._renderHealthDeclarationBody(rec);
         this._showStepHealthDeclPanel();
         void this._persistBeneficiariesStep(rec);
+        return;
+      }
+      if(action === "health-script-ack"){
+        const store = this._mirrorGetHealthDeclStore(rec);
+        store.scriptAckedAt = nowISO();
+        store.scriptAckedBy = safeTrim(Auth?.current?.name);
+        this._renderHealthDeclarationBody(rec);
         return;
       }
       if(action === "health-back"){

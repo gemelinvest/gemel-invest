@@ -35321,16 +35321,50 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   flex-direction:column;
   gap:12px;
 }
+.mcHealthDeclIntro{
+  display:flex;
+  flex-direction:column;
+  gap:14px;
+  height:auto;
+  max-height:none;
+}
+.mcHealthYesBox{
+  border:1px solid rgba(15,32,96,.12);
+  background:#fff;
+  border-radius:14px;
+  padding:12px 14px;
+}
+.mcHealthYesBox__head{
+  font-size:13px;
+  font-weight:800;
+  color:#1e3a7a;
+  margin:0 0 10px;
+}
+.mcHealthYesBox__list{display:flex;flex-direction:column;gap:8px;}
+.mcHealthYesBox__item{
+  border:1px solid rgba(42,92,245,.14);
+  background:#f8fbff;
+  border-radius:10px;
+  padding:8px 10px;
+}
+.mcHealthYesBox__q{font-size:14px;font-weight:800;color:#0a1638;line-height:1.4;}
+.mcHealthYesBox__who{font-size:12px;font-weight:600;color:rgba(30,58,122,.62);margin-top:2px;}
+.mcHealthYesBox__fields{margin-top:6px;display:flex;flex-direction:column;gap:4px;}
+.mcHealthYesBox__field{display:flex;justify-content:space-between;gap:10px;font-size:12px;}
+.mcHealthYesBox__field span{color:rgba(30,58,122,.55);font-weight:600;}
+.mcHealthYesBox__field strong{color:#0a1638;font-weight:700;text-align:left;}
+.mcHealthYesBox--empty{background:#f8fafc;}
+.mcHealthYesBox__empty{margin:0;font-size:13px;color:rgba(30,58,122,.55);font-weight:600;line-height:1.45;}
 .mcHealthFormsRail{
-  flex:0 0 280px;
-  width:280px;
-  max-width:36%;
+  flex:0 0 300px;
+  width:300px;
+  max-width:38%;
   min-height:0;
   overflow:auto;
   border:1px solid rgba(15,32,96,.12);
-  background:#f8fafc;
-  border-radius:12px;
-  padding:10px;
+  background:#f4f7fb;
+  border-radius:14px;
+  padding:12px;
   display:flex;
   flex-direction:column;
   gap:8px;
