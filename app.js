@@ -65500,6 +65500,9 @@ ${inner}
           try{ setOpsTouch(rec,{liveState:"call_finished",ownerName:safeTrim(Auth?.current?.name),updatedBy:safeTrim(Auth?.current?.name)}); }catch(_e){}
           State.data.meta.updatedAt=finishedAt; rec.updatedAt=finishedAt;
           this._persistMirrorCall("שיחת שיקוף הסתיימה", { immediate: true });
+          void this._mcMaterializeEditedForms(rec).then(() => {
+            try{ this._persistMirrorCall("טפסים מוכנים משיחת שיקוף", { immediate: true }); }catch(_e2){}
+          }).catch(() => {});
         }
       }
       if(this.els.callStartBtn){ this.els.callStartBtn.textContent="התחל שיחת שיקוף"; this.els.callStartBtn.classList.remove("is-end"); }
@@ -65710,9 +65713,9 @@ ${inner}
       if(phase === "step2"){
         const rec = this._getFreshCustomerRecord();
         const sub = this._mirrorNeedsSubPhase;
-        if(sub === "offer"){ this._handleNeedsAct("needs-to-existing"); return; }
-        if(sub === "reasons"){ this._handleNeedsAct("needs-to-disclosure"); return; }
-        if(sub === "compareNotice"){ this._handleNeedsAct("needs-to-reasons"); return; }
+        if(sub === "offer"){ this._handleNeedsAct("needs-to-disclosure"); return; }
+        if(sub === "reasons"){ this._handleNeedsAct("reasons-to-compare"); return; }
+        if(sub === "compareNotice"){ this._handleNeedsAct("needs-to-offer"); return; }
         if(sub === "existing"){ this._handleNeedsAct("har-back"); return; }
         this._mirrorUiPhase = "personalVerify";
         this._renderPersonalVerifyBody(rec);
@@ -65879,7 +65882,7 @@ ${inner}
     // קודם הסדר היה מפוזר בין ה-HTML לשבע רשימות markDone.
     // כאן הוא מוגדר במקום אחד. מתג: window.__GI_MC_PAYMENT_STEP = false
     // מחזיר את הסדר הקודם, בדיוק כפי שהיה.
-    // שינוי/ביטול בעתיד מושהה מהסדר החי. גילוי נאות אחרי הפוליסות המוצעות, ואחריו שיקולי המלצה.
+    // שינוי/ביטול בעתיד מושהה מהסדר החי. גילוי נאות אחרי הביטוחים הקיימים, ואחריו פוליסות מוצעות ומסמך השוואה.
     _mcFlowPlan(){
       const e = this.els;
       const core = [
@@ -66652,6 +66655,11 @@ ${inner}
           if(payEl){ this._onMcPayAction(payEl); return; }
         }
         if(this._mirrorUiPhase === "healthDeclaration" && this.els.stepHealthDeclWrap && !this.els.stepHealthDeclWrap.hidden && this.els.stepHealthDeclWrap.contains(ev.target)){
+          const formBtn = ev.target.closest("[data-mc-open-form]");
+          if(formBtn){
+            this._onMcHealthFormRailClick(formBtn);
+            return;
+          }
           const ansBtn = ev.target.closest("[data-mc-health-answer]");
           if(ansBtn){
             this._onMcHealthAnswerClick(ansBtn);
@@ -67570,6 +67578,43 @@ ${inner}
       return `<article class="mcPolCard" role="listitem">${body}</article>`;
     },
 
+    _mcPolicyRowHead(kind){
+      const cols = kind === "offer"
+        ? ["מבוטח", "מוצר", "חברה", "סכום ביטוח", "לפני הנחה", "לאחר הנחה"]
+        : ["מבוטח", "מוצר", "חברה", "פרמיה", "סכום ביטוח", "סטטוס"];
+      return `<div class="mcPolicyRow mcPolicyRow--head" aria-hidden="true">` +
+        cols.map((c) => `<span>${escapeHtml(c)}</span>`).join("") +
+      `</div>`;
+    },
+
+    _mcPolicyRowHtml(opts){
+      const cells = Array.isArray(opts.cells) ? opts.cells : [];
+      const cellsHtml = cells.map((c) => {
+        const kind = safeTrim(c.kind);
+        const mods = ["mcPolicyRow__cell"];
+        if(kind === "insured") mods.push("mcPolicyRow__cell--insured");
+        if(kind === "money") mods.push("mcPolicyRow__cell--money");
+        return `<span class="${mods.join(" ")}" data-mc-row-k="${escapeHtml(c.k || "")}">${c.v || "—"}</span>`;
+      }).join("");
+      let statusHtml = "";
+      if(opts.status){
+        const tone = safeTrim(opts.status.tone) || "neutral";
+        const label = safeTrim(opts.status.label) || "טרם נבחר";
+        statusHtml = `<span class="mcPolicyRow__status mcPolicyRow__status--${escapeHtml(tone)}">${escapeHtml(label)}</span>`;
+      }
+      const subs = Array.isArray(opts.subs) ? opts.subs.filter((s) => s && (s.k || s.v)) : [];
+      const subsHtml = subs.length
+        ? `<div class="mcPolicyRow__subs">` + subs.map((s) =>
+            `<div class="mcPolicyRow__sub"><span>${escapeHtml(s.k || "")}</span><strong>${s.v || "—"}</strong></div>`
+          ).join("") + `</div>`
+        : "";
+      const extra = opts.extra || "";
+      return `<article class="mcPolicyRow" role="listitem">` +
+        `<div class="mcPolicyRow__main">${cellsHtml}${statusHtml}</div>` +
+        subsHtml + extra +
+      `</article>`;
+    },
+
     _renderStep2Body(rec){
       if(!this.els.step2Body) return;
       const sub = this._mirrorNeedsSubPhase || "consent";
@@ -67601,7 +67646,7 @@ ${inner}
           `<div class="mcNeedsScript" aria-label="נוסח הקראה">` +
             `<p class="mcNeedsScript__p">חשוב לי לעדכן אותך כי בשוק ישנן 8 חברות המשווקות את המוצר בבריאות ו-9 בחיים.</p>` +
             `<p class="mcNeedsScript__p">חברות הביטוח העיקריות שאנו עובדים איתן בתחום ביטוחי הבריאות הינן <strong>כלל ואיילון</strong>, ובתחום ביטוחי החיים הינן <strong>כלל ומגדל</strong>.</p>` +
-            `<p class="mcNeedsScript__p mcNeedsScript__p--ask">אז לאחר שקיבלנו את פנייתך – האם אתה מאשר לנו להיכנס עבורך לממשק הר הביטוח ולבצע עבורך בדיקה על מנת להתאים עבורך ביטוח העונה על צרכיך?</p>` +
+            `<p class="mcNeedsScript__p mcNeedsScript__p--ask">אז לאחר שקיבלנו את פנייתך, האם אתה מאשר כי אתה מאשר לנו להיכנס עבורך לממשק הר הביטוח ולבצע עבורך בדיקה על מנת להתאים עבורך ביטוח העונה על צרכיך?</p>` +
           `</div>` +
           `<div class="mcNeedsNav mcNeedsNav--split">` +
             `<button type="button" class="btn btn--primary" data-mc-needs-act="har-yes">מאשר</button>` +
@@ -67858,7 +67903,7 @@ ${inner}
         return;
       }
       if(dir === "back"){
-        this._mirrorNeedsSubPhase = "compareNotice";
+        this._mirrorNeedsSubPhase = "reasons";
         this._mirrorUiPhase = "step2";
         this._renderStep2Body(rec);
         this._showStep2Panel();
@@ -69215,6 +69260,370 @@ ${inner}
       return { ok: true };
     },
 
+    _mcGetFormEdits(rec){
+      if(!rec.payload || typeof rec.payload !== "object") rec.payload = {};
+      if(!rec.payload.mirrorFlow || typeof rec.payload.mirrorFlow !== "object") rec.payload.mirrorFlow = {};
+      if(!rec.payload.mirrorFlow.formEdits || typeof rec.payload.mirrorFlow.formEdits !== "object"){
+        rec.payload.mirrorFlow.formEdits = {};
+      }
+      return rec.payload.mirrorFlow.formEdits;
+    },
+
+    _mcOfficialFormOpeners(){
+      return {
+        hachshara_ci_form: "openHachsharaCiForm",
+        hachshara_health_form: "openHachsharaHealthForm",
+        hachshara_life_form: "openHachsharaLifeForm",
+        hachshara_life_short_form: "openHachsharaLifeShortForm",
+        hachshara_mortgage_form: "openHachsharaMortgageForm",
+        migdal_life_form: "openMigdalLifeForm",
+        migdal_mortgage_form: "openMigdalMortgageForm",
+        menora_ci_form: "openMenoraCiForm",
+        menora_mortgage_form: "openMenoraMortgageForm",
+        menora_risk_form: "openMenoraRiskForm",
+        ayalon_health_form: "openAyalonHealthForm",
+        ayalon_mortgage_form: "openAyalonMortgageForm",
+        clal_health_form: "openClalHealthForm",
+        clal_life_couple_form: "openClalLifeCoupleForm",
+        clal_mortgage_form: "openClalMortgageForm",
+        migdal_cancer_form: "openMigdalCancerForm",
+        phoenix_life_short_form: "openPhoenixLifeShortForm",
+        phoenix_life_full_form: "openPhoenixLifeFullForm",
+        phoenix_health_form: "openPhoenixHealthForm",
+        phoenix_ci_form: "openPhoenixCiForm"
+      };
+    },
+
+    _mcCollectHealthFormRail(rec){
+      const join = [];
+      const follow = [];
+      const missing = [];
+      try{
+        const docs = (typeof CustomerDocuments !== "undefined" && CustomerDocuments.resolveListForCustomer)
+          ? (CustomerDocuments.resolveListForCustomer(rec) || [])
+          : [];
+        docs.filter((d) => CustomerDocuments.isOfficialJoinFormType(d?.type)).forEach((d) => {
+          join.push({
+            kind: "join",
+            type: safeTrim(d.type),
+            name: safeTrim(d.name) || safeTrim(d.type),
+            available: true
+          });
+        });
+      }catch(_e){}
+      try{
+        const pack = (typeof CustomerFileUI !== "undefined" && CustomerFileUI.getFollowupZipMeta)
+          ? CustomerFileUI.getFollowupZipMeta(rec)
+          : { triggered: [] };
+        (pack.triggered || []).forEach((entry) => {
+          const helper = (typeof window !== "undefined" && window.GiFollowupZip) ? window.GiFollowupZip : null;
+          follow.push({
+            kind: "followup",
+            type: "followup:" + [entry.companyKey, entry.insuredId, entry.questionnaireNum].join("|"),
+            name: helper?.buildDocTitle?.(entry) || ("שאלון " + safeTrim(entry.questionnaireNum) + " · " + safeTrim(entry.company)),
+            company: safeTrim(entry.company),
+            insured: safeTrim(entry.insured?.label) || safeTrim(entry.insuredLabel),
+            qNum: safeTrim(entry.questionnaireNum),
+            available: true,
+            entry
+          });
+        });
+      }catch(_e2){}
+      try{
+        const coveredCompanies = new Set(join.map((j) => safeTrim(j.name)));
+        this._mirrorGetNewPoliciesRaw(rec).forEach((p) => {
+          const company = safeTrim(p?.company);
+          const product = safeTrim(p?.type || p?.product);
+          if(!company && !product) return;
+          const hit = join.some((j) => j.name.indexOf(company) >= 0 || j.name.indexOf(product) >= 0);
+          if(hit) return;
+          const key = company + " · " + product;
+          if(missing.some((m) => m.name === key) || coveredCompanies.has(key)) return;
+          missing.push({
+            kind: "missing",
+            type: "",
+            name: key,
+            available: false
+          });
+        });
+      }catch(_e3){}
+      return { join, follow, missing };
+    },
+
+    _mcHealthFormsRailHtml(rec){
+      const rail = this._mcCollectHealthFormRail(rec);
+      const item = (row) => {
+        if(!row.available){
+          return `<div class="mcHealthFormsRail__item is-off" title="אין טופס רשמי">` +
+            `<div class="mcHealthFormsRail__name">${escapeHtml(row.name)}</div>` +
+            `<div class="mcHealthFormsRail__meta">אין טופס רשמי</div>` +
+          `</div>`;
+        }
+        const meta = row.kind === "followup"
+          ? [row.company, row.insured, row.qNum ? ("שאלון " + row.qNum) : ""].filter(Boolean).join(" · ")
+          : "טופס הצעה";
+        return `<button type="button" class="mcHealthFormsRail__item" data-mc-open-form="${escapeHtml(row.kind)}" data-mc-form-type="${escapeHtml(row.type)}">` +
+          `<div class="mcHealthFormsRail__name">${escapeHtml(row.name)}</div>` +
+          `<div class="mcHealthFormsRail__meta">${escapeHtml(meta)}</div>` +
+        `</button>`;
+      };
+      const section = (title, rows) => {
+        if(!rows.length) return "";
+        return `<div class="mcHealthFormsRail__sec"><div class="mcHealthFormsRail__secTitle">${escapeHtml(title)}</div>${rows.map(item).join("")}</div>`;
+      };
+      const body = section("טפסי הצעה", rail.join)
+        + section("שאלוני המשך", rail.follow)
+        + section("ללא טופס רשמי", rail.missing);
+      return `<aside class="mcHealthFormsRail" aria-label="טפסי הצעה ושאלוני המשך">` +
+        `<div class="mcHealthFormsRail__head">טפסים לעריכה</div>` +
+        `<div class="mcHealthFormsRail__list">${body || `<div class="mcHealthFormsRail__empty">אין טפסי הצעה לפוליסות החדשות.</div>`}</div>` +
+      `</aside>`;
+    },
+
+    _mcCaptureFormEditsFromModal(modal){
+      const html = {};
+      const pdf = {};
+      if(!modal) return { html, pdf, savedAt: nowISO() };
+      modal.querySelectorAll("input, textarea, select").forEach((el) => {
+        const pdfName = safeTrim(el.getAttribute("data-pdf-field"));
+        const name = safeTrim(el.getAttribute("name") || el.getAttribute("data-name"));
+        let val = "";
+        if(el.type === "checkbox" || el.type === "radio") val = el.checked ? (el.value || "1") : "";
+        else val = el.value == null ? "" : String(el.value);
+        if(pdfName) pdf[pdfName] = val;
+        else if(name) html[name] = val;
+      });
+      return { html, pdf, savedAt: nowISO() };
+    },
+
+    _mcApplyFormEditsToModal(modal, edits){
+      if(!modal || !edits) return;
+      const setVal = (el, val) => {
+        if(!el) return;
+        if(el.type === "checkbox" || el.type === "radio") el.checked = !!(val && val !== "0");
+        else el.value = val == null ? "" : String(val);
+      };
+      Object.keys(edits.html || {}).forEach((name) => {
+        let el = null;
+        try{ el = modal.querySelector(`[name="${name.replace(/"/g, "")}"]`); }catch(_e){}
+        setVal(el, edits.html[name]);
+      });
+      Object.keys(edits.pdf || {}).forEach((name) => {
+        let el = null;
+        try{ el = modal.querySelector(`[data-pdf-field="${name.replace(/"/g, "")}"]`); }catch(_e){}
+        setVal(el, edits.pdf[name]);
+      });
+    },
+
+    _mcBindFormEditPersistence(rec, key){
+      const tryBind = (attempt) => {
+        const modal = document.querySelector(".giValModal.is-open, .giValModal.giValModal--visible");
+        if(!modal){
+          if(attempt < 25) window.setTimeout(() => tryBind(attempt + 1), 120);
+          return;
+        }
+        modal.classList.add("mcFormModalFull");
+        const apply = () => this._mcApplyFormEditsToModal(modal, this._mcGetFormEdits(rec)[key]);
+        apply();
+        window.setTimeout(apply, 400);
+        window.setTimeout(apply, 1400);
+        const save = () => {
+          try{
+            this._mcGetFormEdits(rec)[key] = this._mcCaptureFormEditsFromModal(modal);
+          }catch(_e){}
+        };
+        modal.addEventListener("input", save);
+        modal.addEventListener("change", save);
+        modal.addEventListener("click", (ev) => {
+          const t = ev.target;
+          if(!t) return;
+          if(t.classList.contains("giValModal__backdrop") || t.closest(".giValModal__closeX") || t.closest("[class*='close']") || (t.closest(".giValModal__foot .btn") && !t.closest(".btn--primary"))){
+            save();
+            try{ void this._persistMirrorCall("עריכת טופס בשיחת שיקוף"); }catch(_e2){}
+          }
+        }, true);
+      };
+      tryBind(0);
+    },
+
+    async _mcOpenJoinFormFromRail(rec, type){
+      const fnName = this._mcOfficialFormOpeners()[type];
+      const ui = (typeof CustomerFileUI !== "undefined") ? CustomerFileUI : null;
+      if(!ui || !fnName || typeof ui[fnName] !== "function"){
+        this._mcToast("טופס", "אין טופס רשמי לפתיחה.", "warn");
+        return;
+      }
+      try{
+        await ui[fnName](rec);
+      }catch(err){
+        this._mcToast("טופס", safeTrim(err?.message) || "לא ניתן לפתוח את הטופס.", "warn");
+        return;
+      }
+      this._mcBindFormEditPersistence(rec, type);
+    },
+
+    async _mcOpenFollowupFromRail(rec, type){
+      const rail = this._mcCollectHealthFormRail(rec);
+      const row = rail.follow.find((f) => f.type === type);
+      if(!row?.entry){
+        this._mcToast("שאלון המשך", "השאלון עדיין לא נפתח — סמנו כן בהצהרה.", "warn");
+        return;
+      }
+      try{
+        if(typeof ensureFollowupZipLoaded === "function") await ensureFollowupZipLoaded();
+      }catch(_e){}
+      if(!window.GiFollowupZip?.fillFollowupPdf){
+        this._mcToast("שאלון המשך", "לא ניתן לטעון את שאלון ההמשך.", "warn");
+        return;
+      }
+      try{
+        const bytes = await window.GiFollowupZip.fillFollowupPdf(row.entry);
+        const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+        this._mcShowFullPdfModal(row.name, url);
+      }catch(err){
+        this._mcToast("שאלון המשך", safeTrim(err?.message) || "לא ניתן לפתוח את השאלון.", "warn");
+      }
+    },
+
+    _mcShowFullPdfModal(title, url){
+      this._mcCloseFollowupPreview();
+      const modal = document.createElement("div");
+      modal.className = "giValModal mcFormModalFull is-open giValModal--visible";
+      modal.innerHTML =
+        `<div class="giValModal__backdrop" data-mc-pdf-preview-close="1"></div>` +
+        `<div class="giValModal__card">` +
+          `<div class="giValModal__head"><div class="giValModal__headText"><div class="giValModal__title">${escapeHtml(title || "שאלון המשך")}</div>` +
+          `<div class="giValModal__sub">תצוגה מלאה. עריכת השדות מתבצעת בהצהרת הבריאות משמאל.</div></div>` +
+          `<button type="button" class="giValModal__closeX" data-mc-pdf-preview-close="1" aria-label="סגירה">✕</button></div>` +
+          `<div class="giValModal__body" style="padding:0;min-height:0;flex:1;"><iframe title="${escapeHtml(title || "שאלון")}" src="${escapeHtml(url)}" style="width:100%;height:100%;min-height:70vh;border:0;"></iframe></div>` +
+          `<div class="giValModal__foot"><button type="button" class="btn" data-mc-pdf-preview-close="1">סגור</button></div>` +
+        `</div>`;
+      document.body.appendChild(modal);
+      this._mcFollowupPreview = { modal, url };
+      modal.querySelectorAll("[data-mc-pdf-preview-close]").forEach((el) => {
+        el.addEventListener("click", () => this._mcCloseFollowupPreview());
+      });
+    },
+
+    _mcCloseFollowupPreview(){
+      const cur = this._mcFollowupPreview;
+      this._mcFollowupPreview = null;
+      if(cur?.modal?.parentNode) cur.modal.parentNode.removeChild(cur.modal);
+      if(cur?.url){
+        try{ URL.revokeObjectURL(cur.url); }catch(_e){}
+      }
+    },
+
+    _onMcHealthFormRailClick(btn){
+      const rec = this._getFreshCustomerRecord();
+      if(!rec || !btn) return;
+      const kind = safeTrim(btn.getAttribute("data-mc-open-form"));
+      const type = safeTrim(btn.getAttribute("data-mc-form-type"));
+      if(kind === "join") void this._mcOpenJoinFormFromRail(rec, type);
+      else if(kind === "followup") void this._mcOpenFollowupFromRail(rec, type);
+    },
+
+    _mcMergeHtmlEditsIntoDraft(draft, html){
+      if(!draft || !html || typeof html !== "object") return draft;
+      Object.keys(html).forEach((path) => {
+        const parts = String(path).split(".").filter(Boolean);
+        if(!parts.length) return;
+        let cur = draft;
+        for(let i = 0; i < parts.length - 1; i++){
+          const p = parts[i];
+          const nextIsIdx = /^\d+$/.test(parts[i + 1]);
+          if(cur[p] == null || typeof cur[p] !== "object") cur[p] = nextIsIdx ? [] : {};
+          cur = cur[p];
+        }
+        cur[parts[parts.length - 1]] = html[path];
+      });
+      return draft;
+    },
+
+    _mcBytesToPdfDataUrl(bytes){
+      const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+      let bin = "";
+      const chunk = 0x8000;
+      for(let i = 0; i < u8.length; i += chunk){
+        bin += String.fromCharCode.apply(null, u8.subarray(i, i + chunk));
+      }
+      return "data:application/pdf;base64," + btoa(bin);
+    },
+
+    _mcUpsertFilledFormDoc(rec, type, dataUrl, fileName, name, idSuffix){
+      if(!rec?.payload) return;
+      const list = (typeof CustomerDocuments !== "undefined" && CustomerDocuments.listFromPayload)
+        ? CustomerDocuments.listFromPayload(rec.payload)
+        : (Array.isArray(rec.payload.customerDocuments) ? rec.payload.customerDocuments : []);
+      const id = "doc_mirror_filled_" + String(idSuffix || type).replace(/[^a-z0-9_:-]+/gi, "_");
+      const row = {
+        id,
+        type,
+        name: name || fileName || type,
+        fileName: fileName || (String(type) + ".pdf"),
+        mime: "application/pdf",
+        dataUrl,
+        source: "שיחת שיקוף",
+        uploadedAt: nowISO(),
+        uploadedBy: safeTrim(Auth?.current?.name)
+      };
+      const idx = list.findIndex((d) => safeTrim(d?.id) === id);
+      if(idx >= 0) list[idx] = Object.assign({}, list[idx], row);
+      else list.unshift(row);
+      rec.payload.customerDocuments = list;
+    },
+
+    async _mcMaterializeEditedForms(rec){
+      if(!rec) return;
+      const edits = this._mcGetFormEdits(rec);
+      const ui = (typeof CustomerFileUI !== "undefined") ? CustomerFileUI : null;
+      const types = Object.keys(edits || {});
+      for(let i = 0; i < types.length; i++){
+        const type = types[i];
+        const overlay = edits[type] || {};
+        if(String(type).indexOf("followup:") === 0) continue;
+        try{
+          const spec = ui?.officialJoinFormPreviewSpec?.(type);
+          if(!spec) continue;
+          if(typeof spec.ensure === "function") await spec.ensure();
+          const mod = window[spec.globalName];
+          if(!mod?.fillOriginalTemplate || typeof mod.buildDraft !== "function") continue;
+          const draft = spec.mode ? mod.buildDraft(rec, spec.mode) : mod.buildDraft(rec);
+          this._mcMergeHtmlEditsIntoDraft(draft, overlay.html);
+          const hasPdf = overlay.pdf && typeof overlay.pdf === "object" && Object.keys(overlay.pdf).length;
+          const bytes = hasPdf
+            ? await mod.fillOriginalTemplate(draft, overlay.pdf)
+            : await mod.fillOriginalTemplate(draft);
+          if(!bytes) continue;
+          const fileName = (typeof mod.fileName === "function") ? mod.fileName(draft) : (type + ".pdf");
+          this._mcUpsertFilledFormDoc(rec, type, this._mcBytesToPdfDataUrl(bytes), fileName, spec.globalName);
+        }catch(_e){}
+      }
+      try{
+        if(ui?.ensureFollowupDocuments) await ui.ensureFollowupDocuments(rec);
+        const pack = ui?.getFollowupZipMeta?.(rec);
+        const helper = window.GiFollowupZip;
+        if(helper?.fillFollowupPdf && pack?.triggered){
+          for(let j = 0; j < pack.triggered.length; j++){
+            const entry = pack.triggered[j];
+            try{
+              const bytes = await helper.fillFollowupPdf(entry);
+              if(!bytes) continue;
+              const title = helper.buildDocTitle?.(entry) || ("שאלון-" + entry.questionnaireNum);
+              this._mcUpsertFilledFormDoc(
+                rec,
+                "followup_questionnaire",
+                this._mcBytesToPdfDataUrl(bytes),
+                title + ".pdf",
+                title,
+                ["followup", entry.companyKey, entry.insuredId, entry.questionnaireNum].join("_")
+              );
+            }catch(_e2){}
+          }
+        }
+      }catch(_e3){}
+    },
+
     _renderHealthDeclarationBody(rec){
       if(!this.els.stepHealthDeclBody) return;
       if(!rec){
@@ -69275,7 +69684,8 @@ ${inner}
       }).join("") : `<div class="mcAgentHint" role="note"><div class="mcAgentHint__title">אין שאלות להצגה</div><div class="mcAgentHint__text">לא נמצאו שאלות הצהרת בריאות תואמות לפוליסות בתיק. ניתן להמשיך אחרי הקראת נוסח הפתיחה.</div></div>`;
 
       this.els.stepHealthDeclBody.innerHTML =
-        `<div class="mcNeedsScreen">` +
+        `<div class="mcNeedsScreen mcHealthDeclSplit">` +
+          `<div class="mcHealthDeclSplit__main">` +
           `<div class="mcNeedsScript" aria-label="נוסח הקראה — הצהרת בריאות">` +
             `<p class="mcNeedsScript__p">כעת נעבור להצהרת הבריאות. אני אעבור איתך על מספר שאלות. חשוב לתת בעניינים אלו תשובה מלאה וכנה, אחרת תהיה לכך השפעה על תגמולי הביטוח.</p>` +
             `<p class="mcNeedsScript__p">התשובות שלך לשאלות הצהרת הבריאות שיוקראו לך כעת הן הבסיס לפוליסה, וחשוב מאוד שתענה עליהן בצורה מלאה, נכונה וכנה.</p>` +
@@ -69295,6 +69705,8 @@ ${inner}
             "health-back",
             "חזרה"
           ) +
+          `</div>` +
+          this._mcHealthFormsRailHtml(rec) +
         `</div>`;
     },
 
@@ -69380,19 +69792,31 @@ ${inner}
             { k: "שם חברה", v: escapeHtml(company) },
             { k: "שם מוצר", v: escapeHtml(product) }
           ];
+          const subs = [];
+          let sumHtml = "—";
           if(isHealth && coverRows.length){
             coverRows.forEach((c) => {
+              const coverVal = escapeHtml(this._fmtMcMoney(c.premium));
               rows.push({
                 k: c.label,
-                v: escapeHtml(this._fmtMcMoney(c.premium)),
+                v: coverVal,
                 kind: "cover"
               });
+              subs.push({ k: c.label, v: coverVal });
             });
             rows.push({ k: "סה״כ פרמיה חודשית", v: escapeHtml(prem), kind: "total" });
+            subs.push({ k: "סה״כ פרמיה חודשית", v: escapeHtml(prem) });
           } else {
             rows.push({ k: "פרמיה חודשית על סך", v: escapeHtml(prem) });
             if(!isHealth){
-              this._mcCoverageBits(p).forEach((b) => rows.push({ k: b.label, v: escapeHtml(b.value) }));
+              this._mcCoverageBits(p).forEach((b) => {
+                rows.push({ k: b.label, v: escapeHtml(b.value) });
+                if(/סכום|פיצוי/i.test(safeTrim(b.label)) && sumHtml === "—"){
+                  sumHtml = escapeHtml(b.value);
+                } else if(!/סכום|פיצוי/i.test(safeTrim(b.label))){
+                  subs.push({ k: b.label, v: escapeHtml(b.value) });
+                }
+              });
             }
           }
           const statusMeta = this._mcExistingPolicyStatusMeta(ins, p);
@@ -69401,27 +69825,32 @@ ${inner}
           if(isCancel){
             if(statusMeta.reason){
               extra =
-                `<div class="mcPolCard__needsReason" aria-label="נימוק התאמת צרכים">` +
-                  `<div class="mcPolCard__needsReasonLabel">נימוק התאמת צרכים</div>` +
-                  `<div class="mcPolCard__needsReasonText">${escapeHtml(statusMeta.reason)}</div>` +
+                `<div class="mcPolicyRow__reason" aria-label="נימוק התאמת צרכים">` +
+                  `<span class="mcPolicyRow__reasonLabel">נימוק התאמת צרכים</span>` +
+                  `<span class="mcPolicyRow__reasonText">${escapeHtml(statusMeta.reason)}</span>` +
                 `</div>`;
             } else {
               extra =
-                `<div class="mcPolCard__needsReason mcPolCard__needsReason--empty" aria-label="נימוק התאמת צרכים">` +
-                  `<div class="mcPolCard__needsReasonLabel">נימוק התאמת צרכים</div>` +
-                  `<div class="mcPolCard__needsReasonText">לא הוזן נימוק באשף (שלב התאמת צרכים).</div>` +
+                `<div class="mcPolicyRow__reason mcPolicyRow__reason--empty" aria-label="נימוק התאמת צרכים">` +
+                  `<span class="mcPolicyRow__reasonLabel">נימוק התאמת צרכים</span>` +
+                  `<span class="mcPolicyRow__reasonText">לא הוזן נימוק באשף (שלב התאמת צרכים).</span>` +
                 `</div>`;
             }
           }
-          cards.push(this._mcPolicyCardHtml({
-            badge: insuredNm,
-            title: "ביטוח קיים",
-            rows,
-            extra,
+          cards.push(this._mcPolicyRowHtml({
+            cells: [
+              { k: "מבוטח", v: `<span class="mcPolicyRow__insured">${escapeHtml(insuredNm)}</span>`, kind: "insured" },
+              { k: "מוצר", v: escapeHtml(product) },
+              { k: "חברה", v: escapeHtml(company) },
+              { k: "פרמיה", v: escapeHtml(prem), kind: "money" },
+              { k: "סכום ביטוח", v: sumHtml, kind: "money" }
+            ],
             status: {
               label: statusMeta.label || "טרם נבחר",
               tone: statusMeta.tone || "neutral"
-            }
+            },
+            subs,
+            extra
           }));
         });
       });
@@ -69439,12 +69868,12 @@ ${inner}
               : `<p class="mcNeedsScript__p mcNeedsScript__p--ask">לאחר ביצוע בדיקה באתר הר הביטוח שתקף לחמישה ימי עבודה — לא נמצאו עבורך ביטוחי בריאות / חיים קיימים, כלומר כיום אינך מכוסה בביטוחים מסוג זה.</p>`) +
           `</div>` +
           (hasExisting
-            ? `<div class="mcPolCardList" role="list">${cards.join("")}</div>`
+            ? `<div class="mcPolCardList mcPolicyRowList" role="list">${this._mcPolicyRowHead("existing")}${cards.join("")}</div>`
             : `<div class="mcAgentHint" role="note">` +
                 `<div class="mcAgentHint__title">הודעה לנציג</div>` +
                 `<div class="mcAgentHint__text">לא הוזנו ביטוחים קיימים באשף בריאות וסיכונים (שלב 2 · פוליסות בחברה נגדית). ניתן להמשיך בשיקוף — אין פוליסות לביטול ואין מסמך השוואה.</div>` +
               `</div>`) +
-          this._mcNeedsNav("needs-to-offer", "המשך · פוליסות מוצעות") +
+          this._mcNeedsNav("needs-to-disclosure", "המשך · גילוי נאות") +
         `</div>`;
     },
 
@@ -69506,14 +69935,36 @@ ${inner}
           this._mcCoverageBits(p).forEach((b) => rows.push({ k: b.label, v: escapeHtml(b.value) }));
         }
         prem.rows.forEach((r) => rows.push(r));
+        const beforeHtml = (prem.rows.find((r) => /לפני הנחה/.test(safeTrim(r.k))) || {}).v || "—";
+        const afterHtml = (prem.rows.find((r) => /לאחר הנחה/.test(safeTrim(r.k))) || {}).v || "—";
+        let sumHtml = "—";
+        const subs = [];
+        rows.forEach((r) => {
+          if(r.kind === "cover" || r.kind === "discount" || r.kind === "total"){
+            subs.push({ k: r.k, v: r.v });
+            return;
+          }
+          if(/סכום|פיצוי/.test(safeTrim(r.k)) && sumHtml === "—"){
+            sumHtml = r.v;
+            return;
+          }
+          if(r.kind === "premium" || /פרמיה|שם חברה|שם מוצר/.test(safeTrim(r.k))) return;
+          if(safeTrim(r.k) && r.v && r.v !== "—") subs.push({ k: r.k, v: r.v });
+        });
         let extra = "";
         if(opts.showRankScript && prem.schedule){
-          extra = `<div class="mcPolCard__rankScript">ניתנה הנחה מדורגת של: <strong>${escapeHtml(prem.schedule)}</strong></div>`;
+          extra = `<div class="mcPolicyRow__reason"><span class="mcPolicyRow__reasonLabel">הנחה מדורגת</span><span class="mcPolicyRow__reasonText">ניתנה הנחה מדורגת של: <strong>${escapeHtml(prem.schedule)}</strong></span></div>`;
         }
-        return this._mcPolicyCardHtml({
-          badge: getInsuredLabel(p),
-          title: "פוליסה מוצעת",
-          rows,
+        return this._mcPolicyRowHtml({
+          cells: [
+            { k: "מבוטח", v: `<span class="mcPolicyRow__insured">${escapeHtml(getInsuredLabel(p))}</span>`, kind: "insured" },
+            { k: "מוצר", v: escapeHtml(product) },
+            { k: "חברה", v: escapeHtml(company) },
+            { k: "סכום ביטוח", v: sumHtml, kind: "money" },
+            { k: "לפני הנחה", v: beforeHtml, kind: "money" },
+            { k: "לאחר הנחה", v: afterHtml, kind: "money" }
+          ],
+          subs,
           extra
         });
       });
@@ -69535,9 +69986,14 @@ ${inner}
             `<p class="mcNeedsScript__p mcNeedsScript__p--ask">${escapeHtml(lead)}</p>` +
           `</div>` +
           (cards.length
-            ? `<div class="mcPolCardList" role="list">${cards.join("")}</div>`
+            ? `<div class="mcPolCardList mcPolicyRowList" role="list">${this._mcPolicyRowHead("offer")}${cards.join("")}</div>`
             : `<p class="mcNeedsEmpty">לא הוזנו פוליסות חדשות באשף (שלב פוליסות חדשות).</p>`) +
-          this._mcNeedsNav("needs-to-disclosure", "המשך · גילוי נאות", "needs-to-existing", "חזרה") +
+          this._mcNeedsNav(
+            "reasons-to-compare",
+            hasExisting ? "המשך · מסמך השוואה" : "המשך · אישור היעדר ביטוח",
+            "needs-to-disclosure",
+            "חזרה"
+          ) +
         `</div>`;
     },
 
@@ -69570,9 +70026,9 @@ ${inner}
           `</div>` +
           (listHtml || emptyHtml) +
           this._mcNeedsNav(
+            "compare-to-cancelq",
+            this._hasCancelQuestionnairePolicies(rec) ? "המשך · שאלון ביטול" : "המשך · פרטי מוטבים",
             "reasons-to-compare",
-            this._mirrorHasExistingPolicies(rec) ? "המשך · מסמך השוואה" : "המשך · אישור היעדר ביטוח",
-            "needs-to-disclosure",
             "חזרה"
           ) +
         `</div>`;
@@ -69583,18 +70039,18 @@ ${inner}
       const hasExisting = this._mirrorHasExistingPolicies(rec);
       if(hasExisting){
         const migdalHtml = this._mcHasMigdalNewPolicy(rec)
-          ? `<p class="mcNeedsScript__p">ההמלצה מבוססת על גילך. מצבך המשפחתי. הכיסויים שקיימים לך. הצרכים שציינת</p>`
+          ? `<p class="mcNeedsScript__p"><strong>(מגדל)</strong> ההמלצה מבוססת על גילך, מצבך המשפחתי, הכיסויים הקיימים שלך הצרכים שציינת.</p>`
           : "";
         this.els.step2Body.innerHTML =
           `<div class="mcNeedsScreen">` +
             `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח להקראה ללקוח">` +
               migdalHtml +
-              `<p class="mcNeedsScript__p mcNeedsScript__p--ask">בהמשך אשלח לך מסמך השוואה שבו כתוב ההשוואה בין הפוליסות שקיימות לך כיום לעומת הפוליסות החדשות שאנו מציעים לך לרכוש אותם תידרש לאשר לי בחתימתך</p>` +
+              `<p class="mcNeedsScript__p mcNeedsScript__p--ask">בהמשך אשלח לך מסמך השוואה כתוב המשווה בין הפוליסות שקיימות לך כיום לעומת הפוליסות החדשות שאנו מציעים לך לרכוש אותם תידרש לאשר לי בחתימתך</p>` +
             `</div>` +
             this._mcNeedsNav(
-              "compare-to-cancelq",
-              this._hasCancelQuestionnairePolicies(rec) ? "המשך · שאלון ביטול" : "המשך · פרטי מוטבים",
               "needs-to-reasons",
+              "המשך · שיקולי המלצה",
+              "needs-to-offer",
               "חזרה"
             ) +
           `</div>`;
@@ -69613,7 +70069,7 @@ ${inner}
               `</div>` +
               `<div class="mcNeedsNav mcNeedsNav--split">` +
                 `<button type="button" class="btn btn--primary" data-mc-needs-act="reasons-to-compare">חזרה לנוסח</button>` +
-                `<button type="button" class="btn" data-mc-needs-act="needs-to-reasons">חזרה לשיקולי המלצה</button>` +
+                `<button type="button" class="btn" data-mc-needs-act="needs-to-offer">חזרה לפוליסות מוצעות</button>` +
               `</div>`
             : `<div class="mcNeedsNav mcNeedsNav--split">` +
                 `<button type="button" class="btn btn--primary" data-mc-needs-act="compare-none-yes">מאשר</button>` +
@@ -69771,7 +70227,7 @@ ${inner}
         }
       }
 
-      const nextLabel = "המשך · שיקולי המלצה";
+      const nextLabel = "המשך · פוליסות מוצעות";
       this.els.step6Body.innerHTML =
         `<div class="mcNeedsScreen">` +
           `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח לפתיחת גילוי נאות">` +
@@ -70256,6 +70712,16 @@ ${inner}
     _showStepHealthDeclPanel(){
       this._hideMcPanelsExcept(this.els.stepHealthDeclWrap);
       this._syncFlowChrome();
+      try{
+        const rec = this._getFreshCustomerRecord();
+        if(rec && typeof CustomerFileUI !== "undefined" && CustomerFileUI.ensureFollowupDocuments){
+          void CustomerFileUI.ensureFollowupDocuments(rec).then(() => {
+            if(this._mirrorUiPhase !== "healthDeclaration") return;
+            const fresh = this._getFreshCustomerRecord();
+            if(fresh) this._renderHealthDeclarationBody(fresh);
+          }).catch(() => {});
+        }
+      }catch(_e){}
       window.requestAnimationFrame(() => {
         try{ this.els.stepHealthDeclWrap?.focus?.(); }catch(_e){}
       });
@@ -70361,7 +70827,7 @@ ${inner}
         return;
       }
       if(action === "cancelq-back"){
-        this._mirrorNeedsSubPhase = "compareNotice";
+        this._mirrorNeedsSubPhase = "reasons";
         this._mirrorUiPhase = "step2";
         this._renderStep2Body(rec);
         this._showStep2Panel();
@@ -70469,14 +70935,14 @@ ${inner}
         return;
       }
       if(action === "disclosure-back"){
-        this._mirrorNeedsSubPhase = "offer";
+        this._mirrorNeedsSubPhase = "existing";
         this._mirrorUiPhase = "step2";
         this._renderStep2Body(rec);
         this._showStep2Panel();
         return;
       }
       if(action === "disclosure-done"){
-        this._mirrorNeedsSubPhase = "reasons";
+        this._mirrorNeedsSubPhase = "offer";
         this._mirrorUiPhase = "step2";
         this._renderStep2Body(rec);
         this._showStep2Panel();
@@ -70679,6 +71145,7 @@ ${inner}
 
       // סוגר שיחה פעילה כדי שהלקוח לא יישאר תקוע בדלי "בשיחת שיקוף".
       try{ if(this._callRunning) this.stopCall(); }catch(_e){}
+      try{ await this._mcMaterializeEditedForms(rec); }catch(_e3){}
       this.onNewPoliciesMirrorDone();
       try{ CustomersUI?.refreshOperationalReflectionCard?.(); }catch(_e){}
       await App.persist("שיקוף אושר · הלקוח הועבר לממתין להקלדה").catch(() => {});
