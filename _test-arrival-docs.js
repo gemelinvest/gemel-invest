@@ -81,7 +81,11 @@ assert(modSrc.includes("embedNispahInHtml"), "html fallback embeds nispah");
 assert(modSrc.includes("giArrivalNispahEmbed"), "fallback keeps nispah in the same file");
 assert(!modSrc.includes("Hashlama") && !modSrc.includes("גריגורי"), "no Hashlama branding in generator");
 assert(fs.existsSync(path.join(ROOT, "forms/har-authorization/nispah-he.pdf")), "official nispah PDF stored");
-assert(fs.existsSync(path.join(ROOT, "assets/gi-doc-cover-3d.png")), "GEMEL 3D cover asset");
+assert(fs.existsSync(path.join(ROOT, "assets/gi-doc-cover-docs.png")), "flat documents cover asset");
+assert(!modSrc.includes("gi-doc-cover-3d.png"), "cover no longer points at 3D GEMEL logo");
+assert(/\.giCoverArt\{[^}]*width:172mm/.test(modSrc), "cover art spans almost full page width");
+assert(/\.giCoverArt\{[^}]*height:188mm/.test(modSrc), "cover art spans almost full page height");
+assert(!/\.giCoverArt\{[^}]*width:250px/.test(modSrc), "cover art is not a small 250px logo");
 
 console.log("\n3) legal sentences 1:1");
 [
@@ -177,7 +181,8 @@ assert(draft.agent.agency === "GEMEL INVEST", "agency branding");
 const hatama = api.renderHatamaHtml(draft);
 assert(hatama.includes("מסמך התאמה"), "cover title");
 assert(hatama.includes("התאמת הביטוח לצורכי המועמד לביטוח"), "cover subtitle");
-assert(hatama.includes("assets/gi-doc-cover-3d.png"), "3D GEMEL cover, not Hashlama folder");
+assert(hatama.includes("assets/gi-doc-cover-docs.png"), "flat documents cover, not Hashlama folder");
+assert(!hatama.includes("assets/gi-doc-cover-3d.png"), "hatama HTML does not use 3D GEMEL logo");
 assert(hatama.includes("חלק ב' - הכיסויים הביטוחיים המומלצים"), "part B title");
 assert(hatama.includes("להצטרף"), "join status");
 assert(hatama.includes("ביטול מוצר קיים"), "cancel status");
