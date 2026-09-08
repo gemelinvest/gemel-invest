@@ -11472,9 +11472,29 @@ if(path === "birthDate"){
       });
       const discountByInsured = {};
       const disc = sim._giSimDiscountSel && typeof sim._giSimDiscountSel === "object" ? sim._giSimDiscountSel : {};
-      Object.keys(disc).forEach((id) => {
+      const manualMap = sim._giSimManualByInsured && typeof sim._giSimManualByInsured === "object" ? sim._giSimManualByInsured : {};
+      const ids = {};
+      Object.keys(disc).forEach((id) => { ids[id] = true; });
+      Object.keys(manualMap).forEach((id) => { ids[id] = true; });
+      Object.keys(ids).forEach((id) => {
+        const rec = manualMap[id];
+        const hasManual = !!(rec && Array.isArray(rec.schedule) && rec.schedule.length);
+        if(hasManual){
+          const nums = rec.schedule.map((row) => (row && typeof row === "object" ? Number(row.pct) : Number(row))).filter((n) => Number.isFinite(n) && n > 0);
+          discountByInsured[id] = {
+            optionId: "gi-sim-manual",
+            label: "הנחה ידנית " + nums.map((n) => n + "%").join("/"),
+            year1Pct: nums[0] || 0,
+            years: nums.length,
+            schedule: nums,
+            raw: String(rec.raw || ""),
+            isException: true,
+            manualException: true
+          };
+          return;
+        }
         const v = safeTrim(disc[id]);
-        if(v) discountByInsured[id] = v;
+        if(v && v !== "gi-sim-manual") discountByInsured[id] = v;
       });
       this.mergeNpSimSessionSnapshot({
         company, product, pickKey: key, stateByInsured, discountByInsured,
@@ -11513,10 +11533,22 @@ if(path === "birthDate"){
       const key = safeTrim(company) + "::" + safeTrim(product);
       const out = {};
       const bag = this._npSimDiscountBag && typeof this._npSimDiscountBag === "object" ? this._npSimDiscountBag : {};
-      Object.keys(bag).forEach((id) => {
-        const stored = bag[id] && bag[id][key];
-        const opt = stored && typeof stored === "object" ? safeTrim(stored.optionId) : safeTrim(stored);
+      const assignRestore = (id, stored) => {
+        if(stored == null || stored === "") return;
+        if(stored && typeof stored === "object"){
+          const optId = safeTrim(stored.optionId);
+          if(stored.manualException || optId === "gi-sim-manual"){
+            try { out[id] = JSON.parse(JSON.stringify(stored)); } catch(_eMan) { out[id] = stored; }
+            return;
+          }
+          if(optId) out[id] = optId;
+          return;
+        }
+        const opt = safeTrim(stored);
         if(opt) out[id] = opt;
+      };
+      Object.keys(bag).forEach((id) => {
+        assignRestore(id, bag[id] && bag[id][key]);
       });
       const fb = fallback && typeof fallback === "object" ? fallback : {};
       Object.keys(fb).forEach((id) => {
@@ -11524,8 +11556,7 @@ if(path === "birthDate"){
         const pick = this._npSimPickByInsured && this._npSimPickByInsured[id];
         const matches = pick ? this.npSimPickMatches(id, company, product) : true;
         if(!matches) return;
-        const opt = safeTrim(fb[id]);
-        if(opt) out[id] = opt;
+        assignRestore(id, fb[id]);
       });
       return Object.keys(out).length ? out : null;
     },
@@ -14269,7 +14300,8 @@ if(path === "birthDate"){
         schedule: scheduleArr.length ? scheduleArr.join("/") : (typeof opt.schedule === "string" ? opt.schedule : ""),
         pctByCover: opt.pctByCover,
         fullPriceIds: opt.fullPriceIds,
-        isException: !!opt.isException,
+        isException: !!opt.isException || !!opt.manualException,
+        manualException: !!opt.manualException,
         packageNum: opt.packageNum || "",
         _simRaw: opt
       };
@@ -16231,7 +16263,9 @@ if(path === "birthDate"){
           years: seed.years,
           schedule: Array.isArray(seed.schedule) ? seed.schedule : seed.schedule,
           pctByCover: seed.pctByCover,
-          fullPriceIds: seed.fullPriceIds
+          fullPriceIds: seed.fullPriceIds,
+          isException: !!seed.isException || !!seed.manualException,
+          manualException: !!seed.manualException
         });
       }
       policy.simDiscountPerInsured = policy.simDiscountPerInsured || {};
@@ -17184,8 +17218,13 @@ if(path === "birthDate"){
       if(!map || typeof map !== "object") return null;
       const out = {};
       Object.keys(map).forEach((id) => {
-        const optId = safeTrim(map[id]?.optionId);
-        if(optId) out[id] = optId;
+        const rec = map[id];
+        const optId = safeTrim(rec?.optionId);
+        if(rec && (rec.manualException || optId === "gi-sim-manual")){
+          try { out[id] = JSON.parse(JSON.stringify(rec)); } catch(_eMan) { if(optId) out[id] = rec; }
+        } else if(optId){
+          out[id] = optId;
+        }
       });
       return Object.keys(out).length ? out : null;
     },
