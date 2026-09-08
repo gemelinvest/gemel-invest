@@ -10848,9 +10848,9 @@
 
 
   // ===== GI-HACH-HEALTH-SIM 2026-08-10 · סימולטור בריאות הכשרה ==================
-  // מקור אמת: תעריפי בריאות 2023.xlsx — כל הכיסויים עם מדד בסיס 13,317 (= 133.17).
+  // מקור אמת: תעריפי בריאות 2023 (2).xlsx — כל הכיסויים עם מדד בסיס 13,317 (= 133.17).
   // פרמיה מוצגת צמודה למדד למ״ס: תעריף × (מדד_ידוע_אחרון ÷ 133.17).
-  // מחלות קשות / ריסק / משכנתא — סימולטורים נפרדים, בלי הצמדה (אין בסיס מדד בספרים).
+  // ריסק / ריסק משכנתא / מחלות קשות — סימולטורים נפרדים, אותו מדד בריאות (hachshara_health).
   // אין שדה עישון בבריאות.
 
   const HACHSHARA_HEALTH_MIN_AGE = 0;
@@ -13575,7 +13575,7 @@
     }
     const monthly = Number(calc.monthlyPremium);
     const annual = Number(calc.annualPremium);
-    return {
+    const out = {
       ok: true,
       company,
       product,
@@ -13583,6 +13583,11 @@
       annualPremium: Number.isFinite(annual) ? annual : (Number.isFinite(monthly) ? monthly * 12 : null),
       currency: "ILS"
     };
+    const baseMonthly = Number(calc.baseMonthlyPremium);
+    if(Number.isFinite(baseMonthly)) out.baseMonthlyPremium = baseMonthly;
+    const factor = Number(calc.indexFactor);
+    if(Number.isFinite(factor)) out.indexFactor = factor;
+    return out;
   }
   /** ייצוא מבוקר של compute* הקיימות — בלי טבלאות חדשות ובלי חישוב מקביל. */
   function quoteExistingSimulator(company, product, input){
