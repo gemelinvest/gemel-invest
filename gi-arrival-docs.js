@@ -8,7 +8,7 @@
   const VERSION = "20260908-hach-disc-v1";
   const NAVY = "#3870ED";
   const AGENCY = "GEMEL INVEST";
-  const COVER_ART = "./assets/gi-doc-cover-3d.png";
+  const COVER_ART = "./assets/gi-doc-cover-docs.png";
   const TEMPLATE_BASE = "./forms/har-authorization/";
   const TEMPLATE_FILE = "nispah-he.pdf";
   const TYPES = {
@@ -799,10 +799,10 @@
         .giHead__sub{color:#94A3B8;font-weight:700;font-size:15px;margin-top:2px}
         .giHead__meta{color:#64748B;font-size:12px;line-height:1.55;font-weight:500}
         .giHead__date{font-size:13px;font-weight:700;color:#334155}
-        .giCover{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:8px 0 18px}
+        .giCover{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;text-align:center;min-height:0;padding:2mm 0 3mm}
         .giCover h1{margin:0;font-size:36px;font-weight:800;letter-spacing:-.03em}
-        .giCover h2{margin:8px 0 0;font-size:18px;font-weight:700;color:#334155}
-        .giCoverArt{width:250px;height:250px;margin:26px 0 8px;object-fit:contain;filter:drop-shadow(0 18px 24px rgba(37,99,235,.28))}
+        .giCover h2{margin:6px 0 0;font-size:18px;font-weight:700;color:#334155}
+        .giCoverArt{display:block;width:172mm;max-width:100%;height:188mm;margin:4mm 0 0;object-fit:contain}
         .giCoverBar{margin-top:auto;background:var(--navy);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;font-weight:700;font-size:14px}
         .giTo{font-size:22px;font-weight:800;margin:2px 0 14px}
         .giPart{text-align:center;font-weight:800;font-size:17px;margin:4px 0 12px}
