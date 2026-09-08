@@ -1,4 +1,4 @@
-/* GI-ARRIVAL-DOCS 20260907-chat-dock-v1
+/* GI-ARRIVAL-DOCS 20260907-chat-ignore-v1
    מסמך התאמה + התפתחות פרמיה + נספח ה׳ — אחד-לאחד מול המסמכים שנשלחו.
    Run: node _test-arrival-docs.js
 */
@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260907-chat-dock-v1";
+const TAG = "20260907-chat-ignore-v1";
 let failed = 0;
 let passed = 0;
 

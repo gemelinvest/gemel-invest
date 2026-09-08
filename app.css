@@ -9696,11 +9696,14 @@ body.lcLeadShellOpen .lcLeadShell__panel{
 }
 .giChatDockCard__actions{
   display:flex;
-  justify-content:flex-end;
+  justify-content:flex-start;
+  flex-wrap:wrap;
+  gap:8px;
   margin-top:8px;
 }
-.giChatDockCard.is-replying .giChatDockCard__actions{ display:none; }
+.giChatDockCard.is-replying .giChatDockCard__reply{ display:none; }
 .giChatDockCard__reply,
+.giChatDockCard__ignore,
 .giChatDockCard__send{
   border:0;
   border-radius:999px;
@@ -9713,8 +9716,14 @@ body.lcLeadShellOpen .lcLeadShell__panel{
   border:1px solid rgba(255,255,255,.5);
 }
 .giChatDockCard__reply:hover,
+.giChatDockCard__ignore:hover,
 .giChatDockCard__send:hover{
   background:rgba(255,255,255,.62);
+}
+.giChatDockCard__ignore{
+  background:transparent;
+  color:rgba(15,23,42,.56);
+  border-color:rgba(15,23,42,.14);
 }
 .giChatDockCard__send{
   background:rgba(62,207,142,.28);
@@ -16552,11 +16561,14 @@ body.lcLeadShellOpen .lcLeadShell__panel{
 }
 .giChatDockCard__actions{
   display:flex;
-  justify-content:flex-end;
+  justify-content:flex-start;
+  flex-wrap:wrap;
+  gap:8px;
   margin-top:8px;
 }
-.giChatDockCard.is-replying .giChatDockCard__actions{ display:none; }
+.giChatDockCard.is-replying .giChatDockCard__reply{ display:none; }
 .giChatDockCard__reply,
+.giChatDockCard__ignore,
 .giChatDockCard__send{
   border:0;
   border-radius:999px;
@@ -16569,8 +16581,14 @@ body.lcLeadShellOpen .lcLeadShell__panel{
   border:1px solid rgba(255,255,255,.5);
 }
 .giChatDockCard__reply:hover,
+.giChatDockCard__ignore:hover,
 .giChatDockCard__send:hover{
   background:rgba(255,255,255,.62);
+}
+.giChatDockCard__ignore{
+  background:transparent;
+  color:rgba(15,23,42,.56);
+  border-color:rgba(15,23,42,.14);
 }
 .giChatDockCard__send{
   background:rgba(62,207,142,.28);

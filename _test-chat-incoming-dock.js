@@ -1,4 +1,4 @@
-/* GI-CHAT 20260907-chat-dock-v1 — הודעת צ׳אט נכנסת בצד שמאל במקום טוסט,
+/* GI-CHAT 20260907-chat-ignore-v1 — הודעת צ׳אט נכנסת בצד שמאל במקום טוסט,
    נשארת פתוחה עם שם השולח ולחצן «השב» שפותח תשובה ישירה לנציג.
    הרצה: node _test-chat-incoming-dock.js
 */
@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260907-chat-dock-v1";
+const APP_TAG = "20260907-chat-ignore-v1";
 let failed = 0;
 let passed = 0;
 
@@ -193,6 +193,9 @@ assert(!app.includes("giChatToast"), "מחלקת הטוסט הוסרה מ-app.js
 assert(app.includes("pushIncomingDock(message)"), "הודעה נכנסת פותחת דוק");
 assert(app.includes('button class="giChatDockCard__reply"'), "לחצן השב בכרטיס");
 assert(app.includes(">השב<"), "תווית לחצן השב");
+assert(app.includes('button class="giChatDockCard__ignore"'), "לחצן התעלם בכרטיס");
+assert(app.includes(">התעלם<"), "תווית לחצן התעלם");
+assert(app.includes('data-chat-dock-dismiss="1">התעלם<'), "התעלם סוגר את ההודעה");
 assert(app.includes("sendDockReply(fromId)"), "שליחת תשובה מהדוק");
 assert(app.includes("async sendTextToPeer(toId, toName, text)"), "שליחה לנציג בלי לפתוח את חלון הצ׳אט");
 assert(app.includes("const result = await this.sendTextToPeer(this.selectedUser.id, this.selectedUser.name, text)"), "חלון הצ׳אט משתמש באותה שליחה");
@@ -207,6 +210,8 @@ assert(css.includes("left:16px") && css.includes("top:76px"), "מיקום בצד
 assert(css.includes("background:rgba(255,255,255,.28)"), "רקע שקוף");
 assert(css.includes("backdrop-filter:blur(16px)"), "זכוכית עדינה");
 assert(css.includes(".giChatDockCard.is-replying .giChatDockCard__composer{ display:flex; }"), "השב פותח את תיבת התשובה");
+assert(css.includes(".giChatDockCard__ignore{"), "עיצוב לחצן התעלם");
+assert(css.includes(".giChatDockCard.is-replying .giChatDockCard__reply{ display:none; }"), "במצב השב נשאר התעלם");
 assert(theme.includes(".giChatDockCard:not(#\\9):not(#\\9)"), "theme שומר על זכוכית");
 assert(!theme.includes(".giChatToast:not(#\\9):not(#\\9)"), "theme כבר לא מעצב את הטוסט הישן");
 
@@ -214,6 +219,14 @@ const dockStart = app.indexOf("    notifyIncoming(message){");
 const dockEnd = app.indexOf("    playNotifySound(){");
 const dockBlock = dockStart > 0 && dockEnd > dockStart ? app.slice(dockStart, dockEnd) : "";
 assert(!!dockBlock, "בלוק notify/dock נמצא");
+
+console.log("\n3b) צליל הודעה בסגנון וואטסאפ");
+const chatSound = sliceMethodBlock(app, "function playGiChatWhatsAppTone(){", "function playGiLeadChime(){");
+assert(!!chatSound, "playGiChatWhatsAppTone נמצא");
+assert(chatSound.includes("drip(t0, 1174.66"), "טיפה ראשונה של הצליל");
+assert(chatSound.includes("drip(t0 + 0.09, 1567.98"), "טיפה שנייה בסגנון הודעת וואטסאפ");
+assert(chatSound.includes("if(playGiChatWhatsAppTone()) return;"), "הצליל הראשי הוא סגנון וואטסאפ");
+assert(!chatSound.includes("playGiNotifySound()"), "אין נפילה לצלצול מרימבה");
 
 const helpersStart = app.indexOf("    escapeHtml(v){");
 const helpersEnd = app.indexOf("    async cleanupExpiredData(){");
@@ -363,9 +376,10 @@ assert(card.querySelector("[data-chat-dock-input]").value === "קיבלתי, ת�
 
   const dismissRun = loadDock();
   dismissRun.ui.pushIncomingDock({ fromId: "u-dana", fromName: "דנה לוי", text: "סגור אותי" });
-  const dismissBtn = dismissRun.dock.children[0].querySelector("[data-chat-dock-dismiss]");
-  click(dismissBtn, dismissRun.dock);
-  assert(dismissRun.dock.children.length === 0, "סגירה ידנית מורידה את הכרטיס");
+  const ignoreBtn = dismissRun.dock.children[0].querySelector(".giChatDockCard__ignore");
+  assert(!!ignoreBtn && String(ignoreBtn.getAttribute("data-chat-dock-dismiss")) === "1", "לחצן התעלם נמצא בכרטיס");
+  click(ignoreBtn, dismissRun.dock);
+  assert(dismissRun.dock.children.length === 0, "התעלם סוגר את ההודעה");
 
   if(failed){
     console.error("\nFAILED " + failed + " / " + (passed + failed));
