@@ -589,6 +589,47 @@
   color:#0F172A;
   white-space:nowrap;
 }
+.giSimDisc__btn--manual{
+  white-space:nowrap;
+}
+.giSimDisc__manual{
+  margin-top:8px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  max-width:min(420px, 100%);
+}
+.giSimDisc__manual[hidden]{
+  display:none !important;
+}
+.giSimDisc__manualLabel{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  font-size:13px;
+  font-weight:650;
+  color:#475569;
+}
+.giSimDisc__manualInput{
+  min-height:40px;
+  font-size:18px;
+  font-weight:700;
+  letter-spacing:0.04em;
+  direction:ltr;
+  text-align:left;
+  border:1px solid #d8dee6;
+  border-radius:8px;
+  padding:0 12px;
+  color:#0F172A;
+  background:#fff;
+}
+.giSimDisc__manualHint{
+  margin:0;
+  font-size:12px;
+  font-weight:600;
+  color:#64748B;
+  line-height:1.35;
+}
 
 /* ===== GI-SIM-UI 2026-08-17 · נראות חברת ביטוח (אושר במוקאפ) ==============
    חל על מרכז (standalone) ועל פתיחה מהאשף (.giSimQuiet). לא משנה חישוב. */
@@ -1213,6 +1254,16 @@
 .giSimDisc__picked,
 .giSimDisc__opt{
   font-size:16px !important;
+}
+.giSimDisc__manualLabel{
+  font-size:16px !important;
+}
+.giSimDisc__manualInput{
+  min-height:40px !important;
+  font-size:18px !important;
+}
+.giSimDisc__manualHint{
+  font-size:14px !important;
 }
 .giSimShellModal [class*="__result--ok"],
 .giSimShellModal [class*="__result--empty"],
