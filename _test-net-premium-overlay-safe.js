@@ -64,7 +64,9 @@ assert(app.includes("const applyServerNet = this._shouldApplyServerNetOverlay({"
 assert(app.includes("if(applyServerNet){"), "דריסת נטו רק כשהעוזר מאשר");
 assert(app.includes("this.compareServerKpis?.(this._metricsCache);"), "אחרי מכירה שולפים overlay חודשי מחדש");
 const policyNet = extractObjectMethod(app, "policyNetPremium");
-assert(!!policyNet && policyNet.includes("getPolicyPremiumAfterDiscount"), "policyNetPremium לא הוסר");
+assert(!!policyNet && policyNet.includes("premiumAfterDiscountValue"), "policyNetPremium לא הוסר");
+assert(policyNet.includes("getNewPolicyFilePremiumAfterDiscount"), "נטו דשבורד לוקח אחרי הנחה");
+assert(!policyNet.includes("getPolicyPremiumAfterDiscount"), "נטו דשבורד לא לוקח לפני-הנחה של האשף");
 assert(!policyNet.includes("_shouldApplyServerNetOverlay"), "policyNetPremium לא נגע במיזוג");
 assert(app.includes("formatNetProductBreakdownHtml(metrics.netProductTotals)"), "פירוט נטו נשאר לפי סוג מוצר");
 assert(app.includes("if(premium > (Number(m.agentAppointmentPremium) || 0)){"), "מינוי סוכן עדיין רק מעלה, לא דורס למטה");
