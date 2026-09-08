@@ -11,6 +11,7 @@
   const SNAPSHOT_POLL_MS = 45 * 1000;
   const MIN_PDF_CHARS = 10000;
   const TITLE = "דוח מכירות למייל";
+  const MAIL_LAYOUT = "20260908-today-net";
 
   let lastSnapshotAt = 0;
   let pollTimer = 0;
@@ -194,7 +195,7 @@
     if(!snap || (!snap.html && !snap.pdfBase64)) return null;
     const html = snap.html ? ensureRtlEmailHtml(snap.html) : "";
     const summary = snap.summary && typeof snap.summary === "object" ? { ...snap.summary } : {};
-    summary.layout = "20260826-branch-leads";
+    summary.layout = MAIL_LAYOUT;
     return {
       dateKey: trim(snap.dateKey) || israelDateKey(),
       dateLabel: snap.dateLabel || israelDateKey(),
@@ -429,6 +430,35 @@
     return { snap, save, kept: !!(save && save.kept) };
   }
 
+  function formatIsraelDateTime(iso){
+    const raw = trim(iso);
+    if(!raw) return "";
+    const d = new Date(raw);
+    if(!Number.isFinite(d.getTime())) return raw;
+    try {
+      return new Intl.DateTimeFormat("he-IL", {
+        timeZone: "Asia/Jerusalem",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+        hourCycle: "h23"
+      }).format(d);
+    } catch(_e) {
+      return raw;
+    }
+  }
+
+  function sendStatusHe(status){
+    const s = trim(status);
+    if(s === "sent") return "נשלח";
+    if(s === "skipped") return "דולג";
+    if(s === "error") return "נכשל";
+    return s;
+  }
+
   function formatStatus(data){
     const lines = [];
     if(data.connectedEmail){
@@ -452,14 +482,16 @@
       lines.push("לא נמצאו מיילים שמורים למנהל / מנהל מערכת. יש למלא מייל בכרטיס המשתמש.");
     }
     if(data.snapshotDateKey){
-      lines.push("דוח אחרון שנשמר לשליחה: " + data.snapshotDateKey + (data.snapshotAt ? (" · " + data.snapshotAt) : ""));
+      const savedAt = formatIsraelDateTime(data.snapshotAt);
+      lines.push("דוח אחרון שנשמר לשליחה: " + data.snapshotDateKey + (savedAt ? (" · " + savedAt) : ""));
       lines.push(data.hasPdf ? "קובץ PDF מוכן לצירוף למייל." : "עדיין אין PDF שמור — לחצו «רענן דוח להיום».");
       if(data.snapshotLayout){
         lines.push("תבנית שמורה: " + trim(data.snapshotLayout));
       }
     }
     if(data.lastSend){
-      let last = "שליחה אחרונה: " + trim(data.lastSend.status) + (data.lastSend.at ? (" · " + data.lastSend.at) : "");
+      const at = formatIsraelDateTime(data.lastSend.at);
+      let last = "שליחה אחרונה: " + sendStatusHe(data.lastSend.status) + (at ? (" · " + at) : "");
       if(trim(data.lastSend.error)) last += " · " + trim(data.lastSend.error);
       lines.push(last);
     }

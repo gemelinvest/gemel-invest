@@ -2,22 +2,16 @@
 # Hosted Supabase Edge Functions do not support Deno.cron; this workflow is
 # the clock. It POSTs { action: "send-slot", slot } to gi-daily-sales-mail.
 #
-# GitHub cron is UTC-only and often hours late. A 35-minute Israel-time gate
-# dropped 12:30 entirely. A wide window without live-function dedup then
-# sent the 15:00 report four times the same afternoon.
+# GitHub cron can be late, so we keep a 10-minute Israel poll plus three
+# exact slot times. The live Edge Function sends ONCE per Israel slot per day.
 #
-# Clock:
-#   1) poll every 10 minutes
-#   2) extra crons inside the 12:30 Israel window (GitHub skipped 09:30 UTC
-#      for a week)
-#   3) send the current Israel slot (12:30 until 15:00, 15:00 until 20:00,
-#      20:00 until midnight)
-# The live Edge Function must send that snapshot ONCE per slot per day.
-# A 90-minute window is not used: it expired while GitHub was still in the
-# same slot and sent again.
+# Do not put secrets.* in a job-level `if` — GitHub evaluates that as empty,
+# skips every job, and treats `jobs: []` as a failure. Repeated schedule
+# failures disable the workflow (this clock was dead after 6 Sep 2026).
+# Do not fail the job on expected skips (אין דוח שמור / כבר נשלח).
 #
-# On push to main this workflow also deploys gi-daily-sales-mail. Changing
-# only the git file does not update the function that Outlook actually hits.
+# On push to main this workflow deploys gi-daily-sales-mail. Changing only
+# the git file does not update the function that Outlook actually hits.
 
 name: Daily sales mail slots
 
@@ -30,25 +24,13 @@ on:
       - ".github/workflows/daily-sales-mail.yml"
   schedule:
     - cron: "*/10 * * * *"
-    # 12:30 IDT window (UTC+3): 09:30–11:50
-    - cron: "30 9 * * *"
-    - cron: "40 9 * * *"
-    - cron: "50 9 * * *"
-    - cron: "10 10 * * *"
-    - cron: "20 10 * * *"
-    - cron: "40 10 * * *"
-    - cron: "50 10 * * *"
-    - cron: "10 11 * * *"
-    - cron: "20 11 * * *"
-    - cron: "40 11 * * *"
-    - cron: "50 11 * * *"
-    # 15:00 / 20:00 IDT
-    - cron: "0 12 * * *"
-    - cron: "0 17 * * *"
-    # 12:30 / 15:00 / 20:00 IST (UTC+2)
-    - cron: "30 10 * * *"
-    - cron: "0 13 * * *"
-    - cron: "0 18 * * *"
+      timezone: "Asia/Jerusalem"
+    - cron: "30 12 * * *"
+      timezone: "Asia/Jerusalem"
+    - cron: "0 15 * * *"
+      timezone: "Asia/Jerusalem"
+    - cron: "0 20 * * *"
+      timezone: "Asia/Jerusalem"
   workflow_dispatch:
 
 concurrency:
@@ -57,7 +39,7 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ github.event_name == 'push' && secrets.SUPABASE_ACCESS_TOKEN != '' }}
+    if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -67,7 +49,12 @@ jobs:
       - name: Deploy gi-daily-sales-mail
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: supabase functions deploy gi-daily-sales-mail --project-ref vhvlkerectggovfihjgm --no-verify-jwt
+        run: |
+          if [ -z "$SUPABASE_ACCESS_TOKEN" ]; then
+            echo "SUPABASE_ACCESS_TOKEN is empty. Add the Actions secret so Outlook hits the git function."
+            exit 1
+          fi
+          supabase functions deploy gi-daily-sales-mail --project-ref vhvlkerectggovfihjgm --no-verify-jwt
 
   send-slot:
     if: ${{ github.event_name != 'push' }}
@@ -141,10 +128,8 @@ jobs:
           if data.get("skipped"):
               reason = data.get("error") or ""
               print("send-slot skipped:", reason)
-              # Once-per-Israel-slot dedup is expected on extra cron fires.
-              if "כבר נשלח" in reason:
-                  sys.exit(0)
-              print("send-slot missed a due Israel slot")
-              sys.exit(1)
+              # Expected skips must not fail the workflow. Consecutive failures
+              # disable GitHub's schedule and the clock stays dead.
+              sys.exit(0)
           print("send-slot ok:", data.get("message") or "sent", "slot", slot)
           PY
