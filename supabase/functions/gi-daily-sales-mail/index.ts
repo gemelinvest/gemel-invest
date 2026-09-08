@@ -85,6 +85,24 @@ function dateKeyLabel(dateKey: string){
   return `${m[3]}.${m[2]}.${m[1]}`;
 }
 
+function escapeHtml(value: unknown){
+  return String(value == null ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/* גוף Outlook: רק כותרת + תאריך. הפירוט ב-PDF. הסנאפשוט שומר HTML מלא לבדיקת תבנית. */
+function salesMailBodyHtml(dateLabel: string){
+  const d = trim(dateLabel);
+  return `<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-8"></head>`
+    + `<body dir="rtl" style="margin:0;padding:16px;font-family:Arial,sans-serif;direction:rtl;text-align:right;color:#122033">`
+    + `<p dir="rtl" style="margin:0;font-size:16px;font-weight:700">דוח מכירות</p>`
+    + (d ? `<p dir="rtl" style="margin:8px 0 0;font-size:14px">${escapeHtml(d)}</p>` : "")
+    + `</body></html>`;
+}
+
 function stripPdf(raw: unknown){
   let s = trim(raw);
   const comma = s.indexOf(",");
@@ -275,7 +293,7 @@ async function sendGraph(account: Json, snap: Json, recipients: { name: string; 
       subject,
       body: {
         contentType: "HTML",
-        content: String(snap.html || "<p dir=\"rtl\">דוח המכירות מצורף כקובץ PDF.</p>"),
+        content: salesMailBodyHtml(dateLabel || dateKeyLabel(dateKey)),
       },
       toRecipients: recipients.map((r) => ({
         emailAddress: { address: r.email, name: r.name },

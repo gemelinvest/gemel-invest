@@ -68,6 +68,10 @@ console.log("\n3) PDF לא חוסם את השעון");
 assert(fn.includes("SENT_WITHOUT_PDF"), "שליחה בלי PDF מסומנת");
 assert(fn.includes("missingPdf ? SENT_WITHOUT_PDF : null"), "Graph עדיין שולח HTML בלי PDF");
 assert(fn.includes("const attachments = pdfOk(pdf)"), "PDF רק כששמור, לא חובה");
+assert(fn.includes("function salesMailBodyHtml"), "גוף Outlook קצר נבנה בנפרד מהסנאפשוט");
+assert(fn.includes("content: salesMailBodyHtml(dateLabel || dateKeyLabel(dateKey))"), "Graph שולח כותרת+תאריך ולא את הטבלה");
+assert(fn.includes(">דוח מכירות<"), "גוף המייל מכיל דוח מכירות");
+assert(!fn.includes("content: String(snap.html"), "HTML המלא לא נשלח כגוף Outlook");
 assert(!fn.includes("if(!pdfOk") || !fn.includes("finishSkip") || fn.indexOf("SENT_WITHOUT_PDF") > 0, "אין שער PDF שעוצר send-slot");
 
 console.log("\n4) GitHub Actions הוא השעון + דיפלוי");
@@ -97,13 +101,14 @@ assert(wf.includes("github.event_name != 'push'"), "שליחה לא רצה על 
 assert(cfg.includes("supabase functions deploy gi-daily-sales-mail --project-ref vhvlkerectggovfihjgm"), "הוראת דיפלוי ב-config.toml");
 
 console.log("\n5) UI + cache");
-assert(html.includes("gi-daily-sales-mail.js?v=20260908-daily-sales-v6"), "cache bust לסקריפט המייל");
+assert(html.includes("gi-daily-sales-mail.js?v=20260908-daily-sales-v7"), "cache bust לסקריפט המייל");
 assert(mail.includes("20260907-couple-shared-discount-v1"), "כותרת הסקריפט");
 assert(mail.includes("MAIL_LAYOUT = \"20260908-today-net\""), "תג תבנית אמיתי");
 assert(!mail.includes("20260826-branch-leads"), "הוסר תג תבנית מזויף");
 assert(mail.includes("function formatIsraelDateTime"), "שעות סטטוס לפי ישראל");
 assert(mail.includes("data.lastSend.error"), "סטטוס מציג סיבת דילוג/כשל");
-assert(mail.includes("12:30, 15:00 ו־20:00 שעון ישראל"), "שעות ישראל לא השתנו");
+assert(mail.includes("בגוף המייל רק «דוח מכירות» והתאריך"), "סטטוס מסביר שגוף המייל קצר");
+assert(mail.includes("הפירוט מצורף כקובץ PDF"), "סטטוס מציין שהפירוט ב-PDF");
 assert(mail.includes('api("send-now"'), "שלח עכשיו נשאר ידני");
 assert(!mail.includes('api("send-slot"'), "הדפדפן לא קורא send-slot");
 assert(mail.includes("slot + 40"), "PDF נבנה גם אחרי השעה אם GitHub מאחר");

@@ -32,11 +32,11 @@ const syntax = spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-simul
 assert(syntax.status === 0, "node --check gi-simulators.js");
 if(syntax.status !== 0) console.error(syntax.stderr || syntax.stdout);
 assert(fs.existsSync(path.join(ROOT, "hachshara-mortgage-risk-sim.css")), "mortgage CSS exists");
-assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260908-daily-sales-v6"'), "app.js loads bumped simulators chunk");
+assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260908-daily-sales-v7"'), "app.js loads bumped simulators chunk");
 assert(app.includes('{ company: "הכשרה", product: "ריסק משכנתא" }'), "catalog lists הכשרה × ריסק משכנתא");
-assert(app.includes("hachshara-mortgage-risk-sim.css?v=20260908-daily-sales-v6"), "app.js loads mortgage CSS");
-assert(html.includes("app.js?v=20260908-daily-sales-v6"), "index.html bumps app.js cache");
-assert(sw.includes("gi-v12-20260908-daily-sales-v6"), "service worker cache bumped");
+assert(app.includes("hachshara-mortgage-risk-sim.css?v=20260908-daily-sales-v7"), "app.js loads mortgage CSS");
+assert(html.includes("app.js?v=20260908-daily-sales-v7"), "index.html bumps app.js cache");
+assert(sw.includes("gi-v12-20260908-daily-sales-v7"), "service worker cache bumped");
 
 console.log("\n2) source-of-truth table from גיליון משכנתא");
 assert(sims.includes("GI-HACH-MORT-RISK-SIM"), "mortgage engine block exists");
