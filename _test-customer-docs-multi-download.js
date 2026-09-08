@@ -34,10 +34,10 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-followup-zip.
 
 console.log("\n2) multi-select UI wiring");
 assert(app.includes("data-doc-select"), "row checkbox attr");
-assert(app.includes("data-doc-select-all"), "select-all checkbox");
+assert(!app.includes("data-doc-select-all"), "select-all checkbox removed from customer file");
 assert(app.includes("data-download-selected-docs"), "download selected button");
 assert(app.includes("הורד נבחרים"), "Hebrew download-selected label");
-assert(app.includes("בחר הכל"), "select-all label");
+assert(!/cfFile__documentsSelectAll[\s\S]{0,80}בחר הכל/.test(app), "customer-file select-all label removed");
 assert(app.includes("downloadSelectedCustomerDocuments"), "downloadSelectedCustomerDocuments method");
 assert(app.includes("showGiDocDownloadOverlay"), "selected download shows wait overlay");
 assert(app.includes("files.length === 1"), "single selected file downloads without zip");
