@@ -357,6 +357,44 @@
     return "";
   }
 
+  /* GI-STEP1-SIM-PERSONAL: מין ועישון נמשכים משלב 1 לכל מבוטח בנפרד.
+     לא מועתקים בפוליסה זוגית (בניגוד לתאריך תחילה / סכום / פיצוי). */
+  function riskSimGenderFromStep1(d){
+    const g = safeTrim(d && d.gender);
+    const low = g.toLowerCase();
+    if(g === "זכר" || low === "male" || low === "m") return "זכר";
+    if(g === "נקבה" || low === "female" || low === "f") return "נקבה";
+    return "";
+  }
+  function riskSimSmokerFromStep1(d){
+    if(!d || typeof d !== "object") return null;
+    if(d.smoker === true || d.smoker === false) return d.smoker;
+    const s = safeTrim(d.smokingStatus != null ? d.smokingStatus : d.smoker).toLowerCase();
+    if(!s) return null;
+    if(s === "yes" || s === "true" || s === "1" || s === "כן" || s === "מעשן" || s === "מעשן/ת") return true;
+    if(s === "no" || s === "false" || s === "0" || s === "לא" || s === "לא מעשן" || s === "לא מעשן/ת") return false;
+    return null;
+  }
+  function riskSimApplyStep1PersonalToState(sim){
+    const insureds = Array.isArray(sim && sim._ctx && sim._ctx.insureds) ? sim._ctx.insureds : [];
+    if(!sim || !sim._state || typeof sim._state !== "object") return;
+    insureds.forEach((ins) => {
+      const id = safeTrim(ins && ins.id);
+      const st = id && sim._state[id];
+      if(!st) return;
+      const gender = riskSimGenderFromStep1(ins.data);
+      const smoker = riskSimSmokerFromStep1(ins.data);
+      if(gender && !safeTrim(st.gender)){
+        st.gender = gender;
+        st.genderSource = st.genderSource || "step1";
+      }
+      if((smoker === true || smoker === false) && st.smoker !== true && st.smoker !== false){
+        st.smoker = smoker;
+        st.smokerSource = st.smokerSource || "step1";
+      }
+    });
+  }
+
   function riskSimIsoDateDaysAgo(daysAgo){
     const n = new Date();
     n.setHours(0, 0, 0, 0);
@@ -1332,6 +1370,7 @@
       };
       on(el, "input", run);
       on(el, "change", run);
+      on(el, "blur", run);
     });
   }
   function riskSimCopyCoupleHealthCoversFromSeed(sim){
@@ -1811,6 +1850,8 @@
         }
         if(sim._ctx?.wizardWorkspace && sim._giCoupleOn){
           sim._confirmSwitch = null;
+          const fromId = safeTrim(sim._activeInsuredId);
+          try { riskSimCopyCoupleSharedFieldsFromId(sim, fromId); } catch(_eShareTab) {}
           sim._activeInsuredId = id;
           try { if(typeof sim._render === "function") sim._render(); } catch(_eTab) {}
           return;
@@ -2035,6 +2076,22 @@
     };
   }
 
+  function riskSimMergeRestoredInsuredState(base, saved){
+    const prev = base && typeof base === "object" ? base : {};
+    const next = saved && typeof saved === "object" ? saved : {};
+    const merged = Object.assign({}, prev, next);
+    if(!safeTrim(next.gender) && safeTrim(prev.gender)){
+      merged.gender = prev.gender;
+      if(!merged.genderSource) merged.genderSource = prev.genderSource || "step1";
+    }
+    const savedSmokerOk = next.smoker === true || next.smoker === false;
+    const baseSmokerOk = prev.smoker === true || prev.smoker === false;
+    if(!savedSmokerOk && baseSmokerOk){
+      merged.smoker = prev.smoker;
+      if(!merged.smokerSource) merged.smokerSource = prev.smokerSource || "step1";
+    }
+    return merged;
+  }
   function riskSimApplyRestoredState(sim, restore, activeId){
     if(!sim || !restore || typeof restore !== "object") return;
     if(!sim._state || typeof sim._state !== "object") sim._state = {};
@@ -2042,9 +2099,11 @@
       const saved = riskSimJsonClone(restore[id]);
       if(!saved) return;
       /* מיזוג ולא החלפה: ברירות המחדל שהסימולטור בנה זה עתה נשארות עבור שדות
-         שנוספו אחרי השמירה, והערכים השמורים נכתבים מעליהן. */
-      sim._state[id] = Object.assign({}, sim._state[id] || {}, saved);
+         שנוספו אחרי השמירה, והערכים השמורים נכתבים מעליהן.
+         מין/עישון ריקים בשחזור לא דורסים את שלב 1. */
+      sim._state[id] = riskSimMergeRestoredInsuredState(sim._state[id], saved);
     });
+    try { riskSimApplyStep1PersonalToState(sim); } catch(_eStep1) {}
     const wanted = safeTrim(activeId);
     if(wanted && sim._state[wanted]) sim._activeInsuredId = wanted;
     try { if(typeof sim._render === "function") sim._render(); } catch(_e) {}
@@ -2626,6 +2685,7 @@
         let out;
         try { out = origOpen(next); }
         finally { handler._giOpening = false; }
+        try { riskSimApplyStep1PersonalToState(handler); } catch(_eStep1Open) {}
         if(restoreDiscount && typeof restoreDiscount === "object"){
           try { handler._giSimDiscountSel = Object.assign({}, restoreDiscount); } catch(_eDisc) {}
           try { riskSimCopyCoupleDiscountFromId(handler, restoreActive || handler._activeInsuredId); } catch(_eCoupleDisc) {}
@@ -2853,8 +2913,8 @@
 
     _prefillFromInsured(ins){
       const d = ins?.data || {};
-      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
-      const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
+      const gender = riskSimGenderFromStep1(d);
+      const smoker = riskSimSmokerFromStep1(d);
       const birthDate = safeTrim(d.birthDate || "");
       const occupation = safeTrim(d.occupation || "");
       const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
@@ -3455,8 +3515,8 @@
 
     _prefillFromInsured(ins){
       const d = ins?.data || {};
-      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
-      const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
+      const gender = riskSimGenderFromStep1(d);
+      const smoker = riskSimSmokerFromStep1(d);
       const birthDate = safeTrim(d.birthDate || "");
       const occupation = safeTrim(d.occupation || "");
       const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
@@ -4022,8 +4082,8 @@
 
     _prefillFromInsured(ins){
       const d = ins?.data || {};
-      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
-      const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : ((d.smoker === true || d.smoker === false) ? d.smoker : null));
+      const gender = riskSimGenderFromStep1(d);
+      const smoker = riskSimSmokerFromStep1(d);
       const birthDate = safeTrim(d.birthDate || "");
       const occupation = safeTrim(d.occupation || "");
       const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
@@ -4640,8 +4700,8 @@
 
     _prefillFromInsured(ins){
       const d = ins?.data || {};
-      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
-      const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
+      const gender = riskSimGenderFromStep1(d);
+      const smoker = riskSimSmokerFromStep1(d);
       const birthDate = safeTrim(d.birthDate || "");
       const occupation = safeTrim(d.occupation || "");
       const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
@@ -5210,8 +5270,8 @@
 
     _prefillFromInsured(ins){
       const d = ins?.data || {};
-      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
-      const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
+      const gender = riskSimGenderFromStep1(d);
+      const smoker = riskSimSmokerFromStep1(d);
       const birthDate = safeTrim(d.birthDate || "");
       const occupation = safeTrim(d.occupation || "");
       const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
@@ -5777,8 +5837,8 @@
 
     _prefillFromInsured(ins){
       const d = ins?.data || {};
-      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
-      const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
+      const gender = riskSimGenderFromStep1(d);
+      const smoker = riskSimSmokerFromStep1(d);
       const birthDate = safeTrim(d.birthDate || "");
       const occupation = safeTrim(d.occupation || "");
       const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
@@ -6908,7 +6968,7 @@
 
     _prefillFromInsured(ins){
       const d = ins?.data || {};
-      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
+      const gender = riskSimGenderFromStep1(d);
       const birthDate = safeTrim(d.birthDate || "");
       const occupation = safeTrim(d.occupation || "");
       const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
@@ -7641,7 +7701,7 @@
 
     _prefillFromInsured(ins){
       const d = ins?.data || {};
-      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
+      const gender = riskSimGenderFromStep1(d);
       const birthDate = safeTrim(d.birthDate || "");
       const occupation = safeTrim(d.occupation || "");
       const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
@@ -8495,7 +8555,7 @@
 
     _prefillFromInsured(ins){
       const d = ins?.data || {};
-      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
+      const gender = riskSimGenderFromStep1(d);
       const birthDate = safeTrim(d.birthDate || "");
       const occupation = safeTrim(d.occupation || "");
       const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
@@ -9171,8 +9231,8 @@
 
       _prefillFromInsured(ins){
         const d = ins?.data || {};
-        const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
-        const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
+        const gender = riskSimGenderFromStep1(d);
+        const smoker = riskSimSmokerFromStep1(d);
         const birthDate = safeTrim(d.birthDate || "");
         const occupation = safeTrim(d.occupation || "");
         const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
@@ -9790,8 +9850,8 @@
 
       _prefillFromInsured(ins){
         const d = ins?.data || {};
-        const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
-        const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
+        const gender = riskSimGenderFromStep1(d);
+        const smoker = riskSimSmokerFromStep1(d);
         const birthDate = safeTrim(d.birthDate || "");
         const occupation = safeTrim(d.occupation || "");
         const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
@@ -10420,8 +10480,8 @@
 
       _prefillFromInsured(ins){
         const d = ins?.data || {};
-        const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
-        const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
+        const gender = riskSimGenderFromStep1(d);
+        const smoker = riskSimSmokerFromStep1(d);
         const birthDate = safeTrim(d.birthDate || "");
         const occupation = safeTrim(d.occupation || "");
         const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
@@ -11054,7 +11114,7 @@
 
     _prefillFromInsured(ins){
       const d = ins?.data || {};
-      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
+      const gender = riskSimGenderFromStep1(d);
       const birthDate = safeTrim(d.birthDate || "");
       const occupation = safeTrim(d.occupation || "");
       const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
@@ -11606,7 +11666,7 @@
     },
     _prefillFromInsured(ins){
       const d = ins?.data || {};
-      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
+      const gender = riskSimGenderFromStep1(d);
       const birthDate = safeTrim(d.birthDate || "");
       const smoker = (d.smoker === true || d.smoker === false) ? d.smoker : null;
       const compensation = "";
@@ -12000,7 +12060,7 @@
     },
     _prefillFromInsured(ins){
       const d = ins?.data || {};
-      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
+      const gender = riskSimGenderFromStep1(d);
       const birthDate = safeTrim(d.birthDate || "");
       const occupation = safeTrim(d.occupation || "");
       const insuranceStartDate = resolveMigdalInsuranceStartDate(this._ctx, ins);
@@ -12216,8 +12276,8 @@
       open(ctx){ this.close(); this._ctx = ctx || {}; const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : []; this._state = {}; insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); }); this._activeInsuredId = insureds[0]?.id || null; this._confirmSwitch = null; this._showFinalSummary = false; this._mount(); this._render(); },
       _prefillFromInsured(ins){
         const d = ins?.data || {};
-        const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
-        const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : ((d.smoker === true || d.smoker === false) ? d.smoker : null));
+        const gender = riskSimGenderFromStep1(d);
+        const smoker = riskSimSmokerFromStep1(d);
         const birthDate = safeTrim(d.birthDate || ""); const occupation = safeTrim(d.occupation || "");
         const insuranceStartDate = resolveMigdalInsuranceStartDate(this._ctx, ins);
         const compensation = "";
@@ -12346,8 +12406,8 @@
     open(ctx){ this.close(); this._ctx = ctx || {}; const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : []; this._state = {}; insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); }); this._activeInsuredId = insureds[0]?.id || null; this._confirmSwitch = null; this._showFinalSummary = false; this._mount(); this._render(); },
     _prefillFromInsured(ins){
       const d = ins?.data || {};
-      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
-      const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : null);
+      const gender = riskSimGenderFromStep1(d);
+      const smoker = riskSimSmokerFromStep1(d);
       const birthDate = safeTrim(d.birthDate || ""); const occupation = safeTrim(d.occupation || "");
       const insuranceStartDate = resolveMigdalInsuranceStartDate(this._ctx, ins);
       const st = { birthDate, birthDateSource: birthDate ? "step1" : "", insuranceStartDate, insuranceStartDateSource: insuranceStartDate ? "ctx" : "", age:"", ageSource: birthDate ? "step1" : "", ageRaw:null, entryDays:null, gender, genderSource: gender ? "step1" : "", smoker, smokerSource: (smoker === true || smoker === false) ? "step1" : "", occupation, occupationSource: occupation ? "step1" : "", sumInsured:"", result:null, error:null, savedAt:null, dirtySinceSave:false };
@@ -12497,7 +12557,7 @@
       open(ctx){ this.close(); this._ctx = ctx || {}; const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : []; this._state = {}; insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); }); this._activeInsuredId = insureds[0]?.id || null; this._confirmSwitch = null; this._showFinalSummary = false; this._mount(); this._render(); },
       _prefillFromInsured(ins){
         const d = ins?.data || {};
-        const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
+        const gender = riskSimGenderFromStep1(d);
         const birthDate = safeTrim(d.birthDate || ""); const occupation = safeTrim(d.occupation || "");
         const insuranceStartDate = resolveMigdalInsuranceStartDate(this._ctx, ins);
         const sumInsured = "";
@@ -12697,7 +12757,7 @@
     },
     _prefillFromInsured(ins){
       const d = ins?.data || {};
-      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
+      const gender = riskSimGenderFromStep1(d);
       const birthDate = safeTrim(d.birthDate || "");
       const occupation = safeTrim(d.occupation || "");
       const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
@@ -12992,8 +13052,8 @@
       open(ctx){ this.close(); this._ctx = ctx || {}; const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : []; this._state = {}; insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); }); this._activeInsuredId = insureds[0]?.id || null; this._confirmSwitch = null; this._showFinalSummary = false; this._mount(); this._render(); },
       _prefillFromInsured(ins){
         const d = ins?.data || {};
-        const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
-        const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : ((d.smoker === true || d.smoker === false) ? d.smoker : null));
+        const gender = riskSimGenderFromStep1(d);
+        const smoker = riskSimSmokerFromStep1(d);
         const birthDate = safeTrim(d.birthDate || ""); const occupation = safeTrim(d.occupation || "");
         const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
         const compensation = "";
@@ -13175,8 +13235,8 @@
     open(ctx){ this.close(); this._ctx = ctx || {}; const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : []; this._state = {}; insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); }); this._activeInsuredId = insureds[0]?.id || null; this._confirmSwitch = null; this._showFinalSummary = false; this._mount(); this._render(); },
     _prefillFromInsured(ins){
       const d = ins?.data || {};
-      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
-      const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : ((d.smoker === true || d.smoker === false) ? d.smoker : null));
+      const gender = riskSimGenderFromStep1(d);
+      const smoker = riskSimSmokerFromStep1(d);
       const birthDate = safeTrim(d.birthDate || ""); const occupation = safeTrim(d.occupation || "");
       const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
       const sumInsured = "";
@@ -13484,8 +13544,8 @@
     open(ctx){ this.close(); this._ctx = ctx || {}; const insureds = Array.isArray(ctx?.insureds) ? ctx.insureds : []; this._state = {}; insureds.forEach((ins) => { this._state[ins.id] = this._prefillFromInsured(ins); }); this._activeInsuredId = insureds[0]?.id || null; this._confirmSwitch = null; this._showFinalSummary = false; this._mount(); this._render(); },
     _prefillFromInsured(ins){
       const d = ins?.data || {};
-      const gender = (d.gender === "זכר" || d.gender === "נקבה") ? d.gender : "";
-      const smoker = d.smokingStatus === "yes" ? true : (d.smokingStatus === "no" ? false : ((d.smoker === true || d.smoker === false) ? d.smoker : null));
+      const gender = riskSimGenderFromStep1(d);
+      const smoker = riskSimSmokerFromStep1(d);
       const birthDate = safeTrim(d.birthDate || ""); const occupation = safeTrim(d.occupation || "");
       const insuranceStartDate = resolveInsuranceStartDate(this._ctx, ins);
       const sumInsured = "";

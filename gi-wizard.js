@@ -3652,6 +3652,9 @@ init(){
       ins.data.birthDate = "";
       ins.data.gender = "";
       ins.data.maritalStatus = "";
+      ins.data.smokingStatus = "";
+      ins.data.smokingType = "";
+      ins.data.smokingAmount = "";
       /* GI-FIX 2026-08-03: קודם אופסה כאן הקופה (clinic="" / shaban="") וכל
          מבוטח נוסף נפתח ריק. כעת הוא יורש את הקופה של הראשי — data כבר הועתק
          ממנו למעלה, ולכן די בכך שלא נאפס. הדגל מאופס במפורש כדי שהירושה לא
