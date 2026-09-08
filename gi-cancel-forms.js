@@ -418,7 +418,7 @@
   const GiCancelForms = {
     TEMPLATE_BASE: "./forms/cancel/",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260907-health-disc-v1",
+    VERSION: "20260907-chat-dock-v1",
     DOC_TYPE: "company_cancel_form",
     TEMPLATES,
 

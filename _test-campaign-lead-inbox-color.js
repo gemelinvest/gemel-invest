@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260907-health-disc-v1";
+const APP_TAG = "20260907-chat-dock-v1";
 let failed = 0;
 let passed = 0;
 

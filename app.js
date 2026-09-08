@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260907-health-disc-v1";
+  const BUILD = "20260907-chat-dock-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -40515,7 +40515,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260907-health-disc-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260907-chat-dock-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -40535,8 +40535,8 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260907-health-disc-v1";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260907-health-disc-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260907-chat-dock-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260907-chat-dock-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -41189,18 +41189,18 @@ UsersGateUI.init();
     "./ayalon-health-sim.css?v=20260810-sim-mockup-v2",
     "./ayalon-ci-sim.css?v=20260811-ayl-ci-v1",
     "./hachshara-health-sim.css?v=20260810-sim-mockup-v2",
-    "./hachshara-risk-sim.css?v=20260907-health-disc-v1",
-    "./hachshara-mortgage-risk-sim.css?v=20260907-health-disc-v1",
+    "./hachshara-risk-sim.css?v=20260907-chat-dock-v1",
+    "./hachshara-mortgage-risk-sim.css?v=20260907-chat-dock-v1",
     "./migdal-health-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
-    "./menora-ci-sim.css?v=20260907-health-disc-v1",
+    "./menora-ci-sim.css?v=20260907-chat-dock-v1",
     "./clal-health-sim.css?v=20260812-cll-health-v1",
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260907-health-disc-v1",
-    "./simulators-shell.css?v=20260907-health-disc-v1"
+    "./simulators-center.css?v=20260907-chat-dock-v1",
+    "./simulators-shell.css?v=20260907-chat-dock-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -42562,7 +42562,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260907-health-disc-v1";
+  const GI_WIZARD_JS_VERSION = "20260907-chat-dock-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -50990,6 +50990,7 @@ const ClalRiskLifePdf = {
     typingWindowMs: Math.max(1200, Number(SUPABASE_CHAT.typingWindowMs || 2200)),
     fabDrag: null,
     fabWasDragged: false,
+    dockCards: new Map(),
     _presenceUiDebounced: null,
 
     schedulePresenceUiRefresh(){
@@ -51046,7 +51047,7 @@ const ClalRiskLifePdf = {
         emojiPanel: $("#giChatEmojiPanel"),
         input: $("#giChatInput"),
         send: $("#giChatSend"),
-        toasts: $("#giChatToasts")
+        dock: $("#giChatDock")
       };
       if(!this.els.fab || !this.els.window) return;
 
@@ -51107,6 +51108,7 @@ const ClalRiskLifePdf = {
         this.handleTypingPulse();
         this.refreshSendButtonState();
       });
+      this.bindIncomingDockEvents();
       on(window, 'beforeunload', () => this.teardownRealtime(true));
       on(window, 'resize', () => this.clampFabToViewport());
       this.initDrag();
@@ -51397,6 +51399,7 @@ const ClalRiskLifePdf = {
       this.ensureComposerUsable();
       this.ensureStarted();
       this.resetUnreadForSelected();
+      if(this.selectedUser?.id) this.dismissDockCard(this.selectedUser.id);
       this.els.input?.focus?.();
     },
 
@@ -51611,6 +51614,7 @@ const ClalRiskLifePdf = {
       this.renderConversationShell();
       this.closeEmojiPanel();
       this.resetUnreadForSelected();
+      this.dismissDockCard(user.id);
       await this.loadConversationHistory();
       this.renderPeerMeta();
       this.renderTypingIndicator();
@@ -51943,7 +51947,7 @@ const ClalRiskLifePdf = {
     },
 
     async sendMessage(){
-      if(!this.client || !this.selectedUser || !this.currentConversationId){
+      if(!this.selectedUser || !this.currentConversationId){
         alert('בחר נציג כדי להתחיל שיחה.');
         return;
       }
@@ -51956,36 +51960,8 @@ const ClalRiskLifePdf = {
       }
       this.refreshSendButtonState();
       try {
-        const expiresAt = SUPABASE_CHAT.retentionMode === 'midnight'
-          ? nextMidnightISO()
-          : new Date(Date.now() + this.retentionMs).toISOString();
-        const payload = {
-          conversation_id: this.currentConversationId,
-          sender_id: this.userKey,
-          sender_name: this.currentUser?.name || 'נציג',
-          recipient_id: this.selectedUser.id,
-          recipient_name: this.selectedUser.name,
-          body: text,
-          expires_at: expiresAt
-        };
-        const { data, error } = await this.client
-          .from(SUPABASE_CHAT.messagesTable)
-          .insert([payload])
-          .select('*')
-          .single();
-        if(error) throw error;
-        const insertedMsg = this.normalizeMessage(data) || {
-          id: null,
-          conversationId: this.currentConversationId,
-          fromId: this.userKey,
-          fromName: this.currentUser?.name || 'נציג',
-          toId: this.selectedUser.id,
-          toName: this.selectedUser.name,
-          text,
-          createdAt: Date.now(),
-          expiresAt: Date.parse(expiresAt) || (Date.now() + this.retentionMs)
-        };
-        this.upsertIncomingMessage(insertedMsg, true);
+        const result = await this.sendTextToPeer(this.selectedUser.id, this.selectedUser.name, text);
+        if(!result?.ok) throw result?.error || new Error('CHAT_SEND_FAILED');
         if(this.els.input){
           this.els.input.value = '';
         }
@@ -51993,7 +51969,6 @@ const ClalRiskLifePdf = {
         this.autoGrowInput();
         this.refreshSendButtonState();
         await this.setTyping(false);
-        this.renderUsers();
       } catch(err){
         console.error('CHAT_SEND_FAILED', err);
         const errMsg = safeTrim(err?.message || err?.details || err?.hint || err?.code || '');
@@ -52002,6 +51977,51 @@ const ClalRiskLifePdf = {
         if(sendBtn) sendBtn.disabled = false;
         this.refreshSendButtonState();
         this.els.input?.focus?.();
+      }
+    },
+
+    async sendTextToPeer(toId, toName, text){
+      const body = safeTrim(text);
+      const peerId = safeTrim(toId);
+      if(!this.client || !this.userKey || !peerId || !body){
+        return { ok:false, error: new Error('CHAT_SEND_MISSING') };
+      }
+      const conversationId = this.conversationId(peerId);
+      const expiresAt = SUPABASE_CHAT.retentionMode === 'midnight'
+        ? nextMidnightISO()
+        : new Date(Date.now() + this.retentionMs).toISOString();
+      const payload = {
+        conversation_id: conversationId,
+        sender_id: this.userKey,
+        sender_name: this.currentUser?.name || 'נציג',
+        recipient_id: peerId,
+        recipient_name: safeTrim(toName) || 'נציג',
+        body,
+        expires_at: expiresAt
+      };
+      try {
+        const { data, error } = await this.client
+          .from(SUPABASE_CHAT.messagesTable)
+          .insert([payload])
+          .select('*')
+          .single();
+        if(error) throw error;
+        const insertedMsg = this.normalizeMessage(data) || {
+          id: null,
+          conversationId,
+          fromId: this.userKey,
+          fromName: this.currentUser?.name || 'נציג',
+          toId: peerId,
+          toName: safeTrim(toName) || 'נציג',
+          text: body,
+          createdAt: Date.now(),
+          expiresAt: Date.parse(expiresAt) || (Date.now() + this.retentionMs)
+        };
+        this.upsertIncomingMessage(insertedMsg, true);
+        this.renderUsers();
+        return { ok:true, message: insertedMsg };
+      } catch(err){
+        return { ok:false, error: err };
       }
     },
 
@@ -52104,10 +52124,10 @@ const ClalRiskLifePdf = {
         this.unreadByConversation.set(convoId, (this.unreadByConversation.get(convoId) || 0) + 1);
         this.renderFabBadge();
         this.renderUsers();
+        this.pushIncomingDock(message);
       }
 
       if(!isActiveConversationOpen || !appIsFocused){
-        if(!isChatWindowOpen) this.pushToast(from, text);
         this.playNotifySound();
       }
 
@@ -52124,15 +52144,158 @@ const ClalRiskLifePdf = {
       }
     },
 
-    pushToast(title, text){
-      const host = this.els.toasts;
-      if(!host) return;
-      const toast = document.createElement('div');
-      toast.className = 'giChatToast';
-      toast.innerHTML = `<div class="giChatToast__title">${this.escapeHtml(title)}</div><div class="giChatToast__text">${this.escapeHtml(text)}</div>`;
-      host.appendChild(toast);
-      setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateY(-8px)'; }, 3600);
-      setTimeout(() => toast.remove(), 4100);
+    bindIncomingDockEvents(){
+      const host = this.els.dock;
+      if(!host || host.dataset.giChatDockBound === '1') return;
+      host.dataset.giChatDockBound = '1';
+      on(host, 'click', (ev) => {
+        const target = ev.target;
+        if(!target || typeof target.closest !== 'function') return;
+        const card = target.closest('[data-chat-dock-from]');
+        if(!card || !host.contains(card)) return;
+        const fromId = card.getAttribute('data-chat-dock-from') || '';
+        if(target.closest('[data-chat-dock-dismiss]')){
+          ev.preventDefault();
+          this.dismissDockCard(fromId);
+          return;
+        }
+        if(target.closest('[data-chat-dock-reply]')){
+          ev.preventDefault();
+          this.openDockReply(fromId);
+        }
+      });
+      on(host, 'submit', (ev) => {
+        const form = ev.target && typeof ev.target.closest === 'function'
+          ? ev.target.closest('[data-chat-dock-composer]')
+          : null;
+        if(!form || !host.contains(form)) return;
+        ev.preventDefault();
+        const fromId = form.closest('[data-chat-dock-from]')?.getAttribute('data-chat-dock-from') || '';
+        if(fromId) this.sendDockReply(fromId);
+      });
+      on(host, 'keydown', (ev) => {
+        if(ev.key !== 'Enter' || ev.shiftKey) return;
+        const target = ev.target;
+        if(!target || typeof target.closest !== 'function') return;
+        const input = target.closest('[data-chat-dock-input]');
+        if(!input || !host.contains(input)) return;
+        ev.preventDefault();
+        const fromId = input.closest('[data-chat-dock-from]')?.getAttribute('data-chat-dock-from') || '';
+        if(fromId) this.sendDockReply(fromId);
+      });
+    },
+
+    pushIncomingDock(message){
+      const host = this.els.dock;
+      if(!host || !message) return;
+      const fromId = safeTrim(message.fromId);
+      if(!fromId) return;
+      const fromName = this.usersMap.get(fromId)?.name || message.fromName || 'נציג';
+      const text = message.text || 'הודעה חדשה';
+      const user = this.usersMap.get(fromId) || { id: fromId, name: fromName };
+      if(!this.dockCards) this.dockCards = new Map();
+      let card = this.dockCards.get(fromId);
+      if(!card || !host.contains(card)){
+        card = document.createElement('article');
+        card.className = 'giChatDockCard';
+        host.appendChild(card);
+        this.dockCards.set(fromId, card);
+      }
+      this.renderDockCard(card, { fromId, fromName, text, user });
+    },
+
+    renderDockCard(card, { fromId, fromName, text, user }){
+      if(!card) return;
+      const wasOpen = card.classList.contains('is-replying');
+      const prevVal = card.querySelector('[data-chat-dock-input]')?.value || '';
+      const prevErr = card.querySelector('[data-chat-dock-error]')?.textContent || '';
+      card.className = 'giChatDockCard' + (wasOpen ? ' is-replying' : '');
+      card.setAttribute('data-chat-dock-from', fromId);
+      card.setAttribute('data-chat-dock-name', fromName);
+      card.innerHTML = `
+        <button class="giChatDockCard__dismiss" type="button" data-chat-dock-dismiss="1" aria-label="סגור הודעה">×</button>
+        <div class="giChatDockCard__row">
+          ${this.avatarMarkup(user, "giChatDockCard__avatar")}
+          <div class="giChatDockCard__main">
+            <div class="giChatDockCard__name">${this.escapeHtml(fromName)}</div>
+            <div class="giChatDockCard__text">${this.escapeHtml(text)}</div>
+          </div>
+        </div>
+        <div class="giChatDockCard__actions">
+          <button class="giChatDockCard__reply" type="button" data-chat-dock-reply="1">השב</button>
+        </div>
+        <form class="giChatDockCard__composer" data-chat-dock-composer="1">
+          <label class="giChatDockCard__srOnly" for="giChatDockReply-${this.escapeAttr(this.normalizeKey(fromId))}">תשובה אל ${this.escapeHtml(fromName)}</label>
+          <textarea class="giChatDockCard__input" id="giChatDockReply-${this.escapeAttr(this.normalizeKey(fromId))}" data-chat-dock-input="1" rows="2" placeholder="כתבו תשובה לנציג…"></textarea>
+          <div class="giChatDockCard__composerBar">
+            <span class="giChatDockCard__error" data-chat-dock-error="1"></span>
+            <button class="giChatDockCard__send" type="submit" data-chat-dock-send="1">שלח</button>
+          </div>
+        </form>`;
+      if(wasOpen){
+        const input = card.querySelector('[data-chat-dock-input]');
+        if(input) input.value = prevVal;
+        const errEl = card.querySelector('[data-chat-dock-error]');
+        if(errEl) errEl.textContent = prevErr;
+      }
+    },
+
+    openDockReply(fromId){
+      const card = this.dockCards?.get(safeTrim(fromId));
+      if(!card) return;
+      card.classList.add('is-replying');
+      const input = card.querySelector('[data-chat-dock-input]');
+      if(!input) return;
+      input.focus();
+      const len = String(input.value || '').length;
+      try { input.setSelectionRange(len, len); } catch(_e) {}
+    },
+
+    async sendDockReply(fromId){
+      const id = safeTrim(fromId);
+      const card = this.dockCards?.get(id);
+      if(!card) return;
+      const input = card.querySelector('[data-chat-dock-input]');
+      const sendBtn = card.querySelector('[data-chat-dock-send]');
+      const errEl = card.querySelector('[data-chat-dock-error]');
+      const text = safeTrim(input?.value);
+      if(!text){
+        this.openDockReply(id);
+        return;
+      }
+      const toName = card.getAttribute('data-chat-dock-name') || 'נציג';
+      if(sendBtn) sendBtn.disabled = true;
+      if(errEl) errEl.textContent = '';
+      try {
+        const result = await this.sendTextToPeer(id, toName, text);
+        if(!result?.ok) throw result?.error || new Error('CHAT_SEND_FAILED');
+        this.dismissDockCard(id);
+      } catch(err){
+        const errMsg = safeTrim(err?.message || err?.details || err?.hint || err?.code || '');
+        if(errEl) errEl.textContent = errMsg || 'לא הצלחתי לשלוח את התשובה.';
+      } finally {
+        if(sendBtn) sendBtn.disabled = false;
+      }
+    },
+
+    dismissDockCard(fromId){
+      const id = safeTrim(fromId);
+      if(!id || !this.dockCards) return;
+      const card = this.dockCards.get(id);
+      if(card){
+        try { card.remove(); } catch(_e) {}
+        this.dockCards.delete(id);
+      }
+    },
+
+    clearIncomingDock(){
+      if(this.dockCards){
+        this.dockCards.forEach((card) => {
+          try { card.remove(); } catch(_e) {}
+        });
+        this.dockCards.clear();
+      }
+      if(this.els.dock) this.els.dock.innerHTML = '';
     },
 
     playNotifySound(){
@@ -52217,6 +52380,7 @@ const ClalRiskLifePdf = {
       this.teardownRealtime(true);
       this.hideFab();
       this.closeWindow(false, true);
+      this.clearIncomingDock();
       this.selectedUser = null;
       this.currentConversationId = '';
       this.usersMap = new Map();
