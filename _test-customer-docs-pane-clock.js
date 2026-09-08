@@ -1,4 +1,4 @@
-/* GI-CUSTOMER-DOCS-PANE-CLOCK 20260908-daily-sales-v4
+/* GI-CUSTOMER-DOCS-PANE-CLOCK 20260908-daily-sales-v5
    Independent file-list / preview scroll, no select-all, elapsed download clock.
    Run: node _test-customer-docs-pane-clock.js
 */
@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260908-daily-sales-v4";
+const TAG = "20260908-daily-sales-v5";
 let failed = 0;
 let passed = 0;
 
