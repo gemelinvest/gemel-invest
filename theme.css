@@ -3434,25 +3434,26 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   border-top: 1px solid var(--gi-border) !important;
 }
 
-/* --- ?????? --- */
-.giChatToast:not(#\9):not(#\9){
-  background: var(--gi-surface) !important;
-  border: 1px solid var(--gi-border) !important;
-  border-radius: var(--gi-r-md) !important;
-  box-shadow: var(--gi-sh-md) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
+/* --- Incoming chat dock --- */
+.giChatDockCard:not(#\9):not(#\9){
+  background: color-mix(in srgb, var(--gi-surface, #ffffff) 32%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--gi-border, rgba(43,75,138,.18)) 65%, transparent) !important;
+  border-radius: var(--gi-r-md, 16px) !important;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, .08) !important;
+  backdrop-filter: blur(16px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(140%) !important;
+  color: var(--gi-text, #0f172a) !important;
 }
 
-.giChatToast__title:not(#\9):not(#\9){
+.giChatDockCard__name:not(#\9):not(#\9){
   font-size: 13px !important;
-  font-weight: 600 !important;
-  color: var(--gi-text) !important;
+  font-weight: 700 !important;
+  color: var(--gi-text, #0f172a) !important;
 }
 
-.giChatToast__text:not(#\9):not(#\9){
+.giChatDockCard__text:not(#\9):not(#\9){
   font-size: 12px !important;
-  color: var(--gi-text-3) !important;
+  color: var(--gi-text-3, rgba(15,23,42,.68)) !important;
 }
 
 /* --- ?????? ????? ?????? ?? ????? ????? ????? --- */

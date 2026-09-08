@@ -9213,7 +9213,7 @@ body.lcLeadShellOpen .lcLeadShell__panel{
 /* === INVEST CHAT · Premium Glass Blue === */
 .giChatFab,
 .giChatWindow,
-.giChatToasts{ direction:rtl; }
+.giChatDock{ direction:rtl; }
 .giChatFab.is-hidden,
 .giChatWindow.is-hidden,
 .giChatSidebar__setupHint.is-hidden,
@@ -9221,6 +9221,8 @@ body.lcLeadShellOpen .lcLeadShell__panel{
 .giChatPanel__empty.is-hidden,
 .giChatFab__badge.is-hidden,
 .giChatTyping.is-hidden{ display:none !important; }
+.giChatDockCard__composer{ display:none; }
+.giChatDockCard.is-replying .giChatDockCard__composer{ display:flex; }
 
 .giChatFab{
   position:fixed;
@@ -9602,33 +9604,162 @@ body.lcLeadShellOpen .lcLeadShell__panel{
   100%{ transform:scale(1); }
 }
 
-.giChatToasts{
+.giChatDock{
   position:fixed;
-  left:96px;
-  bottom:22px;
+  left:16px;
+  top:76px;
   display:flex;
   flex-direction:column;
   align-items:flex-start;
-  gap:10px;
+  gap:8px;
   z-index:10050;
   pointer-events:none;
+  max-width:min(300px, calc(100vw - 28px));
+  max-height:calc(100vh - 96px);
+  overflow:auto;
 }
-.giChatToast{
-  min-width:240px;
-  max-width:min(320px, calc(100vw - 120px));
-  padding:14px 16px;
-  border-radius:18px;
-  background:linear-gradient(180deg, rgba(16,35,79,.88), rgba(17,46,98,.84));
-  border:1px solid rgba(209,233,255,.18);
-  color:#fff;
-  box-shadow:0 18px 34px rgba(9,26,64,.26);
-  backdrop-filter:blur(18px);
-  -webkit-backdrop-filter:blur(18px);
-  animation:giChatToastIn .28s ease;
+.giChatDockCard{
+  position:relative;
+  pointer-events:auto;
+  width:100%;
+  min-width:220px;
+  padding:12px 14px 10px;
+  border-radius:16px;
+  background:rgba(255,255,255,.28);
+  border:1px solid rgba(255,255,255,.42);
+  color:rgba(15,23,42,.82);
+  box-shadow:0 8px 24px rgba(11,31,74,.08);
+  backdrop-filter:blur(16px) saturate(140%);
+  -webkit-backdrop-filter:blur(16px) saturate(140%);
+  animation:giChatDockIn .28s ease;
 }
-@keyframes giChatToastIn{ from{ opacity:0; transform:translateX(-12px) scale(.97); } to{ opacity:1; transform:translateX(0) scale(1); } }
-.giChatToast__title{ font-size:13px; font-weight:900; margin-bottom:4px; }
-.giChatToast__text{ font-size:12px; line-height:1.5; color:rgba(226,242,255,.86); }
+@keyframes giChatDockIn{ from{ opacity:0; transform:translateX(-10px); } to{ opacity:1; transform:translateX(0); } }
+.giChatDockCard__dismiss{
+  position:absolute;
+  top:6px;
+  left:6px;
+  width:22px;
+  height:22px;
+  border:0;
+  border-radius:999px;
+  background:transparent;
+  color:rgba(15,23,42,.45);
+  font-size:15px;
+  line-height:1;
+  cursor:pointer;
+}
+.giChatDockCard__dismiss:hover{
+  background:rgba(15,23,42,.08);
+  color:rgba(15,23,42,.72);
+}
+.giChatDockCard__row{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  padding-left:18px;
+}
+.giChatDockCard__avatar{
+  flex:0 0 auto;
+  width:32px;
+  height:32px;
+  border-radius:11px;
+  display:grid;
+  place-items:center;
+  font-size:11px;
+  font-weight:800;
+  background:rgba(255,255,255,.42);
+  border:1px solid rgba(255,255,255,.5);
+  overflow:hidden;
+}
+.giChatDockCard__avatar img,
+.giChatDockCard__avatar .giChatAvatarImg{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.giChatDockCard__main{ min-width:0; flex:1; }
+.giChatDockCard__name{
+  font-size:13px;
+  font-weight:800;
+  line-height:1.3;
+  margin-bottom:2px;
+  color:rgba(15,23,42,.88);
+}
+.giChatDockCard__text{
+  font-size:12px;
+  line-height:1.45;
+  color:rgba(15,23,42,.68);
+  display:-webkit-box;
+  -webkit-line-clamp:3;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+.giChatDockCard__actions{
+  display:flex;
+  justify-content:flex-end;
+  margin-top:8px;
+}
+.giChatDockCard.is-replying .giChatDockCard__actions{ display:none; }
+.giChatDockCard__reply,
+.giChatDockCard__send{
+  border:0;
+  border-radius:999px;
+  padding:5px 12px;
+  font-size:12px;
+  font-weight:800;
+  cursor:pointer;
+  background:rgba(255,255,255,.42);
+  color:rgba(15,23,42,.82);
+  border:1px solid rgba(255,255,255,.5);
+}
+.giChatDockCard__reply:hover,
+.giChatDockCard__send:hover{
+  background:rgba(255,255,255,.62);
+}
+.giChatDockCard__send{
+  background:rgba(62,207,142,.28);
+  border-color:rgba(62,207,142,.32);
+}
+.giChatDockCard__composer{
+  flex-direction:column;
+  gap:6px;
+  margin-top:8px;
+}
+.giChatDockCard__input{
+  width:100%;
+  resize:none;
+  border:1px solid rgba(255,255,255,.5);
+  border-radius:12px;
+  background:rgba(255,255,255,.38);
+  color:rgba(15,23,42,.88);
+  font:inherit;
+  font-size:12px;
+  line-height:1.4;
+  padding:8px 10px;
+  outline:none;
+}
+.giChatDockCard__input:focus{
+  border-color:rgba(62,207,142,.45);
+  background:rgba(255,255,255,.52);
+}
+.giChatDockCard__composerBar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+.giChatDockCard__error{
+  font-size:11px;
+  color:rgba(176,42,55,.82);
+  min-height:1em;
+}
+.giChatDockCard__srOnly{
+  position:absolute;
+  width:1px;
+  height:1px;
+  overflow:hidden;
+  clip:rect(0 0 0 0);
+}
 
 @media (max-width: 900px){
   .giChatWindow{ width:min(94vw, 430px); height:min(78vh, 640px); left:10px; bottom:82px; }
@@ -9637,7 +9768,7 @@ body.lcLeadShellOpen .lcLeadShell__panel{
   .giChatWindow{ width:calc(100vw - 12px); left:6px; right:6px; bottom:76px; height:78vh; }
   .giChatWindow__body{ grid-template-columns: 146px 1fr; }
   .giChatFab{ left:10px; bottom:12px; }
-  .giChatToasts{ left:78px; right:auto; bottom:12px; }
+  .giChatDock{ left:10px; top:64px; right:auto; }
 }
 
 
@@ -15992,7 +16123,7 @@ body.lcLeadShellOpen .lcLeadShell__panel{
 /* === INVEST CHAT · Premium Glass Blue === */
 .giChatFab,
 .giChatWindow,
-.giChatToasts{ direction:rtl; }
+.giChatDock{ direction:rtl; }
 .giChatFab.is-hidden,
 .giChatWindow.is-hidden,
 .giChatSidebar__setupHint.is-hidden,
@@ -16000,6 +16131,8 @@ body.lcLeadShellOpen .lcLeadShell__panel{
 .giChatPanel__empty.is-hidden,
 .giChatFab__badge.is-hidden,
 .giChatTyping.is-hidden{ display:none !important; }
+.giChatDockCard__composer{ display:none; }
+.giChatDockCard.is-replying .giChatDockCard__composer{ display:flex; }
 
 .giChatFab{
   position:fixed;
@@ -16327,33 +16460,162 @@ body.lcLeadShellOpen .lcLeadShell__panel{
   100%{ transform:scale(1); }
 }
 
-.giChatToasts{
+.giChatDock{
   position:fixed;
-  left:96px;
-  bottom:22px;
+  left:16px;
+  top:76px;
   display:flex;
   flex-direction:column;
   align-items:flex-start;
-  gap:10px;
+  gap:8px;
   z-index:10050;
   pointer-events:none;
+  max-width:min(300px, calc(100vw - 28px));
+  max-height:calc(100vh - 96px);
+  overflow:auto;
 }
-.giChatToast{
-  min-width:240px;
-  max-width:min(320px, calc(100vw - 120px));
-  padding:14px 16px;
-  border-radius:18px;
-  background:linear-gradient(180deg, rgba(16,35,79,.88), rgba(17,46,98,.84));
-  border:1px solid rgba(209,233,255,.18);
-  color:#fff;
-  box-shadow:0 18px 34px rgba(9,26,64,.26);
-  backdrop-filter:blur(18px);
-  -webkit-backdrop-filter:blur(18px);
-  animation:giChatToastIn .28s ease;
+.giChatDockCard{
+  position:relative;
+  pointer-events:auto;
+  width:100%;
+  min-width:220px;
+  padding:12px 14px 10px;
+  border-radius:16px;
+  background:rgba(255,255,255,.28);
+  border:1px solid rgba(255,255,255,.42);
+  color:rgba(15,23,42,.82);
+  box-shadow:0 8px 24px rgba(11,31,74,.08);
+  backdrop-filter:blur(16px) saturate(140%);
+  -webkit-backdrop-filter:blur(16px) saturate(140%);
+  animation:giChatDockIn .28s ease;
 }
-@keyframes giChatToastIn{ from{ opacity:0; transform:translateX(-12px) scale(.97); } to{ opacity:1; transform:translateX(0) scale(1); } }
-.giChatToast__title{ font-size:13px; font-weight:900; margin-bottom:4px; }
-.giChatToast__text{ font-size:12px; line-height:1.5; color:rgba(226,242,255,.86); }
+@keyframes giChatDockIn{ from{ opacity:0; transform:translateX(-10px); } to{ opacity:1; transform:translateX(0); } }
+.giChatDockCard__dismiss{
+  position:absolute;
+  top:6px;
+  left:6px;
+  width:22px;
+  height:22px;
+  border:0;
+  border-radius:999px;
+  background:transparent;
+  color:rgba(15,23,42,.45);
+  font-size:15px;
+  line-height:1;
+  cursor:pointer;
+}
+.giChatDockCard__dismiss:hover{
+  background:rgba(15,23,42,.08);
+  color:rgba(15,23,42,.72);
+}
+.giChatDockCard__row{
+  display:flex;
+  align-items:flex-start;
+  gap:10px;
+  padding-left:18px;
+}
+.giChatDockCard__avatar{
+  flex:0 0 auto;
+  width:32px;
+  height:32px;
+  border-radius:11px;
+  display:grid;
+  place-items:center;
+  font-size:11px;
+  font-weight:800;
+  background:rgba(255,255,255,.42);
+  border:1px solid rgba(255,255,255,.5);
+  overflow:hidden;
+}
+.giChatDockCard__avatar img,
+.giChatDockCard__avatar .giChatAvatarImg{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+.giChatDockCard__main{ min-width:0; flex:1; }
+.giChatDockCard__name{
+  font-size:13px;
+  font-weight:800;
+  line-height:1.3;
+  margin-bottom:2px;
+  color:rgba(15,23,42,.88);
+}
+.giChatDockCard__text{
+  font-size:12px;
+  line-height:1.45;
+  color:rgba(15,23,42,.68);
+  display:-webkit-box;
+  -webkit-line-clamp:3;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+.giChatDockCard__actions{
+  display:flex;
+  justify-content:flex-end;
+  margin-top:8px;
+}
+.giChatDockCard.is-replying .giChatDockCard__actions{ display:none; }
+.giChatDockCard__reply,
+.giChatDockCard__send{
+  border:0;
+  border-radius:999px;
+  padding:5px 12px;
+  font-size:12px;
+  font-weight:800;
+  cursor:pointer;
+  background:rgba(255,255,255,.42);
+  color:rgba(15,23,42,.82);
+  border:1px solid rgba(255,255,255,.5);
+}
+.giChatDockCard__reply:hover,
+.giChatDockCard__send:hover{
+  background:rgba(255,255,255,.62);
+}
+.giChatDockCard__send{
+  background:rgba(62,207,142,.28);
+  border-color:rgba(62,207,142,.32);
+}
+.giChatDockCard__composer{
+  flex-direction:column;
+  gap:6px;
+  margin-top:8px;
+}
+.giChatDockCard__input{
+  width:100%;
+  resize:none;
+  border:1px solid rgba(255,255,255,.5);
+  border-radius:12px;
+  background:rgba(255,255,255,.38);
+  color:rgba(15,23,42,.88);
+  font:inherit;
+  font-size:12px;
+  line-height:1.4;
+  padding:8px 10px;
+  outline:none;
+}
+.giChatDockCard__input:focus{
+  border-color:rgba(62,207,142,.45);
+  background:rgba(255,255,255,.52);
+}
+.giChatDockCard__composerBar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+.giChatDockCard__error{
+  font-size:11px;
+  color:rgba(176,42,55,.82);
+  min-height:1em;
+}
+.giChatDockCard__srOnly{
+  position:absolute;
+  width:1px;
+  height:1px;
+  overflow:hidden;
+  clip:rect(0 0 0 0);
+}
 
 @media (max-width: 900px){
   .giChatWindow{ width:min(94vw, 430px); height:min(78vh, 640px); left:10px; bottom:82px; }
@@ -16362,7 +16624,7 @@ body.lcLeadShellOpen .lcLeadShell__panel{
   .giChatWindow{ width:calc(100vw - 12px); left:6px; right:6px; bottom:76px; height:78vh; }
   .giChatWindow__body{ grid-template-columns: 146px 1fr; }
   .giChatFab{ left:10px; bottom:12px; }
-  .giChatToasts{ left:78px; right:auto; bottom:12px; }
+  .giChatDock{ left:10px; top:64px; right:auto; }
 }
 
 
