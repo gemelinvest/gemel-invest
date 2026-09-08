@@ -101,7 +101,7 @@ assert(wf.includes("github.event_name != 'push'"), "שליחה לא רצה על 
 assert(cfg.includes("supabase functions deploy gi-daily-sales-mail --project-ref vhvlkerectggovfihjgm"), "הוראת דיפלוי ב-config.toml");
 
 console.log("\n5) UI + cache");
-assert(html.includes("gi-daily-sales-mail.js?v=20260908-daily-sales-v7"), "cache bust לסקריפט המייל");
+assert(html.includes("gi-daily-sales-mail.js?v=20260908-daily-sales-v8"), "cache bust לסקריפט המייל");
 assert(mail.includes("20260907-couple-shared-discount-v1"), "כותרת הסקריפט");
 assert(mail.includes("MAIL_LAYOUT = \"20260908-today-net\""), "תג תבנית אמיתי");
 assert(!mail.includes("20260826-branch-leads"), "הוסר תג תבנית מזויף");

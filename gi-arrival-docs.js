@@ -5,7 +5,7 @@
 (function installGiArrivalDocs(global){
   "use strict";
 
-  const VERSION = "20260908-daily-sales-v7";
+  const VERSION = "20260908-daily-sales-v8";
   const NAVY = "#3870ED";
   const AGENCY = "GEMEL INVEST";
   const COVER_ART = "./assets/gi-doc-cover-docs.png";
