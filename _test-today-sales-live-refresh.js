@@ -11,8 +11,8 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260830-clal-health-decl-v1";
-const WIZARD_TAG = "20260830-clal-health-decl-v1";
+const APP_TAG = "20260908-hach-disc-v1";
+const WIZARD_TAG = "20260908-hach-disc-v1";
 let failed = 0;
 let passed = 0;
 
@@ -73,7 +73,7 @@ assert(app.includes("this._todaySalesServerOverlay.at = 0;"), "מפקיע מטמ
 assert(wizard.includes("DashboardUI.invalidateTodaySalesLive?.()"), "סיום אשף מרענן כרטיס היום");
 assert(app.includes("DashboardUI.invalidateTodaySalesLive?.()"), "persist מרענן כרטיס היום");
 assert(app.includes("_resolveTodaySalesOverlayMerge(localResult, serverOverlay, missingPayloads)"), "מיזוג overlay יומי מופרד");
-assert(app.includes("_shouldPaintTodayOverlayValue(overlayPrem, localPrem)"), "לא צובעים overlay נמוך מעל מקומי");
+assert(app.includes("_shouldPaintTodayOverlayValue(overlayPrem, localPrem, overlay)"), "לא צובעים overlay ברוטו מעל מקומי");
 
 console.log("\n3) מיזוג overlay — לא דורסים סכום מקומי גבוה יותר");
 const mergeFn = extractObjectMethod(app, "_mergeTodayCompanyBreakdown");
@@ -133,7 +133,11 @@ const hydrated = sandbox._resolveTodaySalesOverlayMerge(localEmpty, overlay, 12)
 assert(hydrated && hydrated.totalPremium === 5000 && hydrated._fromServer === true, "hydration ריק — נשאר overlay");
 
 const deferredLower = sandbox._resolveTodaySalesOverlayMerge(localPartial, overlay, 12);
-assert(deferredLower && deferredLower.totalPremium === 5000 && deferredLower._fromServer === true, "payload חלקי נמוך — overlay (בלי קפיצה ל־₪200)");
+assert(deferredLower && deferredLower.totalPremium === 200 && deferredLower._fromServer !== true, "RPC ברוטו לא דורס אחרי-הנחה מקומי חלקי");
+
+const overlayAfter = { ...overlay, afterDiscount: true };
+const deferredAfter = sandbox._resolveTodaySalesOverlayMerge(localPartial, overlayAfter, 12);
+assert(deferredAfter && deferredAfter.totalPremium === 5000 && deferredAfter._fromServer === true, "overlay אחרי-הנחה ממלא חוסר בטעינה רזה");
 
 const liveSale = sandbox._resolveTodaySalesOverlayMerge(localHigher, overlay, 12);
 assert(liveSale && liveSale.totalPremium === 5200 && liveSale._fromServer !== true, "מכירה חדשה מקומית גבוהה יותר — לא נדרסת");
@@ -143,7 +147,8 @@ const completeLocal = sandbox._resolveTodaySalesOverlayMerge(localHigher, overla
 assert(completeLocal && completeLocal.totalPremium === 5200, "בלי missing payloads — סכום מקומי");
 
 assert(sandbox._shouldPaintTodayOverlayValue(5000, 5200) === false, "paintServerKpiDom לא מוריד מספר שכבר על המסך");
-assert(sandbox._shouldPaintTodayOverlayValue(5200, 5000) === true, "overlay גבוה יותר — מותר לצבוע");
+assert(sandbox._shouldPaintTodayOverlayValue(5200, 5000) === false, "RPC ברוטו לא נצבע מעל אחרי-הנחה מקומי");
+assert(sandbox._shouldPaintTodayOverlayValue(5200, 5000, overlayAfter) === true, "overlay אחרי-הנחה גבוה יותר — מותר לצבוע");
 assert(sandbox._shouldPaintTodayOverlayValue(5000, 0) === true, "בלי מקומי — מותר לצבוע overlay");
 
 console.log("\n4) אין שינוי בחישוב פרמיה / כרטיסים אחרים / פירוט");

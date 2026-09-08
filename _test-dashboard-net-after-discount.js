@@ -119,6 +119,21 @@ sandbox.CustomersUI.getNewPolicyFilePremiumAfterDiscount = function(p){
 };
 assert(sandbox.policyNetPremium(rawNoStored) === 140, "בלי stored — נפילה לחישוב אחרי הנחה");
 
+const storedGross = {
+  origin: "new",
+  type: "ריסק",
+  premiumMonthly: "95.83",
+  premiumValue: "95.83",
+  premiumAfterDiscountValue: 95.83,
+  simDiscountPerInsured: { ins1: { monthlyAfterDiscount: 28.75 } }
+};
+sandbox.CustomersUI.getNewPolicyFilePremiumAfterDiscount = function(p){
+  const n = Number(p?.simDiscountPerInsured?.ins1?.monthlyAfterDiscount);
+  return n > 0 ? n : Number(p?.premiumAfterDiscountValue) || 0;
+};
+assert(sandbox.policyNetPremium(storedGross) === 28.75, "stored ברוטו + סימולטור אחרי — הכרטיס מציג אחרי");
+assert(sandbox.policyNetPremium(storedGross) !== 95.83, "לא מציגים 95.83 לפני הנחה");
+
 const noDiscount = { origin: "new", premiumValue: "88", premiumMonthly: "88" };
 sandbox.CustomersUI.getNewPolicyFilePremiumAfterDiscount = function(){ return 0; };
 assert(sandbox.policyNetPremium(noDiscount) === 88, "בלי הנחה — פרמיה שהוזנה");
