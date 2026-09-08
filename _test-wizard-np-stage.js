@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260908-hach-cpi-v1";
+const TAG = "20260908-hach-disc-v1";
 let failed = 0;
 let passed = 0;
 
@@ -178,6 +178,8 @@ assert(sims.includes('(after == null || after === "") ? NaN : Number(after)'), "
 assert(sims.includes("built.ok = true"), "risk results without ok get ok:true before discount calc");
 assert(sims.includes("Object.assign({}, result, { ok: true })"), "discount payload forces ok for risk results");
 assert(sims.includes("giSimMoneyAfterPct(monthly, pct)"), "risk without covers falls back to year-1 percent math");
+assert(sims.includes("handler._giDiscBuildWrapped"), "apply/save attach simDiscount via _buildResultForInsured wrap");
+assert(sims.includes("GI-HACH-DISC-APPLY"), "Hachshara apply-discount wrap is documented");
 assert(wiz.includes("simDiscountPerInsured"), "wizard stores the per-insured after-discount price");
 assert(wiz.includes("getPolicySimDiscountAfterTotal(policy){"), "row total helper exists");
 assert(wiz.includes("syncDraftDiscountFromSimulator(draft){"), "discount percent/schedule mirrored for the row chips");

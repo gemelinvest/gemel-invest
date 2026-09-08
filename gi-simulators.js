@@ -2506,7 +2506,12 @@
     const product = safeTrim(sim._ctx?.product);
     const opts = giSimDiscountList(company, product);
     if(!opts.length) return;
-    const result = sim._state?.[sim._activeInsuredId]?.result || null;
+    let result = null;
+    try { result = riskSimCollectResultForInsured(sim, sim._activeInsuredId); } catch(_eCollect) {}
+    if(!result) result = sim._state?.[sim._activeInsuredId]?.result || null;
+    if(result && typeof result === "object" && result.ok !== true && result.ok !== false){
+      result = Object.assign({}, result, { ok: true });
+    }
     const selectedId = giSimDiscountSelectedId(sim);
     const selected = giSimDiscountById(company, product, selectedId);
     const explained = selected ? giSimDiscountExplain(result, selected, company, product) : null;
@@ -2696,6 +2701,37 @@
     handler._giCaptureLegal = function(){
       try { riskSimCaptureLegalFromDom(handler); } catch(_eCap) {}
     };
+    /* GI-HACH-DISC-APPLY: «החל על הפוליסה» / «שמור מבוטח» קוראים ל-_buildResultForInsured
+       בלי simDiscount, ולכן האשף שמר רק את הפרמיה ברוטו (לפני=אחרי).
+       «הוסף להצעה» כבר עבר דרך riskSimBuildLivePurchasePayload. כאן מאחדים. */
+    if(typeof handler._buildResultForInsured === "function" && !handler._giDiscBuildWrapped){
+      const origBuild = handler._buildResultForInsured.bind(handler);
+      handler._buildResultForInsured = function(insId){
+        const built = origBuild(insId);
+        if(!built || typeof built !== "object") return built;
+        const next = Object.assign({}, built);
+        if(next.ok !== true && next.ok !== false){
+          const monthly = Number(next.monthlyPremium);
+          if(Number.isFinite(monthly) || (Array.isArray(next.covers) && next.covers.length)){
+            next.ok = true;
+          }
+        }
+        try {
+          const discount = riskSimSelectedDiscountPayload(handler, next, insId);
+          if(discount) next.simDiscount = discount;
+        } catch(_eDisc) {}
+        try {
+          if(!next.simStateSnapshot){
+            const stSnap = handler._state && handler._state[insId];
+            if(stSnap && typeof stSnap === "object"){
+              next.simStateSnapshot = riskSimJsonClone(stSnap);
+            }
+          }
+        } catch(_eSnap) {}
+        return next;
+      };
+      handler._giDiscBuildWrapped = true;
+    }
     handler._giShellEnhanced = true;
     return handler;
   }
