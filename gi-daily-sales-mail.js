@@ -209,9 +209,9 @@
     const html = String(snap && snap.html || "");
     if(!html) return false;
     if(html.indexOf("מוצגים רק נציגים עם מכירה") >= 0) return false;
+    if(html.indexOf("לידים שויכו") >= 0) return false;
     return html.indexOf("מכירות מודיעין") >= 0
       && html.indexOf("מכירות חיפה") >= 0
-      && html.indexOf("לידים שויכו") >= 0
       && html.indexOf("פרמייה מהפקה") >= 0;
   }
 
@@ -415,7 +415,7 @@
     }
     const snap = await buildSnapshot(needPdf);
     if(!snapshotHasNewLayout(snap)){
-      throw new Error("נטען דוח ישן מהמטמון (בלי מודיעין / חיפה / לידים). רעננו את העמוד ב־Ctrl+F5, ואז לחצו שוב «שלח עכשיו לבדיקה».");
+      throw new Error("נטען דוח ישן מהמטמון (בלי מודיעין / חיפה). רעננו את העמוד ב־Ctrl+F5, ואז לחצו שוב «שלח עכשיו לבדיקה».");
     }
     if(needPdf && !snapHasPdf(snap)){
       throw new Error("לא נוצר קובץ PDF. רעננו את העמוד ב־Ctrl+F5, פתחו את דוח המכירות, ואז לחצו שוב.");
