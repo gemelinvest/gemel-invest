@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260908-daily-sales-v2";
+  const BUILD = "20260908-daily-sales-v3";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -36617,15 +36617,20 @@ UsersGateUI.init();
       const healthSet = this._dailySalesHealthSectorSet();
       const map = Object.create(null);
       const localHealthByAgent = new Map();
+      let localHealthPremium = 0;
       list.forEach((g) => {
         if(healthSet.has(safeTrim(g?.sector))){
           const key = dailySalesAgentMergeKey(g?.agentName, g?.agentIds);
           if(!localHealthByAgent.has(key)) localHealthByAgent.set(key, []);
           localHealthByAgent.get(key).push(g);
+          localHealthPremium += Number(g?.premium) || 0;
         } else {
           this._seedDailySalesGroup(map, g);
         }
       });
+      /* היום: לא למלא חורים מ-RPC. ה-RPC סופר גם פוליסות חדשות בתיק מימים קודמים. */
+      const skipServerOnly = localHealthPremium > 0
+        && safeTrim(dateKey) === this.toIsraelDateKey(new Date());
       const serverByAgent = new Map();
       rows.forEach((row) => {
         const key = dailySalesAgentMergeKey(row?.agent_name, row?.agent_id);
@@ -36644,6 +36649,7 @@ UsersGateUI.init();
           localGroups.forEach((g) => this._seedDailySalesGroup(map, g));
           return;
         }
+        if(skipServerOnly) return;
         serverRows.forEach((row) => {
           const product = safeTrim(row?.product) || "פוליסה";
           const name = safeTrim(row?.agent_name) || "נציג";
@@ -36685,6 +36691,7 @@ UsersGateUI.init();
         "agentRpcNoGrossV1",
         "noPartialCache",
         "officeBranchTodaySplitV1",
+        "monthlyTodayOnlyV1",
         dateKey,
         String(customers.length),
         String(missingPayloads),
@@ -36943,7 +36950,7 @@ UsersGateUI.init();
         pension: Math.round(row.pension * 100) / 100,
         other: Math.round(row.other * 100) / 100,
         premium: Math.round(row.premium * 100) / 100,
-        monthly: Math.round((row.health + row.prat + row.pension + row.other) * 100) / 100
+        monthly: Math.round((row.health + row.prat) * 100) / 100
       })).sort((a, b) =>
         (Number(b.premium) - Number(a.premium))
         || safeTrim(a.agentName).localeCompare(safeTrim(b.agentName), "he")
@@ -37292,7 +37299,7 @@ UsersGateUI.init();
         const health = Number(r?.health) || 0;
         const prat = Number(r?.prat) || 0;
         const other = Number(r?.other) || 0;
-        const monthly = Math.round((health + prat + other) * 100) / 100;
+        const monthly = Math.round((health + prat) * 100) / 100;
         const sectors = (Array.isArray(r?.sectors) ? r.sectors : []).filter((s) => {
           const v = safeTrim(s);
           return v === "בריאות" || v === "סיכונים" || v === "אחר";
@@ -37304,7 +37311,7 @@ UsersGateUI.init();
           pension: 0,
           monthly
         };
-      }).filter((r) => (Number(r.health) || 0) > 0 || (Number(r.prat) || 0) > 0 || (Number(r.other) || 0) > 0);
+      }).filter((r) => (Number(r.health) || 0) > 0 || (Number(r.prat) || 0) > 0);
       const sum = (key) => Math.round(rows.reduce((n, r) => n + (Number(r[key]) || 0), 0) * 100) / 100;
       return {
         ...src,
@@ -41266,7 +41273,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260908-daily-sales-v2";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260908-daily-sales-v3";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -41286,8 +41293,8 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260908-daily-sales-v2";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260908-daily-sales-v2";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260908-daily-sales-v3";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260908-daily-sales-v3";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -41940,18 +41947,18 @@ UsersGateUI.init();
     "./ayalon-health-sim.css?v=20260810-sim-mockup-v2",
     "./ayalon-ci-sim.css?v=20260811-ayl-ci-v1",
     "./hachshara-health-sim.css?v=20260810-sim-mockup-v2",
-    "./hachshara-risk-sim.css?v=20260908-daily-sales-v2",
-    "./hachshara-mortgage-risk-sim.css?v=20260908-daily-sales-v2",
+    "./hachshara-risk-sim.css?v=20260908-daily-sales-v3",
+    "./hachshara-mortgage-risk-sim.css?v=20260908-daily-sales-v3",
     "./migdal-health-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
-    "./menora-ci-sim.css?v=20260908-daily-sales-v2",
+    "./menora-ci-sim.css?v=20260908-daily-sales-v3",
     "./clal-health-sim.css?v=20260812-cll-health-v1",
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260908-daily-sales-v2",
-    "./simulators-shell.css?v=20260908-daily-sales-v2"
+    "./simulators-center.css?v=20260908-daily-sales-v3",
+    "./simulators-shell.css?v=20260908-daily-sales-v3"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -43313,7 +43320,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260908-daily-sales-v2";
+  const GI_WIZARD_JS_VERSION = "20260908-daily-sales-v3";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
