@@ -473,7 +473,7 @@
     if(data.connectedEmail){
       lines.push("מייל שולח מחובר: " + data.connectedEmail);
       lines.push("שעת שליחה: כל יום ב־12:30, 15:00 ו־20:00 שעון ישראל");
-      lines.push("הדוח מצורף למייל כקובץ PDF, כמו דוח ההדפסה במערכת.");
+      lines.push("בגוף המייל רק «דוח מכירות» והתאריך. הפירוט מצורף כקובץ PDF, כמו מסך המכירות.");
     } else if(data.azureReady){
       lines.push("אפליקציית Microsoft מוגדרת. עדיין לא חובר מייל Outlook.");
       lines.push("לחץ «חבר מייל Outlook» והיכנס עם orias@i-s-f.co.il");

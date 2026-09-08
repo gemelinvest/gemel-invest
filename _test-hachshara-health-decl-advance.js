@@ -11,8 +11,8 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260908-daily-sales-v6";
-const APP_TAG = "20260908-daily-sales-v6";
+const TAG = "20260908-daily-sales-v7";
+const APP_TAG = "20260908-daily-sales-v7";
 let failed = 0;
 let passed = 0;
 

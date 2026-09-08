@@ -8,8 +8,8 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260908-daily-sales-v6";
-const THEME_TAG = "20260908-daily-sales-v6";
+const APP_TAG = "20260908-daily-sales-v7";
+const THEME_TAG = "20260908-daily-sales-v7";
 let failed = 0;
 let passed = 0;
 
@@ -129,13 +129,17 @@ assert(app.includes("dailySalesScaleOfficeBranchTotals"), "סניפים מנור
 assert(app.includes("dailySalesOfficeBranchTotalsFromAgentSales"), "פיצול סניף לפי נציג אחרי הנחה");
 assert(app.includes("_dailySalesOverlayPersonAlreadyLocal"), "overlay לא מוסיף את אותו נציג פעמיים");
 assert(app.includes("officeBranchTodaySplitV1"), "מטמון דוח מתבטל אחרי פיצול סניפים להיום");
-assert(app.includes("monthlySoldDayV1"), "מטמון דוח מתבטל אחרי סה״כ חודשי לפי יום מכירה");
+assert(app.includes("monthlyKpiAlignV1"), "מטמון דוח מתבטל אחרי יישור טבלה לכרטיס נמכר היום");
+assert(!app.includes("monthlySoldDayV1"), "מפתח מטמון ישן של יישור יום מכירה הוחלף");
 assert(app.includes("dailySalesApplySoldDayHealthPrat"), "עמודות בריאות/פרט/חודשי מיושרות לנמכר ביום");
 assert(!app.includes("monthlyTodayOnlyV1"), "מפתח מטמון ישן של סה״כ חודשי הוחלף");
 assert(app.includes('layout: "20260908-today-net"'), "סיכום המייל נושא תג תבנית אמיתי");
-assert(app.includes("const skipServerOnly = localHealthPremium > 0"), "היום לא ממלאים overlay כשיש מכירות מקומיות");
-const skipChunk = app.slice(app.indexOf("const skipServerOnly = localHealthPremium > 0"), app.indexOf("const skipServerOnly = localHealthPremium > 0") + 180);
-assert(!skipChunk.includes("toIsraelDateKey"), "overlay נחסם בכל יום נבחר כשיש מקומי");
+assert(app.includes("let skipServerOnly = localHealthPremium > 0"), "היום לא ממלאים overlay כשהמקומי מכסה את נמכר היום");
+assert(app.includes("if(kpi > localHealthPremium + 0.05) skipServerOnly = false"), "מקומי חלקי לא חוסם overlay");
+assert(app.includes("dailySalesSoldDayMatchesKpi"), "טבלת מייל לא מוחלפת בחישוב חלקי");
+assert(app.includes("dailySalesSoldMonthlyFromAgents"), "סכום נציגי נמכר היום לטבלה");
+assert(app.includes("_coerceDailySalesMailDate"), "מייל תמיד להיום שעון ישראל");
+assert(app.includes("this.buildDailySalesPrintModel(this._coerceDailySalesMailDate(forDate))"), "HTML מייל נבנה להיום");
 assert(app.includes("monthly: Math.round((row.health + row.prat) * 100) / 100"), "סה״כ חודשי = בריאות+פרט בלבד");
 assert(!app.includes("row.health + row.prat + row.pension + row.other"), "סה״כ חודשי לא כולל פנסיה/אחר");
 assert(app.includes("const monthly = Math.round((health + prat) * 100) / 100"), "בריאות+פרט בלי other בעמודת סה״כ חודשי");
@@ -547,6 +551,24 @@ function skipOverlayWhenLocal(localHealthPremium){
 }
 assert(skipOverlayWhenLocal(5058.29) === true, "עם מכירות מקומיות — בלי overlay");
 assert(skipOverlayWhenLocal(0) === false, "טעינה רזה בלי מקומי — overlay עדיין ממלא");
+function skipServerOnlyForToday(localHealthPremium, kpiPremium){
+  let skip = localHealthPremium > 0;
+  if(kpiPremium > localHealthPremium + 0.05) skip = false;
+  return skip;
+}
+assert(skipServerOnlyForToday(5058.29, 5058.29) === true, "מקומי מלא כמו הכרטיס — בלי overlay");
+assert(skipServerOnlyForToday(2377.17, 5058.29) === false, "מקומי 2377 מול כרטיס 5058 — overlay משלים");
+assert(skipServerOnlyForToday(0, 5058.29) === false, "טעינה רזה — overlay ממלא");
+function shouldApplySoldDayToTable(soldMonthly, kpiPremium){
+  const sold = Math.round((Number(soldMonthly) || 0) * 100) / 100;
+  const kpi = Math.round((Number(kpiPremium) || 0) * 100) / 100;
+  if(!(sold > 0)) return false;
+  if(!(kpi > 0)) return true;
+  return Math.abs(sold - kpi) <= 0.05;
+}
+assert(shouldApplySoldDayToTable(5058.29, 5058.29) === true, "כשהחישוב המקומי תואם לכרטיס מיישרים את הטבלה");
+assert(shouldApplySoldDayToTable(2377.17, 5058.29) === false, "לא מחליפים טבלה חלקית כשהאריחים 5058");
+assert(shouldApplySoldDayToTable(0, 5058.29) === false, "בלי פירוט מקומי לא מוחקים את שורות המסך");
 
 function dailySalesPresentPivotByAgent(groups){
   const map = new Map();
