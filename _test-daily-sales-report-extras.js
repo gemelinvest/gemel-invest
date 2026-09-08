@@ -2,15 +2,14 @@
    הרצה: node _test-daily-sales-report-extras.js
 */
 "use strict";
-"use strict";
 
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260908-daily-sales-v2";
-const THEME_TAG = "20260908-daily-sales-v2";
+const APP_TAG = "20260908-daily-sales-v4";
+const THEME_TAG = "20260908-daily-sales-v4";
 let failed = 0;
 let passed = 0;
 
@@ -39,7 +38,7 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).statu
 assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
 assert(html.includes("theme.css?v=" + THEME_TAG), "index.html theme.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
-assert(html.includes("gi-daily-sales-mail.js?v=20260908-daily-sales-v2"), "index.html mail script cache");
+assert(html.includes("gi-daily-sales-mail.js?v=" + APP_TAG), "index.html mail script cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-daily-sales-mail.js")]).status === 0, "node --check gi-daily-sales-mail.js");
 assert(mail.includes("function snapshotHasNewLayout"), "חסימת שליחת דוח ישן");
 assert(mail.includes("מכירות מודיעין"), "בודק תווית מודיעין בסנאפשוט");
@@ -57,6 +56,10 @@ assert(mail.includes('api("send-now"'), "send-now עדיין קיים");
 assert(mail.includes("...(snap || {})"), "send-now שולח את ה-snapshot המלא ולא רק actor");
 assert(mail.includes("persist.kept"), "בודקים kept מהשרת");
 assert(mail.includes("לא נשלח שוב את הדוח הישן"), "לא שולחים שוב PDF ישן כש-kept");
+assert(mail.includes("MAIL_LAYOUT = \"20260908-today-net\""), "תג תבנית אמיתי בסנאפשוט");
+assert(!mail.includes("20260826-branch-leads"), "הוסר תג תבנית מזויף");
+assert(mail.includes("function formatIsraelDateTime"), "שעת שליחה/שמירה לפי ישראל");
+assert(mail.includes("function sendStatusHe"), "סטטוס שליחה בעברית");
 assert(!mail.includes('await api("send-now");'), "send-now לא נקרא בלי גוף הדוח");
 
 console.log("\n2) שיוך סוכנות בניהול משתמשים");
@@ -109,6 +112,7 @@ assert(app.includes("dailySalesOfficeBranchTotalsFromAgentSales"), "פיצול �
 assert(app.includes("_dailySalesOverlayPersonAlreadyLocal"), "overlay לא מוסיף את אותו נציג פעמיים");
 assert(app.includes("officeBranchTodaySplitV1"), "מטמון דוח מתבטל אחרי פיצול סניפים להיום");
 assert(app.includes("monthlyTodayOnlyV1"), "מטמון דוח מתבטל אחרי סה״כ חודשי להיום בלבד");
+assert(app.includes('layout: "20260908-today-net"'), "סיכום המייל נושא תג תבנית אמיתי");
 assert(app.includes("const skipServerOnly = localHealthPremium > 0"), "היום לא ממלאים overlay כשיש מכירות מקומיות");
 assert(app.includes("monthly: Math.round((row.health + row.prat) * 100) / 100"), "סה״כ חודשי = בריאות+פרט בלבד");
 assert(!app.includes("row.health + row.prat + row.pension + row.other"), "סה״כ חודשי לא כולל פנסיה/אחר");
@@ -118,14 +122,22 @@ assert(app.includes("dailySalesAgentMergeKey(name, ids)"), "פיבוט נציג�
 assert(!app.includes("try { this._kickDailySalesAssignedLeadsLoad(); } catch(_e) {}"), "רינדור לא טוען לידים");
 assert(!app.includes("ensureDailySalesAssignedLeadsLoaded({ force: true })"), "רענון לא טוען לידים");
 
+const readyStart = app.indexOf("dailySalesMailSnapshotReady(){");
+const readyEnd = app.indexOf("async prepareDailySalesMailSnapshot(){", readyStart);
+const ready = readyStart > 0 ? app.slice(readyStart, readyEnd > 0 ? readyEnd : readyStart + 400) : "";
+assert(!ready.includes("ensureDailySalesServerOverlay"), "מוכנות מייל לא מפעילה overlay");
+assert(!ready.includes("_dailySalesByAgentOverlay"), "מוכנות מייל לא דורשת overlay");
+
 const prepStart = app.indexOf("async prepareDailySalesMailSnapshot(){");
-const prep = prepStart > 0 ? app.slice(prepStart, prepStart + 500) : "";
-assert(prep.includes("_waitDailySalesOverlayForMail"), "prepare של המייל ממתין ל-overlay");
+const prepEnd = app.indexOf("async _waitDailySalesOverlayForMail", prepStart);
+const prep = prepStart > 0 ? app.slice(prepStart, prepEnd > 0 ? prepEnd : prepStart + 500) : "";
+assert(prep.includes("dailySalesMailSnapshotReady"), "prepare ממתין לנתונים מקומיים");
+assert(!prep.includes("_waitDailySalesOverlayForMail"), "prepare של המייל לא ממתין ל-overlay");
 assert(!prep.includes("AssignedLeads"), "prepare לא ממתין ללידים");
 
 const snapStart = app.indexOf("async buildDailySalesMailSnapshot(forDate){");
 const snap = snapStart > 0 ? app.slice(snapStart, snapStart + 400) : "";
-assert(snap.includes("_waitDailySalesOverlayForMail"), "בניית snapshot ממתינה ל-overlay");
+assert(!snap.includes("_waitDailySalesOverlayForMail"), "בניית snapshot לא ממתינה ל-overlay");
 assert(!snap.includes("AssignedLeads"), "בניית snapshot לא ממתינה ללידים");
 
 console.log("\n4) רגרסיה — לוגיקת ליבה לא ננגעה");
@@ -589,11 +601,12 @@ assert(!fn.includes("return json({ ok: false, error: NO_SNAPSHOT_ERROR }, 400);"
 
 const wf = read(".github/workflows/daily-sales-mail.yml");
 assert(wf.includes('cron: "*/10 * * * *"'), "Actions סקר כל 10 דקות");
-assert(wf.includes('cron: "30 9 * * *"'), "Actions 09:30 UTC");
+assert(wf.includes('cron: "30 12 * * *"'), "Actions 12:30 שעון ישראל");
 assert(!wf.includes("window = 35"), "Actions בלי שער 35 דקות");
-assert(wf.includes('cron: "0 12 * * *"'), "Actions 12:00 UTC");
-assert(wf.includes('cron: "0 17 * * *"'), "Actions 17:00 UTC");
-assert(wf.includes('cron: "30 10 * * *"'), "Actions חורף 10:30 UTC");
+assert(wf.includes('cron: "0 15 * * *"'), "Actions 15:00 שעון ישראל");
+assert(wf.includes('cron: "0 20 * * *"'), "Actions 20:00 שעון ישראל");
+assert(wf.includes('timezone: "Asia/Jerusalem"'), "Actions cron לפי שעון ישראל");
+assert(!wf.includes('cron: "30 9 * * *"'), "הוסרו cron UTC כפולים מה-Actions");
 assert(wf.includes('action": "send-slot"') || wf.includes('"action": "send-slot"'), "Actions קורא send-slot");
 assert(wf.includes("Asia/Jerusalem"), "Actions בודק שעון ישראל");
 assert(wf.includes("vhvlkerectggovfihjgm"), "Actions פונה לפרויקט החי");

@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260908-daily-sales-v3";
+  const BUILD = "20260908-daily-sales-v4";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -37465,6 +37465,7 @@ UsersGateUI.init();
         dateLabel: model.dateLine,
         html,
         summary: {
+          layout: "20260908-today-net",
           agentCount: model.agentCount,
           healthDeals: Number(model.healthSlice.deals) || 0,
           healthPremium: Number(model.healthSlice.premium) || 0,
@@ -38862,22 +38863,22 @@ UsersGateUI.init();
 
     dailySalesMailSnapshotReady(){
       try {
-        try { this.ensureDailySalesServerOverlay(); } catch(_e) {}
-        const dateKey = this.getDailySalesReportDateKey();
-        const overlay = this._dailySalesByAgentOverlay;
-        const overlayOk = !!(overlay?.ok && overlay.dateKey === dateKey && Array.isArray(overlay.rows));
         const missing = this._countMissingCustomerPayloadsSafe();
-        if(missing > 0 && !overlayOk) return false;
-        if(!App?._fullDataReady && !overlayOk) return false;
-        return true;
+        if(App?._fullDataReady) return true;
+        return !(missing > 0);
       } catch(_e) {
         return false;
       }
     },
 
     async prepareDailySalesMailSnapshot(){
-      try { this.ensureDailySalesServerOverlay(); } catch(_e) {}
-      return this._waitDailySalesOverlayForMail(12000);
+      /* מייל = אותו מודל מקומי כמו נמכר היום. לא ממתינים ל-RPC overlay. */
+      const started = Date.now();
+      while((Date.now() - started) < 8000){
+        if(this.dailySalesMailSnapshotReady()) return true;
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      return this.dailySalesMailSnapshotReady();
     },
 
     async _waitDailySalesOverlayForMail(ms){
@@ -38904,7 +38905,6 @@ UsersGateUI.init();
     },
 
     async buildDailySalesMailSnapshot(forDate){
-      await this._waitDailySalesOverlayForMail(4000);
       const email = this.buildDailySalesEmailHtml(forDate);
       const doc = this.buildDailySalesPrintDocumentHtml(forDate);
       const pdfBase64 = await this._renderDailySalesPdfBase64(doc);
@@ -41273,7 +41273,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260908-daily-sales-v3";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260908-daily-sales-v4";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -41293,8 +41293,8 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260908-daily-sales-v3";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260908-daily-sales-v3";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260908-daily-sales-v4";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260908-daily-sales-v4";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -41947,18 +41947,18 @@ UsersGateUI.init();
     "./ayalon-health-sim.css?v=20260810-sim-mockup-v2",
     "./ayalon-ci-sim.css?v=20260811-ayl-ci-v1",
     "./hachshara-health-sim.css?v=20260810-sim-mockup-v2",
-    "./hachshara-risk-sim.css?v=20260908-daily-sales-v3",
-    "./hachshara-mortgage-risk-sim.css?v=20260908-daily-sales-v3",
+    "./hachshara-risk-sim.css?v=20260908-daily-sales-v4",
+    "./hachshara-mortgage-risk-sim.css?v=20260908-daily-sales-v4",
     "./migdal-health-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
-    "./menora-ci-sim.css?v=20260908-daily-sales-v3",
+    "./menora-ci-sim.css?v=20260908-daily-sales-v4",
     "./clal-health-sim.css?v=20260812-cll-health-v1",
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260908-daily-sales-v3",
-    "./simulators-shell.css?v=20260908-daily-sales-v3"
+    "./simulators-center.css?v=20260908-daily-sales-v4",
+    "./simulators-shell.css?v=20260908-daily-sales-v4"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -43320,7 +43320,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260908-daily-sales-v3";
+  const GI_WIZARD_JS_VERSION = "20260908-daily-sales-v4";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;

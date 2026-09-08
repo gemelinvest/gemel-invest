@@ -1,4 +1,4 @@
-/* GI-CUSTOMER-FILES-STORAGE 20260908-daily-sales-v3
+/* GI-CUSTOMER-FILES-STORAGE 20260908-daily-sales-v4
    Metadata in the customer record, file bytes in object storage.
    Generated docs stay generated. Uploaded blobs offload on save/open.
    Run: node _test-customer-files-storage.js
@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260908-daily-sales-v3";
+const TAG = "20260908-daily-sales-v4";
 let failed = 0;
 let passed = 0;
 
