@@ -9,8 +9,8 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260908-daily-sales-v1";
-const THEME_TAG = "20260908-daily-sales-v1";
+const APP_TAG = "20260908-daily-sales-v2";
+const THEME_TAG = "20260908-daily-sales-v2";
 let failed = 0;
 let passed = 0;
 
@@ -39,7 +39,7 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).statu
 assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
 assert(html.includes("theme.css?v=" + THEME_TAG), "index.html theme.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
-assert(html.includes("gi-daily-sales-mail.js?v=20260908-daily-sales-v1"), "index.html mail script cache");
+assert(html.includes("gi-daily-sales-mail.js?v=20260908-daily-sales-v2"), "index.html mail script cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-daily-sales-mail.js")]).status === 0, "node --check gi-daily-sales-mail.js");
 assert(mail.includes("function snapshotHasNewLayout"), "חסימת שליחת דוח ישן");
 assert(mail.includes("מכירות מודיעין"), "בודק תווית מודיעין בסנאפשוט");
@@ -93,7 +93,8 @@ assert(app.includes("dailySalesOfficeBranchPremium"), "סיכום סניף לפ�
 assert(!app.includes("מוצגים רק נציגים עם מכירה ביום הנבחר"), "הוסר טקסט ההסבר בתחתית הדוח");
 assert(app.includes("dailySalesIssuedPremiumTotal"), "קריאה לנתון הפקה קיים");
 assert(app.includes("DailyReportStore.getIssuedPremiumMetrics"), "מקור הפרמייה מהפקה הוא הדשבורד");
-assert(app.includes("this.buildTodaySalesMetrics()"), "KPI היום נלקח מכרטיס נמכר היום");
+assert(app.includes("byAgent: Array.isArray(summed.byAgent) ? summed.byAgent : []"), "נמכר היום שומר פירוט לפי נציג");
+assert(app.includes("dailySalesTodayOfficeBranchTotals(healthSlice.premium, rows)"), "סניפי היום מקבלים את סכום נמכר היום");
 assert(app.includes("dailySalesIsReportStyleTab"), "חוצץ בריאות+פרט בסגנון הכל היום");
 assert(app.includes("dailySalesHealthPratPrintModel"), "מודל תצוגה לבריאות+פרט כמו הכל היום");
 assert(app.includes("dailySalesOfficeBranchTotals"), "סיכום סניפים משורות הדוח הקיימות");
@@ -102,7 +103,12 @@ assert(app.includes("function resolveOfficeBranchForSalesAgent"), "שיוך סנ
 assert(app.includes("function salesRecordAgentId"), "חילוץ מזהה נציג מהמכירה");
 assert(app.includes("salesRecordAgentId(rec)"), "מכירות מקומיות נספרות לפי מזהה נציג");
 assert(app.includes("resolveOfficeBranchForSalesAgent(r?.agentName, r?.agentIds)"), "KPI סניף קורא למזהה מהשורה");
-assert(app.includes("officeBranchFullNameV1"), "מטמון דוח מתבטל אחרי שיוך לפי שם מלא");
+assert(app.includes("dailySalesTodayOfficeBranchTotals"), "KPI סניפים להיום מתפצל מנמכר היום");
+assert(app.includes("dailySalesScaleOfficeBranchTotals"), "סניפים מנורמלים לסכום אחרי הנחה");
+assert(app.includes("dailySalesOfficeBranchTotalsFromAgentSales"), "פיצול סניף לפי נציג אחרי הנחה");
+assert(app.includes("_dailySalesOverlayPersonAlreadyLocal"), "overlay לא מוסיף את אותו נציג פעמיים");
+assert(app.includes("officeBranchTodaySplitV1"), "מטמון דוח מתבטל אחרי פיצול סניפים להיום");
+assert(!app.includes("officeBranchFullNameV1"), "מפתח מטמון ישן הוחלף");
 assert(app.includes("dailySalesAgentMergeKey(name, ids)"), "פיבוט נציגים לפי מזהה או שם מלא");
 assert(!app.includes("try { this._kickDailySalesAssignedLeadsLoad(); } catch(_e) {}"), "רינדור לא טוען לידים");
 assert(!app.includes("ensureDailySalesAssignedLeadsLoaded({ force: true })"), "רענון לא טוען לידים");
@@ -173,7 +179,7 @@ assert(normalizeAgentBranchesMap({ a1: "חיפה", a2: "", a3: "מודעין" })
 assert(!normalizeAgentBranchesMap({ a2: "" }).a2, "שיוך ריק לא נשמר");
 
 function dailySalesOfficeBranchPremium(row){
-  return (Number(row?.health) || 0) + (Number(row?.prat) || 0) + (Number(row?.other) || 0);
+  return (Number(row?.health) || 0) + (Number(row?.prat) || 0);
 }
 function dailySalesOfficeBranchTotals(rows, resolveBranch){
   const out = { haifa: { premium: 0, agents: 0 }, modiin: { premium: 0, agents: 0 } };
@@ -352,6 +358,99 @@ assert(officeWithIds.modiin.premium === 2810.49, "עם מזהה אביאל נס�
 assert(Math.round((officeWithIds.haifa.premium + officeWithIds.modiin.premium) * 100) / 100 === gapTotal,
   "עם מזהה חיפה+מודיעין שווה לטוטאל בריאות+פרט כולל 321.19");
 assert(officeWithIds.modiin.agents === 2, "מודיעין סופרת אביב ואביאל כשני נציגים");
+
+assert(dailySalesOfficeBranchPremium({ health: 100, prat: 50, other: 999 }) === 150,
+  "סניף לא סופר other מה-overlay");
+
+function dailySalesScaleOfficeBranchTotals(parts, targetPremium){
+  const haifa = Number(parts?.haifa?.premium) || 0;
+  const modiin = Number(parts?.modiin?.premium) || 0;
+  const unassigned = Number(parts?.unassigned) || 0;
+  const localAll = haifa + modiin + unassigned;
+  const target = Number(targetPremium);
+  const agents = {
+    haifa: Number(parts?.haifa?.agents) || 0,
+    modiin: Number(parts?.modiin?.agents) || 0
+  };
+  if(!(localAll > 0) || !Number.isFinite(target) || target < 0){
+    return {
+      haifa: { premium: Math.round(haifa * 100) / 100, agents: agents.haifa },
+      modiin: { premium: Math.round(modiin * 100) / 100, agents: agents.modiin }
+    };
+  }
+  let haifaOut = Math.round(target * (haifa / localAll) * 100) / 100;
+  let modiinOut = Math.round(target * (modiin / localAll) * 100) / 100;
+  const assignedTarget = Math.round(target * ((haifa + modiin) / localAll) * 100) / 100;
+  const drift = Math.round((assignedTarget - haifaOut - modiinOut) * 100) / 100;
+  if(drift !== 0){
+    if(modiinOut >= haifaOut) modiinOut = Math.round((modiinOut + drift) * 100) / 100;
+    else haifaOut = Math.round((haifaOut + drift) * 100) / 100;
+  }
+  return {
+    haifa: { premium: haifaOut, agents: agents.haifa },
+    modiin: { premium: modiinOut, agents: agents.modiin }
+  };
+}
+const inflated = dailySalesScaleOfficeBranchTotals({
+  haifa: { premium: 3180.44, agents: 3 },
+  modiin: { premium: 5743.07, agents: 4 },
+  unassigned: 0
+}, 5058.29);
+assert(Math.round((inflated.haifa.premium + inflated.modiin.premium) * 100) / 100 === 5058.29,
+  "חיפה+מודיעין מנורמלים ל-5058.29 ולא לסכום הברוטו");
+assert(inflated.modiin.premium > inflated.haifa.premium, "היחס בין הסניפים נשמר אחרי נרמול");
+const withGap = dailySalesScaleOfficeBranchTotals({
+  haifa: { premium: 2000, agents: 1 },
+  modiin: { premium: 2000, agents: 1 },
+  unassigned: 1058.29
+}, 5058.29);
+assert(Math.round((withGap.haifa.premium + withGap.modiin.premium) * 100) / 100 === 4000,
+  "נציג בלי סניף לא מוכנס לחיפה/מודיעין");
+
+function dailySalesOfficeBranchTotalsFromAgentSales(agentRows, resolveBranch){
+  const out = { haifa: { premium: 0, agents: 0 }, modiin: { premium: 0, agents: 0 }, unassigned: 0 };
+  (Array.isArray(agentRows) ? agentRows : []).forEach((r) => {
+    const prem = Number(r?.premium) || 0;
+    if(!(prem > 0)) return;
+    const branch = resolveBranch(r);
+    const bucket = branch === "חיפה" ? "haifa" : (branch === "מודיעין" ? "modiin" : "");
+    if(!bucket){
+      out.unassigned += prem;
+      return;
+    }
+    out[bucket].premium += prem;
+    out[bucket].agents += 1;
+  });
+  return dailySalesScaleOfficeBranchTotals(out, 5058.29);
+}
+const splitToday = dailySalesOfficeBranchTotalsFromAgentSales([
+  { agentName: "יוסי", premium: 2000 },
+  { agentName: "דנה", premium: 3058.29 }
+], (r) => (r.agentName === "יוסי" ? "חיפה" : "מודיעין"));
+assert(splitToday.haifa.premium === 2000, "חיפה מקבלת את הפרמיה אחרי הנחה של יוסי");
+assert(splitToday.modiin.premium === 3058.29, "מודיעין מקבלת את הפרמיה אחרי הנחה של דנה");
+assert(Math.round((splitToday.haifa.premium + splitToday.modiin.premium) * 100) / 100 === 5058.29,
+  "פיצול נציגים אחרי הנחה שווה לנמכר היום");
+
+function dailySalesOverlayPersonAlreadyLocal(localGroups, agentName, agentId){
+  const sid = String(agentId || "").trim().toLowerCase();
+  const nameKey = String(agentName || "").trim();
+  return localGroups.some((g) => {
+    const ids = Array.isArray(g?.agentIds) ? g.agentIds : [];
+    if(sid && ids.some((id) => String(id).trim().toLowerCase() === sid)) return true;
+    return nameKey && String(g?.agentName || "").trim() === nameKey;
+  });
+}
+assert(dailySalesOverlayPersonAlreadyLocal(
+  [{ agentName: "אביאל דהאן", agentIds: ["aviel-modiin"] }],
+  "אביאל דהאן",
+  "other-id"
+) === true, "אותו שם מלא ב-RPC לא נוסף שוב");
+assert(dailySalesOverlayPersonAlreadyLocal(
+  [{ agentName: "אביאל דהאן", agentIds: ["aviel-modiin"] }],
+  "אביאל אלקיים",
+  "aviel-haifa"
+) === false, "אביאל אחר עדיין נוסף");
 
 function dailySalesPresentPivotByAgent(groups){
   const map = new Map();

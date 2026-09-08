@@ -95,7 +95,7 @@ assert(wf.includes("github.event_name != 'push'"), "שליחה לא רצה על 
 assert(cfg.includes("supabase functions deploy gi-daily-sales-mail --project-ref vhvlkerectggovfihjgm"), "הוראת דיפלוי ב-config.toml");
 
 console.log("\n5) UI + cache");
-assert(html.includes("gi-daily-sales-mail.js?v=20260908-daily-sales-v1"), "cache bust לסקריפט המייל");
+assert(html.includes("gi-daily-sales-mail.js?v=20260908-daily-sales-v2"), "cache bust לסקריפט המייל");
 assert(mail.includes("20260907-couple-shared-discount-v1"), "כותרת הסקריפט");
 assert(mail.includes("data.lastSend.error"), "סטטוס מציג סיבת דילוג/כשל");
 assert(mail.includes("12:30, 15:00 ו־20:00 שעון ישראל"), "שעות ישראל לא השתנו");
