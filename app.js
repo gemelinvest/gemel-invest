@@ -21380,9 +21380,6 @@ UsersGateUI.init();
       });
       if(!saleIds.size) return [];
       const range = options.range || null;
-      const resolveCustomerMonthStamp = typeof options.resolveCustomerMonthStamp === "function"
-        ? options.resolveCustomerMonthStamp
-        : null;
       const isWithinRange = typeof options.isWithinRange === "function" ? options.isWithinRange : null;
       const isSaleRow = (p) => {
         const pid = safeTrim(p?.id);
@@ -21394,14 +21391,15 @@ UsersGateUI.init();
           if(String(p?.origin || "") !== "new") return false;
           if(!isSaleRow(p)) return false;
           if(!range || !isWithinRange) return true;
-          const stamp = safeTrim(p?._addedAt) || (resolveCustomerMonthStamp ? resolveCustomerMonthStamp(rec) : "");
+          // כרטיס היום / נטו חודשי: רק חותמת מכירה של הפוליסה. לא createdAt/updatedAt של התיק.
+          const stamp = safeTrim(p?._addedAt);
           return !!stamp && isWithinRange(stamp, range);
         });
       }
       const out = [];
       rawNew.forEach((raw) => {
         if(!saleIds.has(safeTrim(raw?.id))) return;
-        const stamp = safeTrim(raw?._addedAt) || (resolveCustomerMonthStamp ? resolveCustomerMonthStamp(rec) : "");
+        const stamp = safeTrim(raw?._addedAt);
         if(range && isWithinRange && (!stamp || !isWithinRange(stamp, range))) return;
         const p = clonePolicyForMetrics(raw);
         const premiumAfterDiscountValue = (typeof this.getNewPolicyFilePremiumAfterDiscount === "function")
@@ -27437,6 +27435,23 @@ UsersGateUI.init();
       };
     },
 
+    /** שמירת תיק / טיוטה: לא להמציא _addedAt של עכשיו לפוליסה ישנה בלי חותמת מכירה. */
+    keepExistingNewPolicyAddedAt(next, incoming, previous){
+      if(!next || typeof next !== "object") return next;
+      const fromIncoming = safeTrim(incoming?._addedAt);
+      if(fromIncoming){
+        next._addedAt = fromIncoming;
+        return next;
+      }
+      const fromPrev = safeTrim(previous?._addedAt);
+      if(fromPrev){
+        next._addedAt = fromPrev;
+        return next;
+      }
+      delete next._addedAt;
+      return next;
+    },
+
     buildDraft(rec){
       const payload = this.deepClone(rec?.payload || {}) || {};
       const primary = Object.assign(this.defaultPrimary(), this.deepClone(payload.primary || {}));
@@ -27463,6 +27478,7 @@ UsersGateUI.init();
       if(!newPolicies.length && Array.isArray(payload?.operational?.newPolicies)) newPolicies = this.deepClone(payload.operational.newPolicies);
       newPolicies = newPolicies.map((policy) => {
         const next = Object.assign(this.defaultNewPolicy(insureds[0]?.id || ""), policy || {});
+        this.keepExistingNewPolicyAddedAt(next, policy, null);
         next.id = safeTrim(next.id) || this.defaultNewPolicy(insureds[0]?.id || "").id;
         next.pledgeBank = Object.assign(this.defaultNewPolicy().pledgeBank, this.deepClone(next.pledgeBank || {}));
         next.healthCovers = Array.isArray(next.healthCovers) ? next.healthCovers : [];
@@ -28789,13 +28805,14 @@ UsersGateUI.init();
       const newPolicies = (this.draft.newPolicies || []).map((policy) => {
         const next = Object.assign(this.defaultNewPolicy(insureds[0]?.id || ""), this.deepClone(policy || {}));
         next.id = safeTrim(next.id) || this.defaultNewPolicy(insureds[0]?.id || "").id;
+        const origPolicy = origNewById.get(safeTrim(next.id)) || origNewById.get(safeTrim(policy?.id)) || null;
+        this.keepExistingNewPolicyAddedAt(next, policy, origPolicy);
         next.insuredId = safeTrim(next.insuredId) || safeTrim(insureds[0]?.id || "");
         next.pledgeBank = Object.assign(this.defaultNewPolicy().pledgeBank, this.deepClone(next.pledgeBank || {}));
         next.healthCovers = Array.isArray(next.healthCovers) ? next.healthCovers : [];
         next.umbrellaInsurance = !!next.umbrellaInsurance;
         next.umbrellaDisabilityAmount = safeTrim(next.umbrellaDisabilityAmount || "");
         next.umbrellaDeathAmount = safeTrim(next.umbrellaDeathAmount || "");
-        const origPolicy = origNewById.get(safeTrim(next.id)) || null;
         const draftPolicy = (this.draft.newPolicies || []).find((row) => safeTrim(row?.id) === safeTrim(next.id)) || policy;
         const hasHealthAddons = safeTrim(next.type) === "בריאות" && this.healthPolicyHasEditableAddons(draftPolicy || next);
         if(hasHealthAddons){
@@ -34500,7 +34517,6 @@ UsersGateUI.init();
         resolveCustomerMonthStamp: (row) => this.resolveCustomerMonthStamp(row)
       });
       if(!allNew.length && !dailySeries) return;
-      const custStamp = this.resolveCustomerMonthStamp(rec);
       const addTo = (agg, p) => {
         const gross = CustomersUI.asMoneyNumber(p?.premiumValue);
         const net = this.policyNetPremium(p);
@@ -34514,7 +34530,7 @@ UsersGateUI.init();
       };
       const daysTouched = dailySeries && Array.isArray(dailySeries) ? new Set() : null;
       for(const p of allNew){
-        const stamp = safeTrim(p?._addedAt) || custStamp;
+        const stamp = safeTrim(p?._addedAt);
         if(!stamp) continue;
         if(this.isWithinRange(stamp, currentRange)) addTo(currentAgg, p);
         else if(this.isWithinRange(stamp, previousRange)) addTo(prevAgg, p);
@@ -35073,6 +35089,12 @@ UsersGateUI.init();
       return { start, end };
     },
 
+    /** «נמכר היום» לפי יום קלנדרי בישראל, לא לפי חצות UTC של המכונה. */
+    getDashboardTodayRange(refDate = new Date()){
+      const dayKey = this.toIsraelDateKey(refDate);
+      return { dayKey, range: this.getIsraelDayRange(dayKey) };
+    },
+
     getTodayRange(refDate = new Date()){
       const start = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate(), 0, 0, 0, 0);
       const end   = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate() + 1, 0, 0, 0, 0);
@@ -35179,8 +35201,9 @@ UsersGateUI.init();
     ensureTodaySalesServerOverlay(options = {}){
       if(this._todaySalesServerBusy) return;
       if(typeof Storage === "undefined" || typeof Storage.loadServerKpis !== "function") return;
-      const todayRange = this.getTodayRange();
-      const dayKey = todayRange.start.toISOString().slice(0, 10);
+      const todayPack = this.getDashboardTodayRange();
+      const todayRange = todayPack.range;
+      const dayKey = todayPack.dayKey;
       const ageMs = Date.now() - (Number(this._todaySalesServerOverlay?.at) || 0);
       const cachedOk = this._todaySalesServerOverlay?.ok && this._todaySalesServerOverlay?.dayKey === dayKey && ageMs < 45000;
       const cachedHasMoney = Number(this._todaySalesServerOverlay?.totalPremium) > 0
@@ -35269,8 +35292,9 @@ UsersGateUI.init();
     },
 
     buildTodaySalesMetrics(){
-      const todayRange = this.getTodayRange();
-      const dayKey = todayRange.start.toISOString().slice(0, 10);
+      const todayPack = this.getDashboardTodayRange();
+      const todayRange = todayPack.range;
+      const dayKey = todayPack.dayKey;
       // GI-FIX 2026-08-09c: כרטיס היום = בריאות וסיכונים בלבד (ללא אלמנטרי)
       const cacheKey = this.getMetricsCacheKey() + "|today|" + dayKey + "|healthRiskOnly|rpc1|byCompany3";
       if(this._todaySalesCacheKey === cacheKey && this._todaySalesCache){
@@ -35561,14 +35585,13 @@ UsersGateUI.init();
       const daily = Array.from({ length: totalDays }, (_, idx) => ({ day: idx + 1, premium: 0, clients: 0 }));
       // GI-FIX 2026-08-09c: ייחוס לפי _addedAt של פוליסה (כמו KPI), לא לפי createdAt של הלקוח בלבד
       (Array.isArray(customersMonth) ? customersMonth : []).forEach((rec) => {
-        const custStamp = this.resolveCustomerMonthStamp(rec);
         const policies = CustomersUI.collectNewPoliciesForMetrics(rec, {
           resolveCustomerMonthStamp: (row) => this.resolveCustomerMonthStamp(row)
         });
         if(!policies.length) return;
         const daysTouched = new Set();
         policies.forEach((p) => {
-          const stamp = safeTrim(p?._addedAt) || custStamp;
+          const stamp = safeTrim(p?._addedAt);
           if(!stamp || !this.isWithinRange(stamp, range)) return;
           const dayMs = Date.parse(stamp);
           if(!Number.isFinite(dayMs)) return;
@@ -57970,7 +57993,10 @@ const CampaignLeadsStore = {
     const ownership = getAgentOwnershipProfileForAgent(agent);
     const customers = (Array.isArray(State.data?.customers) ? State.data.customers : [])
       .filter((rec) => recordOwnedByAgent(rec, ownership));
-    const todayRange = DashboardUI.getTodayRange();
+    const todayPack = (typeof DashboardUI.getDashboardTodayRange === "function")
+      ? DashboardUI.getDashboardTodayRange()
+      : { range: DashboardUI.getTodayRange() };
+    const todayRange = todayPack.range;
     const monthRange = DashboardUI.getMonthToDateRange();
     let todayPremium = 0;
     let todayPolicies = 0;
@@ -57991,14 +58017,18 @@ const CampaignLeadsStore = {
           return;
         }
       } catch(_e) {}
-      const policies = CustomersUI.collectPolicies(rec).filter((p) => String(p?.origin || "") === "new");
+      const policies = (typeof CustomersUI.collectNewPoliciesForMetrics === "function")
+        ? (CustomersUI.collectNewPoliciesForMetrics(rec) || [])
+        : CustomersUI.collectPolicies(rec).filter((p) => String(p?.origin || "") === "new");
       policies.forEach((p) => {
+        const soldAt = safeTrim(p?._addedAt);
+        if(!soldAt) return;
         const premium = DashboardUI.policyNetPremium(p);
-        if(isWithinDateRange(stamp, todayRange)){
+        if(isWithinDateRange(soldAt, todayRange)){
           todayPremium += premium;
           todayPolicies += 1;
         }
-        if(isWithinDateRange(stamp, monthRange)){
+        if(isWithinDateRange(soldAt, monthRange)){
           monthPremium += premium;
           monthPolicies += 1;
         }
