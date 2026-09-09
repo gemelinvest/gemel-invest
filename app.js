@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260909-session-keep-v1";
+  const BUILD = "20260909-customer-open-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -21575,6 +21575,7 @@ UsersGateUI.init();
       const id = safeTrim(customerId);
       if(!id) return;
       window.clearTimeout(this._loaderTimer);
+      this._markCustomerFileOpening(id);
       this.openByIdWithLoader(id);
     },
 
@@ -21974,13 +21975,62 @@ UsersGateUI.init();
       try { this.ensureVisibleListPayloads(); } catch(_e) {}
     },
 
-    /* תצוגה בלבד: מושכים payload רק לשורות שמוצגות עכשיו (10 אחרונים / חיפוש). */
+    /* GI-PERF 2026-09-09: לא למשוך 10 payload-ים מלאים ברצף אחרי ציור הרשימה —
+       זה התחרה בפתיחת תיק (נמדד ~3.4s / ~2MB על 10 האחרונים). מילוי תצוגה
+       נשאר, אבל תיק אחד אחרי idle, ונעצר כשתיק פתוח / נפתח. */
+    _visiblePayloadSeq: 0,
+    _openingCustomerId: "",
+    _FILE_BLOB_OFFLOAD_DELAY_MS: 8000,
+
+    _isCustomerFileBlockingListHydrate(){
+      if(safeTrim(this._openingCustomerId)) return true;
+      try {
+        if(this.els?.wrap?.classList.contains("is-open")) return true;
+      } catch(_e) {}
+      return false;
+    },
+
+    _markCustomerFileOpening(id){
+      const cid = safeTrim(id);
+      if(!cid) return;
+      this._openingCustomerId = cid;
+      this._visiblePayloadSeq = (Number(this._visiblePayloadSeq) || 0) + 1;
+    },
+
+    _clearCustomerFileOpening(id){
+      const cid = safeTrim(id);
+      if(cid && safeTrim(this._openingCustomerId) && safeTrim(this._openingCustomerId) !== cid) return;
+      this._openingCustomerId = "";
+    },
+
     ensureVisibleListPayloads(){
+      if(!Auth?.current) return;
+      if(this._isCustomerFileBlockingListHydrate()) return;
+      this._visiblePayloadSeq = (Number(this._visiblePayloadSeq) || 0) + 1;
+      const seq = this._visiblePayloadSeq;
+      const kick = () => {
+        if(seq !== this._visiblePayloadSeq) return;
+        void this._fillOneVisibleListPayload();
+      };
+      try {
+        if(typeof perfIdle === "function"){
+          perfIdle(kick, 900);
+          return;
+        }
+      } catch(_e) {}
+      window.setTimeout(kick, 900);
+    },
+
+    async _fillOneVisibleListPayload(){
       if(this._visiblePayloadBusy) return;
       if(!Auth?.current) return;
+      if(this._isCustomerFileBlockingListHydrate()) return;
       const rows = this.filtered();
       if(!rows.length) return;
+      const skipId = safeTrim(this._openingCustomerId || this.currentId);
       const missing = rows.filter((rec) => {
+        const id = safeTrim(rec?.id);
+        if(!id || (skipId && id === skipId)) return false;
         try { return typeof Storage !== "undefined" && Storage.payloadIsEmpty?.(rec); }
         catch(_e) { return false; }
       });
@@ -21989,43 +22039,42 @@ UsersGateUI.init();
       const lastFailAt = Number(this._visiblePayloadFailedAt) || 0;
       if(missingKey && this._visiblePayloadFailedKey === missingKey && lastFailAt && (Date.now() - lastFailAt) < 20000) return;
       this._visiblePayloadBusy = true;
-      void (async () => {
-        let filled = 0;
-        try {
-          for(const rec of missing){
-            if(!Auth?.current) return;
-            const id = safeTrim(rec?.id);
-            if(!id) continue;
-            try {
-              const res = await Storage.ensureRecordPayload("customers", id);
-              if(res?.ok && !Storage.payloadIsEmpty?.(res.record || rec)){
-                filled += 1;
-                if(res.record && Array.isArray(this._viewRows)){
-                  const vIdx = this._viewRows.findIndex((row) => String(row?.id) === String(id));
-                  if(vIdx >= 0) this._viewRows[vIdx] = res.record;
-                }
-              }
-            } catch(_e) {}
+      let filled = 0;
+      const rec = missing[0];
+      const id = safeTrim(rec?.id);
+      try {
+        if(!id) return;
+        const res = await Storage.ensureRecordPayload("customers", id);
+        if(this._isCustomerFileBlockingListHydrate()) return;
+        if(res?.ok && !Storage.payloadIsEmpty?.(res.record || rec)){
+          filled += 1;
+          if(res.record && Array.isArray(this._viewRows)){
+            const vIdx = this._viewRows.findIndex((row) => String(row?.id) === String(id));
+            if(vIdx >= 0) this._viewRows[vIdx] = res.record;
           }
-          if(filled > 0){
-            this._visiblePayloadFailedKey = "";
-            this._visiblePayloadFailedAt = 0;
-          } else {
-            this._visiblePayloadFailedKey = missingKey;
-            this._visiblePayloadFailedAt = Date.now();
-          }
-          if(LiveRefresh.getCurrentView?.() !== "customers") return;
-          if(filled > 0){
-            try {
-              if(!this.quietRefresh()) this.paintTable();
-            } catch(_e) {
-              try { this.paintTable(); } catch(_e2) {}
-            }
-          }
-        } finally {
-          this._visiblePayloadBusy = false;
         }
-      })();
+        if(filled > 0){
+          this._visiblePayloadFailedKey = "";
+          this._visiblePayloadFailedAt = 0;
+        } else {
+          this._visiblePayloadFailedKey = missingKey;
+          this._visiblePayloadFailedAt = Date.now();
+        }
+        if(LiveRefresh.getCurrentView?.() !== "customers") return;
+        if(filled > 0){
+          try {
+            if(!this.quietRefresh()) this.paintTable();
+          } catch(_e) {
+            try { this.paintTable(); } catch(_e2) {}
+          }
+        }
+      } catch(_e) {
+        this._visiblePayloadFailedKey = missingKey;
+        this._visiblePayloadFailedAt = Date.now();
+      } finally {
+        this._visiblePayloadBusy = false;
+      }
+      if(!this._isCustomerFileBlockingListHydrate()) this.ensureVisibleListPayloads();
     },
 
     render(options = {}){
@@ -22065,6 +22114,7 @@ UsersGateUI.init();
     openByIdWithLoader(id, delay=120){
       const safeId = safeTrim(id);
       if(!safeId) return;
+      this._markCustomerFileOpening(safeId);
       let rec = this.byId(safeId) || findCustomerRecordById(safeId);
       if(!rec) {
         // ניסיון אחרון: טעינה מהשרת ואז פתיחה (למשל אחרי הפקה כשהרשימה המקומית חסרה)
@@ -22077,6 +22127,7 @@ UsersGateUI.init();
           this.hideLoader();
           if(!rec){
             console.warn("CUSTOMER_OPEN_NOT_FOUND", safeId);
+            this._clearCustomerFileOpening(safeId);
             try { window.showToast?.({ title: "לקוח לא נמצא", text: "לא נמצא תיק לקוח לפתיחה.", variant: "warn", durationMs: 4800 }); } catch(_e2){}
             return;
           }
@@ -23836,24 +23887,63 @@ UsersGateUI.init();
     queueCustomerFileBlobOffload(rec){
       const cid = safeTrim(rec?.id);
       if(!cid) return;
-      if(this._fileOffloadQueued && this._fileOffloadQueued[cid]) return;
       let needs = false;
       try {
         needs = typeof GiCustomerFileStore !== "undefined" && GiCustomerFileStore.payloadNeedsPersistSlim(rec?.payload);
       } catch(_e) {}
       if(!needs) return;
       this._fileOffloadQueued = this._fileOffloadQueued || Object.create(null);
-      this._fileOffloadQueued[cid] = true;
-      window.setTimeout(() => {
-        void (async () => {
-          try {
-            const live = this.byId?.(cid) || rec;
-            await persistCustomerPayloadRecord(cid, live?.payload, "ארכוב קבצי תיק לאחסון", { skipAppPersist: true });
-          } catch(_e) {
-            try { delete this._fileOffloadQueued[cid]; } catch(_e2) {}
-          }
-        })();
-      }, 1800);
+      if(this._fileOffloadQueued[cid]) return;
+      this._fileOffloadQueued[cid] = "pending";
+      this._scheduleCustomerFileBlobOffload(cid, rec, this._FILE_BLOB_OFFLOAD_DELAY_MS || 8000);
+    },
+
+    _scheduleCustomerFileBlobOffload(cid, rec, delayMs){
+      const id = safeTrim(cid);
+      if(!id) return;
+      this._fileOffloadTimers = this._fileOffloadTimers || Object.create(null);
+      if(this._fileOffloadTimers[id]){
+        try { window.clearTimeout(this._fileOffloadTimers[id]); } catch(_e) {}
+      }
+      const wait = Math.max(0, Number(delayMs) || 8000);
+      this._fileOffloadTimers[id] = window.setTimeout(() => {
+        try { delete this._fileOffloadTimers[id]; } catch(_e) {}
+        this._runCustomerFileBlobOffload(id, rec);
+      }, wait);
+    },
+
+    _runCustomerFileBlobOffload(cid, rec){
+      const id = safeTrim(cid);
+      if(!id) return;
+      try {
+        if(safeTrim(this._openingCustomerId)){
+          this._scheduleCustomerFileBlobOffload(id, rec, this._FILE_BLOB_OFFLOAD_DELAY_MS || 8000);
+          return;
+        }
+        if(this.els?.wrap?.classList.contains("is-open") && safeTrim(this.currentId) && safeTrim(this.currentId) !== id){
+          this._scheduleCustomerFileBlobOffload(id, rec, this._FILE_BLOB_OFFLOAD_DELAY_MS || 8000);
+          return;
+        }
+      } catch(_e) {}
+      this._fileOffloadQueued = this._fileOffloadQueued || Object.create(null);
+      this._fileOffloadQueued[id] = "running";
+      void (async () => {
+        try {
+          const live = this.byId?.(id) || rec;
+          await persistCustomerPayloadRecord(id, live?.payload, "ארכוב קבצי תיק לאחסון", { skipAppPersist: true });
+        } catch(_e) {
+          try { delete this._fileOffloadQueued[id]; } catch(_e2) {}
+        }
+      })();
+    },
+
+    _flushCustomerFileBlobOffloadOnClose(cid){
+      const id = safeTrim(cid);
+      if(!id) return;
+      const state = this._fileOffloadQueued && this._fileOffloadQueued[id];
+      if(state !== "pending") return;
+      const rec = this.byId?.(id);
+      this._scheduleCustomerFileBlobOffload(id, rec, 2500);
     },
 
     renderTabBar(rec, policies){
@@ -26636,6 +26726,7 @@ UsersGateUI.init();
     openById(id, opts={}){
       const rec = this.byId(id);
       if(!rec || !this.els.wrap) return;
+      this._markCustomerFileOpening(id);
       // הקורא (openWithLoader) עוטף ב-try/catch סינכרוני, שלא תופס דחיית Promise —
       // לכן בולעים כאן ומדווחים ללוג, במקום unhandled rejection.
       const afterOpen = (refreshOpts) => {
@@ -27323,12 +27414,14 @@ UsersGateUI.init();
     },
 
     close(){
+      const closingId = safeTrim(this.currentId || this._openingCustomerId);
       this.stopOpenFileCallWatch();
       this._openFileCallSig = "";
       this.stopOpsCardLoop();
       this._openRefreshSig = "";
       this.clearSelectedDocIds();
       this.currentSection = "policies";
+      this._clearCustomerFileOpening(closingId);
       try { this._closeFileActionsMenu?.(); } catch(_e) {}
       if(!this.els.wrap) return;
       window.clearTimeout(this._loaderTimer);
@@ -27339,6 +27432,7 @@ UsersGateUI.init();
       document.body.style.overflow = "";
       this.refreshArchiveBtnVisibility();
       this.refreshAssignBtnVisibility();
+      try { this._flushCustomerFileBlobOffloadOnClose(closingId); } catch(_e) {}
     },
 
     current(){
@@ -41523,7 +41617,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260909-session-keep-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260909-customer-open-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -41543,8 +41637,8 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260909-session-keep-v1";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260909-session-keep-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260909-customer-open-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260909-customer-open-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -42197,18 +42291,18 @@ UsersGateUI.init();
     "./ayalon-health-sim.css?v=20260810-sim-mockup-v2",
     "./ayalon-ci-sim.css?v=20260811-ayl-ci-v1",
     "./hachshara-health-sim.css?v=20260810-sim-mockup-v2",
-    "./hachshara-risk-sim.css?v=20260909-session-keep-v1",
-    "./hachshara-mortgage-risk-sim.css?v=20260909-session-keep-v1",
+    "./hachshara-risk-sim.css?v=20260909-customer-open-v1",
+    "./hachshara-mortgage-risk-sim.css?v=20260909-customer-open-v1",
     "./migdal-health-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
-    "./menora-ci-sim.css?v=20260909-session-keep-v1",
+    "./menora-ci-sim.css?v=20260909-customer-open-v1",
     "./clal-health-sim.css?v=20260812-cll-health-v1",
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260909-session-keep-v1",
-    "./simulators-shell.css?v=20260909-session-keep-v1"
+    "./simulators-center.css?v=20260909-customer-open-v1",
+    "./simulators-shell.css?v=20260909-customer-open-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -43570,7 +43664,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260909-session-keep-v1";
+  const GI_WIZARD_JS_VERSION = "20260909-customer-open-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
