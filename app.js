@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260909-customer-open-v1";
+  const BUILD = "20260909-version-resume-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -3033,24 +3033,70 @@
   const GI_SERVER_CACHE_KEY = "GEMEL_SERVER_STATE_CACHE_V2";
   const GI_LAST_SESSION_USER_KEY = "GI_LAST_SESSION_USER_V1";
 
-  function peekVersionUpdateResume(){
-    try { return !!sessionStorage.getItem(GI_VERSION_UPDATE_RESUME_KEY); } catch(_e) { return false; }
+  function hasVersionUpdateNocacheQuery(){
+    try {
+      const params = new URLSearchParams(String(window.location.search || ""));
+      if(!params.has("nocache")) return false;
+      const n = Number(params.get("nocache"));
+      if(Number.isFinite(n) && n > 1000000000000 && (Date.now() - n) > GI_VERSION_UPDATE_RESUME_TTL_MS) return false;
+      return true;
+    } catch(_e) { return false; }
   }
 
-  function consumeVersionUpdateResume(){
+  function readStoredVersionUpdateResumeSnap(){
+    const fromStore = (storage) => {
+      try {
+        const raw = storage.getItem(GI_VERSION_UPDATE_RESUME_KEY);
+        if(!raw) return null;
+        const snap = JSON.parse(raw);
+        if(!snap || !(safeTrim(snap.name) || safeTrim(snap.id))) return null;
+        const ts = Number(snap.ts) || 0;
+        if(ts && (Date.now() - ts) > GI_VERSION_UPDATE_RESUME_TTL_MS) return null;
+        return snap;
+      } catch(_e) { return null; }
+    };
     try {
-      const raw = sessionStorage.getItem(GI_VERSION_UPDATE_RESUME_KEY);
-      sessionStorage.removeItem(GI_VERSION_UPDATE_RESUME_KEY);
-      if(!raw) return null;
-      const snap = JSON.parse(raw);
-      if(!snap || !safeTrim(snap.name)) return null;
-      const ts = Number(snap.ts) || 0;
-      if(ts && (Date.now() - ts) > GI_VERSION_UPDATE_RESUME_TTL_MS) return null;
-      return snap;
+      return fromStore(sessionStorage) || fromStore(localStorage);
     } catch(_e) {
-      try { sessionStorage.removeItem(GI_VERSION_UPDATE_RESUME_KEY); } catch(_e2) {}
       return null;
     }
+  }
+
+  function snapFromLastSessionUserKey(){
+    if(!hasVersionUpdateNocacheQuery()) return null;
+    const raw = readLastSessionUserKey();
+    if(!raw || raw.indexOf("full:") !== 0) return null;
+    const rest = raw.slice(5);
+    const colon = rest.indexOf(":");
+    if(colon < 0) return null;
+    const role = safeTrim(rest.slice(0, colon)) || "agent";
+    const idOrName = safeTrim(rest.slice(colon + 1));
+    if(!idOrName) return null;
+    return { name: idOrName, role, id: idOrName, username: "", view: "", fromLastKey: true, ts: Date.now() };
+  }
+
+  function peekVersionUpdateResume(){
+    if(readStoredVersionUpdateResumeSnap()) return true;
+    try {
+      if(sessionStorage.getItem(GI_VERSION_UPDATE_RESUME_KEY)) return true;
+      if(localStorage.getItem(GI_VERSION_UPDATE_RESUME_KEY)) return true;
+    } catch(_e) {}
+    return hasVersionUpdateNocacheQuery() && !!readLastSessionUserKey();
+  }
+
+  function clearVersionUpdateResume(){
+    try { sessionStorage.removeItem(GI_VERSION_UPDATE_RESUME_KEY); } catch(_e) {}
+    try { localStorage.removeItem(GI_VERSION_UPDATE_RESUME_KEY); } catch(_e) {}
+  }
+
+  function stripVersionUpdateNocacheQuery(){
+    try {
+      if(!hasVersionUpdateNocacheQuery()) return;
+      const url = new URL(window.location.href);
+      url.searchParams.delete("nocache");
+      const qs = url.searchParams.toString();
+      window.history.replaceState({}, "", url.pathname + (qs ? ("?" + qs) : "") + url.hash);
+    } catch(_e) {}
   }
 
   function saveVersionUpdateResume(cur){
@@ -3063,14 +3109,16 @@
         const rec = (typeof getCurrentAgentRecord === "function") ? getCurrentAgentRecord() : null;
         username = safeTrim(rec?.username);
       } catch(_e) {}
-      sessionStorage.setItem(GI_VERSION_UPDATE_RESUME_KEY, JSON.stringify({
+      const payload = JSON.stringify({
         name: safeTrim(cur.name),
         role: safeTrim(cur.role) || "agent",
         id: safeTrim(cur.id),
         username,
         view,
         ts: Date.now()
-      }));
+      });
+      try { sessionStorage.setItem(GI_VERSION_UPDATE_RESUME_KEY, payload); } catch(_e) {}
+      try { localStorage.setItem(GI_VERSION_UPDATE_RESUME_KEY, payload); } catch(_e) {}
       return true;
     } catch(_e) {
       return false;
@@ -41617,7 +41665,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260909-customer-open-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260909-version-resume-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -41637,8 +41685,8 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260909-customer-open-v1";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260909-customer-open-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260909-version-resume-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260909-version-resume-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -42291,18 +42339,18 @@ UsersGateUI.init();
     "./ayalon-health-sim.css?v=20260810-sim-mockup-v2",
     "./ayalon-ci-sim.css?v=20260811-ayl-ci-v1",
     "./hachshara-health-sim.css?v=20260810-sim-mockup-v2",
-    "./hachshara-risk-sim.css?v=20260909-customer-open-v1",
-    "./hachshara-mortgage-risk-sim.css?v=20260909-customer-open-v1",
+    "./hachshara-risk-sim.css?v=20260909-version-resume-v1",
+    "./hachshara-mortgage-risk-sim.css?v=20260909-version-resume-v1",
     "./migdal-health-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
-    "./menora-ci-sim.css?v=20260909-customer-open-v1",
+    "./menora-ci-sim.css?v=20260909-version-resume-v1",
     "./clal-health-sim.css?v=20260812-cll-health-v1",
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260909-customer-open-v1",
-    "./simulators-shell.css?v=20260909-customer-open-v1"
+    "./simulators-center.css?v=20260909-version-resume-v1",
+    "./simulators-shell.css?v=20260909-version-resume-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -43664,7 +43712,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260909-customer-open-v1";
+  const GI_WIZARD_JS_VERSION = "20260909-version-resume-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -56203,7 +56251,7 @@ const ClalRiskLifePdf = {
   try { window.__GI_FACE_ENTER__ = enterFromFaceSession; } catch(_e) {}
 
   async function resumeSessionAfterVersionUpdate(){
-    const snap = consumeVersionUpdateResume();
+    const snap = readStoredVersionUpdateResumeSnap() || snapFromLastSessionUserKey();
     if(!snap){
       try { Auth.lock(); } catch(_e) {}
       return false;
@@ -56214,12 +56262,20 @@ const ClalRiskLifePdf = {
       const sid = safeTrim(snap.id);
       const label = safeTrim(snap.name);
       const user = safeTrim(snap.username);
-      const matched = agents.find((a) => sid && safeTrim(a.id) === sid)
-        || agents.find((a) => label && (safeTrim(a.name) === label || safeTrim(a.username) === label))
+      let matched = agents.find((a) => sid && safeTrim(a.id) === sid)
+        || agents.find((a) => label && (safeTrim(a.name) === label || safeTrim(a.username) === label || safeTrim(a.id) === label))
         || agents.find((a) => user && (safeTrim(a.username) === user || safeTrim(a.name) === user))
         || null;
+      if(!matched && label && typeof findAgentForLogin === "function"){
+        try { matched = findAgentForLogin(label, agents)?.agent || null; } catch(_e) {}
+      }
+      if(!matched && user && typeof findAgentForLogin === "function"){
+        try { matched = findAgentForLogin(user, agents)?.agent || null; } catch(_e) {}
+      }
       if(matched){
         if(matched.active === false){
+          clearVersionUpdateResume();
+          stripVersionUpdateNocacheQuery();
           try { Auth.lock(); } catch(_e) {}
           return false;
         }
@@ -56233,6 +56289,8 @@ const ClalRiskLifePdf = {
         if(view){
           try { UI.goView(view); } catch(_e) {}
         }
+        clearVersionUpdateResume();
+        stripVersionUpdateNocacheQuery();
         return true;
       }
       const role = safeTrim(snap.role);
@@ -56247,8 +56305,12 @@ const ClalRiskLifePdf = {
         try { window.dispatchEvent(new CustomEvent("gi:app-login-ready", { detail:{ source:"version-update-resume" } })); } catch(_e) {}
         const view = safeTrim(snap.view) || "settings";
         try { UI.goView(view); } catch(_e) {}
+        clearVersionUpdateResume();
+        stripVersionUpdateNocacheQuery();
         return true;
       }
+      clearVersionUpdateResume();
+      stripVersionUpdateNocacheQuery();
       try { Auth.lock(); } catch(_e) {}
       return false;
     } catch(_e) {
@@ -56744,6 +56806,7 @@ const ClalRiskLifePdf = {
   Auth.logout = (function(orig){
     return function(reason='manual'){
       try { sessionStorage.removeItem(GI_VERSION_UPDATE_RESUME_KEY); } catch(_e) {}
+      try { localStorage.removeItem(GI_VERSION_UPDATE_RESUME_KEY); } catch(_e) {}
       try { void SupabaseMFA.signOutSilently(); } catch(_e) {}
       return orig.call(this, reason);
     };
@@ -79429,6 +79492,7 @@ ${inner}
           const popup = document.getElementById('updatePopup');
           const pendingVersion = popup ? (popup.dataset.pendingVersion || '') : '';
           if(pendingVersion) setAcknowledgedVersion(pendingVersion);
+          try { persistLastSessionUserKey(typeof Storage !== "undefined" ? Storage.fullCacheUserKey() : ""); } catch(_e) {}
           try { saveVersionUpdateResume(Auth?.current); } catch(_e) {}
           if('caches' in window){
             const keys = await caches.keys();
@@ -79491,6 +79555,7 @@ ${inner}
         window.__GI_SW_RELOAD_BOUND = true;
         navigator.serviceWorker.addEventListener("controllerchange", () => {
           if(window.__GI_SW_RELOADED) return;
+          if(peekVersionUpdateResume()) return;
           window.__GI_SW_RELOADED = true;
           window.location.reload();
         });
