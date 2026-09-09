@@ -8,8 +8,8 @@
 <meta content="#f8fafc" name="theme-color"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20260909-version-resume-v3" rel="stylesheet"/>
-<link href="./theme.css?v=20260909-version-resume-v3" rel="stylesheet"/>
+<link href="./app.css?v=20260909-leads-export-v1" rel="stylesheet"/>
+<link href="./theme.css?v=20260909-leads-export-v1" rel="stylesheet"/>
 <style id="giCfSummaryKill">#customerFullSide,.cfFile__side,#customerFullDash,#customerFull.cfFile .customerFull__dash{display:none!important}#customerFull.cfFile .customerFull__body,.cfFile__layout{grid-template-columns:minmax(0,1fr)!important}</style>
 <script>
 (function(){function k(){try{["customerFullSide","customerFullDash"].forEach(function(id){var n=document.getElementById(id);if(n&&n.parentNode)n.parentNode.removeChild(n);});document.querySelectorAll(".cfFile__side").forEach(function(n){if(n&&n.parentNode)n.parentNode.removeChild(n);});}catch(e){}}k();if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",k);})();
@@ -856,6 +856,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <button class="btn" id="btnGoldBoardForm" type="button" style="display:none">מעקב לידי זהב</button>
 <button class="btn" id="btnCampaignShowLeadsList" type="button">מסך לידים</button>
 <button class="btn" id="btnCampaignShowTracking1" type="button">דו"ח מעקב סגירות</button>
+<button class="btn" id="btnCampaignLeadsExport1" type="button" style="display:none">הפק דוח</button>
 </div>
 </div>
 <div class="lcCampaign__alert" id="campaignLeadsTableAlert" hidden role="status"></div>
@@ -979,6 +980,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <button class="btn" id="btnGoldBoardList" type="button" style="display:none">מעקב לידי זהב</button>
 <button class="btn" id="btnCampaignShowForm" type="button">הקמת ליד חדש</button>
 <button class="btn" id="btnCampaignShowTracking2" type="button">דו"ח מעקב סגירות</button>
+<button class="btn" id="btnCampaignLeadsExport2" type="button" style="display:none">הפק דוח</button>
 <button class="btn" id="btnCampaignLeadsRefresh" type="button">רענון</button>
 </div>
 </div>
@@ -3620,6 +3622,34 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
   </div>
 </div>
 
+<!-- GI-LEADS-EXPORT: דוח אקסל למנהל / מנהל מערכת — בחירת טווח תאריכים בלבד -->
+<div aria-hidden="true" class="gi-modal-overlay" id="campaignLeadsExportModal">
+  <div class="gi-modal lcLeadExportModal" role="dialog" aria-labelledby="campaignLeadsExportTitle" aria-modal="true">
+    <div class="gi-modal__header">
+      <h3 class="gi-modal__title" id="campaignLeadsExportTitle">הפק דוח לידים</h3>
+      <button class="iconBtn" id="btnCampaignLeadsExportClose" type="button" aria-label="סגור">✕</button>
+    </div>
+    <div class="gi-modal__body">
+      <p class="gi-modal__hint">בחרו מתאריך עד תאריך. הדוח כולל את כל פרטי הליד, תיעוד הסוקרת ותיעוד הנציג.</p>
+      <div class="lcLeadExportModal__dates">
+        <div class="field">
+          <label class="label" for="campaignLeadsExportFrom">מתאריך</label>
+          <input class="input" id="campaignLeadsExportFrom" type="date" dir="ltr"/>
+        </div>
+        <div class="field">
+          <label class="label" for="campaignLeadsExportTo">עד תאריך</label>
+          <input class="input" id="campaignLeadsExportTo" type="date" dir="ltr"/>
+        </div>
+      </div>
+      <div class="gi-modal__error" id="campaignLeadsExportError" style="display:none" role="alert"></div>
+    </div>
+    <div class="gi-modal__footer">
+      <button class="btn" id="btnCampaignLeadsExportCancel" type="button">ביטול</button>
+      <button class="btn btn--primary" id="btnCampaignLeadsExportConfirm" type="button">אישור</button>
+    </div>
+  </div>
+</div>
+
 <!-- GI-GOLD-LEAD Full-screen -->
 <div aria-hidden="true" class="goldFs" id="goldLeadModal">
   <div class="goldFs__bar">
@@ -3910,10 +3940,10 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <script src="./gi-policy-scan.js?v=20260819-issued-scan-v3"></script>
 <script src="./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1"></script>
 <script src="./gi-agent-appointment-report-seed.js?v=20260909-agent-appt-report-v1"></script>
-<script src="./app.js?v=20260909-version-resume-v3"></script>
+<script src="./app.js?v=20260909-leads-export-v1"></script>
 <script src="./gi-assistant.js?v=20260829-assistant-open-file-fix-v1"></script>
 <script src="./gi-face-auth.js?v=20260817-face-retry-v1"></script>
-<script src="./gi-daily-sales-mail.js?v=20260909-version-resume-v3"></script>
+<script src="./gi-daily-sales-mail.js?v=20260909-leads-export-v1"></script>
 
 
 <div id="giPwaInstallBanner" class="giPwaInstallBanner" hidden>
