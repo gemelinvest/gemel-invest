@@ -5,7 +5,7 @@
 (function installGiArrivalDocs(global){
   "use strict";
 
-  const VERSION = "20260909-session-keep-v1";
+  const VERSION = "20260909-session-keep-v2";
   const NAVY = "#3870ED";
   const AGENCY = "GEMEL INVEST";
   const COVER_ART = "./assets/gi-doc-cover-docs.png";

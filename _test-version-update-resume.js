@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260909-session-keep-v1";
+const APP_TAG = "20260909-session-keep-v2";
 let failed = 0;
 let passed = 0;
 
@@ -40,25 +40,32 @@ assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
 assert(app.includes('const BUILD = "' + APP_TAG + '"'), "app.js BUILD tag");
 
-console.log("\n2) סמן סשן חד-פעמי לפני רענון עדכון");
-assert(app.includes('const GI_VERSION_UPDATE_RESUME_KEY = "GI_VERSION_UPDATE_RESUME_V1"'), "מפתח sessionStorage");
+console.log("\n2) סמן סשן לפני רענון עדכון — גם מקוד ישן עם ?nocache=");
+assert(app.includes('const GI_VERSION_UPDATE_RESUME_KEY = "GI_VERSION_UPDATE_RESUME_V1"'), "מפתח resume");
 assert(app.includes("function saveVersionUpdateResume(cur)"), "saveVersionUpdateResume");
-assert(app.includes("function consumeVersionUpdateResume()"), "consumeVersionUpdateResume");
+assert(app.includes("function hasVersionUpdateNocacheQuery()"), "זיהוי ?nocache= מעדכון");
+assert(app.includes("function snapFromLastSessionUserKey()"), "שחזור ממשתמש אחרון אחרי עדכון ישן");
 assert(app.includes("function peekVersionUpdateResume()"), "peekVersionUpdateResume");
+assert(app.includes("function clearVersionUpdateResume()"), "clearVersionUpdateResume אחרי הצלחה");
+assert(app.includes("localStorage.setItem(GI_VERSION_UPDATE_RESUME_KEY, payload)"), "גיבוי resume ב-localStorage");
 assert(app.includes("try { saveVersionUpdateResume(Auth?.current); } catch(_e) {}"), "לחיצה על עדכן שומרת סשן");
+assert(app.includes("persistLastSessionUserKey(typeof Storage !== \"undefined\" ? Storage.fullCacheUserKey() : \"\")"), "לחיצה על עדכן שומרת מזהה משתמש");
 const applyClick = sliceBetween(app, 'applyBtn.addEventListener(\'click\'', "const dismissBtn");
 assert(applyClick.includes("saveVersionUpdateResume(Auth?.current)"), "שמירה לפני ניווט nocache");
 assert(applyClick.includes("window.location.replace"), "רענון גרסה נשאר");
 
-console.log("\n3) טעינה מחדש מדלגת על כניסה/2FA רק עם הסמן");
+console.log("\n3) טעינה מחדש מדלגת על כניסה/2FA");
 assert(app.includes("async function resumeSessionAfterVersionUpdate()"), "resumeSessionAfterVersionUpdate");
+assert(app.includes("readStoredVersionUpdateResumeSnap() || snapFromLastSessionUserKey()"), "resume קורא סמן או משתמש אחרון");
+assert(!app.includes("function consumeVersionUpdateResume()"), "לא מוחקים סמן לפני שהשחזור הצליח");
 assert(app.includes("skipMfa: true"), "דילוג על MFA ב-resume");
 assert(app.includes("quietResume: true"), "resume שקט בלי לוג כניסה ובלי מסך ברוכים");
-assert(app.includes("if(peekVersionUpdateResume()) void resumeSessionAfterVersionUpdate()"), "Auth.init מפעיל resume רק עם סמן");
+assert(app.includes("if(peekVersionUpdateResume()) void resumeSessionAfterVersionUpdate()"), "Auth.init מפעיל resume");
 assert(app.includes("if(peekVersionUpdateResume()) return;"), "pagehide לא מנתק בעדכון גרסה");
+assert(app.includes("if(peekVersionUpdateResume()) return;\n          window.__GI_SW_RELOADED"), "SW לא מרענן שוב באמצע resume");
 assert(app.includes('this.els.wrap?.setAttribute?.("aria-hidden", resumingVersionUpdate ? "true" : "false")'), "מסך כניסה מוסתר ב-resume");
 assert(app.includes("if(!resumingVersionUpdate) this.lock()"), "lock רגיל בלי סמן");
-assert(app.includes("sessionStorage.removeItem(GI_VERSION_UPDATE_RESUME_KEY)"), "logout מוחק סמן resume");
+assert(app.includes("localStorage.removeItem(GI_VERSION_UPDATE_RESUME_KEY)"), "logout מוחק סמן resume");
 
 console.log("\n4) כניסה רגילה לא השתנתה");
 assert(app.includes("Auth._submit = async function()"), "מסלול שם משתמש/PIN נשאר");
