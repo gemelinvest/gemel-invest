@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260909-leads-export-v1";
+const TAG = "20260909-wizard-open-v1";
 let failed = 0;
 let passed = 0;
 

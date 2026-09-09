@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260909-leads-export-v1";
+  const BUILD = "20260909-wizard-open-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -17572,6 +17572,9 @@
           try {
             if(ev?.persisted) return;
             if(peekVersionUpdateResume()) return;
+            try {
+              if(sessionStorage.getItem(GI_WIZARD_SOFT_RECOVERY_KEY) === "1") return;
+            } catch(_e) {}
             if(!this.current) return;
             try { persistLastSessionUserKey(typeof Storage !== "undefined" ? Storage.fullCacheUserKey() : ""); } catch(_e) {}
             try { App.resetSessionDataForUserSwitch("browser_close"); } catch(_e) {}
@@ -41805,7 +41808,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260909-version-resume-v3";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260909-wizard-open-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -41825,8 +41828,8 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260909-version-resume-v3";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260909-version-resume-v3";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260909-wizard-open-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260909-wizard-open-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -42479,18 +42482,18 @@ UsersGateUI.init();
     "./ayalon-health-sim.css?v=20260810-sim-mockup-v2",
     "./ayalon-ci-sim.css?v=20260811-ayl-ci-v1",
     "./hachshara-health-sim.css?v=20260810-sim-mockup-v2",
-    "./hachshara-risk-sim.css?v=20260909-version-resume-v3",
-    "./hachshara-mortgage-risk-sim.css?v=20260909-version-resume-v3",
+    "./hachshara-risk-sim.css?v=20260909-wizard-open-v1",
+    "./hachshara-mortgage-risk-sim.css?v=20260909-wizard-open-v1",
     "./migdal-health-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
-    "./menora-ci-sim.css?v=20260909-version-resume-v3",
+    "./menora-ci-sim.css?v=20260909-wizard-open-v1",
     "./clal-health-sim.css?v=20260812-cll-health-v1",
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260909-version-resume-v3",
-    "./simulators-shell.css?v=20260909-version-resume-v3"
+    "./simulators-center.css?v=20260909-wizard-open-v1",
+    "./simulators-shell.css?v=20260909-wizard-open-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -43852,7 +43855,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260909-version-resume-v3";
+  const GI_WIZARD_JS_VERSION = "20260909-wizard-open-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -43925,6 +43928,16 @@ UsersGateUI.init();
   function isWizardBuildMismatchError(err){
     return /stale gi-wizard\.js \(build mismatch\)/i.test(String(err && err.message || err || ""));
   }
+  /* אשף תקין עם תג מטמון אחר עדיין נטען — אחרת prefetch אחרי MFA עושה
+     location.replace, pagehide מוחק את הסשן, והמשתמש נזרק למסך כניסה. */
+  function giWizardChunkLooksInstallable(text){
+    const src = String(text || "");
+    if(src.length < 4000) return false;
+    if(/^\s*</.test(src)) return false;
+    if(!/GI_WIZARD_BUILD\s*=\s*["'][^"']+["']/.test(src)) return false;
+    if(src.indexOf("function installGiWizard") < 0 && src.indexOf("installGiWizard(") < 0) return false;
+    return true;
+  }
   async function clearGiWizardLoadCaches(){
     try {
       if(typeof caches !== "undefined" && caches.keys){
@@ -43944,6 +43957,14 @@ UsersGateUI.init();
       if(Wizard._softRecoveryStarted) return false;
       Wizard._softRecoveryStarted = true;
     }
+    try {
+      if(typeof window.__GI_PREPARE_VERSION_UPDATE_RESUME === "function"){
+        window.__GI_PREPARE_VERSION_UPDATE_RESUME();
+      } else if(Auth && Auth.current){
+        persistLastSessionUserKey(typeof Storage !== "undefined" ? Storage.fullCacheUserKey() : "");
+        saveVersionUpdateResume(Auth.current);
+      }
+    } catch(_e) {}
     try { await clearGiWizardLoadCaches(); } catch(_e) {}
     try {
       if(typeof caches !== "undefined" && caches.keys){
@@ -43992,7 +44013,11 @@ UsersGateUI.init();
       }
       const buildMark = 'GI_WIZARD_BUILD = "' + GI_WIZARD_JS_VERSION + '"';
       if(text.indexOf(buildMark) < 0){
-        throw new Error("stale gi-wizard.js (build mismatch): " + href);
+        if(giWizardChunkLooksInstallable(text)){
+          try { console.warn("[gi-wizard] cache-tag drift accepted", { expected: GI_WIZARD_JS_VERSION, href }); } catch(_e) {}
+        } else {
+          throw new Error("stale gi-wizard.js (build mismatch): " + href);
+        }
       }
       const blobUrl = URL.createObjectURL(new Blob([text], { type: "text/javascript" }));
       return new Promise((resolve, reject) => {
@@ -44385,19 +44410,7 @@ UsersGateUI.init();
         return wiz;
       } catch(firstErr) {
         try { console.warn("GI_WIZARD_CHUNK_LOAD_FAILED", firstErr); } catch(_e) {}
-        // build mismatch: רענון רך חד־פעמי (app.js ישן מול gi-wizard חדש מהשרת).
-        if(isWizardBuildMismatchError(firstErr)){
-          try {
-            const recovering = await softRecoverStaleWizardBuild();
-            if(recovering){
-              Wizard._chunkReady = false;
-              // משאירים את _chunkLoading כ־promise תלוי כדי שקריאות מקבילות לא יפתחו toastים.
-              await new Promise(() => {});
-            }
-          } catch(_softErr) {
-            /* ממשיכים לניסיון nocache */
-          }
-        }
+        // לא מרעננים את כל הדף על drift של תג — זה זורק את המשתמש למסך כניסה אחרי MFA.
         // ניסיון שני: ניקוי מטמון SW + טעינה עם nocache (עוקף Service Worker).
         try { await clearGiWizardLoadCaches(); } catch(_e) {}
         const retryHref = resolveGiWizardHref({ nocache: true });
