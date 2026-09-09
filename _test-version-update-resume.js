@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260909-version-resume-v1";
+const APP_TAG = "20260909-version-resume-v2";
 let failed = 0;
 let passed = 0;
 
@@ -62,11 +62,16 @@ assert(app.includes("skipMfa: true"), "דילוג על MFA ב-resume");
 assert(app.includes("quietResume: true"), "resume שקט בלי לוג כניסה ובלי מסך ברוכים");
 assert(app.includes("if(peekVersionUpdateResume()) void resumeSessionAfterVersionUpdate()"), "Auth.init מפעיל resume רק עם peek");
 assert(app.includes("if(peekVersionUpdateResume()) return;"), "pagehide לא מנתק בעדכון גרסה");
-assert(app.includes('this.els.wrap?.setAttribute?.("aria-hidden", resumingVersionUpdate ? "true" : "false")'), "מסך כניסה מוסתר ב-resume");
+assert(app.includes('if(resumingVersionUpdate){'), "ב-resume לא שמים lcAuthLock");
+assert(app.includes("document.body.classList.remove(\"lcAuthLock\")"), "מסירים lcAuthLock ב-resume כדי שה-CSS לא יציג כניסה");
 assert(app.includes("if(!resumingVersionUpdate) this.lock()"), "lock רגיל בלי סמן/nocache");
 assert(app.includes("clearVersionUpdateResume()"), "מוחקים סמן רק אחרי הצלחה/כישלון סופי");
 assert(app.includes("stripVersionUpdateNocacheQuery()"), "מסירים ?nocache= אחרי resume כדי ש-F5 ידרוש כניסה");
-assert(app.includes("if(peekVersionUpdateResume()) return;"), "SW controllerchange לא עושה reload שמוחק את ה-resume");
+assert(app.includes("if(typeof peekVersionUpdateResume === \"function\" && peekVersionUpdateResume()) return;"), "SW controllerchange לא עושה reload בזמן resume");
+assert(app.includes("if(Auth?.current) return;"), "SW לא מרענן אחרי resume שהצליח");
+assert(app.includes("let hadController = !!navigator.serviceWorker.controller;"), "SW לא מרענן ב-claim ראשון אחרי unregister של עדכן");
+assert(app.includes("LOGIN_SUBMIT_FAILED:"), "שגיאת כניסה נתפסת ב-_submit ולא נשארת unhandled");
+assert(app.includes("VERSION_UPDATE_RESUME_FAILED:"), "כישלון resume נכתב לקונסול");
 assert(app.includes("localStorage.removeItem(GI_VERSION_UPDATE_RESUME_KEY)"), "logout מוחק סמן גם מ-localStorage");
 
 console.log("\n4) כניסה רגילה לא השתנתה");

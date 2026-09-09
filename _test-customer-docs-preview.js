@@ -1,4 +1,4 @@
-/* GI-CUSTOMER-DOCS-PREVIEW 20260909-version-resume-v1
+/* GI-CUSTOMER-DOCS-PREVIEW 20260909-version-resume-v2
    On-screen preview for every customer-file document (ops-report style),
    without changing fill / download / open logic.
    Run: node _test-customer-docs-preview.js
@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260909-version-resume-v1";
+const TAG = "20260909-version-resume-v2";
 let failed = 0;
 let passed = 0;
 
