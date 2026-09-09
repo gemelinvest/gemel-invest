@@ -1,4 +1,4 @@
-/* GI-CUSTOMER-DOCS-PANE-CLOCK 20260909-leads-export-v1
+/* GI-CUSTOMER-DOCS-PANE-CLOCK 20260909-version-resume-v3
    Independent file-list / preview scroll, no select-all, elapsed download clock.
    Run: node _test-customer-docs-pane-clock.js
 */
@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260909-leads-export-v1";
+const TAG = "20260909-version-resume-v3";
 let failed = 0;
 let passed = 0;
 

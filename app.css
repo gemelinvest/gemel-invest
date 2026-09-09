@@ -41645,21 +41645,6 @@ body.lcAuthLock .lcLogin--mfa #lcLoginMfaStep[data-mode="enroll"] .lcLogin__logo
   opacity:1;
   pointer-events:auto;
 }
-#campaignLeadsExportModal.gi-modal-overlay--active{
-  z-index:10050;
-}
-.lcLeadExportModal{
-  width:min(440px, 92vw);
-}
-.lcLeadExportModal__dates{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:12px;
-  margin-top:12px;
-}
-@media (max-width:520px){
-  .lcLeadExportModal__dates{ grid-template-columns:1fr; }
-}
 .gi-modal{
   background:#fff;
   border-radius:16px;

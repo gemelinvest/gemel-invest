@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260909-leads-export-v1";
+  const BUILD = "20260909-version-resume-v3";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -6783,126 +6783,6 @@
     if(s === "manual") return "ידני";
     if(s === "gold_mirror") return "ליד זהב";
     return s || "—";
-  }
-
-  function campaignLeadExportCanUse(){
-    try { return !!(Auth.isAdmin() || Auth.isManager()); } catch(_e){ return false; }
-  }
-
-  function campaignLeadExportSurveyorNote(lead){
-    return safeTrim(lead?.descriptionDisplay || stripCampaignLeadPayloadMarker(lead?.description));
-  }
-
-  function campaignLeadMatchesExportRange(lead, fromDay, toDay){
-    const day = parseCampaignLeadStampDateIL(lead?.createdAt);
-    if(!day) return false;
-    const from = safeTrim(fromDay);
-    const to = safeTrim(toDay);
-    if(from && day < from) return false;
-    if(to && day > to) return false;
-    return true;
-  }
-
-  function campaignLeadExportFmtStamp(raw){
-    const s = safeTrim(raw);
-    if(!s) return "";
-    try {
-      const d = new Date(s);
-      if(!isNaN(d.getTime())){
-        return d.toLocaleString("he-IL", { timeZone: "Asia/Jerusalem" });
-      }
-    } catch(_e) {}
-    return s;
-  }
-
-  const CAMPAIGN_LEAD_EXPORT_HEADERS = Object.freeze([
-    "שם לקוח",
-    "טלפון",
-    "תעודת זהות",
-    "תאריך לידה",
-    "תאריך הנפקה ת.ז",
-    "סיבת פנייה (תיעוד סוקרת)",
-    "חברת ביטוח",
-    "קמפיין",
-    "סוגי ביטוח",
-    "מקור",
-    "סטטוס",
-    "נציג",
-    "נציגים נוספים / מעבר ליד",
-    "הוזן ע״י",
-    "תאריך הגשת הליד",
-    "תאריך עדכון",
-    "תאריך שינוי אחרון",
-    "תאריך סגירה",
-    "עודכן ע״י",
-    "תיעוד שיחה (נציג)",
-    "תיעוד מכירה",
-    "תיעוד לא רלוונטי",
-    "ליד זהב",
-    "סוכן מקור זהב",
-    "מוצרי זהב",
-    "מסלול זהב",
-    "סליקה זהב",
-    "שכר זהב",
-    "זמינות זהב",
-    "הערות דף נחיתה"
-  ]);
-
-  function buildCampaignLeadExportRow(lead, agents){
-    const l = lead && typeof lead === "object" ? lead : {};
-    const types = Array.isArray(l.insuranceTypeLabels) && l.insuranceTypeLabels.length
-      ? l.insuranceTypeLabels.join(" · ")
-      : (Array.isArray(l.insuranceTypes) ? l.insuranceTypes.join(" · ") : "");
-    const goldAvail = l.goldAvailAllDay === true
-      ? "כל היום"
-      : [safeTrim(l.goldAvailDate), safeTrim(l.goldAvailTime)].filter(Boolean).join(" ");
-    const landingNotes = (l.landingPayload && typeof l.landingPayload === "object")
-      ? safeTrim(l.landingPayload.notes)
-      : "";
-    const goldTrackLabel = l.goldTrack === "pension" ? "פנסיה" : (l.goldTrack === "elementary" ? "אלמנטרי" : safeTrim(l.goldTrack));
-    const goldClearingLabel = l.goldClearing === "available" ? "קיימת" : (l.goldClearing === "pending" ? "ממתינה" : safeTrim(l.goldClearing));
-    return [
-      safeTrim(l.customerName),
-      safeTrim(l.phone),
-      safeTrim(l.idNumber),
-      safeTrim(l.birthDate),
-      safeTrim(l.idIssueDate),
-      campaignLeadExportSurveyorNote(l),
-      safeTrim(l.insuranceCompany),
-      safeTrim(l.campaignLabel),
-      types,
-      campaignLeadSourceLabel(l.source),
-      campaignLeadStatusLabel(l.status),
-      campaignLeadResolveAgentName(l, agents),
-      campaignLeadTransferTrailText(l, agents),
-      safeTrim(l.createdByName),
-      campaignLeadExportFmtStamp(l.createdAt),
-      campaignLeadExportFmtStamp(l.updatedAt),
-      campaignLeadExportFmtStamp(l.lastModifiedAt),
-      campaignLeadExportFmtStamp(l.closedAt),
-      safeTrim(l.updatedByName),
-      safeTrim(l.callNote),
-      safeTrim(l.closedNote),
-      safeTrim(l.irrelevantNote),
-      l.goldLead === true ? "כן" : "",
-      safeTrim(l.goldSourceAgentName),
-      Array.isArray(l.goldProducts) ? l.goldProducts.join(" · ") : "",
-      goldTrackLabel,
-      goldClearingLabel,
-      safeTrim(l.goldSalary),
-      goldAvail,
-      landingNotes
-    ];
-  }
-
-  function buildCampaignLeadExportSheet(leads, agents){
-    const list = (Array.isArray(leads) ? leads : []).slice().sort((a, b) =>
-      String(a?.createdAt || "").localeCompare(String(b?.createdAt || ""))
-    );
-    const headers = CAMPAIGN_LEAD_EXPORT_HEADERS.slice();
-    const rows = list.map((lead) => buildCampaignLeadExportRow(lead, agents));
-    const flip = (row) => row.slice().reverse();
-    return [flip(headers), ...rows.map(flip)];
   }
 
   const CAMPAIGN_LEAD_LANDING_MARKER = "---LANDING_PAYLOAD---";
@@ -63330,132 +63210,6 @@ const CampaignLeadsStore = {
     }
   };
 
-  const CampaignLeadsExportUI = {
-    _busy: false,
-
-    canUse(){
-      return campaignLeadExportCanUse();
-    },
-
-    syncButtons(){
-      const show = this.canUse() ? "" : "none";
-      ["btnCampaignLeadsExport1", "btnCampaignLeadsExport2"].forEach((id) => {
-        const b = document.getElementById(id);
-        if(b) b.style.display = show;
-      });
-    },
-
-    bind(){
-      ["btnCampaignLeadsExport1", "btnCampaignLeadsExport2"].forEach((id) => {
-        const b = document.getElementById(id);
-        if(b && !b.dataset.giLeadExportBound){
-          b.dataset.giLeadExportBound = "1";
-          on(b, "click", () => this.open());
-        }
-      });
-      const overlay = document.getElementById("campaignLeadsExportModal");
-      if(overlay && !overlay.dataset.giLeadExportBound){
-        overlay.dataset.giLeadExportBound = "1";
-        const close = () => this.close();
-        on(document.getElementById("btnCampaignLeadsExportClose"), "click", close);
-        on(document.getElementById("btnCampaignLeadsExportCancel"), "click", close);
-        on(overlay, "click", (ev) => { if(ev.target === overlay) close(); });
-        on(document.getElementById("btnCampaignLeadsExportConfirm"), "click", () => void this.confirm());
-      }
-    },
-
-    _setError(msg){
-      const el = document.getElementById("campaignLeadsExportError");
-      if(!el) return;
-      if(!msg){
-        el.style.display = "none";
-        el.textContent = "";
-        return;
-      }
-      el.style.display = "";
-      el.textContent = msg;
-    },
-
-    open(){
-      if(!this.canUse()) return;
-      const overlay = document.getElementById("campaignLeadsExportModal");
-      if(!overlay) return;
-      const today = currentCampaignLeadDateIL();
-      const fromEl = document.getElementById("campaignLeadsExportFrom");
-      const toEl = document.getElementById("campaignLeadsExportTo");
-      if(fromEl && !fromEl.value) fromEl.value = today.slice(0, 7) + "-01";
-      if(toEl && !toEl.value) toEl.value = today;
-      this._setError("");
-      overlay.classList.add("gi-modal-overlay--active");
-      overlay.setAttribute("aria-hidden", "false");
-      try { fromEl?.focus?.(); } catch(_e) {}
-    },
-
-    close(){
-      const overlay = document.getElementById("campaignLeadsExportModal");
-      if(!overlay) return;
-      overlay.classList.remove("gi-modal-overlay--active");
-      overlay.setAttribute("aria-hidden", "true");
-      this._setError("");
-    },
-
-    async confirm(){
-      if(this._busy) return;
-      if(!this.canUse()){
-        this._setError("אין הרשאה להפקת הדוח");
-        return;
-      }
-      const from = safeTrim(document.getElementById("campaignLeadsExportFrom")?.value);
-      const to = safeTrim(document.getElementById("campaignLeadsExportTo")?.value);
-      if(!from || !to){
-        this._setError("יש לבחור מתאריך ועד תאריך");
-        return;
-      }
-      if(from > to){
-        this._setError("מתאריך לא יכול להיות אחרי עד תאריך");
-        return;
-      }
-      const btn = document.getElementById("btnCampaignLeadsExportConfirm");
-      this._busy = true;
-      if(btn){
-        btn.disabled = true;
-        btn.textContent = "מפיק...";
-      }
-      this._setError("");
-      try {
-        if(window.GI_LOAD_LIBS?.xlsx) await window.GI_LOAD_LIBS.xlsx();
-        if(typeof window === "undefined" || !window.XLSX){
-          this._setError("ספריית Excel לא נטענה — רענן את הדף ונסה שוב");
-          return;
-        }
-        try { await CampaignLeadsStore.fetchAll({ scope: "all" }); } catch(_e) {}
-        const agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
-        const leads = (CampaignLeadsStore.leads || []).filter((lead) => campaignLeadMatchesExportRange(lead, from, to));
-        if(!leads.length){
-          this._setError("אין לידים בטווח שנבחר");
-          return;
-        }
-        const wsData = buildCampaignLeadExportSheet(leads, agents);
-        const wb = window.XLSX.utils.book_new();
-        const ws = window.XLSX.utils.aoa_to_sheet(wsData);
-        if(!ws["!opts"]) ws["!opts"] = {};
-        ws["!opts"].RTL = true;
-        window.XLSX.utils.book_append_sheet(wb, ws, "דוח לידים".slice(0, 31));
-        const fileName = "דוח_לידים_" + from + "_" + to + ".xlsx";
-        window.XLSX.writeFile(wb, fileName);
-        this.close();
-      } catch(err){
-        this._setError(safeTrim(err?.message) || "הפקת הדוח נכשלה");
-      } finally {
-        this._busy = false;
-        if(btn){
-          btn.disabled = false;
-          btn.textContent = "אישור";
-        }
-      }
-    }
-  };
-
   const CampaignLeadsUI = {
     els: {},
     filter: "all",
@@ -63736,7 +63490,6 @@ const CampaignLeadsStore = {
       if(this.els.btnShowForm) on(this.els.btnShowForm, "click", () => this.showPanel("form"));
       if(this.els.btnShowTracking1) on(this.els.btnShowTracking1, "click", () => this.showPanel("tracking"));
       if(this.els.btnShowTracking2) on(this.els.btnShowTracking2, "click", () => this.showPanel("tracking"));
-      try { CampaignLeadsExportUI.bind(); } catch(_e) {}
       if(this.els.btnShowFormFromTracking) on(this.els.btnShowFormFromTracking, "click", () => this.showPanel("form"));
       if(this.els.btnShowListFromTracking) on(this.els.btnShowListFromTracking, "click", () => this.showPanel("list"));
       if(this.els.btnNew) on(this.els.btnNew, "click", () => this.beginNewLead());
@@ -63810,7 +63563,6 @@ const CampaignLeadsStore = {
         const b = document.getElementById(id);
         if(b) b.style.display = show;
       });
-      try { CampaignLeadsExportUI.syncButtons(); } catch(_e) {}
     },
 
     showPanel(panel){
@@ -64174,7 +63926,6 @@ const CampaignLeadsStore = {
     async render(){
       if(!Auth.canAccessCampaignLeadsInbox()) return;
       if(this.els.btnSimulate) this.els.btnSimulate.hidden = !(Auth.isAdmin() || Auth.isManager());
-      try { CampaignLeadsExportUI.syncButtons(); } catch(_e) {}
       this.showPanel("form");
       this.fillCampaignSelect();
       this.fillAgentSelect();

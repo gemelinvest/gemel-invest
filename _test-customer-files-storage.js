@@ -1,4 +1,4 @@
-/* GI-CUSTOMER-FILES-STORAGE 20260909-leads-export-v1
+/* GI-CUSTOMER-FILES-STORAGE 20260909-version-resume-v3
    Metadata in the customer record, file bytes in object storage.
    Generated docs stay generated. Uploaded blobs offload on save/open.
    Run: node _test-customer-files-storage.js
@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260909-leads-export-v1";
+const TAG = "20260909-version-resume-v3";
 let failed = 0;
 let passed = 0;
 
