@@ -1,4 +1,4 @@
-/* GI-WELCOME-SHANA-TOVA 20260908-daily-sales-v8
+/* GI-WELCOME-SHANA-TOVA 20260909-session-keep-v1
    אחרי סיסמה: ברכת השנה השקופה בתוך הטבעת שמתמלאת.
    לוגו הכניסה/תפריט לא משתנה. בלי באמפ מטמון.
    Run: node _test-welcome-shana-tova.js
@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260908-daily-sales-v8";
+const TAG = "20260909-session-keep-v1";
 const ASSET = "assets/gi-welcome-shana-tova.png";
 let failed = 0;
 let passed = 0;

@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260908-daily-sales-v8";
+  const GI_WIZARD_BUILD = "20260909-session-keep-v1";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -3740,20 +3740,6 @@ init(){
     },
 
     async ensureHarDateUploadNoticeAck(){
-      if(this.isElementaryFlow()) return true;
-      if(this._harDateNoticeAcked) return true;
-      if(typeof showWizardHarAlertModal !== "function"){
-        this._harDateNoticeAcked = true;
-        return true;
-      }
-      const ok = await showWizardHarAlertModal({
-        title: "משתמש יקר, שים לב",
-        text: "מהיום לא נדרש להסיר את התאריך מקובץ הר הביטוח. ניתן ונדרש להעלות אותו כמו שירד מאתר הר הביטוח.",
-        confirmText: "קראתי והבנתי",
-        showCancel: false,
-        requireConfirmClick: true
-      });
-      if(!ok) return false;
       this._harDateNoticeAcked = true;
       return true;
     },

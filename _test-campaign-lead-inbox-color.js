@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260908-daily-sales-v8";
+const APP_TAG = "20260909-session-keep-v1";
 let failed = 0;
 let passed = 0;
 
@@ -69,6 +69,8 @@ assert(app.includes("CAMPAIGN_LEAD_AGENT_PEER_REASSIGN_TARGETS"), "רשימת י
 assert(app.includes('{ name: "קורן פרנקל", dept: "פנסיה" }'), "קורן פרנקל — פנסיה");
 assert(app.includes('{ name: "שמחה אזרד", dept: "פנסיה" }'), "שמחה אזרד — פנסיה");
 assert(app.includes('{ name: "עדן ביטון", dept: "אלמנטרי רכב ודירה" }'), "עדן ביטון — אלמנטרי רכב ודירה");
+assert(app.includes('{ name: "אילן איילין" }'), "אילן איילין ברשימת שיוך ממחלקה אחרת");
+assert(app.includes("קורן פרנקל, שמחה אזרד, עדן ביטון, אילן איילין"), "טקסט ריק כולל את אילן איילין");
 assert(app.includes("function getCampaignLeadPeerReassignAgents()"), "getCampaignLeadPeerReassignAgents");
 assert(!app.includes('agents = agents.filter((a) => safeTrim(a.role) === "opsAgent")'), "אין נפילה לכל נציגי התפעול");
 assert(app.includes("function canCampaignLeadPeerReassign()"), "canCampaignLeadPeerReassign");

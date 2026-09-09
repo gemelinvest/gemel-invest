@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260908-daily-sales-v8";
+  const BUILD = "20260909-session-keep-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -3024,12 +3024,58 @@
 
   // ---------- Config / Local keys ----------
   const LS_SESSION_KEY = "GEMEL_SESSION_V1";
+  const GI_VERSION_UPDATE_RESUME_KEY = "GI_VERSION_UPDATE_RESUME_V1";
+  const GI_VERSION_UPDATE_RESUME_TTL_MS = 180000;
   const LS_BACKUP_KEY  = "GEMEL_STATE_BACKUP_V1"; // legacy only - Server Only mode clears and ignores it
   const LS_FAST_CACHE_KEY = "GEMEL_FAST_CACHE_V1"; // legacy only - Server Only mode clears and ignores it
   const LS_TABLE_CACHE_PREFIX = "GEMEL_TABLE_CACHE_V1_"; // legacy only - Server Only mode clears and ignores it
   const FAST_CACHE_MAX_AGE_MS = 1000 * 60 * 15;
   const GI_SERVER_CACHE_KEY = "GEMEL_SERVER_STATE_CACHE_V2";
   const GI_LAST_SESSION_USER_KEY = "GI_LAST_SESSION_USER_V1";
+
+  function peekVersionUpdateResume(){
+    try { return !!sessionStorage.getItem(GI_VERSION_UPDATE_RESUME_KEY); } catch(_e) { return false; }
+  }
+
+  function consumeVersionUpdateResume(){
+    try {
+      const raw = sessionStorage.getItem(GI_VERSION_UPDATE_RESUME_KEY);
+      sessionStorage.removeItem(GI_VERSION_UPDATE_RESUME_KEY);
+      if(!raw) return null;
+      const snap = JSON.parse(raw);
+      if(!snap || !safeTrim(snap.name)) return null;
+      const ts = Number(snap.ts) || 0;
+      if(ts && (Date.now() - ts) > GI_VERSION_UPDATE_RESUME_TTL_MS) return null;
+      return snap;
+    } catch(_e) {
+      try { sessionStorage.removeItem(GI_VERSION_UPDATE_RESUME_KEY); } catch(_e2) {}
+      return null;
+    }
+  }
+
+  function saveVersionUpdateResume(cur){
+    try {
+      if(!cur || !safeTrim(cur.name)) return false;
+      let view = "";
+      try { view = safeTrim(LiveRefresh?.getCurrentView?.() || ""); } catch(_e) {}
+      let username = "";
+      try {
+        const rec = (typeof getCurrentAgentRecord === "function") ? getCurrentAgentRecord() : null;
+        username = safeTrim(rec?.username);
+      } catch(_e) {}
+      sessionStorage.setItem(GI_VERSION_UPDATE_RESUME_KEY, JSON.stringify({
+        name: safeTrim(cur.name),
+        role: safeTrim(cur.role) || "agent",
+        id: safeTrim(cur.id),
+        username,
+        view,
+        ts: Date.now()
+      }));
+      return true;
+    } catch(_e) {
+      return false;
+    }
+  }
 
   function persistLastSessionUserKey(key){
     try {
@@ -6420,7 +6466,8 @@
   const CAMPAIGN_LEAD_AGENT_PEER_REASSIGN_TARGETS = [
     { name: "קורן פרנקל", dept: "פנסיה" },
     { name: "שמחה אזרד", dept: "פנסיה" },
-    { name: "עדן ביטון", dept: "אלמנטרי רכב ודירה" }
+    { name: "עדן ביטון", dept: "אלמנטרי רכב ודירה" },
+    { name: "אילן איילין" }
   ];
 
   // GI-GOLD-LEAD — tracking helpers
@@ -17333,20 +17380,22 @@
         err: $("#lcLoginError"),
       };
 
-      // show login immediately
+      // show login immediately — unless this load is a one-shot version-update resume
+      const resumingVersionUpdate = peekVersionUpdateResume();
       try {
         document.body.classList.add("lcAuthLock");
-        this.els.wrap?.setAttribute?.("aria-hidden","false");
+        this.els.wrap?.setAttribute?.("aria-hidden", resumingVersionUpdate ? "true" : "false");
       } catch(_) {}
 
       try { localStorage.removeItem(LS_SESSION_KEY); } catch(_) {}
-      this.lock();
+      if(!resumingVersionUpdate) this.lock();
 
       if(!this._browserCloseBound){
         this._browserCloseBound = true;
         window.addEventListener("pagehide", (ev) => {
           try {
             if(ev?.persisted) return;
+            if(peekVersionUpdateResume()) return;
             if(!this.current) return;
             try { persistLastSessionUserKey(typeof Storage !== "undefined" ? Storage.fullCacheUserKey() : ""); } catch(_e) {}
             try { App.resetSessionDataForUserSwitch("browser_close"); } catch(_e) {}
@@ -41474,7 +41523,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260908-daily-sales-v8";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260909-session-keep-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -41494,8 +41543,8 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260908-daily-sales-v8";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260908-daily-sales-v8";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260909-session-keep-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260909-session-keep-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -42148,18 +42197,18 @@ UsersGateUI.init();
     "./ayalon-health-sim.css?v=20260810-sim-mockup-v2",
     "./ayalon-ci-sim.css?v=20260811-ayl-ci-v1",
     "./hachshara-health-sim.css?v=20260810-sim-mockup-v2",
-    "./hachshara-risk-sim.css?v=20260908-daily-sales-v8",
-    "./hachshara-mortgage-risk-sim.css?v=20260908-daily-sales-v8",
+    "./hachshara-risk-sim.css?v=20260909-session-keep-v1",
+    "./hachshara-mortgage-risk-sim.css?v=20260909-session-keep-v1",
     "./migdal-health-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
-    "./menora-ci-sim.css?v=20260908-daily-sales-v8",
+    "./menora-ci-sim.css?v=20260909-session-keep-v1",
     "./clal-health-sim.css?v=20260812-cll-health-v1",
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260908-daily-sales-v8",
-    "./simulators-shell.css?v=20260908-daily-sales-v8"
+    "./simulators-center.css?v=20260909-session-keep-v1",
+    "./simulators-shell.css?v=20260909-session-keep-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -43521,7 +43570,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260908-daily-sales-v8";
+  const GI_WIZARD_JS_VERSION = "20260909-session-keep-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -55929,17 +55978,21 @@ const ClalRiskLifePdf = {
       if(options.skipMfa === true){
         try { document.body.classList.remove("lcAuthLock"); } catch(_e) {}
         try { Auth.unlock(); } catch(_e) {}
-        try {
-          void AgentActivityLog.log("login", {
-            name: safeTrim(Auth.current?.name),
-            role: safeTrim(Auth.current?.role),
-            id: safeTrim(Auth.current?.id)
-          }, { detailText: safeTrim(options.loginDetailText) });
-        } catch(_e) {}
+        if(options.quietResume !== true){
+          try {
+            void AgentActivityLog.log("login", {
+              name: safeTrim(Auth.current?.name),
+              role: safeTrim(Auth.current?.role),
+              id: safeTrim(Auth.current?.id)
+            }, { detailText: safeTrim(options.loginDetailText) });
+          } catch(_e) {}
+        }
       }
       const loaderName = safeTrim(Auth.current?.name || matched?.name);
       try { localStorage.removeItem(LS_SESSION_KEY); } catch(_) {}
-      try { WelcomeLoader.open(loaderName); } catch(_e) {}
+      if(options.quietResume !== true){
+        try { WelcomeLoader.open(loaderName); } catch(_e) {}
+      }
       targetView = Auth.isReferent() ? 'campaignLeads' : 'dashboard';
       if(!App._loginReady){
         try {
@@ -56054,6 +56107,61 @@ const ClalRiskLifePdf = {
     try { Auth.unlock(); } catch(_e) {}
   };
   try { window.__GI_FACE_ENTER__ = enterFromFaceSession; } catch(_e) {}
+
+  async function resumeSessionAfterVersionUpdate(){
+    const snap = consumeVersionUpdateResume();
+    if(!snap){
+      try { Auth.lock(); } catch(_e) {}
+      return false;
+    }
+    try {
+      try { await App.ensureLoginReady(); } catch(_e) {}
+      const agents = Array.isArray(State.data?.agents) ? State.data.agents : [];
+      const sid = safeTrim(snap.id);
+      const label = safeTrim(snap.name);
+      const user = safeTrim(snap.username);
+      const matched = agents.find((a) => sid && safeTrim(a.id) === sid)
+        || agents.find((a) => label && (safeTrim(a.name) === label || safeTrim(a.username) === label))
+        || agents.find((a) => user && (safeTrim(a.username) === user || safeTrim(a.name) === user))
+        || null;
+      if(matched){
+        if(matched.active === false){
+          try { Auth.lock(); } catch(_e) {}
+          return false;
+        }
+        await completeAgentLogin(matched, {
+          skipMfa: true,
+          quietResume: true,
+          loginAlreadyLogged: true,
+          loginDetailText: "version_update"
+        });
+        const view = safeTrim(snap.view);
+        if(view){
+          try { UI.goView(view); } catch(_e) {}
+        }
+        return true;
+      }
+      const role = safeTrim(snap.role);
+      if(role === "admin" || role === "owner"){
+        Auth.current = { name: label, role, id: sid };
+        try { document.body.classList.remove("lcAuthLock"); } catch(_e) {}
+        try { Auth.unlock(); } catch(_e) {}
+        try { InactivityGuard.start(); } catch(_e) {}
+        try { UI.applyRoleUI(); } catch(_e) {}
+        try { UI.renderAuthPill(); } catch(_e) {}
+        try { void AttendanceClock.onAuthenticated(); } catch(_e) {}
+        try { window.dispatchEvent(new CustomEvent("gi:app-login-ready", { detail:{ source:"version-update-resume" } })); } catch(_e) {}
+        const view = safeTrim(snap.view) || "settings";
+        try { UI.goView(view); } catch(_e) {}
+        return true;
+      }
+      try { Auth.lock(); } catch(_e) {}
+      return false;
+    } catch(_e) {
+      try { Auth.lock(); } catch(_e2) {}
+      return false;
+    }
+  }
 
   // Enhance UI init/pill
   const _uiInit = UI.init.bind(UI);
@@ -56537,9 +56645,11 @@ const ClalRiskLifePdf = {
     _authInit();
     this._bindMfaInput();
     on($('#btnVerifyLoginMfa'),'click',()=> this._verifyPendingMfa({ source:'button' }));
+    if(peekVersionUpdateResume()) void resumeSessionAfterVersionUpdate();
   };
   Auth.logout = (function(orig){
     return function(reason='manual'){
+      try { sessionStorage.removeItem(GI_VERSION_UPDATE_RESUME_KEY); } catch(_e) {}
       try { void SupabaseMFA.signOutSilently(); } catch(_e) {}
       return orig.call(this, reason);
     };
@@ -64116,7 +64226,7 @@ const CampaignLeadsStore = {
       overlay.className = "lcLeadReassign__overlay";
       const dialogTitle = mode === "peer" ? "שיוך לנציג" : "שיוך לנציג נוסף";
       const emptyText = mode === "peer"
-        ? "אין יוזרים תואמים לשיוך (קורן פרנקל, שמחה אזרד, עדן ביטון)"
+        ? "אין יוזרים תואמים לשיוך (קורן פרנקל, שמחה אזרד, עדן ביטון, אילן איילין)"
         : "אין נציגים במערכת";
       overlay.innerHTML = `
         <div class="lcLeadReassign__panel" role="dialog" aria-modal="true" aria-label="${escapeHtml(dialogTitle)}" dir="rtl">
@@ -79225,6 +79335,7 @@ ${inner}
           const popup = document.getElementById('updatePopup');
           const pendingVersion = popup ? (popup.dataset.pendingVersion || '') : '';
           if(pendingVersion) setAcknowledgedVersion(pendingVersion);
+          try { saveVersionUpdateResume(Auth?.current); } catch(_e) {}
           if('caches' in window){
             const keys = await caches.keys();
             await Promise.all(keys.map(k => caches.delete(k)));
