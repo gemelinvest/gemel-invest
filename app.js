@@ -88,6 +88,7 @@
     campaignLeads: "campaign_leads",
     dailyReport: "gi_daily_report",
     cancellationsReport: "gi_cancellations_report",
+    agentAppointmentReport: "gi_agent_appointment_report",
     agentActivityLog: "gi_agent_activity_log",
     simulatorSaves: "gi_simulator_saves"
   };
@@ -25382,7 +25383,7 @@ UsersGateUI.init();
           modifier: 'appt', icon: ICONS.appt, title: 'מינוי סוכן', kind: 'פוליסות קיימות',
           meta: `${plural(agentApptPolicies.length)} · הועברו לניהולנו`,
           sum: this.formatMoneyValue(this.sumAgentAppointmentPremium(agentApptPolicies)),
-          head: APPT_HEAD, body: agentApptPolicies.map(p => this.renderAgentAppointmentTableRow(p)).join(''),
+          head: APPT_HEAD, body: agentApptPolicies.map(p => this.renderAgentAppointmentTableRow(p, rec)).join(''),
           collapsible: true
         }),
         group({
@@ -25925,32 +25926,39 @@ UsersGateUI.init();
       </tr>`;
     },
 
-    renderAgentAppointmentTableRow(policy){
-      const logoHtml = renderCompanyLogoHtmlForCompany(policy.company, "card");
-      const companyCls = this.companyClass(policy.company);
+    renderAgentAppointmentTableRow(policy, rec){
+      let shown = policy;
+      try {
+        if(typeof overlayAgentAppointmentPolicyFromReport === "function"){
+          shown = overlayAgentAppointmentPolicyFromReport(policy, rec) || policy;
+        }
+      } catch(_e) {}
+      const logoHtml = renderCompanyLogoHtmlForCompany(shown.company, "card");
+      const companyCls = this.companyClass(shown.company);
       const logoMark = logoHtml
         ? `<div class="cfFile__policyLogoMark">${logoHtml}</div>`
-        : `<div class="cfFile__policyLogoMark"><span class="cfFile__policyLogoFallback">${escapeHtml((policy.company || '?').slice(0,2))}</span></div>`;
-      const premiumText = safeTrim(policy.premiumAfterDiscount || policy.premiumText || '—');
+        : `<div class="cfFile__policyLogoMark"><span class="cfFile__policyLogoFallback">${escapeHtml((shown.company || '?').slice(0,2))}</span></div>`;
+      const premiumText = safeTrim(shown.premiumText || policy.premiumAfterDiscount || policy.premiumText || '—');
       const menuActions = [
-        `<button class="cfFile__menuItem" type="button" data-policy-open="${escapeHtml(policy.id)}">פרטי פוליסה</button>`
+        `<button class="cfFile__menuItem" type="button" data-policy-open="${escapeHtml(shown.id)}">פרטי פוליסה</button>`
       ];
-      return `<tr class="cfFilePolicyTr cfFilePolicyTr--agentAppt ${companyCls}" data-policy-id="${escapeHtml(policy.id)}">
+      const badgeClass = safeTrim(shown.badgeClass) || "is-appoint";
+      return `<tr class="cfFilePolicyTr cfFilePolicyTr--agentAppt ${companyCls}" data-policy-id="${escapeHtml(shown.id)}">
         <td>
           <div class="cfFile__policyBrand">
             ${logoMark}
             <div>
-              <div class="cfFile__policyName">${escapeHtml(policy.company || 'חברה')} · ${escapeHtml(policy.type || 'פוליסה')}</div>
-              <div class="cfFile__policyType">${escapeHtml(safeTrim(policy.insuredLabel) || '')}</div>
+              <div class="cfFile__policyName">${escapeHtml(shown.company || 'חברה')} · ${escapeHtml(shown.type || 'פוליסה')}</div>
+              <div class="cfFile__policyType">${escapeHtml(safeTrim(shown.insuredLabel) || '')}</div>
             </div>
           </div>
         </td>
-        <td><span class="cfFile__policyNumber">${escapeHtml(safeTrim(policy.policyNumber) || '—')}</span></td>
+        <td><span class="cfFile__policyNumber">${escapeHtml(safeTrim(shown.policyNumber) || '—')}</span></td>
         <td><span class="cfFile__premium">${escapeHtml(premiumText)}</span></td>
-        <td><span class="cfFile__apptDate">${escapeHtml(safeTrim(policy.appointmentDateLabel) || '—')}</span></td>
-        <td><span class="cfFile__statusBadge is-appoint">${escapeHtml(policy.badgeText || 'מינוי סוכן')}</span></td>
+        <td><span class="cfFile__apptDate">${escapeHtml(safeTrim(shown.appointmentDateLabel) || '—')}</span></td>
+        <td><span class="cfFile__statusBadge ${escapeHtml(badgeClass)}">${escapeHtml(shown.badgeText || 'מינוי סוכן')}</span></td>
         <td class="cfFile__menuCell">
-          <button class="cfFile__menuBtn" type="button" aria-label="פעולות" data-policy-menu="${escapeHtml(policy.id)}">⋮</button>
+          <button class="cfFile__menuBtn" type="button" aria-label="פעולות" data-policy-menu="${escapeHtml(shown.id)}">⋮</button>
           <div class="cfFile__menu" role="menu">${menuActions.join('')}</div>
         </td>
       </tr>`;
@@ -27323,6 +27331,11 @@ UsersGateUI.init();
 
     openPolicyModal(rec, policy){
       if(!this.policyModal.wrap || !this.policyModal.body) return;
+      try {
+        if(policy && policy.origin === "agent_appointment" && typeof overlayAgentAppointmentPolicyFromReport === "function"){
+          policy = overlayAgentAppointmentPolicyFromReport(policy, rec) || policy;
+        }
+      } catch(_e) {}
       this._openPolicyId = safeTrim(policy?.id || "");
       this.policyModal.wrap.dataset.policyId = this._openPolicyId;
       const isElementary = policy?.origin === "elementary" || policy?.domain === "elementary";
@@ -59806,6 +59819,260 @@ const CampaignLeadsStore = {
     }
   };
 
+  const AGENT_APPT_REPORT_ACTIVE_ID = "active";
+  const AGENT_APPT_REPORT_LS_KEY = "GI_AGENT_APPOINTMENT_REPORT_V1";
+
+  function normalizeAgentApptPolicyNumber(value){
+    return safeTrim(value).replace(/[\s\-]/g, "");
+  }
+
+  function normalizeAgentApptCompanyKey(value){
+    return safeTrim(value).replace(/[()]/g, " ").replace(/\s+/g, " ").toLowerCase();
+  }
+
+  function isAgentApptReportCompletedStatus(value){
+    return safeTrim(value).replace(/\s+/g, "") === "בוצע";
+  }
+
+  function getAgentApptReportColumnIndexes(report){
+    const headers = Array.isArray(report?.headerRow) ? report.headerRow : [];
+    return {
+      agent: findDailyReportHeaderCol(headers, ["נציג"]),
+      insured: findDailyReportHeaderCol(headers, ["מבוטח"]),
+      idNumber: findDailyReportHeaderCol(headers, ["ת.ז", "תז", "תעודת זהות"]),
+      policyNumber: findDailyReportHeaderCol(headers, ["מס פוליסה", "מספר פוליסה"]),
+      plan: findDailyReportHeaderCol(headers, ["שם תוכנית", "תוכנית"]),
+      status: findDailyReportHeaderCol(headers, ["סטאטוס", "סטטוס"]),
+      statusDate: findDailyReportHeaderCol(headers, ["תאריך סטטוס", "תאריך סטאטוס"]),
+      company: findDailyReportHeaderCol(headers, ["חברה"]),
+      premium: findDailyReportHeaderCol(headers, ["פרמיה"]),
+      notes: findDailyReportHeaderCol(headers, ["הערות"]),
+      month: findDailyReportHeaderCol(headers, ["חודש ביצוע", "חודש"])
+    };
+  }
+
+  function formatAgentApptReportMoney(value){
+    const n = Number(value);
+    if(!Number.isFinite(n) || n <= 0) return "";
+    try {
+      if(typeof CustomersUI !== "undefined" && typeof CustomersUI.formatMoneyValue === "function"){
+        return CustomersUI.formatMoneyValue(n);
+      }
+    } catch(_e) {}
+    try {
+      return "₪" + n.toLocaleString("he-IL", { maximumFractionDigits: 2 });
+    } catch(_e) {
+      return "₪" + String(n);
+    }
+  }
+
+  function loadAgentApptReportSeed(){
+    const seed = (typeof window !== "undefined") ? window.GI_AGENT_APPOINTMENT_REPORT_SEED : null;
+    if(!seed || typeof seed !== "object") return null;
+    return mapDailyReportFromDb({
+      id: AGENT_APPT_REPORT_ACTIVE_ID,
+      uploaded_at: seed.uploadedAt || seed.uploaded_at || "",
+      uploaded_by_name: seed.uploadedByName || seed.uploaded_by_name || "מערכת",
+      report_as_of_date: seed.reportAsOfDate || seed.report_as_of_date || "2026-08-31",
+      sheet_name: seed.sheetName || seed.sheet_name || "גיליון1",
+      header_row: seed.headerRow || seed.header_row,
+      data_rows: seed.dataRows || seed.data_rows
+    });
+  }
+
+  function readAgentApptReportLocal(){
+    try {
+      const raw = localStorage.getItem(AGENT_APPT_REPORT_LS_KEY);
+      if(!raw) return null;
+      const parsed = JSON.parse(raw);
+      return mapDailyReportFromDb(parsed);
+    } catch(_e) {
+      return null;
+    }
+  }
+
+  function writeAgentApptReportLocal(report){
+    try {
+      localStorage.setItem(AGENT_APPT_REPORT_LS_KEY, JSON.stringify(mapDailyReportToDb(report)));
+    } catch(_e) {}
+  }
+
+  const AgentAppointmentReportStore = {
+    report: null,
+    tableReady: true,
+    lastError: "",
+    _matchIndex: null,
+
+    invalidateIndex(){
+      this._matchIndex = null;
+    },
+
+    getVisibleRows(){
+      if(!this.report) return [];
+      return (this.report.dataRows || []).filter((row) => dailyReportRowVisibleToSession(row));
+    },
+
+    getAgentSummary(){
+      const map = new Map();
+      (this.report?.dataRows || []).forEach((row) => {
+        const key = normalizeDailyReportAgentKey(row.agent) || "— ללא נציג";
+        map.set(key, (map.get(key) || 0) + 1);
+      });
+      return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], "he"));
+    },
+
+    applyLocal(report){
+      this.report = report || null;
+      this.invalidateIndex();
+    },
+
+    async fetchActive(){
+      this.lastError = "";
+      const fromLs = readAgentApptReportLocal();
+      const seed = loadAgentApptReportSeed();
+      if(typeof Storage?.loadSingleRow === "function" && SUPABASE_TABLES.agentAppointmentReport){
+        const res = await Storage.loadSingleRow(SUPABASE_TABLES.agentAppointmentReport, AGENT_APPT_REPORT_ACTIVE_ID, "*");
+        if(!res.ok){
+          const err = safeTrim(res.error).toLowerCase();
+          if(err.includes("does not exist") || err.includes("relation") || err.includes("schema cache") || err.includes("permission denied")){
+            this.tableReady = false;
+            this.lastError = "";
+          } else {
+            this.tableReady = true;
+            this.lastError = res.error || "";
+          }
+        } else {
+          this.tableReady = true;
+          if(res.data){
+            this.applyLocal(mapDailyReportFromDb(res.data));
+            return { ok: true, report: this.report, source: "supabase" };
+          }
+        }
+      }
+      if(fromLs){
+        this.applyLocal(fromLs);
+        return { ok: true, report: this.report, source: "local" };
+      }
+      if(seed){
+        this.applyLocal(seed);
+        return { ok: true, report: this.report, source: "seed" };
+      }
+      this.applyLocal(null);
+      return { ok: true, report: null };
+    },
+
+    async saveActive(report){
+      const mapped = mapDailyReportFromDb(mapDailyReportToDb(report));
+      writeAgentApptReportLocal(mapped);
+      this.applyLocal(mapped);
+      this.tableReady = true;
+      if(typeof Storage?.upsertSingleRow === "function" && SUPABASE_TABLES.agentAppointmentReport){
+        const row = mapDailyReportToDb(mapped);
+        const save = await Storage.upsertSingleRow(SUPABASE_TABLES.agentAppointmentReport, row);
+        if(!save.ok){
+          const err = safeTrim(save.error).toLowerCase();
+          if(err.includes("does not exist") || err.includes("relation") || err.includes("schema cache") || err.includes("permission denied")){
+            this.tableReady = false;
+            return { ok: true, report: this.report, persisted: "local" };
+          }
+          return save;
+        }
+      }
+      return { ok: true, report: this.report };
+    },
+
+    buildMatchIndex(){
+      if(this._matchIndex) return this._matchIndex;
+      const byPolicyCompany = new Map();
+      const byPolicyId = new Map();
+      const byPolicy = new Map();
+      const report = this.report;
+      const cols = getAgentApptReportColumnIndexes(report);
+      (report?.dataRows || []).forEach((row) => {
+        const policyNumber = normalizeAgentApptPolicyNumber(getDailyReportCell(row, cols.policyNumber));
+        if(!policyNumber) return;
+        const company = normalizeAgentApptCompanyKey(getDailyReportCell(row, cols.company));
+        const idNumber = safeTrim(getDailyReportCell(row, cols.idNumber)).replace(/\D/g, "");
+        const packed = { row, cols };
+        if(company){
+          const k = policyNumber + "|" + company;
+          if(!byPolicyCompany.has(k)) byPolicyCompany.set(k, packed);
+        }
+        if(idNumber){
+          const k = policyNumber + "|" + idNumber;
+          if(!byPolicyId.has(k)) byPolicyId.set(k, packed);
+        }
+        if(!byPolicy.has(policyNumber)) byPolicy.set(policyNumber, packed);
+      });
+      this._matchIndex = { byPolicyCompany, byPolicyId, byPolicy };
+      return this._matchIndex;
+    },
+
+    findMatch(policy, rec){
+      const idx = this.buildMatchIndex();
+      if(!idx) return null;
+      const policyNumber = normalizeAgentApptPolicyNumber(policy?.policyNumber);
+      if(!policyNumber) return null;
+      const company = normalizeAgentApptCompanyKey(policy?.company);
+      if(company){
+        const hit = idx.byPolicyCompany.get(policyNumber + "|" + company);
+        if(hit) return hit;
+        const prefix = policyNumber + "|";
+        for(const [k, packed] of idx.byPolicyCompany){
+          if(!k.startsWith(prefix)) continue;
+          const co = k.slice(prefix.length);
+          if(co.includes(company) || company.includes(co)) return packed;
+        }
+      }
+      const idNumber = safeTrim(rec?.idNumber || rec?.id_number || "").replace(/\D/g, "");
+      if(idNumber){
+        const hit = idx.byPolicyId.get(policyNumber + "|" + idNumber);
+        if(hit) return hit;
+      }
+      return idx.byPolicy.get(policyNumber) || null;
+    }
+  };
+
+  function overlayAgentAppointmentPolicyFromReport(policy, rec){
+    if(!policy) return policy;
+    const origin = safeTrim(policy.origin);
+    if(origin !== "agent_appointment") return policy;
+    try {
+      if(!AgentAppointmentReportStore.report){
+        AgentAppointmentReportStore.applyLocal(readAgentApptReportLocal() || loadAgentApptReportSeed());
+      }
+    } catch(_e) {}
+    let hit = null;
+    try {
+      hit = AgentAppointmentReportStore.findMatch(policy, rec);
+    } catch(_e) {
+      return policy;
+    }
+    if(!hit || !hit.row) return policy;
+    const status = getDailyReportCell(hit.row, hit.cols.status);
+    if(!isAgentApptReportCompletedStatus(status)) return policy;
+    const premiumNum = parseDailyReportMoney(getDailyReportCell(hit.row, hit.cols.premium));
+    const premiumText = formatAgentApptReportMoney(premiumNum) || policy.premiumText || "—";
+    const notes = getDailyReportCell(hit.row, hit.cols.notes);
+    const month = getDailyReportCell(hit.row, hit.cols.month);
+    const statusDate = getDailyReportCell(hit.row, hit.cols.statusDate);
+    const agentName = safeTrim(hit.row.agent) || getDailyReportCell(hit.row, hit.cols.agent);
+    const details = Object.assign({}, policy.details || {}, {
+      "סטטוס": "פעילה",
+      "פרמיה חודשית": premiumText
+    });
+    if(agentName) details["נציג"] = agentName;
+    if(month) details["חודש ביצוע"] = month;
+    if(statusDate) details["תאריך סטטוס"] = statusDate;
+    if(notes) details["הערות"] = notes;
+    return Object.assign({}, policy, {
+      badgeText: "פעילה",
+      badgeClass: "is-appoint is-apptActive",
+      premiumText,
+      details
+    });
+  }
+
   const AgentActivityLogUI = {
     els: {},
     _selectedDate: "",
@@ -60452,16 +60719,27 @@ const CampaignLeadsStore = {
     _monthSelectBusy: false,
     _rubricEls: {},
 
+    normalizeReportRubric(rubric){
+      const raw = safeTrim(rubric);
+      if(raw === "cancellations") return "cancellations";
+      if(raw === "agentAppointments" || raw === "agentAppointment" || raw === "agentAppt") return "agentAppointments";
+      return "daily";
+    },
+
     initRubrics(){
       this._rubricEls.tabDaily = document.getElementById("rubricTabDaily");
       this._rubricEls.tabCancellations = document.getElementById("rubricTabCancellations");
+      this._rubricEls.tabAgentAppointments = document.getElementById("rubricTabAgentAppointments");
       this._rubricEls.panelDaily = document.getElementById("dailyReportPanelDaily");
       this._rubricEls.panelCancellations = document.getElementById("dailyReportPanelCancellations");
+      this._rubricEls.panelAgentAppointments = document.getElementById("dailyReportPanelAgentAppointments");
       this._rubricEls.btnBack = document.getElementById("btnReportsHubBack");
       this._rubricEls.navActionsDaily = document.getElementById("reportNavActionsDaily");
       this._rubricEls.navActionsCancellations = document.getElementById("reportNavActionsCancellations");
+      this._rubricEls.navActionsAgentAppointments = document.getElementById("reportNavActionsAgentAppointments");
       if(this._rubricEls.tabDaily) on(this._rubricEls.tabDaily, "click", () => this.switchRubric("daily"));
       if(this._rubricEls.tabCancellations) on(this._rubricEls.tabCancellations, "click", () => this.switchRubric("cancellations"));
+      if(this._rubricEls.tabAgentAppointments) on(this._rubricEls.tabAgentAppointments, "click", () => this.switchRubric("agentAppointments"));
       if(this._rubricEls.btnBack) on(this._rubricEls.btnBack, "click", () => {
         try { UI.goView("reportsHub"); } catch(_e) {}
       });
@@ -60483,8 +60761,7 @@ const CampaignLeadsStore = {
     },
 
     openFromHub(rubric){
-      const next = rubric === "cancellations" ? "cancellations" : "daily";
-      this.activeRubric = next;
+      this.activeRubric = this.normalizeReportRubric(rubric);
       this.applyRubricUi();
       try { UI.goView("dailyReport"); } catch(_e) {}
     },
@@ -60493,46 +60770,65 @@ const CampaignLeadsStore = {
       try {
         if(!UI?.els?.pageTitle) return;
         if(LiveRefresh.getCurrentView?.() !== "dailyReport" && !document.getElementById("view-dailyReport")?.classList.contains("is-visible")) return;
-        UI.els.pageTitle.textContent = this.activeRubric === "cancellations" ? "דוח ביטולים" : "דוח מכירות";
+        UI.els.pageTitle.textContent = this.activeRubric === "cancellations"
+          ? "דוח ביטולים"
+          : this.activeRubric === "agentAppointments"
+            ? "דוח מינוי סוכן"
+            : "דוח מכירות";
       } catch(_e) {}
     },
 
     applyRubricUi(){
-      const isCancellations = this.activeRubric === "cancellations";
-      const { tabDaily, tabCancellations, panelDaily, panelCancellations } = this._rubricEls;
+      const rubric = this.normalizeReportRubric(this.activeRubric);
+      this.activeRubric = rubric;
+      const isDaily = rubric === "daily";
+      const isCancellations = rubric === "cancellations";
+      const isAgentAppt = rubric === "agentAppointments";
+      const { tabDaily, tabCancellations, tabAgentAppointments, panelDaily, panelCancellations, panelAgentAppointments } = this._rubricEls;
       if(tabDaily){
-        tabDaily.classList.toggle("is-active", !isCancellations);
-        tabDaily.setAttribute("aria-selected", String(!isCancellations));
+        tabDaily.classList.toggle("is-active", isDaily);
+        tabDaily.setAttribute("aria-selected", String(isDaily));
       }
       if(tabCancellations){
         tabCancellations.classList.toggle("is-active", isCancellations);
         tabCancellations.setAttribute("aria-selected", String(isCancellations));
       }
+      if(tabAgentAppointments){
+        tabAgentAppointments.classList.toggle("is-active", isAgentAppt);
+        tabAgentAppointments.setAttribute("aria-selected", String(isAgentAppt));
+      }
       if(panelDaily){
-        panelDaily.hidden = isCancellations;
-        panelDaily.classList.toggle("is-active", !isCancellations);
+        panelDaily.hidden = !isDaily;
+        panelDaily.classList.toggle("is-active", isDaily);
       }
       if(panelCancellations){
         panelCancellations.hidden = !isCancellations;
         panelCancellations.classList.toggle("is-active", isCancellations);
       }
-      // GI-NAV-ACTIONS: כפתורי שני הדוחות יושבים בשורת הניווט המשותפת,
-      // ולכן כל סלוט מוצג רק כשהרובריקה שלו פעילה.
+      if(panelAgentAppointments){
+        panelAgentAppointments.hidden = !isAgentAppt;
+        panelAgentAppointments.classList.toggle("is-active", isAgentAppt);
+      }
       if(this._rubricEls.navActionsDaily){
-        this._rubricEls.navActionsDaily.hidden = isCancellations;
+        this._rubricEls.navActionsDaily.hidden = !isDaily;
       }
       if(this._rubricEls.navActionsCancellations){
         this._rubricEls.navActionsCancellations.hidden = !isCancellations;
+      }
+      if(this._rubricEls.navActionsAgentAppointments){
+        this._rubricEls.navActionsAgentAppointments.hidden = !isAgentAppt;
       }
       this.syncPageTitle();
     },
 
     switchRubric(rubric){
-      const next = rubric === "cancellations" ? "cancellations" : "daily";
+      const next = this.normalizeReportRubric(rubric);
       this.activeRubric = next;
       this.applyRubricUi();
       if(next === "cancellations"){
         try { CancellationsUI.scheduleNavRender(); } catch(_e) {}
+      } else if(next === "agentAppointments"){
+        try { AgentAppointmentReportUI.scheduleNavRender(); } catch(_e) {}
       } else {
         try { this.scheduleNavRender(); } catch(_e) {}
       }
@@ -61104,6 +61400,10 @@ const CampaignLeadsStore = {
       if(!Auth.current) return;
       if(this.activeRubric === "cancellations"){
         try { CancellationsUI.scheduleNavRender(); } catch(_e) {}
+        return;
+      }
+      if(this.activeRubric === "agentAppointments"){
+        try { AgentAppointmentReportUI.scheduleNavRender(); } catch(_e) {}
         return;
       }
       if(!this.els.thead) this.init();
@@ -61767,6 +62067,466 @@ const CampaignLeadsStore = {
       if(options.onlyIfVisible && !(LiveRefresh.getCurrentView() === "dailyReport" && DailyReportUI.activeRubric === "cancellations")) return;
       this.paint();
       if(showToast && typeof toast === "function" && r.ok) toast("דוח ביטולים עודכן");
+    },
+
+    async render(){
+      if(!Auth.current) return;
+      this.scheduleNavRender();
+    }
+  };
+
+  const AgentAppointmentReportUI = {
+    els: {},
+    searchQuery: "",
+    filterAgent: "",
+    filterStatus: "",
+    filterCompany: "",
+    filterMonth: "",
+    _navFetchInFlight: false,
+    _filterOptionsStamp: "",
+
+    init(){
+      this.els.title = document.getElementById("agentApptReportTitle");
+      this.els.asOfLine = document.getElementById("agentApptReportAsOfLine");
+      this.els.stats = document.getElementById("agentApptReportStats");
+      this.els.premDone = document.getElementById("agentApptReportPremDone");
+      this.els.premDoneSub = document.getElementById("agentApptReportPremDoneSub");
+      this.els.rowCount = document.getElementById("agentApptReportRowCount");
+      this.els.rowCountSub = document.getElementById("agentApptReportRowCountSub");
+      this.els.meta = document.getElementById("agentApptReportMeta");
+      this.els.alert = document.getElementById("agentApptReportAlert");
+      this.els.filters = document.getElementById("agentApptReportFilters");
+      this.els.search = document.getElementById("agentApptReportSearch");
+      this.els.filterAgent = document.getElementById("agentApptReportFilterAgent");
+      this.els.filterStatus = document.getElementById("agentApptReportFilterStatus");
+      this.els.filterCompany = document.getElementById("agentApptReportFilterCompany");
+      this.els.filterMonth = document.getElementById("agentApptReportFilterMonth");
+      this.els.btnClearFilters = document.getElementById("btnAgentApptReportClearFilters");
+      this.els.asOfPickWrap = document.getElementById("agentApptReportAsOfPickWrap");
+      this.els.asOfDate = document.getElementById("agentApptReportAsOfDate");
+      this.els.thead = document.getElementById("agentApptReportThead");
+      this.els.tbody = document.getElementById("agentApptReportTbody");
+      this.els.btnUpload = document.getElementById("btnAgentApptReportUpload");
+      this.els.btnExport = document.getElementById("btnAgentApptReportExport");
+      this.els.btnRefresh = document.getElementById("btnAgentApptReportRefresh");
+      this.els.fileInput = document.getElementById("agentApptReportFileInput");
+      if(this.els.btnExport) on(this.els.btnExport, "click", () => void this.exportToExcel());
+      if(this.els.btnUpload) on(this.els.btnUpload, "click", () => this.onUploadClick());
+      if(this.els.fileInput) on(this.els.fileInput, "change", (ev) => void this.onFileSelected(ev));
+      if(this.els.btnRefresh) on(this.els.btnRefresh, "click", () => void this.refresh(true));
+      if(this.els.search) on(this.els.search, "input", perfDebounce(() => {
+        this.searchQuery = safeTrim(this.els.search?.value);
+        this.paint();
+      }, 200));
+      const onFilterChange = () => {
+        this.filterAgent = safeTrim(this.els.filterAgent?.value);
+        this.filterStatus = safeTrim(this.els.filterStatus?.value);
+        this.filterCompany = safeTrim(this.els.filterCompany?.value);
+        this.filterMonth = safeTrim(this.els.filterMonth?.value);
+        this.paint();
+      };
+      if(this.els.filterAgent) on(this.els.filterAgent, "change", onFilterChange);
+      if(this.els.filterStatus) on(this.els.filterStatus, "change", onFilterChange);
+      if(this.els.filterCompany) on(this.els.filterCompany, "change", onFilterChange);
+      if(this.els.filterMonth) on(this.els.filterMonth, "change", onFilterChange);
+      if(this.els.btnClearFilters) on(this.els.btnClearFilters, "click", () => this.clearFilters());
+    },
+
+    clearFilters(){
+      this._filterOptionsStamp = "";
+      this.searchQuery = "";
+      this.filterAgent = "";
+      this.filterStatus = "";
+      this.filterCompany = "";
+      this.filterMonth = "";
+      if(this.els.search) this.els.search.value = "";
+      if(this.els.filterAgent) this.els.filterAgent.value = "";
+      if(this.els.filterStatus) this.els.filterStatus.value = "";
+      if(this.els.filterCompany) this.els.filterCompany.value = "";
+      if(this.els.filterMonth) this.els.filterMonth.value = "";
+      this.paint();
+    },
+
+    hasActiveFilters(){
+      return !!(safeTrim(this.searchQuery) || safeTrim(this.filterAgent) || safeTrim(this.filterStatus) || safeTrim(this.filterCompany) || safeTrim(this.filterMonth));
+    },
+
+    showAlert(msg, tone = "warn"){
+      if(!this.els.alert) return;
+      if(!msg){
+        this.els.alert.hidden = true;
+        this.els.alert.textContent = "";
+        this.els.alert.className = "lcDailyReport__alert";
+        return;
+      }
+      this.els.alert.hidden = false;
+      this.els.alert.textContent = msg;
+      this.els.alert.className = "lcDailyReport__alert lcDailyReport__alert--" + (tone === "err" ? "err" : tone === "ok" ? "ok" : "warn");
+    },
+
+    onUploadClick(){
+      if(!Auth.canUploadDailyReport()) return;
+      const asOf = normalizeDailyReportAsOfInput(this.els.asOfDate?.value);
+      if(!asOf){
+        this.showAlert('יש לבחור "תאריך עדכון הדוח" לפני העלאת הקובץ', "err");
+        try { this.els.asOfDate?.focus(); } catch(_e) {}
+        return;
+      }
+      this.showAlert("");
+      this.els.fileInput?.click();
+    },
+
+    async onFileSelected(ev){
+      if(!Auth.canUploadDailyReport()) return;
+      const file = ev?.target?.files?.[0];
+      try { if(ev?.target) ev.target.value = ""; } catch(_e) {}
+      if(!file) return;
+      const reportAsOfDate = normalizeDailyReportAsOfInput(this.els.asOfDate?.value);
+      if(!reportAsOfDate){
+        this.showAlert('יש לבחור "תאריך עדכון הדוח" לפני העלאת הקובץ', "err");
+        return;
+      }
+      const name = safeTrim(file.name).toLowerCase();
+      if(name && !/\.(xlsx|xls|csv)$/.test(name)){
+        this.showAlert("יש לבחור קובץ Excel (.xlsx, .xls) או CSV", "err");
+        return;
+      }
+      this.showAlert("מעבד ושומר את הדוח…", "warn");
+      if(this.els.btnUpload) this.els.btnUpload.disabled = true;
+      try {
+        if(window.GI_LOAD_LIBS?.xlsx) await window.GI_LOAD_LIBS.xlsx();
+      } catch(loadErr) {
+        this.showAlert("ספריית Excel לא נטענה — בדוק חיבור לאינטרנט ורענן את הדף", "err");
+        if(this.els.btnUpload) this.els.btnUpload.disabled = false;
+        return;
+      }
+      const parsed = await parseDailyReportWorkbook(file);
+      if(!parsed.ok){
+        this.showAlert(parsed.error || "שגיאה בקריאת הקובץ", "err");
+        if(this.els.btnUpload) this.els.btnUpload.disabled = false;
+        return;
+      }
+      const stamp = nowISO();
+      this.clearFilters();
+      const save = await AgentAppointmentReportStore.saveActive({
+        uploadedAt: stamp,
+        uploadedByName: safeTrim(Auth?.current?.name) || "מנהל",
+        reportAsOfDate,
+        sheetName: parsed.sheetName || "גיליון1",
+        headerRow: parsed.headerRow,
+        dataRows: parsed.dataRows
+      });
+      if(this.els.btnUpload) this.els.btnUpload.disabled = false;
+      if(!save.ok){
+        this.showAlert("שמירה נכשלה: " + (save.error || ""), "err");
+        return;
+      }
+      if(typeof toast === "function") toast("דוח מינוי סוכן הועלה", formatDailyReportUploadDate(stamp));
+      this.showAlert("הדוח נשמר בהצלחה — " + (parsed.dataRows?.length || 0) + " שורות", "ok");
+      this.paint();
+    },
+
+    async exportToExcel(){
+      try {
+        if(window.GI_LOAD_LIBS?.xlsx) await window.GI_LOAD_LIBS.xlsx();
+        if(typeof window === "undefined" || !window.XLSX){
+          this.showAlert("ספריית Excel לא נטענה — רענן את הדף ונסה שוב", "err");
+          return;
+        }
+        const report = AgentAppointmentReportStore.report;
+        if(!report || !Array.isArray(report.headerRow) || !report.headerRow.length){
+          this.showAlert("טרם נטען דוח מינוי סוכן", "warn");
+          return;
+        }
+        const headers = report.headerRow.map((h) => safeTrim(h) || "—");
+        const colCount = headers.length;
+        const rows = (Auth.isAdmin() || Auth.isManager())
+          ? (Array.isArray(report.dataRows) ? report.dataRows : [])
+          : this.getFilteredRows();
+        if(!rows.length){
+          this.showAlert("אין שורות לייצוא", "warn");
+          return;
+        }
+        const dataRows = rows.map((row) => {
+          const cells = Array.isArray(row.cells) ? row.cells : [];
+          const out = [];
+          for(let i = 0; i < colCount; i += 1) out.push(safeTrim(cells[i]));
+          return out;
+        });
+        const flipRow = (row) => row.slice().reverse();
+        const wsData = [flipRow(headers), ...dataRows.map(flipRow)];
+        const wb = window.XLSX.utils.book_new();
+        const ws = window.XLSX.utils.aoa_to_sheet(wsData);
+        if(!ws["!opts"]) ws["!opts"] = {};
+        ws["!opts"].RTL = true;
+        const sheetLabel = safeTrim(report.sheetName) || "מינוי סוכן";
+        window.XLSX.utils.book_append_sheet(wb, ws, sheetLabel.slice(0, 31));
+        const now = new Date();
+        const ds = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, "0"), String(now.getDate()).padStart(2, "0")].join("-");
+        const asOf = normalizeDailyReportAsOfInput(report.reportAsOfDate);
+        let fileName = "דוח_מינוי_סוכן_GEMEL_INVEST_" + (asOf || ds);
+        if(!Auth.isAdmin() && !Auth.isManager()){
+          const agentName = safeTrim(Auth?.current?.name) || safeTrim(Auth?.current?.username) || "נציג";
+          fileName += "_" + agentName.replace(/[^\w\u0590-\u05FF]+/g, "_");
+        }
+        fileName += ".xlsx";
+        window.XLSX.writeFile(wb, fileName);
+        if(typeof toast === "function") toast("דוח מינוי סוכן הופק", fileName);
+      } catch(err) {
+        console.error("agentApptReport exportToExcel error:", err);
+        this.showAlert("שגיאה בייצוא: " + (err?.message || err), "err");
+      }
+    },
+
+    getFilteredRows(){
+      const report = AgentAppointmentReportStore.report;
+      if(!report) return [];
+      const cols = getAgentApptReportColumnIndexes(report);
+      const q = safeTrim(this.searchQuery).toLowerCase();
+      const fAgent = safeTrim(this.filterAgent);
+      const fStatus = safeTrim(this.filterStatus);
+      const fCompany = safeTrim(this.filterCompany);
+      const fMonth = safeTrim(this.filterMonth);
+      let rows = AgentAppointmentReportStore.getVisibleRows();
+      if(fAgent){
+        rows = filterDailyReportRowsBySelectedAgent(rows, fAgent);
+      }
+      if(fStatus && cols.status >= 0){
+        rows = rows.filter((row) => getDailyReportCell(row, cols.status) === fStatus);
+      }
+      if(fCompany && cols.company >= 0){
+        rows = rows.filter((row) => getDailyReportCell(row, cols.company) === fCompany);
+      }
+      if(fMonth && cols.month >= 0){
+        rows = rows.filter((row) => getDailyReportCell(row, cols.month) === fMonth);
+      }
+      if(!q) return rows;
+      return rows.filter((row) => {
+        const blob = (row.cells || []).join(" ").toLowerCase();
+        return blob.includes(q) || safeTrim(row.agent).toLowerCase().includes(q);
+      });
+    },
+
+    collectUniqueColumnValues(rows, colIdx){
+      const set = new Set();
+      if(colIdx < 0) return [];
+      (rows || []).forEach((row) => {
+        const val = getDailyReportCell(row, colIdx);
+        if(val) set.add(val);
+      });
+      return Array.from(set).sort((a, b) => a.localeCompare(b, "he"));
+    },
+
+    paintFilterOptions(report){
+      const stamp = report
+        ? safeTrim(report.uploadedAt) + "|" + (report.dataRows?.length || 0)
+        : "";
+      const syncValues = () => {
+        if(this.els.filterAgent && !this.els.filterAgent.hidden) this.els.filterAgent.value = this.filterAgent;
+        if(this.els.filterStatus) this.els.filterStatus.value = this.filterStatus;
+        if(this.els.filterCompany) this.els.filterCompany.value = this.filterCompany;
+        if(this.els.filterMonth) this.els.filterMonth.value = this.filterMonth;
+      };
+      if(stamp && this._filterOptionsStamp === stamp){
+        syncValues();
+        return;
+      }
+      this._filterOptionsStamp = stamp;
+      const baseRows = AgentAppointmentReportStore.getVisibleRows();
+      const cols = getAgentApptReportColumnIndexes(report);
+      const fillSelect = (el, placeholder, values, current) => {
+        if(!el) return;
+        const opts = [`<option value="">${escapeHtml(placeholder)}</option>`]
+          .concat(values.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`));
+        el.innerHTML = opts.join("");
+        el.value = values.includes(current) ? current : "";
+      };
+      const canPickAgent = Auth.isAdmin() || Auth.isManager() || Auth.isTeamManager();
+      if(this.els.filterAgent){
+        this.els.filterAgent.hidden = !canPickAgent;
+        if(canPickAgent){
+          let agents = AgentAppointmentReportStore.getAgentSummary().map(([name]) => name).filter((n) => n && n !== "— ללא נציג");
+          if(Auth.isTeamManager()){
+            agents = buildTeamManagerDailyReportAgentFilterNames(agents, baseRows);
+          }
+          fillSelect(this.els.filterAgent, "נציג — הכל", agents, this.filterAgent);
+        }
+      }
+      fillSelect(this.els.filterStatus, "סטטוס — הכל", this.collectUniqueColumnValues(baseRows, cols.status), this.filterStatus);
+      fillSelect(this.els.filterCompany, "חברה — הכל", this.collectUniqueColumnValues(baseRows, cols.company), this.filterCompany);
+      fillSelect(this.els.filterMonth, "חודש — הכל", this.collectUniqueColumnValues(baseRows, cols.month), this.filterMonth);
+      syncValues();
+    },
+
+    paintHeader(report){
+      if(!this.els.thead) return;
+      const headers = Array.isArray(report?.headerRow) ? report.headerRow : [];
+      if(!headers.length){
+        this.els.thead.innerHTML = "<tr><th class=\"muted\">—</th></tr>";
+        return;
+      }
+      this.els.thead.innerHTML = "<tr>" + headers.map((h) => `<th>${escapeHtml(h || "—")}</th>`).join("") + "</tr>";
+    },
+
+    paintBody(report, rows){
+      if(!this.els.tbody) return;
+      const headers = Array.isArray(report?.headerRow) ? report.headerRow : [];
+      const colCount = Math.max(headers.length, 1);
+      if(!report){
+        this.els.tbody.innerHTML = `<tr><td colspan="${colCount}" class="muted">טרם נטען דוח מינוי סוכן</td></tr>`;
+        return;
+      }
+      if(!rows.length){
+        const msg = Auth.isAdmin() || Auth.isManager()
+          ? "אין שורות להצגה (נסה לשנות חיפוש)"
+          : Auth.isTeamManager()
+            ? "אין שורות בדוח עבור הצוות שלך — ודא ששמות הנציגים בעמודת \"נציג\" תואמים למערכת"
+            : 'אין שורות בדוח עבורך — ודא ששמך בעמודת "נציג" תואם לשם במערכת';
+        this.els.tbody.innerHTML = `<tr><td colspan="${colCount}" class="muted">${escapeHtml(msg)}</td></tr>`;
+        return;
+      }
+      const cols = getAgentApptReportColumnIndexes(report);
+      this.els.tbody.innerHTML = rows.map((row) => {
+        const cells = Array.isArray(row.cells) ? row.cells : [];
+        const tds = [];
+        for(let i = 0; i < colCount; i += 1){
+          const val = safeTrim(cells[i]);
+          const isNum = i === cols.idNumber || i === cols.policyNumber || i === cols.premium;
+          tds.push(`<td${isNum ? ' dir="ltr"' : ""}>${escapeHtml(val)}</td>`);
+        }
+        return `<tr>${tds.join("")}</tr>`;
+      }).join("");
+    },
+
+    paintStats(report, rows){
+      if(!this.els.stats) return;
+      if(!report){
+        this.els.stats.hidden = true;
+        return;
+      }
+      const cols = getAgentApptReportColumnIndexes(report);
+      let doneCount = 0;
+      let donePremium = 0;
+      (rows || []).forEach((row) => {
+        if(!isAgentApptReportCompletedStatus(getDailyReportCell(row, cols.status))) return;
+        doneCount += 1;
+        donePremium += parseDailyReportMoney(getDailyReportCell(row, cols.premium));
+      });
+      this.els.stats.hidden = false;
+      if(this.els.premDone) this.els.premDone.textContent = formatAgentApptReportMoney(donePremium) || "₪0";
+      if(this.els.premDoneSub) this.els.premDoneSub.textContent = doneCount + " פוליסות בוצע";
+      if(this.els.rowCount) this.els.rowCount.textContent = String(rows.length);
+      if(this.els.rowCountSub) this.els.rowCountSub.textContent = this.hasActiveFilters() ? "מוצגות כעת" : "שורות בדוח";
+    },
+
+    paintMeta(report, filteredCount, totalVisible){
+      if(!this.els.meta) return;
+      if(!report){
+        this.els.meta.textContent = Auth.canUploadDailyReport()
+          ? 'העלה קובץ Excel — העמודה "נציג" קובעת אילו שורות יראה כל נציג'
+          : "";
+        return;
+      }
+      const uploadLabel = formatDailyReportUploadDate(report.uploadedAt);
+      const parts = [];
+      if(uploadLabel) parts.push("תאריך העלאה: " + uploadLabel);
+      else parts.push("נטען מדוח מינוי סוכן 1-8.26");
+      if(safeTrim(report.uploadedByName)) parts.push("הועלה על ידי: " + report.uploadedByName);
+      const total = Number(totalVisible) || 0;
+      const shown = Number(filteredCount) || 0;
+      parts.push(this.hasActiveFilters() ? `מוצגות ${shown} מתוך ${total} שורות` : `מוצגות ${shown} שורות`);
+      if(Auth.isAdmin() || Auth.isManager()){
+        const summary = AgentAppointmentReportStore.getAgentSummary();
+        if(summary.length){
+          parts.push("פילוח: " + summary.slice(0, 8).map(([name, cnt]) => `${name} (${cnt})`).join(" · ") + (summary.length > 8 ? "…" : ""));
+        }
+      }
+      this.els.meta.textContent = parts.join(" · ");
+    },
+
+    paintTitle(){
+      const report = AgentAppointmentReportStore.report;
+      const asOfLabel = report ? formatDailyReportAsOfDate(report.reportAsOfDate) : "";
+      if(this.els.asOfLine){
+        if(asOfLabel){
+          this.els.asOfLine.hidden = false;
+          this.els.asOfLine.textContent = "נכון לתאריך " + asOfLabel;
+        } else {
+          this.els.asOfLine.hidden = true;
+          this.els.asOfLine.textContent = "";
+        }
+      }
+      const canUpload = Auth.canUploadDailyReport();
+      if(this.els.asOfPickWrap) this.els.asOfPickWrap.hidden = !canUpload;
+      if(this.els.asOfDate && canUpload && report?.reportAsOfDate){
+        this.els.asOfDate.value = normalizeDailyReportAsOfInput(report.reportAsOfDate);
+      }
+    },
+
+    paint(){
+      const report = AgentAppointmentReportStore.report;
+      const canUpload = Auth.canUploadDailyReport();
+      if(this.els.btnUpload){
+        this.els.btnUpload.hidden = !canUpload;
+        this.els.btnUpload.disabled = false;
+      }
+      if(this.els.btnExport) this.els.btnExport.hidden = !report;
+      if(this.els.btnRefresh) this.els.btnRefresh.hidden = !canUpload;
+      if(this.els.fileInput) this.els.fileInput.hidden = !canUpload;
+      if(this.els.filters) this.els.filters.hidden = !report;
+      this.showAlert("");
+      this.paintTitle();
+      if(report) this.paintFilterOptions(report);
+      const totalVisible = AgentAppointmentReportStore.getVisibleRows().length;
+      const rows = this.getFilteredRows();
+      this.paintStats(report, rows);
+      this.paintMeta(report, rows.length, totalVisible);
+      this.paintHeader(report);
+      this.paintBody(report, rows);
+    },
+
+    showLoadingShell(){
+      if(!this.els.thead) this.init();
+      if(this.els.thead) this.els.thead.innerHTML = '<tr><th class="muted">טוען דוח מינוי סוכן…</th></tr>';
+      if(this.els.tbody) this.els.tbody.innerHTML = '<tr><td class="muted">טוען נתונים…</td></tr>';
+      if(this.els.meta) this.els.meta.textContent = "טוען…";
+      if(this.els.filters) this.els.filters.hidden = true;
+      if(this.els.alert){
+        this.els.alert.hidden = true;
+        this.els.alert.textContent = "";
+      }
+    },
+
+    scheduleNavRender(){
+      if(!Auth.current) return;
+      if(!this.els.thead) this.init();
+      const hadCache = !!AgentAppointmentReportStore.report;
+      if(hadCache){
+        try { this.paint(); } catch(_e) {}
+      } else {
+        try { this.showLoadingShell(); } catch(_e) {}
+      }
+      if(this._navFetchInFlight) return;
+      this._navFetchInFlight = true;
+      perfIdle(() => {
+        void (async () => {
+          try {
+            await this.refresh(false, { onlyIfVisible: true });
+          } finally {
+            this._navFetchInFlight = false;
+          }
+        })();
+      }, hadCache ? 120 : 80);
+    },
+
+    async refresh(showToast, options = {}){
+      const r = await AgentAppointmentReportStore.fetchActive();
+      if(!r.ok && AgentAppointmentReportStore.lastError){
+        this.showAlert("לא נטען דוח מינוי סוכן: " + AgentAppointmentReportStore.lastError, "err");
+      }
+      if(options.onlyIfVisible && !(LiveRefresh.getCurrentView() === "dailyReport" && DailyReportUI.activeRubric === "agentAppointments")) return;
+      this.paint();
+      if(showToast && typeof toast === "function" && r.ok) toast("דוח מינוי סוכן עודכן");
     },
 
     async render(){
@@ -65403,6 +66163,8 @@ ${inner}
   AttendanceReportUI.init();
   DailyReportUI.init();
   CancellationsUI.init();
+  AgentAppointmentReportUI.init();
+  try { void AgentAppointmentReportStore.fetchActive(); } catch(_e) {}
   CampaignLeadsUI.init();
   TrackingReportUI.init();
   CampaignMyLeadsUI.init();
