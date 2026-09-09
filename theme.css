@@ -2534,7 +2534,7 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 
 .giReportsHub__grid:not(#\9):not(#\9){
   display: grid !important;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   gap: var(--gi-s3) !important;
 }
 

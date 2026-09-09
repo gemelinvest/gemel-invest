@@ -675,6 +675,10 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <span class="giReportsHub__optTitle">דוח ביטולים</span>
 <span class="giReportsHub__optHint">נתוני ביטולים מהקובץ</span>
 </button>
+<button class="giReportsHub__opt" data-report-open="agentAppointments" id="btnReportsHubAgentAppointments" type="button">
+<span class="giReportsHub__optTitle">דוח מינוי סוכן</span>
+<span class="giReportsHub__optHint">פרמיה שעברה לנציג מביצוע מינוי</span>
+</button>
 </div>
 </div>
 </section>
@@ -684,6 +688,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <div class="lcReportRubrics" id="reportRubrics" role="tablist" aria-label="מעבר בין דוחות">
 <button class="lcReportRubrics__tab is-active" id="rubricTabDaily" type="button" role="tab" aria-selected="true" data-rubric="daily">דוח מכירות</button>
 <button class="lcReportRubrics__tab" id="rubricTabCancellations" type="button" role="tab" aria-selected="false" data-rubric="cancellations">דוח ביטולים</button>
+<button class="lcReportRubrics__tab" id="rubricTabAgentAppointments" type="button" role="tab" aria-selected="false" data-rubric="agentAppointments">דוח מינוי סוכן</button>
 </div>
 <div class="lcReportNav__actions" id="reportNavActionsDaily">
 <div class="lcDailyReportCard__actions lcReportNav__actionsInner">
@@ -713,6 +718,18 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <button class="btn btn--primary" id="btnCancellationsExport" type="button">הפק דוח ביטולים</button>
 <button class="btn btn--primary" id="btnCancellationsUpload" type="button" hidden>העלה דוח מאקסל</button>
 <button class="btn" id="btnCancellationsRefresh" type="button">רענון</button>
+</div>
+</div>
+<div class="lcReportNav__actions" hidden id="reportNavActionsAgentAppointments">
+<div class="lcDailyReportCard__actions lcReportNav__actionsInner">
+<label class="lcDailyReport__asOfPick" hidden id="agentApptReportAsOfPickWrap">
+<span class="lcDailyReport__asOfPickLabel">תאריך עדכון הדוח</span>
+<input class="input lcDailyReport__asOfInput" id="agentApptReportAsOfDate" type="date"/>
+</label>
+<input accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" class="lcDailyReport__fileInput" id="agentApptReportFileInput" type="file"/>
+<button class="btn btn--primary" id="btnAgentApptReportExport" type="button">הפק דוח מינוי סוכן</button>
+<button class="btn btn--primary" id="btnAgentApptReportUpload" type="button" hidden>העלה דוח מאקסל</button>
+<button class="btn" id="btnAgentApptReportRefresh" type="button">רענון</button>
 </div>
 </div>
 </div>
@@ -777,6 +794,45 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <table class="table lcDailyReportTable">
 <thead id="cancellationsThead"><tr><th class="muted">טוען…</th></tr></thead>
 <tbody id="cancellationsTbody"></tbody>
+</table>
+</div>
+</div>
+</div>
+<div class="lcReportPanel" id="dailyReportPanelAgentAppointments" hidden>
+<div class="card lcDailyReportCard lcAgentApptReportCard">
+<div class="card__head lcDailyReportCard__head">
+<div class="lcReportHead__main">
+<div class="lcDailyReport__asOf lcDailyReport__asOf--sub" hidden id="agentApptReportAsOfLine"></div>
+<div class="lcStatStrip lcStatStrip--inHead" hidden id="agentApptReportStats">
+<div class="lcStatStrip__row">
+<div class="lcStatCell lcStatCell--totalSuccess">
+<span class="lcStatCell__label">סה״כ פרמיה שעברה (בוצע)</span>
+<span class="lcStatCell__value" id="agentApptReportPremDone">₪0</span>
+<span class="lcStatCell__sub" id="agentApptReportPremDoneSub">0 פוליסות</span>
+</div>
+<div class="lcStatCell">
+<span class="lcStatCell__label">שורות בדוח</span>
+<span class="lcStatCell__value" id="agentApptReportRowCount">0</span>
+<span class="lcStatCell__sub" id="agentApptReportRowCountSub">מוצגות כעת</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div aria-live="polite" class="lcDailyReport__alert" hidden id="agentApptReportAlert"></div>
+<div class="lcDailyReport__filters" hidden id="agentApptReportFilters">
+<input class="input lcDailyReport__search" id="agentApptReportSearch" placeholder="חיפוש: נציג, מבוטח, תז, פוליסה, חברה…" type="search"/>
+<select class="input lcDailyReport__filterSelect" hidden id="agentApptReportFilterAgent"><option value="">נציג — הכל</option></select>
+<select class="input lcDailyReport__filterSelect" id="agentApptReportFilterStatus"><option value="">סטטוס — הכל</option></select>
+<select class="input lcDailyReport__filterSelect" id="agentApptReportFilterCompany"><option value="">חברה — הכל</option></select>
+<select class="input lcDailyReport__filterSelect" id="agentApptReportFilterMonth"><option value="">חודש — הכל</option></select>
+<button class="btn" id="btnAgentApptReportClearFilters" type="button">נקה סינון</button>
+</div>
+<div class="muted small lcDailyReport__meta" id="agentApptReportMeta"></div>
+<div class="tableWrap lcDailyReport__tableWrap">
+<table class="table lcDailyReportTable">
+<thead id="agentApptReportThead"><tr><th class="muted">טוען…</th></tr></thead>
+<tbody id="agentApptReportTbody"></tbody>
 </table>
 </div>
 </div>
@@ -3853,6 +3909,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <script src="./contacts-directory-seed.js?v=20260811-contacts-v1"></script>
 <script src="./gi-policy-scan.js?v=20260819-issued-scan-v3"></script>
 <script src="./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1"></script>
+<script src="./gi-agent-appointment-report-seed.js?v=20260909-agent-appt-report-v1"></script>
 <script src="./app.js?v=20260909-version-resume-v2"></script>
 <script src="./gi-assistant.js?v=20260829-assistant-open-file-fix-v1"></script>
 <script src="./gi-face-auth.js?v=20260817-face-retry-v1"></script>
