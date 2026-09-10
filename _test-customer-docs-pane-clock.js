@@ -1,4 +1,4 @@
-/* GI-CUSTOMER-DOCS-PANE-CLOCK 20260910-cf-policy-sum-v1
+/* GI-CUSTOMER-DOCS-PANE-CLOCK 20260910-cf-open-paint-v1
    Independent file-list / preview scroll, no select-all, elapsed download clock.
    Run: node _test-customer-docs-pane-clock.js
 */
@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260910-cf-policy-sum-v1";
+const TAG = "20260910-cf-open-paint-v1";
 let failed = 0;
 let passed = 0;
 
@@ -45,7 +45,7 @@ assert(app.includes('BUILD = "' + TAG + '"'), "app.js BUILD tag");
 assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "wizard build tag unchanged");
 
 console.log("\n2) independent scroll panes");
-assert(css.includes(".cfFile__main:has(.cfFile__documentsSplit)"), "documents tab stops the outer scroll");
+assert(css.includes(".cfFile__main.is-cf-documents") || css.includes(".cfFile__pane.is-active .cfFile__documentsSplit"), "documents tab stops the outer scroll");
 assert(css.includes("overscroll-behavior: contain"), "inner panes contain scroll");
 assert(css.includes(".cfFile__documentsList") && css.includes("overflow: auto"), "file list has its own overflow");
 assert(css.includes(".cfFile__documentsPreviewBody"), "preview body still exists");

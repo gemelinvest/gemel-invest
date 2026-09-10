@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260910-cf-policy-sum-v1";
+  const BUILD = "20260910-cf-open-paint-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -24013,17 +24013,127 @@ UsersGateUI.init();
       return "policies";
     },
 
-    switchSection(section){
-      this.currentSection = this.normalizeSection(section);
-      const rec = this.current();
-      if(!rec) return;
-      const policies = this.collectPolicies(rec);
-      if(this.els.tabs) this.els.tabs.innerHTML = this.renderTabBar(rec, policies);
-      if(this.els.main){
+    _cfSectionIds(){
+      return ["policies", "personal", "medical", "ops", "documents"];
+    },
+
+    /* GI-PERF 2026-09-10: לא לטעון gi-wizard.js (~1.9MB) רק כי נפתח תיק.
+       hideFinishFlow / closeHealthFindingsModal הן עטיפות שמתחילות את ה-chunk. */
+    _closeWizardChromeForFileOpen(){
+      try {
+        if(typeof Wizard === "undefined" || !Wizard) return;
+        const chunkReady = !!(Wizard._chunkReady || (typeof giWizardIsInstalled === "function" && giWizardIsInstalled()));
+        if(Wizard.isOpen){
+          try { Wizard.hideFinishFlow?.(); } catch(_e) {}
+          try { Wizard.closeHealthFindingsModal?.(); } catch(_e) {}
+          try { Wizard.close(); } catch(_e) {}
+          return;
+        }
+        if(!chunkReady) return;
+        try { Wizard.hideFinishFlow?.(); } catch(_e) {}
+        try { Wizard.closeHealthFindingsModal?.(); } catch(_e) {}
+      } catch(_e) {}
+    },
+
+    sectionPane(section){
+      const id = this.normalizeSection(section);
+      try {
+        return this.els.main?.querySelector(`:scope > [data-cf-pane="${id}"]`) || null;
+      } catch(_e) {
+        return this.els.main?.querySelector(`[data-cf-pane="${id}"]`) || null;
+      }
+    },
+
+    _sectionHost(){
+      return this.sectionPane(this.currentSection) || this.els.main;
+    },
+
+    invalidateSectionPanes(){
+      this._paintedSectionKeys = Object.create(null);
+      try {
+        this.els.main?.querySelectorAll("[data-cf-pane]").forEach((el) => { el.innerHTML = ""; });
+      } catch(_e) {}
+    },
+
+    ensureSectionPanes(){
+      const main = this.els.main;
+      if(!main) return null;
+      if(main.querySelector(":scope > [data-cf-pane], [data-cf-pane]")) return main;
+      main.innerHTML = this._cfSectionIds().map((id) =>
+        `<div class="cfFile__pane" data-cf-pane="${escapeHtml(id)}" hidden></div>`
+      ).join("");
+      this._paintedSectionKeys = Object.create(null);
+      return main;
+    },
+
+    showSectionPane(section){
+      const id = this.normalizeSection(section);
+      const main = this.els.main;
+      if(!main) return;
+      const prev = this.normalizeSection(this._visibleSection || "");
+      if(prev && prev !== id){
+        this._sectionScroll = this._sectionScroll || Object.create(null);
+        this._sectionScroll[prev] = main.scrollTop || 0;
+      }
+      main.querySelectorAll("[data-cf-pane]").forEach((el) => {
+        const on = el.getAttribute("data-cf-pane") === id;
+        el.hidden = !on;
+        el.classList.toggle("is-active", on);
+      });
+      main.classList.toggle("is-cf-documents", id === "documents");
+      this._visibleSection = id;
+      const saved = this._sectionScroll && Number(this._sectionScroll[id] || 0);
+      if(Number.isFinite(saved) && saved > 0){
+        try { main.scrollTop = saved; } catch(_e) {}
+      } else if(prev && prev !== id){
+        try { main.scrollTop = 0; } catch(_e) {}
+      }
+    },
+
+    markActiveTab(section){
+      const id = this.normalizeSection(section);
+      const tabs = this.els.tabs;
+      if(!tabs) return false;
+      const buttons = tabs.querySelectorAll("[data-cf-tab]");
+      if(!buttons.length) return false;
+      buttons.forEach((btn) => {
+        btn.classList.toggle("is-active", btn.getAttribute("data-cf-tab") === id);
+      });
+      return true;
+    },
+
+    paintSectionPane(rec, policies, opts={}){
+      if(!rec || !this.els.main) return;
+      const section = this.normalizeSection(this.currentSection);
+      this.ensureSectionPanes();
+      const pane = this.sectionPane(section);
+      if(!pane){
         this.els.main.innerHTML = this.renderSectionContent(rec, policies);
         this.bindSectionActions(rec, policies);
+        return;
       }
-      this.queueFollowupDocumentsSync(rec);
+      const key = `${safeTrim(rec?.id)}|${safeTrim(rec?.updatedAt)}|${section}`;
+      const already = !opts.force && this._paintedSectionKeys && this._paintedSectionKeys[section] === key && pane.innerHTML;
+      this.showSectionPane(section);
+      if(already) return;
+      pane.innerHTML = this.renderSectionContent(rec, policies);
+      if(!this._paintedSectionKeys) this._paintedSectionKeys = Object.create(null);
+      this._paintedSectionKeys[section] = key;
+      this.bindSectionActions(rec, policies);
+    },
+
+    switchSection(section){
+      const next = this.normalizeSection(section);
+      const rec = this.current();
+      if(!rec) return;
+      try { HeavySyncGate.markInteraction?.(); } catch(_e) {}
+      this.currentSection = next;
+      const policies = this.collectPolicies(rec);
+      if(!this.markActiveTab(next) && this.els.tabs){
+        this.els.tabs.innerHTML = this.renderTabBar(rec, policies);
+      }
+      this.paintSectionPane(rec, policies);
+      if(next === "documents") this.queueFollowupDocumentsSync(rec);
     },
 
     stripLegacyFileSummary(){
@@ -24051,9 +24161,13 @@ UsersGateUI.init();
       if(this.els.meta) this.els.meta.innerHTML = this.renderHeroMeta(rec);
       if(this.els.tabs) this.els.tabs.innerHTML = this.renderTabBar(rec, policies);
       if(this.els.main){
-        this.els.main.innerHTML = this.renderSectionContent(rec, policies);
-        this.bindSectionActions(rec, policies);
+        this.invalidateSectionPanes();
+        this.ensureSectionPanes();
+        this.paintSectionPane(rec, policies, { force: true });
         const scrollTop = Math.max(0, Number(opts?.bodyScrollTop || 0) || 0);
+        const section = this.normalizeSection(this.currentSection);
+        this._sectionScroll = this._sectionScroll || Object.create(null);
+        this._sectionScroll[section] = scrollTop;
         requestAnimationFrame(() => {
           try { this.els.main.scrollTop = scrollTop; } catch(_e) {}
         });
@@ -25393,7 +25507,7 @@ UsersGateUI.init();
     },
 
     bindMedicalTabActions(){
-      const root = this.els.main;
+      const root = this._sectionHost();
       if(!root) return;
       root.querySelectorAll("[data-cf-med-yes-toggle]").forEach((btn) => {
         on(btn, "click", (ev) => {
@@ -26143,7 +26257,7 @@ UsersGateUI.init();
     },
 
     bindPolicyTableActions(rec, policies){
-      const root = this.els.main;
+      const root = this._sectionHost();
       if(!root) return;
       this.closePolicyRowMenus();
       root.querySelectorAll("[data-policy-download]").forEach((btn) => {
@@ -26432,15 +26546,19 @@ UsersGateUI.init();
     },
 
     bindInsuredsTabActions(rec){
-      const root = this.els.main;
+      const root = this._sectionHost();
       if(!root) return;
       root.querySelectorAll("[data-cf-ins-pick]").forEach((btn) => {
         on(btn, "click", (ev) => {
           ev.preventDefault();
           ev.stopPropagation();
           this._insuredsTabSelectedId = safeTrim(btn.getAttribute("data-cf-ins-pick"));
-          if(this.els.main){
-            this.els.main.innerHTML = this.renderInsuredsTab(rec);
+          const host = this.sectionPane("personal") || this.els.main;
+          if(host){
+            host.innerHTML = this.renderInsuredsTab(rec);
+            if(this._paintedSectionKeys){
+              this._paintedSectionKeys.personal = `${safeTrim(rec?.id)}|${safeTrim(rec?.updatedAt)}|personal`;
+            }
             this.bindInsuredsTabActions(rec);
           }
         });
@@ -26967,6 +27085,8 @@ UsersGateUI.init();
       this.stripLegacyFileSummary();
       if(this.els.tabs) this.els.tabs.innerHTML = "";
       if(this.els.main){
+        try { this._paintedSectionKeys = Object.create(null); } catch(_e) {}
+        this.els.main.classList.remove("is-cf-documents");
         this.els.main.innerHTML = `<div class="muted" style="padding:32px;text-align:center;">טוען פרטי תיק…</div>`;
       }
       this.els.wrap.classList.add("is-open");
@@ -27009,6 +27129,7 @@ UsersGateUI.init();
     _openByIdResolved(rec, opts={}){
       if(!rec || !this.els.wrap) return;
       const paintHeavy = () => GiPerf.run("openCustomer", () => {
+      try { HeavySyncGate.markInteraction?.(); } catch(_e) {}
       try {
         if(typeof MirrorCallUI !== "undefined" && MirrorCallUI?._mirrorCoerceCustomerPayloadInPlace){
           MirrorCallUI._mirrorCoerceCustomerPayloadInPlace(rec);
@@ -27025,11 +27146,9 @@ UsersGateUI.init();
       const reopenPolicyId = safeTrim(opts?.policyId || "");
       const bodyScrollTop = Math.max(0, Number(opts?.bodyScrollTop || 0) || 0);
       try {
-        Wizard?.hideFinishFlow?.();
-        Wizard?.closeHealthFindingsModal?.();
+        this._closeWizardChromeForFileOpen();
       } catch(_e) {}
       try{
-        if(Wizard?.isOpen) Wizard.close();
         this.currentId = rec.id;
         const policies = this.collectPolicies(rec);
         this.currentSection = safeSection;
@@ -27069,24 +27188,31 @@ UsersGateUI.init();
       });
 
       /* GI-PERF 2026-08-09: פתיחת מעטפת מיידית + רינדור כבד אחרי paint.
-         skipSig / syncOpen — רענון תיק פתוח בלי הבהוב "טוען". */
-      if(opts.skipSig || opts.syncOpen === true || typeof requestAnimationFrame !== "function"){
+         skipSig — רענון תיק פתוח בלי הבהוב "טוען", אבל עדיין אחרי rAF כדי לא לחסום קליק.
+         syncOpen — מילוט לקוראים שחייבים DOM מיידי באותו task. */
+      if(opts.syncOpen === true || typeof requestAnimationFrame !== "function"){
         return paintHeavy();
       }
-      try {
-        this.currentId = rec.id;
-        if(this.els.name) this.els.name.textContent = safeTrim(rec.fullName) || "תיק לקוח";
-        if(this.els.avatar) this.els.avatar.setAttribute("data-customer-name", safeTrim(rec.fullName || "תיק לקוח"));
-        this.paintHeroLiveTimer(rec);
-        if(this.els.main){
-          this.els.main.innerHTML = `<div class="muted" style="padding:32px;text-align:center;">טוען פרטי תיק…</div>`;
-        }
-        this.els.wrap.classList.add("is-open");
-        this.els.wrap.setAttribute("aria-hidden", "false");
-        document.body.style.overflow = "hidden";
-        this.refreshArchiveBtnVisibility();
-        this.refreshAssignBtnVisibility();
-      } catch(_e) {}
+      if(!opts.skipSig){
+        try {
+          this.currentId = rec.id;
+          if(this.els.name) this.els.name.textContent = safeTrim(rec.fullName) || "תיק לקוח";
+          if(this.els.avatar) this.els.avatar.setAttribute("data-customer-name", safeTrim(rec.fullName || "תיק לקוח"));
+          this.paintHeroLiveTimer(rec);
+          if(this.els.main){
+            try { this._paintedSectionKeys = Object.create(null); } catch(_e2) {}
+            this.els.main.classList.remove("is-cf-documents");
+            this.els.main.innerHTML = `<div class="muted" style="padding:32px;text-align:center;">טוען פרטי תיק…</div>`;
+          }
+          this.els.wrap.classList.add("is-open");
+          this.els.wrap.setAttribute("aria-hidden", "false");
+          document.body.style.overflow = "hidden";
+          this.refreshArchiveBtnVisibility();
+          this.refreshAssignBtnVisibility();
+        } catch(_e) {}
+      } else {
+        try { HeavySyncGate.markInteraction?.(); } catch(_e) {}
+      }
       const token = (Number(this._openPaintToken) || 0) + 1;
       this._openPaintToken = token;
       requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -27642,6 +27768,9 @@ UsersGateUI.init();
       this._openRefreshSig = "";
       this.clearSelectedDocIds();
       this.currentSection = "policies";
+      this._visibleSection = "";
+      this._paintedSectionKeys = Object.create(null);
+      this._sectionScroll = Object.create(null);
       this._clearCustomerFileOpening(closingId);
       try { this._closeFileActionsMenu?.(); } catch(_e) {}
       if(!this.els.wrap) return;
@@ -41838,7 +41967,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260910-cf-policy-sum-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260910-cf-open-paint-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -41858,8 +41987,8 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260910-cf-policy-sum-v1";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260910-cf-policy-sum-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260910-cf-open-paint-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260910-cf-open-paint-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -42512,18 +42641,18 @@ UsersGateUI.init();
     "./ayalon-health-sim.css?v=20260810-sim-mockup-v2",
     "./ayalon-ci-sim.css?v=20260811-ayl-ci-v1",
     "./hachshara-health-sim.css?v=20260810-sim-mockup-v2",
-    "./hachshara-risk-sim.css?v=20260910-cf-policy-sum-v1",
-    "./hachshara-mortgage-risk-sim.css?v=20260910-cf-policy-sum-v1",
+    "./hachshara-risk-sim.css?v=20260910-cf-open-paint-v1",
+    "./hachshara-mortgage-risk-sim.css?v=20260910-cf-open-paint-v1",
     "./migdal-health-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
-    "./menora-ci-sim.css?v=20260910-cf-policy-sum-v1",
+    "./menora-ci-sim.css?v=20260910-cf-open-paint-v1",
     "./clal-health-sim.css?v=20260812-cll-health-v1",
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260910-cf-policy-sum-v1",
-    "./simulators-shell.css?v=20260910-cf-policy-sum-v1"
+    "./simulators-center.css?v=20260910-cf-open-paint-v1",
+    "./simulators-shell.css?v=20260910-cf-open-paint-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -43885,7 +44014,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260910-cf-policy-sum-v1";
+  const GI_WIZARD_JS_VERSION = "20260910-cf-open-paint-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
