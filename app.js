@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260909-wizard-open-v1";
+  const BUILD = "20260910-cf-policy-sum-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -25652,6 +25652,35 @@ UsersGateUI.init();
       return rows;
     },
 
+    /* GI-CF-SUM-DATE 2026-09-10 — תצוגה בלבד בשורת פוליסה חדשה.
+       סרטן / מחלות / ריסק / ריסק משכנתא: סכום ביטוח + תאריך DD/MM/YYYY.
+       לא משנה שמירה, אשף או כניסה. */
+    formatCfPolicyStartDate(value){
+      const parsed = parseAnyDmyDate(value);
+      if(parsed) return formatDmyFromParts(parsed.year, parsed.month, parsed.day);
+      return safeTrim(value) || "—";
+    },
+
+    formatCfRiskOrCiSumDisplay(policy, rawPol, coverRows){
+      const type = safeTrim(policy?.type);
+      if(type !== "ריסק" && type !== "ריסק משכנתא" && type !== "סרטן" && type !== "מחלות קשות") return "";
+      const candidates = [];
+      const push = (v) => { if(v != null && String(v).trim() !== "") candidates.push(v); };
+      const raw = rawPol && typeof rawPol === "object" ? rawPol : {};
+      push(raw.sumInsured);
+      push(raw.compensation);
+      push(policy?.coverageValue);
+      [raw.sumInsuredPerInsured, raw.compensationPerInsured].forEach((map) => {
+        if(map && typeof map === "object") Object.values(map).forEach(push);
+      });
+      (Array.isArray(coverRows) ? coverRows : []).forEach((row) => push(row?.amount));
+      for(let i = 0; i < candidates.length; i++){
+        const n = this.asMoneyNumber(candidates[i]);
+        if(n >= 1000) return this.formatMoneyValue(n);
+      }
+      return "";
+    },
+
     renderNewPolicyCard(policy, rec, healthPolicies){
       const logoHtml = renderCompanyLogoHtmlForCompany(policy.company, "card");
       const logoMark = logoHtml
@@ -25666,7 +25695,7 @@ UsersGateUI.init();
       const rawPol = this.getRawNewPolicy(rec, policy) || {};
       const insuredSum = this.getPolicyInsuredCoverageSummary(rec, policy);
       const policyNumber = safeTrim(policy.policyNumber) || "—";
-      const startDate = safeTrim(policy.startDate) || "—";
+      const startDate = this.formatCfPolicyStartDate(policy.startDate || rawPol.startDate);
       const endDate = safeTrim(rawPol.endDate || policy.endDate);
       const sumInsured = safeTrim(rawPol.sumInsured || policy.coverageValue);
       const compensation = safeTrim(rawPol.compensation);
@@ -25703,11 +25732,12 @@ UsersGateUI.init();
         periodLabel ? ("תקופה " + periodLabel) : "",
         endDate ? ("תום " + endDate) : ""
       ].filter(Boolean).join(" · ");
-      const amountText = (isLife && displaySum)
+      const targetSum = this.formatCfRiskOrCiSumDisplay(policy, rawPol, coverRows);
+      const amountText = targetSum || ((isLife && displaySum)
         ? this.formatMoneyValue(this.asMoneyNumber(displaySum) || displaySum)
         : ((isHealth && compensation && Number(compensation) >= 1000)
           ? this.formatMoneyValue(this.asMoneyNumber(compensation) || compensation)
-          : "—");
+          : "—"));
       const cell = (label, value) =>
         `<div class="cfNewPolicyCard__cell"><span class="cfNewPolicyCard__lbl">${escapeHtml(label)}</span><strong class="cfNewPolicyCard__val">${escapeHtml(value)}</strong></div>`;
       const scan = rawPol.issuedPolicyScan && typeof rawPol.issuedPolicyScan === "object" ? rawPol.issuedPolicyScan : null;
@@ -41808,7 +41838,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260909-wizard-open-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260910-cf-policy-sum-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -41828,8 +41858,8 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260909-wizard-open-v1";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260909-wizard-open-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260910-cf-policy-sum-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260910-cf-policy-sum-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -42482,18 +42512,18 @@ UsersGateUI.init();
     "./ayalon-health-sim.css?v=20260810-sim-mockup-v2",
     "./ayalon-ci-sim.css?v=20260811-ayl-ci-v1",
     "./hachshara-health-sim.css?v=20260810-sim-mockup-v2",
-    "./hachshara-risk-sim.css?v=20260909-wizard-open-v1",
-    "./hachshara-mortgage-risk-sim.css?v=20260909-wizard-open-v1",
+    "./hachshara-risk-sim.css?v=20260910-cf-policy-sum-v1",
+    "./hachshara-mortgage-risk-sim.css?v=20260910-cf-policy-sum-v1",
     "./migdal-health-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
-    "./menora-ci-sim.css?v=20260909-wizard-open-v1",
+    "./menora-ci-sim.css?v=20260910-cf-policy-sum-v1",
     "./clal-health-sim.css?v=20260812-cll-health-v1",
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260909-wizard-open-v1",
-    "./simulators-shell.css?v=20260909-wizard-open-v1"
+    "./simulators-center.css?v=20260910-cf-policy-sum-v1",
+    "./simulators-shell.css?v=20260910-cf-policy-sum-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -43855,7 +43885,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260909-wizard-open-v1";
+  const GI_WIZARD_JS_VERSION = "20260910-cf-policy-sum-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
