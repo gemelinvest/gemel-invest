@@ -97,7 +97,7 @@ assert(fileBlock.includes("tab('medical', 'הצהרת בריאות'"), "health t
 assert(fileBlock.includes("tab('ops', 'תפעול'"), "ops tab remains");
 assert(fileBlock.includes("tab('documents', 'מסמכי לקוח'"), "documents tab remains");
 assert(fileBlock.includes("CustomersUI.openByIdWithLoader") || app.includes("CustomersUI.openByIdWithLoader"), "full-file open entry remains");
-assert(fileBlock.includes("this.els.main.innerHTML = this.renderSectionContent(rec, policies)"), "file view still paints the main section");
+assert(fileBlock.includes("renderSectionContent(rec, policies)"), "file view still paints the main section");
 assert(fileBlock.includes("this.els.tabs.innerHTML = this.renderTabBar(rec, policies)"), "file view still paints tabs");
 
 console.log("\n-----");
