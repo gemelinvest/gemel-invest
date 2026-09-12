@@ -41660,6 +41660,48 @@ UsersGateUI.init();
       }
       return this._phoenixHealthRows;
     },
+    /**
+     * Clal health join PDF (20-109-01-0725): SmokingStatus (+ IsSmoking) is named;
+     * HealthDecMainQ2–28 are yes/no radios. Layout evidence (widget Y vs printed rows):
+     * Q2 drugs/cannabis, Q3 alcohol, Q4 family hereditary, Q5–22 body systems 1–18,
+     * Q23 meds, Q24 pending tests, Q25 hospital/surgery, Q26–28 infant questions.
+     * Wizard still asks clal_family_heart_diabetes (printed 2ב) but that row has no
+     * AcroForm radio — keep it for follow-up packs only.
+     */
+    clalHealthRows(){
+      if(this._clalHealthRows) return this._clalHealthRows;
+      this._clalHealthRows = [
+        { smoke: true, keys: ["clal_smoking"] },
+        { q: 2, keys: ["clal_drugs_cannabis"] },
+        { q: 3, keys: ["clal_alcohol"] },
+        { q: 4, keys: ["clal_family_hereditary"] },
+        { q: 5, keys: ["clal_neuro_development"] },
+        { q: 6, keys: ["clal_mental"] },
+        { q: 7, keys: ["clal_respiratory"] },
+        { q: 8, keys: ["clal_skin"] },
+        { q: 9, keys: ["clal_heart_blood_vessels"] },
+        { q: 10, keys: ["clal_digestive"] },
+        { q: 11, keys: ["clal_hernia"] },
+        { q: 12, keys: ["clal_liver_gallbladder_pancreas"] },
+        { q: 13, keys: ["clal_kidney_urinary"] },
+        { q: 14, keys: ["clal_metabolic_endocrine"] },
+        { q: 15, keys: ["clal_blood_immune"] },
+        { q: 16, keys: ["clal_infectious_hiv"] },
+        { q: 17, keys: ["clal_tumors"] },
+        { q: 18, keys: ["clal_musculoskeletal"] },
+        { q: 19, keys: ["clal_vision"] },
+        { q: 20, keys: ["clal_ent"] },
+        { q: 21, keys: ["clal_reproductive"] },
+        { q: 22, keys: ["clal_rheumatic_connective"] },
+        { q: 23, keys: ["clal_regular_meds"] },
+        { q: 24, keys: ["clal_future_tests"] },
+        { q: 25, keys: ["clal_hospital_surgery"] },
+        { q: 26, keys: ["clal_child_under_6m_followup"] },
+        { q: 27, keys: ["clal_child_family_history"] },
+        { q: 28, keys: ["clal_child_congenital"] }
+      ];
+      return this._clalHealthRows;
+    },
     applyMappedHealthYesNo(form, spec){
       const cfg = spec && typeof spec === "object" ? spec : {};
       if(!form) return;
@@ -41667,7 +41709,8 @@ UsersGateUI.init();
         : (cfg.map === "migdal_life" ? this.migdalLifeHealthRows()
           : (cfg.map === "migdal_cancer" ? this.migdalCancerHealthRows()
             : (cfg.map === "migdal_mortgage" ? this.migdalMortgageHealthRows()
-              : (cfg.map === "phoenix_health" ? this.phoenixHealthRows() : this.hachsharaHealthRows(cfg.map)))));
+              : (cfg.map === "phoenix_health" ? this.phoenixHealthRows()
+                : (cfg.map === "clal_health" ? this.clalHealthRows() : this.hachsharaHealthRows(cfg.map))))));
       const responses = cfg.responses && typeof cfg.responses === "object" ? cfg.responses : {};
       const primaryId = this.resolveHealthPrimaryId(responses, cfg.primaryId);
       const spouseId = String(cfg.spouseId == null ? "" : cfg.spouseId).trim();
@@ -41980,7 +42023,7 @@ UsersGateUI.init();
   const GI_MENORA_RISK_FORM_HREF = "./gi-menora-risk-form.js?v=20260828-menora-health-decl-v1";
   const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-covers-sum-v1";
   const GI_AYALON_MORTGAGE_FORM_HREF = "./gi-ayalon-mortgage-form.js?v=20260824-covers-sum-v1";
-  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-covers-sum-v1";
+  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260912-clal-health-align-v1";
   const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-covers-sum-v1";
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260824-covers-sum-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260825-migdal-health-fill-v1";
