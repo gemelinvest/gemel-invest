@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260912-np-multi-rail-v2";
+const TAG = "20260912-np-multi-rail-v3";
 let failed = 0;
 let passed = 0;
 
@@ -296,6 +296,29 @@ W.purchaseAllSimulatorInsureds([
   }
 ], { couple:true, coupleIds:["i1"] });
 assert((W.newPolicies || []).length === 0, "couple with one insured still does not write a policy");
+
+resetWizard();
+W.policyDraft.company = "כלל";
+W.policyDraft.type = "ריסק";
+W.purchaseAllSimulatorInsureds([
+  {
+    insId:"i1", company:"כלל", product:"ריסק", label:"ראשי - דוד כהן",
+    payload:{ ok:true, monthlyPremium:61.32, sumInsured:"800000", insuranceStartDate:"01/10/2026" }
+  },
+  {
+    insId:"i2", company:"כלל", product:"ריסק", label:"משני - יעל כהן",
+    payload:{ ok:true, monthlyPremium:40, sumInsured:"800000" }
+  },
+  {
+    insId:"i3", company:"כלל", product:"ריסק", label:"ילד - ללא חישוב",
+    payload:null
+  }
+], { couple:true, coupleIds:["i1","i2","i3"] });
+assert((W.newPolicies || []).length === 2, "multi-select adds ready marked insureds even if one marked lacks calc");
+assert((W.newPolicies || []).some((p) => (p.insuredIds || [])[0] === "i1"), "primary ready row added");
+assert((W.newPolicies || []).some((p) => (p.insuredIds || [])[0] === "i2"), "secondary ready row added");
+assert(!(W.newPolicies || []).some((p) => (p.insuredIds || [])[0] === "i3"), "unready marked insured is skipped");
+
 
 resetWizard();
 W.policyDraft.company = "הפניקס";

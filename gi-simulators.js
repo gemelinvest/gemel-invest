@@ -1363,20 +1363,52 @@
     return;
   }
 
+  /* GI-MULTI-SELECT-ADD-ALL 2026-09-12
+     בחירה מרובה: מסנכרנים pick/state של כל המסומנים למוצר הפתוח,
+     מעתיקים שדות משותפים מהראשי (או מהפעיל אם מסומן), ומחשבים כל אחד
+     לפי הנתונים שלו — כדי ש«הוסף להצעה» יוסיף את כולם. */
+  function riskSimEnsureInsuredState(sim, insId){
+    const id = safeTrim(insId);
+    if(!sim || !id) return null;
+    if(!sim._state || typeof sim._state !== "object") sim._state = {};
+    if(sim._state[id] && typeof sim._state[id] === "object") return sim._state[id];
+    const insureds = Array.isArray(sim._ctx && sim._ctx.insureds) ? sim._ctx.insureds : [];
+    const ins = insureds.find((x) => safeTrim(x && x.id) === id) || { id, label: id, data: {} };
+    try {
+      sim._state[id] = typeof sim._prefillFromInsured === "function" ? sim._prefillFromInsured(ins) : {};
+    } catch(_ePrefill) {
+      sim._state[id] = {};
+    }
+    try { riskSimApplyStep1PersonalToState(sim); } catch(_eStep1) {}
+    return sim._state[id];
+  }
+  function riskSimSyncCouplePicksToOpenProduct(sim){
+    if(!sim || !sim._giCoupleOn || !sim._ctx) return;
+    const curCo = safeTrim(sim._ctx.company);
+    const curPr = safeTrim(sim._ctx.product);
+    if(!curCo || !curPr) return;
+    const pickMap = riskSimEnsurePickMap(sim);
+    riskSimCoupleSelectedIds(sim).forEach((id) => {
+      pickMap[id] = { company: curCo, product: curPr };
+    });
+  }
   function riskSimEnsureCoupleSharedResults(sim){
     if(!sim || !sim._giCoupleOn || !sim._ctx || !sim._ctx.wizardWorkspace) return;
     if(!riskSimAllowsCouplePolicy(sim._ctx.product)) return;
-    try { riskSimCopyCoupleSharedFieldsFromSeed(sim); } catch(_eCopy) {}
-    /* הנחה לא מועתקת בבחירה מרובה — כל מבוטח לפי ההנחה שלו. */
+    try { riskSimFlushActiveDomFields(sim); } catch(_eFlush) {}
     riskSimCoupleSelectedIds(sim).forEach((id) => {
-      if(riskSimCollectResultForInsured(sim, id)) return;
-      try {
-        if(typeof sim._calc === "function") sim._calc(id);
-        else if(typeof sim._recalcState === "function"){
-          const st = sim._state && sim._state[id];
-          if(st) sim._recalcState(st);
-        }
-      } catch(_eCalc) {}
+      try { riskSimEnsureInsuredState(sim, id); } catch(_eSt) {}
+    });
+    try { riskSimSyncCouplePicksToOpenProduct(sim); } catch(_ePick) {}
+    const activeId = safeTrim(sim._activeInsuredId);
+    const selected = riskSimCoupleSelectedIds(sim);
+    const shareSrc = (activeId && selected.indexOf(activeId) >= 0)
+      ? activeId
+      : riskSimCoupleSeedInsuredId(sim);
+    try { riskSimCopyCoupleSharedFieldsFromId(sim, shareSrc); } catch(_eCopy) {}
+    /* הנחה לא מועתקת בבחירה מרובה — כל מבוטח לפי ההנחה שלו. */
+    selected.forEach((id) => {
+      try { riskSimEnsureCalcForInsured(sim, id); } catch(_eCalc) {}
     });
   }
   function riskSimCoupleSharedFieldName(el){
@@ -1679,10 +1711,17 @@
     const activeId = safeTrim(sim._activeInsuredId);
     const coupleOn = !!sim._giCoupleOn && riskSimAllowsCouplePolicy(curPr);
     const coupleIds = coupleOn ? riskSimCoupleSelectedIds(sim) : [];
-    /* המבוטח הפעיל עובד על החברה/מוצר הפתוחים — מסנכרנים את ה-pick שלו
-       כדי שלא ייפסל בגלל בחירה ישנה מחברה אחרת. */
+    /* המבוטח הפעיל + כל המסומנים בבחירה מרובה נצמדים לחברה/מוצר הפתוחים
+       (בלי סגירה/פתיחה מחדש) כדי שלא ייפסלו בגלל pick ישן. */
     if(activeId && curCo && curPr){
       pickMap[activeId] = { company: curCo, product: curPr };
+    }
+    if(coupleOn && curCo && curPr){
+      try { riskSimSyncCouplePicksToOpenProduct(sim); } catch(_eCouplePick) {}
+      coupleIds.forEach((id) => {
+        try { riskSimEnsureInsuredState(sim, id); } catch(_eSt) {}
+        pickMap[id] = { company: curCo, product: curPr };
+      });
     }
     /* חישוב לפי הנתונים של כל מבוטח בנפרד — לא מנחשים ולא מעתיקים פרמיה. */
     const calcTargets = new Set();
@@ -1699,6 +1738,13 @@
       let co = safeTrim(pick.company || curCo);
       let pr = safeTrim(pick.product || curPr);
       let matches = co === curCo && pr === curPr;
+      /* בחירה מרובה: מסומנים תמיד על המוצר הפתוח אחרי הסנכרון השקט. */
+      if(coupleOn && coupleIds.indexOf(id) >= 0 && curCo && curPr){
+        co = curCo;
+        pr = curPr;
+        matches = true;
+        pickMap[id] = { company: curCo, product: curPr };
+      }
       /* אם יש תוצאה חיה בסימולטור הפתוח — זו האמת למוצר הנוכחי. */
       const live = matches ? riskSimBuildLivePurchasePayload(sim, id) : null;
       if(!matches && riskSimCollectResultForInsured(sim, id)){
@@ -2079,14 +2125,16 @@
         if(!chk.checked && sim._giCoupleCoverCustomized) delete sim._giCoupleCoverCustomized[id];
         riskSimNotifyCoupleChange(sim);
         if(chk.checked){
-          try { riskSimCopyCoupleSharedFieldsFromSeed(sim); } catch(_eShareIns) {}
-          try { riskSimSyncCoupleHealthCovers(sim); } catch(_eSyncIns) {}
-          const pick = riskSimGetPick(sim, id);
+          try { riskSimEnsureInsuredState(sim, id); } catch(_eStIns) {}
           const curCo = safeTrim(sim._ctx?.company);
           const curPr = safeTrim(sim._ctx?.product);
-          if(safeTrim(pick.company) !== curCo || safeTrim(pick.product) !== curPr){
-            riskSimRequestPickSwitch(sim, id, curCo, curPr);
+          /* שיוך שקט למוצר הפתוח — בלי סגירה/פתיחה שמוחקת את הירושה מהראשי. */
+          if(curCo && curPr){
+            const pickMapQuiet = riskSimEnsurePickMap(sim);
+            pickMapQuiet[id] = { company: curCo, product: curPr };
           }
+          try { riskSimCopyCoupleSharedFieldsFromSeed(sim); } catch(_eShareIns) {}
+          try { riskSimSyncCoupleHealthCovers(sim); } catch(_eSyncIns) {}
         }
       });
     });

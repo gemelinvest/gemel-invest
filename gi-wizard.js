@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260912-np-multi-rail-v2";
+  const GI_WIZARD_BUILD = "20260912-np-multi-rail-v3";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -17161,19 +17161,28 @@ if(path === "birthDate"){
           return [];
         }
         const wantSet = new Set(want);
-        buyList = ready.filter((e) => wantSet.has(e.insId));
+        /* סדר לפי סימון הבחירה המרובה — הראשי/ראשון ברשימה משמש לירושת שדות משותפים. */
+        buyList = want.map((id) => ready.find((e) => e.insId === id)).filter(Boolean);
         const missing = want.filter((id) => !buyList.some((e) => e.insId === id));
-        if(missing.length){
+        if(buyList.length < 2){
           const labels = missing.map((id) => {
             const hit = (this.insureds || []).find((x) => x.id === id);
             return safeTrim(hit?.label) || id;
           });
           window.showToast?.({
             title: "יש לחשב פרמיה",
-            text: "חשבו פרמיה לכל המבוטחים שסומנו בבחירה המרובה: " + labels.join(", ") + ".",
+            text: labels.length
+              ? ("חשבו פרמיה למבוטחים שסומנו בבחירה המרובה: " + labels.join(", ") + ".")
+              : "יש לסמן לפחות שני מבוטחים עם פרמיה מחושבת.",
             variant: "warn"
           });
           return [];
+        }
+        if(missing.length){
+          missing.forEach((id) => {
+            const hit = (this.insureds || []).find((x) => x.id === id);
+            skipped.push(safeTrim(hit?.label) || id);
+          });
         }
       }
       if(!buyList.length){

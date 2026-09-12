@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260912-np-multi-rail-v2";
+const TAG = "20260912-np-multi-rail-v3";
 let failed = 0;
 let passed = 0;
 
@@ -64,6 +64,12 @@ assert(sims.includes("function riskSimEnsureCalcForInsured(sim, insId)"), "ensur
 assert(sims.includes("function riskSimFlushActiveDomFields(sim)"), "flush active DOM before calc");
 assert(sims.includes("riskSimEnsureCalcForInsured(sim, id)"), "purchase auto-calcs targets");
 assert(sims.includes("pickMap[activeId] = { company: curCo, product: curPr }"), "active pick synced to open product");
+assert(sims.includes("GI-MULTI-SELECT-ADD-ALL"), "multi-select add-all marker");
+assert(sims.includes("function riskSimEnsureInsuredState(sim, insId)"), "ensure state for couple members");
+assert(sims.includes("function riskSimSyncCouplePicksToOpenProduct(sim)"), "quiet couple pick sync");
+assert(sims.includes("שיוך שקט למוצר הפתוח"), "checkbox assigns pick without reopen");
+assert(wiz.includes("want.map((id) => ready.find((e) => e.insId === id)).filter(Boolean)"), "wizard keeps ready multi-select rows");
+
 assert(sims.includes("try { riskSimFlushActiveDomFields(sim); } catch(_eFlushCalc) {}"), "shell calc flushes DOM first");
 assert(wiz.includes("fromPickSwitch: true"), "pick-switch reopen keeps the chosen pick");
 assert(wiz.includes("if(!opts.fromPickSwitch)"), "draft open binds active pick to draft company/product");
