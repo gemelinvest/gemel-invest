@@ -1,4 +1,4 @@
-/* GI-CHAT 20260910-cf-open-paint-v1 — הודעת צ׳אט נכנסת בצד שמאל למטה,
+/* GI-CHAT 20260912-chat-dock-louder-v1 — הודעת צ׳אט נכנסת בצד שמאל למטה,
    נשארת פתוחה עם שם השולח ולחצן «השב». Realtime עם recipient_id=eq ולא or=.
    הרצה: node _test-chat-incoming-dock.js
 */
@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260910-cf-open-paint-v1";
+const APP_TAG = "20260912-chat-dock-louder-v1";
 let failed = 0;
 let passed = 0;
 
@@ -224,6 +224,10 @@ assert(css.includes("left:16px") && css.includes("bottom:22px"), "מיקום ב�
 assert(!css.includes("top:76px"), "הדוק כבר לא למעלה");
 assert(css.includes("background:rgba(255,255,255,.28)"), "רקע שקוף");
 assert(css.includes("backdrop-filter:blur(16px)"), "זכוכית עדינה");
+assert(css.includes("max-width:min(440px, calc(100vw - 28px))"), "דוק גדול יותר");
+assert(css.includes("min-width:300px"), "כרטיס דוק רחב יותר");
+assert(css.includes("font-size:17px"), "שם שולח גדול יותר");
+assert(css.includes("font-size:15px"), "טקסט הודעה גדול יותר");
 assert(css.includes(".giChatDockCard.is-replying .giChatDockCard__composer{ display:flex; }"), "השב פותח את תיבת התשובה");
 assert(css.includes(".giChatDockCard__ignore{"), "עיצוב לחצן התעלם");
 assert(css.includes(".giChatDockCard.is-replying .giChatDockCard__reply{ display:none; }"), "במצב השב נשאר התעלם");
@@ -238,8 +242,9 @@ assert(!!dockBlock, "בלוק notify/dock נמצא");
 console.log("\n3b) צליל הודעה בסגנון וואטסאפ");
 const chatSound = sliceMethodBlock(app, "function playGiChatWhatsAppTone(){", "function playGiLeadChime(){");
 assert(!!chatSound, "playGiChatWhatsAppTone נמצא");
-assert(chatSound.includes("drip(t0, 1174.66"), "טיפה ראשונה של הצליל");
-assert(chatSound.includes("drip(t0 + 0.09, 1567.98"), "טיפה שנייה בסגנון הודעת וואטסאפ");
+assert(chatSound.includes("drip(t0, 1174.66, 0.82)"), "טיפה ראשונה חזקה יותר");
+assert(chatSound.includes("drip(t0 + 0.09, 1567.98, 0.70)"), "טיפה שנייה חזקה יותר");
+assert(chatSound.includes("master.gain.setValueAtTime(1.0, t0)"), "master gain מלא להודעה נכנסת");
 assert(chatSound.includes("if(playGiChatWhatsAppTone()) return;"), "הצליל הראשי הוא סגנון וואטסאפ");
 assert(!chatSound.includes("playGiNotifySound()"), "אין נפילה לצלצול מרימבה");
 
