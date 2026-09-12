@@ -12,7 +12,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260912-har-upload-update-v1";
+const TAG = "20260912-cancel-sum-full-partial-v1";
 let failed = 0;
 let passed = 0;
 
