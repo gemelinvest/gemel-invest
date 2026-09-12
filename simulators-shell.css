@@ -1329,3 +1329,173 @@
   border-color:#1e3a5f !important;
   background:#eef4ff !important;
 }
+
+/* GI-NP-MULTI-RAIL 2026-09-12 — מבוטחים בצד + בחירה מרובה לפני סל */
+.giSimShellModal .giSimShell__workspace,
+.giSimShell__workspace{
+  display:grid !important;
+  grid-template-columns:minmax(0, 1fr) 248px !important;
+  gap:14px !important;
+  align-items:stretch !important;
+  flex:1 1 auto !important;
+  min-height:0 !important;
+}
+.giSimShell__workspaceMain{
+  min-width:0 !important;
+  display:flex !important;
+  flex-direction:column !important;
+  gap:12px !important;
+  min-height:0 !important;
+}
+.giSimShell__workspaceMain .giSimShell__layout{
+  flex:1 1 auto !important;
+  min-height:0 !important;
+}
+.giSimShell__rail{
+  display:flex !important;
+  flex-direction:column !important;
+  gap:10px !important;
+  min-width:0 !important;
+  background:#f7f9fc !important;
+  border:1.5px solid #e5eaf3 !important;
+  border-radius:16px !important;
+  padding:12px !important;
+  box-shadow:0 1px 2px rgba(15,23,42,.03) !important;
+}
+.giSimShell__railHead{
+  display:flex !important;
+  flex-direction:column !important;
+  gap:6px !important;
+  padding-bottom:8px !important;
+  border-bottom:1px solid #e5eaf3 !important;
+}
+.giSimShell__railTitle{
+  font-size:15px !important;
+  font-weight:850 !important;
+  color:#0b1f4b !important;
+}
+.giSimShell__railSub{
+  font-size:12px !important;
+  font-weight:650 !important;
+  color:#5c6b7a !important;
+}
+.giSimShell__multiToggle{
+  display:inline-flex !important;
+  align-items:center !important;
+  gap:8px !important;
+  margin-top:4px !important;
+  min-height:40px !important;
+  padding:8px 10px !important;
+  border:1.5px solid #d5deea !important;
+  border-radius:12px !important;
+  background:#fff !important;
+  font-size:14px !important;
+  font-weight:800 !important;
+  color:#1e3a5f !important;
+  cursor:pointer !important;
+}
+.giSimShell__multiToggle input{
+  width:16px !important;
+  height:16px !important;
+  accent-color:#1e3a5f !important;
+}
+.giSimShell__multiToggle:hover{
+  border-color:#1e3a5f !important;
+  background:#eef4ff !important;
+}
+.giSimShell__railList{
+  display:flex !important;
+  flex-direction:column !important;
+  gap:8px !important;
+  overflow:auto !important;
+  min-height:0 !important;
+  flex:1 1 auto !important;
+}
+.giSimShell__railItem{
+  display:flex !important;
+  align-items:flex-start !important;
+  gap:8px !important;
+  width:100% !important;
+  text-align:right !important;
+  border:1.5px solid #d5deea !important;
+  border-radius:12px !important;
+  background:#fff !important;
+  color:#1a2332 !important;
+  padding:10px 10px !important;
+  cursor:pointer !important;
+  transition:border-color .12s, background .12s, box-shadow .12s !important;
+}
+.giSimShell__railItem:hover{
+  border-color:#1e3a5f !important;
+  background:#eef4ff !important;
+  box-shadow:0 0 0 3px rgba(30,58,95,.12) !important;
+}
+.giSimShell__railItem.is-active{
+  border-color:#1e3a5f !important;
+  background:#1e3a5f !important;
+  color:#fff !important;
+  box-shadow:0 0 0 3px rgba(30,58,95,.16) !important;
+}
+.giSimShell__railItem.has-result:not(.is-active){
+  border-color:#93c5fd !important;
+  background:#f8fbff !important;
+  color:#1d4ed8 !important;
+}
+.giSimShell__railItem.is-multi:not(.is-active){
+  border-color:#c9a227 !important;
+  background:#fffdf6 !important;
+}
+.giSimShell__railCheck{
+  display:inline-flex !important;
+  margin-top:2px !important;
+}
+.giSimShell__railCheck input{
+  width:15px !important;
+  height:15px !important;
+  accent-color:#1e3a5f !important;
+}
+.giSimShell__railItem.is-active .giSimShell__railCheck input{
+  accent-color:#f8fafc !important;
+}
+.giSimShell__railItemText{
+  display:flex !important;
+  flex-direction:column !important;
+  gap:3px !important;
+  min-width:0 !important;
+  flex:1 1 auto !important;
+}
+.giSimShell__railItemName{
+  font-size:14px !important;
+  font-weight:800 !important;
+  line-height:1.3 !important;
+}
+.giSimShell__railItemMeta{
+  font-size:12px !important;
+  font-weight:650 !important;
+  opacity:.92 !important;
+  line-height:1.35 !important;
+}
+.giSimShell__railFoot{
+  display:flex !important;
+  flex-direction:column !important;
+  gap:8px !important;
+  padding-top:8px !important;
+  border-top:1px solid #e5eaf3 !important;
+}
+.giSimShell__railHint{
+  font-size:12px !important;
+  line-height:1.45 !important;
+  color:#5c6b7a !important;
+  font-weight:600 !important;
+}
+.giSimShell__railFoot .giSimShell__pick{
+  margin-inline-start:0 !important;
+  width:100% !important;
+}
+@media (max-width: 980px){
+  .giSimShellModal .giSimShell__workspace,
+  .giSimShell__workspace{
+    grid-template-columns:1fr !important;
+  }
+  .giSimShell__rail{ order:-1 !important; }
+}
