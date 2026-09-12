@@ -15,6 +15,7 @@ const FORM_TAG = "20260824-covers-sum-v1";
 const HACH_FORM_TAG = "20260826-hach-hmo-health-v1";
 const MIGDAL_FORM_TAG = "20260825-migdal-health-fill-v1";
 const MENORA_FORM_TAG = "20260828-menora-health-decl-v1";
+const CLAL_COUPLE_FORM_TAG = "20260912-clal-couple-health-align-v1";
 let failed = 0;
 let passed = 0;
 
@@ -117,9 +118,10 @@ assert(/gi-v12-/.test(sw), "SW tag");
   "gi-phoenix-life-form.js",
   "gi-phoenix-health-form.js"
 ].forEach((file) => {
-  const tag = file.indexOf("hachshara") >= 0 ? HACH_FORM_TAG
-    : (file.indexOf("migdal") >= 0 ? MIGDAL_FORM_TAG
-      : (file.indexOf("menora") >= 0 ? MENORA_FORM_TAG : FORM_TAG));
+  const tag = file === "gi-clal-life-couple-form.js" ? CLAL_COUPLE_FORM_TAG
+    : (file.indexOf("hachshara") >= 0 ? HACH_FORM_TAG
+      : (file.indexOf("migdal") >= 0 ? MIGDAL_FORM_TAG
+        : (file.indexOf("menora") >= 0 ? MENORA_FORM_TAG : FORM_TAG)));
   assert(app.includes("./" + file + "?v=" + tag), "href " + file);
   const src = fs.readFileSync(path.join(ROOT, file), "utf8");
   assert(src.includes("Heebo-Bold.ttf"), file + " bold font");
@@ -132,8 +134,14 @@ assert(/gi-v12-/.test(sw), "SW tag");
         ? src.includes('map: "migdal_mortgage"')
         : (file === "gi-menora-mortgage-form.js"
           ? src.includes('map: "menora_mortgage"')
-          : src.includes("applyOfficialHealthAndNames"))));
+          : (file === "gi-clal-life-couple-form.js"
+            ? (src.includes("applyClalCoupleHealthYesNo") && src.includes("skipHealth: true"))
+            : src.includes("applyOfficialHealthAndNames")))));
   assert(healthFill, file + " fills health yes/no");
+  if(file === "gi-clal-life-couple-form.js"){
+    assert(src.includes("applyClalCoupleHealthYesNo"), "clal couple uses named CRQ fill");
+    assert(src.includes("skipHealth: true"), "clal couple skips HealthDecMainQ index-zip");
+  }
 });
 assert(fs.existsSync(path.join(ROOT, "gi-phoenix-ci-form.js")), "phoenix CI form file");
 assert(app.includes("./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1"), "href gi-phoenix-ci-form.js");
@@ -267,6 +275,38 @@ H.setTextSafe(textForm, "FullName2", "כהן", { dummy: true });
 assert(texts.FullName2 === "ןהכ", "default visual reverse still used for other companies");
 assert(H.HEALTH_QKEYS.clal_health[0] === "clal_smoking", "Clal keys start at smoking");
 assert(H.HEALTH_QKEYS.clal_couple.length === 19, "Clal couple key list is CRQ1–19");
+assert(typeof H.clalCoupleHealthRows === "function", "Clal couple named health rows helper exists");
+const clalCoupleRows = H.clalCoupleHealthRows();
+assert(clalCoupleRows.length === 23, "Clal couple maps 19 CRQ + 4 named extras");
+assert(clalCoupleRows[0].field === "CRQ1" && (clalCoupleRows[0].keys || []).indexOf("clal_couple_neuro") >= 0, "Clal couple CRQ1 is neuro");
+assert(clalCoupleRows[17].field === "CRQ18" && (clalCoupleRows[17].keys || []).indexOf("clal_couple_alcohol") >= 0, "Clal couple CRQ18 is alcohol");
+assert(clalCoupleRows[18].field === "CRQ19" && (clalCoupleRows[18].keys || []).indexOf("clal_couple_drugs") >= 0, "Clal couple CRQ19 is drugs");
+assert(clalCoupleRows.some((r) => r.field === "RegularMeds" && r.detailField === "RegularMedsText"), "Clal couple RegularMeds has detail text");
+assert(clalCoupleRows.some((r) => r.field === "FutureInvasiveExam" && r.spouseDetailField === "SInvasiveExamText"), "Clal couple spouse future detail uses SInvasiveExamText");
+const capCouple = {};
+H.applyClalCoupleHealthYesNo({ __giCapture: capCouple }, {
+  primaryId: "p1",
+  spouseId: "s1",
+  healthResponses: {
+    clal_couple_neuro: { p1: { answer: "yes" }, s1: { answer: "no" } },
+    clal_couple_alcohol: { p1: { answer: "no" } },
+    clal_couple_drugs: { p1: { answer: "yes" } },
+    clal_couple_regular_meds: { p1: { answer: "yes", fields: { meds: "אספירין 100" } } },
+    clal_couple_future_surgery: { s1: { answer: "yes", fields: { details: "קולונוסקופיה" } } },
+    clal_couple_disability: { p1: { answer: "no" } }
+  }
+});
+assert(capCouple.CRQ1 === "1", "Clal couple neuro yes → CRQ1");
+assert(capCouple.CRQ1S === "2", "Clal couple spouse neuro no → CRQ1S");
+assert(capCouple.CRQ18 === "2", "Clal couple alcohol no → CRQ18");
+assert(capCouple.CRQ19 === "1", "Clal couple drugs yes → CRQ19");
+assert(capCouple.RegularMeds === "1", "Clal couple regular meds yes");
+assert(String(capCouple.RegularMedsText || "").indexOf("אספירין") >= 0, "Clal couple meds detail text filled");
+assert(capCouple.SFutureInvasiveExam === "1", "Clal couple spouse future exam yes");
+assert(String(capCouple.SInvasiveExamText || "").indexOf("קולונוסקופיה") >= 0, "Clal couple spouse future detail → SInvasiveExamText");
+assert(capCouple.ExistingDisability === "2", "Clal couple disability no");
+assert(!capCouple.HealthDecMainQ1, "Clal couple does not write HealthDecMainQ");
+
 assert(H.HEALTH_QKEYS.migdal_cancer.length === 6, "Migdal cancer key list covers all 6 wizard questions");
 assert(H.HEALTH_QKEYS.migdal_cancer[1] === "magdal_cancer__smoking", "Migdal cancer smoking key is second");
 assert(H.HEALTH_QKEYS.migdal_cancer[5] === "magdal_cancer__family", "Migdal cancer family key is last");

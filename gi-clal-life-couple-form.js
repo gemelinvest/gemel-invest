@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/clal-life-couple/",
     TEMPLATE_FILE: "clal-life-couple-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-clal-couple-v1",
+    VERSION: "20260912-clal-couple-health-align-v1",
     DOC_ID: "doc_clal_life_couple_form",
     DOC_TYPE: "clal_life_couple_form",
 
@@ -388,11 +388,12 @@
         this.setTextSafe(form, "PIDBankAccOwner", draft.payer.idNumber, font);
       }
       global.GI_OFFICIAL_FORM_FILL?.applyOfficialHealthAndNames?.(form, draft, font, {
-        keys: "clal_couple",
+        skipHealth: true,
         visual: false,
         extraNames: ["FullNameBagir", "FullNameHolder"]
       });
-      global.GI_OFFICIAL_FORM_FILL?.applyClalCoupleHealthYesNo?.(form, draft);
+      // Named CRQ1–19 + RegularMeds/Future/Past/Disability (not HealthDecMainQ index-zip).
+      global.GI_OFFICIAL_FORM_FILL?.applyClalCoupleHealthYesNo?.(form, Object.assign({}, draft, { font }));
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
         bank: draft.bank || {},
