@@ -54,15 +54,14 @@ assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=' + TAG + '"')
 assert(html.includes("app.js?v=" + TAG), "index.html app.js cache");
 assert(sw.includes("gi-v12-" + TAG), "service worker cache");
 
-console.log("\n2) simulator copies the selected discount onto every couple member");
+console.log("\n2) multi-select keeps a separate discount per insured");
 assert(sims.includes("function riskSimCopyCoupleDiscountFromId(sim, sourceId)"), "copy helper exists");
-assert(sims.includes("function riskSimCopyCoupleDiscountFromSeed(sim)"), "copy from seed");
-assert(sims.includes("try { riskSimCopyCoupleDiscountFromId(sim, active); }"), "picking a discount copies in couple mode");
-assert(sims.includes("try { riskSimCopyCoupleDiscountFromSeed(sim); } catch(_eDisc) {}"), "add-to-proposal copies before fill");
-assert(sims.includes("try { riskSimCopyCoupleDiscountFromSeed(sim); } catch(_eDiscOn) {}"), "checking זוגית copies the discount");
-const setFn = sliceBetween(sims, "function giSimDiscountSetSelected(sim, optionId){", "function giSimDiscountCloseMenu");
-assert(setFn.includes("riskSimCopyCoupleDiscountFromId"), "setSelected copies to couple members");
-assert(!/function giSimDiscountAfterMonthly[\s\S]{0,80}riskSimCopyCoupleDiscountFromId/.test(sims), "copy does not rewrite afterMonthly engine");
+assert(sims.includes("function riskSimCopyCoupleDiscountFromSeed(sim)"), "seed helper exists");
+assert(sims.includes("GI-MULTI-SELECT-OWN-DISCOUNT"), "own-discount marker present");
+assert(sims.includes("בחירה מרובה אינה מעתיקה הנחה בין מבוטחים"), "docs say multi-select does not copy discount");
+assert(sims.includes("הנחה לא מועתקת בבחירה מרובה"), "ensure-shared-results skips discount copy");
+assert(!sims.includes("try { riskSimCopyCoupleDiscountFromSeed(sim); } catch(_eDiscOn) {}"), "checking multi-select no longer copies discount");
+assert(!sims.includes("try { riskSimCopyCoupleDiscountFromSeed(sim); } catch(_eDisc) {}"), "add-to-proposal no longer copies discount before fill");
 
 {
   const start = sims.indexOf("function riskSimCopyCoupleDiscountFromId(sim, sourceId){");
@@ -85,14 +84,14 @@ assert(!/function giSimDiscountAfterMonthly[\s\S]{0,80}riskSimCopyCoupleDiscount
     _giCoupleOn: true,
     _ctx: { wizardWorkspace: true, product: "ריסק" },
     _activeInsuredId: "i1",
-    _giSimDiscountSel: { i1: "cll-r-5001" }
+    _giSimDiscountSel: { i1: "cll-r-5001", i2: "own-opt" }
   };
   copy(sim, "i1");
   assert(sim._giSimDiscountSel.i1 === "cll-r-5001", "keeps the source option");
-  assert(sim._giSimDiscountSel.i2 === "cll-r-5001", "copies the option onto the secondary");
+  assert(sim._giSimDiscountSel.i2 === "own-opt", "does not overwrite the secondary discount");
   sim._giSimDiscountSel.i1 = "";
   copy(sim, "i1");
-  assert(sim._giSimDiscountSel.i2 === "", "clearing the discount clears it for every couple member");
+  assert(sim._giSimDiscountSel.i2 === "own-opt", "clearing primary discount leaves secondary untouched");
 }
 
 console.log("\n3) wizard applies the same option and recomputes each premium");

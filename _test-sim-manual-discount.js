@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260910-cf-open-paint-v1";
+const TAG = "20260912-np-multi-rail-v1";
 let failed = 0;
 let passed = 0;
 
@@ -141,7 +141,7 @@ assert(/getPolicyPremiumAfterDiscount\(policy\)\{[\s\S]{0,320}return this\.getPo
   assert(opt.label.indexOf("70%") >= 0 && opt.label.indexOf("65%") >= 0, "label lists the yearly percents");
 }
 
-console.log("\n5) couple copy + session restore keep the typed schedule");
+console.log("\n5) multi-select keeps typed discount per insured + session restore");
 {
   const start = sims.indexOf("function riskSimCopyCoupleDiscountFromId(sim, sourceId){");
   const end = sims.indexOf("function riskSimCopyCoupleDiscountFromSeed(sim){", start);
@@ -158,20 +158,21 @@ console.log("\n5) couple copy + session restore keep the typed schedule");
     _giCoupleOn: true,
     _ctx: { wizardWorkspace: true, product: "ריסק" },
     _activeInsuredId: "i1",
-    _giSimDiscountSel: { i1: "gi-sim-manual" },
+    _giSimDiscountSel: { i1: "gi-sim-manual", i2: "own-manual" },
     _giSimManualByInsured: {
-      i1: { raw: "70/65/60/", schedule: [{ year: 1, pct: 70 }, { year: 2, pct: 65 }, { year: 3, pct: 60 }] }
+      i1: { raw: "70/65/60/", schedule: [{ year: 1, pct: 70 }, { year: 2, pct: 65 }, { year: 3, pct: 60 }] },
+      i2: { raw: "50/", schedule: [{ year: 1, pct: 50 }] }
     }
   };
   copy(sim, "i1");
-  assert(sim._giSimDiscountSel.i2 === "gi-sim-manual", "couple copies the manual option id");
-  assert(sim._giSimManualByInsured.i2 && sim._giSimManualByInsured.i2.schedule[0].pct === 70, "couple copies year-1 percent");
-  assert(sim._giSimManualByInsured.i2.schedule[2].pct === 60, "couple copies the last year");
+  assert(sim._giSimDiscountSel.i2 === "own-manual", "multi-select does not overwrite secondary manual option");
+  assert(sim._giSimManualByInsured.i2 && sim._giSimManualByInsured.i2.schedule[0].pct === 50, "secondary keeps its own year-1 percent");
+  assert(sim._giSimManualByInsured.i2.schedule.length === 1, "secondary keeps its own schedule length");
   sim._giSimDiscountSel.i1 = "cll-r-5001";
   delete sim._giSimManualByInsured.i1;
   copy(sim, "i1");
-  assert(sim._giSimDiscountSel.i2 === "cll-r-5001", "catalog pick still copies to the secondary");
-  assert(!sim._giSimManualByInsured.i2, "catalog pick clears the secondary typed schedule");
+  assert(sim._giSimDiscountSel.i2 === "own-manual", "catalog pick on primary leaves secondary discount alone");
+  assert(sim._giSimManualByInsured.i2 && sim._giSimManualByInsured.i2.schedule[0].pct === 50, "catalog pick on primary does not clear secondary typed schedule");
 }
 
 assert(sims.includes("function giSimDiscountRestoreMap(sim, restoreDiscount){"), "open restores a typed schedule object");
