@@ -545,6 +545,7 @@
   function riskSimLayoutStandaloneBody(body, sim){
     if(!body || body.querySelector(".giSimShell__layout")) return;
     const bar = body.querySelector(".giSimShell__insuredBar");
+    const workspaceMain = body.querySelector(".giSimShell__workspaceMain");
     const grid = body.querySelector("[class*='__grid']");
     if(!grid) return;
 
@@ -604,19 +605,20 @@
     layout.appendChild(details);
     layout.appendChild(covers);
 
-    const insertAfter = bar || null;
+    const host = workspaceMain || body;
+    const insertAfter = (!workspaceMain && bar) ? bar : null;
     if(insertAfter && insertAfter.nextSibling){
-      body.insertBefore(layout, insertAfter.nextSibling);
+      host.insertBefore(layout, insertAfter.nextSibling);
     } else if(insertAfter){
-      body.appendChild(layout);
+      host.appendChild(layout);
     } else {
-      body.insertBefore(layout, body.firstChild);
+      host.insertBefore(layout, host.firstChild);
     }
 
     // Move leftover nodes (except bar/layout/overlays) under a extras strip if any meaningful leftovers remain
     Array.from(body.children).forEach((child) => {
       if(child === bar || child === layout) return;
-      if(child.classList && (child.classList.contains("giSimShell__insuredBar") || child.classList.contains("giSimShell__layout"))) return;
+      if(child.classList && (child.classList.contains("giSimShell__insuredBar") || child.classList.contains("giSimShell__layout") || child.classList.contains("giSimShell__workspace"))) return;
       if(statusList && child === statusList){
         statusList.hidden = true;
         statusList.setAttribute("aria-hidden", "true");
@@ -1770,41 +1772,109 @@
 
     const body = card.querySelector(".giValModal__body");
     if(body){
-      let bar = body.querySelector(".giSimShell__insuredBar");
-      if(bar) bar.remove();
-      bar = document.createElement("div");
-      bar.className = "giSimShell__insuredBar";
       try { riskSimEnsureCoupleState(sim); } catch(_eCouple) {}
       const coupleAllowed = !!sim._ctx.wizardWorkspace && riskSimAllowsCouplePolicy(product) && insureds.length >= 2;
       if(coupleAllowed && sim._giCoupleOn){
         try { riskSimSeedCoupleIdsIfEmpty(sim); } catch(_eSeed) {}
       }
-      const tabs = insureds.map((ins) => {
+      const pickHtml = sim._ctx.wizardWorkspace ? riskSimPickHtml(sim) : "";
+      const addInsHtml = sim._ctx.standalone
+        ? `<button type="button" class="giSimShell__addIns" data-gishell-add-ins="1">+ הוסף מבוטח</button>`
+        : "";
+      const formatPrem = (n) => {
+        const num = Number(n);
+        if(!Number.isFinite(num) || num <= 0) return "";
+        try { return "₪" + Math.round(num).toLocaleString("he-IL"); } catch(_e) { return "₪" + String(Math.round(num)); }
+      };
+      const multiOn = !!(coupleAllowed && sim._giCoupleOn);
+      const multiHtml = coupleAllowed
+        ? `<label class="giSimShell__multiToggle"><input type="checkbox" data-gishell-couple="1"${multiOn ? " checked" : ""} /><span>בחירה מרובה</span></label>`
+        : "";
+      const buildInsuredRow = (ins) => {
         const s = sim._state?.[ins.id];
         const pick = riskSimGetPick(sim, ins.id);
         const prod = safeTrim(pick.product);
         const base = safeTrim(ins.label) || "מבוטח";
-        const tabName = prod ? (base + " · " + prod) : base;
+        const isActive = ins.id === activeId;
+        const hasResult = !!(s && s.result && s.result.ok);
+        const inMulti = !!(multiOn && sim._giCoupleIds && sim._giCoupleIds[ins.id]);
+        const prem = hasResult ? formatPrem(s.result.monthlyPremium) : "";
+        const status = hasResult
+          ? (`מוכן לסל` + (prem ? (" · " + prem) : ""))
+          : (inMulti ? "מסומן · ממתין לחישוב" : "ממתין לחישוב");
         const cls = [
-          "giSimShell__tab",
-          ins.id === activeId ? "is-active" : "",
-          s?.result?.ok ? "has-result" : "",
-          (coupleAllowed && sim._giCoupleOn && sim._giCoupleIds && sim._giCoupleIds[ins.id]) ? "is-couple" : ""
+          "giSimShell__railItem",
+          isActive ? "is-active" : "",
+          hasResult ? "has-result" : "",
+          inMulti ? "is-multi" : ""
         ].filter(Boolean).join(" ");
-        const coupleChk = (coupleAllowed && sim._giCoupleOn)
-          ? `<span class="giSimShell__tabCouple"><input type="checkbox" data-gishell-couple-ins="${escapeHtml(String(ins.id || ""))}"${sim._giCoupleIds && sim._giCoupleIds[ins.id] ? " checked" : ""} /></span>`
+        const multiChk = multiOn
+          ? `<span class="giSimShell__railCheck" data-gishell-couple-ins-wrap="1"><input type="checkbox" data-gishell-couple-ins="${escapeHtml(String(ins.id || ""))}"${inMulti ? " checked" : ""} /></span>`
           : "";
-        return `<button type="button" class="${cls}" data-gishell-tab="${escapeHtml(String(ins.id || ""))}">${coupleChk}${escapeHtml(tabName)}</button>`;
-      }).join("");
-      const addInsHtml = sim._ctx.standalone
-        ? `<button type="button" class="giSimShell__addIns" data-gishell-add-ins="1">+ הוסף מבוטח</button>`
-        : "";
-      const coupleHtml = coupleAllowed
-        ? `<label class="giSimShell__couple"><input type="checkbox" data-gishell-couple="1"${sim._giCoupleOn ? " checked" : ""} /><span>פוליסה זוגית</span></label>`
-        : "";
-      const pickHtml = sim._ctx.wizardWorkspace ? riskSimPickHtml(sim) : "";
-      bar.innerHTML = tabs + addInsHtml + coupleHtml + pickHtml;
-      body.insertBefore(bar, body.firstChild);
+        return `<button type="button" class="${cls}" data-gishell-tab="${escapeHtml(String(ins.id || ""))}">
+          ${multiChk}
+          <span class="giSimShell__railItemText">
+            <span class="giSimShell__railItemName">${escapeHtml(base)}</span>
+            <span class="giSimShell__railItemMeta">${escapeHtml(prod || product || "—")} · ${escapeHtml(status)}</span>
+          </span>
+        </button>`;
+      };
+      // Clear prior chrome wrappers
+      const oldWorkspace = body.querySelector(".giSimShell__workspace");
+      if(oldWorkspace) oldWorkspace.remove();
+      const oldBar = body.querySelector(".giSimShell__insuredBar");
+      if(oldBar) oldBar.remove();
+
+      if(sim._ctx.wizardWorkspace){
+        const workspace = document.createElement("div");
+        workspace.className = "giSimShell__workspace";
+        const main = document.createElement("div");
+        main.className = "giSimShell__workspaceMain";
+        const rail = document.createElement("aside");
+        rail.className = "giSimShell__rail";
+        rail.setAttribute("aria-label", "מבוטחים בסימולטור");
+        const readyCount = insureds.filter((ins) => {
+          const s = sim._state?.[ins.id];
+          return !!(s && s.result && s.result.ok);
+        }).length;
+        rail.innerHTML = `
+          <div class="giSimShell__railHead">
+            <div class="giSimShell__railTitle">מבוטחים</div>
+            <div class="giSimShell__railSub">לפני הוספה לסל · ${readyCount}/${insureds.length} מוכנים</div>
+            ${multiHtml}
+          </div>
+          <div class="giSimShell__railList">${insureds.map(buildInsuredRow).join("")}</div>
+          <div class="giSimShell__railFoot">
+            <div class="giSimShell__railHint">${multiOn
+              ? "מה שמגדירים על הראשי יימשך למסומנים בבחירה המרובה. כל מבוטח ייכנס כשורה נפרדת עם הנתונים וההנחה שלו."
+              : "עברו מבוטח־מבוטח: חשבו פרמיה ובחרו כיסויים. אחר כך הוסיפו לסל — שורה לכל מבוטח שחושב."}</div>
+            ${pickHtml}
+            ${addInsHtml}
+          </div>`;
+        const existingLayout = body.querySelector(".giSimShell__layout");
+        if(existingLayout) main.appendChild(existingLayout);
+        workspace.appendChild(main);
+        workspace.appendChild(rail);
+        body.insertBefore(workspace, body.firstChild);
+      } else {
+        const bar = document.createElement("div");
+        bar.className = "giSimShell__insuredBar";
+        const tabs = insureds.map((ins) => {
+          const s = sim._state?.[ins.id];
+          const pick = riskSimGetPick(sim, ins.id);
+          const prod = safeTrim(pick.product);
+          const base = safeTrim(ins.label) || "מבוטח";
+          const tabName = prod ? (base + " · " + prod) : base;
+          const cls = [
+            "giSimShell__tab",
+            ins.id === activeId ? "is-active" : "",
+            s?.result?.ok ? "has-result" : ""
+          ].filter(Boolean).join(" ");
+          return `<button type="button" class="${cls}" data-gishell-tab="${escapeHtml(String(ins.id || ""))}">${escapeHtml(tabName)}</button>`;
+        }).join("");
+        bar.innerHTML = tabs + addInsHtml + pickHtml;
+        body.insertBefore(bar, body.firstChild);
+      }
       try { riskSimLayoutStandaloneBody(body, sim); } catch(_e) {}
       try { riskSimHideNativeBodyCalc(card); } catch(_e2) {}
       try { riskSimMountLegalPanel(sim); } catch(_e3) {}

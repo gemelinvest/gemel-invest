@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260910-cf-open-paint-v1";
+  const GI_WIZARD_BUILD = "20260912-np-multi-rail-v1";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -16964,6 +16964,20 @@ if(path === "birthDate"){
       this.applySimulatorLegalToDraft(draft, legalSrc);
       const addedCompany = safeTrim(draft.company);
       const addedType = safeTrim(draft.type);
+      /* מניעת כפל: אם כבר יש שורת single לאותו מבוטח+חברה+מוצר — מחליפים אותה. */
+      const existingRow = (this.newPolicies || []).find((p) => {
+        if(!p) return false;
+        if(safeTrim(p.company) !== addedCompany || safeTrim(p.type) !== addedType) return false;
+        const ids = Array.isArray(p.insuredIds) && p.insuredIds.length
+          ? p.insuredIds.map(safeTrim).filter(Boolean)
+          : (p.insuredId ? [safeTrim(p.insuredId)] : []);
+        if(ids.length !== 1 || ids[0] !== id) return false;
+        const mode = safeTrim(p.insuredMode);
+        return !mode || mode === "single";
+      });
+      if(existingRow && existingRow.id){
+        this.editingPolicyId = existingRow.id;
+      }
       /* אחרי ההוספה הסימולטור נסגר, ולכן אין להחזיר את השלב לבחירה — מציגים סיכום. */
       this._npSimSkipCloseCleanup = true;
       this._npShowPick = false;
@@ -17110,10 +17124,41 @@ if(path === "birthDate"){
           label: safeTrim(e.label) || "מבוטח"
         });
       });
+      let buyList = ready;
       if(meta && meta.couple){
-        return this.purchaseSimulatorCoupleGroup(ready, skipped, meta.coupleIds);
+        const want = [];
+        const seen = new Set();
+        (Array.isArray(meta.coupleIds) ? meta.coupleIds : []).forEach((id) => {
+          const sid = safeTrim(id);
+          if(!sid || seen.has(sid)) return;
+          seen.add(sid);
+          want.push(sid);
+        });
+        if(want.length < 2){
+          window.showToast?.({
+            title: "בחירה מרובה",
+            text: "יש לסמן לפחות שני מבוטחים בבחירה המרובה.",
+            variant: "warn"
+          });
+          return [];
+        }
+        const wantSet = new Set(want);
+        buyList = ready.filter((e) => wantSet.has(e.insId));
+        const missing = want.filter((id) => !buyList.some((e) => e.insId === id));
+        if(missing.length){
+          const labels = missing.map((id) => {
+            const hit = (this.insureds || []).find((x) => x.id === id);
+            return safeTrim(hit?.label) || id;
+          });
+          window.showToast?.({
+            title: "יש לחשב פרמיה",
+            text: "חשבו פרמיה לכל המבוטחים שסומנו בבחירה המרובה: " + labels.join(", ") + ".",
+            variant: "warn"
+          });
+          return [];
+        }
       }
-      if(!ready.length){
+      if(!buyList.length){
         window.showToast?.({
           title: "יש לחשב פרמיה",
           text: skipped.length
@@ -17123,8 +17168,23 @@ if(path === "birthDate"){
         });
         return [];
       }
+      /* בחירה מרובה: מה שהוגדר על הראשי ממלא חסרים אצל המסומנים, בלי לדרוס פרמיה/הנחה אישית. */
+      if(meta && meta.couple && buyList.length >= 2){
+        const seed = buyList[0].payload || {};
+        buyList.slice(1).forEach((e) => {
+          if(!e.payload || typeof e.payload !== "object") e.payload = {};
+          const p = e.payload;
+          if(!safeTrim(p.sumInsured) && safeTrim(seed.sumInsured)) p.sumInsured = seed.sumInsured;
+          if(!safeTrim(p.compensation) && safeTrim(seed.compensation)) p.compensation = seed.compensation;
+          const seedStart = safeTrim(seed.insuranceStartDate || seed.startDate || "");
+          if(!safeTrim(p.insuranceStartDate || p.startDate) && seedStart){
+            p.insuranceStartDate = seedStart;
+            if(p.startDate != null) p.startDate = seedStart;
+          }
+        });
+      }
       const pids = [];
-      ready.forEach((e) => {
+      buyList.forEach((e) => {
         this.ensurePolicyDraft();
         this.policyDraft.company = e.company;
         this.policyDraft.type = e.product;

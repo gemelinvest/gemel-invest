@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260910-cf-open-paint-v1";
+const TAG = "20260912-np-multi-rail-v1";
 let failed = 0;
 let passed = 0;
 
@@ -233,7 +233,7 @@ assert(sims.includes("data-gishell-pick-company"), "company picker on the insure
 assert(sims.includes("data-gishell-pick-product"), "product picker on the insured bar");
 assert(sims.includes("חברה למבוטח זה"), "company picker labeled for this insured");
 assert(sims.includes("מוצר למבוטח זה"), "product picker labeled for this insured");
-assert(sims.includes("פוליסה זוגית"), "couple policy checkbox");
+assert(sims.includes("בחירה מרובה"), "couple policy checkbox");
 assert(sims.includes("data-gishell-couple="), "couple master checkbox wiring");
 assert(sims.includes("function riskSimAllowsCouplePolicy(product){"), "couple limited to risk/ci/cancer/health");
 assert(sims.includes("function riskSimRequestPickSwitch("), "pick switch reopens the matching simulator");

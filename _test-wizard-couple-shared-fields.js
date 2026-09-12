@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260910-cf-open-paint-v1";
+const TAG = "20260912-np-multi-rail-v1";
 let failed = 0;
 let passed = 0;
 
@@ -254,14 +254,17 @@ W.purchaseAllSimulatorInsureds([
     payload:{ ok:true, monthlyPremium:40 }
   }
 ], { couple:true, coupleIds:["i1","i2"] });
-const riskPol = W.newPolicies[0];
-assert(!!riskPol, "couple risk with only primary sum still writes a row");
-assert(riskPol.insuredMode === "couple", "row stays couple");
-assert(riskPol.sumInsuredPerInsured.i1 === "800000" && riskPol.sumInsuredPerInsured.i2 === "800000", "both insureds store the shared risk sum");
-assert(riskPol.startDate === "2026-10-01", "start date from the primary is kept");
-assert(String(riskPol.premiumPerInsured.i2).indexOf("40") === 0, "secondary premium is not replaced by the primary premium");
+assert((W.newPolicies || []).length === 2, "multi-select risk writes one row per insured");
+const riskPol1 = W.newPolicies.find((p) => (p.insuredIds || [])[0] === "i1") || W.newPolicies[0];
+const riskPol2 = W.newPolicies.find((p) => (p.insuredIds || [])[0] === "i2") || W.newPolicies[1];
+assert(riskPol1 && riskPol1.insuredMode !== "couple", "primary row is single (not couple)");
+assert(riskPol2 && riskPol2.insuredMode !== "couple", "secondary row is single (not couple)");
+assert(riskPol1.sumInsuredPerInsured.i1 === "800000", "primary keeps its risk sum");
+assert(riskPol2.sumInsuredPerInsured.i2 === "800000", "secondary inherits shared risk sum from primary");
+assert(riskPol1.startDate === "2026-10-01" || riskPol2.startDate === "2026-10-01", "start date from the primary is kept on a row");
+assert(String(riskPol2.premiumPerInsured.i2).indexOf("40") === 0, "secondary premium is not replaced by the primary premium");
 const riskNext = W.validateStep5();
-assert(riskNext.ok === true, "Next is allowed after couple risk add");
+assert(riskNext.ok === true, "Next is allowed after multi-select risk add");
 
 resetWizard();
 W.policyDraft.company = "כלל";
@@ -276,11 +279,12 @@ W.purchaseAllSimulatorInsureds([
     payload:{ ok:true, monthlyPremium:42 }
   }
 ], { couple:true, coupleIds:["i1","i2"] });
-const ciPol = W.newPolicies[0];
-assert(ciPol && ciPol.compensationPerInsured.i2 === "100000", "couple CI fills secondary compensation from primary");
-assert(String(ciPol.premiumPerInsured.i2).indexOf("42") === 0, "CI secondary premium stays 42");
+assert((W.newPolicies || []).length === 2, "multi-select CI writes one row per insured");
+const ciPol2 = W.newPolicies.find((p) => (p.insuredIds || [])[0] === "i2") || W.newPolicies[1];
+assert(ciPol2 && ciPol2.compensationPerInsured.i2 === "100000", "multi CI fills secondary compensation from primary");
+assert(String(ciPol2.premiumPerInsured.i2).indexOf("42") === 0, "CI secondary premium stays 42");
 const ciNext = W.validateStep5();
-assert(ciNext.ok === true, "Next is allowed after couple CI add");
+assert(ciNext.ok === true, "Next is allowed after multi-select CI add");
 
 resetWizard();
 W.policyDraft.company = "כלל";
