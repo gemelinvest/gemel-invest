@@ -16962,18 +16962,36 @@ if(path === "birthDate"){
       if(draft.healthCoversPerInsured) draft.healthCoversPerInsured = keepMap(draft.healthCoversPerInsured);
       const legalSrc = this.resolveSimulatorLegal(legal, id);
       this.applySimulatorLegalToDraft(draft, legalSrc);
-      const addedCompany = safeTrim(draft.company);
-      const addedType = safeTrim(draft.type);
-      /* מניעת כפל: אם כבר יש שורת single לאותו מבוטח+חברה+מוצר — מחליפים אותה. */
-      const existingRow = (this.newPolicies || []).find((p) => {
+      let addedCompany = safeTrim(draft.company);
+      let addedType = safeTrim(draft.type);
+      /* מניעת כפל: אם כבר יש שורת single לאותו מבוטח+חברה+מוצר — מחליפים אותה.
+         אם בטיוטה חסרים חברה/מוצר (אחרי addDraftPolicy שאיפס אותם) — משלימים מהשורה הקיימת. */
+      const sameInsuredSingle = (p) => {
         if(!p) return false;
-        if(safeTrim(p.company) !== addedCompany || safeTrim(p.type) !== addedType) return false;
         const ids = Array.isArray(p.insuredIds) && p.insuredIds.length
           ? p.insuredIds.map(safeTrim).filter(Boolean)
           : (p.insuredId ? [safeTrim(p.insuredId)] : []);
         if(ids.length !== 1 || ids[0] !== id) return false;
         const mode = safeTrim(p.insuredMode);
         return !mode || mode === "single";
+      };
+      if(!addedCompany || !addedType){
+        const prev = (this.newPolicies || []).find(sameInsuredSingle);
+        if(prev){
+          if(!addedCompany && safeTrim(prev.company)){
+            addedCompany = safeTrim(prev.company);
+            draft.company = addedCompany;
+          }
+          if(!addedType && safeTrim(prev.type)){
+            addedType = safeTrim(prev.type);
+            draft.type = addedType;
+          }
+        }
+      }
+      const existingRow = (this.newPolicies || []).find((p) => {
+        if(!sameInsuredSingle(p)) return false;
+        if(safeTrim(p.company) !== addedCompany || safeTrim(p.type) !== addedType) return false;
+        return true;
       });
       if(existingRow && existingRow.id){
         this.editingPolicyId = existingRow.id;
