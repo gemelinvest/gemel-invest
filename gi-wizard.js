@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260912-np-multi-rail-v3";
+  const GI_WIZARD_BUILD = "20260912-har-upload-update-v1";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -12366,28 +12366,33 @@ if(path === "birthDate"){
       return hashes;
     },
 
+    /* GI-HAR-UPLOAD-ALWAYS-UPDATE 2026-09-12
+       קובץ שכבר בתיק / שהורד מהמערכת — לא חוסמים יותר את הייבוא.
+       מזהירים, ואם הנציג מאשר — ממשיכים לאישור הייבוא ומעדכנים נתונים. */
     async rejectRecycledHarBituachFile(ins, buffer){
       const originStamp = this.readHarOriginStampFromBuffer(buffer);
       if(originStamp){
-        await showWizardHarAlertModal({
+        const ok = await showWizardHarAlertModal({
           title: "שים לב",
-          text: "זהו קובץ הר הביטוח שהורד ממערכת GEMEL INVEST. יש להוריד הר ביטוח עדכני מאתר הר הביטוח ולהעלות אותו.",
-          confirmText: "הבנתי",
-          showCancel: false
+          text: "זהו קובץ הר הביטוח שהורד ממערכת GEMEL INVEST (לא הורדה טרייה מאתר הר הביטוח). אפשר בכל זאת להמשיך — אחרי אישור הייבוא הנתונים יתעדכנו.",
+          confirmText: "המשך ועדכן",
+          cancelText: "ביטול",
+          showCancel: true
         });
-        return true;
+        return !ok;
       }
       const sha = typeof sha256HexFromArrayBuffer === "function" ? safeTrim(await sha256HexFromArrayBuffer(buffer)).toLowerCase() : "";
       if(!sha) return false;
       const known = await this.collectKnownHarContentHashes(ins);
       if(!known.has(sha)) return false;
-      await showWizardHarAlertModal({
+      const ok = await showWizardHarAlertModal({
         title: "שים לב",
-        text: "זהו קובץ הר הביטוח הישן ששמור בתיק. יש להוריד הר ביטוח עדכני מאתר הר הביטוח ולהעלות אותו.",
-        confirmText: "הבנתי",
-        showCancel: false
+        text: "קובץ זה כבר שמור בתיק הלקוח. אפשר להמשיך — אחרי אישור הייבוא הנתונים יתעדכנו מחדש מהקובץ.",
+        confirmText: "המשך ועדכן",
+        cancelText: "ביטול",
+        showCancel: true
       });
-      return true;
+      return !ok;
     },
 
     async handleHarBituachFile(ins, file){
@@ -12407,7 +12412,7 @@ if(path === "birthDate"){
             status: this.isHarBituachStaleForInsured(ins) ? "stale" : "idle",
             fileUploaded: false,
             fileName: file.name || "",
-            message: "הקובץ שהועלה הוא הר הביטוח הישן מהתיק. יש להעלות קובץ עדכני מאתר הר הביטוח."
+            message: "העלאת הקובץ בוטלה — הנתונים בתיק לא שונו. ניתן להעלות שוב ולאשר כדי לעדכן."
           });
           this.render();
           return;
@@ -12477,6 +12482,14 @@ if(path === "birthDate"){
           successMs: 920
         });
 
+        /* רענון מלא של פוליסות שהגיעו מהר הביטוח — ידניות נשארות; אחרי אישור תמיד מתעדכן מהקובץ. */
+        try {
+          const prev = Array.isArray(ins.data.existingPolicies) ? ins.data.existingPolicies : [];
+          const removedIds = new Set(prev.filter((p) => !!p?.importedFromHarBituach).map((p) => p.id));
+          ins.data.existingPolicies = prev.filter((p) => !p?.importedFromHarBituach);
+          ins.data.cancellations = ins.data.cancellations && typeof ins.data.cancellations === "object" ? ins.data.cancellations : {};
+          removedIds.forEach((id) => { try { delete ins.data.cancellations[id]; } catch(_e) {} });
+        } catch(_eClear) {}
         policies.forEach((policy) => this.mergeImportedExistingPolicy(ins, policy, file.name || ""));
         this.storeHarBituachOriginalFile(ins, file, originalDataUrl, { contentSha256, originToken });
         this.markHarBituachAcknowledged(ins, { fileName: file.name || "", empty: false, policyCount: policies.length, contentSha256, originToken });
