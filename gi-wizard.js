@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260912-np-multi-rail-v1";
+  const GI_WIZARD_BUILD = "20260912-np-multi-rail-v2";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -11399,7 +11399,7 @@ if(path === "birthDate"){
       this.closeNpOpenSimulator();
       const done = () => { this._npSimReopening = false; };
       try {
-        const opened = this.openRiskSimulator({ restoreActiveId: id });
+        const opened = this.openRiskSimulator({ restoreActiveId: id, fromPickSwitch: true });
         if(opened && typeof opened.then === "function") opened.then(done, done);
         else done();
       } catch(_e) {
@@ -17333,6 +17333,15 @@ if(path === "birthDate"){
         }
       });
       const activeId = restoreActiveId || insureds[0].id;
+      /* פתיחה מהטיוטה (לא ממעבר pick) — המבוטח הפעיל נצמד לחברה/מוצר שנבחרו בטיוטה,
+         כדי שלא ייפתח סימולטור ישן בגלל pick שמור. */
+      if(!opts.fromPickSwitch){
+        const draftCo = safeTrim(d.company);
+        const draftPr = safeTrim(d.type);
+        if(activeId && draftCo && draftPr){
+          this._npSimPickByInsured[activeId] = { company: draftCo, product: draftPr };
+        }
+      }
       const pick = this._npSimPickByInsured[activeId] || { company: d.company, product: d.type };
       const company = safeTrim(pick.company || d.company);
       const product = safeTrim(pick.product || d.type);
