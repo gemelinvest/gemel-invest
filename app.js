@@ -41977,7 +41977,7 @@ UsersGateUI.init();
   const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260825-migdal-health-fill-v1";
   const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260828-menora-health-decl-v1";
   const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260828-menora-health-decl-v1";
-  const GI_MENORA_RISK_FORM_HREF = "./gi-menora-risk-form.js?v=20260828-menora-health-decl-v1";
+  const GI_MENORA_RISK_FORM_HREF = "./gi-menora-risk-form.js?v=20260912-menora-risk-mkq-align-v1";
   const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-covers-sum-v1";
   const GI_AYALON_MORTGAGE_FORM_HREF = "./gi-ayalon-mortgage-form.js?v=20260824-covers-sum-v1";
   const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-covers-sum-v1";

@@ -15,6 +15,7 @@ const FORM_TAG = "20260824-covers-sum-v1";
 const HACH_FORM_TAG = "20260826-hach-hmo-health-v1";
 const MIGDAL_FORM_TAG = "20260825-migdal-health-fill-v1";
 const MENORA_FORM_TAG = "20260828-menora-health-decl-v1";
+const MENORA_RISK_FORM_TAG = "20260912-menora-risk-mkq-align-v1";
 let failed = 0;
 let passed = 0;
 
@@ -117,9 +118,10 @@ assert(/gi-v12-/.test(sw), "SW tag");
   "gi-phoenix-life-form.js",
   "gi-phoenix-health-form.js"
 ].forEach((file) => {
-  const tag = file.indexOf("hachshara") >= 0 ? HACH_FORM_TAG
-    : (file.indexOf("migdal") >= 0 ? MIGDAL_FORM_TAG
-      : (file.indexOf("menora") >= 0 ? MENORA_FORM_TAG : FORM_TAG));
+  const tag = file === "gi-menora-risk-form.js" ? MENORA_RISK_FORM_TAG
+    : (file.indexOf("hachshara") >= 0 ? HACH_FORM_TAG
+      : (file.indexOf("migdal") >= 0 ? MIGDAL_FORM_TAG
+        : (file.indexOf("menora") >= 0 ? MENORA_FORM_TAG : FORM_TAG)));
   assert(app.includes("./" + file + "?v=" + tag), "href " + file);
   const src = fs.readFileSync(path.join(ROOT, file), "utf8");
   assert(src.includes("Heebo-Bold.ttf"), file + " bold font");
@@ -127,7 +129,7 @@ assert(/gi-v12-/.test(sw), "SW tag");
   const healthFill = (file === "gi-phoenix-health-form.js" || file === "gi-migdal-cancer-form.js")
     ? src.includes("applyMappedHealthYesNo")
     : (file === "gi-menora-risk-form.js"
-      ? src.includes("applyMenoraMkqHealth")
+      ? (src.includes("applyMenoraMkqHealth") && src.includes('menora_risk__inquiry') && src.includes('field: "MKQ4", keys: ["menora_risk__neuro"'))
       : (file === "gi-migdal-mortgage-form.js"
         ? src.includes('map: "migdal_mortgage"')
         : (file === "gi-menora-mortgage-form.js"
