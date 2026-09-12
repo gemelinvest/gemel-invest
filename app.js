@@ -41660,6 +41660,40 @@ UsersGateUI.init();
       }
       return this._phoenixHealthRows;
     },
+    /**
+     * Ayalon health join PDF: HealthDecMainQ1–21 are yes/no radios; smoking is the
+     * named IsSmoking group between printed Q2 (drugs) and Q3 (medications).
+     * Index-zip of HEALTH_QKEYS.ayalon_health (22 keys incl. smoking) onto MainQ1–21
+     * put smoking on MainQ3 and dropped ayalon__female off the form.
+     */
+    ayalonHealthRows(){
+      if(this._ayalonHealthRows) return this._ayalonHealthRows;
+      this._ayalonHealthRows = [
+        { smoke: true, keys: ["ayalon__smoking"] },
+        { q: 1, keys: ["ayalon__alcohol"] },
+        { q: 2, keys: ["ayalon__drugs"] },
+        { q: 3, keys: ["ayalon__medications"] },
+        { q: 4, keys: ["ayalon__hospitalization"] },
+        { q: 5, keys: ["ayalon__tests"] },
+        { q: 6, keys: ["ayalon__disability"] },
+        { q: 7, keys: ["ayalon__family_history"] },
+        { q: 8, keys: ["ayalon__neuro"] },
+        { q: 9, keys: ["ayalon__mental"] },
+        { q: 10, keys: ["ayalon__cancer"] },
+        { q: 11, keys: ["ayalon__respiratory"] },
+        { q: 12, keys: ["ayalon__eyes"] },
+        { q: 13, keys: ["ayalon__ent"] },
+        { q: 14, keys: ["ayalon__heart"] },
+        { q: 15, keys: ["ayalon__digestive"] },
+        { q: 16, keys: ["ayalon__kidneys"] },
+        { q: 17, keys: ["ayalon__endocrine"] },
+        { q: 18, keys: ["ayalon__musculoskeletal"] },
+        { q: 19, keys: ["ayalon__skin"] },
+        { q: 20, keys: ["ayalon__infectious"] },
+        { q: 21, keys: ["ayalon__female"] }
+      ];
+      return this._ayalonHealthRows;
+    },
     applyMappedHealthYesNo(form, spec){
       const cfg = spec && typeof spec === "object" ? spec : {};
       if(!form) return;
@@ -41667,7 +41701,8 @@ UsersGateUI.init();
         : (cfg.map === "migdal_life" ? this.migdalLifeHealthRows()
           : (cfg.map === "migdal_cancer" ? this.migdalCancerHealthRows()
             : (cfg.map === "migdal_mortgage" ? this.migdalMortgageHealthRows()
-              : (cfg.map === "phoenix_health" ? this.phoenixHealthRows() : this.hachsharaHealthRows(cfg.map)))));
+              : (cfg.map === "phoenix_health" ? this.phoenixHealthRows()
+                : (cfg.map === "ayalon_health" ? this.ayalonHealthRows() : this.hachsharaHealthRows(cfg.map))))));
       const responses = cfg.responses && typeof cfg.responses === "object" ? cfg.responses : {};
       const primaryId = this.resolveHealthPrimaryId(responses, cfg.primaryId);
       const spouseId = String(cfg.spouseId == null ? "" : cfg.spouseId).trim();
@@ -41978,7 +42013,7 @@ UsersGateUI.init();
   const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260828-menora-health-decl-v1";
   const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260828-menora-health-decl-v1";
   const GI_MENORA_RISK_FORM_HREF = "./gi-menora-risk-form.js?v=20260828-menora-health-decl-v1";
-  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-covers-sum-v1";
+  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260912-ayalon-health-align-v1";
   const GI_AYALON_MORTGAGE_FORM_HREF = "./gi-ayalon-mortgage-form.js?v=20260824-covers-sum-v1";
   const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-covers-sum-v1";
   const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-covers-sum-v1";

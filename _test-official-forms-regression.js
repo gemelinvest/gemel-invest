@@ -12,6 +12,7 @@ const vm = require("vm");
 const ROOT = __dirname;
 const TAG = "20260830-clal-health-decl-v1";
 const FORM_TAG = "20260824-covers-sum-v1";
+const AYALON_HEALTH_FORM_TAG = "20260912-ayalon-health-align-v1";
 const HACH_FORM_TAG = "20260826-hach-hmo-health-v1";
 const MIGDAL_FORM_TAG = "20260825-migdal-health-fill-v1";
 const MENORA_FORM_TAG = "20260828-menora-health-decl-v1";
@@ -117,14 +118,15 @@ assert(/gi-v12-/.test(sw), "SW tag");
   "gi-phoenix-life-form.js",
   "gi-phoenix-health-form.js"
 ].forEach((file) => {
-  const tag = file.indexOf("hachshara") >= 0 ? HACH_FORM_TAG
-    : (file.indexOf("migdal") >= 0 ? MIGDAL_FORM_TAG
-      : (file.indexOf("menora") >= 0 ? MENORA_FORM_TAG : FORM_TAG));
+  const tag = file === "gi-ayalon-health-form.js" ? AYALON_HEALTH_FORM_TAG
+    : (file.indexOf("hachshara") >= 0 ? HACH_FORM_TAG
+      : (file.indexOf("migdal") >= 0 ? MIGDAL_FORM_TAG
+        : (file.indexOf("menora") >= 0 ? MENORA_FORM_TAG : FORM_TAG)));
   assert(app.includes("./" + file + "?v=" + tag), "href " + file);
   const src = fs.readFileSync(path.join(ROOT, file), "utf8");
   assert(src.includes("Heebo-Bold.ttf"), file + " bold font");
   assert(src.includes("cc: draft.payment?.cc"), file + " passes stored card");
-  const healthFill = (file === "gi-phoenix-health-form.js" || file === "gi-migdal-cancer-form.js")
+  const healthFill = (file === "gi-phoenix-health-form.js" || file === "gi-migdal-cancer-form.js" || file === "gi-ayalon-health-form.js")
     ? src.includes("applyMappedHealthYesNo")
     : (file === "gi-menora-risk-form.js"
       ? src.includes("applyMenoraMkqHealth")
@@ -134,6 +136,10 @@ assert(/gi-v12-/.test(sw), "SW tag");
           ? src.includes('map: "menora_mortgage"')
           : src.includes("applyOfficialHealthAndNames"))));
   assert(healthFill, file + " fills health yes/no");
+  if(file === "gi-ayalon-health-form.js"){
+    assert(src.includes('map: "ayalon_health"'), "ayalon health uses named MainQ map");
+    assert(src.includes("skipHealth: true"), "ayalon health skips index-zip health fill");
+  }
 });
 assert(fs.existsSync(path.join(ROOT, "gi-phoenix-ci-form.js")), "phoenix CI form file");
 assert(app.includes("./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1"), "href gi-phoenix-ci-form.js");
@@ -502,6 +508,38 @@ H.applyMappedHealthYesNo({ __giCapture: capPhx }, {
 });
 assert(capPhx.IsSmoking === "False", "Phoenix health smoking False export");
 assert(capPhx.Q27 === "1", "Phoenix health medications yes on Q27");
+
+console.log("\n9b) ayalon health form map");
+assert(typeof H.ayalonHealthRows === "function", "Ayalon named health rows helper exists");
+const ayalonRows = H.ayalonHealthRows();
+assert(ayalonRows[0] && ayalonRows[0].smoke === true, "Ayalon smoking is named onto IsSmoking");
+assert(ayalonRows.some((r) => r.q === 1 && (r.keys || []).indexOf("ayalon__alcohol") >= 0), "Ayalon MainQ1 is alcohol");
+assert(ayalonRows.some((r) => r.q === 2 && (r.keys || []).indexOf("ayalon__drugs") >= 0), "Ayalon MainQ2 is drugs");
+assert(ayalonRows.some((r) => r.q === 3 && (r.keys || []).indexOf("ayalon__medications") >= 0), "Ayalon MainQ3 is medications not smoking");
+assert(ayalonRows.some((r) => r.q === 21 && (r.keys || []).indexOf("ayalon__female") >= 0), "Ayalon MainQ21 is female");
+assert(!ayalonRows.some((r) => r.q && (r.keys || []).indexOf("ayalon__smoking") >= 0), "Ayalon smoking is not a MainQ radio");
+assert(ayalonRows.filter((r) => r.q).length === 21, "Ayalon maps 21 MainQ radios");
+assert(H.HEALTH_QKEYS.ayalon_health.length === 22, "Ayalon wizard still has 22 keys incl. smoking");
+assert(H.HEALTH_QKEYS.ayalon_health[2] === "ayalon__smoking", "Ayalon wizard key order still has smoking third");
+const capAyalon = {};
+H.applyMappedHealthYesNo({ __giCapture: capAyalon }, {
+  map: "ayalon_health",
+  responses: {
+    ayalon__smoking: { p1: { answer: "yes" }, s1: { answer: "no" } },
+    ayalon__alcohol: { p1: { answer: "no" } },
+    ayalon__drugs: { p1: { answer: "no" } },
+    ayalon__medications: { p1: { answer: "yes" } },
+    ayalon__female: { p1: { answer: "no" } }
+  },
+  primaryId: "p1",
+  spouseId: "s1"
+});
+assert(capAyalon.IsSmoking === "True", "Ayalon smoking yes → IsSmoking True");
+assert(capAyalon.IsSmokingBzug === "False", "Ayalon spouse smoking no → IsSmokingBzug False");
+assert(capAyalon.HealthDecMainQ1 === "2", "Ayalon alcohol no → MainQ1");
+assert(capAyalon.HealthDecMainQ3 === "1", "Ayalon medications yes → MainQ3 (not smoking)");
+assert(capAyalon.HealthDecMainQ21 === "2", "Ayalon female reaches MainQ21");
+assert(!capAyalon.HealthDecMainQ22, "Ayalon has no MainQ22 overflow");
 
 console.log("\n10) stored covers + sum insured helpers");
 assert(typeof H.listStoredHealthCovers === "function", "listStoredHealthCovers helper exists");
