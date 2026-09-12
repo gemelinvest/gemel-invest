@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260912-np-multi-rail-v1";
+  const GI_WIZARD_BUILD = "20260912-np-multi-rail-v3";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -11399,7 +11399,7 @@ if(path === "birthDate"){
       this.closeNpOpenSimulator();
       const done = () => { this._npSimReopening = false; };
       try {
-        const opened = this.openRiskSimulator({ restoreActiveId: id });
+        const opened = this.openRiskSimulator({ restoreActiveId: id, fromPickSwitch: true });
         if(opened && typeof opened.then === "function") opened.then(done, done);
         else done();
       } catch(_e) {
@@ -17161,19 +17161,28 @@ if(path === "birthDate"){
           return [];
         }
         const wantSet = new Set(want);
-        buyList = ready.filter((e) => wantSet.has(e.insId));
+        /* סדר לפי סימון הבחירה המרובה — הראשי/ראשון ברשימה משמש לירושת שדות משותפים. */
+        buyList = want.map((id) => ready.find((e) => e.insId === id)).filter(Boolean);
         const missing = want.filter((id) => !buyList.some((e) => e.insId === id));
-        if(missing.length){
+        if(buyList.length < 2){
           const labels = missing.map((id) => {
             const hit = (this.insureds || []).find((x) => x.id === id);
             return safeTrim(hit?.label) || id;
           });
           window.showToast?.({
             title: "יש לחשב פרמיה",
-            text: "חשבו פרמיה לכל המבוטחים שסומנו בבחירה המרובה: " + labels.join(", ") + ".",
+            text: labels.length
+              ? ("חשבו פרמיה למבוטחים שסומנו בבחירה המרובה: " + labels.join(", ") + ".")
+              : "יש לסמן לפחות שני מבוטחים עם פרמיה מחושבת.",
             variant: "warn"
           });
           return [];
+        }
+        if(missing.length){
+          missing.forEach((id) => {
+            const hit = (this.insureds || []).find((x) => x.id === id);
+            skipped.push(safeTrim(hit?.label) || id);
+          });
         }
       }
       if(!buyList.length){
@@ -17333,6 +17342,15 @@ if(path === "birthDate"){
         }
       });
       const activeId = restoreActiveId || insureds[0].id;
+      /* פתיחה מהטיוטה (לא ממעבר pick) — המבוטח הפעיל נצמד לחברה/מוצר שנבחרו בטיוטה,
+         כדי שלא ייפתח סימולטור ישן בגלל pick שמור. */
+      if(!opts.fromPickSwitch){
+        const draftCo = safeTrim(d.company);
+        const draftPr = safeTrim(d.type);
+        if(activeId && draftCo && draftPr){
+          this._npSimPickByInsured[activeId] = { company: draftCo, product: draftPr };
+        }
+      }
       const pick = this._npSimPickByInsured[activeId] || { company: d.company, product: d.type };
       const company = safeTrim(pick.company || d.company);
       const product = safeTrim(pick.product || d.type);

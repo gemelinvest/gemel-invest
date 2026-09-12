@@ -432,6 +432,44 @@
   }
 
   /* ===== GI-SIM-SHELL 2026-08-10 — מעטפת standalone + הוספת מבוטחים ========= */
+  function riskSimAgeSyncErrorMessage(messages, sync){
+    const msgs = messages && typeof messages === "object" ? messages : {};
+    if(!sync || sync.ok) return "";
+    const reason = sync.reason || "age_missing";
+    return msgs[reason] || msgs.age_missing || msgs.birth_missing || "יש להזין תאריך לידה תקין לפני חישוב הפרמיה.";
+  }
+
+  /* לפני חישוב/הוספה להצעה: אם שדה תאריך עדיין בפוקוס — onCommit עוד לא רץ
+     והגיל לא סונכרן. blur מאלץ commit ואז _calc מקבל age מעודכן. */
+  function riskSimFlushActiveDomFields(sim){
+    try {
+      const modal = sim && sim._modal;
+      if(!modal || typeof document === "undefined") return;
+      const ae = document.activeElement;
+      if(ae && modal.contains(ae) && typeof ae.blur === "function") ae.blur();
+    } catch(_e) {}
+  }
+
+  /* GI-SIM-CALC-OWN-DATA 2026-09-12 — חישוב והוספה לפי נתוני כל מבוטח; סנכרון גיל לפני calc. */
+  function riskSimEnsureCalcForInsured(sim, insId){
+    const id = safeTrim(insId);
+    if(!sim || !id) return null;
+    try { riskSimFlushActiveDomFields(sim); } catch(_eFlush) {}
+    const st = sim._state && sim._state[id];
+    if(st && typeof sim._syncAge === "function"){
+      try { sim._syncAge(st); } catch(_eAge) {}
+    }
+    let existing = null;
+    try { existing = riskSimCollectResultForInsured(sim, id); } catch(_e0) {}
+    if(existing) return existing;
+    try {
+      if(typeof sim._calc === "function") sim._calc(id);
+      else if(typeof sim._recalcState === "function" && st) sim._recalcState(st);
+    } catch(_eCalc) {}
+    try { return riskSimCollectResultForInsured(sim, id); } catch(_e1) { return null; }
+  }
+
+
   function riskSimEnsureStandaloneInsureds(ctx){
     const next = ctx && typeof ctx === "object" ? ctx : {};
     if(!next.standalone) return next;
@@ -1325,20 +1363,52 @@
     return;
   }
 
+  /* GI-MULTI-SELECT-ADD-ALL 2026-09-12
+     בחירה מרובה: מסנכרנים pick/state של כל המסומנים למוצר הפתוח,
+     מעתיקים שדות משותפים מהראשי (או מהפעיל אם מסומן), ומחשבים כל אחד
+     לפי הנתונים שלו — כדי ש«הוסף להצעה» יוסיף את כולם. */
+  function riskSimEnsureInsuredState(sim, insId){
+    const id = safeTrim(insId);
+    if(!sim || !id) return null;
+    if(!sim._state || typeof sim._state !== "object") sim._state = {};
+    if(sim._state[id] && typeof sim._state[id] === "object") return sim._state[id];
+    const insureds = Array.isArray(sim._ctx && sim._ctx.insureds) ? sim._ctx.insureds : [];
+    const ins = insureds.find((x) => safeTrim(x && x.id) === id) || { id, label: id, data: {} };
+    try {
+      sim._state[id] = typeof sim._prefillFromInsured === "function" ? sim._prefillFromInsured(ins) : {};
+    } catch(_ePrefill) {
+      sim._state[id] = {};
+    }
+    try { riskSimApplyStep1PersonalToState(sim); } catch(_eStep1) {}
+    return sim._state[id];
+  }
+  function riskSimSyncCouplePicksToOpenProduct(sim){
+    if(!sim || !sim._giCoupleOn || !sim._ctx) return;
+    const curCo = safeTrim(sim._ctx.company);
+    const curPr = safeTrim(sim._ctx.product);
+    if(!curCo || !curPr) return;
+    const pickMap = riskSimEnsurePickMap(sim);
+    riskSimCoupleSelectedIds(sim).forEach((id) => {
+      pickMap[id] = { company: curCo, product: curPr };
+    });
+  }
   function riskSimEnsureCoupleSharedResults(sim){
     if(!sim || !sim._giCoupleOn || !sim._ctx || !sim._ctx.wizardWorkspace) return;
     if(!riskSimAllowsCouplePolicy(sim._ctx.product)) return;
-    try { riskSimCopyCoupleSharedFieldsFromSeed(sim); } catch(_eCopy) {}
-    /* הנחה לא מועתקת בבחירה מרובה — כל מבוטח לפי ההנחה שלו. */
+    try { riskSimFlushActiveDomFields(sim); } catch(_eFlush) {}
     riskSimCoupleSelectedIds(sim).forEach((id) => {
-      if(riskSimCollectResultForInsured(sim, id)) return;
-      try {
-        if(typeof sim._calc === "function") sim._calc(id);
-        else if(typeof sim._recalcState === "function"){
-          const st = sim._state && sim._state[id];
-          if(st) sim._recalcState(st);
-        }
-      } catch(_eCalc) {}
+      try { riskSimEnsureInsuredState(sim, id); } catch(_eSt) {}
+    });
+    try { riskSimSyncCouplePicksToOpenProduct(sim); } catch(_ePick) {}
+    const activeId = safeTrim(sim._activeInsuredId);
+    const selected = riskSimCoupleSelectedIds(sim);
+    const shareSrc = (activeId && selected.indexOf(activeId) >= 0)
+      ? activeId
+      : riskSimCoupleSeedInsuredId(sim);
+    try { riskSimCopyCoupleSharedFieldsFromId(sim, shareSrc); } catch(_eCopy) {}
+    /* הנחה לא מועתקת בבחירה מרובה — כל מבוטח לפי ההנחה שלו. */
+    selected.forEach((id) => {
+      try { riskSimEnsureCalcForInsured(sim, id); } catch(_eCalc) {}
     });
   }
   function riskSimCoupleSharedFieldName(el){
@@ -1623,6 +1693,7 @@
   function riskSimPurchaseWizardInsureds(sim){
     if(!sim || !sim._ctx?.wizardWorkspace) return;
     try { riskSimCaptureLegalFromDom(sim); } catch(_e) {}
+    try { riskSimFlushActiveDomFields(sim); } catch(_eFlush) {}
     try { riskSimEnsureCoupleSharedResults(sim); } catch(_eCouple) {}
     try {
       if(typeof sim._ctx.onWizardSessionCapture === "function"){
@@ -1637,33 +1708,74 @@
     const curCo = safeTrim(sim._ctx.company);
     const curPr = safeTrim(sim._ctx.product);
     const pickMap = riskSimEnsurePickMap(sim);
+    const activeId = safeTrim(sim._activeInsuredId);
+    const coupleOn = !!sim._giCoupleOn && riskSimAllowsCouplePolicy(curPr);
+    const coupleIds = coupleOn ? riskSimCoupleSelectedIds(sim) : [];
+    /* המבוטח הפעיל + כל המסומנים בבחירה מרובה נצמדים לחברה/מוצר הפתוחים
+       (בלי סגירה/פתיחה מחדש) כדי שלא ייפסלו בגלל pick ישן. */
+    if(activeId && curCo && curPr){
+      pickMap[activeId] = { company: curCo, product: curPr };
+    }
+    if(coupleOn && curCo && curPr){
+      try { riskSimSyncCouplePicksToOpenProduct(sim); } catch(_eCouplePick) {}
+      coupleIds.forEach((id) => {
+        try { riskSimEnsureInsuredState(sim, id); } catch(_eSt) {}
+        pickMap[id] = { company: curCo, product: curPr };
+      });
+    }
+    /* חישוב לפי הנתונים של כל מבוטח בנפרד — לא מנחשים ולא מעתיקים פרמיה. */
+    const calcTargets = new Set();
+    if(activeId) calcTargets.add(activeId);
+    if(coupleOn) coupleIds.forEach((id) => calcTargets.add(id));
+    calcTargets.forEach((id) => {
+      try { riskSimEnsureCalcForInsured(sim, id); } catch(_eCalc) {}
+    });
     const entries = [];
     insureds.forEach((ins) => {
       const id = safeTrim(ins.id);
       if(!id) return;
       const pick = pickMap[id] || { company: curCo, product: curPr };
-      const co = safeTrim(pick.company || curCo);
-      const pr = safeTrim(pick.product || curPr);
-      const matches = co === curCo && pr === curPr;
+      let co = safeTrim(pick.company || curCo);
+      let pr = safeTrim(pick.product || curPr);
+      let matches = co === curCo && pr === curPr;
+      /* בחירה מרובה: מסומנים תמיד על המוצר הפתוח אחרי הסנכרון השקט. */
+      if(coupleOn && coupleIds.indexOf(id) >= 0 && curCo && curPr){
+        co = curCo;
+        pr = curPr;
+        matches = true;
+        pickMap[id] = { company: curCo, product: curPr };
+      }
+      /* אם יש תוצאה חיה בסימולטור הפתוח — זו האמת למוצר הנוכחי. */
+      const live = matches ? riskSimBuildLivePurchasePayload(sim, id) : null;
+      if(!matches && riskSimCollectResultForInsured(sim, id)){
+        co = curCo;
+        pr = curPr;
+        matches = true;
+        pickMap[id] = { company: curCo, product: curPr };
+      }
+      const payload = matches ? (live || riskSimBuildLivePurchasePayload(sim, id)) : null;
       const legal = riskSimIsRiskOrMortgageProduct(pr) ? riskSimCloneLegal(riskSimGetLegal(sim, id)) : null;
       entries.push({
         insId: id,
         company: co,
         product: pr,
-        payload: matches ? riskSimBuildLivePurchasePayload(sim, id) : null,
+        payload,
         legal,
         label: safeTrim(ins.label) || "מבוטח"
       });
     });
-    const coupleOn = !!sim._giCoupleOn && riskSimAllowsCouplePolicy(curPr);
-    const coupleIds = coupleOn ? riskSimCoupleSelectedIds(sim) : [];
     if(typeof sim._ctx.onPurchaseAllInsureds === "function"){
       try { sim._ctx.onPurchaseAllInsureds(entries, { couple: coupleOn, coupleIds }); } catch(_eAll) {}
       return;
     }
-    const active = entries.find((e) => e.insId === safeTrim(sim._activeInsuredId)) || entries[0];
+    const active = entries.find((e) => e.insId === activeId) || entries[0];
     if(!active || !active.payload){
-      window.showToast?.({ title: "יש לחשב פרמיה", text: "חשבו פרמיה למבוטח זה לפני ההוספה להצעה.", variant: "warn" });
+      const stErr = activeId && sim._state && sim._state[activeId] && sim._state[activeId].error;
+      window.showToast?.({
+        title: "יש לחשב פרמיה",
+        text: safeTrim(stErr) || "מלאו את כל השדות וחשבו פרמיה למבוטח זה לפני ההוספה להצעה.",
+        variant: "warn"
+      });
       return;
     }
     try { sim._ctx.onApply?.({ [active.insId]: active.payload }, { skipRender: true, skipToast: true }); } catch(_e2) {}
@@ -1941,6 +2053,7 @@
         try { riskSimCaptureLegalFromDom(sim); } catch(_eCap) {}
         const id = sim._activeInsuredId;
         try {
+          try { riskSimFlushActiveDomFields(sim); } catch(_eFlushCalc) {}
           if(typeof sim._calc === "function"){
             sim._calc(id);
           } else if(typeof sim._recalcState === "function"){
@@ -2012,14 +2125,16 @@
         if(!chk.checked && sim._giCoupleCoverCustomized) delete sim._giCoupleCoverCustomized[id];
         riskSimNotifyCoupleChange(sim);
         if(chk.checked){
-          try { riskSimCopyCoupleSharedFieldsFromSeed(sim); } catch(_eShareIns) {}
-          try { riskSimSyncCoupleHealthCovers(sim); } catch(_eSyncIns) {}
-          const pick = riskSimGetPick(sim, id);
+          try { riskSimEnsureInsuredState(sim, id); } catch(_eStIns) {}
           const curCo = safeTrim(sim._ctx?.company);
           const curPr = safeTrim(sim._ctx?.product);
-          if(safeTrim(pick.company) !== curCo || safeTrim(pick.product) !== curPr){
-            riskSimRequestPickSwitch(sim, id, curCo, curPr);
+          /* שיוך שקט למוצר הפתוח — בלי סגירה/פתיחה שמוחקת את הירושה מהראשי. */
+          if(curCo && curPr){
+            const pickMapQuiet = riskSimEnsurePickMap(sim);
+            pickMapQuiet[id] = { company: curCo, product: curPr };
           }
+          try { riskSimCopyCoupleSharedFieldsFromSeed(sim); } catch(_eShareIns) {}
+          try { riskSimSyncCoupleHealthCovers(sim); } catch(_eSyncIns) {}
         }
       });
     });
@@ -3649,9 +3764,21 @@
       this._render();
     },
 
+    _syncAge(st){
+      return riskSimSyncAgeFromBirthDate(st, { minAge: PHOENIX_RISK_MIN_AGE, maxAge: PHOENIX_RISK_MAX_AGE, asOfDate: st?.insuranceStartDate || "" });
+    },
+
     _calc(insuredId){
       const st = this._state[insuredId];
       if(!st) return;
+      const ageSync = this._syncAge(st);
+      if(!ageSync.ok){
+        st.result = null;
+        st.error = riskSimAgeSyncErrorMessage(PHOENIX_RISK_SIM_MISSING_MESSAGES, ageSync);
+        st.dirtySinceSave = true;
+        this._render();
+        return;
+      }
       const sumNum = Number(String(st.sumInsured || "").replace(/[^\d.]/g, ""));
       const calc = computePhoenixRiskPremium({ age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: sumNum });
       if(calc.ok){
@@ -4249,9 +4376,21 @@
       this._render();
     },
 
+    _syncAge(st){
+      return riskSimSyncAgeFromBirthDate(st, { minAge: MENORA_RISK_MIN_AGE, maxAge: MENORA_RISK_MAX_AGE, asOfDate: st?.insuranceStartDate || "" });
+    },
+
     _calc(insuredId){
       const st = this._state[insuredId];
       if(!st) return;
+      const ageSync = this._syncAge(st);
+      if(!ageSync.ok){
+        st.result = null;
+        st.error = riskSimAgeSyncErrorMessage(MENORA_RISK_SIM_MISSING_MESSAGES, ageSync);
+        st.dirtySinceSave = true;
+        this._render();
+        return;
+      }
       const sumNum = Number(String(st.sumInsured || "").replace(/[^\d.]/g, ""));
       const calc = computeMenoraRiskPremium({ age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: sumNum });
       if(calc.ok){
@@ -5440,9 +5579,21 @@
       this._render();
     },
 
+    _syncAge(st){
+      return riskSimSyncAgeFromBirthDate(st, { minAge: HACHSHARA_RISK_MIN_AGE, maxAge: HACHSHARA_RISK_MAX_AGE, asOfDate: st?.insuranceStartDate || "" });
+    },
+
     _calc(insuredId){
       const st = this._state[insuredId];
       if(!st) return;
+      const ageSync = this._syncAge(st);
+      if(!ageSync.ok){
+        st.result = null;
+        st.error = riskSimAgeSyncErrorMessage(HACHSHARA_RISK_SIM_MISSING_MESSAGES, ageSync);
+        st.dirtySinceSave = true;
+        this._render();
+        return;
+      }
       const sumNum = Number(String(st.sumInsured || "").replace(/[^\d.]/g, ""));
       const calc = computeHachsharaRiskPremium({ age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: sumNum });
       if(calc.ok){
@@ -6010,9 +6161,21 @@
       this._render();
     },
 
+    _syncAge(st){
+      return riskSimSyncAgeFromBirthDate(st, { minAge: HACHSHARA_MORT_RISK_MIN_AGE, maxAge: HACHSHARA_MORT_RISK_MAX_AGE, asOfDate: st?.insuranceStartDate || "" });
+    },
+
     _calc(insuredId){
       const st = this._state[insuredId];
       if(!st) return;
+      const ageSync = this._syncAge(st);
+      if(!ageSync.ok){
+        st.result = null;
+        st.error = riskSimAgeSyncErrorMessage(HACHSHARA_MORT_RISK_SIM_MISSING_MESSAGES, ageSync);
+        st.dirtySinceSave = true;
+        this._render();
+        return;
+      }
       const sumNum = Number(String(st.sumInsured || "").replace(/[^\d.]/g, ""));
       const calc = computeHachsharaMortRiskPremium({ age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: sumNum });
       if(calc.ok){
@@ -6570,9 +6733,21 @@
       this._render();
     },
 
+    _syncAge(st){
+      return riskSimSyncAgeFromBirthDate(st, { minAge: PHOENIX_MORTGAGE_RISK_MIN_AGE, maxAge: PHOENIX_MORTGAGE_RISK_MAX_AGE, asOfDate: st?.insuranceStartDate || "" });
+    },
+
     _calc(insuredId){
       const st = this._state[insuredId];
       if(!st) return;
+      const ageSync = this._syncAge(st);
+      if(!ageSync.ok){
+        st.result = null;
+        st.error = riskSimAgeSyncErrorMessage(PHOENIX_MORTGAGE_RISK_SIM_MISSING_MESSAGES, ageSync);
+        st.dirtySinceSave = true;
+        this._render();
+        return;
+      }
       const sumNum = Number(String(st.sumInsured || "").replace(/[^\d.]/g, ""));
       const calc = computePhoenixMortgageRiskPremium({ age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: sumNum });
       if(calc.ok){
