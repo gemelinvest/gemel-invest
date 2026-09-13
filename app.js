@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260913-clal-couple-health-decl-v2";
+  const BUILD = "20260913-clal-couple-health-decl-v3";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -41328,92 +41328,29 @@ UsersGateUI.init();
         { step: "e11_17_family", field: "Q26" }
       ]
     },
-    /**
-     * Clal couple-risk join PDF page 3: CRQ1–19 match printed rows (OCR/widget Y):
-     * 1 neuro … 17 rheumatic, 18 alcohol, 19 drugs. Extra yes/no radios are named
-     * RegularMeds / FutureInvasiveExam / PastInvasiveExam / ExistingDisability
-     * (+ S* spouse). Spouse future-detail text is SInvasiveExamText (not SFuture…).
-     * Do not index-zip HEALTH_QKEYS onto HealthDecMainQ — those fields are absent.
-     */
-    clalCoupleHealthRows(){
-      if(this._clalCoupleHealthRows) return this._clalCoupleHealthRows;
-      this._clalCoupleHealthRows = [
-        { field: "CRQ1", spouseField: "CRQ1S", keys: ["clal_couple_neuro"] },
-        { field: "CRQ2", spouseField: "CRQ2S", keys: ["clal_couple_mental"] },
-        { field: "CRQ3", spouseField: "CRQ3S", keys: ["clal_couple_respiratory"] },
-        { field: "CRQ4", spouseField: "CRQ4S", keys: ["clal_couple_skin"] },
-        { field: "CRQ5", spouseField: "CRQ5S", keys: ["clal_couple_heart"] },
-        { field: "CRQ6", spouseField: "CRQ6S", keys: ["clal_couple_digestive"] },
-        { field: "CRQ7", spouseField: "CRQ7S", keys: ["clal_couple_liver"] },
-        { field: "CRQ8", spouseField: "CRQ8S", keys: ["clal_couple_kidney"] },
-        { field: "CRQ9", spouseField: "CRQ9S", keys: ["clal_couple_metabolic"] },
-        { field: "CRQ10", spouseField: "CRQ10S", keys: ["clal_couple_blood"] },
-        { field: "CRQ11", spouseField: "CRQ11S", keys: ["clal_couple_infectious"] },
-        { field: "CRQ12", spouseField: "CRQ12S", keys: ["clal_couple_tumors"] },
-        { field: "CRQ13", spouseField: "CRQ13S", keys: ["clal_couple_musculoskeletal"] },
-        { field: "CRQ14", spouseField: "CRQ14S", keys: ["clal_couple_vision"] },
-        { field: "CRQ15", spouseField: "CRQ15S", keys: ["clal_couple_ent"] },
-        { field: "CRQ16", spouseField: "CRQ16S", keys: ["clal_couple_reproductive"] },
-        { field: "CRQ17", spouseField: "CRQ17S", keys: ["clal_couple_rheumatic"] },
-        { field: "CRQ18", spouseField: "CRQ18S", keys: ["clal_couple_alcohol"] },
-        { field: "CRQ19", spouseField: "CRQ19S", keys: ["clal_couple_drugs"] },
-        { field: "RegularMeds", spouseField: "SRegularMeds", detailField: "RegularMedsText", spouseDetailField: "SRegularMedsText", keys: ["clal_couple_regular_meds"] },
-        { field: "FutureInvasiveExam", spouseField: "SFutureInvasiveExam", detailField: "FutureInvasiveExamText", spouseDetailField: "SInvasiveExamText", keys: ["clal_couple_future_surgery"] },
-        { field: "PastInvasiveExam", spouseField: "SPastInvasiveExam", detailField: "PastInvasiveExamText", spouseDetailField: "SPastInvasiveExamText", keys: ["clal_couple_hospital_surgery"] },
-        { field: "ExistingDisability", spouseField: "SExistingDisability", detailField: "ExistingDisabilityText", spouseDetailField: "SExistingDisabilityText", keys: ["clal_couple_disability"] }
-      ];
-      return this._clalCoupleHealthRows;
-    },
     applyClalCoupleHealthYesNo(form, draft){
       if(!form) return;
       const responses = (draft && draft.healthResponses) || {};
       const primaryId = (draft && draft.primaryId) || (draft && draft.primary && draft.primary.id) || "";
       const spouseId = (draft && draft.spouseId) || (draft && draft.spouse && draft.spouse.id) || "";
-      const font = draft && draft.font ? draft.font : null;
       const yesNo = (answer) => answer === "yes" ? "1" : (answer === "no" ? "2" : "");
-      const ans = (keys, insId) => {
-        let sawNo = false;
-        for(let i = 0; i < keys.length; i++){
-          let a = this.healthAnswer(responses, keys[i], insId);
-          if(!a && (!insId || insId === primaryId)) a = this.healthAnswerOrSolo(responses, keys[i], "");
-          if(a === "yes") return "yes";
-          if(a === "no") sawNo = true;
-        }
-        return sawNo ? "no" : "";
+      const fill = (field, insId, qKey) => {
+        const exportValue = yesNo(this.healthAnswer(responses, qKey, insId));
+        if(exportValue) this.setExport(form, field, exportValue);
       };
-      const detailText = (keys, insId) => {
-        for(let i = 0; i < keys.length; i++){
-          const block = responses?.[keys[i]];
-          const row = (insId && block?.[insId]) || null;
-          const soloId = !row ? this.soloHealthInsuredId({ [keys[i]]: block || {} }) : "";
-          const use = row || (soloId && block?.[soloId]) || null;
-          if(!use) continue;
-          const fields = use.fields && typeof use.fields === "object" ? use.fields : {};
-          const bits = [];
-          Object.keys(fields).forEach((fk) => {
-            const v = String(fields[fk] == null ? "" : fields[fk]).trim();
-            if(v) bits.push(v);
-          });
-          if(bits.length) return bits.join(" · ");
-        }
-        return "";
-      };
-      this.clalCoupleHealthRows().forEach((row) => {
-        if(!row || !Array.isArray(row.keys) || !row.keys.length) return;
-        const primaryA = ans(row.keys, primaryId);
-        const spouseA = spouseId ? ans(row.keys, spouseId) : "";
-        const pYn = yesNo(primaryA);
-        if(pYn && row.field) this.setExport(form, row.field, pYn);
-        const sYn = yesNo(spouseA);
-        if(sYn && row.spouseField) this.setExport(form, row.spouseField, sYn);
-        if(row.detailField){
-          const text = detailText(row.keys, primaryId);
-          if(text) this.setTextSafe(form, row.detailField, text, font, { visual: false });
-        }
-        if(row.spouseDetailField && spouseId){
-          const sText = detailText(row.keys, spouseId);
-          if(sText) this.setTextSafe(form, row.spouseDetailField, sText, font, { visual: false });
-        }
+      (this.HEALTH_QKEYS.clal_couple || []).forEach((qKey, idx) => {
+        const n = idx + 1;
+        fill("CRQ" + n, primaryId, qKey);
+        fill("CRQ" + n + "S", spouseId, qKey);
+      });
+      [
+        ["clal_couple_regular_meds", "RegularMeds", "SRegularMeds"],
+        ["clal_couple_future_surgery", "FutureInvasiveExam", "SFutureInvasiveExam"],
+        ["clal_couple_hospital_surgery", "PastInvasiveExam", "SPastInvasiveExam"],
+        ["clal_couple_disability", "ExistingDisability", "SExistingDisability"]
+      ].forEach((row) => {
+        fill(row[1], primaryId, row[0]);
+        fill(row[2], spouseId, row[0]);
       });
     },
     hachsharaHealthRows(kind){
@@ -42031,7 +41968,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260913-clal-couple-health-decl-v2";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260913-clal-couple-health-decl-v3";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -42045,14 +41982,14 @@ UsersGateUI.init();
   const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-covers-sum-v1";
   const GI_AYALON_MORTGAGE_FORM_HREF = "./gi-ayalon-mortgage-form.js?v=20260824-covers-sum-v1";
   const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-covers-sum-v1";
-  const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260912-clal-couple-health-align-v1";
+  const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-covers-sum-v1";
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260824-covers-sum-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260825-migdal-health-fill-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260913-clal-couple-health-decl-v2";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260913-clal-couple-health-decl-v2";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260913-clal-couple-health-decl-v3";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260913-clal-couple-health-decl-v3";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -42705,18 +42642,18 @@ UsersGateUI.init();
     "./ayalon-health-sim.css?v=20260810-sim-mockup-v2",
     "./ayalon-ci-sim.css?v=20260811-ayl-ci-v1",
     "./hachshara-health-sim.css?v=20260810-sim-mockup-v2",
-    "./hachshara-risk-sim.css?v=20260913-clal-couple-health-decl-v2",
-    "./hachshara-mortgage-risk-sim.css?v=20260913-clal-couple-health-decl-v2",
+    "./hachshara-risk-sim.css?v=20260913-clal-couple-health-decl-v3",
+    "./hachshara-mortgage-risk-sim.css?v=20260913-clal-couple-health-decl-v3",
     "./migdal-health-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
-    "./menora-ci-sim.css?v=20260913-clal-couple-health-decl-v2",
+    "./menora-ci-sim.css?v=20260913-clal-couple-health-decl-v3",
     "./clal-health-sim.css?v=20260812-cll-health-v1",
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260913-clal-couple-health-decl-v2",
-    "./simulators-shell.css?v=20260913-clal-couple-health-decl-v2"
+    "./simulators-center.css?v=20260913-clal-couple-health-decl-v3",
+    "./simulators-shell.css?v=20260913-clal-couple-health-decl-v3"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -44078,7 +44015,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260913-clal-couple-health-decl-v2";
+  const GI_WIZARD_JS_VERSION = "20260913-clal-couple-health-decl-v3";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
