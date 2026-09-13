@@ -15164,8 +15164,15 @@
       rawRows.forEach((row, idx) => {
         const rec = this.mapProposalRow(row, idx);
         if(!rec?.id) return;
-        changedIds.push(String(rec.id));
-        map.set(String(rec.id), rec);
+        const id = String(rec.id);
+        changedIds.push(id);
+        const prev = map.get(id);
+        // GI-PERF F2: light delta must not wipe a draft payload already in memory.
+        if(prev && !this.payloadIsEmpty(prev) && this.payloadIsEmpty(rec)){
+          map.set(id, { ...rec, payload: prev.payload });
+        } else {
+          map.set(id, rec);
+        }
         merged += 1;
       });
       State.data.proposals = Array.from(map.values());
@@ -15319,20 +15326,23 @@
           ? new Date(sinceDate.getTime() - GI_WAVE3_INCR_OVERLAP_MS).toISOString()
           : localAt;
 
+        // GI-PERF F2: delta is list-columns only for every session. Existing
+        // payloads stay in memory (mergeCustomersDelta / mergeProposalsDelta).
+        // Open-file content still comes from ensureRecordPayload.
         const [metaRes, agentsRes, customersRes, proposalsRes] = await Promise.all([
           this.loadMetaRow(),
           this.loadTableRows(SUPABASE_TABLES.agents, AGENT_PUBLIC_COLUMNS),
           this.loadTableRowsSince(
             SUPABASE_TABLES.customers,
             querySince,
-            this.isTeamManagerLightSession() ? CUSTOMER_LIGHT_COLUMNS : "*"
+            CUSTOMER_LIGHT_COLUMNS
           ),
           (Auth?.isOpsAgent?.()
             ? Promise.resolve({ ok:true, data: [] })
             : this.loadTableRowsSince(
                 SUPABASE_TABLES.proposals,
                 querySince,
-                this.isTeamManagerLightSession() ? PROPOSAL_LIGHT_COLUMNS : "*"
+                PROPOSAL_LIGHT_COLUMNS
               ))
         ]);
 
