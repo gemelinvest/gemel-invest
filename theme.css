@@ -3446,13 +3446,13 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
 }
 
 .giChatDockCard__name:not(#\9):not(#\9){
-  font-size: 13px !important;
+  font-size: 17px !important;
   font-weight: 700 !important;
   color: var(--gi-text, #0f172a) !important;
 }
 
 .giChatDockCard__text:not(#\9):not(#\9){
-  font-size: 12px !important;
+  font-size: 15px !important;
   color: var(--gi-text-3, rgba(15,23,42,.68)) !important;
 }
 

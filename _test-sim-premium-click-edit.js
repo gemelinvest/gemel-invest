@@ -12,7 +12,7 @@ const assert = require('assert');
 const { spawnSync } = require('child_process');
 
 const ROOT = __dirname;
-const CACHE_TAG = '20260913-sim-prem-edit-v3';
+const CACHE_TAG = '20260913-sim-prem-edit-v4';
 
 function read(rel) {
   return fs.readFileSync(path.join(ROOT, rel), 'utf8');
