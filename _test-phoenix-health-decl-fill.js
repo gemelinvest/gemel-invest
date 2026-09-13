@@ -10,7 +10,7 @@ const path = require("path");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const APP_TAG = "20260913-phoenix-health-decl-v1";
+const APP_TAG = "20260913-hachshara-health-decl-v1";
 let passed = 0;
 let failed = 0;
 
