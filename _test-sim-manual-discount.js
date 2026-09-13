@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260913-clal-couple-health-decl-v7";
+const TAG = "20260913-clal-couple-health-decl-v8";
 let failed = 0;
 let passed = 0;
 
@@ -100,7 +100,10 @@ assert(parseFn("").length === 0, "empty input is not a schedule");
 
 console.log("\n4) payload to the proposal replaces catalog and uses year-1 after-premium");
 assert(sims.includes("giSimDiscountActiveOption(sim, insId, company, product)"), "payload reads the active catalog-or-manual option");
-assert(sims.includes("manualException: !!opt.manualException"), "payload marks a typed exception");
+assert(
+  sims.includes("manualException: !!payloadOpt.manualException") || sims.includes("manualException: !!opt.manualException"),
+  "payload marks a typed exception"
+);
 assert(sims.includes('id: GI_SIM_MANUAL_DISCOUNT_ID'), "synthetic option id");
 assert(sims.includes('const GI_SIM_MANUAL_DISCOUNT_ID = "gi-sim-manual"'), "stable manual id");
 assert(/function giSimDiscountSetSelected\(sim, optionId\)\{[\s\S]{0,420}delete sim\._giSimManualByInsured\[active\]/.test(sims), "picking a catalog option clears the typed schedule");

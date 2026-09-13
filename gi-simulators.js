@@ -1632,47 +1632,74 @@
   function riskSimSelectedDiscountPayload(sim, result, insId){
     const company = safeTrim(sim?._ctx?.company);
     const product = safeTrim(sim?._ctx?.product);
+    const edit = giSimPremEditGet(sim, insId);
     const opt = giSimDiscountActiveOption(sim, insId, company, product);
-    if(!opt) return null;
     /* אם התוצאה הגיעה בלי ok (סימולטורי ריסק) — משלימים כדי שמנוע ההנחה יחשב. */
-    const calcResult = (result && typeof result === "object" && result.ok !== true)
+    let calcResult = (result && typeof result === "object" && result.ok !== true)
       ? Object.assign({}, result, { ok: true })
       : result;
+    if(edit && Number.isFinite(Number(edit.before)) && calcResult && typeof calcResult === "object"){
+      calcResult = Object.assign({}, calcResult, {
+        monthlyPremium: Number(edit.before),
+        annualPremium: Math.round(Number(edit.before) * 12 * 100) / 100,
+        ok: true
+      });
+    }
     let after = null;
-    if(opt.manualException){
-      try { after = giSimManualAfterMonthly(calcResult, opt); } catch(_eMan) {}
-    } else {
-      try {
-        const explained = giSimDiscountExplain(calcResult, opt, company, product);
-        after = explained && explained.after != null ? explained.after : null;
-      } catch(_e) {}
-      if(after == null){
-        try { after = giSimDiscountAfterMonthly(calcResult, opt); } catch(_e2) {}
-      }
-      /* גיבוי לריסק בלי כיסויים: אחוז שנה-1 × פרמיה חודשית. */
-      if(after == null){
-        const monthly = Number(calcResult && calcResult.monthlyPremium);
-        const pct = giSimDiscountYear1Pct(opt);
-        if(Number.isFinite(monthly) && pct >= 0){
-          try { after = giSimMoneyAfterPct(monthly, pct); } catch(_e3) {}
+    let payloadOpt = opt;
+    if(opt){
+      if(opt.manualException){
+        try { after = giSimManualAfterMonthly(calcResult, opt); } catch(_eMan) {}
+      } else {
+        try {
+          const explained = giSimDiscountExplain(calcResult, opt, company, product);
+          after = explained && explained.after != null ? explained.after : null;
+        } catch(_e) {}
+        if(after == null){
+          try { after = giSimDiscountAfterMonthly(calcResult, opt); } catch(_e2) {}
+        }
+        /* גיבוי לריסק בלי כיסויים: אחוז שנה-1 × פרמיה חודשית. */
+        if(after == null){
+          const monthly = Number(calcResult && calcResult.monthlyPremium);
+          const pct = giSimDiscountYear1Pct(opt);
+          if(Number.isFinite(monthly) && pct >= 0){
+            try { after = giSimMoneyAfterPct(monthly, pct); } catch(_e3) {}
+          }
         }
       }
     }
+    if(edit && Number.isFinite(Number(edit.after))){
+      after = Number(edit.after);
+      if(!payloadOpt){
+        payloadOpt = {
+          id: "gi-sim-prem-edit",
+          label: "תיקון פרמיה ידני",
+          year1Pct: 0,
+          years: 1,
+          schedule: [0],
+          isException: true,
+          manualException: true,
+          raw: ""
+        };
+      }
+    }
+    if(!payloadOpt) return null;
     /* חשוב: Number(null) === 0 — אסור להפוך «אין חישוב» ל־₪0 בשורת הסיכום. */
     const afterNum = (after == null || after === "") ? NaN : Number(after);
-    const schedule = Array.isArray(opt.schedule) ? opt.schedule.map((n) => Number(n) || 0) : [];
+    const schedule = Array.isArray(payloadOpt.schedule) ? payloadOpt.schedule.map((n) => Number(n) || 0) : [];
     return {
-      optionId: safeTrim(opt.id),
-      label: safeTrim(opt.label),
-      year1Pct: giSimDiscountYear1Pct(opt),
-      years: schedule.length || (Number(opt.years) || 0),
+      optionId: safeTrim(payloadOpt.id),
+      label: safeTrim(payloadOpt.label),
+      year1Pct: giSimDiscountYear1Pct(payloadOpt),
+      years: schedule.length || (Number(payloadOpt.years) || 0),
       schedule,
       monthlyAfterDiscount: Number.isFinite(afterNum) ? afterNum : null,
       company,
       product,
-      isException: !!opt.isException,
-      manualException: !!opt.manualException,
-      raw: String(opt.raw || "")
+      isException: !!payloadOpt.isException,
+      manualException: !!payloadOpt.manualException,
+      premiumEdited: !!(edit && (Number.isFinite(Number(edit.before)) || Number.isFinite(Number(edit.after)))),
+      raw: String(payloadOpt.raw || "")
     };
   }
 
@@ -1975,7 +2002,11 @@
     if(foot){
       foot.classList.add("giSimShell__foot");
       const active = sim._state?.[activeId];
-      const monthly = Number(active?.result?.monthlyPremium) || 0;
+      let monthly = Number(active?.result?.monthlyPremium) || 0;
+      try {
+        const editBefore = giSimPremEditGet(sim, activeId);
+        if(editBefore && Number.isFinite(Number(editBefore.before))) monthly = Number(editBefore.before);
+      } catch(_eEd) {}
       const wizardFoot = !!sim._ctx.wizardWorkspace;
       const total = wizardFoot ? riskSimTotalMonthlyPremiumsMatchingPick(sim) : riskSimTotalMonthlyPremiums(sim._state);
       const backBtnHtml = (!wizardFoot && typeof window !== "undefined" && typeof window.GI_SIM_BACK_TO_PICKER === "function")
@@ -1987,7 +2018,7 @@
       foot.innerHTML = `
         <div class="giSimShell__premBlock">
           <span class="giSimShell__premLabel">פרמיה חודשית</span>
-          <strong class="giSimShell__premValue">₪${escapeHtml(riskSimFormatMoneyShekels(monthly))}</strong>
+          <strong class="giSimShell__premValue giSimPremEdit" data-gi-prem-edit="before" title="לחצו לעריכת הפרמיה" role="button" tabindex="0">₪${escapeHtml(riskSimFormatMoneyShekels(monthly))}</strong>
         </div>
         <div class="giSimShell__premBlock">
           <span class="giSimShell__premLabel">${wizardFoot ? "סה״כ למוצר זה" : "סה״כ לכל המבוטחים"}</span>
@@ -2053,6 +2084,7 @@
         try { riskSimCaptureLegalFromDom(sim); } catch(_eCap) {}
         const id = sim._activeInsuredId;
         try {
+          try { giSimPremEditClear(sim, id); } catch(_eClr) {}
           try { riskSimFlushActiveDomFields(sim); } catch(_eFlushCalc) {}
           if(typeof sim._calc === "function"){
             sim._calc(id);
@@ -2903,17 +2935,166 @@
     }
     return result;
   }
+
+  /* GI-SIM-PREM-EDIT 2026-09-12
+     לחיצה על פרמיה לפני/אחרי הנחה בכל סימולטור → עריכה ידנית.
+     הערך נשמר ב-_giPremEditByInsured וזורם ל-simDiscount / premiumPerInsured
+     (דוח תפעולי + מסך שיקוף קוראים את אותם שדות). */
+  function giSimPremEditEnsure(sim){
+    if(!sim) return {};
+    if(!sim._giPremEditByInsured || typeof sim._giPremEditByInsured !== "object"){
+      sim._giPremEditByInsured = {};
+    }
+    return sim._giPremEditByInsured;
+  }
+  function giSimPremEditGet(sim, insId){
+    const id = safeTrim(insId || (sim && sim._activeInsuredId));
+    if(!id) return null;
+    const rec = giSimPremEditEnsure(sim)[id];
+    return (rec && typeof rec === "object") ? rec : null;
+  }
+  function giSimPremEditSet(sim, insId, patch){
+    const id = safeTrim(insId || (sim && sim._activeInsuredId));
+    if(!id || !patch || typeof patch !== "object") return null;
+    const map = giSimPremEditEnsure(sim);
+    const prev = (map[id] && typeof map[id] === "object") ? map[id] : {};
+    const next = Object.assign({}, prev);
+    if(Object.prototype.hasOwnProperty.call(patch, "before")){
+      const n = Number(patch.before);
+      if(Number.isFinite(n) && n >= 0) next.before = Math.round(n * 100) / 100;
+      else delete next.before;
+    }
+    if(Object.prototype.hasOwnProperty.call(patch, "after")){
+      const n = Number(patch.after);
+      if(Number.isFinite(n) && n >= 0) next.after = Math.round(n * 100) / 100;
+      else delete next.after;
+    }
+    if(next.before == null && next.after == null) delete map[id];
+    else map[id] = next;
+    return map[id] || null;
+  }
+  function giSimPremEditClear(sim, insId){
+    const id = safeTrim(insId || (sim && sim._activeInsuredId));
+    if(!id) return;
+    const map = giSimPremEditEnsure(sim);
+    delete map[id];
+  }
+  function giSimPremEditParseMoney(raw){
+    let s = String(raw == null ? "" : raw).trim();
+    if(!s) return NaN;
+    s = s.replace(/[₪\s]/g, "").replace(/,/g, "");
+    const n = Number(s);
+    return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : NaN;
+  }
+  function giSimPremEditAsk(kind, current){
+    const label = kind === "after" ? "פרמיה לאחר הנחה (₪)" : "פרמיה לפני הנחה (₪)";
+    const seed = Number.isFinite(Number(current)) ? String(Math.round(Number(current) * 100) / 100) : "";
+    let raw;
+    try { raw = window.prompt(label, seed); } catch(_e){ return null; }
+    if(raw == null) return null; /* ביטול */
+    const n = giSimPremEditParseMoney(raw);
+    if(!Number.isFinite(n)){
+      try { window.showToast?.({ title: "סכום לא תקין", text: "הזינו סכום חודשי חיובי בשקלים.", variant: "warn" }); } catch(_e2) {}
+      return null;
+    }
+    return n;
+  }
+  function giSimPremEditApplyBeforeToState(sim, insId, amount){
+    const id = safeTrim(insId);
+    const n = Number(amount);
+    if(!id || !Number.isFinite(n)) return;
+    try {
+      const st = sim && sim._state && sim._state[id];
+      if(st && st.result && typeof st.result === "object"){
+        st.result.monthlyPremium = n;
+        st.result.annualPremium = Math.round(n * 12 * 100) / 100;
+        st.result.premiumEditedBefore = true;
+      }
+    } catch(_e) {}
+  }
+  function giSimPremEditMarkEl(el, kind){
+    if(!el) return;
+    el.classList.add("giSimPremEdit");
+    el.setAttribute("data-gi-prem-edit", kind);
+    el.setAttribute("title", "לחצו לעריכת הפרמיה");
+    el.setAttribute("role", "button");
+    el.setAttribute("tabindex", "0");
+  }
+  function giSimPremEditBindModal(sim){
+    const modal = sim && sim._modal;
+    if(!modal || modal._giPremEditBound) return;
+    modal._giPremEditBound = true;
+    const onAct = (ev) => {
+      const t = ev.target && ev.target.closest && ev.target.closest("[data-gi-prem-edit]");
+      if(!t || !modal.contains(t)) return;
+      if(ev.type === "keydown" && ev.key !== "Enter" && ev.key !== " ") return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const kind = t.getAttribute("data-gi-prem-edit") === "after" ? "after" : "before";
+      const id = safeTrim(sim._activeInsuredId);
+      if(!id) return;
+      const edit = giSimPremEditGet(sim, id) || {};
+      let current;
+      if(kind === "after"){
+        current = Number.isFinite(Number(edit.after)) ? Number(edit.after) : NaN;
+        if(!Number.isFinite(current)){
+          const strong = t.textContent || "";
+          current = giSimPremEditParseMoney(strong);
+        }
+      } else {
+        current = Number.isFinite(Number(edit.before)) ? Number(edit.before) : NaN;
+        if(!Number.isFinite(current)){
+          const st = sim._state && sim._state[id];
+          current = Number(st && st.result && st.result.monthlyPremium);
+        }
+        if(!Number.isFinite(current)) current = giSimPremEditParseMoney(t.textContent || "");
+      }
+      const next = giSimPremEditAsk(kind, current);
+      if(next == null) return;
+      if(kind === "before"){
+        giSimPremEditSet(sim, id, { before: next });
+        giSimPremEditApplyBeforeToState(sim, id, next);
+      } else {
+        giSimPremEditSet(sim, id, { after: next });
+      }
+      try {
+        if(typeof sim._render === "function") sim._render();
+        else {
+          try { riskSimAugmentStandaloneChrome(sim); } catch(_eP) {}
+        }
+      } catch(_eR) {}
+      try { giSimDiscountRefreshLive(sim); } catch(_eL) {}
+      try {
+        window.showToast?.({
+          title: "פרמיה עודכנה",
+          text: kind === "after" ? ("לאחר הנחה: ₪" + next.toFixed(2)) : ("לפני הנחה: ₪" + next.toFixed(2)),
+          variant: "success"
+        });
+      } catch(_eT) {}
+    };
+    modal.addEventListener("click", onAct);
+    modal.addEventListener("keydown", onAct);
+  }
+
   function giSimDiscountPaintAfter(sim, modal, result, selected, explained, after){
     if(!modal) return;
     modal.querySelectorAll(".giSimDisc__afterRow").forEach((el) => el.remove());
     modal.querySelectorAll(".giSimDisc__footPrem").forEach((el) => el.remove());
     modal.querySelectorAll(".giSimDisc__split").forEach((el) => el.remove());
+    /* סמן את פרמיית הברוטו (לפני) כניתנת לעריכה */
+    try {
+      modal.querySelectorAll(".giSimShell__premBlock:not(.giSimDisc__footPrem) .giSimShell__premValue:not(.giSimShell__premValue--total)").forEach((el) => giSimPremEditMarkEl(el, "before"));
+      modal.querySelectorAll("[class*='__resultRow--main'] strong").forEach((el) => {
+        if(el.closest(".giSimDisc__afterRow")) return;
+        giSimPremEditMarkEl(el, "before");
+      });
+    } catch(_eMark) {}
     if(after == null || !Number.isFinite(after)) return;
     const ok = modal.querySelector("[class*='__result--ok']");
     if(ok){
       const row = document.createElement("div");
       row.className = "giSimDisc__afterRow";
-      row.innerHTML = `<span>פרמיה לאחר הנחה</span><strong>₪${escapeHtml(riskSimFormatMoneyShekels(after))}</strong>`;
+      row.innerHTML = `<span>פרמיה לאחר הנחה</span><strong class="giSimPremEdit" data-gi-prem-edit="after" title="לחצו לעריכת הפרמיה" role="button" tabindex="0">₪${escapeHtml(riskSimFormatMoneyShekels(after))}</strong>`;
       ok.appendChild(row);
       const splitRows = explained && Array.isArray(explained.rows) ? explained.rows.filter((r) => r && r.rule === "cover") : [];
       if(splitRows.length){
@@ -2931,7 +3112,7 @@
     if(foot){
       const block = document.createElement("div");
       block.className = "giSimShell__premBlock giSimDisc__footPrem";
-      block.innerHTML = `<span class="giSimShell__premLabel">פרמיה לאחר הנחה</span><strong class="giSimShell__premValue">₪${escapeHtml(riskSimFormatMoneyShekels(after))}</strong>`;
+      block.innerHTML = `<span class="giSimShell__premLabel">פרמיה לאחר הנחה</span><strong class="giSimShell__premValue giSimPremEdit" data-gi-prem-edit="after" title="לחצו לעריכת הפרמיה" role="button" tabindex="0">₪${escapeHtml(riskSimFormatMoneyShekels(after))}</strong>`;
       const actions = foot.querySelector(".giSimShell__footActions");
       if(actions) foot.insertBefore(block, actions);
       else foot.appendChild(block);
@@ -2940,20 +3121,48 @@
   function giSimDiscountRefreshLive(sim){
     const modal = sim && sim._modal;
     if(!modal) return;
+    try { giSimPremEditBindModal(sim); } catch(_eBind) {}
     const company = safeTrim(sim._ctx?.company);
     const product = safeTrim(sim._ctx?.product);
-    const selected = giSimDiscountActiveOption(sim, sim._activeInsuredId, company, product);
-    const result = giSimDiscountCollectResult(sim);
+    const activeId = safeTrim(sim._activeInsuredId);
+    const selected = giSimDiscountActiveOption(sim, activeId, company, product);
+    let result = giSimDiscountCollectResult(sim);
+    const edit = giSimPremEditGet(sim, activeId);
+    if(edit && Number.isFinite(Number(edit.before)) && result && typeof result === "object"){
+      result = Object.assign({}, result, {
+        monthlyPremium: Number(edit.before),
+        annualPremium: Math.round(Number(edit.before) * 12 * 100) / 100,
+        ok: true
+      });
+    }
     const resolved = giSimDiscountResolvedAfter(result, selected, company, product);
     const explained = resolved.explained;
-    const after = resolved.after;
+    let after = resolved.after;
+    if(edit && Number.isFinite(Number(edit.after))) after = Number(edit.after);
+    else if(after == null && !selected){
+      /* בלי הנחה מקטלוג — מציגים שורת «אחרי» (=לפני) כדי לאפשר תיקון מסחרי בלחיצה */
+      const baseMonthly = Number(result && result.monthlyPremium);
+      if(Number.isFinite(baseMonthly)) after = baseMonthly;
+    }
     const wrap = modal.querySelector(".giSimDisc");
     const picked = wrap && wrap.querySelector(".giSimDisc__picked");
-    if(picked) picked.textContent = selected ? selected.label : "לא נבחרה הנחה";
+    if(picked){
+      if(selected) picked.textContent = selected.label;
+      else if(edit && Number.isFinite(Number(edit.after))) picked.textContent = "תיקון פרמיה ידני";
+      else picked.textContent = "לא נבחרה הנחה";
+    }
     const catalogBtn = wrap && wrap.querySelector("[data-gisim-disc-toggle]");
     if(catalogBtn) catalogBtn.textContent = "הנחה";
     const manBtn = wrap && wrap.querySelector("[data-gisim-disc-manual-toggle]");
-    if(manBtn) manBtn.textContent = giSimManualOptionFromRec(giSimDiscountManualRec(sim, sim._activeInsuredId)) ? "הנחה ידנית ✓" : "הנחה ידנית";
+    if(manBtn) manBtn.textContent = giSimManualOptionFromRec(giSimDiscountManualRec(sim, activeId)) ? "הנחה ידנית ✓" : "הנחה ידנית";
+    /* עדכון תצוגת לפני בפוטר לפי override */
+    try {
+      if(edit && Number.isFinite(Number(edit.before))){
+        modal.querySelectorAll(".giSimShell__premBlock:not(.giSimDisc__footPrem) .giSimShell__premValue:not(.giSimShell__premValue--total)").forEach((el) => {
+          el.textContent = "₪" + riskSimFormatMoneyShekels(Number(edit.before));
+        });
+      }
+    } catch(_eBefore) {}
     giSimDiscountPaintAfter(sim, modal, result, selected, explained, after);
   }
   function giSimDiscountSetManual(sim, raw){
@@ -3133,6 +3342,8 @@
   function giSimDiscountInstallChrome(sim){
     try { giSimDiscountEnsureDelegation(sim); } catch(_e) {}
     try { giSimDiscountInjectDom(sim); } catch(_e2) {}
+    try { giSimPremEditBindModal(sim); } catch(_e3) {}
+    try { giSimDiscountRefreshLive(sim); } catch(_e4) {}
   }
 
   function riskSimInstallShellEnhancer(handler){
@@ -3238,6 +3449,14 @@
         const built = origBuild(insId);
         if(!built || typeof built !== "object") return built;
         const next = Object.assign({}, built);
+        try {
+          const edit = giSimPremEditGet(handler, insId);
+          if(edit && Number.isFinite(Number(edit.before))){
+            next.monthlyPremium = Number(edit.before);
+            next.annualPremium = Math.round(Number(edit.before) * 12 * 100) / 100;
+            next.premiumEditedBefore = true;
+          }
+        } catch(_eEdit) {}
         if(next.ok !== true && next.ok !== false){
           const monthly = Number(next.monthlyPremium);
           if(Number.isFinite(monthly) || (Array.isArray(next.covers) && next.covers.length)){
@@ -5044,7 +5263,7 @@
   // התעריף בכל טבלה הוא פרמיה **שנתית** לכל 1,000 ₪ סכום ביטוח (כמו פניקס),
   // לפי גיל כניסה (18–85), מין ומעשן/לא מעשן. חודשית = שנתית / 12.
   // גיל 34 במדרגה הגבוהה תוקן מאינטרפולציה (תא משובש במקור).
-  // ללא הצמדת מדד — בגיליון הריסק אין מדד בסיס (מדד 133.17 שייך רק לבריאות).
+  // הצמדה: אותו מדד בריאות הכשרה (HealthCpi · hachshara_health · בסיס 133.17).
   //
   // [age, maleNonSmoker, maleSmoker, femaleNonSmoker, femaleSmoker] — פרמיה שנתית ל-1,000 ₪
   const HACHSHARA_RISK_RATE_TABLE_LE500K = [
@@ -5135,14 +5354,18 @@
     const sum = Number(sumInsured);
     const rateCenti = Math.round(lookup.ratePerMille * 100);
     const annualPremium = (rateCenti * sum) / 100000;
-    const monthlyPremium = Math.round((annualPremium / 12) * 100) / 100;
-    // ללא הצמדת מדד — בתעריפון הסיכונים אין מדד בסיס מתועד (בניגוד לבריאות 133.17).
+    const monthlyPremium = annualPremium / 12;
+    const cpi = applyHachsharaSharedCpiToMonthlyShekels(monthlyPremium);
     return {
       ok:true,
       ratePerMille: lookup.ratePerMille,
       bracket: lookup.bracket,
-      monthlyPremium,
-      annualPremium: Math.round(monthlyPremium * 12 * 100) / 100
+      baseMonthlyPremium: cpi.baseMonthlyPremium,
+      baseAnnualPremium: annualPremium,
+      monthlyPremium: cpi.monthlyPremium,
+      annualPremium: cpi.annualPremium,
+      indexFactor: cpi.indexFactor,
+      indexInfo: cpi.indexInfo
     };
   }
 
@@ -5313,12 +5536,18 @@
         const calc = computeHachsharaRiskPremium({ age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: sumNum });
         if(calc.ok){ st.result = calc; st.error = null; }
       }
+      const indexMetaHtml = formatHachsharaSharedCpiMetaHtml(st.result?.indexInfo || HealthCpi.getIndexInfo(HACHSHARA_SHARED_CPI_KEY), "lcHachRisk");
+      const baseTotalHtml = (st.result?.ok && st.result.baseMonthlyPremium != null && Math.abs(st.result.baseMonthlyPremium - st.result.monthlyPremium) > 0.0001)
+        ? `<div class="lcHachRisk__resultRow"><span>פרמיית בסיס (לפני מדד)</span><strong>₪${escapeHtml(formatHachsharaRiskExactAmount(st.result.baseMonthlyPremium))}</strong></div>`
+        : "";
       const resultHtml = st.error
         ? `<div class="lcHachRisk__result lcHachRisk__result--error">${escapeHtml(st.error)}</div>`
         : (st.result ? `<div class="lcHachRisk__result lcHachRisk__result--ok">
             <div class="lcHachRisk__resultRow"><span>מדרגת סכום ביטוח</span><strong>${escapeHtml(HACHSHARA_RISK_BRACKET_LABELS[st.result.bracket] || "")}</strong></div>
-            <div class="lcHachRisk__resultRow lcHachRisk__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatHachsharaRiskExactAmount(st.result.monthlyPremium))}</strong></div>
+            ${baseTotalHtml}
+            <div class="lcHachRisk__resultRow lcHachRisk__resultRow--main"><span>פרמיה חודשית (צמודה למדד)</span><strong>₪${escapeHtml(formatHachsharaRiskExactAmount(st.result.monthlyPremium))}</strong></div>
             <div class="lcHachRisk__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatHachsharaRiskExactAmount(st.result.annualPremium))}</strong></div>
+            ${indexMetaHtml}
           </div>` : "");
 
       const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
@@ -5654,7 +5883,7 @@
   // פרמיה **שנתית** לכל 1,000 ₪ סכום ביטוח (העמודה השמאלית בגליון).
   // העמודה הימנית (חודשית לכל 100,000 ₪) היא המרה: שנתי/1,000 × 100 / 12.
   // אין מדרגות סכום. גיל כניסה 18–85, מין ומעשן/לא מעשן. חודשית = שנתית / 12.
-  // ללא הצמדת מדד — בגיליון המשכנתא אין מדד בסיס (מדד 133.17 שייך רק לבריאות).
+  // הצמדה: אותו מדד בריאות הכשרה (HealthCpi · hachshara_health · בסיס 133.17).
   // אין להמציא, לקרב או להשלים ערך שאינו רשום כאן במפורש.
   //
   // [age, maleNonSmoker, maleSmoker, femaleNonSmoker, femaleSmoker] — פרמיה שנתית ל-1,000 ₪
@@ -5712,13 +5941,17 @@
     if(!Number.isFinite(sum) || sum <= 0) return { ok:false, reason:"sum_missing" };
     const rateCenti = Math.round(lookup.ratePerMille * 100);
     const annualPremium = (rateCenti * sum) / 100000;
-    const monthlyPremium = Math.round((annualPremium / 12) * 100) / 100;
-    // ללא הצמדת מדד — בתעריפון הסיכונים אין מדד בסיס מתועד.
+    const monthlyPremium = annualPremium / 12;
+    const cpi = applyHachsharaSharedCpiToMonthlyShekels(monthlyPremium);
     return {
       ok:true,
       ratePerMille: lookup.ratePerMille,
-      monthlyPremium,
-      annualPremium: Math.round(monthlyPremium * 12 * 100) / 100,
+      baseMonthlyPremium: cpi.baseMonthlyPremium,
+      baseAnnualPremium: annualPremium,
+      monthlyPremium: cpi.monthlyPremium,
+      annualPremium: cpi.annualPremium,
+      indexFactor: cpi.indexFactor,
+      indexInfo: cpi.indexInfo,
       sumInsured: sum
     };
   }
@@ -5885,11 +6118,17 @@
         const calc = computeHachsharaMortRiskPremium({ age: st.age, gender: st.gender, smoker: st.smoker, sumInsured: sumNum });
         if(calc.ok){ st.result = calc; st.error = null; }
       }
+      const indexMetaHtml = formatHachsharaSharedCpiMetaHtml(st.result?.indexInfo || HealthCpi.getIndexInfo(HACHSHARA_SHARED_CPI_KEY), "lcHachMort");
+      const baseTotalHtml = (st.result?.ok && st.result.baseMonthlyPremium != null && Math.abs(st.result.baseMonthlyPremium - st.result.monthlyPremium) > 0.0001)
+        ? `<div class="lcHachMort__resultRow"><span>פרמיית בסיס (לפני מדד)</span><strong>₪${escapeHtml(formatHachsharaMortRiskExactAmount(st.result.baseMonthlyPremium))}</strong></div>`
+        : "";
       const resultHtml = st.error
         ? `<div class="lcHachMort__result lcHachMort__result--error">${escapeHtml(st.error)}</div>`
         : (st.result ? `<div class="lcHachMort__result lcHachMort__result--ok">
-            <div class="lcHachMort__resultRow lcHachMort__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatHachsharaMortRiskExactAmount(st.result.monthlyPremium))}</strong></div>
+            ${baseTotalHtml}
+            <div class="lcHachMort__resultRow lcHachMort__resultRow--main"><span>פרמיה חודשית (צמודה למדד)</span><strong>₪${escapeHtml(formatHachsharaMortRiskExactAmount(st.result.monthlyPremium))}</strong></div>
             <div class="lcHachMort__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatHachsharaMortRiskExactAmount(st.result.annualPremium))}</strong></div>
+            ${indexMetaHtml}
           </div>` : "");
 
       const anyApplyable = Object.values(this._state).some((s) => s?.result?.ok);
@@ -6835,7 +7074,7 @@
         company: "הכשרה",
         product: "בריאות",
         // תעריפי בריאות 2023.xlsx — כותרת כל גיליון: «הכשרה מדד 13317» (= 133.17)
-        // ריסק / משכנתא / מחלות קשות אינם משתמשים במדד זה (אין מדד בסיס בתעריפון הסיכונים).
+        // מחלות קשות / ריסק / ריסק משכנתא משתמשים באותו בסיס (אין מדד טבלה נפרד).
         baseIndexPoints: 133.17,
         baseKnownDate: "2022-12-15"
       },
@@ -7093,7 +7332,7 @@
   };
   try { window.HealthCpi = HealthCpi; } catch(_e){}
 
-  /** מדד בריאות הכשרה (133.17) — לבריאות בלבד. עזרי פורמט נשמרים לתצוגת בריאות. */
+  /** אותו מדד בריאות הכשרה (133.17) — למוצרים בלי מדד טבלה משלהם. */
   const HACHSHARA_SHARED_CPI_KEY = "hachshara_health";
 
   function applyHachsharaSharedCpiToAgorot(baseMonthlyAgorot){
@@ -12078,7 +12317,7 @@
 
   // ===== GI-HACH-CI-SIM 2026-08-10 · מחלות קשות הכשרה ============================
   // מקור אמת: גיליון «מחלות קשות» ב־תעריפים סיכונים.xlsx — חודשי ל־₪100,000, אגורות מעוגלות.
-  // ללא הצמדת מדד — בגיליון מחלות קשות אין מדד בסיס (מדד 133.17 שייך רק לבריאות).
+  // הצמדה: אותו מדד בריאות הכשרה (HealthCpi · hachshara_health · בסיס 133.17).
   // גילאי 0–16 מועתקים מגיל 17; גיל 75 מועתק מגיל 74.
   const HACHSHARA_CI_RATE_MAP = {"0":{"mNS":889,"fNS":889,"mS":889,"fS":889},"1":{"mNS":889,"fNS":889,"mS":889,"fS":889},"2":{"mNS":889,"fNS":889,"mS":889,"fS":889},"3":{"mNS":889,"fNS":889,"mS":889,"fS":889},"4":{"mNS":889,"fNS":889,"mS":889,"fS":889},"5":{"mNS":889,"fNS":889,"mS":889,"fS":889},"6":{"mNS":889,"fNS":889,"mS":889,"fS":889},"7":{"mNS":889,"fNS":889,"mS":889,"fS":889},"8":{"mNS":889,"fNS":889,"mS":889,"fS":889},"9":{"mNS":889,"fNS":889,"mS":889,"fS":889},"10":{"mNS":889,"fNS":889,"mS":889,"fS":889},"11":{"mNS":889,"fNS":889,"mS":889,"fS":889},"12":{"mNS":889,"fNS":889,"mS":889,"fS":889},"13":{"mNS":889,"fNS":889,"mS":889,"fS":889},"14":{"mNS":889,"fNS":889,"mS":889,"fS":889},"15":{"mNS":889,"fNS":889,"mS":889,"fS":889},"16":{"mNS":889,"fNS":889,"mS":889,"fS":889},"17":{"mNS":889,"fNS":889,"mS":889,"fS":889},"18":{"mNS":1211,"fNS":1407,"mS":1569,"fS":1688},"19":{"mNS":1333,"fNS":1607,"mS":1816,"fS":1983},"20":{"mNS":1457,"fNS":1826,"mS":2066,"fS":2301},"21":{"mNS":1482,"fNS":1894,"mS":2097,"fS":2375},"22":{"mNS":1512,"fNS":1986,"mS":2137,"fS":2476},"23":{"mNS":1558,"fNS":2122,"mS":2197,"fS":2625},"24":{"mNS":1598,"fNS":2288,"mS":2247,"fS":2804},"25":{"mNS":1655,"fNS":2497,"mS":2321,"fS":3028},"26":{"mNS":1727,"fNS":2758,"mS":2419,"fS":3310},"27":{"mNS":1805,"fNS":3061,"mS":2538,"fS":3635},"28":{"mNS":1897,"fNS":3408,"mS":2686,"fS":4015},"29":{"mNS":2013,"fNS":3803,"mS":2882,"fS":4447},"30":{"mNS":1910,"fNS":4246,"mS":2778,"fS":4936},"31":{"mNS":2056,"fNS":4740,"mS":3047,"fS":5482},"32":{"mNS":2237,"fNS":5270,"mS":3383,"fS":6077},"33":{"mNS":2471,"fNS":5767,"mS":3826,"fS":6641},"34":{"mNS":2760,"fNS":6181,"mS":4382,"fS":7134},"35":{"mNS":3108,"fNS":6503,"mS":5064,"fS":7542},"36":{"mNS":3510,"fNS":6733,"mS":5872,"fS":7867},"37":{"mNS":4023,"fNS":6942,"mS":6876,"fS":8182},"38":{"mNS":4628,"fNS":7226,"mS":8046,"fS":8593},"39":{"mNS":5336,"fNS":7668,"mS":9393,"fS":9171},"40":{"mNS":6464,"fNS":8462,"mS":11474,"fS":10152},"41":{"mNS":7443,"fNS":9243,"mS":13295,"fS":11100},"42":{"mNS":8426,"fNS":10120,"mS":15154,"fS":12156},"43":{"mNS":9360,"fNS":11009,"mS":16955,"fS":13225},"44":{"mNS":10208,"fNS":11807,"mS":18608,"fS":14216},"45":{"mNS":10954,"fNS":12511,"mS":20082,"fS":15122},"46":{"mNS":11510,"fNS":12950,"mS":21687,"fS":16286},"47":{"mNS":12069,"fNS":13396,"mS":23288,"fS":17504},"48":{"mNS":12758,"fNS":13888,"mS":25126,"fS":18821},"49":{"mNS":13745,"fNS":14546,"mS":27560,"fS":20376},"50":{"mNS":16222,"fNS":16064,"mS":32997,"fS":23163},"51":{"mNS":18315,"fNS":17334,"mS":37089,"fS":24997},"52":{"mNS":20933,"fNS":18697,"mS":42198,"fS":26966},"53":{"mNS":24116,"fNS":20160,"mS":48378,"fS":29076},"54":{"mNS":27838,"fNS":21722,"mS":55528,"fS":31323},"55":{"mNS":32089,"fNS":23397,"mS":63604,"fS":33738},"56":{"mNS":36849,"fNS":25209,"mS":72539,"fS":36349},"57":{"mNS":41749,"fNS":27054,"mS":81699,"fS":39029},"58":{"mNS":46599,"fNS":28937,"mS":90715,"fS":41795},"59":{"mNS":51006,"fNS":30663,"mS":98733,"fS":44427},"60":{"mNS":54618,"fNS":32178,"mS":105198,"fS":46822},"61":{"mNS":57729,"fNS":33456,"mS":110583,"fS":48937},"62":{"mNS":60496,"fNS":34608,"mS":115163,"fS":50918},"63":{"mNS":62970,"fNS":35642,"mS":119069,"fS":52789},"64":{"mNS":65430,"fNS":36711,"mS":122983,"fS":54734},"65":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"66":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"67":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"68":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"69":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"70":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"71":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"72":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"73":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"74":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633},"75":{"mNS":105162,"fNS":56909,"mS":194835,"fS":87633}};
   const HACHSHARA_CI_MIN_AGE = 0;
@@ -12117,13 +12356,16 @@
     const rate = lookupHachsharaCiRate({ age, gender, smoker });
     if(!rate.ok) return rate;
     const monthlyAgorot = Math.round(rate.rateAgorot * (sum / 100000));
-    // ללא הצמדת מדד — בתעריפון הסיכונים אין מדד בסיס מתועד.
-    const monthlyPremium = monthlyAgorot / 100;
+    const cpi = applyHachsharaSharedCpiToAgorot(monthlyAgorot);
     return {
       ok: true,
-      monthlyAgorot,
-      monthlyPremium,
-      annualPremium: Math.round(monthlyPremium * 12 * 100) / 100,
+      monthlyAgorot: cpi.monthlyAgorot,
+      monthlyPremium: cpi.monthlyPremium,
+      annualPremium: cpi.annualPremium,
+      baseMonthlyAgorot: cpi.baseMonthlyAgorot,
+      baseMonthlyPremium: cpi.baseMonthlyPremium,
+      indexFactor: cpi.indexFactor,
+      indexInfo: cpi.indexInfo,
       ratePerHundredThousand: rate.ratePerHundredThousand,
       compensation: sum,
       wizardCoverKey: HACHSHARA_CI_WIZARD_KEY
@@ -12276,12 +12518,18 @@
       const ageDisplay = ageSync.ok ? String(ageSync.age) : "—";
       const headLogoHtml = (typeof renderCompanyLogoHtmlForCompany === "function" && this._ctx?.company)
         ? renderCompanyLogoHtmlForCompany(this._ctx.company, "mini") : "✚";
+      const indexMetaHtml = formatHachsharaSharedCpiMetaHtml(st.result?.indexInfo || HealthCpi.getIndexInfo(HACHSHARA_SHARED_CPI_KEY), "lcMnrCi");
+      const baseTotalHtml = (st.result?.ok && st.result.baseMonthlyPremium != null && Math.abs(st.result.baseMonthlyPremium - st.result.monthlyPremium) > 0.0001)
+        ? `<div class="lcMnrCi__resultRow"><span>פרמיית בסיס (לפני מדד)</span><strong>₪${escapeHtml(formatHachsharaCiExactAmount(st.result.baseMonthlyPremium))}</strong></div>`
+        : "";
       const resultHtml = st.error
         ? `<div class="lcMnrCi__result lcMnrCi__result--error">${escapeHtml(st.error)}</div>`
         : (st.result ? `<div class="lcMnrCi__result lcMnrCi__result--ok">
-            <div class="lcMnrCi__resultRow lcMnrCi__resultRow--main"><span>פרמיה חודשית</span><strong>₪${escapeHtml(formatHachsharaCiExactAmount(st.result.monthlyPremium))}</strong></div>
+            ${baseTotalHtml}
+            <div class="lcMnrCi__resultRow lcMnrCi__resultRow--main"><span>פרמיה חודשית (צמודה למדד)</span><strong>₪${escapeHtml(formatHachsharaCiExactAmount(st.result.monthlyPremium))}</strong></div>
             <div class="lcMnrCi__resultRow"><span>פרמיה שנתית</span><strong>₪${escapeHtml(formatHachsharaCiExactAmount(st.result.annualPremium))}</strong></div>
             <div class="lcMnrCi__resultRow"><span>תעריף לכל ₪100,000</span><strong>₪${escapeHtml(formatHachsharaCiExactAmount(st.result.ratePerHundredThousand))}</strong></div>
+            ${indexMetaHtml}
           </div>` : `<div class="lcMnrCi__result lcMnrCi__result--empty">מלאו את השדות לחישוב</div>`);
       const tabsHtml = isMulti ? `<div class="lcMnrCi__tabs">${insureds.map((ins) => {
         const s = this._state[ins.id];
@@ -14240,6 +14488,16 @@
     const discApi = { list: giSimDiscountList, byId: giSimDiscountById, year1Pct: giSimDiscountYear1Pct, afterMonthly: giSimDiscountAfterMonthly };
     host.GiSimulatorDiscounts = discApi;
     global.GiSimulatorDiscounts = discApi;
+    const premEditApi = {
+      get: giSimPremEditGet,
+      set: giSimPremEditSet,
+      clear: giSimPremEditClear,
+      parseMoney: giSimPremEditParseMoney,
+      applyBeforeToState: giSimPremEditApplyBeforeToState,
+      selectedDiscountPayload: riskSimSelectedDiscountPayload
+    };
+    host.GiSimulatorPremEdit = premEditApi;
+    global.GiSimulatorPremEdit = premEditApi;
   } catch(_e) {}
 
   try { host.onSimulatorsInstalled?.(RiskSimulators); } catch(_e) {}

@@ -1499,3 +1499,28 @@
   }
   .giSimShell__rail{ order:-1 !important; }
 }
+
+/* GI-SIM-PREM-EDIT — click-to-edit before/after premium */
+.giSimPremEdit,
+[data-gi-prem-edit]{
+  cursor: pointer;
+  border-radius: 8px;
+  outline: none;
+  transition: background-color .15s ease, box-shadow .15s ease;
+}
+.giSimPremEdit:hover,
+[data-gi-prem-edit]:hover{
+  background: rgba(14, 165, 233, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(14, 165, 233, 0.35);
+}
+.giSimPremEdit:focus-visible,
+[data-gi-prem-edit]:focus-visible{
+  box-shadow: inset 0 0 0 2px rgba(14, 165, 233, 0.55);
+}
+.giSimPremEdit::after,
+.giSimShell__premValue.giSimPremEdit::after{
+  content: " ✎";
+  font-size: 0.72em;
+  opacity: 0.55;
+  font-weight: 600;
+}
