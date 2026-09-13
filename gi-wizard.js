@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260913-sim-prem-edit-v4";
+  const GI_WIZARD_BUILD = "20260913-sim-prem-edit-v5";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -12820,7 +12820,8 @@ if(path === "birthDate"){
           const needsComp = (p.type === "מחלות קשות" || p.type === "סרטן");
           const sumField = needsComp ? "compensation" : "sumInsured";
           const sumVal   = escapeHtml(p[sumField] || "");
-          const isMissing = (needsSum || needsComp) && !safeTrim(p[sumField] || "");
+          const cancelSt = d.cancellations?.[p.id] || {};
+          const isMissing = this.isExistingPolicyCancelSumRequired(p, cancelSt) && !safeTrim(p[sumField] || "");
           const coverPills = premiumBreakdown.length
             ? `<div class="lcHarCompactCovers">${premiumBreakdown.map(item => `<span class="lcHarCompactCover"><b>${escapeHtml(safeTrim(item.label) || 'כיסוי')}</b><span>${escapeHtml(safeTrim(item.monthlyPremium) || '0.00')} ₪</span></span>`).join('')}</div>`
             : (includedList.length
@@ -18385,13 +18386,14 @@ if(path === "birthDate"){
           }
         }
 
-        // סכום ביטוח / פיצוי — קולקטיב/קבוצתי לא דורש הזנה (כבר מסונן מ-list)
+        // סכום ביטוח / פיצוי — רק בביטול מלא/חלקי (לא ב«ללא שינוי» וכו')
         for(const p of list){
-          const needsSum  = (p.type === 'ריסק' || p.type === 'ריסק משכנתא' || p.type === 'אובדן כושר עבודה');
-          const needsComp = (p.type === 'מחלות קשות' || p.type === 'סרטן');
+          const c = d.cancellations?.[p.id] || {};
+          if(!this.isExistingPolicyCancelSumRequired(p, c)) continue;
+          const field = this.existingPolicyNeedsSumField(p);
           const pName = [safeTrim(p.company), safeTrim(p.type)].filter(Boolean).join(' · ') || 'פוליסה';
-          if(needsSum  && !safeTrim(p.sumInsured  || '')) pItems.push(`חסר סכום ביטוח לפוליסה: ${pName}`);
-          if(needsComp && !safeTrim(p.compensation || '')) pItems.push(`חסר סכום פיצוי לפוליסה: ${pName}`);
+          if(field === "sumInsured" && !safeTrim(p.sumInsured || "")) pItems.push(`חסר סכום ביטוח לפוליסה: ${pName}`);
+          if(field === "compensation" && !safeTrim(p.compensation || "")) pItems.push(`חסר סכום פיצוי לפוליסה: ${pName}`);
         }
 
         // שיעבוד / בנק
@@ -20992,6 +20994,25 @@ if(path === "birthDate"){
     isCancellationExecutionMethodRequired(status){
       const key = safeTrim(status);
       return key === 'full' || key === 'partial_health';
+    },
+
+    /* GI-WIZARD 2026-09-12: סכום ביטוח/פיצוי נדרש רק בביטול מלא או חלקי —
+       לא ב«ללא שינוי / לבקשת לקוח / קולקטיב / מינוי סוכן». */
+    isExistingPolicyCancelSumRequired(policy, cancellation){
+      const status = safeTrim(cancellation?.status);
+      if(!this.isCancellationExecutionMethodRequired(status)) return false;
+      const t = safeTrim(policy?.type);
+      return (
+        t === "ריסק" || t === "ריסק משכנתא" || t === "אובדן כושר עבודה" ||
+        t === "מחלות קשות" || t === "סרטן"
+      );
+    },
+
+    existingPolicyNeedsSumField(policy){
+      const t = safeTrim(policy?.type);
+      if(t === "מחלות קשות" || t === "סרטן") return "compensation";
+      if(t === "ריסק" || t === "ריסק משכנתא" || t === "אובדן כושר עבודה") return "sumInsured";
+      return "";
     },
 
     isExistingPolicyCollectiveReadOnly(policy = {}){
@@ -31477,13 +31498,13 @@ if(path === "birthDate"){
         for(const p of list){
           if(this.shouldValidateStep3PolicyPremium(p) && safeTrim(p.monthlyPremium) === "") return false;
         }
-        // ולידציה: ריסק/ריסק משכנתא/אובדן כושר עבודה/מחלות קשות/סרטן — חובה למלא סכום ביטוח/פיצוי
-        // פוליסה קולקטיבית/קבוצתית (מיובאת מהר הביטוח) לא דורשת סכום — היא לא ב-list
+        // סכום ביטוח/פיצוי — חובה רק כשנבחר ביטול מלא או ביטול חלקי
         for(const p of list){
-          const needsSum  = (p.type === "ריסק" || p.type === "ריסק משכנתא" || p.type === "אובדן כושר עבודה");
-          const needsComp = (p.type === "מחלות קשות" || p.type === "סרטן");
-          if(needsSum  && !safeTrim(p.sumInsured || "")) return false;
-          if(needsComp && !safeTrim(p.compensation || "")) return false;
+          const c = (d.cancellations && d.cancellations[p.id]) || {};
+          if(!this.isExistingPolicyCancelSumRequired(p, c)) continue;
+          const field = this.existingPolicyNeedsSumField(p);
+          if(field === "sumInsured" && !safeTrim(p.sumInsured || "")) return false;
+          if(field === "compensation" && !safeTrim(p.compensation || "")) return false;
         }
         for(const p of list){
           const isRisk = (p.type === "ריסק" || p.type === "ריסק משכנתא");

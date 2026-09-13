@@ -388,9 +388,21 @@
         this.setExport(form, "PayGender", this.mapGenderExport(draft.payer.gender));
       }
       global.GI_OFFICIAL_FORM_FILL?.applyOfficialHealthAndNames?.(form, draft, font, {
-        keys: "clal_health",
+        skipHealth: true,
         visual: false,
         extraNames: ["FullNameBagir", "FullNameHolder"]
+      });
+      // Named map: smoking → SmokingStatus; MainQ2–28 match printed rows (not index-zip of HEALTH_QKEYS).
+      global.GI_OFFICIAL_FORM_FILL?.applyMappedHealthYesNo?.(form, {
+        map: "clal_health",
+        responses: draft.healthResponses,
+        primaryId: draft.primaryId || (draft.primary && draft.primary.id) || "",
+        spouseId: draft.spouseId || (draft.spouse && draft.spouse.id) || "",
+        childIds: draft.childIds || (draft.children || []).map((c) => c && c.id).filter(Boolean),
+        smokingField: "SmokingStatus",
+        spouseSmokingField: "SmokingStatusBzug",
+        childSmokingField: "SmokingStatusChild",
+        font
       });
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",
