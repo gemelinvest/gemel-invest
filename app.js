@@ -106,8 +106,18 @@
   // ל-"מערכת" כשהערך חסר, אז ההסרה אינה משנה התנהגות.
   const CUSTOMER_LIGHT_COLUMNS = "id,status,full_name,id_number,phone,email,city,agent_name,agent_id,agent_role,insured_count,existing_policies_count,new_policies_count,created_at,updated_at";
   const PROPOSAL_LIGHT_COLUMNS = "id,status,full_name,id_number,phone,email,city,agent_name,agent_id,agent_role,current_step,insured_count,created_at,updated_at";
+  /* GI-PERF F1.2: campaign_leads list fetch — columns mapCampaignLeadFromDb reads.
+     Extra customer fields are appended only after probeCustomerFieldsInDb. */
+  const CAMPAIGN_LEAD_COLUMNS = "id,phone,customer_name,description,campaign_id,campaign_label,assigned_agent_id,assigned_agent_name,status,source,created_by_name,updated_by_name,row_color,created_at,updated_at";
+  const CAMPAIGN_LEAD_CUSTOMER_COLUMNS = "id_number,id_issue_date,birth_date";
   /* GI-SEC R9-pre-B: never SELECT agents.pin to the browser. Login uses gi_verify_agent_login RPC. */
   const AGENT_PUBLIC_COLUMNS = "id,name,username,role,active,created_at,updated_at,birth_date,monthly_sales_target,email,team_manager_id,auth_user_id";
+
+  function campaignLeadSelectColumns(includeCustomerFields){
+    return includeCustomerFields === false
+      ? CAMPAIGN_LEAD_COLUMNS
+      : CAMPAIGN_LEAD_COLUMNS + "," + CAMPAIGN_LEAD_CUSTOMER_COLUMNS;
+  }
 
   /* GI-PERF 2026-08-08 — טעינה ראשונית רזה ללקוחות (בלי payload).
      הגנות שנבדקו לפני ההדלקה:
@@ -15182,46 +15192,37 @@
       const dirtyProposalIds = new Set(
         this.getChangedRows(SUPABASE_TABLES.proposals, proposalRows).map((row) => String(row?.id)).filter(Boolean)
       );
-      // GI-PERF 2026-08-25: במנהל-צוות-light לא למשוך select=* של כל הצוות (~22MB אצל ואדים).
-      // GI-PERF 2026-08-25c: גם LIGHT של כל הצוות מיותר — רק dirty / תיקים פתוחים.
-      const lightConflict = this.isTeamManagerLightSession();
-      let customersRes = { ok:true, data:[] };
-      let proposalsRes = { ok:true, data:[] };
-      if(lightConflict){
-        const custIds = [...dirtyCustomerIds];
+      // GI-PERF F1.2: never select("*") of the full org on conflict.
+      // Only dirty rows + currently-open files; new remote rows still arrive via LiveRefresh
+      // (same contract the Team Manager light path already used).
+      const custIds = [...dirtyCustomerIds];
+      try {
+        getTeamManagerProtectedPayloadIds().forEach((id) => {
+          if(id) custIds.push(String(id));
+        });
+      } catch(_e) {}
+      const propIds = [...dirtyProposalIds];
+      const uniq = (arr) => [...new Set(arr.map(String).filter(Boolean))];
+      const cIds = uniq(custIds);
+      const pIds = uniq(propIds);
+      const fetchByIds = async (table, ids, selectExpr) => {
+        if(!ids.length) return { ok:true, data:[] };
         try {
-          getTeamManagerProtectedPayloadIds().forEach((id) => {
-            if(id) custIds.push(String(id));
-          });
-        } catch(_e) {}
-        const propIds = [...dirtyProposalIds];
-        const uniq = (arr) => [...new Set(arr.map(String).filter(Boolean))];
-        const cIds = uniq(custIds);
-        const pIds = uniq(propIds);
-        const fetchByIds = async (table, ids, selectExpr) => {
-          if(!ids.length) return { ok:true, data:[] };
-          try {
-            const client = this.getClient();
-            const { data, error } = await this.withRetry(
-              () => client.from(table).select(selectExpr).in("id", ids),
-              "מיזוג קונפליקט לפי מזהים"
-            );
-            if(error) throw error;
-            return { ok:true, data: Array.isArray(data) ? data : [] };
-          } catch(err) {
-            return { ok:false, error: String(err?.message || err), data:[] };
-          }
-        };
-        [customersRes, proposalsRes] = await Promise.all([
-          fetchByIds(SUPABASE_TABLES.customers, cIds, CUSTOMER_LIGHT_COLUMNS + ",payload"),
-          fetchByIds(SUPABASE_TABLES.proposals, pIds, PROPOSAL_LIGHT_COLUMNS + ",payload")
-        ]);
-      } else {
-        [customersRes, proposalsRes] = await Promise.all([
-          this.loadTableRows(SUPABASE_TABLES.customers, "*"),
-          this.loadTableRows(SUPABASE_TABLES.proposals, "*")
-        ]);
-      }
+          const client = this.getClient();
+          const { data, error } = await this.withRetry(
+            () => client.from(table).select(selectExpr).in("id", ids),
+            "מיזוג קונפליקט לפי מזהים"
+          );
+          if(error) throw error;
+          return { ok:true, data: Array.isArray(data) ? data : [] };
+        } catch(err) {
+          return { ok:false, error: String(err?.message || err), data:[] };
+        }
+      };
+      const [customersRes, proposalsRes] = await Promise.all([
+        fetchByIds(SUPABASE_TABLES.customers, cIds, CUSTOMER_LIGHT_COLUMNS + ",payload"),
+        fetchByIds(SUPABASE_TABLES.proposals, pIds, PROPOSAL_LIGHT_COLUMNS + ",payload")
+      ]);
       let merged = 0;
       if(customersRes?.ok){
         const map = new Map((state.customers || []).map((c) => [String(c?.id), c]));
@@ -58950,7 +58951,11 @@ const CampaignLeadsStore = {
     async __fetchAllImpl(scope){
       this.lastError = "";
       await this.probeCustomerFieldsInDb();
-      const res = await Storage.loadCampaignLeadRows(scope, "*");
+      let res = await Storage.loadCampaignLeadRows(scope, campaignLeadSelectColumns(this.customerFieldsInDb));
+      if(!res.ok && this.customerFieldsInDb !== false){
+        this.customerFieldsInDb = false;
+        res = await Storage.loadCampaignLeadRows(scope, campaignLeadSelectColumns(false));
+      }
       if(!res.ok){
         this.tableReady = false;
         this.lastError = res.error || "טעינת לידים נכשלה";
@@ -64599,7 +64604,7 @@ const CampaignLeadsStore = {
       /* GI-PERF 2026-07-31 (שלב ו'): קודם היה כאן
              await this.refresh(false, { retries: 4 });
          לפני renderList. כלומר המסך נשאר ריק לאורך כל שרשרת הרשת:
-         loadCampaignLeadRows שולף select("*") בעמודים של 1000 עד 25,000 שורות,
+         loadCampaignLeadRows שולף CAMPAIGN_LEAD_COLUMNS בעמודים של 1000 עד 25,000 שורות,
          בקשות סדרתיות, ומעליו עד 4 ניסיונות עם המתנה של 700/1400/2100ms.
          במקרה הגרוע המשתמש בוהה במסך ריק עשרות שניות. זה מה שנראה כתקיעה.
          עכשיו: צובעים מהמטמון, הטופס שמיש מיד, והרענון רץ ברקע. */
