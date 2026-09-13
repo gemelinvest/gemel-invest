@@ -10,7 +10,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const APP_TAG = "20260826-live-fix-v1";
+const APP_TAG = "20260913-migdal-health-decl-v1";
 const TAG = "20260825-migdal-health-fill-v1";
 let failed = 0;
 let passed = 0;
@@ -101,7 +101,10 @@ assert(html.includes("app.js?v=" + APP_TAG), "index cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "SW cache");
 assert(app.includes("resolveHealthPrimaryId"), "primary health id resolver");
 assert(app.includes("migdalMortgageHealthRows"), "mortgage named health rows");
-assert(app.includes('detailField: "Text1"'), "cancer family detail field");
+assert(app.includes('detailField: "Text4"'), "cancer family detail → Text4 notes");
+assert(app.includes('q: 4, keys: ["magdal_cancer__family"]'), "cancer family yes/no → MainQ4");
+assert(!app.includes('q: 4, keys: ["magdal_cancer__digestive"]'), "cancer Q4 is not digestive");
+assert(!app.includes('q: 5, keys: ["magdal_cancer__diabetes"]'), "cancer has no diabetes radio on PDF");
 
 const H = loadHelper();
 
@@ -253,10 +256,12 @@ console.log("\n5) cancer");
   assert(cap.IsSmoking === "False", "cancer smoking");
   assert(cap.HealthDecMainQ2 === "2", "cancer tests");
   assert(cap.HealthDecMainQ3 === "2", "cancer tumors");
-  assert(cap.HealthDecMainQ5 === "2", "cancer diabetes");
+  assert(cap.HealthDecMainQ4 === "1", "cancer family yes → MainQ4");
+  assert(!cap.HealthDecMainQ5, "orphan MainQ5 stays empty (no printed diabetes)");
   assert(!cap.HealthDecMainQ6, "no bogus Q6");
-  assert(String(cap.Text1 || "").indexOf("כן") >= 0, "cancer family → Text1");
-  assert(String(cap.Text1 || "").indexOf("אב") >= 0, "cancer family detail text");
+  assert(String(cap.Text4 || "").indexOf("כן") >= 0, "cancer family → Text4 notes");
+  assert(String(cap.Text4 || "").indexOf("אב") >= 0, "cancer family detail text");
+  assert(!cap.Text1, "Text1 is smoking-row field, not family");
 }
 
 console.log("\n6) source guards");

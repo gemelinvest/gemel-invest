@@ -22,7 +22,7 @@
     TEMPLATE_BASE: "./forms/clal-health/",
     TEMPLATE_FILE: "clal-health-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-official-decl-pay-he-v1",
+    VERSION: "20260913-clal-health-align-v1",
     DOC_ID: "doc_clal_health_form",
     DOC_TYPE: "clal_health_form",
 
