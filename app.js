@@ -3456,6 +3456,23 @@
       } catch(_e) {
         file._giHydratedDataUrl = url;
       }
+      if(url.startsWith("blob:")){
+        this._hydratedBlobUrls = Array.isArray(this._hydratedBlobUrls) ? this._hydratedBlobUrls : [];
+        this._hydratedBlobUrls = this._hydratedBlobUrls.filter((row) => {
+          const rowUrl = row && typeof row === "object" ? row.url : row;
+          return rowUrl !== url;
+        });
+        this._hydratedBlobUrls.push({ file, url });
+        while(this._hydratedBlobUrls.length > 8){
+          const old = this._hydratedBlobUrls.shift();
+          const oldUrl = old && typeof old === "object" ? old.url : old;
+          const oldFile = old && typeof old === "object" ? old.file : null;
+          try { if(oldUrl) URL.revokeObjectURL(oldUrl); } catch(_e) {}
+          if(oldFile && oldFile._giHydratedDataUrl === oldUrl){
+            try { oldFile._giHydratedDataUrl = ""; } catch(_e) {}
+          }
+        }
+      }
       return url;
     },
     getStorageApi(){
@@ -3500,10 +3517,17 @@
         return { ok: false, error: String(err?.message || err) };
       }
     },
+    /* GI-PERF files: preview as blob URL. Encoding the whole file to base64
+       on the main thread froze the tab when switching documents. */
     async hydrate(file){
       if(!file || typeof file !== "object") return "";
       const cached = this.previewUrl(file);
       if(cached) return cached;
+      try {
+        if(file._giHydratedBlob){
+          return this.rememberHydrated(file, URL.createObjectURL(file._giHydratedBlob));
+        }
+      } catch(_e) {}
       const path = this.storagePathOf(file);
       if(!path) return "";
       const api = this.getStorageApi();
@@ -3512,13 +3536,48 @@
         const bucket = safeTrim(file.storageBucket) || GI_CUSTOMER_FILES_BUCKET;
         const { data, error } = await api.from(bucket).download(path);
         if(error || !data) return "";
-        const buf = typeof data.arrayBuffer === "function" ? await data.arrayBuffer() : data;
         const mime = safeTrim(file.mime) || safeTrim(data.type) || "application/octet-stream";
-        const dataUrl = this.bytesToDataUrl(buf, mime);
-        return this.rememberHydrated(file, dataUrl);
+        const blob = (typeof Blob !== "undefined" && data instanceof Blob)
+          ? data
+          : new Blob([data], { type: mime });
+        try {
+          Object.defineProperty(file, "_giHydratedBlob", {
+            value: blob,
+            writable: true,
+            enumerable: false,
+            configurable: true
+          });
+        } catch(_e) {
+          file._giHydratedBlob = blob;
+        }
+        return this.rememberHydrated(file, URL.createObjectURL(blob));
       } catch(_e) {
         return "";
       }
+    },
+    async readBytes(file){
+      if(!file || typeof file !== "object") return null;
+      const inline = this.inlineDataUrl(file);
+      if(inline) return dataUrlToArrayBuffer(inline);
+      try {
+        if(file._giHydratedBlob && typeof file._giHydratedBlob.arrayBuffer === "function"){
+          return await file._giHydratedBlob.arrayBuffer();
+        }
+      } catch(_e) {}
+      const url = this.previewUrl(file);
+      if(url){
+        if(url.startsWith("data:")) return dataUrlToArrayBuffer(url);
+        try {
+          const res = await fetch(url);
+          if(res.ok) return await res.arrayBuffer();
+        } catch(_e) {}
+      }
+      if(this.needsHydrate(file)){
+        const next = await this.hydrate(file);
+        if(!next) return null;
+        return this.readBytes(file);
+      }
+      return null;
     },
     walkUploadedFiles(payload, visit, options = {}){
       if(!payload || typeof payload !== "object" || typeof visit !== "function") return;
@@ -8657,23 +8716,29 @@
       return true;
     },
     async downloadHarBituachFileDoc(doc){
+      const fileName = safeTrim(doc?.fileName) || safeTrim(doc?.name) || "הר ביטוח.xlsx";
+      const token = safeTrim(doc?.originToken) || safeTrim(doc?.id);
       let url = safeTrim(doc?.dataUrl) || safeTrim(doc?.url);
-      if(!url || !url.startsWith("data:")){
+      let buffer = null;
+      try {
+        if(typeof GiCustomerFileStore !== "undefined" && GiCustomerFileStore.readBytes){
+          buffer = await GiCustomerFileStore.readBytes(doc);
+        }
+      } catch(_e) {}
+      if(!url || !(url.startsWith("data:") || url.startsWith("blob:"))){
         try {
           if(typeof GiCustomerFileStore !== "undefined"){
             url = (await GiCustomerFileStore.hydrate(doc)) || url;
           }
         } catch(_e) {}
       }
-      if(!url) return false;
-      const fileName = safeTrim(doc?.fileName) || safeTrim(doc?.name) || "הר ביטוח.xlsx";
-      const token = safeTrim(doc?.originToken) || safeTrim(doc?.id);
-      const fallback = () => this.triggerDataUrlDownload(url, fileName);
+      if(!url && !buffer) return false;
+      const fallback = () => url ? this.triggerDataUrlDownload(url, fileName) : false;
       if(!token) return fallback();
       try {
         if(window.GI_LOAD_LIBS?.xlsx) await window.GI_LOAD_LIBS.xlsx();
         if(!window.XLSX?.read || !window.XLSX?.write) return fallback();
-        const buffer = dataUrlToArrayBuffer(url);
+        if(!buffer && url && url.startsWith("data:")) buffer = dataUrlToArrayBuffer(url);
         if(!buffer) return fallback();
         const wb = window.XLSX.read(buffer, { type: "array" });
         stampGiHarOriginOnWorkbook(wb, token);
@@ -24599,18 +24664,16 @@ UsersGateUI.init();
     },
 
     async renderSheetPreviewHtml(doc){
-      let url = safeTrim(doc?.dataUrl) || safeTrim(doc?.url);
-      if(!url){
-        try {
-          if(typeof GiCustomerFileStore !== "undefined") url = await GiCustomerFileStore.hydrate(doc);
-        } catch(_e) {}
-      }
-      if(!url) url = (typeof GiCustomerFileStore !== "undefined" && GiCustomerFileStore.previewUrl) ? GiCustomerFileStore.previewUrl(doc) : "";
-      if(!url) return "";
       try{
         if(window.GI_LOAD_LIBS?.xlsx) await window.GI_LOAD_LIBS.xlsx();
         if(!window.XLSX?.read || !window.XLSX?.utils?.sheet_to_json) return "";
-        const buffer = dataUrlToArrayBuffer(url);
+        let buffer = null;
+        if(typeof GiCustomerFileStore !== "undefined" && GiCustomerFileStore.readBytes){
+          buffer = await GiCustomerFileStore.readBytes(doc);
+        } else {
+          const url = safeTrim(doc?.dataUrl) || safeTrim(doc?.url);
+          buffer = url ? dataUrlToArrayBuffer(url) : null;
+        }
         if(!buffer) return "";
         const wb = window.XLSX.read(buffer, { type: "array" });
         const names = Array.isArray(wb?.SheetNames) ? wb.SheetNames.filter((name) => {
@@ -24827,6 +24890,30 @@ UsersGateUI.init();
         <div class="cfFile__documentsPreviewBody">${body}</div>`;
     },
 
+    async prefetchNeighborCustomerDocs(rec, currentId){
+      if(!rec || typeof GiCustomerFileStore === "undefined") return;
+      const list = this.getCustomerDocuments(rec);
+      const idx = list.findIndex((row) => safeTrim(row?.id) === safeTrim(currentId));
+      if(idx < 0) return;
+      const neighbors = [list[idx + 1], list[idx - 1]].filter((row) => row && typeof row === "object");
+      for(const doc of neighbors){
+        try {
+          if(!GiCustomerFileStore.needsHydrate?.(doc)) continue;
+          await GiCustomerFileStore.hydrate(doc);
+        } catch(_e) {}
+      }
+    },
+
+    yieldCustomerDocumentPreviewPaint(){
+      return new Promise((resolve) => {
+        if(typeof requestAnimationFrame === "function"){
+          requestAnimationFrame(() => requestAnimationFrame(resolve));
+        } else {
+          setTimeout(resolve, 0);
+        }
+      });
+    },
+
     async showCustomerDocumentPreview(docId){
       const rec = this.current();
       const id = safeTrim(docId);
@@ -24842,8 +24929,18 @@ UsersGateUI.init();
       const pane = root.querySelector("[data-cf-doc-preview-pane]");
       if(!pane) return;
       const doc = this.findCustomerDocument(rec, id);
+      const scheduleNeighborPrefetch = () => {
+        const run = () => {
+          if(this._previewDocId !== id) return;
+          void this.prefetchNeighborCustomerDocs(rec, id);
+        };
+        if(typeof requestIdleCallback === "function") requestIdleCallback(run, { timeout: 1200 });
+        else setTimeout(run, 40);
+      };
       if(doc && typeof GiCustomerFileStore !== "undefined" && GiCustomerFileStore.needsHydrate?.(doc)){
         pane.innerHTML = this.renderDocumentPreviewInner(rec, id, { pdfLoading: true });
+        await this.yieldCustomerDocumentPreviewPaint();
+        if(this._previewDocId !== id || seq !== this._previewFillSeq) return;
         try { await GiCustomerFileStore.hydrate(doc); } catch(_e) {}
         if(this._previewDocId !== id || seq !== this._previewFillSeq) return;
       }
@@ -24867,6 +24964,7 @@ UsersGateUI.init();
             ? this.renderPdfPreviewFrame("preview", src.url)
             : this.renderGeneratedDocumentPreview(rec, doc))
         });
+        scheduleNeighborPrefetch();
         return;
       }
       if(storedPreview || this.isArchiveCustomerDoc(doc) || !needsPdf){
@@ -24874,10 +24972,12 @@ UsersGateUI.init();
         if(safeTrim(doc?.type) === CustomerDocuments.TYPES.arrivalPack){
           await this.appendArrivalNispahPreview(rec, pane, seq, id);
         }
+        scheduleNeighborPrefetch();
         return;
       }
       if(cachedPdf){
         pane.innerHTML = this.renderDocumentPreviewInner(rec, id, { pdfUrl: cachedPdf });
+        scheduleNeighborPrefetch();
         return;
       }
       try {
@@ -24885,11 +24985,13 @@ UsersGateUI.init();
         if(this._previewDocId !== id || seq !== this._previewFillSeq) return;
         if(url){
           pane.innerHTML = this.renderDocumentPreviewInner(rec, id, { pdfUrl: url });
+          scheduleNeighborPrefetch();
           return;
         }
       } catch(_e) {}
       if(this._previewDocId !== id || seq !== this._previewFillSeq) return;
       pane.innerHTML = this.renderDocumentPreviewInner(rec, id, { pdfError: true });
+      scheduleNeighborPrefetch();
     },
 
     denyOfficialJoinFormDownload(){
@@ -25290,33 +25392,12 @@ UsersGateUI.init();
         const bytes = new TextEncoder().encode(html);
         return { fileName: window.GiArrivalDocs.fileName(type === CustomerDocuments.TYPES.premiumDevelopment ? "premia" : (type === CustomerDocuments.TYPES.suitabilityDoc ? "hatama" : "pack"), draft).replace(/\.pdf$/i, ".html"), bytes };
       }
-      let dataUrl = safeTrim(doc.dataUrl) || safeTrim(doc.url);
-      if(!dataUrl){
-        try {
-          if(typeof GiCustomerFileStore !== "undefined") dataUrl = GiCustomerFileStore.previewUrl(doc);
-        } catch(_e) {}
-      }
-      if(!dataUrl || (!dataUrl.startsWith("data:") && !/^https?:/i.test(dataUrl))){
-        try {
-          if(typeof GiCustomerFileStore !== "undefined"){
-            dataUrl = (await GiCustomerFileStore.hydrate(doc)) || dataUrl;
-          }
-        } catch(_e) {}
-      }
-      if(dataUrl){
-        if(dataUrl.startsWith("data:")){
-          const buf = dataUrlToArrayBuffer(dataUrl);
-          if(!buf) return null;
-          return { fileName, bytes: new Uint8Array(buf) };
+      try {
+        if(typeof GiCustomerFileStore !== "undefined" && GiCustomerFileStore.readBytes){
+          const buf = await GiCustomerFileStore.readBytes(doc);
+          if(buf) return { fileName, bytes: new Uint8Array(buf) };
         }
-        try {
-          const res = await fetch(dataUrl);
-          if(!res.ok) return null;
-          return { fileName, bytes: new Uint8Array(await res.arrayBuffer()) };
-        } catch(_e){
-          return null;
-        }
-      }
+      } catch(_e) {}
       return null;
     },
     async downloadSelectedCustomerDocuments(rec){
