@@ -68,6 +68,7 @@ jobs:
         env:
           MAIL_FN_URL: https://vhvlkerectggovfihjgm.supabase.co/functions/v1/gi-daily-sales-mail
           MAIL_FN_KEY: sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb
+          MAIL_CRON_SECRET: ${{ secrets.GI_DAILY_SALES_MAIL_CRON_SECRET }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: |
           python3 - <<'PY'
@@ -99,6 +100,10 @@ jobs:
 
           url = os.environ["MAIL_FN_URL"]
           key = os.environ["MAIL_FN_KEY"]
+          cron_secret = os.environ.get("MAIL_CRON_SECRET") or ""
+          if not cron_secret:
+              print("skip: GI_DAILY_SALES_MAIL_CRON_SECRET missing")
+              sys.exit(0)
           body = json.dumps({
               "action": "send-slot",
               "scheduled": True,
@@ -112,6 +117,7 @@ jobs:
                   "Content-Type": "application/json",
                   "apikey": key,
                   "Authorization": "Bearer " + key,
+                  "x-gi-mail-cron-secret": cron_secret,
               },
           )
           try:

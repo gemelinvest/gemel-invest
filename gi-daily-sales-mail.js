@@ -86,7 +86,8 @@
         return {
           id: trim(fromBridge.id),
           name: trim(fromBridge.name) || trim(pill?.name),
-          role: role || "agent"
+          role: role || "agent",
+          username: trim(fromBridge.username)
         };
       }
       return pill;
@@ -107,6 +108,14 @@
     return bridge().supabaseUrl.replace(/\/+$/, "") + FN_PATH;
   }
 
+  function sessionPin(){
+    try {
+      const b = window.__GI_FACE_BRIDGE__;
+      if(b && typeof b.getMailSessionPin === "function") return trim(b.getMailSessionPin());
+    } catch(_e) {}
+    return "";
+  }
+
   async function api(action, body){
     const b = bridge();
     const agent = currentAgent() || {};
@@ -121,6 +130,8 @@
         action,
         actorId: trim(agent.id),
         actorName: trim(agent.name),
+        actorUsername: trim(agent.username) || trim(agent.name),
+        actorPin: sessionPin(),
         actorRole: isMailAdmin() ? (isMailAdminRole(agent.role) ? trim(agent.role) : "manager") : (trim(agent.role) || "agent"),
         ...(body || {})
       })
