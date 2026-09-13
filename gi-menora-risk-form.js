@@ -19,7 +19,7 @@
     TEMPLATE_BASE: "./forms/menora-risk/",
     TEMPLATE_FILE: "menora-risk-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260828-menora-health-decl-v1",
+    VERSION: "20260912-menora-risk-mkq-align-v1",
     DOC_ID: "doc_menora_risk_form",
     DOC_TYPE: "menora_risk_form",
 
@@ -193,32 +193,38 @@
       return /^05\d{8}$/.test(String(phone || "").replace(/\D+/g, ""));
     },
 
+    /**
+     * Form 201 page-4 radios follow printed declaration order (not questionnaire
+     * numbers in parentheses). OCR/widget Y order: MKQ1 alcohol … MKQ3 inquiry,
+     * MKQ4 neuro, MKQ5 heart, MKQ6 mental (split MKQ6/MQ6), MKQ7 metabolic …
+     * MKQ22 family. Old map used questionnaire IDs and shifted most rows.
+     */
     mkqHealthRows(){
       return [
         { field: "ExtremeSports", spouseField: "SExtremeSports", sport: true, keys: ["menora_risk__hobby"] },
         { field: "FlightLicense", spouseField: "SFlightLicense", sport: true, keys: ["menora_risk__aviation"] },
         { field: "MKQ1", keys: ["menora_risk__alcohol"] },
         { field: "MKQ2", keys: ["menora_risk__drugs"] },
-        { field: "MKQ3", keys: ["menora_risk__neuro", "menora_mort__neuro", "menora_crit__neuro"] },
-        { field: "MKQ4", keys: ["menora_risk__heart", "menora_mort__heart", "menora_crit__heart"] },
+        { field: "MKQ3", keys: ["menora_risk__inquiry", "menora_mort__inquiry", "menora_crit__inquiry"] },
+        { field: "MKQ4", keys: ["menora_risk__neuro", "menora_mort__neuro", "menora_crit__neuro"] },
         { field: "MKQ5", keys: ["menora_risk__heart", "menora_mort__heart", "menora_crit__heart"] },
-        { field: "MKQ6", keys: ["menora_risk__metabolic"] },
-        { field: "MKQ7", keys: ["menora_risk__mental"] },
-        { field: "MKQ8", keys: ["menora_risk__metabolic"] },
-        { field: "MKQ9", keys: ["menora_risk__metabolic"] },
-        { field: "MKQ10", keys: ["menora_risk__surgery", "menora_risk__hospital", "menora_risk__inquiry", "menora_risk__meds"] },
-        { field: "MKQ11", keys: ["menora_risk__tumors"] },
-        { field: "MKQ12", keys: ["menora_risk__digestive"] },
-        { field: "MKQ13", keys: ["menora_risk__digestive"] },
-        { field: "MKQ14", keys: ["menora_risk__lungs"] },
-        { field: "MKQ15", keys: ["menora_risk__kidneys"] },
-        { field: "MKQ16", keys: ["menora_risk__rheum"] },
-        { field: "MKQ17", keys: ["menora_risk__ortho"] },
-        { field: "MKQ18", keys: ["menora_risk__ortho"] },
-        { field: "MKQ19", keys: ["menora_risk__ortho"] },
-        { field: "MKQ20", keys: ["menora_risk__female", "menora_risk__family", "menora_risk__adl"] },
-        { field: "MKQ21", keys: ["menora_risk__eyes"] },
-        { field: "MKQ22", keys: ["menora_risk__ent"] }
+        { field: "MKQ6", keys: ["menora_risk__mental"] },
+        { field: "MKQ7", keys: ["menora_risk__metabolic", "menora_mort__metabolic", "menora_crit__metabolic"] },
+        { field: "MKQ8", keys: ["menora_risk__tumors", "menora_mort__tumors", "menora_crit__tumors"] },
+        { field: "MKQ9", keys: ["menora_risk__digestive", "menora_mort__digestive", "menora_crit__digestive"] },
+        { field: "MKQ10", keys: ["menora_risk__lungs", "menora_mort__lungs", "menora_crit__lungs"] },
+        { field: "MKQ11", keys: ["menora_risk__kidneys", "menora_mort__kidneys", "menora_crit__kidneys"] },
+        { field: "MKQ12", keys: ["menora_risk__infectious", "menora_mort__infectious", "menora_crit__infectious"] },
+        { field: "MKQ13", keys: ["menora_risk__surgery", "menora_mort__surgery", "menora_crit__surgery"] },
+        { field: "MKQ14", keys: ["menora_risk__hospital", "menora_mort__hospital", "menora_crit__hospital"] },
+        { field: "MKQ15", keys: ["menora_risk__meds", "menora_mort__meds", "menora_crit__meds"] },
+        { field: "MKQ16", keys: ["menora_risk__eyes", "menora_mort__eyes", "menora_crit__eyes"] },
+        { field: "MKQ17", keys: ["menora_risk__ent", "menora_mort__ent", "menora_crit__ent"] },
+        { field: "MKQ18", keys: ["menora_risk__rheum", "menora_mort__rheum"] },
+        { field: "MKQ19", keys: ["menora_risk__ortho", "menora_mort__ortho", "menora_crit__ortho_top"] },
+        { field: "MKQ20", keys: ["menora_risk__female", "menora_mort__female"] },
+        { field: "MKQ21", keys: ["menora_risk__adl", "menora_mort__adl"] },
+        { field: "MKQ22", keys: ["menora_risk__family", "menora_mort__family", "menora_crit__family"] }
       ];
     },
     healthDetail(responses, qKey, insId, detailKey){

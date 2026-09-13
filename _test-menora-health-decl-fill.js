@@ -11,8 +11,9 @@ const { spawnSync } = require("child_process");
 const { PDFDocument, PDFName } = require("pdf-lib");
 
 const ROOT = __dirname;
-const APP_TAG = "20260828-menora-health-decl-v1";
+const APP_TAG = "20260913-menora-health-decl-v6";
 const FORM_TAG = "20260828-menora-health-decl-v1";
+const RISK_FORM_TAG = "20260912-menora-risk-mkq-align-v1";
 let failed = 0;
 let passed = 0;
 
@@ -82,12 +83,16 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-menora-mortga
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-menora-ci-form.js")]).status === 0, "CI form syntax");
 assert(html.includes("app.js?v=" + APP_TAG), "index app.js cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
-assert(app.includes("./gi-menora-risk-form.js?v=" + FORM_TAG), "risk form href");
+assert(app.includes("./gi-menora-risk-form.js?v=" + RISK_FORM_TAG), "risk form href");
 assert(app.includes("./gi-menora-mortgage-form.js?v=" + FORM_TAG), "mortgage form href");
 assert(app.includes("./gi-menora-ci-form.js?v=" + FORM_TAG), "CI form href");
-assert(riskSrc.includes('VERSION: "' + FORM_TAG + '"'), "risk VERSION");
+assert(riskSrc.includes('VERSION: "' + RISK_FORM_TAG + '"'), "risk VERSION");
 assert(mortSrc.includes('VERSION: "' + FORM_TAG + '"'), "mortgage VERSION");
 assert(ciSrc.includes('VERSION: "' + FORM_TAG + '"'), "CI VERSION");
+assert(riskSrc.includes('menora_risk__inquiry'), "risk MKQ3 maps inquiry (printed order)");
+assert(riskSrc.includes('field: "MKQ4", keys: ["menora_risk__neuro"'), "risk MKQ4 maps neuro");
+assert(riskSrc.includes('field: "MKQ6", keys: ["menora_risk__mental"]'), "risk MKQ6 maps mental");
+assert(riskSrc.includes('field: "MKQ22", keys: ["menora_risk__family"'), "risk MKQ22 maps family");
 assert(mortSrc.includes('map: "menora_mortgage"'), "mortgage uses named health map");
 assert(ciSrc.includes('map: "menora_ci"'), "CI uses named health map");
 assert(app.includes("HEALTH_TOPIC_ALIASES"), "cross-company topic aliases");
@@ -169,7 +174,7 @@ console.log("\n5) CI named map + Migdal / cancer aliases");
   assert(cap.HealthDecMainQ8 === "1", "CI Q8 tumors from Menora cancer personal yes");
 }
 
-console.log("\n6) risk MKQ capture: wizard כן → export 1");
+console.log("\n6) risk MKQ capture: printed-order map (not questionnaire IDs)");
 {
   const cap = {};
   const form = { __giCapture: cap };
@@ -178,13 +183,19 @@ console.log("\n6) risk MKQ capture: wizard כן → export 1");
     healthResponses: {
       magdal_full__alcohol: { p1: { answer: "yes" } },
       magdal_full__heart: { p1: { answer: "yes" } },
-      menora_risk__neuro: { p1: { answer: "no" } }
+      menora_risk__inquiry: { p1: { answer: "yes" } },
+      menora_risk__neuro: { p1: { answer: "no" } },
+      menora_risk__eyes: { p1: { answer: "yes" } },
+      menora_risk__family: { p1: { answer: "no" } }
     }
   });
   assert(cap.MKQ1 === "1", "MKQ1 alcohol from Migdal yes");
-  assert(cap.MKQ3 === "2", "MKQ3 neuro no → 2");
-  assert(cap.MKQ4 === "1", "MKQ4 heart from Migdal yes");
+  assert(cap.MKQ3 === "1", "MKQ3 inquiry yes (not neuro)");
+  assert(cap.MKQ4 === "2", "MKQ4 neuro no → 2");
   assert(cap.MKQ5 === "1", "MKQ5 heart from Migdal yes");
+  assert(!cap.MKQ4 || cap.MKQ4 !== "1", "heart yes does not paint MKQ4");
+  assert(cap.MKQ16 === "1", "MKQ16 eyes yes (not MKQ21)");
+  assert(cap.MKQ22 === "2", "MKQ22 family no");
   assert(cap.MKQ1 !== "2", "alcohol yes is not exported as לא");
 }
 
@@ -218,19 +229,25 @@ console.log("\n7) live PDF widgets: כן paints /1, not /2");
   assert(yesWidgetOn(ciQ6), "CI Q6 heart yes widget AS=/1");
   assert(!noWidgetOn(ciQ6), "CI Q6 no widget stays Off");
 
-  console.log("\n8) MKQ6 yes/no split fields");
+  console.log("\n8) MKQ6 mental yes/no split fields; metabolic → MKQ7");
   H.setExport(form, "MKQ6", "Off");
   H.setExport(form, "MQ6", "Off");
+  H.setExport(form, "MKQ7", "Off");
   Risk.applyMenoraMkqHealth({
     getField(name){ return form.getField(name); }
   }, {
     primaryId: "p1",
-    healthResponses: { menora_risk__metabolic: { p1: { answer: "yes" } } }
+    healthResponses: {
+      menora_risk__mental: { p1: { answer: "yes" } },
+      menora_risk__metabolic: { p1: { answer: "yes" } }
+    }
   });
   const mkq6 = form.getField("MKQ6");
   const mq6 = form.getField("MQ6");
-  assert(widgetOn(mkq6).some((w) => w.as === "1"), "MKQ6 yes uses /1 field");
-  assert(!widgetOn(mq6).some((w) => w.as === "2"), "MQ6 no stays off when metabolic is yes");
+  const mkq7 = form.getField("MKQ7");
+  assert(widgetOn(mkq6).some((w) => w.as === "1"), "MKQ6 mental yes uses /1 field");
+  assert(!widgetOn(mq6).some((w) => w.as === "2"), "MQ6 no stays off when mental is yes");
+  assert(yesWidgetOn(mkq7), "MKQ7 metabolic yes (not MKQ6)");
 
   console.log("\n=== " + passed + " passed, " + failed + " failed ===");
   if(failed) process.exit(1);
