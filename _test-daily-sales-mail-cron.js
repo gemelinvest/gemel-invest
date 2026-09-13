@@ -1,4 +1,5 @@
 /* GI-MAIL 2026-09-06 — 12:30 / 15:00 / 20:00 Israel daily-sales send.
+   TEMP 2026-09-13: scheduled send paused (SCHEDULED_SEND_DISABLED + no workflow schedule).
    One send per Israel slot from the CRM sales-screen snapshot.
    הרצה: node _test-daily-sales-mail-cron.js
 */
@@ -74,13 +75,17 @@ assert(fn.includes(">דוח מכירות<"), "גוף המייל מכיל דוח 
 assert(!fn.includes("content: String(snap.html"), "HTML המלא לא נשלח כגוף Outlook");
 assert(!fn.includes("if(!pdfOk") || !fn.includes("finishSkip") || fn.indexOf("SENT_WITHOUT_PDF") > 0, "אין שער PDF שעוצר send-slot");
 
-console.log("\n4) GitHub Actions הוא השעון + דיפלוי");
+console.log("\n4) GitHub Actions — שעון מושהה זמנית + דיפלוי");
 assert(wf.includes("name: Daily sales mail slots"), "שם ה-workflow");
-assert(wf.includes('cron: "*/10 * * * *"'), "סקר כל 10 דקות");
-assert(wf.includes('cron: "30 12 * * *"'), "12:30 שעון ישראל");
-assert(wf.includes('cron: "0 15 * * *"'), "15:00 שעון ישראל");
-assert(wf.includes('cron: "0 20 * * *"'), "20:00 שעון ישראל");
-assert((wf.match(/timezone: "Asia\/Jerusalem"/g) || []).length >= 4, "כל ה-cron לפי Asia/Jerusalem");
+assert(wf.includes("schedule paused"), "schedule מושבת זמנית עד תיקון השליחה");
+assert(!/(^|\n)  schedule:/.test(wf), "אין בלוק schedule פעיל תחת on");
+assert(wf.includes('#     - cron: "*/10 * * * *"'), "סקר 10 דקות שמור בהערה לשחזור");
+assert(wf.includes('#     - cron: "30 12 * * *"'), "12:30 שמור בהערה לשחזור");
+assert(wf.includes('#     - cron: "0 15 * * *"'), "15:00 שמור בהערה לשחזור");
+assert(wf.includes('#     - cron: "0 20 * * *"'), "20:00 שמור בהערה לשחזור");
+assert(fn.includes("const SCHEDULED_SEND_DISABLED = true"), "kill-switch דלוק ב-Edge Function");
+assert(fn.includes('finishSkip("שליחה מתוזמנת מושבתת זמנית")'), "send-slot מדלג כשהדגל דלוק");
+assert(fn.includes("if(scheduled && SCHEDULED_SEND_DISABLED)"), "רק שליחה מתוזמנת נחסמת");
 assert(!wf.includes('cron: "40 9 * * *"'), "הוסרו cron UTC כפולים");
 assert(!wf.includes('cron: "50 11 * * *"'), "הוסר חלון UTC 11:50");
 assert(!wf.includes("secrets.SUPABASE_ACCESS_TOKEN != ''"), "אין secrets ב-if של job (מדלג את הדיפלוי)");
@@ -101,7 +106,7 @@ assert(wf.includes("github.event_name != 'push'"), "שליחה לא רצה על 
 assert(cfg.includes("supabase functions deploy gi-daily-sales-mail --project-ref vhvlkerectggovfihjgm"), "הוראת דיפלוי ב-config.toml");
 
 console.log("\n5) UI + cache");
-assert(html.includes("gi-daily-sales-mail.js?v=20260910-cf-open-paint-v1"), "cache bust לסקריפט המייל");
+assert(html.includes("gi-daily-sales-mail.js?v=20260913-hachshara-health-decl-v1"), "cache bust לסקריפט המייל");
 assert(mail.includes("20260907-couple-shared-discount-v1"), "כותרת הסקריפט");
 assert(mail.includes("MAIL_LAYOUT = \"20260908-today-net\""), "תג תבנית אמיתי");
 assert(!mail.includes("20260826-branch-leads"), "הוסר תג תבנית מזויף");

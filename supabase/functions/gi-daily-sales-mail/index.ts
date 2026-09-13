@@ -21,6 +21,10 @@
 
 import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 
+// TEMP: pause automated Outlook sends until the sales-mail path is fixed.
+// Manual send-now stays enabled. Flip to false + restore workflow schedule.
+const SCHEDULED_SEND_DISABLED = true;
+
 const MIN_PDF_CHARS = 10000;
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -434,6 +438,10 @@ async function handleSendNow(sb: SupabaseClient, body: Json, opts: { scheduled?:
     if(scheduled) return json({ ok: true, skipped: true, error: msg, dateKey, slot });
     return json({ ok: false, error: msg }, 400);
   };
+
+  if(scheduled && SCHEDULED_SEND_DISABLED){
+    return await finishSkip("שליחה מתוזמנת מושבתת זמנית");
+  }
 
   if(!snap || (!snap.html && !pdfOk(snap.pdf_base64))){
     return await finishSkip(NO_SNAPSHOT_ERROR);

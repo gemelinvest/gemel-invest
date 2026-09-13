@@ -12,6 +12,19 @@
 #
 # On push to main this workflow deploys gi-daily-sales-mail. Changing only
 # the git file does not update the function that Outlook actually hits.
+#
+# TEMP 2026-09-13: schedule paused until sales-mail send is fixed.
+# Restore the schedule: block below + set SCHEDULED_SEND_DISABLED = false
+# in supabase/functions/gi-daily-sales-mail/index.ts.
+#   schedule:
+#     - cron: "*/10 * * * *"
+#       timezone: "Asia/Jerusalem"
+#     - cron: "30 12 * * *"
+#       timezone: "Asia/Jerusalem"
+#     - cron: "0 15 * * *"
+#       timezone: "Asia/Jerusalem"
+#     - cron: "0 20 * * *"
+#       timezone: "Asia/Jerusalem"
 
 name: Daily sales mail slots
 
@@ -22,15 +35,6 @@ on:
       - "supabase/functions/gi-daily-sales-mail/**"
       - "supabase/config.toml"
       - ".github/workflows/daily-sales-mail.yml"
-  schedule:
-    - cron: "*/10 * * * *"
-      timezone: "Asia/Jerusalem"
-    - cron: "30 12 * * *"
-      timezone: "Asia/Jerusalem"
-    - cron: "0 15 * * *"
-      timezone: "Asia/Jerusalem"
-    - cron: "0 20 * * *"
-      timezone: "Asia/Jerusalem"
   workflow_dispatch:
 
 concurrency:
