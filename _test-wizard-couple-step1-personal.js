@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260913-cancel-sum-full-partial-v2";
+const TAG = "20260913-clal-couple-health-decl-v2";
 let failed = 0;
 let passed = 0;
 
