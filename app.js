@@ -315,6 +315,15 @@
           }))
           .sort((a, b) => b['סה"כ ms'] - a['סה"כ ms']);
         if(console.table) console.table(out);
+        try {
+          const countRows = Object.entries(this.counts()).map(([name, calls]) => ({
+            "מונה": name,
+            "קריאות": calls
+          })).sort((a, b) => b["קריאות"] - a["קריאות"]);
+          if(countRows.length && console.table){
+            console.table(countRows);
+          }
+        } catch(_e) {}
         return out;
       } catch(err){
         console.warn("giPerfReport failed:", err);
@@ -323,6 +332,36 @@
     },
     reset(){
       try { performance.clearMeasures(); performance.clearMarks(); } catch(_e) {}
+      this.resetCounts();
+    },
+    /* GI-PERF F0 — counters only. Never throw, never change control flow. */
+    count(name){
+      try {
+        if(!this._counts) this._counts = Object.create(null);
+        const key = String(name || "unknown");
+        this._counts[key] = (this._counts[key] || 0) + 1;
+      } catch(_e) {}
+    },
+    noteTimer(info){
+      try {
+        if(!this._timers) this._timers = Object.create(null);
+        const name = String(info?.name || "timer");
+        this._timers[name] = {
+          name,
+          intervalMs: Number(info?.intervalMs) || 0,
+          runsWhenHidden: info?.runsWhenHidden === true,
+          startedAt: Date.now()
+        };
+      } catch(_e) {}
+    },
+    counts(){
+      try { return Object.assign({}, this._counts || {}); } catch(_e) { return {}; }
+    },
+    timers(){
+      try { return Object.assign({}, this._timers || {}); } catch(_e) { return {}; }
+    },
+    resetCounts(){
+      try { this._counts = Object.create(null); } catch(_e) {}
     },
     /* GI-PERF 2026-08-09: Long Task observer — מדידה בלבד, בלי שינוי לוגיקה. */
     startLongTaskObserver(){
@@ -11100,6 +11139,7 @@
       this._retry = 0;
       this.startRealtime();
       this.lightTimer = window.setInterval(() => { void this.lightTick(); }, this.lightIntervalMs);
+      try { GiPerf.noteTimer({ name: "ProposalAssignWatcher", intervalMs: this.lightIntervalMs, runsWhenHidden: false }); } catch(_e) {}
       void this.lightTick();
     },
     stop(){
@@ -18494,6 +18534,7 @@ UsersGateUI.init();
     },
 
     goView(view, options = {}){
+      try { GiPerf.count("goView"); } catch(_e) {}
       let safe = String(view || "dashboard");
       if(safe === "settings" && !Auth.isAdmin() && !Auth.isManager()) safe = "dashboard";
       if(safe === "users" && !Auth.canManageUsers()) safe = "dashboard";
@@ -18600,6 +18641,7 @@ UsersGateUI.init();
          _navToken מבטל רינדור מיושן: אם המשתמש לחץ על פריט אחר בינתיים,
          הרינדור הישן לא ירוץ ולא ידרוס את המסך החדש. */
       if(alreadyOnView && options.forceRender !== true){
+        try { GiPerf.count("goView:alreadyOnView"); } catch(_e) {}
         if(!options.skipDashboardRender){
           try { LiveRefresh.renderActiveView(); } catch(_e) {}
         }
@@ -20511,6 +20553,7 @@ UsersGateUI.init();
       if(this.timer) return;
       window.setTimeout(() => { void this.tick(); }, 700);
       this.timer = window.setInterval(() => { void this.tick(); }, this.intervalMs);
+      try { GiPerf.noteTimer({ name: "MirrorCallAgentToastWatcher", intervalMs: this.intervalMs, runsWhenHidden: false }); } catch(_e) {}
     },
     stop(){
       if(this.timer){
@@ -20652,6 +20695,7 @@ UsersGateUI.init();
       if(this.timer) return;
       window.setTimeout(() => { void this.tick(); }, 800);
       this.timer = window.setInterval(() => { void this.tick(); }, this.intervalMs);
+      try { GiPerf.noteTimer({ name: "OpsAgentStatusToastWatcher", intervalMs: this.intervalMs, runsWhenHidden: false }); } catch(_e) {}
     },
     stop(){
       if(this.timer){
@@ -22306,6 +22350,7 @@ UsersGateUI.init();
     },
 
     render(options = {}){
+      try { GiPerf.count("render:customers"); } catch(_e) {}
       if(!UI.els.customersTbody) return;
       try { App.ensureAdminCustomersLoaded("customers_view"); } catch(_e) {}
       // צביעה מיידית ממה שיש (מטמון תצוגה / 10 מקומיים) — בלי לחכות לשרת
@@ -27854,6 +27899,9 @@ UsersGateUI.init();
     if(typeof globalThis !== "undefined"){
       globalThis.giPerfReport = () => GiPerf.report();
       globalThis.giPerfReset = () => GiPerf.reset();
+      globalThis.giPerfCounts = () => GiPerf.counts();
+      globalThis.giPerfTimers = () => GiPerf.timers();
+      globalThis.giPerfResetCounts = () => GiPerf.resetCounts();
     }
   }catch(_e){}
 
@@ -30135,6 +30183,7 @@ UsersGateUI.init();
     },
 
     render(){
+      try { GiPerf.count("render:proposals"); } catch(_e) {}
       if(!UI.els.proposalsTbody) return;
       // אם הסשן כבר טעון עם מערך הצעות ענק (לפני התיקון) — חותכים מיד בזיכרון.
       try {
@@ -30738,6 +30787,7 @@ UsersGateUI.init();
       return d.toLocaleDateString("he-IL", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
     },
     render(){
+      try { GiPerf.count("render:agentElementaryTracking"); } catch(_e) {}
       if(!this.els?.tbody) return;
       const rows = this.filtered();
       const historyRows = this.filteredHistory();
@@ -31898,6 +31948,7 @@ UsersGateUI.init();
     },
 
     render(){
+      try { GiPerf.count("render:elementaryPending"); } catch(_e) {}
       if(!this.els?.tbody) return;
       if(repairStuckElementaryReferralsAwaitingIssue()){
         void persistElementaryReferralsQuiet("תוקן סטטוס הפניה — ממתין להפקה");
@@ -32852,6 +32903,7 @@ UsersGateUI.init();
     },
 
     renderActiveView(){
+      try { GiPerf.count("render:activeView"); } catch(_e) {}
       const view = this.getCurrentView();
       if(view === "dashboard"){
         if(Auth.isElementary()){
@@ -32904,6 +32956,7 @@ UsersGateUI.init();
     },
 
     async tick(){
+      try { GiPerf.count("timer:LiveRefresh.tick"); } catch(_e) {}
       if(this.busy || !this.shouldRun()) return;
       if(HeavySyncGate.isBusy()) return;
       this.busy = true;
@@ -32997,6 +33050,7 @@ UsersGateUI.init();
     start(){
       this.stop();
       this.timer = window.setInterval(() => { this.tick(); }, this.getIntervalMs());
+      try { GiPerf.noteTimer({ name: "LiveRefresh", intervalMs: this.getIntervalMs(), runsWhenHidden: false }); } catch(_e) {}
     },
 
     stop(){
@@ -33297,6 +33351,7 @@ UsersGateUI.init();
       }
       window.setTimeout(() => { void this.tick(); }, 2500);
       this.timer = window.setInterval(() => { void this.tick(); }, this.intervalMs);
+      try { GiPerf.noteTimer({ name: "ReferralQuietRefresh", intervalMs: this.intervalMs, runsWhenHidden: false }); } catch(_e) {}
     },
 
     stop(){
@@ -33809,6 +33864,7 @@ UsersGateUI.init();
     },
 
     render(options = {}){
+      try { GiPerf.count("render:elementaryDashboard"); } catch(_e) {}
       this.init();
       if(!this.canAccess()) return;
       if(repairStuckElementaryReferralsAwaitingIssue()){
@@ -34585,6 +34641,7 @@ UsersGateUI.init();
     },
 
     render(){
+      try { GiPerf.count("render:opsDashboard"); } catch(_e) {}
       if(!this.canAccess()) return;
       const mount = this.root();
       if(!mount) return;
@@ -39838,6 +39895,7 @@ UsersGateUI.init();
     },
 
     schedulePostLoginRender(options = {}){
+      try { GiPerf.count("render:dashboardSchedule"); } catch(_e) {}
       if(!this.els.root) this.init();
       if(!this.els.root) return;
       const cacheKey = this.getMetricsCacheKey();
@@ -40433,6 +40491,7 @@ UsersGateUI.init();
     },
 
     async render(options = {}){
+      try { GiPerf.count("render:dashboard"); } catch(_e) {}
       if(options.shellOnly){
         this.renderLoadingShell();
         return;
@@ -64757,6 +64816,7 @@ const CampaignLeadsStore = {
       this.startRealtime();
       this.installRealtimeWatchdog();
       this.timer = window.setInterval(() => { void this.tick(); }, this.intervalMs);
+      try { GiPerf.noteTimer({ name: "CampaignAgentLeadWatcher", intervalMs: this.intervalMs, runsWhenHidden: false }); } catch(_e) {}
       // GI-LEADNOTIFY 2026-08-02: טיק קל כל 15 שניות. הוא לא מוריד את שורת ה-meta
       // הכבדה (~3MB) אלא רק בודק updated_at (כמה בתים), ולכן אפשר להריץ אותו
       // בתדירות גבוהה בלי להכביד. זה מקצר את חלון ההמתנה כשה-Realtime מפספס.
