@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260912-sim-prem-edit-v1";
+const APP_TAG = "20260913-sim-prem-edit-v2";
 let failed = 0;
 let passed = 0;
 
