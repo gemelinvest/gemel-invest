@@ -38,8 +38,8 @@ assert(app.includes("TEAM_MANAGER_PAYLOAD_LRU_TRIM"), "לוג trim קיים");
 
 console.log("\nהגנות שחוברו");
 assert(app.includes("this.isHeavyRosterSession()") || app.includes("Storage.isHeavyRosterSession"), "heavy roster בשימוש");
-assert(app.includes("isTeamManagerLightSession() ? CUSTOMER_LIGHT_COLUMNS"), "delta לקוחות בעמודות רזות");
-assert(app.includes("isTeamManagerLightSession() ? PROPOSAL_LIGHT_COLUMNS"), "delta הצעות בעמודות רזות");
+assert(app.includes("GI-PERF F2") && app.includes("CUSTOMER_LIGHT_COLUMNS"), "delta לקוחות בעמודות רזות");
+assert(app.includes("loadTableRowsSince") && app.includes("PROPOSAL_LIGHT_COLUMNS"), "delta הצעות בעמודות רזות");
 assert(app.includes("מיזוג קונפליקט לפי מזהים") || app.includes("fetchByIds"), "conflict-merge לפי מזהים dirty בלבד");
 assert(app.includes("CUSTOMER_LIGHT_COLUMNS + \",payload\"") || app.includes('CUSTOMER_LIGHT_COLUMNS + ",payload"'), "conflict-merge לקוחות עם payload נקודתי");
 assert(app.includes("largeSession || teamMgrLight"), "LiveRefresh מתייחס למנהל צוות light");

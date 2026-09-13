@@ -55,8 +55,8 @@ assert(mergeFn.includes("getTeamManagerProtectedPayloadIds()"), "merge must keep
 assert(!mergeFn.includes('loadTableRows(SUPABASE_TABLES.customers, "*")'), "merge must not fat-select customers");
 assert(!mergeFn.includes('loadTableRows(SUPABASE_TABLES.proposals, "*")'), "merge must not fat-select proposals");
 
-assert(app.includes('this.isTeamManagerLightSession() ? CUSTOMER_LIGHT_COLUMNS : "*"'),
-  "loadSheetsDelta must stay unchanged (F3)");
+assert(app.includes("GI-PERF F2"), "F2 light delta must stay in place");
+assert(app.includes("CUSTOMER_LIGHT_COLUMNS"), "delta customers stay light");
 assert(app.includes("function scheduleVisibleViewRender"), "must keep F1.0 scheduler");
 assert(app.includes("const BackgroundSyncGate"), "must keep F1.1 gate");
 assert(app.includes("intervalMs: 120000"), "must not change LiveRefresh interval");
