@@ -12,10 +12,12 @@ const vm = require("vm");
 const ROOT = __dirname;
 const TAG = "20260830-clal-health-decl-v1";
 const FORM_TAG = "20260824-covers-sum-v1";
-const CLAL_HEALTH_FORM_TAG = "20260912-clal-health-align-v1";
+const CLAL_HEALTH_FORM_TAG = "20260913-clal-health-align-v1";
+const AYALON_HEALTH_FORM_TAG = "20260912-ayalon-health-align-v1";
 const HACH_FORM_TAG = "20260826-hach-hmo-health-v1";
 const MIGDAL_FORM_TAG = "20260825-migdal-health-fill-v1";
 const MENORA_FORM_TAG = "20260828-menora-health-decl-v1";
+const MENORA_RISK_FORM_TAG = "20260912-menora-risk-mkq-align-v1";
 let failed = 0;
 let passed = 0;
 
@@ -118,10 +120,12 @@ assert(/gi-v12-/.test(sw), "SW tag");
   "gi-phoenix-life-form.js",
   "gi-phoenix-health-form.js"
 ].forEach((file) => {
-  const tag = file.indexOf("hachshara") >= 0 ? HACH_FORM_TAG
-    : (file.indexOf("migdal") >= 0 ? MIGDAL_FORM_TAG
-      : (file.indexOf("menora") >= 0 ? MENORA_FORM_TAG
-        : (file === "gi-clal-health-form.js" ? CLAL_HEALTH_FORM_TAG : FORM_TAG)));
+  const tag = file === "gi-menora-risk-form.js" ? MENORA_RISK_FORM_TAG
+    : (file === "gi-ayalon-health-form.js" ? AYALON_HEALTH_FORM_TAG
+      : (file.indexOf("hachshara") >= 0 ? HACH_FORM_TAG
+        : (file.indexOf("migdal") >= 0 ? MIGDAL_FORM_TAG
+          : (file.indexOf("menora") >= 0 ? MENORA_FORM_TAG
+            : (file === "gi-clal-health-form.js" ? CLAL_HEALTH_FORM_TAG : FORM_TAG)))));
   assert(app.includes("./" + file + "?v=" + tag), "href " + file);
   const src = fs.readFileSync(path.join(ROOT, file), "utf8");
   assert(src.includes("Heebo-Bold.ttf"), file + " bold font");
@@ -411,8 +415,11 @@ H.applyMappedHealthYesNo({ __giCapture: capCancer }, {
 assert(capCancer.IsSmoking === "True", "cancer smoking goes to IsSmoking");
 assert(capCancer.IsSmokingBzug === "False", "cancer spouse smoking export");
 assert(capCancer.HealthDecMainQ2 === "2", "cancer tests maps to Q2");
+assert(capCancer.HealthDecMainQ4 === "1", "cancer family yes maps to MainQ4");
+assert(!capCancer.HealthDecMainQ5, "cancer has no diabetes radio on PDF (orphan Q5 unused)");
 assert(!capCancer.HealthDecMainQ6, "cancer family has no Q6 radio on PDF");
-assert(capCancer.Text1 === "כן", "cancer family yes goes to Text1 detail");
+assert(String(capCancer.Text4 || "").indexOf("כן") >= 0, "cancer family yes goes to Text4 notes");
+assert(!capCancer.Text1, "Text1 is not the family detail field");
 const capMigdalShort = {};
 H.applyMappedHealthYesNo({ __giCapture: capMigdalShort }, {
   map: "migdal_life",

@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260913-clal-mortgage-health-decl-v1";
+  const BUILD = "20260913-migdal-health-decl-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -41592,15 +41592,16 @@ UsersGateUI.init();
     },
     migdalCancerHealthRows(){
       if(this._migdalCancerHealthRows) return this._migdalCancerHealthRows;
-      // PDF has HealthDecMainQ2–Q5 only (+ IsSmoking). Family (wizard Q6) has no radio —
-      // yes/no details are painted onto Text1 when answered.
+      // Printed cancer join (06.2025): Q1 tests→MainQ2, Q2 smoking→IsSmoking,
+      // Q3 tumors→MainQ3, Q4 family→MainQ4 + notes Text4. No digestive/diabetes radios
+      // on the PDF (wizard keys remain for follow-up questionnaires only). MainQ5 is an
+      // orphan AcroForm row with no printed question — do not map onto it.
       this._migdalCancerHealthRows = [
         { q: 2, keys: ["magdal_cancer__tests"] },
         { smoke: true, keys: ["magdal_cancer__smoking"] },
         { q: 3, keys: ["magdal_cancer__tumors"] },
-        { q: 4, keys: ["magdal_cancer__digestive"] },
-        { q: 5, keys: ["magdal_cancer__diabetes"] },
-        { detailField: "Text1", keys: ["magdal_cancer__family"] }
+        { q: 4, keys: ["magdal_cancer__family"] },
+        { detailField: "Text4", keys: ["magdal_cancer__family"] }
       ];
       return this._migdalCancerHealthRows;
     },
@@ -41661,6 +41662,73 @@ UsersGateUI.init();
       }
       return this._phoenixHealthRows;
     },
+    clalHealthRows(){
+      if(this._clalHealthRows) return this._clalHealthRows;
+      // Printed Clal health join: smoking → SmokingStatus; MainQ2–28 by row
+      // (drugs→Q2 … infants→Q26–28). Family heart/diabetes stays in the wizard
+      // for follow-ups only — no AcroForm radio on the join PDF.
+      this._clalHealthRows = [
+        { smoke: true, keys: ["clal_smoking"] },
+        { q: 2, keys: ["clal_drugs_cannabis"] },
+        { q: 3, keys: ["clal_alcohol"] },
+        { q: 4, keys: ["clal_family_hereditary"] },
+        { q: 5, keys: ["clal_neuro_development"] },
+        { q: 6, keys: ["clal_mental"] },
+        { q: 7, keys: ["clal_respiratory"] },
+        { q: 8, keys: ["clal_skin"] },
+        { q: 9, keys: ["clal_heart_blood_vessels"] },
+        { q: 10, keys: ["clal_digestive"] },
+        { q: 11, keys: ["clal_hernia"] },
+        { q: 12, keys: ["clal_liver_gallbladder_pancreas"] },
+        { q: 13, keys: ["clal_kidney_urinary"] },
+        { q: 14, keys: ["clal_metabolic_endocrine"] },
+        { q: 15, keys: ["clal_blood_immune"] },
+        { q: 16, keys: ["clal_infectious_hiv"] },
+        { q: 17, keys: ["clal_tumors"] },
+        { q: 18, keys: ["clal_musculoskeletal"] },
+        { q: 19, keys: ["clal_vision"] },
+        { q: 20, keys: ["clal_ent"] },
+        { q: 21, keys: ["clal_reproductive"] },
+        { q: 22, keys: ["clal_rheumatic_connective"] },
+        { q: 23, keys: ["clal_regular_meds"] },
+        { q: 24, keys: ["clal_future_tests"] },
+        { q: 25, keys: ["clal_hospital_surgery"] },
+        { q: 26, keys: ["clal_child_under_6m_followup"] },
+        { q: 27, keys: ["clal_child_family_history"] },
+        { q: 28, keys: ["clal_child_congenital"] }
+      ];
+      return this._clalHealthRows;
+    },
+    ayalonHealthRows(){
+      if(this._ayalonHealthRows) return this._ayalonHealthRows;
+      // Printed Ayalon health: smoking → IsSmoking; MainQ1–21 match printed rows
+      // (not index-zip of the 22 wizard keys).
+      this._ayalonHealthRows = [
+        { smoke: true, keys: ["ayalon__smoking"] },
+        { q: 1, keys: ["ayalon__alcohol"] },
+        { q: 2, keys: ["ayalon__drugs"] },
+        { q: 3, keys: ["ayalon__medications"] },
+        { q: 4, keys: ["ayalon__hospitalization"] },
+        { q: 5, keys: ["ayalon__tests"] },
+        { q: 6, keys: ["ayalon__disability"] },
+        { q: 7, keys: ["ayalon__family_history"] },
+        { q: 8, keys: ["ayalon__neuro"] },
+        { q: 9, keys: ["ayalon__mental"] },
+        { q: 10, keys: ["ayalon__cancer"] },
+        { q: 11, keys: ["ayalon__respiratory"] },
+        { q: 12, keys: ["ayalon__eyes"] },
+        { q: 13, keys: ["ayalon__ent"] },
+        { q: 14, keys: ["ayalon__heart"] },
+        { q: 15, keys: ["ayalon__digestive"] },
+        { q: 16, keys: ["ayalon__kidneys"] },
+        { q: 17, keys: ["ayalon__endocrine"] },
+        { q: 18, keys: ["ayalon__musculoskeletal"] },
+        { q: 19, keys: ["ayalon__skin"] },
+        { q: 20, keys: ["ayalon__infectious"] },
+        { q: 21, keys: ["ayalon__female"] }
+      ];
+      return this._ayalonHealthRows;
+    },
     applyMappedHealthYesNo(form, spec){
       const cfg = spec && typeof spec === "object" ? spec : {};
       if(!form) return;
@@ -41668,7 +41736,10 @@ UsersGateUI.init();
         : (cfg.map === "migdal_life" ? this.migdalLifeHealthRows()
           : (cfg.map === "migdal_cancer" ? this.migdalCancerHealthRows()
             : (cfg.map === "migdal_mortgage" ? this.migdalMortgageHealthRows()
-              : (cfg.map === "phoenix_health" ? this.phoenixHealthRows() : this.hachsharaHealthRows(cfg.map)))));
+              : (cfg.map === "phoenix_health" ? this.phoenixHealthRows()
+                : (cfg.map === "clal_health" ? this.clalHealthRows()
+                  : (cfg.map === "ayalon_health" ? this.ayalonHealthRows()
+                    : this.hachsharaHealthRows(cfg.map)))))));
       const responses = cfg.responses && typeof cfg.responses === "object" ? cfg.responses : {};
       const primaryId = this.resolveHealthPrimaryId(responses, cfg.primaryId);
       const spouseId = String(cfg.spouseId == null ? "" : cfg.spouseId).trim();
@@ -41968,7 +42039,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260913-clal-mortgage-health-decl-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260913-migdal-health-decl-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -41978,18 +42049,18 @@ UsersGateUI.init();
   const GI_MIGDAL_MORTGAGE_FORM_HREF = "./gi-migdal-mortgage-form.js?v=20260825-migdal-health-fill-v1";
   const GI_MENORA_CI_FORM_HREF = "./gi-menora-ci-form.js?v=20260828-menora-health-decl-v1";
   const GI_MENORA_MORTGAGE_FORM_HREF = "./gi-menora-mortgage-form.js?v=20260828-menora-health-decl-v1";
-  const GI_MENORA_RISK_FORM_HREF = "./gi-menora-risk-form.js?v=20260828-menora-health-decl-v1";
-  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260824-covers-sum-v1";
+  const GI_MENORA_RISK_FORM_HREF = "./gi-menora-risk-form.js?v=20260912-menora-risk-mkq-align-v1";
+  const GI_AYALON_HEALTH_FORM_HREF = "./gi-ayalon-health-form.js?v=20260912-ayalon-health-align-v1";
   const GI_AYALON_MORTGAGE_FORM_HREF = "./gi-ayalon-mortgage-form.js?v=20260824-covers-sum-v1";
-  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260824-covers-sum-v1";
+  const GI_CLAL_HEALTH_FORM_HREF = "./gi-clal-health-form.js?v=20260913-clal-health-align-v1";
   const GI_CLAL_LIFE_COUPLE_FORM_HREF = "./gi-clal-life-couple-form.js?v=20260824-covers-sum-v1";
   const GI_CLAL_MORTGAGE_FORM_HREF = "./gi-clal-mortgage-form.js?v=20260913-clal-mortgage-health-decl-v1";
   const GI_MIGDAL_CANCER_FORM_HREF = "./gi-migdal-cancer-form.js?v=20260825-migdal-health-fill-v1";
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260913-clal-mortgage-health-decl-v1";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260913-clal-mortgage-health-decl-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260913-migdal-health-decl-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260913-migdal-health-decl-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -42642,18 +42713,18 @@ UsersGateUI.init();
     "./ayalon-health-sim.css?v=20260810-sim-mockup-v2",
     "./ayalon-ci-sim.css?v=20260811-ayl-ci-v1",
     "./hachshara-health-sim.css?v=20260810-sim-mockup-v2",
-    "./hachshara-risk-sim.css?v=20260913-clal-mortgage-health-decl-v1",
-    "./hachshara-mortgage-risk-sim.css?v=20260913-clal-mortgage-health-decl-v1",
+    "./hachshara-risk-sim.css?v=20260913-migdal-health-decl-v1",
+    "./hachshara-mortgage-risk-sim.css?v=20260913-migdal-health-decl-v1",
     "./migdal-health-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
-    "./menora-ci-sim.css?v=20260913-clal-mortgage-health-decl-v1",
+    "./menora-ci-sim.css?v=20260913-migdal-health-decl-v1",
     "./clal-health-sim.css?v=20260812-cll-health-v1",
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260913-clal-mortgage-health-decl-v1",
-    "./simulators-shell.css?v=20260913-clal-mortgage-health-decl-v1"
+    "./simulators-center.css?v=20260913-migdal-health-decl-v1",
+    "./simulators-shell.css?v=20260913-migdal-health-decl-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -44015,7 +44086,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260913-clal-mortgage-health-decl-v1";
+  const GI_WIZARD_JS_VERSION = "20260913-migdal-health-decl-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
