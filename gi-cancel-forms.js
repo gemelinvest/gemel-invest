@@ -418,7 +418,7 @@
   const GiCancelForms = {
     TEMPLATE_BASE: "./forms/cancel/",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260913-hach-sikunim-no-cpi-v6",
+    VERSION: "20260913-menora-health-decl-v6",
     DOC_TYPE: "company_cancel_form",
     TEMPLATES,
 
