@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260913-clal-health-decl-v3";
+const TAG = "20260913-ayalon-health-decl-v4";
 let failed = 0;
 let passed = 0;
 function assert(cond, msg){
