@@ -4879,7 +4879,10 @@
           p_pin: typed
         });
         if(!error && data && typeof data === "object"){
-          if(data.ok === true) return { ok:true, source:"server" };
+          if(data.ok === true){
+            try { Auth._sessionPin = typed; } catch(_e) {}
+            return { ok:true, source:"server" };
+          }
           if(data.ok === false){
             const code = safeTrim(data.error);
             const msg = code === "BAD_PIN" || code === "USER_NOT_FOUND" || code === "MISSING_CREDENTIALS"
@@ -4899,6 +4902,7 @@
     }
     if(expectedLocal){
       if(typed !== expectedLocal) return { ok:false, source:"local", error:"קוד כניסה שגוי" };
+      try { Auth._sessionPin = typed; } catch(_e) {}
       return { ok:true, source:"local" };
     }
     return { ok:false, source:"server_unavailable", error:"לא ניתן לאמת מול השרת כרגע. נסו שוב בעוד רגע." };
@@ -17851,6 +17855,7 @@
       }
       try { persistLastSessionUserKey(typeof Storage !== "undefined" ? Storage.fullCacheUserKey() : ""); } catch(_e) {}
       this.current = null;
+      try { this._sessionPin = ""; } catch(_e) {}
       try { localStorage.removeItem(LS_SESSION_KEY); } catch(_) {}
       try { localStorage.removeItem(SIDEBAR_COLLAPSE_STORAGE_KEY); } catch(_) {}
       this.lock();
@@ -57480,6 +57485,7 @@ const ClalRiskLifePdf = {
         const sr = await SupabaseMFA.signInWithPassword(authEmail, pin);
         if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
         if(!sr.ok) return this._setError('סיסמת Auth שגויה או שהמשתמש לא קיים ב-Supabase Auth');
+        try { Auth._sessionPin = safeTrim(pin); } catch(_e) {}
         authSigned = true;
         if(authEmail !== safeTrim(sec.authEmail)){
           setAgentSecurity(matched.id, { authEmail, mfaRequired:true });
@@ -82130,6 +82136,9 @@ ${inner}
       },
       prepareDailySalesMailSnapshot(){
         try { return DashboardUI.prepareDailySalesMailSnapshot(); } catch(_e) { return null; }
+      },
+      getMailSessionPin(){
+        try { return safeTrim(Auth._sessionPin); } catch(_e) { return ""; }
       },
       getCurrentAgent(){
         const rec = (typeof getCurrentAgentRecord === "function" ? getCurrentAgentRecord() : null)

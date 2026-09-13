@@ -25,10 +25,20 @@ import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 // Manual send-now stays enabled. Flip to false + restore workflow schedule.
 const SCHEDULED_SEND_DISABLED = true;
 
+/* GI-SEC Pא: per-action gates. Do not set verify_jwt=true on this function —
+   GitHub Actions is the clock and has no user JWT. Rollback: set these false
+   and redeploy, or redeploy the previous function. */
+const CRON_SECRET_REQUIRED = true;
+const UI_ACTOR_REQUIRED = true;
+const CRON_SECRET_HEADER = "x-gi-mail-cron-secret";
+const UI_ACTIONS = new Set([
+  "status", "save-snapshot", "send-now", "save-azure", "oauth-start", "disconnect",
+]);
+
 const MIN_PDF_CHARS = 10000;
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-gi-mail-cron-secret",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 const GRAPH_SCOPE = "offline_access User.Read Mail.Send";
@@ -72,6 +82,81 @@ function isMailAdmin(body: Json){
   const name = trim(body.actorName);
   return name === "מנהל מערכת" || name === "מפתח המערכת" || name === "אוריה סומך"
     || name === "איתי סומך" || name === "סוניה ארנשטיין" || name.indexOf("סטס") === 0;
+}
+
+function isMailAdminAgent(agent: Json){
+  return isMailAdminRole(agent.role) || isMailAdmin({
+    actorName: agent.name || agent.agentName,
+    actorRole: agent.role,
+  });
+}
+
+function secretsEqual(got: string, expected: string){
+  if(!got || !expected) return false;
+  const enc = new TextEncoder();
+  const a = enc.encode(got);
+  const b = enc.encode(expected);
+  const n = Math.max(a.length, b.length);
+  let diff = a.length ^ b.length;
+  for(let i = 0; i < n; i += 1) diff |= (a[i] || 0) ^ (b[i] || 0);
+  return diff === 0;
+}
+
+function cronSecretFrom(req: Request, body: Json){
+  return trim(req.headers.get(CRON_SECRET_HEADER)) || trim(body.cronSecret);
+}
+
+function cronSecretOk(req: Request, body: Json){
+  if(!CRON_SECRET_REQUIRED) return true;
+  const expected = trim(Deno.env.get("GI_DAILY_SALES_MAIL_CRON_SECRET"));
+  if(!expected) return false;
+  return secretsEqual(cronSecretFrom(req, body), expected);
+}
+
+async function loadMailAdminById(sb: SupabaseClient, id: string){
+  const sid = trim(id);
+  if(!sid) return null;
+  const { data, error } = await sb.from("agents")
+    .select("id,name,username,role,active")
+    .eq("id", sid)
+    .maybeSingle();
+  if(error || !data) return null;
+  const row = data as Json;
+  if(row.active === false) return null;
+  if(!isMailAdminAgent(row)) return null;
+  return row;
+}
+
+async function requireUiActor(sb: SupabaseClient, body: Json){
+  if(!UI_ACTOR_REQUIRED) return { ok: true as const };
+  const actorId = trim(body.actorId);
+  const username = trim(body.actorUsername) || trim(body.actorName);
+  const pin = trim(body.actorPin);
+  if(pin && username){
+    const { data, error } = await sb.rpc("gi_verify_agent_login", {
+      p_username: username,
+      p_pin: pin,
+    });
+    if(error || !data || (data as Json).ok !== true){
+      return { ok: false as const, res: json({ ok: false, error: "אין הרשאה" }, 401) };
+    }
+    const verified = data as Json;
+    if(!isMailAdminAgent({ role: verified.role, name: verified.agentName })){
+      return { ok: false as const, res: json({ ok: false, error: "אין הרשאה" }, 403) };
+    }
+    return { ok: true as const };
+  }
+  if(!actorId || !username){
+    return { ok: false as const, res: json({ ok: false, error: "אין הרשאה" }, 401) };
+  }
+  const row = await loadMailAdminById(sb, actorId);
+  if(!row) return { ok: false as const, res: json({ ok: false, error: "אין הרשאה" }, 401) };
+  const uname = trim(row.username);
+  const name = trim(row.name);
+  if(username !== uname && username !== name){
+    return { ok: false as const, res: json({ ok: false, error: "אין הרשאה" }, 401) };
+  }
+  return { ok: true as const };
 }
 
 function israelDateKey(d = new Date()){
@@ -623,10 +708,17 @@ Deno.serve(async (req) => {
     if(req.method !== "POST") return json({ ok: false, error: "METHOD" }, 405);
     const body = (await req.json().catch(() => ({}))) as Json;
     const action = trim(body.action);
+    if(action === "send-slot"){
+      if(!cronSecretOk(req, body)) return json({ ok: false, error: "אין הרשאה" }, 401);
+      return await handleSendNow(sb, body, { scheduled: true });
+    }
+    if(UI_ACTIONS.has(action)){
+      const gate = await requireUiActor(sb, body);
+      if(!gate.ok) return gate.res;
+    }
     if(action === "status") return await handleStatus(sb);
     if(action === "save-snapshot") return await handleSaveSnapshot(sb, body);
     if(action === "send-now") return await handleSendNow(sb, body, { scheduled: false });
-    if(action === "send-slot") return await handleSendNow(sb, body, { scheduled: true });
     if(action === "save-azure") return await handleSaveAzure(sb, body);
     if(action === "oauth-start") return await handleOauthStart(sb);
     if(action === "disconnect") return await handleDisconnect(sb);

@@ -40,7 +40,9 @@ assert(fn.includes('["gi-daily-sales-mail-1500", "0 12 * * *"]'), "Deno.cron 12:
 assert(fn.includes('["gi-daily-sales-mail-2000", "0 17 * * *"]'), "Deno.cron 17:00 UTC = 20:00 IDT");
 assert(fn.includes("function registerSlotCrons"), "רישום Deno.cron מאובטח");
 assert(fn.includes("typeof cron !== \"function\""), "לא קורס אם Deno.cron חסר");
-assert(fn.includes("if(action === \"send-slot\") return await handleSendNow(sb, body, { scheduled: true })"), "HTTP send-slot מתוזמן");
+assert(fn.includes('if(action === "send-slot")'), "HTTP send-slot מתוזמן");
+assert(fn.includes("cronSecretOk(req, body)"), "send-slot דורש סוד כרון");
+assert(fn.includes("return await handleSendNow(sb, body, { scheduled: true })"), "send-slot קורא לשליחה מתוזמנת");
 assert(fn.includes("if(action === \"send-now\") return await handleSendNow(sb, body, { scheduled: false })"), "HTTP send-now ידני");
 assert(fn.includes("async function runScheduledSlot"), "קרון קורא לאותו send-slot");
 assert(fn.includes("fromBody = scheduled ? null : snapshotFromBody"), "שליחה מתוזמנת משתמשת בסנאפשוט השמור");
