@@ -11,7 +11,7 @@ const { spawnSync } = require("child_process");
 const { PDFDocument, PDFName } = require("pdf-lib");
 
 const ROOT = __dirname;
-const APP_TAG = "20260912-har-upload-update-v1";
+const APP_TAG = "20260913-menora-health-decl-v2";
 const FORM_TAG = "20260828-menora-health-decl-v1";
 const RISK_FORM_TAG = "20260912-menora-risk-mkq-align-v1";
 let failed = 0;
