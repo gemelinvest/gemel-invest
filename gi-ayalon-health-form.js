@@ -22,7 +22,7 @@
     TEMPLATE_BASE: "./forms/ayalon-health/",
     TEMPLATE_FILE: "ayalon-health-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-official-decl-pay-he-v1",
+    VERSION: "20260912-ayalon-health-align-v1",
     DOC_ID: "doc_ayalon_health_form",
     DOC_TYPE: "ayalon_health_form",
 
@@ -390,8 +390,17 @@
         this.setTextSafe(form, "ZipCodePayer", draft.payer.zip, font);
       }
       global.GI_OFFICIAL_FORM_FILL?.applyOfficialHealthAndNames?.(form, draft, font, {
-        keys: "ayalon_health",
+        skipHealth: true,
         visual: false
+      });
+      // Named map: smoking → IsSmoking; MainQ1–21 match printed rows (not index-zip).
+      global.GI_OFFICIAL_FORM_FILL?.applyMappedHealthYesNo?.(form, {
+        map: "ayalon_health",
+        responses: draft.healthResponses,
+        primaryId: draft.primaryId || (draft.primary && draft.primary.id) || "",
+        spouseId: draft.spouseId || (draft.spouse && draft.spouse.id) || "",
+        childIds: draft.childIds || (draft.children || []).map((c) => c && c.id).filter(Boolean),
+        font
       });
       global.GI_OFFICIAL_FORM_FILL?.applyStoredPayment?.(form, {
         method: draft.payment?.method || "",

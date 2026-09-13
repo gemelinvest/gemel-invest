@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260913-menora-health-decl-v4";
+const TAG = "20260913-menora-health-decl-v5";
 let failed = 0;
 let passed = 0;
 
