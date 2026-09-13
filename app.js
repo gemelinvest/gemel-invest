@@ -11210,6 +11210,10 @@
     },
     async lightTick(){
       if(this.lightBusy || !Auth.current) return;
+      if(BackgroundSyncGate?.shouldSkipNetwork?.("ProposalAssignWatcher")){
+        try { await ProposalAssignInbox.flushForCurrentUser(); } catch(_e) {}
+        return;
+      }
       this.lightBusy = true;
       try {
         try { await ProposalAssignInbox.flushForCurrentUser(); } catch(_e) {}
@@ -20527,6 +20531,7 @@ UsersGateUI.init();
       this.busy = true;
       try{
         this.inspectLocalCustomers();
+        if(BackgroundSyncGate?.shouldSkipNetwork?.("MirrorCallAgentToastWatcher", { onlyWhileLiveBusy: true })) return;
         const remote = await this.fetchRecentOwnedRows();
         remote.forEach((rec) => this.inspectRecord(rec));
       }catch(_e){}
@@ -20669,6 +20674,7 @@ UsersGateUI.init();
       this.busy = true;
       try{
         this.inspectLocalCustomers();
+        if(BackgroundSyncGate?.shouldSkipNetwork?.("OpsAgentStatusToastWatcher", { onlyWhileLiveBusy: true })) return;
         const remote = await this.fetchRecentOwnedRows();
         remote.forEach((rec) => this.inspectRecord(rec));
       }catch(_e){}
@@ -32818,6 +32824,49 @@ UsersGateUI.init();
     }
   }
 
+  /* GI-PERF F1.1 — watchers yield to LiveRefresh.
+     No interval/login/persist changes. Realtime stays. Local inbox flush still runs. */
+  const BackgroundSyncGate = {
+    LIVE_COOLDOWN_MS: 8000,
+    _liveBusy: false,
+    _liveUntil: 0,
+    markLiveStart(){
+      this._liveBusy = true;
+      try { GiPerf.count("syncGate:liveStart"); } catch(_e) {}
+    },
+    markLiveEnd(){
+      this._liveBusy = false;
+      this._liveUntil = Date.now() + this.LIVE_COOLDOWN_MS;
+      try { GiPerf.count("syncGate:liveEnd"); } catch(_e) {}
+    },
+    shouldSkipNetwork(name, options){
+      try {
+        if(typeof document !== "undefined" && document.visibilityState === "hidden"){
+          try { GiPerf.count("syncGate:skip:" + String(name || "poll") + ":hidden"); } catch(_e) {}
+          return true;
+        }
+        if(BackgroundTimers?.isInLoginGrace?.()){
+          try { GiPerf.count("syncGate:skip:" + String(name || "poll") + ":loginGrace"); } catch(_e) {}
+          return true;
+        }
+        if(this._liveBusy){
+          try { GiPerf.count("syncGate:skip:" + String(name || "poll") + ":liveBusy"); } catch(_e) {}
+          return true;
+        }
+        if(options?.onlyWhileLiveBusy) return false;
+        if(LiveRefresh?.hasBlockingFlow?.()){
+          try { GiPerf.count("syncGate:skip:" + String(name || "poll") + ":blocking"); } catch(_e) {}
+          return true;
+        }
+        if(Date.now() < Number(this._liveUntil || 0)){
+          try { GiPerf.count("syncGate:skip:" + String(name || "poll") + ":cooldown"); } catch(_e) {}
+          return true;
+        }
+      } catch(_e) {}
+      return false;
+    }
+  };
+
   const LiveRefresh = {
     intervalMs: 120000,
     heavyIntervalMs: 180000,
@@ -32976,6 +33025,7 @@ UsersGateUI.init();
       if(HeavySyncGate.isBusy()) return;
       this.busy = true;
       let heavyHeld = false;
+      try { BackgroundSyncGate.markLiveStart(); } catch(_e) {}
       try {
         const forceDashboardPull = this.shouldForceDashboardPull();
         const localDataAt = getMetaSyncAt(State.data?.meta, "data");
@@ -33059,6 +33109,7 @@ UsersGateUI.init();
       } finally {
         if(heavyHeld) HeavySyncGate.leave("LiveRefresh");
         this.busy = false;
+        try { BackgroundSyncGate.markLiveEnd(); } catch(_e) {}
       }
     },
 
@@ -33237,6 +33288,7 @@ UsersGateUI.init();
     async tick(){
       if(this.busy || !this.shouldRun()) return;
       if(this.hasBlockingFlow()) return;
+      if(BackgroundSyncGate?.shouldSkipNetwork?.("ReferralQuietRefresh")) return;
       this.busy = true;
       try {
         const pinnedIds = getPinnedElementaryReferralIdSet();
@@ -64860,6 +64912,11 @@ const CampaignLeadsStore = {
     async lightTick(){
       if(this.busy || this.lightBusy) return;
       if(!Auth.canAccessCampaignMyLeads()) return;
+      if(BackgroundSyncGate?.shouldSkipNetwork?.("CampaignAgentLeadWatcher.light")){
+        try { await CampaignLeadAssignInbox.flushForCurrentUser(); } catch(_e) {}
+        try { await ProposalAssignInbox.flushForCurrentUser(); } catch(_e) {}
+        return;
+      }
       this.lightBusy = true;
       try {
         try { await CampaignLeadAssignInbox.flushForCurrentUser(); } catch(_e) {}
@@ -64882,7 +64939,7 @@ const CampaignLeadsStore = {
       // GI-LEADNOTIFY 2026-08-02: קודם יצאנו כאן לגמרי, וכל התראה ממתינה נדחתה
       // בסבב שלם (60 שניות) בכל פעם שרץ סנכרון כבד או תהליך חוסם.
       // עכשיו מדלגים רק על החלק היקר (רשת), אבל עדיין מנקזים את התור המקומי.
-      if(LiveRefresh?.hasBlockingFlow?.() || HeavySyncGate.isBusy()){
+      if(LiveRefresh?.hasBlockingFlow?.() || HeavySyncGate.isBusy() || BackgroundSyncGate?.shouldSkipNetwork?.("CampaignAgentLeadWatcher")){
         try { await CampaignLeadAssignInbox.flushForCurrentUser(); } catch(_e) {}
         try { await ProposalAssignInbox.flushForCurrentUser(); } catch(_e) {}
         return;
