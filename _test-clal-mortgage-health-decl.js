@@ -12,7 +12,7 @@ const { spawnSync } = require("child_process");
 const { PDFDocument, PDFName } = require("pdf-lib");
 
 const ROOT = __dirname;
-const APP_TAG = "20260913-migdal-health-decl-v1";
+const APP_TAG = "20260913-phoenix-health-decl-v1";
 const FORM_TAG = "20260913-clal-mortgage-health-decl-v1";
 let failed = 0;
 let passed = 0;

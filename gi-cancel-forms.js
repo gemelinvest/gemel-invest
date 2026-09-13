@@ -418,7 +418,7 @@
   const GiCancelForms = {
     TEMPLATE_BASE: "./forms/cancel/",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260913-migdal-health-decl-v1",
+    VERSION: "20260913-phoenix-health-decl-v1",
     DOC_TYPE: "company_cancel_form",
     TEMPLATES,
 
