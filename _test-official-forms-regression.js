@@ -12,10 +12,10 @@ const vm = require("vm");
 const ROOT = __dirname;
 const TAG = "20260830-clal-health-decl-v1";
 const FORM_TAG = "20260824-covers-sum-v1";
+const CLAL_HEALTH_FORM_TAG = "20260912-clal-health-align-v1";
 const HACH_FORM_TAG = "20260826-hach-hmo-health-v1";
 const MIGDAL_FORM_TAG = "20260825-migdal-health-fill-v1";
 const MENORA_FORM_TAG = "20260828-menora-health-decl-v1";
-const MENORA_RISK_FORM_TAG = "20260912-menora-risk-mkq-align-v1";
 let failed = 0;
 let passed = 0;
 
@@ -118,24 +118,28 @@ assert(/gi-v12-/.test(sw), "SW tag");
   "gi-phoenix-life-form.js",
   "gi-phoenix-health-form.js"
 ].forEach((file) => {
-  const tag = file === "gi-menora-risk-form.js" ? MENORA_RISK_FORM_TAG
-    : (file.indexOf("hachshara") >= 0 ? HACH_FORM_TAG
-      : (file.indexOf("migdal") >= 0 ? MIGDAL_FORM_TAG
-        : (file.indexOf("menora") >= 0 ? MENORA_FORM_TAG : FORM_TAG)));
+  const tag = file.indexOf("hachshara") >= 0 ? HACH_FORM_TAG
+    : (file.indexOf("migdal") >= 0 ? MIGDAL_FORM_TAG
+      : (file.indexOf("menora") >= 0 ? MENORA_FORM_TAG
+        : (file === "gi-clal-health-form.js" ? CLAL_HEALTH_FORM_TAG : FORM_TAG)));
   assert(app.includes("./" + file + "?v=" + tag), "href " + file);
   const src = fs.readFileSync(path.join(ROOT, file), "utf8");
   assert(src.includes("Heebo-Bold.ttf"), file + " bold font");
   assert(src.includes("cc: draft.payment?.cc"), file + " passes stored card");
-  const healthFill = (file === "gi-phoenix-health-form.js" || file === "gi-migdal-cancer-form.js")
+  const healthFill = (file === "gi-phoenix-health-form.js" || file === "gi-migdal-cancer-form.js" || file === "gi-clal-health-form.js")
     ? src.includes("applyMappedHealthYesNo")
     : (file === "gi-menora-risk-form.js"
-      ? (src.includes("applyMenoraMkqHealth") && src.includes('menora_risk__inquiry') && src.includes('field: "MKQ4", keys: ["menora_risk__neuro"'))
+      ? src.includes("applyMenoraMkqHealth")
       : (file === "gi-migdal-mortgage-form.js"
         ? src.includes('map: "migdal_mortgage"')
         : (file === "gi-menora-mortgage-form.js"
           ? src.includes('map: "menora_mortgage"')
           : src.includes("applyOfficialHealthAndNames"))));
   assert(healthFill, file + " fills health yes/no");
+  if(file === "gi-clal-health-form.js"){
+    assert(src.includes('map: "clal_health"'), "clal health uses named MainQ map");
+    assert(src.includes('smokingField: "SmokingStatus"'), "clal smoking fills SmokingStatus not MainQ2");
+  }
 });
 assert(fs.existsSync(path.join(ROOT, "gi-phoenix-ci-form.js")), "phoenix CI form file");
 assert(app.includes("./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1"), "href gi-phoenix-ci-form.js");
@@ -268,6 +272,35 @@ assert(texts.FullName === "כהן", "visual:false keeps logical Hebrew");
 H.setTextSafe(textForm, "FullName2", "כהן", { dummy: true });
 assert(texts.FullName2 === "ןהכ", "default visual reverse still used for other companies");
 assert(H.HEALTH_QKEYS.clal_health[0] === "clal_smoking", "Clal keys start at smoking");
+assert(H.HEALTH_QKEYS.clal_health.length === 29, "Clal wizard still has 29 keys incl. family heart");
+assert(H.HEALTH_QKEYS.clal_health.indexOf("clal_family_heart_diabetes") >= 0, "Clal keeps family heart in wizard keys");
+assert(typeof H.clalHealthRows === "function", "Clal named health rows helper exists");
+const clalRows = H.clalHealthRows();
+assert(clalRows[0] && clalRows[0].smoke === true, "Clal smoking is named onto SmokingStatus");
+assert(clalRows.some((r) => r.q === 2 && (r.keys || []).indexOf("clal_drugs_cannabis") >= 0), "Clal MainQ2 is drugs/cannabis");
+assert(clalRows.some((r) => r.q === 23 && (r.keys || []).indexOf("clal_regular_meds") >= 0), "Clal MainQ23 is regular meds");
+assert(clalRows.some((r) => r.q === 26 && (r.keys || []).indexOf("clal_child_under_6m_followup") >= 0), "Clal MainQ26 is infant follow-up");
+assert(clalRows.some((r) => r.q === 28 && (r.keys || []).indexOf("clal_child_congenital") >= 0), "Clal MainQ28 is congenital");
+assert(!clalRows.some((r) => (r.keys || []).indexOf("clal_family_heart_diabetes") >= 0), "Clal family heart has no MainQ radio");
+assert(clalRows.filter((r) => r.q).length === 27, "Clal maps 27 MainQ radios (Q2–Q28)");
+const capClal = {};
+H.applyMappedHealthYesNo({ __giCapture: capClal }, {
+  map: "clal_health",
+  responses: {
+    clal_smoking: { p1: { answer: "yes" } },
+    clal_drugs_cannabis: { p1: { answer: "no" } },
+    clal_regular_meds: { p1: { answer: "yes" } },
+    clal_child_congenital: { p1: { answer: "no" } },
+    clal_family_heart_diabetes: { p1: { answer: "yes" } }
+  },
+  primaryId: "p1",
+  smokingField: "SmokingStatus"
+});
+assert(capClal.SmokingStatus === "True", "Clal smoking exports SmokingStatus True");
+assert(capClal.HealthDecMainQ2 === "2", "Clal drugs no → MainQ2");
+assert(capClal.HealthDecMainQ23 === "1", "Clal meds yes → MainQ23");
+assert(capClal.HealthDecMainQ28 === "2", "Clal congenital no → MainQ28");
+assert(!capClal.HealthDecMainQ29, "Clal has no MainQ29 overflow");
 assert(H.HEALTH_QKEYS.clal_couple.length === 19, "Clal couple key list is CRQ1–19");
 assert(H.HEALTH_QKEYS.migdal_cancer.length === 6, "Migdal cancer key list covers all 6 wizard questions");
 assert(H.HEALTH_QKEYS.migdal_cancer[1] === "magdal_cancer__smoking", "Migdal cancer smoking key is second");
