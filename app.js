@@ -106,6 +106,8 @@
   // ל-"מערכת" כשהערך חסר, אז ההסרה אינה משנה התנהגות.
   const CUSTOMER_LIGHT_COLUMNS = "id,status,full_name,id_number,phone,email,city,agent_name,agent_id,agent_role,insured_count,existing_policies_count,new_policies_count,created_at,updated_at";
   const PROPOSAL_LIGHT_COLUMNS = "id,status,full_name,id_number,phone,email,city,agent_name,agent_id,agent_role,current_step,insured_count,created_at,updated_at";
+  /* GI-SEC R9-pre-B: never SELECT agents.pin to the browser. Login uses gi_verify_agent_login RPC. */
+  const AGENT_PUBLIC_COLUMNS = "id,name,username,role,active,created_at,updated_at,birth_date,monthly_sales_target,email,team_manager_id,auth_user_id";
 
   /* GI-PERF 2026-08-08 — טעינה ראשונית רזה ללקוחות (בלי payload).
      הגנות שנבדקו לפני ההדלקה:
@@ -4137,7 +4139,7 @@
       id: row?.id,
       name: row?.name,
       username: row?.username,
-      pin: row?.pin,
+      // GI-SEC R9-pre-B: ignore legacy pins from agentsShadow
       birthDate: row?.birthDate || row?.birth_date,
       email: row?.email,
       monthlySalesTarget: row?.monthlySalesTarget ?? row?.monthly_sales_target,
@@ -4813,13 +4815,12 @@
     return { agent:null, error:"שם משתמש לא נמצא" };
   }
 
-  /* GI-SEC 2026-09-13 — אימות PIN בשרת עם נפילה אוטומטית למסלול הישן.
-     אפס סיכון לכניסה: אם RPC gi_verify_agent_login חסר/נכשל טכנית — משווים
-     מול matched.pin כמו קודם. רק תשובת ok:false מפורשת מהשרת דוחה כניסה.
-     לא מבטלים גישה ל-agents.pin בשלב זה. */
+  /* GI-SEC R9-pre-B — אימות PIN בשרת בלבד.
+     agents.pin לא נשלף לדפדפן. אם RPC נכשל טכנית — לא משווים ל-"0000" מקומי.
+     נפילה מקומית רק אם במקרה נשאר pin בזיכרון (מטמון ישן) — אחרת מבקשים לנסות שוב. */
   async function verifyAgentPinForLogin(agent, pin){
     const typed = safeTrim(pin);
-    const expectedLocal = safeTrim(agent?.pin) || "0000";
+    const expectedLocal = safeTrim(agent?.pin);
     const loginName = safeTrim(agent?.username) || safeTrim(agent?.name);
     try {
       const client = Storage.getClient?.();
@@ -4841,14 +4842,17 @@
           }
         }
         if(error){
-          try { console.warn("GI_VERIFY_AGENT_LOGIN_FALLBACK:", safeTrim(error?.message || error)); } catch(_e) {}
+          try { console.warn("GI_VERIFY_AGENT_LOGIN_ERROR:", safeTrim(error?.message || error)); } catch(_e) {}
         }
       }
     } catch(err) {
-      try { console.warn("GI_VERIFY_AGENT_LOGIN_FALLBACK:", safeTrim(err?.message || err)); } catch(_e) {}
+      try { console.warn("GI_VERIFY_AGENT_LOGIN_ERROR:", safeTrim(err?.message || err)); } catch(_e) {}
     }
-    if(typed !== expectedLocal) return { ok:false, source:"local", error:"קוד כניסה שגוי" };
-    return { ok:true, source:"local" };
+    if(expectedLocal){
+      if(typed !== expectedLocal) return { ok:false, source:"local", error:"קוד כניסה שגוי" };
+      return { ok:true, source:"local" };
+    }
+    return { ok:false, source:"server_unavailable", error:"לא ניתן לאמת מול השרת כרגע. נסו שוב בעוד רגע." };
   }
 
   function normalizeAgentLabelToken(value){
@@ -13552,7 +13556,7 @@
                 id: aid,
                 name: safeTrim(a?.name) || "נציג",
                 username: safeTrim(a?.username) || safeTrim(a?.name) || "נציג",
-                pin: safeTrim(a?.pin) || "0000",
+                // GI-SEC R9-pre-B: do not persist pins into app_meta.agentsShadow
                 birthDate: safeTrim(a?.birthDate || a?.birth_date),
                 email: safeTrim(a?.email) || null,
                 monthlySalesTarget: storeT > 0 ? storeT : recT,
@@ -14179,7 +14183,7 @@
           id: safeTrim(row?.id) || ("a_" + idx),
           name: safeTrim(row?.name),
           username: safeTrim(row?.username),
-          pin: safeTrim(row?.pin),
+          // GI-SEC R9-pre-B: ignore legacy pin fields from meta shadow
           birthDate: safeTrim(row?.birthDate || row?.birth_date),
           email: safeTrim(row?.email),
           monthlySalesTarget: Number(String(row?.monthlySalesTarget ?? row?.monthly_sales_target ?? '').replace(/[^\d.-]/g, '')) || 0,
@@ -15269,7 +15273,7 @@
 
         const [metaRes, agentsRes, customersRes, proposalsRes] = await Promise.all([
           this.loadMetaRow(),
-          this.loadTableRows(SUPABASE_TABLES.agents),
+          this.loadTableRows(SUPABASE_TABLES.agents, AGENT_PUBLIC_COLUMNS),
           this.loadTableRowsSince(
             SUPABASE_TABLES.customers,
             querySince,
@@ -15486,7 +15490,7 @@
 
         const [metaRes, agentsRes] = await Promise.all([
           this.loadMetaRow(),
-          this.loadTableRows(SUPABASE_TABLES.agents)
+          this.loadTableRows(SUPABASE_TABLES.agents, AGENT_PUBLIC_COLUMNS)
         ]);
 
         const failures = [
@@ -15900,7 +15904,7 @@
 
         const [metaRes, agentsRes, customersLightRes, proposalsLightRes] = await Promise.all([
           this.loadMetaRow(),
-          this.loadTableRows(SUPABASE_TABLES.agents),
+          this.loadTableRows(SUPABASE_TABLES.agents, AGENT_PUBLIC_COLUMNS),
           customersFetch,
           proposalsFetch
         ]);
@@ -19558,7 +19562,12 @@ UsersGateUI.init();
       if(E.id) E.id.value = user ? (user.id || "") : "";
       if(E.name) E.name.value = user ? (user.name || "") : "";
       if(E.username) E.username.value = user ? (user.username || "") : "";
-      if(E.pin) E.pin.value = user ? (user.pin || "") : "0000";
+      if(E.pin){
+        // GI-SEC R9-pre-B: pins are not loaded to the client anymore.
+        // Edit: leave empty (= keep existing server pin). Add: default 0000.
+        E.pin.value = (this._modalMode === "edit") ? "" : "0000";
+        try { E.pin.placeholder = (this._modalMode === "edit") ? "השאר ריק כדי לא לשנות" : ""; } catch(_e) {}
+      }
       if(E.birthDate) E.birthDate.value = user ? (user.birthDate || "") : "";
       if(E.monthlyTarget){
         if(user && typeof getAgentMonthlyTarget === 'function'){
@@ -19840,9 +19849,11 @@ UsersGateUI.init();
       let ok = true;
       this._showErr(E.nameErr, name ? "" : "נא להזין שם");
       this._showErr(E.userErr, username ? "" : "נא להזין שם משתמש");
-      this._showErr(E.pinErr, pin ? "" : "נא להזין PIN");
+      // GI-SEC R9-pre-B: on edit, empty PIN means "do not change existing server PIN"
+      const pinRequired = !(this._modalMode === "edit" && !pin);
+      this._showErr(E.pinErr, pinRequired ? (pin ? "" : "נא להזין PIN") : "");
       this._showErr(E.birthDateErr, birthDate ? "" : "נא להזין תאריך לידה");
-      if(!name || !username || !pin || !birthDate) ok = false;
+      if(!name || !username || (pinRequired && !pin) || !birthDate) ok = false;
 
       if(!ok){
         this._showErr(E.err, "חסרים שדות חובה");
@@ -19886,7 +19897,7 @@ UsersGateUI.init();
         const agentNow = nowISO();
         a.name = name;
         a.username = username;
-        a.pin = pin;
+        if(pin) a.pin = pin; // empty on edit => omit from upsert, keep server pin
         a.birthDate = birthDate;
         a.monthlySalesTarget = monthlySalesTarget;
         a.role = resolveAgentRoleCode(role);
@@ -56410,7 +56421,7 @@ const ClalRiskLifePdf = {
       id: safeTrim(row?.id) || ("a_" + idx),
       name: safeTrim(row?.name),
       username: safeTrim(row?.username),
-      pin: safeTrim(row?.pin),
+      // GI-SEC R9-pre-B: ignore legacy pin fields from meta shadow
       birthDate: safeTrim(row?.birthDate || row?.birth_date),
       monthlySalesTarget: Number(String(row?.monthlySalesTarget ?? row?.monthly_sales_target ?? '').replace(/[^\d.-]/g, '')) || 0,
       role: safeTrim(row?.role) || "agent",
