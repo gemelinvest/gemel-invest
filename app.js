@@ -4813,6 +4813,44 @@
     return { agent:null, error:"שם משתמש לא נמצא" };
   }
 
+  /* GI-SEC 2026-09-13 — אימות PIN בשרת עם נפילה אוטומטית למסלול הישן.
+     אפס סיכון לכניסה: אם RPC gi_verify_agent_login חסר/נכשל טכנית — משווים
+     מול matched.pin כמו קודם. רק תשובת ok:false מפורשת מהשרת דוחה כניסה.
+     לא מבטלים גישה ל-agents.pin בשלב זה. */
+  async function verifyAgentPinForLogin(agent, pin){
+    const typed = safeTrim(pin);
+    const expectedLocal = safeTrim(agent?.pin) || "0000";
+    const loginName = safeTrim(agent?.username) || safeTrim(agent?.name);
+    try {
+      const client = Storage.getClient?.();
+      if(client && typeof client.rpc === "function" && loginName){
+        const { data, error } = await client.rpc("gi_verify_agent_login", {
+          p_username: loginName,
+          p_pin: typed
+        });
+        if(!error && data && typeof data === "object"){
+          if(data.ok === true) return { ok:true, source:"server" };
+          if(data.ok === false){
+            const code = safeTrim(data.error);
+            const msg = code === "BAD_PIN" || code === "USER_NOT_FOUND" || code === "MISSING_CREDENTIALS"
+              ? "קוד כניסה שגוי"
+              : (code === "USERNAME_AMBIGUOUS"
+                ? "שם המשתמש לא חד-משמעי. פנה למנהל המערכת."
+                : "קוד כניסה שגוי");
+            return { ok:false, source:"server", error: msg };
+          }
+        }
+        if(error){
+          try { console.warn("GI_VERIFY_AGENT_LOGIN_FALLBACK:", safeTrim(error?.message || error)); } catch(_e) {}
+        }
+      }
+    } catch(err) {
+      try { console.warn("GI_VERIFY_AGENT_LOGIN_FALLBACK:", safeTrim(err?.message || err)); } catch(_e) {}
+    }
+    if(typed !== expectedLocal) return { ok:false, source:"local", error:"קוד כניסה שגוי" };
+    return { ok:true, source:"local" };
+  }
+
   function normalizeAgentLabelToken(value){
     return safeTrim(value)
       .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, "")
@@ -57229,7 +57267,6 @@ const ClalRiskLifePdf = {
       const matched = loginMatch.agent;
       if(!matched) return this._setError(loginMatch.error || 'שם משתמש לא נמצא');
       if(matched.active === false) return this._setError('המשתמש מושבת');
-      const expected = safeTrim(matched.pin) || '0000';
       /* GI-FIX 2026-08-03c — מקור האמת ל-PIN בלבד הוא השרת, לא מטמון מקומי.
          בודקים קודם מול meta; אם הדגל דלוק — כניסת PIN בלבד בלי MFA. */
       let serverPinOnly = false;
@@ -57241,7 +57278,8 @@ const ClalRiskLifePdf = {
       }
       if(serverPinOnly){
         if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
-        if(pin !== expected) return this._setError('קוד כניסה שגוי');
+        const pinCheck = await verifyAgentPinForLogin(matched, pin);
+        if(!pinCheck.ok) return this._setError(pinCheck.error || 'קוד כניסה שגוי');
         await completeAgentLogin(matched);
         return;
       }
@@ -57261,9 +57299,10 @@ const ClalRiskLifePdf = {
         if(authEmail !== safeTrim(sec.authEmail)){
           setAgentSecurity(matched.id, { authEmail, mfaRequired:true });
         }
-      } else if(pin !== expected) {
+      } else {
         if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
-        return this._setError('קוד כניסה שגוי');
+        const pinCheck = await verifyAgentPinForLogin(matched, pin);
+        if(!pinCheck.ok) return this._setError(pinCheck.error || 'קוד כניסה שגוי');
       }
       if(authSigned){
         this._setPrimaryLoginLoading(true, 'פותח אימות דו־שלבי...');
