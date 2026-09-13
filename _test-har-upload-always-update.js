@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260913-chat-dock-louder-v2";
+const TAG = "20260913-chat-dock-louder-v3";
 let failed = 0;
 let passed = 0;
 function assert(cond, msg){
