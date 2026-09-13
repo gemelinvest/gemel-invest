@@ -6174,6 +6174,19 @@
     return ids;
   }
 
+  /* GI-PERF F1.3: open / in-use customer files — filled first, and also
+     filled when mass hydration is skipped. Does not replace the regular
+     full fill (daily sales / KPI still need remaining payloads). */
+  function collectHydrationPriorityIds(){
+    const ids = [];
+    try {
+      getTeamManagerProtectedPayloadIds().forEach((id) => {
+        if(id) ids.push(String(id));
+      });
+    } catch(_e) {}
+    return [...new Set(ids)];
+  }
+
   function trimTeamManagerCustomerPayloadLru(stateLike){
     try {
       if(!Storage?.isTeamManagerLightSession?.()) return stateLike;
@@ -15769,6 +15782,11 @@
       if(this._payloadHydrationRunning) return { ok:false, error:"ALREADY_RUNNING" };
       this._payloadHydrationRunning = true;
       const onBatch = typeof options.onBatch === "function" ? options.onBatch : null;
+      const prioritySet = new Set(
+        (Array.isArray(options.priorityIds) ? options.priorityIds : [])
+          .map((id) => safeTrim(id))
+          .filter(Boolean)
+      );
       let filled = 0;
       let failed = 0;
       try {
@@ -15779,9 +15797,19 @@
         for(const spec of specs){
           const list = Array.isArray(State.data?.[spec.key]) ? State.data[spec.key] : [];
           if(!list.length) continue;
-          const pending = list.filter((rec) => this.payloadIsEmpty(rec))
+          let pending = list.filter((rec) => this.payloadIsEmpty(rec))
                               .map((rec) => safeTrim(rec?.id))
                               .filter(Boolean);
+          // GI-PERF F1.3: open files first. The rest still fill — do not cap.
+          if(spec.key === "customers" && prioritySet.size){
+            const first = [];
+            const rest = [];
+            pending.forEach((id) => {
+              if(prioritySet.has(id)) first.push(id);
+              else rest.push(id);
+            });
+            pending = first.concat(rest);
+          }
           if(!pending.length) continue;
 
           for(let i = 0; i < pending.length; i += PAYLOAD_HYDRATION_BATCH_SIZE){
@@ -54911,8 +54939,24 @@ const ClalRiskLifePdf = {
       }, wait);
     },
 
+    /* GI-PERF F1.3: fill currently-open files via the same path as clicking a file.
+       Used when mass hydration is skipped (large / team-manager). */
+    hydrateOpenWorkingSetPayloads(ids){
+      const list = (Array.isArray(ids) ? ids : collectHydrationPriorityIds())
+        .map((id) => safeTrim(id))
+        .filter(Boolean);
+      if(!list.length) return;
+      void (async () => {
+        for(const id of list){
+          if(!Auth?.current) return;
+          try { await Storage.ensureRecordPayload("customers", id); } catch(_e) {}
+        }
+      })();
+    },
+
     startPayloadHydration(){
       if(this._payloadHydrationStarted) return;
+      const priorityIds = collectHydrationPriorityIds();
       // GI-PERF 2026-08-10: בסשן ענק אין hydrate המוני — פתיחת תיק דרך ensureRecordPayload.
       if(Storage.isLargeCustomersSession?.()){
         try { console.warn("LARGE_SESSION_SKIP_MASS_HYDRATION"); } catch(_e) {}
@@ -54922,6 +54966,7 @@ const ClalRiskLifePdf = {
             "warn"
           );
         } catch(_e) {}
+        if(priorityIds.length) this.hydrateOpenWorkingSetPayloads(priorityIds);
         return;
       }
       // GI-PERF 2026-08-23 / 08-25: מנהל צוות — בלי hydration המוני (אותו רעיון כמו Large Session).
@@ -54934,6 +54979,7 @@ const ClalRiskLifePdf = {
               "warn"
             );
           } catch(_e2) {}
+          if(priorityIds.length) this.hydrateOpenWorkingSetPayloads(priorityIds);
           return;
         }
       } catch(_e) {}
@@ -54949,6 +54995,7 @@ const ClalRiskLifePdf = {
         try {
           UI.renderSyncStatus("טוען פרטי לקוחות ברקע…", "warn");
           const res = await GiPerf.runAsync("hydration:total", () => Storage.hydratePayloads({
+            priorityIds,
             onBatch: () => {
               // מרוסן: לכל היותר רענון אחד ב-PAYLOAD_HYDRATION_REFRESH_MIN_GAP_MS.
               try { this.scheduleHydrationViewRefresh(); } catch(_e) {}
