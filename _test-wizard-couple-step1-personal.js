@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260913-chat-dock-louder-v3";
+const TAG = "20260913-clal-health-decl-v3";
 let failed = 0;
 let passed = 0;
 
