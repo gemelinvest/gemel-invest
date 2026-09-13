@@ -11,8 +11,8 @@
 |--------|------|--------|-------------|-------------------|--------|
 | 0 | OPS | מחיקת שורת `__audit_probe_cust__` ב־SQL Editor (service role) | נמוך | כן (גישת service) | ממתין |
 | 1 | R1 | אימות RLS חוזר (קריאה בלבד) — `node scripts/r1-verify-anon-access.mjs` | אין | לא | **הושלם** |
-| 2a | R9-pre-A | RPC `gi_verify_agent_login` + כניסה עם fallback מקומי (בלי REVOKE) | נמוך (אפס סיכון לכניסה) | מאושר להתחיל | **בקוד / ממתין להרצת SQL בפרודקשן** |
-| 2b | R9-pre-B | הסתרת `agents.pin` מ־anon רק אחרי ש־2a מוכח בפרודקשן | בינוני | **כן — נפרד** | חסום עד 2a |
+| 2a | R9-pre-A | RPC `gi_verify_agent_login` + כניסה עם fallback מקומי (בלי REVOKE) | נמוך (אפס סיכון לכניסה) | מאושר | **הושלם בפרודקשן** |
+| 2b | R9-pre-B | הסתרת `agents.pin` מ־anon/authenticated + טעינת agents בלי pin | בינוני | מאושר | **DB בפרודקשן + קוד ב־PR** |
 | 3 | R5 | הסרת ברירות מחדל `1234` / `0000` / `1990` מהקוד הפועל | נמוך–בינוני | **כן** | ממתין |
 | 4 | R4 | הקשחת Edge Functions (`verify_jwt` / secret / בדיקת actor) | בינוני | **כן** | ממתין |
 | 5 | R2 | תכנון + מעבר הדרגתי ל־Supabase Auth + RLS לפי `app_metadata` | **גבוה** | **כן** (תכנון נפרד) | ממתין |
@@ -31,10 +31,10 @@
 2. בקוד: `verifyAgentPinForLogin` קורא ל־RPC; אם RPC חסר/נכשל טכנית — נשאר מסלול PIN הישן.
 3. **לא** מסתירים עמודת `pin` בשלב זה.
 
-**R9-pre-B (רק אחרי אישור נפרד):**
-הסתרת `agents.pin` מ־anon — רק אחרי שווידאנו בפרודקשן שהכניסה עוברת דרך ה־RPC.
-
-> **לא להריץ REVOKE על `pin` לפני ש־R9-pre-A מוכח בפרודקשן.**
+**R9-pre-B (אחרי ש־2a הוכח בפרודקשן):**
+1. הרצת [`supabase-gi-hide-agent-pins.sql`](../supabase-gi-hide-agent-pins.sql): `REVOKE SELECT` ברמת טבלה + `GRANT SELECT` לעמודות בלי `pin`.
+2. בקוד: `AGENT_PUBLIC_COLUMNS` (בלי pin), כניסה דרך RPC בלבד (ללא ברירת מחדל `0000`), ו־agentsShadow בלי pin.
+3. עריכת משתמש: PIN ריק = לא לשנות את ה־PIN בשרת.
 
 ---
 
