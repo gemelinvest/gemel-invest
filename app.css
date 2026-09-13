@@ -9614,7 +9614,7 @@ body.lcLeadShellOpen .lcLeadShell__panel{
   gap:8px;
   z-index:10050;
   pointer-events:none;
-  max-width:min(300px, calc(100vw - 28px));
+  max-width:min(440px, calc(100vw - 28px));
   max-height:calc(100vh - 96px);
   overflow:auto;
 }
@@ -9622,9 +9622,9 @@ body.lcLeadShellOpen .lcLeadShell__panel{
   position:relative;
   pointer-events:auto;
   width:100%;
-  min-width:220px;
-  padding:12px 14px 10px;
-  border-radius:16px;
+  min-width:300px;
+  padding:18px 20px 16px;
+  border-radius:20px;
   background:rgba(255,255,255,.28);
   border:1px solid rgba(255,255,255,.42);
   color:rgba(15,23,42,.82);
@@ -9636,15 +9636,15 @@ body.lcLeadShellOpen .lcLeadShell__panel{
 @keyframes giChatDockIn{ from{ opacity:0; transform:translateX(-10px); } to{ opacity:1; transform:translateX(0); } }
 .giChatDockCard__dismiss{
   position:absolute;
-  top:6px;
-  left:6px;
-  width:22px;
-  height:22px;
+  top:8px;
+  left:8px;
+  width:28px;
+  height:28px;
   border:0;
   border-radius:999px;
   background:transparent;
   color:rgba(15,23,42,.45);
-  font-size:15px;
+  font-size:18px;
   line-height:1;
   cursor:pointer;
 }
@@ -9655,17 +9655,17 @@ body.lcLeadShellOpen .lcLeadShell__panel{
 .giChatDockCard__row{
   display:flex;
   align-items:flex-start;
-  gap:10px;
-  padding-left:18px;
+  gap:12px;
+  padding-left:22px;
 }
 .giChatDockCard__avatar{
   flex:0 0 auto;
-  width:32px;
-  height:32px;
-  border-radius:11px;
+  width:48px;
+  height:48px;
+  border-radius:14px;
   display:grid;
   place-items:center;
-  font-size:11px;
+  font-size:14px;
   font-weight:800;
   background:rgba(255,255,255,.42);
   border:1px solid rgba(255,255,255,.5);
@@ -9679,18 +9679,18 @@ body.lcLeadShellOpen .lcLeadShell__panel{
 }
 .giChatDockCard__main{ min-width:0; flex:1; }
 .giChatDockCard__name{
-  font-size:13px;
+  font-size:17px;
   font-weight:800;
   line-height:1.3;
-  margin-bottom:2px;
+  margin-bottom:4px;
   color:rgba(15,23,42,.88);
 }
 .giChatDockCard__text{
-  font-size:12px;
-  line-height:1.45;
+  font-size:15px;
+  line-height:1.5;
   color:rgba(15,23,42,.68);
   display:-webkit-box;
-  -webkit-line-clamp:3;
+  -webkit-line-clamp:5;
   -webkit-box-orient:vertical;
   overflow:hidden;
 }
@@ -9707,8 +9707,8 @@ body.lcLeadShellOpen .lcLeadShell__panel{
 .giChatDockCard__send{
   border:0;
   border-radius:999px;
-  padding:5px 12px;
-  font-size:12px;
+  padding:9px 16px;
+  font-size:14px;
   font-weight:800;
   cursor:pointer;
   background:rgba(255,255,255,.42);
@@ -9742,9 +9742,9 @@ body.lcLeadShellOpen .lcLeadShell__panel{
   background:rgba(255,255,255,.38);
   color:rgba(15,23,42,.88);
   font:inherit;
-  font-size:12px;
-  line-height:1.4;
-  padding:8px 10px;
+  font-size:14px;
+  line-height:1.45;
+  padding:10px 12px;
   outline:none;
 }
 .giChatDockCard__input:focus{
@@ -16479,7 +16479,7 @@ body.lcLeadShellOpen .lcLeadShell__panel{
   gap:8px;
   z-index:10050;
   pointer-events:none;
-  max-width:min(300px, calc(100vw - 28px));
+  max-width:min(440px, calc(100vw - 28px));
   max-height:calc(100vh - 96px);
   overflow:auto;
 }
@@ -16487,9 +16487,9 @@ body.lcLeadShellOpen .lcLeadShell__panel{
   position:relative;
   pointer-events:auto;
   width:100%;
-  min-width:220px;
-  padding:12px 14px 10px;
-  border-radius:16px;
+  min-width:300px;
+  padding:18px 20px 16px;
+  border-radius:20px;
   background:rgba(255,255,255,.28);
   border:1px solid rgba(255,255,255,.42);
   color:rgba(15,23,42,.82);
@@ -16501,15 +16501,15 @@ body.lcLeadShellOpen .lcLeadShell__panel{
 @keyframes giChatDockIn{ from{ opacity:0; transform:translateX(-10px); } to{ opacity:1; transform:translateX(0); } }
 .giChatDockCard__dismiss{
   position:absolute;
-  top:6px;
-  left:6px;
-  width:22px;
-  height:22px;
+  top:8px;
+  left:8px;
+  width:28px;
+  height:28px;
   border:0;
   border-radius:999px;
   background:transparent;
   color:rgba(15,23,42,.45);
-  font-size:15px;
+  font-size:18px;
   line-height:1;
   cursor:pointer;
 }
@@ -16520,17 +16520,17 @@ body.lcLeadShellOpen .lcLeadShell__panel{
 .giChatDockCard__row{
   display:flex;
   align-items:flex-start;
-  gap:10px;
-  padding-left:18px;
+  gap:12px;
+  padding-left:22px;
 }
 .giChatDockCard__avatar{
   flex:0 0 auto;
-  width:32px;
-  height:32px;
-  border-radius:11px;
+  width:48px;
+  height:48px;
+  border-radius:14px;
   display:grid;
   place-items:center;
-  font-size:11px;
+  font-size:14px;
   font-weight:800;
   background:rgba(255,255,255,.42);
   border:1px solid rgba(255,255,255,.5);
@@ -16544,18 +16544,18 @@ body.lcLeadShellOpen .lcLeadShell__panel{
 }
 .giChatDockCard__main{ min-width:0; flex:1; }
 .giChatDockCard__name{
-  font-size:13px;
+  font-size:17px;
   font-weight:800;
   line-height:1.3;
-  margin-bottom:2px;
+  margin-bottom:4px;
   color:rgba(15,23,42,.88);
 }
 .giChatDockCard__text{
-  font-size:12px;
-  line-height:1.45;
+  font-size:15px;
+  line-height:1.5;
   color:rgba(15,23,42,.68);
   display:-webkit-box;
-  -webkit-line-clamp:3;
+  -webkit-line-clamp:5;
   -webkit-box-orient:vertical;
   overflow:hidden;
 }
@@ -16572,8 +16572,8 @@ body.lcLeadShellOpen .lcLeadShell__panel{
 .giChatDockCard__send{
   border:0;
   border-radius:999px;
-  padding:5px 12px;
-  font-size:12px;
+  padding:9px 16px;
+  font-size:14px;
   font-weight:800;
   cursor:pointer;
   background:rgba(255,255,255,.42);
@@ -16607,9 +16607,9 @@ body.lcLeadShellOpen .lcLeadShell__panel{
   background:rgba(255,255,255,.38);
   color:rgba(15,23,42,.88);
   font:inherit;
-  font-size:12px;
-  line-height:1.4;
-  padding:8px 10px;
+  font-size:14px;
+  line-height:1.45;
+  padding:10px 12px;
   outline:none;
 }
 .giChatDockCard__input:focus{
