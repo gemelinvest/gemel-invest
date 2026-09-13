@@ -1,6 +1,6 @@
 /* GI-HACH-DISC-APPLY 2026-09-08
    הכשרה — מחלות קשות / ריסק / ריסק משכנתא:
-   הנחה שנבחרה בסימולטור מחושבת על הפרמיה הצמודה (שנה ראשונה)
+   הנחה שנבחרה בסימולטור מחושבת על פרמיית התעריפון (שנה ראשונה)
    ונשמרת לפרמיה אחרי הנחה בהצעה, גם ב-«החל על הפוליסה».
    הרצה: node _test-hachshara-disc.js
 */
@@ -12,7 +12,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260910-cf-open-paint-v1";
+const TAG = "20260913-hach-sikunim-no-cpi-v6";
 let failed = 0;
 let passed = 0;
 
@@ -261,11 +261,11 @@ cases.forEach((c) => {
   const apiAfter = discApi.afterMonthly(Object.assign({ ok: true }, q), chosen);
   assert(engineAfter === expected, c.product + " engine after = " + expected + " (gross " + q.monthlyPremium + " − " + c.year1 + "%)");
   assert(apiAfter === expected, c.product + " GiSimulatorDiscounts.afterMonthly matches engine");
-  assert(engineAfter < q.monthlyPremium, c.product + " after-discount is lower than indexed gross");
+  assert(engineAfter < q.monthlyPremium, c.product + " after-discount is lower than tariff gross");
   if(Number.isFinite(q.baseMonthlyPremium)){
     const onBase = moneyAfterPct(q.baseMonthlyPremium, c.year1);
     assert(engineAfter !== onBase || q.baseMonthlyPremium === q.monthlyPremium,
-      c.product + " discount is on indexed premium, not book base");
+      c.product + " discount is on tariff premium (no separate CPI base)");
   }
 
   const handler = RiskSimulators.getHandler("הכשרה", c.product);
@@ -278,7 +278,7 @@ cases.forEach((c) => {
   const built = handler._buildResultForInsured("i1");
   assert(!!built, c.product + " _buildResultForInsured returns a result");
   assert(built.ok === true, c.product + " wrapped result has ok:true");
-  assert(Math.abs(Number(built.monthlyPremium) - Number(q.monthlyPremium)) < 0.001, c.product + " wrap keeps indexed gross");
+  assert(Math.abs(Number(built.monthlyPremium) - Number(q.monthlyPremium)) < 0.001, c.product + " wrap keeps tariff gross");
   assert(!!built.simDiscount, c.product + " wrap attaches simDiscount (החל על הפוליסה)");
   assert(built.simDiscount.optionId === c.optionId, c.product + " wrap keeps option id");
   assert(built.simDiscount.year1Pct === c.year1, c.product + " wrap year-1 pct");
@@ -299,12 +299,12 @@ cases.forEach((c) => {
 const ciGold = quote("הכשרה", "מחלות קשות", { age: 43, gender: "זכר", smoker: false, compensation: 100000 });
 const riskGold = quote("הכשרה", "ריסק", { age: 40, gender: "זכר", smoker: false, sumInsured: 1000000 });
 const mortGold = quote("הכשרה", "ריסק משכנתא", { age: 40, gender: "זכר", smoker: false, sumInsured: 1000000 });
-assert(ciGold && ciGold.monthlyPremium === 103.89, "CI indexed gross ₪103.89 (for 40% → ₪62.33)");
-assert(moneyAfterPct(103.89, 40) === 62.33, "CI 40% of ₪103.89 is ₪62.33");
-assert(riskGold && riskGold.monthlyPremium === 96.20, "risk indexed gross ₪96.20 (for 55% → ₪43.29)");
-assert(moneyAfterPct(96.20, 55) === 43.29, "risk 55% of ₪96.20 is ₪43.29");
-assert(mortGold && mortGold.monthlyPremium === 88.79, "mortgage indexed gross ₪88.79 (for 55% → ₪39.96)");
-assert(moneyAfterPct(88.79, 55) === 39.96, "mortgage 55% of ₪88.79 is ₪39.96");
+assert(ciGold && ciGold.monthlyPremium === 93.6, "CI tariff gross ₪93.60 (for 40% → ₪56.16)");
+assert(moneyAfterPct(93.6, 40) === 56.16, "CI 40% of ₪93.60 is ₪56.16");
+assert(riskGold && riskGold.monthlyPremium === 86.67, "risk tariff gross ₪86.67 (for 55% → ₪39.00)");
+assert(moneyAfterPct(86.67, 55) === 39.00, "risk 55% of ₪86.67 is ₪39.00");
+assert(mortGold && mortGold.monthlyPremium === 80, "mortgage tariff gross ₪80.00 (for 55% → ₪36.00)");
+assert(moneyAfterPct(80, 55) === 36.00, "mortgage 55% of ₪80.00 is ₪36.00");
 
 const extraRisk = discApi.list("הכשרה", "ריסק");
 extraRisk.forEach((opt) => {
