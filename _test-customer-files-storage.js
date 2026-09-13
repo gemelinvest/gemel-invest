@@ -79,7 +79,7 @@ assert(!showFn.includes("triggerDataUrlDownload"), "preview still does not downl
 const resolveFn = sliceBetween(app, "async resolveDocumentBytes(rec, doc){", "async downloadSelectedCustomerDocuments(rec){");
 assert(resolveFn.includes("companyCancelForm"), "generated cancel PDFs still filled");
 assert(resolveFn.includes("followupQuestionnaire"), "generated followup PDFs still filled");
-assert(resolveFn.includes("GiCustomerFileStore.hydrate"), "uploaded bytes resolved from storage when needed");
+assert(resolveFn.includes("GiCustomerFileStore.readBytes"), "uploaded bytes resolved from storage when needed");
 
 console.log("\n5) runtime: generated blobs stripped, uploaded blobs offloaded, failure keeps dataUrl");
 function safeTrim(v){ return String(v == null ? "" : v).trim(); }
@@ -114,10 +114,7 @@ const mockStorage = {
         const row = objects.get(bucket + "/" + path);
         if(!row) return { data: null, error: { message: "not found" } };
         return {
-          data: {
-            type: row.type,
-            arrayBuffer: async () => row.buf
-          },
+          data: new TestBlob([row.buf], { type: row.type }),
           error: null
         };
       }
@@ -140,6 +137,9 @@ class TestBlob {
     this.type = (opts && opts.type) || "";
     this.size = this._buf.byteLength || 0;
   }
+  async arrayBuffer(){
+    return this._buf;
+  }
 }
 
 const storeSrc = sliceBetween(
@@ -149,6 +149,7 @@ const storeSrc = sliceBetween(
 );
 assert(!!storeSrc && storeSrc.includes("preparePayloadForPersist"), "extracted GiCustomerFileStore source");
 
+const blobUrls = [];
 const sandbox = {
   window: {},
   ArrayBuffer,
@@ -169,6 +170,13 @@ const sandbox = {
   },
   Storage: { getClient(){ return { storage: mockStorage }; } },
   Blob: TestBlob,
+  URL: {
+    createObjectURL(blob){
+      blobUrls.push(blob);
+      return "blob:gi-test/" + blobUrls.length;
+    },
+    revokeObjectURL(){}
+  },
   Date,
   console
 };
@@ -216,9 +224,13 @@ assert(!!payload.customerDocuments[1].dataUrl, "har bituach dataUrl kept until u
   assert(!store.payloadNeedsPersistSlim(payload), "slim payload does not need another persist");
 
   const hydrated = await store.hydrate(payload.customerDocuments[1]);
-  assert(/^data:/.test(hydrated), "hydrate returns dataUrl for the selected file");
+  assert(/^blob:/.test(hydrated), "hydrate returns blob URL for the selected file");
+  assert(!/^data:/.test(hydrated), "hydrate does not encode the file to base64");
   assert(!payload.customerDocuments[1].dataUrl, "hydrate does not write enumerable dataUrl back");
   assert(!!Object.getOwnPropertyDescriptor(payload.customerDocuments[1], "_giHydratedDataUrl"), "hydrate cache is memory-only");
+  const bytes = await store.readBytes(payload.customerDocuments[1]);
+  assert(!!bytes && bytes.byteLength > 0, "readBytes returns stored file bytes");
+  assert(Buffer.from(bytes).toString() === "xlsx", "readBytes matches the uploaded workbook");
 
   const persistJson = JSON.parse(JSON.stringify(payload));
   assert(!persistJson.customerDocuments[1].dataUrl, "JSON persist copy has no har blob");
