@@ -335,10 +335,11 @@ console.log("\n8) hachshara named health + editor + insured payment");
 const ciRows = H.hachsharaHealthRows("ci");
 assert(ciRows[0] && ciRows[0].smoke === true, "CI smoking is named onto IsSmoking");
 assert(ciRows[1] && ciRows[1].q === 1 && (ciRows[1].keys || []).indexOf("hachshara_crit__hospitalization") >= 0, "CI Q1 is hospitalization");
-assert(ciRows.filter((r) => r.q).length === 29, "CI has 29 health radios");
-assert((ciRows.find((r) => r.q === 28)?.keys || []).indexOf("hachshara_crit__infant_1") >= 0, "CI infant_1 maps to Q28");
-assert((ciRows.find((r) => r.q === 29)?.keys || []).indexOf("hachshara_crit__infant_2") >= 0, "CI infant_2 maps to Q29");
+assert(ciRows.filter((r) => r.q).length === 27, "CI maps 27 MainQ radios (PDF max Q27)");
+assert(!ciRows.some((r) => r.q === 28 || r.q === 29), "CI has no phantom Q28/Q29 (infants have no AcroForm)");
+assert((ciRows.find((r) => r.q === 5)?.keys || []).indexOf("hachshara_crit__memory") >= 0, "CI Q5 is memory");
 assert((ciRows.find((r) => r.q === 11)?.keys || []).indexOf("hachshara_crit__heart_disease") >= 0, "CI heart accepts legacy heart_disease key");
+assert((ciRows.find((r) => r.q === 27)?.keys || []).indexOf("hachshara_crit__family_critical") >= 0, "CI Q27 is family critical");
 const healthRows = H.hachsharaHealthRows("health");
 assert(healthRows[0] && healthRows[0].smoke === true, "health smoking is named onto IsSmoking");
 assert(healthRows.filter((r) => r.q).length === 29, "health form has 29 declaration radios");
@@ -357,11 +358,13 @@ assert(capHealthForm.HealthDecMainQ1 === "2", "health form Q1 hospitalization no
 assert(capHealthForm.HealthDecMainQ5 === "1", "health form Q5 breath_chest yes");
 const fullRows = H.hachsharaHealthRows("life_full");
 assert(fullRows[0] && fullRows[0].smoke === true, "full smoking is named");
-assert(fullRows.filter((r) => r.q).length === 25, "full has 25 health radios");
-assert((fullRows.find((r) => r.q === 21)?.keys || []).indexOf("hachshara_risk_f__b15") >= 0, "full b15 maps to Q21");
-assert((fullRows.find((r) => r.q === 25)?.keys || []).indexOf("hachshara_risk_f__b19") >= 0, "full b19 maps to Q25");
+assert(fullRows.filter((r) => r.q).length === 20, "full maps 20 MainQ radios (PDF max Q20)");
+assert(!fullRows.some((r) => r.q >= 21), "full has no phantom Q21–Q25 (b15–b19 have no AcroForm)");
+assert((fullRows.find((r) => r.q === 20)?.keys || []).indexOf("hachshara_risk_f__b14") >= 0, "full Q20 is b14 glands");
 assert(fullRows[7] && fullRows[7].q === 7 && (fullRows[7].keys || []).indexOf("hachshara_risk_f__b1") >= 0, "full b1 maps to Q7");
 assert((fullRows[1].keys || []).indexOf("hachshara_risk_f__q1") >= 0, "full Q1 accepts legacy q1 key");
+const mortFullRows = H.hachsharaHealthRows("mortgage_full");
+assert(mortFullRows.filter((r) => r.q).length === 20, "mortgage full also stops at Q20");
 const shortRows = H.hachsharaHealthRows("life_short");
 assert(shortRows[0] && shortRows[0].smoke === true, "short smoking is named");
 assert(shortRows[1] && shortRows[1].q === 1 && (shortRows[1].keys || []).indexOf("hachshara_risk_s__q1") >= 0, "short Q1 is q1");
@@ -400,7 +403,8 @@ H.applyMappedHealthYesNo({ __giCapture: capFullB19 }, {
   responses: { hachshara_risk_f__b19: { p1: { answer: "yes" } } },
   primaryId: "p1"
 });
-assert(capFullB19.HealthDecMainQ25 === "1", "full b19 fills Q25");
+assert(!capFullB19.HealthDecMainQ25, "full b19 no longer paints phantom Q25");
+assert(!Object.keys(capFullB19).some((k) => /^HealthDecMainQ/.test(k)), "full b19 has no MainQ radio on PDF");
 const capCancer = {};
 H.applyMappedHealthYesNo({ __giCapture: capCancer }, {
   map: "migdal_cancer",
@@ -489,7 +493,7 @@ H.applyMappedHealthYesNo({ __giCapture: capRiskOnCi }, {
   primaryId: "p1"
 });
 assert(capRiskOnCi.HealthDecMainQ1 === "2", "CI Q1 fills from risk-short hospitalization");
-assert(capRiskOnCi.HealthDecMainQ28 === "2", "CI infant_1 accepts health-master infant key");
+assert(!capRiskOnCi.HealthDecMainQ28, "CI infant_1 no longer paints phantom Q28");
 const mergedHealth = H.healthResponses({
   primary: { healthDeclaration: { responses: {} } },
   insureds: [

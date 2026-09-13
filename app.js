@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260913-phoenix-health-decl-v1";
+  const BUILD = "20260913-hachshara-health-decl-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -41385,9 +41385,9 @@ UsersGateUI.init();
             { q: 24, keys: ["hachshara_crit__hernia", "hachshara__hernia"] },
             { q: 25, keys: ["hachshara_crit__female", "hachshara__female", "hachshara_risk_f__b18"] },
             { q: 26, keys: ["hachshara_crit__child_dev", "hachshara__child_dev", "hachshara_risk_f__b19"] },
-            { q: 27, keys: ["hachshara_crit__family_critical", "hachshara__family_critical", "hachshara_risk_f__a1"] },
-            { q: 28, keys: ["hachshara_crit__infant_1", "hachshara__infant_1"] },
-            { q: 29, keys: ["hachshara_crit__infant_2", "hachshara__infant_2"] }
+            { q: 27, keys: ["hachshara_crit__family_critical", "hachshara__family_critical", "hachshara_risk_f__a1"] }
+            // CI join PDF has HealthDecMainQ1–27 only. Infant wizard keys stay for
+            // follow-ups; they have no AcroForm radios on this form.
           ],
           health: [
             { smoke: true, keys: ["hachshara__smoking", "hachshara_crit__smoking"] },
@@ -41443,12 +41443,9 @@ UsersGateUI.init();
             { q: 17, keys: ["hachshara_risk_f__b11", "hachshara__musculoskeletal", "hachshara_crit__musculoskeletal"] },
             { q: 18, keys: ["hachshara_risk_f__b12", "hachshara__cancer", "hachshara_crit__cancer"] },
             { q: 19, keys: ["hachshara_risk_f__b13", "hachshara__autoimmune", "hachshara_crit__autoimmune"] },
-            { q: 20, keys: ["hachshara_risk_f__b14", "hachshara__glands", "hachshara_crit__glands"] },
-            { q: 21, keys: ["hachshara_risk_f__b15", "hachshara__eyes", "hachshara_crit__eyes"] },
-            { q: 22, keys: ["hachshara_risk_f__b16", "hachshara__ent", "hachshara_crit__ent"] },
-            { q: 23, keys: ["hachshara_risk_f__b17"] },
-            { q: 24, keys: ["hachshara_risk_f__b18", "hachshara__female", "hachshara_crit__female"] },
-            { q: 25, keys: ["hachshara_risk_f__b19", "hachshara__child_dev", "hachshara_crit__child_dev"] }
+            { q: 20, keys: ["hachshara_risk_f__b14", "hachshara__glands", "hachshara_crit__glands"] }
+            // Life-full join PDF stops at HealthDecMainQ20 (ב.14 glands). Wizard
+            // b15–b19 (eyes/ENT/hernia/female/child) remain for follow-ups only.
           ],
           life_short: [
             { smoke: true, keys: ["hachshara_risk_s__smoking", "hachshara_mort_s__smoking", "hachshara_crit__smoking", "hachshara__smoking"] },
@@ -42039,7 +42036,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260913-phoenix-health-decl-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260913-hachshara-health-decl-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -42059,8 +42056,8 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260913-phoenix-health-decl-v1";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260913-phoenix-health-decl-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260913-hachshara-health-decl-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260913-hachshara-health-decl-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -42713,18 +42710,18 @@ UsersGateUI.init();
     "./ayalon-health-sim.css?v=20260810-sim-mockup-v2",
     "./ayalon-ci-sim.css?v=20260811-ayl-ci-v1",
     "./hachshara-health-sim.css?v=20260810-sim-mockup-v2",
-    "./hachshara-risk-sim.css?v=20260913-phoenix-health-decl-v1",
-    "./hachshara-mortgage-risk-sim.css?v=20260913-phoenix-health-decl-v1",
+    "./hachshara-risk-sim.css?v=20260913-hachshara-health-decl-v1",
+    "./hachshara-mortgage-risk-sim.css?v=20260913-hachshara-health-decl-v1",
     "./migdal-health-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
-    "./menora-ci-sim.css?v=20260913-phoenix-health-decl-v1",
+    "./menora-ci-sim.css?v=20260913-hachshara-health-decl-v1",
     "./clal-health-sim.css?v=20260812-cll-health-v1",
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260913-phoenix-health-decl-v1",
-    "./simulators-shell.css?v=20260913-phoenix-health-decl-v1"
+    "./simulators-center.css?v=20260913-hachshara-health-decl-v1",
+    "./simulators-shell.css?v=20260913-hachshara-health-decl-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -44086,7 +44083,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260913-phoenix-health-decl-v1";
+  const GI_WIZARD_JS_VERSION = "20260913-hachshara-health-decl-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;

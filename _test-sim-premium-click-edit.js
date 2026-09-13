@@ -12,7 +12,7 @@ const assert = require('assert');
 const { spawnSync } = require('child_process');
 
 const ROOT = __dirname;
-const CACHE_TAG = '20260913-phoenix-health-decl-v1';
+const CACHE_TAG = '20260913-hachshara-health-decl-v1';
 
 function read(rel) {
   return fs.readFileSync(path.join(ROOT, rel), 'utf8');
