@@ -37,17 +37,18 @@
     { keys: ["clal_risk_rheumatic"], primaryNo: "Check Box42", primaryYes: "Check Box41", spouseNo: "Check Box64", spouseYes: "gfsxbhgf" },
     { keys: ["clal_mortgage_alcohol"], primaryNo: "Check Box445454", primaryYes: "Check Box435454", spouseNo: "Check Box34", spouseYes: "hnjfhjmkhj" },
     { keys: ["clal_mortgage_drugs"], primaryNo: "Check Box465454", primaryYes: "Check Box45", spouseNo: "Check Box36", spouseYes: "Check Box35" },
-    { keys: ["clal_risk_regular_meds"], primaryNo: "Check Box212", primaryYes: "Check Box211", spouseNo: "Check Box222", spouseYes: "Check Box221", detailPrimary: "Text1", detailSpouse: "Text6" },
-    { keys: ["clal_risk_future_surgery"], primaryNo: "Check Box214", primaryYes: "Check Box213", spouseNo: "Check Box224", spouseYes: "Check Box223", detailPrimary: "Text2", detailSpouse: "Text7" },
-    { keys: ["clal_risk_hospital_surgery"], primaryNo: "Check Box216", primaryYes: "Check Box215", spouseNo: "Check Box226", spouseYes: "Check Box225", detailPrimary: "Text3", detailSpouse: "Text8" },
-    { keys: ["clal_risk_disability"], primaryNo: "Check Box218", primaryYes: "Check Box217", spouseNo: "Check Box228", spouseYes: "Check Box227", detailPrimary: "Text4", detailSpouse: "Text9" }
+    /* שאלות נוספות: בכל עמודה לא מעל כן,פרט (Y גבוה = לא). אומת מול צילום עמוד 3. */
+    { keys: ["clal_risk_regular_meds"], primaryNo: "Check Box211", primaryYes: "Check Box212", spouseNo: "Check Box221", spouseYes: "Check Box222", detailPrimary: "Text1", detailSpouse: "Text6" },
+    { keys: ["clal_risk_future_surgery"], primaryNo: "Check Box213", primaryYes: "Check Box214", spouseNo: "Check Box223", spouseYes: "Check Box224", detailPrimary: "Text2", detailSpouse: "Text7" },
+    { keys: ["clal_risk_hospital_surgery"], primaryNo: "Check Box215", primaryYes: "Check Box216", spouseNo: "Check Box225", spouseYes: "Check Box226", detailPrimary: "Text3", detailSpouse: "Text8" },
+    { keys: ["clal_risk_disability"], primaryNo: "Check Box217", primaryYes: "Check Box218", spouseNo: "Check Box227", spouseYes: "Check Box228", detailPrimary: "Text4", detailSpouse: "Text9" }
   ];
 
   const ClalMortgageForm = {
     TEMPLATE_BASE: "./forms/clal-mortgage/",
     TEMPLATE_FILE: "clal-mortgage-join.pdf",
     FONT_URL: "./fonts/Heebo-Bold.ttf",
-    VERSION: "20260824-clal-mort-v3",
+    VERSION: "20260913-clal-mortgage-health-decl-v1",
     DOC_ID: "doc_clal_mortgage_form",
     DOC_TYPE: "clal_mortgage_form",
     HEALTH_ROWS,
