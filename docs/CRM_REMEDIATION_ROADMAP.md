@@ -1,7 +1,8 @@
 # מפת תיקונים מדורגת — GEMEL INVEST CRM
 
 **מבוסס על:** [`CRM_ARCHITECTURE_AUDIT.md`](CRM_ARCHITECTURE_AUDIT.md) + אימות R1 ב־Production.  
-**תוכנית האבטחה המחייבת מכאן והלאה:** [`CRM_SECURITY_PROGRAM.md`](CRM_SECURITY_PROGRAM.md)  
+**תוכנית האבטחה המחייבת:** [`CRM_SECURITY_PROGRAM.md`](CRM_SECURITY_PROGRAM.md)  
+**נתיב ביצועים מקביל (אושר):** [`CRM_PERFORMANCE_PROGRAM.md`](CRM_PERFORMANCE_PROGRAM.md)  
 **חשוב:** הפעלת policy מצמצמת על `customers` לפני זהות JWT ל־57 המשתמשים הפעילים **תשבור את ה־CRM**. RLS כבר דלוק; רוב ה־policies הן `USING (true)`.
 
 ---
@@ -20,8 +21,12 @@
 | 6 | Pד | מדיניות צל ל־`authenticated` לפי מטריצת תפקידים | נמוך למוצר | **כן** | אחרי שער Pג |
 | 7 | Pה / R2 חיתוך | החלפת `USING (true)` טבלה־טבלה | **גבוה** | **כן** | אחרי שערי Pג+Pד |
 | 8 | Pו / R3 | נעילת Storage `gi-customer-files` + `gi_simulator_saves` | גבוה בלי Pה | אחרי Pה | ממתין |
-| 9 | Pז / R6–R8 | ביצועים: select צר, איחוד sync, hydrate on-demand | נמוך–בינוני | כן | אחרי יציבות גבול, או במקביל בלי לגעת ב־policies |
-| 10 | R10–R14 | ארכיטקטורה ארוכת טווח | משתנה | כן | עתידי |
+| 9a | F0 | ביצועים: מדידת טיימרים + `giPerf` (מנהל/נציג) | אין | **אושר כנתיב** — יישום F0 בנפרד | ממתין לאישור התחלה |
+| 9b | F1 | אוטומציות בדפדפן: מקור sync אחד, backoff, לידים/conflict בלי `select("*")`, hydrate ל־working-set | נמוך–בינוני | אחרי F0 | מקביל ל־Pא–Pד; מוקפא ב־Pה |
+| 9c | F2 | אוטומציות שרת: מייל/עוזר — התנהגות בלבד, בלי לגעת ב־auth | בינוני מקומי | כן | לא באותו PR של Pא |
+| 9d | F3 | ליבת מערכת: `normalizeState`, select צר, `goView` | נמוך–בינוני | אחרי F1 | לא ב־Pה |
+| 9e | F4 | מדידה מחדש + אינדקסים אחרי חיתוך RLS | נמוך | אחרי Pה | ממתין |
+| 10 | R10–R14 | ארכיטקטורה ארוכת טווח (פיצול מונולית וכו') | משתנה | כן | עתידי |
 
 ---
 
@@ -66,6 +71,9 @@
 
 ## הצעד הבא ליישום
 
-רק אחרי אישור מפורש: **Pא על `gi-daily-sales-mail` בלבד**.
+שני אישורים נפרדים, לא אותו PR:
 
-עד אז — קוראים את [`CRM_SECURITY_PROGRAM.md`](CRM_SECURITY_PROGRAM.md) ומאשרים את החלטות סעיף 9 שם.
+1. אבטחה: **Pא על `gi-daily-sales-mail` בלבד**.
+2. ביצועים: **F0 מדידה בלבד** — [`CRM_PERFORMANCE_PROGRAM.md`](CRM_PERFORMANCE_PROGRAM.md).
+
+עד אישור ההתחלה — קוראים את שתי התוכניות. אין נעילת RLS ואין שינוי טיימרים.
