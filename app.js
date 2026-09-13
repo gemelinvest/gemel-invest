@@ -9767,7 +9767,7 @@
       details: { idNumber, source: best.label, policies: summarizeHealthPoliciesForRecovery(best.newPolicies) }
     });
     try { await App.persist("שוחזרה פרמיית בריאות לתיק לקוח"); } catch(_e){}
-    try { CustomersUI.render(); } catch(_e){}
+    try { scheduleVisibleViewRender("health-premium-recovered"); } catch(_e){}
     if(CustomersUI?.currentId && String(CustomersUI.currentId) === String(record.id)){
       try { CustomersUI.refreshOpenCustomerPreservingState(); } catch(_e){}
     }
@@ -9990,14 +9990,8 @@
     });
     pinElementaryReferralLocally(rec.id);
     await persistElementaryReferralsQuiet("הנציג השלים הקמת הצעה — ממתין להפקה");
-    try { ProposalsUI.render(); } catch(_e){}
-    try { AgentElementaryTrackingUI.render(); } catch(_e){}
-    try { ElementaryPendingUI.render(); } catch(_e){}
-    try {
-      focusElementaryDashboardAwaitingIssueTab();
-      ElementaryDashboardUI.refreshAfterReferralChange();
-    } catch(_e){}
-    try { CustomersUI.render(); } catch(_e){}
+    try { focusElementaryDashboardAwaitingIssueTab(); } catch(_e){}
+    try { scheduleVisibleViewRender("elem-agent-setup"); } catch(_e){}
     try {
       window.showToast?.({
         title: "הועבר להפקה",
@@ -10511,8 +10505,7 @@
           : "שיקוף אלמנטרי · מעוניין בבדיקה"
       );
     }
-    try { ElementaryPendingUI.render(); } catch(_e) {}
-    try { ElementaryDashboardUI.refreshAfterReferralChange?.(); } catch(_e) {}
+    try { scheduleVisibleViewRender("elem-mirror-status"); } catch(_e) {}
     return normalized;
   }
 
@@ -12311,7 +12304,7 @@
     }
     payload = activateElementaryPoliciesInPayload(payload, { lifecycleStatus: "active" });
     const ok = await persistCustomerPayloadRecord(cid, payload, "פוליסות אלמנטרי הופעלו לאחר אישור בשיקוף");
-    try { CustomersUI.render(); } catch(_e){}
+    try { scheduleVisibleViewRender("elem-policies-activated"); } catch(_e){}
     try {
       if(CustomersUI?.currentId && String(CustomersUI.currentId) === String(cid)){
         CustomersUI.refreshOpenCustomerPreservingState?.();
@@ -12546,8 +12539,7 @@
       opsTouchedBy: safeTrim(Auth?.current?.name)
     });
     void persistElementaryReferralsQuiet("תפעול נגע בהפניה");
-    try { ProposalsUI.render(); } catch(_e){}
-    try { ElementaryPendingUI.render(); } catch(_e){}
+    try { scheduleVisibleViewRender("elem-ops-touch"); } catch(_e){}
     return updated;
   }
 
@@ -12565,9 +12557,7 @@
       payload: nextPayload
     });
     await persistElementaryReferralsQuiet("הצעה הוכנה — בתהליך הגשה לחברה");
-    try { ProposalsUI.render(); } catch(_e){}
-    try { ElementaryPendingUI.render(); } catch(_e){}
-    try { CustomersUI.render(); } catch(_e){}
+    try { scheduleVisibleViewRender("elem-proposal-ready"); } catch(_e){}
     return updated;
   }
 
@@ -12584,9 +12574,7 @@
     });
     schedulePersistElementaryReferralsQuiet("אלמנטרי התחיל טיפול");
     if(options.skipRender !== true){
-      try { ProposalsUI.render(); } catch(_e){}
-      try { ElementaryPendingUI.render(); } catch(_e){}
-      try { ElementaryDashboardUI.refreshAfterReferralChange(); } catch(_e){}
+      try { scheduleVisibleViewRender("elem-handling"); } catch(_e){}
     }
     return updated;
   }
@@ -12625,9 +12613,7 @@
       details: { agentName: rec.agentName, quoteCount: quotes.length }
     });
     await persistElementaryReferralsQuiet("נשלחה הצעת מחיר לנציג");
-    try { ProposalsUI.render(); } catch(_e){}
-    try { ElementaryPendingUI.render(); } catch(_e){}
-    try { ElementaryDashboardUI.refreshAfterReferralChange(); } catch(_e){}
+    try { scheduleVisibleViewRender("elem-quote-sent"); } catch(_e){}
     return { ok: true, rec: updated };
   }
 
@@ -32802,6 +32788,35 @@ UsersGateUI.init();
       this.stopProposals();
     }
   };
+
+  /* GI-PERF F1.0 — one visible-view paint per turn.
+     Does not change data, login, or persist. Hidden lists are not rebuilt. */
+  let _visibleViewRenderRaf = 0;
+  function scheduleVisibleViewRender(reason){
+    try { GiPerf.count("schedule:visibleView"); } catch(_e) {}
+    try { if(reason) GiPerf.count("schedule:visibleView:" + String(reason)); } catch(_e) {}
+    if(_visibleViewRenderRaf) return;
+    const flush = () => {
+      _visibleViewRenderRaf = 0;
+      try { GiPerf.count("schedule:visibleView:flush"); } catch(_e) {}
+      try {
+        if(typeof LiveRefresh !== "undefined" && LiveRefresh && typeof LiveRefresh.renderActiveView === "function"){
+          LiveRefresh.renderActiveView();
+        }
+      } catch(_e) {}
+    };
+    try {
+      if(typeof requestAnimationFrame === "function"){
+        _visibleViewRenderRaf = requestAnimationFrame(flush);
+        return;
+      }
+    } catch(_e) {}
+    try {
+      _visibleViewRenderRaf = window.setTimeout(flush, 0);
+    } catch(_e2) {
+      flush();
+    }
+  }
 
   const LiveRefresh = {
     intervalMs: 120000,
