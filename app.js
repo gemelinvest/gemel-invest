@@ -21783,6 +21783,13 @@ UsersGateUI.init();
           this.switchSection(tabBtn.getAttribute("data-cf-tab"));
           return;
         }
+        const editOriginal = ev.target?.closest?.("[data-edit-original-form]");
+        if(editOriginal){
+          ev.preventDefault();
+          const rec = this.current();
+          if(rec) void this.openOriginalFormForEdit(rec, editOriginal.getAttribute("data-edit-original-form"));
+          return;
+        }
         const openHachCi = ev.target?.closest?.("[data-open-hachshara-ci-doc], [data-hachci-open]");
         if(openHachCi){
           ev.preventDefault();
@@ -22015,7 +22022,18 @@ UsersGateUI.init();
         const previewRow = ev.target?.closest?.("[data-cf-doc-preview]");
         if(previewRow){
           ev.preventDefault();
-          void this.showCustomerDocumentPreview(previewRow.getAttribute("data-cf-doc-preview"));
+          const rec = this.current();
+          const docId = previewRow.getAttribute("data-cf-doc-preview");
+          const doc = rec && docId ? this.findCustomerDocument(rec, docId) : null;
+          const joinType = (doc && this.officialJoinFormPreviewSpec(safeTrim(doc.type)))
+            ? safeTrim(doc.type)
+            : (rec && doc ? this.followupEditorTypeFromDoc(rec, doc) : "");
+          if(rec && joinType && CustomerDocuments.canDownloadOfficialJoinForm()){
+            this._previewDocId = safeTrim(docId);
+            void this.openOriginalFormForEdit(rec, joinType);
+            return;
+          }
+          void this.showCustomerDocumentPreview(docId);
           return;
         }
         const backBtn = ev.target?.closest?.("#customerMedicalBackBtn");
@@ -24979,7 +24997,21 @@ UsersGateUI.init();
         const mod = window[spec.globalName];
         if(!mod?.fillOriginalTemplate || typeof mod.buildDraft !== "function") return "";
         const draft = spec.mode ? mod.buildDraft(rec, spec.mode) : mod.buildDraft(rec);
-        bytes = await mod.fillOriginalTemplate(draft);
+        const overlay = rec?.payload?.mirrorFlow?.formEdits?.[safeTrim(doc?.type)] || {};
+        try{
+          if(typeof MirrorCallUI !== "undefined" && MirrorCallUI._mcMergeHtmlEditsIntoDraft){
+            MirrorCallUI._mcMergeHtmlEditsIntoDraft(draft, overlay.html);
+          }
+        }catch(_e0){}
+        const hasPdf = overlay.pdf && typeof overlay.pdf === "object" && Object.keys(overlay.pdf).length;
+        if(hasPdf && mod.fillOriginalTemplate.length >= 2){
+          bytes = await mod.fillOriginalTemplate(draft, overlay.pdf);
+        } else {
+          bytes = await mod.fillOriginalTemplate(draft);
+          if(hasPdf && typeof MirrorCallUI !== "undefined" && MirrorCallUI._mcApplyPdfOverlayToBytes){
+            bytes = await MirrorCallUI._mcApplyPdfOverlayToBytes(bytes, overlay.pdf);
+          }
+        }
       } else if(safeTrim(doc?.type) === "nispah_he_har_auth" && window.GiArrivalDocs?.fillNispahPdf){
         const draft = window.GiArrivalDocs.buildDraft(rec);
         bytes = await window.GiArrivalDocs.fillNispahPdf(draft);
@@ -25428,6 +25460,37 @@ UsersGateUI.init();
           + this.renderPdfPreviewFrame("נספח ה׳ · הרשאת הר הביטוח", url, { hideToolbar: true });
         body.appendChild(holder);
       } catch(_e) {}
+    },
+    async openOriginalFormForEdit(rec, type){
+      if(this.denyOfficialJoinFormDownload()) return;
+      const t = safeTrim(type);
+      if(!rec || !t) return;
+      try {
+        if(typeof MirrorCallUI === "undefined" || typeof MirrorCallUI._mcOpenJoinFormFromFile !== "function"){
+          throw new Error("עורך הטפסים לא זמין");
+        }
+        await MirrorCallUI._mcOpenJoinFormFromFile(rec, t);
+      } catch(err){
+        try { console.error("ORIGINAL_FORM_EDIT_OPEN_FAILED", err); } catch(_e) {}
+        try { window.showToast?.({ title: "לא ניתן לפתוח את הטופס", text: safeTrim(err?.message) || "נסו לרענן את המערכת.", variant: "warn", durationMs: 5200 }); } catch(_e2) {}
+      }
+    },
+    followupEditorTypeFromDoc(rec, doc){
+      if(safeTrim(doc?.type) !== CustomerDocuments.TYPES.followupQuestionnaire) return "";
+      const id = safeTrim(doc?.id);
+      try{
+        const rail = (typeof MirrorCallUI !== "undefined" && MirrorCallUI._mcCollectHealthFormRail)
+          ? MirrorCallUI._mcCollectHealthFormRail(rec)
+          : { follow: [] };
+        const helper = (typeof window !== "undefined" && window.GiFollowupZip) ? window.GiFollowupZip : null;
+        const hit = (rail.follow || []).find((row) => {
+          const stable = helper?.stableDocId?.(row.entry)
+            || ["doc_followup", row.entry?.companyKey, row.entry?.insuredId, row.entry?.questionnaireNum].join("_");
+          return stable === id || safeTrim(row?.type) === id;
+        });
+        if(hit?.type) return hit.type;
+      }catch(_e){}
+      return "";
     },
     async openHachsharaCiForm(rec){
       if(this.denyOfficialJoinFormDownload()) return;
@@ -25984,50 +26047,16 @@ UsersGateUI.init();
         let downloadBtn = "";
         if(docType === CustomerDocuments.TYPES.agentApptForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-agent-appt-doc="${escapeHtml(docId)}">הורדה</button>`;
-        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.hachsharaCiForm){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-hachshara-ci-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.hachsharaHealthForm){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-hachshara-health-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.hachsharaLifeForm){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-hachshara-life-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.hachsharaLifeShortForm){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-hachshara-life-short-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.hachsharaMortgageForm){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-hachshara-mortgage-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.phoenixLifeShortForm){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-phoenix-life-short-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.phoenixLifeFullForm){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-phoenix-life-full-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.migdalLifeForm){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-migdal-life-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.migdalMortgageForm){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-migdal-mortgage-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.clalHealthForm){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-clal-health-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.clalLifeCoupleForm){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-clal-life-couple-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.migdalCancerForm){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-migdal-cancer-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.ayalonHealthForm){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-ayalon-health-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.phoenixHealthForm){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-phoenix-health-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.phoenixCiForm){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-phoenix-ci-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.ayalonMortgageForm){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-ayalon-mortgage-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.menoraCiForm){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-menora-ci-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.menoraMortgageForm){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-menora-mortgage-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.menoraRiskForm){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-menora-risk-doc="${escapeHtml(docId)}">פתח טופס</button>`;
-        }else if(canOfficialPdf && docType === CustomerDocuments.TYPES.clalMortgageForm){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-clal-mortgage-doc="${escapeHtml(docId)}">פתח טופס</button>`;
+        }else if(canOfficialPdf && this.officialJoinFormPreviewSpec(docType)){
+          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-edit-original-form="${escapeHtml(docType)}">ערוך טופס</button>`;
         }else if(docType === CustomerDocuments.TYPES.companyCancelForm){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-open-cancel-form-doc="${escapeHtml(docId)}">פתח טופס</button>`;
         }else if(docType === CustomerDocuments.TYPES.followupQuestionnaire){
-          downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-followup-doc="${escapeHtml(docId)}">הורדה</button>`;
+          const followType = this.followupEditorTypeFromDoc(rec, doc);
+          downloadBtn = (canOfficialPdf && followType
+            ? `<button class="btn btn--primary btn--small" type="button" data-edit-original-form="${escapeHtml(followType)}">ערוך טופס</button>`
+            : "") +
+            `<button class="btn btn--ghost btn--small" type="button" data-download-followup-doc="${escapeHtml(docId)}">הורדה</button>`;
         }else if(docType === CustomerDocuments.TYPES.followupQuestionnairesZip || (safeTrim(doc.mime) === "application/zip" && safeTrim(doc.dataUrl))){
           downloadBtn = `<button class="btn btn--primary btn--small" type="button" data-download-customer-file-doc="${escapeHtml(docId)}">הורד ZIP</button>`;
         }else if(docType === CustomerDocuments.TYPES.healthOps){
@@ -69362,9 +69391,18 @@ ${inner}
     },
 
     _getFreshCustomerRecord(){
-      const id = safeTrim(this.selectedCustomer?.id);
+      let id = "";
+      if(this._mcFormEditorContext === "customerFile"){
+        id = safeTrim(this._mcFileFormCustomerId);
+        if(!id){
+          try{ id = safeTrim(CustomerFileUI?.currentId); }catch(_e){}
+        }
+      }
+      if(!id) id = safeTrim(this.selectedCustomer?.id);
       if(!id) return null;
-      const rec = (State.data?.customers || []).find(c => safeTrim(c.id) === id) || this.selectedCustomer;
+      const rec = (State.data?.customers || []).find(c => safeTrim(c.id) === id)
+        || (this._mcFormEditorContext === "customerFile" ? (typeof CustomerFileUI !== "undefined" && CustomerFileUI.current?.()) : null)
+        || this.selectedCustomer;
       if(rec) this._mirrorCoerceCustomerPayloadInPlace(rec);
       return rec;
     },
@@ -73435,11 +73473,14 @@ ${inner}
     _mcHealthFormEditorHtml(rec){
       const ed = this._mcHealthEditor || {};
       const isFollow = ed.kind === "followup" || String(ed.type || "").indexOf("followup:") === 0;
+      const fileCtx = this._mcFormEditorContext === "customerFile";
       const title = safeTrim(ed.title) || (isFollow ? "שאלון המשך" : this._mcJoinFormTitle(ed.type));
       const backAct = isFollow ? "health-followup-save" : "health-form-close";
-      const backLabel = isFollow
-        ? (ed.returnTo ? "שמירה וחזרה לטופס" : "שמירה וחזרה להצהרה")
-        : "חזרה להצהרה";
+      const backLabel = fileCtx
+        ? (isFollow && ed.returnTo ? "שמירה וחזרה לטופס" : "שמירה וסגירה")
+        : (isFollow
+          ? (ed.returnTo ? "שמירה וחזרה לטופס" : "שמירה וחזרה להצהרה")
+          : "חזרה להצהרה");
       const head =
         `<header class="mcFormEd__head">` +
           `<div class="mcFormEd__headText">` +
@@ -73456,7 +73497,7 @@ ${inner}
       }
       if(ed.error){
         return `<div class="mcFormEditor">${head}<div class="mcCancelQError" role="alert">${escapeHtml(ed.error)}</div>` +
-          this._mcNeedsNav("health-to-future", this._mcPayStepEnabled() ? "המשך · פרטי אמצעי תשלום" : "סיימתי · סיום שלבי השיקוף", backAct, backLabel) +
+          this._mcNeedsNav(fileCtx ? "health-form-close" : "health-to-future", fileCtx ? "סגירה" : (this._mcPayStepEnabled() ? "המשך · פרטי אמצעי תשלום" : "סיימתי · סיום שלבי השיקוף"), backAct, backLabel) +
         `</div>`;
       }
       const body = isFollow
@@ -73467,22 +73508,33 @@ ${inner}
         : ((ed.usePdfFields && Array.isArray(ed.fields) && ed.fields.length)
           ? this._mcRenderPdfFieldsHtml(ed.type, ed.fields, ed.values)
           : this._mcRenderDraftHealthFormHtml(rec, ed.type, ed.draft));
-      const primaryAct = isFollow ? "health-followup-save" : "health-to-future";
-      const primaryLabel = isFollow
-        ? backLabel
-        : (this._mcPayStepEnabled() ? "המשך · פרטי אמצעי תשלום" : "סיימתי · סיום שלבי השיקוף");
+      const primaryAct = fileCtx
+        ? (isFollow ? "health-followup-save" : "health-form-close")
+        : (isFollow ? "health-followup-save" : "health-to-future");
+      const primaryLabel = fileCtx
+        ? (isFollow && ed.returnTo ? backLabel : "שמירה")
+        : (isFollow
+          ? backLabel
+          : (this._mcPayStepEnabled() ? "המשך · פרטי אמצעי תשלום" : "סיימתי · סיום שלבי השיקוף"));
       const secondaryAct = isFollow ? "health-followup-save" : "health-form-close";
-      const secondaryLabel = isFollow ? backLabel : "חזרה להצהרה";
+      const secondaryLabel = isFollow ? backLabel : (fileCtx ? "שמירה וסגירה" : "חזרה להצהרה");
       return `<div class="mcFormEditor">` + head +
         `<div class="mcFormEd__body">${body}</div>` +
         this._mcNeedsNav(primaryAct, primaryLabel, isFollow ? "" : secondaryAct, secondaryLabel) +
       `</div>`;
     },
 
+    _mcEditorRoot(){
+      const host = this._mcFormEditorContext === "customerFile"
+        ? this._mcFileFormModal?.querySelector?.("[data-mc-file-form-body]")
+        : this.els.stepHealthDeclBody;
+      return host ? host.querySelector(".mcFormEditor") : null;
+    },
+
     _mcFlushInlineFormEditor(rec){
       const ed = this._mcHealthEditor;
       if(!ed || !rec || ed.loading) return;
-      const root = this.els.stepHealthDeclBody && this.els.stepHealthDeclBody.querySelector(".mcFormEditor");
+      const root = this._mcEditorRoot();
       if(!root) return;
       try{
         this._mcGetFormEdits(rec)[ed.type] = this._mcCaptureFormEditsFromModal(root);
@@ -73490,6 +73542,11 @@ ${inner}
     },
 
     _mcCloseHealthFormEditor(rec, keepEdits){
+      if(this._mcFormEditorContext === "customerFile"){
+        if(keepEdits !== false) this._mcFlushInlineFormEditor(rec);
+        void this._mcSaveAndCloseFileFormEditor();
+        return;
+      }
       const ed = this._mcHealthEditor;
       if(ed && ed.kind === "followup" && ed.returnTo && rec){
         void this._mcReturnFromFollowupEditor(rec);
@@ -73505,7 +73562,7 @@ ${inner}
     },
 
     _mcBindInlineFormEditorPersistence(rec, key){
-      const root = this.els.stepHealthDeclBody && this.els.stepHealthDeclBody.querySelector(".mcFormEditor");
+      const root = this._mcEditorRoot();
       if(!root || !rec || !key) return;
       const apply = () => this._mcApplyFormEditsToModal(root, this._mcGetFormEdits(rec)[key]);
       apply();
@@ -73866,12 +73923,20 @@ ${inner}
       if(this._mcHealthEditor?.pdfUrl){
         try{ URL.revokeObjectURL(this._mcHealthEditor.pdfUrl); }catch(_e){}
       }
-      try{ void this._persistMirrorCall("שאלון המשך בשיחת שיקוף נשמר"); }catch(_e2){}
-      this._mcHealthEditor = null;
       if(ret && ret.kind === "join" && ret.type){
+        if(this._mcFormEditorContext !== "customerFile"){
+          try{ void this._persistMirrorCall("שאלון המשך בשיחת שיקוף נשמר"); }catch(_e2){}
+        }
+        this._mcHealthEditor = null;
         await this._mcOpenJoinFormFromRail(rec, ret.type);
         return;
       }
+      if(this._mcFormEditorContext === "customerFile"){
+        void this._mcSaveAndCloseFileFormEditor();
+        return;
+      }
+      try{ void this._persistMirrorCall("שאלון המשך בשיחת שיקוף נשמר"); }catch(_e2){}
+      this._mcHealthEditor = null;
       if(rec) this._renderHealthDeclarationBody(rec);
     },
 
@@ -73987,6 +74052,120 @@ ${inner}
       tryBind(0);
     },
 
+    async _mcOpenJoinFormFromFile(rec, type){
+      if(!rec || !safeTrim(type)) return;
+      this._mcFormEditorContext = "customerFile";
+      this._mcFileFormCustomerId = safeTrim(rec.id);
+      this._mcEnsureFileFormModal();
+      const t = safeTrim(type);
+      if(t.indexOf("followup:") === 0) await this._mcOpenFollowupFromRail(rec, t);
+      else await this._mcOpenJoinFormFromRail(rec, t);
+    },
+
+    _mcEnsureFileFormModal(){
+      if(this._mcFileFormModal && this._mcFileFormModal.parentNode) return this._mcFileFormModal;
+      const modal = document.createElement("div");
+      modal.className = "giValModal mcFileFormModal is-open giValModal--visible";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.innerHTML =
+        `<div class="giValModal__backdrop" data-mc-file-form-act="close"></div>` +
+        `<div class="giValModal__card mcFileFormModal__card">` +
+          `<div data-mc-file-form-body></div>` +
+        `</div>`;
+      document.body.appendChild(modal);
+      const closeEl = modal.querySelector("[data-mc-file-form-act='close']");
+      if(closeEl){
+        closeEl.addEventListener("click", () => { void this._mcSaveAndCloseFileFormEditor(); });
+      }
+      this._mcFileFormModal = modal;
+      return modal;
+    },
+
+    _mcBindFileFormModalActs(){
+      const host = this._mcFileFormModal?.querySelector?.("[data-mc-file-form-body]");
+      if(!host) return;
+      host.querySelectorAll("[data-mc-needs-act]").forEach((btn) => {
+        on(btn, "click", () => {
+          const act = safeTrim(btn.getAttribute("data-mc-needs-act"));
+          const rec = this._getFreshCustomerRecord();
+          if(act === "health-followup-save"){
+            void this._mcReturnFromFollowupEditor(rec);
+            return;
+          }
+          if(act === "health-form-close" || act === "health-to-future"){
+            void this._mcSaveAndCloseFileFormEditor();
+          }
+        });
+      });
+    },
+
+    _mcPaintFormEditor(rec){
+      if(this._mcFormEditorContext === "customerFile"){
+        this._mcEnsureFileFormModal();
+        const body = this._mcFileFormModal.querySelector("[data-mc-file-form-body]");
+        if(body) body.innerHTML = this._mcHealthFormEditorHtml(rec);
+        this._mcBindFileFormModalActs();
+        if(this._mcHealthEditor && !this._mcHealthEditor.loading){
+          this._mcBindInlineFormEditorPersistence(rec, this._mcHealthEditor.type);
+        }
+        return;
+      }
+      this._renderHealthDeclarationBody(rec);
+    },
+
+    _mcCloseFileFormModal(){
+      const modal = this._mcFileFormModal;
+      this._mcFileFormModal = null;
+      if(modal && modal.parentNode){
+        try{ modal.parentNode.removeChild(modal); }catch(_e){}
+      }
+    },
+
+    async _mcSaveAndCloseFileFormEditor(){
+      if(this._mcFileFormSaving) return;
+      this._mcFileFormSaving = true;
+      const rec = this._getFreshCustomerRecord();
+      try{
+        this._mcFlushInlineFormEditor(rec);
+        if(this._mcHealthEditor?.pdfUrl){
+          try{ URL.revokeObjectURL(this._mcHealthEditor.pdfUrl); }catch(_e){}
+        }
+        const hadEditor = !!(this._mcHealthEditor && this._mcHealthEditor.type);
+        this._mcHealthEditor = null;
+        if(rec && hadEditor){
+          try{ await this._mcMaterializeEditedForms(rec); }catch(_e2){}
+          try{ await App.persist("נשמרה עריכת טופס מקורי"); }catch(_e3){}
+          try{
+            window.showToast?.({
+              title: "הטופס נשמר",
+              text: "השינויים נשמרו בתיק הלקוח וניתן לראות אותם בקבצים.",
+              variant: "success",
+              durationMs: 4200
+            });
+          }catch(_e4){}
+          try{
+            if(typeof CustomerFileUI !== "undefined" && CustomerFileUI){
+              CustomerFileUI._previewBlobUrls = {};
+              CustomerFileUI._previewBlobOrder = [];
+              const policies = typeof CustomerFileUI.collectPolicies === "function"
+                ? CustomerFileUI.collectPolicies(rec)
+                : [];
+              CustomerFileUI.paintSectionPane?.(rec, policies, { force: true });
+              if(CustomerFileUI._previewDocId){
+                void CustomerFileUI.showCustomerDocumentPreview?.(CustomerFileUI._previewDocId);
+              }
+            }
+          }catch(_e5){}
+        }
+        this._mcCloseFileFormModal();
+      } finally {
+        this._mcFileFormSaving = false;
+        this._mcFormEditorContext = "";
+        this._mcFileFormCustomerId = "";
+      }
+    },
+
     async _mcOpenJoinFormFromRail(rec, type){
       if(String(type || "").indexOf("followup:") === 0){
         return this._mcOpenFollowupFromRail(rec, type);
@@ -74002,7 +74181,7 @@ ${inner}
         try{ URL.revokeObjectURL(this._mcHealthEditor.pdfUrl); }catch(_e){}
       }
       this._mcHealthEditor = { kind: "join", type, title: this._mcJoinFormTitle(type), loading: true, error: "" };
-      this._renderHealthDeclarationBody(rec);
+      this._mcPaintFormEditor(rec);
       try{
         if(typeof ensureGiWizardJsLoaded === "function") await ensureGiWizardJsLoaded();
         if(typeof spec.ensure === "function") await spec.ensure();
@@ -74047,7 +74226,7 @@ ${inner}
           usePdfFields: fields.length > 0
         };
         const fresh = this._getFreshCustomerRecord() || rec;
-        this._renderHealthDeclarationBody(fresh);
+        this._mcPaintFormEditor(fresh);
       }catch(err){
         this._mcHealthEditor = {
           kind: "join",
@@ -74056,7 +74235,7 @@ ${inner}
           loading: false,
           error: safeTrim(err?.message) || "לא ניתן לפתוח את הטופס."
         };
-        this._renderHealthDeclarationBody(this._getFreshCustomerRecord() || rec);
+        this._mcPaintFormEditor(this._getFreshCustomerRecord() || rec);
         this._mcToast("טופס", safeTrim(err?.message) || "לא ניתן לפתוח את הטופס.", "warn");
       }
     },
@@ -74086,7 +74265,7 @@ ${inner}
         try{ URL.revokeObjectURL(this._mcHealthEditor.pdfUrl); }catch(_e){}
       }
       this._mcHealthEditor = { kind: "followup", type, title: row.name || "שאלון המשך", loading: true, error: "", returnTo };
-      this._renderHealthDeclarationBody(rec);
+      this._mcPaintFormEditor(rec);
       try{
         if(typeof ensureGiWizardJsLoaded === "function") await ensureGiWizardJsLoaded();
       }catch(_e){}
@@ -74105,7 +74284,7 @@ ${inner}
         returnTo,
         entry: row.entry
       };
-      this._renderHealthDeclarationBody(this._getFreshCustomerRecord() || rec);
+      this._mcPaintFormEditor(this._getFreshCustomerRecord() || rec);
     },
 
     _mcShowFullPdfModal(title, url){

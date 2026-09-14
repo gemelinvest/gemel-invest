@@ -35585,6 +35585,24 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   white-space:normal;
 }
 .mcFormEd__row--wide{grid-column:1 / -1;}
+.mcFileFormModal.giValModal{
+  z-index: 80;
+}
+.mcFileFormModal .mcFileFormModal__card{
+  width: min(1120px, 96vw);
+  height: min(92vh, 980px);
+  max-width: none;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+.mcFileFormModal [data-mc-file-form-body]{
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
 @media (max-width:720px){
   .mcFormEd__grid{grid-template-columns:1fr;}
   .mcFormEd__head{flex-direction:column;}
