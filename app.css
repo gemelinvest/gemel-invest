@@ -35524,6 +35524,7 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 }
 .mcFormEd__qText{font-size:13.5px;font-weight:750;color:#0a1638;line-height:1.45;}
 .mcFormEd__qWho{font-size:11px;font-weight:700;color:#5b6b8c;margin-top:3px;}
+.mcFormEd__qFollow{font-size:11px;font-weight:700;color:#1e3a7a;margin-top:2px;}
 .mcFormEd__segs{display:flex;flex-wrap:wrap;gap:8px;}
 .mcFormEd__seg{
   position:relative;
@@ -35562,7 +35563,16 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   border:0;
   background:#fff;
 }
-.mcFormEditor .mcNeedsNav{padding:8px 18px 16px;}
+.mcFormEd__manual{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px 12px;
+  margin-top:8px;
+  padding-top:8px;
+  border-top:1px dashed #d5deea;
+}
+.mcFormEd__manual[hidden]{display:none !important;}
+.mcFormEd__row--wide{grid-column:1 / -1;}
 @media (max-width:720px){
   .mcFormEd__grid{grid-template-columns:1fr;}
   .mcFormEd__head{flex-direction:column;}
