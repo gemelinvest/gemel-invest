@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260914-pledge-years-digit-v1";
+const APP_TAG = "20260914-cf-form-modal-close-v1";
 let failed = 0;
 let passed = 0;
 
@@ -62,6 +62,12 @@ assert(app.includes("await this._mcMaterializeEditedForms(rec)"), "אחרי ער
 assert(app.includes('App.persist("נשמרה עריכת טופס מקורי")'), "persist אחרי שמירת טופס");
 assert(app.includes("paintSectionPane?.(rec, policies, { force: true })"), "רשימת הקבצים מתרעננת אחרי שמירה");
 assert(app.includes("_mcMergeHtmlEditsIntoDraft(draft, overlay.html)"), "תצוגה מקדימה מכבדת עריכות שנשמרו");
+const saveFn = sliceBetween(app, "async _mcSaveAndCloseFileFormEditor(){", "async _mcOpenJoinFormFromRail(rec, type){");
+assert(saveFn.indexOf("this._mcCloseFileFormModal()") >= 0, "save path closes the modal");
+assert(saveFn.indexOf("this._mcCloseFileFormModal()") < saveFn.indexOf("await this._mcMaterializeEditedForms"), "החלון יורד לפני מילוי ה-PDF");
+assert(saveFn.indexOf("this._mcCloseFileFormModal()") < saveFn.indexOf("App.persist"), "החלון יורד לפני persist");
+assert(app.includes("_mcDismissFileFormEditorOnFileClose"), "סגירת תיק מנתקת את עורך הטופס");
+assert(app.includes("void MirrorCallUI._mcDismissFileFormEditorOnFileClose()"), "close() של התיק קורא לניתוק העורך");
 
 console.log("\n4) עורך השיקוף נשאר");
 assert(app.includes("חזרה להצהרה"), "בשיחת שיקוף עדיין חוזרים להצהרה");

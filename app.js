@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260914-pledge-years-digit-v1";
+  const BUILD = "20260914-cf-form-modal-close-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -25745,13 +25745,24 @@ UsersGateUI.init();
           }
         }).catch(() => {});
       };
-      try {
-        if(typeof perfIdle === "function"){
-          perfIdle(() => { run(); }, 2200);
-          return;
-        }
-      } catch(_e) {}
-      window.setTimeout(run, 0);
+      /* GI-PERF 2026-09-14: never load gi-wizard on the tab-click turn.
+         Idle only — a 0ms timeout was freezing the file while switching tabs. */
+      const scheduleIdle = (fn) => {
+        try {
+          if(typeof perfIdle === "function"){
+            perfIdle(fn, 2200);
+            return;
+          }
+        } catch(_e) {}
+        try {
+          if(typeof requestIdleCallback === "function"){
+            requestIdleCallback(() => { fn(); }, { timeout: 2500 });
+            return;
+          }
+        } catch(_e2) {}
+        window.setTimeout(fn, 2200);
+      };
+      scheduleIdle(run);
     },
     async buildFollowupZipBlob(rec){
       await ensureFollowupZipLoaded();
@@ -28416,6 +28427,11 @@ UsersGateUI.init();
       this._sectionScroll = Object.create(null);
       this._clearCustomerFileOpening(closingId);
       try { this._closeFileActionsMenu?.(); } catch(_e) {}
+      try {
+        if(typeof MirrorCallUI !== "undefined" && typeof MirrorCallUI._mcDismissFileFormEditorOnFileClose === "function"){
+          void MirrorCallUI._mcDismissFileFormEditorOnFileClose();
+        }
+      } catch(_eForm) {}
       if(!this.els.wrap) return;
       window.clearTimeout(this._loaderTimer);
       this.hideLoader();
@@ -42773,7 +42789,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260914-pledge-years-digit-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260914-cf-form-modal-close-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -43458,7 +43474,7 @@ UsersGateUI.init();
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
     "./simulators-center.css?v=20260914-mc-followup-qfix-v2",
-    "./simulators-shell.css?v=20260914-pledge-years-digit-v1"
+    "./simulators-shell.css?v=20260914-cf-form-modal-close-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -44820,7 +44836,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260914-pledge-years-digit-v1";
+  const GI_WIZARD_JS_VERSION = "20260914-cf-form-modal-close-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -74604,8 +74620,20 @@ ${inner}
       }
     },
 
+    _mcDismissFileFormEditorOnFileClose(){
+      if(this._mcFileFormSaving){
+        this._mcCloseFileFormModal();
+        return;
+      }
+      if(!this._mcFileFormModal && this._mcFormEditorContext !== "customerFile") return;
+      void this._mcSaveAndCloseFileFormEditor();
+    },
+
     async _mcSaveAndCloseFileFormEditor(){
-      if(this._mcFileFormSaving) return;
+      if(this._mcFileFormSaving){
+        this._mcCloseFileFormModal();
+        return;
+      }
       this._mcFileFormSaving = true;
       const rec = this._getFreshCustomerRecord();
       try{
@@ -74615,6 +74643,8 @@ ${inner}
         }
         const hadEditor = !!(this._mcHealthEditor && this._mcHealthEditor.type);
         this._mcHealthEditor = null;
+        this._mcCloseFileFormModal();
+        this._mcFormEditorContext = "";
         if(rec && hadEditor){
           try{ await this._mcMaterializeEditedForms(rec); }catch(_e2){}
           try{ await App.persist("נשמרה עריכת טופס מקורי"); }catch(_e3){}
@@ -74628,23 +74658,27 @@ ${inner}
           }catch(_e4){}
           try{
             if(typeof CustomerFileUI !== "undefined" && CustomerFileUI){
-              CustomerFileUI._previewBlobUrls = {};
-              CustomerFileUI._previewBlobOrder = [];
-              const policies = typeof CustomerFileUI.collectPolicies === "function"
-                ? CustomerFileUI.collectPolicies(rec)
-                : [];
-              CustomerFileUI.paintSectionPane?.(rec, policies, { force: true });
-              if(CustomerFileUI._previewDocId){
-                void CustomerFileUI.showCustomerDocumentPreview?.(CustomerFileUI._previewDocId);
+              const stillOpen = !!(CustomerFileUI.els?.wrap?.classList?.contains?.("is-open")
+                && safeTrim(CustomerFileUI.currentId) === safeTrim(rec.id));
+              if(stillOpen){
+                CustomerFileUI._previewBlobUrls = {};
+                CustomerFileUI._previewBlobOrder = [];
+                const policies = typeof CustomerFileUI.collectPolicies === "function"
+                  ? CustomerFileUI.collectPolicies(rec)
+                  : [];
+                CustomerFileUI.paintSectionPane?.(rec, policies, { force: true });
+                if(CustomerFileUI._previewDocId){
+                  void CustomerFileUI.showCustomerDocumentPreview?.(CustomerFileUI._previewDocId);
+                }
               }
             }
           }catch(_e5){}
         }
-        this._mcCloseFileFormModal();
       } finally {
         this._mcFileFormSaving = false;
         this._mcFormEditorContext = "";
         this._mcFileFormCustomerId = "";
+        this._mcCloseFileFormModal();
       }
     },
 
