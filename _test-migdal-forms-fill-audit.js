@@ -10,7 +10,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const APP_TAG = "20260914-mc-followup-qfix-v2";
+const APP_TAG = "20260914-pledge-years-digit-v1";
 const TAG = "20260825-migdal-health-fill-v1";
 let failed = 0;
 let passed = 0;

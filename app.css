@@ -27090,8 +27090,9 @@ body.lcAuthLock .lcLogin__mfaQrBox > canvas{width:min(100%,220px) !important;max
   gap:14px;
   align-items:start;
 }
-.lcField--pledgeReference{
-  min-width:0;
+.lcField--pledgeReference input[data-pdraft-bank="years"]{
+  direction:ltr;
+  text-align:left;
 }
 .lcField--pledgeReference .lcLabel{
   display:block;

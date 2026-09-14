@@ -781,6 +781,55 @@
   function riskSimEmptyPledgeBank(){
     return { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" };
   }
+  /* ספרה יחידה כמו 2 = שנתיים. 02 גם שנתיים. 0 ריק. */
+  function riskSimNormalizePledgeYears(value){
+    const digits = String(value == null ? "" : value).replace(/\D/g, "");
+    if(!digits) return "";
+    const n = Number(digits);
+    if(!Number.isFinite(n) || n < 1 || n > 99) return "";
+    return String(n);
+  }
+  function riskSimPledgeBankMissingLabel(b){
+    const bank = b && typeof b === "object" ? b : {};
+    const rows = [
+      ["bankName", "שם הבנק (שיעבוד)"],
+      ["bankNo", "מספר בנק (שיעבוד)"],
+      ["branch", "מספר סניף (שיעבוד)"],
+      ["amount", "סכום לשיעבוד"],
+      ["years", "משך השיעבוד בשנים"],
+      ["address", "כתובת הבנק (שיעבוד)"]
+    ];
+    for(let i = 0; i < rows.length; i++){
+      const k = rows[i][0];
+      const label = rows[i][1];
+      const ok = k === "years" ? !!riskSimNormalizePledgeYears(bank[k]) : !!safeTrim(bank[k]);
+      if(!ok) return label;
+    }
+    return "";
+  }
+  function riskSimCopyPledgeToCoupleInsureds(sim){
+    if(!sim || !sim._giCoupleOn) return;
+    const ids = riskSimCoupleSelectedIds(sim);
+    if(ids.length < 2) return;
+    const map = riskSimEnsureLegalMap(sim);
+    let srcId = safeTrim(sim._activeInsuredId);
+    let src = srcId ? map[srcId] : null;
+    const hasYears = (legal) => !!(legal && (legal.pledgeBanks || []).some((b) => riskSimNormalizePledgeYears(b && b.years)));
+    if(!hasYears(src)){
+      srcId = ids.find((id) => hasYears(map[id])) || "";
+      src = srcId ? map[srcId] : null;
+    }
+    if(!src || !src.pledge) return;
+    ids.forEach((id) => {
+      if(id === srcId) return;
+      const dest = riskSimGetLegal(sim, id);
+      dest.pledge = true;
+      dest.pledgeConfirmed = !!src.pledgeConfirmed;
+      dest.pledgeBanks = (src.pledgeBanks || []).map((b) => Object.assign(riskSimEmptyPledgeBank(), b, {
+        years: riskSimNormalizePledgeYears(b && b.years) || safeTrim(b && b.years)
+      }));
+    });
+  }
   function riskSimEmptyBeneficiary(){
     return { firstName:"", lastName:"", idNumber:"", birthDate:"", phone:"", relationship:"", sharePct:"" };
   }
@@ -793,7 +842,11 @@
     base.pledge = !!raw.pledge;
     base.pledgeConfirmed = !!raw.pledgeConfirmed;
     const banks = Array.isArray(raw.pledgeBanks) ? raw.pledgeBanks : [];
-    base.pledgeBanks = (banks.length ? banks : [riskSimEmptyPledgeBank()]).slice(0, 2).map((b) => Object.assign(riskSimEmptyPledgeBank(), b || {}));
+    base.pledgeBanks = (banks.length ? banks : [riskSimEmptyPledgeBank()]).slice(0, 2).map((b) => {
+      const next = Object.assign(riskSimEmptyPledgeBank(), b || {});
+      next.years = riskSimNormalizePledgeYears(next.years) || next.years;
+      return next;
+    });
     if(!base.pledgeBanks.length) base.pledgeBanks = [riskSimEmptyPledgeBank()];
     const bens = Array.isArray(raw.beneficiaries) ? raw.beneficiaries : [];
     base.beneficiaries = bens.map((b) => Object.assign(riskSimEmptyBeneficiary(), b || {}));
@@ -910,14 +963,14 @@
     dock.querySelectorAll("[data-gishell-legal-bank]").forEach((card) => {
       const idx = Number(card.getAttribute("data-gishell-legal-bank") || "0") || 0;
       const read = (field) => safeTrim(card.querySelector(`[data-gishell-legal-bank-field="${field}"]`)?.value || "");
-      banks[idx] = Object.assign(riskSimEmptyPledgeBank(), {
-        bankName: read("bankName"),
-        bankNo: read("bankNo"),
-        branch: read("branch"),
-        amount: read("amount"),
-        years: read("years"),
-        address: read("address")
-      });
+          banks[idx] = Object.assign(riskSimEmptyPledgeBank(), {
+            bankName: read("bankName"),
+            bankNo: read("bankNo"),
+            branch: read("branch"),
+            amount: read("amount"),
+            years: riskSimNormalizePledgeYears(read("years")) || read("years"),
+            address: read("address")
+          });
     });
     if(banks.filter(Boolean).length) legal.pledgeBanks = banks.filter(Boolean).slice(0, 2);
     const benRows = dock.querySelectorAll("[data-gishell-legal-ben]");
@@ -962,12 +1015,13 @@
           <label class="giSimShell__legalField"><span>מספר בנק</span><input type="text" inputmode="numeric" data-gishell-legal-bank-field="bankNo" value="${escapeHtml(b.bankNo || "")}" readonly /></label>
           <label class="giSimShell__legalField"><span>מספר סניף</span><input type="text" inputmode="numeric" data-gishell-legal-bank-field="branch" value="${escapeHtml(b.branch || "")}" /><div data-gishell-legal-branch-status></div></label>
           <label class="giSimShell__legalField"><span>סכום לשיעבוד</span><input type="text" inputmode="numeric" data-gishell-legal-bank-field="amount" value="${escapeHtml(b.amount || "")}" /></label>
-          <label class="giSimShell__legalField"><span>לכמה שנים</span><input type="text" inputmode="numeric" data-gishell-legal-bank-field="years" value="${escapeHtml(b.years || "")}" /></label>
+          <label class="giSimShell__legalField"><span>לכמה שנים</span><input type="text" inputmode="numeric" dir="ltr" maxlength="2" placeholder="למשל 2" autocomplete="off" data-gishell-legal-bank-field="years" value="${escapeHtml(b.years || "")}" /></label>
           <label class="giSimShell__legalField giSimShell__legalField--wide"><span>כתובת הבנק</span><input type="text" data-gishell-legal-bank-field="address" value="${escapeHtml(b.address || "")}" /></label>
         </div>
       </div>`).join("");
     const summaryBanks = (legal.pledgeBanks || []).map((b, i) => {
-      const amount = [b.amount ? ("₪" + b.amount) : "", b.years ? (b.years + " שנים") : ""].filter(Boolean).join(" · ");
+      const yearsTxt = riskSimNormalizePledgeYears(b.years) || safeTrim(b.years);
+      const amount = [b.amount ? ("₪" + b.amount) : "", yearsTxt ? (yearsTxt + " שנים") : ""].filter(Boolean).join(" · ");
       return `<div class="giSimShell__legalSummaryItem">
         <span>בנק ${i + 1}</span>
         <strong>${escapeHtml(b.bankName || "—")}</strong>
@@ -1094,7 +1148,31 @@
         ev.preventDefault();
         persist();
         const legal = riskSimGetLegal(sim, sim._activeInsuredId);
+        const banks = Array.isArray(legal.pledgeBanks) && legal.pledgeBanks.length ? legal.pledgeBanks : [riskSimEmptyPledgeBank()];
+        let missing = "";
+        for(let i = 0; i < banks.length; i++){
+          missing = riskSimPledgeBankMissingLabel(banks[i]);
+          if(missing) break;
+        }
+        if(missing){
+          const yearsEl = modal.querySelector('[data-gishell-legal-bank-field="years"]');
+          if(missing.indexOf("שנים") >= 0 && yearsEl){
+            try { yearsEl.focus(); } catch(_eF) {}
+            yearsEl.classList.add("is-miss");
+          }
+          window.showToast?.({
+            title: "שכחת למלא",
+            text: missing,
+            variant: "warn"
+          });
+          return;
+        }
+        banks.forEach((b) => {
+          b.years = riskSimNormalizePledgeYears(b.years);
+        });
+        legal.pledgeBanks = banks;
         legal.pledgeConfirmed = true;
+        try { riskSimCopyPledgeToCoupleInsureds(sim); } catch(_eCopy) {}
         riskSimRefreshLegalPanel(sim);
       });
     }
@@ -1720,6 +1798,7 @@
   function riskSimPurchaseWizardInsureds(sim){
     if(!sim || !sim._ctx?.wizardWorkspace) return;
     try { riskSimCaptureLegalFromDom(sim); } catch(_e) {}
+    try { riskSimCopyPledgeToCoupleInsureds(sim); } catch(_eCopyP) {}
     try { riskSimFlushActiveDomFields(sim); } catch(_eFlush) {}
     try { riskSimEnsureCoupleSharedResults(sim); } catch(_eCouple) {}
     try {

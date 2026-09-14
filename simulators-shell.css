@@ -992,7 +992,7 @@
   background:#f8fafc !important;
   border:1px solid #e5eaf3 !important;
   border-radius:12px !important;
-  max-height:min(36vh, 280px) !important;
+  max-height:min(52vh, 440px) !important;
   overflow:auto !important;
 }
 .giSimShellModal .giSimShell__layout{
@@ -1041,6 +1041,14 @@
   font-size:13px !important;
   color:#1e3a5f !important;
   background:#fff !important;
+}
+.giSimShell__legalField input[data-gishell-legal-bank-field="years"]{
+  direction:ltr !important;
+  text-align:left !important;
+}
+.giSimShell__legalField input.is-miss{
+  border-color:#b42318 !important;
+  box-shadow:0 0 0 3px rgba(180,35,24,.12) !important;
 }
 .giSimShell__legalField--wide{grid-column:1 / -1 !important}
 .giSimShell__legalBank{

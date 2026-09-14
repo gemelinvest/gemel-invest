@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260914-mc-followup-qfix-v2";
+  const GI_WIZARD_BUILD = "20260914-pledge-years-digit-v1";
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -15433,7 +15433,8 @@ if(path === "birthDate"){
         banks.forEach((b, i) => {
           const suffix = banks.length > 1 ? ` — בנק ${i + 1}` : "";
           for(const k of ["bankName","bankNo","branch","amount","years","address"]){
-            if(!safeTrim(b[k])){
+            const filled = k === "years" ? !!this.normalizePledgeYears(b[k]) : !!safeTrim(b[k]);
+            if(!filled){
               miss(`${pledgeLabels[k] || k}${suffix}`, {
                 section: 4,
                 selector: `[data-pdraft-bank="${k}"][data-pdraft-bank-idx="${i}"]`
@@ -16416,6 +16417,15 @@ if(path === "birthDate"){
       return { bankName:"", bankNo:"", branch:"", amount:"", years:"", address:"" };
     },
 
+    /* ספרה יחידה כמו 2 = שנתיים. 02 גם שנתיים. 0 ריק. */
+    normalizePledgeYears(value){
+      const digits = String(value == null ? "" : value).replace(/\D/g, "");
+      if(!digits) return "";
+      const n = Number(digits);
+      if(!Number.isFinite(n) || n < 1 || n > 99) return "";
+      return String(n);
+    },
+
     normalizePledgeBanks(target){
       if(!target || typeof target !== "object") return [this.emptyPledgeBank()];
       let list = Array.isArray(target.pledgeBanks) ? target.pledgeBanks.slice() : null;
@@ -16735,7 +16745,11 @@ if(path === "birthDate"){
       if(!src) return;
       draft.pledge = !!src.pledge;
       draft.pledgeBanks = Array.isArray(src.pledgeBanks) && src.pledgeBanks.length
-        ? src.pledgeBanks.map((b) => Object.assign(this.emptyPledgeBank(), b))
+        ? src.pledgeBanks.map((b) => {
+            const next = Object.assign(this.emptyPledgeBank(), b);
+            next.years = this.normalizePledgeYears(next.years);
+            return next;
+          })
         : [this.emptyPledgeBank()];
       this.normalizePledgeBanks(draft);
       draft.beneficiaries = Array.isArray(src.beneficiaries)
@@ -19290,7 +19304,7 @@ if(path === "birthDate"){
                   <input class="lcInput lcPledgeAmountInput" data-pdraft-bank="amount" data-pdraft-bank-idx="${i}" value="${escapeHtml(b.amount||"")}" inputmode="numeric" />
                   <div class="lcMoneyHint" data-money-hint="pledge-${i}">${(this.parseMoneyNumber(b.amount) || 0) > 0 ? escapeHtml(this.formatMoneyValue(this.parseMoneyNumber(b.amount))) : ""}</div>
                 </div>
-                <div class="lcField lcField--pledgeReference"><label class="lcLabel">לכמה שנים</label><input class="lcInput" data-pdraft-bank="years" data-pdraft-bank-idx="${i}" value="${escapeHtml(b.years||"")}" inputmode="numeric" /></div>
+                <div class="lcField lcField--pledgeReference"><label class="lcLabel">לכמה שנים</label><input class="lcInput" data-pdraft-bank="years" data-pdraft-bank-idx="${i}" value="${escapeHtml(b.years||"")}" inputmode="numeric" dir="ltr" maxlength="2" placeholder="למשל 2" autocomplete="off" /></div>
                 <div class="lcField lcField--pledgeReference lcField--pledgeReferenceFull"><label class="lcLabel">כתובת הבנק</label><input class="lcInput" data-pdraft-bank="address" data-pdraft-bank-idx="${i}" value="${escapeHtml(b.address||"")}" /></div>
               </div>
             </div>`;
@@ -20094,7 +20108,7 @@ if(path === "birthDate"){
 
         // pledge bank fields — GI-PLEDGE-MULTI (indexed)
         $$("[data-pdraft-bank]", this.els.body).forEach(el => {
-          const handler = () => {
+          const handler = (ev) => {
             this.ensurePolicyDraft();
             const k = el.getAttribute("data-pdraft-bank");
             if(!k) return;
@@ -20102,6 +20116,15 @@ if(path === "birthDate"){
             const banks = this.normalizePledgeBanks(this.policyDraft);
             if(!banks[idx]) return;
             banks[idx][k] = el.value;
+            if(k === "years"){
+              const norm = this.normalizePledgeYears(el.value);
+              if(ev && ev.type === "change"){
+                banks[idx].years = norm;
+                if(el.value !== norm) el.value = norm;
+              } else {
+                banks[idx].years = norm || el.value;
+              }
+            }
             if(k === "bankName"){
               const code = this.getBankCodeForName(el.value);
               if(code){
@@ -31598,7 +31621,7 @@ if(path === "birthDate"){
             // GI-PLEDGE-MULTI — כל בנק משעבד חייב להיות מלא
             const banks = Wizard.normalizePledgeBanks(p);
             for(const b of banks){
-              if(!safeTrim(b.bankName) || !safeTrim(b.bankNo) || !safeTrim(b.branch) || !safeTrim(b.amount) || !safeTrim(b.years) || !safeTrim(b.address)) return false;
+              if(!safeTrim(b.bankName) || !safeTrim(b.bankNo) || !safeTrim(b.branch) || !safeTrim(b.amount) || !this.normalizePledgeYears(b.years) || !safeTrim(b.address)) return false;
             }
             if(!Wizard.getPledgeTotals(p).ok) return false;
           }

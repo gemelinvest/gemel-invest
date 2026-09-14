@@ -12,7 +12,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260914-mc-followup-qfix-v2";
+const TAG = "20260914-pledge-years-digit-v1";
 let failed = 0;
 let passed = 0;
 
@@ -46,7 +46,7 @@ assert(html.includes("app.js?v=" + TAG), "index app.js cache");
 assert(sw.includes("gi-v12-" + TAG), "service worker cache");
 assert(app.includes('GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=' + TAG + '"'), "simulator chunk cache");
 assert(app.includes("simulators-shell.css?v=" + TAG), "shell css cache");
-assert(app.includes("simulators-center.css?v=" + TAG), "center css cache");
+assert(app.includes("simulators-center.css?v=20260914-mc-followup-qfix-v2"), "center css cache unchanged");
 assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "wizard build tag");
 
 console.log("\n2) larger simulator text");
