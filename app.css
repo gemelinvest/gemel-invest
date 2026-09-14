@@ -34802,6 +34802,8 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 }
 .mcPolicyRow__reasonText{font-weight:700;color:#0f1f4a;}
 .mcPolicyRow__reason--empty .mcPolicyRow__reasonText{color:#9a3412;}
+.mcPolicyRow__maxPrem .mcPolicyRow__reasonText{color:#0a1638;}
+.mcPolicyRow__maxPrem strong{font-weight:800;}
 @media (max-width:860px){
   .mcPolicyRow--head{display:none;}
   .mcPolicyRow__main{

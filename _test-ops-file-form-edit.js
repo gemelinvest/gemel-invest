@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260914-file-form-edit-v1";
+const APP_TAG = "20260914-mirror-live-steps-v1";
 let failed = 0;
 let passed = 0;
 

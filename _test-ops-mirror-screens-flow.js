@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260914-mc-followup-qfix-v2";
+const APP_TAG = "20260914-mirror-live-steps-v1";
 let failed = 0;
 let passed = 0;
 
@@ -79,7 +79,7 @@ assert(reasons.includes("compare-to-cancelq"), "משיקולים לשאלון ב
 const compare = sliceBetween(app, "_renderNeedsCompareNotice(rec){", "_mirrorGetNewPoliciesRaw(rec){");
 assert(compare.includes("needs-to-reasons"), "ממסמך השוואה לשיקולים");
 assert(compare.includes("<strong>(מגדל)</strong>"), "תג מגדל בנוסח");
-assert(compare.includes("מסמך השוואה כתוב המשווה"), "נוסח מסמך השוואה המעודכן");
+assert(compare.includes("האם אתה מאשר שאין לך כיום ביטוחים קיימים"), "נוסח אישור היעדר ביטוחים קיימים");
 assert(!compare.includes("שבו כתוב ההשוואה"), "הנוסח הישן של מסמך ההשוואה הוסר");
 
 console.log("\n5) מסילת טפסים בהצהרת בריאות + שמירה בסוף");
