@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260914-mc-followup-page-v1";
+const APP_TAG = "20260914-mc-followup-qfix-v2";
 let failed = 0;
 let passed = 0;
 
@@ -32,6 +32,22 @@ function sliceBetween(src, startMark, endMark){
   const end = src.indexOf(endMark, start);
   if(start < 0 || end < 0 || end <= start) return "";
   return src.slice(start, end);
+}
+
+function extractMethod(src, name){
+  let start = src.indexOf("    async " + name + "(");
+  if(start < 0) start = src.indexOf("    " + name + "(");
+  if(start < 0) return "";
+  let i = src.indexOf("{", start);
+  let depth = 0;
+  for(; i < src.length; i++){
+    if(src[i] === "{") depth += 1;
+    else if(src[i] === "}"){
+      depth -= 1;
+      if(depth === 0) return src.slice(start, i + 1);
+    }
+  }
+  return "";
 }
 
 const app = read("app.js");
@@ -59,8 +75,12 @@ assert(app.includes("health-form-close"), "פעולת סגירת עורך");
 assert(openJoin.includes("listEditablePdfFields"), "טוען את כל שדות ה-PDF הרשמי");
 assert(openJoin.includes("fillOriginalTemplate"), "ממלא מהתיק לפני העריכה");
 assert(!openJoin.includes("await ui[fnName](rec)"), "לא פותח את מודאל תיק הלקוח");
-assert(openFollow.includes('kind: "followup"'), "שאלון המשך נפתח במסך ולא במודאל");
+const editorHtml = extractMethod(app, "_mcHealthFormEditorHtml");
+assert(editorHtml.includes("_mcFollowupEditorFields"), "עורך המשך נבנה משאלות הדף");
+assert(editorHtml.includes("_mcFollowupEntryFromEditor"), "עורך המשך לא תלוי ב-PDF שכבר נטען");
+assert(!/ed\.fields && ed\.fields\.length/.test(editorHtml), "עורך המשך לא מציג רשימת שדות PDF ישנה");
 assert(openFollow.includes("_mcFollowupEditorFields"), "שאלון המשך נפתח לפי דף השאלון");
+assert(openFollow.includes("_mcParseFollowupType"), "שאלון נפתח גם בלי רשומת PDF במסילה");
 assert(!openFollow.includes("listEditablePdfFields"), "שאלון המשך לא שופך את כל שדות ה-PDF");
 assert(openFollow.includes("usePdfFields: false"), "עורך שאלון אינו AcroForm גולמי");
 assert(!openFollow.includes("<iframe"), "שאלון המשך אינו iframe במסך העריכה");
@@ -109,21 +129,6 @@ assert(app.includes("fillOriginalTemplate"), "מנוע מילוי רשמי לא 
 assert(healthRender.includes("כעת נעבור להצהרת הבריאות"), "נוסח הקראה נשאר כשהעורך סגור");
 
 console.log("\n6) תוויות עבריות בזמן ריצה");
-function extractMethod(src, name){
-  let start = src.indexOf("    async " + name + "(");
-  if(start < 0) start = src.indexOf("    " + name + "(");
-  if(start < 0) return "";
-  let i = src.indexOf("{", start);
-  let depth = 0;
-  for(; i < src.length; i++){
-    if(src[i] === "{") depth += 1;
-    else if(src[i] === "}"){
-      depth -= 1;
-      if(depth === 0) return src.slice(start, i + 1);
-    }
-  }
-  return "";
-}
 const vm = require("vm");
 const humanizeSrc = [
   extractMethod(app, "_mcPdfFieldStemMap"),
@@ -148,17 +153,28 @@ assert(labelOf("PIDChild1") === "ילד 1 — תעודת זהות", "PIDChild1 �
 console.log("\n7) שאלה↔שאלון 1:1 + עברית במקום מפתח אנגלי");
 const qTextFn = extractMethod(app, "_mcHealthQText");
 const hitsFn = extractMethod(app, "_mcFollowupHitsForQuestion");
+const clalListFn = extractMethod(app, "_mcClalLetterList");
+const aliasFn = extractMethod(app, "_mcQuestionnaireNumAliases");
+const overlapFn = extractMethod(app, "_mcQuestionnaireNumsOverlap");
+const companyFn = extractMethod(app, "_mcFollowupCompanyKey");
 const draftFn = extractMethod(app, "_mcRenderDraftHealthFormHtml");
 const isHealthFn = extractMethod(app, "_mcIsHealthPdfField");
 assert(qTextFn.includes("resolveHealthQuestionDisplayText"), "תווית שאלה מהקטלוג העברי");
 assert(qTextFn.includes("groups[i]?.question?.text"), "לא מחליפים טקסט שאלה בשם מבוטח");
 assert(!qTextFn.includes("insured?.label"), "שם מבוטח אינו תווית השאלה");
 assert(app.includes("_mcFollowupHitsForQuestion(rec, qKey, insId, questionnaireNos){"), "חיבור שאלון לפי שאלה+חברה+מבוטח");
+assert(app.includes("_mcHealthQuestionnaireNosForQKey(rec, qKey){"), "מספר שאלון נשלף גם בלי מטא מוכן");
+assert(app.includes("_mcSyntheticFollowupRow(companyKey, insId, qNum, qKey){"), "כן פותח שאלון גם בלי רשומת מסילה");
+assert(app.includes("_mcParseFollowupType(type){"), "פתיחת שאלון לפי סוג followup:חברה|מבוטח|מספר");
+assert(app.includes("_mcQuestionnaireNumAliases(num){"), "כלל 19 ↔ יט");
 assert(app.includes("_mcHealthManualFieldsHtml(qKey, insId, fields, stored, hidden){"), "שדות מילוי ידני לשאלה בלי שאלון");
 assert(app.includes('class="mcFormEd__manual"'), "בלוק שדות ידניים בעורך");
 assert(css.includes(".mcFormEd__manual{"), "עיצוב שדות ידניים");
 assert(css.includes(".mcFormEd__qFollow{"), "רמז מספר שאלון על השאלה");
 const yesSlice = sliceBetween(app, "async _mcOnHealthChoiceInEditor(rec, el){", "async _mcReturnFromFollowupEditor(rec){");
+assert(yesSlice.includes("ensureGiWizardJsLoaded"), "כן טוען את קטלוג השאלונים לפני הפתיחה");
+assert(yesSlice.includes("_mcHealthQuestionnaireNosForQKey(rec, qKey)"), "כן מוצא את מספר השאלון של אותה שאלה");
+assert(yesSlice.includes("_mcSyntheticFollowupRow"), "כן פותח שאלון גם אם המסילה עדיין ריקה");
 assert(yesSlice.includes("_mcFollowupHitsForQuestion(fresh, qKey, insId, nos)"), "כן פותח רק שאלון של אותה שאלה");
 assert(!yesSlice.includes("_renderHealthDeclarationBody"), "כן לא קופץ חזרה לסיכום/גובה-משקל");
 assert(!yesSlice.includes("rail.follow.find"), "אין נפילה לשאלון אקראי של המבוטח");
@@ -183,6 +199,7 @@ const qSandbox = {
     }
   },
   GI_FOLLOWUP_ZIP_CONFIG: {
+    CLAL_LETTERS: ["א","ב","ג","ד","ה","ו","ז","ח","ט","י","יא","יב","יג","יד","טו","טז","יז","יח","יט","כ","כא","כב","כג"],
     companyKeyFromQKey(qKey){
       if(String(qKey).startsWith("phoenix_")) return "phoenix";
       if(String(qKey).startsWith("clal_")) return "clal";
@@ -202,10 +219,11 @@ vm.runInContext(
   "      { type: 'followup:phoenix|ins1|20', entry: { insuredId: 'ins1', companyKey: 'phoenix', questionnaireNum: '20', qKeys: ['phoenix_critical_illness__ci_tests'] } },\n" +
   "      { type: 'followup:phoenix|ins1|2', entry: { insuredId: 'ins1', companyKey: 'phoenix', questionnaireNum: '2', qKeys: ['phoenix_critical_illness__ci_heart'] } },\n" +
   "      { type: 'followup:phoenix|ins1|22', entry: { insuredId: 'ins1', companyKey: 'phoenix', questionnaireNum: '22', qKeys: ['phoenix_critical_illness__ci_family'] } },\n" +
-  "      { type: 'followup:clal|ins1|18', entry: { insuredId: 'ins1', companyKey: 'clal', questionnaireNum: '18', qKeys: ['clal_health__tests'] } }\n" +
+  "      { type: 'followup:clal|ins1|18', entry: { insuredId: 'ins1', companyKey: 'clal', questionnaireNum: '18', qKeys: ['clal_health__tests'] } },\n" +
+  "      { type: 'followup:clal|ins1|19', entry: { insuredId: 'ins1', companyKey: 'clal', questionnaireNum: '19', qKeys: ['clal_reproductive'] } }\n" +
   "    ] };\n" +
   "  },\n" +
-  qTextFn + ",\n" + hitsFn + ",\n" + isHealthFn + "\n}; this.api = api;",
+  qTextFn + ",\n" + clalListFn + ",\n" + aliasFn + ",\n" + overlapFn + ",\n" + companyFn + ",\n" + hitsFn + ",\n" + isHealthFn + "\n}; this.api = api;",
   qSandbox
 );
 const smokingHe = qSandbox.api._mcHealthQText("phoenix_critical_illness__ci_smoking");
@@ -225,6 +243,8 @@ const smokeHits = qSandbox.api._mcFollowupHitsForQuestion({}, "phoenix_critical_
 assert(smokeHits.length === 0, "עישון CI בלי questionnaireNos לא פותח שאלון זר");
 const familyHits = qSandbox.api._mcFollowupHitsForQuestion({}, "phoenix_critical_illness__ci_family", "ins1", ["22"]);
 assert(familyHits.length === 1 && familyHits[0].entry.questionnaireNum === "22", "משפחה CI → שאלון 22");
+const clalLetterHits = qSandbox.api._mcFollowupHitsForQuestion({}, "clal_reproductive", "ins1", ["יט"]);
+assert(clalLetterHits.length === 1 && clalLetterHits[0].entry.questionnaireNum === "19", "כלל יט תואם שאלון 19 במסילה");
 
 console.log("\n8) עורך שאלון המשך = דף השאלון בלבד, לכל החברות");
 assert(app.includes("getPhoenixFollowupSchemas"), "פניקס — סכמת דף שאלון");
@@ -242,6 +262,9 @@ const labelFn = extractMethod(app, "_mcFollowupFallbackLabel");
 const storeFn = extractMethod(app, "_mcFollowupFieldStorageKey");
 const valFn = extractMethod(app, "_mcFollowupFieldValue");
 const healthValFn = extractMethod(app, "_mcFollowupHealthResponseValues");
+const fallbackFieldsFn = extractMethod(app, "_mcFollowupFallbackFields");
+const titleFn = extractMethod(app, "_mcFollowupEditorTitle");
+const wizardApiFn = extractMethod(app, "_mcWizardApi");
 assert(!!schemaFn && !!editorFn, "חולצו עוזרי עורך שאלון");
 const fSandbox = {
   safeTrim: (v) => (v == null ? "" : String(v).trim()),
@@ -261,7 +284,9 @@ vm.runInContext(
   "const api = {\n" +
   "  _getFreshCustomerRecord(){ return { payload: {} }; },\n" +
   "  _mcHumanizePdfFieldName(n){ return n; },\n" +
-  schemaFn + ",\n" + editorFn + ",\n" + headerFn + ",\n" + labelFn + ",\n" + storeFn + ",\n" + valFn + ",\n" + healthValFn + "\n}; this.api = api;",
+  clalListFn + ",\n" + aliasFn + ",\n" + overlapFn + ",\n" + companyFn + ",\n" + wizardApiFn + ",\n" +
+  schemaFn + ",\n" + editorFn + ",\n" + headerFn + ",\n" + labelFn + ",\n" + storeFn + ",\n" + valFn + ",\n" + healthValFn + ",\n" +
+  fallbackFieldsFn + ",\n" + titleFn + "\n}; this.api = api;",
   fSandbox
 );
 function labelsOf(company, num){
@@ -282,8 +307,21 @@ assert(labelsOf("migdal", "20").some((t) => t.indexOf("קרוב") >= 0), "מגד
 assert(namesOf("clal", "יט").every((n) => n.indexOf("Insured") < 0 && n.indexOf("Business") < 0), "אין שדות כותרת בשמות השדות");
 assert(fSandbox.api._mcIsFollowupHeaderField("InsuredHight") === true, "גובה PDF הוא שדה כותרת");
 assert(fSandbox.api._mcIsFollowupHeaderField("BusinessDMNumber") === true, "מספר עסק הוא שדה כותרת");
+assert(fSandbox.api._mcIsFollowupHeaderField("CQ6") === true, "CQ6 הוא שדה PDF ולא שאלת השאלון");
+assert(fSandbox.api._mcIsFollowupHeaderField("InsurancedName") === true, "InsurancedName הוא שדה PDF");
+assert(fSandbox.api._mcIsFollowupHeaderField("DetailLineCQ3") === true, "DetailLine הוא שדה PDF");
 assert(fSandbox.api._mcIsFollowupHeaderField("diagnosis") === false, "אבחנה אינה שדה כותרת");
 assert(!fSandbox.api._mcFollowupFallbackLabel("InsuredFirstName", ""), "אין תווית אנגלית לשם PDF");
+const dumped = fSandbox.api._mcFollowupEditorFields(
+  { companyKey: "clal", questionnaireNum: "יט", insuredId: "ins1", followupData: { CQ6: "x", InsurancedName: "דנה", DetailLineCQ3: "z", PIDInsuranced: "1" } },
+  { html: { CQ6: "a", PIDInsuranced: "b", InsurancedName: "c" } }
+);
+assert(dumped.every((f) => String(f.label + f.name).indexOf("CQ") < 0 && String(f.label + f.name).indexOf("Insuranced") < 0), "כלל יט לא מציג שמות AcroForm");
+const unknownDump = fSandbox.api._mcFollowupEditorFields(
+  { companyKey: "unknown", questionnaireNum: "99", followupData: { CQ6: "x", InsurancedName: "y" } },
+  { html: { CQ6: "a", DetailLineCQ2: "b" } }
+);
+assert(unknownDump.every((f) => /[\u0590-\u05FF]/.test(f.label) && !/^CQ/i.test(f.name) && String(f.label).indexOf("CQ") < 0), "בלי סכמה לא שופכים שדות PDF");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));

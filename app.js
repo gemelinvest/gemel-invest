@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260914-mc-followup-page-v1";
+  const BUILD = "20260914-mc-followup-qfix-v2";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -42336,7 +42336,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260914-mc-followup-page-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260914-mc-followup-qfix-v2";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -42356,8 +42356,8 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-page-v1";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mc-followup-page-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mc-followup-qfix-v2";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -43010,18 +43010,18 @@ UsersGateUI.init();
     "./ayalon-health-sim.css?v=20260810-sim-mockup-v2",
     "./ayalon-ci-sim.css?v=20260811-ayl-ci-v1",
     "./hachshara-health-sim.css?v=20260810-sim-mockup-v2",
-    "./hachshara-risk-sim.css?v=20260914-mc-followup-page-v1",
-    "./hachshara-mortgage-risk-sim.css?v=20260914-mc-followup-page-v1",
+    "./hachshara-risk-sim.css?v=20260914-mc-followup-qfix-v2",
+    "./hachshara-mortgage-risk-sim.css?v=20260914-mc-followup-qfix-v2",
     "./migdal-health-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
-    "./menora-ci-sim.css?v=20260914-mc-followup-page-v1",
+    "./menora-ci-sim.css?v=20260914-mc-followup-qfix-v2",
     "./clal-health-sim.css?v=20260812-cll-health-v1",
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260914-mc-followup-page-v1",
-    "./simulators-shell.css?v=20260914-mc-followup-page-v1"
+    "./simulators-center.css?v=20260914-mc-followup-qfix-v2",
+    "./simulators-shell.css?v=20260914-mc-followup-qfix-v2"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -44383,7 +44383,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260914-mc-followup-page-v1";
+  const GI_WIZARD_JS_VERSION = "20260914-mc-followup-qfix-v2";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -72052,24 +72052,181 @@ ${inner}
       return `<div class="mcFormEd__qFollow">שאלון ${escapeHtml(list.join(", "))}</div>`;
     },
 
+    _mcClalLetterList(){
+      const cfg = (typeof GI_FOLLOWUP_ZIP_CONFIG !== "undefined") ? GI_FOLLOWUP_ZIP_CONFIG : null;
+      if(cfg && Array.isArray(cfg.CLAL_LETTERS) && cfg.CLAL_LETTERS.length) return cfg.CLAL_LETTERS.slice();
+      return ["א","ב","ג","ד","ה","ו","ז","ח","ט","י","יא","יב","יג","יד","טו","טז","יז","יח","יט","כ","כא","כב","כג"];
+    },
+
+    _mcQuestionnaireNumAliases(num){
+      const n = String(num == null ? "" : num).trim();
+      if(!n) return [];
+      const out = [n];
+      const letters = this._mcClalLetterList();
+      const idx = letters.indexOf(n);
+      if(idx >= 0) out.push(String(idx + 1));
+      const parsed = parseInt(n, 10);
+      if(Number.isFinite(parsed) && parsed >= 1 && parsed <= letters.length && String(parsed) === n){
+        out.push(letters[parsed - 1]);
+      }
+      return out;
+    },
+
+    _mcQuestionnaireNumsOverlap(left, right){
+      const a = Object.create(null);
+      (Array.isArray(left) ? left : [left]).forEach((v) => {
+        this._mcQuestionnaireNumAliases(v).forEach((alias) => { a[alias] = true; });
+      });
+      const list = Array.isArray(right) ? right : [right];
+      for(let i = 0; i < list.length; i++){
+        const aliases = this._mcQuestionnaireNumAliases(list[i]);
+        for(let j = 0; j < aliases.length; j++){
+          if(a[aliases[j]]) return true;
+        }
+      }
+      return false;
+    },
+
+    _mcFollowupCompanyKey(entryOrQKey){
+      if(typeof entryOrQKey === "string"){
+        const fromKey = (typeof GI_FOLLOWUP_ZIP_CONFIG !== "undefined" && GI_FOLLOWUP_ZIP_CONFIG.companyKeyFromQKey)
+          ? GI_FOLLOWUP_ZIP_CONFIG.companyKeyFromQKey(entryOrQKey) : "";
+        if(fromKey) return fromKey === "magdal" ? "migdal" : fromKey;
+        const prefix = String(entryOrQKey).split(/[_-]/)[0] || "";
+        if(prefix === "magdal") return "migdal";
+        return prefix;
+      }
+      const entry = entryOrQKey && typeof entryOrQKey === "object" ? entryOrQKey : {};
+      let k = safeTrim(entry.companyKey);
+      if(k === "magdal") k = "migdal";
+      const cfg = (typeof GI_FOLLOWUP_ZIP_CONFIG !== "undefined") ? GI_FOLLOWUP_ZIP_CONFIG : null;
+      if(k && cfg && cfg.COMPANIES && cfg.COMPANIES[k]) return k;
+      if(cfg && cfg.companyKeyFromLabel){
+        const fromLabel = cfg.companyKeyFromLabel(entry.company || k);
+        if(fromLabel) return fromLabel === "magdal" ? "migdal" : fromLabel;
+      }
+      const blob = (k + " " + safeTrim(entry.company)).toLowerCase();
+      if(/clal|כלל/.test(blob)) return "clal";
+      if(/phoenix|פניקס/.test(blob)) return "phoenix";
+      if(/hachshara|הכשרה/.test(blob)) return "hachshara";
+      if(/menora|מנורה/.test(blob)) return "menora";
+      if(/ayalon|איילון/.test(blob)) return "ayalon";
+      if(/migdal|magdal|מגדל/.test(blob)) return "migdal";
+      return k;
+    },
+
+    _mcParseFollowupType(type){
+      const m = /^followup:([^|]+)\|([^|]*)\|(.+)$/.exec(String(type || ""));
+      if(!m) return null;
+      const companyKey = this._mcFollowupCompanyKey({ companyKey: m[1] });
+      return {
+        companyKey,
+        insuredId: m[2],
+        questionnaireNum: m[3]
+      };
+    },
+
+    _mcFollowupEntryFromEditor(ed){
+      if(ed && ed.entry && (ed.entry.companyKey || ed.entry.questionnaireNum)) return ed.entry;
+      return this._mcParseFollowupType(ed && ed.type) || {};
+    },
+
+    _mcSyntheticFollowupRow(companyKey, insId, qNum, qKey){
+      const company = this._mcFollowupCompanyKey({ companyKey });
+      const num = String(qNum || "").trim();
+      const entry = {
+        companyKey: company,
+        insuredId: String(insId || ""),
+        questionnaireNum: num,
+        qKeys: qKey ? [qKey] : []
+      };
+      return {
+        kind: "followup",
+        type: this._mcFollowupTypeOfEntry(entry),
+        name: "שאלון " + num,
+        entry
+      };
+    },
+
+    _mcWizardApi(){
+      try{
+        if(typeof Wizard !== "undefined" && Wizard && typeof Wizard.getClalFollowupSchemas === "function") return Wizard;
+      }catch(_e){}
+      try{
+        if(typeof window !== "undefined" && window.Wizard && typeof window.Wizard.getClalFollowupSchemas === "function"){
+          return window.Wizard;
+        }
+      }catch(_e2){}
+      try{
+        if(typeof Wizard !== "undefined") return Wizard;
+      }catch(_e3){}
+      return (typeof window !== "undefined") ? window.Wizard : null;
+    },
+
+    _mcHealthQuestionnaireNosForQKey(rec, qKey){
+      const key = safeTrim(qKey);
+      if(!key) return [];
+      try{
+        const meta = this._mcHealthMetaForQKey(rec, key);
+        if(meta.questionnaireNos && meta.questionnaireNos.length) return meta.questionnaireNos.slice();
+        const letter = safeTrim(this._mcHealthMetaMap(rec)[key]?.questionnaireLetter);
+        if(letter){
+          const parts = letter.split(/[,،\s]+/).map((s) => String(s || "").trim()).filter(Boolean);
+          if(parts.length) return parts;
+        }
+      }catch(_e){}
+      const W = this._mcWizardApi();
+      const fns = [
+        "getClalHealthSchema", "getClalRiskHealthSchema", "getClalCriticalCancerHealthSchema",
+        "getPhoenixHealthSchema", "getPhoenixCriticalIllnessHealthSchema", "getPhoenixCancerHealthSchema",
+        "getPhoenixRiskMortgageHealthSchema", "getHachsharaHealthSchema", "getHachsharaCriticalHealthSchema",
+        "getHachsharaRiskHealthSchema", "getHachsharaMortgageHealthSchema", "getMenoraHealthSchema",
+        "getMenoraCriticalHealthSchema", "getMenoraCancerHealthSchema", "getMenoraRiskHealthSchema",
+        "getMenoraMortgageHealthSchema", "getAyalonHealthSchema", "getAyalonCriticalHealthSchema",
+        "getAyalonCancerHealthSchema", "getAyalonRiskHealthSchema", "getAyalonMortgageHealthSchema",
+        "getMagdalHealthSchema", "getMagdalRiskHealthSchema", "getMagdalMortgageHealthSchema",
+        "getMagdalLifeHealthSchema", "getMagdalCancerHealthSchema"
+      ];
+      for(let i = 0; i < fns.length; i++){
+        if(!W || typeof W[fns[i]] !== "function") continue;
+        try{
+          const cats = W[fns[i]]() || [];
+          const list = Array.isArray(cats) ? cats : [];
+          for(let c = 0; c < list.length; c++){
+            const qs = list[c].questions || [];
+            for(let q = 0; q < qs.length; q++){
+              if(safeTrim(qs[q]?.key) !== key) continue;
+              const nos = Array.isArray(qs[q].questionnaireNos) ? qs[q].questionnaireNos.map(String).filter(Boolean) : [];
+              if(nos.length) return nos;
+              const letter = safeTrim(qs[q].questionnaireLetter);
+              if(letter) return letter.split(/[,،\s]+/).map((s) => String(s || "").trim()).filter(Boolean);
+            }
+          }
+        }catch(_e2){}
+      }
+      return [];
+    },
+
     _mcFollowupHitsForQuestion(rec, qKey, insId, questionnaireNos){
       const rail = this._mcCollectHealthFormRail(rec);
       const nos = (Array.isArray(questionnaireNos) ? questionnaireNos : []).map(String).filter(Boolean);
-      const company = (typeof GI_FOLLOWUP_ZIP_CONFIG !== "undefined" && GI_FOLLOWUP_ZIP_CONFIG.companyKeyFromQKey)
-        ? GI_FOLLOWUP_ZIP_CONFIG.companyKeyFromQKey(qKey) : "";
+      const company = this._mcFollowupCompanyKey(qKey);
+      const wantIns = safeTrim(insId);
       const hits = (rail.follow || []).filter((row) => {
         const entry = row.entry || {};
-        if(safeTrim(entry.insuredId) !== safeTrim(insId)) return false;
-        if(company && safeTrim(entry.companyKey) && safeTrim(entry.companyKey) !== company) return false;
+        const rowIns = safeTrim(entry.insuredId);
+        if(wantIns && rowIns && rowIns !== wantIns) return false;
+        const rowCompany = this._mcFollowupCompanyKey(entry);
+        if(company && rowCompany && rowCompany !== company) return false;
         const num = String(entry.questionnaireNum || "");
-        if(nos.length) return !!(num && nos.indexOf(num) >= 0);
+        if(nos.length) return this._mcQuestionnaireNumsOverlap(nos, num);
         const keys = Array.isArray(entry.qKeys) ? entry.qKeys.map(String) : [];
         return keys.indexOf(qKey) >= 0;
       });
       hits.sort((a, b) => {
         if(!nos.length) return 0;
-        const ia = nos.indexOf(String(a.entry?.questionnaireNum || ""));
-        const ib = nos.indexOf(String(b.entry?.questionnaireNum || ""));
+        const ia = nos.findIndex((n) => this._mcQuestionnaireNumsOverlap(n, a.entry?.questionnaireNum));
+        const ib = nos.findIndex((n) => this._mcQuestionnaireNumsOverlap(n, b.entry?.questionnaireNum));
         return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
       });
       return hits;
@@ -72634,8 +72791,9 @@ ${inner}
         const leaf = String(fieldName || "").replace(/^.*__/, "").replace(/^.*\./, "");
         if(leaf && labels[leaf]) return labels[leaf];
         const he = this._mcHumanizePdfFieldName(leaf || fieldName);
-        if(he) return he;
-        return this._mcFollowupFallbackLabel(leaf || fieldName, "");
+        if(he && /[\u0590-\u05FF]/.test(he) && !this._mcIsFollowupHeaderField(leaf || fieldName)) return he;
+        const fallback = this._mcFollowupFallbackLabel(leaf || fieldName, "");
+        return /[\u0590-\u05FF]/.test(fallback) ? fallback : "";
       }
       const meta = this._mcPdfHealthFieldMeta(type, fieldName);
       if(meta.text) return meta.text;
@@ -72736,6 +72894,9 @@ ${inner}
             }).join("");
             const rec = this._getFreshCustomerRecord();
             const qMeta = meta.qKey ? this._mcHealthMetaForQKey(rec, meta.qKey) : { fields: [], questionnaireNos: [] };
+            if(meta.qKey && !(qMeta.questionnaireNos && qMeta.questionnaireNos.length)){
+              qMeta.questionnaireNos = this._mcHealthQuestionnaireNosForQKey(rec, meta.qKey);
+            }
             const insId = this._mcInsuredIdForHealthWho(rec, meta.who, f.name);
             const isYes = val === "1" || val === "True" || val === "yes";
             const stored = (() => {
@@ -72877,7 +73038,7 @@ ${inner}
 
     _mcHealthFormEditorHtml(rec){
       const ed = this._mcHealthEditor || {};
-      const isFollow = ed.kind === "followup";
+      const isFollow = ed.kind === "followup" || String(ed.type || "").indexOf("followup:") === 0;
       const title = safeTrim(ed.title) || (isFollow ? "שאלון המשך" : this._mcJoinFormTitle(ed.type));
       const backAct = isFollow ? "health-followup-save" : "health-form-close";
       const backLabel = isFollow
@@ -72903,9 +73064,10 @@ ${inner}
         `</div>`;
       }
       const body = isFollow
-        ? this._mcRenderFollowupFallbackHtml(ed.fields && ed.fields.length
-          ? ed.fields
-          : this._mcFollowupEditorFields(ed.entry, this._mcGetFormEdits(rec)[ed.type]))
+        ? this._mcRenderFollowupFallbackHtml(this._mcFollowupEditorFields(
+          this._mcFollowupEntryFromEditor(ed),
+          this._mcGetFormEdits(rec)[ed.type]
+        ))
         : ((ed.usePdfFields && Array.isArray(ed.fields) && ed.fields.length)
           ? this._mcRenderPdfFieldsHtml(ed.type, ed.fields, ed.values)
           : this._mcRenderDraftHealthFormHtml(rec, ed.type, ed.draft));
@@ -72991,9 +73153,9 @@ ${inner}
       }
       if(/זוג/.test(whoS) || /Spouse|Bzug/i.test(String(fieldName || ""))){
         const sp = insureds.find((ins) => /spouse|secondary/i.test(safeTrim(ins?.type)));
-        return safeTrim(sp?.id) || safeTrim(insureds[1]?.id);
+        return safeTrim(sp?.id) || safeTrim(insureds[1]?.id) || safeTrim(insureds[0]?.id);
       }
-      return safeTrim(insureds[0]?.id);
+      return safeTrim(insureds[0]?.id) || "primary";
     },
 
     _mcFollowupTypeOfEntry(entry){
@@ -73004,6 +73166,8 @@ ${inner}
       const n = safeTrim(name);
       if(!n) return true;
       if(/[\u0590-\u05FF]/.test(n)) return false;
+      if(/^(CQ\d|DetailLine|Insuranced|PIDInsuranced)/i.test(n)) return true;
+      if(/^CQ/i.test(n) || /^DetailLine/i.test(n) || /Insuranced/i.test(n)) return true;
       if(/^(Insured|Business|SuggestNumber|CollectiveNumber|Text\d+)$/i.test(n)) return true;
       if(/Insured|BusinessDM|SuggestNumber|CollectiveNumber/i.test(n)) return true;
       if(/^(FirstName|LastName|FullName|PID|Hight|Height|Weight|Gender|BirthDate|InsuredClient|InsuredHight|InsuredWeight)$/i.test(n)) return true;
@@ -73012,17 +73176,20 @@ ${inner}
     },
 
     _mcFollowupWizardSchema(entry){
-      const company = safeTrim(entry?.companyKey);
+      const company = this._mcFollowupCompanyKey(entry);
       const qId = safeTrim(entry?.questionnaireNum);
       if(!qId) return null;
       const pick = (pack) => {
         if(!pack || typeof pack !== "object") return null;
         if(pack[qId]) return pack[qId];
+        const aliases = this._mcQuestionnaireNumAliases(qId);
+        for(let i = 0; i < aliases.length; i++){
+          if(pack[aliases[i]]) return pack[aliases[i]];
+        }
         const asNum = String(Number(qId));
         if(asNum !== "NaN" && pack[asNum]) return pack[asNum];
         try{
-          const letters = (typeof GI_FOLLOWUP_ZIP_CONFIG !== "undefined" && Array.isArray(GI_FOLLOWUP_ZIP_CONFIG.CLAL_LETTERS))
-            ? GI_FOLLOWUP_ZIP_CONFIG.CLAL_LETTERS : [];
+          const letters = this._mcClalLetterList();
           const idx = Number(qId) - 1;
           if(Number.isFinite(idx) && idx >= 0 && letters[idx] && pack[letters[idx]]) return pack[letters[idx]];
         }catch(_e){}
@@ -73036,7 +73203,8 @@ ${inner}
         return { title: safeTrim(schema.title) || fallbackTitle, fields };
       };
       try{
-        if(typeof Wizard === "undefined") return null;
+        const W = this._mcWizardApi();
+        if(!W) return null;
         const fn = {
           phoenix: "getPhoenixFollowupSchemas",
           clal: "getClalFollowupSchemas",
@@ -73046,8 +73214,8 @@ ${inner}
           migdal: "getMagdalQuestionnaireMap",
           magdal: "getMagdalQuestionnaireMap"
         }[company];
-        if(fn && typeof Wizard[fn] === "function"){
-          const found = asFields(pick(Wizard[fn]() || {}), "שאלון " + qId);
+        if(fn && typeof W[fn] === "function"){
+          const found = asFields(pick(W[fn]() || {}), "שאלון " + qId);
           if(found) return found;
         }
       }catch(_e){}
@@ -73119,7 +73287,7 @@ ${inner}
           value: this._mcFollowupFieldValue(entry, overlayObj, field),
           label: safeTrim(field.label) || this._mcFollowupFallbackLabel(field.key, ""),
           section: schema.title
-        })).filter((row) => row.name && /[\u0590-\u05FF]/.test(row.label));
+        })).filter((row) => row.name && /[\u0590-\u05FF]/.test(row.label) && !this._mcIsFollowupHeaderField(row.name));
       }
       return this._mcFollowupFallbackFields(entry, overlayObj);
     },
@@ -73156,36 +73324,52 @@ ${inner}
     },
 
     _mcFollowupFallbackFields(entry, overlay){
+      const schemaTitle = safeTrim(this._mcFollowupEditorTitle(entry, "")) || ("שאלון " + safeTrim(entry?.questionnaireNum));
       const data = Object.assign({}, entry?.followupData || {}, overlay?.html || {});
       const labels = entry?.followupLabels && typeof entry.followupLabels === "object" ? entry.followupLabels : {};
       const seen = new Set();
       const out = [];
-      const push = (name) => {
+      const push = (name, forcedLabel) => {
         const n = safeTrim(name);
         if(!n || seen.has(n) || this._mcIsFollowupHeaderField(n)) return;
-        const label = this._mcFollowupFallbackLabel(n, labels[n]);
-        if(!label || !/[\u0590-\u05FF]/.test(label)) return;
+        const label = safeTrim(forcedLabel) || this._mcFollowupFallbackLabel(n, labels[n]);
+        if(!label || !/[\u0590-\u05FF]/.test(label) || this._mcIsFollowupHeaderField(label)) return;
         seen.add(n);
         out.push({
           name: n,
-          type: "text",
+          type: /notes|details|treatment|diagnosis/i.test(n) ? "textarea" : "text",
           value: data[n] == null ? "" : String(data[n]),
-          label
+          label,
+          section: schemaTitle
         });
       };
-      Object.keys(labels).forEach(push);
-      Object.keys(data).forEach(push);
+      Object.keys(labels).forEach((k) => push(k, labels[k]));
+      ["diagnosis", "date", "treatment", "hospital", "notes"].forEach((k) => {
+        push(this._mcFollowupFieldStorageKey(entry, k) || k, this._mcFollowupFallbackLabel(k, ""));
+      });
       if(!out.length){
-        ["diagnosis", "date", "treatment", "hospital", "notes"].forEach(push);
+        out.push({
+          name: this._mcFollowupFieldStorageKey(entry, "notes") || "notes",
+          type: "textarea",
+          value: "",
+          label: "פירוט לשאלון",
+          section: schemaTitle
+        });
       }
       return out;
     },
 
     _mcRenderFollowupFallbackHtml(fields){
-      const list = Array.isArray(fields) ? fields : [];
+      const list = (Array.isArray(fields) ? fields : []).filter((f) => {
+        const lab = safeTrim(f && (f.label || ""));
+        const name = safeTrim(f && f.name);
+        if(!f || !name) return false;
+        if(this._mcIsFollowupHeaderField(name) || this._mcIsFollowupHeaderField(lab)) return false;
+        return /[\u0590-\u05FF]/.test(lab);
+      });
       const title = safeTrim(list[0]?.section) || "שאלות השאלון";
       const rows = list.map((f) => {
-        const lab = escapeHtml(f.label || f.name);
+        const lab = escapeHtml(f.label);
         const val = escapeHtml(f.value || "");
         const name = escapeHtml(f.name);
         if(f.type === "select" && Array.isArray(f.options) && f.options.length){
@@ -73246,8 +73430,10 @@ ${inner}
         return;
       }
       if(this._mcHealthEditor && this._mcHealthEditor.kind === "followup") return;
-      const qMeta = this._mcHealthMetaForQKey(rec, qKey);
-      const nos = qMeta.questionnaireNos || [];
+      try{
+        if(typeof ensureGiWizardJsLoaded === "function") await ensureGiWizardJsLoaded();
+      }catch(_eWiz){}
+      const nos = this._mcHealthQuestionnaireNosForQKey(rec, qKey);
       if(!nos.length){
         const block = el.closest && el.closest(".mcFormEd__q");
         if(block){
@@ -73264,24 +73450,18 @@ ${inner}
         }
       }catch(_e2){}
       const fresh = this._getFreshCustomerRecord() || rec;
-      const hits = this._mcFollowupHitsForQuestion(fresh, qKey, insId, nos);
-      const target = hits[0];
+      let hits = this._mcFollowupHitsForQuestion(fresh, qKey, insId, nos);
+      let target = hits[0];
       if(!target || !target.type){
-        const block = el.closest && el.closest(".mcFormEd__q");
-        if(block){
-          block.querySelectorAll(".mcFormEd__manual").forEach((box) => {
-            const mark = box.getAttribute("data-mc-manual-for") || "";
-            if(mark === (qKey + "|" + insId) || mark === qKey) box.hidden = false;
-          });
-        }
-        return;
+        const company = this._mcFollowupCompanyKey(qKey);
+        target = this._mcSyntheticFollowupRow(company, insId, nos[0], qKey);
       }
       const ed = this._mcHealthEditor;
       const returnTo = (ed && ed.kind === "join")
         ? { kind: "join", type: ed.type, title: ed.title }
         : null;
       this._mcFlushInlineFormEditor(fresh);
-      await this._mcOpenFollowupFromRail(fresh, target.type, { returnTo });
+      await this._mcOpenFollowupFromRail(fresh, target.type, { returnTo, entry: target.entry });
     },
 
     async _mcReturnFromFollowupEditor(rec){
@@ -73412,6 +73592,9 @@ ${inner}
     },
 
     async _mcOpenJoinFormFromRail(rec, type){
+      if(String(type || "").indexOf("followup:") === 0){
+        return this._mcOpenFollowupFromRail(rec, type);
+      }
       const ui = (typeof CustomerFileUI !== "undefined") ? CustomerFileUI : null;
       const spec = ui?.officialJoinFormPreviewSpec?.(type);
       if(!ui || !spec){
@@ -73425,6 +73608,7 @@ ${inner}
       this._mcHealthEditor = { kind: "join", type, title: this._mcJoinFormTitle(type), loading: true, error: "" };
       this._renderHealthDeclarationBody(rec);
       try{
+        if(typeof ensureGiWizardJsLoaded === "function") await ensureGiWizardJsLoaded();
         if(typeof spec.ensure === "function") await spec.ensure();
         const mod = window[spec.globalName];
         if(!mod?.fillOriginalTemplate || typeof mod.buildDraft !== "function"){
@@ -73483,7 +73667,17 @@ ${inner}
 
     async _mcOpenFollowupFromRail(rec, type, opts){
       const rail = this._mcCollectHealthFormRail(rec);
-      const row = rail.follow.find((f) => f.type === type);
+      let row = (rail.follow || []).find((f) => f.type === type);
+      if(!row?.entry){
+        const parsed = (opts && opts.entry) ? opts.entry : this._mcParseFollowupType(type);
+        if(parsed && (parsed.companyKey || parsed.questionnaireNum)){
+          row = {
+            type,
+            name: "שאלון " + safeTrim(parsed.questionnaireNum),
+            entry: parsed
+          };
+        }
+      }
       if(!row?.entry){
         this._mcToast("שאלון המשך", "השאלון עדיין לא נפתח — סמנו כן בהצהרה.", "warn");
         return;
