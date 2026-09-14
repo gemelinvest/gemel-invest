@@ -4,7 +4,7 @@
 (() => {
   "use strict";
 
-  const TAG = "20260914-remote-support-admin-fs-v1";
+  const TAG = "20260914-remote-support-control-latency-v1";
   const TOKEN_KEY = "GI_RS_ACTOR_TOKEN_V1";
   const SESSION_KEY = "GI_RS_SESSION_V1";
   const ADMIN_TOPIC = "gi-rs-admins";
@@ -26,13 +26,16 @@
     inbox: [],
     pc: null,
     dc: null,
+    dcCmd: null,
+    dcMove: null,
     localStream: null,
     watchChannel: null,
     adminChannel: null,
     sigChannel: null,
     makingOffer: false,
     isAgentParty: false,
-    lastPointerSent: 0,
+    pendingMove: null,
+    moveRaf: 0,
     bound: false,
     partyId: "",
     pendingIce: [],
@@ -660,7 +663,16 @@
   }
 
   function teardownRtc(reason){
-    try { state.dc?.close?.(); } catch(_e) {}
+    if(state.moveRaf){
+      try { cancelAnimationFrame(state.moveRaf); } catch(_e0) {}
+    }
+    state.moveRaf = 0;
+    state.pendingMove = null;
+    try { state.dcMove?.close?.(); } catch(_e) {}
+    try { state.dcCmd?.close?.(); } catch(_e1) {}
+    try { state.dc?.close?.(); } catch(_e2) {}
+    state.dcMove = null;
+    state.dcCmd = null;
     state.dc = null;
     try {
       state.pc?.getSenders?.()?.forEach((sender) => {
@@ -687,12 +699,16 @@
     };
     pc.onconnectionstatechange = () => {
       const st = pc.connectionState;
+      if(st === "connected" && state.localStream){
+        void tuneLocalCapture(pc, state.localStream.getVideoTracks()[0]);
+      }
       if(st === "failed"){
         toast({ title: "החיבור נכשל", text: "לא ניתן ליצור חיבור WebRTC (NAT/חומת אש). אין פתרון דמה — נדרש STUN/TURN.", variant: "err" });
         void failSession("ice-failed");
       }
     };
     pc.ontrack = (ev) => {
+      tuneRemotePlayback(ev.receiver);
       const video = $("giRsAdminVideo");
       if(video){
         video.srcObject = ev.streams[0] || new MediaStream([ev.track]);
@@ -703,13 +719,17 @@
       bindDataChannel(ev.channel);
     };
     if(asOfferer){
-      const dc = pc.createDataChannel("gi-rs-control");
-      bindDataChannel(dc);
+      bindDataChannel(pc.createDataChannel("gi-rs-control", { ordered: true }));
+      bindDataChannel(pc.createDataChannel("gi-rs-move", { ordered: false, maxRetransmits: 0 }));
     }
   }
 
   function bindDataChannel(dc){
-    state.dc = dc;
+    if(!dc) return;
+    const label = trim(dc.label);
+    if(label === "gi-rs-move") state.dcMove = dc;
+    else state.dcCmd = dc;
+    state.dc = state.dcCmd || state.dcMove || dc;
     dc.onmessage = (ev) => {
       let msg = null;
       try { msg = JSON.parse(ev.data); } catch(_e) { return; }
@@ -718,6 +738,50 @@
       if(state.session?.status !== "control_granted" || !state.session?.controlPermission) return;
       applyRemoteControl(msg);
     };
+  }
+
+  function tuneRemotePlayback(receiver){
+    if(!receiver) return;
+    try {
+      if("jitterBufferTarget" in receiver) receiver.jitterBufferTarget = 0;
+    } catch(_e) {}
+    try {
+      if("playoutDelayHint" in receiver) receiver.playoutDelayHint = 0;
+    } catch(_e2) {}
+    try {
+      if("jitterBufferDelayHint" in receiver) receiver.jitterBufferDelayHint = 0;
+    } catch(_e3) {}
+  }
+
+  async function tuneLocalCapture(pc, track){
+    if(!pc || !track) return;
+    try { track.contentHint = "detail"; } catch(_e) {}
+    try { await track.applyConstraints({ frameRate: 30 }); } catch(_e2) {}
+    const sender = pc.getSenders?.()?.find((s) => s.track === track);
+    if(!sender) return;
+    try {
+      const caps = RTCRtpSender.getCapabilities?.("video");
+      const tr = pc.getTransceivers?.().find((t) => t.sender === sender);
+      if(caps?.codecs?.length && tr?.setCodecPreferences){
+        const preferred = [];
+        const rest = [];
+        caps.codecs.forEach((codec) => {
+          if(/vp8|h264/i.test(codec.mimeType || "")) preferred.push(codec);
+          else rest.push(codec);
+        });
+        if(preferred.length) tr.setCodecPreferences(preferred.concat(rest));
+      }
+    } catch(_e3) {}
+    try {
+      const params = sender.getParameters();
+      params.degradationPreference = "maintain-framerate";
+      if(!Array.isArray(params.encodings) || !params.encodings.length) params.encodings = [{}];
+      params.encodings[0].maxBitrate = 2500000;
+      params.encodings[0].maxFramerate = 30;
+      try { params.encodings[0].priority = "high"; } catch(_e4) {}
+      try { params.encodings[0].networkPriority = "high"; } catch(_e5) {}
+      await sender.setParameters(params);
+    } catch(_e6) {}
   }
 
   async function ensurePeer(asOfferer){
@@ -740,8 +804,8 @@
       await action("mark_connecting", state.session.id, {});
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
-          frameRate: { ideal: 12, max: 20 },
-          width: { max: 1600 },
+          frameRate: { ideal: 30, max: 30 },
+          width: { ideal: 1920, max: 1920 },
           displaySurface: "browser"
         },
         audio: false,
@@ -766,6 +830,7 @@
       });
       const pc = await ensurePeer(true);
       stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+      await tuneLocalCapture(pc, track);
       state.makingOffer = true;
       try {
         const offer = await pc.createOffer();
@@ -854,6 +919,10 @@
     return false;
   }
 
+  function fireDom(el, Ctor, name, init){
+    try { el.dispatchEvent(new Ctor(name, init)); } catch(_e) {}
+  }
+
   function applyRemoteControl(msg){
     if(state.session?.status !== "control_granted") return;
     const type = trim(msg.t);
@@ -863,26 +932,40 @@
       const el = document.elementFromPoint(x, y);
       if(!el || isSensitiveTarget(el)) return;
       const view = el.ownerDocument.defaultView;
-      const common = { bubbles: true, cancelable: true, view, clientX: x, clientY: y, button: 0 };
+      const common = {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        view,
+        clientX: x,
+        clientY: y,
+        screenX: x,
+        screenY: y,
+        button: 0,
+        buttons: msg.op === "down" ? 1 : 0,
+        pointerId: 1,
+        pointerType: "mouse",
+        isPrimary: true
+      };
       if(msg.op === "move"){
-        el.dispatchEvent(new PointerEvent("pointermove", common));
-        el.dispatchEvent(new MouseEvent("mousemove", common));
+        fireDom(el, PointerEvent, "pointermove", common);
+        fireDom(el, MouseEvent, "mousemove", common);
         return;
       }
       if(msg.op === "down"){
-        el.dispatchEvent(new PointerEvent("pointerdown", common));
-        el.dispatchEvent(new MouseEvent("mousedown", common));
+        fireDom(el, PointerEvent, "pointerdown", common);
+        fireDom(el, MouseEvent, "mousedown", common);
         return;
       }
       if(msg.op === "up"){
-        el.dispatchEvent(new PointerEvent("pointerup", common));
-        el.dispatchEvent(new MouseEvent("mouseup", common));
+        fireDom(el, PointerEvent, "pointerup", common);
+        fireDom(el, MouseEvent, "mouseup", common);
         try { el.click(); } catch(_e) {}
         try { el.focus?.(); } catch(_e2) {}
         return;
       }
       if(msg.op === "dbl"){
-        el.dispatchEvent(new MouseEvent("dblclick", common));
+        fireDom(el, MouseEvent, "dblclick", common);
         return;
       }
       if(msg.op === "scroll"){
@@ -917,8 +1000,39 @@
 
   function sendControl(msg){
     if(state.session?.status !== "control_granted") return;
-    if(!state.dc || state.dc.readyState !== "open") return;
-    try { state.dc.send(JSON.stringify(msg)); } catch(_e) {}
+    const isMove = msg?.t === "pointer" && msg.op === "move";
+    const dc = isMove ? (state.dcMove || state.dcCmd || state.dc) : (state.dcCmd || state.dc);
+    if(!dc || dc.readyState !== "open") return;
+    if(isMove && dc.bufferedAmount > 8192) return;
+    try { dc.send(JSON.stringify(msg)); } catch(_e) {}
+  }
+
+  function videoLetterboxRect(video){
+    const rect = video.getBoundingClientRect();
+    const vw = Number(video.videoWidth) || 0;
+    const vh = Number(video.videoHeight) || 0;
+    if(!rect.width || !rect.height) return null;
+    if(!vw || !vh){
+      return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+    }
+    const scale = Math.min(rect.width / vw, rect.height / vh);
+    const width = vw * scale;
+    const height = vh * scale;
+    return {
+      left: rect.left + (rect.width - width) / 2,
+      top: rect.top + (rect.height - height) / 2,
+      width,
+      height
+    };
+  }
+
+  function pointerFromVideoEvent(ev, video){
+    const box = videoLetterboxRect(video);
+    if(!box || !box.width || !box.height) return null;
+    const x = (ev.clientX - box.left) / box.width;
+    const y = (ev.clientY - box.top) / box.height;
+    if(x < 0 || x > 1 || y < 0 || y > 1) return null;
+    return { x, y };
   }
 
   function bindAdminVideoControls(){
@@ -927,17 +1041,22 @@
     video._giRsBound = true;
     const point = (ev, op, extra) => {
       if(state.session?.status !== "control_granted") return;
-      const rect = video.getBoundingClientRect();
-      if(!rect.width || !rect.height) return;
-      const x = (ev.clientX - rect.left) / rect.width;
-      const y = (ev.clientY - rect.top) / rect.height;
-      sendControl({ t: "pointer", op, x, y, ...(extra || {}) });
+      const norm = pointerFromVideoEvent(ev, video);
+      if(!norm) return;
+      sendControl({ t: "pointer", op, x: norm.x, y: norm.y, ...(extra || {}) });
     };
     video.addEventListener("mousemove", (ev) => {
-      const now = Date.now();
-      if(now - state.lastPointerSent < 50) return;
-      state.lastPointerSent = now;
-      point(ev, "move");
+      if(state.session?.status !== "control_granted") return;
+      const norm = pointerFromVideoEvent(ev, video);
+      if(!norm) return;
+      state.pendingMove = norm;
+      if(state.moveRaf) return;
+      state.moveRaf = requestAnimationFrame(() => {
+        state.moveRaf = 0;
+        const next = state.pendingMove;
+        state.pendingMove = null;
+        if(next) sendControl({ t: "pointer", op: "move", x: next.x, y: next.y });
+      });
     });
     video.addEventListener("mousedown", (ev) => { ev.preventDefault(); point(ev, "down"); });
     video.addEventListener("mouseup", (ev) => { ev.preventDefault(); point(ev, "up"); });
@@ -945,7 +1064,8 @@
     video.addEventListener("wheel", (ev) => {
       if(state.session?.status !== "control_granted") return;
       ev.preventDefault();
-      sendControl({ t: "pointer", op: "scroll", x: 0, y: 0, dx: ev.deltaX, dy: ev.deltaY });
+      const norm = pointerFromVideoEvent(ev, video) || { x: 0, y: 0 };
+      sendControl({ t: "pointer", op: "scroll", x: norm.x, y: norm.y, dx: ev.deltaX, dy: ev.deltaY });
     }, { passive: false });
     window.addEventListener("keydown", (ev) => {
       if(state.session?.status !== "control_granted") return;

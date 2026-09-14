@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260914-remote-support-admin-fs-v1";
+const TAG = "20260914-remote-support-control-latency-v1";
 let failed = 0;
 let passed = 0;
 
@@ -108,6 +108,15 @@ assert(js.includes("have-local-offer"), "ignores a duplicate answer after handsh
 assert(js.includes("queueSignal"), "serializes signaling messages");
 assert(js.includes("signalingPartyId"), "filters self-sent signaling");
 assert(js.includes("gi-rs-control"), "control datachannel");
+assert(js.includes("gi-rs-move"), "separate unreliable move channel");
+assert(js.includes("maxRetransmits: 0"), "moves are not queued behind lost packets");
+assert(js.includes("jitterBufferTarget"), "receiver uses a low-latency jitter buffer");
+assert(js.includes("contentHint"), "screen-share encoder hint for UI detail");
+assert(js.includes("ideal: 30"), "capture aims for 30fps");
+assert(!js.includes("ideal: 12"), "does not cap capture at 12fps");
+assert(js.includes("requestAnimationFrame"), "coalesces pointer moves per frame");
+assert(js.includes("videoWidth"), "maps clicks through the letterboxed video frame");
+assert(js.includes("bufferedAmount"), "drops stale moves if the channel is backed up");
 assert(js.includes("control_granted"), "control requires grant");
 assert(js.includes("input[type='password']"), "password fields blocked");
 assert(js.includes("cvv") && js.includes("cardNumber"), "payment fields blocked");
