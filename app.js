@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260914-mirror-script-order-v1";
+  const BUILD = "20260914-policy-row-clal-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -9520,17 +9520,30 @@
       });
       return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
     },
+    isClalLifeJoinPolicy(policy){
+      if(!policy || safeTrim(policy.company) !== "כלל") return false;
+      const blob = [policy?.type, policy?.productName, policy?.planName, policy?.label].map(safeTrim).join(" ");
+      if(/משכנתא/.test(blob) || /בריאות/.test(blob) || /מחלות\s*קשות/.test(blob)) return false;
+      return /ריסק/.test(blob) || /ביטוח\s*חיים/.test(blob);
+    },
     qualifiesForClalLifeCoupleForm(payload, rec){
       const list = this.listOfficialJoinFormPolicies(payload, rec);
-      const matched = list.filter((p) => {
-        if(safeTrim(p?.company) !== "כלל") return false;
+      const matched = list.filter((p) => this.isClalLifeJoinPolicy(p));
+      if(!matched.length) return false;
+      const coupleTagged = matched.some((p) => {
         const blob = [p?.type, p?.productName, p?.planName, p?.label].map(safeTrim).join(" ");
-        if(/משכנתא/.test(blob) || /בריאות/.test(blob) || /מחלות\s*קשות/.test(blob)) return false;
-        const isLife = /ריסק/.test(blob) || /ביטוח\s*חיים/.test(blob);
-        if(!isLife) return false;
         return safeTrim(p?.insuredMode) === "couple" || /זוגי|כפול למשפחה|כלל כפול/.test(blob);
       });
-      return matched.length > 0 && this.officialJoinFormInPeriod(rec, payload, matched);
+      const insuredIds = new Set();
+      matched.forEach((p) => {
+        const ids = Array.isArray(p?.insuredIds) && p.insuredIds.length ? p.insuredIds : [p?.insuredId];
+        ids.forEach((id) => {
+          const t = safeTrim(id);
+          if(t) insuredIds.add(t);
+        });
+      });
+      const twoPeople = matched.length >= 2 || insuredIds.size >= 2;
+      return (coupleTagged || twoPeople) && this.officialJoinFormInPeriod(rec, payload, matched);
     },
     qualifiesForMenoraCiForm(payload, rec){
       const list = this.listOfficialJoinFormPolicies(payload, rec);
@@ -70956,8 +70969,17 @@ ${inner}
       const cols = kind === "offer"
         ? ["מבוטח", "מוצר", "חברה", "סכום ביטוח", "לפני הנחה", "לאחר הנחה"]
         : ["מבוטח", "מוצר", "חברה", "פרמיה", "סכום ביטוח", "סטטוס"];
+      const money = kind === "offer"
+        ? new Set(["סכום ביטוח", "לפני הנחה", "לאחר הנחה"])
+        : new Set(["פרמיה", "סכום ביטוח"]);
       return `<div class="mcPolicyRow mcPolicyRow--head" aria-hidden="true">` +
-        cols.map((c) => `<span>${escapeHtml(c)}</span>`).join("") +
+        `<div class="mcPolicyRow__main">` +
+          cols.map((c) => {
+            const mods = ["mcPolicyRow__cell"];
+            if(money.has(c)) mods.push("mcPolicyRow__cell--money");
+            return `<span class="${mods.join(" ")}" data-mc-row-k="${escapeHtml(c)}">${escapeHtml(c)}</span>`;
+          }).join("") +
+        `</div>` +
       `</div>`;
     },
 
@@ -72931,6 +72953,19 @@ ${inner}
           if(typeof fn === "function" && fn.call(CD, payload, null)) return type;
         }catch(_e){}
       }
+      try{
+        if(typeof CD.isClalLifeJoinPolicy === "function" && CD.isClalLifeJoinPolicy(p)){
+          const all = this._mirrorGetNewPoliciesRaw(rec);
+          const couplePayload = {
+            newPolicies: all.length ? all : [p],
+            createdAt: rec?.createdAt || rec?.payload?.createdAt || payload.createdAt,
+            primary: rec?.payload?.primary
+          };
+          if(typeof CD.qualifiesForClalLifeCoupleForm === "function" && CD.qualifiesForClalLifeCoupleForm(couplePayload, null)){
+            return CD.TYPES.clalLifeCoupleForm;
+          }
+        }
+      }catch(_e2){}
       return "";
     },
 
