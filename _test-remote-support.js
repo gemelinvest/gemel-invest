@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260914-remote-support-agent-request-v1";
+const TAG = "20260914-remote-support-webrtc-v1";
 let failed = 0;
 let passed = 0;
 
@@ -104,7 +104,9 @@ console.log("\n5) live view + control are real, not fake");
 assert(js.includes("getDisplayMedia"), "tab capture via getDisplayMedia");
 assert(js.includes("preferCurrentTab"), "prefers current CRM tab");
 assert(js.includes("RTCPeerConnection"), "WebRTC peer connection");
-assert(js.includes("stun:stun.l.google.com:19302"), "STUN configured");
+assert(js.includes("have-local-offer"), "ignores a duplicate answer after handshake");
+assert(js.includes("queueSignal"), "serializes signaling messages");
+assert(js.includes("signalingPartyId"), "filters self-sent signaling");
 assert(js.includes("gi-rs-control"), "control datachannel");
 assert(js.includes("control_granted"), "control requires grant");
 assert(js.includes("input[type='password']"), "password fields blocked");
