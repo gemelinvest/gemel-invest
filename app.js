@@ -2524,8 +2524,128 @@
       return (v && typeof v === "object") ? v : {};
     },
 
+    _payloadLooksEmpty(rec){
+      try{
+        if(typeof Storage !== "undefined" && typeof Storage.payloadIsEmpty === "function"){
+          return !!Storage.payloadIsEmpty(rec);
+        }
+      }catch(_e){}
+      const p = rec?.payload;
+      if(!p || typeof p !== "object") return true;
+      if(Array.isArray(p.insureds) && p.insureds.length) return false;
+      if(Array.isArray(p.newPolicies) && p.newPolicies.length) return false;
+      if(Array.isArray(p?.operational?.insureds) && p.operational.insureds.length) return false;
+      if(p.primary && typeof p.primary === "object" && Object.keys(p.primary).length) return false;
+      return true;
+    },
+
+    _coerceIfPossible(rec){
+      try{
+        if(typeof MirrorCallUI !== "undefined" && typeof MirrorCallUI._mirrorCoerceCustomerPayloadInPlace === "function"){
+          MirrorCallUI._mirrorCoerceCustomerPayloadInPlace(rec);
+        }
+      }catch(_e){}
+    },
+
+    _norm(value){
+      let s = safeTrim(value);
+      if(!s) return "";
+      const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if(iso) s = `${iso[3]}/${iso[2]}/${iso[1]}`;
+      else {
+        const dmy = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/);
+        if(dmy){
+          const dd = String(dmy[1]).padStart(2, "0");
+          const mm = String(dmy[2]).padStart(2, "0");
+          let yy = dmy[3];
+          if(yy.length === 2) yy = (Number(yy) > 50 ? "19" : "20") + yy;
+          s = `${dd}/${mm}/${yy}`;
+        }
+      }
+      return s.replace(/\s+/g, " ").trim();
+    },
+
+    _formTitle(type){
+      try{
+        if(typeof MirrorCallUI !== "undefined" && typeof MirrorCallUI._mcJoinFormTitle === "function"){
+          const named = safeTrim(MirrorCallUI._mcJoinFormTitle(type));
+          if(named) return named;
+        }
+      }catch(_e){}
+      return safeTrim(type) || "טופס";
+    },
+
+    _formOverlaySummary(overlay){
+      const parts = [];
+      const take = (bag) => {
+        Object.keys(bag || {}).sort().forEach((k) => {
+          const v = safeTrim(bag[k]);
+          if(!v) return;
+          parts.push(v.length > 80 ? `${k}: [עודכן]` : `${k}: ${v}`);
+        });
+      };
+      take(overlay?.html);
+      take(overlay?.pdf);
+      return parts.join(" · ");
+    },
+
+    _docsList(rec){
+      try{
+        if(typeof CustomerDocuments !== "undefined" && typeof CustomerDocuments.listFromPayload === "function"){
+          return CustomerDocuments.listFromPayload(rec?.payload) || [];
+        }
+      }catch(_e){}
+      return Array.isArray(rec?.payload?.customerDocuments) ? rec.payload.customerDocuments : [];
+    },
+
+    _policiesSnapshot(rec){
+      const out = {};
+      const nps = Array.isArray(rec?.payload?.newPolicies) ? rec.payload.newPolicies : [];
+      nps.forEach((p, idx) => {
+        if(String(p?.origin || "") === "existing") return;
+        const pid = safeTrim(p?.id) || `np_${idx}`;
+        out[pid] = {
+          title: this._policyTitle(p),
+          company: safeTrim(p?.company),
+          type: safeTrim(p?.type || p?.product),
+          premium: safeTrim(p?.premiumAfterDiscount || p?.monthlyPremium || p?.premiumValue || p?.premiumText || p?.premium),
+          startDate: safeTrim(p?.startDate || p?.insuranceStartDate),
+          sumInsured: safeTrim(p?.sumInsured || p?.coverageAmount || p?.insuranceAmount || p?.sum)
+        };
+      });
+      return out;
+    },
+
+    _formsSnapshot(rec){
+      const out = {};
+      const edits = rec?.payload?.mirrorFlow?.formEdits;
+      if(!edits || typeof edits !== "object") return out;
+      Object.keys(edits).forEach((type) => {
+        const overlay = edits[type] && typeof edits[type] === "object" ? edits[type] : {};
+        const summary = this._formOverlaySummary(overlay);
+        const hasBag = !!(Object.keys(overlay.html || {}).length || Object.keys(overlay.pdf || {}).length || safeTrim(overlay.savedAt));
+        if(!summary && !hasBag) return;
+        out[type] = { title: this._formTitle(type), summary };
+      });
+      return out;
+    },
+
+    _documentsSnapshot(rec){
+      const out = {};
+      this._docsList(rec).forEach((doc, idx) => {
+        if(!doc || typeof doc !== "object") return;
+        const id = safeTrim(doc.id) || safeTrim(doc.type) || `doc_${idx}`;
+        out[id] = {
+          title: safeTrim(doc.name || doc.fileName || doc.title || doc.type) || "מסמך",
+          type: safeTrim(doc.type),
+          stamp: safeTrim(doc.uploadedAt || doc.updatedAt)
+        };
+      });
+      return out;
+    },
+
     _emptySnap(){
-      return { personal: {}, contact: {}, payment: {}, health: {}, delivery: {}, beneficiaries: {}, cancel: { policies: {} } };
+      return { personal: {}, contact: {}, payment: {}, health: {}, delivery: {}, beneficiaries: {}, cancel: { policies: {} }, policies: {}, forms: {}, documents: {} };
     },
 
     _deliverySnapshot(rec){
@@ -2598,10 +2718,35 @@
     _healthSource(rec){
       try{
         if(typeof MirrorFlowReadModel !== "undefined" && typeof MirrorFlowReadModel.getMirrorHealthEntries === "function"){
-          return MirrorFlowReadModel.getMirrorHealthEntries(rec) || [];
+          const groups = MirrorFlowReadModel.getMirrorHealthEntries(rec) || [];
+          if(groups.length) return groups;
         }
       }catch(_e){}
-      return [];
+      return this._healthSourceFallback(rec);
+    },
+
+    _healthSourceFallback(rec){
+      const pl = rec?.payload || {};
+      const host = (pl.primary && pl.primary.healthDeclaration)
+        || pl.healthDeclaration
+        || (pl.insureds && pl.insureds[0] && pl.insureds[0].data && pl.insureds[0].data.healthDeclaration)
+        || {};
+      const responses = (host && host.responses && typeof host.responses === "object") ? host.responses : {};
+      const groups = {};
+      Object.keys(responses).forEach((qKey) => {
+        const perIns = responses[qKey];
+        if(!perIns || typeof perIns !== "object") return;
+        Object.keys(perIns).forEach((insId) => {
+          if(!groups[insId]) groups[insId] = { insured: { id: insId, label: "מבוטח" }, items: [] };
+          groups[insId].items.push({
+            qKey,
+            insId,
+            meta: { text: qKey },
+            response: perIns[insId] || {}
+          });
+        });
+      });
+      return Object.values(groups);
     },
 
     _healthDetail(response, meta){
@@ -2716,6 +2861,9 @@
       snap.delivery = this._deliverySnapshot(rec);
       snap.beneficiaries = this._beneficiariesSnapshot(rec);
       snap.cancel = this._cancelSnapshot(rec);
+      snap.policies = this._policiesSnapshot(rec);
+      snap.forms = this._formsSnapshot(rec);
+      snap.documents = this._documentsSnapshot(rec);
 
       return snap;
     },
@@ -2729,28 +2877,68 @@
 
     /** נלכד פעם אחת בפתיחת השיחה. קריאות חוזרות לא דורסות את הבסיס. */
     captureBaseline(rec, options = {}){
+      this._coerceIfPossible(rec);
       const flow = this._flowStore(rec);
       if(!flow) return null;
-      if(flow.baseline && typeof flow.baseline === "object" && !options.force) return flow.baseline;
+      const empty = this._payloadLooksEmpty(rec);
+      const existing = (flow.baseline && typeof flow.baseline === "object") ? flow.baseline : null;
+      const complete = !!(existing && existing.data && !existing.incomplete);
+
+      if(options.force){
+        flow.baselineLocked = false;
+      }
+
+      if(flow.baselineLocked && complete && !options.force) return existing;
+      if(complete && !options.force && !flow.baselinePending && !existing.incomplete) return existing;
+
+      if(empty){
+        flow.baselinePending = true;
+        if(complete) return existing;
+        flow.baseline = {
+          capturedAt: nowISO(),
+          capturedBy: safeTrim(Auth?.current?.name),
+          incomplete: true,
+          data: this._emptySnap()
+        };
+        return flow.baseline;
+      }
+
       flow.baseline = {
         capturedAt: nowISO(),
         capturedBy: safeTrim(Auth?.current?.name),
         data: this.buildSnapshot(rec)
       };
+      flow.baselinePending = false;
       return flow.baseline;
+    },
+
+    tryFillPendingBaseline(rec){
+      const flow = rec?.payload?.mirrorFlow;
+      if(!flow || typeof flow !== "object") return null;
+      if(flow.baselineLocked) return this.getBaseline(rec);
+      if(!flow.baselinePending && !flow.baseline?.incomplete) return this.getBaseline(rec);
+      return this.captureBaseline(rec);
+    },
+
+    lockBaseline(rec){
+      const flow = this._flowStore(rec);
+      if(!flow) return;
+      if(flow.baseline && flow.baseline.data && !flow.baseline.incomplete){
+        flow.baselineLocked = true;
+      }
     },
 
     getBaseline(rec){
       const flow = rec?.payload?.mirrorFlow;
       const baseline = flow?.baseline;
-      if(baseline && typeof baseline === "object" && baseline.data) return baseline;
+      if(baseline && typeof baseline === "object" && baseline.data && !baseline.incomplete) return baseline;
       return null;
     },
 
     _row(label, before, after){
-      const b = safeTrim(before);
-      const a = safeTrim(after);
-      return { label, before: b, after: a, changed: b !== a };
+      const b = this._norm(before);
+      const a = this._norm(after);
+      return { label, before: b, after: a, changed: !!(b || a) && b !== a };
     },
 
     PERSONAL_FIELDS: Object.freeze([
@@ -2813,12 +3001,52 @@
       ["zip", "מיקוד"]
     ]),
 
-    /** משווה בסיס מול המצב הנוכחי ומחזיר את האזורים לפי סדר התצוגה בדוח. */
+    POLICY_FIELDS: Object.freeze([
+      ["company", "חברה"],
+      ["type", "מוצר"],
+      ["premium", "פרמיה חודשית"],
+      ["startDate", "תחילת ביטוח"],
+      ["sumInsured", "סכום ביטוח"]
+    ]),
+
+    FORM_FIELDS: Object.freeze([
+      ["summary", "שדות בטופס"]
+    ]),
+
+    /** משווה בסיס מול המצב הנוכחי ומחזיר את האזורים לפי סדר שלבי השיקוף. */
     collect(rec){
+      this.tryFillPendingBaseline(rec);
       const baseline = this.getBaseline(rec);
       const before = baseline?.data || this._emptySnap();
       const after = this.buildSnapshot(rec);
       const areas = [];
+      const push = (key, label, stage, rows) => {
+        areas.push({ key, label, stage, rows });
+      };
+
+      if(!baseline){
+        ["personal", "delivery", "policies", "cancel", "beneficiaries", "health", "forms", "payment", "documents"].forEach((key) => {
+          const labels = {
+            personal: "פרטים אישיים",
+            delivery: "אופן קבלת דיוורים",
+            policies: "פוליסות מוצעות",
+            cancel: "שאלון ביטול",
+            beneficiaries: "מוטבים ושעבוד",
+            health: "הצהרת בריאות",
+            forms: "טפסי מקור",
+            payment: "אמצעי תשלום",
+            documents: "מסמכי לקוח"
+          };
+          push(key, labels[key], labels[key], []);
+        });
+        return {
+          hasBaseline: false,
+          capturedAt: "",
+          areas,
+          changedAreas: 0,
+          changedFields: 0
+        };
+      }
 
       const personalRows = [];
       const personalKeys = new Set([
@@ -2835,18 +3063,41 @@
           if(row.changed) personalRows.push(row);
         });
       });
+      const primaryKey = [...personalKeys][0];
+      const pWas = before.personal?.[primaryKey] || {};
+      const pNow = after.personal?.[primaryKey] || {};
       this.CONTACT_FIELDS.forEach(([field, label]) => {
+        if((field === "address" || field === "zip") && primaryKey){
+          const sameBefore = this._norm(before.contact?.[field]) === this._norm(pWas[field]);
+          const sameAfter = this._norm(after.contact?.[field]) === this._norm(pNow[field]);
+          if(sameBefore && sameAfter) return;
+        }
         const row = this._row(label, before.contact?.[field], after.contact?.[field]);
         if(row.changed) personalRows.push(row);
       });
-      areas.push({ key: "personal", label: "פרטים אישיים", rows: personalRows });
+      push("personal", "פרטים אישיים", "פרטי מבוטח/ים", personalRows);
 
       const deliveryRows = [];
       this.DELIVERY_FIELDS.forEach(([field, label]) => {
         const row = this._row(label, before.delivery?.[field], after.delivery?.[field]);
         if(row.changed) deliveryRows.push(row);
       });
-      areas.push({ key: "delivery", label: "אופן קבלת דיוורים", rows: deliveryRows });
+      push("delivery", "אופן קבלת דיוורים", "פרטי מבוטח/ים", deliveryRows);
+
+      const policyRows = [];
+      const polBefore = before.policies || {};
+      const polAfter = after.policies || {};
+      const polKeys = new Set([...Object.keys(polBefore), ...Object.keys(polAfter)]);
+      polKeys.forEach((pid) => {
+        const now = polAfter[pid] || {};
+        const was = polBefore[pid] || {};
+        const title = now.title || was.title || "פוליסה";
+        this.POLICY_FIELDS.forEach(([field, label]) => {
+          const row = this._row(`${title} · ${label}`, was[field], now[field]);
+          if(row.changed) policyRows.push(row);
+        });
+      });
+      push("policies", "פוליסות מוצעות", "בירור והתאמת צרכים", policyRows);
 
       const cancelRows = [];
       const cancelBefore = before.cancel || { policies: {} };
@@ -2868,7 +3119,7 @@
         const row = this._row(label, cancelBefore[field], cancelAfter[field]);
         if(row.changed) cancelRows.push(row);
       });
-      areas.push({ key: "cancel", label: "שאלון ביטול", rows: cancelRows });
+      push("cancel", "שאלון ביטול", "שאלון ביטול", cancelRows);
 
       const benefRows = [];
       const bBefore = before.beneficiaries || {};
@@ -2883,29 +3134,72 @@
           if(row.changed) benefRows.push(row);
         });
       });
-      areas.push({ key: "beneficiaries", label: "מוטבים ושעבוד", rows: benefRows });
+      push("beneficiaries", "מוטבים ושעבוד", "מוטבים ושעבוד", benefRows);
 
       const healthRows = [];
       const healthKeys = new Set([...Object.keys(before.health || {}), ...Object.keys(after.health || {})]);
       healthKeys.forEach((key) => {
         const now = after.health?.[key];
         const was = before.health?.[key];
+        const bVal = this._norm(was?.value);
+        const aVal = this._norm(now?.value);
+        if(!bVal && !aVal) return;
         const label = safeTrim(now?.label) || safeTrim(was?.label) || "שאלה רפואית";
         const insuredLabel = safeTrim(now?.insuredLabel) || safeTrim(was?.insuredLabel);
-        const row = this._row(insuredLabel ? `${insuredLabel} · ${label}` : label, was?.value, now?.value);
+        const row = this._row(insuredLabel ? `${insuredLabel} · ${label}` : label, bVal, aVal);
         if(row.changed) healthRows.push(row);
       });
-      areas.push({ key: "health", label: "הצהרת בריאות", rows: healthRows });
+      push("health", "הצהרת בריאות", "הצהרת בריאות", healthRows);
+
+      const formRows = [];
+      const fBefore = before.forms || {};
+      const fAfter = after.forms || {};
+      const fKeys = new Set([...Object.keys(fBefore), ...Object.keys(fAfter)]);
+      fKeys.forEach((type) => {
+        const now = fAfter[type] || {};
+        const was = fBefore[type] || {};
+        const title = now.title || was.title || this._formTitle(type);
+        const row = this._row(`${title} · ${this.FORM_FIELDS[0][1]}`, was.summary, now.summary);
+        if(row.changed) formRows.push(row);
+      });
+      push("forms", "טפסי מקור", "הצהרת בריאות", formRows);
 
       const paymentRows = [];
       this.PAYMENT_FIELDS.forEach(([field, label]) => {
         const row = this._row(label, before.payment?.[field], after.payment?.[field]);
         if(row.changed) paymentRows.push(row);
       });
-      areas.push({ key: "payment", label: "אמצעי תשלום", rows: paymentRows });
+      push("payment", "אמצעי תשלום", "פרטי אמצעי תשלום", paymentRows);
+
+      const docRows = [];
+      const dBefore = before.documents || {};
+      const dAfter = after.documents || {};
+      const dKeys = new Set([...Object.keys(dBefore), ...Object.keys(dAfter)]);
+      dKeys.forEach((id) => {
+        const now = dAfter[id];
+        const was = dBefore[id];
+        const title = safeTrim(now?.title) || safeTrim(was?.title) || "מסמך";
+        if(!was && now){
+          docRows.push({ label: title, before: "", after: "נוסף לתיק", changed: true });
+          return;
+        }
+        if(was && !now){
+          docRows.push({ label: title, before: "היה בתיק", after: "", changed: true });
+          return;
+        }
+        if(safeTrim(was?.stamp) !== safeTrim(now?.stamp)){
+          docRows.push({
+            label: title,
+            before: safeTrim(was?.stamp) || "היה בתיק",
+            after: safeTrim(now?.stamp) || "עודכן",
+            changed: true
+          });
+        }
+      });
+      push("documents", "מסמכי לקוח", "מסמכי לקוח", docRows);
 
       return {
-        hasBaseline: !!baseline,
+        hasBaseline: true,
         capturedAt: safeTrim(baseline?.capturedAt),
         areas,
         changedAreas: areas.filter((a) => a.rows.length).length,
@@ -35167,7 +35461,7 @@ UsersGateUI.init();
               <div class="mtqField${changed ? " is-changed" : ""}" data-mtq-copy="${escapeHtml(val)}">
                 <div class="mtqField__lbl">${escapeHtml(label)}${changed ? ` <span class="mtqBadge mtqBadge--chg">שונה</span>` : ""}</div>
                 <div class="mtqField__val">${escapeHtml(val || "—")}</div>
-                ${changed ? `<div class="mtqField__was">לפני: <em>${escapeHtml(changedRow.before || "לא הוזן")}</em></div>` : ""}
+                ${changed ? `<div class="mtqField__was">לפני: <em>${escapeHtml(changedRow.before || "—")}</em></div>` : ""}
               </div>`;
     },
 
@@ -35300,8 +35594,8 @@ UsersGateUI.init();
                   <tr class="is-changed">
                     <td>${escapeHtml(area)}</td>
                     <td>${escapeHtml(row.label)}</td>
-                    <td class="mtqChgBefore">${escapeHtml(row.before || "לא הוזן")}</td>
-                    <td class="mtqChgAfter">${escapeHtml(row.after || "רוקן")}</td>
+                    <td class="mtqChgBefore">${escapeHtml(row.before || "—")}</td>
+                    <td class="mtqChgAfter">${escapeHtml(row.after || "—")}</td>
                   </tr>`).join("")}
                 </tbody>
               </table>
@@ -68282,6 +68576,7 @@ ${inner}
         this._liveStartedAt = startedAt;
         try{ setOpsTouch(rec,{liveState:"in_call",ownerName:safeTrim(Auth?.current?.name),updatedBy:safeTrim(Auth?.current?.name)}); }catch(_e){}
         // תצלום "לפני" לדוח התיקונים — חייב להילכד לפני העריכה הראשונה בשיחה.
+        try{ this._mirrorCoerceCustomerPayloadInPlace(rec); }catch(_e0){}
         try{ MirrorChangeReport.captureBaseline(rec, { force: true }); }catch(_e){}
         State.data.meta.updatedAt = startedAt;
         rec.updatedAt = startedAt;
@@ -69292,6 +69587,7 @@ ${inner}
         if(!rec.payload.operational || typeof rec.payload.operational !== "object") rec.payload.operational = {};
         if(insureds.length) rec.payload.operational.insureds = insureds;
       }
+      try{ MirrorChangeReport.lockBaseline(rec); }catch(_e){}
     },
 
     _collectMirrorPolicies(rec){
@@ -69624,6 +69920,7 @@ ${inner}
         return;
       }
       this._mirrorCoerceCustomerPayloadInPlace(rec);
+      try{ MirrorChangeReport.tryFillPendingBaseline(rec); }catch(_e){}
       try{
         const store = this._mirrorGetVerifyStore(rec);
         const insureds = this._mirrorGetInsureds(rec);
@@ -75324,36 +75621,44 @@ ${inner}
       const report = MirrorChangeReport.collect(rec);
       const meta = this._mirrorSummaryCallMeta(rec);
       const changedAreas = report.areas.filter((area) => area.rows.length);
-      const untouched = report.areas.filter((area) => !area.rows.length).map((area) => area.label);
+      const stageOrder = [];
+      const stageMap = {};
+      changedAreas.forEach((area) => {
+        const stage = safeTrim(area.stage) || area.label;
+        if(!stageMap[stage]){
+          stageMap[stage] = [];
+          stageOrder.push(stage);
+        }
+        stageMap[stage].push(area);
+      });
 
-      const areaHtml = changedAreas.map((area) => `
+      const areaHtml = stageOrder.map((stage) => {
+        const grouped = stageMap[stage] || [];
+        const rows = grouped.flatMap((area) => (area.rows || []).map((row) => ({
+          ...row,
+          fieldLabel: row.label
+        })));
+        return `
               <div class="mtqChgSection">
                 <div class="mtqChgSection__head">
-                  <div class="mtqChgSection__name">${escapeHtml(area.label)} <span class="mtqBadge mtqBadge--chg">${area.rows.length}</span></div>
-                  ${`<div class="mtqChgSection__count">לעומת נתוני האשף לפני השיקוף</div>`}
+                  <div class="mtqChgSection__name">${escapeHtml(stage)} <span class="mtqBadge mtqBadge--chg">${rows.length}</span></div>
+                  <div class="mtqChgSection__count">לעומת נתוני האשף לפני השיקוף</div>
                 </div>
                 <table class="mtqChgTable">
                   <thead>
-                    <tr><th style="width:22%">${area.key === "health" ? "שאלה / שדה" : "שדה"}</th><th style="width:39%">לפני</th><th style="width:39%">אחרי שיקוף</th></tr>
+                    <tr><th style="width:28%">שדה</th><th style="width:36%">לפני</th><th style="width:36%">אחרי שיקוף</th></tr>
                   </thead>
                   <tbody>
-                    ${area.rows.map((row) => `
+                    ${rows.map((row) => `
                     <tr class="is-changed">
-                      <td>${escapeHtml(row.label)}</td>
-                      <td class="mtqChgBefore">${escapeHtml(row.before || "לא הוזן")}</td>
-                      <td class="mtqChgAfter">${escapeHtml(row.after || "רוקן")}</td>
+                      <td>${escapeHtml(row.fieldLabel)}</td>
+                      <td class="mtqChgBefore">${escapeHtml(row.before || "—")}</td>
+                      <td class="mtqChgAfter">${escapeHtml(row.after || "—")}</td>
                     </tr>`).join("")}
                   </tbody>
                 </table>
-              </div>`).join("");
-
-      const untouchedHtml = untouched.length ? `
-              <div class="mtqChgSection">
-                <div class="mtqChgSection__head">
-                  <div class="mtqChgSection__name">${escapeHtml(untouched.join(" · "))}</div>
-                </div>
-                <div class="mtqUnchangedNote">לא בוצעו שינויים באזורים אלה בשיחה זו.</div>
-              </div>` : "";
+              </div>`;
+      }).join("");
 
       const noBaselineHtml = report.hasBaseline ? "" : `
               <div class="mtqUnchangedNote" style="margin-bottom:18px">לא נלכד תצלום נתונים בתחילת השיחה, ולכן לא ניתן להציג השוואת «לפני / אחרי» עבור שיחה זו. ניתן להמשיך ולאשר את העברת הלקוח להקלדה.</div>`;
@@ -75393,11 +75698,11 @@ ${inner}
         <div class="mtqSummaryLayout">
           <div class="mtqPanel">
             <div class="mtqPanel__head">
-              <h2 class="mtqPanel__title">פירוט שינויים לפי אזור</h2>
+              <h2 class="mtqPanel__title">פירוט שינויים לפי שלב</h2>
               <span class="mtqBadge ${report.changedFields ? "mtqBadge--chg" : "mtqBadge--muted"}">${report.changedFields ? `${report.changedFields} שדות עודכנו` : "לא עודכנו שדות"}</span>
             </div>
             <div class="mtqPanel__body">
-              ${noBaselineHtml}${areaHtml}${untouchedHtml}
+              ${noBaselineHtml}${areaHtml}
             </div>
           </div>
 
@@ -75406,7 +75711,7 @@ ${inner}
               <h2 class="mtqPanel__title">אישור נציג</h2>
             </div>
             <div class="mtqPanel__body">
-              <div class="mtqSideStat"><span>סה״כ אזורים שעודכנו</span><strong>${report.changedAreas}</strong></div>
+              <div class="mtqSideStat"><span>סה״כ שלבים שעודכנו</span><strong>${stageOrder.length}</strong></div>
               <div class="mtqSideStat"><span>סה״כ שדות שעודכנו</span><strong>${report.changedFields}</strong></div>
               <div class="mtqSideDivider"></div>
               <ul class="mtqCheckList">

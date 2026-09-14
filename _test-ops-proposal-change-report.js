@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260910-cf-open-paint-v1";
+const APP_TAG = "20260914-mirror-chg-v1";
 let failed = 0;
 let passed = 0;
 
@@ -71,19 +71,31 @@ assert(app.includes("_mirrorPersistPersonalVerification(rec, collectedById, stor
 assert(app.includes("async _persistCancelQuestionnaire(rec, label){"), "persist שאלון ביטול נשאר");
 assert(app.includes("async _persistBeneficiariesStep(rec){"), "persist מוטבים נשאר");
 assert(app.includes("_onMcPayAction(el){"), "החלפת אמצעי תשלום נשארה");
+assert(app.includes("try{ this._mirrorCoerceCustomerPayloadInPlace(rec); }catch(_e0){}"), "coerce לפני לכידת בסיס בפתיחת שיחה");
 assert(app.includes("try{ MirrorChangeReport.captureBaseline(rec, { force: true }); }catch(_e){}"), "לכידת בסיס בתחילת השיחה נשארה");
+assert(app.includes("try{ MirrorChangeReport.lockBaseline(rec); }catch(_e){}"), "נעילת בסיס אחרי persist אימות אישי");
+assert(app.includes("try{ MirrorChangeReport.tryFillPendingBaseline(rec); }catch(_e){}"), "השלמת בסיס חסר במסך אימות אישי");
 
 console.log("\n4) כיסוי כל מסכי השיקוף בצילום וב־collect");
 assert(reportSrc.includes("_deliverySnapshot"), "צילום אופן קבלת דיוורים");
 assert(reportSrc.includes("_beneficiariesSnapshot"), "צילום מוטבים/שעבוד");
 assert(reportSrc.includes("_cancelSnapshot"), "צילום שאלון ביטול");
+assert(reportSrc.includes("_policiesSnapshot"), "צילום פוליסות מוצעות");
+assert(reportSrc.includes("_formsSnapshot"), "צילום עריכות טפסי מקור");
+assert(reportSrc.includes("_documentsSnapshot"), "צילום מסמכי לקוח");
+assert(reportSrc.includes("_payloadLooksEmpty"), "זיהוי payload חסר לפני לכידת בסיס");
+assert(reportSrc.includes("_norm(value)"), "נרמול ערכים לפני השוואה");
 assert(reportSrc.includes('["method", "אמצעי תשלום"]'), "אמצעי תשלום CC/HO נכנס לדוח");
-assert(reportSrc.includes('key: "delivery"'), "אזור דיוורים בדוח");
-assert(reportSrc.includes('key: "cancel"'), "אזור ביטול בדוח");
-assert(reportSrc.includes('key: "beneficiaries"'), "אזור מוטבים בדוח");
-assert(reportSrc.includes('key: "health"'), "אזור הצהרת בריאות נשאר");
-assert(reportSrc.includes('key: "personal"'), "אזור פרטים אישיים נשאר");
-assert(reportSrc.includes('key: "payment"'), "אזור תשלום נשאר");
+assert(reportSrc.includes('push("delivery"'), "אזור דיוורים בדוח");
+assert(reportSrc.includes('push("cancel"'), "אזור ביטול בדוח");
+assert(reportSrc.includes('push("beneficiaries"'), "אזור מוטבים בדוח");
+assert(reportSrc.includes('push("health"'), "אזור הצהרת בריאות נשאר");
+assert(reportSrc.includes('push("personal"'), "אזור פרטים אישיים נשאר");
+assert(reportSrc.includes('push("payment"'), "אזור תשלום נשאר");
+assert(reportSrc.includes('push("policies"'), "אזור פוליסות מוצעות בדוח");
+assert(reportSrc.includes('push("forms"'), "אזור טפסי מקור בדוח");
+assert(reportSrc.includes('push("documents"'), "אזור מסמכי לקוח בדוח");
+assert(reportSrc.includes("פירוט שינויים לפי שלב") || app.includes("פירוט שינויים לפי שלב"), "הדוח מקובץ לפי שלב שיקוף");
 assert(reportSrc.includes("Object.keys(before.personal") && reportSrc.includes("Object.keys(after.personal"), "השוואת מבוטחים לפי איחוד מפתחות");
 assert(app.includes("mtqPktBenef"), "תיק הקלדה מציג מוטבים");
 assert(app.includes("mtqPktCancel"), "תיק הקלדה מציג שאלון ביטול");
@@ -154,6 +166,10 @@ function baseRec(){
         id: "np-risk",
         type: "ריסק",
         company: "מגדל",
+        premiumAfterDiscount: "120",
+        monthlyPremium: "120",
+        startDate: "2026-09-01",
+        sumInsured: "500000",
         beneficiariesMode: "named",
         beneficiaries: [{ firstName: "רות", lastName: "ישראלי", idNumber: "111222333", relationship: "בת זוג", sharePct: "100" }],
         pledgeBanks: []
@@ -245,7 +261,8 @@ const noChangeRec = baseRec();
 R.captureBaseline(noChangeRec, { force: true });
 const emptyReport = R.collect(noChangeRec);
 assert(emptyReport.changedFields === 0, "בלי שינוי — דוח ריק (got " + emptyReport.changedFields + ")");
-assert(emptyReport.areas.length === 6, "שישה אזורי דוח קבועים");
+assert(emptyReport.areas.length === 9, "תשעה אזורי דוח קבועים");
+assert(emptyReport.hasBaseline === true, "בסיס מלא מסומן hasBaseline");
 
 const removed = baseRec();
 R.captureBaseline(removed, { force: true });
@@ -256,6 +273,74 @@ removed.payload.insureds.push({
 });
 const addedIns = R.collect(removed);
 assert((addedIns.areas.find((a) => a.key === "personal")?.rows || []).some((r) => r.label.includes("בן/בת זוג") && r.label.includes("שם מלא")), "מבוטח שנוסף נכנס לדוח");
+
+const dateRec = baseRec();
+R.captureBaseline(dateRec, { force: true });
+dateRec.payload.insureds[0].data.birthDate = "15/03/1988";
+const dateReport = R.collect(dateRec);
+assert(!(dateReport.areas.find((a) => a.key === "personal")?.rows || []).some((r) => r.label.includes("תאריך לידה")), "נרמול תאריך — ISO מול dd/mm/yyyy אינו שינוי");
+
+const emptyPayload = { payload: {} };
+R.captureBaseline(emptyPayload, { force: true });
+assert(!R.getBaseline(emptyPayload), "payload ריק — אין בסיס בר-השוואה");
+const emptyDump = R.collect(emptyPayload);
+assert(emptyDump.hasBaseline === false, "בלי בסיס — hasBaseline=false");
+assert(emptyDump.changedFields === 0, "בלי בסיס — לא נזרקים כל שדות התיק כשינוי (got " + emptyDump.changedFields + ")");
+const pendingFlow = emptyPayload.payload.mirrorFlow;
+const filled = baseRec();
+emptyPayload.payload.insureds = filled.payload.insureds;
+emptyPayload.payload.primary = filled.payload.primary;
+emptyPayload.payload.newPolicies = filled.payload.newPolicies;
+emptyPayload.payload.mirrorFlow = pendingFlow;
+pendingFlow.verify = filled.payload.mirrorFlow.verify;
+pendingFlow.paymentStep = filled.payload.mirrorFlow.paymentStep;
+pendingFlow.beneficiariesStep = filled.payload.mirrorFlow.beneficiariesStep;
+pendingFlow.cancelQuestionnaire = filled.payload.mirrorFlow.cancelQuestionnaire;
+R.captureBaseline(emptyPayload);
+assert(!!R.getBaseline(emptyPayload), "אחרי payload מלא — הבסיס מושלם");
+assert(R.collect(emptyPayload).changedFields === 0, "השלמת בסיס מתיק מלא לא ממציאה שינויים");
+
+const formRec = baseRec();
+R.captureBaseline(formRec, { force: true });
+formRec.payload.mirrorFlow.formEdits = {
+  clal_health_form: { html: { fullName: "ישראל ישראלי" }, pdf: { Q1: "כן" }, savedAt: "2026-08-27T12:30:00.000Z" }
+};
+const formReport = R.collect(formRec);
+assert((formReport.areas.find((a) => a.key === "forms")?.rows || []).some((r) => r.after.includes("כן") || r.after.includes("Q1")), "עריכת טופס מקור נכנסת לדוח");
+const formNoChange = baseRec();
+R.captureBaseline(formNoChange, { force: true });
+assert((R.collect(formNoChange).areas.find((a) => a.key === "forms")?.rows || []).length === 0, "בלי formEdits — אין שורות טפסים");
+
+const polRec = baseRec();
+R.captureBaseline(polRec, { force: true });
+polRec.payload.newPolicies[0].premiumAfterDiscount = "150";
+polRec.payload.newPolicies[0].startDate = "01/10/2026";
+const polReport = R.collect(polRec);
+assert((polReport.areas.find((a) => a.key === "policies")?.rows || []).some((r) => r.label.includes("פרמיה") && r.after === "150"), "שינוי פרמיה בפוליסה מוצעת");
+assert((polReport.areas.find((a) => a.key === "policies")?.rows || []).some((r) => r.label.includes("תחילת ביטוח") && r.before === "01/09/2026"), "שינוי תחילת ביטוח בפוליסה מוצעת");
+
+const healthDump = baseRec();
+R.captureBaseline(healthDump, { force: true });
+healthDump.payload.primary = healthDump.payload.primary || {};
+healthDump.payload.primary.healthDeclaration = {
+  responses: { empty_q: { "ins-1": { answer: "", fields: {} } } }
+};
+assert((R.collect(healthDump).areas.find((a) => a.key === "health")?.rows || []).length === 0, "שאלת בריאות ריקה שנוצרה ברינדור לא נזרקת לדוח");
+
+const lockRec = baseRec();
+R.captureBaseline(lockRec, { force: true });
+const lockedSnap = JSON.stringify(lockRec.payload.mirrorFlow.baseline.data);
+R.lockBaseline(lockRec);
+lockRec.payload.insureds[0].data.city = "חיפה";
+R.captureBaseline(lockRec);
+assert(JSON.stringify(lockRec.payload.mirrorFlow.baseline.data) === lockedSnap, "נעילה מונעת דריסת בסיס אחרי עריכה");
+R.captureBaseline(lockRec, { force: true });
+assert(lockRec.payload.mirrorFlow.baseline.data.personal["ins-1"].address.includes("חיפה"), "force בפתיחת שיחה חדשה דורס גם בסיס נעול");
+
+const docRec = baseRec();
+R.captureBaseline(docRec, { force: true });
+docRec.payload.customerDocuments = [{ id: "doc-1", type: "clal_health_form", name: "טופס בריאות כלל", uploadedAt: "2026-08-27T13:00:00.000Z" }];
+assert((R.collect(docRec).areas.find((a) => a.key === "documents")?.rows || []).some((r) => r.label.includes("טופס בריאות") && r.after === "נוסף לתיק"), "מסמך שנוסף בשיחה נכנס לדוח");
 
 console.log("\n6) שמירת דוח מאושר לתיק הקלדה");
 const saved = R.saveApproved(rec, { approvedAt: "2026-08-27T13:00:00.000Z", approvedBy: "נציג בדיקה" });
