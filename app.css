@@ -35750,6 +35750,8 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcBenefPickCard__who{display:flex;flex-direction:column;gap:2px;}
 .mcBenefPickCard__who strong{font-size:16px;color:#0a1638;}
 .mcBenefPickCard__who span{font-size:15px;font-weight:650;color:#334155;}
+.mcBenefPickCard__bens{font-size:15px;font-weight:750;color:#0f1f4a;}
+.mcBenefPickCard__bens--empty{font-weight:650;color:rgba(30,58,122,.55);}
 .mcBenefPickCard__status{font-size:14px;font-weight:800;color:#2a5cf5;}
 .mcBenefPicker__actions{display:flex;flex-wrap:wrap;gap:8px;}
 .mcBenefCard__hint--ok{color:#047857;}
