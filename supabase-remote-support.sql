@@ -421,6 +421,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = public
+set row_security = off
 as $fn$
 declare
   actor jsonb;
@@ -441,11 +442,7 @@ begin
     ) order by s.requested_at desc), '[]'::jsonb)
     into recs
     from public.gi_remote_support_sessions s
-    where s.requested_at > now() - interval '7 days'
-      and (
-        not public.gi_rs_terminal(s.status)
-        or s.ended_at > now() - interval '6 hours'
-      );
+    where not public.gi_rs_terminal(s.status);
   end if;
 
   select public.gi_rs_session_json(s, not public.gi_rs_terminal(s.status))

@@ -4,7 +4,7 @@
 (() => {
   "use strict";
 
-  const TAG = "20260914-remote-support-simple-v2";
+  const TAG = "20260914-remote-support-agent-request-v1";
   const TOKEN_KEY = "GI_RS_ACTOR_TOKEN_V1";
   const SESSION_KEY = "GI_RS_SESSION_V1";
   const ADMIN_TOPIC = "gi-rs-admins";
@@ -74,22 +74,6 @@
     return { id: "", name: name || "", role: roleFromHebrew(roleHe), username: "" };
   }
 
-  function agentFromLastSessionKey(){
-    try {
-      const raw = trim(localStorage.getItem("GI_LAST_SESSION_USER_V1"));
-      if(!raw || raw.indexOf("full:") !== 0) return null;
-      const rest = raw.slice(5);
-      const colon = rest.indexOf(":");
-      if(colon < 0) return null;
-      const role = trim(rest.slice(0, colon)) || "agent";
-      const idOrName = trim(rest.slice(colon + 1));
-      if(!idOrName) return null;
-      return { id: idOrName, name: idOrName, role, username: "" };
-    } catch(_e){
-      return null;
-    }
-  }
-
   function enrichAgent(partial){
     if(!partial) return null;
     try {
@@ -98,7 +82,7 @@
         return {
           id: trim(rec.id) || trim(partial.id),
           name: trim(rec.name) || trim(partial.name),
-          role: trim(rec.role) || trim(partial.role) || "agent",
+          role: trim(partial.role) || trim(rec.role) || "agent",
           username: trim(rec.username) || trim(partial.username)
         };
       }
@@ -112,11 +96,34 @@
     };
   }
 
-  function currentUser(){
-    try {
-      const fromBridge = enrichAgent(faceBridge()?.getCurrentAgent?.());
-      if(fromBridge && (trim(fromBridge.id) || trim(fromBridge.name))) return fromBridge;
-    } catch(_e) {}
+  function namesEqual(a, b){
+    return !!trim(a) && trim(a) === trim(b);
+  }
+
+  function roleIsSupportAdmin(role, name){
+    const r = trim(role).toLowerCase();
+    const n = trim(name);
+    if(r === "admin" || r === "owner" || r === "manager" || r === "adminlite" || r === "מנהל") return true;
+    if(n === "איתי סומך" || n === "סוניה ארנשטיין" || n === "אוריה סומך") return true;
+    return false;
+  }
+
+  function visibleUser(){
+    const pill = agentFromPill();
+    let fromBridge = null;
+    try { fromBridge = enrichAgent(faceBridge()?.getCurrentAgent?.()); } catch(_e) {}
+    if(pill && (pill.name || pill.role)){
+      if(fromBridge && (namesEqual(fromBridge.name, pill.name) || (trim(fromBridge.id) && namesEqual(fromBridge.id, pill.id)))){
+        return {
+          id: trim(fromBridge.id),
+          name: trim(fromBridge.name) || pill.name,
+          role: pill.role || fromBridge.role || "agent",
+          username: trim(fromBridge.username)
+        };
+      }
+      return enrichAgent(pill);
+    }
+    if(fromBridge && (trim(fromBridge.id) || trim(fromBridge.name))) return fromBridge;
     try {
       const a = window.Auth;
       if(a && a.current){
@@ -124,23 +131,43 @@
         if(fromAuth && (trim(fromAuth.id) || trim(fromAuth.name))) return fromAuth;
       }
     } catch(_e2) {}
-    const fromPill = enrichAgent(agentFromPill());
-    if(fromPill && (trim(fromPill.id) || trim(fromPill.name))) return fromPill;
-    const fromKey = enrichAgent(agentFromLastSessionKey());
-    if(fromKey && (trim(fromKey.id) || trim(fromKey.name))) return fromKey;
     return null;
   }
 
+  function currentUser(){
+    return visibleUser();
+  }
+
+  function tokenMatchesVisibleUser(){
+    const vis = visibleUser();
+    if(!vis) return true;
+    if(trim(state.agentName) && vis.name && !namesEqual(state.agentName, vis.name)) return false;
+    if(trim(state.agentUserId) && vis.id && !namesEqual(state.agentUserId, vis.id)) return false;
+    if(state.isSupportAdmin && !roleIsSupportAdmin(vis.role, vis.name)) return false;
+    return true;
+  }
+
+  function clearToken(){
+    state.token = "";
+    state.tokenExpiresAt = 0;
+    state.agentUserId = "";
+    state.agentName = "";
+    state.isSupportAdmin = false;
+    try { sessionStorage.removeItem(TOKEN_KEY); } catch(_e) {}
+  }
+
   function currentUserId(){
-    if(trim(state.agentUserId)) return trim(state.agentUserId);
     const user = currentUser();
-    return trim(user?.id);
+    if(trim(user?.id)) return trim(user.id);
+    if(tokenMatchesVisibleUser() && trim(state.agentUserId)) return trim(state.agentUserId);
+    return "";
   }
 
   function currentUserName(){
-    if(trim(state.agentName)) return trim(state.agentName);
     const user = currentUser();
-    return trim(user?.name || user?.username);
+    if(trim(user?.name || user?.username)) return trim(user?.name || user?.username);
+    if(tokenMatchesVisibleUser() && trim(state.agentName)) return trim(state.agentName);
+    return "";
   }
 
   function isAgentParty(session){
@@ -154,15 +181,7 @@
 
   function isSupportAdminClient(){
     const user = currentUser();
-    const role = trim(user?.role).toLowerCase();
-    const name = trim(user?.name || user?.username);
-    if(role === "admin" || role === "owner" || role === "manager" || role === "adminlite" || user?.role === "מנהל") return true;
-    if(name === "איתי סומך" || name === "סוניה ארנשטיין" || name === "אוריה סומך") return true;
-    try {
-      const a = window.Auth;
-      if(a) return !!(a.isAdmin?.() || a.isManager?.());
-    } catch(_e) {}
-    return false;
+    return roleIsSupportAdmin(user?.role, user?.name || user?.username);
   }
 
   function supabaseClient(){
@@ -249,15 +268,16 @@
       const raw = JSON.parse(sessionStorage.getItem(TOKEN_KEY) || "null");
       if(!raw || !trim(raw.token)) return;
       if(Number(raw.expiresAt || 0) < Date.now()) return;
-      const myId = currentUserId();
-      const myName = currentUserName();
-      if(trim(raw.agentId) && myId && trim(raw.agentId) !== myId) return;
-      if(trim(raw.agentName) && myName && trim(raw.agentName) !== myName) return;
+      if(!!raw.isSupportAdmin && !isSupportAdminClient()) return;
+      const vis = visibleUser();
+      if(vis?.name && trim(raw.agentName) && !namesEqual(raw.agentName, vis.name)) return;
+      if(vis?.id && trim(raw.agentId) && !namesEqual(raw.agentId, vis.id)) return;
       state.token = trim(raw.token);
       state.tokenExpiresAt = Number(raw.expiresAt || 0);
-      state.isSupportAdmin = !!raw.isSupportAdmin;
+      state.isSupportAdmin = !!raw.isSupportAdmin && isSupportAdminClient();
       if(trim(raw.agentId)) state.agentUserId = trim(raw.agentId);
       if(trim(raw.agentName)) state.agentName = trim(raw.agentName);
+      if(!tokenMatchesVisibleUser()) clearToken();
     } catch(_e) {}
   }
 
@@ -317,11 +337,13 @@
   }
 
   async function ensureToken(){
+    if(state.token && !tokenMatchesVisibleUser()) clearToken();
     if(state.token && state.tokenExpiresAt > Date.now() + 15000) return { ok: true, token: state.token };
     restoreToken();
+    if(state.token && !tokenMatchesVisibleUser()) clearToken();
     if(state.token && state.tokenExpiresAt > Date.now() + 15000) return { ok: true, token: state.token };
     const user = currentUser();
-    const keys = [user?.id, user?.username, user?.name, currentUserName()].map(trim).filter(Boolean);
+    const keys = [user?.name, user?.id, user?.username].map(trim).filter(Boolean);
     const uniqueKeys = Array.from(new Set(keys));
     if(!uniqueKeys.length) return { ok: false, error: "NOT_LOGGED_IN" };
     let last = { ok: false, error: "MINT_FAILED" };
@@ -332,6 +354,13 @@
       });
       if(res?.ok && res.token){
         rememberMint(res);
+        if(!tokenMatchesVisibleUser()){
+          clearToken();
+          last = { ok: false, error: "AGENT_NOT_FOUND" };
+          continue;
+        }
+        state.isSupportAdmin = isSupportAdminClient() && !!res.isSupportAdmin;
+        persistToken();
         return { ok: true, token: state.token };
       }
       last = res && typeof res === "object" ? res : last;
@@ -363,7 +392,7 @@
     persistSessionId();
     renderMenuLabel();
     renderBanner();
-    if(state.isSupportAdmin || isSupportAdminClient()) renderAdminModal(false);
+    if(isSupportAdminClient()) renderAdminModal(false);
     if(state.session && !isTerminal(state.session)){
       void startWatchChannel();
       if(LIVE_STATUSES.has(state.session.status)){
@@ -462,7 +491,7 @@
     const hangupBtn = $("giRsAdminHangup");
     const selected = state.session;
     if(list){
-      const rows = Array.isArray(state.inbox) ? state.inbox : [];
+      const rows = (Array.isArray(state.inbox) ? state.inbox : []).filter((row) => !TERMINAL.has(trim(row.status)));
       if(!rows.length){
         list.innerHTML = "";
         if(empty) empty.hidden = false;
@@ -883,8 +912,8 @@
   async function refreshFromServer(){
     const listed = await listSessions();
     if(!listed?.ok) return;
-    state.isSupportAdmin = !!listed.isSupportAdmin || isSupportAdminClient();
-    state.inbox = Array.isArray(listed.inbox) ? listed.inbox : [];
+    state.isSupportAdmin = isSupportAdminClient() && !!listed.isSupportAdmin;
+    state.inbox = state.isSupportAdmin && Array.isArray(listed.inbox) ? listed.inbox : [];
     const mine = listed.mine || null;
     const selectedId = state.session?.id;
     let next = mine;
@@ -925,6 +954,12 @@
 
   async function submitRequest(){
     setError("giRsRequestError", "");
+    if(isSupportAdminClient()){
+      closeModal("giRsRequestModal");
+      await refreshFromServer();
+      renderAdminModal(true);
+      return;
+    }
     const minted = await ensureToken();
     if(!minted.ok){
       const code = trim(minted.error);
@@ -934,19 +969,22 @@
         : "לא ניתן לשלוח את הבקשה. נסה שוב או רענן את הדף.");
       return;
     }
-    if(state.isSupportAdmin){
+    if(isSupportAdminClient()){
       closeModal("giRsRequestModal");
       await refreshFromServer();
       renderAdminModal(true);
       return;
     }
-    const res = await action("request_support", null, { problemText: "" });
+    let res = await action("request_support", null, { problemText: "" });
+    if(res?.error === "ADMIN_CANNOT_REQUEST"){
+      clearToken();
+      const mintedAgain = await ensureToken();
+      if(mintedAgain.ok && !isSupportAdminClient()){
+        res = await action("request_support", null, { problemText: "" });
+      }
+    }
     if(!res?.ok){
-      setError("giRsRequestError", res?.error === "SESSION_ALREADY_ACTIVE"
-        ? "כבר יש בקשת תמיכה פעילה."
-        : res?.error === "ADMIN_CANNOT_REQUEST"
-          ? "מנהל מערכת רואה את תיבת הבקשות, ולא שולח בקשת תמיכה."
-        : "שליחת הבקשה נכשלה.");
+      setError("giRsRequestError", "שליחת הבקשה נכשלה.");
       return;
     }
     applySession(res.session);
@@ -1082,7 +1120,7 @@
     ev?.preventDefault?.();
     ev?.stopPropagation?.();
     closeUserMenu();
-    const admin = state.isSupportAdmin || isSupportAdminClient();
+    const admin = isSupportAdminClient();
     if(admin){
       const minted = await ensureToken();
       if(!minted.ok){
@@ -1157,15 +1195,15 @@
   async function onLogin(){
     if(!currentUser()) return;
     restoreToken();
-    state.isSupportAdmin = isSupportAdminClient() || state.isSupportAdmin;
+    state.isSupportAdmin = isSupportAdminClient();
     bindUi();
     renderMenuLabel();
     const minted = await ensureToken();
     if(minted.ok){
       const listed = await listSessions();
       if(listed?.ok){
-        state.isSupportAdmin = !!listed.isSupportAdmin || isSupportAdminClient();
-        state.inbox = Array.isArray(listed.inbox) ? listed.inbox : [];
+        state.isSupportAdmin = isSupportAdminClient() && !!listed.isSupportAdmin;
+        state.inbox = isSupportAdminClient() && Array.isArray(listed.inbox) ? listed.inbox : [];
         applySession(listed.mine || null);
       }
       if(state.isSupportAdmin) await startAdminInboxChannel();

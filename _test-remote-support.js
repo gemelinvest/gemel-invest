@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260914-remote-support-simple-v2";
+const TAG = "20260914-remote-support-agent-request-v1";
 let failed = 0;
 let passed = 0;
 
@@ -72,7 +72,7 @@ assert(sql.includes("security definer"), "security definer RPCs");
 assert(sql.includes("gi_rs_mint_actor_token"), "mint token rpc");
 assert(sql.includes("-- PIN is optional"), "mint does not require PIN");
 assert(sql.includes("set row_security = off"), "RPCs bypass caller RLS");
-assert(sql.includes("'existing', true"), "repeat send returns the active session");
+assert(sql.includes("where not public.gi_rs_terminal(s.status);"), "admin inbox hides ended sessions");
 assert(!sql.includes("using (true)"), "no USING(true) open policy");
 
 console.log("\n4) realtime isolation — no CRM rehydrate");
@@ -90,8 +90,10 @@ assert(js.includes("__GI_FACE_BRIDGE__"), "uses existing login bridge, not windo
 assert(js.includes("getCurrentAgent"), "reads current agent from face bridge");
 assert(js.includes("agentFromPill"), "falls back to the logged-in user pill");
 assert(js.includes("findLoginAgent"), "resolves agent id from name via face bridge");
-assert(js.includes("GI_LAST_SESSION_USER_V1"), "falls back to last session user key");
+assert(js.includes("visibleUser"), "uses the on-screen logged-in user");
+assert(js.includes("tokenMatchesVisibleUser"), "drops a token from a different user");
 assert(js.includes("isAgentParty"), "matches the agent session by id or name");
+assert(!js.includes("GI_LAST_SESSION_USER_V1"), "does not reuse a previous login from localStorage");
 assert(!js.includes("getMailSessionPin"), "does not ask for or read a session PIN");
 assert(!js.includes("giRsRequestPin"), "request flow has no PIN field");
 assert(!js.includes("giRsAdminPin"), "admin inbox has no PIN field");
@@ -118,7 +120,8 @@ assert(!html.includes("אין צורך לתאר את התקלה"), "no PIN/probl
 assert(!html.includes("id=\"giRsProblemText\""), "no problem description textarea");
 assert(!html.includes("id=\"giRsRequestPin\""), "no request PIN input");
 assert(!html.includes("id=\"giRsAdminPin\""), "no admin PIN input");
-assert(html.includes("שלח בקשת תמיכה"), "send request button");
+assert(html.includes("הגש בקשה"), "submit request button");
+assert(js.includes("support_requested"), "notifies admins over broadcast");
 assert(html.includes("החיבור לא יתחיל ללא אישורך"), "explicit consent copy");
 assert(html.includes("אשר חיבור"), "approve connect");
 assert(html.includes("אפשר שליטה"), "grant control");
