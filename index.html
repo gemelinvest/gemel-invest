@@ -18,6 +18,7 @@
 <link href="./theme-p2.css?v=20260907-couple-shared-discount-v1" rel="stylesheet"/>
 <link href="./login-split.css?v=20260820-welcome-mfa-v4" rel="stylesheet"/>
 <link href="./gi-assistant.css?v=20260829-assistant-open-file-fix-v1" rel="stylesheet"/>
+<link href="./gi-remote-support.css?v=20260914-remote-support-v1" rel="stylesheet"/>
 <!-- GI-PERF 2026-08-10: CSS משני (mirror/import/unify) נטען אחרי כניסה מ-app.js —
      לא חוסם מסך login ולא מרעיש 404 לפני שהמשתמש התחבר. -->
 <!-- GI-PERF 2026-08-09: סימולטורים — CSS נטען לפי צורך מ-ensureGiSimulatorStylesLoaded ב-app.js -->
@@ -479,6 +480,9 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 </div>
 <button class="lcUserPill__btn giUserMenu__item giUserMenu__item--face" id="btnFaceEnroll" type="button" role="menuitem">
 <svg class="giUserMenu__itemIcon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="5" width="16" height="14" rx="3"></rect><circle cx="12" cy="12" r="3.2"></circle><path d="M8 5V4"></path><path d="M16 5V4"></path></svg>זיהוי פנים</button>
+<button class="lcUserPill__btn giUserMenu__item giUserMenu__item--support" id="btnRemoteSupport" type="button" role="menuitem" aria-label="תמיכה מרחוק">
+<svg class="giUserMenu__itemIcon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 14v-2a8 8 0 0 1 16 0v2"></path><path d="M4 14a2 2 0 0 0 2 2h1v-5H6a2 2 0 0 0-2 2z"></path><path d="M20 14a2 2 0 0 1-2 2h-1v-5h1a2 2 0 0 1 2 2z"></path></svg><span id="giRsMenuLabel">🎧 תמיכה מרחוק</span></button>
+<div class="giUserMenu__sep" role="separator" aria-hidden="true"></div>
 <button class="lcUserPill__btn giUserMenu__item" id="btnLogout" type="button" role="menuitem">
 <svg class="giUserMenu__itemIcon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><path d="m16 17 5-5-5-5"></path><path d="M21 12H9"></path></svg>התנתק</button>
 </div>
@@ -2328,6 +2332,123 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
   </div>
 </div>
 
+<div aria-hidden="true" class="modal giRsModal" id="giRsRequestModal">
+  <div class="modal__backdrop" data-close="1" id="giRsRequestBackdrop"></div>
+  <div aria-label="בקשת תמיכה מרחוק" aria-modal="true" class="modal__panel" role="dialog">
+    <div class="modal__head">
+      <div>
+        <div class="modal__kicker">GEMEL INVEST</div>
+        <div class="modal__title">בקשת תמיכה מרחוק</div>
+      </div>
+      <button aria-label="סגור" class="iconBtn" id="giRsRequestClose" type="button">✕</button>
+    </div>
+    <div class="modal__body" style="padding:16px 18px 8px;">
+      <p class="giRsModal__lead">נתקלת בבעיה במערכת? שלח בקשה למנהל המערכת כדי לקבל סיוע.</p>
+      <div class="field">
+        <label class="label" for="giRsProblemText">תיאור הבעיה</label>
+        <textarea class="input" id="giRsProblemText" rows="4" placeholder="כאשר אני לוחץ על הפקת הצעה, המערכת נתקעת."></textarea>
+      </div>
+      <div class="field" id="giRsRequestPinField" hidden>
+        <label class="label" for="giRsRequestPin">קוד כניסה לאימות</label>
+        <input class="input" id="giRsRequestPin" type="password" inputmode="numeric" autocomplete="off"/>
+      </div>
+      <div class="giRsModal__error" id="giRsRequestError" role="alert"></div>
+    </div>
+    <div class="modal__foot">
+      <button class="btn" id="giRsRequestCancel" type="button">ביטול</button>
+      <button class="btn btn--primary" id="giRsRequestSend" type="button">שלח בקשת תמיכה</button>
+    </div>
+  </div>
+</div>
+
+<div aria-hidden="true" class="modal giRsModal" id="giRsApproveModal">
+  <div class="modal__backdrop" data-close="1"></div>
+  <div aria-label="בקשת תמיכה מרחוק" aria-modal="true" class="modal__panel" role="dialog">
+    <div class="modal__head">
+      <div>
+        <div class="modal__kicker">GEMEL INVEST</div>
+        <div class="modal__title">🎧 בקשת תמיכה מרחוק</div>
+      </div>
+    </div>
+    <div class="modal__body" style="padding:16px 18px 8px;">
+      <p class="giRsModal__lead">מנהל המערכת מבקש להתחבר לסביבת העבודה שלך כדי לסייע לך בפתרון הבעיה.</p>
+      <p class="giRsModal__note">החיבור לא יתחיל ללא אישורך. <span id="giRsApproveAdminName"></span></p>
+    </div>
+    <div class="modal__foot">
+      <button class="btn" id="giRsApproveReject" type="button">דחה</button>
+      <button class="btn btn--primary" id="giRsApproveAccept" type="button">אשר חיבור</button>
+    </div>
+  </div>
+</div>
+
+<div aria-hidden="true" class="modal giRsModal" id="giRsControlModal">
+  <div class="modal__backdrop" data-close="1"></div>
+  <div aria-label="בקשת שליטה" aria-modal="true" class="modal__panel" role="dialog">
+    <div class="modal__head">
+      <div>
+        <div class="modal__kicker">GEMEL INVEST</div>
+        <div class="modal__title">בקשת שליטה</div>
+      </div>
+    </div>
+    <div class="modal__body" style="padding:16px 18px 8px;">
+      <p class="giRsModal__lead">מנהל המערכת מבקש לקבל שליטה זמנית בסביבת העבודה שלך.</p>
+      <p class="giRsModal__note">אפשר לעצור שליטה בכל רגע מהבאנר בראש המסך. שדות סיסמה ותשלום נשארים חסומים.</p>
+    </div>
+    <div class="modal__foot">
+      <button class="btn" id="giRsControlReject" type="button">דחה</button>
+      <button class="btn btn--primary" id="giRsControlAccept" type="button">אפשר שליטה</button>
+    </div>
+  </div>
+</div>
+
+<div aria-hidden="true" class="modal giRsModal" id="giRsAdminModal">
+  <div class="modal__backdrop" data-close="1" id="giRsAdminBackdrop"></div>
+  <div aria-label="תמיכה מרחוק" aria-modal="true" class="modal__panel" role="dialog">
+    <div class="modal__head">
+      <div>
+        <div class="modal__kicker">GEMEL INVEST</div>
+        <div class="modal__title">תמיכה מרחוק</div>
+      </div>
+      <button aria-label="סגור" class="iconBtn" id="giRsAdminClose" type="button">✕</button>
+    </div>
+    <div class="modal__body">
+      <div class="field" id="giRsAdminPinField" hidden>
+        <label class="label" for="giRsAdminPin">קוד כניסה לאימות</label>
+        <input class="input" id="giRsAdminPin" type="password" inputmode="numeric" autocomplete="off"/>
+      </div>
+      <div class="giRsModal__error" id="giRsAdminError" role="alert"></div>
+      <div class="giRsInbox" id="giRsInbox">
+        <div class="giRsInbox__empty" id="giRsInboxEmpty">אין בקשות תמיכה ממתינות.</div>
+        <div id="giRsInboxList"></div>
+      </div>
+      <div class="giRsLive" id="giRsLive">
+        <div class="giRsLive__videoWrap">
+          <video class="giRsLive__video" id="giRsAdminVideo" autoplay playsinline muted></video>
+        </div>
+        <p class="giRsLive__hint" id="giRsLiveHint"></p>
+      </div>
+    </div>
+    <div class="modal__foot">
+      <button class="btn" id="giRsAdminReject" type="button" hidden>דחה</button>
+      <button class="btn btn--primary" id="giRsAdminConnect" type="button" hidden>שלח בקשת התחברות</button>
+      <button class="btn btn--primary" id="giRsAdminRequestControl" type="button" hidden>בקש שליטה</button>
+      <button class="btn btn--danger" id="giRsAdminHangup" type="button" hidden>נתק</button>
+    </div>
+  </div>
+</div>
+
+<div class="giRsBanner" id="giRsBanner" hidden>
+  <span class="giRsBanner__dot" aria-hidden="true"></span>
+  <div class="giRsBanner__copy">
+    <div class="giRsBanner__title" id="giRsBannerTitle">🟢 תמיכה מרחוק פעילה</div>
+    <div class="giRsBanner__text" id="giRsBannerText">מנהל המערכת מחובר כעת לסביבת העבודה שלך.</div>
+  </div>
+  <div class="giRsBanner__actions">
+    <button class="btn" id="giRsBannerStopControl" type="button" hidden>עצור שליטה</button>
+    <button class="btn btn--danger" id="giRsBannerEnd" type="button">סיים תמיכה</button>
+  </div>
+</div>
+
 <div aria-hidden="true" class="modal giFaceModal" id="giFaceEnrollModal">
   <div class="modal__backdrop" data-close="1" id="giFaceEnrollBackdrop"></div>
   <div aria-label="הרשמת זיהוי פנים" aria-modal="true" class="modal__panel giFaceModal__panel" role="dialog">
@@ -3949,6 +4070,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <script src="./gi-assistant.js?v=20260829-assistant-open-file-fix-v1"></script>
 <script src="./gi-face-auth.js?v=20260817-face-retry-v1"></script>
 <script src="./gi-daily-sales-mail.js?v=20260914-mc-followup-qfix-v2"></script>
+<script src="./gi-remote-support.js?v=20260914-remote-support-v1"></script>
 
 
 <div id="giPwaInstallBanner" class="giPwaInstallBanner" hidden>
