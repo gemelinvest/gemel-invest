@@ -42455,13 +42455,53 @@ body.lcHmoDdOpen .lcWizard .lcStep1UnifiedSection{
   padding: 5px 12px;
   border-radius: 999px;
 }
-.cfFile__liveTimer.is-stopped{
-  background: #fff7ed;
-  border: 1px solid #fdba74;
+.cfFile__liveTimer.is-waiting{
+  background:
+    radial-gradient(circle at 18% 20%, rgba(255,255,255,.72), transparent 42%),
+    linear-gradient(135deg, #eff6ff 0%, #dbeafe 48%, #bfdbfe 100%);
+  border: 1px solid #60a5fa;
+  color: #1e3a8a;
+  max-width: min(360px, 100%);
+}
+.cfFile__liveTimer.is-preparing{
+  background:
+    radial-gradient(circle at 18% 20%, rgba(255,255,255,.72), transparent 42%),
+    linear-gradient(135deg, #fff7ed 0%, #ffedd5 48%, #fed7aa 100%);
+  border: 1px solid #fb923c;
   color: #9a3412;
-  min-height: 30px;
-  padding: 5px 12px;
-  border-radius: 999px;
+  max-width: min(360px, 100%);
+}
+.cfFile__liveTimer.is-waiting .cfFile__liveTimerFace{
+  background:
+    radial-gradient(circle at 50% 50%, #eff6ff 0 11px, transparent 12px),
+    conic-gradient(#2563eb var(--gi-call-progress), #bfdbfe 0);
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.92), 0 0 0 1px rgba(37, 99, 235, .4);
+}
+.cfFile__liveTimer.is-preparing .cfFile__liveTimerFace{
+  background:
+    radial-gradient(circle at 50% 50%, #fff7ed 0 11px, transparent 12px),
+    conic-gradient(#ea580c var(--gi-call-progress), #fed7aa 0);
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.92), 0 0 0 1px rgba(234, 88, 12, .4);
+}
+.cfFile__liveTimer.is-waiting .cfFile__liveTimerHand{
+  background: #1d4ed8;
+}
+.cfFile__liveTimer.is-preparing .cfFile__liveTimerHand{
+  background: #c2410c;
+}
+.cfFile__liveTimer.is-waiting .cfFile__liveTimerPulse{
+  background: #3b82f6;
+  box-shadow: 0 0 0 0 rgba(59, 130, 246, .7);
+}
+.cfFile__liveTimer.is-preparing .cfFile__liveTimerPulse{
+  background: #f97316;
+  box-shadow: 0 0 0 0 rgba(249, 115, 22, .7);
+}
+.cfFile__liveTimer.is-waiting .cfFile__liveTimerCount,
+.cfFile__liveTimer.is-preparing .cfFile__liveTimerCount,
+.cfFile__liveTimer.is-waiting .cfFile__liveTimerStep,
+.cfFile__liveTimer.is-preparing .cfFile__liveTimerStep{
+  color: inherit;
 }
 .cfFile__liveTimerClock{
   position: relative;
