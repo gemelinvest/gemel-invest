@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260913-hachshara-health-decl-v1";
+  const BUILD = "20260914-mc-inline-form-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -42336,7 +42336,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260913-hachshara-health-decl-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260914-mc-inline-form-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -42356,8 +42356,8 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260913-hachshara-health-decl-v1";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260913-hachshara-health-decl-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-inline-form-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mc-inline-form-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -43010,18 +43010,18 @@ UsersGateUI.init();
     "./ayalon-health-sim.css?v=20260810-sim-mockup-v2",
     "./ayalon-ci-sim.css?v=20260811-ayl-ci-v1",
     "./hachshara-health-sim.css?v=20260810-sim-mockup-v2",
-    "./hachshara-risk-sim.css?v=20260913-hachshara-health-decl-v1",
-    "./hachshara-mortgage-risk-sim.css?v=20260913-hachshara-health-decl-v1",
+    "./hachshara-risk-sim.css?v=20260914-mc-inline-form-v1",
+    "./hachshara-mortgage-risk-sim.css?v=20260914-mc-inline-form-v1",
     "./migdal-health-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
-    "./menora-ci-sim.css?v=20260913-hachshara-health-decl-v1",
+    "./menora-ci-sim.css?v=20260914-mc-inline-form-v1",
     "./clal-health-sim.css?v=20260812-cll-health-v1",
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260913-hachshara-health-decl-v1",
-    "./simulators-shell.css?v=20260913-hachshara-health-decl-v1"
+    "./simulators-center.css?v=20260914-mc-inline-form-v1",
+    "./simulators-shell.css?v=20260914-mc-inline-form-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -44383,7 +44383,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260913-hachshara-health-decl-v1";
+  const GI_WIZARD_JS_VERSION = "20260914-mc-inline-form-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -67119,6 +67119,7 @@ ${inner}
     _verifyActiveInsuredId: null,
     _preFlightReviewed: null,
     _preFlightConfirmed: false,
+    _mcHealthEditor: null,
 
     els: {},
 
@@ -72255,7 +72256,8 @@ ${inner}
         const meta = row.kind === "followup"
           ? [row.company, row.insured, row.qNum ? ("שאלון " + row.qNum) : ""].filter(Boolean).join(" · ")
           : "טופס הצעה";
-        return `<button type="button" class="mcHealthFormsRail__item" data-mc-open-form="${escapeHtml(row.kind)}" data-mc-form-type="${escapeHtml(row.type)}">` +
+        const on = this._mcHealthEditor && safeTrim(this._mcHealthEditor.type) === safeTrim(row.type) ? " is-on" : "";
+        return `<button type="button" class="mcHealthFormsRail__item${on}" data-mc-open-form="${escapeHtml(row.kind)}" data-mc-form-type="${escapeHtml(row.type)}" aria-pressed="${on ? "true" : "false"}">` +
           `<div class="mcHealthFormsRail__name">${escapeHtml(row.name)}</div>` +
           `<div class="mcHealthFormsRail__meta">${escapeHtml(meta)}</div>` +
         `</button>`;
@@ -72273,6 +72275,459 @@ ${inner}
       `</aside>`;
     },
 
+    _mcJoinTypeHealthMap(type){
+      const t = safeTrim(type);
+      const map = {
+        hachshara_ci_form: "hachshara_ci",
+        hachshara_health_form: "hachshara_health",
+        hachshara_life_form: "hachshara_life_full",
+        hachshara_life_short_form: "hachshara_life_short_decl",
+        hachshara_mortgage_form: "hachshara_mortgage_full",
+        migdal_life_form: "migdal_life",
+        migdal_mortgage_form: "migdal_mortgage",
+        migdal_cancer_form: "migdal_cancer",
+        menora_ci_form: "menora_ci",
+        menora_mortgage_form: "menora_mortgage",
+        menora_risk_form: "menora_risk",
+        ayalon_health_form: "ayalon_health",
+        ayalon_mortgage_form: "ayalon_mortgage",
+        clal_health_form: "clal_health",
+        clal_life_couple_form: "clal_couple",
+        clal_mortgage_form: "clal_health",
+        phoenix_health_form: "phoenix_health",
+        phoenix_ci_form: "phoenix_ci",
+        phoenix_life_short_form: "phoenix_life_short",
+        phoenix_life_full_form: "phoenix_life_full"
+      };
+      return map[t] || "";
+    },
+
+    _mcHealthQText(qKey){
+      const key = safeTrim(qKey);
+      if(!key) return "";
+      try{
+        const rec = this._getFreshCustomerRecord();
+        const groups = this._mirrorBuildHealthGroups(rec) || [];
+        for(let i = 0; i < groups.length; i++){
+          if(safeTrim(groups[i]?.qKey) === key){
+            const text = safeTrim(groups[i]?.question?.text || groups[i]?.insured?.label);
+            if(text && text !== key) return text;
+          }
+        }
+      }catch(_e){}
+      try{
+        const map = (typeof Wizard !== "undefined" && Wizard.getHealthQuestionLegacyTextMap)
+          ? Wizard.getHealthQuestionLegacyTextMap() : null;
+        if(map && map[key]) return map[key];
+        const idx = key.lastIndexOf("__");
+        if(idx > 0 && map){
+          const shortKey = "short" + key.slice(idx);
+          if(map[shortKey]) return map[shortKey];
+        }
+      }catch(_e2){}
+      return "";
+    },
+
+    _mcHealthKeysForJoinType(type){
+      const helper = (typeof GI_OFFICIAL_FORM_FILL !== "undefined") ? GI_OFFICIAL_FORM_FILL : null;
+      const mapKey = this._mcJoinTypeHealthMap(type);
+      if(mapKey === "phoenix_life_short"){
+        const rows = helper?.PHOENIX_HEALTH_ROWS?.short || [];
+        const prefixes = helper?.PHOENIX_HEALTH_PREFIXES?.short || ["phoenix_risk_u55_under2m"];
+        const prefix = prefixes[0] || "";
+        return rows.map((row) => prefix && row.step ? (prefix + "__" + row.step) : "").filter(Boolean);
+      }
+      if(mapKey === "phoenix_life_full"){
+        const rows = helper?.PHOENIX_HEALTH_ROWS?.full || [];
+        const prefixes = helper?.PHOENIX_HEALTH_PREFIXES?.full || ["phoenix_risk_o55_or_over2m"];
+        const prefix = prefixes[0] || "";
+        return rows.map((row) => prefix && row.step ? (prefix + "__" + row.step) : "").filter(Boolean);
+      }
+      const bag = helper?.HEALTH_QKEYS;
+      if(bag && mapKey && Array.isArray(bag[mapKey])) return bag[mapKey].slice();
+      return [];
+    },
+
+    _mcPdfHealthFieldMeta(type, fieldName){
+      const name = safeTrim(fieldName);
+      const helper = (typeof GI_OFFICIAL_FORM_FILL !== "undefined") ? GI_OFFICIAL_FORM_FILL : null;
+      const mapKey = this._mcJoinTypeHealthMap(type);
+      const rowsOf = () => {
+        if(!helper) return [];
+        if(mapKey === "phoenix_health" && typeof helper.phoenixHealthRows === "function") return helper.phoenixHealthRows();
+        if(mapKey === "clal_health" && typeof helper.clalHealthRows === "function") return helper.clalHealthRows();
+        if(mapKey === "ayalon_health" && typeof helper.ayalonHealthRows === "function") return helper.ayalonHealthRows();
+        if(typeof helper.hachsharaHealthRows === "function" && /^hachshara_/.test(mapKey)){
+          const kind = mapKey === "hachshara_life_short_decl" ? "life_short"
+            : mapKey.replace(/^hachshara_/, "");
+          return helper.hachsharaHealthRows(kind);
+        }
+        if(mapKey === "migdal_life" && typeof helper.migdalLifeHealthRows === "function") return helper.migdalLifeHealthRows();
+        if(mapKey === "migdal_cancer" && typeof helper.migdalCancerHealthRows === "function") return helper.migdalCancerHealthRows();
+        if(mapKey === "migdal_mortgage" && typeof helper.migdalMortgageHealthRows === "function") return helper.migdalMortgageHealthRows();
+        return [];
+      };
+      const who = /Bzug|Spouse|\.S$|S$/.test(name) && /HealthDec|IsSmoking|MKQ|Q\d/.test(name)
+        ? "בן/בת זוג" : (/Child|C\d/.test(name) ? "ילד" : "מבוטח");
+      const main = name.match(/^HealthDecMainQ(\d+)$/i);
+      const bzug = name.match(/^HealthDecBzugQ(\d+)$/i);
+      const child = name.match(/^HealthDecC(\d+)Q(\d+)$/i);
+      const qn = name.match(/^Q(\d+)$/i);
+      const mkq = name.match(/^MKQ(\d+)$/i);
+      const mkqS = name.match(/^MKQ(\d+)S$/i);
+      let qNum = 0;
+      if(main) qNum = Number(main[1]);
+      else if(bzug) qNum = Number(bzug[1]);
+      else if(child) qNum = Number(child[2]);
+      else if(qn) qNum = Number(qn[1]);
+      else if(mkq) qNum = Number(mkq[1]);
+      else if(mkqS) qNum = Number(mkqS[1]);
+      let qKey = "";
+      const rows = rowsOf();
+      if(qNum && rows.length){
+        const row = rows.find((r) => Number(r.q) === qNum) || rows.find((r) => r.field === name || r.field === ("Q" + qNum));
+        if(row){
+          const keys = Array.isArray(row.keys) ? row.keys : (row.key ? [row.key] : []);
+          qKey = safeTrim(keys[0]);
+        }
+      }
+      if(!qKey && (mapKey === "phoenix_life_short" || mapKey === "phoenix_life_full")){
+        const mode = mapKey === "phoenix_life_full" ? "full" : "short";
+        const rowsPhx = helper?.PHOENIX_HEALTH_ROWS?.[mode] || [];
+        const prefixes = helper?.PHOENIX_HEALTH_PREFIXES?.[mode] || [];
+        const row = name === "IsSmoking" || name === "IsSmokingBzug"
+          ? rowsPhx.find((r) => r.smoke)
+          : rowsPhx.find((r) => r.field === name || r.field === name.replace(/S$/, ""));
+        if(row?.step && prefixes[0]) qKey = prefixes[0] + "__" + row.step;
+      }
+      if(!qKey && (mkq || mkqS) && mapKey === "menora_risk"){
+        try{
+          const mod = window.MenoraRiskForm;
+          const mkRows = (typeof mod?.mkqHealthRows === "function") ? mod.mkqHealthRows() : [];
+          const row = mkRows.find((r) => r.field === ("MKQ" + qNum) || r.field === name);
+          qKey = safeTrim((row?.keys && row.keys[0]) || "");
+        }catch(_e){}
+      }
+      if(!qKey && (name === "IsSmoking" || name === "IsSmokingBzug" || name === "SmokingStatus")){
+        const keys = this._mcHealthKeysForJoinType(type);
+        qKey = keys.find((k) => /smok/i.test(k)) || "";
+      }
+      const text = this._mcHealthQText(qKey);
+      return { qKey, text, who, qNum };
+    },
+
+    _mcPdfFieldLabel(type, fieldName){
+      const helper = (typeof GI_OFFICIAL_FORM_FILL !== "undefined") ? GI_OFFICIAL_FORM_FILL : null;
+      const meta = this._mcPdfHealthFieldMeta(type, fieldName);
+      if(meta.text){
+        const n = meta.qNum ? (meta.qNum + ". ") : "";
+        return n + meta.text;
+      }
+      return (helper && typeof helper.hebrewPdfFieldLabel === "function")
+        ? helper.hebrewPdfFieldLabel(fieldName) : safeTrim(fieldName);
+    },
+
+    _mcReadPdfFieldValues(form, fields){
+      const values = {};
+      (fields || []).forEach((f) => {
+        const name = safeTrim(f?.name);
+        if(!name) return;
+        try{
+          const field = form.getField(name);
+          if(!field) return;
+          if(typeof field.getText === "function"){
+            values[name] = String(field.getText() || "");
+            return;
+          }
+          if(typeof field.getSelected === "function"){
+            const sel = field.getSelected();
+            values[name] = Array.isArray(sel) ? String(sel[0] || "") : String(sel || "");
+            return;
+          }
+          try{
+            const raw = field.acroField && typeof field.acroField.getValue === "function"
+              ? field.acroField.getValue() : null;
+            const s = raw == null ? "" : String(raw).replace(/^\//, "");
+            if(s && s !== "Off"){
+              values[name] = s;
+              return;
+            }
+          }catch(_e){}
+          if(typeof field.isChecked === "function"){
+            values[name] = field.isChecked() ? "1" : "";
+          }
+        }catch(_e2){}
+      });
+      return values;
+    },
+
+    _mcIsHealthPdfField(name){
+      const n = safeTrim(name);
+      return /^(HealthDec|IsSmoking|MKQ\d|Q\d+$|Hight|Weight|BMI|ClientSmoke|Smoking|Shaban)/.test(n);
+    },
+
+    _mcRenderPdfFieldsHtml(type, fields, values){
+      const helper = (typeof GI_OFFICIAL_FORM_FILL !== "undefined") ? GI_OFFICIAL_FORM_FILL : null;
+      const bag = values && typeof values === "object" ? values : {};
+      const groups = Object.create(null);
+      const order = [];
+      const prefer = ["הצהרת בריאות", "פרטי טופס", "בן/בת זוג", "ילדים", "תשלום", "סוכן", "מוטבים", "בעל פוליסה"];
+      (fields || []).forEach((f) => {
+        const sec = (this._mcIsHealthPdfField(f.name) ? "הצהרת בריאות"
+          : (helper && typeof helper.pdfFieldSection === "function" ? helper.pdfFieldSection(f.name) : "פרטי טופס"));
+        if(!groups[sec]){
+          groups[sec] = [];
+          order.push(sec);
+        }
+        groups[sec].push(f);
+      });
+      order.sort((a, b) => {
+        const ia = prefer.indexOf(a); const ib = prefer.indexOf(b);
+        const pa = ia < 0 ? 50 : ia; const pb = ib < 0 ? 50 : ib;
+        return pa - pb;
+      });
+      const esc = (s) => escapeHtml(s);
+      return order.map((sec) => {
+        const isHealth = sec === "הצהרת בריאות";
+        const rows = groups[sec].map((f) => {
+          const val = bag[f.name] == null ? "" : String(bag[f.name]);
+          const label = this._mcPdfFieldLabel(type, f.name);
+          const meta = this._mcPdfHealthFieldMeta(type, f.name);
+          const healthChoice = isHealth && (f.type === "choice" || f.type === "dropdown" || /HealthDec|IsSmoking|MKQ|^Q\d+$/.test(f.name));
+          if(healthChoice){
+            let choices = Array.isArray(f.options) ? f.options.slice() : [];
+            if(!choices.length){
+              if(/IsSmoking|Gender/.test(f.name)) choices = ["True", "False"];
+              else choices = ["1", "2"];
+            }
+            const optHtml = choices.filter((o, i, arr) => o && arr.indexOf(o) === i).map((raw) => {
+              const o = String(raw);
+              const lab = (helper && helper.choiceOptionLabel) ? helper.choiceOptionLabel(f.name, o) : o;
+              const on = val === o ? " is-on" : "";
+              return `<label class="mcFormEd__seg${on}"><input type="radio" name="pdf:${esc(f.name)}" data-pdf-field="${esc(f.name)}" value="${esc(o)}"${val === o ? " checked" : ""}><span>${esc(lab)}</span></label>`;
+            }).join("");
+            return `<div class="mcFormEd__q">` +
+              `<div class="mcFormEd__qHead"><div class="mcFormEd__qText">${esc(label)}</div>` +
+              (meta.who ? `<div class="mcFormEd__qWho">${esc(meta.who)}</div>` : "") +
+              `</div><div class="mcFormEd__segs">${optHtml}</div></div>`;
+          }
+          let control = "";
+          if(f.type === "choice" || f.type === "dropdown"){
+            const opts = ['<option value="">—</option>'];
+            let choices = Array.isArray(f.options) ? f.options.slice() : [];
+            if(!choices.length && helper){
+              if(/HMORadio|^HMOSpouse$/.test(f.name)) choices = ["2", "3", "1", "4"];
+              else if(/^Shaban/.test(f.name)) choices = ["1", "2"];
+              else if(/Gender/.test(f.name)) choices = ["True", "False"];
+              else if(f.name === "CollectionMethod") choices = ["Hok", "Credit"];
+              else if(/FamilyStatus/.test(f.name)) choices = ["Single", "Married", "Divorced", "Widow"];
+            }
+            const seenOpt = Object.create(null);
+            choices.forEach((raw) => {
+              const o = String(raw == null ? "" : raw);
+              if(!o || seenOpt[o]) return;
+              seenOpt[o] = true;
+              const lab = helper && helper.choiceOptionLabel ? helper.choiceOptionLabel(f.name, o) : o;
+              opts.push(`<option value="${esc(o)}"${val === o ? " selected" : ""}>${esc(lab)}</option>`);
+            });
+            if(val && !seenOpt[val]) opts.push(`<option value="${esc(val)}" selected>${esc(val)}</option>`);
+            control = `<select class="mcFormEd__input" data-pdf-field="${esc(f.name)}">${opts.join("")}</select>`;
+          } else {
+            control = `<input class="mcFormEd__input" data-pdf-field="${esc(f.name)}" value="${esc(val)}">`;
+          }
+          return `<label class="mcFormEd__row"><span class="mcFormEd__lab" title="${esc(f.name)}">${esc(label)}</span>${control}</label>`;
+        }).join("");
+        const gridClass = isHealth ? "mcFormEd__health" : "mcFormEd__grid";
+        return `<section class="mcFormEd__sec"><div class="mcFormEd__secTitle">${esc(sec)}</div><div class="${gridClass}">${rows}</div></section>`;
+      }).join("");
+    },
+
+    _mcDraftPersonFields(prefix, person, title){
+      const p = person && typeof person === "object" ? person : {};
+      const rows = [
+        ["שם פרטי", prefix + ".firstName", p.firstName],
+        ["שם משפחה", prefix + ".lastName", p.lastName],
+        ["תעודת זהות", prefix + ".idNumber", p.idNumber],
+        ["תאריך לידה", prefix + ".birthDate", p.birthDate],
+        ["מין", prefix + ".gender", p.gender],
+        ["מצב משפחתי", prefix + ".maritalStatus", p.maritalStatus],
+        ["טלפון", prefix + ".phone", p.phone],
+        ["דוא״ל", prefix + ".email", p.email],
+        ["עיר", prefix + ".city", p.city],
+        ["רחוב", prefix + ".street", p.street],
+        ["מספר בית", prefix + ".houseNumber", p.houseNumber],
+        ["עיסוק", prefix + ".occupation", p.occupation],
+        ["קופת חולים", prefix + ".clinic", p.clinic],
+        ["גובה", prefix + ".heightCm", p.heightCm],
+        ["משקל", prefix + ".weightKg", p.weightKg]
+      ];
+      const body = rows.map((r) =>
+        `<label class="mcFormEd__row"><span class="mcFormEd__lab">${escapeHtml(r[0])}</span>` +
+        `<input class="mcFormEd__input" name="${escapeHtml(r[1])}" value="${escapeHtml(r[2] || "")}"></label>`
+      ).join("");
+      return `<section class="mcFormEd__sec"><div class="mcFormEd__secTitle">${escapeHtml(title)}</div><div class="mcFormEd__grid">${body}</div></section>`;
+    },
+
+    _mcRenderDraftHealthFormHtml(rec, type, draft){
+      const d = draft && typeof draft === "object" ? draft : {};
+      const helper = (typeof GI_OFFICIAL_FORM_FILL !== "undefined") ? GI_OFFICIAL_FORM_FILL : null;
+      const responses = d.healthResponses && typeof d.healthResponses === "object" ? d.healthResponses : {};
+      const people = [];
+      if(d.primary) people.push({ person: d.primary, id: safeTrim(d.primaryId || d.primary.id), title: "מבוטח ראשי", prefix: "primary" });
+      if(d.spouse) people.push({ person: d.spouse, id: safeTrim(d.spouseId || d.spouse.id), title: "בן/בת זוג", prefix: "spouse" });
+      (Array.isArray(d.children) ? d.children : []).forEach((child, idx) => {
+        if(!child) return;
+        people.push({ person: child, id: safeTrim((d.childIds && d.childIds[idx]) || child.id), title: "ילד " + (idx + 1), prefix: "children." + idx });
+      });
+      const keys = this._mcHealthKeysForJoinType(type);
+      const healthRows = keys.map((qKey) => {
+        const text = this._mcHealthQText(qKey) || qKey;
+        const whoBlocks = people.map((row) => {
+          const insId = row.id;
+          let ans = "";
+          if(helper && typeof helper.healthAnswer === "function"){
+            ans = helper.healthAnswer(responses, qKey, insId) || "";
+            if(!ans && typeof helper.healthAnswerOrSolo === "function") ans = helper.healthAnswerOrSolo(responses, qKey, insId) || "";
+          }
+          const name = "healthResponses." + qKey + "." + insId + ".answer";
+          const yesOn = ans === "yes" ? " is-on" : "";
+          const noOn = ans === "no" ? " is-on" : "";
+          return `<div class="mcFormEd__q">` +
+            `<div class="mcFormEd__qHead"><div class="mcFormEd__qText">${escapeHtml(text)}</div>` +
+            `<div class="mcFormEd__qWho">${escapeHtml(row.title)}</div></div>` +
+            `<div class="mcFormEd__segs">` +
+              `<label class="mcFormEd__seg${yesOn}"><input type="radio" name="${escapeHtml(name)}" value="yes"${ans === "yes" ? " checked" : ""}><span>כן</span></label>` +
+              `<label class="mcFormEd__seg${noOn}"><input type="radio" name="${escapeHtml(name)}" value="no"${ans === "no" ? " checked" : ""}><span>לא</span></label>` +
+            `</div></div>`;
+        }).join("");
+        return whoBlocks;
+      }).join("");
+      const agent = `<section class="mcFormEd__sec"><div class="mcFormEd__secTitle">פרטי הצעה וסוכן</div><div class="mcFormEd__grid">` +
+        `<label class="mcFormEd__row"><span class="mcFormEd__lab">תחילת ביטוח</span><input class="mcFormEd__input" name="insuranceBegin" value="${escapeHtml(d.insuranceBegin || "")}"></label>` +
+        `<label class="mcFormEd__row"><span class="mcFormEd__lab">תאריך</span><input class="mcFormEd__input" name="today" value="${escapeHtml(d.today || "")}"></label>` +
+        `<label class="mcFormEd__row"><span class="mcFormEd__lab">שם סוכן</span><input class="mcFormEd__input" name="agentName" value="${escapeHtml(d.agentName || "")}"></label>` +
+        `<label class="mcFormEd__row"><span class="mcFormEd__lab">מספר סוכן</span><input class="mcFormEd__input" name="agentNumber" value="${escapeHtml(d.agentNumber || "")}"></label>` +
+      `</div></section>`;
+      const persons = people.map((row) => this._mcDraftPersonFields(row.prefix, row.person, row.title)).join("");
+      const payer = d.payer || {};
+      const bank = d.bank || {};
+      const pay = `<section class="mcFormEd__sec"><div class="mcFormEd__secTitle">תשלום והוראת קבע</div><div class="mcFormEd__grid">` +
+        `<label class="mcFormEd__row"><span class="mcFormEd__lab">שם משלם</span><input class="mcFormEd__input" name="payer.fullName" value="${escapeHtml(payer.fullName || payer.name || "")}"></label>` +
+        `<label class="mcFormEd__row"><span class="mcFormEd__lab">ת״ז משלם</span><input class="mcFormEd__input" name="payer.idNumber" value="${escapeHtml(payer.idNumber || "")}"></label>` +
+        `<label class="mcFormEd__row"><span class="mcFormEd__lab">בנק</span><input class="mcFormEd__input" name="bank.name" value="${escapeHtml(bank.name || "")}"></label>` +
+        `<label class="mcFormEd__row"><span class="mcFormEd__lab">סניף</span><input class="mcFormEd__input" name="bank.branch" value="${escapeHtml(bank.branch || "")}"></label>` +
+        `<label class="mcFormEd__row"><span class="mcFormEd__lab">חשבון</span><input class="mcFormEd__input" name="bank.account" value="${escapeHtml(bank.account || "")}"></label>` +
+      `</div></section>`;
+      const healthSec = `<section class="mcFormEd__sec"><div class="mcFormEd__secTitle">הצהרת בריאות</div><div class="mcFormEd__health">${healthRows || `<p class="mcFormEd__empty">אין שאלות הצהרה ממופות לטופס זה.</p>`}</div></section>`;
+      return agent + persons + healthSec + pay;
+    },
+
+    _mcHealthFormEditorHtml(rec){
+      const ed = this._mcHealthEditor || {};
+      const title = safeTrim(ed.title) || this._mcJoinFormTitle(ed.type);
+      const head =
+        `<header class="mcFormEd__head">` +
+          `<div class="mcFormEd__headText">` +
+            `<div class="mcFormEd__kicker">עריכת טופס מקורי</div>` +
+            `<h2 class="mcFormEd__title">${escapeHtml(title)}</h2>` +
+            `<p class="mcFormEd__sub">השדות ממולאים מהתיק ומהצהרת הבריאות שנשמרה באשף, במיקומם בטופס הרשמי.</p>` +
+          `</div>` +
+          `<button type="button" class="btn mcFormEd__back" data-mc-needs-act="health-form-close">חזרה להצהרה</button>` +
+        `</header>`;
+      if(ed.loading){
+        return `<div class="mcFormEditor" aria-busy="true">${head}<div class="mcFormEd__wait">טוען את כל שדות הטופס הרשמי…</div></div>`;
+      }
+      if(ed.error){
+        return `<div class="mcFormEditor">${head}<div class="mcCancelQError" role="alert">${escapeHtml(ed.error)}</div>` +
+          this._mcNeedsNav("health-to-future", this._mcPayStepEnabled() ? "המשך · פרטי אמצעי תשלום" : "סיימתי · סיום שלבי השיקוף", "health-form-close", "חזרה להצהרה") +
+        `</div>`;
+      }
+      if(ed.kind === "followup"){
+        const url = safeTrim(ed.pdfUrl);
+        return `<div class="mcFormEditor mcFormEditor--pdf">${head}` +
+          (url ? `<iframe class="mcFormEd__iframe" title="${escapeHtml(title)}" src="${escapeHtml(url)}"></iframe>` : `<div class="mcFormEd__wait">לא ניתן להציג את השאלון.</div>`) +
+          this._mcNeedsNav("health-to-future", this._mcPayStepEnabled() ? "המשך · פרטי אמצעי תשלום" : "סיימתי · סיום שלבי השיקוף", "health-form-close", "חזרה להצהרה") +
+        `</div>`;
+      }
+      const body = (ed.usePdfFields && Array.isArray(ed.fields) && ed.fields.length)
+        ? this._mcRenderPdfFieldsHtml(ed.type, ed.fields, ed.values)
+        : this._mcRenderDraftHealthFormHtml(rec, ed.type, ed.draft);
+      return `<div class="mcFormEditor">` + head +
+        `<div class="mcFormEd__body">${body}</div>` +
+        this._mcNeedsNav(
+          "health-to-future",
+          this._mcPayStepEnabled() ? "המשך · פרטי אמצעי תשלום" : "סיימתי · סיום שלבי השיקוף",
+          "health-form-close",
+          "חזרה להצהרה"
+        ) +
+      `</div>`;
+    },
+
+    _mcFlushInlineFormEditor(rec){
+      const ed = this._mcHealthEditor;
+      if(!ed || !rec || ed.loading || ed.kind === "followup") return;
+      const root = this.els.stepHealthDeclBody && this.els.stepHealthDeclBody.querySelector(".mcFormEditor");
+      if(!root) return;
+      try{
+        this._mcGetFormEdits(rec)[ed.type] = this._mcCaptureFormEditsFromModal(root);
+      }catch(_e){}
+    },
+
+    _mcCloseHealthFormEditor(rec, keepEdits){
+      if(keepEdits !== false) this._mcFlushInlineFormEditor(rec);
+      const ed = this._mcHealthEditor;
+      if(ed?.pdfUrl){
+        try{ URL.revokeObjectURL(ed.pdfUrl); }catch(_e){}
+      }
+      this._mcHealthEditor = null;
+      try{ void this._persistMirrorCall("עריכת טופס בשיחת שיקוף"); }catch(_e2){}
+      if(rec) this._renderHealthDeclarationBody(rec);
+    },
+
+    _mcBindInlineFormEditorPersistence(rec, key){
+      const root = this.els.stepHealthDeclBody && this.els.stepHealthDeclBody.querySelector(".mcFormEditor");
+      if(!root || !rec || !key) return;
+      const apply = () => this._mcApplyFormEditsToModal(root, this._mcGetFormEdits(rec)[key]);
+      apply();
+      const save = () => {
+        try{ this._mcGetFormEdits(rec)[key] = this._mcCaptureFormEditsFromModal(root); }catch(_e){}
+      };
+      if(root._mcFormEdBound) return;
+      root._mcFormEdBound = true;
+      root.addEventListener("input", save);
+      root.addEventListener("change", (ev) => {
+        save();
+        const t = ev.target;
+        if(t && t.type === "radio"){
+          const name = t.getAttribute("data-pdf-field") || t.getAttribute("name") || "";
+          if(name){
+            root.querySelectorAll(".mcFormEd__seg").forEach((lab) => {
+              const inp = lab.querySelector("input");
+              if(!inp) return;
+              const n = inp.getAttribute("data-pdf-field") || inp.getAttribute("name") || "";
+              if(n === name) lab.classList.toggle("is-on", !!inp.checked);
+            });
+          }
+        }
+      });
+    },
+
+    async _mcApplyPdfOverlayToBytes(bytes, pdfValues){
+      const bag = pdfValues && typeof pdfValues === "object" ? pdfValues : {};
+      if(!Object.keys(bag).length) return bytes;
+      try{
+        if(typeof GI_LOAD_LIBS !== "undefined" && GI_LOAD_LIBS.pdfLib) await GI_LOAD_LIBS.pdfLib();
+      }catch(_e){}
+      const PDFLib = window.PDFLib;
+      const helper = (typeof GI_OFFICIAL_FORM_FILL !== "undefined") ? GI_OFFICIAL_FORM_FILL : null;
+      if(!PDFLib?.PDFDocument || !helper?.applyPdfValues) return bytes;
+      const pdfDoc = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
+      let form = null;
+      try{ form = pdfDoc.getForm(); }catch(_e2){ return bytes; }
+      helper.applyPdfValues(form, bag, null, { visual: false });
+      return pdfDoc.save({ updateFieldAppearances: false });
+    },
+
     _mcCaptureFormEditsFromModal(modal){
       const html = {};
       const pdf = {};
@@ -72280,6 +72735,7 @@ ${inner}
       modal.querySelectorAll("input, textarea, select").forEach((el) => {
         const pdfName = safeTrim(el.getAttribute("data-pdf-field"));
         const name = safeTrim(el.getAttribute("name") || el.getAttribute("data-name"));
+        if(el.type === "radio" && !el.checked) return;
         let val = "";
         if(el.type === "checkbox" || el.type === "radio") val = el.checked ? (el.value || "1") : "";
         else val = el.value == null ? "" : String(el.value);
@@ -72293,18 +72749,24 @@ ${inner}
       if(!modal || !edits) return;
       const setVal = (el, val) => {
         if(!el) return;
-        if(el.type === "checkbox" || el.type === "radio") el.checked = !!(val && val !== "0");
+        if(el.type === "radio"){
+          el.checked = String(el.value) === String(val == null ? "" : val);
+          return;
+        }
+        if(el.type === "checkbox") el.checked = !!(val && val !== "0");
         else el.value = val == null ? "" : String(val);
       };
       Object.keys(edits.html || {}).forEach((name) => {
-        let el = null;
-        try{ el = modal.querySelector(`[name="${name.replace(/"/g, "")}"]`); }catch(_e){}
-        setVal(el, edits.html[name]);
+        const safe = name.replace(/"/g, "");
+        let nodes = [];
+        try{ nodes = Array.from(modal.querySelectorAll(`[name="${safe}"]`)); }catch(_e){}
+        nodes.forEach((el) => setVal(el, edits.html[name]));
       });
       Object.keys(edits.pdf || {}).forEach((name) => {
-        let el = null;
-        try{ el = modal.querySelector(`[data-pdf-field="${name.replace(/"/g, "")}"]`); }catch(_e){}
-        setVal(el, edits.pdf[name]);
+        const safe = name.replace(/"/g, "");
+        let nodes = [];
+        try{ nodes = Array.from(modal.querySelectorAll(`[data-pdf-field="${safe}"]`)); }catch(_e){}
+        nodes.forEach((el) => setVal(el, edits.pdf[name]));
       });
     },
 
@@ -72340,19 +72802,73 @@ ${inner}
     },
 
     async _mcOpenJoinFormFromRail(rec, type){
-      const fnName = this._mcOfficialFormOpeners()[type];
       const ui = (typeof CustomerFileUI !== "undefined") ? CustomerFileUI : null;
-      if(!ui || !fnName || typeof ui[fnName] !== "function"){
+      const spec = ui?.officialJoinFormPreviewSpec?.(type);
+      if(!ui || !spec){
         this._mcToast("טופס", "אין טופס רשמי לפתיחה.", "warn");
         return;
       }
-      try{
-        await ui[fnName](rec);
-      }catch(err){
-        this._mcToast("טופס", safeTrim(err?.message) || "לא ניתן לפתוח את הטופס.", "warn");
-        return;
+      this._mcFlushInlineFormEditor(rec);
+      if(this._mcHealthEditor?.pdfUrl){
+        try{ URL.revokeObjectURL(this._mcHealthEditor.pdfUrl); }catch(_e){}
       }
-      this._mcBindFormEditPersistence(rec, type);
+      this._mcHealthEditor = { kind: "join", type, title: this._mcJoinFormTitle(type), loading: true, error: "" };
+      this._renderHealthDeclarationBody(rec);
+      try{
+        if(typeof spec.ensure === "function") await spec.ensure();
+        const mod = window[spec.globalName];
+        if(!mod?.fillOriginalTemplate || typeof mod.buildDraft !== "function"){
+          throw new Error("לא ניתן לטעון את מודול הטופס.");
+        }
+        const draft = spec.mode ? mod.buildDraft(rec, spec.mode) : mod.buildDraft(rec);
+        const overlay = this._mcGetFormEdits(rec)[type] || {};
+        this._mcMergeHtmlEditsIntoDraft(draft, overlay.html);
+        const hasPdf = overlay.pdf && typeof overlay.pdf === "object" && Object.keys(overlay.pdf).length;
+        let bytes = (hasPdf && mod.fillOriginalTemplate.length >= 2)
+          ? await mod.fillOriginalTemplate(draft, overlay.pdf)
+          : await mod.fillOriginalTemplate(draft);
+        if(hasPdf && mod.fillOriginalTemplate.length < 2) bytes = await this._mcApplyPdfOverlayToBytes(bytes, overlay.pdf);
+        let fields = [];
+        let values = {};
+        try{
+          if(typeof GI_LOAD_LIBS !== "undefined" && GI_LOAD_LIBS.pdfLib) await GI_LOAD_LIBS.pdfLib();
+          const PDFLib = window.PDFLib;
+          const helper = (typeof GI_OFFICIAL_FORM_FILL !== "undefined") ? GI_OFFICIAL_FORM_FILL : null;
+          if(PDFLib?.PDFDocument && helper?.listEditablePdfFields){
+            const pdfDoc = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
+            let form = null;
+            try{ form = pdfDoc.getForm(); }catch(_e2){ form = null; }
+            if(form){
+              fields = helper.listEditablePdfFields(form) || [];
+              values = this._mcReadPdfFieldValues(form, fields);
+              if(hasPdf) Object.assign(values, overlay.pdf);
+            }
+          }
+        }catch(_e3){}
+        this._mcHealthEditor = {
+          kind: "join",
+          type,
+          title: this._mcJoinFormTitle(type),
+          loading: false,
+          error: "",
+          fields,
+          values,
+          draft,
+          usePdfFields: fields.length > 0
+        };
+        const fresh = this._getFreshCustomerRecord() || rec;
+        this._renderHealthDeclarationBody(fresh);
+      }catch(err){
+        this._mcHealthEditor = {
+          kind: "join",
+          type,
+          title: this._mcJoinFormTitle(type),
+          loading: false,
+          error: safeTrim(err?.message) || "לא ניתן לפתוח את הטופס."
+        };
+        this._renderHealthDeclarationBody(this._getFreshCustomerRecord() || rec);
+        this._mcToast("טופס", safeTrim(err?.message) || "לא ניתן לפתוח את הטופס.", "warn");
+      }
     },
 
     async _mcOpenFollowupFromRail(rec, type){
@@ -72362,18 +72878,29 @@ ${inner}
         this._mcToast("שאלון המשך", "השאלון עדיין לא נפתח — סמנו כן בהצהרה.", "warn");
         return;
       }
+      this._mcFlushInlineFormEditor(rec);
+      if(this._mcHealthEditor?.pdfUrl){
+        try{ URL.revokeObjectURL(this._mcHealthEditor.pdfUrl); }catch(_e){}
+      }
+      this._mcHealthEditor = { kind: "followup", type, title: row.name || "שאלון המשך", loading: true, error: "" };
+      this._renderHealthDeclarationBody(rec);
       try{
         if(typeof ensureFollowupZipLoaded === "function") await ensureFollowupZipLoaded();
       }catch(_e){}
       if(!window.GiFollowupZip?.fillFollowupPdf){
+        this._mcHealthEditor = { kind: "followup", type, title: row.name || "שאלון המשך", loading: false, error: "לא ניתן לטעון את שאלון ההמשך." };
+        this._renderHealthDeclarationBody(this._getFreshCustomerRecord() || rec);
         this._mcToast("שאלון המשך", "לא ניתן לטעון את שאלון ההמשך.", "warn");
         return;
       }
       try{
         const bytes = await window.GiFollowupZip.fillFollowupPdf(row.entry);
         const url = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-        this._mcShowFullPdfModal(row.name, url);
+        this._mcHealthEditor = { kind: "followup", type, title: row.name || "שאלון המשך", loading: false, error: "", pdfUrl: url };
+        this._renderHealthDeclarationBody(this._getFreshCustomerRecord() || rec);
       }catch(err){
+        this._mcHealthEditor = { kind: "followup", type, title: row.name || "שאלון המשך", loading: false, error: safeTrim(err?.message) || "לא ניתן לפתוח את השאלון." };
+        this._renderHealthDeclarationBody(this._getFreshCustomerRecord() || rec);
         this._mcToast("שאלון המשך", safeTrim(err?.message) || "לא ניתן לפתוח את השאלון.", "warn");
       }
     },
@@ -72495,9 +73022,13 @@ ${inner}
           const draft = spec.mode ? mod.buildDraft(rec, spec.mode) : mod.buildDraft(rec);
           this._mcMergeHtmlEditsIntoDraft(draft, overlay.html);
           const hasPdf = overlay.pdf && typeof overlay.pdf === "object" && Object.keys(overlay.pdf).length;
-          const bytes = hasPdf
-            ? await mod.fillOriginalTemplate(draft, overlay.pdf)
-            : await mod.fillOriginalTemplate(draft);
+          let bytes;
+          if(hasPdf && mod.fillOriginalTemplate.length >= 2){
+            bytes = await mod.fillOriginalTemplate(draft, overlay.pdf);
+          } else {
+            bytes = await mod.fillOriginalTemplate(draft);
+            if(hasPdf) bytes = await this._mcApplyPdfOverlayToBytes(bytes, overlay.pdf);
+          }
           if(!bytes) continue;
           const fileName = (typeof mod.fileName === "function") ? mod.fileName(draft) : (type + ".pdf");
           this._mcUpsertFilledFormDoc(rec, type, this._mcBytesToPdfDataUrl(bytes), fileName, this._mcJoinFormTitle(type));
@@ -72587,12 +73118,26 @@ ${inner}
             `</div>`
           : "");
       if(!acked){
+        this._mcHealthEditor = null;
         this.els.stepHealthDeclBody.innerHTML =
           `<div class="mcNeedsScreen mcHealthDeclIntro">` +
             scriptHtml +
             (err ? `<div class="mcCancelQError" role="alert">${escapeHtml(err)}</div>` : "") +
             this._mcNeedsNav("health-script-ack", "הקראתי ללקוח והמשך", "health-back", "חזרה") +
           `</div>`;
+        return;
+      }
+      if(this._mcHealthEditor && this._mcHealthEditor.type){
+        this.els.stepHealthDeclBody.innerHTML =
+          `<div class="mcNeedsScreen mcHealthDeclSplit mcHealthDeclSplit--editor">` +
+            `<div class="mcHealthDeclSplit__main">` +
+              this._mcHealthFormEditorHtml(rec) +
+            `</div>` +
+            this._mcHealthFormsRailHtml(rec) +
+          `</div>`;
+        if(!this._mcHealthEditor.loading && this._mcHealthEditor.kind !== "followup"){
+          this._mcBindInlineFormEditorPersistence(rec, this._mcHealthEditor.type);
+        }
         return;
       }
       this.els.stepHealthDeclBody.innerHTML =
@@ -73663,6 +74208,7 @@ ${inner}
         if(rec && typeof CustomerFileUI !== "undefined" && CustomerFileUI.ensureFollowupDocuments){
           void CustomerFileUI.ensureFollowupDocuments(rec).then(() => {
             if(this._mirrorUiPhase !== "healthDeclaration") return;
+            if(this._mcHealthEditor) return;
             const fresh = this._getFreshCustomerRecord();
             if(fresh) this._renderHealthDeclarationBody(fresh);
           }).catch(() => {});
@@ -73816,10 +74362,23 @@ ${inner}
         return;
       }
       if(action === "health-back"){
+        if(this._mcHealthEditor){
+          this._mcCloseHealthFormEditor(rec);
+          return;
+        }
         this._enterBeneficiariesOrSkip(rec, "back");
         return;
       }
+      if(action === "health-form-close"){
+        this._mcCloseHealthFormEditor(rec);
+        return;
+      }
       if(action === "health-to-future"){
+        this._mcFlushInlineFormEditor(rec);
+        if(this._mcHealthEditor?.pdfUrl){
+          try{ URL.revokeObjectURL(this._mcHealthEditor.pdfUrl); }catch(_e){}
+        }
+        this._mcHealthEditor = null;
         const validation = this._validateHealthDeclarationStep(rec);
         if(!validation.ok){
           this._healthDeclError = validation.message || "יש להשלים את הצהרת הבריאות.";
