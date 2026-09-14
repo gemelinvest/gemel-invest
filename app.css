@@ -35526,6 +35526,8 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcFormEd__qWho{font-size:11px;font-weight:700;color:#5b6b8c;margin-top:3px;}
 .mcFormEd__segs{display:flex;flex-wrap:wrap;gap:8px;}
 .mcFormEd__seg{
+  position:relative;
+  overflow:hidden;
   display:inline-flex;
   align-items:center;
   gap:6px;
@@ -35540,7 +35542,15 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   color:#1e3a7a;
   cursor:pointer;
 }
-.mcFormEd__seg input{position:absolute;opacity:0;pointer-events:none;}
+.mcFormEd__seg input{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  margin:0;
+  opacity:0;
+  cursor:pointer;
+}
 .mcFormEd__seg.is-on,.mcFormEd__seg:has(input:checked){
   background:#1e3a7a;
   border-color:#1e3a7a;

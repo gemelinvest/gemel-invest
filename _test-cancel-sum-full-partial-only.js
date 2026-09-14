@@ -9,7 +9,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260914-mc-inline-form-v1";
+const TAG = "20260914-mc-he-followup-v1";
 let failed = 0;
 let passed = 0;
 
