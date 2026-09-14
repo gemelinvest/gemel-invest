@@ -10,7 +10,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const APP_TAG = "20260913-hachshara-health-decl-v1";
+const APP_TAG = "20260914-mc-inline-form-v1";
 const FORM_TAG = "20260826-hach-health-form-v1";
 let failed = 0;
 let passed = 0;

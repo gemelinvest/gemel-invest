@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260910-cf-open-paint-v1";
+const APP_TAG = "20260914-mc-inline-form-v1";
 let failed = 0;
 let passed = 0;
 
@@ -87,13 +87,14 @@ assert(app.includes("_mcHealthFormsRailHtml(rec){"), "בונה רשימת טפס
 assert(app.includes("mcHealthDeclSplit"), "פריסה מפוצלת");
 assert(css.includes(".mcHealthFormsRail{"), "עיצוב מסילה ימנית");
 assert(app.includes("טפסי הצעה") && app.includes("שאלוני המשך"), "שתי קבוצות ברשימה");
-assert(app.includes("_mcBindFormEditPersistence(rec, key){"), "עריכה נשמרת תוך כדי");
+assert(app.includes("_mcBindInlineFormEditorPersistence(rec, key){"), "עריכה נשמרת במסך מלא");
 assert(app.includes("payload.mirrorFlow.formEdits"), "overlay ב-mirrorFlow");
 assert(app.includes("_mcMaterializeEditedForms(rec){"), "הפקת טפסים מוכנים בסוף");
 assert(app.includes("_mcCanonicalJoinDocId(type){"), "מזהה טופס קנוני בתיק");
 assert(!app.includes("doc_mirror_filled_"), "אין מסמך כפול משיחת שיקוף");
-assert(app.includes("mcFormModalFull"), "טופס נפתח במלואו");
-assert(css.includes(".giValModal.mcFormModalFull .giValModal__card"), "חלון טופס גדול");
+assert(app.includes("mcFormEditor"), "טופס נפתח במסך השיקוף עצמו");
+assert(css.includes(".mcFormEditor{"), "עיצוב עורך טופס במסך מלא");
+assert(!app.includes("await ui[fnName](rec);"), "אין פתיחת מודאל מהמסילה");
 assert(app.includes("data-mc-open-form"), "לחיצה מהמסילה");
 assert(app.includes("_mcJoinFormTypeForPolicy(p, rec){"), "צימוד טופס לכל פוליסה מוצעת");
 assert(app.includes("הקראתי ללקוח והמשך"), "לחצן הקראה לפני טפסים");
