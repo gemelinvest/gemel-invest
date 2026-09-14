@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260914-mirror-offer-benef-v1";
+  const BUILD = "20260914-benef-picker-names-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -72435,6 +72435,21 @@ ${inner}
       return "טרם מולא";
     },
 
+    _mcBenefRowDisplayName(b){
+      const n = this._normalizeBenefRow(b);
+      return [n.firstName, n.lastName].filter(Boolean).join(" ") || safeTrim(b?.fullName || b?.name);
+    },
+
+    _mcBenefPickerPreviewText(item, meta){
+      const mode = item?.mode || this._benefModeForPolicy(item?.policy);
+      if(mode === "risk_benef" && (meta?.legalHeirs || item?.policy?.beneficiariesMode === "legalHeirs")){
+        return "יורשים חוקיים";
+      }
+      const bens = Array.isArray(item?.policy?.beneficiaries) ? item.policy.beneficiaries : [];
+      const names = bens.map((b) => this._mcBenefRowDisplayName(b)).map((s) => safeTrim(s)).filter(Boolean);
+      return names.join(" · ");
+    },
+
     _mcBenefFillCardHtml(item, store, relOpts, opts = {}){
       const mode = item.mode || this._benefModeForPolicy(item.policy);
       if(!store.policies[item.policyId]) store.policies[item.policyId] = {};
@@ -72572,12 +72587,16 @@ ${inner}
           if(meta.legalHeirs == null && item.policy.beneficiariesMode === "legalHeirs") meta.legalHeirs = true;
           const on = checked.has(item.policyId);
           const status = this._mcBenefItemStatus(item, meta);
+          const preview = this._mcBenefPickerPreviewText(item, meta);
           return `<article class="mcBenefPickCard${on ? " is-checked" : ""}" role="listitem">` +
             `<label class="mcBenefPickCard__check">` +
               `<input type="checkbox" data-mc-benef-pick-check="${escapeHtml(item.policyId)}"${on ? " checked" : ""}/>` +
               `<span class="mcBenefPickCard__who">` +
                 `<strong>${escapeHtml(item.insuredLabel)}</strong>` +
                 `<span>${escapeHtml(item.company)} · ${escapeHtml(item.product)}</span>` +
+                (preview
+                  ? `<span class="mcBenefPickCard__bens">מוטבים: ${escapeHtml(preview)}</span>`
+                  : `<span class="mcBenefPickCard__bens mcBenefPickCard__bens--empty">מוטבים: טרם הוזנו בהצעה</span>`) +
               `</span>` +
             `</label>` +
             `<span class="mcBenefPickCard__status">${escapeHtml(status)}</span>` +

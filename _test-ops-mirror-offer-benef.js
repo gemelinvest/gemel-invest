@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260914-mirror-offer-benef-v1";
+const APP_TAG = "20260914-benef-picker-names-v1";
 let failed = 0;
 let passed = 0;
 
@@ -162,6 +162,38 @@ assert(pickSandbox.ui._benefFillItems({ pickerView: "fill", focusIds: ["b"] }, t
 assert(pickSandbox.ui._benefFillItems({}, [{ policyId: "only" }]).length === 1, "פוליסה אחת מדלגת על בחירה");
 assert(pickSandbox.ui._benefTargetIdsFromCard({ getAttribute(n){ return n === "data-mc-benef-shared-ids" ? "a,b" : ""; } }).join() === "a,b", "מזהי מילוי משותף");
 assert(pickSandbox.ui._benefTargetIdsFromCard({ getAttribute(n){ return n === "data-mc-benef-policy" ? "x" : ""; } }).join() === "x", "כרטיס יחיד לפי policy id");
+assert(app.includes("_mcBenefPickerPreviewText(item, meta){"), "תצוגת שמות מוטבים בבחירה");
+assert(app.includes("mcBenefPickCard__bens"), "שורה למוטבים בכרטיס בחירה");
+assert(app.includes("מוטבים: ${escapeHtml(preview)}"), "שמות שנשלפו מוצגים בבחירה");
+assert(css.includes(".mcBenefPickCard__bens{"), "עיצוב שמות מוטבים בבחירה");
+const prevStart = app.indexOf("_mcBenefRowDisplayName(b){");
+const prevEnd = app.indexOf("_mcBenefFillCardHtml(item, store, relOpts, opts = {}){", prevStart);
+const normStart = app.indexOf("_normalizeBenefRow(b){");
+const normEnd = app.indexOf("_emptyPledgeBankRow(){", normStart);
+const nameSandbox = { console };
+vm.runInNewContext(`
+  function safeTrim(v){ return String(v == null ? "" : v).trim(); }
+  const ui = {
+    _benefModeForPolicy(){ return "risk_benef"; },
+    ${app.slice(normStart, normEnd)}
+    ${app.slice(prevStart, prevEnd)}
+  };
+  this.ui = ui;
+`, nameSandbox);
+assert(nameSandbox.ui._mcBenefRowDisplayName({ firstName: "רות", lastName: "ישראלי" }) === "רות ישראלי", "שם מלא משדות נפרדים");
+assert(nameSandbox.ui._mcBenefRowDisplayName({ fullName: "דני כהן" }) === "דני כהן", "שם מ-fullName של ההצעה");
+assert(nameSandbox.ui._mcBenefPickerPreviewText({
+  mode: "risk_benef",
+  policy: { beneficiaries: [{ firstName: "רות", lastName: "ישראלי" }, { fullName: "נועה לוי" }] }
+}, {}) === "רות ישראלי · נועה לוי", "שני מוטבים מההצעה בכרטיס הבחירה");
+assert(nameSandbox.ui._mcBenefPickerPreviewText({
+  mode: "risk_benef",
+  policy: { beneficiariesMode: "legalHeirs", beneficiaries: [] }
+}, { legalHeirs: true }) === "יורשים חוקיים", "יורשים חוקיים בכרטיס הבחירה");
+assert(nameSandbox.ui._mcBenefPickerPreviewText({
+  mode: "risk_benef",
+  policy: { beneficiaries: [{ firstName: "", lastName: "" }] }
+}, {}) === "", "בלי שמות לא ממציאים מוטב");
 
 console.log("\n6) גודל טקסט במסכי שיחה חיה");
 assert(css.includes(".mcStepVerify__label{\n  font-size:15px;"), "תוויות שדות 15px");
