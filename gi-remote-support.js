@@ -4,7 +4,7 @@
 (() => {
   "use strict";
 
-  const TAG = "20260914-remote-support-single-share-v1";
+  const TAG = "20260914-remote-support-anydesk-feel-v1";
   const TOKEN_KEY = "GI_RS_ACTOR_TOKEN_V1";
   const SESSION_KEY = "GI_RS_SESSION_V1";
   const ADMIN_TOPIC = "gi-rs-admins";
@@ -518,6 +518,7 @@
     const showLive = selected && LIVE_STATUSES.has(selected.status);
     live?.classList.toggle("is-visible", !!showLive);
     $("giRsAdminModal")?.classList.toggle("giRsAdminModal--live", !!showLive);
+    $("giRsLiveVideoWrap")?.classList.toggle("is-controlling", !!(selected && selected.status === "control_granted"));
     if(hint){
       hint.textContent = selected
         ? (selected.status === "control_granted"
@@ -988,12 +989,35 @@
     try { el.dispatchEvent(new Ctor(name, init)); } catch(_e) {}
   }
 
+  function captureNormToPage(nx, ny){
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const track = state.localStream?.getVideoTracks?.()[0];
+    const settings = track?.getSettings?.() || {};
+    const capW = Number(settings.width) || 0;
+    const capH = Number(settings.height) || 0;
+    if(!capW || !capH){
+      return { x: nx * vw, y: ny * vh };
+    }
+    const scale = vw / capW;
+    const extraY = (capH * scale) - vh;
+    return {
+      x: nx * capW * scale,
+      y: ny * capH * scale - Math.max(0, extraY)
+    };
+  }
+
   function applyRemoteControl(msg){
     if(state.session?.status !== "control_granted") return;
     const type = trim(msg.t);
     if(type === "pointer"){
-      const x = Math.max(0, Math.min(1, Number(msg.x))) * window.innerWidth;
-      const y = Math.max(0, Math.min(1, Number(msg.y))) * window.innerHeight;
+      const page = captureNormToPage(
+        Math.max(0, Math.min(1, Number(msg.x))),
+        Math.max(0, Math.min(1, Number(msg.y)))
+      );
+      const x = page.x;
+      const y = page.y;
+      if(y < 0 || y > window.innerHeight || x < 0 || x > window.innerWidth) return;
       const el = document.elementFromPoint(x, y);
       if(!el || isSensitiveTarget(el)) return;
       const view = el.ownerDocument.defaultView;
@@ -1100,6 +1124,14 @@
     return { x, y };
   }
 
+  function placeAdminCursor(ev, video){
+    const cursor = $("giRsAdminCursor");
+    const wrap = $("giRsLiveVideoWrap") || video?.parentElement;
+    if(!cursor || !wrap || !wrap.classList.contains("is-controlling")) return;
+    const rect = wrap.getBoundingClientRect();
+    cursor.style.transform = "translate(" + (ev.clientX - rect.left - 2) + "px, " + (ev.clientY - rect.top - 1) + "px)";
+  }
+
   function bindAdminVideoControls(){
     const video = $("giRsAdminVideo");
     if(!video || video._giRsBound) return;
@@ -1111,6 +1143,7 @@
       sendControl({ t: "pointer", op, x: norm.x, y: norm.y, ...(extra || {}) });
     };
     video.addEventListener("mousemove", (ev) => {
+      placeAdminCursor(ev, video);
       if(state.session?.status !== "control_granted") return;
       const norm = pointerFromVideoEvent(ev, video);
       if(!norm) return;

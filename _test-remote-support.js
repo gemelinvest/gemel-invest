@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260914-remote-support-single-share-v1";
+const TAG = "20260914-remote-support-anydesk-feel-v1";
 let failed = 0;
 let passed = 0;
 
@@ -113,6 +113,7 @@ assert(js.includes("maxRetransmits: 0"), "moves are not queued behind lost packe
 assert(js.includes("jitterBufferTarget"), "receiver uses a low-latency jitter buffer");
 assert(js.includes("contentHint"), "screen-share encoder hint for UI detail");
 assert(js.includes("ideal: 30"), "capture aims for 30fps");
+assert(!js.includes("ideal: 60"), "does not raise capture to 60fps");
 assert(!js.includes("ideal: 12"), "does not cap capture at 12fps");
 assert(js.includes("requestAnimationFrame"), "coalesces pointer moves per frame");
 assert(js.includes("videoWidth"), "maps clicks through the letterboxed video frame");
@@ -149,6 +150,12 @@ assert(js.includes("giRsAdminModal--live"), "toggles fullscreen live class");
 assert(css.includes("giRsAdminModal--live"), "fullscreen live CSS");
 assert(css.includes("aspect-ratio: auto"), "live video uses remaining viewport, not 16/10 letterbox");
 assert(css.includes("#giRsAdminModal.giRsAdminModal--live #giRsInbox"), "inbox hidden during live view");
+assert(html.includes("id=\"giRsAdminCursor\""), "local admin cursor overlay");
+assert(js.includes("placeAdminCursor"), "cursor moves locally without waiting for video");
+assert(js.includes("captureNormToPage"), "maps clicks through capture size, not only viewport");
+assert(js.includes("is-controlling"), "hides native cursor only while controlling");
+assert(css.includes("#giRsAdminModal.giRsAdminModal--live .modal__head"), "live header overlays the video");
+assert(css.includes("cursor: none"), "native cursor hidden over the live video");
 assert(js.includes("🟠 ממתין לתמיכה"), "waiting menu label");
 
 if(failed){
