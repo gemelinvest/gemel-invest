@@ -11948,18 +11948,21 @@ if(path === "birthDate"){
 
       const normalizeCellText = (value) => normalizeHarWorkbookCell(value);
 
+      /* GI-HAR-PARSE-EMPTY-VS-FAIL 2026-09-14
+         כותרות רשמיות מהר הביטוח מגיעות לפעמים עם רווח/ניסוח קרוב — לא רק התאמה מדויקת.
+         אותה גמישות כמו פרסר האלמנטרי, בלי לשנות סינון שורות בריאות/חיים. */
       const headerMatchers = {
-        idNumber: [/^תעודת זהות$/, /^מספר תעודת זהות$/],
-        main: [/^ענף ראשי$/, /^ענף\s*\(?.*ראשי.*\)?$/, /^ענף$/],
-        sub: [/^ענף \(משני\)$/, /^ענף משני$/, /^ענף\s*\(?.*משני.*\)?$/],
-        productType: [/^סוג מוצר$/, /^מוצר$/, /^שם מוצר$/],
-        company: [/^חברה$/, /חברה מבטחת/, /מבטח/, /שם חברה/],
-        period: [/^תקופת ביטוח$/, /תקופה/],
+        idNumber: [/^תעודת זהות$/, /^מספר תעודת זהות$/, /תעודת\s*זהות/, /מספר\s*תעודת\s*זהות/, /מספר\s*זהות/],
+        main: [/^ענף ראשי$/, /^ענף\s*\(?.*ראשי.*\)?$/, /^ענף$/, /ענף\s*ראשי/],
+        sub: [/^ענף \(משני\)$/, /^ענף משני$/, /^ענף\s*\(?.*משני.*\)?$/, /ענף\s*משני/, /ענף\s*\(משני\)/],
+        productType: [/^סוג מוצר$/, /^מוצר$/, /^שם מוצר$/, /סוג\s*מוצר/],
+        company: [/^חברה$/, /חברה מבטחת/, /מבטח/, /שם חברה/, /חברה/],
+        period: [/^תקופת ביטוח$/, /תקופה/, /תקופת\s*ביטוח/],
         extra: [/^פרטים נוספים$/, /פרטים נוספים/, /מידע נוסף/],
-        premium: [/^פרמיה בש"ח$/, /^פרמיה בשח$/, /^פרמיה$/, /פרמיה לתשלום/, /סכום פרמיה/],
-        premiumType: [/^סוג פרמיה$/, /תדירות פרמיה/],
-        policyNumber: [/^מספר פוליסה$/, /^מס' פוליסה$/, /^מס פוליסה$/, /פוליסה/],
-        classification: [/^סיווג תכנית$/, /^סיווג תוכנית$/, /סיווג/]
+        premium: [/^פרמיה בש"ח$/, /^פרמיה בשח$/, /^פרמיה$/, /פרמיה לתשלום/, /סכום פרמיה/, /פרמיה\s*בשח/, /פרמיה\s*בש״ח/, /פרמיה\s*בש"ח/],
+        premiumType: [/^סוג פרמיה$/, /תדירות פרמיה/, /סוג\s*פרמיה/],
+        policyNumber: [/^מספר פוליסה$/, /^מס' פוליסה$/, /^מס פוליסה$/, /פוליסה/, /מספר\s*פוליסה/],
+        classification: [/^סיווג תכנית$/, /^סיווג תוכנית$/, /סיווג/, /סיווג\s*תכנית/, /סווג\s*תכנית/]
       };
 
       const matchHeader = (value, patterns=[]) => patterns.some((pattern) => pattern.test(normalizeCellText(value)));
@@ -12003,7 +12006,9 @@ if(path === "birthDate"){
       const fileIdNumbers = new Set();
       const elementaryPolicyNumbers = new Set();
       const elementaryProductsByPolicy = new Map();
+      let headerFound = false;
       sheetNames.forEach((sheetName) => {
+        if(GI_HAR_ORIGIN_SHEET && sheetName === GI_HAR_ORIGIN_SHEET) return;
         const sheet = wb.Sheets[sheetName];
         if(!sheet) return;
         const rawRows = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" });
@@ -12014,6 +12019,7 @@ if(path === "birthDate"){
         if(headerIdx === -1 || headerMeta.requiredHits < 3 || headerScore < 4){
           return;
         }
+        headerFound = true;
 
         const header = rows[headerIdx].map((x) => normalizeCellText(x));
         const findIndex = (patterns=[]) => header.findIndex((value) => patterns.some((pattern) => pattern.test(value)));
@@ -12071,7 +12077,7 @@ if(path === "birthDate"){
 
       });
       const fileIdList = Array.from(fileIdNumbers);
-      if(!extracted.length) return { policies: [], fileIdNumbers: fileIdList, fileName: "" };
+      if(!extracted.length) return { policies: [], fileIdNumbers: fileIdList, fileName: "", headerFound };
 
       const grouped = new Map();
       extracted.forEach((row) => {
@@ -12192,7 +12198,7 @@ if(path === "birthDate"){
         };
       }).sort((a,b) => String(a.policyNumber || "").localeCompare(String(b.policyNumber || ""), "he"));
 
-      return { policies, fileIdNumbers: fileIdList, fileName: "" };
+      return { policies, fileIdNumbers: fileIdList, fileName: "", headerFound };
     },
 
     mergeImportedExistingPolicy(ins, policy, fileName){
@@ -12422,6 +12428,41 @@ if(path === "birthDate"){
         const originalDataUrl = await this.readUploadFileAsDataUrl(file, buffer);
         const parsed = this.parseHarBituachWorkbook(buffer, ins);
         const policies = Array.isArray(parsed?.policies) ? parsed.policies : [];
+        const fileIdNumbers = Array.isArray(parsed?.fileIdNumbers) ? parsed.fileIdNumbers : [];
+        const headerFound = parsed?.headerFound === true;
+
+        /* GI-HAR-PARSE-EMPTY-VS-FAIL 2026-09-14
+           כשל קריאה ≠ «אין היסטוריה». בלי כותרות — שגיאה, בלי סימון שהקובץ הועלה.
+           ת.ז. לא תואמת — החלונית הקיימת, בלי ייבוא. «נדבק» רק כשהקובץ באמת ריק. */
+        if(!headerFound){
+          this.setHarImportState(ins, {
+            status: "error",
+            fileUploaded: false,
+            fileName: file.name || "",
+            message: "לא זוהה קובץ הר ביטוח תקין. יש להעלות את קובץ ה-Excel כפי שהורד מאתר הר הביטוח."
+          });
+          this.render();
+          await showWizardHarAlertModal({
+            title: "לא ניתן לקרוא את הקובץ",
+            text: "הקובץ שהועלה אינו מזוהה כקובץ הר ביטוח תקין. יש להוריד קובץ Excel חדש מאתר הר הביטוח ולהעלות אותו.",
+            confirmText: "הבנתי",
+            showCancel: false
+          });
+          return;
+        }
+
+        const idCheck = this.harFileBelongsToInsured(ins, fileIdNumbers);
+        if(idCheck && idCheck.ok === false && idCheck.reason === "id_mismatch"){
+          this.setHarImportState(ins, {
+            status: "error",
+            fileUploaded: false,
+            fileName: file.name || "",
+            message: "קובץ הר הביטוח לא שייך למבוטח הנוכחי. ההעלאה בוטלה."
+          });
+          this.render();
+          await this.showHarIdMismatchModal();
+          return;
+        }
 
         if(!policies.length){
           this.storeHarBituachOriginalFile(ins, file, originalDataUrl, { contentSha256, originToken });
