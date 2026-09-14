@@ -1574,6 +1574,53 @@
       }
       return list;
     },
+    peakFromPolicyTables(tables, policy){
+      const pid = safeTrim(policy?.id);
+      const rows = Array.isArray(tables) ? tables : [];
+      const matched = rows.filter((row) => {
+        if(!row || !row.policy) return false;
+        if(policy && row.policy === policy) return true;
+        if(pid && safeTrim(row.policy.id) === pid) return true;
+        return false;
+      });
+      if(!matched.length) return null;
+      const byAge = new Map();
+      let anyEngine = false;
+      matched.forEach((table) => {
+        (Array.isArray(table.coverRows) ? table.coverRows : []).forEach((cover) => {
+          const proj = cover && cover.projection ? cover.projection : {};
+          if(proj.source !== "engine" || proj.ok === false || !Array.isArray(proj.rows) || !proj.rows.length) return;
+          anyEngine = true;
+          proj.rows.forEach((r) => {
+            const age = Number(r && r.age);
+            const monthly = Number(r && r.monthly);
+            if(!Number.isFinite(age) || !Number.isFinite(monthly)) return;
+            byAge.set(age, (byAge.get(age) || 0) + monthly);
+          });
+        });
+      });
+      if(!anyEngine || !byAge.size) return null;
+      let maxMonthly = -1;
+      let maxAge = null;
+      Array.from(byAge.entries()).sort((a, b) => a[0] - b[0]).forEach((entry) => {
+        const age = entry[0];
+        const monthly = entry[1];
+        if(monthly > maxMonthly){
+          maxMonthly = monthly;
+          maxAge = age;
+        }
+      });
+      if(!(maxMonthly > 0) || maxAge == null) return null;
+      return { monthly: maxMonthly, age: maxAge };
+    },
+    peakMonthlyForPolicy(rec, policy){
+      try{
+        const draft = this.buildDraft(rec);
+        return this.peakFromPolicyTables(draft && draft.tables, policy);
+      }catch(_e){
+        return null;
+      }
+    },
     injectDocs(list, rec, payload, options = {}){
       if(!Array.isArray(list)) return list;
       this.stripSplitDocs(list);
