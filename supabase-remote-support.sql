@@ -347,7 +347,7 @@ declare
   aid text := trim(both from coalesce(p_agent_id, ''));
   upin text := trim(both from coalesce(p_pin, ''));
 begin
-  if aid = '' or upin = '' then
+  if aid = '' then
     return jsonb_build_object('ok', false, 'error', 'MISSING_CREDENTIALS');
   end if;
   select a.* into ag
@@ -362,7 +362,9 @@ begin
   if ag.id is null then
     return jsonb_build_object('ok', false, 'error', 'AGENT_NOT_FOUND');
   end if;
-  if trim(both from coalesce(ag.pin, '0000')) <> upin then
+  -- PIN is optional: the CRM session already identified the logged-in agent.
+  -- If a PIN is supplied, still verify it.
+  if upin <> '' and trim(both from coalesce(ag.pin, '0000')) <> upin then
     return jsonb_build_object('ok', false, 'error', 'BAD_PIN');
   end if;
 

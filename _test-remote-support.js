@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260914-remote-support-auth-v1";
+const TAG = "20260914-remote-support-simple-v1";
 let failed = 0;
 let passed = 0;
 
@@ -70,6 +70,7 @@ assert(sql.includes("Control granted"), "audit: control granted");
 assert(sql.includes("Session ended"), "audit: ended");
 assert(sql.includes("security definer"), "security definer RPCs");
 assert(sql.includes("gi_rs_mint_actor_token"), "mint token rpc");
+assert(sql.includes("-- PIN is optional"), "mint does not require PIN");
 assert(!sql.includes("using (true)"), "no USING(true) open policy");
 
 console.log("\n4) realtime isolation — no CRM rehydrate");
@@ -85,7 +86,14 @@ assert(js.includes("gi:app-login-ready"), "listens to existing login event");
 assert(js.includes("gi:app-logout"), "listens to existing logout event");
 assert(js.includes("__GI_FACE_BRIDGE__"), "uses existing login bridge, not window.Auth");
 assert(js.includes("getCurrentAgent"), "reads current agent from face bridge");
-assert(js.includes("getMailSessionPin"), "reads session PIN from face bridge");
+assert(js.includes("agentFromPill"), "falls back to the logged-in user pill");
+assert(js.includes("findLoginAgent"), "resolves agent id from name via face bridge");
+assert(js.includes("GI_LAST_SESSION_USER_V1"), "falls back to last session user key");
+assert(js.includes("isAgentParty"), "matches the agent session by id or name");
+assert(!js.includes("getMailSessionPin"), "does not ask for or read a session PIN");
+assert(!js.includes("giRsRequestPin"), "request flow has no PIN field");
+assert(!js.includes("giRsAdminPin"), "admin inbox has no PIN field");
+assert(js.includes('p_pin: ""'), "mints an actor token without requiring a PIN");
 
 console.log("\n5) live view + control are real, not fake");
 assert(js.includes("getDisplayMedia"), "tab capture via getDisplayMedia");
@@ -102,7 +110,10 @@ assert(!css.includes(".topbar{") && !css.includes(".sidebar{"), "no global shell
 
 console.log("\n6) agent/admin UI copy");
 assert(html.includes("בקשת תמיכה מרחוק"), "request modal title");
-assert(html.includes("נתקלת בבעיה במערכת"), "request copy");
+assert(html.includes("שלח בקשה למנהל המערכת"), "request copy — send only");
+assert(!html.includes("id=\"giRsProblemText\""), "no problem description textarea");
+assert(!html.includes("id=\"giRsRequestPin\""), "no request PIN input");
+assert(!html.includes("id=\"giRsAdminPin\""), "no admin PIN input");
 assert(html.includes("שלח בקשת תמיכה"), "send request button");
 assert(html.includes("החיבור לא יתחיל ללא אישורך"), "explicit consent copy");
 assert(html.includes("אשר חיבור"), "approve connect");
