@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260914-mc-q1to1-followup-v1";
+  const BUILD = "20260914-mc-followup-page-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -42336,7 +42336,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260914-mc-q1to1-followup-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260914-mc-followup-page-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -42356,8 +42356,8 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-q1to1-followup-v1";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mc-q1to1-followup-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-page-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mc-followup-page-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -43010,18 +43010,18 @@ UsersGateUI.init();
     "./ayalon-health-sim.css?v=20260810-sim-mockup-v2",
     "./ayalon-ci-sim.css?v=20260811-ayl-ci-v1",
     "./hachshara-health-sim.css?v=20260810-sim-mockup-v2",
-    "./hachshara-risk-sim.css?v=20260914-mc-q1to1-followup-v1",
-    "./hachshara-mortgage-risk-sim.css?v=20260914-mc-q1to1-followup-v1",
+    "./hachshara-risk-sim.css?v=20260914-mc-followup-page-v1",
+    "./hachshara-mortgage-risk-sim.css?v=20260914-mc-followup-page-v1",
     "./migdal-health-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
-    "./menora-ci-sim.css?v=20260914-mc-q1to1-followup-v1",
+    "./menora-ci-sim.css?v=20260914-mc-followup-page-v1",
     "./clal-health-sim.css?v=20260812-cll-health-v1",
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260914-mc-q1to1-followup-v1",
-    "./simulators-shell.css?v=20260914-mc-q1to1-followup-v1"
+    "./simulators-center.css?v=20260914-mc-followup-page-v1",
+    "./simulators-shell.css?v=20260914-mc-followup-page-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -44383,7 +44383,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260914-mc-q1to1-followup-v1";
+  const GI_WIZARD_JS_VERSION = "20260914-mc-followup-page-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -72889,7 +72889,7 @@ ${inner}
             `<div class="mcFormEd__kicker">${isFollow ? "עריכת שאלון המשך" : "עריכת טופס מקורי"}</div>` +
             `<h2 class="mcFormEd__title">${escapeHtml(title)}</h2>` +
             `<p class="mcFormEd__sub">${isFollow
-              ? "השאלון הרשמי של החברה. מלאו את השדות בעברית, שמרו, וחזרו למסך הקודם."
+              ? "רק שאלות הדף הזה, בעברית כמו בטופס הרשמי. בלי שדות כותרת או שמות PDF באנגלית."
               : "השדות ממולאים מהתיק ומהצהרת הבריאות שנשמרה באשף, במיקומם בטופס הרשמי. תוויות בעברית כמו בטופס."}</p>` +
           `</div>` +
           `<button type="button" class="btn mcFormEd__back" data-mc-needs-act="${backAct}">${escapeHtml(backLabel)}</button>` +
@@ -72902,12 +72902,12 @@ ${inner}
           this._mcNeedsNav("health-to-future", this._mcPayStepEnabled() ? "המשך · פרטי אמצעי תשלום" : "סיימתי · סיום שלבי השיקוף", backAct, backLabel) +
         `</div>`;
       }
-      const body = (ed.usePdfFields && Array.isArray(ed.fields) && ed.fields.length)
-        ? this._mcRenderPdfFieldsHtml(ed.type, ed.fields, ed.values)
-        : (isFollow
-          ? this._mcRenderFollowupFallbackHtml(ed.fields && ed.fields.length
-            ? ed.fields
-            : this._mcFollowupFallbackFields(ed.entry, this._mcGetFormEdits(rec)[ed.type]))
+      const body = isFollow
+        ? this._mcRenderFollowupFallbackHtml(ed.fields && ed.fields.length
+          ? ed.fields
+          : this._mcFollowupEditorFields(ed.entry, this._mcGetFormEdits(rec)[ed.type]))
+        : ((ed.usePdfFields && Array.isArray(ed.fields) && ed.fields.length)
+          ? this._mcRenderPdfFieldsHtml(ed.type, ed.fields, ed.values)
           : this._mcRenderDraftHealthFormHtml(rec, ed.type, ed.draft));
       const primaryAct = isFollow ? "health-followup-save" : "health-to-future";
       const primaryLabel = isFollow
@@ -73000,9 +73000,133 @@ ${inner}
       return "followup:" + [entry?.companyKey, entry?.insuredId, entry?.questionnaireNum].join("|");
     },
 
+    _mcIsFollowupHeaderField(name){
+      const n = safeTrim(name);
+      if(!n) return true;
+      if(/[\u0590-\u05FF]/.test(n)) return false;
+      if(/^(Insured|Business|SuggestNumber|CollectiveNumber|Text\d+)$/i.test(n)) return true;
+      if(/Insured|BusinessDM|SuggestNumber|CollectiveNumber/i.test(n)) return true;
+      if(/^(FirstName|LastName|FullName|PID|Hight|Height|Weight|Gender|BirthDate|InsuredClient|InsuredHight|InsuredWeight)$/i.test(n)) return true;
+      if(/^[A-Z][A-Za-z0-9]*[A-Z][A-Za-z0-9]*$/.test(n)) return true;
+      return false;
+    },
+
+    _mcFollowupWizardSchema(entry){
+      const company = safeTrim(entry?.companyKey);
+      const qId = safeTrim(entry?.questionnaireNum);
+      if(!qId) return null;
+      const pick = (pack) => {
+        if(!pack || typeof pack !== "object") return null;
+        if(pack[qId]) return pack[qId];
+        const asNum = String(Number(qId));
+        if(asNum !== "NaN" && pack[asNum]) return pack[asNum];
+        try{
+          const letters = (typeof GI_FOLLOWUP_ZIP_CONFIG !== "undefined" && Array.isArray(GI_FOLLOWUP_ZIP_CONFIG.CLAL_LETTERS))
+            ? GI_FOLLOWUP_ZIP_CONFIG.CLAL_LETTERS : [];
+          const idx = Number(qId) - 1;
+          if(Number.isFinite(idx) && idx >= 0 && letters[idx] && pack[letters[idx]]) return pack[letters[idx]];
+        }catch(_e){}
+        return null;
+      };
+      const asFields = (schema, fallbackTitle) => {
+        const fields = Array.isArray(schema?.fields)
+          ? schema.fields.filter((f) => f && f.key && f.type !== "section")
+          : [];
+        if(!fields.length) return null;
+        return { title: safeTrim(schema.title) || fallbackTitle, fields };
+      };
+      try{
+        if(typeof Wizard === "undefined") return null;
+        const fn = {
+          phoenix: "getPhoenixFollowupSchemas",
+          clal: "getClalFollowupSchemas",
+          hachshara: "getHachsharaFollowupSchemas",
+          menora: "getMenoraFollowupSchemas",
+          ayalon: "getAyalonFollowupSchemas",
+          migdal: "getMagdalQuestionnaireMap",
+          magdal: "getMagdalQuestionnaireMap"
+        }[company];
+        if(fn && typeof Wizard[fn] === "function"){
+          const found = asFields(pick(Wizard[fn]() || {}), "שאלון " + qId);
+          if(found) return found;
+        }
+      }catch(_e){}
+      return null;
+    },
+
+    _mcFollowupFieldStorageKey(entry, fieldKey){
+      const company = safeTrim(entry?.companyKey);
+      const qId = safeTrim(entry?.questionnaireNum);
+      const leaf = safeTrim(fieldKey);
+      if(!leaf) return "";
+      if(company === "clal"){
+        if(leaf.indexOf("clal_") === 0) return leaf;
+        return "clal_" + qId + "_" + leaf;
+      }
+      if(/^q\d+_/i.test(leaf) || leaf.indexOf("__") >= 0) return leaf;
+      return qId ? (qId + "__" + leaf) : leaf;
+    },
+
+    _mcFollowupHealthResponseValues(entry){
+      const out = {};
+      try{
+        const rec = this._getFreshCustomerRecord();
+        const helper = (typeof GI_OFFICIAL_FORM_FILL !== "undefined") ? GI_OFFICIAL_FORM_FILL : null;
+        const responses = helper?.healthResponses?.(rec?.payload) || {};
+        const insId = safeTrim(entry?.insuredId);
+        (Array.isArray(entry?.qKeys) ? entry.qKeys : []).forEach((qKey) => {
+          const bag = responses[qKey] && responses[qKey][insId] && responses[qKey][insId].fields;
+          if(!bag || typeof bag !== "object") return;
+          Object.keys(bag).forEach((k) => {
+            const v = safeTrim(bag[k]);
+            if(v && !out[k]) out[k] = v;
+          });
+        });
+      }catch(_e){}
+      return out;
+    },
+
+    _mcFollowupFieldValue(entry, overlay, field){
+      const html = overlay && overlay.html && typeof overlay.html === "object" ? overlay.html : {};
+      const data = Object.assign({}, this._mcFollowupHealthResponseValues(entry), entry?.followupData || {}, html);
+      const leaf = safeTrim(field?.key || field?.name);
+      const prefixed = this._mcFollowupFieldStorageKey(entry, leaf);
+      const keys = [prefixed, leaf, field?.name, field?.key].filter(Boolean);
+      for(let i = 0; i < keys.length; i++){
+        const v = data[keys[i]];
+        if(v != null && String(v).trim()) return String(v);
+      }
+      return "";
+    },
+
+    _mcFollowupEditorTitle(entry, fallback){
+      const schema = this._mcFollowupWizardSchema(entry);
+      const company = safeTrim(entry?.company)
+        || (typeof GI_FOLLOWUP_ZIP_CONFIG !== "undefined" && GI_FOLLOWUP_ZIP_CONFIG.COMPANIES?.[entry?.companyKey]?.label)
+        || "";
+      if(schema?.title) return company ? (schema.title + " · " + company) : schema.title;
+      return fallback || "שאלון המשך";
+    },
+
+    _mcFollowupEditorFields(entry, overlay){
+      const overlayObj = overlay && typeof overlay === "object" ? overlay : {};
+      const schema = this._mcFollowupWizardSchema(entry);
+      if(schema && schema.fields.length){
+        return schema.fields.map((field) => ({
+          name: this._mcFollowupFieldStorageKey(entry, field.key),
+          type: field.type || "text",
+          options: field.options,
+          value: this._mcFollowupFieldValue(entry, overlayObj, field),
+          label: safeTrim(field.label) || this._mcFollowupFallbackLabel(field.key, ""),
+          section: schema.title
+        })).filter((row) => row.name && /[\u0590-\u05FF]/.test(row.label));
+      }
+      return this._mcFollowupFallbackFields(entry, overlayObj);
+    },
+
     _mcFollowupFallbackLabel(key, raw){
       const s = safeTrim(raw);
-      if(s && /[\u0590-\u05FF]/.test(s) && s.length < 90) return s;
+      if(s && /[\u0590-\u05FF]/.test(s)) return s;
       const map = {
         notes: "הערות לשאלון",
         date: "תאריך",
@@ -73023,11 +73147,12 @@ ${inner}
         percent: "דרגת נכות %",
         reason: "סיבה"
       };
-      const leaf = String(key || "").replace(/^.*__/, "").replace(/^.*\./, "");
+      const leaf = String(key || "").replace(/^.*__/, "").replace(/^clal_[^_]+_/, "").replace(/^.*\./, "");
       if(map[key] || map[leaf]) return map[key] || map[leaf];
+      if(/^[A-Za-z][A-Za-z0-9_]*$/.test(leaf || key)) return "";
       const he = this._mcHumanizePdfFieldName(leaf || key);
-      if(he) return he;
-      return (leaf || key || "שדה בשאלון").replace(/_/g, " ");
+      if(he && /[\u0590-\u05FF]/.test(he)) return he;
+      return "";
     },
 
     _mcFollowupFallbackFields(entry, overlay){
@@ -73037,13 +73162,15 @@ ${inner}
       const out = [];
       const push = (name) => {
         const n = safeTrim(name);
-        if(!n || seen.has(n)) return;
+        if(!n || seen.has(n) || this._mcIsFollowupHeaderField(n)) return;
+        const label = this._mcFollowupFallbackLabel(n, labels[n]);
+        if(!label || !/[\u0590-\u05FF]/.test(label)) return;
         seen.add(n);
         out.push({
           name: n,
           type: "text",
           value: data[n] == null ? "" : String(data[n]),
-          label: this._mcFollowupFallbackLabel(n, labels[n])
+          label
         });
       };
       Object.keys(labels).forEach(push);
@@ -73055,12 +73182,26 @@ ${inner}
     },
 
     _mcRenderFollowupFallbackHtml(fields){
-      const rows = (fields || []).map((f) =>
-        `<label class="mcFormEd__row"><span class="mcFormEd__lab">${escapeHtml(f.label || f.name)}</span>` +
-        `<input class="mcFormEd__input" name="${escapeHtml(f.name)}" value="${escapeHtml(f.value || "")}"></label>`
-      ).join("");
-      return `<section class="mcFormEd__sec"><div class="mcFormEd__secTitle">שדות השאלון</div>` +
-        `<div class="mcFormEd__grid">${rows || `<p class="mcFormEd__empty">אין שדות לשאלון זה.</p>`}</div></section>`;
+      const list = Array.isArray(fields) ? fields : [];
+      const title = safeTrim(list[0]?.section) || "שאלות השאלון";
+      const rows = list.map((f) => {
+        const lab = escapeHtml(f.label || f.name);
+        const val = escapeHtml(f.value || "");
+        const name = escapeHtml(f.name);
+        if(f.type === "select" && Array.isArray(f.options) && f.options.length){
+          const opts = ['<option value="">—</option>'].concat(f.options.map((raw) => {
+            const o = String(raw == null ? "" : raw);
+            return `<option value="${escapeHtml(o)}"${String(f.value) === o ? " selected" : ""}>${escapeHtml(o)}</option>`;
+          }));
+          return `<label class="mcFormEd__row mcFormEd__row--wide"><span class="mcFormEd__lab">${lab}</span><select class="mcFormEd__input" name="${name}">${opts.join("")}</select></label>`;
+        }
+        if(f.type === "textarea"){
+          return `<label class="mcFormEd__row mcFormEd__row--wide"><span class="mcFormEd__lab">${lab}</span><textarea class="mcFormEd__input" name="${name}" rows="3">${val}</textarea></label>`;
+        }
+        return `<label class="mcFormEd__row mcFormEd__row--wide"><span class="mcFormEd__lab">${lab}</span><input class="mcFormEd__input" name="${name}" value="${val}"></label>`;
+      }).join("");
+      return `<section class="mcFormEd__sec"><div class="mcFormEd__secTitle">${escapeHtml(title)}</div>` +
+        `<div class="mcFormEd__follow">${rows || `<p class="mcFormEd__empty">אין שדות לשאלון זה.</p>`}</div></section>`;
     },
 
     async _mcOnHealthChoiceInEditor(rec, el){
@@ -73357,86 +73498,24 @@ ${inner}
       this._mcHealthEditor = { kind: "followup", type, title: row.name || "שאלון המשך", loading: true, error: "", returnTo };
       this._renderHealthDeclarationBody(rec);
       try{
-        if(typeof ensureFollowupZipLoaded === "function") await ensureFollowupZipLoaded();
+        if(typeof ensureGiWizardJsLoaded === "function") await ensureGiWizardJsLoaded();
       }catch(_e){}
-      if(!window.GiFollowupZip?.fillFollowupPdf){
-        const overlay = this._mcGetFormEdits(rec)[type] || {};
-        const fallback = this._mcFollowupFallbackFields(row.entry, overlay);
-        this._mcHealthEditor = {
-          kind: "followup",
-          type,
-          title: row.name || "שאלון המשך",
-          loading: false,
-          error: "",
-          fields: fallback,
-          values: {},
-          usePdfFields: false,
-          returnTo,
-          entry: row.entry
-        };
-        this._renderHealthDeclarationBody(this._getFreshCustomerRecord() || rec);
-        return;
-      }
-      try{
-        const overlay = this._mcGetFormEdits(rec)[type] || {};
-        const entry = Object.assign({}, row.entry, {
-          followupData: Object.assign({}, row.entry.followupData || {}, overlay.html || {})
-        });
-        let bytes = null;
-        try{
-          bytes = await window.GiFollowupZip.fillFollowupPdf(entry);
-          const hasPdf = overlay.pdf && typeof overlay.pdf === "object" && Object.keys(overlay.pdf).length;
-          if(hasPdf && bytes) bytes = await this._mcApplyPdfOverlayToBytes(bytes, overlay.pdf);
-        }catch(_fillErr){ bytes = null; }
-        let fields = [];
-        let values = {};
-        try{
-          if(bytes && typeof GI_LOAD_LIBS !== "undefined" && GI_LOAD_LIBS.pdfLib) await GI_LOAD_LIBS.pdfLib();
-          const PDFLib = window.PDFLib;
-          const helper = (typeof GI_OFFICIAL_FORM_FILL !== "undefined") ? GI_OFFICIAL_FORM_FILL : null;
-          if(bytes && PDFLib?.PDFDocument && helper?.listEditablePdfFields){
-            const pdfDoc = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
-            let form = null;
-            try{ form = pdfDoc.getForm(); }catch(_e2){ form = null; }
-            if(form){
-              fields = helper.listEditablePdfFields(form) || [];
-              values = this._mcReadPdfFieldValues(form, fields);
-              if(overlay.pdf) Object.assign(values, overlay.pdf);
-            }
-          }
-        }catch(_e3){}
-        const usePdfFields = fields.length > 0;
-        const fallback = usePdfFields ? [] : this._mcFollowupFallbackFields(entry, overlay);
-        this._mcHealthEditor = {
-          kind: "followup",
-          type,
-          title: row.name || "שאלון המשך",
-          loading: false,
-          error: "",
-          fields: usePdfFields ? fields : fallback,
-          values,
-          usePdfFields,
-          returnTo,
-          entry
-        };
-        this._renderHealthDeclarationBody(this._getFreshCustomerRecord() || rec);
-      }catch(err){
-        const fallback = this._mcFollowupFallbackFields(row.entry, this._mcGetFormEdits(rec)[type]);
-        this._mcHealthEditor = {
-          kind: "followup",
-          type,
-          title: row.name || "שאלון המשך",
-          loading: false,
-          error: fallback.length ? "" : (safeTrim(err?.message) || "לא ניתן לפתוח את השאלון."),
-          fields: fallback,
-          values: {},
-          usePdfFields: false,
-          returnTo,
-          entry: row.entry
-        };
-        this._renderHealthDeclarationBody(this._getFreshCustomerRecord() || rec);
-        if(!fallback.length) this._mcToast("שאלון המשך", safeTrim(err?.message) || "לא ניתן לפתוח את השאלון.", "warn");
-      }
+      const overlay = this._mcGetFormEdits(rec)[type] || {};
+      const fields = this._mcFollowupEditorFields(row.entry, overlay);
+      const title = this._mcFollowupEditorTitle(row.entry, row.name || "שאלון המשך");
+      this._mcHealthEditor = {
+        kind: "followup",
+        type,
+        title,
+        loading: false,
+        error: fields.length ? "" : "לא נמצאו שאלות לדף השאלון הזה.",
+        fields,
+        values: {},
+        usePdfFields: false,
+        returnTo,
+        entry: row.entry
+      };
+      this._renderHealthDeclarationBody(this._getFreshCustomerRecord() || rec);
     },
 
     _mcShowFullPdfModal(title, url){

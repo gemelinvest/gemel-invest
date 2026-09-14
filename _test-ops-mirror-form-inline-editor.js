@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260914-mc-q1to1-followup-v1";
+const APP_TAG = "20260914-mc-followup-page-v1";
 let failed = 0;
 let passed = 0;
 
@@ -60,7 +60,9 @@ assert(openJoin.includes("listEditablePdfFields"), "טוען את כל שדות 
 assert(openJoin.includes("fillOriginalTemplate"), "ממלא מהתיק לפני העריכה");
 assert(!openJoin.includes("await ui[fnName](rec)"), "לא פותח את מודאל תיק הלקוח");
 assert(openFollow.includes('kind: "followup"'), "שאלון המשך נפתח במסך ולא במודאל");
-assert(openFollow.includes("_mcFollowupFallbackFields"), "שאלון בלי AcroForm נפתח לעריכה");
+assert(openFollow.includes("_mcFollowupEditorFields"), "שאלון המשך נפתח לפי דף השאלון");
+assert(!openFollow.includes("listEditablePdfFields"), "שאלון המשך לא שופך את כל שדות ה-PDF");
+assert(openFollow.includes("usePdfFields: false"), "עורך שאלון אינו AcroForm גולמי");
 assert(!openFollow.includes("<iframe"), "שאלון המשך אינו iframe במסך העריכה");
 assert(app.includes("health-followup-save"), "שמירת שאלון וחזרה");
 assert(app.includes("_mcReturnFromFollowupEditor(rec){"), "חזרה לטופס או להצהרה אחרי שאלון");
@@ -223,6 +225,65 @@ const smokeHits = qSandbox.api._mcFollowupHitsForQuestion({}, "phoenix_critical_
 assert(smokeHits.length === 0, "עישון CI בלי questionnaireNos לא פותח שאלון זר");
 const familyHits = qSandbox.api._mcFollowupHitsForQuestion({}, "phoenix_critical_illness__ci_family", "ins1", ["22"]);
 assert(familyHits.length === 1 && familyHits[0].entry.questionnaireNum === "22", "משפחה CI → שאלון 22");
+
+console.log("\n8) עורך שאלון המשך = דף השאלון בלבד, לכל החברות");
+assert(app.includes("getPhoenixFollowupSchemas"), "פניקס — סכמת דף שאלון");
+assert(app.includes("getClalFollowupSchemas"), "כלל — סכמת דף שאלון");
+assert(app.includes("getHachsharaFollowupSchemas"), "הכשרה — סכמת דף שאלון");
+assert(app.includes("getMenoraFollowupSchemas"), "מנורה — סכמת דף שאלון");
+assert(app.includes("getAyalonFollowupSchemas"), "איילון — סכמת דף שאלון");
+assert(app.includes("getMagdalQuestionnaireMap"), "מגדל — סכמת דף שאלון");
+assert(openFollow.includes("ensureGiWizardJsLoaded"), "טוען את קטלוג השאלונים לפני העריכה");
+assert(css.includes(".mcFormEd__follow{"), "עיצוב שאלות דף השאלון");
+const schemaFn = extractMethod(app, "_mcFollowupWizardSchema");
+const editorFn = extractMethod(app, "_mcFollowupEditorFields");
+const headerFn = extractMethod(app, "_mcIsFollowupHeaderField");
+const labelFn = extractMethod(app, "_mcFollowupFallbackLabel");
+const storeFn = extractMethod(app, "_mcFollowupFieldStorageKey");
+const valFn = extractMethod(app, "_mcFollowupFieldValue");
+const healthValFn = extractMethod(app, "_mcFollowupHealthResponseValues");
+assert(!!schemaFn && !!editorFn, "חולצו עוזרי עורך שאלון");
+const fSandbox = {
+  safeTrim: (v) => (v == null ? "" : String(v).trim()),
+  escapeHtml: (v) => String(v == null ? "" : v),
+  GI_FOLLOWUP_ZIP_CONFIG: { CLAL_LETTERS: ["א","ב","ג","ד","ה","ו","ז","ח","ט","י","יא","יב","יג","יד","טו","טז","יז","יח","יט","כ","כא","כב","כג"] },
+  Wizard: {
+    getPhoenixFollowupSchemas(){ return { "18": { title: "בדיקות", fields: [{ key: "testName", label: "שם הבדיקה", type: "text" }, { key: "findings", label: "ממצאים / אבחנה", type: "textarea" }] } }; },
+    getClalFollowupSchemas(){ return { "יט": { title: "שאלון יט׳ — מערכת המין והרבייה", fields: [{ key: "female", label: "נשים: גוש בשד, דימומים, הריון — פרט", type: "textarea" }, { key: "male", label: "גברים: פריון, אשך טמיר — פרט", type: "textarea" }, { key: "testsTreatment", label: "בדיקות/טיפולים/ניתוחים ומצב עדכני", type: "textarea" }] } }; },
+    getHachsharaFollowupSchemas(){ return { "1": { title: "אשפוזים", fields: [{ key: "reason", label: "מה הסיבה לאשפוז", type: "text" }] } }; },
+    getMenoraFollowupSchemas(){ return { "4": { title: "לב", fields: [{ key: "heartDisease", label: "מחלת לב", type: "textarea" }] } }; },
+    getAyalonFollowupSchemas(){ return { "32": { title: "היסטוריה משפחתית", fields: [{ key: "relative", label: "קרוב משפחה מדרגה ראשונה", type: "text" }] } }; },
+    getMagdalQuestionnaireMap(){ return { "20": { title: "היסטוריה משפחתית", fields: [{ key: "relatives", label: "איזה קרוב/ים מדרגה ראשונה", type: "textarea" }] } }; }
+  }
+};
+vm.createContext(fSandbox);
+vm.runInContext(
+  "const api = {\n" +
+  "  _getFreshCustomerRecord(){ return { payload: {} }; },\n" +
+  "  _mcHumanizePdfFieldName(n){ return n; },\n" +
+  schemaFn + ",\n" + editorFn + ",\n" + headerFn + ",\n" + labelFn + ",\n" + storeFn + ",\n" + valFn + ",\n" + healthValFn + "\n}; this.api = api;",
+  fSandbox
+);
+function labelsOf(company, num){
+  return fSandbox.api._mcFollowupEditorFields({ companyKey: company, questionnaireNum: num, insuredId: "ins1", followupData: { InsuredHight: "170", InsuredFirstName: "דנה", BusinessDMNumber: "x" } }, {}).map((f) => f.label);
+}
+function namesOf(company, num){
+  return fSandbox.api._mcFollowupEditorFields({ companyKey: company, questionnaireNum: num, insuredId: "ins1", followupData: { InsuredHight: "170" } }, {}).map((f) => f.name);
+}
+const clalYt = labelsOf("clal", "יט");
+assert(clalYt.length === 3 && clalYt[0].indexOf("נשים") >= 0, "כלל יט — רק שאלות דף הרבייה");
+assert(clalYt.every((t) => t.indexOf("Insured") < 0 && /[\u0590-\u05FF]/.test(t)), "כלל יט — בלי שמות PDF באנגלית");
+assert(labelsOf("clal", "19").some((t) => t.indexOf("נשים") >= 0), "כלל 19 ממופה לאות יט");
+assert(labelsOf("phoenix", "18").some((t) => t.indexOf("שם הבדיקה") >= 0), "פניקס 18 — דף בדיקות");
+assert(labelsOf("hachshara", "1").some((t) => t.indexOf("אשפוז") >= 0), "הכשרה 1 — דף אשפוזים");
+assert(labelsOf("menora", "4").some((t) => t.indexOf("לב") >= 0), "מנורה 4 — דף לב");
+assert(labelsOf("ayalon", "32").some((t) => t.indexOf("קרוב") >= 0), "איילון 32 — דף משפחה");
+assert(labelsOf("migdal", "20").some((t) => t.indexOf("קרוב") >= 0), "מגדל 20 — דף משפחה");
+assert(namesOf("clal", "יט").every((n) => n.indexOf("Insured") < 0 && n.indexOf("Business") < 0), "אין שדות כותרת בשמות השדות");
+assert(fSandbox.api._mcIsFollowupHeaderField("InsuredHight") === true, "גובה PDF הוא שדה כותרת");
+assert(fSandbox.api._mcIsFollowupHeaderField("BusinessDMNumber") === true, "מספר עסק הוא שדה כותרת");
+assert(fSandbox.api._mcIsFollowupHeaderField("diagnosis") === false, "אבחנה אינה שדה כותרת");
+assert(!fSandbox.api._mcFollowupFallbackLabel("InsuredFirstName", ""), "אין תווית אנגלית לשם PDF");
 
 if(failed){
   console.error("\nFAILED " + failed + " / " + (passed + failed));
