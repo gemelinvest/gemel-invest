@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260914-cf-form-modal-close-v1";
+const TAG = "20260914-cf-form-in-file-v1";
 let failed = 0;
 let passed = 0;
 
@@ -90,6 +90,8 @@ assert(queueFollowup.includes("scheduleIdle"), "followup sync is scheduled idle"
 assert(queueFollowup.includes("window.setTimeout(fn, 2200)"), "fallback is delayed, not 0ms");
 assert(!queueFollowup.includes("window.setTimeout(run, 0)"), "tab click does not load wizard on the same turn");
 assert(app.includes("_mcDismissFileFormEditorOnFileClose"), "file close dismisses original-form editor");
+assert(app.includes("host.appendChild(modal)"), "editor is hosted inside the customer file");
+assert(app.includes("_mcInvalidateFileFormSession"), "file close cancels in-flight form load");
 const saveEditor = sliceFunction(app, "async _mcSaveAndCloseFileFormEditor(){");
 assert(saveEditor.indexOf("this._mcCloseFileFormModal()") < saveEditor.indexOf("await this._mcMaterializeEditedForms"), "form modal is removed before PDF/persist work");
 

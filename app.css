@@ -35636,7 +35636,13 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 }
 .mcFormEd__row--wide{grid-column:1 / -1;}
 .mcFileFormModal.giValModal{
-  z-index: 80;
+  z-index: 140;
+}
+#customerFull .mcFileFormModal.giValModal{
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  padding: 16px;
 }
 .mcFileFormModal .mcFileFormModal__card{
   width: min(1120px, 96vw);

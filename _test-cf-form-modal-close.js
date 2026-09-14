@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260914-cf-form-modal-close-v1";
+const TAG = "20260914-cf-form-in-file-v1";
 let failed = 0;
 let passed = 0;
 
@@ -53,7 +53,8 @@ assert(sw.includes("gi-v12-" + TAG), "service-worker cache");
 assert(app.includes('BUILD = "' + TAG + '"'), "app.js BUILD");
 
 console.log("\n2) closing the customer file dismisses the original-form window");
-assert(app.includes("document.body.appendChild(modal)"), "editor is mounted on document.body");
+assert(app.includes("host.appendChild(modal)"), "editor is mounted on the customer file host");
+assert(!sliceFunction(app, "_mcEnsureFileFormModal(){").includes("document.body.appendChild(modal)"), "file editor is not mounted on document.body");
 assert(app.includes("_mcDismissFileFormEditorOnFileClose"), "dismiss helper exists");
 assert(app.includes("void MirrorCallUI._mcDismissFileFormEditorOnFileClose()"), "CustomersUI.close calls dismiss");
 const closeFile = sliceFunction(app, "close(){\n      const closingId = safeTrim(this.currentId || this._openingCustomerId);");
