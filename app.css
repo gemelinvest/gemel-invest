@@ -35572,6 +35572,18 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   border-top:1px dashed #d5deea;
 }
 .mcFormEd__manual[hidden]{display:none !important;}
+.mcFormEd__follow{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+.mcFormEd__follow .mcFormEd__lab{
+  display:block;
+  margin-bottom:6px;
+  font-weight:750;
+  line-height:1.45;
+  white-space:normal;
+}
 .mcFormEd__row--wide{grid-column:1 / -1;}
 @media (max-width:720px){
   .mcFormEd__grid{grid-template-columns:1fr;}

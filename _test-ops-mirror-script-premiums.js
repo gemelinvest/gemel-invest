@@ -10,7 +10,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260914-har-parse-v1";
+const APP_TAG = "20260914-mc-followup-qfix-v2";
 let failed = 0;
 let passed = 0;
 
