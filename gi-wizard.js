@@ -3,7 +3,22 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260914-cf-form-in-file-v1";
+  const GI_WIZARD_BUILD = "20260914-ils-km-shorthand-v1";
+  function giWizardExpandIlsAmount(raw){
+    try{
+      if(typeof window !== "undefined" && window.GI_ILS_AMOUNT && typeof window.GI_ILS_AMOUNT.expand === "function"){
+        return window.GI_ILS_AMOUNT.expand(raw);
+      }
+    }catch(_e){}
+    const s = String(raw ?? "").trim();
+    const m = s.match(/^₪?\s*([\d.,]+)\s*([kKmM])\s*$/);
+    if(!m) return s;
+    const n = Number(String(m[1]).replace(/,/g, ""));
+    if(!Number.isFinite(n) || n < 0) return s;
+    const out = n * ((m[2] === "m" || m[2] === "M") ? 1000000 : 1000);
+    if(!Number.isFinite(out)) return s;
+    return String(Math.abs(out - Math.round(out)) < 1e-9 ? Math.round(out) : Math.round(out * 100) / 100);
+  }
   /* כיסויי בריאות שמתומחרים בסימולטור — לא קטלוג האשף (בלי תוכניות פיצוי). */
   const HEALTH_SIMULATOR_COVER_KEYS = {
     "מנורה": [
@@ -13920,7 +13935,8 @@ if(path === "birthDate"){
 
 
     asMoneyNumber(v){
-      const raw = String(v ?? "").replace(/[^\d.-]/g, "");
+      const src = giWizardExpandIlsAmount(v);
+      const raw = String(src ?? "").replace(/[^\d.-]/g, "");
       const n = Number(raw);
       return Number.isFinite(n) ? n : 0;
     },
@@ -21547,7 +21563,8 @@ if(path === "birthDate"){
     },
 
     parseMoneyNumber(v){
-      const raw = String(v ?? '').replace(/[^0-9.]/g, '');
+      const src = giWizardExpandIlsAmount(v);
+      const raw = String(src ?? '').replace(/[^0-9.]/g, '');
       if(!raw) return null;
       const n = Number(raw);
       return Number.isFinite(n) ? n : null;
