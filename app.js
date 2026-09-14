@@ -1773,6 +1773,49 @@
     return OPS_RESULT_OPTIONS[k] || "";
   }
 
+  function isPendingTypingResult(key){
+    const k = safeTrim(key);
+    return k === "pendingTyping" || k === "waitingTyping";
+  }
+
+  function isPreparingFormsOps(ops){
+    if(!ops || typeof ops !== "object") return false;
+    if(!isPendingTypingResult(ops.resultStatus)) return false;
+    if(safeTrim(ops.liveState) === "preparing_forms") return true;
+    return !!safeTrim(ops.typingStartedAt);
+  }
+
+  function isWaitingTypingOps(ops){
+    if(!ops || typeof ops !== "object") return false;
+    if(isPreparingFormsOps(ops)) return false;
+    if(isPendingTypingResult(ops.resultStatus)) return true;
+    return safeTrim(ops.liveState) === "waiting_typing";
+  }
+
+  function beginCustomerTypingPrep(rec){
+    if(!rec) return false;
+    try{
+      if(!(Auth?.isOps?.() || Auth?.isOpsAgent?.())) return false;
+    }catch(_e){
+      return false;
+    }
+    const store = ensureOpsProcess(rec);
+    if(!isPendingTypingResult(store.resultStatus)) return false;
+    const who = safeTrim(Auth?.current?.name);
+    if(safeTrim(store.liveState) === "preparing_forms" && safeTrim(store.typingStartedBy) === who && safeTrim(store.typingStartedAt)){
+      return false;
+    }
+    const stamp = safeTrim(store.typingStartedAt) || nowISO();
+    setOpsTouch(rec, {
+      liveState: "preparing_forms",
+      typingStartedAt: stamp,
+      typingStartedBy: who,
+      ownerName: who,
+      updatedBy: who
+    });
+    return true;
+  }
+
   /* GI-OPS-THREAD-LANE-START */
   var OpsThreadLane = {
     OPTIONS: {
@@ -2097,12 +2140,38 @@
         stepCount: Number(step?.count || 0) || 0
       };
     }
+    const typingPending = isPendingTypingResult(ops?.resultKey) || isPendingTypingResult(ops?.store?.resultStatus);
+    if(safeTrim(ops?.liveKey) === "preparing_forms" && (typingPending || !safeTrim(ops?.finalLabel))){
+      const agent = safeTrim(ops?.ownerText);
+      return {
+        mode: "preparing",
+        status: "לקוח בהכנת טפסים",
+        count: "",
+        stepLabel: agent,
+        stepKicker: agent ? ("נציג מבצע · " + agent) : "",
+        stepIndex: 0,
+        stepCount: 0
+      };
+    }
+    if(safeTrim(ops?.liveKey) === "waiting_typing" && (typingPending || !safeTrim(ops?.finalLabel))){
+      return {
+        mode: "waiting",
+        status: "ממתין להקלדה",
+        count: "",
+        stepLabel: "",
+        stepKicker: "",
+        stepIndex: 0,
+        stepCount: 0
+      };
+    }
     return { mode: "hidden", status: "", count: "" };
   }
 
   function getCustomerFileOpsBadge(state){
     if(!state) return "ממתין לשיקוף";
     if(state.timerLive) return safeTrim(state.liveLabel) || "הלקוח בשיחה כעת";
+    if(safeTrim(state.liveKey) === "preparing_forms" && !safeTrim(state.finalLabel)) return safeTrim(state.liveLabel) || "לקוח בהכנת טפסים";
+    if(safeTrim(state.liveKey) === "waiting_typing" && !safeTrim(state.finalLabel)) return "ממתין להקלדה";
     if(safeTrim(state.finalLabel)) return safeTrim(state.finalLabel);
     if(safeTrim(state.liveKey) === "call_finished") return "ממתין לסטטוס תפעול";
     return safeTrim(state.liveLabel) || "ממתין לשיקוף";
@@ -2220,8 +2289,20 @@
       liveKey = "in_call";
       liveLabel = "הלקוח בשיחה כעת";
       tone = "warn";
+    } else if(isPreparingFormsOps(ops)){
+      const who = safeTrim(ops.typingStartedBy || ops.ownerName || ops.updatedBy);
+      liveKey = "preparing_forms";
+      liveLabel = who ? ("לקוח בהכנת טפסים · " + who) : "לקוח בהכנת טפסים";
+      tone = "warn";
+    } else if(isWaitingTypingOps(ops)){
+      liveKey = "waiting_typing";
+      liveLabel = "ממתין להקלדה";
+      tone = "info";
     } else if(finalLabel){
       liveLabel = finalLabel;
+      if(liveKey === "preparing_forms" || liveKey === "waiting_typing"){
+        liveKey = safeTrim(ops.resultStatus) || liveKey;
+      }
       tone = ops.resultStatus === 'notInterested'
         ? 'danger'
         : (ops.resultStatus === 'waitingAgentInfo' ? 'warn' : 'success');
@@ -27349,7 +27430,7 @@ UsersGateUI.init();
       const view = typeof getHeroCallTimerView === "function"
         ? getHeroCallTimerView(rec, ops)
         : { mode: ops?.timerLive ? "live" : "hidden", status: ops?.timerLive ? "הלקוח בשיחה כעת" : "", count: ops?.timerText || "" };
-      el.classList.remove("is-live", "is-done", "is-stopped", "has-step");
+      el.classList.remove("is-live", "is-done", "is-stopped", "is-waiting", "is-preparing", "has-step");
       if(!view || view.mode === "hidden"){
         el.hidden = true;
         el.setAttribute("hidden", "");
@@ -27364,17 +27445,24 @@ UsersGateUI.init();
       el.classList.add(`is-${view.mode}`);
       const stepLabel = safeTrim(view.stepLabel);
       const stepKicker = safeTrim(view.stepKicker);
+      const clockModes = view.mode === "live" || view.mode === "waiting" || view.mode === "preparing";
       const hasStep = view.mode === "live" && !!(stepKicker || stepLabel);
       if(hasStep) el.classList.add("has-step");
-      const stepText = hasStep
-        ? (stepKicker || `${view.stepIndex ? `שלב ${view.stepIndex}` : "שלב"}${view.stepCount ? ` מתוך ${view.stepCount}` : ""} · ${stepLabel}`)
-        : "";
+      const stepText = view.mode === "live"
+        ? (hasStep
+          ? (stepKicker || `${view.stepIndex ? `שלב ${view.stepIndex}` : "שלב"}${view.stepCount ? ` מתוך ${view.stepCount}` : ""} · ${stepLabel}`)
+          : "")
+        : (stepKicker || stepLabel);
       const parts = [safeTrim(view.status), stepText, safeTrim(view.count)].filter(Boolean);
       if(parts.length) el.setAttribute("aria-label", parts.join(" · "));
       else el.removeAttribute("aria-label");
       let progress = 12;
       if(view.mode === "live" && Number(view.stepIndex) > 0 && Number(view.stepCount) > 0){
         progress = Math.max(8, Math.min(100, Math.round((Number(view.stepIndex) / Number(view.stepCount)) * 100)));
+      } else if(view.mode === "waiting"){
+        progress = 18;
+      } else if(view.mode === "preparing"){
+        progress = 62;
       }
       const countBits = String(view.count || "").split(":");
       const mins = Number(countBits[0] || 0) || 0;
@@ -27385,7 +27473,7 @@ UsersGateUI.init();
       const countEl = el.querySelector(".cfFile__liveTimerCount");
       const statusEl = el.querySelector(".cfFile__liveTimerStatus");
       const stepEl = el.querySelector(".cfFile__liveTimerStep");
-      const sameShell = view.mode === "live" && !!(countEl && statusEl && el.querySelector(".cfFile__liveTimerClock"));
+      const sameShell = clockModes && !!(countEl && statusEl && el.querySelector(".cfFile__liveTimerClock"));
       if(sameShell){
         if(countEl) countEl.textContent = view.count || "";
         if(statusEl) statusEl.textContent = view.status || "";
@@ -27395,7 +27483,7 @@ UsersGateUI.init();
         }
         return true;
       }
-      const clock = view.mode === "live"
+      const clock = clockModes
         ? `<span class="cfFile__liveTimerClock" aria-hidden="true"><span class="cfFile__liveTimerFace"></span><span class="cfFile__liveTimerHand"></span><span class="cfFile__liveTimerPulse"></span></span>`
         : "";
       const count = view.count
@@ -27403,7 +27491,7 @@ UsersGateUI.init();
         : "";
       const step = `<span class="cfFile__liveTimerStep"${stepText ? "" : " hidden"}>${escapeHtml(stepText)}</span>`;
       el.innerHTML = `${clock}<span class="cfFile__liveTimerBody"><span class="cfFile__liveTimerStatus">${escapeHtml(view.status)}</span>${count}${step}</span>`;
-      return view.mode === "live";
+      return clockModes;
     },
 
     _openFileCallWatchMs: 2000,
@@ -27648,6 +27736,11 @@ UsersGateUI.init();
           }
         }
       } catch(_e) {}
+      try{
+        if(typeof beginCustomerTypingPrep === "function" && beginCustomerTypingPrep(rec)){
+          App.persist("לקוח בהכנת טפסים").catch(() => {});
+        }
+      }catch(_ePrep){}
       const safeSection = this.normalizeSection(opts?.section || this.currentSection || "policies");
       const reopenPolicyId = safeTrim(opts?.policyId || "");
       const bodyScrollTop = Math.max(0, Number(opts?.bodyScrollTop || 0) || 0);
@@ -35410,6 +35503,12 @@ UsersGateUI.init();
       const cid = safeTrim(id);
       if(!cid || !this.canAccess()) return;
       this._customerId = cid;
+      const rec = (State.data?.customers || []).find((c) => safeTrim(c.id) === cid) || null;
+      try{
+        if(typeof beginCustomerTypingPrep === "function" && beginCustomerTypingPrep(rec)){
+          App.persist("לקוח בהכנת טפסים").catch(() => {});
+        }
+      }catch(_e){}
       UI.goView("typingPacket");
     },
 
@@ -43342,7 +43441,7 @@ UsersGateUI.init();
 
   /* GI-PERF 2026-08-10 — CSS משני אחרי login בלבד (לא במסך הכניסה). */
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
-    "./theme-mirror-typing.css?v=20260805-mirror-typing-v1",
+    "./theme-mirror-typing.css?v=20260914-mirror-chg-v2",
     "./gi-customers-import.css?v=20260828-menora-health-decl-v1",
     "./theme-unify-flat.css?v=20260907-couple-shared-discount-v1"
   ]);
@@ -74108,6 +74207,200 @@ ${inner}
       rec.payload.customerDocuments = list;
     },
 
+    _mcEnsureJoinFormEdits(rec){
+      if(!rec) return;
+      const edits = this._mcGetFormEdits(rec);
+      let rail = { join: [], follow: [] };
+      try{ rail = this._mcCollectHealthFormRail(rec) || rail; }catch(_e){}
+      (rail.join || []).forEach((row) => {
+        const type = safeTrim(row?.type);
+        if(!type) return;
+        if(!edits[type] || typeof edits[type] !== "object") edits[type] = {};
+      });
+    },
+
+    _mcCustomerDocsList(rec){
+      const payload = rec?.payload && typeof rec.payload === "object" ? rec.payload : {};
+      if(typeof CustomerDocuments !== "undefined" && CustomerDocuments.listFromPayload){
+        return CustomerDocuments.listFromPayload(payload);
+      }
+      return Array.isArray(payload.customerDocuments) ? payload.customerDocuments : [];
+    },
+
+    _mcFindSummaryFormDoc(rec, type, idHint){
+      const list = this._mcCustomerDocsList(rec);
+      const wantId = safeTrim(idHint);
+      if(wantId){
+        const byId = list.find((d) => safeTrim(d?.id) === wantId);
+        if(byId) return byId;
+      }
+      const t = safeTrim(type);
+      if(t === "followup_questionnaire"){
+        return wantId ? (list.find((d) => safeTrim(d?.id) === wantId) || null) : null;
+      }
+      const canonical = this._mcCanonicalJoinDocId(t);
+      return list.find((d) => safeTrim(d?.type) === t || safeTrim(d?.id) === canonical) || null;
+    },
+
+    _mcListSummaryFilledForms(rec){
+      const items = [];
+      const seen = new Set();
+      let rail = { join: [], follow: [] };
+      try{ rail = this._mcCollectHealthFormRail(rec) || rail; }catch(_e){}
+      (rail.join || []).forEach((row) => {
+        const type = safeTrim(row?.type);
+        if(!type) return;
+        const key = "join:" + type;
+        if(seen.has(key)) return;
+        seen.add(key);
+        const doc = this._mcFindSummaryFormDoc(rec, type);
+        items.push({
+          key,
+          kind: "join",
+          type,
+          name: row.name || this._mcJoinFormTitle(type),
+          doc,
+          docId: safeTrim(doc?.id) || this._mcCanonicalJoinDocId(type),
+          ready: !!(safeTrim(doc?.dataUrl) || safeTrim(doc?.url))
+        });
+      });
+      (rail.follow || []).forEach((row) => {
+        const helper = (typeof window !== "undefined" && window.GiFollowupZip) ? window.GiFollowupZip : null;
+        const entry = row.entry || {};
+        const stableId = helper?.stableDocId?.(entry)
+          || ["doc_followup", entry.companyKey, entry.insuredId, entry.questionnaireNum].join("_");
+        const key = "follow:" + stableId;
+        if(seen.has(key)) return;
+        seen.add(key);
+        const doc = this._mcFindSummaryFormDoc(rec, "followup_questionnaire", stableId);
+        items.push({
+          key,
+          kind: "followup",
+          type: "followup_questionnaire",
+          name: row.name || "שאלון המשך",
+          doc,
+          docId: safeTrim(doc?.id) || stableId,
+          ready: !!(safeTrim(doc?.dataUrl) || safeTrim(doc?.url))
+        });
+      });
+      const edits = rec?.payload?.mirrorFlow?.formEdits && typeof rec.payload.mirrorFlow.formEdits === "object"
+        ? rec.payload.mirrorFlow.formEdits
+        : {};
+      Object.keys(edits).forEach((type) => {
+        if(String(type).indexOf("followup:") === 0) return;
+        const key = "join:" + type;
+        if(seen.has(key)) return;
+        const spec = (typeof CustomerFileUI !== "undefined") ? CustomerFileUI.officialJoinFormPreviewSpec?.(type) : null;
+        if(!spec) return;
+        seen.add(key);
+        const doc = this._mcFindSummaryFormDoc(rec, type);
+        items.push({
+          key,
+          kind: "join",
+          type,
+          name: this._mcJoinFormTitle(type),
+          doc,
+          docId: safeTrim(doc?.id) || this._mcCanonicalJoinDocId(type),
+          ready: !!(safeTrim(doc?.dataUrl) || safeTrim(doc?.url))
+        });
+      });
+      return items;
+    },
+
+    _mcSummaryFilledFormsHtml(rec, opts){
+      const loading = !!opts?.loading;
+      const items = this._mcListSummaryFilledForms(rec);
+      if(loading && !items.some((row) => row.ready)){
+        return `<div class="mtqUnchangedNote">מכין את הטפסים המעודכנים לפתיחה ולהורדה…</div>`;
+      }
+      if(!items.length){
+        return `<div class="mtqUnchangedNote">אין טפסי הצעה רשמיים לתיק זה אחרי השיקוף.</div>`;
+      }
+      return items.map((item) => {
+        const disabled = item.ready ? "" : " disabled";
+        const kind = item.kind === "followup" ? "שאלון המשך" : "טופס הצעה";
+        return `<div class="mtqFormRow${item.ready ? "" : " is-pending"}">
+          <div class="mtqFormRow__text">
+            <div class="mtqFormRow__name">${escapeHtml(item.name)}</div>
+            <div class="mtqFormRow__meta">${escapeHtml(item.ready ? kind : "מכין טופס…")}</div>
+          </div>
+          <div class="mtqFormRow__acts">
+            <button class="mtqBtn mtqBtn--ghost mtqBtn--sm" type="button" data-mc-summary-form="open" data-mc-form-doc="${escapeHtml(item.docId)}"${disabled}>פתח</button>
+            <button class="mtqBtn mtqBtn--primary mtqBtn--sm" type="button" data-mc-summary-form="download" data-mc-form-doc="${escapeHtml(item.docId)}"${disabled}>הורדה</button>
+          </div>
+        </div>`;
+      }).join("");
+    },
+
+    _mcBindSummaryFilledForms(host, rec){
+      if(!host) return;
+      host.querySelectorAll("[data-mc-summary-form]").forEach((btn) => {
+        on(btn, "click", () => {
+          const act = safeTrim(btn.getAttribute("data-mc-summary-form"));
+          const docId = safeTrim(btn.getAttribute("data-mc-form-doc"));
+          const fresh = this._getFreshCustomerRecord() || rec;
+          const doc = this._mcCustomerDocsList(fresh).find((d) => safeTrim(d?.id) === docId)
+            || this._mcFindSummaryFormDoc(fresh, "", docId);
+          if(act === "open") this._mcOpenFilledFormDoc(doc);
+          else if(act === "download") void this._mcDownloadFilledFormDoc(doc);
+        });
+      });
+    },
+
+    _mcPaintSummaryFilledForms(rec, opts){
+      const body = this.els?.mirrorSummaryBody?.querySelector?.("[data-mc-summary-forms-body]");
+      if(!body) return;
+      body.innerHTML = this._mcSummaryFilledFormsHtml(rec, opts);
+      this._mcBindSummaryFilledForms(body, rec);
+    },
+
+    async _mcPrepareSummaryFilledForms(rec){
+      if(!rec || this._mirrorUiPhase !== "mirrorSummaryReport") return;
+      this._mcPaintSummaryFilledForms(rec, { loading: true });
+      try{ this._mcEnsureJoinFormEdits(rec); }catch(_e){}
+      try{ await this._mcMaterializeEditedForms(rec); }catch(_e2){}
+      if(this._mirrorUiPhase !== "mirrorSummaryReport") return;
+      const fresh = this._getFreshCustomerRecord() || rec;
+      this._mcPaintSummaryFilledForms(fresh, { loading: false });
+    },
+
+    _mcOpenFilledFormDoc(doc){
+      const dataUrl = safeTrim(doc?.dataUrl) || safeTrim(doc?.url);
+      if(!dataUrl){
+        this._mcToast("אין קובץ", "הטופס עדיין לא מוכן לפתיחה.", "warn");
+        return;
+      }
+      try{
+        let url = dataUrl;
+        if(dataUrl.indexOf("data:") === 0 && typeof dataUrlToArrayBuffer === "function"){
+          const buf = dataUrlToArrayBuffer(dataUrl);
+          if(buf) url = URL.createObjectURL(new Blob([buf], { type: safeTrim(doc?.mime) || "application/pdf" }));
+        }
+        const win = window.open(url, "_blank", "noopener");
+        if(!win){
+          void this._mcDownloadFilledFormDoc(doc);
+        }
+      }catch(_e){
+        void this._mcDownloadFilledFormDoc(doc);
+      }
+    },
+
+    async _mcDownloadFilledFormDoc(doc){
+      if(!doc){
+        this._mcToast("אין קובץ", "לא נמצא טופס להורדה.", "warn");
+        return;
+      }
+      let ok = false;
+      try{
+        if(typeof CustomerDocuments !== "undefined" && CustomerDocuments.downloadFileDoc){
+          ok = await CustomerDocuments.downloadFileDoc(doc);
+        } else if(typeof CustomerDocuments !== "undefined" && CustomerDocuments.triggerDataUrlDownload){
+          ok = !!CustomerDocuments.triggerDataUrlDownload(doc.dataUrl || doc.url, doc.fileName || doc.name);
+        }
+      }catch(_e){}
+      if(!ok) this._mcToast("אין קובץ", "לא נמצא עותק להורדה.", "warn");
+    },
+
     async _mcMaterializeEditedForms(rec){
       if(!rec) return;
       const edits = this._mcGetFormEdits(rec);
@@ -75696,6 +75989,7 @@ ${inner}
         </div>
 
         <div class="mtqSummaryLayout">
+          <div class="mtqSummaryMain">
           <div class="mtqPanel">
             <div class="mtqPanel__head">
               <h2 class="mtqPanel__title">פירוט שינויים לפי שלב</h2>
@@ -75704,6 +75998,16 @@ ${inner}
             <div class="mtqPanel__body">
               ${noBaselineHtml}${areaHtml}
             </div>
+          </div>
+
+          <div class="mtqPanel" data-mc-summary-forms>
+            <div class="mtqPanel__head">
+              <h2 class="mtqPanel__title">טפסים ממולאים אחרי תיקון השיקוף</h2>
+            </div>
+            <div class="mtqPanel__body" data-mc-summary-forms-body>
+              <div class="mtqUnchangedNote">מכין את הטפסים המעודכנים לפתיחה ולהורדה…</div>
+            </div>
+          </div>
           </div>
 
           <aside class="mtqPanel mtqSideCard">
@@ -75745,6 +76049,7 @@ ${inner}
       window.requestAnimationFrame(() => {
         try{ this.els.mirrorSummaryWrap?.focus?.(); }catch(_e){}
       });
+      void this._mcPrepareSummaryFilledForms(target);
     },
 
     closeMirrorSummaryReport(){
@@ -75770,7 +76075,7 @@ ${inner}
       MirrorChangeReport.saveApproved(rec, { approvedAt, approvedBy });
 
       setOpsTouch(rec, {
-        liveState: "call_finished",
+        liveState: "waiting_typing",
         resultStatus: "pendingTyping",
         waitingTypingAt: approvedAt,
         waitingTypingBy: approvedBy,
@@ -75780,6 +76085,13 @@ ${inner}
 
       // סוגר שיחה פעילה כדי שהלקוח לא יישאר תקוע בדלי "בשיחת שיקוף".
       try{ if(this._callRunning) this.stopCall(); }catch(_e){}
+      setOpsTouch(rec, {
+        liveState: "waiting_typing",
+        resultStatus: "pendingTyping",
+        ownerName: approvedBy,
+        updatedBy: approvedBy
+      });
+      try{ this._mcEnsureJoinFormEdits(rec); }catch(_e2){}
       try{ await this._mcMaterializeEditedForms(rec); }catch(_e3){}
       this.onNewPoliciesMirrorDone();
       try{ CustomersUI?.refreshOperationalReflectionCard?.(); }catch(_e){}
