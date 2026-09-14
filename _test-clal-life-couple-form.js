@@ -50,7 +50,9 @@ assert(app.includes("data-open-clal-life-couple-doc"), "documents tab has open b
 assert(app.includes("openClalLifeCoupleForm"), "customer file opens the form");
 assert(app.includes("ensureClalLifeCoupleFormLoaded"), "form chunk loads on demand");
 assert(app.includes('OFFICIAL_JOIN_FORM_FROM_DAY: "2026-08-23"'), "official forms start from 23 Aug 2026");
-assert(app.includes("insuredMode") && app.includes("זוגי|כפול למשפחה|כלל כפול"), "qualify requires couple risk");
+assert(app.includes("insuredMode") && app.includes("זוגי|כפול למשפחה|כלל כפול"), "qualify still recognizes tagged couple risk");
+assert(app.includes("isClalLifeJoinPolicy(policy){"), "Clal life matcher extracted");
+assert(app.includes("const twoPeople = matched.length >= 2 || insuredIds.size >= 2"), "two single Clal risk policies count as couple form");
 
 console.log("\n4) fill engine — proposal sums");
 assert(form.includes("function installClalLifeCoupleForm"), "form module wraps itself");

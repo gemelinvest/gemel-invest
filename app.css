@@ -34711,10 +34711,6 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   overflow:hidden;
 }
 .mcPolicyRow--head{
-  display:grid;
-  grid-template-columns:minmax(110px,.9fr) minmax(70px,.7fr) minmax(70px,.7fr) minmax(90px,.7fr) minmax(90px,.7fr) minmax(92px,.6fr);
-  gap:6px 10px;
-  padding:6px 10px;
   background:#f3f6fb;
   border-color:rgba(15,32,96,.1);
   color:rgba(15,32,96,.55);
@@ -34722,9 +34718,11 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   font-weight:800;
   letter-spacing:.02em;
 }
+.mcPolicyRow--head .mcPolicyRow__main{padding:6px 10px;}
+.mcPolicyRow--head .mcPolicyRow__cell{color:rgba(15,32,96,.55);font-weight:800;}
 .mcPolicyRow__main{
   display:grid;
-  grid-template-columns:minmax(110px,.9fr) minmax(70px,.7fr) minmax(70px,.7fr) minmax(90px,.7fr) minmax(90px,.7fr) minmax(92px,.6fr);
+  grid-template-columns:minmax(150px,1.2fr) minmax(72px,.55fr) minmax(68px,.5fr) minmax(118px,.85fr) minmax(108px,.7fr) minmax(108px,.7fr);
   gap:6px 10px;
   align-items:center;
   padding:8px 10px;
@@ -34736,11 +34734,18 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
+  text-align:start;
 }
 .mcPolicyRow__cell--money{
-  direction:ltr;
-  text-align:left;
+  text-align:start;
   font-variant-numeric:tabular-nums;
+}
+.mcPolicyRow__cell--money .mcStartDate{
+  display:inline-block;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  vertical-align:middle;
 }
 .mcPolicyRow__insured{
   display:inline-flex;
