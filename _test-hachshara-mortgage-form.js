@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260914-cf-form-modal-close-v1";
+const APP_TAG = "20260914-cf-form-in-file-v1";
 const TAG = "20260826-hach-hmo-health-v1";
 let failed = 0;
 let passed = 0;

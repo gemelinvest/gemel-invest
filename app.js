@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260914-cf-form-modal-close-v1";
+  const BUILD = "20260914-cf-form-in-file-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -42789,7 +42789,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260914-cf-form-modal-close-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260914-cf-form-in-file-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -43474,7 +43474,7 @@ UsersGateUI.init();
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
     "./simulators-center.css?v=20260914-mc-followup-qfix-v2",
-    "./simulators-shell.css?v=20260914-cf-form-modal-close-v1"
+    "./simulators-shell.css?v=20260914-cf-form-in-file-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -44836,7 +44836,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260914-cf-form-modal-close-v1";
+  const GI_WIZARD_JS_VERSION = "20260914-cf-form-in-file-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -74550,18 +74550,59 @@ ${inner}
       tryBind(0);
     },
 
+    _mcBeginFileFormSession(){
+      this._mcFileFormSessionId = (this._mcFileFormSessionId || 0) + 1;
+      this._mcFileFormSessionLive = true;
+      return this._mcFileFormSessionId;
+    },
+    _mcInvalidateFileFormSession(){
+      this._mcFileFormSessionId = (this._mcFileFormSessionId || 0) + 1;
+      this._mcFileFormSessionLive = false;
+    },
+    _mcFileFormHostEl(){
+      let host = null;
+      try{
+        host = (typeof CustomerFileUI !== "undefined" && CustomerFileUI.els && CustomerFileUI.els.wrap)
+          ? CustomerFileUI.els.wrap
+          : null;
+      }catch(_e){ host = null; }
+      if(!host){
+        try{ host = document.getElementById("customerFull"); }catch(_e2){ host = null; }
+      }
+      if(!host || !host.classList || !host.classList.contains("is-open")) return null;
+      return host;
+    },
+
     async _mcOpenJoinFormFromFile(rec, type){
       if(!rec || !safeTrim(type)) return;
+      this._mcBeginFileFormSession();
       this._mcFormEditorContext = "customerFile";
       this._mcFileFormCustomerId = safeTrim(rec.id);
-      this._mcEnsureFileFormModal();
+      const modal = this._mcEnsureFileFormModal();
+      if(!modal){
+        this._mcInvalidateFileFormSession();
+        this._mcFormEditorContext = "";
+        this._mcFileFormCustomerId = "";
+        this._mcToast("טופס", "לא ניתן לפתוח את העורך מחוץ לתיק הלקוח.", "warn");
+        return;
+      }
       const t = safeTrim(type);
       if(t.indexOf("followup:") === 0) await this._mcOpenFollowupFromRail(rec, t);
       else await this._mcOpenJoinFormFromRail(rec, t);
     },
 
     _mcEnsureFileFormModal(){
-      if(this._mcFileFormModal && this._mcFileFormModal.parentNode) return this._mcFileFormModal;
+      const host = this._mcFileFormHostEl();
+      if(!host){
+        this._mcCloseFileFormModal();
+        return null;
+      }
+      if(this._mcFileFormModal && this._mcFileFormModal.parentNode === host) return this._mcFileFormModal;
+      if(this._mcFileFormModal && this._mcFileFormModal.parentNode){
+        try{ host.appendChild(this._mcFileFormModal); }catch(_eMove){}
+        if(this._mcFileFormModal.parentNode === host) return this._mcFileFormModal;
+      }
+      this._mcCloseFileFormModal();
       const modal = document.createElement("div");
       modal.className = "giValModal mcFileFormModal is-open giValModal--visible";
       modal.setAttribute("role", "dialog");
@@ -74571,7 +74612,7 @@ ${inner}
         `<div class="giValModal__card mcFileFormModal__card">` +
           `<div data-mc-file-form-body></div>` +
         `</div>`;
-      document.body.appendChild(modal);
+      host.appendChild(modal);
       const closeEl = modal.querySelector("[data-mc-file-form-act='close']");
       if(closeEl){
         closeEl.addEventListener("click", () => { void this._mcSaveAndCloseFileFormEditor(); });
@@ -74600,8 +74641,10 @@ ${inner}
 
     _mcPaintFormEditor(rec){
       if(this._mcFormEditorContext === "customerFile"){
-        this._mcEnsureFileFormModal();
-        const body = this._mcFileFormModal.querySelector("[data-mc-file-form-body]");
+        if(!this._mcFileFormSessionLive) return;
+        const modal = this._mcEnsureFileFormModal();
+        if(!modal) return;
+        const body = modal.querySelector("[data-mc-file-form-body]");
         if(body) body.innerHTML = this._mcHealthFormEditorHtml(rec);
         this._mcBindFileFormModalActs();
         if(this._mcHealthEditor && !this._mcHealthEditor.loading){
@@ -74615,14 +74658,25 @@ ${inner}
     _mcCloseFileFormModal(){
       const modal = this._mcFileFormModal;
       this._mcFileFormModal = null;
-      if(modal && modal.parentNode){
-        try{ modal.parentNode.removeChild(modal); }catch(_e){}
-      }
+      const nodes = [];
+      if(modal) nodes.push(modal);
+      try{
+        document.querySelectorAll(".mcFileFormModal").forEach((el) => {
+          if(el && nodes.indexOf(el) < 0) nodes.push(el);
+        });
+      }catch(_eQ){}
+      nodes.forEach((el) => {
+        if(el && el.parentNode){
+          try{ el.parentNode.removeChild(el); }catch(_eR){}
+        }
+      });
     },
 
     _mcDismissFileFormEditorOnFileClose(){
+      this._mcInvalidateFileFormSession();
       if(this._mcFileFormSaving){
         this._mcCloseFileFormModal();
+        this._mcFormEditorContext = "";
         return;
       }
       if(!this._mcFileFormModal && this._mcFormEditorContext !== "customerFile") return;
@@ -74630,8 +74684,10 @@ ${inner}
     },
 
     async _mcSaveAndCloseFileFormEditor(){
+      this._mcInvalidateFileFormSession();
       if(this._mcFileFormSaving){
         this._mcCloseFileFormModal();
+        this._mcFormEditorContext = "";
         return;
       }
       this._mcFileFormSaving = true;
@@ -74686,6 +74742,8 @@ ${inner}
       if(String(type || "").indexOf("followup:") === 0){
         return this._mcOpenFollowupFromRail(rec, type);
       }
+      const fileGen = this._mcFormEditorContext === "customerFile" ? (this._mcFileFormSessionId || 0) : 0;
+      const abortIfFileFormStale = () => fileGen && fileGen !== this._mcFileFormSessionId;
       const ui = (typeof CustomerFileUI !== "undefined") ? CustomerFileUI : null;
       const spec = ui?.officialJoinFormPreviewSpec?.(type);
       if(!ui || !spec){
@@ -74700,7 +74758,9 @@ ${inner}
       this._mcPaintFormEditor(rec);
       try{
         if(typeof ensureGiWizardJsLoaded === "function") await ensureGiWizardJsLoaded();
+        if(abortIfFileFormStale()) return;
         if(typeof spec.ensure === "function") await spec.ensure();
+        if(abortIfFileFormStale()) return;
         const mod = window[spec.globalName];
         if(!mod?.fillOriginalTemplate || typeof mod.buildDraft !== "function"){
           throw new Error("לא ניתן לטעון את מודול הטופס.");
@@ -74712,15 +74772,19 @@ ${inner}
         let bytes = (hasPdf && mod.fillOriginalTemplate.length >= 2)
           ? await mod.fillOriginalTemplate(draft, overlay.pdf)
           : await mod.fillOriginalTemplate(draft);
+        if(abortIfFileFormStale()) return;
         if(hasPdf && mod.fillOriginalTemplate.length < 2) bytes = await this._mcApplyPdfOverlayToBytes(bytes, overlay.pdf);
+        if(abortIfFileFormStale()) return;
         let fields = [];
         let values = {};
         try{
           if(typeof GI_LOAD_LIBS !== "undefined" && GI_LOAD_LIBS.pdfLib) await GI_LOAD_LIBS.pdfLib();
+          if(abortIfFileFormStale()) return;
           const PDFLib = window.PDFLib;
           const helper = (typeof GI_OFFICIAL_FORM_FILL !== "undefined") ? GI_OFFICIAL_FORM_FILL : null;
           if(PDFLib?.PDFDocument && helper?.listEditablePdfFields){
             const pdfDoc = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
+            if(abortIfFileFormStale()) return;
             let form = null;
             try{ form = pdfDoc.getForm(); }catch(_e2){ form = null; }
             if(form){
@@ -74729,7 +74793,8 @@ ${inner}
               if(hasPdf) Object.assign(values, overlay.pdf);
             }
           }
-        }catch(_e3){}
+        }catch(_e3){ if(abortIfFileFormStale()) return; }
+        if(abortIfFileFormStale()) return;
         this._mcHealthEditor = {
           kind: "join",
           type,
@@ -74744,6 +74809,7 @@ ${inner}
         const fresh = this._getFreshCustomerRecord() || rec;
         this._mcPaintFormEditor(fresh);
       }catch(err){
+        if(abortIfFileFormStale()) return;
         this._mcHealthEditor = {
           kind: "join",
           type,
@@ -74757,6 +74823,8 @@ ${inner}
     },
 
     async _mcOpenFollowupFromRail(rec, type, opts){
+      const fileGen = this._mcFormEditorContext === "customerFile" ? (this._mcFileFormSessionId || 0) : 0;
+      const abortIfFileFormStale = () => fileGen && fileGen !== this._mcFileFormSessionId;
       const rail = this._mcCollectHealthFormRail(rec);
       let row = (rail.follow || []).find((f) => f.type === type);
       if(!row?.entry){
@@ -74785,6 +74853,7 @@ ${inner}
       try{
         if(typeof ensureGiWizardJsLoaded === "function") await ensureGiWizardJsLoaded();
       }catch(_e){}
+      if(abortIfFileFormStale()) return;
       const overlay = this._mcGetFormEdits(rec)[type] || {};
       const fields = this._mcFollowupEditorFields(row.entry, overlay);
       const title = this._mcFollowupEditorTitle(row.entry, row.name || "שאלון המשך");

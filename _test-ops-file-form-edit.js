@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260914-cf-form-modal-close-v1";
+const APP_TAG = "20260914-cf-form-in-file-v1";
 let failed = 0;
 let passed = 0;
 
@@ -68,6 +68,8 @@ assert(saveFn.indexOf("this._mcCloseFileFormModal()") < saveFn.indexOf("await th
 assert(saveFn.indexOf("this._mcCloseFileFormModal()") < saveFn.indexOf("App.persist"), "החלון יורד לפני persist");
 assert(app.includes("_mcDismissFileFormEditorOnFileClose"), "סגירת תיק מנתקת את עורך הטופס");
 assert(app.includes("void MirrorCallUI._mcDismissFileFormEditorOnFileClose()"), "close() של התיק קורא לניתוק העורך");
+assert(app.includes("host.appendChild(modal)"), "העורך נפתח בתוך תיק הלקוח");
+assert(app.includes("_mcInvalidateFileFormSession"), "סגירה מבטלת טעינת PDF פתוחה");
 
 console.log("\n4) עורך השיקוף נשאר");
 assert(app.includes("חזרה להצהרה"), "בשיחת שיקוף עדיין חוזרים להצהרה");
