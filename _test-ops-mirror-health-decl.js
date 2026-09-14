@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260914-mc-inline-form-v1";
+const APP_TAG = "20260914-mc-he-followup-v1";
 let failed = 0;
 let passed = 0;
 
@@ -61,6 +61,8 @@ assert(healthGroups.includes("return indexedInsureds"), "כן/לא לכל מבו
 assert(!healthGroups.includes("answered.has("), "אין סינון מבוטחים רק לפי תשובה שמורה");
 assert(healthGroups.includes('role + ": " + name'), "תווית מבוטח ראשי: שם");
 assert(app.includes("_mcHealthYesSummaryHtml(rec){"), "אזור תיעוד הצהרות כן");
+assert(app.includes('data-mc-health-yes="1"'), "כן בעורך טופס פותח שאלון המשך");
+assert(app.includes("_mcOnHealthChoiceInEditor(rec, el){"), "טיפול בלחיצת כן בעורך");
 assert(app.includes("הקראתי ללקוח והמשך"), "לחצן לאחר הקראה");
 assert(healthRender.includes("health-script-ack"), "אישור הקראה לפני הטפסים");
 assert(healthRender.includes("_mcHealthYesSummaryHtml(rec)"), "סיכום כן אחרי ההקראה");

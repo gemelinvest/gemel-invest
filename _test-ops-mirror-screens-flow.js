@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260914-mc-inline-form-v1";
+const APP_TAG = "20260914-mc-he-followup-v1";
 let failed = 0;
 let passed = 0;
 
@@ -90,6 +90,8 @@ assert(app.includes("טפסי הצעה") && app.includes("שאלוני המשך"
 assert(app.includes("_mcBindInlineFormEditorPersistence(rec, key){"), "עריכה נשמרת במסך מלא");
 assert(app.includes("payload.mirrorFlow.formEdits"), "overlay ב-mirrorFlow");
 assert(app.includes("_mcMaterializeEditedForms(rec){"), "הפקת טפסים מוכנים בסוף");
+assert(app.includes("health-followup-save"), "שמירת שאלון המשך מהמסך");
+assert(app.includes("_mcOnHealthChoiceInEditor(rec, el){"), "כן בעורך פותח שאלון");
 assert(app.includes("_mcCanonicalJoinDocId(type){"), "מזהה טופס קנוני בתיק");
 assert(!app.includes("doc_mirror_filled_"), "אין מסמך כפול משיחת שיקוף");
 assert(app.includes("mcFormEditor"), "טופס נפתח במסך השיקוף עצמו");
