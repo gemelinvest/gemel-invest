@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260914-remote-support-control-latency-v1";
+const TAG = "20260914-remote-support-single-share-v1";
 let failed = 0;
 let passed = 0;
 
@@ -117,6 +117,10 @@ assert(!js.includes("ideal: 12"), "does not cap capture at 12fps");
 assert(js.includes("requestAnimationFrame"), "coalesces pointer moves per frame");
 assert(js.includes("videoWidth"), "maps clicks through the letterboxed video frame");
 assert(js.includes("bufferedAmount"), "drops stale moves if the channel is backed up");
+assert(js.includes("capturePromise"), "single-flights tab capture so share is not requested twice");
+assert(js.includes("hasLiveCapture"), "ignores a second capture while a live share exists");
+assert(js.includes("startAdminOfferWait"), "admin retries need-offer until the live video arrives");
+assert(!js.includes("if(state.needOfferSent) return"), "admin is not stuck after a missed first offer");
 assert(js.includes("control_granted"), "control requires grant");
 assert(js.includes("input[type='password']"), "password fields blocked");
 assert(js.includes("cvv") && js.includes("cardNumber"), "payment fields blocked");

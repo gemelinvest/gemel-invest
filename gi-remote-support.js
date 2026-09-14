@@ -4,7 +4,7 @@
 (() => {
   "use strict";
 
-  const TAG = "20260914-remote-support-control-latency-v1";
+  const TAG = "20260914-remote-support-single-share-v1";
   const TOKEN_KEY = "GI_RS_ACTOR_TOKEN_V1";
   const SESSION_KEY = "GI_RS_SESSION_V1";
   const ADMIN_TOPIC = "gi-rs-admins";
@@ -40,7 +40,9 @@
     partyId: "",
     pendingIce: [],
     sigQueue: Promise.resolve(),
-    needOfferSent: false
+    capturePromise: null,
+    sigStarting: null,
+    offerWaitTimer: 0
   };
 
   function trim(v){
@@ -434,7 +436,7 @@
       openControlModal();
     }
     if(iAmAgent && LIVE_STATUSES.has(nextStatus) && nextStatus !== "pending_agent_approval"){
-      if(!state.localStream) void startAgentCapture();
+      if(!hasLiveCapture()) void startAgentCapture();
     }
     if(iAmAdmin && LIVE_STATUSES.has(nextStatus)){
       openModal("giRsAdminModal");
@@ -611,14 +613,24 @@
     const client = supabaseClient();
     const topic = sigTopic(state.session);
     if(!client?.channel || !topic) return;
-    if(state.sigChannel && state.sigChannel.topic === "realtime:" + topic) return;
-    stopSignaling();
-    const ch = client.channel(topic, { config: { broadcast: { self: false } } });
-    ch.on("broadcast", { event: "signal" }, (msg) => {
-      queueSignal(() => onSignal(msg?.payload || msg));
-    });
-    await ch.subscribe();
-    state.sigChannel = ch;
+    const names = [topic, "realtime:" + topic];
+    if(state.sigChannel && names.includes(state.sigChannel.topic)) return;
+    if(state.sigStarting) return state.sigStarting;
+    state.sigStarting = (async () => {
+      try {
+        if(state.sigChannel && names.includes(state.sigChannel.topic)) return;
+        stopSignaling();
+        const ch = client.channel(topic, { config: { broadcast: { self: false } } });
+        ch.on("broadcast", { event: "signal" }, (msg) => {
+          queueSignal(() => onSignal(msg?.payload || msg));
+        });
+        await ch.subscribe();
+        state.sigChannel = ch;
+      } finally {
+        state.sigStarting = null;
+      }
+    })();
+    return state.sigStarting;
   }
 
   function stopSignaling(){
@@ -662,7 +674,35 @@
     } catch(_e) {}
   }
 
+  function stopAdminOfferWait(){
+    if(state.offerWaitTimer){
+      try { clearTimeout(state.offerWaitTimer); } catch(_e) {}
+    }
+    state.offerWaitTimer = 0;
+  }
+
+  function startAdminOfferWait(){
+    stopAdminOfferWait();
+    let tries = 0;
+    const tick = () => {
+      state.offerWaitTimer = 0;
+      const pc = state.pc;
+      if(!pc || pc.remoteDescription) return;
+      if(!state.session || isTerminal(state.session) || !LIVE_STATUSES.has(state.session.status)) return;
+      if(tries++ >= 12) return;
+      void sendSignal({ kind: "need-offer" });
+      state.offerWaitTimer = setTimeout(tick, 800);
+    };
+    state.offerWaitTimer = setTimeout(tick, 400);
+  }
+
+  function hasLiveCapture(){
+    return !!(state.localStream && state.localStream.getVideoTracks().some((t) => t.readyState === "live"));
+  }
+
   function teardownRtc(reason){
+    stopAdminOfferWait();
+    state.capturePromise = null;
     if(state.moveRaf){
       try { cancelAnimationFrame(state.moveRaf); } catch(_e0) {}
     }
@@ -689,7 +729,6 @@
     if(video) video.srcObject = null;
     state.makingOffer = false;
     state.pendingIce = [];
-    state.needOfferSent = false;
     void reason;
   }
 
@@ -796,12 +835,24 @@
 
   async function startAgentCapture(){
     if(!isAgentParty(state.session)) return;
+    if(hasLiveCapture()) return;
+    if(state.capturePromise) return state.capturePromise;
     if(!navigator.mediaDevices?.getDisplayMedia){
       toast({ title: "לא ניתן לשתף מסך", text: "הדפדפן אינו תומך בשיתוף לשונית.", variant: "err" });
       return;
     }
+    state.capturePromise = runAgentCapture();
+    try {
+      await state.capturePromise;
+    } finally {
+      if(!hasLiveCapture()) state.capturePromise = null;
+    }
+  }
+
+  async function runAgentCapture(){
     try {
       await action("mark_connecting", state.session.id, {});
+      if(hasLiveCapture()) return;
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           frameRate: { ideal: 30, max: 30 },
@@ -814,6 +865,10 @@
         surfaceSwitching: "exclude",
         systemAudio: "exclude"
       });
+      if(hasLiveCapture() && state.localStream !== stream){
+        try { stream.getTracks().forEach((t) => t.stop()); } catch(_e0) {}
+        return;
+      }
       state.localStream = stream;
       const track = stream.getVideoTracks()[0];
       const surface = trim(track?.getSettings?.()?.displaySurface);
@@ -829,25 +884,32 @@
         void endSession("share-ended");
       });
       const pc = await ensurePeer(true);
-      stream.getTracks().forEach((t) => pc.addTrack(t, stream));
-      await tuneLocalCapture(pc, track);
-      state.makingOffer = true;
-      try {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        await sendSignal({ kind: "offer", sdp: pc.localDescription });
-      } finally {
-        state.makingOffer = false;
+      const hasSend = (pc.getSenders?.() || []).some((s) => s.track && s.track.readyState === "live");
+      if(!hasSend){
+        stream.getTracks().forEach((t) => pc.addTrack(t, stream));
+        await tuneLocalCapture(pc, track);
       }
+      if(pc.signalingState === "stable" || !pc.localDescription){
+        state.makingOffer = true;
+        try {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+        } finally {
+          state.makingOffer = false;
+        }
+      }
+      if(pc.localDescription) await sendSignal({ kind: "offer", sdp: pc.localDescription });
       const connected = await action("mark_connected", state.session.id, {});
       if(connected?.session) applySession(connected.session);
       await broadcastStatus();
     } catch(err){
+      if(hasLiveCapture()) return;
       const name = String(err?.name || err?.message || err);
-      if(/notallowed|permission|denied/i.test(name)){
+      if(/notallowed|permission|denied|abort/i.test(name)){
         toast({ title: "שיתוף הלשונית בוטל", text: "החיבור לא יתחיל בלי שיתוף לשונית ה-CRM.", variant: "warn" });
         return;
       }
+      if(/invalidstate|wrong state|stable|have-local-offer/i.test(name)) return;
       toast({ title: "שיתוף הלשונית נכשל", text: name, variant: "err" });
       void failSession("capture-failed");
     }
@@ -858,10 +920,12 @@
     if(isAgentParty(state.session)) return;
     const pc = await ensurePeer(false);
     await startSignaling();
-    if(pc.remoteDescription || pc.signalingState !== "stable") return;
-    if(state.needOfferSent) return;
-    state.needOfferSent = true;
+    if(pc.remoteDescription){
+      stopAdminOfferWait();
+      return;
+    }
     await sendSignal({ kind: "need-offer" });
+    startAdminOfferWait();
   }
 
   async function onSignal(payload){
@@ -876,6 +940,7 @@
         if(offerCollision && asAgent) return;
         await pc.setRemoteDescription(msg.sdp);
         await flushIce(pc);
+        stopAdminOfferWait();
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         await sendSignal({ kind: "answer", sdp: pc.localDescription });
@@ -902,7 +967,7 @@
       }
     } catch(err){
       const text = String(err?.message || err);
-      if(/wrong state|InvalidStateError|stable|have-local-offer/i.test(text)) return;
+      if(/wrong state|InvalidStateError|stable|have-local-offer|setLocalDescription|setRemoteDescription/i.test(text)) return;
       toast({ title: "שגיאת חיבור", text, variant: "err" });
     }
   }
@@ -1369,7 +1434,9 @@
       }
     });
     document.addEventListener("visibilitychange", () => {
-      if(document.visibilityState === "visible") void refreshFromServer();
+      if(document.visibilityState !== "visible") return;
+      if(state.capturePromise && !hasLiveCapture()) return;
+      void refreshFromServer();
     });
   }
 
