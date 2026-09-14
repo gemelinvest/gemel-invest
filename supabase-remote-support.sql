@@ -287,10 +287,14 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = public
+set row_security = off
 as $fn$
 declare
   tok public.gi_remote_support_actor_tokens%rowtype;
-  ag public.agents%rowtype;
+  ag_id text;
+  ag_name text;
+  ag_role text;
+  ag_active boolean;
   hash text;
 begin
   if trim(both from coalesce(p_token, '')) = '' then
@@ -310,23 +314,24 @@ begin
   if tok.expires_at < now() then
     return jsonb_build_object('ok', false, 'error', 'TOKEN_EXPIRED');
   end if;
-  select a.* into ag
+  select a.id, a.name, a.role, coalesce(a.active, true)
+    into ag_id, ag_name, ag_role, ag_active
   from public.agents a
-  where a.id = tok.agent_user_id
+  where trim(both from a.id) = trim(both from tok.agent_user_id)
   limit 1;
-  if ag.id is null then
+  if ag_id is null then
     return jsonb_build_object('ok', false, 'error', 'AGENT_NOT_FOUND');
   end if;
-  if coalesce(ag.active, true) is not true then
+  if ag_active is not true then
     return jsonb_build_object('ok', false, 'error', 'AGENT_INACTIVE');
   end if;
   return jsonb_build_object(
     'ok', true,
     'tokenId', tok.id,
     'agentUserId', tok.agent_user_id,
-    'agentName', coalesce(ag.name, ''),
-    'role', coalesce(ag.role, 'agent'),
-    'isSupportAdmin', public.gi_rs_role_is_support_admin(ag.role, ag.name)
+    'agentName', coalesce(ag_name, ''),
+    'role', coalesce(ag_role, 'agent'),
+    'isSupportAdmin', public.gi_rs_role_is_support_admin(ag_role, ag_name)
   );
 end;
 $fn$;
@@ -340,6 +345,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = public
+set row_security = off
 as $fn$
 declare
   ag public.agents%rowtype;
@@ -468,6 +474,7 @@ create or replace function public.gi_rs_action(
 language plpgsql
 security definer
 set search_path = public
+set row_security = off
 as $fn$
 declare
   actor jsonb;
@@ -501,7 +508,13 @@ begin
       where x.agent_user_id = actor_id
         and not public.gi_rs_terminal(x.status)
     ) then
-      return jsonb_build_object('ok', false, 'error', 'SESSION_ALREADY_ACTIVE');
+      select x.* into s
+      from public.gi_remote_support_sessions x
+      where x.agent_user_id = actor_id
+        and not public.gi_rs_terminal(x.status)
+      order by x.requested_at desc
+      limit 1;
+      return jsonb_build_object('ok', true, 'session', public.gi_rs_session_json(s, true), 'existing', true);
     end if;
     insert into public.gi_remote_support_sessions (
       agent_user_id, agent_name, problem_text, status,
@@ -795,5 +808,10 @@ grant execute on function public.gi_rs_list(text) to anon, authenticated;
 
 revoke all on function public.gi_rs_action(text, text, uuid, jsonb) from public;
 grant execute on function public.gi_rs_action(text, text, uuid, jsonb) to anon, authenticated;
+
+alter function public.gi_rs_mint_actor_token(text, text) set row_security = off;
+alter function public.gi_rs_lookup_actor(text) set row_security = off;
+alter function public.gi_rs_action(text, text, uuid, jsonb) set row_security = off;
+alter function public.gi_rs_list(text) set row_security = off;
 
 notify pgrst, 'reload schema';

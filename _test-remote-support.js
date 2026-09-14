@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260914-remote-support-simple-v1";
+const TAG = "20260914-remote-support-simple-v2";
 let failed = 0;
 let passed = 0;
 
@@ -71,6 +71,8 @@ assert(sql.includes("Session ended"), "audit: ended");
 assert(sql.includes("security definer"), "security definer RPCs");
 assert(sql.includes("gi_rs_mint_actor_token"), "mint token rpc");
 assert(sql.includes("-- PIN is optional"), "mint does not require PIN");
+assert(sql.includes("set row_security = off"), "RPCs bypass caller RLS");
+assert(sql.includes("'existing', true"), "repeat send returns the active session");
 assert(!sql.includes("using (true)"), "no USING(true) open policy");
 
 console.log("\n4) realtime isolation — no CRM rehydrate");
@@ -93,7 +95,8 @@ assert(js.includes("isAgentParty"), "matches the agent session by id or name");
 assert(!js.includes("getMailSessionPin"), "does not ask for or read a session PIN");
 assert(!js.includes("giRsRequestPin"), "request flow has no PIN field");
 assert(!js.includes("giRsAdminPin"), "admin inbox has no PIN field");
-assert(js.includes('p_pin: ""'), "mints an actor token without requiring a PIN");
+assert(js.includes("Array.isArray"), "unwraps PostgREST array RPC payloads");
+assert(!js.includes("p_session_id: sessionId || null"), "does not send a null session id");
 
 console.log("\n5) live view + control are real, not fake");
 assert(js.includes("getDisplayMedia"), "tab capture via getDisplayMedia");
@@ -110,7 +113,8 @@ assert(!css.includes(".topbar{") && !css.includes(".sidebar{"), "no global shell
 
 console.log("\n6) agent/admin UI copy");
 assert(html.includes("בקשת תמיכה מרחוק"), "request modal title");
-assert(html.includes("שלח בקשה למנהל המערכת"), "request copy — send only");
+assert(!html.includes("שלח בקשה למנהל המערכת"), "no request explanation copy");
+assert(!html.includes("אין צורך לתאר את התקלה"), "no PIN/problem explanation");
 assert(!html.includes("id=\"giRsProblemText\""), "no problem description textarea");
 assert(!html.includes("id=\"giRsRequestPin\""), "no request PIN input");
 assert(!html.includes("id=\"giRsAdminPin\""), "no admin PIN input");
