@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260914-remote-support-webrtc-v1";
+const TAG = "20260914-remote-support-admin-fs-v1";
 let failed = 0;
 let passed = 0;
 
@@ -132,6 +132,10 @@ assert(html.includes("סיים תמיכה"), "agent end");
 assert(html.includes("שלח בקשת התחברות"), "admin connect");
 assert(html.includes("בקש שליטה"), "admin request control");
 assert(html.includes("id=\"giRsAdminVideo\""), "admin live video");
+assert(js.includes("giRsAdminModal--live"), "toggles fullscreen live class");
+assert(css.includes("giRsAdminModal--live"), "fullscreen live CSS");
+assert(css.includes("aspect-ratio: auto"), "live video uses remaining viewport, not 16/10 letterbox");
+assert(css.includes("#giRsAdminModal.giRsAdminModal--live #giRsInbox"), "inbox hidden during live view");
 assert(js.includes("🟠 ממתין לתמיכה"), "waiting menu label");
 
 if(failed){

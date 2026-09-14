@@ -4,7 +4,7 @@
 (() => {
   "use strict";
 
-  const TAG = "20260914-remote-support-webrtc-v1";
+  const TAG = "20260914-remote-support-admin-fs-v1";
   const TOKEN_KEY = "GI_RS_ACTOR_TOKEN_V1";
   const SESSION_KEY = "GI_RS_SESSION_V1";
   const ADMIN_TOPIC = "gi-rs-admins";
@@ -512,6 +512,7 @@
     }
     const showLive = selected && LIVE_STATUSES.has(selected.status);
     live?.classList.toggle("is-visible", !!showLive);
+    $("giRsAdminModal")?.classList.toggle("giRsAdminModal--live", !!showLive);
     if(hint){
       hint.textContent = selected
         ? (selected.status === "control_granted"
@@ -1218,7 +1219,10 @@
     $("giRsAdminRequestControl")?.addEventListener("click", () => { void requestControl(); });
     $("giRsAdminHangup")?.addEventListener("click", () => { void endSession("admin-hangup"); });
     $("giRsAdminClose")?.addEventListener("click", () => closeModal("giRsAdminModal"));
-    $("giRsAdminBackdrop")?.addEventListener("click", () => closeModal("giRsAdminModal"));
+    $("giRsAdminBackdrop")?.addEventListener("click", () => {
+      if($("giRsAdminModal")?.classList.contains("giRsAdminModal--live")) return;
+      closeModal("giRsAdminModal");
+    });
     $("giRsBannerStopControl")?.addEventListener("click", () => { void revokeControl(); });
     $("giRsBannerEnd")?.addEventListener("click", () => { void endSession("agent-end"); });
     $("giRsInboxList")?.addEventListener("click", (ev) => {
