@@ -4,7 +4,7 @@
 (() => {
   "use strict";
 
-  const TAG = "20260914-remote-support-auth-v1";
+  const TAG = "20260914-remote-support-simple-v1";
   const TOKEN_KEY = "GI_RS_ACTOR_TOKEN_V1";
   const SESSION_KEY = "GI_RS_SESSION_V1";
   const ADMIN_TOPIC = "gi-rs-admins";
@@ -19,6 +19,8 @@
   const state = {
     token: "",
     tokenExpiresAt: 0,
+    agentUserId: "",
+    agentName: "",
     isSupportAdmin: false,
     session: null,
     inbox: [],
@@ -52,34 +54,102 @@
     }
   }
 
+  function roleFromHebrew(roleHe){
+    const label = trim(roleHe);
+    if(label === "מפתח המערכת") return "owner";
+    if(label === "מנהל מערכת") return "admin";
+    if(label === "מנהל") return "manager";
+    if(label === "מנהל צוות") return "teamManager";
+    if(label === "מנהל תפעול") return "ops";
+    if(label === "נציג תפעול") return "opsAgent";
+    if(label === "אלמנטרי") return "elementary";
+    if(label === "סוקרת") return "referent";
+    return "agent";
+  }
+
+  function agentFromPill(){
+    const name = trim(document.querySelector("#lcUserPillText .lcUserPill__name, .lcUserPill__name")?.textContent);
+    const roleHe = trim(document.querySelector("#lcUserPillText .lcUserPill__role, .lcUserPill__role")?.textContent);
+    if(!name && !roleHe) return null;
+    return { id: "", name: name || "", role: roleFromHebrew(roleHe), username: "" };
+  }
+
+  function agentFromLastSessionKey(){
+    try {
+      const raw = trim(localStorage.getItem("GI_LAST_SESSION_USER_V1"));
+      if(!raw || raw.indexOf("full:") !== 0) return null;
+      const rest = raw.slice(5);
+      const colon = rest.indexOf(":");
+      if(colon < 0) return null;
+      const role = trim(rest.slice(0, colon)) || "agent";
+      const idOrName = trim(rest.slice(colon + 1));
+      if(!idOrName) return null;
+      return { id: idOrName, name: idOrName, role, username: "" };
+    } catch(_e){
+      return null;
+    }
+  }
+
+  function enrichAgent(partial){
+    if(!partial) return null;
+    try {
+      const rec = faceBridge()?.findLoginAgent?.(partial.id, partial.name || partial.username);
+      if(rec && (trim(rec.id) || trim(rec.name))){
+        return {
+          id: trim(rec.id) || trim(partial.id),
+          name: trim(rec.name) || trim(partial.name),
+          role: trim(rec.role) || trim(partial.role) || "agent",
+          username: trim(rec.username) || trim(partial.username)
+        };
+      }
+    } catch(_e) {}
+    if(!trim(partial.id) && !trim(partial.name) && !trim(partial.username)) return null;
+    return {
+      id: trim(partial.id),
+      name: trim(partial.name),
+      role: trim(partial.role) || "agent",
+      username: trim(partial.username)
+    };
+  }
+
   function currentUser(){
     try {
-      const fromBridge = faceBridge()?.getCurrentAgent?.();
+      const fromBridge = enrichAgent(faceBridge()?.getCurrentAgent?.());
       if(fromBridge && (trim(fromBridge.id) || trim(fromBridge.name))) return fromBridge;
     } catch(_e) {}
     try {
       const a = window.Auth;
-      if(a && a.current) return a.current;
+      if(a && a.current){
+        const fromAuth = enrichAgent(a.current);
+        if(fromAuth && (trim(fromAuth.id) || trim(fromAuth.name))) return fromAuth;
+      }
     } catch(_e2) {}
+    const fromPill = enrichAgent(agentFromPill());
+    if(fromPill && (trim(fromPill.id) || trim(fromPill.name))) return fromPill;
+    const fromKey = enrichAgent(agentFromLastSessionKey());
+    if(fromKey && (trim(fromKey.id) || trim(fromKey.name))) return fromKey;
     return null;
   }
 
   function currentUserId(){
+    if(trim(state.agentUserId)) return trim(state.agentUserId);
     const user = currentUser();
     return trim(user?.id);
   }
 
   function currentUserName(){
+    if(trim(state.agentName)) return trim(state.agentName);
     const user = currentUser();
     return trim(user?.name || user?.username);
   }
 
-  function sessionPin(){
-    try {
-      const fromBridge = trim(faceBridge()?.getMailSessionPin?.());
-      if(fromBridge) return fromBridge;
-    } catch(_e) {}
-    try { return trim(window.Auth?._sessionPin); } catch(_e2) { return ""; }
+  function isAgentParty(session){
+    if(!session) return false;
+    const id = currentUserId();
+    if(id && trim(session.agentUserId) === id) return true;
+    const name = currentUserName();
+    if(name && trim(session.agentName) === name) return true;
+    return false;
   }
 
   function isSupportAdminClient(){
@@ -166,6 +236,7 @@
     try {
       sessionStorage.setItem(TOKEN_KEY, JSON.stringify({
         agentId: currentUserId(),
+        agentName: currentUserName(),
         token: state.token,
         expiresAt: state.tokenExpiresAt,
         isSupportAdmin: state.isSupportAdmin
@@ -176,11 +247,17 @@
   function restoreToken(){
     try {
       const raw = JSON.parse(sessionStorage.getItem(TOKEN_KEY) || "null");
-      if(!raw || trim(raw.agentId) !== currentUserId()) return;
+      if(!raw || !trim(raw.token)) return;
       if(Number(raw.expiresAt || 0) < Date.now()) return;
+      const myId = currentUserId();
+      const myName = currentUserName();
+      if(trim(raw.agentId) && myId && trim(raw.agentId) !== myId) return;
+      if(trim(raw.agentName) && myName && trim(raw.agentName) !== myName) return;
       state.token = trim(raw.token);
       state.tokenExpiresAt = Number(raw.expiresAt || 0);
       state.isSupportAdmin = !!raw.isSupportAdmin;
+      if(trim(raw.agentId)) state.agentUserId = trim(raw.agentId);
+      if(trim(raw.agentName)) state.agentName = trim(raw.agentName);
     } catch(_e) {}
   }
 
@@ -192,6 +269,7 @@
       }
       sessionStorage.setItem(SESSION_KEY, JSON.stringify({
         agentId: currentUserId(),
+        agentName: currentUserName(),
         sessionId: state.session.id
       }));
     } catch(_e) {}
@@ -200,15 +278,15 @@
   function restoreSessionId(){
     try {
       const raw = JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null");
-      if(!raw || trim(raw.agentId) !== currentUserId()) return "";
+      if(!raw) return "";
+      const myId = currentUserId();
+      const myName = currentUserName();
+      if(trim(raw.agentId) && myId && trim(raw.agentId) !== myId) return "";
+      if(trim(raw.agentName) && myName && trim(raw.agentName) !== myName) return "";
       return trim(raw.sessionId);
     } catch(_e){
       return "";
     }
-  }
-
-  function pinFromUi(id){
-    return trim($(id)?.value);
   }
 
   async function rpc(name, args){
@@ -224,31 +302,34 @@
     }
   }
 
-  async function ensureToken(pinOverride){
+  function rememberMint(res){
+    state.token = trim(res?.token);
+    state.isSupportAdmin = !!res?.isSupportAdmin;
+    state.tokenExpiresAt = Date.parse(res?.expiresAt) || (Date.now() + 12 * 60 * 60 * 1000);
+    if(trim(res?.agentUserId)) state.agentUserId = trim(res.agentUserId);
+    if(trim(res?.agentName)) state.agentName = trim(res.agentName);
+    persistToken();
+  }
+
+  async function ensureToken(){
     if(state.token && state.tokenExpiresAt > Date.now() + 15000) return { ok: true, token: state.token };
     restoreToken();
     if(state.token && state.tokenExpiresAt > Date.now() + 15000) return { ok: true, token: state.token };
     const user = currentUser();
-    const keys = [user?.id, user?.username, user?.name].map(trim).filter(Boolean);
+    const keys = [user?.id, user?.username, user?.name, currentUserName()].map(trim).filter(Boolean);
     const uniqueKeys = Array.from(new Set(keys));
     if(!uniqueKeys.length) return { ok: false, error: "NOT_LOGGED_IN" };
-    const pin = trim(pinOverride) || sessionPin();
-    if(!pin) return { ok: false, error: "MISSING_CREDENTIALS" };
     let last = { ok: false, error: "MINT_FAILED" };
     for(const key of uniqueKeys){
       const res = await rpc("gi_rs_mint_actor_token", {
         p_agent_id: key,
-        p_pin: pin
+        p_pin: ""
       });
       if(res?.ok && res.token){
-        state.token = res.token;
-        state.isSupportAdmin = !!res.isSupportAdmin;
-        state.tokenExpiresAt = Date.parse(res.expiresAt) || (Date.now() + 12 * 60 * 60 * 1000);
-        persistToken();
+        rememberMint(res);
         return { ok: true, token: state.token };
       }
       last = res && typeof res === "object" ? res : last;
-      if(trim(res?.error) === "BAD_PIN") break;
     }
     return { ok: false, error: last.error || "MINT_FAILED" };
   }
@@ -301,8 +382,8 @@
       }
       return;
     }
-    const iAmAgent = trim(next.agentUserId) === currentUserId();
-    const iAmAdmin = trim(next.adminUserId) === currentUserId() || (state.isSupportAdmin && !iAmAgent);
+    const iAmAgent = isAgentParty(next);
+    const iAmAdmin = (!iAmAgent && state.isSupportAdmin) || (trim(next.adminUserId) === currentUserId() && !!currentUserId());
 
     if(iAmAgent && nextStatus === "pending_agent_approval" && prevStatus !== "pending_agent_approval"){
       openApproveModal();
@@ -344,7 +425,7 @@
     const banner = $("giRsBanner");
     if(!banner) return;
     const session = state.session;
-    const iAmAgent = trim(session?.agentUserId) === currentUserId();
+    const iAmAgent = isAgentParty(session);
     const live = session && iAmAgent && LIVE_STATUSES.has(session.status);
     banner.hidden = !live;
     banner.classList.toggle("is-visible", !!live);
@@ -383,11 +464,9 @@
         if(empty) empty.hidden = true;
         list.innerHTML = rows.map((row) => {
           const active = selected && row.id === selected.id ? " is-active" : "";
-          const problem = escapeHtml(trim(row.problemText) || "ללא תיאור");
           return `<button class="giRsInbox__item${active}" type="button" data-rs-id="${escapeHtml(row.id)}">
             <span class="giRsInbox__name">${escapeHtml(row.agentName || "נציג")}</span>
             <span class="giRsInbox__meta">${escapeHtml(statusLabel(row.status))}</span>
-            <span class="giRsInbox__problem">${problem}</span>
           </button>`;
         }).join("");
       }
@@ -567,7 +646,7 @@
       let msg = null;
       try { msg = JSON.parse(ev.data); } catch(_e) { return; }
       if(!msg || typeof msg !== "object") return;
-      if(trim(state.session?.agentUserId) !== currentUserId()) return;
+      if(!isAgentParty(state.session)) return;
       if(state.session?.status !== "control_granted" || !state.session?.controlPermission) return;
       applyRemoteControl(msg);
     };
@@ -584,7 +663,7 @@
   }
 
   async function startAgentCapture(){
-    if(trim(state.session?.agentUserId) !== currentUserId()) return;
+    if(!isAgentParty(state.session)) return;
     if(!navigator.mediaDevices?.getDisplayMedia){
       toast({ title: "לא ניתן לשתף מסך", text: "הדפדפן אינו תומך בשיתוף לשונית.", variant: "err" });
       return;
@@ -637,8 +716,8 @@
   }
 
   async function ensureAdminPeer(){
-    if(trim(state.session?.adminUserId) !== currentUserId() && !state.isSupportAdmin) return;
-    if(trim(state.session?.agentUserId) === currentUserId()) return;
+    if(!state.isSupportAdmin && trim(state.session?.adminUserId) !== currentUserId()) return;
+    if(isAgentParty(state.session)) return;
     await ensurePeer(false);
     await startSignaling();
     await sendSignal({ kind: "need-offer" });
@@ -646,8 +725,8 @@
 
   async function onSignal(payload){
     const msg = payload && typeof payload === "object" ? payload : {};
-    if(trim(msg.from) === currentUserId()) return;
-    const pc = await ensurePeer(trim(state.session?.agentUserId) === currentUserId());
+    if(currentUserId() && trim(msg.from) === currentUserId()) return;
+    const pc = await ensurePeer(isAgentParty(state.session));
     try {
       if(msg.kind === "offer" && msg.sdp){
         await pc.setRemoteDescription(msg.sdp);
@@ -813,10 +892,9 @@
     const body = payload && typeof payload === "object" ? payload : {};
     await refreshFromServer();
     const name = trim(body.agentName) || "נציג";
-    const problem = trim(body.problemText) || "ללא תיאור";
     toast({
       title: "בקשת תמיכה חדשה",
-      text: `נציג: ${name}\nתיאור הבעיה:\n${problem}`,
+      text: `${name} מבקש תמיכה מרחוק`,
       variant: "warn",
       durationMs: 14000,
       singletonKey: "gi-rs-request-" + trim(body.id),
@@ -839,46 +917,35 @@
     renderAdminModal(true);
   }
 
-  function needPinField(fieldId){
-    const field = $(fieldId);
-    if(!field) return false;
-    const missing = !sessionPin() && !state.token;
-    field.hidden = !missing;
-    return missing;
-  }
-
   async function submitRequest(){
     setError("giRsRequestError", "");
-    const pinNeeded = needPinField("giRsRequestPinField");
-    const pin = pinFromUi("giRsRequestPin");
-    const minted = await ensureToken(pinNeeded ? pin : "");
+    const minted = await ensureToken();
     if(!minted.ok){
       const code = trim(minted.error);
       setError("giRsRequestError",
-        code === "MISSING_CREDENTIALS" ? "יש להזין קוד כניסה כדי לאמת את הבקשה."
-        : code === "BAD_PIN" ? "קוד הכניסה שגוי."
-        : code === "NOT_LOGGED_IN" ? "לא זוהה משתמש מחובר. רענן את הדף והיכנס שוב."
+        code === "NOT_LOGGED_IN" ? "לא זוהה משתמש מחובר. רענן את הדף והיכנס שוב."
         : code === "AGENT_NOT_FOUND" ? "המשתמש המחובר לא נמצא בשרת התמיכה."
-        : "לא ניתן לאמת מול השרת. נסה שוב או רענן את הדף.");
+        : code === "ADMIN_CANNOT_REQUEST" ? "מנהל מערכת רואה את תיבת הבקשות, ולא שולח בקשת תמיכה."
+        : "לא ניתן לשלוח את הבקשה. נסה שוב או רענן את הדף.");
       return;
     }
-    const problem = trim($("giRsProblemText")?.value);
-    const res = await action("request_support", null, { problemText: problem });
+    const res = await action("request_support", null, { problemText: "" });
     if(!res?.ok){
       setError("giRsRequestError", res?.error === "SESSION_ALREADY_ACTIVE"
         ? "כבר יש בקשת תמיכה פעילה."
+        : res?.error === "ADMIN_CANNOT_REQUEST"
+          ? "מנהל מערכת רואה את תיבת הבקשות, ולא שולח בקשת תמיכה."
         : "שליחת הבקשה נכשלה.");
       return;
     }
     applySession(res.session);
     await broadcastAdmin("support_requested", {
       id: res.session.id,
-      agentName: currentUserName(),
-      problemText: problem
+      agentName: currentUserName()
     });
     await broadcastStatus();
     closeModal("giRsRequestModal");
-    toast({ title: "בקשת התמיכה נשלחה", variant: "ok" });
+    toast({ title: "בקשת התמיכה נשלחה", text: "כשהמנהל יבקש להתחבר תופיע אצלך בקשת אישור.", variant: "ok" });
   }
 
   async function requestConnect(){
@@ -986,9 +1053,7 @@
   }
 
   function openRequestModal(){
-    needPinField("giRsRequestPinField");
     setError("giRsRequestError", "");
-    if($("giRsProblemText")) $("giRsProblemText").value = "";
     openModal("giRsRequestModal");
   }
 
@@ -1008,17 +1073,15 @@
     closeUserMenu();
     const admin = state.isSupportAdmin || isSupportAdminClient();
     if(admin){
-      const pinNeeded = !sessionPin() && !state.token;
-      if(pinNeeded){
-        needPinField("giRsAdminPinField");
-      }
-      const minted = await ensureToken(pinFromUi("giRsAdminPin"));
-      if(!minted.ok && minted.error === "MISSING_CREDENTIALS"){
+      const minted = await ensureToken();
+      if(!minted.ok){
         openModal("giRsAdminModal");
-        needPinField("giRsAdminPinField");
-        setError("giRsAdminError", "הזן קוד כניסה כדי לראות בקשות תמיכה.");
+        setError("giRsAdminError", minted.error === "NOT_LOGGED_IN"
+          ? "לא זוהה משתמש מחובר. רענן את הדף והיכנס שוב."
+          : "לא ניתן לטעון בקשות תמיכה. נסה שוב.");
         return;
       }
+      setError("giRsAdminError", "");
       await refreshFromServer();
       renderAdminModal(true);
       return;
@@ -1086,18 +1149,15 @@
     state.isSupportAdmin = isSupportAdminClient() || state.isSupportAdmin;
     bindUi();
     renderMenuLabel();
-    const pin = sessionPin();
-    if(pin || state.token){
-      const minted = await ensureToken(pin);
-      if(minted.ok){
-        const listed = await listSessions();
-        if(listed?.ok){
-          state.isSupportAdmin = !!listed.isSupportAdmin || isSupportAdminClient();
-          state.inbox = Array.isArray(listed.inbox) ? listed.inbox : [];
-          applySession(listed.mine || null);
-        }
-        if(state.isSupportAdmin) await startAdminInboxChannel();
+    const minted = await ensureToken();
+    if(minted.ok){
+      const listed = await listSessions();
+      if(listed?.ok){
+        state.isSupportAdmin = !!listed.isSupportAdmin || isSupportAdminClient();
+        state.inbox = Array.isArray(listed.inbox) ? listed.inbox : [];
+        applySession(listed.mine || null);
       }
+      if(state.isSupportAdmin) await startAdminInboxChannel();
     } else {
       const restoredId = restoreSessionId();
       if(restoredId) persistSessionId();
@@ -1116,6 +1176,8 @@
     teardownRtc("logout");
     state.token = "";
     state.tokenExpiresAt = 0;
+    state.agentUserId = "";
+    state.agentName = "";
     state.session = null;
     state.inbox = [];
     try { sessionStorage.removeItem(TOKEN_KEY); } catch(_e) {}
