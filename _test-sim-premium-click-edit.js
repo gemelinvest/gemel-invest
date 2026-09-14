@@ -12,7 +12,7 @@ const assert = require('assert');
 const { spawnSync } = require('child_process');
 
 const ROOT = __dirname;
-const CACHE_TAG = '20260914-ils-km-shorthand-v1';
+const CACHE_TAG = '20260914-cf-doc-preview-v1';
 
 function read(rel) {
   return fs.readFileSync(path.join(ROOT, rel), 'utf8');

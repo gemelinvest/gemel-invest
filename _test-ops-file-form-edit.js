@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260914-ils-km-shorthand-v1";
+const APP_TAG = "20260914-cf-doc-preview-v1";
 let failed = 0;
 let passed = 0;
 
@@ -45,12 +45,15 @@ assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
 assert(html.includes("app.css?v=" + APP_TAG), "index.html app.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
 
-console.log("\n2) לחיצה בתיק הלקוח פותחת עורך אמיתי");
+console.log("\n2) לחיצה בתיק הלקוח — כפתור ערוך פותח עורך, השורה מציגה את הטופס");
 assert(app.includes("async openOriginalFormForEdit(rec, type){"), "openOriginalFormForEdit קיים");
 assert(app.includes("async _mcOpenJoinFormFromFile(rec, type){"), "פתיחה מתיק הלקוח");
 assert(app.includes('data-edit-original-form="${escapeHtml(docType)}"'), "כפתור ערוך טופס בקבצים");
 assert(app.includes(">ערוך טופס</button>"), "תווית ערוך טופס");
-assert(app.includes("void this.openOriginalFormForEdit(rec, joinType)"), "לחיצה על שורת טופס רשמי פותחת עורך");
+assert(app.includes("void this.openOriginalFormForEdit(rec, editOriginal.getAttribute(\"data-edit-original-form\"))"), "כפתור ערוך טופס פותח עורך");
+const previewClick = sliceBetween(app, 'const previewRow = ev.target?.closest?.("[data-cf-doc-preview]");', 'const backBtn = ev.target?.closest?.("#customerMedicalBackBtn");');
+assert(previewClick.includes("showCustomerDocumentPreview(docId)"), "לחיצה על שורת מסמך מציגה תצוגה מקדימה");
+assert(!previewClick.includes("openOriginalFormForEdit"), "לחיצה על שורת מסמך לא פותחת עורך");
 assert(app.includes("_mcFormEditorContext = \"customerFile\""), "הקשר עורך מתיק לקוח");
 assert(app.includes("_mcHealthFormEditorHtml(rec)"), "משתמש בעורך הטופס הרשמי של השיקוף");
 assert(app.includes("listEditablePdfFields"), "עורך נשען על שדות ה-PDF האמיתיים");
