@@ -4,7 +4,7 @@
 (() => {
   "use strict";
 
-  const TAG = "20260914-remote-support-agent-request-v1";
+  const TAG = "20260914-remote-support-webrtc-v1";
   const TOKEN_KEY = "GI_RS_ACTOR_TOKEN_V1";
   const SESSION_KEY = "GI_RS_SESSION_V1";
   const ADMIN_TOPIC = "gi-rs-admins";
@@ -33,7 +33,11 @@
     makingOffer: false,
     isAgentParty: false,
     lastPointerSent: 0,
-    bound: false
+    bound: false,
+    partyId: "",
+    pendingIce: [],
+    sigQueue: Promise.resolve(),
+    needOfferSent: false
   };
 
   function trim(v){
@@ -607,7 +611,7 @@
     stopSignaling();
     const ch = client.channel(topic, { config: { broadcast: { self: false } } });
     ch.on("broadcast", { event: "signal" }, (msg) => {
-      void onSignal(msg?.payload || msg);
+      queueSignal(() => onSignal(msg?.payload || msg));
     });
     await ch.subscribe();
     state.sigChannel = ch;
@@ -618,13 +622,38 @@
     state.sigChannel = null;
   }
 
+  function signalingPartyId(){
+    if(trim(state.partyId)) return trim(state.partyId);
+    const id = currentUserId() || ("p-" + Math.random().toString(36).slice(2, 10));
+    state.partyId = id;
+    return id;
+  }
+
+  function queueSignal(fn){
+    state.sigQueue = Promise.resolve(state.sigQueue).then(fn).catch(() => {});
+    return state.sigQueue;
+  }
+
+  function sdpKey(desc){
+    if(!desc) return "";
+    if(typeof desc === "string") return desc;
+    return trim(desc.type) + "\n" + trim(desc.sdp);
+  }
+
+  async function flushIce(pc){
+    const queued = state.pendingIce.splice(0, state.pendingIce.length);
+    for(const candidate of queued){
+      try { await pc.addIceCandidate(candidate); } catch(_e) {}
+    }
+  }
+
   async function sendSignal(payload){
     if(!state.sigChannel) await startSignaling();
     try {
       await state.sigChannel?.send?.({
         type: "broadcast",
         event: "signal",
-        payload: { ...payload, from: currentUserId() }
+        payload: { ...payload, from: signalingPartyId() }
       });
     } catch(_e) {}
   }
@@ -645,6 +674,9 @@
     }
     const video = $("giRsAdminVideo");
     if(video) video.srcObject = null;
+    state.makingOffer = false;
+    state.pendingIce = [];
+    state.needOfferSent = false;
     void reason;
   }
 
@@ -733,9 +765,14 @@
       });
       const pc = await ensurePeer(true);
       stream.getTracks().forEach((t) => pc.addTrack(t, stream));
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      await sendSignal({ kind: "offer", sdp: pc.localDescription });
+      state.makingOffer = true;
+      try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await sendSignal({ kind: "offer", sdp: pc.localDescription });
+      } finally {
+        state.makingOffer = false;
+      }
       const connected = await action("mark_connected", state.session.id, {});
       if(connected?.session) applySession(connected.session);
       await broadcastStatus();
@@ -753,18 +790,26 @@
   async function ensureAdminPeer(){
     if(!state.isSupportAdmin && trim(state.session?.adminUserId) !== currentUserId()) return;
     if(isAgentParty(state.session)) return;
-    await ensurePeer(false);
+    const pc = await ensurePeer(false);
     await startSignaling();
+    if(pc.remoteDescription || pc.signalingState !== "stable") return;
+    if(state.needOfferSent) return;
+    state.needOfferSent = true;
     await sendSignal({ kind: "need-offer" });
   }
 
   async function onSignal(payload){
     const msg = payload && typeof payload === "object" ? payload : {};
-    if(currentUserId() && trim(msg.from) === currentUserId()) return;
-    const pc = await ensurePeer(isAgentParty(state.session));
+    if(trim(msg.from) && trim(msg.from) === signalingPartyId()) return;
+    const asAgent = isAgentParty(state.session);
+    const pc = await ensurePeer(asAgent);
     try {
       if(msg.kind === "offer" && msg.sdp){
+        if(sdpKey(pc.remoteDescription) === sdpKey(msg.sdp) && pc.signalingState !== "stable") return;
+        const offerCollision = state.makingOffer || pc.signalingState !== "stable";
+        if(offerCollision && asAgent) return;
         await pc.setRemoteDescription(msg.sdp);
+        await flushIce(pc);
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
         await sendSignal({ kind: "answer", sdp: pc.localDescription });
@@ -773,14 +818,26 @@
           if(connected?.session) applySession(connected.session);
         }
       } else if(msg.kind === "answer" && msg.sdp){
+        if(pc.signalingState !== "have-local-offer") return;
+        if(sdpKey(pc.remoteDescription) === sdpKey(msg.sdp)) return;
         await pc.setRemoteDescription(msg.sdp);
+        await flushIce(pc);
       } else if(msg.kind === "ice" && msg.candidate){
+        if(!pc.remoteDescription){
+          state.pendingIce.push(msg.candidate);
+          return;
+        }
         try { await pc.addIceCandidate(msg.candidate); } catch(_e) {}
-      } else if(msg.kind === "need-offer" && state.pc?.localDescription){
-        await sendSignal({ kind: "offer", sdp: state.pc.localDescription });
+      } else if(msg.kind === "need-offer"){
+        if(!asAgent) return;
+        if(!pc.localDescription || pc.localDescription.type !== "offer") return;
+        if(pc.signalingState !== "have-local-offer") return;
+        await sendSignal({ kind: "offer", sdp: pc.localDescription });
       }
     } catch(err){
-      toast({ title: "שגיאת חיבור", text: String(err?.message || err), variant: "err" });
+      const text = String(err?.message || err);
+      if(/wrong state|InvalidStateError|stable|have-local-offer/i.test(text)) return;
+      toast({ title: "שגיאת חיבור", text, variant: "err" });
     }
   }
 
@@ -1229,6 +1286,8 @@
     state.agentName = "";
     state.session = null;
     state.inbox = [];
+    state.partyId = "";
+    state.sigQueue = Promise.resolve();
     try { sessionStorage.removeItem(TOKEN_KEY); } catch(_e) {}
     try { sessionStorage.removeItem(SESSION_KEY); } catch(_e) {}
     renderMenuLabel();
