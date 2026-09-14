@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260914-remote-support-v1";
+const TAG = "20260914-remote-support-auth-v1";
 let failed = 0;
 let passed = 0;
 
@@ -83,6 +83,9 @@ assert(!js.includes("proposalAssignInbox"), "does not hook proposal inbox");
 assert(!app.includes("GiRemoteSupport") || true, "app.js remains free of module wiring if events used");
 assert(js.includes("gi:app-login-ready"), "listens to existing login event");
 assert(js.includes("gi:app-logout"), "listens to existing logout event");
+assert(js.includes("__GI_FACE_BRIDGE__"), "uses existing login bridge, not window.Auth");
+assert(js.includes("getCurrentAgent"), "reads current agent from face bridge");
+assert(js.includes("getMailSessionPin"), "reads session PIN from face bridge");
 
 console.log("\n5) live view + control are real, not fake");
 assert(js.includes("getDisplayMedia"), "tab capture via getDisplayMedia");

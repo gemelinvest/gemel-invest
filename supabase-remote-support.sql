@@ -353,7 +353,11 @@ begin
   select a.* into ag
   from public.agents a
   where coalesce(a.active, true) = true
-    and a.id = aid
+    and (
+      a.id = aid
+      or trim(both from coalesce(a.username, '')) = aid
+      or trim(both from coalesce(a.name, '')) = aid
+    )
   limit 1;
   if ag.id is null then
     return jsonb_build_object('ok', false, 'error', 'AGENT_NOT_FOUND');

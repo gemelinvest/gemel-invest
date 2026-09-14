@@ -4,7 +4,7 @@
 (() => {
   "use strict";
 
-  const TAG = "20260914-remote-support-v1";
+  const TAG = "20260914-remote-support-auth-v1";
   const TOKEN_KEY = "GI_RS_ACTOR_TOKEN_V1";
   const SESSION_KEY = "GI_RS_SESSION_V1";
   const ADMIN_TOPIC = "gi-rs-admins";
@@ -42,35 +42,57 @@
     return document.getElementById(id);
   }
 
-  function auth(){
-    return window.Auth || null;
+  function faceBridge(){
+    try {
+      return window.__GI_FACE_BRIDGE__ && typeof window.__GI_FACE_BRIDGE__ === "object"
+        ? window.__GI_FACE_BRIDGE__
+        : null;
+    } catch(_e){
+      return null;
+    }
   }
 
   function currentUser(){
-    const a = auth();
-    return a && a.current ? a.current : null;
+    try {
+      const fromBridge = faceBridge()?.getCurrentAgent?.();
+      if(fromBridge && (trim(fromBridge.id) || trim(fromBridge.name))) return fromBridge;
+    } catch(_e) {}
+    try {
+      const a = window.Auth;
+      if(a && a.current) return a.current;
+    } catch(_e2) {}
+    return null;
   }
 
   function currentUserId(){
-    return trim(currentUser()?.id);
+    const user = currentUser();
+    return trim(user?.id);
   }
 
   function currentUserName(){
-    return trim(currentUser()?.name || currentUser()?.username);
+    const user = currentUser();
+    return trim(user?.name || user?.username);
   }
 
   function sessionPin(){
-    try { return trim(auth()?._sessionPin); } catch(_e){ return ""; }
+    try {
+      const fromBridge = trim(faceBridge()?.getMailSessionPin?.());
+      if(fromBridge) return fromBridge;
+    } catch(_e) {}
+    try { return trim(window.Auth?._sessionPin); } catch(_e2) { return ""; }
   }
 
   function isSupportAdminClient(){
-    const a = auth();
-    if(!a || !a.current) return false;
+    const user = currentUser();
+    const role = trim(user?.role).toLowerCase();
+    const name = trim(user?.name || user?.username);
+    if(role === "admin" || role === "owner" || role === "manager" || role === "adminlite" || user?.role === "מנהל") return true;
+    if(name === "איתי סומך" || name === "סוניה ארנשטיין" || name === "אוריה סומך") return true;
     try {
-      return !!(a.isAdmin?.() || a.isManager?.());
-    } catch(_e){
-      return false;
-    }
+      const a = window.Auth;
+      if(a) return !!(a.isAdmin?.() || a.isManager?.());
+    } catch(_e) {}
+    return false;
   }
 
   function supabaseClient(){
@@ -92,7 +114,8 @@
   }
 
   function closeUserMenu(){
-    try { window.UI?._closeUserMenu?.(); } catch(_e) {}
+    try { faceBridge()?.closeUserMenu?.(); } catch(_e) {}
+    try { window.UI?._closeUserMenu?.(); } catch(_e2) {}
   }
 
   function openModal(id){
@@ -206,22 +229,28 @@
     restoreToken();
     if(state.token && state.tokenExpiresAt > Date.now() + 15000) return { ok: true, token: state.token };
     const user = currentUser();
-    if(!user?.id) return { ok: false, error: "NOT_LOGGED_IN" };
+    const keys = [user?.id, user?.username, user?.name].map(trim).filter(Boolean);
+    const uniqueKeys = Array.from(new Set(keys));
+    if(!uniqueKeys.length) return { ok: false, error: "NOT_LOGGED_IN" };
     const pin = trim(pinOverride) || sessionPin();
     if(!pin) return { ok: false, error: "MISSING_CREDENTIALS" };
-    const res = await rpc("gi_rs_mint_actor_token", {
-      p_agent_id: user.id,
-      p_pin: pin
-    });
-    if(!res?.ok || !res.token){
-      return { ok: false, error: res?.error || "MINT_FAILED" };
+    let last = { ok: false, error: "MINT_FAILED" };
+    for(const key of uniqueKeys){
+      const res = await rpc("gi_rs_mint_actor_token", {
+        p_agent_id: key,
+        p_pin: pin
+      });
+      if(res?.ok && res.token){
+        state.token = res.token;
+        state.isSupportAdmin = !!res.isSupportAdmin;
+        state.tokenExpiresAt = Date.parse(res.expiresAt) || (Date.now() + 12 * 60 * 60 * 1000);
+        persistToken();
+        return { ok: true, token: state.token };
+      }
+      last = res && typeof res === "object" ? res : last;
+      if(trim(res?.error) === "BAD_PIN") break;
     }
-    state.token = res.token;
-    state.isSupportAdmin = !!res.isSupportAdmin;
-    state.tokenExpiresAt = Date.parse(res.expiresAt) || (Date.now() + 12 * 60 * 60 * 1000);
-    persistToken();
-    try { if(!auth()._sessionPin) auth()._sessionPin = pin; } catch(_e) {}
-    return { ok: true, token: state.token };
+    return { ok: false, error: last.error || "MINT_FAILED" };
   }
 
   async function action(name, sessionId, payload){
@@ -824,9 +853,13 @@
     const pin = pinFromUi("giRsRequestPin");
     const minted = await ensureToken(pinNeeded ? pin : "");
     if(!minted.ok){
-      setError("giRsRequestError", minted.error === "MISSING_CREDENTIALS"
-        ? "יש להזין קוד כניסה כדי לאמת את הבקשה."
-        : "לא ניתן לאמת מול השרת. ודא שקוד הכניסה נכון ושמערכת התמיכה הוגדרה.");
+      const code = trim(minted.error);
+      setError("giRsRequestError",
+        code === "MISSING_CREDENTIALS" ? "יש להזין קוד כניסה כדי לאמת את הבקשה."
+        : code === "BAD_PIN" ? "קוד הכניסה שגוי."
+        : code === "NOT_LOGGED_IN" ? "לא זוהה משתמש מחובר. רענן את הדף והיכנס שוב."
+        : code === "AGENT_NOT_FOUND" ? "המשתמש המחובר לא נמצא בשרת התמיכה."
+        : "לא ניתן לאמת מול השרת. נסה שוב או רענן את הדף.");
       return;
     }
     const problem = trim($("giRsProblemText")?.value);
