@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260914-mirror-live-steps-v1";
+  const BUILD = "20260914-mirror-script-order-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -42781,7 +42781,7 @@ UsersGateUI.init();
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
   const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-followup-qfix-v2";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-live-steps-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-script-order-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -67596,8 +67596,8 @@ ${inner}
       this.els.step2Wrap      = document.getElementById("mcStep2Wrap");
       this.els.step2Body      = document.getElementById("mcStep2Body");
       this.els.harPoliciesContinueBtn = document.getElementById("mcBtnHarPoliciesContinue");
-      this.els.step4Wrap      = null;
-      this.els.step4Body      = null;
+      this.els.step4Wrap      = document.getElementById("mcStep4Wrap");
+      this.els.step4Body      = document.getElementById("mcStep4Body");
       this.els.newPoliciesDoneBtn = null;
       this.els.stepCancelQWrap = document.getElementById("mcStepCancelQWrap");
       this.els.stepCancelQBody = document.getElementById("mcStepCancelQBody");
@@ -68821,8 +68821,8 @@ ${inner}
         idle: "הצגה עצמית",
         personalVerify: "פרטי מבוטח/ים",
         step2: "בירור והתאמת צרכים",
-        premiumCost: "בירור והתאמת צרכים",
-        newPolicies: "בירור והתאמת צרכים",
+        premiumCost: "עלות הביטוח",
+        newPolicies: "עלות הביטוח",
         cancelQuestionnaire: "שאלון ביטול",
         beneficiaries: "מוטבים / משעבד",
         healthDeclaration: "הצהרת בריאות",
@@ -68934,10 +68934,8 @@ ${inner}
         this._renderStep2Body(rec);
         this._showStep2Panel();
       } else if(p === "premiumCost" || p === "newPolicies"){
-        // שלב עלות/פרמיה הוסר — אחרי בירור הצרכים ממשיכים לגילוי נאות
-        this._mirrorUiPhase = "disclosure";
-        this._renderStep6DisclosureBody(rec);
-        this._showStep6Panel();
+        this._renderStep4PremiumCostBody(rec);
+        this._showStep4Panel();
       } else if(p === "cancelQuestionnaire"){
         this._renderCancelQuestionnaireBody(rec);
         this._showStepCancelQPanel();
@@ -68948,10 +68946,8 @@ ${inner}
         this._renderHealthDeclarationBody(rec);
         this._showStepHealthDeclPanel();
       } else if(p === "futureCancel"){
-        // מסך שינוי/ביטול בעתיד מושהה מהסדר הנוכחי — ממשיכים לגילוי נאות
-        this._mirrorUiPhase = "disclosure";
-        this._renderStep6DisclosureBody(rec);
-        this._showStep6Panel();
+        this._renderStep5FutureCancelBody();
+        this._showStep5Panel();
       } else if(p === "disclosure"){
         this._renderStep6DisclosureBody(rec);
         this._showStep6Panel();
@@ -68986,7 +68982,11 @@ ${inner}
       if(phase === "step2"){
         const rec = this._getFreshCustomerRecord();
         const sub = this._mirrorNeedsSubPhase;
-        if(sub === "offer"){ this._handleNeedsAct("needs-to-disclosure"); return; }
+        if(sub === "offer"){
+          if(this._mirrorHasExistingPolicies(rec)) this._handleNeedsAct("needs-to-existing");
+          else this._handleNeedsAct("har-back");
+          return;
+        }
         if(sub === "reasons"){ this._handleNeedsAct("reasons-to-compare"); return; }
         if(sub === "compareNotice"){ this._handleNeedsAct("needs-to-offer"); return; }
         if(sub === "existing"){ this._handleNeedsAct("har-back"); return; }
@@ -69000,6 +69000,8 @@ ${inner}
         return;
       }
       const backMap = {
+        premiumCost: "premium-back",
+        newPolicies: "premium-back",
         disclosure: "disclosure-back",
         cancelQuestionnaire: "cancelq-back",
         beneficiaries: "benef-back",
@@ -69032,11 +69034,13 @@ ${inner}
         return;
       }
       const nextMap = {
+        premiumCost: "premium-to-future",
+        newPolicies: "premium-to-future",
         disclosure: "disclosure-done",
         cancelQuestionnaire: "cancelq-to-benef",
         beneficiaries: "benef-to-health",
         healthDeclaration: "health-to-future",
-        futureCancel: this._mcPayStepEnabled() ? "future-to-disclosure" : "future-done",
+        futureCancel: "future-to-disclosure",
         paymentDetails: "pay-to-insstart",
         insuranceStart: "insstart-done"
       };
@@ -69155,13 +69159,13 @@ ${inner}
     // קודם הסדר היה מפוזר בין ה-HTML לשבע רשימות markDone.
     // כאן הוא מוגדר במקום אחד. מתג: window.__GI_MC_PAYMENT_STEP = false
     // מחזיר את הסדר הקודם, בדיוק כפי שהיה.
-    // שינוי/ביטול בעתיד מושהה מהסדר החי. גילוי נאות אחרי הביטוחים הקיימים, ואחריו פוליסות מוצעות ומסמך השוואה.
+    // עלות הביטוח ושינוי/ביטול בעתיד חיים אחרי מסמך ההשוואה / אישור היעדר ביטוח, ולפני גילוי נאות.
     _mcFlowPlan(){
       const e = this.els;
       const core = [
         { el: e.flowStep1,          label: "הצגה עצמית",            phases: ["idle", "declinePending"] },
         { el: e.flowStepPersonal,   label: "פרטי מבוטח/ים",         phases: ["personalVerify"] },
-        { el: e.flowStepHar,        label: "בירור והתאמת צרכים",     phases: ["step2", "newPolicies", "premiumCost"] },
+        { el: e.flowStepHar,        label: "בירור והתאמת צרכים",     phases: ["step2", "newPolicies", "premiumCost", "futureCancel"] },
         { el: e.flowStepDisclosure, label: "גילוי נאות",             phases: ["disclosure"] },
         { el: e.flowStepCancelQ,    label: "שאלון ביטול",            phases: ["cancelQuestionnaire"] },
         { el: e.flowStepBenef,      label: "פרטי מוטבים",            phases: ["beneficiaries"] },
@@ -69218,14 +69222,15 @@ ${inner}
         { key: "consent", label: "בירור והתאמת צרכים", kickerId: "mcStep2Kicker" }
       ];
       if(hasExisting) steps.push({ key: "existing", label: "ביטוחים קיימים", kickerId: "mcStep2Kicker" });
-      steps.push({ key: "disclosure", label: "גילוי נאות", kickerId: "mcStep6Kicker" });
       steps.push({ key: "offer", label: "פוליסות מוצעות", kickerId: "mcStep2Kicker" });
       if(hasExisting){
         steps.push({ key: "compareNotice", label: "מסמך השוואה", kickerId: "mcStep2Kicker" });
-        steps.push({ key: "reasons", label: "שיקולי המלצה", kickerId: "mcStep2Kicker" });
       } else {
         steps.push({ key: "compareNotice", label: "אישור היעדר ביטוח", kickerId: "mcStep2Kicker" });
       }
+      steps.push({ key: "premiumCost", label: "עלות הביטוח", kickerId: "mcStep4Kicker" });
+      steps.push({ key: "futureCancel", label: "שינוי או ביטול בעתיד", kickerId: "mcStep5Kicker" });
+      steps.push({ key: "disclosure", label: "גילוי נאות", kickerId: "mcStep6Kicker" });
       if(this._hasCancelQuestionnairePolicies(rec)){
         steps.push({ key: "cancelQuestionnaire", label: "שאלון ביטול", kickerId: "mcStepCancelQKicker" });
       }
@@ -69244,7 +69249,9 @@ ${inner}
       const phase = safeTrim(this._mirrorUiPhase) || "idle";
       if(phase === "idle" || phase === "declinePending") return "idle";
       if(phase === "personalVerify") return "personalVerify";
-      if(phase === "step2" || phase === "newPolicies" || phase === "premiumCost"){
+      if(phase === "premiumCost" || phase === "newPolicies") return "premiumCost";
+      if(phase === "futureCancel") return "futureCancel";
+      if(phase === "step2"){
         const sub = this._mirrorNeedsSubPhase || "consent";
         if(sub === "existing" || sub === "offer" || sub === "reasons" || sub === "compareNotice" || sub === "consent") return sub;
         return "consent";
@@ -69255,7 +69262,6 @@ ${inner}
       if(phase === "healthDeclaration") return "healthDeclaration";
       if(phase === "paymentDetails") return "paymentDetails";
       if(phase === "insuranceStart") return "insuranceStart";
-      if(phase === "futureCancel") return "offer";
       return phase;
     },
 
@@ -69283,11 +69289,12 @@ ${inner}
         { wrap: this.els.scriptWrap, id: "mcCallScriptKicker" },
         { wrap: this.els.verifyWrap, id: "mcStepVerifyKicker" },
         { wrap: this.els.step2Wrap, id: "mcStep2Kicker" },
+        { wrap: this.els.step4Wrap, id: "mcStep4Kicker" },
+        { wrap: this.els.step5Wrap, id: "mcStep5Kicker" },
         { wrap: this.els.step6Wrap, id: "mcStep6Kicker" },
         { wrap: this.els.stepCancelQWrap, id: "mcStepCancelQKicker" },
         { wrap: this.els.stepBenefWrap, id: "mcStepBenefKicker" },
         { wrap: this.els.stepHealthDeclWrap, id: "mcStepHealthDeclKicker" },
-        { wrap: this.els.step5Wrap, id: "mcStep5Kicker" },
         { wrap: this.els.stepPayWrap, id: "mcStepPayKicker" },
         { wrap: this.els.stepInsStartWrap, id: "mcStepInsStartKicker" }
       ];
@@ -71255,10 +71262,9 @@ ${inner}
         return;
       }
       if(dir === "back"){
-        this._mirrorNeedsSubPhase = this._mirrorHasExistingPolicies(rec) ? "reasons" : "compareNotice";
-        this._mirrorUiPhase = "step2";
-        this._renderStep2Body(rec);
-        this._showStep2Panel();
+        this._mirrorUiPhase = "disclosure";
+        this._renderStep6DisclosureBody(rec);
+        this._showStep6Panel();
         return;
       }
       this._enterBeneficiariesOrSkip(rec, "forward");
@@ -74980,7 +74986,7 @@ ${inner}
                 `<div class="mcAgentHint__title">הודעה לנציג</div>` +
                 `<div class="mcAgentHint__text">לא הוזנו ביטוחים קיימים באשף בריאות וסיכונים (שלב 2 · פוליסות בחברה נגדית). ניתן להמשיך בשיקוף — אין פוליסות לביטול ואין מסמך השוואה.</div>` +
               `</div>`) +
-          this._mcNeedsNav("needs-to-disclosure", "המשך · גילוי נאות") +
+          this._mcNeedsNav("needs-to-offer", "המשך · פוליסות מוצעות") +
         `</div>`;
     },
 
@@ -75108,17 +75114,15 @@ ${inner}
         (typeof ensureGiArrivalDocsLoaded === "function") ? ensureGiArrivalDocsLoaded() : Promise.resolve(),
         (typeof ensureGiSimulatorJsLoaded === "function") ? ensureGiSimulatorJsLoaded() : Promise.resolve()
       ]).then(() => {
-        if(this._mirrorNeedsSubPhase !== "offer") return;
+        if(this._mirrorUiPhase !== "premiumCost" && this._mirrorUiPhase !== "newPolicies") return;
         const fresh = this._getFreshCustomerRecord() || rec;
         if(!fresh || (runId && safeTrim(fresh.id) !== safeTrim(runId))) return;
-        this._renderNeedsOffer(fresh);
+        this._renderStep4PremiumCostBody(fresh);
       }).catch(() => {});
     },
 
     _renderNeedsOffer(rec){
-      this._mcEnsureMigdalPeakEngines(rec);
-      const peaks = this._mcMigdalPeakMap(rec);
-      const cards = this._collectNewPolicyCards(rec, { simple: true, withDiscount: false, premiumMode: "after", migdalPeaks: peaks });
+      const cards = this._collectNewPolicyCards(rec, { simple: true, withDiscount: false, premiumMode: "after" });
       const hasExisting = this._mirrorHasExistingPolicies(rec);
       const lead = hasExisting
         ? (cards.length === 1
@@ -75127,6 +75131,9 @@ ${inner}
         : (cards.length === 1
           ? "בהתאם לצרכים הביטוחיים שעלו בשיחה, הפוליסה שאנו מציעים לך לרכוש היא:"
           : "בהתאם לצרכים הביטוחיים שעלו בשיחה, הפוליסות שאנו מציעים לך לרכוש הן:");
+      const migdalHtml = this._mcHasMigdalNewPolicy(rec)
+        ? `<p class="mcNeedsScript__p"><strong>(מגדל)</strong> ההמלצה מבוססת על גילך, מצבך המשפחתי, הכיסויים הקיימים שלך הצרכים שציינת.</p>`
+        : "";
       this.els.step2Body.innerHTML =
         `<div class="mcNeedsScreen">` +
           `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח להקראה ללקוח">` +
@@ -75135,14 +75142,13 @@ ${inner}
           (cards.length
             ? `<div class="mcPolCardList mcPolicyRowList" role="list">${this._mcPolicyRowHead("offer")}${cards.join("")}</div>`
             : `<p class="mcNeedsEmpty">לא הוזנו פוליסות חדשות באשף (שלב פוליסות חדשות).</p>`) +
-          `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח הקראה — שינוי או ביטול בעתיד">` +
-            `<p class="mcNeedsScript__p">במידה ובעתיד תרצה לעשות שינוי או ביטול, תוכל לבצע זאת בכל אחד מהאמצעים שמעמידה לרשותך חברת הביטוח: פקס, מייל, מוקד שירות, אזור אישי באתר החברה.</p>` +
-            `<p class="mcNeedsScript__p mcNeedsScript__p--ask">חשוב לי שתדע שתוכל לבטל את כל אחד מהנספחים הכלולים בחבילה בכל עת בתנאי שנותר מוצר הבסיס.</p>` +
-          `</div>` +
+          (migdalHtml
+            ? `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח הקראה — המלצת מגדל">${migdalHtml}</div>`
+            : "") +
           this._mcNeedsNav(
             "reasons-to-compare",
             hasExisting ? "המשך · מסמך השוואה" : "המשך · אישור היעדר ביטוח",
-            "needs-to-disclosure",
+            hasExisting ? "needs-to-existing" : "har-back",
             "חזרה"
           ) +
         `</div>`;
@@ -75189,18 +75195,14 @@ ${inner}
       if(!this.els.step2Body) return;
       const hasExisting = this._mirrorHasExistingPolicies(rec);
       if(hasExisting){
-        const migdalHtml = this._mcHasMigdalNewPolicy(rec)
-          ? `<p class="mcNeedsScript__p"><strong>(מגדל)</strong> ההמלצה מבוססת על גילך, מצבך המשפחתי, הכיסויים הקיימים שלך הצרכים שציינת.</p>`
-          : "";
         this.els.step2Body.innerHTML =
           `<div class="mcNeedsScreen">` +
             `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח להקראה ללקוח">` +
-              migdalHtml +
               `<p class="mcNeedsScript__p mcNeedsScript__p--ask">בהמשך אשלח לך מסמך השוואה כתוב המשווה בין הפוליסות שקיימות לך כיום לעומת הפוליסות החדשות שאנו מציעים לך לרכוש אותם תידרש לאשר לי בחתימתך</p>` +
             `</div>` +
             this._mcNeedsNav(
-              "needs-to-reasons",
-              "המשך · שיקולי המלצה",
+              "needs-to-premium",
+              "המשך · עלות הביטוח",
               "needs-to-offer",
               "חזרה"
             ) +
@@ -75289,10 +75291,9 @@ ${inner}
         return;
       }
       this._mirrorCoerceCustomerPayloadInPlace(rec);
-      const cards = this._collectNewPolicyCards(rec, { withDiscount: true, premiumMode: "before", showRankScript: true });
-      const hasCancelQ = this._hasCancelQuestionnairePolicies(rec);
-      const nextAct = hasCancelQ ? "premium-to-cancelq" : "needs-to-disclosure";
-      const nextLabel = hasCancelQ ? "המשך · שאלון ביטול" : "המשך · גילוי נאות";
+      this._mcEnsureMigdalPeakEngines(rec);
+      const peaks = this._mcMigdalPeakMap(rec);
+      const cards = this._collectNewPolicyCards(rec, { withDiscount: true, premiumMode: "before", showRankScript: true, migdalPeaks: peaks });
       this.els.step4Body.innerHTML =
         `<div class="mcNeedsScreen">` +
           `<div class="mcAgentHint" role="note">` +
@@ -75305,7 +75306,7 @@ ${inner}
           `<div class="mcNeedsScript mcNeedsScript--closing">` +
             `<p class="mcNeedsScript__p">הפרמיה צמודה למדד, ובמידה ולא תהיה תוספת חיתומית או מקצועית ייתכן והגבייה הראשונה תהיה גבייה יחסית או כפולה בהתאם למועד החיוב. הגבייה תתבצע במועד התשלום הקבוע של אמצעי התשלום שלך.</p>` +
           `</div>` +
-          this._mcNeedsNav(nextAct, nextLabel) +
+          this._mcNeedsNav("premium-to-future", "המשך · שינוי או ביטול בעתיד", "premium-back", "חזרה") +
         `</div>`;
     },
 
@@ -75315,16 +75316,13 @@ ${inner}
 
     _renderStep5FutureCancelBody(){
       if(!this.els.step5Body) return;
-      const payOn = this._mcPayStepEnabled();
-      const nextAct = payOn ? "future-to-disclosure" : "future-done";
-      const nextLabel = payOn ? "המשך · גילוי נאות" : "סיימתי · סיום שלבי השיקוף";
       this.els.step5Body.innerHTML =
         `<div class="mcNeedsScreen">` +
           `<div class="mcNeedsScript" aria-label="נוסח הקראה — שינוי או ביטול בעתיד">` +
             `<p class="mcNeedsScript__p">במידה ובעתיד תרצה לעשות שינוי או ביטול — תוכל לבצע זאת בכל אחד מהאמצעים שמעמידה לרשותך חברת הביטוח: <strong>פקס</strong>, <strong>מייל</strong>, <strong>מוקד שירות</strong>, או <strong>באזור האישי באתר החברה</strong>.</p>` +
             `<p class="mcNeedsScript__p mcNeedsScript__p--ask">חשוב לי שתדע שתוכל לבטל את כל אחד מהנספחים הכלולים בחבילה בכל עת, בתנאי שנותר מוצר הבסיס.</p>` +
           `</div>` +
-          this._mcNeedsNav(nextAct, nextLabel, "future-back", "חזרה") +
+          this._mcNeedsNav("future-to-disclosure", "המשך · גילוי נאות", "future-back", "חזרה") +
         `</div>`;
     },
 
@@ -75420,7 +75418,9 @@ ${inner}
         }
       }
 
-      const nextLabel = "המשך · פוליסות מוצעות";
+      const nextLabel = this._hasCancelQuestionnairePolicies(rec)
+        ? "המשך · שאלון ביטול"
+        : (this._mcHasBeneficiaryStepPolicies(rec) ? "המשך · פרטי מוטבים" : "המשך · הצהרת בריאות");
       this.els.step6Body.innerHTML =
         `<div class="mcNeedsScreen">` +
           `<div class="mcNeedsScript mcNeedsScript--readAloud" aria-label="נוסח לפתיחת גילוי נאות">` +
@@ -75970,9 +75970,10 @@ ${inner}
           this._renderStep2Body(rec);
           this._showStep2Panel();
         } else {
-          this._mirrorUiPhase = "disclosure";
-          this._renderStep6DisclosureBody(rec);
-          this._showStep6Panel();
+          this._mirrorNeedsSubPhase = "offer";
+          this._mirrorUiPhase = "step2";
+          this._renderStep2Body(rec);
+          this._showStep2Panel();
         }
         return;
       }
@@ -76023,18 +76024,35 @@ ${inner}
         this._showStep2Panel();
         return;
       }
-      if(action === "needs-to-premium" || action === "needs-to-disclosure"
-        || action === "premium-to-cancelq" || action === "premium-to-future" || action === "premium-done"){
+      if(action === "needs-to-premium"){
+        this._mirrorUiPhase = "premiumCost";
+        this._renderStep4PremiumCostBody(rec);
+        this._showStep4Panel();
+        return;
+      }
+      if(action === "premium-back"){
+        this._mirrorNeedsSubPhase = "compareNotice";
+        this._mirrorUiPhase = "step2";
+        this._renderStep2Body(rec);
+        this._showStep2Panel();
+        return;
+      }
+      if(action === "premium-to-future" || action === "premium-to-cancelq" || action === "premium-done"){
+        this._mirrorUiPhase = "futureCancel";
+        this._renderStep5FutureCancelBody();
+        this._showStep5Panel();
+        return;
+      }
+      if(action === "needs-to-disclosure"){
         this._mirrorUiPhase = "disclosure";
         this._renderStep6DisclosureBody(rec);
         this._showStep6Panel();
         return;
       }
       if(action === "cancelq-back"){
-        this._mirrorNeedsSubPhase = this._mirrorHasExistingPolicies(rec) ? "reasons" : "compareNotice";
-        this._mirrorUiPhase = "step2";
-        this._renderStep2Body(rec);
-        this._showStep2Panel();
+        this._mirrorUiPhase = "disclosure";
+        this._renderStep6DisclosureBody(rec);
+        this._showStep6Panel();
         return;
       }
       if(action === "cancelq-to-benef" || action === "cancelq-to-future"){
@@ -76114,10 +76132,9 @@ ${inner}
         return;
       }
       if(action === "future-back"){
-        this._mirrorNeedsSubPhase = "offer";
-        this._mirrorUiPhase = "step2";
-        this._renderStep2Body(rec);
-        this._showStep2Panel();
+        this._mirrorUiPhase = "premiumCost";
+        this._renderStep4PremiumCostBody(rec);
+        this._showStep4Panel();
         return;
       }
       if(action === "future-to-disclosure" || action === "future-done"){
@@ -76163,29 +76180,25 @@ ${inner}
         return;
       }
       if(action === "disclosure-back"){
-        if(this._mirrorHasExistingPolicies(rec)){
-          this._mirrorNeedsSubPhase = "existing";
-          this._mirrorUiPhase = "step2";
-          this._renderStep2Body(rec);
-          this._showStep2Panel();
-        } else {
-          this._mirrorNeedsSubPhase = "consent";
-          this._mirrorUiPhase = "step2";
-          this._renderStep2Body(rec);
-          this._showStep2Panel();
-        }
+        this._mirrorUiPhase = "futureCancel";
+        this._renderStep5FutureCancelBody();
+        this._showStep5Panel();
         return;
       }
       if(action === "disclosure-done"){
-        this._mirrorNeedsSubPhase = "offer";
-        this._mirrorUiPhase = "step2";
-        this._renderStep2Body(rec);
-        this._showStep2Panel();
+        this._enterCancelQuestionnaireOrSkip(rec, "forward");
         return;
       }
-      if(action === "offer-to-cancelq" || action === "reasons-to-cancelq" || action === "compare-to-cancelq" || action === "compare-none-yes"){
+      if(action === "offer-to-cancelq" || action === "reasons-to-cancelq" || action === "compare-to-cancelq"){
         this._compareNoPrivateDeclined = false;
         this._enterCancelQuestionnaireOrSkip(rec, "forward");
+        return;
+      }
+      if(action === "compare-none-yes"){
+        this._compareNoPrivateDeclined = false;
+        this._mirrorUiPhase = "premiumCost";
+        this._renderStep4PremiumCostBody(rec);
+        this._showStep4Panel();
         return;
       }
       if(action === "reasons-to-compare"){

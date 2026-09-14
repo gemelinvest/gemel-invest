@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260914-mirror-live-steps-v1";
+const APP_TAG = "20260914-mirror-script-order-v1";
 let failed = 0;
 let passed = 0;
 
@@ -63,22 +63,22 @@ assert(offer.includes("_mcPolicyRowHtml({"), "פוליסות מוצעות בשו
 assert(offer.includes('k: "לפני הנחה"'), "עמודת פרמיה לפני הנחה");
 assert(app.includes("_mcPolicyCardHtml(opts){"), "כרטיס ישן נשאר לגילוי נאות");
 
-console.log("\n4) סדר שלבים: קיימים → גילוי נאות → מוצעות → מסמך השוואה");
+console.log("\n4) סדר שלבים לפי תסריט 2026: קיימים → מוצעות → השוואה → עלות → ביטול בעתיד → גילוי");
 const existingRender = sliceBetween(app, "_renderNeedsExisting(rec){", "_mcNewPolicyFileParityRows(rec, p){");
-assert(existingRender.includes('needs-to-disclosure"'), "מקיימים ממשיכים לגילוי נאות");
-assert(!existingRender.includes("needs-to-offer"), "מקיימים לא מדלגים למוצעות");
+assert(existingRender.includes("needs-to-offer"), "מקיימים ממשיכים לפוליסות מוצעות");
+assert(!existingRender.includes('needs-to-disclosure"'), "מקיימים לא מדלגים לגילוי נאות");
 const offerRender = sliceBetween(app, "_renderNeedsOffer(rec){", "_renderNeedsReasons(rec){");
 assert(offerRender.includes("reasons-to-compare"), "ממוצעות למסמך השוואה");
-assert(offerRender.includes("needs-to-disclosure"), "חזרה ממוצעות לגילוי נאות");
-const disc = sliceBetween(app, "const nextLabel = \"המשך · פוליסות מוצעות\";", "_hideMcPanelsExcept(keep){");
-assert(!!disc, "גילוי נאות ממשיך לפוליסות מוצעות");
-assert(app.includes('this._mirrorNeedsSubPhase = "offer";') && app.includes('action === "disclosure-done"'), "disclosure-done → מוצעות");
-assert(app.includes('this._mirrorNeedsSubPhase = "existing";'), "disclosure-back → קיימים");
+assert(offerRender.includes("needs-to-existing") || offerRender.includes("har-back"), "חזרה ממוצעות לקיימים / הסכמת הר");
+assert(!offerRender.includes("needs-to-disclosure"), "חזרה ממוצעות לא לגילוי נאות");
+assert(app.includes('_enterCancelQuestionnaireOrSkip(rec, "forward")') && app.includes('action === "disclosure-done"'), "disclosure-done → שאלון ביטול");
+assert(app.includes('this._mirrorUiPhase = "futureCancel"') && app.includes('action === "disclosure-back"'), "disclosure-back → שינוי/ביטול בעתיד");
 const reasons = sliceBetween(app, "_renderNeedsReasons(rec){", "_renderNeedsCompareNotice(rec){");
-assert(reasons.includes("compare-to-cancelq"), "משיקולים לשאלון ביטול");
+assert(reasons.includes("compare-to-cancelq"), "מסך שיקולים נשאר בקוד");
 const compare = sliceBetween(app, "_renderNeedsCompareNotice(rec){", "_mirrorGetNewPoliciesRaw(rec){");
-assert(compare.includes("needs-to-reasons"), "ממסמך השוואה לשיקולים");
-assert(compare.includes("<strong>(מגדל)</strong>"), "תג מגדל בנוסח");
+assert(compare.includes("needs-to-premium"), "ממסמך השוואה לעלות הביטוח");
+assert(!compare.includes("needs-to-reasons"), "ממסמך השוואה לא נכנסים לשיקולי המלצה");
+assert(!compare.includes("<strong>(מגדל)</strong>"), "משפט מגדל הועבר מהשוואה להצעה");
 assert(compare.includes("האם אתה מאשר שאין לך כיום ביטוחים קיימים"), "נוסח אישור היעדר ביטוחים קיימים");
 assert(!compare.includes("שבו כתוב ההשוואה"), "הנוסח הישן של מסמך ההשוואה הוסר");
 
