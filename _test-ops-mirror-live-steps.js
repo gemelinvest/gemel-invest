@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260914-mirror-script-order-v1";
+const APP_TAG = "20260914-mirror-offer-benef-v1";
 let failed = 0;
 let passed = 0;
 
@@ -48,7 +48,7 @@ assert(html.includes("app.js?v=" + APP_TAG), "index.html app.js cache");
 assert(html.includes("app.css?v=" + APP_TAG), "index.html app.css cache");
 assert(sw.includes("gi-v12-" + APP_TAG), "service-worker cache");
 assert(app.includes('BUILD = "' + APP_TAG + '"'), "app.js BUILD");
-assert(app.includes('GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=' + APP_TAG + '"'), "arrival docs href");
+assert(app.includes('GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mirror-script-order-v1"'), "arrival docs href לא שונה");
 
 console.log("\n2) מספור רץ לכל מסך + טיימר חי בחזרה");
 assert(app.includes("_mcCallStepCatalog(rec){"), "קטלוג מסכים לשיחה");
@@ -69,14 +69,14 @@ const futI = catalog.indexOf('key: "futureCancel"');
 const discI = catalog.indexOf('key: "disclosure"');
 const cancelI = catalog.indexOf('key: "cancelQuestionnaire"');
 assert(offerI > 0 && compareI > offerI, "מוצעות לפני מסמך השוואה / אישור היעדר");
-assert(premI > compareI, "עלות הביטוח אחרי מסמך השוואה");
-assert(futI > premI, "שינוי/ביטול בעתיד אחרי עלות");
+assert(premI < 0, "עלות הביטוח אינה שלב חי");
+assert(futI > compareI, "שינוי/ביטול בעתיד אחרי השוואה");
 assert(discI > futI, "גילוי נאות אחרי שינוי/ביטול בעתיד");
 assert(cancelI > discI, "שאלון ביטול אחרי גילוי נאות");
 assert(!catalog.includes('key: "reasons"'), "שיקולי המלצה אינם שלב חי בקטלוג");
-assert(catalog.includes('label: "עלות הביטוח"'), "שם שלב עלות לפי התסריט");
-assert(html.includes('id="mcStep4Wrap"') && html.includes('id="mcStep4Body"'), "פאנל עלות הביטוח ב-HTML");
-assert(html.includes('id="mcStep4Kicker"'), "כותרת שלב לעלות הביטוח");
+assert(catalog.includes('label: "שינוי או ביטול בעתיד"'), "שם שלב ביטול בעתיד לפי התסריט");
+assert(html.includes('id="mcStep4Wrap"') && html.includes('id="mcStep4Body"'), "פאנל עלות הביטוח ב-HTML נשאר");
+assert(html.includes('id="mcStep4Kicker"'), "כותרת שלב לעלות הביטוח נשארה ב-DOM");
 
 console.log("\n3) פוליסות מוצעות — המלצת מגדל בלבד, בלי מקס ובלי ביטול בעתיד");
 const offer = sliceBetween(app, "_renderNeedsOffer(rec){", "_renderNeedsReasons(rec){");
@@ -88,9 +88,9 @@ assert(offer.includes("ההמלצה מבוססת על גילך"), "נוסח המ
 assert(offer.includes("reasons-to-compare"), "ממוצעות למסמך השוואה / אישור היעדר");
 assert(offer.includes("needs-to-existing") && offer.includes("har-back"), "חזרה ממוצעות לקיימים או להסכמת הר");
 
-console.log("\n4) עלות הביטוח + שינוי/ביטול בעתיד כמסכים חיים");
+console.log("\n4) עלות הביטוח נשארה בקוד, לא במסלול החי");
 const premium = sliceBetween(app, "_renderStep4PremiumCostBody(rec){", "_renderStep4NewPoliciesBody(rec){");
-assert(premium.includes("_mcMigdalPeakMap(rec)"), "מפת מקס מגדל במסך העלות");
+assert(premium.includes("_mcMigdalPeakMap(rec)"), "מפת מקס מגדל במסך העלות שנשמר בקוד");
 assert(premium.includes("migdalPeaks"), "שיא מגדל מועבר לכרטיסי עלות");
 assert(premium.includes("premium-to-future"), "מעלויות לשינוי/ביטול בעתיד");
 assert(premium.includes("premium-back"), "חזרה מעלויות למסמך השוואה");
@@ -100,13 +100,13 @@ assert(arrival.includes("peakFromPolicyTables(tables, policy)"), "חישוב ש�
 assert(arrival.includes('if(proj.source !== "engine"'), "רק תחזית מנוע, בלי מספר מזויף");
 assert(css.includes(".mcPolicyRow__maxPrem"), "עיצוב שורת מקס");
 const restore = sliceBetween(app, "_restoreMirrorPhaseUi(rec, phase){", "_mcNavPrev(){");
-assert(restore.includes("_renderStep4PremiumCostBody(rec)"), "שחזור מציג את מסך העלות");
+assert(!restore.includes("_renderStep4PremiumCostBody(rec)"), "שחזור לא מציג את מסך העלות החי");
 assert(restore.includes("_renderStep5FutureCancelBody()"), "שחזור מציג את מסך שינוי/ביטול");
-assert(!restore.includes("שלב עלות/פרמיה הוסר"), "אין יותר דילוג מעלות לגילוי נאות");
+assert(restore.includes('this._mirrorUiPhase = "futureCancel"'), "שחזור מדילוג עלות לביטול בעתיד");
 const futureBody = sliceBetween(app, "_renderStep5FutureCancelBody(){", "_renderStep6DisclosureBody(rec){");
 assert(futureBody.includes("future-to-disclosure"), "משינוי/ביטול תמיד לגילוי נאות");
-assert(futureBody.includes("future-back"), "חזרה משינוי/ביטול לעלות");
-assert(app.includes("_showStep4Panel(){"), "פתיחת פאנל עלות");
+assert(futureBody.includes("future-back"), "חזרה משינוי/ביטול");
+assert(app.includes("_showStep4Panel(){"), "פתיחת פאנל עלות נשארה בקוד");
 assert(app.includes('this.els.step4Wrap      = document.getElementById("mcStep4Wrap")'), "חיבור DOM לעלות");
 
 console.log("\n5) מוטבים — מחלות קשות + סרטן");
@@ -128,7 +128,7 @@ const discDone = sliceBetween(app, 'if(action === "disclosure-done"){', 'if(acti
 assert(discDone.includes('_enterCancelQuestionnaireOrSkip(rec, "forward")'), "גילוי נאות ממשיך לשאלון ביטול");
 assert(app.includes('this._mirrorUiPhase = "disclosure"') && app.includes('if(action === "cancelq-back"){'), "חזרה משאלון ביטול לגילוי נאות");
 const noneYes = sliceBetween(app, 'if(action === "compare-none-yes"){', 'if(action === "reasons-to-compare"){');
-assert(noneYes.includes('this._mirrorUiPhase = "premiumCost"'), "אישור היעדר ביטוח ממשיך לעלות");
+assert(noneYes.includes('this._mirrorUiPhase = "futureCancel"'), "אישור היעדר ביטוח ממשיך לשינוי/ביטול בעתיד");
 
 console.log("\n7) שיא פרמיה מטבלאות מנוע");
 const sandbox = { console, location: { href: "https://example.com/app", pathname: "/" } };

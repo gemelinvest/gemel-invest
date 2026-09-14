@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260914-mirror-script-order-v1";
+const APP_TAG = "20260914-mirror-offer-benef-v1";
 let failed = 0;
 let passed = 0;
 
@@ -63,7 +63,7 @@ assert(offer.includes("_mcPolicyRowHtml({"), "פוליסות מוצעות בשו
 assert(offer.includes('k: "לפני הנחה"'), "עמודת פרמיה לפני הנחה");
 assert(app.includes("_mcPolicyCardHtml(opts){"), "כרטיס ישן נשאר לגילוי נאות");
 
-console.log("\n4) סדר שלבים לפי תסריט 2026: קיימים → מוצעות → השוואה → עלות → ביטול בעתיד → גילוי");
+console.log("\n4) סדר שלבים לפי תסריט 2026: קיימים → מוצעות → השוואה → ביטול בעתיד → גילוי");
 const existingRender = sliceBetween(app, "_renderNeedsExisting(rec){", "_mcNewPolicyFileParityRows(rec, p){");
 assert(existingRender.includes("needs-to-offer"), "מקיימים ממשיכים לפוליסות מוצעות");
 assert(!existingRender.includes('needs-to-disclosure"'), "מקיימים לא מדלגים לגילוי נאות");
@@ -76,7 +76,9 @@ assert(app.includes('this._mirrorUiPhase = "futureCancel"') && app.includes('act
 const reasons = sliceBetween(app, "_renderNeedsReasons(rec){", "_renderNeedsCompareNotice(rec){");
 assert(reasons.includes("compare-to-cancelq"), "מסך שיקולים נשאר בקוד");
 const compare = sliceBetween(app, "_renderNeedsCompareNotice(rec){", "_mirrorGetNewPoliciesRaw(rec){");
-assert(compare.includes("needs-to-premium"), "ממסמך השוואה לעלות הביטוח");
+assert(compare.includes("needs-to-premium"), "ממסמך השוואה לשלב הבא");
+assert(compare.includes("המשך · שינוי או ביטול בעתיד"), "מהשוואה לשינוי/ביטול בעתיד");
+assert(!compare.includes("המשך · עלות הביטוח"), "אין מסך עלות חי אחרי השוואה");
 assert(!compare.includes("needs-to-reasons"), "ממסמך השוואה לא נכנסים לשיקולי המלצה");
 assert(!compare.includes("<strong>(מגדל)</strong>"), "משפט מגדל הועבר מהשוואה להצעה");
 assert(compare.includes("האם אתה מאשר שאין לך כיום ביטוחים קיימים"), "נוסח אישור היעדר ביטוחים קיימים");
