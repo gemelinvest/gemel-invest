@@ -172,13 +172,29 @@
 
 ;
 
+  function giIlsExpandLocal(raw){
+    try{
+      if(global.GI_ILS_AMOUNT && typeof global.GI_ILS_AMOUNT.expand === "function"){
+        return global.GI_ILS_AMOUNT.expand(raw);
+      }
+    }catch(_e){}
+    const s = String(raw ?? "").trim();
+    const m = s.match(/^₪?\s*([\d.,]+)\s*([kKmM])\s*$/);
+    if(!m) return s;
+    const n = Number(String(m[1]).replace(/,/g, ""));
+    if(!Number.isFinite(n) || n < 0) return s;
+    const out = n * ((m[2] === "m" || m[2] === "M") ? 1000000 : 1000);
+    if(!Number.isFinite(out)) return s;
+    return String(Math.abs(out - Math.round(out)) < 1e-9 ? Math.round(out) : Math.round(out * 100) / 100);
+  }
+
   /** מפרמט קלט "סכום ביטוח" לתצוגה עם פסיקים בין שלשות ספרות בזמן ההקלדה
       (למשל "50000" -> "50,000"), כדי שיהיה ברור מיידית כמה אפסים הוזנו בפועל
       ותימנע טעות של אפס חסר/עודף. משמש בכל סימולטורי הריסק. לא משפיע על
       החישוב עצמו — _calc בכל סימולטור ממשיך לנקות תווים שאינם ספרות לפני
       ההמרה למספר. */
   function formatRiskSimSumInsuredDigits(raw){
-    const digits = String(raw == null ? "" : raw).replace(/[^\d]/g, "").replace(/^0+(?=\d)/, "");
+    const digits = String(giIlsExpandLocal(raw == null ? "" : raw)).replace(/[^\d]/g, "").replace(/^0+(?=\d)/, "");
     if(!digits) return "";
     return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   }
@@ -3061,6 +3077,7 @@
   function giSimPremEditParseMoney(raw){
     let s = String(raw == null ? "" : raw).trim();
     if(!s) return NaN;
+    s = giIlsExpandLocal(s);
     s = s.replace(/[₪\s]/g, "").replace(/,/g, "");
     const n = Number(s);
     return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : NaN;
@@ -12665,7 +12682,7 @@
               </div>
               <div class="lcMnrCi__field">
                 <label class="lcMnrCi__label">סכום פיצוי (₪)</label>
-                <input class="lcMnrCi__input" type="number" min="100000" step="50000" data-hachci-field="compensation" value="${escapeHtml(String(st.compensation || ""))}" />
+                <input class="lcMnrCi__input" type="text" inputmode="numeric" dir="ltr" data-hachci-field="compensation" value="${escapeHtml(String(st.compensation || ""))}" />
               </div>
             </div>
             ${resultHtml}

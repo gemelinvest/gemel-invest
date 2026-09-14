@@ -61,7 +61,126 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260914-cf-form-in-file-v1";
+  const BUILD = "20260914-ils-km-shorthand-v1";
+  /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
+     חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
+  const GI_ILS_AMOUNT = (function(){
+    const SHORT = /^₪?\s*([\d.,]+)\s*([kKmM])\s*$/;
+    const SIM_SUM_ATTRS = [
+      "data-phx-field", "data-mnr-field", "data-hachr-field", "data-clalrisk-field",
+      "data-clalmort-field", "data-mgd-field", "data-ayl-field", "data-hachm-field",
+      "data-mnrci-field", "data-phxci-field", "data-aylci-field", "data-mgdci-field",
+      "data-clalci-field", "data-hachci-field"
+    ];
+    function expand(raw){
+      const s = String(raw ?? "").trim();
+      if(!s) return s;
+      const m = s.match(SHORT);
+      if(!m) return s;
+      const n = Number(String(m[1]).replace(/,/g, ""));
+      if(!Number.isFinite(n) || n < 0) return s;
+      const mul = (m[2] === "m" || m[2] === "M") ? 1000000 : 1000;
+      const out = n * mul;
+      if(!Number.isFinite(out)) return s;
+      if(Math.abs(out - Math.round(out)) < 1e-9) return String(Math.round(out));
+      return String(Math.round(out * 100) / 100);
+    }
+    function parse(raw){
+      const src = expand(raw);
+      const cleaned = String(src ?? "").replace(/[₪\s]/g, "").replace(/,/g, "");
+      const n = Number(cleaned.replace(/[^0-9.\-]/g, ""));
+      return Number.isFinite(n) ? n : NaN;
+    }
+    function grouped(raw){
+      const src = expand(raw);
+      const cleaned = String(src ?? "").replace(/[^\d.]/g, "");
+      if(!cleaned) return "";
+      const parts = cleaned.split(".");
+      const i = (parts[0] || "").replace(/^0+(?=\d)/, "");
+      const f = parts.length > 1 ? parts.slice(1).join("") : undefined;
+      const withCommas = i.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      return f !== undefined && f !== "" ? (withCommas + "." + f) : withCommas;
+    }
+    function shekelLabel(raw){
+      const n = parse(raw);
+      if(!Number.isFinite(n) || n <= 0) return "";
+      try { return "₪" + n.toLocaleString("he-IL"); }
+      catch(_e){ return "₪" + n; }
+    }
+    function isCeMoneyPath(path){
+      const p = String(path || "");
+      if(/years$/i.test(p) || /bankNo$/.test(p) || /branch$/.test(p) || /idNumber$/.test(p) || /phone$/.test(p) || /zip$/.test(p) || /policyNumber$/.test(p)) return false;
+      return /(monthlyPremium|premiumMonthly|sumInsured|compensation|umbrellaDisabilityAmount|umbrellaDeathAmount|pledgeBank\.amount)$/.test(p)
+        || /\.premiumPerInsured\.[^.]+$/.test(p)
+        || /\.healthAddonPremiums\./.test(p);
+    }
+    function isAmountField(el){
+      if(!el || !el.getAttribute) return false;
+      const tag = String(el.tagName || "").toUpperCase();
+      if(tag !== "INPUT" && tag !== "TEXTAREA") return false;
+      if(el.getAttribute("data-ils-amount") === "0") return false;
+      if(el.getAttribute("data-ils-amount") === "1") return true;
+      if(el.getAttribute("data-money") === "ils") return true;
+      const bank = el.getAttribute("data-pdraft-bank");
+      if(bank === "amount") return true;
+      if(bank) return false;
+      const pledge = el.getAttribute("data-mc-pledge-field");
+      if(pledge === "amount") return true;
+      if(pledge) return false;
+      if(el.hasAttribute("data-pdraft-per-insured-sum")) return true;
+      if(el.hasAttribute("data-pdraft-per-insured-comp")) return true;
+      if(el.hasAttribute("data-pdraft-per-insured-premium")) return true;
+      if(el.hasAttribute("data-pdraft-addon-premium")) return true;
+      if(el.hasAttribute("data-np-cover-amount")) return true;
+      if(el.hasAttribute("data-cover-amount-field")) return true;
+      if(el.hasAttribute("data-elem-product-prem")) return true;
+      const pdraft = el.getAttribute("data-pdraft");
+      if(pdraft === "akovSalary" || pdraft === "umbrellaDisabilityAmount" || pdraft === "umbrellaDeathAmount") return true;
+      const eq = el.getAttribute("data-eq-field");
+      if(eq === "premium" || eq === "deductible" || eq === "sumInsured") return true;
+      if(el.getAttribute("data-gishell-legal-bank-field") === "amount") return true;
+      for(let i = 0; i < SIM_SUM_ATTRS.length; i++){
+        const v = el.getAttribute(SIM_SUM_ATTRS[i]);
+        if(v === "sumInsured" || v === "compensation") return true;
+      }
+      const id = el.id || "";
+      if(id === "goldSalary" || id === "lcUserMonthlyTarget") return true;
+      if(isCeMoneyPath(el.getAttribute("data-ce-field"))) return true;
+      const bind = el.getAttribute("data-bind") || "";
+      if(/\.(sumInsured|compensation|monthlyPremium)$/.test(bind)) return true;
+      return false;
+    }
+    function applyInput(el){
+      if(!el || !isAmountField(el)) return false;
+      const cur = String(el.value ?? "");
+      const trimmed = cur.trim();
+      if(!SHORT.test(trimmed)) return false;
+      const next = grouped(trimmed);
+      if(!next || next === cur) return false;
+      el.value = next;
+      try { el.setSelectionRange(next.length, next.length); } catch(_e) {}
+      try {
+        const host = el.closest ? (el.closest(".lcField") || el.parentElement) : el.parentElement;
+        const hint = host && host.querySelector && host.querySelector("[data-money-hint], [data-mc-money-hint], .lcMoneyHint, .mcMoneyHint");
+        if(hint) hint.textContent = shekelLabel(next);
+      } catch(_e2) {}
+      return true;
+    }
+    function bindDocument(){
+      if(typeof document === "undefined" || !document.addEventListener) return;
+      const handler = (ev) => {
+        const el = ev && ev.target;
+        if(!el) return;
+        applyInput(el);
+      };
+      document.addEventListener("input", handler, true);
+      document.addEventListener("change", handler, true);
+      document.addEventListener("focusout", handler, true);
+    }
+    return { expand, parse, grouped, shekelLabel, isAmountField, applyInput, bindDocument, SHORT };
+  })();
+  try { window.GI_ILS_AMOUNT = GI_ILS_AMOUNT; } catch(_eIls) {}
+  try { GI_ILS_AMOUNT.bindDocument(); } catch(_eIlsBind) {}
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -21583,7 +21702,10 @@ UsersGateUI.init();
     _lifeSumSavedIds: new Set(),
 
     asLifeMoneyNumber(v){
-      return Number(String(v == null ? "" : v).replace(/[^\d.\-]/g, "")) || 0;
+      const src = (typeof GI_ILS_AMOUNT !== "undefined" && GI_ILS_AMOUNT && typeof GI_ILS_AMOUNT.expand === "function")
+        ? GI_ILS_AMOUNT.expand(v)
+        : v;
+      return Number(String(src == null ? "" : src).replace(/[^\d.\-]/g, "")) || 0;
     },
 
     sanitizeLifePolicyInPlace(p){
@@ -23806,7 +23928,10 @@ UsersGateUI.init();
     },
 
     asMoneyNumber(v){
-      return this.asNumber(v);
+      const src = (typeof GI_ILS_AMOUNT !== "undefined" && GI_ILS_AMOUNT && typeof GI_ILS_AMOUNT.expand === "function")
+        ? GI_ILS_AMOUNT.expand(v)
+        : v;
+      return this.asNumber(src);
     },
 
     getPolicyDiscountPct(policy){
@@ -29967,7 +30092,10 @@ UsersGateUI.init();
 
     asEditMoneyNumber(v){
       if(typeof CustomersUI !== "undefined" && CustomersUI?.asMoneyNumber) return CustomersUI.asMoneyNumber(v);
-      const n = Number(String(v ?? "").replace(/[^\d.\-]/g, ""));
+      const src = (typeof GI_ILS_AMOUNT !== "undefined" && GI_ILS_AMOUNT && typeof GI_ILS_AMOUNT.expand === "function")
+        ? GI_ILS_AMOUNT.expand(v)
+        : v;
+      const n = Number(String(src ?? "").replace(/[^\d.\-]/g, ""));
       return Number.isFinite(n) ? Math.max(0, Math.round(n * 100) / 100) : 0;
     },
 
@@ -42789,7 +42917,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260914-cf-form-in-file-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260914-ils-km-shorthand-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -43474,7 +43602,7 @@ UsersGateUI.init();
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
     "./simulators-center.css?v=20260914-mc-followup-qfix-v2",
-    "./simulators-shell.css?v=20260914-cf-form-in-file-v1"
+    "./simulators-shell.css?v=20260914-ils-km-shorthand-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -44836,7 +44964,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260914-cf-form-in-file-v1";
+  const GI_WIZARD_JS_VERSION = "20260914-ils-km-shorthand-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -70994,7 +71122,10 @@ ${inner}
           if(Number.isFinite(n)) return n;
         }
       }catch(_e2){}
-      const n = Number(String(v == null ? "" : v).replace(/[^\d.\-]/g, ""));
+      const src = (typeof GI_ILS_AMOUNT !== "undefined" && GI_ILS_AMOUNT && typeof GI_ILS_AMOUNT.expand === "function")
+        ? GI_ILS_AMOUNT.expand(v)
+        : v;
+      const n = Number(String(src == null ? "" : src).replace(/[^\d.\-]/g, ""));
       return Number.isFinite(n) ? n : 0;
     },
 
@@ -72220,7 +72351,7 @@ ${inner}
       if(field === "amount"){
         const hint = card.querySelector(`[data-mc-money-hint="${bIdx}"]`);
         if(hint){
-          const n = Number(String(el.value || "").replace(/[^0-9.]/g, "")) || 0;
+          const n = this._mcAsMoneyNumber(el.value) || 0;
           hint.textContent = n > 0 ? this._mcFmtMoney(n) : "";
         }
         this._mcRefreshBenefMoneyUi(card, item.policy);
