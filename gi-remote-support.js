@@ -4,7 +4,7 @@
 (() => {
   "use strict";
 
-  const TAG = "20260914-remote-support-simple-v1";
+  const TAG = "20260914-remote-support-simple-v2";
   const TOKEN_KEY = "GI_RS_ACTOR_TOKEN_V1";
   const SESSION_KEY = "GI_RS_SESSION_V1";
   const ADMIN_TOPIC = "gi-rs-admins";
@@ -295,7 +295,12 @@
     try {
       const { data, error } = await client.rpc(name, args);
       if(error) return { ok: false, error: error.message || "RPC_FAILED", raw: error };
-      if(data && typeof data === "object") return data;
+      let payload = data;
+      if(typeof payload === "string"){
+        try { payload = JSON.parse(payload); } catch(_e) {}
+      }
+      if(Array.isArray(payload)) payload = payload[0] || null;
+      if(payload && typeof payload === "object") return payload;
       return { ok: false, error: "BAD_RPC_PAYLOAD" };
     } catch(err){
       return { ok: false, error: String(err?.message || err) };
@@ -337,12 +342,13 @@
   async function action(name, sessionId, payload){
     const tok = await ensureToken();
     if(!tok.ok) return tok;
-    return rpc("gi_rs_action", {
+    const args = {
       p_token: state.token,
       p_action: name,
-      p_session_id: sessionId || null,
       p_payload: payload && typeof payload === "object" ? payload : {}
-    });
+    };
+    if(trim(sessionId)) args.p_session_id = sessionId;
+    return rpc("gi_rs_action", args);
   }
 
   async function listSessions(){
@@ -925,8 +931,13 @@
       setError("giRsRequestError",
         code === "NOT_LOGGED_IN" ? "לא זוהה משתמש מחובר. רענן את הדף והיכנס שוב."
         : code === "AGENT_NOT_FOUND" ? "המשתמש המחובר לא נמצא בשרת התמיכה."
-        : code === "ADMIN_CANNOT_REQUEST" ? "מנהל מערכת רואה את תיבת הבקשות, ולא שולח בקשת תמיכה."
         : "לא ניתן לשלוח את הבקשה. נסה שוב או רענן את הדף.");
+      return;
+    }
+    if(state.isSupportAdmin){
+      closeModal("giRsRequestModal");
+      await refreshFromServer();
+      renderAdminModal(true);
       return;
     }
     const res = await action("request_support", null, { problemText: "" });
@@ -945,7 +956,7 @@
     });
     await broadcastStatus();
     closeModal("giRsRequestModal");
-    toast({ title: "בקשת התמיכה נשלחה", text: "כשהמנהל יבקש להתחבר תופיע אצלך בקשת אישור.", variant: "ok" });
+    toast({ title: "בקשת התמיכה נשלחה", variant: "ok" });
   }
 
   async function requestConnect(){
