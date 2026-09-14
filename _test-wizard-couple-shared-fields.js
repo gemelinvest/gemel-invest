@@ -11,7 +11,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260914-pledge-years-digit-v1";
+const TAG = "20260914-cf-form-modal-close-v1";
 let failed = 0;
 let passed = 0;
 

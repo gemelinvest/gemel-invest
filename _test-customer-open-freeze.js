@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260914-pledge-years-digit-v1";
+const TAG = "20260914-cf-form-modal-close-v1";
 let failed = 0;
 let passed = 0;
 
@@ -82,6 +82,16 @@ const earlyReturnIdx = ensureFollowup.indexOf("if(!pack.triggered.length && !has
 const wizardLoadIdx = ensureFollowup.indexOf("ensureGiWizardJsLoaded");
 assert(earlyReturnIdx >= 0, "early-returns when no followup docs");
 assert(wizardLoadIdx > earlyReturnIdx, "wizard load happens only after followup need is confirmed");
+
+console.log("\n5) tab switch and file close do not leave the form editor stuck");
+const queueFollowup = sliceFunction(app, "queueFollowupDocumentsSync(rec, opts){");
+assert(!!queueFollowup, "queueFollowupDocumentsSync exists");
+assert(queueFollowup.includes("scheduleIdle"), "followup sync is scheduled idle");
+assert(queueFollowup.includes("window.setTimeout(fn, 2200)"), "fallback is delayed, not 0ms");
+assert(!queueFollowup.includes("window.setTimeout(run, 0)"), "tab click does not load wizard on the same turn");
+assert(app.includes("_mcDismissFileFormEditorOnFileClose"), "file close dismisses original-form editor");
+const saveEditor = sliceFunction(app, "async _mcSaveAndCloseFileFormEditor(){");
+assert(saveEditor.indexOf("this._mcCloseFileFormModal()") < saveEditor.indexOf("await this._mcMaterializeEditedForms"), "form modal is removed before PDF/persist work");
 
 if(failed){
   console.error("\nFAILED " + failed + " / passed " + passed);
