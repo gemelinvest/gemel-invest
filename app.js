@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260914-benef-picker-names-v1";
+  const BUILD = "20260914-pledge-years-digit-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -42773,7 +42773,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260914-mc-followup-qfix-v2";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260914-pledge-years-digit-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -43458,7 +43458,7 @@ UsersGateUI.init();
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
     "./simulators-center.css?v=20260914-mc-followup-qfix-v2",
-    "./simulators-shell.css?v=20260914-mc-followup-qfix-v2"
+    "./simulators-shell.css?v=20260914-pledge-years-digit-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -44820,7 +44820,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260914-mc-followup-qfix-v2";
+  const GI_WIZARD_JS_VERSION = "20260914-pledge-years-digit-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
