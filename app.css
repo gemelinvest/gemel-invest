@@ -34797,11 +34797,11 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   gap:8px;
   align-items:baseline;
   padding:4px 10px 8px;
-  font-size:12px;
+  font-size:14px;
 }
 .mcPolicyRow__reasonLabel{
   flex:0 0 auto;
-  font-size:11px;
+  font-size:13px;
   font-weight:800;
   color:rgba(30,58,122,.48);
 }
@@ -34809,6 +34809,48 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcPolicyRow__reason--empty .mcPolicyRow__reasonText{color:#9a3412;}
 .mcPolicyRow__maxPrem .mcPolicyRow__reasonText{color:#0a1638;}
 .mcPolicyRow__maxPrem strong{font-weight:800;}
+.mcPolicyRow__pledgeBtn{
+  appearance:none;font:inherit;cursor:pointer;
+  margin:0 10px 8px;padding:6px 12px;border-radius:999px;
+  border:1px solid rgba(180,83,9,.35);
+  background:rgba(245,158,11,.12);color:#92400e;
+  font-size:14px;font-weight:800;
+}
+.mcCoverDisc{
+  margin:0 10px 8px;padding:8px 10px;border-radius:10px;
+  background:#f8fafc;border:1px solid #e8eef8;
+}
+.mcCoverDisc__title{font-size:14px;font-weight:800;color:#0a1638;margin:0 0 6px;}
+.mcCoverDisc__rows{display:flex;flex-direction:column;gap:6px;}
+.mcCoverDisc__row{
+  display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;
+  font-size:14px;font-weight:650;color:#0f1f4a;
+}
+.mcCoverDisc__name{font-weight:800;}
+.mcCoverDisc__pct{color:#2a5cf5;font-weight:800;}
+.mcCoverDisc__pay{color:#334155;}
+.mcPledgeViewModal{
+  position:fixed;inset:0;z-index:80;
+  display:flex;align-items:center;justify-content:center;
+  padding:18px;background:rgba(10,22,56,.45);
+}
+.mcPledgeViewModal__panel{
+  width:min(560px,100%);max-height:min(86vh,720px);overflow:auto;
+  background:#fff;border-radius:16px;padding:16px 18px;
+  box-shadow:0 18px 50px rgba(10,22,56,.2);
+}
+.mcPledgeViewModal__head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 8px;}
+.mcPledgeViewModal__title{font-size:18px;font-weight:800;color:#0a1638;}
+.mcPledgeViewModal__close{
+  appearance:none;border:none;background:transparent;cursor:pointer;
+  font-size:18px;font-weight:800;color:#64748b;padding:4px 8px;
+}
+.mcPledgeViewModal__note{margin:0 0 12px;font-size:14px;font-weight:650;color:rgba(30,58,122,.62);}
+.mcPledgeView__bank{margin:0 0 12px;padding:10px 12px;border-radius:12px;border:1px solid #e8eef8;background:#f8fafc;}
+.mcPledgeView__bankTitle{margin:0 0 8px;font-size:15px;font-weight:800;color:#0a1638;}
+.mcPledgeView__row{display:flex;justify-content:space-between;gap:12px;padding:4px 0;font-size:15px;}
+.mcPledgeView__k{font-weight:700;color:#334155;}
+.mcPledgeView__v{font-weight:800;color:#0a1638;text-align:end;}
 @media (max-width:860px){
   .mcPolicyRow--head{display:none;}
   .mcPolicyRow__main{
@@ -35190,19 +35232,19 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcCancelQCard__badge{
   display:inline-flex;align-items:center;
   padding:5px 10px;border-radius:8px;
-  background:#2a5cf5;color:#fff;font-size:12px;font-weight:800;
+  background:#2a5cf5;color:#fff;font-size:14px;font-weight:800;
 }
 .mcCancelQCard__status{
   display:inline-flex;align-items:center;
   padding:5px 10px;border-radius:8px;
-  background:rgba(245,158,11,.12);color:#92400e;font-size:12px;font-weight:800;
+  background:rgba(245,158,11,.12);color:#92400e;font-size:14px;font-weight:800;
 }
-.mcCancelQCard__title{font-size:clamp(15px,1.5vw,17px);font-weight:800;color:#0a1638;margin:0 0 8px;}
+.mcCancelQCard__title{font-size:clamp(17px,1.6vw,19px);font-weight:800;color:#0a1638;margin:0 0 8px;}
 .mcCancelQCard__reason{
   margin:0 0 10px;padding:10px 12px;border-radius:10px;
-  background:#f8fafc;border:1px solid #e8eef8;font-size:13px;line-height:1.45;font-weight:600;
+  background:#f8fafc;border:1px solid #e8eef8;font-size:15px;line-height:1.45;font-weight:600;
 }
-.mcCancelQCard__reasonLabel{display:block;margin:0 0 4px;font-size:11px;font-weight:800;color:rgba(30,58,122,.5);letter-spacing:.04em;}
+.mcCancelQCard__reasonLabel{display:block;margin:0 0 4px;font-size:15px;font-weight:800;color:rgba(30,58,122,.5);letter-spacing:.04em;}
 .mcCancelQCard__wizardNote{
   margin:0 0 12px;padding:8px 10px;border-radius:10px;
   background:#eef5ff;border:1px solid rgba(42,92,245,.18);
@@ -35630,15 +35672,15 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcBenefCard__head{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 8px;}
 .mcBenefCard__badge{
   display:inline-flex;align-items:center;padding:5px 10px;border-radius:8px;
-  background:#2a5cf5;color:#fff;font-size:12px;font-weight:800;
+  background:#2a5cf5;color:#fff;font-size:14px;font-weight:800;
 }
 .mcBenefCard__type{
   display:inline-flex;align-items:center;padding:5px 10px;border-radius:8px;
-  background:rgba(14,165,164,.12);color:#0f766e;font-size:12px;font-weight:800;
+  background:rgba(14,165,164,.12);color:#0f766e;font-size:14px;font-weight:800;
 }
-.mcBenefCard__title{font-size:clamp(15px,1.5vw,17px);font-weight:800;color:#0a1638;margin:0 0 8px;}
+.mcBenefCard__title{font-size:clamp(17px,1.6vw,19px);font-weight:800;color:#0a1638;margin:0 0 8px;}
 .mcBenefCard__ask{margin:0 0 10px;}
-.mcBenefCard__hint{margin:0 0 12px;font-size:13px;color:rgba(30,58,122,.62);font-weight:600;}
+.mcBenefCard__hint{margin:0 0 12px;font-size:16px;color:rgba(30,58,122,.62);font-weight:600;}
 .mcBenefList{display:flex;flex-direction:column;gap:10px;}
 .mcBenefRow{
   padding:12px;
@@ -35660,26 +35702,62 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
   display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;
   margin:12px 0;
 }
-.mcBenefCard__total{font-size:13px;font-weight:700;color:#334155;}
+.mcBenefCard__total{font-size:15px;font-weight:700;color:#334155;}
 .mcBenefCard__total [data-mc-benef-total].is-ok{color:#047857;}
 .mcBenefCard__total [data-mc-benef-total].is-bad{color:#b91c1c;}
 .mcBenefCard__confirm{
   display:flex;align-items:center;gap:8px;
-  font-size:14px;font-weight:700;color:#152a5c;cursor:pointer;
+  font-size:16px;font-weight:700;color:#152a5c;cursor:pointer;
 }
 .mcBenefCard__confirm input{width:18px;height:18px;accent-color:#2a5cf5;}
 .mcBenefCard__legalHeirs{
   display:flex;align-items:flex-start;gap:10px;margin:0 0 12px;padding:10px 12px;
   border:1px solid rgba(42,92,245,.18);border-radius:12px;background:rgba(42,92,245,.05);
-  font-size:13px;font-weight:700;color:#0f1f4a;cursor:pointer;
+  font-size:16px;font-weight:700;color:#0f1f4a;cursor:pointer;
 }
 .mcBenefCard__legalHeirs input{width:18px;height:18px;margin-top:2px;accent-color:#2a5cf5;flex:0 0 auto;}
+.mcBenefCard__heirsRow{
+  display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:0 0 12px;
+}
+.mcBenefCard__heirsBtn{
+  appearance:none;font:inherit;cursor:pointer;
+  padding:10px 16px;border-radius:12px;
+  border:1px solid rgba(42,92,245,.28);
+  background:#fff;color:#1e3a7a;font-size:16px;font-weight:800;
+}
+.mcBenefCard__heirsBtn.is-on{
+  border-color:#2a5cf5;background:#2a5cf5;color:#fff;
+}
+.mcBenefCard__heirsNote{font-size:15px;font-weight:650;color:rgba(30,58,122,.62);}
+.mcBenefCard__back{margin-inline-start:auto;font-size:14px;}
+.mcBenefCard__nestedPledge{
+  margin:0 0 12px;padding:10px 12px;border-radius:12px;
+  border:1px dashed rgba(15,32,96,.16);background:#f8fafc;
+}
+.mcBenefCard__nestedTitle{font-size:15px;font-weight:800;color:#0a1638;margin:0 0 8px;}
+.mcBenefPicker{display:flex;flex-direction:column;gap:12px;}
+.mcBenefPicker__lead{margin:0;font-size:16px;font-weight:700;color:#1e3a7a;}
+.mcBenefPickList{display:flex;flex-direction:column;gap:10px;}
+.mcBenefPickCard{
+  display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;
+  padding:12px 14px;border-radius:14px;border:1px solid #e5eaf3;background:#fff;
+}
+.mcBenefPickCard.is-checked{border-color:#2a5cf5;box-shadow:0 0 0 2px rgba(42,92,245,.12);}
+.mcBenefPickCard__check{
+  display:flex;align-items:center;gap:10px;flex:1 1 220px;cursor:pointer;
+}
+.mcBenefPickCard__check input{width:18px;height:18px;accent-color:#2a5cf5;}
+.mcBenefPickCard__who{display:flex;flex-direction:column;gap:2px;}
+.mcBenefPickCard__who strong{font-size:16px;color:#0a1638;}
+.mcBenefPickCard__who span{font-size:15px;font-weight:650;color:#334155;}
+.mcBenefPickCard__status{font-size:14px;font-weight:800;color:#2a5cf5;}
+.mcBenefPicker__actions{display:flex;flex-wrap:wrap;gap:8px;}
 .mcBenefCard__hint--ok{color:#047857;}
 .mcPledgeBox{
   margin:0 0 14px;padding:12px 14px;border-radius:14px;
   border:1px solid rgba(15,32,96,.1);background:rgba(248,250,255,.9);
 }
-.mcPledgeBox__title{font-size:14px;font-weight:800;color:#0a1638;margin:0 0 10px;}
+.mcPledgeBox__title{font-size:16px;font-weight:800;color:#0a1638;margin:0 0 10px;}
 .mcStepVerify__field--wide{grid-column:1 / -1;}
 .mcCall__liveNav{
   display:none;
@@ -35758,7 +35836,7 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 }
 .mcHealthDeclChildren__label{
   margin:0 0 6px;
-  font-size:12px;
+  font-size:15px;
   font-weight:800;
   color:#1e3a7a;
 }
@@ -36137,7 +36215,7 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 }
 .mcStepVerify__field{display:flex;flex-direction:column;gap:4px;min-width:0;}
 .mcStepVerify__label{
-  font-size:11px;
+  font-size:15px;
   font-weight:700;
   color:#334155;
   line-height:1.3;
@@ -36145,14 +36223,14 @@ body.view-mirrorCall-active.mc-mirror-immersive .content{
 .mcStepVerify__input{
   width:100%;
   box-sizing:border-box;
-  min-height:36px;
-  padding:7px 10px;
+  min-height:42px;
+  padding:8px 10px;
   border-radius:9px;
   border:1px solid #d7deea;
   background:#fff;
   color:#0f172a;
   font:inherit;
-  font-size:13px;
+  font-size:16px;
   font-weight:600;
   line-height:1.35;
   text-align:right;
@@ -46661,13 +46739,13 @@ body.view-elementaryMirror-active .pageTitle{ /* keep default */ }
   border-bottom: 1px solid var(--payLine);
 }
 .mcPayRow__k{
-  font-size: 11.5px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--muted);
   white-space: nowrap;
 }
 .mcPayRow__v{
-  font-size: 13.5px;
+  font-size: 16px;
   font-weight: 650;
   color: var(--payInk);
   text-align: end;
@@ -46690,7 +46768,7 @@ body.view-elementaryMirror-active .pageTitle{ /* keep default */ }
 .mcPayConfirm{
   appearance: none;
   font: inherit;
-  font-size: 12.5px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--muted);
   background: var(--bg2, #fff);
