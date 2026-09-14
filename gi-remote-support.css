@@ -38,6 +38,67 @@
   flex: 1 1 auto;
 }
 
+/* Live work screen fills the viewport instead of a centered cramped card. */
+#giRsAdminModal.giRsAdminModal--live .modal__panel{
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  transform: none;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+#giRsAdminModal.giRsAdminModal--live .modal__head{
+  flex: 0 0 auto;
+  padding: 8px 14px;
+}
+
+#giRsAdminModal.giRsAdminModal--live .modal__kicker{
+  display: none;
+}
+
+#giRsAdminModal.giRsAdminModal--live .modal__body{
+  padding: 0;
+  overflow: hidden;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+#giRsAdminModal.giRsAdminModal--live .modal__foot{
+  flex: 0 0 auto;
+}
+
+#giRsAdminModal.giRsAdminModal--live #giRsInbox{
+  display: none;
+}
+
+#giRsAdminModal.giRsAdminModal--live .giRsLive.is-visible{
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  margin: 0;
+}
+
+#giRsAdminModal.giRsAdminModal--live .giRsLive__videoWrap{
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  aspect-ratio: auto;
+  border-radius: 0;
+}
+
+#giRsAdminModal.giRsAdminModal--live .giRsLive__hint{
+  margin: 0;
+  padding: 6px 14px;
+}
+
 .giRsModal__lead{
   margin: 0 0 12px;
   color: var(--gi-text-2, #334155);
