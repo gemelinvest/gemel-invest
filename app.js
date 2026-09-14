@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260914-mc-he-followup-v1";
+  const BUILD = "20260914-mc-q1to1-followup-v1";
   const NEW_POLICY_PREMIUM_MAX_ILS = 3000;
   const OPERATIONAL_PDF_MAX_PAGE_SCROLL_PX = 1080;
   const POST_LOGIN_DATA_TIMEOUT_MS = 15000;
@@ -42336,7 +42336,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260914-mc-he-followup-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260914-mc-q1to1-followup-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -42356,8 +42356,8 @@ UsersGateUI.init();
   const GI_PHOENIX_LIFE_FORM_HREF = "./gi-phoenix-life-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_HEALTH_FORM_HREF = "./gi-phoenix-health-form.js?v=20260824-covers-sum-v1";
   const GI_PHOENIX_CI_FORM_HREF = "./gi-phoenix-ci-form.js?v=20260826-phoenix-ci-3148-v1";
-  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-he-followup-v1";
-  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mc-he-followup-v1";
+  const GI_CANCEL_FORMS_HREF = "./gi-cancel-forms.js?v=20260914-mc-q1to1-followup-v1";
+  const GI_ARRIVAL_DOCS_HREF = "./gi-arrival-docs.js?v=20260914-mc-q1to1-followup-v1";
   const GI_FOLLOWUP_ZIP_CONFIG_HREF = "./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1";
   const GI_FOLLOWUP_ZIP_HREF = "./gi-followup-zip.js?v=20260828-sales-mail-hide-v1";
   const GI_SIM_DISC_ENGINE_HREF = "./gi-sim-discount-engine.js?v=20260823-disc-cover-split-v1";
@@ -43010,18 +43010,18 @@ UsersGateUI.init();
     "./ayalon-health-sim.css?v=20260810-sim-mockup-v2",
     "./ayalon-ci-sim.css?v=20260811-ayl-ci-v1",
     "./hachshara-health-sim.css?v=20260810-sim-mockup-v2",
-    "./hachshara-risk-sim.css?v=20260914-mc-he-followup-v1",
-    "./hachshara-mortgage-risk-sim.css?v=20260914-mc-he-followup-v1",
+    "./hachshara-risk-sim.css?v=20260914-mc-q1to1-followup-v1",
+    "./hachshara-mortgage-risk-sim.css?v=20260914-mc-q1to1-followup-v1",
     "./migdal-health-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-ci-sim.css?v=20260810-sim-mockup-v2",
     "./migdal-risk-sim.css?v=20260810-sim-mockup-v2",
-    "./menora-ci-sim.css?v=20260914-mc-he-followup-v1",
+    "./menora-ci-sim.css?v=20260914-mc-q1to1-followup-v1",
     "./clal-health-sim.css?v=20260812-cll-health-v1",
     "./clal-ci-sim.css?v=20260812-cll-ci-v1",
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
-    "./simulators-center.css?v=20260914-mc-he-followup-v1",
-    "./simulators-shell.css?v=20260914-mc-he-followup-v1"
+    "./simulators-center.css?v=20260914-mc-q1to1-followup-v1",
+    "./simulators-shell.css?v=20260914-mc-q1to1-followup-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -44383,7 +44383,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260914-mc-he-followup-v1";
+  const GI_WIZARD_JS_VERSION = "20260914-mc-q1to1-followup-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -72005,6 +72005,76 @@ ${inner}
       return all.length ? ("שאלון " + all.join(", ")) : "שאלון המשך";
     },
 
+    _mcHealthMetaMap(rec){
+      try{
+        if(typeof MirrorsUI !== "undefined" && typeof MirrorsUI.buildMirrorHealthMeta === "function"){
+          return MirrorsUI.buildMirrorHealthMeta(rec)?.map || {};
+        }
+      }catch(_e){}
+      return {};
+    },
+
+    _mcHealthMetaForQKey(rec, qKey){
+      const key = safeTrim(qKey);
+      if(!key) return { text: "", fields: [], questionnaireNos: [] };
+      const meta = this._mcHealthMetaMap(rec)[key] || {};
+      const fields = Array.isArray(meta.fields)
+        ? meta.fields.filter((f) => f && f.key && f.type !== "section")
+        : [];
+      const nos = Array.isArray(meta.questionnaireNos) && meta.questionnaireNos.length
+        ? meta.questionnaireNos.map(String).filter(Boolean)
+        : (Array.isArray(meta.questionnaireNumbers) ? meta.questionnaireNumbers.map(String).filter(Boolean) : []);
+      return { text: this._mcHealthQText(key, rec), fields, questionnaireNos: nos };
+    },
+
+    _mcHealthManualFieldsHtml(qKey, insId, fields, stored, hidden){
+      const list = Array.isArray(fields) ? fields : [];
+      if(!list.length) return "";
+      const bag = stored && typeof stored === "object" ? stored : {};
+      const rows = list.map((field) => {
+        const fk = safeTrim(field.key);
+        if(!fk) return "";
+        const val = bag[fk] == null ? "" : String(bag[fk]);
+        const lab = safeTrim(field.label) || fk;
+        const name = "healthResponses." + qKey + "." + insId + ".fields." + fk;
+        const attrs = `class="mcFormEd__input" name="${escapeHtml(name)}" data-mc-health-q="${escapeHtml(qKey)}" data-mc-health-ins="${escapeHtml(insId)}" data-mc-health-field="${escapeHtml(fk)}"`;
+        if(field.type === "textarea"){
+          return `<label class="mcFormEd__row mcFormEd__row--wide"><span class="mcFormEd__lab">${escapeHtml(lab)}</span><textarea ${attrs} rows="2">${escapeHtml(val)}</textarea></label>`;
+        }
+        return `<label class="mcFormEd__row"><span class="mcFormEd__lab">${escapeHtml(lab)}</span><input ${attrs} value="${escapeHtml(val)}"></label>`;
+      }).join("");
+      return `<div class="mcFormEd__manual"${hidden ? " hidden" : ""} data-mc-manual-for="${escapeHtml(qKey + "|" + insId)}">${rows}</div>`;
+    },
+
+    _mcHealthQuestionFollowHint(nos){
+      const list = (Array.isArray(nos) ? nos : []).map(String).filter(Boolean);
+      if(!list.length) return "";
+      return `<div class="mcFormEd__qFollow">שאלון ${escapeHtml(list.join(", "))}</div>`;
+    },
+
+    _mcFollowupHitsForQuestion(rec, qKey, insId, questionnaireNos){
+      const rail = this._mcCollectHealthFormRail(rec);
+      const nos = (Array.isArray(questionnaireNos) ? questionnaireNos : []).map(String).filter(Boolean);
+      const company = (typeof GI_FOLLOWUP_ZIP_CONFIG !== "undefined" && GI_FOLLOWUP_ZIP_CONFIG.companyKeyFromQKey)
+        ? GI_FOLLOWUP_ZIP_CONFIG.companyKeyFromQKey(qKey) : "";
+      const hits = (rail.follow || []).filter((row) => {
+        const entry = row.entry || {};
+        if(safeTrim(entry.insuredId) !== safeTrim(insId)) return false;
+        if(company && safeTrim(entry.companyKey) && safeTrim(entry.companyKey) !== company) return false;
+        const num = String(entry.questionnaireNum || "");
+        if(nos.length) return !!(num && nos.indexOf(num) >= 0);
+        const keys = Array.isArray(entry.qKeys) ? entry.qKeys.map(String) : [];
+        return keys.indexOf(qKey) >= 0;
+      });
+      hits.sort((a, b) => {
+        if(!nos.length) return 0;
+        const ia = nos.indexOf(String(a.entry?.questionnaireNum || ""));
+        const ib = nos.indexOf(String(b.entry?.questionnaireNum || ""));
+        return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+      });
+      return hits;
+    },
+
     _mcHealthFollowupFields(item){
       const schema = Array.isArray(item?.meta?.fields)
         ? item.meta.fields.filter((f) => f && f.type !== "section")
@@ -72302,27 +72372,41 @@ ${inner}
       return map[t] || "";
     },
 
-    _mcHealthQText(qKey){
+    _mcHealthQText(qKey, rec){
       const key = safeTrim(qKey);
       if(!key) return "";
+      const usable = (t) => {
+        const s = safeTrim(t);
+        if(!s || s === key) return "";
+        if(/^[a-z0-9_]+$/i.test(s)) return "";
+        return s;
+      };
       try{
-        const rec = this._getFreshCustomerRecord();
-        const groups = this._mirrorBuildHealthGroups(rec) || [];
+        const recNow = rec || this._getFreshCustomerRecord();
+        const groups = this._mirrorBuildHealthGroups(recNow) || [];
         for(let i = 0; i < groups.length; i++){
           if(safeTrim(groups[i]?.qKey) === key){
-            const text = safeTrim(groups[i]?.question?.text || groups[i]?.insured?.label);
-            if(text && text !== key) return text;
+            const text = usable(groups[i]?.question?.text);
+            if(text) return text;
           }
         }
+        const mapped = usable(this._mcHealthMetaMap(recNow)[key]?.text);
+        if(mapped) return mapped;
       }catch(_e){}
       try{
+        if(typeof Wizard !== "undefined" && typeof Wizard.resolveHealthQuestionDisplayText === "function"){
+          const resolved = usable(Wizard.resolveHealthQuestionDisplayText(key));
+          if(resolved) return resolved;
+        }
         const map = (typeof Wizard !== "undefined" && Wizard.getHealthQuestionLegacyTextMap)
           ? Wizard.getHealthQuestionLegacyTextMap() : null;
-        if(map && map[key]) return map[key];
+        if(map && usable(map[key])) return map[key];
         const idx = key.lastIndexOf("__");
         if(idx > 0 && map){
-          const shortKey = "short" + key.slice(idx);
-          if(map[shortKey]) return map[shortKey];
+          const suffix = key.slice(idx + 2);
+          const leaf = suffix.includes("_") ? suffix.slice(suffix.lastIndexOf("_") + 1) : suffix;
+          if(usable(map["short__" + suffix])) return map["short__" + suffix];
+          if(usable(map["short__" + leaf])) return map["short__" + leaf];
         }
       }catch(_e2){}
       return "";
@@ -72554,11 +72638,7 @@ ${inner}
         return this._mcFollowupFallbackLabel(leaf || fieldName, "");
       }
       const meta = this._mcPdfHealthFieldMeta(type, fieldName);
-      if(meta.text){
-        const n = meta.qNum ? (meta.qNum + ". ") : "";
-        const who = meta.who && meta.who !== "מבוטח" ? (" (" + meta.who + ")") : "";
-        return n + meta.text + who;
-      }
+      if(meta.text) return meta.text;
       const he = this._mcHumanizePdfFieldName(fieldName);
       if(he) return he;
       const helper = (typeof GI_OFFICIAL_FORM_FILL !== "undefined") ? GI_OFFICIAL_FORM_FILL : null;
@@ -72604,7 +72684,7 @@ ${inner}
 
     _mcIsHealthPdfField(name){
       const n = safeTrim(name);
-      return /^(HealthDec|IsSmoking|MKQ\d|Q\d+$|Hight|Weight|BMI|ClientSmoke|Smoking|Shaban)/.test(n);
+      return /^(HealthDec|IsSmoking|MKQ\d|Q\d+$|ClientSmoke|Smoking|Shaban)/.test(n);
     },
 
     _mcRenderPdfFieldsHtml(type, fields, values){
@@ -72654,10 +72734,27 @@ ${inner}
               const yesAttr = (o === "1" || o === "True" || o === "yes") ? ` data-mc-health-yes="1"` : "";
               return `<label class="mcFormEd__seg${on}"><input type="radio" name="pdf:${esc(f.name)}" data-pdf-field="${esc(f.name)}" value="${esc(o)}"${qKeyAttr}${whoAttr}${yesAttr}${val === o ? " checked" : ""}><span>${esc(lab)}</span></label>`;
             }).join("");
-            return `<div class="mcFormEd__q">` +
-              `<div class="mcFormEd__qHead"><div class="mcFormEd__qText">${esc(label)}</div>` +
+            const rec = this._getFreshCustomerRecord();
+            const qMeta = meta.qKey ? this._mcHealthMetaForQKey(rec, meta.qKey) : { fields: [], questionnaireNos: [] };
+            const insId = this._mcInsuredIdForHealthWho(rec, meta.who, f.name);
+            const isYes = val === "1" || val === "True" || val === "yes";
+            const stored = (() => {
+              try{
+                const helperH = (typeof GI_OFFICIAL_FORM_FILL !== "undefined") ? GI_OFFICIAL_FORM_FILL : null;
+                const responses = helperH?.healthResponses?.(rec?.payload) || {};
+                return (responses[meta.qKey] && responses[meta.qKey][insId] && responses[meta.qKey][insId].fields) || {};
+              }catch(_e){ return {}; }
+            })();
+            const hideManual = !(isYes && !qMeta.questionnaireNos.length);
+            const manualHtml = qMeta.fields.length
+              ? this._mcHealthManualFieldsHtml(meta.qKey, insId, qMeta.fields, stored, hideManual)
+              : "";
+            const qLabel = qMeta.text || label;
+            return `<div class="mcFormEd__q" data-mc-qblock="${esc(meta.qKey || f.name)}">` +
+              `<div class="mcFormEd__qHead"><div class="mcFormEd__qText">${esc(qLabel)}</div>` +
               (meta.who ? `<div class="mcFormEd__qWho">${esc(meta.who)}</div>` : "") +
-              `</div><div class="mcFormEd__segs">${optHtml}</div></div>`;
+              this._mcHealthQuestionFollowHint(qMeta.questionnaireNos) +
+              `</div><div class="mcFormEd__segs">${optHtml}</div>${manualHtml}</div>`;
           }
           let control = "";
           if(f.type === "choice" || f.type === "dropdown"){
@@ -72729,7 +72826,8 @@ ${inner}
       });
       const keys = this._mcHealthKeysForJoinType(type);
       const healthRows = keys.map((qKey) => {
-        const text = this._mcHealthQText(qKey) || qKey;
+        const qMeta = this._mcHealthMetaForQKey(rec, qKey);
+        const text = qMeta.text || this._mcHealthQText(qKey) || "שאלה רפואית";
         const whoBlocks = people.map((row) => {
           const insId = row.id;
           let ans = "";
@@ -72740,13 +72838,20 @@ ${inner}
           const name = "healthResponses." + qKey + "." + insId + ".answer";
           const yesOn = ans === "yes" ? " is-on" : "";
           const noOn = ans === "no" ? " is-on" : "";
-          return `<div class="mcFormEd__q">` +
+          const stored = (responses[qKey] && responses[qKey][insId] && responses[qKey][insId].fields) || {};
+          const hideManual = !(ans === "yes" && !qMeta.questionnaireNos.length);
+          const manualHtml = qMeta.fields.length
+            ? this._mcHealthManualFieldsHtml(qKey, insId, qMeta.fields, stored, hideManual)
+            : "";
+          return `<div class="mcFormEd__q" data-mc-qblock="${escapeHtml(qKey)}">` +
             `<div class="mcFormEd__qHead"><div class="mcFormEd__qText">${escapeHtml(text)}</div>` +
-            `<div class="mcFormEd__qWho">${escapeHtml(row.title)}</div></div>` +
+            `<div class="mcFormEd__qWho">${escapeHtml(row.title)}</div>` +
+            this._mcHealthQuestionFollowHint(qMeta.questionnaireNos) +
+            `</div>` +
             `<div class="mcFormEd__segs">` +
               `<label class="mcFormEd__seg${yesOn}"><input type="radio" name="${escapeHtml(name)}" value="yes" data-mc-health-qkey="${escapeHtml(qKey)}" data-mc-health-who="${escapeHtml(row.title)}" data-mc-health-yes="1"${ans === "yes" ? " checked" : ""}><span>כן</span></label>` +
               `<label class="mcFormEd__seg${noOn}"><input type="radio" name="${escapeHtml(name)}" value="no" data-mc-health-qkey="${escapeHtml(qKey)}" data-mc-health-who="${escapeHtml(row.title)}"${ans === "no" ? " checked" : ""}><span>לא</span></label>` +
-            `</div></div>`;
+            `</div>${manualHtml}</div>`;
         }).join("");
         return whoBlocks;
       }).join("");
@@ -72851,10 +72956,15 @@ ${inner}
       };
       if(root._mcFormEdBound) return;
       root._mcFormEdBound = true;
-      root.addEventListener("input", save);
+      root.addEventListener("input", (ev) => {
+        save();
+        const t = ev.target;
+        if(t && t.getAttribute && t.getAttribute("data-mc-health-field")) this._onMcHealthFieldEdit(t);
+      });
       root.addEventListener("change", (ev) => {
         save();
         const t = ev.target;
+        if(t && t.getAttribute && t.getAttribute("data-mc-health-field")) this._onMcHealthFieldEdit(t);
         if(t && t.type === "radio"){
           const name = t.getAttribute("data-pdf-field") || t.getAttribute("name") || "";
           if(name){
@@ -72983,22 +73093,46 @@ ${inner}
         });
         this._mcSyncHealthDeclarationCopies(rec, source);
       }catch(_e){ return; }
-      if(!isYes) return;
+      if(!isYes){
+        const block = el.closest && el.closest(".mcFormEd__q");
+        if(block){
+          const ins = this._mcInsuredIdForHealthWho(rec, el.getAttribute("data-mc-health-who"), el.getAttribute("data-pdf-field"));
+          block.querySelectorAll(".mcFormEd__manual").forEach((box) => {
+            const mark = box.getAttribute("data-mc-manual-for") || "";
+            if(!ins || mark === (qKey + "|" + ins) || mark === qKey) box.hidden = true;
+          });
+        }
+        return;
+      }
       if(this._mcHealthEditor && this._mcHealthEditor.kind === "followup") return;
+      const qMeta = this._mcHealthMetaForQKey(rec, qKey);
+      const nos = qMeta.questionnaireNos || [];
+      if(!nos.length){
+        const block = el.closest && el.closest(".mcFormEd__q");
+        if(block){
+          block.querySelectorAll(".mcFormEd__manual").forEach((box) => {
+            const mark = box.getAttribute("data-mc-manual-for") || "";
+            if(mark === (qKey + "|" + insId) || mark === qKey) box.hidden = false;
+          });
+        }
+        return;
+      }
       try{
         if(typeof CustomerFileUI !== "undefined" && CustomerFileUI.ensureFollowupDocuments){
           await CustomerFileUI.ensureFollowupDocuments(rec);
         }
       }catch(_e2){}
       const fresh = this._getFreshCustomerRecord() || rec;
-      const rail = this._mcCollectHealthFormRail(fresh);
-      const hits = (rail.follow || []).filter((row) => {
-        const keys = row.entry && Array.isArray(row.entry.qKeys) ? row.entry.qKeys : [];
-        return keys.indexOf(qKey) >= 0 && safeTrim(row.entry?.insuredId) === insId;
-      });
-      const target = hits[0] || (rail.follow || []).find((row) => safeTrim(row.entry?.insuredId) === insId);
+      const hits = this._mcFollowupHitsForQuestion(fresh, qKey, insId, nos);
+      const target = hits[0];
       if(!target || !target.type){
-        this._renderHealthDeclarationBody(fresh);
+        const block = el.closest && el.closest(".mcFormEd__q");
+        if(block){
+          block.querySelectorAll(".mcFormEd__manual").forEach((box) => {
+            const mark = box.getAttribute("data-mc-manual-for") || "";
+            if(mark === (qKey + "|" + insId) || mark === qKey) box.hidden = false;
+          });
+        }
         return;
       }
       const ed = this._mcHealthEditor;
