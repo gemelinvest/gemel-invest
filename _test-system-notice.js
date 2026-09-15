@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260915-sys-notice-v5";
+const TAG = "20260915-sys-notice-v6";
 const IDLE_MS = 20000;
 let failed = 0;
 let passed = 0;
@@ -105,6 +105,11 @@ assert(js.includes("lcUserPill__role"), "manager pill is enough to send");
 assert(js.includes("מנהל"), "Hebrew manager role is allowed");
 assert(js.includes("function isComposerRole(role)"), "role aliases are normalized");
 assert(!js.includes("window.Auth"), "module stays off window.Auth");
+assert(!js.includes("window.Storage"), "module stays off window.Storage");
+assert(js.includes("/rest/v1/"), "send posts through PostgREST");
+assert(js.includes("gemelInvestSupabaseClient"), "realtime uses the exposed supabase client");
+assert(js.includes("FALLBACK_SUPABASE_URL"), "send has a supabase URL fallback");
+assert(js.includes("function restRequest(path, options = {})"), "own rest helper exists");
 
 console.log("\n4) CRM engines stay");
 assert(app.includes("function playGiReminderSound(){"), "reminder sound stays");

@@ -9,7 +9,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260915-sys-notice-v5";
+const TAG = "20260915-sys-notice-v6";
 let failed = 0;
 let passed = 0;
 
