@@ -4,11 +4,12 @@
 (() => {
   "use strict";
 
-  const TAG = "20260915-sys-notice-v2";
+  const TAG = "20260915-sys-notice-v3";
   const TABLE = "gi_system_notices";
   const CHANNEL = "gi-system-notice";
   const STATE_KEY = "GI_SYS_NOTICE_UI_V1";
   const MAX_BODY = 2000;
+  const IDLE_MS = 20000;
 
   const state = {
     bound: false,
@@ -16,6 +17,7 @@
     mode: "hidden",
     lastHeardId: "",
     pollTimer: 0,
+    idleTimer: 0,
     channel: null,
     dbChannel: null,
     sending: false
@@ -70,6 +72,20 @@
 
   function saveUiState(next){
     try { localStorage.setItem(STATE_KEY, JSON.stringify(next || {})); } catch(_e) {}
+  }
+
+  function clearIdle(){
+    window.clearTimeout(state.idleTimer);
+    state.idleTimer = 0;
+  }
+
+  function armIdle(){
+    clearIdle();
+    if(state.mode !== "open") return;
+    state.idleTimer = window.setTimeout(() => {
+      state.idleTimer = 0;
+      if(state.mode === "open") minimize();
+    }, IDLE_MS);
   }
 
   function playGiSystemNoticeSound(){
@@ -136,10 +152,13 @@
       card.classList.add("is-open");
       card.classList.remove("is-min");
       dock.classList.remove("is-on");
-    } else {
+    } else if(state.mode === "min"){
       card.classList.remove("is-open");
       card.classList.add("is-min");
       dock.classList.add("is-on");
+    } else {
+      card.classList.remove("is-open", "is-min");
+      dock.classList.remove("is-on");
     }
   }
 
@@ -160,15 +179,19 @@
     const saved = trim(ui[notice.id]);
     if(options.forceOpen || (isNew && options.play)){
       state.mode = "open";
-    } else if(saved === "open" || saved === "min"){
-      state.mode = saved;
+    } else if(saved === "closed"){
+      state.mode = "closed";
     } else if(options.fromLogin){
       state.mode = "min";
+    } else if(saved === "open" || saved === "min"){
+      state.mode = saved;
     } else {
       state.mode = "open";
     }
     persistMode();
     paintCard();
+    if(state.mode === "open") armIdle();
+    else clearIdle();
     if(options.play && notice.id !== state.lastHeardId){
       state.lastHeardId = notice.id;
       playGiSystemNoticeSound();
@@ -191,6 +214,7 @@
 
   function minimize(){
     if(!state.notice) return;
+    clearIdle();
     state.mode = "min";
     persistMode();
     paintCard();
@@ -198,7 +222,8 @@
 
   function closeCard(){
     if(!state.notice) return;
-    state.mode = "min";
+    clearIdle();
+    state.mode = "closed";
     persistMode();
     paintCard();
   }
@@ -208,6 +233,7 @@
     state.mode = "open";
     persistMode();
     paintCard();
+    armIdle();
   }
 
   function setComposerStatus(msg, isErr){
@@ -322,8 +348,16 @@
     state.bound = true;
     $("giSysNoticeMinBtn")?.addEventListener("click", () => minimize());
     $("giSysNoticeCloseBtn")?.addEventListener("click", () => closeCard());
-    $("giSysNoticeDock")?.addEventListener("click", () => expand());
+    $("giSysNoticeDockOpen")?.addEventListener("click", () => expand());
+    $("giSysNoticeDockClose")?.addEventListener("click", () => closeCard());
     $("giSysNoticeSendBtn")?.addEventListener("click", () => { void sendNow(); });
+    const card = $("giSysNoticeCard");
+    card?.addEventListener("pointerenter", () => {
+      if(state.mode === "open") clearIdle();
+    });
+    card?.addEventListener("pointerleave", () => {
+      if(state.mode === "open") armIdle();
+    });
   }
 
   async function onLogin(){
@@ -336,6 +370,7 @@
 
   function onLogout(){
     window.clearInterval(state.pollTimer);
+    clearIdle();
     try { state.channel?.unsubscribe?.(); } catch(_e) {}
     try { state.dbChannel?.unsubscribe?.(); } catch(_e) {}
     state.channel = null;
@@ -356,6 +391,7 @@
 
   window.GiSystemNotice = {
     tag: TAG,
+    idleMs: IDLE_MS,
     sendNow,
     playGiSystemNoticeSound,
     onLogin,
