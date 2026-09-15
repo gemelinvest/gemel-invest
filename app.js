@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260914-cf-doc-preview-v1";
+  const BUILD = "20260915-reminder-glass-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -1253,6 +1253,53 @@
         const dur = i === seq.length - 1 ? 0.32 : noteDur;
         _playGiMarimbaNote(ctx, master, N[key], i * step, dur, vel);
       });
+    } catch(_e) {}
+  }
+
+  /* GI-REMINDER 2026-09-15 — זכוכית רכה פעמיים, עם הפסקה באמצע. רק תזכורת. */
+  function _playGiGlassNote(ctx, dest, freq, start, duration, velocity){
+    const t = ctx.currentTime + start;
+    const partials = [
+      { mult: 1, amp: 1 },
+      { mult: 2.01, amp: 0.35 },
+      { mult: 4.04, amp: 0.12 }
+    ];
+    partials.forEach(({ mult, amp }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq * mult, t);
+      const peak = Math.max(velocity * amp, 0.0002);
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(peak, t + 0.006);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+      osc.connect(gain);
+      gain.connect(dest);
+      osc.start(t);
+      osc.stop(t + duration + 0.08);
+    });
+  }
+
+  function playGiReminderSound(){
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if(!Ctx) return;
+      if(!playGiNotifySound._ctx) playGiNotifySound._ctx = new Ctx();
+      const ctx = playGiNotifySound._ctx;
+      if(ctx.state === "suspended"){
+        try { void ctx.resume(); } catch(_e) {}
+      }
+      const master = ctx.createGain();
+      master.gain.value = 0.85;
+      master.connect(ctx.destination);
+      const G6 = 1567.98;
+      const E6 = 1318.51;
+      const playPhrase = (offset) => {
+        _playGiGlassNote(ctx, master, G6, offset, 0.7, 0.18);
+        _playGiGlassNote(ctx, master, E6, offset + 0.22, 1.0, 0.16);
+      };
+      playPhrase(0);
+      playPhrase(1.72);
     } catch(_e) {}
   }
 
@@ -42911,7 +42958,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260914-cf-doc-preview-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260915-reminder-glass-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -43596,7 +43643,7 @@ UsersGateUI.init();
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
     "./simulators-center.css?v=20260914-mc-followup-qfix-v2",
-    "./simulators-shell.css?v=20260914-cf-doc-preview-v1"
+    "./simulators-shell.css?v=20260915-reminder-glass-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -44958,7 +45005,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260914-cf-doc-preview-v1";
+  const GI_WIZARD_JS_VERSION = "20260915-reminder-glass-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -59488,7 +59535,7 @@ const ClalRiskLifePdf = {
     },
 
     _playAlertSound(){
-      try { playGiNotifySound(); } catch(_e) {}
+      try { playGiReminderSound(); } catch(_e) {}
     },
 
     _sendBrowserNotification(r){

@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260914-cf-doc-preview-v1";
+const TAG = "20260915-reminder-glass-v1";
 let failed = 0;
 let passed = 0;
 
