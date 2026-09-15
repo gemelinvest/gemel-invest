@@ -9,7 +9,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260915-reminder-link-v1";
+const TAG = "20260915-reminder-vol-v1";
 let failed = 0;
 let passed = 0;
 
@@ -51,6 +51,9 @@ assert(remFn.includes("playPhrase(1.72)"), "repeats after a pause");
 assert(remFn.includes("1567.98") && remFn.includes("1318.51"), "same G6/E6 glass notes as the sample");
 assert(remFn.includes("_playGiGlassNote"), "uses the glass voice, not marimba");
 assert(!remFn.includes("E G A B C B A G"), "reminder is not the old marimba run");
+assert(remFn.includes("master.gain.value = 1.0"), "master gain is louder than the original 0.85");
+assert(remFn.includes("0.50") && remFn.includes("0.44"), "glass note velocities are raised");
+assert(!remFn.includes("0.18") && !remFn.includes("0.16"), "quiet 0.18/0.16 velocities are gone");
 
 console.log("\n3) lead and chat stay on their own sounds");
 assert(app.includes('new Audio("assets/audio/lead-chime-from-recording.mp3")'), "lead chime file stays");
