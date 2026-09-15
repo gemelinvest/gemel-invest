@@ -10,7 +10,7 @@ const path = require("path");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const APP_TAG = "20260915-reminder-glass-v1";
+const APP_TAG = "20260915-reminder-link-v1";
 let passed = 0;
 let failed = 0;
 

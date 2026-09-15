@@ -13,7 +13,7 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260915-reminder-glass-v1";
+const TAG = "20260915-reminder-link-v1";
 let failed = 0;
 let passed = 0;
 

@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260915-reminder-glass-v1";
+  const BUILD = "20260915-reminder-link-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -42958,7 +42958,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260915-reminder-glass-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260915-reminder-link-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -43643,7 +43643,7 @@ UsersGateUI.init();
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
     "./simulators-center.css?v=20260914-mc-followup-qfix-v2",
-    "./simulators-shell.css?v=20260915-reminder-glass-v1"
+    "./simulators-shell.css?v=20260915-reminder-link-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -45005,7 +45005,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260915-reminder-glass-v1";
+  const GI_WIZARD_JS_VERSION = "20260915-reminder-link-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -59072,7 +59072,10 @@ const ClalRiskLifePdf = {
         callbackNote: $("#giReminderCallbackNote"),
         docsList:     $("#giReminderDocsList"),
         missingList:  $("#giReminderMissingList"),
-        customerSel:  $("#giReminderCustomer"),
+        linkQuery:    $("#giReminderLinkQuery"),
+        linkClear:    $("#giReminderLinkClear"),
+        linkPicked:   $("#giReminderLinkPicked"),
+        linkResults:  $("#giReminderLinkResults"),
         dateInput:    $("#giReminderDate"),
         timeInput:    $("#giReminderTime"),
         errorBox:     $("#giReminderError"),
@@ -59095,7 +59098,9 @@ const ClalRiskLifePdf = {
         alertTime:    $("#giReminderAlertTime"),
         alertDone:    $("#giReminderAlertDone"),
         alertSnooze:  $("#giReminderAlertSnooze"),
+        alertOpenCustomer: $("#giReminderAlertOpenCustomer"),
         alertOpenLead:$("#giReminderAlertOpenLead"),
+        alertOpenProposal: $("#giReminderAlertOpenProposal"),
       };
 
       on(this.els.fab,       "click",  () => this.openModal());
@@ -59108,20 +59113,27 @@ const ClalRiskLifePdf = {
       on(this.els.addNewBtn, "click",  () => this.startNew());
       on(this.els.alertDone, "click",  () => this.dismissAlert(true));
       on(this.els.alertSnooze,"click", () => this.snoozeAlert());
-      on(this.els.alertOpenLead, "click", () => {
-        const r = this.alertQueue[0];
-        if(!r) return;
-        try {
-          const lead = (CampaignLeadsStore?.leads || []).find(l => String(l.id) === String(r.lead_id));
-          if(lead){
-            this.dismissAlert(false);
-            LeadDetailsModal.open(lead);
-          } else {
-            // אם אין lead_id — נסה לפתוח לפי customer_id
-            UI.goView("campaignMyLeads");
-            this.dismissAlert(false);
-          }
-        } catch(_e){}
+      on(this.els.alertOpenCustomer, "click", () => this.openLinkedFromAlert("customer"));
+      on(this.els.alertOpenLead, "click", () => this.openLinkedFromAlert("lead"));
+      on(this.els.alertOpenProposal, "click", () => this.openLinkedFromAlert("proposal"));
+      on(this.els.linkQuery, "input", () => this.onLinkQueryInput());
+      on(this.els.linkQuery, "focus", () => {
+        if(safeTrim(this.els.linkQuery?.value)) this.searchLinkedRecords(this.els.linkQuery.value);
+      });
+      on(this.els.linkClear, "click", () => this.clearLinkedRecord());
+      on(this.els.linkResults, "click", (ev) => {
+        const hit = ev.target?.closest?.("[data-rem-link-kind]");
+        if(!hit) return;
+        this.selectLinkedRecord({
+          kind: hit.getAttribute("data-rem-link-kind"),
+          id: hit.getAttribute("data-rem-link-id"),
+          name: hit.getAttribute("data-rem-link-name") || ""
+        });
+      });
+      on(document, "click", (ev) => {
+        if(!this.els.modal?.classList.contains("is-open")) return;
+        if(ev.target?.closest?.(".giReminderLink")) return;
+        this.hideLinkResults();
       });
 
       this.els.typeCards.forEach(card => {
@@ -59166,7 +59178,17 @@ const ClalRiskLifePdf = {
     },
 
     async upsertReminder(row){
-      const result = await Storage.upsertSingleRow(REMINDERS_TABLE, row);
+      let result = await Storage.upsertSingleRow(REMINDERS_TABLE, row);
+      if(!result?.ok){
+        const err = String(result?.error || "");
+        if(/lead_id|proposal_id|link_kind|schema cache|column/i.test(err)){
+          const fallback = { ...row };
+          delete fallback.lead_id;
+          delete fallback.proposal_id;
+          delete fallback.link_kind;
+          result = await Storage.upsertSingleRow(REMINDERS_TABLE, fallback);
+        }
+      }
       if(!result?.ok) throw new Error(result?.error || "upsert failed");
     },
 
@@ -59201,7 +59223,6 @@ const ClalRiskLifePdf = {
 
     // ── modal open/close ─────────────────────────────
     openModal(){
-      this.populateCustomerList();
       this.showStep("list");
       this.renderList();
       this.els.modal.setAttribute("aria-hidden","false");
@@ -59245,27 +59266,23 @@ const ClalRiskLifePdf = {
 
     // פותח מודאל תזכורת ישירות לשלב הפרטים עם שם + טלפון של ליד
     openForLead(lead){
-      this.populateCustomerList();
       this.renderList();
       this.editingId = null;
-      this._pendingLeadId = safeTrim(lead?.id) || null;
       this.selectedType = "callback";
       this.els.typeCards.forEach(c => c.classList.toggle("is-selected", c.dataset.type === "callback"));
       this.showStep("details");
       this.showFieldsForType("callback");
 
-      // מלא שם לקוח ב-select אם קיים, אחרת הצג ב-note
       const name = safeTrim(lead?.customerName) || "";
       const phone = safeTrim(lead?.phone) || "";
-
-      if(this.els.customerSel){
-        // חפש לפי שם
-        const opts = Array.from(this.els.customerSel.options);
-        const match = opts.find(o => o.textContent.trim() === name);
-        if(match) this.els.customerSel.value = match.value;
+      if(lead?.id){
+        this.selectLinkedRecord({
+          kind: "lead",
+          id: safeTrim(lead.id),
+          name: name || phone || "ליד"
+        });
       }
 
-      // מלא את שדה ההערה עם שם + טלפון
       if(this.els.callbackNote){
         const prefill = [name, phone].filter(Boolean).join(" | ");
         this.els.callbackNote.value = prefill ? prefill + "\n" : "";
@@ -59273,8 +59290,6 @@ const ClalRiskLifePdf = {
 
       this.els.modal.setAttribute("aria-hidden","false");
       this.els.modal.classList.add("is-open");
-
-      // פוקוס על שדה התאריך
       window.setTimeout(() => { try { this.els.dateInput?.focus(); } catch(_e){} }, 120);
     },
 
@@ -59305,21 +59320,217 @@ const ClalRiskLifePdf = {
       });
     },
 
-    // ── populate customers ───────────────────────────
-    populateCustomerList(){
-      const sel = this.els.customerSel;
-      if(!sel) return;
-      sel.innerHTML = "<option value=\"\">— ללא קישור ללקוח —</option>";
+    // ── שיוך לקוח / ליד / הצעה — חיפוש מקומי בלבד, בלי שינוי מנועי חיפוש ──
+    _isMineCustomerOrProposal(rec){
+      try { return !!customerOwnedByCurrentAgent(rec); } catch(_e) { return false; }
+    },
+
+    _isMineLead(lead){
+      try {
+        if(typeof agentCanOpenCampaignLead === "function") return agentCanOpenCampaignLead(lead);
+        return campaignLeadAgentAccess(lead, getCurrentAgentRecord());
+      } catch(_e) {
+        return false;
+      }
+    },
+
+    _linkMatchBlob(name, idNumber, phone){
+      const n = safeTrim(name).toLowerCase();
+      const id = (typeof normalizeIdValue === "function" ? normalizeIdValue(idNumber) : String(idNumber || "").replace(/\D/g, ""));
+      const ph = (typeof normalizePhoneValue === "function" ? normalizePhoneValue(phone) : String(phone || "").replace(/\D/g, ""));
+      return { n, id, ph, raw: [n, id, ph].join(" ") };
+    },
+
+    _queryMatchesLink(q, blob){
+      const raw = safeTrim(q).toLowerCase();
+      if(!raw) return true;
+      const digits = raw.replace(/\D/g, "");
+      if(blob.n && blob.n.indexOf(raw) >= 0) return true;
+      if(digits && blob.id && blob.id.indexOf(digits) >= 0) return true;
+      if(digits && blob.ph && blob.ph.indexOf(digits) >= 0) return true;
+      return blob.raw.indexOf(raw) >= 0;
+    },
+
+    _customerLinkRow(c){
+      const name = safeTrim(c?.fullName) || safeTrim(c?.payload?.fullName) || safeTrim(c?.name) || "";
+      const idNumber = safeTrim(c?.idNumber) || safeTrim(c?.payload?.idNumber) || "";
+      const phone = safeTrim(c?.phone) || safeTrim(c?.payload?.phone) || "";
+      return { kind: "customer", id: safeTrim(c?.id), name: name || "לקוח", idNumber, phone };
+    },
+
+    _leadLinkRow(lead){
+      const row = (typeof enrichCampaignLeadFromDescription === "function")
+        ? enrichCampaignLeadFromDescription(lead)
+        : lead;
+      const name = safeTrim(row?.customerName) || safeTrim(row?.fullName) || "";
+      const idNumber = safeTrim(row?.idNumber) || "";
+      const phone = safeTrim(row?.phone) || "";
+      return { kind: "lead", id: safeTrim(lead?.id), name: name || phone || "ליד", idNumber, phone };
+    },
+
+    _proposalLinkRow(p){
+      const name = safeTrim(p?.fullName) || safeTrim(p?.payload?.fullName) || "";
+      const idNumber = safeTrim(p?.idNumber) || safeTrim(p?.payload?.idNumber) || "";
+      const phone = safeTrim(p?.phone) || safeTrim(p?.payload?.phone) || "";
+      return { kind: "proposal", id: safeTrim(p?.id), name: name || "הצעה", idNumber, phone };
+    },
+
+    _collectLocalLinkHits(query){
+      const out = [];
       const customers = Array.isArray(State?.data?.customers) ? State.data.customers : [];
-      customers.forEach(c => {
-        const name = safeTrim(c?.payload?.name || c?.name || "");
-        const id   = safeTrim(c?.id || "");
-        if(!name) return;
-        const opt = document.createElement("option");
-        opt.value = id;
-        opt.textContent = name;
-        sel.appendChild(opt);
+      customers.forEach((c) => {
+        if(!this._isMineCustomerOrProposal(c)) return;
+        const row = this._customerLinkRow(c);
+        if(!row.id) return;
+        const blob = this._linkMatchBlob(row.name, row.idNumber, row.phone);
+        if(!this._queryMatchesLink(query, blob)) return;
+        out.push(row);
       });
+      const leads = Array.isArray(CampaignLeadsStore?.leads) ? CampaignLeadsStore.leads : [];
+      leads.forEach((lead) => {
+        if(!this._isMineLead(lead)) return;
+        const row = this._leadLinkRow(lead);
+        if(!row.id) return;
+        const blob = this._linkMatchBlob(row.name, row.idNumber, row.phone);
+        if(!this._queryMatchesLink(query, blob)) return;
+        out.push(row);
+      });
+      const proposals = Array.isArray(State?.data?.proposals) ? State.data.proposals : [];
+      proposals.forEach((p) => {
+        if(!this._isMineCustomerOrProposal(p)) return;
+        const row = this._proposalLinkRow(p);
+        if(!row.id) return;
+        const blob = this._linkMatchBlob(row.name, row.idNumber, row.phone);
+        if(!this._queryMatchesLink(query, blob)) return;
+        out.push(row);
+      });
+      return out;
+    },
+
+    onLinkQueryInput(){
+      const q = this.els.linkQuery ? this.els.linkQuery.value : "";
+      if(this._linkedRecord && safeTrim(q) !== safeTrim(this._linkedRecord.name)){
+        this._linkedRecord = null;
+        this._paintLinkedPick();
+      }
+      window.clearTimeout(this._linkSearchTimer);
+      this._linkSearchTimer = window.setTimeout(() => this.searchLinkedRecords(q), 180);
+    },
+
+    async searchLinkedRecords(query){
+      const q = safeTrim(query);
+      if(!q){
+        this.hideLinkResults();
+        return;
+      }
+      const hits = this._collectLocalLinkHits(q);
+      if(q.length >= 2 && typeof Storage?.searchCustomers === "function"){
+        try {
+          const res = await Storage.searchCustomers(q, 20);
+          (res?.data || []).forEach((c) => {
+            if(!this._isMineCustomerOrProposal(c)) return;
+            const row = this._customerLinkRow(c);
+            if(!row.id) return;
+            if(hits.some((h) => h.kind === "customer" && String(h.id) === String(row.id))) return;
+            hits.push(row);
+          });
+        } catch(_e) {}
+      }
+      const kindOrder = { customer: 0, lead: 1, proposal: 2 };
+      hits.sort((a, b) => (kindOrder[a.kind] - kindOrder[b.kind]) || String(a.name).localeCompare(String(b.name), "he"));
+      this._renderLinkResults(hits.slice(0, 24), q);
+    },
+
+    _renderLinkResults(hits, query){
+      const box = this.els.linkResults;
+      if(!box) return;
+      if(!hits.length){
+        box.hidden = false;
+        box.innerHTML = `<div class="giReminderLink__empty">${safeTrim(query) ? "אין תוצאה ברשימה שלך" : "הקלידו שם, ת״ז או טלפון"}</div>`;
+        return;
+      }
+      const kindLabel = { customer: "לקוח", lead: "ליד", proposal: "הצעה" };
+      box.hidden = false;
+      box.innerHTML = hits.map((row) => {
+        const meta = [row.idNumber, row.phone].filter(Boolean).join(" · ");
+        return `<button class="giReminderLink__hit" type="button" role="option" data-rem-link-kind="${this._escHtml(row.kind)}" data-rem-link-id="${this._escHtml(row.id)}" data-rem-link-name="${this._escHtml(row.name)}">
+          <span class="giReminderLink__hitKind">${kindLabel[row.kind] || row.kind}</span>
+          <span class="giReminderLink__hitName">${this._escHtml(row.name)}</span>
+          ${meta ? `<span class="giReminderLink__hitMeta">${this._escHtml(meta)}</span>` : ""}
+        </button>`;
+      }).join("");
+    },
+
+    hideLinkResults(){
+      if(this.els.linkResults) this.els.linkResults.hidden = true;
+    },
+
+    selectLinkedRecord(row){
+      if(!row || !row.id) return;
+      this._linkedRecord = { kind: safeTrim(row.kind), id: safeTrim(row.id), name: safeTrim(row.name) };
+      if(this.els.linkQuery) this.els.linkQuery.value = this._linkedRecord.name;
+      this.hideLinkResults();
+      this._paintLinkedPick();
+    },
+
+    clearLinkedRecord(){
+      this._linkedRecord = null;
+      if(this.els.linkQuery) this.els.linkQuery.value = "";
+      this.hideLinkResults();
+      this._paintLinkedPick();
+    },
+
+    _paintLinkedPick(){
+      const picked = this.els.linkPicked;
+      const clearBtn = this.els.linkClear;
+      const rec = this._linkedRecord;
+      if(clearBtn) clearBtn.hidden = !rec;
+      if(!picked) return;
+      if(!rec){
+        picked.hidden = true;
+        picked.textContent = "";
+        return;
+      }
+      const kindLabel = { customer: "לקוח", lead: "ליד", proposal: "הצעה" };
+      picked.hidden = false;
+      picked.textContent = (kindLabel[rec.kind] || rec.kind) + " · " + (rec.name || rec.id);
+    },
+
+    openLinkedFromAlert(kind){
+      const r = this.alertQueue[0];
+      if(!r) return;
+      this.dismissAlert(false);
+      try { this.closeModal(); } catch(_e) {}
+      if(kind === "customer" && r.customer_id){
+        try { CustomersUI.openByIdWithLoader?.(r.customer_id, 400); } catch(_e) {
+          try { CustomersUI.openById?.(r.customer_id); } catch(_e2) {}
+        }
+        return;
+      }
+      if(kind === "lead" && r.lead_id){
+        try {
+          const lead = (CampaignLeadsStore?.leads || []).find((l) => String(l.id) === String(r.lead_id));
+          if(lead) LeadDetailsModal.open(lead);
+          else UI.goView("campaignMyLeads");
+        } catch(_e) {}
+        return;
+      }
+      if(kind === "proposal" && r.proposal_id){
+        try {
+          UI.goView("proposals");
+          window.setTimeout(() => { try { ProposalsUI.openById?.(r.proposal_id); } catch(_e2) {} }, 80);
+        } catch(_e) {}
+      }
+    },
+
+    _syncAlertOpenButtons(r){
+      const kind = safeTrim(r?.link_kind);
+      const showCustomer = kind === "customer" || (!kind && !!r?.customer_id);
+      const showLead = kind === "lead" || (!kind && !!r?.lead_id);
+      const showProposal = kind === "proposal" || (!kind && !!r?.proposal_id);
+      if(this.els.alertOpenCustomer) this.els.alertOpenCustomer.hidden = !showCustomer;
+      if(this.els.alertOpenLead) this.els.alertOpenLead.hidden = !showLead;
+      if(this.els.alertOpenProposal) this.els.alertOpenProposal.hidden = !showProposal;
     },
 
     // ── save ─────────────────────────────────────────
@@ -59346,10 +59557,12 @@ const ClalRiskLifePdf = {
         if(!details){ this.showError("יש לרשום את החוסרים"); return; }
       }
 
-      const customerId = safeTrim(this.els.customerSel?.value) || null;
-      const customerName = customerId
-        ? (this.els.customerSel?.options[this.els.customerSel.selectedIndex]?.text || "")
-        : "";
+      const link = this._linkedRecord || null;
+      const linkKind = safeTrim(link?.kind);
+      const customerId = linkKind === "customer" ? safeTrim(link.id) : null;
+      const customerName = safeTrim(link?.name) || null;
+      const leadId = linkKind === "lead" ? safeTrim(link.id) : null;
+      const proposalId = linkKind === "proposal" ? safeTrim(link.id) : null;
 
       const row = {
         id:            this.editingId || ("rem_" + Date.now() + "_" + Math.random().toString(16).slice(2)),
@@ -59358,20 +59571,19 @@ const ClalRiskLifePdf = {
         details,
         remind_at:     remindAt.toISOString(),
         customer_id:   customerId,
-        customer_name: customerName || null,
+        customer_name: customerName,
+        lead_id:       leadId,
+        proposal_id:   proposalId,
+        link_kind:     linkKind || null,
         is_done:       false,
         created_at:    nowISO(),
         snoozed_until: null,
       };
-      // lead_id נשמר רק בזיכרון (לא נשלח ל-Supabase כי העמודה לא קיימת בסכמה)
-      const leadId = this._pendingLeadId || null;
 
       this._saving = true;
       this.els.saveBtn.textContent = "שומר...";
       try {
         await this.upsertReminder(row);
-        // צמד lead_id רק בזיכרון אחרי שמירה מוצלחת
-        row.lead_id = leadId;
         if(!this.editingId){
           this.reminders.push(row);
         } else {
@@ -59392,19 +59604,26 @@ const ClalRiskLifePdf = {
       }
     },
 
-    showError(msg){ if(this.els.errorBox) this.els.errorBox.textContent = msg; },
+    showError(msg){
+      if(!this.els.errorBox) return;
+      const text = safeTrim(msg);
+      this.els.errorBox.textContent = text;
+      this.els.errorBox.hidden = !text;
+    },
 
     resetForm(){
       this.selectedType = "";
       this.editingId = null;
-      this._pendingLeadId = null;
+      this._linkedRecord = null;
       if(this.els.callbackNote) this.els.callbackNote.value = "";
       if(this.els.docsList)     this.els.docsList.value = "";
       if(this.els.missingList)  this.els.missingList.value = "";
-      if(this.els.customerSel)  this.els.customerSel.value = "";
+      if(this.els.linkQuery)    this.els.linkQuery.value = "";
+      this.hideLinkResults();
+      this._paintLinkedPick();
       if(this.els.dateInput)    this.els.dateInput.value = "";
       if(this.els.timeInput)    this.els.timeInput.value = "";
-      if(this.els.errorBox)     this.els.errorBox.textContent = "";
+      this.showError("");
       this.els.typeCards?.forEach(c => c.classList.remove("is-selected"));
     },
 
@@ -59496,12 +59715,8 @@ const ClalRiskLifePdf = {
       if(this.els.alertText)    this.els.alertText.textContent   = r.details;
       if(this.els.alertCustomer) this.els.alertCustomer.textContent = r.customer_name ? `👤 ${r.customer_name}` : "";
       if(this.els.alertTime)    this.els.alertTime.textContent   = this._formatDt(new Date(r.remind_at));
-      // הצג כפתור "פתח ליד" רק אם יש lead_id תואם
-      if(this.els.alertOpenLead){
-        const hasLead = !!(r.lead_id && (CampaignLeadsStore?.leads || []).some(l => String(l.id) === String(r.lead_id)));
-        this.els.alertOpenLead.style.display = hasLead ? "" : "none";
-      }
       this.els.alert?.classList.remove("is-hidden");
+      this._syncAlertOpenButtons(r);
       this._playAlertSound();
       this._sendBrowserNotification(r);
     },

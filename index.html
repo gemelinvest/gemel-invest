@@ -8,7 +8,7 @@
 <meta content="#f8fafc" name="theme-color"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20260915-reminder-glass-v1" rel="stylesheet"/>
+<link href="./app.css?v=20260915-reminder-link-v1" rel="stylesheet"/>
 <link href="./theme.css?v=20260914-mc-followup-qfix-v2" rel="stylesheet"/>
 <style id="giCfSummaryKill">#customerFullSide,.cfFile__side,#customerFullDash,#customerFull.cfFile .customerFull__dash{display:none!important}#customerFull.cfFile .customerFull__body,.cfFile__layout{grid-template-columns:minmax(0,1fr)!important}</style>
 <script>
@@ -3943,12 +3943,15 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
           </div>
         </div>
 
-        <!-- לקוח (אופציונלי) -->
-        <div class="field" style="margin-top:14px;">
-          <label class="label" for="giReminderCustomer">לקוח מקושר (אופציונלי)</label>
-          <select class="input" id="giReminderCustomer">
-            <option value="">— ללא קישור ללקוח —</option>
-          </select>
+        <!-- שיוך לקוח / ליד / הצעה (אופציונלי) — חיפוש לפי שם, ת״ז או טלפון -->
+        <div class="field giReminderLink" style="margin-top:14px;">
+          <label class="label" for="giReminderLinkQuery">שיוך לקוח / ליד / הצעה (אופציונלי)</label>
+          <div class="giReminderLink__wrap">
+            <input class="input" id="giReminderLinkQuery" type="search" autocomplete="off" placeholder="חיפוש לפי שם, ת״ז או טלפון" />
+            <button class="giReminderLink__clear" id="giReminderLinkClear" type="button" hidden>נקה</button>
+          </div>
+          <div class="giReminderLink__picked" id="giReminderLinkPicked" hidden></div>
+          <div class="giReminderLink__results" id="giReminderLinkResults" hidden role="listbox"></div>
         </div>
 
         <!-- תאריך + שעה -->
@@ -3963,7 +3966,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
           </div>
         </div>
 
-        <div aria-live="polite" class="giReminderModal__error" id="giReminderError"></div>
+        <div aria-live="polite" class="giReminderModal__error" id="giReminderError" hidden></div>
       </div>
 
       <!-- STEP: רשימת תזכורות -->
@@ -4002,7 +4005,9 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
   <div class="giReminderAlert__actions">
     <button class="giReminderAlert__btn giReminderAlert__btn--done" id="giReminderAlertDone" type="button">✓ בוצע</button>
     <button class="giReminderAlert__btn giReminderAlert__btn--snooze" id="giReminderAlertSnooze" type="button">⏰ דחה 10 דק׳</button>
-    <button class="giReminderAlert__btn giReminderAlert__btn--open" id="giReminderAlertOpenLead" type="button" style="display:none">📋 פתח ליד</button>
+    <button class="giReminderAlert__btn giReminderAlert__btn--open" id="giReminderAlertOpenCustomer" type="button" hidden>תיק לקוח</button>
+    <button class="giReminderAlert__btn giReminderAlert__btn--open" id="giReminderAlertOpenLead" type="button" hidden>פתח ליד</button>
+    <button class="giReminderAlert__btn giReminderAlert__btn--open" id="giReminderAlertOpenProposal" type="button" hidden>פתח הצעה</button>
   </div>
 </div>
 
@@ -4054,7 +4059,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <script src="./gi-policy-scan.js?v=20260819-issued-scan-v3"></script>
 <script src="./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1"></script>
 <script src="./gi-agent-appointment-report-seed.js?v=20260909-agent-appt-report-v1"></script>
-<script src="./app.js?v=20260915-reminder-glass-v1"></script>
+<script src="./app.js?v=20260915-reminder-link-v1"></script>
 <script src="./gi-assistant.js?v=20260829-assistant-open-file-fix-v1"></script>
 <script src="./gi-face-auth.js?v=20260817-face-retry-v1"></script>
 <script src="./gi-daily-sales-mail.js?v=20260914-mc-followup-qfix-v2"></script>
