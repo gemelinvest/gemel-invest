@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260915-sys-notice-v6";
+  const BUILD = "20260915-agent-save-verify-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -14532,7 +14532,62 @@
       this._metaRowProbeInFlight = null;   // GI-META-REVALIDATE
     },
 
-    /** סנכרון נציגים לטבלת agents — bulk ואז upsert שורה-שורה; בלי rememberRows אם נכשל. */
+    /* GI-FIX 2026-09-15 — כתיבת נציג בלי upsert/ON CONFLICT.
+       אחרי R9-pre-B אין SELECT על pin, ו-INSERT ON CONFLICT DO UPDATE נחסם
+       ב-permission denied גם כשה-INSERT עצמו היה מצליח. PATCH (קיים) ואז
+       POST (חדש) לא דורשים קריאת pin. לא משנים את upsertSingleRow/syncTable
+       הכלליים — הם משמשים לקוחות והצעות. */
+    async writeAgentRow(row){
+      const payload = row && typeof row === "object" ? this._omitEmptyPayloadForWrite(row) : {};
+      const id = safeTrim(payload.id);
+      if(!id) return { ok:false, error:"MISSING_ID" };
+
+      const send = async (body) => {
+        try {
+          const patched = await this.restRequest(
+            SUPABASE_TABLES.agents + "?id=eq." + encodeURIComponent(id) + "&select=id",
+            {
+              method: "PATCH",
+              body,
+              headers: { Prefer: "return=representation" }
+            }
+          );
+          if(Array.isArray(patched) && patched.length){
+            return { ok:true, mode:"patch", at: nowISO() };
+          }
+          await this.restRequest(SUPABASE_TABLES.agents, {
+            method: "POST",
+            body,
+            headers: { Prefer: "return=minimal" }
+          });
+          return { ok:true, mode:"insert", at: nowISO() };
+        } catch(err) {
+          const msg = String(err?.message || err || "");
+          if(/duplicate|already exists|409|unique/i.test(msg)){
+            const check = await this.loadSingleRow(SUPABASE_TABLES.agents, id, "id");
+            if(check?.ok && check.data) return { ok:true, mode:"exists", at: nowISO() };
+          }
+          return { ok:false, error: msg };
+        }
+      };
+
+      let res = await send(payload);
+      if(res?.ok) return res;
+      const msg = safeTrim(res?.error);
+      if(msg && /pin|team_manager|column|schema/i.test(msg)){
+        const slim = { ...payload };
+        if(/pin/i.test(msg)) delete slim.pin;
+        if(/team_manager/i.test(msg)){
+          delete slim.team_manager_id;
+          const slimRes = await send(slim);
+          return { ...slimRes, teamManagerColumnSkipped: true };
+        }
+        return send(slim);
+      }
+      return res;
+    },
+
+    /** סנכרון נציגים לטבלת agents — insert/patch שורה-שורה; בלי rememberRows אם נכשל. */
     async syncAgentsFromState(state, options = {}){
       const agentRows = this.buildAgentRows(state);
       const onlyAgentIds = Array.isArray(options.onlyAgentIds)
@@ -14578,29 +14633,12 @@
         try { this.rememberRows(SUPABASE_TABLES.agents, agentRows); } catch(_e) {}
       };
 
-      const upsertAgentRow = async (row) => {
-        const res = await this.upsertSingleRow(SUPABASE_TABLES.agents, row);
-        if(res?.ok) return res;
-        const msg = safeTrim(res?.error);
-        if(msg && /pin|team_manager|column|schema/i.test(msg) && row){
-          const slim = { ...row };
-          if(/pin/i.test(msg)) delete slim.pin;
-          if(/team_manager/i.test(msg)){
-            delete slim.team_manager_id;
-            const slimRes = await this.upsertSingleRow(SUPABASE_TABLES.agents, slim);
-            return { ...slimRes, teamManagerColumnSkipped: true };
-          }
-          return this.upsertSingleRow(SUPABASE_TABLES.agents, slim);
-        }
-        return res;
-      };
-
-      /* נציגים חדשים נכתבים אחד-אחד עם ה-PIN שלהם, לפני הבאלק. */
+      /* נציגים חדשים נכתבים אחד-אחד עם ה-PIN שלהם, לפני עדכון הקיימים. */
       let newRowErrors = [];
       for(const row of newRows){
         try {
-          const res = await upsertAgentRow(row);
-          if(!res?.ok) newRowErrors.push(safeTrim(row?.id) + ": " + formatAgentServerPersistError(safeTrim(res?.error) || "UPSERT_FAILED"));
+          const res = await this.writeAgentRow(row);
+          if(!res?.ok) newRowErrors.push(safeTrim(row?.id) + ": " + formatAgentServerPersistError(safeTrim(res?.error) || "WRITE_FAILED"));
         } catch(rowErr) {
           newRowErrors.push(safeTrim(row?.id) + ": " + formatAgentServerPersistError(rowErr?.message || rowErr));
         }
@@ -14611,29 +14649,8 @@
         return { ok:true, synced: newRows.length, mode:"new-only", at: nowISO() };
       }
 
-      try {
-        /* PostgREST דוחה מערך bulk שהאובייקטים בו לא חולקים אותם מפתחות.
-           אחרי הגנת ה-PIN יש שורות עם pin ובלעדיו, ולכן כותבים בשתי מנות. */
-        const groups = [
-          writeRows.filter((row) => Object.prototype.hasOwnProperty.call(row, "pin")),
-          writeRows.filter((row) => !Object.prototype.hasOwnProperty.call(row, "pin"))
-        ].filter((group) => group.length);
-        for(const group of groups){
-          await this.syncTable(SUPABASE_TABLES.agents, group, { allowDelete:false });
-        }
-        rememberOnSuccess();
-        return {
-          ok: !newRowErrors.length,
-          synced: writeRows.length + newRows.length - newRowErrors.length,
-          mode:"bulk",
-          pinOmitted: !targeted,
-          error: newRowErrors.join(" | "),
-          at: nowISO()
-        };
-      } catch(bulkErr) {
-        console.warn("AGENTS_BULK_SYNC_FAILED:", bulkErr?.message || bulkErr);
-      }
-
+      /* GI-FIX 2026-09-15 — בלי syncTable/upsert על agents. ON CONFLICT נחסם
+         אחרי הסתרת pin, וה-INSERT האמיתי כבר הצליח במסלול הגיבוי. */
       const rowErrors = [...newRowErrors];
       let synced = newRows.length - newRowErrors.length;
       let teamManagerColumnSkipped = false;
@@ -14641,10 +14658,10 @@
         const id = safeTrim(row?.id);
         if(!id) continue;
         try {
-          const res = await upsertAgentRow(row);
+          const res = await this.writeAgentRow(row);
           if(res?.teamManagerColumnSkipped) teamManagerColumnSkipped = true;
           if(res?.ok) synced += 1;
-          else rowErrors.push(id + ": " + formatAgentServerPersistError(safeTrim(res?.error) || "UPSERT_FAILED"));
+          else rowErrors.push(id + ": " + formatAgentServerPersistError(safeTrim(res?.error) || "WRITE_FAILED"));
         } catch(rowErr) {
           rowErrors.push(id + ": " + formatAgentServerPersistError(rowErr?.message || rowErr));
         }
@@ -20472,14 +20489,17 @@ UsersGateUI.init();
         this._showErr(E.err, errMsg);
         return { ok:false, error: errMsg, persist: r };
       }
+      /* GI-FIX 2026-09-15 — אחרי R9-pre-B אסור SELECT * על agents (עמודת pin
+         מוסתרת). האימות חייב אותן עמודות ציבוריות שבהן נטענת רשימת הנציגים. */
       const verify = await Storage.verifySavedRow(
         SUPABASE_TABLES.agents,
         id,
         { id: { equals: id } },
-        { retries: 2, delayMs: 250 }
+        { retries: 2, delayMs: 250, selectExpr: AGENT_PUBLIC_COLUMNS }
       );
       if(!verify?.ok){
-        this._showErr(E.err, "הנציג לא אומת בשרת לאחר השמירה. בדוק חיבור ל-Supabase ונסה שוב.");
+        const verifyErr = formatAgentServerPersistError(safeTrim(verify?.error) || "VERIFY_FAILED");
+        this._showErr(E.err, "הנציג לא אומת בשרת לאחר השמירה. " + verifyErr);
         return { ok:false, error: safeTrim(verify?.error) || "VERIFY_FAILED", persist: r };
       }
       if(options.verifyTeamLinks === true && safeTrim(options.teamManagerId)){

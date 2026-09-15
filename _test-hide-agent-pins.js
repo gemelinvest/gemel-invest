@@ -10,6 +10,9 @@ const checks = [
   [/השאר ריק כדי לא לשנות/, "blank pin keeps existing"],
   [/revoke select on table public\.agents from anon, authenticated/i, "sql revoke table select"],
   [/grant select \(\s*id, name, username, role, active/i, "sql grant columns without pin"],
+  [/selectExpr:\s*AGENT_PUBLIC_COLUMNS/, "agent save verify uses public columns"],
+  [/async writeAgentRow\(/, "agents write via insert/patch helper"],
+  [/client\.rpc\("gi_verify_agent_login"/, "login RPC untouched"],
 ];
 let failed = 0;
 for (const [re, label] of checks) {
@@ -27,6 +30,26 @@ if (bareAgentsLoads) {
   failed += 1;
 } else {
   console.log("OK no bare agents loads");
+}
+if (/syncTable\(\s*SUPABASE_TABLES\.agents/.test(src)) {
+  console.error("FAIL agents sync still uses generic syncTable upsert");
+  failed += 1;
+} else {
+  console.log("OK agents sync does not use generic syncTable");
+}
+const writeStart = src.indexOf("async writeAgentRow(");
+const writeFn = writeStart >= 0 ? src.slice(writeStart, writeStart + 1800) : "";
+if (!/method:\s*"PATCH"/.test(writeFn) || !/method:\s*"POST"/.test(writeFn) || /\.upsert\(/.test(writeFn)) {
+  console.error("FAIL writeAgentRow must PATCH then POST without upsert");
+  failed += 1;
+} else {
+  console.log("OK writeAgentRow is insert/patch only");
+}
+if (!/async upsertSingleRow\(/.test(src) || !/onConflict:\s*['"]id['"]/.test(src)) {
+  console.error("FAIL generic upsertSingleRow for other tables was removed");
+  failed += 1;
+} else {
+  console.log("OK generic upsert for customers/proposals remains");
 }
 if (failed) process.exit(1);
 console.log("all checks passed");
