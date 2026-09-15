@@ -4,7 +4,7 @@
 (() => {
   "use strict";
 
-  const TAG = "20260915-sys-notice-v4";
+  const TAG = "20260915-sys-notice-v5";
   const TABLE = "gi_system_notices";
   const CHANNEL = "gi-system-notice";
   const STATE_KEY = "GI_SYS_NOTICE_UI_V1";
@@ -51,9 +51,45 @@
     try { return faceBridge()?.getCurrentAgent?.() || null; } catch(_e) { return null; }
   }
 
+  function roleCode(role){
+    const r = trim(role).toLowerCase();
+    if(r === "owner" || r === "מפתח המערכת") return "owner";
+    if(r === "admin" || r === "מנהל מערכת") return "admin";
+    if(r === "manager" || r === "adminlite" || r === "admin_lite" || r === "מנהל") return "manager";
+    return r;
+  }
+
+  function isComposerRole(role){
+    const code = roleCode(role);
+    return code === "admin" || code === "owner" || code === "manager";
+  }
+
+  function agentFromPill(){
+    try {
+      const name = trim(document.querySelector("#lcUserPillText .lcUserPill__name, .lcUserPill__name")?.textContent);
+      const roleHe = trim(document.querySelector("#lcUserPillText .lcUserPill__role, .lcUserPill__role")?.textContent);
+      if(!name && !roleHe) return null;
+      return { id: "", name, role: roleHe, username: "" };
+    } catch(_e) {
+      return null;
+    }
+  }
+
+  function composerAgent(){
+    const fromBridge = currentAgent() || {};
+    const fromPill = agentFromPill() || {};
+    return {
+      id: trim(fromBridge.id),
+      name: trim(fromBridge.name) || trim(fromPill.name),
+      role: trim(fromBridge.role) || trim(fromPill.role),
+      username: trim(fromBridge.username)
+    };
+  }
+
   function canCompose(){
-    const role = trim(currentAgent()?.role).toLowerCase();
-    return role === "admin" || role === "owner" || role === "manager" || role === "adminlite";
+    if(isComposerRole(currentAgent()?.role)) return true;
+    if(isComposerRole(agentFromPill()?.role)) return true;
+    return false;
   }
 
   function storageApi(){
@@ -258,7 +294,7 @@
       setComposerStatus("ההודעה ארוכה מדי", true);
       return;
     }
-    const agent = currentAgent() || {};
+    const agent = composerAgent();
     const row = {
       id: "sn_" + Date.now() + "_" + Math.random().toString(16).slice(2),
       body,
