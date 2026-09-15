@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260915-reminder-compact-v2";
+  const BUILD = "20260915-sys-notice-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -19280,7 +19280,7 @@ UsersGateUI.init();
       }
       try { MirrorCallUI._syncMirrorImmersiveChrome(); } catch(_e) {}
       if(safe !== "settings"){
-        ["connection","version","campaigns","landing","security","systemUpdates","activityLog","attendanceReport","archivedCustomers"].forEach((name) => {
+        ["connection","version","campaigns","landing","security","systemNotice","systemUpdates","activityLog","attendanceReport","archivedCustomers"].forEach((name) => {
           document.body.classList.remove("lcSettingsRubric-" + name);
         });
       }
@@ -19442,6 +19442,8 @@ UsersGateUI.init();
         campaigns: "קמפיינים וקווי טלפון",
         landing: "דף נחיתה — קליטת לידים",
         security: "אבטחת ניהול משתמשים",
+        dailySalesMail: "דיוור מכירות יומי",
+        systemNotice: "הודעת מערכת",
         systemUpdates: "עדכוני מערכת",
         activityLog: "לוג פעילות",
         attendanceReport: "דוח נוכחות",
@@ -19477,7 +19479,7 @@ UsersGateUI.init();
       if(rubric === "activityLog") { try { void AgentActivityLogUI.render(); } catch(_e) {} }
       if(rubric === "attendanceReport") { try { void AttendanceReportUI.render(); } catch(_e) {} }
       if(rubric !== "activityLog") AgentActivityLogUI.stopRealtime();
-      ["connection","version","campaigns","landing","security","systemUpdates","activityLog","attendanceReport","archivedCustomers"].forEach((name) => {
+      ["connection","version","campaigns","landing","security","systemNotice","systemUpdates","activityLog","attendanceReport","archivedCustomers"].forEach((name) => {
         document.body.classList.remove("lcSettingsRubric-" + name);
       });
       document.body.classList.add("lcSettingsRubric-" + rubric);
@@ -42959,7 +42961,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260915-reminder-compact-v2";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260915-sys-notice-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -43644,7 +43646,7 @@ UsersGateUI.init();
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
     "./simulators-center.css?v=20260914-mc-followup-qfix-v2",
-    "./simulators-shell.css?v=20260915-reminder-compact-v2"
+    "./simulators-shell.css?v=20260915-sys-notice-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -45006,7 +45008,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260915-reminder-compact-v2";
+  const GI_WIZARD_JS_VERSION = "20260915-sys-notice-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;

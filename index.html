@@ -8,7 +8,7 @@
 <meta content="#f8fafc" name="theme-color"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20260915-reminder-compact-v2" rel="stylesheet"/>
+<link href="./app.css?v=20260915-sys-notice-v1" rel="stylesheet"/>
 <link href="./theme.css?v=20260914-mc-followup-qfix-v2" rel="stylesheet"/>
 <style id="giCfSummaryKill">#customerFullSide,.cfFile__side,#customerFullDash,#customerFull.cfFile .customerFull__dash{display:none!important}#customerFull.cfFile .customerFull__body,.cfFile__layout{grid-template-columns:minmax(0,1fr)!important}</style>
 <script>
@@ -19,6 +19,7 @@
 <link href="./login-split.css?v=20260820-welcome-mfa-v4" rel="stylesheet"/>
 <link href="./gi-assistant.css?v=20260829-assistant-open-file-fix-v1" rel="stylesheet"/>
 <link href="./gi-remote-support.css?v=20260914-remote-support-anydesk-feel-v1" rel="stylesheet"/>
+<link href="./gi-system-notice.css?v=20260915-sys-notice-v1" rel="stylesheet"/>
 <!-- GI-PERF 2026-08-10: CSS משני (mirror/import/unify) נטען אחרי כניסה מ-app.js —
      לא חוסם מסך login ולא מרעיש 404 לפני שהמשתמש התחבר. -->
 <!-- GI-PERF 2026-08-09: סימולטורים — CSS נטען לפי צורך מ-ensureGiSimulatorStylesLoaded ב-app.js -->
@@ -1875,6 +1876,15 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
     </div>
     <div class="lcSettingsHub__group" data-settings-group="admin" id="settingsGroupAdmin">
       <div class="lcSettingsHub__groupTitle">ניהול ומעקב</div>
+      <button type="button" class="lcSettingsRubric" data-settings-rubric="systemNotice">
+        <span class="lcSettingsRubric__icon" aria-hidden="true">
+          <svg class="lcSettingsRubric__svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a1 1 0 0 0 1 1h1l6 4V6L5 10H4a1 1 0 0 0-1 1z"></path><path d="M16.5 8.5a5 5 0 0 1 0 7"></path></svg>
+        </span>
+        <span class="lcSettingsRubric__text">
+          <span class="lcSettingsRubric__title">הודעת מערכת</span>
+          <span class="lcSettingsRubric__hint">שליחה מיידית לכל הנציגים</span>
+        </span>
+      </button>
       <button type="button" class="lcSettingsRubric" data-settings-rubric="systemUpdates">
         <span class="lcSettingsRubric__icon" aria-hidden="true">
           <svg class="lcSettingsRubric__svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"></path><path d="M21 3v6h-6"></path><path d="M12 7v5l3 2"></path></svg>
@@ -2099,6 +2109,27 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
         <button class="btn" id="giDailySalesMailSendNowBtn" type="button">שלח עכשיו לבדיקה</button>
       </div>
       <div class="lcLogin__error lcSettingsInlineError" id="giDailySalesMailMessage" aria-live="polite"></div>
+    </div>
+  </div>
+  </div>
+
+  <div class="lcSettingsPanel" data-settings-panel="systemNotice" id="settingsPanel-systemNotice" hidden>
+  <div class="card lcSettingsCard giSysNoticeComposer">
+    <div class="card__head">
+      <div>
+        <div class="card__title">הודעת מערכת</div>
+        <div class="card__hint">כתבו את ההודעה ולחצו שלח — היא תופיע מיד אצל כל המשתמשים בצד שמאל של המסך</div>
+      </div>
+    </div>
+    <div class="card__body">
+      <div class="field">
+        <label class="label" for="giSysNoticeInput">תוכן ההודעה</label>
+        <textarea class="input" id="giSysNoticeInput" rows="6" maxlength="2000" placeholder="מה כל הנציגים צריכים לראות עכשיו"></textarea>
+      </div>
+      <div class="row lcSettingsActions">
+        <button class="btn btn--primary" id="giSysNoticeSendBtn" type="button">שלח</button>
+      </div>
+      <div class="giSysNoticeComposer__status" id="giSysNoticeStatus" aria-live="polite"></div>
     </div>
   </div>
   </div>
@@ -4035,6 +4066,25 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
   </div>
 </div>
 
+<div class="giSysNoticeCard" id="giSysNoticeCard" role="alertdialog" aria-label="הודעת מערכת">
+  <div class="giSysNoticeCard__bar">
+    <div class="giSysNoticeCard__kicker">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h1l6 4V6L5 10H4a1 1 0 0 0-1 1z"></path><path d="M16.5 8.5a5 5 0 0 1 0 7"></path></svg>
+      הודעת מערכת
+    </div>
+    <div class="giSysNoticeCard__actions">
+      <button class="giSysNoticeCard__btn" id="giSysNoticeMinBtn" type="button">מזער</button>
+      <button class="giSysNoticeCard__btn" id="giSysNoticeCloseBtn" type="button">סגור</button>
+    </div>
+  </div>
+  <div class="giSysNoticeCard__body" id="giSysNoticeBody"></div>
+  <div class="giSysNoticeCard__meta" id="giSysNoticeMeta"></div>
+</div>
+<button class="giSysNoticeDock" id="giSysNoticeDock" type="button" aria-label="פתח הודעת מערכת">
+  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11v2a1 1 0 0 0 1 1h1l6 4V6L5 10H4a1 1 0 0 0-1 1z"></path><path d="M16.5 8.5a5 5 0 0 1 0 7"></path></svg>
+  הודעת מערכת
+</button>
+
 
 <div class="mcAssignModal" id="mcAssignModal" hidden dir="rtl" role="dialog" aria-modal="true" aria-labelledby="mcAssignModalTitle">
   <button type="button" class="mcAssignModal__backdrop" id="mcAssignModalBackdrop" aria-label="סגור"></button>
@@ -4083,11 +4133,12 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <script src="./gi-policy-scan.js?v=20260819-issued-scan-v3"></script>
 <script src="./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1"></script>
 <script src="./gi-agent-appointment-report-seed.js?v=20260909-agent-appt-report-v1"></script>
-<script src="./app.js?v=20260915-reminder-compact-v2"></script>
+<script src="./app.js?v=20260915-sys-notice-v1"></script>
 <script src="./gi-assistant.js?v=20260829-assistant-open-file-fix-v1"></script>
 <script src="./gi-face-auth.js?v=20260817-face-retry-v1"></script>
 <script src="./gi-daily-sales-mail.js?v=20260914-mc-followup-qfix-v2"></script>
 <script src="./gi-remote-support.js?v=20260914-remote-support-anydesk-feel-v1"></script>
+<script src="./gi-system-notice.js?v=20260915-sys-notice-v1"></script>
 
 
 <div id="giPwaInstallBanner" class="giPwaInstallBanner" hidden>
