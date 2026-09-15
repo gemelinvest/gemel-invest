@@ -1337,6 +1337,16 @@
 #giReminderModal .giReminderModal__typeTitle:not(#\9):not(#\9){ color: var(--uf-ink) !important; }
 #giReminderModal .giReminderModal__typeDesc:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
 #giReminderModal .giReminderModal__error:not(#\9):not(#\9){ color: var(--uf-danger) !important; }
+#giReminderModal .giReminderModal__error:empty:not(#\9):not(#\9),
+#giReminderModal .giReminderModal__error[hidden]:not(#\9):not(#\9){
+  display: none !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: none !important;
+  background: none !important;
+  box-shadow: none !important;
+}
 
 /* ---- רשימת תזכורות פתוחות ---- */
 #giReminderModal .giReminderModal__listEmpty:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
