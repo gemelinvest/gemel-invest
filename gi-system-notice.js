@@ -4,12 +4,14 @@
 (() => {
   "use strict";
 
-  const TAG = "20260915-sys-notice-v5";
+  const TAG = "20260915-sys-notice-v6";
   const TABLE = "gi_system_notices";
   const CHANNEL = "gi-system-notice";
   const STATE_KEY = "GI_SYS_NOTICE_UI_V1";
   const MAX_BODY = 2000;
   const IDLE_MS = 20000;
+  const FALLBACK_SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
+  const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
 
   const state = {
     bound: false,
@@ -92,8 +94,78 @@
     return false;
   }
 
-  function storageApi(){
-    try { return window.Storage || null; } catch(_e) { return null; }
+  function connection(){
+    const b = faceBridge() || {};
+    return {
+      url: trim(b.supabaseUrl) || FALLBACK_SUPABASE_URL,
+      key: trim(b.publishableKey) || FALLBACK_PUBLISHABLE_KEY
+    };
+  }
+
+  function supabaseClient(){
+    try {
+      const client = window.gemelInvestSupabaseClient;
+      if(client?.channel) return client;
+    } catch(_e) {}
+    try {
+      const cfg = connection();
+      if(window.supabase?.createClient && cfg.url && cfg.key){
+        return window.supabase.createClient(cfg.url, cfg.key);
+      }
+    } catch(_e2) {}
+    return null;
+  }
+
+  async function authBearer(fallbackKey){
+    try {
+      const { data } = await window.gemelInvestSupabaseClient?.auth?.getSession?.() || {};
+      const token = trim(data?.session?.access_token);
+      if(token) return token;
+    } catch(_e) {}
+    return fallbackKey;
+  }
+
+  function isNetworkError(err){
+    const msg = trim(err?.message || err);
+    const name = trim(err?.name);
+    if(name === "TypeError" || name === "AbortError") return true;
+    return /failed to fetch|networkerror|load failed|abort/i.test(msg);
+  }
+
+  async function restRequest(path, options = {}){
+    const cfg = connection();
+    if(!cfg.url || !cfg.key) throw new Error("NO_CONNECTION");
+    const method = String(options.method || "GET").toUpperCase();
+    const controller = new AbortController();
+    const timer = window.setTimeout(
+      () => controller.abort(),
+      Math.max(3000, Number(options.timeoutMs || 8000) || 8000)
+    );
+    try {
+      const bearer = await authBearer(cfg.key);
+      const res = await fetch(cfg.url + "/rest/v1/" + String(path || ""), {
+        method,
+        cache: "no-store",
+        signal: controller.signal,
+        headers: {
+          apikey: cfg.key,
+          Authorization: "Bearer " + bearer,
+          "Content-Type": "application/json",
+          Prefer: "return=minimal",
+          ...(options.headers || {})
+        },
+        body: options.body == null ? undefined : JSON.stringify(options.body)
+      });
+      let payload = null;
+      try { payload = await res.json(); } catch(_e) {}
+      if(!res.ok){
+        const msg = payload?.message || payload?.error_description || payload?.hint || ("HTTP_" + res.status);
+        throw new Error(msg);
+      }
+      return payload;
+    } finally {
+      window.clearTimeout(timer);
+    }
   }
 
   function loadUiState(){
@@ -302,17 +374,12 @@
       author_name: trim(agent.name) || "מערכת",
       created_at: new Date().toISOString()
     };
-    const store = storageApi();
-    if(!store?.restRequest){
-      setComposerStatus("אין חיבור לשרת", true);
-      return;
-    }
     state.sending = true;
     const btn = $("giSysNoticeSendBtn");
     if(btn) btn.textContent = "שולח...";
     setComposerStatus("שולח לכל המשתמשים...", false);
     try {
-      await store.restRequest(TABLE, {
+      await restRequest(TABLE, {
         method: "POST",
         body: row,
         headers: { Prefer: "return=minimal" },
@@ -325,7 +392,11 @@
       if($("giSysNoticeInput")) $("giSysNoticeInput").value = "";
       setComposerStatus("נשלח לכל המשתמשים", false);
     } catch(err){
-      setComposerStatus("שגיאה בשליחה: " + (err?.message || String(err)), true);
+      if(isNetworkError(err) || trim(err?.message) === "NO_CONNECTION"){
+        setComposerStatus("אין חיבור לשרת", true);
+      } else {
+        setComposerStatus("שגיאה בשליחה: " + (err?.message || String(err)), true);
+      }
     } finally {
       state.sending = false;
       if(btn) btn.textContent = "שלח";
@@ -333,10 +404,8 @@
   }
 
   async function fetchLatest(){
-    const store = storageApi();
-    if(!store?.restRequest) return null;
     try {
-      const data = await store.restRequest(
+      const data = await restRequest(
         TABLE + "?select=id,body,author_id,author_name,created_at&order=created_at.desc&limit=1",
         { method: "GET", timeoutMs: 8000 }
       );
@@ -347,9 +416,7 @@
   }
 
   function subscribe(){
-    const store = storageApi();
-    let client = null;
-    try { client = store?.getClient?.(); } catch(_e) {}
+    const client = supabaseClient();
     if(!client?.channel) return;
     try { state.channel?.unsubscribe?.(); } catch(_e) {}
     try { state.dbChannel?.unsubscribe?.(); } catch(_e) {}
