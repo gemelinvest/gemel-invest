@@ -5,14 +5,15 @@
   left:16px;
   top:76px;
   z-index:10060;
-  width:min(360px, calc(100vw - 32px));
+  width:min(440px, calc(100vw - 32px));
   direction:rtl;
   background:#fff;
   color:#142033;
-  border:1px solid #d7deea;
-  box-shadow:0 18px 40px rgba(15,23,42,.12);
+  border:1px solid #0b1f3a;
+  box-shadow:0 22px 50px rgba(11,31,58,.22);
   padding:0;
   display:none;
+  overflow:hidden;
 }
 .giSysNoticeCard.is-open{ display:block; }
 .giSysNoticeCard.is-min{ display:none; }
@@ -22,69 +23,91 @@
   align-items:center;
   justify-content:space-between;
   gap:10px;
-  padding:10px 14px;
-  border-bottom:1px solid #e6ebf3;
-  background:#f6f8fb;
+  padding:12px 16px;
+  background:#0b1f3a;
+  color:#fff;
 }
 .giSysNoticeCard__kicker{
   display:flex;
   align-items:center;
   gap:8px;
-  font-size:11px;
+  font-size:12px;
   font-weight:800;
   letter-spacing:.04em;
   text-transform:uppercase;
-  color:#1e3d7a;
+  color:#fff;
 }
 .giSysNoticeCard__kicker svg{
-  width:16px;
-  height:16px;
-  color:#1e3d7a;
+  width:18px;
+  height:18px;
+  color:#fff;
 }
 .giSysNoticeCard__actions{ display:flex; gap:6px; flex-shrink:0; }
 .giSysNoticeCard__btn{
-  border:1px solid #d7deea;
-  background:#fff;
-  color:#142033;
+  border:1px solid rgba(255,255,255,.38);
+  background:transparent;
+  color:#fff;
   font-size:12px;
   font-weight:700;
-  padding:5px 10px;
+  padding:6px 12px;
   cursor:pointer;
 }
-.giSysNoticeCard__btn:hover{ background:#f6f8fb; color:#1e3d7a; }
+.giSysNoticeCard__btn:hover{ background:rgba(255,255,255,.12); color:#fff; }
 .giSysNoticeCard__body{
-  padding:16px 16px 14px;
-  font-size:14px;
+  padding:20px 20px 12px;
+  font-size:16.5px;
   line-height:1.7;
   white-space:pre-wrap;
   color:#142033;
 }
 .giSysNoticeCard__meta{
-  padding:0 16px 14px;
-  font-size:11px;
+  padding:0 20px 18px;
+  font-size:12px;
   color:#6b778c;
 }
 
 .giSysNoticeDock{
   position:fixed;
-  left:0;
-  top:118px;
+  left:16px;
+  top:76px;
   z-index:10060;
   display:none;
-  border:1px solid #d7deea;
-  border-left:none;
-  background:#fff;
-  color:#1e3d7a;
-  box-shadow:0 10px 24px rgba(15,23,42,.10);
-  cursor:pointer;
+  width:min(440px, calc(100vw - 32px));
+  box-sizing:border-box;
+  border:1px solid #0b1f3a;
+  background:#0b1f3a;
+  color:#fff;
+  box-shadow:0 16px 36px rgba(11,31,58,.20);
   padding:10px 12px;
-  font-size:12px;
+  font-size:13px;
   font-weight:800;
   direction:rtl;
+  cursor:default;
 }
-.giSysNoticeDock.is-on{ display:flex; align-items:center; gap:8px; }
-.giSysNoticeDock svg{ width:16px; height:16px; flex-shrink:0; }
-.giSysNoticeDock:hover{ background:#f6f8fb; }
+.giSysNoticeDock.is-on{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.giSysNoticeDock__kicker{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+}
+.giSysNoticeDock svg{ width:16px; height:16px; flex-shrink:0; color:#fff; }
+.giSysNoticeDock__actions{ display:flex; gap:6px; flex-shrink:0; }
+.giSysNoticeDock__btn{
+  border:1px solid rgba(255,255,255,.38);
+  background:transparent;
+  color:#fff;
+  font-size:12px;
+  font-weight:700;
+  padding:5px 10px;
+  cursor:pointer;
+}
+.giSysNoticeDock__btn:hover{ background:rgba(255,255,255,.12); color:#fff; }
 
 .giSysNoticeComposer__status{
   min-height:18px;
