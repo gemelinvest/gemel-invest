@@ -1286,12 +1286,14 @@
   border: 1px solid var(--uf-line) !important;
   background: var(--uf-surface) !important;
   box-shadow: none !important;
+  max-width: 380px !important;
+  width: min(380px, calc(100vw - 32px)) !important;
 }
 #giReminderModal .modal__head:not(#\9):not(#\9){
   background: var(--uf-head-bg) !important;
   border-bottom: 1px solid var(--uf-line-soft) !important;
 }
-#giReminderModal .modal__kicker:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#giReminderModal .modal__kicker:not(#\9):not(#\9){ display: none !important; }
 #giReminderModal .modal__title:not(#\9):not(#\9){ color: var(--uf-navy) !important; font-weight: 700 !important; }
 #giReminderModal .iconBtn:not(#\9):not(#\9){
   border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important;
@@ -1350,6 +1352,7 @@
 
 /* ---- רשימת תזכורות פתוחות ---- */
 #giReminderModal .giReminderModal__listEmpty:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#giReminderModal .giReminderModal__emptyIcon:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; opacity: .55 !important; }
 #giReminderModal .giReminderRow:not(#\9):not(#\9){
   border-radius: 0 !important;
   border: 1px solid var(--uf-line) !important;

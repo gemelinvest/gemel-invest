@@ -8,7 +8,7 @@
 <meta content="#f8fafc" name="theme-color"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20260915-reminder-vol-v1" rel="stylesheet"/>
+<link href="./app.css?v=20260915-reminder-compact-v1" rel="stylesheet"/>
 <link href="./theme.css?v=20260914-mc-followup-qfix-v2" rel="stylesheet"/>
 <style id="giCfSummaryKill">#customerFullSide,.cfFile__side,#customerFullDash,#customerFull.cfFile .customerFull__dash{display:none!important}#customerFull.cfFile .customerFull__body,.cfFile__layout{grid-template-columns:minmax(0,1fr)!important}</style>
 <script>
@@ -3972,12 +3972,14 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
       <!-- STEP: רשימת תזכורות -->
       <div id="giReminderStep_list" hidden>
         <div class="giReminderModal__listHead">
-          <div class="giReminderModal__stepLabel" style="margin-bottom:0">תזכורות פתוחות</div>
           <button class="btn btn--primary giReminderModal__addBtn" id="giReminderAddNewBtn" type="button">+ תזכורת חדשה</button>
         </div>
         <div id="giReminderList" class="giReminderModal__list"></div>
         <div id="giReminderListEmpty" class="giReminderModal__listEmpty" hidden>
-          <span>🔔</span>
+          <svg class="giReminderModal__emptyIcon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
           <span>אין תזכורות פתוחות</span>
         </div>
       </div>
@@ -4059,7 +4061,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <script src="./gi-policy-scan.js?v=20260819-issued-scan-v3"></script>
 <script src="./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1"></script>
 <script src="./gi-agent-appointment-report-seed.js?v=20260909-agent-appt-report-v1"></script>
-<script src="./app.js?v=20260915-reminder-vol-v1"></script>
+<script src="./app.js?v=20260915-reminder-compact-v1"></script>
 <script src="./gi-assistant.js?v=20260829-assistant-open-file-fix-v1"></script>
 <script src="./gi-face-auth.js?v=20260817-face-retry-v1"></script>
 <script src="./gi-daily-sales-mail.js?v=20260914-mc-followup-qfix-v2"></script>
