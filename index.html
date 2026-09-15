@@ -8,7 +8,7 @@
 <meta content="#f8fafc" name="theme-color"/>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800;900&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-<link href="./app.css?v=20260915-reminder-compact-v1" rel="stylesheet"/>
+<link href="./app.css?v=20260915-reminder-compact-v2" rel="stylesheet"/>
 <link href="./theme.css?v=20260914-mc-followup-qfix-v2" rel="stylesheet"/>
 <style id="giCfSummaryKill">#customerFullSide,.cfFile__side,#customerFullDash,#customerFull.cfFile .customerFull__dash{display:none!important}#customerFull.cfFile .customerFull__body,.cfFile__layout{grid-template-columns:minmax(0,1fr)!important}</style>
 <script>
@@ -3896,22 +3896,44 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 
       <!-- STEP 1: בחירת סוג -->
       <div id="giReminderStep1">
-        <div class="giReminderModal__stepLabel">בחר סוג תזכורת</div>
         <div class="giReminderModal__typeGrid">
           <button class="giReminderModal__typeCard" type="button" data-type="callback">
-            <span class="giReminderModal__typeIcon">📞</span>
-            <span class="giReminderModal__typeTitle">חזרה ללקוח</span>
-            <span class="giReminderModal__typeDesc">קבע מועד לחזרת טלפון</span>
+            <span class="giReminderModal__typeIcon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"></path>
+              </svg>
+            </span>
+            <span class="giReminderModal__typeText">
+              <span class="giReminderModal__typeTitle">חזרה ללקוח</span>
+              <span class="giReminderModal__typeDesc">קבע מועד לחזרת טלפון</span>
+            </span>
           </button>
           <button class="giReminderModal__typeCard" type="button" data-type="documents">
-            <span class="giReminderModal__typeIcon">📄</span>
-            <span class="giReminderModal__typeTitle">מעקב מסמכים</span>
-            <span class="giReminderModal__typeDesc">מסמכים שהלקוח צריך לשלוח</span>
+            <span class="giReminderModal__typeIcon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="8" y1="13" x2="16" y2="13"></line>
+                <line x1="8" y1="17" x2="13" y2="17"></line>
+              </svg>
+            </span>
+            <span class="giReminderModal__typeText">
+              <span class="giReminderModal__typeTitle">מעקב מסמכים</span>
+              <span class="giReminderModal__typeDesc">מסמכים שהלקוח צריך לשלוח</span>
+            </span>
           </button>
           <button class="giReminderModal__typeCard" type="button" data-type="missing">
-            <span class="giReminderModal__typeIcon">⚠️</span>
-            <span class="giReminderModal__typeTitle">השלמת חוסרים</span>
-            <span class="giReminderModal__typeDesc">פרטים חסרים לטיפול</span>
+            <span class="giReminderModal__typeIcon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <circle cx="12" cy="16" r=".7" fill="currentColor" stroke="none"></circle>
+              </svg>
+            </span>
+            <span class="giReminderModal__typeText">
+              <span class="giReminderModal__typeTitle">השלמת חוסרים</span>
+              <span class="giReminderModal__typeDesc">פרטים חסרים לטיפול</span>
+            </span>
           </button>
         </div>
       </div>
@@ -3997,7 +4019,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 
 <!-- ===== REMINDER ALERT POPUP ===== -->
 <div class="giReminderAlert is-hidden" id="giReminderAlert" role="alertdialog" aria-modal="true" aria-label="התראת תזכורת">
-  <div class="giReminderAlert__icon" id="giReminderAlertIcon">🔔</div>
+  <div class="giReminderAlert__icon" id="giReminderAlertIcon" aria-hidden="true"></div>
   <div class="giReminderAlert__body">
     <div class="giReminderAlert__title" id="giReminderAlertTitle">תזכורת!</div>
     <div class="giReminderAlert__text" id="giReminderAlertText"></div>
@@ -4061,7 +4083,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <script src="./gi-policy-scan.js?v=20260819-issued-scan-v3"></script>
 <script src="./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1"></script>
 <script src="./gi-agent-appointment-report-seed.js?v=20260909-agent-appt-report-v1"></script>
-<script src="./app.js?v=20260915-reminder-compact-v1"></script>
+<script src="./app.js?v=20260915-reminder-compact-v2"></script>
 <script src="./gi-assistant.js?v=20260829-assistant-open-file-fix-v1"></script>
 <script src="./gi-face-auth.js?v=20260817-face-retry-v1"></script>
 <script src="./gi-daily-sales-mail.js?v=20260914-mc-followup-qfix-v2"></script>

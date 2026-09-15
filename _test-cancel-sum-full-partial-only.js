@@ -9,7 +9,7 @@ const { spawnSync } = require("child_process");
 const vm = require("vm");
 
 const ROOT = __dirname;
-const TAG = "20260915-reminder-compact-v1";
+const TAG = "20260915-reminder-compact-v2";
 let failed = 0;
 let passed = 0;
 

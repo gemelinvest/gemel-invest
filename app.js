@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260915-reminder-compact-v1";
+  const BUILD = "20260915-reminder-compact-v2";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -42959,7 +42959,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260915-reminder-compact-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260915-reminder-compact-v2";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -43644,7 +43644,7 @@ UsersGateUI.init();
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
     "./simulators-center.css?v=20260914-mc-followup-qfix-v2",
-    "./simulators-shell.css?v=20260915-reminder-compact-v1"
+    "./simulators-shell.css?v=20260915-reminder-compact-v2"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -45006,7 +45006,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260915-reminder-compact-v1";
+  const GI_WIZARD_JS_VERSION = "20260915-reminder-compact-v2";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
@@ -59053,8 +59053,15 @@ const ClalRiskLifePdf = {
     checkInterval: null,
     _saving: false,
 
-    ICONS: { callback:"📞", documents:"📄", missing:"⚠️" },
     LABELS: { callback:"חזרה ללקוח", documents:"מעקב מסמכים", missing:"השלמת חוסרים" },
+    _typeIconHtml(type){
+      const svg = {
+        callback: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>',
+        documents: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="13" y2="17"></line></svg>',
+        missing: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="8" x2="12" y2="12"></line><circle cx="12" cy="16" r=".7" fill="currentColor" stroke="none"></circle></svg>'
+      };
+      return svg[type] || svg.callback;
+    },
 
     // ── init ──────────────────────────────────────────
     init(){
@@ -59255,7 +59262,7 @@ const ClalRiskLifePdf = {
       saveBtn.hidden   = (step !== "details");
       if(this.els.foot) this.els.foot.hidden = (step === "list");
 
-      const titles = { list:"תזכורות", type:"תזכורת חדשה — סוג", details:"תזכורת חדשה — פרטים" };
+      const titles = { list:"תזכורות", type:"סוג תזכורת", details:"פרטי תזכורת" };
       if(this.els.title) this.els.title.textContent = titles[step] || "תזכורות";
     },
 
@@ -59647,7 +59654,7 @@ const ClalRiskLifePdf = {
         const row = document.createElement("div");
         row.className = "giReminderRow" + (overdue ? " is-overdue" : "");
         row.innerHTML = `
-          <div class="giReminderRow__icon">${this.ICONS[r.type] || "🔔"}</div>
+          <div class="giReminderRow__icon">${this._typeIconHtml(r.type)}</div>
           <div class="giReminderRow__body">
             <div class="giReminderRow__type">${this.LABELS[r.type] || r.type}</div>
             <div class="giReminderRow__text">${this._escHtml(r.details)}</div>
@@ -59712,7 +59719,7 @@ const ClalRiskLifePdf = {
       if(!this.alertQueue.length){ this.alertActive = false; return; }
       this.alertActive = true;
       const r = this.alertQueue[0];
-      if(this.els.alertIcon)    this.els.alertIcon.textContent   = this.ICONS[r.type] || "🔔";
+      if(this.els.alertIcon)    this.els.alertIcon.innerHTML     = this._typeIconHtml(r.type);
       if(this.els.alertTitle)   this.els.alertTitle.textContent  = this.LABELS[r.type] || "תזכורת";
       if(this.els.alertText)    this.els.alertText.textContent   = r.details;
       if(this.els.alertCustomer) this.els.alertCustomer.textContent = r.customer_name ? `👤 ${r.customer_name}` : "";

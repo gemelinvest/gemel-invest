@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260915-reminder-compact-v1";
+const TAG = "20260915-reminder-compact-v2";
 let failed = 0;
 let passed = 0;
 
@@ -43,7 +43,7 @@ assert(sw.includes("gi-v12-" + TAG), "service-worker cache");
 assert(app.includes('BUILD = "' + TAG + '"'), "app.js BUILD");
 
 console.log("\n2) compact panel, not a large empty stage");
-const panel = sliceBetween(css, "/* ===== REMINDER MODAL ===== */", "/* Type grid */");
+const panel = sliceBetween(css, "/* ===== REMINDER MODAL ===== */", "/* Type list */");
 assert(panel.includes("max-width:380px"), "panel max-width is 380px");
 assert(!panel.includes("max-width:500px"), "old 500px panel is gone");
 assert(css.includes("max-height:220px"), "open list is shorter");
@@ -63,7 +63,21 @@ const showStep = sliceBetween(app, "showStep(step){", "startNew(){");
 assert(showStep.includes("this.els.foot.hidden = (step === \"list\")"), "footer hides on the list step");
 assert(css.includes(".giReminderModal .modal__kicker{ display:none; }"), "GEMEL INVEST kicker is hidden");
 
-console.log("\n5) reminder engines stay");
+console.log("\n5) type picker is a professional row list, not toy cards");
+const typeStep = sliceBetween(html, "id=\"giReminderStep1\"", "id=\"giReminderStep2\"");
+const typeCss = sliceBetween(css, "/* Type list */", "/* Date row */");
+const remHead = sliceBetween(app, "const ReminderUI = {", "init(){");
+assert(typeStep.includes("data-type=\"callback\""), "callback type stays");
+assert(typeStep.includes("data-type=\"documents\""), "documents type stays");
+assert(typeStep.includes("data-type=\"missing\""), "missing type stays");
+assert(!typeStep.includes("📞") && !typeStep.includes("📄") && !typeStep.includes("⚠️"), "type cards have no emoji");
+assert(typeStep.includes("<svg"), "type cards use outline SVG");
+assert(typeCss.includes("flex-direction:column"), "types are a vertical list");
+assert(!typeCss.includes("repeat(3,1fr)"), "old 3-up game cards are gone");
+assert(app.includes("_typeIconHtml(type)"), "list/alert reuse the outline icons");
+assert(!remHead.includes("📞"), "ReminderUI no longer stores emoji icons");
+
+console.log("\n6) reminder engines stay");
 assert(app.includes("function playGiReminderSound(){"), "glass reminder sound stays");
 assert(app.includes("playGiReminderSound()"), "due alert still plays it");
 assert(html.includes("id=\"giReminderLinkQuery\""), "link search stays");

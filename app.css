@@ -32684,33 +32684,36 @@ input[inputmode="tel"]{
   text-transform:uppercase; letter-spacing:.04em;
   margin-bottom:16px;
 }
-/* Type grid */
+/* Type list */
 .giReminderModal__typeGrid{
-  display:grid; grid-template-columns:repeat(3,1fr); gap:12px;
+  display:flex; flex-direction:column; gap:8px;
 }
 .giReminderModal__typeCard{
-  display:flex; flex-direction:column; align-items:center; gap:6px;
-  padding:12px 8px; border-radius:16px;
-  border:1.5px solid var(--line);
-  background:var(--bg2);
+  display:flex; flex-direction:row; align-items:center; gap:12px;
+  padding:10px 12px; border-radius:0;
+  border:1px solid var(--line);
+  background:var(--panel);
   cursor:pointer;
-  transition:border-color .18s, background .18s, transform .15s, box-shadow .18s;
-  text-align:center;
+  transition:border-color .15s, background .15s;
+  text-align:right;
 }
 .giReminderModal__typeCard:hover{
   border-color:var(--brandC);
   background:rgba(42,92,245,.06);
-  transform:translateY(-2px);
-  box-shadow:0 6px 20px rgba(42,92,245,.12);
 }
 .giReminderModal__typeCard.is-selected{
   border-color:var(--brandC);
-  background:rgba(42,92,245,.10);
-  box-shadow:0 0 0 3px rgba(42,92,245,.18);
+  background:rgba(42,92,245,.08);
 }
-.giReminderModal__typeIcon{ font-size:18px; line-height:1; }
-.giReminderModal__typeTitle{ font-size:13px; font-weight:700; color:var(--text); }
-.giReminderModal__typeDesc{ font-size:11px; color:var(--muted); line-height:1.4; }
+.giReminderModal__typeIcon{
+  width:18px; height:18px; flex-shrink:0;
+  color:var(--muted); display:flex; align-items:center; justify-content:center;
+}
+.giReminderModal__typeIcon svg{ display:block; width:18px; height:18px; }
+.giReminderModal__typeCard.is-selected .giReminderModal__typeIcon{ color:var(--brandC); }
+.giReminderModal__typeText{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+.giReminderModal__typeTitle{ font-size:14px; font-weight:700; color:var(--text); }
+.giReminderModal__typeDesc{ font-size:12px; color:var(--muted); line-height:1.4; }
 
 /* Date row */
 .giReminderModal__dateRow{
@@ -32784,7 +32787,8 @@ input[inputmode="tel"]{
   background:var(--bg2);
   position:relative;
 }
-.giReminderRow__icon{ font-size:22px; flex-shrink:0; margin-top:2px; }
+.giReminderRow__icon{ width:18px; height:18px; flex-shrink:0; margin-top:2px; color:var(--muted); }
+.giReminderRow__icon svg{ display:block; width:18px; height:18px; }
 .giReminderRow__body{ flex:1; min-width:0; }
 .giReminderRow__type{ font-size:12px; font-weight:700; color:var(--muted); margin-bottom:3px; }
 .giReminderRow__text{ font-size:14px; font-weight:500; color:var(--text); white-space:pre-line; line-height:1.5; }
