@@ -61,7 +61,7 @@
   }
   // ===== /GI-WORKDAYS =======================================================
 
-  const BUILD = "20260915-reminder-link-v1";
+  const BUILD = "20260915-reminder-vol-v1";
   /* GI-ILS-AMOUNT 2026-09-14 — 1K/1M → סכום עם אפסים. תצוגה בלבד על שדות כסף;
      חישוב פרמיה/הנחה ממשיך לקבל מספר רגיל אחרי הפענוח. */
   const GI_ILS_AMOUNT = (function(){
@@ -1256,7 +1256,8 @@
     } catch(_e) {}
   }
 
-  /* GI-REMINDER 2026-09-15 — זכוכית רכה פעמיים, עם הפסקה באמצע. רק תזכורת. */
+  /* GI-REMINDER 2026-09-15 — זכוכית רכה פעמיים, עם הפסקה באמצע. רק תזכורת.
+     הווליום הוגבר (master 1.0, velocity 0.50/0.44) בלי לשנות את המנגינה. */
   function _playGiGlassNote(ctx, dest, freq, start, duration, velocity){
     const t = ctx.currentTime + start;
     const partials = [
@@ -1290,13 +1291,13 @@
         try { void ctx.resume(); } catch(_e) {}
       }
       const master = ctx.createGain();
-      master.gain.value = 0.85;
+      master.gain.value = 1.0;
       master.connect(ctx.destination);
       const G6 = 1567.98;
       const E6 = 1318.51;
       const playPhrase = (offset) => {
-        _playGiGlassNote(ctx, master, G6, offset, 0.7, 0.18);
-        _playGiGlassNote(ctx, master, E6, offset + 0.22, 1.0, 0.16);
+        _playGiGlassNote(ctx, master, G6, offset, 0.7, 0.50);
+        _playGiGlassNote(ctx, master, E6, offset + 0.22, 1.0, 0.44);
       };
       playPhrase(0);
       playPhrase(1.72);
@@ -42958,7 +42959,7 @@ UsersGateUI.init();
     }
   };
   try { window.GI_OFFICIAL_FORM_FILL = GI_OFFICIAL_FORM_FILL; } catch(_e) {}
-  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260915-reminder-link-v1";
+  const GI_SIMULATOR_JS_HREF = "./gi-simulators.js?v=20260915-reminder-vol-v1";
   const GI_HACHSHARA_CI_FORM_HREF = "./gi-hachshara-ci-form.js?v=20260826-hach-hmo-health-v1";
   const GI_HACHSHARA_HEALTH_FORM_HREF = "./gi-hachshara-health-form.js?v=20260826-hach-health-form-v1";
   const GI_HACHSHARA_LIFE_FORM_HREF = "./gi-hachshara-life-form.js?v=20260826-hach-hmo-health-v1";
@@ -43643,7 +43644,7 @@ UsersGateUI.init();
     "./clal-mortgage-risk-sim.css?v=20260812-cll-mort-v1",
     "./clal-risk-sim.css?v=20260812-cll-risk-v2",
     "./simulators-center.css?v=20260914-mc-followup-qfix-v2",
-    "./simulators-shell.css?v=20260915-reminder-link-v1"
+    "./simulators-shell.css?v=20260915-reminder-vol-v1"
   ]);
   function ensureGiSimulatorStylesLoaded(){
     const ver = "20260818-sim-no-steps-v2";
@@ -45005,7 +45006,7 @@ UsersGateUI.init();
 
   /* GI-PERF-LAZY-WIZARD 2026-08-09 */
   // Lazy Wizard — full engine in gi-wizard.js (~1.5MB parse deferred until open/init).
-  const GI_WIZARD_JS_VERSION = "20260915-reminder-link-v1";
+  const GI_WIZARD_JS_VERSION = "20260915-reminder-vol-v1";
   const GI_WIZARD_SOFT_RECOVERY_KEY = "gi_wizard_build_soft_recovery";
   const GI_WIZARD_FAIL_TOAST_KEY = "gi_wizard_fail_toast_shown";
   let _giWizardFailToastShown = false;
