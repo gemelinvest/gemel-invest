@@ -4,7 +4,7 @@
 (() => {
   "use strict";
 
-  const TAG = "20260915-sys-notice-v1";
+  const TAG = "20260915-sys-notice-v2";
   const TABLE = "gi_system_notices";
   const CHANNEL = "gi-system-notice";
   const STATE_KEY = "GI_SYS_NOTICE_UI_V1";
@@ -84,7 +84,7 @@
       const t0 = ctx.currentTime;
       const master = ctx.createGain();
       master.gain.setValueAtTime(0.0001, t0);
-      master.gain.exponentialRampToValueAtTime(0.55, t0 + 0.02);
+      master.gain.exponentialRampToValueAtTime(1.0, t0 + 0.02);
       master.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.92);
       master.connect(ctx.destination);
       const tone = (when, freq, dur) => {
@@ -93,7 +93,7 @@
         osc.type = "sine";
         osc.frequency.setValueAtTime(freq, when);
         g.gain.setValueAtTime(0.0001, when);
-        g.gain.exponentialRampToValueAtTime(0.9, when + 0.012);
+        g.gain.exponentialRampToValueAtTime(1.0, when + 0.012);
         g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
         osc.connect(g);
         g.connect(master);
