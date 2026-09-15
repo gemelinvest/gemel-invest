@@ -1286,12 +1286,14 @@
   border: 1px solid var(--uf-line) !important;
   background: var(--uf-surface) !important;
   box-shadow: none !important;
+  max-width: 380px !important;
+  width: min(380px, calc(100vw - 32px)) !important;
 }
 #giReminderModal .modal__head:not(#\9):not(#\9){
   background: var(--uf-head-bg) !important;
   border-bottom: 1px solid var(--uf-line-soft) !important;
 }
-#giReminderModal .modal__kicker:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#giReminderModal .modal__kicker:not(#\9):not(#\9){ display: none !important; }
 #giReminderModal .modal__title:not(#\9):not(#\9){ color: var(--uf-navy) !important; font-weight: 700 !important; }
 #giReminderModal .iconBtn:not(#\9):not(#\9){
   border-radius: 0 !important; border: 1px solid var(--uf-line) !important; background: var(--uf-surface) !important;
@@ -1336,6 +1338,13 @@
 }
 #giReminderModal .giReminderModal__typeTitle:not(#\9):not(#\9){ color: var(--uf-ink) !important; }
 #giReminderModal .giReminderModal__typeDesc:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#giReminderModal .giReminderModal__typeGrid:not(#\9):not(#\9){
+  display: flex !important;
+  flex-direction: column !important;
+  grid-template-columns: none !important;
+}
+#giReminderModal .giReminderModal__typeIcon:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#giReminderModal .giReminderModal__typeCard.is-selected .giReminderModal__typeIcon:not(#\9):not(#\9){ color: var(--uf-accent) !important; }
 #giReminderModal .giReminderModal__error:not(#\9):not(#\9){ color: var(--uf-danger) !important; }
 #giReminderModal .giReminderModal__error:empty:not(#\9):not(#\9),
 #giReminderModal .giReminderModal__error[hidden]:not(#\9):not(#\9){
@@ -1350,6 +1359,7 @@
 
 /* ---- רשימת תזכורות פתוחות ---- */
 #giReminderModal .giReminderModal__listEmpty:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; }
+#giReminderModal .giReminderModal__emptyIcon:not(#\9):not(#\9){ color: var(--uf-ink-3) !important; opacity: .55 !important; }
 #giReminderModal .giReminderRow:not(#\9):not(#\9){
   border-radius: 0 !important;
   border: 1px solid var(--uf-line) !important;
