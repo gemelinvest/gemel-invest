@@ -4,7 +4,7 @@
 (() => {
   "use strict";
 
-  const TAG = "20260915-sys-notice-v3";
+  const TAG = "20260915-sys-notice-v4";
   const TABLE = "gi_system_notices";
   const CHANNEL = "gi-system-notice";
   const STATE_KEY = "GI_SYS_NOTICE_UI_V1";
