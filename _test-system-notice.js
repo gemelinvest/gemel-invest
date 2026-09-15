@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260915-sys-notice-v3";
+const TAG = "20260915-sys-notice-v4";
 const IDLE_MS = 20000;
 let failed = 0;
 let passed = 0;
@@ -64,6 +64,8 @@ assert(html.includes("id=\"giSysNoticeMinBtn\""), "minimize button");
 assert(html.includes("id=\"giSysNoticeCloseBtn\""), "close button");
 assert(!html.includes("<button class=\"giSysNoticeDock\""), "dock is no longer a single clickable chip");
 assert(css.includes("left:16px") || css.includes("left: 16px"), "card is on the left");
+assert(css.includes("bottom:16px") || css.includes("bottom: 16px"), "card is at the bottom");
+assert(!css.includes("top:76px"), "old top-left placement is gone");
 assert(css.includes("width:min(440px"), "card is larger than a toast");
 assert(!css.includes("360px"), "old 360px toast width is gone");
 assert(css.includes("background:#0b1f3a"), "navy official header");
@@ -71,7 +73,8 @@ assert(css.includes(".giSysNoticeDock"), "minimized dock styles");
 assert(css.includes(".giSysNoticeDock{\n") || css.includes(".giSysNoticeDock{"), "dock block exists");
 const dockCss = sliceBetween(css, ".giSysNoticeDock{", ".giSysNoticeDock.is-on");
 assert(dockCss.includes("left:16px"), "dock stays in the same left place");
-assert(dockCss.includes("top:76px"), "dock stays at the same top as the card");
+assert(dockCss.includes("bottom:16px"), "dock stays at the same bottom as the card");
+assert(!dockCss.includes("top:76px"), "dock is no longer at the top");
 assert(!dockCss.includes("left:0"), "old left-edge dock is gone");
 
 console.log("\n3) send is immediate; module is isolated");
