@@ -20544,10 +20544,14 @@ UsersGateUI.init();
       const actorPin = safeTrim(Auth._sessionPin);
       const actorName = safeTrim(Auth.current?.name || rec?.name);
       const actorUsername = safeTrim(rec?.username || Auth.current?.name);
-      if(!actorPin || !actorUsername){
+      /* מנהל שנכנס עם אימות דו־שלבי מחזיק JWT אמיתי. הוא הראיה החזקה לזהות:
+         ה-PIN שהוקלד בכניסה הוא סיסמת ה-Auth, ולא בהכרח agents.pin, ולכן
+         שחזור ה-PIN בשרת נכשל אצל מנהלים כאלה. */
+      const actorToken = await Storage.getAuthAccessToken();
+      if(!actorToken && (!actorPin || !actorUsername)){
         return {
           ok:false,
-          error:"כדי ליצור את המשתמש ב-Supabase Auth יש להתחבר מחדש (נדרש קוד הכניסה של המנהל בסשן) ואז לשמור שוב את הנציג עם מייל ו-PIN."
+          error:"כדי ליצור את המשתמש ב-Supabase Auth יש להתחבר מחדש (נדרש חיבור מאובטח או קוד הכניסה של המנהל בסשן) ואז לשמור שוב את הנציג עם מייל ו-PIN."
         };
       }
       try {
@@ -20556,7 +20560,7 @@ UsersGateUI.init();
           headers: {
             "Content-Type": "application/json",
             apikey: SUPABASE_PUBLISHABLE_KEY,
-            Authorization: "Bearer " + SUPABASE_PUBLISHABLE_KEY
+            Authorization: "Bearer " + (actorToken || SUPABASE_PUBLISHABLE_KEY)
           },
           body: JSON.stringify({
             action: "create",

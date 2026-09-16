@@ -63,40 +63,125 @@ function sbAdmin(){
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
-async function verifyAdminActor(sb: SupabaseClient, body: Json){
+function bearerToken(req: Request){
+  const raw = trim(req.headers.get("authorization"));
+  if(!raw) return "";
+  const token = raw.replace(/^Bearer\s+/i, "").trim();
+  // The CRM sends the publishable key when no user session exists.
+  if(!token || token.startsWith("sb_publishable_") || token.startsWith("sb_secret_")) return "";
+  // Only a JWT can be validated as a user token.
+  return token.split(".").length === 3 ? token : "";
+}
+
+/* Authorization order:
+   1. The manager's live Supabase Auth JWT. Managers who log in with MFA hold a
+      real session, and their agents.pin may legitimately differ from the Auth
+      password they typed — so replaying the PIN is not a reliable gate.
+   2. adminAuth (username + PIN from app_meta) for the synthetic system admin.
+   3. gi_verify_agent_login for PIN-only managers, who have no Auth session.
+   Role always comes from public.agents, never from user_metadata. */
+async function verifyAdminActor(sb: SupabaseClient, req: Request, body: Json){
   const username = trim(body.actorUsername) || trim(body.actorName);
   const pin = trim(body.actorPin);
-  if(!username || !pin){
-    return { ok: false as const, res: json({ ok: false, error: "אין הרשאה — חסר קוד כניסה של המנהל" }, 401) };
+  const token = bearerToken(req);
+  const reasons: string[] = [];
+
+  if(token){
+    const { data: userData, error: userErr } = await sb.auth.getUser(token);
+    const user = userData?.user;
+    if(userErr || !user?.id){
+      reasons.push("session_invalid");
+    } else {
+      const byAuthId = await sb.from("agents")
+        .select("id,name,username,role,active")
+        .eq("auth_user_id", user.id)
+        .maybeSingle();
+      let agent = byAuthId.data as Json | null;
+      if(!agent && normalizeEmail(user.email)){
+        const byEmail = await sb.from("agents")
+          .select("id,name,username,role,active")
+          .eq("email", normalizeEmail(user.email))
+          .maybeSingle();
+        agent = byEmail.data as Json | null;
+      }
+      if(!agent){
+        reasons.push("session_not_linked_to_agent");
+      } else if(agent.active === false){
+        reasons.push("session_agent_disabled");
+      } else {
+        const actor = {
+          id: trim(agent.id),
+          name: trim(agent.name),
+          username: trim(agent.username) || trim(agent.name),
+          role: trim(agent.role) || "agent",
+        };
+        if(isProvisionAdmin(actor)) return { ok: true as const, actor, via: "session" };
+        return {
+          ok: false as const,
+          res: json({
+            ok: false,
+            error: "רק מנהל או מנהל מערכת יכול להקים משתמש Auth. התפקיד המחובר: " + actor.role,
+            reason: "session_not_manager",
+          }, 403),
+        };
+      }
+    }
   }
 
-  const { data: metaRow } = await sb.from("app_meta").select("payload").eq("key", "global").maybeSingle();
-  const payload = (metaRow?.payload && typeof metaRow.payload === "object") ? metaRow.payload as Json : {};
-  const adminAuth = (payload.adminAuth && typeof payload.adminAuth === "object") ? payload.adminAuth as Json : {};
-  if(adminAuth.active !== false
-    && trim(adminAuth.username) === username
-    && trim(adminAuth.pin) === pin){
-    return { ok: true as const, actor: { id: "", name: trim(adminAuth.username), username, role: "admin" } };
+  if(username && pin){
+    const { data: metaRow } = await sb.from("app_meta").select("payload").eq("key", "global").maybeSingle();
+    const payload = (metaRow?.payload && typeof metaRow.payload === "object") ? metaRow.payload as Json : {};
+    const adminAuth = (payload.adminAuth && typeof payload.adminAuth === "object") ? payload.adminAuth as Json : {};
+    if(adminAuth.active !== false
+      && trim(adminAuth.username) === username
+      && trim(adminAuth.pin) === pin){
+      return { ok: true as const, actor: { id: "", name: trim(adminAuth.username), username, role: "admin" }, via: "adminAuth" };
+    }
+
+    const { data, error } = await sb.rpc("gi_verify_agent_login", {
+      p_username: username,
+      p_pin: pin,
+    });
+    if(error){
+      reasons.push("pin_rpc_error");
+    } else if(!data || (data as Json).ok !== true) {
+      reasons.push("pin_" + (trim((data as Json)?.error) || "rejected").toLowerCase());
+    } else {
+      const verified = data as Json;
+      const actor = {
+        id: trim(verified.agentId),
+        name: trim(verified.agentName),
+        username: trim(verified.username) || username,
+        role: trim(verified.role) || "agent",
+      };
+      if(!isProvisionAdmin(actor)){
+        return {
+          ok: false as const,
+          res: json({
+            ok: false,
+            error: "רק מנהל או מנהל מערכת יכול להקים משתמש Auth. התפקיד המחובר: " + actor.role,
+            reason: "pin_not_manager",
+          }, 403),
+        };
+      }
+      return { ok: true as const, actor, via: "pin" };
+    }
+  } else if(!token) {
+    reasons.push("no_credentials");
   }
 
-  const { data, error } = await sb.rpc("gi_verify_agent_login", {
-    p_username: username,
-    p_pin: pin,
-  });
-  if(error || !data || (data as Json).ok !== true){
-    return { ok: false as const, res: json({ ok: false, error: "אין הרשאה" }, 401) };
-  }
-  const verified = data as Json;
-  const actor = {
-    id: trim(verified.agentId),
-    name: trim(verified.agentName),
-    username: trim(verified.username) || username,
-    role: trim(verified.role) || "agent",
+  const hint = reasons.includes("pin_bad_pin")
+    ? "קוד הכניסה של המנהל לא תואם את הקוד בטבלת הנציגים. אם אתה מחובר עם אימות דו־שלבי — התנתק, היכנס מחדש כדי לרענן את החיבור המאובטח, ונסה לשמור שוב."
+    : reasons.includes("session_not_linked_to_agent")
+      ? "החיבור המאובטח שלך לא מקושר לרשומת נציג. פנה למנהל המערכת לקישור auth_user_id."
+      : reasons.includes("no_credentials")
+        ? "לא נמצאו פרטי מנהל מאומתים בבקשה. התנתק והיכנס מחדש ואז נסה לשמור שוב."
+        : "לא הצלחתי לאמת שאתה מנהל. התנתק, היכנס מחדש ונסה שוב.";
+
+  return {
+    ok: false as const,
+    res: json({ ok: false, error: "אין הרשאה — " + hint, reason: reasons.join(",") || "unauthorized" }, 401),
   };
-  if(!isProvisionAdmin(actor)){
-    return { ok: false as const, res: json({ ok: false, error: "רק מנהל יכול להקים משתמש Auth" }, 403) };
-  }
-  return { ok: true as const, actor };
 }
 
 async function findAuthUserByEmail(sb: SupabaseClient, email: string){
@@ -187,7 +272,7 @@ Deno.serve(async (req: Request) => {
   }
 
   const sb = sbAdmin();
-  const gate = await verifyAdminActor(sb, body);
+  const gate = await verifyAdminActor(sb, req, body);
   if(!gate.ok) return gate.res;
 
   const agentId = trim(body.agentId);
@@ -271,6 +356,7 @@ Deno.serve(async (req: Request) => {
       email,
       passwordScheme: result.passwordScheme,
       agentId,
+      authorizedVia: gate.via,
     });
   } catch(err) {
     return json({
