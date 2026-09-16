@@ -4289,6 +4289,7 @@
       directoryContactsUpdatedAt: null,
       agentSecurity: {},
       agentTargets: {},
+      agentShiftHours: {},
       dataUpdatedAt: null,
       referralsUpdatedAt: null,
       campaignInboxUpdatedAt: null,
@@ -4370,6 +4371,9 @@
     // Without this, code paths that reconstruct meta from a partial object lose these maps.
     if(typeof normalizeAgentTargetMap === 'function'){
       out.meta.agentTargets = normalizeAgentTargetMap(out.meta.agentTargets);
+    }
+    if(typeof normalizeAgentShiftHoursMap === 'function'){
+      out.meta.agentShiftHours = normalizeAgentShiftHoursMap(out.meta.agentShiftHours);
     }
     if(typeof normalizeAgentSecurityMap === 'function'){
       out.meta.agentSecurity = normalizeAgentSecurityMap(out.meta.agentSecurity);
@@ -4626,6 +4630,9 @@
       auditLog: normalizeAuditLogList([...(Array.isArray(server.auditLog) ? server.auditLog : []), ...(Array.isArray(local.auditLog) ? local.auditLog : [])]),
       agentSecurity: mergeAgentSecurityMaps(server.agentSecurity, local.agentSecurity),
       agentTargets: mergeAgentTargetMaps(server.agentTargets, local.agentTargets),
+      agentShiftHours: (typeof mergeAgentShiftHoursMaps === "function")
+        ? mergeAgentShiftHoursMaps(server.agentShiftHours, local.agentShiftHours)
+        : (local.agentShiftHours || server.agentShiftHours || {}),
       // BUG-FIX: args must be (local, remote) to match mergeAgentReportAliasesMapsByRecency
       // and teamManagerAssignments merge — swapped maps made newer server aliases lose to stale local.
       agentReportAliases: mergeAgentReportAliasesMapsByRecency(
@@ -14265,6 +14272,9 @@
           agentTargets: (typeof normalizeAgentTargetMap === "function")
             ? normalizeAgentTargetMap(state?.meta?.agentTargets)
             : (state?.meta?.agentTargets && typeof state.meta.agentTargets === "object" ? state.meta.agentTargets : {}),
+          agentShiftHours: (typeof normalizeAgentShiftHoursMap === "function")
+            ? normalizeAgentShiftHoursMap(state?.meta?.agentShiftHours)
+            : (state?.meta?.agentShiftHours && typeof state.meta.agentShiftHours === "object" ? state.meta.agentShiftHours : {}),
           ...clocks,
           updatedAt
         },
@@ -14910,7 +14920,10 @@
           : (payload?.agentSecurity && typeof payload.agentSecurity === "object" ? payload.agentSecurity : {}),
         agentTargets: (typeof normalizeAgentTargetMap === "function")
           ? normalizeAgentTargetMap(payload?.agentTargets)
-          : (payload?.agentTargets && typeof payload.agentTargets === "object" ? payload.agentTargets : {})
+          : (payload?.agentTargets && typeof payload.agentTargets === "object" ? payload.agentTargets : {}),
+        agentShiftHours: (typeof normalizeAgentShiftHoursMap === "function")
+          ? normalizeAgentShiftHoursMap(payload?.agentShiftHours)
+          : (payload?.agentShiftHours && typeof payload.agentShiftHours === "object" ? payload.agentShiftHours : {})
       };
     },
 
@@ -20145,6 +20158,8 @@ UsersGateUI.init();
         teamAgentsPick: $("#lcUserTeamAgentsPick"),
         reportAliases: $("#lcUserReportAliases"),
         officeBranch: $("#lcUserOfficeBranch"),
+        shiftStart: $("#lcUserShiftStart"),
+        shiftEnd: $("#lcUserShiftEnd"),
       };
 
       const E = this._modalEls;
@@ -20616,6 +20631,7 @@ UsersGateUI.init();
         a.name = name;
         a.username = username;
         if(pin) a.pin = pin; // empty on edit => omit from upsert, keep server pin
+        else delete a.pin;
         a.birthDate = birthDate;
         a.monthlySalesTarget = monthlySalesTarget;
         a.role = resolveAgentRoleCode(role);
@@ -20703,6 +20719,9 @@ UsersGateUI.init();
         }
         if(monthlySalesTarget > 0){
           setAgentMonthlyTarget(newId, monthlySalesTarget);
+        }
+        if(typeof setAgentShiftHours === "function"){
+          setAgentShiftHours(newId, safeTrim(E.shiftStart?.value), safeTrim(E.shiftEnd?.value));
         }
         if(E.reportAliases){
           setAgentReportAliases(newId, parseAgentReportAliasesInput(E.reportAliases.value));
@@ -43695,7 +43714,7 @@ UsersGateUI.init();
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260914-mirror-chg-v2",
     "./gi-customers-import.css?v=20260828-menora-health-decl-v1",
-    "./theme-unify-flat.css?v=20260907-couple-shared-discount-v1"
+    "./theme-unify-flat.css?v=20260916-agent-shift-fs-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
     if(document.documentElement.dataset.giSecondaryCss === "1") return;
@@ -56622,6 +56641,109 @@ const ClalRiskLifePdf = {
     return merged;
   };
 
+  const HHMM_RE = /^(\d{1,2}):(\d{2})$/;
+  const normalizeShiftClock = (value) => {
+    const raw = safeTrim(value);
+    const m = HHMM_RE.exec(raw);
+    if(!m) return "";
+    const hour = Number(m[1]);
+    const minute = Number(m[2]);
+    if(!Number.isFinite(hour) || !Number.isFinite(minute) || hour > 23 || minute > 59) return "";
+    return String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
+  };
+  const shiftClockToMinutes = (value) => {
+    const clock = normalizeShiftClock(value);
+    if(!clock) return null;
+    const parts = clock.split(":");
+    return (Number(parts[0]) * 60) + Number(parts[1]);
+  };
+  const israelNowMinutes = (now = new Date()) => {
+    try {
+      const parts = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Asia/Jerusalem",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23"
+      }).formatToParts(now);
+      const hour = Number((parts.find((p) => p.type === "hour") || {}).value);
+      const minute = Number((parts.find((p) => p.type === "minute") || {}).value);
+      if(!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+      return (hour * 60) + minute;
+    } catch(_e) {
+      return (now.getHours() * 60) + now.getMinutes();
+    }
+  };
+  const normalizeAgentShiftHoursEntry = (raw) => {
+    const input = raw && typeof raw === "object" ? raw : {};
+    return {
+      start: normalizeShiftClock(input.start || input.shiftStart || input.from),
+      end: normalizeShiftClock(input.end || input.shiftEnd || input.to),
+      updatedAt: safeTrim(input.updatedAt || input.updated_at) || nowISO()
+    };
+  };
+  const normalizeAgentShiftHoursMap = (raw) => {
+    const input = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+    const out = {};
+    Object.entries(input).forEach(([key, value]) => {
+      if(key) out[String(key)] = normalizeAgentShiftHoursEntry(value);
+    });
+    return out;
+  };
+  const mergeAgentShiftHoursMaps = (srv, loc) => {
+    const s = normalizeAgentShiftHoursMap(srv);
+    const l = normalizeAgentShiftHoursMap(loc);
+    const out = { ...s };
+    Object.entries(l).forEach(([key, lEntry]) => {
+      const sEntry = s[key];
+      if(!sEntry || compareIsoStamps(lEntry.updatedAt, sEntry.updatedAt) >= 0){
+        out[key] = lEntry;
+      }
+    });
+    return out;
+  };
+  const getAgentShiftHoursStore = () => {
+    State.data.meta = State.data.meta && typeof State.data.meta === "object" ? State.data.meta : {};
+    State.data.meta.agentShiftHours = normalizeAgentShiftHoursMap(State.data.meta.agentShiftHours);
+    return State.data.meta.agentShiftHours;
+  };
+  const getAgentShiftHours = (agentId) => {
+    const key = safeTrim(agentId);
+    if(!key) return normalizeAgentShiftHoursEntry({});
+    return normalizeAgentShiftHoursEntry(getAgentShiftHoursStore()[key] || {});
+  };
+  const setAgentShiftHours = (agentId, start, end) => {
+    const key = safeTrim(agentId);
+    if(!key) return normalizeAgentShiftHoursEntry({});
+    const store = getAgentShiftHoursStore();
+    const merged = normalizeAgentShiftHoursEntry({
+      start,
+      end,
+      updatedAt: nowISO()
+    });
+    store[key] = merged;
+    State.data.meta.updatedAt = nowISO();
+    return merged;
+  };
+  const isNowWithinAgentShift = (start, end, now = new Date()) => {
+    const startM = shiftClockToMinutes(start);
+    const endM = shiftClockToMinutes(end);
+    if(startM == null || endM == null) return true;
+    if(startM === endM) return true;
+    const nowM = israelNowMinutes(now);
+    if(nowM == null) return true;
+    if(startM < endM) return nowM >= startM && nowM < endM;
+    return nowM >= startM || nowM < endM;
+  };
+  const getAgentShiftLoginBlock = (agent) => {
+    const hours = getAgentShiftHours(agent?.id);
+    if(!hours.start || !hours.end) return { blocked: false, message: "" };
+    if(isNowWithinAgentShift(hours.start, hours.end)) return { blocked: false, message: "" };
+    return {
+      blocked: true,
+      message: "לא ניתן להתחבר למערכת אינך במשמרת. תוכל/י היכנס למערכת החל מהשעה : " + hours.start
+    };
+  };
+
   const SupabaseMFA = {
     getClient(){ return Storage.getClient(); },
     async signOutSilently(){ try { await Storage.withTimeout(this.getClient().auth.signOut(), 'ניתוק Auth', 7000); } catch(_e) {} },
@@ -56743,6 +56865,7 @@ const ClalRiskLifePdf = {
     row.payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
     row.payload.agentSecurity = normalizeAgentSecurityMap(state?.meta?.agentSecurity);
     row.payload.agentTargets = normalizeAgentTargetMap(state?.meta?.agentTargets);
+    row.payload.agentShiftHours = normalizeAgentShiftHoursMap(state?.meta?.agentShiftHours);
     row.payload.agentReportAliases = normalizeAgentReportAliasesMap(state?.meta?.agentReportAliases);
     row.payload.agentReportAliasesUpdatedAt = safeTrim(state?.meta?.agentReportAliasesUpdatedAt) || null;
     row.payload.agentBranches = normalizeAgentBranchesMap(state?.meta?.agentBranches);
@@ -57317,6 +57440,7 @@ const ClalRiskLifePdf = {
     const out = _origMapMeta(metaRow);
     out.agentSecurity = normalizeAgentSecurityMap(metaRow?.payload?.agentSecurity || out.agentSecurity);
     out.agentTargets = normalizeAgentTargetMap(metaRow?.payload?.agentTargets || out.agentTargets);
+    out.agentShiftHours = normalizeAgentShiftHoursMap(metaRow?.payload?.agentShiftHours || out.agentShiftHours);
     out.agentReportAliases = normalizeAgentReportAliasesMap(metaRow?.payload?.agentReportAliases || out.agentReportAliases);
     out.agentReportAliasesUpdatedAt = safeTrim(metaRow?.payload?.agentReportAliasesUpdatedAt)
       || safeTrim(out.agentReportAliasesUpdatedAt)
@@ -57428,6 +57552,13 @@ const ClalRiskLifePdf = {
 
   const getCurrentAgentRecord = () => findAgentRecordForSession();
   const completeAgentLogin = async (matched, options = {}) => {
+    try {
+      const shiftBlock = getAgentShiftLoginBlock(matched);
+      if(shiftBlock.blocked){
+        try { Auth._setError(shiftBlock.message); } catch(_e) {}
+        return;
+      }
+    } catch(_e) {}
     if(options.skipMfa === true){
       try { Auth._hideMfaStep(); } catch(_e) {}
       try { document.getElementById("lcLogin")?.classList.remove("lcLogin--mfa"); } catch(_e) {}
@@ -57728,6 +57859,11 @@ const ClalRiskLifePdf = {
       if(E.officeBranch){
         E.officeBranch.value = user ? suggestOfficeBranchForAgent(user) : '';
       }
+      if(E.shiftStart || E.shiftEnd){
+        const hours = user ? getAgentShiftHours(user.id) : { start: "", end: "" };
+        if(E.shiftStart) E.shiftStart.value = hours.start || "";
+        if(E.shiftEnd) E.shiftEnd.value = hours.end || "";
+      }
     };
     fillExtra();
     // Fallback: retry once after next tick in case DOM wasn't ready
@@ -57776,6 +57912,13 @@ const ClalRiskLifePdf = {
 
     if(authEmailFieldExists && authEmailRaw && !isValidEmailAddress(authEmailRaw)){
       this._showErr(E.err, 'כתובת Auth email לא תקינה');
+      return;
+    }
+
+    const shiftStartRaw = safeTrim(E.shiftStart?.value);
+    const shiftEndRaw = safeTrim(E.shiftEnd?.value);
+    if((shiftStartRaw && !shiftEndRaw) || (!shiftStartRaw && shiftEndRaw)){
+      this._showErr(E.err, 'יש להזין שעת התחלה ושעת סיום למשמרת, או להשאיר את שניהם ריקים');
       return;
     }
 
@@ -57831,6 +57974,9 @@ const ClalRiskLifePdf = {
       }
       if(!!E.officeBranch){
         setAgentOfficeBranch(agentId, E.officeBranch.value);
+      }
+      if(E.shiftStart || E.shiftEnd){
+        setAgentShiftHours(agentId, shiftStartRaw, shiftEndRaw);
       }
       if(agentRow){
         agentRow.email = authEmailToSave;
@@ -58193,6 +58339,10 @@ const ClalRiskLifePdf = {
       const matched = loginMatch.agent;
       if(!matched) return this._setError(loginMatch.error || 'שם משתמש לא נמצא');
       if(matched.active === false) return this._setError('המשתמש מושבת');
+      try {
+        const shiftBlock = getAgentShiftLoginBlock(matched);
+        if(shiftBlock.blocked) return this._setError(shiftBlock.message);
+      } catch(_e) {}
       /* GI-FIX 2026-08-03c — מקור האמת ל-PIN בלבד הוא השרת, לא מטמון מקומי.
          בודקים קודם מול meta; אם הדגל דלוק — כניסת PIN בלבד בלי MFA. */
       let serverPinOnly = false;
