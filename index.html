@@ -2561,9 +2561,8 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 </div>
 <div class="field">
 <label class="label" for="lcUserPin">קוד כניסה (PIN)</label>
-<input class="input" id="lcUserPin" inputmode="numeric" placeholder="קוד כניסה חדש" type="text"/>
+<input class="input" id="lcUserPin" inputmode="numeric" placeholder="0000" type="text"/>
 <div class="lcLogin__error" id="lcUserPinErr" style="display:none"></div>
-<div class="help">אותו קוד משמש לכניסה למערכת. בעריכה — השאר ריק כדי לא לשנות את הקוד הקיים בשרת.</div>
 </div>
 <div class="field">
 <label class="label" for="lcUserBirthDate">תאריך לידה</label>
@@ -2592,7 +2591,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <div class="field lcUserModal__fieldWide">
 <label class="label" for="lcUserAuthEmail">מייל Auth (Supabase)</label>
 <input class="input" id="lcUserAuthEmail" inputmode="email" placeholder="user@example.com" type="email"/>
-<div class="help">מייל לכניסה עם Google Authenticator. בשמירה המערכת יוצרת לבד את המשתמש ב-Supabase Auth עם המייל וקוד הכניסה — אין צורך להזין אותם שוב ב-Studio.</div>
+<div class="help">מייל לכניסה עם Google Authenticator. אחרי שמירה — לחץ 2FA בטבלה להפעלה.</div>
 </div>
 <div class="field lcUserModal__fieldWide">
 <label class="label" for="lcUserReportAliases">שמות נוספים בדוח היומי</label>
@@ -4139,7 +4138,7 @@ body.lcAuthLock #lcLogin.lcLogin--mfa #lcForgotPasswordBtn{display:none!importan
 <script src="./gi-policy-scan.js?v=20260819-issued-scan-v3"></script>
 <script src="./gi-followup-zip-config.js?v=20260828-sales-mail-hide-v1"></script>
 <script src="./gi-agent-appointment-report-seed.js?v=20260909-agent-appt-report-v1"></script>
-<script src="./app.js?v=20260916-provision-agent-auth-v1"></script>
+<script src="./app.js?v=20260915-agent-save-verify-v1"></script>
 <script src="./gi-assistant.js?v=20260829-assistant-open-file-fix-v1"></script>
 <script src="./gi-face-auth.js?v=20260817-face-retry-v1"></script>
 <script src="./gi-daily-sales-mail.js?v=20260914-mc-followup-qfix-v2"></script>

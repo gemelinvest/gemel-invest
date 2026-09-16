@@ -7170,11 +7170,7 @@
     const input = a && typeof a === "object" ? a : {};
     const name = safeTrim(input?.name) || "נציג";
     const username = safeTrim(input?.username) || safeTrim(input?.user) || name;
-    /* GI-FIX 2026-09-16 — אחרי R9-pre-B אין SELECT על pin, אז טעינה מהשרת
-       מגיעה בלי pin. ברירת המחדל "0000" כאן דרסה את הקוד האמיתי בשמירה
-       ממוקדת (עריכת נציג עם שדה PIN ריק). עכשיו שדה חסר נשאר ריק ו-buildAgentRows
-       לא שולח pin — ערך השרת שורד. */
-    const pin = safeTrim(input?.pin) || safeTrim(input?.pass) || "";
+    const pin = safeTrim(input?.pin) || safeTrim(input?.pass) || "0000";
     const roleRaw = safeTrim(input?.role) || safeTrim(input?.type) || "";
     const role = (roleRaw === "manager" || roleRaw === "adminLite" || roleRaw === "admin" || roleRaw === "מנהל") ? "manager"
       : (roleRaw === "opsAgent" || roleRaw === "ops_agent" || roleRaw === "נציג תפעול") ? "opsAgent"
@@ -7193,7 +7189,6 @@
       pin,
       birthDate: safeTrim(input?.birthDate || input?.birth_date),
       email: safeTrim(input?.email) || "",
-      authUserId: safeTrim(input?.authUserId || input?.auth_user_id),
       monthlySalesTarget: Number(String(input?.monthlySalesTarget ?? input?.monthly_sales_target ?? '').replace(/[^\d.-]/g, '')) || 0,
       role,
       teamManagerId: teamManagerId || "",
@@ -14581,23 +14576,9 @@
       const msg = safeTrim(res?.error);
       if(msg && /pin|team_manager|column|schema/i.test(msg)){
         const slim = { ...payload };
-        const hadPin = Object.prototype.hasOwnProperty.call(payload, "pin") && safeTrim(payload.pin);
+        if(/pin/i.test(msg)) delete slim.pin;
         if(/team_manager/i.test(msg)){
           delete slim.team_manager_id;
-        }
-        /* GI-FIX 2026-09-16 — נציג חדש חייב PIN. השמטה בשקט אחרי שגיאת pin
-           יצרה רשומה בלי קוד כניסה ("הפרטים נשמרו, הסיסמה לא"). לעדכון
-           קיים מותר להשמיט pin כדי לשמור את שאר השדות. */
-        if(/pin/i.test(msg) && hadPin){
-          const existing = await this.loadSingleRow(SUPABASE_TABLES.agents, id, "id");
-          if(!(existing?.ok && existing.data)){
-            return { ok:false, error: "שמירת קוד הכניסה (PIN) נכשלה: " + msg, pinWriteFailed: true };
-          }
-          delete slim.pin;
-          const slimRes = await send(slim);
-          return { ...slimRes, pinSkipped: true };
-        }
-        if(/team_manager/i.test(msg)){
           const slimRes = await send(slim);
           return { ...slimRes, teamManagerColumnSkipped: true };
         }
@@ -15003,7 +14984,6 @@
         pin: row?.pin,
         birthDate: row?.birthDate || row?.birth_date,
         email: row?.email,
-        authUserId: row?.auth_user_id || row?.authUserId,
         monthlySalesTarget: row?.monthlySalesTarget ?? row?.monthly_sales_target,
         role: row?.role,
         teamManagerId: row?.teamManagerId ?? row?.team_manager_id,
@@ -20300,8 +20280,8 @@ UsersGateUI.init();
       if(E.pin){
         // GI-SEC R9-pre-B: pins are not loaded to the client anymore.
         // Edit: leave empty (= keep existing server pin). Add: default 0000.
-        E.pin.value = "";
-        try { E.pin.placeholder = (this._modalMode === "edit") ? "השאר ריק כדי לא לשנות" : "קוד כניסה חדש"; } catch(_e) {}
+        E.pin.value = (this._modalMode === "edit") ? "" : "0000";
+        try { E.pin.placeholder = (this._modalMode === "edit") ? "השאר ריק כדי לא לשנות" : ""; } catch(_e) {}
       }
       if(E.birthDate) E.birthDate.value = user ? (user.birthDate || "") : "";
       if(E.monthlyTarget){
@@ -20535,83 +20515,6 @@ UsersGateUI.init();
       return { ok:true, agentId: id, persist: r };
     },
 
-    async _provisionAgentAuth(input = {}){
-      const agentId = safeTrim(input.agentId);
-      const email = normalizeEmailValue(input.email);
-      const pin = safeTrim(input.pin);
-      if(!agentId || !email || !pin) return { ok:false, skipped:true, error:"MISSING_FIELDS" };
-      const rec = typeof getCurrentAgentRecord === "function" ? getCurrentAgentRecord() : null;
-      const actorPin = safeTrim(Auth._sessionPin);
-      const actorName = safeTrim(Auth.current?.name || rec?.name);
-      const actorUsername = safeTrim(rec?.username || Auth.current?.name);
-      /* מנהל שנכנס עם אימות דו־שלבי מחזיק JWT אמיתי. הוא הראיה החזקה לזהות:
-         ה-PIN שהוקלד בכניסה הוא סיסמת ה-Auth, ולא בהכרח agents.pin, ולכן
-         שחזור ה-PIN בשרת נכשל אצל מנהלים כאלה. */
-      const actorToken = await Storage.getAuthAccessToken();
-      if(!actorToken && (!actorPin || !actorUsername)){
-        return {
-          ok:false,
-          error:"כדי ליצור את המשתמש ב-Supabase Auth יש להתחבר מחדש (נדרש חיבור מאובטח או קוד הכניסה של המנהל בסשן) ואז לשמור שוב את הנציג עם מייל ו-PIN."
-        };
-      }
-      try {
-        const res = await fetch(SUPABASE_URL + "/functions/v1/gi-provision-agent-auth", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: SUPABASE_PUBLISHABLE_KEY,
-            Authorization: "Bearer " + (actorToken || SUPABASE_PUBLISHABLE_KEY)
-          },
-          body: JSON.stringify({
-            action: "create",
-            agentId,
-            email,
-            password: pin,
-            pin,
-            name: safeTrim(input.name),
-            role: safeTrim(input.role) || "agent",
-            actorId: safeTrim(Auth.current?.id || rec?.id),
-            actorName,
-            actorUsername,
-            actorPin,
-            actorRole: safeTrim(Auth.current?.role || rec?.role)
-          })
-        });
-        let data = {};
-        try { data = await res.json(); } catch(_e) { data = {}; }
-        if(!res.ok || data.ok === false){
-          return { ok:false, error: safeTrim(data.error) || ("שגיאת Auth " + res.status) };
-        }
-        setAgentSecurity(agentId, {
-          authEmail: email,
-          authUserId: safeTrim(data.authUserId),
-          authPasswordScheme: safeTrim(data.passwordScheme) || "pin",
-          mfaRequired: true
-        });
-        const agentRow = (Array.isArray(State.data?.agents) ? State.data.agents : []).find((a) => String(a.id) === String(agentId));
-        if(agentRow){
-          agentRow.email = email;
-          agentRow.authUserId = safeTrim(data.authUserId);
-        }
-        try {
-          await App.persist("סונכרן משתמש Auth לנציג", {
-            silent: true,
-            metaOnly: true,
-            skipHeavy: true,
-            skipNormalize: true
-          });
-        } catch(_e) {}
-        return {
-          ok:true,
-          created: data.created === true,
-          authUserId: safeTrim(data.authUserId),
-          passwordScheme: safeTrim(data.passwordScheme)
-        };
-      } catch(err) {
-        return { ok:false, error: safeTrim(err?.message || err) || "PROVISION_FAILED" };
-      }
-    },
-
     _ownershipNamePatchRow(rec){
       const id = safeTrim(rec?.id);
       if(!id) return null;
@@ -20712,11 +20615,7 @@ UsersGateUI.init();
         const agentNow = nowISO();
         a.name = name;
         a.username = username;
-        if(pin) a.pin = pin;
-        else {
-          // empty on edit => omit from upsert, keep server pin (do not keep a stale in-memory 0000)
-          try { delete a.pin; } catch(_e) { a.pin = ""; }
-        }
+        if(pin) a.pin = pin; // empty on edit => omit from upsert, keep server pin
         a.birthDate = birthDate;
         a.monthlySalesTarget = monthlySalesTarget;
         a.role = resolveAgentRoleCode(role);
@@ -20767,37 +20666,11 @@ UsersGateUI.init();
         if(ownership.changed > 0){
           try { await this._persistOwnershipNamePatches(ownership); } catch(_e) {}
         }
-        let authNote = "";
-        /* GI-FIX 2026-09-16 — לא לגעת ב-Auth של נציג שהוגדר "כניסה עם PIN בלבד".
-           אין נפילה חזרה ל-a.email: רשומה מקומית עלולה להחזיק מייל ישן גם אחרי
-           שהדגל נדלק בשרת, והקמת משתמש Auth הייתה מחזירה לו את המייל בטבלה. */
-        const editSec = getAgentSecurity(a.id);
-        const editEmail = editSec.pinOnlyLogin === true
-          ? ""
-          : normalizeEmailValue(safeTrim(E.authEmail?.value) || resolveAgentAuthEmail(a, editSec) || "");
-        if(pin && editEmail){
-          const authRes = await this._provisionAgentAuth({
-            agentId: a.id,
-            email: editEmail,
-            pin,
-            name,
-            role: a.role
-          });
-          if(authRes.ok){
-            authNote = authRes.created
-              ? " משתמש Supabase Auth נוצר אוטומטית (מייל + קוד כניסה)."
-              : " משתמש Supabase Auth עודכן (מייל + קוד כניסה).";
-          } else if(!authRes.skipped){
-            authNote = " הנציג נשמר, אך משתמש Auth לא עודכן: " + safeTrim(authRes.error);
-            try { window.showToast?.({ title: "Auth לא עודכן", text: authRes.error, variant: "warn", durationMs: 8000 }); } catch(_e) {}
-          }
-        }
         try {
-          const teamSavedText = (verifyTeamLinks
+          const teamSavedText = verifyTeamLinks
             ? "פרטי מנהל הצוות ושיוך הנציגים נשמרו ואומתו בשרת."
-            : "פרטי הנציג נשמרו ואומתו בשרת.")
-            + authNote;
-          window.showToast?.({ title: "עודכן משתמש", text: teamSavedText, variant: "ok", durationMs: 5200 });
+            : "פרטי הנציג נשמרו ואומתו בשרת.";
+          window.showToast?.({ title: "עודכן משתמש", text: teamSavedText, variant: "ok", durationMs: 4200 });
         } catch(_e) {}
         this.closeModal();
         this.render();
@@ -20862,28 +20735,11 @@ UsersGateUI.init();
           this.render();
           return addRes;
         }
-        let authNote = "";
-        if(newAgentEmail && pin){
-          const authRes = await this._provisionAgentAuth({
-            agentId: newId,
-            email: newAgentEmail,
-            pin,
-            name,
-            role: resolvedRole
-          });
-          if(authRes.ok){
-            authNote = " משתמש Supabase Auth נוצר אוטומטית — אין צורך להזין שוב מייל/סיסמה ב-Studio.";
-          } else if(!authRes.skipped){
-            authNote = " הנציג נשמר ב-CRM, אך משתמש Auth לא נוצר: " + safeTrim(authRes.error);
-            try { window.showToast?.({ title: "Auth לא נוצר", text: authRes.error, variant: "warn", durationMs: 9000 }); } catch(_e) {}
-          }
-        }
         try {
-          const teamSavedText = (verifyTeamLinks
+          const teamSavedText = verifyTeamLinks
             ? "מנהל הצוות נשמר ושיוך הנציגים אומת בשרת."
-            : "הנציג נשמר ואומת בשרת — יופיע גם אחרי יציאה וכניסה מחדש.")
-            + authNote;
-          window.showToast?.({ title: "נציג נוסף", text: teamSavedText, variant: "ok", durationMs: 5600 });
+            : "הנציג נשמר ואומת בשרת — יופיע גם אחרי יציאה וכניסה מחדש.";
+          window.showToast?.({ title: "נציג נוסף", text: teamSavedText, variant: "ok", durationMs: 4800 });
         } catch(_e) {}
         this.closeModal();
         this.render();
@@ -56295,7 +56151,6 @@ const ClalRiskLifePdf = {
     return {
       authEmail: safeTrim(input.authEmail || input.auth_email || input.email),
       authUserId: safeTrim(input.authUserId || input.auth_user_id || input.userId),
-      authPasswordScheme: safeTrim(input.authPasswordScheme || input.auth_password_scheme),
       mfaRequired: input.mfaRequired === true || input.mfa_required === true,
       mfaEnabled: input.mfaEnabled === true || input.mfa_enabled === true,
       mfaEnrolledAt: safeTrim(input.mfaEnrolledAt || input.mfa_enrolled_at),
@@ -56334,7 +56189,7 @@ const ClalRiskLifePdf = {
   /* GI-FIX 2026-08-07 — שדות זהות שריק בהם אף פעם לא אומר "למחוק".
      מחיקה מכוונת של השדות האלה קורית אך ורק במעבר ל-pinOnlyLogin, ושם
      setAgentSecurity מנקה אותם — והענף של pinOnly מטופל לפני המיזוג הזה. */
-  const AGENT_SECURITY_IDENTITY_FIELDS = ["authEmail", "authUserId", "authPasswordScheme", "factorId", "mfaEnrolledAt", "lastVerifiedAt"];
+  const AGENT_SECURITY_IDENTITY_FIELDS = ["authEmail", "authUserId", "factorId", "mfaEnrolledAt", "lastVerifiedAt"];
   /* base = הרשומה שניצחה בהשוואת הרסניות; filler = המפסידה.
      המנצחת קובעת את כל הדגלים; המפסידה רק ממלאת שדות זהות שנשארו ריקים. */
   const mergeAgentSecurityEntriesFieldwise = (base, filler) => {
@@ -56423,7 +56278,6 @@ const ClalRiskLifePdf = {
         ...nextPatch,
         authEmail: "",
         authUserId: "",
-        authPasswordScheme: "",
         mfaRequired: false,
         mfaEnabled: false,
         factorId: "",
@@ -56442,7 +56296,6 @@ const ClalRiskLifePdf = {
       nextPatch.pinOnlyLiftedAt = "";
       nextPatch.authEmail = "";
       nextPatch.authUserId = "";
-      nextPatch.authPasswordScheme = "";
       nextPatch.mfaRequired = false;
       nextPatch.mfaEnabled = false;
       nextPatch.factorId = "";
@@ -56485,7 +56338,6 @@ const ClalRiskLifePdf = {
           ...sEntry,
           authEmail: "",
           authUserId: "",
-          authPasswordScheme: "",
           mfaRequired: false,
           mfaEnabled: false,
           factorId: "",
@@ -56532,34 +56384,6 @@ const ClalRiskLifePdf = {
     if(sec.pinOnlyLogin === true) return "";
     return safeTrim(sec.authEmail) || safeTrim(agent?.email) || safeTrim(agent?.auth_email);
   };
-  /* Must match supabase/functions/gi-provision-agent-auth deriveGiAuthPassword.
-     Used when Auth rejects the raw PIN (HaveIBeenPwned / min length). */
-  const deriveGiAuthPassword = (pin, email) => {
-    return "GiCrm!" + safeTrim(pin) + "#" + normalizeEmailValue(email) + "!v1";
-  };
-  const resolveAgentAuthPassword = (pin, email, security = null) => {
-    const scheme = safeTrim(security?.authPasswordScheme || security?.auth_password_scheme);
-    if(scheme === "gi-v1") return deriveGiAuthPassword(pin, email);
-    return safeTrim(pin);
-  };
-  const signInAgentAuth = async (email, pin, security = null) => {
-    const addr = normalizeEmailValue(email);
-    const typed = safeTrim(pin);
-    if(!addr || !typed) return { ok:false, error:"MISSING_CREDENTIALS" };
-    const primary = resolveAgentAuthPassword(typed, addr, security);
-    let sr = await SupabaseMFA.signInWithPassword(addr, primary);
-    if(sr.ok) return { ...sr, passwordScheme: (primary === typed ? "pin" : "gi-v1") };
-    const derived = deriveGiAuthPassword(typed, addr);
-    if(derived !== primary){
-      sr = await SupabaseMFA.signInWithPassword(addr, derived);
-      if(sr.ok) return { ...sr, passwordScheme: "gi-v1" };
-    }
-    if(primary !== typed){
-      sr = await SupabaseMFA.signInWithPassword(addr, typed);
-      if(sr.ok) return { ...sr, passwordScheme: "pin" };
-    }
-    return sr;
-  };
   const agentRequiresMfa = (agent, security = null) => {
     const sec = security || (agent?.id ? getAgentSecurity(agent.id) : normalizeAgentSecurityEntry({}));
     if(sec.pinOnlyLogin === true) return false;
@@ -56580,7 +56404,7 @@ const ClalRiskLifePdf = {
     const pin = safeTrim(options?.pin);
     let unenrollWarning = "";
     if(authEmail && pin){
-      const session = await signInAgentAuth(authEmail, pin, security);
+      const session = await SupabaseMFA.signInWithPassword(authEmail, pin);
       if(session.ok){
         const listed = await SupabaseMFA.listFactors();
         if(listed.ok){
@@ -57891,7 +57715,7 @@ const ClalRiskLifePdf = {
                 : 'מייל חובה לצורך אימות דו־שלבי. אחרי שמירה — לחץ 2FA בטבלה.');
           }
         } else if(help) {
-          help.textContent = 'מייל + קוד הכניסה (PIN) נוצרים אוטומטית ב-Supabase Auth בשמירה. אין צורך לפתוח את מסך Authentication ב-Studio.';
+          help.textContent = 'מייל Supabase Auth לכניסה עם Google Authenticator. אחרי שמירה — לחץ 2FA בטבלה.';
         }
       }
       if(E.monthlyTarget){
@@ -58348,7 +58172,6 @@ const ClalRiskLifePdf = {
       const adminAuth = State.data?.meta?.adminAuth || { ...defAdmin, active:true };
       if (adminAuth.active !== false && username === safeTrim(adminAuth.username) && pin === safeTrim(adminAuth.pin)) {
         this.current = { name: safeTrim(adminAuth.username) || defAdmin.username, role:(safeTrim(adminAuth.username) === 'אוריה סומך' ? 'owner' : 'admin') };
-        try { Auth._sessionPin = safeTrim(pin); } catch(_e) {}
         WelcomeLoader.open(this.current.name);
         try {
           await App.reloadSessionState();
@@ -58395,16 +58218,13 @@ const ClalRiskLifePdf = {
         this._setPrimaryLoginLoading(true, 'מחבר אימות מאובטח...');
         if(!authEmail) return this._setError('לא הוגדר Auth email למשתמש ולכן לא ניתן להשלים חיבור Google Authenticator. עדכן את המייל בניהול משתמשים.');
         if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
-        const sr = await signInAgentAuth(authEmail, pin, sec);
+        const sr = await SupabaseMFA.signInWithPassword(authEmail, pin);
         if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
         if(!sr.ok) return this._setError('סיסמת Auth שגויה או שהמשתמש לא קיים ב-Supabase Auth');
         try { Auth._sessionPin = safeTrim(pin); } catch(_e) {}
         authSigned = true;
-        const schemePatch = {};
-        if(authEmail !== safeTrim(sec.authEmail)) schemePatch.authEmail = authEmail;
-        if(sr.passwordScheme && sr.passwordScheme !== safeTrim(sec.authPasswordScheme)) schemePatch.authPasswordScheme = sr.passwordScheme;
-        if(Object.keys(schemePatch).length){
-          setAgentSecurity(matched.id, { ...schemePatch, mfaRequired:true });
+        if(authEmail !== safeTrim(sec.authEmail)){
+          setAgentSecurity(matched.id, { authEmail, mfaRequired:true });
         }
       } else {
         if(window.__GI_FACE_LOGIN_ACTIVE__ || window.__GI_FACE_LOGIN_DONE__) return;
@@ -58512,7 +58332,7 @@ const ClalRiskLifePdf = {
       if(current.ok && sessionEmail === email.toLowerCase()) return { ok:true, user:current.user };
       const pwd = safeTrim(this.els.password?.value);
       if(!pwd) return { ok:false, error:'הזן את קוד הכניסה (PIN) של המשתמש — אותו קוד שבו הוא נכנס למערכת.' };
-      const sr = await signInAgentAuth(email, pwd, getAgentSecurity(this.getCurrentAgent()?.id));
+      const sr = await SupabaseMFA.signInWithPassword(email, pwd);
       if(!sr.ok) return { ok:false, error:'קוד הכניסה שגוי או שהמשתמש לא קיים ב-Supabase Auth עם המייל הזה.' };
       return SupabaseMFA.getUser();
     },
