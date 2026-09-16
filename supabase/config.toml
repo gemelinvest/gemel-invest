@@ -5,6 +5,13 @@
 #   supabase functions deploy gi-daily-sales-mail --project-ref vhvlkerectggovfihjgm --no-verify-jwt
 project_id = "vhvlkerectggovfihjgm"
 
+# Hosted Auth password policy is applied by scripts/disable-auth-hibp.sh
+# (Management API), not by this file. Keep these keys as the intended policy:
+# Studio must accept leaked/weak passwords when creating users.
+[auth]
+minimum_password_length = 6
+password_requirements = ""
+
 [functions.gi-daily-sales-mail]
 verify_jwt = false
 
