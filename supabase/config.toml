@@ -19,3 +19,6 @@ verify_jwt = false
 
 [functions.gi-assistant-tools]
 verify_jwt = false
+
+[functions.gi-provision-agent-auth]
+verify_jwt = false
