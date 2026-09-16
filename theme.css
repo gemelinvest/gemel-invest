@@ -4268,12 +4268,29 @@ body.giAgentOpsOverlay-open:not(#\9):not(#\9){
 
 /* --- 20.3 ????? ?????? --- */
 
+.lcUserModal.is-open:not(#\9):not(#\9){
+  padding: 0 !important;
+  align-items: stretch !important;
+  justify-content: stretch !important;
+}
+
 .lcUserModal__panel:not(#\9):not(#\9){
-  width: min(760px, calc(100vw - 32px)) !important;
-  max-height: min(88vh, 880px) !important;
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: none !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  border-radius: 0 !important;
+  border: 0 !important;
+  box-shadow: none !important;
 }
 
 .lcUserModal__head:not(#\9):not(#\9){

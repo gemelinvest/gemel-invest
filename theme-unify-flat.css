@@ -470,7 +470,11 @@
 }
 
 /* ---- מודאלים (מעטפת) ---- */
-#lcUserModal .modal__panel:not(#\9):not(#\9),
+#lcUserModal.lcUserModal.is-open:not(#\9):not(#\9){
+  padding: 0 !important;
+  align-items: stretch !important;
+  justify-content: stretch !important;
+}
 .ciModal .ciModal__panel:not(#\9):not(#\9){
   background: var(--uf-surface) !important;
   border: 1px solid var(--uf-line) !important;
@@ -833,8 +837,12 @@
 #view-users .lcUsers__mfaBadge--is-neutral:not(#\9):not(#\9){ background: var(--uf-info-bg) !important; color: var(--uf-info) !important; border-color: var(--uf-info-line) !important; }
 #view-users .lcUsers__name:not(#\9):not(#\9){ color: var(--uf-ink) !important; }
 
-#lcUserModal .lcUserModal__panel:not(#\9):not(#\9){
-  border-radius: 0 !important; background: var(--uf-surface) !important; border: 1px solid var(--uf-line) !important; box-shadow: none !important;
+#lcUserModal .lcUserModal__panel:not(#\9):not(#\9),
+#lcUserModal .modal__panel:not(#\9):not(#\9){
+  border-radius: 0 !important; background: var(--uf-surface) !important; border: 0 !important; box-shadow: none !important;
+  position: relative !important; top: auto !important; left: auto !important; right: auto !important; bottom: auto !important;
+  transform: none !important;
+  width: 100% !important; max-width: 100% !important; height: 100dvh !important; max-height: 100dvh !important;
 }
 #lcUserModal .lcUserModal__head:not(#\9):not(#\9){ border-bottom: 1px solid var(--uf-line-soft) !important; background: var(--uf-head-bg) !important; }
 #lcUserModal .lcUserModal__roleBadge:not(#\9):not(#\9){ border-radius: 0 !important; background: var(--uf-accent-soft) !important; color: var(--uf-accent) !important; }
