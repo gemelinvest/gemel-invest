@@ -20764,7 +20764,13 @@ UsersGateUI.init();
           try { await this._persistOwnershipNamePatches(ownership); } catch(_e) {}
         }
         let authNote = "";
-        const editEmail = normalizeEmailValue(safeTrim(E.authEmail?.value) || a.email || "");
+        /* GI-FIX 2026-09-16 — לא לגעת ב-Auth של נציג שהוגדר "כניסה עם PIN בלבד".
+           אין נפילה חזרה ל-a.email: רשומה מקומית עלולה להחזיק מייל ישן גם אחרי
+           שהדגל נדלק בשרת, והקמת משתמש Auth הייתה מחזירה לו את המייל בטבלה. */
+        const editSec = getAgentSecurity(a.id);
+        const editEmail = editSec.pinOnlyLogin === true
+          ? ""
+          : normalizeEmailValue(safeTrim(E.authEmail?.value) || resolveAgentAuthEmail(a, editSec) || "");
         if(pin && editEmail){
           const authRes = await this._provisionAgentAuth({
             agentId: a.id,

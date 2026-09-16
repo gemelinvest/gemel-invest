@@ -42,6 +42,8 @@ assert(app.includes("async _provisionAgentAuth("), "UsersUI provision helper");
 assert(app.includes("/functions/v1/gi-provision-agent-auth"), "calls the edge function");
 assert(app.includes("משתמש Supabase Auth נוצר אוטומטית"), "success copy after create");
 assert(app.includes("Auth לא נוצר"), "warns if Auth provision fails");
+assert(app.includes("editSec.pinOnlyLogin === true"), "PIN-only agents are never provisioned into Auth");
+assert(!app.includes("safeTrim(E.authEmail?.value) || a.email"), "no stale a.email fallback that resurrects a PIN-only email");
 assert(html.includes("אין צורך להזין אותם שוב ב-Studio") || html.includes("אין צורך להזין אותם שוב"), "HTML explains no Studio step");
 
 console.log("4) PIN no longer silently dropped / defaulted to 0000");
