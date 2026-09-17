@@ -9502,13 +9502,13 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
   border: 1px solid #e2e8f0 !important;
   border-radius: 8px !important;
   background: #fff !important;
-  color: #1e4d6b !important;
+  color: var(--gi-navy) !important;
   box-shadow: none !important;
 }
 #view-customers .lcCustomerRow:hover .lcCustomerFolderBtn:not(#\9):not(#\9),
 #view-customers .lcCustomerFolderBtn:hover:not(#\9):not(#\9){
-  background: #1e4d6b !important;
-  border-color: #1e4d6b !important;
+  background: var(--gi-navy) !important;
+  border-color: var(--gi-navy) !important;
   color: #fff !important;
 }
 

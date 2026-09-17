@@ -15173,18 +15173,18 @@ body.view-mirrors-active .mirrorsScriptBody{letter-spacing:.1px;}
 
 #view-customers .lcCustomerRow:hover .lcCustomerFolderBtn,
 #view-customers .lcCustomerFolderBtn:hover{
-  background: var(--gi-primary, #2563EB);
+  background: var(--gi-navy, #3870ED);
   color:#FFFFFF;
 }
 
 #view-customers .lcCustomerFolderBtn:active{
-  background: var(--gi-primary-hover, #1D4ED8);
+  background: var(--gi-navy-hover, #4A7EEE);
   color:#FFFFFF;
 }
 
 #view-customers .lcCustomerFolderBtn:focus-visible{
   outline:none;
-  background: var(--gi-primary, #2563EB);
+  background: var(--gi-navy, #3870ED);
   color:#FFFFFF;
   box-shadow: 0 0 0 3px var(--gi-primary-ring, rgba(37,99,235,.18));
 }
@@ -47514,13 +47514,13 @@ body.view-elementaryMirror-active .pageTitle{ /* keep default */ }
 }
 #view-customers .lcCustomerRow:hover .lcCustomerFolderBtn,
 #view-customers .lcCustomerFolderBtn:hover{
-  background: var(--lc-accent);
-  border-color: var(--lc-accent);
+  background: var(--gi-navy, #3870ED);
+  border-color: var(--gi-navy, #3870ED);
   color: #fff;
 }
 #view-customers .lcCustomerFolderBtn:active{
-  background: #163a52;
-  border-color: #163a52;
+  background: var(--gi-navy-hover, #4A7EEE);
+  border-color: var(--gi-navy-hover, #4A7EEE);
   color: #fff;
 }
 #view-customers .lcCustomerFolderBtn:focus-visible{

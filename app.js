@@ -195,7 +195,7 @@
   const METRICS_CHUNK_SIZE = 28;
   const GI_PERF_LOG_MS = 50;
   const ADMIN_CONTACT_EMAIL = "oriasomech@gmail.com";
-  const AUTO_LOGOUT_IDLE_MS = 40 * 60 * 1000;
+  const AUTO_LOGOUT_IDLE_MS = 60 * 60 * 1000;
   const ARCHIVE_CUSTOMER_PIN = "1990";
   const SUPABASE_URL = "https://vhvlkerectggovfihjgm.supabase.co";
   const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_JixJJelGPWcP0BPKGq96Lw_nIiMyIBb";
@@ -18525,7 +18525,7 @@
       this.lock();
       try { UI.applySidebarCollapse(false); } catch(_e) {}
       if(reason === "idle"){
-        this._setError("בוצעה התנתקות אוטומטית לאחר 40 דקות של אי פעילות במערכת");
+        this._setError("בוצעה התנתקות אוטומטית לאחר 60 דקות של אי פעילות במערכת");
       } else {
         this._setError("");
       }
@@ -18598,7 +18598,7 @@
 
   const InactivityGuard = {
     idleMs: AUTO_LOGOUT_IDLE_MS,
-    warnText: "בוצעה התנתקות אוטומטית לאחר 40 דקות של אי פעילות במערכת",
+    warnText: "בוצעה התנתקות אוטומטית לאחר 60 דקות של אי פעילות במערכת",
     timerId: null,
     started: false,
     boundActivityHandler: null,
@@ -43752,7 +43752,7 @@ UsersGateUI.init();
   const GI_SECONDARY_STYLE_HREFS = Object.freeze([
     "./theme-mirror-typing.css?v=20260914-mirror-chg-v2",
     "./gi-customers-import.css?v=20260828-menora-health-decl-v1",
-    "./theme-unify-flat.css?v=20260916-agent-shift-fs-v1"
+    "./theme-unify-flat.css?v=20260917-sidebar-chrome-v1"
   ]);
   function ensureGiSecondaryStylesLoaded(){
     if(document.documentElement.dataset.giSecondaryCss === "1") return;
