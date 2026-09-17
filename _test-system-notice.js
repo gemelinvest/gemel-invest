@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260915-sys-notice-v6";
+const TAG = "20260917-sys-notice-sidebar-v1";
 const IDLE_MS = 20000;
 let failed = 0;
 let passed = 0;
@@ -35,16 +35,18 @@ const html = fs.readFileSync(path.join(ROOT, "index.html"), "utf8");
 const sw = fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8");
 const js = fs.readFileSync(path.join(ROOT, "gi-system-notice.js"), "utf8");
 const css = fs.readFileSync(path.join(ROOT, "gi-system-notice.css"), "utf8");
+const theme = fs.readFileSync(path.join(ROOT, "theme.css"), "utf8");
 const sql = fs.readFileSync(path.join(ROOT, "supabase-system-notices.sql"), "utf8");
 
 console.log("1) syntax + cache + isolated files");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-system-notice.js")]).status === 0, "node --check gi-system-notice.js");
-assert(html.includes("app.js?v=" + TAG), "index.html app.js cache");
 assert(html.includes("gi-system-notice.js?v=" + TAG), "index loads isolated module");
 assert(html.includes("gi-system-notice.css?v=" + TAG), "index loads isolated css");
+assert(html.includes("theme.css?v=" + TAG), "index.html theme.css cache");
 assert(sw.includes("gi-v12-" + TAG), "service-worker cache");
-assert(app.includes('BUILD = "' + TAG + '"'), "app.js BUILD");
+assert(js.includes('const TAG = "' + TAG + '"'), "module tag matches cache");
+assert(html.includes("app.js?v=20260916-agent-shift-fs-v1"), "app.js cache untouched");
 
 console.log("\n2) settings composer + left-side card");
 assert(html.includes("data-settings-rubric=\"systemNotice\""), "settings rubric exists");
@@ -68,7 +70,8 @@ assert(css.includes("bottom:16px") || css.includes("bottom: 16px"), "card is at 
 assert(!css.includes("top:76px"), "old top-left placement is gone");
 assert(css.includes("width:min(440px"), "card is larger than a toast");
 assert(!css.includes("360px"), "old 360px toast width is gone");
-assert(css.includes("background:#0b1f3a"), "navy official header");
+assert(css.includes("background:var(--gi-navy, #3870ED)"), "header matches sidebar navy");
+assert(!css.includes("#0b1f3a"), "old dark navy is gone");
 assert(css.includes(".giSysNoticeDock"), "minimized dock styles");
 assert(css.includes(".giSysNoticeDock{\n") || css.includes(".giSysNoticeDock{"), "dock block exists");
 const dockCss = sliceBetween(css, ".giSysNoticeDock{", ".giSysNoticeDock.is-on");
@@ -111,12 +114,27 @@ assert(js.includes("gemelInvestSupabaseClient"), "realtime uses the exposed supa
 assert(js.includes("FALLBACK_SUPABASE_URL"), "send has a supabase URL fallback");
 assert(js.includes("function restRequest(path, options = {})"), "own rest helper exists");
 
-console.log("\n4) CRM engines stay");
+console.log("\n4) card hides sender; toast chrome matches sidebar; reminders stay");
+const paintFn = sliceBetween(js, "function paintCard(){", "function persistMode(){");
+assert(paintFn.includes("meta.textContent = formatWhen(notice.created_at)"), "card still shows the timestamp");
+assert(!paintFn.includes("מאת "), "card does not show who sent it");
+assert(!js.includes("מאת "), "from-author copy is gone from the module");
+assert(js.includes("author_name: trim(agent.name)"), "send still stores author on the server");
+const toastBlock = sliceBetween(theme, "GI-TOAST-SIDEBAR", "GI-CF-REMOVE-SUMMARY");
+assert(toastBlock.includes(".giGlobalToast"), "global toast restyled");
+assert(toastBlock.includes(".opsAssignArrivalToast"), "assign toast restyled");
+assert(toastBlock.includes("var(--gi-navy)"), "toasts use sidebar navy");
+assert(!toastBlock.includes(".giReminderAlert"), "reminder alert not restyled");
+assert(!toastBlock.includes(".opsEventToast"), "ops reminder toast not restyled");
+
+console.log("\n5) CRM engines stay");
 assert(app.includes("function playGiReminderSound(){"), "reminder sound stays");
 assert(app.includes("const GI_ILS_AMOUNT"), "amount helper stays");
 assert(app.includes("async searchCustomers(query, limit = 40, options = {}){"), "customer search stays");
 assert(app.includes("customerOwnedByCurrentAgent(rec)"), "ownership helper stays");
 assert(html.includes("id=\"giReminderLinkQuery\""), "reminder link search stays");
+assert(html.includes("id=\"giReminderAlert\""), "reminder popup markup stays");
+assert(css.includes(".giReminderAlert") === false, "system-notice css does not restyle reminders");
 
 if(failed){
   console.error("\nFAILED " + failed + " / passed " + passed);

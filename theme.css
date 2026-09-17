@@ -10681,6 +10681,17 @@ body.sidebar-collapsed .app:not(#\9):not(#\9),
   }
 }
 
+/* GI-TOAST-SIDEBAR 2026-09-17 — popup chrome matches sidebar navy.
+   Reminder alerts and ops event reminders stay as they are. */
+.giGlobalToast:not(#\9):not(#\9){
+  background: var(--gi-navy) !important;
+  box-shadow: 0 24px 50px rgba(56,112,237,.34) !important;
+}
+.opsAssignArrivalToast:not(#\9):not(#\9){
+  background: var(--gi-navy) !important;
+  box-shadow: 0 18px 40px rgba(56,112,237,.35) !important;
+}
+
 /* GI-CF-REMOVE-SUMMARY 2026-08-26 — hard-kill leftover file-summary column */
 #customerFullSide:not(#\9):not(#\9),
 .cfFile__side:not(#\9):not(#\9),
