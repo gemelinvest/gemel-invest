@@ -10761,7 +10761,7 @@ body.sidebar-collapsed .app:not(#\9):not(#\9),
   align-content: flex-end !important;
   direction: ltr !important;
   gap: 12px !important;
-  max-width: calc(100vw - 32px) !important;
+  max-width: calc(50vw - 220px) !important;
   pointer-events: none !important;
   background: none !important;
   border: 0 !important;
@@ -10775,9 +10775,10 @@ body.sidebar-collapsed .app:not(#\9):not(#\9),
   bottom: auto !important;
   z-index: auto !important;
   pointer-events: auto !important;
-  flex: 0 1 340px !important;
-  width: min(340px, calc(100vw - 32px)) !important;
-  max-width: min(340px, calc(100vw - 32px)) !important;
+  flex: 1 1 220px !important;
+  width: min(300px, 100%) !important;
+  min-width: 0 !important;
+  max-width: min(300px, 100%) !important;
   direction: rtl !important;
 }
 .giChatDock:empty:not(#\9):not(#\9),

@@ -134,6 +134,7 @@ assert(!toastBlock.includes(".giReminderAlert"), "reminder alert not restyled");
 assert(!toastBlock.includes(".opsEventToast"), "ops reminder toast not restyled");
 const rowBlock = sliceBetween(theme, "GI-BOTTOM-ALERTS", "GI-CF-REMOVE-SUMMARY");
 assert(rowBlock.includes("direction: ltr"), "row is left to right");
+assert(rowBlock.includes("50vw - 220px"), "row stays on the left of the centered reminder");
 assert(!rowBlock.includes(".giReminderAlert"), "row layout does not restyle reminders");
 const chatDockTheme = sliceBetween(theme, "GI-CHAT-DOCK-SIDEBAR", ".giChatUsers:not(#\\9):not(#\\9){");
 assert(chatDockTheme.includes("var(--gi-navy)"), "chat dock uses sidebar navy");
