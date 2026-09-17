@@ -1,23 +1,32 @@
-/* GI-SALE-TOAST 2026-09-17 — isolated live sale toast. Does not rewrite CRM chrome. */
+/* GI-SALE-TOAST 2026-09-17 — navy sale toast in the CRM sidebar language.
+   Isolated. Does not rewrite CRM chrome. Loaded after theme.css so host width
+   can beat the 340px theme clamp without bumping the global theme cache. */
 
 .giSaleToastHost{
   display:none;
-  width:min(340px, calc(100vw - 32px));
+  width:min(420px, calc(100vw - 32px));
   direction:rtl;
 }
 .giSaleToastHost:not(:empty){ display:block; }
 
+.giBottomAlerts .giSaleToastHost:not(#\9):not(#\9){
+  flex: 0 0 auto !important;
+  width: min(420px, 100%) !important;
+  max-width: min(420px, 100%) !important;
+  overflow: visible !important;
+}
+
 .giSaleToast{
   display:flex;
   align-items:center;
-  gap:12px;
+  gap:14px;
   width:100%;
   box-sizing:border-box;
-  padding:12px 14px;
-  background:#fff;
-  color:#142033;
-  border:1px solid var(--gi-navy, #3870ED);
-  box-shadow:0 16px 36px rgba(56,112,237,.18);
+  padding:16px 18px;
+  background: var(--gi-navy, #3870ED) !important;
+  color:#fff !important;
+  border:1px solid rgba(255,255,255,.16);
+  box-shadow:0 24px 50px rgba(56,112,237,.42);
   transform:translateY(8px);
   opacity:0;
   transition:transform .16s ease, opacity .16s ease;
@@ -33,17 +42,17 @@
 
 .giSaleToast__icon{
   flex:0 0 auto;
-  width:40px;
-  height:40px;
+  width:48px;
+  height:48px;
   display:grid;
   place-items:center;
-  color:var(--gi-navy, #3870ED);
-  background:rgba(56,112,237,.08);
-  border:1px solid rgba(56,112,237,.18);
+  color:#fff;
+  background:rgba(255,255,255,.14);
+  border:1px solid rgba(255,255,255,.22);
 }
 .giSaleToast__icon svg{
-  width:22px;
-  height:22px;
+  width:26px;
+  height:26px;
 }
 
 .giSaleToast__body{
@@ -51,27 +60,27 @@
   flex:1 1 auto;
   display:flex;
   flex-direction:column;
-  gap:2px;
+  gap:3px;
 }
 .giSaleToast__kicker{
-  font-size:11px;
+  font-size:12px;
   font-weight:800;
-  letter-spacing:.04em;
-  color:var(--gi-navy, #3870ED);
+  letter-spacing:.06em;
+  color:rgba(255,255,255,.82);
 }
 .giSaleToast__agent{
-  font-size:14px;
+  font-size:16px;
   font-weight:800;
-  color:#142033;
+  color:#fff;
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
 }
 .giSaleToast__prem{
-  font-size:15px;
-  font-weight:800;
+  font-size:20px;
+  font-weight:900;
   font-variant-numeric:tabular-nums;
-  color:#0F2748;
+  color:#fff;
 }
 
 body.lcAuthLock .giSaleToastHost{
