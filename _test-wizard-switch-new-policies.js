@@ -11,6 +11,7 @@ const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
 const TAG = "20260917-sale-toast-v1";
+const WIZARD_TAG = "20260917-har-cross-ins-v1";
 const APP_CACHE = "20260917-month-net-after-v1";
 let failed = 0;
 let passed = 0;
@@ -76,8 +77,8 @@ const sw = read("service-worker.js");
 console.log("1) syntax + cache");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-wizard.js")]).status === 0, "node --check gi-wizard.js");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
-assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "wizard build tag");
-assert(app.includes('GI_WIZARD_JS_VERSION = "' + TAG + '"'), "app wizard cache tag");
+assert(wiz.includes('GI_WIZARD_BUILD = "' + WIZARD_TAG + '"'), "wizard build tag");
+assert(app.includes('GI_WIZARD_JS_VERSION = "' + WIZARD_TAG + '"'), "app wizard cache tag");
 assert(html.includes("app.js?v=" + APP_CACHE), "index app.js cache");
 assert(html.includes("app.css?v=" + TAG), "index app.css cache");
 assert(html.includes("theme.css?v=" + TAG), "index theme.css cache");

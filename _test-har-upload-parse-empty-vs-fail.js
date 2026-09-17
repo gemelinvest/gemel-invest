@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260915-sys-notice-v2";
+const TAG = "20260917-har-cross-ins-v1";
 let failed = 0;
 let passed = 0;
 function assert(cond, msg){
@@ -71,10 +71,9 @@ assert(emptyBlock.includes("markHarBituachAcknowledged"), "true-empty still acks
 assert(emptyBlock.includes('status: "empty"'), "true-empty status kept");
 assert(emptyBlock.includes("הקובץ נדבק"), "true-empty still uses stuck copy");
 
-console.log("\n4) recycled warning and import-refresh stay intact");
-const rejectFn = sliceBetween(wiz, "async rejectRecycledHarBituachFile", "async handleHarBituachFile");
-assert(rejectFn.includes("המשך ועדכן"), "continue-and-update kept");
-assert(rejectFn.includes("return !ok"), "confirm still continues");
+console.log("\n4) cross-insured warning and import-refresh stay intact");
+assert(handleFn.includes("findOtherProposalInsuredWithHarForFileIds"), "cross-insured check in upload path");
+assert(handleFn.includes("קובץ הר ביטוח זה כבר הועלה למבוטח") || wiz.includes("קובץ הר ביטוח זה כבר הועלה למבוטח"), "cross-insured copy present");
 const mergeArea = sliceBetween(wiz, "/* רענון מלא של פוליסות", "unlockExistingPolicyActionsAfterHarImport");
 assert(mergeArea.includes("importedFromHarBituach"), "still refreshes HAR rows after approve");
 assert(mergeArea.includes("mergeImportedExistingPolicy"), "still merges approved policies");
