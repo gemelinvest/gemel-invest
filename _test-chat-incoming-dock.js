@@ -10,8 +10,8 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const APP_TAG = "20260917-month-net-after-v1";
-const CSS_TAG = "20260917-toast-full-v1";
+const APP_TAG = "20260917-lead-toast-v1";
+const CSS_TAG = "20260917-lead-toast-v1";
 const BUILD_TAG = "20260915-agent-save-verify-v1";
 let failed = 0;
 let passed = 0;

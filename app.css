@@ -24856,6 +24856,27 @@ body{
 .giGlobalToast__action:hover{
   background:rgba(255,255,255,.28);
 }
+/* GI-LEAD-TOAST 2026-09-17 — larger chrome for new-lead assignment only. */
+.giGlobalToastHost--lead,
+.giGlobalToastHost:has(.giGlobalToast--lead){
+  max-width:min(480px, calc(100vw - 48px));
+}
+.giGlobalToast--lead{
+  padding:22px 24px 22px 22px;
+}
+.giGlobalToast--lead .giGlobalToast__title{
+  font-size:22px;
+  line-height:1.25;
+  margin-bottom:10px;
+}
+.giGlobalToast--lead .giGlobalToast__text{
+  font-size:16px;
+  line-height:1.55;
+}
+.giGlobalToast--lead .giGlobalToast__action{
+  font-size:15px;
+  padding:10px 18px;
+}
 .lcCampaignTable tr.is-highlight td{
   background:rgba(42,92,245,.14);
   box-shadow:inset 0 0 0 2px rgba(42,92,245,.35);
