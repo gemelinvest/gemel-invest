@@ -29,15 +29,26 @@ function read(name){
 }
 
 function sliceMethod(src, name){
-  const token = name + "(";
-  let start = -1;
-  const re = new RegExp("(?:^|\\n)\\s*" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\(");
-  const m = src.match(re);
+  const re = new RegExp("(?:^|\\n)\\s*" + name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*\\(");
+  const m = re.exec(src);
   if(!m) return "";
-  start = src.indexOf(m[0]);
-  if(start < 0) return "";
-  let i = src.indexOf("{", start);
-  if(i < 0) return "";
+  const start = m.index + (m[0][0] === "\n" ? 1 : 0);
+  let i = m.index + m[0].length;
+  let paren = 1;
+  let quote = "";
+  for(; i < src.length && paren > 0; i++){
+    const ch = src[i];
+    if(quote){
+      if(ch === "\\"){ i += 1; continue; }
+      if(ch === quote) quote = "";
+      continue;
+    }
+    if(ch === "'" || ch === "\"" || ch === "`"){ quote = ch; continue; }
+    if(ch === "(") paren += 1;
+    else if(ch === ")") paren -= 1;
+  }
+  while(i < src.length && /\s/.test(src[i])) i += 1;
+  if(src[i] !== "{") return "";
   let depth = 0;
   for(; i < src.length; i++){
     const ch = src[i];
@@ -115,7 +126,7 @@ const baselineSrc = sliceMethod(wiz, "getCustomerPurchaseBaselinePolicies");
 const idSetSrc = sliceMethod(wiz, "getCustomerPurchaseBaselinePolicyIdSet");
 const cancelSetSrc = sliceMethod(wiz, "getCustomerPurchaseSwitchCancelIdSet");
 const cancelPolSrc = sliceMethod(wiz, "getCustomerPurchaseSwitchCancelPolicies");
-assert(!!applySrc && applySrc.indexOf("function") < 0, "sliced apply method");
+assert(!!applySrc && applySrc.indexOf("function") < 0 && applySrc.includes("keepSessionOnlyNewPolicies"), "sliced apply method");
 assert(!!convertSrc, "sliced convert method");
 
 const ctx = {
