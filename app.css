@@ -37170,8 +37170,13 @@ body.lcHealthDetailModalOpen .lcHealthDetailModal{
   transform:translateY(8px) scale(.98);
   opacity:0;
 }
+.giHarNotice__card--choice{
+  max-width:460px;
+  padding:22px 22px 18px;
+}
 .giHarNotice__card--wide{
-  max-width:640px;
+  max-width:860px;
+  padding:22px 24px 18px;
 }
 .giHarNotice__list{
   max-height:min(48vh, 420px);
@@ -37183,35 +37188,55 @@ body.lcHealthDetailModalOpen .lcHealthDetailModal{
   padding:2px 2px 4px;
 }
 .giHarNotice__pol{
-  display:flex;
-  align-items:flex-start;
-  gap:10px;
-  padding:10px 12px;
+  display:grid;
+  grid-template-columns:auto auto minmax(8.5rem,1.35fr) minmax(6.5rem,1fr) auto;
+  align-items:center;
+  gap:10px 14px;
+  padding:10px 14px;
   border-radius:14px;
   border:1px solid rgba(43,75,138,.14);
   background:rgba(249,251,255,.92);
   cursor:pointer;
   text-align:right;
-}
-.giHarNotice__pol input{
-  margin-top:4px;
-  flex:0 0 auto;
-}
-.giHarNotice__polMain{
-  display:flex;
-  flex-direction:column;
-  gap:3px;
   min-width:0;
 }
-.giHarNotice__polBrand{
+.giHarNotice__pol input{
+  margin:0;
+  flex:0 0 auto;
+}
+.giHarNotice__polLogo{
   display:flex;
   align-items:center;
-  gap:8px;
+  justify-content:center;
+  flex:0 0 auto;
+}
+.giHarNotice__polLogo .lcCompanyLogo{
+  width:72px;
+  height:40px;
+}
+.giHarNotice__polName{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
   font-size:13px;
 }
-.giHarNotice__polMeta{
+.giHarNotice__polInsureds{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
   font-size:12px;
+  font-weight:600;
   color:#64748b;
+}
+.giHarNotice__polPrem{
+  flex:0 0 auto;
+  white-space:nowrap;
+  font-size:13px;
+  font-weight:800;
+  font-variant-numeric:tabular-nums;
+  color:#0F2748;
 }
 .giHarNotice__mark{
   width:36px;

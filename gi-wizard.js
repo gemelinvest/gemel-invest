@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260917-switch-purchase-v1";
+  const GI_WIZARD_BUILD = "20260917-sale-toast-v1";
   function giWizardExpandIlsAmount(raw){
     try{
       if(typeof window !== "undefined" && window.GI_ILS_AMOUNT && typeof window.GI_ILS_AMOUNT.expand === "function"){
@@ -1910,7 +1910,8 @@ init(){
             confirmText: "ביצוע שיחלוף",
             cancelText: "הוספת פוליסה חדשה",
             showCancel: true,
-            requireConfirmClick: true
+            requireConfirmClick: true,
+            cardClass: "giHarNotice__card--choice"
           }));
           return isSwitch ? "switch" : "purchase";
         }
@@ -1944,14 +1945,15 @@ init(){
           ? this.formatMoneyValue(prem)
           : String(prem || "—");
         const logo = (typeof this.renderCompanyLogoHtml === "function")
-          ? this.renderCompanyLogoHtml(p.company, "mini")
+          ? this.renderCompanyLogoHtml(p.company, "card")
           : "";
+        const insuredTitle = insuredNames || "—";
         return `<label class="giHarNotice__pol">
           <input type="checkbox" data-switch-cancel-id="${escapeHtml(pid)}" />
-          <span class="giHarNotice__polMain">
-            <span class="giHarNotice__polBrand">${logo}<strong>${escapeHtml(p.company || "חברה")} · ${escapeHtml(p.type || "פוליסה")}</strong></span>
-            <span class="giHarNotice__polMeta">מבוטחים: ${escapeHtml(insuredNames || "—")} · פרמיה ${escapeHtml(premLabel)}${safeTrim(p.policyNumber) ? ` · מס׳ ${escapeHtml(p.policyNumber)}` : ""}</span>
-          </span>
+          <span class="giHarNotice__polLogo">${logo}</span>
+          <span class="giHarNotice__polName"><strong>${escapeHtml(p.company || "חברה")} · ${escapeHtml(p.type || "פוליסה")}</strong></span>
+          <span class="giHarNotice__polInsureds" title="${escapeHtml(insuredTitle)}">${escapeHtml(insuredTitle)}</span>
+          <span class="giHarNotice__polPrem">${escapeHtml(premLabel)}</span>
         </label>`;
       }).join("");
       const modal = document.createElement("div");
@@ -31176,6 +31178,12 @@ if(path === "birthDate"){
         this._finishing = false;
         return;
       }
+
+      try {
+        if(!this.isElementaryFlow() && saved){
+          window.GiSaleToast?.publishFromWizardFinish?.(saved, this);
+        }
+      } catch(_saleToastErr) {}
 
       // אחרי שמירה מאומתת — כשל UI לא יוצג ככשל שמירת לקוח
       try{

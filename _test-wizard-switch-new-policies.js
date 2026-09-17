@@ -10,7 +10,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260917-switch-purchase-v1";
+const TAG = "20260917-sale-toast-v1";
 let failed = 0;
 let passed = 0;
 
@@ -100,7 +100,19 @@ assert(wiz.includes("this.newPolicies = [];"), "purchase/switch start with empty
 assert(/getWizardNewPolicies\(\)\{\s*if\(this\.isCustomerPurchaseMode\(\)\) return this\.getCustomerPurchaseSessionPolicies\(\);/.test(wiz), "wizard new list is session-only");
 assert(!wiz.includes("פוליסות בתיק / לשיחלוף"), "step 5 no longer frames file policies as new");
 assert(css.includes("giHarNotice__card--wide"), "wide system card for picker");
+assert(css.includes("giHarNotice__card--choice"), "choice card is slightly larger");
 assert(css.includes("giHarNotice__pol"), "picker policy rows");
+assert(css.includes("giHarNotice__polPrem"), "premium stays on the same row");
+assert(css.includes("giHarNotice__polInsureds"), "insureds stay on the same row");
+assert(css.includes("giHarNotice__polLogo"), "clear company logo cell");
+assert(theme.includes("giHarNotice__card--wide"), "theme allows the wide picker card");
+assert(theme.includes("max-width: 860px !important"), "theme wide card is 860px");
+assert(theme.includes("giHarNotice__card--choice"), "theme allows the larger choice card");
+assert(theme.includes("max-width: 460px !important"), "theme choice card is 460px");
+assert(wiz.includes('cardClass: "giHarNotice__card--choice"'), "choice modal uses the larger card");
+assert(wiz.includes('this.renderCompanyLogoHtml(p.company, "card")'), "picker uses the clear card logo");
+assert(!/promptSwitchCancelPolicyPicker[\s\S]{0,1800}renderCompanyLogoHtml\(p\.company, "mini"\)/.test(wiz), "picker no longer uses the tiny mini logo");
+assert(wiz.includes("giHarNotice__polPrem"), "picker markup has a premium cell");
 
 console.log("\n4) ID dialog no longer auto-dumps into switch");
 assert(!wiz.includes('title = isSwitch ? "שיחלוף לקוח קיים"'), "ID dialog not titled as forced switch");
