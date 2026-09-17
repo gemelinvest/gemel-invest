@@ -9,6 +9,7 @@ const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
 const TAG = "20260917-sale-toast-v1";
+const THEME_TAG = "20260917-toast-full-v1";
 const APP_CACHE = "20260917-month-net-after-v1";
 const IDLE_MS = 20000;
 let failed = 0;
@@ -44,7 +45,7 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).statu
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-system-notice.js")]).status === 0, "node --check gi-system-notice.js");
 assert(html.includes("gi-system-notice.js?v=" + TAG), "index loads isolated module");
 assert(html.includes("gi-system-notice.css?v=" + TAG), "index loads isolated css");
-assert(html.includes("theme.css?v=" + TAG), "index.html theme.css cache");
+assert(html.includes("theme.css?v=" + THEME_TAG), "index.html theme.css cache");
 assert(sw.includes("gi-v12-" + APP_CACHE), "service-worker cache");
 assert(js.includes('const TAG = "' + TAG + '"'), "module tag matches cache");
 assert(html.includes("app.js?v=" + APP_CACHE), "app.js cache");
@@ -138,7 +139,9 @@ assert(!toastBlock.includes(".giReminderAlert"), "reminder alert not restyled");
 assert(!toastBlock.includes(".opsEventToast"), "ops reminder toast not restyled");
 const rowBlock = sliceBetween(theme, "GI-BOTTOM-ALERTS", "GI-CF-REMOVE-SUMMARY");
 assert(rowBlock.includes("direction: ltr"), "row is left to right");
-assert(rowBlock.includes("50vw - 220px"), "row stays on the left of the centered reminder");
+assert(rowBlock.includes("min(920px, calc(100vw - 32px))"), "row is wide enough for full chat/sale cards");
+assert(rowBlock.includes("GI-BOTTOM-ALERTS-FULL"), "full-card toast marker");
+assert(!rowBlock.includes("min(300px, 100%)"), "row no longer crushes cards to 300px");
 assert(!rowBlock.includes(".giReminderAlert"), "row layout does not restyle reminders");
 const chatDockTheme = sliceBetween(theme, "GI-CHAT-DOCK-SIDEBAR", ".giChatUsers:not(#\\9):not(#\\9){");
 assert(chatDockTheme.includes("var(--gi-navy)"), "chat dock uses sidebar navy");

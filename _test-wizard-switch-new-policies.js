@@ -11,6 +11,7 @@ const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
 const TAG = "20260917-sale-toast-v1";
+const CSS_TAG = "20260917-toast-full-v1";
 const WIZARD_TAG = "20260917-har-cross-ins-v1";
 const APP_CACHE = "20260917-month-net-after-v1";
 let failed = 0;
@@ -80,8 +81,8 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).statu
 assert(wiz.includes('GI_WIZARD_BUILD = "' + WIZARD_TAG + '"'), "wizard build tag");
 assert(app.includes('GI_WIZARD_JS_VERSION = "' + WIZARD_TAG + '"'), "app wizard cache tag");
 assert(html.includes("app.js?v=" + APP_CACHE), "index app.js cache");
-assert(html.includes("app.css?v=" + TAG), "index app.css cache");
-assert(html.includes("theme.css?v=" + TAG), "index theme.css cache");
+assert(html.includes("app.css?v=" + CSS_TAG), "index app.css cache");
+assert(html.includes("theme.css?v=" + CSS_TAG), "index theme.css cache");
 assert(sw.includes("gi-v12-" + APP_CACHE), "service worker cache");
 
 console.log("\n2) entry dialog is system-styled, not alert");

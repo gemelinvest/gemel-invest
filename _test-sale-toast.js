@@ -8,7 +8,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260917-sale-toast-v1";
+const TAG = "20260917-toast-full-v1";
 const WIZARD_TAG = "20260917-har-cross-ins-v1";
 const APP_CACHE = "20260917-month-net-after-v1";
 let failed = 0;
@@ -67,7 +67,8 @@ assert(js.includes('<circle cx="12" cy="13.15" r="1.45"'), "person outline in th
 assert(js.includes("M7 3.75h7.25L18.5 8"), "form outline in the icon");
 assert(!js.includes("🎉") && !js.includes("💰") && !js.includes("emoji"), "no emoji / toy icon");
 assert(css.includes("giSaleToast__icon"), "professional icon frame");
-assert(theme.includes(".giBottomAlerts .giSaleToastHost"), "theme does not crush the toast");
+assert(theme.includes("GI-BOTTOM-ALERTS-FULL"), "theme keeps chat cards full-width");
+assert(theme.includes(".giBottomAlerts .giChatDockCard__text"), "theme unclamps chat message text");
 
 console.log("\n3) roles + not the seller + not ops");
 assert(js.includes('code === "agent"'), "agents receive the toast");
@@ -80,7 +81,10 @@ assert(js.includes("function isBlockedRole(role)"), "blocked-role helper");
 assert(js.includes('code === "opsAgent"'), "typing / ops-agent is blocked");
 assert(js.includes("function isSelfSale(payload)"), "seller is skipped");
 assert(js.includes("if(sellerId && myId) return sellerId === myId"), "seller skip is by agent id");
-assert(js.includes("broadcast: { self: false }"), "broadcast does not echo to the seller");
+assert(js.includes("self: false"), "broadcast does not echo to the seller");
+assert(js.includes('status === "SUBSCRIBED"'), "waits until realtime channel is joined");
+assert(js.includes("if(!code) return true"), "unknown role still shows the toast");
+assert(js.includes("ack: true"), "broadcast send is acknowledged");
 assert(!js.includes("window.Auth"), "module stays off window.Auth");
 
 console.log("\n4) immediate broadcast, no polling, short cash sound");

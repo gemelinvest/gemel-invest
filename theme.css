@@ -3461,6 +3461,11 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   font-weight: 700 !important;
   line-height: 1.55 !important;
   color: #fff !important;
+  display: block !important;
+  overflow: visible !important;
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
 }
 
 .giChatDockCard__dismiss:not(#\9):not(#\9){
@@ -10757,7 +10762,9 @@ body.sidebar-collapsed .app:not(#\9):not(#\9),
 }
 
 /* GI-BOTTOM-ALERTS 2026-09-17 — system notice, chat dock and global toasts
-   sit in one left-to-right row at the bottom. Reminder alerts stay centered. */
+   sit on the left at the bottom. Reminder alerts stay centered.
+   GI-BOTTOM-ALERTS-FULL 2026-09-17 — cards keep their real width so chat/sale
+   text is not crushed or clipped. */
 .giBottomAlerts:not(#\9):not(#\9){
   position: fixed !important;
   left: 16px !important;
@@ -10772,11 +10779,12 @@ body.sidebar-collapsed .app:not(#\9):not(#\9),
   align-content: flex-end !important;
   direction: ltr !important;
   gap: 12px !important;
-  max-width: calc(50vw - 220px) !important;
+  max-width: min(920px, calc(100vw - 32px)) !important;
   pointer-events: none !important;
   background: none !important;
   border: 0 !important;
   box-shadow: none !important;
+  overflow: visible !important;
 }
 .giBottomAlerts > :not(#\9):not(#\9){
   position: relative !important;
@@ -10786,11 +10794,12 @@ body.sidebar-collapsed .app:not(#\9):not(#\9),
   bottom: auto !important;
   z-index: auto !important;
   pointer-events: auto !important;
-  flex: 1 1 220px !important;
-  width: min(300px, 100%) !important;
+  flex: 0 1 auto !important;
+  width: auto !important;
   min-width: 0 !important;
-  max-width: min(300px, 100%) !important;
+  max-width: min(560px, 100%) !important;
   direction: rtl !important;
+  overflow: visible !important;
 }
 .giBottomAlerts .giSysNoticeCard:not(#\9):not(#\9),
 .giBottomAlerts .giSysNoticeDock:not(#\9):not(#\9){
@@ -10802,6 +10811,7 @@ body.sidebar-collapsed .app:not(#\9):not(#\9),
   flex: 0 0 auto !important;
   width: min(340px, 100%) !important;
   max-width: min(340px, 100%) !important;
+  overflow: visible !important;
 }
 .giBottomAlerts .giSaleToastHost:empty:not(#\9):not(#\9){
   display: none !important;
@@ -10820,9 +10830,27 @@ body.sidebar-collapsed .app:not(#\9):not(#\9),
   flex-direction: column !important;
   align-items: stretch !important;
   gap: 8px !important;
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
+  flex: 0 1 auto !important;
+  width: min(440px, 100%) !important;
+  max-width: min(440px, 100%) !important;
+  overflow: visible !important;
   max-height: calc(100vh - 96px) !important;
+}
+.giBottomAlerts .giChatDockCard:not(#\9):not(#\9){
+  min-width: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  overflow: visible !important;
+}
+.giBottomAlerts .giChatDockCard__text:not(#\9):not(#\9){
+  display: block !important;
+  -webkit-line-clamp: unset !important;
+  -webkit-box-orient: unset !important;
+  overflow: visible !important;
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
 }
 .giBottomAlerts .giChatDock:empty:not(#\9):not(#\9){
   display: none !important;
@@ -10830,6 +10858,8 @@ body.sidebar-collapsed .app:not(#\9):not(#\9),
 .giBottomAlerts .giGlobalToastHost:not(#\9):not(#\9){
   display: grid !important;
   gap: 12px !important;
+  width: min(420px, 100%) !important;
+  max-width: min(420px, 100%) !important;
 }
 .giBottomAlerts .giGlobalToastHost:empty:not(#\9):not(#\9){
   display: none !important;
