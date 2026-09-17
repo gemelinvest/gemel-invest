@@ -9,8 +9,8 @@ const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
 const TAG = "20260917-sale-toast-v1";
-const THEME_TAG = "20260917-toast-full-v1";
-const APP_CACHE = "20260917-month-net-after-v1";
+const THEME_TAG = "20260917-lead-toast-v1";
+const APP_CACHE = "20260917-lead-toast-v1";
 const IDLE_MS = 20000;
 let failed = 0;
 let passed = 0;

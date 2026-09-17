@@ -12127,12 +12127,7 @@
         const agentId = safeTrim(ev?.targetAgentId);
         if(!leadId || !agentId) return;
         if(this.shouldNotifyInboxEntry(ev)){
-          // רק אחרי שהליד באמת קיים אצל הנציג — אחרת אין התראה ריקה
-          const hasLead = (CampaignLeadsStore.leads || []).some((l) => String(l.id) === leadId);
-          if(!hasLead){
-            // נשאיר בתור לטיק הבא אחרי fetch — לא מסמנים delivered
-            return;
-          }
+          // GI-LEAD-TOAST 2026-09-17: הטוסט מנתוני ה-inbox, בלי לחכות ל-fetchAll.
           this.notifyAssigned(ev);
           return;
         }
@@ -12147,6 +12142,7 @@
       try { CampaignMyLeadsUI.pendingHighlightId = id; } catch(_e) {}
       try { UI.goView("campaignMyLeads"); } catch(_e) {}
       try { void CampaignMyLeadsUI.render?.(); } catch(_e) {}
+      try { void this.refreshMyLeadsAfterAssign(); } catch(_e) {}
     },
     notifyAssigned(ev){
       const customerName = safeTrim(ev?.customerName) || "לקוח";
@@ -12192,6 +12188,7 @@
           title: "קבלת ליד חדש לטיפול",
           text: text || fromName,
           variant: "info",
+          kind: "lead",
           durationMs: 8000,
           singletonKey: tag,
           actions: [{ label: "פתח ליד", onClick: () => this.openLead(leadId) }]
@@ -12221,16 +12218,22 @@
     notifyLeadRow(row, options = {}){
       if(!row || !campaignLeadRowMatchesCurrentAgent(row)) return false;
       const leadId = safeTrim(row.id);
-      const agentId = safeTrim(row.assigned_agent_id || row.assignedAgentId);
+      const me = findAgentRecordForSession() || Auth.current;
+      const agentId = safeTrim(me?.id) || safeTrim(row.assigned_agent_id || row.assignedAgentId);
       if(!leadId || !agentId) return false;
       const status = safeTrim(row.status);
       if(status === "closed" || status === "irrelevant") return false;
+      const alreadyMine = (CampaignLeadsStore.leads || []).some((l) =>
+        String(l.id) === String(leadId) && campaignLeadAgentAccess(l, me)
+      );
       // קודם מחילים ללוקאל + רענון רשימה, ורק אז התראה — בלי «התראה בלי ליד»
       if(!this.applyLocalLeadRow(row)) return false;
+      // GI-LEAD-TOAST 2026-09-17: עדכון שדות לליד שכבר אצל הנציג לא מפיק טוסט כפול.
+      if(alreadyMine) return false;
       this.notifyAssigned({
         id: safeTrim(options.id) || `rt-${leadId}`,
         targetAgentId: agentId,
-        targetAgentName: safeTrim(row.assigned_agent_name || row.assignedAgentName),
+        targetAgentName: safeTrim(me?.name) || safeTrim(row.assigned_agent_name || row.assignedAgentName),
         fromName: safeTrim(options.fromName) || safeTrim(row.created_by_name || row.createdByName) || "מערכת",
         leadId,
         customerName: safeTrim(row.customer_name || row.customerName),
@@ -12261,12 +12264,13 @@
       } catch(_e) {}
     },
     handleRealtimeDbRow(row, options = {}){
-      if(!row || !safeTrim(row.assigned_agent_id || row.assignedAgentId)) return;
+      if(!row) return;
       if(!campaignLeadRowMatchesCurrentAgent(row)) return;
       const leadId = safeTrim(row.id);
-      const agentId = safeTrim(row.assigned_agent_id || row.assignedAgentId);
+      const me = findAgentRecordForSession() || Auth.current;
+      const agentId = safeTrim(me?.id) || safeTrim(row.assigned_agent_id || row.assignedAgentId);
       const prevAgentId = safeTrim(options.prevAgentId);
-      if(prevAgentId && prevAgentId !== agentId) this.forgetDelivered(leadId, agentId);
+      if(prevAgentId && agentId && prevAgentId !== agentId) this.forgetDelivered(leadId, agentId);
       // notifyLeadRow כבר עושה applyLocal + התראה (פעם אחת)
       this.notifyLeadRow(row, options);
     },
@@ -12274,9 +12278,10 @@
       if(!Auth.canAccessCampaignMyLeads()) return;
       void (async () => {
         try {
+          // GI-LEAD-TOAST 2026-09-17: טוסט קודם, טעינת הרשימה ברקע.
+          await this.flushForCurrentUser();
           await CampaignLeadsStore.fetchAll({ scope: "mine" });
           try { CampaignMyLeadsUI.renderList(); } catch(_e) {}
-          await this.flushForCurrentUser();
         } catch(_e) {}
       })();
     },
@@ -12336,11 +12341,7 @@
             return;
           }
           if(this.shouldNotifyInboxEntry(ev)){
-            const hasLead = (CampaignLeadsStore.leads || []).some((l) => String(l.id) === leadId);
-            if(!hasLead){
-              keepMine.push(ev); // נשאר בתור עד שהליד ייטען
-              return;
-            }
+            // GI-LEAD-TOAST 2026-09-17: לא מחכים ל-hasLead — הטוסט עולה מיד.
             this.notifyAssigned(ev);
             // GI-LEADNOTIFY 2026-08-02: מוחקים מהתיבה רק אם ההתראה באמת נמסרה.
             // קודם הרשומה נמחקה תמיד, ולכן התראה שנכשלה אבדה לתמיד.
@@ -20995,6 +20996,7 @@ UsersGateUI.init();
         .filter(Boolean);
       const singletonKey = safeTrim(merged.singletonKey) || '';
       const variant = safeTrim(merged.variant) || 'default';
+      const kind = safeTrim(merged.kind) === "lead" ? "lead" : "";
       const durationMs = Math.max(3200, Number(merged.durationMs) || (items.length > 1 ? 7600 : 5200));
       const actions = (Array.isArray(merged.actions) ? merged.actions : [])
         .map((action) => ({
@@ -21002,8 +21004,15 @@ UsersGateUI.init();
           onClick: typeof action?.onClick === "function" ? action.onClick : null
         }))
         .filter((action) => action.label);
-      const signature = safeTrim(merged.signature) || JSON.stringify({ title, text, items, singletonKey, variant, actions: actions.map((a) => a.label) });
-      return { title, text, items, singletonKey, variant, durationMs, signature, actions };
+      const signature = safeTrim(merged.signature) || JSON.stringify({ title, text, items, singletonKey, variant, kind, actions: actions.map((a) => a.label) });
+      return { title, text, items, singletonKey, variant, kind, durationMs, signature, actions };
+    },
+
+    syncLeadHostClass(){
+      const host = this.host;
+      if(!host) return;
+      if(host.querySelector(".giGlobalToast--lead")) host.classList.add("giGlobalToastHost--lead");
+      else host.classList.remove("giGlobalToastHost--lead");
     },
 
     removeToast(toast, immediate = false){
@@ -21015,10 +21024,14 @@ UsersGateUI.init();
       }
       if(immediate){
         toast.remove();
+        this.syncLeadHostClass();
         return;
       }
       toast.classList.add('is-leaving');
-      window.setTimeout(() => toast.remove(), 220);
+      window.setTimeout(() => {
+        toast.remove();
+        this.syncLeadHostClass();
+      }, 220);
     },
 
     show(payload, opts = {}){
@@ -21037,7 +21050,8 @@ UsersGateUI.init();
       if(existing) this.removeToast(existing, true);
 
       const toast = document.createElement('div');
-      toast.className = `giGlobalToast giGlobalToast--${escapeHtml(normalized.variant)}`;
+      const kindClass = normalized.kind === "lead" ? " giGlobalToast--lead" : "";
+      toast.className = `giGlobalToast giGlobalToast--${escapeHtml(normalized.variant)}${kindClass}`;
       toast.setAttribute('role', 'alert');
       toast.setAttribute('data-toast-signature', normalized.signature);
       if(singletonKey) toast.setAttribute('data-toast-key', singletonKey);
@@ -21049,6 +21063,7 @@ UsersGateUI.init();
         ${normalized.actions.length ? `<div class="giGlobalToast__actions">${normalized.actions.map((action, idx) => `<button class="giGlobalToast__action" type="button" data-toast-action="${idx}">${escapeHtml(action.label)}</button>`).join('')}</div>` : ''}
       `;
       host.appendChild(toast);
+      this.syncLeadHostClass();
       toast.querySelector('.giGlobalToast__close')?.addEventListener('click', () => this.removeToast(toast));
       normalized.actions.forEach((action, idx) => {
         toast.querySelector(`[data-toast-action="${idx}"]`)?.addEventListener('click', () => {
@@ -65982,12 +65997,13 @@ const CampaignLeadsStore = {
             table: SUPABASE_TABLES.campaignLeads
           }, (payload) => {
             const row = payload?.new;
-            if(!row || !safeTrim(row.assigned_agent_id)) return;
+            if(!row) return;
             const oldAgentId = safeTrim(payload?.old?.assigned_agent_id);
-            const newAgentId = safeTrim(row.assigned_agent_id);
             const localLead = CampaignLeadsStore.leads.find((l) => String(l.id) === String(row.id));
             const prevAgentId = oldAgentId || safeTrim(localLead?.assignedAgentId);
-            if(prevAgentId === newAgentId) return;
+            // GI-LEAD-TOAST 2026-09-17: לא מדלגים כש-assigned_agent_id זהה —
+            // שיוך נוסף מגיע ב-UPDATE בלי שינוי נציג ראשי. alreadyMine ב-notifyLeadRow
+            // מונע טוסט כפול על עדכון סטטוס.
             try { CampaignLeadAssignInbox.handleRealtimeDbRow(row, { prevAgentId }); } catch(_e) {}
           })
           .on("postgres_changes", {
