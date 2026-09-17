@@ -57012,6 +57012,7 @@ const ClalRiskLifePdf = {
       }
       return {
         ok: true,
+        afterDiscount: true,
         netPremium:    Number(n.net_premium)   || 0,
         soldPolicies:  Number(n.sold_policies) || 0,
         newClients:    Number(n.new_clients)   || 0,
@@ -57027,9 +57028,10 @@ const ClalRiskLifePdf = {
     }
   };
 
-  /* GI-TODAY-AFTER 2026-09-08 — כרטיס «נמכר היום» למנהל/טעינה רזה:
-     RPC gi_dashboard_net_premium קורא premiumAfterDiscountValue השמור כברוטו.
-     כאן שולפים תיקים שעודכנו סביב היום ומחשבים אחרי הנחה כמו הדשבורד המקומי. */
+     /* GI-TODAY-AFTER 2026-09-08 — כרטיס «נמכר היום» למנהל/טעינה רזה:
+     GI-MONTH-NET-AFTER 2026-09-17 — gi_policy_premium ב-RPC הוא אחרי הנחה
+     (סימולטור monthlyAfterDiscount מנצח ברוטו שמור). השליפה הממוקדת ל«היום»
+     נשארת: מחשבת אחרי הנחה מהתיקים כמו הדשבורד המקומי. */
   Storage.loadTodaySalesAfterDiscount = async function(range){
     if(!range?.start || !range?.end) return { ok:false, error:"BAD_RANGE" };
     if(typeof DashboardUI === "undefined" || typeof DashboardUI._accumulateTodayHealthRiskSales !== "function"){

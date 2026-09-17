@@ -9,7 +9,7 @@ const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
 const TAG = "20260917-sale-toast-v1";
-const APP_CACHE = "20260917-sale-toast-v1";
+const APP_CACHE = "20260917-month-net-after-v1";
 const IDLE_MS = 20000;
 let failed = 0;
 let passed = 0;
@@ -44,7 +44,7 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).statu
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-system-notice.js")]).status === 0, "node --check gi-system-notice.js");
 assert(html.includes("gi-system-notice.js?v=" + TAG), "index loads isolated module");
 assert(html.includes("gi-system-notice.css?v=" + TAG), "index loads isolated css");
-assert(html.includes("theme.css?v=" + APP_CACHE), "index.html theme.css cache");
+assert(html.includes("theme.css?v=" + TAG), "index.html theme.css cache");
 assert(sw.includes("gi-v12-" + APP_CACHE), "service-worker cache");
 assert(js.includes('const TAG = "' + TAG + '"'), "module tag matches cache");
 assert(html.includes("app.js?v=" + APP_CACHE), "app.js cache");

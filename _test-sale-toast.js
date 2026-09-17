@@ -9,6 +9,7 @@ const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
 const TAG = "20260917-sale-toast-v1";
+const APP_CACHE = "20260917-month-net-after-v1";
 let failed = 0;
 let passed = 0;
 
@@ -43,9 +44,9 @@ assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-sale-toast.js
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "gi-wizard.js")]).status === 0, "node --check gi-wizard.js");
 assert(html.includes("gi-sale-toast.js?v=" + TAG), "index loads isolated module");
 assert(html.includes("gi-sale-toast.css?v=" + TAG), "index loads isolated css");
-assert(html.includes("app.js?v=" + TAG), "app.js cache");
+assert(html.includes("app.js?v=" + APP_CACHE), "app.js cache");
 assert(html.includes("theme.css?v=" + TAG), "theme.css cache");
-assert(sw.includes("gi-v12-" + TAG), "service-worker cache");
+assert(sw.includes("gi-v12-" + APP_CACHE), "service-worker cache");
 assert(js.includes('const TAG = "' + TAG + '"'), "module tag matches cache");
 assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "wizard build tag");
 assert(app.includes('GI_WIZARD_JS_VERSION = "' + TAG + '"'), "app wizard cache tag");
