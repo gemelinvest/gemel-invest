@@ -172,6 +172,7 @@ assert(css.includes(".giBottomAlerts .giSaleToastHost:not(#\\9):not(#\\9)"), "ho
 assert(css.includes("width: min(420px, 100%) !important"), "host width beats theme 340px clamp");
 assert(css.includes("color:#fff !important"), "copy is on navy, not pale text");
 assert(css.includes("font-size:20px"), "premium amount is larger");
+assert(css.includes("border-radius:24px"), "card radius matches CRM toasts");
 
 console.log("\n8) runtime — ₪0 shallow sum still shows the sold amount");
 const toast = loadSaleToast({
