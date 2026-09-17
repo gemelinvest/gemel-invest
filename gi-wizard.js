@@ -1075,6 +1075,114 @@ init(){
       return this.flowType === "elementary";
     },
 
+    getWizardPrimaryIdentity(){
+      const d = this.insureds?.[0]?.data || {};
+      const firstName = safeTrim(d.firstName);
+      const lastName = safeTrim(d.lastName);
+      return {
+        idNumber: normalizeIdValue(d.idNumber || ""),
+        fullName: [firstName, lastName].filter(Boolean).join(" ").trim()
+      };
+    },
+
+    customerRecordMatchesWizardPrimary(rec){
+      if(!rec) return false;
+      const ident = this.getWizardPrimaryIdentity();
+      const recId = normalizeIdValue(rec.idNumber);
+      if(ident.idNumber.length >= 8 && recId.length >= 8) return ident.idNumber === recId;
+      const recName = safeTrim(rec.fullName);
+      if(ident.fullName && recName) return ident.fullName === recName;
+      return false;
+    },
+
+    _findCustomerRecordById(customerId){
+      const id = safeTrim(customerId);
+      if(!id) return null;
+      const customers = Array.isArray(State?.data?.customers) ? State.data.customers : [];
+      return customers.find((row) => String(row?.id) === String(id)) || null;
+    },
+
+    resolveElementarySaveTargetCustomerId(){
+      const candidates = [
+        this._wizardMirrorCustomerId,
+        this.lastSavedCustomerId,
+        this._elementaryReferralAgentSetup?.customerId,
+        this._elementaryReferralContinue?.customerId
+      ];
+      for(let i = 0; i < candidates.length; i++){
+        const id = safeTrim(candidates[i]);
+        if(!id) continue;
+        const rec = this._findCustomerRecordById(id);
+        if(!rec){
+          if(i === 0) return id;
+          continue;
+        }
+        if(this.customerRecordMatchesWizardPrimary(rec)) return id;
+      }
+      return "";
+    },
+
+    resolveWizardElementaryMirrorCustomerId(){
+      const mirrorId = safeTrim(this._wizardMirrorCustomerId);
+      if(mirrorId) return mirrorId;
+      return this.resolveElementarySaveTargetCustomerId();
+    },
+
+    getLocalDraftStepLabel(snap){
+      const row = snap && typeof snap === "object" ? snap : {};
+      const step = Number(row.step);
+      const keep = Array.isArray(row.wizardMirrorKeepSteps) ? row.wizardMirrorKeepSteps : [];
+      const kept = keep.find((s) => Number(s?.id) === step);
+      if(kept && (safeTrim(kept.progressTitle) || safeTrim(kept.title))){
+        return safeTrim(kept.progressTitle) || safeTrim(kept.title);
+      }
+      const isElem = row.flowType === "elementary"
+        || (typeof inferProposalFlowType === "function" && inferProposalFlowType(row.payload) === "elementary");
+      if(isElem){
+        const elemNames = {
+          1:"פרטים אישיים",
+          2:"פרטי רכב",
+          3:"עבר ביטוחי",
+          4:"בחירת כיסוי",
+          5:"פרמיות",
+          6:"תשלום",
+          7:"שיקוף",
+          8:"סיכום והקמת לקוח"
+        };
+        return elemNames[step] || (`שלב ${step || "?"}`);
+      }
+      const stepNames = {
+        1:"פרטי לקוח",
+        3:"פוליסות קיימות",
+        4:"התאמת צרכים",
+        5:"פוליסות חדשות",
+        6:"פרטי משלם",
+        7:"הצהרת בריאות",
+        8:"תיאום שיחה וסיום הקמה"
+      };
+      return stepNames[step] || (`שלב ${step || "?"}`);
+    },
+
+    closeForSessionEnd(){
+      if(this._sessionEndHandled) return;
+      this._sessionEndHandled = true;
+      const skipDraft = !!this._skipLocalDraftOnClose;
+      if(skipDraft){
+        try { this._clearLocalDraft(); } catch(_e){}
+      } else {
+        try { this._saveLocalDraft(); } catch(_e){}
+      }
+      const wasFinishing = this._finishing;
+      this._finishing = true;
+      try { this.close(); } catch(_e){}
+      this._finishing = wasFinishing;
+      this._skipLocalDraftOnClose = false;
+      this.lastSavedCustomerId = null;
+      this._wizardMirrorCustomerId = null;
+      this._wizardMirrorKeepSteps = null;
+      this.isOpen = false;
+    },
+
     getCurrentSteps(){
       if(Array.isArray(this._wizardMirrorKeepSteps) && this._wizardMirrorKeepSteps.length){
         return this._wizardMirrorKeepSteps;
@@ -1211,6 +1319,10 @@ init(){
       this.step1FlowMap = {};
       this._operationalGuideAccepted = false;
       this.lastSavedCustomerId = null;
+      this._wizardMirrorCustomerId = null;
+      this._wizardMirrorKeepSteps = null;
+      this._skipLocalDraftOnClose = false;
+      this._sessionEndHandled = false;
       this.editingDraftId = null;
       this._draftPayloadMissing = false;
       this._finishing = false;
@@ -1457,6 +1569,8 @@ init(){
       this.lastSavedCustomerId = null;
       this._wizardMirrorCustomerId = null;
       this._wizardMirrorKeepSteps = null;
+      this._skipLocalDraftOnClose = false;
+      this._sessionEndHandled = false;
       this.editingDraftId = null;
       this._draftPayloadMissing = false;
       this._finishing = false;
@@ -1468,6 +1582,7 @@ init(){
 
     open(){
       prepareInteractiveWizardOpen();
+      this._sessionEndHandled = false;
       if(this.isCustomerPurchaseMode()) this.sanitizeCustomerPurchaseWizardPolicies();
       this._harDateNoticeAcked = false;
       this.isOpen = true;
@@ -2430,6 +2545,10 @@ init(){
         activeInsId: this.activeInsId,
         step: this.step,
         lastSavedCustomerId: this.lastSavedCustomerId,
+        wizardMirrorCustomerId: safeTrim(this._wizardMirrorCustomerId) || "",
+        wizardMirrorKeepSteps: Array.isArray(this._wizardMirrorKeepSteps)
+          ? JSON.parse(JSON.stringify(this._wizardMirrorKeepSteps))
+          : null,
         editingDraftId: this.editingDraftId,
         customerPurchaseMode: this.customerPurchaseMode ? JSON.parse(JSON.stringify(this.customerPurchaseMode)) : null,
         _carInsuranceClickFlow: this._carInsuranceClickFlow,
@@ -2447,6 +2566,10 @@ init(){
       this.activeInsId = snapshot.activeInsId;
       this.step = snapshot.step;
       this.lastSavedCustomerId = snapshot.lastSavedCustomerId;
+      this._wizardMirrorCustomerId = safeTrim(snapshot.wizardMirrorCustomerId) || null;
+      this._wizardMirrorKeepSteps = Array.isArray(snapshot.wizardMirrorKeepSteps) && snapshot.wizardMirrorKeepSteps.length
+        ? JSON.parse(JSON.stringify(snapshot.wizardMirrorKeepSteps))
+        : null;
       this.editingDraftId = snapshot.editingDraftId;
       this.customerPurchaseMode = snapshot.customerPurchaseMode;
       this._carInsuranceClickFlow = snapshot._carInsuranceClickFlow;
@@ -3349,8 +3472,9 @@ init(){
     },
 
     close(){
-      // שמירת טיוטה מקומית לפני סגירה (לשחזור אם נסגר בטעות)
-      if(!this._finishing){ this._saveLocalDraft(); }
+      // שמירת טיוטה מקומית לפני סגירה (לשחזור אם נסגר בטעות).
+      // אחרי סיום מוצלח לא כותבים מחדש טיוטה של לקוח שכבר הוקם.
+      if(!this._finishing && !this._skipLocalDraftOnClose){ this._saveLocalDraft(); }
       try { ElementaryQuoteUI.unmountWizardHost(); } catch(_e){}
       try { ElementaryMirrorUI.unmountWizardEmbed(); } catch(_e){}
       this.isOpen = false;
@@ -4607,7 +4731,7 @@ init(){
       }
       this.renderBody();
       this.renderFooter();
-      if(Number(this.step) === 7){
+      if(!this.isElementaryFlow() && Number(this.step) === 7){
         requestAnimationFrame(() => {
           try{
             this.hardenHealthStepInteractivity();
@@ -8885,6 +9009,10 @@ if(path === "birthDate"){
         if(typeof ElementaryMirrorUI?.isWizardEmbed === "function" && ElementaryMirrorUI.isWizardEmbed()){
           try { ElementaryMirrorUI._captureReportFromDom?.(); } catch(_e){}
         }
+        const expectedId = this.resolveWizardElementaryMirrorCustomerId();
+        const draftId = safeTrim(ElementaryMirrorUI?.selectedCustomerId);
+        if(expectedId && draftId && String(expectedId) !== String(draftId)) return payload;
+        if(!expectedId && draftId) return payload;
         const draft = ElementaryMirrorUI?.reportDraft;
         if(draft && typeof draft === "object"){
           payload.mirrorFlow = payload.mirrorFlow && typeof payload.mirrorFlow === "object" ? payload.mirrorFlow : {};
@@ -9447,7 +9575,7 @@ if(path === "birthDate"){
       return `<div class="lcElementaryWrap lcElementaryWrap--stepMirror lcElemMirrorRoot">
         ${this.renderElementaryProgress()}
         <div class="lcElementarySection__title lcElementarySection__title--compact">שיקוף</div>
-        <p class="lcElemQuotePickLead muted small">מלאו את נתוני השיקוף. הם יישמרו בתיק הלקוח ויופיעו גם במסך שיקוף השיחה.</p>
+        <p class="lcElemQuotePickLead muted small">מלאו את נתוני השיקוף כהכנה למשקף. זה טופס מילוי בלבד — שיחת השיקוף עם הטיימר מתחילה רק ממסך «שיקוף שיחה אלמנטרי».</p>
         <div id="lcWizardElemMirrorHost" class="lcWizardElemMirrorHost emMirror__report"></div>
       </div>`;
     },
@@ -9455,10 +9583,7 @@ if(path === "birthDate"){
     mountWizardElementaryMirrorUi(){
       const host = this.els.body?.querySelector?.("#lcWizardElemMirrorHost");
       if(!host) return;
-      const customerId = safeTrim(this._wizardMirrorCustomerId)
-        || safeTrim(this.lastSavedCustomerId)
-        || safeTrim(this._elementaryReferralAgentSetup?.customerId)
-        || safeTrim(this._elementaryReferralContinue?.customerId);
+      const customerId = this.resolveWizardElementaryMirrorCustomerId();
       if(!customerId){
         host.innerHTML = `<div class="lcElemPricingEmpty muted small">לא נמצא לקוח לשמירת שיקוף — יש לסיים קודם את הקמת ההצעה.</div>`;
         return;
@@ -26397,7 +26522,11 @@ if(path === "birthDate"){
           customerPurchaseMode: this.customerPurchaseMode
             ? JSON.parse(JSON.stringify(this.customerPurchaseMode))
             : null,
-          lastSavedCustomerId: safeTrim(this.lastSavedCustomerId) || ""
+          lastSavedCustomerId: safeTrim(this.lastSavedCustomerId) || "",
+          wizardMirrorCustomerId: safeTrim(this._wizardMirrorCustomerId) || "",
+          wizardMirrorKeepSteps: Array.isArray(this._wizardMirrorKeepSteps)
+            ? JSON.parse(JSON.stringify(this._wizardMirrorKeepSteps))
+            : null
         };
         localStorage.setItem(this._LOCAL_DRAFT_KEY, JSON.stringify(snapshot));
       }catch(_e){}
@@ -26427,8 +26556,7 @@ if(path === "birthDate"){
 
       const savedAt = snap.savedAt ? new Date(snap.savedAt) : null;
       const timeStr = savedAt ? savedAt.toLocaleString("he-IL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}) : "";
-      const stepNames = {1:"פרטי לקוח",3:"פוליסות קיימות",4:"התאמת צרכים",5:"פוליסות חדשות",6:"פרטי משלם",7:"הצהרת בריאות",8:"תיאום שיחה וסיום הקמה"};
-      const stepLabel = stepNames[snap.step] || `שלב ${snap.step}`;
+      const stepLabel = this.getLocalDraftStepLabel(snap);
       const ins0 = snap.payload?.insureds?.[0]?.data || {};
       const name = [ins0.firstName, ins0.lastName].filter(Boolean).join(" ") || "";
 
@@ -26497,6 +26625,13 @@ if(path === "birthDate"){
       this.customerPurchaseMode = null;
       const savedId = safeTrim(row.lastSavedCustomerId);
       if(savedId) this.lastSavedCustomerId = savedId;
+      const mirrorId = safeTrim(row.wizardMirrorCustomerId);
+      this._wizardMirrorCustomerId = mirrorId || null;
+      this._wizardMirrorKeepSteps = Array.isArray(row.wizardMirrorKeepSteps) && row.wizardMirrorKeepSteps.length
+        ? JSON.parse(JSON.stringify(row.wizardMirrorKeepSteps))
+        : null;
+      this._skipLocalDraftOnClose = false;
+      this._sessionEndHandled = false;
     },
 
     loadDraftData(rec){
@@ -26526,6 +26661,9 @@ if(path === "birthDate"){
       this.editingPolicyId = null;
       this.lastSavedCustomerId = null;
       this._wizardMirrorCustomerId = null;
+      this._wizardMirrorKeepSteps = null;
+      this._skipLocalDraftOnClose = false;
+      this._sessionEndHandled = false;
       this.customerPurchaseMode = null;
       this.editingDraftId = rec?.id || null;
       this._finishing = false;
@@ -30817,6 +30955,7 @@ if(path === "birthDate"){
       try{
         this._clearLocalDraft(); // רק אחרי שמירה מאומתת בשרת
         this.lastSavedCustomerId = saved?.id || null;
+        this._skipLocalDraftOnClose = !continueToMirror;
         try {
           this._lastFinishPayload = JSON.parse(JSON.stringify(saved?.payload || this.getOperationalPayload() || {}));
         } catch(_payloadCloneErr) {
@@ -30957,6 +31096,7 @@ if(path === "birthDate"){
           if(continueToMirror){
             this._wizardMirrorCustomerId = safeTrim(saved.id);
             this._wizardMirrorKeepSteps = this.getCurrentSteps().map((s) => ({ ...s }));
+            this._skipLocalDraftOnClose = false;
             const mirrorStep = this._wizardMirrorKeepSteps.find((s) => s.kind === "mirror");
             this.step = Number(mirrorStep?.id) || this.getWizardLastStepId();
             this._elementaryReferralAgentSetup = null;
@@ -31016,7 +31156,9 @@ if(path === "birthDate"){
       const isPurchaseFlow = this.isCustomerPurchaseMode();
       const targetCustomerId = isPurchaseFlow
         ? safeTrim(this.customerPurchaseMode?.customerId)
-        : safeTrim(this.lastSavedCustomerId);
+        : (this.isElementaryFlow()
+          ? this.resolveElementarySaveTargetCustomerId()
+          : safeTrim(this.lastSavedCustomerId));
       const existingCustomer = targetCustomerId ? (State.data?.customers || []).find((x) => String(x?.id) === String(targetCustomerId)) : null;
       const existingPayloadSnapshot = existingCustomer?.payload && typeof existingCustomer.payload === "object"
         ? JSON.parse(JSON.stringify(existingCustomer.payload))
@@ -31064,7 +31206,9 @@ if(path === "birthDate"){
       }
       const createdAtBase = existingCustomer?.createdAt || existingCustomer?.created_at || nowISO();
       const record = normalizeCustomerRecord({
-        id: existingCustomer?.id || ("cust_" + Date.now().toString(16) + "_" + Math.random().toString(16).slice(2,8)),
+        id: existingCustomer?.id
+          || (this.isElementaryFlow() ? safeTrim(targetCustomerId) : "")
+          || ("cust_" + Date.now().toString(16) + "_" + Math.random().toString(16).slice(2,8)),
         status: safeTrim(existingCustomer?.status) || "חדש",
         fullName: safeTrim(((primary.firstName || "") + " " + (primary.lastName || "")).trim()) || "לקוח ללא שם",
         idNumber: normalizeIdValue(primary.idNumber),
@@ -31872,4 +32016,12 @@ calcAge(dateStr){
   } catch(_e) {}
   try { host.onWizardInstalled?.(target); } catch(_e) {}
   try { global.__GI_WIZARD_CHUNK_READY = true; } catch(_e) {}
+  try {
+    if(!global.__GI_WIZARD_LOGOUT_BOUND){
+      global.__GI_WIZARD_LOGOUT_BOUND = true;
+      global.addEventListener("gi:app-logout", () => {
+        try { global.Wizard?.closeForSessionEnd?.(); } catch(_e) {}
+      });
+    }
+  } catch(_e) {}
 })(typeof globalThis !== "undefined" ? globalThis : window);
