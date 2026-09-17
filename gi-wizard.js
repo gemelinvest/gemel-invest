@@ -3,7 +3,7 @@
 */
 (function installGiWizard(global){
   "use strict";
-  const GI_WIZARD_BUILD = "20260917-sale-toast-v1";
+  const GI_WIZARD_BUILD = "20260917-har-cross-ins-v1";
   function giWizardExpandIlsAmount(raw){
     try{
       if(typeof window !== "undefined" && window.GI_ILS_AMOUNT && typeof window.GI_ILS_AMOUNT.expand === "function"){
@@ -12731,33 +12731,37 @@ if(path === "birthDate"){
       return hashes;
     },
 
-    /* GI-HAR-UPLOAD-ALWAYS-UPDATE 2026-09-12
-       קובץ שכבר בתיק / שהורד מהמערכת — לא חוסמים יותר את הייבוא.
-       מזהירים, ואם הנציג מאשר — ממשיכים לאישור הייבוא ומעדכנים נתונים. */
-    async rejectRecycledHarBituachFile(ins, buffer){
-      const originStamp = this.readHarOriginStampFromBuffer(buffer);
-      if(originStamp){
-        const ok = await showWizardHarAlertModal({
-          title: "שים לב",
-          text: "זהו קובץ הר הביטוח שהורד ממערכת GEMEL INVEST (לא הורדה טרייה מאתר הר הביטוח). אפשר בכל זאת להמשיך — אחרי אישור הייבוא הנתונים יתעדכנו.",
-          confirmText: "המשך ועדכן",
-          cancelText: "ביטול",
-          showCancel: true
-        });
-        return !ok;
+    /* GI-HAR-CROSS-INSURED-UPLOAD 2026-09-17
+       באותה הצעה: אם ת.ז. שבקובץ שייכת למבוטח אחר שכבר העלה הר ביטוח —
+       מזהים לפי ת.ז. בלבד (לא SHA / לא מס׳ פוליסה) ומציגים את שמו. */
+    findOtherProposalInsuredWithHarForFileIds(currentIns, fileIdNumbers){
+      const fileIds = (Array.isArray(fileIdNumbers) ? fileIdNumbers : [])
+        .map((id) => normalizeIdValue(id))
+        .filter((id) => id.length >= 7)
+        .map((id) => id.padStart(9, "0"));
+      if(!fileIds.length) return null;
+      const fileSet = new Set(fileIds);
+      const currentKey = safeTrim(currentIns?.id);
+      for(const other of (this.insureds || [])){
+        if(!other || safeTrim(other.id) === currentKey) continue;
+        const otherId = normalizeIdValue(other?.data?.idNumber);
+        if(!otherId || otherId.length < 7) continue;
+        if(!fileSet.has(otherId.padStart(9, "0"))) continue;
+        if(!this.hasHarFileUploaded(other) && !this.insuredHasPersistedHarBituach(other)) continue;
+        return other;
       }
-      const sha = typeof sha256HexFromArrayBuffer === "function" ? safeTrim(await sha256HexFromArrayBuffer(buffer)).toLowerCase() : "";
-      if(!sha) return false;
-      const known = await this.collectKnownHarContentHashes(ins);
-      if(!known.has(sha)) return false;
-      const ok = await showWizardHarAlertModal({
+      return null;
+    },
+
+    async warnHarFileAlreadyUploadedForOtherInsured(otherIns){
+      const name = this.getInsuredDisplayName(otherIns);
+      return showWizardHarAlertModal({
         title: "שים לב",
-        text: "קובץ זה כבר שמור בתיק הלקוח. אפשר להמשיך — אחרי אישור הייבוא הנתונים יתעדכנו מחדש מהקובץ.",
-        confirmText: "המשך ועדכן",
-        cancelText: "ביטול",
+        text: `קובץ הר ביטוח זה כבר הועלה למבוטח ${name}.`,
+        confirmText: "אישור",
+        cancelText: "העלה קובץ הר ביטוח אחר",
         showCancel: true
       });
-      return !ok;
     },
 
     async handleHarBituachFile(ins, file){
@@ -12772,16 +12776,6 @@ if(path === "birthDate"){
         this.render();
         if(window.GI_LOAD_LIBS?.xlsx) await window.GI_LOAD_LIBS.xlsx();
         const buffer = await file.arrayBuffer();
-        if(await this.rejectRecycledHarBituachFile(ins, buffer)){
-          this.setHarImportState(ins, {
-            status: this.isHarBituachStaleForInsured(ins) ? "stale" : "idle",
-            fileUploaded: false,
-            fileName: file.name || "",
-            message: "העלאת הקובץ בוטלה — הנתונים בתיק לא שונו. ניתן להעלות שוב ולאשר כדי לעדכן."
-          });
-          this.render();
-          return;
-        }
         const contentSha256 = typeof sha256HexFromArrayBuffer === "function" ? await sha256HexFromArrayBuffer(buffer) : "";
         const originToken = "gihar_" + Math.random().toString(16).slice(2);
         const originalDataUrl = await this.readUploadFileAsDataUrl(file, buffer);
@@ -12807,6 +12801,23 @@ if(path === "birthDate"){
             confirmText: "הבנתי",
             showCancel: false
           });
+          return;
+        }
+
+        /* GI-HAR-CROSS-INSURED-UPLOAD 2026-09-17 — אחרי קריאה תקינה, לפני שיוך למבוטח הנוכחי. */
+        const otherOwner = this.findOtherProposalInsuredWithHarForFileIds(ins, fileIdNumbers);
+        if(otherOwner){
+          const confirmed = await this.warnHarFileAlreadyUploadedForOtherInsured(otherOwner);
+          this.setHarImportState(ins, {
+            status: this.isHarBituachStaleForInsured(ins) ? "stale" : "idle",
+            fileUploaded: false,
+            fileName: file.name || "",
+            message: "העלאת הקובץ בוטלה — הקובץ כבר משויך למבוטח אחר בהצעה."
+          });
+          this.render();
+          if(!confirmed){
+            try { this.openHarBituachImport(ins); } catch(_eOpen) {}
+          }
           return;
         }
 

@@ -9,6 +9,7 @@ const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
 const TAG = "20260917-sale-toast-v1";
+const WIZARD_TAG = "20260917-har-cross-ins-v1";
 const APP_CACHE = "20260917-month-net-after-v1";
 let failed = 0;
 let passed = 0;
@@ -48,8 +49,8 @@ assert(html.includes("app.js?v=" + APP_CACHE), "app.js cache");
 assert(html.includes("theme.css?v=" + TAG), "theme.css cache");
 assert(sw.includes("gi-v12-" + APP_CACHE), "service-worker cache");
 assert(js.includes('const TAG = "' + TAG + '"'), "module tag matches cache");
-assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "wizard build tag");
-assert(app.includes('GI_WIZARD_JS_VERSION = "' + TAG + '"'), "app wizard cache tag");
+assert(wiz.includes('GI_WIZARD_BUILD = "' + WIZARD_TAG + '"'), "wizard build tag");
+assert(app.includes('GI_WIZARD_JS_VERSION = "' + WIZARD_TAG + '"'), "app wizard cache tag");
 
 console.log("\n2) toast chrome + 4s auto-hide");
 assert(html.includes("id=\"giSaleToastHost\""), "toast host exists");
