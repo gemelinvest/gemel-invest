@@ -10790,7 +10790,8 @@ body.sidebar-collapsed .app:not(#\9):not(#\9),
   flex-direction: column !important;
   align-items: stretch !important;
   gap: 8px !important;
-  overflow: auto !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
   max-height: calc(100vh - 96px) !important;
 }
 .giBottomAlerts .giChatDock:empty:not(#\9):not(#\9){
