@@ -3434,29 +3434,82 @@ body.lcAuthLock .lcLogin__mfaStage:not(#\9):not(#\9){ gap: var(--gi-s4) !importa
   border-top: 1px solid var(--gi-border) !important;
 }
 
-/* --- Incoming chat dock --- */
+/* --- Incoming chat dock ---
+   GI-CHAT-DOCK-SIDEBAR 2026-09-17 — sidebar navy, clear hierarchy, larger message.
+   Reminder alerts stay on their own chrome. */
 .giChatDockCard:not(#\9):not(#\9){
-  background: color-mix(in srgb, var(--gi-surface, #ffffff) 32%, transparent) !important;
-  border: 1px solid color-mix(in srgb, var(--gi-border, rgba(43,75,138,.18)) 65%, transparent) !important;
-  border-radius: var(--gi-r-md, 16px) !important;
-  box-shadow: 0 10px 28px rgba(15, 23, 42, .08) !important;
-  backdrop-filter: blur(16px) saturate(140%) !important;
-  -webkit-backdrop-filter: blur(16px) saturate(140%) !important;
-  color: var(--gi-text, #0f172a) !important;
+  background: var(--gi-navy) !important;
+  border: 1px solid rgba(255,255,255,.16) !important;
+  border-radius: 20px !important;
+  box-shadow: 0 18px 40px rgba(56,112,237,.34) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  color: #fff !important;
+  padding: 20px 22px 18px !important;
 }
 
 .giChatDockCard__name:not(#\9):not(#\9){
-  font-size: 17px !important;
+  font-size: 13px !important;
   font-weight: 700 !important;
-  color: var(--gi-text, #0f172a) !important;
+  letter-spacing: .03em !important;
+  color: rgba(255,255,255,.78) !important;
+  margin-bottom: 6px !important;
 }
 
 .giChatDockCard__text:not(#\9):not(#\9){
-  font-size: 15px !important;
-  color: var(--gi-text-3, rgba(15,23,42,.68)) !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  line-height: 1.55 !important;
+  color: #fff !important;
 }
 
-/* --- ?????? ????? ?????? ?? ????? ????? ????? --- */
+.giChatDockCard__dismiss:not(#\9):not(#\9){
+  color: rgba(255,255,255,.72) !important;
+  background: transparent !important;
+}
+.giChatDockCard__dismiss:hover:not(#\9):not(#\9){
+  background: rgba(255,255,255,.12) !important;
+  color: #fff !important;
+}
+
+.giChatDockCard__avatar:not(#\9):not(#\9){
+  background: rgba(255,255,255,.16) !important;
+  border: 1px solid rgba(255,255,255,.28) !important;
+  color: #fff !important;
+}
+
+.giChatDockCard__reply:not(#\9):not(#\9),
+.giChatDockCard__ignore:not(#\9):not(#\9),
+.giChatDockCard__send:not(#\9):not(#\9){
+  background: rgba(255,255,255,.16) !important;
+  border: 1px solid rgba(255,255,255,.38) !important;
+  color: #fff !important;
+}
+.giChatDockCard__reply:hover:not(#\9):not(#\9),
+.giChatDockCard__ignore:hover:not(#\9):not(#\9),
+.giChatDockCard__send:hover:not(#\9):not(#\9){
+  background: rgba(255,255,255,.26) !important;
+  color: #fff !important;
+}
+.giChatDockCard__send:not(#\9):not(#\9){
+  background: #fff !important;
+  border-color: #fff !important;
+  color: var(--gi-navy) !important;
+}
+
+.giChatDockCard__input:not(#\9):not(#\9){
+  background: rgba(255,255,255,.14) !important;
+  border: 1px solid rgba(255,255,255,.32) !important;
+  color: #fff !important;
+}
+.giChatDockCard__input:not(#\9):not(#\9)::placeholder{
+  color: rgba(255,255,255,.62) !important;
+}
+.giChatDockCard__input:focus:not(#\9):not(#\9){
+  border-color: rgba(255,255,255,.7) !important;
+  background: rgba(255,255,255,.2) !important;
+}
+
 .giChatUsers:not(#\9):not(#\9){
   padding: 0 0 var(--gi-s3) !important;
   background: none !important;
@@ -10690,6 +10743,66 @@ body.sidebar-collapsed .app:not(#\9):not(#\9),
 .opsAssignArrivalToast:not(#\9):not(#\9){
   background: var(--gi-navy) !important;
   box-shadow: 0 18px 40px rgba(56,112,237,.35) !important;
+}
+
+/* GI-BOTTOM-ALERTS 2026-09-17 — system notice, chat dock and global toasts
+   sit in one left-to-right row at the bottom. Reminder alerts stay centered. */
+.giBottomAlerts:not(#\9):not(#\9){
+  position: fixed !important;
+  left: 16px !important;
+  right: auto !important;
+  bottom: 16px !important;
+  top: auto !important;
+  z-index: 12050 !important;
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+  align-items: flex-end !important;
+  align-content: flex-end !important;
+  direction: ltr !important;
+  gap: 12px !important;
+  max-width: calc(50vw - 220px) !important;
+  pointer-events: none !important;
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+.giBottomAlerts > :not(#\9):not(#\9){
+  position: relative !important;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  z-index: auto !important;
+  pointer-events: auto !important;
+  flex: 1 1 220px !important;
+  width: min(300px, 100%) !important;
+  min-width: 0 !important;
+  max-width: min(300px, 100%) !important;
+  direction: rtl !important;
+}
+.giChatDock:empty:not(#\9):not(#\9),
+.giGlobalToastHost:empty:not(#\9):not(#\9){
+  display: none !important;
+}
+.giBottomAlerts .giChatDock:not(#\9):not(#\9){
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 8px !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  max-height: calc(100vh - 96px) !important;
+}
+.giBottomAlerts .giChatDock:empty:not(#\9):not(#\9){
+  display: none !important;
+}
+.giBottomAlerts .giGlobalToastHost:not(#\9):not(#\9){
+  display: grid !important;
+  gap: 12px !important;
+}
+.giBottomAlerts .giGlobalToastHost:empty:not(#\9):not(#\9){
+  display: none !important;
 }
 
 /* GI-CF-REMOVE-SUMMARY 2026-08-26 — hard-kill leftover file-summary column */

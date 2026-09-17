@@ -231,7 +231,14 @@ assert(css.includes("font-size:15px"), "טקסט הודעה גדול יותר");
 assert(css.includes(".giChatDockCard.is-replying .giChatDockCard__composer{ display:flex; }"), "השב פותח את תיבת התשובה");
 assert(css.includes(".giChatDockCard__ignore{"), "עיצוב לחצן התעלם");
 assert(css.includes(".giChatDockCard.is-replying .giChatDockCard__reply{ display:none; }"), "במצב השב נשאר התעלם");
-assert(theme.includes(".giChatDockCard:not(#\\9):not(#\\9)"), "theme שומר על זכוכית");
+assert(theme.includes(".giChatDockCard:not(#\\9):not(#\\9)"), "theme מעצב את כרטיס הדוק");
+assert(theme.includes("GI-CHAT-DOCK-SIDEBAR"), "theme uses sidebar navy on chat dock");
+assert(theme.includes("font-size: 18px"), "הודעת הצ׳אט גדולה יותר ב-theme");
+assert(!theme.includes("color-mix(in srgb, var(--gi-surface, #ffffff) 32%, transparent)"), "זכוכית לבנה של הדוק הוסרה");
+assert(html.includes('id="giBottomAlerts"'), "מגש שורה תחתונה קיים");
+assert(html.includes('id="giGlobalToastHost"'), "טוסטים גלובליים במגש");
+assert(theme.includes("GI-BOTTOM-ALERTS"), "סידור שורה משמאל לימין");
+assert(!html.slice(html.indexOf('id="giBottomAlerts"'), html.indexOf('id="mcAssignModal"')).includes("giReminderAlert"), "תזכורת מחוץ לשורה");
 assert(!theme.includes(".giChatToast:not(#\\9):not(#\\9)"), "theme כבר לא מעצב את הטוסט הישן");
 
 const dockStart = app.indexOf("    notifyIncoming(message){");
