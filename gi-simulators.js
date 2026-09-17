@@ -13501,7 +13501,7 @@
     return null;
   }
 
-  const CLAL_HEALTH_MIN_AGE = 0, CLAL_HEALTH_MAX_AGE = 65, CLAL_HEALTH_MIN_ENTRY_DAYS = 0;
+  const CLAL_HEALTH_MIN_AGE = 0, CLAL_HEALTH_MAX_AGE = 120, CLAL_HEALTH_MIN_ENTRY_DAYS = 0;
   const CLAL_HEALTH_CPI_KEY = "clal_health";
   const CLAL_HEALTH_DEFAULT_BASE_INDEX = HealthCpi.TARIFFS.clal_health.baseIndexPoints; // 136.84
   const CLAL_HEALTH_COVERS = [
