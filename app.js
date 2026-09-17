@@ -18546,6 +18546,13 @@
       try { MirrorCallAgentToastWatcher.stop(); } catch(_e) {}
       try { OpsAssignArrivalAlert.stop(); } catch(_e) {}
       try { BackgroundTimers.stopAll(); } catch(_e) {}
+      try {
+        if(typeof Wizard !== "undefined" && typeof Wizard.closeForSessionEnd === "function"){
+          Wizard.closeForSessionEnd();
+        } else if(typeof Wizard !== "undefined" && typeof Wizard.close === "function"){
+          Wizard.close();
+        }
+      } catch(_e) {}
       try { App.resetSessionDataForUserSwitch(reason === "browser" ? "browser_close" : "logout"); } catch(_e) {
         try { App._fullDataReady = false; } catch(_e2) {}
         try { App._sessionDataScoped = false; } catch(_e2) {}
@@ -77806,12 +77813,17 @@ ${inner}
       if(!this._wizardEmbed) return;
       try { this._captureReportFromDom(); } catch(_e){}
       try { void this.saveReport({ silent: true }); } catch(_e){}
+      const keepCallIdentity = !!this._callRunning;
       this._wizardEmbed = false;
       this._wizardHostEl = null;
       if(this._savedReportEl){
         this.els.report = this._savedReportEl;
       }
       this._savedReportEl = null;
+      if(!keepCallIdentity){
+        this.selectedCustomerId = null;
+        this.reportDraft = null;
+      }
     },
 
     async commitWizardEmbed(){
@@ -78366,13 +78378,14 @@ ${inner}
     },
 
     _schedulePersist(label){
+      const persistId = safeTrim(this.selectedCustomerId);
       window.clearTimeout(this._persistTimer);
       this._persistTimer = window.setTimeout(() => {
         this._persistTimer = null;
         const gen = this._bumpPersistGen();
         void this._enqueuePersist(async () => {
           if(gen !== this._persistGen) return;
-          const rec = this._getCustomer(this.selectedCustomerId);
+          const rec = this._getCustomer(persistId);
           if(!rec) return;
           try{
             await this._persistReportHard(rec, label || "דוח שיקוף אלמנטרי (טיוטה)", {
@@ -78817,6 +78830,7 @@ ${inner}
     },
 
     async startCallForCustomer(customerId){
+      if(this.isWizardEmbed()) return;
       try{
         let rec = this._getCustomer(customerId);
         const hit = (this._lastSearchHits || []).find((c) => safeTrim(c.id) === safeTrim(customerId));
@@ -78854,6 +78868,7 @@ ${inner}
     },
 
     _beginCallSession(rec){
+      if(this.isWizardEmbed()) return;
       this._callRunning = true;
       this._callPaused = false;
       this._callSeconds = 0;
@@ -78906,6 +78921,7 @@ ${inner}
     },
 
     _startTimerLoop(){
+      if(this.isWizardEmbed()) return;
       window.clearInterval(this._timerHandle);
       this._timerHandle = window.setInterval(() => {
         if(!this._callRunning || this._callPaused) return;
