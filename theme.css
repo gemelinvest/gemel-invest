@@ -9834,6 +9834,9 @@ body.lcSettingsRubric-systemUpdates #view-settings .lcSettingsHub__content:not(#
 .cfFile__statusBadge.is-cancelFull:not(#\9):not(#\9){
   background: var(--gi-danger-soft) !important; color: #991B1B !important; border-color: rgba(220,38,38,.22) !important;
 }
+.cfFile__statusBadge.is-switched:not(#\9):not(#\9){
+  background: #fef3c7 !important; color: #92400e !important; border-color: rgba(217,119,6,.28) !important;
+}
 .cfFile__statusBadge.is-cancelPartial:not(#\9):not(#\9){
   background: var(--gi-warn-soft) !important; color: #92400E !important; border-color: rgba(217,119,6,.24) !important;
 }

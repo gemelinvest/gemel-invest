@@ -11,7 +11,8 @@ const vm = require("vm");
 const { spawnSync } = require("child_process");
 
 const ROOT = __dirname;
-const TAG = "20260915-sys-notice-v6";
+const TAG = "20260917-switch-purchase-v1";
+const APP_BUILD = "20260915-agent-save-verify-v1";
 let failed = 0;
 let passed = 0;
 
@@ -47,7 +48,7 @@ const wiz = fs.readFileSync(path.join(ROOT, "gi-wizard.js"), "utf8");
 
 console.log("1) syntax + BUILD aligned with wizard chunk");
 assert(spawnSync(process.execPath, ["--check", path.join(ROOT, "app.js")]).status === 0, "node --check app.js");
-assert(app.includes('const BUILD = "' + TAG + '"'), "BUILD");
+assert(app.includes('const BUILD = "' + APP_BUILD + '"'), "BUILD");
 assert(app.includes('GI_WIZARD_JS_VERSION = "' + TAG + '"'), "GI_WIZARD_JS_VERSION aligned");
 assert(wiz.includes('GI_WIZARD_BUILD = "' + TAG + '"'), "GI_WIZARD_BUILD aligned");
 assert(app.includes("function giWizardChunkLooksInstallable"), "helper present");
